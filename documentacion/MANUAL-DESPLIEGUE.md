@@ -9,53 +9,19 @@ Tiempo estimado: 1-2 horas la primera vez.
 
 ---
 
-## Paso 0 — Arreglar la ubicación del repositorio Git (IMPORTANTE, hacer primero)
+## Paso 0 y 1 — Repositorio Git (ya hecho)
 
-Se detectó que el repositorio Git actual **no está dentro de la carpeta
-`SIGSO`**, sino en la raíz de tu carpeta de usuario de Windows
-(`C:\Users\luis1`). Esto es un problema real: si en ese estado se hiciera
-`git add .`, Git intentaría empezar a rastrear todo tu perfil de Windows
-(`AppData`, `Documents`, `NTUSER.DAT`, etc.), no solo el proyecto SIGSO.
+Estos pasos ya se completaron para este proyecto:
 
-El remoto ya está bien configurado (`https://github.com/luis11cesar11lm-dot/Formulario-HomePymes-1.git`),
-así que solo hay que mover el repositorio al lugar correcto. Ejecuta esto
-en una terminal (Git Bash o PowerShell), **sin borrar nada todavía**:
+- El repositorio Git quedó correctamente inicializado dentro de la carpeta
+  `SIGSO` (se detectó y corrigió un `.git` mal ubicado en la raíz del
+  usuario de Windows, que habría rastreado archivos ajenos al proyecto).
+- El remoto `origin` apunta a
+  `https://github.com/lmtechworkspace-tech/Sistema-de-solicitudes-.git`.
+- El primer commit ("SIGSO: version completa Fases 0-8") ya se subió a la
+  rama `main`.
 
-```bash
-# 1. Confirma que el repo actual esta en la raiz del usuario (no en SIGSO)
-cd ~
-git rev-parse --show-toplevel   # deberia mostrar C:/Users/luis1, eso es el problema
-
-# 2. Anota el remoto para no perderlo (ya lo sabemos, pero por si acaso)
-git remote -v
-
-# 3. Elimina SOLO la carpeta .git de la raiz del usuario (esto NO borra
-#    ningun archivo tuyo, solo el historial de git mal ubicado; como no
-#    hay commits todavia -- "No commits yet" -- no se pierde ningun trabajo)
-rm -rf ~/.git
-
-# 4. Ve a la carpeta del proyecto e inicializa el repo ahi, que es donde
-#    debio estar desde el principio
-cd "C:/Users/luis1/OneDrive/Desktop/SIGSO"
-git init
-git remote add origin https://github.com/luis11cesar11lm-dot/Formulario-HomePymes-1.git
-```
-
-Verifica que quedó bien:
-
-```bash
-git rev-parse --show-toplevel   # ahora debe mostrar la ruta de SIGSO
-git status                       # debe listar solo archivos del proyecto SIGSO
-```
-
-> Si prefieres que yo ejecute estos comandos por ti en vez de hacerlo tú
-> mismo, dímelo antes de continuar y lo hago.
-
----
-
-## Paso 1 — Primer commit y subida a GitHub
-
-Desde la carpeta `SIGSO`:
+Para futuros cambios, el flujo normal es:
 
 ```bash
 git add .
@@ -97,7 +63,7 @@ Para activarlo:
    workflow "Publicar frontend en GitHub Pages" automáticamente (se activó
    con el push del Paso 1). Espera a que termine en verde (~1 minuto).
 5. Al terminar, en **Settings → Pages** aparecerá la URL pública, algo
-   como `https://luis11cesar11lm-dot.github.io/Formulario-HomePymes-1/`.
+   como `https://lmtechworkspace-tech.github.io/Sistema-de-solicitudes-/`.
    Anótala — la necesitarás para probar el sistema al final.
 
 > Nota: en cada push posterior que toque archivos de `frontend/`, el sitio
@@ -324,7 +290,7 @@ pueden cargar desde `admin.html` sin tocar la hoja directamente.
 ## Paso 11 — Empezar a probar
 
 1. Abre la URL pública de GitHub Pages (Paso 2.5), por ejemplo
-   `https://tuusuario.github.io/Formulario-HomePymes-1/index.html`.
+   `https://lmtechworkspace-tech.github.io/Sistema-de-solicitudes-/index.html`.
 2. **Como solicitante (sin login)**: llena el formulario de una solicitud
    de prueba y envíala. Verifica: aparece en `SOLICITUDES` de la hoja,
    llega el correo de acuse de recibo, y `estado.html` permite consultarla
