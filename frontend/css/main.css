@@ -1,0 +1,217 @@
+/* main.css — tokens de marca (§12.3), reset y layout compartido
+   (header/nav, botones, inputs). Especifico de cada pantalla vive en su
+   propio css (formulario.css, dashboard.css en Fase 5). */
+
+:root {
+  --naranja: #E8622A;
+  --naranja-claro: #FAD7C3;
+  --azul: #1F4E79;
+  --gris-oscuro: #2C2C2C;
+  --gris-medio: #555555;
+  --gris-claro: #F5F5F5;
+
+  --p1: #C0392B;
+  --p2: #E67E22;
+  --p3: #F1C40F;
+  --p4: #27AE60;
+  --p5: #2980B9;
+
+  --fuente: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--fuente);
+  color: var(--gris-oscuro);
+  background: var(--gris-claro);
+}
+
+a {
+  color: var(--azul);
+}
+
+.sigso-contenido {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+/* --- Header/nav compartido (ui-components.js lo inyecta) ------------- */
+
+.sigso-header {
+  background: #fff;
+  border-bottom: 3px solid var(--naranja);
+}
+
+.sigso-header__interior {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sigso-header__titulo {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--azul);
+}
+
+.sigso-header__subtitulo {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--gris-medio);
+}
+
+.sigso-nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.sigso-nav a {
+  text-decoration: none;
+  color: var(--gris-medio);
+  font-size: 0.9rem;
+  padding: 0.25rem 0;
+  border-bottom: 2px solid transparent;
+}
+
+.sigso-nav a[aria-current="page"] {
+  color: var(--naranja);
+  border-bottom-color: var(--naranja);
+  font-weight: 600;
+}
+
+/* --- Elementos genericos --------------------------------------------- */
+
+.sigso-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.sigso-card + .sigso-card {
+  margin-top: 1rem;
+}
+
+label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+select,
+textarea {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  background: #fff;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 4.5rem;
+}
+
+.sigso-campo {
+  margin-bottom: 1rem;
+}
+
+.sigso-campo__error {
+  color: var(--p1);
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.sigso-boton {
+  background: var(--naranja);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.7rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.sigso-boton:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.sigso-boton--secundario {
+  background: transparent;
+  color: var(--azul);
+  border: 1px solid var(--azul);
+}
+
+.sigso-badge {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.sigso-badge--P1 { background: var(--p1); }
+.sigso-badge--P2 { background: var(--p2); }
+.sigso-badge--P3 { background: var(--p3); color: var(--gris-oscuro); }
+.sigso-badge--P4 { background: var(--p4); }
+.sigso-badge--P5 { background: var(--p5); }
+
+.sigso-spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: sigso-girar 0.6s linear infinite;
+  vertical-align: middle;
+  margin-right: 0.5rem;
+}
+
+@keyframes sigso-girar {
+  to { transform: rotate(360deg); }
+}
+
+.sigso-oculto {
+  display: none !important;
+}
+
+/* Stub generico usado por app.html hasta la Fase 5. */
+.sigso-stub {
+  max-width: 640px;
+  margin: 3rem auto;
+  padding: 1.5rem;
+  background: #fff;
+  border-radius: 8px;
+}
+
+.sigso-stub pre {
+  background: var(--gris-claro);
+  padding: 0.75rem;
+  border-radius: 4px;
+  overflow-x: auto;
+}

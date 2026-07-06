@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SIGSO — Consulta de estado</title>
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/formulario.css" />
+</head>
+<body>
+  <header id="sigso-header" class="sigso-header"></header>
+
+  <main class="sigso-contenido">
+    <form id="form-estado" class="sigso-card" novalidate>
+      <h1>Consultar estado de una solicitud</h1>
+      <p>Ingresa el n&uacute;mero de tu solicitud y el correo con el que la registraste.</p>
+
+      <div class="sigso-campo">
+        <label for="campo-numero-solicitud">N&uacute;mero de solicitud</label>
+        <input type="text" id="campo-numero-solicitud" placeholder="SOL-2026-HP-0001" required />
+      </div>
+
+      <div class="sigso-campo">
+        <label for="campo-email-consulta">Correo</label>
+        <input type="email" id="campo-email-consulta" required />
+      </div>
+
+      <button type="submit" class="sigso-boton" id="btn-consultar">Consultar</button>
+    </form>
+
+    <div id="resultado" class="sigso-card sigso-oculto"></div>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/ui-components.js"></script>
+  <script src="js/estado.js"></script>
+</body>
+</html>

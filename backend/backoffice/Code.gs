@@ -1,0 +1,190 @@
+/**
+ * Code.gs — App Gestion (Backoffice)
+ *
+ * Se publica con "Ejecutar como: usuario que accede" y "Acceso: solo
+ * usuarios del dominio" (§2.1, §3.1). Google ya bloquea a quien no
+ * pertenece al dominio antes de llegar aqui; igual se valida la identidad
+ * de forma defensiva porque no existe token de sesion propio que revisar.
+ *
+ * Mismo contrato de transporte que Intake: POST + text/plain + JSON;
+ * ninguna llamada agrega headers custom ni usa application/json (§4.1).
+ *
+ * Fase 0: transporte, router y resolucion de identidad. Fase 2: resolucion
+ * de rol (USUARIOS) y maquina de estados/prioridad. Fase 5: getDashboardData,
+ * getSolicitudDetalle y agregarComentario. Fase 6: guardarCatalogo y
+ * gestionarUsuario (administracion) ya llaman logica real -- todas las
+ * acciones del router (§4.2) estan conectadas desde esta fase.
+ */
+
+var BACKOFFICE_ACTIONS = {
+  ping: handlePing_,
+  getDashboardData: handleGetDashboardData_,
+  getSolicitudDetalle: handleGetSolicitudDetalle_,
+  actualizarEstado: handleActualizarEstado_,
+  actualizarPrioridad: handleActualizarPrioridad_,
+  agregarComentario: handleAgregarComentario_,
+  guardarCatalogo: handleGuardarCatalogo_,
+  listarCatalogo: handleListarCatalogo_,
+  gestionarUsuario: handleGestionarUsuario_,
+  listarUsuarios: handleListarUsuarios_,
+  listarLogs: handleListarLogs_
+};
+
+function doGet(e) {
+  return jsonResponse_({ ok: true, data: { servicio: 'SIGSO Backoffice', estado: 'activo' } });
+}
+
+function doPost(e) {
+  try {
+    var email = getIdentidadActiva_();
+    if (!email) {
+      return jsonResponse_({
+        ok: false,
+        error: 'forbidden',
+        message: 'No fue posible resolver la identidad del dominio.'
+      });
+    }
+
+    var rol = obtenerRolUsuario_(email);
+    if (!rol) {
+      return jsonResponse_({
+        ok: false,
+        error: 'forbidden',
+        message: 'El usuario ' + email + ' no esta registrado o esta inactivo en SIGSO.'
+      });
+    }
+    // RN-029: Auth.suspenderInactivos() (Fase 7) decide en base a este campo;
+    // sin registrarlo aqui, todos los usuarios activos se verian "inactivos".
+    actualizarFilaPorId_(SHEETS.USUARIOS, 'email', email, { ultimo_acceso: new Date().toISOString() });
+
+    var body = parseRequestBody_(e);
+    var handler = BACKOFFICE_ACTIONS[body.action];
+    if (!handler) {
+      return jsonResponse_({
+        ok: false,
+        error: 'validation',
+        message: 'Accion desconocida: ' + body.action,
+        fields: ['action']
+      });
+    }
+    return handler(body.data || {}, { email: email, rol: rol });
+  } catch (err) {
+    var ref = logError_(err, 'Backoffice.doPost');
+    return jsonResponse_({ ok: false, error: 'internal', ref: ref });
+  }
+}
+
+function getIdentidadActiva_() {
+  var email = Session.getActiveUser().getEmail();
+  return email || null;
+}
+
+// §3.1: la autorizacion es por rol, leido de USUARIOS (email -> rol activo).
+// Devuelve null si el email no esta registrado o esta inactivo (RN-029).
+function obtenerRolUsuario_(email) {
+  var filas = leerFilas_(SHEETS.USUARIOS);
+  for (var i = 0; i < filas.length; i++) {
+    var esActivo = filas[i].activo === true || filas[i].activo === 'TRUE' || filas[i].activo === 1;
+    if (filas[i].email === email && esActivo) {
+      return filas[i].rol;
+    }
+  }
+  return null;
+}
+
+function handlePing_(data, contexto) {
+  return jsonResponse_({
+    ok: true,
+    data: {
+      pong: true,
+      ts: new Date().toISOString(),
+      tz: getConfig_().timezone,
+      usuario: contexto.email,
+      rol: contexto.rol
+    }
+  });
+}
+
+function handleActualizarEstado_(data, contexto) {
+  var resultado = Solicitudes.actualizarEstado(data, contexto);
+  return responderResultado_(resultado);
+}
+
+function handleActualizarPrioridad_(data, contexto) {
+  var resultado = Solicitudes.actualizarPrioridad(data, contexto);
+  return responderResultado_(resultado);
+}
+
+function handleGetDashboardData_(data, contexto) {
+  return jsonResponse_({ ok: true, data: Dashboard.getData(data, contexto) });
+}
+
+function handleGetSolicitudDetalle_(data) {
+  return responderResultado_(Solicitudes.getDetalle(data.solicitud_id));
+}
+
+function handleAgregarComentario_(data, contexto) {
+  return responderResultado_(Comentarios.agregarComentario(data, contexto));
+}
+
+function handleGuardarCatalogo_(data, contexto) {
+  return responderResultado_(Catalogos.guardar(data, contexto));
+}
+
+function handleGestionarUsuario_(data, contexto) {
+  return responderResultado_(Auth.gestionarUsuario(data, contexto));
+}
+
+function handleListarCatalogo_(data, contexto) {
+  return responderResultado_(Catalogos.listar(data, contexto));
+}
+
+function handleListarUsuarios_(data, contexto) {
+  return responderResultado_(Auth.listarUsuarios(data, contexto));
+}
+
+function handleListarLogs_(data, contexto) {
+  return responderResultado_(Notificaciones.listarLogs(data, contexto));
+}
+
+function responderResultado_(resultado) {
+  if (resultado && resultado._validationError) {
+    return jsonResponse_({
+      ok: false,
+      error: 'validation',
+      message: resultado.message,
+      fields: resultado.fields
+    });
+  }
+  if (resultado && resultado._forbidden) {
+    return jsonResponse_({ ok: false, error: 'forbidden', message: resultado.message });
+  }
+  return jsonResponse_({ ok: true, data: resultado });
+}
+
+function handleNotImplemented_() {
+  return jsonResponse_({ ok: false, error: 'internal', ref: 'NOT_IMPLEMENTED_FASE0' });
+}
+
+function parseRequestBody_(e) {
+  if (!e || !e.postData || typeof e.postData.contents !== 'string') {
+    throw new Error('Cuerpo de request vacio o invalido');
+  }
+  var body = JSON.parse(e.postData.contents);
+  if (!body || typeof body.action !== 'string') {
+    throw new Error('Falta el campo "action" en el body');
+  }
+  return body;
+}
+
+function jsonResponse_(payload) {
+  return ContentService
+    .createTextOutput(JSON.stringify(payload))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function logError_(err, contexto) {
+  var ref = Utilities.getUuid();
+  Logger.log('[' + ref + '] ' + contexto + ': ' + (err && err.stack ? err.stack : err));
+  return ref;
+}

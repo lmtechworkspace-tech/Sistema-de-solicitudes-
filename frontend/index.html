@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SIGSO — Nueva solicitud</title>
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/formulario.css" />
+</head>
+<body>
+  <header id="sigso-header" class="sigso-header"></header>
+
+  <main class="sigso-contenido">
+    <div class="sigso-progreso"><div class="sigso-progreso__relleno" id="barra-progreso" style="width:0%"></div></div>
+
+    <form id="form-solicitud" class="sigso-card" novalidate>
+      <h1>Nueva solicitud</h1>
+
+      <div class="sigso-campo">
+        <label for="campo-empresa">Empresa</label>
+        <select id="campo-empresa" required></select>
+      </div>
+
+      <div class="sigso-campo">
+        <label for="campo-plataforma">Plataforma</label>
+        <select id="campo-plataforma" required></select>
+      </div>
+
+      <div class="sigso-campo">
+        <label for="campo-modulo">M&oacute;dulo</label>
+        <select id="campo-modulo" required></select>
+      </div>
+
+      <div class="sigso-campo">
+        <label for="campo-tipo">Tipo de solicitud</label>
+        <select id="campo-tipo" required></select>
+      </div>
+
+      <div class="sigso-campo">
+        <label class="sigso-toggle">
+          <input type="checkbox" id="campo-es-cliente" />
+          &iquest;Es una solicitud de cliente?
+        </label>
+      </div>
+
+      <div class="sigso-bloque-cliente" id="bloque-cliente">
+        <div class="sigso-campo">
+          <label for="campo-empresa-cliente">Empresa cliente</label>
+          <input type="text" id="campo-empresa-cliente" />
+        </div>
+        <div class="sigso-campo">
+          <label for="campo-cliente-mandante">Mandante (opcional)</label>
+          <input type="text" id="campo-cliente-mandante" />
+        </div>
+        <div class="sigso-campo">
+          <label for="campo-cliente-obra">Obra/Proyecto (opcional)</label>
+          <input type="text" id="campo-cliente-obra" />
+        </div>
+        <div class="sigso-campo">
+          <label for="campo-contacto-cliente">Nombre de contacto</label>
+          <input type="text" id="campo-contacto-cliente" />
+        </div>
+        <div class="sigso-campo">
+          <label for="campo-correo-cliente">Correo del cliente</label>
+          <input type="email" id="campo-correo-cliente" />
+        </div>
+        <div class="sigso-campo">
+          <label for="campo-telefono-cliente">Tel&eacute;fono de contacto (opcional)</label>
+          <input type="tel" id="campo-telefono-cliente" placeholder="+569XXXXXXXX" />
+        </div>
+        <div class="sigso-campo">
+          <label for="campo-urgencia-cliente">Urgencia reportada por el cliente</label>
+          <select id="campo-urgencia-cliente">
+            <option value="">No especificada</option>
+            <option value="Alta">Alta</option>
+            <option value="Normal">Normal</option>
+            <option value="Baja">Baja</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="sigso-campo">
+        <label for="campo-solicitante-nombre">Tu nombre</label>
+        <input type="text" id="campo-solicitante-nombre" required />
+      </div>
+
+      <div class="sigso-campo">
+        <label for="campo-solicitante-cargo">Tu cargo</label>
+        <input type="text" id="campo-solicitante-cargo" required />
+      </div>
+
+      <div class="sigso-campo">
+        <label for="campo-solicitante-email">Tu correo</label>
+        <input type="email" id="campo-solicitante-email" required />
+      </div>
+
+      <h2>Subsolicitudes</h2>
+      <div id="lista-subsolicitudes"></div>
+      <button type="button" class="sigso-boton--secundario" id="btn-agregar-subsolicitud">+ Agregar subsolicitud</button>
+
+      <div class="sigso-campo" style="margin-top: 1.5rem">
+        <label for="campo-observaciones-generales">Observaciones generales (opcional)</label>
+        <textarea id="campo-observaciones-generales"></textarea>
+      </div>
+
+      <div class="sigso-campo">
+        <button type="submit" class="sigso-boton" id="btn-enviar">Enviar solicitud</button>
+      </div>
+    </form>
+
+    <div id="resultado" class="sigso-card sigso-oculto"></div>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/ui-components.js"></script>
+  <script src="js/formulario.js"></script>
+</body>
+</html>

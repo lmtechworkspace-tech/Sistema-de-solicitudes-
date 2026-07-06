@@ -1,0 +1,228 @@
+/**
+ * Notificaciones.gs — App Gestion: cambio de estado, aviso al desarrollador
+ * y alerta de fallo de documento (A-05, A-06), alertas de SLA (A-08/09,
+ * Fase 7), mas la cola de reintentos por cuota (A-12). Duplica el nucleo de
+ * envio/dedup con backend/intake/Notificaciones.gs (ver nota de
+ * duplicacion en Config.gs).
+ */
+
+var VENTANA_DEDUP_MINUTOS = 30;
+// RN-027: "SLA vencido notifica 1 vez/dia" -- se aproxima con una ventana
+// deslizante de 24h (mas simple que anclar al dia calendario de Chile, y
+// cumple igual la intencion de no saturar de correos).
+var VENTANA_DEDUP_SLA_VENCIDO_MINUTOS = 24 * 60;
+var MAX_REINTENTOS_CORREO = 3;
+
+var Notificaciones = {
+  notificarCambioEstado: function (solicitudId, subsolicitudId, estadoAnterior, estadoNuevo) {
+    var solicitud = buscarSolicitudPorId_(solicitudId);
+    if (!solicitud) {
+      return { enviado: false, motivo: 'solicitud_no_encontrada' };
+    }
+    var asunto = 'SIGSO - Actualizacion de tu solicitud ' + solicitudId;
+    var cuerpo =
+      'Tu solicitud ' + solicitudId + ' cambio de estado: ' +
+      formatearEstado_(estadoAnterior) + ' -> ' + formatearEstado_(estadoNuevo) + '.';
+    var evento = 'CAMBIO_ESTADO:' + subsolicitudId + ':' + estadoNuevo;
+    return enviarCorreo_(solicitudId, solicitud.solicitante_email, evento, asunto, cuerpo);
+  },
+
+  notificarDesarrollador: function (solicitud) {
+    var destinatarios = obtenerEmailsPorRol_(solicitud.empresa_id, ['DEV']);
+    return destinatarios.map(function (email) {
+      var asunto = 'SIGSO - Documento listo: ' + solicitud.solicitud_id;
+      var cuerpo = 'El documento de la solicitud ' + solicitud.solicitud_id + ' ya esta generado: ' + solicitud.url_pdf;
+      return enviarCorreo_(solicitud.solicitud_id, email, 'DOC_LISTO', asunto, cuerpo);
+    });
+  },
+
+  // A-08 (§13/17.4 v1.0): SLA >= 80% y aun no vencido. Llamada desde
+  // Triggers.verificarSLAs() (diario 09:00).
+  alertaSLAProximo: function (subsolicitud, solicitud) {
+    var destinatarios = obtenerEmailsPorRol_(solicitud.empresa_id, ['ANA', 'ADM']);
+    return destinatarios.map(function (email) {
+      var asunto = 'SIGSO - SLA proximo a vencer: ' + subsolicitud.subsolicitud_id;
+      var cuerpo =
+        'La subsolicitud ' + subsolicitud.subsolicitud_id + ' (solicitud ' + solicitud.solicitud_id +
+        ') ya supero el 80% de su SLA objetivo (' + subsolicitud.sla_objetivo_horas + ' horas habiles).';
+      return enviarCorreo_(solicitud.solicitud_id, email, 'SLA_PROXIMO:' + subsolicitud.subsolicitud_id, asunto, cuerpo);
+    });
+  },
+
+  // A-09 (§13/17.4 v1.0): SLA > 100%. RN-027: como mucho 1 email por dia
+  // por destinatario mientras la subsolicitud siga vencida.
+  alertaSLAVencido: function (subsolicitud, solicitud) {
+    var destinatarios = obtenerEmailsPorRol_(solicitud.empresa_id, ['ANA', 'ADM']);
+    return destinatarios.map(function (email) {
+      var asunto = 'SIGSO - SLA VENCIDO: ' + subsolicitud.subsolicitud_id;
+      var cuerpo =
+        'La subsolicitud ' + subsolicitud.subsolicitud_id + ' (solicitud ' + solicitud.solicitud_id +
+        ') supero su SLA objetivo (' + subsolicitud.sla_objetivo_horas + ' horas habiles).';
+      return enviarCorreo_(
+        solicitud.solicitud_id, email, 'SLA_VENCIDO:' + subsolicitud.subsolicitud_id, asunto, cuerpo,
+        VENTANA_DEDUP_SLA_VENCIDO_MINUTOS
+      );
+    });
+  },
+
+  // §17.4 v1.0: "Resumen semanal" — lunes 09:00, a Admin+Analista, con los
+  // KPIs de Dashboard.getData ya calculados (Fase 5), uno por empresa.
+  enviarResumenSemanal: function () {
+    return enviarReporteProgramado_('RESUMEN_SEMANAL', ['ANA', 'ADM'], function (kpis) {
+      return 'Resumen semanal SIGSO\n\n' +
+        'Solicitudes abiertas: ' + kpis.resumen.total_abiertas + '\n' +
+        'Criticas activas (P1): ' + kpis.resumen.criticas_activas + '\n' +
+        'Subsolicitudes con SLA vencido: ' + kpis.resumen.sla_vencido + '\n' +
+        'Ingresadas hoy: ' + kpis.resumen.del_dia + '\n';
+    });
+  },
+
+  // §17.4 v1.0: "Reporte mensual" — dia 1, a Admin+Analista+Desarrollador,
+  // con tendencia y tiempo promedio de resolucion.
+  enviarReporteMensual: function () {
+    return enviarReporteProgramado_('REPORTE_MENSUAL', ['ANA', 'ADM', 'DEV'], function (kpis) {
+      return 'Reporte mensual SIGSO\n\n' +
+        'Solicitudes abiertas: ' + kpis.resumen.total_abiertas + '\n' +
+        'Tiempo promedio de resolucion (horas habiles): ' + kpis.tiempo_promedio_resolucion_horas + '\n' +
+        'Tendencia (ultimos 6 meses, ingresadas/resueltas): ' + JSON.stringify(kpis.tendencia_mensual) + '\n';
+    });
+  },
+
+  alertarAdminFalloDocumento: function (solicitud, ref) {
+    var destinatarios = obtenerEmailsPorRol_(solicitud.empresa_id, ['ADM']);
+    return destinatarios.map(function (email) {
+      var asunto = 'SIGSO - Fallo generando documento: ' + solicitud.solicitud_id;
+      var cuerpo =
+        'La generacion de documento fallo ' + MAX_REINTENTOS_CORREO + ' veces para ' +
+        solicitud.solicitud_id + '. Referencia de log: ' + ref;
+      return enviarCorreo_(solicitud.solicitud_id, email, 'FALLO_DOCUMENTO', asunto, cuerpo);
+    });
+  },
+
+  // A-12: reintenta notificaciones marcadas PENDIENTE_REINTENTO (fallo de
+  // cuota u otro error transitorio de Gmail), hasta 3 intentos.
+  // RF-019 (§12.6 v1.0): vista de logs de automatizaciones en admin.html.
+  // Solo Admin, mas recientes primero.
+  listarLogs: function (data, contexto) {
+    if (contexto.rol !== 'ADM') {
+      return { _forbidden: true, message: 'Solo un Administrador puede ver los logs de automatizaciones.' };
+    }
+    var limite = (data && data.limite) ? Number(data.limite) : 100;
+    return leerFilas_(SHEETS.LOG_NOTIFICACIONES)
+      .slice()
+      .sort(function (a, b) { return new Date(b.timestamp) - new Date(a.timestamp); })
+      .slice(0, limite);
+  },
+
+  procesarColaCorreo: function () {
+    var pendientes = leerFilas_(SHEETS.LOG_NOTIFICACIONES).filter(function (n) {
+      return n.resultado === 'PENDIENTE_REINTENTO' && Number(n.reintentos) < MAX_REINTENTOS_CORREO;
+    });
+
+    return pendientes.map(function (n) {
+      try {
+        GmailApp.sendEmail(n.destinatario, '[Reintento] ' + n.evento, 'Reintento de notificacion para ' + n.solicitud_id);
+        actualizarFilaPorId_(SHEETS.LOG_NOTIFICACIONES, 'log_id', n.log_id, { resultado: 'ENVIADO' });
+        return { log_id: n.log_id, resultado: 'ENVIADO' };
+      } catch (err) {
+        var reintentos = Number(n.reintentos) + 1;
+        actualizarFilaPorId_(SHEETS.LOG_NOTIFICACIONES, 'log_id', n.log_id, {
+          reintentos: reintentos,
+          resultado: reintentos >= MAX_REINTENTOS_CORREO ? 'FALLIDO' : 'PENDIENTE_REINTENTO'
+        });
+        return { log_id: n.log_id, resultado: 'ERROR' };
+      }
+    });
+  }
+};
+
+function formatearEstado_(codigo) {
+  var etiquetas = {
+    S01: 'Nueva', S02: 'Recibida', S03: 'En revision', S04: 'Aprobada',
+    S05: 'En desarrollo', S06: 'Esperando informacion', S07: 'En pruebas',
+    S08: 'Terminada', S09: 'Cerrada', S10: 'Rechazada', S11: 'Cancelada'
+  };
+  return etiquetas[codigo] || codigo;
+}
+
+function obtenerEmailsPorRol_(empresaId, roles) {
+  return leerFilas_(SHEETS.USUARIOS)
+    .filter(function (u) {
+      var activo = u.activo === true || u.activo === 'TRUE' || u.activo === 1;
+      return activo && u.empresa_id === empresaId && roles.indexOf(u.rol) !== -1;
+    })
+    .map(function (u) {
+      return u.email;
+    });
+}
+
+// RN-026 deduplica por (solicitud, evento, destinatario): ver la nota
+// identica en backend/intake/Notificaciones.gs.
+function yaNotificadoRecientemente_(solicitudId, evento, destinatario, ventanaMinutos) {
+  var ahora = new Date().getTime();
+  var ventana = ventanaMinutos || VENTANA_DEDUP_MINUTOS;
+  return leerFilas_(SHEETS.LOG_NOTIFICACIONES).some(function (fila) {
+    if (
+      fila.solicitud_id !== solicitudId ||
+      fila.evento !== evento ||
+      fila.destinatario !== destinatario ||
+      fila.resultado !== 'ENVIADO'
+    ) {
+      return false;
+    }
+    var minutosTranscurridos = (ahora - new Date(fila.timestamp).getTime()) / 60000;
+    return minutosTranscurridos < ventana;
+  });
+}
+
+function registrarNotificacion_(solicitudId, canal, destinatario, evento, resultado, reintentos) {
+  agregarFila_(SHEETS.LOG_NOTIFICACIONES, {
+    log_id: Utilities.getUuid(),
+    timestamp: new Date().toISOString(),
+    solicitud_id: solicitudId,
+    canal: canal,
+    destinatario: destinatario,
+    evento: evento,
+    resultado: resultado,
+    reintentos: reintentos || 0
+  });
+}
+
+// Un reporte por empresa (Dashboard.getData ya filtra por empresa_id
+// cuando se pasa en filtros); el "solicitud_id" del log es un tag, no un FK
+// real (LOG_NOTIFICACIONES no fuerza esa relacion). La ventana de dedup
+// evita reenvios si el trigger corre dos veces el mismo dia.
+function enviarReporteProgramado_(evento, roles, formatearCuerpo) {
+  var empresas = {};
+  leerFilas_(SHEETS.USUARIOS).forEach(function (u) { empresas[u.empresa_id] = true; });
+
+  var resultados = [];
+  Object.keys(empresas).forEach(function (empresaId) {
+    var kpis = Dashboard.getData({ empresa_id: empresaId }, { rol: 'ADM', email: '' });
+    var asunto = 'SIGSO - ' + evento.replace(/_/g, ' ') + ' (' + empresaId + ')';
+    var cuerpo = formatearCuerpo(kpis);
+    var claveEvento = evento + ':' + claveDia_(new Date(), 'America/Santiago');
+    obtenerEmailsPorRol_(empresaId, roles).forEach(function (email) {
+      resultados.push(enviarCorreo_('REPORTE:' + empresaId, email, claveEvento, asunto, cuerpo, VENTANA_DEDUP_SLA_VENCIDO_MINUTOS));
+    });
+  });
+  return resultados;
+}
+
+function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo, ventanaMinutos) {
+  if (!destinatario) {
+    return { enviado: false, motivo: 'sin_destinatario' };
+  }
+  if (yaNotificadoRecientemente_(solicitudId, evento, destinatario, ventanaMinutos)) {
+    return { enviado: false, motivo: 'deduplicado' };
+  }
+  try {
+    GmailApp.sendEmail(destinatario, asunto, cuerpo);
+    registrarNotificacion_(solicitudId, 'EMAIL', destinatario, evento, 'ENVIADO', 0);
+    return { enviado: true };
+  } catch (err) {
+    registrarNotificacion_(solicitudId, 'EMAIL', destinatario, evento, 'PENDIENTE_REINTENTO', 1);
+    logError_(err, 'Notificaciones.enviarCorreo:' + evento + ':' + solicitudId);
+    return { enviado: false, motivo: 'error_envio' };
+  }
+}
