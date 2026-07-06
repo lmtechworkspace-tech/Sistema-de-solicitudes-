@@ -16,8 +16,8 @@ test('Catalogos.getAll devuelve solo entradas activas de cada catalogo', () => {
     ['ERP', 'ERP', 'HP', 'https://erp.hp.cl', true]
   ]);
   seedSheet(ctx, 'CAT_MODULOS', ctx.COLUMNAS.CAT_MODULOS, [
-    ['FACT', 'Facturacion', 'ERP', true],
-    ['LEGACY', 'Modulo viejo', 'ERP', false]
+    ['FACT', 'Facturacion', 'ERP', '', true],
+    ['LEGACY', 'Modulo viejo', 'ERP', '', false]
   ]);
   seedSheet(ctx, 'CAT_TIPOS', ctx.COLUMNAS.CAT_TIPOS, [
     ['ERR', 'Error', 'P2', true],

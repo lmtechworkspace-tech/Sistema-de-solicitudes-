@@ -59,8 +59,8 @@ function construirContexto() {
     ['RLD_GDE', 'GDE', 'RLD', '', true]
   ]);
   seedSheet(ctx, 'CAT_MODULOS', ctx.COLUMNAS.CAT_MODULOS, [
-    ['MOD_CHARLA', 'Charla Diaria', 'INT_GDE', true],
-    ['MOD_LIQ', 'Liquidaciones', 'RLD_GDE', true]
+    ['MOD_CHARLA', 'Charla Diaria', 'INT_GDE', '', true],
+    ['MOD_LIQ', 'Liquidaciones', 'RLD_GDE', '', true]
   ]);
   seedSheet(ctx, 'CAT_TIPOS', ctx.COLUMNAS.CAT_TIPOS, [
     ['ERR', 'Error / Bug', 'P2', true],

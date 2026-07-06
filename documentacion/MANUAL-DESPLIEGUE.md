@@ -323,12 +323,19 @@ desde `admin.html`):
    `nombre`, `empresa_id` de la fila anterior, `url_base` opcional,
    `activo=TRUE`).
 4. **`CAT_MODULOS`**: una fila por módulo real (`modulo_id`, `nombre`,
-   `plataforma_id`, `activo=TRUE`).
+   `plataforma_id`, `modulo_padre_id` — vacío si es un módulo raíz, o el
+   código del módulo padre si es un submódulo/ítem —, `activo=TRUE`). El
+   catálogo real completo (HomePymes, GDE, Intranet) quedó registrado en el
+   historial de la conversación de despliegue; RLD todavía no tiene su
+   catálogo de módulos definido, así que sus plataformas (`Gestión Integral`,
+   `Navieras`) se cargan sin filas en `CAT_MODULOS` por ahora.
 5. **`CONFIG_FERIADOS`**: una fila por feriado de Chile del año en curso
    (`fecha` en formato `YYYY-MM-DD`, `nombre`, `anio`).
 
 A partir de aquí, empresas/plataformas/módulos/usuarios adicionales ya se
-pueden cargar desde `admin.html` sin tocar la hoja directamente.
+pueden cargar desde `admin.html` sin tocar la hoja directamente — incluida
+la jerarquía de módulos (el campo "Módulo padre" del formulario de
+administración).
 
 ---
 

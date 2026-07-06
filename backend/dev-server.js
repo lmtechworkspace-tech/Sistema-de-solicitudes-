@@ -55,12 +55,16 @@ function construirContexto() {
     ['RLD_GDE', 'GDE', 'RLD', '', true]
   ]);
   seedSheet(ctx, 'CAT_MODULOS', ctx.COLUMNAS.CAT_MODULOS, [
-    ['MOD_DASH', 'Dashboard', 'INT_GDE', true],
-    ['MOD_CHARLA', 'Charla Diaria', 'INT_GDE', true],
-    ['MOD_AST', 'AST', 'INT_GDE', true],
-    ['MOD_GENDOC', 'Generador Documental', 'RLD_GDE', true],
-    ['MOD_LIQ', 'Liquidaciones', 'RLD_GDE', true],
-    ['MOD_VAC', 'Vacaciones', 'RLD_GDE', true]
+    ['MOD_DASH', 'Dashboard', 'INT_GDE', '', true],
+    ['MOD_CHARLA', 'Charla Diaria', 'INT_GDE', '', true],
+    ['MOD_AST', 'AST', 'INT_GDE', '', true],
+    // Ejemplo de jerarquia de 2 niveles (post-Fase 8): modulo principal +
+    // submodulos, para probar la cascada del formulario en local.
+    ['MOD_GENDOC', 'Generador Documental', 'RLD_GDE', '', true],
+    ['MOD_GENDOC_GEN', 'Generar Documento', 'RLD_GDE', 'MOD_GENDOC', true],
+    ['MOD_GENDOC_FIRMA', 'Firma R Generador', 'RLD_GDE', 'MOD_GENDOC', true],
+    ['MOD_LIQ', 'Liquidaciones', 'RLD_GDE', '', true],
+    ['MOD_VAC', 'Vacaciones', 'RLD_GDE', '', true]
   ]);
   seedSheet(ctx, 'CAT_TIPOS', ctx.COLUMNAS.CAT_TIPOS, [
     ['ERR', 'Error / Bug', 'P2', true],

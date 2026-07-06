@@ -190,7 +190,7 @@ test('crearSolicitud guarda los nombres desnormalizados de los catalogos (§13.2
   const ctx = loadIntakeConSchema();
   seedSheet(ctx, 'CAT_EMPRESAS', ctx.COLUMNAS.CAT_EMPRESAS, [['HP', 'HomePymes', '', true]]);
   seedSheet(ctx, 'CAT_PLATAFORMAS', ctx.COLUMNAS.CAT_PLATAFORMAS, [['ERP', 'Sistema ERP', 'HP', '', true]]);
-  seedSheet(ctx, 'CAT_MODULOS', ctx.COLUMNAS.CAT_MODULOS, [['Facturacion', 'Facturacion Electronica', 'ERP', true]]);
+  seedSheet(ctx, 'CAT_MODULOS', ctx.COLUMNAS.CAT_MODULOS, [['Facturacion', 'Facturacion Electronica', 'ERP', '', true]]);
   seedSheet(ctx, 'CAT_TIPOS', ctx.COLUMNAS.CAT_TIPOS, [['ERR', 'Error / Bug', 'P2', true]]);
 
   ctx.Solicitudes.crearSolicitud(datosValidos());

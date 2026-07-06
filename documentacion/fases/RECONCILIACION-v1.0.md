@@ -113,6 +113,16 @@ para el detalle columna por columna.
   visibles. No se agregó la columna ni la UI de jerarquía: se puede sumar
   después si un módulo específico lo necesita, sin tocar el resto del
   esquema.
+
+  > **Actualización (durante el despliegue real, post-Fase 8):** al cargar
+  > el catálogo real de módulos (HomePymes/GDE/Intranet), el cliente aportó
+  > un mapa de procesos completo (draw.io) que sí tiene una jerarquía real
+  > de hasta 3 niveles (módulo principal → submódulo → ítem), más profunda
+  > que los ejemplos planos de v1.0/v1.1. Se agregó `modulo_padre_id` a
+  > `CAT_MODULOS`, una cascada de selects en el formulario público
+  > (`campo-modulo` → `campo-submodulo` → `campo-item`, visibles solo si el
+  > nivel anterior tiene hijos) y el campo correspondiente en la gestión de
+  > catálogos de `admin.html`. Ver `database/schema.md` para el detalle.
 - **Pantallas de v1.0 no cubiertas aún** (login.html, dashboard.html,
   admin.html, detalle de solicitud): corresponden a fases futuras (5 y 6),
   no a este retrofit. La paleta de colores y tipografía de v1.0 ya

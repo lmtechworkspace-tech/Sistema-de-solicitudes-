@@ -118,7 +118,24 @@ agregan la FK a su padre: `empresa_id` / `plataforma_id`). `CAT_EMPRESAS`
 agrega `logo` (URL) y `CAT_PLATAFORMAS` agrega `url_base` — campos reales de
 RF-006/RF-007 (v1.0) que se habían omitido en la primera pasada de
 reconciliación; agregados en la Fase 6 (ver
-`documentacion/fases/RECONCILIACION-v1.0.md`). `Catalogos.getAll()` (Intake,
+`documentacion/fases/RECONCILIACION-v1.0.md`).
+
+`CAT_MODULOS` agrega además `modulo_padre_id` (post-Fase 8, durante el
+despliegue real): el catálogo real de módulos de HomePymes/GDE/Intranet
+tiene hasta 3 niveles (módulo principal → submódulo → ítem — ver el mapa de
+procesos real, no modelado en ninguna versión de la especificación
+original). Vacío si el módulo es raíz de su plataforma. El formulario
+público arma una cascada de selects (`campo-modulo` → `campo-submodulo` →
+`campo-item`, ver `frontend/js/formulario.js`) que se muestran solo si el
+nivel anterior efectivamente tiene hijos; el valor que se guarda en
+`SOLICITUDES.modulo` es siempre el del nivel más profundo elegido, sin
+importar la profundidad real de ese módulo en particular. `admin.html`
+gestiona el árbol con un campo de texto simple (`modulo_padre_id`, el
+código del padre) en vez de un editor de árbol dedicado — consistente con
+cómo ya se referencian `empresa_id`/`plataforma_id` en el resto del panel de
+catálogos.
+
+`Catalogos.getAll()` (Intake,
 formulario público) solo devuelve filas con `activo=true`;
 `Catalogos.listar()` (Backoffice, panel de administración) devuelve todas,
 activas e inactivas, para poder editarlas. `CAT_EMPRESAS`/`CAT_PLATAFORMAS`/`CAT_MODULOS`

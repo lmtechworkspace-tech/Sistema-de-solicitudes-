@@ -60,6 +60,25 @@ test('Catalogos.guardar permite MODULO/TIPO para el rol Analista (nivel basico)'
   assert.equal(resultado.modulo_id, 'MOD_X');
 });
 
+test('Catalogos.guardar (MODULO) acepta modulo_padre_id para armar jerarquia (post-Fase 8)', () => {
+  const ctx = loadConSchema();
+  ctx.Catalogos.guardar(
+    { tipo: 'MODULO', registro: { modulo_id: 'GENDOC', nombre: 'Generador Documental', plataforma_id: 'RLD_GDE', modulo_padre_id: '', activo: true } },
+    { email: 'admin@homepymes.cl', rol: 'ADM' }
+  );
+  const resultado = ctx.Catalogos.guardar(
+    { tipo: 'MODULO', registro: { modulo_id: 'GENDOC_FIRMA', nombre: 'Firma R Generador', plataforma_id: 'RLD_GDE', modulo_padre_id: 'GENDOC', activo: true } },
+    { email: 'admin@homepymes.cl', rol: 'ADM' }
+  );
+
+  assert.equal(resultado.modulo_padre_id, 'GENDOC');
+  const modulos = ctx.leerFilas_('CAT_MODULOS');
+  const raiz = modulos.find((m) => m.modulo_id === 'GENDOC');
+  const hijo = modulos.find((m) => m.modulo_id === 'GENDOC_FIRMA');
+  assert.equal(raiz.modulo_padre_id, '');
+  assert.equal(hijo.modulo_padre_id, 'GENDOC');
+});
+
 test('Catalogos.guardar responde error de validacion sin el identificador del registro', () => {
   const ctx = loadConSchema();
   const resultado = ctx.Catalogos.guardar(

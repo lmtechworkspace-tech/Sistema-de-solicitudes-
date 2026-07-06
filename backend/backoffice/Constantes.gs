@@ -78,7 +78,9 @@ var COLUMNAS = {
   // Ver la nota identica en backend/intake/Constantes.gs (RF-006/RF-007 v1.0).
   CAT_EMPRESAS: ['empresa_id', 'nombre', 'logo', 'activo'],
   CAT_PLATAFORMAS: ['plataforma_id', 'nombre', 'empresa_id', 'url_base', 'activo'],
-  CAT_MODULOS: ['modulo_id', 'nombre', 'plataforma_id', 'activo'],
+  // Ver la nota identica en backend/intake/Constantes.gs sobre
+  // modulo_padre_id (jerarquia de hasta 3 niveles, post-Fase 8).
+  CAT_MODULOS: ['modulo_id', 'nombre', 'plataforma_id', 'modulo_padre_id', 'activo'],
   CAT_TIPOS: ['tipo_id', 'nombre', 'prioridad_default', 'activo'],
   LOG_SISTEMA: ['log_id', 'timestamp', 'contexto', 'mensaje', 'ref'],
   LOG_NOTIFICACIONES: [

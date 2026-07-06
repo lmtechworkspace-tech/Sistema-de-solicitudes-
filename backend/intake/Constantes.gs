@@ -96,7 +96,13 @@ var COLUMNAS = {
   // directo a la plataforma). Ver RECONCILIACION-v1.0.md.
   CAT_EMPRESAS: ['empresa_id', 'nombre', 'logo', 'activo'],
   CAT_PLATAFORMAS: ['plataforma_id', 'nombre', 'empresa_id', 'url_base', 'activo'],
-  CAT_MODULOS: ['modulo_id', 'nombre', 'plataforma_id', 'activo'],
+  // modulo_padre_id (post-Fase 8): jerarquia real de hasta 3 niveles
+  // (modulo principal > submodulo > item) encontrada en el mapa de
+  // procesos real de HomePymes/GDE/Intranet. Vacio si es un modulo raiz.
+  // El selector "Modulo" del formulario publico arma la cascada con esto;
+  // el modulo_id que se guarda en SOLICITUDES es siempre el del nivel mas
+  // profundo elegido, sin importar la profundidad real del arbol.
+  CAT_MODULOS: ['modulo_id', 'nombre', 'plataforma_id', 'modulo_padre_id', 'activo'],
   // 7 tipos reales de RF-009 (doc 3 de v1.0): prioridad_default es solo
   // informativa/UX (mostrar una sugerencia en el formulario); la Fase 2
   // corrigio explicitamente que la prioridad automatica se derive por

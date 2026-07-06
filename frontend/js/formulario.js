@@ -41,8 +41,10 @@
       poblarModulos_();
     });
     document.getElementById('campo-plataforma').addEventListener('change', poblarModulos_);
+    document.getElementById('campo-modulo').addEventListener('change', actualizarCascadaSubmodulo_);
+    document.getElementById('campo-submodulo').addEventListener('change', actualizarCascadaItem_);
 
-    ['campo-empresa', 'campo-plataforma', 'campo-modulo', 'campo-tipo',
+    ['campo-empresa', 'campo-plataforma', 'campo-modulo', 'campo-submodulo', 'campo-item', 'campo-tipo',
       'campo-solicitante-nombre', 'campo-solicitante-cargo', 'campo-solicitante-email',
       'campo-empresa-cliente', 'campo-cliente-mandante', 'campo-cliente-obra',
       'campo-contacto-cliente', 'campo-correo-cliente', 'campo-telefono-cliente',
@@ -94,15 +96,60 @@
     poblarSelect_('campo-plataforma', plataformas, 'plataforma_id', 'nombre');
   }
 
+  // Jerarquia real de hasta 3 niveles (modulo principal > submodulo > item,
+  // post-Fase 8, ver mapa de procesos de HomePymes/GDE/Intranet): un modulo
+  // es "raiz" cuando modulo_padre_id viene vacio. Submodulo/item aparecen
+  // solo si el nivel anterior efectivamente tiene hijos -- muchos modulos
+  // no tienen ninguno, y el formulario no debe mostrar selects vacios.
   function poblarModulos_() {
     if (!estado.catalogos) {
       return;
     }
     var plataformaId = document.getElementById('campo-plataforma').value;
-    var modulos = estado.catalogos.modulos.filter(function (m) {
-      return !plataformaId || m.plataforma_id === plataformaId;
+    var raices = estado.catalogos.modulos.filter(function (m) {
+      return (!plataformaId || m.plataforma_id === plataformaId) && !m.modulo_padre_id;
     });
-    poblarSelect_('campo-modulo', modulos, 'modulo_id', 'nombre');
+    poblarSelect_('campo-modulo', raices, 'modulo_id', 'nombre');
+    actualizarCascadaSubmodulo_();
+  }
+
+  function actualizarCascadaSubmodulo_() {
+    actualizarNivelHijo_('campo-modulo', 'bloque-submodulo', 'campo-submodulo');
+    actualizarCascadaItem_();
+  }
+
+  function actualizarCascadaItem_() {
+    actualizarNivelHijo_('campo-submodulo', 'bloque-item', 'campo-item');
+  }
+
+  function actualizarNivelHijo_(idPadre, idBloqueHijo, idSelectHijo) {
+    var bloque = document.getElementById(idBloqueHijo);
+    var selectHijo = document.getElementById(idSelectHijo);
+    var padreId = document.getElementById(idPadre).value;
+    var hijos = (estado.catalogos ? estado.catalogos.modulos : []).filter(function (m) {
+      return !!padreId && m.modulo_padre_id === padreId;
+    });
+
+    if (hijos.length === 0) {
+      bloque.classList.add('sigso-oculto');
+      selectHijo.innerHTML = '';
+      selectHijo.required = false;
+      return;
+    }
+    bloque.classList.remove('sigso-oculto');
+    selectHijo.required = true;
+    poblarSelect_(idSelectHijo, hijos, 'modulo_id', 'nombre');
+  }
+
+  // El valor final que se guarda en SOLICITUDES.modulo es siempre el del
+  // nivel mas profundo con una seleccion real, sin importar cuantos
+  // niveles tenga ese modulo en particular.
+  function moduloSeleccionadoFinal_() {
+    var item = document.getElementById('campo-item').value;
+    if (item) return item;
+    var submodulo = document.getElementById('campo-submodulo').value;
+    if (submodulo) return submodulo;
+    return document.getElementById('campo-modulo').value;
   }
 
   function alternarBloqueCliente_() {
@@ -237,7 +284,7 @@
     return {
       empresa_id: document.getElementById('campo-empresa').value,
       plataforma: document.getElementById('campo-plataforma').value,
-      modulo: document.getElementById('campo-modulo').value,
+      modulo: moduloSeleccionadoFinal_(),
       tipo: document.getElementById('campo-tipo').value,
       es_cliente: esCliente,
       empresa_cliente: esCliente ? document.getElementById('campo-empresa-cliente').value : '',
