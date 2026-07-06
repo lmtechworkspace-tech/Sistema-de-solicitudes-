@@ -2,3 +2,4 @@ node_modules/
 .clasp.json
 .claude/settings.local.json
 *.log
+~$*.docx
