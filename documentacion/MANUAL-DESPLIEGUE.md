@@ -166,15 +166,27 @@ el editor) para ver el error exacto.
 
 ## Paso 7 — Proyecto Apps Script "Backoffice" (App Gestión)
 
-Igual que el Paso 6, pero:
+Igual que el Paso 6, pero con dos diferencias importantes: incluye 2
+archivos HTML (`App.html`/`Admin.html`) y, si tu cuenta es Gmail normal (no
+Google Workspace), el navegador bloquea el patrón "GitHub Pages llama por
+`fetch()` a un Apps Script autenticado" — por eso estas 2 páginas ya no
+viven en GitHub Pages, las sirve el propio proyecto Apps Script (ver nota
+al final de este paso).
 
 1. Nuevo proyecto, nómbralo `SIGSO - Backoffice`.
-2. Copia todos los archivos de `backend/backoffice/`:
+2. Copia todos los archivos `.gs` de `backend/backoffice/`:
    - `Config.gs`, `Constantes.gs`, `SheetsRepo.gs`, `Utils.gs`,
      `DriveRepo.gs`, `Notificaciones.gs`, `Documentos.gs`, `Solicitudes.gs`,
      `Dashboard.gs`, `Comentarios.gs`, `Catalogos.gs`, `Auth.gs`,
      `Triggers.gs`, `Code.gs`
-3. Manifiesto: reemplaza por `backend/backoffice/appsscript.json` (trae
+3. Copia además los 2 archivos HTML **generados** (no los edites a mano —
+   corren `npm run build:backoffice-html` para regenerarlos si cambia algo
+   en `frontend/app.html`/`admin.html`/`js/*.js`):
+   - `backend/backoffice/App.html` → crea un archivo nuevo en el editor,
+     tipo **HTML** (no Script), nómbralo exactamente `App`.
+   - `backend/backoffice/Admin.html` → archivo tipo **HTML**, nómbralo
+     exactamente `Admin`.
+4. Manifiesto: reemplaza por `backend/backoffice/appsscript.json` (trae
    `"access": "DOMAIN"`, `"executeAs": "USER_ACCESSING"` — solo usuarios
    del dominio de Google Workspace, cada uno ejecuta con su propia
    identidad).
@@ -186,23 +198,44 @@ Igual que el Paso 6, pero:
    > gestiona el control de acceso completamente vía la hoja `USUARIOS`
    > (que ya es como funciona el control de roles en este sistema, `Code.gs`
    > ya rechaza a cualquier email que no esté en `USUARIOS` con `activo=true`).
-4. Mismas 3 Propiedades del script que el Paso 6.4 (mismo Sheet ID, mismo
+5. Mismas 3 Propiedades del script que el Paso 6.4 (mismo Sheet ID, mismo
    Drive folder ID).
-5. **Implementar → Nueva implementación** → Aplicación web:
+6. **Implementar → Nueva implementación** → Aplicación web:
    - Ejecutar como: **El usuario que accede a la aplicación web**.
    - Quién tiene acceso: **Cualquier usuario de [tu dominio]** (o "Cualquier
-     usuario con una Cuenta de Google" si usaste `ANYONE` arriba).
+     usuario con una Cuenta de Google" si usaste `ANYONE` arriba — **nunca**
+     "Cualquier usuario" a secas, esa opción es acceso anónimo y rompe la
+     resolución de rol).
    - Implementar, copiar la URL `/exec` → esa es tu `BACKOFFICE_URL`.
-6. En el editor, selecciona la función `configurarTriggers` en el
+   - Si al autorizar te da un error de Google Drive ("no se pudo abrir el
+     archivo"), prueba en una ventana de incógnito con sesión solo en tu
+     cuenta — es un conflicto de sesión cuando el navegador tiene varias
+     cuentas de Google abiertas a la vez.
+7. En el editor, selecciona la función `configurarTriggers` en el
    desplegable de funciones y **Ejecútala una sola vez**. Esto instala los
    7 triggers de tiempo (cola de documentos, cola de correo, verificación
    de SLA, refresco de cache, suspensión de inactivos, resumen semanal,
    reporte mensual). Verifica en el ícono de reloj ("Triggers") del editor
    que aparezcan 7 entradas.
 
+> **Por qué `App.html`/`Admin.html` viven aquí y no en GitHub Pages**: un
+> Web App de Apps Script que exige identidad de Google (no anónimo, como
+> Backoffice) necesita que el navegador demuestre esa identidad mediante
+> una cookie de sesión de Google. Si la página que llama a ese Web App vive
+> en otro dominio (tu sitio de GitHub Pages), esa cookie viaja como
+> "cookie de tercero", y los navegadores actuales la bloquean cada vez más
+> agresivo — el resultado es un `401 Unauthorized` que ni siquiera llega a
+> tu código. Sirviendo `App.html`/`Admin.html` desde el propio proyecto
+> Apps Script (mismo origen) y usando `google.script.run` en vez de
+> `fetch()` (ver `frontend/js/api.js`), este problema desaparece por
+> completo: no hay red ni cookies involucradas, es un puente nativo del
+> sandbox de Apps Script. Intake (formulario público, consulta de estado)
+> no tiene este problema porque es 100% anónimo — sigue funcionando desde
+> GitHub Pages sin cambios.
+
 ---
 
-## Paso 8 — Conectar el frontend a las URLs reales
+## Paso 8 — Conectar Intake a la URL real
 
 1. Edita `frontend/js/config.js` en tu copia local del repo:
 
@@ -210,22 +243,37 @@ Igual que el Paso 6, pero:
 window.SIGSO_CONFIG = Object.freeze({
   INTAKE_URL: 'https://script.google.com/macros/s/TU_ID_DE_INTAKE/exec',
   BACKOFFICE_URL: 'https://script.google.com/macros/s/TU_ID_DE_BACKOFFICE/exec',
+  SITIO_PUBLICO: '',
   TIMEZONE: 'America/Santiago'
 });
 ```
 
-Pega las URLs reales de los Pasos 6.6 y 7.5.
+Pega las URLs reales de los Pasos 6.6 y 7.6. `BACKOFFICE_URL` aquí solo se
+usa para armar los enlaces de navegación "Backoffice"/"Administración" del
+header (`index.html`/`estado.html` no llaman a Backoffice por fetch).
 
-2. Commitea y sube el cambio:
+2. Si cambiaste `frontend/app.html`, `frontend/admin.html` o cualquier
+   `frontend/js/*.js`, regenera las páginas de Apps Script antes de
+   commitear:
 
 ```bash
-git add frontend/js/config.js
-git commit -m "config: URLs reales de Intake/Backoffice"
+npm run build:backoffice-html
+```
+
+Y vuelve a pegar el contenido de `backend/backoffice/App.html`/`Admin.html`
+en el editor de Apps Script (Paso 7.3), con una **Nueva versión** de la
+implementación (Apps Script no actualiza `/exec` hasta que creas una).
+
+3. Commitea y sube el cambio:
+
+```bash
+git add frontend/js/config.js backend/backoffice/App.html backend/backoffice/Admin.html
+git commit -m "config: URL real de Intake"
 git push
 ```
 
-El workflow de GitHub Pages (Paso 2) va a republicar el sitio solo en
-cuanto detecte el push.
+El workflow de GitHub Pages (Paso 2) va a republicar `index.html`/`estado.html`
+solo en cuanto detecte el push.
 
 ---
 
@@ -248,14 +296,11 @@ usa `{ action: 'getCatalogos', data: {} }` en su lugar — cualquier
 respuesta con `ok: true` o `ok: false` pero **sin** error de red confirma
 que el contrato CORS funciona).*
 
-Repite contra `TU_BACKOFFICE_URL` con `{ action: 'ping', data: {} }` —
-debería responder `ok:false, error:"forbidden"` si tu cuenta todavía no
-está en `USUARIOS` (eso es correcto y esperado en este punto, lo resuelves
-en el Paso 10).
-
-Si en vez de eso ves un error de red / CORS bloqueado en la consola del
-navegador, algo quedó mal configurado en el Paso 6 o 7 (revisa
-"Quién tiene acceso" de la implementación).
+Para Backoffice, no lo pruebes con `fetch` (ver la nota del Paso 7 sobre
+cookies de terceros): abre directamente `TU_BACKOFFICE_URL?page=app` en el
+navegador. Debería cargar el dashboard (vacío/sin datos todavía) sin
+errores de consola — si en vez de eso te pide autorizar la app, hazlo con
+la cuenta que vayas a usar como Admin.
 
 ---
 
@@ -296,26 +341,27 @@ pueden cargar desde `admin.html` sin tocar la hoja directamente.
    llega el correo de acuse de recibo, y `estado.html` permite consultarla
    por número + correo.
 3. **Como Analista** (con tu cuenta Google, la que agregaste con rol `ANA`
-   en el Paso 10): abre `app.html`, verifica que la solicitud aparece en el
-   dashboard, ábrela y avánzala: `S02 → S03 → S04` (aprobar). Espera hasta
-   5 minutos (o ejecuta manualmente `procesarColaDocumentosTrigger` desde
-   el editor de Apps Script de Backoffice) y confirma que se generó el
-   documento (`url_pdf` se llena en la hoja, y llega el correo al
-   Desarrollador).
+   en el Paso 10): abre `TU_BACKOFFICE_URL?page=app`, verifica que la
+   solicitud aparece en el dashboard, ábrela y avánzala: `S02 → S03 → S04`
+   (aprobar). Espera hasta 5 minutos (o ejecuta manualmente
+   `procesarColaDocumentosTrigger` desde el editor de Apps Script de
+   Backoffice) y confirma que se generó el documento (`url_pdf` se llena en
+   la hoja, y llega el correo al Desarrollador).
 4. **Como Desarrollador**: avanza `S04 → S05 → S07` (a pruebas).
 5. **Como Analista de nuevo**: `S07 → S08 → S09` (cierre). Confirma en el
    dashboard que ya no aparece como abierta.
-6. **Como Admin**: abre `admin.html` → pestaña "Automatizaciones" y
-   confirma que ves los logs de todas las notificaciones enviadas en la
-   prueba anterior.
+6. **Como Admin**: abre `TU_BACKOFFICE_URL?page=admin` → pestaña
+   "Automatizaciones" y confirma que ves los logs de todas las
+   notificaciones enviadas en la prueba anterior.
 7. Repite un ciclo corto para la segunda empresa (RLD) y confirma que el
    dashboard filtra correctamente por empresa.
 
 Si algo no funciona en producción pero sí en `npm test` /
-`node backend/dev-server*.js`, casi siempre es una de estas 3 causas:
+`node backend/dev-server*.js`, casi siempre es una de estas causas:
 Script Properties mal escritas (revisa que los 3 nombres sean EXACTOS:
 `SIGSO_SHEET_ID`, `SIGSO_DRIVE_ROOT_FOLDER_ID`, `SIGSO_TIMEZONE`), el
-manifiesto (`appsscript.json`) no se guardó bien, o falta volver a
+manifiesto (`appsscript.json`) no se guardó bien, `App.html`/`Admin.html`
+no se llamaron exactamente así en el editor, o falta volver a
 **Implementar → Gestionar implementaciones → Editar → Nueva versión**
 después de cambiar código (Apps Script no actualiza la URL `/exec` con el
 código nuevo hasta que creas una nueva versión de la implementación).
@@ -329,8 +375,8 @@ código nuevo hasta que creas una nueva versión de la implementación).
 | `SIGSO_SHEET_ID` | Paso 3 |
 | `SIGSO_DRIVE_ROOT_FOLDER_ID` | Paso 4 |
 | `INTAKE_URL` | Paso 6.6 |
-| `BACKOFFICE_URL` | Paso 7.5 |
-| URL pública del frontend | Paso 2.5 |
+| `BACKOFFICE_URL` (agrega `?page=app` o `?page=admin`) | Paso 7.6 |
+| URL pública del frontend (Intake) | Paso 2.5 |
 
 Con esto, SIGSO queda operativo de punta a punta y listo para las pruebas
 reales con HomePymes/RLD.

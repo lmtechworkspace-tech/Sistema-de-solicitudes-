@@ -1,0 +1,712 @@
+<!-- ARCHIVO GENERADO por backend/build-backoffice-html.js -- no editar a mano. Edita frontend/admin.html y frontend/js/*.js, y vuelve a correr "npm run build:backoffice-html". -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SIGSO — Administración</title>
+  <style>
+/* main.css — tokens de marca (§12.3), reset y layout compartido
+   (header/nav, botones, inputs). Especifico de cada pantalla vive en su
+   propio css (formulario.css, dashboard.css en Fase 5). */
+
+:root {
+  --naranja: #E8622A;
+  --naranja-claro: #FAD7C3;
+  --azul: #1F4E79;
+  --gris-oscuro: #2C2C2C;
+  --gris-medio: #555555;
+  --gris-claro: #F5F5F5;
+
+  --p1: #C0392B;
+  --p2: #E67E22;
+  --p3: #F1C40F;
+  --p4: #27AE60;
+  --p5: #2980B9;
+
+  --fuente: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: var(--fuente);
+  color: var(--gris-oscuro);
+  background: var(--gris-claro);
+}
+
+a {
+  color: var(--azul);
+}
+
+.sigso-contenido {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+/* --- Header/nav compartido (ui-components.js lo inyecta) ------------- */
+
+.sigso-header {
+  background: #fff;
+  border-bottom: 3px solid var(--naranja);
+}
+
+.sigso-header__interior {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sigso-header__titulo {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--azul);
+}
+
+.sigso-header__subtitulo {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--gris-medio);
+}
+
+.sigso-nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.sigso-nav a {
+  text-decoration: none;
+  color: var(--gris-medio);
+  font-size: 0.9rem;
+  padding: 0.25rem 0;
+  border-bottom: 2px solid transparent;
+}
+
+.sigso-nav a[aria-current="page"] {
+  color: var(--naranja);
+  border-bottom-color: var(--naranja);
+  font-weight: 600;
+}
+
+/* --- Elementos genericos --------------------------------------------- */
+
+.sigso-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.sigso-card + .sigso-card {
+  margin-top: 1rem;
+}
+
+label {
+  display: block;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+select,
+textarea {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  background: #fff;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 4.5rem;
+}
+
+.sigso-campo {
+  margin-bottom: 1rem;
+}
+
+.sigso-campo__error {
+  color: var(--p1);
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.sigso-boton {
+  background: var(--naranja);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.7rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.sigso-boton:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.sigso-boton--secundario {
+  background: transparent;
+  color: var(--azul);
+  border: 1px solid var(--azul);
+}
+
+.sigso-badge {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.sigso-badge--P1 { background: var(--p1); }
+.sigso-badge--P2 { background: var(--p2); }
+.sigso-badge--P3 { background: var(--p3); color: var(--gris-oscuro); }
+.sigso-badge--P4 { background: var(--p4); }
+.sigso-badge--P5 { background: var(--p5); }
+
+.sigso-spinner {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: sigso-girar 0.6s linear infinite;
+  vertical-align: middle;
+  margin-right: 0.5rem;
+}
+
+@keyframes sigso-girar {
+  to { transform: rotate(360deg); }
+}
+
+.sigso-oculto {
+  display: none !important;
+}
+
+/* Stub generico usado por app.html hasta la Fase 5. */
+.sigso-stub {
+  max-width: 640px;
+  margin: 3rem auto;
+  padding: 1.5rem;
+  background: #fff;
+  border-radius: 8px;
+}
+
+.sigso-stub pre {
+  background: var(--gris-claro);
+  padding: 0.75rem;
+  border-radius: 4px;
+  overflow-x: auto;
+}
+
+</style>
+  <style>
+/* dashboard.css — Backoffice: KPIs, graficos, tabla, detalle (§12.4/12.5). */
+
+.sigso-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.sigso-kpi {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.sigso-kpi__valor {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--azul);
+}
+
+.sigso-kpi__etiqueta {
+  font-size: 0.85rem;
+  color: var(--gris-medio);
+}
+
+.sigso-kpi--alerta .sigso-kpi__valor {
+  color: var(--p1);
+}
+
+.sigso-filtros {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 1.5rem;
+}
+
+.sigso-filtros .sigso-campo {
+  margin-bottom: 0;
+  min-width: 160px;
+}
+
+.sigso-graficos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.sigso-grafico-card canvas {
+  max-height: 240px;
+}
+
+.sigso-tabla {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.sigso-tabla th,
+.sigso-tabla td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--gris-claro);
+  font-size: 0.9rem;
+}
+
+.sigso-tabla tbody tr:hover {
+  background: var(--gris-claro);
+  cursor: pointer;
+}
+
+.sigso-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 2px solid var(--naranja-claro);
+}
+
+.sigso-timeline li {
+  padding: 0.5rem 0 0.5rem 1rem;
+  position: relative;
+  font-size: 0.9rem;
+}
+
+.sigso-timeline li::before {
+  content: '';
+  position: absolute;
+  left: -5px;
+  top: 0.9rem;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--naranja);
+}
+
+.sigso-comentario {
+  border-bottom: 1px solid var(--gris-claro);
+  padding: 0.75rem 0;
+}
+
+.sigso-comentario__meta {
+  font-size: 0.8rem;
+  color: var(--gris-medio);
+}
+
+.sigso-comentario--interno {
+  background: var(--naranja-claro);
+  padding-left: 0.5rem;
+  border-radius: 4px;
+}
+
+</style>
+  <style>
+/* admin.css — panel de administracion (§12.6). */
+
+.sigso-admin-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 180px;
+}
+
+.sigso-admin-menu__item {
+  text-align: left;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.sigso-admin-menu__item--activo {
+  background: var(--naranja);
+  color: #fff;
+  border-color: var(--naranja);
+}
+
+.sigso-admin-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  align-items: end;
+  margin-bottom: 1rem;
+}
+
+.sigso-admin-form .sigso-campo {
+  margin-bottom: 0;
+}
+
+</style>
+</head>
+<body>
+  <header id="sigso-header" class="sigso-header"></header>
+
+  <main class="sigso-contenido" style="max-width: 1100px; display: flex; gap: 1.5rem;">
+    <nav class="sigso-admin-menu" id="admin-menu">
+      <button type="button" class="sigso-admin-menu__item" data-tipo="EMPRESA">Empresas</button>
+      <button type="button" class="sigso-admin-menu__item" data-tipo="PLATAFORMA">Plataformas</button>
+      <button type="button" class="sigso-admin-menu__item" data-tipo="MODULO">Módulos</button>
+      <button type="button" class="sigso-admin-menu__item" data-tipo="TIPO">Tipos de solicitud</button>
+      <button type="button" class="sigso-admin-menu__item" data-tipo="USUARIOS">Usuarios</button>
+      <button type="button" class="sigso-admin-menu__item" data-tipo="LOGS">Automatizaciones</button>
+    </nav>
+
+    <section id="admin-contenido" style="flex: 1"></section>
+  </main>
+
+  <script>
+window.SIGSO_CONFIG = { BACKOFFICE_URL: '', SITIO_PUBLICO: 'https://lmtechworkspace-tech.github.io/Sistema-de-solicitudes-/' };
+</script>
+  <script>
+/**
+ * api.js — Cliente compartido para llamar a los Web Apps de Apps Script.
+ *
+ * Dos transportes segun donde corra la pagina:
+ * - Intake (index.html/estado.html, GitHub Pages): POST + Content-Type
+ *   text/plain;charset=utf-8 + cuerpo string JSON { action, data } (§4.1).
+ *   Nunca application/json ni headers custom: cualquiera de los dos
+ *   dispara un preflight OPTIONS que el Web App no responde.
+ * - Backoffice (app.html/admin.html, Fase 8): estas paginas las sirve el
+ *   propio proyecto Apps Script via HtmlService, y usan `google.script.run`
+ *   en vez de fetch. No es una preferencia de estilo: un fetch cross-origin
+ *   contra un Web App que exige identidad de Google (no anonimo) requiere
+ *   la cookie de sesion de Google como "cookie de tercero", y los
+ *   navegadores actuales la bloquean cada vez mas agresivo incluso fuera de
+ *   modo incognito -- rompe el fetch con 401 antes de llegar al script.
+ *   `google.script.run` no usa red ni cookies (puente nativo del sandbox
+ *   de Apps Script), asi que evita ese problema por completo.
+ */
+async function llamarApi(url, action, data) {
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    return new Promise(function (resolve, reject) {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)
+        .ejecutarAccionBackoffice(action, data || {});
+    });
+  }
+  const respuesta = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: action, data: data || {} })
+  });
+  return respuesta.json();
+}
+
+</script>
+  <script>
+/**
+ * ui-components.js — header/nav compartido entre index.html, estado.html
+ * (GitHub Pages) y App.html/Admin.html (servidos por Apps Script, Fase 8).
+ *
+ * Los enlaces cruzan de sitio (GitHub Pages <-> Apps Script), asi que no
+ * pueden ser rutas relativas fijas: usan SITIO_PUBLICO/BACKOFFICE_URL de
+ * SIGSO_CONFIG. En cada sitio, la ruta "propia" queda vacia/relativa
+ * (SITIO_PUBLICO='' en config.js de GitHub Pages, BACKOFFICE_URL='' en el
+ * stub de App.html/Admin.html) y la ruta "del otro sitio" es absoluta.
+ */
+function renderHeaderSigso(paginaActiva) {
+  var contenedor = document.getElementById('sigso-header');
+  if (!contenedor) {
+    return;
+  }
+
+  var cfg = window.SIGSO_CONFIG || {};
+  var sitioPublico = cfg.SITIO_PUBLICO || '';
+  var backofficeUrl = cfg.BACKOFFICE_URL || '';
+
+  var paginas = [
+    { href: sitioPublico + 'index.html', id: 'formulario', texto: 'Nueva solicitud' },
+    { href: sitioPublico + 'estado.html', id: 'estado', texto: 'Consultar estado' },
+    { href: backofficeUrl + '?page=app', id: 'app', texto: 'Backoffice' },
+    { href: backofficeUrl + '?page=admin', id: 'admin', texto: 'Administración' }
+  ];
+
+  var enlaces = paginas
+    .map(function (p) {
+      var actual = p.id === paginaActiva ? ' aria-current="page"' : '';
+      return '<a href="' + p.href + '"' + actual + '>' + p.texto + '</a>';
+    })
+    .join('');
+
+  contenedor.innerHTML =
+    '<div class="sigso-header__interior">' +
+    '<div>' +
+    '<p class="sigso-header__titulo">SIGSO</p>' +
+    '<p class="sigso-header__subtitulo">HomePymes / RLD &mdash; Gesti&oacute;n de solicitudes</p>' +
+    '</div>' +
+    '<nav class="sigso-nav">' + enlaces + '</nav>' +
+    '</div>';
+}
+
+</script>
+  <script>
+/**
+ * admin.js — panel de administracion (§12.6, CU-006/CU-007). Catalogos:
+ * crear/editar/desactivar (nunca eliminar, RF-F03). Usuarios: crear/editar/
+ * activar/desactivar (RN-029/030/031).
+ */
+(function () {
+  var CATALOGOS_UI = {
+    EMPRESA: {
+      titulo: 'Empresas',
+      campos: [
+        { nombre: 'empresa_id', label: 'Código', soloAlCrear: true },
+        { nombre: 'nombre', label: 'Nombre' },
+        { nombre: 'logo', label: 'Logo (URL)' },
+        { nombre: 'activo', label: 'Activo', tipo: 'checkbox' }
+      ]
+    },
+    PLATAFORMA: {
+      titulo: 'Plataformas',
+      campos: [
+        { nombre: 'plataforma_id', label: 'Código', soloAlCrear: true },
+        { nombre: 'nombre', label: 'Nombre' },
+        { nombre: 'empresa_id', label: 'Empresa (código)' },
+        { nombre: 'url_base', label: 'URL base' },
+        { nombre: 'activo', label: 'Activo', tipo: 'checkbox' }
+      ]
+    },
+    MODULO: {
+      titulo: 'Módulos',
+      campos: [
+        { nombre: 'modulo_id', label: 'Código', soloAlCrear: true },
+        { nombre: 'nombre', label: 'Nombre' },
+        { nombre: 'plataforma_id', label: 'Plataforma (código)' },
+        { nombre: 'activo', label: 'Activo', tipo: 'checkbox' }
+      ]
+    },
+    TIPO: {
+      titulo: 'Tipos de solicitud',
+      campos: [
+        { nombre: 'tipo_id', label: 'Código', soloAlCrear: true },
+        { nombre: 'nombre', label: 'Nombre' },
+        { nombre: 'prioridad_default', label: 'Prioridad sugerida (informativa)' },
+        { nombre: 'activo', label: 'Activo', tipo: 'checkbox' }
+      ]
+    }
+  };
+
+  var USUARIOS_UI = {
+    titulo: 'Usuarios',
+    campos: [
+      { nombre: 'email', label: 'Email', soloAlCrear: true },
+      { nombre: 'nombre', label: 'Nombre' },
+      { nombre: 'empresa_id', label: 'Empresa (código)' },
+      { nombre: 'rol', label: 'Rol (ANA/DEV/ADM)' },
+      { nombre: 'activo', label: 'Activo', tipo: 'checkbox' }
+    ]
+  };
+
+  document.addEventListener('DOMContentLoaded', function () {
+    if (typeof renderHeaderSigso === 'function') {
+      renderHeaderSigso('admin');
+    }
+    document.querySelectorAll('.sigso-admin-menu__item').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        document.querySelectorAll('.sigso-admin-menu__item').forEach(function (b) {
+          b.classList.remove('sigso-admin-menu__item--activo');
+        });
+        boton.classList.add('sigso-admin-menu__item--activo');
+        var tipo = boton.getAttribute('data-tipo');
+        if (tipo === 'USUARIOS') {
+          renderUsuarios_();
+        } else if (tipo === 'LOGS') {
+          renderLogs_();
+        } else {
+          renderCatalogo_(tipo);
+        }
+      });
+    });
+    document.querySelector('.sigso-admin-menu__item').click();
+  });
+
+  function renderCatalogo_(tipo) {
+    var config = CATALOGOS_UI[tipo];
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarCatalogo', { tipo: tipo }).then(function (respuesta) {
+      var contenedor = document.getElementById('admin-contenido');
+      if (!respuesta.ok) {
+        contenedor.innerHTML = '<div class="sigso-resultado-error"><p>' + escaparHtml_(respuesta.message || 'No se pudo cargar.') + '</p></div>';
+        return;
+      }
+      contenedor.innerHTML =
+        '<h2>' + config.titulo + '</h2>' +
+        renderFormulario_(config.campos) +
+        renderTabla_(config.campos, respuesta.data);
+
+      document.getElementById('form-admin').addEventListener('submit', function (evento) {
+        evento.preventDefault();
+        guardarCatalogo_(tipo, config.campos);
+      });
+      document.querySelectorAll('[data-editar]').forEach(function (fila) {
+        fila.addEventListener('click', function () {
+          precargarFormulario_(config.campos, JSON.parse(fila.getAttribute('data-editar')));
+        });
+      });
+    });
+  }
+
+  function renderUsuarios_() {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarUsuarios', {}).then(function (respuesta) {
+      var contenedor = document.getElementById('admin-contenido');
+      if (!respuesta.ok) {
+        contenedor.innerHTML = '<div class="sigso-resultado-error"><p>' + escaparHtml_(respuesta.message || 'No se pudo cargar.') + '</p></div>';
+        return;
+      }
+      contenedor.innerHTML =
+        '<h2>' + USUARIOS_UI.titulo + '</h2>' +
+        renderFormulario_(USUARIOS_UI.campos) +
+        renderTabla_(USUARIOS_UI.campos, respuesta.data);
+
+      document.getElementById('form-admin').addEventListener('submit', function (evento) {
+        evento.preventDefault();
+        guardarUsuario_(USUARIOS_UI.campos);
+      });
+      document.querySelectorAll('[data-editar]').forEach(function (fila) {
+        fila.addEventListener('click', function () {
+          precargarFormulario_(USUARIOS_UI.campos, JSON.parse(fila.getAttribute('data-editar')));
+        });
+      });
+    });
+  }
+
+  var LOGS_UI = {
+    titulo: 'Automatizaciones — logs de notificaciones',
+    campos: [
+      { nombre: 'timestamp', label: 'Fecha' },
+      { nombre: 'solicitud_id', label: 'Solicitud' },
+      { nombre: 'evento', label: 'Evento' },
+      { nombre: 'destinatario', label: 'Destinatario' },
+      { nombre: 'resultado', label: 'Resultado' },
+      { nombre: 'reintentos', label: 'Reintentos' }
+    ]
+  };
+
+  // RF-019 (§12.6 v1.0): vista de logs de automatizaciones. Solo lectura
+  // (a diferencia de catalogos/usuarios, no tiene formulario de edicion).
+  function renderLogs_() {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarLogs', {}).then(function (respuesta) {
+      var contenedor = document.getElementById('admin-contenido');
+      if (!respuesta.ok) {
+        contenedor.innerHTML = '<div class="sigso-resultado-error"><p>' + escaparHtml_(respuesta.message || 'No se pudo cargar.') + '</p></div>';
+        return;
+      }
+      contenedor.innerHTML = '<h2>' + LOGS_UI.titulo + '</h2>' + renderTabla_(LOGS_UI.campos, respuesta.data);
+    });
+  }
+
+  function renderFormulario_(campos) {
+    return '<form id="form-admin" class="sigso-card">' +
+      '<div class="sigso-admin-form">' +
+      campos.map(function (campo) {
+        if (campo.tipo === 'checkbox') {
+          return '<label class="sigso-toggle"><input type="checkbox" data-campo="' + campo.nombre + '" checked> ' + campo.label + '</label>';
+        }
+        return '<div class="sigso-campo"><label>' + campo.label + '</label><input type="text" data-campo="' + campo.nombre + '"></div>';
+      }).join('') +
+      '</div>' +
+      '<button type="submit" class="sigso-boton">Guardar</button>' +
+      '<span id="resultado-admin"></span>' +
+      '</form>';
+  }
+
+  function renderTabla_(campos, filas) {
+    var encabezados = campos.map(function (c) { return '<th>' + c.label + '</th>'; }).join('');
+    var cuerpo = filas.map(function (fila) {
+      var celdas = campos.map(function (c) { return '<td>' + escaparHtml_(String(fila[c.nombre])) + '</td>'; }).join('');
+      return '<tr data-editar=\'' + JSON.stringify(fila).replace(/'/g, '&#39;') + '\'>' + celdas + '</tr>';
+    }).join('');
+    return '<table class="sigso-tabla"><thead><tr>' + encabezados + '</tr></thead><tbody>' + cuerpo + '</tbody></table>';
+  }
+
+  function precargarFormulario_(campos, registro) {
+    campos.forEach(function (campo) {
+      var input = document.querySelector('[data-campo="' + campo.nombre + '"]');
+      if (!input) return;
+      if (campo.tipo === 'checkbox') {
+        input.checked = registro[campo.nombre] === true || registro[campo.nombre] === 'TRUE';
+      } else {
+        input.value = registro[campo.nombre] || '';
+        if (campo.soloAlCrear) input.disabled = true;
+      }
+    });
+  }
+
+  function leerFormulario_(campos) {
+    var registro = {};
+    campos.forEach(function (campo) {
+      var input = document.querySelector('[data-campo="' + campo.nombre + '"]');
+      registro[campo.nombre] = campo.tipo === 'checkbox' ? input.checked : input.value;
+    });
+    return registro;
+  }
+
+  function guardarCatalogo_(tipo, campos) {
+    var registro = leerFormulario_(campos);
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'guardarCatalogo', { tipo: tipo, registro: registro }).then(function (respuesta) {
+      document.getElementById('resultado-admin').textContent = respuesta.ok ? 'Guardado.' : (respuesta.message || 'Error al guardar.');
+      if (respuesta.ok) renderCatalogo_(tipo);
+    });
+  }
+
+  function guardarUsuario_(campos) {
+    var registro = leerFormulario_(campos);
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'gestionarUsuario', registro).then(function (respuesta) {
+      document.getElementById('resultado-admin').textContent = respuesta.ok ? 'Guardado.' : (respuesta.message || 'Error al guardar.');
+      if (respuesta.ok) renderUsuarios_();
+    });
+  }
+
+  function escaparHtml_(texto) {
+    var div = document.createElement('div');
+    div.textContent = texto || '';
+    return div.innerHTML;
+  }
+})();
+
+</script>
+</body>
+</html>

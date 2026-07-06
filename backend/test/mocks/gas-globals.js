@@ -1,5 +1,8 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
+
 /**
  * Mocks minimos del runtime de Google Apps Script, suficientes para probar
  * el contrato de transporte (doPost/doGet) fuera de Google, sin dependencias
@@ -454,6 +457,33 @@ function createSessionMock(email) {
   };
 }
 
+// Fase 8: App.html/Admin.html se sirven via HtmlService.createHtmlOutputFromFile
+// (Code.gs, doGet). No hay scriptlets <?!= ?> que evaluar (todo el CSS/JS ya
+// viene inlineado por backend/build-backoffice-html.js), asi que el mock solo
+// necesita leer el archivo tal cual del proyecto y exponer las mismas
+// llamadas encadenables que usa el codigo real.
+function createHtmlServiceMock(htmlDir) {
+  function crearSalida(contenido) {
+    const salida = {
+      _contenido: contenido,
+      setTitle() { return salida; },
+      addMetaTag() { return salida; },
+      getContent() { return salida._contenido; }
+    };
+    return salida;
+  }
+  return {
+    createHtmlOutputFromFile(nombre) {
+      const archivo = nombre.endsWith('.html') ? nombre : nombre + '.html';
+      const contenido = fs.readFileSync(path.join(htmlDir, archivo), 'utf8');
+      return crearSalida(contenido);
+    },
+    createHtmlOutput(contenido) {
+      return crearSalida(contenido || '');
+    }
+  };
+}
+
 /**
  * @param {object} [options]
  * @param {object} [options.scriptProperties] valores iniciales de Script Properties
@@ -473,7 +503,8 @@ function createGasGlobals(options) {
     DocumentApp: createDocumentAppMock(),
     GmailApp: createGmailAppMock(),
     ScriptApp: createScriptAppMock(),
-    CacheService: createCacheServiceMock()
+    CacheService: createCacheServiceMock(),
+    HtmlService: createHtmlServiceMock(opts.htmlDir)
   };
 }
 

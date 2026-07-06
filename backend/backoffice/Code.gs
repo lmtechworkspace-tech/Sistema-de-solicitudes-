@@ -1,13 +1,21 @@
 /**
  * Code.gs — App Gestion (Backoffice)
  *
- * Se publica con "Ejecutar como: usuario que accede" y "Acceso: solo
- * usuarios del dominio" (§2.1, §3.1). Google ya bloquea a quien no
- * pertenece al dominio antes de llegar aqui; igual se valida la identidad
- * de forma defensiva porque no existe token de sesion propio que revisar.
+ * Se publica con "Ejecutar como: usuario que accede" y acceso "Cualquier
+ * cuenta de Google" o "Dominio" segun el Workspace real (§2.1, §3.1).
+ * Google ya bloquea a quien no pertenece al dominio/no tiene cuenta antes
+ * de llegar aqui; igual se valida la identidad de forma defensiva porque
+ * no existe token de sesion propio que revisar.
  *
  * Mismo contrato de transporte que Intake: POST + text/plain + JSON;
  * ninguna llamada agrega headers custom ni usa application/json (§4.1).
+ * Esto sigue valiendo para llamadas externas (p.ej. otra integracion), pero
+ * `app.html`/`admin.html` (Fase 8, ver notas de despliegue) ya NO llaman
+ * por fetch: los navegadores bloquean cada vez mas agresivo las cookies de
+ * terceros necesarias para autenticar un fetch cross-origin contra un Web
+ * App no anonimo, asi que esas paginas ahora las sirve este mismo proyecto
+ * via HtmlService (mismo origen) y llaman a `ejecutarAccionBackoffice`
+ * mediante `google.script.run` (sin red, sin cookies, sin CORS).
  *
  * Fase 0: transporte, router y resolucion de identidad. Fase 2: resolucion
  * de rol (USUARIOS) y maquina de estados/prioridad. Fase 5: getDashboardData,
@@ -30,32 +38,27 @@ var BACKOFFICE_ACTIONS = {
   listarLogs: handleListarLogs_
 };
 
+// ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
+// mantiene el health-check JSON de siempre (usado por monitoreo/tests).
+var PAGINAS_HTML = { app: 'App', admin: 'Admin' };
+
 function doGet(e) {
+  var pagina = e && e.parameter && e.parameter.page;
+  var archivo = PAGINAS_HTML[pagina];
+  if (archivo) {
+    return HtmlService.createHtmlOutputFromFile(archivo)
+      .setTitle('SIGSO - ' + (pagina === 'admin' ? 'Administracion' : 'Backoffice'))
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+  }
   return jsonResponse_({ ok: true, data: { servicio: 'SIGSO Backoffice', estado: 'activo' } });
 }
 
 function doPost(e) {
   try {
-    var email = getIdentidadActiva_();
-    if (!email) {
-      return jsonResponse_({
-        ok: false,
-        error: 'forbidden',
-        message: 'No fue posible resolver la identidad del dominio.'
-      });
+    var resuelto = resolverIdentidadYRol_();
+    if (resuelto.error) {
+      return jsonResponse_(resuelto.error);
     }
-
-    var rol = obtenerRolUsuario_(email);
-    if (!rol) {
-      return jsonResponse_({
-        ok: false,
-        error: 'forbidden',
-        message: 'El usuario ' + email + ' no esta registrado o esta inactivo en SIGSO.'
-      });
-    }
-    // RN-029: Auth.suspenderInactivos() (Fase 7) decide en base a este campo;
-    // sin registrarlo aqui, todos los usuarios activos se verian "inactivos".
-    actualizarFilaPorId_(SHEETS.USUARIOS, 'email', email, { ultimo_acceso: new Date().toISOString() });
 
     var body = parseRequestBody_(e);
     var handler = BACKOFFICE_ACTIONS[body.action];
@@ -67,11 +70,59 @@ function doPost(e) {
         fields: ['action']
       });
     }
-    return handler(body.data || {}, { email: email, rol: rol });
+    return handler(body.data || {}, resuelto.contexto);
   } catch (err) {
     var ref = logError_(err, 'Backoffice.doPost');
     return jsonResponse_({ ok: false, error: 'internal', ref: ref });
   }
+}
+
+// Puente para app.html/admin.html servidos via HtmlService (Fase 8):
+// mismo router y misma resolucion de identidad/rol que doPost, pero
+// invocado por google.script.run (sin red) en vez de un POST. Devuelve el
+// objeto plano (no un ContentService) porque google.script.run serializa
+// el valor de retorno directamente.
+function ejecutarAccionBackoffice(action, data) {
+  try {
+    var resuelto = resolverIdentidadYRol_();
+    if (resuelto.error) {
+      return resuelto.error;
+    }
+
+    var handler = BACKOFFICE_ACTIONS[action];
+    if (!handler) {
+      return { ok: false, error: 'validation', message: 'Accion desconocida: ' + action, fields: ['action'] };
+    }
+    var salida = handler(data || {}, resuelto.contexto);
+    return JSON.parse(salida.getContent());
+  } catch (err) {
+    var ref = logError_(err, 'Backoffice.ejecutarAccionBackoffice:' + action);
+    return { ok: false, error: 'internal', ref: ref };
+  }
+}
+
+// Compartido por doPost y ejecutarAccionBackoffice: resuelve email+rol o
+// devuelve el objeto de error listo para responder (evita repetir la
+// misma validacion en los dos puntos de entrada).
+function resolverIdentidadYRol_() {
+  var email = getIdentidadActiva_();
+  if (!email) {
+    return { error: { ok: false, error: 'forbidden', message: 'No fue posible resolver la identidad del dominio.' } };
+  }
+  var rol = obtenerRolUsuario_(email);
+  if (!rol) {
+    return {
+      error: {
+        ok: false,
+        error: 'forbidden',
+        message: 'El usuario ' + email + ' no esta registrado o esta inactivo en SIGSO.'
+      }
+    };
+  }
+  // RN-029: Auth.suspenderInactivos() (Fase 7) decide en base a este campo;
+  // sin registrarlo aqui, todos los usuarios activos se verian "inactivos".
+  actualizarFilaPorId_(SHEETS.USUARIOS, 'email', email, { ultimo_acceso: new Date().toISOString() });
+  return { contexto: { email: email, rol: rol } };
 }
 
 function getIdentidadActiva_() {

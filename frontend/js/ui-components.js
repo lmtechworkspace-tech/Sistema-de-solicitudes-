@@ -1,6 +1,12 @@
 /**
- * ui-components.js — header/nav compartido entre index.html, estado.html y
- * app.html (§2.4), para no duplicar el marcado en cada pagina.
+ * ui-components.js — header/nav compartido entre index.html, estado.html
+ * (GitHub Pages) y App.html/Admin.html (servidos por Apps Script, Fase 8).
+ *
+ * Los enlaces cruzan de sitio (GitHub Pages <-> Apps Script), asi que no
+ * pueden ser rutas relativas fijas: usan SITIO_PUBLICO/BACKOFFICE_URL de
+ * SIGSO_CONFIG. En cada sitio, la ruta "propia" queda vacia/relativa
+ * (SITIO_PUBLICO='' en config.js de GitHub Pages, BACKOFFICE_URL='' en el
+ * stub de App.html/Admin.html) y la ruta "del otro sitio" es absoluta.
  */
 function renderHeaderSigso(paginaActiva) {
   var contenedor = document.getElementById('sigso-header');
@@ -8,11 +14,15 @@ function renderHeaderSigso(paginaActiva) {
     return;
   }
 
+  var cfg = window.SIGSO_CONFIG || {};
+  var sitioPublico = cfg.SITIO_PUBLICO || '';
+  var backofficeUrl = cfg.BACKOFFICE_URL || '';
+
   var paginas = [
-    { href: 'index.html', id: 'formulario', texto: 'Nueva solicitud' },
-    { href: 'estado.html', id: 'estado', texto: 'Consultar estado' },
-    { href: 'app.html', id: 'app', texto: 'Backoffice' },
-    { href: 'admin.html', id: 'admin', texto: 'Administración' }
+    { href: sitioPublico + 'index.html', id: 'formulario', texto: 'Nueva solicitud' },
+    { href: sitioPublico + 'estado.html', id: 'estado', texto: 'Consultar estado' },
+    { href: backofficeUrl + '?page=app', id: 'app', texto: 'Backoffice' },
+    { href: backofficeUrl + '?page=admin', id: 'admin', texto: 'Administración' }
   ];
 
   var enlaces = paginas

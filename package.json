@@ -4,6 +4,7 @@
   "private": true,
   "description": "SIGSO - Sistema Integral de Gestion de Solicitudes (HomePymes / RLD)",
   "scripts": {
-    "test": "node --test backend/test/*.test.js"
+    "test": "node --test backend/test/*.test.js",
+    "build:backoffice-html": "node backend/build-backoffice-html.js"
   }
 }

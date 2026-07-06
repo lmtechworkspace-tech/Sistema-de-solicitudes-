@@ -44,20 +44,38 @@ documentación, README y commits sugeridos propios en
 ```
 backend/
   intake/       Apps Script — App Pública (acceso anónimo)
-  backoffice/   Apps Script — App Gestión (identidad Google del dominio)
+  backoffice/   Apps Script — App Gestión (identidad Google), incluye
+                App.html/Admin.html generados (Fase 8, ver mas abajo)
   setup/        Apps Script — instalador del esquema de Sheets (una sola vez)
   test/         Pruebas automatizadas (node:test + vm, sin cuenta Google)
   dev-server.js             Dev server de Intake (no se despliega, ver Fase 3)
   dev-server-backoffice.js  Dev server de Backoffice (no se despliega, ver Fase 5)
+  build-backoffice-html.js  Genera backend/backoffice/App.html y Admin.html
+                            desde frontend/ (Fase 8, ver mas abajo)
 frontend/
-  index.html    Formulario público de solicitudes
-  estado.html   Consulta pública de estado
-  app.html      Backoffice: dashboard + detalle de solicitud
-  admin.html    Administración: catálogos y usuarios (Fase 6)
+  index.html    Formulario público de solicitudes (GitHub Pages, Intake)
+  estado.html   Consulta pública de estado (GitHub Pages, Intake)
+  app.html      Fuente de desarrollo del dashboard (dev-server local, Fase 5).
+                En producción lo sirve el propio Apps Script de Backoffice
+                como backend/backoffice/App.html — ver nota de Fase 8 abajo.
+  admin.html    Idem para Administración (Fase 6) — producción:
+                backend/backoffice/Admin.html.
   css/ js/      Estilos y lógica compartida (marca §12.3, ui-components.js, dashboard.js, detalle.js)
 database/       schema.md — esquema documentado de las hojas (Fase 1)
 documentacion/  Especificación fuente + documentación por fase
 ```
+
+**Nota de Fase 8**: un Web App de Apps Script que exige identidad de
+Google (Backoffice) no puede llamarse por `fetch()` desde un sitio externo
+como GitHub Pages — los navegadores bloquean la cookie de sesión de Google
+como "cookie de tercero", devolviendo 401 antes de llegar al script. Por
+eso `app.html`/`admin.html` se sirven directamente desde el proyecto Apps
+Script de Backoffice (mismo origen, via `google.script.run`, sin red ni
+cookies) en vez de GitHub Pages. `frontend/app.html`/`admin.html` siguen
+siendo la fuente real para desarrollo local; `npm run build:backoffice-html`
+genera las versiones autocontenidas que van al editor de Apps Script. Ver
+[documentacion/MANUAL-DESPLIEGUE.md](documentacion/MANUAL-DESPLIEGUE.md)
+Paso 7 para el detalle completo.
 
 ## Cómo correr las pruebas
 

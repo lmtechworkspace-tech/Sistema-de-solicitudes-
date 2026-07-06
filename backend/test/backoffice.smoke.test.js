@@ -65,11 +65,56 @@ test('doPost responde error de validacion para una accion desconocida', () => {
   assert.equal(parsed.error, 'validation');
 });
 
-test('doGet responde estado activo (health-check)', () => {
+test('doGet responde estado activo (health-check) sin parametro page', () => {
   const ctx = loadBackoffice({ activeUserEmail: 'admin@rld.cl' });
   const output = ctx.doGet({});
   const parsed = JSON.parse(output.getContent());
 
   assert.equal(parsed.ok, true);
   assert.equal(parsed.data.servicio, 'SIGSO Backoffice');
+});
+
+// Fase 8: ?page=app/admin sirve la UI real via HtmlService (mismo origen,
+// evita el bloqueo de cookies de terceros de un fetch cross-origin).
+test('doGet con page=app sirve App.html via HtmlService', () => {
+  const ctx = loadBackoffice({ activeUserEmail: 'admin@rld.cl' });
+  const output = ctx.doGet({ parameter: { page: 'app' } });
+
+  assert.ok(output.getContent().indexOf('vista-dashboard') !== -1);
+});
+
+test('doGet con page=admin sirve Admin.html via HtmlService', () => {
+  const ctx = loadBackoffice({ activeUserEmail: 'admin@rld.cl' });
+  const output = ctx.doGet({ parameter: { page: 'admin' } });
+
+  assert.ok(output.getContent().indexOf('admin-menu') !== -1);
+});
+
+test('ejecutarAccionBackoffice (puente de google.script.run) exige identidad y rol igual que doPost', () => {
+  const ctx = loadBackoffice({ activeUserEmail: '' });
+  const resultado = ctx.ejecutarAccionBackoffice('ping', {});
+
+  assert.equal(resultado.ok, false);
+  assert.equal(resultado.error, 'forbidden');
+});
+
+test('ejecutarAccionBackoffice responde ok:true a action=ping (mismo router que doPost)', () => {
+  const ctx = loadBackoffice({ activeUserEmail: 'analista@homepymes.cl' });
+  seedUsuario(ctx, 'analista@homepymes.cl', 'ANA');
+
+  const resultado = ctx.ejecutarAccionBackoffice('ping', {});
+
+  assert.equal(resultado.ok, true);
+  assert.equal(resultado.data.usuario, 'analista@homepymes.cl');
+  assert.equal(resultado.data.rol, 'ANA');
+});
+
+test('ejecutarAccionBackoffice responde error de validacion para una accion desconocida', () => {
+  const ctx = loadBackoffice({ activeUserEmail: 'admin@rld.cl' });
+  seedUsuario(ctx, 'admin@rld.cl', 'ADM');
+
+  const resultado = ctx.ejecutarAccionBackoffice('accionInexistente', {});
+
+  assert.equal(resultado.ok, false);
+  assert.equal(resultado.error, 'validation');
 });

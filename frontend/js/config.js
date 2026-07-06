@@ -8,5 +8,10 @@
 window.SIGSO_CONFIG = Object.freeze({
   INTAKE_URL: 'https://script.google.com/macros/s/AKfycbypI38IfuisU2DFMnvM9_knsbqgm8T-9rnkUUr5MbLlc5_J7BZuXhy8mZC-GtVHzEV9aA/exec',
   BACKOFFICE_URL: 'https://script.google.com/macros/s/AKfycbzoC2IsvrwPIElUeTgIxmNxLcNsEH3SXU8TrKLM-sFntZjd8ratSv8w_1-zGo1MmdCcFg/exec',
+  // '' porque este archivo se sirve desde el sitio publico (GitHub Pages):
+  // los enlaces "propios" del header (index.html/estado.html) son relativos.
+  // El stub de SIGSO_CONFIG embebido en App.html/Admin.html (Fase 8) usa
+  // el valor real de este sitio, porque ahi SI es el "otro" sitio.
+  SITIO_PUBLICO: '',
   TIMEZONE: 'America/Santiago'
 });

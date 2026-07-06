@@ -79,7 +79,8 @@ const BACKOFFICE_FILES_EN_ORDEN = [
 
 function loadBackofficeProject(options) {
   const dir = path.join(__dirname, '..', '..', 'backoffice');
-  return loadGasProject(BACKOFFICE_FILES_EN_ORDEN.map((f) => path.join(dir, f)), options);
+  const opts = Object.assign({ htmlDir: dir }, options);
+  return loadGasProject(BACKOFFICE_FILES_EN_ORDEN.map((f) => path.join(dir, f)), opts);
 }
 
 /**
