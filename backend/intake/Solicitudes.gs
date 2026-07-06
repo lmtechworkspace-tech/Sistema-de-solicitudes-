@@ -57,7 +57,8 @@ var Solicitudes = {
         sla_objetivo_horas: slaHoras,
         estimacion_horas: item.estimacion_horas || '',
         horas_reales: '',
-        fecha_creacion: timestamp
+        fecha_creacion: timestamp,
+        urls_adicionales: JSON.stringify(item.urls_adicionales || [])
       });
 
       return { subsolicitud_id: subId, prioridad: prioridad };
@@ -107,7 +108,8 @@ var Solicitudes = {
       observaciones_generales: data.observaciones_generales || '',
       resumen_whatsapp: resumenWhatsapp,
       fecha_creacion: timestamp,
-      creado_por: data.solicitante_email
+      creado_por: data.solicitante_email,
+      cc: data.cc || ''
     });
 
     agregarFila_(SHEETS.HISTORIAL_ESTADOS, {
@@ -257,6 +259,11 @@ function validarSolicitud_(data) {
         });
       }
     });
+  }
+
+  // cc (Fase 9): opcional, pero si viene debe ser un correo valido.
+  if (data.cc && !esEmailValido_(data.cc)) {
+    errores.push({ campo: 'cc', mensaje: 'Formato de correo invalido' });
   }
 
   // RN-005: si es solicitud de cliente, empresa cliente + contacto + correo

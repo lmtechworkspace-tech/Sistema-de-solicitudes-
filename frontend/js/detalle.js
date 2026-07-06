@@ -28,17 +28,24 @@
     var s = detalle.solicitud;
     var contenedor = document.getElementById('detalle-contenido');
 
+    var archivos = detalle.archivos || [];
+    // Fase 9: imagenes sin subsolicitud_id son adjuntos generales de la
+    // solicitud (RF-003: se adjuntan a nivel de solicitud, Bloque 5).
+    var archivosGenerales = archivos.filter(function (a) { return !a.subsolicitud_id; });
+
     contenedor.innerHTML =
       '<div class="sigso-card">' +
       '<h2>' + s.solicitud_id + '</h2>' +
       '<p><span class="sigso-badge sigso-badge--' + s.prioridad_derivada + '">' + s.prioridad_derivada + '</span> ' +
       formatearEstadoSigso(s.estado_derivado) + '</p>' +
       '<p>Empresa: ' + s.empresa_id + ' — Plataforma/Modulo: ' + s.plataforma + ' / ' + s.modulo + ' — Tipo: ' + s.tipo + '</p>' +
-      '<p>Solicitante: ' + escaparHtml_(s.solicitante_nombre) + ' (' + escaparHtml_(s.solicitante_cargo) + ') — ' + escaparHtml_(s.solicitante_email) + '</p>' +
+      '<p>Solicitante: ' + escaparHtml_(s.solicitante_nombre) + ' (' + escaparHtml_(s.solicitante_cargo) + ') — ' + escaparHtml_(s.solicitante_email) +
+      (s.cc ? ' — CC: ' + escaparHtml_(s.cc) : '') + '</p>' +
       (s.es_cliente ? renderBloqueCliente_(s) : '') +
       (s.observaciones_generales ? '<p><em>Observaciones: ' + escaparHtml_(s.observaciones_generales) + '</em></p>' : '') +
+      renderGaleria_(archivosGenerales) +
       '</div>' +
-      '<div class="sigso-card"><h3>Subsolicitudes</h3>' + renderSubsolicitudes_(detalle.subsolicitudes) + '</div>' +
+      '<div class="sigso-card"><h3>Qu&eacute; hacer (subsolicitudes)</h3>' + renderSubsolicitudes_(detalle.subsolicitudes, archivos) + '</div>' +
       '<div class="sigso-card"><h3>Historial de estados</h3>' + renderTimeline_(detalle.historial_estados) + '</div>' +
       '<div class="sigso-card"><h3>Comentarios</h3><div id="lista-comentarios">' + renderComentarios_(detalle.comentarios) + '</div>' + renderFormComentario_() + '</div>' +
       '<div class="sigso-card"><h3>Acciones</h3>' + renderAcciones_(detalle.subsolicitudes) + '</div>';
@@ -67,8 +74,45 @@
       '</div>';
   }
 
-  function renderSubsolicitudes_(subsolicitudes) {
+  // Fase 9 (hallazgo de datos reales): el objetivo de este panel es que
+  // Leo entienda, sin cruzar ninguna otra planilla ni pedir mas datos por
+  // WhatsApp, exactamente donde reproducir/hacer el cambio (URLs, usuario
+  // de prueba, credencial), y con que estado/prioridad esta cada item --
+  // el reemplazo real de "mandar un PDF" que motivo este rediseno.
+  function renderSubsolicitudes_(subsolicitudes, archivos) {
     return subsolicitudes.map(function (sub) {
+      var urlsAdicionales = [];
+      try {
+        urlsAdicionales = JSON.parse(sub.urls_adicionales || '[]');
+      } catch (err) {
+        urlsAdicionales = [];
+      }
+      var imagenesItem = (archivos || []).filter(function (a) { return a.subsolicitud_id === sub.subsolicitud_id; });
+
+      var datos = [];
+      if (sub.url_modulo) {
+        datos.push(renderCampoDato_('URL principal', '<a href="' + escaparHtml_(sub.url_modulo) + '" target="_blank" rel="noopener">' + escaparHtml_(sub.url_modulo) + '</a>'));
+      }
+      urlsAdicionales.forEach(function (u) {
+        if (!u.url) return;
+        datos.push(renderCampoDato_(u.titulo || 'URL adicional', '<a href="' + escaparHtml_(u.url) + '" target="_blank" rel="noopener">' + escaparHtml_(u.url) + '</a>'));
+      });
+      if (sub.usuario_prueba) {
+        datos.push(renderCampoDato_('Usuario de prueba', escaparHtml_(sub.usuario_prueba)));
+      }
+      if (sub.ref_credencial) {
+        datos.push(renderCampoDato_('Credencial', escaparHtml_(sub.ref_credencial)));
+      }
+      if (sub.centro_costos) {
+        datos.push(renderCampoDato_('Centro de costos', escaparHtml_(sub.centro_costos)));
+      }
+      if (sub.desarrollador_asignado) {
+        datos.push(renderCampoDato_('Asignado a', escaparHtml_(sub.desarrollador_asignado)));
+      }
+      if (sub.estimacion_horas) {
+        datos.push(renderCampoDato_('Estimacion', sub.estimacion_horas + ' h' + (sub.horas_reales ? ' (reales: ' + sub.horas_reales + ' h)' : '')));
+      }
+
       return '<div class="sigso-acordeon-item sigso-acordeon-item--activo">' +
         '<div class="sigso-acordeon-item__cabecera"><span>' + sub.numero_item + '. ' + escaparHtml_(sub.titulo) +
         ' — <span class="sigso-badge sigso-badge--' + sub.prioridad + '">' + sub.prioridad + '</span> — ' + formatearEstadoSigso(sub.estado) + '</span></div>' +
@@ -76,8 +120,29 @@
         '<p>' + escaparHtml_(sub.descripcion) + '</p>' +
         (sub.contexto ? '<p><strong>Contexto:</strong> ' + escaparHtml_(sub.contexto) + '</p>' : '') +
         (sub.resultado_esperado ? '<p><strong>Resultado esperado:</strong> ' + escaparHtml_(sub.resultado_esperado) + '</p>' : '') +
+        (datos.length > 0 ? '<dl class="sigso-datos-item">' + datos.join('') + '</dl>' : '') +
+        (sub.observaciones ? '<p><em>' + escaparHtml_(sub.observaciones) + '</em></p>' : '') +
+        renderGaleria_(imagenesItem) +
         '</div></div>';
     }).join('') || '<p>Sin subsolicitudes.</p>';
+  }
+
+  function renderCampoDato_(etiqueta, valorHtml) {
+    return '<dt>' + escaparHtml_(etiqueta) + '</dt><dd>' + valorHtml + '</dd>';
+  }
+
+  function renderGaleria_(archivos) {
+    if (!archivos || archivos.length === 0) {
+      return '';
+    }
+    return '<div class="sigso-galeria">' + archivos.map(function (a) {
+      var esImagen = String(a.tipo_mime || '').indexOf('image/') === 0;
+      return '<a href="' + escaparHtml_(a.url) + '" target="_blank" rel="noopener" class="sigso-galeria__item" title="' + escaparHtml_(a.nombre_original) + '">' +
+        (esImagen
+          ? '<img src="' + escaparHtml_(a.url) + '" alt="' + escaparHtml_(a.nombre_original) + '">'
+          : escaparHtml_(a.nombre_original)) +
+        '</a>';
+    }).join('') + '</div>';
   }
 
   function renderTimeline_(historial) {

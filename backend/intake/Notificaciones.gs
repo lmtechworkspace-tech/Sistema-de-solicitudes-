@@ -17,7 +17,10 @@ var Notificaciones = {
       'Hola ' + solicitud.solicitante_nombre + ',\n\n' +
       'Tu solicitud ' + solicitud.solicitud_id + ' fue registrada correctamente.\n\n' +
       solicitud.resumen_whatsapp;
-    return enviarCorreo_(solicitud.solicitud_id, solicitud.solicitante_email, 'ACUSE_RECIBO', asunto, cuerpo);
+    // Fase 9: cc opcional del formulario (hallazgo real, RLD "Hoja de
+    // ruta") -- se copia en el acuse, no cambia a quien va dirigido ni
+    // la deduplicacion (esa sigue siendo por solicitante_email).
+    return enviarCorreo_(solicitud.solicitud_id, solicitud.solicitante_email, 'ACUSE_RECIBO', asunto, cuerpo, solicitud.cc);
   },
 
   enviarAlertaCritica: function (solicitud) {
@@ -73,7 +76,7 @@ function registrarNotificacion_(solicitudId, canal, destinatario, evento, result
   });
 }
 
-function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo) {
+function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo, cc) {
   if (!destinatario) {
     return { enviado: false, motivo: 'sin_destinatario' };
   }
@@ -81,7 +84,7 @@ function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo) {
     return { enviado: false, motivo: 'deduplicado' };
   }
   try {
-    GmailApp.sendEmail(destinatario, asunto, cuerpo);
+    GmailApp.sendEmail(destinatario, asunto, cuerpo, cc ? { cc: cc } : {});
     registrarNotificacion_(solicitudId, 'EMAIL', destinatario, evento, 'ENVIADO', 0);
     return { enviado: true };
   } catch (err) {

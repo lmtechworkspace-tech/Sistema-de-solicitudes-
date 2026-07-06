@@ -48,7 +48,12 @@ var COLUMNAS = {
     'version_documento', 'url_pdf_historial',
     'dedup_hash', 'estimacion_total_horas', 'horas_reales',
     'observaciones_generales',
-    'resumen_whatsapp', 'fecha_creacion', 'creado_por'
+    'resumen_whatsapp', 'fecha_creacion', 'creado_por',
+    // Fase 9 (hallazgo de datos reales, RLD "Hoja de ruta"): correo
+    // adicional a copiar en las notificaciones de esta solicitud, ademas
+    // de solicitante_email. Agregado al final para no romper el orden de
+    // columnas ya desplegado (backend/test/schema-consistency.test.js).
+    'cc'
   ],
   SUBSOLICITUDES: [
     'subsolicitud_id', 'solicitud_id', 'numero_item', 'titulo', 'descripcion',
@@ -57,7 +62,13 @@ var COLUMNAS = {
     'url_modulo', 'usuario_prueba', 'ref_credencial', 'centro_costos',
     'url_video', 'observaciones',
     'sla_objetivo_horas', 'estimacion_horas', 'horas_reales', 'fecha_creacion',
-    'desarrollador_asignado'
+    'desarrollador_asignado',
+    // Fase 9: el ejemplo real (RLD "Hoja de ruta") trae hasta 4 URLs por
+    // solicitud (modulo, modal de validacion, modal de informacion,
+    // documento generado) -- url_modulo sigue siendo la principal, esta
+    // guarda las demas como JSON string (array de {titulo, url}), mismo
+    // patron que url_pdf_historial.
+    'urls_adicionales'
   ],
   HISTORIAL_ESTADOS: [
     'historial_id', 'solicitud_id', 'subsolicitud_id',

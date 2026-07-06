@@ -96,17 +96,30 @@ function sembrarSolicitudesDemo_(ctx) {
       estado_derivado: item.estado, prioridad_derivada: item.prioridad, orden_atencion: '',
       doc_estado: '', doc_reintentos: 0, url_doc: '', url_pdf: '', version_documento: 0, url_pdf_historial: '',
       dedup_hash: 'demo-' + idx, estimacion_total_horas: 8, horas_reales: '', observaciones_generales: '',
-      resumen_whatsapp: '', fecha_creacion: fecha, creado_por: 'demo' + (idx + 1) + '@' + item.empresa.toLowerCase() + '.cl'
+      resumen_whatsapp: '', fecha_creacion: fecha, creado_por: 'demo' + (idx + 1) + '@' + item.empresa.toLowerCase() + '.cl',
+      cc: idx === 0 ? 'copia@homepymes.cl' : ''
     };
     ctx.SpreadsheetApp.openById('dev-sheet').getSheetByName('SOLICITUDES')
       .appendRow(ctx.COLUMNAS.SOLICITUDES.map((col) => solicitud[col]));
 
+    // Fase 9: el primer item demo lleva los campos reales (URLs multiples,
+    // credencial, CC) para poder ver el panel de detalle rediseñado
+    // (detalle.js) tal como lo veria Leo, sin tener que crear una solicitud
+    // real a mano cada vez.
+    const esDemoRico = idx === 0;
     const subsolicitud = {
       subsolicitud_id: item.id + '-01', solicitud_id: item.id, numero_item: 1,
       titulo: 'Item de ejemplo ' + (idx + 1), descripcion: 'Descripcion de ejemplo para ' + item.id,
       contexto: '', resultado_esperado: '', impacto: '', prioridad: item.prioridad, estado: item.estado,
-      url_modulo: '', usuario_prueba: '', ref_credencial: '', centro_costos: '', url_video: '', observaciones: '',
-      sla_objetivo_horas: 24, estimacion_horas: 8, horas_reales: '', fecha_creacion: fecha
+      url_modulo: esDemoRico ? 'https://integral.rld.cl/pages/ejemplo.php' : '',
+      usuario_prueba: esDemoRico ? 'z4nunoa' : '',
+      ref_credencial: esDemoRico ? 'Ver gestor de credenciales del equipo, entrada "z4nunoa"' : '',
+      centro_costos: esDemoRico ? 'CC-01' : '', url_video: '', observaciones: '',
+      sla_objetivo_horas: 24, estimacion_horas: 8, horas_reales: '', fecha_creacion: fecha,
+      urls_adicionales: esDemoRico ? JSON.stringify([
+        { titulo: 'Modal de validacion', url: 'https://integral.rld.cl/modal_validacion.php?id=1' },
+        { titulo: 'Documento generado', url: 'https://integral.rld.cl/doc_generado.php?id=1' }
+      ]) : ''
     };
     ctx.SpreadsheetApp.openById('dev-sheet').getSheetByName('SUBSOLICITUDES')
       .appendRow(ctx.COLUMNAS.SUBSOLICITUDES.map((col) => subsolicitud[col]));
@@ -114,6 +127,15 @@ function sembrarSolicitudesDemo_(ctx) {
     ctx.SpreadsheetApp.openById('dev-sheet').getSheetByName('HISTORIAL_ESTADOS').appendRow([
       'hist-' + idx, item.id, item.id + '-01', '', 'S01', 'sistema', 'Solicitud creada', fecha
     ]);
+
+    if (esDemoRico) {
+      ctx.SpreadsheetApp.openById('dev-sheet').getSheetByName('ARCHIVOS').appendRow([
+        'archivo-demo-1', item.id, '', 'captura_general.png', 'https://drive.google.com/demo-general', 'image/png', 12345, fecha
+      ]);
+      ctx.SpreadsheetApp.openById('dev-sheet').getSheetByName('ARCHIVOS').appendRow([
+        'archivo-demo-2', item.id, item.id + '-01', 'captura_item.png', 'https://drive.google.com/demo-item', 'image/png', 12345, fecha
+      ]);
+    }
   });
 }
 

@@ -97,3 +97,27 @@
 .sigso-toggle input {
   width: auto;
 }
+
+.sigso-ayuda {
+  font-size: 0.8rem;
+  color: var(--gris-oscuro, #666);
+  margin: 0.25rem 0 0;
+}
+
+.sigso-url-item {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.sigso-url-item input {
+  flex: 1;
+}
+
+.sigso-url-item__quitar {
+  background: none;
+  border: none;
+  color: var(--p1);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}

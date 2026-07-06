@@ -112,6 +112,11 @@
         <input type="email" id="campo-solicitante-email" required />
       </div>
 
+      <div class="sigso-campo">
+        <label for="campo-cc">Copiar a (CC, opcional)</label>
+        <input type="email" id="campo-cc" placeholder="otro.correo@empresa.cl" />
+      </div>
+
       <h2>Subsolicitudes</h2>
       <div id="lista-subsolicitudes"></div>
       <button type="button" class="sigso-boton--secundario" id="btn-agregar-subsolicitud">+ Agregar subsolicitud</button>
@@ -119,6 +124,16 @@
       <div class="sigso-campo" style="margin-top: 1.5rem">
         <label for="campo-observaciones-generales">Observaciones generales (opcional)</label>
         <textarea id="campo-observaciones-generales"></textarea>
+      </div>
+
+      <!-- RF-003 v1.0: hasta 5 imagenes por solicitud (no por subsolicitud).
+           Se suben despues de crear la solicitud (Drive.subirArchivo necesita
+           el solicitud_id ya generado), en forma transparente para quien
+           llena el formulario (formulario.js). -->
+      <div class="sigso-campo">
+        <label for="campo-imagenes">Capturas de pantalla (opcional, m&aacute;x. 5)</label>
+        <input type="file" id="campo-imagenes" accept="image/png,image/jpeg,image/gif" multiple />
+        <p class="sigso-ayuda" id="imagenes-ayuda"></p>
       </div>
 
       <div class="sigso-campo">

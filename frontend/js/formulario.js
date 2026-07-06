@@ -2,13 +2,27 @@
  * formulario.js — formulario publico progresivo (§12.2).
  *
  * Sin frameworks (§2.2): estado en un objeto plano + render manual del
- * acordeon de subsolicitudes. subirArchivo no esta implementado todavia
- * (Fase 4, §5.3): este formulario no incluye adjuntos.
+ * acordeon de subsolicitudes.
+ *
+ * Fase 9 (hallazgo de datos reales, RLD "Hoja de ruta" via correo real):
+ * - urls_adicionales reemplaza el supuesto de "una sola URL" -- el ejemplo
+ *   real trae hasta 4 (modulo, modal de validacion, modal de informacion,
+ *   documento generado). url_modulo sigue siendo la URL principal.
+ * - ref_credencial (ya existia en el schema desde C-06/§3.4 pero nunca se
+ *   habia expuesto en el formulario) reemplaza la practica real de pegar
+ *   usuario+password en texto plano: aqui va una referencia, nunca la
+ *   contrasena.
+ * - url_video se retira de la vista: ningun caso real lo usa.
+ * - Imagenes: subirArchivo (Drive.gs, Fase 4) necesita el solicitud_id ya
+ *   generado, asi que se suben despues de crearSolicitud (RF-003: hasta 5
+ *   por solicitud, no por subsolicitud), de forma transparente para quien
+ *   llena el formulario.
  */
 (function () {
   var LLAVE_BORRADOR = 'sigso_borrador_solicitud';
   var MAX_SUBSOLICITUDES = 10;
   var MIN_SUBSOLICITUDES = 1;
+  var MAX_IMAGENES = 5;
 
   var estado = {
     catalogos: null,
@@ -19,7 +33,8 @@
   function nuevaSubsolicitud_() {
     return {
       titulo: '', descripcion: '', contexto: '', resultado_esperado: '', impacto: '',
-      url_modulo: '', usuario_prueba: '', centro_costos: '', url_video: '',
+      url_modulo: '', usuario_prueba: '', ref_credencial: '', centro_costos: '',
+      urls_adicionales: [],
       observaciones: '', estimacion_horas: ''
     };
   }
@@ -46,7 +61,7 @@
     document.getElementById('campo-item').addEventListener('change', actualizarCascadaSubitem_);
 
     ['campo-empresa', 'campo-plataforma', 'campo-modulo', 'campo-submodulo', 'campo-item', 'campo-subitem', 'campo-tipo',
-      'campo-solicitante-nombre', 'campo-solicitante-cargo', 'campo-solicitante-email',
+      'campo-solicitante-nombre', 'campo-solicitante-cargo', 'campo-solicitante-email', 'campo-cc',
       'campo-empresa-cliente', 'campo-cliente-mandante', 'campo-cliente-obra',
       'campo-contacto-cliente', 'campo-correo-cliente', 'campo-telefono-cliente',
       'campo-urgencia-cliente', 'campo-observaciones-generales'
@@ -59,7 +74,20 @@
         });
       }
     });
+
+    document.getElementById('campo-imagenes').addEventListener('change', manejarSeleccionImagenes_);
   });
+
+  // RF-003: hasta 5 imagenes por solicitud (no se guardan en localStorage:
+  // los File no son serializables y el borrador es solo para texto).
+  function manejarSeleccionImagenes_(evento) {
+    var ayuda = document.getElementById('imagenes-ayuda');
+    if (evento.target.files.length > MAX_IMAGENES) {
+      ayuda.textContent = 'Maximo ' + MAX_IMAGENES + ' imagenes; se subiran solo las primeras ' + MAX_IMAGENES + '.';
+    } else {
+      ayuda.textContent = evento.target.files.length + ' imagen(es) seleccionada(s).';
+    }
+  }
 
   function cargarCatalogos_() {
     llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'getCatalogos', {}).then(function (respuesta) {
@@ -200,14 +228,16 @@
         '<select data-campo="impacto" data-idx="' + idx + '">' +
         opcionesImpacto_(item.impacto) +
         '</select></div>' +
-        '<div class="sigso-campo"><label>URL del m&oacute;dulo (opcional)</label>' +
+        '<div class="sigso-campo"><label>URL principal (opcional)</label>' +
         '<input type="text" data-campo="url_modulo" data-idx="' + idx + '" value="' + escaparHtml_(item.url_modulo) + '"></div>' +
+        renderUrlsAdicionales_(item, idx) +
         '<div class="sigso-campo"><label>Usuario de prueba (opcional)</label>' +
         '<input type="text" data-campo="usuario_prueba" data-idx="' + idx + '" value="' + escaparHtml_(item.usuario_prueba) + '"></div>' +
+        '<div class="sigso-campo"><label>Credencial de prueba (opcional)</label>' +
+        '<input type="text" data-campo="ref_credencial" data-idx="' + idx + '" value="' + escaparHtml_(item.ref_credencial) + '" placeholder="Referencia al gestor de credenciales, nunca la contrase&ntilde;a">' +
+        '<p class="sigso-ayuda">Indica d&oacute;nde encontrar la clave (ej. gestor de contrase&ntilde;as del equipo). Nunca escribas la contrase&ntilde;a aqu&iacute;.</p></div>' +
         '<div class="sigso-campo"><label>Centro de costos (opcional)</label>' +
         '<input type="text" data-campo="centro_costos" data-idx="' + idx + '" value="' + escaparHtml_(item.centro_costos) + '"></div>' +
-        '<div class="sigso-campo"><label>Video explicativo (opcional)</label>' +
-        '<input type="text" data-campo="url_video" data-idx="' + idx + '" value="' + escaparHtml_(item.url_video) + '"></div>' +
         '<div class="sigso-campo"><label>Estimaci&oacute;n en horas (opcional)</label>' +
         '<input type="text" data-campo="estimacion_horas" data-idx="' + idx + '" value="' + escaparHtml_(item.estimacion_horas) + '"></div>' +
         '<div class="sigso-campo"><label>Observaciones del item (opcional)</label>' +
@@ -245,7 +275,61 @@
       });
     });
 
+    contenedor.querySelectorAll('[data-url-campo]').forEach(function (el) {
+      el.addEventListener('input', function () {
+        var idx = Number(el.getAttribute('data-idx'));
+        var urlIdx = Number(el.getAttribute('data-url-idx'));
+        var campo = el.getAttribute('data-url-campo');
+        estado.subsolicitudes[idx].urls_adicionales[urlIdx][campo] = el.value;
+        guardarBorrador_();
+      });
+    });
+    contenedor.querySelectorAll('[data-accion="agregar-url"]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        agregarUrlAdicional_(Number(el.getAttribute('data-idx')));
+      });
+    });
+    contenedor.querySelectorAll('[data-accion="quitar-url"]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        quitarUrlAdicional_(Number(el.getAttribute('data-idx')), Number(el.getAttribute('data-url-idx')));
+      });
+    });
+
     document.getElementById('btn-agregar-subsolicitud').disabled = estado.subsolicitudes.length >= MAX_SUBSOLICITUDES;
+  }
+
+  // URLs adicionales por subsolicitud (Fase 9): titulo + link, sin limite
+  // fijo -- el ejemplo real (RLD "Hoja de ruta") trae hasta 4.
+  function renderUrlsAdicionales_(item, idx) {
+    var filas = (item.urls_adicionales || []).map(function (u, urlIdx) {
+      return (
+        '<div class="sigso-url-item">' +
+        '<input type="text" data-url-campo="titulo" data-idx="' + idx + '" data-url-idx="' + urlIdx + '" ' +
+        'value="' + escaparHtml_(u.titulo) + '" placeholder="Ej: modal de validaci&oacute;n">' +
+        '<input type="text" data-url-campo="url" data-idx="' + idx + '" data-url-idx="' + urlIdx + '" ' +
+        'value="' + escaparHtml_(u.url) + '" placeholder="https://...">' +
+        '<button type="button" class="sigso-url-item__quitar" data-accion="quitar-url" data-idx="' + idx + '" data-url-idx="' + urlIdx + '">Quitar</button>' +
+        '</div>'
+      );
+    }).join('');
+    return (
+      '<div class="sigso-campo"><label>URLs adicionales (opcional)</label>' +
+      filas +
+      '<button type="button" class="sigso-boton--secundario" data-accion="agregar-url" data-idx="' + idx + '">+ Agregar URL</button>' +
+      '</div>'
+    );
+  }
+
+  function agregarUrlAdicional_(idx) {
+    estado.subsolicitudes[idx].urls_adicionales.push({ titulo: '', url: '' });
+    renderSubsolicitudes_();
+    guardarBorrador_();
+  }
+
+  function quitarUrlAdicional_(idx, urlIdx) {
+    estado.subsolicitudes[idx].urls_adicionales.splice(urlIdx, 1);
+    renderSubsolicitudes_();
+    guardarBorrador_();
   }
 
   function opcionesImpacto_(seleccionado) {
@@ -306,6 +390,7 @@
       solicitante_nombre: document.getElementById('campo-solicitante-nombre').value,
       solicitante_cargo: document.getElementById('campo-solicitante-cargo').value,
       solicitante_email: document.getElementById('campo-solicitante-email').value,
+      cc: document.getElementById('campo-cc').value,
       observaciones_generales: document.getElementById('campo-observaciones-generales').value,
       subsolicitudes: estado.subsolicitudes
     };
@@ -358,6 +443,7 @@
       document.getElementById('campo-solicitante-nombre').value = datos.solicitante_nombre || '';
       document.getElementById('campo-solicitante-cargo').value = datos.solicitante_cargo || '';
       document.getElementById('campo-solicitante-email').value = datos.solicitante_email || '';
+      document.getElementById('campo-cc').value = datos.cc || '';
       document.getElementById('campo-observaciones-generales').value = datos.observaciones_generales || '';
       if (datos.es_cliente) {
         document.getElementById('campo-es-cliente').checked = true;
@@ -371,7 +457,13 @@
         alternarBloqueCliente_();
       }
       if (Array.isArray(datos.subsolicitudes) && datos.subsolicitudes.length > 0) {
-        estado.subsolicitudes = datos.subsolicitudes;
+        // Normaliza borradores guardados antes de la Fase 9 (sin
+        // ref_credencial/urls_adicionales todavia).
+        estado.subsolicitudes = datos.subsolicitudes.map(function (item) {
+          return Object.assign(nuevaSubsolicitud_(), item, {
+            urls_adicionales: Array.isArray(item.urls_adicionales) ? item.urls_adicionales : []
+          });
+        });
       }
     } catch (err) {
       // Borrador corrupto: se ignora y se empieza de cero.
@@ -397,13 +489,15 @@
 
     llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'crearSolicitud', datos)
       .then(function (respuesta) {
-        if (respuesta.ok) {
-          limpiarBorrador_();
-          mostrarExito_(respuesta.data);
-          document.getElementById('form-solicitud').classList.add('sigso-oculto');
-        } else {
+        if (!respuesta.ok) {
           mostrarError_(respuesta);
+          return;
         }
+        limpiarBorrador_();
+        document.getElementById('form-solicitud').classList.add('sigso-oculto');
+        return subirImagenesSeleccionadas_(respuesta.data.solicitud_id).then(function (resultadoImagenes) {
+          mostrarExito_(respuesta.data, resultadoImagenes);
+        });
       })
       .catch(function () {
         mostrarError_({ error: 'internal', message: 'No se pudo conectar con el servidor. Intenta nuevamente.' });
@@ -414,16 +508,67 @@
       });
   }
 
-  function mostrarExito_(data) {
+  // RF-003: subirArchivo (Drive.gs) necesita el solicitud_id ya generado,
+  // asi que las imagenes se suben recien despues de crearSolicitud -- de
+  // forma transparente, sin que quien llena el formulario tenga que hacer
+  // un segundo paso.
+  function subirImagenesSeleccionadas_(solicitudId) {
+    var archivos = Array.prototype.slice.call(document.getElementById('campo-imagenes').files, 0, MAX_IMAGENES);
+    if (archivos.length === 0) {
+      return Promise.resolve({ intentadas: 0, subidas: 0 });
+    }
+    var subidas = 0;
+    return archivos.reduce(function (promesa, archivo) {
+      return promesa.then(function () {
+        return leerArchivoBase64_(archivo).then(function (base64) {
+          return llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'subirArchivo', {
+            solicitud_id: solicitudId,
+            nombre_archivo: archivo.name,
+            contenido_base64: base64
+          });
+        }).then(function (respuesta) {
+          if (respuesta && respuesta.ok) {
+            subidas++;
+          }
+        }).catch(function () {
+          // Una imagen fallida no debe bloquear las demas ni el aviso final.
+        });
+      });
+    }, Promise.resolve()).then(function () {
+      return { intentadas: archivos.length, subidas: subidas };
+    });
+  }
+
+  function leerArchivoBase64_(archivo) {
+    return new Promise(function (resolve, reject) {
+      var lector = new FileReader();
+      lector.onload = function () {
+        // dataURL viene como "data:<mime>;base64,<contenido>" -- Drive.gs
+        // solo necesita la parte base64.
+        resolve(String(lector.result).split(',')[1] || '');
+      };
+      lector.onerror = reject;
+      lector.readAsDataURL(archivo);
+    });
+  }
+
+  function mostrarExito_(data, resultadoImagenes) {
     var contenedor = document.getElementById('resultado');
     var aviso = data.posible_duplicado
       ? '<p><strong>Nota:</strong> ya existe una solicitud abierta parecida (' + data.posible_duplicado.solicitud_id + ').</p>'
       : '';
+    var avisoImagenes = '';
+    if (resultadoImagenes && resultadoImagenes.intentadas > 0) {
+      avisoImagenes = resultadoImagenes.subidas === resultadoImagenes.intentadas
+        ? '<p>' + resultadoImagenes.subidas + ' imagen(es) adjuntada(s) correctamente.</p>'
+        : '<p><strong>Nota:</strong> se adjuntaron ' + resultadoImagenes.subidas + ' de ' + resultadoImagenes.intentadas + ' imagenes (revisa tama&ntilde;o/formato de las restantes).</p>';
+    }
     contenedor.innerHTML =
       '<div class="sigso-resultado-exito">' +
       '<p>Solicitud registrada:</p>' +
       '<p class="sigso-numero-solicitud">' + data.solicitud_id + '</p>' +
       aviso +
+      avisoImagenes +
       '<p>Resumen para compartir por WhatsApp:</p>' +
       '<pre class="sigso-resumen-whatsapp">' + escaparHtml_(data.resumen_whatsapp) + '</pre>' +
       '<button type="button" class="sigso-boton--secundario" id="btn-copiar-resumen">Copiar resumen</button>' +

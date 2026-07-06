@@ -184,13 +184,19 @@ var Solicitudes = {
     var comentarios = leerFilas_(SHEETS.COMENTARIOS)
       .filter(function (c) { return c.solicitud_id === solicitudId; })
       .sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
+    // Fase 9 (hallazgo de datos reales): Leo necesita ver las capturas de
+    // pantalla adjuntas, no solo texto -- getDetalle no las incluia.
+    var archivos = leerFilas_(SHEETS.ARCHIVOS)
+      .filter(function (a) { return a.solicitud_id === solicitudId; })
+      .sort(function (a, b) { return new Date(a.fecha_subida) - new Date(b.fecha_subida); });
 
     return {
       solicitud: solicitud,
       subsolicitudes: subsolicitudes,
       historial_estados: historialEstados,
       historial_prioridad: historialPrioridad,
-      comentarios: comentarios
+      comentarios: comentarios,
+      archivos: archivos
     };
   }
 };

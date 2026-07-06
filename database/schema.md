@@ -57,6 +57,7 @@ corrida de `npm test`.
 | `resumen_whatsapp` | string | Formato exacto de RF-015 v1.0 (con emojis), generado en `crearSolicitud` |
 | `fecha_creacion` | ISO datetime | — |
 | `creado_por` | string | `solicitante_email` |
+| `cc` | string (email) | **Fase 9** (hallazgo de datos reales, ej. RLD "Hoja de ruta": `Cc: Monje Fuji`): opcional; correo adicional a copiar en las notificaciones de la solicitud, además de `solicitante_email`. Se copia (Gmail `cc`) en el acuse de recibo |
 
 ## SUBSOLICITUDES
 
@@ -71,17 +72,18 @@ corrida de `npm test`.
 | `impacto` | string | `SISTEMA_CAIDO`/`PERDIDA_DATOS`/`BLOQUEO_OPERATIVO`/`DEGRADACION_IMPORTANTE`/`PARCIAL_CON_WORKAROUND`/`PLANIFICADO`; insumo de `derivarPrioridad_` (RN-006) |
 | `prioridad` | string (`P1`-`P5`) | `derivarPrioridad_(impacto)` |
 | `estado` | string (`S01`-`S11`) | `S01` al crear; ver máquina de estados (§8, Fase 2) |
-| `url_modulo` | string | Opcional; RF-003 v1.0 — URL exacta donde se reproduce el problema |
+| `url_modulo` | string | Opcional; RF-003 v1.0 — URL exacta donde se reproduce el problema (URL principal) |
 | `usuario_prueba` | string | Opcional; RF-003 v1.0 |
 | `ref_credencial` | string | Enlace a `Sistema_Control_Credenciales` (C-06/§3.4); reemplaza a `password_prueba` de v1.0, nunca contraseña en claro |
 | `centro_costos` | string | Opcional; RF-003 v1.0 |
-| `url_video` | string | Opcional; RF-003 v1.0 — link a video explicativo (Drive/YouTube/Loom) |
+| `url_video` | string | Opcional; RF-003 v1.0 — link a video explicativo (Drive/YouTube/Loom). **Fase 9**: se retiró del formulario visible (ningún ejemplo real lo usa — sí se usan capturas de pantalla, ver `ARCHIVOS`); la columna se mantiene por si algún caso futuro lo necesita |
 | `observaciones` | string | Opcional; observaciones específicas del ítem (distinto de `observaciones_generales` en `SOLICITUDES`) |
 | `sla_objetivo_horas` | number | Leído de `CONFIG_SLA` según `prioridad` |
 | `estimacion_horas` | number | Opcional; estimación del desarrollador, entidad SUBSOLICITUD v1.0 |
 | `horas_reales` | number | **(futuro)**; se completa durante el desarrollo |
 | `fecha_creacion` | ISO datetime | — |
 | `desarrollador_asignado` | string (email) | Fase 6 (segunda reconciliación), §13.3 v1.0: las subsolicitudes pueden trabajarse en paralelo por distintos desarrolladores, así que la asignación también existe a este nivel (no solo en `SOLICITUDES.desarrollador_asignado`, que sigue siendo el responsable "por defecto"). La asignación puntual se hace vía `actualizarPrioridad({ solicitud_id, subsolicitud_id, desarrollador_asignado })`; el Dashboard (vista DEV) muestra una solicitud si el desarrollador está asignado a ella o a cualquiera de sus subsolicitudes |
+| `urls_adicionales` | string (JSON) | **Fase 9** (hallazgo de datos reales, RLD "Hoja de ruta": hasta 4 URLs distintas en una sola solicitud — módulo, modal de validación, modal de información, documento generado). Array `[{titulo, url}, ...]` serializado, mismo patrón que `url_pdf_historial`. `url_modulo` sigue siendo la URL principal; esta columna guarda las adicionales |
 
 ## COUNTERS (nueva, C-12)
 

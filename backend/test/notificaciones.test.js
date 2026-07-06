@@ -41,6 +41,16 @@ test('enviarAcuseRecibo envia el correo y lo registra en LOG_NOTIFICACIONES', ()
   assert.equal(log[0].resultado, 'ENVIADO');
 });
 
+test('enviarAcuseRecibo copia el cc opcional (Fase 9, hallazgo de datos reales)', () => {
+  const ctx = loadIntakeConSchema();
+  ctx.Notificaciones.enviarAcuseRecibo({
+    solicitud_id: 'SOL-2026-HP-0002', solicitante_nombre: 'Juan', solicitante_email: 'juan@x.cl',
+    resumen_whatsapp: 'r', cc: 'copia@x.cl'
+  });
+
+  assert.equal(ctx.GmailApp._enviados[0].opciones.cc, 'copia@x.cl');
+});
+
 test('el mismo evento para la misma solicitud se deduplica dentro de 30 minutos (RN-026)', () => {
   const ctx = loadIntakeConSchema();
   const datos = { solicitud_id: 'SOL-2026-HP-0001', solicitante_nombre: 'Juan', solicitante_email: 'juan@x.cl', resumen_whatsapp: 'r' };

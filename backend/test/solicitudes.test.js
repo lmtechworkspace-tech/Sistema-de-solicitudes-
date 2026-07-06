@@ -174,6 +174,42 @@ test('crearSolicitud guarda los campos ampliados de v1.0 (cargo, cliente, subsol
   assert.equal(subsolicitud.estimacion_horas, 8);
 });
 
+test('crearSolicitud guarda cc y urls_adicionales (Fase 9, hallazgo de datos reales)', () => {
+  const ctx = loadIntakeConSchema();
+  ctx.Solicitudes.crearSolicitud(
+    datosValidos({
+      cc: 'copia@empresa.cl',
+      subsolicitudes: [{
+        titulo: 'Titulo', descripcion: 'Desc', impacto: 'PLANIFICADO',
+        url_modulo: 'https://x.cl/principal',
+        urls_adicionales: [
+          { titulo: 'Modal de validacion', url: 'https://x.cl/validacion' },
+          { titulo: 'Documento generado', url: 'https://x.cl/doc' }
+        ],
+        ref_credencial: 'Ver gestor de credenciales #123'
+      }]
+    })
+  );
+
+  const solicitud = ctx.leerFilas_('SOLICITUDES')[0];
+  assert.equal(solicitud.cc, 'copia@empresa.cl');
+
+  const subsolicitud = ctx.leerFilas_('SUBSOLICITUDES')[0];
+  assert.equal(subsolicitud.ref_credencial, 'Ver gestor de credenciales #123');
+  assert.deepEqual(JSON.parse(subsolicitud.urls_adicionales), [
+    { titulo: 'Modal de validacion', url: 'https://x.cl/validacion' },
+    { titulo: 'Documento generado', url: 'https://x.cl/doc' }
+  ]);
+});
+
+test('crearSolicitud rechaza un cc con formato de correo invalido', () => {
+  const ctx = loadIntakeConSchema();
+  const resultado = ctx.Solicitudes.crearSolicitud(datosValidos({ cc: 'no-es-un-correo' }));
+
+  assert.equal(resultado._validationError, true);
+  assert.ok(resultado.fields.some((f) => f.campo === 'cc'));
+});
+
 test('generarResumenWhatsapp_ sigue el formato de RF-015 con un solo item', () => {
   const ctx = loadIntakeConSchema();
   const resultado = ctx.Solicitudes.crearSolicitud(datosValidos());

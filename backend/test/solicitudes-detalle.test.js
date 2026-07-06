@@ -14,6 +14,7 @@ function loadConSchema() {
   ]);
   seedSheet(ctx, 'HISTORIAL_PRIORIDAD', ctx.COLUMNAS.HISTORIAL_PRIORIDAD);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
+  seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);
   return ctx;
 }
 
@@ -45,6 +46,22 @@ test('getDetalle devuelve solicitud, subsolicitudes, historial y comentarios', (
   assert.equal(detalle.historial_estados[0].estado_nuevo, 'S01');
   assert.equal(detalle.historial_estados[1].estado_nuevo, 'S02');
   assert.equal(detalle.comentarios.length, 0);
+  assert.equal(detalle.archivos.length, 0);
+});
+
+test('getDetalle incluye los archivos de la solicitud (Fase 9, para la galeria del panel de Leo)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  const hojaArchivos = ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('ARCHIVOS');
+  hojaArchivos.appendRow(['A1', 'SOL-2026-HP-0001', '', 'general.png', 'https://drive/general', 'image/png', 1000, '2026-01-01T10:00:00.000Z']);
+  hojaArchivos.appendRow(['A2', 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'item.png', 'https://drive/item', 'image/png', 1000, '2026-01-01T10:00:00.000Z']);
+  hojaArchivos.appendRow(['A3', 'SOL-2026-HP-9999', '', 'otra.png', 'https://drive/otra', 'image/png', 1000, '2026-01-01T10:00:00.000Z']);
+
+  const detalle = ctx.Solicitudes.getDetalle('SOL-2026-HP-0001');
+
+  assert.equal(detalle.archivos.length, 2);
+  assert.ok(detalle.archivos.some((a) => a.archivo_id === 'A1' && !a.subsolicitud_id));
+  assert.ok(detalle.archivos.some((a) => a.archivo_id === 'A2' && a.subsolicitud_id === 'SOL-2026-HP-0001-01'));
 });
 
 test('getDetalle responde error de validacion si la solicitud no existe', () => {
@@ -63,6 +80,7 @@ test('doPost action=getSolicitudDetalle responde ok:true end-to-end', () => {
   seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
   seedSheet(ctx, 'HISTORIAL_PRIORIDAD', ctx.COLUMNAS.HISTORIAL_PRIORIDAD);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
+  seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);
   seedSolicitud(ctx);
   seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS, [
     ['U1', 'Admin', 'admin@homepymes.cl', 'HP', 'ADM', true, '', 'sistema']
