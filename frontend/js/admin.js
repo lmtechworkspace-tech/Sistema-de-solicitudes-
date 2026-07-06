@@ -30,7 +30,7 @@
         { nombre: 'modulo_id', label: 'Código', soloAlCrear: true },
         { nombre: 'nombre', label: 'Nombre' },
         { nombre: 'plataforma_id', label: 'Plataforma (código)' },
-        // Jerarquia real de hasta 3 niveles (modulo principal > submodulo >
+        // Jerarquia real de hasta 4 niveles (modulo principal > submodulo >
         // item, post-Fase 8): vacio si este modulo es raiz de su plataforma.
         { nombre: 'modulo_padre_id', label: 'Módulo padre (código, opcional)' },
         { nombre: 'activo', label: 'Activo', tipo: 'checkbox' }

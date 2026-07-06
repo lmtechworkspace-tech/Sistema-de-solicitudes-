@@ -122,7 +122,7 @@ reconciliación; agregados en la Fase 6 (ver
 
 `CAT_MODULOS` agrega además `modulo_padre_id` (post-Fase 8, durante el
 despliegue real): el catálogo real de módulos de HomePymes/GDE/Intranet
-tiene hasta 3 niveles (módulo principal → submódulo → ítem — ver el mapa de
+tiene hasta 4 niveles (módulo principal → submódulo → ítem → sub-ítem — ver el mapa de
 procesos real, no modelado en ninguna versión de la especificación
 original). Vacío si el módulo es raíz de su plataforma. El formulario
 público arma una cascada de selects (`campo-modulo` → `campo-submodulo` →

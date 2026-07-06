@@ -96,8 +96,8 @@ var COLUMNAS = {
   // directo a la plataforma). Ver RECONCILIACION-v1.0.md.
   CAT_EMPRESAS: ['empresa_id', 'nombre', 'logo', 'activo'],
   CAT_PLATAFORMAS: ['plataforma_id', 'nombre', 'empresa_id', 'url_base', 'activo'],
-  // modulo_padre_id (post-Fase 8): jerarquia real de hasta 3 niveles
-  // (modulo principal > submodulo > item) encontrada en el mapa de
+  // modulo_padre_id (post-Fase 8): jerarquia real de hasta 4 niveles
+  // (modulo principal > submodulo > item > sub-item) encontrada en el mapa de
   // procesos real de HomePymes/GDE/Intranet. Vacio si es un modulo raiz.
   // El selector "Modulo" del formulario publico arma la cascada con esto;
   // el modulo_id que se guarda en SOLICITUDES es siempre el del nivel mas

@@ -64,7 +64,15 @@ function construirContexto() {
     ['MOD_GENDOC_GEN', 'Generar Documento', 'RLD_GDE', 'MOD_GENDOC', true],
     ['MOD_GENDOC_FIRMA', 'Firma R Generador', 'RLD_GDE', 'MOD_GENDOC', true],
     ['MOD_LIQ', 'Liquidaciones', 'RLD_GDE', '', true],
-    ['MOD_VAC', 'Vacaciones', 'RLD_GDE', '', true]
+    ['MOD_VAC', 'Vacaciones', 'RLD_GDE', '', true],
+    // Ejemplo de jerarquia de 4 niveles real (Prevencion > Gestion
+    // Preventiva > Charlas > Registro de charlas), para probar el 4to
+    // select (sub-item) en local.
+    ['MOD_PREV', 'Prevencion', 'RLD_GDE', '', true],
+    ['MOD_PREV_GESTPREV', 'Gestion Preventiva', 'RLD_GDE', 'MOD_PREV', true],
+    ['MOD_PREV_CHARLAS', 'Charlas', 'RLD_GDE', 'MOD_PREV_GESTPREV', true],
+    ['MOD_PREV_CHARLAS_REG', 'Registro de charlas', 'RLD_GDE', 'MOD_PREV_CHARLAS', true],
+    ['MOD_PREV_CHARLAS_HIST', 'Historico', 'RLD_GDE', 'MOD_PREV_CHARLAS', true]
   ]);
   seedSheet(ctx, 'CAT_TIPOS', ctx.COLUMNAS.CAT_TIPOS, [
     ['ERR', 'Error / Bug', 'P2', true],

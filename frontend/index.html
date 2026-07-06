@@ -31,8 +31,9 @@
         <select id="campo-modulo" required></select>
       </div>
 
-      <!-- Submodulo/item (jerarquia real de hasta 3 niveles, post-Fase 8):
-           ocultos hasta que el nivel anterior tenga hijos (formulario.js). -->
+      <!-- Submodulo/item/sub-item (jerarquia real de hasta 4 niveles,
+           post-Fase 8): ocultos hasta que el nivel anterior tenga hijos
+           (formulario.js). -->
       <div class="sigso-campo sigso-oculto" id="bloque-submodulo">
         <label for="campo-submodulo">Submodulo</label>
         <select id="campo-submodulo"></select>
@@ -41,6 +42,11 @@
       <div class="sigso-campo sigso-oculto" id="bloque-item">
         <label for="campo-item">Item</label>
         <select id="campo-item"></select>
+      </div>
+
+      <div class="sigso-campo sigso-oculto" id="bloque-subitem">
+        <label for="campo-subitem">Sub-item</label>
+        <select id="campo-subitem"></select>
       </div>
 
       <div class="sigso-campo">

@@ -117,7 +117,7 @@ para el detalle columna por columna.
   > **Actualización (durante el despliegue real, post-Fase 8):** al cargar
   > el catálogo real de módulos (HomePymes/GDE/Intranet), el cliente aportó
   > un mapa de procesos completo (draw.io) que sí tiene una jerarquía real
-  > de hasta 3 niveles (módulo principal → submódulo → ítem), más profunda
+  > de hasta 4 niveles (módulo principal → submódulo → ítem → sub-ítem), más profunda
   > que los ejemplos planos de v1.0/v1.1. Se agregó `modulo_padre_id` a
   > `CAT_MODULOS`, una cascada de selects en el formulario público
   > (`campo-modulo` → `campo-submodulo` → `campo-item`, visibles solo si el

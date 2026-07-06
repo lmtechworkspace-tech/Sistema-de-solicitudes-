@@ -43,8 +43,9 @@
     document.getElementById('campo-plataforma').addEventListener('change', poblarModulos_);
     document.getElementById('campo-modulo').addEventListener('change', actualizarCascadaSubmodulo_);
     document.getElementById('campo-submodulo').addEventListener('change', actualizarCascadaItem_);
+    document.getElementById('campo-item').addEventListener('change', actualizarCascadaSubitem_);
 
-    ['campo-empresa', 'campo-plataforma', 'campo-modulo', 'campo-submodulo', 'campo-item', 'campo-tipo',
+    ['campo-empresa', 'campo-plataforma', 'campo-modulo', 'campo-submodulo', 'campo-item', 'campo-subitem', 'campo-tipo',
       'campo-solicitante-nombre', 'campo-solicitante-cargo', 'campo-solicitante-email',
       'campo-empresa-cliente', 'campo-cliente-mandante', 'campo-cliente-obra',
       'campo-contacto-cliente', 'campo-correo-cliente', 'campo-telefono-cliente',
@@ -96,11 +97,12 @@
     poblarSelect_('campo-plataforma', plataformas, 'plataforma_id', 'nombre');
   }
 
-  // Jerarquia real de hasta 3 niveles (modulo principal > submodulo > item,
-  // post-Fase 8, ver mapa de procesos de HomePymes/GDE/Intranet): un modulo
-  // es "raiz" cuando modulo_padre_id viene vacio. Submodulo/item aparecen
-  // solo si el nivel anterior efectivamente tiene hijos -- muchos modulos
-  // no tienen ninguno, y el formulario no debe mostrar selects vacios.
+  // Jerarquia real de hasta 4 niveles (modulo principal > submodulo > item >
+  // sub-item, post-Fase 8, ver mapa de procesos real de HomePymes/GDE/
+  // Intranet): un modulo es "raiz" cuando modulo_padre_id viene vacio.
+  // Cada nivel aparece solo si el anterior efectivamente tiene hijos --
+  // la mayoria de los modulos no llegan a 4 niveles, y el formulario no
+  // debe mostrar selects vacios.
   function poblarModulos_() {
     if (!estado.catalogos) {
       return;
@@ -120,6 +122,11 @@
 
   function actualizarCascadaItem_() {
     actualizarNivelHijo_('campo-submodulo', 'bloque-item', 'campo-item');
+    actualizarCascadaSubitem_();
+  }
+
+  function actualizarCascadaSubitem_() {
+    actualizarNivelHijo_('campo-item', 'bloque-subitem', 'campo-subitem');
   }
 
   function actualizarNivelHijo_(idPadre, idBloqueHijo, idSelectHijo) {
@@ -145,6 +152,8 @@
   // nivel mas profundo con una seleccion real, sin importar cuantos
   // niveles tenga ese modulo en particular.
   function moduloSeleccionadoFinal_() {
+    var subitem = document.getElementById('campo-subitem').value;
+    if (subitem) return subitem;
     var item = document.getElementById('campo-item').value;
     if (item) return item;
     var submodulo = document.getElementById('campo-submodulo').value;
