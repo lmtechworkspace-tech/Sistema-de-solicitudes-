@@ -121,7 +121,7 @@ var Notificaciones = {
 
     return pendientes.map(function (n) {
       try {
-        GmailApp.sendEmail(n.destinatario, '[Reintento] ' + n.evento, 'Reintento de notificacion para ' + n.solicitud_id);
+        MailApp.sendEmail(n.destinatario, '[Reintento] ' + n.evento, 'Reintento de notificacion para ' + n.solicitud_id);
         actualizarFilaPorId_(SHEETS.LOG_NOTIFICACIONES, 'log_id', n.log_id, { resultado: 'ENVIADO' });
         return { log_id: n.log_id, resultado: 'ENVIADO' };
       } catch (err) {
@@ -217,7 +217,7 @@ function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo, ventan
     return { enviado: false, motivo: 'deduplicado' };
   }
   try {
-    GmailApp.sendEmail(destinatario, asunto, cuerpo);
+    MailApp.sendEmail(destinatario, asunto, cuerpo);
     registrarNotificacion_(solicitudId, 'EMAIL', destinatario, evento, 'ENVIADO', 0);
     return { enviado: true };
   } catch (err) {

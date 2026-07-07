@@ -78,7 +78,10 @@ function createUtilitiesMock() {
       return bytes.slice(0, 16);
     },
     base64Decode(texto) {
-      return Array.from(Buffer.from(texto, 'base64'));
+      // Fiel al Apps Script real: Utilities.base64Decode devuelve Byte[] CON
+      // SIGNO (-128..127), no 0..255. Replicarlo aqui es lo que hace que el
+      // test cace el bug de deteccion de firma (0x89/0xFF) en Drive.gs.
+      return Array.from(Buffer.from(texto, 'base64'), (b) => (b > 127 ? b - 256 : b));
     },
     base64Encode(bytesOrString) {
       const buffer = Buffer.isBuffer(bytesOrString) || Array.isArray(bytesOrString)
@@ -491,6 +494,10 @@ function createHtmlServiceMock(htmlDir) {
  */
 function createGasGlobals(options) {
   const opts = options || {};
+  // MailApp y GmailApp comparten el mismo mock: el codigo real usa MailApp
+  // (solo necesita el scope script.send_mail para enviar, en vez del scope
+  // completo de Gmail), pero los tests siguen leyendo ctx.GmailApp._enviados.
+  const correo = createGmailAppMock();
   return {
     ContentService: createContentServiceMock(),
     PropertiesService: createPropertiesServiceMock(opts.scriptProperties),
@@ -501,7 +508,8 @@ function createGasGlobals(options) {
     LockService: createLockServiceMock(),
     DriveApp: createDriveAppMock(),
     DocumentApp: createDocumentAppMock(),
-    GmailApp: createGmailAppMock(),
+    GmailApp: correo,
+    MailApp: correo,
     ScriptApp: createScriptAppMock(),
     CacheService: createCacheServiceMock(),
     HtmlService: createHtmlServiceMock(opts.htmlDir)

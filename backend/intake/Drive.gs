@@ -52,7 +52,11 @@ function detectarMimeReal_(bytes) {
   for (var i = 0; i < FIRMAS_MIME.length; i++) {
     var candidato = FIRMAS_MIME[i];
     var coincide = candidato.firma.every(function (byte, idx) {
-      return bytes[idx] === byte;
+      // Utilities.base64Decode devuelve Byte[] CON SIGNO (-128..127): un
+      // 0x89 (137) llega como -119. Sin el & 0xFF, ninguna firma con byte
+      // >127 (PNG 0x89, JPEG 0xFF) coincidiria y toda imagen real se
+      // rechazaria como "tipo no reconocido".
+      return (bytes[idx] & 0xFF) === byte;
     });
     if (coincide) {
       return candidato;

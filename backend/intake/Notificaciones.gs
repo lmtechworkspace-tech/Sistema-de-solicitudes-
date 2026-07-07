@@ -10,6 +10,13 @@
 
 var VENTANA_DEDUP_MINUTOS = 30;
 
+// Buzon del equipo de desarrollo (Leo). Es quien recibe el aviso de cada
+// solicitud que corresponda notificar (cliente siempre; interna solo si el
+// solicitante lo pide; y cualquier P1). Se deja como constante para poder
+// cambiarlo sin tocar Script Properties; si se quiere hacer configurable en
+// caliente, mover a getConfig_() / una hoja de config es un cambio acotado.
+var EMAIL_DESARROLLO = 'lestay@rld.cl';
+
 var Notificaciones = {
   enviarAcuseRecibo: function (solicitud) {
     var asunto = 'SIGSO - Solicitud registrada: ' + solicitud.solicitud_id;
@@ -23,26 +30,18 @@ var Notificaciones = {
     return enviarCorreo_(solicitud.solicitud_id, solicitud.solicitante_email, 'ACUSE_RECIBO', asunto, cuerpo, solicitud.cc);
   },
 
-  enviarAlertaCritica: function (solicitud) {
-    var destinatarios = obtenerEmailsPorRol_(solicitud.empresa_id, ['ANA', 'DEV']);
-    return destinatarios.map(function (email) {
-      var asunto = 'SIGSO - ALERTA P1: ' + solicitud.solicitud_id;
-      var cuerpo = 'Solicitud critica (P1) registrada: ' + solicitud.solicitud_id + '\n\n' + solicitud.resumen_whatsapp;
-      return enviarCorreo_(solicitud.solicitud_id, email, 'ALERTA_CRITICA', asunto, cuerpo);
-    });
+  // Aviso al equipo de desarrollo (Leo). Reemplaza al ruteo por rol/empresa
+  // anterior (que no enviaba nada si no habia un ANA/DEV registrado para esa
+  // empresa): ahora hay un unico destinatario claro. El motivo (cliente /
+  // pedido explicito / P1) lo decide crearSolicitud.
+  enviarAvisoDesarrollo: function (solicitud, motivo) {
+    var asunto = 'SIGSO - ' + (solicitud.prioridad === 'P1' ? 'ALERTA P1: ' : 'Nueva solicitud: ') + solicitud.solicitud_id;
+    var cuerpo =
+      'Nueva solicitud para revisar (' + (motivo || 'aviso') + '):\n\n' +
+      solicitud.resumen_whatsapp;
+    return enviarCorreo_(solicitud.solicitud_id, EMAIL_DESARROLLO, 'AVISO_DESARROLLO', asunto, cuerpo);
   }
 };
-
-function obtenerEmailsPorRol_(empresaId, roles) {
-  return leerFilas_(SHEETS.USUARIOS)
-    .filter(function (u) {
-      var activo = u.activo === true || u.activo === 'TRUE' || u.activo === 1;
-      return activo && u.empresa_id === empresaId && roles.indexOf(u.rol) !== -1;
-    })
-    .map(function (u) {
-      return u.email;
-    });
-}
 
 // RN-026 deduplica por (solicitud, evento, destinatario): una alerta con
 // varios destinatarios (p.ej. Analista + Desarrollador en ALERTA_CRITICA)
@@ -84,7 +83,9 @@ function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo, cc) {
     return { enviado: false, motivo: 'deduplicado' };
   }
   try {
-    GmailApp.sendEmail(destinatario, asunto, cuerpo, cc ? { cc: cc } : {});
+    // MailApp (no GmailApp): solo necesita el scope script.send_mail para
+    // enviar, en vez del scope completo de Gmail. Soporta cc en opciones.
+    MailApp.sendEmail(destinatario, asunto, cuerpo, cc ? { cc: cc } : {});
     registrarNotificacion_(solicitudId, 'EMAIL', destinatario, evento, 'ENVIADO', 0);
     return { enviado: true };
   } catch (err) {

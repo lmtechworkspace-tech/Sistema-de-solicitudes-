@@ -57,10 +57,10 @@
 
   function renderKpis_(resumen) {
     document.getElementById('contenedor-kpis').innerHTML =
-      Componentes.kpi({ valor: resumen.total_abiertas, etiqueta: 'Abiertas' }) +
-      Componentes.kpi({ valor: resumen.criticas_activas, etiqueta: 'Criticas activas', alerta: true }) +
-      Componentes.kpi({ valor: resumen.sla_vencido, etiqueta: 'SLA vencido', alerta: true }) +
-      Componentes.kpi({ valor: resumen.del_dia, etiqueta: 'Del dia' });
+      Componentes.kpi({ valor: resumen.total_abiertas, etiqueta: 'Abiertas', titulo: 'Solicitudes que aun no estan cerradas, rechazadas ni canceladas.' }) +
+      Componentes.kpi({ valor: resumen.criticas_activas, etiqueta: 'Criticas activas', alerta: true, titulo: 'Solicitudes abiertas de prioridad P1 (la mas alta).' }) +
+      Componentes.kpi({ valor: resumen.sla_vencido, etiqueta: 'Fuera de plazo', alerta: true, titulo: 'Items que ya pasaron su tiempo objetivo de respuesta segun la prioridad (P1: 2h, P2: 24h, P3: 72h, P4: 120h; en horas habiles).' }) +
+      Componentes.kpi({ valor: resumen.del_dia, etiqueta: 'Ingresadas hoy', titulo: 'Solicitudes creadas hoy.' });
   }
 
   function renderGrafico_(idCanvas, tipo, datosAgrupados) {
@@ -139,7 +139,7 @@
 
   function renderIndicadorSla_(horas) {
     if (horas === null || horas === undefined) return '';
-    if (horas < 0) return Componentes.badge('SLA vencido', 'P1');
-    return 'SLA: ' + horas + 'h restantes';
+    if (horas < 0) return Componentes.badge('Fuera de plazo', 'P1');
+    return 'Vence en ' + horas + 'h';
   }
 })();

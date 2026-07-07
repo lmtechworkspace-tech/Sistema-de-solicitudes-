@@ -81,6 +81,14 @@
     document.querySelector('.sigso-admin-menu__item').click();
   });
 
+  // Si google.script.run rechaza (o el fetch falla), la promesa se rechaza y
+  // sin .catch la vista quedaba EN BLANCO (sintoma "no carga"). Este handler
+  // muestra el error real en vez de dejar el panel vacio.
+  function mostrarErrorAdmin_(err) {
+    var mensaje = (err && err.message) ? err.message : 'No se pudo contactar el servidor. Revisa tu sesion/permiso e intenta de nuevo.';
+    document.getElementById('admin-contenido').innerHTML = Componentes.alerta(mensaje, 'error');
+  }
+
   function renderCatalogo_(tipo) {
     var config = CATALOGOS_UI[tipo];
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarCatalogo', { tipo: tipo }).then(function (respuesta) {
@@ -103,7 +111,7 @@
           precargarFormulario_(config.campos, JSON.parse(fila.getAttribute('data-editar')));
         });
       });
-    });
+    }).catch(mostrarErrorAdmin_);
   }
 
   function renderUsuarios_() {
@@ -127,7 +135,7 @@
           precargarFormulario_(USUARIOS_UI.campos, JSON.parse(fila.getAttribute('data-editar')));
         });
       });
-    });
+    }).catch(mostrarErrorAdmin_);
   }
 
   var LOGS_UI = {
@@ -152,7 +160,7 @@
         return;
       }
       contenedor.innerHTML = '<h2>' + LOGS_UI.titulo + '</h2>' + Componentes.tarjeta(renderTabla_(LOGS_UI.campos, respuesta.data));
-    });
+    }).catch(mostrarErrorAdmin_);
   }
 
   function renderFormulario_(campos) {

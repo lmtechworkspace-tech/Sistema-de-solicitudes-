@@ -144,19 +144,26 @@ var Solicitudes = {
       timestamp: timestamp
     });
 
-    // §5.1 pasos 6-7: acuse de recibo siempre; alerta critica solo si P1.
+    // §5.1 pasos 6-7: acuse de recibo siempre al solicitante (con su cc).
     Notificaciones.enviarAcuseRecibo({
       solicitud_id: solicitudId,
       solicitante_nombre: data.solicitante_nombre,
       solicitante_email: data.solicitante_email,
-      resumen_whatsapp: resumenWhatsapp
+      resumen_whatsapp: resumenWhatsapp,
+      cc: data.cc || ''
     });
-    if (prioridadDerivada === 'P1') {
-      Notificaciones.enviarAlertaCritica({
+    // Aviso al equipo de desarrollo (Leo): cliente SIEMPRE (es prioridad
+    // alta), interna solo si el solicitante lo pidio (avisar_leo), y
+    // cualquier P1 sin importar el origen.
+    var motivoAviso = data.es_cliente ? 'solicitud de cliente'
+      : (prioridadDerivada === 'P1' ? 'prioridad critica P1'
+        : (data.avisar_leo ? 'el solicitante pidio avisar' : ''));
+    if (motivoAviso) {
+      Notificaciones.enviarAvisoDesarrollo({
         solicitud_id: solicitudId,
-        empresa_id: data.empresa_id,
+        prioridad: prioridadDerivada,
         resumen_whatsapp: resumenWhatsapp
-      });
+      }, motivoAviso);
     }
 
     var respuesta = {
@@ -201,8 +208,20 @@ var Solicitudes = {
         return s.solicitud_id === solicitudId;
       })
       .map(function (s) {
-        // Fase 10: tipo_nombre por item (antes solo vivia a nivel SOLICITUDES).
-        return { titulo: s.titulo, estado: s.estado, prioridad: s.prioridad, tipo_nombre: s.tipo_nombre || '' };
+        // El detalle publico incluye lo que el solicitante mismo escribio
+        // (descripcion, resultado esperado, contexto) para que al expandir un
+        // item vea de que se trata -- nunca datos internos de gestion.
+        return {
+          numero_item: s.numero_item,
+          titulo: s.titulo,
+          estado: s.estado,
+          prioridad: s.prioridad,
+          tipo_nombre: s.tipo_nombre || '',
+          modulo_nombre: s.modulo_nombre || '',
+          descripcion: s.descripcion || '',
+          resultado_esperado: s.resultado_esperado || '',
+          contexto: s.contexto || ''
+        };
       });
 
     return {

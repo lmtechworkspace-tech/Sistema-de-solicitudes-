@@ -63,12 +63,29 @@ test('el mismo evento para la misma solicitud se deduplica dentro de 30 minutos 
   assert.equal(ctx.GmailApp._enviados.length, 1, 'no debe reenviar el correo');
 });
 
-test('enviarAlertaCritica notifica solo a Analista/Desarrollador activos de la misma empresa', () => {
+test('enviarAvisoDesarrollo avisa al buzon de desarrollo (Leo) con el motivo', () => {
   const ctx = loadIntakeConSchema();
-  ctx.Notificaciones.enviarAlertaCritica({ solicitud_id: 'SOL-2026-HP-0001', empresa_id: 'HP', resumen_whatsapp: 'r' });
+  ctx.Notificaciones.enviarAvisoDesarrollo(
+    { solicitud_id: 'SOL-2026-HP-0001', prioridad: 'P2', resumen_whatsapp: 'r' },
+    'solicitud de cliente'
+  );
 
-  const destinatarios = ctx.GmailApp._enviados.map((e) => e.destinatario).sort();
-  assert.deepEqual(destinatarios, ['analista@homepymes.cl', 'dev@homepymes.cl']);
+  assert.equal(ctx.GmailApp._enviados.length, 1);
+  assert.equal(ctx.GmailApp._enviados[0].destinatario, 'lestay@rld.cl');
+  assert.ok(ctx.GmailApp._enviados[0].cuerpo.indexOf('solicitud de cliente') !== -1);
+
+  const log = ctx.leerFilas_('LOG_NOTIFICACIONES');
+  assert.equal(log[0].evento, 'AVISO_DESARROLLO');
+});
+
+test('enviarAvisoDesarrollo marca ALERTA P1 en el asunto cuando la prioridad es P1', () => {
+  const ctx = loadIntakeConSchema();
+  ctx.Notificaciones.enviarAvisoDesarrollo(
+    { solicitud_id: 'SOL-2026-HP-0002', prioridad: 'P1', resumen_whatsapp: 'r' },
+    'prioridad critica P1'
+  );
+
+  assert.ok(ctx.GmailApp._enviados[0].asunto.indexOf('ALERTA P1') !== -1);
 });
 
 test('enviarCorreo_ encola para reintento si GmailApp falla (cuota, A-12)', () => {

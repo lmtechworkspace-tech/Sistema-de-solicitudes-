@@ -48,26 +48,51 @@
   }
 
   function mostrarEstado_(data) {
-    var itemsHtml = data.subsolicitudes.map(function (s) {
+    var itemsHtml = data.subsolicitudes.map(function (s, idx) {
       var etiquetaTipo = s.tipo_nombre ? '[' + Componentes.escaparHtml(s.tipo_nombre) + '] ' : '';
-      return '<div class="sigso-acordeon-item">' +
-        '<div class="sigso-acordeon-item__cabecera">' +
+      return '<div class="sigso-acordeon-item" data-idx="' + idx + '">' +
+        '<div class="sigso-acordeon-item__cabecera" data-accion="expandir" data-idx="' + idx + '">' +
         '<span>' + etiquetaTipo + Componentes.escaparHtml(s.titulo) + '</span>' +
         Componentes.badgePrioridad(s.prioridad) + ' ' + Componentes.badgeEstado(s.estado) +
-        '</div></div>';
+        '</div>' +
+        '<div class="sigso-acordeon-item__cuerpo">' + cuerpoItem_(s) + '</div>' +
+        '</div>';
     }).join('');
 
     var pdf = data.url_pdf ? '<p><a href="' + data.url_pdf + '" target="_blank" rel="noopener">Ver documento PDF</a></p>' : '';
 
-    document.getElementById('resultado').innerHTML =
+    var contenedor = document.getElementById('resultado');
+    contenedor.innerHTML =
       '<div class="sigso-resultado-exito">' +
       '<p class="sigso-numero-solicitud">' + data.solicitud_id + '</p>' +
       '<p>Estado: <strong>' + formatearEstadoSigso(data.estado_derivado) + '</strong>' +
       ' &mdash; Prioridad: ' + Componentes.badgePrioridad(data.prioridad_derivada) + '</p>' +
+      '<p class="sigso-ayuda">Haz clic en cada &iacute;tem para ver su detalle.</p>' +
       pdf +
       itemsHtml +
       '</div>';
-    document.getElementById('resultado').classList.remove('sigso-oculto');
+
+    // Expandir/colapsar el detalle de cada item al hacer clic en la cabecera.
+    contenedor.querySelectorAll('[data-accion="expandir"]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        el.parentElement.classList.toggle('sigso-acordeon-item--activo');
+      });
+    });
+
+    contenedor.classList.remove('sigso-oculto');
+  }
+
+  function cuerpoItem_(s) {
+    var filas = '';
+    if (s.modulo_nombre) filas += campo_('Módulo', s.modulo_nombre);
+    if (s.descripcion) filas += campo_('Lo que reportaste', s.descripcion);
+    if (s.resultado_esperado) filas += campo_('Resultado esperado', s.resultado_esperado);
+    if (s.contexto) filas += campo_('Contexto', s.contexto);
+    return filas || '<p class="sigso-ayuda">Sin detalle adicional.</p>';
+  }
+
+  function campo_(etiqueta, valor) {
+    return '<p><strong>' + Componentes.escaparHtml(etiqueta) + ':</strong> ' + Componentes.escaparHtml(valor) + '</p>';
   }
 
   function mostrarError_(respuesta) {

@@ -132,7 +132,9 @@
     // HTML estatico repetido en app.html.
     kpi: function (opts) {
       opts = opts || {};
-      return '<div class="sigso-kpi' + (opts.alerta ? ' sigso-kpi--alerta' : '') + '"' + (opts.id ? ' id="' + opts.id + '"' : '') + '>' +
+      return '<div class="sigso-kpi' + (opts.alerta ? ' sigso-kpi--alerta' : '') + '"' +
+        (opts.id ? ' id="' + opts.id + '"' : '') +
+        (opts.titulo ? ' title="' + escaparHtml(opts.titulo) + '"' : '') + '>' +
         '<div class="sigso-kpi__valor">' + escaparHtml(opts.valor === undefined ? '—' : opts.valor) + '</div>' +
         '<div class="sigso-kpi__etiqueta">' + escaparHtml(opts.etiqueta) + '</div>' +
         '</div>';

@@ -77,7 +77,7 @@
     document.getElementById('btn-paso3-atras').addEventListener('click', function () { cambiarPaso_('items'); });
 
     ['campo-empresa', 'campo-plataforma', 'campo-solicitante-nombre', 'campo-solicitante-cargo',
-      'campo-solicitante-email', 'campo-cc',
+      'campo-solicitante-email', 'campo-cc', 'campo-avisar-leo',
       'campo-empresa-cliente', 'campo-cliente-mandante', 'campo-cliente-obra',
       'campo-contacto-cliente', 'campo-correo-cliente', 'campo-telefono-cliente',
       'campo-urgencia-cliente', 'campo-observaciones-generales'
@@ -206,6 +206,10 @@
     ['campo-empresa-cliente', 'campo-contacto-cliente', 'campo-correo-cliente'].forEach(function (id) {
       document.getElementById(id).required = visible;
     });
+    // El aviso a desarrollo es automatico para clientes: se oculta el check
+    // manual y se muestra la nota (el backend lo fuerza igual).
+    document.querySelector('#fila-avisar-leo .sigso-toggle').style.display = visible ? 'none' : '';
+    document.getElementById('nota-avisar-leo-cliente').style.display = visible ? '' : 'none';
     guardarBorrador_();
   }
 
@@ -558,6 +562,9 @@
       solicitante_cargo: document.getElementById('campo-solicitante-cargo').value,
       solicitante_email: document.getElementById('campo-solicitante-email').value,
       cc: document.getElementById('campo-cc').value,
+      // Aviso a desarrollo: para clientes el backend lo fuerza; para internas
+      // lo decide este check (el solicitante elige si avisar a Leo).
+      avisar_leo: document.getElementById('campo-avisar-leo').checked,
       observaciones_generales: document.getElementById('campo-observaciones-generales').value,
       subsolicitudes: estado.subsolicitudes.map(function (item, idx) {
         // Las descripciones ya se conocen antes de subir los archivos (el
@@ -598,6 +605,7 @@
       document.getElementById('campo-solicitante-cargo').value = datos.solicitante_cargo || '';
       document.getElementById('campo-solicitante-email').value = datos.solicitante_email || '';
       document.getElementById('campo-cc').value = datos.cc || '';
+      document.getElementById('campo-avisar-leo').checked = !!datos.avisar_leo;
       document.getElementById('campo-observaciones-generales').value = datos.observaciones_generales || '';
       if (datos.es_cliente) {
         document.getElementById('campo-es-cliente').checked = true;

@@ -57,6 +57,24 @@ test('estadoPublico devuelve el estado cuando el correo coincide con el solicita
   assert.equal(resultado.subsolicitudes[0].titulo, 'No cargan las facturas');
 });
 
+test('estadoPublico incluye el detalle que el solicitante escribio, para expandir cada item', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, {
+    descripcion: 'Al abrir el modulo aparece pantalla en blanco',
+    resultado_esperado: 'Deberia mostrar la lista de facturas',
+    contexto: 'Empezo despues de la actualizacion del martes',
+    modulo_nombre: 'Facturacion Electronica'
+  });
+
+  const item = ctx.Solicitudes.estadoPublico('SOL-2026-HP-0001', 'juan@homepymes.cl').subsolicitudes[0];
+
+  assert.equal(item.descripcion, 'Al abrir el modulo aparece pantalla en blanco');
+  assert.equal(item.resultado_esperado, 'Deberia mostrar la lista de facturas');
+  assert.equal(item.contexto, 'Empezo despues de la actualizacion del martes');
+  assert.equal(item.modulo_nombre, 'Facturacion Electronica');
+});
+
 test('estadoPublico compara el correo sin distinguir mayusculas/espacios', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
