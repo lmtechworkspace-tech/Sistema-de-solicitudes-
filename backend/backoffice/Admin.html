@@ -226,6 +226,159 @@ button {
 
 </style>
   <style>
+/* components.css — Fase 10 (rediseno UX). Estilos de la libreria de
+   componentes (js/components.js). Los proto-componentes que ya existian
+   (.sigso-card, .sigso-boton, .sigso-badge, .sigso-galeria...) siguen en
+   main.css/dashboard.css -- aqui solo lo que es nuevo, para no duplicar CSS. */
+
+.sigso-stepper {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.sigso-stepper__paso {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--gris-medio);
+}
+
+.sigso-stepper__numero {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--gris-claro);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.sigso-stepper__paso--actual .sigso-stepper__numero {
+  background: var(--naranja);
+  color: #fff;
+}
+
+.sigso-stepper__paso--actual .sigso-stepper__texto {
+  color: var(--gris-oscuro);
+  font-weight: 600;
+}
+
+.sigso-stepper__paso--hecho .sigso-stepper__numero {
+  background: var(--p4);
+  color: #fff;
+}
+
+.sigso-stepper__linea {
+  flex: 1;
+  height: 2px;
+  background: var(--gris-claro);
+  margin: 0 0.5rem;
+}
+
+.sigso-badge--estado {
+  background: var(--azul);
+}
+
+.sigso-alerta {
+  border-left: 4px solid var(--naranja);
+  background: var(--naranja-claro);
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.sigso-alerta p {
+  margin: 0;
+}
+
+.sigso-cargando,
+.sigso-vacio {
+  color: var(--gris-medio);
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+/* Chips de tipo de solicitud (reemplaza el <select> de tipo, un clic en vez
+   de abrir un desplegable -- Componentes no genera este HTML porque su
+   estructura es especifica de la tarjeta de item, ver formulario.js). */
+.sigso-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.sigso-chip {
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.sigso-chip--activo {
+  background: var(--naranja);
+  color: #fff;
+  border-color: var(--naranja);
+  font-weight: 600;
+}
+
+.sigso-galeria__quitar {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--p1);
+  color: #fff;
+  border: none;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sigso-galeria__item {
+  position: relative;
+}
+
+.sigso-galeria__descripcion {
+  width: 90px;
+  margin-top: 0.25rem;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.3rem;
+}
+
+.sigso-galeria__descripcion-texto {
+  width: 90px;
+  font-size: 0.7rem;
+  margin: 0.25rem 0 0;
+  color: var(--gris-medio);
+}
+
+/* Resumen de revision final (paso 3) */
+.sigso-revision-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.sigso-revision-tabla th,
+.sigso-revision-tabla td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--gris-claro);
+  font-size: 0.9rem;
+}
+
+</style>
+  <style>
 /* dashboard.css — Backoffice: KPIs, graficos, tabla, detalle (§12.4/12.5). */
 
 .sigso-kpis {
@@ -631,6 +784,161 @@ function renderHeaderSigso(paginaActiva) {
 </script>
   <script>
 /**
+ * components.js — libreria de componentes reutilizable (Fase 10, rediseno
+ * UX). Funciones puras que devuelven strings HTML, mismo estilo que ya
+ * usaban admin.js/detalle.js (sin framework, §2.2) -- aqui se formalizan
+ * para no repetir el mismo HTML/CSS en cada pantalla nueva.
+ *
+ * Usa los proto-componentes que ya existian en main.css/dashboard.css
+ * (.sigso-card, .sigso-boton, .sigso-badge, .sigso-galeria, etc.) en vez de
+ * inventar clases nuevas donde ya habia una que servia; components.css solo
+ * agrega lo que de verdad es nuevo (stepper, chips de tipo, alerta).
+ */
+(function () {
+  function escaparHtml(texto) {
+    var div = document.createElement('div');
+    div.textContent = texto === undefined || texto === null ? '' : String(texto);
+    return div.innerHTML;
+  }
+
+  function atributos(obj) {
+    return Object.keys(obj || {})
+      .filter(function (k) { return obj[k] !== undefined && obj[k] !== null && obj[k] !== false; })
+      .map(function (k) { return obj[k] === true ? k : k + '="' + escaparHtml(obj[k]) + '"'; })
+      .join(' ');
+  }
+
+  var Componentes = {
+    escaparHtml: escaparHtml,
+
+    boton: function (opts) {
+      opts = opts || {};
+      var clase = 'sigso-boton' + (opts.variante === 'secundario' ? ' sigso-boton--secundario' : '');
+      if (opts.clase) clase += ' ' + opts.clase;
+      var attrs = atributos({
+        type: opts.tipo || 'button', id: opts.id, class: clase, disabled: !!opts.disabled,
+        'data-accion': opts.accion, 'data-idx': opts.idx
+      });
+      var contenido = opts.cargando
+        ? '<span class="sigso-spinner"></span>' + escaparHtml(opts.textoCargando || opts.texto)
+        : escaparHtml(opts.texto);
+      return '<button ' + attrs + '>' + contenido + '</button>';
+    },
+
+    campoTexto: function (opts) {
+      return campoBase_(opts, function (attrs) {
+        return '<input type="' + (opts.tipo || 'text') + '" value="' + escaparHtml(opts.valor) + '" ' + attrs + '>';
+      });
+    },
+
+    campoTextarea: function (opts) {
+      return campoBase_(opts, function (attrs) {
+        return '<textarea ' + attrs + '>' + escaparHtml(opts.valor) + '</textarea>';
+      });
+    },
+
+    campoSelect: function (opts) {
+      opts = opts || {};
+      var opciones = (opts.opciones || []).map(function (o) {
+        var sel = String(o.valor) === String(opts.valor || '') ? ' selected' : '';
+        return '<option value="' + escaparHtml(o.valor) + '"' + sel + '>' + escaparHtml(o.texto) + '</option>';
+      }).join('');
+      return campoBase_(opts, function (attrs) {
+        return '<select ' + attrs + '>' + (opts.placeholder !== false ? '<option value="">' + escaparHtml(opts.placeholder || 'Selecciona...') + '</option>' : '') + opciones + '</select>';
+      });
+    },
+
+    tarjeta: function (html, opts) {
+      opts = opts || {};
+      var clase = 'sigso-card' + (opts.clase ? ' ' + opts.clase : '');
+      var attrs = atributos({ class: clase, id: opts.id });
+      return '<div ' + attrs + '>' + html + '</div>';
+    },
+
+    badge: function (texto, variante) {
+      return '<span class="sigso-badge' + (variante ? ' sigso-badge--' + variante : '') + '">' + escaparHtml(texto) + '</span>';
+    },
+
+    badgeEstado: function (codigo) {
+      var texto = (typeof SIGSO_ESTADOS_LABEL !== 'undefined' && SIGSO_ESTADOS_LABEL[codigo]) || codigo;
+      return '<span class="sigso-badge sigso-badge--estado">' + escaparHtml(texto) + '</span>';
+    },
+
+    badgePrioridad: function (codigo) {
+      return Componentes.badge(codigo, codigo);
+    },
+
+    alerta: function (texto, tipo) {
+      var clase = tipo === 'error' ? 'sigso-resultado-error' : (tipo === 'exito' ? 'sigso-resultado-exito' : 'sigso-alerta');
+      return '<div class="' + clase + '"><p>' + escaparHtml(texto) + '</p></div>';
+    },
+
+    // pasos: [{ id, texto }], activo: id del paso actual. Los pasos antes
+    // del activo se marcan "hecho", el activo "actual", el resto "pendiente".
+    stepper: function (pasos, activo) {
+      var activoIdx = pasos.findIndex(function (p) { return p.id === activo; });
+      var items = pasos.map(function (p, idx) {
+        var estado = idx < activoIdx ? 'hecho' : (idx === activoIdx ? 'actual' : 'pendiente');
+        return '<div class="sigso-stepper__paso sigso-stepper__paso--' + estado + '">' +
+          '<span class="sigso-stepper__numero">' + (idx + 1) + '</span>' +
+          '<span class="sigso-stepper__texto">' + escaparHtml(p.texto) + '</span>' +
+          '</div>';
+      }).join('<div class="sigso-stepper__linea"></div>');
+      return '<div class="sigso-stepper">' + items + '</div>';
+    },
+
+    galeriaImagenes: function (imagenes, opts) {
+      opts = opts || {};
+      if (!imagenes || imagenes.length === 0) {
+        return opts.vacioTexto ? Componentes.vacio(opts.vacioTexto) : '';
+      }
+      return '<div class="sigso-galeria">' + imagenes.map(function (img, idx) {
+        var quitar = opts.editable
+          ? '<button type="button" class="sigso-galeria__quitar" data-accion="quitar-imagen" data-idx="' + opts.idx + '" data-img-idx="' + idx + '">&times;</button>'
+          : '';
+        var src = img.previewUrl || img.url || '';
+        var nombre = img.nombre || img.nombre_original || '';
+        var contenidoImg = src ? '<img src="' + escaparHtml(src) + '" alt="' + escaparHtml(nombre) + '">' : escaparHtml(nombre);
+        var descripcionHtml = opts.editable
+          ? '<input type="text" class="sigso-galeria__descripcion" data-campo="imagen-descripcion" data-idx="' + opts.idx + '" data-img-idx="' + idx + '" value="' + escaparHtml(img.descripcion) + '" placeholder="Descripcion breve">'
+          : (img.descripcion ? '<p class="sigso-galeria__descripcion-texto">' + escaparHtml(img.descripcion) + '</p>' : '');
+        return '<div class="sigso-galeria__item">' + quitar +
+          '<a href="' + escaparHtml(src) + '" target="_blank" rel="noopener">' + contenidoImg + '</a>' +
+          descripcionHtml +
+          '</div>';
+      }).join('') + '</div>';
+    },
+
+    cargando: function (texto) {
+      return '<p class="sigso-cargando"><span class="sigso-spinner"></span>' + escaparHtml(texto || 'Cargando...') + '</p>';
+    },
+
+    vacio: function (texto) {
+      return '<p class="sigso-vacio">' + escaparHtml(texto || 'Nada por aqui todavia.') + '</p>';
+    }
+  };
+
+  function campoBase_(opts, renderInput) {
+    opts = opts || {};
+    var attrs = atributos({
+      id: opts.id, class: opts.claseInput, required: !!opts.requerido,
+      placeholder: opts.placeholder,
+      'data-campo': opts.dataCampo, 'data-idx': opts.idx
+    });
+    var ayuda = opts.ayuda ? '<p class="sigso-ayuda">' + escaparHtml(opts.ayuda) + '</p>' : '';
+    var error = opts.error ? '<p class="sigso-campo__error">' + escaparHtml(opts.error) + '</p>' : '';
+    return '<div class="sigso-campo' + (opts.claseCampo ? ' ' + opts.claseCampo : '') + '">' +
+      (opts.label ? '<label' + (opts.id ? ' for="' + opts.id + '"' : '') + '>' + escaparHtml(opts.label) + '</label>' : '') +
+      renderInput(attrs) + ayuda + error +
+      '</div>';
+  }
+
+  window.Componentes = Componentes;
+})();
+
+</script>
+  <script>
+/**
  * admin.js — panel de administracion (§12.6, CU-006/CU-007). Catalogos:
  * crear/editar/desactivar (nunca eliminar, RF-F03). Usuarios: crear/editar/
  * activar/desactivar (RN-029/030/031).
@@ -718,13 +1026,13 @@ function renderHeaderSigso(paginaActiva) {
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarCatalogo', { tipo: tipo }).then(function (respuesta) {
       var contenedor = document.getElementById('admin-contenido');
       if (!respuesta.ok) {
-        contenedor.innerHTML = '<div class="sigso-resultado-error"><p>' + escaparHtml_(respuesta.message || 'No se pudo cargar.') + '</p></div>';
+        contenedor.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
         return;
       }
       contenedor.innerHTML =
         '<h2>' + config.titulo + '</h2>' +
         renderFormulario_(config.campos) +
-        renderTabla_(config.campos, respuesta.data);
+        Componentes.tarjeta(renderTabla_(config.campos, respuesta.data));
 
       document.getElementById('form-admin').addEventListener('submit', function (evento) {
         evento.preventDefault();
@@ -742,13 +1050,13 @@ function renderHeaderSigso(paginaActiva) {
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarUsuarios', {}).then(function (respuesta) {
       var contenedor = document.getElementById('admin-contenido');
       if (!respuesta.ok) {
-        contenedor.innerHTML = '<div class="sigso-resultado-error"><p>' + escaparHtml_(respuesta.message || 'No se pudo cargar.') + '</p></div>';
+        contenedor.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
         return;
       }
       contenedor.innerHTML =
         '<h2>' + USUARIOS_UI.titulo + '</h2>' +
         renderFormulario_(USUARIOS_UI.campos) +
-        renderTabla_(USUARIOS_UI.campos, respuesta.data);
+        Componentes.tarjeta(renderTabla_(USUARIOS_UI.campos, respuesta.data));
 
       document.getElementById('form-admin').addEventListener('submit', function (evento) {
         evento.preventDefault();
@@ -780,10 +1088,10 @@ function renderHeaderSigso(paginaActiva) {
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarLogs', {}).then(function (respuesta) {
       var contenedor = document.getElementById('admin-contenido');
       if (!respuesta.ok) {
-        contenedor.innerHTML = '<div class="sigso-resultado-error"><p>' + escaparHtml_(respuesta.message || 'No se pudo cargar.') + '</p></div>';
+        contenedor.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
         return;
       }
-      contenedor.innerHTML = '<h2>' + LOGS_UI.titulo + '</h2>' + renderTabla_(LOGS_UI.campos, respuesta.data);
+      contenedor.innerHTML = '<h2>' + LOGS_UI.titulo + '</h2>' + Componentes.tarjeta(renderTabla_(LOGS_UI.campos, respuesta.data));
     });
   }
 
@@ -792,20 +1100,28 @@ function renderHeaderSigso(paginaActiva) {
       '<div class="sigso-admin-form">' +
       campos.map(function (campo) {
         if (campo.tipo === 'checkbox') {
-          return '<label class="sigso-toggle"><input type="checkbox" data-campo="' + campo.nombre + '" checked> ' + campo.label + '</label>';
+          return '<label class="sigso-toggle"><input type="checkbox" data-campo="' + campo.nombre + '" checked> ' + Componentes.escaparHtml(campo.label) + '</label>';
         }
-        return '<div class="sigso-campo"><label>' + campo.label + '</label><input type="text" data-campo="' + campo.nombre + '"></div>';
+        return Componentes.campoTexto({ dataCampo: campo.nombre, label: campo.label });
       }).join('') +
       '</div>' +
-      '<button type="submit" class="sigso-boton">Guardar</button>' +
-      '<span id="resultado-admin"></span>' +
+      Componentes.boton({ tipo: 'submit', texto: 'Guardar' }) +
+      '<div id="resultado-admin"></div>' +
       '</form>';
   }
 
   function renderTabla_(campos, filas) {
     var encabezados = campos.map(function (c) { return '<th>' + c.label + '</th>'; }).join('');
     var cuerpo = filas.map(function (fila) {
-      var celdas = campos.map(function (c) { return '<td>' + escaparHtml_(String(fila[c.nombre])) + '</td>'; }).join('');
+      var celdas = campos.map(function (c) {
+        // "activo" como badge (Si/No) en vez de TRUE/FALSE en crudo -- mas
+        // facil de escanear en una tabla larga (Fase 10, rediseno UX).
+        if (c.tipo === 'checkbox') {
+          var esActivo = fila[c.nombre] === true || fila[c.nombre] === 'TRUE';
+          return '<td>' + Componentes.badge(esActivo ? 'Sí' : 'No', esActivo ? 'P4' : 'P1') + '</td>';
+        }
+        return '<td>' + Componentes.escaparHtml(String(fila[c.nombre])) + '</td>';
+      }).join('');
       return '<tr data-editar=\'' + JSON.stringify(fila).replace(/'/g, '&#39;') + '\'>' + celdas + '</tr>';
     }).join('');
     return '<table class="sigso-tabla"><thead><tr>' + encabezados + '</tr></thead><tbody>' + cuerpo + '</tbody></table>';
@@ -836,24 +1152,25 @@ function renderHeaderSigso(paginaActiva) {
   function guardarCatalogo_(tipo, campos) {
     var registro = leerFormulario_(campos);
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'guardarCatalogo', { tipo: tipo, registro: registro }).then(function (respuesta) {
-      document.getElementById('resultado-admin').textContent = respuesta.ok ? 'Guardado.' : (respuesta.message || 'Error al guardar.');
-      if (respuesta.ok) renderCatalogo_(tipo);
+      if (respuesta.ok) {
+        renderCatalogo_(tipo);
+        return;
+      }
+      document.getElementById('resultado-admin').innerHTML = Componentes.alerta(respuesta.message || 'Error al guardar.', 'error');
     });
   }
 
   function guardarUsuario_(campos) {
     var registro = leerFormulario_(campos);
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'gestionarUsuario', registro).then(function (respuesta) {
-      document.getElementById('resultado-admin').textContent = respuesta.ok ? 'Guardado.' : (respuesta.message || 'Error al guardar.');
-      if (respuesta.ok) renderUsuarios_();
+      if (respuesta.ok) {
+        renderUsuarios_();
+        return;
+      }
+      document.getElementById('resultado-admin').innerHTML = Componentes.alerta(respuesta.message || 'Error al guardar.', 'error');
     });
   }
 
-  function escaparHtml_(texto) {
-    var div = document.createElement('div');
-    div.textContent = texto || '';
-    return div.innerHTML;
-  }
 })();
 
 </script>

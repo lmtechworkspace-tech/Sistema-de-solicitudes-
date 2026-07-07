@@ -86,13 +86,13 @@
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarCatalogo', { tipo: tipo }).then(function (respuesta) {
       var contenedor = document.getElementById('admin-contenido');
       if (!respuesta.ok) {
-        contenedor.innerHTML = '<div class="sigso-resultado-error"><p>' + escaparHtml_(respuesta.message || 'No se pudo cargar.') + '</p></div>';
+        contenedor.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
         return;
       }
       contenedor.innerHTML =
         '<h2>' + config.titulo + '</h2>' +
         renderFormulario_(config.campos) +
-        renderTabla_(config.campos, respuesta.data);
+        Componentes.tarjeta(renderTabla_(config.campos, respuesta.data));
 
       document.getElementById('form-admin').addEventListener('submit', function (evento) {
         evento.preventDefault();
@@ -110,13 +110,13 @@
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarUsuarios', {}).then(function (respuesta) {
       var contenedor = document.getElementById('admin-contenido');
       if (!respuesta.ok) {
-        contenedor.innerHTML = '<div class="sigso-resultado-error"><p>' + escaparHtml_(respuesta.message || 'No se pudo cargar.') + '</p></div>';
+        contenedor.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
         return;
       }
       contenedor.innerHTML =
         '<h2>' + USUARIOS_UI.titulo + '</h2>' +
         renderFormulario_(USUARIOS_UI.campos) +
-        renderTabla_(USUARIOS_UI.campos, respuesta.data);
+        Componentes.tarjeta(renderTabla_(USUARIOS_UI.campos, respuesta.data));
 
       document.getElementById('form-admin').addEventListener('submit', function (evento) {
         evento.preventDefault();
@@ -148,10 +148,10 @@
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarLogs', {}).then(function (respuesta) {
       var contenedor = document.getElementById('admin-contenido');
       if (!respuesta.ok) {
-        contenedor.innerHTML = '<div class="sigso-resultado-error"><p>' + escaparHtml_(respuesta.message || 'No se pudo cargar.') + '</p></div>';
+        contenedor.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
         return;
       }
-      contenedor.innerHTML = '<h2>' + LOGS_UI.titulo + '</h2>' + renderTabla_(LOGS_UI.campos, respuesta.data);
+      contenedor.innerHTML = '<h2>' + LOGS_UI.titulo + '</h2>' + Componentes.tarjeta(renderTabla_(LOGS_UI.campos, respuesta.data));
     });
   }
 
@@ -160,20 +160,28 @@
       '<div class="sigso-admin-form">' +
       campos.map(function (campo) {
         if (campo.tipo === 'checkbox') {
-          return '<label class="sigso-toggle"><input type="checkbox" data-campo="' + campo.nombre + '" checked> ' + campo.label + '</label>';
+          return '<label class="sigso-toggle"><input type="checkbox" data-campo="' + campo.nombre + '" checked> ' + Componentes.escaparHtml(campo.label) + '</label>';
         }
-        return '<div class="sigso-campo"><label>' + campo.label + '</label><input type="text" data-campo="' + campo.nombre + '"></div>';
+        return Componentes.campoTexto({ dataCampo: campo.nombre, label: campo.label });
       }).join('') +
       '</div>' +
-      '<button type="submit" class="sigso-boton">Guardar</button>' +
-      '<span id="resultado-admin"></span>' +
+      Componentes.boton({ tipo: 'submit', texto: 'Guardar' }) +
+      '<div id="resultado-admin"></div>' +
       '</form>';
   }
 
   function renderTabla_(campos, filas) {
     var encabezados = campos.map(function (c) { return '<th>' + c.label + '</th>'; }).join('');
     var cuerpo = filas.map(function (fila) {
-      var celdas = campos.map(function (c) { return '<td>' + escaparHtml_(String(fila[c.nombre])) + '</td>'; }).join('');
+      var celdas = campos.map(function (c) {
+        // "activo" como badge (Si/No) en vez de TRUE/FALSE en crudo -- mas
+        // facil de escanear en una tabla larga (Fase 10, rediseno UX).
+        if (c.tipo === 'checkbox') {
+          var esActivo = fila[c.nombre] === true || fila[c.nombre] === 'TRUE';
+          return '<td>' + Componentes.badge(esActivo ? 'Sí' : 'No', esActivo ? 'P4' : 'P1') + '</td>';
+        }
+        return '<td>' + Componentes.escaparHtml(String(fila[c.nombre])) + '</td>';
+      }).join('');
       return '<tr data-editar=\'' + JSON.stringify(fila).replace(/'/g, '&#39;') + '\'>' + celdas + '</tr>';
     }).join('');
     return '<table class="sigso-tabla"><thead><tr>' + encabezados + '</tr></thead><tbody>' + cuerpo + '</tbody></table>';
@@ -204,22 +212,23 @@
   function guardarCatalogo_(tipo, campos) {
     var registro = leerFormulario_(campos);
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'guardarCatalogo', { tipo: tipo, registro: registro }).then(function (respuesta) {
-      document.getElementById('resultado-admin').textContent = respuesta.ok ? 'Guardado.' : (respuesta.message || 'Error al guardar.');
-      if (respuesta.ok) renderCatalogo_(tipo);
+      if (respuesta.ok) {
+        renderCatalogo_(tipo);
+        return;
+      }
+      document.getElementById('resultado-admin').innerHTML = Componentes.alerta(respuesta.message || 'Error al guardar.', 'error');
     });
   }
 
   function guardarUsuario_(campos) {
     var registro = leerFormulario_(campos);
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'gestionarUsuario', registro).then(function (respuesta) {
-      document.getElementById('resultado-admin').textContent = respuesta.ok ? 'Guardado.' : (respuesta.message || 'Error al guardar.');
-      if (respuesta.ok) renderUsuarios_();
+      if (respuesta.ok) {
+        renderUsuarios_();
+        return;
+      }
+      document.getElementById('resultado-admin').innerHTML = Componentes.alerta(respuesta.message || 'Error al guardar.', 'error');
     });
   }
 
-  function escaparHtml_(texto) {
-    var div = document.createElement('div');
-    div.textContent = texto || '';
-    return div.innerHTML;
-  }
 })();
