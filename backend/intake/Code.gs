@@ -18,7 +18,8 @@ var INTAKE_ACTIONS = {
   crearSolicitud: handleCrearSolicitud_,
   subirArchivo: handleSubirArchivo_,
   getCatalogos: handleGetCatalogos_,
-  consultarEstado: handleConsultarEstado_
+  consultarEstado: handleConsultarEstado_,
+  responderConsulta: handleResponderConsulta_
 };
 
 function doGet(e) {
@@ -65,6 +66,10 @@ function handleGetCatalogos_() {
 
 function handleConsultarEstado_(data) {
   return responderResultado_(Solicitudes.estadoPublico(data.solicitud_id, data.email));
+}
+
+function handleResponderConsulta_(data) {
+  return responderResultado_(Solicitudes.responderConsulta(data));
 }
 
 function handleSubirArchivo_(data) {

@@ -152,54 +152,72 @@ var ESTADOS_EXCLUIDOS_DERIVACION = [ESTADOS.S10, ESTADOS.S11];
 // RN-013 (inmutabilidad de S09/S10, reapertura solo Admin), RN-016
 // (cancelacion aprobada por el Analista desde S03 en adelante).
 //
+// Fase 10.1 (post-produccion, feedback real de uso): en la practica una sola
+// persona (Leo) gestiona todo el ciclo de vida -- el modelo de 3 roles
+// (Analista aprueba / Desarrollador desarrolla / Admin administra) dejaba a
+// Leo sin transiciones disponibles la mayoria del tiempo si su rol
+// registrado no coincidia con el dueño "de papel" de ese paso. Se abre TODA
+// transicion de trabajo normal a cualquier rol de Backoffice (ANA/DEV/ADM):
+// el permiso pasa a ser "esta registrado y activo en USUARIOS", no "tiene
+// el rol exacto". La UNICA excepcion deliberada es la reapertura de un
+// ticket cerrado/rechazado (S09->S05, S10->S03): eso sigue exigiendo Admin
+// + justificacion (RN-012/013) como salvaguarda de integridad de datos, no
+// como reparto de trabajo -- reabrir algo ya cerrado es una decision
+// distinta a hacer el trabajo del dia a dia.
+//
 // Nota de alcance (documentada en FASE-02): la cancelacion directa del
 // Solicitante en S01/S02 (RN-016) y la confirmacion de cierre S08->S09 por
 // el propio Solicitante (§9.3) viajan por la App Publica (magic link), no
 // por este endpoint autenticado — llegan con la Fase 3/4. Aqui solo se
 // modela lo que un usuario del Backoffice puede accionar.
+var ROLES_BACKOFFICE = ['ANA', 'DEV', 'ADM'];
+
 var TRANSICIONES_VALIDAS = {
   S01: [
-    { a: 'S02', roles: ['ANA'] }
+    { a: 'S02', roles: ROLES_BACKOFFICE }
   ],
   S02: [
-    { a: 'S03', roles: ['ANA'] },
+    { a: 'S03', roles: ROLES_BACKOFFICE },
     // RF-F08: consulta tecnica se cierra directo, la respuesta queda como
     // comentario obligatorio en el historial.
-    { a: 'S09', roles: ['ANA'], comentarioObligatorio: true }
+    { a: 'S09', roles: ROLES_BACKOFFICE, comentarioObligatorio: true }
   ],
   S03: [
-    { a: 'S04', roles: ['ANA', 'ADM'] },
-    { a: 'S06', roles: ['ANA', 'DEV'] },
-    { a: 'S10', roles: ['ANA', 'ADM'], comentarioObligatorio: true },
-    { a: 'S11', roles: ['ANA'], comentarioObligatorio: true }
+    { a: 'S04', roles: ROLES_BACKOFFICE },
+    // "Pedir mas informacion" (Fase 10.1): el comentario es obligatorio
+    // porque ES la pregunta que el solicitante vera en Consultar Estado.
+    { a: 'S06', roles: ROLES_BACKOFFICE, comentarioObligatorio: true },
+    { a: 'S10', roles: ROLES_BACKOFFICE, comentarioObligatorio: true },
+    { a: 'S11', roles: ROLES_BACKOFFICE, comentarioObligatorio: true }
   ],
   S04: [
-    { a: 'S05', roles: ['DEV'] },
-    { a: 'S11', roles: ['ANA'], comentarioObligatorio: true }
+    { a: 'S05', roles: ROLES_BACKOFFICE },
+    { a: 'S11', roles: ROLES_BACKOFFICE, comentarioObligatorio: true }
   ],
   S05: [
-    { a: 'S06', roles: ['ANA', 'DEV'] },
-    { a: 'S07', roles: ['DEV'] },
-    { a: 'S11', roles: ['ANA'], comentarioObligatorio: true }
+    { a: 'S06', roles: ROLES_BACKOFFICE, comentarioObligatorio: true },
+    { a: 'S07', roles: ROLES_BACKOFFICE },
+    { a: 'S11', roles: ROLES_BACKOFFICE, comentarioObligatorio: true }
   ],
   S06: [
-    { a: 'S03', roles: ['ANA', 'DEV'] },
-    { a: 'S05', roles: ['ANA', 'DEV'] }
+    { a: 'S03', roles: ROLES_BACKOFFICE },
+    { a: 'S05', roles: ROLES_BACKOFFICE }
   ],
   S07: [
-    { a: 'S08', roles: ['ANA'] },
-    { a: 'S05', roles: ['ANA', 'DEV'], comentarioObligatorio: true },
-    { a: 'S11', roles: ['ANA'], comentarioObligatorio: true }
+    { a: 'S08', roles: ROLES_BACKOFFICE },
+    { a: 'S05', roles: ROLES_BACKOFFICE, comentarioObligatorio: true },
+    { a: 'S11', roles: ROLES_BACKOFFICE, comentarioObligatorio: true }
   ],
   S08: [
     // Confirmacion normal es del Solicitante (Fase 3/4); esta via cubre el
     // fallback documentado en §9.3 ("cierre por falta de respuesta").
-    { a: 'S09', roles: ['ANA'] },
-    { a: 'S05', roles: ['ANA', 'ADM'], comentarioObligatorio: true },
-    { a: 'S11', roles: ['ANA'], comentarioObligatorio: true }
+    { a: 'S09', roles: ROLES_BACKOFFICE },
+    { a: 'S05', roles: ROLES_BACKOFFICE, comentarioObligatorio: true },
+    { a: 'S11', roles: ROLES_BACKOFFICE, comentarioObligatorio: true }
   ],
   S09: [
-    // RN-012/013: reapertura, solo Admin, con justificacion.
+    // RN-012/013: reapertura, solo Admin, con justificacion -- deliberadamente
+    // NO se abre a todos los roles (ver nota arriba).
     { a: 'S05', roles: ['ADM'], comentarioObligatorio: true }
   ],
   S10: [

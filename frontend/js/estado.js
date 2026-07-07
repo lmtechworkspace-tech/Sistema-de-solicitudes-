@@ -20,6 +20,11 @@
     document.getElementById('form-estado').addEventListener('submit', manejarConsulta_);
   });
 
+  // Se recuerda la ultima consulta exitosa para poder recargar el estado
+  // despues de que el solicitante responda una pregunta (sin pedirle de
+  // nuevo el numero+correo).
+  var ultimaConsulta = null;
+
   function manejarConsulta_(evento) {
     evento.preventDefault();
     var boton = document.getElementById('btn-consultar');
@@ -30,9 +35,18 @@
     boton.disabled = true;
     boton.innerHTML = '<span class="sigso-spinner"></span> Consultando...';
 
-    llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'consultarEstado', { solicitud_id: solicitudId, email: email })
+    consultar_(solicitudId, email)
+      .finally(function () {
+        boton.disabled = false;
+        boton.textContent = 'Consultar';
+      });
+  }
+
+  function consultar_(solicitudId, email) {
+    return llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'consultarEstado', { solicitud_id: solicitudId, email: email })
       .then(function (respuesta) {
         if (respuesta.ok) {
+          ultimaConsulta = { solicitud_id: solicitudId, email: email };
           mostrarEstado_(respuesta.data);
         } else {
           mostrarError_(respuesta);
@@ -40,17 +54,13 @@
       })
       .catch(function () {
         mostrarError_({ message: 'No se pudo conectar con el servidor. Intenta nuevamente.' });
-      })
-      .finally(function () {
-        boton.disabled = false;
-        boton.textContent = 'Consultar';
       });
   }
 
   function mostrarEstado_(data) {
     var itemsHtml = data.subsolicitudes.map(function (s, idx) {
       var etiquetaTipo = s.tipo_nombre ? '[' + Componentes.escaparHtml(s.tipo_nombre) + '] ' : '';
-      return '<div class="sigso-acordeon-item" data-idx="' + idx + '">' +
+      return '<div class="sigso-acordeon-item" data-idx="' + idx + '" data-pregunta-pendiente="' + (s.pregunta_pendiente ? '1' : '0') + '">' +
         '<div class="sigso-acordeon-item__cabecera" data-accion="expandir" data-idx="' + idx + '">' +
         '<span>' + etiquetaTipo + Componentes.escaparHtml(s.titulo) + '</span>' +
         Componentes.badgePrioridad(s.prioridad) + ' ' + Componentes.badgeEstado(s.estado) +
@@ -79,6 +89,20 @@
       });
     });
 
+    // Fase 10.1: si el item esta "esperando informacion" (S06), Leo dejo una
+    // pregunta -- se responde desde aqui mismo, sin llamar/escribir aparte.
+    contenedor.querySelectorAll('[data-accion="enviar-respuesta"]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        enviarRespuesta_(boton.getAttribute('data-subsolicitud'));
+      });
+    });
+
+    // Expande automaticamente items con pregunta pendiente: son los que mas
+    // le importan al solicitante en ese momento.
+    contenedor.querySelectorAll('.sigso-acordeon-item[data-pregunta-pendiente="1"]').forEach(function (el) {
+      el.classList.add('sigso-acordeon-item--activo');
+    });
+
     contenedor.classList.remove('sigso-oculto');
   }
 
@@ -88,7 +112,44 @@
     if (s.descripcion) filas += campo_('Lo que reportaste', s.descripcion);
     if (s.resultado_esperado) filas += campo_('Resultado esperado', s.resultado_esperado);
     if (s.contexto) filas += campo_('Contexto', s.contexto);
+    if (s.pregunta_pendiente) {
+      filas += Componentes.alerta('El equipo necesita más información: ' + s.pregunta_pendiente, 'aviso') +
+        '<div class="sigso-campo">' +
+        '<label for="respuesta-' + s.subsolicitud_id + '">Tu respuesta</label>' +
+        '<textarea id="respuesta-' + s.subsolicitud_id + '" data-campo="respuesta" data-subsolicitud="' + s.subsolicitud_id + '"></textarea>' +
+        '</div>' +
+        '<button type="button" class="sigso-boton--secundario" data-accion="enviar-respuesta" data-subsolicitud="' + s.subsolicitud_id + '">Enviar respuesta</button>' +
+        '<div data-resultado-respuesta="' + s.subsolicitud_id + '"></div>';
+    }
     return filas || '<p class="sigso-ayuda">Sin detalle adicional.</p>';
+  }
+
+  function enviarRespuesta_(subsolicitudId) {
+    var textarea = document.getElementById('respuesta-' + subsolicitudId);
+    var boton = document.querySelector('[data-accion="enviar-respuesta"][data-subsolicitud="' + subsolicitudId + '"]');
+    var contenedorResultado = document.querySelector('[data-resultado-respuesta="' + subsolicitudId + '"]');
+    var texto = textarea.value.trim();
+    if (!texto) {
+      contenedorResultado.innerHTML = Componentes.alerta('Escribe una respuesta antes de enviar.', 'error');
+      return;
+    }
+
+    boton.disabled = true;
+    llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'responderConsulta', {
+      solicitud_id: ultimaConsulta.solicitud_id,
+      subsolicitud_id: subsolicitudId,
+      email: ultimaConsulta.email,
+      texto: texto
+    }).then(function (respuesta) {
+      if (!respuesta.ok) {
+        contenedorResultado.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo enviar la respuesta.', 'error');
+        boton.disabled = false;
+        return;
+      }
+      // Recarga el estado: el item sigue en "esperando informacion" hasta
+      // que Leo lo mueva, pero la respuesta ya quedo registrada.
+      return consultar_(ultimaConsulta.solicitud_id, ultimaConsulta.email);
+    });
   }
 
   function campo_(etiqueta, valor) {

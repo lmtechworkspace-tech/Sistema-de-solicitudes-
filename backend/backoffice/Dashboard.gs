@@ -17,6 +17,7 @@ var CACHE_TTL_SEGUNDOS = 300;
 var ESTADOS_TRABAJO_DEV = [ESTADOS.S04, ESTADOS.S05, ESTADOS.S06, ESTADOS.S07];
 var TOP_MODULOS_CANTIDAD = 5;
 var MESES_TENDENCIA = 6;
+var RECIENTES_LIMITE = 50;
 
 var Dashboard = {
   getData: function (filtros, contexto) {
@@ -108,7 +109,10 @@ function calcularKpis_(filtros) {
     recientes: solicitudes
       .slice()
       .sort(function (a, b) { return new Date(b.fecha_creacion) - new Date(a.fecha_creacion); })
-      .slice(0, 20)
+      // Fase 10.1: se sube de 20 a RECIENTES_LIMITE para que la busqueda por
+      // texto (cliente, dashboard.js) tenga un universo util donde buscar;
+      // sigue siendo una lista acotada, no un listado completo paginado.
+      .slice(0, RECIENTES_LIMITE)
       .map(function (s) {
         // Fase 10 (rediseno UX): Leo debe entender una solicitud en <10s
         // desde la fila, sin entrar al detalle -- cantidad de items y SLA
@@ -119,7 +123,10 @@ function calcularKpis_(filtros) {
           modulo: s.modulo, estado_derivado: s.estado_derivado, prioridad_derivada: s.prioridad_derivada,
           fecha_creacion: s.fecha_creacion, asignado_a: s.desarrollador_asignado || '',
           cantidad_items: itemsDeEstaSolicitud.length,
-          sla_restante_horas: slaRestanteHoras_(itemsDeEstaSolicitud, feriados)
+          sla_restante_horas: slaRestanteHoras_(itemsDeEstaSolicitud, feriados),
+          // Fase 10.1: campos para la busqueda por texto en el Dashboard.
+          solicitante_nombre: s.solicitante_nombre || '',
+          solicitante_email: s.solicitante_email || ''
         };
       })
   };

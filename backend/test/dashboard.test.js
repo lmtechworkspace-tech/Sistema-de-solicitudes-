@@ -100,6 +100,16 @@ test('Dashboard.getData enriquece recientes con cantidad_items, sla_restante_hor
   assert.ok(datos.recientes[0].sla_restante_horas > 0); // recien creada, SLA de 24h aun no vence
 });
 
+test('Dashboard.getData incluye solicitante_nombre/email en recientes para la busqueda por texto (Fase 10.1)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { solicitante_nombre: 'Camila Pena', solicitante_email: 'camila@homepymes.cl' });
+
+  const datos = ctx.Dashboard.getData({}, { rol: 'ADM' });
+
+  assert.equal(datos.recientes[0].solicitante_nombre, 'Camila Pena');
+  assert.equal(datos.recientes[0].solicitante_email, 'camila@homepymes.cl');
+});
+
 test('Dashboard.getData: sla_restante_horas es null si ningun item tiene SLA activo', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0001' }, ['S09']); // cerrada: excluida del SLA

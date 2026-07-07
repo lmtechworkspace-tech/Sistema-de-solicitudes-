@@ -27,6 +27,9 @@
     // Agrupar es solo de presentacion (no dispara una nueva consulta al
     // backend): reordena lo que ya se cargo.
     document.getElementById('filtro-agrupar').addEventListener('change', renderRecientes_);
+    // Fase 10.1: busqueda por texto sobre lo ya cargado (recientesActuales),
+    // sin golpear el backend en cada tecla -- igual que Agrupar.
+    document.getElementById('buscar-recientes').addEventListener('input', renderRecientes_);
   }
 
   function leerFiltros_() {
@@ -87,12 +90,13 @@
   function renderRecientes_() {
     var contenedor = document.getElementById('lista-recientes');
     var campoAgrupar = document.getElementById('filtro-agrupar').value;
+    var filtradas = filtrarPorTexto_(recientesActuales);
 
     if (!campoAgrupar) {
-      contenedor.innerHTML = recientesActuales.map(renderFilaReciente_).join('') ||
+      contenedor.innerHTML = filtradas.map(renderFilaReciente_).join('') ||
         Componentes.vacio('No hay solicitudes que coincidan con los filtros.');
     } else {
-      contenedor.innerHTML = agruparPara_(campoAgrupar).map(function (grupo) {
+      contenedor.innerHTML = agruparPara_(filtradas, campoAgrupar).map(function (grupo) {
         return '<h4 class="sigso-grupo__titulo">' + Componentes.escaparHtml(grupo.etiqueta) + ' (' + grupo.filas.length + ')</h4>' +
           grupo.filas.map(renderFilaReciente_).join('');
       }).join('') || Componentes.vacio('No hay solicitudes que coincidan con los filtros.');
@@ -107,10 +111,22 @@
     });
   }
 
-  function agruparPara_(campo) {
+  // Busqueda client-side sobre lo ya cargado: N de solicitud, solicitante,
+  // correo, empresa y modulo (Fase 10.1, pedido explicito: "que sea facil
+  // buscar" en Solicitudes recientes).
+  function filtrarPorTexto_(lista) {
+    var texto = document.getElementById('buscar-recientes').value.trim().toLowerCase();
+    if (!texto) return lista;
+    return lista.filter(function (s) {
+      return [s.solicitud_id, s.solicitante_nombre, s.solicitante_email, s.empresa_id, s.modulo]
+        .some(function (campo) { return String(campo || '').toLowerCase().indexOf(texto) !== -1; });
+    });
+  }
+
+  function agruparPara_(lista, campo) {
     var etiquetador = campo === 'estado_derivado' ? formatearEstadoSigso : function (v) { return v; };
     var grupos = {};
-    recientesActuales.forEach(function (s) {
+    lista.forEach(function (s) {
       var clave = s[campo] || '(sin dato)';
       if (!grupos[clave]) grupos[clave] = [];
       grupos[clave].push(s);

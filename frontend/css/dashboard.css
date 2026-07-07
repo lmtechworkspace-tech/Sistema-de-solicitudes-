@@ -65,6 +65,9 @@
   padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--gris-claro);
   font-size: 0.9rem;
+  /* Codigos largos sin espacios (ej. GDE_ADM_COML_GESTIONES_SEGUIMIENTOS)
+     desbordaban la celda/tarjeta en vez de partirse en varias lineas. */
+  overflow-wrap: anywhere;
 }
 
 .sigso-tabla tbody tr:hover {

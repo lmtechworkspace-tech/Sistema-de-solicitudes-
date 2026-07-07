@@ -211,7 +211,10 @@ var Solicitudes = {
         // El detalle publico incluye lo que el solicitante mismo escribio
         // (descripcion, resultado esperado, contexto) para que al expandir un
         // item vea de que se trata -- nunca datos internos de gestion.
+        // subsolicitud_id se expone para poder responder (responderConsulta)
+        // cuando el item esta "esperando informacion" (S06).
         return {
+          subsolicitud_id: s.subsolicitud_id,
           numero_item: s.numero_item,
           titulo: s.titulo,
           estado: s.estado,
@@ -220,7 +223,12 @@ var Solicitudes = {
           modulo_nombre: s.modulo_nombre || '',
           descripcion: s.descripcion || '',
           resultado_esperado: s.resultado_esperado || '',
-          contexto: s.contexto || ''
+          contexto: s.contexto || '',
+          // Fase 10.1: si Leo pidio mas informacion (S06), el comentario con
+          // el que hizo la transicion ES la pregunta -- se muestra aqui para
+          // que el solicitante sepa que le estan pidiendo sin tener que
+          // llamar/escribir aparte.
+          pregunta_pendiente: s.estado === ESTADOS.S06 ? obtenerUltimaPreguntaEsperandoInfo_(s.subsolicitud_id) : ''
         };
       });
 
@@ -233,8 +241,58 @@ var Solicitudes = {
       url_pdf: solicitud.url_pdf,
       subsolicitudes: subsolicitudes
     };
+  },
+
+  /**
+   * Respuesta del solicitante a un pedido de informacion (Fase 10.1): se
+   * agrega como comentario publico (es_interno=false), visible para Leo en
+   * el panel de Backoffice (getDetalle ya lee COMENTARIOS). No cambia el
+   * estado -- es Leo quien decide, al leer la respuesta, mover el item de
+   * "esperando informacion" al siguiente paso.
+   */
+  responderConsulta: function (data) {
+    if (!data.solicitud_id || !data.email || !data.texto || String(data.texto).trim() === '') {
+      return errorValidacion_('texto', 'Debes indicar la solicitud, tu correo y una respuesta.');
+    }
+
+    var solicitud = buscarSolicitudPorId_(data.solicitud_id);
+    if (!solicitud) {
+      return errorValidacion_('solicitud_id', 'No existe una solicitud con ese numero.');
+    }
+
+    var coincide =
+      compararEmail_(data.email, solicitud.solicitante_email) ||
+      (!!solicitud.es_cliente && compararEmail_(data.email, solicitud.correo_cliente));
+    if (!coincide) {
+      return { _forbidden: true, message: 'El correo no coincide con el registrado para esta solicitud.' };
+    }
+
+    agregarFila_(SHEETS.COMENTARIOS, {
+      comentario_id: Utilities.getUuid(),
+      solicitud_id: data.solicitud_id,
+      subsolicitud_id: data.subsolicitud_id || '',
+      usuario: data.email,
+      texto: data.texto,
+      es_interno: false,
+      timestamp: new Date().toISOString()
+    });
+
+    return { ok: true };
   }
 };
+
+// Ultimo comentario con el que Leo entro a S06 para este item (el mas
+// reciente, por si volvio a pedir informacion mas de una vez).
+function obtenerUltimaPreguntaEsperandoInfo_(subsolicitudId) {
+  var eventos = leerFilas_(SHEETS.HISTORIAL_ESTADOS).filter(function (h) {
+    return h.subsolicitud_id === subsolicitudId && h.estado_nuevo === ESTADOS.S06;
+  });
+  if (eventos.length === 0) return '';
+  var masReciente = eventos.reduce(function (a, b) {
+    return new Date(b.timestamp) > new Date(a.timestamp) ? b : a;
+  });
+  return masReciente.comentario || '';
+}
 
 function errorValidacion_(campo, mensaje) {
   return { _validationError: true, message: mensaje, fields: [{ campo: campo, mensaje: mensaje }] };

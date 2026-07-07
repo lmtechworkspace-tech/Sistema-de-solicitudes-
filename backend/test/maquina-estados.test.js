@@ -104,18 +104,39 @@ test('actualizarEstado rechaza una transicion no permitida por la tabla de estad
   assert.equal(resultado._validationError, true);
 });
 
-test('actualizarEstado rechaza si el rol no tiene permiso para esa transicion (RN-008 style)', () => {
+test('actualizarEstado (Fase 10.1, "Leo hace todo"): cualquier rol de Backoffice puede aplicar transiciones de trabajo normal', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
   seedSubsolicitud(ctx, { estado: 'S04' });
 
-  // S04 -> S05 solo lo puede hacer DEV.
+  // Antes S04 -> S05 era exclusivo de DEV; ahora cualquier rol registrado
+  // (ANA/DEV/ADM) puede aplicarla -- el permiso es "esta activo en
+  // USUARIOS", no "tiene el rol exacto de ese paso".
   const resultado = ctx.Solicitudes.actualizarEstado(
     { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S05' },
     { email: 'analista@homepymes.cl', rol: 'ANA' }
   );
 
-  assert.equal(resultado._forbidden, true);
+  assert.equal(resultado.estado_nuevo, 'S05');
+});
+
+test('actualizarEstado exige comentario obligatorio al pasar a "esperando informacion" (S06)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S03' });
+
+  // El comentario ES la pregunta que el solicitante vera en Consultar Estado.
+  const sinComentario = ctx.Solicitudes.actualizarEstado(
+    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S06' },
+    { email: 'dev@homepymes.cl', rol: 'DEV' }
+  );
+  assert.equal(sinComentario._validationError, true);
+
+  const conComentario = ctx.Solicitudes.actualizarEstado(
+    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S06', comentario: '¿Cual es el numero de factura afectado?' },
+    { email: 'dev@homepymes.cl', rol: 'DEV' }
+  );
+  assert.equal(conComentario.estado_nuevo, 'S06');
 });
 
 test('actualizarEstado exige comentario cuando la transicion lo requiere (rechazo con motivo)', () => {

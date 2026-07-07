@@ -57,6 +57,56 @@ test('estadoPublico devuelve el estado cuando el correo coincide con el solicita
   assert.equal(resultado.subsolicitudes[0].titulo, 'No cargan las facturas');
 });
 
+test('estadoPublico expone pregunta_pendiente cuando el item esta esperando informacion (S06)', () => {
+  const ctx = loadConSchema();
+  seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S06' });
+  ctx.agregarFila_('HISTORIAL_ESTADOS', {
+    historial_id: 'h1', solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    estado_anterior: 'S03', estado_nuevo: 'S06', usuario: 'dev@homepymes.cl',
+    comentario: '¿Cual es el numero de factura afectado?', timestamp: new Date().toISOString()
+  });
+
+  const item = ctx.Solicitudes.estadoPublico('SOL-2026-HP-0001', 'juan@homepymes.cl').subsolicitudes[0];
+
+  assert.equal(item.pregunta_pendiente, '¿Cual es el numero de factura afectado?');
+  assert.equal(item.subsolicitud_id, 'SOL-2026-HP-0001-01');
+});
+
+test('responderConsulta agrega un comentario publico cuando el correo coincide', () => {
+  const ctx = loadConSchema();
+  seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S06' });
+
+  const resultado = ctx.Solicitudes.responderConsulta({
+    solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    email: 'juan@homepymes.cl', texto: 'La factura N-4521'
+  });
+
+  assert.equal(resultado.ok, true);
+  const comentarios = ctx.leerFilas_('COMENTARIOS');
+  assert.equal(comentarios.length, 1);
+  assert.equal(comentarios[0].usuario, 'juan@homepymes.cl');
+  assert.equal(comentarios[0].texto, 'La factura N-4521');
+  assert.equal(comentarios[0].es_interno, false);
+});
+
+test('responderConsulta rechaza si el correo no coincide con el registrado', () => {
+  const ctx = loadConSchema();
+  seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S06' });
+
+  const resultado = ctx.Solicitudes.responderConsulta({
+    solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    email: 'otro@correo.cl', texto: 'La factura N-4521'
+  });
+
+  assert.equal(resultado._forbidden, true);
+});
+
 test('estadoPublico incluye el detalle que el solicitante escribio, para expandir cada item', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);

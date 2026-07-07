@@ -64,23 +64,26 @@ test('getDetalle incluye los archivos de la solicitud (Fase 9, para la galeria d
   assert.ok(detalle.archivos.some((a) => a.archivo_id === 'A2' && a.subsolicitud_id === 'SOL-2026-HP-0001-01'));
 });
 
-test('getDetalle calcula las transiciones validas por subsolicitud segun el rol (Fase 10)', () => {
+test('getDetalle calcula las transiciones validas por subsolicitud (Fase 10.1: cualquier rol de Backoffice ve las mismas opciones)', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx); // subsolicitud en S02
 
   const comoAnalista = ctx.Solicitudes.getDetalle('SOL-2026-HP-0001', { rol: 'ANA', email: 'a@a.cl' });
   const comoDev = ctx.Solicitudes.getDetalle('SOL-2026-HP-0001', { rol: 'DEV', email: 'd@d.cl' });
 
-  // S02 -> S03 (ANA) y S02 -> S09 (ANA, consulta directa) son validas para ANA.
+  // S02 -> S03 y S02 -> S09 (consulta directa) son validas para cualquier
+  // rol de Backoffice (Fase 10.1, "Leo hace todo" -- ver nota en
+  // Constantes.gs). Antes DEV no veia ninguna transicion desde S02, que era
+  // exactamente el bug reportado en produccion.
   const opcionesAna = comoAnalista.transiciones_por_subsolicitud['SOL-2026-HP-0001-01'];
   const estadosAna = Array.from(opcionesAna).map((o) => o.estado).sort();
   assert.equal(estadosAna.length, 2);
   assert.equal(estadosAna[0], 'S03');
   assert.equal(estadosAna[1], 'S09');
 
-  // DEV no tiene ninguna transicion valida desde S02.
   const opcionesDev = comoDev.transiciones_por_subsolicitud['SOL-2026-HP-0001-01'];
-  assert.equal(opcionesDev.length, 0);
+  const estadosDev = Array.from(opcionesDev).map((o) => o.estado).sort();
+  assert.deepEqual(estadosDev, estadosAna);
 });
 
 test('getDetalle responde error de validacion si la solicitud no existe', () => {
