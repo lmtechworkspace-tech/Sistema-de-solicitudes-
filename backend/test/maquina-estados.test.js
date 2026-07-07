@@ -133,20 +133,22 @@ test('actualizarEstado (Fase 10.1, "Leo hace todo"): cualquier rol puede saltar 
   assert.equal(resultado.estado_nuevo, 'S05');
 });
 
-test('actualizarEstado exige comentario obligatorio al pasar a "esperando informacion" no aplica salvo que sea rechazo/cancelacion/cierre directo/reapertura', () => {
+test('actualizarEstado exige comentario obligatorio al pasar a "esperando informacion" (S06): el comentario ES la pregunta', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
   seedSubsolicitud(ctx, { estado: 'S03' });
 
-  // S06 (esperando informacion) ya NO exige comentario por si solo -- solo
-  // los movimientos "sensibles" (ver comentarioObligatorioParaCambio_) lo
-  // piden. Si Leo quiere dejar la pregunta, la escribe igual (el campo
-  // sigue existiendo), pero el backend no lo bloquea si la omite.
-  const resultado = ctx.Solicitudes.actualizarEstado(
+  const sinComentario = ctx.Solicitudes.actualizarEstado(
     { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S06' },
     { email: 'dev@homepymes.cl', rol: 'DEV' }
   );
-  assert.equal(resultado.estado_nuevo, 'S06');
+  assert.equal(sinComentario._validationError, true);
+
+  const conComentario = ctx.Solicitudes.actualizarEstado(
+    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S06', comentario: '¿Cual es el numero de factura afectado?' },
+    { email: 'dev@homepymes.cl', rol: 'DEV' }
+  );
+  assert.equal(conComentario.estado_nuevo, 'S06');
 });
 
 test('actualizarEstado exige comentario para Rechazar (S10)', () => {

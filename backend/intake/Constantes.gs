@@ -141,7 +141,13 @@ var COLUMNAS = {
   LOG_SISTEMA: ['log_id', 'timestamp', 'contexto', 'mensaje', 'ref'],
   LOG_NOTIFICACIONES: [
     'log_id', 'timestamp', 'solicitud_id', 'canal',
-    'destinatario', 'evento', 'resultado', 'reintentos'
+    'destinatario', 'evento', 'resultado', 'reintentos',
+    // Fase 10.2 (optimizacion, "el cambio de estado tarda mucho"): el correo
+    // de cambio de estado se encola en vez de enviarse en el momento (asi
+    // el usuario no espera el envio); procesarColaCorreo (Backoffice,
+    // trigger cada 5 min) necesita el asunto/cuerpo reales guardados aqui
+    // para no mandar un mensaje generico al procesar la cola.
+    'asunto', 'cuerpo'
   ],
   // Agregada en Fase 2: RN-007 exige que cada cambio de prioridad quede en
   // historial, y ninguna hoja de §6 tiene esa forma (HISTORIAL_ESTADOS es

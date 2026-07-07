@@ -102,7 +102,7 @@ test('enviarCorreo_ encola para reintento si GmailApp falla (cuota, A-12)', () =
   assert.equal(log[0].resultado, 'PENDIENTE_REINTENTO');
 });
 
-test('notificarCambioEstado (Backoffice) envia al solicitante registrado en la solicitud', () => {
+test('notificarCambioEstado (Backoffice, Fase 10.2) ENCOLA el correo en vez de enviarlo en el momento', () => {
   const ctx = loadBackofficeConSchema();
   const fila = ctx.COLUMNAS.SOLICITUDES.map((col) => ({
     solicitud_id: 'SOL-2026-HP-0001', solicitante_email: 'juan@x.cl', empresa_id: 'HP'
@@ -111,8 +111,35 @@ test('notificarCambioEstado (Backoffice) envia al solicitante registrado en la s
 
   const resultado = ctx.Notificaciones.notificarCambioEstado('SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'S02', 'S03');
 
-  assert.equal(resultado.enviado, true);
+  // No se llama a GmailApp/MailApp de inmediato -- se guarda en la cola con
+  // el asunto/cuerpo reales para que procesarColaCorreo lo envie despues.
+  assert.equal(resultado.encolado, true);
+  assert.equal(ctx.GmailApp._enviados.length, 0);
+
+  const log = ctx.leerFilas_('LOG_NOTIFICACIONES');
+  assert.equal(log.length, 1);
+  assert.equal(log[0].destinatario, 'juan@x.cl');
+  assert.equal(log[0].resultado, 'PENDIENTE_REINTENTO');
+  assert.ok(log[0].asunto.indexOf('SOL-2026-HP-0001') !== -1);
+  // El cuerpo usa las etiquetas legibles del estado (formatearEstado_), no
+  // los codigos crudos.
+  assert.ok(log[0].cuerpo.indexOf('Recibida') !== -1 && log[0].cuerpo.indexOf('En revision') !== -1);
+});
+
+test('procesarColaCorreo entrega el correo real de un cambio de estado encolado (Fase 10.2)', () => {
+  const ctx = loadBackofficeConSchema();
+  const fila = ctx.COLUMNAS.SOLICITUDES.map((col) => ({
+    solicitud_id: 'SOL-2026-HP-0001', solicitante_email: 'juan@x.cl', empresa_id: 'HP'
+  }[col] || ''));
+  ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('SOLICITUDES').appendRow(fila);
+  ctx.Notificaciones.notificarCambioEstado('SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'S02', 'S03');
+
+  const resultado = ctx.Notificaciones.procesarColaCorreo();
+
+  assert.equal(resultado[0].resultado, 'ENVIADO');
+  assert.equal(ctx.GmailApp._enviados.length, 1);
   assert.equal(ctx.GmailApp._enviados[0].destinatario, 'juan@x.cl');
+  assert.ok(ctx.GmailApp._enviados[0].cuerpo.indexOf('cambio de estado') !== -1);
 });
 
 test('procesarColaCorreo reintenta notificaciones pendientes y las marca ENVIADO', () => {

@@ -36,9 +36,16 @@ var Solicitudes = {
       return errorValidacion_('comentario', 'Esta transicion exige un comentario con el motivo.');
     }
 
+    // Una sola lectura de las hermanas: sirve tanto para RN-015 (necesita
+    // titulo/descripcion) como para recalcular el estado derivado del padre
+    // mas abajo (necesita el estado de cada una) -- antes eran 2 lecturas
+    // separadas de la misma hoja (Fase 10.2, "el cambio de estado tarda
+    // mucho": cada leerFilas_ es un viaje de ida y vuelta a Sheets).
+    var hermanas = obtenerSubsolicitudesDeSolicitud_(subsolicitud.solicitud_id);
+
     // RN-015: no se pasa a S04 con subsolicitudes sin titulo/descripcion.
     if (data.estado_nuevo === ESTADOS.S04) {
-      var incompleta = obtenerSubsolicitudesDeSolicitud_(subsolicitud.solicitud_id).find(function (s) {
+      var incompleta = hermanas.find(function (s) {
         return !s.titulo || !s.descripcion;
       });
       if (incompleta) {
@@ -65,7 +72,16 @@ var Solicitudes = {
       timestamp: timestamp
     });
 
-    var estadoDerivado = recalcularEstadoDerivado_(subsolicitud.solicitud_id);
+    // Ya sabemos exactamente que cambio (esta subsolicitud, a data.estado_nuevo)
+    // asi que se recalcula con los datos que ya tenemos en memoria (hermanas)
+    // en vez de releer toda la hoja de nuevo via recalcularEstadoDerivado_.
+    var estadosActualizados = hermanas.map(function (s) {
+      return s.subsolicitud_id === data.subsolicitud_id ? data.estado_nuevo : s.estado;
+    });
+    var estadoDerivado = calcularEstadoDerivado_(estadosActualizados);
+    actualizarFilaPorId_(SHEETS.SOLICITUDES, 'solicitud_id', subsolicitud.solicitud_id, {
+      estado_derivado: estadoDerivado
+    });
 
     // C-04/§5.2: al aprobar (S04) se encola la generacion de documento; NO
     // se genera aqui (evita el riesgo de timeout de 6 min). El trigger de
@@ -248,10 +264,14 @@ function obtenerSubsolicitudesDeSolicitud_(solicitudId) {
   });
 }
 
-// Fase 10.1: con el selector de estado abierto a los 11 destinos (ver nota
-// en Constantes.gs), esta funcion es el unico control que queda -- exige
+// Fase 10.1/10.2: con el selector de estado abierto a los 11 destinos (ver
+// nota en Constantes.gs), esta funcion es el unico control que queda -- exige
 // dejar un motivo por escrito (HISTORIAL_ESTADOS.comentario) para los
 // movimientos donde perder ese rastro seria un problema real:
+//  - Esperando informacion (S06): el comentario ES la pregunta que
+//    Consultar Estado le muestra al solicitante (Solicitudes.responderConsulta,
+//    backend/intake) -- sin este requisito, Leo puede dejar el item en S06
+//    sin ninguna pregunta registrada y esa funcionalidad queda inutil.
 //  - Rechazar (S10) o Cancelar (S11): siempre hay que decir por que.
 //  - Cerrar sin pasar por Terminada (S08): un cierre directo es una
 //    excepcion al flujo normal (RF-F08 consulta tecnica, o cualquier otro
@@ -259,6 +279,7 @@ function obtenerSubsolicitudesDeSolicitud_(solicitudId) {
 //  - Reabrir algo que ya estaba cerrado/rechazado/cancelado: es la unica
 //    vez que se "deshace" una decision previa (RN-012/013).
 function comentarioObligatorioParaCambio_(estadoActual, estadoNuevo) {
+  if (estadoNuevo === ESTADOS.S06) return true;
   if (estadoNuevo === ESTADOS.S10 || estadoNuevo === ESTADOS.S11) return true;
   if (estadoNuevo === ESTADOS.S09 && estadoActual !== ESTADOS.S08) return true;
   if (ESTADOS_CERRADOS.indexOf(estadoActual) !== -1) return true;

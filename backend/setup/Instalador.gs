@@ -80,7 +80,9 @@ var ESQUEMA_HOJAS = {
   LOG_SISTEMA: ['log_id', 'timestamp', 'contexto', 'mensaje', 'ref'],
   LOG_NOTIFICACIONES: [
     'log_id', 'timestamp', 'solicitud_id', 'canal',
-    'destinatario', 'evento', 'resultado', 'reintentos'
+    'destinatario', 'evento', 'resultado', 'reintentos',
+    // Fase 10.2: ver la nota identica en backend/intake/Constantes.gs.
+    'asunto', 'cuerpo'
   ],
   // Agregada en Fase 2 (RN-007): ver la nota identica en
   // backend/intake/Constantes.gs.

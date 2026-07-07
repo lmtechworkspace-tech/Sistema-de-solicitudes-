@@ -14,17 +14,31 @@ var VENTANA_DEDUP_SLA_VENCIDO_MINUTOS = 24 * 60;
 var MAX_REINTENTOS_CORREO = 3;
 
 var Notificaciones = {
+  // Fase 10.2 (optimizacion, feedback real: "el cambio de estado tarda
+  // mucho"): a diferencia del resto de enviarCorreo_ (que intenta enviar en
+  // el momento), este correo se ENCOLA directo -- actualizarEstado ya no
+  // espera el envio sincrono a Gmail (el mayor costo de tiempo de esa
+  // accion). Lo entrega procesarColaCorreoTrigger, que ya corre cada 5 min
+  // (Triggers.gs); la demora maxima es esa ventana, nunca inmediata pero
+  // tampoco un problema real para un aviso informativo de cambio de estado.
   notificarCambioEstado: function (solicitudId, subsolicitudId, estadoAnterior, estadoNuevo) {
     var solicitud = buscarSolicitudPorId_(solicitudId);
     if (!solicitud) {
       return { enviado: false, motivo: 'solicitud_no_encontrada' };
+    }
+    if (!solicitud.solicitante_email) {
+      return { enviado: false, motivo: 'sin_destinatario' };
     }
     var asunto = 'SIGSO - Actualizacion de tu solicitud ' + solicitudId;
     var cuerpo =
       'Tu solicitud ' + solicitudId + ' cambio de estado: ' +
       formatearEstado_(estadoAnterior) + ' -> ' + formatearEstado_(estadoNuevo) + '.';
     var evento = 'CAMBIO_ESTADO:' + subsolicitudId + ':' + estadoNuevo;
-    return enviarCorreo_(solicitudId, solicitud.solicitante_email, evento, asunto, cuerpo);
+    if (yaNotificadoRecientemente_(solicitudId, evento, solicitud.solicitante_email)) {
+      return { enviado: false, motivo: 'deduplicado' };
+    }
+    registrarNotificacion_(solicitudId, 'EMAIL', solicitud.solicitante_email, evento, 'PENDIENTE_REINTENTO', 0, asunto, cuerpo);
+    return { encolado: true };
   },
 
   notificarDesarrollador: function (solicitud) {
@@ -121,7 +135,14 @@ var Notificaciones = {
 
     return pendientes.map(function (n) {
       try {
-        MailApp.sendEmail(n.destinatario, '[Reintento] ' + n.evento, 'Reintento de notificacion para ' + n.solicitud_id);
+        // Fase 10.2: si el item viene de una notificacion encolada a
+        // proposito (notificarCambioEstado), n.asunto/n.cuerpo tienen el
+        // contenido real. Si viene de un fallo genuino de otro tipo de
+        // correo (que no guarda asunto/cuerpo), se usa el texto generico de
+        // siempre.
+        var asunto = n.asunto || ('[Reintento] ' + n.evento);
+        var cuerpo = n.cuerpo || ('Reintento de notificacion para ' + n.solicitud_id);
+        MailApp.sendEmail(n.destinatario, asunto, cuerpo);
         actualizarFilaPorId_(SHEETS.LOG_NOTIFICACIONES, 'log_id', n.log_id, { resultado: 'ENVIADO' });
         return { log_id: n.log_id, resultado: 'ENVIADO' };
       } catch (err) {
@@ -175,7 +196,10 @@ function yaNotificadoRecientemente_(solicitudId, evento, destinatario, ventanaMi
   });
 }
 
-function registrarNotificacion_(solicitudId, canal, destinatario, evento, resultado, reintentos) {
+// asunto/cuerpo son opcionales: solo los usa el camino de encolado directo
+// (notificarCambioEstado, Fase 10.2) para que procesarColaCorreo pueda
+// enviar el contenido real en vez de un texto generico de reintento.
+function registrarNotificacion_(solicitudId, canal, destinatario, evento, resultado, reintentos, asunto, cuerpo) {
   agregarFila_(SHEETS.LOG_NOTIFICACIONES, {
     log_id: Utilities.getUuid(),
     timestamp: new Date().toISOString(),
@@ -184,7 +208,9 @@ function registrarNotificacion_(solicitudId, canal, destinatario, evento, result
     destinatario: destinatario,
     evento: evento,
     resultado: resultado,
-    reintentos: reintentos || 0
+    reintentos: reintentos || 0,
+    asunto: asunto || '',
+    cuerpo: cuerpo || ''
   });
 }
 

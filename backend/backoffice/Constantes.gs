@@ -101,7 +101,9 @@ var COLUMNAS = {
   LOG_SISTEMA: ['log_id', 'timestamp', 'contexto', 'mensaje', 'ref'],
   LOG_NOTIFICACIONES: [
     'log_id', 'timestamp', 'solicitud_id', 'canal',
-    'destinatario', 'evento', 'resultado', 'reintentos'
+    'destinatario', 'evento', 'resultado', 'reintentos',
+    // Fase 10.2: ver la nota identica en backend/intake/Constantes.gs.
+    'asunto', 'cuerpo'
   ],
   HISTORIAL_PRIORIDAD: [
     'historial_id', 'subsolicitud_id', 'solicitud_id',
