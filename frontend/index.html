@@ -5,140 +5,131 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SIGSO — Nueva solicitud</title>
   <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/components.css" />
   <link rel="stylesheet" href="css/formulario.css" />
 </head>
 <body>
   <header id="sigso-header" class="sigso-header"></header>
 
   <main class="sigso-contenido">
-    <div class="sigso-progreso"><div class="sigso-progreso__relleno" id="barra-progreso" style="width:0%"></div></div>
+    <div id="contenedor-stepper"></div>
 
     <form id="form-solicitud" class="sigso-card" novalidate>
       <h1>Nueva solicitud</h1>
 
-      <div class="sigso-campo">
-        <label for="campo-empresa">Empresa</label>
-        <select id="campo-empresa" required></select>
-      </div>
-
-      <div class="sigso-campo">
-        <label for="campo-plataforma">Plataforma</label>
-        <select id="campo-plataforma" required></select>
-      </div>
-
-      <div class="sigso-campo">
-        <label for="campo-modulo">M&oacute;dulo</label>
-        <select id="campo-modulo" required></select>
-      </div>
-
-      <!-- Submodulo/item/sub-item (jerarquia real de hasta 4 niveles,
-           post-Fase 8): ocultos hasta que el nivel anterior tenga hijos
-           (formulario.js). -->
-      <div class="sigso-campo sigso-oculto" id="bloque-submodulo">
-        <label for="campo-submodulo">Submodulo</label>
-        <select id="campo-submodulo"></select>
-      </div>
-
-      <div class="sigso-campo sigso-oculto" id="bloque-item">
-        <label for="campo-item">Item</label>
-        <select id="campo-item"></select>
-      </div>
-
-      <div class="sigso-campo sigso-oculto" id="bloque-subitem">
-        <label for="campo-subitem">Sub-item</label>
-        <select id="campo-subitem"></select>
-      </div>
-
-      <div class="sigso-campo">
-        <label for="campo-tipo">Tipo de solicitud</label>
-        <select id="campo-tipo" required></select>
-      </div>
-
-      <div class="sigso-campo">
-        <label class="sigso-toggle">
-          <input type="checkbox" id="campo-es-cliente" />
-          &iquest;Es una solicitud de cliente?
-        </label>
-      </div>
-
-      <div class="sigso-bloque-cliente" id="bloque-cliente">
+      <!-- Paso 1: Contexto general -- lo minimo compartido por toda la
+           solicitud. Modulo/tipo NO van aqui: cada item puede vivir en un
+           modulo distinto y ser de un tipo distinto (Fase 10, rediseno UX). -->
+      <section id="paso-contexto">
         <div class="sigso-campo">
-          <label for="campo-empresa-cliente">Empresa cliente</label>
-          <input type="text" id="campo-empresa-cliente" />
+          <label for="campo-empresa">Empresa</label>
+          <select id="campo-empresa" required></select>
         </div>
+
         <div class="sigso-campo">
-          <label for="campo-cliente-mandante">Mandante (opcional)</label>
-          <input type="text" id="campo-cliente-mandante" />
+          <label for="campo-plataforma">Plataforma</label>
+          <select id="campo-plataforma" required></select>
         </div>
+
         <div class="sigso-campo">
-          <label for="campo-cliente-obra">Obra/Proyecto (opcional)</label>
-          <input type="text" id="campo-cliente-obra" />
+          <label class="sigso-toggle">
+            <input type="checkbox" id="campo-es-cliente" />
+            &iquest;Es una solicitud de cliente?
+          </label>
         </div>
+
+        <div class="sigso-bloque-cliente" id="bloque-cliente">
+          <div class="sigso-campo">
+            <label for="campo-empresa-cliente">Empresa cliente</label>
+            <input type="text" id="campo-empresa-cliente" />
+          </div>
+          <div class="sigso-campo">
+            <label for="campo-cliente-mandante">Mandante (opcional)</label>
+            <input type="text" id="campo-cliente-mandante" />
+          </div>
+          <div class="sigso-campo">
+            <label for="campo-cliente-obra">Obra/Proyecto (opcional)</label>
+            <input type="text" id="campo-cliente-obra" />
+          </div>
+          <div class="sigso-campo">
+            <label for="campo-contacto-cliente">Nombre de contacto</label>
+            <input type="text" id="campo-contacto-cliente" />
+          </div>
+          <div class="sigso-campo">
+            <label for="campo-correo-cliente">Correo del cliente</label>
+            <input type="email" id="campo-correo-cliente" />
+          </div>
+          <div class="sigso-campo">
+            <label for="campo-telefono-cliente">Tel&eacute;fono de contacto (opcional)</label>
+            <input type="tel" id="campo-telefono-cliente" placeholder="+569XXXXXXXX" />
+          </div>
+          <div class="sigso-campo">
+            <label for="campo-urgencia-cliente">Urgencia reportada por el cliente</label>
+            <select id="campo-urgencia-cliente">
+              <option value="">No especificada</option>
+              <option value="Alta">Alta</option>
+              <option value="Normal">Normal</option>
+              <option value="Baja">Baja</option>
+            </select>
+          </div>
+        </div>
+
         <div class="sigso-campo">
-          <label for="campo-contacto-cliente">Nombre de contacto</label>
-          <input type="text" id="campo-contacto-cliente" />
+          <label for="campo-solicitante-nombre">Tu nombre</label>
+          <input type="text" id="campo-solicitante-nombre" required />
         </div>
+
         <div class="sigso-campo">
-          <label for="campo-correo-cliente">Correo del cliente</label>
-          <input type="email" id="campo-correo-cliente" />
+          <label for="campo-solicitante-cargo">Tu cargo</label>
+          <input type="text" id="campo-solicitante-cargo" required />
         </div>
+
         <div class="sigso-campo">
-          <label for="campo-telefono-cliente">Tel&eacute;fono de contacto (opcional)</label>
-          <input type="tel" id="campo-telefono-cliente" placeholder="+569XXXXXXXX" />
+          <label for="campo-solicitante-email">Tu correo</label>
+          <input type="email" id="campo-solicitante-email" required />
         </div>
+
         <div class="sigso-campo">
-          <label for="campo-urgencia-cliente">Urgencia reportada por el cliente</label>
-          <select id="campo-urgencia-cliente">
-            <option value="">No especificada</option>
-            <option value="Alta">Alta</option>
-            <option value="Normal">Normal</option>
-            <option value="Baja">Baja</option>
-          </select>
+          <label for="campo-cc">Copiar a (CC, opcional)</label>
+          <input type="email" id="campo-cc" placeholder="otro.correo@empresa.cl" />
         </div>
-      </div>
 
-      <div class="sigso-campo">
-        <label for="campo-solicitante-nombre">Tu nombre</label>
-        <input type="text" id="campo-solicitante-nombre" required />
-      </div>
+        <div id="alerta-paso1"></div>
+        <div class="sigso-campo">
+          <button type="button" class="sigso-boton" id="btn-paso1-siguiente">Continuar &rarr;</button>
+        </div>
+      </section>
 
-      <div class="sigso-campo">
-        <label for="campo-solicitante-cargo">Tu cargo</label>
-        <input type="text" id="campo-solicitante-cargo" required />
-      </div>
+      <!-- Paso 2: los items -- el corazon del formulario. Cada item es una
+           mini "hoja de ruta": tipo, modulo, que pasa/que deberia pasar,
+           evidencia con descripcion propia. -->
+      <section id="paso-items" class="sigso-oculto">
+        <h2>Que necesitas pedir</h2>
+        <div id="lista-subsolicitudes"></div>
+        <button type="button" class="sigso-boton--secundario" id="btn-agregar-subsolicitud">+ Agregar otro item</button>
 
-      <div class="sigso-campo">
-        <label for="campo-solicitante-email">Tu correo</label>
-        <input type="email" id="campo-solicitante-email" required />
-      </div>
+        <div id="alerta-paso2"></div>
+        <div class="sigso-campo" style="margin-top: 1.5rem">
+          <button type="button" class="sigso-boton--secundario" id="btn-paso2-atras">&larr; Atr&aacute;s</button>
+          <button type="button" class="sigso-boton" id="btn-paso2-siguiente">Revisar y enviar &rarr;</button>
+        </div>
+      </section>
 
-      <div class="sigso-campo">
-        <label for="campo-cc">Copiar a (CC, opcional)</label>
-        <input type="email" id="campo-cc" placeholder="otro.correo@empresa.cl" />
-      </div>
+      <!-- Paso 3: revision final antes de enviar. -->
+      <section id="paso-revision" class="sigso-oculto">
+        <h2>Revisa antes de enviar</h2>
+        <div id="contenedor-revision"></div>
 
-      <h2>Subsolicitudes</h2>
-      <div id="lista-subsolicitudes"></div>
-      <button type="button" class="sigso-boton--secundario" id="btn-agregar-subsolicitud">+ Agregar subsolicitud</button>
+        <div class="sigso-campo" style="margin-top: 1.5rem">
+          <label for="campo-observaciones-generales">Observaciones generales (opcional)</label>
+          <textarea id="campo-observaciones-generales"></textarea>
+        </div>
 
-      <div class="sigso-campo" style="margin-top: 1.5rem">
-        <label for="campo-observaciones-generales">Observaciones generales (opcional)</label>
-        <textarea id="campo-observaciones-generales"></textarea>
-      </div>
-
-      <!-- RF-003 v1.0: hasta 5 imagenes por solicitud (no por subsolicitud).
-           Se suben despues de crear la solicitud (Drive.subirArchivo necesita
-           el solicitud_id ya generado), en forma transparente para quien
-           llena el formulario (formulario.js). -->
-      <div class="sigso-campo">
-        <label for="campo-imagenes">Capturas de pantalla (opcional, m&aacute;x. 5)</label>
-        <input type="file" id="campo-imagenes" accept="image/png,image/jpeg,image/gif" multiple />
-        <p class="sigso-ayuda" id="imagenes-ayuda"></p>
-      </div>
-
-      <div class="sigso-campo">
-        <button type="submit" class="sigso-boton" id="btn-enviar">Enviar solicitud</button>
-      </div>
+        <div class="sigso-campo">
+          <button type="button" class="sigso-boton--secundario" id="btn-paso3-atras">&larr; Editar</button>
+          <button type="submit" class="sigso-boton" id="btn-enviar">Enviar solicitud</button>
+        </div>
+      </section>
     </form>
 
     <div id="resultado" class="sigso-card sigso-oculto"></div>
@@ -146,7 +137,9 @@
 
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
   <script src="js/ui-components.js"></script>
+  <script src="js/components.js"></script>
   <script src="js/formulario.js"></script>
 </body>
 </html>

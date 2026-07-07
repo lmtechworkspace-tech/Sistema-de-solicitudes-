@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SIGSO — Backoffice</title>
   <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/components.css" />
   <link rel="stylesheet" href="css/dashboard.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
@@ -33,6 +34,14 @@
           </select>
         </div>
         <div class="sigso-campo">
+          <label for="filtro-agrupar">Agrupar</label>
+          <select id="filtro-agrupar">
+            <option value="">Sin agrupar</option>
+            <option value="estado_derivado">Por estado</option>
+            <option value="prioridad_derivada">Por prioridad</option>
+          </select>
+        </div>
+        <div class="sigso-campo">
           <button type="button" class="sigso-boton" id="btn-actualizar-dashboard">Actualizar</button>
         </div>
       </div>
@@ -52,10 +61,7 @@
 
       <div class="sigso-card">
         <h3>Solicitudes recientes</h3>
-        <table class="sigso-tabla">
-          <thead><tr><th>N°</th><th>Empresa</th><th>Plataforma / Modulo</th><th>Estado</th><th>Prioridad</th></tr></thead>
-          <tbody id="tabla-recientes"></tbody>
-        </table>
+        <div id="lista-recientes"></div>
       </div>
     </section>
 
@@ -69,6 +75,7 @@
   <script src="js/api.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/ui-components.js"></script>
+  <script src="js/components.js"></script>
   <script src="js/dashboard.js"></script>
   <script src="js/detalle.js"></script>
   <script src="js/app.js"></script>

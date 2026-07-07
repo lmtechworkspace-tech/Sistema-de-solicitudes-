@@ -110,13 +110,36 @@ function calcularKpis_(filtros) {
       .sort(function (a, b) { return new Date(b.fecha_creacion) - new Date(a.fecha_creacion); })
       .slice(0, 20)
       .map(function (s) {
+        // Fase 10 (rediseno UX): Leo debe entender una solicitud en <10s
+        // desde la fila, sin entrar al detalle -- cantidad de items y SLA
+        // restante son los dos datos que mas faltaban.
+        var itemsDeEstaSolicitud = subsolicitudes.filter(function (sub) { return sub.solicitud_id === s.solicitud_id; });
         return {
           solicitud_id: s.solicitud_id, empresa_id: s.empresa_id, plataforma: s.plataforma,
           modulo: s.modulo, estado_derivado: s.estado_derivado, prioridad_derivada: s.prioridad_derivada,
-          fecha_creacion: s.fecha_creacion
+          fecha_creacion: s.fecha_creacion, asignado_a: s.desarrollador_asignado || '',
+          cantidad_items: itemsDeEstaSolicitud.length,
+          sla_restante_horas: slaRestanteHoras_(itemsDeEstaSolicitud, feriados)
         };
       })
   };
+}
+
+// Minimo (mas urgente) de horas habiles restantes de SLA entre los items
+// activos de la solicitud; null si ninguno tiene SLA vigente (todos
+// cerrados/excluidos o sin sla_objetivo_horas, ej. P5). Negativo = vencido.
+function slaRestanteHoras_(items, feriados) {
+  var restantes = items
+    .filter(function (sub) {
+      return ESTADOS_EXCLUIDOS_DERIVACION.indexOf(sub.estado) === -1 && sub.estado !== ESTADOS.S09 &&
+        sub.sla_objetivo_horas !== '' && sub.sla_objetivo_horas !== undefined && sub.sla_objetivo_horas !== null;
+    })
+    .map(function (sub) {
+      var transcurridas = Utils.horasHabilesEntre(sub.fecha_creacion, new Date(), { feriados: feriados });
+      return Number(sub.sla_objetivo_horas) - transcurridas;
+    });
+  if (restantes.length === 0) return null;
+  return Math.round(Math.min.apply(null, restantes) * 10) / 10;
 }
 
 function coincideFiltros_(solicitud, filtros, idsAsignadosPorItem) {

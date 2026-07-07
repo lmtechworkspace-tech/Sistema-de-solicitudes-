@@ -79,7 +79,25 @@ var COLUMNAS = {
     // documento generado) -- url_modulo sigue siendo la principal, esta
     // guarda las demas como JSON string (array de {titulo, url}), mismo
     // patron que url_pdf_historial.
-    'urls_adicionales'
+    'urls_adicionales',
+    // Fase 10 (rediseno UX, auditoria de producto): tipo y modulo pasan de
+    // ser una pregunta unica a nivel SOLICITUDES a una pregunta por item --
+    // una solicitud real mezcla Error+Mejora+Nuevo modulo, cada uno en un
+    // modulo distinto (confirmado con datos reales de Camila Pena/Lisseth
+    // Vilchez). SOLICITUDES.tipo/modulo se mantienen (no se borran columnas)
+    // pero pasan a derivarse del primer item en crearSolicitud, no de un
+    // campo global del formulario.
+    'tipo', 'tipo_nombre', 'modulo', 'modulo_nombre',
+    // Reemplaza a "estimacion_horas" en el formulario publico (el
+    // solicitante no puede estimar esfuerzo de desarrollo, pero si sabe
+    // cuanto pasa y a cuantos afecta). estimacion_horas se mantiene para que
+    // Leo la complete despues desde el Backoffice.
+    'frecuencia', 'personas_afectadas',
+    // Caption por imagen sin tocar ARCHIVOS: JSON string, array de strings
+    // (indice i = descripcion de la i-esima imagen subida para este item,
+    // ver nota en Solicitudes.gs -- el archivo_id no existe todavia al
+    // guardar la subsolicitud).
+    'imagen_descripciones'
   ],
   HISTORIAL_ESTADOS: [
     'historial_id', 'solicitud_id', 'subsolicitud_id',

@@ -170,8 +170,8 @@ function handleGetDashboardData_(data, contexto) {
   return jsonResponse_({ ok: true, data: Dashboard.getData(data, contexto) });
 }
 
-function handleGetSolicitudDetalle_(data) {
-  return responderResultado_(Solicitudes.getDetalle(data.solicitud_id));
+function handleGetSolicitudDetalle_(data, contexto) {
+  return responderResultado_(Solicitudes.getDetalle(data.solicitud_id, contexto));
 }
 
 function handleAgregarComentario_(data, contexto) {

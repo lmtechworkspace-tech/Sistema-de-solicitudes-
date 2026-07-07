@@ -87,6 +87,27 @@ test('Dashboard.getData respeta los filtros (empresa_id)', () => {
   assert.equal(datos.recientes[0].empresa_id, 'HP');
 });
 
+test('Dashboard.getData enriquece recientes con cantidad_items, sla_restante_horas y asignado_a (Fase 10)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0001', desarrollador_asignado: 'dev@homepymes.cl', fecha_creacion: new Date().toISOString()
+  }, ['S02', 'S05']);
+
+  const datos = ctx.Dashboard.getData({}, { rol: 'ADM' });
+
+  assert.equal(datos.recientes[0].cantidad_items, 2);
+  assert.equal(datos.recientes[0].asignado_a, 'dev@homepymes.cl');
+  assert.ok(datos.recientes[0].sla_restante_horas > 0); // recien creada, SLA de 24h aun no vence
+});
+
+test('Dashboard.getData: sla_restante_horas es null si ningun item tiene SLA activo', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0001' }, ['S09']); // cerrada: excluida del SLA
+
+  const datos = ctx.Dashboard.getData({}, { rol: 'ADM' });
+  assert.equal(datos.recientes[0].sla_restante_horas, null);
+});
+
 test('Dashboard.getData (DEV sin asignaciones) usa como respaldo los estados de trabajo activo', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0001', estado_derivado: 'S02' }, ['S02']);

@@ -68,7 +68,12 @@ var COLUMNAS = {
     // documento generado) -- url_modulo sigue siendo la principal, esta
     // guarda las demas como JSON string (array de {titulo, url}), mismo
     // patron que url_pdf_historial.
-    'urls_adicionales'
+    'urls_adicionales',
+    // Fase 10 (rediseno UX): tipo y modulo por item, ver nota identica en
+    // backend/intake/Constantes.gs.
+    'tipo', 'tipo_nombre', 'modulo', 'modulo_nombre',
+    'frecuencia', 'personas_afectadas',
+    'imagen_descripciones'
   ],
   HISTORIAL_ESTADOS: [
     'historial_id', 'solicitud_id', 'subsolicitud_id',

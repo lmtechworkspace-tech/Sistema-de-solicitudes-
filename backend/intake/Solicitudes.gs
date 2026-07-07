@@ -58,11 +58,32 @@ var Solicitudes = {
         estimacion_horas: item.estimacion_horas || '',
         horas_reales: '',
         fecha_creacion: timestamp,
-        urls_adicionales: JSON.stringify(item.urls_adicionales || [])
+        urls_adicionales: JSON.stringify(item.urls_adicionales || []),
+        // Fase 10: tipo/modulo se piden por item, no una sola vez por
+        // solicitud (una solicitud real mezcla Error+Mejora+Nuevo modulo).
+        tipo: item.tipo || '',
+        tipo_nombre: resolverNombreCatalogo_(SHEETS.CAT_TIPOS, 'tipo_id', item.tipo),
+        modulo: item.modulo || '',
+        modulo_nombre: resolverNombreCatalogo_(SHEETS.CAT_MODULOS, 'modulo_id', item.modulo),
+        // Reemplaza a estimacion_horas en el formulario publico (el
+        // solicitante no puede estimar esfuerzo de desarrollo).
+        frecuencia: item.frecuencia || '',
+        personas_afectadas: item.personas_afectadas || '',
+        // Array de strings: el indice i es la descripcion de la i-esima
+        // imagen subida para este item (subirArchivo se llama despues de
+        // crearSolicitud, en el mismo orden -- el archivo_id real no existe
+        // todavia aqui, asi que no se puede indexar por archivo_id).
+        imagen_descripciones: JSON.stringify(item.imagen_descripciones || [])
       });
 
       return { subsolicitud_id: subId, prioridad: prioridad };
     });
+
+    // Fase 10: SOLICITUDES.tipo/modulo (columnas existentes) se derivan del
+    // primer item -- mantiene compatibilidad con dedup/resumen/Dashboard sin
+    // tocarlos, aunque ya no reflejan "la verdad completa" cuando hay items
+    // mixtos (el desglose real vive en SUBSOLICITUDES).
+    var primerItem = data.subsolicitudes[0] || {};
 
     var prioridadDerivada = prioridadMasCritica_(
       subsolicitudesGuardadas.map(function (s) { return s.prioridad; })
@@ -78,10 +99,10 @@ var Solicitudes = {
       empresa_nombre: resolverNombreCatalogo_(SHEETS.CAT_EMPRESAS, 'empresa_id', data.empresa_id),
       plataforma: data.plataforma,
       plataforma_nombre: resolverNombreCatalogo_(SHEETS.CAT_PLATAFORMAS, 'plataforma_id', data.plataforma),
-      modulo: data.modulo,
-      modulo_nombre: resolverNombreCatalogo_(SHEETS.CAT_MODULOS, 'modulo_id', data.modulo),
-      tipo: data.tipo,
-      tipo_nombre: resolverNombreCatalogo_(SHEETS.CAT_TIPOS, 'tipo_id', data.tipo),
+      modulo: primerItem.modulo || '',
+      modulo_nombre: resolverNombreCatalogo_(SHEETS.CAT_MODULOS, 'modulo_id', primerItem.modulo),
+      tipo: primerItem.tipo || '',
+      tipo_nombre: resolverNombreCatalogo_(SHEETS.CAT_TIPOS, 'tipo_id', primerItem.tipo),
       solicitante_nombre: data.solicitante_nombre,
       solicitante_cargo: data.solicitante_cargo,
       solicitante_email: data.solicitante_email,
@@ -180,7 +201,8 @@ var Solicitudes = {
         return s.solicitud_id === solicitudId;
       })
       .map(function (s) {
-        return { titulo: s.titulo, estado: s.estado, prioridad: s.prioridad };
+        // Fase 10: tipo_nombre por item (antes solo vivia a nivel SOLICITUDES).
+        return { titulo: s.titulo, estado: s.estado, prioridad: s.prioridad, tipo_nombre: s.tipo_nombre || '' };
       });
 
     return {
@@ -222,11 +244,11 @@ function validarSolicitud_(data) {
     }
   }
 
-  // RN-002: sin empresa, plataforma, modulo y tipo no se puede enviar.
+  // RN-002: sin empresa y plataforma no se puede enviar. modulo/tipo se
+  // exigen por item (Fase 10, ver validacion de subsolicitudes mas abajo):
+  // una solicitud real mezcla tipos y modulos distintos por item.
   requerido_('empresa_id', data.empresa_id);
   requerido_('plataforma', data.plataforma);
-  requerido_('modulo', data.modulo);
-  requerido_('tipo', data.tipo);
 
   // Necesario para notificaciones y magic link (§12.1); sin numero de RN
   // propio pero indispensable para que el resto del flujo funcione.
@@ -256,6 +278,20 @@ function validarSolicitud_(data) {
         errores.push({
           campo: 'subsolicitudes[' + idx + '].descripcion',
           mensaje: 'Descripcion obligatoria (RN-004)'
+        });
+      }
+      // RN-002 (Fase 10): tipo y modulo se exigen por item, no una sola vez
+      // por solicitud.
+      if (!item || !item.tipo || String(item.tipo).trim() === '') {
+        errores.push({
+          campo: 'subsolicitudes[' + idx + '].tipo',
+          mensaje: 'Tipo obligatorio (RN-002)'
+        });
+      }
+      if (!item || !item.modulo || String(item.modulo).trim() === '') {
+        errores.push({
+          campo: 'subsolicitudes[' + idx + '].modulo',
+          mensaje: 'Modulo obligatorio (RN-002)'
         });
       }
     });
@@ -304,14 +340,15 @@ function resolverNombreCatalogo_(nombreHoja, idCampo, valorId) {
 }
 
 // RF-F06: hash de (empresa+plataforma+modulo+solicitante+descripcion_item1).
+// Fase 10: modulo ahora vive en el primer item, no a nivel raiz de data.
 function calcularHashDuplicado_(data) {
-  var primeraDescripcion = (data.subsolicitudes[0] && data.subsolicitudes[0].descripcion) || '';
+  var primerItem = data.subsolicitudes[0] || {};
   var base = [
     data.empresa_id,
     data.plataforma,
-    data.modulo,
+    primerItem.modulo || '',
     String(data.solicitante_email || '').toLowerCase(),
-    String(primeraDescripcion).trim().toLowerCase()
+    String(primerItem.descripcion || '').trim().toLowerCase()
   ].join('|');
 
   var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, base, Utilities.Charset.UTF_8);
@@ -355,10 +392,14 @@ function obtenerSlaHoras_(prioridad) {
 // Formato exacto de RF-015 (doc 3.5 de v1.0). Regla de multiples items
 // (RF-F07, ya incorporada en v1.1 §20.4): con mas de un item se indica la
 // cantidad en vez de listarlos, el detalle completo va en el correo.
+// Fase 10: "Modulo" muestra el del primer item (modulo ya no es un campo
+// unico de la solicitud); si hay varios tipos/modulos el detalle completo
+// sigue estando en el correo/panel, no en este resumen corto.
 function generarResumenWhatsapp_(solicitudId, data, prioridad) {
+  var primerItem = data.subsolicitudes[0] || {};
   var resumen;
   if (data.subsolicitudes.length === 1) {
-    resumen = String(data.subsolicitudes[0].descripcion || '').slice(0, 150);
+    resumen = String(primerItem.descripcion || '').slice(0, 150);
   } else {
     resumen = data.subsolicitudes.length + ' items — ver detalle en correo';
   }
@@ -368,7 +409,7 @@ function generarResumenWhatsapp_(solicitudId, data, prioridad) {
     (PRIORIDAD_EMOJI[prioridad] || '') + ' PRIORIDAD: ' + (PRIORIDAD_ETIQUETA[prioridad] || prioridad),
     '🏢 Empresa: ' + data.empresa_id,
     '💻 Sistema: ' + data.plataforma,
-    '📦 Modulo: ' + data.modulo,
+    '📦 Modulo: ' + (primerItem.modulo || ''),
     '👤 Solicitante: ' + data.solicitante_nombre,
     '📝 Resumen: ' + resumen,
     '📧 Revisar correo para detalle completo.'

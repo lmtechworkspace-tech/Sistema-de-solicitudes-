@@ -26,14 +26,16 @@ function datosValidos(overrides) {
     {
       empresa_id: 'HP',
       plataforma: 'ERP',
-      modulo: 'Facturacion',
-      tipo: 'ERR',
       es_cliente: false,
       solicitante_nombre: 'Juan Perez',
       solicitante_cargo: 'Jefe de Operaciones',
       solicitante_email: 'juan.perez@homepymes.cl',
+      // Fase 10: modulo/tipo se piden por item, no a nivel raiz.
       subsolicitudes: [
-        { titulo: 'No cargan las facturas', descripcion: 'La pantalla queda en blanco', impacto: 'SISTEMA_CAIDO' }
+        {
+          titulo: 'No cargan las facturas', descripcion: 'La pantalla queda en blanco',
+          impacto: 'SISTEMA_CAIDO', modulo: 'Facturacion', tipo: 'ERR'
+        }
       ]
     },
     overrides
@@ -54,21 +56,41 @@ test('crearSolicitud escribe SOLICITUDES, SUBSOLICITUDES e HISTORIAL_ESTADOS y r
 
   assert.equal(solicitudes.length, 1);
   assert.equal(solicitudes[0].prioridad_derivada, 'P1');
+  // Fase 10: SOLICITUDES.tipo/modulo se derivan del primer item.
+  assert.equal(solicitudes[0].modulo, 'Facturacion');
+  assert.equal(solicitudes[0].tipo, 'ERR');
   assert.equal(subsolicitudes.length, 1);
   assert.equal(subsolicitudes[0].prioridad, 'P1');
   assert.equal(subsolicitudes[0].sla_objetivo_horas, 2);
+  assert.equal(subsolicitudes[0].modulo, 'Facturacion');
+  assert.equal(subsolicitudes[0].tipo, 'ERR');
   assert.equal(historial.length, 1);
   assert.equal(historial[0].estado_nuevo, 'S01');
 });
 
 test('crearSolicitud rechaza datos incompletos (RN-002) con error de validacion', () => {
   const ctx = loadIntakeConSchema();
-  const resultado = ctx.Solicitudes.crearSolicitud(datosValidos({ empresa_id: '', tipo: '' }));
+  const resultado = ctx.Solicitudes.crearSolicitud(datosValidos({
+    empresa_id: '',
+    subsolicitudes: [{ titulo: 'x', descripcion: 'y', impacto: 'SISTEMA_CAIDO', modulo: 'Facturacion', tipo: '' }]
+  }));
 
   assert.equal(resultado._validationError, true);
   const campos = resultado.fields.map((f) => f.campo);
   assert.ok(campos.includes('empresa_id'));
-  assert.ok(campos.includes('tipo'));
+  assert.ok(campos.includes('subsolicitudes[0].tipo'));
+});
+
+test('crearSolicitud exige tipo y modulo por item (RN-002, Fase 10)', () => {
+  const ctx = loadIntakeConSchema();
+  const resultado = ctx.Solicitudes.crearSolicitud(datosValidos({
+    subsolicitudes: [{ titulo: 'x', descripcion: 'y', impacto: 'SISTEMA_CAIDO' }]
+  }));
+
+  assert.equal(resultado._validationError, true);
+  const campos = resultado.fields.map((f) => f.campo);
+  assert.ok(campos.includes('subsolicitudes[0].tipo'));
+  assert.ok(campos.includes('subsolicitudes[0].modulo'));
 });
 
 test('crearSolicitud exige al menos una subsolicitud con titulo y descripcion (RN-004)', () => {
@@ -118,8 +140,8 @@ test('la prioridad_derivada del padre es la mas critica entre sus subsolicitudes
   const resultado = ctx.Solicitudes.crearSolicitud(
     datosValidos({
       subsolicitudes: [
-        { titulo: 'Item menor', descripcion: 'algo parcial', impacto: 'PARCIAL_CON_WORKAROUND' },
-        { titulo: 'Item critico', descripcion: 'todo caido', impacto: 'SISTEMA_CAIDO' }
+        { titulo: 'Item menor', descripcion: 'algo parcial', impacto: 'PARCIAL_CON_WORKAROUND', modulo: 'Facturacion', tipo: 'ERR' },
+        { titulo: 'Item critico', descripcion: 'todo caido', impacto: 'SISTEMA_CAIDO', modulo: 'Facturacion', tipo: 'ERR' }
       ]
     })
   );
@@ -149,7 +171,7 @@ test('crearSolicitud guarda los campos ampliados de v1.0 (cargo, cliente, subsol
         titulo: 'Titulo', descripcion: 'Desc', contexto: 'Contexto', resultado_esperado: 'Resultado',
         impacto: 'SISTEMA_CAIDO', url_modulo: 'https://x.cl/modulo', usuario_prueba: 'demo',
         centro_costos: 'CC-01', url_video: 'https://video.cl/1', observaciones: 'obs item',
-        estimacion_horas: 8
+        estimacion_horas: 8, modulo: 'Facturacion', tipo: 'ERR'
       }]
     })
   );
@@ -181,6 +203,7 @@ test('crearSolicitud guarda cc y urls_adicionales (Fase 9, hallazgo de datos rea
       cc: 'copia@empresa.cl',
       subsolicitudes: [{
         titulo: 'Titulo', descripcion: 'Desc', impacto: 'PLANIFICADO',
+        modulo: 'Facturacion', tipo: 'ERR',
         url_modulo: 'https://x.cl/principal',
         urls_adicionales: [
           { titulo: 'Modal de validacion', url: 'https://x.cl/validacion' },
@@ -200,6 +223,57 @@ test('crearSolicitud guarda cc y urls_adicionales (Fase 9, hallazgo de datos rea
     { titulo: 'Modal de validacion', url: 'https://x.cl/validacion' },
     { titulo: 'Documento generado', url: 'https://x.cl/doc' }
   ]);
+});
+
+test('crearSolicitud guarda tipo/modulo por item, frecuencia/personas_afectadas e imagen_descripciones (Fase 10)', () => {
+  const ctx = loadIntakeConSchema();
+  seedSheet(ctx, 'CAT_TIPOS', ctx.COLUMNAS.CAT_TIPOS, [
+    ['ERR', 'Error / Bug', 'P2', true], ['MEJ', 'Mejora', 'P3', true]
+  ]);
+  seedSheet(ctx, 'CAT_MODULOS', ctx.COLUMNAS.CAT_MODULOS, [
+    ['Facturacion', 'Facturacion Electronica', 'ERP', '', true],
+    ['Reportes', 'Reportes', 'ERP', '', true]
+  ]);
+
+  ctx.Solicitudes.crearSolicitud(
+    datosValidos({
+      subsolicitudes: [
+        {
+          titulo: 'Item 1', descripcion: 'Desc 1', impacto: 'SISTEMA_CAIDO',
+          modulo: 'Facturacion', tipo: 'ERR',
+          frecuencia: 'SIEMPRE', personas_afectadas: 12,
+          imagen_descripciones: ['Pantalla en blanco', 'Consola con el error']
+        },
+        {
+          titulo: 'Item 2', descripcion: 'Desc 2', impacto: 'PLANIFICADO',
+          modulo: 'Reportes', tipo: 'MEJ',
+          frecuencia: 'A_VECES', personas_afectadas: 3
+        }
+      ]
+    })
+  );
+
+  const subsolicitudes = ctx.leerFilas_('SUBSOLICITUDES');
+  assert.equal(subsolicitudes[0].modulo, 'Facturacion');
+  assert.equal(subsolicitudes[0].modulo_nombre, 'Facturacion Electronica');
+  assert.equal(subsolicitudes[0].tipo, 'ERR');
+  assert.equal(subsolicitudes[0].tipo_nombre, 'Error / Bug');
+  assert.equal(subsolicitudes[0].frecuencia, 'SIEMPRE');
+  assert.equal(subsolicitudes[0].personas_afectadas, 12);
+  assert.deepEqual(JSON.parse(subsolicitudes[0].imagen_descripciones), ['Pantalla en blanco', 'Consola con el error']);
+
+  assert.equal(subsolicitudes[1].modulo, 'Reportes');
+  assert.equal(subsolicitudes[1].tipo, 'MEJ');
+  assert.equal(subsolicitudes[1].frecuencia, 'A_VECES');
+  assert.equal(subsolicitudes[1].personas_afectadas, 3);
+  assert.deepEqual(JSON.parse(subsolicitudes[1].imagen_descripciones), []);
+
+  // SOLICITUDES.modulo/tipo se derivan del PRIMER item, no del segundo.
+  const solicitud = ctx.leerFilas_('SOLICITUDES')[0];
+  assert.equal(solicitud.modulo, 'Facturacion');
+  assert.equal(solicitud.modulo_nombre, 'Facturacion Electronica');
+  assert.equal(solicitud.tipo, 'ERR');
+  assert.equal(solicitud.tipo_nombre, 'Error / Bug');
 });
 
 test('crearSolicitud rechaza un cc con formato de correo invalido', () => {
@@ -252,8 +326,8 @@ test('generarResumenWhatsapp_ indica la cantidad de items en vez de listarlos (R
   const resultado = ctx.Solicitudes.crearSolicitud(
     datosValidos({
       subsolicitudes: [
-        { titulo: 'Item 1', descripcion: 'Desc 1', impacto: 'PARCIAL_CON_WORKAROUND' },
-        { titulo: 'Item 2', descripcion: 'Desc 2', impacto: 'PARCIAL_CON_WORKAROUND' }
+        { titulo: 'Item 1', descripcion: 'Desc 1', impacto: 'PARCIAL_CON_WORKAROUND', modulo: 'Facturacion', tipo: 'ERR' },
+        { titulo: 'Item 2', descripcion: 'Desc 2', impacto: 'PARCIAL_CON_WORKAROUND', modulo: 'Facturacion', tipo: 'ERR' }
       ]
     })
   );

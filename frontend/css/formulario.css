@@ -1,18 +1,6 @@
-/* formulario.css — especifico del formulario publico (§12.2). */
-
-.sigso-progreso {
-  height: 6px;
-  background: var(--naranja-claro);
-  border-radius: 999px;
-  overflow: hidden;
-  margin-bottom: 1.5rem;
-}
-
-.sigso-progreso__relleno {
-  height: 100%;
-  background: var(--naranja);
-  transition: width 0.2s ease;
-}
+/* formulario.css — especifico del formulario publico (§12.2). La barra de
+   progreso de una pagina (sigso-progreso) se reemplazo por el stepper de 3
+   pasos (Fase 10, components.css) -- eliminada de aqui, no se duplica. */
 
 .sigso-acordeon-item {
   border: 1px solid #e0e0e0;

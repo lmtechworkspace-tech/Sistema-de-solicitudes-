@@ -48,10 +48,13 @@
   }
 
   function mostrarEstado_(data) {
-    var subsolicitudesHtml = data.subsolicitudes.map(function (s) {
-      return '<li>' + escaparHtml_(s.titulo) +
-        ' &mdash; <span class="sigso-badge sigso-badge--' + s.prioridad + '">' + s.prioridad + '</span>' +
-        ' &mdash; ' + formatearEstadoSigso(s.estado) + '</li>';
+    var itemsHtml = data.subsolicitudes.map(function (s) {
+      var etiquetaTipo = s.tipo_nombre ? '[' + Componentes.escaparHtml(s.tipo_nombre) + '] ' : '';
+      return '<div class="sigso-acordeon-item">' +
+        '<div class="sigso-acordeon-item__cabecera">' +
+        '<span>' + etiquetaTipo + Componentes.escaparHtml(s.titulo) + '</span>' +
+        Componentes.badgePrioridad(s.prioridad) + ' ' + Componentes.badgeEstado(s.estado) +
+        '</div></div>';
     }).join('');
 
     var pdf = data.url_pdf ? '<p><a href="' + data.url_pdf + '" target="_blank" rel="noopener">Ver documento PDF</a></p>' : '';
@@ -60,17 +63,16 @@
       '<div class="sigso-resultado-exito">' +
       '<p class="sigso-numero-solicitud">' + data.solicitud_id + '</p>' +
       '<p>Estado: <strong>' + formatearEstadoSigso(data.estado_derivado) + '</strong>' +
-      ' &mdash; Prioridad: <span class="sigso-badge sigso-badge--' + data.prioridad_derivada + '">' + data.prioridad_derivada + '</span></p>' +
+      ' &mdash; Prioridad: ' + Componentes.badgePrioridad(data.prioridad_derivada) + '</p>' +
       pdf +
-      '<ul>' + subsolicitudesHtml + '</ul>' +
+      itemsHtml +
       '</div>';
     document.getElementById('resultado').classList.remove('sigso-oculto');
   }
 
   function mostrarError_(respuesta) {
     var mensaje = respuesta.message || 'No se pudo consultar el estado.';
-    document.getElementById('resultado').innerHTML =
-      '<div class="sigso-resultado-error"><p>' + escaparHtml_(mensaje) + '</p></div>';
+    document.getElementById('resultado').innerHTML = Componentes.alerta(mensaje, 'error');
     document.getElementById('resultado').classList.remove('sigso-oculto');
   }
 
@@ -78,11 +80,5 @@
     var contenedor = document.getElementById('resultado');
     contenedor.classList.add('sigso-oculto');
     contenedor.innerHTML = '';
-  }
-
-  function escaparHtml_(texto) {
-    var div = document.createElement('div');
-    div.textContent = texto || '';
-    return div.innerHTML;
   }
 })();

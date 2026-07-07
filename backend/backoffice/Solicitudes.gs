@@ -165,7 +165,7 @@ var Solicitudes = {
    * autenticado puede ver cualquier solicitud. Se ajusta cuando exista esa
    * asignacion.
    */
-  getDetalle: function (solicitudId) {
+  getDetalle: function (solicitudId, contexto) {
     if (!solicitudId) {
       return errorValidacion_('solicitud_id', 'Falta indicar el numero de solicitud.');
     }
@@ -175,6 +175,19 @@ var Solicitudes = {
     }
 
     var subsolicitudes = obtenerSubsolicitudesDeSolicitud_(solicitudId);
+    // Fase 10 (rediseno UX): el selector de estado del detalle solo debe
+    // ofrecer transiciones que el backend realmente aceptaria para el rol
+    // actual -- antes ofrecia los 11 estados y dejaba que el backend
+    // rechazara. Se calcula aqui (mismo TRANSICIONES_VALIDAS que ya usa
+    // actualizarEstado) para no duplicar la tabla en el frontend.
+    var rolActual = contexto ? contexto.rol : '';
+    var transicionesPorSubsolicitud = {};
+    subsolicitudes.forEach(function (sub) {
+      var opciones = TRANSICIONES_VALIDAS[sub.estado] || [];
+      transicionesPorSubsolicitud[sub.subsolicitud_id] = opciones
+        .filter(function (t) { return t.roles.indexOf(rolActual) !== -1; })
+        .map(function (t) { return { estado: t.a, comentario_obligatorio: !!t.comentarioObligatorio }; });
+    });
     var historialEstados = leerFilas_(SHEETS.HISTORIAL_ESTADOS)
       .filter(function (h) { return h.solicitud_id === solicitudId; })
       .sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
@@ -196,7 +209,9 @@ var Solicitudes = {
       historial_estados: historialEstados,
       historial_prioridad: historialPrioridad,
       comentarios: comentarios,
-      archivos: archivos
+      archivos: archivos,
+      rol_actual: rolActual,
+      transiciones_por_subsolicitud: transicionesPorSubsolicitud
     };
   }
 };

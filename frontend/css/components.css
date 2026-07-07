@@ -1,0 +1,150 @@
+/* components.css — Fase 10 (rediseno UX). Estilos de la libreria de
+   componentes (js/components.js). Los proto-componentes que ya existian
+   (.sigso-card, .sigso-boton, .sigso-badge, .sigso-galeria...) siguen en
+   main.css/dashboard.css -- aqui solo lo que es nuevo, para no duplicar CSS. */
+
+.sigso-stepper {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.sigso-stepper__paso {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--gris-medio);
+}
+
+.sigso-stepper__numero {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--gris-claro);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.sigso-stepper__paso--actual .sigso-stepper__numero {
+  background: var(--naranja);
+  color: #fff;
+}
+
+.sigso-stepper__paso--actual .sigso-stepper__texto {
+  color: var(--gris-oscuro);
+  font-weight: 600;
+}
+
+.sigso-stepper__paso--hecho .sigso-stepper__numero {
+  background: var(--p4);
+  color: #fff;
+}
+
+.sigso-stepper__linea {
+  flex: 1;
+  height: 2px;
+  background: var(--gris-claro);
+  margin: 0 0.5rem;
+}
+
+.sigso-badge--estado {
+  background: var(--azul);
+}
+
+.sigso-alerta {
+  border-left: 4px solid var(--naranja);
+  background: var(--naranja-claro);
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.sigso-alerta p {
+  margin: 0;
+}
+
+.sigso-cargando,
+.sigso-vacio {
+  color: var(--gris-medio);
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+/* Chips de tipo de solicitud (reemplaza el <select> de tipo, un clic en vez
+   de abrir un desplegable -- Componentes no genera este HTML porque su
+   estructura es especifica de la tarjeta de item, ver formulario.js). */
+.sigso-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.sigso-chip {
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.sigso-chip--activo {
+  background: var(--naranja);
+  color: #fff;
+  border-color: var(--naranja);
+  font-weight: 600;
+}
+
+.sigso-galeria__quitar {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--p1);
+  color: #fff;
+  border: none;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sigso-galeria__item {
+  position: relative;
+}
+
+.sigso-galeria__descripcion {
+  width: 90px;
+  margin-top: 0.25rem;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.3rem;
+}
+
+.sigso-galeria__descripcion-texto {
+  width: 90px;
+  font-size: 0.7rem;
+  margin: 0.25rem 0 0;
+  color: var(--gris-medio);
+}
+
+/* Resumen de revision final (paso 3) */
+.sigso-revision-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.sigso-revision-tabla th,
+.sigso-revision-tabla td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--gris-claro);
+  font-size: 0.9rem;
+}

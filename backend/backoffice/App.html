@@ -226,6 +226,159 @@ button {
 
 </style>
   <style>
+/* components.css — Fase 10 (rediseno UX). Estilos de la libreria de
+   componentes (js/components.js). Los proto-componentes que ya existian
+   (.sigso-card, .sigso-boton, .sigso-badge, .sigso-galeria...) siguen en
+   main.css/dashboard.css -- aqui solo lo que es nuevo, para no duplicar CSS. */
+
+.sigso-stepper {
+  display: flex;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.sigso-stepper__paso {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--gris-medio);
+}
+
+.sigso-stepper__numero {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--gris-claro);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.sigso-stepper__paso--actual .sigso-stepper__numero {
+  background: var(--naranja);
+  color: #fff;
+}
+
+.sigso-stepper__paso--actual .sigso-stepper__texto {
+  color: var(--gris-oscuro);
+  font-weight: 600;
+}
+
+.sigso-stepper__paso--hecho .sigso-stepper__numero {
+  background: var(--p4);
+  color: #fff;
+}
+
+.sigso-stepper__linea {
+  flex: 1;
+  height: 2px;
+  background: var(--gris-claro);
+  margin: 0 0.5rem;
+}
+
+.sigso-badge--estado {
+  background: var(--azul);
+}
+
+.sigso-alerta {
+  border-left: 4px solid var(--naranja);
+  background: var(--naranja-claro);
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.sigso-alerta p {
+  margin: 0;
+}
+
+.sigso-cargando,
+.sigso-vacio {
+  color: var(--gris-medio);
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+/* Chips de tipo de solicitud (reemplaza el <select> de tipo, un clic en vez
+   de abrir un desplegable -- Componentes no genera este HTML porque su
+   estructura es especifica de la tarjeta de item, ver formulario.js). */
+.sigso-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.sigso-chip {
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.sigso-chip--activo {
+  background: var(--naranja);
+  color: #fff;
+  border-color: var(--naranja);
+  font-weight: 600;
+}
+
+.sigso-galeria__quitar {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--p1);
+  color: #fff;
+  border: none;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sigso-galeria__item {
+  position: relative;
+}
+
+.sigso-galeria__descripcion {
+  width: 90px;
+  margin-top: 0.25rem;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.3rem;
+}
+
+.sigso-galeria__descripcion-texto {
+  width: 90px;
+  font-size: 0.7rem;
+  margin: 0.25rem 0 0;
+  color: var(--gris-medio);
+}
+
+/* Resumen de revision final (paso 3) */
+.sigso-revision-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.sigso-revision-tabla th,
+.sigso-revision-tabla td {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--gris-claro);
+  font-size: 0.9rem;
+}
+
+</style>
+  <style>
 /* dashboard.css — Backoffice: KPIs, graficos, tabla, detalle (§12.4/12.5). */
 
 .sigso-kpis {
@@ -385,6 +538,107 @@ button {
   object-fit: cover;
 }
 
+/* Fase 10: fila enriquecida de "Solicitudes recientes" -- reemplaza la
+   tabla plana para que Leo entienda una solicitud sin entrar al detalle. */
+.sigso-fila-reciente {
+  padding: 0.6rem 0.25rem;
+  border-bottom: 1px solid var(--gris-claro);
+  cursor: pointer;
+}
+
+.sigso-fila-reciente:hover {
+  background: var(--gris-claro);
+}
+
+.sigso-fila-reciente__principal {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sigso-fila-reciente__meta {
+  font-size: 0.8rem;
+  color: var(--gris-medio);
+  margin-top: 0.2rem;
+}
+
+.sigso-grupo__titulo {
+  margin: 1rem 0 0.25rem;
+  font-size: 0.9rem;
+  color: var(--gris-medio);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.sigso-grupo__titulo:first-child {
+  margin-top: 0;
+}
+
+/* Fase 10: detalle de solicitud en 3 columnas -- ficha (solo lectura,
+   sticky) / items (donde Leo actua) / historia (timeline unificado).
+   Reemplaza el layout previo de bloques apilados con acciones al fondo. */
+.sigso-detalle-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) 300px;
+  gap: 1rem;
+  align-items: start;
+}
+
+.sigso-detalle-ficha,
+.sigso-detalle-centro,
+.sigso-detalle-historia {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.sigso-detalle-ficha {
+  position: sticky;
+  top: 1rem;
+}
+
+.sigso-datos-item-compacto {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0.5rem 0 1rem;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 900px) {
+  .sigso-detalle-layout {
+    grid-template-columns: 1fr;
+  }
+  .sigso-detalle-ficha {
+    position: static;
+  }
+}
+
+/* Acciones inline por item (Fase 10): junto al contenido del item, no en
+   un formulario generico al fondo del panel. */
+.sigso-acciones-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--gris-claro);
+}
+
+.sigso-acciones-item select,
+.sigso-acciones-item input {
+  width: auto;
+  flex: 1;
+  min-width: 140px;
+}
+
+.sigso-resultado-accion {
+  font-size: 0.8rem;
+  color: var(--p1);
+}
+
 </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
@@ -413,6 +667,14 @@ button {
           </select>
         </div>
         <div class="sigso-campo">
+          <label for="filtro-agrupar">Agrupar</label>
+          <select id="filtro-agrupar">
+            <option value="">Sin agrupar</option>
+            <option value="estado_derivado">Por estado</option>
+            <option value="prioridad_derivada">Por prioridad</option>
+          </select>
+        </div>
+        <div class="sigso-campo">
           <button type="button" class="sigso-boton" id="btn-actualizar-dashboard">Actualizar</button>
         </div>
       </div>
@@ -432,10 +694,7 @@ button {
 
       <div class="sigso-card">
         <h3>Solicitudes recientes</h3>
-        <table class="sigso-tabla">
-          <thead><tr><th>N°</th><th>Empresa</th><th>Plataforma / Modulo</th><th>Estado</th><th>Prioridad</th></tr></thead>
-          <tbody id="tabla-recientes"></tbody>
-        </table>
+        <div id="lista-recientes"></div>
       </div>
     </section>
 
@@ -549,6 +808,161 @@ function renderHeaderSigso(paginaActiva) {
 </script>
   <script>
 /**
+ * components.js — libreria de componentes reutilizable (Fase 10, rediseno
+ * UX). Funciones puras que devuelven strings HTML, mismo estilo que ya
+ * usaban admin.js/detalle.js (sin framework, §2.2) -- aqui se formalizan
+ * para no repetir el mismo HTML/CSS en cada pantalla nueva.
+ *
+ * Usa los proto-componentes que ya existian en main.css/dashboard.css
+ * (.sigso-card, .sigso-boton, .sigso-badge, .sigso-galeria, etc.) en vez de
+ * inventar clases nuevas donde ya habia una que servia; components.css solo
+ * agrega lo que de verdad es nuevo (stepper, chips de tipo, alerta).
+ */
+(function () {
+  function escaparHtml(texto) {
+    var div = document.createElement('div');
+    div.textContent = texto === undefined || texto === null ? '' : String(texto);
+    return div.innerHTML;
+  }
+
+  function atributos(obj) {
+    return Object.keys(obj || {})
+      .filter(function (k) { return obj[k] !== undefined && obj[k] !== null && obj[k] !== false; })
+      .map(function (k) { return obj[k] === true ? k : k + '="' + escaparHtml(obj[k]) + '"'; })
+      .join(' ');
+  }
+
+  var Componentes = {
+    escaparHtml: escaparHtml,
+
+    boton: function (opts) {
+      opts = opts || {};
+      var clase = 'sigso-boton' + (opts.variante === 'secundario' ? ' sigso-boton--secundario' : '');
+      if (opts.clase) clase += ' ' + opts.clase;
+      var attrs = atributos({
+        type: opts.tipo || 'button', id: opts.id, class: clase, disabled: !!opts.disabled,
+        'data-accion': opts.accion, 'data-idx': opts.idx
+      });
+      var contenido = opts.cargando
+        ? '<span class="sigso-spinner"></span>' + escaparHtml(opts.textoCargando || opts.texto)
+        : escaparHtml(opts.texto);
+      return '<button ' + attrs + '>' + contenido + '</button>';
+    },
+
+    campoTexto: function (opts) {
+      return campoBase_(opts, function (attrs) {
+        return '<input type="' + (opts.tipo || 'text') + '" value="' + escaparHtml(opts.valor) + '" ' + attrs + '>';
+      });
+    },
+
+    campoTextarea: function (opts) {
+      return campoBase_(opts, function (attrs) {
+        return '<textarea ' + attrs + '>' + escaparHtml(opts.valor) + '</textarea>';
+      });
+    },
+
+    campoSelect: function (opts) {
+      opts = opts || {};
+      var opciones = (opts.opciones || []).map(function (o) {
+        var sel = String(o.valor) === String(opts.valor || '') ? ' selected' : '';
+        return '<option value="' + escaparHtml(o.valor) + '"' + sel + '>' + escaparHtml(o.texto) + '</option>';
+      }).join('');
+      return campoBase_(opts, function (attrs) {
+        return '<select ' + attrs + '>' + (opts.placeholder !== false ? '<option value="">' + escaparHtml(opts.placeholder || 'Selecciona...') + '</option>' : '') + opciones + '</select>';
+      });
+    },
+
+    tarjeta: function (html, opts) {
+      opts = opts || {};
+      var clase = 'sigso-card' + (opts.clase ? ' ' + opts.clase : '');
+      var attrs = atributos({ class: clase, id: opts.id });
+      return '<div ' + attrs + '>' + html + '</div>';
+    },
+
+    badge: function (texto, variante) {
+      return '<span class="sigso-badge' + (variante ? ' sigso-badge--' + variante : '') + '">' + escaparHtml(texto) + '</span>';
+    },
+
+    badgeEstado: function (codigo) {
+      var texto = (typeof SIGSO_ESTADOS_LABEL !== 'undefined' && SIGSO_ESTADOS_LABEL[codigo]) || codigo;
+      return '<span class="sigso-badge sigso-badge--estado">' + escaparHtml(texto) + '</span>';
+    },
+
+    badgePrioridad: function (codigo) {
+      return Componentes.badge(codigo, codigo);
+    },
+
+    alerta: function (texto, tipo) {
+      var clase = tipo === 'error' ? 'sigso-resultado-error' : (tipo === 'exito' ? 'sigso-resultado-exito' : 'sigso-alerta');
+      return '<div class="' + clase + '"><p>' + escaparHtml(texto) + '</p></div>';
+    },
+
+    // pasos: [{ id, texto }], activo: id del paso actual. Los pasos antes
+    // del activo se marcan "hecho", el activo "actual", el resto "pendiente".
+    stepper: function (pasos, activo) {
+      var activoIdx = pasos.findIndex(function (p) { return p.id === activo; });
+      var items = pasos.map(function (p, idx) {
+        var estado = idx < activoIdx ? 'hecho' : (idx === activoIdx ? 'actual' : 'pendiente');
+        return '<div class="sigso-stepper__paso sigso-stepper__paso--' + estado + '">' +
+          '<span class="sigso-stepper__numero">' + (idx + 1) + '</span>' +
+          '<span class="sigso-stepper__texto">' + escaparHtml(p.texto) + '</span>' +
+          '</div>';
+      }).join('<div class="sigso-stepper__linea"></div>');
+      return '<div class="sigso-stepper">' + items + '</div>';
+    },
+
+    galeriaImagenes: function (imagenes, opts) {
+      opts = opts || {};
+      if (!imagenes || imagenes.length === 0) {
+        return opts.vacioTexto ? Componentes.vacio(opts.vacioTexto) : '';
+      }
+      return '<div class="sigso-galeria">' + imagenes.map(function (img, idx) {
+        var quitar = opts.editable
+          ? '<button type="button" class="sigso-galeria__quitar" data-accion="quitar-imagen" data-idx="' + opts.idx + '" data-img-idx="' + idx + '">&times;</button>'
+          : '';
+        var src = img.previewUrl || img.url || '';
+        var nombre = img.nombre || img.nombre_original || '';
+        var contenidoImg = src ? '<img src="' + escaparHtml(src) + '" alt="' + escaparHtml(nombre) + '">' : escaparHtml(nombre);
+        var descripcionHtml = opts.editable
+          ? '<input type="text" class="sigso-galeria__descripcion" data-campo="imagen-descripcion" data-idx="' + opts.idx + '" data-img-idx="' + idx + '" value="' + escaparHtml(img.descripcion) + '" placeholder="Descripcion breve">'
+          : (img.descripcion ? '<p class="sigso-galeria__descripcion-texto">' + escaparHtml(img.descripcion) + '</p>' : '');
+        return '<div class="sigso-galeria__item">' + quitar +
+          '<a href="' + escaparHtml(src) + '" target="_blank" rel="noopener">' + contenidoImg + '</a>' +
+          descripcionHtml +
+          '</div>';
+      }).join('') + '</div>';
+    },
+
+    cargando: function (texto) {
+      return '<p class="sigso-cargando"><span class="sigso-spinner"></span>' + escaparHtml(texto || 'Cargando...') + '</p>';
+    },
+
+    vacio: function (texto) {
+      return '<p class="sigso-vacio">' + escaparHtml(texto || 'Nada por aqui todavia.') + '</p>';
+    }
+  };
+
+  function campoBase_(opts, renderInput) {
+    opts = opts || {};
+    var attrs = atributos({
+      id: opts.id, class: opts.claseInput, required: !!opts.requerido,
+      placeholder: opts.placeholder,
+      'data-campo': opts.dataCampo, 'data-idx': opts.idx
+    });
+    var ayuda = opts.ayuda ? '<p class="sigso-ayuda">' + escaparHtml(opts.ayuda) + '</p>' : '';
+    var error = opts.error ? '<p class="sigso-campo__error">' + escaparHtml(opts.error) + '</p>' : '';
+    return '<div class="sigso-campo' + (opts.claseCampo ? ' ' + opts.claseCampo : '') + '">' +
+      (opts.label ? '<label' + (opts.id ? ' for="' + opts.id + '"' : '') + '>' + escaparHtml(opts.label) + '</label>' : '') +
+      renderInput(attrs) + ayuda + error +
+      '</div>';
+  }
+
+  window.Componentes = Componentes;
+})();
+
+</script>
+  <script>
+/**
  * dashboard.js — Backoffice: KPIs, graficos y tabla de recientes (§12.4).
  */
 (function () {
@@ -573,6 +987,10 @@ function renderHeaderSigso(paginaActiva) {
       opcion.textContent = codigo + ' — ' + SIGSO_ESTADOS_LABEL[codigo];
       selectEstado.appendChild(opcion);
     });
+
+    // Agrupar es solo de presentacion (no dispara una nueva consulta al
+    // backend): reordena lo que ya se cargo.
+    document.getElementById('filtro-agrupar').addEventListener('change', renderRecientes_);
   }
 
   function leerFiltros_() {
@@ -593,10 +1011,13 @@ function renderHeaderSigso(paginaActiva) {
       renderGrafico_('grafico-estado', 'bar', respuesta.data.por_estado);
       renderGrafico_('grafico-prioridad', 'doughnut', respuesta.data.por_prioridad);
       renderGrafico_('grafico-empresa', 'bar', respuesta.data.por_empresa);
-      renderTablaRecientes_(respuesta.data.recientes);
+      recientesActuales = respuesta.data.recientes;
+      renderRecientes_();
       return respuesta;
     });
   }
+
+  var recientesActuales = [];
 
   function renderKpis_(resumen) {
     document.getElementById('kpi-abiertas').textContent = resumen.total_abiertas;
@@ -623,19 +1044,24 @@ function renderHeaderSigso(paginaActiva) {
     });
   }
 
-  function renderTablaRecientes_(recientes) {
-    var cuerpo = document.getElementById('tabla-recientes');
-    cuerpo.innerHTML = recientes.map(function (s) {
-      return '<tr data-id="' + s.solicitud_id + '">' +
-        '<td>' + s.solicitud_id + '</td>' +
-        '<td>' + s.empresa_id + '</td>' +
-        '<td>' + s.plataforma + ' / ' + s.modulo + '</td>' +
-        '<td>' + formatearEstadoSigso(s.estado_derivado) + '</td>' +
-        '<td><span class="sigso-badge sigso-badge--' + s.prioridad_derivada + '">' + s.prioridad_derivada + '</span></td>' +
-        '</tr>';
-    }).join('');
+  // Fase 10 (rediseno UX): Leo debe entender una solicitud en <10s desde la
+  // fila, sin entrar al detalle -- cantidad de items, SLA restante y a
+  // quien esta asignada (ya vienen enriquecidos desde Dashboard.gs).
+  function renderRecientes_() {
+    var contenedor = document.getElementById('lista-recientes');
+    var campoAgrupar = document.getElementById('filtro-agrupar').value;
 
-    cuerpo.querySelectorAll('tr').forEach(function (fila) {
+    if (!campoAgrupar) {
+      contenedor.innerHTML = recientesActuales.map(renderFilaReciente_).join('') ||
+        Componentes.vacio('No hay solicitudes que coincidan con los filtros.');
+    } else {
+      contenedor.innerHTML = agruparPara_(campoAgrupar).map(function (grupo) {
+        return '<h4 class="sigso-grupo__titulo">' + Componentes.escaparHtml(grupo.etiqueta) + ' (' + grupo.filas.length + ')</h4>' +
+          grupo.filas.map(renderFilaReciente_).join('');
+      }).join('') || Componentes.vacio('No hay solicitudes que coincidan con los filtros.');
+    }
+
+    contenedor.querySelectorAll('[data-id]').forEach(function (fila) {
       fila.addEventListener('click', function () {
         if (typeof window.SigsoApp !== 'undefined') {
           window.SigsoApp.mostrarDetalle(fila.getAttribute('data-id'));
@@ -643,92 +1069,151 @@ function renderHeaderSigso(paginaActiva) {
       });
     });
   }
+
+  function agruparPara_(campo) {
+    var etiquetador = campo === 'estado_derivado' ? formatearEstadoSigso : function (v) { return v; };
+    var grupos = {};
+    recientesActuales.forEach(function (s) {
+      var clave = s[campo] || '(sin dato)';
+      if (!grupos[clave]) grupos[clave] = [];
+      grupos[clave].push(s);
+    });
+    return Object.keys(grupos).map(function (clave) {
+      return { etiqueta: etiquetador(clave), filas: grupos[clave] };
+    });
+  }
+
+  function renderFilaReciente_(s) {
+    var sla = renderIndicadorSla_(s.sla_restante_horas);
+    return '<div class="sigso-fila-reciente" data-id="' + s.solicitud_id + '">' +
+      '<div class="sigso-fila-reciente__principal">' +
+      Componentes.badgePrioridad(s.prioridad_derivada) + ' ' +
+      '<strong>' + s.solicitud_id + '</strong> ' +
+      Componentes.badgeEstado(s.estado_derivado) +
+      '</div>' +
+      '<div class="sigso-fila-reciente__meta">' +
+      s.empresa_id + ' &middot; ' + s.plataforma + ' / ' + s.modulo + ' &middot; ' +
+      s.cantidad_items + ' item(s) &middot; ' +
+      (s.asignado_a ? Componentes.escaparHtml(s.asignado_a) : 'Sin asignar') +
+      (sla ? ' &middot; ' + sla : '') +
+      '</div>' +
+      '</div>';
+  }
+
+  function renderIndicadorSla_(horas) {
+    if (horas === null || horas === undefined) return '';
+    if (horas < 0) return Componentes.badge('SLA vencido', 'P1');
+    return 'SLA: ' + horas + 'h restantes';
+  }
 })();
 
 </script>
   <script>
 /**
- * detalle.js — Backoffice: detalle de solicitud (§12.5): datos generales,
- * datos de cliente, subsolicitudes, historial, comentarios y acciones.
+ * detalle.js — Backoffice: detalle de solicitud (§12.5, Fase 10 rediseno UX).
  *
- * Las transiciones de estado validas dependen de TRANSICIONES_VALIDAS
- * (backend, por rol y estado actual). En vez de duplicar esa tabla aqui,
- * el selector ofrece los 11 estados y el backend responde 'validation' con
- * un mensaje claro si la transicion no esta permitida -- evita que la
- * regla de negocio viva en dos lugares que puedan desalinearse.
+ * Layout de 3 columnas (auditoria de producto): ficha (izquierda, sticky,
+ * solo lectura) / items (centro, donde Leo actua) / historia (derecha,
+ * timeline unificado de estados + comentarios). Reemplaza el layout previo
+ * de bloques apilados con un formulario de acciones al fondo.
+ *
+ * El selector de "nuevo estado" ahora solo ofrece transiciones que el
+ * backend realmente aceptaria para el rol actual (getDetalle ya las
+ * calcula, ver backend/backoffice/Solicitudes.gs) -- antes ofrecia los 11
+ * estados y dejaba que el usuario adivinara/fallara.
  */
 (function () {
   window.SigsoDetalle = { cargar: cargarDetalle_ };
+
+  var detalleActual = null;
 
   function cargarDetalle_(solicitudId) {
     return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getSolicitudDetalle', { solicitud_id: solicitudId })
       .then(function (respuesta) {
         if (!respuesta.ok) {
           document.getElementById('detalle-contenido').innerHTML =
-            '<div class="sigso-resultado-error"><p>' + escaparHtml_(respuesta.message || 'No se pudo cargar la solicitud.') + '</p></div>';
+            Componentes.alerta(respuesta.message || 'No se pudo cargar la solicitud.', 'error');
           return respuesta;
         }
-        render_(respuesta.data);
+        detalleActual = respuesta.data;
+        render_(detalleActual);
         return respuesta;
       });
   }
 
   function render_(detalle) {
-    var s = detalle.solicitud;
     var contenedor = document.getElementById('detalle-contenido');
+    contenedor.innerHTML =
+      '<div class="sigso-detalle-layout">' +
+      '<div class="sigso-detalle-ficha">' + renderFicha_(detalle) + '</div>' +
+      '<div class="sigso-detalle-centro"><h3>Qu&eacute; hacer (items)</h3>' + renderSubsolicitudes_(detalle) + '</div>' +
+      '<div class="sigso-detalle-historia">' + renderHistoria_(detalle) + '</div>' +
+      '</div>';
 
+    wireAcciones_(detalle.solicitud.solicitud_id);
+
+    document.getElementById('form-comentario').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      enviarComentario_(detalle.solicitud.solicitud_id);
+    });
+  }
+
+  // --- Columna izquierda: ficha (solo lectura, sticky) -------------------
+
+  function renderFicha_(detalle) {
+    var s = detalle.solicitud;
     var archivos = detalle.archivos || [];
     // Fase 9: imagenes sin subsolicitud_id son adjuntos generales de la
     // solicitud (RF-003: se adjuntan a nivel de solicitud, Bloque 5).
     var archivosGenerales = archivos.filter(function (a) { return !a.subsolicitud_id; });
 
-    contenedor.innerHTML =
-      '<div class="sigso-card">' +
-      '<h2>' + s.solicitud_id + '</h2>' +
-      '<p><span class="sigso-badge sigso-badge--' + s.prioridad_derivada + '">' + s.prioridad_derivada + '</span> ' +
-      formatearEstadoSigso(s.estado_derivado) + '</p>' +
-      '<p>Empresa: ' + s.empresa_id + ' — Plataforma/Modulo: ' + s.plataforma + ' / ' + s.modulo + ' — Tipo: ' + s.tipo + '</p>' +
-      '<p>Solicitante: ' + escaparHtml_(s.solicitante_nombre) + ' (' + escaparHtml_(s.solicitante_cargo) + ') — ' + escaparHtml_(s.solicitante_email) +
-      (s.cc ? ' — CC: ' + escaparHtml_(s.cc) : '') + '</p>' +
-      (s.es_cliente ? renderBloqueCliente_(s) : '') +
-      (s.observaciones_generales ? '<p><em>Observaciones: ' + escaparHtml_(s.observaciones_generales) + '</em></p>' : '') +
-      renderGaleria_(archivosGenerales) +
-      '</div>' +
-      '<div class="sigso-card"><h3>Qu&eacute; hacer (subsolicitudes)</h3>' + renderSubsolicitudes_(detalle.subsolicitudes, archivos) + '</div>' +
-      '<div class="sigso-card"><h3>Historial de estados</h3>' + renderTimeline_(detalle.historial_estados) + '</div>' +
-      '<div class="sigso-card"><h3>Comentarios</h3><div id="lista-comentarios">' + renderComentarios_(detalle.comentarios) + '</div>' + renderFormComentario_() + '</div>' +
-      '<div class="sigso-card"><h3>Acciones</h3>' + renderAcciones_(detalle.subsolicitudes) + '</div>';
+    var documentos = '';
+    if (s.url_doc || s.url_pdf) {
+      documentos = '<div class="sigso-datos-item-compacto">' +
+        (s.url_doc ? '<a href="' + Componentes.escaparHtml(s.url_doc) + '" target="_blank" rel="noopener">Ver documento</a>' : '') +
+        (s.url_pdf ? '<a href="' + Componentes.escaparHtml(s.url_pdf) + '" target="_blank" rel="noopener">Descargar PDF</a>' : '') +
+        '</div>';
+    }
 
-    document.getElementById('form-comentario').addEventListener('submit', function (evento) {
-      evento.preventDefault();
-      enviarComentario_(s.solicitud_id);
-    });
-    document.getElementById('form-cambiar-estado').addEventListener('submit', function (evento) {
-      evento.preventDefault();
-      enviarCambioEstado_(s.solicitud_id);
-    });
-    document.getElementById('form-cambiar-prioridad').addEventListener('submit', function (evento) {
-      evento.preventDefault();
-      enviarCambioPrioridad_(s.solicitud_id);
-    });
+    return '<h2>' + s.solicitud_id + '</h2>' +
+      '<p>' + Componentes.badgePrioridad(s.prioridad_derivada) + ' ' + Componentes.badgeEstado(s.estado_derivado) + '</p>' +
+      documentos +
+      '<dl class="sigso-datos-item">' +
+      renderCampoDato_('Empresa', Componentes.escaparHtml(s.empresa_nombre || s.empresa_id)) +
+      renderCampoDato_('Plataforma', Componentes.escaparHtml(s.plataforma_nombre || s.plataforma)) +
+      renderCampoDato_('Solicitante', Componentes.escaparHtml(s.solicitante_nombre) + ' (' + Componentes.escaparHtml(s.solicitante_cargo) + ')') +
+      renderCampoDato_('Correo', Componentes.escaparHtml(s.solicitante_email)) +
+      (s.cc ? renderCampoDato_('CC', Componentes.escaparHtml(s.cc)) : '') +
+      '</dl>' +
+      (s.es_cliente ? renderBloqueCliente_(s) : '') +
+      (s.observaciones_generales ? '<p><em>' + Componentes.escaparHtml(s.observaciones_generales) + '</em></p>' : '') +
+      renderGaleria_(archivosGenerales);
   }
 
   function renderBloqueCliente_(s) {
-    return '<div class="sigso-bloque-cliente sigso-bloque-cliente--visible">' +
-      '<p><strong>Cliente:</strong> ' + escaparHtml_(s.empresa_cliente) + '</p>' +
-      (s.cliente_mandante ? '<p>Mandante: ' + escaparHtml_(s.cliente_mandante) + '</p>' : '') +
-      (s.cliente_obra ? '<p>Obra: ' + escaparHtml_(s.cliente_obra) + '</p>' : '') +
-      '<p>Contacto: ' + escaparHtml_(s.contacto_cliente) + ' — ' + escaparHtml_(s.correo_cliente) + '</p>' +
-      (s.urgencia_cliente ? '<p>Urgencia reportada: ' + escaparHtml_(s.urgencia_cliente) + '</p>' : '') +
-      '</div>';
+    return '<dl class="sigso-datos-item">' +
+      renderCampoDato_('Cliente', Componentes.escaparHtml(s.empresa_cliente)) +
+      (s.cliente_mandante ? renderCampoDato_('Mandante', Componentes.escaparHtml(s.cliente_mandante)) : '') +
+      (s.cliente_obra ? renderCampoDato_('Obra', Componentes.escaparHtml(s.cliente_obra)) : '') +
+      renderCampoDato_('Contacto', Componentes.escaparHtml(s.contacto_cliente) + ' — ' + Componentes.escaparHtml(s.correo_cliente)) +
+      (s.urgencia_cliente ? renderCampoDato_('Urgencia reportada', Componentes.escaparHtml(s.urgencia_cliente)) : '') +
+      '</dl>';
   }
+
+  // --- Columna central: items, con acciones inline -----------------------
 
   // Fase 9 (hallazgo de datos reales): el objetivo de este panel es que
   // Leo entienda, sin cruzar ninguna otra planilla ni pedir mas datos por
   // WhatsApp, exactamente donde reproducir/hacer el cambio (URLs, usuario
-  // de prueba, credencial), y con que estado/prioridad esta cada item --
-  // el reemplazo real de "mandar un PDF" que motivo este rediseno.
-  function renderSubsolicitudes_(subsolicitudes, archivos) {
+  // de prueba, credencial), y con que estado/prioridad esta cada item.
+  // Fase 10: ademas, actua sin salir de la tarjeta (cambiar estado con solo
+  // las transiciones validas para su rol, cambiar prioridad), en vez de un
+  // formulario generico al fondo del panel.
+  function renderSubsolicitudes_(detalle) {
+    var subsolicitudes = detalle.subsolicitudes;
+    var archivos = detalle.archivos || [];
+    var transiciones = detalle.transiciones_por_subsolicitud || {};
+
     return subsolicitudes.map(function (sub) {
       var urlsAdicionales = [];
       try {
@@ -736,119 +1221,150 @@ function renderHeaderSigso(paginaActiva) {
       } catch (err) {
         urlsAdicionales = [];
       }
-      var imagenesItem = (archivos || []).filter(function (a) { return a.subsolicitud_id === sub.subsolicitud_id; });
+      var imagenesItem = archivos.filter(function (a) { return a.subsolicitud_id === sub.subsolicitud_id; });
 
       var datos = [];
       if (sub.url_modulo) {
-        datos.push(renderCampoDato_('URL principal', '<a href="' + escaparHtml_(sub.url_modulo) + '" target="_blank" rel="noopener">' + escaparHtml_(sub.url_modulo) + '</a>'));
+        datos.push(renderCampoDato_('URL principal', '<a href="' + Componentes.escaparHtml(sub.url_modulo) + '" target="_blank" rel="noopener">' + Componentes.escaparHtml(sub.url_modulo) + '</a>'));
       }
       urlsAdicionales.forEach(function (u) {
         if (!u.url) return;
-        datos.push(renderCampoDato_(u.titulo || 'URL adicional', '<a href="' + escaparHtml_(u.url) + '" target="_blank" rel="noopener">' + escaparHtml_(u.url) + '</a>'));
+        datos.push(renderCampoDato_(u.titulo || 'URL adicional', '<a href="' + Componentes.escaparHtml(u.url) + '" target="_blank" rel="noopener">' + Componentes.escaparHtml(u.url) + '</a>'));
       });
-      if (sub.usuario_prueba) {
-        datos.push(renderCampoDato_('Usuario de prueba', escaparHtml_(sub.usuario_prueba)));
-      }
-      if (sub.ref_credencial) {
-        datos.push(renderCampoDato_('Credencial', escaparHtml_(sub.ref_credencial)));
-      }
-      if (sub.centro_costos) {
-        datos.push(renderCampoDato_('Centro de costos', escaparHtml_(sub.centro_costos)));
-      }
-      if (sub.desarrollador_asignado) {
-        datos.push(renderCampoDato_('Asignado a', escaparHtml_(sub.desarrollador_asignado)));
-      }
-      if (sub.estimacion_horas) {
-        datos.push(renderCampoDato_('Estimacion', sub.estimacion_horas + ' h' + (sub.horas_reales ? ' (reales: ' + sub.horas_reales + ' h)' : '')));
-      }
+      if (sub.usuario_prueba) datos.push(renderCampoDato_('Usuario de prueba', Componentes.escaparHtml(sub.usuario_prueba)));
+      if (sub.ref_credencial) datos.push(renderCampoDato_('Credencial', Componentes.escaparHtml(sub.ref_credencial)));
+      if (sub.centro_costos) datos.push(renderCampoDato_('Centro de costos', Componentes.escaparHtml(sub.centro_costos)));
+      if (sub.frecuencia) datos.push(renderCampoDato_('Frecuencia', Componentes.escaparHtml(sub.frecuencia)));
+      if (sub.personas_afectadas) datos.push(renderCampoDato_('Personas afectadas', Componentes.escaparHtml(sub.personas_afectadas)));
+      if (sub.desarrollador_asignado) datos.push(renderCampoDato_('Asignado a', Componentes.escaparHtml(sub.desarrollador_asignado)));
+      if (sub.estimacion_horas) datos.push(renderCampoDato_('Estimacion', sub.estimacion_horas + ' h' + (sub.horas_reales ? ' (reales: ' + sub.horas_reales + ' h)' : '')));
 
       return '<div class="sigso-acordeon-item sigso-acordeon-item--activo">' +
-        '<div class="sigso-acordeon-item__cabecera"><span>' + sub.numero_item + '. ' + escaparHtml_(sub.titulo) +
-        ' — <span class="sigso-badge sigso-badge--' + sub.prioridad + '">' + sub.prioridad + '</span> — ' + formatearEstadoSigso(sub.estado) + '</span></div>' +
+        '<div class="sigso-acordeon-item__cabecera"><span>' + sub.numero_item + '. ' + Componentes.escaparHtml(sub.titulo) +
+        ' — ' + Componentes.badgePrioridad(sub.prioridad) + ' ' + Componentes.badgeEstado(sub.estado) + '</span></div>' +
         '<div class="sigso-acordeon-item__cuerpo">' +
-        '<p>' + escaparHtml_(sub.descripcion) + '</p>' +
-        (sub.contexto ? '<p><strong>Contexto:</strong> ' + escaparHtml_(sub.contexto) + '</p>' : '') +
-        (sub.resultado_esperado ? '<p><strong>Resultado esperado:</strong> ' + escaparHtml_(sub.resultado_esperado) + '</p>' : '') +
+        '<p>' + Componentes.escaparHtml(sub.descripcion) + '</p>' +
+        (sub.contexto ? '<p><strong>Contexto:</strong> ' + Componentes.escaparHtml(sub.contexto) + '</p>' : '') +
+        (sub.resultado_esperado ? '<p><strong>Resultado esperado:</strong> ' + Componentes.escaparHtml(sub.resultado_esperado) + '</p>' : '') +
         (datos.length > 0 ? '<dl class="sigso-datos-item">' + datos.join('') + '</dl>' : '') +
-        (sub.observaciones ? '<p><em>' + escaparHtml_(sub.observaciones) + '</em></p>' : '') +
+        (sub.observaciones ? '<p><em>' + Componentes.escaparHtml(sub.observaciones) + '</em></p>' : '') +
         renderGaleria_(imagenesItem) +
+        renderAccionesItem_(sub, transiciones[sub.subsolicitud_id] || []) +
         '</div></div>';
-    }).join('') || '<p>Sin subsolicitudes.</p>';
+    }).join('') || Componentes.vacio('Sin items.');
+  }
+
+  // Acciones inline: solo se ofrecen las transiciones que el backend ya
+  // valido como legales para el rol actual (RN-012/013 etc, ver
+  // TRANSICIONES_VALIDAS en Solicitudes.gs) -- reemplaza el selector con
+  // los 11 estados que dejaba adivinar/fallar al usuario.
+  function renderAccionesItem_(sub, opcionesTransicion) {
+    var selectorEstado = '';
+    if (opcionesTransicion.length > 0) {
+      var opciones = opcionesTransicion.map(function (t) {
+        return '<option value="' + t.estado + '" data-comentario-obligatorio="' + (t.comentario_obligatorio ? '1' : '0') + '">' +
+          t.estado + ' — ' + (typeof SIGSO_ESTADOS_LABEL !== 'undefined' ? SIGSO_ESTADOS_LABEL[t.estado] : t.estado) + '</option>';
+      }).join('');
+      selectorEstado =
+        '<div class="sigso-acciones-item">' +
+        '<select class="sigso-cambiar-estado" data-subsolicitud="' + sub.subsolicitud_id + '">' +
+        '<option value="">Cambiar estado a...</option>' + opciones +
+        '</select>' +
+        '<input type="text" class="sigso-comentario-estado sigso-oculto" data-subsolicitud="' + sub.subsolicitud_id + '" placeholder="Motivo (obligatorio para esta transicion)">' +
+        '<button type="button" class="sigso-boton--secundario sigso-aplicar-estado" data-subsolicitud="' + sub.subsolicitud_id + '" disabled>Aplicar</button>' +
+        '<span class="sigso-resultado-accion" data-subsolicitud="' + sub.subsolicitud_id + '"></span>' +
+        '</div>';
+    }
+
+    return selectorEstado +
+      '<div class="sigso-acciones-item">' +
+      '<select class="sigso-nueva-prioridad" data-subsolicitud="' + sub.subsolicitud_id + '">' +
+      ['P1', 'P2', 'P3', 'P4', 'P5'].map(function (p) {
+        return '<option value="' + p + '"' + (p === sub.prioridad ? ' selected' : '') + '>' + p + '</option>';
+      }).join('') +
+      '</select>' +
+      '<input type="text" class="sigso-justificacion-prioridad" data-subsolicitud="' + sub.subsolicitud_id + '" placeholder="Justificacion (min. 20 caracteres) para cambiar prioridad">' +
+      '<button type="button" class="sigso-boton--secundario sigso-aplicar-prioridad" data-subsolicitud="' + sub.subsolicitud_id + '">Cambiar prioridad</button>' +
+      '<span class="sigso-resultado-accion" data-subsolicitud="' + sub.subsolicitud_id + '-prioridad"></span>' +
+      '</div>';
   }
 
   function renderCampoDato_(etiqueta, valorHtml) {
-    return '<dt>' + escaparHtml_(etiqueta) + '</dt><dd>' + valorHtml + '</dd>';
+    return '<dt>' + Componentes.escaparHtml(etiqueta) + '</dt><dd>' + valorHtml + '</dd>';
   }
 
   function renderGaleria_(archivos) {
-    if (!archivos || archivos.length === 0) {
-      return '';
-    }
-    return '<div class="sigso-galeria">' + archivos.map(function (a) {
+    return Componentes.galeriaImagenes((archivos || []).map(function (a) {
       var esImagen = String(a.tipo_mime || '').indexOf('image/') === 0;
-      return '<a href="' + escaparHtml_(a.url) + '" target="_blank" rel="noopener" class="sigso-galeria__item" title="' + escaparHtml_(a.nombre_original) + '">' +
-        (esImagen
-          ? '<img src="' + escaparHtml_(a.url) + '" alt="' + escaparHtml_(a.nombre_original) + '">'
-          : escaparHtml_(a.nombre_original)) +
-        '</a>';
-    }).join('') + '</div>';
+      return { url: a.url, nombre: a.nombre_original, descripcion: esImagen ? '' : a.nombre_original };
+    }));
   }
 
-  function renderTimeline_(historial) {
-    if (historial.length === 0) {
-      return '<p>Sin historial todavia.</p>';
-    }
-    return '<ul class="sigso-timeline">' + historial.map(function (h) {
-      return '<li><strong>' + formatearEstadoSigso(h.estado_nuevo) + '</strong> — ' + escaparHtml_(h.usuario) +
-        ' (' + new Date(h.timestamp).toLocaleString('es-CL') + ')' +
-        (h.comentario ? '<br>' + escaparHtml_(h.comentario) : '') + '</li>';
-    }).join('') + '</ul>';
-  }
+  // --- Columna derecha: historia unificada (estados + comentarios) ------
 
-  function renderComentarios_(comentarios) {
-    if (comentarios.length === 0) {
-      return '<p>Sin comentarios todavia.</p>';
-    }
-    return comentarios.map(function (c) {
-      return '<div class="sigso-comentario' + (c.es_interno ? ' sigso-comentario--interno' : '') + '">' +
-        '<p>' + escaparHtml_(c.texto) + '</p>' +
-        '<p class="sigso-comentario__meta">' + escaparHtml_(c.usuario) + ' — ' + new Date(c.timestamp).toLocaleString('es-CL') +
-        (c.es_interno ? ' (interno)' : '') + '</p>' +
-        '</div>';
-    }).join('');
+  function renderHistoria_(detalle) {
+    var eventos = (detalle.historial_estados || []).map(function (h) {
+      return {
+        tipo: 'estado', timestamp: h.timestamp, usuario: h.usuario,
+        texto: formatearEstadoSigso(h.estado_nuevo), comentario: h.comentario
+      };
+    }).concat((detalle.comentarios || []).map(function (c) {
+      return { tipo: 'comentario', timestamp: c.timestamp, usuario: c.usuario, texto: c.texto, esInterno: c.es_interno };
+    })).sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
+
+    var feed = eventos.length === 0
+      ? Componentes.vacio('Sin actividad todavia.')
+      : '<ul class="sigso-timeline">' + eventos.map(function (e) {
+        var etiqueta = e.tipo === 'estado' ? '<strong>' + e.texto + '</strong>' : 'Comentario' + (e.esInterno ? ' (interno)' : '');
+        return '<li' + (e.tipo === 'comentario' && e.esInterno ? ' class="sigso-comentario--interno"' : '') + '>' +
+          etiqueta + ' — ' + Componentes.escaparHtml(e.usuario) + ' (' + new Date(e.timestamp).toLocaleString('es-CL') + ')' +
+          ((e.tipo === 'estado' ? e.comentario : e.texto) ? '<br>' + Componentes.escaparHtml(e.tipo === 'estado' ? e.comentario : e.texto) : '') +
+          '</li>';
+      }).join('') + '</ul>';
+
+    return '<h3>Actividad</h3>' + feed + renderFormComentario_();
   }
 
   function renderFormComentario_() {
     return '<form id="form-comentario">' +
       '<div class="sigso-campo"><textarea id="campo-nuevo-comentario" required placeholder="Escribe un comentario..."></textarea></div>' +
-      '<label class="sigso-toggle"><input type="checkbox" id="campo-comentario-interno"> Comentario interno (no visible al solicitante)</label>' +
-      '<button type="submit" class="sigso-boton--secundario">Agregar comentario</button>' +
+      '<label class="sigso-toggle"><input type="checkbox" id="campo-comentario-interno"> Interno (no visible al solicitante)</label>' +
+      '<button type="submit" class="sigso-boton--secundario">Comentar</button>' +
       '</form>';
   }
 
-  function renderAcciones_(subsolicitudes) {
-    var opcionesSub = subsolicitudes.map(function (sub) {
-      return '<option value="' + sub.subsolicitud_id + '">' + sub.numero_item + '. ' + escaparHtml_(sub.titulo) + ' (' + sub.estado + ')</option>';
-    }).join('');
-    var opcionesEstado = Object.keys(SIGSO_ESTADOS_LABEL).map(function (codigo) {
-      return '<option value="' + codigo + '">' + codigo + ' — ' + SIGSO_ESTADOS_LABEL[codigo] + '</option>';
-    }).join('');
+  // --- Cableado de acciones inline ---------------------------------------
 
-    return '<form id="form-cambiar-estado" class="sigso-campo">' +
-      '<label>Cambiar estado de</label><select id="select-subsolicitud-estado">' + opcionesSub + '</select>' +
-      '<label>Nuevo estado</label><select id="select-nuevo-estado">' + opcionesEstado + '</select>' +
-      '<label>Comentario</label><input type="text" id="campo-comentario-estado" placeholder="Motivo (obligatorio en rechazos/reaperturas)">' +
-      '<button type="submit" class="sigso-boton">Aplicar cambio de estado</button>' +
-      '<span id="resultado-estado"></span>' +
-      '</form>' +
-      '<form id="form-cambiar-prioridad" class="sigso-campo" style="margin-top:1rem">' +
-      '<label>Cambiar prioridad de</label><select id="select-subsolicitud-prioridad">' + opcionesSub + '</select>' +
-      '<label>Nueva prioridad</label>' +
-      '<select id="select-nueva-prioridad"><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option><option value="P4">P4</option><option value="P5">P5</option></select>' +
-      '<label>Justificacion (minimo 20 caracteres)</label><input type="text" id="campo-justificacion-prioridad">' +
-      '<button type="submit" class="sigso-boton">Aplicar cambio de prioridad</button>' +
-      '<span id="resultado-prioridad"></span>' +
-      '</form>';
+  function wireAcciones_(solicitudId) {
+    document.querySelectorAll('.sigso-cambiar-estado').forEach(function (select) {
+      select.addEventListener('change', function () {
+        var subId = select.getAttribute('data-subsolicitud');
+        var boton = document.querySelector('.sigso-aplicar-estado[data-subsolicitud="' + subId + '"]');
+        var campoComentario = document.querySelector('.sigso-comentario-estado[data-subsolicitud="' + subId + '"]');
+        var opcionElegida = select.options[select.selectedIndex];
+        var requiereComentario = opcionElegida && opcionElegida.getAttribute('data-comentario-obligatorio') === '1';
+        campoComentario.classList.toggle('sigso-oculto', !requiereComentario);
+        boton.disabled = !select.value;
+      });
+    });
+
+    document.querySelectorAll('.sigso-aplicar-estado').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        var subId = boton.getAttribute('data-subsolicitud');
+        var select = document.querySelector('.sigso-cambiar-estado[data-subsolicitud="' + subId + '"]');
+        var comentario = document.querySelector('.sigso-comentario-estado[data-subsolicitud="' + subId + '"]').value;
+        enviarCambioEstado_(solicitudId, subId, select.value, comentario);
+      });
+    });
+
+    document.querySelectorAll('.sigso-aplicar-prioridad').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        var subId = boton.getAttribute('data-subsolicitud');
+        var prioridad = document.querySelector('.sigso-nueva-prioridad[data-subsolicitud="' + subId + '"]').value;
+        var justificacion = document.querySelector('.sigso-justificacion-prioridad[data-subsolicitud="' + subId + '"]').value;
+        enviarCambioPrioridad_(solicitudId, subId, prioridad, justificacion);
+      });
+    });
   }
 
   function enviarComentario_(solicitudId) {
@@ -860,36 +1376,26 @@ function renderHeaderSigso(paginaActiva) {
       });
   }
 
-  function enviarCambioEstado_(solicitudId) {
-    var subsolicitudId = document.getElementById('select-subsolicitud-estado').value;
-    var estadoNuevo = document.getElementById('select-nuevo-estado').value;
-    var comentario = document.getElementById('campo-comentario-estado').value;
+  function enviarCambioEstado_(solicitudId, subsolicitudId, estadoNuevo, comentario) {
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'actualizarEstado', { subsolicitud_id: subsolicitudId, estado_nuevo: estadoNuevo, comentario: comentario })
       .then(function (respuesta) {
         if (respuesta.ok) {
           return window.SigsoDetalle.cargar(solicitudId);
         }
-        document.getElementById('resultado-estado').textContent = respuesta.message || 'No se pudo aplicar el cambio.';
+        var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subsolicitudId + '"]');
+        if (span) span.textContent = respuesta.message || 'No se pudo aplicar el cambio.';
       });
   }
 
-  function enviarCambioPrioridad_(solicitudId) {
-    var subsolicitudId = document.getElementById('select-subsolicitud-prioridad').value;
-    var prioridadNueva = document.getElementById('select-nueva-prioridad').value;
-    var justificacion = document.getElementById('campo-justificacion-prioridad').value;
+  function enviarCambioPrioridad_(solicitudId, subsolicitudId, prioridadNueva, justificacion) {
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'actualizarPrioridad', { subsolicitud_id: subsolicitudId, prioridad_nueva: prioridadNueva, justificacion: justificacion })
       .then(function (respuesta) {
         if (respuesta.ok) {
           return window.SigsoDetalle.cargar(solicitudId);
         }
-        document.getElementById('resultado-prioridad').textContent = respuesta.message || 'No se pudo aplicar el cambio.';
+        var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subsolicitudId + '-prioridad"]');
+        if (span) span.textContent = respuesta.message || 'No se pudo aplicar el cambio.';
       });
-  }
-
-  function escaparHtml_(texto) {
-    var div = document.createElement('div');
-    div.textContent = texto || '';
-    return div.innerHTML;
   }
 })();
 

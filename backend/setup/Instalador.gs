@@ -47,7 +47,12 @@ var ESQUEMA_HOJAS = {
     // Fase 9: URLs adicionales (modal de validacion, doc generado, etc.)
     // como JSON string (array de {titulo, url}); url_modulo sigue siendo
     // la principal.
-    'urls_adicionales'
+    'urls_adicionales',
+    // Fase 10 (rediseno UX): tipo/modulo pasan a pedirse por item, no una
+    // sola vez por solicitud (ver nota identica en backend/intake/Constantes.gs).
+    'tipo', 'tipo_nombre', 'modulo', 'modulo_nombre',
+    'frecuencia', 'personas_afectadas',
+    'imagen_descripciones'
   ],
   HISTORIAL_ESTADOS: [
     'historial_id', 'solicitud_id', 'subsolicitud_id',

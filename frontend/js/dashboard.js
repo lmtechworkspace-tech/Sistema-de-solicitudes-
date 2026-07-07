@@ -23,6 +23,10 @@
       opcion.textContent = codigo + ' — ' + SIGSO_ESTADOS_LABEL[codigo];
       selectEstado.appendChild(opcion);
     });
+
+    // Agrupar es solo de presentacion (no dispara una nueva consulta al
+    // backend): reordena lo que ya se cargo.
+    document.getElementById('filtro-agrupar').addEventListener('change', renderRecientes_);
   }
 
   function leerFiltros_() {
@@ -43,10 +47,13 @@
       renderGrafico_('grafico-estado', 'bar', respuesta.data.por_estado);
       renderGrafico_('grafico-prioridad', 'doughnut', respuesta.data.por_prioridad);
       renderGrafico_('grafico-empresa', 'bar', respuesta.data.por_empresa);
-      renderTablaRecientes_(respuesta.data.recientes);
+      recientesActuales = respuesta.data.recientes;
+      renderRecientes_();
       return respuesta;
     });
   }
+
+  var recientesActuales = [];
 
   function renderKpis_(resumen) {
     document.getElementById('kpi-abiertas').textContent = resumen.total_abiertas;
@@ -73,24 +80,65 @@
     });
   }
 
-  function renderTablaRecientes_(recientes) {
-    var cuerpo = document.getElementById('tabla-recientes');
-    cuerpo.innerHTML = recientes.map(function (s) {
-      return '<tr data-id="' + s.solicitud_id + '">' +
-        '<td>' + s.solicitud_id + '</td>' +
-        '<td>' + s.empresa_id + '</td>' +
-        '<td>' + s.plataforma + ' / ' + s.modulo + '</td>' +
-        '<td>' + formatearEstadoSigso(s.estado_derivado) + '</td>' +
-        '<td><span class="sigso-badge sigso-badge--' + s.prioridad_derivada + '">' + s.prioridad_derivada + '</span></td>' +
-        '</tr>';
-    }).join('');
+  // Fase 10 (rediseno UX): Leo debe entender una solicitud en <10s desde la
+  // fila, sin entrar al detalle -- cantidad de items, SLA restante y a
+  // quien esta asignada (ya vienen enriquecidos desde Dashboard.gs).
+  function renderRecientes_() {
+    var contenedor = document.getElementById('lista-recientes');
+    var campoAgrupar = document.getElementById('filtro-agrupar').value;
 
-    cuerpo.querySelectorAll('tr').forEach(function (fila) {
+    if (!campoAgrupar) {
+      contenedor.innerHTML = recientesActuales.map(renderFilaReciente_).join('') ||
+        Componentes.vacio('No hay solicitudes que coincidan con los filtros.');
+    } else {
+      contenedor.innerHTML = agruparPara_(campoAgrupar).map(function (grupo) {
+        return '<h4 class="sigso-grupo__titulo">' + Componentes.escaparHtml(grupo.etiqueta) + ' (' + grupo.filas.length + ')</h4>' +
+          grupo.filas.map(renderFilaReciente_).join('');
+      }).join('') || Componentes.vacio('No hay solicitudes que coincidan con los filtros.');
+    }
+
+    contenedor.querySelectorAll('[data-id]').forEach(function (fila) {
       fila.addEventListener('click', function () {
         if (typeof window.SigsoApp !== 'undefined') {
           window.SigsoApp.mostrarDetalle(fila.getAttribute('data-id'));
         }
       });
     });
+  }
+
+  function agruparPara_(campo) {
+    var etiquetador = campo === 'estado_derivado' ? formatearEstadoSigso : function (v) { return v; };
+    var grupos = {};
+    recientesActuales.forEach(function (s) {
+      var clave = s[campo] || '(sin dato)';
+      if (!grupos[clave]) grupos[clave] = [];
+      grupos[clave].push(s);
+    });
+    return Object.keys(grupos).map(function (clave) {
+      return { etiqueta: etiquetador(clave), filas: grupos[clave] };
+    });
+  }
+
+  function renderFilaReciente_(s) {
+    var sla = renderIndicadorSla_(s.sla_restante_horas);
+    return '<div class="sigso-fila-reciente" data-id="' + s.solicitud_id + '">' +
+      '<div class="sigso-fila-reciente__principal">' +
+      Componentes.badgePrioridad(s.prioridad_derivada) + ' ' +
+      '<strong>' + s.solicitud_id + '</strong> ' +
+      Componentes.badgeEstado(s.estado_derivado) +
+      '</div>' +
+      '<div class="sigso-fila-reciente__meta">' +
+      s.empresa_id + ' &middot; ' + s.plataforma + ' / ' + s.modulo + ' &middot; ' +
+      s.cantidad_items + ' item(s) &middot; ' +
+      (s.asignado_a ? Componentes.escaparHtml(s.asignado_a) : 'Sin asignar') +
+      (sla ? ' &middot; ' + sla : '') +
+      '</div>' +
+      '</div>';
+  }
+
+  function renderIndicadorSla_(horas) {
+    if (horas === null || horas === undefined) return '';
+    if (horas < 0) return Componentes.badge('SLA vencido', 'P1');
+    return 'SLA: ' + horas + 'h restantes';
   }
 })();

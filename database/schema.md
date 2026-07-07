@@ -25,10 +25,10 @@ corrida de `npm test`.
 | `empresa_nombre` | string | Fase 6 (segunda reconciliación): nombre desnormalizado de `CAT_EMPRESAS`, resuelto en `crearSolicitud` (§13.2 v1.0 — legible directo en Sheets sin cruzar hojas). Queda vacío si el catálogo aún no tiene esa fila |
 | `plataforma` | string | RN-002 |
 | `plataforma_nombre` | string | Idem `empresa_nombre`, resuelto de `CAT_PLATAFORMAS` |
-| `modulo` | string | RN-002 |
-| `modulo_nombre` | string | Idem `empresa_nombre`, resuelto de `CAT_MODULOS` |
-| `tipo` | string | RN-002; catálogo `CAT_TIPOS` con los 7 tipos reales de RF-009 v1.0: `ERR`/`MOD`/`MEJ`/`DES`/`NMO`/`MIG`/`CON` |
-| `tipo_nombre` | string | Idem `empresa_nombre`, resuelto de `CAT_TIPOS` |
+| `modulo` | string | **Fase 10** (rediseño UX): ya no viene de un campo único del formulario — se deriva del **primer ítem** en `crearSolicitud`. Se mantiene por compatibilidad con `dedup_hash`/`resumen_whatsapp`/`Dashboard.gs`, pero deja de reflejar la solicitud completa cuando hay ítems en módulos distintos (el desglose real vive en `SUBSOLICITUDES.modulo`) |
+| `modulo_nombre` | string | Idem `empresa_nombre`, resuelto de `CAT_MODULOS` a partir del `modulo` del primer ítem |
+| `tipo` | string | **Fase 10**: idem `modulo` — se deriva del primer ítem, ya no es una pregunta única de la solicitud (una solicitud real mezcla Error+Mejora+Nuevo módulo). Catálogo `CAT_TIPOS` con los 7 tipos reales de RF-009 v1.0: `ERR`/`MOD`/`MEJ`/`DES`/`NMO`/`MIG`/`CON` |
+| `tipo_nombre` | string | Idem `empresa_nombre`, resuelto de `CAT_TIPOS` a partir del `tipo` del primer ítem |
 | `solicitante_nombre` | string | Identidad del solicitante (§12.1) |
 | `solicitante_cargo` | string | RF-001 v1.0: campo base obligatorio del formulario |
 | `solicitante_email` | string | Identidad del solicitante (§12.1); usado para magic link |
@@ -84,6 +84,11 @@ corrida de `npm test`.
 | `fecha_creacion` | ISO datetime | — |
 | `desarrollador_asignado` | string (email) | Fase 6 (segunda reconciliación), §13.3 v1.0: las subsolicitudes pueden trabajarse en paralelo por distintos desarrolladores, así que la asignación también existe a este nivel (no solo en `SOLICITUDES.desarrollador_asignado`, que sigue siendo el responsable "por defecto"). La asignación puntual se hace vía `actualizarPrioridad({ solicitud_id, subsolicitud_id, desarrollador_asignado })`; el Dashboard (vista DEV) muestra una solicitud si el desarrollador está asignado a ella o a cualquiera de sus subsolicitudes |
 | `urls_adicionales` | string (JSON) | **Fase 9** (hallazgo de datos reales, RLD "Hoja de ruta": hasta 4 URLs distintas en una sola solicitud — módulo, modal de validación, modal de información, documento generado). Array `[{titulo, url}, ...]` serializado, mismo patrón que `url_pdf_historial`. `url_modulo` sigue siendo la URL principal; esta columna guarda las adicionales |
+| `tipo` / `tipo_nombre` | string | **Fase 10** (rediseño UX, auditoría de producto): el tipo pasa de ser una pregunta global (`SOLICITUDES.tipo`) a una pregunta por ítem — la corrección conceptual central del rediseño: una solicitud real mezcla Error+Mejora+Nuevo módulo. `SOLICITUDES.tipo` se mantiene mientras existe, pero ahora es solo el del primer ítem (ver nota ahí) |
+| `modulo` / `modulo_nombre` | string | **Fase 10**: idem `tipo` — cada ítem puede vivir en un módulo distinto (confirmado con datos reales de Camila Peña/Lisseth Vilchez); reemplaza el supuesto de "un solo módulo por solicitud" |
+| `frecuencia` | string (`SIEMPRE`/`A_VECES`/`UNA_VEZ`) | **Fase 10**: reemplaza a `estimacion_horas` en el formulario público — el solicitante no puede estimar esfuerzo de desarrollo, pero sí sabe cuán seguido ocurre el problema. `estimacion_horas` se mantiene para que el desarrollador la complete después desde el Backoffice |
+| `personas_afectadas` | number | **Fase 10**: idem — a cuántas personas afecta, insumo de priorización más realista que una estimación de horas hecha por quien no desarrolla |
+| `imagen_descripciones` | string (JSON) | **Fase 10**: caption corto por imagen, sin agregar una columna a `ARCHIVOS`. Array de strings serializado — el índice `i` corresponde a la i-ésima imagen subida para ese ítem (`subirArchivo` se llama en el mismo orden después de `crearSolicitud`, ya que el `archivo_id` real no existe todavía al momento de guardar la subsolicitud) |
 
 ## COUNTERS (nueva, C-12)
 
