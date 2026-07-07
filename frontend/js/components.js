@@ -128,6 +128,16 @@
       return '<p class="sigso-cargando"><span class="sigso-spinner"></span>' + escaparHtml(texto || 'Cargando...') + '</p>';
     },
 
+    // Fase 10 (pulido): reemplaza las 4 tarjetas de KPI que vivian como
+    // HTML estatico repetido en app.html.
+    kpi: function (opts) {
+      opts = opts || {};
+      return '<div class="sigso-kpi' + (opts.alerta ? ' sigso-kpi--alerta' : '') + '"' + (opts.id ? ' id="' + opts.id + '"' : '') + '>' +
+        '<div class="sigso-kpi__valor">' + escaparHtml(opts.valor === undefined ? '—' : opts.valor) + '</div>' +
+        '<div class="sigso-kpi__etiqueta">' + escaparHtml(opts.etiqueta) + '</div>' +
+        '</div>';
+    },
+
     vacio: function (texto) {
       return '<p class="sigso-vacio">' + escaparHtml(texto || 'Nada por aqui todavia.') + '</p>';
     }

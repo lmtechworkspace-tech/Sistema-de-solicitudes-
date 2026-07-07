@@ -1,10 +1,33 @@
 /* admin.css — panel de administracion (§12.6). */
 
+.sigso-admin-layout {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.sigso-admin-contenido {
+  flex: 1;
+  min-width: 0;
+}
+
 .sigso-admin-menu {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   min-width: 180px;
+}
+
+/* Fase 10 (pulido): el sidebar fijo + contenido no cabe en mobile (375px) --
+   se apilan como en el resto de pantallas rediseñadas. */
+@media (max-width: 700px) {
+  .sigso-admin-layout {
+    flex-direction: column;
+  }
+  .sigso-admin-menu {
+    flex-direction: row;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
 }
 
 .sigso-admin-menu__item {

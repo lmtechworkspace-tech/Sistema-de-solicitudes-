@@ -679,12 +679,7 @@ button {
         </div>
       </div>
 
-      <div class="sigso-kpis">
-        <div class="sigso-kpi"><div class="sigso-kpi__valor" id="kpi-abiertas">—</div><div class="sigso-kpi__etiqueta">Abiertas</div></div>
-        <div class="sigso-kpi sigso-kpi--alerta"><div class="sigso-kpi__valor" id="kpi-criticas">—</div><div class="sigso-kpi__etiqueta">Criticas activas</div></div>
-        <div class="sigso-kpi sigso-kpi--alerta"><div class="sigso-kpi__valor" id="kpi-sla-vencido">—</div><div class="sigso-kpi__etiqueta">SLA vencido</div></div>
-        <div class="sigso-kpi"><div class="sigso-kpi__valor" id="kpi-del-dia">—</div><div class="sigso-kpi__etiqueta">Del dia</div></div>
-      </div>
+      <div class="sigso-kpis" id="contenedor-kpis"></div>
 
       <div class="sigso-graficos">
         <div class="sigso-card sigso-grafico-card"><h3>Por estado</h3><canvas id="grafico-estado"></canvas></div>
@@ -937,6 +932,16 @@ function renderHeaderSigso(paginaActiva) {
       return '<p class="sigso-cargando"><span class="sigso-spinner"></span>' + escaparHtml(texto || 'Cargando...') + '</p>';
     },
 
+    // Fase 10 (pulido): reemplaza las 4 tarjetas de KPI que vivian como
+    // HTML estatico repetido en app.html.
+    kpi: function (opts) {
+      opts = opts || {};
+      return '<div class="sigso-kpi' + (opts.alerta ? ' sigso-kpi--alerta' : '') + '"' + (opts.id ? ' id="' + opts.id + '"' : '') + '>' +
+        '<div class="sigso-kpi__valor">' + escaparHtml(opts.valor === undefined ? '—' : opts.valor) + '</div>' +
+        '<div class="sigso-kpi__etiqueta">' + escaparHtml(opts.etiqueta) + '</div>' +
+        '</div>';
+    },
+
     vacio: function (texto) {
       return '<p class="sigso-vacio">' + escaparHtml(texto || 'Nada por aqui todavia.') + '</p>';
     }
@@ -1020,10 +1025,11 @@ function renderHeaderSigso(paginaActiva) {
   var recientesActuales = [];
 
   function renderKpis_(resumen) {
-    document.getElementById('kpi-abiertas').textContent = resumen.total_abiertas;
-    document.getElementById('kpi-criticas').textContent = resumen.criticas_activas;
-    document.getElementById('kpi-sla-vencido').textContent = resumen.sla_vencido;
-    document.getElementById('kpi-del-dia').textContent = resumen.del_dia;
+    document.getElementById('contenedor-kpis').innerHTML =
+      Componentes.kpi({ valor: resumen.total_abiertas, etiqueta: 'Abiertas' }) +
+      Componentes.kpi({ valor: resumen.criticas_activas, etiqueta: 'Criticas activas', alerta: true }) +
+      Componentes.kpi({ valor: resumen.sla_vencido, etiqueta: 'SLA vencido', alerta: true }) +
+      Componentes.kpi({ valor: resumen.del_dia, etiqueta: 'Del dia' });
   }
 
   function renderGrafico_(idCanvas, tipo, datosAgrupados) {

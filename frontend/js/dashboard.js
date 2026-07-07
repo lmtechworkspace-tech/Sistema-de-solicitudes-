@@ -56,10 +56,11 @@
   var recientesActuales = [];
 
   function renderKpis_(resumen) {
-    document.getElementById('kpi-abiertas').textContent = resumen.total_abiertas;
-    document.getElementById('kpi-criticas').textContent = resumen.criticas_activas;
-    document.getElementById('kpi-sla-vencido').textContent = resumen.sla_vencido;
-    document.getElementById('kpi-del-dia').textContent = resumen.del_dia;
+    document.getElementById('contenedor-kpis').innerHTML =
+      Componentes.kpi({ valor: resumen.total_abiertas, etiqueta: 'Abiertas' }) +
+      Componentes.kpi({ valor: resumen.criticas_activas, etiqueta: 'Criticas activas', alerta: true }) +
+      Componentes.kpi({ valor: resumen.sla_vencido, etiqueta: 'SLA vencido', alerta: true }) +
+      Componentes.kpi({ valor: resumen.del_dia, etiqueta: 'Del dia' });
   }
 
   function renderGrafico_(idCanvas, tipo, datosAgrupados) {
