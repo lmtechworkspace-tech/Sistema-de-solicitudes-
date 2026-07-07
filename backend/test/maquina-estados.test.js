@@ -91,27 +91,40 @@ test('actualizarEstado aplica una transicion valida y registra HISTORIAL_ESTADOS
   assert.equal(historial[0].usuario, 'analista@homepymes.cl');
 });
 
-test('actualizarEstado rechaza una transicion no permitida por la tabla de estados', () => {
+test('actualizarEstado rechaza un estado_nuevo que no existe', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
   seedSubsolicitud(ctx, { estado: 'S01' });
 
   const resultado = ctx.Solicitudes.actualizarEstado(
-    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S09' },
+    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S99' },
     { email: 'analista@homepymes.cl', rol: 'ANA' }
   );
 
   assert.equal(resultado._validationError, true);
 });
 
-test('actualizarEstado (Fase 10.1, "Leo hace todo"): cualquier rol de Backoffice puede aplicar transiciones de trabajo normal', () => {
+test('actualizarEstado rechaza fijar el mismo estado en el que ya esta', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
-  seedSubsolicitud(ctx, { estado: 'S04' });
+  seedSubsolicitud(ctx, { estado: 'S03' });
 
-  // Antes S04 -> S05 era exclusivo de DEV; ahora cualquier rol registrado
-  // (ANA/DEV/ADM) puede aplicarla -- el permiso es "esta activo en
-  // USUARIOS", no "tiene el rol exacto de ese paso".
+  const resultado = ctx.Solicitudes.actualizarEstado(
+    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S03' },
+    { email: 'analista@homepymes.cl', rol: 'ANA' }
+  );
+
+  assert.equal(resultado._validationError, true);
+});
+
+test('actualizarEstado (Fase 10.1, "Leo hace todo"): cualquier rol puede saltar a cualquier estado, no solo el siguiente paso logico', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S01' });
+
+  // Antes S01 solo podia avanzar a S02; ahora un salto directo a S05 (sin
+  // pasar por los intermedios) tambien es valido -- Leo necesita reflejar
+  // la realidad aunque no haya seguido el flujo formal paso a paso.
   const resultado = ctx.Solicitudes.actualizarEstado(
     { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S05' },
     { email: 'analista@homepymes.cl', rol: 'ANA' }
@@ -120,26 +133,23 @@ test('actualizarEstado (Fase 10.1, "Leo hace todo"): cualquier rol de Backoffice
   assert.equal(resultado.estado_nuevo, 'S05');
 });
 
-test('actualizarEstado exige comentario obligatorio al pasar a "esperando informacion" (S06)', () => {
+test('actualizarEstado exige comentario obligatorio al pasar a "esperando informacion" no aplica salvo que sea rechazo/cancelacion/cierre directo/reapertura', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
   seedSubsolicitud(ctx, { estado: 'S03' });
 
-  // El comentario ES la pregunta que el solicitante vera en Consultar Estado.
-  const sinComentario = ctx.Solicitudes.actualizarEstado(
+  // S06 (esperando informacion) ya NO exige comentario por si solo -- solo
+  // los movimientos "sensibles" (ver comentarioObligatorioParaCambio_) lo
+  // piden. Si Leo quiere dejar la pregunta, la escribe igual (el campo
+  // sigue existiendo), pero el backend no lo bloquea si la omite.
+  const resultado = ctx.Solicitudes.actualizarEstado(
     { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S06' },
     { email: 'dev@homepymes.cl', rol: 'DEV' }
   );
-  assert.equal(sinComentario._validationError, true);
-
-  const conComentario = ctx.Solicitudes.actualizarEstado(
-    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S06', comentario: '¿Cual es el numero de factura afectado?' },
-    { email: 'dev@homepymes.cl', rol: 'DEV' }
-  );
-  assert.equal(conComentario.estado_nuevo, 'S06');
+  assert.equal(resultado.estado_nuevo, 'S06');
 });
 
-test('actualizarEstado exige comentario cuando la transicion lo requiere (rechazo con motivo)', () => {
+test('actualizarEstado exige comentario para Rechazar (S10)', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
   seedSubsolicitud(ctx, { estado: 'S03' });
@@ -155,6 +165,48 @@ test('actualizarEstado exige comentario cuando la transicion lo requiere (rechaz
     { email: 'analista@homepymes.cl', rol: 'ANA' }
   );
   assert.equal(conComentario.estado_nuevo, 'S10');
+});
+
+test('actualizarEstado exige comentario para Cancelar (S11)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S03' });
+
+  const sinComentario = ctx.Solicitudes.actualizarEstado(
+    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S11' },
+    { email: 'analista@homepymes.cl', rol: 'ANA' }
+  );
+  assert.equal(sinComentario._validationError, true);
+});
+
+test('actualizarEstado exige comentario al cerrar directo (S09) sin pasar por Terminada (S08)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S02' });
+
+  const sinComentario = ctx.Solicitudes.actualizarEstado(
+    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S09' },
+    { email: 'analista@homepymes.cl', rol: 'ANA' }
+  );
+  assert.equal(sinComentario._validationError, true);
+
+  const conComentario = ctx.Solicitudes.actualizarEstado(
+    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S09', comentario: 'Respuesta: se explico el uso del modulo.' },
+    { email: 'analista@homepymes.cl', rol: 'ANA' }
+  );
+  assert.equal(conComentario.estado_nuevo, 'S09');
+});
+
+test('actualizarEstado NO exige comentario al cerrar S08 -> S09 (confirmacion normal de cierre)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S08' });
+
+  const resultado = ctx.Solicitudes.actualizarEstado(
+    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S09' },
+    { email: 'analista@homepymes.cl', rol: 'ANA' }
+  );
+  assert.equal(resultado.estado_nuevo, 'S09');
 });
 
 test('actualizarEstado aplica RN-015: no pasa a S04 si alguna subsolicitud hermana no tiene titulo/descripcion', () => {
@@ -215,39 +267,38 @@ test('estado_derivado pasa a S10 si todas las hijas estan rechazadas/canceladas 
   assert.equal(solicitudes[0].estado_derivado, 'S10');
 });
 
-test('consulta tecnica (RF-F08): S02 puede cerrarse directo a S09 con comentario', () => {
-  const ctx = loadConSchema();
-  seedSolicitud(ctx, { tipo: 'CONSULTA' });
-  seedSubsolicitud(ctx, { estado: 'S02' });
-
-  const resultado = ctx.Solicitudes.actualizarEstado(
-    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S09', comentario: 'Respuesta: se explico el uso del modulo.' },
-    { email: 'analista@homepymes.cl', rol: 'ANA' }
-  );
-
-  assert.equal(resultado.estado_nuevo, 'S09');
-});
-
-test('S09 solo lo reabre Admin y exige justificacion (RN-012/013)', () => {
+test('reabrir un ticket cerrado (S09) exige comentario, sin importar el rol (Fase 10.1)', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
   seedSubsolicitud(ctx, { estado: 'S09' });
 
-  const comoAnalista = ctx.Solicitudes.actualizarEstado(
-    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S05', comentario: 'motivo valido con mas de veinte caracteres' },
+  const sinComentario = ctx.Solicitudes.actualizarEstado(
+    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S05' },
     { email: 'analista@homepymes.cl', rol: 'ANA' }
   );
-  assert.equal(comoAnalista._forbidden, true);
+  assert.equal(sinComentario._validationError, true);
 
-  const comoAdminSinComentario = ctx.Solicitudes.actualizarEstado(
-    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S05' },
-    { email: 'admin@homepymes.cl', rol: 'ADM' }
-  );
-  assert.equal(comoAdminSinComentario._validationError, true);
-
-  const comoAdmin = ctx.Solicitudes.actualizarEstado(
+  const conComentario = ctx.Solicitudes.actualizarEstado(
     { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S05', comentario: 'Se detecto que el problema persiste' },
-    { email: 'admin@homepymes.cl', rol: 'ADM' }
+    { email: 'analista@homepymes.cl', rol: 'ANA' }
   );
-  assert.equal(comoAdmin.estado_nuevo, 'S05');
+  assert.equal(conComentario.estado_nuevo, 'S05');
+});
+
+test('reabrir un ticket rechazado (S10) exige comentario', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S10' });
+
+  const sinComentario = ctx.Solicitudes.actualizarEstado(
+    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S03' },
+    { email: 'dev@homepymes.cl', rol: 'DEV' }
+  );
+  assert.equal(sinComentario._validationError, true);
+
+  const conComentario = ctx.Solicitudes.actualizarEstado(
+    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S03', comentario: 'Se reevaluo el alcance, si corresponde' },
+    { email: 'dev@homepymes.cl', rol: 'DEV' }
+  );
+  assert.equal(conComentario.estado_nuevo, 'S03');
 });

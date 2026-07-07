@@ -147,84 +147,19 @@ var ORDEN_ESTADOS = [
 // estado derivado del padre (no bloquean su avance).
 var ESTADOS_EXCLUIDOS_DERIVACION = [ESTADOS.S10, ESTADOS.S11];
 
-// Tabla de transiciones validas por subsolicitud: de-> [{a, roles, comentarioObligatorio}].
-// Fuente: flujo operativo §9.1-9.4, RN-012 (excepciones de retroceso),
-// RN-013 (inmutabilidad de S09/S10, reapertura solo Admin), RN-016
-// (cancelacion aprobada por el Analista desde S03 en adelante).
+// Fase 10.1 (post-produccion, feedback real de uso): el modelo original de
+// "transiciones validas por estado" (un grafo de pasos permitidos, uno por
+// rol) resulto demasiado rigido -- en la practica una sola persona (Leo)
+// gestiona todo el ciclo de vida y necesita poder fijar CUALQUIER estado en
+// cualquier momento para reflejar la realidad (ej. saltar directo de Nueva a
+// Cerrada sin pasar por los intermedios), no solo "el siguiente paso logico".
 //
-// Fase 10.1 (post-produccion, feedback real de uso): en la practica una sola
-// persona (Leo) gestiona todo el ciclo de vida -- el modelo de 3 roles
-// (Analista aprueba / Desarrollador desarrolla / Admin administra) dejaba a
-// Leo sin transiciones disponibles la mayoria del tiempo si su rol
-// registrado no coincidia con el dueño "de papel" de ese paso. Se abre TODA
-// transicion de trabajo normal a cualquier rol de Backoffice (ANA/DEV/ADM):
-// el permiso pasa a ser "esta registrado y activo en USUARIOS", no "tiene
-// el rol exacto". La UNICA excepcion deliberada es la reapertura de un
-// ticket cerrado/rechazado (S09->S05, S10->S03): eso sigue exigiendo Admin
-// + justificacion (RN-012/013) como salvaguarda de integridad de datos, no
-// como reparto de trabajo -- reabrir algo ya cerrado es una decision
-// distinta a hacer el trabajo del dia a dia.
-//
-// Nota de alcance (documentada en FASE-02): la cancelacion directa del
-// Solicitante en S01/S02 (RN-016) y la confirmacion de cierre S08->S09 por
-// el propio Solicitante (§9.3) viajan por la App Publica (magic link), no
-// por este endpoint autenticado — llegan con la Fase 3/4. Aqui solo se
-// modela lo que un usuario del Backoffice puede accionar.
-var ROLES_BACKOFFICE = ['ANA', 'DEV', 'ADM'];
-
-var TRANSICIONES_VALIDAS = {
-  S01: [
-    { a: 'S02', roles: ROLES_BACKOFFICE }
-  ],
-  S02: [
-    { a: 'S03', roles: ROLES_BACKOFFICE },
-    // RF-F08: consulta tecnica se cierra directo, la respuesta queda como
-    // comentario obligatorio en el historial.
-    { a: 'S09', roles: ROLES_BACKOFFICE, comentarioObligatorio: true }
-  ],
-  S03: [
-    { a: 'S04', roles: ROLES_BACKOFFICE },
-    // "Pedir mas informacion" (Fase 10.1): el comentario es obligatorio
-    // porque ES la pregunta que el solicitante vera en Consultar Estado.
-    { a: 'S06', roles: ROLES_BACKOFFICE, comentarioObligatorio: true },
-    { a: 'S10', roles: ROLES_BACKOFFICE, comentarioObligatorio: true },
-    { a: 'S11', roles: ROLES_BACKOFFICE, comentarioObligatorio: true }
-  ],
-  S04: [
-    { a: 'S05', roles: ROLES_BACKOFFICE },
-    { a: 'S11', roles: ROLES_BACKOFFICE, comentarioObligatorio: true }
-  ],
-  S05: [
-    { a: 'S06', roles: ROLES_BACKOFFICE, comentarioObligatorio: true },
-    { a: 'S07', roles: ROLES_BACKOFFICE },
-    { a: 'S11', roles: ROLES_BACKOFFICE, comentarioObligatorio: true }
-  ],
-  S06: [
-    { a: 'S03', roles: ROLES_BACKOFFICE },
-    { a: 'S05', roles: ROLES_BACKOFFICE }
-  ],
-  S07: [
-    { a: 'S08', roles: ROLES_BACKOFFICE },
-    { a: 'S05', roles: ROLES_BACKOFFICE, comentarioObligatorio: true },
-    { a: 'S11', roles: ROLES_BACKOFFICE, comentarioObligatorio: true }
-  ],
-  S08: [
-    // Confirmacion normal es del Solicitante (Fase 3/4); esta via cubre el
-    // fallback documentado en §9.3 ("cierre por falta de respuesta").
-    { a: 'S09', roles: ROLES_BACKOFFICE },
-    { a: 'S05', roles: ROLES_BACKOFFICE, comentarioObligatorio: true },
-    { a: 'S11', roles: ROLES_BACKOFFICE, comentarioObligatorio: true }
-  ],
-  S09: [
-    // RN-012/013: reapertura, solo Admin, con justificacion -- deliberadamente
-    // NO se abre a todos los roles (ver nota arriba).
-    { a: 'S05', roles: ['ADM'], comentarioObligatorio: true }
-  ],
-  S10: [
-    // RN-013: solo Admin reabre. La especificacion no fija el estado
-    // destino explicitamente; se asume que vuelve a revision (documentado
-    // como supuesto en FASE-02-maquina-estados.md).
-    { a: 'S03', roles: ['ADM'], comentarioObligatorio: true }
-  ],
-  S11: []
-};
+// Se reemplaza el grafo por un modelo simple: cualquier rol de Backoffice
+// puede mover una subsolicitud a cualquiera de los 11 estados (excepto al
+// mismo en el que ya esta). El unico control que se conserva es pedir un
+// comentario (queda en HISTORIAL_ESTADOS) para los movimientos "sensibles"
+// -- ver comentarioObligatorioParaCambio_ en Solicitudes.gs -- de forma que
+// quede un rastro de POR QUE se rechazo/cancelo/cerro directo/reabrio, sin
+// bloquear a Leo con un flujo formal que no calza con como trabaja.
+// (ESTADOS_CERRADOS, ya definido arriba, es el conjunto S09/S10/S11 que se
+// usa como "cierre" tanto aqui como en el calculo de estado_derivado, §8.2.)

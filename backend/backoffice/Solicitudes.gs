@@ -21,18 +21,18 @@ var Solicitudes = {
     }
 
     var estadoActual = subsolicitud.estado;
-    var transicion = buscarTransicion_(estadoActual, data.estado_nuevo);
-    if (!transicion) {
-      return errorValidacion_(
-        'estado_nuevo',
-        'Transicion no permitida: ' + estadoActual + ' -> ' + data.estado_nuevo
-      );
+    // Fase 10.1: cualquier estado es un destino valido (ver nota en
+    // Constantes.gs) -- solo se exige que exista y que sea distinto del
+    // actual. El unico rol resuelve el acceso (contexto ya viene de un
+    // usuario activo en USUARIOS, Code.gs); no hay restriccion adicional.
+    if (!ESTADOS.hasOwnProperty(data.estado_nuevo)) {
+      return errorValidacion_('estado_nuevo', 'Estado invalido: ' + data.estado_nuevo);
     }
-    if (transicion.roles.indexOf(contexto.rol) === -1) {
-      return { _forbidden: true, message: 'El rol ' + contexto.rol + ' no puede aplicar esta transicion.' };
+    if (data.estado_nuevo === estadoActual) {
+      return errorValidacion_('estado_nuevo', 'La subsolicitud ya esta en ese estado.');
     }
     var comentario = data.comentario || '';
-    if (transicion.comentarioObligatorio && comentario.trim() === '') {
+    if (comentarioObligatorioParaCambio_(estadoActual, data.estado_nuevo) && comentario.trim() === '') {
       return errorValidacion_('comentario', 'Esta transicion exige un comentario con el motivo.');
     }
 
@@ -175,18 +175,18 @@ var Solicitudes = {
     }
 
     var subsolicitudes = obtenerSubsolicitudesDeSolicitud_(solicitudId);
-    // Fase 10 (rediseno UX): el selector de estado del detalle solo debe
-    // ofrecer transiciones que el backend realmente aceptaria para el rol
-    // actual -- antes ofrecia los 11 estados y dejaba que el backend
-    // rechazara. Se calcula aqui (mismo TRANSICIONES_VALIDAS que ya usa
-    // actualizarEstado) para no duplicar la tabla en el frontend.
+    // Fase 10.1: cualquier estado es un destino valido para cualquier rol
+    // (ver nota en Constantes.gs) -- el selector ofrece los 11 estados
+    // menos el actual, marcando cuales piden comentario obligatorio para
+    // que el frontend muestre el campo antes de intentar aplicar el cambio.
     var rolActual = contexto ? contexto.rol : '';
     var transicionesPorSubsolicitud = {};
     subsolicitudes.forEach(function (sub) {
-      var opciones = TRANSICIONES_VALIDAS[sub.estado] || [];
-      transicionesPorSubsolicitud[sub.subsolicitud_id] = opciones
-        .filter(function (t) { return t.roles.indexOf(rolActual) !== -1; })
-        .map(function (t) { return { estado: t.a, comentario_obligatorio: !!t.comentarioObligatorio }; });
+      transicionesPorSubsolicitud[sub.subsolicitud_id] = Object.keys(ESTADOS)
+        .filter(function (estado) { return estado !== sub.estado; })
+        .map(function (estado) {
+          return { estado: estado, comentario_obligatorio: comentarioObligatorioParaCambio_(sub.estado, estado) };
+        });
     });
     var historialEstados = leerFilas_(SHEETS.HISTORIAL_ESTADOS)
       .filter(function (h) { return h.solicitud_id === solicitudId; })
@@ -248,14 +248,21 @@ function obtenerSubsolicitudesDeSolicitud_(solicitudId) {
   });
 }
 
-function buscarTransicion_(estadoActual, estadoNuevo) {
-  var opciones = TRANSICIONES_VALIDAS[estadoActual] || [];
-  for (var i = 0; i < opciones.length; i++) {
-    if (opciones[i].a === estadoNuevo) {
-      return opciones[i];
-    }
-  }
-  return null;
+// Fase 10.1: con el selector de estado abierto a los 11 destinos (ver nota
+// en Constantes.gs), esta funcion es el unico control que queda -- exige
+// dejar un motivo por escrito (HISTORIAL_ESTADOS.comentario) para los
+// movimientos donde perder ese rastro seria un problema real:
+//  - Rechazar (S10) o Cancelar (S11): siempre hay que decir por que.
+//  - Cerrar sin pasar por Terminada (S08): un cierre directo es una
+//    excepcion al flujo normal (RF-F08 consulta tecnica, o cualquier otro
+//    cierre anticipado) y merece una nota de que paso.
+//  - Reabrir algo que ya estaba cerrado/rechazado/cancelado: es la unica
+//    vez que se "deshace" una decision previa (RN-012/013).
+function comentarioObligatorioParaCambio_(estadoActual, estadoNuevo) {
+  if (estadoNuevo === ESTADOS.S10 || estadoNuevo === ESTADOS.S11) return true;
+  if (estadoNuevo === ESTADOS.S09 && estadoActual !== ESTADOS.S08) return true;
+  if (ESTADOS_CERRADOS.indexOf(estadoActual) !== -1) return true;
+  return false;
 }
 
 // §8.2: estado del padre = el MINIMO (menos avanzado) entre subsolicitudes

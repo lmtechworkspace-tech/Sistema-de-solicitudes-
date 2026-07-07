@@ -146,7 +146,7 @@ test('Ciclo de vida completo (S01 -> S09) de una solicitud de HomePymes: aprobac
   assert.ok(logs.some((l) => l.evento === 'DOC_LISTO'));
 });
 
-test('Ciclo de vida con rechazo (S03 -> S10) y reapertura (RN-012/013) en una solicitud de RLD', () => {
+test('Ciclo de vida con rechazo (S03 -> S10) y reapertura (Fase 10.1: cualquier rol, con comentario obligatorio) en una solicitud de RLD', () => {
   const ctx = loadConSchema();
   const { solicitud, subsolicitud } = seedSolicitudRecienCreada(ctx, {
     solicitud_id: 'SOL-2026-RLD-0001', empresa_id: 'RLD', empresa_nombre: 'RLD',
@@ -162,14 +162,16 @@ test('Ciclo de vida con rechazo (S03 -> S10) y reapertura (RN-012/013) en una so
   let fila = ctx.buscarSolicitudPorId_(solicitud.solicitud_id);
   assert.equal(fila.estado_derivado, 'S10');
 
-  // RN-013: solo Admin reabre y con justificacion.
-  const intentoAnalista = ctx.Solicitudes.actualizarEstado(
-    { subsolicitud_id: subsolicitud.subsolicitud_id, estado_nuevo: 'S03', comentario: 'reabrir' },
+  // Fase 10.1: la reapertura ya no es exclusiva de Admin -- cualquier rol
+  // de Backoffice puede reabrir, siempre que deje un comentario (unico
+  // control que se conserva, ver comentarioObligatorioParaCambio_).
+  const sinComentario = ctx.Solicitudes.actualizarEstado(
+    { subsolicitud_id: subsolicitud.subsolicitud_id, estado_nuevo: 'S03' },
     analista
   );
-  assert.equal(intentoAnalista._forbidden, true);
+  assert.equal(sinComentario._validationError, true);
 
-  avanzarEstado(ctx, subsolicitud.subsolicitud_id, 'S03', admin, 'Se reevaluo el alcance, si corresponde');
+  avanzarEstado(ctx, subsolicitud.subsolicitud_id, 'S03', analista, 'Se reevaluo el alcance, si corresponde');
   fila = ctx.buscarSolicitudPorId_(solicitud.solicitud_id);
   assert.equal(fila.estado_derivado, 'S03');
 

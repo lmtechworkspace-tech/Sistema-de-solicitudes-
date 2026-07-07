@@ -143,10 +143,12 @@
     }).join('') || Componentes.vacio('Sin items.');
   }
 
-  // Acciones inline: solo se ofrecen las transiciones que el backend ya
-  // valido como legales para el rol actual (RN-012/013 etc, ver
-  // TRANSICIONES_VALIDAS en Solicitudes.gs) -- reemplaza el selector con
-  // los 11 estados que dejaba adivinar/fallar al usuario.
+  // Acciones inline: los 11 estados estan siempre disponibles (Fase 10.1,
+  // "Leo hace todo" -- ver nota en backend/backoffice/Constantes.gs); el
+  // backend ya indica cuales piden comentario obligatorio
+  // (comentarioObligatorioParaCambio_ en Solicitudes.gs), asi el frontend
+  // muestra el campo de motivo antes de que el usuario intente aplicar el
+  // cambio en vez de que le rebote despues.
   function renderAccionesItem_(sub, opcionesTransicion) {
     var selectorEstado = '';
     if (opcionesTransicion.length > 0) {
