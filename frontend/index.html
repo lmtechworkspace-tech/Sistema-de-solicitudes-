@@ -21,6 +21,19 @@
            solicitud. Modulo/tipo NO van aqui: cada item puede vivir en un
            modulo distinto y ser de un tipo distinto (Fase 10, rediseno UX). -->
       <section id="paso-contexto">
+        <!-- P1 (v2.0, Sprint 1): formulario de dos velocidades -- "Rápido"
+             pide solo lo minimo (tipo, módulo, título, qué pasa, evidencia);
+             "Completo" muestra ademas contexto, impacto, acceso y demas
+             campos opcionales. Rápido es el modo por defecto (RF-201/202). -->
+        <div class="sigso-campo">
+          <label>¿Cómo quieres cargar tu solicitud?</label>
+          <div class="sigso-chips" id="selector-modo">
+            <button type="button" class="sigso-chip" data-modo="rapido">Rápido</button>
+            <button type="button" class="sigso-chip" data-modo="completo">Completo</button>
+          </div>
+          <p class="sigso-ayuda">Rápido: lo justo para dejar tu pedido registrado. Completo: agrega contexto, acceso y más detalle por item.</p>
+        </div>
+
         <div class="sigso-campo">
           <label for="campo-empresa">Empresa</label>
           <select id="campo-empresa" required></select>

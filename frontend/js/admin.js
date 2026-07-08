@@ -53,7 +53,13 @@
       { nombre: 'email', label: 'Email', soloAlCrear: true },
       { nombre: 'nombre', label: 'Nombre' },
       { nombre: 'empresa_id', label: 'Empresa (código)' },
-      { nombre: 'rol', label: 'Rol (ANA/DEV/ADM)' },
+      // §12.1 (v2.0, Sprint 1): renombre de roles a nivel de etiqueta -- el
+      // codigo interno (ANA/DEV/ADM en USUARIOS.rol y en todos los checks de
+      // permisos, RN-007/008/009) NO cambia (evita reescribir cada
+      // comparacion de rol en el backend por un cambio cosmetico). Solo se
+      // aclara aqui, para quien administra usuarios, que ANA y DEV son las
+      // dos variantes de "Gestor" (RN-201: el que gestiona, no el que cierra).
+      { nombre: 'rol', label: 'Rol: ANA = Gestor/Analista, DEV = Gestor técnico, ADM = Administrador' },
       { nombre: 'activo', label: 'Activo', tipo: 'checkbox' }
     ]
   };

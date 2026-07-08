@@ -64,20 +64,24 @@ test('getDetalle incluye los archivos de la solicitud (Fase 9, para la galeria d
   assert.ok(detalle.archivos.some((a) => a.archivo_id === 'A2' && a.subsolicitud_id === 'SOL-2026-HP-0001-01'));
 });
 
-test('getDetalle ofrece los 11 estados menos el actual, iguales para cualquier rol (Fase 10.2: "Leo hace todo", sin flujo restringido)', () => {
+test('getDetalle ofrece los 11 estados menos el actual (y menos Cerrada, RN-201), iguales para cualquier rol (Fase 10.2 + Sprint 1 v2.0)', () => {
   const ctx = loadConSchema();
-  seedSolicitud(ctx); // subsolicitud en S02
+  seedSolicitud(ctx); // subsolicitud en S02, tipo ERR (no es consulta tecnica)
 
   const comoAnalista = ctx.Solicitudes.getDetalle('SOL-2026-HP-0001', { rol: 'ANA', email: 'a@a.cl' });
   const comoDev = ctx.Solicitudes.getDetalle('SOL-2026-HP-0001', { rol: 'DEV', email: 'd@d.cl' });
 
-  // Ya no hay grafo de "siguiente paso logico": el selector ofrece los 10
+  // Ya no hay grafo de "siguiente paso logico": el selector ofrece los
   // estados restantes (11 menos el actual, S02), iguales para cualquier rol
-  // -- Leo necesita poder saltar a cualquiera para reflejar la realidad.
+  // -- Leo necesita poder saltar a cualquiera para reflejar la realidad. La
+  // unica excepcion es "Cerrada" (S09, RN-201): esa la fija el solicitante,
+  // no el gestor, salvo que el item sea una consulta tecnica -- por eso son
+  // 9 (11 menos el actual, menos S09) y no 10.
   const opcionesAna = comoAnalista.transiciones_por_subsolicitud['SOL-2026-HP-0001-01'];
   const estadosAna = Array.from(opcionesAna).map((o) => o.estado).sort();
-  assert.equal(estadosAna.length, 10);
+  assert.equal(estadosAna.length, 9);
   assert.ok(estadosAna.indexOf('S02') === -1, 'no debe ofrecer el estado actual como destino');
+  assert.ok(estadosAna.indexOf('S09') === -1, 'no debe ofrecer Cerrada: la fija el solicitante (RN-201)');
 
   const opcionesDev = comoDev.transiciones_por_subsolicitud['SOL-2026-HP-0001-01'];
   const estadosDev = Array.from(opcionesDev).map((o) => o.estado).sort();

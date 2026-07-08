@@ -19,7 +19,8 @@ var INTAKE_ACTIONS = {
   subirArchivo: handleSubirArchivo_,
   getCatalogos: handleGetCatalogos_,
   consultarEstado: handleConsultarEstado_,
-  responderConsulta: handleResponderConsulta_
+  responderConsulta: handleResponderConsulta_,
+  validarCierre: handleValidarCierre_
 };
 
 function doGet(e) {
@@ -70,6 +71,10 @@ function handleConsultarEstado_(data) {
 
 function handleResponderConsulta_(data) {
   return responderResultado_(Solicitudes.responderConsulta(data));
+}
+
+function handleValidarCierre_(data) {
+  return responderResultado_(Solicitudes.validarCierre(data));
 }
 
 function handleSubirArchivo_(data) {

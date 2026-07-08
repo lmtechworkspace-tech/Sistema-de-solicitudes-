@@ -45,6 +45,14 @@ function configurarTriggers() {
     creados.push('suspenderInactivosTrigger');
   }
 
+  // RN-201/RF-208 (v2.0, Sprint 1): diario 09:00, igual que verificarSLAs --
+  // cierra por inactividad los items "Terminada" que el solicitante nunca
+  // valido (ver Triggers.cerrarInactivosPorValidacion mas abajo).
+  if (existentes.indexOf('cerrarInactivosTrigger') === -1) {
+    ScriptApp.newTrigger('cerrarInactivosTrigger').timeBased().atHour(9).everyDays(1).create();
+    creados.push('cerrarInactivosTrigger');
+  }
+
   // §17.4 v1.0: resumen semanal (lunes 09:00) y reporte mensual (dia 1).
   if (existentes.indexOf('enviarResumenSemanalTrigger') === -1) {
     ScriptApp.newTrigger('enviarResumenSemanalTrigger').timeBased()
@@ -81,6 +89,11 @@ function suspenderInactivosTrigger() {
   return Auth.suspenderInactivos();
 }
 
+// RN-201/RF-208 (v2.0, Sprint 1): ver Triggers.cerrarInactivosPorValidacion().
+function cerrarInactivosTrigger() {
+  return Triggers.cerrarInactivosPorValidacion();
+}
+
 // §17.4 v1.0: reportes programados, ver Notificaciones.gs.
 function enviarResumenSemanalTrigger() {
   return Notificaciones.enviarResumenSemanal();
@@ -97,6 +110,12 @@ function enviarReporteMensualTrigger() {
 function verificarSLAsTrigger() {
   return Triggers.verificarSLAs();
 }
+
+// RN-201/RF-208: dias habiles que un item puede quedar en "Terminada" (S08)
+// sin que el solicitante lo valide antes de cerrarlo solo. 5 dias habiles
+// (una semana laboral) -- suficiente margen para que el solicitante revise
+// sin dejar items "Terminada" acumulandose indefinidamente sin auditoria.
+var DIAS_HABILES_CIERRE_AUTOMATICO = 5;
 
 var Triggers = {
   verificarSLAs: function () {
@@ -122,6 +141,47 @@ var Triggers = {
     });
 
     return resumen;
+  },
+
+  // RN-201/RF-208: recorre los items en "Terminada" (S08) y cierra
+  // automaticamente (S09) los que llevan >= DIAS_HABILES_CIERRE_AUTOMATICO
+  // dias habiles sin que el solicitante los haya validado (confirmado o
+  // reabierto) desde Consultar Estado. Usa la ultima transicion HACIA S08 en
+  // HISTORIAL_ESTADOS como punto de partida -- si Leo lo reabrio y lo volvio
+  // a terminar, el conteo arranca de nuevo desde esa ultima vez.
+  cerrarInactivosPorValidacion: function () {
+    var feriados = obtenerFeriados_();
+    var historial = leerFilas_(SHEETS.HISTORIAL_ESTADOS);
+    var cerrados = [];
+
+    leerFilas_(SHEETS.SUBSOLICITUDES)
+      .filter(function (s) { return s.estado === ESTADOS.S08; })
+      .forEach(function (sub) {
+        var ultimaEntradaS08 = historial
+          .filter(function (h) { return h.subsolicitud_id === sub.subsolicitud_id && h.estado_nuevo === ESTADOS.S08; })
+          .sort(function (a, b) { return new Date(b.timestamp) - new Date(a.timestamp); })[0];
+        if (!ultimaEntradaS08) {
+          return;
+        }
+        var diasHabiles = Utils.horasHabilesEntre(ultimaEntradaS08.timestamp, new Date(), { feriados: feriados }) / 9;
+        if (diasHabiles < DIAS_HABILES_CIERRE_AUTOMATICO) {
+          return;
+        }
+        var resultado = Solicitudes.actualizarEstado(
+          {
+            subsolicitud_id: sub.subsolicitud_id,
+            estado_nuevo: ESTADOS.S09,
+            comentario: 'Cierre automatico: sin validacion del solicitante tras ' + DIAS_HABILES_CIERRE_AUTOMATICO + ' dias habiles en Terminada (RN-201).'
+          },
+          { email: 'sistema@sigso', rol: 'ADM' },
+          { sistemaAutomatico: true }
+        );
+        if (!resultado._validationError && !resultado._forbidden) {
+          cerrados.push(sub.subsolicitud_id);
+        }
+      });
+
+    return { cerrados: cerrados.length, ids: cerrados };
   }
 };
 

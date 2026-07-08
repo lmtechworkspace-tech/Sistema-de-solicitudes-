@@ -14,7 +14,8 @@
  */
 
 var Solicitudes = {
-  actualizarEstado: function (data, contexto) {
+  actualizarEstado: function (data, contexto, opciones) {
+    var opts = opciones || {};
     var subsolicitud = buscarSubsolicitud_(data.subsolicitud_id);
     if (!subsolicitud) {
       return errorValidacion_('subsolicitud_id', 'Subsolicitud no encontrada: ' + data.subsolicitud_id);
@@ -30,6 +31,18 @@ var Solicitudes = {
     }
     if (data.estado_nuevo === estadoActual) {
       return errorValidacion_('estado_nuevo', 'La subsolicitud ya esta en ese estado.');
+    }
+    // RN-201 (v2.0, Sprint 1): "Cerrada" (S09) ya no es un destino libre para
+    // el gestor -- lo fija el solicitante desde Consultar Estado
+    // (Solicitudes.validarCierre, backend/intake) o el cierre automatico por
+    // inactividad (Triggers.cerrarInactivosTrigger). Unica excepcion: una
+    // consulta tecnica (tipo CON) SI puede cerrarla directo el gestor, porque
+    // no hay nada que "validar" -- es una respuesta, no una entrega.
+    if (data.estado_nuevo === ESTADOS.S09 && !opts.sistemaAutomatico && !esConsultaTecnica_(subsolicitud)) {
+      return {
+        _forbidden: true,
+        message: 'Solo el solicitante puede confirmar el cierre (o el cierre automatico por inactividad). Mueve el item a Terminada para que quede listo para su validacion.'
+      };
     }
     var comentario = data.comentario || '';
     if (comentarioObligatorioParaCambio_(estadoActual, data.estado_nuevo) && comentario.trim() === '') {
@@ -199,7 +212,13 @@ var Solicitudes = {
     var transicionesPorSubsolicitud = {};
     subsolicitudes.forEach(function (sub) {
       transicionesPorSubsolicitud[sub.subsolicitud_id] = Object.keys(ESTADOS)
-        .filter(function (estado) { return estado !== sub.estado; })
+        // RN-201: "Cerrada" no se ofrece al gestor salvo consulta tecnica
+        // (ver nota identica en Solicitudes.actualizarEstado).
+        .filter(function (estado) {
+          if (estado === sub.estado) return false;
+          if (estado === ESTADOS.S09 && !esConsultaTecnica_(sub)) return false;
+          return true;
+        })
         .map(function (estado) {
           return { estado: estado, comentario_obligatorio: comentarioObligatorioParaCambio_(sub.estado, estado) };
         });
@@ -278,6 +297,14 @@ function obtenerSubsolicitudesDeSolicitud_(solicitudId) {
 //    cierre anticipado) y merece una nota de que paso.
 //  - Reabrir algo que ya estaba cerrado/rechazado/cancelado: es la unica
 //    vez que se "deshace" una decision previa (RN-012/013).
+// RN-201: la unica "entrega" que el gestor puede cerrar directo sin pasar
+// por la validacion del solicitante es una consulta tecnica (tipo CON,
+// TIPOS_INICIALES en backend/setup/Instalador.gs) -- ahi no hay nada que
+// entregar/validar, es una respuesta.
+function esConsultaTecnica_(subsolicitud) {
+  return subsolicitud.tipo === 'CON';
+}
+
 function comentarioObligatorioParaCambio_(estadoActual, estadoNuevo) {
   if (estadoNuevo === ESTADOS.S06) return true;
   if (estadoNuevo === ESTADOS.S10 || estadoNuevo === ESTADOS.S11) return true;

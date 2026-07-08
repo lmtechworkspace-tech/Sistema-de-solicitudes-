@@ -183,6 +183,101 @@ test('doPost action=consultarEstado responde ok:true con el estado cuando el cor
   assert.equal(parsed.data.estado_derivado, 'S02');
 });
 
+// RN-201/RF-206/207 (v2.0, Sprint 1): validacion/cierre por el solicitante.
+test('validarCierre (confirmar) cierra un item Terminada y recalcula el estado derivado del padre', () => {
+  const ctx = loadConSchema();
+  seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
+  seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S08' });
+
+  const resultado = ctx.Solicitudes.validarCierre({
+    solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    email: 'juan@homepymes.cl', accion: 'confirmar'
+  });
+
+  assert.equal(resultado.estado_nuevo, 'S09');
+  const subsolicitudes = ctx.leerFilas_('SUBSOLICITUDES');
+  assert.equal(subsolicitudes[0].estado, 'S09');
+  const solicitudes = ctx.leerFilas_('SOLICITUDES');
+  assert.equal(solicitudes[0].estado_derivado, 'S09');
+  const historial = ctx.leerFilas_('HISTORIAL_ESTADOS');
+  assert.equal(historial.length, 1);
+  assert.equal(historial[0].usuario, 'juan@homepymes.cl');
+});
+
+test('validarCierre (reabrir) exige comentario y vuelve el item a En desarrollo (S05)', () => {
+  const ctx = loadConSchema();
+  seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
+  seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S08' });
+
+  const sinComentario = ctx.Solicitudes.validarCierre({
+    solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    email: 'juan@homepymes.cl', accion: 'reabrir'
+  });
+  assert.equal(sinComentario._validationError, true);
+
+  const conComentario = ctx.Solicitudes.validarCierre({
+    solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    email: 'juan@homepymes.cl', accion: 'reabrir', comentario: 'El boton de exportar sigue sin funcionar'
+  });
+  assert.equal(conComentario.estado_nuevo, 'S05');
+  const subsolicitudes = ctx.leerFilas_('SUBSOLICITUDES');
+  assert.equal(subsolicitudes[0].estado, 'S05');
+});
+
+test('validarCierre rechaza si el item no esta en Terminada (S08)', () => {
+  const ctx = loadConSchema();
+  seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S05' });
+
+  const resultado = ctx.Solicitudes.validarCierre({
+    solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    email: 'juan@homepymes.cl', accion: 'confirmar'
+  });
+
+  assert.equal(resultado._validationError, true);
+});
+
+test('validarCierre rechaza si el correo no coincide con el registrado', () => {
+  const ctx = loadConSchema();
+  seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
+  seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S08' });
+
+  const resultado = ctx.Solicitudes.validarCierre({
+    solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    email: 'otro@correo.cl', accion: 'confirmar'
+  });
+
+  assert.equal(resultado._forbidden, true);
+});
+
+test('doPost action=validarCierre responde ok:true y cierra el item', () => {
+  const ctx = loadConSchema();
+  seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
+  seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S08' });
+
+  const output = ctx.doPost({
+    postData: {
+      contents: JSON.stringify({
+        action: 'validarCierre',
+        data: { solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01', email: 'juan@homepymes.cl', accion: 'confirmar' }
+      })
+    }
+  });
+  const parsed = JSON.parse(output.getContent());
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.data.estado_nuevo, 'S09');
+});
+
 test('doPost action=consultarEstado responde forbidden cuando el correo no coincide', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);

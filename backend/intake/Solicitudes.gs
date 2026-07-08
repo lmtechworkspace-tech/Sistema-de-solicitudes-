@@ -278,8 +278,122 @@ var Solicitudes = {
     });
 
     return { ok: true };
+  },
+
+  /**
+   * Validacion/cierre por el solicitante (RN-201, RF-206/207, v2.0 Sprint 1):
+   * revierte el cierre libre del gestor -- "Cerrada" (S09) solo la fija el
+   * solicitante desde Consultar Estado (o el cierre automatico por
+   * inactividad, backend/backoffice/Triggers.gs), nunca el gestor
+   * directamente (salvo consulta tecnica, ver esConsultaTecnica_ en
+   * backend/backoffice/Solicitudes.gs).
+   *
+   * accion = 'confirmar' (queda Cerrada) | 'reabrir' (vuelve a En desarrollo,
+   * con comentario obligatorio explicando que falta).
+   */
+  validarCierre: function (data) {
+    if (!data.solicitud_id || !data.subsolicitud_id || !data.email || !data.accion) {
+      return errorValidacion_('accion', 'Debes indicar la solicitud, el item, tu correo y la accion.');
+    }
+    if (data.accion !== 'confirmar' && data.accion !== 'reabrir') {
+      return errorValidacion_('accion', 'Accion invalida: ' + data.accion);
+    }
+
+    var solicitud = buscarSolicitudPorId_(data.solicitud_id);
+    if (!solicitud) {
+      return errorValidacion_('solicitud_id', 'No existe una solicitud con ese numero.');
+    }
+
+    var coincide =
+      compararEmail_(data.email, solicitud.solicitante_email) ||
+      (!!solicitud.es_cliente && compararEmail_(data.email, solicitud.correo_cliente));
+    if (!coincide) {
+      return { _forbidden: true, message: 'El correo no coincide con el registrado para esta solicitud.' };
+    }
+
+    var subsolicitud = buscarSubsolicitud_(data.subsolicitud_id);
+    if (!subsolicitud || subsolicitud.solicitud_id !== data.solicitud_id) {
+      return errorValidacion_('subsolicitud_id', 'Item no encontrado en esta solicitud.');
+    }
+    if (subsolicitud.estado !== ESTADOS.S08) {
+      return errorValidacion_('subsolicitud_id', 'Este item no esta pendiente de validacion (debe estar Terminada).');
+    }
+    if (data.accion === 'reabrir' && (!data.comentario || String(data.comentario).trim() === '')) {
+      return errorValidacion_('comentario', 'Cuentanos que falta antes de reabrir el item.');
+    }
+
+    var estadoAnterior = subsolicitud.estado;
+    var estadoNuevo = data.accion === 'confirmar' ? ESTADOS.S09 : ESTADOS.S05;
+    var comentario = data.accion === 'confirmar'
+      ? 'Cierre confirmado por el solicitante.'
+      : 'Reabierto por el solicitante: ' + data.comentario;
+    var timestamp = new Date().toISOString();
+
+    actualizarFilaPorId_(SHEETS.SUBSOLICITUDES, 'subsolicitud_id', data.subsolicitud_id, { estado: estadoNuevo });
+    agregarFila_(SHEETS.HISTORIAL_ESTADOS, {
+      historial_id: Utilities.getUuid(),
+      solicitud_id: data.solicitud_id,
+      subsolicitud_id: data.subsolicitud_id,
+      estado_anterior: estadoAnterior,
+      estado_nuevo: estadoNuevo,
+      usuario: data.email,
+      comentario: comentario,
+      timestamp: timestamp
+    });
+
+    var hermanas = leerFilas_(SHEETS.SUBSOLICITUDES).filter(function (s) {
+      return s.solicitud_id === data.solicitud_id;
+    });
+    var estadosActualizados = hermanas.map(function (s) {
+      return s.subsolicitud_id === data.subsolicitud_id ? estadoNuevo : s.estado;
+    });
+    var estadoDerivado = calcularEstadoDerivado_(estadosActualizados);
+    actualizarFilaPorId_(SHEETS.SOLICITUDES, 'solicitud_id', data.solicitud_id, { estado_derivado: estadoDerivado });
+
+    Notificaciones.notificarValidacionSolicitante(solicitud, subsolicitud, data.accion);
+
+    return {
+      subsolicitud_id: data.subsolicitud_id,
+      solicitud_id: data.solicitud_id,
+      estado_anterior: estadoAnterior,
+      estado_nuevo: estadoNuevo,
+      estado_derivado_padre: estadoDerivado
+    };
   }
 };
+
+// Duplicado de backend/backoffice/Solicitudes.gs (RN-201): §8.2, estado del
+// padre = el MINIMO (menos avanzado) entre subsolicitudes no excluidas.
+function calcularEstadoDerivado_(estadosSubsolicitudes) {
+  var activas = estadosSubsolicitudes.filter(function (e) {
+    return ESTADOS_EXCLUIDOS_DERIVACION.indexOf(e) === -1;
+  });
+
+  if (activas.length === 0) {
+    return estadosSubsolicitudes.indexOf(ESTADOS.S10) !== -1 ? ESTADOS.S10 : ESTADOS.S11;
+  }
+
+  var todasS09 = activas.every(function (e) {
+    return e === ESTADOS.S09;
+  });
+  if (todasS09) {
+    return ESTADOS.S09;
+  }
+
+  return activas.reduce(function (masAtrasado, actual) {
+    return ORDEN_ESTADOS.indexOf(actual) < ORDEN_ESTADOS.indexOf(masAtrasado) ? actual : masAtrasado;
+  });
+}
+
+function buscarSubsolicitud_(subsolicitudId) {
+  var filas = leerFilas_(SHEETS.SUBSOLICITUDES);
+  for (var i = 0; i < filas.length; i++) {
+    if (filas[i].subsolicitud_id === subsolicitudId) {
+      return filas[i];
+    }
+  }
+  return null;
+}
 
 // Ultimo comentario con el que Leo entro a S06 para este item (el mas
 // reciente, por si volvio a pedir informacion mas de una vez).

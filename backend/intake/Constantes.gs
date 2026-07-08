@@ -176,6 +176,15 @@ var ESTADOS = {
 
 var ESTADOS_CERRADOS = [ESTADOS.S09, ESTADOS.S10, ESTADOS.S11];
 
+// Duplicado de backend/backoffice/Constantes.gs (RN-201, Sprint 1 v2.0):
+// Solicitudes.validarCierre necesita recalcular el estado derivado del padre
+// igual que Solicitudes.gs de Backoffice.
+var ORDEN_ESTADOS = [
+  ESTADOS.S01, ESTADOS.S02, ESTADOS.S03, ESTADOS.S04, ESTADOS.S05,
+  ESTADOS.S06, ESTADOS.S07, ESTADOS.S08, ESTADOS.S09
+];
+var ESTADOS_EXCLUIDOS_DERIVACION = [ESTADOS.S10, ESTADOS.S11];
+
 var ORDEN_PRIORIDAD = ['P1', 'P2', 'P3', 'P4', 'P5'];
 
 // Etiquetas y emojis de RF-010/RF-015 (doc 3 y 3.5 de v1.0), para el

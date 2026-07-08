@@ -37,6 +37,11 @@
 
   var estado = {
     paso: 'contexto',
+    // P1 (v2.0, Sprint 1): 'rapido' muestra solo tipo/modulo/titulo/que pasa
+    // /evidencia; 'completo' agrega contexto, impacto, acceso, frecuencia,
+    // etc. El modo es global al formulario (no por item): mas simple de
+    // entender para el solicitante que un flag por item.
+    modo: 'rapido',
     catalogos: null,
     subsolicitudActivaIdx: 0,
     subsolicitudes: [nuevaSubsolicitud_()],
@@ -61,9 +66,18 @@
     cargarBorrador_();
     cargarCatalogos_();
     renderStepper_();
+    renderSelectorModo_();
     renderSubsolicitudes_();
 
     document.getElementById('form-solicitud').addEventListener('submit', manejarSubmit_);
+    document.querySelectorAll('#selector-modo [data-modo]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        estado.modo = boton.getAttribute('data-modo');
+        renderSelectorModo_();
+        renderSubsolicitudes_();
+        guardarBorrador_();
+      });
+    });
     document.getElementById('campo-es-cliente').addEventListener('change', alternarBloqueCliente_);
     document.getElementById('btn-agregar-subsolicitud').addEventListener('click', agregarSubsolicitud_);
     document.getElementById('campo-plataforma').addEventListener('change', function () {
@@ -102,6 +116,13 @@
 
   function renderStepper_() {
     document.getElementById('contenedor-stepper').innerHTML = Componentes.stepper(PASOS, estado.paso);
+  }
+
+  // P1: resalta el modo activo en el selector Rápido/Completo.
+  function renderSelectorModo_() {
+    document.querySelectorAll('#selector-modo [data-modo]').forEach(function (boton) {
+      boton.classList.toggle('sigso-chip--activo', boton.getAttribute('data-modo') === estado.modo);
+    });
   }
 
   function irAPaso2_() {
@@ -266,17 +287,37 @@
   // El cuerpo de un item: chips de tipo, cascada de modulo propia, campos
   // "hoja de ruta" (que pasa/que deberia pasar), acceso condicional segun
   // tipo, frecuencia/personas afectadas, evidencia con descripcion propia.
+  //
+  // P1 (v2.0, Sprint 1): en modo "rapido" solo se muestran tipo, modulo,
+  // titulo, "que pasa" y evidencia -- el resto (resultado esperado,
+  // contexto, impacto, acceso, frecuencia, personas afectadas, centro de
+  // costos, observaciones) se OCULTA pero NO se borra (si el usuario ya
+  // habia escrito algo y vuelve a Completo, lo sigue viendo).
   function renderCuerpoItem_(item, idx) {
-    var mostrarAcceso = TIPOS_CON_ACCESO.indexOf(item.tipo) !== -1;
+    var completo = estado.modo === 'completo';
+    var mostrarAcceso = completo && TIPOS_CON_ACCESO.indexOf(item.tipo) !== -1;
     var imagenes = (estado.imagenesPorItem[idx] || []).map(function (img) {
       return { previewUrl: img.previewUrl, descripcion: img.descripcion, nombre: img.file.name };
     });
 
-    return (
+    var evidencia =
+      '<div class="sigso-campo"><label>Evidencia (capturas de pantalla, opcional)</label>' +
+      '<input type="file" data-accion="input-imagenes" data-idx="' + idx + '" accept="image/png,image/jpeg,image/gif" multiple>' +
+      Componentes.galeriaImagenes(imagenes, { editable: true, idx: idx }) +
+      '</div>';
+
+    var basico =
       '<div class="sigso-campo"><label>Tipo de trabajo</label>' + renderChipsTipo_(item, idx) + '</div>' +
       renderCascadaModuloItem_(item, idx) +
       Componentes.campoTexto({ dataCampo: 'titulo', idx: idx, valor: item.titulo, requerido: true, label: 'Título corto' }) +
-      Componentes.campoTextarea({ dataCampo: 'descripcion', idx: idx, valor: item.descripcion, requerido: true, label: '¿Qué pasa hoy?', ayuda: 'Describe el problema o lo que necesitas.' }) +
+      Componentes.campoTextarea({ dataCampo: 'descripcion', idx: idx, valor: item.descripcion, requerido: true, label: completo ? '¿Qué pasa hoy?' : '¿Qué pasa?', ayuda: 'Describe el problema o lo que necesitas.' });
+
+    if (!completo) {
+      return basico + evidencia + renderAlternarModo_();
+    }
+
+    return (
+      basico +
       Componentes.campoTextarea({ dataCampo: 'resultado_esperado', idx: idx, valor: item.resultado_esperado, label: '¿Qué debería pasar?' }) +
       Componentes.campoTextarea({ dataCampo: 'contexto', idx: idx, valor: item.contexto, label: 'Contexto (opcional)', ayuda: 'Antecedentes de cómo se llegó a esto.' }) +
       Componentes.campoSelect({ dataCampo: 'impacto', idx: idx, valor: item.impacto, label: 'Impacto', opciones: opcionesImpacto_(), placeholder: 'No especificado' }) +
@@ -284,12 +325,13 @@
       '<div class="sigso-campo"><label>¿Con qué frecuencia pasa?</label>' + renderChipsFrecuencia_(item, idx) + '</div>' +
       Componentes.campoTexto({ dataCampo: 'personas_afectadas', idx: idx, valor: item.personas_afectadas, tipo: 'number', label: '¿A cuántas personas afecta? (opcional)' }) +
       Componentes.campoTexto({ dataCampo: 'centro_costos', idx: idx, valor: item.centro_costos, label: 'Centro de costos (opcional)' }) +
-      '<div class="sigso-campo"><label>Evidencia (capturas de pantalla, opcional)</label>' +
-      '<input type="file" data-accion="input-imagenes" data-idx="' + idx + '" accept="image/png,image/jpeg,image/gif" multiple>' +
-      Componentes.galeriaImagenes(imagenes, { editable: true, idx: idx }) +
-      '</div>' +
+      evidencia +
       Componentes.campoTextarea({ dataCampo: 'observaciones', idx: idx, valor: item.observaciones, label: 'Observaciones (opcional)' })
     );
+  }
+
+  function renderAlternarModo_() {
+    return '<div class="sigso-campo"><button type="button" class="sigso-boton--secundario" data-accion="ir-a-completo">+ Agregar más detalles (modo Completo)</button></div>';
   }
 
   function renderChipsTipo_(item, idx) {
@@ -409,6 +451,15 @@
         guardarBorrador_();
       });
     });
+    var btnIrACompleto = cuerpo.querySelector('[data-accion="ir-a-completo"]');
+    if (btnIrACompleto) {
+      btnIrACompleto.addEventListener('click', function () {
+        estado.modo = 'completo';
+        renderSelectorModo_();
+        renderSubsolicitudes_();
+        guardarBorrador_();
+      });
+    }
     cuerpo.querySelectorAll('[data-accion="elegir-frecuencia"]').forEach(function (el) {
       el.addEventListener('click', function () {
         estado.subsolicitudes[idx].frecuencia = el.getAttribute('data-frecuencia');
@@ -548,6 +599,9 @@
   function recolectarDatos_() {
     var esCliente = document.getElementById('campo-es-cliente').checked;
     return {
+      // P1: solo se persiste en el borrador local -- no se envia al backend
+      // (crearSolicitud no necesita saber en que modo se cargo el formulario).
+      _modo: estado.modo,
       empresa_id: document.getElementById('campo-empresa').value,
       plataforma: document.getElementById('campo-plataforma').value,
       es_cliente: esCliente,
@@ -599,6 +653,7 @@
     }
     try {
       var datos = JSON.parse(crudo);
+      estado.modo = datos._modo === 'completo' ? 'completo' : 'rapido';
       document.getElementById('campo-empresa').value = datos.empresa_id || '';
       document.getElementById('campo-plataforma').value = datos.plataforma || '';
       document.getElementById('campo-solicitante-nombre').value = datos.solicitante_nombre || '';

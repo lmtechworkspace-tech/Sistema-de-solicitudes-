@@ -93,6 +93,21 @@ function avanzarEstado(ctx, subsolicitudId, estadoNuevo, contexto, comentario) {
   return resultado;
 }
 
+// RN-201 (v2.0, Sprint 1): "Cerrada" (S09) ya no la fija el gestor -- la
+// confirma el solicitante desde Consultar Estado (Solicitudes.validarCierre,
+// backend/intake, un proyecto Apps Script distinto sin Sheet compartida en
+// este sandbox). Se simula aqui la misma escritura que hace ese endpoint,
+// igual que seedSolicitudRecienCreada simula lo que ya deja probado crearSolicitud.
+function confirmarCierrePorSolicitante(ctx, solicitudId, subsolicitudId, email) {
+  ctx.actualizarFilaPorId_('SUBSOLICITUDES', 'subsolicitud_id', subsolicitudId, { estado: 'S09' });
+  ctx.agregarFila_('HISTORIAL_ESTADOS', {
+    historial_id: 'h-cierre-' + subsolicitudId, solicitud_id: solicitudId, subsolicitud_id: subsolicitudId,
+    estado_anterior: 'S08', estado_nuevo: 'S09', usuario: email,
+    comentario: 'Cierre confirmado por el solicitante.', timestamp: new Date().toISOString()
+  });
+  return ctx.recalcularEstadoDerivado_(solicitudId);
+}
+
 test('Ciclo de vida completo (S01 -> S09) de una solicitud de HomePymes: aprobacion, documento, desarrollo, cierre', () => {
   const ctx = loadConSchema();
   const { solicitud, subsolicitud } = seedSolicitudRecienCreada(ctx);
@@ -123,7 +138,7 @@ test('Ciclo de vida completo (S01 -> S09) de una solicitud de HomePymes: aprobac
   avanzarEstado(ctx, subsolicitud.subsolicitud_id, 'S05', dev);
   avanzarEstado(ctx, subsolicitud.subsolicitud_id, 'S07', dev);
   avanzarEstado(ctx, subsolicitud.subsolicitud_id, 'S08', analista);
-  avanzarEstado(ctx, subsolicitud.subsolicitud_id, 'S09', analista);
+  confirmarCierrePorSolicitante(ctx, solicitud.solicitud_id, subsolicitud.subsolicitud_id, solicitud.solicitante_email);
 
   fila = ctx.buscarSolicitudPorId_(solicitud.solicitud_id);
   assert.equal(fila.estado_derivado, 'S09');

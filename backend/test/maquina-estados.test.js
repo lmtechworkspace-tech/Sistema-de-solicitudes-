@@ -11,6 +11,9 @@ function loadConSchema() {
   seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
   seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
   seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS);
+  seedSheet(ctx, 'HISTORIAL_PRIORIDAD', ctx.COLUMNAS.HISTORIAL_PRIORIDAD);
+  seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
+  seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);
   return ctx;
 }
 
@@ -181,10 +184,10 @@ test('actualizarEstado exige comentario para Cancelar (S11)', () => {
   assert.equal(sinComentario._validationError, true);
 });
 
-test('actualizarEstado exige comentario al cerrar directo (S09) sin pasar por Terminada (S08)', () => {
+test('actualizarEstado (RN-201, consulta tecnica): exige comentario al cerrar directo (S09) sin pasar por Terminada (S08)', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
-  seedSubsolicitud(ctx, { estado: 'S02' });
+  seedSubsolicitud(ctx, { estado: 'S02', tipo: 'CON' });
 
   const sinComentario = ctx.Solicitudes.actualizarEstado(
     { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S09' },
@@ -199,16 +202,64 @@ test('actualizarEstado exige comentario al cerrar directo (S09) sin pasar por Te
   assert.equal(conComentario.estado_nuevo, 'S09');
 });
 
-test('actualizarEstado NO exige comentario al cerrar S08 -> S09 (confirmacion normal de cierre)', () => {
+test('actualizarEstado (RN-201): el gestor NO puede cerrar (S09) un item que no es consulta tecnica -- ni siquiera desde Terminada (S08)', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
-  seedSubsolicitud(ctx, { estado: 'S08' });
+  seedSubsolicitud(ctx, { estado: 'S08', tipo: 'ERR' });
+
+  const resultado = ctx.Solicitudes.actualizarEstado(
+    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S09' },
+    { email: 'analista@homepymes.cl', rol: 'ANA' }
+  );
+  assert.equal(resultado._forbidden, true);
+
+  const subsolicitudes = ctx.leerFilas_('SUBSOLICITUDES');
+  assert.equal(subsolicitudes[0].estado, 'S08');
+});
+
+test('actualizarEstado (RN-201): una consulta tecnica (tipo CON) SI puede cerrarla directo el gestor desde Terminada', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S08', tipo: 'CON' });
 
   const resultado = ctx.Solicitudes.actualizarEstado(
     { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S09' },
     { email: 'analista@homepymes.cl', rol: 'ANA' }
   );
   assert.equal(resultado.estado_nuevo, 'S09');
+});
+
+test('actualizarEstado (RN-201): el cierre automatico por inactividad (opciones.sistemaAutomatico) si puede cerrar un item que no es consulta tecnica', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S08', tipo: 'ERR' });
+
+  const resultado = ctx.Solicitudes.actualizarEstado(
+    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S09', comentario: 'Cierre automatico de prueba' },
+    { email: 'sistema@sigso', rol: 'ADM' },
+    { sistemaAutomatico: true }
+  );
+  assert.equal(resultado.estado_nuevo, 'S09');
+});
+
+test('getDetalle (RN-201): no ofrece "Cerrada" (S09) entre las transiciones de un item que no es consulta tecnica', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S08', tipo: 'ERR' });
+
+  const detalle = ctx.Solicitudes.getDetalle('SOL-2026-HP-0001', { email: 'analista@homepymes.cl', rol: 'ANA' });
+  const opciones = detalle.transiciones_por_subsolicitud['SOL-2026-HP-0001-01'].map((t) => t.estado);
+  assert.equal(opciones.indexOf('S09'), -1);
+});
+
+test('getDetalle (RN-201): SI ofrece "Cerrada" (S09) para una consulta tecnica (tipo CON)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S02', tipo: 'CON' });
+
+  const detalle = ctx.Solicitudes.getDetalle('SOL-2026-HP-0001', { email: 'analista@homepymes.cl', rol: 'ANA' });
+  const opciones = detalle.transiciones_por_subsolicitud['SOL-2026-HP-0001-01'].map((t) => t.estado);
+  assert.notEqual(opciones.indexOf('S09'), -1);
 });
 
 test('actualizarEstado aplica RN-015: no pasa a S04 si alguna subsolicitud hermana no tiene titulo/descripcion', () => {

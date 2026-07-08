@@ -97,6 +97,31 @@
       });
     });
 
+    // RN-201: validacion del solicitante sobre un item "Terminada".
+    contenedor.querySelectorAll('[data-accion="confirmar-cierre"]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        enviarValidacion_(boton.getAttribute('data-subsolicitud'), 'confirmar');
+      });
+    });
+    contenedor.querySelectorAll('[data-accion="mostrar-reabrir"]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        var bloque = contenedor.querySelector('[data-bloque-reabrir="' + boton.getAttribute('data-subsolicitud') + '"]');
+        bloque.classList.toggle('sigso-oculto');
+      });
+    });
+    contenedor.querySelectorAll('[data-accion="enviar-reabrir"]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        var subId = boton.getAttribute('data-subsolicitud');
+        var comentario = document.getElementById('motivo-reabrir-' + subId).value.trim();
+        if (!comentario) {
+          document.querySelector('[data-resultado-validacion="' + subId + '"]').innerHTML =
+            Componentes.alerta('Cuéntanos qué falta antes de reabrir.', 'error');
+          return;
+        }
+        enviarValidacion_(subId, 'reabrir', comentario);
+      });
+    });
+
     // Expande automaticamente items con pregunta pendiente: son los que mas
     // le importan al solicitante en ese momento.
     contenedor.querySelectorAll('.sigso-acordeon-item[data-pregunta-pendiente="1"]').forEach(function (el) {
@@ -120,6 +145,25 @@
         '</div>' +
         '<button type="button" class="sigso-boton--secundario" data-accion="enviar-respuesta" data-subsolicitud="' + s.subsolicitud_id + '">Enviar respuesta</button>' +
         '<div data-resultado-respuesta="' + s.subsolicitud_id + '"></div>';
+    }
+    // RN-201 (v2.0, Sprint 1): un item "Terminada" (S08) espera la
+    // validacion del solicitante -- confirmar que quedo resuelto (se cierra)
+    // o indicar que falta (vuelve a En desarrollo). Si nadie valida, se
+    // cierra solo tras unos dias (Triggers.cerrarInactivosTrigger, Backoffice).
+    if (s.estado === 'S08') {
+      filas += Componentes.alerta('Este ítem está terminado. Confírmalo si quedó resuelto, o cuéntanos si no.', 'aviso') +
+        '<div class="sigso-acciones-item">' +
+        '<button type="button" class="sigso-boton" data-accion="confirmar-cierre" data-subsolicitud="' + s.subsolicitud_id + '">Confirmar y cerrar</button> ' +
+        '<button type="button" class="sigso-boton--secundario" data-accion="mostrar-reabrir" data-subsolicitud="' + s.subsolicitud_id + '">No quedó resuelto</button>' +
+        '</div>' +
+        '<div class="sigso-oculto" data-bloque-reabrir="' + s.subsolicitud_id + '">' +
+        '<div class="sigso-campo">' +
+        '<label for="motivo-reabrir-' + s.subsolicitud_id + '">Cuéntanos qué falta</label>' +
+        '<textarea id="motivo-reabrir-' + s.subsolicitud_id + '" data-campo="motivo-reabrir" data-subsolicitud="' + s.subsolicitud_id + '"></textarea>' +
+        '</div>' +
+        '<button type="button" class="sigso-boton--secundario" data-accion="enviar-reabrir" data-subsolicitud="' + s.subsolicitud_id + '">Enviar</button>' +
+        '</div>' +
+        '<div data-resultado-validacion="' + s.subsolicitud_id + '"></div>';
     }
     return filas || '<p class="sigso-ayuda">Sin detalle adicional.</p>';
   }
@@ -148,6 +192,23 @@
       }
       // Recarga el estado: el item sigue en "esperando informacion" hasta
       // que Leo lo mueva, pero la respuesta ya quedo registrada.
+      return consultar_(ultimaConsulta.solicitud_id, ultimaConsulta.email);
+    });
+  }
+
+  function enviarValidacion_(subsolicitudId, accion, comentario) {
+    var contenedorResultado = document.querySelector('[data-resultado-validacion="' + subsolicitudId + '"]');
+    llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'validarCierre', {
+      solicitud_id: ultimaConsulta.solicitud_id,
+      subsolicitud_id: subsolicitudId,
+      email: ultimaConsulta.email,
+      accion: accion,
+      comentario: comentario || ''
+    }).then(function (respuesta) {
+      if (!respuesta.ok) {
+        contenedorResultado.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo aplicar la validacion.', 'error');
+        return;
+      }
       return consultar_(ultimaConsulta.solicitud_id, ultimaConsulta.email);
     });
   }

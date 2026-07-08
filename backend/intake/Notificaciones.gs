@@ -40,6 +40,19 @@ var Notificaciones = {
       'Nueva solicitud para revisar (' + (motivo || 'aviso') + '):\n\n' +
       solicitud.resumen_whatsapp;
     return enviarCorreo_(solicitud.solicitud_id, EMAIL_DESARROLLO, 'AVISO_DESARROLLO', asunto, cuerpo);
+  },
+
+  // RN-201 (v2.0, Sprint 1): avisa a Leo cuando el solicitante valida un item
+  // "Terminada" -- confirmando el cierre o reabriendolo con un motivo. Sin
+  // este aviso, Leo no se entera de una reapertura hasta que vuelve a mirar
+  // el panel (el gobierno del proceso depende de que se entere rapido).
+  notificarValidacionSolicitante: function (solicitud, subsolicitud, accion) {
+    var esConfirmacion = accion === 'confirmar';
+    var asunto = 'SIGSO - ' + (esConfirmacion ? 'Cierre confirmado' : 'Reabierto por el solicitante') + ': ' + subsolicitud.subsolicitud_id;
+    var cuerpo = esConfirmacion
+      ? 'El solicitante confirmo que el item ' + subsolicitud.subsolicitud_id + ' (' + solicitud.solicitud_id + ') quedo resuelto. Ya esta Cerrada.'
+      : 'El solicitante reabrio el item ' + subsolicitud.subsolicitud_id + ' (' + solicitud.solicitud_id + '): no quedo resuelto.';
+    return enviarCorreo_(solicitud.solicitud_id, EMAIL_DESARROLLO, 'VALIDACION_SOLICITANTE:' + subsolicitud.subsolicitud_id + ':' + accion, asunto, cuerpo);
   }
 };
 
