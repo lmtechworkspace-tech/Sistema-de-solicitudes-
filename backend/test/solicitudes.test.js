@@ -135,6 +135,62 @@ test('derivarPrioridad_ aplica la tabla de impacto (RN-006) y P4 por defecto', (
   assert.equal(ctx.derivarPrioridad_('ALGO_DESCONOCIDO'), 'P4');
 });
 
+// P2 (v2.0, Sprint 2): un tipo urgente por naturaleza (o una solicitud de
+// cliente) pone un piso de P2, sin diluir un impacto realmente critico.
+test('derivarPrioridad_ (P2): con esUrgente=true, nunca baja de P2 -- pero un impacto P1 sigue ganando', () => {
+  const ctx = loadIntakeConSchema();
+  assert.equal(ctx.derivarPrioridad_('PLANIFICADO', true), 'P2');
+  assert.equal(ctx.derivarPrioridad_('PARCIAL_CON_WORKAROUND', true), 'P2');
+  assert.equal(ctx.derivarPrioridad_('DEGRADACION_IMPORTANTE', true), 'P2');
+  assert.equal(ctx.derivarPrioridad_('SISTEMA_CAIDO', true), 'P1');
+  assert.equal(ctx.derivarPrioridad_(undefined, true), 'P2');
+  // Sin la bandera, se comporta igual que antes.
+  assert.equal(ctx.derivarPrioridad_('PLANIFICADO', false), 'P5');
+});
+
+test('crearSolicitud (P2): un tipo con es_urgente=true en CAT_TIPOS sube la prioridad a P2 aunque el impacto sea bajo', () => {
+  const ctx = loadIntakeConSchema();
+  seedSheet(ctx, 'CAT_TIPOS', ctx.COLUMNAS.CAT_TIPOS, [
+    ['ERR', 'Error / Bug', 'P2', true, true],
+    ['MEJ', 'Mejora', 'P3', true, false]
+  ]);
+
+  const resultado = ctx.Solicitudes.crearSolicitud(datosValidos({
+    subsolicitudes: [{ titulo: 'Idea nueva', descripcion: 'seria bueno tener esto', impacto: 'PLANIFICADO', modulo: 'Facturacion', tipo: 'ERR' }]
+  }));
+
+  const subsolicitudes = ctx.leerFilas_('SUBSOLICITUDES');
+  assert.equal(subsolicitudes[0].prioridad, 'P2');
+  assert.equal(ctx.leerFilas_('SOLICITUDES')[0].prioridad_derivada, 'P2');
+});
+
+test('crearSolicitud (P2): un tipo con es_urgente=false NO sube la prioridad -- sigue derivandose solo del impacto', () => {
+  const ctx = loadIntakeConSchema();
+  seedSheet(ctx, 'CAT_TIPOS', ctx.COLUMNAS.CAT_TIPOS, [
+    ['MEJ', 'Mejora', 'P3', true, false]
+  ]);
+
+  const resultado = ctx.Solicitudes.crearSolicitud(datosValidos({
+    subsolicitudes: [{ titulo: 'Idea nueva', descripcion: 'seria bueno tener esto', impacto: 'PLANIFICADO', modulo: 'Facturacion', tipo: 'MEJ' }]
+  }));
+
+  assert.equal(ctx.leerFilas_('SUBSOLICITUDES')[0].prioridad, 'P5');
+});
+
+test('crearSolicitud (P2): toda solicitud de cliente sube a P2 aunque el tipo no sea urgente (RN-005/P4 formalizado)', () => {
+  const ctx = loadIntakeConSchema();
+  seedSheet(ctx, 'CAT_TIPOS', ctx.COLUMNAS.CAT_TIPOS, [
+    ['MEJ', 'Mejora', 'P3', true, false]
+  ]);
+
+  const resultado = ctx.Solicitudes.crearSolicitud(datosValidos({
+    es_cliente: true, empresa_cliente: 'Constructora X', contacto_cliente: 'Ana', correo_cliente: 'ana@constructorax.cl',
+    subsolicitudes: [{ titulo: 'Idea nueva', descripcion: 'pedido de cliente', impacto: 'PLANIFICADO', modulo: 'Facturacion', tipo: 'MEJ' }]
+  }));
+
+  assert.equal(ctx.leerFilas_('SUBSOLICITUDES')[0].prioridad, 'P2');
+});
+
 test('la prioridad_derivada del padre es la mas critica entre sus subsolicitudes', () => {
   const ctx = loadIntakeConSchema();
   const resultado = ctx.Solicitudes.crearSolicitud(

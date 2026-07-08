@@ -152,6 +152,54 @@ test('estadoPublico responde forbidden si el correo no coincide', () => {
   assert.equal(resultado._forbidden, true);
 });
 
+// P2 (v2.0, Sprint 2): "cuantas hay antes que yo" -- posicion en la cola,
+// sin exponer el contenido de las demas solicitudes.
+test('estadoPublico (P2) expone posicion_cola: cuenta solo abiertas de la MISMA empresa con prioridad igual o mas critica', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0001', prioridad_derivada: 'P3', estado_derivado: 'S02',
+    fecha_creacion: '2026-01-05T10:00:00.000Z'
+  });
+  seedSubsolicitud(ctx, { subsolicitud_id: 'SOL-2026-HP-0001-01', solicitud_id: 'SOL-2026-HP-0001' });
+  // Mas critica (P1) y anterior: cuenta.
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0002', prioridad_derivada: 'P1', estado_derivado: 'S02',
+    fecha_creacion: '2026-01-01T10:00:00.000Z'
+  });
+  // Misma prioridad (P3) pero creada DESPUES: no cuenta.
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0003', prioridad_derivada: 'P3', estado_derivado: 'S02',
+    fecha_creacion: '2026-01-10T10:00:00.000Z'
+  });
+  // Misma prioridad (P3) y anterior: cuenta.
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0004', prioridad_derivada: 'P3', estado_derivado: 'S02',
+    fecha_creacion: '2026-01-02T10:00:00.000Z'
+  });
+  // Mas critica pero YA CERRADA: no cuenta.
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0005', prioridad_derivada: 'P1', estado_derivado: 'S09',
+    fecha_creacion: '2026-01-01T10:00:00.000Z'
+  });
+  // Mas critica pero de OTRA empresa: no cuenta.
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-RLD-0001', empresa_id: 'RLD', prioridad_derivada: 'P1', estado_derivado: 'S02',
+    fecha_creacion: '2026-01-01T10:00:00.000Z'
+  });
+
+  const resultado = ctx.Solicitudes.estadoPublico('SOL-2026-HP-0001', 'juan@homepymes.cl');
+  assert.equal(resultado.posicion_cola, 2);
+});
+
+test('estadoPublico (P2) posicion_cola es null si la solicitud ya esta cerrada/rechazada/cancelada', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { estado_derivado: 'S09' });
+  seedSubsolicitud(ctx, { estado: 'S09' });
+
+  const resultado = ctx.Solicitudes.estadoPublico('SOL-2026-HP-0001', 'juan@homepymes.cl');
+  assert.equal(resultado.posicion_cola, null);
+});
+
 test('estadoPublico responde error de validacion si la solicitud no existe', () => {
   const ctx = loadConSchema();
   const resultado = ctx.Solicitudes.estadoPublico('SOL-2026-HP-9999', 'juan@homepymes.cl');

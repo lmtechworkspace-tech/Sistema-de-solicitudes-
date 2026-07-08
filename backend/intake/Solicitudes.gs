@@ -33,7 +33,13 @@ var Solicitudes = {
     var timestamp = new Date().toISOString();
 
     var subsolicitudesGuardadas = data.subsolicitudes.map(function (item, idx) {
-      var prioridad = derivarPrioridad_(item.impacto);
+      // P2 (v2.0, Sprint 2): la urgencia real no es solo lo que el
+      // solicitante declara como impacto -- ciertos tipos son urgentes por
+      // naturaleza (CAT_TIPOS.es_urgente), y toda solicitud de cliente ya
+      // es urgente por defecto (RN-005, P4). derivarPrioridad_ nunca deja
+      // que estas bajen de P2, aunque el impacto declarado sea menor.
+      var esUrgentePorTipo = !!data.es_cliente || tipoEsUrgente_(item.tipo);
+      var prioridad = derivarPrioridad_(item.impacto, esUrgentePorTipo);
       var slaHoras = obtenerSlaHoras_(prioridad);
       var subId = solicitudId + '-' + ('0' + (idx + 1)).slice(-2);
 
@@ -239,6 +245,12 @@ var Solicitudes = {
       fecha_creacion: solicitud.fecha_creacion,
       doc_estado: solicitud.doc_estado,
       url_pdf: solicitud.url_pdf,
+      // P2 (v2.0, Sprint 2): "cuantas hay antes que yo" -- posicion en la
+      // cola de su propia empresa, sin exponer el contenido de las demas
+      // (privacidad, requisito explicito de la reunion).
+      posicion_cola: ESTADOS_CERRADOS.indexOf(solicitud.estado_derivado) === -1
+        ? calcularPosicionCola_(solicitud)
+        : null,
       subsolicitudes: subsolicitudes
     };
   },
@@ -412,6 +424,22 @@ function errorValidacion_(campo, mensaje) {
   return { _validationError: true, message: mensaje, fields: [{ campo: campo, mensaje: mensaje }] };
 }
 
+// P2: cuenta cuantas solicitudes ABIERTAS de la MISMA empresa estan
+// "adelante" en la cola -- prioridad mas critica, o misma prioridad pero
+// creada antes. No cruza empresas (la cola es la de tu propio equipo/Leo).
+function calcularPosicionCola_(solicitud) {
+  var indiceMiPrioridad = ORDEN_PRIORIDAD.indexOf(solicitud.prioridad_derivada);
+  var miFecha = new Date(solicitud.fecha_creacion).getTime();
+  return leerFilas_(SHEETS.SOLICITUDES).filter(function (otra) {
+    if (otra.solicitud_id === solicitud.solicitud_id) return false;
+    if (otra.empresa_id !== solicitud.empresa_id) return false;
+    if (ESTADOS_CERRADOS.indexOf(otra.estado_derivado) !== -1) return false;
+    var indiceOtra = ORDEN_PRIORIDAD.indexOf(otra.prioridad_derivada);
+    if (indiceOtra < indiceMiPrioridad) return true;
+    return indiceOtra === indiceMiPrioridad && new Date(otra.fecha_creacion).getTime() < miFecha;
+  }).length;
+}
+
 function buscarSolicitudPorId_(solicitudId) {
   var filas = leerFilas_(SHEETS.SOLICITUDES);
   for (var i = 0; i < filas.length; i++) {
@@ -560,8 +588,37 @@ function buscarDuplicadoAbierto_(dedupHash) {
   return null;
 }
 
-function derivarPrioridad_(impacto) {
-  return MAPA_IMPACTO_PRIORIDAD[impacto] || PRIORIDAD_POR_DEFECTO;
+// RN-006 sigue siendo la base (impacto declarado); P2 (Sprint 2) le agrega
+// un piso: si el tipo es urgente por naturaleza o es solicitud de cliente,
+// la prioridad nunca queda mas baja que P2 -- pero un impacto realmente
+// critico (P1: sistema caido, perdida de datos, bloqueo operativo) sigue
+// ganando, nunca se "diluye" a P2 por la regla de urgencia.
+function derivarPrioridad_(impacto, esUrgente) {
+  var base = MAPA_IMPACTO_PRIORIDAD[impacto] || PRIORIDAD_POR_DEFECTO;
+  if (esUrgente && ORDEN_PRIORIDAD.indexOf(base) > ORDEN_PRIORIDAD.indexOf('P2')) {
+    return 'P2';
+  }
+  return base;
+}
+
+// Resuelve CAT_TIPOS.es_urgente para un tipo_id dado. Si el catalogo aun no
+// existe (instalacion incompleta) o el tipo no tiene match, no bloquea la
+// creacion de la solicitud: se asume que no es urgente por tipo (el
+// impacto declarado sigue derivando la prioridad igual).
+function tipoEsUrgente_(tipoId) {
+  var filas;
+  try {
+    filas = leerFilas_(SHEETS.CAT_TIPOS);
+  } catch (err) {
+    return false;
+  }
+  for (var i = 0; i < filas.length; i++) {
+    if (filas[i].tipo_id === tipoId) {
+      var valor = filas[i].es_urgente;
+      return valor === true || valor === 'TRUE' || valor === 1;
+    }
+  }
+  return false;
 }
 
 function prioridadMasCritica_(listaPrioridades) {

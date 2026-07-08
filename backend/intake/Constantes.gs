@@ -137,7 +137,9 @@ var COLUMNAS = {
   // corrigio explicitamente que la prioridad automatica se derive por
   // impacto (RN-006, §7.2 de v1.1), no por tipo -- ver
   // documentacion/fases/RECONCILIACION-v1.0.md.
-  CAT_TIPOS: ['tipo_id', 'nombre', 'prioridad_default', 'activo'],
+  // Ver la nota identica en backend/backoffice/Constantes.gs (v2.0, Sprint
+  // 2, P2): es_urgente agregado al final.
+  CAT_TIPOS: ['tipo_id', 'nombre', 'prioridad_default', 'activo', 'es_urgente'],
   LOG_SISTEMA: ['log_id', 'timestamp', 'contexto', 'mensaje', 'ref'],
   LOG_NOTIFICACIONES: [
     'log_id', 'timestamp', 'solicitud_id', 'canal',

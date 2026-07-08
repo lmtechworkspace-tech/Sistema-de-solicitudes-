@@ -154,6 +154,16 @@ function coincideFiltros_(solicitud, filtros, idsAsignadosPorItem) {
   if (filtros.estado && solicitud.estado_derivado !== filtros.estado) return false;
   if (filtros.prioridad && solicitud.prioridad_derivada !== filtros.prioridad) return false;
   if (filtros.plataforma && solicitud.plataforma !== filtros.plataforma) return false;
+  // P6 (v2.0, Sprint 2): filtro por solicitante -- Gerencia necesita
+  // responder "¿de que son todos esos tickets que manda Juan?" sin
+  // depender de Leo. Coincidencia parcial, sin distinguir mayus/minus,
+  // contra nombre O correo (quien busca puede saber cualquiera de los dos).
+  if (filtros.solicitante) {
+    var buscado = String(filtros.solicitante).trim().toLowerCase();
+    var nombre = String(solicitud.solicitante_nombre || '').toLowerCase();
+    var email = String(solicitud.solicitante_email || '').toLowerCase();
+    if (nombre.indexOf(buscado) === -1 && email.indexOf(buscado) === -1) return false;
+  }
   if (filtros.vistaDev) {
     // Asignado a nivel solicitud (rol "por defecto") o a nivel de alguna
     // subsolicitud puntual (§13.3 v1.0, trabajo en paralelo por item).

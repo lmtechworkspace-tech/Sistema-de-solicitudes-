@@ -152,7 +152,14 @@ fijo de la especificación (RF-009 v1.0), así que **sí** se siembra
 automáticamente (`Instalador.gs`, `TIPOS_INICIALES`) con sus 7 tipos y
 agrega la columna `prioridad_default` (solo informativa/UX — la prioridad
 real siempre se
-deriva por impacto, RN-006, nunca por tipo).
+deriva por impacto, RN-006, nunca por tipo). **v2.0 (Sprint 2, P2)** agrega
+`es_urgente` (booleano, aditivo al final): a diferencia de
+`prioridad_default`, este **sí** afecta la prioridad real —
+`derivarPrioridad_` (`backend/intake/Solicitudes.gs`) no deja que un tipo
+marcado urgente (o cualquier solicitud de cliente) quede por debajo de P2,
+sin importar el impacto que declare el solicitante. Sembrado por defecto en
+`ERR`/`MIG`; el resto se ajusta desde `admin.html` según el criterio real de
+cada equipo.
 
 ## HISTORIAL_ESTADOS
 

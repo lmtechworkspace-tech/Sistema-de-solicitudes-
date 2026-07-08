@@ -334,11 +334,17 @@
     return '<div class="sigso-campo"><button type="button" class="sigso-boton--secundario" data-accion="ir-a-completo">+ Agregar más detalles (modo Completo)</button></div>';
   }
 
+  // P2 (v2.0, Sprint 2): los tipos urgentes por naturaleza (CAT_TIPOS.es_urgente,
+  // p.ej. Error/Bug) se marcan visualmente -- el solicitante ve que ese tipo
+  // ya entra con prioridad alta, sin depender solo de lo que el mismo declare
+  // como impacto ("todos van a poner alta porque todo es urgente").
   function renderChipsTipo_(item, idx) {
     var tipos = estado.catalogos ? estado.catalogos.tipos : [];
     return '<div class="sigso-chips">' + tipos.map(function (t) {
       var activo = t.tipo_id === item.tipo ? ' sigso-chip--activo' : '';
-      return '<button type="button" class="sigso-chip' + activo + '" data-accion="elegir-tipo" data-idx="' + idx + '" data-tipo="' + t.tipo_id + '">' + Componentes.escaparHtml(t.nombre) + '</button>';
+      var esUrgente = t.es_urgente === true || t.es_urgente === 'TRUE' || t.es_urgente === 1;
+      var etiquetaUrgente = esUrgente ? ' <span class="sigso-badge sigso-badge--P1">Urgente</span>' : '';
+      return '<button type="button" class="sigso-chip' + activo + '" data-accion="elegir-tipo" data-idx="' + idx + '" data-tipo="' + t.tipo_id + '">' + Componentes.escaparHtml(t.nombre) + etiquetaUrgente + '</button>';
     }).join('') + '</div>';
   }
 

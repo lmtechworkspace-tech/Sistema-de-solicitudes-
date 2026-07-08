@@ -97,7 +97,15 @@ var COLUMNAS = {
   // Ver la nota identica en backend/intake/Constantes.gs sobre
   // modulo_padre_id (jerarquia de hasta 4 niveles, post-Fase 8).
   CAT_MODULOS: ['modulo_id', 'nombre', 'plataforma_id', 'modulo_padre_id', 'activo'],
-  CAT_TIPOS: ['tipo_id', 'nombre', 'prioridad_default', 'activo'],
+  // es_urgente (v2.0, Sprint 2, P2): aditiva al final -- ciertos tipos son
+  // urgentes por naturaleza (frenan dinero/operacion), independiente del
+  // impacto que declare el solicitante ("todos van a poner alta porque todo
+  // es urgente" -- se necesita un corte objetivo, no auto-declarado).
+  // derivarPrioridad_ (backend/intake/Solicitudes.gs) lo combina con el
+  // impacto: si el tipo es urgente (o la solicitud es de cliente, ya
+  // urgente por RN-005), la prioridad nunca baja de P2 aunque el impacto
+  // declarado sea menor.
+  CAT_TIPOS: ['tipo_id', 'nombre', 'prioridad_default', 'activo', 'es_urgente'],
   LOG_SISTEMA: ['log_id', 'timestamp', 'contexto', 'mensaje', 'ref'],
   LOG_NOTIFICACIONES: [
     'log_id', 'timestamp', 'solicitud_id', 'canal',

@@ -6,6 +6,11 @@
 
 var Comentarios = {
   agregarComentario: function (data, contexto) {
+    // P6 (v2.0, Sprint 2): Gerencia es de solo lectura -- ver detalle,
+    // nunca escribir en el (comentar incluido).
+    if (contexto.rol === 'GERENCIA') {
+      return { _forbidden: true, message: 'El rol Gerencia es de solo lectura: no puede comentar.' };
+    }
     if (!data.solicitud_id) {
       return errorValidacion_('solicitud_id', 'Falta indicar la solicitud.');
     }

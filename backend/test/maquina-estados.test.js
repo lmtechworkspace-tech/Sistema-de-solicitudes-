@@ -262,6 +262,30 @@ test('getDetalle (RN-201): SI ofrece "Cerrada" (S09) para una consulta tecnica (
   assert.notEqual(opciones.indexOf('S09'), -1);
 });
 
+// P6 (v2.0, Sprint 2): Gerencia ve todo, no toca nada.
+test('actualizarEstado (P6): el rol GERENCIA no puede cambiar ningun estado', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S01' });
+
+  const resultado = ctx.Solicitudes.actualizarEstado(
+    { subsolicitud_id: 'SOL-2026-HP-0001-01', estado_nuevo: 'S02' },
+    { email: 'gerente@homepymes.cl', rol: 'GERENCIA' }
+  );
+
+  assert.equal(resultado._forbidden, true);
+  assert.equal(ctx.leerFilas_('SUBSOLICITUDES')[0].estado, 'S01');
+});
+
+test('getDetalle (P6): al rol GERENCIA no se le ofrece ninguna transicion de estado (solo lectura)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S02' });
+
+  const detalle = ctx.Solicitudes.getDetalle('SOL-2026-HP-0001', { email: 'gerente@homepymes.cl', rol: 'GERENCIA' });
+  assert.equal(detalle.transiciones_por_subsolicitud['SOL-2026-HP-0001-01'].length, 0);
+});
+
 test('actualizarEstado aplica RN-015: no pasa a S04 si alguna subsolicitud hermana no tiene titulo/descripcion', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);

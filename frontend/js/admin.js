@@ -42,6 +42,11 @@
         { nombre: 'tipo_id', label: 'Código', soloAlCrear: true },
         { nombre: 'nombre', label: 'Nombre' },
         { nombre: 'prioridad_default', label: 'Prioridad sugerida (informativa)' },
+        // P2 (v2.0, Sprint 2): a diferencia de prioridad_default (solo
+        // informativa), este SI afecta la prioridad real -- derivarPrioridad_
+        // (backend/intake/Solicitudes.gs) no deja que un tipo urgente quede
+        // por debajo de P2, sin importar el impacto que declare el solicitante.
+        { nombre: 'es_urgente', label: 'Urgente por naturaleza (afecta la prioridad real)', tipo: 'checkbox' },
         { nombre: 'activo', label: 'Activo', tipo: 'checkbox' }
       ]
     }

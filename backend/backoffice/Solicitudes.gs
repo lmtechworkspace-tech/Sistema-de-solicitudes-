@@ -16,6 +16,12 @@
 var Solicitudes = {
   actualizarEstado: function (data, contexto, opciones) {
     var opts = opciones || {};
+    // P6 (v2.0, Sprint 2): Gerencia ve todo, no toca nada -- "confundir 'ver
+    // todo' con 'poder tocar todo'" es justo el riesgo que el propio
+    // documento de mejoras advierte evitar.
+    if (contexto.rol === 'GERENCIA' && !opts.sistemaAutomatico) {
+      return { _forbidden: true, message: 'El rol Gerencia es de solo lectura: no puede cambiar estados.' };
+    }
     var subsolicitud = buscarSubsolicitud_(data.subsolicitud_id);
     if (!subsolicitud) {
       return errorValidacion_('subsolicitud_id', 'Subsolicitud no encontrada: ' + data.subsolicitud_id);
@@ -211,7 +217,9 @@ var Solicitudes = {
     var rolActual = contexto ? contexto.rol : '';
     var transicionesPorSubsolicitud = {};
     subsolicitudes.forEach(function (sub) {
-      transicionesPorSubsolicitud[sub.subsolicitud_id] = Object.keys(ESTADOS)
+      // P6: Gerencia es de solo lectura -- no se le ofrece ningun destino
+      // (el selector de "Cambiar estado a..." queda vacio en el frontend).
+      transicionesPorSubsolicitud[sub.subsolicitud_id] = rolActual === 'GERENCIA' ? [] : Object.keys(ESTADOS)
         // RN-201: "Cerrada" no se ofrece al gestor salvo consulta tecnica
         // (ver nota identica en Solicitudes.actualizarEstado).
         .filter(function (estado) {

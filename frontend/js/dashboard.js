@@ -28,15 +28,21 @@
     // backend): reordena lo que ya se cargo.
     document.getElementById('filtro-agrupar').addEventListener('change', renderRecientes_);
     // Fase 10.1: busqueda por texto sobre lo ya cargado (recientesActuales),
-    // sin golpear el backend en cada tecla -- igual que Agrupar.
+    // sin golpear el backend en cada tecla -- igual que Agrupar. P6 (Sprint
+    // 2): "Actualizar" SI manda este mismo texto como filtro de solicitante
+    // al backend (Dashboard.coincideFiltros_), para buscar en TODAS las
+    // solicitudes y no solo en las ultimas 50 (Gerencia necesita responder
+    // "de que son los tickets de Juan" sin ese limite).
     document.getElementById('buscar-recientes').addEventListener('input', renderRecientes_);
+    document.getElementById('btn-exportar-csv').addEventListener('click', exportarCSV_);
   }
 
   function leerFiltros_() {
     return {
       empresa_id: document.getElementById('filtro-empresa').value,
       estado: document.getElementById('filtro-estado').value,
-      prioridad: document.getElementById('filtro-prioridad').value
+      prioridad: document.getElementById('filtro-prioridad').value,
+      solicitante: document.getElementById('buscar-recientes').value.trim()
     };
   }
 
@@ -151,6 +157,26 @@
       (sla ? ' &middot; ' + sla : '') +
       '</div>' +
       '</div>';
+  }
+
+  // P6 (v2.0, Sprint 2): Gerencia necesita responderle a su jefe sin entrar
+  // al sistema -- exporta exactamente lo que esta viendo (recientes +
+  // filtro de texto ya aplicado), no un volcado completo aparte.
+  function exportarCSV_() {
+    var filas = filtrarPorTexto_(recientesActuales);
+    var encabezado = ['solicitud_id', 'empresa_id', 'plataforma', 'modulo', 'estado_derivado', 'prioridad_derivada', 'solicitante_nombre', 'solicitante_email', 'asignado_a', 'cantidad_items', 'fecha_creacion'];
+    var lineas = [encabezado.join(',')].concat(filas.map(function (s) {
+      return encabezado.map(function (campo) {
+        return '"' + String(s[campo] || '').replace(/"/g, '""') + '"';
+      }).join(',');
+    }));
+    var blob = new Blob([lineas.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    var enlace = document.createElement('a');
+    enlace.href = URL.createObjectURL(blob);
+    enlace.download = 'sigso-solicitudes-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(enlace);
+    enlace.click();
+    document.body.removeChild(enlace);
   }
 
   function renderIndicadorSla_(horas) {

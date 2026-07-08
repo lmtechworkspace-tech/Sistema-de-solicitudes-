@@ -76,7 +76,9 @@ var ESQUEMA_HOJAS = {
   // Ver la nota identica en backend/intake/Constantes.gs sobre
   // modulo_padre_id (jerarquia de hasta 4 niveles, post-Fase 8).
   CAT_MODULOS: ['modulo_id', 'nombre', 'plataforma_id', 'modulo_padre_id', 'activo'],
-  CAT_TIPOS: ['tipo_id', 'nombre', 'prioridad_default', 'activo'],
+  // Ver la nota identica en backend/intake/Constantes.gs (v2.0, Sprint 2,
+  // P2): es_urgente agregado al final.
+  CAT_TIPOS: ['tipo_id', 'nombre', 'prioridad_default', 'activo', 'es_urgente'],
   LOG_SISTEMA: ['log_id', 'timestamp', 'contexto', 'mensaje', 'ref'],
   LOG_NOTIFICACIONES: [
     'log_id', 'timestamp', 'solicitud_id', 'canal',
@@ -113,14 +115,21 @@ var SLA_INICIAL = [
 // que son datos propios de la organizacion y se cargan a mano (§17.2). Por
 // eso se siembran aqui. prioridad_default es solo informativa: la
 // prioridad real se deriva por impacto (RN-006, Fase 2), no por tipo.
+// es_urgente (v2.0, Sprint 2, P2) SI afecta la prioridad real (ver
+// derivarPrioridad_, backend/intake/Solicitudes.gs): marca por defecto
+// Error/Bug y Migracion como urgentes por naturaleza (paran operacion o
+// tocan datos en produccion); el resto queda ajustable desde
+// Administracion > Catalogos > Tipos, segun el criterio real de cada
+// equipo (la reunion menciono categorias propias como "hoja de ruta" o
+// "firma digital" que no mapean 1 a 1 a estos 7 tipos genericos).
 var TIPOS_INICIALES = [
-  ['ERR', 'Error / Bug', 'P2', true],
-  ['MOD', 'Modificacion', 'P3', true],
-  ['MEJ', 'Mejora', 'P3', true],
-  ['DES', 'Desarrollo', 'P4', true],
-  ['NMO', 'Nuevo Modulo', 'P5', true],
-  ['MIG', 'Migracion', 'P2', true],
-  ['CON', 'Consulta Tecnica', 'P4', true]
+  ['ERR', 'Error / Bug', 'P2', true, true],
+  ['MOD', 'Modificacion', 'P3', true, false],
+  ['MEJ', 'Mejora', 'P3', true, false],
+  ['DES', 'Desarrollo', 'P4', true, false],
+  ['NMO', 'Nuevo Modulo', 'P5', true, false],
+  ['MIG', 'Migracion', 'P2', true, true],
+  ['CON', 'Consulta Tecnica', 'P4', true, false]
 ];
 
 function instalarHojas() {

@@ -75,13 +75,13 @@ function construirContexto() {
     ['MOD_PREV_CHARLAS_HIST', 'Historico', 'RLD_GDE', 'MOD_PREV_CHARLAS', true]
   ]);
   seedSheet(ctx, 'CAT_TIPOS', ctx.COLUMNAS.CAT_TIPOS, [
-    ['ERR', 'Error / Bug', 'P2', true],
-    ['MOD', 'Modificacion', 'P3', true],
-    ['MEJ', 'Mejora', 'P3', true],
-    ['DES', 'Desarrollo', 'P4', true],
-    ['NMO', 'Nuevo Modulo', 'P5', true],
-    ['MIG', 'Migracion', 'P2', true],
-    ['CON', 'Consulta Tecnica', 'P4', true]
+    ['ERR', 'Error / Bug', 'P2', true, true],
+    ['MOD', 'Modificacion', 'P3', true, false],
+    ['MEJ', 'Mejora', 'P3', true, false],
+    ['DES', 'Desarrollo', 'P4', true, false],
+    ['NMO', 'Nuevo Modulo', 'P5', true, false],
+    ['MIG', 'Migracion', 'P2', true, true],
+    ['CON', 'Consulta Tecnica', 'P4', true, false]
   ]);
 
   return ctx;

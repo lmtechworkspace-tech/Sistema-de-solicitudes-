@@ -66,3 +66,17 @@ test('agregarComentario responde error de validacion si la solicitud no existe',
   );
   assert.equal(resultado._validationError, true);
 });
+
+// P6 (v2.0, Sprint 2): Gerencia es de solo lectura -- ni comentar.
+test('agregarComentario rechaza al rol GERENCIA (solo lectura, P6)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+
+  const resultado = ctx.Comentarios.agregarComentario(
+    { solicitud_id: 'SOL-2026-HP-0001', texto: 'Intento de comentario' },
+    { email: 'gerente@homepymes.cl', rol: 'GERENCIA' }
+  );
+
+  assert.equal(resultado._forbidden, true);
+  assert.equal(ctx.leerFilas_('COMENTARIOS').length, 0);
+});

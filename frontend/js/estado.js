@@ -71,12 +71,22 @@
 
     var pdf = data.url_pdf ? '<p><a href="' + data.url_pdf + '" target="_blank" rel="noopener">Ver documento PDF</a></p>' : '';
 
+    // P2 (v2.0, Sprint 2): "cuantas hay antes que yo" -- solo se muestra si
+    // sigue abierta (posicion_cola es null cuando ya esta cerrada/rechazada).
+    var cola = '';
+    if (typeof data.posicion_cola === 'number') {
+      cola = data.posicion_cola > 0
+        ? '<p class="sigso-ayuda">Hay ' + data.posicion_cola + ' solicitud(es) de tu empresa con igual o mayor prioridad por delante.</p>'
+        : '<p class="sigso-ayuda">Eres la solicitud de mayor prioridad en espera de tu empresa.</p>';
+    }
+
     var contenedor = document.getElementById('resultado');
     contenedor.innerHTML =
       '<div class="sigso-resultado-exito">' +
       '<p class="sigso-numero-solicitud">' + data.solicitud_id + '</p>' +
       '<p>Estado: <strong>' + formatearEstadoSigso(data.estado_derivado) + '</strong>' +
       ' &mdash; Prioridad: ' + Componentes.badgePrioridad(data.prioridad_derivada) + '</p>' +
+      cola +
       '<p class="sigso-ayuda">Haz clic en cada &iacute;tem para ver su detalle.</p>' +
       pdf +
       itemsHtml +

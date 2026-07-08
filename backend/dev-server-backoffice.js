@@ -48,7 +48,9 @@ function construirContexto() {
   seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS, [
     ['U1', 'Analista Demo', 'analista@homepymes.cl', 'HP', 'ANA', true, '', 'sistema'],
     ['U2', 'Dev Demo', 'dev@homepymes.cl', 'HP', 'DEV', true, '', 'sistema'],
-    ['U3', 'Admin Demo', 'admin@homepymes.cl', 'HP', 'ADM', true, '', 'sistema']
+    ['U3', 'Admin Demo', 'admin@homepymes.cl', 'HP', 'ADM', true, '', 'sistema'],
+    // P6 (v2.0, Sprint 2): rol de solo lectura, para probar el panel en local.
+    ['U4', 'Gerente Demo', 'gerente@homepymes.cl', 'HP', 'GERENCIA', true, '', 'sistema']
   ]);
   seedSheet(ctx, 'CAT_EMPRESAS', ctx.COLUMNAS.CAT_EMPRESAS, [
     ['HP', 'HomePymes', '', true],
@@ -63,13 +65,13 @@ function construirContexto() {
     ['MOD_LIQ', 'Liquidaciones', 'RLD_GDE', '', true]
   ]);
   seedSheet(ctx, 'CAT_TIPOS', ctx.COLUMNAS.CAT_TIPOS, [
-    ['ERR', 'Error / Bug', 'P2', true],
-    ['MOD', 'Modificacion', 'P3', true],
-    ['MEJ', 'Mejora', 'P3', true],
-    ['DES', 'Desarrollo', 'P4', true],
-    ['NMO', 'Nuevo Modulo', 'P5', true],
-    ['MIG', 'Migracion', 'P2', true],
-    ['CON', 'Consulta Tecnica', 'P4', true]
+    ['ERR', 'Error / Bug', 'P2', true, true],
+    ['MOD', 'Modificacion', 'P3', true, false],
+    ['MEJ', 'Mejora', 'P3', true, false],
+    ['DES', 'Desarrollo', 'P4', true, false],
+    ['NMO', 'Nuevo Modulo', 'P5', true, false],
+    ['MIG', 'Migracion', 'P2', true, true],
+    ['CON', 'Consulta Tecnica', 'P4', true, false]
   ]);
 
   sembrarSolicitudesDemo_(ctx);

@@ -41,10 +41,15 @@
 
     wireAcciones_(detalle.solicitud.solicitud_id);
 
-    document.getElementById('form-comentario').addEventListener('submit', function (evento) {
-      evento.preventDefault();
-      enviarComentario_(detalle.solicitud.solicitud_id);
-    });
+    // P6: el formulario no existe en el DOM cuando el rol es GERENCIA
+    // (renderHistoria_ lo omite) -- solo se cablea si esta presente.
+    var formComentario = document.getElementById('form-comentario');
+    if (formComentario) {
+      formComentario.addEventListener('submit', function (evento) {
+        evento.preventDefault();
+        enviarComentario_(detalle.solicitud.solicitud_id);
+      });
+    }
   }
 
   // --- Columna izquierda: ficha (solo lectura, sticky) -------------------
@@ -102,6 +107,11 @@
     var subsolicitudes = detalle.subsolicitudes;
     var archivos = detalle.archivos || [];
     var transiciones = detalle.transiciones_por_subsolicitud || {};
+    // P6 (v2.0, Sprint 2): Gerencia ve el detalle completo, pero de solo
+    // lectura -- no se le ofrecen las acciones de cambiar estado/prioridad
+    // (el backend ya las rechaza igual, esto evita mostrar controles que
+    // solo van a fallar).
+    var soloLectura = detalle.rol_actual === 'GERENCIA';
 
     return subsolicitudes.map(function (sub) {
       var urlsAdicionales = [];
@@ -138,7 +148,7 @@
         (datos.length > 0 ? '<dl class="sigso-datos-item">' + datos.join('') + '</dl>' : '') +
         (sub.observaciones ? '<p><em>' + Componentes.escaparHtml(sub.observaciones) + '</em></p>' : '') +
         renderGaleria_(imagenesItem) +
-        renderAccionesItem_(sub, transiciones[sub.subsolicitud_id] || []) +
+        (soloLectura ? '' : renderAccionesItem_(sub, transiciones[sub.subsolicitud_id] || [])) +
         '</div></div>';
     }).join('') || Componentes.vacio('Sin items.');
   }
@@ -213,7 +223,10 @@
           '</li>';
       }).join('') + '</ul>';
 
-    return '<h3>Actividad</h3>' + feed + renderFormComentario_();
+    // P6: Gerencia ve la actividad pero no comenta (el backend ya lo
+    // rechaza igual; ver nota identica en renderSubsolicitudes_).
+    var formComentario = detalle.rol_actual === 'GERENCIA' ? '' : renderFormComentario_();
+    return '<h3>Actividad</h3>' + feed + formComentario;
   }
 
   function renderFormComentario_() {

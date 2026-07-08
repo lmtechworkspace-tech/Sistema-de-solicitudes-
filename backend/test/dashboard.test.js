@@ -87,6 +87,22 @@ test('Dashboard.getData respeta los filtros (empresa_id)', () => {
   assert.equal(datos.recientes[0].empresa_id, 'HP');
 });
 
+// P6 (v2.0, Sprint 2): filtro por solicitante, para Gerencia (o cualquier
+// rol) sin depender de cruzar con otra planilla.
+test('Dashboard.getData (P6) respeta el filtro solicitante -- coincidencia parcial por nombre o correo', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0001', solicitante_nombre: 'Juan Perez', solicitante_email: 'juan@homepymes.cl' });
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0002', solicitante_nombre: 'Camila Pena', solicitante_email: 'camila@homepymes.cl' });
+
+  const porNombre = ctx.Dashboard.getData({ solicitante: 'juan' }, { rol: 'GERENCIA' });
+  assert.equal(porNombre.recientes.length, 1);
+  assert.equal(porNombre.recientes[0].solicitud_id, 'SOL-2026-HP-0001');
+
+  const porCorreo = ctx.Dashboard.getData({ solicitante: 'camila@homepymes.cl' }, { rol: 'GERENCIA' });
+  assert.equal(porCorreo.recientes.length, 1);
+  assert.equal(porCorreo.recientes[0].solicitud_id, 'SOL-2026-HP-0002');
+});
+
 test('Dashboard.getData enriquece recientes con cantidad_items, sla_restante_horas y asignado_a (Fase 10)', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx, {
