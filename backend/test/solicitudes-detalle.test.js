@@ -49,6 +49,17 @@ test('getDetalle devuelve solicitud, subsolicitudes, historial y comentarios', (
   assert.equal(detalle.archivos.length, 0);
 });
 
+// v2.1 (Fase B): getDetalle agrega el semaforo de cumplimiento por item
+// (Cumplimiento.gs), sin fecha_comprometida el item activo es SIN_COMPROMISO.
+test('getDetalle (v2.1) agrega cumplimiento a cada subsolicitud', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+
+  const detalle = ctx.Solicitudes.getDetalle('SOL-2026-HP-0001');
+
+  assert.equal(detalle.subsolicitudes[0].cumplimiento.codigo, 'SIN_COMPROMISO');
+});
+
 test('getDetalle incluye los archivos de la solicitud (Fase 9, para la galeria del panel de Leo)', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);

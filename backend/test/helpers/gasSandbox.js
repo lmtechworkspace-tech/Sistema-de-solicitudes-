@@ -65,6 +65,7 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   'Constantes.gs',
   'SheetsRepo.gs',
   'Utils.gs',
+  'Cumplimiento.gs',
   'DriveRepo.gs',
   'Notificaciones.gs',
   'Documentos.gs',

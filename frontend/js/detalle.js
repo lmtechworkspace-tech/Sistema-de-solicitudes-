@@ -142,10 +142,18 @@
       if (sub.fecha_propuesta) datos.push(renderCampoDato_('Fecha propuesta (solicitante)', Componentes.escaparHtml(sub.fecha_propuesta.replace('T', ' '))));
       if (sub.fecha_comprometida) datos.push(renderCampoDato_('Fecha comprometida', Componentes.escaparHtml(sub.fecha_comprometida.replace('T', ' ')) + (sub.comprometida_por ? ' — ' + Componentes.escaparHtml(sub.comprometida_por) : '')));
       if (sub.fecha_terminada) datos.push(renderCampoDato_('Terminada el', Componentes.escaparHtml(new Date(sub.fecha_terminada).toLocaleString('es-CL'))));
+      // v2.1 (Fase B): semaforo de cumplimiento (§6) -- ya calculado por
+      // getDetalle (Cumplimiento.gs), aqui solo se muestra.
+      var cumplimientoBadge = sub.cumplimiento
+        ? ' ' + Componentes.badge(sub.cumplimiento.emoji + ' ' + sub.cumplimiento.etiqueta, '')
+        : '';
+      if (sub.cumplimiento && sub.cumplimiento.dias_esperando !== null) {
+        datos.push(renderCampoDato_('Esperando validación', sub.cumplimiento.dias_esperando + ' día(s) hábil(es)'));
+      }
 
       return '<div class="sigso-acordeon-item sigso-acordeon-item--activo">' +
         '<div class="sigso-acordeon-item__cabecera"><span>' + sub.numero_item + '. ' + Componentes.escaparHtml(sub.titulo) +
-        ' — ' + Componentes.badgePrioridad(sub.prioridad) + ' ' + Componentes.badgeEstado(sub.estado) + '</span></div>' +
+        ' — ' + Componentes.badgePrioridad(sub.prioridad) + ' ' + Componentes.badgeEstado(sub.estado) + cumplimientoBadge + '</span></div>' +
         '<div class="sigso-acordeon-item__cuerpo">' +
         '<p>' + Componentes.escaparHtml(sub.descripcion) + '</p>' +
         (sub.contexto ? '<p><strong>Contexto:</strong> ' + Componentes.escaparHtml(sub.contexto) + '</p>' : '') +

@@ -275,7 +275,15 @@ var Solicitudes = {
       return errorValidacion_('solicitud_id', 'No existe una solicitud con ese numero.');
     }
 
-    var subsolicitudes = obtenerSubsolicitudesDeSolicitud_(solicitudId);
+    // v2.1 (Fase B): el semaforo de cumplimiento (§6) se calcula aqui, no se
+    // guarda -- se deriva de fecha_comprometida/fecha_terminada/estado en el
+    // momento de pedir el detalle (Cumplimiento.gs). Se agrega a una copia
+    // del objeto, sin mutar lo que devuelve obtenerSubsolicitudesDeSolicitud_
+    // (otras funciones -- actualizarEstado, actualizarPrioridad -- reusan esa
+    // lectura sin esperar un campo calculado).
+    var subsolicitudes = obtenerSubsolicitudesDeSolicitud_(solicitudId).map(function (sub) {
+      return Object.assign({}, sub, { cumplimiento: Cumplimiento.clasificar(sub) });
+    });
     // Fase 10.1: cualquier estado es un destino valido para cualquier rol
     // (ver nota en Constantes.gs) -- el selector ofrece los 11 estados
     // menos el actual, marcando cuales piden comentario obligatorio para

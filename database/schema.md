@@ -189,6 +189,20 @@ existente tiene esa forma (`HISTORIAL_ESTADOS` es específicamente de
 estados, RN-014). Ver el razonamiento completo en
 `documentacion/fases/FASE-02-maquina-estados.md`.
 
+## Semáforo de cumplimiento (v2.1 Fase B, derivado — no persiste en Sheets)
+
+`backend/backoffice/Cumplimiento.gs` (`Cumplimiento.clasificar(subsolicitud)`)
+calcula, en el momento de pedir el detalle (`Solicitudes.getDetalle`), la
+clasificación de "dos relojes" descrita en
+`documentacion/SIGSO-v2.1-plazos-y-control.md` §2.2/§6, a partir de
+`estado`/`fecha_comprometida`/`fecha_terminada` — reutilizando
+`Utils.horasHabilesEntre` (mismo motor de horas hábiles del SLA, §10). No
+agrega columnas: es un campo calculado (`cumplimiento: { codigo, etiqueta,
+emoji, dias_esperando }`) que viaja en la respuesta, nunca se escribe en
+`SUBSOLICITUDES`. Códigos: `EN_PLAZO`, `EN_RIESGO`,
+`ATRASADA_DESARROLLADOR`, `ESPERANDO_VALIDACION` (con `dias_esperando`),
+`SIN_COMPROMISO`, `CERRADA_A_TIEMPO`, `CERRADA_CON_ATRASO`.
+
 ## HISTORIAL_COMPROMISO (nueva, v2.1 Fase A)
 
 | Columna | Tipo | Nota |
