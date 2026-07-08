@@ -45,7 +45,11 @@
     catalogos: null,
     subsolicitudActivaIdx: 0,
     subsolicitudes: [nuevaSubsolicitud_()],
-    imagenesPorItem: { 0: [] }
+    imagenesPorItem: { 0: [] },
+    // v2.1 (Fase A, "dos promesas, dos relojes"): lo que el solicitante
+    // propone -- una sola fecha (y hora, si aplica) por SOLICITUD, no por
+    // item; el desarrollador la confirma/ajusta despues en el Backoffice.
+    fechaPropuesta: { fecha: '', hora: '' }
   };
 
   function nuevaSubsolicitud_() {
@@ -155,7 +159,20 @@
     }
     document.getElementById('alerta-paso2').innerHTML = '';
     renderRevision_();
+    renderFechaPropuesta_();
     cambiarPaso_('revision');
+  }
+
+  // v2.1 (Fase A, §4 de la especificacion): la hora importa cuando la
+  // solicitud puede resolverse en horas/minutos -- cliente (siempre) o
+  // cualquier item con impacto que deriva P1. Mismo criterio que
+  // requiereFechaHoraPropuesta_ en backend/intake/Solicitudes.gs.
+  var IMPACTOS_P1 = ['SISTEMA_CAIDO', 'PERDIDA_DATOS', 'BLOQUEO_OPERATIVO'];
+  function requiereFechaHoraPropuesta_() {
+    if (document.getElementById('campo-es-cliente').checked) return true;
+    return estado.subsolicitudes.some(function (item) {
+      return IMPACTOS_P1.indexOf(item.impacto) !== -1;
+    });
   }
 
   // --- Catalogos --------------------------------------------------------
@@ -600,6 +617,61 @@
       avisoEvidencia + avisoCc;
   }
 
+  // v2.1 (Fase A): se dibuja en el paso de revision (ahi ya se conoce
+  // es_cliente + el impacto de todos los items) -- el desarrollador es
+  // quien fija la fecha DEFINITIVA despues (Backoffice); esto es solo lo
+  // que el solicitante pide.
+  function renderFechaPropuesta_() {
+    var requerida = requiereFechaHoraPropuesta_();
+    var nota = requerida
+      ? 'Es obligatoria (fecha y hora) porque es una solicitud de cliente o de impacto crítico: se puede resolver en horas.'
+      : 'Opcional. El desarrollador confirmará o ajustará la fecha final.';
+    document.getElementById('contenedor-fecha-propuesta').innerHTML =
+      '<div class="sigso-campo"><label>¿Para cuándo necesitas esto resuelto?' + (requerida ? ' *' : '') + '</label>' +
+      '<p class="sigso-ayuda">' + nota + '</p>' +
+      '<div class="sigso-fecha-propuesta">' +
+      '<input type="date" id="campo-fecha-propuesta-fecha" value="' + Componentes.escaparHtml(estado.fechaPropuesta.fecha) + '"' + (requerida ? ' required' : '') + '>' +
+      (requerida ? '<input type="time" id="campo-fecha-propuesta-hora" value="' + Componentes.escaparHtml(estado.fechaPropuesta.hora) + '" required>' : '') +
+      '</div>' +
+      '<div id="alerta-fecha-propuesta"></div>' +
+      '</div>';
+
+    document.getElementById('campo-fecha-propuesta-fecha').addEventListener('input', function (ev) {
+      estado.fechaPropuesta.fecha = ev.target.value;
+      guardarBorrador_();
+    });
+    var campoHora = document.getElementById('campo-fecha-propuesta-hora');
+    if (campoHora) {
+      campoHora.addEventListener('input', function (ev) {
+        estado.fechaPropuesta.hora = ev.target.value;
+        guardarBorrador_();
+      });
+    }
+  }
+
+  // Devuelve el string ISO a enviar (o '' si no aplica), y valida que si es
+  // obligatoria (cliente/P1) venga con fecha+hora completas.
+  function validarYArmarFechaPropuesta_() {
+    var requerida = requiereFechaHoraPropuesta_();
+    var fecha = estado.fechaPropuesta.fecha;
+    var hora = estado.fechaPropuesta.hora;
+    var alerta = document.getElementById('alerta-fecha-propuesta');
+
+    if (requerida && (!fecha || !hora)) {
+      if (alerta) {
+        alerta.innerHTML = Componentes.alerta('Indica fecha y hora: es obligatorio en solicitudes de cliente o de impacto crítico.', 'error');
+      }
+      return { valido: false, valor: '' };
+    }
+    if (alerta) {
+      alerta.innerHTML = '';
+    }
+    if (!fecha) {
+      return { valido: true, valor: '' };
+    }
+    return { valido: true, valor: requerida ? (fecha + 'T' + hora) : fecha };
+  }
+
   // --- Progreso, borrador, envio -------------------------------------
 
   function recolectarDatos_() {
@@ -626,6 +698,9 @@
       // lo decide este check (el solicitante elige si avisar a Leo).
       avisar_leo: document.getElementById('campo-avisar-leo').checked,
       observaciones_generales: document.getElementById('campo-observaciones-generales').value,
+      // v2.1 (Fase A): '' si no se ha llegado al paso de revision todavia o
+      // el solicitante no indico nada (es opcional salvo cliente/P1).
+      fecha_propuesta: validarYArmarFechaPropuesta_().valor,
       subsolicitudes: estado.subsolicitudes.map(function (item, idx) {
         // Las descripciones ya se conocen antes de subir los archivos (el
         // orden coincide con subirImagenesDeTodosLosItems_, que sube en el
@@ -668,6 +743,13 @@
       document.getElementById('campo-cc').value = datos.cc || '';
       document.getElementById('campo-avisar-leo').checked = !!datos.avisar_leo;
       document.getElementById('campo-observaciones-generales').value = datos.observaciones_generales || '';
+      // v2.1 (Fase A): fecha_propuesta viene combinada ('YYYY-MM-DD' o
+      // 'YYYY-MM-DDTHH:MM'); se separa para precargar los inputs cuando se
+      // llegue al paso de revision (renderFechaPropuesta_).
+      if (datos.fecha_propuesta) {
+        var partes = String(datos.fecha_propuesta).split('T');
+        estado.fechaPropuesta = { fecha: partes[0] || '', hora: partes[1] || '' };
+      }
       if (datos.es_cliente) {
         document.getElementById('campo-es-cliente').checked = true;
         document.getElementById('campo-empresa-cliente').value = datos.empresa_cliente || '';
@@ -706,6 +788,9 @@
 
   function manejarSubmit_(evento) {
     evento.preventDefault();
+    if (!validarYArmarFechaPropuesta_().valido) {
+      return;
+    }
     var boton = document.getElementById('btn-enviar');
     var datos = recolectarDatos_();
 

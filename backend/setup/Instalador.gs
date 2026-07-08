@@ -52,7 +52,9 @@ var ESQUEMA_HOJAS = {
     // sola vez por solicitud (ver nota identica en backend/intake/Constantes.gs).
     'tipo', 'tipo_nombre', 'modulo', 'modulo_nombre',
     'frecuencia', 'personas_afectadas',
-    'imagen_descripciones'
+    'imagen_descripciones',
+    // v2.1 (Fase A): ver la nota identica en backend/intake/Constantes.gs.
+    'fecha_propuesta', 'fecha_comprometida', 'fecha_terminada', 'comprometida_por'
   ],
   HISTORIAL_ESTADOS: [
     'historial_id', 'solicitud_id', 'subsolicitud_id',
@@ -98,6 +100,11 @@ var ESQUEMA_HOJAS = {
   ARCHIVOS: [
     'archivo_id', 'solicitud_id', 'subsolicitud_id',
     'nombre_original', 'url', 'tipo_mime', 'tamano_bytes', 'fecha_subida'
+  ],
+  // v2.1 (Fase A): ver la nota identica en backend/intake/Constantes.gs.
+  HISTORIAL_COMPROMISO: [
+    'historial_id', 'subsolicitud_id', 'solicitud_id',
+    'fecha_anterior', 'fecha_nueva', 'motivo', 'usuario', 'timestamp'
   ]
 };
 

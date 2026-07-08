@@ -30,6 +30,9 @@ function datosValidos(overrides) {
       solicitante_nombre: 'Juan Perez',
       solicitante_cargo: 'Jefe de Operaciones',
       solicitante_email: 'juan.perez@homepymes.cl',
+      // v2.1 (Fase A): el impacto por defecto (SISTEMA_CAIDO) es P1, asi que
+      // hace falta fecha+hora para que datosValidos() sea realmente valido.
+      fecha_propuesta: '2026-08-01T18:00',
       // Fase 10: modulo/tipo se piden por item, no a nivel raiz.
       subsolicitudes: [
         {
@@ -361,6 +364,78 @@ test('crearSolicitud rechaza un cc con formato de correo invalido', () => {
 
   assert.equal(resultado._validationError, true);
   assert.ok(resultado.fields.some((f) => f.campo === 'cc'));
+});
+
+// v2.1 (Fase A, documentacion/SIGSO-v2.1-plazos-y-control.md §4): "para
+// cuando lo necesitas" es obligatorio CON hora en cliente/P1 (se puede
+// resolver en horas/minutos), opcional (solo fecha) para el resto.
+test('crearSolicitud (v2.1) exige fecha+hora propuesta cuando el impacto deriva P1', () => {
+  const ctx = loadIntakeConSchema();
+  const resultado = ctx.Solicitudes.crearSolicitud(datosValidos({ fecha_propuesta: '' }));
+
+  assert.equal(resultado._validationError, true);
+  assert.ok(resultado.fields.some((f) => f.campo === 'fecha_propuesta'));
+});
+
+test('crearSolicitud (v2.1) exige fecha+hora propuesta cuando es_cliente=true, aunque el impacto no sea P1', () => {
+  const ctx = loadIntakeConSchema();
+  const resultado = ctx.Solicitudes.crearSolicitud(datosValidos({
+    es_cliente: true,
+    empresa_cliente: 'Constructora X', contacto_cliente: 'Ana', correo_cliente: 'ana@constructorax.cl',
+    fecha_propuesta: '',
+    subsolicitudes: [{ titulo: 'x', descripcion: 'y', impacto: 'PLANIFICADO', modulo: 'Facturacion', tipo: 'ERR' }]
+  }));
+
+  assert.equal(resultado._validationError, true);
+  assert.ok(resultado.fields.some((f) => f.campo === 'fecha_propuesta'));
+});
+
+test('crearSolicitud (v2.1) rechaza fecha propuesta SIN hora cuando se requiere (cliente/P1)', () => {
+  const ctx = loadIntakeConSchema();
+  const resultado = ctx.Solicitudes.crearSolicitud(datosValidos({ fecha_propuesta: '2026-08-01' }));
+
+  assert.equal(resultado._validationError, true);
+  assert.ok(resultado.fields.some((f) => f.campo === 'fecha_propuesta'));
+});
+
+test('crearSolicitud (v2.1) NO exige fecha propuesta cuando no es cliente ni P1 (es opcional)', () => {
+  const ctx = loadIntakeConSchema();
+  const resultado = ctx.Solicitudes.crearSolicitud(datosValidos({
+    fecha_propuesta: '',
+    subsolicitudes: [{ titulo: 'x', descripcion: 'y', impacto: 'PLANIFICADO', modulo: 'Facturacion', tipo: 'ERR' }]
+  }));
+
+  assert.equal(resultado._validationError, undefined);
+});
+
+test('crearSolicitud (v2.1) acepta solo fecha (sin hora) cuando la propuesta es opcional', () => {
+  const ctx = loadIntakeConSchema();
+  const resultado = ctx.Solicitudes.crearSolicitud(datosValidos({
+    fecha_propuesta: '2026-08-01',
+    subsolicitudes: [{ titulo: 'x', descripcion: 'y', impacto: 'PLANIFICADO', modulo: 'Facturacion', tipo: 'ERR' }]
+  }));
+
+  assert.equal(resultado._validationError, undefined);
+  assert.equal(ctx.leerFilas_('SUBSOLICITUDES')[0].fecha_propuesta, '2026-08-01');
+});
+
+test('crearSolicitud (v2.1) replica fecha_propuesta en cada item y deja fecha_comprometida/fecha_terminada/comprometida_por vacias', () => {
+  const ctx = loadIntakeConSchema();
+  ctx.Solicitudes.crearSolicitud(datosValidos({
+    subsolicitudes: [
+      { titulo: 'Item 1', descripcion: 'Desc 1', impacto: 'SISTEMA_CAIDO', modulo: 'Facturacion', tipo: 'ERR' },
+      { titulo: 'Item 2', descripcion: 'Desc 2', impacto: 'PLANIFICADO', modulo: 'Facturacion', tipo: 'ERR' }
+    ]
+  }));
+
+  const subsolicitudes = ctx.leerFilas_('SUBSOLICITUDES');
+  assert.equal(subsolicitudes[0].fecha_propuesta, '2026-08-01T18:00');
+  assert.equal(subsolicitudes[1].fecha_propuesta, '2026-08-01T18:00');
+  subsolicitudes.forEach((s) => {
+    assert.equal(s.fecha_comprometida, '');
+    assert.equal(s.fecha_terminada, '');
+    assert.equal(s.comprometida_por, '');
+  });
 });
 
 test('generarResumenWhatsapp_ sigue el formato de RF-015 con un solo item', () => {

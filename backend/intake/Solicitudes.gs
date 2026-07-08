@@ -79,7 +79,15 @@ var Solicitudes = {
         // imagen subida para este item (subirArchivo se llama despues de
         // crearSolicitud, en el mismo orden -- el archivo_id real no existe
         // todavia aqui, asi que no se puede indexar por archivo_id).
-        imagen_descripciones: JSON.stringify(item.imagen_descripciones || [])
+        imagen_descripciones: JSON.stringify(item.imagen_descripciones || []),
+        // v2.1 (Fase A): fecha_propuesta es UNA sola por solicitud (lo que
+        // pidio el solicitante), replicada como default en cada item -- el
+        // desarrollador la desglosa/ajusta por item al comprometerse
+        // (fecha_comprometida, ver Backoffice Solicitudes.comprometerFecha).
+        fecha_propuesta: data.fecha_propuesta || '',
+        fecha_comprometida: '',
+        fecha_terminada: '',
+        comprometida_por: ''
       });
 
       return { subsolicitud_id: subId, prioridad: prioridad };
@@ -234,6 +242,11 @@ var Solicitudes = {
           descripcion: s.descripcion || '',
           resultado_esperado: s.resultado_esperado || '',
           contexto: s.contexto || '',
+          // v2.1 (Fase A): el solicitante ve lo que propuso y, una vez que
+          // Leo se compromete, la fecha DEFINITIVA (esa es la oficial, no
+          // la propuesta -- ver documentacion/SIGSO-v2.1-plazos-y-control.md §2.1).
+          fecha_propuesta: s.fecha_propuesta || '',
+          fecha_comprometida: s.fecha_comprometida || '',
           // Fase 10.1: si Leo pidio mas informacion (S06), el comentario con
           // el que hizo la transicion ES la pregunta -- se muestra aqui para
           // que el solicitante sepa que le estan pidiendo sin tener que
@@ -531,6 +544,27 @@ function validarSolicitud_(data) {
     errores.push({ campo: 'cc', mensaje: 'Formato de correo invalido' });
   }
 
+  // v2.1 (Fase A, §4 de la especificacion): "para cuando lo necesitas" es
+  // opcional en general, pero obligatoria -- CON hora -- para solicitudes
+  // de cliente o con impacto critico (P1): ahi la hora importa porque se
+  // puede resolver en horas/minutos. Para el resto, si viene, alcanza con
+  // la fecha (sin hora).
+  if (requiereFechaHoraPropuesta_(data)) {
+    if (!data.fecha_propuesta || String(data.fecha_propuesta).trim() === '') {
+      errores.push({
+        campo: 'fecha_propuesta',
+        mensaje: 'Indica para cuando necesitas esto resuelto (fecha y hora): es una solicitud de cliente o de impacto critico.'
+      });
+    } else if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(String(data.fecha_propuesta))) {
+      errores.push({
+        campo: 'fecha_propuesta',
+        mensaje: 'Para esta solicitud tambien debes indicar la hora en que la necesitas.'
+      });
+    }
+  } else if (data.fecha_propuesta && isNaN(new Date(data.fecha_propuesta).getTime())) {
+    errores.push({ campo: 'fecha_propuesta', mensaje: 'Formato de fecha invalido' });
+  }
+
   // RN-005: si es solicitud de cliente, empresa cliente + contacto + correo
   // son obligatorios.
   if (data.es_cliente) {
@@ -563,6 +597,19 @@ function avisoDesarrolloActivo_() {
     }
   }
   return true;
+}
+
+// v2.1 (Fase A, §4): la hora importa cuando la solicitud puede resolverse en
+// horas/minutos -- cliente (siempre) o cualquier item con impacto que
+// deriva P1 (SISTEMA_CAIDO/PERDIDA_DATOS/BLOQUEO_OPERATIVO). No se usa
+// derivarPrioridad_/es_urgente aqui: ese piso solo SUBE prioridad hacia P2,
+// nunca baja un P1 real, asi que basta con mirar el impacto declarado.
+function requiereFechaHoraPropuesta_(data) {
+  if (data.es_cliente) return true;
+  if (!Array.isArray(data.subsolicitudes)) return false;
+  return data.subsolicitudes.some(function (item) {
+    return !!item && MAPA_IMPACTO_PRIORIDAD[item.impacto] === 'P1';
+  });
 }
 
 function esEmailValido_(email) {

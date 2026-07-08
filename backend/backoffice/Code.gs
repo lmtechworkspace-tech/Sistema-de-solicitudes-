@@ -30,6 +30,7 @@ var BACKOFFICE_ACTIONS = {
   getSolicitudDetalle: handleGetSolicitudDetalle_,
   actualizarEstado: handleActualizarEstado_,
   actualizarPrioridad: handleActualizarPrioridad_,
+  comprometerFecha: handleComprometerFecha_,
   agregarComentario: handleAgregarComentario_,
   guardarCatalogo: handleGuardarCatalogo_,
   listarCatalogo: handleListarCatalogo_,
@@ -163,6 +164,11 @@ function handleActualizarEstado_(data, contexto) {
 
 function handleActualizarPrioridad_(data, contexto) {
   var resultado = Solicitudes.actualizarPrioridad(data, contexto);
+  return responderResultado_(resultado);
+}
+
+function handleComprometerFecha_(data, contexto) {
+  var resultado = Solicitudes.comprometerFecha(data, contexto);
   return responderResultado_(resultado);
 }
 

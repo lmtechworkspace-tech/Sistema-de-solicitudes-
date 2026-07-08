@@ -25,7 +25,10 @@ var SHEETS = {
   LOG_SISTEMA: 'LOG_SISTEMA',
   LOG_NOTIFICACIONES: 'LOG_NOTIFICACIONES',
   HISTORIAL_PRIORIDAD: 'HISTORIAL_PRIORIDAD',
-  ARCHIVOS: 'ARCHIVOS'
+  ARCHIVOS: 'ARCHIVOS',
+  // v2.1 (Fase A, compromiso de fechas): ver la nota identica en
+  // backend/backoffice/Constantes.gs.
+  HISTORIAL_COMPROMISO: 'HISTORIAL_COMPROMISO'
 };
 
 var COLUMNAS = {
@@ -97,7 +100,16 @@ var COLUMNAS = {
     // (indice i = descripcion de la i-esima imagen subida para este item,
     // ver nota en Solicitudes.gs -- el archivo_id no existe todavia al
     // guardar la subsolicitud).
-    'imagen_descripciones'
+    'imagen_descripciones',
+    // v2.1 (Fase A, documentacion/SIGSO-v2.1-plazos-y-control.md §5):
+    // "dos promesas, dos relojes". fecha_propuesta la escribe el
+    // solicitante en el formulario (misma fecha replicada en cada item,
+    // ver crearSolicitud); fecha_comprometida es la que fija el
+    // desarrollador (Backoffice, Solicitudes.comprometerFecha) y es la
+    // oficial para Gerencia; fecha_terminada se sella sola al llegar a
+    // S08 (detiene el reloj del desarrollador); comprometida_por es el
+    // correo de quien fijo fecha_comprometida.
+    'fecha_propuesta', 'fecha_comprometida', 'fecha_terminada', 'comprometida_por'
   ],
   HISTORIAL_ESTADOS: [
     'historial_id', 'solicitud_id', 'subsolicitud_id',
@@ -166,6 +178,15 @@ var COLUMNAS = {
   ARCHIVOS: [
     'archivo_id', 'solicitud_id', 'subsolicitud_id',
     'nombre_original', 'url', 'tipo_mime', 'tamano_bytes', 'fecha_subida'
+  ],
+  // v2.1 (Fase A): linea base de cada re-compromiso, "el resbalon" que el
+  // Panel de Gerencia (Fase C) necesita mostrar. Intake no escribe aqui
+  // (solo Backoffice lo hace, al comprometer/re-comprometer una fecha) pero
+  // declara las columnas igual que el resto del esquema (mismo patron que
+  // HISTORIAL_PRIORIDAD).
+  HISTORIAL_COMPROMISO: [
+    'historial_id', 'subsolicitud_id', 'solicitud_id',
+    'fecha_anterior', 'fecha_nueva', 'motivo', 'usuario', 'timestamp'
   ]
 };
 

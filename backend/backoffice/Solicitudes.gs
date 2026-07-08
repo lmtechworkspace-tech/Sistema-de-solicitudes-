@@ -76,9 +76,17 @@ var Solicitudes = {
     }
 
     var timestamp = new Date().toISOString();
-    actualizarFilaPorId_(SHEETS.SUBSOLICITUDES, 'subsolicitud_id', data.subsolicitud_id, {
-      estado: data.estado_nuevo
-    });
+    var cambiosSubsolicitud = { estado: data.estado_nuevo };
+    // v2.1 (Fase A, §2.2 "dos relojes"): entrar a Terminada (S08) detiene el
+    // reloj del desarrollador; salir de Terminada (reabrir) lo reanuda -- si
+    // no se limpiara, un item reabierto seguiria mostrandose como "esperando
+    // validacion del solicitante" con una fecha_terminada vieja.
+    if (data.estado_nuevo === ESTADOS.S08) {
+      cambiosSubsolicitud.fecha_terminada = timestamp;
+    } else if (estadoActual === ESTADOS.S08) {
+      cambiosSubsolicitud.fecha_terminada = '';
+    }
+    actualizarFilaPorId_(SHEETS.SUBSOLICITUDES, 'subsolicitud_id', data.subsolicitud_id, cambiosSubsolicitud);
 
     agregarFila_(SHEETS.HISTORIAL_ESTADOS, {
       historial_id: Utilities.getUuid(),
@@ -189,6 +197,64 @@ var Solicitudes = {
       prioridad_anterior: prioridadAnterior,
       prioridad_nueva: data.prioridad_nueva,
       prioridad_derivada_padre: prioridadDerivada
+    };
+  },
+
+  /**
+   * v2.1 (Fase A, §3): el desarrollador confirma/fija la fecha comprometida
+   * por item -- es la definitiva ("dos promesas", documentacion/SIGSO-v2.1-
+   * plazos-y-control.md §2.1); la propuesta del solicitante (fecha_propuesta)
+   * es solo informativa. Re-comprometer (ya existia una fecha_comprometida)
+   * exige un motivo, igual que RN-007 con la prioridad, porque es la
+   * evidencia que el Panel de Gerencia (Fase C) necesita para mostrar el
+   * "resbalon" (HISTORIAL_COMPROMISO).
+   */
+  comprometerFecha: function (data, contexto) {
+    if (contexto.rol === 'GERENCIA') {
+      return { _forbidden: true, message: 'El rol Gerencia es de solo lectura: no puede comprometer fechas.' };
+    }
+    if (!data.subsolicitud_id) {
+      return errorValidacion_('subsolicitud_id', 'Falta indicar el item.');
+    }
+    if (!data.fecha_comprometida || isNaN(new Date(data.fecha_comprometida).getTime())) {
+      return errorValidacion_('fecha_comprometida', 'Indica una fecha (y hora) valida para comprometerte.');
+    }
+
+    var subsolicitud = buscarSubsolicitud_(data.subsolicitud_id);
+    if (!subsolicitud) {
+      return errorValidacion_('subsolicitud_id', 'Subsolicitud no encontrada: ' + data.subsolicitud_id);
+    }
+
+    var esReCompromiso = !!subsolicitud.fecha_comprometida;
+    if (esReCompromiso && (!data.motivo || data.motivo.trim().length < 20)) {
+      return errorValidacion_('motivo', 'Para mover una fecha ya comprometida debes indicar el motivo (minimo 20 caracteres).');
+    }
+
+    var timestamp = new Date().toISOString();
+    actualizarFilaPorId_(SHEETS.SUBSOLICITUDES, 'subsolicitud_id', data.subsolicitud_id, {
+      fecha_comprometida: data.fecha_comprometida,
+      comprometida_por: contexto.email
+    });
+
+    if (esReCompromiso) {
+      agregarFila_(SHEETS.HISTORIAL_COMPROMISO, {
+        historial_id: Utilities.getUuid(),
+        subsolicitud_id: data.subsolicitud_id,
+        solicitud_id: subsolicitud.solicitud_id,
+        fecha_anterior: subsolicitud.fecha_comprometida,
+        fecha_nueva: data.fecha_comprometida,
+        motivo: data.motivo,
+        usuario: contexto.email,
+        timestamp: timestamp
+      });
+    }
+
+    return {
+      subsolicitud_id: data.subsolicitud_id,
+      solicitud_id: subsolicitud.solicitud_id,
+      fecha_comprometida: data.fecha_comprometida,
+      comprometida_por: contexto.email,
+      re_compromiso: esReCompromiso
     };
   },
 

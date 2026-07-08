@@ -147,6 +147,13 @@
     if (s.descripcion) filas += campo_('Lo que reportaste', s.descripcion);
     if (s.resultado_esperado) filas += campo_('Resultado esperado', s.resultado_esperado);
     if (s.contexto) filas += campo_('Contexto', s.contexto);
+    // v2.1 (Fase A): la fecha comprometida por el desarrollador es la
+    // definitiva -- se muestra primero y con mas peso que la propuesta.
+    if (s.fecha_comprometida) {
+      filas += campo_('Fecha comprometida', formatearFechaHora_(s.fecha_comprometida));
+    } else if (s.fecha_propuesta) {
+      filas += '<p class="sigso-ayuda">Para cuándo lo pediste: ' + Componentes.escaparHtml(formatearFechaHora_(s.fecha_propuesta)) + ' (a confirmar por el equipo).</p>';
+    }
     if (s.pregunta_pendiente) {
       filas += Componentes.alerta('El equipo necesita más información: ' + s.pregunta_pendiente, 'aviso') +
         '<div class="sigso-campo">' +
@@ -221,6 +228,14 @@
       }
       return consultar_(ultimaConsulta.solicitud_id, ultimaConsulta.email);
     });
+  }
+
+  // Acepta 'YYYY-MM-DD' o 'YYYY-MM-DDTHH:MM' (ver Fase A, fecha_propuesta);
+  // se muestra tal cual sin hora si no la trae, para no inventar un "00:00".
+  function formatearFechaHora_(valor) {
+    var partes = String(valor).split('T');
+    if (partes.length < 2) return partes[0];
+    return partes[0] + ' ' + partes[1].slice(0, 5);
   }
 
   function campo_(etiqueta, valor) {

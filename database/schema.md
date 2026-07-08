@@ -89,6 +89,10 @@ corrida de `npm test`.
 | `frecuencia` | string (`SIEMPRE`/`A_VECES`/`UNA_VEZ`) | **Fase 10**: reemplaza a `estimacion_horas` en el formulario público — el solicitante no puede estimar esfuerzo de desarrollo, pero sí sabe cuán seguido ocurre el problema. `estimacion_horas` se mantiene para que el desarrollador la complete después desde el Backoffice |
 | `personas_afectadas` | number | **Fase 10**: idem — a cuántas personas afecta, insumo de priorización más realista que una estimación de horas hecha por quien no desarrolla |
 | `imagen_descripciones` | string (JSON) | **Fase 10**: caption corto por imagen, sin agregar una columna a `ARCHIVOS`. Array de strings serializado — el índice `i` corresponde a la i-ésima imagen subida para ese ítem (`subirArchivo` se llama en el mismo orden después de `crearSolicitud`, ya que el `archivo_id` real no existe todavía al momento de guardar la subsolicitud) |
+| `fecha_propuesta` | ISO datetime / date | **v2.1 (Fase A, "dos promesas, dos relojes")**: lo que el solicitante propone en el formulario — una sola fecha por solicitud, replicada como default en cada ítem (`crearSolicitud`). Opcional en general; **obligatoria con hora** si `es_cliente` o si el ítem tiene un `impacto` que deriva `P1` (`SISTEMA_CAIDO`/`PERDIDA_DATOS`/`BLOQUEO_OPERATIVO`) — ahí se puede resolver en horas/minutos. No es vinculante |
+| `fecha_comprometida` | ISO datetime | **v2.1 (Fase A)**: la fecha que fija el **desarrollador** (`Solicitudes.comprometerFecha`, Backoffice) — es la definitiva, la que mide Gerencia (Fase C). Re-comprometer (ya había una fecha) exige `motivo` (≥20 caracteres, mismo patrón que `HISTORIAL_PRIORIDAD`/RN-007) y queda registrado en `HISTORIAL_COMPROMISO` |
+| `fecha_terminada` | ISO datetime | **v2.1 (Fase A)**: sellada automáticamente por `actualizarEstado` al entrar a `S08` (Terminada) — detiene el "reloj del desarrollador". Se limpia si el ítem sale de `S08` (reabierto), para que el reloj se reanude |
+| `comprometida_por` | string (email) | **v2.1 (Fase A)**: quien fijó `fecha_comprometida` |
 
 ## COUNTERS (nueva, C-12)
 
@@ -184,6 +188,23 @@ explícitamente que "cada modificación... queda en historial" y ninguna hoja
 existente tiene esa forma (`HISTORIAL_ESTADOS` es específicamente de
 estados, RN-014). Ver el razonamiento completo en
 `documentacion/fases/FASE-02-maquina-estados.md`.
+
+## HISTORIAL_COMPROMISO (nueva, v2.1 Fase A)
+
+| Columna | Tipo | Nota |
+|---|---|---|
+| `historial_id` | string | `Utilities.getUuid()` |
+| `subsolicitud_id` / `solicitud_id` | string | FK |
+| `fecha_anterior` / `fecha_nueva` | ISO datetime | El "resbalón" — la línea base es la primera fila de esta hoja para ese ítem; si nunca hubo re-compromiso, la línea base es `fecha_comprometida` misma |
+| `motivo` | string | Obligatorio, mínimo 20 caracteres — evidencia que el Panel de Gerencia (Fase C) necesita para mostrar por qué se movió la fecha |
+| `usuario` | string | Email de quien re-comprometió |
+| `timestamp` | ISO datetime | — |
+
+Mismo patrón que `HISTORIAL_PRIORIDAD`: solo se escribe cuando ya existía una
+`fecha_comprometida` previa (el primer compromiso no es un "resbalón", no
+genera fila aquí). Ver
+`documentacion/SIGSO-v2.1-plazos-y-control.md` §5 para el diseño completo
+("dos promesas, dos relojes") y §10 para el plan de fases.
 
 ## ARCHIVOS (nueva, Fase 4)
 

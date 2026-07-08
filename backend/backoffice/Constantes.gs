@@ -28,7 +28,11 @@ var SHEETS = {
   LOG_SISTEMA: 'LOG_SISTEMA',
   LOG_NOTIFICACIONES: 'LOG_NOTIFICACIONES',
   HISTORIAL_PRIORIDAD: 'HISTORIAL_PRIORIDAD',
-  ARCHIVOS: 'ARCHIVOS'
+  ARCHIVOS: 'ARCHIVOS',
+  // v2.1 (Fase A, documentacion/SIGSO-v2.1-plazos-y-control.md §5):
+  // "resbalones" de fecha comprometida (linea base para el Panel de
+  // Gerencia, Fase C). Mismo patron que HISTORIAL_PRIORIDAD (RN-007).
+  HISTORIAL_COMPROMISO: 'HISTORIAL_COMPROMISO'
 };
 
 var COLUMNAS = {
@@ -73,7 +77,9 @@ var COLUMNAS = {
     // backend/intake/Constantes.gs.
     'tipo', 'tipo_nombre', 'modulo', 'modulo_nombre',
     'frecuencia', 'personas_afectadas',
-    'imagen_descripciones'
+    'imagen_descripciones',
+    // v2.1 (Fase A): ver la nota identica en backend/intake/Constantes.gs.
+    'fecha_propuesta', 'fecha_comprometida', 'fecha_terminada', 'comprometida_por'
   ],
   HISTORIAL_ESTADOS: [
     'historial_id', 'solicitud_id', 'subsolicitud_id',
@@ -121,6 +127,11 @@ var COLUMNAS = {
   ARCHIVOS: [
     'archivo_id', 'solicitud_id', 'subsolicitud_id',
     'nombre_original', 'url', 'tipo_mime', 'tamano_bytes', 'fecha_subida'
+  ],
+  // v2.1 (Fase A): ver la nota identica en backend/intake/Constantes.gs.
+  HISTORIAL_COMPROMISO: [
+    'historial_id', 'subsolicitud_id', 'solicitud_id',
+    'fecha_anterior', 'fecha_nueva', 'motivo', 'usuario', 'timestamp'
   ]
 };
 

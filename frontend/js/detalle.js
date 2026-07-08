@@ -137,6 +137,11 @@
       if (sub.personas_afectadas) datos.push(renderCampoDato_('Personas afectadas', Componentes.escaparHtml(sub.personas_afectadas)));
       if (sub.desarrollador_asignado) datos.push(renderCampoDato_('Asignado a', Componentes.escaparHtml(sub.desarrollador_asignado)));
       if (sub.estimacion_horas) datos.push(renderCampoDato_('Estimacion', sub.estimacion_horas + ' h' + (sub.horas_reales ? ' (reales: ' + sub.horas_reales + ' h)' : '')));
+      // v2.1 (Fase A): "dos promesas" -- lo que propuso el solicitante vs. lo
+      // que Leo comprometio (la oficial, ver §2.1 de la especificacion).
+      if (sub.fecha_propuesta) datos.push(renderCampoDato_('Fecha propuesta (solicitante)', Componentes.escaparHtml(sub.fecha_propuesta.replace('T', ' '))));
+      if (sub.fecha_comprometida) datos.push(renderCampoDato_('Fecha comprometida', Componentes.escaparHtml(sub.fecha_comprometida.replace('T', ' ')) + (sub.comprometida_por ? ' — ' + Componentes.escaparHtml(sub.comprometida_por) : '')));
+      if (sub.fecha_terminada) datos.push(renderCampoDato_('Terminada el', Componentes.escaparHtml(new Date(sub.fecha_terminada).toLocaleString('es-CL'))));
 
       return '<div class="sigso-acordeon-item sigso-acordeon-item--activo">' +
         '<div class="sigso-acordeon-item__cabecera"><span>' + sub.numero_item + '. ' + Componentes.escaparHtml(sub.titulo) +
@@ -177,7 +182,20 @@
         '</div>';
     }
 
-    return selectorEstado +
+    // v2.1 (Fase A): comprometer/ajustar la fecha es una accion propia,
+    // aparte de cambiar estado -- Leo la usa al aprobar (S04) o cuando
+    // quiera confirmar/mover el compromiso. Re-comprometer (ya habia una
+    // fecha) exige motivo, igual que cambiar prioridad exige justificacion.
+    var yaComprometida = !!sub.fecha_comprometida;
+    var bloqueFecha =
+      '<div class="sigso-acciones-item">' +
+      '<input type="datetime-local" class="sigso-fecha-comprometida" data-subsolicitud="' + sub.subsolicitud_id + '" value="' + Componentes.escaparHtml(sub.fecha_comprometida || sub.fecha_propuesta || '') + '">' +
+      '<input type="text" class="sigso-motivo-fecha' + (yaComprometida ? '' : ' sigso-oculto') + '" data-subsolicitud="' + sub.subsolicitud_id + '" placeholder="Motivo (min. 20 caracteres) para mover una fecha ya comprometida">' +
+      '<button type="button" class="sigso-boton--secundario sigso-aplicar-fecha" data-subsolicitud="' + sub.subsolicitud_id + '">' + (yaComprometida ? 'Ajustar fecha comprometida' : 'Comprometer fecha') + '</button>' +
+      '<span class="sigso-resultado-accion" data-subsolicitud="' + sub.subsolicitud_id + '-fecha"></span>' +
+      '</div>';
+
+    return selectorEstado + bloqueFecha +
       '<div class="sigso-acciones-item">' +
       '<select class="sigso-nueva-prioridad" data-subsolicitud="' + sub.subsolicitud_id + '">' +
       ['P1', 'P2', 'P3', 'P4', 'P5'].map(function (p) {
@@ -261,6 +279,15 @@
       });
     });
 
+    document.querySelectorAll('.sigso-aplicar-fecha').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        var subId = boton.getAttribute('data-subsolicitud');
+        var fecha = document.querySelector('.sigso-fecha-comprometida[data-subsolicitud="' + subId + '"]').value;
+        var motivo = document.querySelector('.sigso-motivo-fecha[data-subsolicitud="' + subId + '"]').value;
+        enviarCompromisoFecha_(solicitudId, subId, fecha, motivo);
+      });
+    });
+
     document.querySelectorAll('.sigso-aplicar-prioridad').forEach(function (boton) {
       boton.addEventListener('click', function () {
         var subId = boton.getAttribute('data-subsolicitud');
@@ -289,6 +316,21 @@
         var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subsolicitudId + '"]');
         if (span) span.textContent = respuesta.message || 'No se pudo aplicar el cambio.';
       });
+  }
+
+  // v2.1 (Fase A): comprometer/ajustar la fecha por item -- el motivo solo
+  // es obligatorio si ya habia una fecha comprometida (backend lo re-valida
+  // igual, esto solo evita el viaje redondo cuando obviamente falta).
+  function enviarCompromisoFecha_(solicitudId, subsolicitudId, fechaComprometida, motivo) {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'comprometerFecha', {
+      subsolicitud_id: subsolicitudId, fecha_comprometida: fechaComprometida, motivo: motivo
+    }).then(function (respuesta) {
+      if (respuesta.ok) {
+        return window.SigsoDetalle.cargar(solicitudId);
+      }
+      var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subsolicitudId + '-fecha"]');
+      if (span) span.textContent = respuesta.message || 'No se pudo comprometer la fecha.';
+    });
   }
 
   function enviarCambioPrioridad_(solicitudId, subsolicitudId, prioridadNueva, justificacion) {
