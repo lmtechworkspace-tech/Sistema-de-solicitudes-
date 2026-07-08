@@ -147,6 +147,7 @@ function instalarHojas() {
 
   sembrarConfigSlaSiVacia_(ss);
   sembrarTiposSiVacia_(ss);
+  sembrarConfigNotificacionesSiVacia_(ss);
 
   Logger.log('Hojas creadas en esta corrida: ' + creadas.join(', '));
   return creadas;
@@ -165,6 +166,26 @@ function sembrarTiposSiVacia_(ss) {
   var hoja = ss.getSheetByName('CAT_TIPOS');
   if (hoja && hoja.getLastRow() < 2) {
     TIPOS_INICIALES.forEach(function (fila) {
+      hoja.appendRow(fila);
+    });
+  }
+}
+
+// P12 (v2.0, Sprint 3): CONFIG_NOTIFICACIONES existia desde Fase 1 pero
+// "hoy infrautilizada" -- se siembra un unico registro que sirve de switch
+// global: "avisar automaticamente al equipo de desarrollo (Leo) cuando entra
+// una solicitud de cliente o P1". Activo=true reproduce el comportamiento
+// actual (no rompe nada); Gerencia/Admin lo puede desactivar desde
+// Administracion > Notificaciones sin tocar codigo (resuelve C2: "Felipe
+// dijo que no le enviara ni un correo todavia" vs. el aviso hardcodeado).
+var CONFIG_NOTIFICACIONES_INICIAL = [
+  ['AVISO_LEO', 'AVISO_DESARROLLO', '', '', true]
+];
+
+function sembrarConfigNotificacionesSiVacia_(ss) {
+  var hoja = ss.getSheetByName('CONFIG_NOTIFICACIONES');
+  if (hoja && hoja.getLastRow() < 2) {
+    CONFIG_NOTIFICACIONES_INICIAL.forEach(function (fila) {
       hoja.appendRow(fila);
     });
   }

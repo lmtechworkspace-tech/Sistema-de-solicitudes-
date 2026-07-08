@@ -12,7 +12,10 @@ var CATALOGOS_CONFIG = {
   EMPRESA: { hoja: 'CAT_EMPRESAS', idCampo: 'empresa_id', roles: ['ADM'] },
   PLATAFORMA: { hoja: 'CAT_PLATAFORMAS', idCampo: 'plataforma_id', roles: ['ADM'] },
   MODULO: { hoja: 'CAT_MODULOS', idCampo: 'modulo_id', roles: ['ADM', 'ANA'] },
-  TIPO: { hoja: 'CAT_TIPOS', idCampo: 'tipo_id', roles: ['ADM', 'ANA'] }
+  TIPO: { hoja: 'CAT_TIPOS', idCampo: 'tipo_id', roles: ['ADM', 'ANA'] },
+  // P12 (v2.0, Sprint 3): CONFIG_NOTIFICACIONES via el mismo CRUD generico
+  // -- solo Admin, es una decision de gobierno (C2), no de operacion diaria.
+  NOTIFICACION: { hoja: 'CONFIG_NOTIFICACIONES', idCampo: 'notif_id', roles: ['ADM'] }
 };
 
 var Catalogos = {

@@ -19,6 +19,15 @@ var TOP_MODULOS_CANTIDAD = 5;
 var MESES_TENDENCIA = 6;
 var RECIENTES_LIMITE = 50;
 
+// P7 (v2.0, Sprint 3): umbral de "patron" -- "veo un error... con distintos
+// [usuarios]... si se repite con distintos en distintas empresas, no es un
+// caso aislado, hay un problema en el codigo". Conservador a proposito
+// (RN de la propuesta): mejor perder algun patron real al principio que
+// saturar con falsos positivos por modulos mal parametrizados.
+var PATRON_VENTANA_DIAS = 7;
+var PATRON_CANTIDAD_MINIMA = 3;
+var PATRON_SOLICITANTES_MINIMOS = 2;
+
 var Dashboard = {
   getData: function (filtros, contexto) {
     var filtrosEfectivos = aplicarAmbitoRol_(filtros || {}, contexto);
@@ -85,6 +94,12 @@ function calcularKpis_(filtros) {
     return idsSolicitudes[h.solicitud_id];
   });
 
+  // P5 (v2.0, Sprint 3): comentarios publicos (es_interno=false) para
+  // detectar "respuesta recibida" -- ver respuestaPendienteLectura_ mas abajo.
+  var comentariosPublicos = leerFilas_(SHEETS.COMENTARIOS).filter(function (c) {
+    return idsSolicitudes[c.solicitud_id] && !c.es_interno;
+  });
+
   var abiertas = solicitudes.filter(function (s) {
     return ESTADOS_CERRADOS.indexOf(s.estado_derivado) === -1;
   });
@@ -106,6 +121,13 @@ function calcularKpis_(filtros) {
     top_modulos: topN_(agruparYContar_(solicitudes, 'modulo'), TOP_MODULOS_CANTIDAD),
     tiempo_promedio_resolucion_horas: tiempoPromedioResolucion_(solicitudes, historial, feriados),
     tendencia_mensual: tendenciaMensual_(solicitudes, historial, MESES_TENDENCIA),
+    // P7 (v2.0, Sprint 3): alertas de patron -- siempre globales (todas las
+    // empresas/modulos), sin importar los filtros activos del dashboard,
+    // porque el valor esta justo en ver un patron que cruza empresas
+    // ("si se repite con distintos en distintas empresas, no es un caso
+    // aislado"). Ver Triggers.detectarPatrones (Triggers.gs) para el aviso
+    // por correo equivalente.
+    alertas_patron: calcularAlertasPatron_(),
     recientes: solicitudes
       .slice()
       .sort(function (a, b) { return new Date(b.fecha_creacion) - new Date(a.fecha_creacion); })
@@ -126,10 +148,39 @@ function calcularKpis_(filtros) {
           sla_restante_horas: slaRestanteHoras_(itemsDeEstaSolicitud, feriados),
           // Fase 10.1: campos para la busqueda por texto en el Dashboard.
           solicitante_nombre: s.solicitante_nombre || '',
-          solicitante_email: s.solicitante_email || ''
+          solicitante_email: s.solicitante_email || '',
+          // P5 (v2.0, Sprint 3): "respuesta recibida" -- alguno de los items
+          // de esta solicitud esta "esperando informacion" (S06) y el
+          // solicitante ya respondio (badge, para no depender solo del correo).
+          respuesta_pendiente: itemsDeEstaSolicitud.some(function (sub) {
+            return respuestaPendienteLectura_(sub, historial, comentariosPublicos);
+          })
         };
       })
   };
+}
+
+// P5: true si el item sigue "esperando informacion" (S06) Y ya existe un
+// comentario publico posterior a la ULTIMA vez que entro a S06 -- es decir,
+// el solicitante ya respondio la pregunta y Leo todavia no movio el estado.
+function respuestaPendienteLectura_(subsolicitud, historial, comentariosPublicos) {
+  if (subsolicitud.estado !== ESTADOS.S06) {
+    return false;
+  }
+  var entradasS06 = historial.filter(function (h) {
+    return h.subsolicitud_id === subsolicitud.subsolicitud_id && h.estado_nuevo === ESTADOS.S06;
+  });
+  if (entradasS06.length === 0) {
+    return false;
+  }
+  var ultimaEntradaS06 = entradasS06.reduce(function (masReciente, h) {
+    return new Date(h.timestamp) > new Date(masReciente.timestamp) ? h : masReciente;
+  });
+  return comentariosPublicos.some(function (c) {
+    return (c.subsolicitud_id === subsolicitud.subsolicitud_id || !c.subsolicitud_id) &&
+      c.solicitud_id === subsolicitud.solicitud_id &&
+      new Date(c.timestamp) > new Date(ultimaEntradaS06.timestamp);
+  });
 }
 
 // Minimo (mas urgente) de horas habiles restantes de SLA entre los items
@@ -252,6 +303,56 @@ function tendenciaMensual_(solicitudes, historial, meses) {
   return claves.map(function (clave) {
     return { mes: clave, ingresadas: ingresadasPorMes[clave] || 0, resueltas: resueltasPorMes[clave] || 0 };
   });
+}
+
+// P7: agrupa subsolicitudes recientes (ultimos PATRON_VENTANA_DIAS, sin
+// contar rechazadas/canceladas) por (modulo, tipo) y devuelve solo los
+// grupos que superan el umbral -- misma logica que usa el trigger diario
+// (Triggers.detectarPatrones) para el correo, pero esta version es "al
+// vuelo" para mostrar en el Dashboard sin esperar al trigger.
+function calcularAlertasPatron_() {
+  var ahora = new Date().getTime();
+  var ventanaMs = PATRON_VENTANA_DIAS * 24 * 60 * 60 * 1000;
+  var solicitudPorId = {};
+  leerFilas_(SHEETS.SOLICITUDES).forEach(function (s) { solicitudPorId[s.solicitud_id] = s; });
+
+  var grupos = {};
+  leerFilas_(SHEETS.SUBSOLICITUDES).forEach(function (sub) {
+    // Sin modulo/tipo no hay forma de agrupar de forma confiable (RN del
+    // propio P7: se apoya en la categorizacion estructurada, no en texto libre).
+    if (!sub.modulo || !sub.tipo) return;
+    if (ESTADOS_EXCLUIDOS_DERIVACION.indexOf(sub.estado) !== -1) return;
+    if (ahora - new Date(sub.fecha_creacion).getTime() > ventanaMs) return;
+    var solicitud = solicitudPorId[sub.solicitud_id];
+    if (!solicitud) return;
+
+    var clave = sub.modulo + '||' + sub.tipo;
+    if (!grupos[clave]) {
+      grupos[clave] = {
+        modulo: sub.modulo_nombre || sub.modulo,
+        tipo: sub.tipo_nombre || sub.tipo,
+        cantidad: 0,
+        solicitantes: {}
+      };
+    }
+    grupos[clave].cantidad++;
+    grupos[clave].solicitantes[solicitud.solicitante_email] = true;
+  });
+
+  return Object.keys(grupos)
+    .map(function (clave) {
+      var g = grupos[clave];
+      return {
+        modulo: g.modulo,
+        tipo: g.tipo,
+        cantidad: g.cantidad,
+        solicitantes_distintos: Object.keys(g.solicitantes).length
+      };
+    })
+    .filter(function (g) {
+      return g.cantidad >= PATRON_CANTIDAD_MINIMA && g.solicitantes_distintos >= PATRON_SOLICITANTES_MINIMOS;
+    })
+    .sort(function (a, b) { return b.cantidad - a.cantidad; });
 }
 
 function claveMes_(fechaIso) {

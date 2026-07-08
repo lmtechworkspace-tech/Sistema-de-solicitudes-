@@ -164,7 +164,11 @@ var Solicitudes = {
     var motivoAviso = data.es_cliente ? 'solicitud de cliente'
       : (prioridadDerivada === 'P1' ? 'prioridad critica P1'
         : (data.avisar_leo ? 'el solicitante pidio avisar' : ''));
-    if (motivoAviso) {
+    // P12 (v2.0, Sprint 3): switch global en CONFIG_NOTIFICACIONES -- si
+    // Gerencia lo desactiva desde Administracion, no se avisa a Leo por
+    // ningun motivo (ni cliente ni P1 ni opt-in), respetando una instruccion
+    // como "no le avises a Leo todavia" sin hardcodearla en el codigo.
+    if (motivoAviso && avisoDesarrolloActivo_()) {
       Notificaciones.enviarAvisoDesarrollo({
         solicitud_id: solicitudId,
         prioridad: prioridadDerivada,
@@ -288,6 +292,12 @@ var Solicitudes = {
       es_interno: false,
       timestamp: new Date().toISOString()
     });
+
+    // P5 (v2.0, Sprint 3): cierra el ciclo "pedir informacion / responder"
+    // -- hasta ahora Leo se enteraba de la respuesta solo si volvia a mirar
+    // el panel. Sin esto la funcionalidad de S06 queda a medias (la
+    // pregunta si se notifica, la respuesta no).
+    Notificaciones.notificarRespuestaSolicitante(solicitud, data.subsolicitud_id || '', data.texto);
 
     return { ok: true };
   },
@@ -533,6 +543,26 @@ function validarSolicitud_(data) {
   }
 
   return errores;
+}
+
+// P12: lee CONFIG_NOTIFICACIONES.activo para el registro AVISO_LEO. Si el
+// registro no existe todavia (instalacion vieja sin el seed nuevo), se
+// asume activo=true -- reproduce el comportamiento previo a Sprint 3, no
+// rompe nada por default.
+function avisoDesarrolloActivo_() {
+  var filas;
+  try {
+    filas = leerFilas_(SHEETS.CONFIG_NOTIFICACIONES);
+  } catch (err) {
+    return true;
+  }
+  for (var i = 0; i < filas.length; i++) {
+    if (filas[i].notif_id === 'AVISO_LEO') {
+      var valor = filas[i].activo;
+      return valor === true || valor === 'TRUE' || valor === 1;
+    }
+  }
+  return true;
 }
 
 function esEmailValido_(email) {

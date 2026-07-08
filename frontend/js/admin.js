@@ -49,6 +49,21 @@
         { nombre: 'es_urgente', label: 'Urgente por naturaleza (afecta la prioridad real)', tipo: 'checkbox' },
         { nombre: 'activo', label: 'Activo', tipo: 'checkbox' }
       ]
+    },
+    // P12 (v2.0, Sprint 3): CONFIG_NOTIFICACIONES estaba infrautilizada --
+    // ahora "AVISO_LEO" es el switch global de "avisar automaticamente al
+    // equipo de desarrollo" (cliente/P1/opt-in). Desactivarlo hace que
+    // NINGUNA solicitud le avise a Leo por correo, sin tocar codigo
+    // (resuelve C2: "Felipe dijo que no le enviara ni un correo todavia").
+    NOTIFICACION: {
+      titulo: 'Notificaciones',
+      campos: [
+        { nombre: 'notif_id', label: 'Código', soloAlCrear: true },
+        { nombre: 'evento', label: 'Evento' },
+        { nombre: 'rol_destinatario', label: 'Rol destinatario (opcional)' },
+        { nombre: 'emails_extra', label: 'Correos extra (opcional)' },
+        { nombre: 'activo', label: 'Activo', tipo: 'checkbox' }
+      ]
     }
   };
 

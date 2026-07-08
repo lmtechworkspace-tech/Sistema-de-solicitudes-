@@ -113,6 +113,28 @@ var Notificaciones = {
     });
   },
 
+  // P7 (v2.0, Sprint 3): avisa a Gerencia/Admin cuando un (modulo, tipo)
+  // supera el umbral de patron (Dashboard.calcularAlertasPatron_). No usa
+  // un solicitud_id real (es un aviso agregado, no de una solicitud
+  // puntual) -- el "solicitud_id" del log es un tag descriptivo, mismo
+  // criterio que ya usa enviarReporteProgramado_ para los reportes.
+  notificarPatron: function (alerta) {
+    var destinatarios = leerFilas_(SHEETS.USUARIOS)
+      .filter(function (u) {
+        var activo = u.activo === true || u.activo === 'TRUE' || u.activo === 1;
+        return activo && (u.rol === 'GERENCIA' || u.rol === 'ADM');
+      })
+      .map(function (u) { return u.email; });
+    var asunto = 'SIGSO - Patron detectado: ' + alerta.modulo + ' / ' + alerta.tipo;
+    var cuerpo =
+      'El modulo "' + alerta.modulo + '" acumula ' + alerta.cantidad + ' reportes de tipo "' + alerta.tipo +
+      '" en los ultimos ' + PATRON_VENTANA_DIAS + ' dias, de ' + alerta.solicitantes_distintos +
+      ' solicitantes distintos.\n\nPosible causa raiz -- no lo trates como casos aislados.';
+    return destinatarios.map(function (email) {
+      return enviarCorreo_('PATRON:' + alerta.modulo + ':' + alerta.tipo, email, 'ALERTA_PATRON:' + alerta.modulo + ':' + alerta.tipo, asunto, cuerpo);
+    });
+  },
+
   // A-12: reintenta notificaciones marcadas PENDIENTE_REINTENTO (fallo de
   // cuota u otro error transitorio de Gmail), hasta 3 intentos.
   // RF-019 (§12.6 v1.0): vista de logs de automatizaciones en admin.html.

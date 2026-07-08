@@ -228,6 +228,16 @@ administren las reglas de notificación desde el Backoffice (Fase 7+),
 ya que las notificaciones actuales (`Notificaciones.gs`, Fase 4) usan
 reglas fijas en código, no configurables todavía.
 
+**v2.0 (Sprint 3, P12)**: deja de estar infrautilizada. `Instalador.gs`
+siembra un registro `AVISO_LEO` (`evento='AVISO_DESARROLLO'`,
+`activo=true`) que funciona como switch global: `crearSolicitud`
+(`backend/intake/Solicitudes.gs`, `avisoDesarrolloActivo_`) lo consulta
+antes de avisarle a Leo por correo (cliente, P1 u opt-in) — si está en
+`false`, no se envía ningún aviso automático, sin tocar código (resuelve
+la contradicción C2: "Felipe dijo que no le enviara ni un correo
+todavía"). Editable desde Administración > Notificaciones (mismo CRUD
+genérico que el resto de catálogos, solo Admin).
+
 ## Supuestos documentados (no literales en la especificación)
 
 - **`prioridad_derivada` en `SOLICITUDES`**: la especificación define

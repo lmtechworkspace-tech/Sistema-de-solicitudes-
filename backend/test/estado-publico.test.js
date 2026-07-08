@@ -77,6 +77,7 @@ test('estadoPublico expone pregunta_pendiente cuando el item esta esperando info
 test('responderConsulta agrega un comentario publico cuando el correo coincide', () => {
   const ctx = loadConSchema();
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
+  seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
   seedSolicitud(ctx);
   seedSubsolicitud(ctx, { estado: 'S06' });
 

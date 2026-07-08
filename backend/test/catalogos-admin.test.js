@@ -10,8 +10,37 @@ function loadConSchema() {
   seedSheet(ctx, 'CAT_PLATAFORMAS', ctx.COLUMNAS.CAT_PLATAFORMAS);
   seedSheet(ctx, 'CAT_MODULOS', ctx.COLUMNAS.CAT_MODULOS);
   seedSheet(ctx, 'CAT_TIPOS', ctx.COLUMNAS.CAT_TIPOS);
+  seedSheet(ctx, 'CONFIG_NOTIFICACIONES', ctx.COLUMNAS.CONFIG_NOTIFICACIONES);
   return ctx;
 }
+
+// P12 (v2.0, Sprint 3): CONFIG_NOTIFICACIONES via el mismo CRUD generico,
+// solo Admin (es una decision de gobierno, no de operacion diaria).
+test('Catalogos.guardar (NOTIFICACION, P12) permite a Admin desactivar el aviso automatico a Leo', () => {
+  const ctx = loadConSchema();
+  ctx.agregarFila_('CONFIG_NOTIFICACIONES', {
+    notif_id: 'AVISO_LEO', evento: 'AVISO_DESARROLLO', rol_destinatario: '', emails_extra: '', activo: true
+  });
+
+  const resultado = ctx.Catalogos.guardar(
+    { tipo: 'NOTIFICACION', registro: { notif_id: 'AVISO_LEO', evento: 'AVISO_DESARROLLO', activo: false } },
+    { email: 'admin@homepymes.cl', rol: 'ADM' }
+  );
+
+  assert.equal(resultado.activo, false);
+  const filas = ctx.leerFilas_('CONFIG_NOTIFICACIONES');
+  assert.equal(filas.length, 1);
+  assert.equal(filas[0].activo, false);
+});
+
+test('Catalogos.guardar (NOTIFICACION) rechaza al rol Analista (P12, solo Admin)', () => {
+  const ctx = loadConSchema();
+  const resultado = ctx.Catalogos.guardar(
+    { tipo: 'NOTIFICACION', registro: { notif_id: 'AVISO_LEO', activo: false } },
+    { email: 'analista@homepymes.cl', rol: 'ANA' }
+  );
+  assert.equal(resultado._forbidden, true);
+});
 
 test('Catalogos.guardar (Admin) crea una empresa nueva', () => {
   const ctx = loadConSchema();

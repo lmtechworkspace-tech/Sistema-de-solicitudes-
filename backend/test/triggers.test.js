@@ -2,14 +2,15 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadBackofficeProject, toPlain } = require('./helpers/gasSandbox');
+const { loadBackofficeProject, toPlain, seedSheet } = require('./helpers/gasSandbox');
 
 const TODOS_LOS_TRIGGERS = [
-  'cerrarInactivosTrigger', 'enviarReporteMensualTrigger', 'enviarResumenSemanalTrigger', 'procesarColaCorreoTrigger',
-  'procesarColaDocumentosTrigger', 'refrescarCacheTrigger', 'suspenderInactivosTrigger', 'verificarSLAsTrigger'
+  'cerrarInactivosTrigger', 'detectarPatronesTrigger', 'enviarReporteMensualTrigger', 'enviarResumenSemanalTrigger',
+  'procesarColaCorreoTrigger', 'procesarColaDocumentosTrigger', 'refrescarCacheTrigger', 'suspenderInactivosTrigger',
+  'verificarSLAsTrigger'
 ];
 
-test('configurarTriggers instala los 8 triggers de tiempo de §13/§16.3 (Fase 4 + Fase 7 + Sprint 1 v2.0)', () => {
+test('configurarTriggers instala los 9 triggers de tiempo de §13/§16.3 (Fase 4 + Fase 7 + Sprint 1/3 v2.0)', () => {
   const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
   const creados = toPlain(ctx.configurarTriggers());
 
@@ -86,6 +87,68 @@ test('Triggers.cerrarInactivosPorValidacion cierra un item Terminada con mas de 
   assert.equal(resultado.cerrados, 1);
   const subsolicitudes = ctx.leerFilas_('SUBSOLICITUDES');
   assert.equal(subsolicitudes[0].estado, 'S09');
+});
+
+// P7 (v2.0, Sprint 3): alertas de patron -- aviso por correo + dedup diario.
+function loadConSchemaPatron() {
+  const ctx = loadConSchemaCierre();
+  seedSheet(ctx, 'LOG_SISTEMA', ctx.COLUMNAS.LOG_SISTEMA);
+  seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
+  // loadConSchemaCierre ya crea la hoja USUARIOS (solo encabezados) -- se
+  // agrega la fila directo para no re-sembrar encabezados duplicados.
+  ctx.agregarFila_('USUARIOS', {
+    usuario_id: 'U1', nombre: 'Gerente Demo', email: 'gerente@homepymes.cl', empresa_id: 'HP',
+    rol: 'GERENCIA', activo: true, ultimo_acceso: '', creado_por: 'sistema'
+  });
+  return ctx;
+}
+
+function seedSubsolicitudPatron(ctx, overrides) {
+  const base = Object.assign(
+    {
+      subsolicitud_id: 'SOL-2026-HP-0001-01', solicitud_id: 'SOL-2026-HP-0001', titulo: 'Titulo',
+      descripcion: 'Descripcion', prioridad: 'P2', estado: 'S02', modulo: 'MOD_X', tipo: 'ERR',
+      fecha_creacion: new Date().toISOString()
+    },
+    overrides
+  );
+  const fila = ctx.COLUMNAS.SUBSOLICITUDES.map((col) => (base[col] === undefined ? '' : base[col]));
+  ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('SUBSOLICITUDES').appendRow(fila);
+  return base;
+}
+
+test('Triggers.detectarPatrones avisa por correo y registra en LOG_SISTEMA cuando supera el umbral', () => {
+  const ctx = loadConSchemaPatron();
+  seedSolicitudCierre(ctx, { solicitud_id: 'SOL-2026-HP-0001', solicitante_email: 'juan@homepymes.cl' });
+  seedSolicitudCierre(ctx, { solicitud_id: 'SOL-2026-HP-0002', solicitante_email: 'ana@homepymes.cl' });
+  seedSolicitudCierre(ctx, { solicitud_id: 'SOL-2026-HP-0003', solicitante_email: 'ana@homepymes.cl' });
+  seedSubsolicitudPatron(ctx, { subsolicitud_id: 'SOL-2026-HP-0001-01', solicitud_id: 'SOL-2026-HP-0001' });
+  seedSubsolicitudPatron(ctx, { subsolicitud_id: 'SOL-2026-HP-0002-01', solicitud_id: 'SOL-2026-HP-0002' });
+  seedSubsolicitudPatron(ctx, { subsolicitud_id: 'SOL-2026-HP-0003-01', solicitud_id: 'SOL-2026-HP-0003' });
+
+  const resultado = ctx.Triggers.detectarPatrones();
+
+  assert.equal(resultado.avisados, 1);
+  const logs = ctx.leerFilas_('LOG_SISTEMA').filter((l) => l.contexto === 'ALERTA_PATRON');
+  assert.equal(logs.length, 1);
+  const correos = ctx.leerFilas_('LOG_NOTIFICACIONES').filter((n) => n.evento.indexOf('ALERTA_PATRON') === 0);
+  assert.equal(correos.length, 1);
+  assert.equal(correos[0].destinatario, 'gerente@homepymes.cl');
+});
+
+test('Triggers.detectarPatrones no reenvia el mismo patron el mismo dia (dedup via LOG_SISTEMA)', () => {
+  const ctx = loadConSchemaPatron();
+  seedSolicitudCierre(ctx, { solicitud_id: 'SOL-2026-HP-0001', solicitante_email: 'juan@homepymes.cl' });
+  seedSolicitudCierre(ctx, { solicitud_id: 'SOL-2026-HP-0002', solicitante_email: 'ana@homepymes.cl' });
+  seedSolicitudCierre(ctx, { solicitud_id: 'SOL-2026-HP-0003', solicitante_email: 'ana@homepymes.cl' });
+  seedSubsolicitudPatron(ctx, { subsolicitud_id: 'SOL-2026-HP-0001-01', solicitud_id: 'SOL-2026-HP-0001' });
+  seedSubsolicitudPatron(ctx, { subsolicitud_id: 'SOL-2026-HP-0002-01', solicitud_id: 'SOL-2026-HP-0002' });
+  seedSubsolicitudPatron(ctx, { subsolicitud_id: 'SOL-2026-HP-0003-01', solicitud_id: 'SOL-2026-HP-0003' });
+
+  ctx.Triggers.detectarPatrones();
+  const segundaCorrida = ctx.Triggers.detectarPatrones();
+
+  assert.equal(segundaCorrida.avisados, 0);
 });
 
 test('Triggers.cerrarInactivosPorValidacion NO cierra un item Terminada reciente (aun dentro del plazo)', () => {

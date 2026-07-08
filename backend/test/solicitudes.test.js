@@ -177,6 +177,29 @@ test('crearSolicitud (P2): un tipo con es_urgente=false NO sube la prioridad -- 
   assert.equal(ctx.leerFilas_('SUBSOLICITUDES')[0].prioridad, 'P5');
 });
 
+// P12 (v2.0, Sprint 3): switch global CONFIG_NOTIFICACIONES.AVISO_LEO.
+test('crearSolicitud (P12) NO avisa a Leo si AVISO_LEO esta desactivado, aunque sea P1', () => {
+  const ctx = loadIntakeConSchema();
+  seedSheet(ctx, 'CONFIG_NOTIFICACIONES', ctx.COLUMNAS.CONFIG_NOTIFICACIONES, [
+    ['AVISO_LEO', 'AVISO_DESARROLLO', '', '', false]
+  ]);
+
+  ctx.Solicitudes.crearSolicitud(datosValidos());
+
+  const avisos = ctx.leerFilas_('LOG_NOTIFICACIONES').filter((n) => n.evento === 'AVISO_DESARROLLO');
+  assert.equal(avisos.length, 0);
+});
+
+test('crearSolicitud (P12) SI avisa a Leo si no existe el registro AVISO_LEO (compatibilidad hacia atras)', () => {
+  const ctx = loadIntakeConSchema();
+  seedSheet(ctx, 'CONFIG_NOTIFICACIONES', ctx.COLUMNAS.CONFIG_NOTIFICACIONES);
+
+  ctx.Solicitudes.crearSolicitud(datosValidos());
+
+  const avisos = ctx.leerFilas_('LOG_NOTIFICACIONES').filter((n) => n.evento === 'AVISO_DESARROLLO');
+  assert.equal(avisos.length, 1);
+});
+
 test('crearSolicitud (P2): toda solicitud de cliente sube a P2 aunque el tipo no sea urgente (RN-005/P4 formalizado)', () => {
   const ctx = loadIntakeConSchema();
   seedSheet(ctx, 'CAT_TIPOS', ctx.COLUMNAS.CAT_TIPOS, [

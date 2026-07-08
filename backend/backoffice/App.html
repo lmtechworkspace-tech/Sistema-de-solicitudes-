@@ -684,6 +684,8 @@ button {
 
       <div class="sigso-kpis" id="contenedor-kpis"></div>
 
+      <div id="contenedor-alertas-patron"></div>
+
       <div class="sigso-graficos">
         <div class="sigso-card sigso-grafico-card"><h3>Por estado</h3><canvas id="grafico-estado"></canvas></div>
         <div class="sigso-card sigso-grafico-card"><h3>Por prioridad</h3><canvas id="grafico-prioridad"></canvas></div>
@@ -1032,6 +1034,7 @@ function renderHeaderSigso(paginaActiva) {
         return respuesta;
       }
       renderKpis_(respuesta.data.resumen);
+      renderAlertasPatron_(respuesta.data.alertas_patron || []);
       renderGrafico_('grafico-estado', 'bar', respuesta.data.por_estado);
       renderGrafico_('grafico-prioridad', 'doughnut', respuesta.data.por_prioridad);
       renderGrafico_('grafico-empresa', 'bar', respuesta.data.por_empresa);
@@ -1049,6 +1052,28 @@ function renderHeaderSigso(paginaActiva) {
       Componentes.kpi({ valor: resumen.criticas_activas, etiqueta: 'Criticas activas', alerta: true, titulo: 'Solicitudes abiertas de prioridad P1 (la mas alta).' }) +
       Componentes.kpi({ valor: resumen.sla_vencido, etiqueta: 'Fuera de plazo', alerta: true, titulo: 'Items que ya pasaron su tiempo objetivo de respuesta segun la prioridad (P1: 2h, P2: 24h, P3: 72h, P4: 120h; en horas habiles).' }) +
       Componentes.kpi({ valor: resumen.del_dia, etiqueta: 'Ingresadas hoy', titulo: 'Solicitudes creadas hoy.' });
+  }
+
+  // P7 (v2.0, Sprint 3): "el modulo X acumula N reportes de tipo Error esta
+  // semana -- posible causa raiz". Solo se muestra si hay algo que superar
+  // umbral (no ensucia el dashboard cuando no hay patrones).
+  function renderAlertasPatron_(alertas) {
+    var contenedor = document.getElementById('contenedor-alertas-patron');
+    if (!alertas.length) {
+      contenedor.innerHTML = '';
+      return;
+    }
+    contenedor.innerHTML = Componentes.tarjeta(
+      '<h3>Alertas de patrón</h3>' +
+      alertas.map(function (a) {
+        return Componentes.alerta(
+          '<strong>' + Componentes.escaparHtml(a.modulo) + '</strong> acumula ' + a.cantidad +
+          ' reportes de tipo <strong>' + Componentes.escaparHtml(a.tipo) + '</strong> en los últimos 7 días (' +
+          a.solicitantes_distintos + ' solicitantes distintos) — posible causa raíz.',
+          'aviso'
+        );
+      }).join('')
+    );
   }
 
   function renderGrafico_(idCanvas, tipo, datosAgrupados) {
@@ -1123,11 +1148,14 @@ function renderHeaderSigso(paginaActiva) {
 
   function renderFilaReciente_(s) {
     var sla = renderIndicadorSla_(s.sla_restante_horas);
+    // P5 (v2.0, Sprint 3): badge visual de "respuesta recibida" -- para que
+    // Leo no dependa solo de encontrar el correo entre el resto de avisos.
+    var badgeRespuesta = s.respuesta_pendiente ? ' ' + Componentes.badge('Respuesta recibida', 'P2') : '';
     return '<div class="sigso-fila-reciente" data-id="' + s.solicitud_id + '">' +
       '<div class="sigso-fila-reciente__principal">' +
       Componentes.badgePrioridad(s.prioridad_derivada) + ' ' +
       '<strong>' + s.solicitud_id + '</strong> ' +
-      Componentes.badgeEstado(s.estado_derivado) +
+      Componentes.badgeEstado(s.estado_derivado) + badgeRespuesta +
       '</div>' +
       '<div class="sigso-fila-reciente__meta">' +
       s.empresa_id + ' &middot; ' + s.plataforma + ' / ' + s.modulo + ' &middot; ' +

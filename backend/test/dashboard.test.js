@@ -10,6 +10,7 @@ function loadConSchema() {
   seedSheet(ctx, 'SUBSOLICITUDES', ctx.COLUMNAS.SUBSOLICITUDES);
   seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
   seedSheet(ctx, 'CONFIG_FERIADOS', ctx.COLUMNAS.CONFIG_FERIADOS);
+  seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
   return ctx;
 }
 
@@ -36,7 +37,11 @@ function seedSolicitud(ctx, overrides, subestados) {
       titulo: 't', descripcion: 'd', contexto: '', resultado_esperado: '', impacto: '',
       prioridad: base.prioridad_derivada, estado: estado, url_modulo: '', usuario_prueba: '',
       ref_credencial: '', centro_costos: '', url_video: '', observaciones: '',
-      sla_objetivo_horas: 24, estimacion_horas: '', horas_reales: '', fecha_creacion: base.fecha_creacion
+      sla_objetivo_horas: 24, estimacion_horas: '', horas_reales: '', fecha_creacion: base.fecha_creacion,
+      // P7 (v2.0, Sprint 3): calcularAlertasPatron_ agrupa por (modulo, tipo)
+      // a nivel de subsolicitud -- se reutilizan los mismos valores de la
+      // solicitud como default de conveniencia para los tests existentes.
+      modulo: base.modulo, tipo: base.tipo
     }[col]));
     ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('SUBSOLICITUDES').appendRow(subFila);
   });
@@ -101,6 +106,79 @@ test('Dashboard.getData (P6) respeta el filtro solicitante -- coincidencia parci
   const porCorreo = ctx.Dashboard.getData({ solicitante: 'camila@homepymes.cl' }, { rol: 'GERENCIA' });
   assert.equal(porCorreo.recientes.length, 1);
   assert.equal(porCorreo.recientes[0].solicitud_id, 'SOL-2026-HP-0002');
+});
+
+// P5 (v2.0, Sprint 3): badge "respuesta recibida" -- el item sigue en S06
+// pero el solicitante ya respondio despues de la ultima pregunta.
+test('Dashboard.getData (P5) marca respuesta_pendiente cuando hay un comentario publico posterior a la ultima entrada a S06', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0001' }, ['S06']);
+  ctx.agregarFila_('HISTORIAL_ESTADOS', {
+    historial_id: 'h1', solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    estado_anterior: 'S03', estado_nuevo: 'S06', usuario: 'dev@homepymes.cl', comentario: '¿Que factura?',
+    timestamp: '2026-01-01T10:00:00.000Z'
+  });
+  ctx.agregarFila_('COMENTARIOS', {
+    comentario_id: 'c1', solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    usuario: 'juan@homepymes.cl', texto: 'La N-4521', es_interno: false, timestamp: '2026-01-02T10:00:00.000Z'
+  });
+
+  const datos = ctx.Dashboard.getData({}, { rol: 'ADM' });
+  assert.equal(datos.recientes[0].respuesta_pendiente, true);
+});
+
+test('Dashboard.getData (P5) NO marca respuesta_pendiente si el comentario es ANTERIOR a la ultima entrada a S06', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0001' }, ['S06']);
+  ctx.agregarFila_('COMENTARIOS', {
+    comentario_id: 'c1', solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    usuario: 'juan@homepymes.cl', texto: 'Comentario viejo', es_interno: false, timestamp: '2026-01-01T10:00:00.000Z'
+  });
+  ctx.agregarFila_('HISTORIAL_ESTADOS', {
+    historial_id: 'h1', solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    estado_anterior: 'S03', estado_nuevo: 'S06', usuario: 'dev@homepymes.cl', comentario: '¿Que factura?',
+    timestamp: '2026-01-02T10:00:00.000Z'
+  });
+
+  const datos = ctx.Dashboard.getData({}, { rol: 'ADM' });
+  assert.equal(datos.recientes[0].respuesta_pendiente, false);
+});
+
+// P7 (v2.0, Sprint 3): alertas de patron.
+test('Dashboard.getData (P7) detecta un patron: >=3 reportes del mismo (modulo,tipo) con >=2 solicitantes distintos', () => {
+  const ctx = loadConSchema();
+  const hoy = new Date().toISOString();
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0001', solicitante_email: 'juan@homepymes.cl', modulo: 'MOD_X', tipo: 'ERR', fecha_creacion: hoy
+  }, ['S02']);
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0002', solicitante_email: 'ana@homepymes.cl', modulo: 'MOD_X', tipo: 'ERR', fecha_creacion: hoy
+  }, ['S02']);
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0003', solicitante_email: 'ana@homepymes.cl', modulo: 'MOD_X', tipo: 'ERR', fecha_creacion: hoy
+  }, ['S02']);
+
+  const datos = ctx.Dashboard.getData({}, { rol: 'ADM' });
+  assert.equal(datos.alertas_patron.length, 1);
+  assert.equal(datos.alertas_patron[0].cantidad, 3);
+  assert.equal(datos.alertas_patron[0].solicitantes_distintos, 2);
+});
+
+test('Dashboard.getData (P7) NO reporta un patron con menos de 2 solicitantes distintos', () => {
+  const ctx = loadConSchema();
+  const hoy = new Date().toISOString();
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0001', solicitante_email: 'juan@homepymes.cl', modulo: 'MOD_X', tipo: 'ERR', fecha_creacion: hoy
+  }, ['S02']);
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0002', solicitante_email: 'juan@homepymes.cl', modulo: 'MOD_X', tipo: 'ERR', fecha_creacion: hoy
+  }, ['S02']);
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0003', solicitante_email: 'juan@homepymes.cl', modulo: 'MOD_X', tipo: 'ERR', fecha_creacion: hoy
+  }, ['S02']);
+
+  const datos = ctx.Dashboard.getData({}, { rol: 'ADM' });
+  assert.equal(datos.alertas_patron.length, 0);
 });
 
 test('Dashboard.getData enriquece recientes con cantidad_items, sla_restante_horas y asignado_a (Fase 10)', () => {

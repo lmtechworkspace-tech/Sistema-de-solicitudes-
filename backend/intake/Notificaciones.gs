@@ -53,6 +53,18 @@ var Notificaciones = {
       ? 'El solicitante confirmo que el item ' + subsolicitud.subsolicitud_id + ' (' + solicitud.solicitud_id + ') quedo resuelto. Ya esta Cerrada.'
       : 'El solicitante reabrio el item ' + subsolicitud.subsolicitud_id + ' (' + solicitud.solicitud_id + '): no quedo resuelto.';
     return enviarCorreo_(solicitud.solicitud_id, EMAIL_DESARROLLO, 'VALIDACION_SOLICITANTE:' + subsolicitud.subsolicitud_id + ':' + accion, asunto, cuerpo);
+  },
+
+  // P5 (v2.0, Sprint 3): avisa a Leo cuando el solicitante responde una
+  // pregunta ("esperando informacion", S06). Sin este aviso, Leo solo se
+  // entera si vuelve a mirar el panel -- el ciclo "pedir info / responder"
+  // quedaba con la mitad notificada (la pregunta si avisaba, la respuesta no).
+  notificarRespuestaSolicitante: function (solicitud, subsolicitudId, texto) {
+    var asunto = 'SIGSO - Respuesta del solicitante: ' + (subsolicitudId || solicitud.solicitud_id);
+    var cuerpo =
+      'El solicitante respondio en ' + solicitud.solicitud_id +
+      (subsolicitudId ? ' (item ' + subsolicitudId + ')' : '') + ':\n\n' + texto;
+    return enviarCorreo_(solicitud.solicitud_id, EMAIL_DESARROLLO, 'RESPUESTA_SOLICITANTE:' + (subsolicitudId || solicitud.solicitud_id), asunto, cuerpo);
   }
 };
 

@@ -34,6 +34,12 @@ function construirContexto() {
   seedSheet(ctx, 'COUNTERS', ctx.COLUMNAS.COUNTERS);
   seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);
   seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
+  seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
+  // P12 (v2.0, Sprint 3): switch global de aviso a Leo -- activo=true
+  // reproduce el comportamiento de siempre en local.
+  seedSheet(ctx, 'CONFIG_NOTIFICACIONES', ctx.COLUMNAS.CONFIG_NOTIFICACIONES, [
+    ['AVISO_LEO', 'AVISO_DESARROLLO', '', '', true]
+  ]);
   seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS, [
     ['U1', 'Analista Demo', 'analista@homepymes.cl', 'HP', 'ANA', true, '', 'sistema'],
     ['U2', 'Dev Demo', 'dev@homepymes.cl', 'HP', 'DEV', true, '', 'sistema']

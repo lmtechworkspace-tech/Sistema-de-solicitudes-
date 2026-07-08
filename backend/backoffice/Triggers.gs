@@ -53,6 +53,12 @@ function configurarTriggers() {
     creados.push('cerrarInactivosTrigger');
   }
 
+  // P7 (v2.0, Sprint 3): diario 09:00 -- ver Triggers.detectarPatrones.
+  if (existentes.indexOf('detectarPatronesTrigger') === -1) {
+    ScriptApp.newTrigger('detectarPatronesTrigger').timeBased().atHour(9).everyDays(1).create();
+    creados.push('detectarPatronesTrigger');
+  }
+
   // §17.4 v1.0: resumen semanal (lunes 09:00) y reporte mensual (dia 1).
   if (existentes.indexOf('enviarResumenSemanalTrigger') === -1) {
     ScriptApp.newTrigger('enviarResumenSemanalTrigger').timeBased()
@@ -92,6 +98,11 @@ function suspenderInactivosTrigger() {
 // RN-201/RF-208 (v2.0, Sprint 1): ver Triggers.cerrarInactivosPorValidacion().
 function cerrarInactivosTrigger() {
   return Triggers.cerrarInactivosPorValidacion();
+}
+
+// P7 (v2.0, Sprint 3): ver Triggers.detectarPatrones().
+function detectarPatronesTrigger() {
+  return Triggers.detectarPatrones();
 }
 
 // §17.4 v1.0: reportes programados, ver Notificaciones.gs.
@@ -182,6 +193,41 @@ var Triggers = {
       });
 
     return { cerrados: cerrados.length, ids: cerrados };
+  },
+
+  // P7: recorre las alertas de patron vigentes (Dashboard.calcularAlertasPatron_,
+  // mismo umbral que se muestra en el Dashboard) y avisa por correo las que
+  // no se hayan avisado ya HOY (dedup via LOG_SISTEMA, contexto
+  // ALERTA_PATRON, ref = modulo||tipo) -- evita mandar el mismo aviso cada
+  // dia mientras el patron siga activo sin que nadie lo resuelva.
+  detectarPatrones: function () {
+    var hoy = claveDia_(new Date(), 'America/Santiago');
+    var yaAvisadosHoy = {};
+    leerFilas_(SHEETS.LOG_SISTEMA).forEach(function (log) {
+      if (log.contexto === 'ALERTA_PATRON' && claveDia_(new Date(log.timestamp), 'America/Santiago') === hoy) {
+        yaAvisadosHoy[log.ref] = true;
+      }
+    });
+
+    var avisados = [];
+    calcularAlertasPatron_().forEach(function (alerta) {
+      var clave = alerta.modulo + '||' + alerta.tipo;
+      if (yaAvisadosHoy[clave]) {
+        return;
+      }
+      Notificaciones.notificarPatron(alerta);
+      agregarFila_(SHEETS.LOG_SISTEMA, {
+        log_id: Utilities.getUuid(),
+        timestamp: new Date().toISOString(),
+        contexto: 'ALERTA_PATRON',
+        mensaje: alerta.modulo + ' acumula ' + alerta.cantidad + ' reportes de tipo ' + alerta.tipo +
+          ' (' + alerta.solicitantes_distintos + ' solicitantes distintos) en los ultimos ' + PATRON_VENTANA_DIAS + ' dias.',
+        ref: clave
+      });
+      avisados.push(clave);
+    });
+
+    return { avisados: avisados.length, patrones: avisados };
   }
 };
 
