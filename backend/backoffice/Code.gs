@@ -27,6 +27,7 @@
 var BACKOFFICE_ACTIONS = {
   ping: handlePing_,
   getDashboardData: handleGetDashboardData_,
+  getPanelGerencia: handleGetPanelGerencia_,
   getSolicitudDetalle: handleGetSolicitudDetalle_,
   actualizarEstado: handleActualizarEstado_,
   actualizarPrioridad: handleActualizarPrioridad_,
@@ -174,6 +175,13 @@ function handleComprometerFecha_(data, contexto) {
 
 function handleGetDashboardData_(data, contexto) {
   return jsonResponse_({ ok: true, data: Dashboard.getData(data, contexto) });
+}
+
+// v2.1 (Fase C): Panel de Control de Gerencia (documentacion/SIGSO-v2.1-
+// plazos-y-control.md §7). Solo lectura, como el resto del Dashboard --
+// cualquier rol autenticado puede pedirlo (la UI solo lo ofrece a GERENCIA).
+function handleGetPanelGerencia_(data, contexto) {
+  return jsonResponse_({ ok: true, data: Gerencia.getPanel(data, contexto) });
 }
 
 function handleGetSolicitudDetalle_(data, contexto) {

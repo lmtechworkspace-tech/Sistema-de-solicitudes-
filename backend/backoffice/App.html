@@ -577,6 +577,102 @@ button {
   margin-top: 0;
 }
 
+/* v2.1 (Fase C): Panel de Control de Gerencia -- semaforo de tarjetas +
+   carta Gantt liviana (barras posicionadas por CSS, sin libreria Gantt). */
+.sigso-semaforo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.75rem;
+}
+
+.sigso-semaforo-tarjeta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.75rem 0.5rem;
+  border: 1px solid var(--gris-claro);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.sigso-semaforo-tarjeta--activa {
+  border-color: var(--azul);
+  box-shadow: 0 0 0 2px var(--azul) inset;
+}
+
+.sigso-semaforo-tarjeta__emoji {
+  font-size: 1.3rem;
+}
+
+.sigso-semaforo-tarjeta__cantidad {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.sigso-semaforo-tarjeta__etiqueta {
+  font-size: 0.75rem;
+  color: var(--gris-medio);
+  text-align: center;
+}
+
+.sigso-gantt {
+  position: relative;
+  padding-top: 0.5rem;
+}
+
+.sigso-gantt-hoy {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #c0392b;
+  z-index: 1;
+}
+
+.sigso-gantt-fila {
+  margin-bottom: 0.9rem;
+  cursor: pointer;
+}
+
+.sigso-gantt-etiqueta {
+  font-size: 0.8rem;
+  margin-bottom: 0.2rem;
+}
+
+.sigso-gantt-track {
+  position: relative;
+  height: 14px;
+  background: var(--gris-claro);
+  border-radius: 4px;
+}
+
+.sigso-gantt-barra {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 4px;
+}
+
+.sigso-gantt-barra--en-plazo { background: #27AE60; }
+.sigso-gantt-barra--en-riesgo { background: #F1C40F; }
+.sigso-gantt-barra--atrasada-desarrollador { background: #C0392B; }
+.sigso-gantt-barra--esperando-validacion { background: #2980B9; }
+.sigso-gantt-barra--sin-compromiso { background: var(--gris-medio); }
+.sigso-gantt-barra--cerrada-a-tiempo { background: #27AE60; }
+.sigso-gantt-barra--cerrada-con-atraso { background: #C0392B; }
+.sigso-gantt-barra--atraso { background: repeating-linear-gradient(45deg, #C0392B, #C0392B 4px, #922b21 4px, #922b21 8px); }
+
+.sigso-gantt-original {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 22px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
 /* Fase 10: detalle de solicitud en 3 columnas -- ficha (solo lectura,
    sticky) / items (donde Leo actua) / historia (timeline unificado).
    Reemplaza el layout previo de bloques apilados con acciones al fondo. */
@@ -652,6 +748,10 @@ button {
     <section id="vista-dashboard">
       <h1>Dashboard</h1>
 
+      <!-- v2.1 (Fase C): solo visible para GERENCIA (dashboard.js lo
+           muestra segun rol_actual). -->
+      <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-ver-gerencia">Ver Panel de Gerencia</button>
+
       <div class="sigso-filtros">
         <div class="sigso-campo">
           <label for="filtro-empresa">Empresa</label>
@@ -706,6 +806,55 @@ button {
     <section id="vista-detalle" class="sigso-oculto">
       <button type="button" class="sigso-boton--secundario" id="btn-volver-dashboard">&larr; Volver al dashboard</button>
       <div id="detalle-contenido"></div>
+    </section>
+
+    <!-- v2.1 (Fase C): Panel de Control de Gerencia. Solo se muestra (boton
+         de acceso + esta seccion) cuando rol_actual === 'GERENCIA'
+         (ver dashboard.js). -->
+    <section id="vista-gerencia" class="sigso-oculto">
+      <button type="button" class="sigso-boton--secundario" id="btn-volver-dashboard-gerencia">&larr; Volver al dashboard</button>
+      <h1>Panel de Control de Gerencia</h1>
+      <p class="sigso-ayuda">Cumplimiento de plazos: fecha comprometida por el desarrollador (no el SLA automático). "Esperando validación" es tiempo en manos del solicitante, no del desarrollador.</p>
+
+      <div class="sigso-filtros">
+        <div class="sigso-campo">
+          <label for="ger-filtro-desarrollador">Desarrollador</label>
+          <input type="text" id="ger-filtro-desarrollador" placeholder="correo@...">
+        </div>
+        <div class="sigso-campo">
+          <label for="ger-filtro-empresa">Empresa</label>
+          <select id="ger-filtro-empresa"><option value="">Todas</option></select>
+        </div>
+        <div class="sigso-campo">
+          <label for="ger-filtro-tipo">Tipo (texto)</label>
+          <input type="text" id="ger-filtro-tipo" placeholder="Ej: Error, Mejora...">
+        </div>
+        <div class="sigso-campo">
+          <label for="ger-filtro-solicitante">Solicitante</label>
+          <input type="text" id="ger-filtro-solicitante" placeholder="nombre o correo">
+        </div>
+        <div class="sigso-campo">
+          <button type="button" class="sigso-boton" id="btn-actualizar-gerencia">Actualizar</button>
+        </div>
+      </div>
+
+      <div class="sigso-kpis" id="ger-contenedor-kpis"></div>
+
+      <div class="sigso-card">
+        <h3>Semáforo de cumplimiento</h3>
+        <div id="ger-contenedor-semaforo"></div>
+      </div>
+
+      <div class="sigso-card">
+        <h3>Carta Gantt (fecha comprometida por ítem)</h3>
+        <p class="sigso-ayuda">Barra desde que se creó el ítem hasta su fecha comprometida. Línea vertical = hoy. Línea tenue = fecha original, si hubo re-compromiso.</p>
+        <div id="ger-contenedor-gantt"></div>
+      </div>
+
+      <div class="sigso-card">
+        <h3>Control del solicitante — entregado y sin validar</h3>
+        <div id="ger-contenedor-solicitante"></div>
+      </div>
     </section>
   </main>
 
@@ -1040,6 +1189,11 @@ function renderHeaderSigso(paginaActiva) {
       renderGrafico_('grafico-empresa', 'bar', respuesta.data.por_empresa);
       recientesActuales = respuesta.data.recientes;
       renderRecientes_();
+      // v2.1 (Fase C): el Panel de Gerencia es "su vista principal" -- el
+      // boton de acceso solo aparece para ese rol (el backend ya no
+      // restringe la accion en si, pero no tiene sentido ofrecersela a
+      // quien no es Gerencia).
+      document.getElementById('btn-ver-gerencia').classList.toggle('sigso-oculto', respuesta.data.rol_actual !== 'GERENCIA');
       return respuesta;
     });
   }
@@ -1304,6 +1458,7 @@ function renderHeaderSigso(paginaActiva) {
     var subsolicitudes = detalle.subsolicitudes;
     var archivos = detalle.archivos || [];
     var transiciones = detalle.transiciones_por_subsolicitud || {};
+    var historialCompromiso = detalle.historial_compromiso || [];
     // P6 (v2.0, Sprint 2): Gerencia ve el detalle completo, pero de solo
     // lectura -- no se le ofrecen las acciones de cambiar estado/prioridad
     // (el backend ya las rechaza igual, esto evita mostrar controles que
@@ -1348,6 +1503,18 @@ function renderHeaderSigso(paginaActiva) {
         datos.push(renderCampoDato_('Esperando validación', sub.cumplimiento.dias_esperando + ' día(s) hábil(es)'));
       }
 
+      // v2.1 (Fase C, §7 drill-down): "resbalones" de este item -- cada
+      // re-compromiso con su motivo, la evidencia que pidio Gerencia.
+      var resbalones = historialCompromiso.filter(function (h) { return h.subsolicitud_id === sub.subsolicitud_id; });
+      var historialHtml = resbalones.length === 0 ? '' :
+        '<div class="sigso-datos-item"><strong>Historial de compromiso:</strong>' +
+        '<ul>' + resbalones.map(function (h) {
+          return '<li>' + Componentes.escaparHtml(String(h.fecha_anterior).replace('T', ' ')) + ' &rarr; ' +
+            Componentes.escaparHtml(String(h.fecha_nueva).replace('T', ' ')) + ' — ' +
+            Componentes.escaparHtml(h.motivo) + ' (' + Componentes.escaparHtml(h.usuario) + ', ' +
+            new Date(h.timestamp).toLocaleDateString('es-CL') + ')</li>';
+        }).join('') + '</ul></div>';
+
       return '<div class="sigso-acordeon-item sigso-acordeon-item--activo">' +
         '<div class="sigso-acordeon-item__cabecera"><span>' + sub.numero_item + '. ' + Componentes.escaparHtml(sub.titulo) +
         ' — ' + Componentes.badgePrioridad(sub.prioridad) + ' ' + Componentes.badgeEstado(sub.estado) + cumplimientoBadge + '</span></div>' +
@@ -1356,6 +1523,7 @@ function renderHeaderSigso(paginaActiva) {
         (sub.contexto ? '<p><strong>Contexto:</strong> ' + Componentes.escaparHtml(sub.contexto) + '</p>' : '') +
         (sub.resultado_esperado ? '<p><strong>Resultado esperado:</strong> ' + Componentes.escaparHtml(sub.resultado_esperado) + '</p>' : '') +
         (datos.length > 0 ? '<dl class="sigso-datos-item">' + datos.join('') + '</dl>' : '') +
+        historialHtml +
         (sub.observaciones ? '<p><em>' + Componentes.escaparHtml(sub.observaciones) + '</em></p>' : '') +
         renderGaleria_(imagenesItem) +
         (soloLectura ? '' : renderAccionesItem_(sub, transiciones[sub.subsolicitud_id] || [])) +
@@ -1553,6 +1721,221 @@ function renderHeaderSigso(paginaActiva) {
 </script>
   <script>
 /**
+ * gerencia.js — v2.1 (Fase C, documentacion/SIGSO-v2.1-plazos-y-control.md
+ * §7): Panel de Control de Gerencia. Consume Gerencia.getPanel (Backoffice)
+ * -- ya trae el semaforo calculado (Cumplimiento.gs, Fase B) por item, este
+ * archivo solo agrupa/dibuja. Drill-down reutiliza SigsoDetalle/SigsoApp
+ * (mismo detalle que ya usa Leo, ahora con el historial de compromiso
+ * visible, ver detalle.js).
+ */
+(function () {
+  window.SigsoGerencia = { cargar: cargarGerencia_, inicializarFiltros: inicializarFiltrosGerencia_ };
+
+  var itemsActuales = [];
+  var categoriaActiva = null;
+
+  var CATEGORIAS = [
+    { codigo: 'ATRASADA_DESARROLLADOR', emoji: '🔴', etiqueta: 'Atrasadas (desarrollador)' },
+    { codigo: 'EN_RIESGO', emoji: '🟡', etiqueta: 'En riesgo' },
+    { codigo: 'ESPERANDO_VALIDACION', emoji: '🔵', etiqueta: 'Esperando validación' },
+    { codigo: 'EN_PLAZO', emoji: '🟢', etiqueta: 'En plazo' },
+    { codigo: 'SIN_COMPROMISO', emoji: '⚪', etiqueta: 'Sin comprometer' },
+    { codigo: 'CERRADA_A_TIEMPO', emoji: '✅', etiqueta: 'Cerradas a tiempo' },
+    { codigo: 'CERRADA_CON_ATRASO', emoji: '❌', etiqueta: 'Cerradas con atraso' }
+  ];
+
+  function inicializarFiltrosGerencia_() {
+    var selectEmpresa = document.getElementById('ger-filtro-empresa');
+    if (selectEmpresa.options.length <= 1) {
+      ['HP', 'RLD'].forEach(function (id) {
+        var opcion = document.createElement('option');
+        opcion.value = id;
+        opcion.textContent = id;
+        selectEmpresa.appendChild(opcion);
+      });
+    }
+    document.getElementById('ger-filtro-tipo').addEventListener('input', renderTodo_);
+  }
+
+  function leerFiltrosServidor_() {
+    return {
+      empresa_id: document.getElementById('ger-filtro-empresa').value,
+      desarrollador: document.getElementById('ger-filtro-desarrollador').value.trim(),
+      solicitante: document.getElementById('ger-filtro-solicitante').value.trim()
+    };
+  }
+
+  function cargarGerencia_() {
+    categoriaActiva = null;
+    return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getPanelGerencia', leerFiltrosServidor_())
+      .then(function (respuesta) {
+        if (!respuesta.ok) {
+          document.getElementById('ger-contenedor-kpis').innerHTML =
+            Componentes.alerta(respuesta.message || 'No se pudo cargar el panel.', 'error');
+          return respuesta;
+        }
+        itemsActuales = respuesta.data.items;
+        renderKpis_(respuesta.data.kpis);
+        renderTodo_();
+        return respuesta;
+      });
+  }
+
+  function renderKpis_(kpis) {
+    document.getElementById('ger-contenedor-kpis').innerHTML =
+      Componentes.kpi({
+        valor: kpis.pct_cumplimiento_desarrollador === null ? '—' : kpis.pct_cumplimiento_desarrollador + '%',
+        etiqueta: 'Cumplimiento del desarrollador',
+        titulo: 'Entregadas a tiempo ÷ entregadas (fecha comprometida vs. cuándo se marcó Terminada).'
+      }) +
+      Componentes.kpi({ valor: kpis.atrasadas_activas, etiqueta: 'Atrasadas activas', alerta: kpis.atrasadas_activas > 0, titulo: 'Pasaron su fecha comprometida y aún no se entregan.' }) +
+      Componentes.kpi({
+        valor: kpis.esperando_validacion,
+        etiqueta: 'Esperando validación',
+        titulo: 'Entregadas (Terminada) y el solicitante todavía no cierra. Promedio: ' + kpis.esperando_validacion_promedio_dias + ' día(s) hábil(es).'
+      }) +
+      Componentes.kpi({ valor: kpis.atraso_promedio_dias, etiqueta: 'Atraso promedio (días)', titulo: 'Promedio de días hábiles de atraso entre atrasadas activas y cerradas con atraso.' }) +
+      Componentes.kpi({ valor: kpis.sin_comprometer, etiqueta: 'Sin comprometer', titulo: 'Cola que el desarrollador todavía no revisó/comprometió.' });
+  }
+
+  // Aplica el filtro de tipo (texto, client-side -- ver nota en app.html:
+  // no hay catalogo de tipos cargado en esta pantalla, se busca por nombre).
+  function itemsConFiltroTipo_() {
+    var texto = document.getElementById('ger-filtro-tipo').value.trim().toLowerCase();
+    if (!texto) return itemsActuales;
+    return itemsActuales.filter(function (i) {
+      return String(i.tipo_nombre || '').toLowerCase().indexOf(texto) !== -1;
+    });
+  }
+
+  function renderTodo_() {
+    var base = itemsConFiltroTipo_();
+    renderSemaforo_(base);
+    var filtrados = categoriaActiva ? base.filter(function (i) { return i.cumplimiento.codigo === categoriaActiva; }) : base;
+    renderGantt_(filtrados);
+    renderControlSolicitante_(filtrados);
+  }
+
+  // §7B: tarjetas por categoria, clicables para filtrar el Gantt y el
+  // panel del solicitante sin volver a pedir datos al servidor.
+  function renderSemaforo_(items) {
+    var contenedor = document.getElementById('ger-contenedor-semaforo');
+    contenedor.innerHTML = '<div class="sigso-semaforo">' + CATEGORIAS.map(function (cat) {
+      var cantidad = items.filter(function (i) { return i.cumplimiento.codigo === cat.codigo; }).length;
+      var activa = categoriaActiva === cat.codigo ? ' sigso-semaforo-tarjeta--activa' : '';
+      return '<button type="button" class="sigso-semaforo-tarjeta' + activa + '" data-codigo="' + cat.codigo + '">' +
+        '<span class="sigso-semaforo-tarjeta__emoji">' + cat.emoji + '</span>' +
+        '<span class="sigso-semaforo-tarjeta__cantidad">' + cantidad + '</span>' +
+        '<span class="sigso-semaforo-tarjeta__etiqueta">' + Componentes.escaparHtml(cat.etiqueta) + '</span>' +
+        '</button>';
+    }).join('') + '</div>';
+
+    contenedor.querySelectorAll('[data-codigo]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        var codigo = boton.getAttribute('data-codigo');
+        categoriaActiva = categoriaActiva === codigo ? null : codigo;
+        renderTodo_();
+      });
+    });
+  }
+
+  // §7C: carta Gantt liviana -- barras posicionadas por CSS (sin libreria
+  // Gantt), una fila por item que tenga fecha comprometida (sin compromiso
+  // no tiene fecha que dibujar). Barra = creacion -> compromiso; si esta
+  // atrasada, se extiende en rojo hasta hoy; linea tenue = fecha original
+  // (antes del primer re-compromiso), si la hubo.
+  function renderGantt_(items) {
+    var contenedor = document.getElementById('ger-contenedor-gantt');
+    var conFecha = items.filter(function (i) { return i.fecha_comprometida; });
+    if (conFecha.length === 0) {
+      contenedor.innerHTML = Componentes.vacio('No hay ítems comprometidos que coincidan con los filtros.');
+      return;
+    }
+
+    var ahora = new Date();
+    var tiempos = conFecha.map(function (i) { return new Date(i.fecha_creacion).getTime(); })
+      .concat(conFecha.map(function (i) { return new Date(i.fecha_comprometida).getTime(); }))
+      .concat([ahora.getTime()]);
+    var minTime = Math.min.apply(null, tiempos);
+    var maxTime = Math.max.apply(null, tiempos);
+    var rango = Math.max(maxTime - minTime, 1);
+
+    function pct_(fecha) {
+      return Math.min(100, Math.max(0, ((new Date(fecha).getTime() - minTime) / rango) * 100));
+    }
+
+    var hoyPct = pct_(ahora);
+
+    var filas = conFecha.map(function (i) {
+      var inicioPct = pct_(i.fecha_creacion);
+      var finPct = pct_(i.fecha_comprometida);
+      var claseColor = 'sigso-gantt-barra--' + i.cumplimiento.codigo.toLowerCase().replace(/_/g, '-');
+      var extraAtraso = '';
+      if (i.cumplimiento.codigo === 'ATRASADA_DESARROLLADOR' && hoyPct > finPct) {
+        extraAtraso = '<div class="sigso-gantt-barra sigso-gantt-barra--atraso" style="left:' + finPct + '%; width:' + (hoyPct - finPct) + '%"></div>';
+      }
+      var lineaOriginal = '';
+      if (i.re_compromisos > 0 && i.fecha_original && i.fecha_original !== i.fecha_comprometida) {
+        lineaOriginal = '<div class="sigso-gantt-original" style="left:' + pct_(i.fecha_original) + '%" title="Fecha original antes de re-comprometer: ' + Componentes.escaparHtml(String(i.fecha_original)) + '"></div>';
+      }
+      return '<div class="sigso-gantt-fila" data-id="' + i.solicitud_id + '">' +
+        '<div class="sigso-gantt-etiqueta">' + Componentes.escaparHtml(i.solicitud_id + '-' + i.numero_item) + ' — ' + Componentes.escaparHtml(i.titulo) +
+        (i.re_compromisos > 0 ? ' <span class="sigso-ayuda">(re-comprometida ' + i.re_compromisos + 'x)</span>' : '') + '</div>' +
+        '<div class="sigso-gantt-track">' +
+        '<div class="sigso-gantt-barra ' + claseColor + '" style="left:' + inicioPct + '%; width:' + Math.max(finPct - inicioPct, 0.5) + '%"></div>' +
+        extraAtraso + lineaOriginal +
+        '</div></div>';
+    }).join('');
+
+    contenedor.innerHTML =
+      '<div class="sigso-gantt">' +
+      '<div class="sigso-gantt-hoy" style="left:' + hoyPct + '%" title="Hoy"></div>' +
+      filas +
+      '</div>';
+
+    contenedor.querySelectorAll('[data-id]').forEach(function (fila) {
+      fila.addEventListener('click', function () {
+        window.SigsoApp.mostrarDetalle(fila.getAttribute('data-id'));
+      });
+    });
+  }
+
+  // §7D: "el desarrollador la terminó pero el solicitante nunca la prueba"
+  // -- lista de items en ESPERANDO_VALIDACION, ordenada por dias esperando
+  // (los mas urgentes de validar primero).
+  function renderControlSolicitante_(items) {
+    var contenedor = document.getElementById('ger-contenedor-solicitante');
+    var esperando = items
+      .filter(function (i) { return i.cumplimiento.codigo === 'ESPERANDO_VALIDACION'; })
+      .sort(function (a, b) { return (b.cumplimiento.dias_esperando || 0) - (a.cumplimiento.dias_esperando || 0); });
+
+    if (esperando.length === 0) {
+      contenedor.innerHTML = Componentes.vacio('Nada entregado pendiente de validación con estos filtros.');
+      return;
+    }
+
+    contenedor.innerHTML = esperando.map(function (i) {
+      return '<div class="sigso-fila-reciente" data-id="' + i.solicitud_id + '">' +
+        '<div class="sigso-fila-reciente__principal">' +
+        '<strong>' + Componentes.escaparHtml(i.solicitud_id + '-' + i.numero_item) + '</strong> ' +
+        Componentes.escaparHtml(i.titulo) + ' ' +
+        Componentes.badge(i.cumplimiento.dias_esperando + ' día(s) esperando', i.cumplimiento.dias_esperando > 5 ? 'P1' : '') +
+        '</div>' +
+        '<div class="sigso-fila-reciente__meta">Debe probar: ' + Componentes.escaparHtml(i.solicitante_nombre) + ' (' + Componentes.escaparHtml(i.solicitante_email) + ')</div>' +
+        '</div>';
+    }).join('');
+
+    contenedor.querySelectorAll('[data-id]').forEach(function (fila) {
+      fila.addEventListener('click', function () {
+        window.SigsoApp.mostrarDetalle(fila.getAttribute('data-id'));
+      });
+    });
+  }
+})();
+
+</script>
+  <script>
+/**
  * app.js — Backoffice: orquesta las vistas dashboard/detalle (§12.4/12.5).
  */
 (function () {
@@ -1569,18 +1952,38 @@ function renderHeaderSigso(paginaActiva) {
       SigsoDashboard.cargar();
     });
     document.getElementById('btn-volver-dashboard').addEventListener('click', mostrarDashboard_);
+
+    // v2.1 (Fase C): Panel de Control de Gerencia.
+    document.getElementById('btn-ver-gerencia').addEventListener('click', mostrarGerencia_);
+    document.getElementById('btn-volver-dashboard-gerencia').addEventListener('click', mostrarDashboard_);
+    document.getElementById('btn-actualizar-gerencia').addEventListener('click', function () {
+      SigsoGerencia.cargar();
+    });
   });
 
+  function ocultarTodasLasVistas_() {
+    ['vista-dashboard', 'vista-detalle', 'vista-gerencia'].forEach(function (id) {
+      document.getElementById(id).classList.add('sigso-oculto');
+    });
+  }
+
   function mostrarDetalle_(solicitudId) {
-    document.getElementById('vista-dashboard').classList.add('sigso-oculto');
+    ocultarTodasLasVistas_();
     document.getElementById('vista-detalle').classList.remove('sigso-oculto');
     SigsoDetalle.cargar(solicitudId);
   }
 
   function mostrarDashboard_() {
-    document.getElementById('vista-detalle').classList.add('sigso-oculto');
+    ocultarTodasLasVistas_();
     document.getElementById('vista-dashboard').classList.remove('sigso-oculto');
     SigsoDashboard.cargar();
+  }
+
+  function mostrarGerencia_() {
+    ocultarTodasLasVistas_();
+    document.getElementById('vista-gerencia').classList.remove('sigso-oculto');
+    SigsoGerencia.inicializarFiltros();
+    SigsoGerencia.cargar();
   }
 })();
 

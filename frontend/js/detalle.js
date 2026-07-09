@@ -107,6 +107,7 @@
     var subsolicitudes = detalle.subsolicitudes;
     var archivos = detalle.archivos || [];
     var transiciones = detalle.transiciones_por_subsolicitud || {};
+    var historialCompromiso = detalle.historial_compromiso || [];
     // P6 (v2.0, Sprint 2): Gerencia ve el detalle completo, pero de solo
     // lectura -- no se le ofrecen las acciones de cambiar estado/prioridad
     // (el backend ya las rechaza igual, esto evita mostrar controles que
@@ -151,6 +152,18 @@
         datos.push(renderCampoDato_('Esperando validación', sub.cumplimiento.dias_esperando + ' día(s) hábil(es)'));
       }
 
+      // v2.1 (Fase C, §7 drill-down): "resbalones" de este item -- cada
+      // re-compromiso con su motivo, la evidencia que pidio Gerencia.
+      var resbalones = historialCompromiso.filter(function (h) { return h.subsolicitud_id === sub.subsolicitud_id; });
+      var historialHtml = resbalones.length === 0 ? '' :
+        '<div class="sigso-datos-item"><strong>Historial de compromiso:</strong>' +
+        '<ul>' + resbalones.map(function (h) {
+          return '<li>' + Componentes.escaparHtml(String(h.fecha_anterior).replace('T', ' ')) + ' &rarr; ' +
+            Componentes.escaparHtml(String(h.fecha_nueva).replace('T', ' ')) + ' — ' +
+            Componentes.escaparHtml(h.motivo) + ' (' + Componentes.escaparHtml(h.usuario) + ', ' +
+            new Date(h.timestamp).toLocaleDateString('es-CL') + ')</li>';
+        }).join('') + '</ul></div>';
+
       return '<div class="sigso-acordeon-item sigso-acordeon-item--activo">' +
         '<div class="sigso-acordeon-item__cabecera"><span>' + sub.numero_item + '. ' + Componentes.escaparHtml(sub.titulo) +
         ' — ' + Componentes.badgePrioridad(sub.prioridad) + ' ' + Componentes.badgeEstado(sub.estado) + cumplimientoBadge + '</span></div>' +
@@ -159,6 +172,7 @@
         (sub.contexto ? '<p><strong>Contexto:</strong> ' + Componentes.escaparHtml(sub.contexto) + '</p>' : '') +
         (sub.resultado_esperado ? '<p><strong>Resultado esperado:</strong> ' + Componentes.escaparHtml(sub.resultado_esperado) + '</p>' : '') +
         (datos.length > 0 ? '<dl class="sigso-datos-item">' + datos.join('') + '</dl>' : '') +
+        historialHtml +
         (sub.observaciones ? '<p><em>' + Componentes.escaparHtml(sub.observaciones) + '</em></p>' : '') +
         renderGaleria_(imagenesItem) +
         (soloLectura ? '' : renderAccionesItem_(sub, transiciones[sub.subsolicitud_id] || [])) +

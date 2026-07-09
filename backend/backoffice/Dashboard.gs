@@ -40,12 +40,19 @@ var Dashboard = {
 
     var cache = CacheService.getScriptCache();
     var cacheado = cache.get(claveCache);
+    // v2.1 (Fase C): rol_actual viaja en la respuesta (no en el cache -- la
+    // clave de cache ya incluye rol+email, pero se agrega despues de leer
+    // para no depender de una llamada aparte solo para conocer el rol) --
+    // el frontend lo usa para decidir si ofrece el Panel de Gerencia.
     if (cacheado) {
-      return JSON.parse(cacheado);
+      var datosCacheados = JSON.parse(cacheado);
+      datosCacheados.rol_actual = contexto ? contexto.rol : '';
+      return datosCacheados;
     }
 
     var datos = calcularKpis_(filtrosEfectivos);
     cache.put(claveCache, JSON.stringify(datos), CACHE_TTL_SEGUNDOS);
+    datos.rol_actual = contexto ? contexto.rol : '';
     return datos;
   },
 

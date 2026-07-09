@@ -13,6 +13,7 @@ function loadConSchema() {
     ['H2', 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'S01', 'S02', 'analista@homepymes.cl', 'Recibida', '2026-01-02T10:00:00.000Z']
   ]);
   seedSheet(ctx, 'HISTORIAL_PRIORIDAD', ctx.COLUMNAS.HISTORIAL_PRIORIDAD);
+  seedSheet(ctx, 'HISTORIAL_COMPROMISO', ctx.COLUMNAS.HISTORIAL_COMPROMISO);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
   seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);
   return ctx;
@@ -121,6 +122,7 @@ test('doPost action=getSolicitudDetalle responde ok:true end-to-end', () => {
   seedSheet(ctx, 'SUBSOLICITUDES', ctx.COLUMNAS.SUBSOLICITUDES);
   seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
   seedSheet(ctx, 'HISTORIAL_PRIORIDAD', ctx.COLUMNAS.HISTORIAL_PRIORIDAD);
+  seedSheet(ctx, 'HISTORIAL_COMPROMISO', ctx.COLUMNAS.HISTORIAL_COMPROMISO);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
   seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);
   seedSolicitud(ctx);

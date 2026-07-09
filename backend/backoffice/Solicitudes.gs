@@ -311,6 +311,11 @@ var Solicitudes = {
     var historialPrioridad = leerFilas_(SHEETS.HISTORIAL_PRIORIDAD)
       .filter(function (h) { return h.solicitud_id === solicitudId; })
       .sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
+    // v2.1 (Fase C, §7 drill-down): "resbalones" de fecha comprometida --
+    // linea de tiempo propuesta -> comprometida -> re-compromisos -> etc.
+    var historialCompromiso = leerFilas_(SHEETS.HISTORIAL_COMPROMISO)
+      .filter(function (h) { return h.solicitud_id === solicitudId; })
+      .sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
     var comentarios = leerFilas_(SHEETS.COMENTARIOS)
       .filter(function (c) { return c.solicitud_id === solicitudId; })
       .sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
@@ -325,6 +330,7 @@ var Solicitudes = {
       subsolicitudes: subsolicitudes,
       historial_estados: historialEstados,
       historial_prioridad: historialPrioridad,
+      historial_compromiso: historialCompromiso,
       comentarios: comentarios,
       archivos: archivos,
       rol_actual: rolActual,

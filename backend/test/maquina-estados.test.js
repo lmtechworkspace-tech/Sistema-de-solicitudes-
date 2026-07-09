@@ -12,6 +12,7 @@ function loadConSchema() {
   seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
   seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS);
   seedSheet(ctx, 'HISTORIAL_PRIORIDAD', ctx.COLUMNAS.HISTORIAL_PRIORIDAD);
+  seedSheet(ctx, 'HISTORIAL_COMPROMISO', ctx.COLUMNAS.HISTORIAL_COMPROMISO);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
   seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);
   return ctx;

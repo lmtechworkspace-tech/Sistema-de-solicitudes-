@@ -577,6 +577,102 @@ button {
   margin-top: 0;
 }
 
+/* v2.1 (Fase C): Panel de Control de Gerencia -- semaforo de tarjetas +
+   carta Gantt liviana (barras posicionadas por CSS, sin libreria Gantt). */
+.sigso-semaforo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.75rem;
+}
+
+.sigso-semaforo-tarjeta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.75rem 0.5rem;
+  border: 1px solid var(--gris-claro);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.sigso-semaforo-tarjeta--activa {
+  border-color: var(--azul);
+  box-shadow: 0 0 0 2px var(--azul) inset;
+}
+
+.sigso-semaforo-tarjeta__emoji {
+  font-size: 1.3rem;
+}
+
+.sigso-semaforo-tarjeta__cantidad {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.sigso-semaforo-tarjeta__etiqueta {
+  font-size: 0.75rem;
+  color: var(--gris-medio);
+  text-align: center;
+}
+
+.sigso-gantt {
+  position: relative;
+  padding-top: 0.5rem;
+}
+
+.sigso-gantt-hoy {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #c0392b;
+  z-index: 1;
+}
+
+.sigso-gantt-fila {
+  margin-bottom: 0.9rem;
+  cursor: pointer;
+}
+
+.sigso-gantt-etiqueta {
+  font-size: 0.8rem;
+  margin-bottom: 0.2rem;
+}
+
+.sigso-gantt-track {
+  position: relative;
+  height: 14px;
+  background: var(--gris-claro);
+  border-radius: 4px;
+}
+
+.sigso-gantt-barra {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 4px;
+}
+
+.sigso-gantt-barra--en-plazo { background: #27AE60; }
+.sigso-gantt-barra--en-riesgo { background: #F1C40F; }
+.sigso-gantt-barra--atrasada-desarrollador { background: #C0392B; }
+.sigso-gantt-barra--esperando-validacion { background: #2980B9; }
+.sigso-gantt-barra--sin-compromiso { background: var(--gris-medio); }
+.sigso-gantt-barra--cerrada-a-tiempo { background: #27AE60; }
+.sigso-gantt-barra--cerrada-con-atraso { background: #C0392B; }
+.sigso-gantt-barra--atraso { background: repeating-linear-gradient(45deg, #C0392B, #C0392B 4px, #922b21 4px, #922b21 8px); }
+
+.sigso-gantt-original {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 22px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
 /* Fase 10: detalle de solicitud en 3 columnas -- ficha (solo lectura,
    sticky) / items (donde Leo actua) / historia (timeline unificado).
    Reemplaza el layout previo de bloques apilados con acciones al fondo. */

@@ -59,6 +59,11 @@
       renderGrafico_('grafico-empresa', 'bar', respuesta.data.por_empresa);
       recientesActuales = respuesta.data.recientes;
       renderRecientes_();
+      // v2.1 (Fase C): el Panel de Gerencia es "su vista principal" -- el
+      // boton de acceso solo aparece para ese rol (el backend ya no
+      // restringe la accion en si, pero no tiene sentido ofrecersela a
+      // quien no es Gerencia).
+      document.getElementById('btn-ver-gerencia').classList.toggle('sigso-oculto', respuesta.data.rol_actual !== 'GERENCIA');
       return respuesta;
     });
   }

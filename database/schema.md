@@ -203,6 +203,35 @@ emoji, dias_esperando }`) que viaja en la respuesta, nunca se escribe en
 `ATRASADA_DESARROLLADOR`, `ESPERANDO_VALIDACION` (con `dias_esperando`),
 `SIN_COMPROMISO`, `CERRADA_A_TIEMPO`, `CERRADA_CON_ATRASO`.
 
+## Panel de Control de Gerencia (v2.1 Fase C, derivado — no persiste en Sheets)
+
+`backend/backoffice/Gerencia.gs` (`Gerencia.getPanel(filtros, contexto)`,
+acción `getPanelGerencia`) es una vista sobre `SOLICITUDES`/`SUBSOLICITUDES`
++ el semáforo de `Cumplimiento.gs` — no agrega columnas ni hojas. Devuelve:
+- `kpis`: `pct_cumplimiento_desarrollador`, `atrasadas_activas`,
+  `esperando_validacion` (+ `esperando_validacion_promedio_dias`),
+  `atraso_promedio_dias`, `sin_comprometer` (§7A de la especificación).
+- `items`: uno por subsolicitud filtrada, con su `cumplimiento` (Fase B),
+  `fecha_original` (línea base antes del primer re-compromiso, para el
+  "resbalón" de la carta Gantt, §7C) y `re_compromisos` (conteo, de
+  `HISTORIAL_COMPROMISO`).
+
+Reutiliza `coincideFiltros_` (`Dashboard.gs`) para los filtros a nivel
+solicitud (empresa/solicitante) y agrega `coincideFiltroItem_` (propio de
+este archivo) para los filtros a nivel ítem (desarrollador, tipo, período).
+El frontend (`frontend/js/gerencia.js`, sección `#vista-gerencia` en
+`app.html`) dibuja la carta Gantt con barras posicionadas por CSS (sin
+librería Gantt), consistente con `documentacion/SIGSO-v2.1-plazos-y-
+control.md` §9 ("Gantt pesado en el stack" — riesgo mitigado). Solo se
+ofrece como vista al rol `GERENCIA` (botón "Ver Panel de Gerencia" en el
+Dashboard); el backend no bloquea la acción para otros roles autenticados,
+igual que `getDashboardData`.
+
+`Solicitudes.getDetalle` también agrega `historial_compromiso` (filtrado
+por `solicitud_id`) para el drill-down (§7, línea de tiempo de fechas):
+`detalle.js` lo muestra como "Historial de compromiso" bajo cada ítem que
+tuvo al menos un re-compromiso.
+
 ## HISTORIAL_COMPROMISO (nueva, v2.1 Fase A)
 
 | Columna | Tipo | Nota |

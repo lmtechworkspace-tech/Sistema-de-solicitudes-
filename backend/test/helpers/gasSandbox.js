@@ -71,6 +71,7 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   'Documentos.gs',
   'Solicitudes.gs',
   'Dashboard.gs',
+  'Gerencia.gs',
   'Comentarios.gs',
   'Catalogos.gs',
   'Auth.gs',
