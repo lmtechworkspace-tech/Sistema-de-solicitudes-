@@ -59,6 +59,21 @@ function configurarTriggers() {
     creados.push('detectarPatronesTrigger');
   }
 
+  // v2.1 (Fase D, §8): "en riesgo" -- misma cadencia que verificarSLAsTrigger
+  // (diario 09:00), analoga en espiritu a esa alerta pero sobre la fecha
+  // comprometida en vez del SLA automatico.
+  if (existentes.indexOf('verificarFechasComprometidasTrigger') === -1) {
+    ScriptApp.newTrigger('verificarFechasComprometidasTrigger').timeBased().atHour(9).everyDays(1).create();
+    creados.push('verificarFechasComprometidasTrigger');
+  }
+
+  // v2.1 (Fase D, §8): recordatorio de validacion pendiente -- mismo horario,
+  // corre ANTES de que cerrarInactivosTrigger cierre automaticamente.
+  if (existentes.indexOf('recordarValidacionPendienteTrigger') === -1) {
+    ScriptApp.newTrigger('recordarValidacionPendienteTrigger').timeBased().atHour(9).everyDays(1).create();
+    creados.push('recordarValidacionPendienteTrigger');
+  }
+
   // §17.4 v1.0: resumen semanal (lunes 09:00) y reporte mensual (dia 1).
   if (existentes.indexOf('enviarResumenSemanalTrigger') === -1) {
     ScriptApp.newTrigger('enviarResumenSemanalTrigger').timeBased()
@@ -122,11 +137,26 @@ function verificarSLAsTrigger() {
   return Triggers.verificarSLAs();
 }
 
+// v2.1 (Fase D, §8): ver Triggers.verificarFechasComprometidas().
+function verificarFechasComprometidasTrigger() {
+  return Triggers.verificarFechasComprometidas();
+}
+
+// v2.1 (Fase D, §8): ver Triggers.recordarValidacionPendiente().
+function recordarValidacionPendienteTrigger() {
+  return Triggers.recordarValidacionPendiente();
+}
+
 // RN-201/RF-208: dias habiles que un item puede quedar en "Terminada" (S08)
 // sin que el solicitante lo valide antes de cerrarlo solo. 5 dias habiles
 // (una semana laboral) -- suficiente margen para que el solicitante revise
 // sin dejar items "Terminada" acumulandose indefinidamente sin auditoria.
 var DIAS_HABILES_CIERRE_AUTOMATICO = 5;
+
+// v2.1 (Fase D, §8): recordar ANTES de que actue el cierre automatico --
+// deja margen real para que el solicitante reaccione al aviso (2 de los 5
+// dias habiles de plazo) sin ser tan temprano que se sienta prematuro.
+var UMBRAL_RECORDATORIO_DIAS_HABILES = 2;
 
 var Triggers = {
   verificarSLAs: function () {
@@ -168,14 +198,8 @@ var Triggers = {
     leerFilas_(SHEETS.SUBSOLICITUDES)
       .filter(function (s) { return s.estado === ESTADOS.S08; })
       .forEach(function (sub) {
-        var ultimaEntradaS08 = historial
-          .filter(function (h) { return h.subsolicitud_id === sub.subsolicitud_id && h.estado_nuevo === ESTADOS.S08; })
-          .sort(function (a, b) { return new Date(b.timestamp) - new Date(a.timestamp); })[0];
-        if (!ultimaEntradaS08) {
-          return;
-        }
-        var diasHabiles = Utils.horasHabilesEntre(ultimaEntradaS08.timestamp, new Date(), { feriados: feriados }) / 9;
-        if (diasHabiles < DIAS_HABILES_CIERRE_AUTOMATICO) {
+        var diasHabiles = diasHabilesEnTerminada_(sub, historial, feriados);
+        if (diasHabiles === null || diasHabiles < DIAS_HABILES_CIERRE_AUTOMATICO) {
           return;
         }
         var resultado = Solicitudes.actualizarEstado(
@@ -193,6 +217,58 @@ var Triggers = {
       });
 
     return { cerrados: cerrados.length, ids: cerrados };
+  },
+
+  // v2.1 (Fase D, §8): analoga a verificarSLAs pero sobre la fecha
+  // comprometida (Cumplimiento.gs, Fase B) en vez del SLA automatico --
+  // avisa mientras un item esta "en riesgo" (< 1 dia habil de su fecha
+  // comprometida y aun no entregado). Reutiliza el semaforo ya calculado,
+  // no reimplementa la logica de fechas.
+  verificarFechasComprometidas: function () {
+    var avisados = 0;
+    leerFilas_(SHEETS.SUBSOLICITUDES).forEach(function (subsolicitud) {
+      if (!subsolicitud.fecha_comprometida) {
+        return;
+      }
+      var cumplimiento = Cumplimiento.clasificar(subsolicitud);
+      if (cumplimiento.codigo !== 'EN_RIESGO') {
+        return;
+      }
+      var solicitud = buscarSolicitudPorId_(subsolicitud.solicitud_id);
+      if (!solicitud) {
+        return;
+      }
+      Notificaciones.alertaFechaEnRiesgo(subsolicitud, solicitud);
+      avisados++;
+    });
+    return { avisados: avisados };
+  },
+
+  // v2.1 (Fase D, §8): recordatorio al solicitante ANTES de que
+  // cerrarInactivosPorValidacion cierre automaticamente (RN-201) -- entre
+  // UMBRAL_RECORDATORIO_DIAS_HABILES y DIAS_HABILES_CIERRE_AUTOMATICO dias
+  // en Terminada sin validar.
+  recordarValidacionPendiente: function () {
+    var feriados = obtenerFeriados_();
+    var historial = leerFilas_(SHEETS.HISTORIAL_ESTADOS);
+    var recordados = [];
+
+    leerFilas_(SHEETS.SUBSOLICITUDES)
+      .filter(function (s) { return s.estado === ESTADOS.S08; })
+      .forEach(function (sub) {
+        var diasHabiles = diasHabilesEnTerminada_(sub, historial, feriados);
+        if (diasHabiles === null || diasHabiles < UMBRAL_RECORDATORIO_DIAS_HABILES || diasHabiles >= DIAS_HABILES_CIERRE_AUTOMATICO) {
+          return;
+        }
+        var solicitud = buscarSolicitudPorId_(sub.solicitud_id);
+        if (!solicitud) {
+          return;
+        }
+        Notificaciones.recordarValidacionPendiente(sub, solicitud, Math.round(diasHabiles * 10) / 10);
+        recordados.push(sub.subsolicitud_id);
+      });
+
+    return { recordados: recordados.length, ids: recordados };
   },
 
   // P7: recorre las alertas de patron vigentes (Dashboard.calcularAlertasPatron_,
@@ -243,4 +319,19 @@ function ratioSlaConsumido_(subsolicitud, feriados) {
   }
   var transcurridas = Utils.horasHabilesEntre(subsolicitud.fecha_creacion, new Date(), { feriados: feriados });
   return transcurridas / Number(subsolicitud.sla_objetivo_horas);
+}
+
+// RN-201/RF-208 + v2.1 (Fase D): dias habiles desde la ULTIMA vez que el
+// item entro a "Terminada" (S08) -- compartido por cerrarInactivosPorValidacion
+// y recordarValidacionPendiente para no calcular esto dos veces con
+// criterios distintos. null si nunca hay una entrada a S08 en el historial
+// (no deberia pasar para un item que hoy esta en S08, pero se cubre igual).
+function diasHabilesEnTerminada_(subsolicitud, historial, feriados) {
+  var ultimaEntradaS08 = historial
+    .filter(function (h) { return h.subsolicitud_id === subsolicitud.subsolicitud_id && h.estado_nuevo === ESTADOS.S08; })
+    .sort(function (a, b) { return new Date(b.timestamp) - new Date(a.timestamp); })[0];
+  if (!ultimaEntradaS08) {
+    return null;
+  }
+  return Utils.horasHabilesEntre(ultimaEntradaS08.timestamp, new Date(), { feriados: feriados }) / 9;
 }

@@ -232,6 +232,31 @@ por `solicitud_id`) para el drill-down (§7, línea de tiempo de fechas):
 `detalle.js` lo muestra como "Historial de compromiso" bajo cada ítem que
 tuvo al menos un re-compromiso.
 
+## Avisos de plazos (v2.1 Fase D — §8, reutiliza la cola de correo existente)
+
+Tres avisos nuevos, todos en `backend/backoffice/Notificaciones.gs`, sin
+hoja ni columna nueva (usan `LOG_NOTIFICACIONES` para el dedup, igual que
+el resto de la cola de correo):
+
+- **`avisarCompromisoFecha`**: se dispara de forma síncrona desde
+  `Solicitudes.comprometerFecha` (Fase A) — avisa al solicitante que el
+  desarrollador se comprometió (o re-comprometió) a una fecha. El evento
+  de dedup incluye la fecha nueva, así que re-comprometer a una fecha
+  distinta genera un aviso nuevo (no lo deduplica contra el anterior).
+- **`alertaFechaEnRiesgo`** + `Triggers.verificarFechasComprometidas`
+  (trigger diario 09:00, mismo horario que `verificarSLAsTrigger`):
+  recorre las subsolicitudes con `fecha_comprometida` y usa
+  `Cumplimiento.clasificar` (Fase B) — si el código es `EN_RIESGO`, avisa
+  al desarrollador asignado y a Gerencia/Admin de la empresa. Análoga a
+  `alertaSLAProximo` (A-08) pero sobre la fecha comprometida, no el SLA.
+- **`recordarValidacionPendiente`** + `Triggers.recordarValidacionPendiente`
+  (mismo horario): recorre los items en "Terminada" (S08) y, si llevan
+  entre `UMBRAL_RECORDATORIO_DIAS_HABILES` (2) y
+  `DIAS_HABILES_CIERRE_AUTOMATICO` (5, RN-201) días hábiles sin validar,
+  le recuerda al solicitante — antes de que actúe el cierre automático.
+  Comparte el cálculo de "días hábiles en Terminada" (`diasHabilesEnTerminada_`,
+  `Triggers.gs`) con `cerrarInactivosPorValidacion`, que ya existía.
+
 ## HISTORIAL_COMPROMISO (nueva, v2.1 Fase A)
 
 | Columna | Tipo | Nota |

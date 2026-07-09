@@ -249,6 +249,17 @@ var Solicitudes = {
       });
     }
 
+    // v2.1 (Fase D, §8): avisa al solicitante -- "maneja expectativas, sin
+    // pedir su aprobacion" (la fecha del desarrollador es la definitiva).
+    var solicitudParaAviso = buscarSolicitudPorId_(subsolicitud.solicitud_id);
+    if (solicitudParaAviso) {
+      Notificaciones.avisarCompromisoFecha(
+        solicitudParaAviso,
+        Object.assign({}, subsolicitud, { fecha_comprometida: data.fecha_comprometida }),
+        data.fecha_comprometida
+      );
+    }
+
     return {
       subsolicitud_id: data.subsolicitud_id,
       solicitud_id: subsolicitud.solicitud_id,

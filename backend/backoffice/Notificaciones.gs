@@ -79,6 +79,67 @@ var Notificaciones = {
     });
   },
 
+  // v2.1 (Fase D, §8): avisa al solicitante cuando el desarrollador se
+  // compromete (o re-compromete) a una fecha -- "maneja expectativas, sin
+  // pedir su aprobacion" (la fecha del desarrollador es la definitiva, ver
+  // §2.1 de la especificacion). El evento incluye la fecha nueva para que
+  // un re-compromiso a una fecha distinta genere un aviso nuevo (no lo
+  // deduplica contra el aviso del compromiso anterior).
+  avisarCompromisoFecha: function (solicitud, subsolicitud, fechaComprometida) {
+    if (!solicitud.solicitante_email) {
+      return { enviado: false, motivo: 'sin_destinatario' };
+    }
+    var asunto = 'SIGSO - Fecha comprometida para tu solicitud ' + solicitud.solicitud_id;
+    var cuerpo =
+      'El equipo se comprometio a resolver "' + subsolicitud.titulo + '" (item ' + subsolicitud.subsolicitud_id +
+      ' de tu solicitud ' + solicitud.solicitud_id + ') para el ' + String(fechaComprometida).replace('T', ' ') + '.';
+    var evento = 'COMPROMISO_FECHA:' + subsolicitud.subsolicitud_id + ':' + fechaComprometida;
+    return enviarCorreo_(solicitud.solicitud_id, solicitud.solicitante_email, evento, asunto, cuerpo);
+  },
+
+  // v2.1 (Fase D, §8): "en riesgo" (< 1 dia habil de la fecha comprometida,
+  // ver Cumplimiento.gs) -- analoga a alertaSLAProximo (A-08) pero sobre la
+  // fecha comprometida, no el SLA automatico. Va al desarrollador asignado
+  // del item (si lo hay) y a Gerencia/Admin de la empresa.
+  alertaFechaEnRiesgo: function (subsolicitud, solicitud) {
+    var destinatarios = obtenerEmailsPorRol_(solicitud.empresa_id, ['GERENCIA', 'ADM']);
+    var desarrollador = subsolicitud.desarrollador_asignado || solicitud.desarrollador_asignado;
+    if (desarrollador && destinatarios.indexOf(desarrollador) === -1) {
+      destinatarios.push(desarrollador);
+    }
+    var asunto = 'SIGSO - Fecha comprometida en riesgo: ' + subsolicitud.subsolicitud_id;
+    var cuerpo =
+      'El item ' + subsolicitud.subsolicitud_id + ' (solicitud ' + solicitud.solicitud_id +
+      ') se acerca a su fecha comprometida (' + String(subsolicitud.fecha_comprometida).replace('T', ' ') +
+      ') y todavia no se entrega (Terminada).';
+    return destinatarios.map(function (email) {
+      return enviarCorreo_(
+        solicitud.solicitud_id, email, 'FECHA_EN_RIESGO:' + subsolicitud.subsolicitud_id, asunto, cuerpo,
+        VENTANA_DEDUP_SLA_VENCIDO_MINUTOS
+      );
+    });
+  },
+
+  // v2.1 (Fase D, §8): recordatorio al solicitante mientras un item lleva
+  // dias en "Terminada" (S08) sin que lo valide, ANTES de que actue el
+  // cierre automatico (RN-201, DIAS_HABILES_CIERRE_AUTOMATICO). Se envia a
+  // lo mas 1 vez/dia mientras siga pendiente (mismo patron que alertaSLAVencido).
+  recordarValidacionPendiente: function (subsolicitud, solicitud, diasHabilesEsperando) {
+    if (!solicitud.solicitante_email) {
+      return { enviado: false, motivo: 'sin_destinatario' };
+    }
+    var asunto = 'SIGSO - Tienes un item listo para validar: ' + subsolicitud.subsolicitud_id;
+    var cuerpo =
+      '"' + subsolicitud.titulo + '" (item ' + subsolicitud.subsolicitud_id + ' de tu solicitud ' + solicitud.solicitud_id +
+      ') esta terminado hace ' + diasHabilesEsperando + ' dia(s) habil(es) y todavia no lo validas. ' +
+      'Ingresa a Consultar Estado para confirmarlo o avisarnos si algo falta -- si no hay respuesta, se cerrara automaticamente en ' +
+      DIAS_HABILES_CIERRE_AUTOMATICO + ' dias habiles desde que se marco Terminada.';
+    return enviarCorreo_(
+      solicitud.solicitud_id, solicitud.solicitante_email, 'RECORDATORIO_VALIDACION:' + subsolicitud.subsolicitud_id, asunto, cuerpo,
+      VENTANA_DEDUP_SLA_VENCIDO_MINUTOS
+    );
+  },
+
   // §17.4 v1.0: "Resumen semanal" — lunes 09:00, a Admin+Analista, con los
   // KPIs de Dashboard.getData ya calculados (Fase 5), uno por empresa.
   enviarResumenSemanal: function () {

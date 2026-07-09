@@ -6,11 +6,11 @@ const { loadBackofficeProject, toPlain, seedSheet } = require('./helpers/gasSand
 
 const TODOS_LOS_TRIGGERS = [
   'cerrarInactivosTrigger', 'detectarPatronesTrigger', 'enviarReporteMensualTrigger', 'enviarResumenSemanalTrigger',
-  'procesarColaCorreoTrigger', 'procesarColaDocumentosTrigger', 'refrescarCacheTrigger', 'suspenderInactivosTrigger',
-  'verificarSLAsTrigger'
+  'procesarColaCorreoTrigger', 'procesarColaDocumentosTrigger', 'recordarValidacionPendienteTrigger',
+  'refrescarCacheTrigger', 'suspenderInactivosTrigger', 'verificarFechasComprometidasTrigger', 'verificarSLAsTrigger'
 ];
 
-test('configurarTriggers instala los 9 triggers de tiempo de §13/§16.3 (Fase 4 + Fase 7 + Sprint 1/3 v2.0)', () => {
+test('configurarTriggers instala los 11 triggers de tiempo de §13/§16.3 (Fase 4 + Fase 7 + Sprint 1/3 v2.0 + v2.1 Fase D)', () => {
   const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
   const creados = toPlain(ctx.configurarTriggers());
 
