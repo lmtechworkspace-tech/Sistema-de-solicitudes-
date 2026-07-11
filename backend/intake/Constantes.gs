@@ -28,7 +28,10 @@ var SHEETS = {
   ARCHIVOS: 'ARCHIVOS',
   // v2.1 (Fase A, compromiso de fechas): ver la nota identica en
   // backend/backoffice/Constantes.gs.
-  HISTORIAL_COMPROMISO: 'HISTORIAL_COMPROMISO'
+  HISTORIAL_COMPROMISO: 'HISTORIAL_COMPROMISO',
+  // v3.0 (Fase 1, multi-responsable): catalogo de areas -> responsable.
+  // Ver la nota identica en backend/backoffice/Constantes.gs.
+  CAT_AREAS: 'CAT_AREAS'
 };
 
 var COLUMNAS = {
@@ -109,7 +112,13 @@ var COLUMNAS = {
     // oficial para Gerencia; fecha_terminada se sella sola al llegar a
     // S08 (detiene el reloj del desarrollador); comprometida_por es el
     // correo de quien fijo fecha_comprometida.
-    'fecha_propuesta', 'fecha_comprometida', 'fecha_terminada', 'comprometida_por'
+    'fecha_propuesta', 'fecha_comprometida', 'fecha_terminada', 'comprometida_por',
+    // v3.0 (Fase 1, multi-responsable, documentacion/SIGSO-v3.0-multi-
+    // responsable-y-control.md §2-§3): a que area/responsable va dirigido
+    // este item. El formulario elige por AREA (CAT_AREAS); crearSolicitud
+    // resuelve area -> responsable_email y lo escribe en
+    // desarrollador_asignado (arriba), sin exponer el correo al publico.
+    'area', 'area_nombre'
   ],
   HISTORIAL_ESTADOS: [
     'historial_id', 'solicitud_id', 'subsolicitud_id',
@@ -187,7 +196,12 @@ var COLUMNAS = {
   HISTORIAL_COMPROMISO: [
     'historial_id', 'subsolicitud_id', 'solicitud_id',
     'fecha_anterior', 'fecha_nueva', 'motivo', 'usuario', 'timestamp'
-  ]
+  ],
+  // v3.0 (Fase 1): catalogo publico-seguro de areas -> responsable. El
+  // formulario lista las areas activas por nombre (Catalogos.getAll); el
+  // responsable_email se resuelve SOLO en el servidor (crearSolicitud), no
+  // viaja al navegador. Mismo patron administrable que el resto de CAT_*.
+  CAT_AREAS: ['area_id', 'nombre', 'responsable_email', 'activo']
 };
 
 // S01-S11 completos desde la Fase 1 aunque solo S01 se use aqui: la maquina

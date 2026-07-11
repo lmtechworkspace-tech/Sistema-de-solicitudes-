@@ -78,6 +78,11 @@ function construirContexto() {
     ['MIG', 'Migracion', 'P2', true, true],
     ['CON', 'Consulta Tecnica', 'P4', true, false]
   ]);
+  // v3.0 (Fase 1): areas -> responsable, para el CRUD en Administracion.
+  seedSheet(ctx, 'CAT_AREAS', ctx.COLUMNAS.CAT_AREAS, [
+    ['AREA_PLAT', 'Plataformas / sistemas', 'leo@rld.cl', true],
+    ['AREA_CONTA', 'Contabilidad', 'luis@rld.cl', true]
+  ]);
 
   sembrarSolicitudesDemo_(ctx);
   return ctx;

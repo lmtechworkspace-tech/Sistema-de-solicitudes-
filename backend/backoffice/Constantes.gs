@@ -32,7 +32,11 @@ var SHEETS = {
   // v2.1 (Fase A, documentacion/SIGSO-v2.1-plazos-y-control.md §5):
   // "resbalones" de fecha comprometida (linea base para el Panel de
   // Gerencia, Fase C). Mismo patron que HISTORIAL_PRIORIDAD (RN-007).
-  HISTORIAL_COMPROMISO: 'HISTORIAL_COMPROMISO'
+  HISTORIAL_COMPROMISO: 'HISTORIAL_COMPROMISO',
+  // v3.0 (Fase 1, multi-responsable, documentacion/SIGSO-v3.0-multi-
+  // responsable-y-control.md §2): catalogo de areas -> responsable, ruteo
+  // de cada solicitud a quien corresponde (ya no todo a Leo).
+  CAT_AREAS: 'CAT_AREAS'
 };
 
 var COLUMNAS = {
@@ -79,7 +83,9 @@ var COLUMNAS = {
     'frecuencia', 'personas_afectadas',
     'imagen_descripciones',
     // v2.1 (Fase A): ver la nota identica en backend/intake/Constantes.gs.
-    'fecha_propuesta', 'fecha_comprometida', 'fecha_terminada', 'comprometida_por'
+    'fecha_propuesta', 'fecha_comprometida', 'fecha_terminada', 'comprometida_por',
+    // v3.0 (Fase 1): ver la nota identica en backend/intake/Constantes.gs.
+    'area', 'area_nombre'
   ],
   HISTORIAL_ESTADOS: [
     'historial_id', 'solicitud_id', 'subsolicitud_id',
@@ -132,7 +138,9 @@ var COLUMNAS = {
   HISTORIAL_COMPROMISO: [
     'historial_id', 'subsolicitud_id', 'solicitud_id',
     'fecha_anterior', 'fecha_nueva', 'motivo', 'usuario', 'timestamp'
-  ]
+  ],
+  // v3.0 (Fase 1): ver la nota identica en backend/intake/Constantes.gs.
+  CAT_AREAS: ['area_id', 'nombre', 'responsable_email', 'activo']
 };
 
 var ESTADOS = {

@@ -90,6 +90,13 @@ function construirContexto() {
     ['MIG', 'Migracion', 'P2', true, true],
     ['CON', 'Consulta Tecnica', 'P4', true, false]
   ]);
+  // v3.0 (Fase 1): areas -> responsable, para ver el selector en el
+  // formulario y probar el ruteo del aviso. area_id | nombre | correo | activo.
+  seedSheet(ctx, 'CAT_AREAS', ctx.COLUMNAS.CAT_AREAS, [
+    ['AREA_PLAT', 'Plataformas / sistemas', 'leo@rld.cl', true],
+    ['AREA_CONTA', 'Contabilidad', 'luis@rld.cl', true],
+    ['AREA_RRHH', 'Recursos Humanos', 'rrhh@rld.cl', true]
+  ]);
 
   return ctx;
 }

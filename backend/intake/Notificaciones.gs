@@ -30,16 +30,19 @@ var Notificaciones = {
     return enviarCorreo_(solicitud.solicitud_id, solicitud.solicitante_email, 'ACUSE_RECIBO', asunto, cuerpo, solicitud.cc);
   },
 
-  // Aviso al equipo de desarrollo (Leo). Reemplaza al ruteo por rol/empresa
-  // anterior (que no enviaba nada si no habia un ANA/DEV registrado para esa
-  // empresa): ahora hay un unico destinatario claro. El motivo (cliente /
-  // pedido explicito / P1) lo decide crearSolicitud.
-  enviarAvisoDesarrollo: function (solicitud, motivo) {
+  // Aviso al responsable de la solicitud. v3.0 (Fase 1, multi-responsable):
+  // el destinatario ya no es fijo -- crearSolicitud resuelve el responsable
+  // ruteado de cada item (CAT_AREAS -> correo) y lo pasa aqui. Si no se pasa
+  // destinatario (llamadas viejas), cae al buzon por defecto EMAIL_DESARROLLO,
+  // preservando el comportamiento previo. El motivo (cliente / P1 / nueva)
+  // lo decide crearSolicitud.
+  enviarAvisoDesarrollo: function (solicitud, motivo, destinatario) {
+    var email = destinatario || EMAIL_DESARROLLO;
     var asunto = 'SIGSO - ' + (solicitud.prioridad === 'P1' ? 'ALERTA P1: ' : 'Nueva solicitud: ') + solicitud.solicitud_id;
     var cuerpo =
       'Nueva solicitud para revisar (' + (motivo || 'aviso') + '):\n\n' +
       solicitud.resumen_whatsapp;
-    return enviarCorreo_(solicitud.solicitud_id, EMAIL_DESARROLLO, 'AVISO_DESARROLLO', asunto, cuerpo);
+    return enviarCorreo_(solicitud.solicitud_id, email, 'AVISO_DESARROLLO', asunto, cuerpo);
   },
 
   // RN-201 (v2.0, Sprint 1): avisa a Leo cuando el solicitante valida un item

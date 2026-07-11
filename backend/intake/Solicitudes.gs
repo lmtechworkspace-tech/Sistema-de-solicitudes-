@@ -43,6 +43,15 @@ var Solicitudes = {
       var slaHoras = obtenerSlaHoras_(prioridad);
       var subId = solicitudId + '-' + ('0' + (idx + 1)).slice(-2);
 
+      // v3.0 (Fase 1): area por item (o la de la solicitud como default);
+      // resolverResponsable_ traduce area -> correo del responsable (o el
+      // buzon por defecto si no hay area configurada, preservando el
+      // comportamiento previo). Ese responsable se rutea a
+      // desarrollador_asignado -- asi el filtro "asignadas a mi" del
+      // Backoffice ya funciona sin que nadie asigne a mano.
+      var areaId = item.area || data.area || '';
+      var responsable = resolverResponsable_(areaId);
+
       agregarFila_(SHEETS.SUBSOLICITUDES, {
         subsolicitud_id: subId,
         solicitud_id: solicitudId,
@@ -87,10 +96,16 @@ var Solicitudes = {
         fecha_propuesta: data.fecha_propuesta || '',
         fecha_comprometida: '',
         fecha_terminada: '',
-        comprometida_por: ''
+        comprometida_por: '',
+        // v3.0 (Fase 1): ruteo. area/area_nombre para mostrar a quien va;
+        // desarrollador_asignado con el responsable resuelto (antes quedaba
+        // vacio hasta que alguien asignaba a mano en el Backoffice).
+        desarrollador_asignado: responsable,
+        area: areaId,
+        area_nombre: resolverNombreCatalogo_(SHEETS.CAT_AREAS, 'area_id', areaId)
       });
 
-      return { subsolicitud_id: subId, prioridad: prioridad };
+      return { subsolicitud_id: subId, prioridad: prioridad, responsable: responsable };
     });
 
     // Fase 10: SOLICITUDES.tipo/modulo (columnas existentes) se derivan del
@@ -166,22 +181,31 @@ var Solicitudes = {
       resumen_whatsapp: resumenWhatsapp,
       cc: data.cc || ''
     });
-    // Aviso al equipo de desarrollo (Leo): cliente SIEMPRE (es prioridad
-    // alta), interna solo si el solicitante lo pidio (avisar_leo), y
-    // cualquier P1 sin importar el origen.
-    var motivoAviso = data.es_cliente ? 'solicitud de cliente'
-      : (prioridadDerivada === 'P1' ? 'prioridad critica P1'
-        : (data.avisar_leo ? 'el solicitante pidio avisar' : ''));
-    // P12 (v2.0, Sprint 3): switch global en CONFIG_NOTIFICACIONES -- si
-    // Gerencia lo desactiva desde Administracion, no se avisa a Leo por
-    // ningun motivo (ni cliente ni P1 ni opt-in), respetando una instruccion
-    // como "no le avises a Leo todavia" sin hardcodearla en el codigo.
-    if (motivoAviso && avisoDesarrolloActivo_()) {
-      Notificaciones.enviarAvisoDesarrollo({
-        solicitud_id: solicitudId,
-        prioridad: prioridadDerivada,
-        resumen_whatsapp: resumenWhatsapp
-      }, motivoAviso);
+    // v3.0 (Fase 1, multi-responsable): el aviso ya no va a un buzon fijo
+    // (Leo). Se avisa al RESPONSABLE ruteado de cada item (CAT_AREAS ->
+    // responsable, o el buzon por defecto si no hay area configurada). Si
+    // dos items caen en el mismo responsable, recibe un solo aviso (dedup
+    // por destinatario en enviarCorreo_). Cambio de comportamiento respecto
+    // de v2.x: antes una solicitud interna no urgente no avisaba a nadie
+    // salvo opt-in; ahora, como la solicitud va dirigida a alguien concreto,
+    // esa persona SIEMPRE se entera (esa es la razon de ser del ruteo).
+    // P12 (v2.0, Sprint 3): el switch global (AVISO_LEO) sigue mandando -- si
+    // Gerencia lo desactiva desde Administracion, no se avisa a nadie.
+    if (avisoDesarrolloActivo_()) {
+      var motivoAviso = data.es_cliente ? 'solicitud de cliente'
+        : (prioridadDerivada === 'P1' ? 'prioridad critica P1' : 'nueva solicitud');
+      var responsablesAvisados = {};
+      subsolicitudesGuardadas.forEach(function (s) {
+        if (!s.responsable || responsablesAvisados[s.responsable]) {
+          return;
+        }
+        responsablesAvisados[s.responsable] = true;
+        Notificaciones.enviarAvisoDesarrollo({
+          solicitud_id: solicitudId,
+          prioridad: prioridadDerivada,
+          resumen_whatsapp: resumenWhatsapp
+        }, motivoAviso, s.responsable);
+      });
     }
 
     var respuesta = {
@@ -239,6 +263,10 @@ var Solicitudes = {
           prioridad: s.prioridad,
           tipo_nombre: s.tipo_nombre || '',
           modulo_nombre: s.modulo_nombre || '',
+          // v3.0 (Fase 1): a que area va dirigido (nombre legible, nunca el
+          // correo del responsable). Para que el solicitante sepa a quien
+          // le llego su pedido.
+          area_nombre: s.area_nombre || '',
           descripcion: s.descripcion || '',
           resultado_esperado: s.resultado_esperado || '',
           contexto: s.contexto || '',
@@ -633,6 +661,32 @@ function resolverNombreCatalogo_(nombreHoja, idCampo, valorId) {
     }
   }
   return '';
+}
+
+// v3.0 (Fase 1): traduce un area (CAT_AREAS.area_id) al correo del
+// responsable que la atiende. Si el area no existe/esta inactiva/sin correo,
+// o la hoja CAT_AREAS todavia no existe (instalacion previa a v3.0), cae al
+// buzon por defecto (EMAIL_DESARROLLO, Notificaciones.gs) -- asi todo sigue
+// llegando a Leo hasta que se configuren las areas, sin romper nada.
+function resolverResponsable_(areaId) {
+  if (!areaId) {
+    return EMAIL_DESARROLLO;
+  }
+  var filas;
+  try {
+    filas = leerFilas_(SHEETS.CAT_AREAS);
+  } catch (err) {
+    return EMAIL_DESARROLLO;
+  }
+  for (var i = 0; i < filas.length; i++) {
+    if (filas[i].area_id === areaId) {
+      var activo = filas[i].activo === true || filas[i].activo === 'TRUE' || filas[i].activo === 1;
+      if (activo && filas[i].responsable_email) {
+        return filas[i].responsable_email;
+      }
+    }
+  }
+  return EMAIL_DESARROLLO;
 }
 
 // RF-F06: hash de (empresa+plataforma+modulo+solicitante+descripcion_item1).

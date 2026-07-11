@@ -880,7 +880,25 @@ window.SIGSO_CONFIG = { BACKOFFICE_URL: '', SITIO_PUBLICO: 'https://lmtechworksp
  *   `google.script.run` no usa red ni cookies (puente nativo del sandbox
  *   de Apps Script), asi que evita ese problema por completo.
  */
-async function llamarApi(url, action, data) {
+// v3.0 (Fase 1): acciones seguras de reintentar automaticamente -- son de
+// SOLO LECTURA. Reintentar una escritura (crearSolicitud, actualizarEstado,
+// comprometerFecha, guardarCatalogo...) podria ejecutarla dos veces si la
+// falla ocurrio DESPUES de escribir pero antes de responder. Por eso solo se
+// reintentan las lecturas; las escrituras van a un unico intento y, si
+// fallan, el llamador muestra el error para que el usuario reintente a mano.
+var ACCIONES_REINTENTABLES = {
+  ping: true, getCatalogos: true, consultarEstado: true,
+  getDashboardData: true, getPanelGerencia: true, getSolicitudDetalle: true,
+  listarCatalogo: true, listarUsuarios: true, listarLogs: true
+};
+var MAX_INTENTOS_LECTURA = 3;
+
+function esperar_(ms) {
+  return new Promise(function (resolve) { setTimeout(resolve, ms); });
+}
+
+// Un unico intento contra el Web App, por el transporte que corresponda.
+function ejecutarLlamada_(url, action, data) {
   if (typeof google !== 'undefined' && google.script && google.script.run) {
     return new Promise(function (resolve, reject) {
       google.script.run
@@ -889,12 +907,33 @@ async function llamarApi(url, action, data) {
         .ejecutarAccionBackoffice(action, data || {});
     });
   }
-  const respuesta = await fetch(url, {
+  return fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ action: action, data: data || {} })
-  });
-  return respuesta.json();
+  }).then(function (respuesta) { return respuesta.json(); });
+}
+
+// v3.0 (Fase 1, robustez): reintenta con espera creciente las acciones de
+// lectura cuando el transporte falla (el error "se perdio la conexion con
+// Apps Script" que reportaba el usuario al navegar). Las escrituras no se
+// reintentan (ver ACCIONES_REINTENTABLES). Solo se reintenta ante un fallo
+// de transporte (promesa rechazada), nunca ante un {ok:false} del backend
+// (eso llega como valor resuelto y se devuelve tal cual).
+async function llamarApi(url, action, data) {
+  const maxIntentos = ACCIONES_REINTENTABLES[action] ? MAX_INTENTOS_LECTURA : 1;
+  let ultimoError;
+  for (let intento = 1; intento <= maxIntentos; intento++) {
+    try {
+      return await ejecutarLlamada_(url, action, data);
+    } catch (err) {
+      ultimoError = err;
+      if (intento < maxIntentos) {
+        await esperar_(300 * intento);
+      }
+    }
+  }
+  throw ultimoError;
 }
 
 </script>

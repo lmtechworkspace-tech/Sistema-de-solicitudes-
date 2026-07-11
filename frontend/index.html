@@ -44,6 +44,16 @@
           <select id="campo-plataforma" required></select>
         </div>
 
+        <!-- v3.0 (Fase 1, multi-responsable): a qué área/responsable va la
+             solicitud. Se puebla desde CAT_AREAS; si no hay áreas
+             configuradas queda oculto y todo se rutea al responsable por
+             defecto (comportamiento previo a v3.0). -->
+        <div class="sigso-campo sigso-oculto" id="fila-area">
+          <label for="campo-area">¿A qué área va dirigida?</label>
+          <select id="campo-area"></select>
+          <p class="sigso-ayuda">Elige el área que atiende tu pedido. Si no estás seguro, deja "No estoy seguro" y el equipo lo derivará.</p>
+        </div>
+
         <div class="sigso-campo">
           <label class="sigso-toggle">
             <input type="checkbox" id="campo-es-cliente" />

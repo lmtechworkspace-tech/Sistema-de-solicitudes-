@@ -50,6 +50,18 @@
         { nombre: 'activo', label: 'Activo', tipo: 'checkbox' }
       ]
     },
+    // v3.0 (Fase 1, multi-responsable): areas -> responsable. El formulario
+    // publico elige por AREA (por nombre); aqui se define a que correo se le
+    // rutea cada area. El responsable_email nunca se muestra al publico.
+    AREA: {
+      titulo: 'Áreas / responsables',
+      campos: [
+        { nombre: 'area_id', label: 'Código', soloAlCrear: true },
+        { nombre: 'nombre', label: 'Nombre del área (lo ve el solicitante)' },
+        { nombre: 'responsable_email', label: 'Correo del responsable (recibe las solicitudes)' },
+        { nombre: 'activo', label: 'Activo', tipo: 'checkbox' }
+      ]
+    },
     // P12 (v2.0, Sprint 3): CONFIG_NOTIFICACIONES estaba infrautilizada --
     // ahora "AVISO_LEO" es el switch global de "avisar automaticamente al
     // equipo de desarrollo" (cliente/P1/opt-in). Desactivarlo hace que

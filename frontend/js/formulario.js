@@ -94,7 +94,7 @@
     document.getElementById('btn-paso2-siguiente').addEventListener('click', irAPaso3_);
     document.getElementById('btn-paso3-atras').addEventListener('click', function () { cambiarPaso_('items'); });
 
-    ['campo-empresa', 'campo-plataforma', 'campo-solicitante-nombre', 'campo-solicitante-cargo',
+    ['campo-empresa', 'campo-plataforma', 'campo-area', 'campo-solicitante-nombre', 'campo-solicitante-cargo',
       'campo-solicitante-email', 'campo-cc', 'campo-avisar-leo',
       'campo-empresa-cliente', 'campo-cliente-mandante', 'campo-cliente-obra',
       'campo-contacto-cliente', 'campo-correo-cliente', 'campo-telefono-cliente',
@@ -185,6 +185,7 @@
       estado.catalogos = respuesta.data;
       poblarSelect_('campo-empresa', estado.catalogos.empresas, 'empresa_id', 'nombre');
       poblarPlataformas_();
+      poblarAreas_();
       renderSubsolicitudes_();
     });
   }
@@ -199,6 +200,28 @@
     if (actual) {
       select.value = actual;
     }
+  }
+
+  // v3.0 (Fase 1): puebla el selector de area. Si no hay areas configuradas
+  // (instalacion previa a v3.0 o catalogo vacio), oculta el campo -- el
+  // backend rutea al responsable por defecto sin que el solicitante elija.
+  function poblarAreas_() {
+    var fila = document.getElementById('fila-area');
+    var select = document.getElementById('campo-area');
+    var areas = (estado.catalogos && estado.catalogos.areas) || [];
+    if (areas.length === 0) {
+      fila.classList.add('sigso-oculto');
+      return;
+    }
+    var actual = select.value;
+    select.innerHTML = '<option value="">No estoy seguro (que lo derive el equipo)</option>' +
+      areas.map(function (a) {
+        return '<option value="' + a.area_id + '">' + Componentes.escaparHtml(a.nombre) + '</option>';
+      }).join('');
+    if (actual) {
+      select.value = actual;
+    }
+    fila.classList.remove('sigso-oculto');
   }
 
   function poblarPlataformas_() {
@@ -682,6 +705,9 @@
       _modo: estado.modo,
       empresa_id: document.getElementById('campo-empresa').value,
       plataforma: document.getElementById('campo-plataforma').value,
+      // v3.0 (Fase 1): area a la que va dirigida la solicitud (default para
+      // todos los items). '' = "No estoy seguro" -> bandeja de triage.
+      area: document.getElementById('campo-area').value,
       es_cliente: esCliente,
       empresa_cliente: esCliente ? document.getElementById('campo-empresa-cliente').value : '',
       cliente_mandante: esCliente ? document.getElementById('campo-cliente-mandante').value : '',
@@ -737,6 +763,9 @@
       estado.modo = datos._modo === 'completo' ? 'completo' : 'rapido';
       document.getElementById('campo-empresa').value = datos.empresa_id || '';
       document.getElementById('campo-plataforma').value = datos.plataforma || '';
+      // v3.0 (Fase 1): el valor se re-aplica; poblarAreas_ (tras cargar
+      // catalogos) respeta el valor ya presente en el select.
+      document.getElementById('campo-area').value = datos.area || '';
       document.getElementById('campo-solicitante-nombre').value = datos.solicitante_nombre || '';
       document.getElementById('campo-solicitante-cargo').value = datos.solicitante_cargo || '';
       document.getElementById('campo-solicitante-email').value = datos.solicitante_email || '';

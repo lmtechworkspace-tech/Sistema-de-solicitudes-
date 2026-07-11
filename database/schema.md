@@ -93,6 +93,7 @@ corrida de `npm test`.
 | `fecha_comprometida` | ISO datetime | **v2.1 (Fase A)**: la fecha que fija el **desarrollador** (`Solicitudes.comprometerFecha`, Backoffice) — es la definitiva, la que mide Gerencia (Fase C). Re-comprometer (ya había una fecha) exige `motivo` (≥20 caracteres, mismo patrón que `HISTORIAL_PRIORIDAD`/RN-007) y queda registrado en `HISTORIAL_COMPROMISO` |
 | `fecha_terminada` | ISO datetime | **v2.1 (Fase A)**: sellada automáticamente por `actualizarEstado` al entrar a `S08` (Terminada) — detiene el "reloj del desarrollador". Se limpia si el ítem sale de `S08` (reabierto), para que el reloj se reanude |
 | `comprometida_por` | string (email) | **v2.1 (Fase A)**: quien fijó `fecha_comprometida` |
+| `area` / `area_nombre` | string | **v3.0 (Fase 1, multi-responsable)**: a qué área/responsable va dirigido el ítem. El formulario elige por **área** (`CAT_AREAS`, por nombre); `crearSolicitud` resuelve `area → responsable_email` **del lado del servidor** (nunca viaja al navegador público) y escribe ese correo en `desarrollador_asignado`. `''` = "No estoy seguro" → bandeja de triage (responsable por defecto, `EMAIL_DESARROLLO`). `area_nombre` es la desnormalización legible (se muestra al solicitante en Consultar Estado; el correo del responsable, no) |
 
 ## COUNTERS (nueva, C-12)
 
@@ -164,6 +165,32 @@ marcado urgente (o cualquier solicitud de cliente) quede por debajo de P2,
 sin importar el impacto que declare el solicitante. Sembrado por defecto en
 `ERR`/`MIG`; el resto se ajusta desde `admin.html` según el criterio real de
 cada equipo.
+
+## CAT_AREAS (nueva, v3.0 Fase 1 — multi-responsable)
+
+| Columna | Tipo | Nota |
+|---|---|---|
+| `area_id` | string | Código del área |
+| `nombre` | string | Lo que ve el solicitante en el formulario ("Plataformas / sistemas", "Contabilidad"…) |
+| `responsable_email` | string | Correo que **recibe** las solicitudes de esa área. **Nunca** se expone al navegador público |
+| `activo` | boolean | Solo las activas se listan en el formulario |
+
+Catálogo administrable (solo `ADM`), mismo patrón que el resto de `CAT_*`.
+Habilita el ruteo multi-responsable (`documentacion/SIGSO-v3.0-multi-
+responsable-y-control.md`): el formulario elige un **área** por su nombre
+(`Catalogos.getAll` la proyecta a solo `{area_id, nombre}`, sin el correo);
+`crearSolicitud` (`resolverResponsable_`) traduce `area → responsable_email`
+y lo escribe en `SUBSOLICITUDES.desarrollador_asignado`, y le **avisa a ese
+responsable** en vez de al buzón fijo. Si el área no existe/está inactiva o
+la hoja aún no se creó (instalación previa a v3.0), cae al buzón por defecto
+(`EMAIL_DESARROLLO`), preservando el comportamiento anterior. Se crea **vacía**
+(dato de la organización, carga manual desde Administración).
+
+> **Nota de comportamiento (v3.0):** el aviso de nueva solicitud ahora va
+> **siempre** al responsable ruteado cuando el switch global `AVISO_LEO` está
+> activo (antes una solicitud interna no urgente no avisaba salvo opt-in). Es
+> el objetivo del ruteo: quien recibe la solicitud se entera. Ítems que caen
+> en el mismo responsable generan un solo aviso (dedup por destinatario).
 
 ## HISTORIAL_ESTADOS
 

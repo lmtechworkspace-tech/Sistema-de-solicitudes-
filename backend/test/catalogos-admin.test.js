@@ -10,9 +10,33 @@ function loadConSchema() {
   seedSheet(ctx, 'CAT_PLATAFORMAS', ctx.COLUMNAS.CAT_PLATAFORMAS);
   seedSheet(ctx, 'CAT_MODULOS', ctx.COLUMNAS.CAT_MODULOS);
   seedSheet(ctx, 'CAT_TIPOS', ctx.COLUMNAS.CAT_TIPOS);
+  seedSheet(ctx, 'CAT_AREAS', ctx.COLUMNAS.CAT_AREAS);
   seedSheet(ctx, 'CONFIG_NOTIFICACIONES', ctx.COLUMNAS.CONFIG_NOTIFICACIONES);
   return ctx;
 }
+
+// v3.0 (Fase 1): CRUD del catalogo de areas -> responsable (solo Admin).
+test('Catalogos.guardar (AREA, v3.0): Admin crea un area con su responsable', () => {
+  const ctx = loadConSchema();
+  const resultado = ctx.Catalogos.guardar(
+    { tipo: 'AREA', registro: { area_id: 'PLAT', nombre: 'Plataformas', responsable_email: 'luis@rld.cl', activo: true } },
+    { email: 'admin@homepymes.cl', rol: 'ADM' }
+  );
+
+  assert.equal(resultado.responsable_email, 'luis@rld.cl');
+  const filas = ctx.leerFilas_('CAT_AREAS');
+  assert.equal(filas.length, 1);
+  assert.equal(filas[0].nombre, 'Plataformas');
+});
+
+test('Catalogos.guardar (AREA, v3.0): rechaza al rol Analista (solo Admin)', () => {
+  const ctx = loadConSchema();
+  const resultado = ctx.Catalogos.guardar(
+    { tipo: 'AREA', registro: { area_id: 'PLAT', nombre: 'Plataformas', responsable_email: 'luis@rld.cl', activo: true } },
+    { email: 'analista@homepymes.cl', rol: 'ANA' }
+  );
+  assert.equal(resultado._forbidden, true);
+});
 
 // P12 (v2.0, Sprint 3): CONFIG_NOTIFICACIONES via el mismo CRUD generico,
 // solo Admin (es una decision de gobierno, no de operacion diaria).

@@ -20,9 +20,39 @@
  * (Apps Script concatena los .gs de un proyecto), no hace falta importarlo.
  */
 
+// v3.0 (Fase 1, robustez): mismo TTL de cache que el Dashboard (§5.5, C-13).
+// Antes getPanel releia TODAS las hojas en cada llamada sin cache -- al
+// crecer las filas esa llamada se hacia pesada y disparaba el error "se
+// perdio la conexion con Apps Script" al navegar el Panel de Gerencia.
+var GERENCIA_CACHE_TTL_SEGUNDOS = 300;
+
 var Gerencia = {
   getPanel: function (filtros, contexto) {
     var filtrosBase = filtros || {};
+
+    // Cache por filtros (Gerencia/ADM son solo lectura; el rol no cambia el
+    // contenido, asi que no hace falta meterlo en la clave). Si expiro o
+    // nunca se calculo, cae a la lectura completa de abajo y repuebla.
+    var claveCache = 'gerencia_panel::' + JSON.stringify(filtrosBase);
+    var cache = CacheService.getScriptCache();
+    var cacheado = cache.get(claveCache);
+    if (cacheado) {
+      return JSON.parse(cacheado);
+    }
+    var datos = calcularPanelGerencia_(filtrosBase);
+    // JSON grande: CacheService limita cada valor a 100 KB. Si el panel no
+    // cabe (muchisimos items), se omite el cache y se sirve directo -- nunca
+    // se rompe por intentar guardar algo demasiado grande.
+    try {
+      cache.put(claveCache, JSON.stringify(datos), GERENCIA_CACHE_TTL_SEGUNDOS);
+    } catch (err) {
+      // valor demasiado grande para el cache: se sirve sin cachear.
+    }
+    return datos;
+  }
+};
+
+function calcularPanelGerencia_(filtrosBase) {
     var feriados = obtenerFeriados_();
 
     var solicitudes = leerFilas_(SHEETS.SOLICITUDES).filter(function (s) {
@@ -71,8 +101,7 @@ var Gerencia = {
       kpis: calcularKpisGerencia_(items),
       items: items
     };
-  }
-};
+}
 
 // §7A: banda de KPIs -- se calcula sobre el MISMO conjunto ya filtrado que
 // devuelve items (Gerencia ve el panel filtrado, no dos universos distintos).

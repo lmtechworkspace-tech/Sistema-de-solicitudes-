@@ -115,14 +115,30 @@ test('Triggers.verificarFechasComprometidas (v2.1 Fase D): NO avisa si esta en p
   assert.equal(resultado.avisados, 0);
 });
 
+// Retrocede N dias HABILES desde ahora, saltando fines de semana, a las
+// 10:00 (dentro de jornada) para que el conteo de horas habiles sea estable
+// sin importar en que dia de la semana corran los tests (evita que un offset
+// de dias calendario cruce un fin de semana y caiga fuera de la ventana).
+function haceNdiasHabiles(n) {
+  const d = new Date();
+  let restados = 0;
+  while (restados < n) {
+    d.setDate(d.getDate() - 1);
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) restados++;
+  }
+  d.setHours(10, 0, 0, 0);
+  return d;
+}
+
 test('Triggers.recordarValidacionPendiente (v2.1 Fase D): recuerda al solicitante entre el umbral y el cierre automatico', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
   seedSubsolicitud(ctx, { estado: 'S08' });
-  const hace3DiasHabiles = new Date();
-  hace3DiasHabiles.setDate(hace3DiasHabiles.getDate() - 5); // suficiente margen habil
+  // ~3 dias habiles atras: dentro de la ventana [2, 5) dias habiles.
+  const enVentana = haceNdiasHabiles(3);
   seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS, [
-    ['H1', 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'S07', 'S08', 'dev@homepymes.cl', '', hace3DiasHabiles.toISOString()]
+    ['H1', 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'S07', 'S08', 'dev@homepymes.cl', '', enVentana.toISOString()]
   ]);
 
   const resultado = ctx.Triggers.recordarValidacionPendiente();

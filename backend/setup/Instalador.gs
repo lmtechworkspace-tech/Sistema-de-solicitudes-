@@ -54,7 +54,9 @@ var ESQUEMA_HOJAS = {
     'frecuencia', 'personas_afectadas',
     'imagen_descripciones',
     // v2.1 (Fase A): ver la nota identica en backend/intake/Constantes.gs.
-    'fecha_propuesta', 'fecha_comprometida', 'fecha_terminada', 'comprometida_por'
+    'fecha_propuesta', 'fecha_comprometida', 'fecha_terminada', 'comprometida_por',
+    // v3.0 (Fase 1): ver la nota identica en backend/intake/Constantes.gs.
+    'area', 'area_nombre'
   ],
   HISTORIAL_ESTADOS: [
     'historial_id', 'solicitud_id', 'subsolicitud_id',
@@ -105,7 +107,13 @@ var ESQUEMA_HOJAS = {
   HISTORIAL_COMPROMISO: [
     'historial_id', 'subsolicitud_id', 'solicitud_id',
     'fecha_anterior', 'fecha_nueva', 'motivo', 'usuario', 'timestamp'
-  ]
+  ],
+  // v3.0 (Fase 1): ver la nota identica en backend/intake/Constantes.gs.
+  // Se crea vacia (dato propio de la organizacion, como el resto de CAT_*
+  // salvo CAT_TIPOS): el Admin carga las areas desde Administracion. Si
+  // esta vacia, crearSolicitud rutea al responsable por defecto (Leo),
+  // preservando el comportamiento previo a v3.0.
+  CAT_AREAS: ['area_id', 'nombre', 'responsable_email', 'activo']
 };
 
 // SLA por prioridad en horas habiles (§7.2). P5 no tiene SLA.
