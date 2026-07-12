@@ -119,9 +119,12 @@
     var contenedor = document.getElementById(contenedorId || 'resultado');
     contenedor.innerHTML =
       '<div class="sigso-resultado-exito">' +
+      renderBannerAcciones_(data) +
       '<p class="sigso-numero-solicitud">' + data.solicitud_id + '</p>' +
+      renderHitos_(data.estado_derivado) +
       '<p>Estado: <strong>' + formatearEstadoSigso(data.estado_derivado) + '</strong>' +
       ' &mdash; Prioridad: ' + Componentes.badgePrioridad(data.prioridad_derivada) + '</p>' +
+      renderFechaComprometidaResumen_(data) +
       cola +
       '<p class="sigso-ayuda">Haz clic en cada &iacute;tem para ver su detalle.</p>' +
       pdf +
@@ -175,6 +178,64 @@
     });
 
     contenedor.classList.remove('sigso-oculto');
+  }
+
+  // UI-3 (§3): linea de tiempo horizontal de hitos -- el solicitante ve el
+  // camino recorrido y cuanto falta, no solo una palabra de estado. Los
+  // estados intermedios se agrupan en 5 hitos legibles; Rechazada/Cancelada
+  // no siguen el camino, se muestran como aviso en vez de barra.
+  var HITOS = ['Recibida', 'Aprobada', 'En desarrollo', 'Terminada', 'Cerrada'];
+  var NIVEL_POR_ESTADO = {
+    S01: 0, S02: 0, S03: 1, S04: 1, S05: 2, S06: 2, S07: 2, S08: 3, S09: 4
+  };
+
+  function renderHitos_(estadoDerivado) {
+    if (estadoDerivado === 'S10' || estadoDerivado === 'S11') {
+      return Componentes.alerta('Esta solicitud fue ' +
+        (estadoDerivado === 'S10' ? 'rechazada' : 'cancelada') +
+        '. Revisa el detalle de los ítems para ver el motivo.', 'aviso');
+    }
+    var nivel = NIVEL_POR_ESTADO[estadoDerivado];
+    if (nivel === undefined) return '';
+    var cerrada = estadoDerivado === 'S09';
+    return '<div class="sigso-hitos">' + HITOS.map(function (nombre, idx) {
+      var clase = 'sigso-hito';
+      var marcador = idx + 1;
+      if (idx < nivel || cerrada) { clase += ' sigso-hito--hecho'; marcador = '✓'; }
+      else if (idx === nivel) { clase += ' sigso-hito--actual'; marcador = '●'; }
+      return '<span class="' + clase + '"><span class="sigso-hito__n">' + marcador + '</span>' + nombre + '</span>';
+    }).join('<span class="sigso-hito__union"></span>') + '</div>';
+  }
+
+  // UI-3 (§3): si el solicitante tiene algo que HACER (validar un item
+  // Terminada, o responder una pregunta), se le dice arriba de todo -- es
+  // lo unico realmente urgente de esta pantalla.
+  function renderBannerAcciones_(data) {
+    var porValidar = data.subsolicitudes.filter(function (s) { return s.estado === 'S08'; }).length;
+    var porResponder = data.subsolicitudes.filter(function (s) { return s.pregunta_pendiente; }).length;
+    var avisos = [];
+    if (porValidar > 0) avisos.push(porValidar + ' ítem(s) esperando tu validación');
+    if (porResponder > 0) avisos.push(porResponder + ' pregunta(s) del equipo por responder');
+    if (avisos.length === 0) return '';
+    return '<div class="sigso-banner-accion">⚡ Tienes ' + avisos.join(' y ') +
+      ' — están más abajo, expandidos.</div>';
+  }
+
+  // UI-3 (§3): la fecha comprometida mas proxima entre los items abiertos,
+  // con su semaforo -- es lo que el solicitante realmente quiere saber.
+  function renderFechaComprometidaResumen_(data) {
+    var abiertosConFecha = data.subsolicitudes.filter(function (s) {
+      return s.fecha_comprometida && ['S09', 'S10', 'S11'].indexOf(s.estado) === -1;
+    }).sort(function (a, b) { return new Date(a.fecha_comprometida) - new Date(b.fecha_comprometida); });
+    if (abiertosConFecha.length === 0) return '';
+    var item = abiertosConFecha[0];
+    var semaforo = item.cumplimiento
+      ? ' <span class="sigso-semaforo-inline">' + item.cumplimiento.emoji + ' ' + Componentes.escaparHtml(item.cumplimiento.etiqueta) + '</span>'
+      : '';
+    return '<div class="sigso-fecha-destacada">📅 Próxima entrega comprometida: <strong>' +
+      Componentes.escaparHtml(formatearFechaHora_(item.fecha_comprometida)) + '</strong>' + semaforo +
+      (abiertosConFecha.length > 1 ? ' <span class="sigso-ayuda-inline">(+' + (abiertosConFecha.length - 1) + ' ítem(s) más con fecha)</span>' : '') +
+      '</div>';
   }
 
   function cuerpoItem_(s) {

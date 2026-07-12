@@ -249,3 +249,77 @@
   color: var(--azul);
   font-weight: 600;
 }
+
+/* UI-3 (§3): linea de tiempo de hitos en Consultar Estado. */
+.sigso-hitos {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.sigso-hito {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--gris-medio);
+  white-space: nowrap;
+}
+
+.sigso-hito__n {
+  display: inline-grid;
+  place-items: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 50%;
+  background: var(--gris-claro);
+  color: var(--gris-medio);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.sigso-hito--hecho { color: var(--p4); }
+.sigso-hito--hecho .sigso-hito__n { background: var(--p4); color: #fff; }
+.sigso-hito--actual { color: var(--naranja); }
+.sigso-hito--actual .sigso-hito__n { background: var(--naranja); color: #fff; }
+
+.sigso-hito__union {
+  flex: 0 0 1.1rem;
+  height: 2px;
+  background: var(--gris-claro);
+  margin: 0 0.15rem;
+}
+
+/* UI-3 (§3): banner de acciones pendientes del solicitante. */
+.sigso-banner-accion {
+  background: var(--naranja);
+  color: #fff;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.92rem;
+}
+
+/* UI-3 (§3): la fecha comprometida como protagonista. */
+.sigso-fecha-destacada {
+  border: 1px solid var(--naranja-claro);
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  margin: 0.5rem 0 0.75rem;
+  font-size: 0.95rem;
+}
+
+.sigso-semaforo-inline {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.sigso-ayuda-inline {
+  font-size: 0.78rem;
+  color: var(--gris-medio);
+}
