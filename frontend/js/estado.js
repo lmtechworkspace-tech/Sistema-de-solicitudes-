@@ -400,7 +400,7 @@
         : '';
       return '<button type="button" class="sigso-bandeja__fila" data-solicitud="' + s.solicitud_id + '">' +
         '<div class="sigso-bandeja__fila-cabecera">' +
-        '<strong>' + Componentes.escaparHtml(s.solicitud_id) + '</strong>' +
+        '<strong class="sigso-id">' + Componentes.escaparHtml(s.solicitud_id) + '</strong>' +
         '<span>' + Componentes.badgePrioridad(s.prioridad_derivada) + ' ' + Componentes.badgeEstado(s.estado_derivado) + '</span>' +
         '</div>' +
         '<div class="sigso-bandeja__fila-meta">' +

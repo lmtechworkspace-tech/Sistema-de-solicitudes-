@@ -215,7 +215,7 @@
     return '<div class="sigso-fila-reciente" data-id="' + s.solicitud_id + '">' +
       '<div class="sigso-fila-reciente__principal">' +
       Componentes.badgePrioridad(s.prioridad_derivada) + ' ' +
-      '<strong>' + s.solicitud_id + '</strong> ' +
+      '<strong class="sigso-id">' + s.solicitud_id + '</strong> ' +
       Componentes.badgeEstado(s.estado_derivado) + badgeRespuesta +
       '</div>' +
       '<div class="sigso-fila-reciente__meta">' +

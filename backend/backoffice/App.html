@@ -17,6 +17,10 @@
   --gris-oscuro: #2C2C2C;
   --gris-medio: #555555;
   --gris-claro: #F5F5F5;
+  /* UI-1 (§1): fondo de pagina con matiz calido hacia el naranja de marca
+     (en vez del gris plano) -- las tarjetas blancas "flotan" mejor. Es un
+     token aparte de --gris-claro, que sigue siendo el fondo de componentes. */
+  --fondo-pagina: #FAF7F4;
 
   --p1: #C0392B;
   --p2: #E67E22;
@@ -35,7 +39,21 @@ body {
   margin: 0;
   font-family: var(--fuente);
   color: var(--gris-oscuro);
-  background: var(--gris-claro);
+  background: var(--fondo-pagina);
+}
+
+/* UI-1 (§1): numeros de solicitud/item en monoespaciada -- se leen y
+   comparan mejor (SOL-2026-HP-0006 alinea digito a digito). */
+.sigso-id {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.95em;
+  letter-spacing: 0.01em;
+}
+
+/* UI-1 (§1): foco visible por teclado en todo el sistema. */
+:focus-visible {
+  outline: 2px solid var(--azul);
+  outline-offset: 2px;
 }
 
 a {
@@ -570,6 +588,28 @@ button {
   font-size: 0.9rem;
 }
 
+/* UI-2 (§5): icono por tipo de evento + punto coloreado -- el timeline se
+   escanea sin leer (estado = naranja, compromiso = azul, comentario = gris). */
+.sigso-timeline__icono {
+  margin-right: 0.15rem;
+}
+
+.sigso-timeline .sigso-timeline__evento--estado::before { background: var(--naranja) !important; }
+.sigso-timeline .sigso-timeline__evento--compromiso::before { background: var(--azul) !important; }
+.sigso-timeline .sigso-timeline__evento--comentario::before { background: var(--gris-medio) !important; }
+
+/* UI-2 (§5): botonera de transiciones -- botones de accion con nombre. */
+.sigso-botonera-estado {
+  gap: 0.4rem;
+}
+
+.sigso-botonera-estado .sigso-accion-estado {
+  flex: 0 0 auto;
+  min-width: 0;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.9rem;
+}
+
 .sigso-timeline li::before {
   content: '';
   position: absolute;
@@ -906,6 +946,12 @@ button {
   font-weight: 700;
 }
 
+/* UI-1 (§6): urgencia visible sin leer -- borde izquierdo + tinte suave. */
+.sigso-fila--atrasada > td:first-child { border-left: 4px solid var(--p1); }
+.sigso-fila--atrasada > td { background: rgba(192, 57, 43, 0.06); }
+.sigso-fila--riesgo > td:first-child { border-left: 4px solid var(--p3); }
+.sigso-fila--riesgo > td { background: rgba(241, 196, 15, 0.08); }
+
 /* Semaforo del solicitante (distinto del semaforo de cumplimiento del
    desarrollador, que ya usa las clases sigso-gantt-barra--*): se muestra
    junto a "Dias esperando al solicitante" en el tablero. */
@@ -915,6 +961,20 @@ button {
 
 .sigso-solo-imprimir {
   display: none;
+}
+
+.sigso-encabezado-reporte h1 {
+  margin: 0 0 0.15rem;
+  font-size: 1.3rem;
+  color: var(--azul);
+  border-bottom: 3px solid var(--naranja);
+  padding-bottom: 0.35rem;
+}
+
+.sigso-encabezado-reporte p {
+  margin: 0.25rem 0 0.75rem;
+  font-size: 0.8rem;
+  color: var(--gris-medio);
 }
 
 /* Horizontal: el tablero tiene 10 columnas -- en vertical (carta/A4) el
@@ -1008,7 +1068,9 @@ button {
           </select>
         </div>
         <div class="sigso-campo">
-          <button type="button" class="sigso-boton" id="btn-actualizar-dashboard">Actualizar</button>
+          <!-- UI-1 (§1): "Actualizar" es acción de apoyo, no la principal
+               de la pantalla -- pasa a estilo secundario. -->
+          <button type="button" class="sigso-boton--secundario" id="btn-actualizar-dashboard">Actualizar</button>
         </div>
       </div>
 
@@ -1064,7 +1126,7 @@ button {
           <input type="text" id="ger-filtro-solicitante" placeholder="nombre o correo">
         </div>
         <div class="sigso-campo">
-          <button type="button" class="sigso-boton" id="btn-actualizar-gerencia">Actualizar</button>
+          <button type="button" class="sigso-boton--secundario" id="btn-actualizar-gerencia">Actualizar</button>
         </div>
       </div>
 
@@ -1097,6 +1159,11 @@ button {
             </select>
           </div>
           <button type="button" class="sigso-boton--secundario" id="btn-imprimir-gerencia">Descargar / Imprimir PDF</button>
+        </div>
+        <!-- UI-1 (§6): encabezado institucional del reporte impreso. -->
+        <div class="sigso-solo-imprimir sigso-encabezado-reporte">
+          <h1>SIGSO — Informe de seguimiento de solicitudes</h1>
+          <p>HomePymes / RLD &middot; Panel de Control de Gerencia</p>
         </div>
         <p class="sigso-ayuda sigso-solo-imprimir" id="ger-fecha-reporte"></p>
         <div id="ger-contenedor-tablero"></div>
@@ -1641,7 +1708,7 @@ function renderHeaderSigso(paginaActiva) {
     return '<div class="sigso-fila-reciente" data-id="' + s.solicitud_id + '">' +
       '<div class="sigso-fila-reciente__principal">' +
       Componentes.badgePrioridad(s.prioridad_derivada) + ' ' +
-      '<strong>' + s.solicitud_id + '</strong> ' +
+      '<strong class="sigso-id">' + s.solicitud_id + '</strong> ' +
       Componentes.badgeEstado(s.estado_derivado) + badgeRespuesta +
       '</div>' +
       '<div class="sigso-fila-reciente__meta">' +
@@ -1870,22 +1937,32 @@ function renderHeaderSigso(paginaActiva) {
   // (comentarioObligatorioParaCambio_ en Solicitudes.gs), asi el frontend
   // muestra el campo de motivo antes de que el usuario intente aplicar el
   // cambio en vez de que le rebote despues.
+  // UI-2 (§5): cada transicion valida se ofrece como un boton con NOMBRE DE
+  // ACCION ("Iniciar desarrollo", "Pedir informacion"...) en vez del combo
+  // "Cambiar estado a... + Aplicar" -- menos pasos y sin ambiguedad sobre
+  // que va a pasar. Las etiquetas describen la accion, no el estado destino.
+  var VERBO_TRANSICION = {
+    S01: 'Devolver a Nueva',
+    S02: 'Marcar recibida', S03: 'Pasar a revisión', S04: 'Aprobar',
+    S05: 'Iniciar desarrollo', S06: 'Pedir información', S07: 'Pasar a pruebas',
+    S08: 'Marcar terminada', S09: 'Cerrar', S10: 'Rechazar', S11: 'Cancelar'
+  };
+
   function renderAccionesItem_(sub, opcionesTransicion) {
     var selectorEstado = '';
     if (opcionesTransicion.length > 0) {
-      var opciones = opcionesTransicion.map(function (t) {
-        return '<option value="' + t.estado + '" data-comentario-obligatorio="' + (t.comentario_obligatorio ? '1' : '0') + '">' +
-          t.estado + ' — ' + (typeof SIGSO_ESTADOS_LABEL !== 'undefined' ? SIGSO_ESTADOS_LABEL[t.estado] : t.estado) + '</option>';
-      }).join('');
+      var botones = opcionesTransicion.map(function (t) {
+        return '<button type="button" class="sigso-boton--secundario sigso-accion-estado" ' +
+          'data-subsolicitud="' + sub.subsolicitud_id + '" data-estado="' + t.estado + '" ' +
+          'data-comentario-obligatorio="' + (t.comentario_obligatorio ? '1' : '0') + '">' +
+          (VERBO_TRANSICION[t.estado] || t.estado) + '</button>';
+      }).join(' ');
       selectorEstado =
-        '<div class="sigso-acciones-item">' +
-        '<select class="sigso-cambiar-estado" data-subsolicitud="' + sub.subsolicitud_id + '">' +
-        '<option value="">Cambiar estado a...</option>' + opciones +
-        '</select>' +
-        '<input type="text" class="sigso-comentario-estado sigso-oculto" data-subsolicitud="' + sub.subsolicitud_id + '" placeholder="Motivo (obligatorio para esta transicion)">' +
-        '<button type="button" class="sigso-boton--secundario sigso-aplicar-estado" data-subsolicitud="' + sub.subsolicitud_id + '" disabled>Aplicar</button>' +
-        '<span class="sigso-resultado-accion" data-subsolicitud="' + sub.subsolicitud_id + '"></span>' +
-        '</div>';
+        '<div class="sigso-acciones-item sigso-botonera-estado">' + botones + '</div>' +
+        '<div class="sigso-acciones-item sigso-oculto" data-bloque-motivo="' + sub.subsolicitud_id + '">' +
+        '<input type="text" class="sigso-comentario-estado" data-subsolicitud="' + sub.subsolicitud_id + '" placeholder="Motivo (obligatorio para esta acción)">' +
+        '</div>' +
+        '<span class="sigso-resultado-accion" data-subsolicitud="' + sub.subsolicitud_id + '"></span>';
     }
 
     // v2.1 (Fase A): comprometer/ajustar la fecha es una accion propia,
@@ -1935,15 +2012,34 @@ function renderHeaderSigso(paginaActiva) {
       };
     }).concat((detalle.comentarios || []).map(function (c) {
       return { tipo: 'comentario', timestamp: c.timestamp, usuario: c.usuario, texto: c.texto, esInterno: c.es_interno };
+    })).concat((detalle.historial_compromiso || []).map(function (h) {
+      // UI-2 (§5): los re-compromisos de fecha entran al timeline unificado
+      // (antes solo se veian dentro de cada item).
+      return {
+        tipo: 'compromiso', timestamp: h.timestamp, usuario: h.usuario,
+        texto: 'Fecha comprometida: ' + String(h.fecha_nueva).replace('T', ' '),
+        comentario: h.motivo
+      };
     })).sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
+
+    // UI-2 (§5): icono por tipo de evento para escanear el timeline sin leer.
+    function iconoEvento_(e) {
+      if (e.tipo === 'estado') return '🔄';
+      if (e.tipo === 'compromiso') return '📅';
+      return e.esInterno ? '🔒' : '💬';
+    }
 
     var feed = eventos.length === 0
       ? Componentes.vacio('Sin actividad todavia.')
       : '<ul class="sigso-timeline">' + eventos.map(function (e) {
-        var etiqueta = e.tipo === 'estado' ? '<strong>' + e.texto + '</strong>' : 'Comentario' + (e.esInterno ? ' (interno)' : '');
-        return '<li' + (e.tipo === 'comentario' && e.esInterno ? ' class="sigso-comentario--interno"' : '') + '>' +
+        var etiqueta = e.tipo === 'comentario'
+          ? 'Comentario' + (e.esInterno ? ' (interno)' : '')
+          : '<strong>' + e.texto + '</strong>';
+        var detalleTexto = e.tipo === 'comentario' ? e.texto : e.comentario;
+        return '<li class="sigso-timeline__evento--' + e.tipo + (e.tipo === 'comentario' && e.esInterno ? ' sigso-comentario--interno' : '') + '">' +
+          '<span class="sigso-timeline__icono">' + iconoEvento_(e) + '</span> ' +
           etiqueta + ' — ' + Componentes.escaparHtml(e.usuario) + ' (' + new Date(e.timestamp).toLocaleString('es-CL') + ')' +
-          ((e.tipo === 'estado' ? e.comentario : e.texto) ? '<br>' + Componentes.escaparHtml(e.tipo === 'estado' ? e.comentario : e.texto) : '') +
+          (detalleTexto ? '<br>' + Componentes.escaparHtml(detalleTexto) : '') +
           '</li>';
       }).join('') + '</ul>';
 
@@ -1964,24 +2060,32 @@ function renderHeaderSigso(paginaActiva) {
   // --- Cableado de acciones inline ---------------------------------------
 
   function wireAcciones_(solicitudId) {
-    document.querySelectorAll('.sigso-cambiar-estado').forEach(function (select) {
-      select.addEventListener('change', function () {
-        var subId = select.getAttribute('data-subsolicitud');
-        var boton = document.querySelector('.sigso-aplicar-estado[data-subsolicitud="' + subId + '"]');
-        var campoComentario = document.querySelector('.sigso-comentario-estado[data-subsolicitud="' + subId + '"]');
-        var opcionElegida = select.options[select.selectedIndex];
-        var requiereComentario = opcionElegida && opcionElegida.getAttribute('data-comentario-obligatorio') === '1';
-        campoComentario.classList.toggle('sigso-oculto', !requiereComentario);
-        boton.disabled = !select.value;
-      });
-    });
-
-    document.querySelectorAll('.sigso-aplicar-estado').forEach(function (boton) {
+    // UI-2 (§5): botonera contextual. Si la accion exige motivo, el primer
+    // clic revela el campo y el segundo (con texto) aplica -- el usuario
+    // nunca descubre el requisito DESPUES de intentar.
+    document.querySelectorAll('.sigso-accion-estado').forEach(function (boton) {
       boton.addEventListener('click', function () {
         var subId = boton.getAttribute('data-subsolicitud');
-        var select = document.querySelector('.sigso-cambiar-estado[data-subsolicitud="' + subId + '"]');
-        var comentario = document.querySelector('.sigso-comentario-estado[data-subsolicitud="' + subId + '"]').value;
-        enviarCambioEstado_(solicitudId, subId, select.value, comentario);
+        var estado = boton.getAttribute('data-estado');
+        var requiereComentario = boton.getAttribute('data-comentario-obligatorio') === '1';
+        var bloqueMotivo = document.querySelector('[data-bloque-motivo="' + subId + '"]');
+        var campoComentario = document.querySelector('.sigso-comentario-estado[data-subsolicitud="' + subId + '"]');
+        var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subId + '"]');
+
+        if (requiereComentario) {
+          if (bloqueMotivo.classList.contains('sigso-oculto')) {
+            bloqueMotivo.classList.remove('sigso-oculto');
+            campoComentario.focus();
+            if (span) span.textContent = 'Escribe el motivo y vuelve a pulsar "' + boton.textContent + '".';
+            return;
+          }
+          if (!campoComentario.value.trim()) {
+            campoComentario.focus();
+            if (span) span.textContent = 'El motivo es obligatorio para esta acción.';
+            return;
+          }
+        }
+        enviarCambioEstado_(solicitudId, subId, estado, campoComentario ? campoComentario.value : '');
       });
     });
 
@@ -2303,15 +2407,26 @@ function renderHeaderSigso(paginaActiva) {
     });
   }
 
+  // UI-1 (§6): el borde izquierdo coloreado lleva el ojo del gerente
+  // directo a los problemas (rojo = atrasada, amarillo = en riesgo).
+  function claseUrgenciaFila_(i) {
+    if (i.cumplimiento.codigo === 'ATRASADA_DESARROLLADOR') return ' class="sigso-fila--atrasada"';
+    if (i.cumplimiento.codigo === 'EN_RIESGO') return ' class="sigso-fila--riesgo"';
+    return '';
+  }
+
   function filaTablero_(i) {
     var diasEsperando = i.cumplimiento.dias_esperando;
     var celdaEsperando = diasEsperando === null || diasEsperando === undefined
       ? '—'
       : (i.semaforo_solicitante ? i.semaforo_solicitante.emoji + ' ' : '') + diasEsperando + ' día(s)';
-    return '<tr data-id="' + i.solicitud_id + '">' +
-      '<td>' + Componentes.escaparHtml(i.solicitud_id + '-' + i.numero_item) + '</td>' +
+    return '<tr data-id="' + i.solicitud_id + '"' + claseUrgenciaFila_(i) + '>' +
+      '<td class="sigso-id">' + Componentes.escaparHtml(i.solicitud_id + '-' + i.numero_item) + '</td>' +
       '<td>' + Componentes.escaparHtml(i.solicitante_nombre || '') + '</td>' +
-      '<td>' + Componentes.escaparHtml(i.desarrollador_asignado || '—') + '</td>' +
+      // UI-1 (§6): nombre legible del responsable (el correo queda como
+      // title al pasar el mouse) -- lo resuelve el backend en getPanel.
+      '<td title="' + Componentes.escaparHtml(i.desarrollador_asignado || '') + '">' +
+      Componentes.escaparHtml(i.desarrollador_nombre || i.desarrollador_asignado || '—') + '</td>' +
       '<td>' + Componentes.badgeEstado(i.estado) + '</td>' +
       '<td>' + Componentes.badgePrioridad(i.prioridad) + '</td>' +
       '<td>' + (i.dias_abierta === null || i.dias_abierta === undefined ? '—' : i.dias_abierta + ' d') + '</td>' +
@@ -2400,7 +2515,7 @@ function renderHeaderSigso(paginaActiva) {
     contenedor.innerHTML = esperando.map(function (i) {
       return '<div class="sigso-fila-reciente" data-id="' + i.solicitud_id + '">' +
         '<div class="sigso-fila-reciente__principal">' +
-        '<strong>' + Componentes.escaparHtml(i.solicitud_id + '-' + i.numero_item) + '</strong> ' +
+        '<strong class="sigso-id">' + Componentes.escaparHtml(i.solicitud_id + '-' + i.numero_item) + '</strong> ' +
         Componentes.escaparHtml(i.titulo) + ' ' +
         Componentes.badge(i.cumplimiento.dias_esperando + ' día(s) esperando', i.cumplimiento.dias_esperando > 5 ? 'P1' : '') +
         '</div>' +

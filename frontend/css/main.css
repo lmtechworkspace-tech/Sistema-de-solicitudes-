@@ -9,6 +9,10 @@
   --gris-oscuro: #2C2C2C;
   --gris-medio: #555555;
   --gris-claro: #F5F5F5;
+  /* UI-1 (§1): fondo de pagina con matiz calido hacia el naranja de marca
+     (en vez del gris plano) -- las tarjetas blancas "flotan" mejor. Es un
+     token aparte de --gris-claro, que sigue siendo el fondo de componentes. */
+  --fondo-pagina: #FAF7F4;
 
   --p1: #C0392B;
   --p2: #E67E22;
@@ -27,7 +31,21 @@ body {
   margin: 0;
   font-family: var(--fuente);
   color: var(--gris-oscuro);
-  background: var(--gris-claro);
+  background: var(--fondo-pagina);
+}
+
+/* UI-1 (§1): numeros de solicitud/item en monoespaciada -- se leen y
+   comparan mejor (SOL-2026-HP-0006 alinea digito a digito). */
+.sigso-id {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.95em;
+  letter-spacing: 0.01em;
+}
+
+/* UI-1 (§1): foco visible por teclado en todo el sistema. */
+:focus-visible {
+  outline: 2px solid var(--azul);
+  outline-offset: 2px;
 }
 
 a {

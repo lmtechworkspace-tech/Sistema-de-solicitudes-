@@ -66,6 +66,7 @@ function calcularPanelGerencia_(filtrosBase) {
     var reCompromisosPorItem = contarPorSubsolicitud_(historialCompromiso);
 
     var ahora = new Date();
+    var nombrePorEmail = mapaNombresUsuarios_();
 
     var items = leerFilas_(SHEETS.SUBSOLICITUDES)
       .filter(function (sub) {
@@ -87,6 +88,9 @@ function calcularPanelGerencia_(filtrosBase) {
           prioridad: sub.prioridad,
           es_cliente: !!solicitud.es_cliente,
           desarrollador_asignado: sub.desarrollador_asignado || solicitud.desarrollador_asignado || '',
+          // UI-1 (§6): nombre legible del responsable para el tablero (el
+          // correo sigue disponible en desarrollador_asignado).
+          desarrollador_nombre: nombrePorEmail[sub.desarrollador_asignado || solicitud.desarrollador_asignado || ''] || '',
           solicitante_nombre: solicitud.solicitante_nombre,
           solicitante_email: solicitud.solicitante_email,
           fecha_creacion: sub.fecha_creacion,
@@ -152,6 +156,22 @@ function calcularKpisGerencia_(items) {
     atraso_promedio_dias: promedio_(diasAtraso),
     sin_comprometer: sinComprometer.length
   };
+}
+
+// UI-1 (§6): email -> nombre desde USUARIOS, tolerante a hoja ausente
+// (tests/instalaciones frescas), mismo criterio que obtenerResponsablesActivos_.
+function mapaNombresUsuarios_() {
+  var filas;
+  try {
+    filas = leerFilas_(SHEETS.USUARIOS);
+  } catch (err) {
+    return {};
+  }
+  var mapa = {};
+  filas.forEach(function (u) {
+    if (u.email && u.nombre) mapa[u.email] = u.nombre;
+  });
+  return mapa;
 }
 
 function promedio_(numeros) {

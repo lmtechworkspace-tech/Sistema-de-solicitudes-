@@ -248,15 +248,26 @@
     });
   }
 
+  // UI-1 (§6): el borde izquierdo coloreado lleva el ojo del gerente
+  // directo a los problemas (rojo = atrasada, amarillo = en riesgo).
+  function claseUrgenciaFila_(i) {
+    if (i.cumplimiento.codigo === 'ATRASADA_DESARROLLADOR') return ' class="sigso-fila--atrasada"';
+    if (i.cumplimiento.codigo === 'EN_RIESGO') return ' class="sigso-fila--riesgo"';
+    return '';
+  }
+
   function filaTablero_(i) {
     var diasEsperando = i.cumplimiento.dias_esperando;
     var celdaEsperando = diasEsperando === null || diasEsperando === undefined
       ? '—'
       : (i.semaforo_solicitante ? i.semaforo_solicitante.emoji + ' ' : '') + diasEsperando + ' día(s)';
-    return '<tr data-id="' + i.solicitud_id + '">' +
-      '<td>' + Componentes.escaparHtml(i.solicitud_id + '-' + i.numero_item) + '</td>' +
+    return '<tr data-id="' + i.solicitud_id + '"' + claseUrgenciaFila_(i) + '>' +
+      '<td class="sigso-id">' + Componentes.escaparHtml(i.solicitud_id + '-' + i.numero_item) + '</td>' +
       '<td>' + Componentes.escaparHtml(i.solicitante_nombre || '') + '</td>' +
-      '<td>' + Componentes.escaparHtml(i.desarrollador_asignado || '—') + '</td>' +
+      // UI-1 (§6): nombre legible del responsable (el correo queda como
+      // title al pasar el mouse) -- lo resuelve el backend en getPanel.
+      '<td title="' + Componentes.escaparHtml(i.desarrollador_asignado || '') + '">' +
+      Componentes.escaparHtml(i.desarrollador_nombre || i.desarrollador_asignado || '—') + '</td>' +
       '<td>' + Componentes.badgeEstado(i.estado) + '</td>' +
       '<td>' + Componentes.badgePrioridad(i.prioridad) + '</td>' +
       '<td>' + (i.dias_abierta === null || i.dias_abierta === undefined ? '—' : i.dias_abierta + ' d') + '</td>' +
@@ -345,7 +356,7 @@
     contenedor.innerHTML = esperando.map(function (i) {
       return '<div class="sigso-fila-reciente" data-id="' + i.solicitud_id + '">' +
         '<div class="sigso-fila-reciente__principal">' +
-        '<strong>' + Componentes.escaparHtml(i.solicitud_id + '-' + i.numero_item) + '</strong> ' +
+        '<strong class="sigso-id">' + Componentes.escaparHtml(i.solicitud_id + '-' + i.numero_item) + '</strong> ' +
         Componentes.escaparHtml(i.titulo) + ' ' +
         Componentes.badge(i.cumplimiento.dias_esperando + ' día(s) esperando', i.cumplimiento.dias_esperando > 5 ? 'P1' : '') +
         '</div>' +

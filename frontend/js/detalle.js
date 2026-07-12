@@ -186,22 +186,32 @@
   // (comentarioObligatorioParaCambio_ en Solicitudes.gs), asi el frontend
   // muestra el campo de motivo antes de que el usuario intente aplicar el
   // cambio en vez de que le rebote despues.
+  // UI-2 (§5): cada transicion valida se ofrece como un boton con NOMBRE DE
+  // ACCION ("Iniciar desarrollo", "Pedir informacion"...) en vez del combo
+  // "Cambiar estado a... + Aplicar" -- menos pasos y sin ambiguedad sobre
+  // que va a pasar. Las etiquetas describen la accion, no el estado destino.
+  var VERBO_TRANSICION = {
+    S01: 'Devolver a Nueva',
+    S02: 'Marcar recibida', S03: 'Pasar a revisión', S04: 'Aprobar',
+    S05: 'Iniciar desarrollo', S06: 'Pedir información', S07: 'Pasar a pruebas',
+    S08: 'Marcar terminada', S09: 'Cerrar', S10: 'Rechazar', S11: 'Cancelar'
+  };
+
   function renderAccionesItem_(sub, opcionesTransicion) {
     var selectorEstado = '';
     if (opcionesTransicion.length > 0) {
-      var opciones = opcionesTransicion.map(function (t) {
-        return '<option value="' + t.estado + '" data-comentario-obligatorio="' + (t.comentario_obligatorio ? '1' : '0') + '">' +
-          t.estado + ' — ' + (typeof SIGSO_ESTADOS_LABEL !== 'undefined' ? SIGSO_ESTADOS_LABEL[t.estado] : t.estado) + '</option>';
-      }).join('');
+      var botones = opcionesTransicion.map(function (t) {
+        return '<button type="button" class="sigso-boton--secundario sigso-accion-estado" ' +
+          'data-subsolicitud="' + sub.subsolicitud_id + '" data-estado="' + t.estado + '" ' +
+          'data-comentario-obligatorio="' + (t.comentario_obligatorio ? '1' : '0') + '">' +
+          (VERBO_TRANSICION[t.estado] || t.estado) + '</button>';
+      }).join(' ');
       selectorEstado =
-        '<div class="sigso-acciones-item">' +
-        '<select class="sigso-cambiar-estado" data-subsolicitud="' + sub.subsolicitud_id + '">' +
-        '<option value="">Cambiar estado a...</option>' + opciones +
-        '</select>' +
-        '<input type="text" class="sigso-comentario-estado sigso-oculto" data-subsolicitud="' + sub.subsolicitud_id + '" placeholder="Motivo (obligatorio para esta transicion)">' +
-        '<button type="button" class="sigso-boton--secundario sigso-aplicar-estado" data-subsolicitud="' + sub.subsolicitud_id + '" disabled>Aplicar</button>' +
-        '<span class="sigso-resultado-accion" data-subsolicitud="' + sub.subsolicitud_id + '"></span>' +
-        '</div>';
+        '<div class="sigso-acciones-item sigso-botonera-estado">' + botones + '</div>' +
+        '<div class="sigso-acciones-item sigso-oculto" data-bloque-motivo="' + sub.subsolicitud_id + '">' +
+        '<input type="text" class="sigso-comentario-estado" data-subsolicitud="' + sub.subsolicitud_id + '" placeholder="Motivo (obligatorio para esta acción)">' +
+        '</div>' +
+        '<span class="sigso-resultado-accion" data-subsolicitud="' + sub.subsolicitud_id + '"></span>';
     }
 
     // v2.1 (Fase A): comprometer/ajustar la fecha es una accion propia,
@@ -251,15 +261,34 @@
       };
     }).concat((detalle.comentarios || []).map(function (c) {
       return { tipo: 'comentario', timestamp: c.timestamp, usuario: c.usuario, texto: c.texto, esInterno: c.es_interno };
+    })).concat((detalle.historial_compromiso || []).map(function (h) {
+      // UI-2 (§5): los re-compromisos de fecha entran al timeline unificado
+      // (antes solo se veian dentro de cada item).
+      return {
+        tipo: 'compromiso', timestamp: h.timestamp, usuario: h.usuario,
+        texto: 'Fecha comprometida: ' + String(h.fecha_nueva).replace('T', ' '),
+        comentario: h.motivo
+      };
     })).sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
+
+    // UI-2 (§5): icono por tipo de evento para escanear el timeline sin leer.
+    function iconoEvento_(e) {
+      if (e.tipo === 'estado') return '🔄';
+      if (e.tipo === 'compromiso') return '📅';
+      return e.esInterno ? '🔒' : '💬';
+    }
 
     var feed = eventos.length === 0
       ? Componentes.vacio('Sin actividad todavia.')
       : '<ul class="sigso-timeline">' + eventos.map(function (e) {
-        var etiqueta = e.tipo === 'estado' ? '<strong>' + e.texto + '</strong>' : 'Comentario' + (e.esInterno ? ' (interno)' : '');
-        return '<li' + (e.tipo === 'comentario' && e.esInterno ? ' class="sigso-comentario--interno"' : '') + '>' +
+        var etiqueta = e.tipo === 'comentario'
+          ? 'Comentario' + (e.esInterno ? ' (interno)' : '')
+          : '<strong>' + e.texto + '</strong>';
+        var detalleTexto = e.tipo === 'comentario' ? e.texto : e.comentario;
+        return '<li class="sigso-timeline__evento--' + e.tipo + (e.tipo === 'comentario' && e.esInterno ? ' sigso-comentario--interno' : '') + '">' +
+          '<span class="sigso-timeline__icono">' + iconoEvento_(e) + '</span> ' +
           etiqueta + ' — ' + Componentes.escaparHtml(e.usuario) + ' (' + new Date(e.timestamp).toLocaleString('es-CL') + ')' +
-          ((e.tipo === 'estado' ? e.comentario : e.texto) ? '<br>' + Componentes.escaparHtml(e.tipo === 'estado' ? e.comentario : e.texto) : '') +
+          (detalleTexto ? '<br>' + Componentes.escaparHtml(detalleTexto) : '') +
           '</li>';
       }).join('') + '</ul>';
 
@@ -280,24 +309,32 @@
   // --- Cableado de acciones inline ---------------------------------------
 
   function wireAcciones_(solicitudId) {
-    document.querySelectorAll('.sigso-cambiar-estado').forEach(function (select) {
-      select.addEventListener('change', function () {
-        var subId = select.getAttribute('data-subsolicitud');
-        var boton = document.querySelector('.sigso-aplicar-estado[data-subsolicitud="' + subId + '"]');
-        var campoComentario = document.querySelector('.sigso-comentario-estado[data-subsolicitud="' + subId + '"]');
-        var opcionElegida = select.options[select.selectedIndex];
-        var requiereComentario = opcionElegida && opcionElegida.getAttribute('data-comentario-obligatorio') === '1';
-        campoComentario.classList.toggle('sigso-oculto', !requiereComentario);
-        boton.disabled = !select.value;
-      });
-    });
-
-    document.querySelectorAll('.sigso-aplicar-estado').forEach(function (boton) {
+    // UI-2 (§5): botonera contextual. Si la accion exige motivo, el primer
+    // clic revela el campo y el segundo (con texto) aplica -- el usuario
+    // nunca descubre el requisito DESPUES de intentar.
+    document.querySelectorAll('.sigso-accion-estado').forEach(function (boton) {
       boton.addEventListener('click', function () {
         var subId = boton.getAttribute('data-subsolicitud');
-        var select = document.querySelector('.sigso-cambiar-estado[data-subsolicitud="' + subId + '"]');
-        var comentario = document.querySelector('.sigso-comentario-estado[data-subsolicitud="' + subId + '"]').value;
-        enviarCambioEstado_(solicitudId, subId, select.value, comentario);
+        var estado = boton.getAttribute('data-estado');
+        var requiereComentario = boton.getAttribute('data-comentario-obligatorio') === '1';
+        var bloqueMotivo = document.querySelector('[data-bloque-motivo="' + subId + '"]');
+        var campoComentario = document.querySelector('.sigso-comentario-estado[data-subsolicitud="' + subId + '"]');
+        var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subId + '"]');
+
+        if (requiereComentario) {
+          if (bloqueMotivo.classList.contains('sigso-oculto')) {
+            bloqueMotivo.classList.remove('sigso-oculto');
+            campoComentario.focus();
+            if (span) span.textContent = 'Escribe el motivo y vuelve a pulsar "' + boton.textContent + '".';
+            return;
+          }
+          if (!campoComentario.value.trim()) {
+            campoComentario.focus();
+            if (span) span.textContent = 'El motivo es obligatorio para esta acción.';
+            return;
+          }
+        }
+        enviarCambioEstado_(solicitudId, subId, estado, campoComentario ? campoComentario.value : '');
       });
     });
 

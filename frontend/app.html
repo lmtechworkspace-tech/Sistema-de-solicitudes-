@@ -55,7 +55,9 @@
           </select>
         </div>
         <div class="sigso-campo">
-          <button type="button" class="sigso-boton" id="btn-actualizar-dashboard">Actualizar</button>
+          <!-- UI-1 (§1): "Actualizar" es acción de apoyo, no la principal
+               de la pantalla -- pasa a estilo secundario. -->
+          <button type="button" class="sigso-boton--secundario" id="btn-actualizar-dashboard">Actualizar</button>
         </div>
       </div>
 
@@ -111,7 +113,7 @@
           <input type="text" id="ger-filtro-solicitante" placeholder="nombre o correo">
         </div>
         <div class="sigso-campo">
-          <button type="button" class="sigso-boton" id="btn-actualizar-gerencia">Actualizar</button>
+          <button type="button" class="sigso-boton--secundario" id="btn-actualizar-gerencia">Actualizar</button>
         </div>
       </div>
 
@@ -144,6 +146,11 @@
             </select>
           </div>
           <button type="button" class="sigso-boton--secundario" id="btn-imprimir-gerencia">Descargar / Imprimir PDF</button>
+        </div>
+        <!-- UI-1 (§6): encabezado institucional del reporte impreso. -->
+        <div class="sigso-solo-imprimir sigso-encabezado-reporte">
+          <h1>SIGSO — Informe de seguimiento de solicitudes</h1>
+          <p>HomePymes / RLD &middot; Panel de Control de Gerencia</p>
         </div>
         <p class="sigso-ayuda sigso-solo-imprimir" id="ger-fecha-reporte"></p>
         <div id="ger-contenedor-tablero"></div>

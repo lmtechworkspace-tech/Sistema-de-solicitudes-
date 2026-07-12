@@ -211,6 +211,25 @@ test('Gerencia.getPanel (v3.0): semaforo_solicitante rojo cuando lleva >= 5 dias
   assert.equal(item.semaforo_solicitante.codigo, 'CERCA_CIERRE_AUTOMATICO');
 });
 
+test('Gerencia.getPanel (UI-1): resuelve desarrollador_nombre desde USUARIOS (y tolera hoja ausente)', () => {
+  const ctx = loadConSchema();
+  seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS, [
+    ['U1', 'Dev Uno', 'dev1@homepymes.cl', 'HP', 'DEV', true, '', 'sistema']
+  ]);
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { desarrollador_asignado: 'dev1@homepymes.cl' });
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'g@homepymes.cl' });
+  assert.equal(panel.items[0].desarrollador_nombre, 'Dev Uno');
+
+  // Sin la hoja USUARIOS (instalacion fresca/tests) no debe romper.
+  const ctx2 = loadConSchema();
+  seedSolicitud(ctx2);
+  seedSubsolicitud(ctx2, { desarrollador_asignado: 'x@homepymes.cl' });
+  const panel2 = ctx2.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'g@homepymes.cl' });
+  assert.equal(panel2.items[0].desarrollador_nombre, '');
+});
+
 test('Gerencia.getPanel (v3.0): semaforo_solicitante verde cuando recien se entrego (< 1 dia esperando)', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx, { estado_derivado: 'S08' });

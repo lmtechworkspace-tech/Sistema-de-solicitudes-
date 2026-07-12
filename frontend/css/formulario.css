@@ -64,6 +64,7 @@
   font-size: 1.5rem;
   font-weight: 700;
   color: var(--azul);
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
 }
 
 .sigso-resumen-whatsapp {

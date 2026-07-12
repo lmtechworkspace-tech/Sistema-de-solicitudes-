@@ -17,6 +17,10 @@
   --gris-oscuro: #2C2C2C;
   --gris-medio: #555555;
   --gris-claro: #F5F5F5;
+  /* UI-1 (§1): fondo de pagina con matiz calido hacia el naranja de marca
+     (en vez del gris plano) -- las tarjetas blancas "flotan" mejor. Es un
+     token aparte de --gris-claro, que sigue siendo el fondo de componentes. */
+  --fondo-pagina: #FAF7F4;
 
   --p1: #C0392B;
   --p2: #E67E22;
@@ -35,7 +39,21 @@ body {
   margin: 0;
   font-family: var(--fuente);
   color: var(--gris-oscuro);
-  background: var(--gris-claro);
+  background: var(--fondo-pagina);
+}
+
+/* UI-1 (§1): numeros de solicitud/item en monoespaciada -- se leen y
+   comparan mejor (SOL-2026-HP-0006 alinea digito a digito). */
+.sigso-id {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.95em;
+  letter-spacing: 0.01em;
+}
+
+/* UI-1 (§1): foco visible por teclado en todo el sistema. */
+:focus-visible {
+  outline: 2px solid var(--azul);
+  outline-offset: 2px;
 }
 
 a {
@@ -570,6 +588,28 @@ button {
   font-size: 0.9rem;
 }
 
+/* UI-2 (§5): icono por tipo de evento + punto coloreado -- el timeline se
+   escanea sin leer (estado = naranja, compromiso = azul, comentario = gris). */
+.sigso-timeline__icono {
+  margin-right: 0.15rem;
+}
+
+.sigso-timeline .sigso-timeline__evento--estado::before { background: var(--naranja) !important; }
+.sigso-timeline .sigso-timeline__evento--compromiso::before { background: var(--azul) !important; }
+.sigso-timeline .sigso-timeline__evento--comentario::before { background: var(--gris-medio) !important; }
+
+/* UI-2 (§5): botonera de transiciones -- botones de accion con nombre. */
+.sigso-botonera-estado {
+  gap: 0.4rem;
+}
+
+.sigso-botonera-estado .sigso-accion-estado {
+  flex: 0 0 auto;
+  min-width: 0;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.9rem;
+}
+
 .sigso-timeline li::before {
   content: '';
   position: absolute;
@@ -906,6 +946,12 @@ button {
   font-weight: 700;
 }
 
+/* UI-1 (§6): urgencia visible sin leer -- borde izquierdo + tinte suave. */
+.sigso-fila--atrasada > td:first-child { border-left: 4px solid var(--p1); }
+.sigso-fila--atrasada > td { background: rgba(192, 57, 43, 0.06); }
+.sigso-fila--riesgo > td:first-child { border-left: 4px solid var(--p3); }
+.sigso-fila--riesgo > td { background: rgba(241, 196, 15, 0.08); }
+
 /* Semaforo del solicitante (distinto del semaforo de cumplimiento del
    desarrollador, que ya usa las clases sigso-gantt-barra--*): se muestra
    junto a "Dias esperando al solicitante" en el tablero. */
@@ -915,6 +961,20 @@ button {
 
 .sigso-solo-imprimir {
   display: none;
+}
+
+.sigso-encabezado-reporte h1 {
+  margin: 0 0 0.15rem;
+  font-size: 1.3rem;
+  color: var(--azul);
+  border-bottom: 3px solid var(--naranja);
+  padding-bottom: 0.35rem;
+}
+
+.sigso-encabezado-reporte p {
+  margin: 0.25rem 0 0.75rem;
+  font-size: 0.8rem;
+  color: var(--gris-medio);
 }
 
 /* Horizontal: el tablero tiene 10 columnas -- en vertical (carta/A4) el
