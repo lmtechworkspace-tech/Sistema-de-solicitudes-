@@ -617,11 +617,21 @@ function validarSolicitud_(data) {
     }
   }
 
-  // RN-002: sin empresa y plataforma no se puede enviar. modulo/tipo se
-  // exigen por item (Fase 10, ver validacion de subsolicitudes mas abajo):
-  // una solicitud real mezcla tipos y modulos distintos por item.
+  // v3.0 (Fase 5, formulario con/sin plataforma): una solicitud puede estar
+  // asociada a una plataforma (flujo de siempre) o no (otro tipo de pedido,
+  // p.ej. administrativo, que se rutea solo por area). asociada_plataforma
+  // llega false SOLO en ese segundo caso; los clientes viejos no la mandan,
+  // asi que undefined/null se trata como true (retrocompatible: se sigue
+  // exigiendo plataforma/modulo como antes).
+  var asociadaPlataforma = data.asociada_plataforma !== false;
+
+  // RN-002: sin empresa no se puede enviar. La plataforma solo es obligatoria
+  // cuando la solicitud esta asociada a una; modulo/tipo se exigen por item
+  // (Fase 10, ver validacion de subsolicitudes mas abajo).
   requerido_('empresa_id', data.empresa_id);
-  requerido_('plataforma', data.plataforma);
+  if (asociadaPlataforma) {
+    requerido_('plataforma', data.plataforma);
+  }
 
   // Necesario para notificaciones y magic link (§12.1); sin numero de RN
   // propio pero indispensable para que el resto del flujo funcione.
@@ -654,14 +664,16 @@ function validarSolicitud_(data) {
         });
       }
       // RN-002 (Fase 10): tipo y modulo se exigen por item, no una sola vez
-      // por solicitud.
+      // por solicitud. v3.0 (Fase 5): el modulo solo se exige si la solicitud
+      // esta asociada a una plataforma -- sin plataforma no hay modulo que
+      // elegir (el pedido se clasifica solo por tipo + area).
       if (!item || !item.tipo || String(item.tipo).trim() === '') {
         errores.push({
           campo: 'subsolicitudes[' + idx + '].tipo',
           mensaje: 'Tipo obligatorio (RN-002)'
         });
       }
-      if (!item || !item.modulo || String(item.modulo).trim() === '') {
+      if (asociadaPlataforma && (!item || !item.modulo || String(item.modulo).trim() === '')) {
         errores.push({
           campo: 'subsolicitudes[' + idx + '].modulo',
           mensaje: 'Modulo obligatorio (RN-002)'
@@ -914,14 +926,19 @@ function generarResumenWhatsapp_(solicitudId, data, prioridad) {
     resumen = data.subsolicitudes.length + ' items — ver detalle en correo';
   }
 
-  return [
+  // v3.0 (Fase 5): sin plataforma asociada no hay "Sistema/Modulo" que
+  // mostrar -- se omiten esas dos lineas para no dejar campos en blanco.
+  var lineas = [
     '📋 SOLICITUD N° ' + solicitudId,
     (PRIORIDAD_EMOJI[prioridad] || '') + ' PRIORIDAD: ' + (PRIORIDAD_ETIQUETA[prioridad] || prioridad),
-    '🏢 Empresa: ' + data.empresa_id,
-    '💻 Sistema: ' + data.plataforma,
-    '📦 Modulo: ' + (primerItem.modulo || ''),
-    '👤 Solicitante: ' + data.solicitante_nombre,
-    '📝 Resumen: ' + resumen,
-    '📧 Revisar correo para detalle completo.'
-  ].join('\n');
+    '🏢 Empresa: ' + data.empresa_id
+  ];
+  if (data.plataforma) {
+    lineas.push('💻 Sistema: ' + data.plataforma);
+    lineas.push('📦 Modulo: ' + (primerItem.modulo || ''));
+  }
+  lineas.push('👤 Solicitante: ' + data.solicitante_nombre);
+  lineas.push('📝 Resumen: ' + resumen);
+  lineas.push('📧 Revisar correo para detalle completo.');
+  return lineas.join('\n');
 }

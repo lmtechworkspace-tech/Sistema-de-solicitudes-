@@ -42,6 +42,10 @@
     // etc. El modo es global al formulario (no por item): mas simple de
     // entender para el solicitante que un flag por item.
     modo: 'rapido',
+    // v3.0 (Fase 5): true = solicitud asociada a una plataforma (elige
+    // plataforma + modulo por item, flujo de siempre); false = otro tipo de
+    // pedido (sin plataforma ni modulo, se clasifica por tipo + area).
+    asociadaPlataforma: true,
     catalogos: null,
     subsolicitudActivaIdx: 0,
     subsolicitudes: [nuevaSubsolicitud_()],
@@ -71,6 +75,7 @@
     cargarCatalogos_();
     renderStepper_();
     renderSelectorModo_();
+    renderSelectorPlataformaAsociada_();
     renderSubsolicitudes_();
 
     document.getElementById('form-solicitud').addEventListener('submit', manejarSubmit_);
@@ -78,6 +83,16 @@
       boton.addEventListener('click', function () {
         estado.modo = boton.getAttribute('data-modo');
         renderSelectorModo_();
+        renderSubsolicitudes_();
+        guardarBorrador_();
+      });
+    });
+    // v3.0 (Fase 5): al cambiar "asociada a plataforma?" se muestra/oculta el
+    // selector de plataforma y la cascada de modulo por item.
+    document.querySelectorAll('#selector-plataforma-asociada [data-asociada]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        estado.asociadaPlataforma = boton.getAttribute('data-asociada') === 'si';
+        renderSelectorPlataformaAsociada_();
         renderSubsolicitudes_();
         guardarBorrador_();
       });
@@ -129,11 +144,29 @@
     });
   }
 
+  // v3.0 (Fase 5): resalta el chip activo y muestra/oculta el select de
+  // plataforma. Cuando no está asociada a plataforma, el select deja de ser
+  // obligatorio (y la cascada de módulo desaparece de cada item).
+  function renderSelectorPlataformaAsociada_() {
+    document.querySelectorAll('#selector-plataforma-asociada [data-asociada]').forEach(function (boton) {
+      var activo = (boton.getAttribute('data-asociada') === 'si') === estado.asociadaPlataforma;
+      boton.classList.toggle('sigso-chip--activo', activo);
+    });
+    var fila = document.getElementById('fila-plataforma');
+    var select = document.getElementById('campo-plataforma');
+    fila.classList.toggle('sigso-oculto', !estado.asociadaPlataforma);
+    select.required = estado.asociadaPlataforma;
+    if (!estado.asociadaPlataforma) {
+      select.value = '';
+    }
+  }
+
   function irAPaso2_() {
-    var camposObligatorios = [
-      'campo-empresa', 'campo-plataforma', 'campo-solicitante-nombre',
-      'campo-solicitante-cargo', 'campo-solicitante-email'
-    ];
+    var camposObligatorios = ['campo-empresa'];
+    if (estado.asociadaPlataforma) {
+      camposObligatorios.push('campo-plataforma');
+    }
+    camposObligatorios.push('campo-solicitante-nombre', 'campo-solicitante-cargo', 'campo-solicitante-email');
     if (document.getElementById('campo-es-cliente').checked) {
       camposObligatorios.push('campo-empresa-cliente', 'campo-contacto-cliente', 'campo-correo-cliente');
     }
@@ -150,11 +183,14 @@
 
   function irAPaso3_() {
     var faltantes = estado.subsolicitudes.some(function (item) {
-      return !item.titulo.trim() || !item.descripcion.trim() || !item.tipo || !moduloSeleccionadoFinalItem_(item);
+      var faltaModulo = estado.asociadaPlataforma && !moduloSeleccionadoFinalItem_(item);
+      return !item.titulo.trim() || !item.descripcion.trim() || !item.tipo || faltaModulo;
     });
     if (faltantes) {
-      document.getElementById('alerta-paso2').innerHTML =
-        Componentes.alerta('Completa título, descripción, tipo y módulo de todos los items antes de continuar.', 'error');
+      var mensaje = estado.asociadaPlataforma
+        ? 'Completa título, descripción, tipo y módulo de todos los items antes de continuar.'
+        : 'Completa título, descripción y tipo de todos los items antes de continuar.';
+      document.getElementById('alerta-paso2').innerHTML = Componentes.alerta(mensaje, 'error');
       return;
     }
     document.getElementById('alerta-paso2').innerHTML = '';
@@ -408,6 +444,10 @@
   }
 
   function renderCascadaModuloItem_(item, idx) {
+    // v3.0 (Fase 5): sin plataforma asociada no hay módulo que elegir.
+    if (!estado.asociadaPlataforma) {
+      return '';
+    }
     var raices = raicesModulo_();
     var submodulos = hijosModulo_(item.modulo);
     var items2 = hijosModulo_(item.submodulo);
@@ -704,7 +744,10 @@
       // (crearSolicitud no necesita saber en que modo se cargo el formulario).
       _modo: estado.modo,
       empresa_id: document.getElementById('campo-empresa').value,
-      plataforma: document.getElementById('campo-plataforma').value,
+      // v3.0 (Fase 5): false = otro tipo de solicitud (sin plataforma ni
+      // módulo). El backend usa esta bandera para no exigir plataforma/módulo.
+      asociada_plataforma: estado.asociadaPlataforma,
+      plataforma: estado.asociadaPlataforma ? document.getElementById('campo-plataforma').value : '',
       // v3.0 (Fase 1): area a la que va dirigida la solicitud (default para
       // todos los items). '' = "No estoy seguro" -> bandeja de triage.
       area: document.getElementById('campo-area').value,
@@ -761,6 +804,8 @@
     try {
       var datos = JSON.parse(crudo);
       estado.modo = datos._modo === 'completo' ? 'completo' : 'rapido';
+      // v3.0 (Fase 5): borradores viejos no traen la bandera -> true (asociada).
+      estado.asociadaPlataforma = datos.asociada_plataforma !== false;
       document.getElementById('campo-empresa').value = datos.empresa_id || '';
       document.getElementById('campo-plataforma').value = datos.plataforma || '';
       // v3.0 (Fase 1): el valor se re-aplica; poblarAreas_ (tras cargar

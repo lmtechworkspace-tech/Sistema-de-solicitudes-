@@ -39,7 +39,19 @@
           <select id="campo-empresa" required></select>
         </div>
 
+        <!-- v3.0 (Fase 5): la solicitud puede estar asociada a una plataforma
+             (flujo de siempre: elige plataforma y módulo por ítem) o no (otro
+             tipo de pedido, se clasifica solo por tipo + área). -->
         <div class="sigso-campo">
+          <label>&iquest;Tu solicitud est&aacute; asociada a una plataforma?</label>
+          <div class="sigso-chips" id="selector-plataforma-asociada">
+            <button type="button" class="sigso-chip" data-asociada="si">S&iacute;, a una plataforma</button>
+            <button type="button" class="sigso-chip" data-asociada="no">No, es otro tipo de solicitud</button>
+          </div>
+          <p class="sigso-ayuda">Si es sobre un sistema/plataforma, elige cu&aacute;l. Si no (por ejemplo un pedido administrativo o de otra &aacute;rea), deja "No" y solo indica el &aacute;rea a la que va dirigida.</p>
+        </div>
+
+        <div class="sigso-campo" id="fila-plataforma">
           <label for="campo-plataforma">Plataforma</label>
           <select id="campo-plataforma" required></select>
         </div>

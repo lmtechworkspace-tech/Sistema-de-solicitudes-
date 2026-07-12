@@ -488,3 +488,61 @@ test('generarResumenWhatsapp_ indica la cantidad de items en vez de listarlos (R
 
   assert.ok(resultado.resumen_whatsapp.includes('📝 Resumen: 2 items — ver detalle en correo'));
 });
+
+// v3.0 (Fase 5): solicitud "sin plataforma" (otro tipo de pedido, se
+// clasifica por tipo + area). asociada_plataforma:false relaja la
+// obligatoriedad de plataforma (solicitud) y modulo (por item).
+
+test('crearSolicitud (v3.0): sin plataforma asociada NO exige plataforma ni modulo', () => {
+  const ctx = loadIntakeConSchema();
+  const resultado = ctx.Solicitudes.crearSolicitud(datosValidos({
+    asociada_plataforma: false,
+    plataforma: '',
+    fecha_propuesta: '', // el item de abajo no es P1, no requiere fecha+hora
+    subsolicitudes: [
+      { titulo: 'Pedido administrativo', descripcion: 'Necesito acceso a la carpeta X', impacto: 'PLANIFICADO', tipo: 'CON' }
+    ]
+  }));
+
+  assert.match(resultado.solicitud_id, /^SOL-\d{4}-HP-0001$/);
+  assert.equal(resultado.estado, 'S01');
+  const solicitud = ctx.leerFilas_('SOLICITUDES')[0];
+  assert.equal(solicitud.plataforma, '');
+  const sub = ctx.leerFilas_('SUBSOLICITUDES')[0];
+  assert.equal(sub.modulo, '');
+  assert.equal(sub.tipo, 'CON');
+});
+
+test('crearSolicitud (v3.0): sin plataforma, el resumen WhatsApp omite Sistema/Modulo', () => {
+  const ctx = loadIntakeConSchema();
+  const resultado = ctx.Solicitudes.crearSolicitud(datosValidos({
+    asociada_plataforma: false,
+    plataforma: '',
+    fecha_propuesta: '',
+    subsolicitudes: [
+      { titulo: 'Pedido', descripcion: 'Algo no técnico', impacto: 'PLANIFICADO', tipo: 'CON' }
+    ]
+  }));
+
+  assert.ok(resultado.resumen_whatsapp.indexOf('💻 Sistema:') === -1);
+  assert.ok(resultado.resumen_whatsapp.indexOf('📦 Modulo:') === -1);
+  assert.ok(resultado.resumen_whatsapp.indexOf('🏢 Empresa: HP') !== -1);
+});
+
+test('crearSolicitud (v3.0): CON plataforma (o sin la bandera) SIGUE exigiendo plataforma y modulo', () => {
+  const ctx = loadIntakeConSchema();
+  // Sin la bandera (cliente viejo) y sin plataforma -> debe rechazar.
+  const sinPlataforma = ctx.Solicitudes.crearSolicitud(datosValidos({ plataforma: '' }));
+  assert.equal(sinPlataforma._validationError, true);
+  assert.ok(sinPlataforma.fields.some((f) => f.campo === 'plataforma'));
+
+  // asociada_plataforma:true (explicito) sin modulo en el item -> rechaza modulo.
+  const sinModulo = ctx.Solicitudes.crearSolicitud(datosValidos({
+    asociada_plataforma: true,
+    subsolicitudes: [
+      { titulo: 'x', descripcion: 'y', impacto: 'PLANIFICADO', tipo: 'ERR' } // sin modulo
+    ]
+  }));
+  assert.equal(sinModulo._validationError, true);
+  assert.ok(sinModulo.fields.some((f) => f.campo === 'subsolicitudes[0].modulo'));
+});

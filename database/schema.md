@@ -231,6 +231,28 @@ persona, no siempre a Leo.
 - Si el ítem no tiene `desarrollador_asignado` (instalación previa a v3.0,
   o sin área configurada), cae al buzón por defecto — retrocompatible.
 
+## Solicitud con o sin plataforma (v3.0 Fase 5 — sin columnas ni hojas nuevas)
+
+El formulario público (`frontend/index.html` + `frontend/js/formulario.js`)
+pregunta al inicio **"¿Tu solicitud está asociada a una plataforma?"**:
+
+- **Sí** (por defecto, flujo de siempre): se elige `plataforma` y, por cada
+  ítem, la cascada de `modulo`. `plataforma` es obligatoria y cada ítem
+  exige `modulo` — igual que antes.
+- **No** (otro tipo de pedido, p. ej. administrativo): se oculta el selector
+  de plataforma y la cascada de módulo. La solicitud se clasifica solo por
+  `tipo` (por ítem) + `área` (ruteo). `plataforma` queda vacía y los ítems
+  quedan sin `modulo`.
+
+El request lleva la bandera `asociada_plataforma` (boolean). En
+`backend/intake/Solicitudes.gs`, `validarSolicitud_` solo exige `plataforma`
+(nivel solicitud) y `modulo` (por ítem) cuando `asociada_plataforma !== false`
+— los clientes viejos no mandan la bandera, así que `undefined` se trata como
+`true` (retrocompatible). El resumen de WhatsApp omite las líneas "Sistema" y
+"Módulo" cuando no hay plataforma. **No se agregan columnas**: una `plataforma`
+vacía en `SOLICITUDES` ya identifica a estas solicitudes (las asociadas
+siempre la traen).
+
 ## Mis solicitudes (v3.0 Fase 3 — sin columnas ni hojas nuevas)
 
 `documentacion/SIGSO-v3.0-multi-responsable-y-control.md` §4. Nueva vista en
