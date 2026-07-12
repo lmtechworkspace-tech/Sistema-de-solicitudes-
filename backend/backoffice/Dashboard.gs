@@ -47,12 +47,16 @@ var Dashboard = {
     if (cacheado) {
       var datosCacheados = JSON.parse(cacheado);
       datosCacheados.rol_actual = contexto ? contexto.rol : '';
+      // v3.0 (Fase 2): igual que rol_actual, se agrega DESPUES del cache --
+      // no depende de los filtros/resultados cacheados, solo de USUARIOS.
+      agregarResponsablesSiCorresponde_(datosCacheados, contexto);
       return datosCacheados;
     }
 
     var datos = calcularKpis_(filtrosEfectivos);
     cache.put(claveCache, JSON.stringify(datos), CACHE_TTL_SEGUNDOS);
     datos.rol_actual = contexto ? contexto.rol : '';
+    agregarResponsablesSiCorresponde_(datos, contexto);
     return datos;
   },
 
@@ -66,10 +70,56 @@ var Dashboard = {
 };
 
 function aplicarAmbitoRol_(filtros, contexto) {
-  if (contexto && contexto.rol === 'DEV' && !filtros.estado) {
+  if (!contexto) {
+    return filtros;
+  }
+  // v3.0 (Fase 2, refuerzo de acceso): el auto-scope de un responsable
+  // individual (Gestor tecnico) a su propia bandeja ya NO se cancela si
+  // ademas filtra por estado -- antes "!filtros.estado" dejaba ver TODAS
+  // las solicitudes de cualquier estado con solo agregar ese filtro, lo que
+  // contradice "cada responsable ve solo lo suyo" (documentacion/SIGSO-
+  // v3.0-multi-responsable-y-control.md §5).
+  if (contexto.rol === 'DEV') {
     return Object.assign({}, filtros, { vistaDev: contexto.email });
   }
+  // ADM/GERENCIA: por defecto ven todo (sin acotar); si eligen una bandeja
+  // puntual desde el selector "¿Que bandeja ver?" del Dashboard, se acota a
+  // esa persona -- mismo mecanismo de filtrado (vistaDev) que ya usa
+  // coincideFiltros_ para el auto-scope del Desarrollador.
+  if (filtros.verBandeja) {
+    return Object.assign({}, filtros, { vistaDev: filtros.verBandeja });
+  }
   return filtros;
+}
+
+// v3.0 (Fase 2): solo ADM/GERENCIA ven el selector de bandeja -- son los
+// unicos perfiles que pueden mirar la bandeja de otra persona (§5, §8 de la
+// especificacion). Un responsable individual ya esta auto-acotado a la
+// suya (aplicarAmbitoRol_) y no necesita elegir entre una lista.
+function agregarResponsablesSiCorresponde_(datos, contexto) {
+  if (contexto && (contexto.rol === 'ADM' || contexto.rol === 'GERENCIA')) {
+    datos.responsables = obtenerResponsablesActivos_();
+  }
+}
+
+// Personas que pueden tener una bandeja propia (Gestor/Analista o Gestor
+// tecnico, activos) -- son quienes CAT_AREAS.responsable_email puede
+// apuntar. ADM/GERENCIA no aparecen: no son destino de ruteo, son quienes
+// consultan la bandeja de otros.
+function obtenerResponsablesActivos_() {
+  var filas;
+  try {
+    filas = leerFilas_(SHEETS.USUARIOS);
+  } catch (err) {
+    return [];
+  }
+  return filas
+    .filter(function (u) {
+      var activo = u.activo === true || u.activo === 'TRUE' || u.activo === 1;
+      return activo && (u.rol === 'DEV' || u.rol === 'ANA');
+    })
+    .map(function (u) { return { email: u.email, nombre: u.nombre || u.email }; })
+    .sort(function (a, b) { return a.nombre.localeCompare(b.nombre); });
 }
 
 function calcularKpis_(filtros) {

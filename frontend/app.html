@@ -20,6 +20,15 @@
            muestra segun rol_actual). -->
       <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-ver-gerencia">Ver Panel de Gerencia</button>
 
+      <!-- v3.0 (Fase 2, multi-bandeja): un responsable individual (DEV) ya
+           esta auto-acotado a la suya -- solo se le avisa. ADM/GERENCIA ven
+           un selector para elegir de quien mirar la bandeja. -->
+      <p class="sigso-ayuda sigso-oculto" id="aviso-mi-bandeja">Estás viendo tu propia bandeja (solo las solicitudes asignadas a vos).</p>
+      <div class="sigso-campo sigso-oculto" id="fila-bandeja">
+        <label for="filtro-bandeja">Ver bandeja de</label>
+        <select id="filtro-bandeja"><option value="">Todas (sin acotar)</option></select>
+      </div>
+
       <div class="sigso-filtros">
         <div class="sigso-campo">
           <label for="filtro-empresa">Empresa</label>

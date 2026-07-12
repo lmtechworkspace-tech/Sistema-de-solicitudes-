@@ -192,6 +192,25 @@ la hoja aún no se creó (instalación previa a v3.0), cae al buzón por defecto
 > el objetivo del ruteo: quien recibe la solicitud se entera. Ítems que caen
 > en el mismo responsable generan un solo aviso (dedup por destinatario).
 
+## Bandeja por responsable (v3.0 Fase 2 — sin columnas ni hojas nuevas)
+
+`Dashboard.getData` (`backend/backoffice/Dashboard.gs`) resuelve el **ámbito**
+según el rol de quien consulta (`documentacion/SIGSO-v3.0-multi-responsable-
+y-control.md` §5):
+
+- **Responsable individual (`DEV`)**: `aplicarAmbitoRol_` lo acota SIEMPRE a
+  `desarrollador_asignado === su correo` (filtro interno `vistaDev`) — ya no
+  hay forma de que otro filtro (p. ej. `estado`) cancele ese auto-scope
+  (bug corregido en v3.0: antes `!filtros.estado` lo dejaba ver TODAS las
+  solicitudes de ese estado, sin importar el responsable).
+- **`ADM` / `GERENCIA`**: ven todo por defecto. Si mandan el filtro
+  `verBandeja` (email de un responsable, elegido desde el selector "¿Qué
+  bandeja ver?" del Dashboard), se acotan a esa persona igual que un `DEV`.
+- La respuesta agrega `responsables` (lista `{email, nombre}` de `USUARIOS`
+  activos con rol `DEV`/`ANA`) **solo** cuando el rol de quien consulta es
+  `ADM` o `GERENCIA` — es la lista que puebla el selector; un responsable
+  individual no la necesita, ya está auto-acotado.
+
 ## HISTORIAL_ESTADOS
 
 `historial_id`, `solicitud_id`, `subsolicitud_id`, `estado_anterior`,

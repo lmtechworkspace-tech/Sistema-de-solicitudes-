@@ -42,7 +42,11 @@
       empresa_id: document.getElementById('filtro-empresa').value,
       estado: document.getElementById('filtro-estado').value,
       prioridad: document.getElementById('filtro-prioridad').value,
-      solicitante: document.getElementById('buscar-recientes').value.trim()
+      solicitante: document.getElementById('buscar-recientes').value.trim(),
+      // v3.0 (Fase 2): solo tiene efecto para ADM/GERENCIA (Dashboard.
+      // aplicarAmbitoRol_) -- un responsable individual ya esta acotado a
+      // su propia bandeja sin importar este valor.
+      verBandeja: document.getElementById('filtro-bandeja').value
     };
   }
 
@@ -64,8 +68,41 @@
       // restringe la accion en si, pero no tiene sentido ofrecersela a
       // quien no es Gerencia).
       document.getElementById('btn-ver-gerencia').classList.toggle('sigso-oculto', respuesta.data.rol_actual !== 'GERENCIA');
+      renderSelectorBandeja_(respuesta.data);
       return respuesta;
     });
+  }
+
+  // v3.0 (Fase 2, multi-bandeja): un responsable individual (DEV) ya viene
+  // auto-acotado del backend -- solo se le avisa. ADM/GERENCIA reciben la
+  // lista de responsables activos (Dashboard.getData) y pueden elegir de
+  // quien mirar la bandeja, o "Todas" para ver sin acotar.
+  function renderSelectorBandeja_(data) {
+    var filaSelector = document.getElementById('fila-bandeja');
+    var aviso = document.getElementById('aviso-mi-bandeja');
+    var select = document.getElementById('filtro-bandeja');
+
+    if (data.rol_actual === 'DEV') {
+      filaSelector.classList.add('sigso-oculto');
+      aviso.classList.remove('sigso-oculto');
+      return;
+    }
+    aviso.classList.add('sigso-oculto');
+
+    if (!data.responsables || data.responsables.length === 0) {
+      filaSelector.classList.add('sigso-oculto');
+      return;
+    }
+    // Repuebla preservando la seleccion actual (mismo patron que
+    // poblarSelect_ en formulario.js) -- evita perder el filtro elegido
+    // cada vez que "Actualizar" vuelve a traer datos.
+    var actual = select.value;
+    select.innerHTML = '<option value="">Todas (sin acotar)</option>' +
+      data.responsables.map(function (r) {
+        return '<option value="' + r.email + '">' + Componentes.escaparHtml(r.nombre) + '</option>';
+      }).join('');
+    select.value = actual;
+    filaSelector.classList.remove('sigso-oculto');
   }
 
   var recientesActuales = [];
