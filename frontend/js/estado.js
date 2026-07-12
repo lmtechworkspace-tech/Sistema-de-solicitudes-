@@ -18,12 +18,44 @@
     }
 
     document.getElementById('form-estado').addEventListener('submit', manejarConsulta_);
+
+    manejarTabs_();
+    document.getElementById('form-pedir-codigo').addEventListener('submit', manejarPedirCodigo_);
+    document.getElementById('form-verificar-codigo').addEventListener('submit', manejarVerificarCodigo_);
+    document.getElementById('btn-reenviar-codigo').addEventListener('click', function () {
+      manejarPedirCodigo_({ preventDefault: function () {} });
+    });
+    poblarFiltroEstados_();
+    ['filtro-mis-buscador', 'filtro-mis-estado', 'filtro-mis-desde', 'filtro-mis-hasta'].forEach(function (id) {
+      document.getElementById(id).addEventListener('input', renderListaFiltrada_);
+    });
   });
 
   // Se recuerda la ultima consulta exitosa para poder recargar el estado
   // despues de que el solicitante responda una pregunta (sin pedirle de
-  // nuevo el numero+correo).
+  // nuevo el numero+correo). contenedorId distingue si el detalle vive en la
+  // pestaña "Por numero" (#resultado) o en el drill-down de "Mis solicitudes"
+  // (#detalle-mis-solicitudes) -- ambas reusan el mismo render/acciones.
   var ultimaConsulta = null;
+
+  // v3.0 (Fase 3, §4): estado de la pestaña "Mis solicitudes".
+  var correoParaCodigo_ = null;
+  var sesionMisSolicitudes = null;
+  var listaCompleta_ = [];
+
+  function manejarTabs_() {
+    document.querySelectorAll('.sigso-tabs__boton').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        document.querySelectorAll('.sigso-tabs__boton').forEach(function (b) {
+          b.classList.remove('sigso-tabs__boton--activo');
+        });
+        boton.classList.add('sigso-tabs__boton--activo');
+        var tab = boton.getAttribute('data-tab');
+        document.getElementById('panel-numero').classList.toggle('sigso-oculto', tab !== 'numero');
+        document.getElementById('panel-mis-solicitudes').classList.toggle('sigso-oculto', tab !== 'mis-solicitudes');
+      });
+    });
+  }
 
   function manejarConsulta_(evento) {
     evento.preventDefault();
@@ -42,22 +74,26 @@
       });
   }
 
-  function consultar_(solicitudId, email) {
+  // contenedorId: 'resultado' (pestaña "Por numero") o
+  // 'detalle-mis-solicitudes' (drill-down de "Mis solicitudes") -- mismo
+  // render y mismas acciones (responder/validar) en ambos casos.
+  function consultar_(solicitudId, email, contenedorId) {
+    var contenedor = contenedorId || 'resultado';
     return llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'consultarEstado', { solicitud_id: solicitudId, email: email })
       .then(function (respuesta) {
         if (respuesta.ok) {
-          ultimaConsulta = { solicitud_id: solicitudId, email: email };
-          mostrarEstado_(respuesta.data);
+          ultimaConsulta = { solicitud_id: solicitudId, email: email, contenedorId: contenedor };
+          mostrarEstado_(respuesta.data, contenedor);
         } else {
-          mostrarError_(respuesta);
+          mostrarError_(respuesta, contenedor);
         }
       })
       .catch(function () {
-        mostrarError_({ message: 'No se pudo conectar con el servidor. Intenta nuevamente.' });
+        mostrarError_({ message: 'No se pudo conectar con el servidor. Intenta nuevamente.' }, contenedor);
       });
   }
 
-  function mostrarEstado_(data) {
+  function mostrarEstado_(data, contenedorId) {
     var itemsHtml = data.subsolicitudes.map(function (s, idx) {
       var etiquetaTipo = s.tipo_nombre ? '[' + Componentes.escaparHtml(s.tipo_nombre) + '] ' : '';
       return '<div class="sigso-acordeon-item" data-idx="' + idx + '" data-pregunta-pendiente="' + (s.pregunta_pendiente ? '1' : '0') + '">' +
@@ -80,7 +116,7 @@
         : '<p class="sigso-ayuda">Eres la solicitud de mayor prioridad en espera de tu empresa.</p>';
     }
 
-    var contenedor = document.getElementById('resultado');
+    var contenedor = document.getElementById(contenedorId || 'resultado');
     contenedor.innerHTML =
       '<div class="sigso-resultado-exito">' +
       '<p class="sigso-numero-solicitud">' + data.solicitud_id + '</p>' +
@@ -209,7 +245,7 @@
       }
       // Recarga el estado: el item sigue en "esperando informacion" hasta
       // que Leo lo mueva, pero la respuesta ya quedo registrada.
-      return consultar_(ultimaConsulta.solicitud_id, ultimaConsulta.email);
+      return consultar_(ultimaConsulta.solicitud_id, ultimaConsulta.email, ultimaConsulta.contenedorId);
     });
   }
 
@@ -226,7 +262,7 @@
         contenedorResultado.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo aplicar la validacion.', 'error');
         return;
       }
-      return consultar_(ultimaConsulta.solicitud_id, ultimaConsulta.email);
+      return consultar_(ultimaConsulta.solicitud_id, ultimaConsulta.email, ultimaConsulta.contenedorId);
     });
   }
 
@@ -242,15 +278,149 @@
     return '<p><strong>' + Componentes.escaparHtml(etiqueta) + ':</strong> ' + Componentes.escaparHtml(valor) + '</p>';
   }
 
-  function mostrarError_(respuesta) {
+  function mostrarError_(respuesta, contenedorId) {
     var mensaje = respuesta.message || 'No se pudo consultar el estado.';
-    document.getElementById('resultado').innerHTML = Componentes.alerta(mensaje, 'error');
-    document.getElementById('resultado').classList.remove('sigso-oculto');
+    var contenedor = document.getElementById(contenedorId || 'resultado');
+    contenedor.innerHTML = Componentes.alerta(mensaje, 'error');
+    contenedor.classList.remove('sigso-oculto');
   }
 
   function ocultarResultado_() {
     var contenedor = document.getElementById('resultado');
     contenedor.classList.add('sigso-oculto');
     contenedor.innerHTML = '';
+  }
+
+  // ------------------------------------------------------------------
+  // v3.0 (Fase 3, §4): "Mis solicitudes" -- codigo de un solo uso, lista
+  // filtrable con resumen y semaforo del solicitante, drill-down (reusa
+  // consultar_/mostrarEstado_ de arriba, apuntando a #detalle-mis-solicitudes).
+  // ------------------------------------------------------------------
+
+  function manejarPedirCodigo_(evento) {
+    evento.preventDefault();
+    var email = document.getElementById('campo-email-mis-solicitudes').value.trim();
+    if (!email) return;
+
+    var boton = document.getElementById('btn-pedir-codigo');
+    var resultado = document.getElementById('resultado-verificar-codigo');
+    boton.disabled = true;
+
+    llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'solicitarCodigoAcceso', { email: email })
+      .then(function () {
+        correoParaCodigo_ = email;
+        document.getElementById('form-pedir-codigo').classList.add('sigso-oculto');
+        document.getElementById('form-verificar-codigo').classList.remove('sigso-oculto');
+        document.getElementById('texto-codigo-enviado').textContent =
+          'Te enviamos un código a ' + email + '. Puede tardar unos minutos en llegar.';
+        resultado.innerHTML = '';
+      })
+      .catch(function () {
+        resultado.innerHTML = Componentes.alerta('No se pudo enviar el código. Intenta nuevamente.', 'error');
+      })
+      .finally(function () {
+        boton.disabled = false;
+      });
+  }
+
+  function manejarVerificarCodigo_(evento) {
+    evento.preventDefault();
+    var codigo = document.getElementById('campo-codigo-acceso').value.trim();
+    var boton = document.getElementById('btn-verificar-codigo');
+    var resultado = document.getElementById('resultado-verificar-codigo');
+    boton.disabled = true;
+
+    llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'misSolicitudes', { email: correoParaCodigo_, codigo: codigo })
+      .then(function (respuesta) {
+        if (!respuesta.ok) {
+          resultado.innerHTML = Componentes.alerta(respuesta.message || 'Código inválido o expirado.', 'error');
+          return;
+        }
+        sesionMisSolicitudes = { email: correoParaCodigo_ };
+        listaCompleta_ = respuesta.data.solicitudes;
+        document.getElementById('form-verificar-codigo').classList.add('sigso-oculto');
+        document.getElementById('panel-lista-mis-solicitudes').classList.remove('sigso-oculto');
+        renderResumenMisSolicitudes_(respuesta.data.resumen);
+        renderListaFiltrada_();
+      })
+      .catch(function () {
+        resultado.innerHTML = Componentes.alerta('No se pudo verificar el código.', 'error');
+      })
+      .finally(function () {
+        boton.disabled = false;
+      });
+  }
+
+  function renderResumenMisSolicitudes_(resumen) {
+    document.getElementById('resumen-mis-solicitudes').innerHTML =
+      '<p><strong>' + resumen.total + '</strong> solicitud(es) — ' +
+      resumen.abiertas + ' abierta(s), ' +
+      resumen.en_desarrollo + ' en desarrollo, ' +
+      resumen.pendientes_validar + ' ítem(s) pendiente(s) de validar.</p>';
+  }
+
+  function poblarFiltroEstados_() {
+    var select = document.getElementById('filtro-mis-estado');
+    Object.keys(SIGSO_ESTADOS_LABEL).forEach(function (codigo) {
+      var option = document.createElement('option');
+      option.value = codigo;
+      option.textContent = SIGSO_ESTADOS_LABEL[codigo];
+      select.appendChild(option);
+    });
+  }
+
+  function renderListaFiltrada_() {
+    var texto = document.getElementById('filtro-mis-buscador').value.trim().toLowerCase();
+    var estado = document.getElementById('filtro-mis-estado').value;
+    var desde = document.getElementById('filtro-mis-desde').value;
+    var hasta = document.getElementById('filtro-mis-hasta').value;
+
+    var filtradas = listaCompleta_.filter(function (s) {
+      if (estado && s.estado_derivado !== estado) return false;
+      var fechaDia = String(s.fecha_creacion).slice(0, 10);
+      if (desde && fechaDia < desde) return false;
+      if (hasta && fechaDia > hasta) return false;
+      if (texto) {
+        var haystack = (s.solicitud_id + ' ' + (s.empresa_nombre || '')).toLowerCase();
+        if (haystack.indexOf(texto) === -1) return false;
+      }
+      return true;
+    });
+
+    var contenedor = document.getElementById('lista-mis-solicitudes');
+    if (filtradas.length === 0) {
+      contenedor.innerHTML = Componentes.vacio('No hay solicitudes que coincidan con el filtro.');
+      return;
+    }
+
+    contenedor.innerHTML = filtradas.map(function (s) {
+      var semaforo = s.items_pendientes_validar > 0
+        ? '<div class="sigso-bandeja__semaforo">🔵 Llevas ' + (s.dias_esperando_max || 0) +
+          ' día(s) sin revisar ' + s.items_pendientes_validar + ' ítem(s)</div>'
+        : '';
+      return '<button type="button" class="sigso-bandeja__fila" data-solicitud="' + s.solicitud_id + '">' +
+        '<div class="sigso-bandeja__fila-cabecera">' +
+        '<strong>' + Componentes.escaparHtml(s.solicitud_id) + '</strong>' +
+        '<span>' + Componentes.badgePrioridad(s.prioridad_derivada) + ' ' + Componentes.badgeEstado(s.estado_derivado) + '</span>' +
+        '</div>' +
+        '<div class="sigso-bandeja__fila-meta">' +
+        Componentes.escaparHtml(s.empresa_nombre || '') + ' — ' + formatearFechaHora_(s.fecha_creacion) +
+        ' — ' + s.total_items + ' ítem(s)</div>' +
+        semaforo +
+        '</button>';
+    }).join('');
+
+    contenedor.querySelectorAll('[data-solicitud]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        contenedor.querySelectorAll('.sigso-bandeja__fila').forEach(function (fila) {
+          fila.classList.remove('sigso-bandeja__fila--activa');
+        });
+        boton.classList.add('sigso-bandeja__fila--activa');
+        var detalle = document.getElementById('detalle-mis-solicitudes');
+        detalle.classList.remove('sigso-oculto');
+        detalle.innerHTML = Componentes.cargando('Cargando detalle...');
+        consultar_(boton.getAttribute('data-solicitud'), sesionMisSolicitudes.email, 'detalle-mis-solicitudes');
+      });
+    });
   }
 })();

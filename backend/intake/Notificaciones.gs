@@ -78,6 +78,19 @@ var Notificaciones = {
     return emails.map(function (email) {
       return enviarCorreo_(solicitud.solicitud_id, email, 'RESPUESTA_SOLICITANTE:' + (subsolicitudId || solicitud.solicitud_id), asunto, cuerpo);
     });
+  },
+
+  // v3.0 (Fase 3, "Mis solicitudes", §4): codigo de un solo uso para ver la
+  // lista de solicitudes propias. El evento incluye el codigo (no solo el
+  // correo) para que dos pedidos seguidos del mismo correo no se deduplique
+  // el segundo -- cada codigo es distinto, cada uno debe llegar.
+  enviarCodigoAcceso: function (email, codigo) {
+    var asunto = 'SIGSO - Tu código de acceso: ' + codigo;
+    var cuerpo =
+      'Usa este código en "Consultar estado > Mis solicitudes" para ver todas tus solicitudes:\n\n' +
+      codigo + '\n\n' +
+      'Es válido por 10 minutos. Si tú no lo pediste, ignora este correo.';
+    return enviarCorreo_(email, email, 'CODIGO_ACCESO:' + codigo, asunto, cuerpo);
   }
 };
 

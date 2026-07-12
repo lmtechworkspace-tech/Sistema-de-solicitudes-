@@ -148,3 +148,104 @@
   border-bottom: 1px solid var(--gris-claro);
   font-size: 0.9rem;
 }
+
+/* v3.0 (Fase 3): tabs de "Consultar estado" (Por numero / Mis solicitudes). */
+.sigso-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--gris-claro);
+}
+
+.sigso-tabs__boton {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: 0.6rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--gris-medio);
+  cursor: pointer;
+}
+
+.sigso-tabs__boton--activo {
+  color: var(--naranja);
+  border-bottom-color: var(--naranja);
+}
+
+/* Filtros de "Mis solicitudes" (mismo patron visual que .sigso-filtros del
+   Backoffice, duplicado aqui porque esta pagina no carga dashboard.css). */
+.sigso-filtros {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+}
+
+.sigso-filtros .sigso-campo {
+  margin-bottom: 0;
+  min-width: 160px;
+}
+
+/* Layout tipo bandeja: lista a la izquierda, detalle a la derecha (acordeon
+   en movil, ver el media query mas abajo). */
+.sigso-bandeja {
+  display: grid;
+  grid-template-columns: minmax(260px, 380px) 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .sigso-bandeja {
+    grid-template-columns: 1fr;
+  }
+}
+
+.sigso-bandeja__lista {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sigso-bandeja__fila {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  border: 1px solid var(--gris-claro);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+}
+
+.sigso-bandeja__fila:hover {
+  border-color: var(--naranja);
+}
+
+.sigso-bandeja__fila--activa {
+  border-color: var(--naranja);
+  box-shadow: 0 0 0 1px var(--naranja);
+}
+
+.sigso-bandeja__fila-cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.sigso-bandeja__fila-meta {
+  font-size: 0.8rem;
+  color: var(--gris-medio);
+}
+
+.sigso-bandeja__semaforo {
+  display: inline-block;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+  color: var(--azul);
+  font-weight: 600;
+}

@@ -279,7 +279,12 @@ var Solicitudes = {
           // el que hizo la transicion ES la pregunta -- se muestra aqui para
           // que el solicitante sepa que le estan pidiendo sin tener que
           // llamar/escribir aparte.
-          pregunta_pendiente: s.estado === ESTADOS.S06 ? obtenerUltimaPreguntaEsperandoInfo_(s.subsolicitud_id) : ''
+          pregunta_pendiente: s.estado === ESTADOS.S06 ? obtenerUltimaPreguntaEsperandoInfo_(s.subsolicitud_id) : '',
+          // v3.0 (Fase 3, §4): "semaforo del solicitante" -- cuando el item
+          // esta Terminada sin validar, dias_esperando muestra cuantos dias
+          // habiles lleva SIN que el solicitante lo revise (Cumplimiento.gs,
+          // mismo motor que usa Gerencia en el Backoffice).
+          cumplimiento: Cumplimiento.clasificar(s)
         };
       });
 
@@ -298,6 +303,91 @@ var Solicitudes = {
         : null,
       subsolicitudes: subsolicitudes
     };
+  },
+
+  /**
+   * v3.0 (Fase 3, §4): primer paso de "Mis solicitudes" -- pide un codigo de
+   * un solo uso al correo indicado. Siempre responde ok (no revela si ese
+   * correo tiene o no solicitudes registradas, mismo criterio de privacidad
+   * que ya usa calcularPosicionCola_). El codigo vive en CacheService
+   * (efimero, sin hoja nueva) 10 minutos.
+   */
+  solicitarCodigoAcceso: function (data) {
+    if (!data.email) {
+      return errorValidacion_('email', 'Debes indicar tu correo.');
+    }
+    var email = String(data.email).trim().toLowerCase();
+    var codigo = String(Math.floor(100000 + Math.random() * 900000));
+    CacheService.getScriptCache().put('CODIGO_ACCESO:' + email, codigo, 600);
+    Notificaciones.enviarCodigoAcceso(data.email, codigo);
+    return { ok: true };
+  },
+
+  /**
+   * v3.0 (Fase 3, §4): segundo paso -- valida el codigo de un solo uso y
+   * devuelve TODAS las solicitudes de ese correo (como solicitante_email o
+   * correo_cliente, mismo criterio de coincidencia que estadoPublico), con
+   * un resumen arriba y el semaforo del solicitante por solicitud. El
+   * detalle completo de cada una se pide aparte via estadoPublico
+   * (drill-down, reusa el mismo flujo que "Consultar por numero").
+   */
+  misSolicitudes: function (data) {
+    if (!data.email || !data.codigo) {
+      return errorValidacion_('codigo', 'Debes indicar tu correo y el codigo recibido.');
+    }
+    var email = String(data.email).trim().toLowerCase();
+    var clave = 'CODIGO_ACCESO:' + email;
+    var cache = CacheService.getScriptCache();
+    var codigoValido = cache.get(clave);
+    if (!codigoValido || codigoValido !== String(data.codigo).trim()) {
+      return { _forbidden: true, message: 'Código inválido o expirado. Solicita uno nuevo.' };
+    }
+    cache.remove(clave); // un solo uso
+
+    var todasLasSubsolicitudes = leerFilas_(SHEETS.SUBSOLICITUDES);
+    var solicitudes = leerFilas_(SHEETS.SOLICITUDES).filter(function (s) {
+      return compararEmail_(data.email, s.solicitante_email) ||
+        (!!s.es_cliente && compararEmail_(data.email, s.correo_cliente));
+    });
+
+    var resumen = { total: solicitudes.length, abiertas: 0, pendientes_validar: 0, en_desarrollo: 0 };
+
+    var lista = solicitudes.map(function (s) {
+      var items = todasLasSubsolicitudes.filter(function (i) {
+        return i.solicitud_id === s.solicitud_id;
+      });
+      var abierta = ESTADOS_CERRADOS.indexOf(s.estado_derivado) === -1;
+      if (abierta) resumen.abiertas++;
+      if (s.estado_derivado === ESTADOS.S05) resumen.en_desarrollo++;
+
+      var diasEsperandoMax = null;
+      var pendientesValidar = 0;
+      items.forEach(function (item) {
+        if (item.estado === ESTADOS.S08) {
+          pendientesValidar++;
+          var cumplimiento = Cumplimiento.clasificar(item);
+          if (cumplimiento.dias_esperando !== null && (diasEsperandoMax === null || cumplimiento.dias_esperando > diasEsperandoMax)) {
+            diasEsperandoMax = cumplimiento.dias_esperando;
+          }
+        }
+      });
+      resumen.pendientes_validar += pendientesValidar;
+
+      return {
+        solicitud_id: s.solicitud_id,
+        empresa_nombre: s.empresa_nombre || '',
+        estado_derivado: s.estado_derivado,
+        prioridad_derivada: s.prioridad_derivada,
+        fecha_creacion: s.fecha_creacion,
+        total_items: items.length,
+        items_pendientes_validar: pendientesValidar,
+        dias_esperando_max: diasEsperandoMax
+      };
+    }).sort(function (a, b) {
+      return new Date(b.fecha_creacion) - new Date(a.fecha_creacion);
+    });
+
+    return { resumen: resumen, solicitudes: lista };
   },
 
   /**

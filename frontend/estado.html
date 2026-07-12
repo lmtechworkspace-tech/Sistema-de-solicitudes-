@@ -12,24 +12,84 @@
   <header id="sigso-header" class="sigso-header"></header>
 
   <main class="sigso-contenido">
-    <form id="form-estado" class="sigso-card" novalidate>
-      <h1>Consultar estado de una solicitud</h1>
-      <p>Ingresa el n&uacute;mero de tu solicitud y el correo con el que la registraste.</p>
+    <div class="sigso-tabs" role="tablist">
+      <button type="button" class="sigso-tabs__boton sigso-tabs__boton--activo" id="tab-numero" data-tab="numero">Por n&uacute;mero</button>
+      <button type="button" class="sigso-tabs__boton" id="tab-mis-solicitudes" data-tab="mis-solicitudes">Mis solicitudes</button>
+    </div>
 
-      <div class="sigso-campo">
-        <label for="campo-numero-solicitud">N&uacute;mero de solicitud</label>
-        <input type="text" id="campo-numero-solicitud" placeholder="SOL-2026-HP-0001" required />
+    <div id="panel-numero" class="sigso-tab-panel">
+      <form id="form-estado" class="sigso-card" novalidate>
+        <h1>Consultar estado de una solicitud</h1>
+        <p>Ingresa el n&uacute;mero de tu solicitud y el correo con el que la registraste.</p>
+
+        <div class="sigso-campo">
+          <label for="campo-numero-solicitud">N&uacute;mero de solicitud</label>
+          <input type="text" id="campo-numero-solicitud" placeholder="SOL-2026-HP-0001" required />
+        </div>
+
+        <div class="sigso-campo">
+          <label for="campo-email-consulta">Correo</label>
+          <input type="email" id="campo-email-consulta" required />
+        </div>
+
+        <button type="submit" class="sigso-boton" id="btn-consultar">Consultar</button>
+      </form>
+
+      <div id="resultado" class="sigso-card sigso-oculto"></div>
+    </div>
+
+    <div id="panel-mis-solicitudes" class="sigso-tab-panel sigso-oculto">
+      <form id="form-pedir-codigo" class="sigso-card" novalidate>
+        <h1>Mis solicitudes</h1>
+        <p>Ingresa tu correo y te enviaremos un c&oacute;digo para ver todas tus solicitudes.</p>
+        <div class="sigso-campo">
+          <label for="campo-email-mis-solicitudes">Correo</label>
+          <input type="email" id="campo-email-mis-solicitudes" required />
+        </div>
+        <button type="submit" class="sigso-boton" id="btn-pedir-codigo">Enviar c&oacute;digo</button>
+      </form>
+
+      <form id="form-verificar-codigo" class="sigso-card sigso-oculto" novalidate>
+        <h1>Ingresa el c&oacute;digo</h1>
+        <p id="texto-codigo-enviado" class="sigso-ayuda"></p>
+        <div class="sigso-campo">
+          <label for="campo-codigo-acceso">C&oacute;digo</label>
+          <input type="text" id="campo-codigo-acceso" inputmode="numeric" maxlength="6" required />
+        </div>
+        <button type="submit" class="sigso-boton" id="btn-verificar-codigo">Ingresar</button>
+        <button type="button" class="sigso-boton--secundario" id="btn-reenviar-codigo">Reenviar c&oacute;digo</button>
+        <div id="resultado-verificar-codigo"></div>
+      </form>
+
+      <div id="panel-lista-mis-solicitudes" class="sigso-oculto">
+        <div class="sigso-card">
+          <div id="resumen-mis-solicitudes"></div>
+          <div class="sigso-filtros">
+            <div class="sigso-campo">
+              <label for="filtro-mis-buscador">Buscar</label>
+              <input type="text" id="filtro-mis-buscador" placeholder="N&uacute;mero, empresa..." />
+            </div>
+            <div class="sigso-campo">
+              <label for="filtro-mis-estado">Estado</label>
+              <select id="filtro-mis-estado"><option value="">Todos</option></select>
+            </div>
+            <div class="sigso-campo">
+              <label for="filtro-mis-desde">Desde</label>
+              <input type="date" id="filtro-mis-desde" />
+            </div>
+            <div class="sigso-campo">
+              <label for="filtro-mis-hasta">Hasta</label>
+              <input type="date" id="filtro-mis-hasta" />
+            </div>
+          </div>
+        </div>
+
+        <div class="sigso-bandeja">
+          <div id="lista-mis-solicitudes" class="sigso-bandeja__lista"></div>
+          <div id="detalle-mis-solicitudes" class="sigso-bandeja__detalle sigso-card sigso-oculto"></div>
+        </div>
       </div>
-
-      <div class="sigso-campo">
-        <label for="campo-email-consulta">Correo</label>
-        <input type="email" id="campo-email-consulta" required />
-      </div>
-
-      <button type="submit" class="sigso-boton" id="btn-consultar">Consultar</button>
-    </form>
-
-    <div id="resultado" class="sigso-card sigso-oculto"></div>
+    </div>
   </main>
 
   <script src="js/config.js"></script>

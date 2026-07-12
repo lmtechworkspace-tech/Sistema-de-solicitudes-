@@ -47,6 +47,8 @@ const INTAKE_FILES_EN_ORDEN = [
   'Constantes.gs',
   'SheetsRepo.gs',
   'Correlativo.gs',
+  'Utils.gs',
+  'Cumplimiento.gs',
   'Notificaciones.gs',
   'Solicitudes.gs',
   'Catalogos.gs',

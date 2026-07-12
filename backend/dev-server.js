@@ -125,7 +125,18 @@ const servidor = http.createServer((req, res) => {
       res.end(JSON.stringify({ ok: false, error: 'internal' }));
       return;
     }
-    console.log('[dev-server]', new Date().toISOString(), JSON.parse(cuerpo || '{}').action);
+    const accion = JSON.parse(cuerpo || '{}').action;
+    console.log('[dev-server]', new Date().toISOString(), accion);
+    // v3.0 (Fase 3): en local no hay bandeja de correo real -- se imprime el
+    // codigo de un solo uso en la consola para poder probar "Mis solicitudes"
+    // sin depender de Gmail (MailApp esta mockeado, no envia nada real).
+    if (accion === 'solicitarCodigoAcceso') {
+      const eventos = ctx.leerFilas_('LOG_NOTIFICACIONES').filter((n) => n.evento.indexOf('CODIGO_ACCESO:') === 0);
+      const ultimo = eventos[eventos.length - 1];
+      if (ultimo) {
+        console.log('[dev-server] codigo de acceso generado:', ultimo.evento.split(':')[1]);
+      }
+    }
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(salida.getContent());
   });

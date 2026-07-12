@@ -20,7 +20,9 @@ var INTAKE_ACTIONS = {
   getCatalogos: handleGetCatalogos_,
   consultarEstado: handleConsultarEstado_,
   responderConsulta: handleResponderConsulta_,
-  validarCierre: handleValidarCierre_
+  validarCierre: handleValidarCierre_,
+  solicitarCodigoAcceso: handleSolicitarCodigoAcceso_,
+  misSolicitudes: handleMisSolicitudes_
 };
 
 function doGet(e) {
@@ -75,6 +77,14 @@ function handleResponderConsulta_(data) {
 
 function handleValidarCierre_(data) {
   return responderResultado_(Solicitudes.validarCierre(data));
+}
+
+function handleSolicitarCodigoAcceso_(data) {
+  return responderResultado_(Solicitudes.solicitarCodigoAcceso(data));
+}
+
+function handleMisSolicitudes_(data) {
+  return responderResultado_(Solicitudes.misSolicitudes(data));
 }
 
 function handleSubirArchivo_(data) {

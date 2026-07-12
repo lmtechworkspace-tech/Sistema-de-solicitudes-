@@ -231,6 +231,40 @@ persona, no siempre a Leo.
 - Si el ítem no tiene `desarrollador_asignado` (instalación previa a v3.0,
   o sin área configurada), cae al buzón por defecto — retrocompatible.
 
+## Mis solicitudes (v3.0 Fase 3 — sin columnas ni hojas nuevas)
+
+`documentacion/SIGSO-v3.0-multi-responsable-y-control.md` §4. Nueva vista en
+"Consultar estado" para ver TODAS las solicitudes propias de una vez, no una
+por una como el flujo viejo (número + correo, que se mantiene intacto).
+
+- **Verificación**: `Solicitudes.solicitarCodigoAcceso({email})` genera un
+  código de 6 dígitos y lo guarda en `CacheService` (clave
+  `CODIGO_ACCESO:<correo>`, 10 minutos, efímero — **sin hoja nueva**), y lo
+  envía por correo (`Notificaciones.enviarCodigoAcceso`). Responde `{ok:true}`
+  siempre, exista o no ese correo en `SOLICITUDES` (no revela nada).
+- `Solicitudes.misSolicitudes({email, codigo})` valida el código contra el
+  cache y lo **borra al usarlo** (un solo uso); si no coincide o ya expiró,
+  responde `_forbidden`. Con el código correcto, devuelve:
+  - `resumen`: `{total, abiertas, en_desarrollo, pendientes_validar}`.
+  - `solicitudes[]`: una fila resumida por solicitud (`solicitud_id`,
+    `empresa_nombre`, `estado_derivado`, `prioridad_derivada`,
+    `fecha_creacion`, `total_items`, `items_pendientes_validar`,
+    `dias_esperando_max`) — el mismo criterio de coincidencia de correo que
+    `estadoPublico` (solicitante o cliente).
+  - `dias_esperando_max` es el **semáforo del solicitante**: el máximo de
+    `Cumplimiento.clasificar(item).dias_esperando` entre los ítems Terminada
+    (S08) de esa solicitud sin validar.
+- **Drill-down**: el frontend reusa `consultarEstado` (mismo `estadoPublico`
+  de siempre) para ver el detalle completo de una solicitud elegida — no hay
+  un endpoint nuevo para el detalle.
+- `estadoPublico` ahora agrega `cumplimiento` (vía `Cumplimiento.clasificar`)
+  a cada subsolicitud devuelta, para que el semáforo del solicitante también
+  se vea en el detalle, no solo en la lista.
+- `backend/intake/Utils.gs` y `backend/intake/Cumplimiento.gs` (copias de
+  las del Backoffice, mismo motor de horas hábiles) se agregan al proyecto
+  Intake porque antes solo existían ahí — el Intake nunca había necesitado
+  calcular "días hábiles esperando" hasta esta fase.
+
 ## HISTORIAL_ESTADOS
 
 `historial_id`, `solicitud_id`, `subsolicitud_id`, `estado_anterior`,
