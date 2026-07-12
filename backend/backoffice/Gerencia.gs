@@ -65,13 +65,16 @@ function calcularPanelGerencia_(filtrosBase) {
     var lineasBase = lineaBasePorItem_(historialCompromiso);
     var reCompromisosPorItem = contarPorSubsolicitud_(historialCompromiso);
 
+    var ahora = new Date();
+
     var items = leerFilas_(SHEETS.SUBSOLICITUDES)
       .filter(function (sub) {
         return solicitudPorId[sub.solicitud_id] && coincideFiltroItem_(sub, solicitudPorId[sub.solicitud_id], filtrosBase);
       })
       .map(function (sub) {
         var solicitud = solicitudPorId[sub.solicitud_id];
-        var cumplimiento = Cumplimiento.clasificar(sub);
+        var cumplimiento = Cumplimiento.clasificar(sub, ahora);
+        var cerrada = ESTADOS_CERRADOS.indexOf(sub.estado) !== -1;
         return {
           subsolicitud_id: sub.subsolicitud_id,
           solicitud_id: sub.solicitud_id,
@@ -93,7 +96,24 @@ function calcularPanelGerencia_(filtrosBase) {
           // re-compromiso) hace visible el resbalon en la carta Gantt.
           fecha_original: lineasBase[sub.subsolicitud_id] || sub.fecha_comprometida || '',
           re_compromisos: reCompromisosPorItem[sub.subsolicitud_id] || 0,
-          cumplimiento: cumplimiento
+          cumplimiento: cumplimiento,
+          // v3.0 (Fase 4, §6.1): columnas del tablero de seguimiento -- se
+          // calculan aca (no en el frontend) para que ordenar/agrupar por
+          // ellas no dependa de recalcular fechas en el navegador.
+          dias_abierta: diasHabilesRedondeado_(
+            sub.fecha_creacion,
+            cerrada ? (sub.fecha_terminada || sub.fecha_creacion) : ahora
+          ),
+          // Reloj del desarrollador (Cumplimiento.gs): solo corre desde que
+          // hay fecha_comprometida -- antes de eso el item sigue "sin
+          // comprometer" y no tiene sentido medirlo.
+          dias_desarrollador: sub.fecha_comprometida
+            ? diasHabilesRedondeado_(sub.fecha_comprometida, sub.fecha_terminada || (cerrada ? sub.fecha_comprometida : ahora))
+            : null,
+          // v3.0 (Fase 4, §6.2): semaforo PROPIO del solicitante (distinto
+          // del semaforo de cumplimiento, que es del desarrollador) -- solo
+          // aplica mientras el item esta Terminada esperando su validacion.
+          semaforo_solicitante: semaforoSolicitante_(cumplimiento)
         };
       });
 
@@ -138,6 +158,34 @@ function promedio_(numeros) {
   if (numeros.length === 0) return 0;
   var suma = numeros.reduce(function (acc, n) { return acc + n; }, 0);
   return Math.round((suma / numeros.length) * 10) / 10;
+}
+
+// v3.0 (Fase 4, §6.1): dias habiles entre dos fechas, redondeado a 1
+// decimal (mismo criterio que Cumplimiento.gs) -- para las columnas "Dias
+// abierta" / "Dias con el desarrollador" del tablero de seguimiento.
+function diasHabilesRedondeado_(inicio, fin) {
+  return Math.round((Utils.horasHabilesEntre(inicio, fin) / CUMPLIMIENTO_HORAS_JORNADA) * 10) / 10;
+}
+
+// v3.0 (Fase 4, §6.2): semaforo PROPIO del solicitante -- separado del
+// semaforo de cumplimiento (que mide al desarrollador). Solo aplica
+// mientras el item esta Terminada esperando validacion (ESPERANDO_
+// VALIDACION); en cualquier otro estado no le corresponde a el todavia
+// (o ya paso, si esta cerrada). Mismo umbral que el cierre automatico
+// (RN-201, DIAS_HABILES_CIERRE_AUTOMATICO, Triggers.gs) para que "cerca
+// del cierre" signifique lo mismo en todas partes del sistema.
+function semaforoSolicitante_(cumplimiento) {
+  if (cumplimiento.codigo !== 'ESPERANDO_VALIDACION') {
+    return null;
+  }
+  var dias = cumplimiento.dias_esperando || 0;
+  if (dias < 1) {
+    return { codigo: 'RECIEN_ENTREGADO', emoji: '🟢', texto: 'Recién entregado' };
+  }
+  if (dias < DIAS_HABILES_CIERRE_AUTOMATICO) {
+    return { codigo: 'ESPERANDO', emoji: '🟡', texto: 'Esperando validación' };
+  }
+  return { codigo: 'CERCA_CIERRE_AUTOMATICO', emoji: '🔴', texto: 'Cerca del cierre automático' };
 }
 
 // Primera fila de HISTORIAL_COMPROMISO (por timestamp) de cada item ->

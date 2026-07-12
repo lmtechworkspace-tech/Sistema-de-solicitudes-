@@ -356,3 +356,99 @@
   font-size: 0.8rem;
   color: var(--p1);
 }
+
+/* v3.0 (Fase 4, §6.1/§6.3): tablero de seguimiento (reemplaza la Gantt como
+   vista principal del Panel de Gerencia) + soporte de impresion/PDF. */
+.sigso-tablero-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.sigso-tablero-toolbar .sigso-campo {
+  margin-bottom: 0;
+  min-width: 160px;
+}
+
+.sigso-tabla-tablero {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.sigso-tabla-tablero th,
+.sigso-tabla-tablero td {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--gris-claro);
+  white-space: nowrap;
+}
+
+.sigso-tabla-tablero tbody tr {
+  cursor: pointer;
+}
+
+.sigso-tabla-tablero tbody tr:hover {
+  background: #fafafa;
+}
+
+.sigso-tabla-tablero th[data-orden] {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sigso-tabla-tablero th[data-orden]:hover {
+  color: var(--naranja);
+}
+
+.sigso-tabla-tablero th[data-orden]::after {
+  content: '';
+  margin-left: 0.25rem;
+}
+
+.sigso-tabla-tablero th[data-orden-activo="asc"]::after {
+  content: '▲';
+  font-size: 0.7rem;
+}
+
+.sigso-tabla-tablero th[data-orden-activo="desc"]::after {
+  content: '▼';
+  font-size: 0.7rem;
+}
+
+.sigso-tabla-tablero__grupo td {
+  background: var(--gris-claro);
+  font-weight: 700;
+}
+
+/* Semaforo del solicitante (distinto del semaforo de cumplimiento del
+   desarrollador, que ya usa las clases sigso-gantt-barra--*): se muestra
+   junto a "Dias esperando al solicitante" en el tablero. */
+.sigso-semaforo-solicitante {
+  font-size: 0.8rem;
+}
+
+.sigso-solo-imprimir {
+  display: none;
+}
+
+@media print {
+  .sigso-header,
+  .sigso-no-imprimir,
+  #btn-volver-dashboard-gerencia,
+  #ger-panel-gantt,
+  .sigso-filtros {
+    display: none !important;
+  }
+
+  .sigso-solo-imprimir {
+    display: block;
+  }
+
+  .sigso-tabla-tablero {
+    font-size: 0.75rem;
+  }
+}

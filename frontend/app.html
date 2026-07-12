@@ -118,17 +118,44 @@
       <div class="sigso-kpis" id="ger-contenedor-kpis"></div>
 
       <div class="sigso-card">
-        <h3>Semáforo de cumplimiento</h3>
+        <h3>Semáforo de cumplimiento (desarrollador)</h3>
         <div id="ger-contenedor-semaforo"></div>
       </div>
 
-      <div class="sigso-card">
+      <!-- v3.0 (Fase 4, §6.1): el tablero de seguimiento reemplaza la Carta
+           Gantt como vista PRINCIPAL (el gerente no logró entenderla). La
+           Gantt se conserva como pestaña secundaria "Línea de tiempo" para
+           quien la prefiera, no se elimina. -->
+      <div class="sigso-tabs sigso-no-imprimir" role="tablist">
+        <button type="button" class="sigso-tabs__boton sigso-tabs__boton--activo" id="ger-tab-tablero" data-ger-tab="tablero">Tablero de seguimiento</button>
+        <button type="button" class="sigso-tabs__boton" id="ger-tab-gantt" data-ger-tab="gantt">Línea de tiempo</button>
+      </div>
+
+      <div id="ger-panel-tablero" class="sigso-card">
+        <div class="sigso-tablero-toolbar sigso-no-imprimir">
+          <div class="sigso-campo">
+            <label for="ger-agrupar">Agrupar por</label>
+            <select id="ger-agrupar">
+              <option value="">Sin agrupar</option>
+              <option value="solicitante_email">Solicitante</option>
+              <option value="desarrollador_asignado">Responsable</option>
+              <option value="estado">Estado</option>
+              <option value="empresa_id">Empresa</option>
+            </select>
+          </div>
+          <button type="button" class="sigso-boton--secundario" id="btn-imprimir-gerencia">Descargar / Imprimir PDF</button>
+        </div>
+        <p class="sigso-ayuda sigso-solo-imprimir" id="ger-fecha-reporte"></p>
+        <div id="ger-contenedor-tablero"></div>
+      </div>
+
+      <div id="ger-panel-gantt" class="sigso-card sigso-oculto">
         <h3>Carta Gantt (fecha comprometida por ítem)</h3>
         <p class="sigso-ayuda">Barra desde que se creó el ítem hasta su fecha comprometida. Línea vertical = hoy. Línea tenue = fecha original, si hubo re-compromiso.</p>
         <div id="ger-contenedor-gantt"></div>
       </div>
 
-      <div class="sigso-card">
+      <div class="sigso-card sigso-no-imprimir">
         <h3>Control del solicitante — entregado y sin validar</h3>
         <div id="ger-contenedor-solicitante"></div>
       </div>

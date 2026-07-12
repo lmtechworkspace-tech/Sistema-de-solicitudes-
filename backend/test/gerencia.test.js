@@ -152,3 +152,78 @@ test('Gerencia.getPanel (v2.1): filtro por empresa reutiliza coincideFiltros_ de
   assert.equal(panel.items.length, 1);
   assert.equal(panel.items[0].empresa_id, 'RLD');
 });
+
+// v3.0 (Fase 4, documentacion/SIGSO-v3.0-multi-responsable-y-control.md §6):
+// columnas del tablero de seguimiento (reemplaza la Carta Gantt como vista
+// principal) + semaforo propio del solicitante.
+
+test('Gerencia.getPanel (v3.0): dias_abierta y dias_desarrollador de un item activo, comprometido', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  const ahora = new Date('2026-07-10T10:00:00.000Z');
+  seedSubsolicitud(ctx, {
+    fecha_creacion: '2026-07-01T10:00:00.000Z',
+    fecha_comprometida: '2026-08-20T18:00'
+  });
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+  const item = panel.items[0];
+
+  assert.ok(item.dias_abierta > 0);
+  assert.ok(item.dias_desarrollador >= 0);
+});
+
+test('Gerencia.getPanel (v3.0): dias_desarrollador es null si el item aun no tiene fecha comprometida', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx); // sin fecha_comprometida
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+
+  assert.equal(panel.items[0].dias_desarrollador, null);
+  assert.ok(panel.items[0].dias_abierta > 0);
+});
+
+test('Gerencia.getPanel (v3.0): semaforo_solicitante es null salvo cuando el item esta ESPERANDO_VALIDACION', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { fecha_comprometida: '2026-08-20T18:00' }); // EN_PLAZO, no ESPERANDO_VALIDACION
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+
+  assert.equal(panel.items[0].cumplimiento.codigo, 'EN_PLAZO');
+  assert.equal(panel.items[0].semaforo_solicitante, null);
+});
+
+test('Gerencia.getPanel (v3.0): semaforo_solicitante rojo cuando lleva >= 5 dias esperando validacion', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { estado_derivado: 'S08' });
+  seedSubsolicitud(ctx, {
+    estado: 'S08', fecha_comprometida: '2026-06-20T18:00',
+    fecha_terminada: '2026-06-20T18:00:00.000Z'
+  });
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+  const item = panel.items[0];
+
+  assert.equal(item.cumplimiento.codigo, 'ESPERANDO_VALIDACION');
+  assert.ok(item.cumplimiento.dias_esperando >= 5);
+  assert.equal(item.semaforo_solicitante.codigo, 'CERCA_CIERRE_AUTOMATICO');
+});
+
+test('Gerencia.getPanel (v3.0): semaforo_solicitante verde cuando recien se entrego (< 1 dia esperando)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { estado_derivado: 'S08' });
+  const haceUnRato = new Date();
+  haceUnRato.setHours(haceUnRato.getHours() - 1);
+  seedSubsolicitud(ctx, {
+    estado: 'S08', fecha_comprometida: '2026-06-20T18:00',
+    fecha_terminada: haceUnRato.toISOString()
+  });
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+  const item = panel.items[0];
+
+  assert.equal(item.cumplimiento.codigo, 'ESPERANDO_VALIDACION');
+  assert.equal(item.semaforo_solicitante.codigo, 'RECIEN_ENTREGADO');
+});

@@ -332,6 +332,41 @@ por `solicitud_id`) para el drill-down (§7, línea de tiempo de fechas):
 `detalle.js` lo muestra como "Historial de compromiso" bajo cada ítem que
 tuvo al menos un re-compromiso.
 
+### v3.0 Fase 4 — Tablero de seguimiento reemplaza la Carta Gantt (§6, derivado — no persiste en Sheets)
+
+Hallazgo real: "la gerente no pudo entenderla" (la Carta Gantt). Se reemplaza
+por una tabla ordenable/agrupable como vista **principal**; la Gantt se
+conserva en la pestaña secundaria "Línea de tiempo" (nadie pierde la
+funcionalidad, solo deja de ser lo primero que se ve).
+
+- Cada `item` de `Gerencia.getPanel` ahora trae 3 campos nuevos, calculados
+  en el servidor (no en el navegador, para no repetir el motor de horas
+  hábiles en el frontend):
+  - `dias_abierta`: días hábiles desde `fecha_creacion` hasta ahora (o hasta
+    `fecha_terminada` si ya está cerrada).
+  - `dias_desarrollador`: días hábiles desde `fecha_comprometida` (el reloj
+    del desarrollador no corre antes de eso) hasta `fecha_terminada` o ahora.
+    `null` si el ítem todavía no tiene fecha comprometida.
+  - `semaforo_solicitante`: **semáforo propio del solicitante** (§6.2),
+    distinto de `cumplimiento` (que mide al desarrollador). Solo tiene valor
+    mientras el ítem está `ESPERANDO_VALIDACION`: 🟢 recién entregado
+    (< 1 día), 🟡 esperando validación (1 a 4 días), 🔴 cerca del cierre
+    automático (≥ `DIAS_HABILES_CIERRE_AUTOMATICO`, Triggers.gs). `null` en
+    cualquier otro estado.
+- El KPI que antes se llamaba solo "esperando_validacion" ahora se presenta
+  en el frontend como **"Solicitantes en mora"** (§6.2) — mismo dato, mismo
+  campo del backend, título más explícito para separarlo visualmente del
+  "% cumplimiento del desarrollador".
+- `frontend/js/gerencia.js`: el tablero es ordenable (clic en el encabezado
+  de columna) y agrupable (por solicitante/responsable/estado/empresa,
+  mismo patrón que "Solicitudes recientes" del Dashboard) — todo client-side
+  sobre los items ya cargados, sin volver a golpear el servidor.
+- Descarga/impresión a PDF (§6.3): botón que dispara `window.print()` con
+  una hoja de estilos `@media print` que oculta navegación/filtros/pestaña
+  Gantt y deja el tablero + KPIs + fecha del reporte — sin backend ni
+  archivo generado, evolucionable a PDF server-side (Docs→PDF) si se
+  necesita archivarlo más adelante.
+
 ## Avisos de plazos (v2.1 Fase D — §8, reutiliza la cola de correo existente)
 
 Tres avisos nuevos, todos en `backend/backoffice/Notificaciones.gs`, sin
