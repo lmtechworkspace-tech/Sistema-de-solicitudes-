@@ -335,10 +335,17 @@ var Solicitudes = {
     });
 
     // P5 (v2.0, Sprint 3): cierra el ciclo "pedir informacion / responder"
-    // -- hasta ahora Leo se enteraba de la respuesta solo si volvia a mirar
-    // el panel. Sin esto la funcionalidad de S06 queda a medias (la
+    // -- hasta ahora el equipo se enteraba de la respuesta solo si volvia a
+    // mirar el panel. Sin esto la funcionalidad de S06 queda a medias (la
     // pregunta si se notifica, la respuesta no).
-    Notificaciones.notificarRespuestaSolicitante(solicitud, data.subsolicitud_id || '', data.texto);
+    // v3.0 (Fase 2.1): avisa al responsable real del item (no siempre al
+    // buzon por defecto). Si la respuesta es sobre un item puntual, va solo
+    // a su responsable; si es general (sin subsolicitud_id), va a todos los
+    // responsables distintos de la solicitud (dedup).
+    Notificaciones.notificarRespuestaSolicitante(
+      solicitud, data.subsolicitud_id || '', data.texto,
+      resolverDestinatariosRespuesta_(solicitud, data.subsolicitud_id)
+    );
 
     return { ok: true };
   },
@@ -413,7 +420,13 @@ var Solicitudes = {
     var estadoDerivado = calcularEstadoDerivado_(estadosActualizados);
     actualizarFilaPorId_(SHEETS.SOLICITUDES, 'solicitud_id', data.solicitud_id, { estado_derivado: estadoDerivado });
 
-    Notificaciones.notificarValidacionSolicitante(solicitud, subsolicitud, data.accion);
+    // v3.0 (Fase 2.1): avisa al responsable real del item, no siempre al
+    // buzon por defecto -- desarrollador_asignado ya viene resuelto por
+    // ruteo (Fase 1) o asignado a mano en el Backoffice.
+    Notificaciones.notificarValidacionSolicitante(
+      solicitud, subsolicitud, data.accion,
+      subsolicitud.desarrollador_asignado || solicitud.desarrollador_asignado
+    );
 
     return {
       subsolicitud_id: data.subsolicitud_id,
@@ -687,6 +700,34 @@ function resolverResponsable_(areaId) {
     }
   }
   return EMAIL_DESARROLLO;
+}
+
+// v3.0 (Fase 2.1): a quien avisar cuando el solicitante responde una
+// pregunta (RESPUESTA_SOLICITANTE). Si la respuesta es sobre un item
+// puntual, va solo al responsable de ese item. Si es general (sin
+// subsolicitud_id), va a todos los responsables DISTINTOS de la solicitud
+// (una respuesta general puede afectar a varios items/areas a la vez).
+function resolverDestinatariosRespuesta_(solicitud, subsolicitudId) {
+  if (subsolicitudId) {
+    var item = buscarSubsolicitud_(subsolicitudId);
+    var responsable = (item && item.desarrollador_asignado) || solicitud.desarrollador_asignado;
+    return responsable ? [responsable] : [];
+  }
+  var hermanas = leerFilas_(SHEETS.SUBSOLICITUDES).filter(function (s) {
+    return s.solicitud_id === solicitud.solicitud_id;
+  });
+  var vistos = {};
+  var distintos = [];
+  hermanas.forEach(function (s) {
+    if (s.desarrollador_asignado && !vistos[s.desarrollador_asignado]) {
+      vistos[s.desarrollador_asignado] = true;
+      distintos.push(s.desarrollador_asignado);
+    }
+  });
+  if (distintos.length === 0 && solicitud.desarrollador_asignado) {
+    distintos.push(solicitud.desarrollador_asignado);
+  }
+  return distintos;
 }
 
 // RF-F06: hash de (empresa+plataforma+modulo+solicitante+descripcion_item1).

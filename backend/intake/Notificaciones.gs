@@ -45,29 +45,39 @@ var Notificaciones = {
     return enviarCorreo_(solicitud.solicitud_id, email, 'AVISO_DESARROLLO', asunto, cuerpo);
   },
 
-  // RN-201 (v2.0, Sprint 1): avisa a Leo cuando el solicitante valida un item
-  // "Terminada" -- confirmando el cierre o reabriendolo con un motivo. Sin
-  // este aviso, Leo no se entera de una reapertura hasta que vuelve a mirar
-  // el panel (el gobierno del proceso depende de que se entere rapido).
-  notificarValidacionSolicitante: function (solicitud, subsolicitud, accion) {
+  // RN-201 (v2.0, Sprint 1): avisa al responsable del item cuando el
+  // solicitante valida un item "Terminada" -- confirmando el cierre o
+  // reabriendolo con un motivo. Sin este aviso, no se entera de una
+  // reapertura hasta que vuelve a mirar el panel (el gobierno del proceso
+  // depende de que se entere rapido). v3.0 (Fase 2.1, multi-responsable): el
+  // destinatario ya no es fijo -- se pasa el desarrollador_asignado del item
+  // (o el buzon por defecto EMAIL_DESARROLLO si no hay ruteo, retrocompatible).
+  notificarValidacionSolicitante: function (solicitud, subsolicitud, accion, destinatario) {
+    var email = destinatario || EMAIL_DESARROLLO;
     var esConfirmacion = accion === 'confirmar';
     var asunto = 'SIGSO - ' + (esConfirmacion ? 'Cierre confirmado' : 'Reabierto por el solicitante') + ': ' + subsolicitud.subsolicitud_id;
     var cuerpo = esConfirmacion
       ? 'El solicitante confirmo que el item ' + subsolicitud.subsolicitud_id + ' (' + solicitud.solicitud_id + ') quedo resuelto. Ya esta Cerrada.'
       : 'El solicitante reabrio el item ' + subsolicitud.subsolicitud_id + ' (' + solicitud.solicitud_id + '): no quedo resuelto.';
-    return enviarCorreo_(solicitud.solicitud_id, EMAIL_DESARROLLO, 'VALIDACION_SOLICITANTE:' + subsolicitud.subsolicitud_id + ':' + accion, asunto, cuerpo);
+    return enviarCorreo_(solicitud.solicitud_id, email, 'VALIDACION_SOLICITANTE:' + subsolicitud.subsolicitud_id + ':' + accion, asunto, cuerpo);
   },
 
-  // P5 (v2.0, Sprint 3): avisa a Leo cuando el solicitante responde una
-  // pregunta ("esperando informacion", S06). Sin este aviso, Leo solo se
+  // P5 (v2.0, Sprint 3): avisa al responsable cuando el solicitante responde
+  // una pregunta ("esperando informacion", S06). Sin este aviso, solo se
   // entera si vuelve a mirar el panel -- el ciclo "pedir info / responder"
   // quedaba con la mitad notificada (la pregunta si avisaba, la respuesta no).
-  notificarRespuestaSolicitante: function (solicitud, subsolicitudId, texto) {
+  // v3.0 (Fase 2.1): destinatarios es un array de correos (uno por cada
+  // responsable distinto involucrado); si viene vacio, cae al buzon por
+  // defecto EMAIL_DESARROLLO (retrocompatible).
+  notificarRespuestaSolicitante: function (solicitud, subsolicitudId, texto, destinatarios) {
+    var emails = (destinatarios && destinatarios.length > 0) ? destinatarios : [EMAIL_DESARROLLO];
     var asunto = 'SIGSO - Respuesta del solicitante: ' + (subsolicitudId || solicitud.solicitud_id);
     var cuerpo =
       'El solicitante respondio en ' + solicitud.solicitud_id +
       (subsolicitudId ? ' (item ' + subsolicitudId + ')' : '') + ':\n\n' + texto;
-    return enviarCorreo_(solicitud.solicitud_id, EMAIL_DESARROLLO, 'RESPUESTA_SOLICITANTE:' + (subsolicitudId || solicitud.solicitud_id), asunto, cuerpo);
+    return emails.map(function (email) {
+      return enviarCorreo_(solicitud.solicitud_id, email, 'RESPUESTA_SOLICITANTE:' + (subsolicitudId || solicitud.solicitud_id), asunto, cuerpo);
+    });
   }
 };
 

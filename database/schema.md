@@ -211,6 +211,26 @@ y-control.md` §5):
   `ADM` o `GERENCIA` — es la lista que puebla el selector; un responsable
   individual no la necesita, ya está auto-acotado.
 
+## Avisos por responsable (v3.0 Fase 2.1 — hallazgo real de producción)
+
+`Notificaciones.notificarRespuestaSolicitante` y `.notificarValidacionSolicitante`
+(`backend/intake/Notificaciones.gs`) mandaban **siempre** al buzón por
+defecto (`EMAIL_DESARROLLO`, Leo) cuando el solicitante respondía una
+consulta (S06) o validaba/reabría un ítem "Terminada" — tenía sentido
+mientras Leo era el único desarrollador, pero con el ruteo por área (Fase 1)
+cada ítem tiene su propio responsable, y el aviso debe llegarle a esa
+persona, no siempre a Leo.
+
+- `Solicitudes.validarCierre` ahora pasa
+  `subsolicitud.desarrollador_asignado || solicitud.desarrollador_asignado`
+  como destinatario.
+- `Solicitudes.responderConsulta` resuelve destinatarios vía
+  `resolverDestinatariosRespuesta_`: si la respuesta es sobre un ítem
+  puntual (`subsolicitud_id`), va solo a su responsable; si es general, va a
+  todos los responsables **distintos** de la solicitud (dedup).
+- Si el ítem no tiene `desarrollador_asignado` (instalación previa a v3.0,
+  o sin área configurada), cae al buzón por defecto — retrocompatible.
+
 ## HISTORIAL_ESTADOS
 
 `historial_id`, `solicitud_id`, `subsolicitud_id`, `estado_anterior`,
