@@ -17,13 +17,47 @@ var VENTANA_DEDUP_MINUTOS = 30;
 // caliente, mover a getConfig_() / una hoja de config es un cambio acotado.
 var EMAIL_DESARROLLO = 'lestay@rld.cl';
 
+// URL del sitio publico (GitHub Pages) para los enlaces de seguimiento en
+// los correos. No es secreta (es el sitio publico); misma fuente que
+// backend/build-backoffice-html.js.
+var SITIO_PUBLICO_CORREOS = 'https://lmtechworkspace-tech.github.io/Sistema-de-solicitudes-/';
+
+// Pie comun de todos los correos formales del sistema (v3.0, mejora de
+// redaccion): un solo lugar para cambiar la firma institucional.
+function pieCorreo_() {
+  return '\n\n' +
+    '--------------------------------------------------\n' +
+    'Este es un mensaje automatico del sistema SIGSO.\n' +
+    'Por favor no responda directamente a este correo.\n' +
+    'Equipo SIGSO — HomePymes / RLD';
+}
+
 var Notificaciones = {
   enviarAcuseRecibo: function (solicitud) {
-    var asunto = 'SIGSO - Solicitud registrada: ' + solicitud.solicitud_id;
+    var asunto = 'SIGSO — Confirmación de recepción de su solicitud ' + solicitud.solicitud_id;
+    var lineasDetalle = [
+      '- N° de solicitud: ' + solicitud.solicitud_id,
+      solicitud.empresa_id ? '- Empresa: ' + solicitud.empresa_id : '',
+      solicitud.prioridad ? '- Prioridad inicial: ' + solicitud.prioridad : '',
+      solicitud.total_items ? '- Ítems registrados: ' + solicitud.total_items : '',
+      '- Fecha de ingreso: ' + new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' })
+    ].filter(function (l) { return l !== ''; });
+
     var cuerpo =
-      'Hola ' + solicitud.solicitante_nombre + ',\n\n' +
-      'Tu solicitud ' + solicitud.solicitud_id + ' fue registrada correctamente.\n\n' +
-      solicitud.resumen_whatsapp;
+      'Estimado/a ' + solicitud.solicitante_nombre + ':\n\n' +
+      'Confirmamos la recepción de su solicitud, la cual ha sido registrada ' +
+      'correctamente en el Sistema de Gestión de Solicitudes (SIGSO) y derivada ' +
+      'al equipo responsable para su revisión.\n\n' +
+      'DETALLE DE LA SOLICITUD\n' +
+      lineasDetalle.join('\n') + '\n\n' +
+      'SEGUIMIENTO\n' +
+      'Puede consultar el estado de su solicitud en cualquier momento en:\n' +
+      SITIO_PUBLICO_CORREOS + 'estado.html\n' +
+      'En la pestaña "Mis solicitudes", ingresando este mismo correo, podrá ver ' +
+      'todas sus solicitudes y su avance.\n\n' +
+      'RESUMEN\n' +
+      solicitud.resumen_whatsapp +
+      pieCorreo_();
     // Fase 9: cc opcional del formulario (hallazgo real, RLD "Hoja de
     // ruta") -- se copia en el acuse, no cambia a quien va dirigido ni
     // la deduplicacion (esa sigue siendo por solicitante_email).
@@ -38,10 +72,20 @@ var Notificaciones = {
   // lo decide crearSolicitud.
   enviarAvisoDesarrollo: function (solicitud, motivo, destinatario) {
     var email = destinatario || EMAIL_DESARROLLO;
-    var asunto = 'SIGSO - ' + (solicitud.prioridad === 'P1' ? 'ALERTA P1: ' : 'Nueva solicitud: ') + solicitud.solicitud_id;
+    var asunto = 'SIGSO - ' + (solicitud.prioridad === 'P1' ? 'ALERTA P1: ' : 'Nueva solicitud asignada: ') + solicitud.solicitud_id;
     var cuerpo =
-      'Nueva solicitud para revisar (' + (motivo || 'aviso') + '):\n\n' +
-      solicitud.resumen_whatsapp;
+      'Estimado/a:\n\n' +
+      'Se ha registrado una nueva solicitud dirigida a su bandeja de trabajo.\n\n' +
+      'DETALLE\n' +
+      '- N° de solicitud: ' + solicitud.solicitud_id + '\n' +
+      '- Prioridad: ' + (solicitud.prioridad || 'por definir') + '\n' +
+      '- Motivo del aviso: ' + (motivo || 'nueva solicitud') + '\n\n' +
+      'ACCIÓN REQUERIDA\n' +
+      'Ingrese al Backoffice para revisarla, comprometer una fecha de entrega ' +
+      'y gestionar su avance.\n\n' +
+      'RESUMEN\n' +
+      solicitud.resumen_whatsapp +
+      pieCorreo_();
     return enviarCorreo_(solicitud.solicitud_id, email, 'AVISO_DESARROLLO', asunto, cuerpo);
   },
 
@@ -55,10 +99,17 @@ var Notificaciones = {
   notificarValidacionSolicitante: function (solicitud, subsolicitud, accion, destinatario) {
     var email = destinatario || EMAIL_DESARROLLO;
     var esConfirmacion = accion === 'confirmar';
-    var asunto = 'SIGSO - ' + (esConfirmacion ? 'Cierre confirmado' : 'Reabierto por el solicitante') + ': ' + subsolicitud.subsolicitud_id;
-    var cuerpo = esConfirmacion
-      ? 'El solicitante confirmo que el item ' + subsolicitud.subsolicitud_id + ' (' + solicitud.solicitud_id + ') quedo resuelto. Ya esta Cerrada.'
-      : 'El solicitante reabrio el item ' + subsolicitud.subsolicitud_id + ' (' + solicitud.solicitud_id + '): no quedo resuelto.';
+    var asunto = 'SIGSO - ' + (esConfirmacion ? 'Cierre confirmado' : 'Ítem reabierto por el solicitante') + ': ' + subsolicitud.subsolicitud_id;
+    var cuerpo =
+      'Estimado/a:\n\n' +
+      (esConfirmacion
+        ? 'El solicitante confirmó que el ítem indicado quedó resuelto satisfactoriamente. El ítem pasa a estado Cerrada; no se requieren más acciones.'
+        : 'El solicitante indicó que el ítem NO quedó resuelto y lo reabrió. El ítem vuelve a estado En desarrollo; se requiere su revisión.') + '\n\n' +
+      'DETALLE\n' +
+      '- Ítem: ' + subsolicitud.subsolicitud_id + (subsolicitud.titulo ? ' — ' + subsolicitud.titulo : '') + '\n' +
+      '- Solicitud: ' + solicitud.solicitud_id + '\n' +
+      '- Solicitante: ' + (solicitud.solicitante_nombre || solicitud.solicitante_email || '') +
+      pieCorreo_();
     return enviarCorreo_(solicitud.solicitud_id, email, 'VALIDACION_SOLICITANTE:' + subsolicitud.subsolicitud_id + ':' + accion, asunto, cuerpo);
   },
 
@@ -73,8 +124,15 @@ var Notificaciones = {
     var emails = (destinatarios && destinatarios.length > 0) ? destinatarios : [EMAIL_DESARROLLO];
     var asunto = 'SIGSO - Respuesta del solicitante: ' + (subsolicitudId || solicitud.solicitud_id);
     var cuerpo =
-      'El solicitante respondio en ' + solicitud.solicitud_id +
-      (subsolicitudId ? ' (item ' + subsolicitudId + ')' : '') + ':\n\n' + texto;
+      'Estimado/a:\n\n' +
+      'El solicitante ha respondido a la información pendiente de la solicitud ' +
+      solicitud.solicitud_id + (subsolicitudId ? ' (ítem ' + subsolicitudId + ')' : '') + '.\n\n' +
+      'RESPUESTA DEL SOLICITANTE\n' +
+      '"' + texto + '"\n\n' +
+      'ACCIÓN REQUERIDA\n' +
+      'Ingrese al Backoffice para revisar la respuesta y continuar con la gestión ' +
+      'del ítem (sigue en estado "Esperando información" hasta que usted lo avance).' +
+      pieCorreo_();
     return emails.map(function (email) {
       return enviarCorreo_(solicitud.solicitud_id, email, 'RESPUESTA_SOLICITANTE:' + (subsolicitudId || solicitud.solicitud_id), asunto, cuerpo);
     });
@@ -85,11 +143,17 @@ var Notificaciones = {
   // correo) para que dos pedidos seguidos del mismo correo no se deduplique
   // el segundo -- cada codigo es distinto, cada uno debe llegar.
   enviarCodigoAcceso: function (email, codigo) {
-    var asunto = 'SIGSO - Tu código de acceso: ' + codigo;
+    var asunto = 'SIGSO — Código de acceso a Mis solicitudes: ' + codigo;
     var cuerpo =
-      'Usa este código en "Consultar estado > Mis solicitudes" para ver todas tus solicitudes:\n\n' +
-      codigo + '\n\n' +
-      'Es válido por 10 minutos. Si tú no lo pediste, ignora este correo.';
+      'Estimado/a:\n\n' +
+      'Ha solicitado acceder a la vista "Mis solicitudes" del sistema SIGSO. ' +
+      'Su código de verificación es:\n\n' +
+      '    ' + codigo + '\n\n' +
+      'Ingréselo en la página de Consultar Estado, pestaña "Mis solicitudes":\n' +
+      SITIO_PUBLICO_CORREOS + 'estado.html\n\n' +
+      'El código es válido por 10 minutos y de un solo uso. Si usted no lo ' +
+      'solicitó, puede ignorar este correo con tranquilidad.' +
+      pieCorreo_();
     return enviarCorreo_(email, email, 'CODIGO_ACCESO:' + codigo, asunto, cuerpo);
   }
 };

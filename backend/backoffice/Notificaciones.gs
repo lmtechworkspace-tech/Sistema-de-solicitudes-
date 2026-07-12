@@ -29,10 +29,16 @@ var Notificaciones = {
     if (!solicitud.solicitante_email) {
       return { enviado: false, motivo: 'sin_destinatario' };
     }
-    var asunto = 'SIGSO - Actualizacion de tu solicitud ' + solicitudId;
+    var asunto = 'SIGSO — Actualización de su solicitud ' + solicitudId;
     var cuerpo =
-      'Tu solicitud ' + solicitudId + ' cambio de estado: ' +
-      formatearEstado_(estadoAnterior) + ' -> ' + formatearEstado_(estadoNuevo) + '.';
+      'Estimado/a ' + (solicitud.solicitante_nombre || '') + ':\n\n' +
+      'Le informamos que su solicitud ha registrado un cambio de estado en el sistema.\n\n' +
+      'DETALLE\n' +
+      '- N° de solicitud: ' + solicitudId + '\n' +
+      '- Estado anterior: ' + formatearEstado_(estadoAnterior) + '\n' +
+      '- Estado nuevo: ' + formatearEstado_(estadoNuevo) + '\n\n' +
+      'Puede revisar el detalle completo en la página de Consultar Estado del sistema.' +
+      pieCorreoBackoffice_();
     var evento = 'CAMBIO_ESTADO:' + subsolicitudId + ':' + estadoNuevo;
     if (yaNotificadoRecientemente_(solicitudId, evento, solicitud.solicitante_email)) {
       return { enviado: false, motivo: 'deduplicado' };
@@ -89,10 +95,17 @@ var Notificaciones = {
     if (!solicitud.solicitante_email) {
       return { enviado: false, motivo: 'sin_destinatario' };
     }
-    var asunto = 'SIGSO - Fecha comprometida para tu solicitud ' + solicitud.solicitud_id;
+    var asunto = 'SIGSO — Fecha comprometida para su solicitud ' + solicitud.solicitud_id;
     var cuerpo =
-      'El equipo se comprometio a resolver "' + subsolicitud.titulo + '" (item ' + subsolicitud.subsolicitud_id +
-      ' de tu solicitud ' + solicitud.solicitud_id + ') para el ' + String(fechaComprometida).replace('T', ' ') + '.';
+      'Estimado/a ' + (solicitud.solicitante_nombre || '') + ':\n\n' +
+      'Le informamos que el equipo responsable ha comprometido una fecha de ' +
+      'entrega para el siguiente ítem de su solicitud:\n\n' +
+      'DETALLE\n' +
+      '- Ítem: ' + subsolicitud.subsolicitud_id + ' — ' + subsolicitud.titulo + '\n' +
+      '- Solicitud: ' + solicitud.solicitud_id + '\n' +
+      '- Fecha comprometida de entrega: ' + String(fechaComprometida).replace('T', ' ') + '\n\n' +
+      'Le avisaremos cuando el trabajo esté terminado para su validación.' +
+      pieCorreoBackoffice_();
     var evento = 'COMPROMISO_FECHA:' + subsolicitud.subsolicitud_id + ':' + fechaComprometida;
     return enviarCorreo_(solicitud.solicitud_id, solicitud.solicitante_email, evento, asunto, cuerpo);
   },
@@ -128,12 +141,21 @@ var Notificaciones = {
     if (!solicitud.solicitante_email) {
       return { enviado: false, motivo: 'sin_destinatario' };
     }
-    var asunto = 'SIGSO - Tienes un item listo para validar: ' + subsolicitud.subsolicitud_id;
+    var asunto = 'SIGSO — Ítem pendiente de su validación: ' + subsolicitud.subsolicitud_id;
     var cuerpo =
-      '"' + subsolicitud.titulo + '" (item ' + subsolicitud.subsolicitud_id + ' de tu solicitud ' + solicitud.solicitud_id +
-      ') esta terminado hace ' + diasHabilesEsperando + ' dia(s) habil(es) y todavia no lo validas. ' +
-      'Ingresa a Consultar Estado para confirmarlo o avisarnos si algo falta -- si no hay respuesta, se cerrara automaticamente en ' +
-      DIAS_HABILES_CIERRE_AUTOMATICO + ' dias habiles desde que se marco Terminada.';
+      'Estimado/a ' + (solicitud.solicitante_nombre || '') + ':\n\n' +
+      'Le recordamos que el siguiente ítem de su solicitud está terminado y ' +
+      'pendiente de su validación:\n\n' +
+      'DETALLE\n' +
+      '- Ítem: ' + subsolicitud.subsolicitud_id + ' — ' + subsolicitud.titulo + '\n' +
+      '- Solicitud: ' + solicitud.solicitud_id + '\n' +
+      '- Días hábiles esperando su revisión: ' + diasHabilesEsperando + '\n\n' +
+      'ACCIÓN REQUERIDA\n' +
+      'Ingrese a Consultar Estado para confirmar que quedó resuelto, o para ' +
+      'indicarnos si algo falta. Si no hay respuesta, el ítem se cerrará ' +
+      'automáticamente a los ' + DIAS_HABILES_CIERRE_AUTOMATICO + ' días hábiles ' +
+      'desde que se marcó como Terminado.' +
+      pieCorreoBackoffice_();
     return enviarCorreo_(
       solicitud.solicitud_id, solicitud.solicitante_email, 'RECORDATORIO_VALIDACION:' + subsolicitud.subsolicitud_id, asunto, cuerpo,
       VENTANA_DEDUP_SLA_VENCIDO_MINUTOS
@@ -239,6 +261,17 @@ var Notificaciones = {
     });
   }
 };
+
+// Pie comun de los correos formales (v3.0, mejora de redaccion). Duplicado
+// deliberado con backend/intake/Notificaciones.gs (proyectos Apps Script
+// separados, misma nota de duplicacion de siempre).
+function pieCorreoBackoffice_() {
+  return '\n\n' +
+    '--------------------------------------------------\n' +
+    'Este es un mensaje automatico del sistema SIGSO.\n' +
+    'Por favor no responda directamente a este correo.\n' +
+    'Equipo SIGSO — HomePymes / RLD';
+}
 
 function formatearEstado_(codigo) {
   var etiquetas = {

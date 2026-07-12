@@ -213,16 +213,41 @@
 
   // --- Catalogos --------------------------------------------------------
 
+  // v3.0 (optimizacion): "stale-while-revalidate" -- si hay catalogos
+  // guardados de una visita anterior (localStorage), el formulario se dibuja
+  // AL INSTANTE con esos, y en paralelo se piden los frescos al servidor
+  // (que ademas ya los sirve cacheados, ver backend/intake/Catalogos.gs).
+  // Antes el formulario quedaba con selects vacios hasta que respondia
+  // Apps Script (varios segundos en frio).
+  var LLAVE_CACHE_CATALOGOS = 'sigso_cache_catalogos';
+
+  function aplicarCatalogos_(catalogos) {
+    estado.catalogos = catalogos;
+    poblarSelect_('campo-empresa', estado.catalogos.empresas, 'empresa_id', 'nombre');
+    poblarPlataformas_();
+    poblarAreas_();
+    renderSubsolicitudes_();
+  }
+
   function cargarCatalogos_() {
+    try {
+      var guardado = window.localStorage.getItem(LLAVE_CACHE_CATALOGOS);
+      if (guardado) {
+        aplicarCatalogos_(JSON.parse(guardado));
+      }
+    } catch (err) {
+      // cache local corrupto o no disponible: se espera la respuesta fresca.
+    }
     llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'getCatalogos', {}).then(function (respuesta) {
       if (!respuesta.ok) {
         return;
       }
-      estado.catalogos = respuesta.data;
-      poblarSelect_('campo-empresa', estado.catalogos.empresas, 'empresa_id', 'nombre');
-      poblarPlataformas_();
-      poblarAreas_();
-      renderSubsolicitudes_();
+      try {
+        window.localStorage.setItem(LLAVE_CACHE_CATALOGOS, JSON.stringify(respuesta.data));
+      } catch (err) {
+        // localStorage lleno o en modo privado: no es critico.
+      }
+      aplicarCatalogos_(respuesta.data);
     });
   }
 
@@ -956,13 +981,22 @@
     }
     contenedor.innerHTML =
       '<div class="sigso-resultado-exito">' +
-      '<p>Solicitud registrada:</p>' +
+      '<h2>Su solicitud fue registrada correctamente</h2>' +
+      '<p>Guarde este número para hacer seguimiento:</p>' +
       '<p class="sigso-numero-solicitud">' + data.solicitud_id + '</p>' +
       aviso +
       avisoImagenes +
+      '<h3>¿Qué sigue?</h3>' +
+      '<ol class="sigso-pasos-siguientes">' +
+      '<li>Recibirá un <strong>correo de confirmación</strong> con el detalle de su solicitud.</li>' +
+      '<li>El equipo responsable la revisará y <strong>comprometerá una fecha de entrega</strong> (se le avisará por correo).</li>' +
+      '<li>Cuando el trabajo esté terminado, deberá <strong>validarlo</strong> desde <a href="estado.html">Consultar estado</a>.</li>' +
+      '</ol>' +
+      '<p class="sigso-ayuda">También puede ver todas sus solicitudes en Consultar estado &rarr; pestaña "Mis solicitudes", con su correo.</p>' +
       '<p>Resumen para compartir por WhatsApp:</p>' +
       '<pre class="sigso-resumen-whatsapp">' + Componentes.escaparHtml(data.resumen_whatsapp) + '</pre>' +
-      '<button type="button" class="sigso-boton--secundario" id="btn-copiar-resumen">Copiar resumen</button>' +
+      '<button type="button" class="sigso-boton--secundario" id="btn-copiar-resumen">Copiar resumen</button> ' +
+      '<a class="sigso-boton" href="estado.html?id=' + encodeURIComponent(data.solicitud_id) + '">Ir a Consultar estado</a>' +
       '</div>';
     var btnCopiar = document.getElementById('btn-copiar-resumen');
     if (btnCopiar) {

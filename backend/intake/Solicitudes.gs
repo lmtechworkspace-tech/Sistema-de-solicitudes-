@@ -174,10 +174,15 @@ var Solicitudes = {
     });
 
     // §5.1 pasos 6-7: acuse de recibo siempre al solicitante (con su cc).
+    // v3.0 (mejora de redaccion): se pasan empresa/prioridad/total de items
+    // para que el correo formal incluya el detalle completo.
     Notificaciones.enviarAcuseRecibo({
       solicitud_id: solicitudId,
       solicitante_nombre: data.solicitante_nombre,
       solicitante_email: data.solicitante_email,
+      empresa_id: data.empresa_id,
+      prioridad: prioridadDerivada,
+      total_items: data.subsolicitudes.length,
       resumen_whatsapp: resumenWhatsapp,
       cc: data.cc || ''
     });

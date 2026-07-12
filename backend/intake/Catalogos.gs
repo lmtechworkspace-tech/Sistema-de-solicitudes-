@@ -4,9 +4,21 @@
  * administracion (Fase 6) que el formulario publico no necesita ver.
  */
 
+// v3.0 (optimizacion): los catalogos cambian rara vez pero se leen en CADA
+// carga del formulario (5 hojas completas). Se cachean 5 minutos en
+// CacheService -- mismo patron/TTL que Dashboard.getData (C-13). La
+// consecuencia aceptada es que un cambio de catalogo desde Administracion
+// puede tardar hasta 5 minutos en verse en el formulario publico.
+var CATALOGOS_CACHE_TTL_SEGUNDOS = 300;
+
 var Catalogos = {
   getAll: function () {
-    return {
+    var cache = CacheService.getScriptCache();
+    var cacheado = cache.get('catalogos_publicos');
+    if (cacheado) {
+      return JSON.parse(cacheado);
+    }
+    var datos = {
       empresas: filtrarActivos_(leerFilas_(SHEETS.CAT_EMPRESAS)),
       plataformas: filtrarActivos_(leerFilas_(SHEETS.CAT_PLATAFORMAS)),
       modulos: filtrarActivos_(leerFilas_(SHEETS.CAT_MODULOS)),
@@ -18,6 +30,15 @@ var Catalogos = {
       // el formulario simplemente no muestra el selector de area.
       areas: proyectarAreasPublicas_()
     };
+    // CacheService limita cada valor a ~100 KB: si el catalogo creciera mas
+    // que eso, se sirve sin cachear en vez de romper (mismo criterio que
+    // Gerencia.getPanel).
+    try {
+      cache.put('catalogos_publicos', JSON.stringify(datos), CATALOGOS_CACHE_TTL_SEGUNDOS);
+    } catch (err) {
+      // demasiado grande para el cache: se sirve directo.
+    }
+    return datos;
   }
 };
 
