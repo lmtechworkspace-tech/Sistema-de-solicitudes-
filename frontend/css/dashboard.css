@@ -435,6 +435,13 @@
   display: none;
 }
 
+/* Horizontal: el tablero tiene 10 columnas -- en vertical (carta/A4) el
+   navegador las corta en vez de encogerlas. */
+@page {
+  size: landscape;
+  margin: 10mm;
+}
+
 @media print {
   .sigso-header,
   .sigso-no-imprimir,
@@ -448,7 +455,24 @@
     display: block;
   }
 
+  /* El contenedor con scroll horizontal (pensado para pantalla) no sirve
+     en papel -- el navegador no imprime la barra de scroll, solo corta el
+     contenido que sobra. Se deja fluir y se reparte el ancho disponible
+     entre columnas en vez de dejarlas de ancho fijo por su contenido. */
+  #ger-contenedor-tablero div {
+    overflow: visible !important;
+  }
+
   .sigso-tabla-tablero {
-    font-size: 0.75rem;
+    table-layout: fixed;
+    width: 100%;
+    font-size: 0.65rem;
+  }
+
+  .sigso-tabla-tablero th,
+  .sigso-tabla-tablero td {
+    white-space: normal;
+    word-break: break-word;
+    padding: 0.3rem 0.35rem;
   }
 }
