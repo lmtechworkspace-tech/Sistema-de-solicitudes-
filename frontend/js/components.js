@@ -130,14 +130,21 @@
 
     // Fase 10 (pulido): reemplaza las 4 tarjetas de KPI que vivian como
     // HTML estatico repetido en app.html.
+    // UI-5 (§4): si opts.filtro viene, el KPI se renderiza como <button> --
+    // permite filtrar la lista de abajo con un clic (KPI "accionable") en
+    // vez de ser solo un numero decorativo. opts.activo resalta el filtro
+    // actualmente aplicado.
     kpi: function (opts) {
       opts = opts || {};
-      return '<div class="sigso-kpi' + (opts.alerta ? ' sigso-kpi--alerta' : '') + '"' +
+      var tag = opts.filtro ? 'button' : 'div';
+      var clases = 'sigso-kpi' + (opts.alerta ? ' sigso-kpi--alerta' : '') + (opts.filtro ? ' sigso-kpi--clicable' : '') + (opts.activo ? ' sigso-kpi--activo' : '');
+      return '<' + tag + ' class="' + clases + '"' +
+        (tag === 'button' ? ' type="button" data-filtro-kpi="' + escaparHtml(opts.filtro) + '"' : '') +
         (opts.id ? ' id="' + opts.id + '"' : '') +
         (opts.titulo ? ' title="' + escaparHtml(opts.titulo) + '"' : '') + '>' +
         '<div class="sigso-kpi__valor">' + escaparHtml(opts.valor === undefined ? '—' : opts.valor) + '</div>' +
         '<div class="sigso-kpi__etiqueta">' + escaparHtml(opts.etiqueta) + '</div>' +
-        '</div>';
+        '</' + tag + '>';
     },
 
     vacio: function (texto) {

@@ -65,20 +65,37 @@
 
       <div id="contenedor-alertas-patron"></div>
 
-      <div class="sigso-graficos">
-        <div class="sigso-card sigso-grafico-card"><h3>Por estado</h3><canvas id="grafico-estado"></canvas></div>
-        <div class="sigso-card sigso-grafico-card"><h3>Por prioridad</h3><canvas id="grafico-prioridad"></canvas></div>
-        <div class="sigso-card sigso-grafico-card"><h3>Por empresa</h3><canvas id="grafico-empresa"></canvas></div>
+      <!-- UI-5 (§4): lo que necesita accion de Leo va primero, antes de
+           cualquier numero decorativo -- fuera de plazo, respuesta recibida
+           sin leer, criticas P1. Se oculta solo si no hay nada pendiente. -->
+      <div id="contenedor-requieren-accion"></div>
+
+      <!-- UI-5 (§4): "Resumen" (recientes, lo accionable) es la pestaña por
+           defecto; los graficos pasan a "Analisis" -- son utiles para mirar
+           tendencias, no para el trabajo del dia a dia. -->
+      <div class="sigso-tabs" id="tabs-dashboard">
+        <button type="button" class="sigso-tabs__boton sigso-tabs__boton--activo" data-tab="resumen">Resumen</button>
+        <button type="button" class="sigso-tabs__boton" data-tab="analisis">Análisis</button>
       </div>
 
-      <div class="sigso-card">
-        <h3>Solicitudes recientes</h3>
-        <div class="sigso-campo">
-          <input type="text" id="buscar-recientes" placeholder="Buscar por N&deg; de solicitud, solicitante, correo, empresa o m&oacute;dulo...">
-          <p class="sigso-ayuda">Filtra sobre lo ya cargado al escribir. Presiona "Actualizar" arriba para buscar por solicitante en TODAS las solicitudes, no solo las recientes.</p>
+      <div id="tab-resumen">
+        <div class="sigso-card">
+          <h3>Solicitudes recientes</h3>
+          <div class="sigso-campo">
+            <input type="text" id="buscar-recientes" placeholder="Buscar por N&deg; de solicitud, solicitante, correo, empresa o m&oacute;dulo...">
+            <p class="sigso-ayuda">Filtra sobre lo ya cargado al escribir. Presiona "Actualizar" arriba para buscar por solicitante en TODAS las solicitudes, no solo las recientes.</p>
+          </div>
+          <button type="button" class="sigso-boton--secundario" id="btn-exportar-csv">Exportar CSV</button>
+          <div id="lista-recientes"></div>
         </div>
-        <button type="button" class="sigso-boton--secundario" id="btn-exportar-csv">Exportar CSV</button>
-        <div id="lista-recientes"></div>
+      </div>
+
+      <div id="tab-analisis" class="sigso-oculto">
+        <div class="sigso-graficos">
+          <div class="sigso-card sigso-grafico-card"><h3>Por estado</h3><canvas id="grafico-estado"></canvas></div>
+          <div class="sigso-card sigso-grafico-card"><h3>Por prioridad</h3><canvas id="grafico-prioridad"></canvas></div>
+          <div class="sigso-card sigso-grafico-card"><h3>Por empresa</h3><canvas id="grafico-empresa"></canvas></div>
+        </div>
       </div>
     </section>
 

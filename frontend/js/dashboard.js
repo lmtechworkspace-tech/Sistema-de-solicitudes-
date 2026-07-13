@@ -35,6 +35,19 @@
     // "de que son los tickets de Juan" sin ese limite).
     document.getElementById('buscar-recientes').addEventListener('input', renderRecientes_);
     document.getElementById('btn-exportar-csv').addEventListener('click', exportarCSV_);
+
+    // UI-5 (§4): tabs Resumen/Analisis -- los graficos (tendencias) no son
+    // el trabajo del dia a dia, se sacan de la vista principal.
+    document.getElementById('tabs-dashboard').querySelectorAll('[data-tab]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        var tab = boton.getAttribute('data-tab');
+        document.getElementById('tabs-dashboard').querySelectorAll('[data-tab]').forEach(function (b) {
+          b.classList.toggle('sigso-tabs__boton--activo', b === boton);
+        });
+        document.getElementById('tab-resumen').classList.toggle('sigso-oculto', tab !== 'resumen');
+        document.getElementById('tab-analisis').classList.toggle('sigso-oculto', tab !== 'analisis');
+      });
+    });
   }
 
   function leerFiltros_() {
@@ -62,6 +75,7 @@
       renderGrafico_('grafico-prioridad', 'doughnut', respuesta.data.por_prioridad);
       renderGrafico_('grafico-empresa', 'bar', respuesta.data.por_empresa);
       recientesActuales = respuesta.data.recientes;
+      renderRequierenAccion_();
       renderRecientes_();
       // v2.1 (Fase C): el Panel de Gerencia es "su vista principal" -- el
       // boton de acceso solo aparece para ese rol (el backend ya no
@@ -106,13 +120,59 @@
   }
 
   var recientesActuales = [];
+  // UI-5 (§4): KPI accionable -- clic filtra "Solicitudes recientes" abajo
+  // sin golpear el backend de nuevo (mismo patron que categoriaActiva en
+  // gerencia.js). null = sin filtro de KPI activo.
+  var kpiActivo = null;
+  var ESTADOS_CERRADOS_CLIENTE = ['S09', 'S10', 'S11'];
 
   function renderKpis_(resumen) {
     document.getElementById('contenedor-kpis').innerHTML =
-      Componentes.kpi({ valor: resumen.total_abiertas, etiqueta: 'Abiertas', titulo: 'Solicitudes que aun no estan cerradas, rechazadas ni canceladas.' }) +
-      Componentes.kpi({ valor: resumen.criticas_activas, etiqueta: 'Criticas activas', alerta: true, titulo: 'Solicitudes abiertas de prioridad P1 (la mas alta).' }) +
-      Componentes.kpi({ valor: resumen.sla_vencido, etiqueta: 'Fuera de plazo', alerta: true, titulo: 'Items que ya pasaron su tiempo objetivo de respuesta segun la prioridad (P1: 2h, P2: 24h, P3: 72h, P4: 120h; en horas habiles).' }) +
-      Componentes.kpi({ valor: resumen.del_dia, etiqueta: 'Ingresadas hoy', titulo: 'Solicitudes creadas hoy.' });
+      Componentes.kpi({ valor: resumen.total_abiertas, etiqueta: 'Abiertas', titulo: 'Solicitudes que aun no estan cerradas, rechazadas ni canceladas. Clic para filtrar.', filtro: 'abiertas', activo: kpiActivo === 'abiertas' }) +
+      Componentes.kpi({ valor: resumen.criticas_activas, etiqueta: 'Criticas activas', alerta: true, titulo: 'Solicitudes abiertas de prioridad P1 (la mas alta). Clic para filtrar.', filtro: 'criticas', activo: kpiActivo === 'criticas' }) +
+      Componentes.kpi({ valor: resumen.sla_vencido, etiqueta: 'Fuera de plazo', alerta: true, titulo: 'Items que ya pasaron su tiempo objetivo de respuesta segun la prioridad (P1: 2h, P2: 24h, P3: 72h, P4: 120h; en horas habiles). Clic para filtrar.', filtro: 'fuera_plazo', activo: kpiActivo === 'fuera_plazo' }) +
+      Componentes.kpi({ valor: resumen.del_dia, etiqueta: 'Ingresadas hoy', titulo: 'Solicitudes creadas hoy. Clic para filtrar.', filtro: 'hoy', activo: kpiActivo === 'hoy' });
+
+    document.getElementById('contenedor-kpis').querySelectorAll('[data-filtro-kpi]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        var filtro = boton.getAttribute('data-filtro-kpi');
+        kpiActivo = kpiActivo === filtro ? null : filtro;
+        renderKpis_(resumen);
+        renderRecientes_();
+      });
+    });
+  }
+
+  // UI-5 (§4): "Requieren tu accion" -- lo primero que Leo deberia ver, antes
+  // que cualquier numero decorativo. Se arma client-side sobre lo ya cargado
+  // (misma fuente que "Solicitudes recientes"), sin pedirle nada nuevo al
+  // backend.
+  function requierenAccion_() {
+    return recientesActuales.filter(function (s) {
+      return (s.sla_restante_horas !== null && s.sla_restante_horas !== undefined && s.sla_restante_horas < 0) ||
+        s.respuesta_pendiente ||
+        (s.prioridad_derivada === 'P1' && ESTADOS_CERRADOS_CLIENTE.indexOf(s.estado_derivado) === -1);
+    });
+  }
+
+  function renderRequierenAccion_() {
+    var contenedor = document.getElementById('contenedor-requieren-accion');
+    var items = requierenAccion_();
+    if (items.length === 0) {
+      contenedor.innerHTML = '';
+      return;
+    }
+    contenedor.innerHTML = Componentes.tarjeta(
+      '<h3>Requieren tu acción (' + items.length + ')</h3>' +
+      items.map(renderFilaReciente_).join('')
+    );
+    contenedor.querySelectorAll('[data-id]').forEach(function (fila) {
+      fila.addEventListener('click', function () {
+        if (typeof window.SigsoApp !== 'undefined') {
+          window.SigsoApp.mostrarDetalle(fila.getAttribute('data-id'));
+        }
+      });
+    });
   }
 
   // P7 (v2.0, Sprint 3): "el modulo X acumula N reportes de tipo Error esta
@@ -161,7 +221,7 @@
   function renderRecientes_() {
     var contenedor = document.getElementById('lista-recientes');
     var campoAgrupar = document.getElementById('filtro-agrupar').value;
-    var filtradas = filtrarPorTexto_(recientesActuales);
+    var filtradas = filtrarPorKpi_(filtrarPorTexto_(recientesActuales));
 
     if (!campoAgrupar) {
       contenedor.innerHTML = filtradas.map(renderFilaReciente_).join('') ||
@@ -194,6 +254,21 @@
     });
   }
 
+  // UI-5 (§4): aplica el KPI accionable elegido arriba, sobre lo mismo que
+  // ya filtro el buscador -- ambos filtros se combinan (AND), no se pisan.
+  function filtrarPorKpi_(lista) {
+    if (!kpiActivo) return lista;
+    var hoy = new Date().toDateString();
+    return lista.filter(function (s) {
+      var abierta = ESTADOS_CERRADOS_CLIENTE.indexOf(s.estado_derivado) === -1;
+      if (kpiActivo === 'abiertas') return abierta;
+      if (kpiActivo === 'criticas') return abierta && s.prioridad_derivada === 'P1';
+      if (kpiActivo === 'fuera_plazo') return s.sla_restante_horas !== null && s.sla_restante_horas !== undefined && s.sla_restante_horas < 0;
+      if (kpiActivo === 'hoy') return new Date(s.fecha_creacion).toDateString() === hoy;
+      return true;
+    });
+  }
+
   function agruparPara_(lista, campo) {
     var etiquetador = campo === 'estado_derivado' ? formatearEstadoSigso : function (v) { return v; };
     var grupos = {};
@@ -207,6 +282,16 @@
     });
   }
 
+  // UI-5 (§4): semaforo inline -- un vistazo (🔴/🟡/🟢) antes de leer texto,
+  // igual criterio que renderIndicadorSla_ pero como icono para escanear la
+  // lista rapido (mismo espiritu que el semaforo de Gerencia).
+  function semaforoInline_(horas) {
+    if (horas === null || horas === undefined) return '⚪';
+    if (horas < 0) return '🔴';
+    if (horas < 24) return '🟡';
+    return '🟢';
+  }
+
   function renderFilaReciente_(s) {
     var sla = renderIndicadorSla_(s.sla_restante_horas);
     // P5 (v2.0, Sprint 3): badge visual de "respuesta recibida" -- para que
@@ -214,6 +299,7 @@
     var badgeRespuesta = s.respuesta_pendiente ? ' ' + Componentes.badge('Respuesta recibida', 'P2') : '';
     return '<div class="sigso-fila-reciente" data-id="' + s.solicitud_id + '">' +
       '<div class="sigso-fila-reciente__principal">' +
+      '<span class="sigso-semaforo-inline" title="Estado de plazo">' + semaforoInline_(s.sla_restante_horas) + '</span> ' +
       Componentes.badgePrioridad(s.prioridad_derivada) + ' ' +
       '<strong class="sigso-id">' + s.solicitud_id + '</strong> ' +
       Componentes.badgeEstado(s.estado_derivado) + badgeRespuesta +

@@ -30,6 +30,35 @@
   color: var(--p1);
 }
 
+/* UI-5 (§4): KPI accionable -- se ve clicable y marca el filtro activo, para
+   que quede claro que "Solicitudes recientes" abajo esta filtrado por el. */
+button.sigso-kpi {
+  border: 1px solid transparent;
+  font: inherit;
+  width: 100%;
+}
+
+.sigso-kpi--clicable {
+  cursor: pointer;
+}
+
+.sigso-kpi--clicable:hover {
+  box-shadow: 0 0 0 1px var(--azul);
+}
+
+.sigso-kpi--activo {
+  border-color: var(--azul);
+  box-shadow: 0 0 0 2px var(--azul) inset;
+}
+
+/* UI-5 (§4): "Requieren tu accion" -- primera cosa que ve Leo, antes de los
+   KPIs decorativos. Mismo estilo de tarjeta que el resto, sin nada especial
+   que lo distinga como "otro tipo de bloque" (ya lo distingue el orden y el
+   titulo). */
+#contenedor-requieren-accion .sigso-card {
+  margin-bottom: 1.5rem;
+}
+
 .sigso-filtros {
   display: flex;
   gap: 1rem;
