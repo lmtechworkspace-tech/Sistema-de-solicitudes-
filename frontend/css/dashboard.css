@@ -103,6 +103,31 @@
   gap: 0.4rem;
 }
 
+/* Rediseño vista desarrollador: titulos que separan Avanzar / Fecha /
+   Prioridad dentro de la tarjeta del item. */
+.sigso-titulo-accion {
+  margin: 1rem 0 0.25rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gris-medio);
+}
+
+.sigso-mas-acciones {
+  margin-top: 0.5rem;
+}
+
+.sigso-mas-acciones summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: var(--azul);
+  user-select: none;
+}
+
+.sigso-mas-acciones[open] summary {
+  margin-bottom: 0.4rem;
+}
+
 .sigso-botonera-estado .sigso-accion-estado {
   flex: 0 0 auto;
   min-width: 0;

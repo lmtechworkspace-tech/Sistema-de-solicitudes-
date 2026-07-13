@@ -16,6 +16,36 @@
 
   var detalleActual = null;
 
+  // Fix (reporte real de produccion): al tocar una accion, se aplicaban
+  // varios cambios de estado en rafaga. Candado global: mientras hay una
+  // accion en vuelo se ignora cualquier otro clic (de este u otro boton),
+  // y los botones se deshabilitan visualmente hasta que el detalle se
+  // recarga o la accion falla.
+  var accionEnCurso = false;
+
+  function bloquearAcciones_(botonActivo) {
+    accionEnCurso = true;
+    document.querySelectorAll('.sigso-accion-estado, .sigso-aplicar-fecha, .sigso-aplicar-prioridad').forEach(function (b) {
+      b.disabled = true;
+    });
+    if (botonActivo) {
+      botonActivo.setAttribute('data-texto-original', botonActivo.textContent);
+      botonActivo.innerHTML = '<span class="sigso-spinner"></span>Aplicando…';
+    }
+  }
+
+  function desbloquearAcciones_() {
+    accionEnCurso = false;
+    document.querySelectorAll('.sigso-accion-estado, .sigso-aplicar-fecha, .sigso-aplicar-prioridad').forEach(function (b) {
+      b.disabled = false;
+      var original = b.getAttribute('data-texto-original');
+      if (original) {
+        b.textContent = original;
+        b.removeAttribute('data-texto-original');
+      }
+    });
+  }
+
   function cargarDetalle_(solicitudId) {
     return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getSolicitudDetalle', { solicitud_id: solicitudId })
       .then(function (respuesta) {
@@ -140,15 +170,18 @@
       if (sub.estimacion_horas) datos.push(renderCampoDato_('Estimacion', sub.estimacion_horas + ' h' + (sub.horas_reales ? ' (reales: ' + sub.horas_reales + ' h)' : '')));
       // v2.1 (Fase A): "dos promesas" -- lo que propuso el solicitante vs. lo
       // que Leo comprometio (la oficial, ver §2.1 de la especificacion).
-      if (sub.fecha_propuesta) datos.push(renderCampoDato_('Fecha propuesta (solicitante)', Componentes.escaparHtml(sub.fecha_propuesta.replace('T', ' '))));
-      if (sub.fecha_comprometida) datos.push(renderCampoDato_('Fecha comprometida', Componentes.escaparHtml(sub.fecha_comprometida.replace('T', ' ')) + (sub.comprometida_por ? ' — ' + Componentes.escaparHtml(sub.comprometida_por) : '')));
+      if (sub.fecha_propuesta) datos.push(renderCampoDato_('Fecha propuesta (solicitante)', Componentes.escaparHtml(fechaCorta_(sub.fecha_propuesta))));
+      if (sub.fecha_comprometida) datos.push(renderCampoDato_('Fecha comprometida', Componentes.escaparHtml(fechaCorta_(sub.fecha_comprometida)) + (sub.comprometida_por ? ' — ' + Componentes.escaparHtml(sub.comprometida_por) : '')));
       if (sub.fecha_terminada) datos.push(renderCampoDato_('Terminada el', Componentes.escaparHtml(new Date(sub.fecha_terminada).toLocaleString('es-CL'))));
       // v2.1 (Fase B): semaforo de cumplimiento (§6) -- ya calculado por
       // getDetalle (Cumplimiento.gs), aqui solo se muestra.
       var cumplimientoBadge = sub.cumplimiento
         ? ' ' + Componentes.badge(sub.cumplimiento.emoji + ' ' + sub.cumplimiento.etiqueta, '')
         : '';
-      if (sub.cumplimiento && sub.cumplimiento.dias_esperando !== null) {
+      // != null (laxo) cubre tambien undefined -- un backend desplegado con
+      // una version anterior puede no traer dias_esperando y antes se
+      // imprimia "undefined dia(s)".
+      if (sub.cumplimiento && sub.cumplimiento.dias_esperando != null) {
         datos.push(renderCampoDato_('Esperando validación', sub.cumplimiento.dias_esperando + ' día(s) hábil(es)'));
       }
 
@@ -197,17 +230,50 @@
     S08: 'Marcar terminada', S09: 'Cerrar', S10: 'Rechazar', S11: 'Cancelar'
   };
 
+  // Rediseño de la vista del desarrollador (feedback real: "muchos botones,
+  // no queda claro el flujo"): las transiciones se separan en AVANZAR (el
+  // camino natural hacia adelante, con el siguiente paso destacado en
+  // naranja) y "Más acciones" (retrocesos, rechazar, cancelar) plegadas en
+  // un details -- estan disponibles pero no compiten visualmente.
+  var RANGO_ESTADO = {
+    S01: 0, S02: 1, S03: 2, S04: 3, S05: 4, S06: 4, S07: 5, S08: 6, S09: 7,
+    S10: 99, S11: 99
+  };
+
   function renderAccionesItem_(sub, opcionesTransicion) {
     var selectorEstado = '';
     if (opcionesTransicion.length > 0) {
-      var botones = opcionesTransicion.map(function (t) {
-        return '<button type="button" class="sigso-boton--secundario sigso-accion-estado" ' +
+      var rangoActual = RANGO_ESTADO[sub.estado] !== undefined ? RANGO_ESTADO[sub.estado] : -1;
+      var avanzar = opcionesTransicion.filter(function (t) {
+        return RANGO_ESTADO[t.estado] > rangoActual && RANGO_ESTADO[t.estado] < 99;
+      });
+      var otras = opcionesTransicion.filter(function (t) {
+        return avanzar.indexOf(t) === -1;
+      });
+      // El paso inmediato (menor rango entre los de avanzar) va en naranja:
+      // es LA accion esperada; el resto en secundario.
+      var rangoSiguiente = avanzar.length > 0
+        ? Math.min.apply(null, avanzar.map(function (t) { return RANGO_ESTADO[t.estado]; }))
+        : null;
+
+      function botonDe_(t) {
+        var esPrincipal = RANGO_ESTADO[t.estado] === rangoSiguiente;
+        return '<button type="button" class="' + (esPrincipal ? 'sigso-boton' : 'sigso-boton--secundario') + ' sigso-accion-estado" ' +
           'data-subsolicitud="' + sub.subsolicitud_id + '" data-estado="' + t.estado + '" ' +
           'data-comentario-obligatorio="' + (t.comentario_obligatorio ? '1' : '0') + '">' +
           (VERBO_TRANSICION[t.estado] || t.estado) + '</button>';
-      }).join(' ');
+      }
+
+      var botonesAvanzar = avanzar.map(botonDe_).join(' ');
+      var botonesOtras = otras.map(botonDe_).join(' ');
+
       selectorEstado =
-        '<div class="sigso-acciones-item sigso-botonera-estado">' + botones + '</div>' +
+        '<h4 class="sigso-titulo-accion">Avanzar el ítem</h4>' +
+        '<div class="sigso-acciones-item sigso-botonera-estado">' + (botonesAvanzar || '<span class="sigso-ayuda">Sin pasos siguientes: este ítem ya está al final de su flujo.</span>') + '</div>' +
+        (botonesOtras
+          ? '<details class="sigso-mas-acciones"><summary>Más acciones (retroceder, rechazar, cancelar)</summary>' +
+            '<div class="sigso-acciones-item sigso-botonera-estado">' + botonesOtras + '</div></details>'
+          : '') +
         '<div class="sigso-acciones-item sigso-oculto" data-bloque-motivo="' + sub.subsolicitud_id + '">' +
         '<input type="text" class="sigso-comentario-estado" data-subsolicitud="' + sub.subsolicitud_id + '" placeholder="Motivo (obligatorio para esta acción)">' +
         '</div>' +
@@ -227,7 +293,9 @@
       '<span class="sigso-resultado-accion" data-subsolicitud="' + sub.subsolicitud_id + '-fecha"></span>' +
       '</div>';
 
-    return selectorEstado + bloqueFecha +
+    return selectorEstado +
+      '<h4 class="sigso-titulo-accion">Fecha comprometida</h4>' + bloqueFecha +
+      '<h4 class="sigso-titulo-accion">Prioridad</h4>' +
       '<div class="sigso-acciones-item">' +
       '<select class="sigso-nueva-prioridad" data-subsolicitud="' + sub.subsolicitud_id + '">' +
       ['P1', 'P2', 'P3', 'P4', 'P5'].map(function (p) {
@@ -242,6 +310,12 @@
 
   function renderCampoDato_(etiqueta, valorHtml) {
     return '<dt>' + Componentes.escaparHtml(etiqueta) + '</dt><dd>' + valorHtml + '</dd>';
+  }
+
+  // 'YYYY-MM-DDTHH:MM[:SS.mmmZ]' -> 'YYYY-MM-DD HH:MM' (sin segundos ni la
+  // Z de UTC, que en pantalla solo confunden).
+  function fechaCorta_(valor) {
+    return String(valor).replace('T', ' ').slice(0, 16);
   }
 
   function renderGaleria_(archivos) {
@@ -311,9 +385,12 @@
   function wireAcciones_(solicitudId) {
     // UI-2 (§5): botonera contextual. Si la accion exige motivo, el primer
     // clic revela el campo y el segundo (con texto) aplica -- el usuario
-    // nunca descubre el requisito DESPUES de intentar.
+    // nunca descubre el requisito DESPUES de intentar. El candado
+    // accionEnCurso evita que un segundo clic (en este u otro boton)
+    // dispare otra transicion mientras la primera esta en vuelo.
     document.querySelectorAll('.sigso-accion-estado').forEach(function (boton) {
       boton.addEventListener('click', function () {
+        if (accionEnCurso) return;
         var subId = boton.getAttribute('data-subsolicitud');
         var estado = boton.getAttribute('data-estado');
         var requiereComentario = boton.getAttribute('data-comentario-obligatorio') === '1';
@@ -334,24 +411,29 @@
             return;
           }
         }
+        bloquearAcciones_(boton);
         enviarCambioEstado_(solicitudId, subId, estado, campoComentario ? campoComentario.value : '');
       });
     });
 
     document.querySelectorAll('.sigso-aplicar-fecha').forEach(function (boton) {
       boton.addEventListener('click', function () {
+        if (accionEnCurso) return;
         var subId = boton.getAttribute('data-subsolicitud');
         var fecha = document.querySelector('.sigso-fecha-comprometida[data-subsolicitud="' + subId + '"]').value;
         var motivo = document.querySelector('.sigso-motivo-fecha[data-subsolicitud="' + subId + '"]').value;
+        bloquearAcciones_(boton);
         enviarCompromisoFecha_(solicitudId, subId, fecha, motivo);
       });
     });
 
     document.querySelectorAll('.sigso-aplicar-prioridad').forEach(function (boton) {
       boton.addEventListener('click', function () {
+        if (accionEnCurso) return;
         var subId = boton.getAttribute('data-subsolicitud');
         var prioridad = document.querySelector('.sigso-nueva-prioridad[data-subsolicitud="' + subId + '"]').value;
         var justificacion = document.querySelector('.sigso-justificacion-prioridad[data-subsolicitud="' + subId + '"]').value;
+        bloquearAcciones_(boton);
         enviarCambioPrioridad_(solicitudId, subId, prioridad, justificacion);
       });
     });
@@ -370,10 +452,18 @@
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'actualizarEstado', { subsolicitud_id: subsolicitudId, estado_nuevo: estadoNuevo, comentario: comentario })
       .then(function (respuesta) {
         if (respuesta.ok) {
-          return window.SigsoDetalle.cargar(solicitudId);
+          // La recarga reemplaza los botones (quedan habilitados de fabrica);
+          // solo hay que soltar el candado cuando termina.
+          return window.SigsoDetalle.cargar(solicitudId).then(function () { accionEnCurso = false; });
         }
+        desbloquearAcciones_();
         var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subsolicitudId + '"]');
         if (span) span.textContent = respuesta.message || 'No se pudo aplicar el cambio.';
+      })
+      .catch(function () {
+        desbloquearAcciones_();
+        var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subsolicitudId + '"]');
+        if (span) span.textContent = 'No se pudo conectar con el servidor. Intenta nuevamente.';
       });
   }
 
@@ -385,10 +475,15 @@
       subsolicitud_id: subsolicitudId, fecha_comprometida: fechaComprometida, motivo: motivo
     }).then(function (respuesta) {
       if (respuesta.ok) {
-        return window.SigsoDetalle.cargar(solicitudId);
+        return window.SigsoDetalle.cargar(solicitudId).then(function () { accionEnCurso = false; });
       }
+      desbloquearAcciones_();
       var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subsolicitudId + '-fecha"]');
       if (span) span.textContent = respuesta.message || 'No se pudo comprometer la fecha.';
+    }).catch(function () {
+      desbloquearAcciones_();
+      var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subsolicitudId + '-fecha"]');
+      if (span) span.textContent = 'No se pudo conectar con el servidor. Intenta nuevamente.';
     });
   }
 
@@ -396,10 +491,16 @@
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'actualizarPrioridad', { subsolicitud_id: subsolicitudId, prioridad_nueva: prioridadNueva, justificacion: justificacion })
       .then(function (respuesta) {
         if (respuesta.ok) {
-          return window.SigsoDetalle.cargar(solicitudId);
+          return window.SigsoDetalle.cargar(solicitudId).then(function () { accionEnCurso = false; });
         }
+        desbloquearAcciones_();
         var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subsolicitudId + '-prioridad"]');
         if (span) span.textContent = respuesta.message || 'No se pudo aplicar el cambio.';
+      })
+      .catch(function () {
+        desbloquearAcciones_();
+        var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subsolicitudId + '-prioridad"]');
+        if (span) span.textContent = 'No se pudo conectar con el servidor. Intenta nuevamente.';
       });
   }
 })();
