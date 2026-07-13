@@ -570,6 +570,62 @@ button {
   color: var(--gris-medio);
 }
 
+/* UI-4 (§2): formulario publico en tarjetas tematicas -- agrupa campos
+   relacionados (contexto / cliente / contacto) en vez de una lista plana de
+   .sigso-campo uno tras otro. */
+.sigso-tarjeta-grupo {
+  border: 1px solid var(--gris-claro);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  background: #fff;
+}
+
+.sigso-titulo-grupo {
+  margin: 0 0 0.9rem;
+  font-size: 1rem;
+  color: var(--gris-oscuro, #333);
+}
+
+/* Dos columnas en desktop para campos cortos que caben lado a lado (nombre/
+   cargo, correo/CC). En movil colapsa a una columna (media query abajo). */
+.sigso-campo-doble {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1rem;
+}
+
+/* UI-4 (§7): mejoras moviles -- chips con area tactil >=44px (Apple HIG/
+   Material) y botones de paso fijos abajo de la pantalla para no forzar
+   scroll hasta el fondo del formulario en cada paso. */
+@media (max-width: 640px) {
+  .sigso-campo-doble {
+    grid-template-columns: 1fr;
+  }
+
+  .sigso-chip {
+    padding: 0.6rem 1.1rem;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  #form-solicitud .sigso-campo[style*="margin-top"],
+  #paso-contexto > .sigso-campo:last-child,
+  #paso-items > .sigso-campo,
+  #paso-revision > .sigso-campo:last-child {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    padding: 0.75rem 0;
+    margin: 0 -1rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.06);
+    z-index: 5;
+  }
+}
+
 </style>
   <style>
 /* dashboard.css — Backoffice: KPIs, graficos, tabla, detalle (§12.4/12.5). */
@@ -1043,6 +1099,67 @@ button {
 .sigso-tabla-tablero__grupo td {
   background: var(--gris-claro);
   font-weight: 700;
+}
+
+/* UI-4 (§7): tablero de Gerencia como tarjetas apiladas en movil -- una
+   tabla de 10 columnas no se lee al reves de un celular, aunque tenga
+   scroll horizontal. Cada <tr> pasa a ser una tarjeta y cada <td> una fila
+   etiqueta/valor (usa el data-label agregado en filaTablero_). */
+@media (max-width: 720px) {
+  .sigso-tabla-tablero thead {
+    display: none;
+  }
+
+  .sigso-tabla-tablero,
+  .sigso-tabla-tablero tbody,
+  .sigso-tabla-tablero tr,
+  .sigso-tabla-tablero td {
+    display: block;
+    width: 100%;
+  }
+
+  .sigso-tabla-tablero tr {
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--gris-claro);
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    background: #fff;
+  }
+
+  .sigso-fila--atrasada > td:first-child,
+  .sigso-fila--riesgo > td:first-child {
+    border-left: none;
+  }
+
+  .sigso-tabla-tablero tr.sigso-fila--atrasada { border-left: 4px solid var(--p1); }
+  .sigso-tabla-tablero tr.sigso-fila--riesgo { border-left: 4px solid var(--p3); }
+
+  .sigso-tabla-tablero__grupo {
+    background: var(--gris-claro);
+    font-weight: 700;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+  }
+
+  .sigso-tabla-tablero td {
+    white-space: normal;
+    border-bottom: 1px solid var(--gris-claro);
+    padding: 0.35rem 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .sigso-tabla-tablero td:last-child {
+    border-bottom: none;
+  }
+
+  .sigso-tabla-tablero td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--gris-medio);
+    flex-shrink: 0;
+  }
 }
 
 /* UI-1 (§6): urgencia visible sin leer -- borde izquierdo + tinte suave. */

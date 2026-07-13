@@ -323,3 +323,59 @@
   font-size: 0.78rem;
   color: var(--gris-medio);
 }
+
+/* UI-4 (§2): formulario publico en tarjetas tematicas -- agrupa campos
+   relacionados (contexto / cliente / contacto) en vez de una lista plana de
+   .sigso-campo uno tras otro. */
+.sigso-tarjeta-grupo {
+  border: 1px solid var(--gris-claro);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  background: #fff;
+}
+
+.sigso-titulo-grupo {
+  margin: 0 0 0.9rem;
+  font-size: 1rem;
+  color: var(--gris-oscuro, #333);
+}
+
+/* Dos columnas en desktop para campos cortos que caben lado a lado (nombre/
+   cargo, correo/CC). En movil colapsa a una columna (media query abajo). */
+.sigso-campo-doble {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 1rem;
+}
+
+/* UI-4 (§7): mejoras moviles -- chips con area tactil >=44px (Apple HIG/
+   Material) y botones de paso fijos abajo de la pantalla para no forzar
+   scroll hasta el fondo del formulario en cada paso. */
+@media (max-width: 640px) {
+  .sigso-campo-doble {
+    grid-template-columns: 1fr;
+  }
+
+  .sigso-chip {
+    padding: 0.6rem 1.1rem;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  #form-solicitud .sigso-campo[style*="margin-top"],
+  #paso-contexto > .sigso-campo:last-child,
+  #paso-items > .sigso-campo,
+  #paso-revision > .sigso-campo:last-child {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    padding: 0.75rem 0;
+    margin: 0 -1rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.06);
+    z-index: 5;
+  }
+}

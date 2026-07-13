@@ -471,6 +471,67 @@
   font-weight: 700;
 }
 
+/* UI-4 (§7): tablero de Gerencia como tarjetas apiladas en movil -- una
+   tabla de 10 columnas no se lee al reves de un celular, aunque tenga
+   scroll horizontal. Cada <tr> pasa a ser una tarjeta y cada <td> una fila
+   etiqueta/valor (usa el data-label agregado en filaTablero_). */
+@media (max-width: 720px) {
+  .sigso-tabla-tablero thead {
+    display: none;
+  }
+
+  .sigso-tabla-tablero,
+  .sigso-tabla-tablero tbody,
+  .sigso-tabla-tablero tr,
+  .sigso-tabla-tablero td {
+    display: block;
+    width: 100%;
+  }
+
+  .sigso-tabla-tablero tr {
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--gris-claro);
+    border-radius: 8px;
+    padding: 0.5rem 0.75rem;
+    background: #fff;
+  }
+
+  .sigso-fila--atrasada > td:first-child,
+  .sigso-fila--riesgo > td:first-child {
+    border-left: none;
+  }
+
+  .sigso-tabla-tablero tr.sigso-fila--atrasada { border-left: 4px solid var(--p1); }
+  .sigso-tabla-tablero tr.sigso-fila--riesgo { border-left: 4px solid var(--p3); }
+
+  .sigso-tabla-tablero__grupo {
+    background: var(--gris-claro);
+    font-weight: 700;
+    border-radius: 6px;
+    margin-bottom: 0.5rem;
+  }
+
+  .sigso-tabla-tablero td {
+    white-space: normal;
+    border-bottom: 1px solid var(--gris-claro);
+    padding: 0.35rem 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .sigso-tabla-tablero td:last-child {
+    border-bottom: none;
+  }
+
+  .sigso-tabla-tablero td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--gris-medio);
+    flex-shrink: 0;
+  }
+}
+
 /* UI-1 (§6): urgencia visible sin leer -- borde izquierdo + tinte suave. */
 .sigso-fila--atrasada > td:first-child { border-left: 4px solid var(--p1); }
 .sigso-fila--atrasada > td { background: rgba(192, 57, 43, 0.06); }

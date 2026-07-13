@@ -256,25 +256,30 @@
     return '';
   }
 
+  // UI-4 (§7): data-label por celda -- en movil el tablero se ve como
+  // tarjetas apiladas (CSS en dashboard.css), y cada celda necesita saber
+  // que columna representa sin depender del <thead> (que no es visible ahi).
   function filaTablero_(i) {
     var diasEsperando = i.cumplimiento.dias_esperando;
     var celdaEsperando = diasEsperando === null || diasEsperando === undefined
       ? '—'
       : (i.semaforo_solicitante ? i.semaforo_solicitante.emoji + ' ' : '') + diasEsperando + ' día(s)';
+    var etq = {};
+    COLUMNAS_TABLERO.forEach(function (col) { etq[col.campo] = col.etiqueta; });
     return '<tr data-id="' + i.solicitud_id + '"' + claseUrgenciaFila_(i) + '>' +
-      '<td class="sigso-id">' + Componentes.escaparHtml(i.solicitud_id + '-' + i.numero_item) + '</td>' +
-      '<td>' + Componentes.escaparHtml(i.solicitante_nombre || '') + '</td>' +
+      '<td class="sigso-id" data-label="' + etq.solicitud_id + '">' + Componentes.escaparHtml(i.solicitud_id + '-' + i.numero_item) + '</td>' +
+      '<td data-label="' + etq.solicitante_nombre + '">' + Componentes.escaparHtml(i.solicitante_nombre || '') + '</td>' +
       // UI-1 (§6): nombre legible del responsable (el correo queda como
       // title al pasar el mouse) -- lo resuelve el backend en getPanel.
-      '<td title="' + Componentes.escaparHtml(i.desarrollador_asignado || '') + '">' +
+      '<td data-label="' + etq.desarrollador_asignado + '" title="' + Componentes.escaparHtml(i.desarrollador_asignado || '') + '">' +
       Componentes.escaparHtml(i.desarrollador_nombre || i.desarrollador_asignado || '—') + '</td>' +
-      '<td>' + Componentes.badgeEstado(i.estado) + '</td>' +
-      '<td>' + Componentes.badgePrioridad(i.prioridad) + '</td>' +
-      '<td>' + (i.dias_abierta === null || i.dias_abierta === undefined ? '—' : i.dias_abierta + ' d') + '</td>' +
-      '<td>' + (i.dias_desarrollador === null || i.dias_desarrollador === undefined ? '—' : i.dias_desarrollador + ' d') + '</td>' +
-      '<td>' + celdaEsperando + '</td>' +
-      '<td>' + (i.fecha_comprometida ? Componentes.escaparHtml(String(i.fecha_comprometida).replace('T', ' ').slice(0, 16)) : '—') + '</td>' +
-      '<td>' + i.cumplimiento.emoji + ' ' + Componentes.escaparHtml(i.cumplimiento.etiqueta) + '</td>' +
+      '<td data-label="' + etq.estado + '">' + Componentes.badgeEstado(i.estado) + '</td>' +
+      '<td data-label="' + etq.prioridad + '">' + Componentes.badgePrioridad(i.prioridad) + '</td>' +
+      '<td data-label="' + etq.dias_abierta + '">' + (i.dias_abierta === null || i.dias_abierta === undefined ? '—' : i.dias_abierta + ' d') + '</td>' +
+      '<td data-label="' + etq.dias_desarrollador + '">' + (i.dias_desarrollador === null || i.dias_desarrollador === undefined ? '—' : i.dias_desarrollador + ' d') + '</td>' +
+      '<td data-label="' + etq.dias_esperando_solicitante + '">' + celdaEsperando + '</td>' +
+      '<td data-label="' + etq.fecha_comprometida + '">' + (i.fecha_comprometida ? Componentes.escaparHtml(String(i.fecha_comprometida).replace('T', ' ').slice(0, 16)) : '—') + '</td>' +
+      '<td data-label="' + etq.semaforo + '">' + i.cumplimiento.emoji + ' ' + Componentes.escaparHtml(i.cumplimiento.etiqueta) + '</td>' +
       '</tr>';
   }
 
