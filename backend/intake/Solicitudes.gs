@@ -159,7 +159,11 @@ var Solicitudes = {
       resumen_whatsapp: resumenWhatsapp,
       fecha_creacion: timestamp,
       creado_por: data.solicitante_email,
-      cc: data.cc || ''
+      cc: data.cc || '',
+      // Trazabilidad del cliente elegido del buscador (CAT_CLIENTES): '' si
+      // es interna o si se escribio manual sin elegir de la lista.
+      rut_cliente: data.rut_cliente || '',
+      codigo_cliente: data.codigo_cliente || ''
     });
 
     agregarFila_(SHEETS.HISTORIAL_ESTADOS, {

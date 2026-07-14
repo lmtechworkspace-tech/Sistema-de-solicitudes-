@@ -50,7 +50,18 @@ function construirContexto() {
   ]);
   seedSheet(ctx, 'CAT_EMPRESAS', ctx.COLUMNAS.CAT_EMPRESAS, [
     ['HP', 'HomePymes', '', true],
+    ['GDE', 'GDE', '', true],
     ['RLD', 'RLD', '', true]
+  ]);
+  // Idea 1: cartera demo de clientes GDE/HomePymes para probar el buscador
+  // del formulario (razon social/rut/codigo/contacto/correo/telefono + un
+  // bloqueado y un inactivo para ver los badges).
+  seedSheet(ctx, 'CAT_CLIENTES', ctx.COLUMNAS.CAT_CLIENTES, [
+    ['CLI-78193514K', 'CBMD Construcciones SpA', '78.193.514-K', 'HP-209-1', 'Benjamin Munoz', 'cesarbenjaminm@gmail.com', '56883596985', 'Cesar Benjamin Munoz Diaz', 'Av. Recoleta 6109', 'Inactivo', 'Activo', true],
+    ['CLI-768972176', 'Alfacorp SpA', '76.897.217-6', 'HP-013-1', 'Manuel Alfaro', 'contacto.alfacorp1@gmail.com', '955309287', 'Manuel Enrique Alfaro Reyes', 'Eduardo Llanos 33, Nunoa', 'Activo', 'Activo', true],
+    ['CLI-763534570', 'Constructora San Pablo SpA', '76.353.457-K', 'HP-016-1', 'Pablo Cuevas', 'pablo.cuevas@sanpablospa.com', '56975881868', 'Pablo Andres Cuevas Romero', 'Cond Polo Manquehue', 'Activo', 'Activo', true],
+    ['CLI-774301747', 'Shen Long SpA', '77.430.174-7', 'HC-063-2', 'Enrique Isla', 'shenlong.spa@gmail.com', '56994690272', 'Enrique Llefri Isla Gaspar', 'Herrera 98, Santiago', 'Inactivo', 'Bloqueado', true],
+    ['CLI-774664874', 'VyE Construcciones SpA', '77.466.487-4', 'HP-078-1', 'Mauricio Venegas', 'm.venegas1984@gmail.com', '961704796', 'Daphne Hidalgo Guajardo', 'Av Grecia 1938, Nunoa', 'Activo', 'Activo', true]
   ]);
   // Plataformas y modulos reales de RF-007/RF-008 (doc 3 de v1.0), no
   // inventados: sirven para probar el formulario con datos representativos.

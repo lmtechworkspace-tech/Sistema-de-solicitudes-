@@ -347,6 +347,82 @@ button {
   font-weight: 600;
 }
 
+/* Idea 1: buscador de clientes (autocomplete). El input + dropdown de
+   resultados; posicionado relativo para que la lista flote debajo. */
+.sigso-autocomplete {
+  position: relative;
+}
+
+.sigso-autocomplete__lista {
+  list-style: none;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  max-height: 18rem;
+  overflow-y: auto;
+}
+
+.sigso-autocomplete__opcion {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--gris-claro);
+  font-size: 0.9rem;
+}
+
+.sigso-autocomplete__opcion:last-child {
+  border-bottom: none;
+}
+
+.sigso-autocomplete__opcion--activa,
+.sigso-autocomplete__opcion:hover {
+  background: var(--naranja-claro);
+}
+
+.sigso-autocomplete__meta {
+  font-size: 0.8rem;
+  color: var(--gris-medio);
+}
+
+/* Idea 2: lista de documentos adjuntos por item (los docs no tienen preview
+   como las imagenes, se muestran como filas nombre + quitar). */
+.sigso-lista-documentos {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.sigso-lista-documentos__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--gris-claro);
+  border-radius: 6px;
+  margin-bottom: 0.35rem;
+  font-size: 0.88rem;
+}
+
+.sigso-lista-documentos__nombre {
+  overflow-wrap: anywhere;
+}
+
+.sigso-lista-documentos__quitar {
+  background: none;
+  border: none;
+  color: var(--p1);
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .sigso-galeria__quitar {
   position: absolute;
   top: -6px;

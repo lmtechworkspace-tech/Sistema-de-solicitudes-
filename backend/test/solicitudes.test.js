@@ -278,6 +278,30 @@ test('crearSolicitud guarda los campos ampliados de v1.0 (cargo, cliente, subsol
   assert.equal(subsolicitud.estimacion_horas, 8);
 });
 
+test('crearSolicitud guarda rut_cliente y codigo_cliente del cliente elegido en el buscador (Idea 1)', () => {
+  const ctx = loadIntakeConSchema();
+  ctx.Solicitudes.crearSolicitud(
+    datosValidos({
+      es_cliente: true,
+      empresa_cliente: 'Alfacorp SpA', contacto_cliente: 'Manuel Alfaro',
+      correo_cliente: 'contacto.alfacorp1@gmail.com', telefono_cliente: '955309287',
+      rut_cliente: '76.897.217-6', codigo_cliente: 'HP-013-1',
+      subsolicitudes: [{ titulo: 'T', descripcion: 'D', impacto: 'SISTEMA_CAIDO', modulo: 'Facturacion', tipo: 'ERR' }]
+    })
+  );
+  const solicitud = ctx.leerFilas_('SOLICITUDES')[0];
+  assert.equal(solicitud.rut_cliente, '76.897.217-6');
+  assert.equal(solicitud.codigo_cliente, 'HP-013-1');
+});
+
+test('crearSolicitud deja rut_cliente/codigo_cliente vacios en solicitud interna (sin cliente)', () => {
+  const ctx = loadIntakeConSchema();
+  ctx.Solicitudes.crearSolicitud(datosValidos({}));
+  const solicitud = ctx.leerFilas_('SOLICITUDES')[0];
+  assert.equal(solicitud.rut_cliente, '');
+  assert.equal(solicitud.codigo_cliente, '');
+});
+
 test('crearSolicitud guarda cc y urls_adicionales (Fase 9, hallazgo de datos reales)', () => {
   const ctx = loadIntakeConSchema();
   ctx.Solicitudes.crearSolicitud(

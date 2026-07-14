@@ -24,7 +24,13 @@
   var LLAVE_BORRADOR = 'sigso_borrador_solicitud';
   var MAX_SUBSOLICITUDES = 10;
   var MIN_SUBSOLICITUDES = 1;
-  var MAX_IMAGENES = 5; // RF-003: total por SOLICITUD, no por item.
+  // Idea 2: adjuntos POR ITEM (espejo del backend Drive.gs, que es la
+  // autoridad). Antes era 5 imagenes por SOLICITUD completa.
+  var MAX_IMAGENES_ITEM = 5;
+  var MAX_DOCUMENTOS_ITEM = 3;
+  // Extensiones de documento aceptadas (el backend re-valida por firma de
+  // bytes + extension). Mismo set que EXTENSIONES_DOCUMENTO de Drive.gs.
+  var EXTENSIONES_DOC = ['pdf', 'xlsx', 'xls', 'docx', 'doc', 'pptx'];
   var PASOS = [
     { id: 'contexto', texto: 'Contexto' },
     { id: 'items', texto: 'Que necesitas' },
@@ -47,9 +53,17 @@
     // pedido (sin plataforma ni modulo, se clasifica por tipo + area).
     asociadaPlataforma: true,
     catalogos: null,
+    // Buscador de clientes (Idea 1): cartera GDE/HomePymes cargada lazy
+    // (recien al marcar "es cliente" con empresa GDE/HP). clienteElegido
+    // guarda rut/codigo del cliente seleccionado para trazabilidad (van a
+    // recolectarDatos_); '' si se escribio manual sin elegir de la lista.
+    clientes: null,
+    clienteElegido: { rut: '', codigo: '' },
     subsolicitudActivaIdx: 0,
     subsolicitudes: [nuevaSubsolicitud_()],
     imagenesPorItem: { 0: [] },
+    // Idea 2: documentos (PDF/Word/Excel) por item, paralelo a imagenesPorItem.
+    documentosPorItem: { 0: [] },
     // v2.1 (Fase A, "dos promesas, dos relojes"): lo que el solicitante
     // propone -- una sola fecha (y hora, si aplica) por SOLICITUD, no por
     // item; el desarrollador la confirma/ajusta despues en el Backoffice.
@@ -102,7 +116,11 @@
     document.getElementById('campo-plataforma').addEventListener('change', function () {
       renderSubsolicitudes_(); // las opciones de modulo dependen de la plataforma
     });
-    document.getElementById('campo-empresa').addEventListener('change', poblarPlataformas_);
+    document.getElementById('campo-empresa').addEventListener('change', function () {
+      poblarPlataformas_();
+      actualizarBuscadorCliente_(); // el buscador solo aplica a GDE/HP
+    });
+    wireBuscadorCliente_();
 
     document.getElementById('btn-paso1-siguiente').addEventListener('click', irAPaso2_);
     document.getElementById('btn-paso2-atras').addEventListener('click', function () { cambiarPaso_('contexto'); });
@@ -332,7 +350,175 @@
     // manual y se muestra la nota (el backend lo fuerza igual).
     document.querySelector('#fila-avisar-leo .sigso-toggle').style.display = visible ? 'none' : '';
     document.getElementById('nota-avisar-leo-cliente').style.display = visible ? '' : 'none';
+    actualizarBuscadorCliente_();
     guardarBorrador_();
+  }
+
+  // --- Buscador de clientes (Idea 1: GDE/HomePymes) ---------------------
+
+  // Los clientes de la cartera solo aplican a GDE y HomePymes (comparten la
+  // misma). Para otras empresas (RLD) el buscador no aparece y se escriben
+  // los datos a mano, sin romper nada.
+  var EMPRESAS_CON_CLIENTES = ['GDE', 'HP'];
+  var LLAVE_CACHE_CLIENTES = 'sigso_cache_clientes';
+  var idxClienteActivo = -1;
+  var resultadosClienteActuales = [];
+
+  // Muestra u oculta el buscador segun (es_cliente && empresa GDE/HP) y carga
+  // la cartera de forma lazy la primera vez que hace falta.
+  function actualizarBuscadorCliente_() {
+    var fila = document.getElementById('fila-buscar-cliente');
+    if (!fila) return;
+    var esCliente = document.getElementById('campo-es-cliente').checked;
+    var empresa = document.getElementById('campo-empresa').value;
+    var aplica = esCliente && EMPRESAS_CON_CLIENTES.indexOf(empresa) !== -1;
+    fila.classList.toggle('sigso-oculto', !aplica);
+    if (aplica && estado.clientes === null) {
+      cargarClientes_();
+    }
+  }
+
+  function cargarClientes_() {
+    // stale-while-revalidate: pinta al instante desde cache local si existe,
+    // y refresca en paralelo (mismo patron que cargarCatalogos_).
+    try {
+      var guardado = window.localStorage.getItem(LLAVE_CACHE_CLIENTES);
+      if (guardado) {
+        estado.clientes = JSON.parse(guardado);
+      }
+    } catch (err) {
+      // cache local corrupto: se espera la respuesta fresca.
+    }
+    if (estado.clientes === null) {
+      estado.clientes = []; // evita recargar en cada toggle mientras llega la respuesta
+    }
+    llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'getClientes', {}).then(function (respuesta) {
+      if (!respuesta.ok || !Array.isArray(respuesta.data)) {
+        return;
+      }
+      estado.clientes = respuesta.data;
+      try {
+        window.localStorage.setItem(LLAVE_CACHE_CLIENTES, JSON.stringify(respuesta.data));
+      } catch (err) {
+        // localStorage lleno o modo privado: no es critico.
+      }
+    });
+  }
+
+  function normalizarBusqueda_(texto) {
+    return String(texto || '')
+      .toLowerCase()
+      .normalize('NFD').replace(/[̀-ͯ]/g, '') // quita acentos (marcas combinantes)
+      .replace(/[.\s-]/g, ''); // ignora puntos/espacios/guiones (util para RUT)
+  }
+
+  function filtrarClientes_(texto) {
+    var q = normalizarBusqueda_(texto);
+    if (q.length < 2) return [];
+    return (estado.clientes || []).filter(function (c) {
+      return normalizarBusqueda_(c.razon_social).indexOf(q) !== -1 ||
+        normalizarBusqueda_(c.rut).indexOf(q) !== -1 ||
+        normalizarBusqueda_(c.codigo_cliente).indexOf(q) !== -1 ||
+        normalizarBusqueda_(c.contacto).indexOf(q) !== -1;
+    }).slice(0, 8);
+  }
+
+  function badgeEstadoCliente_(c) {
+    var bloqueado = String(c.bloqueo || '').toLowerCase() === 'bloqueado';
+    var inactivo = String(c.estado || '').toLowerCase() === 'inactivo';
+    if (bloqueado) return '<span class="sigso-badge sigso-badge--P1">Bloqueado</span>';
+    if (inactivo) return '<span class="sigso-badge sigso-badge--P3">Inactivo</span>';
+    return '';
+  }
+
+  function renderResultadosCliente_() {
+    var lista = document.getElementById('resultados-cliente');
+    var input = document.getElementById('campo-buscar-cliente');
+    if (resultadosClienteActuales.length === 0) {
+      lista.innerHTML = '';
+      lista.classList.add('sigso-oculto');
+      input.setAttribute('aria-expanded', 'false');
+      return;
+    }
+    lista.innerHTML = resultadosClienteActuales.map(function (c, i) {
+      var activo = i === idxClienteActivo ? ' sigso-autocomplete__opcion--activa' : '';
+      return '<li class="sigso-autocomplete__opcion' + activo + '" role="option" data-idx="' + i + '" id="opcion-cliente-' + i + '"' +
+        (i === idxClienteActivo ? ' aria-selected="true"' : '') + '>' +
+        '<strong>' + Componentes.escaparHtml(c.razon_social) + '</strong> ' + badgeEstadoCliente_(c) +
+        '<br><span class="sigso-autocomplete__meta">' + Componentes.escaparHtml(c.rut || 's/rut') +
+        (c.codigo_cliente ? ' &middot; ' + Componentes.escaparHtml(c.codigo_cliente) : '') +
+        (c.contacto ? ' &middot; ' + Componentes.escaparHtml(c.contacto) : '') + '</span>' +
+        '</li>';
+    }).join('');
+    lista.classList.remove('sigso-oculto');
+    input.setAttribute('aria-expanded', 'true');
+    input.setAttribute('aria-activedescendant', idxClienteActivo >= 0 ? 'opcion-cliente-' + idxClienteActivo : '');
+  }
+
+  function cerrarResultadosCliente_() {
+    resultadosClienteActuales = [];
+    idxClienteActivo = -1;
+    renderResultadosCliente_();
+  }
+
+  function elegirCliente_(cliente) {
+    if (!cliente) return;
+    document.getElementById('campo-empresa-cliente').value = cliente.razon_social || '';
+    document.getElementById('campo-contacto-cliente').value = cliente.contacto || '';
+    document.getElementById('campo-correo-cliente').value = cliente.correo || '';
+    document.getElementById('campo-telefono-cliente').value = cliente.telefono || '';
+    estado.clienteElegido = { rut: cliente.rut || '', codigo: cliente.codigo_cliente || '' };
+    document.getElementById('campo-buscar-cliente').value = cliente.razon_social || '';
+    cerrarResultadosCliente_();
+    guardarBorrador_();
+  }
+
+  function wireBuscadorCliente_() {
+    var input = document.getElementById('campo-buscar-cliente');
+    if (!input) return;
+    input.addEventListener('input', function () {
+      resultadosClienteActuales = filtrarClientes_(input.value);
+      idxClienteActivo = -1;
+      renderResultadosCliente_();
+    });
+    input.addEventListener('keydown', function (ev) {
+      if (resultadosClienteActuales.length === 0) return;
+      if (ev.key === 'ArrowDown') {
+        ev.preventDefault();
+        idxClienteActivo = Math.min(idxClienteActivo + 1, resultadosClienteActuales.length - 1);
+        renderResultadosCliente_();
+      } else if (ev.key === 'ArrowUp') {
+        ev.preventDefault();
+        idxClienteActivo = Math.max(idxClienteActivo - 1, 0);
+        renderResultadosCliente_();
+      } else if (ev.key === 'Enter') {
+        ev.preventDefault();
+        elegirCliente_(resultadosClienteActuales[idxClienteActivo >= 0 ? idxClienteActivo : 0]);
+      } else if (ev.key === 'Escape') {
+        cerrarResultadosCliente_();
+      }
+    });
+    document.getElementById('resultados-cliente').addEventListener('mousedown', function (ev) {
+      // mousedown (no click) para que se dispare antes del blur del input.
+      var li = ev.target.closest('[data-idx]');
+      if (li) {
+        ev.preventDefault();
+        elegirCliente_(resultadosClienteActuales[Number(li.getAttribute('data-idx'))]);
+      }
+    });
+    input.addEventListener('blur', function () {
+      // Cierra al perder foco (con un pequeno delay para no matar el click).
+      setTimeout(cerrarResultadosCliente_, 150);
+    });
+    // "Escribir manualmente": oculta el buscador y limpia el cliente elegido
+    // para que los campos de abajo se llenen a mano sin trazabilidad de id.
+    document.getElementById('link-cliente-manual').addEventListener('click', function (ev) {
+      ev.preventDefault();
+      document.getElementById('fila-buscar-cliente').classList.add('sigso-oculto');
+      estado.clienteElegido = { rut: '', codigo: '' };
+      cerrarResultadosCliente_();
+      document.getElementById('campo-empresa-cliente').focus();
+    });
   }
 
   // --- Acordeon de items (min 1, max 10, un solo item expandido) --------
@@ -401,10 +587,16 @@
       return { previewUrl: img.previewUrl, descripcion: img.descripcion, nombre: img.file.name };
     });
 
+    var documentos = (estado.documentosPorItem[idx] || []);
     var evidencia =
-      '<div class="sigso-campo"><label>Evidencia (capturas de pantalla, opcional)</label>' +
+      '<div class="sigso-campo"><label>Im&aacute;genes (capturas de pantalla, opcional)</label>' +
       '<input type="file" data-accion="input-imagenes" data-idx="' + idx + '" accept="image/png,image/jpeg,image/gif" multiple>' +
       Componentes.galeriaImagenes(imagenes, { editable: true, idx: idx }) +
+      '</div>' +
+      '<div class="sigso-campo"><label>Documentos (PDF, Word o Excel, opcional)</label>' +
+      '<input type="file" data-accion="input-documentos" data-idx="' + idx + '" accept=".pdf,.xlsx,.xls,.docx,.doc,.pptx" multiple>' +
+      renderListaDocumentos_(documentos, idx) +
+      '<div class="sigso-campo__error sigso-oculto" data-error-doc="' + idx + '"></div>' +
       '</div>';
 
     var basico =
@@ -433,6 +625,28 @@
 
   function renderAlternarModo_() {
     return '<div class="sigso-campo"><button type="button" class="sigso-boton--secundario" data-accion="ir-a-completo">+ Agregar más detalles (modo Completo)</button></div>';
+  }
+
+  // Idea 2: lista simple de documentos adjuntos del item (nombre + quitar).
+  // Un icono por tipo ayuda a distinguir de un vistazo (los docs, a
+  // diferencia de las imagenes, no tienen preview).
+  function iconoDocumento_(nombre) {
+    var ext = String(nombre).split('.').pop().toLowerCase();
+    if (ext === 'pdf') return '📕';
+    if (ext === 'doc' || ext === 'docx') return '📘';
+    if (ext === 'xls' || ext === 'xlsx') return '📗';
+    if (ext === 'ppt' || ext === 'pptx') return '📙';
+    return '📄';
+  }
+
+  function renderListaDocumentos_(documentos, idx) {
+    if (!documentos || documentos.length === 0) return '';
+    return '<ul class="sigso-lista-documentos">' + documentos.map(function (doc, docIdx) {
+      return '<li class="sigso-lista-documentos__item">' +
+        '<span class="sigso-lista-documentos__nombre">' + iconoDocumento_(doc.file.name) + ' ' + Componentes.escaparHtml(doc.file.name) + '</span>' +
+        '<button type="button" class="sigso-lista-documentos__quitar" data-accion="quitar-documento" data-idx="' + idx + '" data-doc-idx="' + docIdx + '">Quitar</button>' +
+        '</li>';
+    }).join('') + '</ul>';
   }
 
   // P2 (v2.0, Sprint 2): los tipos urgentes por naturaleza (CAT_TIPOS.es_urgente,
@@ -615,6 +829,19 @@
         quitarImagen_(idx, Number(el.getAttribute('data-img-idx')));
       });
     });
+
+    var inputDocumentos = cuerpo.querySelector('[data-accion="input-documentos"]');
+    if (inputDocumentos) {
+      inputDocumentos.addEventListener('change', function (ev) {
+        agregarDocumentos_(idx, ev.target.files);
+        inputDocumentos.value = '';
+      });
+    }
+    cuerpo.querySelectorAll('[data-accion="quitar-documento"]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        quitarDocumento_(idx, Number(el.getAttribute('data-doc-idx')));
+      });
+    });
     cuerpo.querySelectorAll('[data-campo="imagen-descripcion"]').forEach(function (el) {
       el.addEventListener('input', function () {
         var imgIdx = Number(el.getAttribute('data-img-idx'));
@@ -623,17 +850,11 @@
     });
   }
 
-  // --- Imagenes (RF-003: hasta 5 por SOLICITUD, no por item) ------------
-
-  function totalImagenesSeleccionadas_() {
-    return Object.keys(estado.imagenesPorItem).reduce(function (acc, k) {
-      return acc + estado.imagenesPorItem[k].length;
-    }, 0);
-  }
+  // --- Imagenes y documentos (Idea 2: hasta 5 img / 3 doc POR ITEM) ------
 
   function agregarImagenes_(idx, fileList) {
     if (!estado.imagenesPorItem[idx]) estado.imagenesPorItem[idx] = [];
-    var disponibles = MAX_IMAGENES - totalImagenesSeleccionadas_();
+    var disponibles = MAX_IMAGENES_ITEM - estado.imagenesPorItem[idx].length;
     var archivos = Array.prototype.slice.call(fileList, 0, Math.max(disponibles, 0));
     archivos.forEach(function (file) {
       estado.imagenesPorItem[idx].push({ file: file, descripcion: '', previewUrl: URL.createObjectURL(file) });
@@ -646,6 +867,39 @@
     renderSubsolicitudes_();
   }
 
+  function agregarDocumentos_(idx, fileList) {
+    if (!estado.documentosPorItem[idx]) estado.documentosPorItem[idx] = [];
+    var archivos = Array.prototype.slice.call(fileList, 0);
+    var rechazadosTipo = 0;
+    var rechazadosLimite = 0;
+    archivos.forEach(function (file) {
+      var ext = String(file.name).split('.').pop().toLowerCase();
+      if (EXTENSIONES_DOC.indexOf(ext) === -1) {
+        rechazadosTipo++;
+      } else if (estado.documentosPorItem[idx].length >= MAX_DOCUMENTOS_ITEM) {
+        rechazadosLimite++;
+      } else {
+        estado.documentosPorItem[idx].push({ file: file });
+      }
+    });
+    // renderSubsolicitudes_ vuelve a dibujar el item (incluye el span de
+    // error), asi que el mensaje se aplica DESPUES de redibujar.
+    renderSubsolicitudes_();
+    var errorEl = document.querySelector('[data-error-doc="' + idx + '"]');
+    if (errorEl) {
+      var msjs = [];
+      if (rechazadosTipo > 0) msjs.push(rechazadosTipo + ' archivo(s) ignorado(s): solo se aceptan PDF, Word o Excel.');
+      if (rechazadosLimite > 0) msjs.push('Maximo ' + MAX_DOCUMENTOS_ITEM + ' documentos por item.');
+      errorEl.textContent = msjs.join(' ');
+      errorEl.classList.toggle('sigso-oculto', msjs.length === 0);
+    }
+  }
+
+  function quitarDocumento_(idx, docIdx) {
+    estado.documentosPorItem[idx].splice(docIdx, 1);
+    renderSubsolicitudes_();
+  }
+
   // --- Agregar/quitar items ----------------------------------------------
 
   function agregarSubsolicitud_() {
@@ -655,6 +909,7 @@
     estado.subsolicitudes.push(nuevaSubsolicitud_());
     estado.subsolicitudActivaIdx = estado.subsolicitudes.length - 1;
     estado.imagenesPorItem[estado.subsolicitudActivaIdx] = [];
+    estado.documentosPorItem[estado.subsolicitudActivaIdx] = [];
     renderSubsolicitudes_();
     guardarBorrador_();
   }
@@ -664,13 +919,16 @@
       return;
     }
     estado.subsolicitudes.splice(idx, 1);
-    // Reindexa las imagenes (las claves de imagenesPorItem son posicionales).
-    var reindexadas = {};
+    // Reindexa imagenes y documentos (las claves son posicionales).
+    var reindexImg = {};
+    var reindexDoc = {};
     estado.subsolicitudes.forEach(function (_, nuevoIdx) {
       var viejoIdx = nuevoIdx >= idx ? nuevoIdx + 1 : nuevoIdx;
-      reindexadas[nuevoIdx] = estado.imagenesPorItem[viejoIdx] || [];
+      reindexImg[nuevoIdx] = estado.imagenesPorItem[viejoIdx] || [];
+      reindexDoc[nuevoIdx] = estado.documentosPorItem[viejoIdx] || [];
     });
-    estado.imagenesPorItem = reindexadas;
+    estado.imagenesPorItem = reindexImg;
+    estado.documentosPorItem = reindexDoc;
     estado.subsolicitudActivaIdx = 0;
     renderSubsolicitudes_();
     guardarBorrador_();
@@ -681,15 +939,21 @@
   function renderRevision_() {
     var filas = estado.subsolicitudes.map(function (item, idx) {
       var cantImagenes = (estado.imagenesPorItem[idx] || []).length;
+      var cantDocs = (estado.documentosPorItem[idx] || []).length;
+      var partes = [];
+      if (cantImagenes > 0) partes.push(cantImagenes + ' imagen(es)');
+      if (cantDocs > 0) partes.push(cantDocs + ' documento(s)');
       return '<tr>' +
         '<td>' + (idx + 1) + '</td>' +
         '<td>' + Componentes.escaparHtml(etiquetaTipo_(item.tipo)) + '</td>' +
         '<td>' + Componentes.escaparHtml(item.titulo) + '</td>' +
-        '<td>' + (cantImagenes > 0 ? cantImagenes + ' imagen(es)' : 'Sin evidencia') + '</td>' +
+        '<td>' + (partes.length ? partes.join(', ') : 'Sin evidencia') + '</td>' +
         '</tr>';
     }).join('');
 
-    var sinEvidencia = estado.subsolicitudes.some(function (_, idx) { return (estado.imagenesPorItem[idx] || []).length === 0; });
+    var sinEvidencia = estado.subsolicitudes.some(function (_, idx) {
+      return (estado.imagenesPorItem[idx] || []).length === 0 && (estado.documentosPorItem[idx] || []).length === 0;
+    });
     var avisoEvidencia = sinEvidencia
       ? Componentes.alerta('Uno o más items no tienen evidencia adjunta. Puedes enviar igual si no aplica.', 'aviso')
       : '';
@@ -784,6 +1048,10 @@
       correo_cliente: esCliente ? document.getElementById('campo-correo-cliente').value : '',
       telefono_cliente: esCliente ? document.getElementById('campo-telefono-cliente').value : '',
       urgencia_cliente: esCliente ? document.getElementById('campo-urgencia-cliente').value : '',
+      // Trazabilidad del cliente elegido del buscador (Idea 1): '' si se
+      // escribio manual o no es cliente.
+      rut_cliente: esCliente ? estado.clienteElegido.rut : '',
+      codigo_cliente: esCliente ? estado.clienteElegido.codigo : '',
       solicitante_nombre: document.getElementById('campo-solicitante-nombre').value,
       solicitante_cargo: document.getElementById('campo-solicitante-cargo').value,
       solicitante_email: document.getElementById('campo-solicitante-email').value,
@@ -858,6 +1126,11 @@
         document.getElementById('campo-correo-cliente').value = datos.correo_cliente || '';
         document.getElementById('campo-telefono-cliente').value = datos.telefono_cliente || '';
         document.getElementById('campo-urgencia-cliente').value = datos.urgencia_cliente || '';
+        // Idea 1: restaura el cliente elegido del buscador (trazabilidad).
+        estado.clienteElegido = {
+          rut: datos.rut_cliente || '',
+          codigo: datos.codigo_cliente || ''
+        };
         alternarBloqueCliente_();
       }
       if (Array.isArray(datos.subsolicitudes) && datos.subsolicitudes.length > 0) {
@@ -870,7 +1143,11 @@
           });
         });
         estado.imagenesPorItem = {};
-        estado.subsolicitudes.forEach(function (_, idx) { estado.imagenesPorItem[idx] = []; });
+        estado.documentosPorItem = {};
+        estado.subsolicitudes.forEach(function (_, idx) {
+          estado.imagenesPorItem[idx] = [];
+          estado.documentosPorItem[idx] = [];
+        });
       }
     } catch (err) {
       // Borrador corrupto: se ignora y se empieza de cero.
@@ -905,8 +1182,8 @@
         }
         limpiarBorrador_();
         document.getElementById('form-solicitud').classList.add('sigso-oculto');
-        return subirImagenesDeTodosLosItems_(respuesta.data.solicitud_id).then(function (resultadoImagenes) {
-          mostrarExito_(respuesta.data, resultadoImagenes);
+        return subirAdjuntosDeTodosLosItems_(respuesta.data.solicitud_id).then(function (resultadoAdjuntos) {
+          mostrarExito_(respuesta.data, resultadoAdjuntos);
         });
       })
       .catch(function () {
@@ -918,15 +1195,20 @@
       });
   }
 
-  // RF-003: subirArchivo (Drive.gs) necesita el solicitud_id ya generado.
-  // El subsolicitud_id de cada item se reconstruye con la misma numeracion
-  // que usa Solicitudes.gs al escribir SUBSOLICITUDES (numero_item = idx+1).
-  function subirImagenesDeTodosLosItems_(solicitudId) {
+  // subirArchivo (Drive.gs) necesita el solicitud_id ya generado. El
+  // subsolicitud_id de cada item se reconstruye con la misma numeracion que
+  // usa Solicitudes.gs al escribir SUBSOLICITUDES (numero_item = idx+1).
+  // Idea 2: sube imagenes Y documentos de cada item (misma cola secuencial y
+  // el mismo manejo de fallo por archivo).
+  function subirAdjuntosDeTodosLosItems_(solicitudId) {
     var tareas = [];
     estado.subsolicitudes.forEach(function (item, idx) {
       var subsolicitudId = solicitudId + '-' + ('0' + (idx + 1)).slice(-2);
       (estado.imagenesPorItem[idx] || []).forEach(function (img) {
-        tareas.push({ subsolicitudId: subsolicitudId, img: img });
+        tareas.push({ subsolicitudId: subsolicitudId, file: img.file });
+      });
+      (estado.documentosPorItem[idx] || []).forEach(function (doc) {
+        tareas.push({ subsolicitudId: subsolicitudId, file: doc.file });
       });
     });
     if (tareas.length === 0) {
@@ -935,11 +1217,11 @@
     var subidas = 0;
     return tareas.reduce(function (promesa, tarea) {
       return promesa.then(function () {
-        return leerArchivoBase64_(tarea.img.file).then(function (base64) {
+        return leerArchivoBase64_(tarea.file).then(function (base64) {
           return llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'subirArchivo', {
             solicitud_id: solicitudId,
             subsolicitud_id: tarea.subsolicitudId,
-            nombre_archivo: tarea.img.file.name,
+            nombre_archivo: tarea.file.name,
             contenido_base64: base64
           });
         }).then(function (respuesta) {
@@ -947,7 +1229,7 @@
             subidas++;
           }
         }).catch(function () {
-          // Una imagen fallida no debe bloquear las demas ni el aviso final.
+          // Un adjunto fallido no debe bloquear los demas ni el aviso final.
         });
       });
     }, Promise.resolve()).then(function () {
@@ -968,16 +1250,16 @@
     });
   }
 
-  function mostrarExito_(data, resultadoImagenes) {
+  function mostrarExito_(data, resultadoAdjuntos) {
     var contenedor = document.getElementById('resultado');
     var aviso = data.posible_duplicado
       ? '<p><strong>Nota:</strong> ya existe una solicitud abierta parecida (' + data.posible_duplicado.solicitud_id + ').</p>'
       : '';
     var avisoImagenes = '';
-    if (resultadoImagenes && resultadoImagenes.intentadas > 0) {
-      avisoImagenes = resultadoImagenes.subidas === resultadoImagenes.intentadas
-        ? '<p>' + resultadoImagenes.subidas + ' imagen(es) adjuntada(s) correctamente.</p>'
-        : '<p><strong>Nota:</strong> se adjuntaron ' + resultadoImagenes.subidas + ' de ' + resultadoImagenes.intentadas + ' imagenes (revisa tama&ntilde;o/formato de las restantes).</p>';
+    if (resultadoAdjuntos && resultadoAdjuntos.intentadas > 0) {
+      avisoImagenes = resultadoAdjuntos.subidas === resultadoAdjuntos.intentadas
+        ? '<p>' + resultadoAdjuntos.subidas + ' adjunto(s) subido(s) correctamente.</p>'
+        : '<p><strong>Nota:</strong> se subieron ' + resultadoAdjuntos.subidas + ' de ' + resultadoAdjuntos.intentadas + ' adjuntos (revisa tama&ntilde;o/formato de los restantes).</p>';
     }
     contenedor.innerHTML =
       '<div class="sigso-resultado-exito">' +

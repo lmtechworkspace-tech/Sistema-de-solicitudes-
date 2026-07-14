@@ -49,3 +49,40 @@ test('doPost action=getCatalogos responde ok:true con los catalogos activos', ()
   assert.equal(parsed.ok, true);
   assert.equal(parsed.data.empresas.length, 1);
 });
+
+test('Catalogos.getClientes devuelve los clientes activos, con estado/bloqueo informativos', () => {
+  const ctx = loadIntakeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
+  seedSheet(ctx, 'CAT_CLIENTES', ctx.COLUMNAS.CAT_CLIENTES, [
+    ['CLI-1', 'Constructora Uno SpA', '76.111.111-1', 'HP-001-1', 'Juan Uno', 'juan@uno.cl', '111', 'Rep Uno', 'Calle 1', 'Activo', 'Activo', true],
+    ['CLI-2', 'Bloqueada Dos SpA', '76.222.222-2', 'HP-002-1', 'Ana Dos', 'ana@dos.cl', '222', 'Rep Dos', 'Calle 2', 'Inactivo', 'Bloqueado', true],
+    ['CLI-3', 'Baja Total', '76.333.333-3', 'HP-003-1', '', '', '', '', '', 'Activo', 'Activo', false]
+  ]);
+
+  const clientes = ctx.Catalogos.getClientes();
+  // El de activo=false no aparece; estado/bloqueo NO filtran (el bloqueado si aparece).
+  assert.equal(clientes.length, 2);
+  const bloqueada = clientes.find((c) => c.cliente_id === 'CLI-2');
+  assert.equal(bloqueada.bloqueo, 'Bloqueado');
+  assert.equal(bloqueada.razon_social, 'Bloqueada Dos SpA');
+  assert.equal(bloqueada.rut, '76.222.222-2');
+});
+
+test('Catalogos.getClientes devuelve [] si la hoja CAT_CLIENTES no existe (instalacion previa)', () => {
+  const ctx = loadIntakeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
+  // No se siembra CAT_CLIENTES.
+  const clientes = ctx.Catalogos.getClientes();
+  assert.ok(Array.isArray(clientes));
+  assert.equal(clientes.length, 0);
+});
+
+test('doPost action=getClientes responde ok:true con los clientes activos', () => {
+  const ctx = loadIntakeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
+  seedSheet(ctx, 'CAT_CLIENTES', ctx.COLUMNAS.CAT_CLIENTES, [
+    ['CLI-1', 'Constructora Uno SpA', '76.111.111-1', 'HP-001-1', 'Juan Uno', 'juan@uno.cl', '111', 'Rep Uno', 'Calle 1', 'Activo', 'Activo', true]
+  ]);
+  const output = ctx.doPost({ postData: { contents: JSON.stringify({ action: 'getClientes', data: {} }) } });
+  const parsed = JSON.parse(output.getContent());
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.data.length, 1);
+  assert.equal(parsed.data[0].razon_social, 'Constructora Uno SpA');
+});

@@ -81,6 +81,23 @@
           </div>
 
           <div class="sigso-bloque-cliente" id="bloque-cliente">
+            <!-- Buscador de clientes (solo GDE/HomePymes, que comparten la
+                 misma cartera). Se autocompleta razon social/contacto/correo/
+                 telefono al elegir; los campos quedan editables. Si la empresa
+                 no es GDE/HP, o no hay clientes cargados, queda oculto y se
+                 escriben los datos a mano abajo. -->
+            <div class="sigso-campo sigso-oculto" id="fila-buscar-cliente">
+              <label for="campo-buscar-cliente">Buscar cliente</label>
+              <div class="sigso-autocomplete">
+                <input type="text" id="campo-buscar-cliente" autocomplete="off"
+                  placeholder="Nombre, RUT o c&oacute;digo del cliente..."
+                  role="combobox" aria-expanded="false" aria-autocomplete="list"
+                  aria-controls="resultados-cliente" />
+                <ul class="sigso-autocomplete__lista sigso-oculto" id="resultados-cliente" role="listbox"></ul>
+              </div>
+              <p class="sigso-ayuda">Busca por nombre, RUT o c&oacute;digo. Al elegir se completan los datos (los puedes editar). <a href="#" id="link-cliente-manual">Escribir manualmente</a></p>
+            </div>
+
             <div class="sigso-campo">
               <label for="campo-empresa-cliente">Empresa cliente</label>
               <input type="text" id="campo-empresa-cliente" />

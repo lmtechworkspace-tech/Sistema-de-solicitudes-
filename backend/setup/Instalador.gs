@@ -34,7 +34,10 @@ var ESQUEMA_HOJAS = {
     // Fase 9 (hallazgo de datos reales, RLD "Hoja de ruta"): correo
     // adicional a copiar en las notificaciones de esta solicitud, ademas
     // de solicitante_email.
-    'cc'
+    'cc',
+    // Trazabilidad del cliente elegido del buscador (CAT_CLIENTES). Ver la
+    // nota identica en backend/intake/Constantes.gs.
+    'rut_cliente', 'codigo_cliente'
   ],
   SUBSOLICITUDES: [
     'subsolicitud_id', 'solicitud_id', 'numero_item', 'titulo', 'descripcion',
@@ -113,7 +116,16 @@ var ESQUEMA_HOJAS = {
   // salvo CAT_TIPOS): el Admin carga las areas desde Administracion. Si
   // esta vacia, crearSolicitud rutea al responsable por defecto (Leo),
   // preservando el comportamiento previo a v3.0.
-  CAT_AREAS: ['area_id', 'nombre', 'responsable_email', 'activo']
+  CAT_AREAS: ['area_id', 'nombre', 'responsable_email', 'activo'],
+  // Cartera de clientes GDE/HomePymes (comparten la misma). Se crea vacia:
+  // el Admin pega la lista consolidada de las bases de Contabilidad/RRHH. Si
+  // esta vacia, el formulario cae al modo manual de datos de cliente. Ver la
+  // nota identica en backend/intake/Constantes.gs.
+  CAT_CLIENTES: [
+    'cliente_id', 'razon_social', 'rut', 'codigo_cliente', 'contacto',
+    'correo', 'telefono', 'representante_legal', 'direccion',
+    'estado', 'bloqueo', 'activo'
+  ]
 };
 
 // SLA por prioridad en horas habiles (§7.2). P5 no tiene SLA.

@@ -18,6 +18,7 @@ var INTAKE_ACTIONS = {
   crearSolicitud: handleCrearSolicitud_,
   subirArchivo: handleSubirArchivo_,
   getCatalogos: handleGetCatalogos_,
+  getClientes: handleGetClientes_,
   consultarEstado: handleConsultarEstado_,
   responderConsulta: handleResponderConsulta_,
   validarCierre: handleValidarCierre_,
@@ -65,6 +66,12 @@ function handleCrearSolicitud_(data) {
 
 function handleGetCatalogos_() {
   return jsonResponse_({ ok: true, data: Catalogos.getAll() });
+}
+
+// Cartera de clientes GDE/HomePymes para el buscador del formulario. Aparte
+// de getCatalogos por tamano y por carga lazy (ver Catalogos.getClientes).
+function handleGetClientes_() {
+  return jsonResponse_({ ok: true, data: Catalogos.getClientes() });
 }
 
 function handleConsultarEstado_(data) {

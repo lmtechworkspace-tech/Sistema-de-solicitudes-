@@ -36,7 +36,10 @@ var SHEETS = {
   // v3.0 (Fase 1, multi-responsable, documentacion/SIGSO-v3.0-multi-
   // responsable-y-control.md §2): catalogo de areas -> responsable, ruteo
   // de cada solicitud a quien corresponde (ya no todo a Leo).
-  CAT_AREAS: 'CAT_AREAS'
+  CAT_AREAS: 'CAT_AREAS',
+  // Cartera de clientes de GDE/HomePymes. Ver la nota identica en
+  // backend/intake/Constantes.gs.
+  CAT_CLIENTES: 'CAT_CLIENTES'
 };
 
 var COLUMNAS = {
@@ -61,7 +64,10 @@ var COLUMNAS = {
     // adicional a copiar en las notificaciones de esta solicitud, ademas
     // de solicitante_email. Agregado al final para no romper el orden de
     // columnas ya desplegado (backend/test/schema-consistency.test.js).
-    'cc'
+    'cc',
+    // Trazabilidad del cliente elegido del buscador (CAT_CLIENTES). Ver la
+    // nota identica en backend/intake/Constantes.gs.
+    'rut_cliente', 'codigo_cliente'
   ],
   SUBSOLICITUDES: [
     'subsolicitud_id', 'solicitud_id', 'numero_item', 'titulo', 'descripcion',
@@ -140,7 +146,14 @@ var COLUMNAS = {
     'fecha_anterior', 'fecha_nueva', 'motivo', 'usuario', 'timestamp'
   ],
   // v3.0 (Fase 1): ver la nota identica en backend/intake/Constantes.gs.
-  CAT_AREAS: ['area_id', 'nombre', 'responsable_email', 'activo']
+  CAT_AREAS: ['area_id', 'nombre', 'responsable_email', 'activo'],
+  // Cartera de clientes GDE/HomePymes. Ver la nota identica en
+  // backend/intake/Constantes.gs.
+  CAT_CLIENTES: [
+    'cliente_id', 'razon_social', 'rut', 'codigo_cliente', 'contacto',
+    'correo', 'telefono', 'representante_legal', 'direccion',
+    'estado', 'bloqueo', 'activo'
+  ]
 };
 
 var ESTADOS = {

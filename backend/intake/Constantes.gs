@@ -31,7 +31,12 @@ var SHEETS = {
   HISTORIAL_COMPROMISO: 'HISTORIAL_COMPROMISO',
   // v3.0 (Fase 1, multi-responsable): catalogo de areas -> responsable.
   // Ver la nota identica en backend/backoffice/Constantes.gs.
-  CAT_AREAS: 'CAT_AREAS'
+  CAT_AREAS: 'CAT_AREAS',
+  // Cartera de clientes de GDE/HomePymes (comparten la misma). El formulario
+  // publico la usa para buscar y autocompletar los datos del cliente en vez
+  // de escribirlos a mano. Aditiva; si la hoja no existe, getClientes
+  // devuelve [] y el formulario cae al modo manual.
+  CAT_CLIENTES: 'CAT_CLIENTES'
 };
 
 var COLUMNAS = {
@@ -62,7 +67,12 @@ var COLUMNAS = {
     // adicional a copiar en las notificaciones de esta solicitud, ademas
     // de solicitante_email. Agregado al final para no romper el orden de
     // columnas ya desplegado (backend/test/schema-consistency.test.js).
-    'cc'
+    'cc',
+    // Trazabilidad del cliente elegido del buscador (CAT_CLIENTES): rut y
+    // codigo identifican sin ambiguedad al cliente aunque la razon social se
+    // edite. Quedan '' en solicitudes internas o cuando se escribe manual.
+    // Aditivas al final (mismo criterio que cc).
+    'rut_cliente', 'codigo_cliente'
   ],
   // contexto/resultado_esperado/url_modulo/usuario_prueba/centro_costos/
   // url_video/observaciones/estimacion_horas/horas_reales y numero_item
@@ -201,7 +211,17 @@ var COLUMNAS = {
   // formulario lista las areas activas por nombre (Catalogos.getAll); el
   // responsable_email se resuelve SOLO en el servidor (crearSolicitud), no
   // viaja al navegador. Mismo patron administrable que el resto de CAT_*.
-  CAT_AREAS: ['area_id', 'nombre', 'responsable_email', 'activo']
+  CAT_AREAS: ['area_id', 'nombre', 'responsable_email', 'activo'],
+  // Cartera de clientes GDE/HomePymes. estado (Activo/Inactivo) y bloqueo
+  // (Activo/Bloqueado) son informativos -- se muestran como badge en el
+  // buscador pero NO filtran; el filtro estandar de catalogo usa 'activo'
+  // (TRUE para todos, para no esconder clientes bloqueados que igual pueden
+  // tener una solicitud). Datos de contacto comercial, no credenciales.
+  CAT_CLIENTES: [
+    'cliente_id', 'razon_social', 'rut', 'codigo_cliente', 'contacto',
+    'correo', 'telefono', 'representante_legal', 'direccion',
+    'estado', 'bloqueo', 'activo'
+  ]
 };
 
 // S01-S11 completos desde la Fase 1 aunque solo S01 se use aqui: la maquina

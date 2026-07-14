@@ -114,29 +114,40 @@ test('subirArchivo detecta XLSX por firma ZIP (documentando la ambiguedad con cu
   assert.equal(resultado.tipo_mime, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 });
 
-test('subirArchivo rechaza el 6to archivo de imagen para la misma solicitud (RF-003, max 5)', () => {
+test('subirArchivo rechaza la 6ta imagen del MISMO item (max 5 por item), pero la deja subir en otro item', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
 
   for (let i = 0; i < 5; i++) {
     const r = ctx.Drive.subirArchivo({
       solicitud_id: 'SOL-2026-HP-0001',
+      subsolicitud_id: 'SOL-2026-HP-0001-01',
       nombre_archivo: 'foto' + i + '.png',
       contenido_base64: PNG_1X1_BASE64
     });
     assert.ok(!r._validationError, 'la imagen ' + i + ' deberia aceptarse');
   }
 
+  // 6ta imagen en el MISMO item -> rechazada.
   const sexta = ctx.Drive.subirArchivo({
     solicitud_id: 'SOL-2026-HP-0001',
+    subsolicitud_id: 'SOL-2026-HP-0001-01',
     nombre_archivo: 'foto5.png',
     contenido_base64: PNG_1X1_BASE64
   });
-
   assert.equal(sexta._validationError, true);
+
+  // La misma imagen en OTRO item -> aceptada (el limite es por item, no por solicitud).
+  const otroItem = ctx.Drive.subirArchivo({
+    solicitud_id: 'SOL-2026-HP-0001',
+    subsolicitud_id: 'SOL-2026-HP-0001-02',
+    nombre_archivo: 'foto-otro.png',
+    contenido_base64: PNG_1X1_BASE64
+  });
+  assert.ok(!otroItem._validationError);
 });
 
-test('subirArchivo rechaza el 4to archivo documento para la misma solicitud (RF-003, max 3)', () => {
+test('subirArchivo rechaza el 4to documento del mismo item (max 3 por item)', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
   const pdfMinimo = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]).toString('base64');
@@ -144,6 +155,7 @@ test('subirArchivo rechaza el 4to archivo documento para la misma solicitud (RF-
   for (let i = 0; i < 3; i++) {
     const r = ctx.Drive.subirArchivo({
       solicitud_id: 'SOL-2026-HP-0001',
+      subsolicitud_id: 'SOL-2026-HP-0001-01',
       nombre_archivo: 'doc' + i + '.pdf',
       contenido_base64: pdfMinimo
     });
@@ -152,11 +164,70 @@ test('subirArchivo rechaza el 4to archivo documento para la misma solicitud (RF-
 
   const cuarto = ctx.Drive.subirArchivo({
     solicitud_id: 'SOL-2026-HP-0001',
+    subsolicitud_id: 'SOL-2026-HP-0001-01',
     nombre_archivo: 'doc3.pdf',
     contenido_base64: pdfMinimo
   });
 
   assert.equal(cuarto._validationError, true);
+});
+
+test('subirArchivo aplica el tope global por solicitud (30 imagenes) aun repartidas en varios items', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  // 30 imagenes en 6 items (5 c/u) llenan el tope global -> la 31a se rechaza.
+  for (let item = 1; item <= 6; item++) {
+    const subId = 'SOL-2026-HP-0001-0' + item;
+    for (let i = 0; i < 5; i++) {
+      const r = ctx.Drive.subirArchivo({
+        solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: subId,
+        nombre_archivo: 'f' + item + i + '.png', contenido_base64: PNG_1X1_BASE64
+      });
+      assert.ok(!r._validationError);
+    }
+  }
+  const extra = ctx.Drive.subirArchivo({
+    solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-07',
+    nombre_archivo: 'extra.png', contenido_base64: PNG_1X1_BASE64
+  });
+  assert.equal(extra._validationError, true);
+});
+
+test('subirArchivo detecta docx/doc/xls por extension cuando la firma es ZIP/OLE', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  const zip = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0, 0, 0, 0]).toString('base64');
+  const ole = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]).toString('base64');
+
+  const docx = ctx.Drive.subirArchivo({
+    solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    nombre_archivo: 'contrato.docx', contenido_base64: zip
+  });
+  assert.equal(docx.tipo_mime, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+
+  const xls = ctx.Drive.subirArchivo({
+    solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    nombre_archivo: 'planilla.xls', contenido_base64: ole
+  });
+  assert.equal(xls.tipo_mime, 'application/vnd.ms-excel');
+
+  const doc = ctx.Drive.subirArchivo({
+    solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-02',
+    nombre_archivo: 'carta.doc', contenido_base64: ole
+  });
+  assert.equal(doc.tipo_mime, 'application/msword');
+});
+
+test('subirArchivo rechaza un .zip suelto (firma ZIP pero extension no permitida)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  const zip = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0, 0, 0, 0]).toString('base64');
+
+  const resultado = ctx.Drive.subirArchivo({
+    solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    nombre_archivo: 'archivos.zip', contenido_base64: zip
+  });
+  assert.equal(resultado._validationError, true);
 });
 
 test('subirArchivo responde error de validacion si la solicitud no existe', () => {

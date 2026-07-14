@@ -39,8 +39,59 @@ var Catalogos = {
       // demasiado grande para el cache: se sirve directo.
     }
     return datos;
+  },
+
+  // Cartera de clientes GDE/HomePymes para el buscador del formulario. Se
+  // sirve APARTE de getAll (no dentro) por dos razones: (1) los ~284 clientes
+  // sumados a los 633 modulos excederian el limite de ~100 KB del cache y lo
+  // romperian; (2) solo se necesita cuando el solicitante marca "es cliente"
+  // (carga lazy desde el navegador), no en cada apertura del formulario.
+  // Clave de cache propia. Datos de contacto comercial (no credenciales),
+  // lectura anonima como el resto de catalogos.
+  getClientes: function () {
+    var cache = CacheService.getScriptCache();
+    var cacheado = cache.get('catalogos_clientes');
+    if (cacheado) {
+      return JSON.parse(cacheado);
+    }
+    var clientes = proyectarClientes_();
+    try {
+      cache.put('catalogos_clientes', JSON.stringify(clientes), CATALOGOS_CACHE_TTL_SEGUNDOS);
+    } catch (err) {
+      // demasiado grande para el cache: se sirve directo.
+    }
+    return clientes;
   }
 };
+
+// estado/bloqueo NO filtran (un cliente bloqueado igual puede tener una
+// solicitud): se proyectan para mostrarlos como badge en el buscador. El
+// filtro estandar usa 'activo' (TRUE para todos en CAT_CLIENTES). Si la hoja
+// no existe (instalacion previa), devuelve [] y el formulario cae al modo
+// manual.
+function proyectarClientes_() {
+  var filas;
+  try {
+    filas = leerFilas_(SHEETS.CAT_CLIENTES);
+  } catch (err) {
+    return [];
+  }
+  return filtrarActivos_(filas).map(function (c) {
+    return {
+      cliente_id: c.cliente_id,
+      razon_social: c.razon_social,
+      rut: c.rut,
+      codigo_cliente: c.codigo_cliente,
+      contacto: c.contacto,
+      correo: c.correo,
+      telefono: c.telefono,
+      representante_legal: c.representante_legal,
+      direccion: c.direccion,
+      estado: c.estado,
+      bloqueo: c.bloqueo
+    };
+  });
+}
 
 function proyectarAreasPublicas_() {
   var filas;

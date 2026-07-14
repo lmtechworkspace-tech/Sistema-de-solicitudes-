@@ -192,6 +192,44 @@ la hoja aún no se creó (instalación previa a v3.0), cae al buzón por defecto
 > el objetivo del ruteo: quien recibe la solicitud se entera. Ítems que caen
 > en el mismo responsable generan un solo aviso (dedup por destinatario).
 
+## CAT_CLIENTES (nueva — buscador de clientes GDE/HomePymes)
+
+Cartera de clientes que **comparten GDE y HomePymes** (unión de las bases
+reales de Contabilidad y RRHH). El formulario público la usa para **buscar y
+autocompletar** los datos del cliente (razón social, contacto, correo,
+teléfono) en el bloque "¿Es una solicitud de cliente?", en vez de escribirlos
+a mano — manteniendo la opción de escribir manual.
+
+| Columna | Tipo | Nota |
+|---|---|---|
+| `cliente_id` | string | Slug estable derivado del RUT (`CLI-<rut sin puntos ni guion>`); del código si no hay RUT. Único |
+| `razon_social` | string | Nombre de la empresa cliente → `SOLICITUDES.empresa_cliente` |
+| `rut` | string | RUT del cliente → `SOLICITUDES.rut_cliente` |
+| `codigo_cliente` | string | Código interno (ej. `HP-209-1`) → `SOLICITUDES.codigo_cliente` |
+| `contacto` | string | Nombre de contacto → `SOLICITUDES.contacto_cliente` |
+| `correo` | string | Correo → `SOLICITUDES.correo_cliente` |
+| `telefono` | string | Teléfono → `SOLICITUDES.telefono_cliente` |
+| `representante_legal` | string | Informativo (se muestra en el resultado del buscador) |
+| `direccion` | string | Informativo |
+| `estado` | string | `Activo`/`Inactivo` — informativo, badge en el buscador; **no** filtra |
+| `bloqueo` | string | `Activo`/`Bloqueado` — informativo, badge; **no** filtra |
+| `activo` | boolean | `TRUE` para todos (el filtro estándar de catálogo no debe esconder clientes bloqueados, que igual pueden tener una solicitud) |
+
+Se sirve por una acción propia **`getClientes`** (Intake, `Catalogos.getClientes`),
+cacheada 5 min en clave separada (`catalogos_clientes`) para **no** inflar
+`getCatalogos` (los 633 módulos ya casi tocan el límite de 100 KB de
+`CacheService`). Es dato de contacto comercial, no credenciales: lectura
+anónima como el resto de catálogos. Se crea **vacía**; el Admin pega la lista
+consolidada. Si la hoja no existe (instalación previa) o está vacía,
+`getClientes` devuelve `[]` y el formulario cae al **modo manual** (sin
+romper nada). El buscador solo aparece cuando la empresa es **GDE o HP** (los
+clientes solo aplican a esas dos).
+
+`SOLICITUDES` gana dos columnas **aditivas** al final: `rut_cliente` y
+`codigo_cliente` — trazabilidad del cliente elegido (para que el Backoffice lo
+reconozca sin ambigüedad aunque la razón social se edite). Quedan `''` en
+solicitudes internas o cuando se escribe manual sin elegir de la lista.
+
 ## Bandeja por responsable (v3.0 Fase 2 — sin columnas ni hojas nuevas)
 
 `Dashboard.getData` (`backend/backoffice/Dashboard.gs`) resuelve el **ámbito**

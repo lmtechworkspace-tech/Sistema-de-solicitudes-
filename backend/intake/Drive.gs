@@ -2,8 +2,16 @@
  * Drive.gs — Drive.subirArchivo (§5.3, C-06).
  *
  * Un archivo por request (nunca Base64 monolitico de todos los adjuntos).
- * El servidor valida tamano y tipo MIME real por firma de bytes -- nunca
- * confia en la extension ni en el Content-Type que declara el cliente.
+ * El servidor valida tamano y tipo real por firma de bytes -- nunca confia en
+ * la extension ni en el Content-Type que declara el cliente para decidir la
+ * CATEGORIA (imagen/documento). La firma prueba a que familia de bytes
+ * pertenece el archivo; dentro de la categoria "documento", el mime especifico
+ * se refina por la extension (ver EXTENSIONES_DOCUMENTO), porque los Office
+ * Open XML (docx/xlsx/pptx) comparten la firma ZIP y los Office legacy
+ * (doc/xls) comparten la firma OLE -- imposibles de distinguir por bytes sin
+ * inspeccionar el interior del contenedor. La extension solo elige la etiqueta
+ * DENTRO de una categoria ya validada por firma, y un archivo cuya extension
+ * no este permitida se rechaza aunque su firma sea valida (ej. un .zip suelto).
  */
 
 var LIMITES_TAMANO_BYTES = {
@@ -11,51 +19,85 @@ var LIMITES_TAMANO_BYTES = {
   documento: 10 * 1024 * 1024
 };
 
-// RF-003 (doc 3 de v1.0): maximo 5 imagenes y 3 archivos adjuntos por
-// solicitud (no por subsolicitud: Bloque 5 del formulario, doc 12.1, adjunta
-// archivos a nivel de solicitud).
-var LIMITES_CANTIDAD = {
+// Adjuntos POR ITEM (subsolicitud): una solicitud real mezcla varios items y
+// cada uno puede necesitar su propia evidencia (Fase 10). Antes el limite era
+// por SOLICITUD completa (5 img / 3 doc, RF-003 de v1.0), lo que quedaba corto
+// con 10 items posibles.
+var LIMITES_CANTIDAD_POR_ITEM = {
   imagen: 5,
   documento: 3
 };
 
-// Firmas (magic numbers) minimas para detectar el tipo real del archivo.
-// XLSX (y cualquier Office Open XML: docx/pptx) es un contenedor ZIP, asi
-// que comparte la firma PK con cualquier .zip -- no se puede distinguir de
-// forma confiable sin inspeccionar las entradas internas del archivo, algo
-// fuera de alcance para una validacion liviana de firma de bytes. Se
-// documenta la ambiguedad en vez de fingir una deteccion mas precisa de la
-// que realmente se hace.
-var FIRMAS_MIME = [
-  { mime: 'image/jpeg', categoria: 'imagen', firma: [0xFF, 0xD8, 0xFF] },
-  { mime: 'image/png', categoria: 'imagen', firma: [0x89, 0x50, 0x4E, 0x47] },
-  { mime: 'image/gif', categoria: 'imagen', firma: [0x47, 0x49, 0x46, 0x38] },
-  { mime: 'application/pdf', categoria: 'documento', firma: [0x25, 0x50, 0x44, 0x46] },
-  {
-    mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    categoria: 'documento',
-    firma: [0x50, 0x4B, 0x03, 0x04]
-  }
+// Tope de seguridad por SOLICITUD completa (anti-abuso): con 10 items al maximo
+// por item se llegaria a 50 img / 30 doc, mucho para una sola solicitud.
+var LIMITES_CANTIDAD_POR_SOLICITUD = {
+  imagen: 30,
+  documento: 15
+};
+
+// Firmas (magic numbers) minimas para detectar la FAMILIA real del archivo.
+// - imagen: la firma es autoritativa y no ambigua -> el mime sale de aqui.
+// - documento: la firma solo dice la familia (pdf/zip/ole); el mime especifico
+//   se refina despues por la extension (EXTENSIONES_DOCUMENTO).
+var FIRMAS = [
+  { categoria: 'imagen', mime: 'image/jpeg', firma: [0xFF, 0xD8, 0xFF] },
+  { categoria: 'imagen', mime: 'image/png', firma: [0x89, 0x50, 0x4E, 0x47] },
+  { categoria: 'imagen', mime: 'image/gif', firma: [0x47, 0x49, 0x46, 0x38] },
+  { categoria: 'documento', familia: 'pdf', firma: [0x25, 0x50, 0x44, 0x46] },
+  // Office Open XML (docx/xlsx/pptx) y cualquier .zip comparten la firma PK.
+  { categoria: 'documento', familia: 'zip', firma: [0x50, 0x4B, 0x03, 0x04] },
+  // Office legacy (doc/xls) comparten el contenedor OLE compound file.
+  { categoria: 'documento', familia: 'ole', firma: [0xD0, 0xCF, 0x11, 0xE0] }
 ];
 
-function contarArchivosPorCategoria_(solicitudId, categoria) {
-  var mimesDeLaCategoria = FIRMAS_MIME
-    .filter(function (f) { return f.categoria === categoria; })
-    .map(function (f) { return f.mime; });
+// extension -> { mime, familia }. La familia debe coincidir con la firma
+// detectada: un .xlsx debe traer firma zip, un .xls firma ole, etc. Asi se
+// evita que se cuele un .zip suelto (firma zip pero extension no permitida) o
+// un archivo con extension falsa.
+var EXTENSIONES_DOCUMENTO = {
+  pdf: { mime: 'application/pdf', familia: 'pdf' },
+  xlsx: { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', familia: 'zip' },
+  docx: { mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', familia: 'zip' },
+  pptx: { mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', familia: 'zip' },
+  xls: { mime: 'application/vnd.ms-excel', familia: 'ole' },
+  doc: { mime: 'application/msword', familia: 'ole' }
+};
 
+var MIMES_IMAGEN = ['image/jpeg', 'image/png', 'image/gif'];
+
+function extensionDe_(nombreArchivo) {
+  var partes = String(nombreArchivo || '').split('.');
+  return partes.length > 1 ? partes.pop().toLowerCase() : '';
+}
+
+// Clasifica un tipo_mime ya guardado (para contar cuantos hay). Los mimes de
+// documento son todos los de EXTENSIONES_DOCUMENTO.
+function categoriaDeMime_(mime) {
+  if (MIMES_IMAGEN.indexOf(mime) !== -1) return 'imagen';
+  for (var ext in EXTENSIONES_DOCUMENTO) {
+    if (EXTENSIONES_DOCUMENTO[ext].mime === mime) return 'documento';
+  }
+  return null;
+}
+
+// Cuenta archivos ya subidos de una categoria. Si se pasa subsolicitudId,
+// acota a ese item (limite por item); si no, cuenta toda la solicitud (tope
+// global).
+function contarArchivos_(solicitudId, categoria, subsolicitudId) {
   return leerFilas_(SHEETS.ARCHIVOS).filter(function (archivo) {
-    return archivo.solicitud_id === solicitudId && mimesDeLaCategoria.indexOf(archivo.tipo_mime) !== -1;
+    if (archivo.solicitud_id !== solicitudId) return false;
+    if (subsolicitudId && archivo.subsolicitud_id !== subsolicitudId) return false;
+    return categoriaDeMime_(archivo.tipo_mime) === categoria;
   }).length;
 }
 
-function detectarMimeReal_(bytes) {
-  for (var i = 0; i < FIRMAS_MIME.length; i++) {
-    var candidato = FIRMAS_MIME[i];
+function detectarFirma_(bytes) {
+  for (var i = 0; i < FIRMAS.length; i++) {
+    var candidato = FIRMAS[i];
     var coincide = candidato.firma.every(function (byte, idx) {
       // Utilities.base64Decode devuelve Byte[] CON SIGNO (-128..127): un
       // 0x89 (137) llega como -119. Sin el & 0xFF, ninguna firma con byte
-      // >127 (PNG 0x89, JPEG 0xFF) coincidiria y toda imagen real se
-      // rechazaria como "tipo no reconocido".
+      // >127 (PNG 0x89, JPEG 0xFF, OLE 0xD0) coincidiria.
       return (bytes[idx] & 0xFF) === byte;
     });
     if (coincide) {
@@ -63,6 +105,26 @@ function detectarMimeReal_(bytes) {
     }
   }
   return null;
+}
+
+// Devuelve { categoria, mime } del archivo, o null si no se reconoce / la
+// extension no calza con la firma para documentos.
+function resolverTipoArchivo_(bytes, nombreArchivo) {
+  var firma = detectarFirma_(bytes);
+  if (!firma) {
+    return null;
+  }
+  if (firma.categoria === 'imagen') {
+    return { categoria: 'imagen', mime: firma.mime };
+  }
+  // documento: refinar el mime por la extension, exigiendo que su familia
+  // coincida con la firma detectada.
+  var ext = extensionDe_(nombreArchivo);
+  var conf = EXTENSIONES_DOCUMENTO[ext];
+  if (!conf || conf.familia !== firma.familia) {
+    return null;
+  }
+  return { categoria: 'documento', mime: conf.mime };
 }
 
 var Drive = {
@@ -83,12 +145,12 @@ var Drive = {
       return errorValidacion_('contenido_base64', 'El contenido del archivo no es base64 valido.');
     }
 
-    var firma = detectarMimeReal_(bytes);
-    if (!firma) {
-      return errorValidacion_('archivo', 'Tipo de archivo no permitido o no reconocido.');
+    var tipo = resolverTipoArchivo_(bytes, data.nombre_archivo);
+    if (!tipo) {
+      return errorValidacion_('archivo', 'Tipo de archivo no permitido o no reconocido (imagenes JPG/PNG/GIF; documentos PDF/Word/Excel).');
     }
 
-    var limite = LIMITES_TAMANO_BYTES[firma.categoria];
+    var limite = LIMITES_TAMANO_BYTES[tipo.categoria];
     if (bytes.length > limite) {
       return errorValidacion_(
         'archivo',
@@ -96,17 +158,29 @@ var Drive = {
       );
     }
 
-    var cantidadActual = contarArchivosPorCategoria_(data.solicitud_id, firma.categoria);
-    if (cantidadActual >= LIMITES_CANTIDAD[firma.categoria]) {
+    // Limite por item (subsolicitud) y tope global por solicitud. El por-item
+    // es el que el solicitante ve; el global evita abusos.
+    if (data.subsolicitud_id) {
+      var enItem = contarArchivos_(data.solicitud_id, tipo.categoria, data.subsolicitud_id);
+      if (enItem >= LIMITES_CANTIDAD_POR_ITEM[tipo.categoria]) {
+        return errorValidacion_(
+          'archivo',
+          'Se alcanzo el maximo de ' + LIMITES_CANTIDAD_POR_ITEM[tipo.categoria] +
+            ' archivos de tipo ' + tipo.categoria + ' para este item.'
+        );
+      }
+    }
+    var enSolicitud = contarArchivos_(data.solicitud_id, tipo.categoria);
+    if (enSolicitud >= LIMITES_CANTIDAD_POR_SOLICITUD[tipo.categoria]) {
       return errorValidacion_(
         'archivo',
-        'Se alcanzo el maximo de ' + LIMITES_CANTIDAD[firma.categoria] + ' archivos de tipo ' +
-          firma.categoria + ' para esta solicitud (RF-003).'
+        'Se alcanzo el maximo de ' + LIMITES_CANTIDAD_POR_SOLICITUD[tipo.categoria] +
+          ' archivos de tipo ' + tipo.categoria + ' para esta solicitud.'
       );
     }
 
     var carpetaAdjuntos = obtenerCarpetaAdjuntos_(solicitud);
-    var blob = Utilities.newBlob(bytes, firma.mime, data.nombre_archivo);
+    var blob = Utilities.newBlob(bytes, tipo.mime, data.nombre_archivo);
     var archivoDrive = carpetaAdjuntos.createFile(blob);
     var archivoId = Utilities.getUuid();
     var timestamp = new Date().toISOString();
@@ -117,7 +191,7 @@ var Drive = {
       subsolicitud_id: data.subsolicitud_id || '',
       nombre_original: data.nombre_archivo,
       url: archivoDrive.getUrl(),
-      tipo_mime: firma.mime,
+      tipo_mime: tipo.mime,
       tamano_bytes: bytes.length,
       fecha_subida: timestamp
     });
@@ -125,7 +199,7 @@ var Drive = {
     return {
       archivo_id: archivoId,
       url: archivoDrive.getUrl(),
-      tipo_mime: firma.mime,
+      tipo_mime: tipo.mime,
       tamano_bytes: bytes.length
     };
   }
