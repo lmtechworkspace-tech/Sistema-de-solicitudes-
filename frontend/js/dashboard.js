@@ -67,6 +67,12 @@
     var filtros = leerFiltros_();
     return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getDashboardData', filtros).then(function (respuesta) {
       if (!respuesta.ok) {
+        // Antes un error del backend dejaba el dashboard en blanco sin avisar
+        // (parecia "no hay solicitudes"). Ahora se muestra el error para que
+        // se distinga un fallo real de una lista vacia legitima.
+        document.getElementById('lista-recientes').innerHTML =
+          Componentes.alerta((respuesta.message || 'No se pudieron cargar las solicitudes.') +
+            ' Reintenta con "Actualizar"; si persiste, avisa a soporte.', 'error');
         return respuesta;
       }
       renderKpis_(respuesta.data.resumen);

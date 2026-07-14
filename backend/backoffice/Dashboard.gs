@@ -125,12 +125,17 @@ function obtenerResponsablesActivos_() {
 function calcularKpis_(filtros) {
   var feriados = obtenerFeriados_();
 
+  // SUBSOLICITUDES se lee UNA sola vez y se reusa (antes se leia dos veces:
+  // para el auto-scope del DEV y para el detalle de las recientes). Cada
+  // lectura es una operacion cara sobre Sheets.
+  var todasSubsolicitudes = leerFilas_(SHEETS.SUBSOLICITUDES);
+
   // Para la vista del DEV hace falta saber, ANTES de filtrar, si alguna
   // subsolicitud (no solo la solicitud completa) esta asignada a el
   // (§13.3 v1.0: asignacion tambien existe por item).
   var idsAsignadosPorItem = {};
   if (filtros.vistaDev) {
-    leerFilas_(SHEETS.SUBSOLICITUDES).forEach(function (sub) {
+    todasSubsolicitudes.forEach(function (sub) {
       if (sub.desarrollador_asignado === filtros.vistaDev) {
         idsAsignadosPorItem[sub.solicitud_id] = true;
       }
@@ -143,7 +148,7 @@ function calcularKpis_(filtros) {
   var idsSolicitudes = {};
   solicitudes.forEach(function (s) { idsSolicitudes[s.solicitud_id] = true; });
 
-  var subsolicitudes = leerFilas_(SHEETS.SUBSOLICITUDES).filter(function (sub) {
+  var subsolicitudes = todasSubsolicitudes.filter(function (sub) {
     return idsSolicitudes[sub.solicitud_id];
   });
 
