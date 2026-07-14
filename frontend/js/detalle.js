@@ -86,6 +86,7 @@
 
   function renderFicha_(detalle) {
     var s = detalle.solicitud;
+    var subsolicitudes = detalle.subsolicitudes || [];
     var archivos = detalle.archivos || [];
     // Fase 9: imagenes sin subsolicitud_id son adjuntos generales de la
     // solicitud (RF-003: se adjuntan a nivel de solicitud, Bloque 5).
@@ -101,17 +102,50 @@
 
     return '<h2>' + s.solicitud_id + '</h2>' +
       '<p>' + Componentes.badgePrioridad(s.prioridad_derivada) + ' ' + Componentes.badgeEstado(s.estado_derivado) + '</p>' +
-      documentos +
+      '<dl class="sigso-datos-item">' +
+      renderCampoDato_('Ingresada', Componentes.escaparHtml(fechaCorta_(s.fecha_creacion))) +
+      renderCampoDato_('Ítems', Componentes.escaparHtml(resumenTiposItems_(subsolicitudes))) +
+      renderCampoDato_('Módulo(s)', Componentes.escaparHtml(resumenModulosItems_(subsolicitudes))) +
+      '</dl>' +
       '<dl class="sigso-datos-item">' +
       renderCampoDato_('Empresa', Componentes.escaparHtml(s.empresa_nombre || s.empresa_id)) +
       renderCampoDato_('Plataforma', Componentes.escaparHtml(s.plataforma_nombre || s.plataforma)) +
+      '</dl>' +
+      '<dl class="sigso-datos-item">' +
       renderCampoDato_('Solicitante', Componentes.escaparHtml(s.solicitante_nombre) + ' (' + Componentes.escaparHtml(s.solicitante_cargo) + ')') +
       renderCampoDato_('Correo', Componentes.escaparHtml(s.solicitante_email)) +
       (s.cc ? renderCampoDato_('CC', Componentes.escaparHtml(s.cc)) : '') +
       '</dl>' +
       (s.es_cliente ? renderBloqueCliente_(s) : '') +
       (s.observaciones_generales ? '<p><em>' + Componentes.escaparHtml(s.observaciones_generales) + '</em></p>' : '') +
+      documentos +
       renderGaleria_(archivosGenerales);
+  }
+
+  // Propuesta 4: la ficha debe responder "que es esto" de un vistazo -- una
+  // solicitud real mezcla tipos/modulos por item (Fase 10), asi que aca se
+  // resume en vez de repetir cada item (eso ya se ve en la columna central).
+  function resumenTiposItems_(subsolicitudes) {
+    if (subsolicitudes.length === 0) return '—';
+    var conteo = {};
+    subsolicitudes.forEach(function (sub) {
+      var nombre = sub.tipo_nombre || sub.tipo || 'Sin tipo';
+      conteo[nombre] = (conteo[nombre] || 0) + 1;
+    });
+    var partes = Object.keys(conteo).map(function (nombre) {
+      return conteo[nombre] + ' ' + nombre;
+    });
+    return subsolicitudes.length + ' (' + partes.join(', ') + ')';
+  }
+
+  function resumenModulosItems_(subsolicitudes) {
+    if (subsolicitudes.length === 0) return '—';
+    var vistos = [];
+    subsolicitudes.forEach(function (sub) {
+      var nombre = sub.modulo_nombre || sub.modulo || '';
+      if (nombre && vistos.indexOf(nombre) === -1) vistos.push(nombre);
+    });
+    return vistos.length ? vistos.join(' · ') : '—';
   }
 
   function renderBloqueCliente_(s) {
@@ -153,37 +187,62 @@
       }
       var imagenesItem = archivos.filter(function (a) { return a.subsolicitud_id === sub.subsolicitud_id; });
 
-      var datos = [];
+      // Propuesta 1: identidad completa del item -- tipo y modulo existian
+      // en los datos (tipo_nombre/modulo_nombre, por item desde Fase 10) pero
+      // la vista nunca los mostraba, obligando a leer toda la descripcion
+      // para saber "que es esto" (reporte real de uso).
+      var metaChips = [];
+      if (sub.tipo_nombre || sub.tipo) metaChips.push('🏷 ' + Componentes.escaparHtml(sub.tipo_nombre || sub.tipo));
+      if (sub.modulo_nombre || sub.modulo) metaChips.push('📦 ' + Componentes.escaparHtml(sub.modulo_nombre || sub.modulo));
+      if (sub.fecha_propuesta) metaChips.push('📅 Propuesta: ' + Componentes.escaparHtml(fechaCorta_(sub.fecha_propuesta)));
+      var metaHtml = metaChips.length ? '<div class="sigso-item-meta">' + metaChips.join(' &middot; ') + '</div>' : '';
+
+      // Propuesta 3: los datos del item se agrupan por proposito (donde
+      // reproducir / contexto del pedido / plazos y responsable) en vez de
+      // una unica lista plana -- se escanea, no solo se lee.
+      var datosReproducir = [];
       if (sub.url_modulo) {
-        datos.push(renderCampoDato_('URL principal', '<a href="' + Componentes.escaparHtml(sub.url_modulo) + '" target="_blank" rel="noopener">' + Componentes.escaparHtml(sub.url_modulo) + '</a>'));
+        datosReproducir.push(renderCampoDato_('URL principal', '<a href="' + Componentes.escaparHtml(sub.url_modulo) + '" target="_blank" rel="noopener">' + Componentes.escaparHtml(sub.url_modulo) + '</a>'));
       }
       urlsAdicionales.forEach(function (u) {
         if (!u.url) return;
-        datos.push(renderCampoDato_(u.titulo || 'URL adicional', '<a href="' + Componentes.escaparHtml(u.url) + '" target="_blank" rel="noopener">' + Componentes.escaparHtml(u.url) + '</a>'));
+        datosReproducir.push(renderCampoDato_(u.titulo || 'URL adicional', '<a href="' + Componentes.escaparHtml(u.url) + '" target="_blank" rel="noopener">' + Componentes.escaparHtml(u.url) + '</a>'));
       });
-      if (sub.usuario_prueba) datos.push(renderCampoDato_('Usuario de prueba', Componentes.escaparHtml(sub.usuario_prueba)));
-      if (sub.ref_credencial) datos.push(renderCampoDato_('Credencial', Componentes.escaparHtml(sub.ref_credencial)));
-      if (sub.centro_costos) datos.push(renderCampoDato_('Centro de costos', Componentes.escaparHtml(sub.centro_costos)));
-      if (sub.frecuencia) datos.push(renderCampoDato_('Frecuencia', Componentes.escaparHtml(sub.frecuencia)));
-      if (sub.personas_afectadas) datos.push(renderCampoDato_('Personas afectadas', Componentes.escaparHtml(sub.personas_afectadas)));
-      if (sub.desarrollador_asignado) datos.push(renderCampoDato_('Asignado a', Componentes.escaparHtml(sub.desarrollador_asignado)));
-      if (sub.estimacion_horas) datos.push(renderCampoDato_('Estimacion', sub.estimacion_horas + ' h' + (sub.horas_reales ? ' (reales: ' + sub.horas_reales + ' h)' : '')));
+      if (sub.usuario_prueba) datosReproducir.push(renderCampoDato_('Usuario de prueba', Componentes.escaparHtml(sub.usuario_prueba)));
+      if (sub.ref_credencial) datosReproducir.push(renderCampoDato_('Credencial', Componentes.escaparHtml(sub.ref_credencial)));
+
+      var datosContexto = [];
+      if (sub.frecuencia) datosContexto.push(renderCampoDato_('Frecuencia', Componentes.escaparHtml(sub.frecuencia)));
+      if (sub.personas_afectadas) datosContexto.push(renderCampoDato_('Personas afectadas', Componentes.escaparHtml(sub.personas_afectadas)));
+      if (sub.centro_costos) datosContexto.push(renderCampoDato_('Centro de costos', Componentes.escaparHtml(sub.centro_costos)));
+
+      var datosPlazos = [];
+      if (sub.desarrollador_asignado) datosPlazos.push(renderCampoDato_('Asignado a', Componentes.escaparHtml(sub.desarrollador_asignado)));
+      if (sub.estimacion_horas) datosPlazos.push(renderCampoDato_('Estimacion', sub.estimacion_horas + ' h' + (sub.horas_reales ? ' (reales: ' + sub.horas_reales + ' h)' : '')));
       // v2.1 (Fase A): "dos promesas" -- lo que propuso el solicitante vs. lo
-      // que Leo comprometio (la oficial, ver §2.1 de la especificacion).
-      if (sub.fecha_propuesta) datos.push(renderCampoDato_('Fecha propuesta (solicitante)', Componentes.escaparHtml(fechaCorta_(sub.fecha_propuesta))));
-      if (sub.fecha_comprometida) datos.push(renderCampoDato_('Fecha comprometida', Componentes.escaparHtml(fechaCorta_(sub.fecha_comprometida)) + (sub.comprometida_por ? ' — ' + Componentes.escaparHtml(sub.comprometida_por) : '')));
-      if (sub.fecha_terminada) datos.push(renderCampoDato_('Terminada el', Componentes.escaparHtml(new Date(sub.fecha_terminada).toLocaleString('es-CL'))));
-      // v2.1 (Fase B): semaforo de cumplimiento (§6) -- ya calculado por
-      // getDetalle (Cumplimiento.gs), aqui solo se muestra.
-      var cumplimientoBadge = sub.cumplimiento
-        ? ' ' + Componentes.badge(sub.cumplimiento.emoji + ' ' + sub.cumplimiento.etiqueta, '')
-        : '';
+      // que Leo comprometio (la oficial, ver §2.1 de la especificacion). La
+      // fecha propuesta ya se ve arriba en los chips; aca solo la comprometida.
+      if (sub.fecha_comprometida) datosPlazos.push(renderCampoDato_('Fecha comprometida', Componentes.escaparHtml(fechaCorta_(sub.fecha_comprometida)) + (sub.comprometida_por ? ' — ' + Componentes.escaparHtml(sub.comprometida_por) : '')));
+      if (sub.fecha_terminada) datosPlazos.push(renderCampoDato_('Terminada el', Componentes.escaparHtml(new Date(sub.fecha_terminada).toLocaleString('es-CL'))));
       // != null (laxo) cubre tambien undefined -- un backend desplegado con
       // una version anterior puede no traer dias_esperando y antes se
       // imprimia "undefined dia(s)".
       if (sub.cumplimiento && sub.cumplimiento.dias_esperando != null) {
-        datos.push(renderCampoDato_('Esperando validación', sub.cumplimiento.dias_esperando + ' día(s) hábil(es)'));
+        datosPlazos.push(renderCampoDato_('Esperando validación', sub.cumplimiento.dias_esperando + ' día(s) hábil(es)'));
       }
+
+      function bloqueDatos_(titulo, datos) {
+        return datos.length === 0 ? '' : '<h5 class="sigso-titulo-accion">' + titulo + '</h5><dl class="sigso-datos-item">' + datos.join('') + '</dl>';
+      }
+
+      // v2.1 (Fase B): semaforo de cumplimiento (§6) -- ya calculado por
+      // getDetalle (Cumplimiento.gs). Fix contraste: Componentes.badge(...,'')
+      // sin variante deja texto blanco sin fondo (invisible sobre la tarjeta
+      // blanca) -- se usa el mismo estilo de texto que ya se ve bien en
+      // estado.js/gerencia.js para el mismo dato.
+      var cumplimientoTexto = sub.cumplimiento
+        ? ' <span class="sigso-semaforo-inline">' + sub.cumplimiento.emoji + ' ' + Componentes.escaparHtml(sub.cumplimiento.etiqueta) + '</span>'
+        : '';
 
       // v2.1 (Fase C, §7 drill-down): "resbalones" de este item -- cada
       // re-compromiso con su motivo, la evidencia que pidio Gerencia.
@@ -199,12 +258,15 @@
 
       return '<div class="sigso-acordeon-item sigso-acordeon-item--activo">' +
         '<div class="sigso-acordeon-item__cabecera"><span>' + sub.numero_item + '. ' + Componentes.escaparHtml(sub.titulo) +
-        ' — ' + Componentes.badgePrioridad(sub.prioridad) + ' ' + Componentes.badgeEstado(sub.estado) + cumplimientoBadge + '</span></div>' +
+        ' — ' + Componentes.badgePrioridad(sub.prioridad) + ' ' + Componentes.badgeEstado(sub.estado) + cumplimientoTexto + '</span></div>' +
         '<div class="sigso-acordeon-item__cuerpo">' +
+        metaHtml +
         '<p>' + Componentes.escaparHtml(sub.descripcion) + '</p>' +
         (sub.contexto ? '<p><strong>Contexto:</strong> ' + Componentes.escaparHtml(sub.contexto) + '</p>' : '') +
         (sub.resultado_esperado ? '<p><strong>Resultado esperado:</strong> ' + Componentes.escaparHtml(sub.resultado_esperado) + '</p>' : '') +
-        (datos.length > 0 ? '<dl class="sigso-datos-item">' + datos.join('') + '</dl>' : '') +
+        bloqueDatos_('🔍 Dónde reproducir', datosReproducir) +
+        bloqueDatos_('📋 Contexto del pedido', datosContexto) +
+        bloqueDatos_('⏱ Plazos y responsable', datosPlazos) +
         historialHtml +
         (sub.observaciones ? '<p><em>' + Componentes.escaparHtml(sub.observaciones) + '</em></p>' : '') +
         renderGaleria_(imagenesItem) +
@@ -240,7 +302,20 @@
     S10: 99, S11: 99
   };
 
+  // Rediseño (Propuesta 2): el flujo real de trabajo es "llega -> evaluar ->
+  // comprometer fecha -> recien ahi avanzar estados", pero la tarjeta
+  // mostraba Avanzar primero. La fecha comprometida pasa a ser el primer
+  // bloque; si el item sigue abierto y no tiene fecha, se destaca con una
+  // alerta y el boton de comprometer pasa a ser la accion principal.
+  var ESTADOS_CERRADOS_DETALLE = ['S09', 'S10', 'S11'];
+
   function renderAccionesItem_(sub, opcionesTransicion) {
+    // Se calcula antes que la botonera de "Avanzar" porque decide si esta
+    // puede tener su propio boton primario -- solo un naranja por tarjeta
+    // (UI-1 §1): si falta comprometer fecha, ESA es la accion principal.
+    var itemAbierto = ESTADOS_CERRADOS_DETALLE.indexOf(sub.estado) === -1;
+    var faltaComprometer = itemAbierto && !sub.fecha_comprometida;
+
     var selectorEstado = '';
     if (opcionesTransicion.length > 0) {
       var rangoActual = RANGO_ESTADO[sub.estado] !== undefined ? RANGO_ESTADO[sub.estado] : -1;
@@ -251,8 +326,10 @@
         return avanzar.indexOf(t) === -1;
       });
       // El paso inmediato (menor rango entre los de avanzar) va en naranja:
-      // es LA accion esperada; el resto en secundario.
-      var rangoSiguiente = avanzar.length > 0
+      // es LA accion esperada; el resto en secundario. Si falta comprometer
+      // fecha, ningun boton de avanzar es primario (ese lugar lo ocupa
+      // "Comprometer fecha" arriba).
+      var rangoSiguiente = avanzar.length > 0 && !faltaComprometer
         ? Math.min.apply(null, avanzar.map(function (t) { return RANGO_ESTADO[t.estado]; }))
         : null;
 
@@ -285,16 +362,24 @@
     // quiera confirmar/mover el compromiso. Re-comprometer (ya habia una
     // fecha) exige motivo, igual que cambiar prioridad exige justificacion.
     var yaComprometida = !!sub.fecha_comprometida;
+    // Rediseño (Propuesta 2): sin fecha comprometida y con el item todavia
+    // abierto, "comprometer fecha" pasa a ser LA accion principal (naranja,
+    // faltaComprometer calculado arriba) y se avisa antes de avanzar -- el
+    // flujo real es evaluar -> comprometer -> recien ahi avanzar estados.
+    var avisoFecha = faltaComprometer
+      ? '<div class="sigso-alerta"><p>⚠ Este ítem aún no tiene fecha comprometida — defínela antes de avanzar.</p></div>'
+      : '';
     var bloqueFecha =
+      avisoFecha +
       '<div class="sigso-acciones-item">' +
       '<input type="datetime-local" class="sigso-fecha-comprometida" data-subsolicitud="' + sub.subsolicitud_id + '" value="' + Componentes.escaparHtml(sub.fecha_comprometida || sub.fecha_propuesta || '') + '">' +
       '<input type="text" class="sigso-motivo-fecha' + (yaComprometida ? '' : ' sigso-oculto') + '" data-subsolicitud="' + sub.subsolicitud_id + '" placeholder="Motivo (min. 20 caracteres) para mover una fecha ya comprometida">' +
-      '<button type="button" class="sigso-boton--secundario sigso-aplicar-fecha" data-subsolicitud="' + sub.subsolicitud_id + '">' + (yaComprometida ? 'Ajustar fecha comprometida' : 'Comprometer fecha') + '</button>' +
+      '<button type="button" class="' + (faltaComprometer ? 'sigso-boton' : 'sigso-boton--secundario') + ' sigso-aplicar-fecha" data-subsolicitud="' + sub.subsolicitud_id + '">' + (yaComprometida ? 'Ajustar fecha comprometida' : 'Comprometer fecha') + '</button>' +
       '<span class="sigso-resultado-accion" data-subsolicitud="' + sub.subsolicitud_id + '-fecha"></span>' +
       '</div>';
 
-    return selectorEstado +
-      '<h4 class="sigso-titulo-accion">Fecha comprometida</h4>' + bloqueFecha +
+    return '<h4 class="sigso-titulo-accion">Fecha comprometida</h4>' + bloqueFecha +
+      selectorEstado +
       '<h4 class="sigso-titulo-accion">Prioridad</h4>' +
       '<div class="sigso-acciones-item">' +
       '<select class="sigso-nueva-prioridad" data-subsolicitud="' + sub.subsolicitud_id + '">' +
@@ -328,10 +413,24 @@
   // --- Columna derecha: historia unificada (estados + comentarios) ------
 
   function renderHistoria_(detalle) {
+    var s = detalle.solicitud;
+    var subsolicitudes = detalle.subsolicitudes || [];
     var eventos = (detalle.historial_estados || []).map(function (h) {
+      // Propuesta 5: el evento de creacion (estado_anterior vacio) solo
+      // decia "Nueva -- sistema" -- se enriquece con quien pidio que y
+      // cuantos items trae, usando datos que getDetalle ya trae (sin tocar
+      // el backend).
+      var esCreacion = h.estado_anterior === '';
+      var comentario = h.comentario;
+      if (esCreacion) {
+        comentario = (comentario ? comentario + ' — ' : '') +
+          'Solicitada por ' + (s.solicitante_nombre || 'desconocido') +
+          (s.solicitante_cargo ? ' (' + s.solicitante_cargo + ')' : '') +
+          ' · ' + resumenTiposItems_(subsolicitudes);
+      }
       return {
         tipo: 'estado', timestamp: h.timestamp, usuario: h.usuario,
-        texto: formatearEstadoSigso(h.estado_nuevo), comentario: h.comentario
+        texto: formatearEstadoSigso(h.estado_nuevo), comentario: comentario
       };
     }).concat((detalle.comentarios || []).map(function (c) {
       return { tipo: 'comentario', timestamp: c.timestamp, usuario: c.usuario, texto: c.texto, esInterno: c.es_interno };

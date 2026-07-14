@@ -142,6 +142,15 @@ button.sigso-kpi {
   color: var(--gris-medio);
 }
 
+/* Rediseño vista desarrollador (Propuesta 1): linea de clasificacion del
+   item (tipo, modulo, fecha propuesta) debajo del titulo -- antes solo se
+   sabia leyendo toda la descripcion. */
+.sigso-item-meta {
+  font-size: 0.85rem;
+  color: var(--gris-medio);
+  margin: 0.15rem 0 0.75rem;
+}
+
 .sigso-mas-acciones {
   margin-top: 0.5rem;
 }
