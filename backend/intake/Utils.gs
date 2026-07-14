@@ -31,6 +31,12 @@ var Utils = {
 
     var inicioDate = aFecha_(inicio);
     var finDate = aFecha_(fin);
+    // Fecha invalida (celda vacia o mal pegada a mano): se cuenta como 0
+    // horas en vez de tirar una excepcion mas adentro. Ver la nota identica
+    // en backend/backoffice/Utils.gs.
+    if (isNaN(inicioDate.getTime()) || isNaN(finDate.getTime())) {
+      return 0;
+    }
     if (finDate <= inicioDate) {
       return 0;
     }
@@ -87,6 +93,11 @@ function offsetMinutos_(fecha, tz) {
 
 // 'YYYY-MM-DD' del dia calendario local (en tz) al que pertenece `fecha`.
 function claveDia_(fecha, tz) {
+  // Fecha invalida: Intl.DateTimeFormat.format lanza RangeError. Ver la nota
+  // identica en backend/backoffice/Utils.gs.
+  if (!(fecha instanceof Date) || isNaN(fecha.getTime())) {
+    return '';
+  }
   var dtf = new Intl.DateTimeFormat('en-CA', {
     timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
   });

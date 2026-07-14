@@ -31,6 +31,12 @@ var Utils = {
 
     var inicioDate = aFecha_(inicio);
     var finDate = aFecha_(fin);
+    // Fecha invalida (celda vacia o mal pegada a mano en la hoja): en vez de
+    // tirar una excepcion mas adentro (Intl/formato) y tumbar TODO el
+    // dashboard por una sola fila sucia, se cuenta como 0 horas.
+    if (isNaN(inicioDate.getTime()) || isNaN(finDate.getTime())) {
+      return 0;
+    }
     if (finDate <= inicioDate) {
       return 0;
     }
@@ -87,6 +93,12 @@ function offsetMinutos_(fecha, tz) {
 
 // 'YYYY-MM-DD' del dia calendario local (en tz) al que pertenece `fecha`.
 function claveDia_(fecha, tz) {
+  // Fecha invalida: Intl.DateTimeFormat.format(fecha) lanza RangeError, lo
+  // que tumbaria el KPI/dashboard por una sola fila con fecha vacia o mal
+  // pegada. Se devuelve '' (no coincide con ninguna clave real).
+  if (!(fecha instanceof Date) || isNaN(fecha.getTime())) {
+    return '';
+  }
   var dtf = new Intl.DateTimeFormat('en-CA', {
     timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
   });

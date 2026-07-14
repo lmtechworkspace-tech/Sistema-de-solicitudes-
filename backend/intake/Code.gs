@@ -45,7 +45,7 @@ function doPost(e) {
     return handler(body.data || {});
   } catch (err) {
     var ref = logError_(err, 'Intake.doPost');
-    return jsonResponse_({ ok: false, error: 'internal', ref: ref });
+    return jsonResponse_({ ok: false, error: 'internal', ref: ref, message: 'Error interno: ' + String(err && err.message ? err.message : err).slice(0, 300) });
   }
 }
 

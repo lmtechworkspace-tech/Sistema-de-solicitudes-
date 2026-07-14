@@ -75,8 +75,15 @@ function doPost(e) {
     return handler(body.data || {}, resuelto.contexto);
   } catch (err) {
     var ref = logError_(err, 'Backoffice.doPost');
-    return jsonResponse_({ ok: false, error: 'internal', ref: ref });
+    // Backoffice es solo-staff: se incluye el motivo real para que el error
+    // se vea en pantalla y no haya que entrar a los logs para diagnosticar.
+    return jsonResponse_({ ok: false, error: 'internal', ref: ref, message: 'Error interno: ' + mensajeError_(err) });
   }
+}
+
+// Motivo corto y legible de una excepcion, para mostrarlo en pantalla.
+function mensajeError_(err) {
+  return String(err && err.message ? err.message : err).slice(0, 300);
 }
 
 // Puente para app.html/admin.html servidos via HtmlService (Fase 8):
@@ -99,7 +106,7 @@ function ejecutarAccionBackoffice(action, data) {
     return JSON.parse(salida.getContent());
   } catch (err) {
     var ref = logError_(err, 'Backoffice.ejecutarAccionBackoffice:' + action);
-    return { ok: false, error: 'internal', ref: ref };
+    return { ok: false, error: 'internal', ref: ref, message: 'Error interno: ' + mensajeError_(err) };
   }
 }
 

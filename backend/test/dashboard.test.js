@@ -275,3 +275,18 @@ test('Dashboard.getData recalcula tras expirar el cache', () => {
 
   assert.equal(datos.resumen.del_dia, 2);
 });
+
+test('Dashboard.getData NO se cae si una solicitud tiene fecha_creacion vacia o mal formada (dato pegado a mano)', () => {
+  const ctx = loadConSchema();
+  // Fila valida + fila con fecha vacia + fila con fecha basura (como las que
+  // quedan al pegar datos manualmente en el Sheets).
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0001' });
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-GDE-0005', fecha_creacion: '' });
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-GDE-0006', fecha_creacion: 'SOL-2026-GDE-[N1]' });
+
+  // Antes esto lanzaba RangeError (Intl.format sobre fecha invalida) y el
+  // dashboard entero quedaba en blanco. Ahora debe responder con las 3.
+  const datos = ctx.Dashboard.getData({}, { rol: 'ADM', email: 'admin@homepymes.cl' });
+  assert.equal(datos.recientes.length, 3);
+  assert.ok(datos.resumen.total_abiertas >= 1);
+});
