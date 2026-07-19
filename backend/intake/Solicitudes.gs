@@ -29,6 +29,20 @@ var Solicitudes = {
     var dedupHash = calcularHashDuplicado_(data);
     var duplicado = buscarDuplicadoAbierto_(dedupHash);
 
+    // v3.1 (§1): "atencion directa" -- la solicitud se resolvio por telefono
+    // ANTES de existir en el sistema y se registra a posteriori. No recorre el
+    // flujo: nace Cerrada (S09). Se valida aparte porque los tres campos del
+    // registro son la razon de ser de la funcion ("no es necesario todo el
+    // flujo, pero si importante que quede registro").
+    var atencion = normalizarAtencionDirecta_(data.atencion_directa);
+    if (atencion) {
+      var errorAtencion = validarAtencionDirecta_(atencion);
+      if (errorAtencion) {
+        return errorAtencion;
+      }
+    }
+    var estadoInicial = atencion ? ESTADOS.S09 : ESTADOS.S01;
+
     var solicitudId = generarId_(data.empresa_id);
     var timestamp = new Date().toISOString();
 
@@ -62,7 +76,7 @@ var Solicitudes = {
         resultado_esperado: item.resultado_esperado || '',
         impacto: item.impacto || '',
         prioridad: prioridad,
-        estado: ESTADOS.S01,
+        estado: estadoInicial,
         url_modulo: item.url_modulo || '',
         usuario_prueba: item.usuario_prueba || '',
         ref_credencial: item.ref_credencial || '',
@@ -102,7 +116,12 @@ var Solicitudes = {
         // vacio hasta que alguien asignaba a mano en el Backoffice).
         desarrollador_asignado: responsable,
         area: areaId,
-        area_nombre: resolverNombreCatalogo_(SHEETS.CAT_AREAS, 'area_id', areaId)
+        area_nombre: resolverNombreCatalogo_(SHEETS.CAT_AREAS, 'area_id', areaId),
+        // v3.1 (§1.4): el registro de la atencion directa. Va a nivel de item
+        // (como fecha_terminada) porque el detalle de la solucion es por item.
+        atencion_resuelto_por: atencion ? atencion.resuelto_por : '',
+        atencion_fecha_resolucion: atencion ? atencion.fecha_resolucion : '',
+        atencion_detalle: atencion ? atencion.detalle : ''
       });
 
       return { subsolicitud_id: subId, prioridad: prioridad, responsable: responsable };
@@ -143,7 +162,7 @@ var Solicitudes = {
       correo_cliente: data.correo_cliente || '',
       telefono_cliente: data.telefono_cliente || '',
       urgencia_cliente: data.urgencia_cliente || '',
-      estado_derivado: ESTADOS.S01,
+      estado_derivado: estadoInicial,
       prioridad_derivada: prioridadDerivada,
       orden_atencion: '',
       doc_estado: '',
@@ -163,17 +182,27 @@ var Solicitudes = {
       // Trazabilidad del cliente elegido del buscador (CAT_CLIENTES): '' si
       // es interna o si se escribio manual sin elegir de la lista.
       rut_cliente: data.rut_cliente || '',
-      codigo_cliente: data.codigo_cliente || ''
+      codigo_cliente: data.codigo_cliente || '',
+      // v3.1 (§1.5): marca separada del estado. Ver la nota en Constantes.gs
+      // -- es lo que permite excluirlas de los KPIs de SLA/cumplimiento.
+      atencion_directa: !!atencion
     });
 
+    // UNA sola entrada de historial, honesta. En una atencion directa NO se
+    // fabrica la cadena S01->S02->...->S09: inventar transiciones que nunca
+    // ocurrieron haria inservible el historial como fuente de verdad.
     agregarFila_(SHEETS.HISTORIAL_ESTADOS, {
       historial_id: Utilities.getUuid(),
       solicitud_id: solicitudId,
       subsolicitud_id: '',
       estado_anterior: '',
-      estado_nuevo: ESTADOS.S01,
-      usuario: 'sistema',
-      comentario: 'Solicitud creada por el formulario publico.',
+      estado_nuevo: estadoInicial,
+      usuario: atencion ? data.solicitante_email : 'sistema',
+      comentario: atencion
+        ? 'Atencion directa: resuelto por ' + atencion.resuelto_por +
+          ' el ' + String(atencion.fecha_resolucion).replace('T', ' ') +
+          '. ' + atencion.detalle
+        : 'Solicitud creada por el formulario publico.',
       timestamp: timestamp
     });
 
@@ -188,7 +217,8 @@ var Solicitudes = {
       prioridad: prioridadDerivada,
       total_items: data.subsolicitudes.length,
       resumen_whatsapp: resumenWhatsapp,
-      cc: data.cc || ''
+      cc: data.cc || '',
+      atencion_directa: !!atencion
     });
     // v3.0 (Fase 1, multi-responsable): el aviso ya no va a un buzon fijo
     // (Leo). Se avisa al RESPONSABLE ruteado de cada item (CAT_AREAS ->
@@ -201,14 +231,26 @@ var Solicitudes = {
     // P12 (v2.0, Sprint 3): el switch global (AVISO_LEO) sigue mandando -- si
     // Gerencia lo desactiva desde Administracion, no se avisa a nadie.
     if (avisoDesarrolloActivo_()) {
-      var motivoAviso = data.es_cliente ? 'solicitud de cliente'
-        : (prioridadDerivada === 'P1' ? 'prioridad critica P1' : 'nueva solicitud');
       var responsablesAvisados = {};
       subsolicitudesGuardadas.forEach(function (s) {
         if (!s.responsable || responsablesAvisados[s.responsable]) {
           return;
         }
         responsablesAvisados[s.responsable] = true;
+        // v3.1 (§1.8): en una atencion directa el aviso NO puede ser "tienes
+        // una solicitud nueva" -- le llegaria al desarrollador por algo que el
+        // mismo acaba de arreglar por telefono. Va un acuse, sin llamado a la
+        // accion. Tampoco corresponde la alerta de P1: no hay nada que atender.
+        if (atencion) {
+          Notificaciones.avisarAtencionDirectaRegistrada({
+            solicitud_id: solicitudId,
+            total_items: data.subsolicitudes.length,
+            solicitante_nombre: data.solicitante_nombre
+          }, atencion, s.responsable);
+          return;
+        }
+        var motivoAviso = data.es_cliente ? 'solicitud de cliente'
+          : (prioridadDerivada === 'P1' ? 'prioridad critica P1' : 'nueva solicitud');
         Notificaciones.enviarAvisoDesarrollo({
           solicitud_id: solicitudId,
           prioridad: prioridadDerivada,
@@ -220,7 +262,10 @@ var Solicitudes = {
     var respuesta = {
       solicitud_id: solicitudId,
       resumen_whatsapp: resumenWhatsapp,
-      estado: ESTADOS.S01
+      estado: estadoInicial,
+      // El formulario cambia el mensaje de exito segun esto: una atencion
+      // directa no "sera revisada", ya quedo cerrada.
+      atencion_directa: !!atencion
     };
     if (duplicado) {
       // RF-F06: se avisa, no se bloquea la creacion de la solicitud.
@@ -459,12 +504,19 @@ var Solicitudes = {
    *
    * accion = 'confirmar' (queda Cerrada) | 'reabrir' (vuelve a En desarrollo,
    * con comentario obligatorio explicando que falta).
+   *
+   * v3.1 (§1.3B): se agrega 'cerrar_directo' -- el caso de una solicitud que
+   * SI existe en el sistema, en cualquier estado abierto, y que se termino
+   * resolviendo por telefono. Sin esto habria que arrastrarla por todo el
+   * flujo solo para poder cerrarla, o dejarla abierta para siempre. Pide el
+   * mismo registro que una atencion directa al ingreso (quien/cuando/que).
    */
   validarCierre: function (data) {
     if (!data.solicitud_id || !data.subsolicitud_id || !data.email || !data.accion) {
       return errorValidacion_('accion', 'Debes indicar la solicitud, el item, tu correo y la accion.');
     }
-    if (data.accion !== 'confirmar' && data.accion !== 'reabrir') {
+    var ACCIONES = ['confirmar', 'reabrir', 'cerrar_directo'];
+    if (ACCIONES.indexOf(data.accion) === -1) {
       return errorValidacion_('accion', 'Accion invalida: ' + data.accion);
     }
 
@@ -484,21 +536,51 @@ var Solicitudes = {
     if (!subsolicitud || subsolicitud.solicitud_id !== data.solicitud_id) {
       return errorValidacion_('subsolicitud_id', 'Item no encontrado en esta solicitud.');
     }
-    if (subsolicitud.estado !== ESTADOS.S08) {
+    var esCierreDirecto = data.accion === 'cerrar_directo';
+    // confirmar/reabrir siguen exigiendo S08 (son la validacion de una
+    // entrega). cerrar_directo, en cambio, aplica a cualquier item ABIERTO:
+    // el punto es justamente no tener que recorrer el flujo.
+    if (esCierreDirecto) {
+      if (ESTADOS_CERRADOS.indexOf(subsolicitud.estado) !== -1) {
+        return errorValidacion_('subsolicitud_id', 'Este item ya esta cerrado.');
+      }
+    } else if (subsolicitud.estado !== ESTADOS.S08) {
       return errorValidacion_('subsolicitud_id', 'Este item no esta pendiente de validacion (debe estar Terminada).');
     }
     if (data.accion === 'reabrir' && (!data.comentario || String(data.comentario).trim() === '')) {
       return errorValidacion_('comentario', 'Cuentanos que falta antes de reabrir el item.');
     }
 
+    var atencionCierre = null;
+    if (esCierreDirecto) {
+      atencionCierre = normalizarAtencionDirecta_(data.atencion_directa || true);
+      var errorCierre = validarAtencionDirecta_(atencionCierre);
+      if (errorCierre) {
+        return errorCierre;
+      }
+    }
+
     var estadoAnterior = subsolicitud.estado;
-    var estadoNuevo = data.accion === 'confirmar' ? ESTADOS.S09 : ESTADOS.S05;
-    var comentario = data.accion === 'confirmar'
-      ? 'Cierre confirmado por el solicitante.'
-      : 'Reabierto por el solicitante: ' + data.comentario;
+    var estadoNuevo = data.accion === 'reabrir' ? ESTADOS.S05 : ESTADOS.S09;
+    var comentario;
+    if (esCierreDirecto) {
+      comentario = 'Atencion directa: resuelto por ' + atencionCierre.resuelto_por +
+        ' el ' + String(atencionCierre.fecha_resolucion).replace('T', ' ') +
+        '. ' + atencionCierre.detalle;
+    } else if (data.accion === 'confirmar') {
+      comentario = 'Cierre confirmado por el solicitante.';
+    } else {
+      comentario = 'Reabierto por el solicitante: ' + data.comentario;
+    }
     var timestamp = new Date().toISOString();
 
-    actualizarFilaPorId_(SHEETS.SUBSOLICITUDES, 'subsolicitud_id', data.subsolicitud_id, { estado: estadoNuevo });
+    var cambiosItem = { estado: estadoNuevo };
+    if (esCierreDirecto) {
+      cambiosItem.atencion_resuelto_por = atencionCierre.resuelto_por;
+      cambiosItem.atencion_fecha_resolucion = atencionCierre.fecha_resolucion;
+      cambiosItem.atencion_detalle = atencionCierre.detalle;
+    }
+    actualizarFilaPorId_(SHEETS.SUBSOLICITUDES, 'subsolicitud_id', data.subsolicitud_id, cambiosItem);
     agregarFila_(SHEETS.HISTORIAL_ESTADOS, {
       historial_id: Utilities.getUuid(),
       solicitud_id: data.solicitud_id,
@@ -517,6 +599,12 @@ var Solicitudes = {
       return s.subsolicitud_id === data.subsolicitud_id ? estadoNuevo : s.estado;
     });
     var estadoDerivado = calcularEstadoDerivado_(estadosActualizados);
+    // v3.1: un cierre directo NO marca la solicitud como atencion_directa, a
+    // diferencia del registro al ingreso. La marca sirve para excluir de los
+    // KPIs a las solicitudes que se crean y cierran en el mismo instante;
+    // esta, en cambio, vivio en el sistema un tiempo real y medible, aunque
+    // el desenlace haya ocurrido por telefono. El registro de quien/cuando/
+    // que se hizo queda igual, a nivel de item.
     actualizarFilaPorId_(SHEETS.SOLICITUDES, 'solicitud_id', data.solicitud_id, { estado_derivado: estadoDerivado });
 
     // v3.0 (Fase 2.1): avisa al responsable real del item, no siempre al
@@ -585,6 +673,50 @@ function obtenerUltimaPreguntaEsperandoInfo_(subsolicitudId) {
 
 function errorValidacion_(campo, mensaje) {
   return { _validationError: true, message: mensaje, fields: [{ campo: campo, mensaje: mensaje }] };
+}
+
+// v3.1 (§1): normaliza el bloque de atencion directa que manda el
+// formulario. Devuelve null si no viene o si viene desactivado -- asi el
+// resto de crearSolicitud solo pregunta "hay atencion o no".
+function normalizarAtencionDirecta_(bruto) {
+  if (!bruto || bruto === true) {
+    // `true` pelado no alcanza: sin los campos del registro esto no seria
+    // un registro, seria un atajo para cerrar solicitudes sin dejar rastro.
+    return bruto === true ? { resuelto_por: '', fecha_resolucion: '', detalle: '' } : null;
+  }
+  if (bruto.activo === false) {
+    return null;
+  }
+  return {
+    resuelto_por: String(bruto.resuelto_por || '').trim(),
+    fecha_resolucion: String(bruto.fecha_resolucion || '').trim(),
+    detalle: String(bruto.detalle || '').trim()
+  };
+}
+
+// Los tres campos son obligatorios a proposito: son el registro. Si se
+// permitiera dejarlos vacios, "atencion directa" se convertiria en un boton
+// para crear solicitudes ya cerradas sin explicacion.
+function validarAtencionDirecta_(atencion) {
+  if (!atencion.resuelto_por) {
+    return errorValidacion_('atencion_resuelto_por', 'Indica quien resolvio la solicitud.');
+  }
+  if (!atencion.fecha_resolucion) {
+    return errorValidacion_('atencion_fecha_resolucion', 'Indica cuando se resolvio.');
+  }
+  var fecha = new Date(atencion.fecha_resolucion);
+  if (isNaN(fecha.getTime())) {
+    return errorValidacion_('atencion_fecha_resolucion', 'La fecha de resolucion no es valida.');
+  }
+  // Una atencion directa se registra DESPUES de resolver; una fecha futura
+  // solo puede ser un error de tipeo.
+  if (fecha.getTime() > Date.now()) {
+    return errorValidacion_('atencion_fecha_resolucion', 'La fecha de resolucion no puede ser futura.');
+  }
+  if (atencion.detalle.length < 10) {
+    return errorValidacion_('atencion_detalle', 'Cuenta que se hizo (al menos 10 caracteres).');
+  }
+  return null;
 }
 
 // P2: cuenta cuantas solicitudes ABIERTAS de la MISMA empresa estan
@@ -701,7 +833,11 @@ function validarSolicitud_(data) {
   // de cliente o con impacto critico (P1): ahi la hora importa porque se
   // puede resolver en horas/minutos. Para el resto, si viene, alcanza con
   // la fecha (sin hora).
-  if (requiereFechaHoraPropuesta_(data)) {
+  // v3.1 (§1.3A): en una atencion directa el problema YA se resolvio, asi que
+  // preguntar "para cuando lo necesitas" no tiene sentido -- y exigirlo
+  // bloqueaba el registro de justamente los casos mas urgentes (P1/cliente),
+  // que son los que se resuelven por telefono.
+  if (requiereFechaHoraPropuesta_(data) && !normalizarAtencionDirecta_(data.atencion_directa)) {
     if (!data.fecha_propuesta || String(data.fecha_propuesta).trim() === '') {
       errores.push({
         campo: 'fecha_propuesta',

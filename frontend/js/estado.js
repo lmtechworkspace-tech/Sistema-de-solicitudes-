@@ -6,6 +6,8 @@
  * magic link real (token por Gmail) llega en la Fase 4.
  */
 (function () {
+  var ESTADOS_CERRADOS_PUBLICO = ['S09', 'S10', 'S11'];
+
   document.addEventListener('DOMContentLoaded', function () {
     if (typeof renderHeaderSigso === 'function') {
       renderHeaderSigso('estado');
@@ -171,6 +173,28 @@
       });
     });
 
+    // v3.1 (§1.3B): cierre directo de un item que ya se resolvio por fuera.
+    contenedor.querySelectorAll('[data-accion="cerrar-directo"]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        var subId = boton.getAttribute('data-subsolicitud');
+        var salida = document.querySelector('[data-resultado-validacion="' + subId + '"]');
+        var atencion = {
+          activo: true,
+          resuelto_por: document.getElementById('cd-quien-' + subId).value.trim(),
+          fecha_resolucion: document.getElementById('cd-fecha-' + subId).value,
+          detalle: document.getElementById('cd-detalle-' + subId).value.trim()
+        };
+        // Chequeo local para ahorrar el viaje redondo; el backend re-valida
+        // los tres campos igual (son el registro, no un tramite).
+        if (!atencion.resuelto_por || !atencion.fecha_resolucion || atencion.detalle.length < 10) {
+          salida.innerHTML = Componentes.alerta(
+            'Completa quién lo resolvió, cuándo, y qué se hizo (al menos 10 caracteres).', 'error');
+          return;
+        }
+        enviarValidacion_(subId, 'cerrar_directo', '', atencion);
+      });
+    });
+
     // Expande automaticamente items con pregunta pendiente: son los que mas
     // le importan al solicitante en ese momento.
     contenedor.querySelectorAll('.sigso-acordeon-item[data-pregunta-pendiente="1"]').forEach(function (el) {
@@ -279,6 +303,31 @@
         '</div>' +
         '<div data-resultado-validacion="' + s.subsolicitud_id + '"></div>';
     }
+    // v3.1 (§1.3B): un item abierto que se termino resolviendo por telefono.
+    // Sin esto habria que arrastrarlo por todo el flujo solo para cerrarlo, o
+    // dejarlo abierto para siempre. Se ofrece plegado (<details>) porque es la
+    // excepcion, no el camino normal.
+    if (ESTADOS_CERRADOS_PUBLICO.indexOf(s.estado) === -1 && s.estado !== 'S08') {
+      filas += '<details class="sigso-cierre-directo">' +
+        '<summary>Ya se resolvió por fuera del sistema</summary>' +
+        '<p class="sigso-ayuda">Si esto ya se solucionó (por ejemplo, llamando al desarrollador), ' +
+        'ciérralo dejando el registro de lo que pasó.</p>' +
+        '<div class="sigso-campo">' +
+        '<label for="cd-quien-' + s.subsolicitud_id + '">¿Quién lo resolvió?</label>' +
+        '<input type="text" id="cd-quien-' + s.subsolicitud_id + '" />' +
+        '</div>' +
+        '<div class="sigso-campo">' +
+        '<label for="cd-fecha-' + s.subsolicitud_id + '">¿Cuándo se resolvió?</label>' +
+        '<input type="datetime-local" id="cd-fecha-' + s.subsolicitud_id + '" />' +
+        '</div>' +
+        '<div class="sigso-campo">' +
+        '<label for="cd-detalle-' + s.subsolicitud_id + '">¿Qué se hizo?</label>' +
+        '<textarea id="cd-detalle-' + s.subsolicitud_id + '"></textarea>' +
+        '</div>' +
+        '<button type="button" class="sigso-boton--secundario" data-accion="cerrar-directo" data-subsolicitud="' + s.subsolicitud_id + '">Registrar y cerrar</button>' +
+        '<div data-resultado-validacion="' + s.subsolicitud_id + '"></div>' +
+        '</details>';
+    }
     return filas || '<p class="sigso-ayuda">Sin detalle adicional.</p>';
   }
 
@@ -310,14 +359,17 @@
     });
   }
 
-  function enviarValidacion_(subsolicitudId, accion, comentario) {
+  function enviarValidacion_(subsolicitudId, accion, comentario, atencionDirecta) {
     var contenedorResultado = document.querySelector('[data-resultado-validacion="' + subsolicitudId + '"]');
     llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'validarCierre', {
       solicitud_id: ultimaConsulta.solicitud_id,
       subsolicitud_id: subsolicitudId,
       email: ultimaConsulta.email,
       accion: accion,
-      comentario: comentario || ''
+      comentario: comentario || '',
+      // v3.1 (§1.3B): solo viaja en 'cerrar_directo'; el backend lo exige
+      // completo en ese caso e ignora el resto.
+      atencion_directa: atencionDirecta || null
     }).then(function (respuesta) {
       if (!respuesta.ok) {
         contenedorResultado.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo aplicar la validacion.', 'error');

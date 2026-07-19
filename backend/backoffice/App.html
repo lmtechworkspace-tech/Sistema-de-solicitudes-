@@ -729,6 +729,34 @@ button {
   min-width: 12rem;
 }
 
+/* v3.1 (§1.6): insignia de "atencion directa" en la ficha del detalle. Sin
+   ella, una solicitud creada y cerrada en el mismo instante parece un error
+   de datos en vez de un registro deliberado. */
+.sigso-insignia-directa {
+  display: inline-block;
+  margin: 0.35rem 0 0;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  border-left: 3px solid var(--sigso-naranja, #e8871e);
+  background: var(--sigso-fondo-suave, #faf7f2);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Cierre directo desde "Mis solicitudes": plegado, porque es la excepcion y
+   no debe competir con las acciones normales del item. */
+.sigso-cierre-directo {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed var(--sigso-borde, #d9d2c7);
+  border-radius: 6px;
+}
+
+.sigso-cierre-directo > summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
 </style>
   <style>
 /* dashboard.css — Backoffice: KPIs, graficos, tabla, detalle (§12.4/12.5). */
@@ -2426,8 +2454,16 @@ function renderHeaderSigso(paginaActiva) {
         '</div>';
     }
 
+    // v3.1 (§1.6): que se distinga a simple vista de una solicitud que si
+    // recorrio el flujo -- sin esto, un cierre instantaneo parece un error.
+    var esAtencionDirecta = s.atencion_directa === true || s.atencion_directa === 'TRUE' || s.atencion_directa === 1;
+    var avisoAtencionDirecta = esAtencionDirecta
+      ? '<p class="sigso-insignia-directa">⚡ Atención directa — registrada después de resolver</p>'
+      : '';
+
     return '<h2>' + s.solicitud_id + '</h2>' +
       '<p>' + Componentes.badgePrioridad(s.prioridad_derivada) + ' ' + Componentes.badgeEstado(s.estado_derivado) + '</p>' +
+      avisoAtencionDirecta +
       '<dl class="sigso-datos-item">' +
       renderCampoDato_('Ingresada', Componentes.escaparHtml(fechaCorta_(s.fecha_creacion))) +
       renderCampoDato_('Ítems', Componentes.escaparHtml(resumenTiposItems_(subsolicitudes))) +
@@ -2593,6 +2629,16 @@ function renderHeaderSigso(paginaActiva) {
         bloqueDatos_('🔍 Dónde reproducir', datosReproducir) +
         bloqueDatos_('📋 Contexto del pedido', datosContexto) +
         bloqueDatos_('⏱ Plazos y responsable', datosPlazos) +
+        // v3.1 (§1.4): el registro de la atencion directa. Es la memoria
+        // tecnica del incidente -- lo unico que queda de algo que se
+        // resolvio por telefono.
+        (sub.atencion_resuelto_por
+          ? bloqueDatos_('⚡ Atención directa', [
+            renderCampoDato_('Resuelto por', Componentes.escaparHtml(sub.atencion_resuelto_por)),
+            renderCampoDato_('Fecha de resolución', Componentes.escaparHtml(fechaCorta_(sub.atencion_fecha_resolucion))),
+            renderCampoDato_('Qué se hizo', Componentes.escaparHtml(sub.atencion_detalle))
+          ])
+          : '') +
         historialHtml +
         (sub.observaciones ? '<p><em>' + Componentes.escaparHtml(sub.observaciones) + '</em></p>' : '') +
         renderGaleria_(imagenesItem) +
@@ -3110,13 +3156,13 @@ function renderHeaderSigso(paginaActiva) {
           return respuesta;
         }
         itemsActuales = respuesta.data.items;
-        renderKpis_(respuesta.data.kpis);
+        renderKpis_(respuesta.data.kpis, respuesta.data.atenciones_directas);
         renderTodo_();
         return respuesta;
       });
   }
 
-  function renderKpis_(kpis) {
+  function renderKpis_(kpis, atencionesDirectas) {
     document.getElementById('ger-contenedor-kpis').innerHTML =
       Componentes.kpi({
         valor: kpis.pct_cumplimiento_desarrollador === null ? '—' : kpis.pct_cumplimiento_desarrollador + '%',
@@ -3135,7 +3181,15 @@ function renderHeaderSigso(paginaActiva) {
         titulo: 'Ítems entregados (Terminada) que el solicitante todavía no valida. Promedio: ' + kpis.esperando_validacion_promedio_dias + ' día(s) hábil(es) esperando.'
       }) +
       Componentes.kpi({ valor: kpis.atraso_promedio_dias, etiqueta: 'Atraso promedio (días)', titulo: 'Promedio de días hábiles de atraso entre atrasadas activas y cerradas con atraso.' }) +
-      Componentes.kpi({ valor: kpis.sin_comprometer, etiqueta: 'Sin comprometer', titulo: 'Cola que el desarrollador todavía no revisó/comprometió.' });
+      Componentes.kpi({ valor: kpis.sin_comprometer, etiqueta: 'Sin comprometer', titulo: 'Cola que el desarrollador todavía no revisó/comprometió.' }) +
+      // v3.1 (§1.6): quedan FUERA de los KPIs de arriba (nunca tuvieron
+      // fecha comprometida), pero su volumen es en si un dato de gestion:
+      // cuanto se esta resolviendo por telefono, fuera del proceso.
+      Componentes.kpi({
+        valor: atencionesDirectas || 0,
+        etiqueta: 'Atenciones directas',
+        titulo: 'Solicitudes resueltas fuera del flujo (por teléfono) y registradas después. No entran en los indicadores de cumplimiento porque nunca tuvieron fecha comprometida.'
+      });
   }
 
   // Aplica el filtro de tipo (texto, client-side -- ver nota en app.html:

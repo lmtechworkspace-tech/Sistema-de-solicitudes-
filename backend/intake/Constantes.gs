@@ -79,7 +79,14 @@ var COLUMNAS = {
     // codigo identifican sin ambiguedad al cliente aunque la razon social se
     // edite. Quedan '' en solicitudes internas o cuando se escribe manual.
     // Aditivas al final (mismo criterio que cc).
-    'rut_cliente', 'codigo_cliente'
+    'rut_cliente', 'codigo_cliente',
+    // v3.1 (§1.5): marca de "atencion directa" -- la solicitud se registro
+    // DESPUES de resolverse (llamada telefonica al desarrollador), no
+    // recorrio el flujo. Se necesita como marca separada, y no solo como
+    // estado S09, porque estas solicitudes se crean y cierran en el mismo
+    // instante: contarlas en el tiempo promedio de resolucion o en el
+    // semaforo de cumplimiento distorsionaria los KPIs de Gerencia.
+    'atencion_directa'
   ],
   // contexto/resultado_esperado/url_modulo/usuario_prueba/centro_costos/
   // url_video/observaciones/estimacion_horas/horas_reales y numero_item
@@ -135,7 +142,13 @@ var COLUMNAS = {
     // este item. El formulario elige por AREA (CAT_AREAS); crearSolicitud
     // resuelve area -> responsable_email y lo escribe en
     // desarrollador_asignado (arriba), sin exponer el correo al publico.
-    'area', 'area_nombre'
+    'area', 'area_nombre',
+    // v3.1 (§1.4): el registro de una atencion directa. Obligatorios
+    // cuando atencion_directa es TRUE -- sin ellos el registro no sirve,
+    // que es justamente el punto ("no es necesario todo el flujo, pero si
+    // importante que quede registro"). atencion_fecha_resolucion puede ser
+    // ANTERIOR a fecha_creacion: se resolvio antes de registrarse.
+    'atencion_resuelto_por', 'atencion_fecha_resolucion', 'atencion_detalle'
   ],
   HISTORIAL_ESTADOS: [
     'historial_id', 'solicitud_id', 'subsolicitud_id',

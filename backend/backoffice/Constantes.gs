@@ -72,7 +72,14 @@ var COLUMNAS = {
     'cc',
     // Trazabilidad del cliente elegido del buscador (CAT_CLIENTES). Ver la
     // nota identica en backend/intake/Constantes.gs.
-    'rut_cliente', 'codigo_cliente'
+    'rut_cliente', 'codigo_cliente',
+    // v3.1 (§1.5): marca de "atencion directa" -- la solicitud se registro
+    // DESPUES de resolverse (llamada telefonica al desarrollador), no
+    // recorrio el flujo. Se necesita como marca separada, y no solo como
+    // estado S09, porque estas solicitudes se crean y cierran en el mismo
+    // instante: contarlas en el tiempo promedio de resolucion o en el
+    // semaforo de cumplimiento distorsionaria los KPIs de Gerencia.
+    'atencion_directa'
   ],
   SUBSOLICITUDES: [
     'subsolicitud_id', 'solicitud_id', 'numero_item', 'titulo', 'descripcion',
@@ -96,7 +103,13 @@ var COLUMNAS = {
     // v2.1 (Fase A): ver la nota identica en backend/intake/Constantes.gs.
     'fecha_propuesta', 'fecha_comprometida', 'fecha_terminada', 'comprometida_por',
     // v3.0 (Fase 1): ver la nota identica en backend/intake/Constantes.gs.
-    'area', 'area_nombre'
+    'area', 'area_nombre',
+    // v3.1 (§1.4): el registro de una atencion directa. Obligatorios
+    // cuando atencion_directa es TRUE -- sin ellos el registro no sirve,
+    // que es justamente el punto ("no es necesario todo el flujo, pero si
+    // importante que quede registro"). atencion_fecha_resolucion puede ser
+    // ANTERIOR a fecha_creacion: se resolvio antes de registrarse.
+    'atencion_resuelto_por', 'atencion_fecha_resolucion', 'atencion_detalle'
   ],
   HISTORIAL_ESTADOS: [
     'historial_id', 'solicitud_id', 'subsolicitud_id',

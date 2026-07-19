@@ -95,7 +95,10 @@ function sembrarSolicitudesDemo_(ctx) {
     { id: 'SOL-2026-HP-0001', empresa: 'HP', plataforma: 'INT_GDE', modulo: 'MOD_CHARLA', tipo: 'ERR', prioridad: 'P1', estado: 'S02', dias: 0 },
     { id: 'SOL-2026-HP-0002', empresa: 'HP', plataforma: 'INT_GDE', modulo: 'MOD_DASH', tipo: 'MEJ', prioridad: 'P3', estado: 'S05', dias: 3 },
     { id: 'SOL-2026-RLD-0001', empresa: 'RLD', plataforma: 'RLD_GDE', modulo: 'MOD_LIQ', tipo: 'MOD', prioridad: 'P2', estado: 'S07', dias: 6 },
-    { id: 'SOL-2026-RLD-0002', empresa: 'RLD', plataforma: 'RLD_GDE', modulo: 'MOD_VAC', tipo: 'CON', prioridad: 'P4', estado: 'S09', dias: 15 }
+    { id: 'SOL-2026-RLD-0002', empresa: 'RLD', plataforma: 'RLD_GDE', modulo: 'MOD_VAC', tipo: 'CON', prioridad: 'P4', estado: 'S09', dias: 15 },
+    // v3.1: una atencion directa, para poder ver la insignia del detalle y
+    // el KPI de Gerencia sin tener que crear una a mano cada vez.
+    { id: 'SOL-2026-RLD-0003', empresa: 'RLD', plataforma: 'RLD_GDE', modulo: 'MOD_LIQ', tipo: 'ERR', prioridad: 'P1', estado: 'S09', dias: 2, atencionDirecta: true }
   ];
 
   demo.forEach((item, idx) => {
@@ -110,7 +113,8 @@ function sembrarSolicitudesDemo_(ctx) {
       doc_estado: '', doc_reintentos: 0, url_doc: '', url_pdf: '', version_documento: 0, url_pdf_historial: '',
       dedup_hash: 'demo-' + idx, estimacion_total_horas: 8, horas_reales: '', observaciones_generales: '',
       resumen_whatsapp: '', fecha_creacion: fecha, creado_por: 'demo' + (idx + 1) + '@' + item.empresa.toLowerCase() + '.cl',
-      cc: idx === 0 ? 'copia@homepymes.cl' : ''
+      cc: idx === 0 ? 'copia@homepymes.cl' : '',
+      atencion_directa: !!item.atencionDirecta
     };
     ctx.SpreadsheetApp.openById('dev-sheet').getSheetByName('SOLICITUDES')
       .appendRow(ctx.COLUMNAS.SOLICITUDES.map((col) => solicitud[col]));
@@ -132,7 +136,10 @@ function sembrarSolicitudesDemo_(ctx) {
       urls_adicionales: esDemoRico ? JSON.stringify([
         { titulo: 'Modal de validacion', url: 'https://integral.rld.cl/modal_validacion.php?id=1' },
         { titulo: 'Documento generado', url: 'https://integral.rld.cl/doc_generado.php?id=1' }
-      ]) : ''
+      ]) : '',
+      atencion_resuelto_por: item.atencionDirecta ? 'Leo' : '',
+      atencion_fecha_resolucion: item.atencionDirecta ? fecha : '',
+      atencion_detalle: item.atencionDirecta ? 'Se reinicio el servicio de liquidaciones y se limpio la cola atascada' : ''
     };
     ctx.SpreadsheetApp.openById('dev-sheet').getSheetByName('SUBSOLICITUDES')
       .appendRow(ctx.COLUMNAS.SUBSOLICITUDES.map((col) => subsolicitud[col]));

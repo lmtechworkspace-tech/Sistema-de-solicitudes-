@@ -43,11 +43,18 @@ var Notificaciones = {
       '- Fecha de ingreso: ' + new Date().toLocaleString('es-CL', { timeZone: 'America/Santiago' })
     ].filter(function (l) { return l !== ''; });
 
+    // v3.1 (§1.8): en una atencion directa la solicitud NO se deriva a nadie
+    // para revision -- ya esta resuelta y nace cerrada. Decirle lo contrario
+    // al solicitante lo dejaria esperando una respuesta que no va a llegar.
     var cuerpo =
       'Estimado/a ' + solicitud.solicitante_nombre + ':\n\n' +
-      'Confirmamos la recepción de su solicitud, la cual ha sido registrada ' +
-      'correctamente en el Sistema de Gestión de Solicitudes (SIGSO) y derivada ' +
-      'al equipo responsable para su revisión.\n\n' +
+      (solicitud.atencion_directa
+        ? 'Confirmamos el registro de su solicitud, que ya fue resuelta mediante ' +
+          'atención directa. Queda cerrada en el Sistema de Gestión de Solicitudes ' +
+          '(SIGSO) como respaldo de lo ocurrido; no requiere ninguna acción adicional.\n\n'
+        : 'Confirmamos la recepción de su solicitud, la cual ha sido registrada ' +
+          'correctamente en el Sistema de Gestión de Solicitudes (SIGSO) y derivada ' +
+          'al equipo responsable para su revisión.\n\n') +
       'DETALLE DE LA SOLICITUD\n' +
       lineasDetalle.join('\n') + '\n\n' +
       'SEGUIMIENTO\n' +
@@ -89,6 +96,32 @@ var Notificaciones = {
     return enviarCorreo_(solicitud.solicitud_id, email, 'AVISO_DESARROLLO', asunto, cuerpo);
   },
 
+  // v3.1 (§1.8): acuse de una atencion directa. NO es "tienes una solicitud
+  // nueva": el destinatario es justamente quien ya resolvio el problema por
+  // telefono, asi que un llamado a la accion seria absurdo. Solo se le avisa
+  // que quedo el registro, para que sepa que existe y pueda corregirlo si el
+  // detalle no es exacto.
+  avisarAtencionDirectaRegistrada: function (solicitud, atencion, destinatario) {
+    var email = destinatario || EMAIL_DESARROLLO;
+    var asunto = 'SIGSO — Registro de atención directa: ' + solicitud.solicitud_id;
+    var cuerpo =
+      'Estimado/a:\n\n' +
+      'Se dejó registro en SIGSO de una solicitud que ya fue resuelta fuera del ' +
+      'flujo normal (atención directa). No requiere ninguna acción de su parte: ' +
+      'queda cerrada.\n\n' +
+      'DETALLE\n' +
+      '- N° de solicitud: ' + solicitud.solicitud_id + '\n' +
+      '- Ítems registrados: ' + (solicitud.total_items || 1) + '\n' +
+      '- Registrada por: ' + (solicitud.solicitante_nombre || '') + '\n' +
+      '- Resuelta por: ' + atencion.resuelto_por + '\n' +
+      '- Fecha de resolución: ' + String(atencion.fecha_resolucion).replace('T', ' ') + '\n\n' +
+      'QUÉ SE HIZO\n' +
+      atencion.detalle + '\n\n' +
+      'Si algo de este registro no es exacto, puede corregirlo desde el Backoffice.' +
+      pieCorreo_();
+    return enviarCorreo_(solicitud.solicitud_id, email, 'ATENCION_DIRECTA', asunto, cuerpo);
+  },
+
   // RN-201 (v2.0, Sprint 1): avisa al responsable del item cuando el
   // solicitante valida un item "Terminada" -- confirmando el cierre o
   // reabriendolo con un motivo. Sin este aviso, no se entera de una
@@ -99,12 +132,21 @@ var Notificaciones = {
   notificarValidacionSolicitante: function (solicitud, subsolicitud, accion, destinatario) {
     var email = destinatario || EMAIL_DESARROLLO;
     var esConfirmacion = accion === 'confirmar';
-    var asunto = 'SIGSO - ' + (esConfirmacion ? 'Cierre confirmado' : 'Ítem reabierto por el solicitante') + ': ' + subsolicitud.subsolicitud_id;
+    // v3.1 (§1.3B): 'cerrar_directo' es un tercer caso. Sin distinguirlo, un
+    // cierre directo se anunciaria como "Ítem reabierto", que es lo contrario
+    // de lo que paso.
+    var esCierreDirecto = accion === 'cerrar_directo';
+    var asunto = 'SIGSO - ' + (esCierreDirecto
+      ? 'Cerrado por atención directa'
+      : (esConfirmacion ? 'Cierre confirmado' : 'Ítem reabierto por el solicitante')) +
+      ': ' + subsolicitud.subsolicitud_id;
     var cuerpo =
       'Estimado/a:\n\n' +
-      (esConfirmacion
-        ? 'El solicitante confirmó que el ítem indicado quedó resuelto satisfactoriamente. El ítem pasa a estado Cerrada; no se requieren más acciones.'
-        : 'El solicitante indicó que el ítem NO quedó resuelto y lo reabrió. El ítem vuelve a estado En desarrollo; se requiere su revisión.') + '\n\n' +
+      (esCierreDirecto
+        ? 'El solicitante indicó que el ítem ya fue resuelto fuera del flujo (atención directa) y lo cerró, dejando el registro correspondiente. El ítem pasa a estado Cerrada; no se requieren más acciones.'
+        : esConfirmacion
+          ? 'El solicitante confirmó que el ítem indicado quedó resuelto satisfactoriamente. El ítem pasa a estado Cerrada; no se requieren más acciones.'
+          : 'El solicitante indicó que el ítem NO quedó resuelto y lo reabrió. El ítem vuelve a estado En desarrollo; se requiere su revisión.') + '\n\n' +
       'DETALLE\n' +
       '- Ítem: ' + subsolicitud.subsolicitud_id + (subsolicitud.titulo ? ' — ' + subsolicitud.titulo : '') + '\n' +
       '- Solicitud: ' + solicitud.solicitud_id + '\n' +

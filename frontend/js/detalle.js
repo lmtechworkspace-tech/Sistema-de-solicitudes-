@@ -100,8 +100,16 @@
         '</div>';
     }
 
+    // v3.1 (§1.6): que se distinga a simple vista de una solicitud que si
+    // recorrio el flujo -- sin esto, un cierre instantaneo parece un error.
+    var esAtencionDirecta = s.atencion_directa === true || s.atencion_directa === 'TRUE' || s.atencion_directa === 1;
+    var avisoAtencionDirecta = esAtencionDirecta
+      ? '<p class="sigso-insignia-directa">⚡ Atención directa — registrada después de resolver</p>'
+      : '';
+
     return '<h2>' + s.solicitud_id + '</h2>' +
       '<p>' + Componentes.badgePrioridad(s.prioridad_derivada) + ' ' + Componentes.badgeEstado(s.estado_derivado) + '</p>' +
+      avisoAtencionDirecta +
       '<dl class="sigso-datos-item">' +
       renderCampoDato_('Ingresada', Componentes.escaparHtml(fechaCorta_(s.fecha_creacion))) +
       renderCampoDato_('Ítems', Componentes.escaparHtml(resumenTiposItems_(subsolicitudes))) +
@@ -267,6 +275,16 @@
         bloqueDatos_('🔍 Dónde reproducir', datosReproducir) +
         bloqueDatos_('📋 Contexto del pedido', datosContexto) +
         bloqueDatos_('⏱ Plazos y responsable', datosPlazos) +
+        // v3.1 (§1.4): el registro de la atencion directa. Es la memoria
+        // tecnica del incidente -- lo unico que queda de algo que se
+        // resolvio por telefono.
+        (sub.atencion_resuelto_por
+          ? bloqueDatos_('⚡ Atención directa', [
+            renderCampoDato_('Resuelto por', Componentes.escaparHtml(sub.atencion_resuelto_por)),
+            renderCampoDato_('Fecha de resolución', Componentes.escaparHtml(fechaCorta_(sub.atencion_fecha_resolucion))),
+            renderCampoDato_('Qué se hizo', Componentes.escaparHtml(sub.atencion_detalle))
+          ])
+          : '') +
         historialHtml +
         (sub.observaciones ? '<p><em>' + Componentes.escaparHtml(sub.observaciones) + '</em></p>' : '') +
         renderGaleria_(imagenesItem) +

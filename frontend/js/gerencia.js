@@ -88,13 +88,13 @@
           return respuesta;
         }
         itemsActuales = respuesta.data.items;
-        renderKpis_(respuesta.data.kpis);
+        renderKpis_(respuesta.data.kpis, respuesta.data.atenciones_directas);
         renderTodo_();
         return respuesta;
       });
   }
 
-  function renderKpis_(kpis) {
+  function renderKpis_(kpis, atencionesDirectas) {
     document.getElementById('ger-contenedor-kpis').innerHTML =
       Componentes.kpi({
         valor: kpis.pct_cumplimiento_desarrollador === null ? '—' : kpis.pct_cumplimiento_desarrollador + '%',
@@ -113,7 +113,15 @@
         titulo: 'Ítems entregados (Terminada) que el solicitante todavía no valida. Promedio: ' + kpis.esperando_validacion_promedio_dias + ' día(s) hábil(es) esperando.'
       }) +
       Componentes.kpi({ valor: kpis.atraso_promedio_dias, etiqueta: 'Atraso promedio (días)', titulo: 'Promedio de días hábiles de atraso entre atrasadas activas y cerradas con atraso.' }) +
-      Componentes.kpi({ valor: kpis.sin_comprometer, etiqueta: 'Sin comprometer', titulo: 'Cola que el desarrollador todavía no revisó/comprometió.' });
+      Componentes.kpi({ valor: kpis.sin_comprometer, etiqueta: 'Sin comprometer', titulo: 'Cola que el desarrollador todavía no revisó/comprometió.' }) +
+      // v3.1 (§1.6): quedan FUERA de los KPIs de arriba (nunca tuvieron
+      // fecha comprometida), pero su volumen es en si un dato de gestion:
+      // cuanto se esta resolviendo por telefono, fuera del proceso.
+      Componentes.kpi({
+        valor: atencionesDirectas || 0,
+        etiqueta: 'Atenciones directas',
+        titulo: 'Solicitudes resueltas fuera del flujo (por teléfono) y registradas después. No entran en los indicadores de cumplimiento porque nunca tuvieron fecha comprometida.'
+      });
   }
 
   // Aplica el filtro de tipo (texto, client-side -- ver nota en app.html:

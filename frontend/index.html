@@ -198,6 +198,37 @@
         <h2>Revisa antes de enviar</h2>
         <div id="contenedor-revision"></div>
 
+        <!-- v3.1 (§1.3A): registro de una solicitud YA resuelta. Va en la
+             revision final, no en el paso 1, porque no es parte de "que
+             pasa" sino de "como se esta registrando esto". -->
+        <div class="sigso-tarjeta-grupo" style="margin-top: 1.5rem">
+          <label class="sigso-check">
+            <input type="checkbox" id="campo-atencion-directa" />
+            Esta solicitud <strong>ya fue resuelta</strong> (atenci&oacute;n directa)
+          </label>
+          <p class="sigso-ayuda">
+            M&aacute;rcala solo si el problema ya se solucion&oacute; fuera del sistema
+            (por ejemplo, llamando al desarrollador). Queda registrada y
+            <strong>cerrada</strong>, sin pasar por el flujo.
+          </p>
+
+          <div id="bloque-atencion-directa" class="sigso-oculto">
+            <div class="sigso-campo">
+              <label for="campo-atencion-resuelto-por">&iquest;Qui&eacute;n lo resolvi&oacute;? *</label>
+              <input type="text" id="campo-atencion-resuelto-por" placeholder="Nombre de quien atendi&oacute;" />
+            </div>
+            <div class="sigso-campo">
+              <label for="campo-atencion-fecha">&iquest;Cu&aacute;ndo se resolvi&oacute;? *</label>
+              <input type="datetime-local" id="campo-atencion-fecha" />
+            </div>
+            <div class="sigso-campo">
+              <label for="campo-atencion-detalle">&iquest;Qu&eacute; se hizo? *</label>
+              <textarea id="campo-atencion-detalle" placeholder="Breve descripci&oacute;n de la soluci&oacute;n aplicada"></textarea>
+              <p class="sigso-ayuda">Este es el registro que queda para el futuro: s&eacute; concreto.</p>
+            </div>
+          </div>
+        </div>
+
         <div id="contenedor-fecha-propuesta" style="margin-top: 1.5rem"></div>
 
         <div class="sigso-campo" style="margin-top: 1.5rem">

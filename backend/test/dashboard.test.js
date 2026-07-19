@@ -290,3 +290,49 @@ test('Dashboard.getData NO se cae si una solicitud tiene fecha_creacion vacia o 
   assert.equal(datos.recientes.length, 3);
   assert.ok(datos.resumen.total_abiertas >= 1);
 });
+
+// v3.1 (§1.6): una atencion directa se crea y se cierra en el mismo instante
+// (se resolvio ANTES de registrarse), asi que su "tiempo de resolucion" es
+// ~0. Si contara, hundiria el promedio y daria una lectura falsa de la
+// capacidad real del equipo.
+test('Dashboard (v3.1): las atenciones directas no entran al tiempo promedio de resolucion', () => {
+  // Cierra una solicitud en HISTORIAL_ESTADOS (lo que lee tiempoPromedioResolucion_).
+  function seedCierre(ctx, solicitudId, timestamp, estadoAnterior) {
+    ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('HISTORIAL_ESTADOS').appendRow(
+      ctx.COLUMNAS.HISTORIAL_ESTADOS.map((col) => ({
+        historial_id: 'H-' + solicitudId, solicitud_id: solicitudId, subsolicitud_id: '',
+        estado_anterior: estadoAnterior, estado_nuevo: 'S09', usuario: 'ana@homepymes.cl',
+        comentario: '', timestamp: timestamp
+      }[col] || ''))
+    );
+  }
+  // Lunes 09:00 -> martes 09:00 hora de Santiago = 9 horas habiles.
+  const CREADA = '2026-07-06T13:00:00.000Z';
+  const CERRADA = '2026-07-07T13:00:00.000Z';
+  const contexto = { rol: 'ADM', email: 'admin@homepymes.cl' };
+
+  // Escenario A: solo una solicitud normal cerrada.
+  const soloNormal = loadConSchema();
+  seedSolicitud(soloNormal, { estado_derivado: 'S09', fecha_creacion: CREADA }, ['S09']);
+  seedCierre(soloNormal, 'SOL-2026-HP-0001', CERRADA, 'S08');
+  const promedioBase = soloNormal.Dashboard.getData({}, contexto).tiempo_promedio_resolucion_horas;
+  assert.equal(promedioBase, 9, 'la solicitud normal si debe contar');
+
+  // Escenario B: la misma, mas una atencion directa (creada y cerrada a la vez).
+  const conAtencion = loadConSchema();
+  seedSolicitud(conAtencion, { estado_derivado: 'S09', fecha_creacion: CREADA }, ['S09']);
+  seedCierre(conAtencion, 'SOL-2026-HP-0001', CERRADA, 'S08');
+  seedSolicitud(conAtencion, {
+    solicitud_id: 'SOL-2026-HP-0002', estado_derivado: 'S09',
+    fecha_creacion: CERRADA, atencion_directa: true
+  }, ['S09']);
+  seedCierre(conAtencion, 'SOL-2026-HP-0002', CERRADA, '');
+
+  const datos = conAtencion.Dashboard.getData({}, contexto);
+  assert.equal(
+    datos.tiempo_promedio_resolucion_horas, promedioBase,
+    'el promedio no debe moverse al agregar una atencion directa'
+  );
+  // Pero se cuentan aparte: cuanto se resuelve fuera del proceso.
+  assert.equal(datos.resumen.atenciones_directas, 1);
+});

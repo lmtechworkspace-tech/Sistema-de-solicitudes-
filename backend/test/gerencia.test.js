@@ -246,3 +246,28 @@ test('Gerencia.getPanel (v3.0): semaforo_solicitante verde cuando recien se entr
   assert.equal(item.cumplimiento.codigo, 'ESPERANDO_VALIDACION');
   assert.equal(item.semaforo_solicitante.codigo, 'RECIEN_ENTREGADO');
 });
+
+// v3.1 (§1.6): las atenciones directas no pueden entrar al semaforo. Nunca
+// tuvieron fecha comprometida (se resolvieron ANTES de existir en el
+// sistema), asi que entrarian todas como SIN_COMPROMISO e inflarian esa
+// categoria con casos donde no hay nada que corregir.
+test('Gerencia.getPanel (v3.1): las atenciones directas no entran al semaforo', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { fecha_comprometida: '2026-08-20T18:00' });
+  // Una segunda solicitud, registrada como atencion directa (ya resuelta).
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0002', estado_derivado: 'S09', atencion_directa: true
+  });
+  seedSubsolicitud(ctx, {
+    subsolicitud_id: 'SOL-2026-HP-0002-01', solicitud_id: 'SOL-2026-HP-0002', estado: 'S09'
+  });
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+
+  assert.equal(panel.items.length, 1, 'solo el item de la solicitud normal');
+  assert.equal(panel.items[0].solicitud_id, 'SOL-2026-HP-0001');
+  assert.equal(panel.kpis.sin_comprometer, 0, 'no debe inflar "sin comprometer"');
+  // Pero se cuentan aparte: cuanto se esta resolviendo fuera del proceso.
+  assert.equal(panel.atenciones_directas, 1);
+});

@@ -68,9 +68,19 @@ function calcularPanelGerencia_(filtrosBase) {
     var ahora = new Date();
     var nombrePorEmail = mapaNombresUsuarios_();
 
+    // v3.1 (§1.6): las atenciones directas quedan FUERA del semaforo de
+    // cumplimiento. Nunca tuvieron fecha comprometida (se resolvieron antes
+    // de existir en el sistema), asi que medirlas contra un compromiso que no
+    // existio no significa nada: entrarian todas como SIN_COMPROMISO e
+    // inflarian esa categoria sin que haya nada que corregir. Se reportan
+    // aparte, en su propio contador.
+    var atencionesDirectas = solicitudes.filter(esAtencionDirecta_).length;
+
     var items = leerFilas_(SHEETS.SUBSOLICITUDES)
       .filter(function (sub) {
-        return solicitudPorId[sub.solicitud_id] && coincideFiltroItem_(sub, solicitudPorId[sub.solicitud_id], filtrosBase);
+        var solicitud = solicitudPorId[sub.solicitud_id];
+        return solicitud && !esAtencionDirecta_(solicitud) &&
+          coincideFiltroItem_(sub, solicitud, filtrosBase);
       })
       .map(function (sub) {
         var solicitud = solicitudPorId[sub.solicitud_id];
@@ -123,7 +133,11 @@ function calcularPanelGerencia_(filtrosBase) {
 
     return {
       kpis: calcularKpisGerencia_(items),
-      items: items
+      items: items,
+      // v3.1 (§1.6): no entran al semaforo, pero Gerencia necesita saber
+      // cuantas hubo -- es la medida de cuanto trabajo se esta resolviendo
+      // fuera del proceso.
+      atenciones_directas: atencionesDirectas
     };
 }
 

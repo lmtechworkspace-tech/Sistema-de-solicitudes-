@@ -729,6 +729,34 @@ button {
   min-width: 12rem;
 }
 
+/* v3.1 (§1.6): insignia de "atencion directa" en la ficha del detalle. Sin
+   ella, una solicitud creada y cerrada en el mismo instante parece un error
+   de datos en vez de un registro deliberado. */
+.sigso-insignia-directa {
+  display: inline-block;
+  margin: 0.35rem 0 0;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  border-left: 3px solid var(--sigso-naranja, #e8871e);
+  background: var(--sigso-fondo-suave, #faf7f2);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Cierre directo desde "Mis solicitudes": plegado, porque es la excepcion y
+   no debe competir con las acciones normales del item. */
+.sigso-cierre-directo {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed var(--sigso-borde, #d9d2c7);
+  border-radius: 6px;
+}
+
+.sigso-cierre-directo > summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
 </style>
   <style>
 /* dashboard.css — Backoffice: KPIs, graficos, tabla, detalle (§12.4/12.5). */

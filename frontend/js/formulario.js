@@ -121,6 +121,7 @@
       actualizarBuscadorCliente_(); // el buscador solo aplica a GDE/HP
     });
     wireBuscadorCliente_();
+    wireAtencionDirecta_();
 
     document.getElementById('btn-paso1-siguiente').addEventListener('click', irAPaso2_);
     document.getElementById('btn-paso2-atras').addEventListener('click', function () { cambiarPaso_('contexto'); });
@@ -1026,6 +1027,39 @@
 
   // --- Progreso, borrador, envio -------------------------------------
 
+  // v3.1 (§1.3A): lee el bloque de atencion directa. El backend re-valida
+  // todo; aca solo se arma la estructura.
+  function recolectarAtencionDirecta_() {
+    var activo = document.getElementById('campo-atencion-directa');
+    return {
+      activo: !!(activo && activo.checked),
+      resuelto_por: valorCampo_('campo-atencion-resuelto-por'),
+      fecha_resolucion: valorCampo_('campo-atencion-fecha'),
+      detalle: valorCampo_('campo-atencion-detalle')
+    };
+  }
+
+  function valorCampo_(id) {
+    var el = document.getElementById(id);
+    return el ? el.value : '';
+  }
+
+  // Mostrar/ocultar los campos del registro, y esconder "fecha propuesta":
+  // proponer una fecha de entrega para algo que ya se entrego no tiene
+  // sentido y solo confunde.
+  function wireAtencionDirecta_() {
+    var check = document.getElementById('campo-atencion-directa');
+    if (!check) return;
+    check.addEventListener('change', function () {
+      document.getElementById('bloque-atencion-directa')
+        .classList.toggle('sigso-oculto', !check.checked);
+      var fecha = document.getElementById('contenedor-fecha-propuesta');
+      if (fecha) {
+        fecha.classList.toggle('sigso-oculto', check.checked);
+      }
+    });
+  }
+
   function recolectarDatos_() {
     var esCliente = document.getElementById('campo-es-cliente').checked;
     return {
@@ -1063,6 +1097,10 @@
       // v2.1 (Fase A): '' si no se ha llegado al paso de revision todavia o
       // el solicitante no indico nada (es opcional salvo cliente/P1).
       fecha_propuesta: validarYArmarFechaPropuesta_().valor,
+      // v3.1 (§1.3A): bloque de atencion directa. Siempre se manda el objeto
+      // (con activo true/false) para que el backend distinga "no marcado" de
+      // "marcado sin llenar" -- eso ultimo debe fallar, no pasar de largo.
+      atencion_directa: recolectarAtencionDirecta_(),
       subsolicitudes: estado.subsolicitudes.map(function (item, idx) {
         // Las descripciones ya se conocen antes de subir los archivos (el
         // orden coincide con subirImagenesDeTodosLosItems_, que sube en el
@@ -1164,7 +1202,12 @@
 
   function manejarSubmit_(evento) {
     evento.preventDefault();
-    if (!validarYArmarFechaPropuesta_().valido) {
+    // v3.1: con atencion directa el campo "fecha propuesta" esta oculto (no
+    // se propone una entrega para algo ya entregado), asi que su validacion
+    // -- obligatoria para cliente/P1 -- bloquearia el envio por un campo que
+    // el usuario ni siquiera ve.
+    var atencion = recolectarAtencionDirecta_();
+    if (!atencion.activo && !validarYArmarFechaPropuesta_().valido) {
       return;
     }
     var boton = document.getElementById('btn-enviar');
@@ -1261,19 +1304,29 @@
         ? '<p>' + resultadoAdjuntos.subidas + ' adjunto(s) subido(s) correctamente.</p>'
         : '<p><strong>Nota:</strong> se subieron ' + resultadoAdjuntos.subidas + ' de ' + resultadoAdjuntos.intentadas + ' adjuntos (revisa tama&ntilde;o/formato de los restantes).</p>';
     }
+    // v3.1: una atencion directa nace cerrada -- prometerle al solicitante
+    // una fecha de entrega y una validacion posterior seria falso.
+    var queSigue = data.atencion_directa
+      ? '<h3>¿Qué sigue?</h3>' +
+        '<p>Nada: esta solicitud quedó <strong>cerrada</strong>, registrada como atención directa. ' +
+        'Recibirá un correo de confirmación con el detalle de lo que se hizo.</p>'
+      : '<h3>¿Qué sigue?</h3>' +
+        '<ol class="sigso-pasos-siguientes">' +
+        '<li>Recibirá un <strong>correo de confirmación</strong> con el detalle de su solicitud.</li>' +
+        '<li>El equipo responsable la revisará y <strong>comprometerá una fecha de entrega</strong> (se le avisará por correo).</li>' +
+        '<li>Cuando el trabajo esté terminado, deberá <strong>validarlo</strong> desde <a href="estado.html">Consultar estado</a>.</li>' +
+        '</ol>';
+
     contenedor.innerHTML =
       '<div class="sigso-resultado-exito">' +
-      '<h2>Su solicitud fue registrada correctamente</h2>' +
+      '<h2>' + (data.atencion_directa
+        ? 'Registro guardado correctamente'
+        : 'Su solicitud fue registrada correctamente') + '</h2>' +
       '<p>Guarde este número para hacer seguimiento:</p>' +
       '<p class="sigso-numero-solicitud">' + data.solicitud_id + '</p>' +
       aviso +
       avisoImagenes +
-      '<h3>¿Qué sigue?</h3>' +
-      '<ol class="sigso-pasos-siguientes">' +
-      '<li>Recibirá un <strong>correo de confirmación</strong> con el detalle de su solicitud.</li>' +
-      '<li>El equipo responsable la revisará y <strong>comprometerá una fecha de entrega</strong> (se le avisará por correo).</li>' +
-      '<li>Cuando el trabajo esté terminado, deberá <strong>validarlo</strong> desde <a href="estado.html">Consultar estado</a>.</li>' +
-      '</ol>' +
+      queSigue +
       '<p class="sigso-ayuda">También puede ver todas sus solicitudes en Consultar estado &rarr; pestaña "Mis solicitudes", con su correo.</p>' +
       '<p>Resumen para compartir por WhatsApp:</p>' +
       '<pre class="sigso-resumen-whatsapp">' + Componentes.escaparHtml(data.resumen_whatsapp) + '</pre>' +

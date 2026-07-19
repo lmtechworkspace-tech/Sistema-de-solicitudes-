@@ -173,7 +173,11 @@ function calcularKpis_(filtros) {
       total_abiertas: abiertas.length,
       criticas_activas: abiertas.filter(function (s) { return s.prioridad_derivada === 'P1'; }).length,
       sla_vencido: subsolicitudes.filter(function (sub) { return estaVencidoSla_(sub, feriados); }).length,
-      del_dia: solicitudes.filter(function (s) { return claveDia_(new Date(s.fecha_creacion), 'America/Santiago') === hoy; }).length
+      del_dia: solicitudes.filter(function (s) { return claveDia_(new Date(s.fecha_creacion), 'America/Santiago') === hoy; }).length,
+      // v3.1 (§1.6): se excluyen de los promedios, pero se cuentan aparte --
+      // "cuantas urgencias se estan resolviendo fuera del proceso" es un dato
+      // de gestion por si mismo, no solo ruido que sacar de los KPIs.
+      atenciones_directas: solicitudes.filter(esAtencionDirecta_).length
     },
     por_empresa: agruparYContar_(solicitudes, 'empresa_id'),
     por_plataforma: agruparYContar_(solicitudes, 'plataforma'),
@@ -321,6 +325,14 @@ function estaVencidoSla_(subsolicitud, feriados) {
   return transcurridas > Number(subsolicitud.sla_objetivo_horas);
 }
 
+// v3.1 (§1.5/§1.6): la marca viene del Sheets, donde un booleano puede
+// llegar como true, 'TRUE' o 1 segun como se haya escrito la celda (mismo
+// criterio que obtenerRolUsuario_ con `activo`).
+function esAtencionDirecta_(solicitud) {
+  var valor = solicitud && solicitud.atencion_directa;
+  return valor === true || valor === 'TRUE' || valor === 1;
+}
+
 // Tiempo promedio (horas habiles) entre creacion y el momento en que la
 // solicitud llego a S09 (Cerrada), tomado de HISTORIAL_ESTADOS -- no se
 // agrega una columna fecha_cierre nueva (RECONCILIACION-v1.0.md).
@@ -328,6 +340,11 @@ function tiempoPromedioResolucion_(solicitudes, historial, feriados) {
   var tiempos = [];
   solicitudes.forEach(function (solicitud) {
     if (solicitud.estado_derivado !== ESTADOS.S09) return;
+    // v3.1 (§1.6): las atenciones directas se crean y cierran en el mismo
+    // instante (se resolvieron ANTES de registrarse), asi que su "tiempo de
+    // resolucion" es ~0. Contarlas hundiria este promedio y daria una
+    // lectura falsa de la capacidad real del equipo.
+    if (esAtencionDirecta_(solicitud)) return;
     var cierres = historial.filter(function (h) {
       return h.solicitud_id === solicitud.solicitud_id && h.estado_nuevo === ESTADOS.S09;
     });

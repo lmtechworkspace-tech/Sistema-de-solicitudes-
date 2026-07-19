@@ -58,6 +58,7 @@ corrida de `npm test`.
 | `fecha_creacion` | ISO datetime | — |
 | `creado_por` | string | `solicitante_email` |
 | `cc` | string (email) | **Fase 9** (hallazgo de datos reales, ej. RLD "Hoja de ruta": `Cc: Monje Fuji`): opcional; correo adicional a copiar en las notificaciones de la solicitud, además de `solicitante_email`. Se copia (Gmail `cc`) en el acuse de recibo |
+| `atencion_directa` | boolean | **v3.1 (§1.5)**: la solicitud se registró **después** de resolverse (llamada al desarrollador, arreglo inmediato, registro a posteriori). Se crea directamente en `S09`. Es una marca **separada del estado** a propósito: estas solicitudes se crean y cierran en el mismo instante, así que contarlas en el tiempo promedio de resolución o en el semáforo de cumplimiento distorsionaría los KPIs de Gerencia — `Dashboard.gs` y `Gerencia.gs` las excluyen de esos cálculos y las reportan aparte. Los tres campos del registro van en `SUBSOLICITUDES` |
 
 ## SUBSOLICITUDES
 
@@ -94,6 +95,9 @@ corrida de `npm test`.
 | `fecha_terminada` | ISO datetime | **v2.1 (Fase A)**: sellada automáticamente por `actualizarEstado` al entrar a `S08` (Terminada) — detiene el "reloj del desarrollador". Se limpia si el ítem sale de `S08` (reabierto), para que el reloj se reanude |
 | `comprometida_por` | string (email) | **v2.1 (Fase A)**: quien fijó `fecha_comprometida` |
 | `area` / `area_nombre` | string | **v3.0 (Fase 1, multi-responsable)**: a qué área/responsable va dirigido el ítem. El formulario elige por **área** (`CAT_AREAS`, por nombre); `crearSolicitud` resuelve `area → responsable_email` **del lado del servidor** (nunca viaja al navegador público) y escribe ese correo en `desarrollador_asignado`. `''` = "No estoy seguro" → bandeja de triage (responsable por defecto, `EMAIL_DESARROLLO`). `area_nombre` es la desnormalización legible (se muestra al solicitante en Consultar Estado; el correo del responsable, no) |
+| `atencion_resuelto_por` | string | **v3.1 (§1.4, atención directa)**: quién resolvió el problema (típicamente por teléfono, antes de que existiera el registro). Obligatorio si `SOLICITUDES.atencion_directa` |
+| `atencion_fecha_resolucion` | ISO datetime | **v3.1**: cuándo se resolvió de verdad. Puede ser **anterior** a `fecha_creacion` (se resolvió antes de registrarse); no puede ser futura. Obligatorio si `atencion_directa` |
+| `atencion_detalle` | string | **v3.1**: qué se hizo. Es la memoria técnica del incidente y la razón de ser del registro. Obligatorio si `atencion_directa` |
 
 ## COUNTERS (nueva, C-12)
 
