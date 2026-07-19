@@ -224,6 +224,12 @@
     }
   }
 
+  // Modulos "de trabajo" (tablas, dashboard, detalle de 3 columnas): necesitan
+  // el contenedor ancho, como app.html. Los demas (formulario, mis
+  // solicitudes) se leen mejor angostos y centrados -- por eso el ancho del
+  // <main> se adapta al modulo en vez de ser fijo.
+  var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'administracion'];
+
   function mostrarModulo_(id) {
     // bandeja y gerencia comparten la seccion modulo-bandeja (vistas
     // internas dashboard/detalle/gerencia, mismo layout que app.html).
@@ -231,6 +237,10 @@
     document.querySelectorAll('.plataforma-modulo').forEach(function (seccion) {
       seccion.classList.toggle('sigso-oculto', seccion.id !== seccionId);
     });
+    var main = document.querySelector('#vista-shell .sigso-contenido');
+    if (main) {
+      main.classList.toggle('plataforma-contenido--ancho', MODULOS_ANCHOS.indexOf(id) !== -1);
+    }
     document.querySelectorAll('.plataforma-nav__item[data-modulo]').forEach(function (boton) {
       boton.classList.toggle('plataforma-nav__item--activo', boton.getAttribute('data-modulo') === id);
     });

@@ -629,3 +629,12 @@
   margin-top: 1rem;
   border-left: 3px solid var(--sigso-naranja, #e8871e);
 }
+
+/* P4 (fix de layout): el <main> del shell se adapta al modulo activo.
+   Angosto por defecto (formulario / mis solicitudes, mas legibles); ancho
+   para los modulos de trabajo (bandeja, gerencia, administracion) que traen
+   tablas y el detalle de 3 columnas -- sin esto el detalle se aplasta como
+   en app.html cuando hereda el ancho de 720px del formulario. */
+.sigso-contenido.plataforma-contenido--ancho {
+  max-width: 1180px;
+}
