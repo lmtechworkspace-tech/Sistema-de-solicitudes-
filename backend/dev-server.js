@@ -36,6 +36,25 @@ function construirContexto() {
   seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
   seedSheet(ctx, 'HISTORIAL_COMPROMISO', ctx.COLUMNAS.HISTORIAL_COMPROMISO);
+  // v3.3 (plataforma): cuenta demo con DOS correos, para probar el login y
+  // que "Mis solicitudes" junte lo de ambos. El hash se calcula con el
+  // MISMO codigo que corre en produccion (ctx.hashPassword_), no a mano.
+  //   usuario: cpena / clave: demo12345
+  seedSheet(ctx, 'SESIONES_PORTAL', ctx.COLUMNAS.SESIONES_PORTAL);
+  seedSheet(ctx, 'CUENTAS_PORTAL', ctx.COLUMNAS.CUENTAS_PORTAL, [
+    ['CTA-DEMO-1', 'cpena', 'Camila Pena', 'Jefa de Operaciones',
+      ctx.hashPassword_('demo12345', 'sal-demo'), 'sal-demo',
+      JSON.stringify(['camila@gde.cl', 'camila.pena@gmail.com']),
+      'SOLICITANTE', JSON.stringify(['nueva_solicitud', 'mis_solicitudes']),
+      'GDE', true, false, '', 'dev-server'],
+    // Segunda cuenta con clave temporal (debe_cambiar_password) para probar
+    // el flujo de primer ingreso. usuario: lvilchez / clave: temporal99
+    ['CTA-DEMO-2', 'lvilchez', 'Lisseth Vilchez', 'Jefa de Adquisiciones',
+      ctx.hashPassword_('temporal99', 'sal-demo-2'), 'sal-demo-2',
+      JSON.stringify(['lisseth@gde.cl']),
+      'SOLICITANTE', JSON.stringify(['nueva_solicitud', 'mis_solicitudes']),
+      'GDE', true, true, '', 'dev-server']
+  ]);
   // P12 (v2.0, Sprint 3): switch global de aviso a Leo -- activo=true
   // reproduce el comportamiento de siempre en local.
   seedSheet(ctx, 'CONFIG_NOTIFICACIONES', ctx.COLUMNAS.CONFIG_NOTIFICACIONES, [

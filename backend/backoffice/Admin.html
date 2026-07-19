@@ -757,6 +757,125 @@ button {
   font-size: 0.9rem;
 }
 
+/* ============ v3.3: shell de la plataforma ============ */
+
+/* Login centrado, tarjeta sola en la pantalla. */
+.plataforma-login {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.plataforma-login__card {
+  width: 100%;
+  max-width: 24rem;
+}
+
+.plataforma-login__card h1 {
+  margin-bottom: 0.25rem;
+}
+
+.plataforma-login__pie {
+  margin-top: 1rem;
+}
+
+/* Header del shell: marca + nav de modulos + usuario. */
+.plataforma-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 1.25rem;
+  background: #fff;
+  border-bottom: 2px solid var(--sigso-naranja, #e8871e);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.plataforma-header__marca {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.plataforma-header__nav {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.plataforma-nav__item {
+  border: none;
+  background: transparent;
+  padding: 0.45rem 0.7rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.92rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.plataforma-nav__item:hover {
+  background: var(--sigso-fondo-suave, #faf7f2);
+}
+
+.plataforma-nav__item--activo {
+  background: var(--sigso-fondo-suave, #faf7f2);
+  font-weight: 600;
+  box-shadow: inset 0 -2px 0 var(--sigso-naranja, #e8871e);
+}
+
+.plataforma-header__usuario {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.92rem;
+}
+
+/* Tarjetas de modulos del inicio. */
+.plataforma-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.plataforma-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 1.1rem 1.2rem;
+  background: #fff;
+  border: 1px solid var(--sigso-borde, #d9d2c7);
+  border-radius: 10px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.plataforma-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.plataforma-card__icono {
+  font-size: 1.6rem;
+}
+
+.plataforma-pendientes {
+  margin-top: 1rem;
+  border-left: 3px solid var(--sigso-naranja, #e8871e);
+}
+
 </style>
   <style>
 /* dashboard.css — Backoffice: KPIs, graficos, tabla, detalle (§12.4/12.5). */
@@ -1480,6 +1599,7 @@ button.sigso-kpi {
       <button type="button" class="sigso-admin-menu__item" data-tipo="AREA">Áreas / responsables</button>
       <button type="button" class="sigso-admin-menu__item" data-tipo="NOTIFICACION">Notificaciones</button>
       <button type="button" class="sigso-admin-menu__item" data-tipo="USUARIOS">Usuarios</button>
+      <button type="button" class="sigso-admin-menu__item" data-tipo="CUENTAS_PORTAL">Cuentas plataforma</button>
       <button type="button" class="sigso-admin-menu__item" data-tipo="LOGS">Automatizaciones</button>
     </nav>
 
@@ -1897,6 +2017,8 @@ function renderHeaderSigso(paginaActiva) {
         var tipo = boton.getAttribute('data-tipo');
         if (tipo === 'USUARIOS') {
           renderUsuarios_();
+        } else if (tipo === 'CUENTAS_PORTAL') {
+          renderCuentasPortal_();
         } else if (tipo === 'LOGS') {
           renderLogs_();
         } else {
@@ -1962,6 +2084,144 @@ function renderHeaderSigso(paginaActiva) {
         });
       });
     }).catch(mostrarErrorAdmin_);
+  }
+
+  // v3.3 (plataforma): cuentas del portal. A diferencia de USUARIOS (staff
+  // por correo Google), aqui la identidad es usuario+contrasena y una cuenta
+  // puede tener VARIOS correos. La clave temporal se muestra UNA sola vez al
+  // crear/resetear -- no queda guardada en ninguna parte (solo su hash).
+  function renderCuentasPortal_() {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarCuentasPortal', {}).then(function (respuesta) {
+      var contenedor = document.getElementById('admin-contenido');
+      if (!respuesta.ok) {
+        contenedor.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
+        return;
+      }
+      var cuentas = respuesta.data.cuentas || [];
+      contenedor.innerHTML =
+        '<h2>Cuentas de la plataforma</h2>' +
+        '<p class="sigso-ayuda">La identidad del portal: cada cuenta es una persona; sus correos son una lista ' +
+        '(separados por coma) y el portal le muestra las solicitudes de todos ellos. Los módulos definen qué ve al entrar.</p>' +
+        '<form id="form-cuenta-portal" class="sigso-card">' +
+        '<div class="sigso-admin-form">' +
+        Componentes.campoTexto({ dataCampo: 'usuario', label: 'Usuario (para el login, ej. cpena)' }) +
+        Componentes.campoTexto({ dataCampo: 'nombre', label: 'Nombre completo' }) +
+        Componentes.campoTexto({ dataCampo: 'cargo', label: 'Cargo (autocompleta el formulario)' }) +
+        Componentes.campoTexto({ dataCampo: 'emails', label: 'Correos asociados (separados por coma)' }) +
+        Componentes.campoTexto({ dataCampo: 'rol', label: 'Rol: SOLICITANTE / DEV / GERENCIA / ADM' }) +
+        Componentes.campoTexto({ dataCampo: 'modulos', label: 'Módulos (coma; vacío = según rol): nueva_solicitud, mis_solicitudes, bandeja, gerencia, administracion' }) +
+        Componentes.campoTexto({ dataCampo: 'empresa_id', label: 'Empresa (código, opcional)' }) +
+        '</div>' +
+        Componentes.boton({ tipo: 'submit', texto: 'Guardar cuenta' }) +
+        '<div id="resultado-admin"></div>' +
+        '</form>' +
+        Componentes.tarjeta(renderTablaCuentas_(cuentas));
+
+      document.getElementById('form-cuenta-portal').addEventListener('submit', function (evento) {
+        evento.preventDefault();
+        guardarCuentaPortal_();
+      });
+      document.querySelectorAll('[data-cuenta]').forEach(function (fila) {
+        fila.addEventListener('click', function (e) {
+          if (e.target.closest('button')) return; // los botones de accion mandan
+          precargarCuenta_(JSON.parse(fila.getAttribute('data-cuenta')));
+        });
+      });
+      document.querySelectorAll('[data-accion-cuenta]').forEach(function (boton) {
+        boton.addEventListener('click', function () {
+          accionCuenta_(boton.getAttribute('data-accion-cuenta'), boton.getAttribute('data-id'), boton.getAttribute('data-activo') === 'true');
+        });
+      });
+    }).catch(mostrarErrorAdmin_);
+  }
+
+  function renderTablaCuentas_(cuentas) {
+    if (cuentas.length === 0) {
+      return Componentes.vacio('Aún no hay cuentas. Crea la primera con el formulario.');
+    }
+    var filas = cuentas.map(function (c) {
+      return '<tr data-cuenta=\'' + JSON.stringify(c).replace(/'/g, '&#39;') + '\'>' +
+        '<td>' + Componentes.escaparHtml(c.usuario) + '</td>' +
+        '<td>' + Componentes.escaparHtml(c.nombre) + '</td>' +
+        '<td>' + Componentes.escaparHtml((c.emails || []).join(', ')) + '</td>' +
+        '<td>' + Componentes.escaparHtml(c.rol) + '</td>' +
+        '<td>' + Componentes.escaparHtml((c.modulos || []).join(', ')) + '</td>' +
+        '<td>' + Componentes.badge(c.activo ? 'Sí' : 'No', c.activo ? 'P4' : 'P1') + '</td>' +
+        '<td>' +
+        '<button type="button" class="sigso-boton--secundario" data-accion-cuenta="resetear" data-id="' + c.cuenta_id + '">Resetear clave</button> ' +
+        '<button type="button" class="sigso-boton--secundario" data-accion-cuenta="activar" data-id="' + c.cuenta_id + '" data-activo="' + !c.activo + '">' + (c.activo ? 'Desactivar' : 'Activar') + '</button>' +
+        '</td></tr>';
+    }).join('');
+    return '<table class="sigso-tabla"><thead><tr>' +
+      '<th>Usuario</th><th>Nombre</th><th>Correos</th><th>Rol</th><th>Módulos</th><th>Activa</th><th>Acciones</th>' +
+      '</tr></thead><tbody>' + filas + '</tbody></table>';
+  }
+
+  var cuentaEnEdicion_ = null;
+
+  function precargarCuenta_(cuenta) {
+    cuentaEnEdicion_ = cuenta.cuenta_id;
+    var campos = {
+      usuario: cuenta.usuario, nombre: cuenta.nombre, cargo: cuenta.cargo,
+      emails: (cuenta.emails || []).join(', '), rol: cuenta.rol,
+      modulos: (cuenta.modulos || []).join(', '), empresa_id: cuenta.empresa_id
+    };
+    Object.keys(campos).forEach(function (nombre) {
+      var input = document.querySelector('#form-cuenta-portal [data-campo="' + nombre + '"]');
+      if (input) input.value = campos[nombre] || '';
+    });
+    // El usuario identifica la cuenta: no se renombra (crear otra si hace falta).
+    document.querySelector('#form-cuenta-portal [data-campo="usuario"]').disabled = true;
+  }
+
+  function guardarCuentaPortal_() {
+    var leer = function (nombre) {
+      return document.querySelector('#form-cuenta-portal [data-campo="' + nombre + '"]').value.trim();
+    };
+    var datos = {
+      operacion: cuentaEnEdicion_ ? 'actualizar' : 'crear',
+      nombre: leer('nombre'), cargo: leer('cargo'), emails: leer('emails'),
+      rol: leer('rol') || 'SOLICITANTE', empresa_id: leer('empresa_id')
+    };
+    if (cuentaEnEdicion_) {
+      datos.cuenta_id = cuentaEnEdicion_;
+    } else {
+      datos.usuario = leer('usuario');
+    }
+    var modulos = leer('modulos');
+    if (modulos) {
+      datos.modulos = modulos.split(',').map(function (m) { return m.trim(); }).filter(Boolean);
+    }
+
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'gestionarCuentaPortal', datos).then(function (respuesta) {
+      if (!respuesta.ok) {
+        document.getElementById('resultado-admin').innerHTML = Componentes.alerta(respuesta.message || 'Error al guardar.', 'error');
+        return;
+      }
+      cuentaEnEdicion_ = null;
+      if (respuesta.data.password_temporal) {
+        // Se muestra con confirm nativo ANTES de recargar la vista: es la
+        // unica vez que la clave existe fuera del hash.
+        window.alert('Cuenta "' + respuesta.data.usuario + '" lista.\n\nClave temporal (entregala por WhatsApp o en persona; no queda guardada):\n\n' + respuesta.data.password_temporal);
+      }
+      renderCuentasPortal_();
+    });
+  }
+
+  function accionCuenta_(accion, cuentaId, activar) {
+    var datos = accion === 'resetear'
+      ? { operacion: 'resetear_password', cuenta_id: cuentaId }
+      : { operacion: 'activar', cuenta_id: cuentaId, activo: activar };
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'gestionarCuentaPortal', datos).then(function (respuesta) {
+      if (!respuesta.ok) {
+        window.alert(respuesta.message || 'No se pudo aplicar.');
+        return;
+      }
+      if (respuesta.data.password_temporal) {
+        window.alert('Clave temporal nueva para "' + respuesta.data.usuario + '" (no queda guardada):\n\n' + respuesta.data.password_temporal);
+      }
+      renderCuentasPortal_();
+    });
   }
 
   var LOGS_UI = {

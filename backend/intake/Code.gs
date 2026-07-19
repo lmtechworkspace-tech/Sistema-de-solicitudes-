@@ -23,7 +23,13 @@ var INTAKE_ACTIONS = {
   responderConsulta: handleResponderConsulta_,
   validarCierre: handleValidarCierre_,
   solicitarCodigoAcceso: handleSolicitarCodigoAcceso_,
-  misSolicitudes: handleMisSolicitudes_
+  misSolicitudes: handleMisSolicitudes_,
+  // v3.3: identidad de la plataforma (Portal.gs). Acciones publicas como el
+  // resto de Intake -- la proteccion es el hash/token, no el transporte.
+  portalLogin: handlePortalLogin_,
+  portalLogout: handlePortalLogout_,
+  portalSesion: handlePortalSesion_,
+  portalCambiarPassword: handlePortalCambiarPassword_
 };
 
 function doGet(e) {
@@ -96,6 +102,22 @@ function handleMisSolicitudes_(data) {
 
 function handleSubirArchivo_(data) {
   return responderResultado_(Drive.subirArchivo(data));
+}
+
+function handlePortalLogin_(data) {
+  return responderResultado_(Portal.login(data));
+}
+
+function handlePortalLogout_(data) {
+  return responderResultado_(Portal.logout(data));
+}
+
+function handlePortalSesion_(data) {
+  return responderResultado_(Portal.sesion(data));
+}
+
+function handlePortalCambiarPassword_(data) {
+  return responderResultado_(Portal.cambiarPassword(data));
 }
 
 function responderResultado_(resultado) {

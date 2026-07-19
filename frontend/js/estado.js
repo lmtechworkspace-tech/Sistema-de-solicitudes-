@@ -13,23 +13,36 @@
       renderHeaderSigso('estado');
     }
 
+    // v3.3: este script tambien se carga en plataforma.html, que solo trae
+    // el panel de Mis solicitudes (la consulta por numero y el flujo de
+    // correo+codigo siguen viviendo en estado.html). Cada binding se hace
+    // solo si su elemento existe -- asi el MISMO archivo sirve a ambas
+    // paginas sin duplicarlo.
+    var vincular = function (id, evento, handler) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener(evento, handler);
+    };
+
     var parametros = new URLSearchParams(window.location.search);
     var idPrellenado = parametros.get('id');
-    if (idPrellenado) {
-      document.getElementById('campo-numero-solicitud').value = idPrellenado;
+    var campoNumero = document.getElementById('campo-numero-solicitud');
+    if (idPrellenado && campoNumero) {
+      campoNumero.value = idPrellenado;
     }
 
-    document.getElementById('form-estado').addEventListener('submit', manejarConsulta_);
+    vincular('form-estado', 'submit', manejarConsulta_);
 
     manejarTabs_();
-    document.getElementById('form-pedir-codigo').addEventListener('submit', manejarPedirCodigo_);
-    document.getElementById('form-verificar-codigo').addEventListener('submit', manejarVerificarCodigo_);
-    document.getElementById('btn-reenviar-codigo').addEventListener('click', function () {
+    vincular('form-pedir-codigo', 'submit', manejarPedirCodigo_);
+    vincular('form-verificar-codigo', 'submit', manejarVerificarCodigo_);
+    vincular('btn-reenviar-codigo', 'click', function () {
       manejarPedirCodigo_({ preventDefault: function () {} });
     });
-    poblarFiltroEstados_();
+    if (document.getElementById('filtro-mis-estado')) {
+      poblarFiltroEstados_();
+    }
     ['filtro-mis-buscador', 'filtro-mis-estado', 'filtro-mis-desde', 'filtro-mis-hasta'].forEach(function (id) {
-      document.getElementById(id).addEventListener('input', renderListaFiltrada_);
+      vincular(id, 'input', renderListaFiltrada_);
     });
   });
 
@@ -464,6 +477,32 @@
       });
   }
 
+  // v3.3 (plataforma): entrada directa con sesion de la plataforma -- sin
+  // correo+codigo. Reusa TODO el render de Mis solicitudes (lista, filtros,
+  // drill-down); lo unico que cambia es como se obtienen los datos. Lo llama
+  // plataforma.js al abrir el modulo.
+  window.SigsoMisSolicitudes = {
+    cargarConToken: function (token) {
+      var panel = document.getElementById('panel-lista-mis-solicitudes');
+      var lista = document.getElementById('lista-mis-solicitudes');
+      lista.innerHTML = Componentes.cargando('Cargando tus solicitudes...');
+      panel.classList.remove('sigso-oculto');
+      return llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'misSolicitudes', { token: token })
+        .then(function (respuesta) {
+          if (!respuesta.ok) {
+            lista.innerHTML = Componentes.alerta(respuesta.message || 'No se pudieron cargar tus solicitudes.', 'error');
+            return respuesta;
+          }
+          // Sin email global: el drill-down usa el email_coincidente por fila.
+          sesionMisSolicitudes = { email: '' };
+          listaCompleta_ = respuesta.data.solicitudes;
+          renderResumenMisSolicitudes_(respuesta.data.resumen);
+          renderListaFiltrada_();
+          return respuesta;
+        });
+    }
+  };
+
   function renderResumenMisSolicitudes_(resumen) {
     document.getElementById('resumen-mis-solicitudes').innerHTML =
       '<p><strong>' + resumen.total + '</strong> solicitud(es) — ' +
@@ -511,7 +550,11 @@
         ? '<div class="sigso-bandeja__semaforo">🔵 Llevas ' + (s.dias_esperando_max || 0) +
           ' día(s) sin revisar ' + s.items_pendientes_validar + ' ítem(s)</div>'
         : '';
-      return '<button type="button" class="sigso-bandeja__fila" data-solicitud="' + s.solicitud_id + '">' +
+      // v3.3: con sesion de la plataforma (cuenta multi-correo), cada
+      // solicitud puede pertenecer a un correo DISTINTO de la cuenta -- el
+      // drill-down (consultar_) valida por correo, asi que viaja por fila.
+      return '<button type="button" class="sigso-bandeja__fila" data-solicitud="' + s.solicitud_id + '"' +
+        ' data-email="' + Componentes.escaparHtml(s.email_coincidente || '') + '">' +
         '<div class="sigso-bandeja__fila-cabecera">' +
         '<strong class="sigso-id">' + Componentes.escaparHtml(s.solicitud_id) + '</strong>' +
         '<span>' + Componentes.badgePrioridad(s.prioridad_derivada) + ' ' + Componentes.badgeEstado(s.estado_derivado) + '</span>' +
@@ -532,7 +575,11 @@
         var detalle = document.getElementById('detalle-mis-solicitudes');
         detalle.classList.remove('sigso-oculto');
         detalle.innerHTML = Componentes.cargando('Cargando detalle...');
-        consultar_(boton.getAttribute('data-solicitud'), sesionMisSolicitudes.email, 'detalle-mis-solicitudes');
+        consultar_(
+          boton.getAttribute('data-solicitud'),
+          boton.getAttribute('data-email') || sesionMisSolicitudes.email,
+          'detalle-mis-solicitudes'
+        );
       });
     });
   }

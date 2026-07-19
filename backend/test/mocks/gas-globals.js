@@ -53,7 +53,7 @@ function createPropertiesServiceMock(initialProps) {
 
 function createUtilitiesMock() {
   let counter = 0;
-  const DigestAlgorithm = { MD5: 'MD5' };
+  const DigestAlgorithm = { MD5: 'MD5', SHA_256: 'SHA_256' };
   const Charset = { UTF_8: 'UTF_8' };
 
   return {
@@ -63,9 +63,19 @@ function createUtilitiesMock() {
       counter += 1;
       return 'test-uuid-' + counter;
     },
+    // v3.3 (Portal.gs): el hash de contrasenas SI necesita SHA-256 real --
+    // el dev-server siembra cuentas cuyo hash debe coincidir con lo que
+    // producira Apps Script en produccion. MD5 se mantiene falso (abajo):
+    // la deduplicacion solo necesita determinismo.
+    computeDigest(algorithm, text) {
+      if (algorithm === 'SHA_256') {
+        return Array.from(require('node:crypto').createHash('sha256').update(String(text), 'utf8').digest());
+      }
+      return this._md5Falso(text);
+    },
     // No es MD5 real: alcanza para probar que el hash es deterministico y
     // estable, que es lo unico que la deduplicacion (RF-F06) necesita.
-    computeDigest(_algorithm, text) {
+    _md5Falso(text) {
       const bytes = [];
       let acc = 0;
       for (let i = 0; i < text.length; i++) {

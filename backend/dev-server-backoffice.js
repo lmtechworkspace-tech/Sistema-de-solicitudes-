@@ -40,6 +40,9 @@ function construirContexto() {
   seedSheet(ctx, 'HISTORIAL_PRIORIDAD', ctx.COLUMNAS.HISTORIAL_PRIORIDAD);
   seedSheet(ctx, 'HISTORIAL_COMPROMISO', ctx.COLUMNAS.HISTORIAL_COMPROMISO);
   seedSheet(ctx, 'HISTORIAL_ASIGNACION', ctx.COLUMNAS.HISTORIAL_ASIGNACION);
+  // v3.3: cuentas de la plataforma, para probar el CRUD en admin.html.
+  seedSheet(ctx, 'CUENTAS_PORTAL', ctx.COLUMNAS.CUENTAS_PORTAL);
+  seedSheet(ctx, 'SESIONES_PORTAL', ctx.COLUMNAS.SESIONES_PORTAL);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
   seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);
   seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);

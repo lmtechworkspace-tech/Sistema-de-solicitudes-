@@ -386,22 +386,43 @@ var Solicitudes = {
    * (drill-down, reusa el mismo flujo que "Consultar por numero").
    */
   misSolicitudes: function (data) {
-    if (!data.email || !data.codigo) {
-      return errorValidacion_('codigo', 'Debes indicar tu correo y el codigo recibido.');
+    // v3.3 (plataforma): con sesion de la plataforma, la identidad es la
+    // CUENTA, y una cuenta puede tener VARIOS correos -- se juntan las
+    // solicitudes de todos. Este era el problema de origen: por correo,
+    // quien usa dos correos era dos personas para el sistema.
+    var emails;
+    if (data.token) {
+      var cuenta = resolverCuentaPorToken_(data.token);
+      if (!cuenta) {
+        return { _forbidden: true, message: 'Sesion invalida o expirada. Ingresa de nuevo.' };
+      }
+      emails = parsearJsonLista_(cuenta.emails);
+      if (emails.length === 0) {
+        return errorValidacion_('emails', 'Tu cuenta no tiene correos asociados; pide al administrador que los agregue.');
+      }
+    } else {
+      // Camino previo (correo + codigo de un solo uso): se mantiene intacto
+      // como respaldo mientras dura la transicion a la plataforma.
+      if (!data.email || !data.codigo) {
+        return errorValidacion_('codigo', 'Debes indicar tu correo y el codigo recibido.');
+      }
+      var email = String(data.email).trim().toLowerCase();
+      var clave = 'CODIGO_ACCESO:' + email;
+      var cache = CacheService.getScriptCache();
+      var codigoValido = cache.get(clave);
+      if (!codigoValido || codigoValido !== String(data.codigo).trim()) {
+        return { _forbidden: true, message: 'Código inválido o expirado. Solicita uno nuevo.' };
+      }
+      cache.remove(clave); // un solo uso
+      emails = [data.email];
     }
-    var email = String(data.email).trim().toLowerCase();
-    var clave = 'CODIGO_ACCESO:' + email;
-    var cache = CacheService.getScriptCache();
-    var codigoValido = cache.get(clave);
-    if (!codigoValido || codigoValido !== String(data.codigo).trim()) {
-      return { _forbidden: true, message: 'Código inválido o expirado. Solicita uno nuevo.' };
-    }
-    cache.remove(clave); // un solo uso
 
     var todasLasSubsolicitudes = leerFilas_(SHEETS.SUBSOLICITUDES);
     var solicitudes = leerFilas_(SHEETS.SOLICITUDES).filter(function (s) {
-      return compararEmail_(data.email, s.solicitante_email) ||
-        (!!s.es_cliente && compararEmail_(data.email, s.correo_cliente));
+      return emails.some(function (correo) {
+        return compararEmail_(correo, s.solicitante_email) ||
+          (!!s.es_cliente && compararEmail_(correo, s.correo_cliente));
+      });
     });
 
     var resumen = { total: solicitudes.length, abiertas: 0, pendientes_validar: 0, en_desarrollo: 0 };
@@ -435,7 +456,15 @@ var Solicitudes = {
         fecha_creacion: s.fecha_creacion,
         total_items: items.length,
         items_pendientes_validar: pendientesValidar,
-        dias_esperando_max: diasEsperandoMax
+        dias_esperando_max: diasEsperandoMax,
+        // v3.3: con cuenta multi-correo, el drill-down (estadoPublico,
+        // validarCierre, responderConsulta) sigue validando por correo --
+        // se indica CUAL correo de la cuenta coincide con esta solicitud
+        // para que el frontend lo use en esas llamadas.
+        email_coincidente: emails.filter(function (correo) {
+          return compararEmail_(correo, s.solicitante_email) ||
+            (!!s.es_cliente && compararEmail_(correo, s.correo_cliente));
+        })[0] || ''
       };
     }).sort(function (a, b) {
       return new Date(b.fecha_creacion) - new Date(a.fecha_creacion);

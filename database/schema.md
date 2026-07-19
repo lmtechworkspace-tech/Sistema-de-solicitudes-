@@ -493,6 +493,36 @@ derivación en lote escribe **una fila por solicitud** — agrupar el aviso no
 es motivo para agrupar el registro. Ver
 `documentacion/SIGSO-v3.1-atencion-directa-y-derivacion.md` §2.
 
+## CUENTAS_PORTAL (nueva, v3.3)
+
+| Columna | Tipo | Nota |
+|---|---|---|
+| `cuenta_id` | string | `Utilities.getUuid()` |
+| `usuario` | string | Nombre de usuario del login (ej. `cpena`). Único, comparado sin mayúsculas |
+| `nombre` / `cargo` | string | Identidad visible ("Hola, Camila") y autocompletado del formulario |
+| `hash_password` | string (hex) | SHA-256 **iterado con sal** (`Portal.gs`). **Nunca la contraseña en claro.** Apps Script no tiene bcrypt; es lo mejor disponible en la plataforma y adecuado al riesgo del portal |
+| `salt` | string | Sal aleatoria por cuenta |
+| `emails` | string (JSON) | **La clave del diseño**: TODOS los correos de la persona. El portal muestra las solicitudes de cualquiera de ellos — resuelve que hoy "la identidad es un correo" |
+| `rol` | string | SOLICITANTE / DEV / GERENCIA / ADM — plantilla de módulos al crear |
+| `modulos` | string (JSON) | La lista **efectiva** de módulos (editable por cuenta desde Administración). El backend valida contra esta lista en cada acción |
+| `empresa_id` | string | Informativo |
+| `activo` | boolean | Desactivar revoca el acceso sin borrar la cuenta |
+| `debe_cambiar_password` | boolean | TRUE al crear/resetear: el primer login obliga a elegir clave propia |
+| `ultimo_acceso` / `creado_por` | — | Trazabilidad, igual que USUARIOS |
+
+## SESIONES_PORTAL (nueva, v3.3)
+
+| Columna | Tipo | Nota |
+|---|---|---|
+| `token` | string | UUID que el navegador guarda (localStorage) y presenta en cada llamada |
+| `cuenta_id` | string | FK a CUENTAS_PORTAL |
+| `expira` | ISO datetime | 12 horas desde el login |
+| `creada` | ISO datetime | — |
+
+La hoja es la verdad; `CacheService` solo acelera la validación. Cerrar
+sesión o desactivar la cuenta invalida el token. Ver
+`documentacion/SIGSO-v3.3-propuesta-plataforma-modular.md`.
+
 ## ARCHIVOS (nueva, Fase 4)
 
 | Columna | Tipo | Nota |

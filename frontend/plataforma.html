@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SIGSO — Plataforma</title>
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/formulario.css" />
+</head>
+<body>
+  <!-- v3.3 (SIGSO-v3.3-propuesta-plataforma-modular.md): una sola puerta.
+       Login con usuario+contrasena -> inicio personal -> modulos segun la
+       cuenta. Los modulos "nueva_solicitud" y "mis_solicitudes" REUTILIZAN
+       el markup de index.html y estado.html (duplicacion deliberada de HTML,
+       mismo criterio que las 3 copias del esquema: los .js son los MISMOS
+       archivos, sin bifurcar). -->
+
+  <!-- ============ Vista: login ============ -->
+  <div id="vista-login" class="plataforma-login">
+    <form id="form-login" class="sigso-card plataforma-login__card" novalidate>
+      <h1>SIGSO</h1>
+      <p class="sigso-ayuda">Plataforma de gesti&oacute;n de solicitudes — HomePymes / GDE / RLD</p>
+      <div class="sigso-campo">
+        <label for="campo-login-usuario">Usuario</label>
+        <input type="text" id="campo-login-usuario" autocomplete="username" required />
+      </div>
+      <div class="sigso-campo">
+        <label for="campo-login-password">Contrase&ntilde;a</label>
+        <input type="password" id="campo-login-password" autocomplete="current-password" required />
+      </div>
+      <button type="submit" class="sigso-boton" id="btn-login">Ingresar</button>
+      <div id="resultado-login"></div>
+      <p class="sigso-ayuda plataforma-login__pie">
+        &iquest;No tienes cuenta o la olvidaste? P&iacute;dela al administrador del sistema.<br />
+        Tambi&eacute;n puedes <a href="index.html">ingresar una solicitud sin cuenta</a> o
+        <a href="estado.html">consultar por n&uacute;mero</a>.
+      </p>
+    </form>
+  </div>
+
+  <!-- ============ Vista: cambio de clave obligatorio ============ -->
+  <div id="vista-cambiar-clave" class="plataforma-login sigso-oculto">
+    <form id="form-cambiar-clave" class="sigso-card plataforma-login__card" novalidate>
+      <h1>Elige tu contrase&ntilde;a</h1>
+      <p class="sigso-ayuda">Recibiste una clave temporal: por seguridad, define ahora una propia
+        (m&iacute;nimo 8 caracteres, distinta de la del correo).</p>
+      <div class="sigso-campo">
+        <label for="campo-clave-actual">Contrase&ntilde;a temporal</label>
+        <input type="password" id="campo-clave-actual" autocomplete="current-password" required />
+      </div>
+      <div class="sigso-campo">
+        <label for="campo-clave-nueva">Contrase&ntilde;a nueva</label>
+        <input type="password" id="campo-clave-nueva" autocomplete="new-password" required />
+      </div>
+      <div class="sigso-campo">
+        <label for="campo-clave-repetir">Repite la contrase&ntilde;a nueva</label>
+        <input type="password" id="campo-clave-repetir" autocomplete="new-password" required />
+      </div>
+      <button type="submit" class="sigso-boton" id="btn-cambiar-clave">Guardar y entrar</button>
+      <div id="resultado-cambiar-clave"></div>
+    </form>
+  </div>
+
+  <!-- ============ Shell: nav + modulos ============ -->
+  <div id="vista-shell" class="sigso-oculto">
+    <header class="plataforma-header">
+      <div class="plataforma-header__marca">SIGSO</div>
+      <nav class="plataforma-header__nav" id="nav-modulos"></nav>
+      <div class="plataforma-header__usuario">
+        <span id="nav-nombre-usuario"></span>
+        <button type="button" class="sigso-boton--secundario" id="btn-logout">Cerrar sesi&oacute;n</button>
+      </div>
+    </header>
+
+    <main class="sigso-contenido">
+      <!-- ===== Modulo: inicio ===== -->
+      <section id="modulo-home" class="plataforma-modulo">
+        <h1 id="saludo-home"></h1>
+        <div id="pendientes-home"></div>
+        <div class="plataforma-cards" id="cards-home"></div>
+      </section>
+
+      <!-- ===== Modulo: nueva solicitud (markup de index.html) ===== -->
+      <section id="modulo-nueva_solicitud" class="plataforma-modulo sigso-oculto">
+        <div id="contenedor-stepper"></div>
+
+        <form id="form-solicitud" class="sigso-card" novalidate>
+          <h1>Nueva solicitud</h1>
+
+          <section id="paso-contexto">
+            <div class="sigso-campo">
+              <label>&iquest;C&oacute;mo quieres cargar tu solicitud?</label>
+              <div class="sigso-chips" id="selector-modo">
+                <button type="button" class="sigso-chip" data-modo="rapido">R&aacute;pido</button>
+                <button type="button" class="sigso-chip" data-modo="completo">Completo</button>
+              </div>
+              <p class="sigso-ayuda">R&aacute;pido: lo justo para dejar tu pedido registrado. Completo: agrega contexto, acceso y m&aacute;s detalle por item.</p>
+            </div>
+
+            <div class="sigso-tarjeta-grupo">
+              <h3 class="sigso-titulo-grupo">📍 &iquest;Sobre qu&eacute; es tu solicitud?</h3>
+              <div class="sigso-campo">
+                <label for="campo-empresa">Empresa</label>
+                <select id="campo-empresa" required></select>
+              </div>
+              <div class="sigso-campo">
+                <label>&iquest;Tu solicitud est&aacute; asociada a una plataforma?</label>
+                <div class="sigso-chips" id="selector-plataforma-asociada">
+                  <button type="button" class="sigso-chip" data-asociada="si">S&iacute;, a una plataforma</button>
+                  <button type="button" class="sigso-chip" data-asociada="no">No, es otro tipo de solicitud</button>
+                </div>
+                <p class="sigso-ayuda">Si es sobre un sistema/plataforma, elige cu&aacute;l. Si no, deja "No" y solo indica el &aacute;rea a la que va dirigida.</p>
+              </div>
+              <div class="sigso-campo" id="fila-plataforma">
+                <label for="campo-plataforma">Plataforma</label>
+                <select id="campo-plataforma" required></select>
+              </div>
+              <div class="sigso-campo sigso-oculto" id="fila-area">
+                <label for="campo-area">&iquest;A qu&eacute; &aacute;rea va dirigida?</label>
+                <select id="campo-area"></select>
+                <p class="sigso-ayuda">Elige el &aacute;rea que atiende tu pedido. Si no est&aacute;s seguro, deja "No estoy seguro" y el equipo lo derivar&aacute;.</p>
+              </div>
+            </div>
+
+            <div class="sigso-tarjeta-grupo">
+              <h3 class="sigso-titulo-grupo">🏢 &iquest;Es una solicitud de cliente?</h3>
+              <div class="sigso-campo">
+                <label class="sigso-toggle">
+                  <input type="checkbox" id="campo-es-cliente" />
+                  &iquest;Es una solicitud de cliente?
+                </label>
+              </div>
+              <div class="sigso-bloque-cliente" id="bloque-cliente">
+                <div class="sigso-campo sigso-oculto" id="fila-buscar-cliente">
+                  <label for="campo-buscar-cliente">Buscar cliente</label>
+                  <div class="sigso-autocomplete">
+                    <input type="text" id="campo-buscar-cliente" autocomplete="off"
+                      placeholder="Nombre, RUT o c&oacute;digo del cliente..."
+                      role="combobox" aria-expanded="false" aria-autocomplete="list"
+                      aria-controls="resultados-cliente" />
+                    <ul class="sigso-autocomplete__lista sigso-oculto" id="resultados-cliente" role="listbox"></ul>
+                  </div>
+                  <p class="sigso-ayuda">Busca por nombre, RUT o c&oacute;digo. Al elegir se completan los datos (los puedes editar). <a href="#" id="link-cliente-manual">Escribir manualmente</a></p>
+                </div>
+                <div class="sigso-campo">
+                  <label for="campo-empresa-cliente">Empresa cliente</label>
+                  <input type="text" id="campo-empresa-cliente" />
+                </div>
+                <div class="sigso-campo">
+                  <label for="campo-cliente-mandante">Mandante (opcional)</label>
+                  <input type="text" id="campo-cliente-mandante" />
+                </div>
+                <div class="sigso-campo">
+                  <label for="campo-cliente-obra">Obra/Proyecto (opcional)</label>
+                  <input type="text" id="campo-cliente-obra" />
+                </div>
+                <div class="sigso-campo">
+                  <label for="campo-contacto-cliente">Nombre de contacto</label>
+                  <input type="text" id="campo-contacto-cliente" />
+                </div>
+                <div class="sigso-campo">
+                  <label for="campo-correo-cliente">Correo del cliente</label>
+                  <input type="email" id="campo-correo-cliente" />
+                </div>
+                <div class="sigso-campo">
+                  <label for="campo-telefono-cliente">Tel&eacute;fono de contacto (opcional)</label>
+                  <input type="tel" id="campo-telefono-cliente" placeholder="+569XXXXXXXX" />
+                </div>
+                <div class="sigso-campo">
+                  <label for="campo-urgencia-cliente">Urgencia reportada por el cliente</label>
+                  <select id="campo-urgencia-cliente">
+                    <option value="">No especificada</option>
+                    <option value="Alta">Alta</option>
+                    <option value="Normal">Normal</option>
+                    <option value="Baja">Baja</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="sigso-tarjeta-grupo">
+              <h3 class="sigso-titulo-grupo">👤 Tus datos de contacto</h3>
+              <p class="sigso-ayuda" id="nota-autocompletado" style="display:none">
+                Completados desde tu cuenta — puedes editarlos para esta solicitud.
+              </p>
+              <div class="sigso-campo-doble">
+                <div class="sigso-campo">
+                  <label for="campo-solicitante-nombre">Tu nombre</label>
+                  <input type="text" id="campo-solicitante-nombre" required />
+                </div>
+                <div class="sigso-campo">
+                  <label for="campo-solicitante-cargo">Tu cargo</label>
+                  <input type="text" id="campo-solicitante-cargo" required />
+                </div>
+              </div>
+              <div class="sigso-campo-doble">
+                <div class="sigso-campo">
+                  <label for="campo-solicitante-email">Tu correo</label>
+                  <input type="email" id="campo-solicitante-email" required />
+                </div>
+                <div class="sigso-campo">
+                  <label for="campo-cc">Copiar a (CC, opcional)</label>
+                  <input type="email" id="campo-cc" placeholder="otro.correo@empresa.cl" />
+                </div>
+              </div>
+              <div class="sigso-campo" id="fila-avisar-leo">
+                <label class="sigso-toggle">
+                  <input type="checkbox" id="campo-avisar-leo" />
+                  Avisar al equipo de desarrollo por correo
+                </label>
+                <p class="sigso-ayuda" id="nota-avisar-leo-cliente" style="display:none">
+                  Las solicitudes de cliente se avisan al equipo autom&aacute;ticamente.
+                </p>
+              </div>
+            </div>
+
+            <div id="alerta-paso1"></div>
+            <div class="sigso-campo">
+              <button type="button" class="sigso-boton" id="btn-paso1-siguiente">Continuar &rarr;</button>
+            </div>
+          </section>
+
+          <section id="paso-items" class="sigso-oculto">
+            <h2>Que necesitas pedir</h2>
+            <div id="lista-subsolicitudes"></div>
+            <button type="button" class="sigso-boton--secundario" id="btn-agregar-subsolicitud">+ Agregar otro item</button>
+            <div id="alerta-paso2"></div>
+            <div class="sigso-campo" style="margin-top: 1.5rem">
+              <button type="button" class="sigso-boton--secundario" id="btn-paso2-atras">&larr; Atr&aacute;s</button>
+              <button type="button" class="sigso-boton" id="btn-paso2-siguiente">Revisar y enviar &rarr;</button>
+            </div>
+          </section>
+
+          <section id="paso-revision" class="sigso-oculto">
+            <h2>Revisa antes de enviar</h2>
+            <div id="contenedor-revision"></div>
+
+            <div class="sigso-tarjeta-grupo" style="margin-top: 1.5rem">
+              <label class="sigso-check">
+                <input type="checkbox" id="campo-atencion-directa" />
+                Esta solicitud <strong>ya fue resuelta</strong> (atenci&oacute;n directa)
+              </label>
+              <p class="sigso-ayuda">
+                M&aacute;rcala solo si el problema ya se solucion&oacute; fuera del sistema
+                (por ejemplo, llamando al desarrollador). Queda registrada y
+                <strong>cerrada</strong>, sin pasar por el flujo.
+              </p>
+              <div id="bloque-atencion-directa" class="sigso-oculto">
+                <div class="sigso-campo">
+                  <label for="campo-atencion-resuelto-por">&iquest;Qui&eacute;n lo resolvi&oacute;? *</label>
+                  <input type="text" id="campo-atencion-resuelto-por" placeholder="Nombre de quien atendi&oacute;" />
+                </div>
+                <div class="sigso-campo">
+                  <label for="campo-atencion-fecha">&iquest;Cu&aacute;ndo se resolvi&oacute;? *</label>
+                  <input type="datetime-local" id="campo-atencion-fecha" />
+                </div>
+                <div class="sigso-campo">
+                  <label for="campo-atencion-detalle">&iquest;Qu&eacute; se hizo? *</label>
+                  <textarea id="campo-atencion-detalle" placeholder="Breve descripci&oacute;n de la soluci&oacute;n aplicada"></textarea>
+                  <p class="sigso-ayuda">Este es el registro que queda para el futuro: s&eacute; concreto.</p>
+                </div>
+              </div>
+            </div>
+
+            <div id="contenedor-fecha-propuesta" style="margin-top: 1.5rem"></div>
+
+            <div class="sigso-campo" style="margin-top: 1.5rem">
+              <label for="campo-observaciones-generales">Observaciones generales (opcional)</label>
+              <textarea id="campo-observaciones-generales"></textarea>
+            </div>
+
+            <div class="sigso-campo">
+              <button type="button" class="sigso-boton--secundario" id="btn-paso3-atras">&larr; Editar</button>
+              <button type="submit" class="sigso-boton" id="btn-enviar">Enviar solicitud</button>
+            </div>
+          </section>
+        </form>
+
+        <div id="resultado" class="sigso-card sigso-oculto"></div>
+      </section>
+
+      <!-- ===== Modulo: mis solicitudes (markup de estado.html, sin el
+           flujo correo+codigo: aqui la sesion de la plataforma reemplaza
+           al codigo) ===== -->
+      <section id="modulo-mis_solicitudes" class="plataforma-modulo sigso-oculto">
+        <h1>Mis solicitudes</h1>
+        <p class="sigso-ayuda" id="nota-correos-cuenta"></p>
+        <div id="panel-lista-mis-solicitudes" class="sigso-oculto">
+          <div class="sigso-card">
+            <div id="resumen-mis-solicitudes"></div>
+            <div class="sigso-filtros">
+              <div class="sigso-campo">
+                <label for="filtro-mis-buscador">Buscar</label>
+                <input type="text" id="filtro-mis-buscador" placeholder="N&uacute;mero, empresa..." />
+              </div>
+              <div class="sigso-campo">
+                <label for="filtro-mis-estado">Estado</label>
+                <select id="filtro-mis-estado"><option value="">Todos</option></select>
+              </div>
+              <div class="sigso-campo">
+                <label for="filtro-mis-desde">Desde</label>
+                <input type="date" id="filtro-mis-desde" />
+              </div>
+              <div class="sigso-campo">
+                <label for="filtro-mis-hasta">Hasta</label>
+                <input type="date" id="filtro-mis-hasta" />
+              </div>
+            </div>
+          </div>
+          <div class="sigso-bandeja">
+            <div id="lista-mis-solicitudes" class="sigso-bandeja__lista"></div>
+            <div id="detalle-mis-solicitudes" class="sigso-bandeja__detalle sigso-card sigso-oculto"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/ui-components.js"></script>
+  <script src="js/components.js"></script>
+  <script src="js/formulario.js"></script>
+  <script src="js/estado.js"></script>
+  <script src="js/plataforma.js"></script>
+</body>
+</html>

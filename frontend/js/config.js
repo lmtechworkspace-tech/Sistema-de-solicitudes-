@@ -13,5 +13,10 @@ window.SIGSO_CONFIG = Object.freeze({
   // El stub de SIGSO_CONFIG embebido en App.html/Admin.html (Fase 8) usa
   // el valor real de este sitio, porque ahi SI es el "otro" sitio.
   SITIO_PUBLICO: '',
+  // v3.3 (plataforma): a donde apuntan los modulos del staff mientras viven
+  // en el Backoffice con login Google (P3/P4 los traeran adentro del shell).
+  // Son la misma URL /exec del Backoffice con ?page=app / ?page=admin.
+  BACKOFFICE_APP_URL: 'https://script.google.com/macros/s/AKfycbzoC2IsvrwPIElUeTgIxmNxLcNsEH3SXU8TrKLM-sFntZjd8ratSv8w_1-zGo1MmdCcFg/exec?page=app',
+  BACKOFFICE_ADMIN_URL: 'https://script.google.com/macros/s/AKfycbzoC2IsvrwPIElUeTgIxmNxLcNsEH3SXU8TrKLM-sFntZjd8ratSv8w_1-zGo1MmdCcFg/exec?page=admin',
   TIMEZONE: 'America/Santiago'
 });

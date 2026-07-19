@@ -145,7 +145,19 @@ var ESQUEMA_HOJAS = {
     'historial_id', 'subsolicitud_id', 'solicitud_id',
     'responsable_anterior', 'responsable_nuevo', 'motivo',
     'usuario', 'timestamp'
-  ]
+  ],
+  // v3.3 (§2.4): cuentas de la plataforma. hash_password NUNCA guarda la
+  // contrasena en claro (SHA-256 iterado con sal, ver Portal.gs). modulos
+  // es la lista efectiva (JSON) -- el rol es solo la plantilla al crear.
+  CUENTAS_PORTAL: [
+    'cuenta_id', 'usuario', 'nombre', 'cargo',
+    'hash_password', 'salt', 'emails', 'rol', 'modulos',
+    'empresa_id', 'activo', 'debe_cambiar_password',
+    'ultimo_acceso', 'creado_por'
+  ],
+  // v3.3 (§2.4): sesiones activas del portal (token que el navegador
+  // presenta en cada llamada). Expiran a las 12 horas.
+  SESIONES_PORTAL: ['token', 'cuenta_id', 'expira', 'creada']
 };
 
 // SLA por prioridad en horas habiles (§7.2). P5 no tiene SLA.

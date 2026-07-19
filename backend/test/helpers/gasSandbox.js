@@ -54,6 +54,8 @@ const INTAKE_FILES_EN_ORDEN = [
   'Catalogos.gs',
   'DriveRepo.gs',
   'Drive.gs',
+  // v3.3: identidad de la plataforma (login/sesiones).
+  'Portal.gs',
   'Code.gs'
 ];
 
@@ -77,6 +79,8 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   'Comentarios.gs',
   'Catalogos.gs',
   'Auth.gs',
+  // v3.3: administracion de cuentas de la plataforma (solo ADM).
+  'CuentasPortal.gs',
   'Triggers.gs',
   'Code.gs'
 ];

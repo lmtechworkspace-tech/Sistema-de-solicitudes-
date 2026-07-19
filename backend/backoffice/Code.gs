@@ -37,6 +37,9 @@ var BACKOFFICE_ACTIONS = {
   guardarCatalogo: handleGuardarCatalogo_,
   listarCatalogo: handleListarCatalogo_,
   gestionarUsuario: handleGestionarUsuario_,
+  // v3.3: cuentas de la plataforma (CuentasPortal.gs, solo ADM).
+  listarCuentasPortal: handleListarCuentasPortal_,
+  gestionarCuentaPortal: handleGestionarCuentaPortal_,
   listarUsuarios: handleListarUsuarios_,
   listarLogs: handleListarLogs_
 };
@@ -213,6 +216,14 @@ function handleGuardarCatalogo_(data, contexto) {
 
 function handleGestionarUsuario_(data, contexto) {
   return responderResultado_(Auth.gestionarUsuario(data, contexto));
+}
+
+function handleListarCuentasPortal_(data, contexto) {
+  return responderResultado_(CuentasPortal.listar(data, contexto));
+}
+
+function handleGestionarCuentaPortal_(data, contexto) {
+  return responderResultado_(CuentasPortal.gestionar(data, contexto));
 }
 
 function handleListarCatalogo_(data, contexto) {

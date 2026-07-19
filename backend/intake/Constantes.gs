@@ -43,7 +43,14 @@ var SHEETS = {
   // hacia imposible saber quien movio el trabajo, cuando y por que. La
   // escribe solo el Backoffice; se declara aqui para que las tres copias
   // del esquema no diverjan (schema-consistency.test.js).
-  HISTORIAL_ASIGNACION: 'HISTORIAL_ASIGNACION'
+  HISTORIAL_ASIGNACION: 'HISTORIAL_ASIGNACION',
+  // v3.3 (documentacion/SIGSO-v3.3-propuesta-plataforma-modular.md §2.4):
+  // identidad de la plataforma. La cuenta es la persona; sus correos son un
+  // atributo (JSON, puede haber varios) -- eso resuelve el problema de
+  // origen: hoy la identidad ES un correo y quien usa dos correos es dos
+  // personas para el sistema.
+  CUENTAS_PORTAL: 'CUENTAS_PORTAL',
+  SESIONES_PORTAL: 'SESIONES_PORTAL'
 };
 
 var COLUMNAS = {
@@ -248,7 +255,19 @@ var COLUMNAS = {
     'historial_id', 'subsolicitud_id', 'solicitud_id',
     'responsable_anterior', 'responsable_nuevo', 'motivo',
     'usuario', 'timestamp'
-  ]
+  ],
+  // v3.3 (§2.4): cuentas de la plataforma. hash_password NUNCA guarda la
+  // contrasena en claro (SHA-256 iterado con sal, ver Portal.gs). modulos
+  // es la lista efectiva (JSON) -- el rol es solo la plantilla al crear.
+  CUENTAS_PORTAL: [
+    'cuenta_id', 'usuario', 'nombre', 'cargo',
+    'hash_password', 'salt', 'emails', 'rol', 'modulos',
+    'empresa_id', 'activo', 'debe_cambiar_password',
+    'ultimo_acceso', 'creado_por'
+  ],
+  // v3.3 (§2.4): sesiones activas del portal (token que el navegador
+  // presenta en cada llamada). Expiran a las 12 horas.
+  SESIONES_PORTAL: ['token', 'cuenta_id', 'expira', 'creada']
 };
 
 // S01-S11 completos desde la Fase 1 aunque solo S01 se use aqui: la maquina
