@@ -23,6 +23,6 @@ window.SIGSO_CONFIG = Object.freeze({
   // reciben las llamadas por token de la plataforma (la identidad la pone el
   // token, no Google). '' = aun no creada: la bandeja del shell avisara que
   // falta desplegarla. Ver DEPLOY v33-p3.
-  BACKOFFICE_TOKEN_URL: '',
+  BACKOFFICE_TOKEN_URL: 'https://script.google.com/macros/s/AKfycby5tv_3V1wHnN0DlIH5DkW2XhsdmKbmGfYhXyaBMSiUh5B4A7a5WGWB2ydMqNeglLEqQA/exec',
   TIMEZONE: 'America/Santiago'
 });
