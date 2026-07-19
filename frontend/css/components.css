@@ -638,3 +638,180 @@
 .sigso-contenido.plataforma-contenido--ancho {
   max-width: 1180px;
 }
+
+/* ============ v4.0 Frentes 2 y 3: identidad y navegacion ============ */
+
+/* Contador de pendientes en el nav: la informacion que antes obligaba a
+   entrar al modulo para descubrirla. */
+.plataforma-nav__badge {
+  display: inline-block;
+  min-width: 1.15rem;
+  padding: 0.05rem 0.32rem;
+  margin-left: 0.3rem;
+  border-radius: var(--radio-full);
+  background: var(--critico);
+  color: #fff;
+  font-family: var(--fuente-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.plataforma-nav__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Identidad: avatar de iniciales + rol. */
+.plataforma-usuario {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radio-md);
+  padding: 0.3rem 0.5rem;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.plataforma-usuario:hover {
+  background: var(--superficie-2);
+  border-color: var(--borde);
+}
+
+.plataforma-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--info-suave);
+  color: var(--azul);
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  flex: none;
+}
+
+.plataforma-usuario__txt {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.plataforma-usuario__nombre { font-size: 0.86rem; font-weight: 600; }
+.plataforma-usuario__rol { font-size: 0.72rem; color: var(--texto-3); }
+
+.plataforma-header__usuario { position: relative; }
+
+.plataforma-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  min-width: 15rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
+  box-shadow: var(--sombra-3);
+  z-index: 40;
+  overflow: hidden;
+}
+
+.plataforma-menu__cab {
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--borde);
+  background: var(--fondo-pagina);
+}
+
+.plataforma-menu__nombre { font-size: 0.87rem; font-weight: 620; }
+
+.plataforma-menu__correo {
+  font-family: var(--fuente-mono);
+  font-size: 0.72rem;
+  color: var(--texto-3);
+  margin-top: 0.15rem;
+  word-break: break-all;
+}
+
+.plataforma-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  background: transparent;
+  border: none;
+  font: inherit;
+  font-size: 0.87rem;
+  color: var(--texto);
+  cursor: pointer;
+  text-align: left;
+}
+
+.plataforma-menu__item:hover { background: var(--superficie-2); }
+
+/* Aviso del inicio: "requieren tu accion" con salida directa. */
+.plataforma-aviso {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.85rem 1rem;
+  margin-top: var(--esp-4);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
+  font-size: 0.92rem;
+}
+
+.plataforma-aviso--accion {
+  border-left: 3px solid var(--alerta);
+  background: var(--alerta-suave);
+  color: var(--alerta);
+}
+
+.plataforma-aviso--accion .sigso-ayuda { color: var(--texto-2); }
+.plataforma-aviso > div { flex: 1; }
+
+/* Campo de contrasena con boton de mostrar/ocultar. */
+.sigso-campo-clave { position: relative; display: block; }
+
+.sigso-campo-clave input {
+  width: 100%;
+  padding-right: 2.4rem;
+}
+
+.sigso-ver-clave {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  padding: 0.25rem;
+  cursor: pointer;
+  color: var(--texto-3);
+  display: grid;
+  place-items: center;
+  border-radius: var(--radio-sm);
+}
+
+.sigso-ver-clave:hover { color: var(--texto); }
+
+/* Tarjetas de modulo del inicio: el icono pasa a ser una ficha con el
+   acento de marca, en vez de un emoji suelto. */
+.plataforma-card__icono {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radio-md);
+  background: var(--naranja-claro);
+  color: var(--naranja);
+  display: grid;
+  place-items: center;
+  margin-bottom: 0.15rem;
+}

@@ -4,6 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SIGSO — Backoffice</title>
+  <!-- v4.0: la marca declara Inter desde §12.3 pero nunca se cargaba: todos
+       veian la fuente por defecto del sistema. display=swap evita el bloqueo
+       de render. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/components.css" />
   <link rel="stylesheet" href="css/dashboard.css" />
@@ -208,6 +214,7 @@
   <script src="js/utils.js"></script>
   <script src="js/ui-components.js"></script>
   <script src="js/components.js"></script>
+  <script src="js/iconos.js"></script>
   <script src="js/dashboard.js"></script>
   <script src="js/detalle.js"></script>
   <script src="js/gerencia.js"></script>

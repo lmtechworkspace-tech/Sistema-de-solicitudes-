@@ -14,13 +14,78 @@
      token aparte de --gris-claro, que sigue siendo el fondo de componentes. */
   --fondo-pagina: #FAF7F4;
 
+  /* Prioridad de la solicitud (P1 = mas critica). OJO: son la escala de
+     PRIORIDAD, no de estado -- para "correcto / atencion / error" estan los
+     semanticos de abajo. Antes se usaban para ambas cosas y eso confundia:
+     un badge verde "Si" tomaba prestado el color de "prioridad baja". */
   --p1: #C0392B;
   --p2: #E67E22;
   --p3: #F1C40F;
   --p4: #27AE60;
   --p5: #2980B9;
 
+  /* --- V4.0 Frente 1: tokens de fundamento ------------------------------ */
+
+  /* Semanticos: significado, no prioridad. */
+  --ok: #2E7D5B;
+  --ok-suave: #DCEFE5;
+  --alerta: #B45309;
+  --alerta-suave: #FBEBD6;
+  --critico: #B3261E;
+  --critico-suave: #FADEDC;
+  --info: var(--azul);
+  --info-suave: #DDE7F0;
+
+  /* Neutros con sesgo calido hacia el naranja de marca: un gris puro se lee
+     como "sin elegir" al lado de un acento calido. */
+  --texto: #241C18;
+  --texto-2: #5C5049;
+  --texto-3: #8A7C73;
+  --superficie: #FFFFFF;
+  --superficie-2: #F2EDE8;
+  --borde: #E6DCD4;
+  --borde-fuerte: #D2C4B8;
+
+  /* Escala tipografica (1.200 minor third) -- antes cada pantalla inventaba
+     sus tamanos en rem sueltos. */
+  --texto-xs: 0.75rem;
+  --texto-sm: 0.875rem;
+  --texto-base: 1rem;
+  --texto-lg: 1.125rem;
+  --texto-xl: 1.375rem;
+  --texto-2xl: 1.75rem;
+  --texto-3xl: 2.25rem;
+
+  /* Espaciado en escala de 4px. */
+  --esp-1: 0.25rem;
+  --esp-2: 0.5rem;
+  --esp-3: 0.75rem;
+  --esp-4: 1rem;
+  --esp-5: 1.5rem;
+  --esp-6: 2rem;
+  --esp-7: 3rem;
+
+  --radio-sm: 4px;
+  --radio-md: 8px;
+  --radio-lg: 14px;
+  --radio-full: 999px;
+
+  /* Elevacion: tres niveles y no mas -- reposo, elevado, flotante. */
+  --sombra-1: 0 1px 2px rgba(36, 28, 24, 0.06);
+  --sombra-2: 0 2px 8px rgba(36, 28, 24, 0.08);
+  --sombra-3: 0 12px 32px rgba(36, 28, 24, 0.12);
+
+  /* Alias --sigso-*: los usan components.css (panel de derivacion en lote,
+     insignia de atencion directa, cierre directo) desde v3.1. Se escribieron
+     con valor de respaldo pero NUNCA se definieron, asi que hasta v4.0
+     pintaban con colores aproximados fuera de marca. Ahora apuntan al token
+     real. */
+  --sigso-naranja: var(--naranja);
+  --sigso-borde: var(--borde);
+  --sigso-fondo-suave: var(--fondo-pagina);
+
   --fuente: 'Inter', system-ui, -apple-system, sans-serif;
+  --fuente-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
 }
 
 * {
@@ -232,4 +297,25 @@ button {
   padding: 0.75rem;
   border-radius: 4px;
   overflow-x: auto;
+}
+
+/* --- v4.0 Frente 1: iconos vectoriales (iconos.js) --------------------- */
+/* Heredan el color del texto y se alinean con la linea base -- a diferencia
+   de los emoji, que traen su propio color y metrica del sistema. */
+.sigso-ico {
+  display: inline-block;
+  vertical-align: -0.14em;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Cifras que se comparan en columna (KPIs, tablas, montos): mismo ancho por
+   digito para que alineen. */
+.sigso-cifra,
+.sigso-tabla td {
+  font-variant-numeric: tabular-nums;
 }

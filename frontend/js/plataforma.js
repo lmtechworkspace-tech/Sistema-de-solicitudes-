@@ -17,16 +17,19 @@
 
   // Catalogo de modulos del shell. `interno: true` = vive en esta pagina;
   // si no, es un enlace externo (transicion P2 -> P3/P4).
+  // v4.0: `icono` pasa de emoji a clave de iconos.js -- el emoji lo dibujaba
+  // el sistema operativo (distinto en Windows/Mac/Android y sin heredar el
+  // color del texto).
   var MODULOS_SHELL = {
-    nueva_solicitud: { icono: '📝', nombre: 'Nueva solicitud', descripcion: 'Ingresa un pedido al equipo', interno: true },
-    mis_solicitudes: { icono: '📋', nombre: 'Mis solicitudes', descripcion: 'El estado de todo lo tuyo, de todos tus correos', interno: true },
+    nueva_solicitud: { icono: 'nueva', nombre: 'Nueva solicitud', descripcion: 'Ingresa un pedido al equipo', interno: true },
+    mis_solicitudes: { icono: 'lista', nombre: 'Mis solicitudes', descripcion: 'El estado de todo lo tuyo, de todos tus correos', interno: true },
     // P3: bandeja y gerencia viven DENTRO del shell (dashboard.js/detalle.js/
     // gerencia.js orquestados aqui, con el token de la sesion via api.js).
-    bandeja: { icono: '🗂', nombre: 'Bandeja de trabajo', descripcion: 'Solicitudes del equipo: estados, fechas, derivaciones', interno: true },
-    gerencia: { icono: '📊', nombre: 'Panel de gerencia', descripcion: 'KPIs, semáforo de cumplimiento y seguimiento', interno: true },
+    bandeja: { icono: 'bandeja', nombre: 'Bandeja de trabajo', descripcion: 'Solicitudes del equipo: estados, fechas, derivaciones', interno: true },
+    gerencia: { icono: 'grafico', nombre: 'Panel de gerencia', descripcion: 'KPIs, semáforo de cumplimiento y seguimiento', interno: true },
     // P4: administracion tambien vive dentro del shell (admin.js con el
     // token de la sesion; el backend exige el modulo en cada accion).
-    administracion: { icono: '⚙️', nombre: 'Administración', descripcion: 'Catálogos, usuarios y cuentas de la plataforma', interno: true }
+    administracion: { icono: 'config', nombre: 'Administración', descripcion: 'Catálogos, usuarios y cuentas de la plataforma', interno: true }
   };
 
   var sesion = { token: null, cuenta: null };
@@ -36,6 +39,8 @@
     document.getElementById('form-login').addEventListener('submit', manejarLogin_);
     document.getElementById('form-cambiar-clave').addEventListener('submit', manejarCambioClave_);
     document.getElementById('btn-logout').addEventListener('click', manejarLogout_);
+    wireMenuUsuario_();
+    wireVerContrasena_();
 
     // Sesion guardada: restaurar sin re-loguear. Si expiro, al login.
     var token = null;
@@ -133,12 +138,69 @@
 
   // --- shell -------------------------------------------------------------
 
+  var ETIQUETA_ROL = {
+    ADM: 'Administrador',
+    ANA: 'Gestor / Analista',
+    DEV: 'Gestor técnico',
+    GERENCIA: 'Gerencia',
+    SOLICITANTE: 'Solicitante'
+  };
+
   function entrarAlShell_() {
     mostrarVista_('vista-shell');
-    document.getElementById('nav-nombre-usuario').textContent = sesion.cuenta.nombre;
+    renderIdentidad_();
     renderNav_();
     renderHome_();
     mostrarModulo_('home');
+  }
+
+  // v4.0: avatar de iniciales + rol visible. Antes solo se veia el nombre
+  // suelto junto a un boton de salir, y el rol no aparecia en ningun lado.
+  function renderIdentidad_() {
+    var cuenta = sesion.cuenta;
+    document.getElementById('nav-nombre-usuario').textContent = cuenta.nombre;
+    document.getElementById('nav-rol-usuario').textContent =
+      ETIQUETA_ROL[cuenta.rol] || cuenta.rol;
+    document.getElementById('nav-avatar').textContent = iniciales_(cuenta.nombre);
+    document.getElementById('nav-chevron').innerHTML = Iconos.svg('abajo', { tam: 14 });
+    document.getElementById('ico-salir').innerHTML = Iconos.svg('salir', { tam: 15 });
+    document.getElementById('menu-correos').innerHTML =
+      '<div class="plataforma-menu__nombre">' + Componentes.escaparHtml(cuenta.nombre) + '</div>' +
+      (cuenta.emails || []).map(function (e) {
+        return '<div class="plataforma-menu__correo">' + Componentes.escaparHtml(e) + '</div>';
+      }).join('');
+  }
+
+  function iniciales_(nombre) {
+    var partes = String(nombre || '').trim().split(/\s+/);
+    var texto = (partes[0] || '').charAt(0) + (partes.length > 1 ? partes[partes.length - 1].charAt(0) : '');
+    return texto.toUpperCase();
+  }
+
+  function wireMenuUsuario_() {
+    var boton = document.getElementById('btn-menu-usuario');
+    var menu = document.getElementById('menu-usuario');
+    if (!boton || !menu) return;
+
+    boton.addEventListener('click', function (evento) {
+      evento.stopPropagation();
+      var abierto = !menu.classList.contains('sigso-oculto');
+      menu.classList.toggle('sigso-oculto', abierto);
+      boton.setAttribute('aria-expanded', String(!abierto));
+    });
+    // Cerrar al hacer clic fuera o con Escape: lo que espera cualquiera de
+    // un menu desplegable.
+    document.addEventListener('click', function () {
+      menu.classList.add('sigso-oculto');
+      boton.setAttribute('aria-expanded', 'false');
+    });
+    document.addEventListener('keydown', function (evento) {
+      if (evento.key === 'Escape') {
+        menu.classList.add('sigso-oculto');
+        boton.setAttribute('aria-expanded', 'false');
+      }
+    });
+    menu.addEventListener('click', function (evento) { evento.stopPropagation(); });
   }
 
   function modulosDeLaCuenta_() {
@@ -151,17 +213,22 @@
 
   function renderNav_() {
     var nav = document.getElementById('nav-modulos');
-    nav.innerHTML = '<button type="button" class="plataforma-nav__item" data-modulo="home">🏠 Inicio</button>' +
+    nav.innerHTML = '<button type="button" class="plataforma-nav__item" data-modulo="home">' +
+      Iconos.svg('inicio') + ' Inicio</button>' +
       modulosDeLaCuenta_().map(function (id) {
         var def = MODULOS_SHELL[id];
+        // v4.0: contador de pendientes -- lo rellena actualizarContadores_()
+        // cuando llegan los datos; asi no hay que entrar al modulo para
+        // descubrir que hay algo esperando.
+        var ranura = '<span class="plataforma-nav__badge sigso-oculto" data-badge="' + id + '"></span>';
         if (def.interno) {
           return '<button type="button" class="plataforma-nav__item" data-modulo="' + id + '">' +
-            def.icono + ' ' + def.nombre + '</button>';
+            Iconos.svg(def.icono) + ' ' + def.nombre + ranura + '</button>';
         }
         var url = urlExterna_(def);
         return url
           ? '<a class="plataforma-nav__item" href="' + Componentes.escaparHtml(url) + '" target="_blank" rel="noopener">' +
-            def.icono + ' ' + def.nombre + ' ↗</a>'
+            Iconos.svg(def.icono) + ' ' + def.nombre + '</a>'
           : '';
       }).join('');
 
@@ -178,9 +245,10 @@
 
     document.getElementById('cards-home').innerHTML = modulosDeLaCuenta_().map(function (id) {
       var def = MODULOS_SHELL[id];
+      var icono = '<span class="plataforma-card__icono">' + Iconos.svg(def.icono, { tam: 22 }) + '</span>';
       if (def.interno) {
         return '<button type="button" class="plataforma-card" data-modulo="' + id + '">' +
-          '<span class="plataforma-card__icono">' + def.icono + '</span>' +
+          icono +
           '<strong>' + def.nombre + '</strong>' +
           '<span class="sigso-ayuda">' + def.descripcion + '</span>' +
           '</button>';
@@ -188,8 +256,8 @@
       var url = urlExterna_(def);
       return url
         ? '<a class="plataforma-card" href="' + Componentes.escaparHtml(url) + '" target="_blank" rel="noopener">' +
-          '<span class="plataforma-card__icono">' + def.icono + '</span>' +
-          '<strong>' + def.nombre + ' ↗</strong>' +
+          icono +
+          '<strong>' + def.nombre + '</strong>' +
           '<span class="sigso-ayuda">' + def.descripcion + '</span>' +
           '</a>'
         : '';
@@ -208,20 +276,80 @@
         .then(function (respuesta) {
           if (!respuesta.ok) return;
           var resumen = respuesta.data.resumen;
-          var avisos = [];
+
+          // v4.0: el numero pendiente viaja al badge del nav -- antes habia
+          // que entrar al modulo para enterarse.
+          pintarBadge_('mis_solicitudes', resumen.pendientes_validar);
+
+          var pendientes = document.getElementById('pendientes-home');
           if (resumen.pendientes_validar > 0) {
-            avisos.push('⚠ Tienes <strong>' + resumen.pendientes_validar +
-              '</strong> ítem(s) terminado(s) esperando tu validación.');
+            pendientes.innerHTML =
+              '<div class="plataforma-aviso plataforma-aviso--accion">' +
+              Iconos.svg('alerta', { tam: 18 }) +
+              '<div><strong>' + resumen.pendientes_validar + ' ítem(s) esperan tu validación.</strong>' +
+              '<div class="sigso-ayuda">Revísalos y confirma si quedaron resueltos.</div></div>' +
+              '<button type="button" class="sigso-boton--secundario" data-ir="mis_solicitudes">Revisar</button>' +
+              '</div>';
+            var btn = pendientes.querySelector('[data-ir]');
+            if (btn) {
+              btn.addEventListener('click', function () { mostrarModulo_('mis_solicitudes'); });
+            }
+          } else if (resumen.abiertas > 0) {
+            pendientes.innerHTML =
+              '<div class="plataforma-aviso">' + Iconos.svg('info', { tam: 18 }) +
+              '<div>Tienes <strong>' + resumen.abiertas + '</strong> solicitud(es) en curso. Nada pendiente de tu parte.</div>' +
+              '</div>';
+          } else {
+            pendientes.innerHTML = '';
           }
-          if (resumen.abiertas > 0) {
-            avisos.push('Tienes ' + resumen.abiertas + ' solicitud(es) abierta(s).');
-          }
-          document.getElementById('pendientes-home').innerHTML = avisos.length
-            ? '<div class="sigso-card plataforma-pendientes">' + avisos.join('<br>') + '</div>'
-            : '';
         })
         .catch(function () {});
     }
+
+    // Bandeja: lo que esta fuera de plazo es lo que necesita accion hoy.
+    if (modulosDeLaCuenta_().indexOf('bandeja') !== -1 && backofficeDisponible_()) {
+      llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getDashboardData', {})
+        .then(function (respuesta) {
+          if (respuesta.ok) {
+            pintarBadge_('bandeja', respuesta.data.resumen.sla_vencido);
+          }
+        })
+        .catch(function () {});
+    }
+  }
+
+  // v4.0: mostrar/ocultar la contrasena. Con claves temporales del tipo
+  // "W8f5JG7Z8h" escribir a ciegas es la principal fuente de "no puedo
+  // entrar" -- y hoy no hay forma de comprobar lo tecleado.
+  function wireVerContrasena_() {
+    document.querySelectorAll('input[type="password"]').forEach(function (input) {
+      var envoltura = document.createElement('div');
+      envoltura.className = 'sigso-campo-clave';
+      input.parentNode.insertBefore(envoltura, input);
+      envoltura.appendChild(input);
+
+      var boton = document.createElement('button');
+      boton.type = 'button';
+      boton.className = 'sigso-ver-clave';
+      boton.setAttribute('aria-label', 'Mostrar contraseña');
+      boton.innerHTML = Iconos.svg('ojo', { tam: 16 });
+      envoltura.appendChild(boton);
+
+      boton.addEventListener('click', function () {
+        var oculta = input.type === 'password';
+        input.type = oculta ? 'text' : 'password';
+        boton.innerHTML = Iconos.svg(oculta ? 'ojoTachado' : 'ojo', { tam: 16 });
+        boton.setAttribute('aria-label', oculta ? 'Ocultar contraseña' : 'Mostrar contraseña');
+        input.focus();
+      });
+    });
+  }
+
+  function pintarBadge_(modulo, cantidad) {
+    var badge = document.querySelector('[data-badge="' + modulo + '"]');
+    if (!badge) return;
+    badge.textContent = cantidad > 99 ? '99+' : String(cantidad);
+    badge.classList.toggle('sigso-oculto', !cantidad);
   }
 
   // Modulos "de trabajo" (tablas, dashboard, detalle de 3 columnas): necesitan
