@@ -47,6 +47,74 @@ var Notificaciones = {
     return { encolado: true };
   },
 
+  // v3.1 (§2.5): sin este aviso la derivacion es invisible y el trabajo se
+  // pierde -- quien lo recibe no tiene forma de enterarse salvo mirando su
+  // bandeja por casualidad.
+  //
+  // `derivadas` es la lista que devuelve derivarUna_ (una entrada por
+  // solicitud). El aviso al nuevo responsable va AGRUPADO: derivar 40
+  // solicitudes de una vez no debe producir 40 correos. El registro en
+  // HISTORIAL_ASIGNACION, en cambio, ya quedo fila por fila.
+  notificarDerivacion: function (derivadas, responsableNuevo, motivo, usuario) {
+    if (!derivadas || !derivadas.length || !responsableNuevo) {
+      return { enviado: false, motivo: 'sin_destinatario' };
+    }
+
+    var ids = derivadas.map(function (d) { return d.solicitud_id; });
+    var esLote = ids.length > 1;
+    var listado = derivadas.map(function (d) {
+      var titulo = d.solicitud && d.solicitud.titulo ? ' — ' + d.solicitud.titulo : '';
+      var item = d.subsolicitud_id ? ' (ítem ' + d.subsolicitud_id + ')' : '';
+      return '- ' + d.solicitud_id + item + titulo;
+    }).join('\n');
+
+    var asunto = esLote
+      ? 'SIGSO — Se te derivaron ' + ids.length + ' solicitudes'
+      : 'SIGSO — Se te derivó la solicitud ' + ids[0];
+    var cuerpo =
+      'Estimado/a:\n\n' +
+      (esLote
+        ? 'Se han derivado ' + ids.length + ' solicitudes a tu bandeja:'
+        : 'Se ha derivado la siguiente solicitud a tu bandeja:') + '\n\n' +
+      listado + '\n\n' +
+      'DETALLE\n' +
+      '- Derivada por: ' + usuario + '\n' +
+      '- Motivo: ' + motivo + '\n\n' +
+      'Ya aparece' + (esLote ? 'n' : '') + ' en tu bandeja del Backoffice.' +
+      pieCorreoBackoffice_();
+
+    // El evento incluye los ids para que la deduplicacion no confunda dos
+    // derivaciones distintas hechas con poca diferencia de tiempo.
+    var evento = 'DERIVACION:' + ids.join(',');
+    var avisoNuevo = enviarCorreo_(ids[0], responsableNuevo, evento, asunto, cuerpo);
+
+    // Acuse al responsable anterior: solo si es una persona distinta y hay
+    // uno solo (en un lote mixto no hay "un" anterior a quien avisarle).
+    var anteriores = derivadas
+      .map(function (d) { return d.responsable_anterior; })
+      .filter(function (email, i, todos) {
+        return email && email !== responsableNuevo && todos.indexOf(email) === i;
+      });
+    var avisosAnterior = anteriores.map(function (email) {
+      return enviarCorreo_(
+        ids[0], email, 'DERIVACION_SALIDA:' + ids.join(','),
+        esLote
+          ? 'SIGSO — ' + ids.length + ' solicitudes salieron de tu bandeja'
+          : 'SIGSO — La solicitud ' + ids[0] + ' salió de tu bandeja',
+        'Estimado/a:\n\n' +
+        (esLote ? 'Las siguientes solicitudes fueron derivadas' : 'La siguiente solicitud fue derivada') +
+        ' a ' + responsableNuevo + ':\n\n' + listado + '\n\n' +
+        'DETALLE\n' +
+        '- Derivada por: ' + usuario + '\n' +
+        '- Motivo: ' + motivo + '\n\n' +
+        'Ya no aparece' + (esLote ? 'n' : '') + ' en tu bandeja.' +
+        pieCorreoBackoffice_()
+      );
+    });
+
+    return { nuevo: avisoNuevo, anteriores: avisosAnterior };
+  },
+
   notificarDesarrollador: function (solicitud) {
     var destinatarios = obtenerEmailsPorRol_(solicitud.empresa_id, ['DEV']);
     return destinatarios.map(function (email) {

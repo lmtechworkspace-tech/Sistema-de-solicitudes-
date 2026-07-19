@@ -48,6 +48,8 @@
         document.getElementById('tab-analisis').classList.toggle('sigso-oculto', tab !== 'analisis');
       });
     });
+
+    wireDerivarLote_();
   }
 
   function leerFiltros_() {
@@ -123,6 +125,89 @@
       }).join('');
     select.value = actual;
     filaSelector.classList.remove('sigso-oculto');
+    renderDerivarLote_(data);
+  }
+
+  // v3.1 (§2.6): el traspaso masivo de una bandeja a otra. Solo se ofrece
+  // con una bandeja concreta elegida -- "Todas" derivaria trabajo de gente
+  // distinta de una sola vez, que nunca es lo que se quiere.
+  function renderDerivarLote_(data) {
+    var bloque = document.getElementById('bloque-derivar-lote');
+    if (!bloque) return;
+
+    var bandeja = document.getElementById('filtro-bandeja').value;
+    var puedeDerivar = data.rol_actual === 'ADM' || data.rol_actual === 'ANA';
+    var abiertas = solicitudesAbiertasVisibles_();
+
+    if (!bandeja || !puedeDerivar || abiertas.length === 0) {
+      bloque.classList.add('sigso-oculto');
+      return;
+    }
+
+    var select = document.getElementById('lote-responsable');
+    var actual = select.value;
+    select.innerHTML = '<option value="">Elige responsable…</option>' +
+      (data.responsables || [])
+        .filter(function (r) { return r.email !== bandeja; })
+        .map(function (r) {
+          return '<option value="' + r.email + '">' + Componentes.escaparHtml(r.nombre) + '</option>';
+        }).join('');
+    select.value = actual;
+
+    document.getElementById('resumen-derivar-lote').textContent =
+      'Hay ' + abiertas.length + ' solicitud' + (abiertas.length === 1 ? '' : 'es') +
+      ' abierta' + (abiertas.length === 1 ? '' : 's') + ' en esta bandeja.';
+    bloque.classList.remove('sigso-oculto');
+  }
+
+  // Solo las abiertas: derivar una solicitud ya cerrada no le sirve a nadie
+  // y ensuciaria el historial del nuevo responsable.
+  function solicitudesAbiertasVisibles_() {
+    return recientesActuales.filter(function (s) {
+      return ESTADOS_CERRADOS_CLIENTE.indexOf(s.estado_derivado) === -1;
+    });
+  }
+
+  function wireDerivarLote_() {
+    var boton = document.getElementById('btn-derivar-lote');
+    if (!boton) return;
+    boton.addEventListener('click', function () {
+      var responsable = document.getElementById('lote-responsable').value;
+      var motivo = document.getElementById('lote-motivo').value;
+      var salida = document.getElementById('resultado-derivar-lote');
+      var abiertas = solicitudesAbiertasVisibles_();
+
+      if (!responsable) { salida.textContent = 'Elige a quién derivar.'; return; }
+      if (motivo.trim().length < 10) { salida.textContent = 'El motivo debe tener al menos 10 caracteres.'; return; }
+      if (abiertas.length === 0) { salida.textContent = 'No hay solicitudes abiertas que derivar.'; return; }
+
+      // Confirmacion con el conteo explicito: es la accion mas masiva del
+      // Backoffice y no hay "deshacer".
+      var texto = document.getElementById('lote-responsable').selectedOptions[0].textContent;
+      if (!window.confirm('Se derivarán ' + abiertas.length + ' solicitudes a ' + texto + '. ¿Continuar?')) {
+        return;
+      }
+
+      boton.disabled = true;
+      salida.textContent = 'Derivando…';
+      llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'derivarSolicitud', {
+        solicitud_ids: abiertas.map(function (s) { return s.solicitud_id; }),
+        responsable_nuevo: responsable,
+        motivo: motivo
+      }).then(function (respuesta) {
+        boton.disabled = false;
+        if (!respuesta.ok) {
+          salida.textContent = respuesta.message || 'No se pudo derivar.';
+          return;
+        }
+        salida.textContent = 'Listo: ' + respuesta.data.total + ' derivadas.';
+        document.getElementById('lote-motivo').value = '';
+        cargarDashboard_();
+      }).catch(function () {
+        boton.disabled = false;
+        salida.textContent = 'No se pudo conectar con el servidor. Intenta nuevamente.';
+      });
+    });
   }
 
   var recientesActuales = [];

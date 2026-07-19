@@ -25,7 +25,7 @@
 
   function bloquearAcciones_(botonActivo) {
     accionEnCurso = true;
-    document.querySelectorAll('.sigso-accion-estado, .sigso-aplicar-fecha, .sigso-aplicar-prioridad').forEach(function (b) {
+    document.querySelectorAll('.sigso-accion-estado, .sigso-aplicar-fecha, .sigso-aplicar-prioridad, .sigso-aplicar-derivacion').forEach(function (b) {
       b.disabled = true;
     });
     if (botonActivo) {
@@ -36,7 +36,7 @@
 
   function desbloquearAcciones_() {
     accionEnCurso = false;
-    document.querySelectorAll('.sigso-accion-estado, .sigso-aplicar-fecha, .sigso-aplicar-prioridad').forEach(function (b) {
+    document.querySelectorAll('.sigso-accion-estado, .sigso-aplicar-fecha, .sigso-aplicar-prioridad, .sigso-aplicar-derivacion').forEach(function (b) {
       b.disabled = false;
       var original = b.getAttribute('data-texto-original');
       if (original) {
@@ -390,6 +390,40 @@
       '<input type="text" class="sigso-justificacion-prioridad" data-subsolicitud="' + sub.subsolicitud_id + '" placeholder="Justificacion (min. 20 caracteres) para cambiar prioridad">' +
       '<button type="button" class="sigso-boton--secundario sigso-aplicar-prioridad" data-subsolicitud="' + sub.subsolicitud_id + '">Cambiar prioridad</button>' +
       '<span class="sigso-resultado-accion" data-subsolicitud="' + sub.subsolicitud_id + '-prioridad"></span>' +
+      '</div>' +
+      renderBloqueDerivar_(sub);
+  }
+
+  // v3.1 (§2.6): pasar el item a otro responsable. Va al final del panel
+  // porque no es una accion del dia a dia (a diferencia de fecha/estado),
+  // pero tiene que estar a mano y no escondida en Administracion.
+  function renderBloqueDerivar_(sub) {
+    var responsables = (detalleActual && detalleActual.responsables) || [];
+    if (!responsables.length) {
+      return '';
+    }
+    var actual = sub.desarrollador_asignado || '';
+    var opciones = responsables
+      // Derivarle a quien ya lo tiene no hace nada; no se ofrece.
+      .filter(function (r) { return r.email !== actual; })
+      .map(function (r) {
+        return '<option value="' + Componentes.escaparHtml(r.email) + '">' +
+          Componentes.escaparHtml(r.nombre) + '</option>';
+      }).join('');
+    if (!opciones) {
+      return '';
+    }
+
+    return '<h4 class="sigso-titulo-accion">Derivar</h4>' +
+      '<div class="sigso-acciones-item">' +
+      '<p class="sigso-ayuda">Responsable actual: <strong>' +
+      Componentes.escaparHtml(actual || 'sin asignar') + '</strong></p>' +
+      '<select class="sigso-nuevo-responsable" data-subsolicitud="' + sub.subsolicitud_id + '">' +
+      '<option value="">Derivar a…</option>' + opciones +
+      '</select>' +
+      '<input type="text" class="sigso-motivo-derivacion" data-subsolicitud="' + sub.subsolicitud_id + '" placeholder="Motivo (min. 10 caracteres)">' +
+      '<button type="button" class="sigso-boton--secundario sigso-aplicar-derivacion" data-subsolicitud="' + sub.subsolicitud_id + '">Derivar ítem</button>' +
+      '<span class="sigso-resultado-accion" data-subsolicitud="' + sub.subsolicitud_id + '-derivacion"></span>' +
       '</div>';
   }
 
@@ -442,12 +476,23 @@
         texto: 'Fecha comprometida: ' + String(h.fecha_nueva).replace('T', ' '),
         comentario: h.motivo
       };
+    })).concat((detalle.historial_asignacion || []).map(function (h) {
+      // v3.1 (§2.3): las derivaciones van al mismo timeline que estados,
+      // comentarios y compromisos -- "quien tiene esto ahora" es parte de la
+      // historia de la solicitud, no un dato aparte.
+      return {
+        tipo: 'asignacion', timestamp: h.timestamp, usuario: h.usuario,
+        texto: 'Derivada a ' + h.responsable_nuevo +
+          (h.responsable_anterior ? ' (antes: ' + h.responsable_anterior + ')' : ''),
+        comentario: h.motivo
+      };
     })).sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
 
     // UI-2 (§5): icono por tipo de evento para escanear el timeline sin leer.
     function iconoEvento_(e) {
       if (e.tipo === 'estado') return '🔄';
       if (e.tipo === 'compromiso') return '📅';
+      if (e.tipo === 'asignacion') return '↪️';
       return e.esInterno ? '🔒' : '💬';
     }
 
@@ -536,6 +581,28 @@
         enviarCambioPrioridad_(solicitudId, subId, prioridad, justificacion);
       });
     });
+
+    document.querySelectorAll('.sigso-aplicar-derivacion').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        if (accionEnCurso) return;
+        var subId = boton.getAttribute('data-subsolicitud');
+        var responsable = document.querySelector('.sigso-nuevo-responsable[data-subsolicitud="' + subId + '"]').value;
+        var motivo = document.querySelector('.sigso-motivo-derivacion[data-subsolicitud="' + subId + '"]').value;
+        var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subId + '-derivacion"]');
+        // Chequeos locales para ahorrar el viaje redondo; el backend
+        // re-valida ambos igual.
+        if (!responsable) {
+          if (span) span.textContent = 'Elige a quién derivar el ítem.';
+          return;
+        }
+        if (motivo.trim().length < 10) {
+          if (span) span.textContent = 'El motivo debe tener al menos 10 caracteres.';
+          return;
+        }
+        bloquearAcciones_(boton);
+        enviarDerivacion_(solicitudId, subId, responsable, motivo);
+      });
+    });
   }
 
   function enviarComentario_(solicitudId) {
@@ -582,6 +649,27 @@
     }).catch(function () {
       desbloquearAcciones_();
       var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subsolicitudId + '-fecha"]');
+      if (span) span.textContent = 'No se pudo conectar con el servidor. Intenta nuevamente.';
+    });
+  }
+
+  // v3.1 (§2): derivar el item a otro responsable. Tras derivarlo puede
+  // desaparecer de la bandeja propia (si quien deriva es DEV), pero la vista
+  // de detalle se abre por id, asi que la recarga sigue siendo valida.
+  function enviarDerivacion_(solicitudId, subsolicitudId, responsableNuevo, motivo) {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'derivarSolicitud', {
+      solicitud_id: solicitudId, subsolicitud_id: subsolicitudId,
+      responsable_nuevo: responsableNuevo, motivo: motivo
+    }).then(function (respuesta) {
+      if (respuesta.ok) {
+        return window.SigsoDetalle.cargar(solicitudId).then(function () { accionEnCurso = false; });
+      }
+      desbloquearAcciones_();
+      var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subsolicitudId + '-derivacion"]');
+      if (span) span.textContent = respuesta.message || 'No se pudo derivar el ítem.';
+    }).catch(function () {
+      desbloquearAcciones_();
+      var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subsolicitudId + '-derivacion"]');
       if (span) span.textContent = 'No se pudo conectar con el servidor. Intenta nuevamente.';
     });
   }

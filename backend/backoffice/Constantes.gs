@@ -39,7 +39,12 @@ var SHEETS = {
   CAT_AREAS: 'CAT_AREAS',
   // Cartera de clientes de GDE/HomePymes. Ver la nota identica en
   // backend/intake/Constantes.gs.
-  CAT_CLIENTES: 'CAT_CLIENTES'
+  CAT_CLIENTES: 'CAT_CLIENTES',
+  // v3.1 (documentacion/SIGSO-v3.1-atencion-directa-y-derivacion.md §2.3):
+  // rastro de las derivaciones entre responsables. Mismo patron que
+  // HISTORIAL_PRIORIDAD/HISTORIAL_COMPROMISO -- reasignar sin registro
+  // hacia imposible saber quien movio el trabajo, cuando y por que.
+  HISTORIAL_ASIGNACION: 'HISTORIAL_ASIGNACION'
 };
 
 var COLUMNAS = {
@@ -153,6 +158,12 @@ var COLUMNAS = {
     'cliente_id', 'razon_social', 'rut', 'codigo_cliente', 'contacto',
     'correo', 'telefono', 'representante_legal', 'direccion',
     'estado', 'bloqueo', 'activo'
+  ],
+  // v3.1 (§2.3): ver la nota identica en backend/intake/Constantes.gs.
+  HISTORIAL_ASIGNACION: [
+    'historial_id', 'subsolicitud_id', 'solicitud_id',
+    'responsable_anterior', 'responsable_nuevo', 'motivo',
+    'usuario', 'timestamp'
   ]
 };
 

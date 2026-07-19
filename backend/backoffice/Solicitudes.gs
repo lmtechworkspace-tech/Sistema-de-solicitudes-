@@ -277,6 +277,75 @@ var Solicitudes = {
    * autenticado puede ver cualquier solicitud. Se ajusta cuando exista esa
    * asignacion.
    */
+  // v3.1 (§2): derivar el trabajo de un responsable a otro. La mecanica de
+  // escritura ya existia (asignarResponsables_, alcanzable desde
+  // actualizarPrioridad), pero sin UI, sin registro y sin aviso: nadie sabia
+  // quien movio que, ni el nuevo responsable se enteraba. Esta accion agrega
+  // esas tres piezas y es la que usa el frontend.
+  //
+  // Acepta tres formas:
+  //   { solicitud_id, subsolicitud_id, responsable_nuevo, motivo }  -> un item
+  //   { solicitud_id, responsable_nuevo, motivo }                   -> todos los items
+  //   { solicitud_ids: [...], responsable_nuevo, motivo }           -> lote
+  derivarSolicitud: function (data, contexto) {
+    // P6: Gerencia es de solo lectura.
+    if (contexto.rol === 'GERENCIA') {
+      return { _forbidden: true, message: 'Gerencia tiene acceso de solo lectura.' };
+    }
+    if (!data.responsable_nuevo) {
+      return errorValidacion_('responsable_nuevo', 'Indica a quien se deriva.');
+    }
+    // Mismo criterio que RN-007 (justificacion de prioridad): una derivacion
+    // sin motivo no sirve como registro. Se pide menos texto que en prioridad
+    // (10 vs 20) porque aqui el motivo suele ser corto y concreto
+    // ("corresponde a Leo", "me voy de vacaciones").
+    var motivo = String(data.motivo || '').trim();
+    if (motivo.length < 10) {
+      return errorValidacion_('motivo', 'El motivo debe tener al menos 10 caracteres.');
+    }
+
+    var ids = data.solicitud_ids !== undefined
+      ? data.solicitud_ids
+      : (data.solicitud_id ? [data.solicitud_id] : []);
+    if (!ids.length) {
+      return errorValidacion_('solicitud_id', 'Falta indicar la solicitud.');
+    }
+    // El lote deriva solicitudes completas; derivar "un item de cada una" no
+    // tiene sentido operativo y complicaria la validacion de permisos.
+    if (data.solicitud_ids !== undefined && data.subsolicitud_id !== undefined) {
+      return errorValidacion_('subsolicitud_id', 'La derivacion en lote es por solicitud completa, no por item.');
+    }
+
+    // Dos pasadas a proposito. Si se validara mientras se escribe, un id malo
+    // a mitad de un lote de 40 dejaria las 20 primeras ya movidas y el
+    // llamador recibiendo un error -- media bandeja migrada y nadie sabe cual
+    // mitad. Aqui no se escribe nada hasta que TODAS pasan la validacion.
+    var planes = [];
+    for (var i = 0; i < ids.length; i++) {
+      var plan = planificarDerivacion_(ids[i], data.subsolicitud_id, contexto);
+      if (plan._validationError || plan._forbidden) {
+        return plan;
+      }
+      planes.push(plan);
+    }
+
+    var timestamp = new Date().toISOString();
+    var derivadas = planes.map(function (plan) {
+      return aplicarDerivacion_(plan, data.responsable_nuevo, motivo, contexto, timestamp);
+    });
+
+    // El aviso va agrupado: derivar 40 solicitudes no debe producir 40
+    // correos. El registro, en cambio, ya quedo fila por fila.
+    Notificaciones.notificarDerivacion(derivadas, data.responsable_nuevo, motivo, contexto.email);
+
+    return {
+      responsable_nuevo: data.responsable_nuevo,
+      motivo: motivo,
+      derivadas: derivadas.map(function (d) { return d.solicitud_id; }),
+      total: derivadas.length
+    };
+  },
+
   getDetalle: function (solicitudId, contexto) {
     if (!solicitudId) {
       return errorValidacion_('solicitud_id', 'Falta indicar el numero de solicitud.');
@@ -327,6 +396,17 @@ var Solicitudes = {
     var historialCompromiso = leerFilas_(SHEETS.HISTORIAL_COMPROMISO)
       .filter(function (h) { return h.solicitud_id === solicitudId; })
       .sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
+    // v3.1 (§2.3): quien movio el trabajo, cuando y por que. Se lee con
+    // tolerancia porque la hoja es nueva: una instalacion que todavia no la
+    // tiene debe seguir abriendo el detalle sin errores.
+    var historialAsignacion = [];
+    try {
+      historialAsignacion = leerFilas_(SHEETS.HISTORIAL_ASIGNACION)
+        .filter(function (h) { return h.solicitud_id === solicitudId; })
+        .sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
+    } catch (err) {
+      historialAsignacion = [];
+    }
     var comentarios = leerFilas_(SHEETS.COMENTARIOS)
       .filter(function (c) { return c.solicitud_id === solicitudId; })
       .sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
@@ -342,9 +422,13 @@ var Solicitudes = {
       historial_estados: historialEstados,
       historial_prioridad: historialPrioridad,
       historial_compromiso: historialCompromiso,
+      historial_asignacion: historialAsignacion,
       comentarios: comentarios,
       archivos: archivos,
       rol_actual: rolActual,
+      // v3.1 (§2.6): destinatarios posibles del selector "Derivar". Se reusa
+      // la misma lista de DEV/ANA activos que ya arma el Dashboard.
+      responsables: rolActual === 'GERENCIA' ? [] : obtenerResponsablesActivos_(),
       transiciones_por_subsolicitud: transicionesPorSubsolicitud
     };
   }
@@ -473,6 +557,97 @@ function obtenerSlaHoras_(prioridad) {
     }
   }
   return '';
+}
+
+// v3.1 (§2), pasada 1 de 2: resuelve y valida UNA derivacion sin escribir
+// nada. Devuelve el "plan" (que solicitud, que items, quien la tenia) o un
+// objeto de error/forbidden que el llamador propaga tal cual.
+function planificarDerivacion_(solicitudId, subsolicitudId, contexto) {
+  var solicitud = buscarSolicitudPorId_(solicitudId);
+  if (!solicitud) {
+    return errorValidacion_('solicitud_id', 'No existe una solicitud con ese numero: ' + solicitudId);
+  }
+
+  var esItemPuntual = subsolicitudId !== undefined && subsolicitudId !== '';
+  var items = obtenerSubsolicitudesDeSolicitud_(solicitudId);
+  if (esItemPuntual) {
+    items = items.filter(function (s) { return s.subsolicitud_id === subsolicitudId; });
+    if (!items.length) {
+      return errorValidacion_('subsolicitud_id', 'Subsolicitud no encontrada: ' + subsolicitudId);
+    }
+  }
+
+  // §2.4: un Desarrollador solo puede traspasar SU trabajo. Analista y Admin
+  // pueden mover cualquiera (el Analista es el dueno del flujo).
+  if (contexto.rol === 'DEV') {
+    var ajeno = items.filter(function (s) {
+      return responsableDeItem_(s, solicitud) !== contexto.email;
+    });
+    if (ajeno.length) {
+      return {
+        _forbidden: true,
+        message: 'Solo puedes derivar solicitudes asignadas a ti (' + solicitudId + ').'
+      };
+    }
+  }
+
+  return {
+    solicitud: solicitud,
+    solicitudId: solicitudId,
+    subsolicitudId: esItemPuntual ? subsolicitudId : '',
+    items: items,
+    anterior: esItemPuntual
+      ? responsableDeItem_(items[0], solicitud)
+      : (solicitud.desarrollador_asignado || '')
+  };
+}
+
+// Pasada 2 de 2: escribe. Solo se llama con planes ya validados.
+function aplicarDerivacion_(plan, responsableNuevo, motivo, contexto, timestamp) {
+  var solicitudId = plan.solicitudId;
+  var subsolicitudId = plan.subsolicitudId;
+  var items = plan.items;
+  var anterior = plan.anterior;
+
+  items.forEach(function (item) {
+    actualizarFilaPorId_(SHEETS.SUBSOLICITUDES, 'subsolicitud_id', item.subsolicitud_id, {
+      desarrollador_asignado: responsableNuevo
+    });
+  });
+  // Al derivar la solicitud completa se mueve tambien el responsable "por
+  // defecto" de la cabecera; al derivar un item suelto NO, porque el resto
+  // de los items siguen siendo de quien estaban.
+  if (!subsolicitudId) {
+    actualizarFilaPorId_(SHEETS.SOLICITUDES, 'solicitud_id', solicitudId, {
+      desarrollador_asignado: responsableNuevo
+    });
+  }
+
+  agregarFila_(SHEETS.HISTORIAL_ASIGNACION, {
+    historial_id: Utilities.getUuid(),
+    solicitud_id: solicitudId,
+    subsolicitud_id: subsolicitudId || '',
+    responsable_anterior: anterior,
+    responsable_nuevo: responsableNuevo,
+    motivo: motivo,
+    usuario: contexto.email,
+    timestamp: timestamp
+  });
+
+  return {
+    solicitud_id: solicitudId,
+    subsolicitud_id: subsolicitudId || '',
+    responsable_anterior: anterior,
+    responsable_nuevo: responsableNuevo,
+    solicitud: plan.solicitud,
+    items: items.map(function (s) { return s.subsolicitud_id; })
+  };
+}
+
+// Quien trabaja un item: su propio asignado, o el de la cabecera si el item
+// no tiene uno propio (mismo criterio que el auto-scope del Dashboard).
+function responsableDeItem_(item, solicitud) {
+  return item.desarrollador_asignado || solicitud.desarrollador_asignado || '';
 }
 
 function asignarResponsables_(data, contexto) {

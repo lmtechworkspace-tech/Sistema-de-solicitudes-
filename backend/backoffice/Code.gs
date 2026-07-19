@@ -32,6 +32,7 @@ var BACKOFFICE_ACTIONS = {
   actualizarEstado: handleActualizarEstado_,
   actualizarPrioridad: handleActualizarPrioridad_,
   comprometerFecha: handleComprometerFecha_,
+  derivarSolicitud: handleDerivarSolicitud_,
   agregarComentario: handleAgregarComentario_,
   guardarCatalogo: handleGuardarCatalogo_,
   listarCatalogo: handleListarCatalogo_,
@@ -178,6 +179,13 @@ function handleActualizarPrioridad_(data, contexto) {
 function handleComprometerFecha_(data, contexto) {
   var resultado = Solicitudes.comprometerFecha(data, contexto);
   return responderResultado_(resultado);
+}
+
+// v3.1 (§2.2): la reasignacion era alcanzable de forma lateral desde
+// actualizarPrioridad; aqui pasa a ser una accion propia, con registro y
+// aviso. Ese camino viejo se mantiene por compatibilidad.
+function handleDerivarSolicitud_(data, contexto) {
+  return responderResultado_(Solicitudes.derivarSolicitud(data, contexto));
 }
 
 function handleGetDashboardData_(data, contexto) {

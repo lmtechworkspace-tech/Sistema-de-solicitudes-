@@ -125,6 +125,13 @@ var ESQUEMA_HOJAS = {
     'cliente_id', 'razon_social', 'rut', 'codigo_cliente', 'contacto',
     'correo', 'telefono', 'representante_legal', 'direccion',
     'estado', 'bloqueo', 'activo'
+  ],
+  // v3.1 (§2.3): ver la nota identica en backend/intake/Constantes.gs. Se
+  // crea vacia; la llena el Backoffice cada vez que alguien deriva.
+  HISTORIAL_ASIGNACION: [
+    'historial_id', 'subsolicitud_id', 'solicitud_id',
+    'responsable_anterior', 'responsable_nuevo', 'motivo',
+    'usuario', 'timestamp'
   ]
 };
 

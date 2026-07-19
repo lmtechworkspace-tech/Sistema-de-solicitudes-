@@ -29,6 +29,23 @@
         <select id="filtro-bandeja"><option value="">Todas (sin acotar)</option></select>
       </div>
 
+      <!-- v3.1 (§2.6): derivacion en lote. Solo aparece con una bandeja
+           concreta elegida y para roles que pueden derivar: mover la carga
+           de una persona a otra de a una es inviable cuando son decenas. -->
+      <div class="sigso-panel-lote sigso-oculto" id="bloque-derivar-lote">
+        <p id="resumen-derivar-lote"></p>
+        <div class="sigso-campo">
+          <label for="lote-responsable">Derivar todas a</label>
+          <select id="lote-responsable"><option value="">Elige responsable…</option></select>
+        </div>
+        <div class="sigso-campo">
+          <label for="lote-motivo">Motivo</label>
+          <input type="text" id="lote-motivo" placeholder="M&iacute;nimo 10 caracteres" />
+        </div>
+        <button type="button" class="sigso-boton--secundario" id="btn-derivar-lote">Derivar en lote</button>
+        <span id="resultado-derivar-lote"></span>
+      </div>
+
       <div class="sigso-filtros">
         <div class="sigso-campo">
           <label for="filtro-empresa">Empresa</label>

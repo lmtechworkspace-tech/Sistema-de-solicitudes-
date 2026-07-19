@@ -455,3 +455,30 @@
     z-index: 5;
   }
 }
+
+/* v3.1 (§2.6): panel de derivacion en lote del Dashboard. Se destaca con
+   borde y fondo tenue porque es una accion masiva e irreversible: no debe
+   confundirse con un filtro mas de los que tiene al lado. */
+.sigso-panel-lote {
+  border: 1px solid var(--sigso-borde, #d9d2c7);
+  border-left: 3px solid var(--sigso-naranja, #e8871e);
+  border-radius: 6px;
+  padding: 0.85rem 1rem;
+  margin: 0.75rem 0;
+  background: var(--sigso-fondo-suave, #faf7f2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.sigso-panel-lote > p {
+  flex-basis: 100%;
+  margin: 0;
+  font-weight: 600;
+}
+
+.sigso-panel-lote .sigso-campo {
+  margin: 0;
+  min-width: 12rem;
+}

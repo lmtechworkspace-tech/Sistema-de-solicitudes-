@@ -469,6 +469,26 @@ genera fila aquí). Ver
 `documentacion/SIGSO-v2.1-plazos-y-control.md` §5 para el diseño completo
 ("dos promesas, dos relojes") y §10 para el plan de fases.
 
+## HISTORIAL_ASIGNACION (nueva, v3.1)
+
+| Columna | Tipo | Nota |
+|---|---|---|
+| `historial_id` | string | `Utilities.getUuid()` |
+| `solicitud_id` | string | FK |
+| `subsolicitud_id` | string | FK del ítem derivado; **vacío** si se derivó la solicitud completa |
+| `responsable_anterior` | string | Email de quien tenía el trabajo (`''` si no había nadie asignado) |
+| `responsable_nuevo` | string | Email de quien lo recibe |
+| `motivo` | string | Obligatorio, mínimo 10 caracteres |
+| `usuario` | string | Email de quien derivó |
+| `timestamp` | ISO datetime | — |
+
+Mismo patrón que `HISTORIAL_PRIORIDAD` y `HISTORIAL_COMPROMISO`. La escribe
+solo el Backoffice (`Solicitudes.derivarSolicitud`); se declara en las tres
+copias del esquema para que `schema-consistency.test.js` siga verde. Una
+derivación en lote escribe **una fila por solicitud** — agrupar el aviso no
+es motivo para agrupar el registro. Ver
+`documentacion/SIGSO-v3.1-atencion-directa-y-derivacion.md` §2.
+
 ## ARCHIVOS (nueva, Fase 4)
 
 | Columna | Tipo | Nota |
