@@ -48,6 +48,30 @@ var BACKOFFICE_ACTIONS = {
 // mantiene el health-check JSON de siempre (usado por monitoreo/tests).
 var PAGINAS_HTML = { app: 'App', admin: 'Admin' };
 
+// v3.3 P3 (SIGSO-v3.3-propuesta-plataforma-modular.md §2.3): que modulo de
+// la plataforma exige cada accion. Solo aplica a contextos de PORTAL (token):
+// el camino Google (Session) mantiene su autorizacion por rol de siempre.
+// Esta es la mitad backend de "el shell esconde botones": esconder no
+// protege nada -- aqui se rechaza aunque manipulen el navegador.
+var MODULO_POR_ACCION = {
+  getDashboardData: 'bandeja',
+  getSolicitudDetalle: 'bandeja',
+  actualizarEstado: 'bandeja',
+  actualizarPrioridad: 'bandeja',
+  comprometerFecha: 'bandeja',
+  derivarSolicitud: 'bandeja',
+  agregarComentario: 'bandeja',
+  getPanelGerencia: 'gerencia',
+  guardarCatalogo: 'administracion',
+  listarCatalogo: 'administracion',
+  gestionarUsuario: 'administracion',
+  listarUsuarios: 'administracion',
+  listarLogs: 'administracion',
+  listarCuentasPortal: 'administracion',
+  gestionarCuentaPortal: 'administracion'
+  // ping: sin modulo -- cualquier sesion valida.
+};
+
 function doGet(e) {
   var pagina = e && e.parameter && e.parameter.page;
   var archivo = PAGINAS_HTML[pagina];
@@ -61,11 +85,9 @@ function doGet(e) {
 
 function doPost(e) {
   try {
-    var resuelto = resolverIdentidadYRol_();
-    if (resuelto.error) {
-      return jsonResponse_(resuelto.error);
-    }
-
+    // v3.3 P3: el body se parsea ANTES de resolver identidad, porque el
+    // token de la plataforma viaja en el body (portal_token). El contrato de
+    // transporte no cambia (POST text/plain, sin headers custom, §4.1).
     var body = parseRequestBody_(e);
     var handler = BACKOFFICE_ACTIONS[body.action];
     if (!handler) {
@@ -75,6 +97,11 @@ function doPost(e) {
         message: 'Accion desconocida: ' + body.action,
         fields: ['action']
       });
+    }
+
+    var resuelto = resolverIdentidadYRol_(body.data && body.data.portal_token, body.action);
+    if (resuelto.error) {
+      return jsonResponse_(resuelto.error);
     }
     return handler(body.data || {}, resuelto.contexto);
   } catch (err) {
@@ -117,7 +144,16 @@ function ejecutarAccionBackoffice(action, data) {
 // Compartido por doPost y ejecutarAccionBackoffice: resuelve email+rol o
 // devuelve el objeto de error listo para responder (evita repetir la
 // misma validacion en los dos puntos de entrada).
-function resolverIdentidadYRol_() {
+//
+// v3.3 P3: dos caminos de identidad. Si viene un token de la plataforma, la
+// identidad sale de CUENTAS_PORTAL/SESIONES_PORTAL y SOLO de ahi -- un token
+// invalido NUNCA cae al camino de Session (si lo hiciera, en la
+// implementacion "ejecutar como yo / cualquiera" un token vencido podria
+// heredar la identidad equivocada). Sin token, el camino Google de siempre.
+function resolverIdentidadYRol_(portalToken, action) {
+  if (portalToken) {
+    return resolverContextoPortal_(portalToken, action);
+  }
   var email = getIdentidadActiva_();
   if (!email) {
     return { error: { ok: false, error: 'forbidden', message: 'No fue posible resolver la identidad del dominio.' } };
@@ -137,6 +173,65 @@ function resolverIdentidadYRol_() {
   actualizarFilaPorId_(SHEETS.USUARIOS, 'email', email, { ultimo_acceso: new Date().toISOString() });
   return { contexto: { email: email, rol: rol } };
 }
+
+// v3.3 P3: identidad desde una sesion de la plataforma. La hoja es la
+// verdad: token vigente + cuenta activa + modulo requerido por la accion.
+function resolverContextoPortal_(token, action) {
+  var forbidden = {
+    error: { ok: false, error: 'forbidden', message: 'Sesion invalida o expirada. Ingresa de nuevo a la plataforma.' }
+  };
+
+  var sesion = leerFilasSeguro_(SHEETS.SESIONES_PORTAL).filter(function (s) {
+    return s.token === token;
+  })[0];
+  if (!sesion || new Date(sesion.expira).getTime() <= Date.now()) {
+    return forbidden;
+  }
+
+  var cuenta = leerFilasSeguro_(SHEETS.CUENTAS_PORTAL).filter(function (c) {
+    var activa = c.activo === true || c.activo === 'TRUE' || c.activo === 1;
+    return c.cuenta_id === sesion.cuenta_id && activa;
+  })[0];
+  if (!cuenta) {
+    return forbidden;
+  }
+
+  var modulos = parsearListaPortal_(cuenta.modulos);
+  var requerido = MODULO_POR_ACCION[action];
+  if (requerido && modulos.indexOf(requerido) === -1) {
+    return {
+      error: { ok: false, error: 'forbidden', message: 'Tu cuenta no tiene acceso a este modulo (' + requerido + ').' }
+    };
+  }
+
+  var emails = parsearListaPortal_(cuenta.emails);
+  // El PRIMER correo de la cuenta es el "correo de trabajo": es el que se
+  // compara con desarrollador_asignado (bandeja propia del DEV) y el que
+  // queda en historiales como autor. Documentado en la seccion de cuentas
+  // del admin.
+  //
+  // Normalizacion de rol: los checks del Backoffice conocen ANA/DEV/ADM/
+  // GERENCIA. Una cuenta SOLICITANTE a la que el Admin le dio "bandeja" se
+  // trata como DEV (el rol mas restringido con escritura: solo su propio
+  // trabajo) -- sin esto pasaria los checks pensados para ANA/ADM.
+  var rol = cuenta.rol === 'SOLICITANTE' ? 'DEV' : cuenta.rol;
+
+  actualizarFilaPorId_(SHEETS.CUENTAS_PORTAL, 'cuenta_id', cuenta.cuenta_id, {
+    ultimo_acceso: new Date().toISOString()
+  });
+
+  return { contexto: { email: emails[0] || '', rol: rol, modulos: modulos, via_portal: true } };
+}
+
+function leerFilasSeguro_(hoja) {
+  try {
+    return leerFilas_(hoja);
+  } catch (err) {
+    return []; // instalacion sin las hojas del portal
+  }
+}
+
+// parsearListaPortal_ vive en CuentasPortal.gs (mismo scope del proyecto).
 
 function getIdentidadActiva_() {
   var email = Session.getActiveUser().getEmail();

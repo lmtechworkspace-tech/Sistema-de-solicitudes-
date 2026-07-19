@@ -20,6 +20,10 @@ var ITERACIONES_HASH_PORTAL = 1000;
 var MODULOS_POR_ROL = {
   SOLICITANTE: ['nueva_solicitud', 'mis_solicitudes'],
   DEV: ['nueva_solicitud', 'mis_solicitudes', 'bandeja'],
+  // ANA = Gestor/Analista (mismo renombre de etiquetas de S12.1): misma
+  // plantilla que DEV; la diferencia esta en los permisos por ROL dentro de
+  // la bandeja (cambiar prioridad, derivar cualquiera), no en los modulos.
+  ANA: ['nueva_solicitud', 'mis_solicitudes', 'bandeja'],
   GERENCIA: ['nueva_solicitud', 'mis_solicitudes', 'gerencia'],
   ADM: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'administracion']
 };

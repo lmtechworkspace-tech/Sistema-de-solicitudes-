@@ -20,8 +20,10 @@
   var MODULOS_SHELL = {
     nueva_solicitud: { icono: '📝', nombre: 'Nueva solicitud', descripcion: 'Ingresa un pedido al equipo', interno: true },
     mis_solicitudes: { icono: '📋', nombre: 'Mis solicitudes', descripcion: 'El estado de todo lo tuyo, de todos tus correos', interno: true },
-    bandeja: { icono: '🗂', nombre: 'Bandeja de trabajo', descripcion: 'Backoffice del equipo (abre con tu cuenta Google)', urlConfig: 'BACKOFFICE_APP_URL' },
-    gerencia: { icono: '📊', nombre: 'Panel de gerencia', descripcion: 'KPIs y control (abre con tu cuenta Google)', urlConfig: 'BACKOFFICE_APP_URL' },
+    // P3: bandeja y gerencia viven DENTRO del shell (dashboard.js/detalle.js/
+    // gerencia.js orquestados aqui, con el token de la sesion via api.js).
+    bandeja: { icono: '🗂', nombre: 'Bandeja de trabajo', descripcion: 'Solicitudes del equipo: estados, fechas, derivaciones', interno: true },
+    gerencia: { icono: '📊', nombre: 'Panel de gerencia', descripcion: 'KPIs, semáforo de cumplimiento y seguimiento', interno: true },
     administracion: { icono: '⚙️', nombre: 'Administración', descripcion: 'Catálogos, usuarios y cuentas (abre con tu cuenta Google)', urlConfig: 'BACKOFFICE_ADMIN_URL' }
   };
 
@@ -221,8 +223,11 @@
   }
 
   function mostrarModulo_(id) {
+    // bandeja y gerencia comparten la seccion modulo-bandeja (vistas
+    // internas dashboard/detalle/gerencia, mismo layout que app.html).
+    var seccionId = (id === 'bandeja' || id === 'gerencia') ? 'modulo-bandeja' : 'modulo-' + id;
     document.querySelectorAll('.plataforma-modulo').forEach(function (seccion) {
-      seccion.classList.toggle('sigso-oculto', seccion.id !== 'modulo-' + id);
+      seccion.classList.toggle('sigso-oculto', seccion.id !== seccionId);
     });
     document.querySelectorAll('.plataforma-nav__item[data-modulo]').forEach(function (boton) {
       boton.classList.toggle('plataforma-nav__item--activo', boton.getAttribute('data-modulo') === id);
@@ -236,7 +241,81 @@
     if (id === 'nueva_solicitud') {
       autocompletarFormulario_();
     }
+    if (id === 'bandeja') {
+      abrirBandeja_('dashboard');
+    }
+    if (id === 'gerencia') {
+      abrirBandeja_('gerencia');
+    }
     window.scrollTo(0, 0);
+  }
+
+  // --- P3: orquestacion de la bandeja (el rol que cumplia app.js) --------
+
+  var bandejaLista = false;
+
+  // En produccion, las llamadas por token necesitan la SEGUNDA
+  // implementacion del Web App (BACKOFFICE_TOKEN_URL). En local, el
+  // dev-server (localhost) acepta el token directo.
+  function backofficeDisponible_() {
+    var cfg = window.SIGSO_CONFIG || {};
+    return !!cfg.BACKOFFICE_TOKEN_URL || /localhost/.test(cfg.BACKOFFICE_URL || '');
+  }
+
+  function abrirBandeja_(vista) {
+    var aviso = document.getElementById('aviso-bandeja-sin-deploy');
+    if (!backofficeDisponible_()) {
+      aviso.innerHTML = Componentes.alerta(
+        'La bandeja por token aún no está desplegada (falta la implementación ' +
+        '"por token" del Backoffice y su URL en config.js — ver el paquete de deploy v3.3 P3). ' +
+        'Mientras tanto puedes usar el Backoffice con tu cuenta Google.', 'aviso');
+      mostrarVistaBandeja_(null);
+      return;
+    }
+    aviso.innerHTML = '';
+
+    if (!bandejaLista) {
+      bandejaLista = true;
+      SigsoDashboard.inicializarFiltros();
+      // Puente que dashboard.js/detalle.js ya usan para navegar entre
+      // vistas (mismo contrato que definia app.js).
+      window.SigsoApp = {
+        mostrarDetalle: function (solicitudId) {
+          mostrarVistaBandeja_('vista-detalle');
+          SigsoDetalle.cargar(solicitudId);
+        },
+        mostrarDashboard: function () {
+          mostrarVistaBandeja_('vista-dashboard');
+          SigsoDashboard.cargar();
+        }
+      };
+      document.getElementById('btn-actualizar-dashboard').addEventListener('click', function () {
+        SigsoDashboard.cargar();
+      });
+      document.getElementById('btn-volver-dashboard').addEventListener('click', window.SigsoApp.mostrarDashboard);
+      document.getElementById('btn-ver-gerencia').addEventListener('click', function () {
+        abrirBandeja_('gerencia');
+      });
+      document.getElementById('btn-volver-dashboard-gerencia').addEventListener('click', window.SigsoApp.mostrarDashboard);
+      document.getElementById('btn-actualizar-gerencia').addEventListener('click', function () {
+        SigsoGerencia.cargar();
+      });
+    }
+
+    if (vista === 'gerencia') {
+      mostrarVistaBandeja_('vista-gerencia');
+      SigsoGerencia.inicializarFiltros();
+      SigsoGerencia.cargar();
+    } else {
+      mostrarVistaBandeja_('vista-dashboard');
+      SigsoDashboard.cargar();
+    }
+  }
+
+  function mostrarVistaBandeja_(id) {
+    ['vista-dashboard', 'vista-detalle', 'vista-gerencia'].forEach(function (vista) {
+      document.getElementById(vista).classList.toggle('sigso-oculto', vista !== id);
+    });
   }
 
   // La gracia de tener cuenta: el formulario deja de pedirte quien eres.

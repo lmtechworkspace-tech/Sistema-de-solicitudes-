@@ -1669,6 +1669,22 @@ function ejecutarLlamada_(url, action, data) {
 // de transporte (promesa rechazada), nunca ante un {ok:false} del backend
 // (eso llega como valor resuelto y se devuelve tal cual).
 async function llamarApi(url, action, data) {
+  // v3.3 P3: con sesion de la plataforma activa, las llamadas al Backoffice
+  // viajan con el token en el body y hacia la implementacion "por token"
+  // (BACKOFFICE_TOKEN_URL, ejecutar como yo / cualquiera). Punto UNICO de
+  // enrutamiento: dashboard.js/detalle.js/gerencia.js no cambian. Las
+  // paginas Google (App/Admin via HtmlService) usan google.script.run y no
+  // pasan por aqui.
+  const cfg = window.SIGSO_CONFIG || {};
+  let tokenPortal = null;
+  try { tokenPortal = localStorage.getItem('sigso_portal_token'); } catch (err) { /* sin storage */ }
+  if (tokenPortal && url === cfg.BACKOFFICE_URL) {
+    if (cfg.BACKOFFICE_TOKEN_URL) {
+      url = cfg.BACKOFFICE_TOKEN_URL;
+    }
+    data = Object.assign({}, data, { portal_token: tokenPortal });
+  }
+
   const maxIntentos = ACCIONES_REINTENTABLES[action] ? MAX_INTENTOS_LECTURA : 1;
   let ultimoError;
   for (let intento = 1; intento <= maxIntentos; intento++) {
@@ -2108,7 +2124,7 @@ function renderHeaderSigso(paginaActiva) {
         Componentes.campoTexto({ dataCampo: 'nombre', label: 'Nombre completo' }) +
         Componentes.campoTexto({ dataCampo: 'cargo', label: 'Cargo (autocompleta el formulario)' }) +
         Componentes.campoTexto({ dataCampo: 'emails', label: 'Correos asociados (separados por coma)' }) +
-        Componentes.campoTexto({ dataCampo: 'rol', label: 'Rol: SOLICITANTE / DEV / GERENCIA / ADM' }) +
+        Componentes.campoTexto({ dataCampo: 'rol', label: 'Rol: SOLICITANTE / ANA / DEV / GERENCIA / ADM' }) +
         Componentes.campoTexto({ dataCampo: 'modulos', label: 'Módulos (coma; vacío = según rol): nueva_solicitud, mis_solicitudes, bandeja, gerencia, administracion' }) +
         Componentes.campoTexto({ dataCampo: 'empresa_id', label: 'Empresa (código, opcional)' }) +
         '</div>' +

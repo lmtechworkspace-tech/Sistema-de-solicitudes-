@@ -274,3 +274,126 @@ test('listar nunca expone hash ni sal, ni siquiera al Admin', () => {
   assert.equal(cuenta.hash_password, undefined);
   assert.equal(cuenta.salt, undefined);
 });
+
+// --- P3: identidad por token en el Backoffice ----------------------------
+// El shell llama las acciones del staff con portal_token en el body; la
+// identidad sale de CUENTAS_PORTAL/SESIONES_PORTAL y el modulo requerido se
+// valida EN CADA accion (esconder botones no protege nada).
+
+function makeEventBO(body) {
+  return { postData: { contents: JSON.stringify(body), type: 'text/plain' } };
+}
+
+// Backoffice con las hojas del portal + una cuenta con sesion vigente.
+function loadBackofficeConSesion(rol, modulos) {
+  const ctx = loadBackofficeProject({
+    scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' },
+    activeUserEmail: '' // sin Google: solo el token puede identificar
+  });
+  ['SOLICITUDES', 'SUBSOLICITUDES', 'HISTORIAL_ESTADOS', 'HISTORIAL_PRIORIDAD',
+   'HISTORIAL_COMPROMISO', 'HISTORIAL_ASIGNACION', 'COMENTARIOS', 'ARCHIVOS',
+   'USUARIOS', 'LOG_NOTIFICACIONES', 'LOG_SISTEMA', 'CONFIG_FERIADOS',
+   'CONFIG_SLA', 'CONFIG_NOTIFICACIONES'].forEach((h) => seedSheet(ctx, h, ctx.COLUMNAS[h]));
+  seedSheet(ctx, 'CUENTAS_PORTAL', ctx.COLUMNAS.CUENTAS_PORTAL, [
+    ['CTA-1', 'leo', 'Leo Estay', 'Desarrollador', 'hash-x', 'sal-x',
+      JSON.stringify(['leo@rld.cl']), rol, JSON.stringify(modulos),
+      'RLD', true, false, '', 'test']
+  ]);
+  seedSheet(ctx, 'SESIONES_PORTAL', ctx.COLUMNAS.SESIONES_PORTAL, [
+    ['token-vigente', 'CTA-1', new Date(Date.now() + 3600000).toISOString(), new Date().toISOString()],
+    ['token-vencido', 'CTA-1', new Date(Date.now() - 1000).toISOString(), new Date().toISOString()]
+  ]);
+  return ctx;
+}
+
+test('P3: un DEV con modulo bandeja usa el Backoffice con su token', () => {
+  const ctx = loadBackofficeConSesion('DEV', ['nueva_solicitud', 'mis_solicitudes', 'bandeja']);
+  const res = JSON.parse(ctx.doPost(makeEventBO({
+    action: 'getDashboardData', data: { portal_token: 'token-vigente' }
+  })).getContent());
+  assert.equal(res.ok, true, JSON.stringify(res).slice(0, 200));
+  // Y el auto-scope del DEV usa el primer correo de la cuenta.
+  assert.equal(res.data.rol_actual, 'DEV');
+});
+
+test('P3: sin el modulo requerido, la accion se rechaza aunque el rol alcance', () => {
+  // GERENCIA tiene modulo gerencia pero NO bandeja ni administracion.
+  const ctx = loadBackofficeConSesion('GERENCIA', ['nueva_solicitud', 'mis_solicitudes', 'gerencia']);
+  const bandeja = JSON.parse(ctx.doPost(makeEventBO({
+    action: 'getDashboardData', data: { portal_token: 'token-vigente' }
+  })).getContent());
+  assert.equal(bandeja.ok, false);
+  assert.match(bandeja.message, /modulo/);
+
+  const admin = JSON.parse(ctx.doPost(makeEventBO({
+    action: 'listarUsuarios', data: { portal_token: 'token-vigente' }
+  })).getContent());
+  assert.equal(admin.ok, false);
+
+  const gerencia = JSON.parse(ctx.doPost(makeEventBO({
+    action: 'getPanelGerencia', data: { portal_token: 'token-vigente' }
+  })).getContent());
+  assert.equal(gerencia.ok, true);
+});
+
+test('P3: token vencido o desconocido = forbidden, y NUNCA cae al camino Session', () => {
+  // activeUserEmail simula a un ADM logueado con Google en el mismo runtime:
+  // si el token invalido "cayera" a Session, heredaria esa identidad.
+  const ctx = loadBackofficeProject({
+    scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' },
+    activeUserEmail: 'admin@homepymes.cl'
+  });
+  seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS, [
+    ['U1', 'Admin', 'admin@homepymes.cl', 'HP', 'ADM', true, '', 'sistema']
+  ]);
+  seedSheet(ctx, 'CUENTAS_PORTAL', ctx.COLUMNAS.CUENTAS_PORTAL);
+  seedSheet(ctx, 'SESIONES_PORTAL', ctx.COLUMNAS.SESIONES_PORTAL);
+
+  ['token-falso'].forEach((token) => {
+    const res = JSON.parse(ctx.doPost(makeEventBO({
+      action: 'ping', data: { portal_token: token }
+    })).getContent());
+    assert.equal(res.ok, false);
+    assert.equal(res.error, 'forbidden');
+  });
+  // Sin token, el camino Session sigue funcionando igual que siempre.
+  const porGoogle = JSON.parse(ctx.doPost(makeEventBO({ action: 'ping', data: {} })).getContent());
+  assert.equal(porGoogle.ok, true);
+  assert.equal(porGoogle.data.rol, 'ADM');
+});
+
+test('P3: desactivar la cuenta corta el acceso por token al Backoffice', () => {
+  const ctx = loadBackofficeConSesion('DEV', ['bandeja']);
+  ctx.actualizarFilaPorId_('CUENTAS_PORTAL', 'cuenta_id', 'CTA-1', { activo: false });
+  const res = JSON.parse(ctx.doPost(makeEventBO({
+    action: 'ping', data: { portal_token: 'token-vigente' }
+  })).getContent());
+  assert.equal(res.ok, false);
+});
+
+// Una cuenta SOLICITANTE a la que el Admin le dio bandeja se normaliza a
+// DEV: el rol mas restringido con escritura. Sin esto pasaria los checks
+// pensados para ANA/ADM (p.ej. derivar cualquier solicitud).
+test('P3: rol SOLICITANTE con bandeja se comporta como DEV (no como ANA/ADM)', () => {
+  const ctx = loadBackofficeConSesion('SOLICITANTE', ['nueva_solicitud', 'mis_solicitudes', 'bandeja']);
+  // Solicitud asignada a OTRA persona: un DEV no puede derivarla.
+  const hoja = ctx.SpreadsheetApp.openById('fake-sheet-id');
+  const s = {
+    solicitud_id: 'SOL-2026-RLD-0001', empresa_id: 'RLD', estado_derivado: 'S02',
+    prioridad_derivada: 'P2', desarrollador_asignado: 'otra.persona@rld.cl',
+    fecha_creacion: new Date().toISOString()
+  };
+  hoja.getSheetByName('SOLICITUDES').appendRow(ctx.COLUMNAS.SOLICITUDES.map((c) => (s[c] !== undefined ? s[c] : '')));
+  const sub = {
+    subsolicitud_id: 'SOL-2026-RLD-0001-01', solicitud_id: 'SOL-2026-RLD-0001', numero_item: 1,
+    titulo: 't', descripcion: 'd', estado: 'S02', prioridad: 'P2',
+    desarrollador_asignado: 'otra.persona@rld.cl', fecha_creacion: new Date().toISOString()
+  };
+  hoja.getSheetByName('SUBSOLICITUDES').appendRow(ctx.COLUMNAS.SUBSOLICITUDES.map((c) => (sub[c] !== undefined ? sub[c] : '')));
+
+  const res = JSON.parse(ctx.doPost(makeEventBO({
+    action: 'derivarSolicitud',
+    data: { portal_token: 'token-vigente', solicitud_id: 'SOL-2026-RLD-0001', responsable_nuevo: 'leo@rld.cl', motivo: 'quiero llevarmela a mi bandeja' }
+  })).getContent());
+  assert.equal(res.ok, false, 'no debe poder derivar trabajo ajeno');
+});

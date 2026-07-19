@@ -200,7 +200,7 @@
         Componentes.campoTexto({ dataCampo: 'nombre', label: 'Nombre completo' }) +
         Componentes.campoTexto({ dataCampo: 'cargo', label: 'Cargo (autocompleta el formulario)' }) +
         Componentes.campoTexto({ dataCampo: 'emails', label: 'Correos asociados (separados por coma)' }) +
-        Componentes.campoTexto({ dataCampo: 'rol', label: 'Rol: SOLICITANTE / DEV / GERENCIA / ADM' }) +
+        Componentes.campoTexto({ dataCampo: 'rol', label: 'Rol: SOLICITANTE / ANA / DEV / GERENCIA / ADM' }) +
         Componentes.campoTexto({ dataCampo: 'modulos', label: 'Módulos (coma; vacío = según rol): nueva_solicitud, mis_solicitudes, bandeja, gerencia, administracion' }) +
         Componentes.campoTexto({ dataCampo: 'empresa_id', label: 'Empresa (código, opcional)' }) +
         '</div>' +

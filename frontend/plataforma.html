@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="css/main.css" />
   <link rel="stylesheet" href="css/components.css" />
   <link rel="stylesheet" href="css/formulario.css" />
+  <!-- P3: graficos del dashboard de la bandeja (mismo CDN que app.html). -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
   <!-- v3.3 (SIGSO-v3.3-propuesta-plataforma-modular.md): una sola puerta.
@@ -314,6 +316,177 @@
           </div>
         </div>
       </section>
+      <!-- ===== Modulo: bandeja de trabajo (P3) + panel de gerencia =====
+           Markup de app.html (vista-dashboard / vista-detalle /
+           vista-gerencia), orquestado por plataforma.js en vez de app.js.
+           dashboard.js/detalle.js/gerencia.js son los MISMOS archivos: las
+           llamadas al Backoffice viajan con el token de la sesion (api.js). -->
+      <section id="modulo-bandeja" class="plataforma-modulo sigso-oculto">
+        <div id="aviso-bandeja-sin-deploy"></div>
+
+        <section id="vista-dashboard">
+          <h1>Bandeja de trabajo</h1>
+
+          <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-ver-gerencia">Ver Panel de Gerencia</button>
+
+          <p class="sigso-ayuda sigso-oculto" id="aviso-mi-bandeja">Estás viendo tu propia bandeja (solo las solicitudes asignadas a vos).</p>
+          <div class="sigso-campo sigso-oculto" id="fila-bandeja">
+            <label for="filtro-bandeja">Ver bandeja de</label>
+            <select id="filtro-bandeja"><option value="">Todas (sin acotar)</option></select>
+          </div>
+
+          <div class="sigso-panel-lote sigso-oculto" id="bloque-derivar-lote">
+            <p id="resumen-derivar-lote"></p>
+            <div class="sigso-campo">
+              <label for="lote-responsable">Derivar todas a</label>
+              <select id="lote-responsable"><option value="">Elige responsable…</option></select>
+            </div>
+            <div class="sigso-campo">
+              <label for="lote-motivo">Motivo</label>
+              <input type="text" id="lote-motivo" placeholder="M&iacute;nimo 10 caracteres" />
+            </div>
+            <button type="button" class="sigso-boton--secundario" id="btn-derivar-lote">Derivar en lote</button>
+            <span id="resultado-derivar-lote"></span>
+          </div>
+
+          <div class="sigso-filtros">
+            <div class="sigso-campo">
+              <label for="filtro-empresa">Empresa</label>
+              <select id="filtro-empresa"><option value="">Todas</option></select>
+            </div>
+            <div class="sigso-campo">
+              <label for="filtro-estado">Estado</label>
+              <select id="filtro-estado"><option value="">Todos</option></select>
+            </div>
+            <div class="sigso-campo">
+              <label for="filtro-prioridad">Prioridad</label>
+              <select id="filtro-prioridad">
+                <option value="">Todas</option>
+                <option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option>
+                <option value="P4">P4</option><option value="P5">P5</option>
+              </select>
+            </div>
+            <div class="sigso-campo">
+              <label for="filtro-agrupar">Agrupar</label>
+              <select id="filtro-agrupar">
+                <option value="">Sin agrupar</option>
+                <option value="estado_derivado">Por estado</option>
+                <option value="prioridad_derivada">Por prioridad</option>
+              </select>
+            </div>
+            <div class="sigso-campo">
+              <button type="button" class="sigso-boton--secundario" id="btn-actualizar-dashboard">Actualizar</button>
+            </div>
+          </div>
+
+          <div class="sigso-kpis" id="contenedor-kpis"></div>
+          <div id="contenedor-alertas-patron"></div>
+          <div id="contenedor-requieren-accion"></div>
+
+          <div class="sigso-tabs" id="tabs-dashboard">
+            <button type="button" class="sigso-tabs__boton sigso-tabs__boton--activo" data-tab="resumen">Resumen</button>
+            <button type="button" class="sigso-tabs__boton" data-tab="analisis">Análisis</button>
+          </div>
+
+          <div id="tab-resumen">
+            <div class="sigso-card">
+              <h3>Solicitudes recientes</h3>
+              <div class="sigso-campo">
+                <input type="text" id="buscar-recientes" placeholder="Buscar por N&deg; de solicitud, solicitante, correo, empresa o m&oacute;dulo...">
+                <p class="sigso-ayuda">Filtra sobre lo ya cargado al escribir. Presiona "Actualizar" arriba para buscar por solicitante en TODAS las solicitudes, no solo las recientes.</p>
+              </div>
+              <button type="button" class="sigso-boton--secundario" id="btn-exportar-csv">Exportar CSV</button>
+              <div id="lista-recientes"></div>
+            </div>
+          </div>
+
+          <div id="tab-analisis" class="sigso-oculto">
+            <div class="sigso-graficos">
+              <div class="sigso-card sigso-grafico-card"><h3>Por estado</h3><canvas id="grafico-estado"></canvas></div>
+              <div class="sigso-card sigso-grafico-card"><h3>Por prioridad</h3><canvas id="grafico-prioridad"></canvas></div>
+              <div class="sigso-card sigso-grafico-card"><h3>Por empresa</h3><canvas id="grafico-empresa"></canvas></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="vista-detalle" class="sigso-oculto">
+          <button type="button" class="sigso-boton--secundario" id="btn-volver-dashboard">&larr; Volver a la bandeja</button>
+          <div id="detalle-contenido"></div>
+        </section>
+
+        <section id="vista-gerencia" class="sigso-oculto">
+          <button type="button" class="sigso-boton--secundario" id="btn-volver-dashboard-gerencia">&larr; Volver a la bandeja</button>
+          <h1>Panel de Control de Gerencia</h1>
+          <p class="sigso-ayuda">Cumplimiento de plazos: fecha comprometida por el desarrollador (no el SLA automático). "Esperando validación" es tiempo en manos del solicitante, no del desarrollador.</p>
+
+          <div class="sigso-filtros">
+            <div class="sigso-campo">
+              <label for="ger-filtro-desarrollador">Desarrollador</label>
+              <input type="text" id="ger-filtro-desarrollador" placeholder="correo@...">
+            </div>
+            <div class="sigso-campo">
+              <label for="ger-filtro-empresa">Empresa</label>
+              <select id="ger-filtro-empresa"><option value="">Todas</option></select>
+            </div>
+            <div class="sigso-campo">
+              <label for="ger-filtro-tipo">Tipo (texto)</label>
+              <input type="text" id="ger-filtro-tipo" placeholder="Ej: Error, Mejora...">
+            </div>
+            <div class="sigso-campo">
+              <label for="ger-filtro-solicitante">Solicitante</label>
+              <input type="text" id="ger-filtro-solicitante" placeholder="nombre o correo">
+            </div>
+            <div class="sigso-campo">
+              <button type="button" class="sigso-boton--secundario" id="btn-actualizar-gerencia">Actualizar</button>
+            </div>
+          </div>
+
+          <div class="sigso-kpis" id="ger-contenedor-kpis"></div>
+
+          <div class="sigso-card">
+            <h3>Semáforo de cumplimiento (desarrollador)</h3>
+            <div id="ger-contenedor-semaforo"></div>
+          </div>
+
+          <div class="sigso-tabs sigso-no-imprimir" role="tablist">
+            <button type="button" class="sigso-tabs__boton sigso-tabs__boton--activo" id="ger-tab-tablero" data-ger-tab="tablero">Tablero de seguimiento</button>
+            <button type="button" class="sigso-tabs__boton" id="ger-tab-gantt" data-ger-tab="gantt">Línea de tiempo</button>
+          </div>
+
+          <div id="ger-panel-tablero" class="sigso-card">
+            <div class="sigso-tablero-toolbar sigso-no-imprimir">
+              <div class="sigso-campo">
+                <label for="ger-agrupar">Agrupar por</label>
+                <select id="ger-agrupar">
+                  <option value="">Sin agrupar</option>
+                  <option value="solicitante_email">Solicitante</option>
+                  <option value="desarrollador_asignado">Responsable</option>
+                  <option value="estado">Estado</option>
+                  <option value="empresa_id">Empresa</option>
+                </select>
+              </div>
+              <button type="button" class="sigso-boton--secundario" id="btn-imprimir-gerencia">Descargar / Imprimir PDF</button>
+            </div>
+            <div class="sigso-solo-imprimir sigso-encabezado-reporte">
+              <h1>SIGSO — Informe de seguimiento de solicitudes</h1>
+              <p>HomePymes / RLD &middot; Panel de Control de Gerencia</p>
+            </div>
+            <p class="sigso-ayuda sigso-solo-imprimir" id="ger-fecha-reporte"></p>
+            <div id="ger-contenedor-tablero"></div>
+          </div>
+
+          <div id="ger-panel-gantt" class="sigso-card sigso-oculto">
+            <h3>Carta Gantt (fecha comprometida por ítem)</h3>
+            <p class="sigso-ayuda">Barra desde que se creó el ítem hasta su fecha comprometida. Línea vertical = hoy. Línea tenue = fecha original, si hubo re-compromiso.</p>
+            <div id="ger-contenedor-gantt"></div>
+          </div>
+
+          <div class="sigso-card sigso-no-imprimir">
+            <h3>Control del solicitante — entregado y sin validar</h3>
+            <div id="ger-contenedor-solicitante"></div>
+          </div>
+        </section>
+      </section>
     </main>
   </div>
 
@@ -324,6 +497,9 @@
   <script src="js/components.js"></script>
   <script src="js/formulario.js"></script>
   <script src="js/estado.js"></script>
+  <script src="js/dashboard.js"></script>
+  <script src="js/detalle.js"></script>
+  <script src="js/gerencia.js"></script>
   <script src="js/plataforma.js"></script>
 </body>
 </html>

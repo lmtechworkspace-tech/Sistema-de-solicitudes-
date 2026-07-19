@@ -41,8 +41,18 @@ function construirContexto() {
   seedSheet(ctx, 'HISTORIAL_COMPROMISO', ctx.COLUMNAS.HISTORIAL_COMPROMISO);
   seedSheet(ctx, 'HISTORIAL_ASIGNACION', ctx.COLUMNAS.HISTORIAL_ASIGNACION);
   // v3.3: cuentas de la plataforma, para probar el CRUD en admin.html.
-  seedSheet(ctx, 'CUENTAS_PORTAL', ctx.COLUMNAS.CUENTAS_PORTAL);
-  seedSheet(ctx, 'SESIONES_PORTAL', ctx.COLUMNAS.SESIONES_PORTAL);
+  // P3: la MISMA cuenta/sesion fija que siembra backend/dev-server.js
+  // (en produccion ambos proyectos leen la misma planilla; en local son
+  // hojas separadas, asi que el token se fija por convencion).
+  seedSheet(ctx, 'CUENTAS_PORTAL', ctx.COLUMNAS.CUENTAS_PORTAL, [
+    ['CTA-DEMO-3', 'leo', 'Leo Estay', 'Desarrollador', 'hash-no-usado-aqui', 'sal',
+      JSON.stringify(['leo@rld.cl']),
+      'DEV', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja']),
+      'RLD', true, false, '', 'dev-server']
+  ]);
+  seedSheet(ctx, 'SESIONES_PORTAL', ctx.COLUMNAS.SESIONES_PORTAL, [
+    ['dev-token-leo', 'CTA-DEMO-3', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()]
+  ]);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
   seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);
   seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
@@ -96,8 +106,8 @@ function sembrarSolicitudesDemo_(ctx) {
   const ahora = new Date();
   const demo = [
     { id: 'SOL-2026-HP-0001', empresa: 'HP', plataforma: 'INT_GDE', modulo: 'MOD_CHARLA', tipo: 'ERR', prioridad: 'P1', estado: 'S02', dias: 0 },
-    { id: 'SOL-2026-HP-0002', empresa: 'HP', plataforma: 'INT_GDE', modulo: 'MOD_DASH', tipo: 'MEJ', prioridad: 'P3', estado: 'S05', dias: 3 },
-    { id: 'SOL-2026-RLD-0001', empresa: 'RLD', plataforma: 'RLD_GDE', modulo: 'MOD_LIQ', tipo: 'MOD', prioridad: 'P2', estado: 'S07', dias: 6 },
+    { id: 'SOL-2026-HP-0002', empresa: 'HP', plataforma: 'INT_GDE', modulo: 'MOD_DASH', tipo: 'MEJ', prioridad: 'P3', estado: 'S05', dias: 3, dev: 'leo@rld.cl' },
+    { id: 'SOL-2026-RLD-0001', empresa: 'RLD', plataforma: 'RLD_GDE', modulo: 'MOD_LIQ', tipo: 'MOD', prioridad: 'P2', estado: 'S07', dias: 6, dev: 'leo@rld.cl' },
     { id: 'SOL-2026-RLD-0002', empresa: 'RLD', plataforma: 'RLD_GDE', modulo: 'MOD_VAC', tipo: 'CON', prioridad: 'P4', estado: 'S09', dias: 15 },
     // v3.1: una atencion directa, para poder ver la insignia del detalle y
     // el KPI de Gerencia sin tener que crear una a mano cada vez.
@@ -117,7 +127,8 @@ function sembrarSolicitudesDemo_(ctx) {
       dedup_hash: 'demo-' + idx, estimacion_total_horas: 8, horas_reales: '', observaciones_generales: '',
       resumen_whatsapp: '', fecha_creacion: fecha, creado_por: 'demo' + (idx + 1) + '@' + item.empresa.toLowerCase() + '.cl',
       cc: idx === 0 ? 'copia@homepymes.cl' : '',
-      atencion_directa: !!item.atencionDirecta
+      atencion_directa: !!item.atencionDirecta,
+      desarrollador_asignado: item.dev || ''
     };
     ctx.SpreadsheetApp.openById('dev-sheet').getSheetByName('SOLICITUDES')
       .appendRow(ctx.COLUMNAS.SOLICITUDES.map((col) => solicitud[col]));
@@ -142,7 +153,8 @@ function sembrarSolicitudesDemo_(ctx) {
       ]) : '',
       atencion_resuelto_por: item.atencionDirecta ? 'Leo' : '',
       atencion_fecha_resolucion: item.atencionDirecta ? fecha : '',
-      atencion_detalle: item.atencionDirecta ? 'Se reinicio el servicio de liquidaciones y se limpio la cola atascada' : ''
+      atencion_detalle: item.atencionDirecta ? 'Se reinicio el servicio de liquidaciones y se limpio la cola atascada' : '',
+      desarrollador_asignado: item.dev || ''
     };
     ctx.SpreadsheetApp.openById('dev-sheet').getSheetByName('SUBSOLICITUDES')
       .appendRow(ctx.COLUMNAS.SUBSOLICITUDES.map((col) => subsolicitud[col]));

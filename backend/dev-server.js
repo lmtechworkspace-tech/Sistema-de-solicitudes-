@@ -40,7 +40,13 @@ function construirContexto() {
   // que "Mis solicitudes" junte lo de ambos. El hash se calcula con el
   // MISMO codigo que corre en produccion (ctx.hashPassword_), no a mano.
   //   usuario: cpena / clave: demo12345
-  seedSheet(ctx, 'SESIONES_PORTAL', ctx.COLUMNAS.SESIONES_PORTAL);
+  // P3: sesion FIJA compartida con el dev-server del Backoffice (alla se
+  // siembra la misma fila). En produccion ambos proyectos leen la misma
+  // planilla; en local son hojas separadas en memoria, asi que el token se
+  // fija por convencion: 'dev-token-leo'. Login normal: leo / demo12345.
+  seedSheet(ctx, 'SESIONES_PORTAL', ctx.COLUMNAS.SESIONES_PORTAL, [
+    ['dev-token-leo', 'CTA-DEMO-3', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()]
+  ]);
   seedSheet(ctx, 'CUENTAS_PORTAL', ctx.COLUMNAS.CUENTAS_PORTAL, [
     ['CTA-DEMO-1', 'cpena', 'Camila Pena', 'Jefa de Operaciones',
       ctx.hashPassword_('demo12345', 'sal-demo'), 'sal-demo',
@@ -53,7 +59,13 @@ function construirContexto() {
       ctx.hashPassword_('temporal99', 'sal-demo-2'), 'sal-demo-2',
       JSON.stringify(['lisseth@gde.cl']),
       'SOLICITANTE', JSON.stringify(['nueva_solicitud', 'mis_solicitudes']),
-      'GDE', true, true, '', 'dev-server']
+      'GDE', true, true, '', 'dev-server'],
+    // P3: cuenta DEV para probar la bandeja en el shell (leo / demo12345).
+    ['CTA-DEMO-3', 'leo', 'Leo Estay', 'Desarrollador',
+      ctx.hashPassword_('demo12345', 'sal-demo-3'), 'sal-demo-3',
+      JSON.stringify(['leo@rld.cl']),
+      'DEV', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja']),
+      'RLD', true, false, '', 'dev-server']
   ]);
   // P12 (v2.0, Sprint 3): switch global de aviso a Leo -- activo=true
   // reproduce el comportamiento de siempre en local.
