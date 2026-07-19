@@ -3,3 +3,11 @@ node_modules/
 .claude/settings.local.json
 *.log
 ~$*.docx
+
+# Carpetas de trabajo local (NO versionar): datos manuales para pegar en el
+# Sheets, paquetes de despliegue y revisiones de catalogos. Contienen datos
+# operativos y, temporalmente, credenciales (hashes/claves de las cuentas de
+# la plataforma) que jamas deben llegar al repo.
+_datos-manual/
+_deploy-fase10/
+_catalogos-revision/
