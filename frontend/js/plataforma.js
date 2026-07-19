@@ -24,7 +24,9 @@
     // gerencia.js orquestados aqui, con el token de la sesion via api.js).
     bandeja: { icono: '🗂', nombre: 'Bandeja de trabajo', descripcion: 'Solicitudes del equipo: estados, fechas, derivaciones', interno: true },
     gerencia: { icono: '📊', nombre: 'Panel de gerencia', descripcion: 'KPIs, semáforo de cumplimiento y seguimiento', interno: true },
-    administracion: { icono: '⚙️', nombre: 'Administración', descripcion: 'Catálogos, usuarios y cuentas (abre con tu cuenta Google)', urlConfig: 'BACKOFFICE_ADMIN_URL' }
+    // P4: administracion tambien vive dentro del shell (admin.js con el
+    // token de la sesion; el backend exige el modulo en cada accion).
+    administracion: { icono: '⚙️', nombre: 'Administración', descripcion: 'Catálogos, usuarios y cuentas de la plataforma', interno: true }
   };
 
   var sesion = { token: null, cuenta: null };
@@ -247,7 +249,25 @@
     if (id === 'gerencia') {
       abrirBandeja_('gerencia');
     }
+    if (id === 'administracion') {
+      abrirAdministracion_();
+    }
     window.scrollTo(0, 0);
+  }
+
+  // P4: Administracion usa las mismas acciones del Backoffice por token, asi
+  // que comparte el requisito de la implementacion por token con la bandeja.
+  function abrirAdministracion_() {
+    if (!backofficeDisponible_()) {
+      document.getElementById('admin-contenido').innerHTML = Componentes.alerta(
+        'La administración por token aún no está desplegada (falta la implementación ' +
+        '"por token" del Backoffice y su URL en config.js — ver el paquete de deploy v3.3 P3). ' +
+        'Mientras tanto puedes usar el panel con tu cuenta Google.', 'aviso');
+      return;
+    }
+    // Cada apertura re-entra por la primera pestaña (mismo comportamiento
+    // que abrir admin.html de cero); el binding del menu ya lo hizo admin.js.
+    window.SigsoAdmin.abrir();
   }
 
   // --- P3: orquestacion de la bandeja (el rol que cumplia app.js) --------

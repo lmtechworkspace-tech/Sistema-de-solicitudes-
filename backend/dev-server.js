@@ -45,7 +45,8 @@ function construirContexto() {
   // planilla; en local son hojas separadas en memoria, asi que el token se
   // fija por convencion: 'dev-token-leo'. Login normal: leo / demo12345.
   seedSheet(ctx, 'SESIONES_PORTAL', ctx.COLUMNAS.SESIONES_PORTAL, [
-    ['dev-token-leo', 'CTA-DEMO-3', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()]
+    ['dev-token-leo', 'CTA-DEMO-3', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()],
+    ['dev-token-admin', 'CTA-DEMO-4', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()]
   ]);
   seedSheet(ctx, 'CUENTAS_PORTAL', ctx.COLUMNAS.CUENTAS_PORTAL, [
     ['CTA-DEMO-1', 'cpena', 'Camila Pena', 'Jefa de Operaciones',
@@ -65,6 +66,12 @@ function construirContexto() {
       ctx.hashPassword_('demo12345', 'sal-demo-3'), 'sal-demo-3',
       JSON.stringify(['leo@rld.cl']),
       'DEV', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja']),
+      'RLD', true, false, '', 'dev-server'],
+    // P4: cuenta ADM con todos los modulos (ladmin / demo12345).
+    ['CTA-DEMO-4', 'ladmin', 'Luis Admin', 'Administrador',
+      ctx.hashPassword_('demo12345', 'sal-demo-4'), 'sal-demo-4',
+      JSON.stringify(['luis@rld.cl']),
+      'ADM', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'administracion']),
       'RLD', true, false, '', 'dev-server']
   ]);
   // P12 (v2.0, Sprint 3): switch global de aviso a Leo -- activo=true

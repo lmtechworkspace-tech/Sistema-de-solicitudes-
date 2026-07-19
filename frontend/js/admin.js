@@ -96,6 +96,19 @@
     ]
   };
 
+  // v3.3 P4: este script tambien se carga en plataforma.html. Alli el menu
+  // se cablea igual, pero el primer click (que dispara la primera llamada a
+  // la API) queda DIFERIDO hasta que plataforma.js abre el modulo con una
+  // sesion valida -- si se disparara al cargar la pagina, pediria catalogos
+  // antes del login. En admin.html (standalone, identidad Google) el
+  // comportamiento de siempre no cambia.
+  window.SigsoAdmin = {
+    abrir: function () {
+      var primero = document.querySelector('.sigso-admin-menu__item');
+      if (primero) primero.click();
+    }
+  };
+
   document.addEventListener('DOMContentLoaded', function () {
     if (typeof renderHeaderSigso === 'function') {
       renderHeaderSigso('admin');
@@ -118,7 +131,11 @@
         }
       });
     });
-    document.querySelector('.sigso-admin-menu__item').click();
+    // #vista-shell solo existe en plataforma.html: ahi el arranque lo hace
+    // SigsoAdmin.abrir() al entrar al modulo.
+    if (!document.getElementById('vista-shell')) {
+      document.querySelector('.sigso-admin-menu__item').click();
+    }
   });
 
   // Si google.script.run rechaza (o el fetch falla), la promesa se rechaza y
