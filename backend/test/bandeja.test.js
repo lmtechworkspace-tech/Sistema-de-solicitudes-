@@ -2,8 +2,14 @@
 
 // v3.0 (Fase 2, documentacion/SIGSO-v3.0-multi-responsable-y-control.md §5):
 // bandeja por responsable. Un responsable individual (DEV) ve SIEMPRE solo
-// lo suyo (sin importar otros filtros); ADM/GERENCIA ven todo por defecto y
-// pueden elegir una bandeja puntual con el filtro "verBandeja".
+// lo suyo (sin importar otros filtros); ADM ve todo por defecto y puede
+// elegir una bandeja puntual con el filtro "verBandeja".
+//
+// v4.1.1 (hallazgo real, ver dashboard.test.js): GERENCIA dejo de estar en
+// el grupo "ve todo por defecto" -- ahora queda auto-acotada a su propia
+// bandeja igual que cualquier otro rol que no sea ADM, e ignora
+// "verBandeja" (ese selector ya no se le ofrece). Gerencia sigue viendo
+// todas las solicitudes desde el Panel de Gerencia (Gerencia.getPanel).
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -88,17 +94,20 @@ test('Dashboard.getData (v3.0): ADM elige "verBandeja" y ve solo esa persona', (
   assert.deepEqual(ids, ['SOL-2026-HP-0002']);
 });
 
-test('Dashboard.getData (v3.0): GERENCIA tambien puede elegir "verBandeja"', () => {
+// v4.1.1: GERENCIA ya NO puede elegir "verBandeja" -- queda siempre
+// auto-acotada a su propia bandeja, aunque mande ese filtro explicitamente
+// (el selector que lo generaba tampoco se le ofrece mas, ver dashboard.js).
+test('Dashboard.getData (v4.1.1): GERENCIA ignora "verBandeja" -- siempre ve solo la suya', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0001', desarrollador_asignado: 'dev1@homepymes.cl' });
   seedSubsolicitud(ctx, { subsolicitud_id: 'SOL-2026-HP-0001-01', solicitud_id: 'SOL-2026-HP-0001' });
 
   const datos = ctx.Dashboard.getData({ verBandeja: 'dev1@homepymes.cl' }, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
 
-  assert.equal(datos.recientes.length, 1);
+  assert.equal(datos.recientes.length, 0);
 });
 
-test('Dashboard.getData (v3.0): expone "responsables" (DEV/ANA activos) solo para ADM/GERENCIA', () => {
+test('Dashboard.getData (v4.1.1): expone "responsables" (DEV/ANA activos) solo para ADM', () => {
   const ctx = loadConSchema();
   seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS, [
     ['U1', 'Dev Uno', 'dev1@homepymes.cl', 'HP', 'DEV', true, '', 'sistema'],
@@ -113,8 +122,9 @@ test('Dashboard.getData (v3.0): expone "responsables" (DEV/ANA activos) solo par
 
   const emailsAdmin = datosAdmin.responsables.map((r) => r.email).sort();
   assert.deepEqual(emailsAdmin, ['ana2@homepymes.cl', 'dev1@homepymes.cl']);
-  assert.equal(datosGerencia.responsables.length, 2);
-  // Un DEV no necesita la lista completa -- ya esta auto-acotado.
+  // Ni Gerencia ni un DEV necesitan la lista completa -- ya estan
+  // auto-acotados a su propia bandeja.
+  assert.equal(datosGerencia.responsables, undefined);
   assert.equal(datosDev.responsables, undefined);
 });
 

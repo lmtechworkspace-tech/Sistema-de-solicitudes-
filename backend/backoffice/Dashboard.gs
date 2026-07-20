@@ -79,12 +79,34 @@ function aplicarAmbitoRol_(filtros, contexto) {
   // las solicitudes de cualquier estado con solo agregar ese filtro, lo que
   // contradice "cada responsable ve solo lo suyo" (documentacion/SIGSO-
   // v3.0-multi-responsable-y-control.md §5).
-  if (contexto.rol === 'DEV') {
-    return Object.assign({}, filtros, { vistaDev: contexto.email });
+  //
+  // v4.1.1 (hallazgo real: Gerencia con modulo "bandeja" veia TODAS las
+  // solicitudes ahi, no solo las suyas). Solo ADM ve la bandeja completa
+  // sin acotar por defecto. Cualquier otro rol (DEV, ANA, GERENCIA...)
+  // queda SIEMPRE auto-acotado a su propia bandeja en "Bandeja de trabajo"
+  // -- ignorando incluso un eventual filtros.verBandeja, porque ese
+  // selector ya no se le ofrece a nadie fuera de ADM (ver
+  // agregarResponsablesSiCorresponde_). Gerencia sigue viendo TODAS las
+  // solicitudes desde el Panel de Gerencia (Gerencia.getPanel), que es una
+  // vista de solo lectura aparte y no se toca aca.
+  if (contexto.rol !== 'ADM') {
+    var filtrosAcotados = Object.assign({}, filtros, { vistaDev: contexto.email });
+    // coincideFiltros_ tiene un respaldo pensado para el DEV (§4.2): si
+    // todavia no tiene nada asignado, ve las solicitudes activas sin
+    // asignar (S04-S07) de CUALQUIERA, para que su bandeja no se vea vacia
+    // antes de que exista asignacion real. Ese respaldo NO debe aplicar a
+    // los demas roles auto-acotados (GERENCIA, ANA...): sin nada asignado,
+    // terminarian viendo igual todas las solicitudes activas sin
+    // responsable de todo el mundo -- el mismo bug que se esta
+    // corrigiendo, solo que por otra puerta.
+    if (contexto.rol !== 'DEV') {
+      filtrosAcotados.sinRespaldoHuerfanas = true;
+    }
+    return filtrosAcotados;
   }
-  // ADM/GERENCIA: por defecto ven todo (sin acotar); si eligen una bandeja
-  // puntual desde el selector "¿Que bandeja ver?" del Dashboard, se acota a
-  // esa persona -- mismo mecanismo de filtrado (vistaDev) que ya usa
+  // ADM: por defecto ve todo (sin acotar); si elige una bandeja puntual
+  // desde el selector "¿Que bandeja ver?" del Dashboard, se acota a esa
+  // persona -- mismo mecanismo de filtrado (vistaDev) que ya usa
   // coincideFiltros_ para el auto-scope del Desarrollador.
   if (filtros.verBandeja) {
     return Object.assign({}, filtros, { vistaDev: filtros.verBandeja });
@@ -92,12 +114,13 @@ function aplicarAmbitoRol_(filtros, contexto) {
   return filtros;
 }
 
-// v3.0 (Fase 2): solo ADM/GERENCIA ven el selector de bandeja -- son los
-// unicos perfiles que pueden mirar la bandeja de otra persona (§5, §8 de la
-// especificacion). Un responsable individual ya esta auto-acotado a la
-// suya (aplicarAmbitoRol_) y no necesita elegir entre una lista.
+// v4.1.1: solo ADM ve el selector de bandeja -- es el unico perfil que
+// puede mirar la bandeja de otra persona. Gerencia ya no aparece aca: su
+// bandeja de trabajo quedo auto-acotada a la propia (aplicarAmbitoRol_) y
+// para ver el resto de las solicitudes tiene el Panel de Gerencia, no este
+// selector.
 function agregarResponsablesSiCorresponde_(datos, contexto) {
-  if (contexto && (contexto.rol === 'ADM' || contexto.rol === 'GERENCIA')) {
+  if (contexto && contexto.rol === 'ADM') {
     datos.responsables = obtenerResponsablesActivos_();
   }
 }
@@ -286,7 +309,11 @@ function coincideFiltros_(solicitud, filtros, idsAsignadosPorItem) {
     // subsolicitud puntual (§13.3 v1.0, trabajo en paralelo por item).
     var asignadaAMi = solicitud.desarrollador_asignado === filtros.vistaDev ||
       (idsAsignadosPorItem && idsAsignadosPorItem[solicitud.solicitud_id]);
-    var activaSinAsignar = !solicitud.desarrollador_asignado && ESTADOS_TRABAJO_DEV.indexOf(solicitud.estado_derivado) !== -1;
+    // v4.1.1: el respaldo de "huerfanas activas sin asignar" es solo para
+    // el DEV (ver aplicarAmbitoRol_) -- para el resto de los roles
+    // auto-acotados, sin asignacion real no hay nada que mostrar.
+    var activaSinAsignar = !filtros.sinRespaldoHuerfanas &&
+      !solicitud.desarrollador_asignado && ESTADOS_TRABAJO_DEV.indexOf(solicitud.estado_derivado) !== -1;
     if (!asignadaAMi && !activaSinAsignar) return false;
   }
   return true;

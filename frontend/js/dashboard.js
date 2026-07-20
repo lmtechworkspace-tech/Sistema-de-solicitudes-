@@ -96,15 +96,19 @@
   }
 
   // v3.0 (Fase 2, multi-bandeja): un responsable individual (DEV) ya viene
-  // auto-acotado del backend -- solo se le avisa. ADM/GERENCIA reciben la
-  // lista de responsables activos (Dashboard.getData) y pueden elegir de
-  // quien mirar la bandeja, o "Todas" para ver sin acotar.
+  // auto-acotado del backend -- solo se le avisa.
+  // v4.1.1 (hallazgo real: Gerencia veia TODAS las solicitudes en su
+  // bandeja): solo ADM recibe la lista de responsables activos
+  // (Dashboard.getData) y puede elegir de quien mirar la bandeja, o
+  // "Todas" para ver sin acotar. Cualquier otro rol (GERENCIA incluida)
+  // queda igual de auto-acotado que DEV -- Gerencia sigue viendo todo
+  // desde el Panel de Gerencia, no desde aca.
   function renderSelectorBandeja_(data) {
     var filaSelector = document.getElementById('fila-bandeja');
     var aviso = document.getElementById('aviso-mi-bandeja');
     var select = document.getElementById('filtro-bandeja');
 
-    if (data.rol_actual === 'DEV') {
+    if (data.rol_actual !== 'ADM') {
       filaSelector.classList.add('sigso-oculto');
       aviso.classList.remove('sigso-oculto');
       return;

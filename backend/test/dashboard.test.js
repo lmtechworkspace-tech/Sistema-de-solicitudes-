@@ -93,19 +93,82 @@ test('Dashboard.getData respeta los filtros (empresa_id)', () => {
 });
 
 // P6 (v2.0, Sprint 2): filtro por solicitante, para Gerencia (o cualquier
-// rol) sin depender de cruzar con otra planilla.
+// rol) sin depender de cruzar con otra planilla. Se usa ADM (bandeja sin
+// acotar) para probar el filtro en si mismo, sin mezclarlo con el
+// auto-scope por rol (ver los tests de v4.1.1 mas abajo).
 test('Dashboard.getData (P6) respeta el filtro solicitante -- coincidencia parcial por nombre o correo', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0001', solicitante_nombre: 'Juan Perez', solicitante_email: 'juan@homepymes.cl' });
   seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0002', solicitante_nombre: 'Camila Pena', solicitante_email: 'camila@homepymes.cl' });
 
-  const porNombre = ctx.Dashboard.getData({ solicitante: 'juan' }, { rol: 'GERENCIA' });
+  const porNombre = ctx.Dashboard.getData({ solicitante: 'juan' }, { rol: 'ADM' });
   assert.equal(porNombre.recientes.length, 1);
   assert.equal(porNombre.recientes[0].solicitud_id, 'SOL-2026-HP-0001');
 
-  const porCorreo = ctx.Dashboard.getData({ solicitante: 'camila@homepymes.cl' }, { rol: 'GERENCIA' });
+  const porCorreo = ctx.Dashboard.getData({ solicitante: 'camila@homepymes.cl' }, { rol: 'ADM' });
   assert.equal(porCorreo.recientes.length, 1);
   assert.equal(porCorreo.recientes[0].solicitud_id, 'SOL-2026-HP-0002');
+});
+
+// v4.1.1: hallazgo real -- Felipe (GERENCIA) tenia ademas el modulo
+// "bandeja" habilitado y desde ahi veia TODAS las solicitudes, no solo las
+// que le llegan a el. Solo ADM debe ver la bandeja sin acotar por defecto;
+// cualquier otro rol (Gerencia incluida) queda auto-acotado a su propio
+// correo, igual que ya pasaba con DEV. Gerencia sigue viendo todo desde el
+// Panel de Gerencia (Gerencia.getPanel), que no se toca aca.
+test('Dashboard.getData (v4.1.1) GERENCIA en "Bandeja de trabajo" solo ve lo asignado a su propio correo', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0001', desarrollador_asignado: 'gerencia@rld.cl' }, ['S02']);
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0002', desarrollador_asignado: 'otro@rld.cl' }, ['S02']);
+
+  const datos = ctx.Dashboard.getData({}, { rol: 'GERENCIA', email: 'gerencia@rld.cl' });
+
+  const ids = datos.recientes.map((r) => r.solicitud_id).sort();
+  assert.deepEqual(ids, ['SOL-2026-HP-0001']);
+});
+
+// v4.1.1: este es el escenario EXACTO del bug reportado -- Felipe
+// (GERENCIA) no tenia ninguna solicitud asignada a su correo, pero las
+// solicitudes P1 "Sin asignar" en estado activo (S02, dentro de
+// ESTADOS_TRABAJO_DEV) igual le aparecian en su bandeja, por el respaldo
+// de huerfanas pensado solo para el DEV. Sin nada asignado, su bandeja
+// debe quedar vacia (no mostrar el trabajo huerfano de todo el mundo).
+test('Dashboard.getData (v4.1.1) GERENCIA sin nada asignado NO ve las huerfanas activas sin asignar (a diferencia del DEV)', () => {
+  const ctx = loadConSchema();
+  // S05 (en desarrollo) esta dentro de ESTADOS_TRABAJO_DEV -- es la que
+  // dispara el respaldo de huerfanas para el DEV.
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0001', prioridad_derivada: 'P1', estado_derivado: 'S05' }, ['S05']);
+
+  const datosGerencia = ctx.Dashboard.getData({}, { rol: 'GERENCIA', email: 'gerencia@rld.cl' });
+  const datosDev = ctx.Dashboard.getData({}, { rol: 'DEV', email: 'dev@homepymes.cl' });
+
+  assert.equal(datosGerencia.recientes.length, 0);
+  assert.equal(datosDev.recientes.length, 1, 'el DEV si conserva el respaldo original (Fase 2)');
+});
+
+test('Dashboard.getData (v4.1.1) ADM sigue viendo todas las solicitudes sin acotar', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0001', desarrollador_asignado: 'gerencia@rld.cl' }, ['S02']);
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0002', desarrollador_asignado: 'otro@rld.cl' }, ['S02']);
+
+  const datos = ctx.Dashboard.getData({}, { rol: 'ADM', email: 'admin@homepymes.cl' });
+
+  const ids = datos.recientes.map((r) => r.solicitud_id).sort();
+  assert.deepEqual(ids, ['SOL-2026-HP-0001', 'SOL-2026-HP-0002']);
+});
+
+// v4.1.1: solo ADM recibe la lista de responsables (el selector "Ver
+// bandeja de" en el frontend depende de datos.responsables para mostrarse
+// -- ver dashboard.js:renderSelectorBandeja_).
+test('Dashboard.getData (v4.1.1) solo ADM recibe datos.responsables -- Gerencia ya no ve el selector de bandeja', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0001' }, ['S02']);
+
+  const datosAdm = ctx.Dashboard.getData({}, { rol: 'ADM', email: 'admin@homepymes.cl' });
+  const datosGerencia = ctx.Dashboard.getData({}, { rol: 'GERENCIA', email: 'gerencia@rld.cl' });
+
+  assert.ok(Array.isArray(datosAdm.responsables));
+  assert.equal(datosGerencia.responsables, undefined);
 });
 
 // P5 (v2.0, Sprint 3): badge "respuesta recibida" -- el item sigue en S06
