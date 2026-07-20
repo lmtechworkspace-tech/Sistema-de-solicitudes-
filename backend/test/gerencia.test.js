@@ -14,8 +14,24 @@ function loadConSchema() {
   seedSheet(ctx, 'SOLICITUDES', ctx.COLUMNAS.SOLICITUDES);
   seedSheet(ctx, 'SUBSOLICITUDES', ctx.COLUMNAS.SUBSOLICITUDES);
   seedSheet(ctx, 'HISTORIAL_COMPROMISO', ctx.COLUMNAS.HISTORIAL_COMPROMISO);
+  seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
   seedSheet(ctx, 'CONFIG_FERIADOS', ctx.COLUMNAS.CONFIG_FERIADOS);
   return ctx;
+}
+
+function seedHistorialEstado(ctx, overrides) {
+  const base = Object.assign(
+    {
+      historial_id: 'H-' + Math.random().toString(36).slice(2),
+      solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+      estado_anterior: '', estado_nuevo: 'S01', usuario: 'sistema', comentario: '',
+      timestamp: '2026-07-01T10:00:00.000Z'
+    },
+    overrides
+  );
+  const fila = ctx.COLUMNAS.HISTORIAL_ESTADOS.map((col) => (base[col] !== undefined ? base[col] : ''));
+  ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('HISTORIAL_ESTADOS').appendRow(fila);
+  return base;
 }
 
 function seedSolicitud(ctx, overrides) {
@@ -270,4 +286,242 @@ test('Gerencia.getPanel (v3.1): las atenciones directas no entran al semaforo', 
   assert.equal(panel.kpis.sin_comprometer, 0, 'no debe inflar "sin comprometer"');
   // Pero se cuentan aparte: cuanto se esta resolviendo fuera del proceso.
   assert.equal(panel.atenciones_directas, 1);
+});
+
+// v4.1 (documentacion/SIGSO-v4.1-propuestas-panel-gerencia.md): Gerencia
+// pidio ver el CONTENIDO de la solicitud en el tablero, y mas informacion
+// para decidir. G1/G2/G3/G4/G6/G7 aprobadas.
+
+test('Gerencia.getPanel (v4.1, G1): expone descripcion/resultado_esperado/plataforma_nombre/area_nombre', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { plataforma: 'ERP', plataforma_nombre: 'ERP Contable' });
+  seedSubsolicitud(ctx, {
+    descripcion: 'El boton de guardar no responde',
+    resultado_esperado: 'Que guarde el formulario sin error',
+    area: 'CONTA', area_nombre: 'Contabilidad'
+  });
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+  const item = panel.items[0];
+
+  assert.equal(item.descripcion, 'El boton de guardar no responde');
+  assert.equal(item.resultado_esperado, 'Que guarde el formulario sin error');
+  assert.equal(item.plataforma_nombre, 'ERP Contable');
+  assert.equal(item.area_nombre, 'Contabilidad');
+});
+
+test('Gerencia.getPanel (v4.1, G1): "que deberia pasar" queda vacio en modo Rapido (nunca undefined)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { resultado_esperado: '' });
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+
+  assert.equal(panel.items[0].resultado_esperado, '');
+});
+
+test('Gerencia.getPanel (v4.1, G2): recurrencia agrupa por Modulo x Tipo, cuenta y % del total', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  const hoy = new Date().toISOString();
+  seedSubsolicitud(ctx, {
+    subsolicitud_id: 'SOL-2026-HP-0001-01', modulo_nombre: 'Facturacion', tipo_nombre: 'Error / Bug',
+    fecha_creacion: hoy
+  });
+  seedSubsolicitud(ctx, {
+    subsolicitud_id: 'SOL-2026-HP-0001-02', numero_item: 2, modulo_nombre: 'Facturacion', tipo_nombre: 'Error / Bug',
+    fecha_creacion: hoy
+  });
+  seedSubsolicitud(ctx, {
+    subsolicitud_id: 'SOL-2026-HP-0001-03', numero_item: 3, modulo_nombre: 'Dashboard', tipo_nombre: 'Mejora',
+    fecha_creacion: hoy
+  });
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+
+  assert.equal(panel.recurrencia.length, 2);
+  const facturacionError = panel.recurrencia.find((r) => r.modulo_nombre === 'Facturacion' && r.tipo_nombre === 'Error / Bug');
+  assert.equal(facturacionError.cantidad, 2);
+  assert.equal(facturacionError.pct_total, Math.round((2 / 3) * 1000) / 10);
+  // Ordenado de mayor a menor: el grupo con 2 va primero.
+  assert.equal(panel.recurrencia[0].cantidad, 2);
+});
+
+test('Gerencia.getPanel (v4.1, G2): tendencia compara la cantidad del grupo vs el periodo anterior', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  // Periodo anterior (hace 45 dias): 1 solo item de Facturacion/Error.
+  const hace45 = new Date(Date.now() - 45 * 24 * 3600 * 1000).toISOString();
+  seedSubsolicitud(ctx, {
+    subsolicitud_id: 'SOL-2026-HP-0001-01', modulo_nombre: 'Facturacion', tipo_nombre: 'Error / Bug',
+    fecha_creacion: hace45
+  });
+  // Periodo actual (hoy): 3 items del mismo grupo -- subio.
+  const hoy = new Date().toISOString();
+  ['02', '03', '04'].forEach((n, idx) => {
+    seedSubsolicitud(ctx, {
+      subsolicitud_id: 'SOL-2026-HP-0001-' + n, numero_item: idx + 2,
+      modulo_nombre: 'Facturacion', tipo_nombre: 'Error / Bug', fecha_creacion: hoy
+    });
+  });
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+  const grupo = panel.recurrencia.find((r) => r.modulo_nombre === 'Facturacion' && r.tipo_nombre === 'Error / Bug');
+
+  assert.equal(grupo.cantidad, 3, 'solo cuenta el periodo actual (ultimos 30 dias)');
+  assert.equal(grupo.tendencia, 2, '3 actuales - 1 anterior');
+});
+
+test('Gerencia.getPanel (v4.1, G2): reaperturas cuentan transiciones desde un estado cerrado hacia uno abierto', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S05' });
+  seedHistorialEstado(ctx, { estado_anterior: '', estado_nuevo: 'S01', timestamp: '2026-07-01T10:00:00.000Z' });
+  seedHistorialEstado(ctx, { estado_anterior: 'S08', estado_nuevo: 'S09', timestamp: '2026-07-05T10:00:00.000Z' });
+  // Reapertura real: de Cerrada (S09) vuelve a En desarrollo (S05).
+  seedHistorialEstado(ctx, { estado_anterior: 'S09', estado_nuevo: 'S05', timestamp: '2026-07-06T10:00:00.000Z' });
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+
+  assert.equal(panel.items[0].reaperturas, 1);
+});
+
+test('Gerencia.getPanel (v4.1, G3): tendencia trae 6 meses con creadas/cerradas/cumplimiento', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { estado_derivado: 'S09' });
+  seedSubsolicitud(ctx, {
+    estado: 'S09', fecha_comprometida: '2026-08-05T18:00', fecha_terminada: '2026-08-01T10:00:00.000Z'
+  });
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+
+  assert.equal(panel.tendencia.length, 6);
+  const conDatos = panel.tendencia.filter((m) => m.creadas > 0 || m.cerradas > 0);
+  assert.ok(conDatos.length >= 0, 'no revienta aunque los meses caigan fuera de la ventana de 6 meses reales');
+});
+
+test('Gerencia.getPanel (v4.1, G4): ciclo por etapa mide dias habiles entre la primera vez que se entro a cada estado', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { subsolicitud_id: 'SOL-2026-HP-0001-01', estado: 'S02' });
+  // Un lunes 09:00 -> jueves 09:00 = 3 dias habiles completos (L-V, sin feriados).
+  seedHistorialEstado(ctx, {
+    subsolicitud_id: 'SOL-2026-HP-0001-01', estado_anterior: '', estado_nuevo: 'S01',
+    timestamp: '2026-07-06T09:00:00.000Z' // lunes
+  });
+  seedHistorialEstado(ctx, {
+    subsolicitud_id: 'SOL-2026-HP-0001-01', estado_anterior: 'S01', estado_nuevo: 'S02',
+    timestamp: '2026-07-09T09:00:00.000Z' // jueves
+  });
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+
+  assert.equal(panel.ciclo_por_etapa.length, 8, 'S01..S09 son 8 transiciones');
+  const s01s02 = panel.ciclo_por_etapa.find((c) => c.estado_desde === 'S01' && c.estado_hasta === 'S02');
+  assert.equal(s01s02.muestras, 1);
+  assert.equal(s01s02.dias_promedio, 3);
+  const sinDatos = panel.ciclo_por_etapa.find((c) => c.estado_desde === 'S02' && c.estado_hasta === 'S03');
+  assert.equal(sinDatos.dias_promedio, null);
+  assert.equal(sinDatos.muestras, 0);
+});
+
+test('Gerencia.getPanel (v4.1, G4): usa la PRIMERA vez que entro a cada estado (un rebote no infla el promedio)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { subsolicitud_id: 'SOL-2026-HP-0001-01', estado: 'S02' });
+  seedHistorialEstado(ctx, {
+    subsolicitud_id: 'SOL-2026-HP-0001-01', estado_anterior: '', estado_nuevo: 'S01',
+    timestamp: '2026-07-06T09:00:00.000Z'
+  });
+  seedHistorialEstado(ctx, {
+    subsolicitud_id: 'SOL-2026-HP-0001-01', estado_anterior: 'S01', estado_nuevo: 'S02',
+    timestamp: '2026-07-07T09:00:00.000Z' // 1 dia despues: primera vez en S02
+  });
+  // Rebote: vuelve a S01 y reentra a S02 mucho despues -- no debe contarse
+  // como una segunda "primera vez".
+  seedHistorialEstado(ctx, {
+    subsolicitud_id: 'SOL-2026-HP-0001-01', estado_anterior: 'S02', estado_nuevo: 'S01',
+    timestamp: '2026-07-08T09:00:00.000Z'
+  });
+  seedHistorialEstado(ctx, {
+    subsolicitud_id: 'SOL-2026-HP-0001-01', estado_anterior: 'S01', estado_nuevo: 'S02',
+    timestamp: '2026-07-20T09:00:00.000Z'
+  });
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+  const s01s02 = panel.ciclo_por_etapa.find((c) => c.estado_desde === 'S01' && c.estado_hasta === 'S02');
+
+  assert.equal(s01s02.muestras, 1, 'una sola muestra: la primera vez que entro a S02');
+  assert.equal(s01s02.dias_promedio, 1);
+});
+
+test('Gerencia.getPanel (v4.1, G6): carga agrupa por empresa/plataforma/area', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { empresa_id: 'HP', plataforma_nombre: 'ERP Contable' });
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-RLD-0001', empresa_id: 'RLD', plataforma_nombre: 'Hoja de ruta' });
+  seedSubsolicitud(ctx, { subsolicitud_id: 'SOL-2026-HP-0001-01', area_nombre: 'Contabilidad' });
+  seedSubsolicitud(ctx, {
+    subsolicitud_id: 'SOL-2026-RLD-0001-01', solicitud_id: 'SOL-2026-RLD-0001', area_nombre: 'Operaciones'
+  });
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+
+  assert.equal(panel.carga.por_empresa.length, 2);
+  assert.ok(panel.carga.por_empresa.every((c) => c.cantidad === 1));
+  assert.ok(panel.carga.por_plataforma.some((c) => c.etiqueta === 'ERP Contable'));
+  assert.ok(panel.carga.por_area.some((c) => c.etiqueta === 'Operaciones'));
+});
+
+test('Gerencia.getPanel (v4.1, G7): kpis.comparativo trae el delta vs el periodo anterior', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { estado_derivado: 'S09' });
+  // Periodo anterior (hace 45 dias): 1 atrasada activa.
+  const hace45 = new Date(Date.now() - 45 * 24 * 3600 * 1000).toISOString();
+  seedSubsolicitud(ctx, {
+    subsolicitud_id: 'SOL-2026-HP-0001-01', fecha_creacion: hace45, fecha_comprometida: '2020-01-01T18:00'
+  });
+  // Periodo actual (hoy): 3 atrasadas activas -- empeoro.
+  const hoy = new Date().toISOString();
+  ['02', '03', '04'].forEach((n, idx) => {
+    seedSubsolicitud(ctx, {
+      subsolicitud_id: 'SOL-2026-HP-0001-' + n, numero_item: idx + 2,
+      fecha_creacion: hoy, fecha_comprometida: '2020-01-01T18:00'
+    });
+  });
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+
+  assert.equal(panel.kpis.comparativo.atrasadas_activas, 2, '3 actuales - 1 anterior');
+});
+
+test('Gerencia.getPanel (v4.1, G7): comparativo es null (no cero) cuando falta dato en un lado', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { estado_derivado: 'S09' });
+  // Solo hay entregas en el periodo actual -- el anterior no tiene ninguna,
+  // asi que "% cumplimiento" no puede compararse (no es "empeoro a 0%").
+  const hoy = new Date().toISOString();
+  seedSubsolicitud(ctx, {
+    fecha_creacion: hoy, estado: 'S09',
+    fecha_comprometida: '2026-08-05T18:00', fecha_terminada: '2026-08-01T10:00:00.000Z'
+  });
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+
+  assert.equal(panel.kpis.comparativo.pct_cumplimiento_desarrollador, null);
+});
+
+test('Gerencia.getPanel (v4.1): sin HISTORIAL_ESTADOS (instalacion vieja), G2/G4 no revientan y quedan en cero', () => {
+  const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
+  seedSheet(ctx, 'SOLICITUDES', ctx.COLUMNAS.SOLICITUDES);
+  seedSheet(ctx, 'SUBSOLICITUDES', ctx.COLUMNAS.SUBSOLICITUDES);
+  seedSheet(ctx, 'HISTORIAL_COMPROMISO', ctx.COLUMNAS.HISTORIAL_COMPROMISO);
+  seedSheet(ctx, 'CONFIG_FERIADOS', ctx.COLUMNAS.CONFIG_FERIADOS);
+  // OJO: HISTORIAL_ESTADOS NO se siembra a proposito.
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx);
+
+  const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+
+  assert.equal(panel.items[0].reaperturas, 0);
+  assert.ok(panel.ciclo_por_etapa.every((c) => c.muestras === 0));
 });

@@ -168,10 +168,15 @@
       <!-- v3.0 (Fase 4, §6.1): el tablero de seguimiento reemplaza la Carta
            Gantt como vista PRINCIPAL (el gerente no logró entenderla). La
            Gantt se conserva como pestaña secundaria "Línea de tiempo" para
-           quien la prefiera, no se elimina. -->
+           quien la prefiera, no se elimina. v4.1: Recurrencia/Tendencia/
+           Carga responden "que se repite / mejoramos o empeoramos / que
+           consume mas equipo" (documentacion/SIGSO-v4.1-propuestas-panel-gerencia.md). -->
       <div class="sigso-tabs sigso-no-imprimir" role="tablist">
         <button type="button" class="sigso-tabs__boton sigso-tabs__boton--activo" id="ger-tab-tablero" data-ger-tab="tablero">Tablero de seguimiento</button>
         <button type="button" class="sigso-tabs__boton" id="ger-tab-gantt" data-ger-tab="gantt">Línea de tiempo</button>
+        <button type="button" class="sigso-tabs__boton" id="ger-tab-recurrencia" data-ger-tab="recurrencia">Recurrencia</button>
+        <button type="button" class="sigso-tabs__boton" id="ger-tab-tendencia" data-ger-tab="tendencia">Tendencia</button>
+        <button type="button" class="sigso-tabs__boton" id="ger-tab-carga" data-ger-tab="carga">Carga</button>
       </div>
 
       <div id="ger-panel-tablero" class="sigso-card">
@@ -184,6 +189,13 @@
               <option value="desarrollador_asignado">Responsable</option>
               <option value="estado">Estado</option>
               <option value="empresa_id">Empresa</option>
+            </select>
+          </div>
+          <div class="sigso-campo">
+            <label for="ger-densidad">Vista</label>
+            <select id="ger-densidad">
+              <option value="completa">Completa</option>
+              <option value="compacta">Compacta</option>
             </select>
           </div>
           <button type="button" class="sigso-boton--secundario" id="btn-imprimir-gerencia">Descargar / Imprimir PDF</button>
@@ -201,6 +213,26 @@
         <h3>Carta Gantt (fecha comprometida por ítem)</h3>
         <p class="sigso-ayuda">Barra desde que se creó el ítem hasta su fecha comprometida. Línea vertical = hoy. Línea tenue = fecha original, si hubo re-compromiso.</p>
         <div id="ger-contenedor-gantt"></div>
+      </div>
+
+      <div id="ger-panel-recurrencia" class="sigso-card sigso-oculto sigso-no-imprimir">
+        <h3>Recurrencia — qué se repite</h3>
+        <p class="sigso-ayuda">Ranking Módulo × Tipo. Clic en una fila para ver esas solicitudes en el tablero de seguimiento.</p>
+        <div id="ger-contenedor-recurrencia"></div>
+      </div>
+
+      <div id="ger-panel-tendencia" class="sigso-card sigso-oculto sigso-no-imprimir">
+        <h3>Tendencia — ¿mejoramos o empeoramos?</h3>
+        <p class="sigso-ayuda">Solicitudes creadas vs. cerradas y % de cumplimiento, últimos 6 meses.</p>
+        <div class="sigso-grafico-contenedor"><canvas id="ger-grafico-tendencia" height="90"></canvas></div>
+        <h3>Tiempo de ciclo por etapa</h3>
+        <p class="sigso-ayuda">Promedio de días hábiles entre cada estado (primera vez que se entró a cada uno) — dónde se pierde el tiempo.</p>
+        <div id="ger-contenedor-ciclo"></div>
+      </div>
+
+      <div id="ger-panel-carga" class="sigso-card sigso-oculto sigso-no-imprimir">
+        <h3>Carga por empresa / plataforma / área</h3>
+        <div id="ger-contenedor-carga"></div>
       </div>
 
       <div class="sigso-card sigso-no-imprimir">

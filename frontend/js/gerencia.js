@@ -12,6 +12,20 @@
   var itemsActuales = [];
   var categoriaActiva = null;
 
+  // v4.1 (documentacion/SIGSO-v4.1-propuestas-panel-gerencia.md): datos del
+  // ultimo panel cargado (recurrencia/tendencia/ciclo/carga), para poder
+  // re-renderizar esas pestañas sin volver a pedirlos al servidor.
+  var panelActual = null;
+  // G1-c: "Vista: Compacta/Completa" -- compacta oculta el bloque de
+  // contenido (¿que pasa?/¿que deberia pasar?) para un PDF de solo plazos.
+  var densidad = 'completa';
+  // G1-a: filas expandidas del tablero (clave = solicitud_id-numero_item).
+  var expandidos = {};
+  // G2: clic en una fila de Recurrencia filtra el tablero a ese grupo
+  // Modulo x Tipo, sin volver a pedir datos al servidor.
+  var recurrenciaFiltro = null;
+  var graficosGerencia = {};
+
   var CATEGORIAS = [
     { codigo: 'ATRASADA_DESARROLLADOR', emoji: '🔴', etiqueta: 'Atrasadas (desarrollador)' },
     { codigo: 'EN_RIESGO', emoji: '🟡', etiqueta: 'En riesgo' },
@@ -27,8 +41,15 @@
   // criterio que el gerente ya eligio.
   var ordenTablero = { campo: 'fecha_creacion', direccion: 'desc' };
 
+  // v4.1 (G1): tipo/modulo/titulo YA viajaban desde Gerencia.gs, solo
+  // faltaba pintarlos -- son cortos, entran como columna normal (a
+  // diferencia de descripcion/resultado_esperado, que van en la fila
+  // expandible por ser texto largo, ver filaTablero_).
   var COLUMNAS_TABLERO = [
     { campo: 'solicitud_id', etiqueta: 'Solicitud' },
+    { campo: 'titulo', etiqueta: 'Título' },
+    { campo: 'tipo_nombre', etiqueta: 'Tipo' },
+    { campo: 'modulo_nombre', etiqueta: 'Módulo' },
     { campo: 'solicitante_nombre', etiqueta: 'Solicitante' },
     { campo: 'desarrollador_asignado', etiqueta: 'Responsable' },
     { campo: 'estado', etiqueta: 'Estado' },
@@ -57,6 +78,16 @@
         'Reporte generado el ' + new Date().toLocaleString('es-CL');
       window.print();
     });
+    // G1-c: compacta oculta el bloque de contenido -- al volver a compacta,
+    // colapsa cualquier fila que hubiera quedado abierta.
+    var selectorDensidad = document.getElementById('ger-densidad');
+    if (selectorDensidad) {
+      selectorDensidad.addEventListener('change', function () {
+        densidad = selectorDensidad.value;
+        if (densidad === 'compacta') expandidos = {};
+        renderTodo_();
+      });
+    }
     document.querySelectorAll('[data-ger-tab]').forEach(function (boton) {
       boton.addEventListener('click', function () {
         document.querySelectorAll('[data-ger-tab]').forEach(function (b) {
@@ -66,8 +97,23 @@
         var tab = boton.getAttribute('data-ger-tab');
         document.getElementById('ger-panel-tablero').classList.toggle('sigso-oculto', tab !== 'tablero');
         document.getElementById('ger-panel-gantt').classList.toggle('sigso-oculto', tab !== 'gantt');
+        var panelRecurrencia = document.getElementById('ger-panel-recurrencia');
+        var panelTendencia = document.getElementById('ger-panel-tendencia');
+        var panelCarga = document.getElementById('ger-panel-carga');
+        if (panelRecurrencia) panelRecurrencia.classList.toggle('sigso-oculto', tab !== 'recurrencia');
+        if (panelTendencia) panelTendencia.classList.toggle('sigso-oculto', tab !== 'tendencia');
+        if (panelCarga) panelCarga.classList.toggle('sigso-oculto', tab !== 'carga');
+        // Chart.js no dibuja bien en un canvas que estaba con display:none;
+        // al entrar a la pestaña de Tendencia, se re-renderiza con las
+        // dimensiones ya visibles.
+        if (tab === 'tendencia' && panelActual) renderTendencia_(panelActual.tendencia, panelActual.ciclo_por_etapa);
       });
     });
+  }
+
+  function irATablero_() {
+    var botonTablero = document.getElementById('ger-tab-tablero');
+    if (botonTablero) botonTablero.click();
   }
 
   function leerFiltrosServidor_() {
@@ -88,32 +134,78 @@
           return respuesta;
         }
         itemsActuales = respuesta.data.items;
+        panelActual = respuesta.data;
+        recurrenciaFiltro = null;
         renderKpis_(respuesta.data.kpis, respuesta.data.atenciones_directas);
         renderTodo_();
+        renderRecurrencia_(respuesta.data.recurrencia);
+        renderTendencia_(respuesta.data.tendencia, respuesta.data.ciclo_por_etapa);
+        renderCarga_(respuesta.data.carga);
         return respuesta;
       });
   }
 
+  // G7: badge de variacion vs. el periodo anterior (ultimos 30 dias vs. los
+  // 30 previos, ver Gerencia.resolverVentanaPeriodo_). null = sin dato
+  // comparable (no se puede decir "bajo a 0%" si el periodo anterior no
+  // tuvo ninguna entrega) -- no se muestra nada, en vez de mostrar "+0".
+  function deltaBadge_(delta, subeEsBueno) {
+    if (delta === null || delta === undefined) return '';
+    if (delta === 0) return '<span class="sigso-kpi__delta">= vs. período anterior</span>';
+    var esBueno = subeEsBueno ? delta > 0 : delta < 0;
+    var flecha = delta > 0 ? '▲' : '▼';
+    var clase = esBueno ? 'sigso-kpi__delta--bueno' : 'sigso-kpi__delta--malo';
+    return '<span class="sigso-kpi__delta ' + clase + '">' + flecha + ' ' + Math.abs(delta) + ' vs. período anterior</span>';
+  }
+
+  // Componentes.kpi escapa "valor" entero como texto -- no sirve para
+  // meter el badge de delta (necesita ser HTML). Se arma la misma
+  // estructura/clases a mano solo para las tarjetas con comparativo.
+  function tarjetaKpiConDelta_(opts) {
+    return '<div class="sigso-kpi' + (opts.alerta ? ' sigso-kpi--alerta' : '') + '"' +
+      (opts.titulo ? ' title="' + Componentes.escaparHtml(opts.titulo) + '"' : '') + '>' +
+      '<div class="sigso-kpi__valor">' + Componentes.escaparHtml(opts.valor) + '</div>' +
+      opts.delta +
+      '<div class="sigso-kpi__etiqueta">' + Componentes.escaparHtml(opts.etiqueta) + '</div>' +
+      '</div>';
+  }
+
   function renderKpis_(kpis, atencionesDirectas) {
+    var cmp = kpis.comparativo || {};
     document.getElementById('ger-contenedor-kpis').innerHTML =
-      Componentes.kpi({
+      tarjetaKpiConDelta_({
         valor: kpis.pct_cumplimiento_desarrollador === null ? '—' : kpis.pct_cumplimiento_desarrollador + '%',
+        delta: deltaBadge_(cmp.pct_cumplimiento_desarrollador, true),
         etiqueta: 'Cumplimiento del desarrollador',
         titulo: 'Entregadas a tiempo ÷ entregadas (fecha comprometida vs. cuándo se marcó Terminada).'
       }) +
-      Componentes.kpi({ valor: kpis.atrasadas_activas, etiqueta: 'Atrasadas activas', alerta: kpis.atrasadas_activas > 0, titulo: 'Pasaron su fecha comprometida y aún no se entregan.' }) +
+      tarjetaKpiConDelta_({
+        valor: kpis.atrasadas_activas,
+        delta: deltaBadge_(cmp.atrasadas_activas, false),
+        etiqueta: 'Atrasadas activas', alerta: kpis.atrasadas_activas > 0,
+        titulo: 'Pasaron su fecha comprometida y aún no se entregan.'
+      }) +
       // v3.0 (Fase 4, §6.2): KPI propio del lado del SOLICITANTE, separado
       // del "% cumplimiento del desarrollador" -- antes solo existia como
       // "esperando validacion", con el mismo peso visual que cualquier otro
       // KPI; ahora se nombra explicitamente como lo pidio Gerencia.
-      Componentes.kpi({
+      tarjetaKpiConDelta_({
         valor: kpis.esperando_validacion,
+        delta: deltaBadge_(cmp.esperando_validacion, false),
         etiqueta: 'Solicitantes en mora',
         alerta: kpis.esperando_validacion > 0,
         titulo: 'Ítems entregados (Terminada) que el solicitante todavía no valida. Promedio: ' + kpis.esperando_validacion_promedio_dias + ' día(s) hábil(es) esperando.'
       }) +
-      Componentes.kpi({ valor: kpis.atraso_promedio_dias, etiqueta: 'Atraso promedio (días)', titulo: 'Promedio de días hábiles de atraso entre atrasadas activas y cerradas con atraso.' }) +
-      Componentes.kpi({ valor: kpis.sin_comprometer, etiqueta: 'Sin comprometer', titulo: 'Cola que el desarrollador todavía no revisó/comprometió.' }) +
+      tarjetaKpiConDelta_({
+        valor: kpis.atraso_promedio_dias,
+        delta: deltaBadge_(cmp.atraso_promedio_dias, false),
+        etiqueta: 'Atraso promedio (días)', titulo: 'Promedio de días hábiles de atraso entre atrasadas activas y cerradas con atraso.'
+      }) +
+      tarjetaKpiConDelta_({
+        valor: kpis.sin_comprometer,
+        delta: deltaBadge_(cmp.sin_comprometer, false),
+        etiqueta: 'Sin comprometer', titulo: 'Cola que el desarrollador todavía no revisó/comprometió.'
+      }) +
       // v3.1 (§1.6): quedan FUERA de los KPIs de arriba (nunca tuvieron
       // fecha comprometida), pero su volumen es en si un dato de gestion:
       // cuanto se esta resolviendo por telefono, fuera del proceso.
@@ -122,6 +214,13 @@
         etiqueta: 'Atenciones directas',
         titulo: 'Solicitudes resueltas fuera del flujo (por teléfono) y registradas después. No entran en los indicadores de cumplimiento porque nunca tuvieron fecha comprometida.'
       });
+  }
+
+  // Misma clave de agrupacion que Gerencia.calcularRecurrencia_ (Modulo x
+  // Tipo, con el mismo texto de reemplazo para vacio) -- ver comentario en
+  // renderTodo_.
+  function claveRecurrencia_(i) {
+    return (i.modulo_nombre || '(sin módulo)') + '␟' + (i.tipo_nombre || '(sin tipo)');
   }
 
   // Aplica el filtro de tipo (texto, client-side -- ver nota en app.html:
@@ -138,7 +237,16 @@
     var base = itemsConFiltroTipo_();
     renderSemaforo_(base);
     var filtrados = categoriaActiva ? base.filter(function (i) { return i.cumplimiento.codigo === categoriaActiva; }) : base;
-    renderTablero_(filtrados);
+    // G2: si se hizo clic en un grupo de Recurrencia, el tablero (y solo el
+    // tablero -- Gantt/control del solicitante siguen con su propio filtro)
+    // se acota a ese Modulo x Tipo. Gerencia.calcularRecurrencia_ agrupa
+    // usando '(sin módulo)'/'(sin tipo)' como clave cuando el campo viene
+    // vacio -- hay que reproducir el mismo fallback aca para que el clic
+    // matchee los items reales (que sí tienen '' crudo, no la etiqueta).
+    var filtradosTablero = recurrenciaFiltro
+      ? filtrados.filter(function (i) { return claveRecurrencia_(i) === recurrenciaFiltro; })
+      : filtrados;
+    renderTablero_(filtradosTablero);
     renderGantt_(filtrados);
     renderControlSolicitante_(filtrados);
   }
@@ -179,20 +287,26 @@
     }
 
     var campoAgrupar = document.getElementById('ger-agrupar').value;
-    var encabezado = '<tr>' + COLUMNAS_TABLERO.map(function (col) {
-      var activo = ordenTablero.campo === col.campo ? ' data-orden-activo="' + ordenTablero.direccion + '"' : '';
-      return '<th data-orden="' + col.campo + '"' + activo + '>' + Componentes.escaparHtml(col.etiqueta) + '</th>';
-    }).join('') + '</tr>';
+    // G1-a/G1-c: la columna de expandir solo existe en modo Completo -- en
+    // Compacto el tablero queda igual que antes (solo plazos).
+    var mostrarExpandir = densidad === 'completa';
+    var colspanTotal = COLUMNAS_TABLERO.length + (mostrarExpandir ? 1 : 0);
+    var encabezado = '<tr>' + (mostrarExpandir ? '<th class="sigso-th-expandir"></th>' : '') +
+      COLUMNAS_TABLERO.map(function (col) {
+        var activo = ordenTablero.campo === col.campo ? ' data-orden-activo="' + ordenTablero.direccion + '"' : '';
+        return '<th data-orden="' + col.campo + '"' + activo + '>' + Componentes.escaparHtml(col.etiqueta) + '</th>';
+      }).join('') + '</tr>';
 
     var ordenados = ordenarTablero_(items);
+    function filas_(lista) { return lista.map(function (i) { return filaTablero_(i, mostrarExpandir); }).join(''); }
     var cuerpo;
     if (!campoAgrupar) {
-      cuerpo = ordenados.map(filaTablero_).join('');
+      cuerpo = filas_(ordenados);
     } else {
       cuerpo = agruparParaTablero_(ordenados, campoAgrupar).map(function (grupo) {
-        return '<tr class="sigso-tabla-tablero__grupo"><td colspan="' + COLUMNAS_TABLERO.length + '">' +
+        return '<tr class="sigso-tabla-tablero__grupo"><td colspan="' + colspanTotal + '">' +
           Componentes.escaparHtml(grupo.etiqueta) + ' (' + grupo.filas.length + ')</td></tr>' +
-          grupo.filas.map(filaTablero_).join('');
+          filas_(grupo.filas);
       }).join('');
     }
 
@@ -211,9 +325,20 @@
       });
     });
 
-    contenedor.querySelectorAll('[data-id]').forEach(function (fila) {
+    contenedor.querySelectorAll('tr[data-id]').forEach(function (fila) {
       fila.addEventListener('click', function () {
         window.SigsoApp.mostrarDetalle(fila.getAttribute('data-id'));
+      });
+    });
+
+    // G1-a: el toggle de expandir es un boton propio -- stopPropagation
+    // evita que el clic tambien dispare la navegacion al detalle completo.
+    contenedor.querySelectorAll('[data-expandir]').forEach(function (boton) {
+      boton.addEventListener('click', function (evento) {
+        evento.stopPropagation();
+        var clave = boton.getAttribute('data-expandir');
+        expandidos[clave] = !expandidos[clave];
+        renderTablero_(items);
       });
     });
   }
@@ -267,15 +392,33 @@
   // UI-4 (§7): data-label por celda -- en movil el tablero se ve como
   // tarjetas apiladas (CSS en dashboard.css), y cada celda necesita saber
   // que columna representa sin depender del <thead> (que no es visible ahi).
-  function filaTablero_(i) {
+  // v4.1 (G1-a): trunca titulo/tipo/modulo en la celda corta -- el texto
+  // completo va en el title (mouse) y, para descripcion/resultado_esperado
+  // (mucho mas largos), en la fila expandible de abajo.
+  function truncar_(texto, maxLargo) {
+    var t = String(texto || '');
+    return t.length > maxLargo ? t.slice(0, maxLargo - 1) + '…' : t;
+  }
+
+  function filaTablero_(i, mostrarExpandir) {
     var diasEsperando = i.cumplimiento.dias_esperando;
     var celdaEsperando = diasEsperando === null || diasEsperando === undefined
       ? '—'
       : (i.semaforo_solicitante ? i.semaforo_solicitante.emoji + ' ' : '') + diasEsperando + ' día(s)';
     var etq = {};
     COLUMNAS_TABLERO.forEach(function (col) { etq[col.campo] = col.etiqueta; });
-    return '<tr data-id="' + i.solicitud_id + '"' + claseUrgenciaFila_(i) + '>' +
+    var clave = i.solicitud_id + '-' + i.numero_item;
+    var expandido = mostrarExpandir && expandidos[clave];
+    var celdaExpandir = mostrarExpandir
+      ? '<td class="sigso-td-expandir"><button type="button" class="sigso-boton-expandir" data-expandir="' + Componentes.escaparHtml(clave) +
+        '" aria-expanded="' + (expandido ? 'true' : 'false') + '" title="Ver ¿qué pasa? / ¿qué debería pasar?">' + (expandido ? '▾' : '▸') + '</button></td>'
+      : '';
+    var fila = '<tr data-id="' + i.solicitud_id + '"' + claseUrgenciaFila_(i) + '>' +
+      celdaExpandir +
       '<td class="sigso-id" data-label="' + etq.solicitud_id + '">' + Componentes.escaparHtml(i.solicitud_id + '-' + i.numero_item) + '</td>' +
+      '<td data-label="' + etq.titulo + '" title="' + Componentes.escaparHtml(i.titulo || '') + '">' + Componentes.escaparHtml(truncar_(i.titulo, 40)) + '</td>' +
+      '<td data-label="' + etq.tipo_nombre + '">' + Componentes.escaparHtml(i.tipo_nombre || '—') + '</td>' +
+      '<td data-label="' + etq.modulo_nombre + '">' + Componentes.escaparHtml(i.modulo_nombre || '—') + '</td>' +
       '<td data-label="' + etq.solicitante_nombre + '">' + Componentes.escaparHtml(i.solicitante_nombre || '') + '</td>' +
       // UI-1 (§6): nombre legible del responsable (el correo queda como
       // title al pasar el mouse) -- lo resuelve el backend en getPanel.
@@ -289,6 +432,15 @@
       '<td data-label="' + etq.fecha_comprometida + '">' + (i.fecha_comprometida ? Componentes.escaparHtml(String(i.fecha_comprometida).replace('T', ' ').slice(0, 16)) : '—') + '</td>' +
       '<td data-label="' + etq.semaforo + '">' + i.cumplimiento.emoji + ' ' + Componentes.escaparHtml(i.cumplimiento.etiqueta) + '</td>' +
       '</tr>';
+
+    if (!expandido) return fila;
+
+    var colspanContenido = COLUMNAS_TABLERO.length + 1;
+    return fila + '<tr class="sigso-fila-contenido">' +
+      '<td colspan="' + colspanContenido + '">' +
+      '<div class="sigso-fila-contenido__bloque"><strong>¿Qué pasa?</strong> ' + Componentes.escaparHtml(i.descripcion || '—') + '</div>' +
+      (i.resultado_esperado ? '<div class="sigso-fila-contenido__bloque"><strong>¿Qué debería pasar?</strong> ' + Componentes.escaparHtml(i.resultado_esperado) + '</div>' : '') +
+      '</td></tr>';
   }
 
   // §7C: carta Gantt liviana -- barras posicionadas por CSS (sin libreria
@@ -382,5 +534,139 @@
         window.SigsoApp.mostrarDetalle(fila.getAttribute('data-id'));
       });
     });
+  }
+
+  // G2 (v4.1): "¿que se nos repite?" -- ranking Modulo x Tipo. Cada fila es
+  // clicable y filtra el tablero (renderTodo_ ya sabe leer
+  // recurrenciaFiltro_, ver arriba) para leer los "¿que pasa?" concretos
+  // detras del numero.
+  function renderRecurrencia_(recurrencia) {
+    var contenedor = document.getElementById('ger-contenedor-recurrencia');
+    if (!contenedor) return;
+    if (!recurrencia || recurrencia.length === 0) {
+      contenedor.innerHTML = Componentes.vacio('No hay datos de recurrencia con estos filtros.');
+      return;
+    }
+
+    function tendenciaHtml_(t) {
+      if (t === null || t === undefined) return '<span class="sigso-ayuda">—</span>';
+      if (t === 0) return '<span class="sigso-kpi__delta">=</span>';
+      var clase = t > 0 ? 'sigso-kpi__delta--malo' : 'sigso-kpi__delta--bueno';
+      return '<span class="sigso-kpi__delta ' + clase + '">' + (t > 0 ? '▲ +' : '▼ ') + t + '</span>';
+    }
+
+    var filas = recurrencia.map(function (r) {
+      var clave = r.modulo_nombre + '␟' + r.tipo_nombre;
+      var activo = recurrenciaFiltro === clave;
+      return '<tr data-clave="' + Componentes.escaparHtml(clave) + '"' + (activo ? ' class="sigso-fila--activa"' : '') + '>' +
+        '<td>' + Componentes.escaparHtml(r.modulo_nombre) + '</td>' +
+        '<td>' + Componentes.escaparHtml(r.tipo_nombre) + '</td>' +
+        '<td>' + r.cantidad + '</td>' +
+        '<td>' + r.pct_total + '%</td>' +
+        '<td>' + tendenciaHtml_(r.tendencia) + '</td>' +
+        '<td>' + (r.dias_promedio_resolucion === null ? '—' : r.dias_promedio_resolucion + ' d') + '</td>' +
+        '<td>' + r.reaperturas + '</td>' +
+        '</tr>';
+    }).join('');
+
+    contenedor.innerHTML = '<div style="overflow-x:auto"><table class="sigso-tabla-tablero">' +
+      '<thead><tr><th>Módulo</th><th>Tipo</th><th>Cantidad</th><th>% del total</th>' +
+      '<th>Tendencia</th><th>Días prom. resolución</th><th>Reaperturas</th></tr></thead>' +
+      '<tbody>' + filas + '</tbody></table></div>' +
+      (recurrenciaFiltro ? '<button type="button" class="sigso-boton--secundario" id="btn-quitar-filtro-recurrencia">Quitar filtro del tablero</button>' : '');
+
+    contenedor.querySelectorAll('tr[data-clave]').forEach(function (fila) {
+      fila.addEventListener('click', function () {
+        var clave = fila.getAttribute('data-clave');
+        recurrenciaFiltro = recurrenciaFiltro === clave ? null : clave;
+        renderRecurrencia_(recurrencia);
+        renderTodo_();
+        if (recurrenciaFiltro) irATablero_();
+      });
+    });
+
+    var btnQuitar = document.getElementById('btn-quitar-filtro-recurrencia');
+    if (btnQuitar) {
+      btnQuitar.addEventListener('click', function (evento) {
+        evento.stopPropagation();
+        recurrenciaFiltro = null;
+        renderRecurrencia_(recurrencia);
+        renderTodo_();
+      });
+    }
+  }
+
+  // G3+G4 (v4.1): "¿mejoramos o empeoramos?" (tendencia de 6 meses) y
+  // "¿donde se pierde el tiempo?" (ciclo por etapa) -- ambas son fotos en
+  // el tiempo, se agrupan en la misma pestaña "Tendencia".
+  function renderTendencia_(tendencia, cicloPorEtapa) {
+    var canvas = document.getElementById('ger-grafico-tendencia');
+    if (canvas && tendencia && tendencia.length) {
+      if (graficosGerencia.tendencia) graficosGerencia.tendencia.destroy();
+      graficosGerencia.tendencia = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: tendencia.map(function (m) { return m.etiqueta; }),
+          datasets: [
+            { type: 'bar', label: 'Creadas', data: tendencia.map(function (m) { return m.creadas; }), backgroundColor: '#1F4E79' },
+            { type: 'bar', label: 'Cerradas', data: tendencia.map(function (m) { return m.cerradas; }), backgroundColor: '#27AE60' },
+            {
+              type: 'line', label: '% cumplimiento', yAxisID: 'y1',
+              data: tendencia.map(function (m) { return m.pct_cumplimiento; }),
+              borderColor: '#E8622A', backgroundColor: '#E8622A', spanGaps: true
+            }
+          ]
+        },
+        options: {
+          scales: {
+            y: { beginAtZero: true, title: { display: true, text: 'Ítems' } },
+            y1: { beginAtZero: true, max: 100, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '% cumplimiento' } }
+          }
+        }
+      });
+    }
+
+    var contenedorCiclo = document.getElementById('ger-contenedor-ciclo');
+    if (!contenedorCiclo) return;
+    if (!cicloPorEtapa || cicloPorEtapa.every(function (c) { return c.muestras === 0; })) {
+      contenedorCiclo.innerHTML = Componentes.vacio('Todavía no hay suficiente historial de estados para calcular el ciclo por etapa.');
+      return;
+    }
+
+    var maxDias = Math.max.apply(null, cicloPorEtapa.map(function (c) { return c.dias_promedio || 0; }).concat([1]));
+    contenedorCiclo.innerHTML = '<div class="sigso-carga-lista">' + cicloPorEtapa.map(function (c) {
+      var pct = c.dias_promedio === null ? 0 : Math.max((c.dias_promedio / maxDias) * 100, 2);
+      return '<div class="sigso-carga-fila">' +
+        '<div class="sigso-carga-etiqueta">' + Componentes.escaparHtml(formatearEstadoSigso(c.estado_desde)) + ' → ' + Componentes.escaparHtml(formatearEstadoSigso(c.estado_hasta)) + '</div>' +
+        '<div class="sigso-carga-barra-track"><div class="sigso-carga-barra" style="width:' + pct + '%"></div></div>' +
+        '<div class="sigso-carga-valor">' + (c.dias_promedio === null ? '— (sin datos)' : c.dias_promedio + ' d (' + c.muestras + ' muestra' + (c.muestras === 1 ? '' : 's') + ')') + '</div>' +
+        '</div>';
+    }).join('') + '</div>';
+  }
+
+  // G6 (v4.1): "¿que sistema nos consume mas equipo?" -- distribucion por
+  // empresa/plataforma/area, barras simples (mismo patron visual que el
+  // ciclo por etapa de arriba, sin depender de Chart.js).
+  function renderCarga_(carga) {
+    var contenedor = document.getElementById('ger-contenedor-carga');
+    if (!contenedor || !carga) return;
+
+    function bloque_(titulo, filas) {
+      if (!filas || filas.length === 0) return '<h4>' + Componentes.escaparHtml(titulo) + '</h4>' + Componentes.vacio('Sin datos.');
+      var max = Math.max.apply(null, filas.map(function (f) { return f.cantidad; }));
+      return '<h4>' + Componentes.escaparHtml(titulo) + '</h4><div class="sigso-carga-lista">' + filas.map(function (f) {
+        var pct = Math.max((f.cantidad / max) * 100, 2);
+        return '<div class="sigso-carga-fila">' +
+          '<div class="sigso-carga-etiqueta">' + Componentes.escaparHtml(f.etiqueta) + '</div>' +
+          '<div class="sigso-carga-barra-track"><div class="sigso-carga-barra" style="width:' + pct + '%"></div></div>' +
+          '<div class="sigso-carga-valor">' + f.cantidad + '</div>' +
+          '</div>';
+      }).join('') + '</div>';
+    }
+
+    contenedor.innerHTML =
+      bloque_('Por empresa', carga.por_empresa) +
+      bloque_('Por plataforma', carga.por_plataforma) +
+      bloque_('Por área', carga.por_area);
   }
 })();

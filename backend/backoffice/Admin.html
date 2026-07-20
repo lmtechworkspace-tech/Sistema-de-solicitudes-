@@ -2499,6 +2499,105 @@ button.sigso-kpi {
   }
 }
 
+/* v4.1 (G1-a): columna/boton para expandir "¿que pasa?/¿que deberia
+   pasar?" sin salir del tablero. */
+.sigso-th-expandir,
+.sigso-td-expandir {
+  width: 2rem;
+  text-align: center;
+}
+
+.sigso-boton-expandir {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  color: var(--azul);
+  padding: 0.15rem 0.4rem;
+  line-height: 1;
+}
+
+.sigso-boton-expandir:hover {
+  color: var(--p1);
+}
+
+.sigso-fila-contenido td {
+  background: var(--fondo, #f7f4ef);
+  padding: 0.6rem 1rem;
+  font-size: 0.9rem;
+}
+
+.sigso-fila-contenido__bloque {
+  margin-bottom: 0.35rem;
+}
+
+.sigso-fila-contenido__bloque:last-child {
+  margin-bottom: 0;
+}
+
+/* G2: fila activa cuando su grupo Modulo x Tipo esta filtrando el tablero. */
+.sigso-tabla-tablero tr.sigso-fila--activa {
+  box-shadow: 0 0 0 2px var(--azul) inset;
+}
+
+/* G7: badges de variacion vs. el periodo anterior en las tarjetas KPI. */
+.sigso-kpi__delta {
+  display: block;
+  font-size: 0.75rem;
+  margin: 0.15rem 0;
+  color: var(--gris-medio);
+}
+
+.sigso-kpi__delta--bueno { color: var(--ok); }
+.sigso-kpi__delta--malo { color: var(--critico); }
+
+/* G4/G6: barras horizontales simples (sin libreria), reutilizadas por
+   "Tiempo de ciclo por etapa" y "Carga por empresa/plataforma/area". */
+.sigso-carga-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.sigso-carga-fila {
+  display: grid;
+  grid-template-columns: minmax(120px, 220px) 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sigso-carga-etiqueta {
+  font-size: 0.85rem;
+  color: var(--gris-medio);
+}
+
+.sigso-carga-barra-track {
+  background: var(--borde, #e0dcd4);
+  border-radius: 4px;
+  height: 0.9rem;
+  overflow: hidden;
+}
+
+.sigso-carga-barra {
+  background: var(--azul);
+  height: 100%;
+  border-radius: 4px;
+}
+
+.sigso-carga-valor {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .sigso-carga-fila {
+    grid-template-columns: 1fr;
+    gap: 0.2rem;
+  }
+}
+
 </style>
   <style>
 /* admin.css — panel de administracion (§12.6). */
