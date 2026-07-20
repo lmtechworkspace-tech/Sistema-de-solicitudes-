@@ -390,24 +390,17 @@
     });
   }
 
-  // UI-5 (§4): semaforo inline -- un vistazo (🔴/🟡/🟢) antes de leer texto,
-  // igual criterio que renderIndicadorSla_ pero como icono para escanear la
-  // lista rapido (mismo espiritu que el semaforo de Gerencia).
-  function semaforoInline_(horas) {
-    if (horas === null || horas === undefined) return '⚪';
-    if (horas < 0) return '🔴';
-    if (horas < 24) return '🟡';
-    return '🟢';
-  }
-
+  // v4.0 Frente 4: la fila gana jerarquia (ID + estado grandes, el resto
+  // secundario) y una barra de SLA en vez del semaforo de emoji (🔴🟡🟢) --
+  // una barra que se llena con la urgencia se escanea mas rapido que un
+  // circulo de color o un numero suelto ("Vence en Xh").
   function renderFilaReciente_(s) {
-    var sla = renderIndicadorSla_(s.sla_restante_horas);
+    var sla = Componentes.barraSla(s.sla_restante_horas);
     // P5 (v2.0, Sprint 3): badge visual de "respuesta recibida" -- para que
     // Leo no dependa solo de encontrar el correo entre el resto de avisos.
     var badgeRespuesta = s.respuesta_pendiente ? ' ' + Componentes.badge('Respuesta recibida', 'P2') : '';
     return '<div class="sigso-fila-reciente" data-id="' + s.solicitud_id + '">' +
       '<div class="sigso-fila-reciente__principal">' +
-      '<span class="sigso-semaforo-inline" title="Estado de plazo">' + semaforoInline_(s.sla_restante_horas) + '</span> ' +
       Componentes.badgePrioridad(s.prioridad_derivada) + ' ' +
       '<strong class="sigso-id">' + s.solicitud_id + '</strong> ' +
       Componentes.badgeEstado(s.estado_derivado) + badgeRespuesta +
@@ -416,8 +409,8 @@
       s.empresa_id + ' &middot; ' + s.plataforma + ' / ' + s.modulo + ' &middot; ' +
       s.cantidad_items + ' item(s) &middot; ' +
       (s.asignado_a ? Componentes.escaparHtml(s.asignado_a) : 'Sin asignar') +
-      (sla ? ' &middot; ' + sla : '') +
       '</div>' +
+      (sla ? '<div class="sigso-fila-reciente__sla">' + sla + '</div>' : '') +
       '</div>';
   }
 
@@ -439,11 +432,5 @@
     document.body.appendChild(enlace);
     enlace.click();
     document.body.removeChild(enlace);
-  }
-
-  function renderIndicadorSla_(horas) {
-    if (horas === null || horas === undefined) return '';
-    if (horas < 0) return Componentes.badge('Fuera de plazo', 'P1');
-    return 'Vence en ' + horas + 'h';
   }
 })();

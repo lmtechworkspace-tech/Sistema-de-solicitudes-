@@ -107,8 +107,15 @@
       ? '<p class="sigso-insignia-directa">⚡ Atención directa — registrada después de resolver</p>'
       : '';
 
+    // v4.0 Frente 4: barra de flujo S01..S09 -- de un vistazo se ve cuanto
+    // camino lleva la solicitud, no solo el estado puntual. La atencion
+    // directa no recorrio el flujo (nace cerrada en S09), asi que no aporta
+    // mostrarla igual que el resto.
+    var flujo = esAtencionDirecta ? '' : Componentes.flujoEstados(s.estado_derivado);
+
     return '<h2>' + s.solicitud_id + '</h2>' +
       '<p>' + Componentes.badgePrioridad(s.prioridad_derivada) + ' ' + Componentes.badgeEstado(s.estado_derivado) + '</p>' +
+      flujo +
       avisoAtencionDirecta +
       '<dl class="sigso-datos-item">' +
       renderCampoDato_('Ingresada', Componentes.escaparHtml(fechaCorta_(s.fecha_creacion))) +
@@ -458,7 +465,10 @@
   function renderGaleria_(archivos) {
     return Componentes.galeriaImagenes((archivos || []).map(function (a) {
       var esImagen = String(a.tipo_mime || '').indexOf('image/') === 0;
-      return { url: a.url, nombre: a.nombre_original, descripcion: esImagen ? '' : a.nombre_original };
+      // v4.0 Frente 4: esImagen decide si el clic abre el lightbox (imagen)
+      // o sigue yendo a una pestana nueva (documento -- PDF/Excel/Word no
+      // se ven bien en un visor de imagenes).
+      return { url: a.url, nombre: a.nombre_original, descripcion: esImagen ? '' : a.nombre_original, esImagen: esImagen };
     }));
   }
 
@@ -507,11 +517,14 @@
     })).sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
 
     // UI-2 (§5): icono por tipo de evento para escanear el timeline sin leer.
+    // v4.0 Frente 4: los emoji (🔄📅↪️💬🔒) pasan a los trazos SVG de
+    // iconos.js -- mismo motivo que el resto del rediseno (heredan
+    // currentColor, no cambian de forma entre sistemas operativos).
     function iconoEvento_(e) {
-      if (e.tipo === 'estado') return '🔄';
-      if (e.tipo === 'compromiso') return '📅';
-      if (e.tipo === 'asignacion') return '↪️';
-      return e.esInterno ? '🔒' : '💬';
+      if (e.tipo === 'estado') return Iconos.svg('estado', { tam: 14 });
+      if (e.tipo === 'compromiso') return Iconos.svg('calendario', { tam: 14 });
+      if (e.tipo === 'asignacion') return Iconos.svg('derivar', { tam: 14 });
+      return Iconos.svg(e.esInterno ? 'candado' : 'comentario', { tam: 14 });
     }
 
     var feed = eventos.length === 0

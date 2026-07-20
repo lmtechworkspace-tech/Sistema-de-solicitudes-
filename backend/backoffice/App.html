@@ -1456,6 +1456,171 @@ button {
   text-transform: capitalize;
 }
 
+/* =====================================================================
+   v4.0 Frente 4 — listas y detalle
+   ===================================================================== */
+
+/* --- Barra de SLA (fila de la bandeja) -------------------------------
+   Reemplaza el semaforo de emoji + el texto suelto "Vence en Xh": una
+   barra que se llena con la urgencia se escanea antes que un numero. */
+.sigso-sla {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: var(--texto-xs);
+  color: var(--texto-2);
+}
+
+.sigso-sla__barra {
+  width: 64px;
+  height: 6px;
+  border-radius: var(--radio-full);
+  background: var(--superficie-2);
+  overflow: hidden;
+  flex: none;
+}
+
+.sigso-sla__relleno {
+  display: block;
+  height: 100%;
+  border-radius: var(--radio-full);
+}
+
+.sigso-sla--ok .sigso-sla__relleno { background: var(--ok); }
+.sigso-sla--alerta .sigso-sla__relleno { background: var(--alerta); }
+.sigso-sla--critico .sigso-sla__relleno { background: var(--critico); }
+
+.sigso-sla--critico .sigso-sla__texto { color: var(--critico); font-weight: 600; }
+
+.sigso-fila-reciente__sla {
+  margin-top: 0.3rem;
+}
+
+/* --- Barra de flujo de estados (ficha del detalle) -------------------
+   S01..S09 en una linea: cuanto camino lleva la solicitud, no solo el
+   estado puntual. S10/S11 son ramas de salida, se muestran aparte. */
+.sigso-flujo-estados {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  margin: var(--esp-2) 0 var(--esp-3);
+}
+
+.sigso-flujo-estados__barra {
+  display: flex;
+  gap: 3px;
+  flex: 1;
+}
+
+.sigso-flujo-estados__seg {
+  height: 6px;
+  flex: 1;
+  border-radius: var(--radio-full);
+  background: var(--superficie-2);
+}
+
+.sigso-flujo-estados__seg--hecho { background: var(--ok); }
+.sigso-flujo-estados__seg--actual { background: var(--naranja); }
+
+.sigso-flujo-estados__etiqueta {
+  font-size: var(--texto-xs);
+  color: var(--texto-2);
+  white-space: nowrap;
+  flex: none;
+}
+
+.sigso-flujo-estados--interrumpido {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: var(--esp-2) 0 var(--esp-3);
+  font-size: var(--texto-xs);
+  color: var(--critico);
+  font-weight: 600;
+}
+
+/* --- Lightbox de imagenes ---------------------------------------------
+   El clic en una imagen ya subida la amplia sin salir de la pantalla
+   (antes abria una pestana nueva, perdiendo el contexto de la solicitud). */
+.sigso-galeria__ver {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+}
+
+.sigso-lightbox-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 1020;
+  background: rgba(20, 15, 12, 0.85);
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  animation: sigso-fundido 0.15s ease-out;
+}
+
+.sigso-lightbox {
+  position: relative;
+  max-width: min(90vw, 1100px);
+  max-height: 88vh;
+  display: grid;
+  place-items: center;
+}
+
+.sigso-lightbox img {
+  max-width: 100%;
+  max-height: 88vh;
+  border-radius: var(--radio-md);
+  box-shadow: var(--sombra-3);
+}
+
+.sigso-lightbox__cerrar,
+.sigso-lightbox__nav {
+  position: absolute;
+  background: rgba(36, 28, 24, 0.55);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.sigso-lightbox__cerrar:hover,
+.sigso-lightbox__nav:hover {
+  background: rgba(36, 28, 24, 0.8);
+}
+
+.sigso-lightbox__cerrar {
+  top: -1rem;
+  right: -1rem;
+}
+
+.sigso-lightbox__nav--prev { left: -1rem; top: 50%; transform: translateY(-50%); }
+.sigso-lightbox__nav--next { right: -1rem; top: 50%; transform: translateY(-50%); }
+
+.sigso-lightbox__contador {
+  position: absolute;
+  bottom: -1.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  font-size: var(--texto-xs);
+  opacity: 0.85;
+}
+
+@media (max-width: 640px) {
+  .sigso-lightbox-fondo { padding: 1rem; }
+  .sigso-lightbox__nav--prev { left: 0.25rem; }
+  .sigso-lightbox__nav--next { right: 0.25rem; }
+  .sigso-lightbox__cerrar { top: 0.25rem; right: 0.25rem; }
+}
+
 </style>
   <style>
 /* dashboard.css — Backoffice: KPIs, graficos, tabla, detalle (§12.4/12.5). */
@@ -2555,6 +2720,47 @@ function renderHeaderSigso(paginaActiva) {
       return Componentes.badge(codigo, codigo);
     },
 
+    // v4.0 Frente 4: reemplaza el semaforo de emoji (🔴🟡🟢) y el texto suelto
+    // "Vence en Xh" -- una barra que se llena con la urgencia se escanea en
+    // una fila de tabla mas rapido que leer un numero. horas null/undefined
+    // (item sin SLA, ej. atencion directa) no renderiza nada.
+    barraSla: function (horas) {
+      if (horas === null || horas === undefined) return '';
+      var vencido = horas < 0;
+      var nivel = vencido ? 'critico' : (horas < 24 ? 'alerta' : 'ok');
+      // Ventana de referencia de 72h: mas alla de eso ya no aporta escanear
+      // el detalle, solo importa que esta "sano".
+      var pct = vencido ? 100 : Math.max(8, Math.min(100, Math.round(100 - (horas / 72) * 100)));
+      var texto = vencido ? 'Fuera de plazo' : ('Vence en ' + horas + 'h');
+      return '<span class="sigso-sla sigso-sla--' + nivel + '" title="' + escaparHtml(texto) + '">' +
+        '<span class="sigso-sla__barra"><span class="sigso-sla__relleno" style="width:' + pct + '%"></span></span>' +
+        '<span class="sigso-sla__texto">' + escaparHtml(texto) + '</span>' +
+        '</span>';
+    },
+
+    // v4.0 Frente 4: barra de flujo S01..S09 en la ficha del detalle -- de un
+    // vistazo se ve cuanto camino lleva la solicitud, no solo el estado
+    // puntual. S10/S11 son ramas de salida (rechazo/cancelacion), no un paso
+    // mas del flujo feliz, asi que se muestran aparte.
+    flujoEstados: function (codigoActual) {
+      var ORDEN = ['S01', 'S02', 'S03', 'S04', 'S05', 'S06', 'S07', 'S08', 'S09'];
+      var etiquetas = typeof SIGSO_ESTADOS_LABEL !== 'undefined' ? SIGSO_ESTADOS_LABEL : {};
+      if (codigoActual === 'S10' || codigoActual === 'S11') {
+        return '<div class="sigso-flujo-estados sigso-flujo-estados--interrumpido">' +
+          ico_('equis', 14) + ' Flujo interrumpido en: ' + escaparHtml(etiquetas[codigoActual] || codigoActual) +
+          '</div>';
+      }
+      var idx = ORDEN.indexOf(codigoActual);
+      var segmentos = ORDEN.map(function (cod, i) {
+        var estado = idx === -1 ? 'pendiente' : (i < idx ? 'hecho' : (i === idx ? 'actual' : 'pendiente'));
+        return '<span class="sigso-flujo-estados__seg sigso-flujo-estados__seg--' + estado + '" title="' + escaparHtml(etiquetas[cod] || cod) + '"></span>';
+      }).join('');
+      return '<div class="sigso-flujo-estados">' +
+        '<div class="sigso-flujo-estados__barra">' + segmentos + '</div>' +
+        '<span class="sigso-flujo-estados__etiqueta">' + escaparHtml(etiquetas[codigoActual] || codigoActual) + '</span>' +
+        '</div>';
+    },
+
     alerta: function (texto, tipo) {
       var clase = tipo === 'error' ? 'sigso-resultado-error' : (tipo === 'exito' ? 'sigso-resultado-exito' : 'sigso-alerta');
       return '<div class="' + clase + '"><p>' + escaparHtml(texto) + '</p></div>';
@@ -2589,8 +2795,16 @@ function renderHeaderSigso(paginaActiva) {
         var descripcionHtml = opts.editable
           ? '<input type="text" class="sigso-galeria__descripcion" data-campo="imagen-descripcion" data-idx="' + opts.idx + '" data-img-idx="' + idx + '" value="' + escaparHtml(img.descripcion) + '" placeholder="Descripcion breve">'
           : (img.descripcion ? '<p class="sigso-galeria__descripcion-texto">' + escaparHtml(img.descripcion) + '</p>' : '');
+        // v4.0 Frente 4: mientras se esta subiendo (editable) o el archivo no
+        // es una imagen (documento), el clic sigue abriendo en pestana
+        // nueva. Una imagen ya subida abre el lightbox -- ampliarla sin
+        // perder el contexto de la solicitud detras.
+        var esImagen = img.esImagen !== undefined ? img.esImagen : true;
+        var envoltorio = (opts.editable || !esImagen || !src)
+          ? '<a href="' + escaparHtml(src) + '" target="_blank" rel="noopener">' + contenidoImg + '</a>'
+          : '<button type="button" class="sigso-galeria__ver">' + contenidoImg + '</button>';
         return '<div class="sigso-galeria__item">' + quitar +
-          '<a href="' + escaparHtml(src) + '" target="_blank" rel="noopener">' + contenidoImg + '</a>' +
+          envoltorio +
           descripcionHtml +
           '</div>';
       }).join('') + '</div>';
@@ -2815,6 +3029,72 @@ function renderHeaderSigso(paginaActiva) {
     } catch (e) {
       return false;
     }
+  }
+
+  // v4.0 Frente 4: lightbox de imagenes. Delegado a nivel de documento (se
+  // registra una sola vez al cargar el script) en vez de que cada pantalla
+  // que use galeriaImagenes tenga que cablearlo -- mismo espiritu que el
+  // resto de Componentes, que se auto-manejan (aviso, confirmar).
+  document.addEventListener('click', function (ev) {
+    var boton = ev.target.closest && ev.target.closest('.sigso-galeria__ver');
+    if (!boton) return;
+    var galeria = boton.closest('.sigso-galeria');
+    if (!galeria) return;
+    var botones = [].slice.call(galeria.querySelectorAll('.sigso-galeria__ver'));
+    var imagenes = botones.map(function (b) {
+      var img = b.querySelector('img');
+      return { src: img ? img.src : '', alt: img ? img.alt : '' };
+    });
+    abrirLightbox_(imagenes, botones.indexOf(boton));
+  });
+
+  function abrirLightbox_(imagenes, indiceInicial) {
+    var actual = indiceInicial;
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-lightbox-fondo';
+
+    function marco() {
+      var img = imagenes[actual];
+      var varias = imagenes.length > 1;
+      return '<div class="sigso-lightbox" role="dialog" aria-modal="true" aria-label="Imagen ampliada">' +
+        '<button type="button" class="sigso-lightbox__cerrar" aria-label="Cerrar">' + ico_('equis', 20) + '</button>' +
+        (varias ? '<button type="button" class="sigso-lightbox__nav sigso-lightbox__nav--prev" aria-label="Imagen anterior">' + ico_('izquierda', 22) + '</button>' : '') +
+        '<img src="' + escaparHtml(img.src) + '" alt="' + escaparHtml(img.alt) + '">' +
+        (varias ? '<button type="button" class="sigso-lightbox__nav sigso-lightbox__nav--next" aria-label="Imagen siguiente">' + ico_('derecha', 22) + '</button>' : '') +
+        (varias ? '<div class="sigso-lightbox__contador">' + (actual + 1) + ' / ' + imagenes.length + '</div>' : '') +
+        '</div>';
+    }
+
+    function pintar() {
+      fondo.innerHTML = marco();
+      fondo.querySelector('.sigso-lightbox__cerrar').addEventListener('click', cerrar);
+      var prev = fondo.querySelector('.sigso-lightbox__nav--prev');
+      var next = fondo.querySelector('.sigso-lightbox__nav--next');
+      if (prev) prev.addEventListener('click', function (e) { e.stopPropagation(); mover_(-1); });
+      if (next) next.addEventListener('click', function (e) { e.stopPropagation(); mover_(1); });
+    }
+
+    function mover_(delta) {
+      actual = (actual + delta + imagenes.length) % imagenes.length;
+      pintar();
+    }
+
+    function cerrar() {
+      document.removeEventListener('keydown', alTeclado);
+      if (fondo.parentNode) fondo.parentNode.removeChild(fondo);
+    }
+
+    function alTeclado(ev) {
+      if (ev.key === 'Escape') { cerrar(); return; }
+      if (imagenes.length < 2) return;
+      if (ev.key === 'ArrowLeft') mover_(-1);
+      if (ev.key === 'ArrowRight') mover_(1);
+    }
+
+    fondo.addEventListener('click', function (ev) { if (ev.target === fondo) cerrar(); });
+    document.addEventListener('keydown', alTeclado);
+    pintar();
+    document.body.appendChild(fondo);
   }
 
   function campoBase_(opts, renderInput) {
@@ -3322,24 +3602,17 @@ var Iconos = (function () {
     });
   }
 
-  // UI-5 (§4): semaforo inline -- un vistazo (🔴/🟡/🟢) antes de leer texto,
-  // igual criterio que renderIndicadorSla_ pero como icono para escanear la
-  // lista rapido (mismo espiritu que el semaforo de Gerencia).
-  function semaforoInline_(horas) {
-    if (horas === null || horas === undefined) return '⚪';
-    if (horas < 0) return '🔴';
-    if (horas < 24) return '🟡';
-    return '🟢';
-  }
-
+  // v4.0 Frente 4: la fila gana jerarquia (ID + estado grandes, el resto
+  // secundario) y una barra de SLA en vez del semaforo de emoji (🔴🟡🟢) --
+  // una barra que se llena con la urgencia se escanea mas rapido que un
+  // circulo de color o un numero suelto ("Vence en Xh").
   function renderFilaReciente_(s) {
-    var sla = renderIndicadorSla_(s.sla_restante_horas);
+    var sla = Componentes.barraSla(s.sla_restante_horas);
     // P5 (v2.0, Sprint 3): badge visual de "respuesta recibida" -- para que
     // Leo no dependa solo de encontrar el correo entre el resto de avisos.
     var badgeRespuesta = s.respuesta_pendiente ? ' ' + Componentes.badge('Respuesta recibida', 'P2') : '';
     return '<div class="sigso-fila-reciente" data-id="' + s.solicitud_id + '">' +
       '<div class="sigso-fila-reciente__principal">' +
-      '<span class="sigso-semaforo-inline" title="Estado de plazo">' + semaforoInline_(s.sla_restante_horas) + '</span> ' +
       Componentes.badgePrioridad(s.prioridad_derivada) + ' ' +
       '<strong class="sigso-id">' + s.solicitud_id + '</strong> ' +
       Componentes.badgeEstado(s.estado_derivado) + badgeRespuesta +
@@ -3348,8 +3621,8 @@ var Iconos = (function () {
       s.empresa_id + ' &middot; ' + s.plataforma + ' / ' + s.modulo + ' &middot; ' +
       s.cantidad_items + ' item(s) &middot; ' +
       (s.asignado_a ? Componentes.escaparHtml(s.asignado_a) : 'Sin asignar') +
-      (sla ? ' &middot; ' + sla : '') +
       '</div>' +
+      (sla ? '<div class="sigso-fila-reciente__sla">' + sla + '</div>' : '') +
       '</div>';
   }
 
@@ -3371,12 +3644,6 @@ var Iconos = (function () {
     document.body.appendChild(enlace);
     enlace.click();
     document.body.removeChild(enlace);
-  }
-
-  function renderIndicadorSla_(horas) {
-    if (horas === null || horas === undefined) return '';
-    if (horas < 0) return Componentes.badge('Fuera de plazo', 'P1');
-    return 'Vence en ' + horas + 'h';
   }
 })();
 
@@ -3491,8 +3758,15 @@ var Iconos = (function () {
       ? '<p class="sigso-insignia-directa">⚡ Atención directa — registrada después de resolver</p>'
       : '';
 
+    // v4.0 Frente 4: barra de flujo S01..S09 -- de un vistazo se ve cuanto
+    // camino lleva la solicitud, no solo el estado puntual. La atencion
+    // directa no recorrio el flujo (nace cerrada en S09), asi que no aporta
+    // mostrarla igual que el resto.
+    var flujo = esAtencionDirecta ? '' : Componentes.flujoEstados(s.estado_derivado);
+
     return '<h2>' + s.solicitud_id + '</h2>' +
       '<p>' + Componentes.badgePrioridad(s.prioridad_derivada) + ' ' + Componentes.badgeEstado(s.estado_derivado) + '</p>' +
+      flujo +
       avisoAtencionDirecta +
       '<dl class="sigso-datos-item">' +
       renderCampoDato_('Ingresada', Componentes.escaparHtml(fechaCorta_(s.fecha_creacion))) +
@@ -3842,7 +4116,10 @@ var Iconos = (function () {
   function renderGaleria_(archivos) {
     return Componentes.galeriaImagenes((archivos || []).map(function (a) {
       var esImagen = String(a.tipo_mime || '').indexOf('image/') === 0;
-      return { url: a.url, nombre: a.nombre_original, descripcion: esImagen ? '' : a.nombre_original };
+      // v4.0 Frente 4: esImagen decide si el clic abre el lightbox (imagen)
+      // o sigue yendo a una pestana nueva (documento -- PDF/Excel/Word no
+      // se ven bien en un visor de imagenes).
+      return { url: a.url, nombre: a.nombre_original, descripcion: esImagen ? '' : a.nombre_original, esImagen: esImagen };
     }));
   }
 
@@ -3891,11 +4168,14 @@ var Iconos = (function () {
     })).sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
 
     // UI-2 (§5): icono por tipo de evento para escanear el timeline sin leer.
+    // v4.0 Frente 4: los emoji (🔄📅↪️💬🔒) pasan a los trazos SVG de
+    // iconos.js -- mismo motivo que el resto del rediseno (heredan
+    // currentColor, no cambian de forma entre sistemas operativos).
     function iconoEvento_(e) {
-      if (e.tipo === 'estado') return '🔄';
-      if (e.tipo === 'compromiso') return '📅';
-      if (e.tipo === 'asignacion') return '↪️';
-      return e.esInterno ? '🔒' : '💬';
+      if (e.tipo === 'estado') return Iconos.svg('estado', { tam: 14 });
+      if (e.tipo === 'compromiso') return Iconos.svg('calendario', { tam: 14 });
+      if (e.tipo === 'asignacion') return Iconos.svg('derivar', { tam: 14 });
+      return Iconos.svg(e.esInterno ? 'candado' : 'comentario', { tam: 14 });
     }
 
     var feed = eventos.length === 0

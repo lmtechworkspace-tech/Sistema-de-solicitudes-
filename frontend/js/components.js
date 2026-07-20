@@ -95,6 +95,47 @@
       return Componentes.badge(codigo, codigo);
     },
 
+    // v4.0 Frente 4: reemplaza el semaforo de emoji (🔴🟡🟢) y el texto suelto
+    // "Vence en Xh" -- una barra que se llena con la urgencia se escanea en
+    // una fila de tabla mas rapido que leer un numero. horas null/undefined
+    // (item sin SLA, ej. atencion directa) no renderiza nada.
+    barraSla: function (horas) {
+      if (horas === null || horas === undefined) return '';
+      var vencido = horas < 0;
+      var nivel = vencido ? 'critico' : (horas < 24 ? 'alerta' : 'ok');
+      // Ventana de referencia de 72h: mas alla de eso ya no aporta escanear
+      // el detalle, solo importa que esta "sano".
+      var pct = vencido ? 100 : Math.max(8, Math.min(100, Math.round(100 - (horas / 72) * 100)));
+      var texto = vencido ? 'Fuera de plazo' : ('Vence en ' + horas + 'h');
+      return '<span class="sigso-sla sigso-sla--' + nivel + '" title="' + escaparHtml(texto) + '">' +
+        '<span class="sigso-sla__barra"><span class="sigso-sla__relleno" style="width:' + pct + '%"></span></span>' +
+        '<span class="sigso-sla__texto">' + escaparHtml(texto) + '</span>' +
+        '</span>';
+    },
+
+    // v4.0 Frente 4: barra de flujo S01..S09 en la ficha del detalle -- de un
+    // vistazo se ve cuanto camino lleva la solicitud, no solo el estado
+    // puntual. S10/S11 son ramas de salida (rechazo/cancelacion), no un paso
+    // mas del flujo feliz, asi que se muestran aparte.
+    flujoEstados: function (codigoActual) {
+      var ORDEN = ['S01', 'S02', 'S03', 'S04', 'S05', 'S06', 'S07', 'S08', 'S09'];
+      var etiquetas = typeof SIGSO_ESTADOS_LABEL !== 'undefined' ? SIGSO_ESTADOS_LABEL : {};
+      if (codigoActual === 'S10' || codigoActual === 'S11') {
+        return '<div class="sigso-flujo-estados sigso-flujo-estados--interrumpido">' +
+          ico_('equis', 14) + ' Flujo interrumpido en: ' + escaparHtml(etiquetas[codigoActual] || codigoActual) +
+          '</div>';
+      }
+      var idx = ORDEN.indexOf(codigoActual);
+      var segmentos = ORDEN.map(function (cod, i) {
+        var estado = idx === -1 ? 'pendiente' : (i < idx ? 'hecho' : (i === idx ? 'actual' : 'pendiente'));
+        return '<span class="sigso-flujo-estados__seg sigso-flujo-estados__seg--' + estado + '" title="' + escaparHtml(etiquetas[cod] || cod) + '"></span>';
+      }).join('');
+      return '<div class="sigso-flujo-estados">' +
+        '<div class="sigso-flujo-estados__barra">' + segmentos + '</div>' +
+        '<span class="sigso-flujo-estados__etiqueta">' + escaparHtml(etiquetas[codigoActual] || codigoActual) + '</span>' +
+        '</div>';
+    },
+
     alerta: function (texto, tipo) {
       var clase = tipo === 'error' ? 'sigso-resultado-error' : (tipo === 'exito' ? 'sigso-resultado-exito' : 'sigso-alerta');
       return '<div class="' + clase + '"><p>' + escaparHtml(texto) + '</p></div>';
@@ -129,8 +170,16 @@
         var descripcionHtml = opts.editable
           ? '<input type="text" class="sigso-galeria__descripcion" data-campo="imagen-descripcion" data-idx="' + opts.idx + '" data-img-idx="' + idx + '" value="' + escaparHtml(img.descripcion) + '" placeholder="Descripcion breve">'
           : (img.descripcion ? '<p class="sigso-galeria__descripcion-texto">' + escaparHtml(img.descripcion) + '</p>' : '');
+        // v4.0 Frente 4: mientras se esta subiendo (editable) o el archivo no
+        // es una imagen (documento), el clic sigue abriendo en pestana
+        // nueva. Una imagen ya subida abre el lightbox -- ampliarla sin
+        // perder el contexto de la solicitud detras.
+        var esImagen = img.esImagen !== undefined ? img.esImagen : true;
+        var envoltorio = (opts.editable || !esImagen || !src)
+          ? '<a href="' + escaparHtml(src) + '" target="_blank" rel="noopener">' + contenidoImg + '</a>'
+          : '<button type="button" class="sigso-galeria__ver">' + contenidoImg + '</button>';
         return '<div class="sigso-galeria__item">' + quitar +
-          '<a href="' + escaparHtml(src) + '" target="_blank" rel="noopener">' + contenidoImg + '</a>' +
+          envoltorio +
           descripcionHtml +
           '</div>';
       }).join('') + '</div>';
@@ -355,6 +404,72 @@
     } catch (e) {
       return false;
     }
+  }
+
+  // v4.0 Frente 4: lightbox de imagenes. Delegado a nivel de documento (se
+  // registra una sola vez al cargar el script) en vez de que cada pantalla
+  // que use galeriaImagenes tenga que cablearlo -- mismo espiritu que el
+  // resto de Componentes, que se auto-manejan (aviso, confirmar).
+  document.addEventListener('click', function (ev) {
+    var boton = ev.target.closest && ev.target.closest('.sigso-galeria__ver');
+    if (!boton) return;
+    var galeria = boton.closest('.sigso-galeria');
+    if (!galeria) return;
+    var botones = [].slice.call(galeria.querySelectorAll('.sigso-galeria__ver'));
+    var imagenes = botones.map(function (b) {
+      var img = b.querySelector('img');
+      return { src: img ? img.src : '', alt: img ? img.alt : '' };
+    });
+    abrirLightbox_(imagenes, botones.indexOf(boton));
+  });
+
+  function abrirLightbox_(imagenes, indiceInicial) {
+    var actual = indiceInicial;
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-lightbox-fondo';
+
+    function marco() {
+      var img = imagenes[actual];
+      var varias = imagenes.length > 1;
+      return '<div class="sigso-lightbox" role="dialog" aria-modal="true" aria-label="Imagen ampliada">' +
+        '<button type="button" class="sigso-lightbox__cerrar" aria-label="Cerrar">' + ico_('equis', 20) + '</button>' +
+        (varias ? '<button type="button" class="sigso-lightbox__nav sigso-lightbox__nav--prev" aria-label="Imagen anterior">' + ico_('izquierda', 22) + '</button>' : '') +
+        '<img src="' + escaparHtml(img.src) + '" alt="' + escaparHtml(img.alt) + '">' +
+        (varias ? '<button type="button" class="sigso-lightbox__nav sigso-lightbox__nav--next" aria-label="Imagen siguiente">' + ico_('derecha', 22) + '</button>' : '') +
+        (varias ? '<div class="sigso-lightbox__contador">' + (actual + 1) + ' / ' + imagenes.length + '</div>' : '') +
+        '</div>';
+    }
+
+    function pintar() {
+      fondo.innerHTML = marco();
+      fondo.querySelector('.sigso-lightbox__cerrar').addEventListener('click', cerrar);
+      var prev = fondo.querySelector('.sigso-lightbox__nav--prev');
+      var next = fondo.querySelector('.sigso-lightbox__nav--next');
+      if (prev) prev.addEventListener('click', function (e) { e.stopPropagation(); mover_(-1); });
+      if (next) next.addEventListener('click', function (e) { e.stopPropagation(); mover_(1); });
+    }
+
+    function mover_(delta) {
+      actual = (actual + delta + imagenes.length) % imagenes.length;
+      pintar();
+    }
+
+    function cerrar() {
+      document.removeEventListener('keydown', alTeclado);
+      if (fondo.parentNode) fondo.parentNode.removeChild(fondo);
+    }
+
+    function alTeclado(ev) {
+      if (ev.key === 'Escape') { cerrar(); return; }
+      if (imagenes.length < 2) return;
+      if (ev.key === 'ArrowLeft') mover_(-1);
+      if (ev.key === 'ArrowRight') mover_(1);
+    }
+
+    fondo.addEventListener('click', function (ev) { if (ev.target === fondo) cerrar(); });
+    document.addEventListener('keydown', alTeclado);
+    pintar();
+    document.body.appendChild(fondo);
   }
 
   function campoBase_(opts, renderInput) {
