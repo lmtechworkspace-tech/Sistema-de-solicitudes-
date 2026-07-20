@@ -485,7 +485,7 @@
     cargarConToken: function (token) {
       var panel = document.getElementById('panel-lista-mis-solicitudes');
       var lista = document.getElementById('lista-mis-solicitudes');
-      lista.innerHTML = Componentes.cargando('Cargando tus solicitudes...');
+      lista.innerHTML = Componentes.esqueleto({ filas: 4 });
       panel.classList.remove('sigso-oculto');
       return llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'misSolicitudes', { token: token })
         .then(function (respuesta) {
@@ -541,7 +541,11 @@
 
     var contenedor = document.getElementById('lista-mis-solicitudes');
     if (filtradas.length === 0) {
-      contenedor.innerHTML = Componentes.vacio('No hay solicitudes que coincidan con el filtro.');
+      contenedor.innerHTML = Componentes.vacio({
+        icono: 'filtro',
+        texto: 'Ninguna solicitud coincide con el filtro.',
+        detalle: 'Prueba con "Todas" para ver el listado completo.'
+      });
       return;
     }
 
@@ -574,7 +578,7 @@
         boton.classList.add('sigso-bandeja__fila--activa');
         var detalle = document.getElementById('detalle-mis-solicitudes');
         detalle.classList.remove('sigso-oculto');
-        detalle.innerHTML = Componentes.cargando('Cargando detalle...');
+        detalle.innerHTML = Componentes.esqueleto({ variante: 'tarjeta', filas: 1 });
         consultar_(
           boton.getAttribute('data-solicitud'),
           boton.getAttribute('data-email') || sesionMisSolicitudes.email,

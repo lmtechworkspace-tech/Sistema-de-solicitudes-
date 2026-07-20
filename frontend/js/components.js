@@ -26,9 +26,15 @@
   var Componentes = {
     escaparHtml: escaparHtml,
 
+    // variante: 'primario' (default) | 'secundario' | 'sutil' | 'peligro'.
+    // v4.0 Frente 2: antes solo habia primario/secundario, asi que acciones
+    // sin retorno (derivar en lote, desactivar cuenta) se pintaban igual que
+    // "Guardar" y no habia forma de bajarle el peso a una accion terciaria.
     boton: function (opts) {
       opts = opts || {};
-      var clase = 'sigso-boton' + (opts.variante === 'secundario' ? ' sigso-boton--secundario' : '');
+      var VARIANTES = { secundario: 1, sutil: 1, peligro: 1 };
+      var clase = 'sigso-boton' + (VARIANTES[opts.variante] ? ' sigso-boton--' + opts.variante : '');
+      if (opts.icono) clase += ' sigso-boton--con-icono';
       if (opts.clase) clase += ' ' + opts.clase;
       var attrs = atributos({
         type: opts.tipo || 'button', id: opts.id, class: clase, disabled: !!opts.disabled,
@@ -36,7 +42,7 @@
       });
       var contenido = opts.cargando
         ? '<span class="sigso-spinner"></span>' + escaparHtml(opts.textoCargando || opts.texto)
-        : escaparHtml(opts.texto);
+        : (ico_(opts.icono) + escaparHtml(opts.texto));
       return '<button ' + attrs + '>' + contenido + '</button>';
     },
 
@@ -74,9 +80,15 @@
       return '<span class="sigso-badge' + (variante ? ' sigso-badge--' + variante : '') + '">' + escaparHtml(texto) + '</span>';
     },
 
+    // v4.0 Frente 2: la pastilla de estado deja de ser un badge azul plano
+    // igual para los 11 estados. Ahora el color dice en que FAMILIA esta la
+    // solicitud (en curso / esperando al solicitante / cerrada bien / cerrada
+    // mal) y un punto al inicio le da forma propia, para no confundirla con
+    // el badge de prioridad, que es el otro elemento redondo de la fila.
     badgeEstado: function (codigo) {
       var texto = (typeof SIGSO_ESTADOS_LABEL !== 'undefined' && SIGSO_ESTADOS_LABEL[codigo]) || codigo;
-      return '<span class="sigso-badge sigso-badge--estado">' + escaparHtml(texto) + '</span>';
+      return '<span class="sigso-pastilla sigso-pastilla--' + familiaEstado_(codigo) + '">' +
+        '<span class="sigso-pastilla__punto"></span>' + escaparHtml(texto) + '</span>';
     },
 
     badgePrioridad: function (codigo) {
@@ -147,10 +159,203 @@
         '</' + tag + '>';
     },
 
+    // Acepta el string de siempre (todos los llamadores previos) o un objeto
+    // { texto, detalle, icono, accion:{texto,accion} } -- v4.0 Frente 2: un
+    // parrafo gris no distingue "no hay nada" de "todavia esta cargando" ni
+    // dice que hacer al respecto.
     vacio: function (texto) {
-      return '<p class="sigso-vacio">' + escaparHtml(texto || 'Nada por aqui todavia.') + '</p>';
+      var o = typeof texto === 'string' || texto === undefined || texto === null
+        ? { texto: texto } : texto;
+      var cta = o.accion
+        ? Componentes.boton({ texto: o.accion.texto, variante: 'secundario', accion: o.accion.accion, id: o.accion.id })
+        : '';
+      return '<div class="sigso-vacio">' +
+        '<div class="sigso-vacio__icono">' + ico_(o.icono || 'caja', 26) + '</div>' +
+        '<p class="sigso-vacio__texto">' + escaparHtml(o.texto || 'Nada por aqui todavia.') + '</p>' +
+        (o.detalle ? '<p class="sigso-vacio__detalle">' + escaparHtml(o.detalle) + '</p>' : '') +
+        cta + '</div>';
+    },
+
+    // Esqueleto de carga: bloques con la forma del contenido que viene, en
+    // vez de un spinner que no dice cuanto falta ni de que tamano. `filas`
+    // repite el bloque; `variante` 'tabla' | 'tarjeta' | 'lineas'.
+    esqueleto: function (opts) {
+      opts = opts || {};
+      var filas = opts.filas || 3;
+      var bloque = opts.variante === 'tarjeta'
+        ? '<div class="sigso-esq__tarjeta"><span class="sigso-esq__barra" style="width:45%"></span>' +
+          '<span class="sigso-esq__barra" style="width:80%"></span>' +
+          '<span class="sigso-esq__barra" style="width:60%"></span></div>'
+        : '<div class="sigso-esq__fila">' +
+          '<span class="sigso-esq__barra" style="width:22%"></span>' +
+          '<span class="sigso-esq__barra" style="width:48%"></span>' +
+          '<span class="sigso-esq__barra" style="width:18%"></span></div>';
+      var html = '';
+      for (var i = 0; i < filas; i++) { html += bloque; }
+      return '<div class="sigso-esq" aria-busy="true" aria-label="Cargando">' + html + '</div>';
+    },
+
+    /**
+     * Aviso flotante (toast). Reemplaza los alert() del navegador, que
+     * bloquean la pagina, no se pueden copiar comodo y salen con el titulo
+     * "script.google.com dice:" -- pesimo para mostrar una clave temporal.
+     *
+     * @param {{texto:string, detalle?:string, tipo?:'exito'|'error'|'info',
+     *          copiar?:string, duracion?:number}} opts
+     *        copiar: texto que el aviso ofrece copiar al portapapeles (y por
+     *        el que NO se auto-cierra: la clave debe quedar hasta que la
+     *        guarden).
+     */
+    aviso: function (opts) {
+      opts = typeof opts === 'string' ? { texto: opts } : (opts || {});
+      var cont = contenedorAvisos_();
+      var tipo = opts.tipo || 'info';
+      var iconos = { exito: 'check', error: 'alerta', info: 'info' };
+
+      var el = document.createElement('div');
+      el.className = 'sigso-aviso sigso-aviso--' + tipo;
+      el.setAttribute('role', tipo === 'error' ? 'alert' : 'status');
+      el.innerHTML =
+        '<span class="sigso-aviso__icono">' + ico_(iconos[tipo] || 'info', 18) + '</span>' +
+        '<div class="sigso-aviso__cuerpo">' +
+          '<p class="sigso-aviso__texto">' + escaparHtml(opts.texto) + '</p>' +
+          (opts.detalle ? '<p class="sigso-aviso__detalle">' + escaparHtml(opts.detalle) + '</p>' : '') +
+          (opts.copiar
+            ? '<code class="sigso-aviso__valor">' + escaparHtml(opts.copiar) + '</code>' +
+              '<button type="button" class="sigso-boton sigso-boton--secundario sigso-boton--con-icono sigso-aviso__copiar">' +
+              ico_('copiar') + 'Copiar</button>'
+            : '') +
+        '</div>' +
+        '<button type="button" class="sigso-aviso__cerrar" aria-label="Cerrar aviso">' + ico_('equis', 16) + '</button>';
+
+      function cerrar() {
+        el.classList.add('sigso-aviso--saliendo');
+        setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 200);
+      }
+      el.querySelector('.sigso-aviso__cerrar').addEventListener('click', cerrar);
+
+      var btnCopiar = el.querySelector('.sigso-aviso__copiar');
+      if (btnCopiar) {
+        btnCopiar.addEventListener('click', function () {
+          copiarAlPortapapeles_(opts.copiar).then(function (ok) {
+            btnCopiar.innerHTML = ico_(ok ? 'check' : 'equis') + (ok ? 'Copiada' : 'No se pudo');
+            setTimeout(function () { btnCopiar.innerHTML = ico_('copiar') + 'Copiar'; }, 2000);
+          });
+        });
+      }
+
+      cont.appendChild(el);
+      // Con `copiar` no hay auto-cierre: la clave temporal solo existe aqui.
+      var duracion = opts.duracion !== undefined ? opts.duracion : (opts.copiar ? 0 : 5000);
+      if (duracion > 0) { setTimeout(cerrar, duracion); }
+      return { cerrar: cerrar, elemento: el };
+    },
+
+    /**
+     * Confirmacion propia. Devuelve una Promise<boolean> -- reemplaza a
+     * window.confirm, que ademas de feo no permite marcar la accion como
+     * destructiva ni recordar el conteo en el boton.
+     * @param {{titulo:string, mensaje?:string, confirmar?:string,
+     *          cancelar?:string, peligro?:boolean}} opts
+     */
+    confirmar: function (opts) {
+      opts = opts || {};
+      return new Promise(function (resolver) {
+        var fondo = document.createElement('div');
+        fondo.className = 'sigso-modal-fondo';
+        fondo.innerHTML =
+          '<div class="sigso-modal" role="dialog" aria-modal="true" aria-labelledby="sigso-modal-titulo">' +
+            '<h3 class="sigso-modal__titulo" id="sigso-modal-titulo">' + escaparHtml(opts.titulo) + '</h3>' +
+            (opts.mensaje ? '<p class="sigso-modal__mensaje">' + escaparHtml(opts.mensaje) + '</p>' : '') +
+            '<div class="sigso-modal__acciones">' +
+              Componentes.boton({ texto: opts.cancelar || 'Cancelar', variante: 'sutil', clase: 'js-modal-no' }) +
+              Componentes.boton({
+                texto: opts.confirmar || 'Confirmar',
+                variante: opts.peligro ? 'peligro' : undefined,
+                clase: 'js-modal-si'
+              }) +
+            '</div>' +
+          '</div>';
+
+        function cerrar(valor) {
+          document.removeEventListener('keydown', alTeclado);
+          if (fondo.parentNode) fondo.parentNode.removeChild(fondo);
+          resolver(valor);
+        }
+        function alTeclado(ev) { if (ev.key === 'Escape') cerrar(false); }
+
+        fondo.querySelector('.js-modal-no').addEventListener('click', function () { cerrar(false); });
+        fondo.querySelector('.js-modal-si').addEventListener('click', function () { cerrar(true); });
+        // Clic en el velo = cancelar; clic dentro del cuadro, no.
+        fondo.addEventListener('click', function (ev) { if (ev.target === fondo) cerrar(false); });
+        document.addEventListener('keydown', alTeclado);
+
+        document.body.appendChild(fondo);
+        fondo.querySelector('.js-modal-si').focus();
+      });
     }
   };
+
+  // Familias de estado (§8). S01-S02 entran recien, S03-S07 estan en curso,
+  // S08 espera al solicitante, S09 cerro bien, S10/S11 cerraron sin entregar.
+  var FAMILIA_ESTADO = {
+    S01: 'nueva', S02: 'nueva',
+    S03: 'curso', S04: 'curso', S05: 'curso', S06: 'curso', S07: 'curso',
+    S08: 'espera',
+    S09: 'ok', S10: 'no', S11: 'no'
+  };
+
+  function familiaEstado_(codigo) {
+    return FAMILIA_ESTADO[codigo] || 'curso';
+  }
+
+  // iconos.js se carga DESPUES que este archivo en todas las paginas, asi que
+  // la referencia se resuelve al invocar (no al definir). Si faltara, se
+  // degrada a texto sin icono en vez de romper la pantalla.
+  function ico_(nombre, tam) {
+    if (!nombre || typeof Iconos === 'undefined') return '';
+    return Iconos.svg(nombre, { tam: tam || 16 });
+  }
+
+  function contenedorAvisos_() {
+    var cont = document.getElementById('sigso-avisos');
+    if (!cont) {
+      cont = document.createElement('div');
+      cont.id = 'sigso-avisos';
+      cont.className = 'sigso-avisos';
+      document.body.appendChild(cont);
+    }
+    return cont;
+  }
+
+  // navigator.clipboard exige contexto seguro (https o localhost). El
+  // Backoffice se sirve dentro de un iframe de googleusercontent, donde a
+  // veces no esta disponible: por eso el respaldo con execCommand.
+  function copiarAlPortapapeles_(texto) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(texto)
+        .then(function () { return true; })
+        .catch(function () { return respaldoCopiar_(texto); });
+    }
+    return Promise.resolve(respaldoCopiar_(texto));
+  }
+
+  function respaldoCopiar_(texto) {
+    try {
+      var area = document.createElement('textarea');
+      area.value = texto;
+      area.setAttribute('readonly', '');
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(area);
+      return ok;
+    } catch (e) {
+      return false;
+    }
+  }
 
   function campoBase_(opts, renderInput) {
     opts = opts || {};

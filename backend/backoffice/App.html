@@ -1154,6 +1154,290 @@ button {
   margin-bottom: 0.15rem;
 }
 
+/* =====================================================================
+   v4.0 Frente 2 — componentes compartidos
+   Viven aqui (y no en la hoja de cada pantalla) porque los usan las cinco:
+   formulario, consultar estado, bandeja, gerencia y administracion.
+   ===================================================================== */
+
+/* --- Pastilla de estado ---------------------------------------------
+   Forma propia (esquina menos redonda + punto) para no confundirla con el
+   badge de prioridad, que es la otra ficha de color de la misma fila. El
+   color indica la FAMILIA del estado, no el estado exacto: son 11 estados y
+   11 colores no se memorizan. */
+.sigso-pastilla {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.6rem 0.2rem 0.5rem;
+  border-radius: var(--radio-sm);
+  border: 1px solid currentColor;
+  font-size: var(--texto-xs);
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.sigso-pastilla__punto {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+.sigso-pastilla--nueva  { color: var(--azul);    background: var(--info-suave); }
+.sigso-pastilla--curso  { color: var(--alerta);  background: var(--alerta-suave); }
+.sigso-pastilla--espera { color: var(--naranja); background: var(--naranja-claro); }
+.sigso-pastilla--ok     { color: var(--ok);      background: var(--ok-suave); }
+.sigso-pastilla--no     { color: var(--texto-2); background: var(--superficie-2); }
+
+/* --- Jerarquia de botones -------------------------------------------
+   Antes solo habia primario y secundario: "Guardar" y "Desactivar cuenta"
+   pesaban igual. Ahora hay cuatro niveles y el peso visual corresponde a la
+   consecuencia de la accion. */
+.sigso-boton--sutil {
+  background: transparent;
+  color: var(--texto-2);
+  border: 1px solid transparent;
+  font-weight: 600;
+}
+
+.sigso-boton--sutil:hover {
+  background: var(--superficie-2);
+  color: var(--texto);
+}
+
+.sigso-boton--peligro {
+  background: var(--critico);
+  color: #fff;
+  border: none;
+}
+
+.sigso-boton--peligro:hover { background: #93211B; }
+
+.sigso-boton--con-icono {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/* --- Avisos flotantes (toasts) --------------------------------------
+   Reemplazan alert(): no bloquean la pagina, se pueden copiar y no llegan
+   con el titulo "script.google.com dice:". */
+.sigso-avisos {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: min(380px, calc(100vw - 2rem));
+}
+
+.sigso-aviso {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-left: 4px solid var(--info);
+  border-radius: var(--radio-md);
+  box-shadow: var(--sombra-3);
+  padding: 0.8rem 0.9rem;
+  animation: sigso-aviso-entrar 0.18s ease-out;
+}
+
+@keyframes sigso-aviso-entrar {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.sigso-aviso--saliendo {
+  opacity: 0;
+  transform: translateX(16px);
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.sigso-aviso--exito { border-left-color: var(--ok); }
+.sigso-aviso--error { border-left-color: var(--critico); }
+
+.sigso-aviso__icono { flex: none; margin-top: 0.1rem; }
+.sigso-aviso--exito .sigso-aviso__icono { color: var(--ok); }
+.sigso-aviso--error .sigso-aviso__icono { color: var(--critico); }
+.sigso-aviso--info  .sigso-aviso__icono { color: var(--info); }
+
+.sigso-aviso__cuerpo { flex: 1; min-width: 0; }
+
+.sigso-aviso__texto {
+  margin: 0;
+  font-size: var(--texto-sm);
+  font-weight: 600;
+  color: var(--texto);
+}
+
+.sigso-aviso__detalle {
+  margin: 0.25rem 0 0;
+  font-size: var(--texto-xs);
+  color: var(--texto-2);
+  line-height: 1.45;
+}
+
+/* La clave temporal: monoespaciada y seleccionable, porque a veces se dicta
+   por telefono y hay que distinguir 0 de O. */
+.sigso-aviso__valor {
+  display: block;
+  margin: 0.5rem 0;
+  padding: 0.45rem 0.6rem;
+  background: var(--superficie-2);
+  border-radius: var(--radio-sm);
+  font-family: var(--fuente-mono);
+  font-size: var(--texto-sm);
+  letter-spacing: 0.04em;
+  color: var(--texto);
+  user-select: all;
+  word-break: break-all;
+}
+
+.sigso-aviso__copiar {
+  padding: 0.35rem 0.7rem;
+  font-size: var(--texto-xs);
+}
+
+.sigso-aviso__cerrar {
+  flex: none;
+  background: transparent;
+  border: none;
+  color: var(--texto-3);
+  padding: 0.1rem;
+  border-radius: var(--radio-sm);
+  display: grid;
+  place-items: center;
+}
+
+.sigso-aviso__cerrar:hover { color: var(--texto); }
+
+/* --- Confirmacion propia (reemplaza window.confirm) ------------------ */
+.sigso-modal-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 1010;
+  background: rgba(36, 28, 24, 0.45);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  animation: sigso-fundido 0.15s ease-out;
+}
+
+@keyframes sigso-fundido { from { opacity: 0; } to { opacity: 1; } }
+
+.sigso-modal {
+  background: var(--superficie);
+  border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-3);
+  padding: var(--esp-5);
+  max-width: 420px;
+  width: 100%;
+}
+
+.sigso-modal__titulo {
+  margin: 0 0 var(--esp-2);
+  font-size: var(--texto-lg);
+  color: var(--texto);
+}
+
+.sigso-modal__mensaje {
+  margin: 0;
+  font-size: var(--texto-sm);
+  color: var(--texto-2);
+  line-height: 1.55;
+}
+
+.sigso-modal__acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--esp-2);
+  margin-top: var(--esp-5);
+}
+
+/* --- Esqueleto de carga ---------------------------------------------
+   Muestra la FORMA de lo que viene. Un spinner solo dice "espera"; esto
+   ademas evita que el contenido salte cuando llega. */
+.sigso-esq__fila {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-4);
+  padding: 0.7rem 0;
+  border-bottom: 1px solid var(--borde);
+}
+
+.sigso-esq__tarjeta {
+  padding: var(--esp-4);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
+  margin-bottom: var(--esp-3);
+}
+
+.sigso-esq__tarjeta .sigso-esq__barra { display: block; margin-bottom: 0.55rem; }
+.sigso-esq__tarjeta .sigso-esq__barra:last-child { margin-bottom: 0; }
+
+.sigso-esq__barra {
+  height: 10px;
+  border-radius: var(--radio-full);
+  background: linear-gradient(90deg, var(--superficie-2) 25%, #E9E1DA 37%, var(--superficie-2) 63%);
+  background-size: 400% 100%;
+  animation: sigso-brillo 1.4s ease-in-out infinite;
+}
+
+@keyframes sigso-brillo {
+  from { background-position: 100% 50%; }
+  to   { background-position: 0 50%; }
+}
+
+/* Quien pide menos movimiento ve el esqueleto quieto, no parpadeando. */
+@media (prefers-reduced-motion: reduce) {
+  .sigso-esq__barra,
+  .sigso-aviso,
+  .sigso-modal-fondo { animation: none; }
+}
+
+/* --- Estado vacio ----------------------------------------------------
+   Reemplaza el parrafo gris suelto: icono, frase y (si aplica) el boton que
+   resuelve el vacio. */
+.sigso-vacio {
+  text-align: center;
+  padding: var(--esp-6) var(--esp-4);
+  color: var(--texto-2);
+}
+
+.sigso-vacio__icono {
+  width: 52px;
+  height: 52px;
+  margin: 0 auto var(--esp-3);
+  border-radius: 50%;
+  background: var(--superficie-2);
+  color: var(--texto-3);
+  display: grid;
+  place-items: center;
+}
+
+.sigso-vacio__texto {
+  margin: 0;
+  font-size: var(--texto-base);
+  font-weight: 600;
+  color: var(--texto);
+}
+
+.sigso-vacio__detalle {
+  margin: var(--esp-2) auto 0;
+  max-width: 42ch;
+  font-size: var(--texto-sm);
+  line-height: 1.55;
+}
+
+.sigso-vacio .sigso-boton { margin-top: var(--esp-4); }
+
 </style>
   <style>
 /* dashboard.css — Backoffice: KPIs, graficos, tabla, detalle (§12.4/12.5). */
@@ -2184,9 +2468,15 @@ function renderHeaderSigso(paginaActiva) {
   var Componentes = {
     escaparHtml: escaparHtml,
 
+    // variante: 'primario' (default) | 'secundario' | 'sutil' | 'peligro'.
+    // v4.0 Frente 2: antes solo habia primario/secundario, asi que acciones
+    // sin retorno (derivar en lote, desactivar cuenta) se pintaban igual que
+    // "Guardar" y no habia forma de bajarle el peso a una accion terciaria.
     boton: function (opts) {
       opts = opts || {};
-      var clase = 'sigso-boton' + (opts.variante === 'secundario' ? ' sigso-boton--secundario' : '');
+      var VARIANTES = { secundario: 1, sutil: 1, peligro: 1 };
+      var clase = 'sigso-boton' + (VARIANTES[opts.variante] ? ' sigso-boton--' + opts.variante : '');
+      if (opts.icono) clase += ' sigso-boton--con-icono';
       if (opts.clase) clase += ' ' + opts.clase;
       var attrs = atributos({
         type: opts.tipo || 'button', id: opts.id, class: clase, disabled: !!opts.disabled,
@@ -2194,7 +2484,7 @@ function renderHeaderSigso(paginaActiva) {
       });
       var contenido = opts.cargando
         ? '<span class="sigso-spinner"></span>' + escaparHtml(opts.textoCargando || opts.texto)
-        : escaparHtml(opts.texto);
+        : (ico_(opts.icono) + escaparHtml(opts.texto));
       return '<button ' + attrs + '>' + contenido + '</button>';
     },
 
@@ -2232,9 +2522,15 @@ function renderHeaderSigso(paginaActiva) {
       return '<span class="sigso-badge' + (variante ? ' sigso-badge--' + variante : '') + '">' + escaparHtml(texto) + '</span>';
     },
 
+    // v4.0 Frente 2: la pastilla de estado deja de ser un badge azul plano
+    // igual para los 11 estados. Ahora el color dice en que FAMILIA esta la
+    // solicitud (en curso / esperando al solicitante / cerrada bien / cerrada
+    // mal) y un punto al inicio le da forma propia, para no confundirla con
+    // el badge de prioridad, que es el otro elemento redondo de la fila.
     badgeEstado: function (codigo) {
       var texto = (typeof SIGSO_ESTADOS_LABEL !== 'undefined' && SIGSO_ESTADOS_LABEL[codigo]) || codigo;
-      return '<span class="sigso-badge sigso-badge--estado">' + escaparHtml(texto) + '</span>';
+      return '<span class="sigso-pastilla sigso-pastilla--' + familiaEstado_(codigo) + '">' +
+        '<span class="sigso-pastilla__punto"></span>' + escaparHtml(texto) + '</span>';
     },
 
     badgePrioridad: function (codigo) {
@@ -2305,10 +2601,203 @@ function renderHeaderSigso(paginaActiva) {
         '</' + tag + '>';
     },
 
+    // Acepta el string de siempre (todos los llamadores previos) o un objeto
+    // { texto, detalle, icono, accion:{texto,accion} } -- v4.0 Frente 2: un
+    // parrafo gris no distingue "no hay nada" de "todavia esta cargando" ni
+    // dice que hacer al respecto.
     vacio: function (texto) {
-      return '<p class="sigso-vacio">' + escaparHtml(texto || 'Nada por aqui todavia.') + '</p>';
+      var o = typeof texto === 'string' || texto === undefined || texto === null
+        ? { texto: texto } : texto;
+      var cta = o.accion
+        ? Componentes.boton({ texto: o.accion.texto, variante: 'secundario', accion: o.accion.accion, id: o.accion.id })
+        : '';
+      return '<div class="sigso-vacio">' +
+        '<div class="sigso-vacio__icono">' + ico_(o.icono || 'caja', 26) + '</div>' +
+        '<p class="sigso-vacio__texto">' + escaparHtml(o.texto || 'Nada por aqui todavia.') + '</p>' +
+        (o.detalle ? '<p class="sigso-vacio__detalle">' + escaparHtml(o.detalle) + '</p>' : '') +
+        cta + '</div>';
+    },
+
+    // Esqueleto de carga: bloques con la forma del contenido que viene, en
+    // vez de un spinner que no dice cuanto falta ni de que tamano. `filas`
+    // repite el bloque; `variante` 'tabla' | 'tarjeta' | 'lineas'.
+    esqueleto: function (opts) {
+      opts = opts || {};
+      var filas = opts.filas || 3;
+      var bloque = opts.variante === 'tarjeta'
+        ? '<div class="sigso-esq__tarjeta"><span class="sigso-esq__barra" style="width:45%"></span>' +
+          '<span class="sigso-esq__barra" style="width:80%"></span>' +
+          '<span class="sigso-esq__barra" style="width:60%"></span></div>'
+        : '<div class="sigso-esq__fila">' +
+          '<span class="sigso-esq__barra" style="width:22%"></span>' +
+          '<span class="sigso-esq__barra" style="width:48%"></span>' +
+          '<span class="sigso-esq__barra" style="width:18%"></span></div>';
+      var html = '';
+      for (var i = 0; i < filas; i++) { html += bloque; }
+      return '<div class="sigso-esq" aria-busy="true" aria-label="Cargando">' + html + '</div>';
+    },
+
+    /**
+     * Aviso flotante (toast). Reemplaza los alert() del navegador, que
+     * bloquean la pagina, no se pueden copiar comodo y salen con el titulo
+     * "script.google.com dice:" -- pesimo para mostrar una clave temporal.
+     *
+     * @param {{texto:string, detalle?:string, tipo?:'exito'|'error'|'info',
+     *          copiar?:string, duracion?:number}} opts
+     *        copiar: texto que el aviso ofrece copiar al portapapeles (y por
+     *        el que NO se auto-cierra: la clave debe quedar hasta que la
+     *        guarden).
+     */
+    aviso: function (opts) {
+      opts = typeof opts === 'string' ? { texto: opts } : (opts || {});
+      var cont = contenedorAvisos_();
+      var tipo = opts.tipo || 'info';
+      var iconos = { exito: 'check', error: 'alerta', info: 'info' };
+
+      var el = document.createElement('div');
+      el.className = 'sigso-aviso sigso-aviso--' + tipo;
+      el.setAttribute('role', tipo === 'error' ? 'alert' : 'status');
+      el.innerHTML =
+        '<span class="sigso-aviso__icono">' + ico_(iconos[tipo] || 'info', 18) + '</span>' +
+        '<div class="sigso-aviso__cuerpo">' +
+          '<p class="sigso-aviso__texto">' + escaparHtml(opts.texto) + '</p>' +
+          (opts.detalle ? '<p class="sigso-aviso__detalle">' + escaparHtml(opts.detalle) + '</p>' : '') +
+          (opts.copiar
+            ? '<code class="sigso-aviso__valor">' + escaparHtml(opts.copiar) + '</code>' +
+              '<button type="button" class="sigso-boton sigso-boton--secundario sigso-boton--con-icono sigso-aviso__copiar">' +
+              ico_('copiar') + 'Copiar</button>'
+            : '') +
+        '</div>' +
+        '<button type="button" class="sigso-aviso__cerrar" aria-label="Cerrar aviso">' + ico_('equis', 16) + '</button>';
+
+      function cerrar() {
+        el.classList.add('sigso-aviso--saliendo');
+        setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 200);
+      }
+      el.querySelector('.sigso-aviso__cerrar').addEventListener('click', cerrar);
+
+      var btnCopiar = el.querySelector('.sigso-aviso__copiar');
+      if (btnCopiar) {
+        btnCopiar.addEventListener('click', function () {
+          copiarAlPortapapeles_(opts.copiar).then(function (ok) {
+            btnCopiar.innerHTML = ico_(ok ? 'check' : 'equis') + (ok ? 'Copiada' : 'No se pudo');
+            setTimeout(function () { btnCopiar.innerHTML = ico_('copiar') + 'Copiar'; }, 2000);
+          });
+        });
+      }
+
+      cont.appendChild(el);
+      // Con `copiar` no hay auto-cierre: la clave temporal solo existe aqui.
+      var duracion = opts.duracion !== undefined ? opts.duracion : (opts.copiar ? 0 : 5000);
+      if (duracion > 0) { setTimeout(cerrar, duracion); }
+      return { cerrar: cerrar, elemento: el };
+    },
+
+    /**
+     * Confirmacion propia. Devuelve una Promise<boolean> -- reemplaza a
+     * window.confirm, que ademas de feo no permite marcar la accion como
+     * destructiva ni recordar el conteo en el boton.
+     * @param {{titulo:string, mensaje?:string, confirmar?:string,
+     *          cancelar?:string, peligro?:boolean}} opts
+     */
+    confirmar: function (opts) {
+      opts = opts || {};
+      return new Promise(function (resolver) {
+        var fondo = document.createElement('div');
+        fondo.className = 'sigso-modal-fondo';
+        fondo.innerHTML =
+          '<div class="sigso-modal" role="dialog" aria-modal="true" aria-labelledby="sigso-modal-titulo">' +
+            '<h3 class="sigso-modal__titulo" id="sigso-modal-titulo">' + escaparHtml(opts.titulo) + '</h3>' +
+            (opts.mensaje ? '<p class="sigso-modal__mensaje">' + escaparHtml(opts.mensaje) + '</p>' : '') +
+            '<div class="sigso-modal__acciones">' +
+              Componentes.boton({ texto: opts.cancelar || 'Cancelar', variante: 'sutil', clase: 'js-modal-no' }) +
+              Componentes.boton({
+                texto: opts.confirmar || 'Confirmar',
+                variante: opts.peligro ? 'peligro' : undefined,
+                clase: 'js-modal-si'
+              }) +
+            '</div>' +
+          '</div>';
+
+        function cerrar(valor) {
+          document.removeEventListener('keydown', alTeclado);
+          if (fondo.parentNode) fondo.parentNode.removeChild(fondo);
+          resolver(valor);
+        }
+        function alTeclado(ev) { if (ev.key === 'Escape') cerrar(false); }
+
+        fondo.querySelector('.js-modal-no').addEventListener('click', function () { cerrar(false); });
+        fondo.querySelector('.js-modal-si').addEventListener('click', function () { cerrar(true); });
+        // Clic en el velo = cancelar; clic dentro del cuadro, no.
+        fondo.addEventListener('click', function (ev) { if (ev.target === fondo) cerrar(false); });
+        document.addEventListener('keydown', alTeclado);
+
+        document.body.appendChild(fondo);
+        fondo.querySelector('.js-modal-si').focus();
+      });
     }
   };
+
+  // Familias de estado (§8). S01-S02 entran recien, S03-S07 estan en curso,
+  // S08 espera al solicitante, S09 cerro bien, S10/S11 cerraron sin entregar.
+  var FAMILIA_ESTADO = {
+    S01: 'nueva', S02: 'nueva',
+    S03: 'curso', S04: 'curso', S05: 'curso', S06: 'curso', S07: 'curso',
+    S08: 'espera',
+    S09: 'ok', S10: 'no', S11: 'no'
+  };
+
+  function familiaEstado_(codigo) {
+    return FAMILIA_ESTADO[codigo] || 'curso';
+  }
+
+  // iconos.js se carga DESPUES que este archivo en todas las paginas, asi que
+  // la referencia se resuelve al invocar (no al definir). Si faltara, se
+  // degrada a texto sin icono en vez de romper la pantalla.
+  function ico_(nombre, tam) {
+    if (!nombre || typeof Iconos === 'undefined') return '';
+    return Iconos.svg(nombre, { tam: tam || 16 });
+  }
+
+  function contenedorAvisos_() {
+    var cont = document.getElementById('sigso-avisos');
+    if (!cont) {
+      cont = document.createElement('div');
+      cont.id = 'sigso-avisos';
+      cont.className = 'sigso-avisos';
+      document.body.appendChild(cont);
+    }
+    return cont;
+  }
+
+  // navigator.clipboard exige contexto seguro (https o localhost). El
+  // Backoffice se sirve dentro de un iframe de googleusercontent, donde a
+  // veces no esta disponible: por eso el respaldo con execCommand.
+  function copiarAlPortapapeles_(texto) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(texto)
+        .then(function () { return true; })
+        .catch(function () { return respaldoCopiar_(texto); });
+    }
+    return Promise.resolve(respaldoCopiar_(texto));
+  }
+
+  function respaldoCopiar_(texto) {
+    try {
+      var area = document.createElement('textarea');
+      area.value = texto;
+      area.setAttribute('readonly', '');
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(area);
+      return ok;
+    } catch (e) {
+      return false;
+    }
+  }
 
   function campoBase_(opts, renderInput) {
     opts = opts || {};
@@ -2607,31 +3096,40 @@ var Iconos = (function () {
       if (abiertas.length === 0) { salida.textContent = 'No hay solicitudes abiertas que derivar.'; return; }
 
       // Confirmacion con el conteo explicito: es la accion mas masiva del
-      // Backoffice y no hay "deshacer".
+      // Backoffice y no hay "deshacer". Por eso va marcada como peligro.
       var texto = document.getElementById('lote-responsable').selectedOptions[0].textContent;
-      if (!window.confirm('Se derivarán ' + abiertas.length + ' solicitudes a ' + texto + '. ¿Continuar?')) {
+      Componentes.confirmar({
+        titulo: 'Derivar ' + abiertas.length + ' solicitudes',
+        mensaje: 'Pasaran a ' + texto + '. Esta accion no se puede deshacer.',
+        confirmar: 'Derivar ' + abiertas.length,
+        peligro: true
+      }).then(function (confirmado) {
+        if (confirmado) { derivar_(boton, salida, abiertas, responsable, motivo); }
+      });
+    });
+  }
+
+  function derivar_(boton, salida, abiertas, responsable, motivo) {
+    boton.disabled = true;
+    salida.textContent = 'Derivando…';
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'derivarSolicitud', {
+      solicitud_ids: abiertas.map(function (s) { return s.solicitud_id; }),
+      responsable_nuevo: responsable,
+      motivo: motivo
+    }).then(function (respuesta) {
+      boton.disabled = false;
+      if (!respuesta.ok) {
+        salida.textContent = respuesta.message || 'No se pudo derivar.';
+        Componentes.aviso({ tipo: 'error', texto: respuesta.message || 'No se pudo derivar.' });
         return;
       }
-
-      boton.disabled = true;
-      salida.textContent = 'Derivando…';
-      llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'derivarSolicitud', {
-        solicitud_ids: abiertas.map(function (s) { return s.solicitud_id; }),
-        responsable_nuevo: responsable,
-        motivo: motivo
-      }).then(function (respuesta) {
-        boton.disabled = false;
-        if (!respuesta.ok) {
-          salida.textContent = respuesta.message || 'No se pudo derivar.';
-          return;
-        }
-        salida.textContent = 'Listo: ' + respuesta.data.total + ' derivadas.';
-        document.getElementById('lote-motivo').value = '';
-        cargarDashboard_();
-      }).catch(function () {
-        boton.disabled = false;
-        salida.textContent = 'No se pudo conectar con el servidor. Intenta nuevamente.';
-      });
+      salida.textContent = '';
+      Componentes.aviso({ tipo: 'exito', texto: respuesta.data.total + ' solicitudes derivadas.' });
+      document.getElementById('lote-motivo').value = '';
+      cargarDashboard_();
+    }).catch(function () {
+      boton.disabled = false;
+      salida.textContent = 'No se pudo conectar con el servidor. Intenta nuevamente.';
     });
   }
 
@@ -2741,12 +3239,20 @@ var Iconos = (function () {
 
     if (!campoAgrupar) {
       contenedor.innerHTML = filtradas.map(renderFilaReciente_).join('') ||
-        Componentes.vacio('No hay solicitudes que coincidan con los filtros.');
+        Componentes.vacio({
+          icono: 'filtro',
+          texto: 'Ninguna solicitud coincide con los filtros.',
+          detalle: 'Limpia el buscador o vuelve a "Todos los estados" para ver la bandeja completa.'
+        });
     } else {
       contenedor.innerHTML = agruparPara_(filtradas, campoAgrupar).map(function (grupo) {
         return '<h4 class="sigso-grupo__titulo">' + Componentes.escaparHtml(grupo.etiqueta) + ' (' + grupo.filas.length + ')</h4>' +
           grupo.filas.map(renderFilaReciente_).join('');
-      }).join('') || Componentes.vacio('No hay solicitudes que coincidan con los filtros.');
+      }).join('') || Componentes.vacio({
+          icono: 'filtro',
+          texto: 'Ninguna solicitud coincide con los filtros.',
+          detalle: 'Limpia el buscador o vuelve a "Todos los estados" para ver la bandeja completa.'
+        });
     }
 
     contenedor.querySelectorAll('[data-id]').forEach(function (fila) {

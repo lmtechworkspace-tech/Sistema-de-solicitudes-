@@ -246,7 +246,11 @@
 
   function renderTablaCuentas_(cuentas) {
     if (cuentas.length === 0) {
-      return Componentes.vacio('Aún no hay cuentas. Crea la primera con el formulario.');
+      return Componentes.vacio({
+        icono: 'persona',
+        texto: 'Aún no hay cuentas de plataforma.',
+        detalle: 'Crea la primera con el formulario de arriba: el sistema genera una clave temporal que le entregas a la persona.'
+      });
     }
     var filas = cuentas.map(function (c) {
       return '<tr data-cuenta=\'' + JSON.stringify(c).replace(/'/g, '&#39;') + '\'>' +
@@ -309,9 +313,15 @@
       }
       cuentaEnEdicion_ = null;
       if (respuesta.data.password_temporal) {
-        // Se muestra con confirm nativo ANTES de recargar la vista: es la
-        // unica vez que la clave existe fuera del hash.
-        window.alert('Cuenta "' + respuesta.data.usuario + '" lista.\n\nClave temporal (entregala por WhatsApp o en persona; no queda guardada):\n\n' + respuesta.data.password_temporal);
+        // Aviso propio y SIN auto-cierre: es la unica vez que la clave existe
+        // fuera del hash. Trae boton "Copiar" porque antes habia que
+        // seleccionarla a mano dentro de un alert del navegador.
+        Componentes.aviso({
+          tipo: 'exito',
+          texto: 'Cuenta "' + respuesta.data.usuario + '" lista.',
+          detalle: 'Clave temporal: entregala por WhatsApp o en persona. No queda guardada en ninguna parte.',
+          copiar: respuesta.data.password_temporal
+        });
       }
       renderCuentasPortal_();
     });
@@ -323,11 +333,16 @@
       : { operacion: 'activar', cuenta_id: cuentaId, activo: activar };
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'gestionarCuentaPortal', datos).then(function (respuesta) {
       if (!respuesta.ok) {
-        window.alert(respuesta.message || 'No se pudo aplicar.');
+        Componentes.aviso({ tipo: 'error', texto: respuesta.message || 'No se pudo aplicar.' });
         return;
       }
       if (respuesta.data.password_temporal) {
-        window.alert('Clave temporal nueva para "' + respuesta.data.usuario + '" (no queda guardada):\n\n' + respuesta.data.password_temporal);
+        Componentes.aviso({
+          tipo: 'exito',
+          texto: 'Clave temporal nueva para "' + respuesta.data.usuario + '".',
+          detalle: 'No queda guardada: copiala ahora y entregasela a la persona.',
+          copiar: respuesta.data.password_temporal
+        });
       }
       renderCuentasPortal_();
     });

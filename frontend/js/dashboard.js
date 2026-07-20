@@ -182,31 +182,40 @@
       if (abiertas.length === 0) { salida.textContent = 'No hay solicitudes abiertas que derivar.'; return; }
 
       // Confirmacion con el conteo explicito: es la accion mas masiva del
-      // Backoffice y no hay "deshacer".
+      // Backoffice y no hay "deshacer". Por eso va marcada como peligro.
       var texto = document.getElementById('lote-responsable').selectedOptions[0].textContent;
-      if (!window.confirm('Se derivarán ' + abiertas.length + ' solicitudes a ' + texto + '. ¿Continuar?')) {
+      Componentes.confirmar({
+        titulo: 'Derivar ' + abiertas.length + ' solicitudes',
+        mensaje: 'Pasaran a ' + texto + '. Esta accion no se puede deshacer.',
+        confirmar: 'Derivar ' + abiertas.length,
+        peligro: true
+      }).then(function (confirmado) {
+        if (confirmado) { derivar_(boton, salida, abiertas, responsable, motivo); }
+      });
+    });
+  }
+
+  function derivar_(boton, salida, abiertas, responsable, motivo) {
+    boton.disabled = true;
+    salida.textContent = 'Derivando…';
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'derivarSolicitud', {
+      solicitud_ids: abiertas.map(function (s) { return s.solicitud_id; }),
+      responsable_nuevo: responsable,
+      motivo: motivo
+    }).then(function (respuesta) {
+      boton.disabled = false;
+      if (!respuesta.ok) {
+        salida.textContent = respuesta.message || 'No se pudo derivar.';
+        Componentes.aviso({ tipo: 'error', texto: respuesta.message || 'No se pudo derivar.' });
         return;
       }
-
-      boton.disabled = true;
-      salida.textContent = 'Derivando…';
-      llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'derivarSolicitud', {
-        solicitud_ids: abiertas.map(function (s) { return s.solicitud_id; }),
-        responsable_nuevo: responsable,
-        motivo: motivo
-      }).then(function (respuesta) {
-        boton.disabled = false;
-        if (!respuesta.ok) {
-          salida.textContent = respuesta.message || 'No se pudo derivar.';
-          return;
-        }
-        salida.textContent = 'Listo: ' + respuesta.data.total + ' derivadas.';
-        document.getElementById('lote-motivo').value = '';
-        cargarDashboard_();
-      }).catch(function () {
-        boton.disabled = false;
-        salida.textContent = 'No se pudo conectar con el servidor. Intenta nuevamente.';
-      });
+      salida.textContent = '';
+      Componentes.aviso({ tipo: 'exito', texto: respuesta.data.total + ' solicitudes derivadas.' });
+      document.getElementById('lote-motivo').value = '';
+      cargarDashboard_();
+    }).catch(function () {
+      boton.disabled = false;
+      salida.textContent = 'No se pudo conectar con el servidor. Intenta nuevamente.';
     });
   }
 
@@ -316,12 +325,20 @@
 
     if (!campoAgrupar) {
       contenedor.innerHTML = filtradas.map(renderFilaReciente_).join('') ||
-        Componentes.vacio('No hay solicitudes que coincidan con los filtros.');
+        Componentes.vacio({
+          icono: 'filtro',
+          texto: 'Ninguna solicitud coincide con los filtros.',
+          detalle: 'Limpia el buscador o vuelve a "Todos los estados" para ver la bandeja completa.'
+        });
     } else {
       contenedor.innerHTML = agruparPara_(filtradas, campoAgrupar).map(function (grupo) {
         return '<h4 class="sigso-grupo__titulo">' + Componentes.escaparHtml(grupo.etiqueta) + ' (' + grupo.filas.length + ')</h4>' +
           grupo.filas.map(renderFilaReciente_).join('');
-      }).join('') || Componentes.vacio('No hay solicitudes que coincidan con los filtros.');
+      }).join('') || Componentes.vacio({
+          icono: 'filtro',
+          texto: 'Ninguna solicitud coincide con los filtros.',
+          detalle: 'Limpia el buscador o vuelve a "Todos los estados" para ver la bandeja completa.'
+        });
     }
 
     contenedor.querySelectorAll('[data-id]').forEach(function (fila) {
