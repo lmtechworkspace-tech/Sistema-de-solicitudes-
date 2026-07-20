@@ -8,7 +8,7 @@
 }
 
 .sigso-kpi {
-  background: #fff;
+  background: var(--superficie);
   border-radius: 8px;
   padding: 1rem;
   text-align: center;
@@ -297,7 +297,7 @@ button.sigso-kpi {
   padding: 0.75rem 0.5rem;
   border: 1px solid var(--gris-claro);
   border-radius: 8px;
-  background: #fff;
+  background: var(--superficie);
   cursor: pointer;
   font-family: inherit;
 }
@@ -390,7 +390,7 @@ button.sigso-kpi {
 .sigso-detalle-ficha,
 .sigso-detalle-centro,
 .sigso-detalle-historia {
-  background: #fff;
+  background: var(--superficie);
   border-radius: 8px;
   padding: 1.25rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -477,7 +477,7 @@ button.sigso-kpi {
 }
 
 .sigso-tabla-tablero tbody tr:hover {
-  background: #fafafa;
+  background: var(--superficie-2);
 }
 
 .sigso-tabla-tablero th[data-orden] {
@@ -531,7 +531,7 @@ button.sigso-kpi {
     border: 1px solid var(--gris-claro);
     border-radius: 8px;
     padding: 0.5rem 0.75rem;
-    background: #fff;
+    background: var(--superficie);
   }
 
   .sigso-fila--atrasada > td:first-child,
@@ -587,16 +587,26 @@ button.sigso-kpi {
   display: none;
 }
 
+/* v4.0 Frente 6: el logo entra al encabezado del PDF -- un reporte que se
+   comparte fuera del sistema (por correo, impreso) debe traer la marca, no
+   solo un titulo de texto. */
+.sigso-encabezado-reporte {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 3px solid var(--naranja);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
 .sigso-encabezado-reporte h1 {
   margin: 0 0 0.15rem;
   font-size: 1.3rem;
   color: var(--azul);
-  border-bottom: 3px solid var(--naranja);
-  padding-bottom: 0.35rem;
 }
 
 .sigso-encabezado-reporte p {
-  margin: 0.25rem 0 0.75rem;
+  margin: 0.25rem 0 0;
   font-size: 0.8rem;
   color: var(--gris-medio);
 }

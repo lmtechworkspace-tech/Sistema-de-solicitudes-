@@ -5,6 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SIGSO — Backoffice</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27><rect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%23E8622A%27/><text x=%2716%27 y=%2723%27 font-family=%27Arial,sans-serif%27 font-weight=%27700%27 font-size=%2720%27 fill=%27white%27 text-anchor=%27middle%27>S</text></svg>" />
   <!-- v4.0: la marca declara Inter desde §12.3 pero nunca se cargaba: todos
        veian la fuente por defecto del sistema. display=swap evita el bloqueo
        de render. -->
@@ -102,6 +103,44 @@
   --fuente-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
 }
 
+/* --- v4.0 Frente 6: modo oscuro -----------------------------------------
+   Como casi todo el sistema (main/components/dashboard/admin.css) ya pinta
+   con estos tokens en vez de colores sueltos, redefinirlos aqui basta para
+   que el 100% de las pantallas se oscurezcan sin tocar cada regla una por
+   una. Las excepciones son unas pocas superficies que quedaron con "#fff"
+   literal (ya migradas a var(--superficie) en este mismo commit) y el color
+   de TEXTO fijo sobre fondos saturados (badges, spinner, avatar), que debe
+   seguir blanco pase lo que pase -- esas quedan con #fff a proposito.
+   Los "-suave" (fondo pastel de pastillas/avisos) pasan a una version
+   translucida sobre el mismo tono, en vez de un pastel casi blanco que
+   perderia todo el contraste sobre una superficie oscura. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --naranja-claro: #4A2E1C;
+    --gris-oscuro: #EDE7E2;
+    --gris-medio: #B8AFA8;
+    --gris-claro: #2A2320;
+
+    --ok-suave: rgba(46, 125, 91, 0.28);
+    --alerta-suave: rgba(180, 83, 9, 0.28);
+    --critico-suave: rgba(179, 38, 30, 0.28);
+    --info-suave: rgba(31, 78, 121, 0.32);
+
+    --texto: #F2ECE7;
+    --texto-2: #C9BEB6;
+    --texto-3: #98897F;
+    --superficie: #211C19;
+    --superficie-2: #2C2521;
+    --borde: #40352E;
+    --borde-fuerte: #52443A;
+    --fondo-pagina: #17130F;
+
+    --sombra-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --sombra-2: 0 2px 10px rgba(0, 0, 0, 0.4);
+    --sombra-3: 0 12px 32px rgba(0, 0, 0, 0.5);
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -140,7 +179,7 @@ a {
 /* --- Header/nav compartido (ui-components.js lo inyecta) ------------- */
 
 .sigso-header {
-  background: #fff;
+  background: var(--superficie);
   border-bottom: 3px solid var(--naranja);
 }
 
@@ -153,6 +192,12 @@ a {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.sigso-header__marca {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
 
 .sigso-header__titulo {
@@ -190,7 +235,7 @@ a {
 /* --- Elementos genericos --------------------------------------------- */
 
 .sigso-card {
-  background: #fff;
+  background: var(--superficie);
   border-radius: 8px;
   padding: 1.5rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -214,11 +259,11 @@ select,
 textarea {
   width: 100%;
   padding: 0.6rem 0.75rem;
-  border: 1px solid #ccc;
+  border: 1px solid var(--borde-fuerte);
   border-radius: 6px;
   font-family: inherit;
   font-size: 0.95rem;
-  background: #fff;
+  background: var(--superficie);
 }
 
 textarea {
@@ -302,7 +347,7 @@ button {
   max-width: 640px;
   margin: 3rem auto;
   padding: 1.5rem;
-  background: #fff;
+  background: var(--superficie);
   border-radius: 8px;
 }
 
@@ -424,8 +469,8 @@ button {
 }
 
 .sigso-chip {
-  background: #fff;
-  border: 1px solid #ccc;
+  background: var(--superficie);
+  border: 1px solid var(--borde-fuerte);
   border-radius: 999px;
   padding: 0.4rem 0.9rem;
   font-size: 0.85rem;
@@ -453,8 +498,8 @@ button {
   left: 0;
   right: 0;
   z-index: 20;
-  background: #fff;
-  border: 1px solid #ccc;
+  background: var(--superficie);
+  border: 1px solid var(--borde-fuerte);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   max-height: 18rem;
@@ -627,7 +672,7 @@ button {
   display: block;
   width: 100%;
   text-align: left;
-  background: #fff;
+  background: var(--superficie);
   border: 1px solid var(--gris-claro);
   border-radius: 8px;
   padding: 0.75rem 1rem;
@@ -721,7 +766,7 @@ button {
 /* UI-3 (§3): la fecha comprometida como protagonista. */
 .sigso-fecha-destacada {
   border: 1px solid var(--naranja-claro);
-  background: #fff;
+  background: var(--superficie);
   border-radius: 8px;
   padding: 0.6rem 0.9rem;
   margin: 0.5rem 0 0.75rem;
@@ -746,7 +791,7 @@ button {
   border-radius: 8px;
   padding: 1rem 1.25rem;
   margin-bottom: 1.25rem;
-  background: #fff;
+  background: var(--superficie);
 }
 
 .sigso-titulo-grupo {
@@ -784,7 +829,7 @@ button {
   #paso-revision > .sigso-campo:last-child {
     position: sticky;
     bottom: 0;
-    background: #fff;
+    background: var(--superficie);
     padding: 0.75rem 0;
     margin: 0 -1rem;
     padding-left: 1rem;
@@ -880,7 +925,7 @@ button {
   gap: 1rem;
   flex-wrap: wrap;
   padding: 0.6rem 1.25rem;
-  background: #fff;
+  background: var(--superficie);
   border-bottom: 2px solid var(--sigso-naranja, #e8871e);
   position: sticky;
   top: 0;
@@ -888,9 +933,20 @@ button {
 }
 
 .plataforma-header__marca {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: 0.02em;
+}
+
+/* v4.0 Frente 6: marca compartida (favicon, header, PDF) -- redondeado fijo
+   sin importar el modo de color, porque es la MISMA ficha naranja siempre
+   (no un componente que deba invertirse en oscuro). */
+.sigso-marca {
+  flex: none;
+  border-radius: 6px;
 }
 
 .plataforma-header__nav {
@@ -929,6 +985,48 @@ button {
   font-size: 0.92rem;
 }
 
+/* v4.0 Frente 6 (movil): antes el nav (hasta 5 items con icono+texto)
+   se envolvia en varias filas completas, empujando el contenido de la
+   pantalla varios scrolls hacia abajo antes de verse nada. Ahora la marca
+   y el usuario quedan en la primera fila y el nav pasa a una tira propia,
+   de una sola linea, que se desliza horizontal -- patron conocido de app
+   movil, y el header nunca ocupa mas de dos filas cortas. */
+@media (max-width: 640px) {
+  .plataforma-header {
+    flex-wrap: nowrap;
+    padding: 0.5rem 0.75rem 0;
+    gap: 0.5rem;
+  }
+
+  .plataforma-header__nav {
+    order: 3;
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin: 0 -0.75rem;
+    padding: 0.35rem 0.75rem;
+  }
+
+  .plataforma-header__nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .plataforma-nav__item {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .plataforma-header__usuario {
+    margin-left: auto;
+  }
+
+  .plataforma-usuario__txt {
+    display: none;
+  }
+}
+
 /* Tarjetas de modulos del inicio. */
 .plataforma-cards {
   display: grid;
@@ -943,7 +1041,7 @@ button {
   align-items: flex-start;
   gap: 0.35rem;
   padding: 1.1rem 1.2rem;
-  background: #fff;
+  background: var(--superficie);
   border: 1px solid var(--sigso-borde, #d9d2c7);
   border-radius: 10px;
   cursor: pointer;
@@ -1756,7 +1854,7 @@ button {
 }
 
 .sigso-kpi {
-  background: #fff;
+  background: var(--superficie);
   border-radius: 8px;
   padding: 1rem;
   text-align: center;
@@ -2045,7 +2143,7 @@ button.sigso-kpi {
   padding: 0.75rem 0.5rem;
   border: 1px solid var(--gris-claro);
   border-radius: 8px;
-  background: #fff;
+  background: var(--superficie);
   cursor: pointer;
   font-family: inherit;
 }
@@ -2138,7 +2236,7 @@ button.sigso-kpi {
 .sigso-detalle-ficha,
 .sigso-detalle-centro,
 .sigso-detalle-historia {
-  background: #fff;
+  background: var(--superficie);
   border-radius: 8px;
   padding: 1.25rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
@@ -2225,7 +2323,7 @@ button.sigso-kpi {
 }
 
 .sigso-tabla-tablero tbody tr:hover {
-  background: #fafafa;
+  background: var(--superficie-2);
 }
 
 .sigso-tabla-tablero th[data-orden] {
@@ -2279,7 +2377,7 @@ button.sigso-kpi {
     border: 1px solid var(--gris-claro);
     border-radius: 8px;
     padding: 0.5rem 0.75rem;
-    background: #fff;
+    background: var(--superficie);
   }
 
   .sigso-fila--atrasada > td:first-child,
@@ -2335,16 +2433,26 @@ button.sigso-kpi {
   display: none;
 }
 
+/* v4.0 Frente 6: el logo entra al encabezado del PDF -- un reporte que se
+   comparte fuera del sistema (por correo, impreso) debe traer la marca, no
+   solo un titulo de texto. */
+.sigso-encabezado-reporte {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 3px solid var(--naranja);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
 .sigso-encabezado-reporte h1 {
   margin: 0 0 0.15rem;
   font-size: 1.3rem;
   color: var(--azul);
-  border-bottom: 3px solid var(--naranja);
-  padding-bottom: 0.35rem;
 }
 
 .sigso-encabezado-reporte p {
-  margin: 0.25rem 0 0.75rem;
+  margin: 0.25rem 0 0;
   font-size: 0.8rem;
   color: var(--gris-medio);
 }
@@ -2736,13 +2844,24 @@ function renderHeaderSigso(paginaActiva) {
 
   contenedor.innerHTML =
     '<div class="sigso-header__interior">' +
+    '<div class="sigso-header__marca">' +
+    MARCA_SIGSO_SVG +
     '<div>' +
     '<p class="sigso-header__titulo">SIGSO</p>' +
     '<p class="sigso-header__subtitulo">HomePymes / RLD &mdash; Gesti&oacute;n de solicitudes</p>' +
     '</div>' +
+    '</div>' +
     '<nav class="sigso-nav">' + enlaces + '</nav>' +
     '</div>';
 }
+
+// v4.0 Frente 6 (marca): el mismo distintivo visual del favicon, ahora
+// dentro de la pagina -- antes "SIGSO" era solo texto, sin una marca que se
+// reconociera de un vistazo entre pestanas o capturas de pantalla.
+var MARCA_SIGSO_SVG = '<svg class="sigso-marca" width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">' +
+  '<rect width="32" height="32" rx="8" fill="#E8622A"></rect>' +
+  '<text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">S</text>' +
+  '</svg>';
 
 </script>
   <script>

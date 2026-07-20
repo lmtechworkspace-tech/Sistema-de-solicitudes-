@@ -32,8 +32,8 @@
 
 .sigso-admin-menu__item {
   text-align: left;
-  background: #fff;
-  border: 1px solid #e0e0e0;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
   border-radius: 6px;
   padding: 0.6rem 0.8rem;
   cursor: pointer;

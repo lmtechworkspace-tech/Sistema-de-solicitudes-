@@ -86,8 +86,8 @@
 }
 
 .sigso-chip {
-  background: #fff;
-  border: 1px solid #ccc;
+  background: var(--superficie);
+  border: 1px solid var(--borde-fuerte);
   border-radius: 999px;
   padding: 0.4rem 0.9rem;
   font-size: 0.85rem;
@@ -115,8 +115,8 @@
   left: 0;
   right: 0;
   z-index: 20;
-  background: #fff;
-  border: 1px solid #ccc;
+  background: var(--superficie);
+  border: 1px solid var(--borde-fuerte);
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   max-height: 18rem;
@@ -289,7 +289,7 @@
   display: block;
   width: 100%;
   text-align: left;
-  background: #fff;
+  background: var(--superficie);
   border: 1px solid var(--gris-claro);
   border-radius: 8px;
   padding: 0.75rem 1rem;
@@ -383,7 +383,7 @@
 /* UI-3 (§3): la fecha comprometida como protagonista. */
 .sigso-fecha-destacada {
   border: 1px solid var(--naranja-claro);
-  background: #fff;
+  background: var(--superficie);
   border-radius: 8px;
   padding: 0.6rem 0.9rem;
   margin: 0.5rem 0 0.75rem;
@@ -408,7 +408,7 @@
   border-radius: 8px;
   padding: 1rem 1.25rem;
   margin-bottom: 1.25rem;
-  background: #fff;
+  background: var(--superficie);
 }
 
 .sigso-titulo-grupo {
@@ -446,7 +446,7 @@
   #paso-revision > .sigso-campo:last-child {
     position: sticky;
     bottom: 0;
-    background: #fff;
+    background: var(--superficie);
     padding: 0.75rem 0;
     margin: 0 -1rem;
     padding-left: 1rem;
@@ -542,7 +542,7 @@
   gap: 1rem;
   flex-wrap: wrap;
   padding: 0.6rem 1.25rem;
-  background: #fff;
+  background: var(--superficie);
   border-bottom: 2px solid var(--sigso-naranja, #e8871e);
   position: sticky;
   top: 0;
@@ -550,9 +550,20 @@
 }
 
 .plataforma-header__marca {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 1.15rem;
   font-weight: 700;
   letter-spacing: 0.02em;
+}
+
+/* v4.0 Frente 6: marca compartida (favicon, header, PDF) -- redondeado fijo
+   sin importar el modo de color, porque es la MISMA ficha naranja siempre
+   (no un componente que deba invertirse en oscuro). */
+.sigso-marca {
+  flex: none;
+  border-radius: 6px;
 }
 
 .plataforma-header__nav {
@@ -591,6 +602,48 @@
   font-size: 0.92rem;
 }
 
+/* v4.0 Frente 6 (movil): antes el nav (hasta 5 items con icono+texto)
+   se envolvia en varias filas completas, empujando el contenido de la
+   pantalla varios scrolls hacia abajo antes de verse nada. Ahora la marca
+   y el usuario quedan en la primera fila y el nav pasa a una tira propia,
+   de una sola linea, que se desliza horizontal -- patron conocido de app
+   movil, y el header nunca ocupa mas de dos filas cortas. */
+@media (max-width: 640px) {
+  .plataforma-header {
+    flex-wrap: nowrap;
+    padding: 0.5rem 0.75rem 0;
+    gap: 0.5rem;
+  }
+
+  .plataforma-header__nav {
+    order: 3;
+    flex: 1 1 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin: 0 -0.75rem;
+    padding: 0.35rem 0.75rem;
+  }
+
+  .plataforma-header__nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .plataforma-nav__item {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  .plataforma-header__usuario {
+    margin-left: auto;
+  }
+
+  .plataforma-usuario__txt {
+    display: none;
+  }
+}
+
 /* Tarjetas de modulos del inicio. */
 .plataforma-cards {
   display: grid;
@@ -605,7 +658,7 @@
   align-items: flex-start;
   gap: 0.35rem;
   padding: 1.1rem 1.2rem;
-  background: #fff;
+  background: var(--superficie);
   border: 1px solid var(--sigso-borde, #d9d2c7);
   border-radius: 10px;
   cursor: pointer;

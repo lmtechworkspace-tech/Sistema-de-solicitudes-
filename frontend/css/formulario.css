@@ -3,7 +3,7 @@
    pasos (Fase 10, components.css) -- eliminada de aqui, no se duplica. */
 
 .sigso-acordeon-item {
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--borde);
   border-radius: 8px;
   margin-bottom: 0.75rem;
   overflow: hidden;
@@ -49,14 +49,16 @@
 .sigso-resultado-exito {
   border-left: 4px solid var(--p4);
   padding: 1rem;
-  background: #f1f9f4;
+  background: var(--ok-suave, #f1f9f4);
+  color: var(--texto, inherit);
   border-radius: 6px;
 }
 
 .sigso-resultado-error {
   border-left: 4px solid var(--p1);
   padding: 1rem;
-  background: #fdf1f0;
+  background: var(--critico-suave, #fdf1f0);
+  color: var(--texto, inherit);
   border-radius: 6px;
 }
 
