@@ -32,6 +32,23 @@
     administracion: { icono: 'config', nombre: 'Administración', descripcion: 'Catálogos, usuarios y cuentas de la plataforma', interno: true }
   };
 
+  // v4.0 Frente 3: cada modulo tiene su propio acento -- antes todo el shell
+  // (nav activo, icono de tarjeta) usaba el mismo naranja de marca sin
+  // importar donde estuvieras, asi que no ayudaba a orientarse. Los pares
+  // acento/suave reusan tokens ya existentes (§main.css), no colores nuevos.
+  var MODULO_COLOR = {
+    nueva_solicitud: { acento: 'var(--naranja)', suave: 'var(--naranja-claro)' },
+    mis_solicitudes: { acento: 'var(--info)', suave: 'var(--info-suave)' },
+    bandeja: { acento: 'var(--ok)', suave: 'var(--ok-suave)' },
+    gerencia: { acento: 'var(--alerta)', suave: 'var(--alerta-suave)' },
+    administracion: { acento: 'var(--texto-2)', suave: 'var(--superficie-2)' }
+  };
+
+  function acentoInline_(id) {
+    var c = MODULO_COLOR[id];
+    return c ? ' style="--acento:' + c.acento + ';--acento-suave:' + c.suave + '"' : '';
+  }
+
   var sesion = { token: null, cuenta: null };
   var autocompletadoHecho = false;
 
@@ -221,13 +238,14 @@
         // cuando llegan los datos; asi no hay que entrar al modulo para
         // descubrir que hay algo esperando.
         var ranura = '<span class="plataforma-nav__badge sigso-oculto" data-badge="' + id + '"></span>';
+        var acento = acentoInline_(id);
         if (def.interno) {
-          return '<button type="button" class="plataforma-nav__item" data-modulo="' + id + '">' +
+          return '<button type="button" class="plataforma-nav__item" data-modulo="' + id + '"' + acento + '>' +
             Iconos.svg(def.icono) + ' ' + def.nombre + ranura + '</button>';
         }
         var url = urlExterna_(def);
         return url
-          ? '<a class="plataforma-nav__item" href="' + Componentes.escaparHtml(url) + '" target="_blank" rel="noopener">' +
+          ? '<a class="plataforma-nav__item" href="' + Componentes.escaparHtml(url) + '" target="_blank" rel="noopener"' + acento + '>' +
             Iconos.svg(def.icono) + ' ' + def.nombre + '</a>'
           : '';
       }).join('');
@@ -239,15 +257,31 @@
     });
   }
 
+  // "Hola" a cualquier hora no distinguia si alguien entraba a las 8am o a
+  // las 11pm; el saludo por franja horaria y la fecha dan un ancla de
+  // contexto minima en la pantalla que la persona ve primero cada dia.
+  function saludoSegunHora_() {
+    var hora = new Date().getHours();
+    if (hora < 12) return 'Buenos días';
+    if (hora < 20) return 'Buenas tardes';
+    return 'Buenas noches';
+  }
+
   function renderHome_() {
     var nombrePila = String(sesion.cuenta.nombre || '').split(' ')[0];
-    document.getElementById('saludo-home').textContent = 'Hola, ' + nombrePila;
+    document.getElementById('saludo-home').textContent = saludoSegunHora_() + ', ' + nombrePila;
+    var fecha = document.getElementById('fecha-home');
+    if (fecha) {
+      var texto = new Intl.DateTimeFormat('es-CL', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
+      fecha.textContent = texto.charAt(0).toUpperCase() + texto.slice(1);
+    }
 
     document.getElementById('cards-home').innerHTML = modulosDeLaCuenta_().map(function (id) {
       var def = MODULOS_SHELL[id];
       var icono = '<span class="plataforma-card__icono">' + Iconos.svg(def.icono, { tam: 22 }) + '</span>';
+      var acento = acentoInline_(id);
       if (def.interno) {
-        return '<button type="button" class="plataforma-card" data-modulo="' + id + '">' +
+        return '<button type="button" class="plataforma-card" data-modulo="' + id + '"' + acento + '>' +
           icono +
           '<strong>' + def.nombre + '</strong>' +
           '<span class="sigso-ayuda">' + def.descripcion + '</span>' +
@@ -255,7 +289,7 @@
       }
       var url = urlExterna_(def);
       return url
-        ? '<a class="plataforma-card" href="' + Componentes.escaparHtml(url) + '" target="_blank" rel="noopener">' +
+        ? '<a class="plataforma-card" href="' + Componentes.escaparHtml(url) + '" target="_blank" rel="noopener"' + acento + '>' +
           icono +
           '<strong>' + def.nombre + '</strong>' +
           '<span class="sigso-ayuda">' + def.descripcion + '</span>' +
@@ -368,6 +402,8 @@
     var main = document.querySelector('#vista-shell .sigso-contenido');
     if (main) {
       main.classList.toggle('plataforma-contenido--ancho', MODULOS_ANCHOS.indexOf(id) !== -1);
+      var color = MODULO_COLOR[id];
+      main.style.setProperty('--acento-modulo', color ? color.acento : 'var(--naranja)');
     }
     document.querySelectorAll('.plataforma-nav__item[data-modulo]').forEach(function (boton) {
       boton.classList.toggle('plataforma-nav__item--activo', boton.getAttribute('data-modulo') === id);

@@ -913,13 +913,13 @@ button {
 }
 
 .plataforma-nav__item:hover {
-  background: var(--sigso-fondo-suave, #faf7f2);
+  background: var(--acento-suave, var(--sigso-fondo-suave, #faf7f2));
 }
 
 .plataforma-nav__item--activo {
-  background: var(--sigso-fondo-suave, #faf7f2);
+  background: var(--acento-suave, var(--sigso-fondo-suave, #faf7f2));
   font-weight: 600;
-  box-shadow: inset 0 -2px 0 var(--sigso-naranja, #e8871e);
+  box-shadow: inset 0 -2px 0 var(--acento, var(--sigso-naranja, #e8871e));
 }
 
 .plataforma-header__usuario {
@@ -957,10 +957,7 @@ button {
 .plataforma-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   transform: translateY(-2px);
-}
-
-.plataforma-card__icono {
-  font-size: 1.6rem;
+  border-color: var(--acento, var(--sigso-borde, #d9d2c7));
 }
 
 .plataforma-pendientes {
@@ -1142,13 +1139,14 @@ button {
 .sigso-ver-clave:hover { color: var(--texto); }
 
 /* Tarjetas de modulo del inicio: el icono pasa a ser una ficha con el
-   acento de marca, en vez de un emoji suelto. */
+   acento del MODULO (Frente 3), no siempre el naranja de marca -- asi la
+   tarjeta ya se distingue por color antes de leer el texto. */
 .plataforma-card__icono {
   width: 38px;
   height: 38px;
   border-radius: var(--radio-md);
-  background: var(--naranja-claro);
-  color: var(--naranja);
+  background: var(--acento-suave, var(--naranja-claro));
+  color: var(--acento, var(--naranja));
   display: grid;
   place-items: center;
   margin-bottom: 0.15rem;
@@ -1437,6 +1435,26 @@ button {
 }
 
 .sigso-vacio .sigso-boton { margin-top: var(--esp-4); }
+
+/* --- v4.0 Frente 3: acento por modulo en el titulo -------------------
+   plataforma.js pone --acento-modulo en el <main> al cambiar de modulo
+   (mostrarModulo_). Antes todos los h1 del shell eran iguales; ahora el
+   titulo trae una barra del color del modulo activo, coherente con el nav
+   y las tarjetas del inicio. El saludo de Inicio queda fuera a proposito:
+   es la vista por defecto, no "pertenece" a un modulo con color propio. */
+.plataforma-modulo:not(.sigso-oculto) h1:not(#saludo-home) {
+  border-left: 4px solid var(--acento-modulo, var(--naranja));
+  padding-left: 0.65rem;
+}
+
+/* Fecha bajo el saludo de Inicio: contexto minimo (que dia es) sin competir
+   con el titulo. */
+.plataforma-home__fecha {
+  margin: -0.5rem 0 1.25rem;
+  color: var(--texto-2);
+  font-size: var(--texto-sm);
+  text-transform: capitalize;
+}
 
 </style>
   <style>
