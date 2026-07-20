@@ -336,6 +336,40 @@ test('P3: sin el modulo requerido, la accion se rechaza aunque el rol alcance', 
   assert.equal(gerencia.ok, true);
 });
 
+// Reporte real: Gerencia entraba a su panel, hacia clic en una fila y el
+// Backoffice respondia "Tu cuenta no tiene acceso a este modulo (bandeja)."
+// -- ver el detalle es de solo lectura (Solicitudes.getDetalle ya le oculta
+// transiciones/responsables al rol GERENCIA) y no deberia exigir el modulo
+// de bandeja completo.
+test('P3: Gerencia SI puede abrir el detalle de una solicitud (de solo lectura) desde su panel', () => {
+  const ctx = loadBackofficeConSesion('GERENCIA', ['nueva_solicitud', 'mis_solicitudes', 'gerencia']);
+  const datos = {
+    solicitud_id: 'SOL-2026-RLD-0001', empresa_id: 'RLD', plataforma: 'ERP', modulo: 'Facturacion',
+    tipo: 'ERR', solicitante_nombre: 'Juan', solicitante_cargo: 'Analista', solicitante_email: 'juan@rld.cl',
+    estado_derivado: 'S02', prioridad_derivada: 'P2', fecha_creacion: new Date().toISOString()
+  };
+  const fila = ctx.COLUMNAS.SOLICITUDES.map((col) => (datos[col] !== undefined ? datos[col] : ''));
+  ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('SOLICITUDES').appendRow(fila);
+
+  const res = JSON.parse(ctx.doPost(makeEventBO({
+    action: 'getSolicitudDetalle',
+    data: { portal_token: 'token-vigente', solicitud_id: 'SOL-2026-RLD-0001' }
+  })).getContent());
+  assert.equal(res.ok, true, JSON.stringify(res).slice(0, 200));
+  assert.equal(res.data.solicitud.solicitud_id, 'SOL-2026-RLD-0001');
+  // Solo lectura: sin transiciones de estado ni lista de responsables.
+  assert.equal(res.data.rol_actual, 'GERENCIA');
+
+  // Pero una cuenta sin NINGUNO de los dos modulos sigue sin poder.
+  const sinAcceso = loadBackofficeConSesion('SOLICITANTE', ['nueva_solicitud', 'mis_solicitudes']);
+  const rechazado = JSON.parse(sinAcceso.doPost(makeEventBO({
+    action: 'getSolicitudDetalle',
+    data: { portal_token: 'token-vigente', solicitud_id: 'SOL-2026-RLD-0001' }
+  })).getContent());
+  assert.equal(rechazado.ok, false);
+  assert.match(rechazado.message, /modulo/);
+});
+
 test('P3: token vencido o desconocido = forbidden, y NUNCA cae al camino Session', () => {
   // activeUserEmail simula a un ADM logueado con Google en el mismo runtime:
   // si el token invalido "cayera" a Session, heredaria esa identidad.

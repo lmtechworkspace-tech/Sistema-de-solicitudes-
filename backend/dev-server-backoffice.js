@@ -53,11 +53,19 @@ function construirContexto() {
     ['CTA-DEMO-4', 'ladmin', 'Luis Admin', 'Administrador', 'hash-no-usado-aqui', 'sal',
       JSON.stringify(['luis@rld.cl']),
       'ADM', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'administracion']),
+      'RLD', true, false, '', 'dev-server'],
+    // Cuenta GERENCIA SIN modulo bandeja -- prueba que el detalle de solo
+    // lectura se vea desde el Panel de Gerencia sin ese modulo (ver Code.gs,
+    // MODULO_POR_ACCION.getSolicitudDetalle acepta 'bandeja' O 'gerencia').
+    ['CTA-DEMO-5', 'fgerente', 'Felipe Gerente', 'Gerente General', 'hash-no-usado-aqui', 'sal',
+      JSON.stringify(['gerencia@rld.cl']),
+      'GERENCIA', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'gerencia']),
       'RLD', true, false, '', 'dev-server']
   ]);
   seedSheet(ctx, 'SESIONES_PORTAL', ctx.COLUMNAS.SESIONES_PORTAL, [
     ['dev-token-leo', 'CTA-DEMO-3', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()],
-    ['dev-token-admin', 'CTA-DEMO-4', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()]
+    ['dev-token-admin', 'CTA-DEMO-4', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()],
+    ['dev-token-gerencia', 'CTA-DEMO-5', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()]
   ]);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
   seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);

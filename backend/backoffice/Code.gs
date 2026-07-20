@@ -55,7 +55,12 @@ var PAGINAS_HTML = { app: 'App', admin: 'Admin' };
 // protege nada -- aqui se rechaza aunque manipulen el navegador.
 var MODULO_POR_ACCION = {
   getDashboardData: 'bandeja',
-  getSolicitudDetalle: 'bandeja',
+  // Ver el detalle es de lectura y Gerencia ya lo necesita desde su propio
+  // panel (Solicitudes.getDetalle ya le devuelve una version de solo lectura
+  // -- sin transiciones ni responsables -- para el rol GERENCIA). Por eso
+  // acepta CUALQUIERA de los dos modulos, a diferencia del resto de acciones
+  // de bandeja, que siguen exigiendo 'bandeja' exclusivamente.
+  getSolicitudDetalle: ['bandeja', 'gerencia'],
   actualizarEstado: 'bandeja',
   actualizarPrioridad: 'bandeja',
   comprometerFecha: 'bandeja',
@@ -198,10 +203,16 @@ function resolverContextoPortal_(token, action) {
 
   var modulos = parsearListaPortal_(cuenta.modulos);
   var requerido = MODULO_POR_ACCION[action];
-  if (requerido && modulos.indexOf(requerido) === -1) {
-    return {
-      error: { ok: false, error: 'forbidden', message: 'Tu cuenta no tiene acceso a este modulo (' + requerido + ').' }
-    };
+  if (requerido) {
+    // La mayoria de las acciones piden UN modulo (string); getSolicitudDetalle
+    // acepta una lista (basta con tener alguno de los dos).
+    var requeridos = Array.isArray(requerido) ? requerido : [requerido];
+    var tieneAlguno = requeridos.some(function (m) { return modulos.indexOf(m) !== -1; });
+    if (!tieneAlguno) {
+      return {
+        error: { ok: false, error: 'forbidden', message: 'Tu cuenta no tiene acceso a este modulo (' + requeridos.join(' o ') + ').' }
+      };
+    }
   }
 
   var emails = parsearListaPortal_(cuenta.emails);
