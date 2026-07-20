@@ -106,3 +106,23 @@ function actualizarFilaPorId_(nombreHoja, columnaId, valorId, cambios) {
   }
   return null;
 }
+
+// v4.0 Frente 5: borra TODAS las filas cuyo valor de columnaId coincida
+// (no solo la primera) -- lo usa CuentasPortal.eliminar para la cuenta en
+// CUENTAS_PORTAL y, de paso, cualquier sesion viva de esa cuenta en
+// SESIONES_PORTAL (una cuenta eliminada no debe seguir operando con el
+// token que ya tenia en el navegador). Borra de abajo hacia arriba para
+// que eliminar una fila no corra los indices de las que faltan.
+function eliminarFilasPorId_(nombreHoja, columnaId, valorId) {
+  var datos = leerHojaConEncabezados_(nombreHoja);
+  var idxCol = datos.encabezados.indexOf(columnaId);
+  if (idxCol === -1) return 0;
+  var borradas = 0;
+  for (var i = datos.valores.length - 1; i >= 1; i--) {
+    if (String(datos.valores[i][idxCol]) === String(valorId)) {
+      datos.hoja.deleteRow(i + 1);
+      borradas++;
+    }
+  }
+  return borradas;
+}

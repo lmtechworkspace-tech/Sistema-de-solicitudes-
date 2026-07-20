@@ -402,6 +402,14 @@ function createSheetMock(name) {
       const numCols = rows.reduce((max, r) => Math.max(max, r.length), 0);
       return createRangeMock(rows, 1, 1, rows.length, numCols || 1);
     },
+    deleteRow(rowNumber) {
+      rows.splice(rowNumber - 1, 1);
+      return sheet;
+    },
+    deleteRows(rowNumber, howMany) {
+      rows.splice(rowNumber - 1, howMany);
+      return sheet;
+    },
     _getRows() {
       return rows;
     }

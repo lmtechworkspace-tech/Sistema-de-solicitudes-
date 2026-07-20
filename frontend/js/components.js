@@ -143,6 +143,10 @@
 
     // pasos: [{ id, texto }], activo: id del paso actual. Los pasos antes
     // del activo se marcan "hecho", el activo "actual", el resto "pendiente".
+    // v4.0 Frente 5: suma una linea de progreso ("Paso 2 de 3") debajo de los
+    // circulos -- los circulos dicen EN CUAL paso estas, la linea dice
+    // CUANTO FALTA, que es la pregunta que de verdad importa a mitad del
+    // formulario.
     stepper: function (pasos, activo) {
       var activoIdx = pasos.findIndex(function (p) { return p.id === activo; });
       var items = pasos.map(function (p, idx) {
@@ -152,7 +156,14 @@
           '<span class="sigso-stepper__texto">' + escaparHtml(p.texto) + '</span>' +
           '</div>';
       }).join('<div class="sigso-stepper__linea"></div>');
-      return '<div class="sigso-stepper">' + items + '</div>';
+      var pct = pasos.length > 1 ? Math.round((Math.max(activoIdx, 0) / (pasos.length - 1)) * 100) : 100;
+      var progreso = pasos.length > 1
+        ? '<div class="sigso-stepper__progreso">' +
+          '<span class="sigso-stepper__progreso-barra"><span class="sigso-stepper__progreso-relleno" style="width:' + pct + '%"></span></span>' +
+          '<span class="sigso-stepper__progreso-texto">Paso ' + (Math.max(activoIdx, 0) + 1) + ' de ' + pasos.length + '</span>' +
+          '</div>'
+        : '';
+      return '<div class="sigso-stepper">' + items + '</div>' + progreso;
     },
 
     galeriaImagenes: function (imagenes, opts) {
@@ -341,6 +352,73 @@
 
         document.body.appendChild(fondo);
         fondo.querySelector('.js-modal-si').focus();
+      });
+    },
+
+    /**
+     * v4.0 Frente 5: pide un valor de texto en un modal propio. Devuelve una
+     * Promise<string|null> (null = cancelado). Se usa para "Renombrar
+     * usuario" y "Asignar clave" en la administracion de cuentas -- acciones
+     * puntuales que no ameritan un formulario aparte en la pantalla.
+     * @param {{titulo:string, mensaje?:string, placeholder?:string,
+     *          valorInicial?:string, tipo?:'text'|'password',
+     *          confirmar?:string, cancelar?:string,
+     *          validar?:(valor:string)=>string|null}} opts
+     *        validar: si devuelve un string, se muestra como error y NO se
+     *        cierra el modal; si devuelve null/undefined, se acepta.
+     */
+    prompt: function (opts) {
+      opts = opts || {};
+      return new Promise(function (resolver) {
+        var fondo = document.createElement('div');
+        fondo.className = 'sigso-modal-fondo';
+        fondo.innerHTML =
+          '<div class="sigso-modal" role="dialog" aria-modal="true" aria-labelledby="sigso-prompt-titulo">' +
+            '<h3 class="sigso-modal__titulo" id="sigso-prompt-titulo">' + escaparHtml(opts.titulo) + '</h3>' +
+            (opts.mensaje ? '<p class="sigso-modal__mensaje">' + escaparHtml(opts.mensaje) + '</p>' : '') +
+            '<input type="' + (opts.tipo || 'text') + '" class="sigso-prompt__input" value="' + escaparHtml(opts.valorInicial || '') + '"' +
+              (opts.placeholder ? ' placeholder="' + escaparHtml(opts.placeholder) + '"' : '') + '>' +
+            '<p class="sigso-campo__error sigso-oculto js-prompt-error"></p>' +
+            '<div class="sigso-modal__acciones">' +
+              Componentes.boton({ texto: opts.cancelar || 'Cancelar', variante: 'sutil', clase: 'js-modal-no' }) +
+              Componentes.boton({ texto: opts.confirmar || 'Guardar', clase: 'js-modal-si' }) +
+            '</div>' +
+          '</div>';
+
+        var input = fondo.querySelector('.sigso-prompt__input');
+        var error = fondo.querySelector('.js-prompt-error');
+
+        function cerrar(valor) {
+          document.removeEventListener('keydown', alTeclado);
+          if (fondo.parentNode) fondo.parentNode.removeChild(fondo);
+          resolver(valor);
+        }
+
+        function intentarAceptar() {
+          var valor = input.value.trim();
+          var problema = opts.validar ? opts.validar(valor) : null;
+          if (problema) {
+            error.textContent = problema;
+            error.classList.remove('sigso-oculto');
+            input.focus();
+            return;
+          }
+          cerrar(valor);
+        }
+
+        function alTeclado(ev) {
+          if (ev.key === 'Escape') { cerrar(null); return; }
+          if (ev.key === 'Enter') { ev.preventDefault(); intentarAceptar(); }
+        }
+
+        fondo.querySelector('.js-modal-no').addEventListener('click', function () { cerrar(null); });
+        fondo.querySelector('.js-modal-si').addEventListener('click', intentarAceptar);
+        fondo.addEventListener('click', function (ev) { if (ev.target === fondo) cerrar(null); });
+        document.addEventListener('keydown', alTeclado);
+
+        document.body.appendChild(fondo);
+        input.focus();
+        input.select();
       });
     }
   };

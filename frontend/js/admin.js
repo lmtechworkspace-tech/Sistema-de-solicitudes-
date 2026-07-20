@@ -199,6 +199,21 @@
   // por correo Google), aqui la identidad es usuario+contrasena y una cuenta
   // puede tener VARIOS correos. La clave temporal se muestra UNA sola vez al
   // crear/resetear -- no queda guardada en ninguna parte (solo su hash).
+  var ROLES_PORTAL = [
+    { valor: 'SOLICITANTE', texto: 'Solicitante' },
+    { valor: 'ANA', texto: 'Gestor/Analista' },
+    { valor: 'DEV', texto: 'Desarrollador' },
+    { valor: 'GERENCIA', texto: 'Gerencia' },
+    { valor: 'ADM', texto: 'Administrador' }
+  ];
+  var MODULOS_PORTAL = [
+    { valor: 'nueva_solicitud', texto: 'Nueva solicitud' },
+    { valor: 'mis_solicitudes', texto: 'Mis solicitudes' },
+    { valor: 'bandeja', texto: 'Bandeja de trabajo' },
+    { valor: 'gerencia', texto: 'Panel de gerencia' },
+    { valor: 'administracion', texto: 'Administración' }
+  ];
+
   function renderCuentasPortal_() {
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarCuentasPortal', {}).then(function (respuesta) {
       var contenedor = document.getElementById('admin-contenido');
@@ -217,9 +232,11 @@
         Componentes.campoTexto({ dataCampo: 'nombre', label: 'Nombre completo' }) +
         Componentes.campoTexto({ dataCampo: 'cargo', label: 'Cargo (autocompleta el formulario)' }) +
         Componentes.campoTexto({ dataCampo: 'emails', label: 'Correos asociados (separados por coma)' }) +
-        Componentes.campoTexto({ dataCampo: 'rol', label: 'Rol: SOLICITANTE / ANA / DEV / GERENCIA / ADM' }) +
-        Componentes.campoTexto({ dataCampo: 'modulos', label: 'Módulos (coma; vacío = según rol): nueva_solicitud, mis_solicitudes, bandeja, gerencia, administracion' }) +
+        Componentes.campoSelect({ dataCampo: 'rol', label: 'Rol', placeholder: false, valor: 'SOLICITANTE', opciones: ROLES_PORTAL }) +
         Componentes.campoTexto({ dataCampo: 'empresa_id', label: 'Empresa (código, opcional)' }) +
+        '</div>' +
+        '<div class="sigso-campo"><label>Módulos (vacío = según rol)</label>' +
+        renderChipsModulos_([]) +
         '</div>' +
         Componentes.boton({ tipo: 'submit', texto: 'Guardar cuenta' }) +
         '<div id="resultado-admin"></div>' +
@@ -230,6 +247,7 @@
         evento.preventDefault();
         guardarCuentaPortal_();
       });
+      wireChipsModulos_();
       document.querySelectorAll('[data-cuenta]').forEach(function (fila) {
         fila.addEventListener('click', function (e) {
           if (e.target.closest('button')) return; // los botones de accion mandan
@@ -238,10 +256,41 @@
       });
       document.querySelectorAll('[data-accion-cuenta]').forEach(function (boton) {
         boton.addEventListener('click', function () {
-          accionCuenta_(boton.getAttribute('data-accion-cuenta'), boton.getAttribute('data-id'), boton.getAttribute('data-activo') === 'true');
+          accionCuenta_(boton.getAttribute('data-accion-cuenta'), boton.getAttribute('data-id'), boton.getAttribute('data-activo') === 'true', boton.getAttribute('data-usuario'));
         });
       });
     }).catch(mostrarErrorAdmin_);
+  }
+
+  // v4.0 Frente 5: chips de multi-seleccion en vez del campo de texto libre
+  // "modulos separados por coma" -- un clic marca/desmarca, sin que el
+  // Admin tenga que recordar de memoria los 5 nombres validos.
+  function renderChipsModulos_(seleccionados) {
+    return '<div class="sigso-chips sigso-chips-modulos">' + MODULOS_PORTAL.map(function (m) {
+      var activo = seleccionados.indexOf(m.valor) !== -1 ? ' sigso-chip--activo' : '';
+      return '<button type="button" class="sigso-chip' + activo + '" data-chip-modulo="' + m.valor + '">' + m.texto + '</button>';
+    }).join('') + '</div>';
+  }
+
+  function wireChipsModulos_() {
+    document.querySelectorAll('[data-chip-modulo]').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        chip.classList.toggle('sigso-chip--activo');
+      });
+    });
+  }
+
+  function modulosSeleccionados_() {
+    return [].slice.call(document.querySelectorAll('[data-chip-modulo].sigso-chip--activo'))
+      .map(function (chip) { return chip.getAttribute('data-chip-modulo'); });
+  }
+
+  // v4.0 Frente 5: avatar de iniciales + "Nunca entró" cuando ultimo_acceso
+  // esta vacio -- antes esa columna directamente no existia, asi que no
+  // habia forma de saber si una cuenta creada hace un mes se llego a usar.
+  function inicialesCuenta_(nombre) {
+    var partes = String(nombre || '').trim().split(/\s+/);
+    return ((partes[0] || '')[0] || '') + ((partes[1] || '')[0] || '');
   }
 
   function renderTablaCuentas_(cuentas) {
@@ -253,20 +302,30 @@
       });
     }
     var filas = cuentas.map(function (c) {
+      var ultimoAcceso = c.ultimo_acceso
+        ? Componentes.escaparHtml(String(c.ultimo_acceso).replace('T', ' ').slice(0, 16))
+        : '<span class="sigso-cuenta-nunca-entro">Nunca entró</span>';
       return '<tr data-cuenta=\'' + JSON.stringify(c).replace(/'/g, '&#39;') + '\'>' +
-        '<td>' + Componentes.escaparHtml(c.usuario) + '</td>' +
-        '<td>' + Componentes.escaparHtml(c.nombre) + '</td>' +
+        '<td><div class="sigso-cuenta-fila">' +
+        '<span class="sigso-cuenta-fila__avatar">' + Componentes.escaparHtml(inicialesCuenta_(c.nombre).toUpperCase()) + '</span>' +
+        '<div><div>' + Componentes.escaparHtml(c.usuario) + '</div>' +
+        '<div class="sigso-ayuda">' + Componentes.escaparHtml(c.nombre) + '</div></div>' +
+        '</div></td>' +
         '<td>' + Componentes.escaparHtml((c.emails || []).join(', ')) + '</td>' +
         '<td>' + Componentes.escaparHtml(c.rol) + '</td>' +
         '<td>' + Componentes.escaparHtml((c.modulos || []).join(', ')) + '</td>' +
         '<td>' + Componentes.badge(c.activo ? 'Sí' : 'No', c.activo ? 'P4' : 'P1') + '</td>' +
+        '<td>' + ultimoAcceso + '</td>' +
         '<td>' +
         '<button type="button" class="sigso-boton--secundario" data-accion-cuenta="resetear" data-id="' + c.cuenta_id + '">Resetear clave</button> ' +
-        '<button type="button" class="sigso-boton--secundario" data-accion-cuenta="activar" data-id="' + c.cuenta_id + '" data-activo="' + !c.activo + '">' + (c.activo ? 'Desactivar' : 'Activar') + '</button>' +
+        '<button type="button" class="sigso-boton--secundario" data-accion-cuenta="asignar_password" data-id="' + c.cuenta_id + '" data-usuario="' + Componentes.escaparHtml(c.usuario) + '">Asignar clave</button> ' +
+        '<button type="button" class="sigso-boton--secundario" data-accion-cuenta="renombrar" data-id="' + c.cuenta_id + '" data-usuario="' + Componentes.escaparHtml(c.usuario) + '">Renombrar</button> ' +
+        '<button type="button" class="sigso-boton--secundario" data-accion-cuenta="activar" data-id="' + c.cuenta_id + '" data-activo="' + !c.activo + '">' + (c.activo ? 'Desactivar' : 'Activar') + '</button> ' +
+        '<button type="button" class="sigso-boton--peligro" data-accion-cuenta="eliminar" data-id="' + c.cuenta_id + '" data-usuario="' + Componentes.escaparHtml(c.usuario) + '">Eliminar</button>' +
         '</td></tr>';
     }).join('');
     return '<table class="sigso-tabla"><thead><tr>' +
-      '<th>Usuario</th><th>Nombre</th><th>Correos</th><th>Rol</th><th>Módulos</th><th>Activa</th><th>Acciones</th>' +
+      '<th>Cuenta</th><th>Correos</th><th>Rol</th><th>Módulos</th><th>Activa</th><th>Último acceso</th><th>Acciones</th>' +
       '</tr></thead><tbody>' + filas + '</tbody></table>';
   }
 
@@ -277,14 +336,17 @@
     var campos = {
       usuario: cuenta.usuario, nombre: cuenta.nombre, cargo: cuenta.cargo,
       emails: (cuenta.emails || []).join(', '), rol: cuenta.rol,
-      modulos: (cuenta.modulos || []).join(', '), empresa_id: cuenta.empresa_id
+      empresa_id: cuenta.empresa_id
     };
     Object.keys(campos).forEach(function (nombre) {
       var input = document.querySelector('#form-cuenta-portal [data-campo="' + nombre + '"]');
       if (input) input.value = campos[nombre] || '';
     });
-    // El usuario identifica la cuenta: no se renombra (crear otra si hace falta).
+    // El usuario se cambia con el boton "Renombrar" de la tabla (valida
+    // formato/unicidad en el backend), no desde este formulario.
     document.querySelector('#form-cuenta-portal [data-campo="usuario"]').disabled = true;
+    document.querySelector('.sigso-chips-modulos').outerHTML = renderChipsModulos_(cuenta.modulos || []);
+    wireChipsModulos_();
   }
 
   function guardarCuentaPortal_() {
@@ -301,9 +363,9 @@
     } else {
       datos.usuario = leer('usuario');
     }
-    var modulos = leer('modulos');
-    if (modulos) {
-      datos.modulos = modulos.split(',').map(function (m) { return m.trim(); }).filter(Boolean);
+    var modulos = modulosSeleccionados_();
+    if (modulos.length) {
+      datos.modulos = modulos;
     }
 
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'gestionarCuentaPortal', datos).then(function (respuesta) {
@@ -327,10 +389,58 @@
     });
   }
 
-  function accionCuenta_(accion, cuentaId, activar) {
+  function accionCuenta_(accion, cuentaId, activar, usuarioActual) {
+    if (accion === 'renombrar') {
+      Componentes.prompt({
+        titulo: 'Renombrar usuario',
+        mensaje: 'Usuario actual: ' + usuarioActual + '. Se usa para el login (no afecta el nombre ni los correos).',
+        valorInicial: usuarioActual,
+        confirmar: 'Renombrar',
+        validar: function (valor) {
+          if (!/^[a-z0-9._-]{3,30}$/i.test(valor)) return '3-30 caracteres: letras, números, punto o guión.';
+          return null;
+        }
+      }).then(function (nuevoUsuario) {
+        if (nuevoUsuario === null || nuevoUsuario === usuarioActual) return;
+        aplicarAccionCuenta_({ operacion: 'renombrar', cuenta_id: cuentaId, usuario: nuevoUsuario });
+      });
+      return;
+    }
+    if (accion === 'asignar_password') {
+      Componentes.prompt({
+        titulo: 'Asignar clave a "' + usuarioActual + '"',
+        mensaje: 'La persona podrá entrar de inmediato con esta clave (igual se le pedirá confirmarla al ingresar).',
+        placeholder: 'Mínimo 8 caracteres',
+        confirmar: 'Asignar',
+        validar: function (valor) {
+          if (valor.length < 8) return 'La clave debe tener al menos 8 caracteres.';
+          return null;
+        }
+      }).then(function (password) {
+        if (password === null) return;
+        aplicarAccionCuenta_({ operacion: 'asignar_password', cuenta_id: cuentaId, password: password });
+      });
+      return;
+    }
+    if (accion === 'eliminar') {
+      Componentes.confirmar({
+        titulo: 'Eliminar cuenta "' + usuarioActual + '"',
+        mensaje: 'Se borra por completo (no solo se desactiva) y se cierra cualquier sesión activa. Esta acción no se puede deshacer.',
+        confirmar: 'Eliminar',
+        peligro: true
+      }).then(function (confirmado) {
+        if (!confirmado) return;
+        aplicarAccionCuenta_({ operacion: 'eliminar', cuenta_id: cuentaId });
+      });
+      return;
+    }
     var datos = accion === 'resetear'
       ? { operacion: 'resetear_password', cuenta_id: cuentaId }
       : { operacion: 'activar', cuenta_id: cuentaId, activo: activar };
+    aplicarAccionCuenta_(datos);
+  }
+
+  function aplicarAccionCuenta_(datos) {
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'gestionarCuentaPortal', datos).then(function (respuesta) {
       if (!respuesta.ok) {
         Componentes.aviso({ tipo: 'error', texto: respuesta.message || 'No se pudo aplicar.' });
@@ -343,6 +453,17 @@
           detalle: 'No queda guardada: copiala ahora y entregasela a la persona.',
           copiar: respuesta.data.password_temporal
         });
+      } else if (respuesta.data.password) {
+        Componentes.aviso({
+          tipo: 'exito',
+          texto: 'Clave asignada a "' + respuesta.data.usuario + '".',
+          detalle: 'No queda guardada: copiala ahora y entregasela a la persona.',
+          copiar: respuesta.data.password
+        });
+      } else if (respuesta.data.eliminada) {
+        Componentes.aviso({ tipo: 'exito', texto: 'Cuenta "' + respuesta.data.usuario + '" eliminada.' });
+      } else if (respuesta.data.usuario) {
+        Componentes.aviso({ tipo: 'exito', texto: 'Cuenta renombrada a "' + respuesta.data.usuario + '".' });
       }
       renderCuentasPortal_();
     });

@@ -63,7 +63,8 @@ var CuentasPortal = {
   },
 
   /**
-   * gestionar({ operacion: 'crear'|'actualizar'|'resetear_password'|'activar', ... })
+   * gestionar({ operacion: 'crear'|'actualizar'|'resetear_password'|'activar'|
+   *             'renombrar'|'asignar_password'|'eliminar', ... })
    * Una sola accion con operaciones, mismo patron que gestionarUsuario
    * (Auth.gs).
    */
@@ -76,6 +77,9 @@ var CuentasPortal = {
       case 'actualizar': return actualizarCuenta_(data);
       case 'resetear_password': return resetearPassword_(data);
       case 'activar': return activarCuenta_(data);
+      case 'renombrar': return renombrarCuenta_(data);
+      case 'asignar_password': return asignarPassword_(data);
+      case 'eliminar': return eliminarCuenta_(data);
       default:
         return errorValidacion_('operacion', 'Operacion invalida: ' + data.operacion);
     }
@@ -194,6 +198,64 @@ function activarCuenta_(data) {
     activo: data.activo !== false
   });
   return { cuenta_id: data.cuenta_id, activo: data.activo !== false };
+}
+
+// v4.0 Frente 5: renombrar el usuario de login (antes era fijo al crear la
+// cuenta -- si alguien se equivocaba al tipearlo, la unica salida era crear
+// una cuenta nueva). Misma validacion de formato y unicidad que crearCuenta_.
+function renombrarCuenta_(data) {
+  var cuenta = buscarCuentaPortal_(data.cuenta_id);
+  if (!cuenta) {
+    return errorValidacion_('cuenta_id', 'Cuenta no encontrada.');
+  }
+  var nuevoUsuario = String(data.usuario || '').trim().toLowerCase();
+  if (!nuevoUsuario || !/^[a-z0-9._-]{3,30}$/.test(nuevoUsuario)) {
+    return errorValidacion_('usuario', 'Usuario invalido: 3-30 caracteres, letras/numeros/punto/guion.');
+  }
+  var enUso = leerCuentasPortal_().some(function (c) {
+    return c.cuenta_id !== data.cuenta_id && String(c.usuario).trim().toLowerCase() === nuevoUsuario;
+  });
+  if (enUso) {
+    return errorValidacion_('usuario', 'Ya existe una cuenta con el usuario "' + nuevoUsuario + '".');
+  }
+  actualizarFilaPorId_(SHEETS.CUENTAS_PORTAL, 'cuenta_id', data.cuenta_id, { usuario: nuevoUsuario });
+  return { cuenta_id: data.cuenta_id, usuario: nuevoUsuario };
+}
+
+// v4.0 Frente 5: a diferencia de resetear_password (clave al azar), aqui el
+// Admin ELIGE la clave -- por ejemplo si la persona la pidio por telefono y
+// prefiere algo que recuerde. Se mantiene debe_cambiar_password para no
+// bajar el estandar de seguridad (misma politica que crear/resetear).
+function asignarPassword_(data) {
+  var cuenta = buscarCuentaPortal_(data.cuenta_id);
+  if (!cuenta) {
+    return errorValidacion_('cuenta_id', 'Cuenta no encontrada.');
+  }
+  var password = String(data.password || '');
+  if (password.length < 8) {
+    return errorValidacion_('password', 'La clave debe tener al menos 8 caracteres.');
+  }
+  var salt = Utilities.getUuid();
+  actualizarFilaPorId_(SHEETS.CUENTAS_PORTAL, 'cuenta_id', data.cuenta_id, {
+    salt: salt,
+    hash_password: hashPasswordPortal_(password, salt),
+    debe_cambiar_password: true
+  });
+  return { cuenta_id: data.cuenta_id, usuario: cuenta.usuario, password: password };
+}
+
+// v4.0 Frente 5: borrado real (no solo desactivar) -- el Admin pidio poder
+// "administrar al 100%" las cuentas. Tambien mata cualquier sesion viva de
+// esa cuenta: sin esto, un token ya emitido seguiria funcionando hasta que
+// expirara solo (§P1, SESION_HORAS), aunque la cuenta ya no exista.
+function eliminarCuenta_(data) {
+  var cuenta = buscarCuentaPortal_(data.cuenta_id);
+  if (!cuenta) {
+    return errorValidacion_('cuenta_id', 'Cuenta no encontrada.');
+  }
+  eliminarFilasPorId_(SHEETS.CUENTAS_PORTAL, 'cuenta_id', data.cuenta_id);
+  eliminarFilasPorId_(SHEETS.SESIONES_PORTAL, 'cuenta_id', data.cuenta_id);
+  return { cuenta_id: data.cuenta_id, usuario: cuenta.usuario, eliminada: true };
 }
 
 // --- helpers -------------------------------------------------------------

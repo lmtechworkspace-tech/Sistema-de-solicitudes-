@@ -589,13 +589,24 @@
     });
 
     var documentos = (estado.documentosPorItem[idx] || []);
+    // v4.0 Frente 5: dropzone -- el <input type=file> sigue ahi (oculto),
+    // solo se envuelve en un area mas grande que acepta arrastrar y soltar
+    // ademas del clic de siempre; wireCuerpoItem_ cablea el drag&drop.
     var evidencia =
       '<div class="sigso-campo"><label>Im&aacute;genes (capturas de pantalla, opcional)</label>' +
-      '<input type="file" data-accion="input-imagenes" data-idx="' + idx + '" accept="image/png,image/jpeg,image/gif" multiple>' +
+      '<label class="sigso-dropzone" data-dropzone="imagenes" data-idx="' + idx + '">' +
+      Iconos.svg('imagen', { tam: 22 }) +
+      '<span>Arrastra imagenes aqu&iacute; o haz clic para elegir</span>' +
+      '<input type="file" class="sigso-dropzone__input" data-accion="input-imagenes" data-idx="' + idx + '" accept="image/png,image/jpeg,image/gif" multiple>' +
+      '</label>' +
       Componentes.galeriaImagenes(imagenes, { editable: true, idx: idx }) +
       '</div>' +
       '<div class="sigso-campo"><label>Documentos (PDF, Word o Excel, opcional)</label>' +
-      '<input type="file" data-accion="input-documentos" data-idx="' + idx + '" accept=".pdf,.xlsx,.xls,.docx,.doc,.pptx" multiple>' +
+      '<label class="sigso-dropzone" data-dropzone="documentos" data-idx="' + idx + '">' +
+      Iconos.svg('documento', { tam: 22 }) +
+      '<span>Arrastra documentos aqu&iacute; o haz clic para elegir</span>' +
+      '<input type="file" class="sigso-dropzone__input" data-accion="input-documentos" data-idx="' + idx + '" accept=".pdf,.xlsx,.xls,.docx,.doc,.pptx" multiple>' +
+      '</label>' +
       renderListaDocumentos_(documentos, idx) +
       '<div class="sigso-campo__error sigso-oculto" data-error-doc="' + idx + '"></div>' +
       '</div>';
@@ -838,6 +849,16 @@
         inputDocumentos.value = '';
       });
     }
+
+    // v4.0 Frente 5: arrastrar y soltar sobre el dropzone -- reusa las
+    // mismas funciones que ya validan limite/tipo/tamano (no hay un camino
+    // "sin validar" para el drag&drop).
+    wireDropzone_(cuerpo.querySelector('[data-dropzone="imagenes"]'), function (files) {
+      agregarImagenes_(idx, files);
+    });
+    wireDropzone_(cuerpo.querySelector('[data-dropzone="documentos"]'), function (files) {
+      agregarDocumentos_(idx, files);
+    });
     cuerpo.querySelectorAll('[data-accion="quitar-documento"]').forEach(function (el) {
       el.addEventListener('click', function () {
         quitarDocumento_(idx, Number(el.getAttribute('data-doc-idx')));
@@ -852,6 +873,29 @@
   }
 
   // --- Imagenes y documentos (Idea 2: hasta 5 img / 3 doc POR ITEM) ------
+
+  // v4.0 Frente 5: dropzone generica -- resalta al arrastrar encima y llama
+  // a `alSoltar` con los archivos, sea cual sea el input que envuelva.
+  function wireDropzone_(zona, alSoltar) {
+    if (!zona) return;
+    ['dragenter', 'dragover'].forEach(function (tipo) {
+      zona.addEventListener(tipo, function (ev) {
+        ev.preventDefault();
+        zona.classList.add('sigso-dropzone--sobre');
+      });
+    });
+    ['dragleave', 'drop'].forEach(function (tipo) {
+      zona.addEventListener(tipo, function () {
+        zona.classList.remove('sigso-dropzone--sobre');
+      });
+    });
+    zona.addEventListener('drop', function (ev) {
+      ev.preventDefault();
+      if (ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files.length) {
+        alSoltar(ev.dataTransfer.files);
+      }
+    });
+  }
 
   function agregarImagenes_(idx, fileList) {
     if (!estado.imagenesPorItem[idx]) estado.imagenesPorItem[idx] = [];

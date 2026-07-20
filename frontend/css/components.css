@@ -1282,3 +1282,126 @@
   .sigso-lightbox__nav--next { right: 0.25rem; }
   .sigso-lightbox__cerrar { top: 0.25rem; right: 0.25rem; }
 }
+
+/* =====================================================================
+   v4.0 Frente 5 — administración y formulario
+   ===================================================================== */
+
+/* --- Progreso del stepper --------------------------------------------
+   Los circulos dicen EN CUAL paso estas; esta linea dice CUANTO FALTA. */
+.sigso-stepper__progreso {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-3);
+  margin: -0.5rem 0 1.25rem;
+}
+
+.sigso-stepper__progreso-barra {
+  flex: 1;
+  height: 4px;
+  border-radius: var(--radio-full);
+  background: var(--superficie-2);
+  overflow: hidden;
+}
+
+.sigso-stepper__progreso-relleno {
+  display: block;
+  height: 100%;
+  background: var(--naranja);
+  border-radius: var(--radio-full);
+  transition: width 0.2s ease;
+}
+
+.sigso-stepper__progreso-texto {
+  font-size: var(--texto-xs);
+  color: var(--texto-2);
+  white-space: nowrap;
+  flex: none;
+}
+
+/* --- Prompt (modal con input) ------------------------------------------ */
+.sigso-prompt__input {
+  width: 100%;
+  margin-top: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-sm);
+  font: inherit;
+  font-size: 0.95rem;
+}
+
+/* --- Dropzone (imagenes y documentos del formulario) -------------------
+   El <input type=file> sigue siendo el que sube el archivo (change event
+   intacto); esto solo agrega una superficie mas grande y arrastrar+soltar
+   sin cambiar como se procesa el archivo despues. */
+.sigso-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: var(--esp-4);
+  border: 2px dashed var(--borde-fuerte);
+  border-radius: var(--radio-md);
+  color: var(--texto-2);
+  font-size: var(--texto-sm);
+  text-align: center;
+  cursor: pointer;
+  background: var(--superficie-2);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.sigso-dropzone:hover,
+.sigso-dropzone--sobre {
+  border-color: var(--naranja);
+  background: var(--naranja-claro);
+  color: var(--texto);
+}
+
+.sigso-dropzone__input {
+  /* Oculto visualmente pero accesible: el <label> que lo envuelve ya
+     activa el selector de archivos nativo al hacer clic en cualquier parte
+     de la zona (icono, texto, fondo). */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- Tabla de cuentas: avatar + "nunca entro" -------------------------- */
+.sigso-cuenta-fila {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sigso-cuenta-fila__avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--info-suave);
+  color: var(--azul);
+  display: grid;
+  place-items: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  flex: none;
+}
+
+.sigso-cuenta-nunca-entro {
+  color: var(--texto-3);
+  font-style: italic;
+}
+
+/* --- Modulos: chips de multi-seleccion (reemplaza el input de texto
+   "modulos separados por coma" en el formulario de cuentas) -------------- */
+.sigso-chips-modulos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
