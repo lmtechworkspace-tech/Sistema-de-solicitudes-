@@ -26,6 +26,8 @@
       <!-- v2.1 (Fase C): solo visible para GERENCIA (dashboard.js lo
            muestra segun rol_actual). -->
       <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-ver-gerencia">Ver Panel de Gerencia</button>
+      <!-- v4.2: solo visible para JEFATURA. -->
+      <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-ver-jefatura">Ver Mi Departamento</button>
 
       <!-- v3.0 (Fase 2, multi-bandeja): un responsable individual (DEV) ya
            esta auto-acotado a la suya -- solo se le avisa. ADM/GERENCIA ven
@@ -240,6 +242,44 @@
         <div id="ger-contenedor-solicitante"></div>
       </div>
     </section>
+
+    <!-- v4.2 (documentacion/SIGSO-v4.2-propuestas-modulo-jefatura.md): un
+         "Gerencia acotado" -- misma clase de informacion, recortada SIEMPRE
+         al equipo del jefe (JEFATURAS, por correo). Solo visible para
+         JEFATURA. -->
+    <section id="vista-jefatura" class="sigso-oculto">
+      <button type="button" class="sigso-boton--secundario" id="btn-volver-dashboard-jefatura">&larr; Volver al dashboard</button>
+      <h1>Mi Departamento</h1>
+      <p class="sigso-ayuda">Solo ves lo asociado a las personas a cargo tuyo (como solicitantes o como responsables). Para ver todas las solicitudes, contacta a Gerencia.</p>
+      <button type="button" class="sigso-boton--secundario" id="btn-actualizar-jefatura">Actualizar</button>
+
+      <div class="sigso-kpis" id="jef-contenedor-kpis"></div>
+
+      <div class="sigso-card" id="jef-panel-hoy">
+        <h3>Hoy en tu departamento</h3>
+        <div id="jef-contenedor-hoy"></div>
+      </div>
+
+      <div class="sigso-tabs" role="tablist">
+        <button type="button" class="sigso-tabs__boton sigso-tabs__boton--activo" id="jef-tab-tablero" data-jef-tab="tablero">Tablero</button>
+        <button type="button" class="sigso-tabs__boton" id="jef-tab-persona" data-jef-tab="persona">Por persona</button>
+        <button type="button" class="sigso-tabs__boton" id="jef-tab-carga" data-jef-tab="carga">Carga</button>
+      </div>
+
+      <div id="jef-panel-tablero" class="sigso-card">
+        <div id="jef-contenedor-tablero"></div>
+      </div>
+
+      <div id="jef-panel-persona" class="sigso-card sigso-oculto">
+        <h3>Por persona</h3>
+        <div id="jef-contenedor-persona"></div>
+      </div>
+
+      <div id="jef-panel-carga" class="sigso-card sigso-oculto">
+        <h3>Carga del equipo por módulo / tipo</h3>
+        <div id="jef-contenedor-carga"></div>
+      </div>
+    </section>
   </main>
 
   <script src="js/config.js"></script>
@@ -251,6 +291,7 @@
   <script src="js/dashboard.js"></script>
   <script src="js/detalle.js"></script>
   <script src="js/gerencia.js"></script>
+  <script src="js/jefatura.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

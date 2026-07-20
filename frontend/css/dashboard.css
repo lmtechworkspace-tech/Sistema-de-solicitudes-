@@ -751,3 +751,17 @@ button.sigso-kpi {
     gap: 0.2rem;
   }
 }
+
+/* v4.2 (Jefatura, §4): agrupa cada categoria de "Hoy en tu departamento"
+   (nuevas/avanzaron/cerradas/en riesgo/esperando validacion). */
+.sigso-jefatura-bloque-hoy {
+  margin-bottom: 1.25rem;
+}
+
+.sigso-jefatura-bloque-hoy:last-child {
+  margin-bottom: 0;
+}
+
+.sigso-jefatura-bloque-hoy h4 {
+  margin-bottom: 0.5rem;
+}

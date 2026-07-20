@@ -5,12 +5,13 @@ const assert = require('node:assert/strict');
 const { loadBackofficeProject, toPlain, seedSheet } = require('./helpers/gasSandbox');
 
 const TODOS_LOS_TRIGGERS = [
-  'cerrarInactivosTrigger', 'detectarPatronesTrigger', 'enviarReporteMensualTrigger', 'enviarResumenSemanalTrigger',
+  'cerrarInactivosTrigger', 'detectarPatronesTrigger', 'enviarDigestJefaturaTrigger',
+  'enviarReporteMensualTrigger', 'enviarResumenSemanalTrigger',
   'procesarColaCorreoTrigger', 'procesarColaDocumentosTrigger', 'recordarValidacionPendienteTrigger',
   'refrescarCacheTrigger', 'suspenderInactivosTrigger', 'verificarFechasComprometidasTrigger', 'verificarSLAsTrigger'
 ];
 
-test('configurarTriggers instala los 11 triggers de tiempo de §13/§16.3 (Fase 4 + Fase 7 + Sprint 1/3 v2.0 + v2.1 Fase D)', () => {
+test('configurarTriggers instala los 12 triggers de tiempo de §13/§16.3 (Fase 4 + Fase 7 + Sprint 1/3 v2.0 + v2.1 Fase D + v4.2)', () => {
   const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
   const creados = toPlain(ctx.configurarTriggers());
 

@@ -253,6 +253,52 @@ var Notificaciones = {
     });
   },
 
+  // v4.2 (§4, documentacion/SIGSO-v4.2-propuestas-modulo-jefatura.md): "al
+  // finalizar el dia poder ver que ocurrio en su departamento" -- lo que la
+  // jefatura pidio explicitamente. Un correo por jefe activo, al final de
+  // la jornada (Triggers.gs: enviarDigestJefaturaTrigger, 18:00), con el
+  // mismo resumen "hoy" que ve en su panel. No manda nada si el jefe no
+  // tiene equipo o si hoy no paso nada de relevancia -- un digest siempre
+  // vacio entrena a la gente a ignorarlo.
+  enviarDigestJefatura: function () {
+    var jefes = {};
+    leerFilasSeguro_(SHEETS.JEFATURAS).forEach(function (j) {
+      var activo = j.activo === true || j.activo === 'TRUE' || j.activo === 1;
+      if (activo) jefes[j.jefe_email] = true;
+    });
+
+    var resultados = [];
+    Object.keys(jefes).forEach(function (jefeEmail) {
+      var panel = Jefatura.getPanel({}, { email: jefeEmail, rol: 'JEFATURA' });
+      var r = panel.hoy.resumen;
+      var huboAlgo = r.nuevas > 0 || r.avanzaron > 0 || r.cerradas > 0 || r.en_riesgo > 0 || r.requieren_accion > 0;
+      if (!huboAlgo) {
+        resultados.push({ jefe: jefeEmail, enviado: false, motivo: 'sin_novedades' });
+        return;
+      }
+      var asunto = 'SIGSO — Hoy en tu departamento (' + r.nuevas + ' nuevas, ' + r.cerradas + ' cerradas)';
+      var cuerpo =
+        'Resumen del día en tu departamento:\n\n' +
+        '- Nuevas solicitudes: ' + r.nuevas + '\n' +
+        '- Avanzaron de estado: ' + r.avanzaron + '\n' +
+        '- Se cerraron: ' + r.cerradas + '\n' +
+        '- En riesgo o vencidas: ' + r.en_riesgo + '\n' +
+        '- Esperan validación de tu equipo: ' + r.requieren_accion + '\n\n' +
+        (panel.hoy.nuevas.length ? 'NUEVAS\n' + listarItems_(panel.hoy.nuevas) + '\n\n' : '') +
+        (panel.hoy.cerradas.length ? 'CERRADAS HOY\n' + listarItems_(panel.hoy.cerradas) + '\n\n' : '') +
+        (panel.hoy.en_riesgo_o_vencidas.length ? 'EN RIESGO O VENCIDAS\n' + listarItems_(panel.hoy.en_riesgo_o_vencidas) + '\n\n' : '') +
+        (panel.hoy.requieren_accion.length ? 'ESPERANDO VALIDACIÓN DE TU EQUIPO\n' + listarItems_(panel.hoy.requieren_accion) + '\n\n' : '') +
+        'Puedes ver el detalle completo en tu Panel de Jefatura.' +
+        pieCorreoBackoffice_();
+      var claveEvento = 'DIGEST_JEFATURA:' + claveDia_(new Date(), 'America/Santiago');
+      resultados.push(Object.assign(
+        { jefe: jefeEmail },
+        enviarCorreo_('DIGEST_JEFATURA', jefeEmail, claveEvento, asunto, cuerpo, VENTANA_DEDUP_SLA_VENCIDO_MINUTOS)
+      ));
+    });
+    return resultados;
+  },
+
   alertarAdminFalloDocumento: function (solicitud, ref) {
     var destinatarios = obtenerEmailsPorRol_(solicitud.empresa_id, ['ADM']);
     return destinatarios.map(function (email) {
@@ -339,6 +385,15 @@ function pieCorreoBackoffice_() {
     'Este es un mensaje automatico del sistema SIGSO.\n' +
     'Por favor no responda directamente a este correo.\n' +
     'Equipo SIGSO — HomePymes / RLD';
+}
+
+// v4.2: formatea la lista compacta de items (Jefatura.resumirItem_) para el
+// cuerpo de texto plano del digest.
+function listarItems_(items) {
+  return items.map(function (i) {
+    return '- ' + i.solicitud_id + '-' + i.numero_item + ' — ' + i.titulo +
+      ' (' + i.solicitante_nombre + ', ' + i.semaforo + ')';
+  }).join('\n');
 }
 
 function formatearEstado_(codigo) {

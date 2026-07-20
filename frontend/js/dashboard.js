@@ -90,6 +90,9 @@
       // restringe la accion en si, pero no tiene sentido ofrecersela a
       // quien no es Gerencia).
       document.getElementById('btn-ver-gerencia').classList.toggle('sigso-oculto', respuesta.data.rol_actual !== 'GERENCIA');
+      // v4.2: mismo criterio para el acceso a "Mi departamento".
+      var botonJefatura = document.getElementById('btn-ver-jefatura');
+      if (botonJefatura) botonJefatura.classList.toggle('sigso-oculto', respuesta.data.rol_actual !== 'JEFATURA');
       renderSelectorBandeja_(respuesta.data);
       return respuesta;
     });

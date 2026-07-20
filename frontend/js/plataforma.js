@@ -27,6 +27,9 @@
     // gerencia.js orquestados aqui, con el token de la sesion via api.js).
     bandeja: { icono: 'bandeja', nombre: 'Bandeja de trabajo', descripcion: 'Solicitudes del equipo: estados, fechas, derivaciones', interno: true },
     gerencia: { icono: 'grafico', nombre: 'Panel de gerencia', descripcion: 'KPIs, semáforo de cumplimiento y seguimiento', interno: true },
+    // v4.2: "Gerencia acotado" al equipo del jefe (JEFATURAS, por correo) --
+    // ver documentacion/SIGSO-v4.2-propuestas-modulo-jefatura.md.
+    jefatura: { icono: 'grafico', nombre: 'Mi departamento', descripcion: 'Qué pasó hoy con tu equipo: KPIs, seguimiento y validaciones pendientes', interno: true },
     // P4: administracion tambien vive dentro del shell (admin.js con el
     // token de la sesion; el backend exige el modulo en cada accion).
     administracion: { icono: 'config', nombre: 'Administración', descripcion: 'Catálogos, usuarios y cuentas de la plataforma', interno: true }
@@ -41,6 +44,7 @@
     mis_solicitudes: { acento: 'var(--info)', suave: 'var(--info-suave)' },
     bandeja: { acento: 'var(--ok)', suave: 'var(--ok-suave)' },
     gerencia: { acento: 'var(--alerta)', suave: 'var(--alerta-suave)' },
+    jefatura: { acento: 'var(--alerta)', suave: 'var(--alerta-suave)' },
     administracion: { acento: 'var(--texto-2)', suave: 'var(--superficie-2)' }
   };
 
@@ -160,6 +164,7 @@
     ANA: 'Gestor / Analista',
     DEV: 'Gestor técnico',
     GERENCIA: 'Gerencia',
+    JEFATURA: 'Jefatura',
     SOLICITANTE: 'Solicitante'
   };
 
@@ -390,12 +395,13 @@
   // el contenedor ancho, como app.html. Los demas (formulario, mis
   // solicitudes) se leen mejor angostos y centrados -- por eso el ancho del
   // <main> se adapta al modulo en vez de ser fijo.
-  var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'administracion'];
+  var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion'];
 
   function mostrarModulo_(id) {
-    // bandeja y gerencia comparten la seccion modulo-bandeja (vistas
-    // internas dashboard/detalle/gerencia, mismo layout que app.html).
-    var seccionId = (id === 'bandeja' || id === 'gerencia') ? 'modulo-bandeja' : 'modulo-' + id;
+    // bandeja, gerencia y jefatura comparten la seccion modulo-bandeja
+    // (vistas internas dashboard/detalle/gerencia/jefatura, mismo layout
+    // que app.html).
+    var seccionId = (id === 'bandeja' || id === 'gerencia' || id === 'jefatura') ? 'modulo-bandeja' : 'modulo-' + id;
     document.querySelectorAll('.plataforma-modulo').forEach(function (seccion) {
       seccion.classList.toggle('sigso-oculto', seccion.id !== seccionId);
     });
@@ -422,6 +428,9 @@
     }
     if (id === 'gerencia') {
       abrirBandeja_('gerencia');
+    }
+    if (id === 'jefatura') {
+      abrirBandeja_('jefatura');
     }
     if (id === 'administracion') {
       abrirAdministracion_();
@@ -494,12 +503,20 @@
       document.getElementById('btn-actualizar-gerencia').addEventListener('click', function () {
         SigsoGerencia.cargar();
       });
+      // v4.2: Jefatura ("Mi departamento") -- mismo patron que Gerencia.
+      document.getElementById('btn-volver-dashboard-jefatura').addEventListener('click', window.SigsoApp.mostrarDashboard);
+      document.getElementById('btn-actualizar-jefatura').addEventListener('click', function () {
+        SigsoJefatura.cargar();
+      });
     }
 
     if (vista === 'gerencia') {
       mostrarVistaBandeja_('vista-gerencia');
       SigsoGerencia.inicializarFiltros();
       SigsoGerencia.cargar();
+    } else if (vista === 'jefatura') {
+      mostrarVistaBandeja_('vista-jefatura');
+      SigsoJefatura.cargar();
     } else {
       mostrarVistaBandeja_('vista-dashboard');
       SigsoDashboard.cargar();
@@ -507,7 +524,7 @@
   }
 
   function mostrarVistaBandeja_(id) {
-    ['vista-dashboard', 'vista-detalle', 'vista-gerencia'].forEach(function (vista) {
+    ['vista-dashboard', 'vista-detalle', 'vista-gerencia', 'vista-jefatura'].forEach(function (vista) {
       document.getElementById(vista).classList.toggle('sigso-oculto', vista !== id);
     });
   }

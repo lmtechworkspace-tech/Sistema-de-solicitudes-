@@ -51,7 +51,11 @@ var SHEETS = {
   // origen: hoy la identidad ES un correo y quien usa dos correos es dos
   // personas para el sistema.
   CUENTAS_PORTAL: 'CUENTAS_PORTAL',
-  SESIONES_PORTAL: 'SESIONES_PORTAL'
+  SESIONES_PORTAL: 'SESIONES_PORTAL',
+  // v4.2 (documentacion/SIGSO-v4.2-propuestas-modulo-jefatura.md §1):
+  // relacion jefe -> persona a cargo, por correo. Ver la nota identica en
+  // backend/intake/Constantes.gs.
+  JEFATURAS: 'JEFATURAS'
 };
 
 var COLUMNAS = {
@@ -196,7 +200,9 @@ var COLUMNAS = {
   ],
   // v3.3 (§2.4): sesiones activas del portal (token que el navegador
   // presenta en cada llamada). Expiran a las 12 horas.
-  SESIONES_PORTAL: ['token', 'cuenta_id', 'expira', 'creada']
+  SESIONES_PORTAL: ['token', 'cuenta_id', 'expira', 'creada'],
+  // v4.2 (§1): ver la nota identica en backend/intake/Constantes.gs.
+  JEFATURAS: ['jefatura_id', 'jefe_email', 'subordinado_email', 'activo']
 };
 
 var ESTADOS = {

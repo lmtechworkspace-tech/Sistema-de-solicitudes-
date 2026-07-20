@@ -25,10 +25,15 @@ var MODULOS_POR_ROL = {
   // la bandeja (cambiar prioridad, derivar cualquiera), no en los modulos.
   ANA: ['nueva_solicitud', 'mis_solicitudes', 'bandeja'],
   GERENCIA: ['nueva_solicitud', 'mis_solicitudes', 'gerencia'],
-  ADM: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'administracion']
+  // v4.2 (documentacion/SIGSO-v4.2-propuestas-modulo-jefatura.md §2): un
+  // "Gerencia acotado" -- misma plantilla base, con su propio modulo de
+  // solo lectura recortado al equipo (Jefatura.getPanel), no al 'gerencia'
+  // completo.
+  JEFATURA: ['nueva_solicitud', 'mis_solicitudes', 'jefatura'],
+  ADM: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion']
 };
 
-var MODULOS_VALIDOS = ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'administracion'];
+var MODULOS_VALIDOS = ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion'];
 
 var CuentasPortal = {
   listar: function (data, contexto) {

@@ -157,7 +157,11 @@ var ESQUEMA_HOJAS = {
   ],
   // v3.3 (§2.4): sesiones activas del portal (token que el navegador
   // presenta en cada llamada). Expiran a las 12 horas.
-  SESIONES_PORTAL: ['token', 'cuenta_id', 'expira', 'creada']
+  SESIONES_PORTAL: ['token', 'cuenta_id', 'expira', 'creada'],
+  // v4.2 (§1): ver la nota identica en backend/intake/Constantes.gs. Se
+  // crea vacia; el Admin arma las relaciones jefe->subordinado desde
+  // Administracion.
+  JEFATURAS: ['jefatura_id', 'jefe_email', 'subordinado_email', 'activo']
 };
 
 // SLA por prioridad en horas habiles (§7.2). P5 no tiene SLA.

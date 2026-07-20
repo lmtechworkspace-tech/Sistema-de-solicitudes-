@@ -85,6 +85,13 @@ function configurarTriggers() {
     creados.push('enviarReporteMensualTrigger');
   }
 
+  // v4.2 (§4): "al finalizar el dia poder ver que ocurrio en su
+  // departamento" -- fin de jornada, 18:00, diario.
+  if (existentes.indexOf('enviarDigestJefaturaTrigger') === -1) {
+    ScriptApp.newTrigger('enviarDigestJefaturaTrigger').timeBased().atHour(18).everyDays(1).create();
+    creados.push('enviarDigestJefaturaTrigger');
+  }
+
   return creados;
 }
 
@@ -127,6 +134,11 @@ function enviarResumenSemanalTrigger() {
 
 function enviarReporteMensualTrigger() {
   return Notificaciones.enviarReporteMensual();
+}
+
+// v4.2 (§4): ver Notificaciones.enviarDigestJefatura().
+function enviarDigestJefaturaTrigger() {
+  return Notificaciones.enviarDigestJefatura();
 }
 
 // A-07 (§16.3 v1.0): recorre las subsolicitudes abiertas y dispara A-08

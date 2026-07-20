@@ -28,6 +28,8 @@ var BACKOFFICE_ACTIONS = {
   ping: handlePing_,
   getDashboardData: handleGetDashboardData_,
   getPanelGerencia: handleGetPanelGerencia_,
+  // v4.2: panel de Jefatura (solo lectura, acotado al equipo).
+  getPanelJefatura: handleGetPanelJefatura_,
   getSolicitudDetalle: handleGetSolicitudDetalle_,
   actualizarEstado: handleActualizarEstado_,
   actualizarPrioridad: handleActualizarPrioridad_,
@@ -41,7 +43,10 @@ var BACKOFFICE_ACTIONS = {
   listarCuentasPortal: handleListarCuentasPortal_,
   gestionarCuentaPortal: handleGestionarCuentaPortal_,
   listarUsuarios: handleListarUsuarios_,
-  listarLogs: handleListarLogs_
+  listarLogs: handleListarLogs_,
+  // v4.2: relaciones jefe->subordinado (Jefatura.gs, solo ADM las edita).
+  listarJefaturas: handleListarJefaturas_,
+  gestionarJefatura: handleGestionarJefatura_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -60,20 +65,26 @@ var MODULO_POR_ACCION = {
   // -- sin transiciones ni responsables -- para el rol GERENCIA). Por eso
   // acepta CUALQUIERA de los dos modulos, a diferencia del resto de acciones
   // de bandeja, que siguen exigiendo 'bandeja' exclusivamente.
-  getSolicitudDetalle: ['bandeja', 'gerencia'],
+  // v4.2: Jefatura tambien necesita el detalle de solo lectura desde su
+  // propio panel, igual que Gerencia (getDetalle ya valida por su cuenta
+  // que la solicitud pertenezca al equipo del jefe, ver Solicitudes.gs).
+  getSolicitudDetalle: ['bandeja', 'gerencia', 'jefatura'],
   actualizarEstado: 'bandeja',
   actualizarPrioridad: 'bandeja',
   comprometerFecha: 'bandeja',
   derivarSolicitud: 'bandeja',
   agregarComentario: 'bandeja',
   getPanelGerencia: 'gerencia',
+  getPanelJefatura: 'jefatura',
   guardarCatalogo: 'administracion',
   listarCatalogo: 'administracion',
   gestionarUsuario: 'administracion',
   listarUsuarios: 'administracion',
   listarLogs: 'administracion',
   listarCuentasPortal: 'administracion',
-  gestionarCuentaPortal: 'administracion'
+  gestionarCuentaPortal: 'administracion',
+  listarJefaturas: 'administracion',
+  gestionarJefatura: 'administracion'
   // ping: sin modulo -- cualquier sesion valida.
 };
 
@@ -308,6 +319,10 @@ function handleGetPanelGerencia_(data, contexto) {
   return jsonResponse_({ ok: true, data: Gerencia.getPanel(data, contexto) });
 }
 
+function handleGetPanelJefatura_(data, contexto) {
+  return jsonResponse_({ ok: true, data: Jefatura.getPanel(data, contexto) });
+}
+
 function handleGetSolicitudDetalle_(data, contexto) {
   return responderResultado_(Solicitudes.getDetalle(data.solicitud_id, contexto));
 }
@@ -342,6 +357,14 @@ function handleListarUsuarios_(data, contexto) {
 
 function handleListarLogs_(data, contexto) {
   return responderResultado_(Notificaciones.listarLogs(data, contexto));
+}
+
+function handleListarJefaturas_(data, contexto) {
+  return responderResultado_(Jefatura.listar(data, contexto));
+}
+
+function handleGestionarJefatura_(data, contexto) {
+  return responderResultado_(Jefatura.gestionar(data, contexto));
 }
 
 function responderResultado_(resultado) {

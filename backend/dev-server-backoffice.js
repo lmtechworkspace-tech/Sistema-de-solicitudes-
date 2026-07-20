@@ -60,12 +60,25 @@ function construirContexto() {
     ['CTA-DEMO-5', 'fgerente', 'Felipe Gerente', 'Gerente General', 'hash-no-usado-aqui', 'sal',
       JSON.stringify(['gerencia@rld.cl']),
       'GERENCIA', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'gerencia']),
-      'RLD', true, false, '', 'dev-server']
+      'RLD', true, false, '', 'dev-server'],
+    // v4.2: cuenta JEFATURA, para probar "Mi Departamento" en local -- su
+    // equipo se siembra en JEFATURAS mas abajo (demo1@hp.cl).
+    ['CTA-DEMO-6', 'ljefe', 'Lisseth Jefa', 'Jefa de Area', 'hash-no-usado-aqui', 'sal',
+      JSON.stringify(['jefe@homepymes.cl']),
+      'JEFATURA', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'jefatura']),
+      'HP', true, false, '', 'dev-server']
   ]);
   seedSheet(ctx, 'SESIONES_PORTAL', ctx.COLUMNAS.SESIONES_PORTAL, [
     ['dev-token-leo', 'CTA-DEMO-3', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()],
     ['dev-token-admin', 'CTA-DEMO-4', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()],
-    ['dev-token-gerencia', 'CTA-DEMO-5', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()]
+    ['dev-token-gerencia', 'CTA-DEMO-5', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()],
+    ['dev-token-jefatura', 'CTA-DEMO-6', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()]
+  ]);
+  // v4.2: relacion jefe->subordinado -- demo1@hp.cl es quien reporta
+  // SOL-2026-HP-0001 (sembrarSolicitudesDemo_ mas abajo), asi "Mi
+  // Departamento" tiene algo real que mostrar.
+  seedSheet(ctx, 'JEFATURAS', ctx.COLUMNAS.JEFATURAS, [
+    ['JEF-DEMO-1', 'jefe@homepymes.cl', 'demo1@hp.cl', true]
   ]);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
   seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);
@@ -83,7 +96,9 @@ function construirContexto() {
     ['U2', 'Dev Demo', 'dev@homepymes.cl', 'HP', 'DEV', true, '', 'sistema'],
     ['U3', 'Admin Demo', 'admin@homepymes.cl', 'HP', 'ADM', true, '', 'sistema'],
     // P6 (v2.0, Sprint 2): rol de solo lectura, para probar el panel en local.
-    ['U4', 'Gerente Demo', 'gerente@homepymes.cl', 'HP', 'GERENCIA', true, '', 'sistema']
+    ['U4', 'Gerente Demo', 'gerente@homepymes.cl', 'HP', 'GERENCIA', true, '', 'sistema'],
+    // v4.2: para probar "Mi Departamento" con login Google (?actuar_como=jefe@homepymes.cl).
+    ['U5', 'Jefe Demo', 'jefe@homepymes.cl', 'HP', 'JEFATURA', true, '', 'sistema']
   ]);
   seedSheet(ctx, 'CAT_EMPRESAS', ctx.COLUMNAS.CAT_EMPRESAS, [
     ['HP', 'HomePymes', '', true],

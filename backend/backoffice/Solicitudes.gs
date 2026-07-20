@@ -355,6 +355,23 @@ var Solicitudes = {
       return errorValidacion_('solicitud_id', 'No existe una solicitud con ese numero.');
     }
 
+    // v4.2: a diferencia de Gerencia (ve cualquier solicitud), Jefatura solo
+    // puede abrir el detalle de una solicitud de SU equipo -- getSolicitudDetalle
+    // acepta el modulo 'jefatura' (Code.gs, MODULO_POR_ACCION) pero el modulo
+    // por si solo no basta: sin este guardia, un jefe podria pedir CUALQUIER
+    // solicitud_id y verla igual. Mismo criterio de equipo que Jefatura.getPanel
+    // (esDelEquipoJefaturaSolicitud_), para que "es de mi equipo" no tenga dos
+    // implementaciones que puedan divergir.
+    if (contexto && contexto.rol === 'JEFATURA') {
+      var equipoJefe = obtenerEquipoJefe_(contexto.email);
+      var equipoJefeSet = {};
+      equipoJefe.forEach(function (email) { equipoJefeSet[email] = true; });
+      var subsolicitudesParaGuardia = obtenerSubsolicitudesDeSolicitud_(solicitudId);
+      if (!esDelEquipoJefaturaSolicitud_(solicitud, subsolicitudesParaGuardia, equipoJefeSet)) {
+        return { _forbidden: true, message: 'Esa solicitud no pertenece a tu equipo.' };
+      }
+    }
+
     // v2.1 (Fase B): el semaforo de cumplimiento (§6) se calcula aqui, no se
     // guarda -- se deriva de fecha_comprometida/fecha_terminada/estado en el
     // momento de pedir el detalle (Cumplimiento.gs). Se agrega a una copia
@@ -369,11 +386,14 @@ var Solicitudes = {
     // menos el actual, marcando cuales piden comentario obligatorio para
     // que el frontend muestre el campo antes de intentar aplicar el cambio.
     var rolActual = contexto ? contexto.rol : '';
+    // v4.2: Jefatura es de solo lectura, igual que Gerencia (P6).
+    var esSoloLectura = rolActual === 'GERENCIA' || rolActual === 'JEFATURA';
     var transicionesPorSubsolicitud = {};
     subsolicitudes.forEach(function (sub) {
-      // P6: Gerencia es de solo lectura -- no se le ofrece ningun destino
-      // (el selector de "Cambiar estado a..." queda vacio en el frontend).
-      transicionesPorSubsolicitud[sub.subsolicitud_id] = rolActual === 'GERENCIA' ? [] : Object.keys(ESTADOS)
+      // P6: Gerencia (y Jefatura, v4.2) son de solo lectura -- no se les
+      // ofrece ningun destino (el selector de "Cambiar estado a..." queda
+      // vacio en el frontend).
+      transicionesPorSubsolicitud[sub.subsolicitud_id] = esSoloLectura ? [] : Object.keys(ESTADOS)
         // RN-201: "Cerrada" no se ofrece al gestor salvo consulta tecnica
         // (ver nota identica en Solicitudes.actualizarEstado).
         .filter(function (estado) {
@@ -428,7 +448,7 @@ var Solicitudes = {
       rol_actual: rolActual,
       // v3.1 (§2.6): destinatarios posibles del selector "Derivar". Se reusa
       // la misma lista de DEV/ANA activos que ya arma el Dashboard.
-      responsables: rolActual === 'GERENCIA' ? [] : obtenerResponsablesActivos_(),
+      responsables: esSoloLectura ? [] : obtenerResponsablesActivos_(),
       transiciones_por_subsolicitud: transicionesPorSubsolicitud
     };
   }

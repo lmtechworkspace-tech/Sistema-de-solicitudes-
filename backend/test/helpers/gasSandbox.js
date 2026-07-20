@@ -76,6 +76,10 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   'Solicitudes.gs',
   'Dashboard.gs',
   'Gerencia.gs',
+  // v4.2: panel de Jefatura -- Solicitudes.gs (getDetalle) usa sus helpers
+  // de equipo (esDelEquipoJefaturaSolicitud_) solo en tiempo de ejecucion,
+  // asi que el orden de carga entre ambos no importa.
+  'Jefatura.gs',
   'Comentarios.gs',
   'Catalogos.gs',
   'Auth.gs',

@@ -523,6 +523,29 @@ La hoja es la verdad; `CacheService` solo acelera la validación. Cerrar
 sesión o desactivar la cuenta invalida el token. Ver
 `documentacion/SIGSO-v3.3-propuesta-plataforma-modular.md`.
 
+## JEFATURAS (nueva, v4.2)
+
+| Columna | Tipo | Nota |
+|---|---|---|
+| `jefatura_id` | string | `Utilities.getUuid()` |
+| `jefe_email` | string | Correo de quien supervisa |
+| `subordinado_email` | string | Correo de la persona a cargo |
+| `activo` | boolean | Desactivar la relación sin borrar el historial de quién reportó a quién |
+
+Relación **muchos-a-muchos por correo** (no por cuenta): así funciona aunque
+el subordinado nunca haya iniciado sesión en la plataforma, solo mandado
+solicitudes por el formulario público. Una persona puede tener más de un jefe
+(caso matricial). La escribe solo el Backoffice (Administración); se declara
+en las tres copias del esquema para que `schema-consistency.test.js` siga
+verde, mismo patrón que `HISTORIAL_ASIGNACION`/`CUENTAS_PORTAL`.
+
+`Jefatura.getPanel` resuelve el equipo de un jefe (`subordinado_email` con
+`activo=true`) y acota TODO lo que ve a `{ correos del equipo } ∪ { su propio
+correo }`, tanto si la persona a cargo aparece como **solicitante**
+(`solicitante_email`) como si aparece como **resolutor**
+(`desarrollador_asignado`/`analista_asignado`, a nivel solicitud o
+subsolicitud) — ver `documentacion/SIGSO-v4.2-propuestas-modulo-jefatura.md`.
+
 ## ARCHIVOS (nueva, Fase 4)
 
 | Columna | Tipo | Nota |

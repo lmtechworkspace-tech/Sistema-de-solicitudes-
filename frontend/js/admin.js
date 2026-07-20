@@ -126,6 +126,8 @@
           renderCuentasPortal_();
         } else if (tipo === 'LOGS') {
           renderLogs_();
+        } else if (tipo === 'JEFATURAS') {
+          renderJefaturas_();
         } else {
           renderCatalogo_(tipo);
         }
@@ -204,6 +206,8 @@
     { valor: 'ANA', texto: 'Gestor/Analista' },
     { valor: 'DEV', texto: 'Desarrollador' },
     { valor: 'GERENCIA', texto: 'Gerencia' },
+    // v4.2: "Gerencia acotado" al equipo del jefe (ver pestaña "Jefaturas").
+    { valor: 'JEFATURA', texto: 'Jefatura' },
     { valor: 'ADM', texto: 'Administrador' }
   ];
   var MODULOS_PORTAL = [
@@ -211,6 +215,7 @@
     { valor: 'mis_solicitudes', texto: 'Mis solicitudes' },
     { valor: 'bandeja', texto: 'Bandeja de trabajo' },
     { valor: 'gerencia', texto: 'Panel de gerencia' },
+    { valor: 'jefatura', texto: 'Mi departamento (Jefatura)' },
     { valor: 'administracion', texto: 'Administración' }
   ];
 
@@ -466,6 +471,108 @@
         Componentes.aviso({ tipo: 'exito', texto: 'Cuenta renombrada a "' + respuesta.data.usuario + '".' });
       }
       renderCuentasPortal_();
+    });
+  }
+
+  // v4.2 (documentacion/SIGSO-v4.2-propuestas-modulo-jefatura.md §1):
+  // relacion jefe -> persona a cargo, por correo -- es lo unico que falta
+  // para que el rol JEFATURA sepa a quien acotarse. No hay un catalogo de
+  // personas para elegir (las personas a cargo pueden ser solicitantes que
+  // nunca tuvieron cuenta): se escribe el correo a mano, igual que
+  // "Correo del responsable" en Áreas.
+  function renderJefaturas_() {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarJefaturas', {}).then(function (respuesta) {
+      var contenedor = document.getElementById('admin-contenido');
+      if (!respuesta.ok) {
+        contenedor.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
+        return;
+      }
+      var relaciones = respuesta.data || [];
+      contenedor.innerHTML =
+        '<h2>Jefaturas</h2>' +
+        '<p class="sigso-ayuda">Quién supervisa a quién. La jefatura ve, en "Mi Departamento", ' +
+        'solo lo asociado a las personas a cargo (como solicitantes o como responsables) -- nunca el resto del sistema. ' +
+        'Una persona puede tener más de un jefe.</p>' +
+        '<form id="form-jefatura" class="sigso-card">' +
+        '<div class="sigso-admin-form">' +
+        Componentes.campoTexto({ dataCampo: 'jefe_email', label: 'Correo del jefe' }) +
+        Componentes.campoTexto({ dataCampo: 'subordinado_email', label: 'Correo de la persona a cargo' }) +
+        '</div>' +
+        Componentes.boton({ tipo: 'submit', texto: 'Agregar' }) +
+        '<div id="resultado-admin"></div>' +
+        '</form>' +
+        Componentes.tarjeta(renderTablaJefaturas_(relaciones));
+
+      document.getElementById('form-jefatura').addEventListener('submit', function (evento) {
+        evento.preventDefault();
+        guardarJefatura_();
+      });
+      document.querySelectorAll('[data-accion-jefatura]').forEach(function (boton) {
+        boton.addEventListener('click', function () {
+          var accion = boton.getAttribute('data-accion-jefatura');
+          var id = boton.getAttribute('data-id');
+          if (accion === 'eliminar') {
+            Componentes.confirmar({
+              titulo: 'Eliminar jefatura',
+              mensaje: 'Esta persona dejará de aparecer en "Mi Departamento" de ese jefe. Esta acción no se puede deshacer.',
+              confirmar: 'Eliminar',
+              peligro: true
+            }).then(function (confirmado) {
+              if (!confirmado) return;
+              aplicarAccionJefatura_({ operacion: 'eliminar', jefatura_id: id });
+            });
+          } else {
+            aplicarAccionJefatura_({ operacion: 'activar', jefatura_id: id, activo: boton.getAttribute('data-activo') === 'true' });
+          }
+        });
+      });
+    }).catch(mostrarErrorAdmin_);
+  }
+
+  function renderTablaJefaturas_(relaciones) {
+    if (relaciones.length === 0) {
+      return Componentes.vacio({
+        icono: 'persona',
+        texto: 'Aún no hay jefaturas registradas.',
+        detalle: 'Agrega la primera con el formulario de arriba.'
+      });
+    }
+    var filas = relaciones.map(function (j) {
+      var activo = j.activo === true || j.activo === 'TRUE';
+      return '<tr>' +
+        '<td>' + Componentes.escaparHtml(j.jefe_email) + '</td>' +
+        '<td>' + Componentes.escaparHtml(j.subordinado_email) + '</td>' +
+        '<td>' + Componentes.badge(activo ? 'Sí' : 'No', activo ? 'P4' : 'P1') + '</td>' +
+        '<td>' +
+        '<button type="button" class="sigso-boton--secundario" data-accion-jefatura="activar" data-id="' + j.jefatura_id + '" data-activo="' + !activo + '">' + (activo ? 'Desactivar' : 'Activar') + '</button> ' +
+        '<button type="button" class="sigso-boton--peligro" data-accion-jefatura="eliminar" data-id="' + j.jefatura_id + '">Eliminar</button>' +
+        '</td></tr>';
+    }).join('');
+    return '<table class="sigso-tabla"><thead><tr><th>Jefe</th><th>Persona a cargo</th><th>Activa</th><th>Acciones</th></tr></thead><tbody>' + filas + '</tbody></table>';
+  }
+
+  function guardarJefatura_() {
+    var leer = function (nombre) {
+      return document.querySelector('#form-jefatura [data-campo="' + nombre + '"]').value.trim();
+    };
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'gestionarJefatura', {
+      operacion: 'crear', jefe_email: leer('jefe_email'), subordinado_email: leer('subordinado_email')
+    }).then(function (respuesta) {
+      if (!respuesta.ok) {
+        document.getElementById('resultado-admin').innerHTML = Componentes.alerta(respuesta.message || 'Error al guardar.', 'error');
+        return;
+      }
+      renderJefaturas_();
+    });
+  }
+
+  function aplicarAccionJefatura_(datos) {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'gestionarJefatura', datos).then(function (respuesta) {
+      if (!respuesta.ok) {
+        Componentes.aviso({ tipo: 'error', texto: respuesta.message || 'No se pudo aplicar.' });
+        return;
+      }
+      renderJefaturas_();
     });
   }
 
