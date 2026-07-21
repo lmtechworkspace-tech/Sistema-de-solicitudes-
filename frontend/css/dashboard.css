@@ -295,16 +295,24 @@ button.sigso-kpi {
   align-items: center;
   gap: 0.15rem;
   padding: 0.75rem 0.5rem;
-  border: 1px solid var(--gris-claro);
-  border-radius: 8px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
   background: var(--superficie);
+  /* v5.0: es un <button> -- sin esto hereda el negro del user-agent y en
+     modo oscuro el numero desaparece. */
+  color: var(--texto);
   cursor: pointer;
   font-family: inherit;
+  transition: border-color var(--mov-normal), background var(--mov-normal);
+}
+
+.sigso-semaforo-tarjeta:hover {
+  background: var(--superficie-2);
 }
 
 .sigso-semaforo-tarjeta--activa {
-  border-color: var(--azul);
-  box-shadow: 0 0 0 2px var(--azul) inset;
+  border-color: var(--primario);
+  box-shadow: 0 0 0 2px var(--primario) inset;
 }
 
 .sigso-semaforo-tarjeta__emoji {
@@ -313,7 +321,8 @@ button.sigso-kpi {
 
 .sigso-semaforo-tarjeta__cantidad {
   font-size: 1.4rem;
-  font-weight: 700;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .sigso-semaforo-tarjeta__etiqueta {
@@ -332,7 +341,7 @@ button.sigso-kpi {
   top: 0;
   bottom: 0;
   width: 2px;
-  background: #c0392b;
+  background: var(--critico);
   z-index: 1;
 }
 
@@ -360,14 +369,18 @@ button.sigso-kpi {
   border-radius: 4px;
 }
 
-.sigso-gantt-barra--en-plazo { background: #27AE60; }
-.sigso-gantt-barra--en-riesgo { background: #F1C40F; }
-.sigso-gantt-barra--atrasada-desarrollador { background: #C0392B; }
-.sigso-gantt-barra--esperando-validacion { background: #2980B9; }
-.sigso-gantt-barra--sin-compromiso { background: var(--gris-medio); }
-.sigso-gantt-barra--cerrada-a-tiempo { background: #27AE60; }
-.sigso-gantt-barra--cerrada-con-atraso { background: #C0392B; }
-.sigso-gantt-barra--atraso { background: repeating-linear-gradient(45deg, #C0392B, #C0392B 4px, #922b21 4px, #922b21 8px); }
+/* v5.0 (F1): las barras pasan a los tokens semanticos -- antes usaban la
+   paleta hardcodeada de 2023 y quedaban fuera de sistema en modo oscuro. */
+.sigso-gantt-barra--en-plazo { background: var(--ok); }
+.sigso-gantt-barra--en-riesgo { background: var(--p3); }
+.sigso-gantt-barra--atrasada-desarrollador { background: var(--critico); }
+.sigso-gantt-barra--esperando-validacion { background: var(--info); }
+.sigso-gantt-barra--sin-compromiso { background: var(--texto-3); }
+.sigso-gantt-barra--cerrada-a-tiempo { background: var(--ok); }
+.sigso-gantt-barra--cerrada-con-atraso { background: var(--critico); }
+.sigso-gantt-barra--atraso {
+  background: repeating-linear-gradient(45deg, var(--critico), var(--critico) 4px, color-mix(in srgb, var(--critico), black 25%) 4px, color-mix(in srgb, var(--critico), black 25%) 8px);
+}
 
 .sigso-gantt-original {
   position: absolute;
@@ -594,7 +607,9 @@ button.sigso-kpi {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  border-bottom: 3px solid var(--naranja);
+  /* v5.0: momento de MARCA (el PDF viaja fuera del sistema) -- naranja
+     explicito, no el alias (que ahora apunta al primario indigo). */
+  border-bottom: 3px solid var(--acento-marca);
   padding-bottom: 0.5rem;
   margin-bottom: 0.5rem;
 }

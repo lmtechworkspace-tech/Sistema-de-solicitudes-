@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SIGSO — Design System (interno)</title>
+  <!-- styleguide.html — v5.0 F1: el CONTRATO VISUAL del sistema. Pagina
+       interna, no enlazada desde ninguna otra: sirve para validar cada
+       componente en claro/oscuro antes de tocar pantallas reales, y para
+       que cualquier funcionalidad futura salga consistente. Usa EXACTAMENTE
+       los mismos css que producción — si algo se ve mal aqui, esta mal en
+       el sistema, no en esta pagina. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/dashboard.css" />
+  <style>
+    /* Estilos SOLO de esta pagina (andamiaje del catalogo). */
+    .sg-seccion { margin-bottom: var(--esp-7); }
+    .sg-titulo {
+      font-size: var(--texto-xs); font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--texto-3);
+      border-bottom: 1px solid var(--borde); padding-bottom: var(--esp-2);
+      margin-bottom: var(--esp-4);
+    }
+    .sg-fila { display: flex; flex-wrap: wrap; gap: var(--esp-3); align-items: center; margin-bottom: var(--esp-3); }
+    .sg-swatch { width: 130px; }
+    .sg-swatch__color { height: 56px; border-radius: var(--radio-sm); border: 1px solid var(--borde); }
+    .sg-swatch__nombre { font-family: var(--fuente-mono); font-size: var(--texto-xs); color: var(--texto-2); margin-top: 4px; }
+    .sg-nota { font-size: var(--texto-xs); color: var(--texto-3); margin: var(--esp-2) 0 0; }
+  </style>
+</head>
+<body>
+  <main class="sigso-contenido" style="max-width: 900px">
+    <h1>SIGSO Design System</h1>
+    <p class="sg-nota">v5.0 F1 — página interna. Alternar el tema del sistema operativo para validar el modo oscuro.</p>
+
+    <!-- ====== Color ====== -->
+    <section class="sg-seccion">
+      <h2 class="sg-titulo">Color — primario y marca</h2>
+      <div class="sg-fila">
+        <div class="sg-swatch"><div class="sg-swatch__color" style="background: var(--primario)"></div><div class="sg-swatch__nombre">--primario</div></div>
+        <div class="sg-swatch"><div class="sg-swatch__color" style="background: var(--primario-intenso)"></div><div class="sg-swatch__nombre">--primario-intenso</div></div>
+        <div class="sg-swatch"><div class="sg-swatch__color" style="background: var(--primario-suave)"></div><div class="sg-swatch__nombre">--primario-suave</div></div>
+        <div class="sg-swatch"><div class="sg-swatch__color" style="background: var(--acento-marca)"></div><div class="sg-swatch__nombre">--acento-marca</div></div>
+      </div>
+      <h2 class="sg-titulo">Color — neutros</h2>
+      <div class="sg-fila">
+        <div class="sg-swatch"><div class="sg-swatch__color" style="background: var(--fondo-pagina)"></div><div class="sg-swatch__nombre">--fondo-pagina</div></div>
+        <div class="sg-swatch"><div class="sg-swatch__color" style="background: var(--superficie)"></div><div class="sg-swatch__nombre">--superficie</div></div>
+        <div class="sg-swatch"><div class="sg-swatch__color" style="background: var(--superficie-2)"></div><div class="sg-swatch__nombre">--superficie-2</div></div>
+        <div class="sg-swatch"><div class="sg-swatch__color" style="background: var(--borde)"></div><div class="sg-swatch__nombre">--borde</div></div>
+        <div class="sg-swatch"><div class="sg-swatch__color" style="background: var(--texto)"></div><div class="sg-swatch__nombre">--texto</div></div>
+        <div class="sg-swatch"><div class="sg-swatch__color" style="background: var(--texto-2)"></div><div class="sg-swatch__nombre">--texto-2</div></div>
+      </div>
+      <h2 class="sg-titulo">Color — semánticos y prioridad</h2>
+      <div class="sg-fila">
+        <div class="sg-swatch"><div class="sg-swatch__color" style="background: var(--ok)"></div><div class="sg-swatch__nombre">--ok</div></div>
+        <div class="sg-swatch"><div class="sg-swatch__color" style="background: var(--alerta)"></div><div class="sg-swatch__nombre">--alerta</div></div>
+        <div class="sg-swatch"><div class="sg-swatch__color" style="background: var(--critico)"></div><div class="sg-swatch__nombre">--critico</div></div>
+        <div class="sg-swatch"><div class="sg-swatch__color" style="background: var(--info)"></div><div class="sg-swatch__nombre">--info</div></div>
+      </div>
+      <p class="sg-nota">Regla: 90% neutros; el índigo solo en la acción primaria, links, foco y selección; semánticos solo en estados; el naranja solo en la marca.</p>
+    </section>
+
+    <!-- ====== Tipografia ====== -->
+    <section class="sg-seccion">
+      <h2 class="sg-titulo">Tipografía</h2>
+      <h1 style="margin: 0 0 .5rem">Título de página (28/600, tracking -0.02em)</h1>
+      <h2 style="margin: 0 0 .5rem">Título de sección (22/600)</h2>
+      <h3 style="margin: 0 0 .5rem">Título de card (18/600)</h3>
+      <p style="margin: 0 0 .5rem">Cuerpo 14/400 — la letra de trabajo. Números tabulares en toda cifra: 1.234.567.</p>
+      <p class="sigso-ayuda" style="margin: 0 0 .5rem">Texto de ayuda / metadatos.</p>
+      <p class="sigso-id" style="margin: 0">SOL-2026-RLD-0031 (mono para IDs)</p>
+    </section>
+
+    <!-- ====== Botones ====== -->
+    <section class="sg-seccion">
+      <h2 class="sg-titulo">Botones</h2>
+      <div class="sg-fila">
+        <button type="button" class="sigso-boton">Acción primaria</button>
+        <button type="button" class="sigso-boton--secundario">Secundaria</button>
+        <button type="button" class="sigso-boton--secundario sigso-boton--sutil">Sutil</button>
+        <button type="button" class="sigso-boton--secundario sigso-boton--peligro">Eliminar</button>
+        <button type="button" class="sigso-boton" disabled>Deshabilitado</button>
+      </div>
+      <p class="sg-nota">UNA acción primaria por pantalla. "Actualizar", "Exportar", "Imprimir" son siempre secundarias.</p>
+    </section>
+
+    <!-- ====== Inputs ====== -->
+    <section class="sg-seccion">
+      <h2 class="sg-titulo">Formularios</h2>
+      <div class="sigso-card" style="max-width: 420px">
+        <div class="sigso-campo">
+          <label for="sg-input">Campo de texto</label>
+          <input type="text" id="sg-input" placeholder="Placeholder en texto-3" />
+        </div>
+        <div class="sigso-campo">
+          <label for="sg-select">Selector</label>
+          <select id="sg-select"><option>Opción A</option><option>Opción B</option></select>
+        </div>
+        <div class="sigso-campo">
+          <label for="sg-error">Campo con error</label>
+          <input type="text" id="sg-error" style="border-color: var(--critico)" value="valor inválido" />
+          <p class="sigso-campo__error">Mensaje de error puntual, bajo el campo.</p>
+        </div>
+        <button type="button" class="sigso-boton">Guardar</button>
+      </div>
+    </section>
+
+    <!-- ====== Badges y estado ====== -->
+    <section class="sg-seccion">
+      <h2 class="sg-titulo">Badges de prioridad y estado</h2>
+      <div class="sg-fila">
+        <span class="sigso-badge sigso-badge--P1">P1</span>
+        <span class="sigso-badge sigso-badge--P2">P2</span>
+        <span class="sigso-badge sigso-badge--P3">P3</span>
+        <span class="sigso-badge sigso-badge--P4">P4</span>
+        <span class="sigso-badge sigso-badge--P5">P5</span>
+      </div>
+      <div class="sg-fila">
+        <span class="sigso-pastilla sigso-pastilla--ok">Cerrada a tiempo</span>
+        <span class="sigso-pastilla" style="color: var(--alerta); background: var(--alerta-suave)">En riesgo</span>
+        <span class="sigso-pastilla" style="color: var(--critico); background: var(--critico-suave)">Atrasada</span>
+        <span class="sigso-pastilla" style="color: var(--primario-tinta); background: var(--primario-suave)">Seleccionada</span>
+      </div>
+    </section>
+
+    <!-- ====== Cards y KPI ====== -->
+    <section class="sg-seccion">
+      <h2 class="sg-titulo">Cards y KPIs</h2>
+      <div class="sigso-kpis" style="margin-bottom: var(--esp-4)">
+        <div class="sigso-kpi">
+          <div class="sigso-kpi__valor">13</div>
+          <span class="sigso-kpi__delta sigso-kpi__delta--malo">▲ 4 vs. período anterior</span>
+          <div class="sigso-kpi__etiqueta">Abiertas</div>
+        </div>
+        <div class="sigso-kpi sigso-kpi--alerta">
+          <div class="sigso-kpi__valor">2</div>
+          <span class="sigso-kpi__delta sigso-kpi__delta--bueno">▼ 1 vs. período anterior</span>
+          <div class="sigso-kpi__etiqueta">Críticas activas</div>
+        </div>
+        <div class="sigso-kpi">
+          <div class="sigso-kpi__valor">96%</div>
+          <span class="sigso-kpi__delta">= vs. período anterior</span>
+          <div class="sigso-kpi__etiqueta">Cumplimiento</div>
+        </div>
+      </div>
+      <div class="sigso-card">
+        <h3 style="margin-top: 0">Card estándar</h3>
+        <p style="margin-bottom: 0">Borde 1px + sombra mínima. La separación la hace el borde, no la sombra.</p>
+      </div>
+    </section>
+
+    <!-- ====== Tabs ====== -->
+    <section class="sg-seccion">
+      <h2 class="sg-titulo">Tabs</h2>
+      <div class="sigso-tabs" role="tablist">
+        <button type="button" class="sigso-tabs__boton sigso-tabs__boton--activo">Tablero</button>
+        <button type="button" class="sigso-tabs__boton">Recurrencia</button>
+        <button type="button" class="sigso-tabs__boton">Tendencia</button>
+      </div>
+    </section>
+
+    <!-- ====== Tabla ====== -->
+    <section class="sg-seccion">
+      <h2 class="sg-titulo">Tabla densa</h2>
+      <div class="sigso-card" style="padding: 0; overflow: hidden">
+        <table class="sigso-tabla-tablero" style="width: 100%">
+          <thead><tr><th>Solicitud</th><th>Título</th><th>Prioridad</th><th>Estado</th></tr></thead>
+          <tbody>
+            <tr><td class="sigso-id">SOL-2026-RLD-0031-1</td><td>Error al iniciar sesión</td><td><span class="sigso-badge sigso-badge--P1">P1</span></td><td>Recibida</td></tr>
+            <tr><td class="sigso-id">SOL-2026-HP-0007-1</td><td>Carga de documentos</td><td><span class="sigso-badge sigso-badge--P3">P3</span></td><td>En desarrollo</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ====== Alertas ====== -->
+    <section class="sg-seccion">
+      <h2 class="sg-titulo">Alertas</h2>
+      <div class="sigso-resultado-exito" style="margin-bottom: var(--esp-2)"><p>Cambios guardados.</p></div>
+      <div class="sigso-alerta" style="margin-bottom: var(--esp-2)"><p>La bandeja por token aún no está desplegada.</p></div>
+      <div class="sigso-resultado-error"><p>No se pudo cargar el panel. Reintenta con "Actualizar".</p></div>
+    </section>
+  </main>
+</body>
+</html>

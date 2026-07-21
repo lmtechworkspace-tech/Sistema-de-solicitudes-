@@ -1,0 +1,148 @@
+/* tokens.css — SIGSO Design System v5.0 (Fase 1).
+   FUENTE UNICA DE VERDAD de color, tipografia, espaciado, radio, sombra y
+   movimiento (documentacion/SIGSO-v5.0-propuesta-rediseno-total.md §2-3).
+
+   Debe cargarse ANTES de main.css: main.css re-apunta sus tokens historicos
+   (--naranja, --azul, --gris-*) hacia estos, para que las 5 paginas y los
+   ~15 css/js existentes hereden la piel nueva sin tocar cada regla.
+
+   Regla de uso del color (§2.2): el 90% de una pantalla es fondo/superficie/
+   texto. El indigo (--primario) aparece SOLO en la accion primaria, links,
+   foco y seleccion. Los semanticos SOLO en estados. El naranja historico
+   queda como acento de MARCA (logo, momentos puntuales) -- nunca botones. */
+
+:root {
+  /* --- Color: primario (indigo SIGSO) --------------------------------- */
+  --primario: #6D5DF6;
+  --primario-intenso: #5747E8;   /* hover/active */
+  --primario-suave: #EEEDFE;     /* seleccion, fondos informativos */
+  --primario-tinta: #3B2FA3;     /* texto sobre primario-suave (AA) */
+
+  /* Acento de marca: el naranja historico de SIGSO. Solo logo/marca. */
+  --acento-marca: #E8622A;
+  --acento-marca-suave: #FAD7C3;
+
+  /* --- Color: neutros frios (base Linear/Stripe) ----------------------- */
+  --fondo-pagina: #F8FAFC;
+  --superficie: #FFFFFF;
+  --superficie-2: #F1F4F9;       /* zonas hundidas, inputs, hover de fila */
+  --borde: #E5E8EF;
+  --borde-fuerte: #CBD2DE;
+  --texto: #0F172A;
+  --texto-2: #5B6474;
+  --texto-3: #8A93A5;
+  --texto-invertido: #FFFFFF;
+
+  /* --- Color: semanticos (unica fuente de color "fuerte" de estado) ---- */
+  --ok: #1F7A55;
+  --ok-suave: #DCF2E7;
+  --alerta: #B45309;
+  --alerta-suave: #FCEDD8;
+  --critico: #C2362B;
+  --critico-suave: #FBE3E1;
+  --info: #2563EB;
+  --info-suave: #E3ECFD;
+
+  /* --- Color: escala de prioridad (P1 mas critica) --------------------- */
+  --p1: #C2362B;
+  --p2: #D97706;
+  --p3: #CA9A04;
+  --p4: #1F7A55;
+  --p5: #2563EB;
+
+  /* --- Tipografia ------------------------------------------------------- */
+  --fuente: 'Inter', system-ui, -apple-system, sans-serif;
+  --fuente-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+
+  /* Escala con altura de linea incluida (§2.3). El display lleva tracking
+     negativo leve -- se aplica en las reglas, no aqui. */
+  --t-display: 600 1.75rem/2.125rem var(--fuente);   /* 28/34 titulos de pagina */
+  --t-title:   600 1.25rem/1.75rem var(--fuente);    /* 20/28 titulos de seccion */
+  --t-body:    400 0.875rem/1.375rem var(--fuente);  /* 14/22 cuerpo */
+  --t-small:   400 0.781rem/1.125rem var(--fuente);  /* 12.5/18 metadatos */
+
+  /* Tamanos sueltos (compatibilidad con la escala v4.0 ya en uso). */
+  --texto-xs: 0.75rem;
+  --texto-sm: 0.875rem;
+  --texto-base: 1rem;
+  --texto-lg: 1.125rem;
+  --texto-xl: 1.375rem;
+  --texto-2xl: 1.75rem;
+  --texto-3xl: 2.25rem;
+
+  /* --- Espaciado (escala de 4) ------------------------------------------ */
+  --esp-1: 0.25rem;
+  --esp-2: 0.5rem;
+  --esp-3: 0.75rem;
+  --esp-4: 1rem;
+  --esp-5: 1.5rem;
+  --esp-6: 2rem;
+  --esp-7: 3rem;
+
+  /* --- Radio (§2.4: se acabo el 4px) ------------------------------------ */
+  --radio-sm: 8px;    /* inputs, badges, chips */
+  --radio-md: 12px;   /* cards, botones */
+  --radio-lg: 16px;   /* paneles, modales */
+  --radio-full: 999px;
+
+  /* --- Elevacion: DOS niveles. El resto de la separacion la hacen bordes
+     de 1px y diferencias de fondo, no sombras (§2.4). --------------------- */
+  --sombra-1: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --sombra-2: 0 8px 30px rgba(15, 23, 42, 0.10);
+  /* Alias del tercer nivel historico (v4.0) para no romper reglas viejas;
+     apunta al nivel flotante. */
+  --sombra-3: var(--sombra-2);
+
+  /* --- Movimiento (§6.4: 150ms ease-out, sin excepciones) --------------- */
+  --mov-rapido: 120ms ease-out;
+  --mov-normal: 150ms ease-out;
+  --mov-entrada: 200ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* --- Foco (accesibilidad §1.4) ---------------------------------------- */
+  --foco-anillo: 0 0 0 2px var(--fondo-pagina), 0 0 0 4px var(--primario);
+}
+
+/* --- Modo oscuro ---------------------------------------------------------
+   Mismo criterio que v4.0: redefinir tokens basta para oscurecer el 100%.
+   Cada token nuevo nace con su par oscuro (§2.2). data-theme permite el
+   conmutador manual (F2); el media query cubre el default del sistema. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primario: #8B7DFF;
+    --primario-intenso: #A398FF;
+    --primario-suave: rgba(139, 125, 255, 0.16);
+    --primario-tinta: #C4BCFF;
+
+    --acento-marca: #F0793F;
+    --acento-marca-suave: #4A2E1C;
+
+    --fondo-pagina: #0E1116;
+    --superficie: #161B22;
+    --superficie-2: #1D242E;
+    --borde: #2A323E;
+    --borde-fuerte: #3B4552;
+    --texto: #E7EBF2;
+    --texto-2: #93A0B4;
+    --texto-3: #6B7789;
+
+    --ok: #34A374;
+    --ok-suave: rgba(52, 163, 116, 0.18);
+    --alerta: #E08A2E;
+    --alerta-suave: rgba(224, 138, 46, 0.16);
+    --critico: #E25A4E;
+    --critico-suave: rgba(226, 90, 78, 0.16);
+    --info: #5B8DEF;
+    --info-suave: rgba(91, 141, 239, 0.16);
+
+    --p1: #E25A4E;
+    --p2: #E0902E;
+    --p3: #D4B13C;
+    --p4: #34A374;
+    --p5: #5B8DEF;
+
+    --sombra-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --sombra-2: 0 8px 30px rgba(0, 0, 0, 0.5);
+
+    --foco-anillo: 0 0 0 2px var(--fondo-pagina), 0 0 0 4px var(--primario);
+  }
+}

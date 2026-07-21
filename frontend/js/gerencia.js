@@ -607,9 +607,11 @@
         type: 'bar',
         data: {
           labels: tendencia.map(function (m) { return m.etiqueta; }),
+          // v5.0 (F1): paleta del Design System (creadas indigo, cerradas
+          // verde ok, linea de cumplimiento en el acento de marca).
           datasets: [
-            { type: 'bar', label: 'Creadas', data: tendencia.map(function (m) { return m.creadas; }), backgroundColor: '#1F4E79' },
-            { type: 'bar', label: 'Cerradas', data: tendencia.map(function (m) { return m.cerradas; }), backgroundColor: '#27AE60' },
+            { type: 'bar', label: 'Creadas', data: tendencia.map(function (m) { return m.creadas; }), backgroundColor: '#6D5DF6' },
+            { type: 'bar', label: 'Cerradas', data: tendencia.map(function (m) { return m.cerradas; }), backgroundColor: '#1F7A55' },
             {
               type: 'line', label: '% cumplimiento', yAxisID: 'y1',
               data: tendencia.map(function (m) { return m.pct_cumplimiento; }),

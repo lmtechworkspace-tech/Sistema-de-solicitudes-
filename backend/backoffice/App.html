@@ -13,56 +13,70 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-/* main.css — tokens de marca (§12.3), reset y layout compartido
-   (header/nav, botones, inputs). Especifico de cada pantalla vive en su
-   propio css (formulario.css, dashboard.css en Fase 5). */
+/* tokens.css — SIGSO Design System v5.0 (Fase 1).
+   FUENTE UNICA DE VERDAD de color, tipografia, espaciado, radio, sombra y
+   movimiento (documentacion/SIGSO-v5.0-propuesta-rediseno-total.md §2-3).
+
+   Debe cargarse ANTES de main.css: main.css re-apunta sus tokens historicos
+   (--naranja, --azul, --gris-*) hacia estos, para que las 5 paginas y los
+   ~15 css/js existentes hereden la piel nueva sin tocar cada regla.
+
+   Regla de uso del color (§2.2): el 90% de una pantalla es fondo/superficie/
+   texto. El indigo (--primario) aparece SOLO en la accion primaria, links,
+   foco y seleccion. Los semanticos SOLO en estados. El naranja historico
+   queda como acento de MARCA (logo, momentos puntuales) -- nunca botones. */
 
 :root {
-  --naranja: #E8622A;
-  --naranja-claro: #FAD7C3;
-  --azul: #1F4E79;
-  --gris-oscuro: #2C2C2C;
-  --gris-medio: #555555;
-  --gris-claro: #F5F5F5;
-  /* UI-1 (§1): fondo de pagina con matiz calido hacia el naranja de marca
-     (en vez del gris plano) -- las tarjetas blancas "flotan" mejor. Es un
-     token aparte de --gris-claro, que sigue siendo el fondo de componentes. */
-  --fondo-pagina: #FAF7F4;
+  /* --- Color: primario (indigo SIGSO) --------------------------------- */
+  --primario: #6D5DF6;
+  --primario-intenso: #5747E8;   /* hover/active */
+  --primario-suave: #EEEDFE;     /* seleccion, fondos informativos */
+  --primario-tinta: #3B2FA3;     /* texto sobre primario-suave (AA) */
 
-  /* Prioridad de la solicitud (P1 = mas critica). OJO: son la escala de
-     PRIORIDAD, no de estado -- para "correcto / atencion / error" estan los
-     semanticos de abajo. Antes se usaban para ambas cosas y eso confundia:
-     un badge verde "Si" tomaba prestado el color de "prioridad baja". */
-  --p1: #C0392B;
-  --p2: #E67E22;
-  --p3: #F1C40F;
-  --p4: #27AE60;
-  --p5: #2980B9;
+  /* Acento de marca: el naranja historico de SIGSO. Solo logo/marca. */
+  --acento-marca: #E8622A;
+  --acento-marca-suave: #FAD7C3;
 
-  /* --- V4.0 Frente 1: tokens de fundamento ------------------------------ */
-
-  /* Semanticos: significado, no prioridad. */
-  --ok: #2E7D5B;
-  --ok-suave: #DCEFE5;
-  --alerta: #B45309;
-  --alerta-suave: #FBEBD6;
-  --critico: #B3261E;
-  --critico-suave: #FADEDC;
-  --info: var(--azul);
-  --info-suave: #DDE7F0;
-
-  /* Neutros con sesgo calido hacia el naranja de marca: un gris puro se lee
-     como "sin elegir" al lado de un acento calido. */
-  --texto: #241C18;
-  --texto-2: #5C5049;
-  --texto-3: #8A7C73;
+  /* --- Color: neutros frios (base Linear/Stripe) ----------------------- */
+  --fondo-pagina: #F8FAFC;
   --superficie: #FFFFFF;
-  --superficie-2: #F2EDE8;
-  --borde: #E6DCD4;
-  --borde-fuerte: #D2C4B8;
+  --superficie-2: #F1F4F9;       /* zonas hundidas, inputs, hover de fila */
+  --borde: #E5E8EF;
+  --borde-fuerte: #CBD2DE;
+  --texto: #0F172A;
+  --texto-2: #5B6474;
+  --texto-3: #8A93A5;
+  --texto-invertido: #FFFFFF;
 
-  /* Escala tipografica (1.200 minor third) -- antes cada pantalla inventaba
-     sus tamanos en rem sueltos. */
+  /* --- Color: semanticos (unica fuente de color "fuerte" de estado) ---- */
+  --ok: #1F7A55;
+  --ok-suave: #DCF2E7;
+  --alerta: #B45309;
+  --alerta-suave: #FCEDD8;
+  --critico: #C2362B;
+  --critico-suave: #FBE3E1;
+  --info: #2563EB;
+  --info-suave: #E3ECFD;
+
+  /* --- Color: escala de prioridad (P1 mas critica) --------------------- */
+  --p1: #C2362B;
+  --p2: #D97706;
+  --p3: #CA9A04;
+  --p4: #1F7A55;
+  --p5: #2563EB;
+
+  /* --- Tipografia ------------------------------------------------------- */
+  --fuente: 'Inter', system-ui, -apple-system, sans-serif;
+  --fuente-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+
+  /* Escala con altura de linea incluida (§2.3). El display lleva tracking
+     negativo leve -- se aplica en las reglas, no aqui. */
+  --t-display: 600 1.75rem/2.125rem var(--fuente);   /* 28/34 titulos de pagina */
+  --t-title:   600 1.25rem/1.75rem var(--fuente);    /* 20/28 titulos de seccion */
+  --t-body:    400 0.875rem/1.375rem var(--fuente);  /* 14/22 cuerpo */
+  --t-small:   400 0.781rem/1.125rem var(--fuente);  /* 12.5/18 metadatos */
+
+  /* Tamanos sueltos (compatibilidad con la escala v4.0 ya en uso). */
   --texto-xs: 0.75rem;
   --texto-sm: 0.875rem;
   --texto-base: 1rem;
@@ -71,7 +85,7 @@
   --texto-2xl: 1.75rem;
   --texto-3xl: 2.25rem;
 
-  /* Espaciado en escala de 4px. */
+  /* --- Espaciado (escala de 4) ------------------------------------------ */
   --esp-1: 0.25rem;
   --esp-2: 0.5rem;
   --esp-3: 0.75rem;
@@ -80,65 +94,108 @@
   --esp-6: 2rem;
   --esp-7: 3rem;
 
-  --radio-sm: 4px;
-  --radio-md: 8px;
-  --radio-lg: 14px;
+  /* --- Radio (§2.4: se acabo el 4px) ------------------------------------ */
+  --radio-sm: 8px;    /* inputs, badges, chips */
+  --radio-md: 12px;   /* cards, botones */
+  --radio-lg: 16px;   /* paneles, modales */
   --radio-full: 999px;
 
-  /* Elevacion: tres niveles y no mas -- reposo, elevado, flotante. */
-  --sombra-1: 0 1px 2px rgba(36, 28, 24, 0.06);
-  --sombra-2: 0 2px 8px rgba(36, 28, 24, 0.08);
-  --sombra-3: 0 12px 32px rgba(36, 28, 24, 0.12);
+  /* --- Elevacion: DOS niveles. El resto de la separacion la hacen bordes
+     de 1px y diferencias de fondo, no sombras (§2.4). --------------------- */
+  --sombra-1: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --sombra-2: 0 8px 30px rgba(15, 23, 42, 0.10);
+  /* Alias del tercer nivel historico (v4.0) para no romper reglas viejas;
+     apunta al nivel flotante. */
+  --sombra-3: var(--sombra-2);
 
-  /* Alias --sigso-*: los usan components.css (panel de derivacion en lote,
-     insignia de atencion directa, cierre directo) desde v3.1. Se escribieron
-     con valor de respaldo pero NUNCA se definieron, asi que hasta v4.0
-     pintaban con colores aproximados fuera de marca. Ahora apuntan al token
-     real. */
-  --sigso-naranja: var(--naranja);
-  --sigso-borde: var(--borde);
-  --sigso-fondo-suave: var(--fondo-pagina);
+  /* --- Movimiento (§6.4: 150ms ease-out, sin excepciones) --------------- */
+  --mov-rapido: 120ms ease-out;
+  --mov-normal: 150ms ease-out;
+  --mov-entrada: 200ms cubic-bezier(0.16, 1, 0.3, 1);
 
-  --fuente: 'Inter', system-ui, -apple-system, sans-serif;
-  --fuente-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  /* --- Foco (accesibilidad §1.4) ---------------------------------------- */
+  --foco-anillo: 0 0 0 2px var(--fondo-pagina), 0 0 0 4px var(--primario);
 }
 
-/* --- v4.0 Frente 6: modo oscuro -----------------------------------------
-   Como casi todo el sistema (main/components/dashboard/admin.css) ya pinta
-   con estos tokens en vez de colores sueltos, redefinirlos aqui basta para
-   que el 100% de las pantallas se oscurezcan sin tocar cada regla una por
-   una. Las excepciones son unas pocas superficies que quedaron con "#fff"
-   literal (ya migradas a var(--superficie) en este mismo commit) y el color
-   de TEXTO fijo sobre fondos saturados (badges, spinner, avatar), que debe
-   seguir blanco pase lo que pase -- esas quedan con #fff a proposito.
-   Los "-suave" (fondo pastel de pastillas/avisos) pasan a una version
-   translucida sobre el mismo tono, en vez de un pastel casi blanco que
-   perderia todo el contraste sobre una superficie oscura. */
+/* --- Modo oscuro ---------------------------------------------------------
+   Mismo criterio que v4.0: redefinir tokens basta para oscurecer el 100%.
+   Cada token nuevo nace con su par oscuro (§2.2). data-theme permite el
+   conmutador manual (F2); el media query cubre el default del sistema. */
 @media (prefers-color-scheme: dark) {
   :root {
-    --naranja-claro: #4A2E1C;
-    --gris-oscuro: #EDE7E2;
-    --gris-medio: #B8AFA8;
-    --gris-claro: #2A2320;
+    --primario: #8B7DFF;
+    --primario-intenso: #A398FF;
+    --primario-suave: rgba(139, 125, 255, 0.16);
+    --primario-tinta: #C4BCFF;
 
-    --ok-suave: rgba(46, 125, 91, 0.28);
-    --alerta-suave: rgba(180, 83, 9, 0.28);
-    --critico-suave: rgba(179, 38, 30, 0.28);
-    --info-suave: rgba(31, 78, 121, 0.32);
+    --acento-marca: #F0793F;
+    --acento-marca-suave: #4A2E1C;
 
-    --texto: #F2ECE7;
-    --texto-2: #C9BEB6;
-    --texto-3: #98897F;
-    --superficie: #211C19;
-    --superficie-2: #2C2521;
-    --borde: #40352E;
-    --borde-fuerte: #52443A;
-    --fondo-pagina: #17130F;
+    --fondo-pagina: #0E1116;
+    --superficie: #161B22;
+    --superficie-2: #1D242E;
+    --borde: #2A323E;
+    --borde-fuerte: #3B4552;
+    --texto: #E7EBF2;
+    --texto-2: #93A0B4;
+    --texto-3: #6B7789;
 
-    --sombra-1: 0 1px 2px rgba(0, 0, 0, 0.3);
-    --sombra-2: 0 2px 10px rgba(0, 0, 0, 0.4);
-    --sombra-3: 0 12px 32px rgba(0, 0, 0, 0.5);
+    --ok: #34A374;
+    --ok-suave: rgba(52, 163, 116, 0.18);
+    --alerta: #E08A2E;
+    --alerta-suave: rgba(224, 138, 46, 0.16);
+    --critico: #E25A4E;
+    --critico-suave: rgba(226, 90, 78, 0.16);
+    --info: #5B8DEF;
+    --info-suave: rgba(91, 141, 239, 0.16);
+
+    --p1: #E25A4E;
+    --p2: #E0902E;
+    --p3: #D4B13C;
+    --p4: #34A374;
+    --p5: #5B8DEF;
+
+    --sombra-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --sombra-2: 0 8px 30px rgba(0, 0, 0, 0.5);
+
+    --foco-anillo: 0 0 0 2px var(--fondo-pagina), 0 0 0 4px var(--primario);
   }
+}
+
+</style>
+  <style>
+/* main.css — base compartida (reset, header/nav, botones, inputs, cards).
+   v5.0 (Fase 1, documentacion/SIGSO-v5.0-propuesta-rediseno-total.md):
+   la FUENTE de tokens ahora es css/tokens.css (debe cargarse antes que
+   este archivo). Aqui solo quedan:
+   1. ALIAS de los tokens historicos (--naranja/--azul/--gris-*) hacia los
+      nuevos -- components/dashboard/formulario/admin.css y varios .js
+      pintan con esos nombres; re-apuntarlos convierte todo el sistema a la
+      piel nueva sin tocar cada regla. Como los alias resuelven en el
+      momento de uso, el modo oscuro de tokens.css los cubre solo: el
+      bloque oscuro historico de este archivo se elimino a proposito.
+   2. Las primitivas globales restilizadas (§2-3 de la propuesta). */
+
+:root {
+  /* Alias historicos -> Design System v5.0. OJO con la semantica:
+     --azul era "el color de accion/lectura" (links, boton secundario,
+     valores de KPI, foco) y --naranja era "activo/seleccionado" (tab
+     activo, chip elegido, hito actual del stepper, fila seleccionada) --
+     AMBOS pasan al primario indigo: todos esos usos son ACCION, no marca.
+     La marca de verdad (logo, encabezado del PDF) usa --acento-marca
+     explicito, nunca este alias (§2.2 de la propuesta). */
+  --naranja: var(--primario);
+  --naranja-claro: var(--primario-suave);
+  --azul: var(--primario);
+  --gris-oscuro: var(--texto);
+  --gris-medio: var(--texto-2);
+  --gris-claro: var(--superficie-2);
+
+  /* Alias --sigso-* (components.css los usa desde v3.1). Mismo criterio:
+     eran acentos de UI, no marca. */
+  --sigso-naranja: var(--primario);
+  --sigso-borde: var(--borde);
+  --sigso-fondo-suave: var(--fondo-pagina);
 }
 
 * {
@@ -148,50 +205,82 @@
 body {
   margin: 0;
   font-family: var(--fuente);
-  color: var(--gris-oscuro);
+  font-size: var(--texto-sm);
+  line-height: 1.55;
+  color: var(--texto);
   background: var(--fondo-pagina);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Titulos: peso 600 y tracking levemente negativo en los grandes (§2.3) --
+   el 700 masivo y el tracking por defecto son la mitad del look "plantilla". */
+h1 {
+  font-size: var(--texto-2xl);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: var(--texto-xl);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+h3 {
+  font-size: var(--texto-lg);
+  font-weight: 600;
+}
+
+h4 {
+  font-size: var(--texto-sm);
+  font-weight: 600;
 }
 
 /* UI-1 (§1): numeros de solicitud/item en monoespaciada -- se leen y
    comparan mejor (SOL-2026-HP-0006 alinea digito a digito). */
 .sigso-id {
-  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-family: var(--fuente-mono);
   font-size: 0.95em;
   letter-spacing: 0.01em;
 }
 
-/* UI-1 (§1): foco visible por teclado en todo el sistema. */
+/* Foco visible por teclado en todo el sistema: anillo del primario con
+   separacion del fondo (§1.4) en vez del outline pegado. */
 :focus-visible {
-  outline: 2px solid var(--azul);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: var(--foco-anillo);
+  border-radius: var(--radio-sm);
 }
 
 a {
-  color: var(--azul);
+  color: var(--primario);
 }
 
 .sigso-contenido {
   max-width: 720px;
   margin: 0 auto;
-  padding: 1.5rem;
+  padding: var(--esp-5);
 }
 
 /* --- Header/nav compartido (ui-components.js lo inyecta) ------------- */
+/* v5.0: el borde naranja de 3px gritaba marca en cada pantalla; la marca
+   vive en el logo. El header pasa a separarse con 1px neutro (§2.4). */
 
 .sigso-header {
   background: var(--superficie);
-  border-bottom: 3px solid var(--naranja);
+  border-bottom: 1px solid var(--borde);
 }
 
 .sigso-header__interior {
   max-width: 720px;
   margin: 0 auto;
-  padding: 1rem 1.5rem;
+  padding: var(--esp-4) var(--esp-5);
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--esp-2);
 }
 
 .sigso-header__marca {
@@ -202,68 +291,98 @@ a {
 
 .sigso-header__titulo {
   margin: 0;
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--azul);
+  font-size: var(--texto-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--texto);
 }
 
 .sigso-header__subtitulo {
   margin: 0;
-  font-size: 0.85rem;
-  color: var(--gris-medio);
+  font-size: var(--texto-xs);
+  color: var(--texto-2);
 }
 
 .sigso-nav {
   display: flex;
-  gap: 1rem;
+  gap: var(--esp-4);
 }
 
 .sigso-nav a {
   text-decoration: none;
-  color: var(--gris-medio);
-  font-size: 0.9rem;
+  color: var(--texto-2);
+  font-size: var(--texto-sm);
+  font-weight: 500;
   padding: 0.25rem 0;
   border-bottom: 2px solid transparent;
+  transition: color var(--mov-normal);
+}
+
+.sigso-nav a:hover {
+  color: var(--texto);
 }
 
 .sigso-nav a[aria-current="page"] {
-  color: var(--naranja);
-  border-bottom-color: var(--naranja);
+  color: var(--primario);
+  border-bottom-color: var(--primario);
   font-weight: 600;
 }
 
 /* --- Elementos genericos --------------------------------------------- */
+/* Card v5.0: borde de 1px + sombra minima. La separacion la hace el borde
+   y la diferencia de fondo, no la sombra (§2.4). */
 
 .sigso-card {
   background: var(--superficie);
-  border-radius: 8px;
-  padding: 1.5rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
+  padding: var(--esp-5);
+  box-shadow: var(--sombra-1);
 }
 
 .sigso-card + .sigso-card {
-  margin-top: 1rem;
+  margin-top: var(--esp-4);
 }
 
 label {
   display: block;
-  font-weight: 600;
-  font-size: 0.9rem;
-  margin-bottom: 0.25rem;
+  font-weight: 500;
+  font-size: var(--texto-sm);
+  color: var(--texto);
+  margin-bottom: 0.3rem;
 }
 
 input[type="text"],
 input[type="email"],
 input[type="tel"],
+input[type="password"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
 select,
 textarea {
   width: 100%;
-  padding: 0.6rem 0.75rem;
+  padding: 0.55rem 0.75rem;
   border: 1px solid var(--borde-fuerte);
-  border-radius: 6px;
+  border-radius: var(--radio-sm);
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: var(--texto-sm);
+  color: var(--texto);
   background: var(--superficie);
+  transition: border-color var(--mov-normal), box-shadow var(--mov-normal);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--primario);
+  box-shadow: 0 0 0 3px var(--primario-suave);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--texto-3);
 }
 
 textarea {
@@ -272,12 +391,12 @@ textarea {
 }
 
 .sigso-campo {
-  margin-bottom: 1rem;
+  margin-bottom: var(--esp-4);
 }
 
 .sigso-campo__error {
-  color: var(--p1);
-  font-size: 0.85rem;
+  color: var(--critico);
+  font-size: var(--texto-xs);
   margin-top: 0.25rem;
 }
 
@@ -286,39 +405,61 @@ button {
   cursor: pointer;
 }
 
+/* Boton primario v5.0: indigo, la UNICA accion primaria por pantalla (§4.2).
+   El naranja ya no es color de boton. */
 .sigso-boton {
-  background: var(--naranja);
-  color: #fff;
+  background: var(--primario);
+  color: var(--texto-invertido);
   border: none;
-  border-radius: 6px;
-  padding: 0.7rem 1.5rem;
-  font-size: 1rem;
+  border-radius: var(--radio-sm);
+  padding: 0.6rem 1.25rem;
+  font-size: var(--texto-sm);
   font-weight: 600;
+  transition: background var(--mov-normal), transform var(--mov-rapido);
+}
+
+.sigso-boton:hover {
+  background: var(--primario-intenso);
+}
+
+.sigso-boton:active {
+  transform: translateY(1px);
 }
 
 .sigso-boton:disabled {
-  background: #ccc;
+  background: var(--borde-fuerte);
+  color: var(--texto-3);
   cursor: not-allowed;
+  transform: none;
 }
 
+/* Secundario v5.0: borde neutro + texto, no outline de color -- el patron
+   de toda herramienta seria (el outline azul/naranja era Bootstrap puro). */
 .sigso-boton--secundario {
-  background: transparent;
-  color: var(--azul);
-  border: 1px solid var(--azul);
+  background: var(--superficie);
+  color: var(--texto);
+  border: 1px solid var(--borde-fuerte);
+  font-weight: 500;
+  transition: background var(--mov-normal), border-color var(--mov-normal);
+}
+
+.sigso-boton--secundario:hover {
+  background: var(--superficie-2);
+  border-color: var(--texto-3);
 }
 
 .sigso-badge {
   display: inline-block;
   padding: 0.15rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  font-weight: 700;
+  border-radius: var(--radio-full);
+  font-size: var(--texto-xs);
+  font-weight: 600;
   color: #fff;
 }
 
 .sigso-badge--P1 { background: var(--p1); }
 .sigso-badge--P2 { background: var(--p2); }
-.sigso-badge--P3 { background: var(--p3); color: var(--gris-oscuro); }
+.sigso-badge--P3 { background: var(--p3); color: #3B3000; }
 .sigso-badge--P4 { background: var(--p4); }
 .sigso-badge--P5 { background: var(--p5); }
 
@@ -346,15 +487,16 @@ button {
 .sigso-stub {
   max-width: 640px;
   margin: 3rem auto;
-  padding: 1.5rem;
+  padding: var(--esp-5);
   background: var(--superficie);
-  border-radius: 8px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
 }
 
 .sigso-stub pre {
-  background: var(--gris-claro);
-  padding: 0.75rem;
-  border-radius: 4px;
+  background: var(--superficie-2);
+  padding: var(--esp-3);
+  border-radius: var(--radio-sm);
   overflow-x: auto;
 }
 
@@ -367,16 +509,26 @@ button {
   flex: none;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.9;
+  stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 /* Cifras que se comparan en columna (KPIs, tablas, montos): mismo ancho por
-   digito para que alineen. */
+   digito para que alineen (§2.3). */
 .sigso-cifra,
 .sigso-tabla td {
   font-variant-numeric: tabular-nums;
+}
+
+/* v5.0: respeto por quien desactiva el movimiento (accesibilidad §1.4). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 </style>
@@ -438,11 +590,14 @@ button {
   background: var(--azul);
 }
 
+/* v5.0 (F1): el aviso generico pasa del naranja de marca al semantico de
+   alerta -- el naranja ya no comunica estado, solo marca (§2.2). */
 .sigso-alerta {
-  border-left: 4px solid var(--naranja);
-  background: var(--naranja-claro);
+  border-left: 3px solid var(--alerta);
+  background: var(--alerta-suave);
+  color: var(--texto);
   padding: 0.75rem 1rem;
-  border-radius: 6px;
+  border-radius: var(--radio-sm);
   margin-bottom: 1rem;
 }
 
@@ -1284,7 +1439,9 @@ button {
 
 .sigso-pastilla--nueva  { color: var(--azul);    background: var(--info-suave); }
 .sigso-pastilla--curso  { color: var(--alerta);  background: var(--alerta-suave); }
-.sigso-pastilla--espera { color: var(--naranja); background: var(--naranja-claro); }
+/* v5.0: "en espera" es ESTADO semantico, no accion -- alerta, no el alias
+   de acento (que ahora apunta al primario). */
+.sigso-pastilla--espera { color: var(--alerta); background: var(--alerta-suave); }
 .sigso-pastilla--ok     { color: var(--ok);      background: var(--ok-suave); }
 .sigso-pastilla--no     { color: var(--texto-2); background: var(--superficie-2); }
 
@@ -1310,7 +1467,7 @@ button {
   border: none;
 }
 
-.sigso-boton--peligro:hover { background: #93211B; }
+.sigso-boton--peligro:hover { background: color-mix(in srgb, var(--critico), black 15%); }
 
 .sigso-boton--con-icono {
   display: inline-flex;
@@ -2141,16 +2298,24 @@ button.sigso-kpi {
   align-items: center;
   gap: 0.15rem;
   padding: 0.75rem 0.5rem;
-  border: 1px solid var(--gris-claro);
-  border-radius: 8px;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
   background: var(--superficie);
+  /* v5.0: es un <button> -- sin esto hereda el negro del user-agent y en
+     modo oscuro el numero desaparece. */
+  color: var(--texto);
   cursor: pointer;
   font-family: inherit;
+  transition: border-color var(--mov-normal), background var(--mov-normal);
+}
+
+.sigso-semaforo-tarjeta:hover {
+  background: var(--superficie-2);
 }
 
 .sigso-semaforo-tarjeta--activa {
-  border-color: var(--azul);
-  box-shadow: 0 0 0 2px var(--azul) inset;
+  border-color: var(--primario);
+  box-shadow: 0 0 0 2px var(--primario) inset;
 }
 
 .sigso-semaforo-tarjeta__emoji {
@@ -2159,7 +2324,8 @@ button.sigso-kpi {
 
 .sigso-semaforo-tarjeta__cantidad {
   font-size: 1.4rem;
-  font-weight: 700;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .sigso-semaforo-tarjeta__etiqueta {
@@ -2178,7 +2344,7 @@ button.sigso-kpi {
   top: 0;
   bottom: 0;
   width: 2px;
-  background: #c0392b;
+  background: var(--critico);
   z-index: 1;
 }
 
@@ -2206,14 +2372,18 @@ button.sigso-kpi {
   border-radius: 4px;
 }
 
-.sigso-gantt-barra--en-plazo { background: #27AE60; }
-.sigso-gantt-barra--en-riesgo { background: #F1C40F; }
-.sigso-gantt-barra--atrasada-desarrollador { background: #C0392B; }
-.sigso-gantt-barra--esperando-validacion { background: #2980B9; }
-.sigso-gantt-barra--sin-compromiso { background: var(--gris-medio); }
-.sigso-gantt-barra--cerrada-a-tiempo { background: #27AE60; }
-.sigso-gantt-barra--cerrada-con-atraso { background: #C0392B; }
-.sigso-gantt-barra--atraso { background: repeating-linear-gradient(45deg, #C0392B, #C0392B 4px, #922b21 4px, #922b21 8px); }
+/* v5.0 (F1): las barras pasan a los tokens semanticos -- antes usaban la
+   paleta hardcodeada de 2023 y quedaban fuera de sistema en modo oscuro. */
+.sigso-gantt-barra--en-plazo { background: var(--ok); }
+.sigso-gantt-barra--en-riesgo { background: var(--p3); }
+.sigso-gantt-barra--atrasada-desarrollador { background: var(--critico); }
+.sigso-gantt-barra--esperando-validacion { background: var(--info); }
+.sigso-gantt-barra--sin-compromiso { background: var(--texto-3); }
+.sigso-gantt-barra--cerrada-a-tiempo { background: var(--ok); }
+.sigso-gantt-barra--cerrada-con-atraso { background: var(--critico); }
+.sigso-gantt-barra--atraso {
+  background: repeating-linear-gradient(45deg, var(--critico), var(--critico) 4px, color-mix(in srgb, var(--critico), black 25%) 4px, color-mix(in srgb, var(--critico), black 25%) 8px);
+}
 
 .sigso-gantt-original {
   position: absolute;
@@ -2440,7 +2610,9 @@ button.sigso-kpi {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  border-bottom: 3px solid var(--naranja);
+  /* v5.0: momento de MARCA (el PDF viaja fuera del sistema) -- naranja
+     explicito, no el alias (que ahora apunta al primario indigo). */
+  border-bottom: 3px solid var(--acento-marca);
   padding-bottom: 0.5rem;
   margin-bottom: 0.5rem;
 }
@@ -4032,7 +4204,9 @@ var Iconos = (function () {
         labels: datosAgrupados.map(function (d) { return d.clave; }),
         datasets: [{
           data: datosAgrupados.map(function (d) { return d.total; }),
-          backgroundColor: ['#E8622A', '#1F4E79', '#27AE60', '#F1C40F', '#C0392B', '#2980B9', '#E67E22']
+          // v5.0 (F1): paleta categorial del Design System (indigo primero,
+          // luego semanticos) -- antes usaba los hex de la marca 2023.
+          backgroundColor: ['#6D5DF6', '#2563EB', '#1F7A55', '#CA9A04', '#C2362B', '#D97706', '#8A93A5']
         }]
       },
       options: { plugins: { legend: { display: tipo === 'doughnut' } } }
@@ -5497,9 +5671,11 @@ var Iconos = (function () {
         type: 'bar',
         data: {
           labels: tendencia.map(function (m) { return m.etiqueta; }),
+          // v5.0 (F1): paleta del Design System (creadas indigo, cerradas
+          // verde ok, linea de cumplimiento en el acento de marca).
           datasets: [
-            { type: 'bar', label: 'Creadas', data: tendencia.map(function (m) { return m.creadas; }), backgroundColor: '#1F4E79' },
-            { type: 'bar', label: 'Cerradas', data: tendencia.map(function (m) { return m.cerradas; }), backgroundColor: '#27AE60' },
+            { type: 'bar', label: 'Creadas', data: tendencia.map(function (m) { return m.creadas; }), backgroundColor: '#6D5DF6' },
+            { type: 'bar', label: 'Cerradas', data: tendencia.map(function (m) { return m.cerradas; }), backgroundColor: '#1F7A55' },
             {
               type: 'line', label: '% cumplimiento', yAxisID: 'y1',
               data: tendencia.map(function (m) { return m.pct_cumplimiento; }),

@@ -55,11 +55,14 @@
   background: var(--azul);
 }
 
+/* v5.0 (F1): el aviso generico pasa del naranja de marca al semantico de
+   alerta -- el naranja ya no comunica estado, solo marca (§2.2). */
 .sigso-alerta {
-  border-left: 4px solid var(--naranja);
-  background: var(--naranja-claro);
+  border-left: 3px solid var(--alerta);
+  background: var(--alerta-suave);
+  color: var(--texto);
   padding: 0.75rem 1rem;
-  border-radius: 6px;
+  border-radius: var(--radio-sm);
   margin-bottom: 1rem;
 }
 
@@ -901,7 +904,9 @@
 
 .sigso-pastilla--nueva  { color: var(--azul);    background: var(--info-suave); }
 .sigso-pastilla--curso  { color: var(--alerta);  background: var(--alerta-suave); }
-.sigso-pastilla--espera { color: var(--naranja); background: var(--naranja-claro); }
+/* v5.0: "en espera" es ESTADO semantico, no accion -- alerta, no el alias
+   de acento (que ahora apunta al primario). */
+.sigso-pastilla--espera { color: var(--alerta); background: var(--alerta-suave); }
 .sigso-pastilla--ok     { color: var(--ok);      background: var(--ok-suave); }
 .sigso-pastilla--no     { color: var(--texto-2); background: var(--superficie-2); }
 
@@ -927,7 +932,7 @@
   border: none;
 }
 
-.sigso-boton--peligro:hover { background: #93211B; }
+.sigso-boton--peligro:hover { background: color-mix(in srgb, var(--critico), black 15%); }
 
 .sigso-boton--con-icono {
   display: inline-flex;

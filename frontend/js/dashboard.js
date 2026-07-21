@@ -315,7 +315,9 @@
         labels: datosAgrupados.map(function (d) { return d.clave; }),
         datasets: [{
           data: datosAgrupados.map(function (d) { return d.total; }),
-          backgroundColor: ['#E8622A', '#1F4E79', '#27AE60', '#F1C40F', '#C0392B', '#2980B9', '#E67E22']
+          // v5.0 (F1): paleta categorial del Design System (indigo primero,
+          // luego semanticos) -- antes usaba los hex de la marca 2023.
+          backgroundColor: ['#6D5DF6', '#2563EB', '#1F7A55', '#CA9A04', '#C2362B', '#D97706', '#8A93A5']
         }]
       },
       options: { plugins: { legend: { display: tipo === 'doughnut' } } }
