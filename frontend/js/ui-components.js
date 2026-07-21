@@ -49,6 +49,6 @@ function renderHeaderSigso(paginaActiva) {
 // dentro de la pagina -- antes "SIGSO" era solo texto, sin una marca que se
 // reconociera de un vistazo entre pestanas o capturas de pantalla.
 var MARCA_SIGSO_SVG = '<svg class="sigso-marca" width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">' +
-  '<rect width="32" height="32" rx="8" fill="#E8622A"></rect>' +
+  '<rect width="32" height="32" rx="8" fill="#6D5DF6"></rect>' +
   '<text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">S</text>' +
   '</svg>';

@@ -107,7 +107,7 @@
    Cada token nuevo nace con su par oscuro (§2.2). data-theme permite el
    conmutador manual (F2); el media query cubre el default del sistema. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-tema="claro"]) {
     --primario: #8B7DFF;
     --primario-intenso: #A398FF;
     --primario-suave: rgba(139, 125, 255, 0.16);
@@ -145,4 +145,45 @@
 
     --foco-anillo: 0 0 0 2px var(--fondo-pagina), 0 0 0 4px var(--primario);
   }
+}
+
+/* Conmutador manual (F2): data-tema="oscuro" fuerza oscuro sin importar el
+   SO; data-tema="claro" fuerza claro (cubierto por el :not() de arriba). */
+:root[data-tema="oscuro"] {
+  --primario: #8B7DFF;
+  --primario-intenso: #A398FF;
+  --primario-suave: rgba(139, 125, 255, 0.16);
+  --primario-tinta: #C4BCFF;
+
+  --acento-marca: #F0793F;
+  --acento-marca-suave: #4A2E1C;
+
+  --fondo-pagina: #0E1116;
+  --superficie: #161B22;
+  --superficie-2: #1D242E;
+  --borde: #2A323E;
+  --borde-fuerte: #3B4552;
+  --texto: #E7EBF2;
+  --texto-2: #93A0B4;
+  --texto-3: #6B7789;
+
+  --ok: #34A374;
+  --ok-suave: rgba(52, 163, 116, 0.18);
+  --alerta: #E08A2E;
+  --alerta-suave: rgba(224, 138, 46, 0.16);
+  --critico: #E25A4E;
+  --critico-suave: rgba(226, 90, 78, 0.16);
+  --info: #5B8DEF;
+  --info-suave: rgba(91, 141, 239, 0.16);
+
+  --p1: #E25A4E;
+  --p2: #E0902E;
+  --p3: #D4B13C;
+  --p4: #34A374;
+  --p5: #5B8DEF;
+
+  --sombra-1: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --sombra-2: 0 8px 30px rgba(0, 0, 0, 0.5);
+
+  --foco-anillo: 0 0 0 2px var(--fondo-pagina), 0 0 0 4px var(--primario);
 }

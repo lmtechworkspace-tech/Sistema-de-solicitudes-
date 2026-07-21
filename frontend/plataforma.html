@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SIGSO — Plataforma</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27><rect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%23E8622A%27/><text x=%2716%27 y=%2723%27 font-family=%27Arial,sans-serif%27 font-weight=%27700%27 font-size=%2720%27 fill=%27white%27 text-anchor=%27middle%27>S</text></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27><rect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%236D5DF6%27/><text x=%2716%27 y=%2723%27 font-family=%27Arial,sans-serif%27 font-weight=%27700%27 font-size=%2720%27 fill=%27white%27 text-anchor=%27middle%27>S</text></svg>" />
   <!-- v4.0: la marca declara Inter desde §12.3 pero nunca se cargaba: todos
        veian la fuente por defecto del sistema. display=swap evita el bloqueo
        de render. -->
@@ -77,37 +77,70 @@
     </form>
   </div>
 
-  <!-- ============ Shell: nav + modulos ============ -->
-  <div id="vista-shell" class="sigso-oculto">
-    <header class="plataforma-header">
-      <div class="plataforma-header__marca">
-        <svg class="sigso-marca" width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
-          <rect width="32" height="32" rx="8" fill="#E8622A"></rect>
-          <text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">S</text>
-        </svg>
-        SIGSO
-      </div>
-      <nav class="plataforma-header__nav" id="nav-modulos"></nav>
-      <!-- v4.0: identidad con avatar de iniciales y rol visible; el botón de
-           salir pasa a un menú para no competir con la navegación. -->
-      <div class="plataforma-header__usuario">
-        <button type="button" class="plataforma-usuario" id="btn-menu-usuario"
-                aria-haspopup="menu" aria-expanded="false">
-          <span class="plataforma-avatar" id="nav-avatar"></span>
-          <span class="plataforma-usuario__txt">
-            <span class="plataforma-usuario__nombre" id="nav-nombre-usuario"></span>
-            <span class="plataforma-usuario__rol" id="nav-rol-usuario"></span>
-          </span>
-          <span id="nav-chevron"></span>
+  <!-- ============ Shell: sidebar + modulos ============ -->
+  <!-- v5.0 F2: el header horizontal (una sola fila que se quedaba sin
+       espacio a 4-5 modulos) pasa a un sidebar vertical colapsable, patron
+       estandar de herramienta seria (Linear/Notion/Stripe). En movil el
+       sidebar es un drawer que se abre con el boton hamburguesa. -->
+  <div id="vista-shell" class="sigso-oculto plataforma-shell">
+    <aside class="plataforma-sidebar" id="plataforma-sidebar">
+      <div class="plataforma-sidebar__cab">
+        <div class="plataforma-header__marca">
+          <svg class="sigso-marca" width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
+            <rect width="32" height="32" rx="8" fill="#6D5DF6"></rect>
+            <text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">S</text>
+          </svg>
+          <span class="plataforma-sidebar__txt-marca">SIGSO</span>
+        </div>
+        <button type="button" class="plataforma-sidebar__colapsar" id="btn-colapsar-sidebar"
+                aria-label="Colapsar menú" aria-expanded="true">
+          <span id="ico-colapsar"></span>
         </button>
-        <div class="plataforma-menu sigso-oculto" id="menu-usuario" role="menu">
-          <div class="plataforma-menu__cab" id="menu-correos"></div>
-          <button type="button" class="plataforma-menu__item" id="btn-logout" role="menuitem">
-            <span id="ico-salir"></span> Cerrar sesi&oacute;n
+      </div>
+
+      <nav class="plataforma-sidebar__nav" id="nav-modulos"></nav>
+
+      <div class="plataforma-sidebar__pie">
+        <button type="button" class="plataforma-sidebar__tema" id="btn-tema" aria-label="Cambiar a modo oscuro">
+          <span id="ico-tema"></span><span class="plataforma-sidebar__txt">Modo oscuro</span>
+        </button>
+        <!-- v4.0: identidad con avatar de iniciales y rol visible; el botón de
+             salir pasa a un menú para no competir con la navegación. -->
+        <div class="plataforma-header__usuario">
+          <button type="button" class="plataforma-usuario" id="btn-menu-usuario"
+                  aria-haspopup="menu" aria-expanded="false">
+            <span class="plataforma-avatar" id="nav-avatar"></span>
+            <span class="plataforma-usuario__txt">
+              <span class="plataforma-usuario__nombre" id="nav-nombre-usuario"></span>
+              <span class="plataforma-usuario__rol" id="nav-rol-usuario"></span>
+            </span>
+            <span id="nav-chevron"></span>
           </button>
+          <div class="plataforma-menu sigso-oculto" id="menu-usuario" role="menu">
+            <div class="plataforma-menu__cab" id="menu-correos"></div>
+            <button type="button" class="plataforma-menu__item" id="btn-logout" role="menuitem">
+              <span id="ico-salir"></span> Cerrar sesi&oacute;n
+            </button>
+          </div>
         </div>
       </div>
-    </header>
+    </aside>
+
+    <div class="plataforma-sidebar__telon sigso-oculto" id="telon-sidebar"></div>
+
+    <div class="plataforma-main">
+      <div class="plataforma-topbar">
+        <button type="button" class="plataforma-topbar__hamburguesa" id="btn-abrir-sidebar" aria-label="Abrir menú">
+          <span id="ico-hamburguesa"></span>
+        </button>
+        <div class="plataforma-header__marca plataforma-topbar__marca">
+          <svg class="sigso-marca" width="22" height="22" viewBox="0 0 32 32" aria-hidden="true">
+            <rect width="32" height="32" rx="8" fill="#6D5DF6"></rect>
+            <text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">S</text>
+          </svg>
+          SIGSO
+        </div>
+      </div>
 
     <main class="sigso-contenido">
       <!-- ===== Modulo: inicio ===== -->
@@ -514,7 +547,7 @@
             </div>
             <div class="sigso-solo-imprimir sigso-encabezado-reporte">
               <svg class="sigso-marca" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">
-                <rect width="32" height="32" rx="8" fill="#E8622A"></rect>
+                <rect width="32" height="32" rx="8" fill="#6D5DF6"></rect>
                 <text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">S</text>
               </svg>
               <div>
@@ -618,6 +651,7 @@
         </div>
       </section>
     </main>
+    </div>
   </div>
 
   <script src="js/config.js"></script>

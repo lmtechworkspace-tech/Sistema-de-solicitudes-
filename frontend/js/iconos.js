@@ -61,7 +61,13 @@ var Iconos = (function () {
     derecha: '<path d="M9 18l6-6-6-6"/>',
     subir: '<path d="M12 19V5M5 12l7-7 7 7"/>',
     descargar: '<path d="M12 5v14M5 12l7 7 7-7"/>',
-    filtro: '<path d="M22 3H2l8 9.5V19l4 2v-8.5z"/>'
+    filtro: '<path d="M22 3H2l8 9.5V19l4 2v-8.5z"/>',
+
+    // v5.0 F2: chrome del shell (sidebar)
+    menu: '<path d="M3 6h18M3 12h18M3 18h18"/>',
+    sol: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+    luna: '<path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/>',
+    colapsar: '<path d="M9 3v18"/><path d="M15 9l-3 3 3 3"/><rect x="3" y="3" width="18" height="18" rx="2"/>'
   };
 
   /**

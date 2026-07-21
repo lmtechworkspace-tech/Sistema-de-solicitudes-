@@ -62,6 +62,7 @@
     document.getElementById('btn-logout').addEventListener('click', manejarLogout_);
     wireMenuUsuario_();
     wireVerContrasena_();
+    wireSidebar_();
 
     // Sesion guardada: restaurar sin re-loguear. Si expiro, al login.
     var token = null;
@@ -225,6 +226,121 @@
     menu.addEventListener('click', function (evento) { evento.stopPropagation(); });
   }
 
+  // v5.0 F2: sidebar colapsable (escritorio) + drawer (movil) + conmutador
+  // de tema. El colapso y el tema se recuerdan entre sesiones -- nadie
+  // quiere volver a elegir lo mismo cada vez que entra.
+  var LLAVE_SIDEBAR_COLAPSADO = 'sigso_sidebar_colapsado';
+  var LLAVE_TEMA = 'sigso_tema';
+  var UMBRAL_MOVIL = 900;
+
+  function guardar_(llave, valor) {
+    try { localStorage.setItem(llave, valor); } catch (err) { /* sin storage */ }
+  }
+
+  function leer_(llave) {
+    try { return localStorage.getItem(llave); } catch (err) { return null; }
+  }
+
+  function wireSidebar_() {
+    var sidebar = document.getElementById('plataforma-sidebar');
+    var telon = document.getElementById('telon-sidebar');
+    var btnColapsar = document.getElementById('btn-colapsar-sidebar');
+    var btnAbrir = document.getElementById('btn-abrir-sidebar');
+    var btnTema = document.getElementById('btn-tema');
+    if (!sidebar || !btnColapsar || !btnAbrir || !btnTema) return;
+
+    document.getElementById('ico-colapsar').innerHTML = Iconos.svg('colapsar', { tam: 16 });
+    document.getElementById('ico-hamburguesa').innerHTML = Iconos.svg('menu', { tam: 18 });
+
+    function esMovil_() {
+      return window.innerWidth <= UMBRAL_MOVIL;
+    }
+
+    function cerrarDrawer_() {
+      sidebar.classList.remove('plataforma-sidebar--abierto');
+      telon.classList.remove('plataforma-sidebar__telon--visible');
+      telon.classList.add('sigso-oculto');
+      btnAbrir.setAttribute('aria-expanded', 'false');
+    }
+
+    function abrirDrawer_() {
+      sidebar.classList.add('plataforma-sidebar--abierto');
+      telon.classList.remove('sigso-oculto');
+      telon.classList.add('plataforma-sidebar__telon--visible');
+      btnAbrir.setAttribute('aria-expanded', 'true');
+    }
+
+    btnAbrir.addEventListener('click', function () {
+      var abierto = sidebar.classList.contains('plataforma-sidebar--abierto');
+      if (abierto) cerrarDrawer_(); else abrirDrawer_();
+    });
+    telon.addEventListener('click', cerrarDrawer_);
+    // Al elegir un modulo desde el drawer, se cierra solo -- de otro modo
+    // taparia el contenido recien elegido.
+    document.getElementById('nav-modulos').addEventListener('click', function () {
+      if (esMovil_()) cerrarDrawer_();
+    });
+
+    function aplicarColapso_(colapsado) {
+      sidebar.classList.toggle('plataforma-sidebar--colapsado', colapsado);
+      btnColapsar.setAttribute('aria-expanded', String(!colapsado));
+      btnColapsar.setAttribute('aria-label', colapsado ? 'Expandir menú' : 'Colapsar menú');
+    }
+
+    var colapsadoGuardado = leer_(LLAVE_SIDEBAR_COLAPSADO) === '1';
+    aplicarColapso_(colapsadoGuardado);
+
+    btnColapsar.addEventListener('click', function () {
+      var colapsado = !sidebar.classList.contains('plataforma-sidebar--colapsado');
+      aplicarColapso_(colapsado);
+      guardar_(LLAVE_SIDEBAR_COLAPSADO, colapsado ? '1' : '0');
+    });
+
+    // El colapso es de escritorio y el drawer es de movil: si la ventana
+    // cruza el umbral con el otro estado activo, se limpia para no mezclar
+    // ambos (ej. un sidebar angosto de 68px atascado como drawer movil).
+    window.addEventListener('resize', function () {
+      if (esMovil_()) {
+        sidebar.classList.remove('plataforma-sidebar--colapsado');
+      } else {
+        cerrarDrawer_();
+        aplicarColapso_(leer_(LLAVE_SIDEBAR_COLAPSADO) === '1');
+      }
+    });
+
+    // Sin preferencia guardada, el SO manda (media query de tokens.css);
+    // solo se fija data-tema cuando la persona elige explicitamente, para
+    // no pisar "sigue al sistema" con un "claro" a la fuerza.
+    function pintarIconoTema_(esOscuro) {
+      document.getElementById('ico-tema').innerHTML = Iconos.svg(esOscuro ? 'sol' : 'luna', { tam: 16 });
+      document.querySelector('#btn-tema .plataforma-sidebar__txt').textContent =
+        esOscuro ? 'Modo claro' : 'Modo oscuro';
+      btnTema.setAttribute('aria-label', esOscuro ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
+    }
+
+    function aplicarTema_(tema) {
+      document.documentElement.setAttribute('data-tema', tema);
+      pintarIconoTema_(tema === 'oscuro');
+    }
+
+    var temaGuardado = leer_(LLAVE_TEMA);
+    if (temaGuardado === 'oscuro' || temaGuardado === 'claro') {
+      aplicarTema_(temaGuardado);
+    } else {
+      var prefiereOscuro = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      pintarIconoTema_(prefiereOscuro);
+    }
+
+    btnTema.addEventListener('click', function () {
+      var actualOscuro = document.documentElement.getAttribute('data-tema') === 'oscuro' ||
+        (!document.documentElement.getAttribute('data-tema') && window.matchMedia &&
+          window.matchMedia('(prefers-color-scheme: dark)').matches);
+      var nuevo = actualOscuro ? 'claro' : 'oscuro';
+      aplicarTema_(nuevo);
+      guardar_(LLAVE_TEMA, nuevo);
+    });
+  }
+
   function modulosDeLaCuenta_() {
     return (sesion.cuenta.modulos || []).filter(function (m) { return MODULOS_SHELL[m]; });
   }
@@ -236,22 +352,23 @@
   function renderNav_() {
     var nav = document.getElementById('nav-modulos');
     nav.innerHTML = '<button type="button" class="plataforma-nav__item" data-modulo="home">' +
-      Iconos.svg('inicio') + ' Inicio</button>' +
+      Iconos.svg('inicio') + ' <span class="plataforma-nav__etiqueta">Inicio</span></button>' +
       modulosDeLaCuenta_().map(function (id) {
         var def = MODULOS_SHELL[id];
         // v4.0: contador de pendientes -- lo rellena actualizarContadores_()
         // cuando llegan los datos; asi no hay que entrar al modulo para
         // descubrir que hay algo esperando.
         var ranura = '<span class="plataforma-nav__badge sigso-oculto" data-badge="' + id + '"></span>';
+        var etiqueta = '<span class="plataforma-nav__etiqueta">' + def.nombre + '</span>';
         var acento = acentoInline_(id);
         if (def.interno) {
           return '<button type="button" class="plataforma-nav__item" data-modulo="' + id + '"' + acento + '>' +
-            Iconos.svg(def.icono) + ' ' + def.nombre + ranura + '</button>';
+            Iconos.svg(def.icono) + ' ' + etiqueta + ranura + '</button>';
         }
         var url = urlExterna_(def);
         return url
           ? '<a class="plataforma-nav__item" href="' + Componentes.escaparHtml(url) + '" target="_blank" rel="noopener"' + acento + '>' +
-            Iconos.svg(def.icono) + ' ' + def.nombre + '</a>'
+            Iconos.svg(def.icono) + ' ' + etiqueta + '</a>'
           : '';
       }).join('');
 
