@@ -699,6 +699,19 @@
           <section id="admin-contenido" class="sigso-admin-contenido"></section>
         </div>
       </section>
+
+      <!-- v5.0 F3b (§5.6): mismo drawer que admin.html (duplicacion
+           deliberada de markup, admin.js es el mismo archivo). -->
+      <div class="sigso-drawer__telon sigso-oculto" id="drawer-admin-telon"></div>
+      <aside class="sigso-drawer sigso-oculto" id="drawer-admin" role="dialog" aria-modal="true" aria-labelledby="drawer-admin-titulo">
+        <div class="sigso-drawer__cab">
+          <h2 id="drawer-admin-titulo"></h2>
+          <button type="button" class="sigso-drawer__cerrar" id="btn-cerrar-drawer-admin" aria-label="Cerrar">
+            <span id="ico-cerrar-drawer-admin"></span>
+          </button>
+        </div>
+        <div class="sigso-drawer__cuerpo" id="drawer-admin-cuerpo"></div>
+      </aside>
     </main>
     </div>
   </div>

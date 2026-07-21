@@ -63,3 +63,116 @@
 .sigso-admin-form .sigso-campo {
   margin-bottom: 0;
 }
+
+/* v5.0 F3b (§5.6): cabecera de cada seccion -- titulo + "Nuevo" (la unica
+   accion primaria), reemplaza el <h2> suelto que quedaba con el formulario
+   pegado abajo. */
+.sigso-admin-cab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: var(--esp-4);
+}
+
+.sigso-admin-cab h2 {
+  margin: 0;
+}
+
+.sigso-admin-cab__boton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: none;
+}
+
+/* --- Drawer lateral (formularios de Administracion) -------------------
+   Reemplaza "formulario arriba de la tabla" (obligaba a scroll cada vez
+   que se creaba/editaba un registro): un panel deslizante desde la
+   derecha, la misma tabla queda siempre visible detras. */
+.sigso-drawer__telon {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 45;
+}
+
+.sigso-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 26rem;
+  max-width: 92vw;
+  background: var(--superficie);
+  border-left: 1px solid var(--borde);
+  box-shadow: var(--sombra-2);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(0);
+  animation: sigso-drawer-entrada var(--mov-entrada) ease-out;
+}
+
+@keyframes sigso-drawer-entrada {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.sigso-drawer__cab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: var(--esp-4) var(--esp-5);
+  border-bottom: 1px solid var(--borde);
+  flex: none;
+}
+
+.sigso-drawer__cab h2 {
+  margin: 0;
+  font-size: var(--texto-lg);
+}
+
+.sigso-drawer__cerrar {
+  flex: none;
+  background: transparent;
+  border: none;
+  padding: 0.35rem;
+  border-radius: var(--radio-sm);
+  cursor: pointer;
+  color: var(--texto-2);
+  display: grid;
+  place-items: center;
+}
+
+.sigso-drawer__cerrar:hover {
+  background: var(--superficie-2);
+  color: var(--texto);
+}
+
+.sigso-drawer__cuerpo {
+  padding: var(--esp-5);
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Dentro del drawer, el formulario ya no necesita ser su propia tarjeta ni
+   una grilla multi-columna -- una columna, angosta, se lee de arriba a
+   abajo sin ida y vuelta. */
+.sigso-drawer__cuerpo .sigso-card {
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+.sigso-drawer__cuerpo .sigso-admin-form {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 480px) {
+  .sigso-drawer {
+    width: 100vw;
+    max-width: 100vw;
+  }
+}

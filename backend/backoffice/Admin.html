@@ -3253,6 +3253,119 @@ button.sigso-kpi {
   margin-bottom: 0;
 }
 
+/* v5.0 F3b (§5.6): cabecera de cada seccion -- titulo + "Nuevo" (la unica
+   accion primaria), reemplaza el <h2> suelto que quedaba con el formulario
+   pegado abajo. */
+.sigso-admin-cab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: var(--esp-4);
+}
+
+.sigso-admin-cab h2 {
+  margin: 0;
+}
+
+.sigso-admin-cab__boton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: none;
+}
+
+/* --- Drawer lateral (formularios de Administracion) -------------------
+   Reemplaza "formulario arriba de la tabla" (obligaba a scroll cada vez
+   que se creaba/editaba un registro): un panel deslizante desde la
+   derecha, la misma tabla queda siempre visible detras. */
+.sigso-drawer__telon {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 45;
+}
+
+.sigso-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 26rem;
+  max-width: 92vw;
+  background: var(--superficie);
+  border-left: 1px solid var(--borde);
+  box-shadow: var(--sombra-2);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(0);
+  animation: sigso-drawer-entrada var(--mov-entrada) ease-out;
+}
+
+@keyframes sigso-drawer-entrada {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.sigso-drawer__cab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: var(--esp-4) var(--esp-5);
+  border-bottom: 1px solid var(--borde);
+  flex: none;
+}
+
+.sigso-drawer__cab h2 {
+  margin: 0;
+  font-size: var(--texto-lg);
+}
+
+.sigso-drawer__cerrar {
+  flex: none;
+  background: transparent;
+  border: none;
+  padding: 0.35rem;
+  border-radius: var(--radio-sm);
+  cursor: pointer;
+  color: var(--texto-2);
+  display: grid;
+  place-items: center;
+}
+
+.sigso-drawer__cerrar:hover {
+  background: var(--superficie-2);
+  color: var(--texto);
+}
+
+.sigso-drawer__cuerpo {
+  padding: var(--esp-5);
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Dentro del drawer, el formulario ya no necesita ser su propia tarjeta ni
+   una grilla multi-columna -- una columna, angosta, se lee de arriba a
+   abajo sin ida y vuelta. */
+.sigso-drawer__cuerpo .sigso-card {
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+.sigso-drawer__cuerpo .sigso-admin-form {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 480px) {
+  .sigso-drawer {
+    width: 100vw;
+    max-width: 100vw;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -3274,6 +3387,20 @@ button.sigso-kpi {
 
     <section id="admin-contenido" class="sigso-admin-contenido"></section>
   </main>
+
+  <!-- v5.0 F3b (§5.6): drawer lateral -- reemplaza el formulario arriba de
+       la tabla (obligaba a scroll constante). "Nuevo" o una fila abren el
+       mismo panel; el cuerpo lo llena admin.js segun la seccion activa. -->
+  <div class="sigso-drawer__telon sigso-oculto" id="drawer-admin-telon"></div>
+  <aside class="sigso-drawer sigso-oculto" id="drawer-admin" role="dialog" aria-modal="true" aria-labelledby="drawer-admin-titulo">
+    <div class="sigso-drawer__cab">
+      <h2 id="drawer-admin-titulo"></h2>
+      <button type="button" class="sigso-drawer__cerrar" id="btn-cerrar-drawer-admin" aria-label="Cerrar">
+        <span id="ico-cerrar-drawer-admin"></span>
+      </button>
+    </div>
+    <div class="sigso-drawer__cuerpo" id="drawer-admin-cuerpo"></div>
+  </aside>
 
   <script>
 window.SIGSO_CONFIG = { BACKOFFICE_URL: '', SITIO_PUBLICO: 'https://lmtechworkspace-tech.github.io/Sistema-de-solicitudes-/' };
@@ -4220,6 +4347,7 @@ var Iconos = (function () {
           b.classList.remove('sigso-admin-menu__item--activo');
         });
         boton.classList.add('sigso-admin-menu__item--activo');
+        cerrarDrawerAdmin_();
         var tipo = boton.getAttribute('data-tipo');
         if (tipo === 'USUARIOS') {
           renderUsuarios_();
@@ -4239,7 +4367,42 @@ var Iconos = (function () {
     if (!document.getElementById('vista-shell')) {
       document.querySelector('.sigso-admin-menu__item').click();
     }
+    wireDrawerAdmin_();
   });
+
+  // v5.0 F3b (§5.6): drawer lateral compartido por todos los formularios de
+  // Administracion -- "Nuevo" o una fila lo abren con el formulario de la
+  // seccion activa; cerrar (boton/telon/Escape) no manda nada, solo oculta.
+  function wireDrawerAdmin_() {
+    var drawer = document.getElementById('drawer-admin');
+    var telon = document.getElementById('drawer-admin-telon');
+    var btnCerrar = document.getElementById('btn-cerrar-drawer-admin');
+    if (!drawer || !telon || !btnCerrar) return;
+    document.getElementById('ico-cerrar-drawer-admin').innerHTML = Iconos.svg('equis', { tam: 16 });
+    btnCerrar.addEventListener('click', cerrarDrawerAdmin_);
+    telon.addEventListener('click', cerrarDrawerAdmin_);
+    document.addEventListener('keydown', function (evento) {
+      if (evento.key === 'Escape' && !drawer.classList.contains('sigso-oculto')) {
+        cerrarDrawerAdmin_();
+      }
+    });
+  }
+
+  function abrirDrawerAdmin_(titulo, formularioHtml, wireForm) {
+    document.getElementById('drawer-admin-titulo').textContent = titulo;
+    document.getElementById('drawer-admin-cuerpo').innerHTML = formularioHtml;
+    document.getElementById('drawer-admin').classList.remove('sigso-oculto');
+    document.getElementById('drawer-admin-telon').classList.remove('sigso-oculto');
+    if (wireForm) wireForm();
+    var primerCampo = document.querySelector('#drawer-admin-cuerpo [data-campo]');
+    if (primerCampo) primerCampo.focus();
+  }
+
+  function cerrarDrawerAdmin_() {
+    document.getElementById('drawer-admin').classList.add('sigso-oculto');
+    document.getElementById('drawer-admin-telon').classList.add('sigso-oculto');
+    document.getElementById('drawer-admin-cuerpo').innerHTML = '';
+  }
 
   // Si google.script.run rechaza (o el fetch falla), la promesa se rechaza y
   // sin .catch la vista quedaba EN BLANCO (sintoma "no carga"). Este handler
@@ -4247,6 +4410,14 @@ var Iconos = (function () {
   function mostrarErrorAdmin_(err) {
     var mensaje = (err && err.message) ? err.message : 'No se pudo contactar el servidor. Revisa tu sesion/permiso e intenta de nuevo.';
     document.getElementById('admin-contenido').innerHTML = Componentes.alerta(mensaje, 'error');
+  }
+
+  // v5.0 F3b (§5.6): cabecera comun -- titulo + "Nuevo" (unica accion
+  // primaria de la seccion). Se repite igual en catalogos/usuarios.
+  function cabeceraAdmin_(titulo) {
+    return '<div class="sigso-admin-cab"><h2>' + Componentes.escaparHtml(titulo) + '</h2>' +
+      '<button type="button" class="sigso-boton sigso-admin-cab__boton" id="btn-nuevo-admin">' +
+      Iconos.svg('nueva', { tam: 16 }) + ' Nuevo</button></div>';
   }
 
   function renderCatalogo_(tipo) {
@@ -4258,17 +4429,25 @@ var Iconos = (function () {
         return;
       }
       contenedor.innerHTML =
-        '<h2>' + config.titulo + '</h2>' +
-        renderFormulario_(config.campos) +
+        cabeceraAdmin_(config.titulo) +
         Componentes.tarjeta(renderTabla_(config.campos, respuesta.data));
 
-      document.getElementById('form-admin').addEventListener('submit', function (evento) {
-        evento.preventDefault();
-        guardarCatalogo_(tipo, config.campos);
+      var wireForm = function () {
+        document.getElementById('form-admin').addEventListener('submit', function (evento) {
+          evento.preventDefault();
+          guardarCatalogo_(tipo, config.campos);
+        });
+      };
+      document.getElementById('btn-nuevo-admin').addEventListener('click', function () {
+        abrirDrawerAdmin_(config.titulo, renderFormulario_(config.campos), wireForm);
       });
       document.querySelectorAll('[data-editar]').forEach(function (fila) {
         fila.addEventListener('click', function () {
-          precargarFormulario_(config.campos, JSON.parse(fila.getAttribute('data-editar')));
+          var registro = JSON.parse(fila.getAttribute('data-editar'));
+          abrirDrawerAdmin_(config.titulo, renderFormulario_(config.campos), function () {
+            wireForm();
+            precargarFormulario_(config.campos, registro);
+          });
         });
       });
     }).catch(mostrarErrorAdmin_);
@@ -4282,17 +4461,25 @@ var Iconos = (function () {
         return;
       }
       contenedor.innerHTML =
-        '<h2>' + USUARIOS_UI.titulo + '</h2>' +
-        renderFormulario_(USUARIOS_UI.campos) +
+        cabeceraAdmin_(USUARIOS_UI.titulo) +
         Componentes.tarjeta(renderTabla_(USUARIOS_UI.campos, respuesta.data));
 
-      document.getElementById('form-admin').addEventListener('submit', function (evento) {
-        evento.preventDefault();
-        guardarUsuario_(USUARIOS_UI.campos);
+      var wireForm = function () {
+        document.getElementById('form-admin').addEventListener('submit', function (evento) {
+          evento.preventDefault();
+          guardarUsuario_(USUARIOS_UI.campos);
+        });
+      };
+      document.getElementById('btn-nuevo-admin').addEventListener('click', function () {
+        abrirDrawerAdmin_(USUARIOS_UI.titulo, renderFormulario_(USUARIOS_UI.campos), wireForm);
       });
       document.querySelectorAll('[data-editar]').forEach(function (fila) {
         fila.addEventListener('click', function () {
-          precargarFormulario_(USUARIOS_UI.campos, JSON.parse(fila.getAttribute('data-editar')));
+          var registro = JSON.parse(fila.getAttribute('data-editar'));
+          abrirDrawerAdmin_(USUARIOS_UI.titulo, renderFormulario_(USUARIOS_UI.campos), function () {
+            wireForm();
+            precargarFormulario_(USUARIOS_UI.campos, registro);
+          });
         });
       });
     }).catch(mostrarErrorAdmin_);
@@ -4320,6 +4507,24 @@ var Iconos = (function () {
     { valor: 'administracion', texto: 'Administración' }
   ];
 
+  function formularioCuentaPortal_() {
+    return '<form id="form-cuenta-portal">' +
+      '<div class="sigso-admin-form">' +
+      Componentes.campoTexto({ dataCampo: 'usuario', label: 'Usuario (para el login, ej. cpena)' }) +
+      Componentes.campoTexto({ dataCampo: 'nombre', label: 'Nombre completo' }) +
+      Componentes.campoTexto({ dataCampo: 'cargo', label: 'Cargo (autocompleta el formulario)' }) +
+      Componentes.campoTexto({ dataCampo: 'emails', label: 'Correos asociados (separados por coma)' }) +
+      Componentes.campoSelect({ dataCampo: 'rol', label: 'Rol', placeholder: false, valor: 'SOLICITANTE', opciones: ROLES_PORTAL }) +
+      Componentes.campoTexto({ dataCampo: 'empresa_id', label: 'Empresa (código, opcional)' }) +
+      '</div>' +
+      '<div class="sigso-campo"><label>Módulos (vacío = según rol)</label>' +
+      renderChipsModulos_([]) +
+      '</div>' +
+      Componentes.boton({ tipo: 'submit', texto: 'Guardar cuenta' }) +
+      '<div id="resultado-admin"></div>' +
+      '</form>';
+  }
+
   function renderCuentasPortal_() {
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarCuentasPortal', {}).then(function (respuesta) {
       var contenedor = document.getElementById('admin-contenido');
@@ -4329,35 +4534,30 @@ var Iconos = (function () {
       }
       var cuentas = respuesta.data.cuentas || [];
       contenedor.innerHTML =
-        '<h2>Cuentas de la plataforma</h2>' +
+        cabeceraAdmin_('Cuentas de la plataforma') +
         '<p class="sigso-ayuda">La identidad del portal: cada cuenta es una persona; sus correos son una lista ' +
         '(separados por coma) y el portal le muestra las solicitudes de todos ellos. Los módulos definen qué ve al entrar.</p>' +
-        '<form id="form-cuenta-portal" class="sigso-card">' +
-        '<div class="sigso-admin-form">' +
-        Componentes.campoTexto({ dataCampo: 'usuario', label: 'Usuario (para el login, ej. cpena)' }) +
-        Componentes.campoTexto({ dataCampo: 'nombre', label: 'Nombre completo' }) +
-        Componentes.campoTexto({ dataCampo: 'cargo', label: 'Cargo (autocompleta el formulario)' }) +
-        Componentes.campoTexto({ dataCampo: 'emails', label: 'Correos asociados (separados por coma)' }) +
-        Componentes.campoSelect({ dataCampo: 'rol', label: 'Rol', placeholder: false, valor: 'SOLICITANTE', opciones: ROLES_PORTAL }) +
-        Componentes.campoTexto({ dataCampo: 'empresa_id', label: 'Empresa (código, opcional)' }) +
-        '</div>' +
-        '<div class="sigso-campo"><label>Módulos (vacío = según rol)</label>' +
-        renderChipsModulos_([]) +
-        '</div>' +
-        Componentes.boton({ tipo: 'submit', texto: 'Guardar cuenta' }) +
-        '<div id="resultado-admin"></div>' +
-        '</form>' +
         Componentes.tarjeta(renderTablaCuentas_(cuentas));
 
-      document.getElementById('form-cuenta-portal').addEventListener('submit', function (evento) {
-        evento.preventDefault();
-        guardarCuentaPortal_();
+      var wireForm = function () {
+        document.getElementById('form-cuenta-portal').addEventListener('submit', function (evento) {
+          evento.preventDefault();
+          guardarCuentaPortal_();
+        });
+        wireChipsModulos_();
+      };
+      document.getElementById('btn-nuevo-admin').addEventListener('click', function () {
+        cuentaEnEdicion_ = null;
+        abrirDrawerAdmin_('Nueva cuenta', formularioCuentaPortal_(), wireForm);
       });
-      wireChipsModulos_();
       document.querySelectorAll('[data-cuenta]').forEach(function (fila) {
         fila.addEventListener('click', function (e) {
           if (e.target.closest('button')) return; // los botones de accion mandan
-          precargarCuenta_(JSON.parse(fila.getAttribute('data-cuenta')));
+          var cuenta = JSON.parse(fila.getAttribute('data-cuenta'));
+          abrirDrawerAdmin_('Editar cuenta', formularioCuentaPortal_(), function () {
+            wireForm();
+            precargarCuenta_(cuenta);
+          });
         });
       });
       document.querySelectorAll('[data-accion-cuenta]').forEach(function (boton) {
@@ -4404,7 +4604,7 @@ var Iconos = (function () {
       return Componentes.vacio({
         icono: 'persona',
         texto: 'Aún no hay cuentas de plataforma.',
-        detalle: 'Crea la primera con el formulario de arriba: el sistema genera una clave temporal que le entregas a la persona.'
+        detalle: 'Crea la primera con "Nuevo": el sistema genera una clave temporal que le entregas a la persona.'
       });
     }
     var filas = cuentas.map(function (c) {
@@ -4480,6 +4680,7 @@ var Iconos = (function () {
         return;
       }
       cuentaEnEdicion_ = null;
+      cerrarDrawerAdmin_();
       if (respuesta.data.password_temporal) {
         // Aviso propio y SIN auto-cierre: es la unica vez que la clave existe
         // fuera del hash. Trae boton "Copiar" porque antes habia que
@@ -4590,23 +4791,27 @@ var Iconos = (function () {
       }
       var relaciones = respuesta.data || [];
       contenedor.innerHTML =
-        '<h2>Jefaturas</h2>' +
+        cabeceraAdmin_('Jefaturas') +
         '<p class="sigso-ayuda">Quién supervisa a quién. La jefatura ve, en "Mi Departamento", ' +
         'solo lo asociado a las personas a cargo (como solicitantes o como responsables) -- nunca el resto del sistema. ' +
         'Una persona puede tener más de un jefe.</p>' +
-        '<form id="form-jefatura" class="sigso-card">' +
-        '<div class="sigso-admin-form">' +
-        Componentes.campoTexto({ dataCampo: 'jefe_email', label: 'Correo del jefe' }) +
-        Componentes.campoTexto({ dataCampo: 'subordinado_email', label: 'Correo de la persona a cargo' }) +
-        '</div>' +
-        Componentes.boton({ tipo: 'submit', texto: 'Agregar' }) +
-        '<div id="resultado-admin"></div>' +
-        '</form>' +
         Componentes.tarjeta(renderTablaJefaturas_(relaciones));
 
-      document.getElementById('form-jefatura').addEventListener('submit', function (evento) {
-        evento.preventDefault();
-        guardarJefatura_();
+      document.getElementById('btn-nuevo-admin').addEventListener('click', function () {
+        var formulario = '<form id="form-jefatura">' +
+          '<div class="sigso-admin-form">' +
+          Componentes.campoTexto({ dataCampo: 'jefe_email', label: 'Correo del jefe' }) +
+          Componentes.campoTexto({ dataCampo: 'subordinado_email', label: 'Correo de la persona a cargo' }) +
+          '</div>' +
+          Componentes.boton({ tipo: 'submit', texto: 'Agregar' }) +
+          '<div id="resultado-admin"></div>' +
+          '</form>';
+        abrirDrawerAdmin_('Nueva jefatura', formulario, function () {
+          document.getElementById('form-jefatura').addEventListener('submit', function (evento) {
+            evento.preventDefault();
+            guardarJefatura_();
+          });
+        });
       });
       document.querySelectorAll('[data-accion-jefatura]').forEach(function (boton) {
         boton.addEventListener('click', function () {
@@ -4635,7 +4840,7 @@ var Iconos = (function () {
       return Componentes.vacio({
         icono: 'persona',
         texto: 'Aún no hay jefaturas registradas.',
-        detalle: 'Agrega la primera con el formulario de arriba.'
+        detalle: 'Agrega la primera con "Nuevo".'
       });
     }
     var filas = relaciones.map(function (j) {
@@ -4663,6 +4868,7 @@ var Iconos = (function () {
         document.getElementById('resultado-admin').innerHTML = Componentes.alerta(respuesta.message || 'Error al guardar.', 'error');
         return;
       }
+      cerrarDrawerAdmin_();
       renderJefaturas_();
     });
   }
@@ -4760,6 +4966,7 @@ var Iconos = (function () {
     var registro = leerFormulario_(campos);
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'guardarCatalogo', { tipo: tipo, registro: registro }).then(function (respuesta) {
       if (respuesta.ok) {
+        cerrarDrawerAdmin_();
         renderCatalogo_(tipo);
         return;
       }
@@ -4771,6 +4978,7 @@ var Iconos = (function () {
     var registro = leerFormulario_(campos);
     llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'gestionarUsuario', registro).then(function (respuesta) {
       if (respuesta.ok) {
+        cerrarDrawerAdmin_();
         renderUsuarios_();
         return;
       }

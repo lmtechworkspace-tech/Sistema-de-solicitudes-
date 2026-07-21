@@ -37,6 +37,20 @@
     <section id="admin-contenido" class="sigso-admin-contenido"></section>
   </main>
 
+  <!-- v5.0 F3b (§5.6): drawer lateral -- reemplaza el formulario arriba de
+       la tabla (obligaba a scroll constante). "Nuevo" o una fila abren el
+       mismo panel; el cuerpo lo llena admin.js segun la seccion activa. -->
+  <div class="sigso-drawer__telon sigso-oculto" id="drawer-admin-telon"></div>
+  <aside class="sigso-drawer sigso-oculto" id="drawer-admin" role="dialog" aria-modal="true" aria-labelledby="drawer-admin-titulo">
+    <div class="sigso-drawer__cab">
+      <h2 id="drawer-admin-titulo"></h2>
+      <button type="button" class="sigso-drawer__cerrar" id="btn-cerrar-drawer-admin" aria-label="Cerrar">
+        <span id="ico-cerrar-drawer-admin"></span>
+      </button>
+    </div>
+    <div class="sigso-drawer__cuerpo" id="drawer-admin-cuerpo"></div>
+  </aside>
+
   <script src="js/config.js"></script>
   <script src="js/api.js"></script>
   <script src="js/ui-components.js"></script>
