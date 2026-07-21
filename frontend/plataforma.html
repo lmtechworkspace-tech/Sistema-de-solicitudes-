@@ -37,7 +37,10 @@
        derecha. El panel de marca se duplica en la vista de cambio de clave
        (mismo criterio de duplicacion deliberada del proyecto) para no
        depender de JS extra al alternar entre ambas vistas. -->
-  <div id="vista-login" class="plataforma-auth">
+  <!-- v5.1: oculto por defecto -- plataforma.js decide que vista mostrar al
+       cargar (login / restaurando sesion / shell). Asi no parpadea el
+       formulario de login al recargar una sesion activa. -->
+  <div id="vista-login" class="plataforma-auth sigso-oculto">
     <aside class="plataforma-auth__marca">
       <div class="plataforma-auth__marca-contenido">
         <svg class="sigso-marca" width="40" height="40" viewBox="0 0 32 32" aria-hidden="true">
@@ -105,6 +108,20 @@
         <button type="submit" class="sigso-boton" id="btn-cambiar-clave">Guardar y entrar</button>
         <div id="resultado-cambiar-clave"></div>
       </form>
+    </div>
+  </div>
+
+  <!-- ============ Vista: restaurando sesion ============ -->
+  <!-- v5.1: splash mientras se valida el token guardado (solo cuando no hay
+       cuenta cacheada). Evita el parpadeo del formulario de login al
+       recargar. Con cuenta cacheada, se entra al shell de inmediato. -->
+  <div id="vista-cargando" class="plataforma-cargando sigso-oculto">
+    <div class="plataforma-cargando__contenido">
+      <svg class="sigso-marca" width="36" height="36" viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="8" fill="#6D5DF6"></rect>
+        <text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">S</text>
+      </svg>
+      <p><span class="sigso-spinner"></span> Restaurando tu sesi&oacute;n&hellip;</p>
     </div>
   </div>
 

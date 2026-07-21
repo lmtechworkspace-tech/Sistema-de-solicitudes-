@@ -1362,6 +1362,19 @@
         ? '<p>' + resultadoAdjuntos.subidas + ' adjunto(s) subido(s) correctamente.</p>'
         : '<p><strong>Nota:</strong> se subieron ' + resultadoAdjuntos.subidas + ' de ' + resultadoAdjuntos.intentadas + ' adjuntos (revisa tama&ntilde;o/formato de los restantes).</p>';
     }
+    // v5.1: dentro del shell (window.SigsoShell) todo se queda en la
+    // plataforma -- el boton "Ir a Consultar estado" ya no salta a
+    // estado.html (que sacaba al usuario del sistema y, via el header,
+    // podia derivar al Backoffice de Apps Script). En su lugar cambia al
+    // modulo "Mis solicitudes". Fuera del shell (index.html publico) se
+    // mantiene el enlace de siempre.
+    var enShell = typeof window.SigsoShell !== 'undefined' &&
+      typeof window.SigsoShell.tieneModulo === 'function' &&
+      window.SigsoShell.tieneModulo('mis_solicitudes');
+    var refConsulta = enShell
+      ? '<strong>Mis solicitudes</strong> (menú lateral)'
+      : '<a href="estado.html">Consultar estado</a>';
+
     // v3.1: una atencion directa nace cerrada -- prometerle al solicitante
     // una fecha de entrega y una validacion posterior seria falso.
     var queSigue = data.atencion_directa
@@ -1372,8 +1385,16 @@
         '<ol class="sigso-pasos-siguientes">' +
         '<li>Recibirá un <strong>correo de confirmación</strong> con el detalle de su solicitud.</li>' +
         '<li>El equipo responsable la revisará y <strong>comprometerá una fecha de entrega</strong> (se le avisará por correo).</li>' +
-        '<li>Cuando el trabajo esté terminado, deberá <strong>validarlo</strong> desde <a href="estado.html">Consultar estado</a>.</li>' +
+        '<li>Cuando el trabajo esté terminado, deberá <strong>validarlo</strong> desde ' + refConsulta + '.</li>' +
         '</ol>';
+
+    var notaVerTodas = enShell
+      ? '<p class="sigso-ayuda">También puede ver todas sus solicitudes en el módulo "Mis solicitudes".</p>'
+      : '<p class="sigso-ayuda">También puede ver todas sus solicitudes en Consultar estado &rarr; pestaña "Mis solicitudes", con su correo.</p>';
+
+    var botonConsultar = enShell
+      ? '<button type="button" class="sigso-boton" id="btn-ir-mis-solicitudes">Ver mis solicitudes</button>'
+      : '<a class="sigso-boton" href="estado.html?id=' + encodeURIComponent(data.solicitud_id) + '">Ir a Consultar estado</a>';
 
     contenedor.innerHTML =
       '<div class="sigso-resultado-exito">' +
@@ -1385,17 +1406,23 @@
       aviso +
       avisoImagenes +
       queSigue +
-      '<p class="sigso-ayuda">También puede ver todas sus solicitudes en Consultar estado &rarr; pestaña "Mis solicitudes", con su correo.</p>' +
+      notaVerTodas +
       '<p>Resumen para compartir por WhatsApp:</p>' +
       '<pre class="sigso-resumen-whatsapp">' + Componentes.escaparHtml(data.resumen_whatsapp) + '</pre>' +
       '<button type="button" class="sigso-boton--secundario" id="btn-copiar-resumen">Copiar resumen</button> ' +
-      '<a class="sigso-boton" href="estado.html?id=' + encodeURIComponent(data.solicitud_id) + '">Ir a Consultar estado</a>' +
+      botonConsultar +
       '</div>';
     var btnCopiar = document.getElementById('btn-copiar-resumen');
     if (btnCopiar) {
       btnCopiar.addEventListener('click', function () {
         navigator.clipboard.writeText(data.resumen_whatsapp).catch(function () {});
         btnCopiar.textContent = 'Copiado';
+      });
+    }
+    var btnMisSolicitudes = document.getElementById('btn-ir-mis-solicitudes');
+    if (btnMisSolicitudes) {
+      btnMisSolicitudes.addEventListener('click', function () {
+        window.SigsoShell.irAModulo('mis_solicitudes');
       });
     }
     contenedor.classList.remove('sigso-oculto');

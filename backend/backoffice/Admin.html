@@ -1169,10 +1169,9 @@ button {
   margin-top: var(--esp-5) !important;
   padding-top: var(--esp-4);
   border-top: 1px solid rgba(255, 255, 255, 0.22);
-  font-size: var(--texto-xs) !important;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.65) !important;
+  font-size: var(--texto-sm) !important;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.75) !important;
 }
 
 .plataforma-auth__formulario {
@@ -1194,6 +1193,40 @@ button {
 
 .plataforma-login__pie {
   margin-top: 1rem;
+}
+
+/* v5.1: splash de "restaurando sesion" -- pantalla neutra con la marca
+   mientras se valida el token (solo sin cuenta cacheada). */
+.plataforma-cargando {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--fondo-pagina);
+}
+
+.plataforma-cargando__contenido {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--esp-4);
+  color: var(--texto-2);
+}
+
+.plataforma-cargando__contenido .sigso-marca {
+  border-radius: var(--radio-md);
+}
+
+.plataforma-cargando__contenido p {
+  margin: 0;
+  font-size: var(--texto-sm);
+}
+
+/* El spinner base es blanco (pensado para botones); aqui va sobre fondo
+   claro, asi que se recolorea al primario. */
+.plataforma-cargando__contenido .sigso-spinner {
+  border-color: var(--primario-suave);
+  border-top-color: var(--primario);
 }
 
 @media (max-width: 860px) {

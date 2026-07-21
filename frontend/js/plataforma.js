@@ -14,6 +14,11 @@
  */
 (function () {
   var LLAVE_TOKEN = 'sigso_portal_token';
+  // v5.1: se cachea la cuenta junto al token para restaurar la sesion SIN
+  // esperar la red (Apps Script tarda 1-3s). Elimina el parpadeo del login
+  // al recargar: se entra al shell de inmediato con la cuenta cacheada y se
+  // revalida en segundo plano (stale-while-revalidate).
+  var LLAVE_CUENTA = 'sigso_portal_cuenta';
 
   // Catalogo de modulos del shell. `interno: true` = vive en esta pagina;
   // si no, es un enlace externo (transicion P2 -> P3/P4).
@@ -71,6 +76,8 @@
     wireSidebar_();
     wireTour_();
 
+    wireAutorefresco_();
+
     // Sesion guardada: restaurar sin re-loguear. Si expiro, al login.
     var token = null;
     try { token = localStorage.getItem(LLAVE_TOKEN); } catch (err) { /* sin storage */ }
@@ -78,13 +85,26 @@
       mostrarVista_('vista-login');
       return;
     }
+
+    // v5.1: con la cuenta cacheada se entra al shell de INMEDIATO (sin
+    // parpadeo del login ni espera de red) y se revalida el token en
+    // segundo plano. Sin cache, se muestra un splash mientras valida.
+    var cuentaCache = leerCuentaCache_();
+    if (cuentaCache) {
+      iniciarSesion_(token, cuentaCache);
+      revalidarSesionEnSegundoPlano_(token);
+      return;
+    }
+
+    mostrarVista_('vista-cargando');
     llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'portalSesion', { token: token })
       .then(function (respuesta) {
         if (!respuesta.ok) {
-          olvidarToken_();
+          olvidarSesion_();
           mostrarVista_('vista-login');
           return;
         }
+        guardarSesionLocal_(token, respuesta.data.cuenta);
         iniciarSesion_(token, respuesta.data.cuenta);
       })
       .catch(function () {
@@ -92,6 +112,38 @@
         mostrarVista_('vista-login');
       });
   });
+
+  // v5.1: valida el token ya usado para entrar (con cuenta cacheada). Si el
+  // servidor lo rechaza, se cierra sesion; si responde, se refresca la
+  // cuenta por si cambio algo (rol, modulos, nombre). Un fallo de red no
+  // expulsa al usuario: sigue trabajando con la cuenta cacheada.
+  function revalidarSesionEnSegundoPlano_(token) {
+    llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'portalSesion', { token: token })
+      .then(function (respuesta) {
+        if (!respuesta.ok) {
+          manejarLogout_();
+          return;
+        }
+        var cuenta = respuesta.data.cuenta;
+        guardarSesionLocal_(token, cuenta);
+        // Caso raro: un admin marco "debe cambiar clave" desde el servidor
+        // mientras habia sesion cacheada -- se envia al cambio de clave.
+        if (cuenta.debe_cambiar_password) {
+          sesion.cuenta = cuenta;
+          mostrarVista_('vista-cambiar-clave');
+          return;
+        }
+        // Si cambio algo relevante desde la cache, re-render sin recargar.
+        if (JSON.stringify(cuenta) !== JSON.stringify(sesion.cuenta)) {
+          sesion.cuenta = cuenta;
+          if (!document.getElementById('vista-shell').classList.contains('sigso-oculto')) {
+            renderIdentidad_();
+            renderNav_();
+          }
+        }
+      })
+      .catch(function () { /* sin red: seguir con la cuenta cacheada */ });
+  }
 
   // --- login / logout / cambio de clave ---------------------------------
 
@@ -111,7 +163,7 @@
         return;
       }
       document.getElementById('campo-login-password').value = '';
-      guardarToken_(respuesta.data.token);
+      guardarSesionLocal_(respuesta.data.token, respuesta.data.cuenta);
       iniciarSesion_(respuesta.data.token, respuesta.data.cuenta);
     }).catch(function () {
       salida.innerHTML = Componentes.alerta('No se pudo conectar con el servidor. Intenta nuevamente.', 'error');
@@ -140,6 +192,7 @@
         return;
       }
       sesion.cuenta.debe_cambiar_password = false;
+      guardarSesionLocal_(sesion.token, sesion.cuenta);
       entrarAlShell_();
     }).catch(function () {
       salida.innerHTML = Componentes.alerta('No se pudo conectar con el servidor. Intenta nuevamente.', 'error');
@@ -150,7 +203,7 @@
 
   function manejarLogout_() {
     llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'portalLogout', { token: sesion.token }).catch(function () {});
-    olvidarToken_();
+    olvidarSesion_();
     sesion = { token: null, cuenta: null };
     autocompletadoHecho = false;
     mostrarVista_('vista-login');
@@ -182,7 +235,59 @@
     renderNav_();
     renderHome_();
     mostrarModulo_('home');
+    // v5.1: puente para que el formulario (formulario.js, compartido con
+    // index.html) sepa que corre DENTRO del shell y navegue por modulos en
+    // vez de saltar a estado.html (que sacaba al usuario del sistema).
+    window.SigsoShell = {
+      irAModulo: function (id) { mostrarModulo_(id); },
+      tieneModulo: function (id) { return modulosDeLaCuenta_().indexOf(id) !== -1; }
+    };
     setTimeout(iniciarTourSiCorresponde_, 400);
+  }
+
+  // v5.1: auto-refresco al volver a la pestana -- resuelve "hay que recargar
+  // la pagina para ver algo nuevo" SIN el costo (y el parpadeo del login) de
+  // un reload completo. Solo refresca si pasaron >UMBRAL segundos desde la
+  // ultima carga del modulo activo, para no golpear el backend al alternar
+  // de pestana rapido.
+  var UMBRAL_REFRESCO_MS = 20000;
+
+  function wireAutorefresco_() {
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') refrescarModuloActivoSiCorresponde_();
+    });
+    window.addEventListener('focus', refrescarModuloActivoSiCorresponde_);
+  }
+
+  function refrescarModuloActivoSiCorresponde_() {
+    if (!sesion.token || !moduloActivo_) return;
+    if (document.getElementById('vista-shell').classList.contains('sigso-oculto')) return;
+    var ultima = ultimaCargaModulo_[moduloActivo_] || 0;
+    if (Date.now() - ultima < UMBRAL_REFRESCO_MS) return;
+    ultimaCargaModulo_[moduloActivo_] = Date.now();
+    refrescarModuloActivo_();
+  }
+
+  function refrescarModuloActivo_() {
+    switch (moduloActivo_) {
+      case 'home':
+        renderHome_();
+        break;
+      case 'mis_solicitudes':
+        if (window.SigsoMisSolicitudes) window.SigsoMisSolicitudes.cargarConToken(sesion.token);
+        break;
+      case 'bandeja':
+        if (window.SigsoDashboard) window.SigsoDashboard.cargar();
+        break;
+      case 'gerencia':
+        if (window.SigsoGerencia) window.SigsoGerencia.cargar();
+        break;
+      case 'jefatura':
+        if (window.SigsoJefatura) window.SigsoJefatura.cargar();
+        break;
+      default:
+        break; // nueva_solicitud / administracion: sin auto-refresco
+    }
   }
 
   // v5.0 F4 (§6.5): tour de bienvenida -- solo la primera sesion (por
@@ -886,7 +991,14 @@
   // <main> se adapta al modulo en vez de ser fijo.
   var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion'];
 
+  // v5.1: modulo activo + cuando se cargaron por ultima vez sus datos, para
+  // el auto-refresco al volver a la pestana (sin recargar la pagina).
+  var moduloActivo_ = null;
+  var ultimaCargaModulo_ = {};
+
   function mostrarModulo_(id) {
+    moduloActivo_ = id;
+    ultimaCargaModulo_[id] = Date.now();
     // bandeja, gerencia y jefatura comparten la seccion modulo-bandeja
     // (vistas internas dashboard/detalle/gerencia/jefatura, mismo layout
     // que app.html).
@@ -1044,16 +1156,30 @@
   // --- helpers -----------------------------------------------------------
 
   function mostrarVista_(id) {
-    ['vista-login', 'vista-cambiar-clave', 'vista-shell'].forEach(function (vista) {
-      document.getElementById(vista).classList.toggle('sigso-oculto', vista !== id);
+    ['vista-login', 'vista-cambiar-clave', 'vista-cargando', 'vista-shell'].forEach(function (vista) {
+      var el = document.getElementById(vista);
+      if (el) el.classList.toggle('sigso-oculto', vista !== id);
     });
   }
 
-  function guardarToken_(token) {
-    try { localStorage.setItem(LLAVE_TOKEN, token); } catch (err) { /* sin storage: sesion solo en memoria */ }
+  function guardarSesionLocal_(token, cuenta) {
+    try {
+      localStorage.setItem(LLAVE_TOKEN, token);
+      localStorage.setItem(LLAVE_CUENTA, JSON.stringify(cuenta));
+    } catch (err) { /* sin storage: sesion solo en memoria */ }
   }
 
-  function olvidarToken_() {
-    try { localStorage.removeItem(LLAVE_TOKEN); } catch (err) { /* idem */ }
+  function leerCuentaCache_() {
+    try {
+      var crudo = localStorage.getItem(LLAVE_CUENTA);
+      return crudo ? JSON.parse(crudo) : null;
+    } catch (err) { return null; }
+  }
+
+  function olvidarSesion_() {
+    try {
+      localStorage.removeItem(LLAVE_TOKEN);
+      localStorage.removeItem(LLAVE_CUENTA);
+    } catch (err) { /* idem */ }
   }
 })();
