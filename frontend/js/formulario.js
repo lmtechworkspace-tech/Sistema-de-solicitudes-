@@ -1158,9 +1158,23 @@
     };
   }
 
+  // v5.0 F3 (§5.3): "Borrador guardado hace Xs" -- el borrador ya se
+  // guardaba en cada cambio, pero era invisible; ahora lo confirma.
+  function marcarAutosave_() {
+    var indicador = document.getElementById('autosave-indicador');
+    if (!indicador) return;
+    indicador.classList.remove('sigso-oculto');
+    indicador.textContent = 'Borrador guardado justo ahora';
+    clearTimeout(marcarAutosave_.temporizador);
+    marcarAutosave_.temporizador = setTimeout(function () {
+      indicador.textContent = 'Borrador guardado hace un momento';
+    }, 4000);
+  }
+
   function guardarBorrador_() {
     try {
       window.localStorage.setItem(LLAVE_BORRADOR, JSON.stringify(recolectarDatos_()));
+      marcarAutosave_();
     } catch (err) {
       // localStorage puede fallar en modo privado; no es critico para el envio.
     }

@@ -9,21 +9,23 @@
 
 .sigso-kpi {
   background: var(--superficie);
-  border-radius: 8px;
-  padding: 1rem;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
+  padding: 0.85rem 1rem;
   text-align: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--sombra-1);
 }
 
 .sigso-kpi__valor {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--azul);
+  font-size: 1.6rem;
+  font-weight: 600;
+  color: var(--primario);
+  font-variant-numeric: tabular-nums;
 }
 
 .sigso-kpi__etiqueta {
-  font-size: 0.85rem;
-  color: var(--gris-medio);
+  font-size: var(--texto-xs);
+  color: var(--texto-2);
 }
 
 .sigso-kpi--alerta .sigso-kpi__valor {
@@ -43,20 +45,28 @@ button.sigso-kpi {
 }
 
 .sigso-kpi--clicable:hover {
-  box-shadow: 0 0 0 1px var(--azul);
+  box-shadow: 0 0 0 1px var(--primario);
 }
 
 .sigso-kpi--activo {
-  border-color: var(--azul);
-  box-shadow: 0 0 0 2px var(--azul) inset;
+  border-color: var(--primario);
+  box-shadow: 0 0 0 2px var(--primario) inset;
 }
 
 /* UI-5 (§4): "Requieren tu accion" -- primera cosa que ve Leo, antes de los
    KPIs decorativos. Mismo estilo de tarjeta que el resto, sin nada especial
    que lo distinga como "otro tipo de bloque" (ya lo distingue el orden y el
    titulo). */
+/* v5.0 F3 (§5.2): zona destacada -- fondo primario-suave, no solo un card
+   mas en la pila; el ojo debe encontrarla antes que los KPIs decorativos. */
 #contenedor-requieren-accion .sigso-card {
   margin-bottom: 1.5rem;
+  background: var(--primario-suave);
+  border-color: var(--primario-suave);
+}
+
+#contenedor-requieren-accion .sigso-card h3 {
+  color: var(--primario-tinta);
 }
 
 .sigso-filtros {
@@ -68,6 +78,30 @@ button.sigso-kpi {
 }
 
 .sigso-filtros .sigso-campo {
+  margin-bottom: 0;
+  min-width: 160px;
+}
+
+/* v5.0 F3 (§5.2): "Filtros avanzados" -- fila propia debajo de la toolbar,
+   solo visible al expandir (sigso-oculto por defecto en el HTML). */
+.sigso-filtros__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.sigso-filtros__avanzados {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  flex-basis: 100%;
+  padding-top: 0.75rem;
+  margin-top: 0.25rem;
+  border-top: 1px dashed var(--borde);
+}
+
+.sigso-filtros__avanzados .sigso-campo {
   margin-bottom: 0;
   min-width: 160px;
 }
@@ -480,8 +514,8 @@ button.sigso-kpi {
 .sigso-tabla-tablero th,
 .sigso-tabla-tablero td {
   text-align: left;
-  padding: 0.5rem 0.6rem;
-  border-bottom: 1px solid var(--gris-claro);
+  padding: 0.78rem 0.6rem;
+  border-bottom: 1px solid var(--borde);
   white-space: nowrap;
 }
 

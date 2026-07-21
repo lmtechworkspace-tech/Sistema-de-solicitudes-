@@ -36,6 +36,19 @@
     document.getElementById('buscar-recientes').addEventListener('input', renderRecientes_);
     document.getElementById('btn-exportar-csv').addEventListener('click', exportarCSV_);
 
+    // v5.0 F3 (§5.2): Prioridad/Agrupar quedan detras de "Filtros avanzados"
+    // -- la toolbar de una linea no debe pesar tanto como los datos.
+    var btnFiltrosAvanzados = document.getElementById('btn-filtros-avanzados');
+    var panelFiltrosAvanzados = document.getElementById('filtros-avanzados-bandeja');
+    if (btnFiltrosAvanzados && panelFiltrosAvanzados) {
+      document.getElementById('ico-filtros-avanzados').innerHTML = Iconos.svg('filtro', { tam: 14 });
+      btnFiltrosAvanzados.addEventListener('click', function () {
+        var abierto = !panelFiltrosAvanzados.classList.contains('sigso-oculto');
+        panelFiltrosAvanzados.classList.toggle('sigso-oculto', abierto);
+        btnFiltrosAvanzados.setAttribute('aria-expanded', String(!abierto));
+      });
+    }
+
     // UI-5 (§4): tabs Resumen/Analisis -- los graficos (tendencias) no son
     // el trabajo del dia a dia, se sacan de la vista principal.
     document.getElementById('tabs-dashboard').querySelectorAll('[data-tab]').forEach(function (boton) {

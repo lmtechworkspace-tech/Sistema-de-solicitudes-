@@ -243,13 +243,14 @@
   padding: 0.6rem 1rem;
   font-size: 0.95rem;
   font-weight: 600;
-  color: var(--gris-medio);
+  color: var(--texto-2);
   cursor: pointer;
+  transition: color var(--mov-normal), border-color var(--mov-normal);
 }
 
 .sigso-tabs__boton--activo {
-  color: var(--naranja);
-  border-bottom-color: var(--naranja);
+  color: var(--primario);
+  border-bottom-color: var(--primario);
 }
 
 /* Filtros de "Mis solicitudes" (mismo patron visual que .sigso-filtros del
@@ -362,8 +363,8 @@
 
 .sigso-hito--hecho { color: var(--p4); }
 .sigso-hito--hecho .sigso-hito__n { background: var(--p4); color: #fff; }
-.sigso-hito--actual { color: var(--naranja); }
-.sigso-hito--actual .sigso-hito__n { background: var(--naranja); color: #fff; }
+.sigso-hito--actual { color: var(--primario); }
+.sigso-hito--actual .sigso-hito__n { background: var(--primario); color: #fff; }
 
 .sigso-hito__union {
   flex: 0 0 1.1rem;
@@ -372,15 +373,26 @@
   margin: 0 0.15rem;
 }
 
-/* UI-3 (§3): banner de acciones pendientes del solicitante. */
+/* UI-3 (§3): banner de acciones pendientes del solicitante. v5.0 F3: pasa
+   de fondo primario solido (que competia con la unica accion primaria de
+   la pantalla) al semantico de alerta -- es un estado con significado, no
+   una decision de marca. */
 .sigso-banner-accion {
-  background: var(--naranja);
-  color: #fff;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--alerta-suave);
+  color: var(--alerta);
   font-weight: 600;
-  border-radius: 8px;
+  border-radius: var(--radio-sm);
+  border-left: 3px solid var(--alerta);
   padding: 0.7rem 1rem;
   margin-bottom: 1rem;
   font-size: 0.92rem;
+}
+
+.sigso-banner-accion .sigso-ico {
+  flex: none;
 }
 
 /* UI-3 (§3): la fecha comprometida como protagonista. */
@@ -516,26 +528,103 @@
 
 /* ============ v3.3: shell de la plataforma ============ */
 
-/* Login centrado, tarjeta sola en la pantalla. */
-.plataforma-login {
+/* v5.0 F3 (§5.7): login split-screen -- panel de marca a la izquierda con
+   un patron geometrico de puntos (CSS puro, nunca una foto de stock: es lo
+   primero que delata un rediseño generado por IA), formulario a la derecha. */
+.plataforma-auth {
   min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.plataforma-auth__marca {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  padding: var(--esp-6);
+  background: linear-gradient(155deg, var(--primario-tinta), var(--primario-intenso));
+  color: #fff;
+  overflow: hidden;
 }
 
-.plataforma-login__card {
+.plataforma-auth__marca::before {
+  content: '';
+  position: absolute;
+  inset: -15%;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.16) 1.5px, transparent 1.5px);
+  background-size: 28px 28px;
+  transform: rotate(-9deg);
+  pointer-events: none;
+}
+
+.plataforma-auth__marca-contenido {
+  position: relative;
+  max-width: 22rem;
+}
+
+.plataforma-auth__marca-contenido .sigso-marca {
+  border-radius: var(--radio-md);
+  margin-bottom: var(--esp-4);
+}
+
+.plataforma-auth__marca-contenido h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 var(--esp-2);
+}
+
+.plataforma-auth__marca-contenido p {
+  margin: 0;
+  font-size: var(--texto-base);
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.plataforma-auth__marca-pie {
+  margin-top: var(--esp-5) !important;
+  padding-top: var(--esp-4);
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+  font-size: var(--texto-xs) !important;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+.plataforma-auth__formulario {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--esp-6);
+  background: var(--superficie);
+}
+
+.plataforma-auth__form {
   width: 100%;
-  max-width: 24rem;
+  max-width: 22rem;
 }
 
-.plataforma-login__card h1 {
-  margin-bottom: 0.25rem;
+.plataforma-auth__form h2 {
+  margin: 0 0 0.25rem;
 }
 
 .plataforma-login__pie {
   margin-top: 1rem;
+}
+
+@media (max-width: 860px) {
+  .plataforma-auth {
+    grid-template-columns: 1fr;
+  }
+
+  .plataforma-auth__marca {
+    padding: var(--esp-5);
+    min-height: 12rem;
+  }
+
+  .plataforma-auth__marca-contenido h1 {
+    font-size: 1.5rem;
+  }
 }
 
 /* ============ v5.0 F2: shell con sidebar ============
@@ -1342,6 +1431,67 @@
   color: var(--texto-2);
   font-size: var(--texto-sm);
   text-transform: capitalize;
+}
+
+/* v5.0 F3 (§5.1): resumen del dia + actividad reciente del Home. */
+.plataforma-home__subtitulo {
+  margin: var(--esp-6) 0 var(--esp-3);
+  font-size: var(--texto-sm);
+  font-weight: 600;
+  color: var(--texto-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-left: none !important;
+  padding-left: 0 !important;
+}
+
+#kpis-home.sigso-kpis {
+  margin-bottom: var(--esp-2);
+}
+
+.plataforma-reciente__lista {
+  padding: 0;
+  overflow: hidden;
+}
+
+.plataforma-reciente__fila {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-3);
+  width: 100%;
+  padding: 0.65rem var(--esp-4);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--borde);
+  font: inherit;
+  font-size: var(--texto-sm);
+  color: var(--texto);
+  cursor: pointer;
+  text-align: left;
+}
+
+.plataforma-reciente__fila:last-child {
+  border-bottom: none;
+}
+
+.plataforma-reciente__fila:hover {
+  background: var(--superficie-2);
+}
+
+.plataforma-reciente__meta {
+  flex: 1;
+  min-width: 0;
+  color: var(--texto-2);
+  font-size: var(--texto-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plataforma-reciente__estado {
+  color: var(--texto-2);
+  font-size: var(--texto-xs);
+  white-space: nowrap;
 }
 
 /* =====================================================================

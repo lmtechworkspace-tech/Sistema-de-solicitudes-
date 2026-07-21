@@ -32,49 +32,80 @@
        archivos, sin bifurcar). -->
 
   <!-- ============ Vista: login ============ -->
-  <div id="vista-login" class="plataforma-login">
-    <form id="form-login" class="sigso-card plataforma-login__card" novalidate>
-      <h1>SIGSO</h1>
-      <p class="sigso-ayuda">Plataforma de gesti&oacute;n de solicitudes — HomePymes / GDE / RLD</p>
-      <div class="sigso-campo">
-        <label for="campo-login-usuario">Usuario</label>
-        <input type="text" id="campo-login-usuario" autocomplete="username" required />
+  <!-- v5.0 F3 (§5.7): split-screen -- panel de marca a la izquierda (indigo,
+       patron geometrico via CSS, nunca foto de stock) + formulario a la
+       derecha. El panel de marca se duplica en la vista de cambio de clave
+       (mismo criterio de duplicacion deliberada del proyecto) para no
+       depender de JS extra al alternar entre ambas vistas. -->
+  <div id="vista-login" class="plataforma-auth">
+    <aside class="plataforma-auth__marca">
+      <div class="plataforma-auth__marca-contenido">
+        <svg class="sigso-marca" width="40" height="40" viewBox="0 0 32 32" aria-hidden="true">
+          <rect width="32" height="32" rx="8" fill="#fff"></rect>
+          <text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#6D5DF6" text-anchor="middle">S</text>
+        </svg>
+        <h1>SIGSO</h1>
+        <p>Sistema Integral de Gesti&oacute;n de Solicitudes</p>
+        <p class="plataforma-auth__marca-pie">HomePymes &middot; GDE &middot; RLD</p>
       </div>
-      <div class="sigso-campo">
-        <label for="campo-login-password">Contrase&ntilde;a</label>
-        <input type="password" id="campo-login-password" autocomplete="current-password" required />
-      </div>
-      <button type="submit" class="sigso-boton" id="btn-login">Ingresar</button>
-      <div id="resultado-login"></div>
-      <p class="sigso-ayuda plataforma-login__pie">
-        &iquest;No tienes cuenta o la olvidaste? P&iacute;dela al administrador del sistema.<br />
-        Tambi&eacute;n puedes <a href="index.html">ingresar una solicitud sin cuenta</a> o
-        <a href="estado.html">consultar por n&uacute;mero</a>.
-      </p>
-    </form>
+    </aside>
+    <div class="plataforma-auth__formulario">
+      <form id="form-login" class="plataforma-auth__form" novalidate>
+        <h2>Ingresar</h2>
+        <p class="sigso-ayuda">Usa tu cuenta de la plataforma para continuar.</p>
+        <div class="sigso-campo">
+          <label for="campo-login-usuario">Usuario</label>
+          <input type="text" id="campo-login-usuario" autocomplete="username" required />
+        </div>
+        <div class="sigso-campo">
+          <label for="campo-login-password">Contrase&ntilde;a</label>
+          <input type="password" id="campo-login-password" autocomplete="current-password" required />
+        </div>
+        <button type="submit" class="sigso-boton" id="btn-login">Ingresar</button>
+        <div id="resultado-login"></div>
+        <p class="sigso-ayuda plataforma-login__pie">
+          &iquest;No tienes cuenta o la olvidaste? P&iacute;dela al administrador del sistema.<br />
+          Tambi&eacute;n puedes <a href="index.html">ingresar una solicitud sin cuenta</a> o
+          <a href="estado.html">consultar por n&uacute;mero</a>.
+        </p>
+      </form>
+    </div>
   </div>
 
   <!-- ============ Vista: cambio de clave obligatorio ============ -->
-  <div id="vista-cambiar-clave" class="plataforma-login sigso-oculto">
-    <form id="form-cambiar-clave" class="sigso-card plataforma-login__card" novalidate>
-      <h1>Elige tu contrase&ntilde;a</h1>
-      <p class="sigso-ayuda">Recibiste una clave temporal: por seguridad, define ahora una propia
-        (m&iacute;nimo 8 caracteres, distinta de la del correo).</p>
-      <div class="sigso-campo">
-        <label for="campo-clave-actual">Contrase&ntilde;a temporal</label>
-        <input type="password" id="campo-clave-actual" autocomplete="current-password" required />
+  <div id="vista-cambiar-clave" class="plataforma-auth sigso-oculto">
+    <aside class="plataforma-auth__marca">
+      <div class="plataforma-auth__marca-contenido">
+        <svg class="sigso-marca" width="40" height="40" viewBox="0 0 32 32" aria-hidden="true">
+          <rect width="32" height="32" rx="8" fill="#fff"></rect>
+          <text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#6D5DF6" text-anchor="middle">S</text>
+        </svg>
+        <h1>SIGSO</h1>
+        <p>Sistema Integral de Gesti&oacute;n de Solicitudes</p>
+        <p class="plataforma-auth__marca-pie">HomePymes &middot; GDE &middot; RLD</p>
       </div>
-      <div class="sigso-campo">
-        <label for="campo-clave-nueva">Contrase&ntilde;a nueva</label>
-        <input type="password" id="campo-clave-nueva" autocomplete="new-password" required />
-      </div>
-      <div class="sigso-campo">
-        <label for="campo-clave-repetir">Repite la contrase&ntilde;a nueva</label>
-        <input type="password" id="campo-clave-repetir" autocomplete="new-password" required />
-      </div>
-      <button type="submit" class="sigso-boton" id="btn-cambiar-clave">Guardar y entrar</button>
-      <div id="resultado-cambiar-clave"></div>
-    </form>
+    </aside>
+    <div class="plataforma-auth__formulario">
+      <form id="form-cambiar-clave" class="plataforma-auth__form" novalidate>
+        <h2>Elige tu contrase&ntilde;a</h2>
+        <p class="sigso-ayuda">Recibiste una clave temporal: por seguridad, define ahora una propia
+          (m&iacute;nimo 8 caracteres, distinta de la del correo).</p>
+        <div class="sigso-campo">
+          <label for="campo-clave-actual">Contrase&ntilde;a temporal</label>
+          <input type="password" id="campo-clave-actual" autocomplete="current-password" required />
+        </div>
+        <div class="sigso-campo">
+          <label for="campo-clave-nueva">Contrase&ntilde;a nueva</label>
+          <input type="password" id="campo-clave-nueva" autocomplete="new-password" required />
+        </div>
+        <div class="sigso-campo">
+          <label for="campo-clave-repetir">Repite la contrase&ntilde;a nueva</label>
+          <input type="password" id="campo-clave-repetir" autocomplete="new-password" required />
+        </div>
+        <button type="submit" class="sigso-boton" id="btn-cambiar-clave">Guardar y entrar</button>
+        <div id="resultado-cambiar-clave"></div>
+      </form>
+    </div>
   </div>
 
   <!-- ============ Shell: sidebar + modulos ============ -->
@@ -148,12 +179,19 @@
         <h1 id="saludo-home"></h1>
         <p class="plataforma-home__fecha" id="fecha-home"></p>
         <div id="pendientes-home"></div>
+        <!-- v5.0 F3 (§5.1): resumen del dia (KPIs de la bandeja, si la cuenta
+             la tiene) + actividad reciente -- composicion sobre datos que ya
+             se piden hoy para el badge del nav, sin backend nuevo. -->
+        <div id="kpis-home" class="sigso-oculto"></div>
+        <div id="reciente-home" class="sigso-oculto"></div>
+        <h2 class="plataforma-home__subtitulo">Accesos r&aacute;pidos</h2>
         <div class="plataforma-cards" id="cards-home"></div>
       </section>
 
       <!-- ===== Modulo: nueva solicitud (markup de index.html) ===== -->
       <section id="modulo-nueva_solicitud" class="plataforma-modulo sigso-oculto">
         <div id="contenedor-stepper"></div>
+        <p class="plataforma-autosave sigso-oculto" id="autosave-indicador"></p>
 
         <form id="form-solicitud" class="sigso-card" novalidate>
           <h1>Nueva solicitud</h1>
@@ -417,6 +455,9 @@
             <span id="resultado-derivar-lote"></span>
           </div>
 
+          <!-- v5.0 F3 (§5.2): toolbar de una linea -- Empresa/Estado quedan
+               siempre visibles, Prioridad/Agrupar detras de "Filtros
+               avanzados". -->
           <div class="sigso-filtros">
             <div class="sigso-campo">
               <label for="filtro-empresa">Empresa</label>
@@ -427,23 +468,31 @@
               <select id="filtro-estado"><option value="">Todos</option></select>
             </div>
             <div class="sigso-campo">
-              <label for="filtro-prioridad">Prioridad</label>
-              <select id="filtro-prioridad">
-                <option value="">Todas</option>
-                <option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option>
-                <option value="P4">P4</option><option value="P5">P5</option>
-              </select>
-            </div>
-            <div class="sigso-campo">
-              <label for="filtro-agrupar">Agrupar</label>
-              <select id="filtro-agrupar">
-                <option value="">Sin agrupar</option>
-                <option value="estado_derivado">Por estado</option>
-                <option value="prioridad_derivada">Por prioridad</option>
-              </select>
+              <button type="button" class="sigso-boton--secundario sigso-filtros__toggle" id="btn-filtros-avanzados"
+                      aria-expanded="false" aria-controls="filtros-avanzados-bandeja">
+                <span id="ico-filtros-avanzados"></span> Filtros avanzados
+              </button>
             </div>
             <div class="sigso-campo">
               <button type="button" class="sigso-boton--secundario" id="btn-actualizar-dashboard">Actualizar</button>
+            </div>
+            <div class="sigso-filtros__avanzados sigso-oculto" id="filtros-avanzados-bandeja">
+              <div class="sigso-campo">
+                <label for="filtro-prioridad">Prioridad</label>
+                <select id="filtro-prioridad">
+                  <option value="">Todas</option>
+                  <option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option>
+                  <option value="P4">P4</option><option value="P5">P5</option>
+                </select>
+              </div>
+              <div class="sigso-campo">
+                <label for="filtro-agrupar">Agrupar</label>
+                <select id="filtro-agrupar">
+                  <option value="">Sin agrupar</option>
+                  <option value="estado_derivado">Por estado</option>
+                  <option value="prioridad_derivada">Por prioridad</option>
+                </select>
+              </div>
             </div>
           </div>
 

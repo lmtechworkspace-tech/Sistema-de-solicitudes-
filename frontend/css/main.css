@@ -79,6 +79,14 @@ h4 {
   letter-spacing: 0.01em;
 }
 
+/* v5.0 F3 (§5.3): indicador de autosave del formulario -- discreto, no
+   compite con el contenido, pero confirma que el borrador quedo guardado. */
+.plataforma-autosave {
+  margin: 0 0 var(--esp-3);
+  font-size: var(--texto-xs);
+  color: var(--texto-3);
+}
+
 /* Foco visible por teclado en todo el sistema: anillo del primario con
    separacion del fondo (§1.4) en vez del outline pegado. */
 :focus-visible {

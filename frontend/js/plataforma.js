@@ -463,15 +463,61 @@
     }
 
     // Bandeja: lo que esta fuera de plazo es lo que necesita accion hoy.
+    // v5.0 F3 (§5.1): el mismo llamado que ya se hacia solo para el badge
+    // ahora tambien arma el resumen del dia (4 KPIs) y la actividad
+    // reciente del Home -- sin pedirle nada nuevo al backend.
     if (modulosDeLaCuenta_().indexOf('bandeja') !== -1 && backofficeDisponible_()) {
       llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getDashboardData', {})
         .then(function (respuesta) {
-          if (respuesta.ok) {
-            pintarBadge_('bandeja', respuesta.data.resumen.sla_vencido);
-          }
+          if (!respuesta.ok) return;
+          pintarBadge_('bandeja', respuesta.data.resumen.sla_vencido);
+          renderKpisHome_(respuesta.data.resumen);
+          renderRecienteHome_(respuesta.data.recientes || []);
         })
         .catch(function () {});
     }
+  }
+
+  var ETIQUETA_ESTADO_HOME = {
+    S01: 'Ingresada', S02: 'En revisión', S03: 'En desarrollo', S04: 'En prueba',
+    S05: 'Lista para validar', S06: 'Pausada', S07: 'Bloqueada', S08: 'Rechazada',
+    S09: 'Terminada', S10: 'Validada', S11: 'Cancelada'
+  };
+
+  function renderKpisHome_(resumen) {
+    var cont = document.getElementById('kpis-home');
+    if (!cont) return;
+    cont.className = 'sigso-kpis';
+    cont.innerHTML =
+      Componentes.kpi({ valor: resumen.total_abiertas, etiqueta: 'Abiertas', titulo: 'Solicitudes que aún no están cerradas, rechazadas ni canceladas.' }) +
+      Componentes.kpi({ valor: resumen.criticas_activas, etiqueta: 'Críticas activas', alerta: true, titulo: 'Solicitudes abiertas de prioridad P1.' }) +
+      Componentes.kpi({ valor: resumen.sla_vencido, etiqueta: 'Fuera de plazo', alerta: true, titulo: 'Ítems que ya pasaron su tiempo objetivo de respuesta.' }) +
+      Componentes.kpi({ valor: resumen.del_dia, etiqueta: 'Ingresadas hoy', titulo: 'Solicitudes creadas hoy.' });
+    cont.querySelectorAll('.sigso-kpi').forEach(function (tile) {
+      tile.addEventListener('click', function () { mostrarModulo_('bandeja'); });
+      tile.style.cursor = 'pointer';
+    });
+  }
+
+  function renderRecienteHome_(recientes) {
+    var cont = document.getElementById('reciente-home');
+    if (!cont || !recientes.length) return;
+    cont.className = 'plataforma-reciente';
+    cont.innerHTML =
+      '<h2 class="plataforma-home__subtitulo">Actividad reciente</h2>' +
+      '<div class="sigso-card plataforma-reciente__lista">' +
+      recientes.slice(0, 5).map(function (s) {
+        return '<button type="button" class="plataforma-reciente__fila" data-ir-solicitud="' + Componentes.escaparHtml(s.solicitud_id) + '">' +
+          '<span class="sigso-id">' + Componentes.escaparHtml(s.solicitud_id) + '</span>' +
+          '<span class="plataforma-reciente__meta">' + Componentes.escaparHtml(s.empresa_id) + ' &middot; ' + Componentes.escaparHtml(s.modulo || '—') + '</span>' +
+          '<span class="sigso-badge sigso-badge--' + Componentes.escaparHtml(s.prioridad_derivada) + '">' + Componentes.escaparHtml(s.prioridad_derivada) + '</span>' +
+          '<span class="plataforma-reciente__estado">' + Componentes.escaparHtml(ETIQUETA_ESTADO_HOME[s.estado_derivado] || s.estado_derivado) + '</span>' +
+          '</button>';
+      }).join('') +
+      '</div>';
+    cont.querySelectorAll('[data-ir-solicitud]').forEach(function (fila) {
+      fila.addEventListener('click', function () { mostrarModulo_('bandeja'); });
+    });
   }
 
   // v4.0: mostrar/ocultar la contrasena. Con claves temporales del tipo

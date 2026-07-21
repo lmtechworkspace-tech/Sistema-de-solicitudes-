@@ -56,6 +56,9 @@
         <span id="resultado-derivar-lote"></span>
       </div>
 
+      <!-- v5.0 F3 (§5.2): toolbar de una linea -- Empresa/Estado quedan
+           siempre visibles (los mas usados), Prioridad/Agrupar pasan detras
+           de "Filtros avanzados" para no pesar tanto como los datos. -->
       <div class="sigso-filtros">
         <div class="sigso-campo">
           <label for="filtro-empresa">Empresa</label>
@@ -66,25 +69,33 @@
           <select id="filtro-estado"><option value="">Todos</option></select>
         </div>
         <div class="sigso-campo">
-          <label for="filtro-prioridad">Prioridad</label>
-          <select id="filtro-prioridad">
-            <option value="">Todas</option>
-            <option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option>
-            <option value="P4">P4</option><option value="P5">P5</option>
-          </select>
-        </div>
-        <div class="sigso-campo">
-          <label for="filtro-agrupar">Agrupar</label>
-          <select id="filtro-agrupar">
-            <option value="">Sin agrupar</option>
-            <option value="estado_derivado">Por estado</option>
-            <option value="prioridad_derivada">Por prioridad</option>
-          </select>
+          <button type="button" class="sigso-boton--secundario sigso-filtros__toggle" id="btn-filtros-avanzados"
+                  aria-expanded="false" aria-controls="filtros-avanzados-bandeja">
+            <span id="ico-filtros-avanzados"></span> Filtros avanzados
+          </button>
         </div>
         <div class="sigso-campo">
           <!-- UI-1 (§1): "Actualizar" es acción de apoyo, no la principal
                de la pantalla -- pasa a estilo secundario. -->
           <button type="button" class="sigso-boton--secundario" id="btn-actualizar-dashboard">Actualizar</button>
+        </div>
+        <div class="sigso-filtros__avanzados sigso-oculto" id="filtros-avanzados-bandeja">
+          <div class="sigso-campo">
+            <label for="filtro-prioridad">Prioridad</label>
+            <select id="filtro-prioridad">
+              <option value="">Todas</option>
+              <option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option>
+              <option value="P4">P4</option><option value="P5">P5</option>
+            </select>
+          </div>
+          <div class="sigso-campo">
+            <label for="filtro-agrupar">Agrupar</label>
+            <select id="filtro-agrupar">
+              <option value="">Sin agrupar</option>
+              <option value="estado_derivado">Por estado</option>
+              <option value="prioridad_derivada">Por prioridad</option>
+            </select>
+          </div>
         </div>
       </div>
 

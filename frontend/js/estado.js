@@ -254,7 +254,7 @@
     if (porValidar > 0) avisos.push(porValidar + ' ítem(s) esperando tu validación');
     if (porResponder > 0) avisos.push(porResponder + ' pregunta(s) del equipo por responder');
     if (avisos.length === 0) return '';
-    return '<div class="sigso-banner-accion">⚡ Tienes ' + avisos.join(' y ') +
+    return '<div class="sigso-banner-accion">' + Iconos.svg('alerta', { tam: 16 }) + ' Tienes ' + avisos.join(' y ') +
       ' — están más abajo, expandidos.</div>';
   }
 
