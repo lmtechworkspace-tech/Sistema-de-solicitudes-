@@ -585,10 +585,9 @@
   margin-top: var(--esp-5) !important;
   padding-top: var(--esp-4);
   border-top: 1px solid rgba(255, 255, 255, 0.22);
-  font-size: var(--texto-xs) !important;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.65) !important;
+  font-size: var(--texto-sm) !important;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.75) !important;
 }
 
 .plataforma-auth__formulario {
