@@ -159,6 +159,53 @@
 
     <div class="plataforma-sidebar__telon sigso-oculto" id="telon-sidebar"></div>
 
+    <!-- v5.0 F4 (§6.1/6.2): command palette (Ctrl+K) -- buscar y saltar sin
+         soltar el teclado. Indice en memoria (modulos de la cuenta +
+         recientes ya cargados), sin backend nuevo. -->
+    <div class="sigso-paleta__telon sigso-oculto" id="paleta-telon"></div>
+    <div class="sigso-paleta sigso-oculto" id="paleta-comandos" role="dialog" aria-modal="true" aria-label="Buscar y saltar">
+      <div class="sigso-paleta__buscador">
+        <span id="ico-paleta-buscar"></span>
+        <input type="text" id="paleta-input" placeholder="Buscar una pantalla o una solicitud (Nº, empresa, módulo)…" autocomplete="off" />
+        <kbd>Esc</kbd>
+      </div>
+      <div class="sigso-paleta__resultados" id="paleta-resultados"></div>
+    </div>
+
+    <!-- v5.0 F4 (§6.2): hoja de atajos (?) -- referencia rapida, no un tour. -->
+    <div class="sigso-paleta__telon sigso-oculto" id="atajos-telon"></div>
+    <div class="sigso-atajos sigso-oculto" id="panel-atajos" role="dialog" aria-modal="true" aria-label="Atajos de teclado">
+      <div class="sigso-drawer__cab">
+        <h2>Atajos de teclado</h2>
+        <button type="button" class="sigso-drawer__cerrar" id="btn-cerrar-atajos" aria-label="Cerrar"><span id="ico-cerrar-atajos"></span></button>
+      </div>
+      <ul class="sigso-atajos__lista">
+        <li><kbd>Ctrl</kbd> + <kbd>K</kbd><span>Buscar y saltar</span></li>
+        <li><kbd>N</kbd><span>Nueva solicitud</span></li>
+        <li><kbd>G</kbd> luego <kbd>B</kbd><span>Ir a Bandeja de trabajo</span></li>
+        <li><kbd>/</kbd><span>Foco en el buscador de la bandeja</span></li>
+        <li><kbd>Esc</kbd><span>Cerrar lo que esté abierto</span></li>
+        <li><kbd>?</kbd><span>Esta hoja de atajos</span></li>
+      </ul>
+    </div>
+
+    <!-- v5.0 F4 (§6.5): tour de bienvenida -- solo la primera sesion,
+         guardado en localStorage. Sin dimming de pantalla completa (evita
+         complejidad de mascara/z-index): un anillo en el elemento senalado
+         alcanza para orientar sin tapar nada. -->
+    <div class="sigso-tour sigso-oculto" id="tour-bienvenida" role="dialog" aria-modal="false" aria-label="Tour de bienvenida">
+      <p class="sigso-tour__paso" id="tour-paso-contador"></p>
+      <h3 id="tour-titulo"></h3>
+      <p id="tour-texto"></p>
+      <div class="sigso-tour__pie">
+        <button type="button" class="sigso-boton--secundario" id="btn-tour-saltar">Saltar</button>
+        <div class="sigso-tour__nav">
+          <button type="button" class="sigso-boton--secundario" id="btn-tour-atras">Atrás</button>
+          <button type="button" class="sigso-boton" id="btn-tour-siguiente">Siguiente</button>
+        </div>
+      </div>
+    </div>
+
     <div class="plataforma-main">
       <div class="plataforma-topbar">
         <button type="button" class="plataforma-topbar__hamburguesa" id="btn-abrir-sidebar" aria-label="Abrir menú">

@@ -1786,11 +1786,11 @@ button {
    con el titulo "script.google.com dice:". */
 .sigso-avisos {
   position: fixed;
-  top: 1rem;
+  bottom: 1rem;
   right: 1rem;
   z-index: 1000;
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;
   gap: 0.6rem;
   max-width: min(380px, calc(100vw - 2rem));
 }
@@ -1805,17 +1805,19 @@ button {
   border-radius: var(--radio-md);
   box-shadow: var(--sombra-3);
   padding: 0.8rem 0.9rem;
-  animation: sigso-aviso-entrar 0.18s ease-out;
+  /* v5.0 F4 (§6.4): entra desde abajo, no desde el costado -- el toast
+     "aparece" en vez de "deslizarse", que se siente mas app y menos web. */
+  animation: sigso-aviso-entrar var(--mov-entrada) ease-out;
 }
 
 @keyframes sigso-aviso-entrar {
-  from { opacity: 0; transform: translateX(16px); }
+  from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: none; }
 }
 
 .sigso-aviso--saliendo {
   opacity: 0;
-  transform: translateX(16px);
+  transform: translateY(12px);
   transition: opacity 0.2s, transform 0.2s;
 }
 
@@ -1824,6 +1826,18 @@ button {
 
 .sigso-aviso__icono { flex: none; margin-top: 0.1rem; }
 .sigso-aviso--exito .sigso-aviso__icono { color: var(--ok); }
+
+/* v5.0 F4 (§6.4): el check se dibuja en vez de aparecer de golpe -- la
+   confirmacion de "quedo guardado" se siente, no solo se lee. */
+.sigso-aviso--exito .sigso-aviso__icono svg path {
+  stroke-dasharray: 24;
+  stroke-dashoffset: 24;
+  animation: sigso-check-dibujar 0.35s ease-out 0.05s forwards;
+}
+
+@keyframes sigso-check-dibujar {
+  to { stroke-dashoffset: 0; }
+}
 .sigso-aviso--error .sigso-aviso__icono { color: var(--critico); }
 .sigso-aviso--info  .sigso-aviso__icono { color: var(--info); }
 
@@ -2364,6 +2378,235 @@ button {
   flex-wrap: wrap;
   gap: 0.4rem;
   margin-top: 0.3rem;
+}
+
+/* =====================================================================
+   v5.0 F4 (§6.1/6.2) — command palette + hoja de atajos
+   ===================================================================== */
+
+.sigso-paleta__telon {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  z-index: 60;
+}
+
+.sigso-paleta {
+  position: fixed;
+  top: 12vh;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 36rem;
+  max-height: 70vh;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-2);
+  z-index: 65;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: sigso-paleta-entrada var(--mov-entrada) ease-out;
+}
+
+@keyframes sigso-paleta-entrada {
+  from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.sigso-paleta__buscador {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: var(--esp-4) var(--esp-5);
+  border-bottom: 1px solid var(--borde);
+  flex: none;
+  color: var(--texto-3);
+}
+
+.sigso-paleta__buscador input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: var(--texto-base);
+  color: var(--texto);
+  padding: 0;
+}
+
+.sigso-paleta__buscador kbd {
+  font-family: var(--fuente-mono);
+  font-size: var(--texto-xs);
+  color: var(--texto-3);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-sm);
+  padding: 0.1rem 0.4rem;
+}
+
+.sigso-paleta__resultados {
+  overflow-y: auto;
+  padding: var(--esp-2);
+}
+
+.sigso-paleta__grupo {
+  padding: 0.4rem 0.75rem 0.2rem;
+  font-size: var(--texto-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--texto-3);
+}
+
+.sigso-paleta__item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  background: transparent;
+  border: none;
+  border-radius: var(--radio-sm);
+  font: inherit;
+  font-size: var(--texto-sm);
+  color: var(--texto);
+  cursor: pointer;
+  text-align: left;
+}
+
+.sigso-paleta__item strong {
+  font-weight: 500;
+}
+
+.sigso-paleta__item span {
+  color: var(--texto-3);
+  font-size: var(--texto-xs);
+}
+
+.sigso-paleta__item--activo {
+  background: var(--primario-suave);
+  color: var(--primario-tinta);
+}
+
+.sigso-paleta__vacio {
+  padding: var(--esp-5);
+  text-align: center;
+  color: var(--texto-3);
+  font-size: var(--texto-sm);
+}
+
+/* Hoja de atajos: mismo look que el drawer, pero centrada y angosta. */
+.sigso-atajos {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  max-width: 24rem;
+  max-height: 80vh;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-2);
+  z-index: 65;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sigso-atajos__lista {
+  list-style: none;
+  margin: 0;
+  padding: var(--esp-2) var(--esp-5) var(--esp-5);
+}
+
+.sigso-atajos__lista li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--borde);
+  font-size: var(--texto-sm);
+}
+
+.sigso-atajos__lista li:last-child {
+  border-bottom: none;
+}
+
+.sigso-atajos__lista kbd {
+  font-family: var(--fuente-mono);
+  font-size: var(--texto-xs);
+  background: var(--superficie-2);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-sm);
+  padding: 0.1rem 0.45rem;
+}
+
+.sigso-atajos__lista span {
+  margin-left: auto;
+  color: var(--texto-2);
+}
+
+/* =====================================================================
+   v5.0 F4 (§6.5) — tour de bienvenida
+   ===================================================================== */
+
+.sigso-tour {
+  position: fixed;
+  width: 100%;
+  max-width: 19rem;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-2);
+  padding: var(--esp-4) var(--esp-5) var(--esp-5);
+  z-index: 70;
+  animation: sigso-tour-entrada var(--mov-entrada) ease-out;
+}
+
+@keyframes sigso-tour-entrada {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.sigso-tour__paso {
+  margin: 0 0 0.3rem;
+  font-size: var(--texto-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--primario);
+}
+
+.sigso-tour h3 {
+  margin: 0 0 0.4rem;
+  font-size: var(--texto-base);
+}
+
+.sigso-tour p:not(.sigso-tour__paso) {
+  margin: 0 0 var(--esp-4);
+  font-size: var(--texto-sm);
+  color: var(--texto-2);
+}
+
+.sigso-tour__pie {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.sigso-tour__nav {
+  display: flex;
+  gap: 0.4rem;
+}
+
+/* El anillo que orienta sin oscurecer el resto de la pantalla. */
+.sigso-tour-resaltado {
+  position: relative;
+  z-index: 71;
+  box-shadow: 0 0 0 3px var(--superficie), 0 0 0 5px var(--primario);
+  border-radius: var(--radio-sm);
 }
 
 </style>
@@ -3021,13 +3264,15 @@ button.sigso-kpi {
 .sigso-encabezado-reporte h1 {
   margin: 0 0 0.15rem;
   font-size: 1.3rem;
-  color: var(--azul);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--texto);
 }
 
 .sigso-encabezado-reporte p {
   margin: 0.25rem 0 0;
   font-size: 0.8rem;
-  color: var(--gris-medio);
+  color: var(--texto-2);
 }
 
 /* Horizontal: el tablero tiene 10 columnas -- en vertical (carta/A4) el
@@ -3038,6 +3283,19 @@ button.sigso-kpi {
 }
 
 @media print {
+  /* v5.0 F4 (§6.6): el papel es siempre claro -- si quien imprime tiene
+     modo oscuro activo, el reporte no debe salir con fondo oscuro (o
+     peor, texto claro invisible si el navegador no imprime fondos). */
+  :root {
+    --fondo-pagina: #F8FAFC;
+    --superficie: #FFFFFF;
+    --superficie-2: #F1F4F9;
+    --borde: #E5E8EF;
+    --texto: #0F172A;
+    --texto-2: #5B6474;
+    --texto-3: #8A93A5;
+  }
+
   .sigso-header,
   .sigso-no-imprimir,
   #btn-volver-dashboard-gerencia,
@@ -4387,6 +4645,17 @@ var Iconos = (function () {
 
   function cargarDashboard_() {
     var filtros = leerFiltros_();
+    // v5.0 F4 (§6.3): esqueleto en vez del "blank flash" mientras se pide
+    // getDashboardData -- ya existia el componente (Componentes.esqueleto),
+    // solo faltaba pintarlo antes de la llamada. Los KPI van sueltos (no
+    // envueltos en .sigso-esq) para que la grilla de 4 columnas los reparta
+    // igual que a los reales, en vez de apilarlos en una sola celda.
+    document.getElementById('contenedor-kpis').innerHTML = new Array(4).fill(
+      '<div class="sigso-kpi sigso-esq__tarjeta" aria-busy="true">' +
+      '<span class="sigso-esq__barra" style="width:40%;height:22px;margin:0 auto 0.5rem"></span>' +
+      '<span class="sigso-esq__barra" style="width:65%;height:10px;margin:0 auto"></span></div>'
+    ).join('');
+    document.getElementById('lista-recientes').innerHTML = Componentes.esqueleto({ filas: 5 });
     return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getDashboardData', filtros).then(function (respuesta) {
       if (!respuesta.ok) {
         // Antes un error del backend dejaba el dashboard en blanco sin avisar
@@ -5621,6 +5890,14 @@ var Iconos = (function () {
 
   function cargarGerencia_() {
     categoriaActiva = null;
+    // v5.0 F4 (§6.3): esqueleto mientras se pide getPanelGerencia -- mismo
+    // patron que Bandeja (dashboard.js), KPI sueltos para que la grilla
+    // reparta las 4 tarjetas como a las reales.
+    document.getElementById('ger-contenedor-kpis').innerHTML = new Array(4).fill(
+      '<div class="sigso-kpi sigso-esq__tarjeta" aria-busy="true">' +
+      '<span class="sigso-esq__barra" style="width:40%;height:22px;margin:0 auto 0.5rem"></span>' +
+      '<span class="sigso-esq__barra" style="width:65%;height:10px;margin:0 auto"></span></div>'
+    ).join('');
     return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getPanelGerencia', leerFiltrosServidor_())
       .then(function (respuesta) {
         if (!respuesta.ok) {
@@ -6201,6 +6478,13 @@ var Iconos = (function () {
   });
 
   function cargarJefatura_() {
+    // v5.0 F4 (§6.3): mismo esqueleto que Gerencia/Bandeja mientras se pide
+    // getPanelJefatura.
+    document.getElementById('jef-contenedor-kpis').innerHTML = new Array(4).fill(
+      '<div class="sigso-kpi sigso-esq__tarjeta" aria-busy="true">' +
+      '<span class="sigso-esq__barra" style="width:40%;height:22px;margin:0 auto 0.5rem"></span>' +
+      '<span class="sigso-esq__barra" style="width:65%;height:10px;margin:0 auto"></span></div>'
+    ).join('');
     return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getPanelJefatura', {})
       .then(function (respuesta) {
         if (!respuesta.ok) {

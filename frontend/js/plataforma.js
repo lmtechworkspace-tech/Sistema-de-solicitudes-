@@ -55,6 +55,10 @@
 
   var sesion = { token: null, cuenta: null };
   var autocompletadoHecho = false;
+  // v5.0 F4 (§6.1): recientes ya cargados por el resumen del Home -- el
+  // command palette los reusa para buscar solicitudes, sin pedir nada
+  // nuevo al backend.
+  var ultimosRecientes_ = [];
 
   document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('form-login').addEventListener('submit', manejarLogin_);
@@ -62,7 +66,10 @@
     document.getElementById('btn-logout').addEventListener('click', manejarLogout_);
     wireMenuUsuario_();
     wireVerContrasena_();
+    wirePaleta_();
+    wireAtajos_();
     wireSidebar_();
+    wireTour_();
 
     // Sesion guardada: restaurar sin re-loguear. Si expiro, al login.
     var token = null;
@@ -175,6 +182,102 @@
     renderNav_();
     renderHome_();
     mostrarModulo_('home');
+    setTimeout(iniciarTourSiCorresponde_, 400);
+  }
+
+  // v5.0 F4 (§6.5): tour de bienvenida -- solo la primera sesion (por
+  // cuenta), generico entre roles (senala el chrome del shell, no datos).
+  // En movil el sidebar es un drawer oculto por defecto -- posicionar el
+  // tour ahi suma complejidad sin aportar mucho, asi que se omite y queda
+  // pendiente para la primera sesion en escritorio.
+  var LLAVE_TOUR = 'sigso_tour_visto';
+  var TOUR_PASOS = [
+    { selector: '.plataforma-sidebar__cab .plataforma-header__marca', titulo: 'Bienvenido a SIGSO',
+      texto: 'Este es tu panel: desde aquí llegas a todo lo que tu cuenta puede ver.' },
+    { selector: '#nav-modulos', titulo: 'Tus módulos',
+      texto: 'La lista se arma según tu cuenta. Un clic te lleva de uno a otro sin recargar la página.' },
+    { selector: '#btn-tema', titulo: 'Modo oscuro',
+      texto: 'Si prefieres trabajar en oscuro, actívalo aquí — se recuerda para la próxima vez.' },
+    { selector: null, titulo: 'Busca y salta rápido',
+      texto: 'Presiona Ctrl+K (Cmd+K en Mac) en cualquier momento para buscar una pantalla o una solicitud por número.' },
+    { selector: '.plataforma-usuario', titulo: 'Tu cuenta',
+      texto: 'Aquí ves tu rol y cierras sesión cuando termines.' }
+  ];
+  var tourPasoActual_ = 0;
+
+  function iniciarTourSiCorresponde_() {
+    var visto = false;
+    try { visto = localStorage.getItem(LLAVE_TOUR) === '1'; } catch (err) { visto = true; }
+    if (visto || window.innerWidth <= 900) return;
+    tourPasoActual_ = 0;
+    mostrarPasoTour_();
+  }
+
+  function limpiarResaltadoTour_() {
+    var actual = document.querySelector('.sigso-tour-resaltado');
+    if (actual) actual.classList.remove('sigso-tour-resaltado');
+  }
+
+  function posicionarTour_(el, elemento) {
+    var tour = document.getElementById('tour-bienvenida');
+    if (!elemento) {
+      tour.style.top = '45%';
+      tour.style.left = '50%';
+      tour.style.transform = 'translate(-50%, -50%)';
+      return;
+    }
+    var rect = elemento.getBoundingClientRect();
+    var top = Math.min(Math.max(rect.top, 12), window.innerHeight - 220);
+    tour.style.top = top + 'px';
+    tour.style.left = (rect.right + 16) + 'px';
+    tour.style.transform = 'none';
+  }
+
+  function mostrarPasoTour_() {
+    limpiarResaltadoTour_();
+    var paso = TOUR_PASOS[tourPasoActual_];
+    var elemento = paso.selector ? document.querySelector(paso.selector) : null;
+    // Si el elemento de este paso no existe para esta cuenta (ej. modulo
+    // sin bandeja), se salta al siguiente en vez de apuntar a la nada.
+    if (paso.selector && !elemento) {
+      if (tourPasoActual_ < TOUR_PASOS.length - 1) { tourPasoActual_++; mostrarPasoTour_(); }
+      else cerrarTour_();
+      return;
+    }
+    if (elemento) elemento.classList.add('sigso-tour-resaltado');
+
+    document.getElementById('tour-paso-contador').textContent =
+      'Paso ' + (tourPasoActual_ + 1) + ' de ' + TOUR_PASOS.length;
+    document.getElementById('tour-titulo').textContent = paso.titulo;
+    document.getElementById('tour-texto').textContent = paso.texto;
+    document.getElementById('btn-tour-atras').classList.toggle('sigso-oculto', tourPasoActual_ === 0);
+    document.getElementById('btn-tour-siguiente').textContent =
+      tourPasoActual_ === TOUR_PASOS.length - 1 ? 'Listo' : 'Siguiente';
+
+    var tour = document.getElementById('tour-bienvenida');
+    tour.classList.remove('sigso-oculto');
+    posicionarTour_(tour, elemento);
+  }
+
+  function cerrarTour_() {
+    limpiarResaltadoTour_();
+    document.getElementById('tour-bienvenida').classList.add('sigso-oculto');
+    try { localStorage.setItem(LLAVE_TOUR, '1'); } catch (err) { /* sin storage */ }
+  }
+
+  function wireTour_() {
+    var btnSiguiente = document.getElementById('btn-tour-siguiente');
+    var btnAtras = document.getElementById('btn-tour-atras');
+    var btnSaltar = document.getElementById('btn-tour-saltar');
+    if (!btnSiguiente) return;
+    btnSiguiente.addEventListener('click', function () {
+      if (tourPasoActual_ < TOUR_PASOS.length - 1) { tourPasoActual_++; mostrarPasoTour_(); }
+      else cerrarTour_();
+    });
+    btnAtras.addEventListener('click', function () {
+      if (tourPasoActual_ > 0) { tourPasoActual_--; mostrarPasoTour_(); }
+    });
+    btnSaltar.addEventListener('click', cerrarTour_);
   }
 
   // v4.0: avatar de iniciales + rol visible. Antes solo se veia el nombre
@@ -341,6 +444,211 @@
     });
   }
 
+  // v5.0 F4 (§6.1): command palette -- indice en memoria (modulos de la
+  // cuenta + recientes ya cargados), sin backend nuevo. Enter ejecuta el
+  // resultado resaltado; flechas mueven la seleccion; Esc cierra.
+  var paletaSeleccion_ = 0;
+
+  function wirePaleta_() {
+    var telon = document.getElementById('paleta-telon');
+    var input = document.getElementById('paleta-input');
+    if (!telon || !input) return;
+    document.getElementById('ico-paleta-buscar').innerHTML = Iconos.svg('lupa', { tam: 16 });
+    telon.addEventListener('click', cerrarPaleta_);
+    input.addEventListener('input', function () {
+      paletaSeleccion_ = 0;
+      renderResultadosPaleta_(input.value);
+    });
+    input.addEventListener('keydown', function (evento) {
+      var items = [].slice.call(document.querySelectorAll('.sigso-paleta__item'));
+      if (evento.key === 'ArrowDown') {
+        evento.preventDefault();
+        paletaSeleccion_ = Math.min(paletaSeleccion_ + 1, items.length - 1);
+        marcarSeleccionPaleta_(items);
+      } else if (evento.key === 'ArrowUp') {
+        evento.preventDefault();
+        paletaSeleccion_ = Math.max(paletaSeleccion_ - 1, 0);
+        marcarSeleccionPaleta_(items);
+      } else if (evento.key === 'Enter') {
+        evento.preventDefault();
+        if (items[paletaSeleccion_]) items[paletaSeleccion_].click();
+      }
+    });
+  }
+
+  function marcarSeleccionPaleta_(items) {
+    items.forEach(function (el, idx) {
+      el.classList.toggle('sigso-paleta__item--activo', idx === paletaSeleccion_);
+    });
+    if (items[paletaSeleccion_]) items[paletaSeleccion_].scrollIntoView({ block: 'nearest' });
+  }
+
+  function abrirPaleta_() {
+    document.getElementById('paleta-telon').classList.remove('sigso-oculto');
+    document.getElementById('paleta-comandos').classList.remove('sigso-oculto');
+    var input = document.getElementById('paleta-input');
+    input.value = '';
+    paletaSeleccion_ = 0;
+    renderResultadosPaleta_('');
+    input.focus();
+  }
+
+  function cerrarPaleta_() {
+    document.getElementById('paleta-telon').classList.add('sigso-oculto');
+    document.getElementById('paleta-comandos').classList.add('sigso-oculto');
+  }
+
+  function normalizar_(texto) {
+    return String(texto || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
+
+  function renderResultadosPaleta_(texto) {
+    var q = normalizar_(texto);
+    var cont = document.getElementById('paleta-resultados');
+    var html = '';
+
+    var navegacion = [{ id: 'home', nombre: 'Inicio', icono: 'inicio' }]
+      .concat(modulosDeLaCuenta_().filter(function (id) { return MODULOS_SHELL[id].interno; })
+        .map(function (id) { return { id: id, nombre: MODULOS_SHELL[id].nombre, icono: MODULOS_SHELL[id].icono }; }))
+      .filter(function (item) { return !q || normalizar_(item.nombre).indexOf(q) !== -1; });
+
+    if (navegacion.length) {
+      html += '<div class="sigso-paleta__grupo">Ir a</div>' + navegacion.map(function (item) {
+        return '<button type="button" class="sigso-paleta__item" data-accion="ir" data-modulo="' + item.id + '">' +
+          Iconos.svg(item.icono, { tam: 16 }) + '<strong>' + Componentes.escaparHtml(item.nombre) + '</strong></button>';
+      }).join('');
+    }
+
+    var solicitudes = q && modulosDeLaCuenta_().indexOf('bandeja') !== -1
+      ? ultimosRecientes_.filter(function (s) {
+          return normalizar_(s.solicitud_id).indexOf(q) !== -1 ||
+            normalizar_(s.empresa_id).indexOf(q) !== -1 ||
+            normalizar_(s.modulo).indexOf(q) !== -1;
+        }).slice(0, 6)
+      : [];
+
+    if (solicitudes.length) {
+      html += '<div class="sigso-paleta__grupo">Solicitudes</div>' + solicitudes.map(function (s) {
+        return '<button type="button" class="sigso-paleta__item" data-accion="solicitud" data-id="' + Componentes.escaparHtml(s.solicitud_id) + '">' +
+          Iconos.svg('caja', { tam: 16 }) +
+          '<strong>' + Componentes.escaparHtml(s.solicitud_id) + '</strong>' +
+          '<span>' + Componentes.escaparHtml(s.empresa_id) + ' · ' + Componentes.escaparHtml(s.modulo || '—') + '</span>' +
+          '</button>';
+      }).join('');
+    }
+
+    if (!navegacion.length && !solicitudes.length) {
+      html = '<div class="sigso-paleta__vacio">Nada coincide con "' + Componentes.escaparHtml(texto) + '".</div>';
+    }
+
+    cont.innerHTML = html;
+    cont.querySelectorAll('[data-accion="ir"]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        cerrarPaleta_();
+        mostrarModulo_(boton.getAttribute('data-modulo'));
+      });
+    });
+    cont.querySelectorAll('[data-accion="solicitud"]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        var id = boton.getAttribute('data-id');
+        cerrarPaleta_();
+        mostrarModulo_('bandeja');
+        // La bandeja ya tiene su propio buscador (dashboard.js): se reusa
+        // en vez de duplicar la logica de filtrado aqui.
+        setTimeout(function () {
+          var buscador = document.getElementById('buscar-recientes');
+          if (buscador) {
+            buscador.value = id;
+            buscador.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }, 50);
+      });
+    });
+    marcarSeleccionPaleta_([].slice.call(cont.querySelectorAll('.sigso-paleta__item')));
+  }
+
+  // v5.0 F4 (§6.2): atajos de teclado -- se ignoran mientras el foco esta
+  // en un campo de texto (para no interceptar mientras se escribe).
+  var esperandoG_ = false;
+  var temporizadorG_ = null;
+
+  function enCampoDeTexto_(el) {
+    if (!el) return false;
+    var tag = el.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+  }
+
+  function wireAtajos_() {
+    var btnCerrarAtajos = document.getElementById('btn-cerrar-atajos');
+    var telonAtajos = document.getElementById('atajos-telon');
+    if (btnCerrarAtajos) {
+      document.getElementById('ico-cerrar-atajos').innerHTML = Iconos.svg('equis', { tam: 16 });
+      btnCerrarAtajos.addEventListener('click', cerrarAtajos_);
+    }
+    if (telonAtajos) telonAtajos.addEventListener('click', cerrarAtajos_);
+
+    document.addEventListener('keydown', function (evento) {
+      var paletaAbierta = !document.getElementById('paleta-comandos').classList.contains('sigso-oculto');
+      var atajosAbiertos = !document.getElementById('panel-atajos').classList.contains('sigso-oculto');
+      var conSesion = !document.getElementById('vista-shell').classList.contains('sigso-oculto');
+      if (!conSesion) return; // login/cambio de clave: sin paleta ni atajos
+
+      // Ctrl/Cmd+K abre la paleta desde cualquier parte, incluso con foco
+      // en un campo de texto (es la convencion de la industria).
+      if ((evento.ctrlKey || evento.metaKey) && evento.key.toLowerCase() === 'k') {
+        evento.preventDefault();
+        abrirPaleta_();
+        return;
+      }
+      var tourAbierto = !document.getElementById('tour-bienvenida').classList.contains('sigso-oculto');
+      if (evento.key === 'Escape') {
+        if (paletaAbierta) cerrarPaleta_();
+        else if (atajosAbiertos) cerrarAtajos_();
+        else if (tourAbierto) cerrarTour_();
+        return;
+      }
+      if (paletaAbierta || atajosAbiertos || tourAbierto) return;
+      if (enCampoDeTexto_(evento.target)) return;
+      if (evento.ctrlKey || evento.metaKey || evento.altKey) return;
+
+      if (evento.key === '?') {
+        evento.preventDefault();
+        abrirAtajos_();
+      } else if (evento.key.toLowerCase() === 'n') {
+        if (modulosDeLaCuenta_().indexOf('nueva_solicitud') !== -1) {
+          evento.preventDefault();
+          mostrarModulo_('nueva_solicitud');
+        }
+      } else if (evento.key.toLowerCase() === 'g') {
+        esperandoG_ = true;
+        clearTimeout(temporizadorG_);
+        temporizadorG_ = setTimeout(function () { esperandoG_ = false; }, 1200);
+      } else if (evento.key.toLowerCase() === 'b' && esperandoG_) {
+        esperandoG_ = false;
+        if (modulosDeLaCuenta_().indexOf('bandeja') !== -1) {
+          evento.preventDefault();
+          mostrarModulo_('bandeja');
+        }
+      } else if (evento.key === '/') {
+        var buscador = document.getElementById('buscar-recientes');
+        if (buscador && buscador.offsetParent !== null) {
+          evento.preventDefault();
+          buscador.focus();
+        }
+      }
+    });
+  }
+
+  function abrirAtajos_() {
+    document.getElementById('atajos-telon').classList.remove('sigso-oculto');
+    document.getElementById('panel-atajos').classList.remove('sigso-oculto');
+  }
+
+  function cerrarAtajos_() {
+    document.getElementById('atajos-telon').classList.add('sigso-oculto');
+    document.getElementById('panel-atajos').classList.add('sigso-oculto');
+  }
+
   function modulosDeLaCuenta_() {
     return (sesion.cuenta.modulos || []).filter(function (m) { return MODULOS_SHELL[m]; });
   }
@@ -467,14 +775,32 @@
     // ahora tambien arma el resumen del dia (4 KPIs) y la actividad
     // reciente del Home -- sin pedirle nada nuevo al backend.
     if (modulosDeLaCuenta_().indexOf('bandeja') !== -1 && backofficeDisponible_()) {
+      // v5.0 F4 (§6.3): esqueleto mientras se resuelve -- antes el bloque
+      // quedaba invisible (sigso-oculto) hasta que llegaba la respuesta.
+      var kpisHomeEl = document.getElementById('kpis-home');
+      if (kpisHomeEl) {
+        kpisHomeEl.className = 'sigso-kpis';
+        kpisHomeEl.innerHTML = new Array(4).fill(
+          '<div class="sigso-kpi sigso-esq__tarjeta" aria-busy="true">' +
+          '<span class="sigso-esq__barra" style="width:40%;height:22px;margin:0 auto 0.5rem"></span>' +
+          '<span class="sigso-esq__barra" style="width:65%;height:10px;margin:0 auto"></span></div>'
+        ).join('');
+      }
       llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getDashboardData', {})
         .then(function (respuesta) {
-          if (!respuesta.ok) return;
+          if (!respuesta.ok) {
+            if (kpisHomeEl) kpisHomeEl.className = 'sigso-oculto';
+            return;
+          }
           pintarBadge_('bandeja', respuesta.data.resumen.sla_vencido);
           renderKpisHome_(respuesta.data.resumen);
           renderRecienteHome_(respuesta.data.recientes || []);
+          ultimosRecientes_ = respuesta.data.recientes || [];
         })
-        .catch(function () {});
+        .catch(function () {
+          // Si falla, el esqueleto no debe quedar girando para siempre.
+          if (kpisHomeEl) kpisHomeEl.className = 'sigso-oculto';
+        });
     }
   }
 

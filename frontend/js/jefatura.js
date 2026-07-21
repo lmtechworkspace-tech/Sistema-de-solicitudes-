@@ -29,6 +29,13 @@
   });
 
   function cargarJefatura_() {
+    // v5.0 F4 (§6.3): mismo esqueleto que Gerencia/Bandeja mientras se pide
+    // getPanelJefatura.
+    document.getElementById('jef-contenedor-kpis').innerHTML = new Array(4).fill(
+      '<div class="sigso-kpi sigso-esq__tarjeta" aria-busy="true">' +
+      '<span class="sigso-esq__barra" style="width:40%;height:22px;margin:0 auto 0.5rem"></span>' +
+      '<span class="sigso-esq__barra" style="width:65%;height:10px;margin:0 auto"></span></div>'
+    ).join('');
     return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getPanelJefatura', {})
       .then(function (respuesta) {
         if (!respuesta.ok) {

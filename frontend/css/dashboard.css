@@ -651,13 +651,15 @@ button.sigso-kpi {
 .sigso-encabezado-reporte h1 {
   margin: 0 0 0.15rem;
   font-size: 1.3rem;
-  color: var(--azul);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--texto);
 }
 
 .sigso-encabezado-reporte p {
   margin: 0.25rem 0 0;
   font-size: 0.8rem;
-  color: var(--gris-medio);
+  color: var(--texto-2);
 }
 
 /* Horizontal: el tablero tiene 10 columnas -- en vertical (carta/A4) el
@@ -668,6 +670,19 @@ button.sigso-kpi {
 }
 
 @media print {
+  /* v5.0 F4 (§6.6): el papel es siempre claro -- si quien imprime tiene
+     modo oscuro activo, el reporte no debe salir con fondo oscuro (o
+     peor, texto claro invisible si el navegador no imprime fondos). */
+  :root {
+    --fondo-pagina: #F8FAFC;
+    --superficie: #FFFFFF;
+    --superficie-2: #F1F4F9;
+    --borde: #E5E8EF;
+    --texto: #0F172A;
+    --texto-2: #5B6474;
+    --texto-3: #8A93A5;
+  }
+
   .sigso-header,
   .sigso-no-imprimir,
   #btn-volver-dashboard-gerencia,

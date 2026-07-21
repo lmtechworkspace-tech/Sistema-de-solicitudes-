@@ -80,6 +80,17 @@
 
   function cargarDashboard_() {
     var filtros = leerFiltros_();
+    // v5.0 F4 (§6.3): esqueleto en vez del "blank flash" mientras se pide
+    // getDashboardData -- ya existia el componente (Componentes.esqueleto),
+    // solo faltaba pintarlo antes de la llamada. Los KPI van sueltos (no
+    // envueltos en .sigso-esq) para que la grilla de 4 columnas los reparta
+    // igual que a los reales, en vez de apilarlos en una sola celda.
+    document.getElementById('contenedor-kpis').innerHTML = new Array(4).fill(
+      '<div class="sigso-kpi sigso-esq__tarjeta" aria-busy="true">' +
+      '<span class="sigso-esq__barra" style="width:40%;height:22px;margin:0 auto 0.5rem"></span>' +
+      '<span class="sigso-esq__barra" style="width:65%;height:10px;margin:0 auto"></span></div>'
+    ).join('');
+    document.getElementById('lista-recientes').innerHTML = Componentes.esqueleto({ filas: 5 });
     return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getDashboardData', filtros).then(function (respuesta) {
       if (!respuesta.ok) {
         // Antes un error del backend dejaba el dashboard en blanco sin avisar

@@ -126,6 +126,14 @@
 
   function cargarGerencia_() {
     categoriaActiva = null;
+    // v5.0 F4 (§6.3): esqueleto mientras se pide getPanelGerencia -- mismo
+    // patron que Bandeja (dashboard.js), KPI sueltos para que la grilla
+    // reparta las 4 tarjetas como a las reales.
+    document.getElementById('ger-contenedor-kpis').innerHTML = new Array(4).fill(
+      '<div class="sigso-kpi sigso-esq__tarjeta" aria-busy="true">' +
+      '<span class="sigso-esq__barra" style="width:40%;height:22px;margin:0 auto 0.5rem"></span>' +
+      '<span class="sigso-esq__barra" style="width:65%;height:10px;margin:0 auto"></span></div>'
+    ).join('');
     return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getPanelGerencia', leerFiltrosServidor_())
       .then(function (respuesta) {
         if (!respuesta.ok) {
