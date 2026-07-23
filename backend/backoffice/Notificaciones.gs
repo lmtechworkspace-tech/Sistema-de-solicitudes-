@@ -269,9 +269,14 @@ var Notificaciones = {
 
     var resultados = [];
     Object.keys(empresas).forEach(function (empresaId) {
-      var kpis = Dashboard.getData({ empresa_id: empresaId }, { rol: 'ADM', email: '' });
+      // v5.2 (fix, hallazgo real: el primer envio salio "muy basico" -- traia
+      // el resumen tecnico de Dashboard.getData en vez de los KPIs del
+      // Reporte Ejecutivo real). Gerencia.getPanel trae exactamente los mismos
+      // datos que ya usa el bloque "Reporte ejecutivo (simple)" del panel web
+      // (gerencia.js: renderReporteEjecutivo_) -- mismo contenido, dos canales.
+      var panel = Gerencia.getPanel({ empresa_id: empresaId }, { rol: 'ADM', email: '' });
       var asunto = 'SIGSO — Reporte ejecutivo (' + empresaId + ')';
-      var cuerpo = formatearCuerpoEjecutivo_(kpis) + '\n\nEnviado a pedido desde el Panel de Gerencia.' + pieCorreoBackoffice_();
+      var cuerpo = formatearCuerpoEjecutivo_(panel) + '\n\nEnviado a pedido desde el Panel de Gerencia.' + pieCorreoBackoffice_();
       var claveEvento = 'REPORTE_EJECUTIVO_MANUAL:' + empresaId + ':' + Utilities.getUuid();
       obtenerEmailsPorRol_(empresaId, ['GERENCIA', 'ADM']).forEach(function (email) {
         resultados.push(enviarCorreo_('REPORTE:' + empresaId, email, claveEvento, asunto, cuerpo));
@@ -282,11 +287,25 @@ var Notificaciones = {
 
   // v5.2 (Fase B, §4.2): version PROGRAMADA del reporte ejecutivo -- llega
   // a Gerencia SOLA, sin que el Admin tenga que acordarse de apretar
-  // "Enviar a Gerencia ahora". Reusa enviarReporteProgramado_ (misma
-  // deduplicacion "1 vez por dia" que enviarResumenSemanal/
-  // enviarReporteMensual, ver Triggers.enviarReporteEjecutivoSemanalTrigger).
+  // "Enviar a Gerencia ahora". No reusa enviarReporteProgramado_ (esa arma
+  // el cuerpo con Dashboard.getData, que no trae cumplimiento/semaforo) --
+  // usa Gerencia.getPanel, igual que el envio manual de arriba, con la misma
+  // dedup "1 vez por dia" que enviarResumenSemanal/enviarReporteMensual.
   enviarReporteEjecutivoSemanal: function () {
-    return enviarReporteProgramado_('REPORTE_EJECUTIVO_SEMANAL', ['GERENCIA', 'ADM'], formatearCuerpoEjecutivo_);
+    var empresas = {};
+    leerFilas_(SHEETS.USUARIOS).forEach(function (u) { empresas[u.empresa_id] = true; });
+
+    var resultados = [];
+    Object.keys(empresas).forEach(function (empresaId) {
+      var panel = Gerencia.getPanel({ empresa_id: empresaId }, { rol: 'ADM', email: '' });
+      var asunto = 'SIGSO - REPORTE EJECUTIVO SEMANAL (' + empresaId + ')';
+      var cuerpo = formatearCuerpoEjecutivo_(panel);
+      var claveEvento = 'REPORTE_EJECUTIVO_SEMANAL:' + claveDia_(new Date(), 'America/Santiago');
+      obtenerEmailsPorRol_(empresaId, ['GERENCIA', 'ADM']).forEach(function (email) {
+        resultados.push(enviarCorreo_('REPORTE:' + empresaId, email, claveEvento, asunto, cuerpo, VENTANA_DEDUP_SLA_VENCIDO_MINUTOS));
+      });
+    });
+    return resultados;
   },
 
   // v4.2 (§4, documentacion/SIGSO-v4.2-propuestas-modulo-jefatura.md): "al
@@ -510,15 +529,42 @@ function enviarReporteProgramado_(evento, roles, formatearCuerpo) {
   return resultados;
 }
 
-// v5.2 (§4.1/§4.2): mismo texto "numeros grandes" para el envio manual
-// (enviarReporteEjecutivoAhora) y el programado (enviarReporteEjecutivoSemanal)
-// -- un solo lugar donde cambiar el formato del reporte ejecutivo.
-function formatearCuerpoEjecutivo_(kpis) {
+// v5.2 (§4.1/§4.2): mismo texto para el envio manual (enviarReporteEjecutivoAhora)
+// y el programado (enviarReporteEjecutivoSemanal) -- un solo lugar donde
+// cambiar el formato del reporte ejecutivo. Recibe un panel de
+// Gerencia.getPanel (no Dashboard.getData): trae cumplimiento/semaforo, que
+// es justamente lo que Gerencia pidio ver ("basico y de un vistazo", no un
+// resumen tecnico de conteos). Mismo contenido que gerencia.js:
+// renderReporteEjecutivo_ -- misma logica, dos canales (correo y PDF).
+function formatearCuerpoEjecutivo_(panel) {
+  var kpis = panel.kpis || {};
+  var items = panel.items || [];
+  var atrasadas = items.filter(function (i) { return i.cumplimiento.codigo === 'ATRASADA_DESARROLLADOR'; }).length;
+  var enRiesgo = items.filter(function (i) { return i.cumplimiento.codigo === 'EN_RIESGO'; }).length;
+
+  var semaforo = atrasadas > 0
+    ? '🔴 Hay solicitudes atrasadas que necesitan atención'
+    : (enRiesgo > 0 ? '🟡 Al día, pero hay ítems cerca de vencer' : '🟢 Todo al día');
+
+  var cumplimientoTxt = (kpis.pct_cumplimiento_desarrollador === null || kpis.pct_cumplimiento_desarrollador === undefined)
+    ? '—' : kpis.pct_cumplimiento_desarrollador + '%';
+
+  var lineas = [
+    (kpis.atrasadas_activas || 0) + ' solicitud(es) ya pasaron su fecha comprometida y siguen sin entregarse.',
+    (kpis.esperando_validacion || 0) + ' ítem(s) están listos y esperan que el solicitante confirme que quedaron bien.',
+    (kpis.sin_comprometer || 0) + ' solicitud(es) todavía no tienen fecha comprometida por el equipo.'
+  ];
+  if (cumplimientoTxt !== '—') {
+    lineas.push('De lo entregado, el ' + cumplimientoTxt + ' se entregó a tiempo.');
+  }
+
   return 'Reporte ejecutivo SIGSO\n\n' +
-    'Solicitudes abiertas: ' + kpis.resumen.total_abiertas + '\n' +
-    'Criticas activas (P1): ' + kpis.resumen.criticas_activas + '\n' +
-    'Subsolicitudes con SLA vencido: ' + kpis.resumen.sla_vencido + '\n' +
-    'Ingresadas hoy: ' + kpis.resumen.del_dia;
+    semaforo + '\n\n' +
+    'Cumplimiento: ' + cumplimientoTxt + '\n' +
+    'Atrasadas: ' + (kpis.atrasadas_activas || 0) + '\n' +
+    'Por validar: ' + (kpis.esperando_validacion || 0) + '\n\n' +
+    'Qué necesita tu atención:\n' +
+    lineas.map(function (l) { return '- ' + l; }).join('\n');
 }
 
 function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo, ventanaMinutos) {

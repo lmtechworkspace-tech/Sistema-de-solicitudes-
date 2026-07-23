@@ -11,6 +11,7 @@ function loadConSchema() {
   seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
   seedSheet(ctx, 'CONFIG_FERIADOS', ctx.COLUMNAS.CONFIG_FERIADOS);
   seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
+  seedSheet(ctx, 'HISTORIAL_COMPROMISO', ctx.COLUMNAS.HISTORIAL_COMPROMISO);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
   seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS, [
     ['U1', 'Analista Uno', 'analista@homepymes.cl', 'HP', 'ANA', true, '', 'sistema'],
@@ -199,6 +200,14 @@ test('Notificaciones.enviarReporteEjecutivoSemanal (v5.2 Fase B, §4.2) llega so
   // No va al Analista/Desarrollador -- eso lo sigue cubriendo el resumen
   // semanal/mensual de siempre (roles distintos, mismo trigger no aplica).
   assert.ok(!destinatarios.includes('analista@homepymes.cl'));
+  // v5.2 (fix, hallazgo real: el primer envio era "muy basico" -- solo
+  // contaba solicitudes/criticas/SLA). Ahora trae semaforo + cumplimiento +
+  // lineas en lenguaje llano, igual que el bloque "Reporte ejecutivo
+  // (simple)" del panel web.
+  const cuerpo = ctx.GmailApp._enviados.find((e) => e.destinatario === 'gerente@homepymes.cl').cuerpo;
+  assert.match(cuerpo, /Cumplimiento:/);
+  assert.match(cuerpo, /Atrasadas:/);
+  assert.match(cuerpo, /Qué necesita tu atención:/);
 });
 
 test('Notificaciones.enviarReporteEjecutivoSemanal (v5.2 Fase B) no reenvia el mismo dia (misma ventana de dedup que resumen semanal)', () => {
