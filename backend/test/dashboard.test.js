@@ -399,3 +399,48 @@ test('Dashboard (v3.1): las atenciones directas no entran al tiempo promedio de 
   // Pero se cuentan aparte: cuanto se resuelve fuera del proceso.
   assert.equal(datos.resumen.atenciones_directas, 1);
 });
+
+// v5.2 (Fase B, §3.4): "pauta de trabajo por lote" -- getData es a nivel de
+// SOLICITUD (no trae los campos que Leo necesita para ejecutar); esta accion
+// es a nivel de ITEM, como la OT individual de detalle.js.
+test('Dashboard.getPautaDesarrollador (v5.2 Fase B) trae solo los items abiertos del desarrollador, con los campos de ejecucion', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0001', desarrollador_asignado: 'leo@rld.cl', prioridad_derivada: 'P2'
+  }, ['S05']);
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0002', desarrollador_asignado: 'otra@rld.cl', prioridad_derivada: 'P1'
+  }, ['S02']);
+  // Cerrada: no debe aparecer en la pauta aunque sea de Leo.
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0003', desarrollador_asignado: 'leo@rld.cl', prioridad_derivada: 'P3'
+  }, ['S09']);
+  ctx.actualizarFilaPorId_(ctx.SHEETS.SUBSOLICITUDES, 'subsolicitud_id', 'SOL-2026-HP-0001-01', {
+    url_modulo: 'https://x.cl/modulo', usuario_prueba: 'demo', ref_credencial: 'ver 1Password'
+  });
+
+  const pauta = ctx.Dashboard.getPautaDesarrollador({ desarrollador: 'leo@rld.cl' }, { rol: 'ADM', email: 'admin@homepymes.cl' });
+
+  assert.equal(pauta.desarrollador, 'leo@rld.cl');
+  assert.equal(pauta.items.length, 1);
+  assert.equal(pauta.items[0].solicitud_id, 'SOL-2026-HP-0001');
+  assert.equal(pauta.items[0].url_modulo, 'https://x.cl/modulo');
+  assert.equal(pauta.items[0].usuario_prueba, 'demo');
+});
+
+test('Dashboard.getPautaDesarrollador (v5.2 Fase B) ordena P1 antes que P2 y exige el parametro desarrollador', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0001', desarrollador_asignado: 'leo@rld.cl', prioridad_derivada: 'P2'
+  }, ['S05']);
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-HP-0002', desarrollador_asignado: 'leo@rld.cl', prioridad_derivada: 'P1'
+  }, ['S02']);
+
+  const pauta = ctx.Dashboard.getPautaDesarrollador({ desarrollador: 'leo@rld.cl' }, { rol: 'ADM', email: 'admin@homepymes.cl' });
+  assert.equal(pauta.items[0].solicitud_id, 'SOL-2026-HP-0002');
+  assert.equal(pauta.items[1].solicitud_id, 'SOL-2026-HP-0001');
+
+  const error = ctx.Dashboard.getPautaDesarrollador({}, { rol: 'ADM', email: 'admin@homepymes.cl' });
+  assert.equal(error._validationError, true);
+});

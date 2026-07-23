@@ -271,20 +271,22 @@ var Notificaciones = {
     Object.keys(empresas).forEach(function (empresaId) {
       var kpis = Dashboard.getData({ empresa_id: empresaId }, { rol: 'ADM', email: '' });
       var asunto = 'SIGSO — Reporte ejecutivo (' + empresaId + ')';
-      var cuerpo =
-        'Reporte ejecutivo SIGSO\n\n' +
-        'Solicitudes abiertas: ' + kpis.resumen.total_abiertas + '\n' +
-        'Criticas activas (P1): ' + kpis.resumen.criticas_activas + '\n' +
-        'Subsolicitudes con SLA vencido: ' + kpis.resumen.sla_vencido + '\n' +
-        'Ingresadas hoy: ' + kpis.resumen.del_dia + '\n\n' +
-        'Enviado a pedido desde el Panel de Gerencia.' +
-        pieCorreoBackoffice_();
+      var cuerpo = formatearCuerpoEjecutivo_(kpis) + '\n\nEnviado a pedido desde el Panel de Gerencia.' + pieCorreoBackoffice_();
       var claveEvento = 'REPORTE_EJECUTIVO_MANUAL:' + empresaId + ':' + Utilities.getUuid();
       obtenerEmailsPorRol_(empresaId, ['GERENCIA', 'ADM']).forEach(function (email) {
         resultados.push(enviarCorreo_('REPORTE:' + empresaId, email, claveEvento, asunto, cuerpo));
       });
     });
     return { enviados: resultados.filter(function (r) { return r.enviado; }).length, total: resultados.length };
+  },
+
+  // v5.2 (Fase B, §4.2): version PROGRAMADA del reporte ejecutivo -- llega
+  // a Gerencia SOLA, sin que el Admin tenga que acordarse de apretar
+  // "Enviar a Gerencia ahora". Reusa enviarReporteProgramado_ (misma
+  // deduplicacion "1 vez por dia" que enviarResumenSemanal/
+  // enviarReporteMensual, ver Triggers.enviarReporteEjecutivoSemanalTrigger).
+  enviarReporteEjecutivoSemanal: function () {
+    return enviarReporteProgramado_('REPORTE_EJECUTIVO_SEMANAL', ['GERENCIA', 'ADM'], formatearCuerpoEjecutivo_);
   },
 
   // v4.2 (§4, documentacion/SIGSO-v4.2-propuestas-modulo-jefatura.md): "al
@@ -506,6 +508,17 @@ function enviarReporteProgramado_(evento, roles, formatearCuerpo) {
     });
   });
   return resultados;
+}
+
+// v5.2 (§4.1/§4.2): mismo texto "numeros grandes" para el envio manual
+// (enviarReporteEjecutivoAhora) y el programado (enviarReporteEjecutivoSemanal)
+// -- un solo lugar donde cambiar el formato del reporte ejecutivo.
+function formatearCuerpoEjecutivo_(kpis) {
+  return 'Reporte ejecutivo SIGSO\n\n' +
+    'Solicitudes abiertas: ' + kpis.resumen.total_abiertas + '\n' +
+    'Criticas activas (P1): ' + kpis.resumen.criticas_activas + '\n' +
+    'Subsolicitudes con SLA vencido: ' + kpis.resumen.sla_vencido + '\n' +
+    'Ingresadas hoy: ' + kpis.resumen.del_dia;
 }
 
 function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo, ventanaMinutos) {

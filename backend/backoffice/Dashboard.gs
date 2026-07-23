@@ -66,6 +66,58 @@ var Dashboard = {
     var datos = calcularKpis_({});
     CacheService.getScriptCache().put('dashboard_kpis::{}', JSON.stringify(datos), CACHE_TTL_SEGUNDOS);
     return datos;
+  },
+
+  // v5.2 (Fase B, §3.4): "pauta de trabajo por lote" -- TODOS los items
+  // abiertos de un desarrollador, para imprimir UNA sola hoja en vez de una
+  // Orden de Trabajo suelta por solicitud. A diferencia de `recientes` (que
+  // getData ya arma), esto es a nivel de ITEM (subsolicitud), con los mismos
+  // campos que ya usa la OT individual (detalle.js: renderOtImprimir_) --
+  // getData no los trae porque es un resumen por SOLICITUD, no por item.
+  getPautaDesarrollador: function (data, contexto) {
+    var desarrollador = data && data.desarrollador;
+    if (!desarrollador) {
+      return errorValidacion_('desarrollador', 'Falta indicar el desarrollador.');
+    }
+    var solicitudPorId = {};
+    leerFilas_(SHEETS.SOLICITUDES).forEach(function (s) { solicitudPorId[s.solicitud_id] = s; });
+
+    var items = leerFilas_(SHEETS.SUBSOLICITUDES)
+      .filter(function (sub) {
+        var solicitud = solicitudPorId[sub.solicitud_id];
+        if (!solicitud) return false;
+        var asignado = sub.desarrollador_asignado || solicitud.desarrollador_asignado || '';
+        return asignado === desarrollador && ESTADOS_CERRADOS.indexOf(sub.estado) === -1;
+      })
+      .map(function (sub) {
+        var solicitud = solicitudPorId[sub.solicitud_id];
+        return {
+          solicitud_id: sub.solicitud_id,
+          numero_item: sub.numero_item,
+          titulo: sub.titulo,
+          descripcion: sub.descripcion,
+          resultado_esperado: sub.resultado_esperado || '',
+          prioridad: sub.prioridad,
+          estado: sub.estado,
+          fecha_comprometida: sub.fecha_comprometida || '',
+          url_modulo: sub.url_modulo || '',
+          usuario_prueba: sub.usuario_prueba || '',
+          ref_credencial: sub.ref_credencial || '',
+          empresa_nombre: solicitud.empresa_nombre || solicitud.empresa_id,
+          solicitante_nombre: solicitud.solicitante_nombre
+        };
+      })
+      // P1 primero; a igual prioridad, quien tiene fecha comprometida mas
+      // proxima primero (sin fecha, al final del grupo) -- el orden en que
+      // Leo deberia atacarlas, no el orden de creacion.
+      .sort(function (a, b) {
+        if (a.prioridad !== b.prioridad) return a.prioridad.localeCompare(b.prioridad);
+        if (!a.fecha_comprometida) return 1;
+        if (!b.fecha_comprometida) return -1;
+        return new Date(a.fecha_comprometida) - new Date(b.fecha_comprometida);
+      });
+
+    return { desarrollador: desarrollador, items: items };
   }
 };
 

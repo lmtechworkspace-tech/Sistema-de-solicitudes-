@@ -85,6 +85,16 @@ function configurarTriggers() {
     creados.push('enviarReporteMensualTrigger');
   }
 
+  // v5.2 (Fase B, §4.2): reporte ejecutivo a Gerencia -- lunes 09:00, igual
+  // que el resumen semanal (a Analista/Admin). Son destinatarios y formato
+  // distintos (Gerencia quiere "numeros grandes", no el resumen tecnico),
+  // por eso es un trigger propio en vez de sumar el rol a uno existente.
+  if (existentes.indexOf('enviarReporteEjecutivoSemanalTrigger') === -1) {
+    ScriptApp.newTrigger('enviarReporteEjecutivoSemanalTrigger').timeBased()
+      .onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(9).create();
+    creados.push('enviarReporteEjecutivoSemanalTrigger');
+  }
+
   // v4.2 (§4): "al finalizar el dia poder ver que ocurrio en su
   // departamento" -- fin de jornada, 18:00, diario.
   if (existentes.indexOf('enviarDigestJefaturaTrigger') === -1) {
@@ -134,6 +144,11 @@ function enviarResumenSemanalTrigger() {
 
 function enviarReporteMensualTrigger() {
   return Notificaciones.enviarReporteMensual();
+}
+
+// v5.2 (Fase B, §4.2): ver Notificaciones.enviarReporteEjecutivoSemanal().
+function enviarReporteEjecutivoSemanalTrigger() {
+  return Notificaciones.enviarReporteEjecutivoSemanal();
 }
 
 // v4.2 (§4): ver Notificaciones.enviarDigestJefatura().

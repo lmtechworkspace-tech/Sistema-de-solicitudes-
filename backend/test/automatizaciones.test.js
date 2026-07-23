@@ -181,6 +181,38 @@ test('Notificaciones.enviarReporteMensual (§17.4) envia tambien al Desarrollado
   assert.deepEqual(destinatarios, ['admin@homepymes.cl', 'analista@homepymes.cl', 'dev@homepymes.cl']);
 });
 
+test('Notificaciones.enviarReporteEjecutivoSemanal (v5.2 Fase B, §4.2) llega solo a GERENCIA+ADM, sin depender de un boton', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx);
+  ctx.agregarFila_(ctx.SHEETS.USUARIOS, {
+    usuario_id: 'U4', nombre: 'Gerente Uno', email: 'gerente@homepymes.cl', empresa_id: 'HP',
+    rol: 'GERENCIA', activo: true, ultimo_acceso: '', creado_por: 'sistema'
+  });
+
+  const resultados = ctx.Notificaciones.enviarReporteEjecutivoSemanal();
+
+  assert.equal(resultados.length, 2);
+  const log = ctx.leerFilas_('LOG_NOTIFICACIONES').filter((l) => l.evento.indexOf('REPORTE_EJECUTIVO_SEMANAL') === 0);
+  const destinatarios = log.map((l) => l.destinatario).sort();
+  assert.deepEqual(destinatarios, ['admin@homepymes.cl', 'gerente@homepymes.cl']);
+  // No va al Analista/Desarrollador -- eso lo sigue cubriendo el resumen
+  // semanal/mensual de siempre (roles distintos, mismo trigger no aplica).
+  assert.ok(!destinatarios.includes('analista@homepymes.cl'));
+});
+
+test('Notificaciones.enviarReporteEjecutivoSemanal (v5.2 Fase B) no reenvia el mismo dia (misma ventana de dedup que resumen semanal)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx);
+
+  ctx.Notificaciones.enviarReporteEjecutivoSemanal();
+  const segunda = ctx.Notificaciones.enviarReporteEjecutivoSemanal();
+
+  const enviados = segunda.filter((r) => r.enviado);
+  assert.equal(enviados.length, 0);
+});
+
 test('Notificaciones.enviarReporteEjecutivoAhora (v5.2 §4.2) exige rol ADM', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);

@@ -3459,6 +3459,16 @@ button.sigso-kpi {
   body.sigso-modo-ejecutivo #ger-reporte-ejecutivo-imprimir {
     display: block !important;
   }
+
+  /* v5.2 (Fase B, §3.4): la Pauta de trabajo por lote se imprime SOLA --
+     mismo criterio que sigso-modo-ejecutivo, mirando #vista-dashboard. */
+  body.sigso-modo-pauta #vista-dashboard > :not(#dash-pauta-imprimir) {
+    display: none !important;
+  }
+
+  body.sigso-modo-pauta #dash-pauta-imprimir {
+    display: block !important;
+  }
 }
 
 /* v4.1 (G1-a): columna/boton para expandir "¿que pasa?/¿que deberia

@@ -63,6 +63,94 @@
     });
 
     wireDerivarLote_();
+    wirePautaLote_();
+  }
+
+  // v5.2 (Fase B, §3.4): "pauta de trabajo por lote" -- UNA hoja con TODAS
+  // las pendientes del desarrollador elegido en "Ver bandeja de", en vez de
+  // una Orden de Trabajo suelta por solicitud (esa sigue en detalle.js).
+  // Solo tiene sentido con una persona concreta elegida (mismo gate visual
+  // que el bloque de derivar en lote).
+  function wirePautaLote_() {
+    var boton = document.getElementById('btn-imprimir-pauta');
+    if (!boton) return;
+    document.getElementById('filtro-bandeja').addEventListener('change', actualizarVisibilidadPauta_);
+    boton.addEventListener('click', function () {
+      var desarrollador = document.getElementById('filtro-bandeja').value;
+      if (!desarrollador) return;
+      boton.disabled = true;
+      var textoOriginal = boton.textContent;
+      boton.textContent = 'Generando…';
+      llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getPautaTrabajo', { desarrollador: desarrollador })
+        .then(function (respuesta) {
+          if (!respuesta.ok) {
+            Componentes.aviso({ texto: respuesta.message || 'No se pudo generar la pauta.', tipo: 'error' });
+            return;
+          }
+          renderPautaImprimir_(respuesta.data);
+          document.body.classList.add('sigso-modo-pauta');
+          window.print();
+        })
+        .catch(function () {
+          Componentes.aviso({ texto: 'No se pudo conectar con el servidor. Intenta nuevamente.', tipo: 'error' });
+        })
+        .finally(function () {
+          boton.disabled = false;
+          boton.textContent = textoOriginal;
+        });
+    });
+    window.addEventListener('afterprint', function () {
+      document.body.classList.remove('sigso-modo-pauta');
+    });
+  }
+
+  function actualizarVisibilidadPauta_() {
+    var boton = document.getElementById('btn-imprimir-pauta');
+    if (!boton) return;
+    boton.classList.toggle('sigso-oculto', !document.getElementById('filtro-bandeja').value);
+  }
+
+  // Mismo patron visual que renderOtImprimir_ (detalle.js): encabezado con
+  // marca + un .sigso-ot-item por item + pie de cierre. Aca los items vienen
+  // de VARIAS solicitudes (por eso cada tarjeta muestra su solicitud_id).
+  function renderPautaImprimir_(pauta) {
+    var contenedor = document.getElementById('dash-pauta-imprimir');
+    if (!contenedor) return;
+    var items = pauta.items || [];
+
+    var itemsHtml = items.map(function (item) {
+      var contexto = [];
+      if (item.url_modulo) contexto.push('URL: ' + item.url_modulo);
+      if (item.usuario_prueba) contexto.push('Usuario de prueba: ' + item.usuario_prueba);
+      if (item.ref_credencial) contexto.push('Credencial: ' + item.ref_credencial);
+      var contextoHtml = contexto.length
+        ? '<p class="sigso-ot-item__contexto">🔍 ' + Componentes.escaparHtml(contexto.join(' · ')) + '</p>'
+        : '';
+      var fechaHtml = item.fecha_comprometida
+        ? '<span class="sigso-ot-item__fecha">📅 Comprometida: ' + Componentes.escaparHtml(String(item.fecha_comprometida).replace('T', ' ').slice(0, 16)) + '</span>'
+        : '<span class="sigso-ot-item__fecha">📅 Sin fecha comprometida</span>';
+
+      return '<div class="sigso-ot-item">' +
+        '<h3>' + Componentes.escaparHtml(item.solicitud_id) + '-' + item.numero_item + ' — ' + Componentes.escaparHtml(item.titulo) + '</h3>' +
+        '<p class="sigso-ot-item__meta">' + Componentes.badgePrioridad(item.prioridad) + ' ' + fechaHtml + '</p>' +
+        '<p>' + Componentes.escaparHtml(item.descripcion) + '</p>' +
+        (item.resultado_esperado ? '<p><strong>Resultado esperado:</strong> ' + Componentes.escaparHtml(item.resultado_esperado) + '</p>' : '') +
+        contextoHtml +
+        '</div>';
+    }).join('') || '<p>Sin pendientes.</p>';
+
+    contenedor.innerHTML = '<div class="sigso-solo-imprimir sigso-ot-imprimir">' +
+      '<div class="sigso-encabezado-reporte">' +
+      '<svg class="sigso-marca" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">' +
+      '<rect width="32" height="32" rx="8" fill="#6D5DF6"></rect>' +
+      '<text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">S</text>' +
+      '</svg>' +
+      '<div><h1>Pauta de trabajo — ' + Componentes.escaparHtml(pauta.desarrollador) + '</h1>' +
+      '<p>' + items.length + ' pendiente(s) · Generada el ' + Componentes.escaparHtml(new Date().toLocaleString('es-CL')) + '</p>' +
+      '</div></div>' +
+      itemsHtml +
+      '<p class="sigso-ot-pie">✅ Para cerrar cada una: responde "LISTO &lt;N° de solicitud&gt;" por WhatsApp, o márcala Terminada en el sistema si ya tienes acceso.</p>' +
+      '</div>';
   }
 
   function leerFiltros_() {
@@ -157,6 +245,7 @@
     select.value = actual;
     filaSelector.classList.remove('sigso-oculto');
     renderDerivarLote_(data);
+    actualizarVisibilidadPauta_();
   }
 
   // v3.1 (§2.6): el traspaso masivo de una bandeja a otra. Solo se ofrece

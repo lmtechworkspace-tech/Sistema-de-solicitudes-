@@ -503,6 +503,10 @@
           <div class="sigso-campo sigso-oculto" id="fila-bandeja">
             <label for="filtro-bandeja">Ver bandeja de</label>
             <select id="filtro-bandeja"><option value="">Todas (sin acotar)</option></select>
+            <!-- v5.2 Fase B (§3.4): pauta de trabajo por lote -- UNA hoja con
+                 TODAS las pendientes del desarrollador elegido, en vez de una
+                 Orden de Trabajo suelta por solicitud. -->
+            <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-imprimir-pauta">📋 Pauta de trabajo (PDF)</button>
           </div>
 
           <div class="sigso-panel-lote sigso-oculto" id="bloque-derivar-lote">
@@ -588,6 +592,10 @@
               <div class="sigso-card sigso-grafico-card"><h3>Por empresa</h3><canvas id="grafico-empresa"></canvas></div>
             </div>
           </div>
+
+          <!-- v5.2 Fase B: pauta de trabajo por lote -- vive fuera de los
+               tabs porque se imprime SOLA (ver dashboard.css @media print). -->
+          <div id="dash-pauta-imprimir"></div>
         </section>
 
         <section id="vista-detalle" class="sigso-oculto">

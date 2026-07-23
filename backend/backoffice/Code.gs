@@ -27,6 +27,8 @@
 var BACKOFFICE_ACTIONS = {
   ping: handlePing_,
   getDashboardData: handleGetDashboardData_,
+  // v5.2 (Fase B, §3.4): pauta de trabajo por lote (PDF) de un desarrollador.
+  getPautaTrabajo: handleGetPautaTrabajo_,
   getPanelGerencia: handleGetPanelGerencia_,
   // v5.2 (§4.2): envio manual del reporte ejecutivo, solo ADM.
   enviarReporteGerenciaAhora: handleEnviarReporteGerenciaAhora_,
@@ -62,6 +64,7 @@ var PAGINAS_HTML = { app: 'App', admin: 'Admin' };
 // protege nada -- aqui se rechaza aunque manipulen el navegador.
 var MODULO_POR_ACCION = {
   getDashboardData: 'bandeja',
+  getPautaTrabajo: 'bandeja',
   // Ver el detalle es de lectura y Gerencia ya lo necesita desde su propio
   // panel (Solicitudes.getDetalle ya le devuelve una version de solo lectura
   // -- sin transiciones ni responsables -- para el rol GERENCIA). Por eso
@@ -331,6 +334,10 @@ function handleEnviarReporteGerenciaAhora_(data, contexto) {
 
 function handleGetPanelJefatura_(data, contexto) {
   return jsonResponse_({ ok: true, data: Jefatura.getPanel(data, contexto) });
+}
+
+function handleGetPautaTrabajo_(data, contexto) {
+  return responderResultado_(Dashboard.getPautaDesarrollador(data, contexto));
 }
 
 function handleGetSolicitudDetalle_(data, contexto) {
