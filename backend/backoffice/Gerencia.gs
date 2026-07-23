@@ -54,8 +54,15 @@ var Gerencia = {
     var claveCache = 'gerencia_panel::' + JSON.stringify(filtrosBase);
     var cache = CacheService.getScriptCache();
     var cacheado = cache.get(claveCache);
+    // v5.2 (§4.2, boton "Enviar a Gerencia ahora"): rol_actual viaja en la
+    // respuesta pero NUNCA en el valor cacheado -- mismo criterio que
+    // Dashboard.getData (Dashboard.gs): se agrega DESPUES de leer/escribir el
+    // cache, para que un caso cacheado por un ADM no le "preste" su rol al
+    // siguiente GERENCIA que pida el mismo panel.
     if (cacheado) {
-      return JSON.parse(cacheado);
+      var datosCacheados = JSON.parse(cacheado);
+      datosCacheados.rol_actual = contexto ? contexto.rol : '';
+      return datosCacheados;
     }
     var datos = calcularPanelGerencia_(filtrosBase);
     // JSON grande: CacheService limita cada valor a 100 KB. Si el panel no
@@ -66,6 +73,7 @@ var Gerencia = {
     } catch (err) {
       // valor demasiado grande para el cache: se sirve sin cachear.
     }
+    datos.rol_actual = contexto ? contexto.rol : '';
     return datos;
   }
 };

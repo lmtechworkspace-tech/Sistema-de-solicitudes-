@@ -253,6 +253,40 @@ var Notificaciones = {
     });
   },
 
+  // v5.2 (§4.2, propuesta de adopcion): envio MANUAL del reporte ejecutivo --
+  // complementa (no reemplaza) enviarResumenSemanal/enviarReporteMensual, que
+  // siguen corriendo por trigger. La clave de evento usa un UUID (no la
+  // "clave del dia" que usa enviarReporteProgramado_): nunca se deduplica
+  // contra el envio semanal/mensual ni contra un envio manual anterior del
+  // mismo dia -- si el Admin lo pide, sale SI o SI, no "ya se envio hoy".
+  // Solo callable por ADM (Code.gs valida el rol antes de llegar aca).
+  enviarReporteEjecutivoAhora: function (data, contexto) {
+    if (!contexto || contexto.rol !== 'ADM') {
+      return { _forbidden: true, message: 'Solo un Administrador puede enviar el reporte a Gerencia.' };
+    }
+    var empresas = {};
+    leerFilas_(SHEETS.USUARIOS).forEach(function (u) { empresas[u.empresa_id] = true; });
+
+    var resultados = [];
+    Object.keys(empresas).forEach(function (empresaId) {
+      var kpis = Dashboard.getData({ empresa_id: empresaId }, { rol: 'ADM', email: '' });
+      var asunto = 'SIGSO — Reporte ejecutivo (' + empresaId + ')';
+      var cuerpo =
+        'Reporte ejecutivo SIGSO\n\n' +
+        'Solicitudes abiertas: ' + kpis.resumen.total_abiertas + '\n' +
+        'Criticas activas (P1): ' + kpis.resumen.criticas_activas + '\n' +
+        'Subsolicitudes con SLA vencido: ' + kpis.resumen.sla_vencido + '\n' +
+        'Ingresadas hoy: ' + kpis.resumen.del_dia + '\n\n' +
+        'Enviado a pedido desde el Panel de Gerencia.' +
+        pieCorreoBackoffice_();
+      var claveEvento = 'REPORTE_EJECUTIVO_MANUAL:' + empresaId + ':' + Utilities.getUuid();
+      obtenerEmailsPorRol_(empresaId, ['GERENCIA', 'ADM']).forEach(function (email) {
+        resultados.push(enviarCorreo_('REPORTE:' + empresaId, email, claveEvento, asunto, cuerpo));
+      });
+    });
+    return { enviados: resultados.filter(function (r) { return r.enviado; }).length, total: resultados.length };
+  },
+
   // v4.2 (§4, documentacion/SIGSO-v4.2-propuestas-modulo-jefatura.md): "al
   // finalizar el dia poder ver que ocurrio en su departamento" -- lo que la
   // jefatura pidio explicitamente. Un correo por jefe activo, al final de

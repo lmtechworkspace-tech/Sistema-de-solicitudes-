@@ -662,6 +662,92 @@ button.sigso-kpi {
   color: var(--texto-2);
 }
 
+/* v5.2 (§3.1, propuesta de adopcion): Orden de Trabajo -- una hoja por
+   solicitud, pensada para leerse en el celular (WhatsApp) sin abrir el
+   sistema. Mismo patron visual que sigso-encabezado-reporte (Gerencia). */
+.sigso-ot-item {
+  border-bottom: 1px solid var(--borde);
+  padding: 0.6rem 0;
+}
+
+.sigso-ot-item:last-of-type {
+  border-bottom: none;
+}
+
+.sigso-ot-item h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+}
+
+.sigso-ot-item__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 0.35rem;
+}
+
+.sigso-ot-item__fecha {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.sigso-ot-item__contexto {
+  font-size: 0.85rem;
+  color: var(--texto-2);
+}
+
+.sigso-ot-pie {
+  margin-top: 1rem;
+  padding-top: 0.6rem;
+  border-top: 2px solid var(--acento-marca);
+  font-size: 0.9rem;
+}
+
+/* v5.2 (§4.1, propuesta de adopcion): Reporte Ejecutivo -- deliberadamente
+   NO es el tablero detallado. Numeros grandes + semaforo + 3-5 lineas en
+   texto plano, para quien "dificilmente va a navegar" un panel con filtros y
+   columnas. Oculto siempre en pantalla; en impresion solo se activa cuando
+   el body trae la clase sigso-modo-ejecutivo (ver @media print mas abajo). */
+.sigso-reporte-ejecutivo-imprimir {
+  display: none;
+}
+
+.sigso-reporte-ejecutivo__numeros {
+  display: flex;
+  gap: 1.5rem;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+
+.sigso-reporte-ejecutivo__numero {
+  text-align: center;
+}
+
+.sigso-reporte-ejecutivo__numero strong {
+  display: block;
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.sigso-reporte-ejecutivo__numero span {
+  font-size: 0.8rem;
+  color: var(--texto-2);
+}
+
+.sigso-reporte-ejecutivo__semaforo {
+  font-size: 1.1rem;
+  margin: 0.75rem 0;
+}
+
+.sigso-reporte-ejecutivo__lineas {
+  margin: 1rem 0;
+  padding-left: 1.2rem;
+}
+
+.sigso-reporte-ejecutivo__lineas li {
+  margin-bottom: 0.4rem;
+}
+
 /* Horizontal: el tablero tiene 10 columnas -- en vertical (carta/A4) el
    navegador las corta en vez de encogerlas. */
 @page {
@@ -714,6 +800,18 @@ button.sigso-kpi {
     white-space: normal;
     word-break: break-word;
     padding: 0.3rem 0.35rem;
+  }
+
+  /* v5.2 (§4.1): el Reporte Ejecutivo se imprime SOLO -- oculta el resto de
+     #vista-gerencia (kpis, semaforo, tablero detallado, tabs) y muestra
+     unicamente su propio bloque. Se activa con btn-imprimir-ejecutivo
+     (gerencia.js), que agrega la clase al body antes de window.print(). */
+  body.sigso-modo-ejecutivo #vista-gerencia > :not(#ger-reporte-ejecutivo-imprimir) {
+    display: none !important;
+  }
+
+  body.sigso-modo-ejecutivo #ger-reporte-ejecutivo-imprimir {
+    display: block !important;
   }
 }
 

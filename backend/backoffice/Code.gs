@@ -28,6 +28,8 @@ var BACKOFFICE_ACTIONS = {
   ping: handlePing_,
   getDashboardData: handleGetDashboardData_,
   getPanelGerencia: handleGetPanelGerencia_,
+  // v5.2 (§4.2): envio manual del reporte ejecutivo, solo ADM.
+  enviarReporteGerenciaAhora: handleEnviarReporteGerenciaAhora_,
   // v4.2: panel de Jefatura (solo lectura, acotado al equipo).
   getPanelJefatura: handleGetPanelJefatura_,
   getSolicitudDetalle: handleGetSolicitudDetalle_,
@@ -75,6 +77,10 @@ var MODULO_POR_ACCION = {
   derivarSolicitud: 'bandeja',
   agregarComentario: 'bandeja',
   getPanelGerencia: 'gerencia',
+  // v5.2 (§4.2): el boton vive en el panel de Gerencia, pero Notificaciones.
+  // enviarReporteEjecutivoAhora ya rechaza a cualquiera que no sea ADM --
+  // esto solo exige el modulo (mismo criterio que el resto de "gerencia").
+  enviarReporteGerenciaAhora: 'gerencia',
   getPanelJefatura: 'jefatura',
   guardarCatalogo: 'administracion',
   listarCatalogo: 'administracion',
@@ -317,6 +323,10 @@ function handleGetDashboardData_(data, contexto) {
 // cualquier rol autenticado puede pedirlo (la UI solo lo ofrece a GERENCIA).
 function handleGetPanelGerencia_(data, contexto) {
   return jsonResponse_({ ok: true, data: Gerencia.getPanel(data, contexto) });
+}
+
+function handleEnviarReporteGerenciaAhora_(data, contexto) {
+  return responderResultado_(Notificaciones.enviarReporteEjecutivoAhora(data, contexto));
 }
 
 function handleGetPanelJefatura_(data, contexto) {

@@ -78,6 +78,50 @@
         'Reporte generado el ' + new Date().toLocaleString('es-CL');
       window.print();
     });
+    // v5.2 (§4.1): Reporte Ejecutivo -- una hoja simple, distinta del
+    // tablero detallado de arriba. sigso-modo-ejecutivo (dashboard.css)
+    // oculta todo #vista-gerencia menos ese bloque mientras se imprime.
+    var botonEjecutivo = document.getElementById('btn-imprimir-ejecutivo');
+    if (botonEjecutivo) {
+      botonEjecutivo.addEventListener('click', function () {
+        if (panelActual) renderReporteEjecutivo_(panelActual);
+        document.body.classList.add('sigso-modo-ejecutivo');
+        window.print();
+      });
+      window.addEventListener('afterprint', function () {
+        document.body.classList.remove('sigso-modo-ejecutivo');
+      });
+    }
+    // v5.2 (§4.2): envio manual, complementa el trigger semanal/mensual
+    // (Notificaciones.enviarResumenSemanal/enviarReporteMensual, Triggers.gs)
+    // -- solo lo ve/usa el Administrador (gate real en el backend tambien).
+    var botonEnviarAhora = document.getElementById('btn-enviar-gerencia-ahora');
+    if (botonEnviarAhora) {
+      botonEnviarAhora.addEventListener('click', function () {
+        botonEnviarAhora.disabled = true;
+        var textoOriginal = botonEnviarAhora.textContent;
+        botonEnviarAhora.textContent = 'Enviando…';
+        llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'enviarReporteGerenciaAhora', {})
+          .then(function (respuesta) {
+            if (respuesta.ok) {
+              var total = respuesta.data && respuesta.data.enviados;
+              Componentes.aviso({
+                texto: total ? 'Reporte enviado a ' + total + ' destinatario(s).' : 'No hay destinatarios de Gerencia configurados.',
+                tipo: total ? 'exito' : 'info'
+              });
+            } else {
+              Componentes.aviso({ texto: respuesta.message || 'No se pudo enviar el reporte.', tipo: 'error' });
+            }
+          })
+          .catch(function () {
+            Componentes.aviso({ texto: 'No se pudo conectar con el servidor. Intenta nuevamente.', tipo: 'error' });
+          })
+          .finally(function () {
+            botonEnviarAhora.disabled = false;
+            botonEnviarAhora.textContent = textoOriginal;
+          });
+      });
+    }
     // G1-c: compacta oculta el bloque de contenido -- al volver a compacta,
     // colapsa cualquier fila que hubiera quedado abierta.
     var selectorDensidad = document.getElementById('ger-densidad');
@@ -149,6 +193,14 @@
         renderRecurrencia_(respuesta.data.recurrencia);
         renderTendencia_(respuesta.data.tendencia, respuesta.data.ciclo_por_etapa);
         renderCarga_(respuesta.data.carga);
+        // v5.2 (§4.2): "Enviar a Gerencia ahora" solo lo ve el Administrador
+        // -- rol_actual viaja SIEMPRE fresco (nunca desde el cache del panel,
+        // ver Gerencia.gs), asi que esto no se equivoca aunque el panel venga
+        // cacheado de una sesion de otro rol.
+        var botonEnviarAhora = document.getElementById('btn-enviar-gerencia-ahora');
+        if (botonEnviarAhora) {
+          botonEnviarAhora.classList.toggle('sigso-oculto', respuesta.data.rol_actual !== 'ADM');
+        }
         return respuesta;
       });
   }
@@ -222,6 +274,56 @@
         etiqueta: 'Atenciones directas',
         titulo: 'Solicitudes resueltas fuera del flujo (por teléfono) y registradas después. No entran en los indicadores de cumplimiento porque nunca tuvieron fecha comprometida.'
       });
+  }
+
+  // v5.2 (§4.1, propuesta de adopcion): Reporte Ejecutivo -- UNA hoja, sin
+  // tablero ni filtros: numeros grandes, un semaforo y 3-5 lineas en texto
+  // plano de "que necesita tu atencion". Distinto a proposito del informe
+  // detallado de arriba (ese es para quien SI quiere navegar el detalle).
+  function renderReporteEjecutivo_(panel) {
+    var contenedor = document.getElementById('ger-reporte-ejecutivo-imprimir');
+    if (!contenedor) return;
+    var kpis = panel.kpis || {};
+    var items = panel.items || [];
+    var atrasadas = items.filter(function (i) { return i.cumplimiento.codigo === 'ATRASADA_DESARROLLADOR'; }).length;
+    var enRiesgo = items.filter(function (i) { return i.cumplimiento.codigo === 'EN_RIESGO'; }).length;
+
+    var semaforo = atrasadas > 0
+      ? '🔴 Hay solicitudes atrasadas que necesitan atención'
+      : (enRiesgo > 0 ? '🟡 Al día, pero hay ítems cerca de vencer' : '🟢 Todo al día');
+
+    var lineas = [];
+    lineas.push((kpis.atrasadas_activas || 0) + ' solicitud(es) ya pasaron su fecha comprometida y siguen sin entregarse.');
+    lineas.push((kpis.esperando_validacion || 0) + ' ítem(s) están listos y esperan que el solicitante confirme que quedaron bien.');
+    lineas.push((kpis.sin_comprometer || 0) + ' solicitud(es) todavía no tienen fecha comprometida por el equipo.');
+    if (kpis.pct_cumplimiento_desarrollador !== null && kpis.pct_cumplimiento_desarrollador !== undefined) {
+      lineas.push('De lo entregado, el ' + kpis.pct_cumplimiento_desarrollador + '% se entregó a tiempo.');
+    }
+
+    contenedor.innerHTML =
+      '<div class="sigso-encabezado-reporte">' +
+      '<svg class="sigso-marca" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">' +
+      '<rect width="32" height="32" rx="8" fill="#6D5DF6"></rect>' +
+      '<text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">S</text>' +
+      '</svg>' +
+      '<div><h1>SIGSO — Reporte ejecutivo</h1>' +
+      '<p>HomePymes / RLD · Generado el ' + Componentes.escaparHtml(new Date().toLocaleString('es-CL')) + '</p></div>' +
+      '</div>' +
+      '<p class="sigso-reporte-ejecutivo__semaforo">' + semaforo + '</p>' +
+      '<div class="sigso-reporte-ejecutivo__numeros">' +
+      numeroEjecutivo_(kpis.pct_cumplimiento_desarrollador === null || kpis.pct_cumplimiento_desarrollador === undefined ? '—' : kpis.pct_cumplimiento_desarrollador + '%', 'Cumplimiento') +
+      numeroEjecutivo_(kpis.atrasadas_activas || 0, 'Atrasadas') +
+      numeroEjecutivo_(kpis.esperando_validacion || 0, 'Por validar') +
+      '</div>' +
+      '<p><strong>Qué necesita tu atención:</strong></p>' +
+      '<ul class="sigso-reporte-ejecutivo__lineas">' +
+      lineas.map(function (l) { return '<li>' + Componentes.escaparHtml(l) + '</li>'; }).join('') +
+      '</ul>';
+  }
+
+  function numeroEjecutivo_(valor, etiqueta) {
+    return '<div class="sigso-reporte-ejecutivo__numero"><strong>' + Componentes.escaparHtml(String(valor)) +
+      '</strong><span>' + Componentes.escaparHtml(etiqueta) + '</span></div>';
   }
 
   // Misma clave de agrupacion que Gerencia.calcularRecurrencia_ (Modulo x

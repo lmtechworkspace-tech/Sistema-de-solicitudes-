@@ -181,6 +181,47 @@ test('Notificaciones.enviarReporteMensual (§17.4) envia tambien al Desarrollado
   assert.deepEqual(destinatarios, ['admin@homepymes.cl', 'analista@homepymes.cl', 'dev@homepymes.cl']);
 });
 
+test('Notificaciones.enviarReporteEjecutivoAhora (v5.2 §4.2) exige rol ADM', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx);
+
+  const resultado = ctx.Notificaciones.enviarReporteEjecutivoAhora({}, { rol: 'GERENCIA', email: 'gerente@homepymes.cl' });
+
+  assert.equal(resultado._forbidden, true);
+  assert.equal(ctx.leerFilas_('LOG_NOTIFICACIONES').length, 0);
+});
+
+test('Notificaciones.enviarReporteEjecutivoAhora (v5.2 §4.2) envia YA a Gerencia+Admin, sin esperar el trigger', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0001' });
+  seedSubsolicitud(ctx);
+  ctx.agregarFila_(ctx.SHEETS.USUARIOS, {
+    usuario_id: 'U4', nombre: 'Gerente Uno', email: 'gerente@homepymes.cl', empresa_id: 'HP',
+    rol: 'GERENCIA', activo: true, ultimo_acceso: '', creado_por: 'sistema'
+  });
+
+  const resultado = ctx.Notificaciones.enviarReporteEjecutivoAhora({}, { rol: 'ADM', email: 'admin@homepymes.cl' });
+
+  assert.equal(resultado.enviados, 2);
+  const log = ctx.leerFilas_('LOG_NOTIFICACIONES').filter((l) => l.evento.indexOf('REPORTE_EJECUTIVO_MANUAL') === 0);
+  const destinatarios = log.map((l) => l.destinatario).sort();
+  assert.deepEqual(destinatarios, ['admin@homepymes.cl', 'gerente@homepymes.cl']);
+});
+
+test('Notificaciones.enviarReporteEjecutivoAhora (v5.2 §4.2) nunca se deduplica contra un envio previo del mismo dia', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx);
+
+  ctx.Notificaciones.enviarReporteEjecutivoAhora({}, { rol: 'ADM', email: 'admin@homepymes.cl' });
+  const segundo = ctx.Notificaciones.enviarReporteEjecutivoAhora({}, { rol: 'ADM', email: 'admin@homepymes.cl' });
+
+  // 2 destinatarios (analista? no -- solo GERENCIA/ADM; aca solo admin@ existe)
+  // por corrida: si se dedujera, el segundo envio saldria con enviado:false.
+  assert.equal(segundo.enviados, segundo.total);
+});
+
 test('Notificaciones.listarLogs (RF-019) exige rol Admin y devuelve los mas recientes primero', () => {
   const ctx = loadConSchema();
   ctx.agregarFila_(ctx.SHEETS.LOG_NOTIFICACIONES, {

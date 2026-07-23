@@ -3308,6 +3308,92 @@ button.sigso-kpi {
   color: var(--texto-2);
 }
 
+/* v5.2 (§3.1, propuesta de adopcion): Orden de Trabajo -- una hoja por
+   solicitud, pensada para leerse en el celular (WhatsApp) sin abrir el
+   sistema. Mismo patron visual que sigso-encabezado-reporte (Gerencia). */
+.sigso-ot-item {
+  border-bottom: 1px solid var(--borde);
+  padding: 0.6rem 0;
+}
+
+.sigso-ot-item:last-of-type {
+  border-bottom: none;
+}
+
+.sigso-ot-item h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+}
+
+.sigso-ot-item__meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 0.35rem;
+}
+
+.sigso-ot-item__fecha {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.sigso-ot-item__contexto {
+  font-size: 0.85rem;
+  color: var(--texto-2);
+}
+
+.sigso-ot-pie {
+  margin-top: 1rem;
+  padding-top: 0.6rem;
+  border-top: 2px solid var(--acento-marca);
+  font-size: 0.9rem;
+}
+
+/* v5.2 (§4.1, propuesta de adopcion): Reporte Ejecutivo -- deliberadamente
+   NO es el tablero detallado. Numeros grandes + semaforo + 3-5 lineas en
+   texto plano, para quien "dificilmente va a navegar" un panel con filtros y
+   columnas. Oculto siempre en pantalla; en impresion solo se activa cuando
+   el body trae la clase sigso-modo-ejecutivo (ver @media print mas abajo). */
+.sigso-reporte-ejecutivo-imprimir {
+  display: none;
+}
+
+.sigso-reporte-ejecutivo__numeros {
+  display: flex;
+  gap: 1.5rem;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+
+.sigso-reporte-ejecutivo__numero {
+  text-align: center;
+}
+
+.sigso-reporte-ejecutivo__numero strong {
+  display: block;
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.sigso-reporte-ejecutivo__numero span {
+  font-size: 0.8rem;
+  color: var(--texto-2);
+}
+
+.sigso-reporte-ejecutivo__semaforo {
+  font-size: 1.1rem;
+  margin: 0.75rem 0;
+}
+
+.sigso-reporte-ejecutivo__lineas {
+  margin: 1rem 0;
+  padding-left: 1.2rem;
+}
+
+.sigso-reporte-ejecutivo__lineas li {
+  margin-bottom: 0.4rem;
+}
+
 /* Horizontal: el tablero tiene 10 columnas -- en vertical (carta/A4) el
    navegador las corta en vez de encogerlas. */
 @page {
@@ -3360,6 +3446,18 @@ button.sigso-kpi {
     white-space: normal;
     word-break: break-word;
     padding: 0.3rem 0.35rem;
+  }
+
+  /* v5.2 (§4.1): el Reporte Ejecutivo se imprime SOLO -- oculta el resto de
+     #vista-gerencia (kpis, semaforo, tablero detallado, tabs) y muestra
+     unicamente su propio bloque. Se activa con btn-imprimir-ejecutivo
+     (gerencia.js), que agrega la clase al body antes de window.print(). */
+  body.sigso-modo-ejecutivo #vista-gerencia > :not(#ger-reporte-ejecutivo-imprimir) {
+    display: none !important;
+  }
+
+  body.sigso-modo-ejecutivo #ger-reporte-ejecutivo-imprimir {
+    display: block !important;
   }
 }
 
@@ -3675,6 +3773,13 @@ button.sigso-kpi {
             </select>
           </div>
           <button type="button" class="sigso-boton--secundario" id="btn-imprimir-gerencia">Descargar / Imprimir PDF</button>
+          <!-- v5.2 (§4.1, propuesta de adopcion): reporte de UNA hoja, simple
+               (numeros grandes + semaforo + 3-5 lineas), pensado para
+               Gerencia que "dificilmente va a navegar" el tablero detallado. -->
+          <button type="button" class="sigso-boton--secundario" id="btn-imprimir-ejecutivo">📋 Reporte ejecutivo (simple)</button>
+          <!-- v5.2 (§4.2): complementa el envio programado (semanal/mensual) --
+               solo el Administrador lo ve (rol_actual, ver Gerencia.gs). -->
+          <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-enviar-gerencia-ahora">📧 Enviar a Gerencia ahora</button>
         </div>
         <!-- UI-1 (§6): encabezado institucional del reporte impreso. -->
         <div class="sigso-solo-imprimir sigso-encabezado-reporte">
@@ -3684,6 +3789,11 @@ button.sigso-kpi {
         <p class="sigso-ayuda sigso-solo-imprimir" id="ger-fecha-reporte"></p>
         <div id="ger-contenedor-tablero"></div>
       </div>
+
+      <!-- v5.2 (§4.1): reporte ejecutivo -- vive fuera de ger-panel-tablero
+           porque se imprime SOLO (oculta el resto de #vista-gerencia, ver
+           dashboard.css @media print). -->
+      <div id="ger-reporte-ejecutivo-imprimir"></div>
 
       <div id="ger-panel-gantt" class="sigso-card sigso-oculto">
         <h3>Carta Gantt (fecha comprometida por ítem)</h3>
@@ -5133,11 +5243,17 @@ var Iconos = (function () {
   function render_(detalle) {
     var contenedor = document.getElementById('detalle-contenido');
     contenedor.innerHTML =
+      '<div class="sigso-no-imprimir">' +
+      '<div class="sigso-detalle-toolbar">' +
+      '<button type="button" class="sigso-boton--secundario" id="btn-imprimir-ot">📄 Orden de trabajo (PDF)</button>' +
+      '</div>' +
       '<div class="sigso-detalle-layout">' +
       '<div class="sigso-detalle-ficha">' + renderFicha_(detalle) + '</div>' +
       '<div class="sigso-detalle-centro"><h3>Qu&eacute; hacer (items)</h3>' + renderSubsolicitudes_(detalle) + '</div>' +
       '<div class="sigso-detalle-historia">' + renderHistoria_(detalle) + '</div>' +
-      '</div>';
+      '</div>' +
+      '</div>' +
+      renderOtImprimir_(detalle);
 
     wireAcciones_(detalle.solicitud.solicitud_id);
 
@@ -5150,6 +5266,64 @@ var Iconos = (function () {
         enviarComentario_(detalle.solicitud.solicitud_id);
       });
     }
+
+    // v5.2 (propuesta de adopcion, §3.1): "Orden de Trabajo" -- una hoja
+    // compartible por WhatsApp con Leo, sin pedirle que entre al sistema.
+    // Reusa exactamente los datos que getDetalle ya trae (sin tocar backend).
+    var botonOt = document.getElementById('btn-imprimir-ot');
+    if (botonOt) {
+      botonOt.addEventListener('click', function () {
+        var fecha = document.getElementById('ot-fecha-generada');
+        if (fecha) fecha.textContent = 'Generada el ' + new Date().toLocaleString('es-CL');
+        window.print();
+      });
+    }
+  }
+
+  // v5.2 (§3.1): la OT es de UNA hoja, pensada para leerse en el celular
+  // (WhatsApp) sin abrir el sistema -- solo lo esencial para ejecutar: que
+  // se pide, donde, prioridad/fecha, y como avisar que quedo listo. No repite
+  // el historial ni los comentarios (eso se queda en el sistema).
+  function renderOtImprimir_(detalle) {
+    var s = detalle.solicitud;
+    var subsolicitudes = detalle.subsolicitudes || [];
+
+    var itemsHtml = subsolicitudes.map(function (sub) {
+      var contexto = [];
+      if (sub.url_modulo) contexto.push('URL: ' + sub.url_modulo);
+      if (sub.usuario_prueba) contexto.push('Usuario de prueba: ' + sub.usuario_prueba);
+      if (sub.ref_credencial) contexto.push('Credencial: ' + sub.ref_credencial);
+      var contextoHtml = contexto.length
+        ? '<p class="sigso-ot-item__contexto">🔍 ' + Componentes.escaparHtml(contexto.join(' · ')) + '</p>'
+        : '';
+      var fechaHtml = sub.fecha_comprometida
+        ? '<span class="sigso-ot-item__fecha">📅 Comprometida: ' + Componentes.escaparHtml(fechaCorta_(sub.fecha_comprometida)) + '</span>'
+        : '<span class="sigso-ot-item__fecha">📅 Sin fecha comprometida</span>';
+
+      return '<div class="sigso-ot-item">' +
+        '<h3>' + sub.numero_item + '. ' + Componentes.escaparHtml(sub.titulo) + '</h3>' +
+        '<p class="sigso-ot-item__meta">' + Componentes.badgePrioridad(sub.prioridad) + ' ' + fechaHtml + '</p>' +
+        '<p>' + Componentes.escaparHtml(sub.descripcion) + '</p>' +
+        (sub.resultado_esperado ? '<p><strong>Resultado esperado:</strong> ' + Componentes.escaparHtml(sub.resultado_esperado) + '</p>' : '') +
+        contextoHtml +
+        '</div>';
+    }).join('') || '<p>Sin items.</p>';
+
+    return '<div class="sigso-solo-imprimir sigso-ot-imprimir">' +
+      '<div class="sigso-encabezado-reporte">' +
+      '<svg class="sigso-marca" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">' +
+      '<rect width="32" height="32" rx="8" fill="#6D5DF6"></rect>' +
+      '<text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">S</text>' +
+      '</svg>' +
+      '<div><h1>Orden de trabajo — ' + Componentes.escaparHtml(s.solicitud_id) + '</h1>' +
+      '<p>' + Componentes.escaparHtml(s.empresa_nombre || s.empresa_id) + ' · Solicitante: ' +
+      Componentes.escaparHtml(s.solicitante_nombre) + ' (' + Componentes.escaparHtml(s.solicitante_email) + ')</p>' +
+      '</div></div>' +
+      '<p class="sigso-ayuda" id="ot-fecha-generada"></p>' +
+      itemsHtml +
+      '<p class="sigso-ot-pie">✅ Para cerrar: responde <strong>"LISTO ' + Componentes.escaparHtml(s.solicitud_id) +
+      '"</strong> por este mismo WhatsApp, o marca el ítem como Terminada en el sistema si ya tienes acceso.</p>' +
+      '</div>';
   }
 
   // --- Columna izquierda: ficha (solo lectura, sticky) -------------------
@@ -5875,6 +6049,50 @@ var Iconos = (function () {
         'Reporte generado el ' + new Date().toLocaleString('es-CL');
       window.print();
     });
+    // v5.2 (§4.1): Reporte Ejecutivo -- una hoja simple, distinta del
+    // tablero detallado de arriba. sigso-modo-ejecutivo (dashboard.css)
+    // oculta todo #vista-gerencia menos ese bloque mientras se imprime.
+    var botonEjecutivo = document.getElementById('btn-imprimir-ejecutivo');
+    if (botonEjecutivo) {
+      botonEjecutivo.addEventListener('click', function () {
+        if (panelActual) renderReporteEjecutivo_(panelActual);
+        document.body.classList.add('sigso-modo-ejecutivo');
+        window.print();
+      });
+      window.addEventListener('afterprint', function () {
+        document.body.classList.remove('sigso-modo-ejecutivo');
+      });
+    }
+    // v5.2 (§4.2): envio manual, complementa el trigger semanal/mensual
+    // (Notificaciones.enviarResumenSemanal/enviarReporteMensual, Triggers.gs)
+    // -- solo lo ve/usa el Administrador (gate real en el backend tambien).
+    var botonEnviarAhora = document.getElementById('btn-enviar-gerencia-ahora');
+    if (botonEnviarAhora) {
+      botonEnviarAhora.addEventListener('click', function () {
+        botonEnviarAhora.disabled = true;
+        var textoOriginal = botonEnviarAhora.textContent;
+        botonEnviarAhora.textContent = 'Enviando…';
+        llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'enviarReporteGerenciaAhora', {})
+          .then(function (respuesta) {
+            if (respuesta.ok) {
+              var total = respuesta.data && respuesta.data.enviados;
+              Componentes.aviso({
+                texto: total ? 'Reporte enviado a ' + total + ' destinatario(s).' : 'No hay destinatarios de Gerencia configurados.',
+                tipo: total ? 'exito' : 'info'
+              });
+            } else {
+              Componentes.aviso({ texto: respuesta.message || 'No se pudo enviar el reporte.', tipo: 'error' });
+            }
+          })
+          .catch(function () {
+            Componentes.aviso({ texto: 'No se pudo conectar con el servidor. Intenta nuevamente.', tipo: 'error' });
+          })
+          .finally(function () {
+            botonEnviarAhora.disabled = false;
+            botonEnviarAhora.textContent = textoOriginal;
+          });
+      });
+    }
     // G1-c: compacta oculta el bloque de contenido -- al volver a compacta,
     // colapsa cualquier fila que hubiera quedado abierta.
     var selectorDensidad = document.getElementById('ger-densidad');
@@ -5946,6 +6164,14 @@ var Iconos = (function () {
         renderRecurrencia_(respuesta.data.recurrencia);
         renderTendencia_(respuesta.data.tendencia, respuesta.data.ciclo_por_etapa);
         renderCarga_(respuesta.data.carga);
+        // v5.2 (§4.2): "Enviar a Gerencia ahora" solo lo ve el Administrador
+        // -- rol_actual viaja SIEMPRE fresco (nunca desde el cache del panel,
+        // ver Gerencia.gs), asi que esto no se equivoca aunque el panel venga
+        // cacheado de una sesion de otro rol.
+        var botonEnviarAhora = document.getElementById('btn-enviar-gerencia-ahora');
+        if (botonEnviarAhora) {
+          botonEnviarAhora.classList.toggle('sigso-oculto', respuesta.data.rol_actual !== 'ADM');
+        }
         return respuesta;
       });
   }
@@ -6019,6 +6245,56 @@ var Iconos = (function () {
         etiqueta: 'Atenciones directas',
         titulo: 'Solicitudes resueltas fuera del flujo (por teléfono) y registradas después. No entran en los indicadores de cumplimiento porque nunca tuvieron fecha comprometida.'
       });
+  }
+
+  // v5.2 (§4.1, propuesta de adopcion): Reporte Ejecutivo -- UNA hoja, sin
+  // tablero ni filtros: numeros grandes, un semaforo y 3-5 lineas en texto
+  // plano de "que necesita tu atencion". Distinto a proposito del informe
+  // detallado de arriba (ese es para quien SI quiere navegar el detalle).
+  function renderReporteEjecutivo_(panel) {
+    var contenedor = document.getElementById('ger-reporte-ejecutivo-imprimir');
+    if (!contenedor) return;
+    var kpis = panel.kpis || {};
+    var items = panel.items || [];
+    var atrasadas = items.filter(function (i) { return i.cumplimiento.codigo === 'ATRASADA_DESARROLLADOR'; }).length;
+    var enRiesgo = items.filter(function (i) { return i.cumplimiento.codigo === 'EN_RIESGO'; }).length;
+
+    var semaforo = atrasadas > 0
+      ? '🔴 Hay solicitudes atrasadas que necesitan atención'
+      : (enRiesgo > 0 ? '🟡 Al día, pero hay ítems cerca de vencer' : '🟢 Todo al día');
+
+    var lineas = [];
+    lineas.push((kpis.atrasadas_activas || 0) + ' solicitud(es) ya pasaron su fecha comprometida y siguen sin entregarse.');
+    lineas.push((kpis.esperando_validacion || 0) + ' ítem(s) están listos y esperan que el solicitante confirme que quedaron bien.');
+    lineas.push((kpis.sin_comprometer || 0) + ' solicitud(es) todavía no tienen fecha comprometida por el equipo.');
+    if (kpis.pct_cumplimiento_desarrollador !== null && kpis.pct_cumplimiento_desarrollador !== undefined) {
+      lineas.push('De lo entregado, el ' + kpis.pct_cumplimiento_desarrollador + '% se entregó a tiempo.');
+    }
+
+    contenedor.innerHTML =
+      '<div class="sigso-encabezado-reporte">' +
+      '<svg class="sigso-marca" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">' +
+      '<rect width="32" height="32" rx="8" fill="#6D5DF6"></rect>' +
+      '<text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">S</text>' +
+      '</svg>' +
+      '<div><h1>SIGSO — Reporte ejecutivo</h1>' +
+      '<p>HomePymes / RLD · Generado el ' + Componentes.escaparHtml(new Date().toLocaleString('es-CL')) + '</p></div>' +
+      '</div>' +
+      '<p class="sigso-reporte-ejecutivo__semaforo">' + semaforo + '</p>' +
+      '<div class="sigso-reporte-ejecutivo__numeros">' +
+      numeroEjecutivo_(kpis.pct_cumplimiento_desarrollador === null || kpis.pct_cumplimiento_desarrollador === undefined ? '—' : kpis.pct_cumplimiento_desarrollador + '%', 'Cumplimiento') +
+      numeroEjecutivo_(kpis.atrasadas_activas || 0, 'Atrasadas') +
+      numeroEjecutivo_(kpis.esperando_validacion || 0, 'Por validar') +
+      '</div>' +
+      '<p><strong>Qué necesita tu atención:</strong></p>' +
+      '<ul class="sigso-reporte-ejecutivo__lineas">' +
+      lineas.map(function (l) { return '<li>' + Componentes.escaparHtml(l) + '</li>'; }).join('') +
+      '</ul>';
+  }
+
+  function numeroEjecutivo_(valor, etiqueta) {
+    return '<div class="sigso-reporte-ejecutivo__numero"><strong>' + Componentes.escaparHtml(String(valor)) +
+      '</strong><span>' + Componentes.escaparHtml(etiqueta) + '</span></div>';
   }
 
   // Misma clave de agrupacion que Gerencia.calcularRecurrencia_ (Modulo x

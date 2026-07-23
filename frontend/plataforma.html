@@ -657,6 +657,13 @@
                 </select>
               </div>
               <button type="button" class="sigso-boton--secundario" id="btn-imprimir-gerencia">Descargar / Imprimir PDF</button>
+              <!-- v5.2 (§4.1, propuesta de adopcion): reporte de UNA hoja,
+                   simple (numeros grandes + semaforo + 3-5 lineas), pensado
+                   para Gerencia que "dificilmente va a navegar" el tablero. -->
+              <button type="button" class="sigso-boton--secundario" id="btn-imprimir-ejecutivo">📋 Reporte ejecutivo (simple)</button>
+              <!-- v5.2 (§4.2): complementa el envio programado (semanal/
+                   mensual) -- solo el Administrador lo ve (rol_actual). -->
+              <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-enviar-gerencia-ahora">📧 Enviar a Gerencia ahora</button>
             </div>
             <div class="sigso-solo-imprimir sigso-encabezado-reporte">
               <svg class="sigso-marca" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">
@@ -671,6 +678,11 @@
             <p class="sigso-ayuda sigso-solo-imprimir" id="ger-fecha-reporte"></p>
             <div id="ger-contenedor-tablero"></div>
           </div>
+
+          <!-- v5.2 (§4.1): reporte ejecutivo -- vive fuera de ger-panel-tablero
+               porque se imprime SOLO (oculta el resto de #vista-gerencia, ver
+               dashboard.css @media print). -->
+          <div id="ger-reporte-ejecutivo-imprimir"></div>
 
           <div id="ger-panel-gantt" class="sigso-card sigso-oculto">
             <h3>Carta Gantt (fecha comprometida por ítem)</h3>

@@ -525,3 +525,21 @@ test('Gerencia.getPanel (v4.1): sin HISTORIAL_ESTADOS (instalacion vieja), G2/G4
   assert.equal(panel.items[0].reaperturas, 0);
   assert.ok(panel.ciclo_por_etapa.every((c) => c.muestras === 0));
 });
+
+// v5.2 (§4.2, propuesta de adopcion): el boton "Enviar a Gerencia ahora"
+// solo debe ofrecerse al Administrador -- rol_actual tiene que reflejar
+// SIEMPRE a quien esta mirando, no a quien poblo el cache (mismo criterio
+// que Dashboard.getData, ver Gerencia.gs).
+test('Gerencia.getPanel (v5.2): rol_actual viaja fresco incluso cuando el panel viene del cache', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx);
+
+  const primero = ctx.Gerencia.getPanel({}, { rol: 'ADM', email: 'admin@homepymes.cl' });
+  assert.equal(primero.rol_actual, 'ADM');
+
+  // Mismos filtros -> misma clave de cache -- si rol_actual quedara adentro
+  // del valor cacheado, este segundo caller (GERENCIA) veria "ADM" prestado.
+  const segundo = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+  assert.equal(segundo.rol_actual, 'GERENCIA');
+});

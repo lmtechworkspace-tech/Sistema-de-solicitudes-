@@ -63,11 +63,17 @@
   function render_(detalle) {
     var contenedor = document.getElementById('detalle-contenido');
     contenedor.innerHTML =
+      '<div class="sigso-no-imprimir">' +
+      '<div class="sigso-detalle-toolbar">' +
+      '<button type="button" class="sigso-boton--secundario" id="btn-imprimir-ot">📄 Orden de trabajo (PDF)</button>' +
+      '</div>' +
       '<div class="sigso-detalle-layout">' +
       '<div class="sigso-detalle-ficha">' + renderFicha_(detalle) + '</div>' +
       '<div class="sigso-detalle-centro"><h3>Qu&eacute; hacer (items)</h3>' + renderSubsolicitudes_(detalle) + '</div>' +
       '<div class="sigso-detalle-historia">' + renderHistoria_(detalle) + '</div>' +
-      '</div>';
+      '</div>' +
+      '</div>' +
+      renderOtImprimir_(detalle);
 
     wireAcciones_(detalle.solicitud.solicitud_id);
 
@@ -80,6 +86,64 @@
         enviarComentario_(detalle.solicitud.solicitud_id);
       });
     }
+
+    // v5.2 (propuesta de adopcion, §3.1): "Orden de Trabajo" -- una hoja
+    // compartible por WhatsApp con Leo, sin pedirle que entre al sistema.
+    // Reusa exactamente los datos que getDetalle ya trae (sin tocar backend).
+    var botonOt = document.getElementById('btn-imprimir-ot');
+    if (botonOt) {
+      botonOt.addEventListener('click', function () {
+        var fecha = document.getElementById('ot-fecha-generada');
+        if (fecha) fecha.textContent = 'Generada el ' + new Date().toLocaleString('es-CL');
+        window.print();
+      });
+    }
+  }
+
+  // v5.2 (§3.1): la OT es de UNA hoja, pensada para leerse en el celular
+  // (WhatsApp) sin abrir el sistema -- solo lo esencial para ejecutar: que
+  // se pide, donde, prioridad/fecha, y como avisar que quedo listo. No repite
+  // el historial ni los comentarios (eso se queda en el sistema).
+  function renderOtImprimir_(detalle) {
+    var s = detalle.solicitud;
+    var subsolicitudes = detalle.subsolicitudes || [];
+
+    var itemsHtml = subsolicitudes.map(function (sub) {
+      var contexto = [];
+      if (sub.url_modulo) contexto.push('URL: ' + sub.url_modulo);
+      if (sub.usuario_prueba) contexto.push('Usuario de prueba: ' + sub.usuario_prueba);
+      if (sub.ref_credencial) contexto.push('Credencial: ' + sub.ref_credencial);
+      var contextoHtml = contexto.length
+        ? '<p class="sigso-ot-item__contexto">🔍 ' + Componentes.escaparHtml(contexto.join(' · ')) + '</p>'
+        : '';
+      var fechaHtml = sub.fecha_comprometida
+        ? '<span class="sigso-ot-item__fecha">📅 Comprometida: ' + Componentes.escaparHtml(fechaCorta_(sub.fecha_comprometida)) + '</span>'
+        : '<span class="sigso-ot-item__fecha">📅 Sin fecha comprometida</span>';
+
+      return '<div class="sigso-ot-item">' +
+        '<h3>' + sub.numero_item + '. ' + Componentes.escaparHtml(sub.titulo) + '</h3>' +
+        '<p class="sigso-ot-item__meta">' + Componentes.badgePrioridad(sub.prioridad) + ' ' + fechaHtml + '</p>' +
+        '<p>' + Componentes.escaparHtml(sub.descripcion) + '</p>' +
+        (sub.resultado_esperado ? '<p><strong>Resultado esperado:</strong> ' + Componentes.escaparHtml(sub.resultado_esperado) + '</p>' : '') +
+        contextoHtml +
+        '</div>';
+    }).join('') || '<p>Sin items.</p>';
+
+    return '<div class="sigso-solo-imprimir sigso-ot-imprimir">' +
+      '<div class="sigso-encabezado-reporte">' +
+      '<svg class="sigso-marca" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">' +
+      '<rect width="32" height="32" rx="8" fill="#6D5DF6"></rect>' +
+      '<text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">S</text>' +
+      '</svg>' +
+      '<div><h1>Orden de trabajo — ' + Componentes.escaparHtml(s.solicitud_id) + '</h1>' +
+      '<p>' + Componentes.escaparHtml(s.empresa_nombre || s.empresa_id) + ' · Solicitante: ' +
+      Componentes.escaparHtml(s.solicitante_nombre) + ' (' + Componentes.escaparHtml(s.solicitante_email) + ')</p>' +
+      '</div></div>' +
+      '<p class="sigso-ayuda" id="ot-fecha-generada"></p>' +
+      itemsHtml +
+      '<p class="sigso-ot-pie">✅ Para cerrar: responde <strong>"LISTO ' + Componentes.escaparHtml(s.solicitud_id) +
+      '"</strong> por este mismo WhatsApp, o marca el ítem como Terminada en el sistema si ya tienes acceso.</p>' +
+      '</div>';
   }
 
   // --- Columna izquierda: ficha (solo lectura, sticky) -------------------
