@@ -85,11 +85,42 @@ var CuentasPortal = {
       case 'renombrar': return renombrarCuenta_(data);
       case 'asignar_password': return asignarPassword_(data);
       case 'eliminar': return eliminarCuenta_(data);
+      case 'generar_enlace': return generarEnlaceMagico_(data);
       default:
         return errorValidacion_('operacion', 'Operacion invalida: ' + data.operacion);
     }
   }
 };
+
+// v5.2 (Fase C, propuesta de adopcion §3.3/§4.3): "enlace magico" -- entra
+// al shell SIN password, para el usuario reacio (Leo/Gerencia) que no va a
+// loguearse por su cuenta. Reutiliza SESIONES_PORTAL, la MISMA hoja que ya
+// valida el login normal (backend/intake/Portal.gs: resolverCuentaPorToken_
+// no distingue como se creo la sesion), solo que con una vigencia mucho mas
+// larga (30 dias en vez de las 12h de una sesion por password) para que un
+// enlace mandado por WhatsApp siga sirviendo semanas despues. El enlace NO
+// es un permiso nuevo: que vea (bandeja/gerencia/etc.) lo sigue decidiendo
+// la lista `modulos` de la cuenta, igual que si hubiera entrado con clave.
+var HORAS_ENLACE_MAGICO = 24 * 30;
+
+function generarEnlaceMagico_(data) {
+  var cuenta = buscarCuentaPortal_(data.cuenta_id);
+  if (!cuenta) {
+    return errorValidacion_('cuenta_id', 'Cuenta no encontrada.');
+  }
+  var activa = cuenta.activo === true || cuenta.activo === 'TRUE' || cuenta.activo === 1;
+  if (!activa) {
+    return errorValidacion_('cuenta_id', 'La cuenta está desactivada -- actívala antes de generar el enlace.');
+  }
+  var token = Utilities.getUuid();
+  agregarFila_(SHEETS.SESIONES_PORTAL, {
+    token: token,
+    cuenta_id: data.cuenta_id,
+    expira: new Date(Date.now() + HORAS_ENLACE_MAGICO * 3600 * 1000).toISOString(),
+    creada: new Date().toISOString()
+  });
+  return { cuenta_id: data.cuenta_id, usuario: cuenta.usuario, token: token };
+}
 
 function crearCuenta_(data, contexto) {
   var usuario = String(data.usuario || '').trim().toLowerCase();

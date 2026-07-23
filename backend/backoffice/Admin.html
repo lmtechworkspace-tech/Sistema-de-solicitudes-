@@ -5026,6 +5026,10 @@ var Iconos = (function () {
         '<button type="button" class="sigso-boton--secundario" data-accion-cuenta="asignar_password" data-id="' + c.cuenta_id + '" data-usuario="' + Componentes.escaparHtml(c.usuario) + '">Asignar clave</button> ' +
         '<button type="button" class="sigso-boton--secundario" data-accion-cuenta="renombrar" data-id="' + c.cuenta_id + '" data-usuario="' + Componentes.escaparHtml(c.usuario) + '">Renombrar</button> ' +
         '<button type="button" class="sigso-boton--secundario" data-accion-cuenta="activar" data-id="' + c.cuenta_id + '" data-activo="' + !c.activo + '">' + (c.activo ? 'Desactivar' : 'Activar') + '</button> ' +
+        // v5.2 (Fase C, propuesta de adopcion): enlace sin password -- para
+        // la persona reacia (Leo/Gerencia) que no va a loguearse por su
+        // cuenta. Entra directo a lo que sus modulos ya permiten ver.
+        '<button type="button" class="sigso-boton--secundario" data-accion-cuenta="enlace_magico" data-id="' + c.cuenta_id + '" data-usuario="' + Componentes.escaparHtml(c.usuario) + '">🔗 Enlace mágico</button> ' +
         '<button type="button" class="sigso-boton--peligro" data-accion-cuenta="eliminar" data-id="' + c.cuenta_id + '" data-usuario="' + Componentes.escaparHtml(c.usuario) + '">Eliminar</button>' +
         '</td></tr>';
     }).join('');
@@ -5140,6 +5144,10 @@ var Iconos = (function () {
       });
       return;
     }
+    if (accion === 'enlace_magico') {
+      aplicarAccionCuenta_({ operacion: 'generar_enlace', cuenta_id: cuentaId });
+      return;
+    }
     var datos = accion === 'resetear'
       ? { operacion: 'resetear_password', cuenta_id: cuentaId }
       : { operacion: 'activar', cuenta_id: cuentaId, activo: activar };
@@ -5168,6 +5176,16 @@ var Iconos = (function () {
         });
       } else if (respuesta.data.eliminada) {
         Componentes.aviso({ tipo: 'exito', texto: 'Cuenta "' + respuesta.data.usuario + '" eliminada.' });
+      } else if (respuesta.data.token) {
+        // v5.2 (Fase C): entra directo, sin password -- valido 30 dias.
+        var sitio = (window.SIGSO_CONFIG && window.SIGSO_CONFIG.SITIO_PUBLICO) || '';
+        var url = sitio + 'plataforma.html?token=' + respuesta.data.token;
+        Componentes.aviso({
+          tipo: 'exito',
+          texto: 'Enlace mágico para "' + respuesta.data.usuario + '".',
+          detalle: 'Vale por 30 días, sin clave. Mándaselo por WhatsApp o correo.',
+          copiar: url
+        });
       } else if (respuesta.data.usuario) {
         Componentes.aviso({ tipo: 'exito', texto: 'Cuenta renombrada a "' + respuesta.data.usuario + '".' });
       }

@@ -145,3 +145,56 @@ test('solo ADM puede renombrar/asignar_password/eliminar', () => {
     assert.equal(res._forbidden, true, operacion + ' debe rechazar a un rol distinto de ADM');
   });
 });
+
+// v5.2 (Fase C, propuesta de adopcion): "enlace magico" -- Leo/Gerencia
+// entran sin password. Reutiliza SESIONES_PORTAL (misma hoja/misma
+// validacion que el login normal, backend/intake/Portal.gs), solo que con
+// vigencia mucho mas larga.
+test('generar_enlace (v5.2 Fase C) crea una sesion valida por 30 dias que Portal.sesion acepta sin login', () => {
+  const bo = loadBackoffice();
+  const intake = loadIntake();
+  const creada = crearCuentaReal(bo, intake, { usuario: 'leo', nombre: 'Leo', emails: 'leo@rld.cl', rol: 'DEV' });
+
+  const res = bo.CuentasPortal.gestionar({ operacion: 'generar_enlace', cuenta_id: creada.cuenta_id }, ADMIN);
+
+  assert.ok(!res._validationError, JSON.stringify(res));
+  assert.equal(res.usuario, 'leo');
+  assert.ok(res.token);
+
+  // Simula que ambos proyectos leen la MISMA planilla: la fila de
+  // SESIONES_PORTAL que escribio el Backoffice tiene que existir para
+  // Intake (Portal.sesion) tambien.
+  const fila = bo.leerFilas_('SESIONES_PORTAL').find((s) => s.token === res.token);
+  assert.ok(fila, 'la sesion queda registrada');
+  const horasParaExpirar = (new Date(fila.expira).getTime() - Date.now()) / 3600000;
+  assert.ok(horasParaExpirar > 29 * 24 && horasParaExpirar <= 30 * 24, 'vigencia de ~30 dias');
+  intake.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('SESIONES_PORTAL')
+    .appendRow(intake.COLUMNAS.SESIONES_PORTAL.map((col) => (fila[col] !== undefined ? fila[col] : '')));
+
+  const sesion = intake.Portal.sesion({ token: res.token });
+  assert.ok(!sesion._forbidden, JSON.stringify(sesion));
+  assert.equal(sesion.cuenta.usuario, 'leo');
+});
+
+test('generar_enlace (v5.2 Fase C) rechaza una cuenta desactivada o inexistente', () => {
+  const bo = loadBackoffice();
+  const intake = loadIntake();
+  const creada = crearCuentaReal(bo, intake, { usuario: 'leo', nombre: 'Leo', emails: 'leo@rld.cl', rol: 'DEV' });
+  bo.CuentasPortal.gestionar({ operacion: 'activar', cuenta_id: creada.cuenta_id, activo: false }, ADMIN);
+
+  const resDesactivada = bo.CuentasPortal.gestionar({ operacion: 'generar_enlace', cuenta_id: creada.cuenta_id }, ADMIN);
+  assert.equal(resDesactivada._validationError, true);
+
+  const resInexistente = bo.CuentasPortal.gestionar({ operacion: 'generar_enlace', cuenta_id: 'no-existe' }, ADMIN);
+  assert.equal(resInexistente._validationError, true);
+});
+
+test('generar_enlace (v5.2 Fase C) exige rol ADM', () => {
+  const bo = loadBackoffice();
+  const intake = loadIntake();
+  const creada = crearCuentaReal(bo, intake, { usuario: 'leo', nombre: 'Leo', emails: 'leo@rld.cl', rol: 'DEV' });
+  const NO_ADMIN = { email: 'dev@rld.cl', rol: 'DEV' };
+
+  const res = bo.CuentasPortal.gestionar({ operacion: 'generar_enlace', cuenta_id: creada.cuenta_id }, NO_ADMIN);
+  assert.equal(res._forbidden, true);
+});

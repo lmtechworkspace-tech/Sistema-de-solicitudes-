@@ -78,9 +78,30 @@
 
     wireAutorefresco_();
 
+    // v5.2 (Fase C, propuesta de adopcion): "enlace magico" -- un token en
+    // la URL (generado por el Admin, CuentasPortal.generarEnlaceMagico_)
+    // entra SIN pedir usuario/clave. Se guarda igual que un login normal y
+    // se limpia de la URL enseguida: no debe quedar visible en el historial
+    // del navegador ni en una captura de pantalla compartida sin querer.
+    var tokenDeEnlace = null;
+    try {
+      tokenDeEnlace = new URLSearchParams(window.location.search).get('token');
+    } catch (err) { /* navegador viejo sin URLSearchParams */ }
+    if (tokenDeEnlace) {
+      // Descarta cualquier cuenta cacheada de una sesion PREVIA en este
+      // navegador: sin esto, un enlace magico para otra persona mostraria
+      // por un instante la identidad equivocada (la cache vieja) antes de
+      // que la validacion de red la corrija.
+      olvidarSesion_();
+      try { localStorage.setItem(LLAVE_TOKEN, tokenDeEnlace); } catch (err) { /* sin storage */ }
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+
     // Sesion guardada: restaurar sin re-loguear. Si expiro, al login.
-    var token = null;
-    try { token = localStorage.getItem(LLAVE_TOKEN); } catch (err) { /* sin storage */ }
+    var token = tokenDeEnlace;
+    if (!token) {
+      try { token = localStorage.getItem(LLAVE_TOKEN); } catch (err) { /* sin storage */ }
+    }
     if (!token) {
       mostrarVista_('vista-login');
       return;
@@ -89,7 +110,9 @@
     // v5.1: con la cuenta cacheada se entra al shell de INMEDIATO (sin
     // parpadeo del login ni espera de red) y se revalida el token en
     // segundo plano. Sin cache, se muestra un splash mientras valida.
-    var cuentaCache = leerCuentaCache_();
+    // Un enlace magico (recien consumido arriba) siempre pasa por la
+    // validacion de red -- justo se borro cualquier cache anterior.
+    var cuentaCache = tokenDeEnlace ? null : leerCuentaCache_();
     if (cuentaCache) {
       iniciarSesion_(token, cuentaCache);
       revalidarSesionEnSegundoPlano_(token);
