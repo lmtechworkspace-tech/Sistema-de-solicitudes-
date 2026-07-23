@@ -80,13 +80,45 @@ var Notificaciones = {
       'DETALLE\n' +
       '- Derivada por: ' + usuario + '\n' +
       '- Motivo: ' + motivo + '\n\n' +
-      'Ya aparece' + (esLote ? 'n' : '') + ' en tu bandeja del Backoffice.' +
+      (esLote
+        ? 'Ya aparecen en tu bandeja del Backoffice.'
+        : 'Adjuntamos la orden de trabajo (PDF) con todo lo necesario para ejecutarla. Ya aparece en tu bandeja del Backoffice.') +
       pieCorreoBackoffice_();
+
+    // v5.2 (correos profesionales + OT adjunta): cuerpo HTML branded, y para
+    // una solicitud UNICA se adjunta el PDF de la Orden de Trabajo -- Leo
+    // recibe el correo profesional + su hoja de pega en un solo mensaje. En
+    // lote no se adjunta (adjuntar N PDFs no es viable); las OT quedan en el
+    // sistema. El texto plano (`cuerpo`) sigue como fallback.
+    var listadoHtml = '<ul style="margin:8px 0 12px;padding-left:20px;">' + derivadas.map(function (d) {
+      var titulo = d.solicitud && d.solicitud.titulo ? ' — ' + escaparHtmlCorreo_(d.solicitud.titulo) : '';
+      var item = d.subsolicitud_id ? ' (ítem ' + escaparHtmlCorreo_(d.subsolicitud_id) + ')' : '';
+      return '<li style="margin-bottom:4px;"><strong>' + escaparHtmlCorreo_(d.solicitud_id) + '</strong>' + item + titulo + '</li>';
+    }).join('') + '</ul>';
+    var cuerpoHtml =
+      '<p style="margin:0 0 12px;">Estimado/a:</p>' +
+      '<p style="margin:0 0 4px;">' + (esLote
+        ? 'Se han derivado <strong>' + ids.length + '</strong> solicitudes a tu bandeja:'
+        : 'Se ha derivado la siguiente solicitud a tu bandeja:') + '</p>' +
+      listadoHtml +
+      '<table style="border-collapse:collapse;font-size:14px;margin:4px 0 4px;">' +
+      filaDetalleCorreo_('Derivada por', usuario) +
+      filaDetalleCorreo_('Motivo', motivo) +
+      '</table>';
+    var pieHtml = esLote
+      ? '📋 Ya aparecen en tu bandeja del Backoffice.'
+      : '📎 Adjuntamos la <strong>orden de trabajo (PDF)</strong> con todo lo necesario para ejecutarla — descripción, contexto, accesos y capturas.';
+
+    var opcionesNuevo = { htmlBody: plantillaCorreoHtml_(esLote ? 'Solicitudes derivadas' : 'Solicitud derivada', cuerpoHtml, { pie: pieHtml }) };
+    if (!esLote) {
+      var adjunto = generarAdjuntoOt_(ids[0], usuario);
+      if (adjunto) opcionesNuevo.attachments = [adjunto];
+    }
 
     // El evento incluye los ids para que la deduplicacion no confunda dos
     // derivaciones distintas hechas con poca diferencia de tiempo.
     var evento = 'DERIVACION:' + ids.join(',');
-    var avisoNuevo = enviarCorreo_(ids[0], responsableNuevo, evento, asunto, cuerpo);
+    var avisoNuevo = enviarCorreo_(ids[0], responsableNuevo, evento, asunto, cuerpo, undefined, opcionesNuevo);
 
     // Acuse al responsable anterior: solo si es una persona distinta y hay
     // uno solo (en un lote mixto no hay "un" anterior a quien avisarle).
@@ -95,6 +127,15 @@ var Notificaciones = {
       .filter(function (email, i, todos) {
         return email && email !== responsableNuevo && todos.indexOf(email) === i;
       });
+    var cuerpoAnteriorHtml =
+      '<p style="margin:0 0 4px;">' +
+      (esLote ? 'Las siguientes solicitudes fueron derivadas' : 'La siguiente solicitud fue derivada') +
+      ' a <strong>' + escaparHtmlCorreo_(responsableNuevo) + '</strong>:</p>' +
+      listadoHtml +
+      '<table style="border-collapse:collapse;font-size:14px;">' +
+      filaDetalleCorreo_('Derivada por', usuario) +
+      filaDetalleCorreo_('Motivo', motivo) +
+      '</table>';
     var avisosAnterior = anteriores.map(function (email) {
       return enviarCorreo_(
         ids[0], email, 'DERIVACION_SALIDA:' + ids.join(','),
@@ -108,7 +149,11 @@ var Notificaciones = {
         '- Derivada por: ' + usuario + '\n' +
         '- Motivo: ' + motivo + '\n\n' +
         'Ya no aparece' + (esLote ? 'n' : '') + ' en tu bandeja.' +
-        pieCorreoBackoffice_()
+        pieCorreoBackoffice_(),
+        undefined,
+        { htmlBody: plantillaCorreoHtml_('Solicitud fuera de tu bandeja', cuerpoAnteriorHtml, {
+          pie: 'Ya no aparece' + (esLote ? 'n' : '') + ' en tu bandeja.'
+        }) }
       );
     });
 
@@ -416,7 +461,13 @@ var Notificaciones = {
         // siempre.
         var asunto = n.asunto || ('[Reintento] ' + n.evento);
         var cuerpo = n.cuerpo || ('Reintento de notificacion para ' + n.solicitud_id);
-        MailApp.sendEmail(n.destinatario, asunto, cuerpo);
+        // v5.2: la cola tambien manda en HTML branded (a partir del texto
+        // guardado). Es la que entrega el aviso de cambio de estado al
+        // solicitante (Fase 10.2), asi que tiene que verse igual de profesional.
+        MailApp.sendEmail(n.destinatario, asunto, cuerpo, {
+          name: 'SIGSO — HomePymes / RLD',
+          htmlBody: htmlAutoDesdeTexto_(asunto, cuerpo)
+        });
         actualizarFilaPorId_(SHEETS.LOG_NOTIFICACIONES, 'log_id', n.log_id, { resultado: 'ENVIADO' });
         return { log_id: n.log_id, resultado: 'ENVIADO' };
       } catch (err) {
@@ -567,7 +618,11 @@ function formatearCuerpoEjecutivo_(panel) {
     lineas.map(function (l) { return '- ' + l; }).join('\n');
 }
 
-function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo, ventanaMinutos) {
+// v5.2 (correos profesionales): `opciones` es opcional y solo agrega lo nuevo
+// -- { htmlBody, attachments }. El `cuerpo` de texto plano SIEMPRE se manda
+// como fallback (clientes sin HTML lo leen igual). Los callers viejos que
+// pasan `ventanaMinutos` posicional no cambian: `opciones` va al final.
+function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo, ventanaMinutos, opciones) {
   if (!destinatario) {
     return { enviado: false, motivo: 'sin_destinatario' };
   }
@@ -575,12 +630,100 @@ function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo, ventan
     return { enviado: false, motivo: 'deduplicado' };
   }
   try {
-    MailApp.sendEmail(destinatario, asunto, cuerpo);
+    var opcionesEnvio = { name: 'SIGSO — HomePymes / RLD' };
+    // Si el caller trae un HTML propio (p.ej. la derivacion, con su tabla y
+    // adjunto), se respeta. Si no, se genera uno branded a partir del texto
+    // plano -- asi TODAS las alertas se ven profesionales sin reescribir cada
+    // una. El texto plano sigue viajando como fallback.
+    opcionesEnvio.htmlBody = (opciones && opciones.htmlBody) ? opciones.htmlBody : htmlAutoDesdeTexto_(asunto, cuerpo);
+    if (opciones && opciones.attachments) opcionesEnvio.attachments = opciones.attachments;
+    MailApp.sendEmail(destinatario, asunto, cuerpo, opcionesEnvio);
     registrarNotificacion_(solicitudId, 'EMAIL', destinatario, evento, 'ENVIADO', 0);
     return { enviado: true };
   } catch (err) {
     registrarNotificacion_(solicitudId, 'EMAIL', destinatario, evento, 'PENDIENTE_REINTENTO', 1);
     logError_(err, 'Notificaciones.enviarCorreo:' + evento + ':' + solicitudId);
     return { enviado: false, motivo: 'error_envio' };
+  }
+}
+
+// v5.2 (correos profesionales): plantilla HTML branded, con estilos INLINE
+// (los clientes de correo -- Gmail/Outlook/movil -- ignoran <style> y CSS
+// externo; solo respetan estilos inline). Barra de encabezado con la marca,
+// cuerpo estructurado y pie institucional. `cuerpoHtml` es el contenido ya
+// formateado (parrafos/listas/tablas). `opts.pie` permite un texto de accion
+// destacado bajo el cuerpo.
+function plantillaCorreoHtml_(titulo, cuerpoHtml, opts) {
+  opts = opts || {};
+  var pie = opts.pie
+    ? '<div style="background:#F1F4F9;border-left:4px solid #6D5DF6;padding:12px 16px;margin:16px 0 0;font-size:14px;color:#0F172A;">' +
+      opts.pie + '</div>'
+    : '';
+  return '<div style="margin:0;padding:0;background:#EEF1F6;">' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="background:#EEF1F6;padding:24px 0;">' +
+    '<tr><td align="center">' +
+    '<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:10px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;">' +
+    // Encabezado con marca
+    '<tr><td style="background:#6D5DF6;padding:18px 24px;">' +
+    '<span style="color:#ffffff;font-size:20px;font-weight:bold;letter-spacing:0.3px;">SIGSO</span>' +
+    '<span style="color:#E7E4FF;font-size:14px;margin-left:10px;">' + escaparHtmlCorreo_(titulo) + '</span>' +
+    '</td></tr>' +
+    // Cuerpo
+    '<tr><td style="padding:24px;color:#0F172A;font-size:15px;line-height:1.5;">' +
+    cuerpoHtml +
+    pie +
+    '</td></tr>' +
+    // Pie institucional
+    '<tr><td style="padding:16px 24px;background:#F8FAFC;border-top:1px solid #E5E8EF;color:#8A93A5;font-size:12px;line-height:1.5;">' +
+    'Mensaje automático del sistema SIGSO. Por favor no respondas directamente a este correo.<br>' +
+    'Equipo SIGSO — HomePymes / RLD' +
+    '</td></tr>' +
+    '</table></td></tr></table></div>';
+}
+
+// Fila etiqueta/valor para el bloque "DETALLE" de los correos HTML.
+function filaDetalleCorreo_(etiqueta, valor) {
+  return '<tr>' +
+    '<td style="padding:3px 14px 3px 0;color:#8A93A5;white-space:nowrap;vertical-align:top;">' + escaparHtmlCorreo_(etiqueta) + '</td>' +
+    '<td style="padding:3px 0;">' + escaparHtmlCorreo_(valor) + '</td>' +
+    '</tr>';
+}
+
+function escaparHtmlCorreo_(valor) {
+  return String(valor === undefined || valor === null ? '' : valor)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// v5.2 (correos profesionales): convierte un cuerpo de texto plano en el HTML
+// branded, para las alertas que no traen un HTML propio. Quita el pie de
+// texto plano (la plantilla ya pone su propio pie institucional), escapa el
+// contenido y convierte los saltos de linea en <br>. El titulo del encabezado
+// sale del asunto sin el prefijo "SIGSO".
+function htmlAutoDesdeTexto_(asunto, textoPlano) {
+  var texto = String(textoPlano || '');
+  // Corta el pie de texto plano (pieCorreoBackoffice_) si esta presente.
+  var corte = texto.indexOf('\n--------------------------------------------------');
+  if (corte !== -1) texto = texto.slice(0, corte);
+  var cuerpoHtml = '<p style="margin:0;">' +
+    escaparHtmlCorreo_(texto.trim()).replace(/\n/g, '<br>') +
+    '</p>';
+  var titulo = String(asunto || 'Notificación').replace(/^SIGSO\s*[—-]\s*/, '').trim() || 'Notificación';
+  return plantillaCorreoHtml_(titulo, cuerpoHtml);
+}
+
+// v5.2 (OT adjunta al derivar): genera el PDF de la OT como adjunto. Si la
+// generacion falla (Drive/permiso/imagen), NO bloquea el correo -- se manda
+// sin adjunto (el PDF igual es descargable desde el sistema) y se registra el
+// error. Devuelve el Blob o null.
+function generarAdjuntoOt_(solicitudId, usuario) {
+  try {
+    return OrdenTrabajo.generar(solicitudId, { rol: 'ADM', email: usuario || '' });
+  } catch (err) {
+    logError_(err, 'Notificaciones.generarAdjuntoOt:' + solicitudId);
+    return null;
   }
 }

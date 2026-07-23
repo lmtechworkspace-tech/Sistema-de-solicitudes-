@@ -112,7 +112,30 @@ function createUtilitiesMock() {
           nombreActual = n;
           return blob;
         },
-        getSize: () => buffer.length
+        getSize: () => buffer.length,
+        // v5.2 (OT): en Apps Script real, un blob text/html se convierte a PDF
+        // con getAs('application/pdf'). El mock no tiene motor real de
+        // conversion: devuelve un blob "PDF" que conserva el HTML como bytes,
+        // suficiente para probar que la OT se genera, que el HTML trae los
+        // datos correctos (ID, enlaces) y que se pide base64/adjunto.
+        getAs(mimeType) {
+          let nombrePdf = nombreActual.replace(/\.html$/i, '') + (mimeType === 'application/pdf' ? '.pdf' : '');
+          const pdf = {
+            getBytes: () => Array.from(buffer),
+            getContentType: () => mimeType,
+            getName: () => nombrePdf,
+            setName(n) {
+              nombrePdf = n;
+              return pdf;
+            },
+            getSize: () => buffer.length,
+            getAs: (m) => blob.getAs(m),
+            // El HTML crudo queda accesible para que un test pueda aseverar
+            // sobre su contenido sin depender de una conversion real.
+            _html: buffer.toString('utf8')
+          };
+          return pdf;
+        }
       };
       return blob;
     }

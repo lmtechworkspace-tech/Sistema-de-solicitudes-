@@ -242,3 +242,52 @@ test('getDetalle expone historial_asignacion y los responsables disponibles', ()
   assert.equal(detalle.historial_asignacion[0].responsable_nuevo, LEO);
   assert.ok(Array.isArray(detalle.responsables));
 });
+
+// v5.2 (correos profesionales + OT adjunta): la derivacion manda correo HTML
+// y, para una solicitud UNICA, adjunta el PDF de la Orden de Trabajo.
+function loadConSchemaCompleto() {
+  const ctx = loadConSchema();
+  seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
+  seedSheet(ctx, 'HISTORIAL_PRIORIDAD', ctx.COLUMNAS.HISTORIAL_PRIORIDAD);
+  seedSheet(ctx, 'HISTORIAL_COMPROMISO', ctx.COLUMNAS.HISTORIAL_COMPROMISO);
+  seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
+  seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);
+  return ctx;
+}
+
+test('derivar UNA solicitud manda correo HTML al nuevo responsable con la OT adjunta', () => {
+  const ctx = loadConSchemaCompleto();
+  seedSolicitud(ctx, 'SOL-2026-HP-0001', LUIS, 1);
+
+  ctx.Solicitudes.derivarSolicitud(
+    { solicitud_id: 'SOL-2026-HP-0001', responsable_nuevo: LEO, motivo: 'corresponde a Leo, fin de las pruebas' },
+    { email: ANALISTA, rol: 'ANA' }
+  );
+
+  const alNuevo = ctx.GmailApp._enviados.find((e) => e.destinatario === LEO);
+  assert.ok(alNuevo, 'debe haber un correo al nuevo responsable');
+  // Correo profesional: viaja el HTML branded.
+  assert.ok(alNuevo.opciones.htmlBody, 'debe traer htmlBody');
+  assert.match(alNuevo.opciones.htmlBody, /SIGSO/);
+  // El texto plano sigue como fallback.
+  assert.match(alNuevo.cuerpo, /Se ha derivado/);
+  // La OT va adjunta (1 PDF).
+  assert.ok(alNuevo.opciones.attachments && alNuevo.opciones.attachments.length === 1);
+  assert.equal(alNuevo.opciones.attachments[0].getName(), 'OT-SOL-2026-HP-0001.pdf');
+});
+
+test('derivar en LOTE manda correo HTML sin adjuntos (adjuntar N PDFs no es viable)', () => {
+  const ctx = loadConSchemaCompleto();
+  seedSolicitud(ctx, 'SOL-2026-HP-0001', LUIS, 1);
+  seedSolicitud(ctx, 'SOL-2026-HP-0002', LUIS, 1);
+
+  ctx.Solicitudes.derivarSolicitud(
+    { solicitud_ids: ['SOL-2026-HP-0001', 'SOL-2026-HP-0002'], responsable_nuevo: LEO, motivo: 'migracion masiva a Leo del equipo' },
+    { email: ANALISTA, rol: 'ANA' }
+  );
+
+  const alNuevo = ctx.GmailApp._enviados.find((e) => e.destinatario === LEO);
+  assert.ok(alNuevo, 'debe haber un correo al nuevo responsable');
+  assert.ok(alNuevo.opciones.htmlBody, 'debe traer htmlBody');
+  assert.ok(!alNuevo.opciones.attachments || alNuevo.opciones.attachments.length === 0, 'sin adjuntos en lote');
+});

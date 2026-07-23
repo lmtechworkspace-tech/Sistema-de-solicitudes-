@@ -29,6 +29,9 @@ var BACKOFFICE_ACTIONS = {
   getDashboardData: handleGetDashboardData_,
   // v5.2 (Fase B, §3.4): pauta de trabajo por lote (PDF) de un desarrollador.
   getPautaTrabajo: handleGetPautaTrabajo_,
+  // v5.2 (mejora OT): genera la Orden de Trabajo en PDF del lado del servidor
+  // (con imagenes embebidas y enlaces reales) y la devuelve en base64.
+  descargarOrdenTrabajo: handleDescargarOrdenTrabajo_,
   getPanelGerencia: handleGetPanelGerencia_,
   // v5.2 (§4.2): envio manual del reporte ejecutivo, solo ADM.
   enviarReporteGerenciaAhora: handleEnviarReporteGerenciaAhora_,
@@ -65,6 +68,7 @@ var PAGINAS_HTML = { app: 'App', admin: 'Admin' };
 var MODULO_POR_ACCION = {
   getDashboardData: 'bandeja',
   getPautaTrabajo: 'bandeja',
+  descargarOrdenTrabajo: 'bandeja',
   // Ver el detalle es de lectura y Gerencia ya lo necesita desde su propio
   // panel (Solicitudes.getDetalle ya le devuelve una version de solo lectura
   // -- sin transiciones ni responsables -- para el rol GERENCIA). Por eso
@@ -338,6 +342,10 @@ function handleGetPanelJefatura_(data, contexto) {
 
 function handleGetPautaTrabajo_(data, contexto) {
   return responderResultado_(Dashboard.getPautaDesarrollador(data, contexto));
+}
+
+function handleDescargarOrdenTrabajo_(data, contexto) {
+  return responderResultado_(OrdenTrabajo.descargar(data, contexto));
 }
 
 function handleGetSolicitudDetalle_(data, contexto) {

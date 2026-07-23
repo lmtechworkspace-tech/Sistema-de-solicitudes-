@@ -74,6 +74,9 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   'Notificaciones.gs',
   'Documentos.gs',
   'Solicitudes.gs',
+  // v5.2 (mejora OT): genera la OT en PDF; usa Solicitudes.getDetalle y
+  // DriveApp, asi que carga despues de Solicitudes.
+  'OrdenTrabajo.gs',
   'Dashboard.gs',
   'Gerencia.gs',
   // v4.2: panel de Jefatura -- Solicitudes.gs (getDetalle) usa sus helpers
