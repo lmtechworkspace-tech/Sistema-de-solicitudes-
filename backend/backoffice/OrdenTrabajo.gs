@@ -96,6 +96,8 @@ function construirHtmlOt_(detalle) {
       : '') +
     '<p style="margin:0 0 16px;font-size:12px;color:#8A93A5;">' + escaparHtml_(generada) + '</p>' +
     itemsHtml +
+    // Adjuntos a nivel de solicitud (sin subsolicitud_id): que no se pierdan.
+    bloqueAdjuntosGeneralesOt_(archivos, contadorImagenes) +
     // Pie: como cerrarla
     '<div style="background:#F1F4F9;border-left:4px solid ' + COLOR_MARCA_OT + ';padding:12px 16px;margin-top:18px;font-size:13px;">' +
     '&#9989; <strong>Para cerrar:</strong> responde <strong>"LISTO ' + escaparHtml_(s.solicitud_id) +
@@ -124,7 +126,9 @@ function bloqueItemOt_(sub, archivos, contador) {
       '<table style="border-collapse:collapse;font-size:13px;">' + filasContexto.join('') + '</table>'
     : '';
 
-  var imagenesHtml = imagenesItemOt_(archivos, sub.subsolicitud_id, contador);
+  var archivosItem = (archivos || []).filter(function (a) { return a.subsolicitud_id === sub.subsolicitud_id; });
+  var imagenesHtml = bloqueImagenesOt_(archivosItem.filter(esImagenOt_), contador);
+  var documentosHtml = bloqueDocumentosOt_(archivosItem.filter(function (a) { return !esImagenOt_(a); }));
 
   return '<div style="border:1px solid #E5E8EF;border-radius:8px;padding:14px 16px;margin-bottom:14px;">' +
     '<h2 style="font-size:17px;margin:0 0 6px;">' + escaparHtml_(sub.numero_item + '. ' + (sub.titulo || '')) + '</h2>' +
@@ -135,6 +139,7 @@ function bloqueItemOt_(sub, archivos, contador) {
       : '') +
     contextoHtml +
     imagenesHtml +
+    documentosHtml +
     '</div>';
 }
 
@@ -159,14 +164,18 @@ function badgePrioridadOt_(prioridad) {
     escaparHtml_(prioridad || '—') + '</span>';
 }
 
+// v5.2: true si el archivo es una imagen (se embebe); false si es documento
+// (PDF/Word/Excel -- se enlaza para descargar).
+function esImagenOt_(archivo) {
+  return String(archivo.tipo_mime || '').indexOf('image/') === 0;
+}
+
 // Embebe hasta MAX_IMAGENES_OT capturas (base64), leyendo los bytes de Drive.
-// Si una imagen falla (id no valido, permiso, borrada) se salta sin romper la
-// OT -- una captura menos es mejor que una OT que no se genera.
-function imagenesItemOt_(archivos, subsolicitudId, contador) {
-  var imagenes = (archivos || []).filter(function (a) {
-    return a.subsolicitud_id === subsolicitudId && String(a.tipo_mime || '').indexOf('image/') === 0;
-  });
-  if (imagenes.length === 0) return '';
+// Recibe la lista de imagenes YA filtrada. Si una imagen falla (id no valido,
+// permiso, borrada) se salta sin romper la OT -- una captura menos es mejor
+// que una OT que no se genera.
+function bloqueImagenesOt_(imagenes, contador) {
+  if (!imagenes || imagenes.length === 0) return '';
 
   var tags = [];
   var omitidas = 0;
@@ -183,6 +192,41 @@ function imagenesItemOt_(archivos, subsolicitudId, contador) {
     (omitidas > 0
       ? '<p style="margin:4px 0 0;font-size:12px;color:#8A93A5;">(+' + omitidas + ' captura(s) mas en el sistema)</p>'
       : '') +
+    '</div>';
+}
+
+// v5.2: los documentos (PDF/Word/Excel) NO se embeben (un PDF dentro de otro
+// no tiene sentido) -- se listan con un ENLACE para verlos/descargarlos desde
+// Drive. Sin esto, un solicitante que sube un documento pierde esa info en la
+// OT. Recibe la lista de documentos YA filtrada (no imagenes).
+function bloqueDocumentosOt_(documentos) {
+  if (!documentos || documentos.length === 0) return '';
+  var items = documentos.map(function (d) {
+    var nombre = d.nombre_original || 'documento';
+    return '<li style="margin-bottom:5px;">' +
+      '<a href="' + escaparHtml_(d.url) + '" style="color:' + COLOR_MARCA_OT + ';text-decoration:underline;">' +
+      escaparHtml_(nombre) + '</a></li>';
+  }).join('');
+  return '<div style="margin-top:10px;">' +
+    '<p style="margin:0 0 4px;font-weight:bold;font-size:13px;color:#5B6474;">&#128206; Documentos adjuntos</p>' +
+    '<ul style="margin:0;padding-left:20px;font-size:13px;line-height:1.5;">' + items + '</ul>' +
+    '<p style="margin:4px 0 0;font-size:12px;color:#8A93A5;">Abre el enlace para ver o descargar el documento.</p>' +
+    '</div>';
+}
+
+// v5.2: adjuntos a nivel de SOLICITUD (sin subsolicitud_id) -- imagenes y
+// documentos que el solicitante subio al bloque general del formulario. Van en
+// su propia tarjeta al final para que no se pierdan.
+function bloqueAdjuntosGeneralesOt_(archivos, contador) {
+  var generales = (archivos || []).filter(function (a) { return !a.subsolicitud_id; });
+  if (generales.length === 0) return '';
+  var imagenesHtml = bloqueImagenesOt_(generales.filter(esImagenOt_), contador);
+  var documentosHtml = bloqueDocumentosOt_(generales.filter(function (a) { return !esImagenOt_(a); }));
+  if (!imagenesHtml && !documentosHtml) return '';
+  return '<div style="border:1px solid #E5E8EF;border-radius:8px;padding:14px 16px;margin-bottom:14px;">' +
+    '<h2 style="font-size:16px;margin:0 0 2px;">Adjuntos de la solicitud</h2>' +
+    imagenesHtml +
+    documentosHtml +
     '</div>';
 }
 

@@ -104,6 +104,46 @@ test('La imagen del item se lee de Drive y se embebe como data URI base64', () =
   assert.match(html, /<img src="data:image\/png;base64,/);
 });
 
+// v5.2: los documentos (PDF/Word/Excel) NO se embeben -- se enlazan para que
+// Leo pueda verlos/descargarlos. Sin esto, un solicitante que sube un
+// documento pierde esa info en la OT.
+function seedDocumento(ctx, subsolicitudId, nombre, mime) {
+  const fila = {
+    archivo_id: 'DOC-' + nombre, solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: subsolicitudId,
+    nombre_original: nombre, url: 'https://drive.google.com/file/d/doc-' + nombre + '/view',
+    tipo_mime: mime, tamano_bytes: 100, fecha_subida: new Date().toISOString()
+  };
+  ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('ARCHIVOS')
+    .appendRow(ctx.COLUMNAS.ARCHIVOS.map((c) => (fila[c] !== undefined ? fila[c] : '')));
+}
+
+test('Los documentos del item aparecen en la OT como enlace de descarga (no embebidos)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedDocumento(ctx, 'SOL-2026-HP-0001-01', 'requisitos.pdf', 'application/pdf');
+  seedDocumento(ctx, 'SOL-2026-HP-0001-01', 'planilla.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+  const html = ctx.OrdenTrabajo.generar('SOL-2026-HP-0001', ADMIN)._html;
+
+  assert.match(html, /Documentos adjuntos/);
+  // Cada documento va como enlace con su nombre.
+  assert.match(html, /<a href="https:\/\/drive\.google\.com\/file\/d\/doc-requisitos\.pdf\/view"[^>]*>requisitos\.pdf<\/a>/);
+  assert.match(html, /planilla\.xlsx<\/a>/);
+  // No se intenta embeber el documento como imagen.
+  assert.ok(!/data:application\/pdf/.test(html));
+});
+
+test('Los adjuntos a nivel de solicitud (sin subsolicitud_id) tambien salen en la OT', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedDocumento(ctx, '', 'contrato-general.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+
+  const html = ctx.OrdenTrabajo.generar('SOL-2026-HP-0001', ADMIN)._html;
+
+  assert.match(html, /Adjuntos de la solicitud/);
+  assert.match(html, /contrato-general\.docx<\/a>/);
+});
+
 test('Si la imagen no se puede leer de Drive, la OT se genera igual (sin esa captura)', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
