@@ -426,6 +426,9 @@ test('Dashboard.getPautaDesarrollador (v5.2 Fase B) trae solo los items abiertos
   assert.equal(pauta.items[0].solicitud_id, 'SOL-2026-HP-0001');
   assert.equal(pauta.items[0].url_modulo, 'https://x.cl/modulo');
   assert.equal(pauta.items[0].usuario_prueba, 'demo');
+  // v5.2 (Fase D, §5): la sesion de planificacion llama comprometerFecha por
+  // item -- necesita el ID real, no solo solicitud_id + numero_item.
+  assert.equal(pauta.items[0].subsolicitud_id, 'SOL-2026-HP-0001-01');
 });
 
 test('Dashboard.getPautaDesarrollador (v5.2 Fase B) ordena P1 antes que P2 y exige el parametro desarrollador', () => {

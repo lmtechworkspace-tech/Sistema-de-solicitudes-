@@ -92,6 +92,11 @@ var Dashboard = {
       .map(function (sub) {
         var solicitud = solicitudPorId[sub.solicitud_id];
         return {
+          // v5.2 (Fase D, §5): la sesion de planificacion necesita el ID real
+          // del item para poder llamar Solicitudes.comprometerFecha por fila
+          // -- getPautaDesarrollador es la unica fuente de este listado, no
+          // tenia por que traerlo antes de que hiciera falta escribir.
+          subsolicitud_id: sub.subsolicitud_id,
           solicitud_id: sub.solicitud_id,
           numero_item: sub.numero_item,
           titulo: sub.titulo,

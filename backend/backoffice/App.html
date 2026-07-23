@@ -3471,6 +3471,13 @@ button.sigso-kpi {
   }
 }
 
+/* v5.2 (Fase D, §5): fila con error al guardar en la sesion de
+   planificacion -- el input mismo se marca (el motivo del fallo va en su
+   title, ya visible como tooltip nativo). */
+.sigso-campo-error {
+  border-color: var(--p1) !important;
+}
+
 /* v4.1 (G1-a): columna/boton para expandir "¿que pasa?/¿que deberia
    pasar?" sin salir del tablero. */
 .sigso-th-expandir,
@@ -3612,6 +3619,35 @@ button.sigso-kpi {
              Orden de Trabajo suelta por solicitud. Solo tiene sentido con
              una persona concreta elegida (dashboard.js la muestra/oculta). -->
         <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-imprimir-pauta">📋 Pauta de trabajo (PDF)</button>
+        <!-- v5.2 Fase D (§5): sesion de planificacion -- fechas comprometidas
+             a un lote de items en una sola sentada, con sugerencia de fechas
+             escalonadas (P1 primero, "cada 2 dias"). -->
+        <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-sesion-planificacion">🗓 Sesión de planificación</button>
+      </div>
+
+      <div class="sigso-card sigso-oculto" id="panel-sesion-planificacion">
+        <div class="sigso-tablero-toolbar">
+          <h3 id="titulo-sesion-planificacion">Sesión de planificación</h3>
+          <button type="button" class="sigso-boton--secundario" id="btn-cerrar-planificacion">Cerrar</button>
+        </div>
+        <p class="sigso-ayuda">Fechas comprometidas para todas las pendientes de esta persona, de una sola vez. "Sugerir fechas" solo completa las que todavía no tienen fecha (no toca las ya comprometidas).</p>
+        <div class="sigso-campo">
+          <label for="intervalo-sugerencia">Espaciar sugerencias cada</label>
+          <select id="intervalo-sugerencia">
+            <option value="1">1 día</option>
+            <option value="2" selected>2 días</option>
+            <option value="3">3 días</option>
+            <option value="7">7 días</option>
+          </select>
+          <button type="button" class="sigso-boton--secundario" id="btn-sugerir-fechas">Sugerir fechas</button>
+        </div>
+        <div class="sigso-campo">
+          <label for="motivo-replanificacion">Motivo (solo si cambias una fecha ya comprometida)</label>
+          <input type="text" id="motivo-replanificacion" placeholder="Mínimo 20 caracteres">
+        </div>
+        <div id="tabla-sesion-planificacion"></div>
+        <button type="button" class="sigso-boton" id="btn-guardar-planificacion">Guardar fechas</button>
+        <p id="resultado-planificacion"></p>
       </div>
 
       <!-- v3.1 (§2.6): derivacion en lote. Solo aparece con una bandeja
@@ -4792,6 +4828,7 @@ var Iconos = (function () {
 
     wireDerivarLote_();
     wirePautaLote_();
+    wireSesionPlanificacion_();
   }
 
   // v5.2 (Fase B, §3.4): "pauta de trabajo por lote" -- UNA hoja con TODAS
@@ -4833,9 +4870,17 @@ var Iconos = (function () {
   }
 
   function actualizarVisibilidadPauta_() {
+    var hayBandeja = !!document.getElementById('filtro-bandeja').value;
     var boton = document.getElementById('btn-imprimir-pauta');
-    if (!boton) return;
-    boton.classList.toggle('sigso-oculto', !document.getElementById('filtro-bandeja').value);
+    if (boton) boton.classList.toggle('sigso-oculto', !hayBandeja);
+    var botonPlanificacion = document.getElementById('btn-sesion-planificacion');
+    if (botonPlanificacion) botonPlanificacion.classList.toggle('sigso-oculto', !hayBandeja);
+    // Si se cambia de bandeja con el panel abierto, se cierra: los datos
+    // cargados son de la persona anterior.
+    if (!hayBandeja) {
+      var panel = document.getElementById('panel-sesion-planificacion');
+      if (panel) panel.classList.add('sigso-oculto');
+    }
   }
 
   // Mismo patron visual que renderOtImprimir_ (detalle.js): encabezado con
@@ -4879,6 +4924,179 @@ var Iconos = (function () {
       itemsHtml +
       '<p class="sigso-ot-pie">✅ Para cerrar cada una: responde "LISTO &lt;N° de solicitud&gt;" por WhatsApp, o márcala Terminada en el sistema si ya tienes acceso.</p>' +
       '</div>';
+  }
+
+  // v5.2 (Fase D, §5): "sesion de planificacion" -- lo que hoy es una
+  // conversacion informal ("nos juntamos cada 2 dias") pasa a ser fechas
+  // comprometidas de verdad, todas de una sentada. Reusa exactamente los
+  // mismos datos de la pauta (getPautaTrabajo) y el mismo backend de
+  // siempre (Solicitudes.comprometerFecha, ya usado item por item en
+  // detalle.js) -- no hay accion de lote en el backend, cada fila se
+  // guarda con su propia llamada.
+  var itemsPlanificacion_ = [];
+
+  function wireSesionPlanificacion_() {
+    var boton = document.getElementById('btn-sesion-planificacion');
+    if (!boton) return;
+    boton.addEventListener('click', abrirSesionPlanificacion_);
+    document.getElementById('btn-cerrar-planificacion').addEventListener('click', function () {
+      document.getElementById('panel-sesion-planificacion').classList.add('sigso-oculto');
+    });
+    document.getElementById('btn-sugerir-fechas').addEventListener('click', sugerirFechas_);
+    document.getElementById('btn-guardar-planificacion').addEventListener('click', guardarPlanificacion_);
+  }
+
+  function abrirSesionPlanificacion_() {
+    document.getElementById('panel-sesion-planificacion').classList.remove('sigso-oculto');
+    document.getElementById('resultado-planificacion').textContent = '';
+    cargarItemsPlanificacion_();
+  }
+
+  // Separado de abrirSesionPlanificacion_ porque guardarPlanificacion_
+  // recarga la tabla al terminar (para reflejar las fechas ya guardadas)
+  // pero NO debe borrar el mensaje de "guardadas N de M" que se acaba de
+  // mostrar -- solo abrir el panel de nuevo tiene sentido limpiarlo.
+  function cargarItemsPlanificacion_() {
+    var desarrollador = document.getElementById('filtro-bandeja').value;
+    if (!desarrollador) return;
+    var tabla = document.getElementById('tabla-sesion-planificacion');
+    document.getElementById('titulo-sesion-planificacion').textContent = 'Sesión de planificación';
+    tabla.innerHTML = Componentes.esqueleto({ filas: 4 });
+
+    return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getPautaTrabajo', { desarrollador: desarrollador })
+      .then(function (respuesta) {
+        if (!respuesta.ok) {
+          tabla.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar la pauta.', 'error');
+          return;
+        }
+        itemsPlanificacion_ = respuesta.data.items || [];
+        var nombreSelect = document.getElementById('filtro-bandeja');
+        var etiqueta = nombreSelect.options[nombreSelect.selectedIndex]
+          ? nombreSelect.options[nombreSelect.selectedIndex].textContent
+          : desarrollador;
+        document.getElementById('titulo-sesion-planificacion').textContent = 'Sesión de planificación — ' + etiqueta;
+        renderTablaPlanificacion_();
+      })
+      .catch(function () {
+        tabla.innerHTML = Componentes.alerta('No se pudo conectar con el servidor. Intenta nuevamente.', 'error');
+      });
+  }
+
+  function renderTablaPlanificacion_() {
+    var tabla = document.getElementById('tabla-sesion-planificacion');
+    if (itemsPlanificacion_.length === 0) {
+      tabla.innerHTML = Componentes.vacio('Sin pendientes para esta persona.');
+      return;
+    }
+    var filas = itemsPlanificacion_.map(function (item, indice) {
+      var actual = item.fecha_comprometida
+        ? Componentes.escaparHtml(String(item.fecha_comprometida).replace('T', ' ').slice(0, 16))
+        : '<span class="sigso-cuenta-nunca-entro">Sin comprometer</span>';
+      return '<tr data-indice="' + indice + '">' +
+        '<td data-label="Solicitud">' + Componentes.escaparHtml(item.solicitud_id) + '-' + item.numero_item + '</td>' +
+        '<td data-label="Título">' + Componentes.escaparHtml(item.titulo) + '</td>' +
+        '<td data-label="Prioridad">' + Componentes.badgePrioridad(item.prioridad) + '</td>' +
+        '<td data-label="Fecha actual">' + actual + '</td>' +
+        '<td data-label="Nueva fecha"><input type="datetime-local" class="sigso-nueva-fecha" data-indice="' + indice + '" value="' +
+          Componentes.escaparHtml(String(item.fecha_comprometida || '').slice(0, 16)) + '"></td>' +
+        '</tr>';
+    }).join('');
+    tabla.innerHTML = '<div style="overflow-x:auto"><table class="sigso-tabla">' +
+      '<thead><tr><th>Solicitud</th><th>Título</th><th>Prioridad</th><th>Fecha actual</th><th>Nueva fecha</th></tr></thead>' +
+      '<tbody>' + filas + '</tbody></table></div>';
+  }
+
+  // Solo completa las filas SIN fecha comprometida -- las que ya tienen una
+  // no se tocan (moverla es un re-compromiso, con su propio motivo; no algo
+  // que una sugerencia automatica deba decidir por la persona).
+  function sugerirFechas_() {
+    var intervaloDias = Number(document.getElementById('intervalo-sugerencia').value) || 2;
+    var siguiente = new Date();
+    siguiente.setHours(9, 0, 0, 0);
+    if (siguiente <= new Date()) siguiente.setDate(siguiente.getDate() + 1);
+
+    itemsPlanificacion_.forEach(function (item, indice) {
+      if (item.fecha_comprometida) return; // ya comprometida: no se toca
+      var input = document.querySelector('.sigso-nueva-fecha[data-indice="' + indice + '"]');
+      if (!input) return;
+      input.value = formatearFechaLocal_(siguiente);
+      siguiente = new Date(siguiente.getTime() + intervaloDias * 24 * 3600 * 1000);
+    });
+  }
+
+  function formatearFechaLocal_(fecha) {
+    var pad = function (n) { return String(n).padStart(2, '0'); };
+    return fecha.getFullYear() + '-' + pad(fecha.getMonth() + 1) + '-' + pad(fecha.getDate()) +
+      'T' + pad(fecha.getHours()) + ':' + pad(fecha.getMinutes());
+  }
+
+  // Guarda SOLO las filas cuya "Nueva fecha" cambio respecto a la actual --
+  // una a una (Solicitudes.comprometerFecha no tiene version de lote), y
+  // reporta cuantas quedaron bien al final. Si una fila ya tenia fecha y se
+  // cambia, es un re-compromiso: exige el motivo compartido del panel.
+  function guardarPlanificacion_() {
+    var motivo = document.getElementById('motivo-replanificacion').value.trim();
+    var boton = document.getElementById('btn-guardar-planificacion');
+    var resultado = document.getElementById('resultado-planificacion');
+    var pendientes = itemsPlanificacion_
+      .map(function (item, indice) { return { item: item, indice: indice }; })
+      .filter(function (par) {
+        var input = document.querySelector('.sigso-nueva-fecha[data-indice="' + par.indice + '"]');
+        var valor = input ? input.value : '';
+        return valor && valor !== String(par.item.fecha_comprometida || '').slice(0, 16);
+      });
+
+    if (pendientes.length === 0) {
+      resultado.textContent = 'No hay fechas nuevas para guardar.';
+      return;
+    }
+    var faltaMotivo = pendientes.some(function (par) { return par.item.fecha_comprometida && motivo.length < 20; });
+    if (faltaMotivo) {
+      resultado.textContent = 'Hay fechas ya comprometidas que estás cambiando: escribe un motivo de al menos 20 caracteres.';
+      return;
+    }
+
+    boton.disabled = true;
+    resultado.textContent = 'Guardando ' + pendientes.length + ' fecha(s)…';
+
+    // Secuencial (no Promise.all): son escrituras contra la misma hoja, y
+    // asi el mensaje de error, si lo hay, se puede asociar a una fila
+    // puntual en vez de perderse entre varias promesas en paralelo.
+    var resultados = [];
+    function siguienteEnvio(indiceCola) {
+      if (indiceCola >= pendientes.length) {
+        boton.disabled = false;
+        var ok = resultados.filter(function (r) { return r.ok; }).length;
+        var mensaje = ok + ' de ' + pendientes.length + ' fecha(s) guardadas.' +
+          (ok < pendientes.length ? ' Revisa los errores en cada fila.' : '');
+        if (ok > 0) {
+          // Recarga la tabla (para reflejar lo ya guardado) SIN pisar el
+          // mensaje de resultado -- cargarItemsPlanificacion_ no lo toca.
+          cargarItemsPlanificacion_().then(function () { resultado.textContent = mensaje; });
+        } else {
+          resultado.textContent = mensaje;
+        }
+        return;
+      }
+      var par = pendientes[indiceCola];
+      var input = document.querySelector('.sigso-nueva-fecha[data-indice="' + par.indice + '"]');
+      llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'comprometerFecha', {
+        subsolicitud_id: par.item.subsolicitud_id,
+        fecha_comprometida: input.value,
+        motivo: par.item.fecha_comprometida ? motivo : undefined
+      }).then(function (respuesta) {
+        resultados.push({ ok: respuesta.ok });
+        if (!respuesta.ok && input) {
+          input.title = respuesta.message || 'No se pudo guardar.';
+          input.classList.add('sigso-campo-error');
+        }
+        siguienteEnvio(indiceCola + 1);
+      }).catch(function () {
+        resultados.push({ ok: false });
+        siguienteEnvio(indiceCola + 1);
+      });
+    }
+    siguienteEnvio(0);
   }
 
   function leerFiltros_() {

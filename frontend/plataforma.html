@@ -507,6 +507,35 @@
                  TODAS las pendientes del desarrollador elegido, en vez de una
                  Orden de Trabajo suelta por solicitud. -->
             <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-imprimir-pauta">📋 Pauta de trabajo (PDF)</button>
+            <!-- v5.2 Fase D (§5): sesion de planificacion -- fechas
+                 comprometidas a un lote de items en una sola sentada, con
+                 sugerencia de fechas escalonadas (P1 primero, "cada 2 dias"). -->
+            <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-sesion-planificacion">🗓 Sesión de planificación</button>
+          </div>
+
+          <div class="sigso-card sigso-oculto" id="panel-sesion-planificacion">
+            <div class="sigso-tablero-toolbar">
+              <h3 id="titulo-sesion-planificacion">Sesión de planificación</h3>
+              <button type="button" class="sigso-boton--secundario" id="btn-cerrar-planificacion">Cerrar</button>
+            </div>
+            <p class="sigso-ayuda">Fechas comprometidas para todas las pendientes de esta persona, de una sola vez. "Sugerir fechas" solo completa las que todavía no tienen fecha (no toca las ya comprometidas).</p>
+            <div class="sigso-campo">
+              <label for="intervalo-sugerencia">Espaciar sugerencias cada</label>
+              <select id="intervalo-sugerencia">
+                <option value="1">1 día</option>
+                <option value="2" selected>2 días</option>
+                <option value="3">3 días</option>
+                <option value="7">7 días</option>
+              </select>
+              <button type="button" class="sigso-boton--secundario" id="btn-sugerir-fechas">Sugerir fechas</button>
+            </div>
+            <div class="sigso-campo">
+              <label for="motivo-replanificacion">Motivo (solo si cambias una fecha ya comprometida)</label>
+              <input type="text" id="motivo-replanificacion" placeholder="Mínimo 20 caracteres">
+            </div>
+            <div id="tabla-sesion-planificacion"></div>
+            <button type="button" class="sigso-boton" id="btn-guardar-planificacion">Guardar fechas</button>
+            <p id="resultado-planificacion"></p>
           </div>
 
           <div class="sigso-panel-lote sigso-oculto" id="bloque-derivar-lote">
