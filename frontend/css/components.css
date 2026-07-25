@@ -2074,3 +2074,13 @@
 }
 .sigso-pausa-form { margin-top: 1rem; }
 .sigso-pausa-form .sigso-toggle { margin-bottom: 1rem; display: block; }
+
+/* v6.0 Fase P3: listas de participación del coordinador (participaron /
+   justificaron / pendientes). */
+.sigso-lista-simple {
+  margin: 0.25rem 0 0.75rem 1.1rem;
+  padding: 0;
+  color: var(--texto-2);
+  font-size: 0.92rem;
+}
+.sigso-lista-simple li { margin: 0.15rem 0; }

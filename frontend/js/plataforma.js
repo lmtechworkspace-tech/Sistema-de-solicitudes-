@@ -40,7 +40,10 @@
     administracion: { icono: 'config', nombre: 'Administración', descripcion: 'Catálogos, usuarios y cuentas de la plataforma', interno: true },
     // v6.0 Fase P2: el trabajador registra su participacion en la pausa activa
     // del dia (pausas.js). Cero friccion, pensado para el enlace magico.
-    pausas: { icono: 'reloj', nombre: 'Pausas activas', descripcion: 'Registra tu participación en la pausa de hoy', interno: true }
+    pausas: { icono: 'reloj', nombre: 'Pausas activas', descripcion: 'Registra tu participación en la pausa de hoy', interno: true },
+    // v6.0 Fase P3: la coordinadora (prevencionista) opera la pausa del dia y
+    // ve sus reportes de cumplimiento (coordinacion.js).
+    pausas_coordinacion: { icono: 'grafico', nombre: 'Coordinación de pausas', descripcion: 'Opera la pausa del día y ve el cumplimiento', interno: true }
   };
 
   // v4.0 Frente 3: cada modulo tiene su propio acento -- antes todo el shell
@@ -54,7 +57,8 @@
     gerencia: { acento: 'var(--alerta)', suave: 'var(--alerta-suave)' },
     jefatura: { acento: 'var(--alerta)', suave: 'var(--alerta-suave)' },
     administracion: { acento: 'var(--texto-2)', suave: 'var(--superficie-2)' },
-    pausas: { acento: 'var(--info)', suave: 'var(--info-suave)' }
+    pausas: { acento: 'var(--info)', suave: 'var(--info-suave)' },
+    pausas_coordinacion: { acento: 'var(--alerta)', suave: 'var(--alerta-suave)' }
   };
 
   function acentoInline_(id) {
@@ -1065,6 +1069,9 @@
     }
     if (id === 'pausas' && window.SigsoPausas) {
       window.SigsoPausas.cargar();
+    }
+    if (id === 'pausas_coordinacion' && window.SigsoCoordinacion) {
+      window.SigsoCoordinacion.cargar();
     }
     window.scrollTo(0, 0);
   }

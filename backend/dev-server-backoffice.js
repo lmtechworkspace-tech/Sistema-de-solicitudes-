@@ -89,7 +89,10 @@ function construirContexto() {
     ['HP', '09:30', '1,2,3,4,5,6,7', 10, 15, 80, 60, true]
   ]);
   seedSheet(ctx, 'PAUSAS_COORDINADORES', ctx.COLUMNAS.PAUSAS_COORDINADORES);
-  seedSheet(ctx, 'PAUSAS_TRABAJADORES', ctx.COLUMNAS.PAUSAS_TRABAJADORES);
+  seedSheet(ctx, 'PAUSAS_TRABAJADORES', ctx.COLUMNAS.PAUSAS_TRABAJADORES, [
+    ['TRB-1', 'HP', 'Juan Pérez', 'juan@hp.cl', 'Bodega', 'Operario', true, '2026-01-01'],
+    ['TRB-2', 'HP', 'Ana Díaz', 'ana@hp.cl', 'Ventas', 'Vendedora', true, '2026-01-01']
+  ]);
   // Pausa demo de HOY para probar el registro del trabajador (P2) en local.
   // Se calcula en la zona del proyecto (igual que claveDia_ en el backend),
   // no en UTC, para que coincida con "hoy" segun America/Santiago.

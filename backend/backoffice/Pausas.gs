@@ -357,6 +357,88 @@ var Pausas = {
     agregarFila_(SHEETS.PAUSAS_ASISTENCIA, fila);
     registrarLogPausas_(pausa.pausa_id, contexto, 'asistencia_registrada', email + ' -> ' + estado);
     return fila;
+  },
+
+  // ---- Coordinador: operar la pausa + reportes (Fase P3) -------------------
+  // El gate de modulo ('pausas_coordinacion') lo aplica el router. Ademas,
+  // cada operacion verifica que quien la ejecuta sea coordinador ACTIVO de la
+  // empresa de esa pausa (o ADM) -- esconder el boton no es seguridad.
+
+  // Panel "Hoy": la(s) pausa(s) de hoy de la(s) empresa(s) que coordina, cada
+  // una con su participacion en vivo (participaron / no pudieron / pendientes).
+  getPanelCoordinador: function (data, contexto) {
+    var email = contexto && contexto.email;
+    if (!email) {
+      return { _forbidden: true, message: 'No fue posible identificar tu cuenta.' };
+    }
+    var empresas = empresasQueCoordina_(contexto);
+    if (empresas.length === 0) {
+      return { sin_empresa: true, pausas: [] };
+    }
+    var hoy = claveDia_(new Date(), 'America/Santiago');
+    var todas = leerFilasSeguro_(SHEETS.PAUSAS_PROGRAMADAS);
+    var pausas = todas
+      .filter(function (p) {
+        return empresas.indexOf(String(p.empresa_id)) !== -1 && claveFechaPausa_(p.fecha) === hoy;
+      })
+      .map(function (p) {
+        return {
+          pausa_id: p.pausa_id,
+          empresa_id: p.empresa_id,
+          fecha: claveFechaPausa_(p.fecha),
+          hora_programada: p.hora_programada || '',
+          hora_inicio_real: p.hora_inicio_real || '',
+          hora_fin: p.hora_fin || '',
+          estado: p.estado,
+          duracion_min: p.duracion_min || '',
+          observaciones: p.observaciones || '',
+          participacion: participacionDePausa_(p.pausa_id, p.empresa_id)
+        };
+      });
+    return { empresas: empresas, pausas: pausas };
+  },
+
+  gestionarPausaCoordinador: function (data, contexto) {
+    var pausa = buscarPausaProgramada_(data.pausa_id);
+    if (!pausa) {
+      return errorValidacion_('pausa_id', 'Pausa no encontrada.');
+    }
+    var g = guardaCoordinadorPausa_(contexto, pausa);
+    if (g) return g;
+
+    switch (data.operacion) {
+      case 'iniciar':
+        return transicionarPausa_(pausa, ESTADOS_PAUSA.EN_CURSO, contexto, {
+          hora_inicio_real: new Date().toISOString(),
+          coordinador_email: contexto.email
+        });
+      case 'finalizar':
+        return transicionarPausa_(pausa, ESTADOS_PAUSA.REALIZADA, contexto, {
+          hora_fin: new Date().toISOString(),
+          coordinador_email: pausa.coordinador_email || contexto.email,
+          observaciones: data.observaciones ? String(data.observaciones).trim() : pausa.observaciones
+        });
+      case 'no_realizada':
+        var motivo = String(data.motivo || '').trim();
+        if (!motivo) {
+          return errorValidacion_('motivo', 'Indica el motivo por el que no se realizo la pausa.');
+        }
+        return transicionarPausa_(pausa, ESTADOS_PAUSA.NO_REALIZADA, contexto, {
+          coordinador_email: contexto.email, observaciones: motivo
+        });
+      default:
+        return errorValidacion_('operacion', 'Operacion invalida: ' + data.operacion);
+    }
+  },
+
+  // Reporte de cumplimiento para el coordinador (su propio apartado, §7.6).
+  // Acotado a la(s) empresa(s) que coordina. Periodo por defecto: 30 dias.
+  getReporteCumplimiento: function (data, contexto) {
+    var empresas = empresasQueCoordina_(contexto);
+    if (empresas.length === 0) {
+      return { sin_empresa: true };
+    }
+    return calcularReportePausas_(empresas, data && data.desde, data && data.hasta);
   }
 };
 
@@ -641,6 +723,160 @@ function resolverTrabajadorPausas_(email) {
   }
 
   return { empresa_id: '', trabajador_id: '', nombre: '' };
+}
+
+// --- coordinador (Fase P3) -------------------------------------------------
+
+// Empresas que coordina quien hace la llamada: un ADM las coordina TODAS (ve y
+// opera cualquiera); un coordinador, solo aquellas donde esta activo en
+// PAUSAS_COORDINADORES (titular o reemplazo). Devuelve lista de empresa_id.
+function empresasQueCoordina_(contexto) {
+  if (contexto && contexto.rol === 'ADM') {
+    return leerFilasSeguro_(SHEETS.PAUSAS_CONFIG).map(function (c) { return String(c.empresa_id); });
+  }
+  var correo = String((contexto && contexto.email) || '').toLowerCase();
+  if (!correo) return [];
+  var vistas = {};
+  leerFilasSeguro_(SHEETS.PAUSAS_COORDINADORES).forEach(function (co) {
+    if (esVerdaderoPausas_(co.activo) && String(co.email).toLowerCase() === correo) {
+      vistas[String(co.empresa_id)] = true;
+    }
+  });
+  return Object.keys(vistas);
+}
+
+// Guard de una operacion del coordinador sobre una pausa puntual: ADM siempre;
+// si no, debe ser coordinador ACTIVO de la empresa de esa pausa. Devuelve
+// _forbidden o null.
+function guardaCoordinadorPausa_(contexto, pausa) {
+  if (contexto && contexto.rol === 'ADM') return null;
+  var empresas = empresasQueCoordina_(contexto);
+  if (empresas.indexOf(String(pausa.empresa_id)) === -1) {
+    return { _forbidden: true, message: 'No eres coordinador(a) de la empresa de esta pausa.' };
+  }
+  return null;
+}
+
+// Participacion "en vivo" de una pausa: quienes participaron, quienes
+// justificaron (no pudieron) y quienes siguen pendientes (roster activo que
+// aun no registra). Cuenta sobre el roster ACTIVO de la empresa.
+function participacionDePausa_(pausaId, empresaId) {
+  var roster = leerFilasSeguro_(SHEETS.PAUSAS_TRABAJADORES).filter(function (t) {
+    return esVerdaderoPausas_(t.activo) && String(t.empresa_id) === String(empresaId);
+  });
+  var registros = leerFilasSeguro_(SHEETS.PAUSAS_ASISTENCIA).filter(function (r) {
+    return String(r.pausa_id) === String(pausaId);
+  });
+  var porCorreo = {};
+  registros.forEach(function (r) { porCorreo[String(r.email).toLowerCase()] = r; });
+
+  var participaron = [], justificaron = [], pendientes = [];
+  roster.forEach(function (t) {
+    var reg = porCorreo[String(t.email).toLowerCase()];
+    var item = { nombre: t.nombre || t.email, email: t.email, area: t.area || '' };
+    if (reg && reg.estado === 'participo') { participaron.push(item); }
+    else if (reg && reg.estado === 'no_participo') { justificaron.push(Object.assign({ motivo: reg.motivo || '' }, item)); }
+    else { pendientes.push(item); }
+  });
+  // Registros de correos que NO estan en el roster (ej. cuenta de portal sin
+  // fila de roster) igual cuentan como participacion/justificacion.
+  var correosRoster = {};
+  roster.forEach(function (t) { correosRoster[String(t.email).toLowerCase()] = true; });
+  registros.forEach(function (r) {
+    if (correosRoster[String(r.email).toLowerCase()]) return;
+    var item = { nombre: r.email, email: r.email, area: '' };
+    if (r.estado === 'participo') participaron.push(item);
+    else if (r.estado === 'no_participo') justificaron.push(Object.assign({ motivo: r.motivo || '' }, item));
+  });
+
+  var totalRoster = roster.length;
+  return {
+    total_roster: totalRoster,
+    participaron: participaron,
+    justificaron: justificaron,
+    pendientes: pendientes,
+    n_participaron: participaron.length,
+    n_justificaron: justificaron.length,
+    n_pendientes: pendientes.length,
+    pct_participacion: totalRoster === 0 ? null : Math.round((participaron.length / totalRoster) * 1000) / 10
+  };
+}
+
+// Reporte de cumplimiento de un conjunto de empresas en un periodo. Reusable
+// por el coordinador (P3) y luego por Gerencia (P5). desde/hasta son
+// AAAA-MM-DD; por defecto, ultimos 30 dias.
+function calcularReportePausas_(empresaIds, desde, hasta) {
+  var setEmp = {};
+  empresaIds.forEach(function (e) { setEmp[String(e)] = true; });
+  var hoy = claveDia_(new Date(), 'America/Santiago');
+  var hastaC = /^\d{4}-\d{2}-\d{2}$/.test(String(hasta || '')) ? hasta : hoy;
+  var desdeC = /^\d{4}-\d{2}-\d{2}$/.test(String(desde || '')) ? desde
+    : claveDia_(new Date(Date.now() - 30 * 24 * 3600 * 1000), 'America/Santiago');
+
+  var pausas = leerFilasSeguro_(SHEETS.PAUSAS_PROGRAMADAS).filter(function (p) {
+    var f = claveFechaPausa_(p.fecha);
+    return setEmp[String(p.empresa_id)] && f >= desdeC && f <= hastaC;
+  });
+  var idsPausa = {};
+  pausas.forEach(function (p) { idsPausa[p.pausa_id] = p; });
+
+  var registros = leerFilasSeguro_(SHEETS.PAUSAS_ASISTENCIA).filter(function (r) {
+    return idsPausa[r.pausa_id];
+  });
+
+  // Cancelada no cuenta en cumplimiento (anulada). El denominador son las
+  // "resueltas" (realizadas + no realizadas).
+  var realizadas = pausas.filter(function (p) { return p.estado === 'Realizada' || p.estado === 'Cerrada'; });
+  var noRealizadas = pausas.filter(function (p) { return p.estado === 'No_realizada'; });
+  var canceladas = pausas.filter(function (p) { return p.estado === 'Cancelada'; });
+  var resueltas = realizadas.length + noRealizadas.length;
+
+  var participaciones = registros.filter(function (r) { return r.estado === 'participo'; });
+  var justificaciones = registros.filter(function (r) { return r.estado === 'no_participo'; });
+
+  // Motivos de inasistencia (top).
+  var motivos = {};
+  justificaciones.forEach(function (r) {
+    var m = String(r.motivo || '(sin motivo)').trim() || '(sin motivo)';
+    motivos[m] = (motivos[m] || 0) + 1;
+  });
+  var motivosLista = Object.keys(motivos).map(function (m) { return { motivo: m, cantidad: motivos[m] }; })
+    .sort(function (a, b) { return b.cantidad - a.cantidad; });
+
+  // Participacion por area (usa el area del roster; si el registro no matchea
+  // el roster, cae en "(sin area)").
+  var areaPorCorreo = {};
+  leerFilasSeguro_(SHEETS.PAUSAS_TRABAJADORES).forEach(function (t) {
+    if (setEmp[String(t.empresa_id)]) areaPorCorreo[String(t.email).toLowerCase()] = t.area || '(sin área)';
+  });
+  var porArea = {};
+  participaciones.forEach(function (r) {
+    var area = areaPorCorreo[String(r.email).toLowerCase()] || '(sin área)';
+    porArea[area] = (porArea[area] || 0) + 1;
+  });
+  var porAreaLista = Object.keys(porArea).map(function (a) { return { area: a, participaciones: porArea[a] }; })
+    .sort(function (a, b) { return b.participaciones - a.participaciones; });
+
+  return {
+    periodo: { desde: desdeC, hasta: hastaC },
+    kpis: {
+      programadas: pausas.length,
+      realizadas: realizadas.length,
+      no_realizadas: noRealizadas.length,
+      canceladas: canceladas.length,
+      pct_cumplimiento: resueltas === 0 ? null : Math.round((realizadas.length / resueltas) * 1000) / 10,
+      participaciones: participaciones.length,
+      justificaciones: justificaciones.length
+    },
+    motivos: motivosLista,
+    por_area: porAreaLista,
+    pausas: pausas.map(function (p) {
+      return {
+        pausa_id: p.pausa_id, empresa_id: p.empresa_id, fecha: claveFechaPausa_(p.fecha),
+        estado: p.estado, hora_programada: p.hora_programada || ''
+      };
+    }).sort(function (a, b) { return a.fecha < b.fecha ? 1 : -1; })
+  };
 }
 
 // --- helpers ---------------------------------------------------------------

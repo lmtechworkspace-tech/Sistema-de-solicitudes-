@@ -68,7 +68,11 @@ var BACKOFFICE_ACTIONS = {
   gestionarPausaProgramada: handleGestionarPausaProgramada_,
   // v6.0 Fase P2: registro del trabajador (modulo 'pausas').
   getPausaHoyTrabajador: handleGetPausaHoyTrabajador_,
-  registrarAsistenciaPausa: handleRegistrarAsistenciaPausa_
+  registrarAsistenciaPausa: handleRegistrarAsistenciaPausa_,
+  // v6.0 Fase P3: operacion y reportes del coordinador (modulo 'pausas_coordinacion').
+  getPanelCoordinadorPausas: handleGetPanelCoordinadorPausas_,
+  gestionarPausaCoordinador: handleGestionarPausaCoordinador_,
+  getReporteCumplimientoPausas: handleGetReporteCumplimientoPausas_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -126,7 +130,11 @@ var MODULO_POR_ACCION = {
   // v6.0 Fase P2: el trabajador registra su participacion desde el modulo
   // 'pausas' (cualquier cuenta con ese modulo, tipicamente via enlace magico).
   getPausaHoyTrabajador: 'pausas',
-  registrarAsistenciaPausa: 'pausas'
+  registrarAsistenciaPausa: 'pausas',
+  // v6.0 Fase P3: la coordinadora opera y ve reportes desde su modulo.
+  getPanelCoordinadorPausas: 'pausas_coordinacion',
+  gestionarPausaCoordinador: 'pausas_coordinacion',
+  getReporteCumplimientoPausas: 'pausas_coordinacion'
   // ping: sin modulo -- cualquier sesion valida.
 };
 
@@ -466,6 +474,19 @@ function handleGetPausaHoyTrabajador_(data, contexto) {
 
 function handleRegistrarAsistenciaPausa_(data, contexto) {
   return responderResultado_(Pausas.registrarAsistencia(data, contexto));
+}
+
+// v6.0 Fase P3: coordinador.
+function handleGetPanelCoordinadorPausas_(data, contexto) {
+  return responderResultado_(Pausas.getPanelCoordinador(data, contexto));
+}
+
+function handleGestionarPausaCoordinador_(data, contexto) {
+  return responderResultado_(Pausas.gestionarPausaCoordinador(data, contexto));
+}
+
+function handleGetReporteCumplimientoPausas_(data, contexto) {
+  return responderResultado_(Pausas.getReporteCumplimiento(data, contexto));
 }
 
 function responderResultado_(resultado) {
