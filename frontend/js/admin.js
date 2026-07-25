@@ -677,7 +677,7 @@
 
   // v6.0 (modulo Pausas Activas, Fase P0): la configuracion administrable por
   // el ADM -- lo que el usuario pidio que fuera editable "sin afectar el
-  // sistema principal": parametros por empresa, coordinadoras (Amarilla/Camila
+  // sistema principal": parametros por empresa, coordinadoras (Amarlla/Camila
   // titulares + reemplazos) y el roster de trabajadores. Una sola seccion con
   // tres sub-pestanas para no saturar el menu lateral. Todo aditivo: escribe
   // solo en las hojas PAUSAS_*.
@@ -708,7 +708,8 @@
     var SUBTABS = [
       { id: 'config', texto: 'Configuración' },
       { id: 'coordinadores', texto: 'Coordinadoras' },
-      { id: 'roster', texto: 'Trabajadores' }
+      { id: 'roster', texto: 'Trabajadores' },
+      { id: 'programadas', texto: 'Programadas' }
     ];
     var subnav = '<div class="sigso-tabs" id="pausas-subtabs">' + SUBTABS.map(function (t) {
       var activa = t.id === pausasSubtab ? ' sigso-tabs__boton--activo' : '';
@@ -730,7 +731,8 @@
 
     if (pausasSubtab === 'config') renderPausasConfig_();
     else if (pausasSubtab === 'coordinadores') renderPausasCoordinadores_();
-    else renderPausasRoster_();
+    else if (pausasSubtab === 'roster') renderPausasRoster_();
+    else renderPausasProgramadas_();
   }
 
   // --- sub-pestana: parametros por empresa (upsert) -------------------------
@@ -842,7 +844,7 @@
         '<div class="sigso-admin-cab"><h3>Coordinadoras (prevencionistas)</h3>' +
         '<button type="button" class="sigso-boton sigso-admin-cab__boton" id="btn-nueva-coord-pausas">' +
         Iconos.svg('nueva', { tam: 16 }) + ' Nueva</button></div>' +
-        '<p class="sigso-ayuda">Titulares (Amarilla, Camila) y sus reemplazos, por empresa. Los reemplazos cubren cuando ninguna titular puede.</p>' +
+        '<p class="sigso-ayuda">Titulares (Amarlla, Camila) y sus reemplazos, por empresa. Los reemplazos cubren cuando ninguna titular puede.</p>' +
         Componentes.tarjeta(tablaPausasCoordinadores_(filas));
 
       document.getElementById('btn-nueva-coord-pausas').addEventListener('click', abrirFormPausasCoordinador_);
@@ -987,6 +989,127 @@
       }
       cerrarDrawerAdmin_();
       recargar();
+    });
+  }
+
+  // --- sub-pestana: pausas programadas (Fase P1) ----------------------------
+  var ESTADO_PAUSA_BADGE = {
+    Programada: 'P3', Recordatorio_enviado: 'P3', En_curso: 'P2',
+    Realizada: 'P4', Cerrada: 'P4', Suspendida: 'P5',
+    No_realizada: 'P1', Cancelada: 'P1'
+  };
+  var ESTADOS_PAUSA_TERMINALES_UI = ['Cerrada', 'No_realizada', 'Cancelada'];
+
+  function renderPausasProgramadas_() {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarPausasProgramadas', {}).then(function (respuesta) {
+      var cont = document.getElementById('pausas-sub-contenido');
+      if (!respuesta.ok) {
+        cont.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
+        return;
+      }
+      var filas = respuesta.data || [];
+      cont.innerHTML =
+        '<div class="sigso-admin-cab"><h3>Pausas programadas</h3>' +
+        '<span>' +
+        '<button type="button" class="sigso-boton sigso-boton--secundario" id="btn-programar-hoy-pausas">' +
+        Iconos.svg('reloj', { tam: 16 }) + ' Programar hoy</button> ' +
+        '<button type="button" class="sigso-boton sigso-admin-cab__boton" id="btn-nueva-pausa-manual">' +
+        Iconos.svg('nueva', { tam: 16 }) + ' Manual</button>' +
+        '</span></div>' +
+        '<p class="sigso-ayuda">El sistema crea la pausa del día automáticamente cada mañana según la configuración. ' +
+        'Aquí puedes crear una puntual, reprogramarla o cancelarla.</p>' +
+        Componentes.tarjeta(tablaPausasProgramadas_(filas));
+
+      document.getElementById('btn-programar-hoy-pausas').addEventListener('click', function () {
+        guardarGestionPausas_('programarPausasDelDia', {}, function () {
+          Componentes.aviso({ tipo: 'exito', texto: 'Se programaron las pausas de hoy que correspondían.' });
+          renderPausasProgramadas_();
+        });
+      });
+      document.getElementById('btn-nueva-pausa-manual').addEventListener('click', abrirFormPausaManual_);
+
+      document.querySelectorAll('[data-accion-pausa]').forEach(function (boton) {
+        boton.addEventListener('click', function () {
+          var accion = boton.getAttribute('data-accion-pausa');
+          var id = boton.getAttribute('data-id');
+          if (accion === 'cancelar') {
+            Componentes.confirmar({
+              titulo: 'Cancelar pausa',
+              mensaje: 'La pausa quedará como Cancelada y no se contabilizará. ¿Continuar?',
+              confirmar: 'Cancelar pausa', peligro: true
+            }).then(function (ok) {
+              if (!ok) return;
+              guardarGestionPausas_('gestionarPausaProgramada', { operacion: 'cancelar', pausa_id: id }, renderPausasProgramadas_);
+            });
+          } else {
+            abrirFormReprogramarPausa_(id, boton.getAttribute('data-fecha'), boton.getAttribute('data-hora'));
+          }
+        });
+      });
+    }).catch(mostrarErrorAdmin_);
+  }
+
+  function tablaPausasProgramadas_(filas) {
+    if (filas.length === 0) {
+      return Componentes.vacio({ icono: 'reloj', texto: 'Aún no hay pausas programadas.', detalle: 'Usa "Programar hoy" o crea una manual.' });
+    }
+    var cuerpo = filas.map(function (p) {
+      var terminal = ESTADOS_PAUSA_TERMINALES_UI.indexOf(p.estado) !== -1;
+      var acciones = terminal ? '<span class="sigso-ayuda">—</span>' :
+        '<button type="button" class="sigso-boton--secundario" data-accion-pausa="reprogramar" data-id="' + p.pausa_id + '" data-fecha="' + Componentes.escaparHtml(claveFechaUi_(p.fecha)) + '" data-hora="' + Componentes.escaparHtml(String(p.hora_programada || '')) + '">Reprogramar</button> ' +
+        '<button type="button" class="sigso-boton--peligro" data-accion-pausa="cancelar" data-id="' + p.pausa_id + '">Cancelar</button>';
+      return '<tr>' +
+        '<td>' + Componentes.escaparHtml(nombreEmpresaPausas_(p.empresa_id)) + '</td>' +
+        '<td>' + Componentes.escaparHtml(claveFechaUi_(p.fecha)) + '</td>' +
+        '<td>' + Componentes.escaparHtml(String(p.hora_programada || '—')) + '</td>' +
+        '<td>' + Componentes.escaparHtml(String(p.duracion_min || '—')) + ' min</td>' +
+        '<td>' + Componentes.badge(String(p.estado).replace(/_/g, ' '), ESTADO_PAUSA_BADGE[p.estado] || 'P3') + '</td>' +
+        '<td>' + acciones + '</td>' +
+        '</tr>';
+    }).join('');
+    return '<table class="sigso-tabla"><thead><tr><th>Empresa</th><th>Fecha</th><th>Hora</th><th>Duración</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>' + cuerpo + '</tbody></table>';
+  }
+
+  // La fecha puede llegar como ISO con hora (Date serializado) o como
+  // AAAA-MM-DD; para la UI basta la parte del día.
+  function claveFechaUi_(valor) {
+    var m = String(valor || '').match(/^(\d{4}-\d{2}-\d{2})/);
+    return m ? m[1] : String(valor || '');
+  }
+
+  function abrirFormPausaManual_() {
+    var hoy = new Date().toISOString().slice(0, 10);
+    var form = '<form id="form-pausa-manual"><div class="sigso-admin-form">' +
+      Componentes.campoSelect({ dataCampo: 'empresa_id', label: 'Empresa', opciones: opcionesEmpresasPausas_() }) +
+      Componentes.campoTexto({ dataCampo: 'fecha', tipo: 'date', label: 'Fecha', valor: hoy }) +
+      Componentes.campoTexto({ dataCampo: 'hora_programada', label: 'Hora (HH:mm)', placeholder: '09:30' }) +
+      Componentes.campoTexto({ dataCampo: 'duracion_min', tipo: 'number', label: 'Duración (minutos)' }) +
+      '</div>' + Componentes.boton({ tipo: 'submit', texto: 'Crear' }) + '<div id="resultado-admin"></div></form>';
+    abrirDrawerAdmin_('Nueva pausa manual', form, function () {
+      document.getElementById('form-pausa-manual').addEventListener('submit', function (evento) {
+        evento.preventDefault();
+        var leer = function (n) { return document.querySelector('#form-pausa-manual [data-campo="' + n + '"]').value.trim(); };
+        guardarGestionPausas_('gestionarPausaProgramada', {
+          operacion: 'crear_manual', empresa_id: leer('empresa_id'), fecha: leer('fecha'),
+          hora_programada: leer('hora_programada'), duracion_min: leer('duracion_min')
+        }, renderPausasProgramadas_);
+      });
+    });
+  }
+
+  function abrirFormReprogramarPausa_(pausaId, fecha, hora) {
+    var form = '<form id="form-reprogramar-pausa"><div class="sigso-admin-form">' +
+      Componentes.campoTexto({ dataCampo: 'fecha', tipo: 'date', label: 'Nueva fecha', valor: claveFechaUi_(fecha) }) +
+      Componentes.campoTexto({ dataCampo: 'hora_programada', label: 'Nueva hora (HH:mm)', valor: hora || '' }) +
+      '</div>' + Componentes.boton({ tipo: 'submit', texto: 'Reprogramar' }) + '<div id="resultado-admin"></div></form>';
+    abrirDrawerAdmin_('Reprogramar pausa', form, function () {
+      document.getElementById('form-reprogramar-pausa').addEventListener('submit', function (evento) {
+        evento.preventDefault();
+        var leer = function (n) { return document.querySelector('#form-reprogramar-pausa [data-campo="' + n + '"]').value.trim(); };
+        guardarGestionPausas_('gestionarPausaProgramada', {
+          operacion: 'reprogramar', pausa_id: pausaId, fecha: leer('fecha'), hora_programada: leer('hora_programada')
+        }, renderPausasProgramadas_);
+      });
     });
   }
 

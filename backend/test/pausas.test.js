@@ -78,7 +78,7 @@ test('la configuracion de pausas es ADM-only', () => {
 test('gestionarCoordinador crea titular y reemplazo, y valida el tipo', () => {
   const ctx = loadConPausas();
   const t = ctx.Pausas.gestionarCoordinador({
-    operacion: 'crear', empresa_id: 'HP', nombre: 'Amarilla', email: 'amarilla@hp.cl', tipo: 'titular'
+    operacion: 'crear', empresa_id: 'HP', nombre: 'Amarlla', email: 'amarilla@hp.cl', tipo: 'titular'
   }, ADMIN);
   assert.ok(!t._validationError, JSON.stringify(t));
   assert.equal(t.tipo, 'titular');
@@ -103,19 +103,19 @@ test('gestionarCoordinador rechaza correo invalido y duplicados activos', () => 
     operacion: 'crear', empresa_id: 'HP', nombre: 'X', email: 'no-es-correo'
   }, ADMIN)._validationError, true);
 
-  ctx.Pausas.gestionarCoordinador({ operacion: 'crear', empresa_id: 'HP', nombre: 'Amarilla', email: 'a@hp.cl' }, ADMIN);
-  const dup = ctx.Pausas.gestionarCoordinador({ operacion: 'crear', empresa_id: 'HP', nombre: 'Amarilla 2', email: 'A@hp.cl' }, ADMIN);
+  ctx.Pausas.gestionarCoordinador({ operacion: 'crear', empresa_id: 'HP', nombre: 'Amarlla', email: 'a@hp.cl' }, ADMIN);
+  const dup = ctx.Pausas.gestionarCoordinador({ operacion: 'crear', empresa_id: 'HP', nombre: 'Amarlla 2', email: 'A@hp.cl' }, ADMIN);
   assert.equal(dup._validationError, true);
 });
 
 test('gestionarCoordinador desactiva (baja logica) y elimina', () => {
   const ctx = loadConPausas();
-  const c = ctx.Pausas.gestionarCoordinador({ operacion: 'crear', empresa_id: 'HP', nombre: 'Amarilla', email: 'a@hp.cl' }, ADMIN);
+  const c = ctx.Pausas.gestionarCoordinador({ operacion: 'crear', empresa_id: 'HP', nombre: 'Amarlla', email: 'a@hp.cl' }, ADMIN);
 
   ctx.Pausas.gestionarCoordinador({ operacion: 'activar', coord_id: c.coord_id, activo: false }, ADMIN);
   assert.equal(ctx.Pausas.listarCoordinadores({}, ADMIN)[0].activo, false);
   // desactivada libera el correo para un nuevo alta
-  const reAlta = ctx.Pausas.gestionarCoordinador({ operacion: 'crear', empresa_id: 'HP', nombre: 'Amarilla', email: 'a@hp.cl' }, ADMIN);
+  const reAlta = ctx.Pausas.gestionarCoordinador({ operacion: 'crear', empresa_id: 'HP', nombre: 'Amarlla', email: 'a@hp.cl' }, ADMIN);
   assert.ok(!reAlta._validationError);
 
   ctx.Pausas.gestionarCoordinador({ operacion: 'eliminar', coord_id: c.coord_id }, ADMIN);
@@ -151,7 +151,7 @@ test('gestionarTrabajador rechaza duplicado activo y permite eliminar', () => {
 test('las operaciones dejan traza en PAUSAS_LOG', () => {
   const ctx = loadConPausas();
   ctx.Pausas.guardarConfig({ empresa_id: 'HP', hora_habitual: '09:00' }, ADMIN);
-  ctx.Pausas.gestionarCoordinador({ operacion: 'crear', empresa_id: 'HP', nombre: 'Amarilla', email: 'a@hp.cl' }, ADMIN);
+  ctx.Pausas.gestionarCoordinador({ operacion: 'crear', empresa_id: 'HP', nombre: 'Amarlla', email: 'a@hp.cl' }, ADMIN);
 
   const logs = ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('PAUSAS_LOG')
     .getDataRange().getValues().slice(1);

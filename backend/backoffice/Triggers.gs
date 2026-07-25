@@ -102,6 +102,15 @@ function configurarTriggers() {
     creados.push('enviarDigestJefaturaTrigger');
   }
 
+  // v6.0 Fase P1: crea la pausa activa del dia por cada empresa configurada.
+  // Temprano (06:00) para que ya exista cuando salga el recordatorio (P4) y
+  // cuando la coordinadora entre a operarla. Es idempotente: si ya existe la
+  // del dia, no duplica (ver Pausas.programarDelDia).
+  if (existentes.indexOf('programarPausasDiariasTrigger') === -1) {
+    ScriptApp.newTrigger('programarPausasDiariasTrigger').timeBased().atHour(6).everyDays(1).create();
+    creados.push('programarPausasDiariasTrigger');
+  }
+
   return creados;
 }
 
@@ -154,6 +163,13 @@ function enviarReporteEjecutivoSemanalTrigger() {
 // v4.2 (§4): ver Notificaciones.enviarDigestJefatura().
 function enviarDigestJefaturaTrigger() {
   return Notificaciones.enviarDigestJefatura();
+}
+
+// v6.0 Fase P1: ver Pausas.programarDelDia(). El trigger corre sin contexto de
+// usuario (lo dispara el sistema), asi que no pasa `contexto` -- el log queda
+// atribuido a "sistema".
+function programarPausasDiariasTrigger() {
+  return Pausas.programarDelDia(new Date());
 }
 
 // A-07 (§16.3 v1.0): recorre las subsolicitudes abiertas y dispara A-08

@@ -574,7 +574,7 @@ que `schema-consistency.test.js` siga verde, mismo patrón que `JEFATURAS`. Ver
 |---|---|---|
 | `coord_id` | string | `Utilities.getUuid()` |
 | `empresa_id` | string | FK a `CAT_EMPRESAS` |
-| `nombre` | string | Nombre de la coordinadora (ej. Amarilla, Camila) |
+| `nombre` | string | Nombre de la coordinadora (ej. Amarlla, Camila) |
 | `email` | string | Correo para alertas y para identificarla al registrar |
 | `tipo` | string | `titular` \| `reemplazo` (editable por Admin) |
 | `activo` | boolean | Baja lógica |

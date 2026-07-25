@@ -83,7 +83,11 @@ function construirContexto() {
   // v6.0: modulo de Pausas Activas (Fase P0) -- hojas vacias para probar el
   // CRUD de configuracion en local (crear escribe con agregarFila_, que exige
   // que la hoja exista).
-  seedSheet(ctx, 'PAUSAS_CONFIG', ctx.COLUMNAS.PAUSAS_CONFIG);
+  // Config demo con todos los dias (1..7) para que "Programar hoy" cree la
+  // pausa sin importar en que dia se pruebe en local.
+  seedSheet(ctx, 'PAUSAS_CONFIG', ctx.COLUMNAS.PAUSAS_CONFIG, [
+    ['HP', '09:30', '1,2,3,4,5,6,7', 10, 15, 80, 60, true]
+  ]);
   seedSheet(ctx, 'PAUSAS_COORDINADORES', ctx.COLUMNAS.PAUSAS_COORDINADORES);
   seedSheet(ctx, 'PAUSAS_TRABAJADORES', ctx.COLUMNAS.PAUSAS_TRABAJADORES);
   seedSheet(ctx, 'PAUSAS_PROGRAMADAS', ctx.COLUMNAS.PAUSAS_PROGRAMADAS);

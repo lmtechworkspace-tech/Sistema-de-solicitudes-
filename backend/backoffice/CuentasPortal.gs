@@ -30,7 +30,7 @@ var MODULOS_POR_ROL = {
   // solo lectura recortado al equipo (Jefatura.getPanel), no al 'gerencia'
   // completo.
   JEFATURA: ['nueva_solicitud', 'mis_solicitudes', 'jefatura'],
-  // v6.0 (modulo Pausas Activas §8): COORDINADOR = prevencionista (Amarilla,
+  // v6.0 (modulo Pausas Activas §8): COORDINADOR = prevencionista (Amarlla,
   // Camila, reemplazo). Registra la pausa del dia y ve sus reportes. Modulos
   // aditivos: no toca ninguno de los del sistema principal.
   COORDINADOR: ['nueva_solicitud', 'mis_solicitudes', 'pausas', 'pausas_coordinacion'],

@@ -95,7 +95,7 @@ justificación (tú pediste explícitamente que critique la idea, §19 del docum
 |---|---|---|---|
 | Config empresa/logo | Configuración general | Alta | **Reusa** CAT_EMPRESAS + logo por empresa (ya existe) |
 | Lista de trabajadores (Sheets, no hardcode) | Roster de trabajadores | Alta | **Nuevo** `PAUSAS_TRABAJADORES` (admin-editable), pre-poblable desde CUENTAS_PORTAL/USUARIOS. Ver §4 (nota de identidad) |
-| Coordinadores autorizados (Amarilla, Camila + reemplazo) | Editable por admin | Alta | **Nuevo, editable** vía el CRUD genérico de config (como CONFIG_NOTIFICACIONES). Ver §6 |
+| Coordinadores autorizados (Amarlla, Camila + reemplazo) | Editable por admin | Alta | **Nuevo, editable** vía el CRUD genérico de config (como CONFIG_NOTIFICACIONES). Ver §6 |
 | Horario / días / duración habitual | Editable por admin | Alta | **Nuevo, editable** `PAUSAS_CONFIG`. Ver §6 |
 | Programación de pausas + estados | Estados de la actividad | Alta | **Nuevo** `PAUSAS_PROGRAMADAS` con máquina de estados (análoga a la de solicitudes) |
 | Programación automática L–V | Trigger diario | Alta | **Reusa** `configurarTriggers`; genera la pausa del día si toca |
@@ -110,7 +110,7 @@ justificación (tú pediste explícitamente que critique la idea, §19 del docum
 | Validación del coordinador | Interfaz especial | Alta | **Nuevo** módulo "Coordinación de pausas" (rol coordinador). Ver §7 |
 | Dashboard de cumplimiento | KPIs + semáforo | Alta | **Reusa** el patrón del Panel de Gerencia (`Gerencia.getPanel` + tabs). Ver §9 |
 | Reporte para Gerencia | Panel + PDF/correo | Alta | **Reusa** Panel de Gerencia (una pestaña nueva) + reporte ejecutivo. Tu requisito explícito |
-| Reporte para las prevencionistas | Su propio apartado | Alta | **Nuevo** dentro del módulo de coordinación (Amarilla/Camila ven sus reportes) |
+| Reporte para las prevencionistas | Su propio apartado | Alta | **Nuevo** dentro del módulo de coordinación (Amarlla/Camila ven sus reportes) |
 | Roles y permisos | ADM/COORD/TRABAJADOR/VISUALIZADOR | Alta | **Reusa** el sistema de roles/módulos. Ver §8 |
 | Logs de auditoría | Trazabilidad | Alta | **Reusa** `LOG_NOTIFICACIONES`/patrón de historial + `PAUSAS_LOG` |
 | **Firma manuscrita digital** | — | — | **NO HACER** — sobra. Ver §4 |
@@ -172,7 +172,7 @@ Reusa el shell, los componentes (botones, toasts, formularios) y el login. Cero 
 Todo lo "de gobierno" es editable por ti como ADM, sin tocar código, con el **mismo CRUD
 genérico** que ya administra empresas/áreas/notificaciones (`CATALOGOS_CONFIG` + admin.js):
 
-- **Coordinadores (prevencionistas):** `PAUSAS_COORDINADORES` — Amarilla y Camila como
+- **Coordinadores (prevencionistas):** `PAUSAS_COORDINADORES` — Amarlla y Camila como
   titulares, más **uno o varios de reemplazo**. Marcable quién es titular/reemplazo y
   activo/inactivo. Si ninguna titular puede, el reemplazo queda habilitado para coordinar.
   **Editable desde Administración.**
@@ -192,7 +192,7 @@ genérico** que ya administra empresas/áreas/notificaciones (`CATALOGOS_CONFIG`
 
 ---
 
-## 7. Flujo del coordinador (Amarilla / Camila / reemplazo)
+## 7. Flujo del coordinador (Amarlla / Camila / reemplazo)
 
 Módulo **"Coordinación de pausas"** (rol coordinador). En <1 min:
 
@@ -203,7 +203,7 @@ Módulo **"Coordinación de pausas"** (rol coordinador). En <1 min:
    *Realizada/Cerrada*. Puede dejar observaciones.
 5. Si no se hace: **marcar No realizada** con motivo (falta de disponibilidad, emergencia,
    reunión, ausencia del coordinador, problema técnico, otro).
-6. **Su propio apartado de reportes**: Amarilla y Camila ven el cumplimiento, participación
+6. **Su propio apartado de reportes**: Amarlla y Camila ven el cumplimiento, participación
    por área/trabajador y el histórico — sin pasar por Gerencia. (Tu requisito explícito.)
 
 ---
@@ -216,7 +216,7 @@ Se agrega a `MODULOS_VALIDOS` dos módulos: `pausas` (registro del trabajador) y
 | Rol | Qué puede en pausas |
 |---|---|
 | **TRABAJADOR** (cualquiera con cuenta/enlace) | Registrar SU participación/justificación. Nada más. Módulo `pausas` |
-| **COORDINADOR** (prevencionista: Amarilla, Camila, reemplazo) | Iniciar/cerrar/marcar no realizada + ver participantes + **reportes de pausas**. Módulos `pausas` + `pausas_coordinacion` |
+| **COORDINADOR** (prevencionista: Amarlla, Camila, reemplazo) | Iniciar/cerrar/marcar no realizada + ver participantes + **reportes de pausas**. Módulos `pausas` + `pausas_coordinacion` |
 | **GERENCIA** | Ve el **reporte de cumplimiento** de pausas (pestaña en su panel). Solo lectura |
 | **ADM** (tú) | Configura todo (coordinadores, horas, días, roster), ve todo, corrige |
 
@@ -231,7 +231,7 @@ sólo el coordinador cierra; sólo el admin edita config.
 **Dónde vive:** el dashboard de cumplimiento reusa el **patrón del Panel de Gerencia**
 (`Gerencia.getPanel` calcula, `gerencia.js` con tabs y semáforo dibuja). Se agrega:
 - Una **pestaña "Pausas" en el Panel de Gerencia** (para el gerente — tu requisito).
-- El **apartado de reportes en el módulo de coordinación** (para Amarilla/Camila).
+- El **apartado de reportes en el módulo de coordinación** (para Amarlla/Camila).
 
 **KPIs (con semáforo 🟢≥90% / 🟡 70–89% / 🔴<70%):**
 - Pausas programadas / realizadas / no realizadas del periodo, **% de cumplimiento**.
@@ -337,7 +337,7 @@ documenta el límite.
 | **P0** | Esquema (hojas `PAUSAS_*` en las 3 copias) + `PAUSAS_CONFIG`/`PAUSAS_COORDINADORES`/`PAUSAS_TRABAJADORES` + CRUD admin | El admin ya configura coordinadores/horas/días/roster | Constantes, Instalador, Catálogos CRUD, admin.js |
 | **P1** | Programación de pausas + trigger que crea la del día + máquina de estados | Las pausas quedan programadas y trazadas | Triggers, patrón de estados |
 | **P2** | Módulo del **trabajador** (registro participé/no pude + justificación) con enlace mágico | Registro real en <15 seg, atado a identidad | Shell, login, enlaces mágicos, componentes |
-| **P3** | Módulo del **coordinador** (iniciar/cerrar/no realizada + participantes) + su apartado de reportes | Amarilla/Camila operan y ven reportes | Shell, roles |
+| **P3** | Módulo del **coordinador** (iniciar/cerrar/no realizada + participantes) + su apartado de reportes | Amarlla/Camila operan y ven reportes | Shell, roles |
 | **P4** | **Alertas**: recordatorio, aviso al coordinador, alerta al admin, resúmenes | Full alertas, sin spam | Notificaciones (HTML), Triggers |
 | **P5** | **Dashboard de cumplimiento** + pestaña en Panel de **Gerencia** + reportes semanal/mensual (correo + PDF) | Gerencia ve el reporte; histórico verificable | Gerencia.getPanel, reportes programados, generador PDF |
 
@@ -362,7 +362,7 @@ CRUD reusado, sin riesgo. Cada fase es independiente y desplegable por separado.
 
 1. **¿Confirmas montarlo como módulo de SIGSO** (recomendado) en vez de un sistema aparte?
 2. **Identidad/confirmación:** ¿ok con **enlace mágico + checkbox** (sin firma dibujada)?
-3. **Coordinadores:** ¿Amarilla y Camila como titulares y "reemplazo" como rol editable que
+3. **Coordinadores:** ¿Amarlla y Camila como titulares y "reemplazo" como rol editable que
    tú activas cuando haga falta? ¿Uno o varios reemplazos?
 4. **Cadencia:** ¿pausa L–V a una hora fija configurable, recordatorio 15 min antes? ¿O
    varía por empresa (HP/RLD)?

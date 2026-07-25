@@ -61,7 +61,11 @@ var BACKOFFICE_ACTIONS = {
   listarPausasCoordinadores: handleListarPausasCoordinadores_,
   gestionarPausasCoordinador: handleGestionarPausasCoordinador_,
   listarPausasTrabajadores: handleListarPausasTrabajadores_,
-  gestionarPausasTrabajador: handleGestionarPausasTrabajador_
+  gestionarPausasTrabajador: handleGestionarPausasTrabajador_,
+  // v6.0 Fase P1: programacion + maquina de estados de las pausas.
+  listarPausasProgramadas: handleListarPausasProgramadas_,
+  programarPausasDelDia: handleProgramarPausasDelDia_,
+  gestionarPausaProgramada: handleGestionarPausaProgramada_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -112,7 +116,10 @@ var MODULO_POR_ACCION = {
   listarPausasCoordinadores: 'administracion',
   gestionarPausasCoordinador: 'administracion',
   listarPausasTrabajadores: 'administracion',
-  gestionarPausasTrabajador: 'administracion'
+  gestionarPausasTrabajador: 'administracion',
+  listarPausasProgramadas: 'administracion',
+  programarPausasDelDia: 'administracion',
+  gestionarPausaProgramada: 'administracion'
   // ping: sin modulo -- cualquier sesion valida.
 };
 
@@ -430,6 +437,19 @@ function handleListarPausasTrabajadores_(data, contexto) {
 
 function handleGestionarPausasTrabajador_(data, contexto) {
   return responderResultado_(Pausas.gestionarTrabajador(data, contexto));
+}
+
+// v6.0 Fase P1: programacion + estados de las pausas.
+function handleListarPausasProgramadas_(data, contexto) {
+  return responderResultado_(Pausas.listarProgramadas(data, contexto));
+}
+
+function handleProgramarPausasDelDia_(data, contexto) {
+  return responderResultado_(Pausas.programarDelDiaAdmin(data, contexto));
+}
+
+function handleGestionarPausaProgramada_(data, contexto) {
+  return responderResultado_(Pausas.gestionarPausaProgramada(data, contexto));
 }
 
 function responderResultado_(resultado) {
