@@ -129,6 +129,8 @@
           renderLogs_();
         } else if (tipo === 'JEFATURAS') {
           renderJefaturas_();
+        } else if (tipo === 'PAUSAS') {
+          renderPausas_();
         } else {
           renderCatalogo_(tipo);
         }
@@ -670,6 +672,321 @@
         return;
       }
       renderJefaturas_();
+    });
+  }
+
+  // v6.0 (modulo Pausas Activas, Fase P0): la configuracion administrable por
+  // el ADM -- lo que el usuario pidio que fuera editable "sin afectar el
+  // sistema principal": parametros por empresa, coordinadoras (Amarilla/Camila
+  // titulares + reemplazos) y el roster de trabajadores. Una sola seccion con
+  // tres sub-pestanas para no saturar el menu lateral. Todo aditivo: escribe
+  // solo en las hojas PAUSAS_*.
+  var pausasSubtab = 'config';
+  var pausasEmpresas = [];
+
+  function renderPausas_() {
+    // Trae las empresas UNA vez (para los selectores de las tres sub-pestanas)
+    // y luego pinta la sub-pestana activa sin volver a pedirlas.
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarCatalogo', { tipo: 'EMPRESA' }).then(function (respuesta) {
+      pausasEmpresas = (respuesta.ok && Array.isArray(respuesta.data))
+        ? respuesta.data.filter(function (e) { return e.activo === true || e.activo === 'TRUE'; })
+        : [];
+      pintarPausas_();
+    }).catch(mostrarErrorAdmin_);
+  }
+
+  function opcionesEmpresasPausas_() {
+    return pausasEmpresas.map(function (e) { return { valor: e.empresa_id, texto: e.nombre || e.empresa_id }; });
+  }
+
+  function nombreEmpresaPausas_(empresaId) {
+    var e = pausasEmpresas.filter(function (x) { return String(x.empresa_id) === String(empresaId); })[0];
+    return e ? (e.nombre || e.empresa_id) : empresaId;
+  }
+
+  function pintarPausas_() {
+    var SUBTABS = [
+      { id: 'config', texto: 'Configuración' },
+      { id: 'coordinadores', texto: 'Coordinadoras' },
+      { id: 'roster', texto: 'Trabajadores' }
+    ];
+    var subnav = '<div class="sigso-tabs" id="pausas-subtabs">' + SUBTABS.map(function (t) {
+      var activa = t.id === pausasSubtab ? ' sigso-tabs__boton--activo' : '';
+      return '<button type="button" class="sigso-tabs__boton' + activa + '" data-pausas-sub="' + t.id + '">' + t.texto + '</button>';
+    }).join('') + '</div>';
+
+    document.getElementById('admin-contenido').innerHTML =
+      '<div class="sigso-admin-cab"><h2>Pausas activas</h2></div>' +
+      '<p class="sigso-ayuda">Configuración del módulo de pausas activas. Es <strong>independiente</strong> del ' +
+      'sistema de solicitudes: cambiar horas, días o coordinadoras no afecta el resto de SIGSO.</p>' +
+      subnav + '<div id="pausas-sub-contenido"></div>';
+
+    document.querySelectorAll('[data-pausas-sub]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        pausasSubtab = boton.getAttribute('data-pausas-sub');
+        pintarPausas_();
+      });
+    });
+
+    if (pausasSubtab === 'config') renderPausasConfig_();
+    else if (pausasSubtab === 'coordinadores') renderPausasCoordinadores_();
+    else renderPausasRoster_();
+  }
+
+  // --- sub-pestana: parametros por empresa (upsert) -------------------------
+  function renderPausasConfig_() {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarPausasConfig', {}).then(function (respuesta) {
+      var cont = document.getElementById('pausas-sub-contenido');
+      if (!respuesta.ok) {
+        cont.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
+        return;
+      }
+      var filas = respuesta.data || [];
+      cont.innerHTML =
+        '<div class="sigso-admin-cab"><h3>Parámetros por empresa</h3>' +
+        '<button type="button" class="sigso-boton sigso-admin-cab__boton" id="btn-nueva-config-pausas">' +
+        Iconos.svg('nueva', { tam: 16 }) + ' Nueva / editar</button></div>' +
+        Componentes.tarjeta(tablaPausasConfig_(filas));
+
+      document.getElementById('btn-nueva-config-pausas').addEventListener('click', function () {
+        abrirFormPausasConfig_(null);
+      });
+      document.querySelectorAll('[data-editar-config-pausas]').forEach(function (fila) {
+        fila.addEventListener('click', function () {
+          abrirFormPausasConfig_(JSON.parse(fila.getAttribute('data-editar-config-pausas')));
+        });
+      });
+    }).catch(mostrarErrorAdmin_);
+  }
+
+  function tablaPausasConfig_(filas) {
+    if (filas.length === 0) {
+      return Componentes.vacio({ icono: 'reloj', texto: 'Aún no hay empresas configuradas.', detalle: 'Agrega la primera con "Nueva / editar".' });
+    }
+    var cuerpo = filas.map(function (c) {
+      var activo = c.activo === true || c.activo === 'TRUE';
+      return '<tr data-editar-config-pausas=\'' + JSON.stringify(c).replace(/'/g, '&#39;') + '\'>' +
+        '<td>' + Componentes.escaparHtml(nombreEmpresaPausas_(c.empresa_id)) + '</td>' +
+        '<td>' + Componentes.escaparHtml(String(c.hora_habitual || '—')) + '</td>' +
+        '<td>' + Componentes.escaparHtml(diasLegiblesPausas_(c.dias_semana)) + '</td>' +
+        '<td>' + Componentes.escaparHtml(String(c.duracion_min || '—')) + ' min</td>' +
+        '<td>' + Componentes.escaparHtml(String(c.umbral_verde || '—')) + '% / ' + Componentes.escaparHtml(String(c.umbral_amarillo || '—')) + '%</td>' +
+        '<td>' + Componentes.badge(activo ? 'Sí' : 'No', activo ? 'P4' : 'P1') + '</td>' +
+        '</tr>';
+    }).join('');
+    return '<table class="sigso-tabla"><thead><tr><th>Empresa</th><th>Hora</th><th>Días</th><th>Duración</th><th>Umbral 🟢/🟡</th><th>Activa</th></tr></thead><tbody>' + cuerpo + '</tbody></table>';
+  }
+
+  var DIAS_PAUSAS = { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb', 7: 'Dom' };
+  function diasLegiblesPausas_(csv) {
+    if (!csv) return '—';
+    return String(csv).split(',').map(function (d) { return DIAS_PAUSAS[d.trim()] || d; }).join(' ');
+  }
+
+  function abrirFormPausasConfig_(registro) {
+    registro = registro || {};
+    var esEdicion = !!registro.empresa_id;
+    var form = '<form id="form-pausas-config"><div class="sigso-admin-form">' +
+      Componentes.campoSelect({ dataCampo: 'empresa_id', label: 'Empresa', valor: registro.empresa_id || '', opciones: opcionesEmpresasPausas_() }) +
+      Componentes.campoTexto({ dataCampo: 'hora_habitual', label: 'Hora habitual (HH:mm)', valor: registro.hora_habitual || '', placeholder: '09:30' }) +
+      Componentes.campoTexto({ dataCampo: 'dias_semana', label: 'Días (1=Lun … 7=Dom, separados por coma)', valor: registro.dias_semana || '', placeholder: '1,2,3,4,5', ayuda: 'Ej: 1,2,3,4,5 para lunes a viernes.' }) +
+      Componentes.campoTexto({ dataCampo: 'duracion_min', tipo: 'number', label: 'Duración (minutos)', valor: registro.duracion_min || '' }) +
+      Componentes.campoTexto({ dataCampo: 'min_anticipacion', tipo: 'number', label: 'Anticipación del recordatorio (minutos)', valor: registro.min_anticipacion || '' }) +
+      Componentes.campoTexto({ dataCampo: 'umbral_verde', tipo: 'number', label: 'Umbral verde (% participación)', valor: registro.umbral_verde || '' }) +
+      Componentes.campoTexto({ dataCampo: 'umbral_amarillo', tipo: 'number', label: 'Umbral amarillo (% participación)', valor: registro.umbral_amarillo || '' }) +
+      '<label class="sigso-toggle"><input type="checkbox" data-campo="activo"' + (registro.activo === false || registro.activo === 'FALSE' ? '' : ' checked') + '> Activa</label>' +
+      '</div>' + Componentes.boton({ tipo: 'submit', texto: 'Guardar' }) + '<div id="resultado-admin"></div></form>';
+
+    abrirDrawerAdmin_(esEdicion ? 'Editar configuración' : 'Configurar empresa', form, function () {
+      document.getElementById('form-pausas-config').addEventListener('submit', function (evento) {
+        evento.preventDefault();
+        guardarPausasConfig_();
+      });
+    });
+  }
+
+  function guardarPausasConfig_() {
+    var leer = function (nombre) {
+      var el = document.querySelector('#form-pausas-config [data-campo="' + nombre + '"]');
+      return el ? el.value.trim() : '';
+    };
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'guardarPausasConfig', {
+      empresa_id: leer('empresa_id'),
+      hora_habitual: leer('hora_habitual'),
+      dias_semana: leer('dias_semana'),
+      duracion_min: leer('duracion_min'),
+      min_anticipacion: leer('min_anticipacion'),
+      umbral_verde: leer('umbral_verde'),
+      umbral_amarillo: leer('umbral_amarillo'),
+      activo: document.querySelector('#form-pausas-config [data-campo="activo"]').checked
+    }).then(function (respuesta) {
+      if (!respuesta.ok) {
+        document.getElementById('resultado-admin').innerHTML = Componentes.alerta(respuesta.message || 'Error al guardar.', 'error');
+        return;
+      }
+      cerrarDrawerAdmin_();
+      renderPausasConfig_();
+    });
+  }
+
+  // --- sub-pestana: coordinadoras (titulares / reemplazos) ------------------
+  function renderPausasCoordinadores_() {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarPausasCoordinadores', {}).then(function (respuesta) {
+      var cont = document.getElementById('pausas-sub-contenido');
+      if (!respuesta.ok) {
+        cont.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
+        return;
+      }
+      var filas = respuesta.data || [];
+      cont.innerHTML =
+        '<div class="sigso-admin-cab"><h3>Coordinadoras (prevencionistas)</h3>' +
+        '<button type="button" class="sigso-boton sigso-admin-cab__boton" id="btn-nueva-coord-pausas">' +
+        Iconos.svg('nueva', { tam: 16 }) + ' Nueva</button></div>' +
+        '<p class="sigso-ayuda">Titulares (Amarilla, Camila) y sus reemplazos, por empresa. Los reemplazos cubren cuando ninguna titular puede.</p>' +
+        Componentes.tarjeta(tablaPausasCoordinadores_(filas));
+
+      document.getElementById('btn-nueva-coord-pausas').addEventListener('click', abrirFormPausasCoordinador_);
+      wireAccionesPausas_('coord', 'gestionarPausasCoordinador', 'coord_id', renderPausasCoordinadores_, 'coordinadora');
+    }).catch(mostrarErrorAdmin_);
+  }
+
+  function tablaPausasCoordinadores_(filas) {
+    if (filas.length === 0) {
+      return Componentes.vacio({ icono: 'persona', texto: 'Aún no hay coordinadoras registradas.', detalle: 'Agrega la primera con "Nueva".' });
+    }
+    var cuerpo = filas.map(function (c) {
+      var activo = c.activo === true || c.activo === 'TRUE';
+      return '<tr>' +
+        '<td>' + Componentes.escaparHtml(c.nombre) + '</td>' +
+        '<td>' + Componentes.escaparHtml(c.email) + '</td>' +
+        '<td>' + Componentes.badge(c.tipo === 'reemplazo' ? 'Reemplazo' : 'Titular', c.tipo === 'reemplazo' ? 'P3' : 'P1') + '</td>' +
+        '<td>' + Componentes.escaparHtml(nombreEmpresaPausas_(c.empresa_id)) + '</td>' +
+        '<td>' + Componentes.badge(activo ? 'Sí' : 'No', activo ? 'P4' : 'P1') + '</td>' +
+        '<td>' + botonesAccionPausas_('coord', c.coord_id, activo) + '</td>' +
+        '</tr>';
+    }).join('');
+    return '<table class="sigso-tabla"><thead><tr><th>Nombre</th><th>Correo</th><th>Tipo</th><th>Empresa</th><th>Activa</th><th>Acciones</th></tr></thead><tbody>' + cuerpo + '</tbody></table>';
+  }
+
+  function abrirFormPausasCoordinador_() {
+    var form = '<form id="form-pausas-coord"><div class="sigso-admin-form">' +
+      Componentes.campoSelect({ dataCampo: 'empresa_id', label: 'Empresa', opciones: opcionesEmpresasPausas_() }) +
+      Componentes.campoTexto({ dataCampo: 'nombre', label: 'Nombre' }) +
+      Componentes.campoTexto({ dataCampo: 'email', label: 'Correo' }) +
+      Componentes.campoSelect({ dataCampo: 'tipo', label: 'Tipo', valor: 'titular', placeholder: false, opciones: [{ valor: 'titular', texto: 'Titular' }, { valor: 'reemplazo', texto: 'Reemplazo' }] }) +
+      '</div>' + Componentes.boton({ tipo: 'submit', texto: 'Agregar' }) + '<div id="resultado-admin"></div></form>';
+    abrirDrawerAdmin_('Nueva coordinadora', form, function () {
+      document.getElementById('form-pausas-coord').addEventListener('submit', function (evento) {
+        evento.preventDefault();
+        var leer = function (n) { return document.querySelector('#form-pausas-coord [data-campo="' + n + '"]').value.trim(); };
+        guardarGestionPausas_('gestionarPausasCoordinador', {
+          operacion: 'crear', empresa_id: leer('empresa_id'), nombre: leer('nombre'), email: leer('email'), tipo: leer('tipo')
+        }, renderPausasCoordinadores_);
+      });
+    });
+  }
+
+  // --- sub-pestana: roster de trabajadores ----------------------------------
+  function renderPausasRoster_() {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarPausasTrabajadores', {}).then(function (respuesta) {
+      var cont = document.getElementById('pausas-sub-contenido');
+      if (!respuesta.ok) {
+        cont.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
+        return;
+      }
+      var filas = respuesta.data || [];
+      cont.innerHTML =
+        '<div class="sigso-admin-cab"><h3>Roster de trabajadores</h3>' +
+        '<button type="button" class="sigso-boton sigso-admin-cab__boton" id="btn-nuevo-trab-pausas">' +
+        Iconos.svg('nueva', { tam: 16 }) + ' Nuevo</button></div>' +
+        '<p class="sigso-ayuda">Quiénes participan de las pausas, con su área y cargo (para los reportes por área).</p>' +
+        Componentes.tarjeta(tablaPausasRoster_(filas));
+
+      document.getElementById('btn-nuevo-trab-pausas').addEventListener('click', abrirFormPausasTrabajador_);
+      wireAccionesPausas_('trab', 'gestionarPausasTrabajador', 'trabajador_id', renderPausasRoster_, 'trabajador');
+    }).catch(mostrarErrorAdmin_);
+  }
+
+  function tablaPausasRoster_(filas) {
+    if (filas.length === 0) {
+      return Componentes.vacio({ icono: 'persona', texto: 'Aún no hay trabajadores en el roster.', detalle: 'Agrega el primero con "Nuevo".' });
+    }
+    var cuerpo = filas.map(function (t) {
+      var activo = t.activo === true || t.activo === 'TRUE';
+      return '<tr>' +
+        '<td>' + Componentes.escaparHtml(t.nombre) + '</td>' +
+        '<td>' + Componentes.escaparHtml(t.email) + '</td>' +
+        '<td>' + Componentes.escaparHtml(t.area || '—') + '</td>' +
+        '<td>' + Componentes.escaparHtml(t.cargo || '—') + '</td>' +
+        '<td>' + Componentes.escaparHtml(nombreEmpresaPausas_(t.empresa_id)) + '</td>' +
+        '<td>' + Componentes.badge(activo ? 'Sí' : 'No', activo ? 'P4' : 'P1') + '</td>' +
+        '<td>' + botonesAccionPausas_('trab', t.trabajador_id, activo) + '</td>' +
+        '</tr>';
+    }).join('');
+    return '<table class="sigso-tabla"><thead><tr><th>Nombre</th><th>Correo</th><th>Área</th><th>Cargo</th><th>Empresa</th><th>Activo</th><th>Acciones</th></tr></thead><tbody>' + cuerpo + '</tbody></table>';
+  }
+
+  function abrirFormPausasTrabajador_() {
+    var form = '<form id="form-pausas-trab"><div class="sigso-admin-form">' +
+      Componentes.campoSelect({ dataCampo: 'empresa_id', label: 'Empresa', opciones: opcionesEmpresasPausas_() }) +
+      Componentes.campoTexto({ dataCampo: 'nombre', label: 'Nombre' }) +
+      Componentes.campoTexto({ dataCampo: 'email', label: 'Correo' }) +
+      Componentes.campoTexto({ dataCampo: 'area', label: 'Área' }) +
+      Componentes.campoTexto({ dataCampo: 'cargo', label: 'Cargo' }) +
+      '</div>' + Componentes.boton({ tipo: 'submit', texto: 'Agregar' }) + '<div id="resultado-admin"></div></form>';
+    abrirDrawerAdmin_('Nuevo trabajador', form, function () {
+      document.getElementById('form-pausas-trab').addEventListener('submit', function (evento) {
+        evento.preventDefault();
+        var leer = function (n) { return document.querySelector('#form-pausas-trab [data-campo="' + n + '"]').value.trim(); };
+        guardarGestionPausas_('gestionarPausasTrabajador', {
+          operacion: 'crear', empresa_id: leer('empresa_id'), nombre: leer('nombre'), email: leer('email'), area: leer('area'), cargo: leer('cargo')
+        }, renderPausasRoster_);
+      });
+    });
+  }
+
+  // --- helpers comunes de coordinadoras/roster (activar/eliminar) -----------
+  function botonesAccionPausas_(prefijo, id, activo) {
+    return '<button type="button" class="sigso-boton--secundario" data-accion-' + prefijo + '="activar" data-id="' + id + '" data-activo="' + !activo + '">' + (activo ? 'Desactivar' : 'Activar') + '</button> ' +
+      '<button type="button" class="sigso-boton--peligro" data-accion-' + prefijo + '="eliminar" data-id="' + id + '">Eliminar</button>';
+  }
+
+  function wireAccionesPausas_(prefijo, accionApi, campoId, recargar, etiqueta) {
+    document.querySelectorAll('[data-accion-' + prefijo + ']').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        var accion = boton.getAttribute('data-accion-' + prefijo);
+        var id = boton.getAttribute('data-id');
+        var datos = {};
+        datos[campoId] = id;
+        if (accion === 'eliminar') {
+          Componentes.confirmar({
+            titulo: 'Eliminar ' + etiqueta,
+            mensaje: 'Se eliminará de forma permanente. Esta acción no se puede deshacer.',
+            confirmar: 'Eliminar', peligro: true
+          }).then(function (confirmado) {
+            if (!confirmado) return;
+            datos.operacion = 'eliminar';
+            guardarGestionPausas_(accionApi, datos, recargar);
+          });
+        } else {
+          datos.operacion = 'activar';
+          datos.activo = boton.getAttribute('data-activo') === 'true';
+          guardarGestionPausas_(accionApi, datos, recargar);
+        }
+      });
+    });
+  }
+
+  function guardarGestionPausas_(accionApi, datos, recargar) {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, accionApi, datos).then(function (respuesta) {
+      if (!respuesta.ok) {
+        var destino = document.getElementById('resultado-admin');
+        if (destino) destino.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo aplicar.', 'error');
+        else Componentes.aviso({ tipo: 'error', texto: respuesta.message || 'No se pudo aplicar.' });
+        return;
+      }
+      cerrarDrawerAdmin_();
+      recargar();
     });
   }
 

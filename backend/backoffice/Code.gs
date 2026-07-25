@@ -53,7 +53,15 @@ var BACKOFFICE_ACTIONS = {
   listarLogs: handleListarLogs_,
   // v4.2: relaciones jefe->subordinado (Jefatura.gs, solo ADM las edita).
   listarJefaturas: handleListarJefaturas_,
-  gestionarJefatura: handleGestionarJefatura_
+  gestionarJefatura: handleGestionarJefatura_,
+  // v6.0 (modulo Pausas Activas, Fase P0): configuracion administrable por ADM
+  // -- parametros por empresa, coordinadoras (titulares/reemplazos) y roster.
+  listarPausasConfig: handleListarPausasConfig_,
+  guardarPausasConfig: handleGuardarPausasConfig_,
+  listarPausasCoordinadores: handleListarPausasCoordinadores_,
+  gestionarPausasCoordinador: handleGestionarPausasCoordinador_,
+  listarPausasTrabajadores: handleListarPausasTrabajadores_,
+  gestionarPausasTrabajador: handleGestionarPausasTrabajador_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -97,7 +105,14 @@ var MODULO_POR_ACCION = {
   listarCuentasPortal: 'administracion',
   gestionarCuentaPortal: 'administracion',
   listarJefaturas: 'administracion',
-  gestionarJefatura: 'administracion'
+  gestionarJefatura: 'administracion',
+  // v6.0 (Fase P0): la config de pausas se administra desde Administracion.
+  listarPausasConfig: 'administracion',
+  guardarPausasConfig: 'administracion',
+  listarPausasCoordinadores: 'administracion',
+  gestionarPausasCoordinador: 'administracion',
+  listarPausasTrabajadores: 'administracion',
+  gestionarPausasTrabajador: 'administracion'
   // ping: sin modulo -- cualquier sesion valida.
 };
 
@@ -390,6 +405,31 @@ function handleListarJefaturas_(data, contexto) {
 
 function handleGestionarJefatura_(data, contexto) {
   return responderResultado_(Jefatura.gestionar(data, contexto));
+}
+
+// v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).
+function handleListarPausasConfig_(data, contexto) {
+  return responderResultado_(Pausas.listarConfig(data, contexto));
+}
+
+function handleGuardarPausasConfig_(data, contexto) {
+  return responderResultado_(Pausas.guardarConfig(data, contexto));
+}
+
+function handleListarPausasCoordinadores_(data, contexto) {
+  return responderResultado_(Pausas.listarCoordinadores(data, contexto));
+}
+
+function handleGestionarPausasCoordinador_(data, contexto) {
+  return responderResultado_(Pausas.gestionarCoordinador(data, contexto));
+}
+
+function handleListarPausasTrabajadores_(data, contexto) {
+  return responderResultado_(Pausas.listarTrabajadores(data, contexto));
+}
+
+function handleGestionarPausasTrabajador_(data, contexto) {
+  return responderResultado_(Pausas.gestionarTrabajador(data, contexto));
 }
 
 function responderResultado_(resultado) {

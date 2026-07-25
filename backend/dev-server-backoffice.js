@@ -80,6 +80,15 @@ function construirContexto() {
   seedSheet(ctx, 'JEFATURAS', ctx.COLUMNAS.JEFATURAS, [
     ['JEF-DEMO-1', 'jefe@homepymes.cl', 'demo1@hp.cl', true]
   ]);
+  // v6.0: modulo de Pausas Activas (Fase P0) -- hojas vacias para probar el
+  // CRUD de configuracion en local (crear escribe con agregarFila_, que exige
+  // que la hoja exista).
+  seedSheet(ctx, 'PAUSAS_CONFIG', ctx.COLUMNAS.PAUSAS_CONFIG);
+  seedSheet(ctx, 'PAUSAS_COORDINADORES', ctx.COLUMNAS.PAUSAS_COORDINADORES);
+  seedSheet(ctx, 'PAUSAS_TRABAJADORES', ctx.COLUMNAS.PAUSAS_TRABAJADORES);
+  seedSheet(ctx, 'PAUSAS_PROGRAMADAS', ctx.COLUMNAS.PAUSAS_PROGRAMADAS);
+  seedSheet(ctx, 'PAUSAS_ASISTENCIA', ctx.COLUMNAS.PAUSAS_ASISTENCIA);
+  seedSheet(ctx, 'PAUSAS_LOG', ctx.COLUMNAS.PAUSAS_LOG);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
   seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);
   seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);

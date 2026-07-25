@@ -55,7 +55,17 @@ var SHEETS = {
   // v4.2 (documentacion/SIGSO-v4.2-propuestas-modulo-jefatura.md §1):
   // relacion jefe -> persona a cargo, por correo. Ver la nota identica en
   // backend/intake/Constantes.gs.
-  JEFATURAS: 'JEFATURAS'
+  JEFATURAS: 'JEFATURAS',
+  // v6.0 (documentacion/SIGSO-v6.0-propuesta-modulo-pausas-activas.md):
+  // modulo de Control de Pausas Activas. Todas las hojas son ADITIVAS -- no
+  // tocan nada del sistema principal. Ver la nota identica en
+  // backend/intake/Constantes.gs.
+  PAUSAS_CONFIG: 'PAUSAS_CONFIG',
+  PAUSAS_COORDINADORES: 'PAUSAS_COORDINADORES',
+  PAUSAS_TRABAJADORES: 'PAUSAS_TRABAJADORES',
+  PAUSAS_PROGRAMADAS: 'PAUSAS_PROGRAMADAS',
+  PAUSAS_ASISTENCIA: 'PAUSAS_ASISTENCIA',
+  PAUSAS_LOG: 'PAUSAS_LOG'
 };
 
 var COLUMNAS = {
@@ -202,7 +212,36 @@ var COLUMNAS = {
   // presenta en cada llamada). Expiran a las 12 horas.
   SESIONES_PORTAL: ['token', 'cuenta_id', 'expira', 'creada'],
   // v4.2 (§1): ver la nota identica en backend/intake/Constantes.gs.
-  JEFATURAS: ['jefatura_id', 'jefe_email', 'subordinado_email', 'activo']
+  JEFATURAS: ['jefatura_id', 'jefe_email', 'subordinado_email', 'activo'],
+  // v6.0 (modulo de Pausas Activas). Ver la nota identica en
+  // backend/intake/Constantes.gs. Todas aditivas.
+  // Config por empresa: hora/dias/duracion/umbrales del semaforo, editables
+  // por el Admin (dias_semana = CSV de 1..5, min_anticipacion del recordatorio).
+  PAUSAS_CONFIG: [
+    'empresa_id', 'hora_habitual', 'dias_semana', 'duracion_min',
+    'min_anticipacion', 'umbral_verde', 'umbral_amarillo', 'activo'
+  ],
+  // Coordinadores (prevencionistas). tipo = 'titular' | 'reemplazo'.
+  PAUSAS_COORDINADORES: ['coord_id', 'empresa_id', 'nombre', 'email', 'tipo', 'activo'],
+  // Roster de trabajadores para pausas (se siembra desde CUENTAS_PORTAL/
+  // USUARIOS pero es su propia lista, con area/cargo que pausas necesita).
+  PAUSAS_TRABAJADORES: [
+    'trabajador_id', 'empresa_id', 'nombre', 'email', 'area', 'cargo',
+    'activo', 'fecha_ingreso'
+  ],
+  // Cada pausa programada + su ejecucion. estado: Programada, Recordatorio_enviado,
+  // En_curso, Realizada, Cerrada, Suspendida, No_realizada, Cancelada.
+  PAUSAS_PROGRAMADAS: [
+    'pausa_id', 'empresa_id', 'fecha', 'hora_programada', 'hora_inicio_real',
+    'hora_fin', 'coordinador_email', 'estado', 'duracion_min', 'observaciones'
+  ],
+  // Registro de participacion por trabajador. estado: participo | no_participo.
+  PAUSAS_ASISTENCIA: [
+    'registro_id', 'pausa_id', 'trabajador_id', 'email', 'fecha_hora_registro',
+    'estado', 'motivo', 'comentario', 'confirmacion', 'origen'
+  ],
+  // Auditoria del modulo de pausas.
+  PAUSAS_LOG: ['log_id', 'timestamp', 'pausa_id', 'usuario', 'accion', 'detalle']
 };
 
 var ESTADOS = {

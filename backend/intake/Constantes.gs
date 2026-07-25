@@ -58,7 +58,17 @@ var SHEETS = {
   // de un jefe). La escribe solo el Backoffice (administracion); se
   // declara aqui para que las tres copias del esquema no diverjan
   // (schema-consistency.test.js), mismo criterio que HISTORIAL_ASIGNACION.
-  JEFATURAS: 'JEFATURAS'
+  JEFATURAS: 'JEFATURAS',
+  // v6.0 (documentacion/SIGSO-v6.0-propuesta-modulo-pausas-activas.md):
+  // modulo de Control de Pausas Activas. Todas aditivas -- las escribe solo
+  // el Backoffice; se declaran aqui para que las tres copias del esquema no
+  // diverjan (schema-consistency.test.js).
+  PAUSAS_CONFIG: 'PAUSAS_CONFIG',
+  PAUSAS_COORDINADORES: 'PAUSAS_COORDINADORES',
+  PAUSAS_TRABAJADORES: 'PAUSAS_TRABAJADORES',
+  PAUSAS_PROGRAMADAS: 'PAUSAS_PROGRAMADAS',
+  PAUSAS_ASISTENCIA: 'PAUSAS_ASISTENCIA',
+  PAUSAS_LOG: 'PAUSAS_LOG'
 };
 
 var COLUMNAS = {
@@ -278,7 +288,17 @@ var COLUMNAS = {
   SESIONES_PORTAL: ['token', 'cuenta_id', 'expira', 'creada'],
   // v4.2 (§1): jefe_email/subordinado_email por correo -- ver la nota
   // identica en SHEETS.JEFATURAS de este mismo archivo.
-  JEFATURAS: ['jefatura_id', 'jefe_email', 'subordinado_email', 'activo']
+  JEFATURAS: ['jefatura_id', 'jefe_email', 'subordinado_email', 'activo'],
+  // v6.0 (modulo Pausas Activas): esquema ADITIVO -- estas hojas no afectan
+  // el flujo principal de solicitudes. Ver documentacion/SIGSO-v6.0-propuesta-
+  // modulo-pausas-activas.md. Deben ser identicas en backoffice/Constantes.gs
+  // y en setup/Instalador.gs (ESQUEMA_HOJAS).
+  PAUSAS_CONFIG: ['empresa_id', 'hora_habitual', 'dias_semana', 'duracion_min', 'min_anticipacion', 'umbral_verde', 'umbral_amarillo', 'activo'],
+  PAUSAS_COORDINADORES: ['coord_id', 'empresa_id', 'nombre', 'email', 'tipo', 'activo'],
+  PAUSAS_TRABAJADORES: ['trabajador_id', 'empresa_id', 'nombre', 'email', 'area', 'cargo', 'activo', 'fecha_ingreso'],
+  PAUSAS_PROGRAMADAS: ['pausa_id', 'empresa_id', 'fecha', 'hora_programada', 'hora_inicio_real', 'hora_fin', 'coordinador_email', 'estado', 'duracion_min', 'observaciones'],
+  PAUSAS_ASISTENCIA: ['registro_id', 'pausa_id', 'trabajador_id', 'email', 'fecha_hora_registro', 'estado', 'motivo', 'comentario', 'confirmacion', 'origen'],
+  PAUSAS_LOG: ['log_id', 'timestamp', 'pausa_id', 'usuario', 'accion', 'detalle']
 };
 
 // S01-S11 completos desde la Fase 1 aunque solo S01 se use aqui: la maquina

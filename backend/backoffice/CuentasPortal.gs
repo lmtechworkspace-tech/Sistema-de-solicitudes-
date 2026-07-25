@@ -30,10 +30,18 @@ var MODULOS_POR_ROL = {
   // solo lectura recortado al equipo (Jefatura.getPanel), no al 'gerencia'
   // completo.
   JEFATURA: ['nueva_solicitud', 'mis_solicitudes', 'jefatura'],
-  ADM: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion']
+  // v6.0 (modulo Pausas Activas §8): COORDINADOR = prevencionista (Amarilla,
+  // Camila, reemplazo). Registra la pausa del dia y ve sus reportes. Modulos
+  // aditivos: no toca ninguno de los del sistema principal.
+  COORDINADOR: ['nueva_solicitud', 'mis_solicitudes', 'pausas', 'pausas_coordinacion'],
+  ADM: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion']
 };
 
-var MODULOS_VALIDOS = ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion'];
+// v6.0: 'pausas' (registro del trabajador) y 'pausas_coordinacion' (coordinador
+// + reportes) se suman como modulos ADITIVOS -- cualquier cuenta puede recibir
+// 'pausas' para registrar su participacion sin alterar su rol en el sistema
+// principal.
+var MODULOS_VALIDOS = ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion'];
 
 var CuentasPortal = {
   listar: function (data, contexto) {

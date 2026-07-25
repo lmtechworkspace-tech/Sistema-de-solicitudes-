@@ -546,6 +546,93 @@ correo }`, tanto si la persona a cargo aparece como **solicitante**
 (`desarrollador_asignado`/`analista_asignado`, a nivel solicitud o
 subsolicitud) — ver `documentacion/SIGSO-v4.2-propuestas-modulo-jefatura.md`.
 
+## Módulo Pausas Activas (nuevas, v6.0 — ADITIVO)
+
+Seis hojas nuevas para el módulo de control de pausas activas. Son **totalmente
+aditivas**: no tocan ninguna columna ni flujo del sistema de solicitudes, que
+ya funciona en producción. Se declaran en las tres copias del esquema
+(`intake/Constantes.gs`, `backoffice/Constantes.gs`, `setup/Instalador.gs`) para
+que `schema-consistency.test.js` siga verde, mismo patrón que `JEFATURAS`. Ver
+`documentacion/SIGSO-v6.0-propuesta-modulo-pausas-activas.md`.
+
+### PAUSAS_CONFIG — parámetros por empresa (editable por Admin)
+
+| Columna | Tipo | Nota |
+|---|---|---|
+| `empresa_id` | string | FK a `CAT_EMPRESAS`; una fila de config por empresa |
+| `hora_habitual` | string | Hora estándar de la pausa, `HH:mm` |
+| `dias_semana` | string | CSV de días 1..5 (lun..vie) en que aplica |
+| `duracion_min` | number | Duración de la pausa en minutos |
+| `min_anticipacion` | number | Minutos de anticipación del recordatorio |
+| `umbral_verde` | number | % de participación mínimo para semáforo verde |
+| `umbral_amarillo` | number | % mínimo para amarillo (bajo esto = rojo) |
+| `activo` | boolean | Desactiva el módulo para la empresa sin borrar datos |
+
+### PAUSAS_COORDINADORES — prevencionistas titulares y reemplazos
+
+| Columna | Tipo | Nota |
+|---|---|---|
+| `coord_id` | string | `Utilities.getUuid()` |
+| `empresa_id` | string | FK a `CAT_EMPRESAS` |
+| `nombre` | string | Nombre de la coordinadora (ej. Amarilla, Camila) |
+| `email` | string | Correo para alertas y para identificarla al registrar |
+| `tipo` | string | `titular` \| `reemplazo` (editable por Admin) |
+| `activo` | boolean | Baja lógica |
+
+### PAUSAS_TRABAJADORES — roster para pausas
+
+| Columna | Tipo | Nota |
+|---|---|---|
+| `trabajador_id` | string | `Utilities.getUuid()` |
+| `empresa_id` | string | FK a `CAT_EMPRESAS` |
+| `nombre` | string | Nombre del trabajador |
+| `email` | string | Correo (identidad reutilizada de `CUENTAS_PORTAL`/`USUARIOS`) |
+| `area` | string | Área/sección para reportes por área |
+| `cargo` | string | Cargo |
+| `activo` | boolean | Baja lógica |
+| `fecha_ingreso` | string ISO | Fecha de alta en el roster |
+
+### PAUSAS_PROGRAMADAS — cada pausa y su ejecución
+
+| Columna | Tipo | Nota |
+|---|---|---|
+| `pausa_id` | string | `Utilities.getUuid()` |
+| `empresa_id` | string | FK a `CAT_EMPRESAS` |
+| `fecha` | string ISO | Día de la pausa |
+| `hora_programada` | string | `HH:mm` planificado |
+| `hora_inicio_real` | string ISO | Cuándo la coordinadora la inició |
+| `hora_fin` | string ISO | Cuándo terminó |
+| `coordinador_email` | string | Quién la ejecutó |
+| `estado` | string | Programada \| Recordatorio_enviado \| En_curso \| Realizada \| Cerrada \| Suspendida \| No_realizada \| Cancelada |
+| `duracion_min` | number | Duración real |
+| `observaciones` | string | Notas de la coordinadora |
+
+### PAUSAS_ASISTENCIA — participación por trabajador
+
+| Columna | Tipo | Nota |
+|---|---|---|
+| `registro_id` | string | `Utilities.getUuid()` |
+| `pausa_id` | string | FK a `PAUSAS_PROGRAMADAS` |
+| `trabajador_id` | string | FK a `PAUSAS_TRABAJADORES` |
+| `email` | string | Correo del trabajador (identidad autenticada) |
+| `fecha_hora_registro` | string ISO | Cuándo se registró |
+| `estado` | string | `participo` \| `no_participo` |
+| `motivo` | string | Motivo si no participó |
+| `comentario` | string | Comentario libre |
+| `confirmacion` | boolean | Confirmación con identidad + timestamp (reemplaza la firma dibujada) |
+| `origen` | string | Cómo se registró (coordinadora, autoservicio, etc.) |
+
+### PAUSAS_LOG — auditoría del módulo
+
+| Columna | Tipo | Nota |
+|---|---|---|
+| `log_id` | string | `Utilities.getUuid()` |
+| `timestamp` | string ISO | Momento del evento |
+| `pausa_id` | string | Pausa relacionada (si aplica) |
+| `usuario` | string | Quién ejecutó la acción |
+| `accion` | string | Acción realizada |
+| `detalle` | string | Detalle libre |
+
 ## ARCHIVOS (nueva, Fase 4)
 
 | Columna | Tipo | Nota |

@@ -83,6 +83,9 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // de equipo (esDelEquipoJefaturaSolicitud_) solo en tiempo de ejecucion,
   // asi que el orden de carga entre ambos no importa.
   'Jefatura.gs',
+  // v6.0: modulo de Pausas Activas (Fase P0: config administrable por ADM).
+  // Aditivo; no depende de otros modulos en tiempo de carga.
+  'Pausas.gs',
   'Comentarios.gs',
   'Catalogos.gs',
   'Auth.gs',
