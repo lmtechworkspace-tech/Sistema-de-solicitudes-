@@ -121,6 +121,18 @@ function configurarTriggers() {
     creados.push('enviarResumenPausasDiarioTrigger');
   }
 
+  // v6.0 Fase P5: reporte periodico de pausas a Gerencia + prevencionistas
+  // (correo HTML + PDF). Semanal lunes 08:00, mensual dia 1 a las 08:00.
+  if (existentes.indexOf('enviarReporteSemanalPausasTrigger') === -1) {
+    ScriptApp.newTrigger('enviarReporteSemanalPausasTrigger').timeBased()
+      .onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).create();
+    creados.push('enviarReporteSemanalPausasTrigger');
+  }
+  if (existentes.indexOf('enviarReporteMensualPausasTrigger') === -1) {
+    ScriptApp.newTrigger('enviarReporteMensualPausasTrigger').timeBased().onMonthDay(1).atHour(8).create();
+    creados.push('enviarReporteMensualPausasTrigger');
+  }
+
   return creados;
 }
 
@@ -193,6 +205,16 @@ function enviarRecordatoriosPausasTrigger() {
 // Pausas.enviarResumenDiarioPausas().
 function enviarResumenPausasDiarioTrigger() {
   return Pausas.enviarResumenDiarioPausas();
+}
+
+// v6.0 Fase P5: reportes periodicos de pausas (correo + PDF) a Gerencia +
+// prevencionistas. Ver Pausas.enviarReporteSemanalPausas/Mensual.
+function enviarReporteSemanalPausasTrigger() {
+  return Pausas.enviarReporteSemanalPausas();
+}
+
+function enviarReporteMensualPausasTrigger() {
+  return Pausas.enviarReporteMensualPausas();
 }
 
 // A-07 (§16.3 v1.0): recorre las subsolicitudes abiertas y dispara A-08

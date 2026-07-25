@@ -72,7 +72,9 @@ var BACKOFFICE_ACTIONS = {
   // v6.0 Fase P3: operacion y reportes del coordinador (modulo 'pausas_coordinacion').
   getPanelCoordinadorPausas: handleGetPanelCoordinadorPausas_,
   gestionarPausaCoordinador: handleGestionarPausaCoordinador_,
-  getReporteCumplimientoPausas: handleGetReporteCumplimientoPausas_
+  getReporteCumplimientoPausas: handleGetReporteCumplimientoPausas_,
+  // v6.0 Fase P5: reporte de pausas para el Panel de Gerencia (modulo 'gerencia').
+  getReporteGerenciaPausas: handleGetReporteGerenciaPausas_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -134,7 +136,9 @@ var MODULO_POR_ACCION = {
   // v6.0 Fase P3: la coordinadora opera y ve reportes desde su modulo.
   getPanelCoordinadorPausas: 'pausas_coordinacion',
   gestionarPausaCoordinador: 'pausas_coordinacion',
-  getReporteCumplimientoPausas: 'pausas_coordinacion'
+  getReporteCumplimientoPausas: 'pausas_coordinacion',
+  // v6.0 Fase P5: la pestana de pausas vive en el Panel de Gerencia.
+  getReporteGerenciaPausas: 'gerencia'
   // ping: sin modulo -- cualquier sesion valida.
 };
 
@@ -487,6 +491,11 @@ function handleGestionarPausaCoordinador_(data, contexto) {
 
 function handleGetReporteCumplimientoPausas_(data, contexto) {
   return responderResultado_(Pausas.getReporteCumplimiento(data, contexto));
+}
+
+// v6.0 Fase P5: reporte de pausas para el Panel de Gerencia.
+function handleGetReporteGerenciaPausas_(data, contexto) {
+  return responderResultado_(Pausas.getReporteGerencia(data, contexto));
 }
 
 function responderResultado_(resultado) {

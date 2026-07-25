@@ -147,12 +147,54 @@
         if (panelRecurrencia) panelRecurrencia.classList.toggle('sigso-oculto', tab !== 'recurrencia');
         if (panelTendencia) panelTendencia.classList.toggle('sigso-oculto', tab !== 'tendencia');
         if (panelCarga) panelCarga.classList.toggle('sigso-oculto', tab !== 'carga');
+        // v6.0 Fase P5: pestaña de Pausas activas (su propio endpoint).
+        var panelPausas = document.getElementById('ger-panel-pausas');
+        if (panelPausas) panelPausas.classList.toggle('sigso-oculto', tab !== 'pausas');
         // Chart.js no dibuja bien en un canvas que estaba con display:none;
         // al entrar a la pestaña de Tendencia, se re-renderiza con las
         // dimensiones ya visibles.
         if (tab === 'tendencia' && panelActual) renderTendencia_(panelActual.tendencia, panelActual.ciclo_por_etapa);
+        if (tab === 'pausas') cargarPausasGerencia_();
       });
     });
+  }
+
+  // v6.0 Fase P5: reporte de cumplimiento de pausas activas (todas las
+  // empresas). Su propio endpoint (getReporteGerenciaPausas), no viene con el
+  // panel principal. Se carga al entrar a la pestaña.
+  function cargarPausasGerencia_() {
+    var cont = document.getElementById('ger-contenedor-pausas');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Calculando el cumplimiento de pausas…');
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getReporteGerenciaPausas', {}).then(function (r) {
+      if (!r.ok) { cont.innerHTML = Componentes.alerta(r.message || 'No se pudo cargar.', 'error'); return; }
+      var d = r.data;
+      if (d.sin_datos) {
+        cont.innerHTML = '<p class="sigso-ayuda">Aún no hay pausas activas configuradas.</p>';
+        return;
+      }
+      var k = d.kpis;
+      cont.innerHTML =
+        '<p class="sigso-ayuda">Periodo: ' + Componentes.escaparHtml(d.periodo.desde) + ' a ' + Componentes.escaparHtml(d.periodo.hasta) + '</p>' +
+        '<div class="sigso-kpis">' +
+        Componentes.kpi({ etiqueta: 'Cumplimiento', valor: (k.pct_cumplimiento == null ? '—' : k.pct_cumplimiento + '%') }) +
+        Componentes.kpi({ etiqueta: 'Programadas', valor: k.programadas }) +
+        Componentes.kpi({ etiqueta: 'Realizadas', valor: k.realizadas }) +
+        Componentes.kpi({ etiqueta: 'No realizadas', valor: k.no_realizadas }) +
+        Componentes.kpi({ etiqueta: 'Participaciones', valor: k.participaciones }) +
+        Componentes.kpi({ etiqueta: 'Justificaciones', valor: k.justificaciones }) +
+        '</div>' +
+        '<h4>Motivos de inasistencia</h4>' + tablaPausasGerencia_(d.motivos, 'motivo', 'cantidad', 'Sin justificaciones en el periodo.') +
+        '<h4>Participación por área</h4>' + tablaPausasGerencia_(d.por_area, 'area', 'participaciones', 'Sin participaciones en el periodo.');
+    }).catch(function (e) { cont.innerHTML = Componentes.alerta((e && e.message) || 'Error de conexión.', 'error'); });
+  }
+
+  function tablaPausasGerencia_(filas, a, b, vacio) {
+    if (!filas || filas.length === 0) return '<p class="sigso-ayuda">' + Componentes.escaparHtml(vacio) + '</p>';
+    var cuerpo = filas.map(function (f) {
+      return '<tr><td>' + Componentes.escaparHtml(String(f[a])) + '</td><td>' + Componentes.escaparHtml(String(f[b])) + '</td></tr>';
+    }).join('');
+    return '<table class="sigso-tabla"><tbody>' + cuerpo + '</tbody></table>';
   }
 
   function irATablero_() {

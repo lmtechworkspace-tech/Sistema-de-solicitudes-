@@ -489,6 +489,27 @@ var Pausas = {
     return { pausas_avisadas: avisadas, correos_enviados: enviados };
   },
 
+  // ---- Reportes de Gerencia + programados (Fase P5) ------------------------
+
+  // Reporte de cumplimiento para GERENCIA/ADM: TODAS las empresas (o una, con
+  // data.empresa_id). Mismo calculo que el del coordinador, pero sin acotar a
+  // las empresas que uno coordina. Gate 'gerencia' via el router.
+  getReporteGerencia: function (data, contexto) {
+    var empresas = empresasVisiblesGerencia_(contexto);
+    if (empresas.length === 0) {
+      return { sin_datos: true, kpis: {}, motivos: [], por_area: [], pausas: [] };
+    }
+    if (data && data.empresa_id) {
+      empresas = empresas.filter(function (e) { return String(e) === String(data.empresa_id); });
+    }
+    return calcularReportePausas_(empresas, data && data.desde, data && data.hasta);
+  },
+
+  // Reporte periodico por correo (a Gerencia + prevencionistas) con el PDF
+  // adjunto. `periodo` = 'semanal' | 'mensual'.
+  enviarReporteSemanalPausas: function () { return enviarReportePeriodicoPausas_('semanal'); },
+  enviarReporteMensualPausas: function () { return enviarReportePeriodicoPausas_('mensual'); },
+
   // Resumen de fin de dia (a coordinadoras + admin): que paso con la pausa de
   // hoy (estado + participacion + justificaciones). Se deduplica por pausa.
   enviarResumenDiarioPausas: function () {
@@ -989,6 +1010,116 @@ function coordinadorasDeEmpresa_(empresaId) {
   return leerFilasSeguro_(SHEETS.PAUSAS_COORDINADORES)
     .filter(function (c) { return esVerdaderoPausas_(c.activo) && String(c.empresa_id) === String(empresaId) && c.email; })
     .map(function (c) { return c.email; });
+}
+
+// Empresas que un GERENCIA/ADM puede ver en el reporte: todas las que tienen
+// config de pausas. Otros roles: ninguna.
+function empresasVisiblesGerencia_(contexto) {
+  var rol = contexto && contexto.rol;
+  if (rol !== 'GERENCIA' && rol !== 'ADM') return [];
+  return leerFilasSeguro_(SHEETS.PAUSAS_CONFIG).map(function (c) { return String(c.empresa_id); });
+}
+
+// Envia el reporte periodico (semanal/mensual) por correo con el PDF adjunto.
+// Destinatarios: Gerencia+Admin (USUARIOS) + TODAS las coordinadoras activas.
+function enviarReportePeriodicoPausas_(periodo) {
+  var dias = periodo === 'mensual' ? 30 : 7;
+  var hoy = claveDia_(new Date(), 'America/Santiago');
+  var desde = claveDia_(new Date(Date.now() - dias * 24 * 3600 * 1000), 'America/Santiago');
+  var empresas = leerFilasSeguro_(SHEETS.PAUSAS_CONFIG).map(function (c) { return String(c.empresa_id); });
+  if (empresas.length === 0) return { enviado: false, motivo: 'sin_config' };
+
+  var reporte = calcularReportePausas_(empresas, desde, hoy);
+  var etiqueta = periodo === 'mensual' ? 'mensual' : 'semanal';
+  var titulo = 'Reporte ' + etiqueta + ' de pausas activas';
+  var k = reporte.kpis;
+
+  var cuerpoHtml = plantillaCorreoHtml_(titulo,
+    '<p style="margin:0 0 12px;">Cumplimiento de pausas activas del periodo <strong>' +
+    escaparHtmlCorreo_(reporte.periodo.desde) + '</strong> a <strong>' + escaparHtmlCorreo_(reporte.periodo.hasta) + '</strong>.</p>' +
+    '<table cellpadding="0" cellspacing="0" style="font-size:14px;">' +
+    filaDetalleCorreo_('Cumplimiento', (k.pct_cumplimiento == null ? '—' : k.pct_cumplimiento + '%')) +
+    filaDetalleCorreo_('Programadas', String(k.programadas)) +
+    filaDetalleCorreo_('Realizadas', String(k.realizadas)) +
+    filaDetalleCorreo_('No realizadas', String(k.no_realizadas)) +
+    filaDetalleCorreo_('Participaciones', String(k.participaciones)) +
+    filaDetalleCorreo_('Justificaciones', String(k.justificaciones)) +
+    '</table>',
+    { pie: 'El detalle completo (motivos y participación por área) va en el PDF adjunto.' });
+  var texto = titulo + ' (' + reporte.periodo.desde + ' a ' + reporte.periodo.hasta + '): cumplimiento ' +
+    (k.pct_cumplimiento == null ? '—' : k.pct_cumplimiento + '%') + ', ' + k.realizadas + ' realizadas.';
+
+  var opciones = { htmlBody: cuerpoHtml };
+  var pdf = generarPdfReportePausas_(titulo, reporte);
+  if (pdf) opciones.attachments = [pdf];
+
+  var destinatarios = destinatariosReporteGerencia_();
+  var enviados = 0;
+  var claveDedup = 'PAUSAS_REPORTE_' + etiqueta.toUpperCase() + ':' + hoy;
+  destinatarios.forEach(function (correo) {
+    var r = enviarCorreo_(claveDedup, correo, 'PAUSA_REPORTE_' + etiqueta.toUpperCase(),
+      'SIGSO — ' + titulo, texto, 60 * 24, opciones);
+    if (r.enviado) enviados++;
+  });
+  return { periodo: etiqueta, correos_enviados: enviados, kpis: k };
+}
+
+// Gerencia+Admin (USUARIOS, de CUALQUIER empresa: el reporte es global) +
+// todas las coordinadoras activas. Sin duplicados.
+function destinatariosReporteGerencia_() {
+  var set = {};
+  leerFilasSeguro_(SHEETS.USUARIOS).forEach(function (u) {
+    var activo = u.activo === true || u.activo === 'TRUE' || u.activo === 1;
+    if (activo && (u.rol === 'GERENCIA' || u.rol === 'ADM') && u.email) {
+      set[String(u.email).toLowerCase()] = u.email;
+    }
+  });
+  leerFilasSeguro_(SHEETS.PAUSAS_COORDINADORES).forEach(function (c) {
+    if (esVerdaderoPausas_(c.activo) && c.email) set[String(c.email).toLowerCase()] = c.email;
+  });
+  return Object.keys(set).map(function (k) { return set[k]; });
+}
+
+// PDF del reporte (mismo motor HTML->PDF que la OT). Tolerante: si falla, se
+// envia el correo sin adjunto (el resumen igual va en el cuerpo).
+function generarPdfReportePausas_(titulo, reporte) {
+  try {
+    var html = construirHtmlReportePausas_(titulo, reporte);
+    return Utilities.newBlob(html, 'text/html', 'reporte-pausas.html').getAs('application/pdf')
+      .setName('Reporte-pausas-' + reporte.periodo.hasta + '.pdf');
+  } catch (err) {
+    logError_(err, 'Pausas.generarPdfReportePausas');
+    return null;
+  }
+}
+
+function construirHtmlReportePausas_(titulo, reporte) {
+  var k = reporte.kpis;
+  function tabla_(filas, campoA, campoB, encA, encB) {
+    if (!filas || filas.length === 0) return '<p style="color:#8A93A5;">— sin datos —</p>';
+    var cuerpo = filas.map(function (f) {
+      return '<tr><td style="padding:4px 12px 4px 0;border-bottom:1px solid #eee;">' + escaparHtmlCorreo_(String(f[campoA])) +
+        '</td><td style="padding:4px 0;border-bottom:1px solid #eee;text-align:right;">' + escaparHtmlCorreo_(String(f[campoB])) + '</td></tr>';
+    }).join('');
+    return '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr>' +
+      '<th style="text-align:left;color:#8A93A5;border-bottom:2px solid #ddd;padding:4px 0;">' + encA + '</th>' +
+      '<th style="text-align:right;color:#8A93A5;border-bottom:2px solid #ddd;padding:4px 0;">' + encB + '</th></tr></thead><tbody>' + cuerpo + '</tbody></table>';
+  }
+  return '<html><body style="font-family:Arial,Helvetica,sans-serif;color:#0F172A;padding:24px;">' +
+    '<div style="background:#6D5DF6;color:#fff;padding:14px 18px;border-radius:8px;margin-bottom:18px;">' +
+    '<span style="font-size:20px;font-weight:bold;">SIGSO</span> · ' + escaparHtmlCorreo_(titulo) + '</div>' +
+    '<p>Periodo: <strong>' + escaparHtmlCorreo_(reporte.periodo.desde) + '</strong> a <strong>' + escaparHtmlCorreo_(reporte.periodo.hasta) + '</strong></p>' +
+    '<table style="width:100%;border-collapse:collapse;margin:12px 0 20px;font-size:14px;"><tbody>' +
+    '<tr><td style="padding:6px 0;">Cumplimiento</td><td style="text-align:right;font-weight:bold;">' + (k.pct_cumplimiento == null ? '—' : k.pct_cumplimiento + '%') + '</td></tr>' +
+    '<tr><td style="padding:6px 0;">Programadas</td><td style="text-align:right;">' + k.programadas + '</td></tr>' +
+    '<tr><td style="padding:6px 0;">Realizadas</td><td style="text-align:right;">' + k.realizadas + '</td></tr>' +
+    '<tr><td style="padding:6px 0;">No realizadas</td><td style="text-align:right;">' + k.no_realizadas + '</td></tr>' +
+    '<tr><td style="padding:6px 0;">Participaciones</td><td style="text-align:right;">' + k.participaciones + '</td></tr>' +
+    '<tr><td style="padding:6px 0;">Justificaciones</td><td style="text-align:right;">' + k.justificaciones + '</td></tr>' +
+    '</tbody></table>' +
+    '<h3 style="margin:16px 0 6px;">Motivos de inasistencia</h3>' + tabla_(reporte.motivos, 'motivo', 'cantidad', 'Motivo', 'Cantidad') +
+    '<h3 style="margin:20px 0 6px;">Participación por área</h3>' + tabla_(reporte.por_area, 'area', 'participaciones', 'Área', 'Participaciones') +
+    '</body></html>';
 }
 
 // 'HH:mm' -> minutos del dia (0..1439), o null si no es valida.
