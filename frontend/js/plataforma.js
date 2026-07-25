@@ -37,7 +37,10 @@
     jefatura: { icono: 'grafico', nombre: 'Mi departamento', descripcion: 'Qué pasó hoy con tu equipo: KPIs, seguimiento y validaciones pendientes', interno: true },
     // P4: administracion tambien vive dentro del shell (admin.js con el
     // token de la sesion; el backend exige el modulo en cada accion).
-    administracion: { icono: 'config', nombre: 'Administración', descripcion: 'Catálogos, usuarios y cuentas de la plataforma', interno: true }
+    administracion: { icono: 'config', nombre: 'Administración', descripcion: 'Catálogos, usuarios y cuentas de la plataforma', interno: true },
+    // v6.0 Fase P2: el trabajador registra su participacion en la pausa activa
+    // del dia (pausas.js). Cero friccion, pensado para el enlace magico.
+    pausas: { icono: 'reloj', nombre: 'Pausas activas', descripcion: 'Registra tu participación en la pausa de hoy', interno: true }
   };
 
   // v4.0 Frente 3: cada modulo tiene su propio acento -- antes todo el shell
@@ -50,7 +53,8 @@
     bandeja: { acento: 'var(--ok)', suave: 'var(--ok-suave)' },
     gerencia: { acento: 'var(--alerta)', suave: 'var(--alerta-suave)' },
     jefatura: { acento: 'var(--alerta)', suave: 'var(--alerta-suave)' },
-    administracion: { acento: 'var(--texto-2)', suave: 'var(--superficie-2)' }
+    administracion: { acento: 'var(--texto-2)', suave: 'var(--superficie-2)' },
+    pausas: { acento: 'var(--info)', suave: 'var(--info-suave)' }
   };
 
   function acentoInline_(id) {
@@ -1058,6 +1062,9 @@
     }
     if (id === 'administracion') {
       abrirAdministracion_();
+    }
+    if (id === 'pausas' && window.SigsoPausas) {
+      window.SigsoPausas.cargar();
     }
     window.scrollTo(0, 0);
   }

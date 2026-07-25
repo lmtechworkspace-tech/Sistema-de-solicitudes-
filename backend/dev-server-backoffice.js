@@ -90,7 +90,15 @@ function construirContexto() {
   ]);
   seedSheet(ctx, 'PAUSAS_COORDINADORES', ctx.COLUMNAS.PAUSAS_COORDINADORES);
   seedSheet(ctx, 'PAUSAS_TRABAJADORES', ctx.COLUMNAS.PAUSAS_TRABAJADORES);
-  seedSheet(ctx, 'PAUSAS_PROGRAMADAS', ctx.COLUMNAS.PAUSAS_PROGRAMADAS);
+  // Pausa demo de HOY para probar el registro del trabajador (P2) en local.
+  // Se calcula en la zona del proyecto (igual que claveDia_ en el backend),
+  // no en UTC, para que coincida con "hoy" segun America/Santiago.
+  var hoyPausa = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date());
+  seedSheet(ctx, 'PAUSAS_PROGRAMADAS', ctx.COLUMNAS.PAUSAS_PROGRAMADAS, [
+    ['PA-DEMO-1', 'HP', hoyPausa, '09:30', '', '', '', 'Programada', 10, '']
+  ]);
   seedSheet(ctx, 'PAUSAS_ASISTENCIA', ctx.COLUMNAS.PAUSAS_ASISTENCIA);
   seedSheet(ctx, 'PAUSAS_LOG', ctx.COLUMNAS.PAUSAS_LOG);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);

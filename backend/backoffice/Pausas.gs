@@ -45,6 +45,10 @@ var ESTADOS_PAUSA = {
 // Estados terminales: no admiten mas transiciones.
 var ESTADOS_PAUSA_TERMINALES = ['Cerrada', 'No_realizada', 'Cancelada'];
 
+// Estados en los que un TRABAJADOR aun puede registrar su participacion
+// (Fase P2). Una vez Realizada/Cerrada/No_realizada/Cancelada, ya no.
+var PAUSAS_ESTADOS_REGISTRABLES = ['Programada', 'Recordatorio_enviado', 'En_curso'];
+
 var TRANSICIONES_PAUSA = {
   Programada: ['Recordatorio_enviado', 'En_curso', 'Suspendida', 'No_realizada', 'Cancelada'],
   Recordatorio_enviado: ['En_curso', 'Suspendida', 'No_realizada', 'Cancelada'],
@@ -255,6 +259,104 @@ var Pausas = {
       default:
         return errorValidacion_('operacion', 'Operacion invalida: ' + data.operacion);
     }
+  },
+
+  // ---- Registro del trabajador (Fase P2) -----------------------------------
+  // El gate de modulo ('pausas') lo aplica el router (MODULO_POR_ACCION) para
+  // las sesiones de portal; aqui la identidad ya viene resuelta en contexto.
+
+  // Devuelve la pausa de HOY que este trabajador puede registrar (segun su
+  // empresa) y su registro previo si ya lo hizo. Si no hay pausa hoy, o no se
+  // puede resolver su empresa, lo informa sin romper.
+  getPausaHoyTrabajador: function (data, contexto) {
+    var email = contexto && contexto.email;
+    if (!email) {
+      return { _forbidden: true, message: 'No fue posible identificar tu cuenta.' };
+    }
+    var trab = resolverTrabajadorPausas_(email);
+    if (!trab.empresa_id) {
+      return { sin_empresa: true, email: email };
+    }
+    var pausa = pausaDeHoyEmpresa_(trab.empresa_id);
+    if (!pausa) {
+      return { empresa_id: trab.empresa_id, pausa: null, registrable: false };
+    }
+    var registrable = PAUSAS_ESTADOS_REGISTRABLES.indexOf(pausa.estado) !== -1;
+    var miRegistro = buscarRegistroAsistencia_(pausa.pausa_id, email);
+    return {
+      empresa_id: trab.empresa_id,
+      nombre: trab.nombre || '',
+      pausa: {
+        pausa_id: pausa.pausa_id,
+        fecha: claveFechaPausa_(pausa.fecha),
+        hora_programada: pausa.hora_programada || '',
+        duracion_min: pausa.duracion_min || '',
+        estado: pausa.estado
+      },
+      registrable: registrable,
+      mi_registro: miRegistro ? {
+        estado: miRegistro.estado, motivo: miRegistro.motivo || '',
+        comentario: miRegistro.comentario || '', fecha_hora_registro: miRegistro.fecha_hora_registro
+      } : null
+    };
+  },
+
+  // Registra (o corrige) la participacion del trabajador en la pausa de hoy.
+  // El "trio probatorio" (§4 de la propuesta): identidad autenticada (email
+  // del contexto) + timestamp del servidor + declaracion (confirmacion). No
+  // hay firma dibujada.
+  registrarAsistencia: function (data, contexto) {
+    var email = contexto && contexto.email;
+    if (!email) {
+      return { _forbidden: true, message: 'No fue posible identificar tu cuenta.' };
+    }
+    var estado = String(data.estado || '').trim();
+    if (['participo', 'no_participo'].indexOf(estado) === -1) {
+      return errorValidacion_('estado', 'Indica si participaste o no en la pausa.');
+    }
+    var trab = resolverTrabajadorPausas_(email);
+    if (!trab.empresa_id) {
+      return errorValidacion_('empresa_id', 'No pudimos determinar tu empresa. Avisa al administrador.');
+    }
+    var pausa = pausaDeHoyEmpresa_(trab.empresa_id);
+    if (!pausa) {
+      return errorValidacion_('pausa', 'No hay una pausa activa programada para hoy.');
+    }
+    if (PAUSAS_ESTADOS_REGISTRABLES.indexOf(pausa.estado) === -1) {
+      return errorValidacion_('pausa', 'La pausa de hoy ya no admite registros (estado: ' + pausa.estado + ').');
+    }
+    if (estado === 'participo' && data.confirmacion !== true && data.confirmacion !== 'true') {
+      return errorValidacion_('confirmacion', 'Debes marcar la declaración de participación.');
+    }
+    var motivo = String(data.motivo || '').trim();
+    if (estado === 'no_participo' && !motivo) {
+      return errorValidacion_('motivo', 'Indica el motivo por el que no pudiste participar.');
+    }
+
+    var fila = {
+      pausa_id: pausa.pausa_id,
+      trabajador_id: trab.trabajador_id || '',
+      email: email,
+      fecha_hora_registro: new Date().toISOString(),
+      estado: estado,
+      motivo: estado === 'no_participo' ? motivo : '',
+      comentario: String(data.comentario || '').trim(),
+      confirmacion: estado === 'participo',
+      origen: 'autoservicio'
+    };
+
+    // Un registro por (pausa, correo): si ya existe, se actualiza (el
+    // trabajador puede corregir "no pude" -> "participé" antes del cierre).
+    var previo = buscarRegistroAsistencia_(pausa.pausa_id, email);
+    if (previo) {
+      actualizarFilaPorId_(SHEETS.PAUSAS_ASISTENCIA, 'registro_id', previo.registro_id, fila);
+      registrarLogPausas_(pausa.pausa_id, contexto, 'asistencia_actualizada', email + ' -> ' + estado);
+      return Object.assign({ registro_id: previo.registro_id }, fila);
+    }
+    fila.registro_id = Utilities.getUuid();
+    agregarFila_(SHEETS.PAUSAS_ASISTENCIA, fila);
+    registrarLogPausas_(pausa.pausa_id, contexto, 'asistencia_registrada', email + ' -> ' + estado);
+    return fila;
   }
 };
 
@@ -485,6 +587,60 @@ function buscarPausaProgramada_(pausaId) {
   return leerFilasSeguro_(SHEETS.PAUSAS_PROGRAMADAS).filter(function (p) {
     return String(p.pausa_id) === String(pausaId);
   })[0] || null;
+}
+
+// --- registro del trabajador (Fase P2) -------------------------------------
+
+// La pausa VIVA de hoy para una empresa (la que el trabajador puede registrar).
+// "Viva" = no terminal (no Cancelada/No_realizada/Cerrada). Si hubiera varias
+// el mismo dia (no deberia, la programacion es idempotente), toma la primera.
+function pausaDeHoyEmpresa_(empresaId) {
+  var hoy = claveDia_(new Date(), 'America/Santiago');
+  return leerFilasSeguro_(SHEETS.PAUSAS_PROGRAMADAS).filter(function (p) {
+    return String(p.empresa_id) === String(empresaId) &&
+      claveFechaPausa_(p.fecha) === hoy &&
+      ESTADOS_PAUSA_TERMINALES.indexOf(p.estado) === -1;
+  })[0] || null;
+}
+
+function buscarRegistroAsistencia_(pausaId, email) {
+  var correo = String(email || '').toLowerCase();
+  return leerFilasSeguro_(SHEETS.PAUSAS_ASISTENCIA).filter(function (r) {
+    return String(r.pausa_id) === String(pausaId) && String(r.email).toLowerCase() === correo;
+  })[0] || null;
+}
+
+// Resuelve empresa/trabajador de un correo, en orden: (1) roster de pausas
+// (PAUSAS_TRABAJADORES, la fuente propia del modulo, con area/cargo), (2)
+// cuenta del portal (CUENTAS_PORTAL, cuyo `emails` puede traer varios), (3)
+// USUARIOS (staff). Devuelve { empresa_id, trabajador_id, nombre }.
+function resolverTrabajadorPausas_(email) {
+  var correo = String(email || '').trim().toLowerCase();
+  if (!correo) return { empresa_id: '', trabajador_id: '', nombre: '' };
+
+  var enRoster = leerFilasSeguro_(SHEETS.PAUSAS_TRABAJADORES).filter(function (t) {
+    return esVerdaderoPausas_(t.activo) && String(t.email).toLowerCase() === correo;
+  })[0];
+  if (enRoster) {
+    return { empresa_id: enRoster.empresa_id, trabajador_id: enRoster.trabajador_id, nombre: enRoster.nombre || '' };
+  }
+
+  var cuenta = leerFilasSeguro_(SHEETS.CUENTAS_PORTAL).filter(function (c) {
+    var correos = parsearListaPortal_(c.emails).map(function (e) { return String(e).toLowerCase(); });
+    return correos.indexOf(correo) !== -1;
+  })[0];
+  if (cuenta && cuenta.empresa_id) {
+    return { empresa_id: cuenta.empresa_id, trabajador_id: '', nombre: cuenta.nombre || '' };
+  }
+
+  var usuario = leerFilasSeguro_(SHEETS.USUARIOS).filter(function (u) {
+    return String(u.email).toLowerCase() === correo;
+  })[0];
+  if (usuario && usuario.empresa_id) {
+    return { empresa_id: usuario.empresa_id, trabajador_id: '', nombre: usuario.nombre || '' };
+  }
+
+  return { empresa_id: '', trabajador_id: '', nombre: '' };
 }
 
 // --- helpers ---------------------------------------------------------------

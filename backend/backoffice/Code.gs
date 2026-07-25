@@ -65,7 +65,10 @@ var BACKOFFICE_ACTIONS = {
   // v6.0 Fase P1: programacion + maquina de estados de las pausas.
   listarPausasProgramadas: handleListarPausasProgramadas_,
   programarPausasDelDia: handleProgramarPausasDelDia_,
-  gestionarPausaProgramada: handleGestionarPausaProgramada_
+  gestionarPausaProgramada: handleGestionarPausaProgramada_,
+  // v6.0 Fase P2: registro del trabajador (modulo 'pausas').
+  getPausaHoyTrabajador: handleGetPausaHoyTrabajador_,
+  registrarAsistenciaPausa: handleRegistrarAsistenciaPausa_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -119,7 +122,11 @@ var MODULO_POR_ACCION = {
   gestionarPausasTrabajador: 'administracion',
   listarPausasProgramadas: 'administracion',
   programarPausasDelDia: 'administracion',
-  gestionarPausaProgramada: 'administracion'
+  gestionarPausaProgramada: 'administracion',
+  // v6.0 Fase P2: el trabajador registra su participacion desde el modulo
+  // 'pausas' (cualquier cuenta con ese modulo, tipicamente via enlace magico).
+  getPausaHoyTrabajador: 'pausas',
+  registrarAsistenciaPausa: 'pausas'
   // ping: sin modulo -- cualquier sesion valida.
 };
 
@@ -450,6 +457,15 @@ function handleProgramarPausasDelDia_(data, contexto) {
 
 function handleGestionarPausaProgramada_(data, contexto) {
   return responderResultado_(Pausas.gestionarPausaProgramada(data, contexto));
+}
+
+// v6.0 Fase P2: registro del trabajador.
+function handleGetPausaHoyTrabajador_(data, contexto) {
+  return responderResultado_(Pausas.getPausaHoyTrabajador(data, contexto));
+}
+
+function handleRegistrarAsistenciaPausa_(data, contexto) {
+  return responderResultado_(Pausas.registrarAsistencia(data, contexto));
 }
 
 function responderResultado_(resultado) {

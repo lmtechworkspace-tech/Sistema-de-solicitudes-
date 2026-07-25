@@ -2057,3 +2057,20 @@
   box-shadow: 0 0 0 3px var(--superficie), 0 0 0 5px var(--primario);
   border-radius: var(--radio-sm);
 }
+
+/* v6.0 Fase P2: registro del trabajador en pausas activas. Botones grandes
+   (mobile-first, <15 seg) para "Participé" / "No pude participar". */
+.sigso-pausa-cab { margin-bottom: 1rem; }
+.sigso-pausa-botonera {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin: 1rem 0;
+}
+.sigso-pausa-btn {
+  flex: 1 1 12rem;
+  padding: 1.1rem 1rem;
+  font-size: 1.05rem;
+}
+.sigso-pausa-form { margin-top: 1rem; }
+.sigso-pausa-form .sigso-toggle { margin-bottom: 1rem; display: block; }
