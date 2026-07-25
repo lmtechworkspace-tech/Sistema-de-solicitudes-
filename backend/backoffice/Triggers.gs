@@ -16,7 +16,10 @@
  * se implementa ese trigger.
  */
 
-var FUNCIONES_TRIGGER_CADA_5_MIN = ['procesarColaDocumentosTrigger', 'procesarColaCorreoTrigger', 'refrescarCacheTrigger'];
+// v6.0 Fase P4: el recordatorio de pausa va en el bucket de 5 min para que
+// salga a tiempo (segun min_anticipacion de cada empresa) sin un trigger a una
+// hora fija que no serviria para varias horas de pausa.
+var FUNCIONES_TRIGGER_CADA_5_MIN = ['procesarColaDocumentosTrigger', 'procesarColaCorreoTrigger', 'refrescarCacheTrigger', 'enviarRecordatoriosPausasTrigger'];
 
 function configurarTriggers() {
   var existentes = ScriptApp.getProjectTriggers().map(function (t) {
@@ -111,6 +114,13 @@ function configurarTriggers() {
     creados.push('programarPausasDiariasTrigger');
   }
 
+  // v6.0 Fase P4: resumen de fin de dia de las pausas (a coordinadoras + admin),
+  // 19:00, despues de la jornada.
+  if (existentes.indexOf('enviarResumenPausasDiarioTrigger') === -1) {
+    ScriptApp.newTrigger('enviarResumenPausasDiarioTrigger').timeBased().atHour(19).everyDays(1).create();
+    creados.push('enviarResumenPausasDiarioTrigger');
+  }
+
   return creados;
 }
 
@@ -170,6 +180,19 @@ function enviarDigestJefaturaTrigger() {
 // atribuido a "sistema".
 function programarPausasDiariasTrigger() {
   return Pausas.programarDelDia(new Date());
+}
+
+// v6.0 Fase P4: recordatorio a los trabajadores/coordinadoras de la pausa que
+// se acerca (segun min_anticipacion). Corre cada 5 min; ver
+// Pausas.enviarRecordatoriosPausas().
+function enviarRecordatoriosPausasTrigger() {
+  return Pausas.enviarRecordatoriosPausas();
+}
+
+// v6.0 Fase P4: resumen de fin de dia de las pausas. Ver
+// Pausas.enviarResumenDiarioPausas().
+function enviarResumenPausasDiarioTrigger() {
+  return Pausas.enviarResumenDiarioPausas();
 }
 
 // A-07 (§16.3 v1.0): recorre las subsolicitudes abiertas y dispara A-08

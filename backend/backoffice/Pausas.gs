@@ -439,6 +439,86 @@ var Pausas = {
       return { sin_empresa: true };
     }
     return calcularReportePausas_(empresas, data && data.desde, data && data.hasta);
+  },
+
+  // ---- Alertas (Fase P4): recordatorio + resumen diario --------------------
+  // Las disparan triggers; devuelven un resumen de lo enviado. Idempotentes:
+  // el recordatorio pasa la pausa a Recordatorio_enviado (no reenvia) y el
+  // resumen se deduplica por (pausa, destinatario) en LOG_NOTIFICACIONES.
+
+  // Recordatorio a los trabajadores (y coordinadoras) de que la pausa de hoy
+  // se acerca. Se envia cuando faltan <= min_anticipacion minutos para la hora
+  // programada. `opts.ahoraMin` (minutos del dia) permite fijarlo en tests.
+  enviarRecordatoriosPausas: function (opts) {
+    opts = opts || {};
+    var ahoraMin = (opts.ahoraMin === undefined || opts.ahoraMin === null)
+      ? minutosDelDiaSantiago_() : opts.ahoraMin;
+    var hoy = claveDia_(new Date(), 'America/Santiago');
+    var configs = leerFilasSeguro_(SHEETS.PAUSAS_CONFIG).filter(function (c) { return esVerdaderoPausas_(c.activo); });
+    var pausas = leerFilasSeguro_(SHEETS.PAUSAS_PROGRAMADAS);
+    var enviados = 0, avisadas = 0;
+
+    configs.forEach(function (config) {
+      var pausa = pausas.filter(function (p) {
+        return String(p.empresa_id) === String(config.empresa_id) &&
+          claveFechaPausa_(p.fecha) === hoy && p.estado === ESTADOS_PAUSA.PROGRAMADA;
+      })[0];
+      if (!pausa) return;
+      var horaMin = horaAMinutosPausas_(pausa.hora_programada);
+      if (horaMin === null) return; // sin hora, no se puede agendar el aviso
+      var anticip = enteroNoNegativoPausas_(config.min_anticipacion);
+      if (anticip === null) anticip = 15;
+      if (ahoraMin < horaMin - anticip) return; // todavia no toca
+
+      var destinatarios = destinatariosRecordatorio_(config.empresa_id);
+      var asunto = 'SIGSO — Recordatorio de pausa activa (' + (pausa.hora_programada || '') + ')';
+      var cuerpoHtml = plantillaCorreoHtml_('Pausa activa de hoy',
+        '<p style="margin:0 0 10px;">Hoy tienes tu <strong>pausa activa</strong> a las ' +
+        escaparHtmlCorreo_(pausa.hora_programada || '') + ' (' + escaparHtmlCorreo_(String(pausa.duracion_min || '')) + ' min).</p>' +
+        '<p style="margin:0;">Al terminar, entra a la plataforma y registra tu participación en el módulo <strong>Pausas activas</strong>.</p>',
+        { pie: 'Participar toma unos segundos: ✅ Participé o ✋ No pude participar.' });
+      var texto = 'Hoy tienes tu pausa activa a las ' + (pausa.hora_programada || '') + '. Registra tu participación en la plataforma (módulo Pausas activas).';
+      destinatarios.forEach(function (correo) {
+        var r = enviarCorreo_(pausa.pausa_id, correo, 'PAUSA_RECORDATORIO', asunto, texto, 720, { htmlBody: cuerpoHtml });
+        if (r.enviado) enviados++;
+      });
+      // Marca la pausa como recordada -> no se reenvia (y sigue registrable).
+      transicionarPausa_(pausa, ESTADOS_PAUSA.RECORDATORIO_ENVIADO, { email: 'sistema' }, {});
+      avisadas++;
+    });
+    return { pausas_avisadas: avisadas, correos_enviados: enviados };
+  },
+
+  // Resumen de fin de dia (a coordinadoras + admin): que paso con la pausa de
+  // hoy (estado + participacion + justificaciones). Se deduplica por pausa.
+  enviarResumenDiarioPausas: function () {
+    var hoy = claveDia_(new Date(), 'America/Santiago');
+    var pausas = leerFilasSeguro_(SHEETS.PAUSAS_PROGRAMADAS).filter(function (p) {
+      return claveFechaPausa_(p.fecha) === hoy && p.estado !== ESTADOS_PAUSA.CANCELADA;
+    });
+    var enviados = 0;
+    pausas.forEach(function (pausa) {
+      var part = participacionDePausa_(pausa.pausa_id, pausa.empresa_id);
+      var destinatarios = destinatariosResumenPausa_(pausa.empresa_id);
+      var asunto = 'SIGSO — Resumen de la pausa activa de hoy (' + pausa.empresa_id + ')';
+      var cuerpoHtml = plantillaCorreoHtml_('Resumen de pausa activa',
+        '<table cellpadding="0" cellspacing="0" style="font-size:14px;">' +
+        filaDetalleCorreo_('Empresa', pausa.empresa_id) +
+        filaDetalleCorreo_('Estado', String(pausa.estado).replace(/_/g, ' ')) +
+        filaDetalleCorreo_('Hora', pausa.hora_programada || '—') +
+        filaDetalleCorreo_('Participaron', part.n_participaron + ' de ' + part.total_roster +
+          (part.pct_participacion == null ? '' : ' (' + part.pct_participacion + '%)')) +
+        filaDetalleCorreo_('Justificaron', String(part.n_justificaron)) +
+        filaDetalleCorreo_('Pendientes', String(part.n_pendientes)) +
+        '</table>');
+      var texto = 'Pausa de hoy (' + pausa.empresa_id + '): estado ' + pausa.estado +
+        ', participaron ' + part.n_participaron + ' de ' + part.total_roster + '.';
+      destinatarios.forEach(function (correo) {
+        var r = enviarCorreo_(pausa.pausa_id, correo, 'PAUSA_RESUMEN_DIARIO', asunto, texto, 720, { htmlBody: cuerpoHtml });
+        if (r.enviado) enviados++;
+      });
+    });
+    return { pausas: pausas.length, correos_enviados: enviados };
   }
 };
 
@@ -877,6 +957,56 @@ function calcularReportePausas_(empresaIds, desde, hasta) {
       };
     }).sort(function (a, b) { return a.fecha < b.fecha ? 1 : -1; })
   };
+}
+
+// --- alertas (Fase P4) -----------------------------------------------------
+
+// Correos a avisar en el recordatorio de una empresa: roster ACTIVO + las
+// coordinadoras ACTIVAS. Sin duplicados.
+function destinatariosRecordatorio_(empresaId) {
+  var set = {};
+  leerFilasSeguro_(SHEETS.PAUSAS_TRABAJADORES).forEach(function (t) {
+    if (esVerdaderoPausas_(t.activo) && String(t.empresa_id) === String(empresaId) && t.email) {
+      set[String(t.email).toLowerCase()] = t.email;
+    }
+  });
+  coordinadorasDeEmpresa_(empresaId).forEach(function (c) { set[c.toLowerCase()] = c; });
+  return Object.keys(set).map(function (k) { return set[k]; });
+}
+
+// Correos del resumen de fin de dia: coordinadoras ACTIVAS + admins de la
+// empresa (USUARIOS rol ADM). Sin duplicados.
+function destinatariosResumenPausa_(empresaId) {
+  var set = {};
+  coordinadorasDeEmpresa_(empresaId).forEach(function (c) { set[c.toLowerCase()] = c; });
+  try {
+    obtenerEmailsPorRol_(empresaId, ['ADM']).forEach(function (e) { if (e) set[String(e).toLowerCase()] = e; });
+  } catch (err) { /* USUARIOS puede no existir en algunas instalaciones */ }
+  return Object.keys(set).map(function (k) { return set[k]; });
+}
+
+function coordinadorasDeEmpresa_(empresaId) {
+  return leerFilasSeguro_(SHEETS.PAUSAS_COORDINADORES)
+    .filter(function (c) { return esVerdaderoPausas_(c.activo) && String(c.empresa_id) === String(empresaId) && c.email; })
+    .map(function (c) { return c.email; });
+}
+
+// 'HH:mm' -> minutos del dia (0..1439), o null si no es valida.
+function horaAMinutosPausas_(hhmm) {
+  var m = String(hhmm || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  var h = parseInt(m[1], 10), min = parseInt(m[2], 10);
+  if (h < 0 || h > 23 || min < 0 || min > 59) return null;
+  return h * 60 + min;
+}
+
+// Minutos del dia actuales en la zona del proyecto (America/Santiago).
+function minutosDelDiaSantiago_() {
+  var hhmm = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/Santiago', hour: '2-digit', minute: '2-digit', hour12: false
+  }).format(new Date());
+  var min = horaAMinutosPausas_(hhmm);
+  return min === null ? 0 : min;
 }
 
 // --- helpers ---------------------------------------------------------------

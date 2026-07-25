@@ -5,8 +5,12 @@ const assert = require('node:assert/strict');
 const { loadBackofficeProject, toPlain, seedSheet } = require('./helpers/gasSandbox');
 
 const TODOS_LOS_TRIGGERS = [
+  // Lista en orden alfabetico (el test compara contra creados.sort()).
   'cerrarInactivosTrigger', 'detectarPatronesTrigger', 'enviarDigestJefaturaTrigger',
-  'enviarReporteEjecutivoSemanalTrigger', 'enviarReporteMensualTrigger', 'enviarResumenSemanalTrigger',
+  // v6.0 Fase P4: recordatorio (cada 5 min) + resumen diario de pausas.
+  'enviarRecordatoriosPausasTrigger',
+  'enviarReporteEjecutivoSemanalTrigger', 'enviarReporteMensualTrigger',
+  'enviarResumenPausasDiarioTrigger', 'enviarResumenSemanalTrigger',
   'procesarColaCorreoTrigger', 'procesarColaDocumentosTrigger',
   // v6.0 Fase P1: crea la pausa activa del dia por empresa configurada.
   'programarPausasDiariasTrigger',
@@ -14,7 +18,7 @@ const TODOS_LOS_TRIGGERS = [
   'refrescarCacheTrigger', 'suspenderInactivosTrigger', 'verificarFechasComprometidasTrigger', 'verificarSLAsTrigger'
 ];
 
-test('configurarTriggers instala los 14 triggers de tiempo de §13/§16.3 (Fase 4 + Fase 7 + Sprint 1/3 v2.0 + v2.1 Fase D + v4.2 + v5.2 Fase B + v6.0 Pausas P1)', () => {
+test('configurarTriggers instala los 16 triggers de tiempo de §13/§16.3 (Fase 4 + Fase 7 + Sprint 1/3 v2.0 + v2.1 Fase D + v4.2 + v5.2 Fase B + v6.0 Pausas P1/P4)', () => {
   const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
   const creados = toPlain(ctx.configurarTriggers());
 
