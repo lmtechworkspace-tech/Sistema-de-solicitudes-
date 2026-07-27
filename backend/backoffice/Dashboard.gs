@@ -248,12 +248,37 @@ function calcularKpis_(filtros) {
 
   var hoy = claveDia_(new Date(), 'America/Santiago');
 
+  // Fase 10.2 (rediseno "Bandeja de trabajo"): mapa email->nombre para
+  // mostrar al responsable por nombre en vez de correo crudo (misma fuente
+  // que obtenerResponsablesActivos_, sin filtrar por rol/activo -- aca
+  // interesa CUALQUIER responsable ya asignado, este activo o no).
+  var nombrePorEmail = {};
+  try {
+    leerFilas_(SHEETS.USUARIOS).forEach(function (u) { nombrePorEmail[u.email] = u.nombre || u.email; });
+  } catch (err) { /* USUARIOS puede no existir en algunas instalaciones */ }
+
+  // Ultimo movimiento por solicitud (max timestamp de HISTORIAL_ESTADOS, o
+  // la fecha de creacion si nunca cambio de estado) -- "dias sin movimiento"
+  // es la señal que hoy no existe: una solicitud puede estar "en plazo" y
+  // llevar semanas parada sin que ningun otro indicador se ponga en rojo.
+  var ultimoMovimientoPorSolicitud = {};
+  historial.forEach(function (h) {
+    var actual = ultimoMovimientoPorSolicitud[h.solicitud_id];
+    if (!actual || new Date(h.timestamp) > new Date(actual)) {
+      ultimoMovimientoPorSolicitud[h.solicitud_id] = h.timestamp;
+    }
+  });
+
   return {
     resumen: {
       total_abiertas: abiertas.length,
       criticas_activas: abiertas.filter(function (s) { return s.prioridad_derivada === 'P1'; }).length,
       sla_vencido: subsolicitudes.filter(function (sub) { return estaVencidoSla_(sub, feriados); }).length,
       del_dia: solicitudes.filter(function (s) { return claveDia_(new Date(s.fecha_creacion), 'America/Santiago') === hoy; }).length,
+      // Fase 10.2: reemplaza a "Ingresadas hoy" como KPI accionable de la
+      // bandeja (casi siempre 0, no orienta el trabajo) -- "sin asignar" SI
+      // es shortlist de a quien hay que ponerle nombre.
+      sin_asignar: abiertas.filter(function (s) { return !s.desarrollador_asignado; }).length,
       // v3.1 (§1.6): se excluyen de los promedios, pero se cuentan aparte --
       // "cuantas urgencias se estan resolviendo fuera del proceso" es un dato
       // de gestion por si mismo, no solo ruido que sacar de los KPIs.
@@ -286,10 +311,21 @@ function calcularKpis_(filtros) {
         // desde la fila, sin entrar al detalle -- cantidad de items y SLA
         // restante son los dos datos que mas faltaban.
         var itemsDeEstaSolicitud = subsolicitudes.filter(function (sub) { return sub.solicitud_id === s.solicitud_id; });
+        var ultimoMovimiento = ultimoMovimientoPorSolicitud[s.solicitud_id] || s.fecha_creacion;
         return {
           solicitud_id: s.solicitud_id, empresa_id: s.empresa_id, plataforma: s.plataforma,
           modulo: s.modulo, estado_derivado: s.estado_derivado, prioridad_derivada: s.prioridad_derivada,
           fecha_creacion: s.fecha_creacion, asignado_a: s.desarrollador_asignado || '',
+          // Fase 10.2: nombre del responsable (no el correo) y el titulo del
+          // PRIMER item -- "GDE_GDE_PREVENCION_..." (el codigo del catalogo)
+          // no dice de que se trata; el titulo que el solicitante escribio si.
+          asignado_nombre: s.desarrollador_asignado ? (nombrePorEmail[s.desarrollador_asignado] || s.desarrollador_asignado) : '',
+          titulo_item: itemsDeEstaSolicitud.length ? itemsDeEstaSolicitud[0].titulo : '',
+          // Solo se expone la fecha comprometida cuando es univoca (1 item) --
+          // con varios items, cada uno puede tener la suya y mostrar una sola
+          // seria enganoso; el detalle es donde se ve cada una por separado.
+          fecha_comprometida: itemsDeEstaSolicitud.length === 1 ? (itemsDeEstaSolicitud[0].fecha_comprometida || '') : '',
+          dias_sin_movimiento: Math.floor((Date.now() - new Date(ultimoMovimiento).getTime()) / (24 * 3600 * 1000)),
           cantidad_items: itemsDeEstaSolicitud.length,
           sla_restante_horas: slaRestanteHoras_(itemsDeEstaSolicitud, feriados),
           // Fase 10.1: campos para la busqueda por texto en el Dashboard.

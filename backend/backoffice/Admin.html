@@ -2976,6 +2976,27 @@ button.sigso-kpi {
   margin-top: 0.2rem;
 }
 
+/* Fase 10.2: titulo del item (lo que el solicitante escribio) -- entre el
+   encabezado (ID/estado) y la meta (empresa/plataforma/responsable). */
+.sigso-fila-reciente__titulo {
+  font-size: 0.9rem;
+  margin-top: 0.15rem;
+}
+
+.sigso-fila-reciente__mas-items {
+  color: var(--gris-medio);
+  font-weight: 400;
+}
+
+.sigso-chip-sin-movimiento {
+  display: inline-block;
+  font-size: 0.72rem;
+  color: var(--gris-medio);
+  background: var(--gris-claro);
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+}
+
 .sigso-grupo__titulo {
   margin: 1rem 0 0.25rem;
   font-size: 0.9rem;
@@ -2986,6 +3007,24 @@ button.sigso-kpi {
 
 .sigso-grupo__titulo:first-child {
   margin-top: 0;
+}
+
+/* Fase 10.2: clasificacion "que necesita de mi" -- borde de color a la
+   izquierda del titulo de grupo, mismo espiritu que los KPI de alerta. */
+.sigso-grupo__titulo--critica { border-left: 3px solid var(--rojo, #C2362B); padding-left: 0.5rem; }
+.sigso-grupo__titulo--esperando-mio { border-left: 3px solid var(--naranja, #D97706); padding-left: 0.5rem; }
+.sigso-grupo__titulo--en-curso { border-left: 3px solid var(--azul, #2563EB); padding-left: 0.5rem; }
+.sigso-grupo__titulo--esperando-solicitante { border-left: 3px solid var(--gris-medio); padding-left: 0.5rem; }
+
+.sigso-grupo-cerradas {
+  margin-top: 1rem;
+}
+
+.sigso-grupo-cerradas summary {
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--gris-medio);
+  padding: 0.4rem 0.25rem;
 }
 
 /* v2.1 (Fase C): Panel de Control de Gerencia -- semaforo de tarjetas +

@@ -377,7 +377,6 @@
       renderGrafico_('grafico-prioridad', 'doughnut', respuesta.data.por_prioridad);
       renderGrafico_('grafico-empresa', 'bar', respuesta.data.por_empresa);
       recientesActuales = respuesta.data.recientes;
-      renderRequierenAccion_();
       renderRecientes_();
       // v2.1 (Fase C): el Panel de Gerencia es "su vista principal" -- el
       // boton de acceso solo aparece para ese rol (el backend ya no
@@ -533,7 +532,10 @@
       Componentes.kpi({ valor: resumen.total_abiertas, etiqueta: 'Abiertas', titulo: 'Solicitudes que aun no estan cerradas, rechazadas ni canceladas. Clic para filtrar.', filtro: 'abiertas', activo: kpiActivo === 'abiertas' }) +
       Componentes.kpi({ valor: resumen.criticas_activas, etiqueta: 'Criticas activas', alerta: true, titulo: 'Solicitudes abiertas de prioridad P1 (la mas alta). Clic para filtrar.', filtro: 'criticas', activo: kpiActivo === 'criticas' }) +
       Componentes.kpi({ valor: resumen.sla_vencido, etiqueta: 'Fuera de plazo', alerta: true, titulo: 'Items que ya pasaron su tiempo objetivo de respuesta segun la prioridad (P1: 2h, P2: 24h, P3: 72h, P4: 120h; en horas habiles). Clic para filtrar.', filtro: 'fuera_plazo', activo: kpiActivo === 'fuera_plazo' }) +
-      Componentes.kpi({ valor: resumen.del_dia, etiqueta: 'Ingresadas hoy', titulo: 'Solicitudes creadas hoy. Clic para filtrar.', filtro: 'hoy', activo: kpiActivo === 'hoy' });
+      // Fase 10.2: reemplaza "Ingresadas hoy" (casi siempre 0, no orienta el
+      // trabajo) por "Sin asignar" -- un numero que SI dice a quien hay que
+      // ponerle nombre antes de que se convierta en un atraso.
+      Componentes.kpi({ valor: resumen.sin_asignar, etiqueta: 'Sin asignar', alerta: resumen.sin_asignar > 0, titulo: 'Solicitudes abiertas que todavia no tienen un responsable. Clic para filtrar.', filtro: 'sin_asignar', activo: kpiActivo === 'sin_asignar' });
 
     document.getElementById('contenedor-kpis').querySelectorAll('[data-filtro-kpi]').forEach(function (boton) {
       boton.addEventListener('click', function () {
@@ -545,36 +547,25 @@
     });
   }
 
-  // UI-5 (§4): "Requieren tu accion" -- lo primero que Leo deberia ver, antes
-  // que cualquier numero decorativo. Se arma client-side sobre lo ya cargado
-  // (misma fuente que "Solicitudes recientes"), sin pedirle nada nuevo al
-  // backend.
-  function requierenAccion_() {
-    return recientesActuales.filter(function (s) {
-      return (s.sla_restante_horas !== null && s.sla_restante_horas !== undefined && s.sla_restante_horas < 0) ||
-        s.respuesta_pendiente ||
-        (s.prioridad_derivada === 'P1' && ESTADOS_CERRADOS_CLIENTE.indexOf(s.estado_derivado) === -1);
-    });
-  }
+  // Fase 10.2 (rediseno "Bandeja de trabajo"): clasifica cada solicitud por
+  // "que necesita de mi", no por fecha de creacion -- asi lo urgente no
+  // compite por el mismo lugar que lo ya resuelto, y "Requieren tu accion"
+  // deja de ser una tarjeta aparte que duplicaba filas de la lista de abajo.
+  var GRUPOS_CLASIFICACION = [
+    { clave: 'critica', etiqueta: '🔴 Atrasadas y críticas', clase: 'critica' },
+    { clave: 'esperando_mio', etiqueta: '🟠 Esperando algo mío', clase: 'esperando-mio' },
+    { clave: 'en_curso', etiqueta: '🔵 En curso', clase: 'en-curso' },
+    { clave: 'esperando_solicitante', etiqueta: '⚪ Esperando al solicitante', clase: 'esperando-solicitante' }
+  ];
 
-  function renderRequierenAccion_() {
-    var contenedor = document.getElementById('contenedor-requieren-accion');
-    var items = requierenAccion_();
-    if (items.length === 0) {
-      contenedor.innerHTML = '';
-      return;
-    }
-    contenedor.innerHTML = Componentes.tarjeta(
-      '<h3>Requieren tu acción (' + items.length + ')</h3>' +
-      items.map(renderFilaReciente_).join('')
-    );
-    contenedor.querySelectorAll('[data-id]').forEach(function (fila) {
-      fila.addEventListener('click', function () {
-        if (typeof window.SigsoApp !== 'undefined') {
-          window.SigsoApp.mostrarDetalle(fila.getAttribute('data-id'));
-        }
-      });
-    });
+  function clasificar_(s) {
+    var abierta = ESTADOS_CERRADOS_CLIENTE.indexOf(s.estado_derivado) === -1;
+    if (!abierta) return 'cerrada';
+    var vencida = s.sla_restante_horas !== null && s.sla_restante_horas !== undefined && s.sla_restante_horas < 0;
+    if (vencida || s.prioridad_derivada === 'P1') return 'critica';
+    if (!s.asignado_a || !s.fecha_comprometida || s.respuesta_pendiente) return 'esperando_mio';
+    if (s.estado_derivado === 'S08') return 'esperando_solicitante';
+    return 'en_curso';
   }
 
   // P7 (v2.0, Sprint 3): "el modulo X acumula N reportes de tipo Error esta
@@ -628,12 +619,11 @@
     var filtradas = filtrarPorKpi_(filtrarPorTexto_(recientesActuales));
 
     if (!campoAgrupar) {
-      contenedor.innerHTML = filtradas.map(renderFilaReciente_).join('') ||
-        Componentes.vacio({
-          icono: 'filtro',
-          texto: 'Ninguna solicitud coincide con los filtros.',
-          detalle: 'Limpia el buscador o vuelve a "Todos los estados" para ver la bandeja completa.'
-        });
+      // Fase 10.2: "Sin agrupar" ya no es una lista plana por fecha -- pasa a
+      // ser la clasificacion por "que necesita de mi" (4 grupos con orden
+      // fijo). Las cerradas se sacan de la vista por defecto (compiten por el
+      // mismo espacio que lo urgente) y quedan detras de un <details>.
+      contenedor.innerHTML = renderAgrupadoPorClasificacion_(filtradas);
     } else {
       contenedor.innerHTML = agruparPara_(filtradas, campoAgrupar).map(function (grupo) {
         return '<h4 class="sigso-grupo__titulo">' + Componentes.escaparHtml(grupo.etiqueta) + ' (' + grupo.filas.length + ')</h4>' +
@@ -654,6 +644,38 @@
     });
   }
 
+  function renderAgrupadoPorClasificacion_(lista) {
+    if (lista.length === 0) {
+      return Componentes.vacio({
+        icono: 'filtro',
+        texto: 'Ninguna solicitud coincide con los filtros.',
+        detalle: 'Limpia el buscador o vuelve a "Todos los estados" para ver la bandeja completa.'
+      });
+    }
+    var porClave = { critica: [], esperando_mio: [], en_curso: [], esperando_solicitante: [], cerrada: [] };
+    lista.forEach(function (s) { porClave[clasificar_(s)].push(s); });
+
+    var html = GRUPOS_CLASIFICACION.map(function (g) {
+      var filas = porClave[g.clave];
+      if (filas.length === 0) return '';
+      return '<h4 class="sigso-grupo__titulo sigso-grupo__titulo--' + g.clase + '">' +
+        Componentes.escaparHtml(g.etiqueta) + ' (' + filas.length + ')</h4>' +
+        filas.map(renderFilaReciente_).join('');
+    }).join('');
+
+    // Las cerradas quedan colapsadas: siguen siendo consultables (un clic) sin
+    // ocupar el espacio de arriba, que es para lo que todavia necesita algo.
+    if (porClave.cerrada.length > 0) {
+      html += '<details class="sigso-grupo-cerradas"><summary>⚫ Cerradas recientes (' + porClave.cerrada.length + ')</summary>' +
+        porClave.cerrada.map(renderFilaReciente_).join('') + '</details>';
+    }
+    return html || Componentes.vacio({
+      icono: 'filtro',
+      texto: 'Ninguna solicitud coincide con los filtros.',
+      detalle: 'Limpia el buscador o vuelve a "Todos los estados" para ver la bandeja completa.'
+    });
+  }
+
   // Busqueda client-side sobre lo ya cargado: N de solicitud, solicitante,
   // correo, empresa y modulo (Fase 10.1, pedido explicito: "que sea facil
   // buscar" en Solicitudes recientes).
@@ -670,13 +692,12 @@
   // ya filtro el buscador -- ambos filtros se combinan (AND), no se pisan.
   function filtrarPorKpi_(lista) {
     if (!kpiActivo) return lista;
-    var hoy = new Date().toDateString();
     return lista.filter(function (s) {
       var abierta = ESTADOS_CERRADOS_CLIENTE.indexOf(s.estado_derivado) === -1;
       if (kpiActivo === 'abiertas') return abierta;
       if (kpiActivo === 'criticas') return abierta && s.prioridad_derivada === 'P1';
       if (kpiActivo === 'fuera_plazo') return s.sla_restante_horas !== null && s.sla_restante_horas !== undefined && s.sla_restante_horas < 0;
-      if (kpiActivo === 'hoy') return new Date(s.fecha_creacion).toDateString() === hoy;
+      if (kpiActivo === 'sin_asignar') return abierta && !s.asignado_a;
       return true;
     });
   }
@@ -698,21 +719,36 @@
   // secundario) y una barra de SLA en vez del semaforo de emoji (🔴🟡🟢) --
   // una barra que se llena con la urgencia se escanea mas rapido que un
   // circulo de color o un numero suelto ("Vence en Xh").
+  // Umbral (dias corridos) para el chip "sin movimiento" -- una solicitud
+  // puede estar "en plazo" y llevar semanas parada sin que ningun otro
+  // indicador se ponga en rojo; esta es la señal que faltaba para eso.
+  var DIAS_SIN_MOVIMIENTO_UMBRAL = 5;
+
   function renderFilaReciente_(s) {
     var sla = Componentes.barraSla(s.sla_restante_horas);
     // P5 (v2.0, Sprint 3): badge visual de "respuesta recibida" -- para que
     // Leo no dependa solo de encontrar el correo entre el resto de avisos.
     var badgeRespuesta = s.respuesta_pendiente ? ' ' + Componentes.badge('Respuesta recibida', 'P2') : '';
+    var badgeSinMovimiento = (s.dias_sin_movimiento || 0) >= DIAS_SIN_MOVIMIENTO_UMBRAL
+      ? ' <span class="sigso-chip-sin-movimiento" title="Sin cambios de estado hace ' + s.dias_sin_movimiento + ' días">🕸 ' + s.dias_sin_movimiento + 'd sin mover</span>'
+      : '';
+    // Fase 10.2: el titulo del item (lo que el solicitante escribio) es lo
+    // que dice de que se trata -- el codigo crudo del catalogo (s.modulo,
+    // p.ej. "GDE_GDE_PREVENCION_...") no lo dice. Con varios items, se
+    // muestra el primero + "(+N)"; el modulo/plataforma queda como dato
+    // secundario en la linea de abajo.
+    var titulo = s.titulo_item ? Componentes.escaparHtml(s.titulo_item) : Componentes.escaparHtml(s.modulo || '(sin título)');
+    if (s.cantidad_items > 1) titulo += ' <span class="sigso-fila-reciente__mas-items">(+' + (s.cantidad_items - 1) + ')</span>';
     return '<div class="sigso-fila-reciente" data-id="' + s.solicitud_id + '">' +
       '<div class="sigso-fila-reciente__principal">' +
       Componentes.badgePrioridad(s.prioridad_derivada) + ' ' +
       '<strong class="sigso-id">' + s.solicitud_id + '</strong> ' +
-      Componentes.badgeEstado(s.estado_derivado) + badgeRespuesta +
+      Componentes.badgeEstado(s.estado_derivado) + badgeRespuesta + badgeSinMovimiento +
       '</div>' +
-      '<div class="sigso-fila-reciente__meta">' +
-      s.empresa_id + ' &middot; ' + s.plataforma + ' / ' + s.modulo + ' &middot; ' +
-      s.cantidad_items + ' item(s) &middot; ' +
-      (s.asignado_a ? Componentes.escaparHtml(s.asignado_a) : 'Sin asignar') +
+      '<div class="sigso-fila-reciente__titulo">' + titulo + '</div>' +
+      '<div class="sigso-fila-reciente__meta" title="' + Componentes.escaparHtml(s.modulo || '') + '">' +
+      s.empresa_id + ' &middot; ' + Componentes.escaparHtml(s.plataforma || '') + ' &middot; ' +
+      (s.asignado_nombre ? Componentes.escaparHtml(s.asignado_nombre) : 'Sin asignar') +
       '</div>' +
       (sla ? '<div class="sigso-fila-reciente__sla">' + sla + '</div>' : '') +
       '</div>';
