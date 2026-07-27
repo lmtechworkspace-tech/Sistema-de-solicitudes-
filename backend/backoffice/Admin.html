@@ -5415,13 +5415,18 @@ var Iconos = (function () {
       var filas = respuesta.data || [];
       cont.innerHTML =
         '<div class="sigso-admin-cab"><h3>Parámetros por empresa</h3>' +
+        '<span>' +
+        '<button type="button" class="sigso-boton sigso-boton--secundario" id="btn-qr-pausas">' +
+        Iconos.svg('reloj', { tam: 16 }) + ' QR de registro</button> ' +
         '<button type="button" class="sigso-boton sigso-admin-cab__boton" id="btn-nueva-config-pausas">' +
-        Iconos.svg('nueva', { tam: 16 }) + ' Nueva / editar</button></div>' +
+        Iconos.svg('nueva', { tam: 16 }) + ' Nueva / editar</button>' +
+        '</span></div>' +
         Componentes.tarjeta(tablaPausasConfig_(filas));
 
       document.getElementById('btn-nueva-config-pausas').addEventListener('click', function () {
         abrirFormPausasConfig_(null);
       });
+      document.getElementById('btn-qr-pausas').addEventListener('click', abrirQrRegistroPausas_);
       document.querySelectorAll('[data-editar-config-pausas]').forEach(function (fila) {
         fila.addEventListener('click', function () {
           abrirFormPausasConfig_(JSON.parse(fila.getAttribute('data-editar-config-pausas')));
@@ -5446,6 +5451,30 @@ var Iconos = (function () {
         '</tr>';
     }).join('');
     return '<table class="sigso-tabla"><thead><tr><th>Empresa</th><th>Hora</th><th>Días</th><th>Duración</th><th>Umbral 🟢/🟡</th><th>Activa</th></tr></thead><tbody>' + cuerpo + '</tbody></table>';
+  }
+
+  // v6.0 (mejora #9): QR de registro presencial. Apunta SOLO al login de la
+  // plataforma (sin token) -- seguro para imprimir y pegar junto al lugar de
+  // la pausa: cada trabajador escanea, entra con SU cuenta/clave, y como el
+  // enlace trae "?modulo=pausas" llega directo a su modulo sin pasar por
+  // Home (ver plataforma.js: moduloObjetivoEnlace_ se lee ANTES del login,
+  // no solo en el flujo de enlace magico). Un solo QR sirve para todas las
+  // empresas -- no hay nada personal ni con vencimiento en el enlace.
+  // La imagen la genera un servicio publico (api.qrserver.com, GET simple,
+  // sin API key) -- evita sumar una libreria de terceros solo para esto.
+  function abrirQrRegistroPausas_() {
+    var sitio = (window.SIGSO_CONFIG && window.SIGSO_CONFIG.SITIO_PUBLICO) || '';
+    var separador = sitio && sitio.slice(-1) !== '/' ? '/' : '';
+    var url = sitio + separador + 'plataforma.html?modulo=pausas';
+    var imgUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=' + encodeURIComponent(url);
+    abrirDrawerAdmin_('QR de registro de pausas',
+      '<p class="sigso-ayuda">Imprime y pega este QR junto al lugar donde se hace la pausa activa. ' +
+      'Cada trabajador lo escanea con su celular, entra con su propia cuenta y llega directo al módulo de registro. ' +
+      'No tiene clave ni sesión propia: es seguro dejarlo a la vista.</p>' +
+      '<div style="text-align:center;margin:16px 0;">' +
+      '<img src="' + Componentes.escaparHtml(imgUrl) + '" alt="QR de registro de pausas" width="260" height="260">' +
+      '</div>' +
+      '<p class="sigso-ayuda" style="word-break:break-all;">' + Componentes.escaparHtml(url) + '</p>');
   }
 
   var DIAS_PAUSAS = { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb', 7: 'Dom' };
