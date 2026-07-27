@@ -16,6 +16,18 @@
 
   var detalleActual = null;
 
+  // Fase 10.3 (rediseno detalle): estado de expansion de cada item -- se
+  // preserva mientras se sigue viendo la MISMA solicitud (asi una accion
+  // dentro de un item no lo colapsa al recargar el detalle), y se resetea al
+  // abrir otra. Con un solo item, arranca expandido (no hay nada que elegir);
+  // con varios, arrancan colapsados y el usuario expande el que le interesa.
+  var expandidosItem_ = {};
+  var solicitudIdCargada_ = null;
+
+  function expandirItem_(subId) {
+    expandidosItem_[subId] = true;
+  }
+
   // Fix (reporte real de produccion): al tocar una accion, se aplicaban
   // varios cambios de estado en rafaga. Candado global: mientras hay una
   // accion en vuelo se ignora cualquier otro clic (de este u otro boton),
@@ -54,6 +66,10 @@
             Componentes.alerta(respuesta.message || 'No se pudo cargar la solicitud.', 'error');
           return respuesta;
         }
+        if (solicitudIdCargada_ !== solicitudId) {
+          expandidosItem_ = {};
+          solicitudIdCargada_ = solicitudId;
+        }
         detalleActual = respuesta.data;
         render_(detalleActual);
         return respuesta;
@@ -63,9 +79,7 @@
   function render_(detalle) {
     var contenedor = document.getElementById('detalle-contenido');
     contenedor.innerHTML =
-      '<div class="sigso-detalle-toolbar">' +
-      '<button type="button" class="sigso-boton--secundario" id="btn-imprimir-ot">📄 Orden de trabajo (PDF)</button>' +
-      '</div>' +
+      renderToolbar_(detalle) +
       '<div class="sigso-detalle-layout">' +
       '<div class="sigso-detalle-ficha">' + renderFicha_(detalle) + '</div>' +
       '<div class="sigso-detalle-centro"><h3>Qu&eacute; hacer (items)</h3>' + renderSubsolicitudes_(detalle) + '</div>' +
@@ -129,6 +143,55 @@
         boton.disabled = false;
         boton.textContent = textoOriginal;
       });
+  }
+
+  // Fase 10.3 (rediseno detalle, propuesta G): barra contextual -- antes solo
+  // tenia el boton de la OT; ahora tambien identifica la solicitud de un
+  // vistazo (sin bajar a la ficha) y, si tiene un solo item, ofrece la MISMA
+  // accion principal que ya se ve en la tarjeta del item (evita scroll para
+  // el caso mas comun: una solicitud con un solo pedido).
+  function renderToolbar_(detalle) {
+    var s = detalle.solicitud;
+    var subsolicitudes = detalle.subsolicitudes || [];
+    var soloLectura = detalle.rol_actual === 'GERENCIA';
+    var cta = (!soloLectura && subsolicitudes.length === 1)
+      ? renderCtaToolbar_(subsolicitudes[0], detalle.transiciones_por_subsolicitud || {})
+      : '';
+    return '<div class="sigso-detalle-toolbar">' +
+      '<div class="sigso-detalle-toolbar__info">' +
+      '<strong class="sigso-id">' + s.solicitud_id + '</strong> ' +
+      Componentes.badgeEstado(s.estado_derivado) + ' ' +
+      '<span class="sigso-detalle-toolbar__empresa">' +
+      Componentes.escaparHtml(s.empresa_nombre || s.empresa_id) + ' &middot; ' +
+      Componentes.escaparHtml(s.plataforma_nombre || s.plataforma) + '</span>' +
+      '</div>' +
+      '<div class="sigso-detalle-toolbar__acciones">' + cta +
+      '<button type="button" class="sigso-boton--secundario" id="btn-imprimir-ot">📄 Orden de trabajo (PDF)</button>' +
+      '</div>' +
+      '</div>';
+  }
+
+  // Replica la logica de "cual es la accion principal" de renderAccionesItem_
+  // (comprometer fecha si falta, si no el siguiente paso de avanzar) para un
+  // solo boton en la barra. No duplica la logica de aplicarla -- el click
+  // solo expande el item y hace clic en el boton real (ver wireAcciones_).
+  function renderCtaToolbar_(sub, transicionesPorSub) {
+    var itemAbierto = ESTADOS_CERRADOS_DETALLE.indexOf(sub.estado) === -1;
+    if (!itemAbierto) return '';
+    if (!sub.fecha_comprometida) {
+      return '<button type="button" class="sigso-boton sigso-cta-toolbar" data-cta="comprometer" data-subsolicitud="' + sub.subsolicitud_id + '">📅 Comprometer fecha</button>';
+    }
+    var opcionesTransicion = transicionesPorSub[sub.subsolicitud_id] || [];
+    var rangoActual = RANGO_ESTADO[sub.estado] !== undefined ? RANGO_ESTADO[sub.estado] : -1;
+    var avanzar = opcionesTransicion.filter(function (t) {
+      return RANGO_ESTADO[t.estado] > rangoActual && RANGO_ESTADO[t.estado] < 99;
+    });
+    if (avanzar.length === 0) return '';
+    var rangoSiguiente = Math.min.apply(null, avanzar.map(function (t) { return RANGO_ESTADO[t.estado]; }));
+    var principal = avanzar.filter(function (t) { return RANGO_ESTADO[t.estado] === rangoSiguiente; })[0];
+    if (!principal) return '';
+    return '<button type="button" class="sigso-boton sigso-cta-toolbar" data-cta="avanzar" data-subsolicitud="' + sub.subsolicitud_id + '" data-estado="' + principal.estado + '">' +
+      (VERBO_TRANSICION[principal.estado] || principal.estado) + '</button>';
   }
 
   // --- Columna izquierda: ficha (solo lectura, sticky) -------------------
@@ -242,6 +305,16 @@
     // solo van a fallar).
     var soloLectura = detalle.rol_actual === 'GERENCIA';
 
+    // H (rediseno detalle): con un solo item no hay nada que elegir, arranca
+    // expandido; con varios, arrancan colapsados (el usuario expande el que
+    // le interesa). Solo se decide la PRIMERA vez que se ve el item -- un
+    // toggle manual del usuario no se pisa en renders posteriores.
+    subsolicitudes.forEach(function (sub) {
+      if (expandidosItem_[sub.subsolicitud_id] === undefined) {
+        expandidosItem_[sub.subsolicitud_id] = subsolicitudes.length === 1;
+      }
+    });
+
     return subsolicitudes.map(function (sub) {
       var urlsAdicionales = [];
       try {
@@ -320,9 +393,18 @@
             new Date(h.timestamp).toLocaleDateString('es-CL') + ')</li>';
         }).join('') + '</ul></div>';
 
-      return '<div class="sigso-acordeon-item sigso-acordeon-item--activo">' +
-        '<div class="sigso-acordeon-item__cabecera"><span>' + sub.numero_item + '. ' + Componentes.escaparHtml(sub.titulo) +
-        ' — ' + Componentes.badgePrioridad(sub.prioridad) + ' ' + Componentes.badgeEstado(sub.estado) + cumplimientoTexto + '</span></div>' +
+      // H: resumen visible aun colapsado -- fecha comprometida y responsable
+      // son justo lo que se necesita para decidir "¿me interesa abrir este?"
+      // sin tener que expandirlo primero.
+      var cabeceraExtra = [];
+      if (sub.fecha_comprometida) cabeceraExtra.push('📅 ' + Componentes.escaparHtml(fechaCorta_(sub.fecha_comprometida)));
+      if (sub.desarrollador_asignado) cabeceraExtra.push('👤 ' + Componentes.escaparHtml(sub.desarrollador_asignado));
+      var cabeceraExtraHtml = cabeceraExtra.length ? ' <span class="sigso-acordeon-item__extra">' + cabeceraExtra.join(' &middot; ') + '</span>' : '';
+      var activo = !!expandidosItem_[sub.subsolicitud_id];
+
+      return '<div class="sigso-acordeon-item' + (activo ? ' sigso-acordeon-item--activo' : '') + '">' +
+        '<div class="sigso-acordeon-item__cabecera" data-toggle-item="' + sub.subsolicitud_id + '"><span>' + sub.numero_item + '. ' + Componentes.escaparHtml(sub.titulo) +
+        ' — ' + Componentes.badgePrioridad(sub.prioridad) + ' ' + Componentes.badgeEstado(sub.estado) + cumplimientoTexto + cabeceraExtraHtml + '</span></div>' +
         '<div class="sigso-acordeon-item__cuerpo">' +
         metaHtml +
         '<p>' + Componentes.escaparHtml(sub.descripcion) + '</p>' +
@@ -607,6 +689,45 @@
   // --- Cableado de acciones inline ---------------------------------------
 
   function wireAcciones_(solicitudId) {
+    // H: expandir/colapsar un item -- re-renderiza completo (mismo patron
+    // que el acordeon existente en formulario.js) en vez de togglear una
+    // clase a mano, asi el resto de la tarjeta (botones, inputs) siempre
+    // queda coherente con expandidosItem_.
+    document.querySelectorAll('[data-toggle-item]').forEach(function (cabecera) {
+      cabecera.addEventListener('click', function () {
+        var subId = cabecera.getAttribute('data-toggle-item');
+        expandidosItem_[subId] = !expandidosItem_[subId];
+        render_(detalleActual);
+      });
+    });
+
+    // G: la CTA de la barra reusa el boton real del item (misma validacion,
+    // mismo flujo) en vez de duplicar logica -- solo se asegura de que el
+    // item este expandido y visible antes de "apretarlo" por el usuario.
+    var ctaToolbar = document.querySelector('.sigso-cta-toolbar');
+    if (ctaToolbar) {
+      ctaToolbar.addEventListener('click', function () {
+        var subId = ctaToolbar.getAttribute('data-subsolicitud');
+        var tipo = ctaToolbar.getAttribute('data-cta');
+        expandirItem_(subId);
+        render_(detalleActual);
+        if (tipo === 'comprometer') {
+          var campoFecha = document.querySelector('.sigso-fecha-comprometida[data-subsolicitud="' + subId + '"]');
+          if (campoFecha) {
+            campoFecha.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            campoFecha.focus();
+          }
+        } else {
+          var estado = ctaToolbar.getAttribute('data-estado');
+          var botonReal = document.querySelector('.sigso-accion-estado[data-subsolicitud="' + subId + '"][data-estado="' + estado + '"]');
+          if (botonReal) {
+            botonReal.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            botonReal.click();
+          }
+        }
+      });
+    }
+
     // UI-2 (§5): botonera contextual. Si la accion exige motivo, el primer
     // clic revela el campo y el segundo (con texto) aplica -- el usuario
     // nunca descubre el requisito DESPUES de intentar. El candado
