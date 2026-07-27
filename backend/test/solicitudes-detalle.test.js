@@ -50,6 +50,22 @@ test('getDetalle devuelve solicitud, subsolicitudes, historial y comentarios', (
   assert.equal(detalle.archivos.length, 0);
 });
 
+// v6.0 (fix de horas): una fecha-hora tipeada por el usuario que Sheets guardo
+// como celda de fecha-hora vuelve como Date (getValues) y se serializaba a JSON
+// en UTC (hora corrida). getDetalle debe devolverla como "AAAA-MM-DDTHH:mm"
+// local para que la hora se vea bien.
+test('getDetalle normaliza fecha_comprometida guardada como celda (Date) a HH:mm local', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  // Simula lo que devuelve getValues() para una celda de fecha-hora.
+  ctx.actualizarFilaPorId_('SUBSOLICITUDES', 'subsolicitud_id', 'SOL-2026-HP-0001-01', {
+    fecha_comprometida: new Date(2026, 6, 24, 9, 30, 0)
+  });
+
+  const detalle = ctx.Solicitudes.getDetalle('SOL-2026-HP-0001');
+  assert.equal(detalle.subsolicitudes[0].fecha_comprometida, '2026-07-24T09:30');
+});
+
 // v2.1 (Fase B): getDetalle agrega el semaforo de cumplimiento por item
 // (Cumplimiento.gs), sin fecha_comprometida el item activo es SIN_COMPROMISO.
 test('getDetalle (v2.1) agrega cumplimiento a cada subsolicitud', () => {

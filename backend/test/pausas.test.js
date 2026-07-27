@@ -42,6 +42,25 @@ test('guardarConfig crea la config de una empresa y normaliza hora/dias', () => 
   assert.equal(filas[0].empresa_id, 'HP');
 });
 
+test('la hora se devuelve como HH:mm aunque Sheets la haya guardado como celda de hora (Date)', () => {
+  const ctx = loadConPausas();
+  // Simula lo que devuelve getValues() para una celda de HORA: un Date en la
+  // epoca 1899-12-30. Antes esto salia al front como "1899-12-30T..Z".
+  ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('PAUSAS_CONFIG').appendRow(
+    ctx.COLUMNAS.PAUSAS_CONFIG.map((c) => ({
+      empresa_id: 'HP', hora_habitual: new Date(1899, 11, 30, 9, 30, 0),
+      dias_semana: '1,2,3,4,5', duracion_min: 10, min_anticipacion: 15,
+      umbral_verde: 80, umbral_amarillo: 60, activo: true
+    }[c] !== undefined ? {
+      empresa_id: 'HP', hora_habitual: new Date(1899, 11, 30, 9, 30, 0),
+      dias_semana: '1,2,3,4,5', duracion_min: 10, min_anticipacion: 15,
+      umbral_verde: 80, umbral_amarillo: 60, activo: true
+    }[c] : ''))
+  );
+  const fila = ctx.Pausas.listarConfig({}, ADMIN)[0];
+  assert.equal(fila.hora_habitual, '09:30');
+});
+
 test('guardarConfig hace UPSERT por empresa_id (no duplica la fila)', () => {
   const ctx = loadConPausas();
   ctx.Pausas.guardarConfig({ empresa_id: 'HP', hora_habitual: '09:00', duracion_min: 5 }, ADMIN);

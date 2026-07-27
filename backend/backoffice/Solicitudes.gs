@@ -379,7 +379,17 @@ var Solicitudes = {
     // (otras funciones -- actualizarEstado, actualizarPrioridad -- reusan esa
     // lectura sin esperar un campo calculado).
     var subsolicitudes = obtenerSubsolicitudesDeSolicitud_(solicitudId).map(function (sub) {
-      return Object.assign({}, sub, { cumplimiento: Cumplimiento.clasificar(sub) });
+      // El cumplimiento se calcula con el `sub` ORIGINAL (fechas tal cual las
+      // devolvio la hoja). Las fechas que TIPEA el usuario (comprometida /
+      // propuesta) se normalizan solo para mostrarlas: Sheets a veces guarda
+      // "2026-07-24T09:30" como celda de fecha-hora y al leerla la devuelve
+      // como Date, que serializado a JSON sale en UTC (con la hora corrida).
+      // fechaHoraCelda_ recupera el AAAA-MM-DDTHH:mm local. Ver la misma idea
+      // en Pausas.horaCelda_.
+      var copia = Object.assign({}, sub, { cumplimiento: Cumplimiento.clasificar(sub) });
+      copia.fecha_comprometida = fechaHoraCelda_(sub.fecha_comprometida);
+      copia.fecha_propuesta = fechaHoraCelda_(sub.fecha_propuesta);
+      return copia;
     });
     // Fase 10.1: cualquier estado es un destino valido para cualquier rol
     // (ver nota en Constantes.gs) -- el selector ofrece los 11 estados
@@ -712,4 +722,20 @@ function asignarResponsables_(data, contexto) {
 
   actualizarFilaPorId_(SHEETS.SOLICITUDES, 'solicitud_id', data.solicitud_id, cambios);
   return Object.assign({ solicitud_id: data.solicitud_id }, cambios);
+}
+
+// v6.0 (fix de horas): una fecha-hora que el usuario TIPEA ("2026-07-24T09:30")
+// puede quedar guardada por Sheets como celda de fecha-hora; al leerla con
+// getValues() vuelve como Date y, serializada a JSON, sale en UTC (con la hora
+// corrida). Este helper recupera el "AAAA-MM-DDTHH:mm" LOCAL (zona del script /
+// proyecto). Si ya es un string (no hubo coercion), lo devuelve tal cual.
+function fechaHoraCelda_(valor) {
+  if (valor === null || valor === undefined || valor === '') return '';
+  if (Object.prototype.toString.call(valor) === '[object Date]') {
+    if (isNaN(valor.getTime())) return '';
+    var d2 = function (n) { return n < 10 ? '0' + n : '' + n; };
+    return valor.getFullYear() + '-' + d2(valor.getMonth() + 1) + '-' + d2(valor.getDate()) +
+      'T' + d2(valor.getHours()) + ':' + d2(valor.getMinutes());
+  }
+  return String(valor);
 }

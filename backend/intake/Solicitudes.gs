@@ -327,8 +327,11 @@ var Solicitudes = {
           // v2.1 (Fase A): el solicitante ve lo que propuso y, una vez que
           // Leo se compromete, la fecha DEFINITIVA (esa es la oficial, no
           // la propuesta -- ver documentacion/SIGSO-v2.1-plazos-y-control.md §2.1).
-          fecha_propuesta: s.fecha_propuesta || '',
-          fecha_comprometida: s.fecha_comprometida || '',
+          // v6.0 (fix de horas): fechaHoraCelda_ recupera el HH:mm local si
+          // Sheets guardo la fecha-hora como celda (y la devolvio como Date en
+          // UTC). Ver la misma nota en Backoffice Solicitudes.gs.
+          fecha_propuesta: fechaHoraCelda_(s.fecha_propuesta),
+          fecha_comprometida: fechaHoraCelda_(s.fecha_comprometida),
           // Fase 10.1: si Leo pidio mas informacion (S06), el comentario con
           // el que hizo la transicion ES la pregunta -- se muestra aqui para
           // que el solicitante sepa que le estan pidiendo sin tener que
@@ -1115,4 +1118,21 @@ function generarResumenWhatsapp_(solicitudId, data, prioridad) {
   lineas.push('📝 Resumen: ' + resumen);
   lineas.push('📧 Revisar correo para detalle completo.');
   return lineas.join('\n');
+}
+
+// v6.0 (fix de horas): una fecha-hora que el usuario TIPEA
+// ("2026-07-24T09:30") puede quedar guardada por Sheets como celda de
+// fecha-hora; al leerla con getValues() vuelve como Date y, serializada a JSON,
+// sale en UTC (con la hora corrida). Este helper recupera el "AAAA-MM-DDTHH:mm"
+// LOCAL. Si ya es un string (no hubo coercion), lo devuelve tal cual.
+// Duplicado a proposito de Backoffice Solicitudes.gs (proyectos separados).
+function fechaHoraCelda_(valor) {
+  if (valor === null || valor === undefined || valor === '') return '';
+  if (Object.prototype.toString.call(valor) === '[object Date]') {
+    if (isNaN(valor.getTime())) return '';
+    var d2 = function (n) { return n < 10 ? '0' + n : '' + n; };
+    return valor.getFullYear() + '-' + d2(valor.getMonth() + 1) + '-' + d2(valor.getDate()) +
+      'T' + d2(valor.getHours()) + ':' + d2(valor.getMinutes());
+  }
+  return String(valor);
 }

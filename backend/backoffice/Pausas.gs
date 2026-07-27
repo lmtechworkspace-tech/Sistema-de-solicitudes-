@@ -65,7 +65,7 @@ var Pausas = {
   listarConfig: function (data, contexto) {
     var g = guardaAdminPausas_(contexto, 'ver la configuracion de pausas');
     if (g) return g;
-    return leerFilasSeguro_(SHEETS.PAUSAS_CONFIG);
+    return leerConfigPausas_();
   },
 
   guardarConfig: function (data, contexto) {
@@ -184,10 +184,10 @@ var Pausas = {
     var tz = 'America/Santiago';
     var claveHoy = claveDia_(fecha, tz);
     var diaIso = diaSemanaIsoPausas_(fecha, tz); // 1=Lun .. 7=Dom
-    var configs = leerFilasSeguro_(SHEETS.PAUSAS_CONFIG).filter(function (c) {
+    var configs = leerConfigPausas_().filter(function (c) {
       return esVerdaderoPausas_(c.activo);
     });
-    var yaProgramadas = leerFilasSeguro_(SHEETS.PAUSAS_PROGRAMADAS);
+    var yaProgramadas = leerProgramadasPausas_();
     var creadas = [];
 
     configs.forEach(function (config) {
@@ -233,7 +233,7 @@ var Pausas = {
     var g = guardaAdminPausas_(contexto, 'ver las pausas programadas');
     if (g) return g;
     data = data || {};
-    var filas = leerFilasSeguro_(SHEETS.PAUSAS_PROGRAMADAS);
+    var filas = leerProgramadasPausas_();
     if (data.empresa_id) {
       filas = filas.filter(function (p) { return String(p.empresa_id) === String(data.empresa_id); });
     }
@@ -376,7 +376,7 @@ var Pausas = {
       return { sin_empresa: true, pausas: [] };
     }
     var hoy = claveDia_(new Date(), 'America/Santiago');
-    var todas = leerFilasSeguro_(SHEETS.PAUSAS_PROGRAMADAS);
+    var todas = leerProgramadasPausas_();
     var pausas = todas
       .filter(function (p) {
         return empresas.indexOf(String(p.empresa_id)) !== -1 && claveFechaPausa_(p.fecha) === hoy;
@@ -454,8 +454,8 @@ var Pausas = {
     var ahoraMin = (opts.ahoraMin === undefined || opts.ahoraMin === null)
       ? minutosDelDiaSantiago_() : opts.ahoraMin;
     var hoy = claveDia_(new Date(), 'America/Santiago');
-    var configs = leerFilasSeguro_(SHEETS.PAUSAS_CONFIG).filter(function (c) { return esVerdaderoPausas_(c.activo); });
-    var pausas = leerFilasSeguro_(SHEETS.PAUSAS_PROGRAMADAS);
+    var configs = leerConfigPausas_().filter(function (c) { return esVerdaderoPausas_(c.activo); });
+    var pausas = leerProgramadasPausas_();
     var enviados = 0, avisadas = 0;
 
     configs.forEach(function (config) {
@@ -514,7 +514,7 @@ var Pausas = {
   // hoy (estado + participacion + justificaciones). Se deduplica por pausa.
   enviarResumenDiarioPausas: function () {
     var hoy = claveDia_(new Date(), 'America/Santiago');
-    var pausas = leerFilasSeguro_(SHEETS.PAUSAS_PROGRAMADAS).filter(function (p) {
+    var pausas = leerProgramadasPausas_().filter(function (p) {
       return claveFechaPausa_(p.fecha) === hoy && p.estado !== ESTADOS_PAUSA.CANCELADA;
     });
     var enviados = 0;
@@ -673,7 +673,7 @@ function crearPausaManual_(data, contexto) {
     return errorValidacion_('hora_programada', 'Hora invalida. Usa el formato HH:mm.');
   }
   // No duplica una pausa viva para la misma empresa/fecha.
-  var existe = leerFilasSeguro_(SHEETS.PAUSAS_PROGRAMADAS).some(function (p) {
+  var existe = leerProgramadasPausas_().some(function (p) {
     return String(p.empresa_id) === empresaId && claveFechaPausa_(p.fecha) === fecha &&
       ESTADOS_PAUSA_TERMINALES.indexOf(p.estado) === -1;
   });
@@ -767,7 +767,7 @@ function transicionarPausa_(pausa, nuevoEstado, contexto, campos) {
 }
 
 function buscarPausaProgramada_(pausaId) {
-  return leerFilasSeguro_(SHEETS.PAUSAS_PROGRAMADAS).filter(function (p) {
+  return leerProgramadasPausas_().filter(function (p) {
     return String(p.pausa_id) === String(pausaId);
   })[0] || null;
 }
@@ -779,7 +779,7 @@ function buscarPausaProgramada_(pausaId) {
 // el mismo dia (no deberia, la programacion es idempotente), toma la primera.
 function pausaDeHoyEmpresa_(empresaId) {
   var hoy = claveDia_(new Date(), 'America/Santiago');
-  return leerFilasSeguro_(SHEETS.PAUSAS_PROGRAMADAS).filter(function (p) {
+  return leerProgramadasPausas_().filter(function (p) {
     return String(p.empresa_id) === String(empresaId) &&
       claveFechaPausa_(p.fecha) === hoy &&
       ESTADOS_PAUSA_TERMINALES.indexOf(p.estado) === -1;
@@ -833,7 +833,7 @@ function resolverTrabajadorPausas_(email) {
 // PAUSAS_COORDINADORES (titular o reemplazo). Devuelve lista de empresa_id.
 function empresasQueCoordina_(contexto) {
   if (contexto && contexto.rol === 'ADM') {
-    return leerFilasSeguro_(SHEETS.PAUSAS_CONFIG).map(function (c) { return String(c.empresa_id); });
+    return leerConfigPausas_().map(function (c) { return String(c.empresa_id); });
   }
   var correo = String((contexto && contexto.email) || '').toLowerCase();
   if (!correo) return [];
@@ -914,7 +914,7 @@ function calcularReportePausas_(empresaIds, desde, hasta) {
   var desdeC = /^\d{4}-\d{2}-\d{2}$/.test(String(desde || '')) ? desde
     : claveDia_(new Date(Date.now() - 30 * 24 * 3600 * 1000), 'America/Santiago');
 
-  var pausas = leerFilasSeguro_(SHEETS.PAUSAS_PROGRAMADAS).filter(function (p) {
+  var pausas = leerProgramadasPausas_().filter(function (p) {
     var f = claveFechaPausa_(p.fecha);
     return setEmp[String(p.empresa_id)] && f >= desdeC && f <= hastaC;
   });
@@ -1017,7 +1017,7 @@ function coordinadorasDeEmpresa_(empresaId) {
 function empresasVisiblesGerencia_(contexto) {
   var rol = contexto && contexto.rol;
   if (rol !== 'GERENCIA' && rol !== 'ADM') return [];
-  return leerFilasSeguro_(SHEETS.PAUSAS_CONFIG).map(function (c) { return String(c.empresa_id); });
+  return leerConfigPausas_().map(function (c) { return String(c.empresa_id); });
 }
 
 // Envia el reporte periodico (semanal/mensual) por correo con el PDF adjunto.
@@ -1026,7 +1026,7 @@ function enviarReportePeriodicoPausas_(periodo) {
   var dias = periodo === 'mensual' ? 30 : 7;
   var hoy = claveDia_(new Date(), 'America/Santiago');
   var desde = claveDia_(new Date(Date.now() - dias * 24 * 3600 * 1000), 'America/Santiago');
-  var empresas = leerFilasSeguro_(SHEETS.PAUSAS_CONFIG).map(function (c) { return String(c.empresa_id); });
+  var empresas = leerConfigPausas_().map(function (c) { return String(c.empresa_id); });
   if (empresas.length === 0) return { enviado: false, motivo: 'sin_config' };
 
   var reporte = calcularReportePausas_(empresas, desde, hoy);
@@ -1174,6 +1174,48 @@ function claveFechaPausa_(valor) {
   var s = String(valor || '').trim();
   var m = s.match(/^(\d{4}-\d{2}-\d{2})/);
   return m ? m[1] : s;
+}
+
+// Google Sheets a veces interpreta "09:30" como una celda de HORA; al leerla
+// con getValues() devuelve un Date (epoca 1899-12-30) que, al serializarse a
+// JSON, sale como "1899-12-30T..Z" (en UTC). Este helper recupera el HH:mm
+// real: de un Date usa la hora LOCAL del script (zona del proyecto), no UTC;
+// de un string HH:mm (o un ISO con hora) toma la parte de la hora. Asi la hora
+// llega bien al front aunque la celda se haya guardado como hora.
+function horaCelda_(valor) {
+  if (valor === null || valor === undefined || valor === '') return '';
+  if (Object.prototype.toString.call(valor) === '[object Date]') {
+    if (isNaN(valor.getTime())) return '';
+    var hh = valor.getHours(), mm = valor.getMinutes();
+    return (hh < 10 ? '0' + hh : '' + hh) + ':' + (mm < 10 ? '0' + mm : '' + mm);
+  }
+  var s = String(valor).trim();
+  // "09:30" o "9:30" al inicio -> normalizado.
+  var directo = s.match(/^(\d{1,2}):(\d{2})/);
+  if (directo) return normalizarHoraPausas_(directo[1] + ':' + directo[2]) || (directo[1] + ':' + directo[2]);
+  // "AAAA-MM-DDTHH:MM.." -> toma la hora (fallback; no deberia llegar aca en
+  // produccion, donde getValues devuelve un Date, ver arriba).
+  var iso = s.match(/T(\d{2}):(\d{2})/);
+  if (iso) return iso[1] + ':' + iso[2];
+  return '';
+}
+
+// Lecturas que normalizan la hora "de celda" a HH:mm en un solo punto, para
+// que ninguna vista tenga que preocuparse del formato con que Sheets guardo la
+// hora. Solo tocan hora_habitual / hora_programada (hora_inicio_real y hora_fin
+// son timestamps ISO completos, no celdas de hora).
+function leerConfigPausas_() {
+  return leerFilasSeguro_(SHEETS.PAUSAS_CONFIG).map(function (c) {
+    c.hora_habitual = horaCelda_(c.hora_habitual);
+    return c;
+  });
+}
+
+function leerProgramadasPausas_() {
+  return leerFilasSeguro_(SHEETS.PAUSAS_PROGRAMADAS).map(function (p) {
+    p.hora_programada = horaCelda_(p.hora_programada);
+    return p;
+  });
 }
 
 // 'HH:mm' valido -> lo devuelve normalizado con cero a la izquierda; si no es
