@@ -235,10 +235,13 @@ var COLUMNAS = {
   // del segundo aviso -- evitan reenviar el "ultima llamada" a los
   // trabajadores o el aviso de inicio a la coordinadora mas de una vez por
   // pausa (ver Pausas.enviarSegundosAvisosPausas).
+  // evidencia_url (mejora v6.0 #4): foto/evidencia de la charla que la
+  // coordinadora puede adjuntar al finalizar (Drive, mismo patron que los
+  // adjuntos de Solicitudes).
   PAUSAS_PROGRAMADAS: [
     'pausa_id', 'empresa_id', 'fecha', 'hora_programada', 'hora_inicio_real',
     'hora_fin', 'coordinador_email', 'estado', 'duracion_min', 'observaciones',
-    'ultima_llamada_enviada', 'aviso_coordinador_enviado'
+    'ultima_llamada_enviada', 'aviso_coordinador_enviado', 'evidencia_url'
   ],
   // Registro de participacion por trabajador. estado: participo | no_participo.
   PAUSAS_ASISTENCIA: [

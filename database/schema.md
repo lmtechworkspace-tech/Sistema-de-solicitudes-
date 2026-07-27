@@ -608,6 +608,7 @@ que `schema-consistency.test.js` siga verde, mismo patrón que `JEFATURAS`. Ver
 | `observaciones` | string | Notas de la coordinadora |
 | `ultima_llamada_enviada` | boolean | Mejora v6.0: ya se mandó el segundo aviso ("última llamada") a los trabajadores |
 | `aviso_coordinador_enviado` | boolean | Mejora v6.0: ya se avisó a la coordinadora que es hora de iniciar la pausa |
+| `evidencia_url` | string | Mejora v6.0: URL de Drive de la foto/evidencia de la charla (opcional, adjuntada por la coordinadora al finalizar) |
 
 ### PAUSAS_ASISTENCIA — participación por trabajador
 

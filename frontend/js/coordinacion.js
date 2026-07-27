@@ -89,7 +89,8 @@
       (acciones ? '<div class="sigso-pausa-botonera">' + acciones + '</div>' : '') +
       '<div id="coord-resultado-' + p.pausa_id + '"></div>' +
       listas +
-      (TERMINALES.indexOf(p.estado) !== -1 && p.observaciones ? '<p class="sigso-ayuda">Observaciones: ' + Componentes.escaparHtml(p.observaciones) + '</p>' : ''));
+      (TERMINALES.indexOf(p.estado) !== -1 && p.observaciones ? '<p class="sigso-ayuda">Observaciones: ' + Componentes.escaparHtml(p.observaciones) + '</p>' : '') +
+      (p.evidencia_url ? '<p class="sigso-ayuda">Evidencia: <a href="' + Componentes.escaparHtml(p.evidencia_url) + '" target="_blank" rel="noopener">ver foto</a></p>' : ''));
   }
 
   function bloqueLista_(titulo, items, conMotivo) {
@@ -109,12 +110,9 @@
         if (accion === 'iniciar') {
           operar_({ operacion: 'iniciar', pausa_id: id }, id);
         } else if (accion === 'finalizar') {
-          Componentes.prompt({
-            titulo: 'Finalizar pausa', mensaje: 'Declaro que la pausa activa programada fue realizada.',
-            placeholder: 'Observaciones (opcional)', confirmar: 'Finalizar'
-          }).then(function (obs) {
-            if (obs === null) return;
-            operar_({ operacion: 'finalizar', pausa_id: id, observaciones: obs }, id);
+          promptFinalizarConEvidencia_().then(function (resultado) {
+            if (resultado === null) return;
+            operar_(Object.assign({ operacion: 'finalizar', pausa_id: id }, resultado), id);
           });
         } else if (accion === 'no_realizada') {
           Componentes.prompt({
@@ -127,6 +125,67 @@
           });
         }
       });
+    });
+  }
+
+  // v6.0 (mejora #4): mismo modal que Componentes.prompt (observaciones),
+  // mas un input de foto OPCIONAL -- evidencia de que la charla se hizo.
+  // Se hace a mano (no via Componentes.prompt) porque ese componente es de
+  // un solo campo de texto; aca hacen falta 2 campos + conversion a base64.
+  // Resuelve {observaciones, evidencia_nombre, evidencia_base64} (los ultimos
+  // 2 solo si se eligio una foto), o null si se cancela.
+  var LIMITE_EVIDENCIA_BYTES = 5 * 1024 * 1024;
+  function promptFinalizarConEvidencia_() {
+    return new Promise(function (resolver) {
+      var fondo = document.createElement('div');
+      fondo.className = 'sigso-modal-fondo';
+      fondo.innerHTML =
+        '<div class="sigso-modal" role="dialog" aria-modal="true" aria-labelledby="coord-finalizar-titulo">' +
+        '<h3 class="sigso-modal__titulo" id="coord-finalizar-titulo">Finalizar pausa</h3>' +
+        '<p class="sigso-modal__mensaje">Declaro que la pausa activa programada fue realizada.</p>' +
+        '<textarea class="sigso-prompt__input" id="coord-finalizar-obs" placeholder="Observaciones (opcional)" rows="3"></textarea>' +
+        '<label for="coord-finalizar-foto" style="display:block;margin-top:10px;">Evidencia de la charla (foto, opcional)</label>' +
+        '<input type="file" id="coord-finalizar-foto" accept="image/jpeg,image/png,image/gif">' +
+        '<p class="sigso-campo__error sigso-oculto" id="coord-finalizar-error"></p>' +
+        '<div class="sigso-modal__acciones">' +
+        Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-modal-no' }) +
+        Componentes.boton({ texto: 'Finalizar', clase: 'js-modal-si' }) +
+        '</div></div>';
+
+      var error = fondo.querySelector('#coord-finalizar-error');
+      function cerrar(valor) {
+        document.removeEventListener('keydown', alTeclado);
+        if (fondo.parentNode) fondo.parentNode.removeChild(fondo);
+        resolver(valor);
+      }
+      function alTeclado(ev) { if (ev.key === 'Escape') cerrar(null); }
+
+      function aceptar() {
+        var observaciones = fondo.querySelector('#coord-finalizar-obs').value.trim();
+        var foto = fondo.querySelector('#coord-finalizar-foto').files[0];
+        if (!foto) { cerrar({ observaciones: observaciones }); return; }
+        if (foto.size > LIMITE_EVIDENCIA_BYTES) {
+          error.textContent = 'La foto supera el tamaño máximo (5 MB).';
+          error.classList.remove('sigso-oculto');
+          return;
+        }
+        var lector = new FileReader();
+        lector.onload = function () {
+          var base64 = String(lector.result).split(',')[1] || '';
+          cerrar({ observaciones: observaciones, evidencia_nombre: foto.name, evidencia_base64: base64 });
+        };
+        lector.onerror = function () {
+          error.textContent = 'No se pudo leer la foto. Intenta de nuevo.';
+          error.classList.remove('sigso-oculto');
+        };
+        lector.readAsDataURL(foto);
+      }
+
+      fondo.querySelector('.js-modal-no').addEventListener('click', function () { cerrar(null); });
+      fondo.querySelector('.js-modal-si').addEventListener('click', aceptar);
+      fondo.addEventListener('click', function (ev) { if (ev.target === fondo) cerrar(null); });
+      document.addEventListener('keydown', alTeclado);
+      document.body.appendChild(fondo);
     });
   }
 

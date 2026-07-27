@@ -485,6 +485,7 @@ var Pausas = {
           estado: p.estado,
           duracion_min: p.duracion_min || '',
           observaciones: p.observaciones || '',
+          evidencia_url: p.evidencia_url || '',
           participacion: participacionDePausa_(p.pausa_id, p.empresa_id)
         };
       });
@@ -506,11 +507,21 @@ var Pausas = {
           coordinador_email: contexto.email
         });
       case 'finalizar':
-        return transicionarPausa_(pausa, ESTADOS_PAUSA.REALIZADA, contexto, {
+        var cambiosFinalizar = {
           hora_fin: new Date().toISOString(),
           coordinador_email: pausa.coordinador_email || contexto.email,
           observaciones: data.observaciones ? String(data.observaciones).trim() : pausa.observaciones
-        });
+        };
+        // v6.0 (mejora #4): evidencia de la charla, OPCIONAL -- una foto que
+        // respalda que la pausa se realizo (util ante fiscalizacion). Si el
+        // upload falla, no se bloquea el finalizar (la pausa igual se cierra;
+        // el error queda en LOG_SISTEMA para diagnostico).
+        if (data.evidencia_base64) {
+          var evidencia = subirEvidenciaPausa_(pausa, String(data.evidencia_nombre || 'evidencia.jpg'), data.evidencia_base64);
+          if (evidencia && evidencia._validationError) return evidencia;
+          if (evidencia) cambiosFinalizar.evidencia_url = evidencia.url;
+        }
+        return transicionarPausa_(pausa, ESTADOS_PAUSA.REALIZADA, contexto, cambiosFinalizar);
       case 'no_realizada':
         var motivo = String(data.motivo || '').trim();
         if (!motivo) {
@@ -1488,6 +1499,49 @@ function construirHtmlReportePausas_(titulo, reporte) {
     '<h3 style="margin:16px 0 6px;">Motivos de inasistencia</h3>' + tabla_(reporte.motivos, 'motivo', 'cantidad', 'Motivo', 'Cantidad') +
     '<h3 style="margin:20px 0 6px;">Participación por área</h3>' + tabla_(reporte.por_area, 'area', 'participaciones', 'Área', 'Participaciones') +
     '</body></html>';
+}
+
+// v6.0 (mejora #4): evidencia de la charla -- una foto opcional que la
+// coordinadora adjunta al finalizar. Solo imagenes (JPEG/PNG/GIF), 5 MB,
+// detectadas por firma de bytes (mismo criterio que Drive.subirArchivo del
+// Intake, pero simplificado: aqui solo hace falta la categoria "imagen").
+// Sube a Drive bajo SIGSO_Pausas/{empresa}/{fecha} y devuelve {url}, o un
+// error de validacion si el archivo no es una imagen valida.
+var FIRMAS_IMAGEN_PAUSAS = [
+  { mime: 'image/jpeg', firma: [0xFF, 0xD8, 0xFF] },
+  { mime: 'image/png', firma: [0x89, 0x50, 0x4E, 0x47] },
+  { mime: 'image/gif', firma: [0x47, 0x49, 0x46, 0x38] }
+];
+var LIMITE_EVIDENCIA_PAUSA_BYTES = 5 * 1024 * 1024;
+
+function subirEvidenciaPausa_(pausa, nombreArchivo, base64) {
+  var bytes;
+  try {
+    bytes = Utilities.base64Decode(base64);
+  } catch (err) {
+    return errorValidacion_('evidencia_base64', 'El contenido de la evidencia no es base64 valido.');
+  }
+  if (bytes.length > LIMITE_EVIDENCIA_PAUSA_BYTES) {
+    return errorValidacion_('evidencia_base64', 'La evidencia supera el tamaño máximo permitido (5 MB).');
+  }
+  var mime = FIRMAS_IMAGEN_PAUSAS.filter(function (f) {
+    return f.firma.every(function (byte, idx) { return (bytes[idx] & 0xFF) === byte; });
+  })[0];
+  if (!mime) {
+    return errorValidacion_('evidencia_base64', 'La evidencia debe ser una imagen (JPG, PNG o GIF).');
+  }
+  try {
+    var raiz = obtenerCarpetaRaiz_();
+    var carpetaPausas = obtenerOCrearSubcarpeta_(raiz, 'SIGSO_Pausas');
+    var carpetaEmpresa = obtenerOCrearSubcarpeta_(carpetaPausas, pausa.empresa_id);
+    var carpetaFecha = obtenerOCrearSubcarpeta_(carpetaEmpresa, claveFechaPausa_(pausa.fecha));
+    var blob = Utilities.newBlob(bytes, mime.mime, nombreArchivo);
+    var archivo = carpetaFecha.createFile(blob);
+    return { url: archivo.getUrl() };
+  } catch (err) {
+    logError_(err, 'Pausas.subirEvidenciaPausa');
+    return null; // no bloquea el finalizar: la pausa se cierra igual, sin evidencia.
+  }
 }
 
 // 'HH:mm' -> minutos del dia (0..1439), o null si no es valida.
