@@ -52,7 +52,7 @@ function construirContexto() {
     // P4: cuenta ADM con todos los modulos, para probar Administracion.
     ['CTA-DEMO-4', 'ladmin', 'Luis Admin', 'Administrador', 'hash-no-usado-aqui', 'sal',
       JSON.stringify(['luis@rld.cl']),
-      'ADM', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'administracion']),
+      'ADM', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'administracion', 'pausas', 'pausas_coordinacion']),
       'RLD', true, false, '', 'dev-server'],
     // Cuenta GERENCIA SIN modulo bandeja -- prueba que el detalle de solo
     // lectura se vea desde el Panel de Gerencia sin ese modulo (ver Code.gs,

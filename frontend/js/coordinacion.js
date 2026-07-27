@@ -27,12 +27,14 @@
       '<div class="sigso-tabs" id="coord-subtabs">' +
       '<button type="button" class="sigso-tabs__boton' + (subtab === 'hoy' ? ' sigso-tabs__boton--activo' : '') + '" data-coord-sub="hoy">Hoy</button>' +
       '<button type="button" class="sigso-tabs__boton' + (subtab === 'reportes' ? ' sigso-tabs__boton--activo' : '') + '" data-coord-sub="reportes">Reportes</button>' +
+      '<button type="button" class="sigso-tabs__boton' + (subtab === 'historial' ? ' sigso-tabs__boton--activo' : '') + '" data-coord-sub="historial">Historial por trabajador</button>' +
       '</div><div id="coord-sub-contenido"></div>';
     c.querySelectorAll('[data-coord-sub]').forEach(function (b) {
       b.addEventListener('click', function () { subtab = b.getAttribute('data-coord-sub'); cargar(); });
     });
     if (subtab === 'hoy') cargarHoy_();
-    else cargarReportes_();
+    else if (subtab === 'reportes') cargarReportes_();
+    else cargarHistorial_();
   }
 
   // --- Hoy: operar la pausa -------------------------------------------------
@@ -175,6 +177,65 @@
       return '<tr><td>' + Componentes.escaparHtml(String(f[campoA])) + '</td><td>' + Componentes.escaparHtml(String(f[campoB])) + '</td></tr>';
     }).join('');
     return '<table class="sigso-tabla"><tbody>' + cuerpo + '</tbody></table>';
+  }
+
+  // --- Historial por trabajador (mejora #7) ----------------------------------
+  // "¿quien participa siempre y quien nunca?" -- util para RRHH/prevencion sin
+  // tener que revisar pausa por pausa. Selector de roster + racha calculada
+  // por el backend (getHistorialTrabajador).
+  function cargarHistorial_() {
+    var c = document.getElementById('coord-sub-contenido');
+    c.innerHTML = Componentes.cargando('Cargando el roster…');
+    api('listarRosterCoordinadorPausas', {}).then(function (r) {
+      if (!r.ok) { c.innerHTML = Componentes.alerta(r.message || 'No se pudo cargar.', 'error'); return; }
+      var d = r.data;
+      if (d.sin_empresa || !d.roster || d.roster.length === 0) {
+        c.innerHTML = Componentes.tarjeta('<p class="sigso-ayuda">No hay trabajadores en el roster de tu(s) empresa(s).</p>');
+        return;
+      }
+      var opciones = '<option value="">Selecciona un trabajador…</option>' + d.roster.map(function (t) {
+        return '<option value="' + Componentes.escaparHtml(t.trabajador_id) + '">' + Componentes.escaparHtml(t.nombre) +
+          (t.area ? ' · ' + Componentes.escaparHtml(t.area) : '') + '</option>';
+      }).join('');
+      c.innerHTML =
+        Componentes.tarjeta('<label for="coord-sel-historial">Trabajador</label>' +
+          '<select id="coord-sel-historial">' + opciones + '</select>') +
+        '<div id="coord-historial-detalle"></div>';
+      document.getElementById('coord-sel-historial').addEventListener('change', function (ev) {
+        var id = ev.target.value;
+        var destino = document.getElementById('coord-historial-detalle');
+        if (!id) { destino.innerHTML = ''; return; }
+        destino.innerHTML = Componentes.cargando('Calculando el historial…');
+        api('getHistorialTrabajadorPausas', { trabajador_id: id }).then(function (r2) {
+          if (!r2.ok) { destino.innerHTML = Componentes.alerta(r2.message || 'No se pudo cargar.', 'error'); return; }
+          destino.innerHTML = renderHistorialTrabajador_(r2.data);
+        }).catch(function (e) { destino.innerHTML = Componentes.alerta((e && e.message) || 'Error de conexión.', 'error'); });
+      });
+    }).catch(function (e) { c.innerHTML = Componentes.alerta((e && e.message) || 'Error de conexión.', 'error'); });
+  }
+
+  var ESTADO_MIO_TEXTO = { participo: 'Participó', no_participo: 'No pudo', pendiente: 'Pendiente' };
+
+  function renderHistorialTrabajador_(d) {
+    var s = d.resumen;
+    var filas = d.detalle.map(function (f) {
+      return '<tr><td>' + Componentes.escaparHtml(f.fecha) + '</td><td>' +
+        Componentes.escaparHtml(ESTADO_MIO_TEXTO[f.mi_estado] || f.mi_estado) +
+        (f.motivo ? ' <em>(' + Componentes.escaparHtml(f.motivo) + ')</em>' : '') + '</td></tr>';
+    }).join('');
+    return Componentes.tarjeta(
+      '<h3>' + Componentes.escaparHtml(d.trabajador.nombre) + '</h3>' +
+      '<p class="sigso-ayuda">Periodo: ' + Componentes.escaparHtml(d.periodo.desde) + ' a ' + Componentes.escaparHtml(d.periodo.hasta) + '</p>' +
+      '<div class="sigso-kpis">' +
+      Componentes.kpi({ etiqueta: 'Participación', valor: (s.pct_participacion == null ? '—' : s.pct_participacion + '%') }) +
+      Componentes.kpi({ etiqueta: 'Racha actual', valor: s.racha_actual }) +
+      Componentes.kpi({ etiqueta: 'Racha máxima', valor: s.racha_maxima }) +
+      Componentes.kpi({ etiqueta: 'Justificaciones', valor: s.justificaciones }) +
+      Componentes.kpi({ etiqueta: 'Pendientes', valor: s.pendientes }) +
+      '</div>' +
+      (d.detalle.length === 0
+        ? '<p class="sigso-ayuda">Sin pausas resueltas en el periodo.</p>'
+        : '<table class="sigso-tabla"><thead><tr><th>Fecha</th><th>Estado</th></tr></thead><tbody>' + filas + '</tbody></table>'));
   }
 
   window.SigsoCoordinacion = { cargar: cargar };

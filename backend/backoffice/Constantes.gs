@@ -231,9 +231,14 @@ var COLUMNAS = {
   ],
   // Cada pausa programada + su ejecucion. estado: Programada, Recordatorio_enviado,
   // En_curso, Realizada, Cerrada, Suspendida, No_realizada, Cancelada.
+  // ultima_llamada_enviada / aviso_coordinador_enviado (mejora v6.0): flags
+  // del segundo aviso -- evitan reenviar el "ultima llamada" a los
+  // trabajadores o el aviso de inicio a la coordinadora mas de una vez por
+  // pausa (ver Pausas.enviarSegundosAvisosPausas).
   PAUSAS_PROGRAMADAS: [
     'pausa_id', 'empresa_id', 'fecha', 'hora_programada', 'hora_inicio_real',
-    'hora_fin', 'coordinador_email', 'estado', 'duracion_min', 'observaciones'
+    'hora_fin', 'coordinador_email', 'estado', 'duracion_min', 'observaciones',
+    'ultima_llamada_enviada', 'aviso_coordinador_enviado'
   ],
   // Registro de participacion por trabajador. estado: participo | no_participo.
   PAUSAS_ASISTENCIA: [

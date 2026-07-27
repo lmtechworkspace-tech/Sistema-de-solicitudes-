@@ -534,6 +534,97 @@ var Pausas = {
     return calcularReportePausas_(empresas, data && data.desde, data && data.hasta);
   },
 
+  // v6.0 (mejora #7): roster de las empresas que coordina (o TODAS, si es
+  // ADM) -- para el selector del historial por trabajador. Solo activos.
+  listarRosterCoordinador: function (data, contexto) {
+    var empresas = empresasQueCoordina_(contexto);
+    if (empresas.length === 0) return { sin_empresa: true, roster: [] };
+    var roster = leerFilasSeguro_(SHEETS.PAUSAS_TRABAJADORES).filter(function (t) {
+      return esVerdaderoPausas_(t.activo) && empresas.indexOf(String(t.empresa_id)) !== -1;
+    }).map(function (t) {
+      return { trabajador_id: t.trabajador_id, nombre: t.nombre || t.email, email: t.email, area: t.area || '', empresa_id: t.empresa_id };
+    }).sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre)); });
+    return { roster: roster };
+  },
+
+  // v6.0 (mejora #7): historial de un trabajador -- racha de participacion
+  // (para RRHH/prevencion: "¿quien participa siempre y quien nunca?"). Solo
+  // sobre pausas YA RESUELTAS (Realizada/Cerrada/No_realizada): las
+  // Programadas de hoy/futuro no cuentan como "falta" todavia. Acotado a la
+  // empresa que el coordinador coordina (o cualquiera, si es ADM).
+  getHistorialTrabajador: function (data, contexto) {
+    var trabajadorId = String(data.trabajador_id || '').trim();
+    if (!trabajadorId) {
+      return errorValidacion_('trabajador_id', 'Indica el trabajador.');
+    }
+    var trabajador = leerFilasSeguro_(SHEETS.PAUSAS_TRABAJADORES).filter(function (t) {
+      return String(t.trabajador_id) === trabajadorId;
+    })[0];
+    if (!trabajador) {
+      return errorValidacion_('trabajador_id', 'Trabajador no encontrado.');
+    }
+    var empresas = empresasQueCoordina_(contexto);
+    if (empresas.indexOf(String(trabajador.empresa_id)) === -1) {
+      return { _forbidden: true, message: 'No coordinas la empresa de este trabajador.' };
+    }
+
+    var hoy = claveDia_(new Date(), 'America/Santiago');
+    var hastaC = /^\d{4}-\d{2}-\d{2}$/.test(String(data.hasta || '')) ? data.hasta : hoy;
+    var desdeC = /^\d{4}-\d{2}-\d{2}$/.test(String(data.desde || '')) ? data.desde
+      : claveDia_(new Date(Date.now() - 90 * 24 * 3600 * 1000), 'America/Santiago');
+
+    var RESUELTOS = [ESTADOS_PAUSA.REALIZADA, ESTADOS_PAUSA.CERRADA, ESTADOS_PAUSA.NO_REALIZADA];
+    var pausas = leerProgramadasPausas_().filter(function (p) {
+      var f = claveFechaPausa_(p.fecha);
+      return String(p.empresa_id) === String(trabajador.empresa_id) && f >= desdeC && f <= hastaC &&
+        RESUELTOS.indexOf(p.estado) !== -1;
+    }).sort(function (a, b) { return claveFechaPausa_(a.fecha) < claveFechaPausa_(b.fecha) ? -1 : 1; });
+
+    var registrosPorPausa = {};
+    leerFilasSeguro_(SHEETS.PAUSAS_ASISTENCIA).forEach(function (r) {
+      if (String(r.email).toLowerCase() === String(trabajador.email).toLowerCase()) {
+        registrosPorPausa[String(r.pausa_id)] = r;
+      }
+    });
+
+    var detalle = pausas.map(function (p) {
+      var reg = registrosPorPausa[String(p.pausa_id)];
+      var miEstado = reg ? reg.estado : 'pendiente';
+      return {
+        fecha: claveFechaPausa_(p.fecha), estado_pausa: p.estado,
+        mi_estado: miEstado, motivo: (reg && reg.motivo) || ''
+      };
+    });
+
+    var participaciones = detalle.filter(function (d) { return d.mi_estado === 'participo'; }).length;
+    var justificaciones = detalle.filter(function (d) { return d.mi_estado === 'no_participo'; }).length;
+    var pendientes = detalle.length - participaciones - justificaciones;
+
+    // Racha actual: consecutivos 'participo' contando desde el mas reciente
+    // hacia atras. Racha maxima: la mas larga en toda la ventana.
+    var rachaActual = 0;
+    for (var i = detalle.length - 1; i >= 0; i--) {
+      if (detalle[i].mi_estado === 'participo') rachaActual++; else break;
+    }
+    var rachaMaxima = 0, corrida = 0;
+    detalle.forEach(function (d) {
+      corrida = d.mi_estado === 'participo' ? corrida + 1 : 0;
+      if (corrida > rachaMaxima) rachaMaxima = corrida;
+    });
+
+    return {
+      trabajador: { trabajador_id: trabajador.trabajador_id, nombre: trabajador.nombre || trabajador.email, email: trabajador.email, area: trabajador.area || '', empresa_id: trabajador.empresa_id },
+      periodo: { desde: desdeC, hasta: hastaC },
+      resumen: {
+        total_pausas: detalle.length, participaciones: participaciones, justificaciones: justificaciones,
+        pendientes: pendientes,
+        pct_participacion: detalle.length === 0 ? null : Math.round((participaciones / detalle.length) * 1000) / 10,
+        racha_actual: rachaActual, racha_maxima: rachaMaxima
+      },
+      detalle: detalle.slice().reverse() // mas reciente primero, para la UI
+    };
+  },
+
   // ---- Alertas (Fase P4): recordatorio + resumen diario --------------------
   // Las disparan triggers; devuelven un resumen de lo enviado. Idempotentes:
   // el recordatorio pasa la pausa a Recordatorio_enviado (no reenvia) y el
@@ -589,6 +680,68 @@ var Pausas = {
       avisadas++;
     });
     return { pausas_avisadas: avisadas, correos_enviados: enviados };
+  },
+
+  // v6.0 (mejora): SEGUNDO aviso, mas urgente, en el momento exacto en que
+  // llega la hora programada -- distinto del recordatorio de arriba (que sale
+  // min_anticipacion antes). Dos avisos separados porque van a publicos
+  // distintos:
+  //   - "Ultima llamada" a los trabajadores: la pausa de hoy YA es ahora.
+  //   - Aviso a la coordinadora: "es hora de iniciar la pausa" -- reduce el
+  //     olvido que hoy solo se resuelve al final del dia con el auto-cierre.
+  // Cada aviso se manda UNA vez por pausa (flags ultima_llamada_enviada /
+  // aviso_coordinador_enviado en PAUSAS_PROGRAMADAS). Solo aplica a pausas
+  // que todavia no arrancaron (Programada/Recordatorio_enviado) -- si ya esta
+  // En_curso, la coordinadora ya la inicio y no hace falta avisarle.
+  enviarSegundosAvisosPausas: function (opts) {
+    opts = opts || {};
+    var ahoraMin = (opts.ahoraMin === undefined || opts.ahoraMin === null)
+      ? minutosDelDiaSantiago_() : opts.ahoraMin;
+    var hoy = claveDia_(new Date(), 'America/Santiago');
+    var pausas = leerProgramadasPausas_().filter(function (p) {
+      return claveFechaPausa_(p.fecha) === hoy &&
+        (p.estado === ESTADOS_PAUSA.PROGRAMADA || p.estado === ESTADOS_PAUSA.RECORDATORIO_ENVIADO);
+    });
+    var ultimaLlamada = 0, avisoCoordinadora = 0;
+
+    pausas.forEach(function (pausa) {
+      var horaMin = horaAMinutosPausas_(pausa.hora_programada);
+      if (horaMin === null || ahoraMin < horaMin) return; // todavia no llega la hora
+
+      if (!esVerdaderoPausas_(pausa.ultima_llamada_enviada)) {
+        var asunto = 'SIGSO — ¡Es ahora! Tu pausa activa (' + (pausa.hora_programada || '') + ')';
+        destinatariosRecordatorio_(pausa.empresa_id).forEach(function (correo) {
+          var enlace = enlaceMagicoPausas_(correo, 'pausas');
+          var cuerpoHtml = plantillaCorreoHtml_('¡Es ahora tu pausa activa!',
+            '<p style="margin:0 0 ' + (enlace ? '16px' : '0') + ';">Tu pausa activa de hoy es <strong>ahora mismo</strong>. Cuando termines, registra tu participación.</p>' +
+            (enlace ? botonCorreoPausas_(enlace, 'Registrar mi participación') : ''));
+          var texto = 'Tu pausa activa de hoy es ahora mismo.' +
+            (enlace ? ' Registra tu participación aquí: ' + enlace : ' Registra tu participación en la plataforma.');
+          var r = enviarCorreo_(pausa.pausa_id + ':ultima_llamada', correo, 'PAUSA_ULTIMA_LLAMADA', asunto, texto, 720, { htmlBody: cuerpoHtml });
+          if (r.enviado) ultimaLlamada++;
+        });
+        actualizarFilaPorId_(SHEETS.PAUSAS_PROGRAMADAS, 'pausa_id', pausa.pausa_id, { ultima_llamada_enviada: true });
+      }
+
+      if (!esVerdaderoPausas_(pausa.aviso_coordinador_enviado)) {
+        var asuntoCoord = 'SIGSO — Inicia la pausa activa de ' + pausa.empresa_id;
+        coordinadorasDeEmpresa_(pausa.empresa_id).forEach(function (correo) {
+          var enlace = enlaceMagicoPausas_(correo, 'pausas_coordinacion');
+          var cuerpoHtml = plantillaCorreoHtml_('Es hora de iniciar la pausa',
+            '<p style="margin:0 0 ' + (enlace ? '16px' : '0') + ';">Ya llegó la hora programada (' +
+            escaparHtmlCorreo_(pausa.hora_programada || '') + ') de la pausa activa de <strong>' +
+            escaparHtmlCorreo_(pausa.empresa_id) + '</strong>. Entra a Coordinación de pausas para iniciarla.</p>' +
+            (enlace ? botonCorreoPausas_(enlace, 'Iniciar la pausa') : ''));
+          var texto = 'Ya llegó la hora de la pausa activa de ' + pausa.empresa_id + '. ' +
+            (enlace ? 'Inícala aquí: ' + enlace : 'Inícala desde Coordinación de pausas.');
+          var r = enviarCorreo_(pausa.pausa_id + ':aviso_coordinador', correo, 'PAUSA_AVISO_COORDINADOR', asuntoCoord, texto, 720, { htmlBody: cuerpoHtml });
+          if (r.enviado) avisoCoordinadora++;
+        });
+        actualizarFilaPorId_(SHEETS.PAUSAS_PROGRAMADAS, 'pausa_id', pausa.pausa_id, { aviso_coordinador_enviado: true });
+      }
+    });
+
+    return { ultima_llamada: ultimaLlamada, aviso_coordinadora: avisoCoordinadora };
   },
 
   // ---- Reportes de Gerencia + programados (Fase P5) ------------------------
@@ -1108,6 +1261,10 @@ function calcularReportePausas_(empresaIds, desde, hasta) {
     },
     motivos: motivosLista,
     por_area: porAreaLista,
+    // v6.0 (mejora #6): tendencia semanal, ventana FIJA (ultimas 8 semanas)
+    // independiente del filtro desde/hasta -- mismo criterio que la tendencia
+    // mensual de Gerencia (calcularTendenciaTemporal_ en Gerencia.gs).
+    tendencia: calcularTendenciaPausas_(empresaIds),
     pausas: pausas.map(function (p) {
       return {
         pausa_id: p.pausa_id, empresa_id: p.empresa_id, fecha: claveFechaPausa_(p.fecha),
@@ -1115,6 +1272,53 @@ function calcularReportePausas_(empresaIds, desde, hasta) {
       };
     }).sort(function (a, b) { return a.fecha < b.fecha ? 1 : -1; })
   };
+}
+
+// v6.0 (mejora #6): cumplimiento por semana (ultimas 8 semanas ISO, lunes a
+// domingo, America/Santiago) de las empresas dadas. Igual espiritu que
+// calcularTendenciaTemporal_ (Gerencia.gs) pero semanal en vez de mensual --
+// las pausas son diarias, un panorama mensual diluiria demasiado la senal.
+function calcularTendenciaPausas_(empresaIds) {
+  var SEMANAS_VENTANA = 8;
+  var setEmp = {};
+  empresaIds.forEach(function (e) { setEmp[String(e)] = true; });
+
+  var hoy = new Date();
+  var buckets = [];
+  for (var i = SEMANAS_VENTANA - 1; i >= 0; i--) {
+    var inicio = inicioSemanaIsoPausas_(new Date(hoy.getTime() - i * 7 * 24 * 3600 * 1000));
+    var fin = new Date(inicio.getTime() + 6 * 24 * 3600 * 1000);
+    buckets.push({
+      desde: claveDia_(inicio, 'America/Santiago'), hasta: claveDia_(fin, 'America/Santiago'),
+      etiqueta: 'sem. ' + claveDia_(inicio, 'America/Santiago').slice(5).replace('-', '/'),
+      realizadas: 0, no_realizadas: 0, resueltas: 0
+    });
+  }
+
+  var pausas = leerProgramadasPausas_().filter(function (p) { return setEmp[String(p.empresa_id)]; });
+  pausas.forEach(function (p) {
+    var f = claveFechaPausa_(p.fecha);
+    var bucket = buckets.filter(function (b) { return f >= b.desde && f <= b.hasta; })[0];
+    if (!bucket) return;
+    if (p.estado === ESTADOS_PAUSA.REALIZADA || p.estado === ESTADOS_PAUSA.CERRADA) {
+      bucket.realizadas++; bucket.resueltas++;
+    } else if (p.estado === ESTADOS_PAUSA.NO_REALIZADA) {
+      bucket.no_realizadas++; bucket.resueltas++;
+    }
+  });
+
+  return buckets.map(function (b) {
+    return {
+      etiqueta: b.etiqueta, realizadas: b.realizadas, no_realizadas: b.no_realizadas,
+      pct_cumplimiento: b.resueltas === 0 ? null : Math.round((b.realizadas / b.resueltas) * 1000) / 10
+    };
+  });
+}
+
+// Lunes (00:00) de la semana ISO de `fecha`, en America/Santiago.
+function inicioSemanaIsoPausas_(fecha) {
+  var dow = diaSemanaIsoPausas_(fecha, 'America/Santiago'); // 1=lunes..7=domingo
+  return new Date(fecha.getTime() - (dow - 1) * 24 * 3600 * 1000);
 }
 
 // --- alertas (Fase P4) -----------------------------------------------------

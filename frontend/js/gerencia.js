@@ -159,6 +159,10 @@
     });
   }
 
+  // v6.0 (mejora #6): pausas del ultimo reporte cargado, para el boton
+  // "Exportar CSV" (exporta exactamente lo que se esta viendo).
+  var pausasActuales = [];
+
   // v6.0 Fase P5: reporte de cumplimiento de pausas activas (todas las
   // empresas). Su propio endpoint (getReporteGerenciaPausas), no viene con el
   // panel principal. Se carga al entrar a la pestaña.
@@ -173,9 +177,12 @@
         cont.innerHTML = '<p class="sigso-ayuda">Aún no hay pausas activas configuradas.</p>';
         return;
       }
+      pausasActuales = d.pausas || [];
       var k = d.kpis;
       cont.innerHTML =
-        '<p class="sigso-ayuda">Periodo: ' + Componentes.escaparHtml(d.periodo.desde) + ' a ' + Componentes.escaparHtml(d.periodo.hasta) + '</p>' +
+        '<div class="sigso-admin-cab"><p class="sigso-ayuda" style="margin:0;">Periodo: ' +
+        Componentes.escaparHtml(d.periodo.desde) + ' a ' + Componentes.escaparHtml(d.periodo.hasta) + '</p>' +
+        '<button type="button" class="sigso-boton sigso-boton--secundario" id="btn-exportar-csv-pausas">Exportar CSV</button></div>' +
         '<div class="sigso-kpis">' +
         Componentes.kpi({ etiqueta: 'Cumplimiento', valor: (k.pct_cumplimiento == null ? '—' : k.pct_cumplimiento + '%') }) +
         Componentes.kpi({ etiqueta: 'Programadas', valor: k.programadas }) +
@@ -184,9 +191,60 @@
         Componentes.kpi({ etiqueta: 'Participaciones', valor: k.participaciones }) +
         Componentes.kpi({ etiqueta: 'Justificaciones', valor: k.justificaciones }) +
         '</div>' +
+        '<h4>Tendencia semanal</h4><div class="sigso-grafico-contenedor"><canvas id="ger-grafico-tendencia-pausas" height="90"></canvas></div>' +
         '<h4>Motivos de inasistencia</h4>' + tablaPausasGerencia_(d.motivos, 'motivo', 'cantidad', 'Sin justificaciones en el periodo.') +
         '<h4>Participación por área</h4>' + tablaPausasGerencia_(d.por_area, 'area', 'participaciones', 'Sin participaciones en el periodo.');
+      document.getElementById('btn-exportar-csv-pausas').addEventListener('click', exportarCsvPausas_);
+      renderTendenciaPausas_(d.tendencia);
     }).catch(function (e) { cont.innerHTML = Componentes.alerta((e && e.message) || 'Error de conexión.', 'error'); });
+  }
+
+  // v6.0 (mejora #6): mismo patron que renderTendencia_ (barras + linea de
+  // %), pero semanal en vez de mensual -- las pausas son diarias, el
+  // panorama mensual diluiria demasiado la senal.
+  function renderTendenciaPausas_(tendencia) {
+    var canvas = document.getElementById('ger-grafico-tendencia-pausas');
+    if (!canvas || !tendencia || !tendencia.length) return;
+    if (graficosGerencia.tendenciaPausas) graficosGerencia.tendenciaPausas.destroy();
+    graficosGerencia.tendenciaPausas = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: tendencia.map(function (m) { return m.etiqueta; }),
+        datasets: [
+          { type: 'bar', label: 'Realizadas', data: tendencia.map(function (m) { return m.realizadas; }), backgroundColor: '#1F7A55' },
+          { type: 'bar', label: 'No realizadas', data: tendencia.map(function (m) { return m.no_realizadas; }), backgroundColor: '#C0392B' },
+          {
+            type: 'line', label: '% cumplimiento', yAxisID: 'y1',
+            data: tendencia.map(function (m) { return m.pct_cumplimiento; }),
+            borderColor: '#E8622A', backgroundColor: '#E8622A', spanGaps: true
+          }
+        ]
+      },
+      options: {
+        scales: {
+          y: { beginAtZero: true, title: { display: true, text: 'Pausas' } },
+          y1: { beginAtZero: true, max: 100, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: '% cumplimiento' } }
+        }
+      }
+    });
+  }
+
+  // v6.0 (mejora #6): exporta exactamente el listado de pausas del periodo
+  // actual -- mismo patron que exportarCSV_ de Solicitudes (dashboard.js).
+  function exportarCsvPausas_() {
+    var encabezado = ['pausa_id', 'empresa_id', 'fecha', 'hora_programada', 'estado'];
+    var lineas = [encabezado.join(',')].concat(pausasActuales.map(function (p) {
+      return encabezado.map(function (campo) {
+        return '"' + String(p[campo] || '').replace(/"/g, '""') + '"';
+      }).join(',');
+    }));
+    var blob = new Blob([lineas.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    var enlace = document.createElement('a');
+    enlace.href = URL.createObjectURL(blob);
+    enlace.download = 'sigso-pausas-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(enlace);
+    enlace.click();
+    document.body.removeChild(enlace);
   }
 
   function tablaPausasGerencia_(filas, a, b, vacio) {

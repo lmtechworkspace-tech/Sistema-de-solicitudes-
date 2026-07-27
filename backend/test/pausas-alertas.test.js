@@ -135,6 +135,44 @@ test('recordatorio: incluye un enlace magico personal cuando el destinatario tie
   assert.ok(paraAna.opciones.htmlBody.indexOf('href="https://ejemplo.github.io/sigso/plataforma.html') === -1);
 });
 
+// --- v6.0 (mejora #5): segundo aviso -----------------------------------------
+
+test('segundo aviso: en la hora exacta manda "ultima llamada" al roster y avisa a la coordinadora', () => {
+  const ctx = load();
+  const res = ctx.Pausas.enviarSegundosAvisosPausas({ ahoraMin: 9 * 60 + 30 }); // 09:30 = hora_programada
+  assert.equal(res.ultima_llamada, 3); // 2 trabajadores + 1 coordinadora
+  assert.equal(res.aviso_coordinadora, 1);
+  assert.equal(ctx.MailApp._enviados.length, 4);
+  const p = ctx.Pausas.listarProgramadas({}, { rol: 'ADM', email: 'a@a.cl' })[0];
+  assert.equal(String(p.ultima_llamada_enviada), 'true');
+  assert.equal(String(p.aviso_coordinador_enviado), 'true');
+});
+
+test('segundo aviso: antes de la hora programada no manda nada', () => {
+  const ctx = load();
+  const res = ctx.Pausas.enviarSegundosAvisosPausas({ ahoraMin: 9 * 60 }); // 09:00, faltan 30 min
+  assert.equal(res.ultima_llamada, 0);
+  assert.equal(res.aviso_coordinadora, 0);
+  assert.equal(ctx.MailApp._enviados.length, 0);
+});
+
+test('segundo aviso: es idempotente (no reenvia una vez marcado)', () => {
+  const ctx = load();
+  ctx.Pausas.enviarSegundosAvisosPausas({ ahoraMin: 9 * 60 + 30 });
+  const antes = ctx.MailApp._enviados.length;
+  const res2 = ctx.Pausas.enviarSegundosAvisosPausas({ ahoraMin: 9 * 60 + 30 });
+  assert.equal(res2.ultima_llamada, 0);
+  assert.equal(res2.aviso_coordinadora, 0);
+  assert.equal(ctx.MailApp._enviados.length, antes);
+});
+
+test('segundo aviso: una pausa ya En_curso no recibe aviso a la coordinadora (ya la inicio)', () => {
+  const ctx = load({ estado: 'En_curso' });
+  const res = ctx.Pausas.enviarSegundosAvisosPausas({ ahoraMin: 9 * 60 + 30 });
+  assert.equal(res.ultima_llamada, 0);
+  assert.equal(res.aviso_coordinadora, 0);
+});
+
 test('recordatorio: sin sitio publico configurado, no arma enlace (correo sigue saliendo)', () => {
   const ctx = load({
     sitioPublico: '',

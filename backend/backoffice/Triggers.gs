@@ -19,7 +19,10 @@
 // v6.0 Fase P4: el recordatorio de pausa va en el bucket de 5 min para que
 // salga a tiempo (segun min_anticipacion de cada empresa) sin un trigger a una
 // hora fija que no serviria para varias horas de pausa.
-var FUNCIONES_TRIGGER_CADA_5_MIN = ['procesarColaDocumentosTrigger', 'procesarColaCorreoTrigger', 'refrescarCacheTrigger', 'enviarRecordatoriosPausasTrigger'];
+// v6.0 (mejora #5): segundo aviso (ultima llamada + avisar a la coordinadora)
+// va en el mismo bucket de 5 min -- necesita revisar seguido si ya llego la
+// hora exacta de cada pausa, igual que el recordatorio de arriba.
+var FUNCIONES_TRIGGER_CADA_5_MIN = ['procesarColaDocumentosTrigger', 'procesarColaCorreoTrigger', 'refrescarCacheTrigger', 'enviarRecordatoriosPausasTrigger', 'enviarSegundosAvisosPausasTrigger'];
 
 function configurarTriggers() {
   var existentes = ScriptApp.getProjectTriggers().map(function (t) {
@@ -209,6 +212,13 @@ function programarPausasDiariasTrigger() {
 // Pausas.enviarRecordatoriosPausas().
 function enviarRecordatoriosPausasTrigger() {
   return Pausas.enviarRecordatoriosPausas();
+}
+
+// v6.0 (mejora #5): segundo aviso -- "ultima llamada" a los trabajadores +
+// aviso a la coordinadora de que es hora de iniciar. Ver
+// Pausas.enviarSegundosAvisosPausas().
+function enviarSegundosAvisosPausasTrigger() {
+  return Pausas.enviarSegundosAvisosPausas();
 }
 
 // v6.0 Fase P4: resumen de fin de dia de las pausas. Ver

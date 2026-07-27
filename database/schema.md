@@ -606,6 +606,8 @@ que `schema-consistency.test.js` siga verde, mismo patrón que `JEFATURAS`. Ver
 | `estado` | string | Programada \| Recordatorio_enviado \| En_curso \| Realizada \| Cerrada \| Suspendida \| No_realizada \| Cancelada |
 | `duracion_min` | number | Duración real |
 | `observaciones` | string | Notas de la coordinadora |
+| `ultima_llamada_enviada` | boolean | Mejora v6.0: ya se mandó el segundo aviso ("última llamada") a los trabajadores |
+| `aviso_coordinador_enviado` | boolean | Mejora v6.0: ya se avisó a la coordinadora que es hora de iniciar la pausa |
 
 ### PAUSAS_ASISTENCIA — participación por trabajador
 

@@ -77,6 +77,9 @@ var BACKOFFICE_ACTIONS = {
   getPanelCoordinadorPausas: handleGetPanelCoordinadorPausas_,
   gestionarPausaCoordinador: handleGestionarPausaCoordinador_,
   getReporteCumplimientoPausas: handleGetReporteCumplimientoPausas_,
+  // v6.0 (mejora #7): roster + historial por trabajador.
+  listarRosterCoordinadorPausas: handleListarRosterCoordinadorPausas_,
+  getHistorialTrabajadorPausas: handleGetHistorialTrabajadorPausas_,
   // v6.0 Fase P5: reporte de pausas para el Panel de Gerencia (modulo 'gerencia').
   getReporteGerenciaPausas: handleGetReporteGerenciaPausas_
 };
@@ -143,6 +146,9 @@ var MODULO_POR_ACCION = {
   getPanelCoordinadorPausas: 'pausas_coordinacion',
   gestionarPausaCoordinador: 'pausas_coordinacion',
   getReporteCumplimientoPausas: 'pausas_coordinacion',
+  // v6.0 (mejora #7): roster + historial por trabajador (misma pestana de reportes).
+  listarRosterCoordinadorPausas: 'pausas_coordinacion',
+  getHistorialTrabajadorPausas: 'pausas_coordinacion',
   // v6.0 Fase P5: la pestana de pausas vive en el Panel de Gerencia.
   getReporteGerenciaPausas: 'gerencia'
   // ping: sin modulo -- cualquier sesion valida.
@@ -506,6 +512,15 @@ function handleGestionarPausaCoordinador_(data, contexto) {
 
 function handleGetReporteCumplimientoPausas_(data, contexto) {
   return responderResultado_(Pausas.getReporteCumplimiento(data, contexto));
+}
+
+// v6.0 (mejora #7): roster + historial por trabajador (racha de participacion).
+function handleListarRosterCoordinadorPausas_(data, contexto) {
+  return responderResultado_(Pausas.listarRosterCoordinador(data, contexto));
+}
+
+function handleGetHistorialTrabajadorPausas_(data, contexto) {
+  return responderResultado_(Pausas.getHistorialTrabajador(data, contexto));
 }
 
 // v6.0 Fase P5: reporte de pausas para el Panel de Gerencia.
