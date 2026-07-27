@@ -121,6 +121,16 @@ function configurarTriggers() {
     creados.push('enviarResumenPausasDiarioTrigger');
   }
 
+  // v6.0 (mejora): cierre automatico de pausas que quedaron abiertas al final
+  // del dia (la coordinadora nunca las abrio o las abrio y no las cerro).
+  // 23:00, despues del resumen diario (19:00) -- asi el resumen todavia
+  // refleja el estado real "en curso"/"pendiente" y este trigger resuelve lo
+  // que quedo colgado antes de que empiece el dia siguiente.
+  if (existentes.indexOf('cerrarPausasAbiertasDelDiaTrigger') === -1) {
+    ScriptApp.newTrigger('cerrarPausasAbiertasDelDiaTrigger').timeBased().atHour(23).everyDays(1).create();
+    creados.push('cerrarPausasAbiertasDelDiaTrigger');
+  }
+
   // v6.0 Fase P5: reporte periodico de pausas a Gerencia + prevencionistas
   // (correo HTML + PDF). Semanal lunes 08:00, mensual dia 1 a las 08:00.
   if (existentes.indexOf('enviarReporteSemanalPausasTrigger') === -1) {
@@ -215,6 +225,12 @@ function enviarReporteSemanalPausasTrigger() {
 
 function enviarReporteMensualPausasTrigger() {
   return Pausas.enviarReporteMensualPausas();
+}
+
+// v6.0 (mejora): cierre automatico de pausas abiertas al final del dia. Ver
+// Pausas.cerrarPausasAbiertasDelDia().
+function cerrarPausasAbiertasDelDiaTrigger() {
+  return Pausas.cerrarPausasAbiertasDelDia();
 }
 
 // A-07 (§16.3 v1.0): recorre las subsolicitudes abiertas y dispara A-08

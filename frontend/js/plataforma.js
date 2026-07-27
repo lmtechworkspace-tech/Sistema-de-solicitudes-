@@ -67,6 +67,10 @@
   }
 
   var sesion = { token: null, cuenta: null };
+  // v6.0 (Pausas P4.1): si el enlace magico traia "?modulo=", se guarda aca
+  // para abrir directo ese modulo al entrar al shell (en vez de "home"). Se
+  // consume una sola vez (se limpia despues de usarse).
+  var moduloObjetivoEnlace_ = null;
   var autocompletadoHecho = false;
   // v5.0 F4 (§6.1): recientes ya cargados por el resumen del Home -- el
   // command palette los reusa para buscar solicitudes, sin pedir nada
@@ -93,7 +97,12 @@
     // del navegador ni en una captura de pantalla compartida sin querer.
     var tokenDeEnlace = null;
     try {
-      tokenDeEnlace = new URLSearchParams(window.location.search).get('token');
+      var parametrosEnlace_ = new URLSearchParams(window.location.search);
+      tokenDeEnlace = parametrosEnlace_.get('token');
+      // v6.0 (Pausas P4.1): "?modulo=" opcional -- lo manda p.ej. el
+      // recordatorio de pausas para que el enlace abra directo ese modulo en
+      // vez de Home. Se lee ANTES de limpiar la URL (replaceState de abajo).
+      moduloObjetivoEnlace_ = parametrosEnlace_.get('modulo');
     } catch (err) { /* navegador viejo sin URLSearchParams */ }
     if (tokenDeEnlace) {
       // Descarta cualquier cuenta cacheada de una sesion PREVIA en este
@@ -265,7 +274,14 @@
     renderIdentidad_();
     renderNav_();
     renderHome_();
-    mostrarModulo_('home');
+    // v6.0 (Pausas P4.1): si el enlace magico pedia un modulo puntual (p.ej.
+    // el recordatorio de pausas) y la cuenta SI lo tiene, se abre directo ese
+    // modulo -- si no, se ignora en silencio y entra a Home como siempre. Se
+    // consume una sola vez (no debe reaplicarse en un logout/login posterior).
+    var moduloInicial = (moduloObjetivoEnlace_ && modulosDeLaCuenta_().indexOf(moduloObjetivoEnlace_) !== -1)
+      ? moduloObjetivoEnlace_ : 'home';
+    moduloObjetivoEnlace_ = null;
+    mostrarModulo_(moduloInicial);
     // v5.1: puente para que el formulario (formulario.js, compartido con
     // index.html) sepa que corre DENTRO del shell y navegue por modulos en
     // vez de saltar a estado.html (que sacaba al usuario del sistema).

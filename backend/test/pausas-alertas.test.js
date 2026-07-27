@@ -18,7 +18,9 @@ function hoyClave() {
 
 function load(opts) {
   opts = opts || {};
-  const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
+  var scriptProperties = { SIGSO_SHEET_ID: 'fake-sheet-id' };
+  if (opts.sitioPublico !== undefined) scriptProperties.SIGSO_SITIO_PUBLICO = opts.sitioPublico;
+  const ctx = loadBackofficeProject({ scriptProperties: scriptProperties });
   seedSheet(ctx, 'PAUSAS_CONFIG', ctx.COLUMNAS.PAUSAS_CONFIG, [
     ['HP', opts.hora || '09:30', '1,2,3,4,5', 10, opts.anticip === undefined ? 15 : opts.anticip, 80, 60, true]
   ]);
@@ -37,6 +39,8 @@ function load(opts) {
   seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS, [
     ['U1', 'Admin', 'admin@homepymes.cl', 'HP', 'ADM', true, '', 'sistema']
   ]);
+  seedSheet(ctx, 'CUENTAS_PORTAL', ctx.COLUMNAS.CUENTAS_PORTAL, opts.cuentasPortal || []);
+  seedSheet(ctx, 'SESIONES_PORTAL', ctx.COLUMNAS.SESIONES_PORTAL, []);
   return ctx;
 }
 
@@ -101,4 +105,49 @@ test('resumen diario: una pausa Cancelada no genera resumen', () => {
   const res = ctx.Pausas.enviarResumenDiarioPausas();
   assert.equal(res.pausas, 0);
   assert.equal(ctx.MailApp._enviados.length, 0);
+});
+
+// v6.0 (Pausas P4.1): el recordatorio incluye un enlace magico PERSONAL --
+// entra directo al modulo "Pausas activas" sin pedir clave -- cuando el
+// destinatario tiene cuenta del portal Y el sitio publico esta configurado.
+test('recordatorio: incluye un enlace magico personal cuando el destinatario tiene cuenta y hay sitio publico', () => {
+  const ctx = load({
+    sitioPublico: 'https://ejemplo.github.io/sigso/',
+    cuentasPortal: [
+      ['CTA-1', 'juan', 'Juan', '', 'hash', 'salt', JSON.stringify(['juan@hp.cl']), 'SOLICITANTE', JSON.stringify(['pausas']), 'HP', true, false, '', 'admin']
+    ]
+  });
+  const res = ctx.Pausas.enviarRecordatoriosPausas({ ahoraMin: 1439 });
+  assert.equal(res.correos_enviados, 3);
+  const paraJuan = ctx.MailApp._enviados.find((e) => e.destinatario === 'juan@hp.cl');
+  assert.ok(paraJuan.opciones.htmlBody.indexOf('href="https://ejemplo.github.io/sigso/plataforma.html?token=') !== -1);
+  // El HTML escapa "&" a "&amp;" (valido en HTML); el texto plano no.
+  assert.ok(paraJuan.opciones.htmlBody.indexOf('&amp;modulo=pausas') !== -1);
+  assert.ok(paraJuan.cuerpo.indexOf('https://ejemplo.github.io/sigso/plataforma.html?token=') !== -1);
+  assert.ok(paraJuan.cuerpo.indexOf('&modulo=pausas') !== -1);
+  // Se creo una sesion de enlace magico real (SESIONES_PORTAL).
+  const sesiones = ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('SESIONES_PORTAL')
+    .getDataRange().getValues().slice(1);
+  assert.equal(sesiones.length, 1);
+
+  // Ana no tiene cuenta del portal: su correo sale sin boton, sin romper nada.
+  const paraAna = ctx.MailApp._enviados.find((e) => e.destinatario === 'ana@hp.cl');
+  assert.ok(paraAna.opciones.htmlBody.indexOf('href="https://ejemplo.github.io/sigso/plataforma.html') === -1);
+});
+
+test('recordatorio: sin sitio publico configurado, no arma enlace (correo sigue saliendo)', () => {
+  const ctx = load({
+    sitioPublico: '',
+    cuentasPortal: [
+      ['CTA-1', 'juan', 'Juan', '', 'hash', 'salt', JSON.stringify(['juan@hp.cl']), 'SOLICITANTE', JSON.stringify(['pausas']), 'HP', true, false, '', 'admin']
+    ]
+  });
+  const res = ctx.Pausas.enviarRecordatoriosPausas({ ahoraMin: 1439 });
+  assert.equal(res.correos_enviados, 3);
+  const paraJuan = ctx.MailApp._enviados.find((e) => e.destinatario === 'juan@hp.cl');
+  assert.ok(paraJuan.opciones.htmlBody.indexOf('href="http') === -1);
+  // No crea sesiones de enlace magico si no hay a donde apuntar.
+  const sesiones = ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('SESIONES_PORTAL')
+    .getDataRange().getValues().slice(1);
+  assert.equal(sesiones.length, 0);
 });

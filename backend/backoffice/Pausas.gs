@@ -168,6 +168,99 @@ var Pausas = {
     }
   },
 
+  // Siembra el roster de una empresa desde las cuentas del portal ya
+  // existentes (CUENTAS_PORTAL): en vez de cargar trabajador por trabajador,
+  // toma cada correo de cada cuenta activa de esa empresa y crea la fila en
+  // PAUSAS_TRABAJADORES que falte (nunca duplica por correo). Deja area/cargo
+  // vacios o con el cargo de la cuenta -- el admin los ajusta despues fila por
+  // fila si hace falta. No toca CUENTAS_PORTAL ni modulos (eso es la otra
+  // accion, asignarModuloPausasRoster).
+  sembrarRosterDesdeCuentas: function (data, contexto) {
+    var g = guardaAdminPausas_(contexto, 'sembrar el roster de pausas');
+    if (g) return g;
+    var empresaId = String(data.empresa_id || '').trim();
+    if (!empresaId) {
+      return errorValidacion_('empresa_id', 'Indica la empresa a sembrar.');
+    }
+
+    var yaEnRoster = {};
+    leerFilasSeguro_(SHEETS.PAUSAS_TRABAJADORES).forEach(function (t) {
+      if (String(t.empresa_id) === empresaId) yaEnRoster[String(t.email).toLowerCase()] = true;
+    });
+
+    var creados = [];
+    var vistos = {};
+    leerFilasSeguro_(SHEETS.CUENTAS_PORTAL).forEach(function (cuenta) {
+      var activa = esVerdaderoPausas_(cuenta.activo);
+      if (!activa || String(cuenta.empresa_id) !== empresaId) return;
+      parsearListaPortal_(cuenta.emails).forEach(function (email) {
+        var correo = String(email || '').trim().toLowerCase();
+        if (!correo || yaEnRoster[correo] || vistos[correo]) return;
+        vistos[correo] = true;
+        var fila = {
+          trabajador_id: Utilities.getUuid(),
+          empresa_id: empresaId,
+          nombre: cuenta.nombre || email,
+          email: email,
+          area: '',
+          cargo: cuenta.cargo || '',
+          activo: true,
+          fecha_ingreso: new Date().toISOString()
+        };
+        agregarFila_(SHEETS.PAUSAS_TRABAJADORES, fila);
+        creados.push(fila);
+      });
+    });
+
+    registrarLogPausas_('', contexto, 'roster_sembrado', empresaId + ': ' + creados.length + ' nuevos desde cuentas');
+    return { empresa_id: empresaId, creados: creados.length };
+  },
+
+  // Da el modulo 'pausas' (registro) a la cuenta del portal de CADA trabajador
+  // ACTIVO del roster de una empresa cuya cuenta aun no lo tenga. No crea
+  // cuentas nuevas -- solo agrega el modulo a las que ya existen y coinciden
+  // por correo con el roster. Devuelve cuantas cuentas se actualizaron y
+  // cuantos correos del roster no tienen cuenta (para que el admin sepa a
+  // quien le falta crearsela).
+  asignarModuloPausasRoster: function (data, contexto) {
+    var g = guardaAdminPausas_(contexto, 'asignar el modulo de pausas');
+    if (g) return g;
+    var empresaId = String(data.empresa_id || '').trim();
+    if (!empresaId) {
+      return errorValidacion_('empresa_id', 'Indica la empresa.');
+    }
+
+    var correosRoster = {};
+    leerFilasSeguro_(SHEETS.PAUSAS_TRABAJADORES).forEach(function (t) {
+      if (esVerdaderoPausas_(t.activo) && String(t.empresa_id) === empresaId && t.email) {
+        correosRoster[String(t.email).toLowerCase()] = true;
+      }
+    });
+
+    var actualizadas = 0;
+    var correosConCuenta = {};
+    leerFilasSeguro_(SHEETS.CUENTAS_PORTAL).forEach(function (cuenta) {
+      if (!esVerdaderoPausas_(cuenta.activo)) return;
+      var emails = parsearListaPortal_(cuenta.emails);
+      var coincide = emails.some(function (e) {
+        var correo = String(e).toLowerCase();
+        if (correosRoster[correo]) correosConCuenta[correo] = true;
+        return correosRoster[correo];
+      });
+      if (!coincide) return;
+      var modulos = parsearListaPortal_(cuenta.modulos);
+      if (modulos.indexOf('pausas') === -1) {
+        modulos.push('pausas');
+        actualizarFilaPorId_(SHEETS.CUENTAS_PORTAL, 'cuenta_id', cuenta.cuenta_id, { modulos: JSON.stringify(modulos) });
+        actualizadas++;
+      }
+    });
+
+    var sinCuenta = Object.keys(correosRoster).filter(function (c) { return !correosConCuenta[c]; });
+    registrarLogPausas_('', contexto, 'modulo_pausas_masivo', empresaId + ': ' + actualizadas + ' cuentas actualizadas');
+    return { empresa_id: empresaId, cuentas_actualizadas: actualizadas, sin_cuenta: sinCuenta };
+  },
+
   // ---- PAUSAS_PROGRAMADAS: programacion + maquina de estados (Fase P1) ------
 
   // Idempotente: por cada empresa con config activa cuyos dias_semana incluyan
@@ -472,13 +565,22 @@ var Pausas = {
 
       var destinatarios = destinatariosRecordatorio_(config.empresa_id);
       var asunto = 'SIGSO — Recordatorio de pausa activa (' + (pausa.hora_programada || '') + ')';
-      var cuerpoHtml = plantillaCorreoHtml_('Pausa activa de hoy',
-        '<p style="margin:0 0 10px;">Hoy tienes tu <strong>pausa activa</strong> a las ' +
-        escaparHtmlCorreo_(pausa.hora_programada || '') + ' (' + escaparHtmlCorreo_(String(pausa.duracion_min || '')) + ' min).</p>' +
-        '<p style="margin:0;">Al terminar, entra a la plataforma y registra tu participación en el módulo <strong>Pausas activas</strong>.</p>',
-        { pie: 'Participar toma unos segundos: ✅ Participé o ✋ No pude participar.' });
-      var texto = 'Hoy tienes tu pausa activa a las ' + (pausa.hora_programada || '') + '. Registra tu participación en la plataforma (módulo Pausas activas).';
+      // v6.0 (Pausas P4.1): enlace magico PERSONAL por destinatario -- entra
+      // directo al modulo "Pausas activas" sin pedir clave, en vez de "entra a
+      // la plataforma" a secas. Si el correo no tiene cuenta del portal, o el
+      // sitio publico no esta configurado (Script Properties), se omite el
+      // boton sin romper el envio -- el correo sigue saliendo igual.
       destinatarios.forEach(function (correo) {
+        var enlace = enlaceMagicoPausas_(correo, 'pausas');
+        var cuerpoHtml = plantillaCorreoHtml_('Pausa activa de hoy',
+          '<p style="margin:0 0 10px;">Hoy tienes tu <strong>pausa activa</strong> a las ' +
+          escaparHtmlCorreo_(pausa.hora_programada || '') + ' (' + escaparHtmlCorreo_(String(pausa.duracion_min || '')) + ' min).</p>' +
+          '<p style="margin:0 0 ' + (enlace ? '16px' : '0') + ';">Al terminar, entra a la plataforma y registra tu participación en el módulo <strong>Pausas activas</strong>.</p>' +
+          (enlace ? botonCorreoPausas_(enlace, 'Registrar mi participación') : ''),
+          { pie: 'Participar toma unos segundos: ✅ Participé o ✋ No pude participar.' });
+        var texto = 'Hoy tienes tu pausa activa a las ' + (pausa.hora_programada || '') + '. ' +
+          (enlace ? 'Registra tu participación aquí: ' + enlace
+                  : 'Registra tu participación en la plataforma (módulo Pausas activas).');
         var r = enviarCorreo_(pausa.pausa_id, correo, 'PAUSA_RECORDATORIO', asunto, texto, 720, { htmlBody: cuerpoHtml });
         if (r.enviado) enviados++;
       });
@@ -540,6 +642,41 @@ var Pausas = {
       });
     });
     return { pausas: pausas.length, correos_enviados: enviados };
+  },
+
+  // Cierre automatico de fin de dia: si la pausa de hoy quedo sin cerrar (la
+  // coordinadora nunca la abrio, o la abrio pero olvido finalizarla), el
+  // sistema la resuelve solo para que el cumplimiento no quede "colgado".
+  //   - En_curso (se abrio pero nadie la finalizo) -> Realizada, con nota.
+  //   - Programada / Recordatorio_enviado (nunca se abrio) -> No_realizada,
+  //     con motivo de sistema.
+  // Corre por trigger nocturno (23:00); tambien puede llamarse a mano. No
+  // toca pausas Suspendida (esas las deja el ADM a proposito) ni las ya
+  // terminales.
+  cerrarPausasAbiertasDelDia: function () {
+    var hoy = claveDia_(new Date(), 'America/Santiago');
+    var pausas = leerProgramadasPausas_().filter(function (p) {
+      return claveFechaPausa_(p.fecha) === hoy &&
+        (p.estado === ESTADOS_PAUSA.EN_CURSO || p.estado === ESTADOS_PAUSA.PROGRAMADA ||
+          p.estado === ESTADOS_PAUSA.RECORDATORIO_ENVIADO);
+    });
+    var sistema = { email: 'sistema' };
+    var cerradas = 0;
+    pausas.forEach(function (p) {
+      if (p.estado === ESTADOS_PAUSA.EN_CURSO) {
+        transicionarPausa_(p, ESTADOS_PAUSA.REALIZADA, sistema, {
+          hora_fin: new Date().toISOString(),
+          observaciones: (p.observaciones ? p.observaciones + ' — ' : '') +
+            'Cerrada automáticamente al final del día (la coordinadora no la finalizó).'
+        });
+      } else {
+        transicionarPausa_(p, ESTADOS_PAUSA.NO_REALIZADA, sistema, {
+          observaciones: 'Cierre automático: la coordinadora no inició la pausa.'
+        });
+      }
+      cerradas++;
+    });
+    return { cerradas: cerradas };
   }
 };
 
@@ -981,6 +1118,33 @@ function calcularReportePausas_(empresaIds, desde, hasta) {
 }
 
 // --- alertas (Fase P4) -----------------------------------------------------
+
+// v6.0 (Pausas P4.1): enlace magico personal para el modulo de pausas. Busca
+// la cuenta del portal por correo (buscarCuentaPortalPorEmail_, en
+// CuentasPortal.gs) y, si existe y el sitio publico esta configurado
+// (Script Properties, ver Config.gs), crea una sesion de enlace magico
+// (crearTokenSesionPortal_) y arma la URL directo al modulo indicado. Si falta
+// cualquiera de las dos cosas, devuelve '' -- el correo sigue saliendo sin el
+// boton, nunca falla por esto.
+function enlaceMagicoPausas_(email, modulo) {
+  var sitio = getConfig_().sitioPublico;
+  if (!sitio) return '';
+  var cuenta = buscarCuentaPortalPorEmail_(email);
+  if (!cuenta) return '';
+  var token = crearTokenSesionPortal_(cuenta.cuenta_id);
+  var separador = sitio.slice(-1) === '/' ? '' : '/';
+  return sitio + separador + 'plataforma.html?token=' + token + '&modulo=' + (modulo || 'pausas');
+}
+
+// Boton de llamado a la accion para los correos de pausas -- mismo morado de
+// marca que plantillaCorreoHtml_, con estilos inline (los clientes de correo
+// ignoran CSS externo).
+function botonCorreoPausas_(url, texto) {
+  return '<p style="margin:0;"><a href="' + escaparHtmlCorreo_(url) + '" ' +
+    'style="display:inline-block;background:#6D5DF6;color:#ffffff;text-decoration:none;' +
+    'font-weight:bold;font-size:14px;padding:10px 18px;border-radius:6px;">' +
+    escaparHtmlCorreo_(texto) + '</a></p>';
+}
 
 // Correos a avisar en el recordatorio de una empresa: roster ACTIVO + las
 // coordinadoras ACTIVAS. Sin duplicados.

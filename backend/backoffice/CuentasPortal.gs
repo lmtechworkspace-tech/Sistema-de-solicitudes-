@@ -120,14 +120,38 @@ function generarEnlaceMagico_(data) {
   if (!activa) {
     return errorValidacion_('cuenta_id', 'La cuenta está desactivada -- actívala antes de generar el enlace.');
   }
+  var token = crearTokenSesionPortal_(data.cuenta_id);
+  return { cuenta_id: data.cuenta_id, usuario: cuenta.usuario, token: token };
+}
+
+// Nucleo reusable de un enlace magico: una fila nueva en SESIONES_PORTAL con
+// vigencia larga. Separado de generarEnlaceMagico_ (que ademas valida y
+// responde el shape de la accion del router) para que otros modulos -- p.ej.
+// Pausas.gs, para el boton del recordatorio -- puedan generar el MISMO tipo
+// de sesion sin duplicar la escritura a la hoja.
+function crearTokenSesionPortal_(cuentaId) {
   var token = Utilities.getUuid();
   agregarFila_(SHEETS.SESIONES_PORTAL, {
     token: token,
-    cuenta_id: data.cuenta_id,
+    cuenta_id: cuentaId,
     expira: new Date(Date.now() + HORAS_ENLACE_MAGICO * 3600 * 1000).toISOString(),
     creada: new Date().toISOString()
   });
-  return { cuenta_id: data.cuenta_id, usuario: cuenta.usuario, token: token };
+  return token;
+}
+
+// v6.0 (Pausas P4.1): resuelve la cuenta del portal por CORREO (no por
+// cuenta_id) -- lo que tiene un aviso automatico (recordatorio de pausas),
+// que solo conoce el email del trabajador. Solo cuentas ACTIVAS.
+function buscarCuentaPortalPorEmail_(email) {
+  var correo = String(email || '').trim().toLowerCase();
+  if (!correo) return null;
+  return leerCuentasPortal_().filter(function (c) {
+    var activa = c.activo === true || c.activo === 'TRUE' || c.activo === 1;
+    if (!activa) return false;
+    var emails = parsearListaPortal_(c.emails).map(function (e) { return String(e).toLowerCase(); });
+    return emails.indexOf(correo) !== -1;
+  })[0] || null;
 }
 
 function crearCuenta_(data, contexto) {

@@ -5568,14 +5568,64 @@ var Iconos = (function () {
       var filas = respuesta.data || [];
       cont.innerHTML =
         '<div class="sigso-admin-cab"><h3>Roster de trabajadores</h3>' +
+        '<span>' +
+        '<button type="button" class="sigso-boton sigso-boton--secundario" id="btn-sembrar-roster-pausas">' +
+        Iconos.svg('reloj', { tam: 16 }) + ' Sembrar desde cuentas</button> ' +
+        '<button type="button" class="sigso-boton sigso-boton--secundario" id="btn-modulo-masivo-pausas">' +
+        Iconos.svg('reloj', { tam: 16 }) + ' Dar módulo a todos</button> ' +
         '<button type="button" class="sigso-boton sigso-admin-cab__boton" id="btn-nuevo-trab-pausas">' +
-        Iconos.svg('nueva', { tam: 16 }) + ' Nuevo</button></div>' +
-        '<p class="sigso-ayuda">Quiénes participan de las pausas, con su área y cargo (para los reportes por área).</p>' +
+        Iconos.svg('nueva', { tam: 16 }) + ' Nuevo</button>' +
+        '</span></div>' +
+        '<p class="sigso-ayuda">Quiénes participan de las pausas, con su área y cargo (para los reportes por área). ' +
+        '"Sembrar desde cuentas" carga el roster de una empresa desde las cuentas de la plataforma que ya existen ' +
+        '(no crea cuentas nuevas). "Dar módulo a todos" agrega el acceso a "Pausas activas" a la cuenta de cada ' +
+        'trabajador del roster que ya tenga cuenta.</p>' +
         Componentes.tarjeta(tablaPausasRoster_(filas));
 
       document.getElementById('btn-nuevo-trab-pausas').addEventListener('click', abrirFormPausasTrabajador_);
+      document.getElementById('btn-sembrar-roster-pausas').addEventListener('click', function () {
+        abrirFormAccionMasivaPausas_('Sembrar roster desde cuentas', 'Sembrar', function (empresaId) {
+          llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'sembrarRosterPausas', { empresa_id: empresaId }).then(function (r) {
+            if (!r.ok) { Componentes.aviso({ tipo: 'error', texto: r.message || 'No se pudo sembrar el roster.' }); return; }
+            cerrarDrawerAdmin_();
+            Componentes.aviso({ tipo: 'exito', texto: r.data.creados + ' trabajador(es) nuevo(s) en el roster.' });
+            renderPausasRoster_();
+          });
+        });
+      });
+      document.getElementById('btn-modulo-masivo-pausas').addEventListener('click', function () {
+        abrirFormAccionMasivaPausas_('Dar módulo "Pausas activas" a todo el roster', 'Asignar', function (empresaId) {
+          llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'asignarModuloPausasRoster', { empresa_id: empresaId }).then(function (r) {
+            if (!r.ok) { Componentes.aviso({ tipo: 'error', texto: r.message || 'No se pudo asignar el módulo.' }); return; }
+            cerrarDrawerAdmin_();
+            var extra = (r.data.sin_cuenta && r.data.sin_cuenta.length)
+              ? ' ' + r.data.sin_cuenta.length + ' del roster no tienen cuenta todavía (créala primero en "Cuentas plataforma").'
+              : '';
+            Componentes.aviso({ tipo: 'exito', texto: r.data.cuentas_actualizadas + ' cuenta(s) actualizada(s).' + extra });
+          });
+        });
+      });
       wireAccionesPausas_('trab', 'gestionarPausasTrabajador', 'trabajador_id', renderPausasRoster_, 'trabajador');
     }).catch(mostrarErrorAdmin_);
+  }
+
+  // Mini-drawer compartido por las dos acciones masivas del roster: elegir la
+  // empresa y confirmar. `onConfirmar(empresaId)` hace la llamada real.
+  function abrirFormAccionMasivaPausas_(titulo, textoBoton, onConfirmar) {
+    var form = '<form id="form-pausas-masivo"><div class="sigso-admin-form">' +
+      Componentes.campoSelect({ dataCampo: 'empresa_id', label: 'Empresa', opciones: opcionesEmpresasPausas_() }) +
+      '</div>' + Componentes.boton({ tipo: 'submit', texto: textoBoton }) + '<div id="resultado-admin"></div></form>';
+    abrirDrawerAdmin_(titulo, form, function () {
+      document.getElementById('form-pausas-masivo').addEventListener('submit', function (evento) {
+        evento.preventDefault();
+        var empresaId = document.querySelector('#form-pausas-masivo [data-campo="empresa_id"]').value.trim();
+        if (!empresaId) {
+          document.getElementById('resultado-admin').innerHTML = Componentes.alerta('Elige una empresa.', 'error');
+          return;
+        }
+        onConfirmar(empresaId);
+      });
+    });
   }
 
   function tablaPausasRoster_(filas) {

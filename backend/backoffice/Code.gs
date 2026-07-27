@@ -62,6 +62,10 @@ var BACKOFFICE_ACTIONS = {
   gestionarPausasCoordinador: handleGestionarPausasCoordinador_,
   listarPausasTrabajadores: handleListarPausasTrabajadores_,
   gestionarPausasTrabajador: handleGestionarPausasTrabajador_,
+  // v6.0 (mejora): siembra/asignacion masiva -- evita cargar el roster y el
+  // modulo cuenta por cuenta.
+  sembrarRosterPausas: handleSembrarRosterPausas_,
+  asignarModuloPausasRoster: handleAsignarModuloPausasRoster_,
   // v6.0 Fase P1: programacion + maquina de estados de las pausas.
   listarPausasProgramadas: handleListarPausasProgramadas_,
   programarPausasDelDia: handleProgramarPausasDelDia_,
@@ -126,6 +130,8 @@ var MODULO_POR_ACCION = {
   gestionarPausasCoordinador: 'administracion',
   listarPausasTrabajadores: 'administracion',
   gestionarPausasTrabajador: 'administracion',
+  sembrarRosterPausas: 'administracion',
+  asignarModuloPausasRoster: 'administracion',
   listarPausasProgramadas: 'administracion',
   programarPausasDelDia: 'administracion',
   gestionarPausaProgramada: 'administracion',
@@ -456,6 +462,15 @@ function handleListarPausasTrabajadores_(data, contexto) {
 
 function handleGestionarPausasTrabajador_(data, contexto) {
   return responderResultado_(Pausas.gestionarTrabajador(data, contexto));
+}
+
+// v6.0 (mejora): siembra/asignacion masiva del roster.
+function handleSembrarRosterPausas_(data, contexto) {
+  return responderResultado_(Pausas.sembrarRosterDesdeCuentas(data, contexto));
+}
+
+function handleAsignarModuloPausasRoster_(data, contexto) {
+  return responderResultado_(Pausas.asignarModuloPausasRoster(data, contexto));
 }
 
 // v6.0 Fase P1: programacion + estados de las pausas.
