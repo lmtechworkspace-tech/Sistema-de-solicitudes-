@@ -270,6 +270,9 @@
     { valor: 'GERENCIA', texto: 'Gerencia' },
     // v4.2: "Gerencia acotado" al equipo del jefe (ver pestaña "Jefaturas").
     { valor: 'JEFATURA', texto: 'Jefatura' },
+    // v6.0: prevencionista (Amarlla, Camila, reemplazo) -- opera pausas y ve
+    // reportes. La plantilla de modulos incluye pausas + pausas_coordinacion.
+    { valor: 'COORDINADOR', texto: 'Coordinadora de pausas' },
     { valor: 'ADM', texto: 'Administrador' }
   ];
   var MODULOS_PORTAL = [
@@ -278,7 +281,11 @@
     { valor: 'bandeja', texto: 'Bandeja de trabajo' },
     { valor: 'gerencia', texto: 'Panel de gerencia' },
     { valor: 'jefatura', texto: 'Mi departamento (Jefatura)' },
-    { valor: 'administracion', texto: 'Administración' }
+    { valor: 'administracion', texto: 'Administración' },
+    // v6.0 (modulo Pausas Activas): 'pausas' = registrar participacion (todo
+    // el personal); 'pausas_coordinacion' = operar + reportes (coordinadoras).
+    { valor: 'pausas', texto: 'Pausas activas (registro)' },
+    { valor: 'pausas_coordinacion', texto: 'Coordinación de pausas' }
   ];
 
   function formularioCuentaPortal_() {
