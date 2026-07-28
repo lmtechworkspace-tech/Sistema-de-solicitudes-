@@ -154,10 +154,16 @@
         <div class="sigso-card">
           <h3>Solicitudes recientes</h3>
           <div class="sigso-campo">
-            <input type="text" id="buscar-recientes" placeholder="Buscar por N&deg; de solicitud, solicitante, correo, empresa o m&oacute;dulo...">
-            <p class="sigso-ayuda">Filtra sobre lo ya cargado al escribir. Presiona "Actualizar" arriba para buscar por solicitante en TODAS las solicitudes, no solo las recientes.</p>
+            <input type="text" id="buscar-recientes" placeholder="Buscar por t&iacute;tulo, N&deg; de solicitud, solicitante, correo, empresa o m&oacute;dulo...">
+            <p class="sigso-ayuda">Filtra al escribir sobre lo ya cargado. Presiona "Actualizar" arriba para aplicar la misma b&uacute;squeda sobre TODAS las solicitudes, no solo las m&aacute;s urgentes.</p>
           </div>
           <button type="button" class="sigso-boton--secundario" id="btn-exportar-csv">Exportar CSV</button>
+          <!-- v6.1 (Fase 3): barra de filtros activos. Va pegada a la lista
+               (no arriba con los selectores) porque describe LO QUE SE ESTA
+               VIENDO: cuantos resultados hay y por que. Se rellena desde
+               dashboard.js (renderChipsFiltros_) y queda vacia si no hay
+               ningun filtro puesto. -->
+          <div id="chips-filtros" class="sigso-chips-filtros"></div>
           <div id="lista-recientes"></div>
         </div>
       </div>

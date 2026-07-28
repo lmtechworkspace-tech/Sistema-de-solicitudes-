@@ -291,10 +291,24 @@ button.sigso-kpi {
   background: var(--gris-claro);
 }
 
+/* v6.1 (revision UX): foco visible. La fila es role="button" y navegable con
+   Tab; sin este anillo, quien navega por teclado no sabria donde esta parado
+   (el hover solo existe para el mouse). */
+.sigso-fila-reciente:focus-visible {
+  outline: 2px solid var(--primario);
+  outline-offset: -2px;
+  background: var(--gris-claro);
+}
+
 .sigso-fila-reciente__principal {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  /* v6.1: la fila ya lleva prioridad + ID + estado + situacion + chips, y en
+     movil (375 px) el ultimo chip desbordaba la pagina entera. Con wrap baja
+     de linea en vez de generar scroll horizontal. */
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
 }
 
 .sigso-fila-reciente__meta {
@@ -305,14 +319,201 @@ button.sigso-kpi {
 
 /* Fase 10.2: titulo del item (lo que el solicitante escribio) -- entre el
    encabezado (ID/estado) y la meta (empresa/plataforma/responsable). */
+/* v6.2 (F1): el titulo es AHORA el elemento dominante de la fila (antes iba
+   en segunda linea, en texto normal, debajo de un ID en negrita). Se le da
+   peso y tamano por encima de todo lo demas; el ID pasa a la linea de meta,
+   en mono y gris, para poder cazarlo pero sin competir. margin-right empuja
+   los badges al extremo opuesto cuando hay espacio. */
 .sigso-fila-reciente__titulo {
-  font-size: 0.9rem;
-  margin-top: 0.15rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--texto);
+  margin-right: auto;
 }
 
 .sigso-fila-reciente__mas-items {
   color: var(--gris-medio);
   font-weight: 400;
+}
+
+/* v6.1 (Fase 2): SITUACION del plazo -- eje distinto del ESTADO del flujo.
+   Jerarquia deliberada: rojo = atender ya; ambar = atender antes de que se
+   rompa; verde intencionalmente apagado (borde, sin relleno) para que "todo
+   bien" no compita por atencion con lo que si la necesita. El texto siempre
+   acompana al color (nunca color como unico indicador). */
+.sigso-situacion {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+/* Se usan los tokens SEMANTICOS del Design System (--critico / --alerta /
+   --ok), que tokens.css declara como "unica fuente de color fuerte de
+   estado". OJO: NO sirven --rojo/--naranja: main.css alias --naranja al
+   primario indigo a proposito (es el color de ACCION, no de estado), asi que
+   un chip de riesgo con var(--naranja) sale violeta. */
+.sigso-situacion--critico {
+  background: var(--critico);
+  color: var(--texto-invertido);
+}
+
+.sigso-situacion--riesgo {
+  background: var(--alerta);
+  color: var(--texto-invertido);
+}
+
+.sigso-situacion--ok {
+  background: transparent;
+  color: var(--texto-3);
+  border-color: var(--borde);
+  font-weight: 400;
+}
+
+/* v6.1: plazo en lenguaje humano ("vence mañana"), con la fecha exacta en el
+   title -- dato secundario, no compite con el titulo de la solicitud. */
+.sigso-fila-reciente__plazo {
+  font-size: 0.78rem;
+  color: var(--gris-medio);
+  margin-top: 0.15rem;
+}
+
+/* v6.1 (Fase 4): archivos que NO son imagenes. Una fila por archivo con
+   icono + nombre + metadata (formato/peso/fecha) + accion. Antes salian como
+   un enlace suelto dentro de la galeria de miniaturas, donde una "miniatura"
+   de PDF no aporta nada y la metadata que ARCHIVOS ya guardaba no se veia. */
+.sigso-archivos {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.sigso-archivos__item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  background: var(--superficie);
+}
+
+.sigso-archivos__icono {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--texto-3);
+}
+
+/* min-width:0 para que un nombre largo pueda truncarse en vez de estirar la
+   fila (y con ella la columna del detalle). */
+.sigso-archivos__datos {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.sigso-archivos__nombre {
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sigso-archivos__meta {
+  font-size: 0.75rem;
+  color: var(--texto-3);
+}
+
+.sigso-archivos__accion {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+/* v6.1 (Fase 3): barra de filtros activos. Una sola linea que envuelve, con
+   el conteo primero ("¿cuantas veo?") y despues el por que ("¿por cual
+   filtro?"). Deliberadamente sobria: los chips son de UI, no de estado, asi
+   que no compiten con los colores de situacion/prioridad de las filas. */
+.sigso-chips-filtros {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.75rem 0 0.25rem;
+}
+
+.sigso-chips-filtros:empty {
+  display: none;
+}
+
+.sigso-chips-filtros__conteo {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--texto-2);
+  margin-right: 0.25rem;
+}
+
+.sigso-chip-filtro {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font: inherit;
+  font-size: 0.76rem;
+  line-height: 1.3;
+  color: var(--texto-2);
+  background: var(--superficie-2);
+  border: 1px solid var(--borde);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+}
+
+.sigso-chip-filtro:hover,
+.sigso-chip-filtro:focus-visible {
+  border-color: var(--borde-fuerte);
+  color: var(--texto);
+}
+
+.sigso-chip-filtro__x {
+  font-size: 0.95rem;
+  line-height: 1;
+  color: var(--texto-3);
+}
+
+.sigso-chip-filtro:hover .sigso-chip-filtro__x {
+  color: var(--critico);
+}
+
+.sigso-chips-filtros__limpiar {
+  font: inherit;
+  font-size: 0.76rem;
+  background: none;
+  border: none;
+  padding: 0.15rem 0.25rem;
+  color: var(--primario);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* v6.1: alcance real de la lista, para no dar a entender que la bandeja
+   muestra todas las solicitudes que existen. */
+.sigso-nota-alcance {
+  font-size: 0.78rem;
+  color: var(--gris-medio);
+  margin: 0.75rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--borde);
 }
 
 .sigso-chip-sin-movimiento {
@@ -338,10 +539,16 @@ button.sigso-kpi {
 
 /* Fase 10.2: clasificacion "que necesita de mi" -- borde de color a la
    izquierda del titulo de grupo, mismo espiritu que los KPI de alerta. */
-.sigso-grupo__titulo--critica { border-left: 3px solid var(--rojo, #C2362B); padding-left: 0.5rem; }
-.sigso-grupo__titulo--esperando-mio { border-left: 3px solid var(--naranja, #D97706); padding-left: 0.5rem; }
-.sigso-grupo__titulo--en-curso { border-left: 3px solid var(--azul, #2563EB); padding-left: 0.5rem; }
-.sigso-grupo__titulo--esperando-solicitante { border-left: 3px solid var(--gris-medio); padding-left: 0.5rem; }
+/* v6.1: escala de atencion, de mas a menos urgente:
+     critico (rojo) > alerta (ambar) > p3 (amarillo) > info (azul) > gris.
+   Con los tokens SEMANTICOS, no con los alias historicos: --rojo no existe y
+   --naranja/--azul apuntan al primario indigo (son colores de accion, ver
+   main.css), asi que las tres primeras salian del mismo violeta. */
+.sigso-grupo__titulo--critica { border-left: 3px solid var(--critico); padding-left: 0.5rem; }
+.sigso-grupo__titulo--riesgo { border-left: 3px solid var(--alerta); padding-left: 0.5rem; }
+.sigso-grupo__titulo--esperando-mio { border-left: 3px solid var(--p3); padding-left: 0.5rem; }
+.sigso-grupo__titulo--en-curso { border-left: 3px solid var(--info); padding-left: 0.5rem; }
+.sigso-grupo__titulo--esperando-solicitante { border-left: 3px solid var(--texto-3); padding-left: 0.5rem; }
 
 .sigso-grupo-cerradas {
   margin-top: 1rem;
@@ -480,6 +687,11 @@ button.sigso-kpi {
   border-radius: 8px;
   padding: 1.25rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  /* v6.1 (revision UX): sin esto, las columnas del grid no pueden encoger por
+     debajo del min-content de lo que contienen (min-width:auto es el default
+     de un track 1fr). En movil eso hacia que la ficha midiera ~509 px en un
+     viewport de 375 y TODO el detalle tuviera scroll horizontal. */
+  min-width: 0;
 }
 
 .sigso-detalle-ficha {
@@ -517,11 +729,46 @@ button.sigso-kpi {
 }
 
 /* H (rediseno detalle): resumen visible en la cabecera del item aunque
-   este colapsado (fecha comprometida / responsable). */
+   este colapsado. v6.2 (F3): pasa a ser una SEGUNDA LINEA con campos
+   rotulados, separada de la linea de chips -- asi "Fecha comprometida" se lee
+   como el dato que es y no como otro estado mas. */
+.sigso-acordeon-item__chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.sigso-acordeon-item__titulo {
+  margin-right: auto;
+}
+
 .sigso-acordeon-item__extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
   font-weight: 400;
-  color: var(--gris-medio);
-  font-size: 0.85rem;
+  color: var(--texto-3);
+  font-size: 0.78rem;
+  margin-top: 0.35rem;
+}
+
+/* El rotulo dice de QUE dato se trata; el valor va al lado, sin adorno. */
+.sigso-acordeon-item__rotulo {
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.68rem;
+}
+
+.sigso-acordeon-item__campo {
+  color: var(--texto-2);
+}
+
+/* "sin definir" es una ausencia, no un estado: se muestra apagado y en
+   cursiva, nunca como una pastilla de color que compita con los chips. */
+.sigso-sin-comprometer {
+  font-style: italic;
+  color: var(--texto-3);
 }
 
 /* H: el acordeon de items usa las mismas clases que formulario.css

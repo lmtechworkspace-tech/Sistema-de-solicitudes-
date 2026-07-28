@@ -95,23 +95,59 @@
       return Componentes.badge(codigo, codigo);
     },
 
-    // v4.0 Frente 4: reemplaza el semaforo de emoji (🔴🟡🟢) y el texto suelto
-    // "Vence en Xh" -- una barra que se llena con la urgencia se escanea en
-    // una fila de tabla mas rapido que leer un numero. horas null/undefined
-    // (item sin SLA, ej. atencion directa) no renderiza nada.
-    barraSla: function (horas) {
-      if (horas === null || horas === undefined) return '';
-      var vencido = horas < 0;
-      var nivel = vencido ? 'critico' : (horas < 24 ? 'alerta' : 'ok');
-      // Ventana de referencia de 72h: mas alla de eso ya no aporta escanear
-      // el detalle, solo importa que esta "sano".
-      var pct = vencido ? 100 : Math.max(8, Math.min(100, Math.round(100 - (horas / 72) * 100)));
-      var texto = vencido ? 'Fuera de plazo' : ('Vence en ' + horas + 'h');
-      return '<span class="sigso-sla sigso-sla--' + nivel + '" title="' + escaparHtml(texto) + '">' +
-        '<span class="sigso-sla__barra"><span class="sigso-sla__relleno" style="width:' + pct + '%"></span></span>' +
-        '<span class="sigso-sla__texto">' + escaparHtml(texto) + '</span>' +
-        '</span>';
+    // v6.1 (Fase 2 del rediseno de bandeja): SITUACION del plazo, un eje
+    // aparte del ESTADO del flujo. Antes los dos se mezclaban en la misma
+    // fila y no se podia expresar "Terminada + Fuera de plazo" -- que es un
+    // caso real y frecuente: el desarrollo se entrego, pero tarde.
+    //
+    // Jerarquia visual pedida: rojo = atender ya, ambar = atender antes de
+    // que se rompa, verde = normal. El verde va deliberadamente apagado
+    // (sin relleno) para que "todo bien" no compita por atencion con lo que
+    // si la necesita.
+    //
+    // codigo: 'FUERA_DE_PLAZO' | 'EN_RIESGO' | 'EN_PLAZO' | null. null (sin
+    // SLA vigente: cerrada, P5, atencion directa) no renderiza nada.
+    chipSituacion: function (codigo, horasRestantes) {
+      var TEXTO = { FUERA_DE_PLAZO: 'Fuera de plazo', EN_RIESGO: 'En riesgo', EN_PLAZO: 'En plazo' };
+      var CLASE = { FUERA_DE_PLAZO: 'critico', EN_RIESGO: 'riesgo', EN_PLAZO: 'ok' };
+      if (!codigo || !TEXTO[codigo]) return '';
+      var relativo = Componentes.tiempoRelativoSla(horasRestantes);
+      return '<span class="sigso-situacion sigso-situacion--' + CLASE[codigo] + '"' +
+        (relativo ? ' title="' + escaparHtml(relativo) + '"' : '') + '>' +
+        escaparHtml(TEXTO[codigo]) + '</span>';
     },
+
+    // v6.1: "vence en 3 horas" / "vence mañana" / "venció hace 2 días" en vez
+    // de "Vence en 76.5h" -- un plazo se entiende sin hacer la division
+    // mental. Recibe HORAS HABILES restantes (negativo = ya vencido), que es
+    // la unidad en la que el backend mide el SLA.
+    //
+    // La conversion a dias usa la jornada de 9 h (misma que Utils.gs y
+    // CUMPLIMIENTO_HORAS_JORNADA): "3 dias" son 3 dias de trabajo, no 72 h de
+    // reloj -- si no, un plazo del viernes se leeria como "vence en 1 dia".
+    tiempoRelativoSla: function (horas) {
+      if (horas === null || horas === undefined || isNaN(horas)) return '';
+      var JORNADA = 9;
+      var vencido = horas < 0;
+      var abs = Math.abs(horas);
+      var verbo = vencido ? 'Venció hace ' : 'Vence en ';
+      if (abs < 1) {
+        return vencido ? 'Venció hace menos de 1 hora' : 'Vence en menos de 1 hora';
+      }
+      if (abs < JORNADA) {
+        var h = Math.round(abs);
+        return verbo + h + (h === 1 ? ' hora' : ' horas');
+      }
+      var dias = Math.round(abs / JORNADA);
+      // "mañana" solo tiene sentido a futuro; hacia atras "hace 1 dia".
+      if (dias === 1) return vencido ? 'Venció hace 1 día' : 'Vence mañana';
+      return verbo + dias + ' días';
+    },
+
+    // v6.1: se retiro barraSla (v4.0 Frente 4). La reemplazan chipSituacion
+    // (el veredicto, con color y umbral A-08 real -- la barra usaba su propio
+    // "< 24 h = alerta", que no coincidia con el 80% del SLA que usa el resto
+    // del sistema) y tiempoRelativoSla (el cuando, en lenguaje humano).
 
     // v4.0 Frente 4: barra de flujo S01..S09 en la ficha del detalle -- de un
     // vistazo se ve cuanto camino lleva la solicitud, no solo el estado
@@ -189,11 +225,46 @@
         var envoltorio = (opts.editable || !esImagen || !src)
           ? '<a href="' + escaparHtml(src) + '" target="_blank" rel="noopener">' + contenidoImg + '</a>'
           : '<button type="button" class="sigso-galeria__ver">' + contenidoImg + '</button>';
-        return '<div class="sigso-galeria__item">' + quitar +
+        // v6.1 (Fase 4): si el llamador pasa `meta` (tipo/peso/fecha), va al
+        // title del item -- disponible al pasar el mouse, sin robarle espacio
+        // a la miniatura, que es lo que de verdad identifica una captura.
+        var tituloMeta = img.meta ? textoMetaArchivo_(img.meta, nombre) : '';
+        return '<div class="sigso-galeria__item"' +
+          (tituloMeta ? ' title="' + escaparHtml(tituloMeta) + '"' : '') + '>' + quitar +
           envoltorio +
           descripcionHtml +
           '</div>';
       }).join('') + '</div>';
+    },
+
+    // v6.1 (Fase 4): lista de archivos con su metadata. La galeria de arriba
+    // es lo correcto para CAPTURAS (una miniatura se reconoce de un vistazo),
+    // pero para un PDF/Word/Excel la miniatura no dice nada: hasta v6.0 esos
+    // archivos se veian como un enlace pelado, sin formato, peso ni fecha,
+    // aunque ARCHIVOS ya guardaba las tres cosas (tipo_mime, tamano_bytes,
+    // fecha_subida). Esto solo las MUESTRA -- no cambia como se guardan ni
+    // agrega categorias nuevas.
+    //
+    // Nota: ARCHIVOS no tiene columna de "subido por", asi que ese dato no se
+    // muestra (no se inventa a partir del solicitante, que no es lo mismo).
+    listaArchivos: function (archivos) {
+      if (!archivos || archivos.length === 0) return '';
+      return '<ul class="sigso-archivos">' + archivos.map(function (a) {
+        var nombre = a.nombre || a.nombre_original || 'Archivo';
+        var meta = textoMetaArchivo_(a, nombre);
+        var url = escaparHtml(a.url || '');
+        return '<li class="sigso-archivos__item">' +
+          '<span class="sigso-archivos__icono" aria-hidden="true">' + ico_('documento', 18) + '</span>' +
+          '<span class="sigso-archivos__datos">' +
+          '<span class="sigso-archivos__nombre">' + escaparHtml(nombre) + '</span>' +
+          (meta ? '<span class="sigso-archivos__meta">' + escaparHtml(meta) + '</span>' : '') +
+          '</span>' +
+          (url
+            ? '<a class="sigso-archivos__accion" href="' + url + '" target="_blank" rel="noopener">' +
+              ico_('descargar', 14) + ' Abrir</a>'
+            : '') +
+          '</li>';
+      }).join('') + '</ul>';
     },
 
     cargando: function (texto) {
@@ -442,6 +513,64 @@
   function ico_(nombre, tam) {
     if (!nombre || typeof Iconos === 'undefined') return '';
     return Iconos.svg(nombre, { tam: tam || 16 });
+  }
+
+  // --- v6.1 (Fase 4): formateo de metadata de archivos ------------------
+
+  // Formato "humano" a partir del MIME real (detectado por firma de bytes en
+  // Drive.gs, no por la extension declarada). Si el MIME viene vacio se cae a
+  // la extension del nombre, que es lo unico que queda.
+  var FORMATO_POR_MIME = {
+    'application/pdf': 'PDF',
+    'application/msword': 'Word',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word',
+    'application/vnd.ms-excel': 'Excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel',
+    'image/png': 'PNG',
+    'image/jpeg': 'JPG',
+    'image/gif': 'GIF',
+    'image/webp': 'WEBP'
+  };
+
+  function formatoArchivo_(tipoMime, nombre) {
+    if (tipoMime && FORMATO_POR_MIME[tipoMime]) return FORMATO_POR_MIME[tipoMime];
+    var punto = String(nombre || '').lastIndexOf('.');
+    if (punto > -1 && punto < String(nombre).length - 1) {
+      return String(nombre).slice(punto + 1).toUpperCase();
+    }
+    return '';
+  }
+
+  // Bytes -> "2,4 MB". Coma decimal (es-CL) y solo un decimal: el peso exacto
+  // no aporta, lo que importa es si "pesa mucho" antes de abrirlo.
+  function pesoLegible_(bytes) {
+    var n = Number(bytes);
+    if (!n || isNaN(n) || n <= 0) return '';
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return Math.round(n / 1024) + ' KB';
+    return (Math.round((n / (1024 * 1024)) * 10) / 10).toString().replace('.', ',') + ' MB';
+  }
+
+  function fechaSubidaCorta_(valor) {
+    if (!valor) return '';
+    var fecha = new Date(valor);
+    if (isNaN(fecha.getTime())) return '';
+    return fecha.toLocaleDateString('es-CL');
+  }
+
+  // "PDF · 2,4 MB · Subido el 27-07-2026". Cada parte se omite si el dato no
+  // viene, en vez de imprimir "undefined" o un separador huerfano -- un
+  // Backoffice desplegado antes de que ARCHIVOS guardara alguna de estas
+  // columnas seguiria mostrando lo que si tenga.
+  function textoMetaArchivo_(archivo, nombre) {
+    var partes = [];
+    var formato = formatoArchivo_(archivo.tipo_mime, nombre);
+    if (formato) partes.push(formato);
+    var peso = pesoLegible_(archivo.tamano_bytes);
+    if (peso) partes.push(peso);
+    var subida = fechaSubidaCorta_(archivo.fecha_subida);
+    if (subida) partes.push('Subido el ' + subida);
+    return partes.join(' · ');
   }
 
   function contenedorAvisos_() {

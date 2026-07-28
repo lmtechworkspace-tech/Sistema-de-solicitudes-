@@ -105,7 +105,21 @@ function construirContexto() {
   seedSheet(ctx, 'PAUSAS_ASISTENCIA', ctx.COLUMNAS.PAUSAS_ASISTENCIA);
   seedSheet(ctx, 'PAUSAS_LOG', ctx.COLUMNAS.PAUSAS_LOG);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
-  seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);
+  // v6.1 (Fase 4): DOCUMENTOS demo (las capturas ya las siembra
+  // sembrarSolicitudesDemo_ mas abajo). Hacen falta para ver la lista de
+  // archivos con metadata -- formato, peso y fecha --, que es justo lo que un
+  // PDF/Excel necesita y una miniatura no puede mostrar.
+  seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS, [
+    ['ARC-DEMO-1', 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-01',
+      'FORMATO REGISTRO CAPACITACION ACTUAL.pdf', 'https://drive.google.com/file/d/demo1/view',
+      'application/pdf', 2516582, new Date().toISOString()],
+    // Adjunto a nivel de SOLICITUD (sin subsolicitud_id): sale en la ficha
+    // izquierda, no dentro del item.
+    ['ARC-DEMO-2', 'SOL-2026-HP-0001', '',
+      'Planilla horas estimadas.xlsx', 'https://drive.google.com/file/d/demo2/view',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 45120,
+      new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString()]
+  ]);
   seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
   seedSheet(ctx, 'LOG_SISTEMA', ctx.COLUMNAS.LOG_SISTEMA);
   seedSheet(ctx, 'CONFIG_NOTIFICACIONES', ctx.COLUMNAS.CONFIG_NOTIFICACIONES, [
@@ -164,7 +178,12 @@ function sembrarSolicitudesDemo_(ctx) {
     { id: 'SOL-2026-RLD-0002', empresa: 'RLD', plataforma: 'RLD_GDE', modulo: 'MOD_VAC', tipo: 'CON', prioridad: 'P4', estado: 'S09', dias: 15 },
     // v3.1: una atencion directa, para poder ver la insignia del detalle y
     // el KPI de Gerencia sin tener que crear una a mano cada vez.
-    { id: 'SOL-2026-RLD-0003', empresa: 'RLD', plataforma: 'RLD_GDE', modulo: 'MOD_LIQ', tipo: 'ERR', prioridad: 'P1', estado: 'S09', dias: 2, atencionDirecta: true }
+    { id: 'SOL-2026-RLD-0003', empresa: 'RLD', plataforma: 'RLD_GDE', modulo: 'MOD_LIQ', tipo: 'ERR', prioridad: 'P1', estado: 'S09', dias: 2, atencionDirecta: true },
+    // v6.1: una solicitud EN RIESGO (>= 80% del SLA consumido y sin vencer)
+    // para poder ver el KPI, el grupo ambar y el chip sin tener que esperar a
+    // que una demo envejezca. El sla se elige chico a proposito para que el
+    // ratio caiga en la ventana de riesgo con pocas horas habiles corridas.
+    { id: 'SOL-2026-HP-0003', empresa: 'HP', plataforma: 'INT_GDE', modulo: 'MOD_DASH', tipo: 'ERR', prioridad: 'P2', estado: 'S05', dias: 3, sla: 11, dev: 'leo@rld.cl' }
   ];
 
   demo.forEach((item, idx) => {
@@ -199,7 +218,7 @@ function sembrarSolicitudesDemo_(ctx) {
       usuario_prueba: esDemoRico ? 'z4nunoa' : '',
       ref_credencial: esDemoRico ? 'Ver gestor de credenciales del equipo, entrada "z4nunoa"' : '',
       centro_costos: esDemoRico ? 'CC-01' : '', url_video: '', observaciones: '',
-      sla_objetivo_horas: 24, estimacion_horas: 8, horas_reales: '', fecha_creacion: fecha,
+      sla_objetivo_horas: item.sla || 24, estimacion_horas: 8, horas_reales: '', fecha_creacion: fecha,
       urls_adicionales: esDemoRico ? JSON.stringify([
         { titulo: 'Modal de validacion', url: 'https://integral.rld.cl/modal_validacion.php?id=1' },
         { titulo: 'Documento generado', url: 'https://integral.rld.cl/doc_generado.php?id=1' }

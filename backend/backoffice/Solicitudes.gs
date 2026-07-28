@@ -378,6 +378,19 @@ var Solicitudes = {
     // del objeto, sin mutar lo que devuelve obtenerSubsolicitudesDeSolicitud_
     // (otras funciones -- actualizarEstado, actualizarPrioridad -- reusan esa
     // lectura sin esperar un campo calculado).
+    // v6.1: se leen los feriados UNA vez para todos los items (Sla.medir los
+    // necesita para contar horas habiles) -- leerlos dentro del map seria una
+    // lectura de hoja por item.
+    //
+    // Tolerante a proposito: el chip de situacion es informativo, y no vale la
+    // pena que el detalle COMPLETO de una solicitud deje de abrirse porque a
+    // una instalacion le falte CONFIG_FERIADOS (obtenerFeriados_ lanza si la
+    // hoja no existe). Sin feriados el conteo de horas habiles puede quedar
+    // algo optimista; el resto de la vista sigue siendo exacta.
+    var feriadosDetalle = [];
+    try {
+      feriadosDetalle = obtenerFeriados_();
+    } catch (err) { /* sin CONFIG_FERIADOS se mide sin excluir feriados */ }
     var subsolicitudes = obtenerSubsolicitudesDeSolicitud_(solicitudId).map(function (sub) {
       // El cumplimiento se calcula con el `sub` ORIGINAL (fechas tal cual las
       // devolvio la hoja). Las fechas que TIPEA el usuario (comprometida /
@@ -386,7 +399,19 @@ var Solicitudes = {
       // como Date, que serializado a JSON sale en UTC (con la hora corrida).
       // fechaHoraCelda_ recupera el AAAA-MM-DDTHH:mm local. Ver la misma idea
       // en Pausas.horaCelda_.
-      var copia = Object.assign({}, sub, { cumplimiento: Cumplimiento.clasificar(sub) });
+      // v6.1: se agregan los DOS ejes de plazo, que miden cosas distintas y
+      // por eso no se pueden fusionar (ver nota en Cumplimiento.gs):
+      //   cumplimiento  -> contra fecha_comprometida (la promesa de Leo)
+      //   situacion_sla -> contra sla_objetivo_horas (A-08, el que muestra la
+      //                    bandeja) -- se expone para que el chip del detalle
+      //                    diga lo MISMO que la fila de la que se vino, sin
+      //                    recalcular la regla en el frontend.
+      var medicionSla = Sla.medir(sub, { feriados: feriadosDetalle });
+      var copia = Object.assign({}, sub, {
+        cumplimiento: Cumplimiento.clasificar(sub),
+        situacion_sla: medicionSla ? medicionSla.situacion : null,
+        sla_restante_horas: medicionSla ? Math.round(medicionSla.restantes_horas * 10) / 10 : null
+      });
       copia.fecha_comprometida = fechaHoraCelda_(sub.fecha_comprometida);
       copia.fecha_propuesta = fechaHoraCelda_(sub.fecha_propuesta);
       return copia;

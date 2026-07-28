@@ -91,3 +91,98 @@ function clasificarCerrada_(subsolicitud) {
 function redondear1Decimal_(numero) {
   return Math.round(numero * 10) / 10;
 }
+
+// --- Eje SLA de respuesta (A-08/A-09, §13/§17.4) -----------------------
+//
+// OJO: este es un eje DISTINTO del semaforo de Cumplimiento de arriba, y
+// confundirlos da numeros que no cuadran entre pantallas:
+//
+//  - Cumplimiento.clasificar mide contra fecha_comprometida (la promesa que
+//    hizo Leo). Es el eje del Panel de Gerencia y de Jefatura: "entregamos
+//    cuando dijimos que iba a estar".
+//  - Sla mide contra sla_objetivo_horas desde fecha_creacion (el tiempo de
+//    respuesta que corresponde por prioridad: P1 2h, P2 24h, P3 72h,
+//    P4 120h). Es el eje de la Bandeja de trabajo y de los avisos
+//    automaticos A-08/A-09.
+//
+// Los dos tienen que seguir separados (§6: un item pasado de fecha pero ya
+// en S08 no es atraso del desarrollador). Lo que NO tiene que estar separado
+// es la implementacion de cada eje: hasta v6.1 el eje SLA estaba triplicado
+// (Dashboard.estaVencidoSla_, Dashboard.slaRestanteHoras_ y
+// Triggers.ratioSlaConsumido_ repetian el mismo filtro de elegibilidad y la
+// misma llamada a horasHabilesEntre). Sla.medir es ahora la unica
+// implementacion y las tres delegan aca, asi la bandeja no puede decir
+// "en riesgo" mientras el trigger nocturno dice "en plazo".
+
+// A-08: "proximo a vencer" = 80% del SLA objetivo ya consumido y aun no
+// vencido. El mismo umbral que ya usaba Triggers.verificarSLAs para decidir
+// a quien le manda alertaSLAProximo -- no es un umbral nuevo de la bandeja.
+var SLA_UMBRAL_RIESGO = 0.8;
+
+var SLA_SITUACION_ETIQUETA = {
+  EN_PLAZO: 'En plazo',
+  EN_RIESGO: 'En riesgo',
+  FUERA_DE_PLAZO: 'Fuera de plazo'
+};
+
+var Sla = {
+  /**
+   * Mide el SLA de respuesta de UN item.
+   *
+   * @param {object} subsolicitud fila de SUBSOLICITUDES (estado,
+   *   fecha_creacion, sla_objetivo_horas).
+   * @param {object} [opciones] {feriados, ahora} -- ahora es inyectable para
+   *   tests; feriados se pasa ya leido para no releer la hoja por item.
+   * @return {null|{objetivo_horas: number, transcurridas_horas: number,
+   *   restantes_horas: number, ratio: number, situacion: string}}
+   *   null cuando NO hay SLA vigente que evaluar: item rechazado/cancelado
+   *   (S10/S11), ya cerrado (S09), o sin sla_objetivo_horas (P5, atencion
+   *   directa). Mismo criterio de elegibilidad que tenian las tres copias.
+   */
+  medir: function (subsolicitud, opciones) {
+    var opts = opciones || {};
+    if (ESTADOS_EXCLUIDOS_DERIVACION.indexOf(subsolicitud.estado) !== -1 || subsolicitud.estado === ESTADOS.S09) {
+      return null;
+    }
+    var objetivo = subsolicitud.sla_objetivo_horas;
+    if (objetivo === '' || objetivo === undefined || objetivo === null) {
+      return null;
+    }
+    objetivo = Number(objetivo);
+    var transcurridas = Utils.horasHabilesEntre(
+      subsolicitud.fecha_creacion, opts.ahora || new Date(), { feriados: opts.feriados });
+    var ratio = transcurridas / objetivo;
+    return {
+      objetivo_horas: objetivo,
+      transcurridas_horas: transcurridas,
+      restantes_horas: objetivo - transcurridas,
+      ratio: ratio,
+      situacion: ratio > 1 ? 'FUERA_DE_PLAZO' : (ratio >= SLA_UMBRAL_RIESGO ? 'EN_RIESGO' : 'EN_PLAZO')
+    };
+  },
+
+  /** Atajo: 'FUERA_DE_PLAZO' | 'EN_RIESGO' | 'EN_PLAZO' | null (no aplica). */
+  situacion: function (subsolicitud, opciones) {
+    var medicion = Sla.medir(subsolicitud, opciones);
+    return medicion ? medicion.situacion : null;
+  },
+
+  /**
+   * Situacion de una SOLICITUD completa = la PEOR de sus items.
+   *
+   * No se puede derivar del item con menos horas restantes: con objetivos
+   * distintos por prioridad, "menos horas restantes" y "mas SLA consumido"
+   * no son el mismo item (un P4 con 20 h de 120 ya va en riesgo; un P1 con
+   * 0,5 h de 2 todavia esta en plazo).
+   *
+   * @param {Array<string|null>} situaciones
+   * @return {string|null} null si ningun item tiene SLA vigente.
+   */
+  peorSituacion: function (situaciones) {
+    var orden = ['FUERA_DE_PLAZO', 'EN_RIESGO', 'EN_PLAZO'];
+    for (var i = 0; i < orden.length; i++) {
+      if (situaciones.indexOf(orden[i]) !== -1) return orden[i];
+    }
+    return null;
+  }
+};

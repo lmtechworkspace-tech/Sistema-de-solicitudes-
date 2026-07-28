@@ -6,6 +6,141 @@
 
   window.SigsoDashboard = { cargar: cargarDashboard_, inicializarFiltros: inicializarFiltros_ };
 
+  // --- v6.2 (F2/F4): contexto de la bandeja ------------------------------
+  //
+  // Un solo mecanismo resuelve los dos casos, porque el estado a preservar es
+  // exactamente el mismo:
+  //   F2 "volver del detalle" -> restaurar filtros + scroll
+  //   F4 "F5 / recarga"       -> restaurar filtros + scroll
+  //
+  // Vive en dashboard.js (no en app.js ni plataforma.js) a proposito: los DOS
+  // hosts comparten este archivo y el mismo contrato SigsoApp, asi que ponerlo
+  // aca evita duplicar la logica -- y ninguno de los dos necesita cambios.
+  //
+  // sessionStorage y no localStorage: el contexto tiene que morir con la
+  // pestana. Un filtro "Empresa: HP" que sobrevive al dia siguiente hace que
+  // el usuario crea que perdio solicitudes.
+  var LLAVE_CONTEXTO = 'sigso_bandeja_contexto';
+  // Cinturon adicional: una pestana abierta varios dias tampoco deberia
+  // restaurar un contexto viejo (sessionStorage sobrevive mientras la pestana
+  // exista, no solo mientras se trabaje).
+  var CONTEXTO_VIGENCIA_MS = 8 * 60 * 60 * 1000;
+
+  // Se pone en true al salir al detalle (o al arrancar con contexto guardado):
+  // marca que el PROXIMO render de la lista debe recuperar la posicion. Sin
+  // esta bandera, "Actualizar" tambien daria un salto de scroll inesperado.
+  var restaurarScrollPendiente_ = false;
+  // filtro-bandeja se puebla DESPUES (con la respuesta del backend, en
+  // renderSelectorBandeja_), asi que su valor guardado se aplica alli.
+  var bandejaPendiente_ = null;
+  // v6.3: pausa antes de reconsultar al backend por el buscador. Cada consulta
+  // recalcula los KPIs sobre varias hojas (y cada termino distinto es una
+  // clave de cache nueva), asi que conviene esperar a que el usuario termine
+  // de escribir en vez de disparar una por tecla.
+  var MS_DEBOUNCE_BUSQUEDA = 700;
+
+  function leerContexto_() {
+    try {
+      var crudo = window.sessionStorage.getItem(LLAVE_CONTEXTO);
+      if (!crudo) return null;
+      var ctx = JSON.parse(crudo);
+      if (!ctx || !ctx.guardado || Date.now() - ctx.guardado > CONTEXTO_VIGENCIA_MS) {
+        window.sessionStorage.removeItem(LLAVE_CONTEXTO);
+        return null;
+      }
+      return ctx;
+    } catch (err) {
+      // sessionStorage bloqueado (modo privado) o JSON corrupto: la bandeja
+      // funciona igual, solo sin memoria de contexto.
+      return null;
+    }
+  }
+
+  function escribirContexto_(cambios) {
+    try {
+      var ctx = leerContexto_() || {};
+      Object.keys(cambios).forEach(function (k) { ctx[k] = cambios[k]; });
+      ctx.guardado = Date.now();
+      window.sessionStorage.setItem(LLAVE_CONTEXTO, JSON.stringify(ctx));
+    } catch (err) { /* sin storage: se pierde el contexto, nada mas */ }
+  }
+
+  function limpiarContexto_() {
+    try { window.sessionStorage.removeItem(LLAVE_CONTEXTO); } catch (err) { /* sin storage */ }
+  }
+
+  // Se llama en cada render de la lista: cualquier cambio de filtro, KPI,
+  // busqueda o agrupacion queda guardado sin tener que cablear cada control.
+  // NO toca `scroll`: la posicion se guarda en su propio momento (al salir al
+  // detalle o al descargar la pagina), porque el scroll durante un render no
+  // representa "donde estaba mirando el usuario".
+  function guardarFiltrosEnContexto_() {
+    escribirContexto_({
+      bandeja: valorDe_('filtro-bandeja'),
+      empresa: valorDe_('filtro-empresa'),
+      estado: valorDe_('filtro-estado'),
+      prioridad: valorDe_('filtro-prioridad'),
+      agrupar: valorDe_('filtro-agrupar'),
+      texto: valorDe_('buscar-recientes'),
+      kpi: kpiActivo
+    });
+  }
+
+  function guardarScrollEnContexto_() {
+    escribirContexto_({ scroll: window.scrollY || window.pageYOffset || 0 });
+  }
+
+  function valorDe_(id) {
+    var el = document.getElementById(id);
+    return el ? el.value : '';
+  }
+
+  // Aplica un valor guardado a un <select> SOLO si esa opcion todavia existe.
+  // Un estado/empresa que se dio de baja del catalogo dejaria el select en un
+  // valor fantasma que filtra a cero sin que el usuario entienda por que.
+  function aplicarSelectSiExiste_(id, valor) {
+    if (!valor) return;
+    var select = document.getElementById(id);
+    if (!select) return;
+    var existe = Array.prototype.some.call(select.options, function (o) { return o.value === valor; });
+    if (existe) select.value = valor;
+  }
+
+  function restaurarContextoEnControles_() {
+    var ctx = leerContexto_();
+    if (!ctx) return;
+    aplicarSelectSiExiste_('filtro-empresa', ctx.empresa);
+    aplicarSelectSiExiste_('filtro-estado', ctx.estado);
+    aplicarSelectSiExiste_('filtro-prioridad', ctx.prioridad);
+    aplicarSelectSiExiste_('filtro-agrupar', ctx.agrupar);
+    var buscar = document.getElementById('buscar-recientes');
+    // v6.3: se restaura y ya. Antes hacia falta suprimir su envio al backend
+    // en esta primera carga (el texto viajaba como `solicitante` y vaciaba la
+    // bandeja); ahora backend y cliente buscan por lo mismo, asi que
+    // restaurar el texto da el mismo resultado por los dos caminos.
+    if (buscar && ctx.texto) buscar.value = ctx.texto;
+    // El KPI se valida contra los filtros conocidos: un valor viejo que ya no
+    // exista dejaria la lista filtrada por algo que ningun chip puede apagar.
+    kpiActivo = ctx.kpi && ETIQUETA_KPI[ctx.kpi] ? ctx.kpi : null;
+    bandejaPendiente_ = ctx.bandeja || null;
+    restaurarScrollPendiente_ = true;
+  }
+
+  function restaurarScrollSiCorresponde_() {
+    if (!restaurarScrollPendiente_) return;
+    restaurarScrollPendiente_ = false;
+    var ctx = leerContexto_();
+    if (!ctx || !ctx.scroll) return;
+    // Doble rAF: el primero deja que el navegador aplique el layout del HTML
+    // recien inyectado, el segundo scrollea ya con la altura definitiva (con
+    // uno solo la pagina todavia mide menos y el scroll queda corto).
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(function () {
+        window.scrollTo(0, ctx.scroll);
+      });
+    });
+  }
+
   function inicializarFiltros_() {
     var empresas = ['HP', 'RLD'];
     var selectEmpresa = document.getElementById('filtro-empresa');
@@ -33,8 +168,42 @@
     // al backend (Dashboard.coincideFiltros_), para buscar en TODAS las
     // solicitudes y no solo en las ultimas 50 (Gerencia necesita responder
     // "de que son los tickets de Juan" sin ese limite).
-    document.getElementById('buscar-recientes').addEventListener('input', renderRecientes_);
+    // v6.3: al escribir se filtra AL INSTANTE sobre lo ya cargado (respuesta
+    // inmediata) y, tras una pausa, se vuelve a consultar al backend con el
+    // mismo termino.
+    //
+    // Los dos pasos usan el MISMO predicado (texto_busqueda), asi que nunca se
+    // contradicen: la segunda pasada solo puede AGREGAR solicitudes que no
+    // estaban en la ventana cargada, jamas quitar una que ya se mostraba.
+    //
+    // Sin la reconsulta quedaba un desfase real: despues de "Actualizar" con
+    // el termino A, el universo cargado seguia acotado por A, y escribir B
+    // filtraba dentro de A -- el usuario veia "0 resultados" aunque B si
+    // existiera fuera de esa ventana.
+    //
+    // El debounce es lo que hace esto viable en Apps Script: se consulta una
+    // vez por pausa de escritura, no por tecla.
+    var temporizadorBusqueda_ = null;
+    document.getElementById('buscar-recientes').addEventListener('input', function () {
+      renderRecientes_();
+      if (temporizadorBusqueda_) clearTimeout(temporizadorBusqueda_);
+      temporizadorBusqueda_ = setTimeout(function () {
+        // Se conserva la posicion: reconsultar por escribir no deberia mover
+        // la pagina bajo los pies del usuario.
+        guardarScrollEnContexto_();
+        restaurarScrollPendiente_ = true;
+        cargarDashboard_();
+      }, MS_DEBOUNCE_BUSQUEDA);
+    });
     document.getElementById('btn-exportar-csv').addEventListener('click', exportarCSV_);
+
+    // v6.2 (F4): se restauran los filtros ANTES del primer cargar() -- los
+    // <option> de empresa/estado ya se poblaron arriba, asi que
+    // aplicarSelectSiExiste_ puede validar contra opciones reales.
+    restaurarContextoEnControles_();
+    // F4: un F5 tambien conserva la posicion. beforeunload es el ultimo punto
+    // donde el scroll real todavia se puede leer.
+    window.addEventListener('beforeunload', guardarScrollEnContexto_);
 
     // v5.0 F3 (§5.2): Prioridad/Agrupar quedan detras de "Filtros avanzados"
     // -- la toolbar de una linea no debe pesar tanto como los datos.
@@ -340,7 +509,15 @@
       empresa_id: document.getElementById('filtro-empresa').value,
       estado: document.getElementById('filtro-estado').value,
       prioridad: document.getElementById('filtro-prioridad').value,
-      solicitante: document.getElementById('buscar-recientes').value.trim(),
+      // v6.3: `busqueda` (no `solicitante`). El backend la evalua contra el
+      // MISMO texto que el navegador usa para filtrar en vivo
+      // (textoBusquedaSolicitud_ en Dashboard.gs), asi que buscar y despues
+      // pulsar "Actualizar" devuelve lo mismo.
+      //
+      // Se dejo de mandar `solicitante` desde la Bandeja: ese filtro sigue
+      // existiendo en el backend, pero es el del Panel de Gerencia, donde el
+      // campo esta rotulado "Solicitante" y buscar por titulo seria incorrecto.
+      busqueda: document.getElementById('buscar-recientes').value.trim(),
       // v3.0 (Fase 2): solo tiene efecto para ADM/GERENCIA (Dashboard.
       // aplicarAmbitoRol_) -- un responsable individual ya esta acotado a
       // su propia bandeja sin importar este valor.
@@ -371,12 +548,17 @@
             ' Reintenta con "Actualizar"; si persiste, avisa a soporte.', 'error');
         return respuesta;
       }
-      renderKpis_(respuesta.data.resumen);
+      // v6.1: recientesActuales se asigna ANTES de renderKpis_ porque los
+      // contadores de los KPI ahora se calculan sobre esa misma lista (ver
+      // renderKpis_) -- si se pintaran antes, contarian sobre la lista previa.
+      recientesActuales = respuesta.data.recientes;
+      totalSolicitudes_ = respuesta.data.total_solicitudes;
+      recientesTruncado_ = !!respuesta.data.recientes_truncado;
+      renderKpis_();
       renderAlertasPatron_(respuesta.data.alertas_patron || []);
       renderGrafico_('grafico-estado', 'bar', respuesta.data.por_estado);
       renderGrafico_('grafico-prioridad', 'doughnut', respuesta.data.por_prioridad);
       renderGrafico_('grafico-empresa', 'bar', respuesta.data.por_empresa);
-      recientesActuales = respuesta.data.recientes;
       renderRecientes_();
       // v2.1 (Fase C): el Panel de Gerencia es "su vista principal" -- el
       // boton de acceso solo aparece para ese rol (el backend ya no
@@ -424,6 +606,23 @@
         return '<option value="' + r.email + '">' + Componentes.escaparHtml(r.nombre) + '</option>';
       }).join('');
     select.value = actual;
+
+    // v6.2 (F4): este select es el unico que se puebla DESPUES (sus opciones
+    // vienen del backend), asi que su valor guardado no se pudo aplicar en
+    // inicializarFiltros_ -- se aplica aca, ya con las opciones reales. Si el
+    // responsable guardado ya no esta activo, aplicarSelectSiExiste_ lo
+    // descarta en vez de dejar la bandeja filtrada por alguien inexistente.
+    if (bandejaPendiente_) {
+      var pendiente = bandejaPendiente_;
+      bandejaPendiente_ = null;
+      aplicarSelectSiExiste_('filtro-bandeja', pendiente);
+      // Solo se recarga si de verdad quedo aplicado y cambia lo que se ve:
+      // este filtro es de backend, la lista actual no lo refleja todavia.
+      if (select.value === pendiente && pendiente !== actual) {
+        restaurarScrollPendiente_ = true;
+        cargarDashboard_();
+      }
+    }
     filaSelector.classList.remove('sigso-oculto');
     renderDerivarLote_(data);
     actualizarVisibilidadPauta_();
@@ -521,27 +720,55 @@
   }
 
   var recientesActuales = [];
+  // v6.1: cuantas solicitudes hay en total vs. cuantas caben en la ventana de
+  // RECIENTES_LIMITE. Se muestra explicitamente en vez de dejar creer que la
+  // bandeja son todas -- con el orden por urgencia, lo que queda fuera es
+  // siempre lo menos urgente, pero eso hay que decirlo, no suponerlo.
+  var totalSolicitudes_ = 0;
+  var recientesTruncado_ = false;
   // UI-5 (§4): KPI accionable -- clic filtra "Solicitudes recientes" abajo
   // sin golpear el backend de nuevo (mismo patron que categoriaActiva en
   // gerencia.js). null = sin filtro de KPI activo.
   var kpiActivo = null;
   var ESTADOS_CERRADOS_CLIENTE = ['S09', 'S10', 'S11'];
 
-  function renderKpis_(resumen) {
+  // v6.1: los contadores se calculan sobre recientesActuales, la MISMA lista
+  // que se pinta abajo, aplicando el mismo predicado que usa filtrarPorKpi_.
+  //
+  // Antes venian de resumen.* (calculado en el backend sobre TODAS las
+  // solicitudes) mientras la lista estaba capada a RECIENTES_LIMITE: el KPI
+  // podia decir 7 y aparecer 4 filas. El backend sigue mandando resumen
+  // (Gerencia/reportes lo usan), pero la bandeja es una cola de trabajo y ahi
+  // el numero tiene que ser exactamente "cuantas filas voy a ver".
+  //
+  // Con el nuevo orden por urgencia del backend, lo vencido y lo en riesgo
+  // entra siempre en la ventana, asi que el numero coincide con el global
+  // salvo en volumenes muy altos -- y para ese caso se avisa abajo cuantas
+  // quedaron fuera (renderNotaTruncado_).
+  function contarKpi_(filtro) {
+    return recientesActuales.filter(function (s) { return cumpleKpi_(s, filtro); }).length;
+  }
+
+  function renderKpis_() {
     document.getElementById('contenedor-kpis').innerHTML =
-      Componentes.kpi({ valor: resumen.total_abiertas, etiqueta: 'Abiertas', titulo: 'Solicitudes que aun no estan cerradas, rechazadas ni canceladas. Clic para filtrar.', filtro: 'abiertas', activo: kpiActivo === 'abiertas' }) +
-      Componentes.kpi({ valor: resumen.criticas_activas, etiqueta: 'Criticas activas', alerta: true, titulo: 'Solicitudes abiertas de prioridad P1 (la mas alta). Clic para filtrar.', filtro: 'criticas', activo: kpiActivo === 'criticas' }) +
-      Componentes.kpi({ valor: resumen.sla_vencido, etiqueta: 'Fuera de plazo', alerta: true, titulo: 'Items que ya pasaron su tiempo objetivo de respuesta segun la prioridad (P1: 2h, P2: 24h, P3: 72h, P4: 120h; en horas habiles). Clic para filtrar.', filtro: 'fuera_plazo', activo: kpiActivo === 'fuera_plazo' }) +
+      Componentes.kpi({ valor: contarKpi_('abiertas'), etiqueta: 'Abiertas', titulo: 'Solicitudes que aun no estan cerradas, rechazadas ni canceladas. Clic para filtrar.', filtro: 'abiertas', activo: kpiActivo === 'abiertas' }) +
+      Componentes.kpi({ valor: contarKpi_('criticas'), etiqueta: 'Criticas activas', alerta: true, titulo: 'Solicitudes abiertas de prioridad P1 (la mas alta). Clic para filtrar.', filtro: 'criticas', activo: kpiActivo === 'criticas' }) +
+      Componentes.kpi({ valor: contarKpi_('fuera_plazo'), etiqueta: 'Fuera de plazo', alerta: true, titulo: 'Ya pasaron su tiempo objetivo de respuesta segun la prioridad (P1: 2h, P2: 24h, P3: 72h, P4: 120h; en horas habiles). Clic para filtrar.', filtro: 'fuera_plazo', activo: kpiActivo === 'fuera_plazo' }) +
+      // v6.1 (A-08): el KPI preventivo que faltaba -- hasta v6.0 la bandeja
+      // solo sabia de lo YA vencido, o sea que solo avisaba tarde. Mismo
+      // umbral (80% del SLA consumido) con el que el trigger nocturno manda
+      // alertaSLAProximo, para que pantalla y correo digan lo mismo.
+      Componentes.kpi({ valor: contarKpi_('en_riesgo'), etiqueta: 'En riesgo', alerta: contarKpi_('en_riesgo') > 0, titulo: 'Ya consumieron el 80% de su tiempo objetivo de respuesta y todavia no vencen: si se atienden ahora, no se rompe el plazo. Clic para filtrar.', filtro: 'en_riesgo', activo: kpiActivo === 'en_riesgo' }) +
       // Fase 10.2: reemplaza "Ingresadas hoy" (casi siempre 0, no orienta el
       // trabajo) por "Sin asignar" -- un numero que SI dice a quien hay que
       // ponerle nombre antes de que se convierta en un atraso.
-      Componentes.kpi({ valor: resumen.sin_asignar, etiqueta: 'Sin asignar', alerta: resumen.sin_asignar > 0, titulo: 'Solicitudes abiertas que todavia no tienen un responsable. Clic para filtrar.', filtro: 'sin_asignar', activo: kpiActivo === 'sin_asignar' });
+      Componentes.kpi({ valor: contarKpi_('sin_asignar'), etiqueta: 'Sin asignar', alerta: contarKpi_('sin_asignar') > 0, titulo: 'Solicitudes abiertas que todavia no tienen un responsable. Clic para filtrar.', filtro: 'sin_asignar', activo: kpiActivo === 'sin_asignar' });
 
     document.getElementById('contenedor-kpis').querySelectorAll('[data-filtro-kpi]').forEach(function (boton) {
       boton.addEventListener('click', function () {
         var filtro = boton.getAttribute('data-filtro-kpi');
         kpiActivo = kpiActivo === filtro ? null : filtro;
-        renderKpis_(resumen);
+        renderKpis_();
         renderRecientes_();
       });
     });
@@ -551,9 +778,14 @@
   // "que necesita de mi", no por fecha de creacion -- asi lo urgente no
   // compite por el mismo lugar que lo ya resuelto, y "Requieren tu accion"
   // deja de ser una tarjeta aparte que duplicaba filas de la lista de abajo.
+  // v6.1: se intercala "En riesgo" con peso visual INTERMEDIO entre lo
+  // vencido (rojo, atender ya) y lo sano (atender cuando toque). Es el nivel
+  // que faltaba: hasta v6.0 una solicitud pasaba de "todo bien" a "atrasada"
+  // sin escalon intermedio donde todavia se podia evitar el incumplimiento.
   var GRUPOS_CLASIFICACION = [
-    { clave: 'critica', etiqueta: '🔴 Atrasadas y críticas', clase: 'critica' },
-    { clave: 'esperando_mio', etiqueta: '🟠 Esperando algo mío', clase: 'esperando-mio' },
+    { clave: 'critica', etiqueta: '🔴 Fuera de plazo y críticas', clase: 'critica' },
+    { clave: 'riesgo', etiqueta: '🟠 En riesgo — atender antes de que venza', clase: 'riesgo' },
+    { clave: 'esperando_mio', etiqueta: '🟡 Esperando algo mío', clase: 'esperando-mio' },
     { clave: 'en_curso', etiqueta: '🔵 En curso', clase: 'en-curso' },
     { clave: 'esperando_solicitante', etiqueta: '⚪ Esperando al solicitante', clase: 'esperando-solicitante' }
   ];
@@ -561,8 +793,14 @@
   function clasificar_(s) {
     var abierta = ESTADOS_CERRADOS_CLIENTE.indexOf(s.estado_derivado) === -1;
     if (!abierta) return 'cerrada';
-    var vencida = s.sla_restante_horas !== null && s.sla_restante_horas !== undefined && s.sla_restante_horas < 0;
+    // v6.1: la situacion del plazo la calcula el backend (Sla.medir, unica
+    // fuente de verdad del eje SLA) -- aca solo se lee. El fallback por
+    // horas negativas cubre un backend aun no desplegado que no manda
+    // situacion_sla todavia.
+    var vencida = s.situacion_sla === 'FUERA_DE_PLAZO' ||
+      (!s.situacion_sla && s.sla_restante_horas !== null && s.sla_restante_horas !== undefined && s.sla_restante_horas < 0);
     if (vencida || s.prioridad_derivada === 'P1') return 'critica';
+    if (s.situacion_sla === 'EN_RIESGO') return 'riesgo';
     if (!s.asignado_a || !s.fecha_comprometida || s.respuesta_pendiente) return 'esperando_mio';
     if (s.estado_derivado === 'S08') return 'esperando_solicitante';
     return 'en_curso';
@@ -618,6 +856,11 @@
     var campoAgrupar = document.getElementById('filtro-agrupar').value;
     var filtradas = filtrarPorKpi_(filtrarPorTexto_(recientesActuales));
 
+    // v6.1 (Fase 3): los chips se pintan con el resultado YA filtrado, en el
+    // mismo punto donde se decide la lista -- asi el contador y las filas no
+    // pueden desincronizarse (mismo criterio que los KPI en la Fase 1).
+    renderChipsFiltros_(filtradas.length);
+
     if (!campoAgrupar) {
       // Fase 10.2: "Sin agrupar" ya no es una lista plana por fecha -- pasa a
       // ser la clasificacion por "que necesita de mi" (4 grupos con orden
@@ -635,13 +878,50 @@
         });
     }
 
+    // v6.1: la nota de alcance va SIEMPRE que la lista este recortada, no
+    // solo cuando hay un KPI activo -- es la unica forma de que el usuario
+    // sepa que "5 abiertas" significa "5 de las 50 mas urgentes que cargue",
+    // y no "5 en todo el sistema".
+    contenedor.insertAdjacentHTML('beforeend', renderNotaAlcance_());
+
+    // v6.2 (F4): cualquier cambio de filtro/KPI/busqueda/agrupacion pasa por
+    // aca, asi que guardar el contexto en un solo punto cubre todos los
+    // controles sin cablear cada uno por separado.
+    guardarFiltrosEnContexto_();
+    // v6.2 (F2): la lista ya esta en el DOM; recien ahora tiene sentido
+    // devolver el scroll a donde estaba.
+    restaurarScrollSiCorresponde_();
+
     contenedor.querySelectorAll('[data-id]').forEach(function (fila) {
-      fila.addEventListener('click', function () {
-        if (typeof window.SigsoApp !== 'undefined') {
-          window.SigsoApp.mostrarDetalle(fila.getAttribute('data-id'));
+      function abrir_() {
+        if (typeof window.SigsoApp === 'undefined') return;
+        // v6.2 (F2): se captura la posicion JUSTO antes de salir al detalle, y
+        // se marca que al volver hay que recuperarla. El "volver" de ambos
+        // hosts (app.js y plataforma.js) llama SigsoDashboard.cargar(), que
+        // consume esta bandera -- por eso no hace falta tocar ninguno de los
+        // dos: el unico camino de ida al detalle pasa por aca.
+        guardarScrollEnContexto_();
+        restaurarScrollPendiente_ = true;
+        window.SigsoApp.mostrarDetalle(fila.getAttribute('data-id'));
+      }
+      fila.addEventListener('click', abrir_);
+      // v6.1 (revision UX): la fila declara role="button", asi que tiene que
+      // responder a Enter y Espacio como un boton real. Espacio ademas
+      // scrollea la pagina por defecto -- se previene.
+      fila.addEventListener('keydown', function (evento) {
+        if (evento.key === 'Enter' || evento.key === ' ' || evento.key === 'Spacebar') {
+          evento.preventDefault();
+          abrir_();
         }
       });
     });
+  }
+
+  function renderNotaAlcance_() {
+    if (!recientesTruncado_) return '';
+    return '<p class="sigso-nota-alcance">Mostrando las ' + recientesActuales.length +
+      ' solicitudes más urgentes de ' + totalSolicitudes_ +
+      '. Las que quedan fuera están en plazo; usa los filtros de arriba para acotar la búsqueda.</p>';
   }
 
   function renderAgrupadoPorClasificacion_(lista) {
@@ -652,8 +932,16 @@
         detalle: 'Limpia el buscador o vuelve a "Todos los estados" para ver la bandeja completa.'
       });
     }
-    var porClave = { critica: [], esperando_mio: [], en_curso: [], esperando_solicitante: [], cerrada: [] };
-    lista.forEach(function (s) { porClave[clasificar_(s)].push(s); });
+    // v6.1: los baldes se derivan de GRUPOS_CLASIFICACION (+ 'cerrada', que no
+    // es un grupo visible sino el <details> del final). Antes estaban escritos
+    // a mano y al agregar el grupo "riesgo" quedo sin balde -> TypeError al
+    // hacer push sobre undefined, y la lista entera no se pintaba.
+    var porClave = { cerrada: [] };
+    GRUPOS_CLASIFICACION.forEach(function (g) { porClave[g.clave] = []; });
+    lista.forEach(function (s) {
+      var clave = clasificar_(s);
+      (porClave[clave] || porClave.cerrada).push(s);
+    });
 
     var html = GRUPOS_CLASIFICACION.map(function (g) {
       var filas = porClave[g.clave];
@@ -683,23 +971,179 @@
     var texto = document.getElementById('buscar-recientes').value.trim().toLowerCase();
     if (!texto) return lista;
     return lista.filter(function (s) {
-      return [s.solicitud_id, s.solicitante_nombre, s.solicitante_email, s.empresa_id, s.modulo]
+      // v6.3: se compara contra texto_busqueda, la cadena que arma el backend
+      // (textoBusquedaSolicitud_) y que el propio backend usa para filtrar.
+      // Una sola definicion de "que es buscable": el navegador no la
+      // reimplementa, solo la consulta.
+      //
+      // El fallback por campos sueltos cubre un Backoffice desplegado con una
+      // version anterior que todavia no manda texto_busqueda: la busqueda
+      // sigue funcionando en cliente mientras se actualiza el despliegue.
+      if (s.texto_busqueda) return s.texto_busqueda.indexOf(texto) !== -1;
+      return [s.solicitud_id, s.titulo_item, s.solicitante_nombre, s.solicitante_email, s.empresa_id, s.modulo]
         .some(function (campo) { return String(campo || '').toLowerCase().indexOf(texto) !== -1; });
     });
   }
 
   // UI-5 (§4): aplica el KPI accionable elegido arriba, sobre lo mismo que
   // ya filtro el buscador -- ambos filtros se combinan (AND), no se pisan.
+  // v6.1: UN solo predicado por KPI, usado tanto para CONTAR (contarKpi_,
+  // arriba) como para FILTRAR (filtrarPorKpi_). Antes el filtro vivia aqui y
+  // el contador lo calculaba el backend con su propia formula: dos formulas
+  // para el mismo numero es justo lo que hacia que no cuadraran.
+  function cumpleKpi_(s, filtro) {
+    var abierta = ESTADOS_CERRADOS_CLIENTE.indexOf(s.estado_derivado) === -1;
+    if (filtro === 'abiertas') return abierta;
+    if (filtro === 'criticas') return abierta && s.prioridad_derivada === 'P1';
+    if (filtro === 'fuera_plazo') return situacionSla_(s) === 'FUERA_DE_PLAZO';
+    if (filtro === 'en_riesgo') return situacionSla_(s) === 'EN_RIESGO';
+    if (filtro === 'sin_asignar') return abierta && !s.asignado_a;
+    return true;
+  }
+
+  // Situacion del plazo de una fila. El backend ya la manda calculada
+  // (Sla.medir); el fallback por horas restantes solo cubre el caso de un
+  // Backoffice desplegado con una version anterior, para no dejar la columna
+  // en blanco mientras se actualiza.
+  function situacionSla_(s) {
+    if (s.situacion_sla) return s.situacion_sla;
+    if (s.sla_restante_horas === null || s.sla_restante_horas === undefined) return null;
+    return s.sla_restante_horas < 0 ? 'FUERA_DE_PLAZO' : 'EN_PLAZO';
+  }
+
   function filtrarPorKpi_(lista) {
     if (!kpiActivo) return lista;
     return lista.filter(function (s) {
-      var abierta = ESTADOS_CERRADOS_CLIENTE.indexOf(s.estado_derivado) === -1;
-      if (kpiActivo === 'abiertas') return abierta;
-      if (kpiActivo === 'criticas') return abierta && s.prioridad_derivada === 'P1';
-      if (kpiActivo === 'fuera_plazo') return s.sla_restante_horas !== null && s.sla_restante_horas !== undefined && s.sla_restante_horas < 0;
-      if (kpiActivo === 'sin_asignar') return abierta && !s.asignado_a;
-      return true;
+      return cumpleKpi_(s, kpiActivo);
     });
+  }
+
+  // --- Fase 3: chips de filtros activos ---------------------------------
+  //
+  // Como se lee un KPI cuando actua de filtro. Se nombra el EJE
+  // ("Situacion: En riesgo") y no la etiqueta del KPI a secas, para que el
+  // chip se entienda fuera del contexto de la tarjeta que lo activo.
+  var ETIQUETA_KPI = {
+    // "Solo abiertas" y no "Estado: abiertas": el select de Estado tiene su
+    // propio chip ("Estado: En revisión") y dos chips que empiezan igual pero
+    // filtran cosas distintas se leen como contradiccion.
+    abiertas: 'Solo abiertas',
+    criticas: 'Prioridad: P1',
+    fuera_plazo: 'Situación: fuera de plazo',
+    en_riesgo: 'Situación: en riesgo',
+    sin_asignar: 'Responsable: sin asignar'
+  };
+
+  // Descripcion declarativa de TODO lo que esta filtrando ahora mismo. Una
+  // sola lista alimenta los chips, el boton de limpiar y el contador -- no se
+  // reimplementa ningun filtro aca: cada entrada solo sabe COMO SE APAGA el
+  // mecanismo que ya existe (el select, el input o kpiActivo).
+  //
+  // `recarga: true` = el filtro vive en el backend (leerFiltros_ lo manda en
+  // getDashboardData), asi que apagarlo exige volver a pedir los datos.
+  // `recarga: false` = filtro de cliente sobre lo ya cargado, basta re-render.
+  //
+  // "Agrupar" NO entra: no filtra nada, solo reordena lo que ya se ve --
+  // mostrarlo como filtro activo haria creer que oculta solicitudes.
+  function filtrosActivos_() {
+    var activos = [];
+
+    function porSelect_(id, etiqueta, formatear) {
+      var select = document.getElementById(id);
+      if (!select || !select.value) return;
+      var texto = formatear
+        ? formatear(select.value, select)
+        : select.options[select.selectedIndex].textContent.trim();
+      activos.push({
+        clave: id, etiqueta: etiqueta + ': ' + texto, recarga: true,
+        limpiar: function () { select.value = ''; }
+      });
+    }
+
+    porSelect_('filtro-bandeja', 'Bandeja');
+    porSelect_('filtro-empresa', 'Empresa');
+    porSelect_('filtro-estado', 'Estado', function (valor) {
+      // El <option> dice "S03 — En revisión"; en el chip sobra el codigo.
+      return (typeof SIGSO_ESTADOS_LABEL !== 'undefined' && SIGSO_ESTADOS_LABEL[valor]) || valor;
+    });
+    porSelect_('filtro-prioridad', 'Prioridad');
+
+    if (kpiActivo) {
+      activos.push({
+        clave: 'kpi', etiqueta: ETIQUETA_KPI[kpiActivo] || kpiActivo, recarga: false,
+        limpiar: function () { kpiActivo = null; }
+      });
+    }
+
+    var buscar = document.getElementById('buscar-recientes');
+    if (buscar && buscar.value.trim()) {
+      // Este campo hace doble trabajo: filtra en cliente Y viaja como
+      // `solicitante` a getDashboardData al pulsar "Actualizar". Se limpia
+      // CON recarga siempre, porque si ya se habia enviado, el universo
+      // cargado tambien esta acotado por el -- borrar solo el input dejaria
+      // una lista recortada sin ningun filtro visible que lo explique.
+      activos.push({
+        clave: 'texto', etiqueta: 'Búsqueda: "' + buscar.value.trim() + '"', recarga: true,
+        limpiar: function () { buscar.value = ''; }
+      });
+    }
+
+    return activos;
+  }
+
+  function renderChipsFiltros_(cantidadVisible) {
+    var contenedor = document.getElementById('chips-filtros');
+    if (!contenedor) return;
+    var activos = filtrosActivos_();
+    if (activos.length === 0) {
+      contenedor.innerHTML = '';
+      return;
+    }
+
+    // El contador responde "¿por que veo esto?" junto a los chips que lo
+    // explican, en vez de dejar al usuario contar filas a mano.
+    var plural = cantidadVisible === 1 ? 'solicitud' : 'solicitudes';
+    contenedor.innerHTML =
+      '<span class="sigso-chips-filtros__conteo">' + cantidadVisible + ' ' + plural + '</span>' +
+      activos.map(function (f, i) {
+        // El proposito va en aria-label (no en un span oculto): el texto
+        // visible es el valor del filtro, y la "x" es decorativa.
+        return '<button type="button" class="sigso-chip-filtro" data-quitar-filtro="' + i + '" ' +
+          'aria-label="Quitar filtro ' + Componentes.escaparHtml(f.etiqueta) + '" ' +
+          'title="Quitar filtro">' + Componentes.escaparHtml(f.etiqueta) +
+          '<span class="sigso-chip-filtro__x" aria-hidden="true">×</span></button>';
+      }).join('') +
+      '<button type="button" class="sigso-chips-filtros__limpiar" id="btn-limpiar-filtros">Limpiar filtros</button>';
+
+    contenedor.querySelectorAll('[data-quitar-filtro]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        var filtro = activos[Number(boton.getAttribute('data-quitar-filtro'))];
+        filtro.limpiar();
+        if (filtro.recarga) {
+          cargarDashboard_();
+        } else {
+          renderKpis_();
+          renderRecientes_();
+        }
+      });
+    });
+
+    var botonLimpiar = document.getElementById('btn-limpiar-filtros');
+    if (botonLimpiar) {
+      botonLimpiar.addEventListener('click', function () {
+        // Se apagan TODOS con su propia funcion de limpieza (nada de
+        // reimplementar aca cual era el valor "vacio" de cada control) y se
+        // recarga una sola vez, aunque alguno fuera de cliente.
+        activos.forEach(function (f) { f.limpiar(); });
+        // v6.2 (F4): "Limpiar filtros" es tambien el "restablecer todo" del
+        // contexto guardado -- si solo se apagaran los controles, el proximo
+        // F5 volveria a traer los filtros que el usuario acaba de quitar.
+        limpiarContexto_();
+        restaurarScrollPendiente_ = false;
+        window.scrollTo(0, 0);
+        cargarDashboard_();
+      });
+    }
   }
 
   function agruparPara_(lista, campo) {
@@ -725,7 +1169,11 @@
   var DIAS_SIN_MOVIMIENTO_UMBRAL = 5;
 
   function renderFilaReciente_(s) {
-    var sla = Componentes.barraSla(s.sla_restante_horas);
+    // v6.1: se retira la barra de SLA de la fila. Decia lo MISMO que el chip
+    // de situacion ("Fuera de plazo") y que la linea de tiempo relativo
+    // ("Venció hace 1 día"): tres elementos con colores para un unico hecho.
+    // Queda el chip (el veredicto, con color) + la linea relativa (el cuando,
+    // en gris) -- se lee mas rapido y usa color solo donde comunica.
     // P5 (v2.0, Sprint 3): badge visual de "respuesta recibida" -- para que
     // Leo no dependa solo de encontrar el correo entre el resto de avisos.
     var badgeRespuesta = s.respuesta_pendiente ? ' ' + Componentes.badge('Respuesta recibida', 'P2') : '';
@@ -739,18 +1187,48 @@
     // secundario en la linea de abajo.
     var titulo = s.titulo_item ? Componentes.escaparHtml(s.titulo_item) : Componentes.escaparHtml(s.modulo || '(sin título)');
     if (s.cantidad_items > 1) titulo += ' <span class="sigso-fila-reciente__mas-items">(+' + (s.cantidad_items - 1) + ')</span>';
-    return '<div class="sigso-fila-reciente" data-id="' + s.solicitud_id + '">' +
+
+    // v6.1 (Fase 2): ESTADO (donde va en el flujo) y SITUACION (como va de
+    // plazo) son dos chips distintos y pueden convivir -- "Terminada" +
+    // "Fuera de plazo" es un caso real que antes no se podia expresar.
+    var chipSituacion = Componentes.chipSituacion(situacionSla_(s), s.sla_restante_horas);
+    // El tiempo relativo va en su propia linea, en lenguaje humano; la
+    // fecha comprometida exacta queda en el title (dato secundario, no
+    // compite con el resto de la fila).
+    var relativo = Componentes.tiempoRelativoSla(s.sla_restante_horas);
+    var plazo = relativo
+      ? '<div class="sigso-fila-reciente__plazo"' +
+        (s.fecha_comprometida ? ' title="Fecha comprometida: ' + Componentes.escaparHtml(String(s.fecha_comprometida).replace('T', ' ').slice(0, 16)) + '"' : '') +
+        '>' + Componentes.escaparHtml(relativo) + '</div>'
+      : '';
+
+    // v6.1 (revision UX): la fila abre el detalle, asi que tiene que ser
+    // operable con teclado. Era un <div> con onclick: alcanzable solo con
+    // mouse -- desde la bandeja no habia NINGUNA forma de abrir una solicitud
+    // sin puntero. role+tabindex la exponen como boton y wireFilas_ ata
+    // Enter/Espacio. (No se cambia a <button> nativo porque la fila contiene
+    // varios elementos y anidar botones dentro de un boton es HTML invalido.)
+    return '<div class="sigso-fila-reciente" data-id="' + s.solicitud_id + '"' +
+      ' role="button" tabindex="0"' +
+      ' aria-label="Abrir ' + s.solicitud_id + ': ' + Componentes.escaparHtml(s.titulo_item || s.modulo || '') + '">' +
+      // v6.2 (F1): jerarquia invertida. El TITULO es la primera linea y el
+      // elemento dominante; el ID baja a la linea de metadata (sigue en mono
+      // para poder cazarlo de un vistazo, pero ya no compite). Se escanea la
+      // bandeja leyendo de que se trata cada solicitud, no codigos.
+      // La prioridad y los chips acompanan al titulo en la misma linea porque
+      // son el otro dato de triage inmediato.
       '<div class="sigso-fila-reciente__principal">' +
+      '<span class="sigso-fila-reciente__titulo">' + titulo + '</span>' +
       Componentes.badgePrioridad(s.prioridad_derivada) + ' ' +
-      '<strong class="sigso-id">' + s.solicitud_id + '</strong> ' +
-      Componentes.badgeEstado(s.estado_derivado) + badgeRespuesta + badgeSinMovimiento +
+      Componentes.badgeEstado(s.estado_derivado) + (chipSituacion ? ' ' + chipSituacion : '') +
+      badgeRespuesta + badgeSinMovimiento +
       '</div>' +
-      '<div class="sigso-fila-reciente__titulo">' + titulo + '</div>' +
       '<div class="sigso-fila-reciente__meta" title="' + Componentes.escaparHtml(s.modulo || '') + '">' +
+      '<span class="sigso-id">' + s.solicitud_id + '</span> &middot; ' +
       s.empresa_id + ' &middot; ' + Componentes.escaparHtml(s.plataforma || '') + ' &middot; ' +
       (s.asignado_nombre ? Componentes.escaparHtml(s.asignado_nombre) : 'Sin asignar') +
       '</div>' +
-      (sla ? '<div class="sigso-fila-reciente__sla">' + sla + '</div>' : '') +
+      plazo +
       '</div>';
   }
 

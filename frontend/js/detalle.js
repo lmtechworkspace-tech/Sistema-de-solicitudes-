@@ -157,10 +157,29 @@
     var cta = (!soloLectura && subsolicitudes.length === 1)
       ? renderCtaToolbar_(subsolicitudes[0], detalle.transiciones_por_subsolicitud || {})
       : '';
+    // v6.1 (Fase 2): la situacion del plazo tambien va en la barra, al lado
+    // del estado y como chip aparte -- si la fila de la bandeja decia "Fuera
+    // de plazo", el detalle al que se entra tiene que decir lo mismo. Se toma
+    // la PEOR de los items (mismo criterio que Sla.peorSituacion en el
+    // backend), porque la barra habla de la solicitud completa.
+    var ORDEN_SIT = ['FUERA_DE_PLAZO', 'EN_RIESGO', 'EN_PLAZO'];
+    var situaciones = subsolicitudes.map(function (sub) { return sub.situacion_sla; });
+    var peorSituacion = null;
+    for (var i = 0; i < ORDEN_SIT.length && !peorSituacion; i++) {
+      if (situaciones.indexOf(ORDEN_SIT[i]) !== -1) peorSituacion = ORDEN_SIT[i];
+    }
+    // Horas del item mas apretado, solo para el tooltip del chip.
+    var horasMin = subsolicitudes.reduce(function (min, sub) {
+      if (sub.sla_restante_horas === null || sub.sla_restante_horas === undefined) return min;
+      return min === null ? sub.sla_restante_horas : Math.min(min, sub.sla_restante_horas);
+    }, null);
+    var chipSit = Componentes.chipSituacion(peorSituacion, horasMin);
+
     return '<div class="sigso-detalle-toolbar">' +
       '<div class="sigso-detalle-toolbar__info">' +
       '<strong class="sigso-id">' + s.solicitud_id + '</strong> ' +
       Componentes.badgeEstado(s.estado_derivado) + ' ' +
+      (chipSit ? chipSit + ' ' : '') +
       '<span class="sigso-detalle-toolbar__empresa">' +
       Componentes.escaparHtml(s.empresa_nombre || s.empresa_id) + ' &middot; ' +
       Componentes.escaparHtml(s.plataforma_nombre || s.plataforma) + '</span>' +
@@ -396,15 +415,45 @@
       // H: resumen visible aun colapsado -- fecha comprometida y responsable
       // son justo lo que se necesita para decidir "¿me interesa abrir este?"
       // sin tener que expandirlo primero.
-      var cabeceraExtra = [];
-      if (sub.fecha_comprometida) cabeceraExtra.push('📅 ' + Componentes.escaparHtml(fechaCorta_(sub.fecha_comprometida)));
-      if (sub.desarrollador_asignado) cabeceraExtra.push('👤 ' + Componentes.escaparHtml(sub.desarrollador_asignado));
-      var cabeceraExtraHtml = cabeceraExtra.length ? ' <span class="sigso-acordeon-item__extra">' + cabeceraExtra.join(' &middot; ') + '</span>' : '';
+      // v6.1: el chip de situacion tambien por item -- con varios items, uno
+      // puede ir en riesgo y otro en plazo, y la barra de arriba solo muestra
+      // el peor de todos.
+      var chipSituacionItem = Componentes.chipSituacion(sub.situacion_sla, sub.sla_restante_horas);
+
+      // v6.2 (F3): TRES conceptos distintos, presentados aparte:
+      //   1. ESTADO   -> chip (donde va en el flujo)
+      //   2. SITUACION -> chip (como va de SLA)
+      //   3. FECHA COMPROMETIDA -> campo etiquetado en la linea de abajo
+      //
+      // "Sin comprometer" estaba suelto entre los chips y se leia como un
+      // TERCER estado de SLA, cuando en realidad responde a otra pregunta:
+      // "¿hay fecha acordada?". Ahora vive en su propio campo rotulado.
+      //
+      // El semaforo de cumplimiento (el otro eje, contra la fecha prometida)
+      // acompana a la fecha, no al chip de SLA -- y se omite cuando NO hay
+      // fecha, porque ahi solo diria "Sin comprometer", que es exactamente lo
+      // que ya dice el campo.
+      var hayFecha = !!sub.fecha_comprometida;
+      var compromiso = hayFecha
+        ? Componentes.escaparHtml(fechaCorta_(sub.fecha_comprometida)) + cumplimientoTexto
+        : '<span class="sigso-sin-comprometer">sin definir</span>';
+      var lineaCompromiso = '<span class="sigso-acordeon-item__campo">' +
+        '<span class="sigso-acordeon-item__rotulo">Fecha comprometida</span> ' + compromiso + '</span>';
+      var lineaResponsable = sub.desarrollador_asignado
+        ? '<span class="sigso-acordeon-item__campo">' +
+          '<span class="sigso-acordeon-item__rotulo">Responsable</span> ' +
+          Componentes.escaparHtml(sub.desarrollador_asignado) + '</span>'
+        : '';
+      var cabeceraExtraHtml = '<div class="sigso-acordeon-item__extra">' + lineaCompromiso + lineaResponsable + '</div>';
       var activo = !!expandidosItem_[sub.subsolicitud_id];
 
       return '<div class="sigso-acordeon-item' + (activo ? ' sigso-acordeon-item--activo' : '') + '">' +
-        '<div class="sigso-acordeon-item__cabecera" data-toggle-item="' + sub.subsolicitud_id + '"><span>' + sub.numero_item + '. ' + Componentes.escaparHtml(sub.titulo) +
-        ' — ' + Componentes.badgePrioridad(sub.prioridad) + ' ' + Componentes.badgeEstado(sub.estado) + cumplimientoTexto + cabeceraExtraHtml + '</span></div>' +
+        '<div class="sigso-acordeon-item__cabecera" data-toggle-item="' + sub.subsolicitud_id + '"><span>' +
+        '<span class="sigso-acordeon-item__chips">' +
+        '<span class="sigso-acordeon-item__titulo">' + sub.numero_item + '. ' + Componentes.escaparHtml(sub.titulo) + '</span>' +
+        Componentes.badgePrioridad(sub.prioridad) + ' ' + Componentes.badgeEstado(sub.estado) +
+        (chipSituacionItem ? ' ' + chipSituacionItem : '') +
+        '</span>' + cabeceraExtraHtml + '</span></div>' +
         '<div class="sigso-acordeon-item__cuerpo">' +
         metaHtml +
         '<p>' + Componentes.escaparHtml(sub.descripcion) + '</p>' +
@@ -593,14 +642,27 @@
     return String(valor).replace('T', ' ').slice(0, 16);
   }
 
+  // v6.1 (Fase 4): imagenes y documentos se presentan distinto porque se usan
+  // distinto. Una captura se reconoce por su miniatura (galeria + lightbox);
+  // un PDF/Word/Excel no dice nada como miniatura y lo que se necesita saber
+  // antes de abrirlo es formato, peso y cuando se subio -- datos que ARCHIVOS
+  // ya guardaba y que hasta v6.0 no se mostraban en ninguna parte (salian
+  // como un enlace pelado dentro de la galeria).
   function renderGaleria_(archivos) {
-    return Componentes.galeriaImagenes((archivos || []).map(function (a) {
-      var esImagen = String(a.tipo_mime || '').indexOf('image/') === 0;
-      // v4.0 Frente 4: esImagen decide si el clic abre el lightbox (imagen)
-      // o sigue yendo a una pestana nueva (documento -- PDF/Excel/Word no
-      // se ven bien en un visor de imagenes).
-      return { url: a.url, nombre: a.nombre_original, descripcion: esImagen ? '' : a.nombre_original, esImagen: esImagen };
+    var todos = archivos || [];
+    var imagenes = todos.filter(function (a) { return String(a.tipo_mime || '').indexOf('image/') === 0; });
+    var documentos = todos.filter(function (a) { return String(a.tipo_mime || '').indexOf('image/') !== 0; });
+
+    var galeria = Componentes.galeriaImagenes(imagenes.map(function (a) {
+      return {
+        url: a.url, nombre: a.nombre_original, descripcion: '', esImagen: true,
+        // La metadata de una imagen va al tooltip: en la galeria competiria
+        // con la miniatura, que es la que informa de verdad.
+        meta: { tipo_mime: a.tipo_mime, tamano_bytes: a.tamano_bytes, fecha_subida: a.fecha_subida }
+      };
     }));
+
+    return galeria + Componentes.listaArchivos(documentos);
   }
 
   // --- Columna derecha: historia unificada (estados + comentarios) ------

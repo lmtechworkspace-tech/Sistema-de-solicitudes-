@@ -222,8 +222,19 @@ function calcularKpis_(filtros) {
     });
   }
 
+  // v6.3: indice de titulos por solicitud, para que la busqueda del servidor
+  // pueda mirar el TITULO del item (que vive en SUBSOLICITUDES) y no solo los
+  // campos de SOLICITUDES. Se arma sobre la lectura de SUBSOLICITUDES que ya
+  // esta en memoria -- misma tecnica que idsAsignadosPorItem, sin coste extra
+  // de lecturas de Sheets.
+  var titulosPorSolicitud = {};
+  todasSubsolicitudes.forEach(function (sub) {
+    if (!titulosPorSolicitud[sub.solicitud_id]) titulosPorSolicitud[sub.solicitud_id] = [];
+    if (sub.titulo) titulosPorSolicitud[sub.solicitud_id].push(sub.titulo);
+  });
+
   var solicitudes = leerFilas_(SHEETS.SOLICITUDES).filter(function (s) {
-    return coincideFiltros_(s, filtros, idsAsignadosPorItem);
+    return coincideFiltros_(s, filtros, idsAsignadosPorItem, titulosPorSolicitud);
   });
   var idsSolicitudes = {};
   solicitudes.forEach(function (s) { idsSolicitudes[s.solicitud_id] = true; });
@@ -269,11 +280,93 @@ function calcularKpis_(filtros) {
     }
   });
 
+  // v6.1 (gestion preventiva de SLA): el eje SLA se mide UNA sola vez por
+  // item y se reutiliza para los KPIs y para la lista. Antes se calculaba dos
+  // veces (una para resumen.sla_vencido sobre toda la hoja, otra dentro del
+  // .map() de recientes), y ahora hace falta tambien para ORDENAR por
+  // urgencia antes de recortar -- calcularlo tres veces no era opcion.
+  var medicionPorSub = {};
+  var situacionesPorSolicitud = {};
+  var itemsPorSolicitud = {};
+  subsolicitudes.forEach(function (sub) {
+    var medicion = Sla.medir(sub, { feriados: feriados });
+    medicionPorSub[sub.subsolicitud_id] = medicion;
+    if (!itemsPorSolicitud[sub.solicitud_id]) {
+      itemsPorSolicitud[sub.solicitud_id] = [];
+      situacionesPorSolicitud[sub.solicitud_id] = [];
+    }
+    itemsPorSolicitud[sub.solicitud_id].push(sub);
+    situacionesPorSolicitud[sub.solicitud_id].push(medicion ? medicion.situacion : null);
+  });
+
+  function situacionSlaDe_(solicitudId) {
+    return Sla.peorSituacion(situacionesPorSolicitud[solicitudId] || []);
+  }
+
+  // v6.1: se enriquece TODA la lista antes de ordenar y recortar. Recortar
+  // primero (como hacia hasta v6.0, top-50 por fecha_creacion) dejaba fuera
+  // solicitudes atrasadas antiguas, y entonces el KPI decia 7 y la lista
+  // mostraba 4 -- el contador y lo que se ve tienen que ser lo mismo.
+  var recientesTodas = solicitudes.map(function (s) {
+    // Fase 10 (rediseno UX): Leo debe entender una solicitud en <10s
+    // desde la fila, sin entrar al detalle -- cantidad de items y SLA
+    // restante son los dos datos que mas faltaban.
+    var itemsDeEstaSolicitud = itemsPorSolicitud[s.solicitud_id] || [];
+    var ultimoMovimiento = ultimoMovimientoPorSolicitud[s.solicitud_id] || s.fecha_creacion;
+    return {
+      solicitud_id: s.solicitud_id, empresa_id: s.empresa_id, plataforma: s.plataforma,
+      modulo: s.modulo, estado_derivado: s.estado_derivado, prioridad_derivada: s.prioridad_derivada,
+      fecha_creacion: s.fecha_creacion, asignado_a: s.desarrollador_asignado || '',
+      // Fase 10.2: nombre del responsable (no el correo) y el titulo del
+      // PRIMER item -- "GDE_GDE_PREVENCION_..." (el codigo del catalogo)
+      // no dice de que se trata; el titulo que el solicitante escribio si.
+      asignado_nombre: s.desarrollador_asignado ? (nombrePorEmail[s.desarrollador_asignado] || s.desarrollador_asignado) : '',
+      titulo_item: itemsDeEstaSolicitud.length ? itemsDeEstaSolicitud[0].titulo : '',
+      // Solo se expone la fecha comprometida cuando es univoca (1 item) --
+      // con varios items, cada uno puede tener la suya y mostrar una sola
+      // seria enganoso; el detalle es donde se ve cada una por separado.
+      fecha_comprometida: itemsDeEstaSolicitud.length === 1 ? (itemsDeEstaSolicitud[0].fecha_comprometida || '') : '',
+      dias_sin_movimiento: Math.floor((Date.now() - new Date(ultimoMovimiento).getTime()) / (24 * 3600 * 1000)),
+      cantidad_items: itemsDeEstaSolicitud.length,
+      sla_restante_horas: slaRestanteHoras_(itemsDeEstaSolicitud, feriados, medicionPorSub),
+      // v6.1: situacion del plazo como dato propio, separado del estado del
+      // flujo -- una solicitud puede estar "Terminada" (estado) y "Fuera de
+      // plazo" (situacion) a la vez, y antes eso no se podia expresar.
+      // null = sin SLA vigente que evaluar (cerrada, P5, atencion directa).
+      situacion_sla: situacionSlaDe_(s.solicitud_id),
+      // Fase 10.1: campos para la busqueda por texto en el Dashboard.
+      solicitante_nombre: s.solicitante_nombre || '',
+      solicitante_email: s.solicitante_email || '',
+      // v6.3: el MISMO texto que usa coincideFiltros_ para filtrar en el
+      // servidor. El navegador filtra en vivo contra esta cadena, asi que
+      // escribir en el buscador y pulsar "Actualizar" no pueden dar
+      // resultados distintos: comparan lo mismo contra lo mismo.
+      texto_busqueda: textoBusquedaSolicitud_(s, titulosPorSolicitud),
+      // P5 (v2.0, Sprint 3): "respuesta recibida" -- alguno de los items
+      // de esta solicitud esta "esperando informacion" (S06) y el
+      // solicitante ya respondio (badge, para no depender solo del correo).
+      respuesta_pendiente: itemsDeEstaSolicitud.some(function (sub) {
+        return respuestaPendienteLectura_(sub, historial, comentariosPublicos);
+      })
+    };
+  });
+
   return {
     resumen: {
       total_abiertas: abiertas.length,
       criticas_activas: abiertas.filter(function (s) { return s.prioridad_derivada === 'P1'; }).length,
-      sla_vencido: subsolicitudes.filter(function (sub) { return estaVencidoSla_(sub, feriados); }).length,
+      sla_vencido: subsolicitudes.filter(function (sub) {
+        var m = medicionPorSub[sub.subsolicitud_id];
+        return !!m && m.situacion === 'FUERA_DE_PLAZO';
+      }).length,
+      // v6.1 (A-08): items que ya consumieron >= 80% de su SLA objetivo y
+      // todavia NO vencen. Es el mismo umbral con el que Triggers.verificarSLAs
+      // manda alertaSLAProximo -- hasta v6.0 la bandeja solo sabia de lo ya
+      // vencido, o sea que solo avisaba cuando ya era tarde.
+      en_riesgo: subsolicitudes.filter(function (sub) {
+        var m = medicionPorSub[sub.subsolicitud_id];
+        return !!m && m.situacion === 'EN_RIESGO';
+      }).length,
       del_dia: solicitudes.filter(function (s) { return claveDia_(new Date(s.fecha_creacion), 'America/Santiago') === hoy; }).length,
       // Fase 10.2: reemplaza a "Ingresadas hoy" como KPI accionable de la
       // bandeja (casi siempre 0, no orienta el trabajo) -- "sin asignar" SI
@@ -299,47 +392,46 @@ function calcularKpis_(filtros) {
     // aislado"). Ver Triggers.detectarPatrones (Triggers.gs) para el aviso
     // por correo equivalente.
     alertas_patron: calcularAlertasPatron_(),
-    recientes: solicitudes
+    // v6.1: la lista se ORDENA POR URGENCIA (no por fecha de creacion) antes
+    // de recortar a RECIENTES_LIMITE. Es lo que hace que el contador del KPI y
+    // la cantidad de filas visibles coincidan: si algo esta fuera de plazo o en
+    // riesgo entra en la ventana por definicion, aunque sea una solicitud
+    // antigua (antes quedaba fuera del top-50 por fecha y el KPI decia 7
+    // mientras la lista mostraba 4).
+    recientes: recientesTodas
       .slice()
-      .sort(function (a, b) { return new Date(b.fecha_creacion) - new Date(a.fecha_creacion); })
-      // Fase 10.1: se sube de 20 a RECIENTES_LIMITE para que la busqueda por
-      // texto (cliente, dashboard.js) tenga un universo util donde buscar;
-      // sigue siendo una lista acotada, no un listado completo paginado.
-      .slice(0, RECIENTES_LIMITE)
-      .map(function (s) {
-        // Fase 10 (rediseno UX): Leo debe entender una solicitud en <10s
-        // desde la fila, sin entrar al detalle -- cantidad de items y SLA
-        // restante son los dos datos que mas faltaban.
-        var itemsDeEstaSolicitud = subsolicitudes.filter(function (sub) { return sub.solicitud_id === s.solicitud_id; });
-        var ultimoMovimiento = ultimoMovimientoPorSolicitud[s.solicitud_id] || s.fecha_creacion;
-        return {
-          solicitud_id: s.solicitud_id, empresa_id: s.empresa_id, plataforma: s.plataforma,
-          modulo: s.modulo, estado_derivado: s.estado_derivado, prioridad_derivada: s.prioridad_derivada,
-          fecha_creacion: s.fecha_creacion, asignado_a: s.desarrollador_asignado || '',
-          // Fase 10.2: nombre del responsable (no el correo) y el titulo del
-          // PRIMER item -- "GDE_GDE_PREVENCION_..." (el codigo del catalogo)
-          // no dice de que se trata; el titulo que el solicitante escribio si.
-          asignado_nombre: s.desarrollador_asignado ? (nombrePorEmail[s.desarrollador_asignado] || s.desarrollador_asignado) : '',
-          titulo_item: itemsDeEstaSolicitud.length ? itemsDeEstaSolicitud[0].titulo : '',
-          // Solo se expone la fecha comprometida cuando es univoca (1 item) --
-          // con varios items, cada uno puede tener la suya y mostrar una sola
-          // seria enganoso; el detalle es donde se ve cada una por separado.
-          fecha_comprometida: itemsDeEstaSolicitud.length === 1 ? (itemsDeEstaSolicitud[0].fecha_comprometida || '') : '',
-          dias_sin_movimiento: Math.floor((Date.now() - new Date(ultimoMovimiento).getTime()) / (24 * 3600 * 1000)),
-          cantidad_items: itemsDeEstaSolicitud.length,
-          sla_restante_horas: slaRestanteHoras_(itemsDeEstaSolicitud, feriados),
-          // Fase 10.1: campos para la busqueda por texto en el Dashboard.
-          solicitante_nombre: s.solicitante_nombre || '',
-          solicitante_email: s.solicitante_email || '',
-          // P5 (v2.0, Sprint 3): "respuesta recibida" -- alguno de los items
-          // de esta solicitud esta "esperando informacion" (S06) y el
-          // solicitante ya respondio (badge, para no depender solo del correo).
-          respuesta_pendiente: itemsDeEstaSolicitud.some(function (sub) {
-            return respuestaPendienteLectura_(sub, historial, comentariosPublicos);
-          })
-        };
-      })
+      .sort(function (a, b) { return ordenUrgencia_(a) - ordenUrgencia_(b); })
+      .slice(0, RECIENTES_LIMITE),
+    // v6.1: para poder decir en pantalla "mostrando las 50 mas urgentes de
+    // 128" en vez de dar a entender que la bandeja es todo lo que hay.
+    total_solicitudes: recientesTodas.length,
+    recientes_truncado: recientesTodas.length > RECIENTES_LIMITE
   };
+}
+
+// v6.1: clave de orden de la bandeja. Menor = mas arriba. La bandeja es una
+// COLA DE TRABAJO, no un registro cronologico: lo que decide el orden es
+// "cuanto corre" y no "cuando entro". La fecha de creacion queda solo como
+// desempate dentro del mismo nivel de urgencia.
+//
+// Ademas es lo que garantiza la coherencia KPI -> filtro -> filas: al recortar
+// a RECIENTES_LIMITE, todo lo vencido y en riesgo queda dentro de la ventana
+// antes que cualquier cosa sana.
+var ORDEN_SITUACION_SLA = { FUERA_DE_PLAZO: 0, EN_RIESGO: 1, EN_PLAZO: 2 };
+
+function ordenUrgencia_(fila) {
+  var cerrada = ESTADOS_CERRADOS.indexOf(fila.estado_derivado) !== -1;
+  // Las cerradas siempre al fondo: ya no son trabajo pendiente (la UI las
+  // deja colapsadas en su propio <details>).
+  var nivel = cerrada ? 9 : (fila.situacion_sla ? ORDEN_SITUACION_SLA[fila.situacion_sla] : 3);
+  // Dentro del mismo nivel: menos horas restantes primero. Sin SLA vigente
+  // (null) no hay reloj, va detras de las que si lo tienen.
+  var restantes = fila.sla_restante_horas === null || fila.sla_restante_horas === undefined
+    ? Number.MAX_SAFE_INTEGER
+    : fila.sla_restante_horas;
+  // Se combina en un solo numero (nivel domina, luego horas, luego fecha
+  // desc) para que Array.sort sea estable y facil de razonar.
+  return nivel * 1e15 + restantes * 1e6 - new Date(fila.fecha_creacion).getTime() / 1e6;
 }
 
 // P5: true si el item sigue "esperando informacion" (S06) Y ya existe un
@@ -368,25 +460,72 @@ function respuestaPendienteLectura_(subsolicitud, historial, comentariosPublicos
 // Minimo (mas urgente) de horas habiles restantes de SLA entre los items
 // activos de la solicitud; null si ninguno tiene SLA vigente (todos
 // cerrados/excluidos o sin sla_objetivo_horas, ej. P5). Negativo = vencido.
-function slaRestanteHoras_(items, feriados) {
+//
+// v6.1: la elegibilidad y el calculo salen de Sla.medir (Cumplimiento.gs) --
+// unica fuente de verdad del eje SLA. Acepta mediciones ya calculadas para
+// no volver a llamar a horasHabilesEntre por item (calcularKpis_ las computa
+// una sola vez para toda la hoja).
+function slaRestanteHoras_(items, feriados, medicionPorSub) {
   var restantes = items
-    .filter(function (sub) {
-      return ESTADOS_EXCLUIDOS_DERIVACION.indexOf(sub.estado) === -1 && sub.estado !== ESTADOS.S09 &&
-        sub.sla_objetivo_horas !== '' && sub.sla_objetivo_horas !== undefined && sub.sla_objetivo_horas !== null;
-    })
     .map(function (sub) {
-      var transcurridas = Utils.horasHabilesEntre(sub.fecha_creacion, new Date(), { feriados: feriados });
-      return Number(sub.sla_objetivo_horas) - transcurridas;
-    });
+      var medicion = medicionPorSub && medicionPorSub[sub.subsolicitud_id] !== undefined
+        ? medicionPorSub[sub.subsolicitud_id]
+        : Sla.medir(sub, { feriados: feriados });
+      return medicion ? medicion.restantes_horas : null;
+    })
+    .filter(function (h) { return h !== null; });
   if (restantes.length === 0) return null;
   return Math.round(Math.min.apply(null, restantes) * 10) / 10;
 }
 
-function coincideFiltros_(solicitud, filtros, idsAsignadosPorItem) {
+// v6.3: UNICA definicion de "que texto es buscable en una solicitud".
+//
+// El buscador de la Bandeja tenia dos comportamientos distintos: en cliente
+// miraba varios campos y en el servidor SOLO solicitante, asi que un texto
+// que casaba con el titulo mostraba resultados y al pulsar "Actualizar" los
+// hacia desaparecer. La causa de fondo era tener DOS definiciones de buscar.
+//
+// Ahora hay una sola, aqui. El blob que arma esta funcion se usa para dos
+// cosas y por eso no puede divergir:
+//   1. lo consulta coincideFiltros_ cuando llega filtros.busqueda, y
+//   2. viaja en recientes[].texto_busqueda para que el filtrado en vivo del
+//      navegador compare contra EXACTAMENTE la misma cadena, sin
+//      reimplementar nada.
+//
+// El titulo vive en SUBSOLICITUDES, no en SOLICITUDES, asi que se recibe ya
+// indexado (calcularKpis_ arma el indice con la lectura de SUBSOLICITUDES
+// que de todos modos ya hace: no cuesta lecturas extra de Sheets).
+function textoBusquedaSolicitud_(solicitud, titulosPorSolicitud) {
+  var titulos = (titulosPorSolicitud && titulosPorSolicitud[solicitud.solicitud_id]) || [];
+  return [
+    solicitud.solicitud_id,
+    titulos.join(' '),
+    solicitud.solicitante_nombre,
+    solicitud.solicitante_email,
+    solicitud.empresa_id,
+    solicitud.empresa_nombre,
+    solicitud.plataforma,
+    solicitud.plataforma_nombre,
+    solicitud.modulo
+  ].join(' ').toLowerCase();
+}
+
+function coincideFiltros_(solicitud, filtros, idsAsignadosPorItem, titulosPorSolicitud) {
   if (filtros.empresa_id && solicitud.empresa_id !== filtros.empresa_id) return false;
   if (filtros.estado && solicitud.estado_derivado !== filtros.estado) return false;
   if (filtros.prioridad && solicitud.prioridad_derivada !== filtros.prioridad) return false;
   if (filtros.plataforma && solicitud.plataforma !== filtros.plataforma) return false;
+  // v6.3: busqueda general de la Bandeja. Es un filtro DISTINTO de
+  // `solicitante` (abajo) a proposito: el Panel de Gerencia tiene un campo
+  // rotulado "Solicitante" y ahi ensanchar la busqueda a titulos/modulos
+  // seria incorrecto -- quien escribe en un campo que dice "Solicitante"
+  // espera que filtre por solicitante. Por eso conviven los dos.
+  if (filtros.busqueda) {
+    var termino = String(filtros.busqueda).trim().toLowerCase();
+    if (termino && textoBusquedaSolicitud_(solicitud, titulosPorSolicitud).indexOf(termino) === -1) {
+      return false;
+    }
+  }
   // P6 (v2.0, Sprint 2): filtro por solicitante -- Gerencia necesita
   // responder "¿de que son todos esos tickets que manda Juan?" sin
   // depender de Leo. Coincidencia parcial, sin distinguir mayus/minus,
@@ -434,15 +573,11 @@ function obtenerFeriados_() {
 // §10/§7.4 (RN-019/020): vencida si ya supero su sla_objetivo_horas en
 // horas habiles, sin contar subsolicitudes cerradas/rechazadas/canceladas
 // ni las que ya llegaron a S09, ni las sin SLA (P5).
+//
+// v6.1: delega en Sla.medir (Cumplimiento.gs) -- antes repetia aqui el mismo
+// filtro de elegibilidad que slaRestanteHoras_ y Triggers.ratioSlaConsumido_.
 function estaVencidoSla_(subsolicitud, feriados) {
-  if (ESTADOS_EXCLUIDOS_DERIVACION.indexOf(subsolicitud.estado) !== -1 || subsolicitud.estado === ESTADOS.S09) {
-    return false;
-  }
-  if (subsolicitud.sla_objetivo_horas === '' || subsolicitud.sla_objetivo_horas === undefined || subsolicitud.sla_objetivo_horas === null) {
-    return false;
-  }
-  var transcurridas = Utils.horasHabilesEntre(subsolicitud.fecha_creacion, new Date(), { feriados: feriados });
-  return transcurridas > Number(subsolicitud.sla_objetivo_horas);
+  return Sla.situacion(subsolicitud, { feriados: feriados }) === 'FUERA_DE_PLAZO';
 }
 
 // v3.1 (§1.5/§1.6): la marca viene del Sheets, donde un booleano puede

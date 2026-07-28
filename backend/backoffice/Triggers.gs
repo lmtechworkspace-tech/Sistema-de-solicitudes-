@@ -422,17 +422,14 @@ var Triggers = {
 };
 
 // Devuelve null si la subsolicitud no aplica (cerrada/rechazada/cancelada,
-// ya en S09, o sin SLA definido -- P5): mismo criterio que
-// Dashboard.estaVencidoSla_.
+// ya en S09, o sin SLA definido -- P5).
+//
+// v6.1: delega en Sla.medir (Cumplimiento.gs), que es la unica fuente de
+// verdad del eje SLA -- este umbral del 80% (A-08) es el mismo que ahora usa
+// la Bandeja para el grupo "En riesgo", asi que no puede vivir en dos partes.
 function ratioSlaConsumido_(subsolicitud, feriados) {
-  if (ESTADOS_EXCLUIDOS_DERIVACION.indexOf(subsolicitud.estado) !== -1 || subsolicitud.estado === ESTADOS.S09) {
-    return null;
-  }
-  if (subsolicitud.sla_objetivo_horas === '' || subsolicitud.sla_objetivo_horas === undefined || subsolicitud.sla_objetivo_horas === null) {
-    return null;
-  }
-  var transcurridas = Utils.horasHabilesEntre(subsolicitud.fecha_creacion, new Date(), { feriados: feriados });
-  return transcurridas / Number(subsolicitud.sla_objetivo_horas);
+  var medicion = Sla.medir(subsolicitud, { feriados: feriados });
+  return medicion ? medicion.ratio : null;
 }
 
 // RN-201/RF-208 + v2.1 (Fase D): dias habiles desde la ULTIMA vez que el
