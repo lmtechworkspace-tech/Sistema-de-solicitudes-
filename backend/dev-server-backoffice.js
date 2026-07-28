@@ -104,6 +104,10 @@ function construirContexto() {
   ]);
   seedSheet(ctx, 'PAUSAS_ASISTENCIA', ctx.COLUMNAS.PAUSAS_ASISTENCIA);
   seedSheet(ctx, 'PAUSAS_LOG', ctx.COLUMNAS.PAUSAS_LOG);
+  // v6.4: foto de perfil. Se siembra VACIA a proposito, para poder probar el
+  // camino "usuario sin foto -> avatar de iniciales" que es el estado
+  // inicial de todo el mundo.
+  seedSheet(ctx, 'PERFILES', ctx.COLUMNAS.PERFILES);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
   // v6.1 (Fase 4): DOCUMENTOS demo (las capturas ya las siembra
   // sembrarSolicitudesDemo_ mas abajo). Hacen falta para ver la lista de

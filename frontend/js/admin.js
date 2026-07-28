@@ -113,6 +113,10 @@
     if (typeof renderHeaderSigso === 'function') {
       renderHeaderSigso('admin');
     }
+    // v6.4: identidad + "Mi perfil" en el header, igual que en app.html.
+    if (window.SigsoPerfil) {
+      SigsoPerfil.montarHeaderUsuario();
+    }
     document.querySelectorAll('.sigso-admin-menu__item').forEach(function (boton) {
       boton.addEventListener('click', function () {
         document.querySelectorAll('.sigso-admin-menu__item').forEach(function (b) {
@@ -375,10 +379,10 @@
   // v4.0 Frente 5: avatar de iniciales + "Nunca entró" cuando ultimo_acceso
   // esta vacio -- antes esa columna directamente no existia, asi que no
   // habia forma de saber si una cuenta creada hace un mes se llego a usar.
-  function inicialesCuenta_(nombre) {
-    var partes = String(nombre || '').trim().split(/\s+/);
-    return ((partes[0] || '')[0] || '') + ((partes[1] || '')[0] || '');
-  }
+  //
+  // v6.4: inicialesCuenta_ se elimino; el avatar lo pinta ahora
+  // Componentes.avatar, que ademas muestra la foto de perfil si la cuenta
+  // tiene una. Es la misma funcion que usa el header y los comentarios.
 
   function renderTablaCuentas_(cuentas) {
     if (cuentas.length === 0) {
@@ -394,7 +398,11 @@
         : '<span class="sigso-cuenta-nunca-entro">Nunca entró</span>';
       return '<tr data-cuenta=\'' + JSON.stringify(c).replace(/'/g, '&#39;') + '\'>' +
         '<td><div class="sigso-cuenta-fila">' +
-        '<span class="sigso-cuenta-fila__avatar">' + Componentes.escaparHtml(inicialesCuenta_(c.nombre).toUpperCase()) + '</span>' +
+        '<span class="sigso-cuenta-fila__avatar">' +
+          Componentes.avatar(
+            { nombre: c.nombre, foto: window.SigsoPerfil ? SigsoPerfil.fotoDe((c.emails || [])[0]) : '' },
+            { tam: 'md' }
+          ) + '</span>' +
         '<div><div>' + Componentes.escaparHtml(c.usuario) + '</div>' +
         '<div class="sigso-ayuda">' + Componentes.escaparHtml(c.nombre) + '</div></div>' +
         '</div></td>' +

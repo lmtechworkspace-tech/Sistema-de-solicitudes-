@@ -546,6 +546,35 @@ correo }`, tanto si la persona a cargo aparece como **solicitante**
 (`desarrollador_asignado`/`analista_asignado`, a nivel solicitud o
 subsolicitud) — ver `documentacion/SIGSO-v4.2-propuestas-modulo-jefatura.md`.
 
+## PERFILES (nueva, v6.4 — foto de perfil, ADITIVO)
+
+Una fila por identidad. Se declara en las tres copias del esquema para que
+`schema-consistency.test.js` siga verde, mismo patrón que `JEFATURAS`.
+
+| Columna | Tipo | Nota |
+|---|---|---|
+| `perfil_id` | string | `Utilities.getUuid()` |
+| `identidad_tipo` | string | `GOOGLE` \| `PORTAL` |
+| `identidad_clave` | string | Email normalizado (GOOGLE) o `cuenta_id` (PORTAL) |
+| `foto_file_id` | string | ID del original privado en Drive (carpeta `SIGSO_Perfiles/`) |
+| `foto_thumb` | string | Miniatura cuadrada ~160px como `data:` URI base64 — lo que **renderiza** la interfaz |
+| `foto_mime` | string | `image/jpeg` \| `image/png` \| `image/webp` |
+| `actualizado_en` | string | ISO |
+
+**Clave compuesta `identidad_tipo` + `identidad_clave`** porque el sistema
+tiene DOS poblaciones de identidad que no comparten llave: `USUARIOS` se busca
+por email (login Google) y `CUENTAS_PORTAL` por `cuenta_id` (token). Una misma
+persona puede existir en ambas y tener perfiles independientes.
+
+Hoja SEPARADA a propósito: `USUARIOS`/`CUENTAS_PORTAL` las lee
+`resolverIdentidadYRol_` en CADA request, y meterles la miniatura base64
+arrastraría cientos de KB inútiles en toda llamada del sistema. Con hoja aparte
+la ruta de autenticación no se toca. La escribe solo el Backoffice
+(`Perfiles.gs`), y la identidad a la que pertenece cada fila se deriva SIEMPRE
+del contexto autenticado, nunca de un parámetro del navegador — ver
+`Perfiles.gs` y `backend/test/perfiles.test.js`. El original de Drive nunca
+recibe `setSharing`: hereda los permisos privados de la carpeta raíz.
+
 ## Módulo Pausas Activas (nuevas, v6.0 — ADITIVO)
 
 Seis hojas nuevas para el módulo de control de pausas activas. Son **totalmente

@@ -196,7 +196,14 @@ function createDriveAppMock() {
         return fileWrapper(id);
       },
       getUrl: () => 'https://drive.mock/file/' + id,
-      getBlob: () => nodos[id].blob
+      getBlob: () => nodos[id].blob,
+      // v6.4: Perfiles.gs manda a la papelera la foto anterior al
+      // reemplazarla, para no dejar originales huerfanos en Drive.
+      setTrashed(trashed) {
+        nodos[id].trashed = !!trashed;
+        return fileWrapper(id);
+      },
+      isTrashed: () => !!nodos[id].trashed
     };
   }
 

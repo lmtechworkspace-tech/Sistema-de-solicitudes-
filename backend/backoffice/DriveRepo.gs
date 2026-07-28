@@ -34,3 +34,12 @@ function obtenerCarpetaAdjuntos_(solicitud) {
   var carpetaSolicitud = obtenerCarpetaSolicitud_(solicitud);
   return obtenerOCrearSubcarpeta_(carpetaSolicitud, 'Adjuntos');
 }
+
+// v6.4 (foto de perfil): originales de las fotos de perfil. Cuelga de la
+// misma raiz que el resto y NUNCA se llama setSharing sobre ella ni sobre
+// sus archivos: al heredar los permisos de la raiz (privada), la foto de una
+// persona no queda accesible para cualquiera con el enlace. Lo que se muestra
+// en pantalla es la miniatura de PERFILES.foto_thumb, no este archivo.
+function obtenerCarpetaPerfiles_() {
+  return obtenerOCrearSubcarpeta_(obtenerCarpetaRaiz_(), 'SIGSO_Perfiles');
+}

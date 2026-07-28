@@ -72,8 +72,30 @@
         }
         detalleActual = respuesta.data;
         render_(detalleActual);
+        // v6.4: los avatares de la actividad se piden DESPUES de pintar, en
+        // UNA sola llamada para todos los autores, y solo se repinta si
+        // alguno tiene foto. Asi el detalle no espera por algo decorativo y
+        // una lista de 20 comentarios no genera 20 peticiones.
+        precargarAvatares_(detalleActual);
         return respuesta;
       });
+  }
+
+  function precargarAvatares_(detalle) {
+    if (!window.SigsoPerfil) return;
+    var correos = []
+      .concat(detalle.comentarios || [], detalle.historial_estados || [],
+        detalle.historial_compromiso || [], detalle.historial_asignacion || [])
+      .map(function (e) { return e.usuario; })
+      .filter(Boolean);
+    if (!correos.length) return;
+
+    SigsoPerfil.precargarFotos(correos).then(function () {
+      var hayFotos = correos.some(function (c) { return SigsoPerfil.fotoDe(c); });
+      // Si nadie tiene foto, lo ya pintado (iniciales) es correcto: repintar
+      // seria trabajo y parpadeo para nada.
+      if (hayFotos && detalleActual === detalle) render_(detalle);
+    });
   }
 
   function render_(detalle) {
@@ -727,9 +749,18 @@
           ? 'Comentario' + (e.esInterno ? ' (interno)' : '')
           : '<strong>' + e.texto + '</strong>';
         var detalleTexto = e.tipo === 'comentario' ? e.texto : e.comentario;
+        // v6.4: el autor pasa a mostrarse con su avatar (foto si tiene,
+        // iniciales si no). Las fotos vienen del cache que precargó
+        // precargarAvatares_ en UNA sola llamada -- aqui no hay red.
+        var autor = window.SigsoPerfil
+          ? SigsoPerfil.avatarDe(e.usuario, e.usuario, { tam: 'sm' })
+          : '';
         return '<li class="sigso-timeline__evento--' + e.tipo + (e.tipo === 'comentario' && e.esInterno ? ' sigso-comentario--interno' : '') + '">' +
           '<span class="sigso-timeline__icono">' + iconoEvento_(e) + '</span> ' +
-          etiqueta + ' — ' + Componentes.escaparHtml(e.usuario) + ' (' + new Date(e.timestamp).toLocaleString('es-CL') + ')' +
+          etiqueta + ' — ' +
+          '<span class="sigso-timeline__autor">' + autor +
+            Componentes.escaparHtml(e.usuario) + '</span>' +
+          ' (' + new Date(e.timestamp).toLocaleString('es-CL') + ')' +
           (detalleTexto ? '<br>' + Componentes.escaparHtml(detalleTexto) : '') +
           '</li>';
       }).join('') + '</ul>';

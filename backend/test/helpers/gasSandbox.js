@@ -91,6 +91,8 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   'Auth.gs',
   // v3.3: administracion de cuentas de la plataforma (solo ADM).
   'CuentasPortal.gs',
+  // v6.4: foto de perfil (hoja PERFILES + originales privados en Drive).
+  'Perfiles.gs',
   'Triggers.gs',
   'Code.gs'
 ];

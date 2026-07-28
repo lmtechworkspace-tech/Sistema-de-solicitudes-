@@ -42,6 +42,11 @@ function renderHeaderSigso(paginaActiva) {
     '</div>' +
     '</div>' +
     '<nav class="sigso-nav">' + enlaces + '</nav>' +
+    // v6.4: hueco para la identidad del usuario (avatar + menu "Mi perfil").
+    // Queda VACIO en index.html y estado.html, que son publicas y no tienen
+    // sesion; solo lo rellena SigsoPerfil.montarHeaderUsuario(), que llaman
+    // app.js y admin.js -- las paginas con login de Google.
+    '<div class="sigso-header__usuario" id="sigso-header-usuario"></div>' +
     '</div>';
 }
 

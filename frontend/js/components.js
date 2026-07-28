@@ -26,6 +26,83 @@
   var Componentes = {
     escaparHtml: escaparHtml,
 
+    // v6.4 (foto de perfil): iniciales para el avatar por defecto.
+    //
+    // Sustituye a dos copias que hacian lo mismo y mal (plataforma.js
+    // iniciales_ y admin.js inicialesCuenta_): las dos tomaban la primera y
+    // la ULTIMA palabra, asi que "María José Pérez" daba "MP" en vez de
+    // "MP"... correcto por casualidad, pero "Juan Carlos" daba "JC" cuando
+    // ambas son nombres de pila y no habia apellido. Ademas ninguna
+    // normalizaba acentos ni descartaba particulas.
+    //
+    // Criterio: primera palabra significativa + la SIGUIENTE significativa
+    // (que es el apellido en "Nombre Apellido" y el segundo nombre cuando no
+    // hay apellido). Se saltan particulas ("de", "del", "la", "van"...)
+    // porque "Juan de la Cruz" debe dar "JC", no "JD".
+    iniciales: function (nombre) {
+      // Solo conectores. "San"/"Santa" NO van aqui a proposito: en
+      // "Santa María" o "San Martín" forman parte del apellido, no lo unen.
+      var PARTICULAS = {
+        de: 1, del: 1, la: 1, las: 1, los: 1, y: 1, e: 1,
+        da: 1, das: 1, do: 1, dos: 1, van: 1, von: 1, di: 1
+      };
+      var texto = String(nombre || '').trim();
+      if (!texto) return '?';
+
+      // Si llega un correo (hay identidades sin nombre cargado), se usa la
+      // parte local: "j.perez@x.cl" -> "JP".
+      if (texto.indexOf('@') !== -1 && texto.indexOf(' ') === -1) {
+        texto = texto.split('@')[0].replace(/[._\-+]+/g, ' ');
+      }
+
+      var palabras = texto.split(/\s+/).filter(function (p) {
+        var limpia = p.replace(/[^\p{L}\p{N}]/gu, '');
+        return limpia && !PARTICULAS[quitarAcentos_(limpia).toLowerCase()];
+      });
+      if (!palabras.length) return '?';
+
+      var letras = primeraLetra_(palabras[0]);
+      if (palabras.length > 1) letras += primeraLetra_(palabras[1]);
+      return letras.toUpperCase() || '?';
+    },
+
+    /**
+     * v6.4: avatar unico de toda la plataforma. Si la persona tiene foto se
+     * pinta la miniatura; si no, sus iniciales. Un solo sitio donde decidir
+     * eso, para que no vuelva a haber tres avatares distintos.
+     *
+     * persona: { nombre, foto } (foto = data URI de PERFILES.foto_thumb).
+     * opts:    { tam: 'sm'|'md'|'lg'|'xl', id, clase, titulo }
+     *
+     * El <img> lleva onerror para caer a las iniciales si el data URI
+     * estuviera corrupto: mas vale un avatar de letras que un icono roto.
+     */
+    avatar: function (persona, opts) {
+      persona = persona || {};
+      opts = opts || {};
+      var tam = opts.tam || 'md';
+      var iniciales = Componentes.iniciales(persona.nombre);
+      var titulo = opts.titulo || persona.nombre || '';
+      var clases = 'sigso-avatar sigso-avatar--' + tam + (opts.clase ? ' ' + opts.clase : '');
+
+      var attrs = 'class="' + clases + '"' +
+        (opts.id ? ' id="' + escaparHtml(opts.id) + '"' : '') +
+        (titulo ? ' title="' + escaparHtml(titulo) + '"' : '') +
+        // El avatar es decorativo: el nombre siempre esta escrito al lado o
+        // en el title, asi que anunciarlo otra vez solo duplica el lector.
+        ' aria-hidden="true"';
+
+      if (persona.foto) {
+        return '<span ' + attrs + '>' +
+          '<img src="' + escaparHtml(persona.foto) + '" alt="" class="sigso-avatar__img" ' +
+          'onerror="this.remove()">' +
+          '<span class="sigso-avatar__ini">' + escaparHtml(iniciales) + '</span>' +
+          '</span>';
+      }
+      return '<span ' + attrs + '><span class="sigso-avatar__ini">' +
+        escaparHtml(iniciales) + '</span></span>';
+    },
+
     // variante: 'primario' (default) | 'secundario' | 'sutil' | 'peligro'.
     // v4.0 Frente 2: antes solo habia primario/secundario, asi que acciones
     // sin retorno (derivar en lote, desactivar cuenta) se pintaban igual que
@@ -502,6 +579,21 @@
     S08: 'espera',
     S09: 'ok', S10: 'no', S11: 'no'
   };
+
+  // v6.4: "Ángela" y "Angela" deben dar la misma inicial al comparar
+  // particulas. NFD separa la letra de su tilde y el rango ̀-ͯ la
+  // quita. Ojo: solo se usa para COMPARAR, la inicial que se muestra
+  // conserva su acento ("Á", no "A").
+  function quitarAcentos_(texto) {
+    return String(texto || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
+
+  // Primera letra respetando caracteres fuera del plano basico: charAt(0)
+  // partiria un emoji o ciertos caracteres compuestos por la mitad.
+  function primeraLetra_(palabra) {
+    var limpia = String(palabra || '').replace(/[^\p{L}\p{N}]/gu, '');
+    return limpia ? Array.from(limpia)[0] : '';
+  }
 
   function familiaEstado_(codigo) {
     return FAMILIA_ESTADO[codigo] || 'curso';

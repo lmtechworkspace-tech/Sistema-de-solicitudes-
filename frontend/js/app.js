@@ -8,6 +8,11 @@
     if (typeof renderHeaderSigso === 'function') {
       renderHeaderSigso('app');
     }
+    // v6.4: identidad + "Mi perfil" en el header. Antes esta pagina no
+    // mostraba en ningun lado con que usuario estabas trabajando.
+    if (window.SigsoPerfil) {
+      SigsoPerfil.montarHeaderUsuario();
+    }
     SigsoDashboard.inicializarFiltros();
     SigsoDashboard.cargar();
 

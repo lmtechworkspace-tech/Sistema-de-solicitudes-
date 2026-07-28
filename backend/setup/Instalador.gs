@@ -170,7 +170,16 @@ var ESQUEMA_HOJAS = {
   PAUSAS_TRABAJADORES: ['trabajador_id', 'empresa_id', 'nombre', 'email', 'area', 'cargo', 'activo', 'fecha_ingreso'],
   PAUSAS_PROGRAMADAS: ['pausa_id', 'empresa_id', 'fecha', 'hora_programada', 'hora_inicio_real', 'hora_fin', 'coordinador_email', 'estado', 'duracion_min', 'observaciones', 'ultima_llamada_enviada', 'aviso_coordinador_enviado', 'evidencia_url'],
   PAUSAS_ASISTENCIA: ['registro_id', 'pausa_id', 'trabajador_id', 'email', 'fecha_hora_registro', 'estado', 'motivo', 'comentario', 'confirmacion', 'origen'],
-  PAUSAS_LOG: ['log_id', 'timestamp', 'pausa_id', 'usuario', 'accion', 'detalle']
+  PAUSAS_LOG: ['log_id', 'timestamp', 'pausa_id', 'usuario', 'accion', 'detalle'],
+  // v6.4 (foto de perfil): hoja ADITIVA, una fila por identidad. Clave
+  // compuesta identidad_tipo + identidad_clave porque hay dos poblaciones de
+  // identidad que no comparten llave (USUARIOS por email, CUENTAS_PORTAL por
+  // cuenta_id). foto_file_id apunta al original privado en Drive; foto_thumb
+  // es la miniatura base64 que renderiza la interfaz.
+  PERFILES: [
+    'perfil_id', 'identidad_tipo', 'identidad_clave',
+    'foto_file_id', 'foto_thumb', 'foto_mime', 'actualizado_en'
+  ]
 };
 
 // SLA por prioridad en horas habiles (§7.2). P5 no tiene SLA.

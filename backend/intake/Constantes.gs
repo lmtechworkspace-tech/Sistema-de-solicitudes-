@@ -68,7 +68,14 @@ var SHEETS = {
   PAUSAS_TRABAJADORES: 'PAUSAS_TRABAJADORES',
   PAUSAS_PROGRAMADAS: 'PAUSAS_PROGRAMADAS',
   PAUSAS_ASISTENCIA: 'PAUSAS_ASISTENCIA',
-  PAUSAS_LOG: 'PAUSAS_LOG'
+  PAUSAS_LOG: 'PAUSAS_LOG',
+  // v6.4 (foto de perfil): hoja ADITIVA, una fila por identidad. No se
+  // tocan USUARIOS ni CUENTAS_PORTAL a proposito: esas dos hojas las lee
+  // resolverIdentidadYRol_ en CADA request, y meterles una miniatura en
+  // base64 haria que toda llamada del sistema arrastre cientos de KB
+  // inutiles. La feature vive en el Backoffice (Perfiles.gs); Intake
+  // mantiene la copia solo para que el esquema no diverja.
+  PERFILES: 'PERFILES'
 };
 
 var COLUMNAS = {
@@ -298,7 +305,21 @@ var COLUMNAS = {
   PAUSAS_TRABAJADORES: ['trabajador_id', 'empresa_id', 'nombre', 'email', 'area', 'cargo', 'activo', 'fecha_ingreso'],
   PAUSAS_PROGRAMADAS: ['pausa_id', 'empresa_id', 'fecha', 'hora_programada', 'hora_inicio_real', 'hora_fin', 'coordinador_email', 'estado', 'duracion_min', 'observaciones', 'ultima_llamada_enviada', 'aviso_coordinador_enviado', 'evidencia_url'],
   PAUSAS_ASISTENCIA: ['registro_id', 'pausa_id', 'trabajador_id', 'email', 'fecha_hora_registro', 'estado', 'motivo', 'comentario', 'confirmacion', 'origen'],
-  PAUSAS_LOG: ['log_id', 'timestamp', 'pausa_id', 'usuario', 'accion', 'detalle']
+  PAUSAS_LOG: ['log_id', 'timestamp', 'pausa_id', 'usuario', 'accion', 'detalle'],
+  // v6.4 (foto de perfil). Clave compuesta identidad_tipo + identidad_clave:
+  // el sistema tiene DOS poblaciones de identidad que no comparten llave
+  // (USUARIOS se busca por email; CUENTAS_PORTAL por cuenta_id), asi que una
+  // sola columna "usuario" no alcanzaria.
+  //   - foto_file_id: ID del ORIGINAL en Drive (privado, carpeta Perfiles/).
+  //     Referencia estable: no es una URL publica que pueda romperse.
+  //   - foto_thumb: miniatura cuadrada ~160px como data URI base64. Es lo que
+  //     RENDERIZA la interfaz. Existe porque la URL de vista de Drive no se
+  //     puede usar en un <img> sin hacer el archivo publico -- y las fotos de
+  //     personas no deben quedar accesibles para cualquiera con el enlace.
+  PERFILES: [
+    'perfil_id', 'identidad_tipo', 'identidad_clave',
+    'foto_file_id', 'foto_thumb', 'foto_mime', 'actualizado_en'
+  ]
 };
 
 // S01-S11 completos desde la Fase 1 aunque solo S01 se use aqui: la maquina

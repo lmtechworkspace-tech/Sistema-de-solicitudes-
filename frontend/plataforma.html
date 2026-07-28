@@ -166,6 +166,10 @@
           </button>
           <div class="plataforma-menu sigso-oculto" id="menu-usuario" role="menu">
             <div class="plataforma-menu__cab" id="menu-correos"></div>
+            <!-- v6.4: "Mi perfil" abre el panel de perfil/foto (perfil.js). -->
+            <button type="button" class="plataforma-menu__item" id="btn-mi-perfil" role="menuitem">
+              <span id="ico-perfil"></span> Mi perfil
+            </button>
             <button type="button" class="plataforma-menu__item" id="btn-logout" role="menuitem">
               <span id="ico-salir"></span> Cerrar sesi&oacute;n
             </button>
@@ -866,6 +870,9 @@
   <script src="js/admin.js"></script>
   <script src="js/pausas.js"></script>
   <script src="js/coordinacion.js"></script>
+  <!-- v6.4: panel "Mi perfil" + gestion de la foto. Antes de plataforma.js,
+       que lo invoca desde el menu de usuario. -->
+  <script src="js/perfil.js"></script>
   <script src="js/plataforma.js"></script>
 </body>
 </html>

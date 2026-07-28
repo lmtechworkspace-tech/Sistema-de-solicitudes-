@@ -1008,36 +1008,36 @@
 }
 
 /* Identidad: avatar de iniciales + rol. */
+/* v6.4: mismo chip de identidad que el header del Backoffice con Google
+   (.sigso-header__usuario-btn) -- pastilla con borde, avatar dentro. Las dos
+   vias de acceso deben verse como el mismo producto. */
 .plataforma-usuario {
   display: flex;
   align-items: center;
   gap: 0.55rem;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--radio-md);
-  padding: 0.3rem 0.5rem;
+  border-radius: var(--radio-full);
+  padding: 0.25rem 0.6rem 0.25rem 0.3rem;
   cursor: pointer;
   font: inherit;
   color: inherit;
   text-align: left;
+  transition: background var(--mov-rapido), border-color var(--mov-rapido);
 }
 
-.plataforma-usuario:hover {
+.plataforma-usuario:hover,
+.plataforma-usuario[aria-expanded="true"] {
   background: var(--superficie-2);
   border-color: var(--borde);
 }
 
+/* v6.4: el circulo lo pinta ahora .sigso-avatar (Componentes.avatar), que es
+   el mismo en toda la plataforma y sabe mostrar foto o iniciales. Este
+   contenedor queda solo como hueco en el header: sin fondo ni color propios,
+   que taparian la foto por los bordes. */
 .plataforma-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--info-suave);
-  color: var(--azul);
-  display: grid;
-  place-items: center;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  display: flex;
   flex: none;
 }
 
@@ -1361,6 +1361,15 @@
   padding: var(--esp-5);
   max-width: 420px;
   width: 100%;
+}
+
+/* v6.4: "Mi perfil" no cabe en 420px (avatar grande + ficha de datos en dos
+   columnas). El alto tambien se limita para que en un movil apaisado el
+   modal no se salga de la pantalla. */
+.sigso-modal--ancho {
+  max-width: 620px;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
 }
 
 .sigso-modal__titulo {
@@ -2084,3 +2093,278 @@
   font-size: 0.92rem;
 }
 .sigso-lista-simple li { margin: 0.15rem 0; }
+
+/* === v6.4: Avatar unico + panel "Mi perfil" ==============================
+   Un solo avatar para toda la plataforma (Componentes.avatar). Antes habia
+   dos implementaciones con estilos distintos: .plataforma-avatar en el
+   header del shell y .sigso-cuenta-fila__avatar en la tabla de cuentas.
+   Las dos siguen existiendo como contenedores, pero el circulo lo pinta
+   siempre esta clase. ---------------------------------------------------- */
+.sigso-avatar {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;              /* recorte circular real de la foto */
+  /* Degradado sutil en los tonos de marca en vez de un relleno plano: un
+     circulo liso con una letra dentro se lee como control generico de
+     cualquier libreria. El aro interior (box-shadow inset) le da borde sin
+     ocupar espacio de layout, para que el avatar no "flote" sobre fondos
+     claros. */
+  background:
+    linear-gradient(140deg, var(--primario-suave) 0%, var(--info-suave) 100%);
+  box-shadow: inset 0 0 0 1px rgba(109, 93, 246, 0.18);
+  color: var(--primario-tinta);
+  font-weight: 650;
+  /* Las iniciales son versalitas: en mayusculas sostenidas el tracking
+     apretado del cuerpo de texto las junta demasiado. */
+  letter-spacing: 0.06em;
+  text-indent: 0.06em;           /* compensa el tracking del ultimo caracter */
+  line-height: 1;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+/* La foto tapa a las iniciales, que quedan DEBAJO en el mismo hueco del
+   grid. Si el data URI falla, onerror retira el <img> y las iniciales
+   aparecen solas: nunca se ve el icono de imagen rota. */
+.sigso-avatar__ini { grid-area: 1 / 1; }
+.sigso-avatar__img {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;             /* llena el circulo SIN deformar la cara */
+  display: block;
+}
+
+/* El aro va en ::after y no en el box-shadow inset del contenedor, para que
+   quede POR ENCIMA de la foto: asi una foto clara sobre fondo claro sigue
+   teniendo un borde definido, igual que las iniciales. */
+.sigso-avatar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+  pointer-events: none;
+}
+
+.sigso-avatar--sm { width: 24px; height: 24px; font-size: 0.62rem; }
+.sigso-avatar--md { width: 32px; height: 32px; font-size: 0.74rem; }
+.sigso-avatar--lg { width: 44px; height: 44px; font-size: 1rem; }
+
+/* Retrato del panel "Mi perfil": doble aro (blanco + borde suave) y sombra
+   baja. Es el unico avatar que actua como pieza protagonista, asi que se le
+   permite mas presencia que al resto. */
+.sigso-avatar--xl {
+  width: 112px;
+  height: 112px;
+  font-size: 2.5rem;
+  letter-spacing: 0.04em;
+  box-shadow:
+    inset 0 0 0 1px rgba(109, 93, 246, 0.22),
+    0 0 0 4px var(--superficie),
+    0 0 0 5px var(--borde),
+    0 6px 18px rgba(15, 23, 42, 0.10);
+}
+.sigso-avatar--xl::after { box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06); }
+
+/* --- Panel Mi perfil --------------------------------------------------- */
+.sigso-perfil {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--esp-6);
+  align-items: start;
+  padding: var(--esp-2) 0 var(--esp-1);
+}
+
+.sigso-perfil__foto {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--esp-4);
+  min-width: 0;
+}
+
+.sigso-perfil__acciones {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-1);
+  width: 100%;
+  min-width: 150px;
+}
+.sigso-perfil__acciones .sigso-boton { width: 100%; justify-content: center; }
+
+.sigso-perfil__datos { min-width: 0; }
+
+/* Nombre y rol en la misma linea base: el rol es identidad, no un dato mas
+   de la ficha, asi que acompana al nombre en vez de bajar a la lista. */
+.sigso-perfil__encabezado {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--esp-2) var(--esp-3);
+  padding-bottom: var(--esp-4);
+  border-bottom: 1px solid var(--borde);
+}
+
+.sigso-perfil__nombre {
+  font: var(--t-title);
+  font-size: var(--texto-xl);
+  color: var(--texto);
+  margin: 0;
+  letter-spacing: -0.01em;   /* los titulos grandes piden tracking negativo */
+}
+
+.sigso-perfil__rol {
+  flex: none;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radio-full);
+  background: var(--primario-suave);
+  color: var(--primario-tinta);
+  font-size: var(--texto-xs);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* Los datos son de solo lectura y vienen de su fuente de verdad (USUARIOS o
+   CUENTAS_PORTAL): se presentan como definiciones, no como un formulario,
+   para que nadie espere poder editarlos aqui. */
+.sigso-perfil__campos {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;   /* columna fija: las etiquetas alinean */
+  gap: var(--esp-3) var(--esp-4);
+  margin: var(--esp-4) 0 0;
+}
+.sigso-perfil__campos dt {
+  color: var(--texto-3);
+  font: var(--t-small);
+  font-weight: 500;
+}
+.sigso-perfil__campos dd {
+  margin: 0;
+  color: var(--texto);
+  font: var(--t-body);
+  word-break: break-word;
+}
+
+.sigso-perfil__nota {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esp-2);
+  margin: var(--esp-5) 0 0;
+  padding: var(--esp-3);
+  border-radius: var(--radio-sm);
+  background: var(--superficie-2);
+  color: var(--texto-3);
+  font: var(--t-small);
+}
+.sigso-perfil__nota svg { flex: none; margin-top: 0.1rem; opacity: 0.8; }
+
+/* Destructivo pero secundario: color critico sobre fondo transparente. Un
+   boton relleno rojo pesaria igual o mas que "Cambiar foto", que es la
+   accion que la gente viene a hacer aqui. */
+.sigso-boton--destructivo-sutil {
+  color: var(--critico);
+}
+.sigso-boton--destructivo-sutil:hover:not(:disabled) {
+  background: var(--critico-suave);
+  color: var(--critico);
+}
+.sigso-boton--destructivo-sutil svg { opacity: 0.85; }
+
+/* --- Recorte: el usuario arrastra la foto dentro del circulo ------------ */
+.sigso-recorte { display: flex; flex-direction: column; gap: var(--esp-3); align-items: center; }
+
+.sigso-recorte__lienzo {
+  position: relative;
+  width: 260px;
+  max-width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--superficie-2);
+  box-shadow: 0 0 0 1px var(--borde);
+  cursor: grab;
+  /* Sin esto, arrastrar en movil hace scroll de la pagina en vez de mover
+     la foto: el gesto se lo lleva el navegador. */
+  touch-action: none;
+}
+.sigso-recorte__lienzo:active { cursor: grabbing; }
+.sigso-recorte__lienzo canvas { display: block; width: 100%; height: 100%; }
+
+.sigso-recorte__zoom { display: flex; align-items: center; gap: var(--esp-2); width: 260px; max-width: 100%; }
+.sigso-recorte__zoom input[type="range"] { flex: 1; accent-color: var(--primario); }
+
+.sigso-recorte__ayuda { color: var(--texto-3); font: var(--t-small); text-align: center; }
+.sigso-recorte__botones { display: flex; gap: var(--esp-2); flex-wrap: wrap; justify-content: center; }
+
+/* --- Movil: el perfil pasa a una columna ------------------------------- */
+@media (max-width: 640px) {
+  .sigso-perfil { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  .sigso-perfil__datos { text-align: left; width: 100%; }
+  .sigso-perfil__acciones { max-width: 260px; }
+  .sigso-perfil__campos { grid-template-columns: 1fr; gap: var(--esp-1) 0; }
+  .sigso-perfil__campos dt { margin-top: var(--esp-2); }
+}
+
+/* --- v6.4: identidad en el header del Backoffice (app.html / admin.html) --
+   Estas paginas no tenian ninguna referencia al usuario conectado. El bloque
+   queda vacio en index.html/estado.html, que son publicas. ---------------- */
+.sigso-header__usuario { margin-left: auto; display: flex; align-items: center; }
+.sigso-header__usuario:empty { display: none; }
+
+/* Chip de identidad: avatar y nombre viajan dentro de una misma pastilla
+   con fondo propio, para que el avatar se lea como parte de la identidad y
+   no como un icono suelto al lado del texto. Misma forma que el boton de
+   usuario del shell por token (.plataforma-usuario), para que las dos vias
+   de acceso se sientan el mismo producto. */
+.sigso-header__usuario-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  padding: 0.25rem 0.7rem 0.25rem 0.3rem;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-full);
+  background: var(--superficie);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--mov-rapido), border-color var(--mov-rapido),
+              box-shadow var(--mov-rapido);
+}
+.sigso-header__usuario-btn:hover {
+  background: var(--superficie-2);
+  border-color: var(--borde-fuerte);
+  box-shadow: var(--sombra-1);
+}
+.sigso-header__usuario-btn:focus-visible { outline: 2px solid var(--primario); outline-offset: 2px; }
+
+.sigso-header__usuario-txt { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.sigso-header__usuario-nombre {
+  font-size: var(--texto-sm); font-weight: 600; color: var(--texto);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 16ch;
+}
+.sigso-header__usuario-rol {
+  font-size: var(--texto-xs); color: var(--texto-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 16ch;
+}
+
+/* En movil el chip se reduce al avatar: el header ya va justo de ancho con
+   la marca y la navegacion. Sigue siendo pulsable y con el mismo destino. */
+@media (max-width: 640px) {
+  .sigso-header__usuario-btn { padding: 0.25rem; border-radius: 50%; }
+  .sigso-header__usuario-txt { display: none; }
+}
+
+/* --- v6.4: autor con avatar en comentarios e historial ------------------ */
+.sigso-timeline__autor {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--esp-2);
+  min-width: 0;
+}
+.sigso-timeline__autor .sigso-avatar { flex: none; }

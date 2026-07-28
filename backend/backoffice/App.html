@@ -1592,36 +1592,36 @@ button {
 }
 
 /* Identidad: avatar de iniciales + rol. */
+/* v6.4: mismo chip de identidad que el header del Backoffice con Google
+   (.sigso-header__usuario-btn) -- pastilla con borde, avatar dentro. Las dos
+   vias de acceso deben verse como el mismo producto. */
 .plataforma-usuario {
   display: flex;
   align-items: center;
   gap: 0.55rem;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--radio-md);
-  padding: 0.3rem 0.5rem;
+  border-radius: var(--radio-full);
+  padding: 0.25rem 0.6rem 0.25rem 0.3rem;
   cursor: pointer;
   font: inherit;
   color: inherit;
   text-align: left;
+  transition: background var(--mov-rapido), border-color var(--mov-rapido);
 }
 
-.plataforma-usuario:hover {
+.plataforma-usuario:hover,
+.plataforma-usuario[aria-expanded="true"] {
   background: var(--superficie-2);
   border-color: var(--borde);
 }
 
+/* v6.4: el circulo lo pinta ahora .sigso-avatar (Componentes.avatar), que es
+   el mismo en toda la plataforma y sabe mostrar foto o iniciales. Este
+   contenedor queda solo como hueco en el header: sin fondo ni color propios,
+   que taparian la foto por los bordes. */
 .plataforma-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--info-suave);
-  color: var(--azul);
-  display: grid;
-  place-items: center;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  display: flex;
   flex: none;
 }
 
@@ -1945,6 +1945,15 @@ button {
   padding: var(--esp-5);
   max-width: 420px;
   width: 100%;
+}
+
+/* v6.4: "Mi perfil" no cabe en 420px (avatar grande + ficha de datos en dos
+   columnas). El alto tambien se limita para que en un movil apaisado el
+   modal no se salga de la pantalla. */
+.sigso-modal--ancho {
+  max-width: 620px;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
 }
 
 .sigso-modal__titulo {
@@ -2668,6 +2677,281 @@ button {
   font-size: 0.92rem;
 }
 .sigso-lista-simple li { margin: 0.15rem 0; }
+
+/* === v6.4: Avatar unico + panel "Mi perfil" ==============================
+   Un solo avatar para toda la plataforma (Componentes.avatar). Antes habia
+   dos implementaciones con estilos distintos: .plataforma-avatar en el
+   header del shell y .sigso-cuenta-fila__avatar en la tabla de cuentas.
+   Las dos siguen existiendo como contenedores, pero el circulo lo pinta
+   siempre esta clase. ---------------------------------------------------- */
+.sigso-avatar {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  overflow: hidden;              /* recorte circular real de la foto */
+  /* Degradado sutil en los tonos de marca en vez de un relleno plano: un
+     circulo liso con una letra dentro se lee como control generico de
+     cualquier libreria. El aro interior (box-shadow inset) le da borde sin
+     ocupar espacio de layout, para que el avatar no "flote" sobre fondos
+     claros. */
+  background:
+    linear-gradient(140deg, var(--primario-suave) 0%, var(--info-suave) 100%);
+  box-shadow: inset 0 0 0 1px rgba(109, 93, 246, 0.18);
+  color: var(--primario-tinta);
+  font-weight: 650;
+  /* Las iniciales son versalitas: en mayusculas sostenidas el tracking
+     apretado del cuerpo de texto las junta demasiado. */
+  letter-spacing: 0.06em;
+  text-indent: 0.06em;           /* compensa el tracking del ultimo caracter */
+  line-height: 1;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+/* La foto tapa a las iniciales, que quedan DEBAJO en el mismo hueco del
+   grid. Si el data URI falla, onerror retira el <img> y las iniciales
+   aparecen solas: nunca se ve el icono de imagen rota. */
+.sigso-avatar__ini { grid-area: 1 / 1; }
+.sigso-avatar__img {
+  grid-area: 1 / 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;             /* llena el circulo SIN deformar la cara */
+  display: block;
+}
+
+/* El aro va en ::after y no en el box-shadow inset del contenedor, para que
+   quede POR ENCIMA de la foto: asi una foto clara sobre fondo claro sigue
+   teniendo un borde definido, igual que las iniciales. */
+.sigso-avatar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+  pointer-events: none;
+}
+
+.sigso-avatar--sm { width: 24px; height: 24px; font-size: 0.62rem; }
+.sigso-avatar--md { width: 32px; height: 32px; font-size: 0.74rem; }
+.sigso-avatar--lg { width: 44px; height: 44px; font-size: 1rem; }
+
+/* Retrato del panel "Mi perfil": doble aro (blanco + borde suave) y sombra
+   baja. Es el unico avatar que actua como pieza protagonista, asi que se le
+   permite mas presencia que al resto. */
+.sigso-avatar--xl {
+  width: 112px;
+  height: 112px;
+  font-size: 2.5rem;
+  letter-spacing: 0.04em;
+  box-shadow:
+    inset 0 0 0 1px rgba(109, 93, 246, 0.22),
+    0 0 0 4px var(--superficie),
+    0 0 0 5px var(--borde),
+    0 6px 18px rgba(15, 23, 42, 0.10);
+}
+.sigso-avatar--xl::after { box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06); }
+
+/* --- Panel Mi perfil --------------------------------------------------- */
+.sigso-perfil {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--esp-6);
+  align-items: start;
+  padding: var(--esp-2) 0 var(--esp-1);
+}
+
+.sigso-perfil__foto {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--esp-4);
+  min-width: 0;
+}
+
+.sigso-perfil__acciones {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-1);
+  width: 100%;
+  min-width: 150px;
+}
+.sigso-perfil__acciones .sigso-boton { width: 100%; justify-content: center; }
+
+.sigso-perfil__datos { min-width: 0; }
+
+/* Nombre y rol en la misma linea base: el rol es identidad, no un dato mas
+   de la ficha, asi que acompana al nombre en vez de bajar a la lista. */
+.sigso-perfil__encabezado {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--esp-2) var(--esp-3);
+  padding-bottom: var(--esp-4);
+  border-bottom: 1px solid var(--borde);
+}
+
+.sigso-perfil__nombre {
+  font: var(--t-title);
+  font-size: var(--texto-xl);
+  color: var(--texto);
+  margin: 0;
+  letter-spacing: -0.01em;   /* los titulos grandes piden tracking negativo */
+}
+
+.sigso-perfil__rol {
+  flex: none;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radio-full);
+  background: var(--primario-suave);
+  color: var(--primario-tinta);
+  font-size: var(--texto-xs);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* Los datos son de solo lectura y vienen de su fuente de verdad (USUARIOS o
+   CUENTAS_PORTAL): se presentan como definiciones, no como un formulario,
+   para que nadie espere poder editarlos aqui. */
+.sigso-perfil__campos {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;   /* columna fija: las etiquetas alinean */
+  gap: var(--esp-3) var(--esp-4);
+  margin: var(--esp-4) 0 0;
+}
+.sigso-perfil__campos dt {
+  color: var(--texto-3);
+  font: var(--t-small);
+  font-weight: 500;
+}
+.sigso-perfil__campos dd {
+  margin: 0;
+  color: var(--texto);
+  font: var(--t-body);
+  word-break: break-word;
+}
+
+.sigso-perfil__nota {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--esp-2);
+  margin: var(--esp-5) 0 0;
+  padding: var(--esp-3);
+  border-radius: var(--radio-sm);
+  background: var(--superficie-2);
+  color: var(--texto-3);
+  font: var(--t-small);
+}
+.sigso-perfil__nota svg { flex: none; margin-top: 0.1rem; opacity: 0.8; }
+
+/* Destructivo pero secundario: color critico sobre fondo transparente. Un
+   boton relleno rojo pesaria igual o mas que "Cambiar foto", que es la
+   accion que la gente viene a hacer aqui. */
+.sigso-boton--destructivo-sutil {
+  color: var(--critico);
+}
+.sigso-boton--destructivo-sutil:hover:not(:disabled) {
+  background: var(--critico-suave);
+  color: var(--critico);
+}
+.sigso-boton--destructivo-sutil svg { opacity: 0.85; }
+
+/* --- Recorte: el usuario arrastra la foto dentro del circulo ------------ */
+.sigso-recorte { display: flex; flex-direction: column; gap: var(--esp-3); align-items: center; }
+
+.sigso-recorte__lienzo {
+  position: relative;
+  width: 260px;
+  max-width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--superficie-2);
+  box-shadow: 0 0 0 1px var(--borde);
+  cursor: grab;
+  /* Sin esto, arrastrar en movil hace scroll de la pagina en vez de mover
+     la foto: el gesto se lo lleva el navegador. */
+  touch-action: none;
+}
+.sigso-recorte__lienzo:active { cursor: grabbing; }
+.sigso-recorte__lienzo canvas { display: block; width: 100%; height: 100%; }
+
+.sigso-recorte__zoom { display: flex; align-items: center; gap: var(--esp-2); width: 260px; max-width: 100%; }
+.sigso-recorte__zoom input[type="range"] { flex: 1; accent-color: var(--primario); }
+
+.sigso-recorte__ayuda { color: var(--texto-3); font: var(--t-small); text-align: center; }
+.sigso-recorte__botones { display: flex; gap: var(--esp-2); flex-wrap: wrap; justify-content: center; }
+
+/* --- Movil: el perfil pasa a una columna ------------------------------- */
+@media (max-width: 640px) {
+  .sigso-perfil { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  .sigso-perfil__datos { text-align: left; width: 100%; }
+  .sigso-perfil__acciones { max-width: 260px; }
+  .sigso-perfil__campos { grid-template-columns: 1fr; gap: var(--esp-1) 0; }
+  .sigso-perfil__campos dt { margin-top: var(--esp-2); }
+}
+
+/* --- v6.4: identidad en el header del Backoffice (app.html / admin.html) --
+   Estas paginas no tenian ninguna referencia al usuario conectado. El bloque
+   queda vacio en index.html/estado.html, que son publicas. ---------------- */
+.sigso-header__usuario { margin-left: auto; display: flex; align-items: center; }
+.sigso-header__usuario:empty { display: none; }
+
+/* Chip de identidad: avatar y nombre viajan dentro de una misma pastilla
+   con fondo propio, para que el avatar se lea como parte de la identidad y
+   no como un icono suelto al lado del texto. Misma forma que el boton de
+   usuario del shell por token (.plataforma-usuario), para que las dos vias
+   de acceso se sientan el mismo producto. */
+.sigso-header__usuario-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  padding: 0.25rem 0.7rem 0.25rem 0.3rem;
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-full);
+  background: var(--superficie);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--mov-rapido), border-color var(--mov-rapido),
+              box-shadow var(--mov-rapido);
+}
+.sigso-header__usuario-btn:hover {
+  background: var(--superficie-2);
+  border-color: var(--borde-fuerte);
+  box-shadow: var(--sombra-1);
+}
+.sigso-header__usuario-btn:focus-visible { outline: 2px solid var(--primario); outline-offset: 2px; }
+
+.sigso-header__usuario-txt { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.sigso-header__usuario-nombre {
+  font-size: var(--texto-sm); font-weight: 600; color: var(--texto);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 16ch;
+}
+.sigso-header__usuario-rol {
+  font-size: var(--texto-xs); color: var(--texto-3);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 16ch;
+}
+
+/* En movil el chip se reduce al avatar: el header ya va justo de ancho con
+   la marca y la navegacion. Sigue siendo pulsable y con el mismo destino. */
+@media (max-width: 640px) {
+  .sigso-header__usuario-btn { padding: 0.25rem; border-radius: 50%; }
+  .sigso-header__usuario-txt { display: none; }
+}
+
+/* --- v6.4: autor con avatar en comentarios e historial ------------------ */
+.sigso-timeline__autor {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--esp-2);
+  min-width: 0;
+}
+.sigso-timeline__autor .sigso-avatar { flex: none; }
 
 </style>
   <style>
@@ -4468,6 +4752,11 @@ function renderHeaderSigso(paginaActiva) {
     '</div>' +
     '</div>' +
     '<nav class="sigso-nav">' + enlaces + '</nav>' +
+    // v6.4: hueco para la identidad del usuario (avatar + menu "Mi perfil").
+    // Queda VACIO en index.html y estado.html, que son publicas y no tienen
+    // sesion; solo lo rellena SigsoPerfil.montarHeaderUsuario(), que llaman
+    // app.js y admin.js -- las paginas con login de Google.
+    '<div class="sigso-header__usuario" id="sigso-header-usuario"></div>' +
     '</div>';
 }
 
@@ -4508,6 +4797,83 @@ var MARCA_SIGSO_SVG = '<svg class="sigso-marca" width="28" height="28" viewBox="
 
   var Componentes = {
     escaparHtml: escaparHtml,
+
+    // v6.4 (foto de perfil): iniciales para el avatar por defecto.
+    //
+    // Sustituye a dos copias que hacian lo mismo y mal (plataforma.js
+    // iniciales_ y admin.js inicialesCuenta_): las dos tomaban la primera y
+    // la ULTIMA palabra, asi que "María José Pérez" daba "MP" en vez de
+    // "MP"... correcto por casualidad, pero "Juan Carlos" daba "JC" cuando
+    // ambas son nombres de pila y no habia apellido. Ademas ninguna
+    // normalizaba acentos ni descartaba particulas.
+    //
+    // Criterio: primera palabra significativa + la SIGUIENTE significativa
+    // (que es el apellido en "Nombre Apellido" y el segundo nombre cuando no
+    // hay apellido). Se saltan particulas ("de", "del", "la", "van"...)
+    // porque "Juan de la Cruz" debe dar "JC", no "JD".
+    iniciales: function (nombre) {
+      // Solo conectores. "San"/"Santa" NO van aqui a proposito: en
+      // "Santa María" o "San Martín" forman parte del apellido, no lo unen.
+      var PARTICULAS = {
+        de: 1, del: 1, la: 1, las: 1, los: 1, y: 1, e: 1,
+        da: 1, das: 1, do: 1, dos: 1, van: 1, von: 1, di: 1
+      };
+      var texto = String(nombre || '').trim();
+      if (!texto) return '?';
+
+      // Si llega un correo (hay identidades sin nombre cargado), se usa la
+      // parte local: "j.perez@x.cl" -> "JP".
+      if (texto.indexOf('@') !== -1 && texto.indexOf(' ') === -1) {
+        texto = texto.split('@')[0].replace(/[._\-+]+/g, ' ');
+      }
+
+      var palabras = texto.split(/\s+/).filter(function (p) {
+        var limpia = p.replace(/[^\p{L}\p{N}]/gu, '');
+        return limpia && !PARTICULAS[quitarAcentos_(limpia).toLowerCase()];
+      });
+      if (!palabras.length) return '?';
+
+      var letras = primeraLetra_(palabras[0]);
+      if (palabras.length > 1) letras += primeraLetra_(palabras[1]);
+      return letras.toUpperCase() || '?';
+    },
+
+    /**
+     * v6.4: avatar unico de toda la plataforma. Si la persona tiene foto se
+     * pinta la miniatura; si no, sus iniciales. Un solo sitio donde decidir
+     * eso, para que no vuelva a haber tres avatares distintos.
+     *
+     * persona: { nombre, foto } (foto = data URI de PERFILES.foto_thumb).
+     * opts:    { tam: 'sm'|'md'|'lg'|'xl', id, clase, titulo }
+     *
+     * El <img> lleva onerror para caer a las iniciales si el data URI
+     * estuviera corrupto: mas vale un avatar de letras que un icono roto.
+     */
+    avatar: function (persona, opts) {
+      persona = persona || {};
+      opts = opts || {};
+      var tam = opts.tam || 'md';
+      var iniciales = Componentes.iniciales(persona.nombre);
+      var titulo = opts.titulo || persona.nombre || '';
+      var clases = 'sigso-avatar sigso-avatar--' + tam + (opts.clase ? ' ' + opts.clase : '');
+
+      var attrs = 'class="' + clases + '"' +
+        (opts.id ? ' id="' + escaparHtml(opts.id) + '"' : '') +
+        (titulo ? ' title="' + escaparHtml(titulo) + '"' : '') +
+        // El avatar es decorativo: el nombre siempre esta escrito al lado o
+        // en el title, asi que anunciarlo otra vez solo duplica el lector.
+        ' aria-hidden="true"';
+
+      if (persona.foto) {
+        return '<span ' + attrs + '>' +
+          '<img src="' + escaparHtml(persona.foto) + '" alt="" class="sigso-avatar__img" ' +
+          'onerror="this.remove()">' +
+          '<span class="sigso-avatar__ini">' + escaparHtml(iniciales) + '</span>' +
+          '</span>';
+      }
+      return '<span ' + attrs + '><span class="sigso-avatar__ini">' +
+        escaparHtml(iniciales) + '</span></span>';
+    },
 
     // variante: 'primario' (default) | 'secundario' | 'sutil' | 'peligro'.
     // v4.0 Frente 2: antes solo habia primario/secundario, asi que acciones
@@ -4986,6 +5352,21 @@ var MARCA_SIGSO_SVG = '<svg class="sigso-marca" width="28" height="28" viewBox="
     S09: 'ok', S10: 'no', S11: 'no'
   };
 
+  // v6.4: "Ángela" y "Angela" deben dar la misma inicial al comparar
+  // particulas. NFD separa la letra de su tilde y el rango ̀-ͯ la
+  // quita. Ojo: solo se usa para COMPARAR, la inicial que se muestra
+  // conserva su acento ("Á", no "A").
+  function quitarAcentos_(texto) {
+    return String(texto || '').normalize('NFD').replace(/[̀-ͯ]/g, '');
+  }
+
+  // Primera letra respetando caracteres fuera del plano basico: charAt(0)
+  // partiria un emoji o ciertos caracteres compuestos por la mitad.
+  function primeraLetra_(palabra) {
+    var limpia = String(palabra || '').replace(/[^\p{L}\p{N}]/gu, '');
+    return limpia ? Array.from(limpia)[0] : '';
+  }
+
   function familiaEstado_(codigo) {
     return FAMILIA_ESTADO[codigo] || 'curso';
   }
@@ -5224,6 +5605,9 @@ var Iconos = (function () {
     ubicacion: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 1116 0z"/><circle cx="12" cy="10" r="3"/>',
     adjunto: '<path d="M21 12.5l-8.5 8.5a5 5 0 01-7-7L14 5.5a3.5 3.5 0 015 5L9.5 20"/>',
     imagen: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5-9 9"/>',
+    // v6.4: subir/cambiar la foto de perfil. Distinta de `imagen` (que
+    // representa un archivo ya adjunto): esta es la accion de capturar.
+    camara: '<path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>',
     documento: '<path d="M14 2H7a2 2 0 00-2 2v16a2 2 0 002 2h10a2 2 0 002-2V7z"/><path d="M14 2v5h5"/>',
 
     // Acciones e interfaz
@@ -6612,8 +6996,30 @@ var Iconos = (function () {
         }
         detalleActual = respuesta.data;
         render_(detalleActual);
+        // v6.4: los avatares de la actividad se piden DESPUES de pintar, en
+        // UNA sola llamada para todos los autores, y solo se repinta si
+        // alguno tiene foto. Asi el detalle no espera por algo decorativo y
+        // una lista de 20 comentarios no genera 20 peticiones.
+        precargarAvatares_(detalleActual);
         return respuesta;
       });
+  }
+
+  function precargarAvatares_(detalle) {
+    if (!window.SigsoPerfil) return;
+    var correos = []
+      .concat(detalle.comentarios || [], detalle.historial_estados || [],
+        detalle.historial_compromiso || [], detalle.historial_asignacion || [])
+      .map(function (e) { return e.usuario; })
+      .filter(Boolean);
+    if (!correos.length) return;
+
+    SigsoPerfil.precargarFotos(correos).then(function () {
+      var hayFotos = correos.some(function (c) { return SigsoPerfil.fotoDe(c); });
+      // Si nadie tiene foto, lo ya pintado (iniciales) es correcto: repintar
+      // seria trabajo y parpadeo para nada.
+      if (hayFotos && detalleActual === detalle) render_(detalle);
+    });
   }
 
   function render_(detalle) {
@@ -7267,9 +7673,18 @@ var Iconos = (function () {
           ? 'Comentario' + (e.esInterno ? ' (interno)' : '')
           : '<strong>' + e.texto + '</strong>';
         var detalleTexto = e.tipo === 'comentario' ? e.texto : e.comentario;
+        // v6.4: el autor pasa a mostrarse con su avatar (foto si tiene,
+        // iniciales si no). Las fotos vienen del cache que precargó
+        // precargarAvatares_ en UNA sola llamada -- aqui no hay red.
+        var autor = window.SigsoPerfil
+          ? SigsoPerfil.avatarDe(e.usuario, e.usuario, { tam: 'sm' })
+          : '';
         return '<li class="sigso-timeline__evento--' + e.tipo + (e.tipo === 'comentario' && e.esInterno ? ' sigso-comentario--interno' : '') + '">' +
           '<span class="sigso-timeline__icono">' + iconoEvento_(e) + '</span> ' +
-          etiqueta + ' — ' + Componentes.escaparHtml(e.usuario) + ' (' + new Date(e.timestamp).toLocaleString('es-CL') + ')' +
+          etiqueta + ' — ' +
+          '<span class="sigso-timeline__autor">' + autor +
+            Componentes.escaparHtml(e.usuario) + '</span>' +
+          ' (' + new Date(e.timestamp).toLocaleString('es-CL') + ')' +
           (detalleTexto ? '<br>' + Componentes.escaparHtml(detalleTexto) : '') +
           '</li>';
       }).join('') + '</ul>';
@@ -8580,6 +8995,539 @@ var Iconos = (function () {
 })();
 
 </script>
+  <!-- v6.4: panel "Mi perfil" + identidad en el header. -->
+  <script>
+/**
+ * perfil.js — panel "Mi perfil" y gestion de la foto (v6.4).
+ *
+ * Se implementa como MODAL autocontenido a proposito: asi el mismo codigo
+ * sirve al shell por token (plataforma.html) y al Backoffice con login
+ * Google (app.html), que tienen layouts completamente distintos y donde
+ * meter una "pantalla" mas habria significado dos implementaciones.
+ *
+ * EL RECORTE se hace con Canvas nativo, sin ninguna libreria. Apps Script no
+ * tiene API de redimensionado de imagenes, asi que la miniatura la genera
+ * este archivo y viaja junto al original; el backend la vuelve a validar por
+ * firma binaria (no confia en ella) -- ver Perfiles.gs.
+ *
+ * Expone window.SigsoPerfil = { abrir, avatarDe, precargarFotos, fotoDe }.
+ */
+(function () {
+  // Lado de la miniatura. 160px cubre de sobra el avatar mas grande que se
+  // muestra (116px) incluso en pantallas 2x, y deja el base64 en ~8-14k
+  // caracteres, lejos del limite de 50.000 de una celda de Sheets.
+  var LADO_THUMB = 160;
+  var CALIDAD_THUMB = 0.85;
+  var MAX_BYTES = 5 * 1024 * 1024;
+  var TIPOS_OK = ['image/jpeg', 'image/png', 'image/webp'];
+
+  // Cache en memoria de correo -> miniatura, para que una lista de
+  // comentarios no dispare una llamada por autor.
+  var fotosPorCorreo_ = {};
+  var perfilActual_ = null;
+
+  function urlBackoffice_() {
+    var cfg = window.SIGSO_CONFIG || {};
+    return cfg.BACKOFFICE_URL;
+  }
+
+  function api_(accion, datos) {
+    return llamarApi(urlBackoffice_(), accion, datos || {});
+  }
+
+  // --- Utilidades de imagen ----------------------------------------------
+
+  function leerComoDataUrl_(archivo) {
+    return new Promise(function (resolver, rechazar) {
+      var lector = new FileReader();
+      lector.onload = function () { resolver(lector.result); };
+      lector.onerror = function () { rechazar(new Error('No se pudo leer el archivo.')); };
+      lector.readAsDataURL(archivo);
+    });
+  }
+
+  function cargarImagen_(dataUrl) {
+    return new Promise(function (resolver, rechazar) {
+      var img = new Image();
+      img.onload = function () { resolver(img); };
+      img.onerror = function () { rechazar(new Error('El archivo no es una imagen que el navegador pueda abrir.')); };
+      img.src = dataUrl;
+    });
+  }
+
+  function soloBase64_(dataUrl) {
+    var coma = String(dataUrl || '').indexOf(',');
+    return coma === -1 ? '' : dataUrl.slice(coma + 1);
+  }
+
+  // Validacion en el navegador. NO es la que protege el sistema (esa esta en
+  // Perfiles.gs, por firma binaria): esta solo existe para dar un mensaje
+  // inmediato y no subir 5 MB para nada.
+  function validarArchivo_(archivo) {
+    if (!archivo) return 'No se selecciono ningun archivo.';
+    if (TIPOS_OK.indexOf(archivo.type) === -1) {
+      return 'Formato no permitido. Usa una imagen JPG, PNG o WebP.';
+    }
+    if (archivo.size > MAX_BYTES) {
+      var mb = (archivo.size / (1024 * 1024)).toFixed(1);
+      return 'La imagen pesa ' + mb + ' MB y el maximo es 5 MB. Prueba con una mas liviana.';
+    }
+    return null;
+  }
+
+  // --- Recorte con Canvas -------------------------------------------------
+
+  /**
+   * Monta el recortador dentro de `contenedor`. El usuario arrastra la
+   * imagen y ajusta el zoom; el area visible es un circulo, que es
+   * exactamente como se vera despues.
+   * Devuelve { generarThumb } -> data URL JPEG de LADO_THUMB x LADO_THUMB.
+   */
+  function montarRecortador_(contenedor, imagen) {
+    var lienzo = contenedor.querySelector('.sigso-recorte__lienzo canvas');
+    var deslizador = contenedor.querySelector('.js-zoom');
+    // Se dibuja a resolucion del dispositivo para que no se vea borroso en
+    // pantallas retina.
+    var LADO_CSS = 260;
+    var dpr = Math.min(window.devicePixelRatio || 1, 3);
+    lienzo.width = LADO_CSS * dpr;
+    lienzo.height = LADO_CSS * dpr;
+    var ctx = lienzo.getContext('2d');
+
+    // escalaMin = la escala a la que la imagen cubre justo el circulo. Nunca
+    // se permite bajar de ahi: asi no pueden quedar franjas vacias.
+    var escalaMin = Math.max(LADO_CSS / imagen.width, LADO_CSS / imagen.height);
+    var escala = escalaMin;
+    var desplazamiento = { x: 0, y: 0 };
+
+    function limitar_() {
+      // El borde de la imagen nunca puede entrar en el circulo.
+      var maxX = Math.max(0, (imagen.width * escala - LADO_CSS) / 2);
+      var maxY = Math.max(0, (imagen.height * escala - LADO_CSS) / 2);
+      desplazamiento.x = Math.max(-maxX, Math.min(maxX, desplazamiento.x));
+      desplazamiento.y = Math.max(-maxY, Math.min(maxY, desplazamiento.y));
+    }
+
+    function pintar_() {
+      limitar_();
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, LADO_CSS, LADO_CSS);
+      var ancho = imagen.width * escala;
+      var alto = imagen.height * escala;
+      ctx.drawImage(
+        imagen,
+        (LADO_CSS - ancho) / 2 + desplazamiento.x,
+        (LADO_CSS - alto) / 2 + desplazamiento.y,
+        ancho, alto
+      );
+      ctx.restore();
+    }
+
+    // Pointer events cubren raton, dedo y lapiz con un solo camino. El CSS
+    // pone touch-action:none, sin lo cual el navegador se quedaria el gesto
+    // para hacer scroll y en movil no se podria mover la foto.
+    var arrastrando = false;
+    var ultimo = { x: 0, y: 0 };
+    var zona = contenedor.querySelector('.sigso-recorte__lienzo');
+
+    zona.addEventListener('pointerdown', function (ev) {
+      arrastrando = true;
+      ultimo = { x: ev.clientX, y: ev.clientY };
+      zona.setPointerCapture(ev.pointerId);
+    });
+    zona.addEventListener('pointermove', function (ev) {
+      if (!arrastrando) return;
+      desplazamiento.x += ev.clientX - ultimo.x;
+      desplazamiento.y += ev.clientY - ultimo.y;
+      ultimo = { x: ev.clientX, y: ev.clientY };
+      pintar_();
+    });
+    ['pointerup', 'pointercancel'].forEach(function (evento) {
+      zona.addEventListener(evento, function (ev) {
+        arrastrando = false;
+        if (zona.hasPointerCapture && zona.hasPointerCapture(ev.pointerId)) {
+          zona.releasePointerCapture(ev.pointerId);
+        }
+      });
+    });
+
+    // El deslizador va de 1x a 3x sobre la escala minima.
+    deslizador.addEventListener('input', function () {
+      escala = escalaMin * (parseFloat(deslizador.value) || 1);
+      pintar_();
+    });
+
+    // Rueda del raton: el mismo gesto que espera cualquiera sobre una foto.
+    zona.addEventListener('wheel', function (ev) {
+      ev.preventDefault();
+      var factor = ev.deltaY < 0 ? 1.08 : 1 / 1.08;
+      var nuevo = Math.max(1, Math.min(3, (escala / escalaMin) * factor));
+      deslizador.value = String(nuevo);
+      escala = escalaMin * nuevo;
+      pintar_();
+    }, { passive: false });
+
+    pintar_();
+
+    return {
+      generarThumb: function () {
+        var salida = document.createElement('canvas');
+        salida.width = LADO_THUMB;
+        salida.height = LADO_THUMB;
+        var sctx = salida.getContext('2d');
+        // Fondo blanco: si la imagen tiene transparencia (PNG), al pasar a
+        // JPEG el alfa se volveria negro.
+        sctx.fillStyle = '#FFFFFF';
+        sctx.fillRect(0, 0, LADO_THUMB, LADO_THUMB);
+
+        var k = LADO_THUMB / LADO_CSS;
+        var ancho = imagen.width * escala * k;
+        var alto = imagen.height * escala * k;
+        sctx.drawImage(
+          imagen,
+          (LADO_THUMB - ancho) / 2 + desplazamiento.x * k,
+          (LADO_THUMB - alto) / 2 + desplazamiento.y * k,
+          ancho, alto
+        );
+        return salida.toDataURL('image/jpeg', CALIDAD_THUMB);
+      }
+    };
+  }
+
+  // --- Panel --------------------------------------------------------------
+
+  var ETIQUETA_ROL = {
+    ADM: 'Administrador', ANA: 'Analista', DEV: 'Desarrollador',
+    GERENCIA: 'Gerencia', JEFATURA: 'Jefatura', SOLICITANTE: 'Solicitante'
+  };
+
+  function abrir() {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true" aria-labelledby="perfil-titulo">' +
+        '<h3 class="sigso-modal__titulo" id="perfil-titulo">Mi perfil</h3>' +
+        '<div class="js-perfil-cuerpo">' + Componentes.cargando('Cargando tu perfil...') + '</div>' +
+        '<div class="sigso-modal__acciones">' +
+          Componentes.boton({ texto: 'Cerrar', variante: 'sutil', clase: 'js-perfil-cerrar' }) +
+        '</div>' +
+      '</div>';
+
+    function cerrar() {
+      document.removeEventListener('keydown', alTeclado);
+      if (fondo.parentNode) fondo.parentNode.removeChild(fondo);
+    }
+    function alTeclado(ev) { if (ev.key === 'Escape') cerrar(); }
+
+    fondo.addEventListener('click', function (ev) { if (ev.target === fondo) cerrar(); });
+    fondo.querySelector('.js-perfil-cerrar').addEventListener('click', cerrar);
+    document.addEventListener('keydown', alTeclado);
+    document.body.appendChild(fondo);
+
+    var cuerpo = fondo.querySelector('.js-perfil-cuerpo');
+
+    api_('getMiPerfil', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cuerpo.innerHTML = Componentes.alerta(
+          (respuesta && respuesta.message) || 'No se pudo cargar tu perfil.', 'error'
+        );
+        return;
+      }
+      perfilActual_ = respuesta.data;
+      renderVista_(cuerpo, respuesta.data);
+    }).catch(function () {
+      cuerpo.innerHTML = Componentes.alerta('No se pudo conectar para cargar tu perfil.', 'error');
+    });
+
+    return { cerrar: cerrar };
+  }
+
+  function renderVista_(cuerpo, perfil) {
+    cuerpo.innerHTML =
+      '<div class="sigso-perfil">' +
+        '<div class="sigso-perfil__foto">' +
+          Componentes.avatar({ nombre: perfil.nombre, foto: perfil.foto_thumb }, { tam: 'xl' }) +
+          '<div class="sigso-perfil__acciones">' +
+            // Accion primaria: es lo unico editable de esta pantalla, asi
+            // que no tiene sentido dejarla en secundario compitiendo con
+            // nada. El icono de camara la hace reconocible sin leer.
+            Componentes.boton({
+              texto: perfil.tiene_foto ? 'Cambiar foto' : 'Subir foto',
+              icono: 'camara', clase: 'js-cambiar'
+            }) +
+            // "Eliminar foto" solo aparece cuando hay algo que eliminar, y
+            // como enlace destructivo: debe reconocerse como peligrosa sin
+            // pesar visualmente lo mismo que la accion principal.
+            (perfil.tiene_foto
+              ? Componentes.boton({
+                  texto: 'Eliminar foto', icono: 'basura',
+                  variante: 'sutil', clase: 'sigso-boton--destructivo-sutil js-eliminar'
+                })
+              : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="sigso-perfil__datos">' +
+          '<div class="sigso-perfil__encabezado">' +
+            '<p class="sigso-perfil__nombre">' + Componentes.escaparHtml(perfil.nombre) + '</p>' +
+            // El rol sube a badge junto al nombre en vez de ser una fila mas
+            // de la ficha: es identidad, no un dato de contacto.
+            '<span class="sigso-perfil__rol">' +
+              Componentes.escaparHtml(ETIQUETA_ROL[perfil.rol] || perfil.rol) + '</span>' +
+          '</div>' +
+          '<dl class="sigso-perfil__campos">' +
+            campo_('Correo', perfil.email) +
+            (perfil.cargo ? campo_('Cargo', perfil.cargo) : '') +
+            campo_('Empresa', perfil.empresa_nombre || perfil.empresa_id) +
+          '</dl>' +
+          '<p class="sigso-perfil__nota">' +
+            Iconos.svg('candado', { tam: 13 }) +
+            '<span>Estos datos los administra el equipo de SIGSO. ' +
+            'Si algo no corresponde, avisa a un administrador.</span>' +
+          '</p>' +
+        '</div>' +
+      '</div>' +
+      '<input type="file" accept="image/jpeg,image/png,image/webp" class="sigso-oculto js-archivo">';
+
+    var inputArchivo = cuerpo.querySelector('.js-archivo');
+
+    cuerpo.querySelector('.js-cambiar').addEventListener('click', function () {
+      inputArchivo.value = '';   // permite reelegir el mismo archivo
+      inputArchivo.click();
+    });
+
+    inputArchivo.addEventListener('change', function () {
+      var archivo = inputArchivo.files && inputArchivo.files[0];
+      var error = validarArchivo_(archivo);
+      if (error) {
+        Componentes.aviso({ texto: error, tipo: 'error' });
+        return;
+      }
+      leerComoDataUrl_(archivo)
+        .then(cargarImagen_)
+        .then(function (imagen) { renderRecorte_(cuerpo, perfil, archivo, imagen); })
+        .catch(function (err) {
+          Componentes.aviso({ texto: err.message || 'No se pudo abrir la imagen.', tipo: 'error' });
+        });
+    });
+
+    var botonEliminar = cuerpo.querySelector('.js-eliminar');
+    if (botonEliminar) {
+      botonEliminar.addEventListener('click', function () {
+        Componentes.confirmar({
+          titulo: 'Eliminar tu foto de perfil',
+          mensaje: 'Volveras a aparecer con tus iniciales. Tus datos de usuario no cambian.',
+          confirmar: 'Eliminar foto',
+          peligro: true
+        }).then(function (confirmado) {
+          if (!confirmado) return;
+          // innerHTML y no textContent: textContent borraria el SVG del
+          // icono y el boton volveria como texto pelado tras un error.
+          function restaurarBoton_() {
+            botonEliminar.disabled = false;
+            botonEliminar.innerHTML = Iconos.svg('basura', { tam: 15 }) + 'Eliminar foto';
+          }
+          botonEliminar.disabled = true;
+          botonEliminar.innerHTML = '<span class="sigso-spinner"></span>Eliminando...';
+          api_('eliminarFotoPerfil', {}).then(function (respuesta) {
+            if (!respuesta || !respuesta.ok) {
+              Componentes.aviso({
+                texto: (respuesta && respuesta.message) || 'No se pudo eliminar la foto.', tipo: 'error'
+              });
+              restaurarBoton_();
+              return;
+            }
+            aplicarCambio_(cuerpo, perfil, '', 'Foto eliminada. Ahora apareces con tus iniciales.');
+          }).catch(function () {
+            Componentes.aviso({ texto: 'No se pudo conectar para eliminar la foto.', tipo: 'error' });
+            restaurarBoton_();
+          });
+        });
+      });
+    }
+  }
+
+  function campo_(etiqueta, valor) {
+    return '<dt>' + Componentes.escaparHtml(etiqueta) + '</dt>' +
+      '<dd>' + Componentes.escaparHtml(valor || '—') + '</dd>';
+  }
+
+  function renderRecorte_(cuerpo, perfil, archivo, imagen) {
+    cuerpo.innerHTML =
+      '<div class="sigso-recorte">' +
+        '<div class="sigso-recorte__lienzo"><canvas></canvas></div>' +
+        '<div class="sigso-recorte__zoom">' +
+          '<label for="perfil-zoom" class="sigso-recorte__ayuda">Zoom</label>' +
+          '<input type="range" id="perfil-zoom" class="js-zoom" min="1" max="3" step="0.01" value="1">' +
+        '</div>' +
+        '<p class="sigso-recorte__ayuda">Arrastra la imagen para encuadrar tu cara.</p>' +
+        '<div class="sigso-recorte__botones">' +
+          Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-cancelar' }) +
+          Componentes.boton({ texto: 'Guardar foto', icono: 'check', clase: 'js-guardar' }) +
+        '</div>' +
+      '</div>';
+
+    var recortador = montarRecortador_(cuerpo, imagen);
+
+    cuerpo.querySelector('.js-cancelar').addEventListener('click', function () {
+      renderVista_(cuerpo, perfil);
+    });
+
+    cuerpo.querySelector('.js-guardar').addEventListener('click', function () {
+      var boton = cuerpo.querySelector('.js-guardar');
+      var cancelar = cuerpo.querySelector('.js-cancelar');
+      function restaurarBoton_() {
+        boton.disabled = false;
+        cancelar.disabled = false;
+        boton.innerHTML = Iconos.svg('check', { tam: 15 }) + 'Guardar foto';
+      }
+      boton.disabled = true;
+      cancelar.disabled = true;
+      boton.innerHTML = '<span class="sigso-spinner"></span>Guardando...';
+
+      var thumbDataUrl = recortador.generarThumb();
+
+      leerComoDataUrl_(archivo).then(function (originalDataUrl) {
+        return api_('guardarFotoPerfil', {
+          contenido_base64: soloBase64_(originalDataUrl),
+          thumb_base64: soloBase64_(thumbDataUrl),
+          nombre_archivo: archivo.name || 'foto'
+        });
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({
+            texto: (respuesta && respuesta.message) || 'No se pudo guardar la foto.', tipo: 'error'
+          });
+          restaurarBoton_();
+          return;
+        }
+        aplicarCambio_(cuerpo, perfil, respuesta.data.foto_thumb, 'Foto actualizada.');
+      }).catch(function () {
+        Componentes.aviso({ texto: 'No se pudo conectar para guardar la foto.', tipo: 'error' });
+        restaurarBoton_();
+      });
+    });
+  }
+
+  // Un solo sitio donde se refleja "la foto cambio": actualiza el panel, el
+  // cache y avisa al resto de la interfaz.
+  function aplicarCambio_(cuerpo, perfil, nuevaFoto, mensaje) {
+    perfil.foto_thumb = nuevaFoto;
+    perfil.tiene_foto = !!nuevaFoto;
+    perfilActual_ = perfil;
+
+    var correo = String(perfil.email || '').trim().toLowerCase();
+    if (correo) {
+      if (nuevaFoto) fotosPorCorreo_[correo] = nuevaFoto;
+      else delete fotosPorCorreo_[correo];
+    }
+
+    renderVista_(cuerpo, perfil);
+    Componentes.aviso({ texto: mensaje, tipo: 'exito' });
+
+    // Quien pinte avatares (header, comentarios) escucha esto y se repinta:
+    // no hace falta recargar la pagina.
+    document.dispatchEvent(new CustomEvent('sigso:perfil-actualizado', {
+      detail: { email: correo, foto: nuevaFoto }
+    }));
+  }
+
+  // --- API para el resto del frontend -------------------------------------
+
+  /**
+   * Pide en UNA sola llamada las miniaturas de una lista de correos y las
+   * deja en cache. Es lo que evita que una lista de comentarios haga una
+   * peticion por autor.
+   */
+  function precargarFotos(correos) {
+    var faltantes = (correos || [])
+      .map(function (c) { return String(c || '').trim().toLowerCase(); })
+      .filter(function (c, i, lista) {
+        return c && fotosPorCorreo_[c] === undefined && lista.indexOf(c) === i;
+      });
+    if (!faltantes.length) return Promise.resolve(fotosPorCorreo_);
+
+    return api_('getFotosPerfil', { emails: faltantes }).then(function (respuesta) {
+      var fotos = (respuesta && respuesta.ok && respuesta.data && respuesta.data.fotos) || {};
+      faltantes.forEach(function (correo) {
+        // Se cachea tambien el "no tiene foto" (null) para no volver a
+        // preguntar por el mismo correo en cada render.
+        fotosPorCorreo_[correo] = fotos[correo] || null;
+      });
+      return fotosPorCorreo_;
+    }).catch(function () {
+      // Sin fotos se ven las iniciales: no es motivo para romper la vista.
+      return fotosPorCorreo_;
+    });
+  }
+
+  function fotoDe(correo) {
+    return fotosPorCorreo_[String(correo || '').trim().toLowerCase()] || '';
+  }
+
+  // Avatar de una persona identificada por correo, usando el cache.
+  function avatarDe(nombre, correo, opts) {
+    return Componentes.avatar({ nombre: nombre || correo, foto: fotoDe(correo) }, opts);
+  }
+
+  /**
+   * v6.4: identidad en el header del Backoffice con login de Google
+   * (app.html / admin.html). Esas paginas NO tenian ninguna: el header solo
+   * mostraba marca y navegacion, y no habia donde colgar "Mi perfil". Aqui
+   * se monta el equivalente al menu de usuario del shell.
+   *
+   * No hay boton de cerrar sesion: la sesion es la de Google, y se cierra
+   * desde la propia cuenta de Google, no desde SIGSO.
+   */
+  function montarHeaderUsuario() {
+    var hueco = document.getElementById('sigso-header-usuario');
+    if (!hueco) return Promise.resolve();
+
+    return api_('getMiPerfil', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) return;   // sin sesion valida: header sin identidad
+      var perfil = respuesta.data;
+      perfilActual_ = perfil;
+
+      var correo = String(perfil.email || '').trim().toLowerCase();
+      if (correo) fotosPorCorreo_[correo] = perfil.foto_thumb || null;
+
+      function pintar() {
+        hueco.innerHTML =
+          '<button type="button" class="sigso-header__usuario-btn js-abrir-perfil" ' +
+            'title="Mi perfil" aria-label="Mi perfil">' +
+            Componentes.avatar({ nombre: perfil.nombre, foto: perfil.foto_thumb }, { tam: 'md' }) +
+            '<span class="sigso-header__usuario-txt">' +
+              '<span class="sigso-header__usuario-nombre">' +
+                Componentes.escaparHtml(perfil.nombre) + '</span>' +
+              '<span class="sigso-header__usuario-rol">' +
+                Componentes.escaparHtml(ETIQUETA_ROL[perfil.rol] || perfil.rol) + '</span>' +
+            '</span>' +
+          '</button>';
+        hueco.querySelector('.js-abrir-perfil').addEventListener('click', abrir);
+      }
+
+      pintar();
+      document.addEventListener('sigso:perfil-actualizado', function (ev) {
+        perfil.foto_thumb = (ev.detail && ev.detail.foto) || '';
+        perfil.tiene_foto = !!perfil.foto_thumb;
+        pintar();
+      });
+    }).catch(function () {
+      // El header se queda sin identidad; el resto de la pagina funciona.
+    });
+  }
+
+  window.SigsoPerfil = {
+    abrir: abrir,
+    montarHeaderUsuario: montarHeaderUsuario,
+    precargarFotos: precargarFotos,
+    fotoDe: fotoDe,
+    avatarDe: avatarDe,
+    perfilActual: function () { return perfilActual_; }
+  };
+})();
+
+</script>
   <script>
 /**
  * app.js — Backoffice: orquesta las vistas dashboard/detalle (§12.4/12.5).
@@ -8590,6 +9538,11 @@ var Iconos = (function () {
   document.addEventListener('DOMContentLoaded', function () {
     if (typeof renderHeaderSigso === 'function') {
       renderHeaderSigso('app');
+    }
+    // v6.4: identidad + "Mi perfil" en el header. Antes esta pagina no
+    // mostraba en ningun lado con que usuario estabas trabajando.
+    if (window.SigsoPerfil) {
+      SigsoPerfil.montarHeaderUsuario();
     }
     SigsoDashboard.inicializarFiltros();
     SigsoDashboard.cargar();

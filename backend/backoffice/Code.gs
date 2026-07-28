@@ -81,7 +81,14 @@ var BACKOFFICE_ACTIONS = {
   listarRosterCoordinadorPausas: handleListarRosterCoordinadorPausas_,
   getHistorialTrabajadorPausas: handleGetHistorialTrabajadorPausas_,
   // v6.0 Fase P5: reporte de pausas para el Panel de Gerencia (modulo 'gerencia').
-  getReporteGerenciaPausas: handleGetReporteGerenciaPausas_
+  getReporteGerenciaPausas: handleGetReporteGerenciaPausas_,
+  // v6.4 (foto de perfil): gestionar la foto PROPIA. Ninguna de estas
+  // acciones recibe un identificador de usuario -- Perfiles.gs deriva la
+  // identidad del contexto ya autenticado.
+  getMiPerfil: handleGetMiPerfil_,
+  guardarFotoPerfil: handleGuardarFotoPerfil_,
+  eliminarFotoPerfil: handleEliminarFotoPerfil_,
+  getFotosPerfil: handleGetFotosPerfil_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -152,6 +159,13 @@ var MODULO_POR_ACCION = {
   // v6.0 Fase P5: la pestana de pausas vive en el Panel de Gerencia.
   getReporteGerenciaPausas: 'gerencia'
   // ping: sin modulo -- cualquier sesion valida.
+  //
+  // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
+  // eliminarFotoPerfil / getFotosPerfil tampoco llevan gate de modulo, a
+  // proposito. Gestionar la foto PROPIA no pertenece a ningun modulo: toda
+  // cuenta autenticada tiene perfil, igual que toda cuenta puede cerrar
+  // sesion. La proteccion no es el modulo sino que la identidad se deriva
+  // del contexto (Perfiles.gs), nunca de un parametro del navegador.
 };
 
 function doGet(e) {
@@ -308,7 +322,17 @@ function resolverContextoPortal_(token, action) {
     ultimo_acceso: new Date().toISOString()
   });
 
-  return { contexto: { email: emails[0] || '', rol: rol, modulos: modulos, via_portal: true } };
+  // v6.4 (foto de perfil): se agrega cuenta_id al contexto. NO cambia la
+  // logica de autenticacion -- el dato ya se resolvio arriba desde la hoja;
+  // solo se propaga para que Perfiles.gs pueda identificar la fila de
+  // PERFILES de esta cuenta sin volver a leer CUENTAS_PORTAL, y sobre todo
+  // sin aceptar ningun identificador enviado por el navegador.
+  return {
+    contexto: {
+      email: emails[0] || '', rol: rol, modulos: modulos, via_portal: true,
+      cuenta_id: cuenta.cuenta_id
+    }
+  };
 }
 
 function leerFilasSeguro_(hoja) {
@@ -526,6 +550,25 @@ function handleGetHistorialTrabajadorPausas_(data, contexto) {
 // v6.0 Fase P5: reporte de pausas para el Panel de Gerencia.
 function handleGetReporteGerenciaPausas_(data, contexto) {
   return responderResultado_(Pausas.getReporteGerencia(data, contexto));
+}
+
+// v6.4 (foto de perfil). Notese que `data` NO aporta identidad en ninguna de
+// las tres primeras: Perfiles.gs la saca de `contexto`. Si alguien agrega
+// aqui un data.usuario_id o similar, rompe el modelo de seguridad entero.
+function handleGetMiPerfil_(data, contexto) {
+  return responderResultado_(Perfiles.getMiPerfil(data, contexto));
+}
+
+function handleGuardarFotoPerfil_(data, contexto) {
+  return responderResultado_(Perfiles.guardarFoto(data, contexto));
+}
+
+function handleEliminarFotoPerfil_(data, contexto) {
+  return responderResultado_(Perfiles.eliminarFoto(data, contexto));
+}
+
+function handleGetFotosPerfil_(data, contexto) {
+  return responderResultado_(Perfiles.getFotosDe(data, contexto));
 }
 
 function responderResultado_(resultado) {

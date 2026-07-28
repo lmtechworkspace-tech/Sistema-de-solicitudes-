@@ -82,6 +82,7 @@
     document.getElementById('form-cambiar-clave').addEventListener('submit', manejarCambioClave_);
     document.getElementById('btn-logout').addEventListener('click', manejarLogout_);
     wireMenuUsuario_();
+    wireMiPerfil_();
     wireVerContrasena_();
     wirePaleta_();
     wireAtajos_();
@@ -272,6 +273,10 @@
   function entrarAlShell_() {
     mostrarVista_('vista-shell');
     renderIdentidad_();
+    // v6.4: la foto propia se pide DESPUES de pintar la identidad, para que
+    // el header aparezca de inmediato con las iniciales y la foto lo
+    // reemplace al llegar (nunca un hueco esperando la red).
+    cargarFotoPropia_();
     renderNav_();
     renderHome_();
     // v6.0 (Pausas P4.1): si el enlace magico pedia un modulo puntual (p.ej.
@@ -439,9 +444,15 @@
     document.getElementById('nav-nombre-usuario').textContent = cuenta.nombre;
     document.getElementById('nav-rol-usuario').textContent =
       ETIQUETA_ROL[cuenta.rol] || cuenta.rol;
-    document.getElementById('nav-avatar').textContent = iniciales_(cuenta.nombre);
+    // v6.4: el avatar pasa a ser el componente unico (foto si la hay,
+    // iniciales si no). El contenedor #nav-avatar se conserva para no tocar
+    // el layout del header; dentro va ahora Componentes.avatar.
+    document.getElementById('nav-avatar').innerHTML = Componentes.avatar(
+      { nombre: cuenta.nombre, foto: fotoPerfilPropia_ }, { tam: 'md' }
+    );
     document.getElementById('nav-chevron').innerHTML = Iconos.svg('abajo', { tam: 14 });
     document.getElementById('ico-salir').innerHTML = Iconos.svg('salir', { tam: 15 });
+    document.getElementById('ico-perfil').innerHTML = Iconos.svg('persona', { tam: 15 });
     document.getElementById('menu-correos').innerHTML =
       '<div class="plataforma-menu__nombre">' + Componentes.escaparHtml(cuenta.nombre) + '</div>' +
       (cuenta.emails || []).map(function (e) {
@@ -449,10 +460,44 @@
       }).join('');
   }
 
-  function iniciales_(nombre) {
-    var partes = String(nombre || '').trim().split(/\s+/);
-    var texto = (partes[0] || '').charAt(0) + (partes.length > 1 ? partes[partes.length - 1].charAt(0) : '');
-    return texto.toUpperCase();
+  // v6.4: la foto propia del usuario, cacheada para no volver a pedirla en
+  // cada repintado del header. La rellena cargarFotoPropia_ al iniciar
+  // sesion y la actualiza el evento 'sigso:perfil-actualizado'.
+  var fotoPerfilPropia_ = '';
+
+  // v6.4: iniciales_ se elimino. Vivia aqui una copia (y otra en admin.js)
+  // que tomaba primera + ULTIMA palabra y no manejaba tildes ni particulas.
+  // Ahora la unica implementacion es Componentes.iniciales, usada a traves
+  // de Componentes.avatar.
+
+  // v6.4: "Mi perfil" abre el panel de perfil.js. El menu se cierra primero
+  // para que no quede flotando por encima del modal.
+  function wireMiPerfil_() {
+    var boton = document.getElementById('btn-mi-perfil');
+    if (!boton) return;
+
+    boton.addEventListener('click', function () {
+      var menu = document.getElementById('menu-usuario');
+      if (menu) menu.classList.add('sigso-oculto');
+      document.getElementById('btn-menu-usuario').setAttribute('aria-expanded', 'false');
+      SigsoPerfil.abrir();
+    });
+
+    // Cuando el usuario cambia o borra su foto, el header se repinta solo.
+    document.addEventListener('sigso:perfil-actualizado', function (ev) {
+      fotoPerfilPropia_ = (ev.detail && ev.detail.foto) || '';
+      renderIdentidad_();
+    });
+  }
+
+  function cargarFotoPropia_() {
+    if (!window.SigsoPerfil) return;
+    var correo = (sesion.cuenta && (sesion.cuenta.emails || [])[0]) || '';
+    if (!correo) return;
+    SigsoPerfil.precargarFotos([correo]).then(function () {
+      fotoPerfilPropia_ = SigsoPerfil.fotoDe(correo);
+      if (fotoPerfilPropia_) renderIdentidad_();
+    });
   }
 
   function wireMenuUsuario_() {
