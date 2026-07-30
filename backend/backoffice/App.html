@@ -9236,6 +9236,14 @@ var Iconos = (function () {
   var areasPropias_ = [];
   var tiposCatalogo_ = [];
   var puedeGeneral_ = false;
+  // v6.6 (Fase 4): 'feed' = publicadas (de siempre), 'aprobar' = bandeja de
+  // jefatura/ADM, 'envios' = mis novedades que todavia no estan publicadas.
+  var vista_ = 'feed';
+
+  function carrilDe_(tipo) {
+    var t = tiposCatalogo_.filter(function (x) { return x.tipo === tipo; })[0];
+    return t ? t.carril : 'LIBRE';
+  }
 
   function urlBackoffice_() {
     return (window.SIGSO_CONFIG || {}).BACKOFFICE_URL;
@@ -9443,8 +9451,10 @@ var Iconos = (function () {
   function cargarNovedades_() {
     var cont = document.getElementById('novedades-contenido');
     if (!cont) return;
+    vista_ = 'feed';
 
     cont.innerHTML =
+      '<div class="sigso-tabs" id="novedades-tabs" role="tablist"></div>' +
       '<div class="sigso-novedades__cabecera">' +
         '<div class="sigso-novedades__chips" id="novedades-chips-tipo"></div>' +
         '<button type="button" class="sigso-boton sigso-boton--con-icono sigso-oculto" id="btn-publicar-novedad">' +
@@ -9466,11 +9476,147 @@ var Iconos = (function () {
         }
       }
       renderChipsTipo_(document.getElementById('novedades-chips-tipo'));
+      renderTabs_();
       cargarFeed_();
     }).catch(function () {
       renderChipsTipo_(document.getElementById('novedades-chips-tipo'));
+      renderTabs_();
       cargarFeed_();
     });
+  }
+
+  /**
+   * v6.6 (Fase 4): segmentos Publicadas / Por aprobar / Mis envíos. "Por
+   * aprobar" y "Mis envíos" se piden siempre (sin saber de antemano si el
+   * usuario es jefatura de alguien): si vienen vacios, simplemente no
+   * aparece el contador -- no hace falta un permiso previo para decidir si
+   * mostrar la pestaña.
+   */
+  function renderTabs_(pendientesAprobar, misEnvios) {
+    var cont = document.getElementById('novedades-tabs');
+    if (!cont) return;
+    var segmentos = [
+      { id: 'feed', etiqueta: 'Publicadas' },
+      { id: 'aprobar', etiqueta: 'Por aprobar' + (pendientesAprobar ? ' (' + pendientesAprobar + ')' : '') },
+      { id: 'envios', etiqueta: 'Mis envíos' + (misEnvios ? ' (' + misEnvios + ')' : '') }
+    ];
+    cont.innerHTML = segmentos.map(function (s) {
+      var activo = s.id === vista_ ? ' sigso-tabs__boton--activo' : '';
+      return '<button type="button" class="sigso-tabs__boton' + activo + '" data-vista="' + s.id + '">' +
+        Componentes.escaparHtml(s.etiqueta) + '</button>';
+    }).join('');
+    cont.querySelectorAll('[data-vista]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        vista_ = boton.getAttribute('data-vista');
+        cambiarVista_();
+      });
+    });
+    // Pide los contadores en segundo plano (no bloquea el feed inicial) y
+    // vuelve a pintar las pestañas con el numero real.
+    if (pendientesAprobar === undefined) {
+      Promise.all([
+        api_('listarPendientesAprobacionNovedad', {}).catch(function () { return null; }),
+        api_('misPendientesNovedad', {}).catch(function () { return null; })
+      ]).then(function (resultados) {
+        var aprobar = resultados[0] && resultados[0].ok ? resultados[0].data.pendientes.length : 0;
+        var envios = resultados[1] && resultados[1].ok ? resultados[1].data.envios.length : 0;
+        renderTabs_(aprobar, envios);
+      });
+    }
+  }
+
+  function cambiarVista_() {
+    var cont = document.getElementById('novedades-contenido');
+    if (!cont) return;
+    renderTabs_();
+    document.getElementById('novedades-chips-tipo').classList.toggle('sigso-oculto', vista_ !== 'feed');
+    document.getElementById('btn-publicar-novedad').classList.toggle('sigso-oculto', vista_ !== 'feed' || !puedePublicar_);
+    if (vista_ === 'feed') { cargarFeed_(); return; }
+    if (vista_ === 'aprobar') { cargarPendientesAprobacion_(); return; }
+    cargarMisEnvios_();
+  }
+
+  // Tarjeta compacta para "Por aprobar" / "Mis envíos" -- sin foto ni
+  // acuse (todavia no aplica), con el estado como lo primero que se ve.
+  function tarjetaEstado_(n) {
+    var estadoInfo = {
+      EN_REVISION: { etiqueta: 'En revisión', color: 'alerta' },
+      DEVUELTA: { etiqueta: 'Devuelta para corregir', color: 'critico' },
+      RECHAZADA: { etiqueta: 'Rechazada', color: 'critico' }
+    }[n.estado] || { etiqueta: n.estado, color: 'info' };
+    return '<article class="sigso-novedad-card" data-novedad="' + n.novedad_id + '" tabindex="0" role="button" ' +
+      'aria-label="Abrir: ' + Componentes.escaparHtml(n.titulo) + '">' +
+      '<div class="sigso-novedad-card__franja sigso-novedad-card__franja--' + n.tipo_color + '"></div>' +
+      '<div class="sigso-novedad-card__cuerpo">' +
+        '<div class="sigso-novedad-card__meta-top">' +
+          '<span class="sigso-badge sigso-badge--' + n.tipo_color + '">' + Componentes.escaparHtml(n.tipo_etiqueta) + '</span>' +
+          '<span class="sigso-badge sigso-badge--' + estadoInfo.color + '">' + Componentes.escaparHtml(estadoInfo.etiqueta) + '</span>' +
+        '</div>' +
+        '<h3 class="sigso-novedad-card__titulo">' + Componentes.escaparHtml(n.titulo) + '</h3>' +
+        '<p class="sigso-novedad-card__resumen">' + Componentes.escaparHtml(n.resumen) + '</p>' +
+        (n.motivo_devolucion ? '<p class="sigso-ayuda"><strong>Motivo:</strong> ' + Componentes.escaparHtml(n.motivo_devolucion) + '</p>' : '') +
+        '<div class="sigso-novedad-card__meta-bottom">' +
+          '<span>' + Componentes.escaparHtml(n.autor_nombre) + '</span>' +
+          '<span aria-hidden="true">·</span>' +
+          '<span>' + relativo_(n.fecha_creacion) + '</span>' +
+        '</div>' +
+      '</div>' +
+    '</article>';
+  }
+
+  function renderListaEstados_(items, mensajeVacio) {
+    var cont = document.getElementById('novedades-contenido');
+    var lista = cont.querySelector('.sigso-novedades__lista');
+    if (!lista) return;
+    lista.innerHTML = items.length
+      ? items.map(tarjetaEstado_).join('')
+      : Componentes.vacio({ icono: 'campana', texto: mensajeVacio });
+    lista.querySelectorAll('[data-novedad]').forEach(function (card) {
+      card.addEventListener('click', function () { abrirDetalle_(card.getAttribute('data-novedad')); });
+      card.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); card.click(); }
+      });
+    });
+  }
+
+  function cargarPendientesAprobacion_() {
+    var cont = document.getElementById('novedades-contenido');
+    var lista = cont && cont.querySelector('.sigso-novedades__lista');
+    if (lista) lista.innerHTML = Componentes.cargando('Cargando...');
+    api_('listarPendientesAprobacionNovedad', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        if (lista) lista.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar.', 'error');
+        return;
+      }
+      renderListaEstados_(respuesta.data.pendientes, 'No tienes novedades pendientes de aprobar.');
+    }).catch(function () {
+      if (lista) lista.innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
+    });
+  }
+
+  function cargarMisEnvios_() {
+    var cont = document.getElementById('novedades-contenido');
+    var lista = cont && cont.querySelector('.sigso-novedades__lista');
+    if (lista) lista.innerHTML = Componentes.cargando('Cargando...');
+    api_('misPendientesNovedad', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        if (lista) lista.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar.', 'error');
+        return;
+      }
+      renderListaEstados_(respuesta.data.envios, 'No tienes novedades esperando aprobación.');
+    }).catch(function () {
+      if (lista) lista.innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
+    });
+  }
+
+  // Refresca la vista actual (feed/aprobar/envios) sin perder la pestaña en
+  // la que esta el usuario -- usado despues de aprobar/devolver/rechazar/
+  // reenviar, que pueden mover una novedad de una lista a otra.
+  function recargarVistaActual_() {
+    if (vista_ === 'feed') { cargarFeed_(); return; }
+    if (vista_ === 'aprobar') { cargarPendientesAprobacion_(); return; }
+    cargarMisEnvios_();
+    renderTabs_();
   }
 
   // --- Detalle + acuse ------------------------------------------------------
@@ -9504,37 +9650,59 @@ var Iconos = (function () {
     });
   }
 
+  // v6.6 (Fase 4): mientras no esta PUBLICADA, no hay acuse ni lectores ni
+  // "retirar" que tengan sentido -- lo que corresponde es el circuito de
+  // aprobacion (o, si esta DEVUELTA y soy el autor, corregir y reenviar).
+  var ESTADO_INFO = {
+    EN_REVISION: { etiqueta: 'En revisión', color: 'alerta' },
+    DEVUELTA: { etiqueta: 'Devuelta para corregir', color: 'critico' },
+    RECHAZADA: { etiqueta: 'Rechazada', color: 'critico' }
+  };
+
   function renderDetalle_(cuerpo, n, cerrar) {
     var avatar = window.SigsoPerfil
       ? SigsoPerfil.avatarDe(n.autor_nombre, n.autor_email, { tam: 'md' })
       : '';
+    var noPublicada = n.estado && n.estado !== 'PUBLICADA';
+    var estadoInfo = ESTADO_INFO[n.estado];
+
     cuerpo.innerHTML =
       '<div class="sigso-novedad-detalle">' +
         '<div class="sigso-novedad-card__meta-top">' +
           '<span class="sigso-badge sigso-badge--' + n.tipo_color + '">' + Componentes.escaparHtml(n.tipo_etiqueta) + '</span>' +
+          (estadoInfo ? '<span class="sigso-badge sigso-badge--' + estadoInfo.color + '">' + Componentes.escaparHtml(estadoInfo.etiqueta) + '</span>' : '') +
           (n.area_nombre ? '<span class="sigso-novedad-card__area">' + Componentes.escaparHtml(n.area_nombre) + '</span>' : '<span class="sigso-novedad-card__area">General</span>') +
         '</div>' +
         '<h2 class="sigso-novedad-detalle__titulo">' + Componentes.escaparHtml(n.titulo) + '</h2>' +
         chipVigencia_(n.fecha_vigencia) +
         '<div class="sigso-novedad-detalle__autor">' + avatar +
           '<div><strong>' + Componentes.escaparHtml(n.autor_nombre) + '</strong>' +
-          '<div class="sigso-ayuda">' + relativo_(n.fecha_publicacion) + '</div></div>' +
+          '<div class="sigso-ayuda">' + relativo_(n.fecha_publicacion || n.fecha_creacion) + '</div></div>' +
         '</div>' +
+        (n.motivo_devolucion ? Componentes.alerta('Motivo: ' + n.motivo_devolucion, 'error') : '') +
         '<div class="sigso-novedad-detalle__cuerpo">' + Componentes.escaparHtml(n.cuerpo || n.resumen).replace(/\n/g, '<br>') + '</div>' +
         (n.tiene_adjunto
           ? Componentes.boton({ texto: 'Descargar adjunto', icono: 'descargar', variante: 'secundario', clase: 'js-descargar-adjunto' })
           : '') +
         '<div class="sigso-novedad-detalle__acciones">' +
-          (n.requiere_acuse && !n.leida
+          (!noPublicada && n.requiere_acuse && !n.leida
             ? Componentes.boton({ texto: 'Enterado', icono: 'check', clase: 'js-marcar-leida' })
-            : (n.requiere_acuse
+            : (!noPublicada && n.requiere_acuse
                 ? '<span class="sigso-novedad-card__leida">' + Iconos.svg('check', { tam: 14 }) + ' Ya diste acuse de esta novedad</span>'
                 : '')) +
-          (n.puede_gestionar && n.requiere_acuse
+          (!noPublicada && n.puede_gestionar && n.requiere_acuse
             ? Componentes.boton({ texto: 'Ver quién leyó', variante: 'secundario', clase: 'js-ver-lectores' })
             : '') +
-          (n.puede_gestionar
+          (!noPublicada && n.puede_gestionar
             ? Componentes.boton({ texto: 'Retirar', variante: 'sutil', clase: 'sigso-boton--destructivo-sutil js-retirar-novedad' })
+            : '') +
+          (n.estado === 'EN_REVISION' && n.puede_aprobar
+            ? Componentes.boton({ texto: 'Aprobar', icono: 'check', clase: 'js-aprobar-novedad' }) +
+              Componentes.boton({ texto: 'Devolver', variante: 'secundario', clase: 'js-devolver-novedad' }) +
+              Componentes.boton({ texto: 'Rechazar', variante: 'sutil', clase: 'sigso-boton--destructivo-sutil js-rechazar-novedad' })
+            : '') +
+          (n.estado === 'DEVUELTA' && n.es_autor
+            ? Componentes.boton({ texto: 'Corregir y reenviar', icono: 'editar', clase: 'js-reenviar-novedad' })
             : '') +
         '</div>' +
         '<div class="js-lectores-panel"></div>' +
@@ -9554,7 +9722,7 @@ var Iconos = (function () {
           }
           Componentes.aviso({ texto: 'Acuse registrado.', tipo: 'exito' });
           cerrar();
-          cargarFeed_();
+          recargarVistaActual_();
           refrescarTarjetaHomeSiExiste_();
         }).catch(function () {
           Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
@@ -9610,10 +9778,77 @@ var Iconos = (function () {
             }
             Componentes.aviso({ texto: 'Novedad retirada.', tipo: 'exito' });
             cerrar();
-            cargarFeed_();
+            recargarVistaActual_();
             refrescarTarjetaHomeSiExiste_();
           });
         });
+      });
+    }
+
+    // v6.6 (Fase 4): aprobar/devolver/rechazar (jefatura/ADM).
+    var btnAprobar = cuerpo.querySelector('.js-aprobar-novedad');
+    if (btnAprobar) {
+      btnAprobar.addEventListener('click', function () {
+        btnAprobar.disabled = true;
+        api_('aprobarNovedad', { novedad_id: n.novedad_id }).then(function (respuesta) {
+          if (!respuesta || !respuesta.ok) {
+            Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo aprobar.', tipo: 'error' });
+            btnAprobar.disabled = false;
+            return;
+          }
+          Componentes.aviso({ texto: 'Novedad aprobada y publicada.', tipo: 'exito' });
+          cerrar();
+          recargarVistaActual_();
+        }).catch(function () {
+          Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
+          btnAprobar.disabled = false;
+        });
+      });
+    }
+
+    function pedirMotivoYEnviar_(accion, tituloPrompt, mensajeExito) {
+      Componentes.prompt({
+        titulo: tituloPrompt,
+        placeholder: 'Explica por qué (mínimo 10 caracteres)…',
+        confirmar: 'Enviar',
+        validar: function (valor) {
+          return valor.trim().length < 10 ? 'El motivo debe tener al menos 10 caracteres.' : null;
+        }
+      }).then(function (motivo) {
+        if (motivo === null) return; // cancelado
+        api_(accion, { novedad_id: n.novedad_id, motivo: motivo }).then(function (respuesta) {
+          if (!respuesta || !respuesta.ok) {
+            Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo completar la acción.', tipo: 'error' });
+            return;
+          }
+          Componentes.aviso({ texto: mensajeExito, tipo: 'exito' });
+          cerrar();
+          recargarVistaActual_();
+        }).catch(function () {
+          Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
+        });
+      });
+    }
+
+    var btnDevolver = cuerpo.querySelector('.js-devolver-novedad');
+    if (btnDevolver) {
+      btnDevolver.addEventListener('click', function () {
+        pedirMotivoYEnviar_('devolverNovedad', 'Devolver para corregir', 'Novedad devuelta al autor.');
+      });
+    }
+
+    var btnRechazar = cuerpo.querySelector('.js-rechazar-novedad');
+    if (btnRechazar) {
+      btnRechazar.addEventListener('click', function () {
+        pedirMotivoYEnviar_('rechazarNovedad', 'Rechazar novedad', 'Novedad rechazada.');
+      });
+    }
+
+    var btnReenviar = cuerpo.querySelector('.js-reenviar-novedad');
+    if (btnReenviar) {
+      btnReenviar.addEventListener('click', function () {
+        cerrar();
+        abrirFormularioReenviar_(n);
       });
     }
   }
@@ -9651,6 +9886,71 @@ var Iconos = (function () {
     setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
   }
 
+  // --- Corregir y reenviar (Fase 4) -------------------------------------------
+
+  // v6.6: el autor edita una novedad DEVUELTA y la reenvia a revision.
+  // Reusa el markup del formulario de publicar pero sin tipo/area (esos no
+  // cambian al corregir) ni adjunto (no se reemplaza aqui).
+  function abrirFormularioReenviar_(n) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Corregir y reenviar</h3>' +
+        (n.motivo_devolucion ? Componentes.alerta('Motivo de la devolución: ' + n.motivo_devolucion, 'error') : '') +
+        '<form id="form-reenviar-novedad" class="sigso-novedad-form">' +
+          '<div class="sigso-campo"><label>Título</label><input type="text" id="nr-titulo" maxlength="140" required value="' + Componentes.escaparHtml(n.titulo) + '"></div>' +
+          '<div class="sigso-campo"><label>Resumen (1-2 líneas)</label><textarea id="nr-resumen" rows="2" maxlength="240" required>' + Componentes.escaparHtml(n.resumen) + '</textarea></div>' +
+          '<div class="sigso-campo"><label>Detalle completo</label><textarea id="nr-cuerpo" rows="6">' + Componentes.escaparHtml(n.cuerpo || '') + '</textarea></div>' +
+          '<div class="sigso-campo"><label>Entra en vigencia (opcional)</label><input type="date" id="nr-vigencia" value="' + Componentes.escaparHtml(n.fecha_vigencia || '') + '"></div>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-cancelar-reenviar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Reenviar a revisión', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+
+    function cerrar() {
+      document.removeEventListener('keydown', alTeclado);
+      if (fondo.parentNode) fondo.parentNode.removeChild(fondo);
+    }
+    function alTeclado(ev) { if (ev.key === 'Escape') cerrar(); }
+    fondo.addEventListener('click', function (ev) { if (ev.target === fondo) cerrar(); });
+    document.addEventListener('keydown', alTeclado);
+    document.body.appendChild(fondo);
+
+    fondo.querySelector('.js-cancelar-reenviar').addEventListener('click', cerrar);
+
+    var form = document.getElementById('form-reenviar-novedad');
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var botonSubmit = form.querySelector('button[type="submit"]');
+      botonSubmit.disabled = true;
+      botonSubmit.textContent = 'Reenviando...';
+      api_('reenviarNovedad', {
+        novedad_id: n.novedad_id,
+        titulo: document.getElementById('nr-titulo').value,
+        resumen: document.getElementById('nr-resumen').value,
+        cuerpo: document.getElementById('nr-cuerpo').value,
+        fecha_vigencia: document.getElementById('nr-vigencia').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo reenviar.', tipo: 'error' });
+          botonSubmit.disabled = false;
+          botonSubmit.textContent = 'Reenviar a revisión';
+          return;
+        }
+        Componentes.aviso({ texto: 'Novedad reenviada a revisión.', tipo: 'exito' });
+        cerrar();
+        recargarVistaActual_();
+      }).catch(function () {
+        Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
+        botonSubmit.disabled = false;
+        botonSubmit.textContent = 'Reenviar a revisión';
+      });
+    });
+  }
+
   // --- Publicar --------------------------------------------------------------
 
   function abrirFormularioPublicar_() {
@@ -9667,9 +9967,10 @@ var Iconos = (function () {
         '<form id="form-publicar-novedad" class="sigso-novedad-form">' +
           '<div class="sigso-campo"><label>Tipo</label><select id="np-tipo" required>' +
             tiposCatalogo_.map(function (t) {
-              return '<option value="' + t.tipo + '">' + Componentes.escaparHtml(t.etiqueta) + '</option>';
+              return '<option value="' + t.tipo + '" data-carril="' + t.carril + '">' + Componentes.escaparHtml(t.etiqueta) + '</option>';
             }).join('') +
           '</select></div>' +
+          '<div id="np-aviso-carril"></div>' +
           '<div class="sigso-campo"><label>Área</label><select id="np-area">' + opcionesArea + '</select></div>' +
           '<div class="sigso-campo"><label>Título</label><input type="text" id="np-titulo" maxlength="140" required></div>' +
           '<div class="sigso-campo"><label>Resumen (1-2 líneas)</label><textarea id="np-resumen" rows="2" maxlength="240" required></textarea></div>' +
@@ -9679,7 +9980,7 @@ var Iconos = (function () {
           '<label class="sigso-campo-check"><input type="checkbox" id="np-requiere-acuse" checked> Exigir acuse de lectura ("Enterado")</label>' +
           '<div class="sigso-modal__acciones">' +
             Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-cancelar-publicar', tipo: 'button' }) +
-            Componentes.boton({ texto: 'Publicar', tipo: 'submit' }) +
+            Componentes.boton({ texto: carrilDe_(tiposCatalogo_[0] && tiposCatalogo_[0].tipo) === 'CONTROLADO' ? 'Enviar a revisión' : 'Publicar', tipo: 'submit', clase: 'js-submit-publicar' }) +
           '</div>' +
         '</form>' +
       '</div>';
@@ -9695,15 +9996,33 @@ var Iconos = (function () {
 
     fondo.querySelector('.js-cancelar-publicar').addEventListener('click', cerrar);
 
+    // v6.6: el aviso de "esto requiere aprobación" y el texto del boton
+    // dependen del carril del tipo elegido -- se actualizan al cambiar el
+    // selector, y de nuevo al enviar (por si el usuario nunca lo toco).
+    var selectTipo = document.getElementById('np-tipo');
+    var botonSubmitRef = fondo.querySelector('.js-submit-publicar');
+    function actualizarAvisoCarril_() {
+      var carril = selectTipo.options[selectTipo.selectedIndex].getAttribute('data-carril');
+      var esControlado = carril === 'CONTROLADO';
+      document.getElementById('np-aviso-carril').innerHTML = esControlado
+        ? Componentes.alerta('Este tipo requiere la aprobación de tu jefatura antes de publicarse.', 'info')
+        : '';
+      botonSubmitRef.textContent = esControlado ? 'Enviar a revisión' : 'Publicar';
+    }
+    selectTipo.addEventListener('change', actualizarAvisoCarril_);
+    actualizarAvisoCarril_();
+
     var form = document.getElementById('form-publicar-novedad');
     form.addEventListener('submit', function (ev) {
       ev.preventDefault();
       var botonSubmit = form.querySelector('button[type="submit"]');
       var archivo = document.getElementById('np-archivo').files[0];
+      var esControlado = selectTipo.options[selectTipo.selectedIndex].getAttribute('data-carril') === 'CONTROLADO';
+      var textoOriginal = esControlado ? 'Enviar a revisión' : 'Publicar';
 
       function enviar(contenidoBase64, nombreArchivo) {
         botonSubmit.disabled = true;
-        botonSubmit.textContent = 'Publicando...';
+        botonSubmit.textContent = esControlado ? 'Enviando...' : 'Publicando...';
         api_('publicarNovedad', {
           tipo: document.getElementById('np-tipo').value,
           area_id: document.getElementById('np-area').value,
@@ -9718,16 +10037,19 @@ var Iconos = (function () {
           if (!respuesta || !respuesta.ok) {
             Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo publicar.', tipo: 'error' });
             botonSubmit.disabled = false;
-            botonSubmit.textContent = 'Publicar';
+            botonSubmit.textContent = textoOriginal;
             return;
           }
-          Componentes.aviso({ texto: 'Novedad publicada.', tipo: 'exito' });
+          Componentes.aviso({
+            texto: respuesta.data.estado === 'EN_REVISION' ? 'Novedad enviada a revisión.' : 'Novedad publicada.',
+            tipo: 'exito'
+          });
           cerrar();
-          cargarFeed_();
+          recargarVistaActual_();
         }).catch(function () {
           Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
           botonSubmit.disabled = false;
-          botonSubmit.textContent = 'Publicar';
+          botonSubmit.textContent = textoOriginal;
         });
       }
 

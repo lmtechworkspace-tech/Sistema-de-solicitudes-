@@ -150,6 +150,19 @@ function obtenerEquipoJefe_(jefeEmail) {
     .filter(function (email, i, todos) { return email && todos.indexOf(email) === i; });
 }
 
+// v6.6 (Fase 4, Novedades): inversa de obtenerEquipoJefe_ -- dado un
+// subordinado, su jefe activo. Si aparece en mas de una relacion activa
+// (no deberia pasar en el uso normal), toma la primera -- una novedad solo
+// se aprueba una vez, no hace falta resolver ambigüedad aqui.
+function jefeDeSubordinado_(subordinadoEmail) {
+  if (!subordinadoEmail) return '';
+  var fila = leerFilasSeguro_(SHEETS.JEFATURAS).filter(function (j) {
+    var activo = j.activo === true || j.activo === 'TRUE' || j.activo === 1;
+    return activo && j.subordinado_email === subordinadoEmail;
+  })[0];
+  return fila ? fila.jefe_email : '';
+}
+
 // v4.2 (§0): una solicitud/subsolicitud es "de mi equipo" si el SOLICITANTE
 // o el RESOLUTOR (a nivel solicitud o del item puntual) esta en el equipo.
 // Reusada por Jefatura.getPanel Y por Solicitudes.getDetalle (el guardia de

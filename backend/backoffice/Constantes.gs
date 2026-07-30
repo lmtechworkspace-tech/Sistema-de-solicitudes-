@@ -78,7 +78,12 @@ var SHEETS = {
   // ensuciar la fila del contenido con una lectura por lector. Ver la nota
   // identica en backend/intake/Constantes.gs.
   NOVEDADES: 'NOVEDADES',
-  NOVEDADES_LECTURAS: 'NOVEDADES_LECTURAS'
+  NOVEDADES_LECTURAS: 'NOVEDADES_LECTURAS',
+  // v6.6 (Fase 4, gobierno de la informacion): el hilo de una novedad
+  // controlada -- cada transicion de estado (enviada a revision, devuelta,
+  // rechazada, aprobada, reenviada) con quien y por que. Ver la nota
+  // identica en backend/intake/Constantes.gs.
+  NOVEDADES_HISTORIAL: 'NOVEDADES_HISTORIAL'
 };
 
 var COLUMNAS = {
@@ -288,16 +293,28 @@ var COLUMNAS = {
   // archivo_*: adjunto opcional (hoy solo PDF), original privado en Drive
   // (carpeta SIGSO_Novedades/), descargable via accion dedicada -- igual
   // patron que el original de la foto de perfil.
+  // v6.6 (Fase 4): estado agrega el carril de aprobacion. EN_REVISION es lo
+  // primero que existe para un tipo CONTROLADO (nunca hay un "borrador"
+  // separado -- redactar y enviar a revision es un solo paso, igual que
+  // crear una solicitud). fecha_creacion es SIEMPRE al crear (a diferencia
+  // de fecha_publicacion, que queda vacia hasta que se aprueba/publica).
   NOVEDADES: [
     'novedad_id', 'tipo', 'titulo', 'resumen', 'cuerpo',
     'area_id', 'area_nombre', 'autor_email', 'autor_nombre',
     'requiere_acuse', 'fecha_vigencia',
     'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'estado', 'fecha_creacion', 'aprobador_email', 'aprobador_nombre',
+    'fecha_aprobacion', 'motivo_devolucion',
     'fecha_publicacion', 'activa'
   ],
   // Acuse de lectura, una fila por (novedad, lector). Aparte de NOVEDADES
   // para no mezclar el contenido (una fila) con N lecturas.
-  NOVEDADES_LECTURAS: ['lectura_id', 'novedad_id', 'usuario_email', 'leido_en']
+  NOVEDADES_LECTURAS: ['lectura_id', 'novedad_id', 'usuario_email', 'leido_en'],
+  // v6.6 (Fase 4): un evento por transicion. evento en
+  // {ENVIADA_REVISION, DEVUELTA, RECHAZADA, APROBADA}. autor_email/nombre es
+  // quien HIZO la accion (el redactor al reenviar, la jefatura al
+  // aprobar/devolver/rechazar) -- no confundir con el autor de la novedad.
+  NOVEDADES_HISTORIAL: ['historial_id', 'novedad_id', 'evento', 'autor_email', 'autor_nombre', 'comentario', 'timestamp']
 };
 
 var ESTADOS = {

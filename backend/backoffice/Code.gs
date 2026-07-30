@@ -100,7 +100,17 @@ var BACKOFFICE_ACTIONS = {
   descargarAdjuntoNovedad: handleDescargarAdjuntoNovedad_,
   // v6.5 Fase 2 (seguimiento de lectura): solo autor/ADM, gate propio dentro
   // de Novedades.getLectores -- sin gate de modulo, igual que el resto.
-  getLectoresNovedad: handleGetLectoresNovedad_
+  getLectoresNovedad: handleGetLectoresNovedad_,
+  // v6.6 Fase 4 (gobierno): circuito de aprobacion. Sin gate de modulo --
+  // Novedades.gs valida en cada funcion quien puede aprobar/devolver/
+  // rechazar/reenviar (jefatura del autor via JEFATURAS, o ADM).
+  getHistorialNovedad: handleGetHistorialNovedad_,
+  aprobarNovedad: handleAprobarNovedad_,
+  devolverNovedad: handleDevolverNovedad_,
+  rechazarNovedad: handleRechazarNovedad_,
+  reenviarNovedad: handleReenviarNovedad_,
+  listarPendientesAprobacionNovedad: handleListarPendientesAprobacionNovedad_,
+  misPendientesNovedad: handleMisPendientesNovedad_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -619,6 +629,34 @@ function handleDescargarAdjuntoNovedad_(data, contexto) {
 
 function handleGetLectoresNovedad_(data, contexto) {
   return responderResultado_(Novedades.getLectores(data, contexto));
+}
+
+function handleGetHistorialNovedad_(data, contexto) {
+  return responderResultado_(Novedades.getHistorial(data, contexto));
+}
+
+function handleAprobarNovedad_(data, contexto) {
+  return responderResultado_(Novedades.aprobar(data, contexto));
+}
+
+function handleDevolverNovedad_(data, contexto) {
+  return responderResultado_(Novedades.devolver(data, contexto));
+}
+
+function handleRechazarNovedad_(data, contexto) {
+  return responderResultado_(Novedades.rechazar(data, contexto));
+}
+
+function handleReenviarNovedad_(data, contexto) {
+  return responderResultado_(Novedades.reenviar(data, contexto));
+}
+
+function handleListarPendientesAprobacionNovedad_(data, contexto) {
+  return responderResultado_(Novedades.listarPendientesAprobacion(data, contexto));
+}
+
+function handleMisPendientesNovedad_(data, contexto) {
+  return responderResultado_(Novedades.misPendientes(data, contexto));
 }
 
 function responderResultado_(resultado) {

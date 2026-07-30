@@ -36,6 +36,7 @@ function cargar() {
   seedSheet(ctx, 'CAT_AREAS', ctx.COLUMNAS.CAT_AREAS);
   seedSheet(ctx, 'NOVEDADES', ctx.COLUMNAS.NOVEDADES);
   seedSheet(ctx, 'NOVEDADES_LECTURAS', ctx.COLUMNAS.NOVEDADES_LECTURAS);
+  seedSheet(ctx, 'NOVEDADES_HISTORIAL', ctx.COLUMNAS.NOVEDADES_HISTORIAL);
   return ctx;
 }
 
@@ -84,10 +85,15 @@ function ctxCualquiera(email) {
   return { email: email || 'juan@homepymes.cl', rol: 'DEV' };
 }
 
+// v6.6 (Fase 4): tipo por defecto es AVISO (carril LIBRE, se publica de
+// inmediato) para que los tests de permisos/adjunto/feed/acuse -- que no
+// tratan sobre el circuito de aprobacion -- no se vean afectados por el.
+// Los tests que SI prueban el carril CONTROLADO (Ley, etc.) fijan su propio
+// tipo explicitamente.
 function publicarBase_(overrides) {
   return Object.assign({
-    tipo: 'LEY', titulo: 'Nueva ley de subcontratación',
-    resumen: 'Cambia el plazo de finiquito para obras.', area_id: 'RRHH'
+    tipo: 'AVISO', titulo: 'Recordatorio de horario de verano',
+    resumen: 'A partir del lunes el horario de salida cambia a las 17:00.', area_id: 'RRHH'
   }, overrides);
 }
 
@@ -229,7 +235,10 @@ test('12. filtrar el feed por tipo y por area', () => {
   const ctx = cargar();
   seedArea(ctx, { area_id: 'RRHH' });
   seedArea(ctx, { area_id: 'PREVENCION', responsable_email: 'camila@rld.cl' });
-  ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY', area_id: 'RRHH' }), ctxResponsable());
+  // LEY es carril CONTROLADO (Fase 4): se aprueba antes de aparecer en el
+  // feed -- el test sigue probando el filtro, no el circuito de aprobacion.
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY', area_id: 'RRHH' }), ctxResponsable()));
+  ctx.Novedades.aprobar({ novedad_id: pub.novedad_id }, ctxAdm());
   ctx.Novedades.publicar(
     publicarBase_({ tipo: 'AVISO', titulo: 'Charla de prevencion', area_id: 'PREVENCION' }),
     ctxResponsable('camila@rld.cl')
@@ -389,10 +398,15 @@ test('22. getLectores separa quien ya dio el acuse de quien falta, contra la aud
   assert.deepEqual(res.pendientes.map((p) => p.email), ['leo@rld.cl']);
 });
 
-test('23. publicar tipo LEY envia correo inmediato a la audiencia (menos al autor)', () => {
+test('23. aprobar una novedad tipo LEY envia correo inmediato a la audiencia (menos al autor)', () => {
+  // v6.6: LEY es carril CONTROLADO -- el correo inmediato ya no sale al
+  // publicar (eso ahora solo la manda a revision), sino al aprobar.
   const ctx = cargarConAudiencia();
   seedArea(ctx, { responsable_email: 'juan@homepymes.cl' });
-  ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable('juan@homepymes.cl'));
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable('juan@homepymes.cl')));
+  assert.equal(ctx.GmailApp._enviados.length, 0, 'publicar (enviar a revision) no manda el correo de LEY todavia');
+
+  ctx.Novedades.aprobar({ novedad_id: pub.novedad_id }, ctxAdm());
 
   const destinatarios = ctx.GmailApp._enviados.map((e) => e.destinatario);
   assert.deepEqual(destinatarios.sort(), ['leo@rld.cl']);
@@ -409,7 +423,7 @@ test('25. recordatorioPendientes: un solo correo por persona con TODAS sus pendi
   const ctx = cargarConAudiencia();
   seedArea(ctx);
   ctx.Novedades.publicar(publicarBase_({ tipo: 'AVISO', titulo: 'Aviso 1' }), ctxResponsable());
-  ctx.Novedades.publicar(publicarBase_({ tipo: 'PROCEDIMIENTO', titulo: 'Aviso 2' }), ctxResponsable());
+  ctx.Novedades.publicar(publicarBase_({ tipo: 'LOGRO', titulo: 'Aviso 2' }), ctxResponsable());
 
   const res = toPlain(ctx.Novedades.recordatorioPendientes());
   assert.equal(res.enviados, 2); // juan@homepymes.cl y leo@rld.cl, cada uno un correo
@@ -442,4 +456,248 @@ test('27. recordatorioPendientes no molesta a quien no tiene nada pendiente', ()
   const res = toPlain(ctx.Novedades.recordatorioPendientes());
   assert.equal(res.enviados, 0);
   assert.equal(ctx.GmailApp._enviados.length, 0);
+});
+
+// --- 28-41: Fase 4 (gobierno de la informacion -- aprobacion por jefatura) -
+
+// jefa@rld.cl es jefatura de vanessa@rld.cl (autora por defecto de
+// publicarBase_/ctxResponsable, responsable del area RRHH) -- misma hoja
+// JEFATURAS que usa "Mi Departamento", ninguna configuracion nueva.
+function cargarConJefatura() {
+  const ctx = cargarConAudiencia();
+  seedSheet(ctx, 'JEFATURAS', ctx.COLUMNAS.JEFATURAS, [
+    ['JEF-1', 'jefa@rld.cl', 'vanessa@rld.cl', true]
+  ]);
+  return ctx;
+}
+function ctxJefa(email) {
+  return { email: email || 'jefa@rld.cl', rol: 'JEFATURA' };
+}
+
+test('28. publicar un tipo CONTROLADO (Ley) queda EN_REVISION, no en el feed, y notifica a la jefatura del autor', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
+  assert.equal(pub.estado, 'EN_REVISION');
+
+  const fila = ctx.leerFilas_('NOVEDADES')[0];
+  assert.equal(fila.estado, 'EN_REVISION');
+  assert.equal(fila.activa, false, 'no debe activarse hasta que se aprueba');
+
+  const feed = toPlain(ctx.Novedades.getFeed({}, ctxCualquiera()));
+  assert.equal(feed.recientes.length, 0, 'no aparece en el feed publico mientras esta en revision');
+
+  const avisos = ctx.GmailApp._enviados.filter((e) => e.destinatario === 'jefa@rld.cl');
+  assert.equal(avisos.length, 1);
+});
+
+test('29. publicar un tipo LIBRE (Aviso) sigue publicando de inmediato, sin pasar por revision', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'AVISO' }), ctxResponsable()));
+  assert.equal(pub.estado, 'PUBLICADA');
+  assert.equal(ctx.leerFilas_('NOVEDADES_HISTORIAL').length, 0, 'sin revision, no hay transiciones que registrar');
+
+  const feed = toPlain(ctx.Novedades.getFeed({}, ctxCualquiera()));
+  assert.equal(feed.recientes.length, 1);
+});
+
+test('30. getDetalle: SEGURIDAD -- una novedad EN_REVISION no es visible para cualquiera', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
+
+  const paraOtro = toPlain(ctx.Novedades.getDetalle({ novedad_id: pub.novedad_id }, ctxCualquiera()));
+  assert.equal(paraOtro._forbidden, true);
+
+  const paraAutor = toPlain(ctx.Novedades.getDetalle({ novedad_id: pub.novedad_id }, ctxResponsable()));
+  assert.equal(paraAutor.estado, 'EN_REVISION');
+
+  const paraJefa = toPlain(ctx.Novedades.getDetalle({ novedad_id: pub.novedad_id }, ctxJefa()));
+  assert.equal(paraJefa.estado, 'EN_REVISION');
+  assert.equal(paraJefa.puede_aprobar, true);
+
+  const paraAdm = toPlain(ctx.Novedades.getDetalle({ novedad_id: pub.novedad_id }, ctxAdm()));
+  assert.equal(paraAdm.estado, 'EN_REVISION');
+});
+
+test('31. aprobar: SEGURIDAD -- solo la jefatura del autor o ADM', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
+
+  const otro = toPlain(ctx.Novedades.aprobar({ novedad_id: pub.novedad_id }, ctxCualquiera()));
+  assert.equal(otro._forbidden, true);
+  // Ni siquiera el propio autor puede autoaprobarse.
+  const propio = toPlain(ctx.Novedades.aprobar({ novedad_id: pub.novedad_id }, ctxResponsable()));
+  assert.equal(propio._forbidden, true);
+
+  const ok = toPlain(ctx.Novedades.aprobar({ novedad_id: pub.novedad_id }, ctxJefa()));
+  assert.equal(ok.estado, 'PUBLICADA');
+
+  const fila = ctx.leerFilas_('NOVEDADES')[0];
+  assert.equal(fila.activa, true);
+  assert.equal(fila.aprobador_email, 'jefa@rld.cl');
+  assert.ok(fila.fecha_publicacion);
+
+  const feed = toPlain(ctx.Novedades.getFeed({}, ctxCualquiera()));
+  assert.equal(feed.recientes.length, 1);
+});
+
+test('32. aprobar rechaza si la novedad no esta EN_REVISION (ya aprobada, por ejemplo)', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
+  ctx.Novedades.aprobar({ novedad_id: pub.novedad_id }, ctxJefa());
+
+  const segundaVez = toPlain(ctx.Novedades.aprobar({ novedad_id: pub.novedad_id }, ctxJefa()));
+  assert.equal(segundaVez._validationError, true);
+});
+
+test('33. devolver: exige un motivo de al menos 10 caracteres', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
+
+  const sinMotivo = toPlain(ctx.Novedades.devolver({ novedad_id: pub.novedad_id }, ctxJefa()));
+  assert.equal(sinMotivo._validationError, true);
+
+  const corto = toPlain(ctx.Novedades.devolver({ novedad_id: pub.novedad_id, motivo: 'no' }, ctxJefa()));
+  assert.equal(corto._validationError, true);
+});
+
+test('34. devolver: pasa a DEVUELTA, guarda el motivo y avisa al autor', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
+
+  const res = toPlain(ctx.Novedades.devolver(
+    { novedad_id: pub.novedad_id, motivo: 'Falta citar el numero de la ley.' }, ctxJefa()
+  ));
+  assert.equal(res.estado, 'DEVUELTA');
+
+  const fila = ctx.leerFilas_('NOVEDADES')[0];
+  assert.equal(fila.estado, 'DEVUELTA');
+  assert.equal(fila.motivo_devolucion, 'Falta citar el numero de la ley.');
+
+  const avisoAutor = ctx.GmailApp._enviados.find((e) => e.destinatario === 'vanessa@rld.cl');
+  assert.ok(avisoAutor);
+  assert.ok(avisoAutor.cuerpo.indexOf('Falta citar el numero de la ley.') !== -1);
+});
+
+test('35. rechazar: pasa a RECHAZADA (terminal), no vuelve al autor', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
+
+  const res = toPlain(ctx.Novedades.rechazar(
+    { novedad_id: pub.novedad_id, motivo: 'No corresponde publicar esto como ley.' }, ctxJefa()
+  ));
+  assert.equal(res.estado, 'RECHAZADA');
+
+  // No se puede reenviar una rechazada (reenviar solo aplica a DEVUELTA).
+  const reintento = toPlain(ctx.Novedades.reenviar({ novedad_id: pub.novedad_id }, ctxResponsable()));
+  assert.equal(reintento._validationError, true);
+});
+
+test('36. reenviar: el autor corrige una DEVUELTA, vuelve a EN_REVISION y se re-notifica a la jefatura', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
+  ctx.Novedades.devolver({ novedad_id: pub.novedad_id, motivo: 'Falta la fecha de vigencia.' }, ctxJefa());
+  ctx.GmailApp._enviados.length = 0; // limpio para medir solo el reenvio
+
+  const res = toPlain(ctx.Novedades.reenviar(
+    { novedad_id: pub.novedad_id, titulo: 'Nueva ley de subcontratación (v2)' }, ctxResponsable()
+  ));
+  assert.equal(res.estado, 'EN_REVISION');
+
+  const fila = ctx.leerFilas_('NOVEDADES')[0];
+  assert.equal(fila.titulo, 'Nueva ley de subcontratación (v2)');
+  assert.equal(fila.motivo_devolucion, '', 'el motivo de la devolucion anterior se limpia al reenviar');
+
+  const avisos = ctx.GmailApp._enviados.filter((e) => e.destinatario === 'jefa@rld.cl');
+  assert.equal(avisos.length, 1, 'la jefatura vuelve a recibir el aviso de revision');
+});
+
+test('37. reenviar: SEGURIDAD -- ni la jefatura ni ADM pueden reenviar en nombre del autor', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
+  ctx.Novedades.devolver({ novedad_id: pub.novedad_id, motivo: 'Falta la fecha de vigencia.' }, ctxJefa());
+
+  const porJefa = toPlain(ctx.Novedades.reenviar({ novedad_id: pub.novedad_id }, ctxJefa()));
+  assert.equal(porJefa._forbidden, true);
+
+  const porAdm = toPlain(ctx.Novedades.reenviar({ novedad_id: pub.novedad_id }, ctxAdm()));
+  assert.equal(porAdm._forbidden, true);
+});
+
+test('38. listarPendientesAprobacion: la jefatura ve solo las de su equipo; ADM ve todas', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx, { area_id: 'RRHH', responsable_email: 'vanessa@rld.cl' });
+  seedArea(ctx, { area_id: 'CONTABILIDAD', responsable_email: 'francisca@rld.cl' });
+  const pub1 = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY', titulo: 'Ley de Vanessa' }), ctxResponsable()));
+  ctx.Novedades.publicar(
+    publicarBase_({ tipo: 'DICTAMEN', titulo: 'Dictamen de Francisca', area_id: 'CONTABILIDAD' }),
+    ctxResponsable('francisca@rld.cl')
+  );
+
+  const paraJefa = toPlain(ctx.Novedades.listarPendientesAprobacion({}, ctxJefa()));
+  assert.deepEqual(paraJefa.pendientes.map((p) => p.novedad_id), [pub1.novedad_id]);
+
+  const paraAdm = toPlain(ctx.Novedades.listarPendientesAprobacion({}, ctxAdm()));
+  assert.equal(paraAdm.pendientes.length, 2);
+
+  const paraCualquiera = toPlain(ctx.Novedades.listarPendientesAprobacion({}, ctxCualquiera()));
+  assert.equal(paraCualquiera.pendientes.length, 0, 'quien no es jefatura de nadie no ve pendientes ajenas');
+});
+
+test('39. misPendientes: el autor ve sus EN_REVISION/DEVUELTA/RECHAZADA, no las ya publicadas', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const enRevision = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY', titulo: 'En revision' }), ctxResponsable()));
+  const devuelta = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'DICTAMEN', titulo: 'Devuelta' }), ctxResponsable()));
+  ctx.Novedades.devolver({ novedad_id: devuelta.novedad_id, motivo: 'Falta un detalle importante.' }, ctxJefa());
+  const publicada = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'AVISO', titulo: 'Ya publicada' }), ctxResponsable()));
+
+  const mios = toPlain(ctx.Novedades.misPendientes({}, ctxResponsable()));
+  const ids = mios.envios.map((e) => e.novedad_id);
+  assert.ok(ids.includes(enRevision.novedad_id));
+  assert.ok(ids.includes(devuelta.novedad_id));
+  assert.ok(!ids.includes(publicada.novedad_id));
+});
+
+test('40. getHistorial registra las transiciones en orden y respeta la visibilidad de getDetalle', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
+
+  // Mientras sigue en el circuito de aprobacion (no publicada todavia), un
+  // tercero cualquiera no puede ver el historial -- mismo criterio que
+  // getDetalle.
+  const paraOtro = toPlain(ctx.Novedades.getHistorial({ novedad_id: pub.novedad_id }, ctxCualquiera()));
+  assert.equal(paraOtro._forbidden, true);
+
+  ctx.Novedades.devolver({ novedad_id: pub.novedad_id, motivo: 'Falta la fecha de vigencia.' }, ctxJefa());
+  ctx.Novedades.reenviar({ novedad_id: pub.novedad_id }, ctxResponsable());
+  ctx.Novedades.aprobar({ novedad_id: pub.novedad_id }, ctxJefa());
+
+  // Ya publicada: es publica, incluido el historial, para cualquier
+  // identidad autenticada -- igual que getDetalle.
+  const paraOtroDespues = toPlain(ctx.Novedades.getHistorial({ novedad_id: pub.novedad_id }, ctxCualquiera()));
+  assert.deepEqual(paraOtroDespues.eventos.map((e) => e.evento), [
+    'ENVIADA_REVISION', 'DEVUELTA', 'ENVIADA_REVISION', 'APROBADA'
+  ]);
+});
+
+test('41. sin jefatura configurada para el autor, el aviso de revision cae a ADM (no se pierde)', () => {
+  const ctx = cargarConAudiencia(); // sin seedear JEFATURAS
+  seedArea(ctx);
+  agregar(ctx, 'USUARIOS', { usuario_id: 'U9', nombre: 'Admin General', email: 'adm@rld.cl', empresa_id: 'RLD', rol: 'ADM', activo: true, creado_por: 'seed' });
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
+  assert.equal(pub.estado, 'EN_REVISION');
+
+  const avisos = ctx.GmailApp._enviados.filter((e) => e.destinatario === 'adm@rld.cl');
+  assert.equal(avisos.length, 1);
 });
