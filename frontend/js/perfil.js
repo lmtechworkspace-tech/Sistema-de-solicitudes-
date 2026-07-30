@@ -22,10 +22,41 @@
   var MAX_BYTES = 5 * 1024 * 1024;
   var TIPOS_OK = ['image/jpeg', 'image/png', 'image/webp'];
 
-  // Cache en memoria de correo -> miniatura, para que una lista de
-  // comentarios no dispare una llamada por autor.
-  var fotosPorCorreo_ = {};
+  // Cache de correo -> miniatura, para que una lista de comentarios no
+  // dispare una llamada por autor.
+  //
+  // v6.4 (rendimiento): ademas de memoria, se persiste en sessionStorage.
+  // Sin esto, app.html y admin.html son cargas de pagina separadas y volvian
+  // a pedir las MISMAS fotos en cada navegacion. Se guarda con marca de
+  // tiempo y un techo de 10 minutos para que un cambio de foto se vea sin
+  // tener que cerrar la pestana.
+  var LLAVE_CACHE_FOTOS = 'sigso_fotos_perfil';
+  var MS_VIGENCIA_CACHE = 10 * 60 * 1000;
+  var fotosPorCorreo_ = leerCachePersistido_();
   var perfilActual_ = null;
+
+  function leerCachePersistido_() {
+    try {
+      var crudo = sessionStorage.getItem(LLAVE_CACHE_FOTOS);
+      if (!crudo) return {};
+      var guardado = JSON.parse(crudo);
+      if (!guardado || (Date.now() - guardado.ts) > MS_VIGENCIA_CACHE) return {};
+      return guardado.fotos || {};
+    } catch (err) {
+      return {};   // sin storage (modo privado) o JSON corrupto: sin cache
+    }
+  }
+
+  function persistirCache_() {
+    try {
+      sessionStorage.setItem(
+        LLAVE_CACHE_FOTOS, JSON.stringify({ ts: Date.now(), fotos: fotosPorCorreo_ })
+      );
+    } catch (err) {
+      // Cuota de sessionStorage llena (muchas miniaturas): el cache en
+      // memoria sigue funcionando, solo no sobrevive a la navegacion.
+    }
+  }
 
   function urlBackoffice_() {
     var cfg = window.SIGSO_CONFIG || {};
@@ -419,8 +450,10 @@
 
     var correo = String(perfil.email || '').trim().toLowerCase();
     if (correo) {
-      if (nuevaFoto) fotosPorCorreo_[correo] = nuevaFoto;
-      else delete fotosPorCorreo_[correo];
+      // null y no delete: "ya sabemos que no tiene foto". Con delete se
+      // volveria a preguntar al backend por este correo en el proximo render.
+      fotosPorCorreo_[correo] = nuevaFoto || null;
+      persistirCache_();
     }
 
     renderVista_(cuerpo, perfil);
@@ -455,6 +488,7 @@
         // preguntar por el mismo correo en cada render.
         fotosPorCorreo_[correo] = fotos[correo] || null;
       });
+      persistirCache_();
       return fotosPorCorreo_;
     }).catch(function () {
       // Sin fotos se ven las iniciales: no es motivo para romper la vista.
@@ -489,8 +523,13 @@
       var perfil = respuesta.data;
       perfilActual_ = perfil;
 
+      // La foto propia entra al cache compartido: los avatares del propio
+      // usuario en comentarios/actividad salen de aqui sin pedir nada.
       var correo = String(perfil.email || '').trim().toLowerCase();
-      if (correo) fotosPorCorreo_[correo] = perfil.foto_thumb || null;
+      if (correo) {
+        fotosPorCorreo_[correo] = perfil.foto_thumb || null;
+        persistirCache_();
+      }
 
       function pintar() {
         hueco.innerHTML =

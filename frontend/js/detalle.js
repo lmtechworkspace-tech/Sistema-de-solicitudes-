@@ -91,11 +91,32 @@
     if (!correos.length) return;
 
     SigsoPerfil.precargarFotos(correos).then(function () {
-      var hayFotos = correos.some(function (c) { return SigsoPerfil.fotoDe(c); });
-      // Si nadie tiene foto, lo ya pintado (iniciales) es correcto: repintar
-      // seria trabajo y parpadeo para nada.
-      if (hayFotos && detalleActual === detalle) render_(detalle);
+      if (detalleActual !== detalle) return;   // se navego a otra solicitud
+      pintarAvataresActividad_();
     });
+  }
+
+  // v6.4 (rendimiento): antes esto hacia render_(detalle) COMPLETO cuando
+  // llegaban las fotos, asi que cada apertura de solicitud pintaba el detalle
+  // entero dos veces (con su parpadeo). Ahora solo se cambia el avatar de
+  // cada autor, que es lo unico que cambio: sin re-render, sin perder el
+  // scroll ni el estado de los items desplegados.
+  function pintarAvataresActividad_() {
+    var nodos = document.querySelectorAll('.sigso-timeline__autor[data-usuario]');
+    for (var i = 0; i < nodos.length; i++) {
+      var nodo = nodos[i];
+      var correo = nodo.getAttribute('data-usuario');
+      var foto = SigsoPerfil.fotoDe(correo);
+      if (!foto) continue;                       // sigue con sus iniciales
+      var avatar = nodo.querySelector('.sigso-avatar');
+      if (!avatar || avatar.querySelector('img')) continue;   // ya tiene foto
+      var img = document.createElement('img');
+      img.className = 'sigso-avatar__img';
+      img.alt = '';
+      img.onerror = function () { this.remove(); };
+      img.src = foto;
+      avatar.appendChild(img);
+    }
   }
 
   function render_(detalle) {
@@ -758,7 +779,10 @@
         return '<li class="sigso-timeline__evento--' + e.tipo + (e.tipo === 'comentario' && e.esInterno ? ' sigso-comentario--interno' : '') + '">' +
           '<span class="sigso-timeline__icono">' + iconoEvento_(e) + '</span> ' +
           etiqueta + ' — ' +
-          '<span class="sigso-timeline__autor">' + autor +
+          // data-usuario permite que pintarAvataresActividad_ encuentre este
+          // autor cuando lleguen las fotos, sin repintar el detalle entero.
+          '<span class="sigso-timeline__autor" data-usuario="' +
+            Componentes.escaparHtml(e.usuario) + '">' + autor +
             Componentes.escaparHtml(e.usuario) + '</span>' +
           ' (' + new Date(e.timestamp).toLocaleString('es-CL') + ')' +
           (detalleTexto ? '<br>' + Componentes.escaparHtml(detalleTexto) : '') +

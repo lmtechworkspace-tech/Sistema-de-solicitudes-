@@ -437,3 +437,146 @@ test('doPost: un token invalido no puede tocar ninguna foto', () => {
   assert.equal(respuesta.error, 'forbidden');
   assert.equal(ctx.leerFilas_('PERFILES').length, 0);
 });
+
+// --- Rendimiento: el cache de miniaturas (v6.4 optimizacion) -------------
+//
+// CONTEXTO DEL PROBLEMA QUE ESTO PREVIENE: leerFilas_(PERFILES) trae la hoja
+// ENTERA, con TODAS las miniaturas base64. Sin cache, pintar un avatar
+// obligaba a leer las fotos de todo el personal, y el costo crecia con cada
+// foto nueva -- lo que se noto en produccion como "todo se puso lento
+// despues de subir fotos al equipo".
+//
+// Estos tests cuentan LECTURAS REALES de la hoja envolviendo leerFilas_. Si
+// alguien quita el cache, el contador sube y fallan.
+
+function espiarLecturas_(ctx) {
+  var conteo = { PERFILES: 0, total: 0 };
+  var original = ctx.leerFilas_;
+  ctx.leerFilas_ = function (hoja) {
+    conteo.total++;
+    if (hoja === 'PERFILES') conteo.PERFILES++;
+    return original.apply(null, arguments);
+  };
+  return conteo;
+}
+
+test('PERF: con todo cacheado, getFotosDe NO lee la hoja PERFILES', () => {
+  const ctx = cargar();
+  seedUsuarioGoogle(ctx);
+  guardar(ctx, ctxGoogle(), PNG_1X1);
+
+  // Primera llamada: llena el cache (aqui SI se lee la hoja).
+  toPlain(ctx.Perfiles.getFotosDe({ emails: ['juan@homepymes.cl'] }, ctxGoogle()));
+
+  const conteo = espiarLecturas_(ctx);
+  const res = toPlain(ctx.Perfiles.getFotosDe({ emails: ['juan@homepymes.cl'] }, ctxGoogle()));
+
+  assert.equal(conteo.PERFILES, 0, 'la segunda llamada no debe leer PERFILES');
+  assert.match(res.fotos['juan@homepymes.cl'], /^data:image\/png/,
+    'y aun asi debe devolver la foto correcta');
+});
+
+test('PERF: el "no tiene foto" tambien se cachea (no se relee por cada render)', () => {
+  const ctx = cargar();
+  seedUsuarioGoogle(ctx);
+  // Nadie tiene foto: el caso mas comun al principio.
+  toPlain(ctx.Perfiles.getFotosDe({ emails: ['juan@homepymes.cl'] }, ctxGoogle()));
+
+  const conteo = espiarLecturas_(ctx);
+  const res = toPlain(ctx.Perfiles.getFotosDe({ emails: ['juan@homepymes.cl'] }, ctxGoogle()));
+
+  assert.equal(conteo.PERFILES, 0, 'sin foto tambien debe salir del cache');
+  assert.equal(res.fotos['juan@homepymes.cl'], undefined, 'y seguir sin devolver foto');
+});
+
+test('PERF: solo se lee la hoja por los correos que faltan, no por todo el lote', () => {
+  const ctx = cargar();
+  seedUsuarioGoogle(ctx);
+  seedUsuarioGoogle(ctx, { usuario_id: 'u-2', nombre: 'Otra', email: 'otra@homepymes.cl' });
+  guardar(ctx, ctxGoogle('juan@homepymes.cl'), PNG_1X1);
+  guardar(ctx, ctxGoogle('otra@homepymes.cl'), JPEG_1X1, JPEG_1X1);
+
+  // Se cachea solo uno de los dos.
+  toPlain(ctx.Perfiles.getFotosDe({ emails: ['juan@homepymes.cl'] }, ctxGoogle()));
+
+  const conteo = espiarLecturas_(ctx);
+  const res = toPlain(ctx.Perfiles.getFotosDe(
+    { emails: ['juan@homepymes.cl', 'otra@homepymes.cl'] }, ctxGoogle()
+  ));
+
+  // Falta uno -> se paga UNA lectura, no una por correo.
+  assert.equal(conteo.PERFILES, 1, 'una sola lectura aunque falte mas de un correo');
+  assert.match(res.fotos['juan@homepymes.cl'], /^data:image\/png/);
+  assert.match(res.fotos['otra@homepymes.cl'], /^data:image\/jpeg/);
+});
+
+test('PERF: getMiPerfil no relee PERFILES cuando la miniatura propia esta cacheada', () => {
+  const ctx = cargar();
+  seedUsuarioGoogle(ctx);
+  guardar(ctx, ctxGoogle(), PNG_1X1);
+  toPlain(ctx.Perfiles.getMiPerfil({}, ctxGoogle()));   // llena el cache
+
+  const conteo = espiarLecturas_(ctx);
+  const perfil = toPlain(ctx.Perfiles.getMiPerfil({}, ctxGoogle()));
+
+  assert.equal(conteo.PERFILES, 0, 'montar el header no debe releer todas las miniaturas');
+  assert.equal(perfil.tiene_foto, true);
+  assert.match(perfil.foto_thumb, /^data:image\/png/);
+});
+
+// --- Correccion: el cache NUNCA debe servir datos obsoletos --------------
+
+test('CACHE: guardar una foto nueva invalida el cache (no se sirve la anterior)', () => {
+  const ctx = cargar();
+  seedUsuarioGoogle(ctx);
+  guardar(ctx, ctxGoogle(), PNG_1X1, PNG_1X1);
+  // Se cachea la PNG por los dos caminos.
+  toPlain(ctx.Perfiles.getFotosDe({ emails: ['juan@homepymes.cl'] }, ctxGoogle()));
+  toPlain(ctx.Perfiles.getMiPerfil({}, ctxGoogle()));
+
+  // Se reemplaza por una JPEG.
+  guardar(ctx, ctxGoogle(), JPEG_1X1, JPEG_1X1);
+
+  const lote = toPlain(ctx.Perfiles.getFotosDe({ emails: ['juan@homepymes.cl'] }, ctxGoogle()));
+  const propio = toPlain(ctx.Perfiles.getMiPerfil({}, ctxGoogle()));
+
+  assert.match(lote.fotos['juan@homepymes.cl'], /^data:image\/jpeg/,
+    'el lote debe devolver la foto NUEVA, no la cacheada');
+  assert.match(propio.foto_thumb, /^data:image\/jpeg/,
+    'el perfil propio tambien');
+});
+
+test('CACHE: eliminar la foto invalida el cache (deja de devolverse)', () => {
+  const ctx = cargar();
+  seedUsuarioGoogle(ctx);
+  guardar(ctx, ctxGoogle(), PNG_1X1);
+  toPlain(ctx.Perfiles.getFotosDe({ emails: ['juan@homepymes.cl'] }, ctxGoogle()));
+  toPlain(ctx.Perfiles.getMiPerfil({}, ctxGoogle()));
+
+  ctx.Perfiles.eliminarFoto({}, ctxGoogle());
+
+  const lote = toPlain(ctx.Perfiles.getFotosDe({ emails: ['juan@homepymes.cl'] }, ctxGoogle()));
+  const propio = toPlain(ctx.Perfiles.getMiPerfil({}, ctxGoogle()));
+
+  assert.equal(lote.fotos['juan@homepymes.cl'], undefined, 'ya no debe venir en el lote');
+  assert.equal(propio.tiene_foto, false, 'ni en el perfil propio');
+});
+
+test('CACHE: una cuenta PORTAL invalida TODOS sus correos, no solo el primero', () => {
+  const ctx = cargar();
+  seedCuentaPortal(ctx, { emails: JSON.stringify(['camila@rld.cl', 'c.soto@rld.cl']) });
+  guardar(ctx, ctxPortal(), PNG_1X1, PNG_1X1);
+  // Se cachean los dos correos de la cuenta.
+  toPlain(ctx.Perfiles.getFotosDe(
+    { emails: ['camila@rld.cl', 'c.soto@rld.cl'] }, ctxPortal()
+  ));
+
+  ctx.Perfiles.eliminarFoto({}, ctxPortal());
+
+  const res = toPlain(ctx.Perfiles.getFotosDe(
+    { emails: ['camila@rld.cl', 'c.soto@rld.cl'] }, ctxPortal()
+  ));
+  assert.equal(res.fotos['camila@rld.cl'], undefined);
+  assert.equal(res.fotos['c.soto@rld.cl'], undefined,
+    'el correo secundario tambien debe invalidarse, si no quedaria una foto fantasma');
+});

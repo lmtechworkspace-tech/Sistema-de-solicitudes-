@@ -373,6 +373,24 @@ function createCacheServiceMock() {
     },
     remove(clave) {
       almacen.delete(clave);
+    },
+    // v6.4 (optimizacion): el CacheService real tiene getAll/putAll/removeAll
+    // y son justo los que permiten resolver un lote de avatares en UNA
+    // operacion en vez de N. El mock los replica con la misma semantica:
+    // getAll omite las claves ausentes o expiradas.
+    getAll(claves) {
+      const salida = {};
+      (claves || []).forEach((clave) => {
+        const valor = cache.get(clave);
+        if (valor !== null) salida[clave] = valor;
+      });
+      return salida;
+    },
+    putAll(valores, segundos) {
+      Object.keys(valores || {}).forEach((clave) => cache.put(clave, valores[clave], segundos));
+    },
+    removeAll(claves) {
+      (claves || []).forEach((clave) => almacen.delete(clave));
     }
   };
 
