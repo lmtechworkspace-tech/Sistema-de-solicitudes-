@@ -13,7 +13,11 @@
  * eleccion del lector, no del sistema.
  */
 (function () {
-  window.SigsoNovedades = { cargar: cargarNovedades_, actualizarBadge: actualizarBadgeStandalone_ };
+  window.SigsoNovedades = {
+    cargar: cargarNovedades_,
+    actualizarBadge: actualizarBadgeStandalone_,
+    pintarTarjetaHome: pintarTarjetaHome_
+  };
 
   var ultimoFeed_ = [];
   var filtroTipo_ = '';
@@ -159,6 +163,46 @@
     }).catch(function () { /* sin badge si falla: no es critico */ });
   }
 
+  /**
+   * Fase 3: tarjeta en el Home con la novedad pendiente mas relevante (la
+   * mas reciente que requiere acuse y aun no fue confirmada) -- para que la
+   * informacion quede visible sin tener que entrar al modulo. Si no hay
+   * ninguna pendiente, el contenedor queda vacio (no agrega ruido al Home).
+   */
+  function pintarTarjetaHome_(contenedorId) {
+    var cont = document.getElementById(contenedorId);
+    if (!cont) return;
+    api_('getFeedNovedades', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) { cont.innerHTML = ''; return; }
+      var destacada = respuesta.data.recientes.filter(function (n) {
+        return n.requiere_acuse && !n.leida;
+      })[0];
+      if (!destacada) { cont.innerHTML = ''; return; }
+
+      cont.innerHTML =
+        '<div class="plataforma-aviso plataforma-aviso--accion">' +
+        Iconos.svg('campana', { tam: 18 }) +
+        '<div><strong>' + Componentes.escaparHtml(destacada.titulo) + '</strong>' +
+        '<div class="sigso-ayuda">' + Componentes.escaparHtml(destacada.resumen) + '</div></div>' +
+        '<button type="button" class="sigso-boton--secundario js-ver-novedad-home">Ver</button>' +
+        '</div>';
+      var btn = cont.querySelector('.js-ver-novedad-home');
+      if (btn) {
+        btn.addEventListener('click', function () { abrirDetalle_(destacada.novedad_id); });
+      }
+    }).catch(function () { cont.innerHTML = ''; });
+  }
+
+  // El detalle puede abrirse desde la tarjeta del Home (ademas del feed del
+  // modulo); si el acuse se dio desde ahi, la tarjeta debe actualizarse sola
+  // -- si no, el aviso "Enterado" registrado no se reflejaba hasta la
+  // proxima carga de pagina.
+  function refrescarTarjetaHomeSiExiste_() {
+    if (document.getElementById('novedades-home')) {
+      pintarTarjetaHome_('novedades-home');
+    }
+  }
+
   function cargarFeed_() {
     var cont = document.getElementById('novedades-contenido');
     if (!cont) return;
@@ -300,6 +344,7 @@
           Componentes.aviso({ texto: 'Acuse registrado.', tipo: 'exito' });
           cerrar();
           cargarFeed_();
+          refrescarTarjetaHomeSiExiste_();
         }).catch(function () {
           Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
           btnLeida.disabled = false;
@@ -355,6 +400,7 @@
             Componentes.aviso({ texto: 'Novedad retirada.', tipo: 'exito' });
             cerrar();
             cargarFeed_();
+            refrescarTarjetaHomeSiExiste_();
           });
         });
       });

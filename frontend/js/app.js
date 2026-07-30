@@ -40,6 +40,10 @@
     document.getElementById('btn-volver-dashboard-novedades').addEventListener('click', mostrarDashboard_);
     if (window.SigsoNovedades) {
       SigsoNovedades.actualizarBadge();
+      // Fase 3: tarjeta con la novedad pendiente mas relevante en el
+      // Dashboard (que aqui hace de "Home" -- app.html no tiene una
+      // pantalla de inicio separada).
+      SigsoNovedades.pintarTarjetaHome('novedades-home');
     }
   });
 

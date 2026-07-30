@@ -955,8 +955,10 @@
 
     // v6.5: badge de novedades pendientes, en segundo plano, sin esperar a
     // que se entre al modulo -- mismo criterio que "pendientes_validar".
+    // Fase 3: mas la tarjeta con la novedad pendiente mas relevante.
     if (window.SigsoNovedades) {
       window.SigsoNovedades.actualizarBadge();
+      window.SigsoNovedades.pintarTarjetaHome('novedades-home');
     }
 
     // "Requieren tu accion" del inicio: se pide el resumen una vez, en
