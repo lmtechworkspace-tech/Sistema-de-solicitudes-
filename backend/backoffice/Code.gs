@@ -97,7 +97,10 @@ var BACKOFFICE_ACTIONS = {
   publicarNovedad: handlePublicarNovedad_,
   despublicarNovedad: handleDespublicarNovedad_,
   marcarLeidaNovedad: handleMarcarLeidaNovedad_,
-  descargarAdjuntoNovedad: handleDescargarAdjuntoNovedad_
+  descargarAdjuntoNovedad: handleDescargarAdjuntoNovedad_,
+  // v6.5 Fase 2 (seguimiento de lectura): solo autor/ADM, gate propio dentro
+  // de Novedades.getLectores -- sin gate de modulo, igual que el resto.
+  getLectoresNovedad: handleGetLectoresNovedad_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -612,6 +615,10 @@ function handleMarcarLeidaNovedad_(data, contexto) {
 
 function handleDescargarAdjuntoNovedad_(data, contexto) {
   return responderResultado_(Novedades.descargarAdjunto(data, contexto));
+}
+
+function handleGetLectoresNovedad_(data, contexto) {
+  return responderResultado_(Novedades.getLectores(data, contexto));
 }
 
 function responderResultado_(resultado) {

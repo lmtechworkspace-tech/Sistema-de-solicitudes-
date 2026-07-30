@@ -10,6 +10,8 @@ const TODOS_LOS_TRIGGERS = [
   // v6.0 (mejora): cierre automatico de pausas abiertas al final del dia.
   'cerrarPausasAbiertasDelDiaTrigger',
   'detectarPatronesTrigger', 'enviarDigestJefaturaTrigger',
+  // v6.5 Fase 2 (Novedades): recordatorio diario de acuses pendientes.
+  'enviarRecordatorioNovedadesTrigger',
   // v6.0 Fase P4: recordatorio (cada 5 min) + resumen diario de pausas.
   'enviarRecordatoriosPausasTrigger',
   'enviarReporteEjecutivoSemanalTrigger',
@@ -26,7 +28,7 @@ const TODOS_LOS_TRIGGERS = [
   'refrescarCacheTrigger', 'suspenderInactivosTrigger', 'verificarFechasComprometidasTrigger', 'verificarSLAsTrigger'
 ];
 
-test('configurarTriggers instala los 20 triggers de tiempo de §13/§16.3 (Fase 4 + Fase 7 + Sprint 1/3 v2.0 + v2.1 Fase D + v4.2 + v5.2 Fase B + v6.0 Pausas P1/P4/P5/mejoras)', () => {
+test('configurarTriggers instala los 21 triggers de tiempo de §13/§16.3 (Fase 4 + Fase 7 + Sprint 1/3 v2.0 + v2.1 Fase D + v4.2 + v5.2 Fase B + v6.0 Pausas P1/P4/P5/mejoras + v6.5 Novedades Fase 2)', () => {
   const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
   const creados = toPlain(ctx.configurarTriggers());
 

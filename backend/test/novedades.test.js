@@ -39,6 +39,27 @@ function cargar() {
   return ctx;
 }
 
+// Fase 2 (seguimiento de lectura + aviso): la "audiencia" sale de USUARIOS
+// (login Google) + CUENTAS_PORTAL (portal), asi que estos tests siembran
+// ambas hojas ademas de las de cargar().
+function cargarConAudiencia() {
+  const ctx = cargar();
+  seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS, [
+    ['U1', 'Juan Perez', 'juan@homepymes.cl', 'HP', 'DEV', true, '', 'seed'],
+    ['U2', 'Ex Empleado', 'inactivo@homepymes.cl', 'HP', 'DEV', false, '', 'seed']
+  ]);
+  seedSheet(ctx, 'CUENTAS_PORTAL', ctx.COLUMNAS.CUENTAS_PORTAL, [
+    ['CTA-1', 'leo', 'Leo Estay', 'Desarrollador', 'hash', 'sal',
+      JSON.stringify(['leo@rld.cl']), 'DEV', JSON.stringify(['bandeja']),
+      'RLD', true, false, '', 'seed'],
+    ['CTA-2', 'exportal', 'Cuenta Suspendida', 'Ex', 'hash', 'sal',
+      JSON.stringify(['suspendido@rld.cl']), 'DEV', JSON.stringify(['bandeja']),
+      'RLD', false, false, '', 'seed']
+  ]);
+  seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
+  return ctx;
+}
+
 function agregar(ctx, hoja, obj) {
   ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName(hoja)
     .appendRow(ctx.COLUMNAS[hoja].map((c) => (obj[c] !== undefined ? obj[c] : '')));
@@ -335,4 +356,90 @@ test('20. listarAreasPublicables: ADM ve todas, el responsable solo la suya', ()
   assert.equal(paraAdm.areas.length, 2);
   assert.equal(paraAdm.puede_general, true);
   assert.equal(paraAdm.tipos.length, 7);
+});
+
+// --- 21-26: Fase 2 (seguimiento de lectura + aviso) -------------------------
+
+test('21. getLectores: SEGURIDAD -- solo el autor o ADM pueden verlo', () => {
+  const ctx = cargarConAudiencia();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'AVISO' }), ctxResponsable()));
+
+  const otro = toPlain(ctx.Novedades.getLectores({ novedad_id: pub.novedad_id }, ctxCualquiera()));
+  assert.equal(otro._forbidden, true);
+
+  const admOk = toPlain(ctx.Novedades.getLectores({ novedad_id: pub.novedad_id }, ctxAdm()));
+  assert.ok(admOk.leyeron);
+
+  const autorOk = toPlain(ctx.Novedades.getLectores({ novedad_id: pub.novedad_id }, ctxResponsable()));
+  assert.ok(autorOk.pendientes);
+});
+
+test('22. getLectores separa quien ya dio el acuse de quien falta, contra la audiencia completa', () => {
+  const ctx = cargarConAudiencia();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'AVISO' }), ctxResponsable()));
+  ctx.Novedades.marcarLeida({ novedad_id: pub.novedad_id }, ctxCualquiera('juan@homepymes.cl'));
+
+  const res = toPlain(ctx.Novedades.getLectores({ novedad_id: pub.novedad_id }, ctxAdm()));
+  // Audiencia: juan@homepymes.cl (USUARIOS activo) + leo@rld.cl (CUENTAS_PORTAL activa).
+  // inactivo@homepymes.cl y suspendido@rld.cl quedan fuera por no estar activos.
+  assert.equal(res.total_audiencia, 2);
+  assert.deepEqual(res.leyeron.map((l) => l.email), ['juan@homepymes.cl']);
+  assert.deepEqual(res.pendientes.map((p) => p.email), ['leo@rld.cl']);
+});
+
+test('23. publicar tipo LEY envia correo inmediato a la audiencia (menos al autor)', () => {
+  const ctx = cargarConAudiencia();
+  seedArea(ctx, { responsable_email: 'juan@homepymes.cl' });
+  ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable('juan@homepymes.cl'));
+
+  const destinatarios = ctx.GmailApp._enviados.map((e) => e.destinatario);
+  assert.deepEqual(destinatarios.sort(), ['leo@rld.cl']);
+});
+
+test('24. publicar un tipo distinto de LEY NO envia correo inmediato', () => {
+  const ctx = cargarConAudiencia();
+  seedArea(ctx);
+  ctx.Novedades.publicar(publicarBase_({ tipo: 'AVISO' }), ctxResponsable());
+  assert.equal(ctx.GmailApp._enviados.length, 0);
+});
+
+test('25. recordatorioPendientes: un solo correo por persona con TODAS sus pendientes', () => {
+  const ctx = cargarConAudiencia();
+  seedArea(ctx);
+  ctx.Novedades.publicar(publicarBase_({ tipo: 'AVISO', titulo: 'Aviso 1' }), ctxResponsable());
+  ctx.Novedades.publicar(publicarBase_({ tipo: 'PROCEDIMIENTO', titulo: 'Aviso 2' }), ctxResponsable());
+
+  const res = toPlain(ctx.Novedades.recordatorioPendientes());
+  assert.equal(res.enviados, 2); // juan@homepymes.cl y leo@rld.cl, cada uno un correo
+
+  const paraJuan = ctx.GmailApp._enviados.find((e) => e.destinatario === 'juan@homepymes.cl');
+  assert.ok(paraJuan.cuerpo.indexOf('Aviso 1') !== -1);
+  assert.ok(paraJuan.cuerpo.indexOf('Aviso 2') !== -1);
+});
+
+test('26. recordatorioPendientes no reenvia el mismo dia (dedup por evento+dia, mismo patron que detectarPatrones)', () => {
+  const ctx = cargarConAudiencia();
+  seedArea(ctx);
+  ctx.Novedades.publicar(publicarBase_({ tipo: 'AVISO' }), ctxResponsable());
+
+  ctx.Novedades.recordatorioPendientes();
+  assert.equal(ctx.GmailApp._enviados.length, 2);
+
+  // Correrlo de nuevo el mismo dia no debe duplicar.
+  ctx.Novedades.recordatorioPendientes();
+  assert.equal(ctx.GmailApp._enviados.length, 2);
+});
+
+test('27. recordatorioPendientes no molesta a quien no tiene nada pendiente', () => {
+  const ctx = cargarConAudiencia();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'AVISO' }), ctxResponsable()));
+  ctx.Novedades.marcarLeida({ novedad_id: pub.novedad_id }, ctxCualquiera('juan@homepymes.cl'));
+  ctx.Novedades.marcarLeida({ novedad_id: pub.novedad_id }, ctxCualquiera('leo@rld.cl'));
+
+  const res = toPlain(ctx.Novedades.recordatorioPendientes());
+  assert.equal(res.enviados, 0);
+  assert.equal(ctx.GmailApp._enviados.length, 0);
 });

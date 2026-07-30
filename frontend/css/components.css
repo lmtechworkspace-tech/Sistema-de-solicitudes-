@@ -2516,6 +2516,23 @@
   border-top: 1px solid var(--borde);
 }
 
+/* --- Fase 2: quien leyo / quien falta --------------------------------------- */
+.sigso-lectores {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--esp-4);
+  margin-top: var(--esp-3);
+  padding-top: var(--esp-3);
+  border-top: 1px solid var(--borde);
+}
+.sigso-lectores h4 { margin: 0 0 var(--esp-2); font: var(--t-small); color: var(--texto-2); }
+.sigso-lectores-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--esp-1); }
+.sigso-lectores-lista li { display: flex; align-items: center; gap: var(--esp-1); font: var(--t-body); color: var(--texto); }
+.sigso-lectores-lista--pendiente li { color: var(--texto-2); }
+@media (max-width: 560px) {
+  .sigso-lectores { grid-template-columns: 1fr; }
+}
+
 /* --- Formulario de publicar ------------------------------------------------ */
 .sigso-novedad-form { display: flex; flex-direction: column; gap: var(--esp-3); max-height: 60vh; overflow-y: auto; }
 .sigso-campo-check { display: flex; align-items: center; gap: var(--esp-2); font: var(--t-body); color: var(--texto); }

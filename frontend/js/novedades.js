@@ -275,10 +275,14 @@
             : (n.requiere_acuse
                 ? '<span class="sigso-novedad-card__leida">' + Iconos.svg('check', { tam: 14 }) + ' Ya diste acuse de esta novedad</span>'
                 : '')) +
+          (n.puede_gestionar && n.requiere_acuse
+            ? Componentes.boton({ texto: 'Ver quién leyó', variante: 'secundario', clase: 'js-ver-lectores' })
+            : '') +
           (n.puede_gestionar
             ? Componentes.boton({ texto: 'Retirar', variante: 'sutil', clase: 'sigso-boton--destructivo-sutil js-retirar-novedad' })
             : '') +
         '</div>' +
+        '<div class="js-lectores-panel"></div>' +
       '</div>';
 
     var btnLeida = cuerpo.querySelector('.js-marcar-leida');
@@ -317,6 +321,23 @@
       });
     }
 
+    var btnLectores = cuerpo.querySelector('.js-ver-lectores');
+    if (btnLectores) {
+      btnLectores.addEventListener('click', function () {
+        var panel = cuerpo.querySelector('.js-lectores-panel');
+        panel.innerHTML = Componentes.cargando('Cargando...');
+        api_('getLectoresNovedad', { novedad_id: n.novedad_id }).then(function (respuesta) {
+          if (!respuesta || !respuesta.ok) {
+            panel.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar.', 'error');
+            return;
+          }
+          renderLectores_(panel, respuesta.data);
+        }).catch(function () {
+          panel.innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
+        });
+      });
+    }
+
     var btnRetirar = cuerpo.querySelector('.js-retirar-novedad');
     if (btnRetirar) {
       btnRetirar.addEventListener('click', function () {
@@ -338,6 +359,27 @@
         });
       });
     }
+  }
+
+  // Fase 2 (seguimiento de lectura): panel simple, sin foto ni adorno --
+  // el punto es poder verificar rapido "quien falta", no otra vista bonita.
+  function renderLectores_(cont, datos) {
+    var listaLeyeron = datos.leyeron.length
+      ? '<ul class="sigso-lectores-lista">' + datos.leyeron.map(function (p) {
+          return '<li>' + Iconos.svg('check', { tam: 13 }) + ' ' + Componentes.escaparHtml(p.nombre) + '</li>';
+        }).join('') + '</ul>'
+      : '<p class="sigso-ayuda">Nadie ha confirmado todavía.</p>';
+    var listaPendientes = datos.pendientes.length
+      ? '<ul class="sigso-lectores-lista sigso-lectores-lista--pendiente">' + datos.pendientes.map(function (p) {
+          return '<li>' + Componentes.escaparHtml(p.nombre) + '</li>';
+        }).join('') + '</ul>'
+      : '<p class="sigso-ayuda">Nadie queda pendiente.</p>';
+
+    cont.innerHTML =
+      '<div class="sigso-lectores">' +
+        '<div><h4>Confirmaron (' + datos.leyeron.length + ')</h4>' + listaLeyeron + '</div>' +
+        '<div><h4>Pendientes (' + datos.pendientes.length + ')</h4>' + listaPendientes + '</div>' +
+      '</div>';
   }
 
   function descargarBase64_(base64, nombre, mime) {

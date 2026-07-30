@@ -106,6 +106,55 @@ var Novedades = (function () {
     return filasNovedades_().filter(function (n) { return n.novedad_id === novedadId; })[0] || null;
   }
 
+  // "Audiencia" = cualquiera con credenciales de la plataforma (§ misma
+  // idea del acuse: obligatorio, pero solo tiene sentido si se puede
+  // verificar QUIEN falta). Union de USUARIOS activos (login Google) y los
+  // correos de CUENTAS_PORTAL activas (portal). Sin duplicados.
+  function audienciaNovedades_() {
+    var vistos = {};
+    var lista = [];
+    leerFilasSeguro_(SHEETS.USUARIOS).forEach(function (u) {
+      var activo = u.activo === true || u.activo === 'TRUE' || u.activo === 1;
+      var email = normalizarEmail_(u.email);
+      if (activo && email && !vistos[email]) {
+        vistos[email] = true;
+        lista.push({ email: email, nombre: u.nombre || email });
+      }
+    });
+    leerCuentasPortal_().forEach(function (c) {
+      var activa = c.activo === true || c.activo === 'TRUE' || c.activo === 1;
+      if (!activa) return;
+      parsearListaPortal_(c.emails).forEach(function (email) {
+        email = normalizarEmail_(email);
+        if (email && !vistos[email]) {
+          vistos[email] = true;
+          lista.push({ email: email, nombre: c.nombre || email });
+        }
+      });
+    });
+    return lista;
+  }
+
+  // Aviso inmediato SOLO para tipo LEY (lo urgente: rige en X dias, no puede
+  // esperar al recordatorio diario). El resto de tipos se descubren por el
+  // badge del feed y, si siguen sin leerse, por recordatorioPendientes().
+  function notificarPublicacionLey_(novedad) {
+    var autor = normalizarEmail_(novedad.autor_email);
+    var asunto = 'SIGSO - Nueva novedad: ' + novedad.titulo;
+    var cuerpoTexto = TIPOS.LEY.etiqueta + ': ' + novedad.titulo + '\n\n' + novedad.resumen +
+      '\n\nEntra a SIGSO > Novedades para verla completa y confirmar "Enterado".';
+    var cuerpoHtml = plantillaCorreoHtml_('Nueva novedad publicada',
+      '<p><span style="display:inline-block;background:#FDECEC;color:#B42318;border-radius:4px;padding:2px 8px;font-size:12px;font-weight:bold;">' +
+        escaparHtmlCorreo_(TIPOS.LEY.etiqueta) + '</span></p>' +
+      '<h3 style="margin:8px 0;">' + escaparHtmlCorreo_(novedad.titulo) + '</h3>' +
+      '<p>' + escaparHtmlCorreo_(novedad.resumen) + '</p>' +
+      '<p>Entra a SIGSO &gt; Novedades para verla completa y confirmar "Enterado".</p>');
+    audienciaNovedades_().forEach(function (persona) {
+      if (persona.email === autor) return;
+      enviarCorreo_(novedad.novedad_id, persona.email, 'NOVEDAD_PUBLICADA', asunto, cuerpoTexto, null, { htmlBody: cuerpoHtml });
+    });
+  }
+
   return {
     /**
      * Areas donde el usuario autenticado puede publicar (para el selector
@@ -293,6 +342,14 @@ var Novedades = (function () {
       };
 
       agregarFila_(SHEETS.NOVEDADES, novedad);
+
+      // Fase 2 (§ seguimiento de lectura + aviso): LEY es lo unico con
+      // vigencia que corre -- amerita correo inmediato. El resto se avisa
+      // via el badge del feed y, si sigue sin leerse, el recordatorio diario.
+      if (novedad.tipo === 'LEY') {
+        notificarPublicacionLey_(novedad);
+      }
+
       return { novedad_id: novedad.novedad_id };
     },
 
@@ -359,6 +416,96 @@ var Novedades = (function () {
         nombre_archivo: n.archivo_nombre || archivo.getName(),
         mime: n.archivo_mime || 'application/pdf'
       };
+    },
+
+    /**
+     * Fase 2: quien ya dio el acuse y quien falta, para que "obligatorio" se
+     * pueda verificar. Solo el autor o ADM -- el mismo criterio de
+     * esAutorONoAutor_ que usa despublicar, no una lista nueva de permisos.
+     */
+    getLectores: function (data, contexto) {
+      if (!data || !data.novedad_id) {
+        return errorValidacion_('novedad_id', 'Falta indicar la novedad.');
+      }
+      var n = buscarNovedad_(data.novedad_id);
+      if (!n) return errorValidacion_('novedad_id', 'No existe esa novedad.');
+      if (!esAutorONoAutor_(n, contexto)) {
+        return { _forbidden: true, message: 'Solo quien publico la novedad o un Administrador puede ver quien la leyo.' };
+      }
+
+      var leidoPorEmail = {};
+      filasLecturas_().forEach(function (l) {
+        if (l.novedad_id === n.novedad_id) leidoPorEmail[normalizarEmail_(l.usuario_email)] = l.leido_en;
+      });
+
+      var leyeron = [];
+      var pendientes = [];
+      audienciaNovedades_().forEach(function (persona) {
+        if (leidoPorEmail[persona.email]) {
+          leyeron.push({ email: persona.email, nombre: persona.nombre, leido_en: leidoPorEmail[persona.email] });
+        } else {
+          pendientes.push({ email: persona.email, nombre: persona.nombre });
+        }
+      });
+      leyeron.sort(function (a, b) { return new Date(a.leido_en) - new Date(b.leido_en); });
+      pendientes.sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre)); });
+
+      return { leyeron: leyeron, pendientes: pendientes, total_audiencia: leyeron.length + pendientes.length };
+    },
+
+    /**
+     * Fase 2: recordatorio diario a quien tiene novedades sin confirmar. UN
+     * correo por persona con TODAS sus pendientes (no uno por novedad, para
+     * no saturar). El evento incluye la fecha del dia -- mismo patron que
+     * detectarPatrones (Triggers.gs): no reenvia el mismo dia, pero si al
+     * siguiente si sigue pendiente.
+     */
+    recordatorioPendientes: function () {
+      var activasConAcuse = filasNovedades_().filter(function (n) {
+        var activa = n.activa === true || n.activa === 'TRUE' || n.activa === 1;
+        var requiereAcuse = n.requiere_acuse === true || n.requiere_acuse === 'TRUE' || n.requiere_acuse === 1;
+        return activa && requiereAcuse;
+      });
+      if (!activasConAcuse.length) return { enviados: 0 };
+
+      var leidoPor = {}; // novedad_id -> { email: true }
+      filasLecturas_().forEach(function (l) {
+        var id = l.novedad_id;
+        if (!leidoPor[id]) leidoPor[id] = {};
+        leidoPor[id][normalizarEmail_(l.usuario_email)] = true;
+      });
+
+      var hoy = new Date().toISOString().slice(0, 10);
+      var enviados = 0;
+
+      audienciaNovedades_().forEach(function (persona) {
+        var pendientes = activasConAcuse.filter(function (n) {
+          return normalizarEmail_(n.autor_email) !== persona.email &&
+            !(leidoPor[n.novedad_id] && leidoPor[n.novedad_id][persona.email]);
+        });
+        if (!pendientes.length) return;
+
+        var items = pendientes.map(function (n) {
+          var tipoInfo = TIPOS[n.tipo] || { etiqueta: n.tipo };
+          return '<li><strong>' + escaparHtmlCorreo_(tipoInfo.etiqueta) + '</strong> — ' + escaparHtmlCorreo_(n.titulo) + '</li>';
+        }).join('');
+        var asunto = 'SIGSO - Tienes ' + pendientes.length + ' novedad(es) pendiente(s) de confirmar';
+        var cuerpoTexto = 'Tienes ' + pendientes.length + ' novedad(es) publicadas en SIGSO que aun no confirmas como leidas:\n' +
+          pendientes.map(function (n) { return '- ' + n.titulo; }).join('\n') +
+          '\n\nEntra a SIGSO > Novedades para revisarlas y marcar "Enterado".';
+        var cuerpoHtml = plantillaCorreoHtml_('Novedades pendientes',
+          '<p>Tienes <strong>' + pendientes.length + '</strong> novedad(es) publicadas en SIGSO que aun no confirmas como leidas:</p>' +
+          '<ul style="margin:0 0 12px 18px;padding:0;">' + items + '</ul>' +
+          '<p>Entra a SIGSO &gt; Novedades para revisarlas y marcar "Enterado".</p>');
+
+        var resultado = enviarCorreo_(
+          'NOVEDADES_DIGEST', persona.email, 'NOVEDAD_RECORDATORIO:' + hoy,
+          asunto, cuerpoTexto, null, { htmlBody: cuerpoHtml }
+        );
+        if (resultado.enviado) enviados++;
+      });
+
+      return { enviados: enviados };
     }
   };
 })();

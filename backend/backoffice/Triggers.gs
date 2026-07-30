@@ -146,6 +146,13 @@ function configurarTriggers() {
     creados.push('enviarReporteMensualPausasTrigger');
   }
 
+  // v6.5 Fase 2 (Novedades): recordatorio diario 10:00 -- despues del lote de
+  // las 09:00, a quien tiene novedades con acuse obligatorio sin confirmar.
+  if (existentes.indexOf('enviarRecordatorioNovedadesTrigger') === -1) {
+    ScriptApp.newTrigger('enviarRecordatorioNovedadesTrigger').timeBased().atHour(10).everyDays(1).create();
+    creados.push('enviarRecordatorioNovedadesTrigger');
+  }
+
   return creados;
 }
 
@@ -179,6 +186,11 @@ function cerrarInactivosTrigger() {
 // P7 (v2.0, Sprint 3): ver Triggers.detectarPatrones().
 function detectarPatronesTrigger() {
   return Triggers.detectarPatrones();
+}
+
+// v6.5 Fase 2: ver Novedades.recordatorioPendientes().
+function enviarRecordatorioNovedadesTrigger() {
+  return Novedades.recordatorioPendientes();
 }
 
 // §17.4 v1.0: reportes programados, ver Notificaciones.gs.
