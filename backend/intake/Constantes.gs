@@ -84,7 +84,11 @@ var SHEETS = {
   // v6.6 (Fase 4): vive en el Backoffice; Intake mantiene la copia solo
   // para que el esquema no diverja. Ver la nota identica en
   // backend/backoffice/Constantes.gs.
-  NOVEDADES_HISTORIAL: 'NOVEDADES_HISTORIAL'
+  NOVEDADES_HISTORIAL: 'NOVEDADES_HISTORIAL',
+  // v6.7 (Fase 5): vive en el Backoffice; Intake mantiene la copia solo
+  // para que el esquema no diverja. Ver la nota identica en
+  // backend/backoffice/Constantes.gs.
+  NOVEDADES_AUDIENCIA: 'NOVEDADES_AUDIENCIA'
 };
 
 var COLUMNAS = {
@@ -338,10 +342,12 @@ var COLUMNAS = {
     'archivo_id', 'archivo_nombre', 'archivo_mime',
     'estado', 'fecha_creacion', 'aprobador_email', 'aprobador_nombre',
     'fecha_aprobacion', 'motivo_devolucion',
+    'audiencia_tipo',
     'fecha_publicacion', 'activa'
   ],
   NOVEDADES_LECTURAS: ['lectura_id', 'novedad_id', 'usuario_email', 'leido_en'],
-  NOVEDADES_HISTORIAL: ['historial_id', 'novedad_id', 'evento', 'autor_email', 'autor_nombre', 'comentario', 'timestamp']
+  NOVEDADES_HISTORIAL: ['historial_id', 'novedad_id', 'evento', 'autor_email', 'autor_nombre', 'comentario', 'timestamp'],
+  NOVEDADES_AUDIENCIA: ['audiencia_id', 'novedad_id', 'destinatario_email']
 };
 
 // S01-S11 completos desde la Fase 1 aunque solo S01 se use aqui: la maquina

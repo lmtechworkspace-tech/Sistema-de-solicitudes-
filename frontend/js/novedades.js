@@ -25,6 +25,15 @@
   var areasPropias_ = [];
   var tiposCatalogo_ = [];
   var puedeGeneral_ = false;
+  // v6.7 (Fase 5, audiencia dirigida): directorio completo (para
+  // "Seleccionar personas"), el propio equipo y si puede usar las opciones
+  // amplias (TODOS/MI_EQUIPO, reservadas a jefatura/ADM). Se cargan una vez
+  // al entrar al modulo (listarAreasPublicablesNovedad) y sirven tanto para
+  // el formulario de publicar como para el mini-formulario de aprobar.
+  var directorio_ = [];
+  var equipo_ = [];
+  var puedeTodos_ = false;
+  var puedeEquipo_ = false;
   // v6.6 (Fase 4): 'feed' = publicadas (de siempre), 'aprobar' = bandeja de
   // jefatura/ADM, 'envios' = mis novedades que todavia no estan publicadas.
   var vista_ = 'feed';
@@ -81,6 +90,9 @@
           '<span class="sigso-badge sigso-badge--' + n.tipo_color + '">' + Componentes.escaparHtml(n.tipo_etiqueta) + '</span>' +
           (n.area_nombre ? '<span class="sigso-novedad-card__area">' + Componentes.escaparHtml(n.area_nombre) + '</span>' : '<span class="sigso-novedad-card__area">General</span>') +
           (n.tiene_adjunto ? '<span title="Tiene adjunto">' + Iconos.svg('adjunto', { tam: 13 }) + '</span>' : '') +
+          (n.audiencia_tipo && n.audiencia_tipo !== 'TODOS'
+            ? '<span class="sigso-badge sigso-badge--info" title="No llega a todo el personal">Dirigida</span>'
+            : '') +
           (!n.leida && n.requiere_acuse ? '<span class="sigso-punto-no-leido" aria-hidden="true"></span>' : '') +
         '</div>' +
         '<h3 class="sigso-novedad-card__titulo">' + Componentes.escaparHtml(n.titulo) + '</h3>' +
@@ -257,6 +269,10 @@
         areasPropias_ = respuesta.data.areas;
         tiposCatalogo_ = respuesta.data.tipos;
         puedeGeneral_ = respuesta.data.puede_general;
+        directorio_ = respuesta.data.directorio || [];
+        equipo_ = respuesta.data.equipo || [];
+        puedeTodos_ = !!respuesta.data.puede_todos;
+        puedeEquipo_ = !!respuesta.data.puede_equipo;
         puedePublicar_ = areasPropias_.length > 0 || puedeGeneral_;
         var btn = document.getElementById('btn-publicar-novedad');
         if (btn && puedePublicar_) {
@@ -408,6 +424,69 @@
     renderTabs_();
   }
 
+  // --- Selector de audiencia (Fase 5) -----------------------------------------
+  // Compartido por el formulario de publicar (carril LIBRE, lo elige el
+  // autor) y el mini-formulario de aprobar (carril CONTROLADO, lo elige
+  // quien aprueba) -- misma UI, mismo contrato con el backend
+  // (audiencia_tipo + destinatarios), solo cambia quien la ve.
+
+  function htmlAudienciaSelector_(prefix, defaultTipo) {
+    var radios = [];
+    if (puedeTodos_) {
+      radios.push('<label class="sigso-campo-check"><input type="radio" name="' + prefix + '-audiencia" value="TODOS"' +
+        (defaultTipo === 'TODOS' ? ' checked' : '') + '> Todos</label>');
+    }
+    if (puedeEquipo_) {
+      radios.push('<label class="sigso-campo-check"><input type="radio" name="' + prefix + '-audiencia" value="MI_EQUIPO"' +
+        (defaultTipo === 'MI_EQUIPO' ? ' checked' : '') + '> Mi equipo (' + equipo_.length + ')</label>');
+    }
+    radios.push('<label class="sigso-campo-check"><input type="radio" name="' + prefix + '-audiencia" value="SELECCION"' +
+      (defaultTipo === 'SELECCION' ? ' checked' : '') + '> Seleccionar personas</label>');
+
+    var checklist = directorio_.length
+      ? directorio_.map(function (p) {
+          return '<label class="sigso-campo-check"><input type="checkbox" class="js-' + prefix + '-destinatario" value="' +
+            Componentes.escaparHtml(p.email) + '"> ' + Componentes.escaparHtml(p.nombre) + '</label>';
+        }).join('')
+      : '<p class="sigso-ayuda">No hay personas con credenciales activas para elegir.</p>';
+
+    return '<div class="sigso-campo"><label>¿A quién llega?</label>' +
+      '<div class="sigso-audiencia-opciones">' + radios.join('') + '</div>' +
+      '<div class="sigso-audiencia-lista" id="' + prefix + '-audiencia-lista">' + checklist + '</div>' +
+    '</div>';
+  }
+
+  // Muestra/oculta el checklist de personas segun la opcion elegida.
+  function bindAudienciaSelector_(cont, prefix) {
+    var radios = cont.querySelectorAll('input[name="' + prefix + '-audiencia"]');
+    var lista = cont.querySelector('#' + prefix + '-audiencia-lista');
+    function actualizar() {
+      var elegido = cont.querySelector('input[name="' + prefix + '-audiencia"]:checked');
+      lista.classList.toggle('sigso-oculto', !elegido || elegido.value !== 'SELECCION');
+    }
+    radios.forEach(function (r) { r.addEventListener('change', actualizar); });
+    actualizar();
+  }
+
+  function leerAudienciaSeleccionada_(cont, prefix) {
+    var elegido = cont.querySelector('input[name="' + prefix + '-audiencia"]:checked');
+    var tipo = elegido ? elegido.value : 'SELECCION';
+    var destinatarios = tipo === 'SELECCION'
+      ? Array.from(cont.querySelectorAll('.js-' + prefix + '-destinatario:checked')).map(function (el) { return el.value; })
+      : [];
+    return { audiencia_tipo: tipo, destinatarios: destinatarios };
+  }
+
+  // Linea "Dirigido a..." en el detalle -- solo se muestra si NO es TODOS
+  // (el caso normal no necesita explicarse).
+  function lineaAudiencia_(n) {
+    if (!n.audiencia || !n.audiencia.tipo || n.audiencia.tipo === 'TODOS') return '';
+    var texto = n.audiencia.tipo === 'MI_EQUIPO'
+      ? 'Dirigido a un equipo específico, no a todo el personal.'
+      : 'Dirigido a: ' + (n.audiencia.destinatarios || []).map(function (p) { return p.nombre; }).join(', ');
+    return '<p class="sigso-ayuda">' + Componentes.escaparHtml(texto) + '</p>';
+  }
+
   // --- Detalle + acuse ------------------------------------------------------
 
   function abrirDetalle_(novedadId) {
@@ -469,6 +548,7 @@
           '<div class="sigso-ayuda">' + relativo_(n.fecha_publicacion || n.fecha_creacion) + '</div></div>' +
         '</div>' +
         (n.motivo_devolucion ? Componentes.alerta('Motivo: ' + n.motivo_devolucion, 'error') : '') +
+        (!noPublicada ? lineaAudiencia_(n) : '') +
         '<div class="sigso-novedad-detalle__cuerpo">' + Componentes.escaparHtml(n.cuerpo || n.resumen).replace(/\n/g, '<br>') + '</div>' +
         (n.tiene_adjunto
           ? Componentes.boton({ texto: 'Descargar adjunto', icono: 'descargar', variante: 'secundario', clase: 'js-descargar-adjunto' })
@@ -575,23 +655,13 @@
     }
 
     // v6.6 (Fase 4): aprobar/devolver/rechazar (jefatura/ADM).
+    // v6.7 (Fase 5): aprobar abre un mini-formulario para elegir a quien
+    // llega -- ya no es una accion instantanea.
     var btnAprobar = cuerpo.querySelector('.js-aprobar-novedad');
     if (btnAprobar) {
       btnAprobar.addEventListener('click', function () {
-        btnAprobar.disabled = true;
-        api_('aprobarNovedad', { novedad_id: n.novedad_id }).then(function (respuesta) {
-          if (!respuesta || !respuesta.ok) {
-            Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo aprobar.', tipo: 'error' });
-            btnAprobar.disabled = false;
-            return;
-          }
-          Componentes.aviso({ texto: 'Novedad aprobada y publicada.', tipo: 'exito' });
-          cerrar();
-          recargarVistaActual_();
-        }).catch(function () {
-          Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
-          btnAprobar.disabled = false;
-        });
+        cerrar();
+        abrirFormularioAprobar_(n);
       });
     }
 
@@ -673,6 +743,64 @@
     a.href = url; a.download = nombre || 'adjunto.pdf';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+
+  // --- Aprobar + elegir audiencia (Fase 5) ------------------------------------
+
+  // v6.7: quien aprueba una novedad CONTROLADA elige, en el mismo paso, a
+  // quien llega -- mismo selector que el formulario de publicar, pero
+  // evaluado contra QUIEN APRUEBA (jefatura/ADM), no contra el autor.
+  function abrirFormularioAprobar_(n) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Aprobar novedad</h3>' +
+        '<p class="sigso-ayuda">' + Componentes.escaparHtml(n.titulo) + '</p>' +
+        '<form id="form-aprobar-novedad">' +
+          htmlAudienciaSelector_('ap', 'SELECCION') +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-cancelar-aprobar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Aprobar y publicar', icono: 'check', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+
+    function cerrar() {
+      document.removeEventListener('keydown', alTeclado);
+      if (fondo.parentNode) fondo.parentNode.removeChild(fondo);
+    }
+    function alTeclado(ev) { if (ev.key === 'Escape') cerrar(); }
+    fondo.addEventListener('click', function (ev) { if (ev.target === fondo) cerrar(); });
+    document.addEventListener('keydown', alTeclado);
+    document.body.appendChild(fondo);
+
+    fondo.querySelector('.js-cancelar-aprobar').addEventListener('click', cerrar);
+    bindAudienciaSelector_(fondo, 'ap');
+
+    var form = document.getElementById('form-aprobar-novedad');
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var botonSubmit = form.querySelector('button[type="submit"]');
+      botonSubmit.disabled = true;
+      botonSubmit.textContent = 'Aprobando...';
+      var audiencia = leerAudienciaSeleccionada_(fondo, 'ap');
+      api_('aprobarNovedad', Object.assign({ novedad_id: n.novedad_id }, audiencia)).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo aprobar.', tipo: 'error' });
+          botonSubmit.disabled = false;
+          botonSubmit.textContent = 'Aprobar y publicar';
+          return;
+        }
+        Componentes.aviso({ texto: 'Novedad aprobada y publicada.', tipo: 'exito' });
+        cerrar();
+        recargarVistaActual_();
+      }).catch(function () {
+        Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
+        botonSubmit.disabled = false;
+        botonSubmit.textContent = 'Aprobar y publicar';
+      });
+    });
   }
 
   // --- Corregir y reenviar (Fase 4) -------------------------------------------
@@ -760,6 +888,7 @@
             }).join('') +
           '</select></div>' +
           '<div id="np-aviso-carril"></div>' +
+          '<div id="np-audiencia-bloque">' + htmlAudienciaSelector_('np', 'SELECCION') + '</div>' +
           '<div class="sigso-campo"><label>Área</label><select id="np-area">' + opcionesArea + '</select></div>' +
           '<div class="sigso-campo"><label>Título</label><input type="text" id="np-titulo" maxlength="140" required></div>' +
           '<div class="sigso-campo"><label>Resumen (1-2 líneas)</label><textarea id="np-resumen" rows="2" maxlength="240" required></textarea></div>' +
@@ -784,10 +913,13 @@
     document.body.appendChild(fondo);
 
     fondo.querySelector('.js-cancelar-publicar').addEventListener('click', cerrar);
+    bindAudienciaSelector_(fondo, 'np');
 
     // v6.6: el aviso de "esto requiere aprobación" y el texto del boton
     // dependen del carril del tipo elegido -- se actualizan al cambiar el
     // selector, y de nuevo al enviar (por si el usuario nunca lo toco).
+    // v6.7: en CONTROLADO se oculta el selector de audiencia -- la elige
+    // quien aprueba, no tiene sentido pedirla aqui todavia.
     var selectTipo = document.getElementById('np-tipo');
     var botonSubmitRef = fondo.querySelector('.js-submit-publicar');
     function actualizarAvisoCarril_() {
@@ -796,6 +928,7 @@
       document.getElementById('np-aviso-carril').innerHTML = esControlado
         ? Componentes.alerta('Este tipo requiere la aprobación de tu jefatura antes de publicarse.', 'info')
         : '';
+      document.getElementById('np-audiencia-bloque').classList.toggle('sigso-oculto', esControlado);
       botonSubmitRef.textContent = esControlado ? 'Enviar a revisión' : 'Publicar';
     }
     selectTipo.addEventListener('change', actualizarAvisoCarril_);
@@ -812,7 +945,8 @@
       function enviar(contenidoBase64, nombreArchivo) {
         botonSubmit.disabled = true;
         botonSubmit.textContent = esControlado ? 'Enviando...' : 'Publicando...';
-        api_('publicarNovedad', {
+        var audiencia = esControlado ? null : leerAudienciaSeleccionada_(fondo, 'np');
+        api_('publicarNovedad', Object.assign({
           tipo: document.getElementById('np-tipo').value,
           area_id: document.getElementById('np-area').value,
           titulo: document.getElementById('np-titulo').value,
@@ -822,7 +956,7 @@
           requiere_acuse: document.getElementById('np-requiere-acuse').checked,
           contenido_base64: contenidoBase64,
           nombre_archivo: nombreArchivo
-        }).then(function (respuesta) {
+        }, audiencia || {})).then(function (respuesta) {
           if (!respuesta || !respuesta.ok) {
             Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo publicar.', tipo: 'error' });
             botonSubmit.disabled = false;

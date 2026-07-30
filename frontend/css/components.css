@@ -2536,3 +2536,12 @@
 /* --- Formulario de publicar ------------------------------------------------ */
 .sigso-novedad-form { display: flex; flex-direction: column; gap: var(--esp-3); max-height: 60vh; overflow-y: auto; }
 .sigso-campo-check { display: flex; align-items: center; gap: var(--esp-2); font: var(--t-body); color: var(--texto); }
+
+/* v6.7 (Fase 5, Novedades): selector de audiencia (publicar/aprobar). */
+.sigso-audiencia-opciones { display: flex; flex-wrap: wrap; gap: var(--esp-3); margin-bottom: var(--esp-2); }
+.sigso-audiencia-lista {
+  display: flex; flex-direction: column; gap: var(--esp-1);
+  max-height: 10rem; overflow-y: auto;
+  border: 1px solid var(--borde); border-radius: var(--radio-md);
+  padding: var(--esp-2);
+}

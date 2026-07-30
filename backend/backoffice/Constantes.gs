@@ -83,7 +83,12 @@ var SHEETS = {
   // controlada -- cada transicion de estado (enviada a revision, devuelta,
   // rechazada, aprobada, reenviada) con quien y por que. Ver la nota
   // identica en backend/intake/Constantes.gs.
-  NOVEDADES_HISTORIAL: 'NOVEDADES_HISTORIAL'
+  NOVEDADES_HISTORIAL: 'NOVEDADES_HISTORIAL',
+  // v6.7 (Fase 5, audiencia dirigida): destinatarios explicitos cuando
+  // NOVEDADES.audiencia_tipo = 'SELECCION' -- una fila por persona, mismo
+  // patron que NOVEDADES_LECTURAS. Ver la nota identica en
+  // backend/intake/Constantes.gs.
+  NOVEDADES_AUDIENCIA: 'NOVEDADES_AUDIENCIA'
 };
 
 var COLUMNAS = {
@@ -298,6 +303,10 @@ var COLUMNAS = {
   // separado -- redactar y enviar a revision es un solo paso, igual que
   // crear una solicitud). fecha_creacion es SIEMPRE al crear (a diferencia
   // de fecha_publicacion, que queda vacia hasta que se aprueba/publica).
+  // v6.7 (Fase 5): audiencia_tipo en {TODOS, MI_EQUIPO, SELECCION}. Vacio se
+  // trata como TODOS (compatibilidad con novedades publicadas antes de esta
+  // fase). Quien la define: el AUTOR al publicar (carril LIBRE) o el
+  // APROBADOR al aprobar (carril CONTROLADO) -- ver Novedades.gs.
   NOVEDADES: [
     'novedad_id', 'tipo', 'titulo', 'resumen', 'cuerpo',
     'area_id', 'area_nombre', 'autor_email', 'autor_nombre',
@@ -305,6 +314,7 @@ var COLUMNAS = {
     'archivo_id', 'archivo_nombre', 'archivo_mime',
     'estado', 'fecha_creacion', 'aprobador_email', 'aprobador_nombre',
     'fecha_aprobacion', 'motivo_devolucion',
+    'audiencia_tipo',
     'fecha_publicacion', 'activa'
   ],
   // Acuse de lectura, una fila por (novedad, lector). Aparte de NOVEDADES
@@ -314,7 +324,12 @@ var COLUMNAS = {
   // {ENVIADA_REVISION, DEVUELTA, RECHAZADA, APROBADA}. autor_email/nombre es
   // quien HIZO la accion (el redactor al reenviar, la jefatura al
   // aprobar/devolver/rechazar) -- no confundir con el autor de la novedad.
-  NOVEDADES_HISTORIAL: ['historial_id', 'novedad_id', 'evento', 'autor_email', 'autor_nombre', 'comentario', 'timestamp']
+  NOVEDADES_HISTORIAL: ['historial_id', 'novedad_id', 'evento', 'autor_email', 'autor_nombre', 'comentario', 'timestamp'],
+  // v6.7 (Fase 5): una fila por destinatario elegido a mano (solo cuando
+  // audiencia_tipo = 'SELECCION'). MI_EQUIPO no guarda filas aqui -- se
+  // resuelve dinamicamente contra JEFATURAS para que quede al dia si el
+  // equipo cambia despues de publicada.
+  NOVEDADES_AUDIENCIA: ['audiencia_id', 'novedad_id', 'destinatario_email']
 };
 
 var ESTADOS = {

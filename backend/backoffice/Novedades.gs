@@ -11,11 +11,9 @@
  * DECISION DE DISEÑO IMPORTANTE: el area de una novedad es ETIQUETA, no
  * audiencia. SIGSO no modela "a que area pertenece cada persona" -- CAT_AREAS
  * solo guarda quien es el RESPONSABLE de publicar por esa area, no quienes
- * son sus miembros. Por eso no existe (ni se inventa aqui) un calculo de
- * "esto te afecta a ti": todo lo publicado es visible para cualquier
- * identidad autenticada, y el area sirve para filtrar/mostrar, nunca para
- * restringir quien lo ve. (Fase 5 traera audiencia dirigida -- esta fase
- * sigue publicando "a todos" una vez aprobada, igual que antes.)
+ * son sus miembros. El area sirve para filtrar/mostrar, nunca para
+ * restringir quien la ve -- eso es trabajo de audiencia_tipo (Fase 5), un
+ * concepto aparte y deliberadamente distinto.
  *
  * QUIEN PUEDE PUBLICAR: un Administrador (cualquier area, o "general"), o
  * quien figure como responsable_email de un area en CAT_AREAS (solo esa
@@ -31,6 +29,20 @@
  * JEFATURAS que usa "Mi Departamento" (jefeDeSubordinado_, en Jefatura.gs):
  * no hay configuracion nueva que mantener. Cada transicion queda en
  * NOVEDADES_HISTORIAL -- el "hilo" de correccion de una novedad.
+ *
+ * FASE 5 (v6.7, audiencia dirigida): quien PUBLICA elige a quien llega --
+ * TODOS (todo el personal con credenciales, el comportamiento de siempre),
+ * MI_EQUIPO (su equipo en JEFATURAS) o SELECCION (una o varias personas
+ * elegidas a mano). TODOS y MI_EQUIPO estan reservados a quien tiene equipo
+ * a cargo (jefatura) o es ADM -- el resto del personal solo puede dirigir a
+ * personas puntuales, nunca "a todos" (decision explicita: evita que
+ * cualquiera reemplace el broadcast general). Quien DEFINE la audiencia
+ * depende del carril: en LIBRE la elige el autor al publicar; en CONTROLADO
+ * la elige quien aprueba (autor y jefatura pueden ser personas distintas, y
+ * es la jefatura quien tiene criterio de a quien corresponde). El autor, el
+ * aprobador y ADM siempre ven la novedad sin importar la audiencia elegida
+ * -- audiencia_tipo filtra el FEED/acuse/notificaciones, nunca el acceso de
+ * quien la gestiona.
  *
  * ACUSE DE LECTURA: NOVEDADES_LECTURAS vive aparte del contenido (una fila
  * por lector, no una columna que crezca). El lector se deriva SIEMPRE de
@@ -127,6 +139,128 @@ var Novedades = (function () {
     });
   }
 
+  function filasAudiencia_(novedadId) {
+    var todas;
+    try {
+      todas = leerFilas_(SHEETS.NOVEDADES_AUDIENCIA);
+    } catch (err) {
+      return [];
+    }
+    return todas.filter(function (a) { return a.novedad_id === novedadId; });
+  }
+
+  function guardarDestinatarios_(novedadId, destinatarios) {
+    destinatarios.forEach(function (email) {
+      agregarFila_(SHEETS.NOVEDADES_AUDIENCIA, {
+        audiencia_id: Utilities.getUuid(),
+        novedad_id: novedadId,
+        destinatario_email: email
+      });
+    });
+  }
+
+  // v6.7 (Fase 5): quien "posee" la audiencia MI_EQUIPO de esta novedad --
+  // quien aprobo (carril CONTROLADO) o, si aun no hay aprobador, quien la
+  // redacto (carril LIBRE, donde no existe aprobacion). Es exactamente la
+  // persona que ELIGIO audiencia_tipo en cada carril (ver publicar/aprobar).
+  function audienciaOwner_(novedad) {
+    return normalizarEmail_(novedad.aprobador_email) || normalizarEmail_(novedad.autor_email);
+  }
+
+  // Lista de correos objetivo, o null si es "todos" (sin filtrar). Para
+  // SELECCION intersecta contra la audiencia real vigente (audienciaNovedades_,
+  // definida mas abajo) implicitamente al usarse -- aqui solo se resuelve el
+  // conjunto de destino declarado.
+  function resolverAudiencia_(novedad) {
+    var tipo = novedad.audiencia_tipo || 'TODOS';
+    if (tipo === 'MI_EQUIPO') {
+      var owner = audienciaOwner_(novedad);
+      var equipo = obtenerEquipoJefe_(owner).map(normalizarEmail_);
+      if (equipo.indexOf(owner) === -1) equipo.push(owner);
+      return equipo;
+    }
+    if (tipo === 'SELECCION') {
+      return filasAudiencia_(novedad.novedad_id).map(function (a) { return normalizarEmail_(a.destinatario_email); });
+    }
+    return null; // TODOS (o vacio: compatibilidad con novedades previas a Fase 5)
+  }
+
+  // Para notificaciones/recordatorio/lectores: si esta persona especifica
+  // esta dentro de la audiencia declarada. Sin excepcion de ADM aqui a
+  // proposito -- eso es para VISIBILIDAD en el feed (enAudiencia_), no para
+  // decidir a quien se le manda correo o se le exige acuse.
+  function personaEnAudiencia_(novedad, email) {
+    var destinatarios = resolverAudiencia_(novedad);
+    if (destinatarios === null) return true;
+    return destinatarios.indexOf(normalizarEmail_(email)) !== -1;
+  }
+
+  // Visibilidad en feed/detalle: ADM ve todo (requisito explicito de
+  // gobierno de la informacion), el autor y quien aprobo siempre ven la
+  // suya, y el resto solo si esta dentro de la audiencia declarada.
+  function enAudiencia_(novedad, contexto) {
+    var correo = normalizarEmail_(contexto.email);
+    if (contexto.rol === 'ADM') return true;
+    if (normalizarEmail_(novedad.autor_email) === correo) return true;
+    if (novedad.aprobador_email && normalizarEmail_(novedad.aprobador_email) === correo) return true;
+    return personaEnAudiencia_(novedad, correo);
+  }
+
+  // Resumen legible de la audiencia para UI (detalle / listas de gestion).
+  function audienciaResumen_(novedad) {
+    var tipo = novedad.audiencia_tipo || 'TODOS';
+    if (tipo !== 'SELECCION') return { tipo: tipo, destinatarios: [] };
+    var ids = {};
+    filasAudiencia_(novedad.novedad_id).forEach(function (a) { ids[normalizarEmail_(a.destinatario_email)] = true; });
+    var personas = audienciaNovedades_().filter(function (p) { return ids[p.email]; });
+    return { tipo: tipo, destinatarios: personas };
+  }
+
+  // v6.7 (Fase 5): valida y normaliza la audiencia que llega en `data` al
+  // publicar (carril LIBRE) o al aprobar (carril CONTROLADO). `contexto` es
+  // SIEMPRE quien esta ELIGIENDO la audiencia en ese momento (el autor al
+  // publicar, el aprobador al aprobar) -- nunca el autor de la novedad si
+  // son personas distintas.
+  function validarAudienciaEntrante_(data, contexto) {
+    // Sin audiencia_tipo: TODOS, sin gate -- es el comportamiento de
+    // siempre (anterior a esta fase), y lo mantiene para cualquier llamada
+    // que no conozca este concepto todavia. La restriccion de "TODOS/
+    // MI_EQUIPO reservado a jefatura/ADM" es para quien ELIGE activamente
+    // esas opciones (el nuevo selector del frontend) -- no una trampa para
+    // quien simplemente no la manda.
+    if (!data.audiencia_tipo) {
+      return { tipo: 'TODOS', destinatarios: [] };
+    }
+    var tipo = data.audiencia_tipo;
+    if (['TODOS', 'MI_EQUIPO', 'SELECCION'].indexOf(tipo) === -1) {
+      return { error: errorValidacion_('audiencia_tipo', 'Audiencia invalida.') };
+    }
+    var tieneEquipo = obtenerEquipoJefe_(contexto.email).length > 0;
+    var puedeAmplio = contexto.rol === 'ADM' || tieneEquipo;
+    if (tipo === 'TODOS' && !puedeAmplio) {
+      return { error: { _forbidden: true, message: 'Solo tu jefatura o un Administrador puede enviar a todos.' } };
+    }
+    if (tipo === 'MI_EQUIPO' && !tieneEquipo) {
+      return { error: { _forbidden: true, message: 'No tienes un equipo asignado en Jefaturas.' } };
+    }
+    var destinatarios = [];
+    if (tipo === 'SELECCION') {
+      destinatarios = (Array.isArray(data.destinatarios) ? data.destinatarios : [])
+        .map(normalizarEmail_)
+        .filter(function (email, i, todos) { return email && todos.indexOf(email) === i; });
+      if (!destinatarios.length) {
+        return { error: errorValidacion_('destinatarios', 'Selecciona al menos una persona.') };
+      }
+      var validos = {};
+      audienciaNovedades_().forEach(function (p) { validos[p.email] = true; });
+      var invalido = destinatarios.filter(function (email) { return !validos[email]; })[0];
+      if (invalido) {
+        return { error: errorValidacion_('destinatarios', 'Uno de los destinatarios no tiene credenciales activas en SIGSO.') };
+      }
+    }
+    return { tipo: tipo, destinatarios: destinatarios };
+  }
+
   // areas donde esta persona puede publicar: todas si es ADM, o solo
   // aquella(s) donde figura como responsable_email en CAT_AREAS.
   function areasPublicables_(contexto) {
@@ -163,7 +297,7 @@ var Novedades = (function () {
   // jefatura/ADM -- una novedad EN_REVISION/DEVUELTA/RECHAZADA no es
   // publica todavia.
   function puedeVerDetalle_(novedad, contexto) {
-    if (novedad.estado === ESTADOS.PUBLICADA) return true;
+    if (novedad.estado === ESTADOS.PUBLICADA) return enAudiencia_(novedad, contexto);
     return esAutorONoAutor_(novedad, contexto) || puedeAprobar_(contexto, novedad.autor_email);
   }
 
@@ -272,6 +406,7 @@ var Novedades = (function () {
       '<p>Entra a SIGSO &gt; Novedades para verla completa y confirmar "Enterado".</p>');
     audienciaNovedades_().forEach(function (persona) {
       if (persona.email === autor) return;
+      if (!personaEnAudiencia_(novedad, persona.email)) return;
       enviarCorreo_(novedad.novedad_id, persona.email, 'NOVEDAD_PUBLICADA', asunto, cuerpoTexto, null, { htmlBody: cuerpoHtml });
     });
   }
@@ -292,7 +427,8 @@ var Novedades = (function () {
       autor_nombre: n.autor_nombre,
       estado: n.estado,
       motivo_devolucion: n.motivo_devolucion || '',
-      fecha_creacion: n.fecha_creacion
+      fecha_creacion: n.fecha_creacion,
+      audiencia_tipo: n.audiencia_tipo || ''
     };
   }
 
@@ -302,6 +438,9 @@ var Novedades = (function () {
      * del formulario). ADM ve todas; el resto ve solo las suyas.
      */
     listarAreasPublicables: function (data, contexto) {
+      var equipoEmails = obtenerEquipoJefe_(contexto.email).map(normalizarEmail_);
+      var equipoSet = {};
+      equipoEmails.forEach(function (e) { equipoSet[e] = true; });
       return {
         areas: areasPublicables_(contexto).map(function (a) {
           return { area_id: a.area_id, nombre: a.nombre };
@@ -309,7 +448,15 @@ var Novedades = (function () {
         puede_general: contexto.rol === 'ADM',
         tipos: Object.keys(TIPOS).map(function (t) {
           return { tipo: t, etiqueta: TIPOS[t].etiqueta, color: TIPOS[t].color, carril: TIPOS[t].carril };
-        })
+        }),
+        // v6.7 (Fase 5): datos para el selector de audiencia -- directorio
+        // completo (para "Seleccionar personas"), el propio equipo (para
+        // "Mi equipo") y si puede usar las opciones amplias (TODOS/MI_EQUIPO,
+        // reservadas a jefatura/ADM).
+        directorio: audienciaNovedades_(),
+        equipo: audienciaNovedades_().filter(function (p) { return equipoSet[p.email]; }),
+        puede_equipo: equipoEmails.length > 0,
+        puede_todos: contexto.rol === 'ADM' || equipoEmails.length > 0
       };
     },
 
@@ -337,6 +484,7 @@ var Novedades = (function () {
       var recientes = activas
         .filter(function (n) { return !filtroTipo || n.tipo === filtroTipo; })
         .filter(function (n) { return !filtroArea || n.area_id === filtroArea; })
+        .filter(function (n) { return enAudiencia_(n, contexto); })
         .map(function (n) {
           var tipoInfo = TIPOS[n.tipo] || { etiqueta: n.tipo, color: 'info' };
           return {
@@ -355,7 +503,8 @@ var Novedades = (function () {
             tiene_adjunto: !!n.archivo_id,
             fecha_publicacion: n.fecha_publicacion,
             leida: !!leidasPorMi[n.novedad_id],
-            puede_gestionar: esAutorONoAutor_(n, contexto)
+            puede_gestionar: esAutorONoAutor_(n, contexto),
+            audiencia_tipo: n.audiencia_tipo || 'TODOS'
           };
         })
         .sort(function (a, b) { return new Date(b.fecha_publicacion) - new Date(a.fecha_publicacion); });
@@ -410,7 +559,8 @@ var Novedades = (function () {
         leida: leida,
         puede_gestionar: esAutorONoAutor_(n, contexto),
         puede_aprobar: puedeAprobar_(contexto, n.autor_email),
-        es_autor: normalizarEmail_(n.autor_email) === correo
+        es_autor: normalizarEmail_(n.autor_email) === correo,
+        audiencia: audienciaResumen_(n)
       };
     },
 
@@ -461,6 +611,21 @@ var Novedades = (function () {
         };
       }
 
+      var carril = TIPOS[data.tipo].carril;
+      var esLibre = carril === 'LIBRE';
+
+      // v6.7 (Fase 5): en LIBRE la audiencia la elige quien publica, ahora
+      // mismo -- no hay aprobacion despues que la pueda corregir. En
+      // CONTROLADO se ignora cualquier audiencia que venga en `data`: la
+      // define quien apruebe (Novedades.aprobar), cuando corresponda.
+      // Se valida ANTES de tocar Drive (adjunto) para fallar rapido.
+      var audiencia = { tipo: 'TODOS', destinatarios: [] };
+      if (esLibre) {
+        var validacionAudiencia = validarAudienciaEntrante_(data, contexto);
+        if (validacionAudiencia.error) return validacionAudiencia.error;
+        audiencia = validacionAudiencia;
+      }
+
       var archivo = { archivo_id: '', archivo_nombre: '', archivo_mime: '' };
       if (data.contenido_base64) {
         if (!data.nombre_archivo) {
@@ -491,9 +656,7 @@ var Novedades = (function () {
         };
       }
 
-      var carril = TIPOS[data.tipo].carril;
       var ahora = new Date().toISOString();
-      var esLibre = carril === 'LIBRE';
 
       var novedad = {
         novedad_id: Utilities.getUuid(),
@@ -519,11 +682,17 @@ var Novedades = (function () {
         aprobador_nombre: '',
         fecha_aprobacion: '',
         motivo_devolucion: '',
+        // v6.7 (Fase 5): en CONTROLADO queda vacio -- la define quien
+        // aprueba, no tiene sentido todavia.
+        audiencia_tipo: esLibre ? audiencia.tipo : '',
         fecha_publicacion: esLibre ? ahora : '',
         activa: esLibre
       };
 
       agregarFila_(SHEETS.NOVEDADES, novedad);
+      if (esLibre && audiencia.tipo === 'SELECCION') {
+        guardarDestinatarios_(novedad.novedad_id, audiencia.destinatarios);
+      }
 
       if (esLibre) {
         // Sin revision: nada que registrar en el historial (nunca cambio de
@@ -537,9 +706,12 @@ var Novedades = (function () {
     },
 
     /**
-     * v6.6: la jefatura del autor (o ADM) aprueba -- publica de inmediato
-     * (audiencia = todos, igual que el resto del modulo por ahora; Fase 5
-     * traera la eleccion de audiencia). Solo desde EN_REVISION.
+     * v6.6: la jefatura del autor (o ADM) aprueba -- publica de inmediato.
+     * v6.7 (Fase 5): quien aprueba TAMBIEN elige la audiencia en el mismo
+     * paso (TODOS/MI_EQUIPO/SELECCION, misma validacion que publicar en
+     * carril LIBRE, pero evaluada contra el APROBADOR, no el autor -- son
+     * roles distintos y el criterio de a quien corresponde es de quien
+     * aprueba). Solo desde EN_REVISION.
      */
     aprobar: function (data, contexto) {
       if (!data || !data.novedad_id) {
@@ -553,6 +725,8 @@ var Novedades = (function () {
       if (!puedeAprobar_(contexto, n.autor_email)) {
         return { _forbidden: true, message: 'Solo la jefatura de quien la redactó, o un Administrador, puede aprobarla.' };
       }
+      var validacionAudiencia = validarAudienciaEntrante_(data || {}, contexto);
+      if (validacionAudiencia.error) return validacionAudiencia.error;
 
       var ahora = new Date().toISOString();
       var cambios = {
@@ -561,9 +735,13 @@ var Novedades = (function () {
         fecha_publicacion: ahora,
         aprobador_email: contexto.email,
         aprobador_nombre: data.aprobador_nombre || contexto.email,
-        fecha_aprobacion: ahora
+        fecha_aprobacion: ahora,
+        audiencia_tipo: validacionAudiencia.tipo
       };
       actualizarFilaPorId_(SHEETS.NOVEDADES, 'novedad_id', n.novedad_id, cambios);
+      if (validacionAudiencia.tipo === 'SELECCION') {
+        guardarDestinatarios_(n.novedad_id, validacionAudiencia.destinatarios);
+      }
       registrarHistorial_(n.novedad_id, 'APROBADA', contexto, data.comentario || '');
 
       if (n.tipo === 'LEY') {
@@ -793,6 +971,7 @@ var Novedades = (function () {
       var leyeron = [];
       var pendientes = [];
       audienciaNovedades_().forEach(function (persona) {
+        if (!personaEnAudiencia_(n, persona.email)) return;
         if (leidoPorEmail[persona.email]) {
           leyeron.push({ email: persona.email, nombre: persona.nombre, leido_en: leidoPorEmail[persona.email] });
         } else {
@@ -833,6 +1012,7 @@ var Novedades = (function () {
       audienciaNovedades_().forEach(function (persona) {
         var pendientes = activasConAcuse.filter(function (n) {
           return normalizarEmail_(n.autor_email) !== persona.email &&
+            personaEnAudiencia_(n, persona.email) &&
             !(leidoPor[n.novedad_id] && leidoPor[n.novedad_id][persona.email]);
         });
         if (!pendientes.length) return;

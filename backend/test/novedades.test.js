@@ -37,6 +37,7 @@ function cargar() {
   seedSheet(ctx, 'NOVEDADES', ctx.COLUMNAS.NOVEDADES);
   seedSheet(ctx, 'NOVEDADES_LECTURAS', ctx.COLUMNAS.NOVEDADES_LECTURAS);
   seedSheet(ctx, 'NOVEDADES_HISTORIAL', ctx.COLUMNAS.NOVEDADES_HISTORIAL);
+  seedSheet(ctx, 'NOVEDADES_AUDIENCIA', ctx.COLUMNAS.NOVEDADES_AUDIENCIA);
   return ctx;
 }
 
@@ -700,4 +701,153 @@ test('41. sin jefatura configurada para el autor, el aviso de revision cae a ADM
 
   const avisos = ctx.GmailApp._enviados.filter((e) => e.destinatario === 'adm@rld.cl');
   assert.equal(avisos.length, 1);
+});
+
+// --- 42-50: v6.7 (Fase 5) audiencia dirigida --------------------------------
+// cargarConJefatura() siembra el directorio (audienciaNovedades_) con
+// juan@homepymes.cl (USUARIOS activo) y leo@rld.cl (CUENTAS_PORTAL activa);
+// vanessa@rld.cl es la autora por defecto y NO esta en el directorio (es su
+// email de JEFATURAS, un concepto aparte). jefa@rld.cl es jefatura de
+// vanessa -- unico "equipo" real de estos tests.
+
+test('42. publicar LIBRE con audiencia SELECCION: solo el destinatario elegido (y el autor) la ven', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({
+    audiencia_tipo: 'SELECCION', destinatarios: ['leo@rld.cl']
+  }), ctxResponsable()));
+  assert.equal(pub.estado, 'PUBLICADA');
+
+  const feedElegido = toPlain(ctx.Novedades.getFeed({}, { email: 'leo@rld.cl', rol: 'DEV' }));
+  assert.equal(feedElegido.recientes.length, 1);
+
+  const feedTercero = toPlain(ctx.Novedades.getFeed({}, ctxCualquiera())); // juan@homepymes.cl
+  assert.equal(feedTercero.recientes.length, 0, 'un tercero fuera de la seleccion no la ve');
+
+  const feedAutor = toPlain(ctx.Novedades.getFeed({}, ctxResponsable()));
+  assert.equal(feedAutor.recientes.length, 1, 'el autor siempre ve lo suyo');
+
+  const detalleTercero = toPlain(ctx.Novedades.getDetalle({ novedad_id: pub.novedad_id }, ctxCualquiera()));
+  assert.equal(detalleTercero._forbidden, true);
+});
+
+test('43. audiencia TODOS explicita: reservada a jefatura/ADM', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const rechazado = toPlain(ctx.Novedades.publicar(publicarBase_({ audiencia_tipo: 'TODOS' }), ctxResponsable()));
+  assert.equal(rechazado._forbidden, true);
+
+  const ok = toPlain(ctx.Novedades.publicar(publicarBase_({ audiencia_tipo: 'TODOS', area_id: '' }), ctxAdm()));
+  assert.equal(ok.estado, 'PUBLICADA');
+  const feed = toPlain(ctx.Novedades.getFeed({}, ctxCualquiera()));
+  assert.equal(feed.recientes.length, 1);
+});
+
+test('44. audiencia MI_EQUIPO: solo jefatura/ADM con equipo, visible solo al equipo', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  // vanessa no tiene equipo propio (es subordinada, no jefa).
+  const rechazado = toPlain(ctx.Novedades.publicar(publicarBase_({ audiencia_tipo: 'MI_EQUIPO' }), ctxResponsable()));
+  assert.equal(rechazado._forbidden, true);
+
+  seedArea(ctx, { area_id: 'GENERAL', responsable_email: 'jefa@rld.cl' });
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({
+    audiencia_tipo: 'MI_EQUIPO', area_id: 'GENERAL'
+  }), ctxJefa()));
+  assert.equal(pub.estado, 'PUBLICADA');
+
+  const feedEquipo = toPlain(ctx.Novedades.getFeed({}, ctxResponsable())); // vanessa, del equipo de jefa
+  assert.equal(feedEquipo.recientes.length, 1);
+
+  const feedTercero = toPlain(ctx.Novedades.getFeed({}, ctxCualquiera()));
+  assert.equal(feedTercero.recientes.length, 0);
+});
+
+test('45. SELECCION exige al menos un destinatario', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const res = toPlain(ctx.Novedades.publicar(publicarBase_({ audiencia_tipo: 'SELECCION', destinatarios: [] }), ctxResponsable()));
+  assert.equal(res._validationError, true);
+});
+
+test('46. SELECCION rechaza un destinatario que no tiene credenciales activas en SIGSO', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const res = toPlain(ctx.Novedades.publicar(publicarBase_({
+    audiencia_tipo: 'SELECCION', destinatarios: ['nadie@fuera.cl']
+  }), ctxResponsable()));
+  assert.equal(res._validationError, true);
+});
+
+test('47. aprobar: la audiencia la elige quien aprueba (SELECCION), no el autor', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
+
+  const aprobado = toPlain(ctx.Novedades.aprobar({
+    novedad_id: pub.novedad_id, audiencia_tipo: 'SELECCION', destinatarios: ['leo@rld.cl']
+  }, ctxJefa()));
+  assert.equal(aprobado.estado, 'PUBLICADA');
+
+  const feedElegido = toPlain(ctx.Novedades.getFeed({}, { email: 'leo@rld.cl', rol: 'DEV' }));
+  assert.equal(feedElegido.recientes.length, 1);
+  const feedTercero = toPlain(ctx.Novedades.getFeed({}, ctxCualquiera()));
+  assert.equal(feedTercero.recientes.length, 0);
+
+  // Autor, aprobador y ADM ven la novedad igual, este fuera o no de la seleccion.
+  const paraAutor = toPlain(ctx.Novedades.getDetalle({ novedad_id: pub.novedad_id }, ctxResponsable()));
+  assert.equal(paraAutor._forbidden, undefined);
+  const paraAprobador = toPlain(ctx.Novedades.getDetalle({ novedad_id: pub.novedad_id }, ctxJefa()));
+  assert.equal(paraAprobador._forbidden, undefined);
+  const paraAdm = toPlain(ctx.Novedades.getDetalle({ novedad_id: pub.novedad_id }, ctxAdm()));
+  assert.equal(paraAdm._forbidden, undefined);
+});
+
+test('48. getLectores: con audiencia SELECCION, la audiencia se acota a los destinatarios elegidos', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({
+    audiencia_tipo: 'SELECCION', destinatarios: ['leo@rld.cl']
+  }), ctxResponsable()));
+
+  const lectores = toPlain(ctx.Novedades.getLectores({ novedad_id: pub.novedad_id }, ctxResponsable()));
+  assert.equal(lectores.total_audiencia, 1, 'no cuenta a juan@homepymes.cl, que no esta en la seleccion');
+  assert.deepEqual(lectores.pendientes.map((p) => p.email), ['leo@rld.cl']);
+});
+
+test('49. recordatorioPendientes no molesta a quien esta fuera de la audiencia dirigida', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  ctx.Novedades.publicar(publicarBase_({
+    titulo: 'Solo para Leo', audiencia_tipo: 'SELECCION', destinatarios: ['leo@rld.cl']
+  }), ctxResponsable());
+
+  const res = toPlain(ctx.Novedades.recordatorioPendientes());
+  assert.equal(res.enviados, 1, 'solo le llega a leo@rld.cl, el unico en la audiencia');
+  const destinatarios = ctx.GmailApp._enviados.map((e) => e.destinatario);
+  assert.ok(destinatarios.includes('leo@rld.cl'));
+  assert.ok(!destinatarios.includes('juan@homepymes.cl'));
+});
+
+test('50. listarAreasPublicables expone directorio/equipo/puede_todos/puede_equipo para el selector de audiencia', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+
+  const paraResponsable = toPlain(ctx.Novedades.listarAreasPublicables({}, ctxResponsable()));
+  assert.equal(paraResponsable.puede_todos, false);
+  assert.equal(paraResponsable.puede_equipo, false);
+  assert.equal(paraResponsable.equipo.length, 0);
+  assert.ok(paraResponsable.directorio.some((p) => p.email === 'leo@rld.cl'));
+
+  const paraJefa = toPlain(ctx.Novedades.listarAreasPublicables({}, ctxJefa()));
+  assert.equal(paraJefa.puede_todos, true);
+  assert.equal(paraJefa.puede_equipo, true);
+  // vanessa no esta en el directorio (no tiene USUARIOS/CUENTAS_PORTAL propios
+  // en este seed), asi que su "equipo" resuelto contra el directorio queda
+  // vacio -- lo que importa es que la audiencia MI_EQUIPO igual funcione
+  // (ver test 44), que resuelve contra JEFATURAS, no contra este listado.
+  assert.equal(paraJefa.equipo.length, 0);
+
+  const paraAdm = toPlain(ctx.Novedades.listarAreasPublicables({}, ctxAdm()));
+  assert.equal(paraAdm.puede_todos, true);
 });
