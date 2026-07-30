@@ -146,12 +146,11 @@ function configurarTriggers() {
     creados.push('enviarReporteMensualPausasTrigger');
   }
 
-  // v6.5 Fase 2 (Novedades): recordatorio diario 10:00 -- despues del lote de
-  // las 09:00, a quien tiene novedades con acuse obligatorio sin confirmar.
-  if (existentes.indexOf('enviarRecordatorioNovedadesTrigger') === -1) {
-    ScriptApp.newTrigger('enviarRecordatorioNovedadesTrigger').timeBased().atHour(10).everyDays(1).create();
-    creados.push('enviarRecordatorioNovedadesTrigger');
-  }
+  // v6.5 Fase 2 (Novedades): el recordatorio diario NO tiene un trigger de
+  // tiempo propio -- Apps Script limita a 20 triggers de tiempo por script
+  // (cuenta estandar) y ya estaban los 20 usados. En vez de eso, se cuelga
+  // de recordarValidacionPendienteTrigger (09:00 diario, ver mas abajo):
+  // mismo horario, sin gastar un slot nuevo.
 
   return creados;
 }
@@ -186,11 +185,6 @@ function cerrarInactivosTrigger() {
 // P7 (v2.0, Sprint 3): ver Triggers.detectarPatrones().
 function detectarPatronesTrigger() {
   return Triggers.detectarPatrones();
-}
-
-// v6.5 Fase 2: ver Novedades.recordatorioPendientes().
-function enviarRecordatorioNovedadesTrigger() {
-  return Novedades.recordatorioPendientes();
 }
 
 // §17.4 v1.0: reportes programados, ver Notificaciones.gs.
@@ -270,7 +264,24 @@ function verificarFechasComprometidasTrigger() {
 
 // v2.1 (Fase D, §8): ver Triggers.recordarValidacionPendiente().
 function recordarValidacionPendienteTrigger() {
-  return Triggers.recordarValidacionPendiente();
+  var resultado = Triggers.recordarValidacionPendiente();
+  // v6.5 Fase 2 (Novedades): sin trigger propio (§ nota de configurarTriggers
+  // mas arriba -- limite de 20 triggers de tiempo ya copado). Se cuelga aqui
+  // en try/catch: si el recordatorio de Novedades fallara, no debe tumbar el
+  // recordatorio de validacion pendiente, que es el dueno real de este slot.
+  try {
+    enviarRecordatorioNovedadesTrigger();
+  } catch (err) {
+    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarRecordatorioNovedadesTrigger');
+  }
+  return resultado;
+}
+
+// v6.5 Fase 2: ver Novedades.recordatorioPendientes(). Se deja como funcion
+// nombrada (en vez de inline) para poder ejecutarla manualmente desde el
+// editor de Apps Script si hace falta probarla o forzarla fuera de horario.
+function enviarRecordatorioNovedadesTrigger() {
+  return Novedades.recordatorioPendientes();
 }
 
 // RN-201/RF-208: dias habiles que un item puede quedar en "Terminada" (S08)

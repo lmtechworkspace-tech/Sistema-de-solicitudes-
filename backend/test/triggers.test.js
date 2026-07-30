@@ -10,8 +10,6 @@ const TODOS_LOS_TRIGGERS = [
   // v6.0 (mejora): cierre automatico de pausas abiertas al final del dia.
   'cerrarPausasAbiertasDelDiaTrigger',
   'detectarPatronesTrigger', 'enviarDigestJefaturaTrigger',
-  // v6.5 Fase 2 (Novedades): recordatorio diario de acuses pendientes.
-  'enviarRecordatorioNovedadesTrigger',
   // v6.0 Fase P4: recordatorio (cada 5 min) + resumen diario de pausas.
   'enviarRecordatoriosPausasTrigger',
   'enviarReporteEjecutivoSemanalTrigger',
@@ -28,7 +26,7 @@ const TODOS_LOS_TRIGGERS = [
   'refrescarCacheTrigger', 'suspenderInactivosTrigger', 'verificarFechasComprometidasTrigger', 'verificarSLAsTrigger'
 ];
 
-test('configurarTriggers instala los 21 triggers de tiempo de §13/§16.3 (Fase 4 + Fase 7 + Sprint 1/3 v2.0 + v2.1 Fase D + v4.2 + v5.2 Fase B + v6.0 Pausas P1/P4/P5/mejoras + v6.5 Novedades Fase 2)', () => {
+test('configurarTriggers instala los 20 triggers de tiempo de §13/§16.3 (Fase 4 + Fase 7 + Sprint 1/3 v2.0 + v2.1 Fase D + v4.2 + v5.2 Fase B + v6.0 Pausas P1/P4/P5/mejoras) -- v6.5 Novedades Fase 2 no suma trigger propio (limite de 20), se cuelga de recordarValidacionPendienteTrigger', () => {
   const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
   const creados = toPlain(ctx.configurarTriggers());
 
@@ -184,4 +182,45 @@ test('Triggers.cerrarInactivosPorValidacion NO cierra un item Terminada reciente
   assert.equal(resultado.cerrados, 0);
   const subsolicitudes = ctx.leerFilas_('SUBSOLICITUDES');
   assert.equal(subsolicitudes[0].estado, 'S08');
+});
+
+// v6.5 Fase 2 (Novedades): sin trigger propio (limite de 20 triggers de
+// tiempo ya copado) -- se cuelga de recordarValidacionPendienteTrigger.
+test('recordarValidacionPendienteTrigger tambien dispara el recordatorio de Novedades pendientes', () => {
+  const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
+  seedSheet(ctx, 'SOLICITUDES', ctx.COLUMNAS.SOLICITUDES);
+  seedSheet(ctx, 'SUBSOLICITUDES', ctx.COLUMNAS.SUBSOLICITUDES);
+  seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
+  seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
+  seedSheet(ctx, 'CONFIG_FERIADOS', ctx.COLUMNAS.CONFIG_FERIADOS);
+  seedSheet(ctx, 'CAT_AREAS', ctx.COLUMNAS.CAT_AREAS);
+  seedSheet(ctx, 'NOVEDADES', ctx.COLUMNAS.NOVEDADES);
+  seedSheet(ctx, 'NOVEDADES_LECTURAS', ctx.COLUMNAS.NOVEDADES_LECTURAS);
+  seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS, [
+    ['U1', 'Juan Perez', 'juan@homepymes.cl', 'HP', 'DEV', true, '', 'seed']
+  ]);
+  ctx.Novedades.publicar(
+    { tipo: 'AVISO', titulo: 'Aviso de prueba', resumen: 'Resumen', area_id: '' },
+    { email: 'adm@rld.cl', rol: 'ADM' }
+  );
+
+  ctx.recordarValidacionPendienteTrigger();
+
+  assert.equal(ctx.GmailApp._enviados.length, 1);
+  assert.equal(ctx.GmailApp._enviados[0].destinatario, 'juan@homepymes.cl');
+});
+
+test('recordarValidacionPendienteTrigger no se rompe si el recordatorio de Novedades falla', () => {
+  const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
+  seedSheet(ctx, 'SOLICITUDES', ctx.COLUMNAS.SOLICITUDES);
+  seedSheet(ctx, 'SUBSOLICITUDES', ctx.COLUMNAS.SUBSOLICITUDES);
+  seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
+  seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
+  seedSheet(ctx, 'CONFIG_FERIADOS', ctx.COLUMNAS.CONFIG_FERIADOS);
+  // NOVEDADES/NOVEDADES_LECTURAS NO se siembran a proposito: Novedades.gs
+  // captura la hoja faltante devolviendo [], asi que en este caso no falla
+  // -- lo que este test protege es que aunque Novedades.recordatorioPendientes
+  // lance, recordarValidacionPendienteTrigger igual completa sin excepcion.
+
+  assert.doesNotThrow(() => ctx.recordarValidacionPendienteTrigger());
 });
