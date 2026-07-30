@@ -88,7 +88,16 @@ var BACKOFFICE_ACTIONS = {
   getMiPerfil: handleGetMiPerfil_,
   guardarFotoPerfil: handleGuardarFotoPerfil_,
   eliminarFotoPerfil: handleEliminarFotoPerfil_,
-  getFotosPerfil: handleGetFotosPerfil_
+  getFotosPerfil: handleGetFotosPerfil_,
+  // v6.5 (modulo Novedades): igual que las de perfil, sin gate de modulo --
+  // disponible a cualquier identidad autenticada (Google o portal).
+  listarAreasPublicablesNovedad: handleListarAreasPublicablesNovedad_,
+  getFeedNovedades: handleGetFeedNovedades_,
+  getDetalleNovedad: handleGetDetalleNovedad_,
+  publicarNovedad: handlePublicarNovedad_,
+  despublicarNovedad: handleDespublicarNovedad_,
+  marcarLeidaNovedad: handleMarcarLeidaNovedad_,
+  descargarAdjuntoNovedad: handleDescargarAdjuntoNovedad_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -166,6 +175,11 @@ var MODULO_POR_ACCION = {
   // cuenta autenticada tiene perfil, igual que toda cuenta puede cerrar
   // sesion. La proteccion no es el modulo sino que la identidad se deriva
   // del contexto (Perfiles.gs), nunca de un parametro del navegador.
+  //
+  // v6.5 (modulo Novedades): mismo criterio -- leer el feed y dar acuse es
+  // de cualquier identidad autenticada, sin gate de modulo. Publicar SI se
+  // protege, pero por CAT_AREAS.responsable_email/rol ADM dentro de
+  // Novedades.gs, no por el modulo del portal.
 };
 
 function doGet(e) {
@@ -569,6 +583,35 @@ function handleEliminarFotoPerfil_(data, contexto) {
 
 function handleGetFotosPerfil_(data, contexto) {
   return responderResultado_(Perfiles.getFotosDe(data, contexto));
+}
+
+// v6.5 (modulo Novedades).
+function handleListarAreasPublicablesNovedad_(data, contexto) {
+  return responderResultado_(Novedades.listarAreasPublicables(data, contexto));
+}
+
+function handleGetFeedNovedades_(data, contexto) {
+  return responderResultado_(Novedades.getFeed(data, contexto));
+}
+
+function handleGetDetalleNovedad_(data, contexto) {
+  return responderResultado_(Novedades.getDetalle(data, contexto));
+}
+
+function handlePublicarNovedad_(data, contexto) {
+  return responderResultado_(Novedades.publicar(data, contexto));
+}
+
+function handleDespublicarNovedad_(data, contexto) {
+  return responderResultado_(Novedades.despublicar(data, contexto));
+}
+
+function handleMarcarLeidaNovedad_(data, contexto) {
+  return responderResultado_(Novedades.marcarLeida(data, contexto));
+}
+
+function handleDescargarAdjuntoNovedad_(data, contexto) {
+  return responderResultado_(Novedades.descargarAdjunto(data, contexto));
 }
 
 function responderResultado_(resultado) {

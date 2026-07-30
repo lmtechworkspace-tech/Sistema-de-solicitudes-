@@ -71,7 +71,14 @@ var SHEETS = {
   // resolverIdentidadYRol_ en CADA request, y meterles una miniatura en
   // base64 haria que toda llamada del sistema arrastre cientos de KB
   // inutiles. Ver la nota identica en backend/intake/Constantes.gs.
-  PERFILES: 'PERFILES'
+  PERFILES: 'PERFILES',
+  // v6.5 (modulo Novedades): dos hojas ADITIVAS. NOVEDADES es el contenido
+  // (leyes, dictamenes, procedimientos, avisos, capacitaciones, logros,
+  // comercial); NOVEDADES_LECTURAS es el acuse de lectura, aparte para no
+  // ensuciar la fila del contenido con una lectura por lector. Ver la nota
+  // identica en backend/intake/Constantes.gs.
+  NOVEDADES: 'NOVEDADES',
+  NOVEDADES_LECTURAS: 'NOVEDADES_LECTURAS'
 };
 
 var COLUMNAS = {
@@ -269,7 +276,28 @@ var COLUMNAS = {
   PERFILES: [
     'perfil_id', 'identidad_tipo', 'identidad_clave',
     'foto_file_id', 'foto_thumb', 'foto_mime', 'actualizado_en'
-  ]
+  ],
+  // v6.5 (modulo Novedades). area_id/area_nombre son ETIQUETA, no audiencia:
+  // SIGSO no modela "a que area pertenece cada persona" (CAT_AREAS solo
+  // guarda quien es el RESPONSABLE de cada area), asi que no hay forma
+  // confiable de calcular "esto te afecta a ti" para un lector cualquiera.
+  // Por eso el area sirve para filtrar/mostrar, no para restringir quien ve
+  // que -- todo publicado es visible para todo el que entra a la plataforma.
+  // requiere_acuse: si exige el boton "Enterado" (ver NOVEDADES_LECTURAS).
+  // fecha_vigencia: cuando entra a regir (leyes/normativas); vacia si no aplica.
+  // archivo_*: adjunto opcional (hoy solo PDF), original privado en Drive
+  // (carpeta SIGSO_Novedades/), descargable via accion dedicada -- igual
+  // patron que el original de la foto de perfil.
+  NOVEDADES: [
+    'novedad_id', 'tipo', 'titulo', 'resumen', 'cuerpo',
+    'area_id', 'area_nombre', 'autor_email', 'autor_nombre',
+    'requiere_acuse', 'fecha_vigencia',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'fecha_publicacion', 'activa'
+  ],
+  // Acuse de lectura, una fila por (novedad, lector). Aparte de NOVEDADES
+  // para no mezclar el contenido (una fila) con N lecturas.
+  NOVEDADES_LECTURAS: ['lectura_id', 'novedad_id', 'usuario_email', 'leido_en']
 };
 
 var ESTADOS = {

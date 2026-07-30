@@ -75,7 +75,12 @@ var SHEETS = {
   // base64 haria que toda llamada del sistema arrastre cientos de KB
   // inutiles. La feature vive en el Backoffice (Perfiles.gs); Intake
   // mantiene la copia solo para que el esquema no diverja.
-  PERFILES: 'PERFILES'
+  PERFILES: 'PERFILES',
+  // v6.5 (modulo Novedades): vive en el Backoffice (Novedades.gs); Intake
+  // mantiene la copia solo para que el esquema no diverja. Ver la nota
+  // identica en backend/backoffice/Constantes.gs.
+  NOVEDADES: 'NOVEDADES',
+  NOVEDADES_LECTURAS: 'NOVEDADES_LECTURAS'
 };
 
 var COLUMNAS = {
@@ -319,7 +324,17 @@ var COLUMNAS = {
   PERFILES: [
     'perfil_id', 'identidad_tipo', 'identidad_clave',
     'foto_file_id', 'foto_thumb', 'foto_mime', 'actualizado_en'
-  ]
+  ],
+  // v6.5 (modulo Novedades). Ver la nota identica en
+  // backend/backoffice/Constantes.gs.
+  NOVEDADES: [
+    'novedad_id', 'tipo', 'titulo', 'resumen', 'cuerpo',
+    'area_id', 'area_nombre', 'autor_email', 'autor_nombre',
+    'requiere_acuse', 'fecha_vigencia',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'fecha_publicacion', 'activa'
+  ],
+  NOVEDADES_LECTURAS: ['lectura_id', 'novedad_id', 'usuario_email', 'leido_en']
 };
 
 // S01-S11 completos desde la Fase 1 aunque solo S01 se use aqui: la maquina

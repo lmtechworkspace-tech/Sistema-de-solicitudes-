@@ -491,6 +491,15 @@
         </div>
       </section>
       <!-- ===== Modulo: Pausas activas (registro del trabajador, v6.0 P2) ===== -->
+      <!-- ===== Modulo: Novedades (v6.5) — core, ver plataforma.js
+           modulosDeLaCuenta_: siempre disponible, no depende de
+           cuenta.modulos. ===== -->
+      <section id="modulo-novedades" class="plataforma-modulo sigso-oculto">
+        <h1>Novedades</h1>
+        <p class="sigso-ayuda">Leyes, avisos y novedades de todas las áreas, en un solo lugar.</p>
+        <div id="novedades-contenido"></div>
+      </section>
+
       <section id="modulo-pausas" class="plataforma-modulo sigso-oculto">
         <h1>Pausas activas</h1>
         <p class="sigso-ayuda">Registra tu participación en la pausa activa de hoy. Toma unos segundos.</p>
@@ -873,6 +882,9 @@
   <!-- v6.4: panel "Mi perfil" + gestion de la foto. Antes de plataforma.js,
        que lo invoca desde el menu de usuario. -->
   <script src="js/perfil.js"></script>
+  <!-- v6.5: modulo Novedades. Antes de plataforma.js, que lo invoca desde
+       mostrarModulo_/renderHome_. -->
+  <script src="js/novedades.js"></script>
   <script src="js/plataforma.js"></script>
 </body>
 </html>

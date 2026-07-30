@@ -34,10 +34,17 @@
     document.getElementById('btn-actualizar-jefatura').addEventListener('click', function () {
       SigsoJefatura.cargar();
     });
+
+    // v6.5: Novedades es CORE -- visible para todos, sin gate de rol.
+    document.getElementById('btn-ver-novedades').addEventListener('click', mostrarNovedades_);
+    document.getElementById('btn-volver-dashboard-novedades').addEventListener('click', mostrarDashboard_);
+    if (window.SigsoNovedades) {
+      SigsoNovedades.actualizarBadge();
+    }
   });
 
   function ocultarTodasLasVistas_() {
-    ['vista-dashboard', 'vista-detalle', 'vista-gerencia', 'vista-jefatura'].forEach(function (id) {
+    ['vista-dashboard', 'vista-detalle', 'vista-gerencia', 'vista-jefatura', 'vista-novedades'].forEach(function (id) {
       document.getElementById(id).classList.add('sigso-oculto');
     });
   }
@@ -65,5 +72,11 @@
     ocultarTodasLasVistas_();
     document.getElementById('vista-jefatura').classList.remove('sigso-oculto');
     SigsoJefatura.cargar();
+  }
+
+  function mostrarNovedades_() {
+    ocultarTodasLasVistas_();
+    document.getElementById('vista-novedades').classList.remove('sigso-oculto');
+    if (window.SigsoNovedades) SigsoNovedades.cargar();
   }
 })();

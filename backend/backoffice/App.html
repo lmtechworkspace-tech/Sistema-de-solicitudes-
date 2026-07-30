@@ -2953,6 +2953,157 @@ button {
 }
 .sigso-timeline__autor .sigso-avatar { flex: none; }
 
+/* === v6.5: modulo Novedades ============================================= */
+
+/* Colores de tipo/vigencia reusan los tokens semanticos (--critico/--alerta/
+   --info/--ok), no colores nuevos -- mismo criterio que el chip de
+   situacion SLA de la Bandeja. */
+.sigso-badge--critico { background: var(--critico); }
+.sigso-badge--alerta { background: var(--alerta); }
+.sigso-badge--info { background: var(--info); }
+.sigso-badge--ok { background: var(--ok); }
+
+.sigso-novedades__cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--esp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--esp-4);
+}
+
+.sigso-novedades__chips {
+  display: flex;
+  gap: var(--esp-2);
+  flex-wrap: wrap;
+}
+
+.sigso-novedades__lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-3);
+}
+
+/* Tarjeta: franja de color a la izquierda (tipo) + cuerpo. El punto indigo
+   de "no leida" es la senal minima -- nada de fondos llamativos, para que el
+   feed siga siendo legible aunque tenga varias sin leer. */
+.sigso-novedad-card {
+  display: flex;
+  width: 100%;
+  text-align: left;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow var(--mov-rapido), border-color var(--mov-rapido);
+}
+.sigso-novedad-card:hover,
+.sigso-novedad-card:focus-visible {
+  border-color: var(--borde-fuerte);
+  box-shadow: var(--sombra-1);
+  outline: none;
+}
+.sigso-novedad-card:focus-visible { outline: 2px solid var(--primario); outline-offset: -2px; }
+
+.sigso-novedad-card__franja { width: 4px; flex: none; }
+.sigso-novedad-card__franja--critico { background: var(--critico); }
+.sigso-novedad-card__franja--alerta { background: var(--alerta); }
+.sigso-novedad-card__franja--info { background: var(--info); }
+.sigso-novedad-card__franja--ok { background: var(--ok); }
+
+.sigso-novedad-card__cuerpo {
+  flex: 1;
+  min-width: 0;
+  padding: var(--esp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-2);
+}
+
+.sigso-novedad-card__meta-top {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  flex-wrap: wrap;
+}
+
+.sigso-novedad-card__area {
+  font-size: var(--texto-xs);
+  color: var(--texto-3);
+  background: var(--superficie-2);
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radio-full);
+}
+
+.sigso-punto-no-leido {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--primario);
+  flex: none;
+  margin-left: auto;
+}
+
+.sigso-novedad-card__titulo {
+  margin: 0;
+  font-size: var(--texto-lg);
+  color: var(--texto);
+}
+
+.sigso-novedad-card__resumen {
+  margin: 0;
+  color: var(--texto-2);
+  font: var(--t-body);
+}
+
+.sigso-novedad-card__meta-bottom {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  margin-top: var(--esp-1);
+  color: var(--texto-3);
+  font-size: var(--texto-xs);
+}
+
+.sigso-novedad-card__leida { color: var(--ok); display: inline-flex; align-items: center; gap: 0.25rem; }
+.sigso-novedad-card__pendiente {
+  color: var(--alerta);
+  font-weight: 600;
+  margin-left: auto;
+}
+
+/* Tarjetas sin leer se distinguen por el titulo con mas peso -- sutil, no
+   un fondo de color que compita con el resto del feed. */
+.sigso-novedad-card--no-leida .sigso-novedad-card__titulo { font-weight: 700; }
+
+/* --- Detalle (modal) ----------------------------------------------------- */
+.sigso-novedad-detalle__titulo { margin: var(--esp-2) 0; color: var(--texto); }
+.sigso-novedad-detalle__autor {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  margin: var(--esp-3) 0;
+}
+.sigso-novedad-detalle__cuerpo {
+  color: var(--texto);
+  font: var(--t-body);
+  line-height: 1.6;
+  margin: var(--esp-3) 0;
+  white-space: pre-wrap;
+}
+.sigso-novedad-detalle__acciones {
+  display: flex;
+  gap: var(--esp-2);
+  flex-wrap: wrap;
+  margin-top: var(--esp-4);
+  padding-top: var(--esp-3);
+  border-top: 1px solid var(--borde);
+}
+
+/* --- Formulario de publicar ------------------------------------------------ */
+.sigso-novedad-form { display: flex; flex-direction: column; gap: var(--esp-3); max-height: 60vh; overflow-y: auto; }
+.sigso-campo-check { display: flex; align-items: center; gap: var(--esp-2); font: var(--t-body); color: var(--texto); }
+
 </style>
   <style>
 /* dashboard.css — Backoffice: KPIs, graficos, tabla, detalle (§12.4/12.5). */
@@ -4267,6 +4418,11 @@ button.sigso-kpi {
       <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-ver-gerencia">Ver Panel de Gerencia</button>
       <!-- v4.2: solo visible para JEFATURA. -->
       <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-ver-jefatura">Ver Mi Departamento</button>
+      <!-- v6.5: Novedades es CORE -- siempre visible, sin gate de rol (a
+           diferencia de Gerencia/Jefatura), igual que en plataforma.js. -->
+      <button type="button" class="sigso-boton--con-icono sigso-boton--secundario" id="btn-ver-novedades">
+        <span id="ico-ver-novedades"></span> Novedades<span class="sigso-badge sigso-oculto" id="badge-novedades-app" data-badge="novedades"></span>
+      </button>
 
       <!-- v3.0 (Fase 2, multi-bandeja): un responsable individual (DEV) ya
            esta auto-acotado a la suya -- solo se le avisa. ADM/GERENCIA ven
@@ -4593,6 +4749,14 @@ button.sigso-kpi {
         <h3>Carga del equipo por módulo / tipo</h3>
         <div id="jef-contenedor-carga"></div>
       </div>
+    </section>
+
+    <!-- v6.5: Novedades -- CORE, visible para todos, mismo modulo compartido
+         (novedades.js) que usa plataforma.html. -->
+    <section id="vista-novedades" class="sigso-oculto">
+      <button type="button" class="sigso-boton--secundario" id="btn-volver-dashboard-novedades">&larr; Volver al dashboard</button>
+      <h1>Novedades</h1>
+      <div id="novedades-contenido"></div>
     </section>
   </main>
 
@@ -5608,6 +5772,10 @@ var Iconos = (function () {
     // v6.4: subir/cambiar la foto de perfil. Distinta de `imagen` (que
     // representa un archivo ya adjunto): esta es la accion de capturar.
     camara: '<path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>',
+    // v6.5: modulo Novedades -- campana de "algo nuevo que atender", el
+    // icono universal para esta idea (distinto de `alerta`, que es un
+    // triangulo de advertencia puntual).
+    campana: '<path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
     documento: '<path d="M14 2H7a2 2 0 00-2 2v16a2 2 0 002 2h10a2 2 0 002-2V7z"/><path d="M14 2v5h5"/>',
 
     // Acciones e interfaz
@@ -7015,11 +7183,32 @@ var Iconos = (function () {
     if (!correos.length) return;
 
     SigsoPerfil.precargarFotos(correos).then(function () {
-      var hayFotos = correos.some(function (c) { return SigsoPerfil.fotoDe(c); });
-      // Si nadie tiene foto, lo ya pintado (iniciales) es correcto: repintar
-      // seria trabajo y parpadeo para nada.
-      if (hayFotos && detalleActual === detalle) render_(detalle);
+      if (detalleActual !== detalle) return;   // se navego a otra solicitud
+      pintarAvataresActividad_();
     });
+  }
+
+  // v6.4 (rendimiento): antes esto hacia render_(detalle) COMPLETO cuando
+  // llegaban las fotos, asi que cada apertura de solicitud pintaba el detalle
+  // entero dos veces (con su parpadeo). Ahora solo se cambia el avatar de
+  // cada autor, que es lo unico que cambio: sin re-render, sin perder el
+  // scroll ni el estado de los items desplegados.
+  function pintarAvataresActividad_() {
+    var nodos = document.querySelectorAll('.sigso-timeline__autor[data-usuario]');
+    for (var i = 0; i < nodos.length; i++) {
+      var nodo = nodos[i];
+      var correo = nodo.getAttribute('data-usuario');
+      var foto = SigsoPerfil.fotoDe(correo);
+      if (!foto) continue;                       // sigue con sus iniciales
+      var avatar = nodo.querySelector('.sigso-avatar');
+      if (!avatar || avatar.querySelector('img')) continue;   // ya tiene foto
+      var img = document.createElement('img');
+      img.className = 'sigso-avatar__img';
+      img.alt = '';
+      img.onerror = function () { this.remove(); };
+      img.src = foto;
+      avatar.appendChild(img);
+    }
   }
 
   function render_(detalle) {
@@ -7682,7 +7871,10 @@ var Iconos = (function () {
         return '<li class="sigso-timeline__evento--' + e.tipo + (e.tipo === 'comentario' && e.esInterno ? ' sigso-comentario--interno' : '') + '">' +
           '<span class="sigso-timeline__icono">' + iconoEvento_(e) + '</span> ' +
           etiqueta + ' — ' +
-          '<span class="sigso-timeline__autor">' + autor +
+          // data-usuario permite que pintarAvataresActividad_ encuentre este
+          // autor cuando lleguen las fotos, sin repintar el detalle entero.
+          '<span class="sigso-timeline__autor" data-usuario="' +
+            Componentes.escaparHtml(e.usuario) + '">' + autor +
             Componentes.escaparHtml(e.usuario) + '</span>' +
           ' (' + new Date(e.timestamp).toLocaleString('es-CL') + ')' +
           (detalleTexto ? '<br>' + Componentes.escaparHtml(detalleTexto) : '') +
@@ -8995,6 +9187,456 @@ var Iconos = (function () {
 })();
 
 </script>
+  <script>
+/**
+ * novedades.js — modulo Novedades (v6.5).
+ *
+ * Feed compartido por las dos vias de acceso (plataforma.js con token y
+ * app.js con login Google), igual que dashboard.js/detalle.js: un solo
+ * archivo, sin duplicar logica entre los dos hosts.
+ *
+ * DECISION DE DISEÑO (viene del backend, ver Novedades.gs): el area es
+ * ETIQUETA, no audiencia. SIGSO no modela a que area pertenece cada
+ * persona, asi que TODO lo publicado aparece para TODOS -- el area sirve
+ * para filtrar, no para restringir. Por eso ninguna tarjeta se oculta ni se
+ * "destaca como tuya": todas se ven igual, el filtro de area es una
+ * eleccion del lector, no del sistema.
+ */
+(function () {
+  window.SigsoNovedades = { cargar: cargarNovedades_, actualizarBadge: actualizarBadgeStandalone_ };
+
+  var ultimoFeed_ = [];
+  var filtroTipo_ = '';
+  var puedePublicar_ = false;
+  var areasPropias_ = [];
+  var tiposCatalogo_ = [];
+  var puedeGeneral_ = false;
+
+  function urlBackoffice_() {
+    return (window.SIGSO_CONFIG || {}).BACKOFFICE_URL;
+  }
+  function api_(accion, datos) {
+    return llamarApi(urlBackoffice_(), accion, datos || {});
+  }
+
+  // "hace 2 días" en vez de una fecha ISO pelada -- mas facil de escanear en
+  // un feed que se recorre rapido.
+  function relativo_(iso) {
+    if (!iso) return '';
+    var ms = Date.now() - new Date(iso).getTime();
+    var dias = Math.floor(ms / 86400000);
+    if (dias <= 0) return 'Hoy';
+    if (dias === 1) return 'Ayer';
+    if (dias < 7) return 'Hace ' + dias + ' días';
+    if (dias < 31) return 'Hace ' + Math.floor(dias / 7) + ' semana(s)';
+    return new Date(iso).toLocaleDateString('es-CL');
+  }
+
+  // Cuenta atras a la fecha de vigencia (leyes/normativas): es el
+  // diferenciador del modulo -- convierte "hay una ley nueva" (pasado) en
+  // "esto rige en 12 dias" (accionable, con urgencia creciente).
+  function chipVigencia_(fechaVigencia) {
+    if (!fechaVigencia) return '';
+    var dias = Math.ceil((new Date(fechaVigencia).getTime() - Date.now()) / 86400000);
+    var variante = dias <= 0 ? 'critico' : (dias <= 7 ? 'alerta' : 'info');
+    var texto = dias > 0
+      ? 'Entra en vigencia en ' + dias + ' día(s)'
+      : (dias === 0 ? 'Entra en vigencia hoy' : 'Vigente desde hace ' + (-dias) + ' día(s)');
+    return '<span class="sigso-situacion sigso-situacion--' + variante + '">' +
+      Iconos.svg('calendario', { tam: 12 }) + ' ' + Componentes.escaparHtml(texto) + '</span>';
+  }
+
+  function tarjeta_(n) {
+    var avatar = window.SigsoPerfil
+      ? SigsoPerfil.avatarDe(n.autor_nombre, n.autor_email, { tam: 'sm' })
+      : '';
+    return '<article class="sigso-novedad-card' + (n.leida ? '' : ' sigso-novedad-card--no-leida') +
+      '" data-novedad="' + n.novedad_id + '" tabindex="0" role="button" ' +
+      'aria-label="Abrir: ' + Componentes.escaparHtml(n.titulo) + '">' +
+      '<div class="sigso-novedad-card__franja sigso-novedad-card__franja--' + n.tipo_color + '"></div>' +
+      '<div class="sigso-novedad-card__cuerpo">' +
+        '<div class="sigso-novedad-card__meta-top">' +
+          '<span class="sigso-badge sigso-badge--' + n.tipo_color + '">' + Componentes.escaparHtml(n.tipo_etiqueta) + '</span>' +
+          (n.area_nombre ? '<span class="sigso-novedad-card__area">' + Componentes.escaparHtml(n.area_nombre) + '</span>' : '<span class="sigso-novedad-card__area">General</span>') +
+          (n.tiene_adjunto ? '<span title="Tiene adjunto">' + Iconos.svg('adjunto', { tam: 13 }) + '</span>' : '') +
+          (!n.leida && n.requiere_acuse ? '<span class="sigso-punto-no-leido" aria-hidden="true"></span>' : '') +
+        '</div>' +
+        '<h3 class="sigso-novedad-card__titulo">' + Componentes.escaparHtml(n.titulo) + '</h3>' +
+        '<p class="sigso-novedad-card__resumen">' + Componentes.escaparHtml(n.resumen) + '</p>' +
+        chipVigencia_(n.fecha_vigencia) +
+        '<div class="sigso-novedad-card__meta-bottom">' +
+          avatar +
+          '<span>' + Componentes.escaparHtml(n.autor_nombre) + '</span>' +
+          '<span aria-hidden="true">·</span>' +
+          '<span>' + relativo_(n.fecha_publicacion) + '</span>' +
+          (n.requiere_acuse
+            ? (n.leida
+                ? '<span class="sigso-novedad-card__leida">' + Iconos.svg('check', { tam: 13 }) + ' Enterado</span>'
+                : '<span class="sigso-novedad-card__pendiente">Requiere acuse</span>')
+            : '') +
+        '</div>' +
+      '</div>' +
+    '</article>';
+  }
+
+  function renderChipsTipo_(cont) {
+    var chips = [{ tipo: '', etiqueta: 'Todas' }].concat(
+      tiposCatalogo_.map(function (t) { return { tipo: t.tipo, etiqueta: t.etiqueta }; })
+    );
+    cont.innerHTML = chips.map(function (c) {
+      var activo = c.tipo === filtroTipo_ ? ' sigso-chip--activo' : '';
+      return '<button type="button" class="sigso-chip' + activo + '" data-chip-tipo="' + c.tipo + '">' +
+        Componentes.escaparHtml(c.etiqueta) + '</button>';
+    }).join('');
+    cont.querySelectorAll('[data-chip-tipo]').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        filtroTipo_ = chip.getAttribute('data-chip-tipo');
+        cargarFeed_();
+      });
+    });
+  }
+
+  function renderFeed_(datos) {
+    var cont = document.getElementById('novedades-contenido');
+    if (!cont) return;
+    ultimoFeed_ = datos.recientes;
+
+    var correos = datos.recientes.map(function (n) { return n.autor_email; });
+    var pintarConAvatares = function () {
+      cont.querySelector('.sigso-novedades__lista').innerHTML = datos.recientes.length
+        ? datos.recientes.map(tarjeta_).join('')
+        : Componentes.vacio({
+            icono: 'campana',
+            texto: 'Todavía no hay novedades' + (filtroTipo_ ? ' de este tipo' : '') + '.',
+            detalle: puedePublicar_ ? 'Publica la primera con el botón de arriba.' : 'Vuelve pronto: cada área va a ir sumando lo suyo.'
+          });
+      cont.querySelectorAll('[data-novedad]').forEach(function (card) {
+        card.addEventListener('click', function () { abrirDetalle_(card.getAttribute('data-novedad')); });
+        card.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); card.click(); }
+        });
+      });
+    };
+
+    if (window.SigsoPerfil) {
+      SigsoPerfil.precargarFotos(correos).then(pintarConAvatares);
+    } else {
+      pintarConAvatares();
+    }
+  }
+
+  // Actualiza CUALQUIER badge de "novedades" presente en la pagina --
+  // funciona igual en el nav de plataforma.js (que ya genera
+  // [data-badge="novedades"] para todo modulo, ver renderNav_) y en el
+  // boton de app.html (Backoffice con login Google), sin que ninguno de los
+  // dos hosts tenga que conocer al otro.
+  function actualizarBadge_(pendientes) {
+    document.querySelectorAll('[data-badge="novedades"]').forEach(function (badge) {
+      badge.textContent = pendientes > 99 ? '99+' : String(pendientes);
+      badge.classList.toggle('sigso-oculto', !pendientes);
+    });
+  }
+
+  /**
+   * Se llama desde Home (o desde donde convenga) para que el badge de
+   * pendientes aparezca SIN que el usuario haya entrado todavia al modulo --
+   * mismo criterio que "pendientes_validar" de Mis solicitudes. No toca el
+   * DOM del feed (que puede no existir todavia).
+   */
+  function actualizarBadgeStandalone_() {
+    api_('getFeedNovedades', {}).then(function (respuesta) {
+      if (respuesta && respuesta.ok) actualizarBadge_(respuesta.data.resumen.pendientes);
+    }).catch(function () { /* sin badge si falla: no es critico */ });
+  }
+
+  function cargarFeed_() {
+    var cont = document.getElementById('novedades-contenido');
+    if (!cont) return;
+    var lista = cont.querySelector('.sigso-novedades__lista');
+    if (lista) lista.innerHTML = Componentes.cargando('Cargando novedades...');
+
+    api_('getFeedNovedades', { tipo: filtroTipo_ }).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        if (lista) lista.innerHTML = Componentes.alerta(
+          (respuesta && respuesta.message) || 'No se pudieron cargar las novedades.', 'error'
+        );
+        return;
+      }
+      renderFeed_(respuesta.data);
+      actualizarBadge_(respuesta.data.resumen.pendientes);
+    }).catch(function () {
+      if (lista) lista.innerHTML = Componentes.alerta('No se pudo conectar para cargar las novedades.', 'error');
+    });
+  }
+
+  /**
+   * Punto de entrada, llamado por plataforma.js (mostrarModulo_) y por
+   * app.js al mostrar la seccion. Idempotente: puede llamarse cada vez que
+   * se entra al modulo sin duplicar listeners (el markup se reemplaza
+   * completo en cada carga).
+   */
+  function cargarNovedades_() {
+    var cont = document.getElementById('novedades-contenido');
+    if (!cont) return;
+
+    cont.innerHTML =
+      '<div class="sigso-novedades__cabecera">' +
+        '<div class="sigso-novedades__chips" id="novedades-chips-tipo"></div>' +
+        '<button type="button" class="sigso-boton sigso-boton--con-icono sigso-oculto" id="btn-publicar-novedad">' +
+          Iconos.svg('mas', { tam: 15 }) + 'Publicar' +
+        '</button>' +
+      '</div>' +
+      '<div class="sigso-novedades__lista">' + Componentes.cargando('Cargando novedades...') + '</div>';
+
+    api_('listarAreasPublicablesNovedad', {}).then(function (respuesta) {
+      if (respuesta && respuesta.ok) {
+        areasPropias_ = respuesta.data.areas;
+        tiposCatalogo_ = respuesta.data.tipos;
+        puedeGeneral_ = respuesta.data.puede_general;
+        puedePublicar_ = areasPropias_.length > 0 || puedeGeneral_;
+        var btn = document.getElementById('btn-publicar-novedad');
+        if (btn && puedePublicar_) {
+          btn.classList.remove('sigso-oculto');
+          btn.addEventListener('click', abrirFormularioPublicar_);
+        }
+      }
+      renderChipsTipo_(document.getElementById('novedades-chips-tipo'));
+      cargarFeed_();
+    }).catch(function () {
+      renderChipsTipo_(document.getElementById('novedades-chips-tipo'));
+      cargarFeed_();
+    });
+  }
+
+  // --- Detalle + acuse ------------------------------------------------------
+
+  function abrirDetalle_(novedadId) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<div class="js-detalle-cuerpo">' + Componentes.cargando('Cargando...') + '</div>' +
+      '</div>';
+    function cerrar() {
+      document.removeEventListener('keydown', alTeclado);
+      if (fondo.parentNode) fondo.parentNode.removeChild(fondo);
+    }
+    function alTeclado(ev) { if (ev.key === 'Escape') cerrar(); }
+    fondo.addEventListener('click', function (ev) { if (ev.target === fondo) cerrar(); });
+    document.addEventListener('keydown', alTeclado);
+    document.body.appendChild(fondo);
+
+    api_('getDetalleNovedad', { novedad_id: novedadId }).then(function (respuesta) {
+      var cuerpo = fondo.querySelector('.js-detalle-cuerpo');
+      if (!respuesta || !respuesta.ok) {
+        cuerpo.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar.', 'error');
+        return;
+      }
+      renderDetalle_(cuerpo, respuesta.data, cerrar);
+    }).catch(function () {
+      fondo.querySelector('.js-detalle-cuerpo').innerHTML =
+        Componentes.alerta('No se pudo conectar.', 'error');
+    });
+  }
+
+  function renderDetalle_(cuerpo, n, cerrar) {
+    var avatar = window.SigsoPerfil
+      ? SigsoPerfil.avatarDe(n.autor_nombre, n.autor_email, { tam: 'md' })
+      : '';
+    cuerpo.innerHTML =
+      '<div class="sigso-novedad-detalle">' +
+        '<div class="sigso-novedad-card__meta-top">' +
+          '<span class="sigso-badge sigso-badge--' + n.tipo_color + '">' + Componentes.escaparHtml(n.tipo_etiqueta) + '</span>' +
+          (n.area_nombre ? '<span class="sigso-novedad-card__area">' + Componentes.escaparHtml(n.area_nombre) + '</span>' : '<span class="sigso-novedad-card__area">General</span>') +
+        '</div>' +
+        '<h2 class="sigso-novedad-detalle__titulo">' + Componentes.escaparHtml(n.titulo) + '</h2>' +
+        chipVigencia_(n.fecha_vigencia) +
+        '<div class="sigso-novedad-detalle__autor">' + avatar +
+          '<div><strong>' + Componentes.escaparHtml(n.autor_nombre) + '</strong>' +
+          '<div class="sigso-ayuda">' + relativo_(n.fecha_publicacion) + '</div></div>' +
+        '</div>' +
+        '<div class="sigso-novedad-detalle__cuerpo">' + Componentes.escaparHtml(n.cuerpo || n.resumen).replace(/\n/g, '<br>') + '</div>' +
+        (n.tiene_adjunto
+          ? Componentes.boton({ texto: 'Descargar adjunto', icono: 'descargar', variante: 'secundario', clase: 'js-descargar-adjunto' })
+          : '') +
+        '<div class="sigso-novedad-detalle__acciones">' +
+          (n.requiere_acuse && !n.leida
+            ? Componentes.boton({ texto: 'Enterado', icono: 'check', clase: 'js-marcar-leida' })
+            : (n.requiere_acuse
+                ? '<span class="sigso-novedad-card__leida">' + Iconos.svg('check', { tam: 14 }) + ' Ya diste acuse de esta novedad</span>'
+                : '')) +
+          (n.puede_gestionar
+            ? Componentes.boton({ texto: 'Retirar', variante: 'sutil', clase: 'sigso-boton--destructivo-sutil js-retirar-novedad' })
+            : '') +
+        '</div>' +
+      '</div>';
+
+    var btnLeida = cuerpo.querySelector('.js-marcar-leida');
+    if (btnLeida) {
+      btnLeida.addEventListener('click', function () {
+        btnLeida.disabled = true;
+        btnLeida.innerHTML = '<span class="sigso-spinner"></span>Guardando...';
+        api_('marcarLeidaNovedad', { novedad_id: n.novedad_id }).then(function (respuesta) {
+          if (!respuesta || !respuesta.ok) {
+            Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo registrar el acuse.', tipo: 'error' });
+            btnLeida.disabled = false;
+            btnLeida.innerHTML = Iconos.svg('check', { tam: 15 }) + 'Enterado';
+            return;
+          }
+          Componentes.aviso({ texto: 'Acuse registrado.', tipo: 'exito' });
+          cerrar();
+          cargarFeed_();
+        }).catch(function () {
+          Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
+          btnLeida.disabled = false;
+          btnLeida.innerHTML = Iconos.svg('check', { tam: 15 }) + 'Enterado';
+        });
+      });
+    }
+
+    var btnAdjunto = cuerpo.querySelector('.js-descargar-adjunto');
+    if (btnAdjunto) {
+      btnAdjunto.addEventListener('click', function () {
+        api_('descargarAdjuntoNovedad', { novedad_id: n.novedad_id }).then(function (respuesta) {
+          if (!respuesta || !respuesta.ok) {
+            Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo descargar el adjunto.', tipo: 'error' });
+            return;
+          }
+          descargarBase64_(respuesta.data.contenido_base64, respuesta.data.nombre_archivo, respuesta.data.mime);
+        });
+      });
+    }
+
+    var btnRetirar = cuerpo.querySelector('.js-retirar-novedad');
+    if (btnRetirar) {
+      btnRetirar.addEventListener('click', function () {
+        Componentes.confirmar({
+          titulo: 'Retirar esta novedad',
+          mensaje: 'Dejará de verse en el feed. No se puede deshacer desde aquí.',
+          confirmar: 'Retirar', peligro: true
+        }).then(function (confirmado) {
+          if (!confirmado) return;
+          api_('despublicarNovedad', { novedad_id: n.novedad_id }).then(function (respuesta) {
+            if (!respuesta || !respuesta.ok) {
+              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo retirar.', tipo: 'error' });
+              return;
+            }
+            Componentes.aviso({ texto: 'Novedad retirada.', tipo: 'exito' });
+            cerrar();
+            cargarFeed_();
+          });
+        });
+      });
+    }
+  }
+
+  function descargarBase64_(base64, nombre, mime) {
+    var bytes = atob(base64);
+    var arr = new Uint8Array(bytes.length);
+    for (var i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    var blob = new Blob([arr], { type: mime || 'application/pdf' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = nombre || 'adjunto.pdf';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+
+  // --- Publicar --------------------------------------------------------------
+
+  function abrirFormularioPublicar_() {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    var opcionesArea = (puedeGeneral_ ? ['<option value="">General (todos)</option>'] : [])
+      .concat(areasPropias_.map(function (a) {
+        return '<option value="' + Componentes.escaparHtml(a.area_id) + '">' + Componentes.escaparHtml(a.nombre) + '</option>';
+      })).join('');
+
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Publicar novedad</h3>' +
+        '<form id="form-publicar-novedad" class="sigso-novedad-form">' +
+          '<div class="sigso-campo"><label>Tipo</label><select id="np-tipo" required>' +
+            tiposCatalogo_.map(function (t) {
+              return '<option value="' + t.tipo + '">' + Componentes.escaparHtml(t.etiqueta) + '</option>';
+            }).join('') +
+          '</select></div>' +
+          '<div class="sigso-campo"><label>Área</label><select id="np-area">' + opcionesArea + '</select></div>' +
+          '<div class="sigso-campo"><label>Título</label><input type="text" id="np-titulo" maxlength="140" required></div>' +
+          '<div class="sigso-campo"><label>Resumen (1-2 líneas)</label><textarea id="np-resumen" rows="2" maxlength="240" required></textarea></div>' +
+          '<div class="sigso-campo"><label>Detalle completo</label><textarea id="np-cuerpo" rows="6"></textarea></div>' +
+          '<div class="sigso-campo"><label>Entra en vigencia (opcional)</label><input type="date" id="np-vigencia"></div>' +
+          '<div class="sigso-campo"><label>Adjunto PDF (opcional)</label><input type="file" id="np-archivo" accept="application/pdf"></div>' +
+          '<label class="sigso-campo-check"><input type="checkbox" id="np-requiere-acuse" checked> Exigir acuse de lectura ("Enterado")</label>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-cancelar-publicar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Publicar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+
+    function cerrar() {
+      document.removeEventListener('keydown', alTeclado);
+      if (fondo.parentNode) fondo.parentNode.removeChild(fondo);
+    }
+    function alTeclado(ev) { if (ev.key === 'Escape') cerrar(); }
+    fondo.addEventListener('click', function (ev) { if (ev.target === fondo) cerrar(); });
+    document.addEventListener('keydown', alTeclado);
+    document.body.appendChild(fondo);
+
+    fondo.querySelector('.js-cancelar-publicar').addEventListener('click', cerrar);
+
+    var form = document.getElementById('form-publicar-novedad');
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var botonSubmit = form.querySelector('button[type="submit"]');
+      var archivo = document.getElementById('np-archivo').files[0];
+
+      function enviar(contenidoBase64, nombreArchivo) {
+        botonSubmit.disabled = true;
+        botonSubmit.textContent = 'Publicando...';
+        api_('publicarNovedad', {
+          tipo: document.getElementById('np-tipo').value,
+          area_id: document.getElementById('np-area').value,
+          titulo: document.getElementById('np-titulo').value,
+          resumen: document.getElementById('np-resumen').value,
+          cuerpo: document.getElementById('np-cuerpo').value,
+          fecha_vigencia: document.getElementById('np-vigencia').value,
+          requiere_acuse: document.getElementById('np-requiere-acuse').checked,
+          contenido_base64: contenidoBase64,
+          nombre_archivo: nombreArchivo
+        }).then(function (respuesta) {
+          if (!respuesta || !respuesta.ok) {
+            Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo publicar.', tipo: 'error' });
+            botonSubmit.disabled = false;
+            botonSubmit.textContent = 'Publicar';
+            return;
+          }
+          Componentes.aviso({ texto: 'Novedad publicada.', tipo: 'exito' });
+          cerrar();
+          cargarFeed_();
+        }).catch(function () {
+          Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
+          botonSubmit.disabled = false;
+          botonSubmit.textContent = 'Publicar';
+        });
+      }
+
+      if (archivo) {
+        var lector = new FileReader();
+        lector.onload = function () {
+          var base64 = lector.result.slice(lector.result.indexOf(',') + 1);
+          enviar(base64, archivo.name);
+        };
+        lector.readAsDataURL(archivo);
+      } else {
+        enviar(null, null);
+      }
+    });
+  }
+})();
+
+</script>
   <!-- v6.4: panel "Mi perfil" + identidad en el header. -->
   <script>
 /**
@@ -9021,10 +9663,41 @@ var Iconos = (function () {
   var MAX_BYTES = 5 * 1024 * 1024;
   var TIPOS_OK = ['image/jpeg', 'image/png', 'image/webp'];
 
-  // Cache en memoria de correo -> miniatura, para que una lista de
-  // comentarios no dispare una llamada por autor.
-  var fotosPorCorreo_ = {};
+  // Cache de correo -> miniatura, para que una lista de comentarios no
+  // dispare una llamada por autor.
+  //
+  // v6.4 (rendimiento): ademas de memoria, se persiste en sessionStorage.
+  // Sin esto, app.html y admin.html son cargas de pagina separadas y volvian
+  // a pedir las MISMAS fotos en cada navegacion. Se guarda con marca de
+  // tiempo y un techo de 10 minutos para que un cambio de foto se vea sin
+  // tener que cerrar la pestana.
+  var LLAVE_CACHE_FOTOS = 'sigso_fotos_perfil';
+  var MS_VIGENCIA_CACHE = 10 * 60 * 1000;
+  var fotosPorCorreo_ = leerCachePersistido_();
   var perfilActual_ = null;
+
+  function leerCachePersistido_() {
+    try {
+      var crudo = sessionStorage.getItem(LLAVE_CACHE_FOTOS);
+      if (!crudo) return {};
+      var guardado = JSON.parse(crudo);
+      if (!guardado || (Date.now() - guardado.ts) > MS_VIGENCIA_CACHE) return {};
+      return guardado.fotos || {};
+    } catch (err) {
+      return {};   // sin storage (modo privado) o JSON corrupto: sin cache
+    }
+  }
+
+  function persistirCache_() {
+    try {
+      sessionStorage.setItem(
+        LLAVE_CACHE_FOTOS, JSON.stringify({ ts: Date.now(), fotos: fotosPorCorreo_ })
+      );
+    } catch (err) {
+      // Cuota de sessionStorage llena (muchas miniaturas): el cache en
+      // memoria sigue funcionando, solo no sobrevive a la navegacion.
+    }
+  }
 
   function urlBackoffice_() {
     var cfg = window.SIGSO_CONFIG || {};
@@ -9418,8 +10091,10 @@ var Iconos = (function () {
 
     var correo = String(perfil.email || '').trim().toLowerCase();
     if (correo) {
-      if (nuevaFoto) fotosPorCorreo_[correo] = nuevaFoto;
-      else delete fotosPorCorreo_[correo];
+      // null y no delete: "ya sabemos que no tiene foto". Con delete se
+      // volveria a preguntar al backend por este correo en el proximo render.
+      fotosPorCorreo_[correo] = nuevaFoto || null;
+      persistirCache_();
     }
 
     renderVista_(cuerpo, perfil);
@@ -9454,6 +10129,7 @@ var Iconos = (function () {
         // preguntar por el mismo correo en cada render.
         fotosPorCorreo_[correo] = fotos[correo] || null;
       });
+      persistirCache_();
       return fotosPorCorreo_;
     }).catch(function () {
       // Sin fotos se ven las iniciales: no es motivo para romper la vista.
@@ -9488,8 +10164,13 @@ var Iconos = (function () {
       var perfil = respuesta.data;
       perfilActual_ = perfil;
 
+      // La foto propia entra al cache compartido: los avatares del propio
+      // usuario en comentarios/actividad salen de aqui sin pedir nada.
       var correo = String(perfil.email || '').trim().toLowerCase();
-      if (correo) fotosPorCorreo_[correo] = perfil.foto_thumb || null;
+      if (correo) {
+        fotosPorCorreo_[correo] = perfil.foto_thumb || null;
+        persistirCache_();
+      }
 
       function pintar() {
         hueco.innerHTML =
@@ -9565,10 +10246,17 @@ var Iconos = (function () {
     document.getElementById('btn-actualizar-jefatura').addEventListener('click', function () {
       SigsoJefatura.cargar();
     });
+
+    // v6.5: Novedades es CORE -- visible para todos, sin gate de rol.
+    document.getElementById('btn-ver-novedades').addEventListener('click', mostrarNovedades_);
+    document.getElementById('btn-volver-dashboard-novedades').addEventListener('click', mostrarDashboard_);
+    if (window.SigsoNovedades) {
+      SigsoNovedades.actualizarBadge();
+    }
   });
 
   function ocultarTodasLasVistas_() {
-    ['vista-dashboard', 'vista-detalle', 'vista-gerencia', 'vista-jefatura'].forEach(function (id) {
+    ['vista-dashboard', 'vista-detalle', 'vista-gerencia', 'vista-jefatura', 'vista-novedades'].forEach(function (id) {
       document.getElementById(id).classList.add('sigso-oculto');
     });
   }
@@ -9596,6 +10284,12 @@ var Iconos = (function () {
     ocultarTodasLasVistas_();
     document.getElementById('vista-jefatura').classList.remove('sigso-oculto');
     SigsoJefatura.cargar();
+  }
+
+  function mostrarNovedades_() {
+    ocultarTodasLasVistas_();
+    document.getElementById('vista-novedades').classList.remove('sigso-oculto');
+    if (window.SigsoNovedades) SigsoNovedades.cargar();
   }
 })();
 

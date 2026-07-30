@@ -43,7 +43,12 @@
     pausas: { icono: 'reloj', nombre: 'Pausas activas', descripcion: 'Registra tu participación en la pausa de hoy', interno: true },
     // v6.0 Fase P3: la coordinadora (prevencionista) opera la pausa del dia y
     // ve sus reportes de cumplimiento (coordinacion.js).
-    pausas_coordinacion: { icono: 'grafico', nombre: 'Coordinación de pausas', descripcion: 'Opera la pausa del día y ve el cumplimiento', interno: true }
+    pausas_coordinacion: { icono: 'grafico', nombre: 'Coordinación de pausas', descripcion: 'Opera la pausa del día y ve el cumplimiento', interno: true },
+    // v6.5: Novedades es un modulo CORE, no asignable por cuenta (ver
+    // modulosDeLaCuenta_) -- igual que "Mi perfil", disponible para
+    // cualquiera con sesion, sin que un Admin tenga que activarlo cuenta por
+    // cuenta.
+    novedades: { icono: 'campana', nombre: 'Novedades', descripcion: 'Leyes, avisos y novedades de todas las áreas', interno: true }
   };
 
   // v4.0 Frente 3: cada modulo tiene su propio acento -- antes todo el shell
@@ -58,7 +63,8 @@
     jefatura: { acento: 'var(--alerta)', suave: 'var(--alerta-suave)' },
     administracion: { acento: 'var(--texto-2)', suave: 'var(--superficie-2)' },
     pausas: { acento: 'var(--info)', suave: 'var(--info-suave)' },
-    pausas_coordinacion: { acento: 'var(--alerta)', suave: 'var(--alerta-suave)' }
+    pausas_coordinacion: { acento: 'var(--alerta)', suave: 'var(--alerta-suave)' },
+    novedades: { acento: 'var(--primario)', suave: 'var(--primario-suave)' }
   };
 
   function acentoInline_(id) {
@@ -494,6 +500,18 @@
     if (!window.SigsoPerfil) return;
     var correo = (sesion.cuenta && (sesion.cuenta.emails || [])[0]) || '';
     if (!correo) return;
+
+    // v6.4 (rendimiento): si la foto ya esta en el cache (persistido entre
+    // navegaciones), se pinta de inmediato y NO se hace ninguna llamada.
+    // Antes esto disparaba siempre una peticion que, del lado del servidor,
+    // obligaba a leer la hoja PERFILES entera solo para traer UNA foto.
+    var enCache = SigsoPerfil.fotoDe(correo);
+    if (enCache) {
+      fotoPerfilPropia_ = enCache;
+      renderIdentidad_();
+      return;
+    }
+
     SigsoPerfil.precargarFotos([correo]).then(function () {
       fotoPerfilPropia_ = SigsoPerfil.fotoDe(correo);
       if (fotoPerfilPropia_) renderIdentidad_();
@@ -847,7 +865,12 @@
   }
 
   function modulosDeLaCuenta_() {
-    return (sesion.cuenta.modulos || []).filter(function (m) { return MODULOS_SHELL[m]; });
+    var propios = (sesion.cuenta.modulos || []).filter(function (m) { return MODULOS_SHELL[m]; });
+    // v6.5: "novedades" es core -- se agrega siempre, aunque la cuenta no lo
+    // tenga en su lista asignada. Justo despues de home (primera posicion
+    // entre los internos) porque es lo que se quiere que se vea primero.
+    if (propios.indexOf('novedades') === -1) propios = ['novedades'].concat(propios);
+    return propios;
   }
 
   function urlExterna_(def) {
@@ -929,6 +952,12 @@
         mostrarModulo_(card.getAttribute('data-modulo'));
       });
     });
+
+    // v6.5: badge de novedades pendientes, en segundo plano, sin esperar a
+    // que se entre al modulo -- mismo criterio que "pendientes_validar".
+    if (window.SigsoNovedades) {
+      window.SigsoNovedades.actualizarBadge();
+    }
 
     // "Requieren tu accion" del inicio: se pide el resumen una vez, en
     // segundo plano -- si falla, el inicio funciona igual (sin el aviso).
@@ -1133,6 +1162,9 @@
     }
     if (id === 'pausas_coordinacion' && window.SigsoCoordinacion) {
       window.SigsoCoordinacion.cargar();
+    }
+    if (id === 'novedades' && window.SigsoNovedades) {
+      window.SigsoNovedades.cargar();
     }
     window.scrollTo(0, 0);
   }

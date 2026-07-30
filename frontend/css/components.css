@@ -2368,3 +2368,154 @@
   min-width: 0;
 }
 .sigso-timeline__autor .sigso-avatar { flex: none; }
+
+/* === v6.5: modulo Novedades ============================================= */
+
+/* Colores de tipo/vigencia reusan los tokens semanticos (--critico/--alerta/
+   --info/--ok), no colores nuevos -- mismo criterio que el chip de
+   situacion SLA de la Bandeja. */
+.sigso-badge--critico { background: var(--critico); }
+.sigso-badge--alerta { background: var(--alerta); }
+.sigso-badge--info { background: var(--info); }
+.sigso-badge--ok { background: var(--ok); }
+
+.sigso-novedades__cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--esp-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--esp-4);
+}
+
+.sigso-novedades__chips {
+  display: flex;
+  gap: var(--esp-2);
+  flex-wrap: wrap;
+}
+
+.sigso-novedades__lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-3);
+}
+
+/* Tarjeta: franja de color a la izquierda (tipo) + cuerpo. El punto indigo
+   de "no leida" es la senal minima -- nada de fondos llamativos, para que el
+   feed siga siendo legible aunque tenga varias sin leer. */
+.sigso-novedad-card {
+  display: flex;
+  width: 100%;
+  text-align: left;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow var(--mov-rapido), border-color var(--mov-rapido);
+}
+.sigso-novedad-card:hover,
+.sigso-novedad-card:focus-visible {
+  border-color: var(--borde-fuerte);
+  box-shadow: var(--sombra-1);
+  outline: none;
+}
+.sigso-novedad-card:focus-visible { outline: 2px solid var(--primario); outline-offset: -2px; }
+
+.sigso-novedad-card__franja { width: 4px; flex: none; }
+.sigso-novedad-card__franja--critico { background: var(--critico); }
+.sigso-novedad-card__franja--alerta { background: var(--alerta); }
+.sigso-novedad-card__franja--info { background: var(--info); }
+.sigso-novedad-card__franja--ok { background: var(--ok); }
+
+.sigso-novedad-card__cuerpo {
+  flex: 1;
+  min-width: 0;
+  padding: var(--esp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-2);
+}
+
+.sigso-novedad-card__meta-top {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  flex-wrap: wrap;
+}
+
+.sigso-novedad-card__area {
+  font-size: var(--texto-xs);
+  color: var(--texto-3);
+  background: var(--superficie-2);
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radio-full);
+}
+
+.sigso-punto-no-leido {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--primario);
+  flex: none;
+  margin-left: auto;
+}
+
+.sigso-novedad-card__titulo {
+  margin: 0;
+  font-size: var(--texto-lg);
+  color: var(--texto);
+}
+
+.sigso-novedad-card__resumen {
+  margin: 0;
+  color: var(--texto-2);
+  font: var(--t-body);
+}
+
+.sigso-novedad-card__meta-bottom {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  margin-top: var(--esp-1);
+  color: var(--texto-3);
+  font-size: var(--texto-xs);
+}
+
+.sigso-novedad-card__leida { color: var(--ok); display: inline-flex; align-items: center; gap: 0.25rem; }
+.sigso-novedad-card__pendiente {
+  color: var(--alerta);
+  font-weight: 600;
+  margin-left: auto;
+}
+
+/* Tarjetas sin leer se distinguen por el titulo con mas peso -- sutil, no
+   un fondo de color que compita con el resto del feed. */
+.sigso-novedad-card--no-leida .sigso-novedad-card__titulo { font-weight: 700; }
+
+/* --- Detalle (modal) ----------------------------------------------------- */
+.sigso-novedad-detalle__titulo { margin: var(--esp-2) 0; color: var(--texto); }
+.sigso-novedad-detalle__autor {
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  margin: var(--esp-3) 0;
+}
+.sigso-novedad-detalle__cuerpo {
+  color: var(--texto);
+  font: var(--t-body);
+  line-height: 1.6;
+  margin: var(--esp-3) 0;
+  white-space: pre-wrap;
+}
+.sigso-novedad-detalle__acciones {
+  display: flex;
+  gap: var(--esp-2);
+  flex-wrap: wrap;
+  margin-top: var(--esp-4);
+  padding-top: var(--esp-3);
+  border-top: 1px solid var(--borde);
+}
+
+/* --- Formulario de publicar ------------------------------------------------ */
+.sigso-novedad-form { display: flex; flex-direction: column; gap: var(--esp-3); max-height: 60vh; overflow-y: auto; }
+.sigso-campo-check { display: flex; align-items: center; gap: var(--esp-2); font: var(--t-body); color: var(--texto); }

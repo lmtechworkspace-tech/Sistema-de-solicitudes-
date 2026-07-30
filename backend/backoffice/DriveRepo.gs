@@ -43,3 +43,12 @@ function obtenerCarpetaAdjuntos_(solicitud) {
 function obtenerCarpetaPerfiles_() {
   return obtenerOCrearSubcarpeta_(obtenerCarpetaRaiz_(), 'SIGSO_Perfiles');
 }
+
+// v6.5 (modulo Novedades): adjuntos de las novedades (ej. el PDF de una
+// ley). Privada como el resto -- a diferencia de la foto de perfil, aqui SI
+// hace falta que cualquier lector autenticado pueda bajar el archivo, pero
+// eso se resuelve por una accion de backend que sirve el base64 (Novedades.
+// descargarAdjunto), nunca haciendo publica la carpeta.
+function obtenerCarpetaNovedades_() {
+  return obtenerOCrearSubcarpeta_(obtenerCarpetaRaiz_(), 'SIGSO_Novedades');
+}

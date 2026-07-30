@@ -43,6 +43,10 @@ var Iconos = (function () {
     // v6.4: subir/cambiar la foto de perfil. Distinta de `imagen` (que
     // representa un archivo ya adjunto): esta es la accion de capturar.
     camara: '<path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>',
+    // v6.5: modulo Novedades -- campana de "algo nuevo que atender", el
+    // icono universal para esta idea (distinto de `alerta`, que es un
+    // triangulo de advertencia puntual).
+    campana: '<path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
     documento: '<path d="M14 2H7a2 2 0 00-2 2v16a2 2 0 002 2h10a2 2 0 002-2V7z"/><path d="M14 2v5h5"/>',
 
     // Acciones e interfaz

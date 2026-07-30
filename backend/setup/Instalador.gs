@@ -179,7 +179,17 @@ var ESQUEMA_HOJAS = {
   PERFILES: [
     'perfil_id', 'identidad_tipo', 'identidad_clave',
     'foto_file_id', 'foto_thumb', 'foto_mime', 'actualizado_en'
-  ]
+  ],
+  // v6.5 (modulo Novedades). Ver la nota identica en
+  // backend/backoffice/Constantes.gs.
+  NOVEDADES: [
+    'novedad_id', 'tipo', 'titulo', 'resumen', 'cuerpo',
+    'area_id', 'area_nombre', 'autor_email', 'autor_nombre',
+    'requiere_acuse', 'fecha_vigencia',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'fecha_publicacion', 'activa'
+  ],
+  NOVEDADES_LECTURAS: ['lectura_id', 'novedad_id', 'usuario_email', 'leido_en']
 };
 
 // SLA por prioridad en horas habiles (§7.2). P5 no tiene SLA.

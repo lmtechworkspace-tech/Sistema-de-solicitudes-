@@ -109,6 +109,8 @@ function construirContexto() {
   // inicial de todo el mundo.
   seedSheet(ctx, 'PERFILES', ctx.COLUMNAS.PERFILES);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
+  seedSheet(ctx, 'NOVEDADES', ctx.COLUMNAS.NOVEDADES);
+  seedSheet(ctx, 'NOVEDADES_LECTURAS', ctx.COLUMNAS.NOVEDADES_LECTURAS);
   // v6.1 (Fase 4): DOCUMENTOS demo (las capturas ya las siembra
   // sembrarSolicitudesDemo_ mas abajo). Hacen falta para ver la lista de
   // archivos con metadata -- formato, peso y fecha --, que es justo lo que un

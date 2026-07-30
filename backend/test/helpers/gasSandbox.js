@@ -93,6 +93,8 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   'CuentasPortal.gs',
   // v6.4: foto de perfil (hoja PERFILES + originales privados en Drive).
   'Perfiles.gs',
+  // v6.5: modulo Novedades (hojas NOVEDADES + NOVEDADES_LECTURAS).
+  'Novedades.gs',
   'Triggers.gs',
   'Code.gs'
 ];
