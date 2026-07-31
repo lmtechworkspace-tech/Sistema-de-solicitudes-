@@ -77,6 +77,19 @@
       Iconos.svg('calendario', { tam: 12 }) + ' ' + Componentes.escaparHtml(texto) + '</span>';
   }
 
+  // v6.8 (Fase 6): plazo para dar el acuse -- el diferenciador de esta fase
+  // es que "vence en X días" empuje a confirmar antes de que se cumpla.
+  function chipPlazoAcuse_(n) {
+    if (!n.fecha_limite_acuse || n.dias_para_vencer === undefined || n.dias_para_vencer === null) return '';
+    var dias = n.dias_para_vencer;
+    var variante = dias < 0 ? 'critico' : (dias <= 2 ? 'alerta' : 'info');
+    var texto = dias > 0
+      ? 'Vence en ' + dias + ' día(s) para dar acuse'
+      : (dias === 0 ? 'Vence hoy para dar acuse' : 'Venció hace ' + (-dias) + ' día(s) sin acuse');
+    return '<span class="sigso-situacion sigso-situacion--' + variante + '">' +
+      Iconos.svg('reloj', { tam: 12 }) + ' ' + Componentes.escaparHtml(texto) + '</span>';
+  }
+
   function tarjeta_(n) {
     var avatar = window.SigsoPerfil
       ? SigsoPerfil.avatarDe(n.autor_nombre, n.autor_email, { tam: 'sm' })
@@ -98,6 +111,7 @@
         '<h3 class="sigso-novedad-card__titulo">' + Componentes.escaparHtml(n.titulo) + '</h3>' +
         '<p class="sigso-novedad-card__resumen">' + Componentes.escaparHtml(n.resumen) + '</p>' +
         chipVigencia_(n.fecha_vigencia) +
+        chipPlazoAcuse_(n) +
         '<div class="sigso-novedad-card__meta-bottom">' +
           avatar +
           '<span>' + Componentes.escaparHtml(n.autor_nombre) + '</span>' +
@@ -305,6 +319,9 @@
       { id: 'aprobar', etiqueta: 'Por aprobar' + (pendientesAprobar ? ' (' + pendientesAprobar + ')' : '') },
       { id: 'envios', etiqueta: 'Mis envíos' + (misEnvios ? ' (' + misEnvios + ')' : '') }
     ];
+    // v6.8 (Fase 6): "Cumplimiento" solo para ADM -- puedeGeneral_ ya es
+    // exactamente esa señal (viene de listarAreasPublicablesNovedad).
+    if (puedeGeneral_) segmentos.push({ id: 'cumplimiento', etiqueta: 'Cumplimiento' });
     cont.innerHTML = segmentos.map(function (s) {
       var activo = s.id === vista_ ? ' sigso-tabs__boton--activo' : '';
       return '<button type="button" class="sigso-tabs__boton' + activo + '" data-vista="' + s.id + '">' +
@@ -338,6 +355,7 @@
     document.getElementById('btn-publicar-novedad').classList.toggle('sigso-oculto', vista_ !== 'feed' || !puedePublicar_);
     if (vista_ === 'feed') { cargarFeed_(); return; }
     if (vista_ === 'aprobar') { cargarPendientesAprobacion_(); return; }
+    if (vista_ === 'cumplimiento') { cargarPanelCumplimiento_(); return; }
     cargarMisEnvios_();
   }
 
@@ -414,14 +432,76 @@
     });
   }
 
-  // Refresca la vista actual (feed/aprobar/envios) sin perder la pestaña en
-  // la que esta el usuario -- usado despues de aprobar/devolver/rechazar/
-  // reenviar, que pueden mover una novedad de una lista a otra.
+  // Refresca la vista actual (feed/aprobar/envios/cumplimiento) sin perder
+  // la pestaña en la que esta el usuario -- usado despues de aprobar/
+  // devolver/rechazar/reenviar, que pueden mover una novedad de una lista
+  // a otra (o cambiar sus numeros de cumplimiento).
   function recargarVistaActual_() {
     if (vista_ === 'feed') { cargarFeed_(); return; }
     if (vista_ === 'aprobar') { cargarPendientesAprobacion_(); return; }
+    if (vista_ === 'cumplimiento') { cargarPanelCumplimiento_(); renderTabs_(); return; }
     cargarMisEnvios_();
     renderTabs_();
+  }
+
+  // v6.8 (Fase 6): tarjeta del panel de cumplimiento -- el semaforo es lo
+  // primero que se ve (vencida/por vencer/al dia/cumplida), con cuantos de
+  // la audiencia real ya confirmaron. Clic abre el detalle normal (que ya
+  // trae "Ver quién leyó" para ver nombres puntuales).
+  var ESTADO_CUMPLIMIENTO_INFO = {
+    VENCIDA: { etiqueta: 'Vencida', color: 'critico' },
+    POR_VENCER: { etiqueta: 'Por vencer', color: 'alerta' },
+    AL_DIA: { etiqueta: 'Al día', color: 'info' },
+    CUMPLIDA: { etiqueta: 'Cumplida', color: 'ok' }
+  };
+
+  function textoPlazoCumplimiento_(dias) {
+    if (dias < 0) return 'Venció hace ' + (-dias) + ' día(s)';
+    if (dias === 0) return 'Vence hoy';
+    return 'Vence en ' + dias + ' día(s)';
+  }
+
+  function tarjetaCumplimiento_(item) {
+    var estadoInfo = ESTADO_CUMPLIMIENTO_INFO[item.estado_cumplimiento] || { etiqueta: item.estado_cumplimiento, color: 'info' };
+    var pct = item.total_audiencia ? Math.round((item.confirmados / item.total_audiencia) * 100) : 0;
+    return '<article class="sigso-novedad-card" data-novedad="' + item.novedad_id + '" tabindex="0" role="button" ' +
+      'aria-label="Abrir: ' + Componentes.escaparHtml(item.titulo) + '">' +
+      '<div class="sigso-novedad-card__franja sigso-novedad-card__franja--' + item.tipo_color + '"></div>' +
+      '<div class="sigso-novedad-card__cuerpo">' +
+        '<div class="sigso-novedad-card__meta-top">' +
+          '<span class="sigso-badge sigso-badge--' + item.tipo_color + '">' + Componentes.escaparHtml(item.tipo_etiqueta) + '</span>' +
+          '<span class="sigso-badge sigso-badge--' + estadoInfo.color + '">' + Componentes.escaparHtml(estadoInfo.etiqueta) + '</span>' +
+        '</div>' +
+        '<h3 class="sigso-novedad-card__titulo">' + Componentes.escaparHtml(item.titulo) + '</h3>' +
+        '<p class="sigso-ayuda">' + Componentes.escaparHtml(textoPlazoCumplimiento_(item.dias_para_vencer)) +
+          ' · ' + item.confirmados + '/' + item.total_audiencia + ' confirmaron (' + pct + '%)</p>' +
+      '</div>' +
+    '</article>';
+  }
+
+  function cargarPanelCumplimiento_() {
+    var cont = document.getElementById('novedades-contenido');
+    var lista = cont && cont.querySelector('.sigso-novedades__lista');
+    if (lista) lista.innerHTML = Componentes.cargando('Cargando...');
+    api_('getPanelCumplimientoNovedad', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        if (lista) lista.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar.', 'error');
+        return;
+      }
+      var items = respuesta.data.items;
+      if (!lista) return;
+      lista.innerHTML = items.length
+        ? items.map(tarjetaCumplimiento_).join('')
+        : Componentes.vacio({ icono: 'campana', texto: 'No hay novedades con fecha límite de acuse activa.' });
+      lista.querySelectorAll('[data-novedad]').forEach(function (card) {
+        card.addEventListener('click', function () { abrirDetalle_(card.getAttribute('data-novedad')); });
+        card.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); card.click(); }
+        });
+      });
+    }).catch(function () {
+      if (lista) lista.innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
+    });
   }
 
   // --- Selector de audiencia (Fase 5) -----------------------------------------
@@ -543,6 +623,7 @@
         '</div>' +
         '<h2 class="sigso-novedad-detalle__titulo">' + Componentes.escaparHtml(n.titulo) + '</h2>' +
         chipVigencia_(n.fecha_vigencia) +
+        (!noPublicada ? chipPlazoAcuse_(n) : '') +
         '<div class="sigso-novedad-detalle__autor">' + avatar +
           '<div><strong>' + Componentes.escaparHtml(n.autor_nombre) + '</strong>' +
           '<div class="sigso-ayuda">' + relativo_(n.fecha_publicacion || n.fecha_creacion) + '</div></div>' +
@@ -750,14 +831,23 @@
   // v6.7: quien aprueba una novedad CONTROLADA elige, en el mismo paso, a
   // quien llega -- mismo selector que el formulario de publicar, pero
   // evaluado contra QUIEN APRUEBA (jefatura/ADM), no contra el autor.
+  // v6.8 (Fase 6): Ley/Dictamen exigen fecha límite de acuse al aprobar;
+  // el resto la deja opcional.
+  function exigeFechaLimite_(tipo) {
+    return tipo === 'LEY' || tipo === 'DICTAMEN';
+  }
+
   function abrirFormularioAprobar_(n) {
     var fondo = document.createElement('div');
     fondo.className = 'sigso-modal-fondo';
+    var exigeFecha = exigeFechaLimite_(n.tipo);
     fondo.innerHTML =
       '<div class="sigso-modal" role="dialog" aria-modal="true">' +
         '<h3 class="sigso-modal__titulo">Aprobar novedad</h3>' +
         '<p class="sigso-ayuda">' + Componentes.escaparHtml(n.titulo) + '</p>' +
         '<form id="form-aprobar-novedad">' +
+          '<div class="sigso-campo"><label>Fecha límite para dar acuse' + (exigeFecha ? '' : ' (opcional)') + '</label>' +
+            '<input type="date" id="ap-fecha-limite"' + (exigeFecha ? ' required' : '') + '></div>' +
           htmlAudienciaSelector_('ap', 'SELECCION') +
           '<div class="sigso-modal__acciones">' +
             Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-cancelar-aprobar', tipo: 'button' }) +
@@ -785,7 +875,10 @@
       botonSubmit.disabled = true;
       botonSubmit.textContent = 'Aprobando...';
       var audiencia = leerAudienciaSeleccionada_(fondo, 'ap');
-      api_('aprobarNovedad', Object.assign({ novedad_id: n.novedad_id }, audiencia)).then(function (respuesta) {
+      var fechaLimite = document.getElementById('ap-fecha-limite').value;
+      api_('aprobarNovedad', Object.assign(
+        { novedad_id: n.novedad_id, fecha_limite_acuse: fechaLimite }, audiencia
+      )).then(function (respuesta) {
         if (!respuesta || !respuesta.ok) {
           Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo aprobar.', tipo: 'error' });
           botonSubmit.disabled = false;
@@ -894,6 +987,7 @@
           '<div class="sigso-campo"><label>Resumen (1-2 líneas)</label><textarea id="np-resumen" rows="2" maxlength="240" required></textarea></div>' +
           '<div class="sigso-campo"><label>Detalle completo</label><textarea id="np-cuerpo" rows="6"></textarea></div>' +
           '<div class="sigso-campo"><label>Entra en vigencia (opcional)</label><input type="date" id="np-vigencia"></div>' +
+          '<div class="sigso-campo" id="np-fecha-limite-campo"><label>Fecha límite para dar acuse (opcional)</label><input type="date" id="np-fecha-limite"></div>' +
           '<div class="sigso-campo"><label>Adjunto PDF (opcional)</label><input type="file" id="np-archivo" accept="application/pdf"></div>' +
           '<label class="sigso-campo-check"><input type="checkbox" id="np-requiere-acuse" checked> Exigir acuse de lectura ("Enterado")</label>' +
           '<div class="sigso-modal__acciones">' +
@@ -929,6 +1023,7 @@
         ? Componentes.alerta('Este tipo requiere la aprobación de tu jefatura antes de publicarse.', 'info')
         : '';
       document.getElementById('np-audiencia-bloque').classList.toggle('sigso-oculto', esControlado);
+      document.getElementById('np-fecha-limite-campo').classList.toggle('sigso-oculto', esControlado);
       botonSubmitRef.textContent = esControlado ? 'Enviar a revisión' : 'Publicar';
     }
     selectTipo.addEventListener('change', actualizarAvisoCarril_);
@@ -953,6 +1048,7 @@
           resumen: document.getElementById('np-resumen').value,
           cuerpo: document.getElementById('np-cuerpo').value,
           fecha_vigencia: document.getElementById('np-vigencia').value,
+          fecha_limite_acuse: esControlado ? '' : document.getElementById('np-fecha-limite').value,
           requiere_acuse: document.getElementById('np-requiere-acuse').checked,
           contenido_base64: contenidoBase64,
           nombre_archivo: nombreArchivo

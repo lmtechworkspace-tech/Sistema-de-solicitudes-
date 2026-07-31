@@ -261,6 +261,53 @@ var Novedades = (function () {
     return { tipo: tipo, destinatarios: destinatarios };
   }
 
+  // v6.8 (Fase 6, cumplimiento): la audiencia REAL de una novedad --
+  // interseccion entre lo declarado (resolverAudiencia_) y quien de verdad
+  // tiene credenciales activas hoy (audienciaNovedades_). Asi, si alguien
+  // seleccionado se desactiva despues, deja de contar como pendiente --
+  // nadie queda esperando un acuse imposible.
+  function personasAudiencia_(novedad) {
+    return audienciaNovedades_().filter(function (p) { return personaEnAudiencia_(novedad, p.email); });
+  }
+
+  // v6.8 (Fase 6): plazo para dar el acuse. OBLIGATORIO en Ley/Dictamen (lo
+  // unico con vigencia legal que corre -- de ahi nace el pedido: "no tenemos
+  // como el control de quien ya vio y acuso recibo"), opcional en el resto.
+  // Igual que la audiencia (Fase 5), lo fija quien hace visible la novedad:
+  // el autor al publicar (carril LIBRE) o quien aprueba (carril CONTROLADO).
+  var TIPOS_EXIGEN_PLAZO = { LEY: true, DICTAMEN: true };
+
+  function validarFechaLimiteEntrante_(data, tipo) {
+    var fecha = data.fecha_limite_acuse ? String(data.fecha_limite_acuse).trim() : '';
+    if (!fecha) {
+      if (TIPOS_EXIGEN_PLAZO[tipo]) {
+        return { error: errorValidacion_('fecha_limite_acuse', 'Este tipo exige una fecha límite para dar el acuse.') };
+      }
+      return { fecha: '' };
+    }
+    var d = new Date(fecha);
+    if (isNaN(d.getTime())) {
+      return { error: errorValidacion_('fecha_limite_acuse', 'Fecha límite inválida.') };
+    }
+    var hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    if (d < hoy) {
+      return { error: errorValidacion_('fecha_limite_acuse', 'La fecha límite no puede ser anterior a hoy.') };
+    }
+    return { fecha: fecha };
+  }
+
+  // Diferencia en dias CALENDARIO (no en horas) entre hoy y la fecha
+  // limite -- asi da lo mismo a que hora del dia corra esto: "vence en 5
+  // dias" significa 5 dias de calendario, no 120 horas exactas.
+  function diasParaVencer_(fechaLimite) {
+    var hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    var limite = new Date(fechaLimite + 'T00:00:00');
+    limite.setHours(0, 0, 0, 0);
+    return Math.round((limite.getTime() - hoy.getTime()) / 86400000);
+  }
+
   // areas donde esta persona puede publicar: todas si es ADM, o solo
   // aquella(s) donde figura como responsable_email en CAT_AREAS.
   function areasPublicables_(contexto) {
@@ -504,7 +551,9 @@ var Novedades = (function () {
             fecha_publicacion: n.fecha_publicacion,
             leida: !!leidasPorMi[n.novedad_id],
             puede_gestionar: esAutorONoAutor_(n, contexto),
-            audiencia_tipo: n.audiencia_tipo || 'TODOS'
+            audiencia_tipo: n.audiencia_tipo || 'TODOS',
+            fecha_limite_acuse: n.fecha_limite_acuse || '',
+            dias_para_vencer: n.fecha_limite_acuse ? diasParaVencer_(n.fecha_limite_acuse) : null
           };
         })
         .sort(function (a, b) { return new Date(b.fecha_publicacion) - new Date(a.fecha_publicacion); });
@@ -560,7 +609,9 @@ var Novedades = (function () {
         puede_gestionar: esAutorONoAutor_(n, contexto),
         puede_aprobar: puedeAprobar_(contexto, n.autor_email),
         es_autor: normalizarEmail_(n.autor_email) === correo,
-        audiencia: audienciaResumen_(n)
+        audiencia: audienciaResumen_(n),
+        fecha_limite_acuse: n.fecha_limite_acuse || '',
+        dias_para_vencer: n.fecha_limite_acuse ? diasParaVencer_(n.fecha_limite_acuse) : null
       };
     },
 
@@ -620,10 +671,16 @@ var Novedades = (function () {
       // define quien apruebe (Novedades.aprobar), cuando corresponda.
       // Se valida ANTES de tocar Drive (adjunto) para fallar rapido.
       var audiencia = { tipo: 'TODOS', destinatarios: [] };
+      var fechaLimite = { fecha: '' };
       if (esLibre) {
         var validacionAudiencia = validarAudienciaEntrante_(data, contexto);
         if (validacionAudiencia.error) return validacionAudiencia.error;
         audiencia = validacionAudiencia;
+        // v6.8 (Fase 6): opcional en LIBRE (Aviso/Logro nunca exigen plazo),
+        // pero si se manda igual se valida formato/fecha futura.
+        var validacionFecha = validarFechaLimiteEntrante_(data, data.tipo);
+        if (validacionFecha.error) return validacionFecha.error;
+        fechaLimite = validacionFecha;
       }
 
       var archivo = { archivo_id: '', archivo_nombre: '', archivo_mime: '' };
@@ -685,6 +742,7 @@ var Novedades = (function () {
         // v6.7 (Fase 5): en CONTROLADO queda vacio -- la define quien
         // aprueba, no tiene sentido todavia.
         audiencia_tipo: esLibre ? audiencia.tipo : '',
+        fecha_limite_acuse: esLibre ? fechaLimite.fecha : '',
         fecha_publicacion: esLibre ? ahora : '',
         activa: esLibre
       };
@@ -727,6 +785,11 @@ var Novedades = (function () {
       }
       var validacionAudiencia = validarAudienciaEntrante_(data || {}, contexto);
       if (validacionAudiencia.error) return validacionAudiencia.error;
+      // v6.8 (Fase 6): Ley/Dictamen exigen fecha limite de acuse al
+      // aprobar -- es el punto en que la novedad se hace visible, igual
+      // criterio que la audiencia (Fase 5).
+      var validacionFecha = validarFechaLimiteEntrante_(data || {}, n.tipo);
+      if (validacionFecha.error) return validacionFecha.error;
 
       var ahora = new Date().toISOString();
       var cambios = {
@@ -736,7 +799,8 @@ var Novedades = (function () {
         aprobador_email: contexto.email,
         aprobador_nombre: data.aprobador_nombre || contexto.email,
         fecha_aprobacion: ahora,
-        audiencia_tipo: validacionAudiencia.tipo
+        audiencia_tipo: validacionAudiencia.tipo,
+        fecha_limite_acuse: validacionFecha.fecha
       };
       actualizarFilaPorId_(SHEETS.NOVEDADES, 'novedad_id', n.novedad_id, cambios);
       if (validacionAudiencia.tipo === 'SELECCION') {
@@ -970,8 +1034,7 @@ var Novedades = (function () {
 
       var leyeron = [];
       var pendientes = [];
-      audienciaNovedades_().forEach(function (persona) {
-        if (!personaEnAudiencia_(n, persona.email)) return;
+      personasAudiencia_(n).forEach(function (persona) {
         if (leidoPorEmail[persona.email]) {
           leyeron.push({ email: persona.email, nombre: persona.nombre, leido_en: leidoPorEmail[persona.email] });
         } else {
@@ -1017,13 +1080,22 @@ var Novedades = (function () {
         });
         if (!pendientes.length) return;
 
+        // v6.8 (Fase 6): si tiene fecha limite de acuse, se marca vencida o
+        // los dias que quedan -- sin esto, el recordatorio generico no
+        // transmite la urgencia de un plazo legal que ya paso.
+        function plazoTexto_(n) {
+          if (!n.fecha_limite_acuse) return '';
+          var dias = diasParaVencer_(n.fecha_limite_acuse);
+          return dias < 0 ? ' (VENCIDO hace ' + (-dias) + ' día(s))' : ' (vence en ' + dias + ' día(s))';
+        }
         var items = pendientes.map(function (n) {
           var tipoInfo = TIPOS[n.tipo] || { etiqueta: n.tipo };
-          return '<li><strong>' + escaparHtmlCorreo_(tipoInfo.etiqueta) + '</strong> — ' + escaparHtmlCorreo_(n.titulo) + '</li>';
+          return '<li><strong>' + escaparHtmlCorreo_(tipoInfo.etiqueta) + '</strong> — ' + escaparHtmlCorreo_(n.titulo) +
+            escaparHtmlCorreo_(plazoTexto_(n)) + '</li>';
         }).join('');
         var asunto = 'SIGSO - Tienes ' + pendientes.length + ' novedad(es) pendiente(s) de confirmar';
         var cuerpoTexto = 'Tienes ' + pendientes.length + ' novedad(es) publicadas en SIGSO que aun no confirmas como leidas:\n' +
-          pendientes.map(function (n) { return '- ' + n.titulo; }).join('\n') +
+          pendientes.map(function (n) { return '- ' + n.titulo + plazoTexto_(n); }).join('\n') +
           '\n\nEntra a SIGSO > Novedades para revisarlas y marcar "Enterado".';
         var cuerpoHtml = plantillaCorreoHtml_('Novedades pendientes',
           '<p>Tienes <strong>' + pendientes.length + '</strong> novedad(es) publicadas en SIGSO que aun no confirmas como leidas:</p>' +
@@ -1038,6 +1110,57 @@ var Novedades = (function () {
       });
 
       return { enviados: enviados };
+    },
+
+    /**
+     * v6.8 (Fase 6): panel de cumplimiento -- toda novedad activa, con
+     * acuse exigido y fecha límite, con su semáforo (vencida/por vencer/
+     * al día/cumplida) y cuantos de la audiencia real ya confirmaron.
+     * Solo ADM: es la vista de "visibilidad de todo" que pidió el usuario,
+     * no una bandeja de trabajo de cada jefatura.
+     */
+    getPanelCumplimiento: function (data, contexto) {
+      if (contexto.rol !== 'ADM') {
+        return { _forbidden: true, message: 'Solo un Administrador puede ver el panel de cumplimiento.' };
+      }
+      var conPlazo = filasNovedades_().filter(function (n) {
+        var activa = n.activa === true || n.activa === 'TRUE' || n.activa === 1;
+        var requiereAcuse = n.requiere_acuse === true || n.requiere_acuse === 'TRUE' || n.requiere_acuse === 1;
+        return activa && requiereAcuse && n.fecha_limite_acuse;
+      });
+
+      var leidoPor = {};
+      filasLecturas_().forEach(function (l) {
+        var id = l.novedad_id;
+        if (!leidoPor[id]) leidoPor[id] = {};
+        leidoPor[id][normalizarEmail_(l.usuario_email)] = true;
+      });
+
+      var items = conPlazo.map(function (n) {
+        var tipoInfo = TIPOS[n.tipo] || { etiqueta: n.tipo, color: 'info' };
+        var audiencia = personasAudiencia_(n);
+        var confirmados = audiencia.filter(function (p) {
+          return leidoPor[n.novedad_id] && leidoPor[n.novedad_id][p.email];
+        }).length;
+        var pendientes = audiencia.length - confirmados;
+        var dias = diasParaVencer_(n.fecha_limite_acuse);
+        var estado = pendientes === 0 ? 'CUMPLIDA' : (dias < 0 ? 'VENCIDA' : (dias <= 2 ? 'POR_VENCER' : 'AL_DIA'));
+        return {
+          novedad_id: n.novedad_id,
+          tipo: n.tipo,
+          tipo_etiqueta: tipoInfo.etiqueta,
+          tipo_color: tipoInfo.color,
+          titulo: n.titulo,
+          fecha_limite_acuse: n.fecha_limite_acuse,
+          dias_para_vencer: dias,
+          estado_cumplimiento: estado,
+          total_audiencia: audiencia.length,
+          confirmados: confirmados,
+          pendientes: pendientes
+        };
+      }).sort(function (a, b) { return a.dias_para_vencer - b.dias_para_vencer; });
+
+      return { items: items };
     }
   };
 })();

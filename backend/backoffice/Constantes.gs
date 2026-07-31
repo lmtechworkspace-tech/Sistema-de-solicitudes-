@@ -307,6 +307,10 @@ var COLUMNAS = {
   // trata como TODOS (compatibilidad con novedades publicadas antes de esta
   // fase). Quien la define: el AUTOR al publicar (carril LIBRE) o el
   // APROBADOR al aprobar (carril CONTROLADO) -- ver Novedades.gs.
+  // v6.8 (Fase 6, cumplimiento): fecha_limite_acuse -- plazo para confirmar
+  // "Enterado". Obligatoria al aprobar Ley/Dictamen (lo unico con vigencia
+  // legal que corre), opcional en el resto. Vacia = sin plazo (no entra al
+  // panel de cumplimiento). Ver la nota identica en backend/intake/Constantes.gs.
   NOVEDADES: [
     'novedad_id', 'tipo', 'titulo', 'resumen', 'cuerpo',
     'area_id', 'area_nombre', 'autor_email', 'autor_nombre',
@@ -314,7 +318,7 @@ var COLUMNAS = {
     'archivo_id', 'archivo_nombre', 'archivo_mime',
     'estado', 'fecha_creacion', 'aprobador_email', 'aprobador_nombre',
     'fecha_aprobacion', 'motivo_devolucion',
-    'audiencia_tipo',
+    'audiencia_tipo', 'fecha_limite_acuse',
     'fecha_publicacion', 'activa'
   ],
   // Acuse de lectura, una fila por (novedad, lector). Aparte de NOVEDADES

@@ -86,6 +86,15 @@ function ctxCualquiera(email) {
   return { email: email || 'juan@homepymes.cl', rol: 'DEV' };
 }
 
+// v6.8 (Fase 6): fecha limite valida para aprobar Ley/Dictamen (obligatoria
+// desde esta fase). 10 dias adelante por defecto -- lejos de "hoy" para no
+// depender de a que hora corre el test.
+function fechaLimiteValida_(diasDesdeHoy) {
+  const d = new Date();
+  d.setDate(d.getDate() + (diasDesdeHoy || 10));
+  return d.toISOString().slice(0, 10);
+}
+
 // v6.6 (Fase 4): tipo por defecto es AVISO (carril LIBRE, se publica de
 // inmediato) para que los tests de permisos/adjunto/feed/acuse -- que no
 // tratan sobre el circuito de aprobacion -- no se vean afectados por el.
@@ -239,7 +248,7 @@ test('12. filtrar el feed por tipo y por area', () => {
   // LEY es carril CONTROLADO (Fase 4): se aprueba antes de aparecer en el
   // feed -- el test sigue probando el filtro, no el circuito de aprobacion.
   const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY', area_id: 'RRHH' }), ctxResponsable()));
-  ctx.Novedades.aprobar({ novedad_id: pub.novedad_id }, ctxAdm());
+  ctx.Novedades.aprobar({ novedad_id: pub.novedad_id, fecha_limite_acuse: fechaLimiteValida_() }, ctxAdm());
   ctx.Novedades.publicar(
     publicarBase_({ tipo: 'AVISO', titulo: 'Charla de prevencion', area_id: 'PREVENCION' }),
     ctxResponsable('camila@rld.cl')
@@ -407,7 +416,7 @@ test('23. aprobar una novedad tipo LEY envia correo inmediato a la audiencia (me
   const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable('juan@homepymes.cl')));
   assert.equal(ctx.GmailApp._enviados.length, 0, 'publicar (enviar a revision) no manda el correo de LEY todavia');
 
-  ctx.Novedades.aprobar({ novedad_id: pub.novedad_id }, ctxAdm());
+  ctx.Novedades.aprobar({ novedad_id: pub.novedad_id, fecha_limite_acuse: fechaLimiteValida_() }, ctxAdm());
 
   const destinatarios = ctx.GmailApp._enviados.map((e) => e.destinatario);
   assert.deepEqual(destinatarios.sort(), ['leo@rld.cl']);
@@ -533,7 +542,7 @@ test('31. aprobar: SEGURIDAD -- solo la jefatura del autor o ADM', () => {
   const propio = toPlain(ctx.Novedades.aprobar({ novedad_id: pub.novedad_id }, ctxResponsable()));
   assert.equal(propio._forbidden, true);
 
-  const ok = toPlain(ctx.Novedades.aprobar({ novedad_id: pub.novedad_id }, ctxJefa()));
+  const ok = toPlain(ctx.Novedades.aprobar({ novedad_id: pub.novedad_id, fecha_limite_acuse: fechaLimiteValida_() }, ctxJefa()));
   assert.equal(ok.estado, 'PUBLICADA');
 
   const fila = ctx.leerFilas_('NOVEDADES')[0];
@@ -549,9 +558,9 @@ test('32. aprobar rechaza si la novedad no esta EN_REVISION (ya aprobada, por ej
   const ctx = cargarConJefatura();
   seedArea(ctx);
   const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
-  ctx.Novedades.aprobar({ novedad_id: pub.novedad_id }, ctxJefa());
+  ctx.Novedades.aprobar({ novedad_id: pub.novedad_id, fecha_limite_acuse: fechaLimiteValida_() }, ctxJefa());
 
-  const segundaVez = toPlain(ctx.Novedades.aprobar({ novedad_id: pub.novedad_id }, ctxJefa()));
+  const segundaVez = toPlain(ctx.Novedades.aprobar({ novedad_id: pub.novedad_id, fecha_limite_acuse: fechaLimiteValida_() }, ctxJefa()));
   assert.equal(segundaVez._validationError, true);
 });
 
@@ -682,7 +691,7 @@ test('40. getHistorial registra las transiciones en orden y respeta la visibilid
 
   ctx.Novedades.devolver({ novedad_id: pub.novedad_id, motivo: 'Falta la fecha de vigencia.' }, ctxJefa());
   ctx.Novedades.reenviar({ novedad_id: pub.novedad_id }, ctxResponsable());
-  ctx.Novedades.aprobar({ novedad_id: pub.novedad_id }, ctxJefa());
+  ctx.Novedades.aprobar({ novedad_id: pub.novedad_id, fecha_limite_acuse: fechaLimiteValida_() }, ctxJefa());
 
   // Ya publicada: es publica, incluido el historial, para cualquier
   // identidad autenticada -- igual que getDetalle.
@@ -785,7 +794,8 @@ test('47. aprobar: la audiencia la elige quien aprueba (SELECCION), no el autor'
   const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
 
   const aprobado = toPlain(ctx.Novedades.aprobar({
-    novedad_id: pub.novedad_id, audiencia_tipo: 'SELECCION', destinatarios: ['leo@rld.cl']
+    novedad_id: pub.novedad_id, audiencia_tipo: 'SELECCION', destinatarios: ['leo@rld.cl'],
+    fecha_limite_acuse: fechaLimiteValida_()
   }, ctxJefa()));
   assert.equal(aprobado.estado, 'PUBLICADA');
 
@@ -850,4 +860,127 @@ test('50. listarAreasPublicables expone directorio/equipo/puede_todos/puede_equi
 
   const paraAdm = toPlain(ctx.Novedades.listarAreasPublicables({}, ctxAdm()));
   assert.equal(paraAdm.puede_todos, true);
+});
+
+// --- 51-58: v6.8 (Fase 6) cumplimiento (fecha limite de acuse) -------------
+
+test('51. aprobar Ley/Dictamen SIN fecha limite de acuse: error de validacion', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'DICTAMEN' }), ctxResponsable()));
+  const res = toPlain(ctx.Novedades.aprobar({ novedad_id: pub.novedad_id }, ctxJefa()));
+  assert.equal(res._validationError, true);
+});
+
+test('52. aprobar Ley/Dictamen con fecha limite en el pasado: error de validacion', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
+  const ayer = new Date();
+  ayer.setDate(ayer.getDate() - 1);
+  const res = toPlain(ctx.Novedades.aprobar({
+    novedad_id: pub.novedad_id, fecha_limite_acuse: ayer.toISOString().slice(0, 10)
+  }, ctxJefa()));
+  assert.equal(res._validationError, true);
+});
+
+test('53. aprobar otro tipo CONTROLADO (Procedimiento) sin fecha limite: es opcional, se aprueba igual', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'PROCEDIMIENTO' }), ctxResponsable()));
+  const res = toPlain(ctx.Novedades.aprobar({ novedad_id: pub.novedad_id }, ctxJefa()));
+  assert.equal(res.estado, 'PUBLICADA');
+  const fila = ctx.leerFilas_('NOVEDADES')[0];
+  assert.equal(fila.fecha_limite_acuse, '');
+});
+
+test('54. publicar LIBRE: fecha limite de acuse opcional, se valida si se manda', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+
+  const ayer = new Date();
+  ayer.setDate(ayer.getDate() - 1);
+  const rechazado = toPlain(ctx.Novedades.publicar(publicarBase_({
+    fecha_limite_acuse: ayer.toISOString().slice(0, 10)
+  }), ctxResponsable()));
+  assert.equal(rechazado._validationError, true);
+
+  const ok = toPlain(ctx.Novedades.publicar(publicarBase_({
+    fecha_limite_acuse: fechaLimiteValida_()
+  }), ctxResponsable()));
+  assert.equal(ok.estado, 'PUBLICADA');
+  const fila = ctx.leerFilas_('NOVEDADES')[0];
+  assert.equal(fila.fecha_limite_acuse, fechaLimiteValida_());
+});
+
+test('55. getDetalle expone fecha_limite_acuse y dias_para_vencer', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
+  ctx.Novedades.aprobar({ novedad_id: pub.novedad_id, fecha_limite_acuse: fechaLimiteValida_(5) }, ctxJefa());
+
+  const detalle = toPlain(ctx.Novedades.getDetalle({ novedad_id: pub.novedad_id }, ctxAdm()));
+  assert.equal(detalle.fecha_limite_acuse, fechaLimiteValida_(5));
+  assert.equal(detalle.dias_para_vencer, 5);
+});
+
+test('56. getPanelCumplimiento: SEGURIDAD -- solo ADM', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const denegadoJefa = toPlain(ctx.Novedades.getPanelCumplimiento({}, ctxJefa()));
+  assert.equal(denegadoJefa._forbidden, true);
+  const denegadoCualquiera = toPlain(ctx.Novedades.getPanelCumplimiento({}, ctxCualquiera()));
+  assert.equal(denegadoCualquiera._forbidden, true);
+  const ok = toPlain(ctx.Novedades.getPanelCumplimiento({}, ctxAdm()));
+  assert.ok(Array.isArray(ok.items));
+});
+
+test('57. getPanelCumplimiento: semaforo VENCIDA/POR_VENCER/AL_DIA/CUMPLIDA y conteos', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+
+  // Vencida: fecha limite ya paso y falta gente por confirmar.
+  const vencida = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY', titulo: 'Vencida' }), ctxResponsable()));
+  ctx.Novedades.aprobar({ novedad_id: vencida.novedad_id, fecha_limite_acuse: fechaLimiteValida_(1) }, ctxJefa());
+  // Se retrocede el reloj manipulando directamente la fila (mas simple que
+  // esperar dias reales): se fuerza la fecha limite al pasado despues de
+  // aprobar, para no chocar con la validacion "no puede ser anterior a hoy".
+  ctx.actualizarFilaPorId_('NOVEDADES', 'novedad_id', vencida.novedad_id, {
+    fecha_limite_acuse: (() => { const d = new Date(); d.setDate(d.getDate() - 3); return d.toISOString().slice(0, 10); })()
+  });
+
+  // Cumplida: todos confirmaron antes del plazo.
+  const cumplida = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'DICTAMEN', titulo: 'Cumplida' }), ctxResponsable()));
+  ctx.Novedades.aprobar({ novedad_id: cumplida.novedad_id, fecha_limite_acuse: fechaLimiteValida_(10) }, ctxJefa());
+  ctx.Novedades.marcarLeida({ novedad_id: cumplida.novedad_id }, ctxCualquiera());
+  ctx.Novedades.marcarLeida({ novedad_id: cumplida.novedad_id }, { email: 'leo@rld.cl', rol: 'DEV' });
+
+  const panel = toPlain(ctx.Novedades.getPanelCumplimiento({}, ctxAdm()));
+  const porTitulo = {};
+  panel.items.forEach((i) => { porTitulo[i.titulo] = i; });
+
+  assert.equal(porTitulo['Vencida'].estado_cumplimiento, 'VENCIDA');
+  assert.ok(porTitulo['Vencida'].pendientes > 0);
+
+  assert.equal(porTitulo['Cumplida'].estado_cumplimiento, 'CUMPLIDA');
+  assert.equal(porTitulo['Cumplida'].pendientes, 0);
+  assert.equal(porTitulo['Cumplida'].confirmados, porTitulo['Cumplida'].total_audiencia);
+});
+
+test('58. getPanelCumplimiento no incluye novedades sin fecha limite ni las inactivas', () => {
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  // Sin fecha limite (Procedimiento no la exige).
+  const sinPlazo = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'PROCEDIMIENTO', titulo: 'Sin plazo' }), ctxResponsable()));
+  ctx.Novedades.aprobar({ novedad_id: sinPlazo.novedad_id }, ctxJefa());
+
+  // Con fecha limite pero retirada (activa=false).
+  const retirada = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY', titulo: 'Retirada' }), ctxResponsable()));
+  ctx.Novedades.aprobar({ novedad_id: retirada.novedad_id, fecha_limite_acuse: fechaLimiteValida_() }, ctxJefa());
+  ctx.Novedades.despublicar({ novedad_id: retirada.novedad_id }, ctxAdm());
+
+  const panel = toPlain(ctx.Novedades.getPanelCumplimiento({}, ctxAdm()));
+  const titulos = panel.items.map((i) => i.titulo);
+  assert.ok(!titulos.includes('Sin plazo'));
+  assert.ok(!titulos.includes('Retirada'));
 });

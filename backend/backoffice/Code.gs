@@ -110,7 +110,10 @@ var BACKOFFICE_ACTIONS = {
   rechazarNovedad: handleRechazarNovedad_,
   reenviarNovedad: handleReenviarNovedad_,
   listarPendientesAprobacionNovedad: handleListarPendientesAprobacionNovedad_,
-  misPendientesNovedad: handleMisPendientesNovedad_
+  misPendientesNovedad: handleMisPendientesNovedad_,
+  // v6.8 (Fase 6, cumplimiento): panel de "quien falta y hace cuanto vence" --
+  // solo ADM (Novedades.getPanelCumplimiento ya lo valida en el servidor).
+  getPanelCumplimientoNovedad: handleGetPanelCumplimientoNovedad_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -657,6 +660,10 @@ function handleListarPendientesAprobacionNovedad_(data, contexto) {
 
 function handleMisPendientesNovedad_(data, contexto) {
   return responderResultado_(Novedades.misPendientes(data, contexto));
+}
+
+function handleGetPanelCumplimientoNovedad_(data, contexto) {
+  return responderResultado_(Novedades.getPanelCumplimiento(data, contexto));
 }
 
 function responderResultado_(resultado) {
