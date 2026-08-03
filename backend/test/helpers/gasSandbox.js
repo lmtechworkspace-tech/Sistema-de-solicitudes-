@@ -21,7 +21,64 @@ function loadGasProject(filePaths, options) {
     const code = fs.readFileSync(filePath, 'utf8');
     vm.runInContext(code, context, { filename: filePath });
   }
+  conectarInvalidacionDeCache_(context);
   return context;
+}
+
+/**
+ * v6.9: SheetsRepo cachea cada hoja por ejecucion, e invalida ese cache en
+ * toda escritura que pase por el repo. En PRODUCCION eso basta (no existe
+ * ninguna escritura fuera del repo). Pero los TESTS si escriben directo en
+ * el mock (seedSheet y varios helpers locales usan appendRow), y esa via no
+ * pasa por el repo: sin este puente, un test que siembra filas DESPUES de
+ * una lectura veria datos viejos.
+ *
+ * Se instrumenta el mock una sola vez aqui, en vez de tocar ~30 archivos de
+ * test: cualquier mutacion directa invalida esa hoja, igual que haria el
+ * repo. Modela la realidad ("la hoja cambio"), no la esconde.
+ */
+function conectarInvalidacionDeCache_(context) {
+  const ss = context.SpreadsheetApp && context.SpreadsheetApp._spreadsheet;
+  if (!ss) return;
+
+  const invalidar = (nombre) => {
+    // El proyecto Setup no carga SheetsRepo: ahi no hay cache que invalidar.
+    if (typeof context.invalidarCacheHoja_ === 'function') context.invalidarCacheHoja_(nombre);
+  };
+
+  const instrumentar = (hoja, nombre) => {
+    if (!hoja || hoja.__invalidaCache) return hoja;
+    ['appendRow', 'deleteRow', 'deleteRows', 'clear', 'clearContents'].forEach((metodo) => {
+      if (typeof hoja[metodo] !== 'function') return;
+      const original = hoja[metodo].bind(hoja);
+      hoja[metodo] = function () {
+        const salida = original.apply(null, arguments);
+        invalidar(nombre);
+        return salida;
+      };
+    });
+    const getRangeOriginal = hoja.getRange.bind(hoja);
+    hoja.getRange = function () {
+      const rango = getRangeOriginal.apply(null, arguments);
+      if (rango && typeof rango.setValues === 'function') {
+        const setValuesOriginal = rango.setValues.bind(rango);
+        rango.setValues = function (valores) {
+          const salida = setValuesOriginal(valores);
+          invalidar(nombre);
+          return salida;
+        };
+      }
+      return rango;
+    };
+    hoja.__invalidaCache = true;
+    return hoja;
+  };
+
+  ss.getSheets().forEach((hoja) => instrumentar(hoja, hoja.getName()));
+  const insertarOriginal = ss.insertSheet.bind(ss);
+  ss.insertSheet = (nombre) => instrumentar(insertarOriginal(nombre), nombre);
+  const obtenerOriginal = ss.getSheetByName.bind(ss);
+  ss.getSheetByName = (nombre) => instrumentar(obtenerOriginal(nombre), nombre);
 }
 
 /**

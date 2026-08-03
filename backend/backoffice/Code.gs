@@ -267,6 +267,30 @@ function ejecutarAccionBackoffice(action, data) {
   }
 }
 
+// v6.9 (rendimiento): cada minuto de gracia entre escrituras de
+// ultimo_acceso. Antes se escribia en la hoja en CADA request -- incluso en
+// las de solo lectura -- y una escritura en Sheets es de lo mas lento que
+// hay en Apps Script. Con esto se escribe como maximo 1 vez cada 10 min por
+// identidad.
+//
+// No afecta a RN-029: Auth.suspenderInactivos compara ultimo_acceso contra
+// un umbral en DIAS, asi que un desfase de minutos es irrelevante. Si el
+// CacheService no estuviera disponible, se escribe igual (el fallback es el
+// comportamiento anterior, nunca perder el registro).
+var MINUTOS_GRACIA_ULTIMO_ACCESO = 10;
+
+function registrarUltimoAccesoThrottled_(claveIdentidad, escribir) {
+  var clave = 'ultimo_acceso::' + claveIdentidad;
+  try {
+    var cache = CacheService.getScriptCache();
+    if (cache.get(clave)) return; // ya se registro hace poco
+    escribir();
+    cache.put(clave, '1', MINUTOS_GRACIA_ULTIMO_ACCESO * 60);
+  } catch (err) {
+    escribir();
+  }
+}
+
 // Compartido por doPost y ejecutarAccionBackoffice: resuelve email+rol o
 // devuelve el objeto de error listo para responder (evita repetir la
 // misma validacion en los dos puntos de entrada).
@@ -296,7 +320,9 @@ function resolverIdentidadYRol_(portalToken, action) {
   }
   // RN-029: Auth.suspenderInactivos() (Fase 7) decide en base a este campo;
   // sin registrarlo aqui, todos los usuarios activos se verian "inactivos".
-  actualizarFilaPorId_(SHEETS.USUARIOS, 'email', email, { ultimo_acceso: new Date().toISOString() });
+  registrarUltimoAccesoThrottled_('u:' + email, function () {
+    actualizarFilaPorId_(SHEETS.USUARIOS, 'email', email, { ultimo_acceso: new Date().toISOString() });
+  });
   return { contexto: { email: email, rol: rol } };
 }
 
@@ -348,8 +374,10 @@ function resolverContextoPortal_(token, action) {
   // trabajo) -- sin esto pasaria los checks pensados para ANA/ADM.
   var rol = cuenta.rol === 'SOLICITANTE' ? 'DEV' : cuenta.rol;
 
-  actualizarFilaPorId_(SHEETS.CUENTAS_PORTAL, 'cuenta_id', cuenta.cuenta_id, {
-    ultimo_acceso: new Date().toISOString()
+  registrarUltimoAccesoThrottled_('c:' + cuenta.cuenta_id, function () {
+    actualizarFilaPorId_(SHEETS.CUENTAS_PORTAL, 'cuenta_id', cuenta.cuenta_id, {
+      ultimo_acceso: new Date().toISOString()
+    });
   });
 
   // v6.4 (foto de perfil): se agrega cuenta_id al contexto. NO cambia la

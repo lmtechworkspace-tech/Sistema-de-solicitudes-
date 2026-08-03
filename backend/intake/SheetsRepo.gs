@@ -16,6 +16,27 @@
 
 var _spreadsheetMemo_ = null;
 
+// v6.9 (rendimiento): cache de lectura POR EJECUCION -- ver la nota extensa
+// en backend/backoffice/SheetsRepo.gs. Cada getRange().getValues() es un
+// round-trip real; aqui cada hoja se lee una sola vez por ejecucion y toda
+// escritura invalida la hoja tocada. El contexto JS de Apps Script es nuevo
+// en cada ejecucion, asi que este cache nunca cruza requests.
+var _cacheHojas_ = {};
+
+/**
+ * Descarta lo cacheado de una hoja (o de todas, sin argumento). Lo llama
+ * sola cada escritura; ademas incrementarContadorCorrelativo_ la usa para
+ * forzar lectura fresca dentro del lock (ver la nota ahi: el correlativo NO
+ * puede leerse de cache, o dos solicitudes tomarian el mismo numero).
+ */
+function invalidarCacheHoja_(nombreHoja) {
+  if (nombreHoja) {
+    delete _cacheHojas_[nombreHoja];
+  } else {
+    _cacheHojas_ = {};
+  }
+}
+
 function obtenerSpreadsheet_() {
   if (!_spreadsheetMemo_) {
     _spreadsheetMemo_ = SpreadsheetApp.openById(getConfig_().sheetId);
@@ -38,19 +59,36 @@ function obtenerHoja_(nombreHoja) {
 // valores (incluye la fila de headers) y las filas ya mapeadas a objetos por
 // nombre de encabezado. Evita releer/remapear en cada helper.
 function leerHojaConEncabezados_(nombreHoja) {
-  var hoja = obtenerHoja_(nombreHoja);
-  var ultimaFila = hoja.getLastRow();
-  var ultimaCol = hoja.getLastColumn();
-  if (ultimaFila < 2 || ultimaCol < 1) {
-    return { hoja: hoja, encabezados: [], valores: [], filas: [] };
+  var cacheado = _cacheHojas_[nombreHoja];
+  if (!cacheado) {
+    var hoja = obtenerHoja_(nombreHoja);
+    var ultimaFila = hoja.getLastRow();
+    var ultimaCol = hoja.getLastColumn();
+    cacheado = (ultimaFila < 2 || ultimaCol < 1)
+      ? { hoja: hoja, encabezados: [], valores: [] }
+      : (function () {
+          var valores = hoja.getRange(1, 1, ultimaFila, ultimaCol).getValues();
+          return {
+            hoja: hoja,
+            encabezados: valores[0].map(function (h) { return String(h).trim(); }),
+            valores: valores
+          };
+        })();
+    _cacheHojas_[nombreHoja] = cacheado;
   }
-  var valores = hoja.getRange(1, 1, ultimaFila, ultimaCol).getValues();
-  var encabezados = valores[0].map(function (h) { return String(h).trim(); });
+
+  // `filas` se re-arma siempre (objetos nuevos por llamada): asi ningun
+  // modulo puede contaminar a otro mutando una fila leida.
   var columnasEsquema = COLUMNAS[nombreHoja] || [];
-  var filas = valores.slice(1).map(function (fila) {
-    return mapearFila_(fila, encabezados, columnasEsquema);
+  var filas = cacheado.valores.slice(1).map(function (fila) {
+    return mapearFila_(fila, cacheado.encabezados, columnasEsquema);
   });
-  return { hoja: hoja, encabezados: encabezados, valores: valores, filas: filas };
+  return {
+    hoja: cacheado.hoja,
+    encabezados: cacheado.encabezados,
+    valores: cacheado.valores,
+    filas: filas
+  };
 }
 
 // Garantiza que toda columna del esquema exista (default '') aunque la hoja
@@ -72,6 +110,7 @@ function agregarFila_(nombreHoja, objetoFila) {
     return objetoFila[col] !== undefined ? objetoFila[col] : '';
   });
   hoja.appendRow(fila);
+  invalidarCacheHoja_(nombreHoja); // v6.9: la hoja cambio, el cache ya no sirve
   return objetoFila;
 }
 
@@ -92,6 +131,7 @@ function reescribirFila_(datos, indiceFilaValores, cambios) {
   // indiceFilaValores 0 es el header; la fila de datos i-esima esta en la
   // fila (i+1) de la hoja (1-indexed).
   datos.hoja.getRange(indiceFilaValores + 1, 1, 1, datos.encabezados.length).setValues([filaNueva]);
+  invalidarCacheHoja_(datos.hoja.getName()); // v6.9
   return objetoActualizado;
 }
 
@@ -132,6 +172,13 @@ function actualizarFilaPorFiltro_(nombreHoja, predicado, cambios) {
 // sin llamar a SpreadsheetApp. Si algun dia se migra la persistencia (§11
 // de la especificacion v2.0, Firestore), esta es la unica capa a reescribir.
 function incrementarContadorCorrelativo_(empresaId, anio) {
+  // v6.9 (CRITICO): el cache de lectura NO puede aplicar aqui. Esta funcion
+  // corre dentro del LockService (ver Correlativo.gs) justamente para que
+  // lectura+incremento+escritura sean atomicos: si el numero actual saliera
+  // de un cache poblado ANTES de tomar el lock, dos solicitudes podrian
+  // calcular el mismo correlativo y romper RN-003 (numero unico e inmutable).
+  // Se fuerza la lectura fresca descartando el cache de COUNTERS.
+  invalidarCacheHoja_(SHEETS.COUNTERS);
   var actual = leerFilas_(SHEETS.COUNTERS).find(function (f) {
     return String(f.empresa_id) === String(empresaId) && Number(f.anio) === anio;
   });

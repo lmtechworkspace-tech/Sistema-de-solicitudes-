@@ -185,6 +185,30 @@
     });
   }
 
+  // v6.9 (rendimiento): el feed sin filtro lo piden hasta TRES consumidores
+  // casi a la vez al entrar (badge del nav, tarjeta del Home y el propio
+  // modulo). Eran tres requests identicos, cada una pagando su resolucion de
+  // identidad en el servidor. Aqui se comparte UNA promesa por unos
+  // segundos; cualquier accion que modifique novedades la descarta para no
+  // mostrar datos viejos.
+  var promesaFeed_ = null;
+  var promesaFeedEn_ = 0;
+  var TTL_FEED_COMPARTIDO_MS = 10000;
+
+  function feedSinFiltro_() {
+    var ahora = Date.now();
+    if (promesaFeed_ && (ahora - promesaFeedEn_) < TTL_FEED_COMPARTIDO_MS) {
+      return promesaFeed_;
+    }
+    promesaFeedEn_ = ahora;
+    promesaFeed_ = api_('getFeedNovedades', {});
+    return promesaFeed_;
+  }
+
+  function invalidarFeedCompartido_() {
+    promesaFeed_ = null;
+  }
+
   /**
    * Se llama desde Home (o desde donde convenga) para que el badge de
    * pendientes aparezca SIN que el usuario haya entrado todavia al modulo --
@@ -192,7 +216,7 @@
    * DOM del feed (que puede no existir todavia).
    */
   function actualizarBadgeStandalone_() {
-    api_('getFeedNovedades', {}).then(function (respuesta) {
+    feedSinFiltro_().then(function (respuesta) {
       if (respuesta && respuesta.ok) actualizarBadge_(respuesta.data.resumen.pendientes);
     }).catch(function () { /* sin badge si falla: no es critico */ });
   }
@@ -206,7 +230,7 @@
   function pintarTarjetaHome_(contenedorId) {
     var cont = document.getElementById(contenedorId);
     if (!cont) return;
-    api_('getFeedNovedades', {}).then(function (respuesta) {
+    feedSinFiltro_().then(function (respuesta) {
       if (!respuesta || !respuesta.ok) { cont.innerHTML = ''; return; }
       var destacada = respuesta.data.recientes.filter(function (n) {
         return n.requiere_acuse && !n.leida;
@@ -232,6 +256,7 @@
   // -- si no, el aviso "Enterado" registrado no se reflejaba hasta la
   // proxima carga de pagina.
   function refrescarTarjetaHomeSiExiste_() {
+    invalidarFeedCompartido_(); // el acuse recien dado cambia lo que muestra
     if (document.getElementById('novedades-home')) {
       pintarTarjetaHome_('novedades-home');
     }
@@ -243,7 +268,14 @@
     var lista = cont.querySelector('.sigso-novedades__lista');
     if (lista) lista.innerHTML = Componentes.cargando('Cargando novedades...');
 
-    api_('getFeedNovedades', { tipo: filtroTipo_ }).then(function (respuesta) {
+    // Sin filtro de tipo se reutiliza la promesa compartida (la misma que ya
+    // pidieron el badge y la tarjeta del Home). Con filtro, la consulta es
+    // distinta y va aparte.
+    var peticion = filtroTipo_
+      ? api_('getFeedNovedades', { tipo: filtroTipo_ })
+      : feedSinFiltro_();
+
+    peticion.then(function (respuesta) {
       if (!respuesta || !respuesta.ok) {
         if (lista) lista.innerHTML = Componentes.alerta(
           (respuesta && respuesta.message) || 'No se pudieron cargar las novedades.', 'error'
@@ -437,6 +469,9 @@
   // devolver/rechazar/reenviar, que pueden mover una novedad de una lista
   // a otra (o cambiar sus numeros de cumplimiento).
   function recargarVistaActual_() {
+    // Se llega aca despues de publicar/aprobar/devolver/rechazar/reenviar/
+    // acusar: lo compartido quedo viejo y hay que volver a pedirlo.
+    invalidarFeedCompartido_();
     if (vista_ === 'feed') { cargarFeed_(); return; }
     if (vista_ === 'aprobar') { cargarPendientesAprobacion_(); return; }
     if (vista_ === 'cumplimiento') { cargarPanelCumplimiento_(); renderTabs_(); return; }

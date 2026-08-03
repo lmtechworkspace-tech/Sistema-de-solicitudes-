@@ -469,6 +469,7 @@ var Notificaciones = {
           htmlBody: htmlAutoDesdeTexto_(asunto, cuerpo)
         });
         actualizarFilaPorId_(SHEETS.LOG_NOTIFICACIONES, 'log_id', n.log_id, { resultado: 'ENVIADO' });
+        invalidarIndiceDedup_(); // v6.9: una fila paso a ENVIADO
         return { log_id: n.log_id, resultado: 'ENVIADO' };
       } catch (err) {
         var reintentos = Number(n.reintentos) + 1;
@@ -524,21 +525,42 @@ function obtenerEmailsPorRol_(empresaId, roles) {
 
 // RN-026 deduplica por (solicitud, evento, destinatario): ver la nota
 // identica en backend/intake/Notificaciones.gs.
-function yaNotificadoRecientemente_(solicitudId, evento, destinatario, ventanaMinutos) {
-  var ahora = new Date().getTime();
-  var ventana = ventanaMinutos || VENTANA_DEDUP_MINUTOS;
-  return leerFilas_(SHEETS.LOG_NOTIFICACIONES).some(function (fila) {
-    if (
-      fila.solicitud_id !== solicitudId ||
-      fila.evento !== evento ||
-      fila.destinatario !== destinatario ||
-      fila.resultado !== 'ENVIADO'
-    ) {
-      return false;
-    }
-    var minutosTranscurridos = (ahora - new Date(fila.timestamp).getTime()) / 60000;
-    return minutosTranscurridos < ventana;
+// v6.9 (rendimiento): indice del dedup, armado UNA vez por ejecucion.
+//
+// Antes, cada correo a enviar recorria LOG_NOTIFICACIONES ENTERA para saber
+// si ya se habia mandado. En un envio masivo (recordatorio diario de
+// Novedades, derivacion en lote, alertas de SLA) eso era una lectura por
+// destinatario -- y esa hoja SOLO CRECE, porque guarda toda notificacion
+// historica. Ahora se lee una vez y se mantiene en memoria.
+var _indiceDedup_ = null;
+
+function claveDedup_(solicitudId, evento, destinatario) {
+  return String(solicitudId) + '||' + String(evento) + '||' + String(destinatario);
+}
+
+function invalidarIndiceDedup_() {
+  _indiceDedup_ = null;
+}
+
+// clave -> timestamp (ms) del ENVIADO mas reciente.
+function indiceDedup_() {
+  if (_indiceDedup_) return _indiceDedup_;
+  var indice = {};
+  leerFilas_(SHEETS.LOG_NOTIFICACIONES).forEach(function (fila) {
+    if (fila.resultado !== 'ENVIADO') return;
+    var clave = claveDedup_(fila.solicitud_id, fila.evento, fila.destinatario);
+    var momento = new Date(fila.timestamp).getTime();
+    if (!indice[clave] || momento > indice[clave]) indice[clave] = momento;
   });
+  _indiceDedup_ = indice;
+  return indice;
+}
+
+function yaNotificadoRecientemente_(solicitudId, evento, destinatario, ventanaMinutos) {
+  var ventana = ventanaMinutos || VENTANA_DEDUP_MINUTOS;
+  var ultimoEnvio = indiceDedup_()[claveDedup_(solicitudId, evento, destinatario)];
+  if (!ultimoEnvio) return false;
+  return ((new Date().getTime() - ultimoEnvio) / 60000) < ventana;
 }
 
 // asunto/cuerpo son opcionales: solo los usa el camino de encolado directo
@@ -557,6 +579,12 @@ function registrarNotificacion_(solicitudId, canal, destinatario, evento, result
     asunto: asunto || '',
     cuerpo: cuerpo || ''
   });
+  // v6.9: mantener el indice al dia en vez de releer la hoja. Sin esto, un
+  // segundo intento del MISMO correo dentro de la misma ejecucion no se
+  // deduplicaria (antes se releia la hoja y si aparecia).
+  if (resultado === 'ENVIADO') {
+    indiceDedup_()[claveDedup_(solicitudId, evento, destinatario)] = new Date().getTime();
+  }
 }
 
 // Un reporte por empresa (Dashboard.getData ya filtra por empresa_id

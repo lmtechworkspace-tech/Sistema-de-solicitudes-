@@ -139,14 +139,29 @@ var Novedades = (function () {
     });
   }
 
-  function filasAudiencia_(novedadId) {
-    var todas;
+  // v6.9 (rendimiento): indice novedad_id -> [correos], armado UNA vez por
+  // ejecucion. Antes cada consulta recorria la hoja entera de nuevo, y como
+  // se consultaba por cada par (novedad, persona), el panel de cumplimiento
+  // y el recordatorio diario hacian cientos de recorridos por request.
+  var _indiceAudiencia_ = null;
+
+  function indiceAudiencia_() {
+    if (_indiceAudiencia_) return _indiceAudiencia_;
+    var indice = {};
     try {
-      todas = leerFilas_(SHEETS.NOVEDADES_AUDIENCIA);
+      leerFilas_(SHEETS.NOVEDADES_AUDIENCIA).forEach(function (a) {
+        if (!indice[a.novedad_id]) indice[a.novedad_id] = [];
+        indice[a.novedad_id].push(normalizarEmail_(a.destinatario_email));
+      });
     } catch (err) {
-      return [];
+      // instalacion sin la hoja todavia: audiencia vacia, no es un error
     }
-    return todas.filter(function (a) { return a.novedad_id === novedadId; });
+    _indiceAudiencia_ = indice;
+    return indice;
+  }
+
+  function filasAudiencia_(novedadId) {
+    return indiceAudiencia_()[novedadId] || [];
   }
 
   function guardarDestinatarios_(novedadId, destinatarios) {
@@ -157,6 +172,7 @@ var Novedades = (function () {
         destinatario_email: email
       });
     });
+    _indiceAudiencia_ = null; // se acaba de escribir: el indice quedo viejo
   }
 
   // v6.7 (Fase 5): quien "posee" la audiencia MI_EQUIPO de esta novedad --
@@ -180,7 +196,7 @@ var Novedades = (function () {
       return equipo;
     }
     if (tipo === 'SELECCION') {
-      return filasAudiencia_(novedad.novedad_id).map(function (a) { return normalizarEmail_(a.destinatario_email); });
+      return filasAudiencia_(novedad.novedad_id); // ya viene normalizado
     }
     return null; // TODOS (o vacio: compatibilidad con novedades previas a Fase 5)
   }
@@ -266,8 +282,16 @@ var Novedades = (function () {
   // tiene credenciales activas hoy (audienciaNovedades_). Asi, si alguien
   // seleccionado se desactiva despues, deja de contar como pendiente --
   // nadie queda esperando un acuse imposible.
+  // v6.9: resuelve la audiencia UNA vez por novedad y filtra con un set, en
+  // vez de re-resolverla por cada persona del directorio (era O(personas)
+  // resoluciones por novedad).
   function personasAudiencia_(novedad) {
-    return audienciaNovedades_().filter(function (p) { return personaEnAudiencia_(novedad, p.email); });
+    var todos = audienciaNovedades_();
+    var destinatarios = resolverAudiencia_(novedad);
+    if (destinatarios === null) return todos; // TODOS
+    var set = {};
+    destinatarios.forEach(function (email) { set[email] = true; });
+    return todos.filter(function (p) { return set[p.email]; });
   }
 
   // v6.8 (Fase 6): plazo para dar el acuse. OBLIGATORIO en Ley/Dictamen (lo
@@ -362,7 +386,15 @@ var Novedades = (function () {
   // idea del acuse: obligatorio, pero solo tiene sentido si se puede
   // verificar QUIEN falta). Union de USUARIOS activos (login Google) y los
   // correos de CUENTAS_PORTAL activas (portal). Sin duplicados.
+  // v6.9: memoizado por ejecucion -- arma la lista una sola vez (recorre
+  // USUARIOS y ademas hace JSON.parse de los correos de cada cuenta del
+  // portal). getPanelCumplimiento lo pedia una vez POR NOVEDAD. Ningun punto
+  // de este modulo escribe USUARIOS/CUENTAS_PORTAL, asi que dentro de una
+  // misma ejecucion no puede quedar viejo.
+  var _audienciaMemo_ = null;
+
   function audienciaNovedades_() {
+    if (_audienciaMemo_) return _audienciaMemo_;
     var vistos = {};
     var lista = [];
     leerFilasSeguro_(SHEETS.USUARIOS).forEach(function (u) {
@@ -384,6 +416,7 @@ var Novedades = (function () {
         }
       });
     });
+    _audienciaMemo_ = lista;
     return lista;
   }
 
@@ -1072,10 +1105,26 @@ var Novedades = (function () {
       var hoy = new Date().toISOString().slice(0, 10);
       var enviados = 0;
 
+      // v6.9: la audiencia de cada novedad se resuelve UNA vez (no una vez
+      // por persona). Antes esto era O(personas x novedades) resoluciones y
+      // era lo que hacia pesado al trigger diario.
+      var audienciaPorNovedad = {};
+      activasConAcuse.forEach(function (n) {
+        var destinatarios = resolverAudiencia_(n);
+        if (destinatarios === null) {
+          audienciaPorNovedad[n.novedad_id] = null; // TODOS
+          return;
+        }
+        var set = {};
+        destinatarios.forEach(function (email) { set[email] = true; });
+        audienciaPorNovedad[n.novedad_id] = set;
+      });
+
       audienciaNovedades_().forEach(function (persona) {
         var pendientes = activasConAcuse.filter(function (n) {
+          var set = audienciaPorNovedad[n.novedad_id];
           return normalizarEmail_(n.autor_email) !== persona.email &&
-            personaEnAudiencia_(n, persona.email) &&
+            (set === null || set[persona.email]) &&
             !(leidoPor[n.novedad_id] && leidoPor[n.novedad_id][persona.email]);
         });
         if (!pendientes.length) return;
