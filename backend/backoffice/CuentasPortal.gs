@@ -18,30 +18,37 @@ var ITERACIONES_HASH_PORTAL = 1000;
 // Plantilla de modulos por rol (§2.3 de la propuesta). Solo aplica al CREAR
 // la cuenta (o al resetear modulos): despues manda la lista por cuenta.
 var MODULOS_POR_ROL = {
-  SOLICITANTE: ['nueva_solicitud', 'mis_solicitudes'],
-  DEV: ['nueva_solicitud', 'mis_solicitudes', 'bandeja'],
+  SOLICITANTE: ['nueva_solicitud', 'mis_solicitudes', 'mi_trabajo'],
+  DEV: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo'],
   // ANA = Gestor/Analista (mismo renombre de etiquetas de S12.1): misma
   // plantilla que DEV; la diferencia esta en los permisos por ROL dentro de
   // la bandeja (cambiar prioridad, derivar cualquiera), no en los modulos.
-  ANA: ['nueva_solicitud', 'mis_solicitudes', 'bandeja'],
-  GERENCIA: ['nueva_solicitud', 'mis_solicitudes', 'gerencia'],
+  ANA: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo'],
+  GERENCIA: ['nueva_solicitud', 'mis_solicitudes', 'gerencia', 'mi_trabajo'],
   // v4.2 (documentacion/SIGSO-v4.2-propuestas-modulo-jefatura.md §2): un
   // "Gerencia acotado" -- misma plantilla base, con su propio modulo de
   // solo lectura recortado al equipo (Jefatura.getPanel), no al 'gerencia'
   // completo.
-  JEFATURA: ['nueva_solicitud', 'mis_solicitudes', 'jefatura'],
+  JEFATURA: ['nueva_solicitud', 'mis_solicitudes', 'jefatura', 'mi_trabajo'],
   // v6.0 (modulo Pausas Activas §8): COORDINADOR = prevencionista (Amarlla,
   // Camila, reemplazo). Registra la pausa del dia y ve sus reportes. Modulos
   // aditivos: no toca ninguno de los del sistema principal.
-  COORDINADOR: ['nueva_solicitud', 'mis_solicitudes', 'pausas', 'pausas_coordinacion'],
-  ADM: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion']
+  COORDINADOR: ['nueva_solicitud', 'mis_solicitudes', 'pausas', 'pausas_coordinacion', 'mi_trabajo'],
+  ADM: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo']
 };
 
 // v6.0: 'pausas' (registro del trabajador) y 'pausas_coordinacion' (coordinador
 // + reportes) se suman como modulos ADITIVOS -- cualquier cuenta puede recibir
 // 'pausas' para registrar su participacion sin alterar su rol en el sistema
 // principal.
-var MODULOS_VALIDOS = ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion'];
+// v7.0 (Fase 2, modulo de Gestion Operacional): 'mi_trabajo' es el "Mi
+// trabajo" del colaborador -- se agrega a TODAS las plantillas (como
+// 'mis_solicitudes') porque cualquier persona, sin importar su rol, puede
+// tener compromisos que registrar (documentacion/SIGSO-v7.0-propuesta-
+// modulo-gestion-operacional.md §4.1). No es core como 'novedades' (no se
+// fuerza en cuentas ya existentes que el Admin no haya actualizado) pero SI
+// es parte del set por defecto de toda cuenta nueva.
+var MODULOS_VALIDOS = ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo'];
 
 var CuentasPortal = {
   listar: function (data, contexto) {

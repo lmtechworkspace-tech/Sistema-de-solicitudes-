@@ -45,10 +45,15 @@
       // pantalla de inicio separada).
       SigsoNovedades.pintarTarjetaHome('novedades-home');
     }
+
+    // v7.0 (Fase 2): "Mi trabajo" -- disponible para cualquier sesion de
+    // staff, mismo criterio de visibilidad que la bandeja.
+    document.getElementById('btn-ver-mi-trabajo').addEventListener('click', mostrarMiTrabajo_);
+    document.getElementById('btn-volver-dashboard-mi-trabajo').addEventListener('click', mostrarDashboard_);
   });
 
   function ocultarTodasLasVistas_() {
-    ['vista-dashboard', 'vista-detalle', 'vista-gerencia', 'vista-jefatura', 'vista-novedades'].forEach(function (id) {
+    ['vista-dashboard', 'vista-detalle', 'vista-gerencia', 'vista-jefatura', 'vista-novedades', 'vista-mi-trabajo'].forEach(function (id) {
       document.getElementById(id).classList.add('sigso-oculto');
     });
   }
@@ -82,5 +87,11 @@
     ocultarTodasLasVistas_();
     document.getElementById('vista-novedades').classList.remove('sigso-oculto');
     if (window.SigsoNovedades) SigsoNovedades.cargar();
+  }
+
+  function mostrarMiTrabajo_() {
+    ocultarTodasLasVistas_();
+    document.getElementById('vista-mi-trabajo').classList.remove('sigso-oculto');
+    if (window.SigsoActividades) SigsoActividades.cargar();
   }
 })();

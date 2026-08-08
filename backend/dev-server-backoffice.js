@@ -47,12 +47,12 @@ function construirContexto() {
   seedSheet(ctx, 'CUENTAS_PORTAL', ctx.COLUMNAS.CUENTAS_PORTAL, [
     ['CTA-DEMO-3', 'leo', 'Leo Estay', 'Desarrollador', 'hash-no-usado-aqui', 'sal',
       JSON.stringify(['leo@rld.cl']),
-      'DEV', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja']),
+      'DEV', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo']),
       'RLD', true, false, '', 'dev-server'],
     // P4: cuenta ADM con todos los modulos, para probar Administracion.
     ['CTA-DEMO-4', 'ladmin', 'Luis Admin', 'Administrador', 'hash-no-usado-aqui', 'sal',
       JSON.stringify(['luis@rld.cl']),
-      'ADM', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'administracion', 'pausas', 'pausas_coordinacion']),
+      'ADM', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo']),
       'RLD', true, false, '', 'dev-server'],
     // Cuenta GERENCIA SIN modulo bandeja -- prueba que el detalle de solo
     // lectura se vea desde el Panel de Gerencia sin ese modulo (ver Code.gs,
@@ -113,6 +113,27 @@ function construirContexto() {
   seedSheet(ctx, 'NOVEDADES_LECTURAS', ctx.COLUMNAS.NOVEDADES_LECTURAS);
   seedSheet(ctx, 'NOVEDADES_HISTORIAL', ctx.COLUMNAS.NOVEDADES_HISTORIAL);
   seedSheet(ctx, 'NOVEDADES_AUDIENCIA', ctx.COLUMNAS.NOVEDADES_AUDIENCIA);
+  // v7.0 (Fase 2): "Mi trabajo". Una actividad ya en curso y otra pendiente
+  // de confirmar (asignada por ladmin) para ver ambos flujos en local.
+  seedSheet(ctx, 'ACTIVIDADES', ctx.COLUMNAS.ACTIVIDADES, [
+    ['ACT-DEMO-1', 'Editar 3 videos de testimonios — campaña agosto', '',
+      'PROPIA', '', 'leo@rld.cl', 'Leo Estay', 'luis@rld.cl',
+      '', '', '', 'P2', 'EN_CURSO', 'L',
+      '', new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(), new Date().toISOString(), false,
+      'NINGUNA', '', '', '',
+      'VERDE', '', '', '', '',
+      new Date().toISOString(), 0,
+      new Date().toISOString(), 'leo@rld.cl', true],
+    ['ACT-DEMO-2', 'Cierre contable de julio', '',
+      'ASIGNADA', '', 'leo@rld.cl', 'Leo Estay', 'luis@rld.cl',
+      '', '', '', 'P3', 'NO_INICIADA', 'M',
+      new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(), '', '', false,
+      'MENSUAL', '', '', '',
+      'VERDE', '', '', '', '',
+      new Date().toISOString(), 0,
+      new Date().toISOString(), 'luis@rld.cl', true]
+  ]);
+  seedSheet(ctx, 'ACTIVIDADES_BITACORA', ctx.COLUMNAS.ACTIVIDADES_BITACORA);
   // v6.1 (Fase 4): DOCUMENTOS demo (las capturas ya las siembra
   // sembrarSolicitudesDemo_ mas abajo). Hacen falta para ver la lista de
   // archivos con metadata -- formato, peso y fecha --, que es justo lo que un

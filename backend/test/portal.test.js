@@ -69,7 +69,7 @@ test('login con cuenta creada por el Admin: clave temporal funciona y exige camb
   assert.ok(res.token, 'debe emitir token');
   assert.equal(res.cuenta.nombre, 'Camila Pena');
   assert.equal(res.cuenta.debe_cambiar_password, true);
-  assert.deepEqual([...res.cuenta.modulos], ['nueva_solicitud', 'mis_solicitudes']);
+  assert.deepEqual([...res.cuenta.modulos], ['nueva_solicitud', 'mis_solicitudes', 'mi_trabajo']);
   assert.deepEqual([...res.cuenta.emails], ['camila@gde.cl', 'camila.pena@gmail.com']);
   // El perfil que viaja al navegador JAMAS incluye hash ni sal.
   assert.equal(res.cuenta.hash_password, undefined);
@@ -223,7 +223,7 @@ test('crear cuenta aplica la plantilla de modulos del rol y no repite usuarios',
   assert.equal(dev.password_temporal.length, 10);
 
   const lista = bo.CuentasPortal.listar({}, ADMIN).cuentas;
-  assert.deepEqual([...lista[0].modulos], ['nueva_solicitud', 'mis_solicitudes', 'bandeja']);
+  assert.deepEqual([...lista[0].modulos], ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo']);
 
   const repetido = bo.CuentasPortal.gestionar({
     operacion: 'crear', usuario: 'LEO', nombre: 'Otro', emails: 'otro@rld.cl'

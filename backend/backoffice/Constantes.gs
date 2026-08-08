@@ -88,7 +88,14 @@ var SHEETS = {
   // NOVEDADES.audiencia_tipo = 'SELECCION' -- una fila por persona, mismo
   // patron que NOVEDADES_LECTURAS. Ver la nota identica en
   // backend/intake/Constantes.gs.
-  NOVEDADES_AUDIENCIA: 'NOVEDADES_AUDIENCIA'
+  NOVEDADES_AUDIENCIA: 'NOVEDADES_AUDIENCIA',
+  // v7.0 (documentacion/SIGSO-v7.0-propuesta-modulo-gestion-operacional.md,
+  // Fase 1): modulo de Gestion Operacional -- compromisos de trabajo con
+  // check-in ligero (§4.2). ACTIVIDADES es una fila por compromiso;
+  // ACTIVIDADES_BITACORA es una fila por evento (una sola tabla de
+  // historial a proposito, ver la nota identica en backend/intake/Constantes.gs).
+  ACTIVIDADES: 'ACTIVIDADES',
+  ACTIVIDADES_BITACORA: 'ACTIVIDADES_BITACORA'
 };
 
 var COLUMNAS = {
@@ -333,7 +340,23 @@ var COLUMNAS = {
   // audiencia_tipo = 'SELECCION'). MI_EQUIPO no guarda filas aqui -- se
   // resuelve dinamicamente contra JEFATURAS para que quede al dia si el
   // equipo cambia despues de publicada.
-  NOVEDADES_AUDIENCIA: ['audiencia_id', 'novedad_id', 'destinatario_email']
+  NOVEDADES_AUDIENCIA: ['audiencia_id', 'novedad_id', 'destinatario_email'],
+  // v7.0 (Fase 1, §4.2 de la propuesta): ver la nota identica en
+  // backend/intake/Constantes.gs sobre cada campo.
+  ACTIVIDADES: [
+    'actividad_id', 'titulo', 'descripcion', 'origen', 'solicitud_id',
+    'responsable_email', 'responsable_nombre', 'supervisor_email',
+    'area_id', 'cliente_id', 'proyecto', 'prioridad', 'estado', 'tamano',
+    'fecha_propuesta', 'fecha_compromiso', 'confirmada_en', 'requiere_validacion',
+    'recurrencia', 'recurrencia_origen_id', 'fecha_inicio_plan', 'fecha_terminada',
+    'confianza', 'avance_pct', 'bloqueo_motivo', 'bloqueo_responsable_email',
+    'bloqueo_desde', 'ultima_actualizacion', 'reprogramaciones',
+    'fecha_creacion', 'creado_por', 'activa'
+  ],
+  ACTIVIDADES_BITACORA: [
+    'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',
+    'nota', 'avance_pct', 'confianza', 'datos', 'timestamp'
+  ]
 };
 
 var ESTADOS = {

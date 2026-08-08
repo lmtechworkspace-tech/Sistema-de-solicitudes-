@@ -152,6 +152,10 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   'Perfiles.gs',
   // v6.5: modulo Novedades (hojas NOVEDADES + NOVEDADES_LECTURAS).
   'Novedades.gs',
+  // v7.0 (Fase 1): modulo de Gestion Operacional. Usa obtenerEquipoJefe_/
+  // jefeDeSubordinado_ de Jefatura.gs (ya cargado) solo en tiempo de
+  // ejecucion, asi que basta con cargar despues.
+  'Actividades.gs',
   'Triggers.gs',
   'Code.gs'
 ];

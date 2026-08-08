@@ -48,7 +48,12 @@
     // modulosDeLaCuenta_) -- igual que "Mi perfil", disponible para
     // cualquiera con sesion, sin que un Admin tenga que activarlo cuenta por
     // cuenta.
-    novedades: { icono: 'campana', nombre: 'Novedades', descripcion: 'Leyes, avisos y novedades de todas las áreas', interno: true }
+    novedades: { icono: 'campana', nombre: 'Novedades', descripcion: 'Leyes, avisos y novedades de todas las áreas', interno: true },
+    // v7.0 (Fase 2, modulo de Gestion Operacional): compromisos con
+    // check-in de 1 clic (documentacion/SIGSO-v7.0-propuesta-modulo-
+    // gestion-operacional.md §4.4/§5.1). No es core como 'novedades' --
+    // depende de que la cuenta lo tenga en CUENTAS_PORTAL.modulos.
+    mi_trabajo: { icono: 'check', nombre: 'Mi trabajo', descripcion: 'Tus compromisos, con un check-in de un clic', interno: true }
   };
 
   // v4.0 Frente 3: cada modulo tiene su propio acento -- antes todo el shell
@@ -64,7 +69,8 @@
     administracion: { acento: 'var(--texto-2)', suave: 'var(--superficie-2)' },
     pausas: { acento: 'var(--info)', suave: 'var(--info-suave)' },
     pausas_coordinacion: { acento: 'var(--alerta)', suave: 'var(--alerta-suave)' },
-    novedades: { acento: 'var(--primario)', suave: 'var(--primario-suave)' }
+    novedades: { acento: 'var(--primario)', suave: 'var(--primario-suave)' },
+    mi_trabajo: { acento: 'var(--ok)', suave: 'var(--ok-suave)' }
   };
 
   function acentoInline_(id) {
@@ -342,6 +348,9 @@
         break;
       case 'jefatura':
         if (window.SigsoJefatura) window.SigsoJefatura.cargar();
+        break;
+      case 'mi_trabajo':
+        if (window.SigsoActividades) window.SigsoActividades.cargar();
         break;
       default:
         break; // nueva_solicitud / administracion: sin auto-refresco
@@ -1167,6 +1176,9 @@
     }
     if (id === 'novedades' && window.SigsoNovedades) {
       window.SigsoNovedades.cargar();
+    }
+    if (id === 'mi_trabajo' && window.SigsoActividades) {
+      window.SigsoActividades.cargar();
     }
     window.scrollTo(0, 0);
   }

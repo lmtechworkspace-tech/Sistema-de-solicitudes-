@@ -88,7 +88,12 @@ var SHEETS = {
   // v6.7 (Fase 5): vive en el Backoffice; Intake mantiene la copia solo
   // para que el esquema no diverja. Ver la nota identica en
   // backend/backoffice/Constantes.gs.
-  NOVEDADES_AUDIENCIA: 'NOVEDADES_AUDIENCIA'
+  NOVEDADES_AUDIENCIA: 'NOVEDADES_AUDIENCIA',
+  // v7.0 (Fase 1): vive en el Backoffice; Intake mantiene la copia solo
+  // para que el esquema no diverja. Ver la nota identica en
+  // backend/backoffice/Constantes.gs.
+  ACTIVIDADES: 'ACTIVIDADES',
+  ACTIVIDADES_BITACORA: 'ACTIVIDADES_BITACORA'
 };
 
 var COLUMNAS = {
@@ -347,7 +352,21 @@ var COLUMNAS = {
   ],
   NOVEDADES_LECTURAS: ['lectura_id', 'novedad_id', 'usuario_email', 'leido_en'],
   NOVEDADES_HISTORIAL: ['historial_id', 'novedad_id', 'evento', 'autor_email', 'autor_nombre', 'comentario', 'timestamp'],
-  NOVEDADES_AUDIENCIA: ['audiencia_id', 'novedad_id', 'destinatario_email']
+  NOVEDADES_AUDIENCIA: ['audiencia_id', 'novedad_id', 'destinatario_email'],
+  ACTIVIDADES: [
+    'actividad_id', 'titulo', 'descripcion', 'origen', 'solicitud_id',
+    'responsable_email', 'responsable_nombre', 'supervisor_email',
+    'area_id', 'cliente_id', 'proyecto', 'prioridad', 'estado', 'tamano',
+    'fecha_propuesta', 'fecha_compromiso', 'confirmada_en', 'requiere_validacion',
+    'recurrencia', 'recurrencia_origen_id', 'fecha_inicio_plan', 'fecha_terminada',
+    'confianza', 'avance_pct', 'bloqueo_motivo', 'bloqueo_responsable_email',
+    'bloqueo_desde', 'ultima_actualizacion', 'reprogramaciones',
+    'fecha_creacion', 'creado_por', 'activa'
+  ],
+  ACTIVIDADES_BITACORA: [
+    'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',
+    'nota', 'avance_pct', 'confianza', 'datos', 'timestamp'
+  ]
 };
 
 // S01-S11 completos desde la Fase 1 aunque solo S01 se use aqui: la maquina

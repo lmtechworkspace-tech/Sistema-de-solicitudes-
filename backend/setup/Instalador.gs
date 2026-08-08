@@ -194,7 +194,24 @@ var ESQUEMA_HOJAS = {
   ],
   NOVEDADES_LECTURAS: ['lectura_id', 'novedad_id', 'usuario_email', 'leido_en'],
   NOVEDADES_HISTORIAL: ['historial_id', 'novedad_id', 'evento', 'autor_email', 'autor_nombre', 'comentario', 'timestamp'],
-  NOVEDADES_AUDIENCIA: ['audiencia_id', 'novedad_id', 'destinatario_email']
+  NOVEDADES_AUDIENCIA: ['audiencia_id', 'novedad_id', 'destinatario_email'],
+  // v7.0 (Fase 1, documentacion/SIGSO-v7.0-propuesta-modulo-gestion-
+  // operacional.md §4.2). Esquema ADITIVO, hojas creadas vacias. Ver la
+  // nota identica en backend/backoffice/Constantes.gs sobre cada campo.
+  ACTIVIDADES: [
+    'actividad_id', 'titulo', 'descripcion', 'origen', 'solicitud_id',
+    'responsable_email', 'responsable_nombre', 'supervisor_email',
+    'area_id', 'cliente_id', 'proyecto', 'prioridad', 'estado', 'tamano',
+    'fecha_propuesta', 'fecha_compromiso', 'confirmada_en', 'requiere_validacion',
+    'recurrencia', 'recurrencia_origen_id', 'fecha_inicio_plan', 'fecha_terminada',
+    'confianza', 'avance_pct', 'bloqueo_motivo', 'bloqueo_responsable_email',
+    'bloqueo_desde', 'ultima_actualizacion', 'reprogramaciones',
+    'fecha_creacion', 'creado_por', 'activa'
+  ],
+  ACTIVIDADES_BITACORA: [
+    'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',
+    'nota', 'avance_pct', 'confianza', 'datos', 'timestamp'
+  ]
 };
 
 // SLA por prioridad en horas habiles (§7.2). P5 no tiene SLA.

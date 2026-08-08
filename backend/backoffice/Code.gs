@@ -113,7 +113,20 @@ var BACKOFFICE_ACTIONS = {
   misPendientesNovedad: handleMisPendientesNovedad_,
   // v6.8 (Fase 6, cumplimiento): panel de "quien falta y hace cuanto vence" --
   // solo ADM (Novedades.getPanelCumplimiento ya lo valida en el servidor).
-  getPanelCumplimientoNovedad: handleGetPanelCumplimientoNovedad_
+  getPanelCumplimientoNovedad: handleGetPanelCumplimientoNovedad_,
+  // v7.0 (Fase 1, modulo de Gestion Operacional): CRUD de actividades y
+  // maquina de estados. Sin gate de modulo todavia -- el modulo 'mi_trabajo'
+  // del shell (F2) es el que decide quien puede llegar aqui desde el
+  // portal; el aislamiento real (quien ve/edita que) ya lo impone
+  // Actividades.gs por su cuenta (RN-707/708/709), igual que Novedades.
+  listarActividades: handleListarActividades_,
+  getDetalleActividad: handleGetDetalleActividad_,
+  crearActividad: handleCrearActividad_,
+  confirmarActividad: handleConfirmarActividad_,
+  checkinActividad: handleCheckinActividad_,
+  validarActividad: handleValidarActividad_,
+  cancelarActividad: handleCancelarActividad_,
+  reprogramarActividad: handleReprogramarActividad_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -182,7 +195,19 @@ var MODULO_POR_ACCION = {
   listarRosterCoordinadorPausas: 'pausas_coordinacion',
   getHistorialTrabajadorPausas: 'pausas_coordinacion',
   // v6.0 Fase P5: la pestana de pausas vive en el Panel de Gerencia.
-  getReporteGerenciaPausas: 'gerencia'
+  getReporteGerenciaPausas: 'gerencia',
+  // v7.0 (Fase 2): "Mi trabajo" -- el colaborador ve y actualiza SUS
+  // propias actividades. validarActividad queda sin gate a proposito: hoy
+  // solo lo usa una supervision desde Google (sin gate de modulo, ver
+  // comentario general de esta tabla); F3 la sumara aqui con 'jefatura'
+  // cuando "Actividades del equipo" viva dentro del shell por token.
+  listarActividades: 'mi_trabajo',
+  getDetalleActividad: 'mi_trabajo',
+  crearActividad: 'mi_trabajo',
+  confirmarActividad: 'mi_trabajo',
+  checkinActividad: 'mi_trabajo',
+  cancelarActividad: 'mi_trabajo',
+  reprogramarActividad: 'mi_trabajo'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -525,6 +550,39 @@ function handleListarJefaturas_(data, contexto) {
 
 function handleGestionarJefatura_(data, contexto) {
   return responderResultado_(Jefatura.gestionar(data, contexto));
+}
+
+// v7.0 (Fase 1): modulo de Gestion Operacional (Actividades.gs).
+function handleListarActividades_(data, contexto) {
+  return responderResultado_(Actividades.listar(data, contexto));
+}
+
+function handleGetDetalleActividad_(data, contexto) {
+  return responderResultado_(Actividades.obtenerDetalle(data, contexto));
+}
+
+function handleCrearActividad_(data, contexto) {
+  return responderResultado_(Actividades.crear(data, contexto));
+}
+
+function handleConfirmarActividad_(data, contexto) {
+  return responderResultado_(Actividades.confirmar(data, contexto));
+}
+
+function handleCheckinActividad_(data, contexto) {
+  return responderResultado_(Actividades.checkin(data, contexto));
+}
+
+function handleValidarActividad_(data, contexto) {
+  return responderResultado_(Actividades.validar(data, contexto));
+}
+
+function handleCancelarActividad_(data, contexto) {
+  return responderResultado_(Actividades.cancelar(data, contexto));
+}
+
+function handleReprogramarActividad_(data, contexto) {
+  return responderResultado_(Actividades.reprogramar(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

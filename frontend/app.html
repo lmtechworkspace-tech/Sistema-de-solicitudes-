@@ -34,6 +34,11 @@
       <button type="button" class="sigso-boton--con-icono sigso-boton--secundario" id="btn-ver-novedades">
         <span id="ico-ver-novedades"></span> Novedades<span class="sigso-badge sigso-oculto" id="badge-novedades-app" data-badge="novedades"></span>
       </button>
+      <!-- v7.0 (Fase 2): "Mi trabajo" -- visible para cualquiera con sesion
+           de staff (mismo criterio de acceso que la bandeja). -->
+      <button type="button" class="sigso-boton--con-icono sigso-boton--secundario" id="btn-ver-mi-trabajo">
+        <span id="ico-ver-mi-trabajo"></span> Mi trabajo
+      </button>
 
       <!-- v3.0 (Fase 2, multi-bandeja): un responsable individual (DEV) ya
            esta auto-acotado a la suya -- solo se le avisa. ADM/GERENCIA ven
@@ -373,6 +378,15 @@
       <h1>Novedades</h1>
       <div id="novedades-contenido"></div>
     </section>
+
+    <!-- v7.0 (Fase 2): "Mi trabajo" -- mismo modulo compartido
+         (actividades.js) que usa plataforma.html. -->
+    <section id="vista-mi-trabajo" class="sigso-oculto">
+      <button type="button" class="sigso-boton--secundario" id="btn-volver-dashboard-mi-trabajo">&larr; Volver al dashboard</button>
+      <h1>Mi trabajo</h1>
+      <p class="sigso-ayuda">Tus compromisos, con un check-in de un clic. "Sin cambios" también cuenta.</p>
+      <div id="actividades-contenido"></div>
+    </section>
   </main>
 
   <script src="js/config.js"></script>
@@ -386,6 +400,8 @@
   <script src="js/gerencia.js"></script>
   <script src="js/jefatura.js"></script>
   <script src="js/novedades.js"></script>
+  <!-- v7.0 (Fase 2): modulo "Mi trabajo". -->
+  <script src="js/actividades.js"></script>
   <!-- v6.4: panel "Mi perfil" + identidad en el header. -->
   <script src="js/perfil.js"></script>
   <script src="js/app.js"></script>
