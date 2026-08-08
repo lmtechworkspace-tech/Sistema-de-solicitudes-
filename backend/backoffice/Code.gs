@@ -133,7 +133,14 @@ var BACKOFFICE_ACTIONS = {
   // el equipo, no del check-in exclusivo del responsable (RN-702).
   panelEquipoActividades: handlePanelEquipoActividades_,
   reasignarActividad: handleReasignarActividad_,
-  pedirActualizacionActividad: handlePedirActualizacionActividad_
+  pedirActualizacionActividad: handlePedirActualizacionActividad_,
+  // v7.0 (Fase 5, "Gerencia y reportes"): pestaña de Actividades en el Panel
+  // de Gerencia -- KPIs/mapa de calor/criticas, los 3 motores de reporte en
+  // PDF, y la Acta de reunión.
+  getPanelGerenciaActividades: handleGetPanelGerenciaActividades_,
+  generarReporteActividades: handleGenerarReporteActividades_,
+  descargarReporteActividadesPdf: handleDescargarReporteActividadesPdf_,
+  descargarActaReunionPdf: handleDescargarActaReunionPdf_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -223,6 +230,10 @@ var MODULO_POR_ACCION = {
   // lo usa una supervision desde Google, sin necesidad de exigir modulo.
   panelEquipoActividades: 'jefatura',
   reasignarActividad: 'jefatura',
+  getPanelGerenciaActividades: 'gerencia',
+  generarReporteActividades: 'gerencia',
+  descargarReporteActividadesPdf: 'gerencia',
+  descargarActaReunionPdf: 'gerencia',
   pedirActualizacionActividad: 'jefatura'
   // ping: sin modulo -- cualquier sesion valida.
   //
@@ -612,6 +623,23 @@ function handleReasignarActividad_(data, contexto) {
 
 function handlePedirActualizacionActividad_(data, contexto) {
   return responderResultado_(Actividades.pedirActualizacion(data, contexto));
+}
+
+// v7.0 (Fase 5): pestaña de Actividades en el Panel de Gerencia.
+function handleGetPanelGerenciaActividades_(data, contexto) {
+  return jsonResponse_({ ok: true, data: Actividades.getPanelGerencia(data, contexto) });
+}
+
+function handleGenerarReporteActividades_(data, contexto) {
+  return responderResultado_(Actividades.generarReporte(data, contexto));
+}
+
+function handleDescargarReporteActividadesPdf_(data, contexto) {
+  return responderResultado_(ReporteActividades.descargarReporte(data, contexto));
+}
+
+function handleDescargarActaReunionPdf_(data, contexto) {
+  return responderResultado_(ReporteActividades.descargarActa(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

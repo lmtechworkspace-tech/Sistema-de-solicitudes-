@@ -150,13 +150,18 @@
         // v6.0 Fase P5: pestaña de Pausas activas (su propio endpoint).
         var panelPausas = document.getElementById('ger-panel-pausas');
         if (panelPausas) panelPausas.classList.toggle('sigso-oculto', tab !== 'pausas');
+        // v7.0 Fase 5: pestaña de Actividades (su propio endpoint).
+        var panelActividades = document.getElementById('ger-panel-actividades');
+        if (panelActividades) panelActividades.classList.toggle('sigso-oculto', tab !== 'actividades');
         // Chart.js no dibuja bien en un canvas que estaba con display:none;
         // al entrar a la pestaña de Tendencia, se re-renderiza con las
         // dimensiones ya visibles.
         if (tab === 'tendencia' && panelActual) renderTendencia_(panelActual.tendencia, panelActual.ciclo_por_etapa);
         if (tab === 'pausas') cargarPausasGerencia_();
+        if (tab === 'actividades') cargarActividadesGerencia_();
       });
     });
+    inicializarFiltrosActividadesGerencia_();
   }
 
   // v6.0 (mejora #6): pausas del ultimo reporte cargado, para el boton
@@ -880,5 +885,284 @@
       bloque_('Por empresa', carga.por_empresa) +
       bloque_('Por plataforma', carga.por_plataforma) +
       bloque_('Por área', carga.por_area);
+  }
+
+  // ------------------------------------------------------------------------
+  // v7.0 (Fase 5, §4.7/§4.8/§5.3): pestaña "Actividades" -- KPIs, mapa de
+  // calor área×semana, criticas transversales, 3 motores de reporte
+  // (Estado actual / Cumplimiento del período / Carga y capacidad) en
+  // pantalla + CSV + PDF, y la Acta de reunión. Mismo patron que Pausas
+  // (P5): su propio endpoint, se carga solo al entrar a la pestaña.
+  // ------------------------------------------------------------------------
+
+  // Ultimo reporte cargado -- el boton "Exportar CSV" exporta EXACTAMENTE
+  // lo que se ve en pantalla (mismo criterio que exportarCsvPausas_).
+  var reporteActividadesActual = null;
+
+  function inicializarFiltrosActividadesGerencia_() {
+    var btnVer = document.getElementById('btn-ver-reporte-actividades');
+    if (btnVer) btnVer.addEventListener('click', cargarReporteActividadesGerencia_);
+    var btnCsv = document.getElementById('btn-exportar-csv-actividades');
+    if (btnCsv) btnCsv.addEventListener('click', exportarCsvActividadesGerencia_);
+    var btnPdf = document.getElementById('btn-descargar-pdf-actividades');
+    if (btnPdf) btnPdf.addEventListener('click', descargarPdfActividadesGerencia_);
+    var btnActa = document.getElementById('btn-acta-reunion-actividades');
+    if (btnActa) btnActa.addEventListener('click', descargarActaReunionGerencia_);
+  }
+
+  // Filtros comunes de §4.8 que se implementaron (área/prioridad/rango de
+  // fechas) -- se leen una vez y se reusan tanto para el panel de KPIs como
+  // para los reportes/PDF/acta, para que "lo que ves" sea "lo que exportas".
+  function leerFiltrosActividadesGerencia_() {
+    var desde = document.getElementById('ger-act-filtro-desde').value;
+    var hasta = document.getElementById('ger-act-filtro-hasta').value;
+    return {
+      area_id: document.getElementById('ger-act-filtro-area').value,
+      prioridad: document.getElementById('ger-act-filtro-prioridad').value,
+      desde: desde ? new Date(desde).toISOString() : '',
+      hasta: hasta ? new Date(hasta).toISOString() : ''
+    };
+  }
+
+  function cargarActividadesGerencia_() {
+    var cont = document.getElementById('ger-act-kpis');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Calculando los KPIs de Actividades…');
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getPanelGerenciaActividades', leerFiltrosActividadesGerencia_())
+      .then(function (r) {
+        if (!r.ok) { cont.innerHTML = Componentes.alerta(r.message || 'No se pudo cargar.', 'error'); return; }
+        renderKpisActividadesGerencia_(r.data.kpis);
+        renderHeatmapActividadesGerencia_(r.data.heatmap);
+        renderCriticasActividadesGerencia_(r.data.criticas);
+        poblarSelectAreasActividadesGerencia_(r.data.areas);
+      })
+      .catch(function (e) { cont.innerHTML = Componentes.alerta((e && e.message) || 'Error de conexión.', 'error'); });
+  }
+
+  // El catalogo de áreas viaja en la MISMA respuesta del panel (en vez de
+  // pedirlo a otro endpoint aparte) -- un solo viaje de red para pintar todo
+  // lo que necesita la pestaña. Se puebla una sola vez (si ya hay opciones
+  // ademas de "Todas", no se repite).
+  function poblarSelectAreasActividadesGerencia_(areas) {
+    var select = document.getElementById('ger-act-filtro-area');
+    if (!select || select.options.length > 1) return;
+    (areas || []).forEach(function (a) {
+      var opcion = document.createElement('option');
+      opcion.value = a.area_id;
+      opcion.textContent = a.nombre;
+      select.appendChild(opcion);
+    });
+  }
+
+  // §4.7: los 6 KPIs propuestos (el #5, carga por persona sin ranking, se ve
+  // en detalle en el reporte "Carga y capacidad" en vez de repetirse aca
+  // como una septima tarjeta). #1/#4/#6 son "de periodo" (con delta vs. el
+  // periodo anterior, mismo componente que el resto del panel); #2/#3 son
+  // "de HOY" (una foto, sin periodo anterior comparable -- ver Actividades.gs).
+  function renderKpisActividadesGerencia_(kpis) {
+    var cont = document.getElementById('ger-act-kpis');
+    if (!cont) return;
+    var cmp = kpis.comparativo || {};
+    cont.innerHTML =
+      tarjetaKpiConDelta_({
+        valor: kpis.pct_cumplidas_a_tiempo === null ? '—' : kpis.pct_cumplidas_a_tiempo + '%',
+        delta: deltaBadge_(cmp.pct_cumplidas_a_tiempo, true),
+        etiqueta: 'Cumplidas a tiempo',
+        titulo: 'De lo terminado en el período, % con fecha_terminada dentro del compromiso.'
+      }) +
+      Componentes.kpi({
+        valor: kpis.antiguedad_media_dias,
+        etiqueta: 'Antigüedad media (días)',
+        titulo: 'Meta-KPI (§4.7): promedio de días hábiles sin check-in de las actividades activas. Si es alta, el resto del panel no es confiable.'
+      }) +
+      Componentes.kpi({
+        valor: kpis.bloqueadas_actual + (kpis.bloqueadas_actual ? ' (' + kpis.bloqueo_promedio_dias + ' d prom.)' : ''),
+        etiqueta: 'Bloqueadas ahora',
+        alerta: kpis.bloqueadas_actual > 0,
+        titulo: 'Actividades BLOQUEADA en este momento, con el promedio de días hábiles que llevan así.'
+      }) +
+      tarjetaKpiConDelta_({
+        valor: kpis.reprogramaciones_promedio,
+        delta: deltaBadge_(cmp.reprogramaciones_promedio, false),
+        etiqueta: 'Reprogramaciones prom.',
+        titulo: '1 es normal; varias indican mala estimación o alcance que crece.'
+      }) +
+      tarjetaKpiConDelta_({
+        valor: kpis.pct_emergente === null ? '—' : kpis.pct_emergente + '%',
+        delta: deltaBadge_(cmp.pct_emergente, false),
+        etiqueta: '% trabajo emergente',
+        titulo: 'De lo creado en el período, % que entró como EMERGENTE (no planificado). Si es sistemáticamente alto, planificar es teatro.'
+      });
+  }
+
+  // §5.3: mapa de calor área×semana -- tabla simple con celdas coloreadas
+  // (nada de gráficos decorativos), responde "¿dónde está el problema?" de
+  // un vistazo. Sin datos comprometidos esa semana = celda gris ("—"), no
+  // "0%" (0% sugeriría que hubo compromisos y todos fallaron).
+  function renderHeatmapActividadesGerencia_(heatmap) {
+    var cont = document.getElementById('ger-act-heatmap');
+    if (!cont) return;
+    if (!heatmap || heatmap.length === 0) {
+      cont.innerHTML = Componentes.vacio('Sin actividades con fecha comprometida en las últimas semanas.');
+      return;
+    }
+    var semanas = heatmap[0].semanas.map(function (s) { return s.etiqueta; });
+    var encabezado = '<tr><th></th>' + semanas.map(function (s) {
+      return '<th style="padding:6px;text-align:center;">' + Componentes.escaparHtml(s) + '</th>';
+    }).join('') + '</tr>';
+    var filas = heatmap.map(function (fila) {
+      var celdas = fila.semanas.map(function (s) {
+        var texto = s.total === 0 ? '—' : s.pct_cumplimiento + '%';
+        return '<td style="background:' + colorHeatmapActividades_(s.total, s.pct_cumplimiento) +
+          ';text-align:center;padding:6px;border-radius:4px;" title="' + s.total + ' comprometida(s) esta semana">' + texto + '</td>';
+      }).join('');
+      return '<tr><td style="padding:6px;font-weight:600;white-space:nowrap;">' + Componentes.escaparHtml(fila.area_nombre) + '</td>' + celdas + '</tr>';
+    }).join('');
+    cont.innerHTML = '<div style="overflow-x:auto;"><table style="border-collapse:separate;border-spacing:4px;width:100%;">' + encabezado + filas + '</table></div>';
+  }
+
+  function colorHeatmapActividades_(total, pct) {
+    if (total === 0 || pct === null || pct === undefined) return '#EEF1F6';
+    if (pct >= 80) return '#D7F2E3';
+    if (pct >= 50) return '#FCEEC8';
+    return '#F8D6D2';
+  }
+
+  // §5.3: tabla de actividades críticas -- P1/P2 atrasadas, en riesgo o
+  // bloqueadas, transversal a todos los equipos (Actividades.getPanelGerencia
+  // ya viene ordenada: atrasada primero, luego bloqueada, luego riesgo).
+  function renderCriticasActividadesGerencia_(criticas) {
+    var cont = document.getElementById('ger-act-criticas');
+    if (!cont) return;
+    if (!criticas || criticas.length === 0) {
+      cont.innerHTML = Componentes.vacio('Sin actividades críticas: todo P1/P2 está al día.');
+      return;
+    }
+    var filas = criticas.map(function (c) {
+      return '<tr>' +
+        '<td>' + Componentes.escaparHtml(c.titulo) + '</td>' +
+        '<td>' + Componentes.escaparHtml(c.responsable_nombre) + '</td>' +
+        '<td>' + Componentes.escaparHtml(c.area_nombre) + '</td>' +
+        '<td>' + Componentes.escaparHtml(c.prioridad) + '</td>' +
+        '<td>' + Componentes.escaparHtml(c.semaforo_etiqueta) + '</td>' +
+        '<td>' + (c.fecha_compromiso ? Componentes.escaparHtml(fechaCortaActividadGerencia_(c.fecha_compromiso)) : '—') + '</td>' +
+        '</tr>';
+    }).join('');
+    cont.innerHTML = '<table class="sigso-tabla"><thead><tr>' +
+      '<th>Actividad</th><th>Responsable</th><th>Área</th><th>Prioridad</th><th>Semáforo</th><th>Vence</th>' +
+      '</tr></thead><tbody>' + filas + '</tbody></table>';
+  }
+
+  function fechaCortaActividadGerencia_(iso) {
+    return String(iso).replace('T', ' ').slice(0, 10);
+  }
+
+  // §4.8: "3 motores + filtros comunes" en pantalla. Mismo `reporte` (columnas
+  // + filas + resumen) que arma el servidor sirve para pintar la tabla, para
+  // el CSV (exportarCsvActividadesGerencia_) y, en el servidor, para el PDF.
+  function cargarReporteActividadesGerencia_() {
+    var cont = document.getElementById('ger-act-reporte');
+    if (!cont) return;
+    var tipo = document.getElementById('ger-act-tipo-reporte').value;
+    var filtros = Object.assign({ tipo: tipo }, leerFiltrosActividadesGerencia_());
+    cont.innerHTML = Componentes.cargando('Generando el reporte…');
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'generarReporteActividades', filtros)
+      .then(function (r) {
+        if (!r.ok) { cont.innerHTML = Componentes.alerta(r.message || 'No se pudo generar el reporte.', 'error'); return; }
+        reporteActividadesActual = r.data;
+        renderReporteActividadesGerencia_(r.data);
+      })
+      .catch(function (e) { cont.innerHTML = Componentes.alerta((e && e.message) || 'Error de conexión.', 'error'); });
+  }
+
+  function renderReporteActividadesGerencia_(reporte) {
+    var cont = document.getElementById('ger-act-reporte');
+    if (!cont) return;
+    var resumenHtml = Object.keys(reporte.resumen || {}).map(function (clave) {
+      var valor = reporte.resumen[clave];
+      return '<span style="margin-right:16px;"><strong>' + Componentes.escaparHtml(clave.replace(/_/g, ' ')) + ':</strong> ' +
+        Componentes.escaparHtml(valor === null || valor === undefined ? '—' : String(valor)) + '</span>';
+    }).join('');
+    if (!reporte.filas.length) {
+      cont.innerHTML = '<p>' + resumenHtml + '</p>' + Componentes.vacio('Sin datos para los filtros elegidos.');
+      return;
+    }
+    var encabezado = '<tr>' + reporte.columnas.map(function (c) {
+      return '<th>' + Componentes.escaparHtml(c.etiqueta) + '</th>';
+    }).join('') + '</tr>';
+    var filas = reporte.filas.map(function (fila) {
+      return '<tr>' + reporte.columnas.map(function (c) {
+        var valor = fila[c.campo];
+        return '<td>' + Componentes.escaparHtml(valor === null || valor === undefined || valor === '' ? '—' : String(valor)) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    cont.innerHTML = '<p>' + resumenHtml + '</p><div style="overflow-x:auto;"><table class="sigso-tabla"><thead>' + encabezado + '</thead><tbody>' + filas + '</tbody></table></div>';
+  }
+
+  // Mismo patron blob + <a download> que exportarCSV_ (dashboard.js) y
+  // exportarCsvPausas_ (arriba en este archivo) -- exporta EXACTAMENTE el
+  // reporte que se esta viendo, no vuelve a pedir datos al servidor.
+  function exportarCsvActividadesGerencia_() {
+    if (!reporteActividadesActual || !reporteActividadesActual.filas.length) {
+      Componentes.aviso({ texto: 'Primero genera un reporte con "Ver".', tipo: 'error' });
+      return;
+    }
+    var columnas = reporteActividadesActual.columnas;
+    var lineas = [columnas.map(function (c) { return c.etiqueta; }).join(',')].concat(
+      reporteActividadesActual.filas.map(function (fila) {
+        return columnas.map(function (c) {
+          var valor = fila[c.campo];
+          return '"' + String(valor === null || valor === undefined ? '' : valor).replace(/"/g, '""') + '"';
+        }).join(',');
+      })
+    );
+    var blob = new Blob([lineas.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    var enlace = document.createElement('a');
+    enlace.href = URL.createObjectURL(blob);
+    enlace.download = 'sigso-actividades-' + reporteActividadesActual.tipo + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(enlace);
+    enlace.click();
+    document.body.removeChild(enlace);
+  }
+
+  // §4.8 (formato PDF): el servidor arma el mismo reporte y lo convierte a
+  // PDF (ReporteActividades.gs, mismo patron HTML->PDF que la Orden de
+  // Trabajo, v5.2). Mismo decode base64 -> Blob -> <a download> que
+  // descargarOrdenTrabajo_ (detalle.js).
+  function descargarPdfActividadesGerencia_() {
+    var tipo = document.getElementById('ger-act-tipo-reporte').value;
+    var filtros = Object.assign({ tipo: tipo }, leerFiltrosActividadesGerencia_());
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'descargarReporteActividadesPdf', filtros)
+      .then(function (r) {
+        if (!r.ok) { Componentes.aviso({ texto: r.message || 'No se pudo generar el PDF.', tipo: 'error' }); return; }
+        descargarPdfBase64ActividadesGerencia_(r.data.pdf_base64, r.data.filename);
+      })
+      .catch(function (e) { Componentes.aviso({ texto: (e && e.message) || 'Error de conexión.', tipo: 'error' }); });
+  }
+
+  // §4.8 ("extra propuesto"): la pauta de la reunión semanal, lista para
+  // imprimir/proyectar -- venció / bloqueado / se reprogramó / vence la
+  // semana entrante.
+  function descargarActaReunionGerencia_() {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'descargarActaReunionPdf', leerFiltrosActividadesGerencia_())
+      .then(function (r) {
+        if (!r.ok) { Componentes.aviso({ texto: r.message || 'No se pudo generar el acta.', tipo: 'error' }); return; }
+        descargarPdfBase64ActividadesGerencia_(r.data.pdf_base64, r.data.filename);
+      })
+      .catch(function (e) { Componentes.aviso({ texto: (e && e.message) || 'Error de conexión.', tipo: 'error' }); });
+  }
+
+  function descargarPdfBase64ActividadesGerencia_(base64, filename) {
+    var binario = atob(base64);
+    var buffer = new Uint8Array(binario.length);
+    for (var i = 0; i < binario.length; i++) buffer[i] = binario.charCodeAt(i);
+    var blob = new Blob([buffer], { type: 'application/pdf' });
+    var enlace = document.createElement('a');
+    enlace.href = URL.createObjectURL(blob);
+    enlace.download = filename;
+    document.body.appendChild(enlace);
+    enlace.click();
+    document.body.removeChild(enlace);
+    setTimeout(function () { URL.revokeObjectURL(enlace.href); }, 1000);
   }
 })();

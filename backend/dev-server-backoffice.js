@@ -122,7 +122,7 @@ function construirContexto() {
   seedSheet(ctx, 'ACTIVIDADES', ctx.COLUMNAS.ACTIVIDADES, [
     ['ACT-DEMO-1', 'Editar 3 videos de testimonios — campaña agosto', '',
       'PROPIA', '', 'leo@rld.cl', 'Leo Estay', 'jefe@homepymes.cl',
-      '', '', '', 'P2', 'EN_CURSO', 'L',
+      'AREA_PLAT', '', '', 'P2', 'EN_CURSO', 'L',
       '', new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(), new Date().toISOString(), false,
       'NINGUNA', '', '', '',
       'VERDE', '', '', '', '',
@@ -130,12 +130,31 @@ function construirContexto() {
       new Date().toISOString(), 'leo@rld.cl', true],
     ['ACT-DEMO-2', 'Cierre contable de julio', '',
       'ASIGNADA', '', 'leo@rld.cl', 'Leo Estay', 'jefe@homepymes.cl',
-      '', '', '', 'P3', 'NO_INICIADA', 'M',
+      'AREA_CONTA', '', '', 'P3', 'NO_INICIADA', 'M',
       new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(), '', '', false,
       'MENSUAL', '', '', '',
       'VERDE', '', '', '', '',
       new Date().toISOString(), 0,
-      new Date().toISOString(), 'jefe@homepymes.cl', true]
+      new Date().toISOString(), 'jefe@homepymes.cl', true],
+    // v7.0 (Fase 5): un par extra para ver el panel de Gerencia con datos
+    // reales -- una P1 vencida (criticas + heatmap en rojo) y una bloqueada
+    // hace dias (KPI "Bloqueadas ahora" + fila de bloqueo estancado).
+    ['ACT-DEMO-3', 'Migrar reporte de ventas al nuevo ERP', '',
+      'ASIGNADA', '', 'leo@rld.cl', 'Leo Estay', 'jefe@homepymes.cl',
+      'AREA_PLAT', '', '', 'P1', 'EN_CURSO', 'L',
+      '', new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(), new Date(Date.now() - 6 * 24 * 3600 * 1000).toISOString(), false,
+      'NINGUNA', '', '', '',
+      'ROJA', '', '', '', '',
+      new Date(Date.now() - 4 * 24 * 3600 * 1000).toISOString(), 0,
+      new Date(Date.now() - 6 * 24 * 3600 * 1000).toISOString(), 'jefe@homepymes.cl', true],
+    ['ACT-DEMO-4', 'Conciliar cuentas por cobrar de clientes RLD', '',
+      'PROPIA', '', 'leo@rld.cl', 'Leo Estay', 'jefe@homepymes.cl',
+      'AREA_CONTA', '', '', 'P2', 'BLOQUEADA', 'M',
+      '', new Date(Date.now() + 4 * 24 * 3600 * 1000).toISOString(), new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(), false,
+      'NINGUNA', '', '', '',
+      'AMARILLA', '', 'Esperando acceso al nuevo portal bancario', 'jefe@homepymes.cl', new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
+      new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(), 0,
+      new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(), 'leo@rld.cl', true]
   ]);
   seedSheet(ctx, 'ACTIVIDADES_BITACORA', ctx.COLUMNAS.ACTIVIDADES_BITACORA);
   // v6.1 (Fase 4): DOCUMENTOS demo (las capturas ya las siembra

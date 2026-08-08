@@ -516,6 +516,34 @@ var Actividades = {
         1, { htmlBody: plantillaCorreoHtml_('Actualización pedida', cuerpo) });
     }
     return { actividad_id: actividad.actividad_id, enviado: envio.enviado };
+  },
+
+  // v7.0 (Fase 5, §5.3/§4.7): pestaña de Gerencia -- KPIs, mapa de calor
+  // área×semana y actividades críticas transversales a todos los equipos.
+  // Sin gate de rol propio: como Gerencia.getPanel, se apoya en el gate de
+  // modulo 'gerencia' (Code.gs) para el camino de portal; el camino Google
+  // sigue autorizado por rol de siempre.
+  getPanelGerencia: function (filtros, contexto) {
+    return calcularPanelGerenciaActividades_(filtros || {});
+  },
+
+  // v7.0 (Fase 5, §4.8): "3 motores + filtros comunes" -- un solo punto de
+  // entrada que arma la tabla (columnas + filas + resumen) para los tres
+  // tipos. El mismo resultado alimenta la vista en pantalla, el CSV
+  // (armado en el cliente) y el PDF (ReporteActividades.gs).
+  generarReporte: function (data, contexto) {
+    var tipo = data && data.tipo;
+    if (['estado_actual', 'cumplimiento_periodo', 'carga_capacidad'].indexOf(tipo) === -1) {
+      return errorValidacion_('tipo', 'Tipo de reporte inválido.');
+    }
+    return construirReporteActividades_(tipo, data || {});
+  },
+
+  // v7.0 (Fase 5, §4.8, "extra propuesto"): la pauta de la reunion semanal
+  // de seguimiento -- que vencio, que esta bloqueado, que se reprogramo
+  // esta semana y que vence la semana entrante, en ese orden.
+  generarActaReunion: function (filtros, contexto) {
+    return construirActaReunion_(filtros || {});
   }
 };
 
@@ -608,6 +636,407 @@ var ACTIVIDADES_UMBRAL_BLOQUEO_ESTANCADO_DIAS = 2;
 function diasHabilesEntreFechas_(desde, hasta, feriados) {
   if (!desde) return 0;
   return Utils.horasHabilesEntre(desde, hasta, { feriados: feriados }) / 9;
+}
+
+// --- Fase 5 (§4.7/§4.8): panel de Gerencia y motores de reporte -----------
+
+function areasPorId_() {
+  var mapa = {};
+  try {
+    leerFilas_(SHEETS.CAT_AREAS).forEach(function (a) { mapa[a.area_id] = a.nombre; });
+  } catch (err) {
+    // Instalaciones sin CAT_AREAS todavia (o hoja recien creada): sin
+    // nombres, no debe tumbar el panel -- mismo criterio que
+    // mapaNombresUsuarios_ (Gerencia.gs).
+  }
+  return mapa;
+}
+
+function actividadesActivasNoCanceladas_() {
+  return leerFilasSeguro_(SHEETS.ACTIVIDADES).filter(function (a) {
+    var activa = a.activa === true || a.activa === 'TRUE' || a.activa === 1;
+    return activa && a.estado !== ACTIVIDADES_ESTADOS.CANCELADA;
+  });
+}
+
+// Filtros comunes de Gerencia (§4.8): de los ocho documentados, se
+// implementan área y prioridad -- los que responden "dónde está el
+// problema" sin abrir un formulario de filtros propio. Rango de fechas
+// vive aparte (resolverVentanaPeriodo_, reusado de Gerencia.gs).
+function coincideFiltroGerenciaActividad_(a, filtros) {
+  if (filtros.area_id && a.area_id !== filtros.area_id) return false;
+  if (filtros.prioridad && a.prioridad !== filtros.prioridad) return false;
+  return true;
+}
+
+function calcularPanelGerenciaActividades_(filtrosBase) {
+  var nombresArea = areasPorId_();
+  var todas = actividadesActivasNoCanceladas_().filter(function (a) {
+    return coincideFiltroGerenciaActividad_(a, filtrosBase);
+  });
+  var ahora = new Date();
+
+  // resolverVentanaPeriodo_/dentroDeRango_ (Gerencia.gs): calculo generico
+  // de fechas, sin nada especifico de Solicitudes -- se reusa tal cual.
+  var ventana = resolverVentanaPeriodo_(filtrosBase);
+  var creadasVentana = todas.filter(function (a) { return dentroDeRango_(a.fecha_creacion, ventana.desde, ventana.hasta); });
+  var creadasVentanaAnterior = todas.filter(function (a) { return dentroDeRango_(a.fecha_creacion, ventana.desdeAnterior, ventana.hastaAnterior); });
+
+  var criticas = todas
+    .filter(function (a) {
+      var s = semaforoActividad_(a);
+      return ['P1', 'P2'].indexOf(a.prioridad) !== -1 && ['atrasada', 'riesgo', 'bloqueada'].indexOf(s.codigo) !== -1;
+    })
+    .map(function (a) {
+      var s = semaforoActividad_(a);
+      return {
+        actividad_id: a.actividad_id,
+        titulo: a.titulo,
+        responsable_nombre: a.responsable_nombre || a.responsable_email,
+        area_nombre: nombresArea[a.area_id] || '(sin área)',
+        prioridad: a.prioridad,
+        semaforo: s.codigo,
+        semaforo_etiqueta: s.etiqueta,
+        fecha_compromiso: a.fecha_compromiso || ''
+      };
+    })
+    .sort(function (x, y) {
+      var orden = { atrasada: 0, bloqueada: 1, riesgo: 2 };
+      var porSemaforo = orden[x.semaforo] - orden[y.semaforo];
+      if (porSemaforo !== 0) return porSemaforo;
+      return new Date(x.fecha_compromiso || 0) - new Date(y.fecha_compromiso || 0);
+    });
+
+  return {
+    kpis: calcularKpisGerenciaActividades_(todas, creadasVentana, creadasVentanaAnterior, ahora),
+    heatmap: calcularHeatmapActividades_(todas, nombresArea),
+    criticas: criticas,
+    areas: Object.keys(nombresArea).map(function (id) { return { area_id: id, nombre: nombresArea[id] }; }),
+    ventana: { desde: ventana.desde.toISOString(), hasta: ventana.hasta.toISOString() }
+  };
+}
+
+// §4.7: los 6 KPIs propuestos. #1 (cumplidas a tiempo), #4 (reprogramaciones)
+// y #6 (% emergente) son "de periodo" (comparables contra la ventana
+// anterior, mismo patron que calcularComparativoKpis_ en Gerencia.gs). #2
+// (antigüedad media) y #3 (bloqueadas + tiempo de desbloqueo) son "de HOY":
+// una foto del momento, sin periodo anterior comparable -- comparar
+// "bloqueadas ahora" contra "bloqueadas hace 30 dias" no responde nada util.
+// #5 (carga por persona, sin ranking) es la distribucion completa, no un
+// numero -- la UI decide como mostrarla, aca solo se cuenta.
+function calcularKpisPeriodoActividades_(creadas) {
+  var terminadas = creadas.filter(function (a) {
+    return a.estado === ACTIVIDADES_ESTADOS.TERMINADA && a.fecha_terminada && a.fecha_compromiso;
+  });
+  var aTiempo = terminadas.filter(function (a) { return new Date(a.fecha_terminada) <= new Date(a.fecha_compromiso); });
+  var emergentes = creadas.filter(function (a) { return a.origen === 'EMERGENTE'; });
+  return {
+    pct_cumplidas_a_tiempo: terminadas.length === 0 ? null : Math.round((aTiempo.length / terminadas.length) * 1000) / 10,
+    reprogramaciones_promedio: promedio_(creadas.map(function (a) { return Number(a.reprogramaciones) || 0; })),
+    pct_emergente: creadas.length === 0 ? null : Math.round((emergentes.length / creadas.length) * 1000) / 10
+  };
+}
+
+function calcularKpisGerenciaActividades_(todas, creadasVentana, creadasVentanaAnterior, ahora) {
+  var feriados = obtenerFeriados_();
+  var activasNoTerminales = todas.filter(function (a) { return !esEstadoTerminal_(a.estado); });
+  var bloqueadas = todas.filter(function (a) { return a.estado === ACTIVIDADES_ESTADOS.BLOQUEADA; });
+
+  var porPersona = {};
+  todas.forEach(function (a) {
+    var email = a.responsable_email || '(sin responsable)';
+    porPersona[email] = (porPersona[email] || 0) + 1;
+  });
+
+  var actual = calcularKpisPeriodoActividades_(creadasVentana);
+  var anterior = calcularKpisPeriodoActividades_(creadasVentanaAnterior);
+  function delta_(a, b) {
+    if (a === null || a === undefined || b === null || b === undefined) return null;
+    return Math.round((a - b) * 10) / 10;
+  }
+
+  return {
+    pct_cumplidas_a_tiempo: actual.pct_cumplidas_a_tiempo,
+    antiguedad_media_dias: promedio_(activasNoTerminales.map(function (a) {
+      return Utils.horasHabilesEntre(a.ultima_actualizacion || a.fecha_creacion, ahora, { feriados: feriados }) / 9;
+    })),
+    bloqueadas_actual: bloqueadas.length,
+    bloqueo_promedio_dias: promedio_(bloqueadas.map(function (a) {
+      return Utils.horasHabilesEntre(a.bloqueo_desde || a.ultima_actualizacion, ahora, { feriados: feriados }) / 9;
+    })),
+    reprogramaciones_promedio: actual.reprogramaciones_promedio,
+    pct_emergente: actual.pct_emergente,
+    carga_por_persona: Object.keys(porPersona)
+      .map(function (email) { return { email: email, total: porPersona[email] }; })
+      .sort(function (x, y) { return y.total - x.total; }),
+    comparativo: {
+      pct_cumplidas_a_tiempo: delta_(actual.pct_cumplidas_a_tiempo, anterior.pct_cumplidas_a_tiempo),
+      reprogramaciones_promedio: delta_(actual.reprogramaciones_promedio, anterior.reprogramaciones_promedio),
+      pct_emergente: delta_(actual.pct_emergente, anterior.pct_emergente)
+    }
+  };
+}
+
+// §5.3: mapa de calor área × semana -- responde "¿dónde está el problema?"
+// sin leer filas. 6 semanas (lunes a domingo, UTC -- mismo criterio de
+// aritmetica en UTC que correrFechaRecurrencia_, para no correr un dia
+// segun el huso del servidor). % cumplimiento = TERMINADA a tiempo ÷ total
+// comprometido esa semana; lo aun no resuelto pesa como "no cumplido
+// todavia" en el numero de hoy (se corrige solo cuando se cierra).
+function calcularHeatmapActividades_(todas, nombresArea) {
+  var SEMANAS_HEATMAP = 6;
+  var ahora = new Date();
+  var lunesActual = inicioSemanaUTC_(ahora);
+
+  var semanas = [];
+  for (var i = SEMANAS_HEATMAP - 1; i >= 0; i--) {
+    var inicio = new Date(lunesActual.getTime() - i * 7 * 24 * 3600 * 1000);
+    semanas.push({ inicio: inicio, fin: new Date(inicio.getTime() + 7 * 24 * 3600 * 1000), etiqueta: etiquetaSemana_(inicio) });
+  }
+
+  var porArea = {};
+  todas.forEach(function (a) {
+    if (!a.fecha_compromiso) return;
+    var t = new Date(a.fecha_compromiso).getTime();
+    var semana = null;
+    for (var j = 0; j < semanas.length; j++) {
+      if (t >= semanas[j].inicio.getTime() && t < semanas[j].fin.getTime()) { semana = semanas[j]; break; }
+    }
+    if (!semana) return;
+    var areaNombre = nombresArea[a.area_id] || '(sin área)';
+    if (!porArea[areaNombre]) {
+      porArea[areaNombre] = {};
+      semanas.forEach(function (s) { porArea[areaNombre][s.etiqueta] = { total: 0, cumplidas: 0 }; });
+    }
+    var celda = porArea[areaNombre][semana.etiqueta];
+    celda.total++;
+    if (a.estado === ACTIVIDADES_ESTADOS.TERMINADA && a.fecha_terminada && new Date(a.fecha_terminada) <= new Date(a.fecha_compromiso)) {
+      celda.cumplidas++;
+    }
+  });
+
+  return Object.keys(porArea).sort().map(function (areaNombre) {
+    return {
+      area_nombre: areaNombre,
+      semanas: semanas.map(function (s) {
+        var celda = porArea[areaNombre][s.etiqueta];
+        return {
+          etiqueta: s.etiqueta,
+          total: celda.total,
+          pct_cumplimiento: celda.total === 0 ? null : Math.round((celda.cumplidas / celda.total) * 1000) / 10
+        };
+      })
+    };
+  });
+}
+
+function inicioSemanaUTC_(fecha) {
+  var diaSemana = fecha.getUTCDay(); // 0 = domingo
+  var offsetLunes = (diaSemana + 6) % 7;
+  return new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate() - offsetLunes));
+}
+
+function etiquetaSemana_(inicioLunes) {
+  return ('0' + inicioLunes.getUTCDate()).slice(-2) + '/' + ('0' + (inicioLunes.getUTCMonth() + 1)).slice(-2);
+}
+
+// §4.8: "3 motores + filtros comunes", un solo despachador. Cada tipo
+// devuelve { columnas, filas, resumen } -- misma forma para los tres, asi
+// la tabla en pantalla, el CSV y el PDF (ReporteActividades.gs) comparten
+// un unico contrato en vez de tres formatos distintos.
+function construirReporteActividades_(tipo, filtros) {
+  var nombresArea = areasPorId_();
+  var ventana = resolverVentanaPeriodo_(filtros);
+  var todas = actividadesActivasNoCanceladas_().filter(function (a) {
+    return coincideFiltroGerenciaActividad_(a, filtros);
+  });
+
+  if (tipo === 'estado_actual') {
+    var filasEstado = todas.map(function (a) {
+      var s = semaforoActividad_(a);
+      return {
+        titulo: a.titulo,
+        responsable: a.responsable_nombre || a.responsable_email,
+        area: nombresArea[a.area_id] || '(sin área)',
+        prioridad: a.prioridad,
+        estado: a.estado,
+        semaforo: s.etiqueta,
+        fecha_compromiso: a.fecha_compromiso || ''
+      };
+    });
+    return {
+      tipo: tipo,
+      columnas: [
+        { campo: 'titulo', etiqueta: 'Actividad' },
+        { campo: 'responsable', etiqueta: 'Responsable' },
+        { campo: 'area', etiqueta: 'Área' },
+        { campo: 'prioridad', etiqueta: 'Prioridad' },
+        { campo: 'estado', etiqueta: 'Estado' },
+        { campo: 'semaforo', etiqueta: 'Semáforo' },
+        { campo: 'fecha_compromiso', etiqueta: 'Vence' }
+      ],
+      filas: filasEstado,
+      resumen: { total: filasEstado.length }
+    };
+  }
+
+  if (tipo === 'cumplimiento_periodo') {
+    var enPeriodo = todas.filter(function (a) { return dentroDeRango_(a.fecha_compromiso, ventana.desde, ventana.hasta); });
+    var ahoraCump = new Date();
+    var filasCump = enPeriodo.map(function (a) {
+      var cumplida = a.estado === ACTIVIDADES_ESTADOS.TERMINADA
+        ? (a.fecha_terminada && new Date(a.fecha_terminada) <= new Date(a.fecha_compromiso) ? 'Sí' : 'No')
+        : 'Pendiente';
+      return {
+        titulo: a.titulo,
+        responsable: a.responsable_nombre || a.responsable_email,
+        area: nombresArea[a.area_id] || '(sin área)',
+        fecha_compromiso: a.fecha_compromiso || '',
+        fecha_terminada: a.fecha_terminada || '',
+        cumplida: cumplida,
+        reprogramaciones: Number(a.reprogramaciones) || 0
+      };
+    });
+    var terminadasConFecha = enPeriodo.filter(function (a) {
+      return a.estado === ACTIVIDADES_ESTADOS.TERMINADA && a.fecha_terminada;
+    });
+    var aTiempoCump = terminadasConFecha.filter(function (a) { return new Date(a.fecha_terminada) <= new Date(a.fecha_compromiso); });
+    var vencidasCump = enPeriodo.filter(function (a) {
+      return a.estado !== ACTIVIDADES_ESTADOS.TERMINADA && new Date(a.fecha_compromiso) < ahoraCump;
+    });
+    return {
+      tipo: tipo,
+      columnas: [
+        { campo: 'titulo', etiqueta: 'Actividad' },
+        { campo: 'responsable', etiqueta: 'Responsable' },
+        { campo: 'area', etiqueta: 'Área' },
+        { campo: 'fecha_compromiso', etiqueta: 'Comprometida' },
+        { campo: 'fecha_terminada', etiqueta: 'Terminada' },
+        { campo: 'cumplida', etiqueta: 'Cumplida a tiempo' },
+        { campo: 'reprogramaciones', etiqueta: 'Reprogramaciones' }
+      ],
+      filas: filasCump,
+      resumen: {
+        comprometidas: enPeriodo.length,
+        cumplidas_a_tiempo: aTiempoCump.length,
+        pct_cumplimiento: terminadasConFecha.length === 0 ? null : Math.round((aTiempoCump.length / terminadasConFecha.length) * 1000) / 10,
+        vencidas: vencidasCump.length,
+        reprogramaciones_promedio: promedio_(enPeriodo.map(function (a) { return Number(a.reprogramaciones) || 0; }))
+      }
+    };
+  }
+
+  // carga_capacidad
+  var creadasEnPeriodo = todas.filter(function (a) { return dentroDeRango_(a.fecha_creacion, ventana.desde, ventana.hasta); });
+  var porPersonaCarga = {};
+  creadasEnPeriodo.forEach(function (a) {
+    var email = a.responsable_email || '(sin responsable)';
+    if (!porPersonaCarga[email]) {
+      porPersonaCarga[email] = {
+        nombre: a.responsable_nombre || email,
+        area: nombresArea[a.area_id] || '(sin área)',
+        total: 0,
+        emergentes: 0
+      };
+    }
+    porPersonaCarga[email].total++;
+    if (a.origen === 'EMERGENTE') porPersonaCarga[email].emergentes++;
+  });
+  var filasCarga = Object.keys(porPersonaCarga).map(function (email) {
+    var p = porPersonaCarga[email];
+    return {
+      responsable: p.nombre,
+      area: p.area,
+      total: p.total,
+      planificadas: p.total - p.emergentes,
+      emergentes: p.emergentes,
+      pct_emergente: p.total === 0 ? 0 : Math.round((p.emergentes / p.total) * 1000) / 10
+    };
+  }).sort(function (a, b) { return b.total - a.total; });
+  var totalEmergentesCarga = creadasEnPeriodo.filter(function (a) { return a.origen === 'EMERGENTE'; }).length;
+  return {
+    tipo: tipo,
+    columnas: [
+      { campo: 'responsable', etiqueta: 'Responsable' },
+      { campo: 'area', etiqueta: 'Área' },
+      { campo: 'total', etiqueta: 'Total' },
+      { campo: 'planificadas', etiqueta: 'Planificadas' },
+      { campo: 'emergentes', etiqueta: 'Emergentes' },
+      { campo: 'pct_emergente', etiqueta: '% emergente' }
+    ],
+    filas: filasCarga,
+    resumen: {
+      total: creadasEnPeriodo.length,
+      emergentes: totalEmergentesCarga,
+      pct_emergente: creadasEnPeriodo.length === 0 ? null : Math.round((totalEmergentesCarga / creadasEnPeriodo.length) * 1000) / 10
+    }
+  };
+}
+
+// §4.8 ("extra propuesto"): la pauta de la reunion semanal, en el orden en
+// que la propuesta la pide -- vencio / bloqueado / se reprogramo / vence la
+// semana entrante. "Se reprogramo esta semana" sale de la bitacora
+// (REPROGRAMACION), no de las actividades: una actividad puede haberse
+// reprogramado varias veces, solo interesa si hubo un evento ESTA semana.
+function construirActaReunion_(filtros) {
+  var nombresArea = areasPorId_();
+  var todas = actividadesActivasNoCanceladas_().filter(function (a) { return coincideFiltroGerenciaActividad_(a, filtros); });
+  var ahora = new Date();
+  var inicioSemana = inicioSemanaUTC_(ahora);
+  var finSemana = new Date(inicioSemana.getTime() + 7 * 24 * 3600 * 1000);
+  var finSemanaEntrante = new Date(finSemana.getTime() + 7 * 24 * 3600 * 1000);
+
+  function resumenActa_(a) {
+    return {
+      actividad_id: a.actividad_id,
+      titulo: a.titulo,
+      responsable: a.responsable_nombre || a.responsable_email,
+      area: nombresArea[a.area_id] || '(sin área)',
+      fecha_compromiso: a.fecha_compromiso || ''
+    };
+  }
+
+  var vencidas = todas
+    .filter(function (a) { return a.estado !== ACTIVIDADES_ESTADOS.TERMINADA && a.fecha_compromiso && new Date(a.fecha_compromiso) < ahora; })
+    .map(resumenActa_);
+
+  var bloqueadas = todas
+    .filter(function (a) { return a.estado === ACTIVIDADES_ESTADOS.BLOQUEADA; })
+    .map(function (a) {
+      var r = resumenActa_(a);
+      r.motivo = a.bloqueo_motivo || '';
+      return r;
+    });
+
+  var idsEnAlcance = {};
+  todas.forEach(function (a) { idsEnAlcance[a.actividad_id] = a; });
+  var vistos = {};
+  var reprogramadas = [];
+  leerFilasSeguro_(SHEETS.ACTIVIDADES_BITACORA).forEach(function (b) {
+    if (b.tipo !== 'REPROGRAMACION') return;
+    var t = new Date(b.timestamp);
+    if (t < inicioSemana || t >= finSemana) return;
+    if (vistos[b.actividad_id] || !idsEnAlcance[b.actividad_id]) return;
+    vistos[b.actividad_id] = true;
+    var r = resumenActa_(idsEnAlcance[b.actividad_id]);
+    r.motivo = b.nota || '';
+    reprogramadas.push(r);
+  });
+
+  var venceSemanaEntrante = todas
+    .filter(function (a) {
+      return a.fecha_compromiso && a.estado !== ACTIVIDADES_ESTADOS.TERMINADA &&
+        new Date(a.fecha_compromiso) >= finSemana && new Date(a.fecha_compromiso) < finSemanaEntrante;
+    })
+    .map(resumenActa_);
+
+  return {
+    generado_en: ahora.toISOString(),
+    vencidas: vencidas,
+    bloqueadas: bloqueadas,
+    reprogramadas_semana: reprogramadas,
+    vence_semana_entrante: venceSemanaEntrante
+  };
 }
 
 // --- helpers internos --------------------------------------------------

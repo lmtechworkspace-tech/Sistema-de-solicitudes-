@@ -710,6 +710,8 @@
             <button type="button" class="sigso-tabs__boton" id="ger-tab-tendencia" data-ger-tab="tendencia">Tendencia</button>
             <button type="button" class="sigso-tabs__boton" id="ger-tab-carga" data-ger-tab="carga">Carga</button>
             <button type="button" class="sigso-tabs__boton" id="ger-tab-pausas" data-ger-tab="pausas">Pausas activas</button>
+            <!-- v7.0 Fase 5 (§5.3): KPIs de Actividades, mapa de calor, criticas, reportes y acta de reunion. -->
+            <button type="button" class="sigso-tabs__boton" id="ger-tab-actividades" data-ger-tab="actividades">Actividades</button>
           </div>
 
           <div id="ger-panel-tablero" class="sigso-card">
@@ -789,6 +791,62 @@
           <div id="ger-panel-pausas" class="sigso-card sigso-oculto sigso-no-imprimir">
             <h3>Cumplimiento de pausas activas</h3>
             <div id="ger-contenedor-pausas"></div>
+          </div>
+
+          <!-- v7.0 Fase 5 (§5.3): KPIs de Actividades (§4.7), mapa de calor
+               área×semana, criticas transversales, 3 motores de reporte
+               (§4.8) en PDF/CSV, y la Acta de reunión de seguimiento. -->
+          <div id="ger-panel-actividades" class="sigso-card sigso-oculto sigso-no-imprimir">
+            <h3>Actividades — Gestión operacional</h3>
+            <div class="sigso-kpis" id="ger-act-kpis"></div>
+            <h4>Cumplimiento por área × semana</h4>
+            <div id="ger-act-heatmap"></div>
+            <h4>Actividades críticas (P1/P2 atrasadas, en riesgo o bloqueadas)</h4>
+            <div id="ger-act-criticas"></div>
+
+            <h4>Reportes</h4>
+            <div class="sigso-filtros">
+              <div class="sigso-campo">
+                <label for="ger-act-tipo-reporte">Tipo</label>
+                <select id="ger-act-tipo-reporte">
+                  <option value="estado_actual">Estado actual</option>
+                  <option value="cumplimiento_periodo">Cumplimiento del período</option>
+                  <option value="carga_capacidad">Carga y capacidad</option>
+                </select>
+              </div>
+              <div class="sigso-campo">
+                <label for="ger-act-filtro-area">Área</label>
+                <select id="ger-act-filtro-area"><option value="">Todas</option></select>
+              </div>
+              <div class="sigso-campo">
+                <label for="ger-act-filtro-prioridad">Prioridad</label>
+                <select id="ger-act-filtro-prioridad">
+                  <option value="">Todas</option>
+                  <option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option>
+                  <option value="P4">P4</option><option value="P5">P5</option>
+                </select>
+              </div>
+              <div class="sigso-campo">
+                <label for="ger-act-filtro-desde">Desde</label>
+                <input type="date" id="ger-act-filtro-desde">
+              </div>
+              <div class="sigso-campo">
+                <label for="ger-act-filtro-hasta">Hasta</label>
+                <input type="date" id="ger-act-filtro-hasta">
+              </div>
+              <div class="sigso-campo">
+                <button type="button" class="sigso-boton--secundario" id="btn-ver-reporte-actividades">Ver</button>
+              </div>
+            </div>
+            <div class="sigso-admin-cab">
+              <p class="sigso-ayuda" style="margin:0;">El reporte descarga exactamente lo que ves en pantalla.</p>
+              <div>
+                <button type="button" class="sigso-boton--secundario" id="btn-exportar-csv-actividades">Exportar CSV</button>
+                <button type="button" class="sigso-boton--secundario" id="btn-descargar-pdf-actividades">Descargar PDF</button>
+                <button type="button" class="sigso-boton--secundario" id="btn-acta-reunion-actividades">Acta de reunión (PDF)</button>
+              </div>
+            </div>
+            <div id="ger-act-reporte"></div>
           </div>
 
           <div class="sigso-card sigso-no-imprimir">

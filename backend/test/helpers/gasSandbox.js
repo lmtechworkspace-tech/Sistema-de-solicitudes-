@@ -156,6 +156,10 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // jefeDeSubordinado_ de Jefatura.gs (ya cargado) solo en tiempo de
   // ejecucion, asi que basta con cargar despues.
   'Actividades.gs',
+  // v7.0 (Fase 5): PDF de los reportes/acta de reunion -- usa
+  // Actividades.generarReporte/generarActaReunion (ya cargado) y
+  // escaparHtml_/formatearFechaLegible_/fechaCortaOt_ de OrdenTrabajo.gs.
+  'ReporteActividades.gs',
   'Triggers.gs',
   'Code.gs'
 ];
