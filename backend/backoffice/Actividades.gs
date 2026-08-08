@@ -402,6 +402,95 @@ var Actividades = {
   // inmediato (no cuelga de ningun trigger nuevo, presupuesto de triggers
   // en 0, §4.6) y una nota en la bitacora, sin tocar el estado. Es la
   // alternativa a "preguntarle" que es el problema que origino el modulo.
+  // v7.0 (Fase 4, §4.6): agrupa TODAS las alertas del dia por destinatario --
+  // "un solo correo diario por persona, agrupando todo" es la regla de oro
+  // (aprendida de Novedades). Devuelve el calculo puro (sin enviar nada) para
+  // poder probarlo sin mocks de correo; Notificaciones.enviarAlertasActividades
+  // lo formatea y envia. Presupuesto de triggers en 0 (§4.6): no crea un
+  // trigger propio, se cuelga del trigger diario de las 09:00 (Triggers.gs).
+  calcularAlertas: function () {
+    var feriados = obtenerFeriados_();
+    var ahora = new Date();
+    var porPersona = {};
+
+    function bucket(email) {
+      var normalizado = normalizarEmail_(email);
+      if (!normalizado) return null;
+      if (!porPersona[normalizado]) {
+        porPersona[normalizado] = {
+          sin_novedad: [], sin_confirmar: [], compromiso_proximo: [], vencidas: [], bloqueo_estancado: []
+        };
+      }
+      return porPersona[normalizado];
+    }
+
+    leerFilasSeguro_(SHEETS.ACTIVIDADES).forEach(function (a) {
+      var activa = a.activa === true || a.activa === 'TRUE' || a.activa === 1;
+      if (!activa || esEstadoTerminal_(a.estado)) return;
+
+      var pendienteConfirmar = a.fecha_propuesta && !a.confirmada_en;
+
+      if (pendienteConfirmar) {
+        // Alerta "Sin confirmar": el supervisor asigno y nadie confirmo.
+        var diasAsignada = diasHabilesEntreFechas_(a.fecha_creacion, ahora, feriados);
+        if (diasAsignada >= ACTIVIDADES_UMBRAL_SIN_CONFIRMAR_DIAS) {
+          var bSupSinConfirmar = bucket(a.supervisor_email);
+          if (bSupSinConfirmar) bSupSinConfirmar.sin_confirmar.push(a);
+        }
+      } else if (a.estado !== ACTIVIDADES_ESTADOS.EN_REVISION) {
+        // Alerta "Sin novedad": umbral escalonado (§4.6.1) -- 2 dias habiles
+        // si el compromiso esta cerca (<=5 dias habiles) o esta BLOQUEADA;
+        // 5 dias habiles si esta lejos o sin fecha aun. El primer aviso es
+        // solo para el colaborador (tono recordatorio); si pasa un SEGUNDO
+        // ciclo del mismo largo sin novedad, se suma el supervisor.
+        var diasSinActualizar = diasHabilesEntreFechas_(a.ultima_actualizacion || a.fecha_creacion, ahora, feriados);
+        var compromisoCerca = a.fecha_compromiso &&
+          diasHabilesEntreFechas_(ahora, a.fecha_compromiso, feriados) <= ACTIVIDADES_UMBRAL_COMPROMISO_CERCA_DIAS;
+        var umbral = (a.estado === ACTIVIDADES_ESTADOS.BLOQUEADA || compromisoCerca)
+          ? ACTIVIDADES_UMBRAL_SIN_NOVEDAD_CERCA_DIAS
+          : ACTIVIDADES_UMBRAL_SIN_NOVEDAD_LEJOS_DIAS;
+        if (diasSinActualizar >= umbral * 2) {
+          var bColSegundoCiclo = bucket(a.responsable_email);
+          if (bColSegundoCiclo) bColSegundoCiclo.sin_novedad.push(a);
+          var bSupSegundoCiclo = bucket(a.supervisor_email);
+          if (bSupSegundoCiclo) bSupSegundoCiclo.sin_novedad.push(a);
+        } else if (diasSinActualizar >= umbral) {
+          var bColPrimerCiclo = bucket(a.responsable_email);
+          if (bColPrimerCiclo) bColPrimerCiclo.sin_novedad.push(a);
+        }
+      }
+
+      if (a.fecha_compromiso && a.estado !== ACTIVIDADES_ESTADOS.TERMINADA) {
+        var vencida = new Date(a.fecha_compromiso).getTime() < ahora.getTime();
+        if (vencida) {
+          var bVencida = bucket(a.supervisor_email);
+          if (bVencida) bVencida.vencidas.push(a);
+        } else {
+          var diasHastaVencer = diasHabilesEntreFechas_(ahora, a.fecha_compromiso, feriados);
+          if (diasHastaVencer <= ACTIVIDADES_UMBRAL_COMPROMISO_PROXIMO_DIAS && a.confianza !== 'VERDE') {
+            var bProximo = bucket(a.supervisor_email);
+            if (bProximo) bProximo.compromiso_proximo.push(a);
+          }
+        }
+      }
+
+      if (a.estado === ACTIVIDADES_ESTADOS.BLOQUEADA && a.bloqueo_desde) {
+        var diasBloqueada = diasHabilesEntreFechas_(a.bloqueo_desde, ahora, feriados);
+        if (diasBloqueada >= ACTIVIDADES_UMBRAL_BLOQUEO_ESTANCADO_DIAS) {
+          var bSupBloqueo = bucket(a.supervisor_email);
+          if (bSupBloqueo) bSupBloqueo.bloqueo_estancado.push(a);
+          if (normalizarEmail_(a.bloqueo_responsable_email) &&
+            normalizarEmail_(a.bloqueo_responsable_email) !== normalizarEmail_(a.supervisor_email)) {
+            var bDestrabe = bucket(a.bloqueo_responsable_email);
+            if (bDestrabe) bDestrabe.bloqueo_estancado.push(a);
+          }
+        }
+      }
+    });
+
+    return porPersona;
+  },
+
   pedirActualizacion: function (data, contexto) {
     var actividad = buscarActividad_(data.actividad_id);
     if (!actividad) return errorValidacion_('actividad_id', 'Actividad no encontrada.');
@@ -498,6 +587,27 @@ function puedeGestionarEquipo_(actividad, nuevoResponsableEmail, contexto) {
 
 function normalizarEmail_(email) {
   return String(email || '').trim().toLowerCase();
+}
+
+// --- alertas (§4.6): umbrales -----------------------------------------
+
+// Constantes de codigo, no hoja de configuracion -- mismo criterio que
+// DIAS_HABILES_CIERRE_AUTOMATICO/UMBRAL_RECORDATORIO_DIAS_HABILES en
+// Triggers.gs. Si algun cliente necesitara ajustarlos, se vuelven filas de
+// config mas adelante (no hay pedido de eso todavia).
+var ACTIVIDADES_UMBRAL_SIN_NOVEDAD_CERCA_DIAS = 2;
+var ACTIVIDADES_UMBRAL_SIN_NOVEDAD_LEJOS_DIAS = 5;
+var ACTIVIDADES_UMBRAL_COMPROMISO_CERCA_DIAS = 5;
+var ACTIVIDADES_UMBRAL_SIN_CONFIRMAR_DIAS = 2;
+var ACTIVIDADES_UMBRAL_COMPROMISO_PROXIMO_DIAS = 2;
+var ACTIVIDADES_UMBRAL_BLOQUEO_ESTANCADO_DIAS = 2;
+
+// Utils.horasHabilesEntre devuelve 0 si `hasta` es anterior o igual a
+// `desde` (§10) -- por eso "vencida" (fecha_compromiso ya paso) se detecta
+// aparte con una comparacion de fechas directa, no con este helper.
+function diasHabilesEntreFechas_(desde, hasta, feriados) {
+  if (!desde) return 0;
+  return Utils.horasHabilesEntre(desde, hasta, { feriados: feriados }) / 9;
 }
 
 // --- helpers internos --------------------------------------------------

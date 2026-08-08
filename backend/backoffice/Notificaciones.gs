@@ -399,6 +399,33 @@ var Notificaciones = {
     return resultados;
   },
 
+  // v7.0 (Fase 4, §4.6): un correo diario por persona con TODAS sus alertas
+  // de Actividades agrupadas (regla de oro, aprendida de Novedades: nunca un
+  // correo por actividad). Actividades.calcularAlertas() hace el calculo
+  // puro; aca solo se formatea y se envia -- igual separacion que
+  // enviarDigestJefatura (dominio en su modulo, correo en Notificaciones).
+  // Sin trigger propio (presupuesto en 0, §4.6): Triggers.gs la cuelga del
+  // trigger diario de las 09:00, en try/catch.
+  enviarAlertasActividades: function () {
+    var porPersona = Actividades.calcularAlertas();
+    var resultados = [];
+    Object.keys(porPersona).forEach(function (email) {
+      var d = porPersona[email];
+      var total = d.sin_novedad.length + d.sin_confirmar.length + d.compromiso_proximo.length +
+        d.vencidas.length + d.bloqueo_estancado.length;
+      if (!total) return;
+      var asunto = 'SIGSO — Actividades: ' + total + (total === 1 ? ' pendiente' : ' pendientes');
+      var cuerpo = formatearAlertasActividades_(d);
+      var claveEvento = 'ALERTAS_ACTIVIDADES:' + claveDia_(new Date(), 'America/Santiago');
+      resultados.push(Object.assign(
+        { email: email, total: total },
+        enviarCorreo_('ALERTAS_ACTIVIDADES', email, claveEvento, asunto, cuerpo, VENTANA_DEDUP_SLA_VENCIDO_MINUTOS,
+          { htmlBody: plantillaCorreoHtml_('Actividades pendientes', formatearAlertasActividadesHtml_(d)) })
+      ));
+    });
+    return resultados;
+  },
+
   alertarAdminFalloDocumento: function (solicitud, ref) {
     var destinatarios = obtenerEmailsPorRol_(solicitud.empresa_id, ['ADM']);
     return destinatarios.map(function (email) {
@@ -501,6 +528,51 @@ function listarItems_(items) {
     return '- ' + i.solicitud_id + '-' + i.numero_item + ' — ' + i.titulo +
       ' (' + i.solicitante_nombre + ', ' + i.semaforo + ')';
   }).join('\n');
+}
+
+// v7.0 (Fase 4): secciones del digest de alertas de Actividades, en el
+// orden en que mas urge leerlas -- lo bloqueado y lo vencido primero, "sin
+// novedad" al final (es el mas suave, un recordatorio).
+var ACTIVIDADES_SECCIONES_ALERTA_ = [
+  { clave: 'bloqueo_estancado', titulo: 'BLOQUEADAS HACE VARIOS DIAS' },
+  { clave: 'vencidas', titulo: 'VENCIDAS' },
+  { clave: 'compromiso_proximo', titulo: 'A PUNTO DE VENCER' },
+  { clave: 'sin_confirmar', titulo: 'ASIGNADAS SIN CONFIRMAR' },
+  { clave: 'sin_novedad', titulo: 'SIN NOVEDAD RECIENTE' }
+];
+
+function resumirActividadAlerta_(a) {
+  return a.titulo + ' (' + (a.responsable_nombre || a.responsable_email) +
+    (a.fecha_compromiso ? ', vence ' + fechaCortaCorreo_(a.fecha_compromiso) : '') + ')';
+}
+
+function fechaCortaCorreo_(iso) {
+  var f = new Date(iso);
+  if (isNaN(f.getTime())) return '';
+  return ('0' + f.getUTCDate()).slice(-2) + '/' + ('0' + (f.getUTCMonth() + 1)).slice(-2);
+}
+
+function formatearAlertasActividades_(porTipo) {
+  var bloques = ACTIVIDADES_SECCIONES_ALERTA_
+    .filter(function (s) { return porTipo[s.clave].length; })
+    .map(function (s) {
+      return s.titulo + '\n' + porTipo[s.clave].map(function (a) { return '- ' + resumirActividadAlerta_(a); }).join('\n');
+    });
+  return 'Tienes actividades que necesitan atencion:\n\n' + bloques.join('\n\n') +
+    '\n\nEntra a SIGSO para verlas.' + pieCorreoBackoffice_();
+}
+
+function formatearAlertasActividadesHtml_(porTipo) {
+  var bloques = ACTIVIDADES_SECCIONES_ALERTA_
+    .filter(function (s) { return porTipo[s.clave].length; })
+    .map(function (s) {
+      var items = porTipo[s.clave].map(function (a) {
+        return '<li style="margin:4px 0;">' + escaparHtmlCorreo_(resumirActividadAlerta_(a)) + '</li>';
+      }).join('');
+      return '<p style="font-weight:600;margin:16px 0 4px;">' + escaparHtmlCorreo_(s.titulo) + '</p>' +
+        '<ul style="margin:0;padding-left:20px;">' + items + '</ul>';
+    });
+  return '<p>Tienes actividades que necesitan atención:</p>' + bloques.join('');
 }
 
 function formatearEstado_(codigo) {

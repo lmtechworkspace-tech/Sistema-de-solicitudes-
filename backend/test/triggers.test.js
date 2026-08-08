@@ -224,3 +224,48 @@ test('recordarValidacionPendienteTrigger no se rompe si el recordatorio de Noved
 
   assert.doesNotThrow(() => ctx.recordarValidacionPendienteTrigger());
 });
+
+// v7.0 Fase 4 (Actividades, §4.6): mismo criterio -- sin trigger propio,
+// se cuelga de recordarValidacionPendienteTrigger en try/catch.
+test('recordarValidacionPendienteTrigger tambien dispara las alertas de Actividades', () => {
+  const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
+  seedSheet(ctx, 'SOLICITUDES', ctx.COLUMNAS.SOLICITUDES);
+  seedSheet(ctx, 'SUBSOLICITUDES', ctx.COLUMNAS.SUBSOLICITUDES);
+  seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
+  seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
+  seedSheet(ctx, 'CONFIG_FERIADOS', ctx.COLUMNAS.CONFIG_FERIADOS);
+  seedSheet(ctx, 'CAT_AREAS', ctx.COLUMNAS.CAT_AREAS);
+  seedSheet(ctx, 'NOVEDADES', ctx.COLUMNAS.NOVEDADES);
+  seedSheet(ctx, 'NOVEDADES_LECTURAS', ctx.COLUMNAS.NOVEDADES_LECTURAS);
+  seedSheet(ctx, 'JEFATURAS', ctx.COLUMNAS.JEFATURAS, [
+    ['JEF-1', 'barbara@rld.cl', 'marcelo@rld.cl', true]
+  ]);
+  seedSheet(ctx, 'ACTIVIDADES', ctx.COLUMNAS.ACTIVIDADES, [
+    ['ACT-1', 'Reporte atrasado', '', 'PROPIA', '', 'marcelo@rld.cl', 'Marcelo', 'barbara@rld.cl',
+      '', '', '', 'P3', 'EN_CURSO', 'M',
+      '', new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(), new Date().toISOString(), false,
+      'NINGUNA', '', '', '',
+      'VERDE', '', '', '', '',
+      new Date().toISOString(), 0,
+      new Date().toISOString(), 'marcelo@rld.cl', true]
+  ]);
+  seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS);
+
+  ctx.recordarValidacionPendienteTrigger();
+
+  assert.equal(ctx.MailApp._enviados.length, 1);
+  assert.equal(ctx.MailApp._enviados[0].destinatario, 'barbara@rld.cl');
+});
+
+test('recordarValidacionPendienteTrigger no se rompe si las alertas de Actividades fallan', () => {
+  const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
+  seedSheet(ctx, 'SOLICITUDES', ctx.COLUMNAS.SOLICITUDES);
+  seedSheet(ctx, 'SUBSOLICITUDES', ctx.COLUMNAS.SUBSOLICITUDES);
+  seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
+  seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
+  seedSheet(ctx, 'CONFIG_FERIADOS', ctx.COLUMNAS.CONFIG_FERIADOS);
+  // ACTIVIDADES NO se siembra a proposito: calcularAlertas() lanza al leer
+  // la hoja faltante -- lo que se protege es que igual completa sin excepcion.
+
+  assert.doesNotThrow(() => ctx.recordarValidacionPendienteTrigger());
+});

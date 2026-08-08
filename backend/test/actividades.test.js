@@ -32,6 +32,8 @@ function loadConSchema() {
   // LOG_NOTIFICACIONES -- tiene que existir aunque estos tests no la usen
   // directamente.
   seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
+  // calcularAlertas (Fase 4) usa Utils.horasHabilesEntre, que lee feriados.
+  seedSheet(ctx, 'CONFIG_FERIADOS', ctx.COLUMNAS.CONFIG_FERIADOS);
   seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS, [
     ['U1', 'Marcelo Gonzalez', 'marcelo@rld.cl', 'RLD', 'DEV', true, '', 'sistema'],
     ['U2', 'Barbara Alvarez', 'barbara@rld.cl', 'RLD', 'JEFATURA', true, '', 'sistema'],
@@ -420,4 +422,119 @@ test('pedirActualizacion: solo el responsable, supervisor asignado o ADM', () =>
   const actividad = ctx.Actividades.crear({ titulo: 'Cierre contable', fecha_compromiso: '2026-08-14' }, CTX_MARCELO);
   const resultado = ctx.Actividades.pedirActualizacion({ actividad_id: actividad.actividad_id }, CTX_OTRO);
   assert.equal(resultado._forbidden, true);
+});
+
+// --- v7.0 Fase 4 (§4.6): alertas -- "un solo correo diario por persona,
+// agrupando todo". calcularAlertas() es el calculo puro (sin correo);
+// Notificaciones.enviarAlertasActividades lo formatea y envia (ver abajo).
+
+function diasAtras(n) {
+  return new Date(Date.now() - n * 24 * 3600 * 1000).toISOString();
+}
+function diasAdelante(n) {
+  return new Date(Date.now() + n * 24 * 3600 * 1000).toISOString();
+}
+
+test('calcularAlertas: "sin confirmar" avisa al supervisor cuando una asignada lleva dias sin respuesta', () => {
+  const ctx = loadConSchema();
+  seedJefatura(ctx);
+  const actividad = ctx.Actividades.crear(
+    { titulo: 'Cierre contable', responsable_email: 'marcelo@rld.cl', fecha_propuesta: '2026-08-20' },
+    CTX_BARBARA
+  );
+  ctx.actualizarFilaPorId_('ACTIVIDADES', 'actividad_id', actividad.actividad_id, { fecha_creacion: diasAtras(10) });
+
+  const alertas = ctx.Actividades.calcularAlertas();
+
+  assert.equal(alertas['barbara@rld.cl'].sin_confirmar.length, 1);
+  assert.equal(alertas['marcelo@rld.cl'], undefined, 'lo pendiente de confirmar no debe duplicarse como "sin novedad"');
+});
+
+test('calcularAlertas: "sin confirmar" no avisa dentro del umbral', () => {
+  const ctx = loadConSchema();
+  seedJefatura(ctx);
+  ctx.Actividades.crear(
+    { titulo: 'Cierre contable', responsable_email: 'marcelo@rld.cl', fecha_propuesta: '2026-08-20' },
+    CTX_BARBARA
+  );
+  const alertas = ctx.Actividades.calcularAlertas();
+  assert.equal(alertas['barbara@rld.cl'], undefined);
+});
+
+test('calcularAlertas: "vencida" avisa al supervisor si paso fecha_compromiso sin terminar', () => {
+  const ctx = loadConSchema();
+  seedJefatura(ctx);
+  ctx.Actividades.crear({ titulo: 'Reporte', fecha_compromiso: diasAtras(3) }, CTX_MARCELO);
+  const alertas = ctx.Actividades.calcularAlertas();
+  assert.equal(alertas['barbara@rld.cl'].vencidas.length, 1);
+});
+
+test('calcularAlertas: "compromiso proximo" solo dispara si la confianza no es VERDE', () => {
+  const ctx = loadConSchema();
+  seedJefatura(ctx);
+  const actividad = ctx.Actividades.crear({ titulo: 'Reporte', fecha_compromiso: diasAdelante(1) }, CTX_MARCELO);
+
+  let alertas = ctx.Actividades.calcularAlertas();
+  assert.equal((alertas['barbara@rld.cl'] || {}).compromiso_proximo, undefined, 'confianza VERDE (default) no alerta');
+
+  ctx.Actividades.checkin({ actividad_id: actividad.actividad_id, tipo: 'avance', confianza: 'AMARILLA' }, CTX_MARCELO);
+  alertas = ctx.Actividades.calcularAlertas();
+  assert.equal(alertas['barbara@rld.cl'].compromiso_proximo.length, 1);
+});
+
+test('calcularAlertas: "bloqueo estancado" avisa al supervisor y a quien debe destrabar', () => {
+  const ctx = loadConSchema();
+  seedJefatura(ctx);
+  const actividad = ctx.Actividades.crear({ titulo: 'Reporte', fecha_compromiso: diasAdelante(60) }, CTX_MARCELO);
+  ctx.Actividades.checkin(
+    { actividad_id: actividad.actividad_id, tipo: 'bloqueo', bloqueo_motivo: 'Esperando aprobacion', bloqueo_responsable_email: 'javiera@rld.cl' },
+    CTX_MARCELO
+  );
+  ctx.actualizarFilaPorId_('ACTIVIDADES', 'actividad_id', actividad.actividad_id, { bloqueo_desde: diasAtras(10) });
+
+  const alertas = ctx.Actividades.calcularAlertas();
+
+  assert.equal(alertas['barbara@rld.cl'].bloqueo_estancado.length, 1);
+  assert.equal(alertas['javiera@rld.cl'].bloqueo_estancado.length, 1);
+});
+
+test('calcularAlertas: "sin novedad" escalonado -- primer ciclo solo el colaborador, segundo ciclo suma al supervisor', () => {
+  const ctx = loadConSchema();
+  seedJefatura(ctx);
+  const actividad = ctx.Actividades.crear({ titulo: 'Trabajo lento', fecha_compromiso: diasAdelante(30) }, CTX_MARCELO);
+  ctx.actualizarFilaPorId_('ACTIVIDADES', 'actividad_id', actividad.actividad_id, { ultima_actualizacion: diasAtras(8) });
+
+  let alertas = ctx.Actividades.calcularAlertas();
+  assert.equal(alertas['marcelo@rld.cl'].sin_novedad.length, 1);
+  assert.equal(alertas['barbara@rld.cl'], undefined, 'primer ciclo: solo el colaborador, tono recordatorio');
+
+  ctx.actualizarFilaPorId_('ACTIVIDADES', 'actividad_id', actividad.actividad_id, { ultima_actualizacion: diasAtras(20) });
+  alertas = ctx.Actividades.calcularAlertas();
+  assert.equal(alertas['marcelo@rld.cl'].sin_novedad.length, 1);
+  assert.equal(alertas['barbara@rld.cl'].sin_novedad.length, 1, 'segundo ciclo del mismo largo: se suma el supervisor');
+});
+
+test('Notificaciones.enviarAlertasActividades: un solo correo por persona con todas sus alertas agrupadas', () => {
+  const ctx = loadConSchema();
+  seedJefatura(ctx);
+  ctx.Actividades.crear({ titulo: 'Informe atrasado', fecha_compromiso: diasAtras(3) }, CTX_MARCELO);
+
+  const resultados = ctx.Notificaciones.enviarAlertasActividades();
+
+  const paraBarbara = resultados.find((r) => r.email === 'barbara@rld.cl');
+  assert.equal(paraBarbara.enviado, true);
+  assert.equal(ctx.MailApp._enviados.length, 1, 'un solo correo, aunque haya varias alertas');
+  assert.equal(ctx.MailApp._enviados[0].destinatario, 'barbara@rld.cl');
+  assert.ok(ctx.MailApp._enviados[0].opciones.htmlBody.indexOf('Informe atrasado') !== -1);
+});
+
+test('Notificaciones.enviarAlertasActividades: no manda nada si nadie tiene alertas pendientes', () => {
+  const ctx = loadConSchema();
+  seedJefatura(ctx);
+  ctx.Actividades.crear({ titulo: 'Todo al dia', fecha_compromiso: diasAdelante(30) }, CTX_MARCELO);
+
+  const resultados = ctx.Notificaciones.enviarAlertasActividades();
+
+  assert.equal(resultados.length, 0);
+  assert.equal(ctx.MailApp._enviados.length, 0);
 });

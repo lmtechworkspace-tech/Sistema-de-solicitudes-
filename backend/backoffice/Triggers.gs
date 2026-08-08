@@ -274,6 +274,13 @@ function recordarValidacionPendienteTrigger() {
   } catch (err) {
     logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarRecordatorioNovedadesTrigger');
   }
+  // v7.0 (Fase 4, §4.6): mismo criterio -- sin trigger propio (limite de 20
+  // ya copado), colgada en try/catch de este mismo slot de las 09:00.
+  try {
+    enviarAlertasActividadesTrigger();
+  } catch (err) {
+    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAlertasActividadesTrigger');
+  }
   return resultado;
 }
 
@@ -282,6 +289,13 @@ function recordarValidacionPendienteTrigger() {
 // editor de Apps Script si hace falta probarla o forzarla fuera de horario.
 function enviarRecordatorioNovedadesTrigger() {
   return Novedades.recordatorioPendientes();
+}
+
+// v7.0 (Fase 4): ver Notificaciones.enviarAlertasActividades(). Nombrada
+// igual que enviarRecordatorioNovedadesTrigger, mismo motivo: poder
+// forzarla a mano desde el editor de Apps Script.
+function enviarAlertasActividadesTrigger() {
+  return Notificaciones.enviarAlertasActividades();
 }
 
 // RN-201/RF-208: dias habiles que un item puede quedar en "Terminada" (S08)
