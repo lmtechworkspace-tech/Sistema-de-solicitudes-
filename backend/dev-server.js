@@ -47,7 +47,8 @@ function construirContexto() {
   seedSheet(ctx, 'SESIONES_PORTAL', ctx.COLUMNAS.SESIONES_PORTAL, [
     ['dev-token-leo', 'CTA-DEMO-3', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()],
     ['dev-token-admin', 'CTA-DEMO-4', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()],
-    ['dev-token-gerencia', 'CTA-DEMO-5', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()]
+    ['dev-token-gerencia', 'CTA-DEMO-5', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()],
+    ['dev-token-jefatura', 'CTA-DEMO-6', new Date(Date.now() + 12 * 3600 * 1000).toISOString(), new Date().toISOString()]
   ]);
   seedSheet(ctx, 'CUENTAS_PORTAL', ctx.COLUMNAS.CUENTAS_PORTAL, [
     ['CTA-DEMO-1', 'cpena', 'Camila Pena', 'Jefa de Operaciones',
@@ -81,7 +82,15 @@ function construirContexto() {
       ctx.hashPassword_('demo12345', 'sal-demo-5'), 'sal-demo-5',
       JSON.stringify(['gerencia@rld.cl']),
       'GERENCIA', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'gerencia']),
-      'RLD', true, false, '', 'dev-server']
+      'RLD', true, false, '', 'dev-server'],
+    // v4.2: cuenta JEFATURA -- misma fila fija que dev-server-backoffice.js
+    // (jefe@homepymes.cl), para probar "Mi Departamento" y "Actividades del
+    // equipo" (v7.0 Fase 3) via el shell por token.
+    ['CTA-DEMO-6', 'ljefe', 'Lisseth Jefa', 'Jefa de Area',
+      ctx.hashPassword_('demo12345', 'sal-demo-6'), 'sal-demo-6',
+      JSON.stringify(['jefe@homepymes.cl']),
+      'JEFATURA', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'jefatura']),
+      'HP', true, false, '', 'dev-server']
   ]);
   // P12 (v2.0, Sprint 3): switch global de aviso a Leo -- activo=true
   // reproduce el comportamiento de siempre en local.

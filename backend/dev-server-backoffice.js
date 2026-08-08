@@ -78,7 +78,11 @@ function construirContexto() {
   // SOL-2026-HP-0001 (sembrarSolicitudesDemo_ mas abajo), asi "Mi
   // Departamento" tiene algo real que mostrar.
   seedSheet(ctx, 'JEFATURAS', ctx.COLUMNAS.JEFATURAS, [
-    ['JEF-DEMO-1', 'jefe@homepymes.cl', 'demo1@hp.cl', true]
+    ['JEF-DEMO-1', 'jefe@homepymes.cl', 'demo1@hp.cl', true],
+    // v7.0 (Fase 3): leo@rld.cl tambien reporta a jefe@homepymes.cl, para
+    // que "Actividades del equipo" tenga las 2 actividades demo de ACT-DEMO-*
+    // que ver en local (ver mas abajo).
+    ['JEF-DEMO-2', 'jefe@homepymes.cl', 'leo@rld.cl', true]
   ]);
   // v6.0: modulo de Pausas Activas (Fase P0) -- hojas vacias para probar el
   // CRUD de configuracion en local (crear escribe con agregarFila_, que exige
@@ -117,7 +121,7 @@ function construirContexto() {
   // de confirmar (asignada por ladmin) para ver ambos flujos en local.
   seedSheet(ctx, 'ACTIVIDADES', ctx.COLUMNAS.ACTIVIDADES, [
     ['ACT-DEMO-1', 'Editar 3 videos de testimonios — campaña agosto', '',
-      'PROPIA', '', 'leo@rld.cl', 'Leo Estay', 'luis@rld.cl',
+      'PROPIA', '', 'leo@rld.cl', 'Leo Estay', 'jefe@homepymes.cl',
       '', '', '', 'P2', 'EN_CURSO', 'L',
       '', new Date(Date.now() + 2 * 24 * 3600 * 1000).toISOString(), new Date().toISOString(), false,
       'NINGUNA', '', '', '',
@@ -125,13 +129,13 @@ function construirContexto() {
       new Date().toISOString(), 0,
       new Date().toISOString(), 'leo@rld.cl', true],
     ['ACT-DEMO-2', 'Cierre contable de julio', '',
-      'ASIGNADA', '', 'leo@rld.cl', 'Leo Estay', 'luis@rld.cl',
+      'ASIGNADA', '', 'leo@rld.cl', 'Leo Estay', 'jefe@homepymes.cl',
       '', '', '', 'P3', 'NO_INICIADA', 'M',
       new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(), '', '', false,
       'MENSUAL', '', '', '',
       'VERDE', '', '', '', '',
       new Date().toISOString(), 0,
-      new Date().toISOString(), 'luis@rld.cl', true]
+      new Date().toISOString(), 'jefe@homepymes.cl', true]
   ]);
   seedSheet(ctx, 'ACTIVIDADES_BITACORA', ctx.COLUMNAS.ACTIVIDADES_BITACORA);
   // v6.1 (Fase 4): DOCUMENTOS demo (las capturas ya las siembra

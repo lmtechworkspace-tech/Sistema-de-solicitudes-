@@ -24,6 +24,12 @@
         document.getElementById('jef-panel-tablero').classList.toggle('sigso-oculto', tab !== 'tablero');
         document.getElementById('jef-panel-persona').classList.toggle('sigso-oculto', tab !== 'persona');
         document.getElementById('jef-panel-carga').classList.toggle('sigso-oculto', tab !== 'carga');
+        var panelActividades = document.getElementById('jef-panel-actividades');
+        if (panelActividades) panelActividades.classList.toggle('sigso-oculto', tab !== 'actividades');
+        // v7.0 (Fase 3): datos propios de Actividades.gs -- se piden solo al
+        // entrar a la pestana (igual patron que "Pausas activas" en
+        // Gerencia), no en cada carga de "Mi Departamento".
+        if (tab === 'actividades') cargarActividadesEquipo_();
       });
     });
   });
@@ -190,5 +196,135 @@
       }).join('') + '</div>';
     }
     contenedor.innerHTML = bloque_('Por módulo', carga.por_modulo) + bloque_('Por tipo', carga.por_tipo);
+  }
+
+  // --- v7.0 Fase 3: "Actividades del equipo" -------------------------------
+  // documentacion/SIGSO-v7.0-propuesta-modulo-gestion-operacional.md §5.2.
+  // Datos propios de Actividades.gs (no de Jefatura.getPanel): el semaforo
+  // ya viene calculado del servidor (semaforoActividad_), asi que esta
+  // pantalla y "Mi trabajo" (actividades.js) usan siempre el mismo criterio.
+
+  var ETIQUETA_TAMANO_JEF = { S: 'Chica', M: 'Mediana', L: 'Grande', XL: 'Muy grande' };
+
+  function fechaCortaJef_(iso) {
+    if (!iso) return '—';
+    var f = new Date(iso);
+    return new Date(Date.UTC(f.getUTCFullYear(), f.getUTCMonth(), f.getUTCDate()))
+      .toLocaleDateString('es-CL', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  }
+
+  function cargarActividadesEquipo_() {
+    var resumen = document.getElementById('jef-act-resumen');
+    var contenido = document.getElementById('jef-act-contenido');
+    contenido.innerHTML = Componentes.cargando('Cargando actividades del equipo...');
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'panelEquipoActividades', {})
+      .then(function (respuesta) {
+        if (!respuesta.ok) {
+          resumen.innerHTML = '';
+          contenido.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
+          return;
+        }
+        renderActividadesEquipo_(respuesta.data);
+      })
+      .catch(function () {
+        contenido.innerHTML = Componentes.alerta('No se pudo conectar para cargar las actividades del equipo.', 'error');
+      });
+  }
+
+  function renderActividadesEquipo_(datos) {
+    var items = datos.items || [];
+    var conteo = { al_dia: 0, riesgo: 0, bloqueada: 0, pendiente: 0 };
+    items.forEach(function (a) {
+      if (a.semaforo === 'atrasada' || a.semaforo === 'riesgo') conteo.riesgo++;
+      else if (a.semaforo === 'bloqueada') conteo.bloqueada++;
+      else if (a.semaforo === 'pendiente') conteo.pendiente++;
+      else if (a.semaforo === 'al-dia') conteo.al_dia++;
+    });
+    var resumen = document.getElementById('jef-act-resumen');
+    resumen.innerHTML =
+      '<div class="sigso-mt-resumen__item"><span class="sigso-mt-resumen__num" style="color:var(--ok)">' + conteo.al_dia + '</span><span class="sigso-mt-resumen__rot">Al día</span></div>' +
+      '<div class="sigso-mt-resumen__item"><span class="sigso-mt-resumen__num" style="color:var(--alerta)">' + conteo.riesgo + '</span><span class="sigso-mt-resumen__rot">En riesgo</span></div>' +
+      '<div class="sigso-mt-resumen__item"><span class="sigso-mt-resumen__num" style="color:var(--info)">' + conteo.bloqueada + '</span><span class="sigso-mt-resumen__rot">Bloqueadas</span></div>' +
+      (conteo.pendiente ? '<div class="sigso-mt-resumen__item"><span class="sigso-mt-resumen__num" style="color:var(--texto-2)">' + conteo.pendiente + '</span><span class="sigso-mt-resumen__rot">Por confirmar</span></div>' : '');
+
+    var contenido = document.getElementById('jef-act-contenido');
+    if (items.length === 0) {
+      contenido.innerHTML = Componentes.vacio('Tu equipo no tiene actividades registradas todavía.');
+      return;
+    }
+    // Requieren atencion primero: bloqueadas/atrasadas/por confirmar arriba.
+    var ORDEN = { atrasada: 0, riesgo: 1, bloqueada: 2, pendiente: 3, revision: 4, 'al-dia': 5, terminada: 6, cancelada: 7 };
+    var ordenados = items.slice().sort(function (a, b) {
+      return (ORDEN[a.semaforo] !== undefined ? ORDEN[a.semaforo] : 9) - (ORDEN[b.semaforo] !== undefined ? ORDEN[b.semaforo] : 9);
+    });
+    var encabezado = '<tr><th>Actividad</th><th>Responsable</th><th>Tamaño</th><th>Vence</th><th>Semáforo</th><th></th></tr>';
+    var cuerpo = ordenados.map(function (a) {
+      return '<tr>' +
+        '<td title="' + Componentes.escaparHtml(a.titulo || '') + '">' + Componentes.escaparHtml(truncar_(a.titulo, 40)) +
+        (a.bloqueo_motivo ? '<div class="sigso-ayuda">⏸ ' + Componentes.escaparHtml(truncar_(a.bloqueo_motivo, 60)) + '</div>' : '') + '</td>' +
+        '<td>' + Componentes.escaparHtml(a.responsable_nombre || a.responsable_email) + '</td>' +
+        '<td>' + Componentes.escaparHtml(ETIQUETA_TAMANO_JEF[a.tamano] || a.tamano || '—') + '</td>' +
+        '<td>' + fechaCortaJef_(a.fecha_compromiso || a.fecha_propuesta) + '</td>' +
+        '<td><span class="sigso-badge sigso-mt-badge--' + a.semaforo + '">' + Componentes.escaparHtml(a.semaforo_etiqueta) + '</span></td>' +
+        '<td>' +
+        (a.estado !== 'TERMINADA' && a.estado !== 'CANCELADA'
+          ? '<button type="button" class="sigso-mt-pastilla" data-pedir="' + a.actividad_id + '">Pedir actualización</button> ' +
+            '<button type="button" class="sigso-mt-pastilla" data-reasignar="' + a.actividad_id + '">Reasignar</button>'
+          : '') +
+        '</td>' +
+        '</tr>';
+    }).join('');
+    contenido.innerHTML = '<div style="overflow-x:auto"><table class="sigso-tabla-tablero"><thead>' + encabezado + '</thead><tbody>' + cuerpo + '</tbody></table></div>';
+
+    contenido.querySelectorAll('[data-pedir]').forEach(function (boton) {
+      boton.addEventListener('click', function () { pedirActualizacionEquipo_(boton.getAttribute('data-pedir')); });
+    });
+    contenido.querySelectorAll('[data-reasignar]').forEach(function (boton) {
+      boton.addEventListener('click', function () { reasignarEquipo_(boton.getAttribute('data-reasignar')); });
+    });
+  }
+
+  function pedirActualizacionEquipo_(actividadId) {
+    Componentes.prompt({
+      titulo: 'Pedir una actualización',
+      mensaje: 'Se le manda un correo de inmediato. Puedes agregar una nota (opcional).',
+      placeholder: '¿Cómo vas con esto?'
+    }).then(function (nota) {
+      if (nota === null || nota === undefined) return; // cancelado
+      llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'pedirActualizacionActividad', { actividad_id: actividadId, nota: nota })
+        .then(function (respuesta) {
+          if (!respuesta.ok) {
+            Componentes.aviso({ texto: respuesta.message || 'No se pudo enviar.', tipo: 'error' });
+            return;
+          }
+          Componentes.aviso({ texto: 'Se avisó por correo.', tipo: 'exito' });
+        });
+    });
+  }
+
+  function reasignarEquipo_(actividadId) {
+    Componentes.prompt({
+      titulo: 'Reasignar actividad',
+      mensaje: 'Correo de la persona de tu equipo que se hará cargo.',
+      placeholder: 'nombre@empresa.cl'
+    }).then(function (correoNuevo) {
+      if (!correoNuevo) return;
+      Componentes.prompt({
+        titulo: 'Motivo de la reasignación',
+        mensaje: 'Queda en la bitácora de la actividad.'
+      }).then(function (motivo) {
+        if (!motivo) return;
+        llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'reasignarActividad',
+          { actividad_id: actividadId, responsable_nuevo: correoNuevo, motivo: motivo }
+        ).then(function (respuesta) {
+          if (!respuesta.ok) {
+            Componentes.aviso({ texto: respuesta.message || 'No se pudo reasignar.', tipo: 'error' });
+            return;
+          }
+          Componentes.aviso({ texto: 'Reasignada -- queda pendiente de que la confirme.', tipo: 'exito' });
+          cargarActividadesEquipo_();
+        });
+      });
+    });
   }
 })();

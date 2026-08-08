@@ -6,7 +6,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadBackofficeProject, seedSheet } = require('./helpers/gasSandbox');
+const { loadBackofficeProject, seedSheet, toPlain } = require('./helpers/gasSandbox');
 
 function seedJefatura(ctx, overrides) {
   const base = Object.assign(
@@ -28,13 +28,21 @@ function loadConSchema() {
   seedSheet(ctx, 'ACTIVIDADES', ctx.COLUMNAS.ACTIVIDADES);
   seedSheet(ctx, 'ACTIVIDADES_BITACORA', ctx.COLUMNAS.ACTIVIDADES_BITACORA);
   seedSheet(ctx, 'JEFATURAS', ctx.COLUMNAS.JEFATURAS);
+  // pedirActualizacion (Fase 3) envia por enviarCorreo_, que dedupe contra
+  // LOG_NOTIFICACIONES -- tiene que existir aunque estos tests no la usen
+  // directamente.
+  seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
   seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS, [
     ['U1', 'Marcelo Gonzalez', 'marcelo@rld.cl', 'RLD', 'DEV', true, '', 'sistema'],
     ['U2', 'Barbara Alvarez', 'barbara@rld.cl', 'RLD', 'JEFATURA', true, '', 'sistema'],
-    ['U3', 'Otro Ajeno', 'otro@rld.cl', 'RLD', 'DEV', true, '', 'sistema']
+    ['U3', 'Otro Ajeno', 'otro@rld.cl', 'RLD', 'DEV', true, '', 'sistema'],
+    ['U4', 'Javiera Torres', 'javiera@rld.cl', 'RLD', 'DEV', true, '', 'sistema']
   ]);
   seedJefatura(ctx, { jefatura_id: 'JEF-marcelo', jefe_email: 'barbara@rld.cl', subordinado_email: 'marcelo@rld.cl' });
   seedJefatura(ctx, { jefatura_id: 'JEF-otro', jefe_email: 'otro-jefe@rld.cl', subordinado_email: 'otro@rld.cl' });
+  // Javiera tambien es equipo de Barbara -- necesaria para probar reasignar
+  // (mover trabajo entre dos personas del MISMO equipo).
+  seedJefatura(ctx, { jefatura_id: 'JEF-javiera', jefe_email: 'barbara@rld.cl', subordinado_email: 'javiera@rld.cl' });
   return ctx;
 }
 
@@ -333,4 +341,83 @@ test('obtenerDetalle: incluye la bitacora ordenada', () => {
   const detalle = ctx.Actividades.obtenerDetalle({ actividad_id: actividad.actividad_id }, CTX_MARCELO);
   assert.equal(detalle.actividad.actividad_id, actividad.actividad_id);
   assert.deepEqual(detalle.bitacora.map((b) => b.tipo), ['CREADA', 'CHECKIN_SIN_CAMBIO']);
+});
+
+// --- v7.0 Fase 3: "Actividades del equipo" (semaforo, panelEquipo, reasignar, pedirActualizacion) ---
+
+test('listar: cada actividad trae su semaforo calculado en el servidor', () => {
+  const ctx = loadConSchema();
+  const bloqueada = ctx.Actividades.crear({ titulo: 'Bloqueada', fecha_compromiso: '2026-08-14' }, CTX_MARCELO);
+  ctx.Actividades.checkin({ actividad_id: bloqueada.actividad_id, tipo: 'bloqueo', bloqueo_motivo: 'Esperando algo' }, CTX_MARCELO);
+  ctx.Actividades.crear({ titulo: 'Al dia', fecha_compromiso: '2099-01-01' }, CTX_MARCELO);
+  const items = ctx.Actividades.listar({}, CTX_MARCELO);
+  const porTitulo = Object.fromEntries(items.map((a) => [a.titulo, a.semaforo]));
+  assert.equal(porTitulo['Bloqueada'], 'bloqueada');
+  assert.equal(porTitulo['Al dia'], 'al-dia');
+});
+
+test('panelEquipo: excluye al propio supervisor y arma la carga por persona', () => {
+  const ctx = loadConSchema();
+  ctx.Actividades.crear({ titulo: 'De Marcelo', fecha_compromiso: '2026-08-14' }, CTX_MARCELO);
+  ctx.Actividades.crear({ titulo: 'Otra de Marcelo', fecha_compromiso: '2026-08-14' }, CTX_MARCELO);
+  ctx.Actividades.crear({ titulo: 'De Barbara (no debe salir)', fecha_compromiso: '2026-08-14' }, CTX_BARBARA);
+  const panel = ctx.Actividades.panelEquipo({}, CTX_BARBARA);
+  assert.deepEqual(panel.items.map((a) => a.titulo).sort(), ['De Marcelo', 'Otra de Marcelo']);
+  assert.deepEqual(toPlain(panel.por_persona), [{ email: 'marcelo@rld.cl', nombre: 'marcelo@rld.cl', total: 2, en_riesgo: 0, bloqueadas: 0 }]);
+});
+
+test('reasignar: mueve la actividad y la deja pendiente de confirmar para el nuevo responsable', () => {
+  const ctx = loadConSchema();
+  const actividad = ctx.Actividades.crear({ titulo: 'Deck cliente', fecha_compromiso: '2026-08-14' }, CTX_MARCELO);
+  const reasignada = ctx.Actividades.reasignar(
+    { actividad_id: actividad.actividad_id, responsable_nuevo: 'javiera@rld.cl', motivo: 'Marcelo esta sobrecargado' },
+    CTX_BARBARA
+  );
+  assert.equal(reasignada.responsable_email, 'javiera@rld.cl');
+  assert.equal(reasignada.estado, 'NO_INICIADA');
+  assert.equal(reasignada.confirmada_en, '');
+  assert.equal(reasignada.fecha_propuesta, actividad.fecha_compromiso);
+  assert.equal(reasignada.fecha_compromiso, '');
+  const bitacora = ctx.Actividades.obtenerDetalle({ actividad_id: actividad.actividad_id }, CTX_BARBARA).bitacora;
+  assert.ok(bitacora.some((b) => b.tipo === 'REASIGNACION'));
+});
+
+test('reasignar: rechaza mover trabajo hacia/desde fuera del propio equipo', () => {
+  const ctx = loadConSchema();
+  const actividad = ctx.Actividades.crear({ titulo: 'Deck cliente', fecha_compromiso: '2026-08-14' }, CTX_MARCELO);
+  // otro@rld.cl no es del equipo de Barbara.
+  const resultado = ctx.Actividades.reasignar(
+    { actividad_id: actividad.actividad_id, responsable_nuevo: 'otro@rld.cl', motivo: 'Motivo cualquiera' },
+    CTX_BARBARA
+  );
+  assert.equal(resultado._forbidden, true);
+});
+
+test('reasignar: exige motivo', () => {
+  const ctx = loadConSchema();
+  const actividad = ctx.Actividades.crear({ titulo: 'Deck cliente', fecha_compromiso: '2026-08-14' }, CTX_MARCELO);
+  const resultado = ctx.Actividades.reasignar(
+    { actividad_id: actividad.actividad_id, responsable_nuevo: 'javiera@rld.cl' },
+    CTX_BARBARA
+  );
+  assert.equal(resultado._validationError, true);
+});
+
+test('pedirActualizacion: envia un correo HTML al responsable y deja nota en la bitacora', () => {
+  const ctx = loadConSchema();
+  const actividad = ctx.Actividades.crear({ titulo: 'Cierre contable', fecha_compromiso: '2026-08-14' }, CTX_MARCELO);
+  const resultado = ctx.Actividades.pedirActualizacion({ actividad_id: actividad.actividad_id, nota: '¿Cómo vas?' }, CTX_BARBARA);
+  assert.equal(resultado.enviado, true);
+  assert.equal(ctx.MailApp._enviados.length, 1);
+  assert.equal(ctx.MailApp._enviados[0].destinatario, 'marcelo@rld.cl');
+  assert.ok(ctx.MailApp._enviados[0].opciones.htmlBody.indexOf('Cierre contable') !== -1);
+  const bitacora = ctx.Actividades.obtenerDetalle({ actividad_id: actividad.actividad_id }, CTX_BARBARA).bitacora;
+  assert.ok(bitacora.some((b) => b.tipo === 'COMENTARIO' && b.nota.indexOf('actualizacion') !== -1));
+});
+
+test('pedirActualizacion: solo el responsable, supervisor asignado o ADM', () => {
+  const ctx = loadConSchema();
+  const actividad = ctx.Actividades.crear({ titulo: 'Cierre contable', fecha_compromiso: '2026-08-14' }, CTX_MARCELO);
+  const resultado = ctx.Actividades.pedirActualizacion({ actividad_id: actividad.actividad_id }, CTX_OTRO);
+  assert.equal(resultado._forbidden, true);
 });

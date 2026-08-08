@@ -33,7 +33,44 @@ var Actividades = {
       var email = normalizarEmail_(filtros.responsable_email);
       filas = filas.filter(function (a) { return normalizarEmail_(a.responsable_email) === email; });
     }
-    return filas;
+    // v7.0 Fase 3: "Actividades del equipo" necesita ordenar/filtrar por
+    // urgencia -- se clasifica aca (una sola vez, en el servidor) para que
+    // "Mi trabajo" y la vista del supervisor usen SIEMPRE el mismo criterio,
+    // en vez de reimplementarlo en cada modulo de frontend.
+    return filas.map(function (a) {
+      var s = semaforoActividad_(a);
+      a.semaforo = s.codigo;
+      a.semaforo_etiqueta = s.etiqueta;
+      return a;
+    });
+  },
+
+  // v7.0 Fase 3 (§5.2): "Actividades del equipo" -- lo mismo que listar(),
+  // mas el desglose por persona para la carga del equipo. RN-707 ya acota
+  // el alcance (si contexto no tiene equipo, todo sale vacio); no hace falta
+  // un permiso nuevo.
+  panelEquipo: function (filtros, contexto) {
+    var items = Actividades.listar(filtros, contexto).filter(function (a) {
+      // La vista del supervisor es sobre "mi gente", no sobre si mismo --
+      // evita que el propio jefe se vea duplicado en su propia bandeja de
+      // equipo (ya tiene "Mi trabajo" para eso).
+      return normalizarEmail_(a.responsable_email) !== normalizarEmail_(contexto && contexto.email);
+    });
+    var porPersona = {};
+    items.forEach(function (a) {
+      var email = normalizarEmail_(a.responsable_email);
+      if (!porPersona[email]) {
+        porPersona[email] = { email: email, nombre: a.responsable_nombre || email, total: 0, en_riesgo: 0, bloqueadas: 0 };
+      }
+      porPersona[email].total++;
+      if (a.semaforo === 'atrasada' || a.semaforo === 'riesgo') porPersona[email].en_riesgo++;
+      if (a.semaforo === 'bloqueada') porPersona[email].bloqueadas++;
+    });
+    return {
+      items: items,
+      por_persona: Object.keys(porPersona).map(function (k) { return porPersona[k]; })
+        .sort(function (a, b) { return b.total - a.total; })
+    };
   },
 
   obtenerDetalle: function (data, contexto) {
@@ -321,6 +358,75 @@ var Actividades = {
     registrarEventoActividad_(actividad.actividad_id, 'REPROGRAMACION', contexto,
       motivo, { fecha_anterior: fechaAnterior, fecha_nueva: fechaNueva });
     return actualizado;
+  },
+
+  // v7.0 Fase 3 (§5.2): el supervisor mueve una actividad de su equipo a
+  // otra persona de su equipo. La nueva persona AUN no se comprometio a esa
+  // fecha (RN-710) -- se reabre a "pendiente de confirmar", igual que una
+  // asignacion nueva, en vez de heredar en silencio un compromiso que nadie
+  // de los dos acordo.
+  reasignar: function (data, contexto) {
+    var actividad = buscarActividad_(data.actividad_id);
+    if (!actividad) return errorValidacion_('actividad_id', 'Actividad no encontrada.');
+    if (esEstadoTerminal_(actividad.estado) || actividad.estado === ACTIVIDADES_ESTADOS.EN_REVISION) {
+      return errorValidacion_('actividad_id', 'Esta actividad ya esta cerrada o en revision.');
+    }
+    var nuevoResponsable = normalizarEmail_(data.responsable_nuevo);
+    if (!nuevoResponsable) return errorValidacion_('responsable_nuevo', 'Indica a quien se reasigna.');
+    if (nuevoResponsable === normalizarEmail_(actividad.responsable_email)) {
+      return errorValidacion_('responsable_nuevo', 'Esa persona ya es la responsable.');
+    }
+    var motivo = String(data.motivo || '').trim();
+    if (!motivo) return errorValidacion_('motivo', 'Indica el motivo de la reasignacion.');
+    if (!puedeGestionarEquipo_(actividad, nuevoResponsable, contexto)) {
+      return { _forbidden: true, message: 'No puedes reasignar esta actividad a esa persona.' };
+    }
+    var responsableAnterior = actividad.responsable_email;
+    var ahora = new Date();
+    var actualizado = reescribirActividad_(actividad.actividad_id, {
+      responsable_email: nuevoResponsable,
+      responsable_nombre: data.responsable_nuevo_nombre || '',
+      supervisor_email: normalizarEmail_(jefeDeSubordinado_(nuevoResponsable)) || actividad.supervisor_email,
+      estado: ACTIVIDADES_ESTADOS.NO_INICIADA,
+      fecha_propuesta: actividad.fecha_compromiso || actividad.fecha_propuesta,
+      fecha_compromiso: '',
+      confirmada_en: '',
+      ultima_actualizacion: ahora.toISOString()
+    });
+    registrarEventoActividad_(actividad.actividad_id, 'REASIGNACION', contexto,
+      motivo, { responsable_anterior: responsableAnterior, responsable_nuevo: nuevoResponsable });
+    return actualizado;
+  },
+
+  // v7.0 Fase 3 (§5.2): accion de un clic del supervisor -- un correo
+  // inmediato (no cuelga de ningun trigger nuevo, presupuesto de triggers
+  // en 0, §4.6) y una nota en la bitacora, sin tocar el estado. Es la
+  // alternativa a "preguntarle" que es el problema que origino el modulo.
+  pedirActualizacion: function (data, contexto) {
+    var actividad = buscarActividad_(data.actividad_id);
+    if (!actividad) return errorValidacion_('actividad_id', 'Actividad no encontrada.');
+    if (esEstadoTerminal_(actividad.estado)) {
+      return errorValidacion_('actividad_id', 'Esta actividad ya esta cerrada.');
+    }
+    if (!puedeGestionar_(actividad, contexto)) {
+      return { _forbidden: true, message: 'No puedes pedir una actualizacion de esta actividad.' };
+    }
+    var nota = String(data.nota || '').trim();
+    registrarEventoActividad_(actividad.actividad_id, 'COMENTARIO', contexto,
+      'Pidio una actualizacion.' + (nota ? ' ' + nota : ''));
+    var envio = { enviado: false, motivo: 'sin_responsable' };
+    if (actividad.responsable_email) {
+      var cuerpo = '<p>' + escaparHtmlCorreo_((contexto && contexto.nombre) || contexto.email) +
+        ' pidió una actualización de tu actividad:</p>' +
+        '<p style="font-weight:600">' + escaparHtmlCorreo_(actividad.titulo) + '</p>' +
+        (nota ? '<p>' + escaparHtmlCorreo_(nota) + '</p>' : '') +
+        '<p>Entra a "Mi trabajo" para responder -- "Sin cambios" también cuenta.</p>';
+      envio = enviarCorreo_(actividad.actividad_id, actividad.responsable_email, 'PEDIR_ACTUALIZACION_ACTIVIDAD',
+        'Te piden una actualización: ' + actividad.titulo,
+        'Te piden una actualización de "' + actividad.titulo + '". Entra a Mi trabajo para responder.',
+        1, { htmlBody: plantillaCorreoHtml_('Actualización pedida', cuerpo) });
+    }
+    return { actividad_id: actividad.actividad_id, enviado: envio.enviado };
   }
 };
 
@@ -377,6 +483,17 @@ function puedeGestionar_(actividad, contexto) {
   var email = normalizarEmail_(contexto.email);
   return normalizarEmail_(actividad.responsable_email) === email ||
     normalizarEmail_(actividad.supervisor_email) === email;
+}
+
+// v7.0 Fase 3: reasignar es una decision de "gestion de equipo", no solo del
+// supervisor puntual asignado -- ADM, o cualquiera que tenga tanto al
+// responsable ACTUAL como al NUEVO dentro de su equipo (JEFATURAS). Evita
+// que un jefe mueva trabajo hacia/desde gente que no es suya.
+function puedeGestionarEquipo_(actividad, nuevoResponsableEmail, contexto) {
+  if (contexto.rol === 'ADM') return true;
+  var equipo = obtenerEquipoJefe_(contexto.email).map(normalizarEmail_);
+  var esDeSuEquipo = function (email) { return equipo.indexOf(normalizarEmail_(email)) !== -1; };
+  return esDeSuEquipo(actividad.responsable_email) && esDeSuEquipo(nuevoResponsableEmail);
 }
 
 function normalizarEmail_(email) {
@@ -464,6 +581,30 @@ function crearSiguienteRecurrencia_(actividadCerrada) {
     logError_(err, 'Actividades.crearSiguienteRecurrencia_');
     return null;
   }
+}
+
+// v7.0 Fase 3: clasificacion de urgencia -- espejo servidor del semaforo_
+// que ya vivia solo en frontend/js/actividades.js ("Mi trabajo", Fase 2).
+// Se mueve aca para que "Actividades del equipo" (Fase 3) y cualquier vista
+// futura (Gerencia, Fase 5) usen SIEMPRE el mismo criterio, en vez de que
+// cada modulo de frontend reimplemente su propia nocion de "en riesgo".
+// Calendario UTC (no dias habiles): alcanza para ordenar/filtrar una lista;
+// el semaforo formal de cumplimiento (dias habiles, feriados) es de
+// Solicitudes/Cumplimiento.gs y no aplica aca (§8.3 de la propuesta).
+function semaforoActividad_(a) {
+  if (a.estado === 'TERMINADA') return { codigo: 'terminada', etiqueta: 'Terminada' };
+  if (a.estado === 'CANCELADA') return { codigo: 'cancelada', etiqueta: 'Cancelada' };
+  if (a.estado === 'BLOQUEADA') return { codigo: 'bloqueada', etiqueta: 'Bloqueada' };
+  if (a.estado === 'EN_REVISION') return { codigo: 'revision', etiqueta: 'En revisión' };
+  if (a.fecha_propuesta && !a.confirmada_en) return { codigo: 'pendiente', etiqueta: 'Por confirmar' };
+  if (!a.fecha_compromiso) return { codigo: 'al-dia', etiqueta: 'Al día' };
+  var hoyUTC = Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+  var f = new Date(a.fecha_compromiso);
+  var venceUTC = Date.UTC(f.getUTCFullYear(), f.getUTCMonth(), f.getUTCDate());
+  var dias = Math.round((venceUTC - hoyUTC) / 86400000);
+  if (dias < 0) return { codigo: 'atrasada', etiqueta: 'Atrasada' };
+  if (dias <= 1) return { codigo: 'riesgo', etiqueta: dias === 0 ? 'Vence hoy' : 'Vence mañana' };
+  return { codigo: 'al-dia', etiqueta: 'Al día' };
 }
 
 // Aritmetica en UTC (no en hora local): fechaBase es una fecha de

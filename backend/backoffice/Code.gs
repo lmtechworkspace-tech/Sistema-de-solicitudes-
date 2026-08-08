@@ -126,7 +126,14 @@ var BACKOFFICE_ACTIONS = {
   checkinActividad: handleCheckinActividad_,
   validarActividad: handleValidarActividad_,
   cancelarActividad: handleCancelarActividad_,
-  reprogramarActividad: handleReprogramarActividad_
+  reprogramarActividad: handleReprogramarActividad_,
+  // v7.0 (Fase 3, "Actividades del equipo"): el supervisor deja de tener
+  // que preguntar. panelEquipoActividades es listar() + desglose por
+  // persona; reasignar/pedirActualizacion son acciones de gestion sobre
+  // el equipo, no del check-in exclusivo del responsable (RN-702).
+  panelEquipoActividades: handlePanelEquipoActividades_,
+  reasignarActividad: handleReasignarActividad_,
+  pedirActualizacionActividad: handlePedirActualizacionActividad_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -197,17 +204,26 @@ var MODULO_POR_ACCION = {
   // v6.0 Fase P5: la pestana de pausas vive en el Panel de Gerencia.
   getReporteGerenciaPausas: 'gerencia',
   // v7.0 (Fase 2): "Mi trabajo" -- el colaborador ve y actualiza SUS
-  // propias actividades. validarActividad queda sin gate a proposito: hoy
-  // solo lo usa una supervision desde Google (sin gate de modulo, ver
-  // comentario general de esta tabla); F3 la sumara aqui con 'jefatura'
-  // cuando "Actividades del equipo" viva dentro del shell por token.
-  listarActividades: 'mi_trabajo',
-  getDetalleActividad: 'mi_trabajo',
+  // propias actividades.
+  // v7.0 (Fase 3): "Actividades del equipo" vive dentro de 'jefatura' --
+  // listar/detalle/cancelar/reprogramar aceptan CUALQUIERA de los dos
+  // modulos (igual patron que getSolicitudDetalle), porque tanto "Mi
+  // trabajo" como la vista del supervisor llaman las mismas acciones. El
+  // check-in (RN-702, exclusivo del responsable) y crear/confirmar quedan
+  // SOLO en 'mi_trabajo' -- no son acciones de gestion de equipo.
+  listarActividades: ['mi_trabajo', 'jefatura'],
+  getDetalleActividad: ['mi_trabajo', 'jefatura'],
   crearActividad: 'mi_trabajo',
   confirmarActividad: 'mi_trabajo',
   checkinActividad: 'mi_trabajo',
-  cancelarActividad: 'mi_trabajo',
-  reprogramarActividad: 'mi_trabajo'
+  cancelarActividad: ['mi_trabajo', 'jefatura'],
+  reprogramarActividad: ['mi_trabajo', 'jefatura'],
+  // validarActividad queda sin gate a proposito (ver comentario general de
+  // esta tabla mas abajo, mismo criterio que la foto de perfil): hoy solo
+  // lo usa una supervision desde Google, sin necesidad de exigir modulo.
+  panelEquipoActividades: 'jefatura',
+  reasignarActividad: 'jefatura',
+  pedirActualizacionActividad: 'jefatura'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -583,6 +599,19 @@ function handleCancelarActividad_(data, contexto) {
 
 function handleReprogramarActividad_(data, contexto) {
   return responderResultado_(Actividades.reprogramar(data, contexto));
+}
+
+// v7.0 (Fase 3): "Actividades del equipo" (Mi departamento).
+function handlePanelEquipoActividades_(data, contexto) {
+  return responderResultado_(Actividades.panelEquipo(data, contexto));
+}
+
+function handleReasignarActividad_(data, contexto) {
+  return responderResultado_(Actividades.reasignar(data, contexto));
+}
+
+function handlePedirActualizacionActividad_(data, contexto) {
+  return responderResultado_(Actividades.pedirActualizacion(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

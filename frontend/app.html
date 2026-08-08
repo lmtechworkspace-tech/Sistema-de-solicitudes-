@@ -354,6 +354,9 @@
         <button type="button" class="sigso-tabs__boton sigso-tabs__boton--activo" id="jef-tab-tablero" data-jef-tab="tablero">Tablero</button>
         <button type="button" class="sigso-tabs__boton" id="jef-tab-persona" data-jef-tab="persona">Por persona</button>
         <button type="button" class="sigso-tabs__boton" id="jef-tab-carga" data-jef-tab="carga">Carga</button>
+        <!-- v7.0 (Fase 3): "Actividades del equipo" -- mismo modulo compartido
+             (jefatura.js) que usa plataforma.html. -->
+        <button type="button" class="sigso-tabs__boton" id="jef-tab-actividades" data-jef-tab="actividades">Actividades del equipo</button>
       </div>
 
       <div id="jef-panel-tablero" class="sigso-card">
@@ -368,6 +371,11 @@
       <div id="jef-panel-carga" class="sigso-card sigso-oculto">
         <h3>Carga del equipo por módulo / tipo</h3>
         <div id="jef-contenedor-carga"></div>
+      </div>
+
+      <div id="jef-panel-actividades" class="sigso-card sigso-oculto">
+        <div class="sigso-mt-resumen" id="jef-act-resumen"></div>
+        <div id="jef-act-contenido"></div>
       </div>
     </section>
 
