@@ -514,6 +514,12 @@ var Actividades = {
         'Te piden una actualización: ' + actividad.titulo,
         'Te piden una actualización de "' + actividad.titulo + '". Entra a Mi trabajo para responder.',
         1, { htmlBody: plantillaCorreoHtml_('Actualización pedida', cuerpo) });
+      // v7.1 (notificaciones vivas): prueba de que el canal es transversal,
+      // no exclusivo de Pausas -- mismo espejo del correo.
+      encolarNotificacionApp_(actividad.responsable_email, 'PEDIR_ACTUALIZACION_ACTIVIDAD',
+        'Te piden una actualización',
+        'Te piden una actualización de "' + actividad.titulo + '".' + (nota ? ' ' + nota : ''),
+        'mi_trabajo', 'Responder en Mi trabajo', 48);
     }
     return { actividad_id: actividad.actividad_id, enviado: envio.enviado };
   },

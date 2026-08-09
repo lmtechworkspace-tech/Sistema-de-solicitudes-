@@ -93,7 +93,11 @@ var SHEETS = {
   // para que el esquema no diverja. Ver la nota identica en
   // backend/backoffice/Constantes.gs.
   ACTIVIDADES: 'ACTIVIDADES',
-  ACTIVIDADES_BITACORA: 'ACTIVIDADES_BITACORA'
+  ACTIVIDADES_BITACORA: 'ACTIVIDADES_BITACORA',
+  // v7.1 (notificaciones vivas): vive en el Backoffice; Intake mantiene la
+  // copia solo para que el esquema no diverja. Ver la nota identica en
+  // backend/backoffice/Constantes.gs.
+  NOTIFICACIONES_APP: 'NOTIFICACIONES_APP'
 };
 
 var COLUMNAS = {
@@ -366,6 +370,15 @@ var COLUMNAS = {
   ACTIVIDADES_BITACORA: [
     'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',
     'nota', 'avance_pct', 'confianza', 'datos', 'timestamp'
+  ],
+  // v7.1 (notificaciones vivas): cola de notificaciones "en vivo" -- espejo
+  // de enviarCorreo_ (documentacion/SIGSO-v7.1-notificaciones-vivas.md).
+  // modulo_id es el id de modulo del shell (plataforma.js/app.js) al que
+  // navega el click ("pausas", "mi_trabajo", etc.); expira_en evita que una
+  // notificacion vieja reaparezca en el polling despues de mucho tiempo.
+  NOTIFICACIONES_APP: [
+    'notif_id', 'destinatario_email', 'tipo', 'titulo', 'mensaje',
+    'modulo_id', 'texto_accion', 'leida', 'creada_en', 'expira_en'
   ]
 };
 

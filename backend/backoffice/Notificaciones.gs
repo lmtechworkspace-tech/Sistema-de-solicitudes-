@@ -422,6 +422,10 @@ var Notificaciones = {
         enviarCorreo_('ALERTAS_ACTIVIDADES', email, claveEvento, asunto, cuerpo, VENTANA_DEDUP_SLA_VENCIDO_MINUTOS,
           { htmlBody: plantillaCorreoHtml_('Actividades pendientes', formatearAlertasActividadesHtml_(d)) })
       ));
+      encolarNotificacionApp_(email, 'ALERTAS_ACTIVIDADES',
+        'Tienes ' + total + (total === 1 ? ' actividad pendiente' : ' actividades pendientes'),
+        'Revisa tu digest diario: vencidas, sin confirmar, bloqueadas o sin novedad reciente.',
+        'mi_trabajo', 'Ver Mi trabajo', 24);
     });
     return resultados;
   },
@@ -826,4 +830,90 @@ function generarAdjuntoOt_(solicitudId, usuario) {
     logError_(err, 'Notificaciones.generarAdjuntoOt:' + solicitudId);
     return null;
   }
+}
+
+// v7.1 (documentacion/SIGSO-v7.1-notificaciones-vivas.md): "espejo del
+// correo" -- cada evento que ya dispara enviarCorreo_ puede ademas encolar
+// una notificacion "en vivo" para que el destinatario la vea como toast/modal
+// mientras trabaja, sin depender de que revise el correo. UNA sola decision
+// (este evento se notifica) con DOS canales de salida.
+//
+// No reutiliza yaNotificadoRecientemente_ (esa dedup es por email+ventana, ya
+// resuelta en enviarCorreo_ del mismo evento) -- aqui basta con no duplicar
+// silenciosamente si el caller llama dos veces por error, lo cual no es un
+// riesgo real dado que cada caller ya llama una sola vez por evento.
+//
+// `vidaHoras` (default 72h) define expira_en: pasado ese tiempo el polling
+// (sincronizarNotificacionesApp_) deja de devolverla aunque siga sin leerse
+// -- evita que una alerta de hace semanas reaparezca como "nueva" si el
+// usuario no abrio SIGSO en mucho tiempo.
+function encolarNotificacionApp_(destinatario, tipo, titulo, mensaje, moduloId, textoAccion, vidaHoras) {
+  if (!destinatario) return { encolado: false, motivo: 'sin_destinatario' };
+  try {
+    var ahora = new Date();
+    var expira = new Date(ahora.getTime() + (vidaHoras || 72) * 60 * 60 * 1000);
+    agregarFila_(SHEETS.NOTIFICACIONES_APP, {
+      notif_id: Utilities.getUuid(),
+      destinatario_email: destinatario,
+      tipo: tipo,
+      titulo: titulo,
+      mensaje: mensaje || '',
+      modulo_id: moduloId || '',
+      texto_accion: textoAccion || '',
+      leida: 'FALSE',
+      creada_en: ahora.toISOString(),
+      expira_en: expira.toISOString()
+    });
+    return { encolado: true };
+  } catch (err) {
+    // v7.1: nunca debe tumbar el flujo que la llama (p.ej. un recordatorio de
+    // Pausas) -- si la hoja no existe aun (instalacion vieja sin re-correr el
+    // Instalador) o falla la escritura, el correo (el canal que si es
+    // confiable) ya salio o sale igual.
+    logError_(err, 'Notificaciones.encolarNotificacionApp:' + tipo + ':' + destinatario);
+    return { encolado: false, motivo: 'error_encolado' };
+  }
+}
+
+// v7.1: polling del cliente (cada 2-3 min, ver notificaciones-vivas.js). Solo
+// las no leidas y no vencidas del usuario de la sesion -- nunca recibe un
+// email como parametro, sale de contexto.email (misma identidad ya resuelta
+// por Google Session o portal_token, igual criterio que Perfiles.gs).
+function sincronizarNotificacionesApp_(contexto) {
+  var ahora = Date.now();
+  var pendientes = leerFilasSeguro_(SHEETS.NOTIFICACIONES_APP).filter(function (n) {
+    return n.destinatario_email === contexto.email &&
+      String(n.leida) !== 'TRUE' &&
+      (!n.expira_en || new Date(n.expira_en).getTime() > ahora);
+  });
+  pendientes.sort(function (a, b) { return new Date(b.creada_en) - new Date(a.creada_en); });
+  return {
+    notificaciones: pendientes.map(function (n) {
+      return {
+        notif_id: n.notif_id,
+        tipo: n.tipo,
+        titulo: n.titulo,
+        mensaje: n.mensaje,
+        modulo_id: n.modulo_id,
+        texto_accion: n.texto_accion,
+        creada_en: n.creada_en
+      };
+    })
+  };
+}
+
+// v7.1: marcar como leida/descartada. Solo el propio destinatario puede
+// marcarla (evita que un notif_id adivinado silencie la alerta de otra
+// persona) -- si no matchea, no hace nada (silencioso, es un "dismiss", no
+// una operacion que deba fallar ruidosamente en el cliente).
+function marcarNotificacionAppLeida_(contexto, notifId) {
+  if (!notifId) return { actualizado: false };
+  var fila = leerFilasSeguro_(SHEETS.NOTIFICACIONES_APP).filter(function (n) {
+    return n.notif_id === notifId;
+  })[0];
+  if (!fila || fila.destinatario_email !== contexto.email) {
+    return { actualizado: false };
+  }
+  actualizarFilaPorId_(SHEETS.NOTIFICACIONES_APP, 'notif_id', notifId, { leida: 'TRUE' });
+  return { actualizado: true };
 }

@@ -95,7 +95,12 @@ var SHEETS = {
   // ACTIVIDADES_BITACORA es una fila por evento (una sola tabla de
   // historial a proposito, ver la nota identica en backend/intake/Constantes.gs).
   ACTIVIDADES: 'ACTIVIDADES',
-  ACTIVIDADES_BITACORA: 'ACTIVIDADES_BITACORA'
+  ACTIVIDADES_BITACORA: 'ACTIVIDADES_BITACORA',
+  // v7.1 (notificaciones vivas): cola de notificaciones "en vivo" para el
+  // personal -- espejo de lo que ya se manda por correo (enviarCorreo_),
+  // pero pensado para un toast/modal en pantalla mientras la persona esta
+  // trabajando. Ver la nota identica en backend/intake/Constantes.gs.
+  NOTIFICACIONES_APP: 'NOTIFICACIONES_APP'
 };
 
 var COLUMNAS = {
@@ -356,6 +361,12 @@ var COLUMNAS = {
   ACTIVIDADES_BITACORA: [
     'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',
     'nota', 'avance_pct', 'confianza', 'datos', 'timestamp'
+  ],
+  // v7.1 (notificaciones vivas): ver la nota identica en
+  // backend/intake/Constantes.gs sobre cada campo.
+  NOTIFICACIONES_APP: [
+    'notif_id', 'destinatario_email', 'tipo', 'titulo', 'mensaje',
+    'modulo_id', 'texto_accion', 'leida', 'creada_en', 'expira_en'
   ]
 };
 

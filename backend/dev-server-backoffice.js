@@ -40,6 +40,17 @@ function construirContexto() {
   seedSheet(ctx, 'HISTORIAL_PRIORIDAD', ctx.COLUMNAS.HISTORIAL_PRIORIDAD);
   seedSheet(ctx, 'HISTORIAL_COMPROMISO', ctx.COLUMNAS.HISTORIAL_COMPROMISO);
   seedSheet(ctx, 'HISTORIAL_ASIGNACION', ctx.COLUMNAS.HISTORIAL_ASIGNACION);
+  // v7.1: notificaciones "en vivo" demo -- una para el shell Google
+  // (admin@homepymes.cl) y otra para el shell del portal (leo@rld.cl), asi
+  // se puede ver el modal/toast al cargar app.html/plataforma.html en local.
+  seedSheet(ctx, 'NOTIFICACIONES_APP', ctx.COLUMNAS.NOTIFICACIONES_APP, [
+    ['NOTIF-DEMO-1', USUARIO_POR_DEFECTO, 'PRUEBA', 'Notificación de prueba',
+      'Esto es una notificación en vivo de ejemplo (v7.1).', 'mi_trabajo', 'Ver Mi trabajo',
+      'FALSE', new Date().toISOString(), new Date(Date.now() + 6 * 3600 * 1000).toISOString()],
+    ['NOTIF-DEMO-2', 'leo@rld.cl', 'PAUSA_RECORDATORIO', 'Pausa activa de hoy',
+      'Tu pausa activa es a las 09:30.', 'pausas', 'Ver pausas activas',
+      'FALSE', new Date().toISOString(), new Date(Date.now() + 6 * 3600 * 1000).toISOString()]
+  ]);
   // v3.3: cuentas de la plataforma, para probar el CRUD en admin.html.
   // P3: la MISMA cuenta/sesion fija que siembra backend/dev-server.js
   // (en produccion ambos proyectos leen la misma planilla; en local son

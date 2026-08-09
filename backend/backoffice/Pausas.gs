@@ -685,6 +685,12 @@ var Pausas = {
                   : 'Registra tu participación en la plataforma (módulo Pausas activas).');
         var r = enviarCorreo_(pausa.pausa_id, correo, 'PAUSA_RECORDATORIO', asunto, texto, 720, { htmlBody: cuerpoHtml });
         if (r.enviado) enviados++;
+        // v7.1 (notificaciones vivas): espejo del correo -- toast/modal en
+        // pantalla para quien tenga SIGSO abierto y no revise el correo.
+        encolarNotificacionApp_(correo, 'PAUSA_RECORDATORIO',
+          'Pausa activa de hoy',
+          'Tu pausa activa es a las ' + (pausa.hora_programada || '') + '.',
+          'pausas', 'Ver pausas activas', 6);
       });
       // Marca la pausa como recordada -> no se reenvia (y sigue registrable).
       transicionarPausa_(pausa, ESTADOS_PAUSA.RECORDATORIO_ENVIADO, { email: 'sistema' }, {});
@@ -730,6 +736,13 @@ var Pausas = {
             (enlace ? ' Registra tu participación aquí: ' + enlace : ' Registra tu participación en la plataforma.');
           var r = enviarCorreo_(pausa.pausa_id + ':ultima_llamada', correo, 'PAUSA_ULTIMA_LLAMADA', asunto, texto, 720, { htmlBody: cuerpoHtml });
           if (r.enviado) ultimaLlamada++;
+          // v7.1 (notificaciones vivas): esta es la mas critica de las tres
+          // (arranca YA) -- vida corta (2h) porque pasado ese rato ya no
+          // tiene sentido mostrarla como "ahora".
+          encolarNotificacionApp_(correo, 'PAUSA_ULTIMA_LLAMADA',
+            '¡Es ahora tu pausa activa!',
+            'Tu pausa activa de hoy es ahora mismo. Registra tu participación al terminar.',
+            'pausas', 'Registrar participación', 2);
         });
         actualizarFilaPorId_(SHEETS.PAUSAS_PROGRAMADAS, 'pausa_id', pausa.pausa_id, { ultima_llamada_enviada: true });
       }
@@ -747,6 +760,10 @@ var Pausas = {
             (enlace ? 'Inícala aquí: ' + enlace : 'Inícala desde Coordinación de pausas.');
           var r = enviarCorreo_(pausa.pausa_id + ':aviso_coordinador', correo, 'PAUSA_AVISO_COORDINADOR', asuntoCoord, texto, 720, { htmlBody: cuerpoHtml });
           if (r.enviado) avisoCoordinadora++;
+          encolarNotificacionApp_(correo, 'PAUSA_AVISO_COORDINADOR',
+            'Es hora de iniciar la pausa',
+            'La pausa activa de ' + pausa.empresa_id + ' ya debería iniciar.',
+            'pausas_coordinacion', 'Iniciar la pausa', 2);
         });
         actualizarFilaPorId_(SHEETS.PAUSAS_PROGRAMADAS, 'pausa_id', pausa.pausa_id, { aviso_coordinador_enviado: true });
       }

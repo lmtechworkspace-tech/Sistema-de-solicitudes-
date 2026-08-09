@@ -140,7 +140,13 @@ var BACKOFFICE_ACTIONS = {
   getPanelGerenciaActividades: handleGetPanelGerenciaActividades_,
   generarReporteActividades: handleGenerarReporteActividades_,
   descargarReporteActividadesPdf: handleDescargarReporteActividadesPdf_,
-  descargarActaReunionPdf: handleDescargarActaReunionPdf_
+  descargarActaReunionPdf: handleDescargarActaReunionPdf_,
+  // v7.1 (notificaciones vivas): polling del cliente + marcar leida. Sin
+  // gate de modulo a proposito, mismo criterio que ping/getMiPerfil -- la
+  // identidad ya resuelta por el contexto (Google o portal_token) es la
+  // unica proteccion real; toda sesion valida tiene notificaciones propias.
+  sincronizarNotificacionesApp: handleSincronizarNotificacionesApp_,
+  marcarNotificacionAppLeida: handleMarcarNotificacionAppLeida_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -471,6 +477,16 @@ function obtenerRolUsuario_(email) {
     }
   }
   return null;
+}
+
+// v7.1 (notificaciones vivas): ver la nota junto a la entrada en
+// BACKOFFICE_ACTIONS -- sin gate de modulo.
+function handleSincronizarNotificacionesApp_(data, contexto) {
+  return responderResultado_(sincronizarNotificacionesApp_(contexto));
+}
+
+function handleMarcarNotificacionAppLeida_(data, contexto) {
+  return responderResultado_(marcarNotificacionAppLeida_(contexto, data && data.notif_id));
 }
 
 function handlePing_(data, contexto) {

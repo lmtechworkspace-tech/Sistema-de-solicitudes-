@@ -211,6 +211,12 @@ var ESQUEMA_HOJAS = {
   ACTIVIDADES_BITACORA: [
     'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',
     'nota', 'avance_pct', 'confianza', 'datos', 'timestamp'
+  ],
+  // v7.1 (notificaciones vivas, documentacion/SIGSO-v7.1-notificaciones-
+  // vivas.md): ver la nota identica en backend/backoffice/Constantes.gs.
+  NOTIFICACIONES_APP: [
+    'notif_id', 'destinatario_email', 'tipo', 'titulo', 'mensaje',
+    'modulo_id', 'texto_accion', 'leida', 'creada_en', 'expira_en'
   ]
 };
 

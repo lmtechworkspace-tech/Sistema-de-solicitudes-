@@ -2,7 +2,26 @@
  * app.js — Backoffice: orquesta las vistas dashboard/detalle (§12.4/12.5).
  */
 (function () {
-  window.SigsoApp = { mostrarDetalle: mostrarDetalle_, mostrarDashboard: mostrarDashboard_ };
+  window.SigsoApp = {
+    mostrarDetalle: mostrarDetalle_,
+    mostrarDashboard: mostrarDashboard_,
+    // v7.1 (notificaciones vivas): navegacion por id de modulo, para que un
+    // click en una notificacion funcione igual aca que en el shell del
+    // portal (window.SigsoShell.irAModulo en plataforma.js). 'pausas' y
+    // 'pausas_coordinacion' no tienen vista en este shell (solo existen en
+    // el portal) -- si llega una notificacion con esos modulos aca, no hay
+    // a donde navegar; se ignora en vez de romper.
+    irAModulo: function (id) {
+      var destinos = {
+        home: mostrarDashboard_,
+        gerencia: mostrarGerencia_,
+        jefatura: mostrarJefatura_,
+        novedades: mostrarNovedades_,
+        mi_trabajo: mostrarMiTrabajo_
+      };
+      if (destinos[id]) destinos[id]();
+    }
+  };
 
   document.addEventListener('DOMContentLoaded', function () {
     if (typeof renderHeaderSigso === 'function') {
