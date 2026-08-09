@@ -103,8 +103,67 @@ test('sincronizarNotificacionesApp / marcarNotificacionAppLeida no tienen gate d
   const ctx = load();
   assert.equal(ctx.MODULO_POR_ACCION.sincronizarNotificacionesApp, undefined);
   assert.equal(ctx.MODULO_POR_ACCION.marcarNotificacionAppLeida, undefined);
+  assert.equal(ctx.MODULO_POR_ACCION.marcarTodasNotificacionesAppLeidas, undefined);
   assert.equal(typeof ctx.BACKOFFICE_ACTIONS.sincronizarNotificacionesApp, 'function');
   assert.equal(typeof ctx.BACKOFFICE_ACTIONS.marcarNotificacionAppLeida, 'function');
+  assert.equal(typeof ctx.BACKOFFICE_ACTIONS.marcarTodasNotificacionesAppLeidas, 'function');
+});
+
+// ---- v7.1 Bloque B: escritura por lote, marcar todas, purga --------------
+
+test('encolarNotificacionAppLote_ escribe varias filas en una sola pasada', () => {
+  const ctx = load();
+  const r = ctx.encolarNotificacionAppLote_([
+    { destinatario: 'a@hp.cl', tipo: 'X', titulo: 'T1', mensaje: '', modulo_id: 'pausas', texto_accion: 'V', vidaHoras: 6 },
+    { destinatario: 'b@hp.cl', tipo: 'X', titulo: 'T2' },
+    { destinatario: '', tipo: 'X', titulo: 'ignorada' } // sin destinatario -> se salta
+  ]);
+  assert.equal(r.encolado, 2);
+  assert.equal(ctx.leerFilas_('NOTIFICACIONES_APP').length, 2);
+});
+
+test('marcarTodasNotificacionesAppLeidas_ marca solo las del destinatario de la sesion', () => {
+  const ctx = load();
+  ctx.encolarNotificacionAppLote_([
+    { destinatario: 'ana@hp.cl', tipo: 'X', titulo: 'A1' },
+    { destinatario: 'ana@hp.cl', tipo: 'X', titulo: 'A2' },
+    { destinatario: 'juan@hp.cl', tipo: 'X', titulo: 'J1' }
+  ]);
+  const r = ctx.marcarTodasNotificacionesAppLeidas_({ email: 'ana@hp.cl' });
+  assert.equal(r.actualizadas, 2);
+  assert.equal(ctx.sincronizarNotificacionesApp_({ email: 'ana@hp.cl' }).notificaciones.length, 0);
+  assert.equal(ctx.sincronizarNotificacionesApp_({ email: 'juan@hp.cl' }).notificaciones.length, 1);
+});
+
+test('purgarNotificacionesApp_ borra las leidas y las vencidas, conserva las vivas', () => {
+  const ctx = load();
+  ctx.encolarNotificacionAppLote_([
+    { destinatario: 'ana@hp.cl', tipo: 'X', titulo: 'viva', vidaHoras: 6 },
+    { destinatario: 'ana@hp.cl', tipo: 'X', titulo: 'vencida', vidaHoras: -1 },
+    { destinatario: 'ana@hp.cl', tipo: 'X', titulo: 'a-leer', vidaHoras: 6 }
+  ]);
+  // marca "a-leer" como leida
+  const filas = ctx.leerFilas_('NOTIFICACIONES_APP');
+  const idLeer = filas.filter((f) => f.titulo === 'a-leer')[0].notif_id;
+  ctx.marcarNotificacionAppLeida_({ email: 'ana@hp.cl' }, idLeer);
+
+  const r = ctx.purgarNotificacionesApp_();
+  assert.equal(r.borradas, 2); // vencida + leida
+  const quedan = ctx.leerFilas_('NOTIFICACIONES_APP');
+  assert.equal(quedan.length, 1);
+  assert.equal(quedan[0].titulo, 'viva');
+});
+
+test('purgarNotificacionesApp_ / marcarTodas no revientan si la hoja no existe', () => {
+  const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
+  assert.equal(ctx.purgarNotificacionesApp_().borradas, 0);
+  assert.equal(ctx.marcarTodasNotificacionesAppLeidas_({ email: 'x@y.cl' }).actualizadas, 0);
+});
+
+test('purgarNotificacionesAppTrigger se cuelga del recordatorio diario sin romperlo', () => {
+  const ctx = load();
+  // La hoja existe (load la crea) -> el trigger no debe lanzar.
+  assert.doesNotThrow(function () { ctx.purgarNotificacionesAppTrigger(); });
 });
 
 // ---- Hooks reales: Pausas (el caso que detono el pedido) ------------------

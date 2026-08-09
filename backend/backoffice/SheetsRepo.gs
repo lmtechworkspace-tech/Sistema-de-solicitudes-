@@ -124,6 +124,25 @@ function leerFilas_(nombreHoja) {
   return leerHojaConEncabezados_(nombreHoja).filas;
 }
 
+// v7.1 (notificaciones vivas): escritura por LOTE -- una sola llamada a
+// Sheets (getRange().setValues()) en vez de N appendRow. Un evento de pausa
+// para toda la empresa encola una notificacion por trabajador; con appendRow
+// eso eran 40-80 round-trips a Sheets dentro del trigger. Mismo contrato que
+// agregarFila_ (mapea por COLUMNAS[nombreHoja], default '' para lo ausente).
+function agregarFilas_(nombreHoja, objetosFila) {
+  if (!objetosFila || !objetosFila.length) return objetosFila;
+  var hoja = obtenerHoja_(nombreHoja);
+  var columnas = COLUMNAS[nombreHoja];
+  var matriz = objetosFila.map(function (obj) {
+    return columnas.map(function (col) {
+      return obj[col] !== undefined ? obj[col] : '';
+    });
+  });
+  hoja.getRange(hoja.getLastRow() + 1, 1, matriz.length, columnas.length).setValues(matriz);
+  invalidarCacheHoja_(nombreHoja); // v6.9: la hoja cambio, el cache ya no sirve
+  return objetosFila;
+}
+
 // Reescribe una fila conservando las columnas que el codigo no conoce (el
 // ancho real de la hoja): solo pisa las celdas cuyo encabezado esta en
 // `objetoActualizado`. Devuelve el objeto actualizado, o null si no existe.

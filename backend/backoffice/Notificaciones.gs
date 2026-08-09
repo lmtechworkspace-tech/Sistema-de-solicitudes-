@@ -409,6 +409,7 @@ var Notificaciones = {
   enviarAlertasActividades: function () {
     var porPersona = Actividades.calcularAlertas();
     var resultados = [];
+    var notifs = []; // v7.1: se encolan todas en LOTE al final.
     Object.keys(porPersona).forEach(function (email) {
       var d = porPersona[email];
       var total = d.sin_novedad.length + d.sin_confirmar.length + d.compromiso_proximo.length +
@@ -422,11 +423,14 @@ var Notificaciones = {
         enviarCorreo_('ALERTAS_ACTIVIDADES', email, claveEvento, asunto, cuerpo, VENTANA_DEDUP_SLA_VENCIDO_MINUTOS,
           { htmlBody: plantillaCorreoHtml_('Actividades pendientes', formatearAlertasActividadesHtml_(d)) })
       ));
-      encolarNotificacionApp_(email, 'ALERTAS_ACTIVIDADES',
-        'Tienes ' + total + (total === 1 ? ' actividad pendiente' : ' actividades pendientes'),
-        'Revisa tu digest diario: vencidas, sin confirmar, bloqueadas o sin novedad reciente.',
-        'mi_trabajo', 'Ver Mi trabajo', 24);
+      notifs.push({
+        destinatario: email, tipo: 'ALERTAS_ACTIVIDADES',
+        titulo: 'Tienes ' + total + (total === 1 ? ' actividad pendiente' : ' actividades pendientes'),
+        mensaje: 'Revisa tu digest diario: vencidas, sin confirmar, bloqueadas o sin novedad reciente.',
+        modulo_id: 'mi_trabajo', texto_accion: 'Ver Mi trabajo', vidaHoras: 24
+      });
     });
+    encolarNotificacionAppLote_(notifs);
     return resultados;
   },
 
@@ -849,30 +853,94 @@ function generarAdjuntoOt_(solicitudId, usuario) {
 // usuario no abrio SIGSO en mucho tiempo.
 function encolarNotificacionApp_(destinatario, tipo, titulo, mensaje, moduloId, textoAccion, vidaHoras) {
   if (!destinatario) return { encolado: false, motivo: 'sin_destinatario' };
+  var r = encolarNotificacionAppLote_([{
+    destinatario: destinatario, tipo: tipo, titulo: titulo, mensaje: mensaje,
+    modulo_id: moduloId, texto_accion: textoAccion, vidaHoras: vidaHoras
+  }]);
+  return r.encolado > 0 ? { encolado: true } : { encolado: false, motivo: 'error_encolado' };
+}
+
+// v7.1 (B5, rendimiento): encola VARIAS notificaciones en una sola escritura.
+// `items` es un arreglo de { destinatario, tipo, titulo, mensaje, modulo_id,
+// texto_accion, vidaHoras }. Lo usan los flujos que notifican a muchas
+// personas a la vez (recordatorio de pausa a todo el roster, digest diario de
+// actividades), donde antes se hacia un appendRow por persona.
+//
+// Nunca debe tumbar el flujo que la llama: si la hoja no existe aun
+// (instalacion vieja sin re-correr el Instalador) o falla la escritura, el
+// correo -- el canal confiable -- ya salio o sale igual.
+function encolarNotificacionAppLote_(items) {
+  if (!items || !items.length) return { encolado: 0 };
   try {
     var ahora = new Date();
-    var expira = new Date(ahora.getTime() + (vidaHoras || 72) * 60 * 60 * 1000);
-    agregarFila_(SHEETS.NOTIFICACIONES_APP, {
-      notif_id: Utilities.getUuid(),
-      destinatario_email: destinatario,
-      tipo: tipo,
-      titulo: titulo,
-      mensaje: mensaje || '',
-      modulo_id: moduloId || '',
-      texto_accion: textoAccion || '',
-      leida: 'FALSE',
-      creada_en: ahora.toISOString(),
-      expira_en: expira.toISOString()
-    });
-    return { encolado: true };
+    var filas = items
+      .filter(function (it) { return it && it.destinatario; })
+      .map(function (it) {
+        var expira = new Date(ahora.getTime() + (it.vidaHoras || 72) * 60 * 60 * 1000);
+        return {
+          notif_id: Utilities.getUuid(),
+          destinatario_email: it.destinatario,
+          tipo: it.tipo,
+          titulo: it.titulo,
+          mensaje: it.mensaje || '',
+          modulo_id: it.modulo_id || '',
+          texto_accion: it.texto_accion || '',
+          leida: 'FALSE',
+          creada_en: ahora.toISOString(),
+          expira_en: expira.toISOString()
+        };
+      });
+    if (!filas.length) return { encolado: 0 };
+    agregarFilas_(SHEETS.NOTIFICACIONES_APP, filas);
+    return { encolado: filas.length };
   } catch (err) {
-    // v7.1: nunca debe tumbar el flujo que la llama (p.ej. un recordatorio de
-    // Pausas) -- si la hoja no existe aun (instalacion vieja sin re-correr el
-    // Instalador) o falla la escritura, el correo (el canal que si es
-    // confiable) ya salio o sale igual.
-    logError_(err, 'Notificaciones.encolarNotificacionApp:' + tipo + ':' + destinatario);
-    return { encolado: false, motivo: 'error_encolado' };
+    logError_(err, 'Notificaciones.encolarNotificacionAppLote');
+    return { encolado: 0 };
   }
+}
+
+// v7.1 (B6, "marcar todas leidas"): pasa a leida=TRUE todas las no-leidas del
+// usuario de la sesion, en una sola pasada (evita N requests desde el
+// cliente). Silencioso si la hoja no existe.
+function marcarTodasNotificacionesAppLeidas_(contexto) {
+  var datos;
+  try { datos = leerHojaConEncabezados_(SHEETS.NOTIFICACIONES_APP); } catch (err) { return { actualizadas: 0 }; }
+  var idxDest = datos.encabezados.indexOf('destinatario_email');
+  var idxLeida = datos.encabezados.indexOf('leida');
+  if (idxDest === -1 || idxLeida === -1) return { actualizadas: 0 };
+  var n = 0;
+  for (var i = 1; i < datos.valores.length; i++) {
+    if (String(datos.valores[i][idxDest]) === contexto.email && String(datos.valores[i][idxLeida]) !== 'TRUE') {
+      datos.hoja.getRange(i + 1, idxLeida + 1).setValue('TRUE');
+      n++;
+    }
+  }
+  if (n) invalidarCacheHoja_(SHEETS.NOTIFICACIONES_APP);
+  return { actualizadas: n };
+}
+
+// v7.1 (B5, purga): borra las filas ya leidas o vencidas para que la hoja no
+// crezca sin limite (cada sincronizacion lee la hoja completa). Lo llama un
+// trigger diario ya existente (Triggers.gs), no uno nuevo. Lee una vez y
+// borra de abajo hacia arriba para no correr los indices.
+function purgarNotificacionesApp_() {
+  var datos;
+  try { datos = leerHojaConEncabezados_(SHEETS.NOTIFICACIONES_APP); } catch (err) { return { borradas: 0 }; }
+  var idxLeida = datos.encabezados.indexOf('leida');
+  var idxExpira = datos.encabezados.indexOf('expira_en');
+  var ahora = Date.now();
+  var borradas = 0;
+  for (var i = datos.valores.length - 1; i >= 1; i--) {
+    var leida = idxLeida !== -1 && String(datos.valores[i][idxLeida]) === 'TRUE';
+    var vencida = idxExpira !== -1 && datos.valores[i][idxExpira] &&
+      new Date(datos.valores[i][idxExpira]).getTime() <= ahora;
+    if (leida || vencida) {
+      datos.hoja.deleteRow(i + 1);
+      borradas++;
+    }
+  }
+  if (borradas) invalidarCacheHoja_(SHEETS.NOTIFICACIONES_APP);
+  return { borradas: borradas };
 }
 
 // v7.1: polling del cliente (cada 2-3 min, ver notificaciones-vivas.js). Solo

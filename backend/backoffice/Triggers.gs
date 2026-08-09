@@ -281,6 +281,15 @@ function recordarValidacionPendienteTrigger() {
   } catch (err) {
     logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAlertasActividadesTrigger');
   }
+  // v7.1 (notificaciones vivas, B5): mantenimiento diario -- purga las
+  // notificaciones ya leidas o vencidas para que la hoja NOTIFICACIONES_APP
+  // no crezca sin limite (cada sincronizacion del cliente la lee completa).
+  // Sin trigger propio (limite de 20 ya copado), colgada de este mismo slot.
+  try {
+    purgarNotificacionesAppTrigger();
+  } catch (err) {
+    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:purgarNotificacionesAppTrigger');
+  }
   return resultado;
 }
 
@@ -296,6 +305,12 @@ function enviarRecordatorioNovedadesTrigger() {
 // forzarla a mano desde el editor de Apps Script.
 function enviarAlertasActividadesTrigger() {
   return Notificaciones.enviarAlertasActividades();
+}
+
+// v7.1 (notificaciones vivas, B5): ver purgarNotificacionesApp_(). Nombrada
+// para poder forzarla a mano desde el editor de Apps Script.
+function purgarNotificacionesAppTrigger() {
+  return purgarNotificacionesApp_();
 }
 
 // RN-201/RF-208: dias habiles que un item puede quedar en "Terminada" (S08)

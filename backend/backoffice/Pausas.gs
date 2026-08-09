@@ -685,13 +685,18 @@ var Pausas = {
                   : 'Registra tu participación en la plataforma (módulo Pausas activas).');
         var r = enviarCorreo_(pausa.pausa_id, correo, 'PAUSA_RECORDATORIO', asunto, texto, 720, { htmlBody: cuerpoHtml });
         if (r.enviado) enviados++;
-        // v7.1 (notificaciones vivas): espejo del correo -- toast/modal en
-        // pantalla para quien tenga SIGSO abierto y no revise el correo.
-        encolarNotificacionApp_(correo, 'PAUSA_RECORDATORIO',
-          'Pausa activa de hoy',
-          'Tu pausa activa es a las ' + (pausa.hora_programada || '') + '.',
-          'pausas', 'Ver pausas activas', 6);
       });
+      // v7.1 (notificaciones vivas): espejo del correo -- toast/modal en
+      // pantalla para quien tenga SIGSO abierto y no revise el correo. Se
+      // encola en LOTE (una sola escritura para todo el roster).
+      encolarNotificacionAppLote_(destinatarios.map(function (correo) {
+        return {
+          destinatario: correo, tipo: 'PAUSA_RECORDATORIO',
+          titulo: 'Pausa activa de hoy',
+          mensaje: 'Tu pausa activa es a las ' + (pausa.hora_programada || '') + '.',
+          modulo_id: 'pausas', texto_accion: 'Ver pausas activas', vidaHoras: 6
+        };
+      }));
       // Marca la pausa como recordada -> no se reenvia (y sigue registrable).
       transicionarPausa_(pausa, ESTADOS_PAUSA.RECORDATORIO_ENVIADO, { email: 'sistema' }, {});
       avisadas++;
@@ -727,7 +732,8 @@ var Pausas = {
 
       if (!esVerdaderoPausas_(pausa.ultima_llamada_enviada)) {
         var asunto = 'SIGSO — ¡Es ahora! Tu pausa activa (' + (pausa.hora_programada || '') + ')';
-        destinatariosRecordatorio_(pausa.empresa_id).forEach(function (correo) {
+        var destUltima = destinatariosRecordatorio_(pausa.empresa_id);
+        destUltima.forEach(function (correo) {
           var enlace = enlaceMagicoPausas_(correo, 'pausas');
           var cuerpoHtml = plantillaCorreoHtml_('¡Es ahora tu pausa activa!',
             '<p style="margin:0 0 ' + (enlace ? '16px' : '0') + ';">Tu pausa activa de hoy es <strong>ahora mismo</strong>. Cuando termines, registra tu participación.</p>' +
@@ -736,20 +742,25 @@ var Pausas = {
             (enlace ? ' Registra tu participación aquí: ' + enlace : ' Registra tu participación en la plataforma.');
           var r = enviarCorreo_(pausa.pausa_id + ':ultima_llamada', correo, 'PAUSA_ULTIMA_LLAMADA', asunto, texto, 720, { htmlBody: cuerpoHtml });
           if (r.enviado) ultimaLlamada++;
-          // v7.1 (notificaciones vivas): esta es la mas critica de las tres
-          // (arranca YA) -- vida corta (2h) porque pasado ese rato ya no
-          // tiene sentido mostrarla como "ahora".
-          encolarNotificacionApp_(correo, 'PAUSA_ULTIMA_LLAMADA',
-            '¡Es ahora tu pausa activa!',
-            'Tu pausa activa de hoy es ahora mismo. Registra tu participación al terminar.',
-            'pausas', 'Registrar participación', 2);
         });
+        // v7.1 (notificaciones vivas): esta es la mas critica de las tres
+        // (arranca YA) -- vida corta (2h) porque pasado ese rato ya no tiene
+        // sentido mostrarla como "ahora". Encolado en LOTE.
+        encolarNotificacionAppLote_(destUltima.map(function (correo) {
+          return {
+            destinatario: correo, tipo: 'PAUSA_ULTIMA_LLAMADA',
+            titulo: '¡Es ahora tu pausa activa!',
+            mensaje: 'Tu pausa activa de hoy es ahora mismo. Registra tu participación al terminar.',
+            modulo_id: 'pausas', texto_accion: 'Registrar participación', vidaHoras: 2
+          };
+        }));
         actualizarFilaPorId_(SHEETS.PAUSAS_PROGRAMADAS, 'pausa_id', pausa.pausa_id, { ultima_llamada_enviada: true });
       }
 
       if (!esVerdaderoPausas_(pausa.aviso_coordinador_enviado)) {
         var asuntoCoord = 'SIGSO — Inicia la pausa activa de ' + pausa.empresa_id;
-        coordinadorasDeEmpresa_(pausa.empresa_id).forEach(function (correo) {
+        var destCoord = coordinadorasDeEmpresa_(pausa.empresa_id);
+        destCoord.forEach(function (correo) {
           var enlace = enlaceMagicoPausas_(correo, 'pausas_coordinacion');
           var cuerpoHtml = plantillaCorreoHtml_('Es hora de iniciar la pausa',
             '<p style="margin:0 0 ' + (enlace ? '16px' : '0') + ';">Ya llegó la hora programada (' +
@@ -760,11 +771,15 @@ var Pausas = {
             (enlace ? 'Inícala aquí: ' + enlace : 'Inícala desde Coordinación de pausas.');
           var r = enviarCorreo_(pausa.pausa_id + ':aviso_coordinador', correo, 'PAUSA_AVISO_COORDINADOR', asuntoCoord, texto, 720, { htmlBody: cuerpoHtml });
           if (r.enviado) avisoCoordinadora++;
-          encolarNotificacionApp_(correo, 'PAUSA_AVISO_COORDINADOR',
-            'Es hora de iniciar la pausa',
-            'La pausa activa de ' + pausa.empresa_id + ' ya debería iniciar.',
-            'pausas_coordinacion', 'Iniciar la pausa', 2);
         });
+        encolarNotificacionAppLote_(destCoord.map(function (correo) {
+          return {
+            destinatario: correo, tipo: 'PAUSA_AVISO_COORDINADOR',
+            titulo: 'Es hora de iniciar la pausa',
+            mensaje: 'La pausa activa de ' + pausa.empresa_id + ' ya debería iniciar.',
+            modulo_id: 'pausas_coordinacion', texto_accion: 'Iniciar la pausa', vidaHoras: 2
+          };
+        }));
         actualizarFilaPorId_(SHEETS.PAUSAS_PROGRAMADAS, 'pausa_id', pausa.pausa_id, { aviso_coordinador_enviado: true });
       }
     });
