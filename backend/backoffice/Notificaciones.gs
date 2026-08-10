@@ -943,6 +943,80 @@ function purgarNotificacionesApp_() {
   return { borradas: borradas };
 }
 
+// v7.3 (notificaciones vivas, Nivel 0): guarda el ULTIMO estado de
+// Notification.permission que reporto el navegador de quien hizo la
+// llamada -- 'granted' | 'denied' | 'default'. Upsert por email (no es
+// historico). Sin gate de modulo (como ping): cualquier sesion valida puede
+// reportar SU propio estado. Se llama al cargar SIGSO y cada vez que el
+// permiso cambia (ver notificaciones-vivas.js).
+//
+// Nunca debe tumbar la carga de SIGSO: si la hoja NOTIF_PERMISOS_SO aun no
+// existe (instalacion vieja sin re-correr el Instalador tras este cambio),
+// se ignora en silencio -- mismo criterio que encolarNotificacionAppLote_.
+function reportarPermisoNotificacionesSO_(contexto, permiso) {
+  var valor = String(permiso || '').trim();
+  if (['granted', 'denied', 'default'].indexOf(valor) === -1) {
+    return errorValidacion_('permiso', 'Valor de permiso invalido.');
+  }
+  try {
+    var fila = { email: contexto.email, permiso: valor, actualizado_en: new Date().toISOString() };
+    var actualizado = actualizarFilaPorId_(SHEETS.NOTIF_PERMISOS_SO, 'email', contexto.email, fila);
+    if (!actualizado) agregarFila_(SHEETS.NOTIF_PERMISOS_SO, fila);
+  } catch (err) { /* hoja no existe todavia -- no romper la carga de SIGSO */ }
+  return { ok: true };
+}
+
+// v7.3 (Nivel 0): panel de Administracion -- "quien nunca acepto el permiso
+// del navegador" (la causa mas probable de "a unos les llega la alerta y a
+// otros no", ver el feedback real que motivo esto). Cruza el personal
+// ACTIVO (USUARIOS + CUENTAS_PORTAL) con lo ultimo reportado en
+// NOTIF_PERMISOS_SO -- si nunca reporto nada, aparece como 'sin_datos' (aun
+// no cargo SIGSO con esta version, o tiene el navegador cerrado). ADM-only.
+function listarPermisosNotificacionesSO_(contexto) {
+  if (contexto.rol !== 'ADM') {
+    return { _forbidden: true, message: 'Solo un Administrador puede ver el estado de las alertas.' };
+  }
+  var permisoPorEmail = {};
+  leerFilasSeguro_(SHEETS.NOTIF_PERMISOS_SO).forEach(function (p) {
+    permisoPorEmail[String(p.email).toLowerCase()] = p;
+  });
+
+  var personas = {}; // email(lower) -> { email, nombre, origen }
+  leerFilasSeguro_(SHEETS.USUARIOS).forEach(function (u) {
+    if (!esVerdaderoPausas_(u.activo) || !u.email) return;
+    personas[String(u.email).toLowerCase()] = { email: u.email, nombre: u.nombre || u.email, origen: 'Backoffice (Google)' };
+  });
+  leerFilasSeguro_(SHEETS.CUENTAS_PORTAL).forEach(function (c) {
+    if (!esVerdaderoPausas_(c.activo)) return;
+    parsearListaPortal_(c.emails).forEach(function (email) {
+      var correo = String(email || '').trim();
+      if (!correo) return;
+      var clave = correo.toLowerCase();
+      if (!personas[clave]) personas[clave] = { email: correo, nombre: c.nombre || correo, origen: 'Plataforma (portal)' };
+    });
+  });
+
+  var lista = Object.keys(personas).map(function (clave) {
+    var persona = personas[clave];
+    var reportado = permisoPorEmail[clave];
+    return {
+      email: persona.email,
+      nombre: persona.nombre,
+      origen: persona.origen,
+      permiso: reportado ? reportado.permiso : 'sin_datos',
+      actualizado_en: reportado ? reportado.actualizado_en : ''
+    };
+  });
+  // Los que faltan activar primero (sin_datos, luego denied, luego default);
+  // granted al final -- son los que YA estan bien, no necesitan atencion.
+  var ORDEN = { sin_datos: 0, denied: 1, default: 2, granted: 3 };
+  lista.sort(function (a, b) {
+    var diff = ORDEN[a.permiso] - ORDEN[b.permiso];
+    return diff !== 0 ? diff : String(a.nombre).localeCompare(String(b.nombre));
+  });
+  return { personas: lista };
+}
+
 // v7.1: polling del cliente (cada 2-3 min, ver notificaciones-vivas.js). Solo
 // las no leidas y no vencidas del usuario de la sesion -- nunca recibe un
 // email como parametro, sale de contexto.email (misma identidad ya resuelta

@@ -221,7 +221,10 @@ var ESQUEMA_HOJAS = {
   NOTIFICACIONES_APP: [
     'notif_id', 'destinatario_email', 'tipo', 'titulo', 'mensaje',
     'modulo_id', 'texto_accion', 'leida', 'creada_en', 'expira_en'
-  ]
+  ],
+  // v7.3 (notificaciones vivas, Nivel 0): ver la nota identica en
+  // backend/backoffice/Constantes.gs.
+  NOTIF_PERMISOS_SO: ['email', 'permiso', 'actualizado_en']
 };
 
 // SLA por prioridad en horas habiles (§7.2). P5 no tiene SLA.

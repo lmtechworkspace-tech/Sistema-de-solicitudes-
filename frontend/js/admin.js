@@ -135,6 +135,8 @@
           renderJefaturas_();
         } else if (tipo === 'PAUSAS') {
           renderPausas_();
+        } else if (tipo === 'NOTIF_PERMISOS') {
+          renderPermisosNotif_();
         } else {
           renderCatalogo_(tipo);
         }
@@ -1235,6 +1237,49 @@
       }
       contenedor.innerHTML = '<h2>' + LOGS_UI.titulo + '</h2>' + Componentes.tarjeta(renderTabla_(LOGS_UI.campos, respuesta.data));
     }).catch(mostrarErrorAdmin_);
+  }
+
+  // v7.3 (Nivel 0): panel de solo lectura -- quien nunca acepto el permiso
+  // de notificacion del navegador. Nace del feedback real "a unos les llega
+  // la alerta y a otros no": la causa mas probable es que nunca vieron/
+  // aceptaron el permiso del SO. Ordenado por el backend (pendientes
+  // primero); aca solo se pinta.
+  var PERMISO_NOTIF_BADGE = {
+    sin_datos: 'P1', denied: 'P1', default: 'P3', granted: 'P4'
+  };
+  var PERMISO_NOTIF_TEXTO = {
+    sin_datos: 'Sin datos (no cargó SIGSO aún)',
+    denied: 'Bloqueado', default: 'Pendiente', granted: 'Activo'
+  };
+
+  function renderPermisosNotif_() {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarPermisosNotificacionesSO', {}).then(function (respuesta) {
+      var contenedor = document.getElementById('admin-contenido');
+      if (!respuesta.ok) {
+        contenedor.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
+        return;
+      }
+      var personas = respuesta.data.personas || [];
+      contenedor.innerHTML = '<h2>Alertas en vivo — permiso del navegador</h2>' +
+        '<p class="sigso-ayuda">Quién tiene activadas las alertas del sistema operativo en su navegador. Los pendientes aparecen primero.</p>' +
+        Componentes.tarjeta(tablaPermisosNotif_(personas));
+    }).catch(mostrarErrorAdmin_);
+  }
+
+  function tablaPermisosNotif_(personas) {
+    if (!personas.length) {
+      return Componentes.vacio({ icono: 'campana', texto: 'Sin personal activo para mostrar.' });
+    }
+    var cuerpo = personas.map(function (p) {
+      return '<tr>' +
+        '<td>' + Componentes.escaparHtml(p.nombre) + '</td>' +
+        '<td>' + Componentes.escaparHtml(p.email) + '</td>' +
+        '<td>' + Componentes.escaparHtml(p.origen) + '</td>' +
+        '<td>' + Componentes.badge(PERMISO_NOTIF_TEXTO[p.permiso] || p.permiso, PERMISO_NOTIF_BADGE[p.permiso] || 'P3') + '</td>' +
+        '<td>' + Componentes.escaparHtml(p.actualizado_en ? String(p.actualizado_en) : '—') + '</td>' +
+        '</tr>';
+    }).join('');
+    return '<table class="sigso-tabla"><thead><tr><th>Nombre</th><th>Email</th><th>Origen</th><th>Estado</th><th>Actualizado</th></tr></thead><tbody>' + cuerpo + '</tbody></table>';
   }
 
   function renderFormulario_(campos) {

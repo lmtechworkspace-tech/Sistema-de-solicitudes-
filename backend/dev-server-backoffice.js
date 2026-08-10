@@ -40,6 +40,9 @@ function construirContexto() {
   seedSheet(ctx, 'HISTORIAL_PRIORIDAD', ctx.COLUMNAS.HISTORIAL_PRIORIDAD);
   seedSheet(ctx, 'HISTORIAL_COMPROMISO', ctx.COLUMNAS.HISTORIAL_COMPROMISO);
   seedSheet(ctx, 'HISTORIAL_ASIGNACION', ctx.COLUMNAS.HISTORIAL_ASIGNACION);
+  // v7.3 (Nivel 0): vacia -- el panel "Alertas en vivo" de Administracion se
+  // llena solo con lo que cada navegador reporte al cargar app.html/plataforma.html.
+  seedSheet(ctx, 'NOTIF_PERMISOS_SO', ctx.COLUMNAS.NOTIF_PERMISOS_SO);
   // v7.1: notificaciones "en vivo" demo -- una para el shell Google
   // (admin@homepymes.cl) y otra para el shell del portal (leo@rld.cl), asi
   // se puede ver el modal/toast al cargar app.html/plataforma.html en local.

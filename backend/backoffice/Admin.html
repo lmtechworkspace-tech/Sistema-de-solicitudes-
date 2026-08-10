@@ -2668,6 +2668,28 @@ button {
 .sigso-pausa-form { margin-top: 1rem; }
 .sigso-pausa-form .sigso-toggle { margin-bottom: 1rem; display: block; }
 
+/* v7.2 (Bloque A, mejora A6): micro-encuesta de bienestar, opcional. */
+.sigso-animo { margin: 1rem 0; }
+.sigso-animo-botonera { display: flex; gap: 0.5rem; }
+.sigso-animo-btn {
+  flex: 1 1 auto;
+  font-size: 1.6rem;
+  line-height: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--borde, #E5E8EF);
+  border-radius: 8px;
+  background: var(--superficie, #fff);
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s, border-color 0.15s, transform 0.1s;
+}
+.sigso-animo-btn:hover { opacity: 0.85; }
+.sigso-animo-btn--activo {
+  opacity: 1;
+  border-color: var(--primario, #6D5DF6);
+  transform: scale(1.08);
+}
+
 /* v6.0 Fase P3: listas de participación del coordinador (participaron /
    justificaron / pendientes). */
 .sigso-lista-simple {
@@ -2677,6 +2699,31 @@ button {
   font-size: 0.92rem;
 }
 .sigso-lista-simple li { margin: 0.15rem 0; }
+
+/* v7.2 (Bloque A, mejora A1): modal "pasar lista" grupal del coordinador. */
+.sigso-lista-pasar-lista {
+  max-height: 50vh;
+  overflow-y: auto;
+  margin: 0.75rem 0;
+  border: 1px solid var(--borde, #E5E8EF);
+  border-radius: 8px;
+}
+.sigso-lista-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--borde, #EEF1F6);
+  flex-wrap: wrap;
+}
+.sigso-lista-item:last-child { border-bottom: none; }
+.sigso-lista-item__botones { display: flex; gap: 0.4rem; flex-shrink: 0; }
+.sigso-boton--activo {
+  border-color: var(--primario, #6D5DF6) !important;
+  color: var(--primario, #6D5DF6) !important;
+  font-weight: 600;
+}
 
 /* === v6.4: Avatar unico + panel "Mi perfil" ==============================
    Un solo avatar para toda la plataforma (Componentes.avatar). Antes habia
@@ -4695,6 +4742,7 @@ button.sigso-kpi {
       <button type="button" class="sigso-admin-menu__item" data-tipo="JEFATURAS">Jefaturas</button>
       <button type="button" class="sigso-admin-menu__item" data-tipo="PAUSAS">Pausas activas</button>
       <button type="button" class="sigso-admin-menu__item" data-tipo="LOGS">Automatizaciones</button>
+      <button type="button" class="sigso-admin-menu__item" data-tipo="NOTIF_PERMISOS">Alertas en vivo</button>
     </nav>
 
     <section id="admin-contenido" class="sigso-admin-contenido"></section>
@@ -6483,6 +6531,8 @@ var Iconos = (function () {
           renderJefaturas_();
         } else if (tipo === 'PAUSAS') {
           renderPausas_();
+        } else if (tipo === 'NOTIF_PERMISOS') {
+          renderPermisosNotif_();
         } else {
           renderCatalogo_(tipo);
         }
@@ -7583,6 +7633,49 @@ var Iconos = (function () {
       }
       contenedor.innerHTML = '<h2>' + LOGS_UI.titulo + '</h2>' + Componentes.tarjeta(renderTabla_(LOGS_UI.campos, respuesta.data));
     }).catch(mostrarErrorAdmin_);
+  }
+
+  // v7.3 (Nivel 0): panel de solo lectura -- quien nunca acepto el permiso
+  // de notificacion del navegador. Nace del feedback real "a unos les llega
+  // la alerta y a otros no": la causa mas probable es que nunca vieron/
+  // aceptaron el permiso del SO. Ordenado por el backend (pendientes
+  // primero); aca solo se pinta.
+  var PERMISO_NOTIF_BADGE = {
+    sin_datos: 'P1', denied: 'P1', default: 'P3', granted: 'P4'
+  };
+  var PERMISO_NOTIF_TEXTO = {
+    sin_datos: 'Sin datos (no cargó SIGSO aún)',
+    denied: 'Bloqueado', default: 'Pendiente', granted: 'Activo'
+  };
+
+  function renderPermisosNotif_() {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarPermisosNotificacionesSO', {}).then(function (respuesta) {
+      var contenedor = document.getElementById('admin-contenido');
+      if (!respuesta.ok) {
+        contenedor.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
+        return;
+      }
+      var personas = respuesta.data.personas || [];
+      contenedor.innerHTML = '<h2>Alertas en vivo — permiso del navegador</h2>' +
+        '<p class="sigso-ayuda">Quién tiene activadas las alertas del sistema operativo en su navegador. Los pendientes aparecen primero.</p>' +
+        Componentes.tarjeta(tablaPermisosNotif_(personas));
+    }).catch(mostrarErrorAdmin_);
+  }
+
+  function tablaPermisosNotif_(personas) {
+    if (!personas.length) {
+      return Componentes.vacio({ icono: 'campana', texto: 'Sin personal activo para mostrar.' });
+    }
+    var cuerpo = personas.map(function (p) {
+      return '<tr>' +
+        '<td>' + Componentes.escaparHtml(p.nombre) + '</td>' +
+        '<td>' + Componentes.escaparHtml(p.email) + '</td>' +
+        '<td>' + Componentes.escaparHtml(p.origen) + '</td>' +
+        '<td>' + Componentes.badge(PERMISO_NOTIF_TEXTO[p.permiso] || p.permiso, PERMISO_NOTIF_BADGE[p.permiso] || 'P3') + '</td>' +
+        '<td>' + Componentes.escaparHtml(p.actualizado_en ? String(p.actualizado_en) : '—') + '</td>' +
+        '</tr>';
+    }).join('');
+    return '<table class="sigso-tabla"><thead><tr><th>Nombre</th><th>Email</th><th>Origen</th><th>Estado</th><th>Actualizado</th></tr></thead><tbody>' + cuerpo + '</tbody></table>';
   }
 
   function renderFormulario_(campos) {

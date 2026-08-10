@@ -36,6 +36,21 @@
  * Limitacion honesta: si el navegador esta CERRADO por completo, no llega
  * nada -- no existe "SIGSO en segundo plano" sin servidor propio de push.
  *
+ * v7.3 (Nivel 0 + 1, del feedback real "a unos les llega la alerta y a otros
+ * no"): la causa mas probable NO es un limite del ecosistema gratuito, sino
+ * que el permiso del SO nunca se acepto (se pedia calladito, B10-viejo) mas
+ * el hecho universal de que todo navegador estrangula/congela pestanas en
+ * segundo plano -- eso ultimo no tiene arreglo 100% sin Web Push real
+ * (fuera de alcance de este pase, ver documentacion). Lo que SI se puede
+ * mejorar sin infraestructura nueva:
+ *  - Nivel 0: banner VISIBLE y persistente (no silencioso) pidiendo el
+ *    permiso, + reporte del estado al backend para que Admin vea quien
+ *    quedo pendiente (listarPermisosNotificacionesSO, panel en Admin).
+ *  - Nivel 1: "keep-alive" de audio casi-silencioso (el navegador clasifica
+ *    la pestana como "reproduciendo" y la protege de la congelacion mas
+ *    agresiva) + resync en mas eventos (pageshow, online) ademas de los ya
+ *    existentes (visibilitychange, focus).
+ *
  * Un solo archivo para los dos shells (portal + Backoffice Google): detecta
  * cual bridge de navegacion existe (window.SigsoShell / window.SigsoApp).
  */
@@ -46,6 +61,7 @@
 
   var LLAVE_ULTIMO = 'sigso_notif_ultimo_anuncio'; // B1
   var LLAVE_SONIDO = 'sigso_notif_sonido';         // B8 ('off' = silenciado)
+  var LLAVE_BANNER_OCULTO = 'sigso_notif_banner_oculto'; // v7.3: por sesion (sessionStorage)
 
   var estado = {
     pendientes: [],        // todas las no-leidas (para la campana).
@@ -54,6 +70,7 @@
     sesionActiva: false,
     audioCtx: null,
     audioListo: false,
+    keepAliveNodo: null,   // v7.3 Nivel 1: fuente de audio casi-silenciosa en loop.
     toastsVivos: [],       // referencias a Notification del SO (B10).
     parpadeoTimer: null,
     tituloOriginal: document.title
@@ -162,7 +179,36 @@
       estado.audioCtx = estado.audioCtx || new Ctx();
       if (estado.audioCtx.state === 'suspended') estado.audioCtx.resume();
       estado.audioListo = true;
+      iniciarKeepAlive_(); // v7.3 Nivel 1: aprovecha el mismo desbloqueo por gesto.
     } catch (err) { /* audio no disponible */ }
+  }
+
+  // ---- v7.3 Nivel 1: "keep-alive" -- reduce (no elimina) la chance de que el
+  // navegador congele la pestana en segundo plano. Chrome/Edge/Firefox tratan
+  // distinto a una pestana que esta "reproduciendo audio": la protegen de la
+  // congelacion mas agresiva. No es un contrato oficial de la API, es un
+  // paliativo -- por eso sigue habiendo limitacion honesta si el equipo se
+  // suspende del todo o el navegador se cierra. Ruido blanco de ganancia muy
+  // baja (no 0 exacto: algunos navegadores optimizan un buffer de puro
+  // silencio y anulan el beneficio) -- inaudible para una persona.
+  function iniciarKeepAlive_() {
+    if (estado.keepAliveNodo || !estado.audioCtx) return;
+    try {
+      var ctx = estado.audioCtx;
+      var segundos = 2;
+      var buffer = ctx.createBuffer(1, ctx.sampleRate * segundos, ctx.sampleRate);
+      var datos = buffer.getChannelData(0);
+      for (var i = 0; i < datos.length; i++) datos[i] = (Math.random() * 2 - 1) * 0.00003;
+      var fuente = ctx.createBufferSource();
+      fuente.buffer = buffer;
+      fuente.loop = true;
+      var gain = ctx.createGain();
+      gain.gain.value = 1;
+      fuente.connect(gain);
+      gain.connect(ctx.destination);
+      fuente.start();
+      estado.keepAliveNodo = fuente;
+    } catch (err) { /* paliativo -- si falla, el resto sigue funcionando igual */ }
   }
 
   function reproducirSonido_() {
@@ -184,16 +230,76 @@
 
   // ---- Nivel 2: toasts del SO (B10, con referencias y tope) ------------
 
-  function pedirPermisoAlPrimerGesto_() {
+  // v7.3 Nivel 0: reporta al backend el ULTIMO estado conocido de
+  // Notification.permission -- para que Admin vea quien nunca acepto (la
+  // causa mas probable de "a unos les llega la alerta y a otros no"). Se
+  // llama al cargar y cada vez que el permiso cambia. Sin gate de modulo
+  // (como ping) -- cualquier sesion valida reporta SU propio estado.
+  function reportarPermiso_(valor) {
+    api_('reportarPermisoNotificacionesSO', { permiso: valor }).catch(function () { /* best-effort */ });
+  }
+
+  // v7.3 Nivel 0: banner VISIBLE y persistente (reemplaza el pedido
+  // silencioso B10-viejo) -- si el navegador pide el permiso sin que la
+  // persona vea por que, muchos lo ignoran o ni se dan cuenta que salio.
+  // 'denied' no se puede volver a pedir por API -- ahi el banner explica
+  // como activarlo a mano desde el candado del navegador.
+  function bannerOcultoEstaSesion_() {
+    try { return sessionStorage.getItem(LLAVE_BANNER_OCULTO) === '1'; } catch (err) { return false; }
+  }
+  function ocultarBannerEstaSesion_() {
+    try { sessionStorage.setItem(LLAVE_BANNER_OCULTO, '1'); } catch (err) { /* sin storage */ }
+    var banner = document.getElementById('sigso-notif-banner');
+    if (banner) banner.style.display = 'none';
+  }
+
+  function asegurarBannerPermiso_() {
     if (typeof Notification === 'undefined') return;
-    if (Notification.permission !== 'default') return;
-    var pedir = function () {
-      document.removeEventListener('click', pedir);
-      document.removeEventListener('keydown', pedir);
-      try { Notification.requestPermission(); } catch (e) { /* noop */ }
-    };
-    document.addEventListener('click', pedir, { once: true });
-    document.addEventListener('keydown', pedir, { once: true });
+    if (Notification.permission === 'granted') {
+      var existente = document.getElementById('sigso-notif-banner');
+      if (existente) existente.style.display = 'none';
+      return;
+    }
+    if (bannerOcultoEstaSesion_()) return;
+
+    var banner = document.getElementById('sigso-notif-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'sigso-notif-banner';
+      banner.setAttribute('role', 'alert');
+      banner.style.cssText = [
+        'position:fixed', 'left:0', 'right:0', 'top:0', 'z-index:10000',
+        'display:flex', 'flex-wrap:wrap', 'align-items:center', 'gap:10px',
+        'padding:10px 16px', 'background:var(--primario,#6D5DF6)', 'color:#fff',
+        'font:14px Arial,sans-serif', 'box-shadow:0 2px 10px rgba(0,0,0,0.2)'
+      ].join(';');
+      document.body.appendChild(banner);
+    }
+
+    var denegado = Notification.permission === 'denied';
+    banner.innerHTML =
+      '<span style="flex:1;min-width:220px">' +
+        (denegado
+          ? '🔕 Las alertas de SIGSO estan bloqueadas en este navegador. Actívalas desde el ícono de candado/información junto a la URL → Notificaciones → Permitir, y recarga la página.'
+          : '🔔 Activa las alertas de SIGSO para no perderte avisos importantes (derivaciones, vencimientos, pausas).') +
+      '</span>' +
+      (denegado ? '' : '<button type="button" class="js-notif-banner-activar" style="background:#fff;color:var(--primario,#6D5DF6);border:none;border-radius:6px;padding:6px 12px;font:600 13px Arial,sans-serif;cursor:pointer">Activar alertas</button>') +
+      '<button type="button" class="js-notif-banner-cerrar" aria-label="Cerrar aviso" style="background:none;border:none;color:#fff;font:600 16px Arial,sans-serif;cursor:pointer;padding:2px 6px">✕</button>';
+
+    var btnActivar = banner.querySelector('.js-notif-banner-activar');
+    if (btnActivar) {
+      btnActivar.addEventListener('click', function () {
+        try {
+          Notification.requestPermission().then(function (resultado) {
+            reportarPermiso_(resultado);
+            if (resultado === 'granted') { banner.style.display = 'none'; }
+            else { asegurarBannerPermiso_(); } // re-renderiza (puede pasar a 'denied')
+          });
+        } catch (err) { /* noop */ }
+      });
+    }
+    banner.querySelector('.js-notif-banner-cerrar').addEventListener('click', ocultarBannerEstaSesion_);
+    banner.style.display = 'flex';
   }
 
   function cerrarToastSO_(notifId) {
@@ -473,8 +579,15 @@
   // ---- arranque + resync (B4) -----------------------------------------
 
   function iniciar_() {
-    pedirPermisoAlPrimerGesto_();
-    // B3: desbloquea el audio en el primer gesto real del usuario.
+    // v7.3 Nivel 0: banner visible (reemplaza el pedido silencioso) + reporta
+    // al backend el estado que YA tenia el navegador (aunque no toque el
+    // banner, sirve para que Admin vea grants/denials previos a esta version).
+    if (typeof Notification !== 'undefined') {
+      reportarPermiso_(Notification.permission);
+      asegurarBannerPermiso_();
+    }
+    // B3 + v7.3 Nivel 1: desbloquea el audio (y el keep-alive) en el primer
+    // gesto real del usuario.
     var desbloquear = function () {
       prepararAudio_();
       document.removeEventListener('click', desbloquear);
@@ -492,6 +605,11 @@
       if (document.visibilityState === 'visible') sincronizar_();
     });
     window.addEventListener('focus', sincronizar_);
+    // v7.3 Nivel 1: mas gatillos de resync agresivo --
+    //  - pageshow: cuando la pestana vuelve desde el bfcache (back/forward).
+    //  - online: cuando la red vuelve tras una suspension del equipo.
+    window.addEventListener('pageshow', sincronizar_);
+    window.addEventListener('online', sincronizar_);
 
     // Portal: la sesion aparece DESPUES del login sin recargar la pagina.
     // Vigilancia local barata (sin red): al detectar que ya hay sesion,

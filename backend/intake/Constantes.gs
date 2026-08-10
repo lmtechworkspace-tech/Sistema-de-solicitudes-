@@ -97,7 +97,11 @@ var SHEETS = {
   // v7.1 (notificaciones vivas): vive en el Backoffice; Intake mantiene la
   // copia solo para que el esquema no diverja. Ver la nota identica en
   // backend/backoffice/Constantes.gs.
-  NOTIFICACIONES_APP: 'NOTIFICACIONES_APP'
+  NOTIFICACIONES_APP: 'NOTIFICACIONES_APP',
+  // v7.3 (Nivel 0): vive en el Backoffice; Intake mantiene la copia solo
+  // para que el esquema no diverja. Ver la nota identica en
+  // backend/backoffice/Constantes.gs.
+  NOTIF_PERMISOS_SO: 'NOTIF_PERMISOS_SO'
 };
 
 var COLUMNAS = {
@@ -383,7 +387,9 @@ var COLUMNAS = {
   NOTIFICACIONES_APP: [
     'notif_id', 'destinatario_email', 'tipo', 'titulo', 'mensaje',
     'modulo_id', 'texto_accion', 'leida', 'creada_en', 'expira_en'
-  ]
+  ],
+  // v7.3 (Nivel 0): ver la nota identica en backend/backoffice/Constantes.gs.
+  NOTIF_PERMISOS_SO: ['email', 'permiso', 'actualizado_en']
 };
 
 // S01-S11 completos desde la Fase 1 aunque solo S01 se use aqui: la maquina

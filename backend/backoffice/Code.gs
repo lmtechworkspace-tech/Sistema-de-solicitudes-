@@ -149,7 +149,11 @@ var BACKOFFICE_ACTIONS = {
   // unica proteccion real; toda sesion valida tiene notificaciones propias.
   sincronizarNotificacionesApp: handleSincronizarNotificacionesApp_,
   marcarNotificacionAppLeida: handleMarcarNotificacionAppLeida_,
-  marcarTodasNotificacionesAppLeidas: handleMarcarTodasNotificacionesAppLeidas_
+  marcarTodasNotificacionesAppLeidas: handleMarcarTodasNotificacionesAppLeidas_,
+  // v7.3 (Nivel 0): reportar el permiso es de cualquier sesion valida (como
+  // ping); listar es solo Admin (gate 'administracion' mas abajo).
+  reportarPermisoNotificacionesSO: handleReportarPermisoNotificacionesSO_,
+  listarPermisosNotificacionesSO: handleListarPermisosNotificacionesSO_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -187,6 +191,7 @@ var MODULO_POR_ACCION = {
   getPanelJefatura: 'jefatura',
   guardarCatalogo: 'administracion',
   listarCatalogo: 'administracion',
+  listarPermisosNotificacionesSO: 'administracion',
   gestionarUsuario: 'administracion',
   listarUsuarios: 'administracion',
   listarLogs: 'administracion',
@@ -495,6 +500,14 @@ function handleMarcarNotificacionAppLeida_(data, contexto) {
 
 function handleMarcarTodasNotificacionesAppLeidas_(data, contexto) {
   return responderResultado_(marcarTodasNotificacionesAppLeidas_(contexto));
+}
+
+function handleReportarPermisoNotificacionesSO_(data, contexto) {
+  return responderResultado_(reportarPermisoNotificacionesSO_(contexto, data && data.permiso));
+}
+
+function handleListarPermisosNotificacionesSO_(data, contexto) {
+  return responderResultado_(listarPermisosNotificacionesSO_(contexto));
 }
 
 function handlePing_(data, contexto) {

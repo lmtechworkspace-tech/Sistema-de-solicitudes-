@@ -100,7 +100,13 @@ var SHEETS = {
   // personal -- espejo de lo que ya se manda por correo (enviarCorreo_),
   // pero pensado para un toast/modal en pantalla mientras la persona esta
   // trabajando. Ver la nota identica en backend/intake/Constantes.gs.
-  NOTIFICACIONES_APP: 'NOTIFICACIONES_APP'
+  NOTIFICACIONES_APP: 'NOTIFICACIONES_APP',
+  // v7.3 (notificaciones vivas, Nivel 0): estado del permiso de notificacion
+  // del navegador (Notification.permission) reportado por cada dispositivo/
+  // sesion -- para que el Admin vea quien nunca acepto el permiso del SO
+  // (causa mas probable de "a unos les llega el aviso y a otros no"). Ver
+  // la nota identica en backend/intake/Constantes.gs.
+  NOTIF_PERMISOS_SO: 'NOTIF_PERMISOS_SO'
 };
 
 var COLUMNAS = {
@@ -378,7 +384,10 @@ var COLUMNAS = {
   NOTIFICACIONES_APP: [
     'notif_id', 'destinatario_email', 'tipo', 'titulo', 'mensaje',
     'modulo_id', 'texto_accion', 'leida', 'creada_en', 'expira_en'
-  ]
+  ],
+  // v7.3 (Nivel 0): permiso: 'granted' | 'denied' | 'default'. Una fila por
+  // email (upsert) -- no es historico, es el ULTIMO estado reportado.
+  NOTIF_PERMISOS_SO: ['email', 'permiso', 'actualizado_en']
 };
 
 var ESTADOS = {
