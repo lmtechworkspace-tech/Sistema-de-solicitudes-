@@ -273,15 +273,26 @@ var COLUMNAS = {
   // evidencia_url (mejora v6.0 #4): foto/evidencia de la charla que la
   // coordinadora puede adjuntar al finalizar (Drive, mismo patron que los
   // adjuntos de Solicitudes).
+  // v7.2 (Bloque A, mejora A8 "resiliencia del coordinador"): escalada_admin_
+  // enviada evita reenviar mas de una vez el aviso a Administracion cuando
+  // NINGUN coordinador (titular ni reemplazo) inicio la pausa pasado un
+  // margen de la hora programada (ver Pausas.escalarPausasSinIniciar).
   PAUSAS_PROGRAMADAS: [
     'pausa_id', 'empresa_id', 'fecha', 'hora_programada', 'hora_inicio_real',
     'hora_fin', 'coordinador_email', 'estado', 'duracion_min', 'observaciones',
-    'ultima_llamada_enviada', 'aviso_coordinador_enviado', 'evidencia_url'
+    'ultima_llamada_enviada', 'aviso_coordinador_enviado', 'evidencia_url',
+    'escalada_admin_enviada'
   ],
   // Registro de participacion por trabajador. estado: participo | no_participo.
+  // v7.2 (Bloque A, mejora A6): 'animo' es la micro-encuesta de bienestar
+  // OPCIONAL (1..5) que el trabajador puede dejar al registrar su
+  // participacion -- nunca se muestra por persona (RN-708), solo agregada
+  // (promedio por area/empresa) en los reportes de coordinador/gerencia.
+  // 'origen' ya distinguia autoservicio de otros canales; ahora tambien
+  // puede valer 'pasada_lista' (A1, el coordinador la registro por el).
   PAUSAS_ASISTENCIA: [
     'registro_id', 'pausa_id', 'trabajador_id', 'email', 'fecha_hora_registro',
-    'estado', 'motivo', 'comentario', 'confirmacion', 'origen'
+    'estado', 'motivo', 'comentario', 'confirmacion', 'origen', 'animo'
   ],
   // Auditoria del modulo de pausas.
   PAUSAS_LOG: ['log_id', 'timestamp', 'pausa_id', 'usuario', 'accion', 'detalle'],

@@ -116,10 +116,34 @@ test('getHistorialTrabajador: calcula racha actual y maxima sobre pausas resuelt
   const res = ctx.Pausas.getHistorialTrabajador({ trabajador_id: 'T1' }, ADMIN);
   assert.equal(res.resumen.total_pausas, 5);
   assert.equal(res.resumen.participaciones, 4);
-  assert.equal(res.resumen.pendientes, 1);
-  assert.equal(res.resumen.racha_actual, 2); // PA-4, PA-5
-  assert.equal(res.resumen.racha_maxima, 2); // PA-1,PA-2 tambien es 2
+  // v7.2 (Bloque A, mejora A7): PA-3 quedo No_realizada -- la EMPRESA no
+  // hizo la pausa, asi que para Juan es "no_aplica" (no es su falta), no
+  // "sin_registro". Antes ambos casos caian en el mismo cubo "pendientes".
+  assert.equal(res.resumen.sin_registro, 0);
+  assert.equal(res.resumen.no_aplica, 1);
+  // No_realizada tampoco corta la racha: PA-1..PA-5 quedan todas "participo"
+  // o "no_aplica", asi que la racha actual llega hasta PA-1.
+  assert.equal(res.resumen.racha_actual, 4); // PA-1,PA-2,(no_aplica),PA-4,PA-5
+  assert.equal(res.resumen.racha_maxima, 4);
   assert.equal(res.detalle[0].fecha, diasAtras(1)); // mas reciente primero
+});
+
+test('getHistorialTrabajador: "sin_registro" (la pausa SI se hizo, la persona no dejo constancia) corta la racha', () => {
+  const ctx = load({
+    pausas: [
+      ['PA-1', 'HP', diasAtras(3), '09:30', '', '', '', 'Realizada', 10, ''],
+      ['PA-2', 'HP', diasAtras(2), '09:30', '', '', '', 'Realizada', 10, ''], // Juan no registra nada
+      ['PA-3', 'HP', diasAtras(1), '09:30', '', '', '', 'Realizada', 10, '']
+    ],
+    asistencia: [
+      ['R1', 'PA-1', 'T1', 'juan@hp.cl', diasAtras(3) + 'T09:35:00Z', 'participo', '', '', true, 'autoservicio'],
+      ['R3', 'PA-3', 'T1', 'juan@hp.cl', diasAtras(1) + 'T09:35:00Z', 'participo', '', '', true, 'autoservicio']
+    ]
+  });
+  const res = ctx.Pausas.getHistorialTrabajador({ trabajador_id: 'T1' }, ADMIN);
+  assert.equal(res.resumen.sin_registro, 1);
+  assert.equal(res.resumen.no_aplica, 0);
+  assert.equal(res.resumen.racha_actual, 1); // solo PA-3 -- PA-2 (sin_registro) corta la racha
 });
 
 test('getHistorialTrabajador: exige trabajador_id y rechaza si no coordina esa empresa', () => {

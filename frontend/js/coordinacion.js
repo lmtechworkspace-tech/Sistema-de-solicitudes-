@@ -14,6 +14,10 @@
   'use strict';
 
   var subtab = 'hoy';
+  // v7.2 (Bloque A, mejora A1): guarda las pausas de hoy ya cargadas para que
+  // el modal de "pasar lista" pueda armar el roster de pendientes sin pedirlo
+  // de nuevo al servidor.
+  var ultimasPausasHoy_ = [];
 
   function api(action, data) {
     return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, action, data || {});
@@ -52,6 +56,7 @@
         c.innerHTML = Componentes.tarjeta('<h3>Sin pausa hoy</h3><p class="sigso-ayuda">No hay una pausa programada para hoy en tu(s) empresa(s).</p>');
         return;
       }
+      ultimasPausasHoy_ = d.pausas;
       c.innerHTML = d.pausas.map(tarjetaPausa_).join('');
       wireAccionesHoy_();
     }).catch(function (e) { c.innerHTML = Componentes.alerta((e && e.message) || 'Error de conexión.', 'error'); });
@@ -74,6 +79,15 @@
       acciones =
         Componentes.boton({ texto: 'Finalizar (realizada)', accion: 'finalizar', idx: p.pausa_id, clase: 'sigso-pausa-btn' }) +
         Componentes.boton({ texto: 'No se realizó', variante: 'peligro', accion: 'no_realizada', idx: p.pausa_id, clase: 'sigso-pausa-btn' });
+    }
+    // v7.2 (Bloque A, mejora A1): "pasar lista" grupal -- solo tiene sentido
+    // mientras la pausa admite registros y hay gente sin registrar todavia.
+    var puedePasarLista = ['Programada', 'Recordatorio_enviado', 'En_curso'].indexOf(p.estado) !== -1;
+    if (puedePasarLista && part.n_pendientes > 0) {
+      acciones += Componentes.boton({
+        texto: 'Pasar lista (' + part.n_pendientes + ' pendientes)', variante: 'secundario',
+        accion: 'pasar_lista', idx: p.pausa_id, clase: 'sigso-pausa-btn'
+      });
     }
     var listas =
       bloqueLista_('Participaron (' + part.n_participaron + ')', part.participaron, false) +
@@ -123,9 +137,82 @@
             if (motivo === null) return;
             operar_({ operacion: 'no_realizada', pausa_id: id, motivo: motivo }, id);
           });
+        } else if (accion === 'pasar_lista') {
+          abrirModalPasarLista_(id);
         }
       });
     });
+  }
+
+  // v7.2 (Bloque A, mejora A1 "pasar lista grupal"): pensado para el taller
+  // presencial donde nadie tiene el celular a mano para autoregistrarse. La
+  // coordinadora marca de una vez a quienes quedan pendientes -- toggle
+  // Participó/No pudo por persona, sin marcar nada por defecto (no se envia
+  // lo que no se toco).
+  function abrirModalPasarLista_(pausaId) {
+    var pausa = ultimasPausasHoy_.filter(function (p) { return p.pausa_id === pausaId; })[0];
+    var pendientes = (pausa && pausa.participacion && pausa.participacion.pendientes) || [];
+    if (!pendientes.length) return;
+
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    var filas = pendientes.map(function (t, idx) {
+      return '<div class="sigso-lista-item" data-trab="' + Componentes.escaparHtml(t.trabajador_id) + '">' +
+        '<span>' + Componentes.escaparHtml(t.nombre) + (t.area ? ' · ' + Componentes.escaparHtml(t.area) : '') + '</span>' +
+        '<span class="sigso-lista-item__botones">' +
+        '<button type="button" class="sigso-boton sigso-boton--sutil js-lista-participo" data-idx="' + idx + '">✅ Participó</button>' +
+        '<button type="button" class="sigso-boton sigso-boton--sutil js-lista-nopudo" data-idx="' + idx + '">✋ No pudo</button>' +
+        '</span></div>';
+    }).join('');
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true" aria-labelledby="lista-titulo">' +
+      '<h3 class="sigso-modal__titulo" id="lista-titulo">Pasar lista (' + pendientes.length + ' pendientes)</h3>' +
+      '<p class="sigso-modal__mensaje">Marca a quienes participaron o no pudieron. Lo que no toques queda pendiente.</p>' +
+      '<div class="sigso-lista-pasar-lista">' + filas + '</div>' +
+      '<p class="sigso-campo__error sigso-oculto" id="lista-error"></p>' +
+      '<div class="sigso-modal__acciones">' +
+      Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-modal-no' }) +
+      Componentes.boton({ texto: 'Guardar', clase: 'js-modal-si' }) +
+      '</div></div>';
+
+    var marcas = {}; // trabajador_id -> 'participo' | 'no_participo'
+    function alTeclado(ev) { if (ev.key === 'Escape') cerrar(); }
+    function cerrar() {
+      document.removeEventListener('keydown', alTeclado);
+      if (fondo.parentNode) fondo.parentNode.removeChild(fondo);
+    }
+    fondo.querySelectorAll('.js-lista-participo, .js-lista-nopudo').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var item = btn.closest('.sigso-lista-item');
+        var trabId = item.getAttribute('data-trab');
+        var esParticipo = btn.classList.contains('js-lista-participo');
+        marcas[trabId] = esParticipo ? 'participo' : 'no_participo';
+        item.querySelectorAll('button').forEach(function (b) { b.classList.remove('sigso-boton--activo'); });
+        btn.classList.add('sigso-boton--activo');
+      });
+    });
+    fondo.querySelector('.js-modal-no').addEventListener('click', cerrar);
+    fondo.querySelector('.js-modal-si').addEventListener('click', function () {
+      var registros = Object.keys(marcas).map(function (id) { return { trabajador_id: id, estado: marcas[id] }; });
+      if (!registros.length) {
+        var err = fondo.querySelector('#lista-error');
+        err.textContent = 'Marca al menos a una persona.';
+        err.classList.remove('sigso-oculto');
+        return;
+      }
+      cerrar();
+      var destino = document.getElementById('coord-resultado-' + pausaId);
+      if (destino) destino.innerHTML = Componentes.cargando('Guardando la lista…');
+      api('registrarAsistenciaGrupalPausas', { pausa_id: pausaId, registros: registros }).then(function (r) {
+        if (!r.ok) { if (destino) destino.innerHTML = Componentes.alerta(r.message || 'No se pudo guardar.', 'error'); return; }
+        cargarHoy_();
+      }).catch(function (e) {
+        if (destino) destino.innerHTML = Componentes.alerta((e && e.message) || 'Error de conexión.', 'error');
+      });
+    });
+    fondo.addEventListener('click', function (ev) { if (ev.target === fondo) cerrar(); });
+    document.addEventListener('keydown', alTeclado);
+    document.body.appendChild(fondo);
   }
 
   // v6.0 (mejora #4): mismo modal que Componentes.prompt (observaciones),
@@ -224,10 +311,29 @@
         Componentes.kpi({ etiqueta: 'No realizadas', valor: k.no_realizadas }) +
         Componentes.kpi({ etiqueta: 'Participaciones', valor: k.participaciones }) +
         Componentes.kpi({ etiqueta: 'Justificaciones', valor: k.justificaciones }) +
+        (k.animo_promedio == null ? '' : Componentes.kpi({ etiqueta: 'Ánimo promedio', valor: k.animo_promedio + '/5' })) +
         '</div>' +
         Componentes.tarjeta('<h3>Motivos de inasistencia</h3>' + tablaSimple_(d.motivos, 'motivo', 'cantidad', 'Sin justificaciones en el periodo.')) +
-        Componentes.tarjeta('<h3>Participación por área</h3>' + tablaSimple_(d.por_area, 'area', 'participaciones', 'Sin participaciones en el periodo.'));
+        Componentes.tarjeta('<h3>Participación por área</h3>' + tablaSimple_(d.por_area, 'area', 'participaciones', 'Sin participaciones en el periodo.')) +
+        Componentes.tarjeta('<h3>Rachas de equipo por área</h3>' +
+          '<p class="sigso-ayuda">Pausas consecutivas donde el área alcanzó su umbral de participación. Es una racha de EQUIPO, no de personas.</p>' +
+          rachasAreaHtml_(d.rachas_area));
     }).catch(function (e) { c.innerHTML = Componentes.alerta((e && e.message) || 'Error de conexión.', 'error'); });
+  }
+
+  // v7.2 (Bloque A, mejora A4): "rachas por area" -- a proposito de EQUIPO,
+  // nunca individual (RN-708: nunca rankear personas). Ordenadas de mayor a
+  // menor racha actual (ya vienen asi del backend).
+  function rachasAreaHtml_(rachas) {
+    if (!rachas || rachas.length === 0) return '<p class="sigso-ayuda">Sin datos suficientes en el periodo.</p>';
+    var filas = rachas.map(function (r) {
+      return '<tr><td>' + Componentes.escaparHtml(r.area) + '</td>' +
+        '<td>' + Componentes.escaparHtml(String(r.roster)) + '</td>' +
+        '<td>' + Componentes.escaparHtml(String(r.racha_actual)) + '</td>' +
+        '<td>' + Componentes.escaparHtml(String(r.racha_maxima)) + '</td>' +
+        '<td>≥' + Componentes.escaparHtml(String(r.umbral_pct)) + '%</td></tr>';
+    }).join('');
+    return '<table class="sigso-tabla"><thead><tr><th>Área</th><th>Personas</th><th>Racha actual</th><th>Racha máxima</th><th>Umbral</th></tr></thead><tbody>' + filas + '</tbody></table>';
   }
 
   function tablaSimple_(filas, campoA, campoB, vacio) {
@@ -273,7 +379,15 @@
     }).catch(function (e) { c.innerHTML = Componentes.alerta((e && e.message) || 'Error de conexión.', 'error'); });
   }
 
-  var ESTADO_MIO_TEXTO = { participo: 'Participó', no_participo: 'No pudo', pendiente: 'Pendiente' };
+  // v7.2 (Bloque A, mejora A7): "no_aplica" (la EMPRESA no hizo la pausa) y
+  // "sin_registro" (la pausa SI se hizo, la persona no dejo constancia) son
+  // dos hechos distintos -- antes ambos se veian igual ("Pendiente"), lo que
+  // hacia parecer que alguien "faltó" cuando en realidad la empresa entera
+  // no tuvo pausa ese día.
+  var ESTADO_MIO_TEXTO = {
+    participo: 'Participó', no_participo: 'No pudo',
+    sin_registro: 'Sin registro', no_aplica: 'No aplica (sin pausa ese día)'
+  };
 
   function renderHistorialTrabajador_(d) {
     var s = d.resumen;
@@ -290,7 +404,7 @@
       Componentes.kpi({ etiqueta: 'Racha actual', valor: s.racha_actual }) +
       Componentes.kpi({ etiqueta: 'Racha máxima', valor: s.racha_maxima }) +
       Componentes.kpi({ etiqueta: 'Justificaciones', valor: s.justificaciones }) +
-      Componentes.kpi({ etiqueta: 'Pendientes', valor: s.pendientes }) +
+      Componentes.kpi({ etiqueta: 'Sin registro', valor: s.sin_registro }) +
       '</div>' +
       (d.detalle.length === 0
         ? '<p class="sigso-ayuda">Sin pausas resueltas en el periodo.</p>'

@@ -426,6 +426,14 @@ var Pausas = {
       return errorValidacion_('motivo', 'Indica el motivo por el que no pudiste participar.');
     }
 
+    // v7.2 (Bloque A, mejora A6): micro-encuesta de bienestar, OPCIONAL --
+    // 1..5, nunca obligatoria (no debe ser una barrera para registrar la
+    // participacion). Solo se guarda si viene un numero valido en ese rango;
+    // si no, queda vacia. Nunca se muestra por persona (RN-708) -- solo
+    // promedio agregado en calcularReportePausas_.
+    var animo = enteroPositivoPausas_(data.animo);
+    if (animo !== null && (animo < 1 || animo > 5)) animo = null;
+
     var fila = {
       pausa_id: pausa.pausa_id,
       trabajador_id: trab.trabajador_id || '',
@@ -435,7 +443,8 @@ var Pausas = {
       motivo: estado === 'no_participo' ? motivo : '',
       comentario: String(data.comentario || '').trim(),
       confirmacion: estado === 'participo',
-      origen: 'autoservicio'
+      origen: 'autoservicio',
+      animo: animo === null ? '' : animo
     };
 
     // Un registro por (pausa, correo): si ya existe, se actualiza (el
@@ -450,6 +459,72 @@ var Pausas = {
     agregarFila_(SHEETS.PAUSAS_ASISTENCIA, fila);
     registrarLogPausas_(pausa.pausa_id, contexto, 'asistencia_registrada', email + ' -> ' + estado);
     return fila;
+  },
+
+  // v7.2 (Bloque A, mejora A1 "pasar lista grupal"): el coordinador registra
+  // en UN solo envio la participacion de varios trabajadores del roster --
+  // pensado para el taller presencial donde nadie tiene el celular a mano
+  // para autoregistrarse. `data.registros` es un arreglo de
+  // { trabajador_id, estado: 'participo'|'no_participo', motivo? }. No pisa
+  // un registro que el propio trabajador ya se auto-registro (origen
+  // 'autoservicio') salvo que `data.sobrescribir` sea true -- por defecto el
+  // autorregistro de la persona manda sobre lo que marque el coordinador.
+  registrarAsistenciaGrupal: function (data, contexto) {
+    var pausa = buscarPausaProgramada_(data.pausa_id);
+    if (!pausa) {
+      return errorValidacion_('pausa_id', 'Pausa no encontrada.');
+    }
+    var g = guardaCoordinadorPausa_(contexto, pausa);
+    if (g) return g;
+    if (PAUSAS_ESTADOS_REGISTRABLES.indexOf(pausa.estado) === -1) {
+      return errorValidacion_('pausa', 'La pausa de hoy ya no admite registros (estado: ' + pausa.estado + ').');
+    }
+    var registros = Array.isArray(data.registros) ? data.registros : [];
+    if (!registros.length) {
+      return errorValidacion_('registros', 'Indica al menos un trabajador a marcar.');
+    }
+    var roster = leerFilasSeguro_(SHEETS.PAUSAS_TRABAJADORES).filter(function (t) {
+      return esVerdaderoPausas_(t.activo) && String(t.empresa_id) === String(pausa.empresa_id);
+    });
+    var porId = {};
+    roster.forEach(function (t) { porId[String(t.trabajador_id)] = t; });
+
+    var actualizados = 0, omitidos = 0, invalidos = 0;
+    registros.forEach(function (r) {
+      var trab = porId[String(r && r.trabajador_id)];
+      if (!trab) { invalidos++; return; }
+      var estado = String((r && r.estado) || '').trim();
+      if (['participo', 'no_participo'].indexOf(estado) === -1) { invalidos++; return; }
+
+      var previo = buscarRegistroAsistencia_(pausa.pausa_id, trab.email);
+      if (previo && previo.origen === 'autoservicio' && data.sobrescribir !== true) {
+        omitidos++; return; // el trabajador ya se autoregistro -- manda su version
+      }
+
+      var fila = {
+        pausa_id: pausa.pausa_id,
+        trabajador_id: trab.trabajador_id,
+        email: trab.email,
+        fecha_hora_registro: new Date().toISOString(),
+        estado: estado,
+        motivo: estado === 'no_participo' ? String((r && r.motivo) || '').trim() : '',
+        comentario: '',
+        confirmacion: estado === 'participo',
+        origen: 'pasada_lista',
+        animo: ''
+      };
+      if (previo) {
+        actualizarFilaPorId_(SHEETS.PAUSAS_ASISTENCIA, 'registro_id', previo.registro_id, fila);
+      } else {
+        fila.registro_id = Utilities.getUuid();
+        agregarFila_(SHEETS.PAUSAS_ASISTENCIA, fila);
+      }
+      actualizados++;
+    });
+
+    registrarLogPausas_(pausa.pausa_id, contexto, 'asistencia_grupal',
+      actualizados + ' marcados, ' + omitidos + ' omitidos (autoservicio), ' + invalidos + ' invalidos');
+    return { pausa_id: pausa.pausa_id, actualizados: actualizados, omitidos: omitidos, invalidos: invalidos };
   },
 
   // ---- Coordinador: operar la pausa + reportes (Fase P3) -------------------
@@ -598,9 +673,20 @@ var Pausas = {
       }
     });
 
+    // v7.2 (Bloque A, mejora A7): "no se hizo la pausa" (decision de la
+    // empresa/coordinador, pausa.estado === No_realizada) es un hecho
+    // DISTINTO de "el trabajador no registro su participacion" (la pausa SI
+    // se hizo, pero esta persona no dejo constancia). Antes ambos casos caian
+    // en el mismo cubo "pendiente", lo que hacia ver como "falto" a alguien
+    // cuando en realidad la empresa entera no tuvo pausa ese dia.
     var detalle = pausas.map(function (p) {
       var reg = registrosPorPausa[String(p.pausa_id)];
-      var miEstado = reg ? reg.estado : 'pendiente';
+      var miEstado;
+      if (p.estado === ESTADOS_PAUSA.NO_REALIZADA) {
+        miEstado = 'no_aplica'; // la empresa no hizo la pausa -- no es una falta individual.
+      } else {
+        miEstado = reg ? reg.estado : 'sin_registro'; // la pausa SI se hizo; esta persona no registro.
+      }
       return {
         fecha: claveFechaPausa_(p.fecha), estado_pausa: p.estado,
         mi_estado: miEstado, motivo: (reg && reg.motivo) || ''
@@ -609,27 +695,36 @@ var Pausas = {
 
     var participaciones = detalle.filter(function (d) { return d.mi_estado === 'participo'; }).length;
     var justificaciones = detalle.filter(function (d) { return d.mi_estado === 'no_participo'; }).length;
-    var pendientes = detalle.length - participaciones - justificaciones;
+    var sinRegistro = detalle.filter(function (d) { return d.mi_estado === 'sin_registro'; }).length;
+    var noAplica = detalle.filter(function (d) { return d.mi_estado === 'no_aplica'; }).length;
 
     // Racha actual: consecutivos 'participo' contando desde el mas reciente
-    // hacia atras. Racha maxima: la mas larga en toda la ventana.
+    // hacia atras -- 'no_aplica' (la empresa no hizo la pausa) NO corta la
+    // racha, simplemente se salta (no es un dia donde la persona pudiera
+    // haber participado). Racha maxima: la mas larga en toda la ventana.
     var rachaActual = 0;
     for (var i = detalle.length - 1; i >= 0; i--) {
+      if (detalle[i].mi_estado === 'no_aplica') continue;
       if (detalle[i].mi_estado === 'participo') rachaActual++; else break;
     }
     var rachaMaxima = 0, corrida = 0;
     detalle.forEach(function (d) {
+      if (d.mi_estado === 'no_aplica') return;
       corrida = d.mi_estado === 'participo' ? corrida + 1 : 0;
       if (corrida > rachaMaxima) rachaMaxima = corrida;
     });
+
+    // El denominador de "% participacion" son los dias que SI contaban para
+    // la persona (se excluye no_aplica -- la empresa no hizo esa pausa).
+    var diasQueContaban = detalle.length - noAplica;
 
     return {
       trabajador: { trabajador_id: trabajador.trabajador_id, nombre: trabajador.nombre || trabajador.email, email: trabajador.email, area: trabajador.area || '', empresa_id: trabajador.empresa_id },
       periodo: { desde: desdeC, hasta: hastaC },
       resumen: {
         total_pausas: detalle.length, participaciones: participaciones, justificaciones: justificaciones,
-        pendientes: pendientes,
-        pct_participacion: detalle.length === 0 ? null : Math.round((participaciones / detalle.length) * 1000) / 10,
+        sin_registro: sinRegistro, no_aplica: noAplica,
+        pct_participacion: diasQueContaban === 0 ? null : Math.round((participaciones / diasQueContaban) * 1000) / 10,
         racha_actual: rachaActual, racha_maxima: rachaMaxima
       },
       detalle: detalle.slice().reverse() // mas reciente primero, para la UI
@@ -785,6 +880,66 @@ var Pausas = {
     });
 
     return { ultima_llamada: ultimaLlamada, aviso_coordinadora: avisoCoordinadora };
+  },
+
+  // v7.2 (Bloque A, mejora A8 "resiliencia del coordinador"): si NINGUN
+  // coordinador (titular ni reemplazo, que ya reciben el aviso juntos --
+  // enviarSegundosAvisosPausas) inicio la pausa pasado un margen de la hora
+  // programada, escala a Administracion -- para que alguien pueda reaccionar
+  // (contactar a la coordinadora por otro medio, o iniciarla igual desde
+  // Administracion) antes de que el cierre automatico nocturno la de por
+  // No_realizada sin que nadie se haya enterado a tiempo. Se manda UNA vez
+  // por pausa (escalada_admin_enviada). `opts.margenMin` (default 30) y
+  // `opts.ahoraMin` permiten fijarlo en tests.
+  escalarPausasSinIniciar: function (opts) {
+    opts = opts || {};
+    var margenMin = opts.margenMin === undefined ? 30 : opts.margenMin;
+    var ahoraMin = (opts.ahoraMin === undefined || opts.ahoraMin === null)
+      ? minutosDelDiaSantiago_() : opts.ahoraMin;
+    var hoy = claveDia_(new Date(), 'America/Santiago');
+    var pausas = leerProgramadasPausas_().filter(function (p) {
+      return claveFechaPausa_(p.fecha) === hoy &&
+        (p.estado === ESTADOS_PAUSA.PROGRAMADA || p.estado === ESTADOS_PAUSA.RECORDATORIO_ENVIADO) &&
+        !esVerdaderoPausas_(p.escalada_admin_enviada);
+    });
+    var escaladas = 0, correosEnviados = 0;
+
+    pausas.forEach(function (pausa) {
+      var horaMin = horaAMinutosPausas_(pausa.hora_programada);
+      if (horaMin === null || ahoraMin < horaMin + margenMin) return; // aun dentro del margen
+
+      var destinatarios = [];
+      try { destinatarios = obtenerEmailsPorRol_(pausa.empresa_id, ['ADM']); } catch (err) { /* USUARIOS puede no existir */ }
+      if (!destinatarios.length) { // sin ADM identificable: no hay a quien escalar, igual se marca para no reintentar cada ciclo
+        actualizarFilaPorId_(SHEETS.PAUSAS_PROGRAMADAS, 'pausa_id', pausa.pausa_id, { escalada_admin_enviada: true });
+        return;
+      }
+
+      var asunto = 'SIGSO — Nadie inició la pausa activa de ' + pausa.empresa_id;
+      var cuerpoHtml = plantillaCorreoHtml_('Pausa activa sin iniciar',
+        '<p style="margin:0 0 10px;">La pausa activa de <strong>' + escaparHtmlCorreo_(pausa.empresa_id) +
+        '</strong> programada para las ' + escaparHtmlCorreo_(pausa.hora_programada || '') +
+        ' sigue sin iniciarse, ' + margenMin + ' minutos después. Ni la coordinadora titular ni el reemplazo la han abierto.</p>' +
+        '<p style="margin:0;">Puedes contactarlas por otro medio, o iniciarla tú desde Coordinación de pausas.</p>');
+      var texto = 'La pausa activa de ' + pausa.empresa_id + ' (' + (pausa.hora_programada || '') +
+        ') sigue sin iniciarse ' + margenMin + ' minutos después.';
+      destinatarios.forEach(function (correo) {
+        var r = enviarCorreo_(pausa.pausa_id + ':escalada_admin', correo, 'PAUSA_ESCALADA_ADMIN', asunto, texto, 720, { htmlBody: cuerpoHtml });
+        if (r.enviado) correosEnviados++;
+      });
+      encolarNotificacionAppLote_(destinatarios.map(function (correo) {
+        return {
+          destinatario: correo, tipo: 'PAUSA_ESCALADA_ADMIN',
+          titulo: 'Nadie inició la pausa de ' + pausa.empresa_id,
+          mensaje: 'Han pasado ' + margenMin + ' min desde la hora programada sin que la coordinadora la inicie.',
+          modulo_id: 'pausas_coordinacion', texto_accion: 'Ver pausas', vidaHoras: 4
+        };
+      }));
+      actualizarFilaPorId_(SHEETS.PAUSAS_PROGRAMADAS, 'pausa_id', pausa.pausa_id, { escalada_admin_enviada: true });
+      escaladas++;
+    });
+
+    return { pausas_escaladas: escaladas, correos_enviados: correosEnviados };
   },
 
   // ---- Reportes de Gerencia + programados (Fase P5) ------------------------
@@ -1207,7 +1362,10 @@ function participacionDePausa_(pausaId, empresaId) {
   var participaron = [], justificaron = [], pendientes = [];
   roster.forEach(function (t) {
     var reg = porCorreo[String(t.email).toLowerCase()];
-    var item = { nombre: t.nombre || t.email, email: t.email, area: t.area || '' };
+    // v7.2 (Bloque A, mejora A1 "pasar lista grupal"): trabajador_id viaja
+    // en los 3 grupos -- lo necesita el coordinador para armar el envio a
+    // registrarAsistenciaGrupal (marcar por trabajador_id, no por email).
+    var item = { trabajador_id: t.trabajador_id, nombre: t.nombre || t.email, email: t.email, area: t.area || '' };
     if (reg && reg.estado === 'participo') { participaron.push(item); }
     else if (reg && reg.estado === 'no_participo') { justificaron.push(Object.assign({ motivo: reg.motivo || '' }, item)); }
     else { pendientes.push(item); }
@@ -1268,6 +1426,12 @@ function calcularReportePausas_(empresaIds, desde, hasta) {
   var participaciones = registros.filter(function (r) { return r.estado === 'participo'; });
   var justificaciones = registros.filter(function (r) { return r.estado === 'no_participo'; });
 
+  // v7.2 (Bloque A, mejora A6): bienestar -- SOLO promedio agregado, nunca
+  // por persona (RN-708: nunca rankear individuos). null si nadie dejo animo.
+  var animos = registros.map(function (r) { return Number(r.animo); }).filter(function (n) { return n >= 1 && n <= 5; });
+  var animoPromedio = animos.length === 0 ? null
+    : Math.round((animos.reduce(function (a, b) { return a + b; }, 0) / animos.length) * 10) / 10;
+
   // Motivos de inasistencia (top).
   var motivos = {};
   justificaciones.forEach(function (r) {
@@ -1300,10 +1464,15 @@ function calcularReportePausas_(empresaIds, desde, hasta) {
       canceladas: canceladas.length,
       pct_cumplimiento: resueltas === 0 ? null : Math.round((realizadas.length / resueltas) * 1000) / 10,
       participaciones: participaciones.length,
-      justificaciones: justificaciones.length
+      justificaciones: justificaciones.length,
+      animo_promedio: animoPromedio
     },
     motivos: motivosLista,
     por_area: porAreaLista,
+    // v7.2 (Bloque A, mejora A4): rachas de EQUIPO por area -- nunca por
+    // persona (RN-708). "Racha" = pausas Realizadas consecutivas donde el
+    // area alcanzo el umbral_verde configurado de participacion.
+    rachas_area: calcularRachasPorArea_(empresaIds, desdeC, hastaC),
     // v6.0 (mejora #6): tendencia semanal, ventana FIJA (ultimas 8 semanas)
     // independiente del filtro desde/hasta -- mismo criterio que la tendencia
     // mensual de Gerencia (calcularTendenciaTemporal_ en Gerencia.gs).
@@ -1315,6 +1484,82 @@ function calcularReportePausas_(empresaIds, desde, hasta) {
       };
     }).sort(function (a, b) { return a.fecha < b.fecha ? 1 : -1; })
   };
+}
+
+// v7.2 (Bloque A, mejora A4 "rachas por area"): a proposito NO es una racha
+// individual (RN-708: nunca rankear personas) -- es una racha de EQUIPO, que
+// premia la cultura del area en vez de senalar a alguien. Por cada area
+// (dentro de las empresas dadas), recorre las pausas Realizadas/No_realizada
+// del periodo en orden cronologico y cuenta consecutivos donde la
+// participacion del area alcanzo el umbral_verde configurado para esa
+// empresa (80% si no hay config). No_realizada (la empresa no hizo la pausa)
+// no corta la racha -- mismo criterio que getHistorialTrabajador.
+function calcularRachasPorArea_(empresaIds, desde, hasta) {
+  var umbralPorEmpresa = {};
+  leerConfigPausas_().forEach(function (c) {
+    var u = porcentajePausas_(c.umbral_verde);
+    umbralPorEmpresa[String(c.empresa_id)] = u === null ? 80 : u;
+  });
+
+  var rosterPorAreaEmpresa = {}; // clave "empresa|area" -> [emails]
+  leerFilasSeguro_(SHEETS.PAUSAS_TRABAJADORES).forEach(function (t) {
+    if (!esVerdaderoPausas_(t.activo) || empresaIds.indexOf(String(t.empresa_id)) === -1) return;
+    var area = String(t.area || '').trim() || '(sin área)';
+    var clave = t.empresa_id + '|' + area;
+    (rosterPorAreaEmpresa[clave] = rosterPorAreaEmpresa[clave] || []).push(String(t.email).toLowerCase());
+  });
+
+  var pausas = leerProgramadasPausas_().filter(function (p) {
+    var f = claveFechaPausa_(p.fecha);
+    return empresaIds.indexOf(String(p.empresa_id)) !== -1 && f >= desde && f <= hasta &&
+      (p.estado === ESTADOS_PAUSA.REALIZADA || p.estado === ESTADOS_PAUSA.CERRADA || p.estado === ESTADOS_PAUSA.NO_REALIZADA);
+  }).sort(function (a, b) { return claveFechaPausa_(a.fecha) < claveFechaPausa_(b.fecha) ? -1 : 1; });
+
+  var registrosPorPausa = {};
+  leerFilasSeguro_(SHEETS.PAUSAS_ASISTENCIA).forEach(function (r) {
+    (registrosPorPausa[String(r.pausa_id)] = registrosPorPausa[String(r.pausa_id)] || []).push(r);
+  });
+
+  var resultado = [];
+  Object.keys(rosterPorAreaEmpresa).forEach(function (clave) {
+    var partes = clave.split('|');
+    var empresaId = partes[0], area = partes.slice(1).join('|');
+    var emails = rosterPorAreaEmpresa[clave];
+    if (!emails.length) return;
+    var setEmails = {};
+    emails.forEach(function (e) { setEmails[e] = true; });
+    var umbral = umbralPorEmpresa[empresaId] === undefined ? 80 : umbralPorEmpresa[empresaId];
+
+    var cumpleSerie = []; // true/false/null(no_aplica) por pausa de ESTA empresa
+    pausas.filter(function (p) { return String(p.empresa_id) === empresaId; }).forEach(function (p) {
+      if (p.estado === ESTADOS_PAUSA.NO_REALIZADA) { cumpleSerie.push(null); return; }
+      var regs = registrosPorPausa[String(p.pausa_id)] || [];
+      var participaronArea = regs.filter(function (r) {
+        return setEmails[String(r.email).toLowerCase()] && r.estado === 'participo';
+      }).length;
+      var pct = Math.round((participaronArea / emails.length) * 1000) / 10;
+      cumpleSerie.push(pct >= umbral);
+    });
+
+    var rachaActual = 0;
+    for (var i = cumpleSerie.length - 1; i >= 0; i--) {
+      if (cumpleSerie[i] === null) continue;
+      if (cumpleSerie[i]) rachaActual++; else break;
+    }
+    var rachaMaxima = 0, corrida = 0;
+    cumpleSerie.forEach(function (c) {
+      if (c === null) return;
+      corrida = c ? corrida + 1 : 0;
+      if (corrida > rachaMaxima) rachaMaxima = corrida;
+    });
+
+    resultado.push({
+      empresa_id: empresaId, area: area, roster: emails.length,
+      racha_actual: rachaActual, racha_maxima: rachaMaxima, umbral_pct: umbral
+    });
+  });
+
+  return resultado.sort(function (a, b) { return b.racha_actual - a.racha_actual; });
 }
 
 // v6.0 (mejora #6): cumplimiento por semana (ultimas 8 semanas ISO, lunes a

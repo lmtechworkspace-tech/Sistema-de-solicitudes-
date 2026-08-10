@@ -119,12 +119,14 @@
         '<form id="form-pausa-participe" class="sigso-pausa-form">' +
         '<label class="sigso-toggle"><input type="checkbox" data-campo="confirmacion"> ' +
         'Declaro que participé en la pausa activa de hoy.</label>' +
+        animoHtml_() +
         Componentes.boton({ tipo: 'submit', texto: 'Guardar' }) +
         '</form>';
+      wireAnimo_(document.getElementById('form-pausa-participe'));
       document.getElementById('form-pausa-participe').addEventListener('submit', function (ev) {
         ev.preventDefault();
         var conf = document.querySelector('#form-pausa-participe [data-campo="confirmacion"]').checked;
-        enviar_({ estado: 'participo', confirmacion: conf });
+        enviar_({ estado: 'participo', confirmacion: conf, animo: leerAnimo_(document.getElementById('form-pausa-participe')) });
       });
     });
 
@@ -145,6 +147,43 @@
         });
       });
     });
+  }
+
+  // v7.2 (Bloque A, mejora A6): micro-encuesta de bienestar, OPCIONAL --
+  // 5 caritas, sin obligar a elegir ninguna (nunca debe ser una barrera para
+  // registrar la participacion). No se muestra a nadie por persona -- el
+  // servidor solo la agrega en un promedio (RN-708, ver calcularReportePausas_).
+  var ANIMO_EMOJI = ['😞', '🙁', '😐', '🙂', '😄'];
+
+  function animoHtml_() {
+    var botones = ANIMO_EMOJI.map(function (emoji, idx) {
+      return '<button type="button" class="sigso-animo-btn" data-animo="' + (idx + 1) + '" ' +
+        'aria-label="Ánimo ' + (idx + 1) + ' de 5">' + emoji + '</button>';
+    }).join('');
+    return '<div class="sigso-animo" data-animo-valor="">' +
+      '<p class="sigso-ayuda" style="margin-bottom:6px;">¿Cómo te sientes hoy? (opcional)</p>' +
+      '<div class="sigso-animo-botonera">' + botones + '</div>' +
+      '</div>';
+  }
+
+  function wireAnimo_(form) {
+    var cont = form.querySelector('.sigso-animo');
+    if (!cont) return;
+    cont.querySelectorAll('.sigso-animo-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var yaActivo = btn.classList.contains('sigso-animo-btn--activo');
+        cont.querySelectorAll('.sigso-animo-btn').forEach(function (b) { b.classList.remove('sigso-animo-btn--activo'); });
+        cont.setAttribute('data-animo-valor', yaActivo ? '' : btn.getAttribute('data-animo'));
+        if (!yaActivo) btn.classList.add('sigso-animo-btn--activo');
+      });
+    });
+  }
+
+  function leerAnimo_(form) {
+    var cont = form.querySelector('.sigso-animo');
+    if (!cont) return undefined;
+    var v = cont.getAttribute('data-animo-valor');
+    return v ? Number(v) : undefined;
   }
 
   function enviar_(payload) {

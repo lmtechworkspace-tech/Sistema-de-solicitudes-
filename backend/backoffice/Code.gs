@@ -76,6 +76,8 @@ var BACKOFFICE_ACTIONS = {
   // v6.0 Fase P3: operacion y reportes del coordinador (modulo 'pausas_coordinacion').
   getPanelCoordinadorPausas: handleGetPanelCoordinadorPausas_,
   gestionarPausaCoordinador: handleGestionarPausaCoordinador_,
+  // v7.2 (Bloque A, mejora A1 "pasar lista grupal").
+  registrarAsistenciaGrupalPausas: handleRegistrarAsistenciaGrupalPausas_,
   getReporteCumplimientoPausas: handleGetReporteCumplimientoPausas_,
   // v6.0 (mejora #7): roster + historial por trabajador.
   listarRosterCoordinadorPausas: handleListarRosterCoordinadorPausas_,
@@ -211,6 +213,7 @@ var MODULO_POR_ACCION = {
   // v6.0 Fase P3: la coordinadora opera y ve reportes desde su modulo.
   getPanelCoordinadorPausas: 'pausas_coordinacion',
   gestionarPausaCoordinador: 'pausas_coordinacion',
+  registrarAsistenciaGrupalPausas: 'pausas_coordinacion',
   getReporteCumplimientoPausas: 'pausas_coordinacion',
   // v6.0 (mejora #7): roster + historial por trabajador (misma pestana de reportes).
   listarRosterCoordinadorPausas: 'pausas_coordinacion',
@@ -726,6 +729,10 @@ function handleGetPanelCoordinadorPausas_(data, contexto) {
 
 function handleGestionarPausaCoordinador_(data, contexto) {
   return responderResultado_(Pausas.gestionarPausaCoordinador(data, contexto));
+}
+
+function handleRegistrarAsistenciaGrupalPausas_(data, contexto) {
+  return responderResultado_(Pausas.registrarAsistenciaGrupal(data, contexto));
 }
 
 function handleGetReporteCumplimientoPausas_(data, contexto) {

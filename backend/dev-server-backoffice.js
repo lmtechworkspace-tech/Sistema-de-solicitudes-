@@ -56,9 +56,13 @@ function construirContexto() {
   // (en produccion ambos proyectos leen la misma planilla; en local son
   // hojas separadas, asi que el token se fija por convencion).
   seedSheet(ctx, 'CUENTAS_PORTAL', ctx.COLUMNAS.CUENTAS_PORTAL, [
+    // v7.2 (Bloque A): juan@hp.cl (segundo correo) para poder probar en local
+    // el registro del trabajador (con la micro-encuesta de animo, A6) usando
+    // dev-token-leo -- resolverTrabajadorPausas_ matchea por PAUSAS_TRABAJADORES
+    // primero, asi que este correo resuelve a la empresa HP del roster de abajo.
     ['CTA-DEMO-3', 'leo', 'Leo Estay', 'Desarrollador', 'hash-no-usado-aqui', 'sal',
-      JSON.stringify(['leo@rld.cl']),
-      'DEV', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo']),
+      JSON.stringify(['leo@rld.cl', 'juan@hp.cl']),
+      'DEV', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo', 'pausas']),
       'RLD', true, false, '', 'dev-server'],
     // P4: cuenta ADM con todos los modulos, para probar Administracion.
     ['CTA-DEMO-4', 'ladmin', 'Luis Admin', 'Administrador', 'hash-no-usado-aqui', 'sal',

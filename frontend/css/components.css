@@ -2084,6 +2084,28 @@
 .sigso-pausa-form { margin-top: 1rem; }
 .sigso-pausa-form .sigso-toggle { margin-bottom: 1rem; display: block; }
 
+/* v7.2 (Bloque A, mejora A6): micro-encuesta de bienestar, opcional. */
+.sigso-animo { margin: 1rem 0; }
+.sigso-animo-botonera { display: flex; gap: 0.5rem; }
+.sigso-animo-btn {
+  flex: 1 1 auto;
+  font-size: 1.6rem;
+  line-height: 1;
+  padding: 0.5rem;
+  border: 1px solid var(--borde, #E5E8EF);
+  border-radius: 8px;
+  background: var(--superficie, #fff);
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s, border-color 0.15s, transform 0.1s;
+}
+.sigso-animo-btn:hover { opacity: 0.85; }
+.sigso-animo-btn--activo {
+  opacity: 1;
+  border-color: var(--primario, #6D5DF6);
+  transform: scale(1.08);
+}
+
 /* v6.0 Fase P3: listas de participación del coordinador (participaron /
    justificaron / pendientes). */
 .sigso-lista-simple {
@@ -2093,6 +2115,31 @@
   font-size: 0.92rem;
 }
 .sigso-lista-simple li { margin: 0.15rem 0; }
+
+/* v7.2 (Bloque A, mejora A1): modal "pasar lista" grupal del coordinador. */
+.sigso-lista-pasar-lista {
+  max-height: 50vh;
+  overflow-y: auto;
+  margin: 0.75rem 0;
+  border: 1px solid var(--borde, #E5E8EF);
+  border-radius: 8px;
+}
+.sigso-lista-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--borde, #EEF1F6);
+  flex-wrap: wrap;
+}
+.sigso-lista-item:last-child { border-bottom: none; }
+.sigso-lista-item__botones { display: flex; gap: 0.4rem; flex-shrink: 0; }
+.sigso-boton--activo {
+  border-color: var(--primario, #6D5DF6) !important;
+  color: var(--primario, #6D5DF6) !important;
+  font-weight: 600;
+}
 
 /* === v6.4: Avatar unico + panel "Mi perfil" ==============================
    Un solo avatar para toda la plataforma (Componentes.avatar). Antes habia

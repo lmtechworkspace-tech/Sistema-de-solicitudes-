@@ -224,7 +224,18 @@ function enviarRecordatoriosPausasTrigger() {
 // aviso a la coordinadora de que es hora de iniciar. Ver
 // Pausas.enviarSegundosAvisosPausas().
 function enviarSegundosAvisosPausasTrigger() {
-  return Pausas.enviarSegundosAvisosPausas();
+  var resultado = Pausas.enviarSegundosAvisosPausas();
+  // v7.2 (Bloque A, mejora A8 "resiliencia del coordinador"): sin trigger
+  // propio (limite de 20 ya copado, ver FUNCIONES_TRIGGER_CADA_5_MIN) --
+  // colgada de este mismo slot de 5 min, que es el que ya revisa el estado
+  // de las pausas del dia. En try/catch: si la escalada fallara, no debe
+  // tumbar el segundo aviso, que es el dueno real de este slot.
+  try {
+    Pausas.escalarPausasSinIniciar();
+  } catch (err) {
+    logError_(err, 'Triggers.enviarSegundosAvisosPausasTrigger:escalarPausasSinIniciar');
+  }
+  return resultado;
 }
 
 // v6.0 Fase P4: resumen de fin de dia de las pausas. Ver
