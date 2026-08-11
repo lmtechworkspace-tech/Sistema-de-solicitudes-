@@ -47,6 +47,24 @@ function invalidarCacheHoja_(nombreHoja) {
   }
 }
 
+// v7.4b: para agregarFila_/agregarFilas_ -- un simple append NUNCA cambia
+// los encabezados existentes, asi que en vez de invalidar todo el cache (lo
+// que forzaria una relectura de la hoja en la SIGUIENTE escritura al mismo
+// destino -- costoso en un bucle que escribe muchas filas seguidas, p.ej.
+// LOG_NOTIFICACIONES una vez por correo), el cache se RECONSTRUYE con datos
+// que ya tenemos en memoria (encabezados + lo que habia + lo que se acaba
+// de escribir) -- SIN releer la hoja. Reconstruye en vez de "extender
+// condicionalmente" a proposito: en los tests, el arnes de gasSandbox
+// instrumenta appendRow para invalidar el cache en cualquier escritura
+// directa al mock (necesario para que seedSheet no deje datos viejos, ver
+// gasSandbox.js), asi que el cache puede haber quedado vacio ENTRE que se
+// leyo `datos` y este punto -- reconstruir siempre deja un cache correcto
+// sin importar que paso mientras tanto, y en Apps Script real (sin ese
+// arnes) el resultado es identico.
+function fijarCacheHoja_(nombreHoja, hoja, encabezados, valoresPrevios, filasNuevas) {
+  _cacheHojas_[nombreHoja] = { hoja: hoja, encabezados: encabezados, valores: valoresPrevios.concat(filasNuevas) };
+}
+
 function obtenerSpreadsheet_() {
   if (!_spreadsheetMemo_) {
     _spreadsheetMemo_ = SpreadsheetApp.openById(getConfig_().sheetId);
@@ -70,10 +88,17 @@ function leerHojaConEncabezados_(nombreHoja) {
     var hoja = obtenerHoja_(nombreHoja);
     var ultimaFila = hoja.getLastRow();
     var ultimaCol = hoja.getLastColumn();
-    cacheado = (ultimaFila < 2 || ultimaCol < 1)
+    // v7.4b: antes, una hoja con SOLO el encabezado (sin filas de datos
+    // aun, ultimaFila===1) se trataba igual que una hoja realmente vacia
+    // (encabezados: []) -- inofensivo para leerFilas_ (0 filas de todos
+    // modos), pero agregarFila_/agregarFilas_ SI necesitan el encabezado
+    // real para escribir alineado desde la primera fila de datos. Ahora
+    // solo se considera "sin encabezado" cuando la hoja no tiene ni
+    // siquiera una columna (ultimaCol < 1).
+    cacheado = (ultimaCol < 1)
       ? { hoja: hoja, encabezados: [], valores: [] }
       : (function () {
-          var valores = hoja.getRange(1, 1, ultimaFila, ultimaCol).getValues();
+          var valores = hoja.getRange(1, 1, Math.max(ultimaFila, 1), ultimaCol).getValues();
           return {
             hoja: hoja,
             encabezados: valores[0].map(function (h) { return String(h).trim(); }),
@@ -109,14 +134,33 @@ function mapearFila_(fila, encabezados, columnasEsquema) {
   return obj;
 }
 
+// v7.4b (hallazgo real, Novedades v6.7/v6.8): antes se escribia por
+// POSICION segun COLUMNAS[nombreHoja] (el esquema del CODIGO), asumiendo
+// que coincide exactamente con el orden fisico de columnas de la hoja. Si
+// una fase agrega un campo nuevo al esquema pero la hoja de una instalacion
+// existente nunca actualiza su fila de encabezados (el Instalador solo crea
+// hojas NUEVAS, no sincroniza las que ya existen), appendRow sigue
+// escribiendo el mismo ANCHO de columnas nuevo bajo encabezados viejos --
+// cada valor queda UNA columna corrido respecto de lo que su encabezado
+// dice, y el ultimo campo del esquema (activa, en el caso real que motivo
+// esto) queda invisible para las lecturas (que si son por NOMBRE de
+// encabezado). El sintoma: se "publica" bien, pero nunca aparece en el feed.
+//
+// Ahora se escribe por el mismo criterio que ya usan las lecturas y
+// actualizarFilaPorId_ (reescribirFila_): segun los encabezados REALES de
+// la hoja. Si un campo del esquema no tiene encabezado todavia, su valor
+// simplemente NO se escribe (en vez de correr y corromper las columnas
+// siguientes) -- una hoja desincronizada pierde ESE campo puntual, pero
+// nunca desalinea el resto.
 function agregarFila_(nombreHoja, objetoFila) {
-  var hoja = obtenerHoja_(nombreHoja);
-  var columnas = COLUMNAS[nombreHoja];
+  var datos = leerHojaConEncabezados_(nombreHoja); // pasa por el cache de ejecucion (v6.9)
+  var encabezados = datos.encabezados;
+  var columnas = encabezados.length ? encabezados : COLUMNAS[nombreHoja];
   var fila = columnas.map(function (col) {
-    return objetoFila[col] !== undefined ? objetoFila[col] : '';
+    return (col && objetoFila[col] !== undefined) ? objetoFila[col] : '';
   });
-  hoja.appendRow(fila);
-  invalidarCacheHoja_(nombreHoja); // v6.9: la hoja cambio, el cache ya no sirve
+  datos.hoja.appendRow(fila);
+  fijarCacheHoja_(nombreHoja, datos.hoja, datos.encabezados, datos.valores, [fila]); // v7.4b: sin releer
   return objetoFila;
 }
 
@@ -131,15 +175,16 @@ function leerFilas_(nombreHoja) {
 // agregarFila_ (mapea por COLUMNAS[nombreHoja], default '' para lo ausente).
 function agregarFilas_(nombreHoja, objetosFila) {
   if (!objetosFila || !objetosFila.length) return objetosFila;
-  var hoja = obtenerHoja_(nombreHoja);
-  var columnas = COLUMNAS[nombreHoja];
+  var datos = leerHojaConEncabezados_(nombreHoja); // pasa por el cache de ejecucion (v6.9)
+  var encabezados = datos.encabezados;
+  var columnas = encabezados.length ? encabezados : COLUMNAS[nombreHoja];
   var matriz = objetosFila.map(function (obj) {
     return columnas.map(function (col) {
-      return obj[col] !== undefined ? obj[col] : '';
+      return (col && obj[col] !== undefined) ? obj[col] : '';
     });
   });
-  hoja.getRange(hoja.getLastRow() + 1, 1, matriz.length, columnas.length).setValues(matriz);
-  invalidarCacheHoja_(nombreHoja); // v6.9: la hoja cambio, el cache ya no sirve
+  datos.hoja.getRange(datos.hoja.getLastRow() + 1, 1, matriz.length, columnas.length).setValues(matriz);
+  fijarCacheHoja_(nombreHoja, datos.hoja, datos.encabezados, datos.valores, matriz); // v7.4b: sin releer
   return objetosFila;
 }
 

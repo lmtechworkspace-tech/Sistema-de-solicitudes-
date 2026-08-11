@@ -37,6 +37,18 @@ function invalidarCacheHoja_(nombreHoja) {
   }
 }
 
+// v7.4b: ver la nota identica en backend/backoffice/SheetsRepo.gs -- un
+// simple append nunca cambia encabezados existentes, asi que en vez de
+// invalidar el cache (forzando una relectura en la siguiente escritura al
+// mismo destino) se RECONSTRUYE con datos que ya tenemos en memoria, sin
+// releer la hoja. Reconstruye (no "extiende condicionalmente") porque en
+// tests el arnes de gasSandbox invalida el cache en CUALQUIER appendRow
+// (necesario para que seedSheet no deje datos viejos) -- reconstruir deja
+// un cache correcto sin importar si esa invalidacion ya corrio o no.
+function fijarCacheHoja_(nombreHoja, hoja, encabezados, valoresPrevios, filasNuevas) {
+  _cacheHojas_[nombreHoja] = { hoja: hoja, encabezados: encabezados, valores: valoresPrevios.concat(filasNuevas) };
+}
+
 function obtenerSpreadsheet_() {
   if (!_spreadsheetMemo_) {
     _spreadsheetMemo_ = SpreadsheetApp.openById(getConfig_().sheetId);
@@ -64,10 +76,16 @@ function leerHojaConEncabezados_(nombreHoja) {
     var hoja = obtenerHoja_(nombreHoja);
     var ultimaFila = hoja.getLastRow();
     var ultimaCol = hoja.getLastColumn();
-    cacheado = (ultimaFila < 2 || ultimaCol < 1)
+    // v7.4b: antes, una hoja con SOLO el encabezado (sin filas de datos
+    // aun, ultimaFila===1) se trataba igual que una hoja realmente vacia
+    // (encabezados: []) -- inofensivo para leerFilas_ (0 filas de todos
+    // modos), pero agregarFila_ SI necesita el encabezado real para
+    // escribir alineado desde la primera fila de datos. Ver la nota
+    // identica en backend/backoffice/SheetsRepo.gs.
+    cacheado = (ultimaCol < 1)
       ? { hoja: hoja, encabezados: [], valores: [] }
       : (function () {
-          var valores = hoja.getRange(1, 1, ultimaFila, ultimaCol).getValues();
+          var valores = hoja.getRange(1, 1, Math.max(ultimaFila, 1), ultimaCol).getValues();
           return {
             hoja: hoja,
             encabezados: valores[0].map(function (h) { return String(h).trim(); }),
@@ -103,14 +121,23 @@ function mapearFila_(fila, encabezados, columnasEsquema) {
   return obj;
 }
 
+// v7.4b (hallazgo real, Novedades v6.7/v6.8 -- ver la nota extensa en
+// backend/backoffice/SheetsRepo.gs): antes se escribia por POSICION segun
+// COLUMNAS[nombreHoja] (el esquema del codigo), asumiendo que coincide con
+// el orden fisico de columnas de la hoja. Si una fase agrega un campo nuevo
+// pero una hoja existente nunca sincroniza su encabezado, appendRow corre
+// todo lo que sigue una columna, invisible para lecturas por nombre. Ahora
+// escribe segun los encabezados REALES (mismo criterio que ya usan las
+// lecturas y actualizarFilaPorId_/reescribirFila_).
 function agregarFila_(nombreHoja, objetoFila) {
-  var hoja = obtenerHoja_(nombreHoja);
-  var columnas = COLUMNAS[nombreHoja];
+  var datos = leerHojaConEncabezados_(nombreHoja); // pasa por el cache de ejecucion (v6.9)
+  var encabezados = datos.encabezados;
+  var columnas = encabezados.length ? encabezados : COLUMNAS[nombreHoja];
   var fila = columnas.map(function (col) {
-    return objetoFila[col] !== undefined ? objetoFila[col] : '';
+    return (col && objetoFila[col] !== undefined) ? objetoFila[col] : '';
   });
-  hoja.appendRow(fila);
-  invalidarCacheHoja_(nombreHoja); // v6.9: la hoja cambio, el cache ya no sirve
+  datos.hoja.appendRow(fila);
+  fijarCacheHoja_(nombreHoja, datos.hoja, datos.encabezados, datos.valores, [fila]); // v7.4b: sin releer
   return objetoFila;
 }
 

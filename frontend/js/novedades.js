@@ -458,7 +458,12 @@
         if (lista) lista.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar.', 'error');
         return;
       }
-      renderListaEstados_(respuesta.data.envios, 'No tienes novedades esperando aprobación.');
+      // v7.4b: "Mis envíos" solo muestra lo que sigue EN TRÁMITE (en
+      // revisión, devuelto, rechazado) -- un Aviso/Logro (carril LIBRE) se
+      // publica de inmediato y nunca pasa por aquí, así que vacío es lo
+      // normal para esos tipos. Mensaje propio (antes era casi idéntico al
+      // de "Por aprobar" -- "esperando aprobación" -- y confundía).
+      renderListaEstados_(respuesta.data.envios, 'No tienes envíos en trámite. Los tipos que se publican de inmediato (Aviso, Logro) no pasan por aquí -- revisa "Publicadas".');
     }).catch(function () {
       if (lista) lista.innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
     });
