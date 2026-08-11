@@ -491,6 +491,43 @@ var Novedades = (function () {
     });
   }
 
+  // v7.4: aviso INMEDIATO al publicar un tipo de carril LIBRE (Aviso, Logro)
+  // -- antes solo quedaba visible en el feed si alguien entraba al modulo, lo
+  // que en la practica significaba que nadie se enteraba (feedback real:
+  // "envié un Aviso desde mi usuario ADM pero no se envió a nadie, tampoco
+  // salió correo y no aparece nada"). Mismo patron que notificarPublicacionLey_
+  // (correo + audiencia declarada), mas la notificacion en vivo (espejo en
+  // pantalla, igual que Pausas/Actividades). LEY sigue avisando por su cuenta
+  // al APROBAR (notificarPublicacionLey_), porque ese tipo es CONTROLADO y
+  // pasa por revision -- este helper es solo para LIBRE, que se publica de
+  // una vez.
+  function notificarPublicacionLibre_(novedad) {
+    var tipoInfo = TIPOS[novedad.tipo] || { etiqueta: novedad.tipo, color: 'info' };
+    var autor = normalizarEmail_(novedad.autor_email);
+    var asunto = 'SIGSO - Nueva novedad: ' + novedad.titulo;
+    var cuerpoTexto = tipoInfo.etiqueta + ': ' + novedad.titulo + '\n\n' + novedad.resumen +
+      '\n\nEntra a SIGSO > Novedades para verla completa.';
+    var cuerpoHtml = plantillaCorreoHtml_('Nueva novedad publicada',
+      '<p><span style="display:inline-block;background:#EAF2FE;color:#1D4ED8;border-radius:4px;padding:2px 8px;font-size:12px;font-weight:bold;">' +
+        escaparHtmlCorreo_(tipoInfo.etiqueta) + '</span></p>' +
+      '<h3 style="margin:8px 0;">' + escaparHtmlCorreo_(novedad.titulo) + '</h3>' +
+      '<p>' + escaparHtmlCorreo_(novedad.resumen) + '</p>' +
+      '<p>Entra a SIGSO &gt; Novedades para verla completa.</p>');
+    var destinatarios = audienciaNovedades_()
+      .filter(function (persona) { return persona.email !== autor && personaEnAudiencia_(novedad, persona.email); })
+      .map(function (persona) { return persona.email; });
+    destinatarios.forEach(function (email) {
+      enviarCorreo_(novedad.novedad_id, email, 'NOVEDAD_PUBLICADA', asunto, cuerpoTexto, null, { htmlBody: cuerpoHtml });
+    });
+    encolarNotificacionAppLote_(destinatarios.map(function (email) {
+      return {
+        destinatario: email, tipo: 'NOVEDAD_PUBLICADA',
+        titulo: tipoInfo.etiqueta + ': ' + novedad.titulo,
+        mensaje: novedad.resumen, modulo_id: 'novedades', texto_accion: 'Ver novedad', vidaHoras: 48
+      };
+    }));
+  }
+
   // Datos livianos para las listas de aprobacion/mis envios -- sin cuerpo,
   // igual criterio que getFeed (no inflar la lista con texto largo).
   function resumenNovedad_(n) {
@@ -787,7 +824,9 @@ var Novedades = (function () {
 
       if (esLibre) {
         // Sin revision: nada que registrar en el historial (nunca cambio de
-        // estado) ni que avisar mas alla del feed normal.
+        // estado). v7.4: SI se avisa -- correo + notificacion en vivo a la
+        // audiencia declarada (ver notificarPublicacionLibre_).
+        notificarPublicacionLibre_(novedad);
         return { novedad_id: novedad.novedad_id, estado: novedad.estado };
       }
 

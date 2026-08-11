@@ -422,11 +422,35 @@ test('23. aprobar una novedad tipo LEY envia correo inmediato a la audiencia (me
   assert.deepEqual(destinatarios.sort(), ['leo@rld.cl']);
 });
 
-test('24. publicar un tipo distinto de LEY NO envia correo inmediato', () => {
+test('24. publicar un tipo LIBRE (Aviso/Logro) SI avisa de inmediato a la audiencia (v7.4)', () => {
   const ctx = cargarConAudiencia();
   seedArea(ctx);
   ctx.Novedades.publicar(publicarBase_({ tipo: 'AVISO' }), ctxResponsable());
-  assert.equal(ctx.GmailApp._enviados.length, 0);
+  // audiencia = TODOS (default) menos el autor: juan@homepymes.cl y leo@rld.cl.
+  assert.equal(ctx.GmailApp._enviados.length, 2);
+});
+
+test('24b. publicar LIBRE tambien encola la notificacion en vivo (espejo del correo, v7.4)', () => {
+  const ctx = cargarConAudiencia();
+  seedSheet(ctx, 'NOTIFICACIONES_APP', ctx.COLUMNAS.NOTIFICACIONES_APP);
+  seedArea(ctx);
+  ctx.Novedades.publicar(publicarBase_({ tipo: 'AVISO', titulo: 'Aviso de prueba en vivo' }), ctxResponsable());
+
+  const filas = ctx.leerFilas_('NOTIFICACIONES_APP');
+  assert.equal(filas.length, 2); // juan@homepymes.cl y leo@rld.cl
+  const destinatarios = filas.map((f) => f.destinatario_email).sort();
+  assert.deepEqual(destinatarios, ['juan@homepymes.cl', 'leo@rld.cl']);
+  assert.equal(filas[0].modulo_id, 'novedades');
+  assert.ok(filas[0].titulo.indexOf('Aviso de prueba en vivo') !== -1);
+});
+
+test('24c. publicar LIBRE no rompe la publicacion si NOTIFICACIONES_APP aun no existe (instalacion vieja)', () => {
+  const ctx = cargarConAudiencia();
+  // A proposito: NO se siembra NOTIFICACIONES_APP.
+  seedArea(ctx);
+  const res = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'AVISO' }), ctxResponsable()));
+  assert.ok(res.novedad_id);
+  assert.equal(ctx.GmailApp._enviados.length, 2); // el correo (canal principal) sale igual
 });
 
 test('25. recordatorioPendientes: un solo correo por persona con TODAS sus pendientes', () => {
@@ -438,7 +462,10 @@ test('25. recordatorioPendientes: un solo correo por persona con TODAS sus pendi
   const res = toPlain(ctx.Novedades.recordatorioPendientes());
   assert.equal(res.enviados, 2); // juan@homepymes.cl y leo@rld.cl, cada uno un correo
 
-  const paraJuan = ctx.GmailApp._enviados.find((e) => e.destinatario === 'juan@homepymes.cl');
+  // v7.4: publicar() ya le mando a juan 2 correos inmediatos (uno por
+  // novedad) -- el del recordatorio (con AMBAS pendientes juntas) es el
+  // ULTIMO que le llega, no el primero.
+  const paraJuan = ctx.GmailApp._enviados.filter((e) => e.destinatario === 'juan@homepymes.cl').pop();
   assert.ok(paraJuan.cuerpo.indexOf('Aviso 1') !== -1);
   assert.ok(paraJuan.cuerpo.indexOf('Aviso 2') !== -1);
 });
@@ -448,12 +475,14 @@ test('26. recordatorioPendientes no reenvia el mismo dia (dedup por evento+dia, 
   seedArea(ctx);
   ctx.Novedades.publicar(publicarBase_({ tipo: 'AVISO' }), ctxResponsable());
 
+  // v7.4: publicar ya mando 2 correos inmediatos (juan, leo) -- el
+  // recordatorio suma 2 mas (4 en total), no los duplica.
   ctx.Novedades.recordatorioPendientes();
-  assert.equal(ctx.GmailApp._enviados.length, 2);
+  assert.equal(ctx.GmailApp._enviados.length, 4);
 
   // Correrlo de nuevo el mismo dia no debe duplicar.
   ctx.Novedades.recordatorioPendientes();
-  assert.equal(ctx.GmailApp._enviados.length, 2);
+  assert.equal(ctx.GmailApp._enviados.length, 4);
 });
 
 test('27. recordatorioPendientes no molesta a quien no tiene nada pendiente', () => {
@@ -465,7 +494,10 @@ test('27. recordatorioPendientes no molesta a quien no tiene nada pendiente', ()
 
   const res = toPlain(ctx.Novedades.recordatorioPendientes());
   assert.equal(res.enviados, 0);
-  assert.equal(ctx.GmailApp._enviados.length, 0);
+  // v7.4: los 2 correos inmediatos de publicar() siguen contando -- ya
+  // estaban leidos antes de que corriera el recordatorio, asi que ESE no
+  // manda nada nuevo (por eso res.enviados sigue en 0).
+  assert.equal(ctx.GmailApp._enviados.length, 2);
 });
 
 // --- 28-41: Fase 4 (gobierno de la informacion -- aprobacion por jefatura) -

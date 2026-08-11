@@ -206,7 +206,9 @@ test('recordarValidacionPendienteTrigger tambien dispara el recordatorio de Nove
 
   ctx.recordarValidacionPendienteTrigger();
 
-  assert.equal(ctx.GmailApp._enviados.length, 1);
+  // v7.4: publicar() ya le mando 1 correo inmediato a juan (audiencia TODOS
+  // menos el autor); el recordatorio de pendientes suma 1 mas (2 en total).
+  assert.equal(ctx.GmailApp._enviados.length, 2);
   assert.equal(ctx.GmailApp._enviados[0].destinatario, 'juan@homepymes.cl');
 });
 
