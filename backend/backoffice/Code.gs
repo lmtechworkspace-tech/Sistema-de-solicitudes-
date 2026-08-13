@@ -156,7 +156,10 @@ var BACKOFFICE_ACTIONS = {
   listarPermisosNotificacionesSO: handleListarPermisosNotificacionesSO_,
   // v7.5 (canales de alerta): que categorias mandan correo -- ambas ADM-only.
   listarCanalesAlerta: handleListarCanalesAlerta_,
-  guardarCanalAlerta: handleGuardarCanalAlerta_
+  guardarCanalAlerta: handleGuardarCanalAlerta_,
+  // v7.5 Fase 2 (enviar alerta): megafono manual del Admin -- ambas ADM-only.
+  getDirectorioAlerta: handleGetDirectorioAlerta_,
+  enviarAlertaManual: handleEnviarAlertaManual_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -197,6 +200,8 @@ var MODULO_POR_ACCION = {
   listarPermisosNotificacionesSO: 'administracion',
   listarCanalesAlerta: 'administracion',
   guardarCanalAlerta: 'administracion',
+  getDirectorioAlerta: 'administracion',
+  enviarAlertaManual: 'administracion',
   gestionarUsuario: 'administracion',
   listarUsuarios: 'administracion',
   listarLogs: 'administracion',
@@ -521,6 +526,14 @@ function handleListarCanalesAlerta_(data, contexto) {
 
 function handleGuardarCanalAlerta_(data, contexto) {
   return responderResultado_(guardarCanalAlerta_(contexto, data && data.clave, data && data.activo));
+}
+
+function handleGetDirectorioAlerta_(data, contexto) {
+  return responderResultado_(getDirectorioAlerta_(contexto));
+}
+
+function handleEnviarAlertaManual_(data, contexto) {
+  return responderResultado_(enviarAlertaManual_(contexto, data));
 }
 
 function handlePing_(data, contexto) {

@@ -4744,6 +4744,7 @@ button.sigso-kpi {
       <button type="button" class="sigso-admin-menu__item" data-tipo="LOGS">Automatizaciones</button>
       <button type="button" class="sigso-admin-menu__item" data-tipo="NOTIF_PERMISOS">Alertas en vivo</button>
       <button type="button" class="sigso-admin-menu__item" data-tipo="CANALES_ALERTA">Canales de alerta</button>
+      <button type="button" class="sigso-admin-menu__item" data-tipo="ENVIAR_ALERTA">Enviar alerta</button>
     </nav>
 
     <section id="admin-contenido" class="sigso-admin-contenido"></section>
@@ -6536,6 +6537,8 @@ var Iconos = (function () {
           renderPermisosNotif_();
         } else if (tipo === 'CANALES_ALERTA') {
           renderCanalesAlerta_();
+        } else if (tipo === 'ENVIAR_ALERTA') {
+          renderEnviarAlerta_();
         } else {
           renderCatalogo_(tipo);
         }
@@ -7736,6 +7739,84 @@ var Iconos = (function () {
       '</div>' +
       '<label class="sigso-toggle" style="white-space:nowrap"><input type="checkbox" data-canal="' + Componentes.escaparHtml(c.clave) + '"' + (c.correo_activo ? ' checked' : '') + '> Correo</label>' +
     '</div>';
+  }
+
+  // v7.5 Fase 2 (enviar alerta): megáfono manual del Admin. Elige a quién y
+  // por qué canales (en vivo / correo) y sale al instante. Distinto de
+  // Novedades. Del feedback real: "poder enviar alertas desde el Admin, en
+  // caso que no tengan SIGSO abierto".
+  function renderEnviarAlerta_() {
+    var contenedor = document.getElementById('admin-contenido');
+    contenedor.innerHTML = Componentes.cargando('Cargando...');
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getDirectorioAlerta', {}).then(function (respuesta) {
+      if (!respuesta.ok) {
+        contenedor.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
+        return;
+      }
+      var dir = respuesta.data;
+      var opcionesEmpresa = dir.empresas.map(function (e) {
+        return '<option value="' + Componentes.escaparHtml(e) + '">' + Componentes.escaparHtml(e) + '</option>';
+      }).join('');
+      var opcionesPersona = dir.personas.map(function (p) {
+        return '<option value="' + Componentes.escaparHtml(p.email) + '">' + Componentes.escaparHtml(p.nombre) + ' (' + Componentes.escaparHtml(p.email) + ')</option>';
+      }).join('');
+
+      contenedor.innerHTML =
+        '<h2>Enviar alerta</h2>' +
+        '<p class="sigso-ayuda">Un aviso directo a quien elijas, ahora. La <strong>alerta en vivo</strong> llega a quien tenga SIGSO abierto; el <strong>correo</strong> alcanza también a quien no lo tenga abierto.</p>' +
+        '<form id="form-alerta" class="sigso-card" style="max-width:640px">' +
+          Componentes.campoTexto({ dataCampo: 'titulo', label: 'Título' }) +
+          Componentes.campoTextarea({ dataCampo: 'mensaje', label: 'Mensaje' }) +
+          '<div class="sigso-campo"><label>A quién</label><select data-campo="audiencia">' +
+            '<option value="TODOS">Todo el personal</option>' +
+            '<option value="EMPRESA">Por empresa</option>' +
+            '<option value="SELECCION">Personas específicas</option>' +
+          '</select></div>' +
+          '<div class="sigso-campo sigso-oculto" id="alerta-campo-empresa"><label>Empresa</label><select data-campo="empresa_id">' + opcionesEmpresa + '</select></div>' +
+          '<div class="sigso-campo sigso-oculto" id="alerta-campo-seleccion"><label>Personas (Ctrl/Cmd para varias)</label><select data-campo="destinatarios" multiple size="8">' + opcionesPersona + '</select></div>' +
+          '<div class="sigso-campo"><label>Canales</label><div style="display:flex;gap:16px">' +
+            '<label class="sigso-toggle"><input type="checkbox" data-campo="por_en_vivo" checked> 🔔 Alerta en vivo</label>' +
+            '<label class="sigso-toggle"><input type="checkbox" data-campo="por_correo" checked> ✉ Correo</label>' +
+          '</div></div>' +
+          Componentes.boton({ tipo: 'submit', texto: 'Enviar alerta' }) +
+          '<div id="resultado-alerta"></div>' +
+        '</form>';
+
+      var form = document.getElementById('form-alerta');
+      var lee = function (n) { return form.querySelector('[data-campo="' + n + '"]'); };
+      lee('audiencia').addEventListener('change', function () {
+        document.getElementById('alerta-campo-empresa').classList.toggle('sigso-oculto', this.value !== 'EMPRESA');
+        document.getElementById('alerta-campo-seleccion').classList.toggle('sigso-oculto', this.value !== 'SELECCION');
+      });
+
+      form.addEventListener('submit', function (evento) {
+        evento.preventDefault();
+        var payload = {
+          titulo: lee('titulo').value.trim(),
+          mensaje: lee('mensaje').value.trim(),
+          audiencia_tipo: lee('audiencia').value,
+          empresa_id: lee('empresa_id').value,
+          destinatarios: Array.prototype.map.call(lee('destinatarios').selectedOptions, function (o) { return o.value; }),
+          por_en_vivo: lee('por_en_vivo').checked,
+          por_correo: lee('por_correo').checked
+        };
+        Componentes.confirmar({ titulo: 'Enviar alerta', mensaje: '¿Enviar esta alerta ahora?', confirmar: 'Enviar' }).then(function (ok) {
+          if (!ok) return;
+          llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'enviarAlertaManual', payload).then(function (r) {
+            if (!r.ok) {
+              document.getElementById('resultado-alerta').innerHTML = Componentes.alerta(r.message || 'No se pudo enviar.', 'error');
+              return;
+            }
+            Componentes.aviso({ tipo: 'exito', texto: 'Alerta enviada a ' + r.data.destinatarios + ' persona(s) (' + r.data.en_vivo + ' en vivo, ' + r.data.correo + ' correo).' });
+            form.reset();
+            document.getElementById('alerta-campo-empresa').classList.add('sigso-oculto');
+            document.getElementById('alerta-campo-seleccion').classList.add('sigso-oculto');
+          }).catch(function () {
+            document.getElementById('resultado-alerta').innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
+          });
+        });
+      });
+    }).catch(mostrarErrorAdmin_);
   }
 
   function renderFormulario_(campos) {

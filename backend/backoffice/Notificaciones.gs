@@ -836,6 +836,109 @@ function guardarCanalAlerta_(contexto, clave, activo) {
   return { ok: true, clave: clave, correo_activo: valor };
 }
 
+// v7.5 Fase 2: "Enviar alerta" desde Administracion -- un megafono manual del
+// Admin a quien elija, por alerta EN VIVO y/o CORREO. Distinto de Novedades
+// (feed durable con acuse y aprobacion): esto es inmediato y directo. Nace del
+// feedback real: "poder enviar alertas desde el Admin, en caso que no tengan
+// SIGSO abierto" -- el correo es el canal que alcanza a quien esta offline.
+// Los canales los elige el Admin en CADA envio, asi que NO lo limitan los
+// interruptores de "Canales de alerta" (evento ALERTA_ADMIN sin categoria ->
+// correoActivoParaEvento_ devuelve true -> nunca se bloquea).
+
+// Personal ACTIVO con identidad en SIGSO (USUARIOS Google + CUENTAS_PORTAL),
+// deduplicado por email. Mismo cruce que listarPermisosNotificacionesSO_.
+function directorioPersonalActivo_() {
+  var personas = {};
+  leerFilasSeguro_(SHEETS.USUARIOS).forEach(function (u) {
+    if (!esVerdaderoPausas_(u.activo) || !u.email) return;
+    personas[String(u.email).toLowerCase()] = { email: u.email, nombre: u.nombre || u.email, empresa_id: u.empresa_id || '' };
+  });
+  leerFilasSeguro_(SHEETS.CUENTAS_PORTAL).forEach(function (c) {
+    if (!esVerdaderoPausas_(c.activo)) return;
+    parsearListaPortal_(c.emails).forEach(function (email) {
+      var correo = String(email || '').trim();
+      if (!correo) return;
+      var clave = correo.toLowerCase();
+      if (!personas[clave]) personas[clave] = { email: correo, nombre: c.nombre || correo, empresa_id: c.empresa_id || '' };
+    });
+  });
+  return Object.keys(personas).map(function (k) { return personas[k]; });
+}
+
+// Datos para poblar los selectores del formulario "Enviar alerta". ADM-only.
+function getDirectorioAlerta_(contexto) {
+  if (!contexto || contexto.rol !== 'ADM') {
+    return { _forbidden: true, message: 'Solo un Administrador puede enviar alertas.' };
+  }
+  var personas = directorioPersonalActivo_();
+  var empresas = {};
+  personas.forEach(function (p) { if (p.empresa_id) empresas[p.empresa_id] = true; });
+  return {
+    personas: personas.sort(function (a, b) { return String(a.nombre).localeCompare(String(b.nombre)); }),
+    empresas: Object.keys(empresas).sort()
+  };
+}
+
+// Envia la alerta manual. audiencia_tipo: 'TODOS' | 'EMPRESA' | 'SELECCION'.
+function enviarAlertaManual_(contexto, data) {
+  if (!contexto || contexto.rol !== 'ADM') {
+    return { _forbidden: true, message: 'Solo un Administrador puede enviar alertas.' };
+  }
+  data = data || {};
+  var titulo = String(data.titulo || '').trim();
+  var mensaje = String(data.mensaje || '').trim();
+  if (titulo.length < 3) return errorValidacion_('titulo', 'Escribe un título (mínimo 3 caracteres).');
+  if (mensaje.length < 3) return errorValidacion_('mensaje', 'Escribe el mensaje de la alerta.');
+  var porCorreo = data.por_correo !== false;
+  var porEnVivo = data.por_en_vivo !== false;
+  if (!porCorreo && !porEnVivo) return errorValidacion_('canales', 'Elige al menos un canal (en vivo o correo).');
+
+  var todos = directorioPersonalActivo_();
+  var tipo = data.audiencia_tipo || 'TODOS';
+  var destinatarios;
+  if (tipo === 'EMPRESA') {
+    var emp = String(data.empresa_id || '');
+    destinatarios = todos.filter(function (p) { return p.empresa_id === emp; });
+  } else if (tipo === 'SELECCION') {
+    var elegidos = {};
+    (Array.isArray(data.destinatarios) ? data.destinatarios : []).forEach(function (e) { elegidos[String(e).toLowerCase()] = true; });
+    destinatarios = todos.filter(function (p) { return elegidos[p.email.toLowerCase()]; });
+  } else {
+    destinatarios = todos;
+  }
+  if (!destinatarios.length) return errorValidacion_('audiencia', 'No hay destinatarios para esa audiencia.');
+
+  // UUID en el evento: nunca se deduplica contra otro envio ni contra los
+  // interruptores de canales (ALERTA_ADMIN no tiene categoria).
+  var evento = 'ALERTA_ADMIN:' + Utilities.getUuid();
+  var enVivo = 0, correo = 0;
+
+  if (porEnVivo) {
+    var r = encolarNotificacionAppLote_(destinatarios.map(function (p) {
+      return { destinatario: p.email, tipo: 'ALERTA_ADMIN', titulo: titulo, mensaje: mensaje, modulo_id: '', texto_accion: '', vidaHoras: 72 };
+    }));
+    enVivo = (r && r.encolado) || 0;
+  }
+  if (porCorreo) {
+    var cuerpoHtml = plantillaCorreoHtml_(titulo, '<p>' + escaparHtmlCorreo_(mensaje).replace(/\n/g, '<br>') + '</p>');
+    destinatarios.forEach(function (p) {
+      var res = enviarCorreo_('ALERTA_ADMIN', p.email, evento, 'SIGSO — ' + titulo, mensaje, undefined, { htmlBody: cuerpoHtml });
+      if (res.enviado) correo++;
+    });
+  }
+
+  try {
+    agregarFila_(SHEETS.LOG_SISTEMA, {
+      log_id: Utilities.getUuid(), timestamp: new Date().toISOString(), contexto: 'ALERTA_ADMIN',
+      mensaje: contexto.email + ' → ' + destinatarios.length + ' persona(s) [' +
+        (porEnVivo ? 'en vivo' : '') + (porEnVivo && porCorreo ? '+' : '') + (porCorreo ? 'correo' : '') + ']: ' + titulo,
+      ref: evento
+    });
+  } catch (err) { /* trazabilidad best-effort */ }
+
+  return { ok: true, destinatarios: destinatarios.length, en_vivo: enVivo, correo: correo };
+}
+
 // v5.2 (correos profesionales): `opciones` es opcional y solo agrega lo nuevo
 // -- { htmlBody, attachments }. El `cuerpo` de texto plano SIEMPRE se manda
 // como fallback (clientes sin HTML lo leen igual). Los callers viejos que
