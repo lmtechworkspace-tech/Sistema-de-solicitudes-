@@ -726,6 +726,116 @@ function formatearCuerpoEjecutivo_(panel) {
     lineas.map(function (l) { return '- ' + l; }).join('\n');
 }
 
+// v7.5 (canales de alerta configurables desde Admin): con las alertas EN
+// VIVO (v7.1-v7.4) ya cubriendo varios eventos, el correo de algunos se
+// volvio redundante -- el ejemplo real que motivo esto es Pausas activas.
+// Este catalogo agrupa los ~25 eventos de correo en 6 CATEGORIAS que el
+// Admin puede apagar/encender por correo desde Administracion > Canales de
+// alerta, sin tocar codigo. La granularidad es por categoria (no por evento
+// suelto: seria un muro de switches tecnicos).
+//
+// `tiene_en_vivo`: si esa categoria ADEMAS del correo dispara una alerta en
+// pantalla (Pausas/Actividades/Novedades lo hacen desde v7.1-v7.4). Apagar
+// el correo de esas es SEGURO (la alerta en vivo queda). Las de solo-correo
+// (SLA, derivacion, reportes) se pueden apagar igual, pero apagarlas =
+// nadie se entera -- el panel del Admin lo advierte.
+//
+// IMPORTANTE (seguridad de datos): los avisos al SOLICITANTE EXTERNO
+// (compromiso de fecha, recordatorio de validacion, cambio de estado, acuse)
+// NO estan en ninguna categoria a proposito -- esa gente nunca tiene SIGSO
+// abierto, el correo es su UNICO canal, asi que nunca se bloquean (ver
+// categoriaDeEvento_ -> null -> siempre se envia).
+var CANALES_ALERTA = [
+  { clave: 'PAUSAS', nombre: 'Pausas activas', tiene_en_vivo: true,
+    descripcion: 'Recordatorio, "¡es ahora!" y avisos de coordinación de las pausas.',
+    prefijos: ['PAUSA'] },
+  { clave: 'ACTIVIDADES', nombre: 'Mi trabajo / Actividades', tiene_en_vivo: true,
+    descripcion: 'Pedidos de actualización y el resumen diario de tus actividades.',
+    prefijos: ['PEDIR_ACTUALIZACION_ACTIVIDAD', 'ALERTAS_ACTIVIDADES'] },
+  { clave: 'NOVEDADES', nombre: 'Novedades', tiene_en_vivo: true,
+    descripcion: 'Avisos y logros publicados, novedades por aprobar y recordatorios de acuse.',
+    prefijos: ['NOVEDAD'] },
+  { clave: 'SOLICITUDES', nombre: 'Solicitudes (equipo)', tiene_en_vivo: false,
+    descripcion: 'Derivaciones a tu bandeja y avisos de documento listo. Hoy solo por correo.',
+    prefijos: ['DERIVACION', 'DOC_LISTO', 'FALLO_DOCUMENTO'] },
+  { clave: 'SLA', nombre: 'SLA y vencimientos (equipo)', tiene_en_vivo: false,
+    descripcion: 'SLA próximo o vencido, fecha comprometida en riesgo y alertas de patrón. Hoy solo por correo.',
+    prefijos: ['SLA_PROXIMO', 'SLA_VENCIDO', 'FECHA_EN_RIESGO', 'ALERTA_PATRON'] },
+  { clave: 'REPORTES', nombre: 'Reportes', tiene_en_vivo: false,
+    descripcion: 'Reporte ejecutivo, resumen semanal/mensual y digest de jefatura. Hoy solo por correo.',
+    prefijos: ['RESUMEN_SEMANAL', 'REPORTE_MENSUAL', 'REPORTE_EJECUTIVO', 'DIGEST_JEFATURA'] }
+];
+
+// Devuelve la clave de categoria de un evento, o null si no pertenece a
+// ninguna (evento desconocido/nuevo, o aviso al solicitante externo) -- en
+// cuyo caso NUNCA se bloquea (default seguro).
+function categoriaDeEvento_(evento) {
+  var ev = String(evento || '');
+  for (var i = 0; i < CANALES_ALERTA.length; i++) {
+    var prefijos = CANALES_ALERTA[i].prefijos;
+    for (var j = 0; j < prefijos.length; j++) {
+      if (ev.indexOf(prefijos[j]) === 0) return CANALES_ALERTA[i].clave;
+    }
+  }
+  return null;
+}
+
+// Lee CONFIG_NOTIFICACIONES.activo del registro CANAL_CORREO_<clave>. Sin
+// registro (o sin hoja) = ENCENDIDO -- reproduce el comportamiento previo,
+// no rompe nada; el registro se crea recien cuando el Admin apaga uno.
+function canalCorreoActivo_(clave) {
+  var filas;
+  try { filas = leerFilas_(SHEETS.CONFIG_NOTIFICACIONES); } catch (err) { return true; }
+  for (var i = 0; i < filas.length; i++) {
+    if (filas[i].notif_id === 'CANAL_CORREO_' + clave) {
+      var v = filas[i].activo;
+      return !(v === false || v === 'FALSE' || v === 0 || v === '0');
+    }
+  }
+  return true;
+}
+
+function correoActivoParaEvento_(evento) {
+  var clave = categoriaDeEvento_(evento);
+  if (!clave) return true; // desconocido o aviso al solicitante externo: siempre se envia
+  return canalCorreoActivo_(clave);
+}
+
+// v7.5: Administracion > Canales de alerta -- que categorias mandan correo.
+// ADM-only. `tiene_en_vivo` alimenta la advertencia del panel ("apagar esto
+// = nadie se entera" cuando NO tiene alerta en vivo de respaldo).
+function listarCanalesAlerta_(contexto) {
+  if (!contexto || contexto.rol !== 'ADM') {
+    return { _forbidden: true, message: 'Solo un Administrador puede configurar los canales de alerta.' };
+  }
+  return {
+    canales: CANALES_ALERTA.map(function (c) {
+      return {
+        clave: c.clave, nombre: c.nombre, descripcion: c.descripcion,
+        tiene_en_vivo: c.tiene_en_vivo, correo_activo: canalCorreoActivo_(c.clave)
+      };
+    })
+  };
+}
+
+function guardarCanalAlerta_(contexto, clave, activo) {
+  if (!contexto || contexto.rol !== 'ADM') {
+    return { _forbidden: true, message: 'Solo un Administrador puede configurar los canales de alerta.' };
+  }
+  var conocido = CANALES_ALERTA.some(function (c) { return c.clave === clave; });
+  if (!conocido) return errorValidacion_('clave', 'Canal de alerta desconocido.');
+  var valor = (activo === true || activo === 'true' || activo === 1 || activo === '1');
+  var notifId = 'CANAL_CORREO_' + clave;
+  var actualizado = actualizarFilaPorId_(SHEETS.CONFIG_NOTIFICACIONES, 'notif_id', notifId, { activo: valor });
+  if (!actualizado) {
+    agregarFila_(SHEETS.CONFIG_NOTIFICACIONES, {
+      notif_id: notifId, evento: 'Canal de correo: ' + clave,
+      rol_destinatario: '', emails_extra: '', activo: valor
+    });
+  }
+  return { ok: true, clave: clave, correo_activo: valor };
+}
+
 // v5.2 (correos profesionales): `opciones` es opcional y solo agrega lo nuevo
 // -- { htmlBody, attachments }. El `cuerpo` de texto plano SIEMPRE se manda
 // como fallback (clientes sin HTML lo leen igual). Los callers viejos que
@@ -733,6 +843,11 @@ function formatearCuerpoEjecutivo_(panel) {
 function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo, ventanaMinutos, opciones) {
   if (!destinatario) {
     return { enviado: false, motivo: 'sin_destinatario' };
+  }
+  // v7.5: si el Admin apago el correo de la categoria de este evento, no se
+  // manda (la alerta en vivo, si la hay, es una cola aparte y no se toca).
+  if (!correoActivoParaEvento_(evento)) {
+    return { enviado: false, motivo: 'canal_desactivado' };
   }
   if (yaNotificadoRecientemente_(solicitudId, evento, destinatario, ventanaMinutos)) {
     return { enviado: false, motivo: 'deduplicado' };

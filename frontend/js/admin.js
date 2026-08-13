@@ -137,6 +137,8 @@
           renderPausas_();
         } else if (tipo === 'NOTIF_PERMISOS') {
           renderPermisosNotif_();
+        } else if (tipo === 'CANALES_ALERTA') {
+          renderCanalesAlerta_();
         } else {
           renderCatalogo_(tipo);
         }
@@ -1280,6 +1282,63 @@
         '</tr>';
     }).join('');
     return '<table class="sigso-tabla"><thead><tr><th>Nombre</th><th>Email</th><th>Origen</th><th>Estado</th><th>Actualizado</th></tr></thead><tbody>' + cuerpo + '</tbody></table>';
+  }
+
+  // v7.5 (canales de alerta): el Admin elige qué categorías se mandan por
+  // correo. Las que TAMBIÉN llegan como alerta en vivo (Pausas/Actividades/
+  // Novedades) son seguras de apagar; las de solo-correo se advierten. Nace
+  // del feedback real: "ya llegan las alertas en SIGSO, para pausas el correo
+  // quizá ya no hace falta".
+  function renderCanalesAlerta_() {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'listarCanalesAlerta', {}).then(function (respuesta) {
+      var contenedor = document.getElementById('admin-contenido');
+      if (!respuesta.ok) {
+        contenedor.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
+        return;
+      }
+      var canales = respuesta.data.canales || [];
+      contenedor.innerHTML = '<h2>Canales de alerta — correo</h2>' +
+        '<p class="sigso-ayuda">Elige qué alertas se envían por correo. Las que además llegan como <strong>alerta en vivo</strong> (campana/aviso en pantalla) son seguras de apagar. Las de solo correo, si las apagas, no llegarán por ningún medio.</p>' +
+        canales.map(tarjetaCanalAlerta_).join('');
+
+      contenedor.querySelectorAll('[data-canal]').forEach(function (input) {
+        input.addEventListener('change', function () {
+          var clave = input.getAttribute('data-canal');
+          input.disabled = true;
+          llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'guardarCanalAlerta', { clave: clave, activo: input.checked })
+            .then(function (r) {
+              if (!r.ok) {
+                input.checked = !input.checked; input.disabled = false;
+                Componentes.aviso({ tipo: 'error', texto: r.message || 'No se pudo guardar.' });
+                return;
+              }
+              Componentes.aviso({ tipo: 'exito', texto: 'Preferencia guardada.' });
+              renderCanalesAlerta_(); // re-render: actualiza la advertencia de "solo correo"
+            })
+            .catch(function () {
+              input.checked = !input.checked; input.disabled = false;
+              Componentes.aviso({ tipo: 'error', texto: 'No se pudo conectar.' });
+            });
+        });
+      });
+    }).catch(mostrarErrorAdmin_);
+  }
+
+  function tarjetaCanalAlerta_(c) {
+    var badges = c.tiene_en_vivo
+      ? Componentes.badge('🔔 En vivo', 'P4') + ' ' + Componentes.badge('✉ Correo', 'P3')
+      : Componentes.badge('✉ Solo correo', 'P1');
+    var advertencia = (!c.tiene_en_vivo && c.correo_activo)
+      ? '<div class="sigso-ayuda" style="color:var(--alerta,#E5484D);margin-top:4px">⚠ Esta alerta hoy solo existe por correo. Si la apagas, nadie se enterará.</div>'
+      : '';
+    return '<div class="sigso-card" style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:10px">' +
+      '<div style="flex:1">' +
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><strong>' + Componentes.escaparHtml(c.nombre) + '</strong> ' + badges + '</div>' +
+        '<div class="sigso-ayuda" style="margin-top:2px">' + Componentes.escaparHtml(c.descripcion) + '</div>' +
+        advertencia +
+      '</div>' +
+      '<label class="sigso-toggle" style="white-space:nowrap"><input type="checkbox" data-canal="' + Componentes.escaparHtml(c.clave) + '"' + (c.correo_activo ? ' checked' : '') + '> Correo</label>' +
+    '</div>';
   }
 
   function renderFormulario_(campos) {

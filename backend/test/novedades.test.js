@@ -90,9 +90,17 @@ function ctxCualquiera(email) {
 // desde esta fase). 10 dias adelante por defecto -- lejos de "hoy" para no
 // depender de a que hora corre el test.
 function fechaLimiteValida_(diasDesdeHoy) {
+  // Fecha LOCAL a N dias (no via toISOString(), que es UTC): diasParaVencer_
+  // en Novedades.gs lee 'YYYY-MM-DD'+'T00:00:00' como medianoche LOCAL y la
+  // compara contra hoy local. Formatear en UTC desalineaba ambos por 1 dia
+  // cuando la corrida caia de tarde/noche en husos negativos (Chile UTC-3/-4)
+  // -- hacia flaky el assert de dias_para_vencer segun la hora del dia.
   const d = new Date();
+  d.setHours(0, 0, 0, 0);
   d.setDate(d.getDate() + (diasDesdeHoy || 10));
-  return d.toISOString().slice(0, 10);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + mm + '-' + dd;
 }
 
 // v6.6 (Fase 4): tipo por defecto es AVISO (carril LIBRE, se publica de

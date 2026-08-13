@@ -153,7 +153,10 @@ var BACKOFFICE_ACTIONS = {
   // v7.3 (Nivel 0): reportar el permiso es de cualquier sesion valida (como
   // ping); listar es solo Admin (gate 'administracion' mas abajo).
   reportarPermisoNotificacionesSO: handleReportarPermisoNotificacionesSO_,
-  listarPermisosNotificacionesSO: handleListarPermisosNotificacionesSO_
+  listarPermisosNotificacionesSO: handleListarPermisosNotificacionesSO_,
+  // v7.5 (canales de alerta): que categorias mandan correo -- ambas ADM-only.
+  listarCanalesAlerta: handleListarCanalesAlerta_,
+  guardarCanalAlerta: handleGuardarCanalAlerta_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -192,6 +195,8 @@ var MODULO_POR_ACCION = {
   guardarCatalogo: 'administracion',
   listarCatalogo: 'administracion',
   listarPermisosNotificacionesSO: 'administracion',
+  listarCanalesAlerta: 'administracion',
+  guardarCanalAlerta: 'administracion',
   gestionarUsuario: 'administracion',
   listarUsuarios: 'administracion',
   listarLogs: 'administracion',
@@ -508,6 +513,14 @@ function handleReportarPermisoNotificacionesSO_(data, contexto) {
 
 function handleListarPermisosNotificacionesSO_(data, contexto) {
   return responderResultado_(listarPermisosNotificacionesSO_(contexto));
+}
+
+function handleListarCanalesAlerta_(data, contexto) {
+  return responderResultado_(listarCanalesAlerta_(contexto));
+}
+
+function handleGuardarCanalAlerta_(data, contexto) {
+  return responderResultado_(guardarCanalAlerta_(contexto, data && data.clave, data && data.activo));
 }
 
 function handlePing_(data, contexto) {
