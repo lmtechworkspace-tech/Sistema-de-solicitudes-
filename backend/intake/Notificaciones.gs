@@ -29,7 +29,7 @@ function pieCorreo_() {
     '--------------------------------------------------\n' +
     'Este es un mensaje automatico del sistema SIGSO.\n' +
     'Por favor no responda directamente a este correo.\n' +
-    'Equipo SIGSO — HomePymes / RLD';
+    'Equipo SIGSO — Control y Gestión Empresarial';
 }
 
 // v7.6 (correos "corporativo sobrio"): estos son los correos que le llegan al
@@ -71,7 +71,7 @@ function plantillaCorreoHtml_(titulo, cuerpoHtml, opts) {
     // Pie institucional
     '<tr><td style="padding:16px 28px;background:#F8FAFC;border-top:1px solid #E5E7EB;color:#6B7280;font-size:12px;line-height:1.6;">' +
     'Mensaje automático del sistema SIGSO. Por favor no respondas directamente a este correo.<br>' +
-    'Equipo SIGSO — HomePymes / RLD' +
+    'Equipo SIGSO — Control y Gestión Empresarial' +
     '</td></tr>' +
     '</table></td></tr></table></div>';
 }
@@ -312,7 +312,7 @@ function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo, cc) {
     // enviar, en vez del scope completo de Gmail. Soporta cc en opciones.
     // v7.6: htmlBody branded (el texto plano sigue viajando como fallback
     // para clientes de correo que no rendericen HTML).
-    var opciones = { name: 'SIGSO — HomePymes / RLD', htmlBody: htmlAutoDesdeTexto_(asunto, cuerpo) };
+    var opciones = { name: 'SIGSO — Control y Gestión Empresarial', htmlBody: htmlAutoDesdeTexto_(asunto, cuerpo) };
     if (cc) opciones.cc = cc;
     MailApp.sendEmail(destinatario, asunto, cuerpo, opciones);
     registrarNotificacion_(solicitudId, 'EMAIL', destinatario, evento, 'ENVIADO', 0);

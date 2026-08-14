@@ -500,7 +500,7 @@ var Notificaciones = {
         // guardado). Es la que entrega el aviso de cambio de estado al
         // solicitante (Fase 10.2), asi que tiene que verse igual de profesional.
         MailApp.sendEmail(n.destinatario, asunto, cuerpo, {
-          name: 'SIGSO — HomePymes / RLD',
+          name: 'SIGSO — Control y Gestión Empresarial',
           htmlBody: htmlAutoDesdeTexto_(asunto, cuerpo)
         });
         actualizarFilaPorId_(SHEETS.LOG_NOTIFICACIONES, 'log_id', n.log_id, { resultado: 'ENVIADO' });
@@ -526,7 +526,7 @@ function pieCorreoBackoffice_() {
     '--------------------------------------------------\n' +
     'Este es un mensaje automatico del sistema SIGSO.\n' +
     'Por favor no responda directamente a este correo.\n' +
-    'Equipo SIGSO — HomePymes / RLD';
+    'Equipo SIGSO — Control y Gestión Empresarial';
 }
 
 // v4.2: formatea la lista compacta de items (Jefatura.resumirItem_) para el
@@ -956,7 +956,7 @@ function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo, ventan
     return { enviado: false, motivo: 'deduplicado' };
   }
   try {
-    var opcionesEnvio = { name: 'SIGSO — HomePymes / RLD' };
+    var opcionesEnvio = { name: 'SIGSO — Control y Gestión Empresarial' };
     // Si el caller trae un HTML propio (p.ej. la derivacion, con su tabla y
     // adjunto), se respeta. Si no, se genera uno branded a partir del texto
     // plano -- asi TODAS las alertas se ven profesionales sin reescribir cada
@@ -1012,7 +1012,7 @@ function plantillaCorreoHtml_(titulo, cuerpoHtml, opts) {
     // Pie institucional
     '<tr><td style="padding:16px 28px;background:#F8FAFC;border-top:1px solid #E5E7EB;color:#6B7280;font-size:12px;line-height:1.6;">' +
     'Mensaje automático del sistema SIGSO. Por favor no respondas directamente a este correo.<br>' +
-    'Equipo SIGSO — HomePymes / RLD' +
+    'Equipo SIGSO — Control y Gestión Empresarial' +
     '</td></tr>' +
     '</table></td></tr></table></div>';
 }
