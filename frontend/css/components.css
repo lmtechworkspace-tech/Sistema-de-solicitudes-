@@ -583,6 +583,36 @@
   color: rgba(255, 255, 255, 0.86);
 }
 
+/* v8.0 (rebrand, Fase B): refuerza el posicionamiento "Control y Gestion
+   Empresarial" con 3 puntos concretos, en vez de dejar el panel de marca
+   solo con el titulo y el tagline. */
+.plataforma-auth__marca-lista {
+  list-style: none;
+  margin: var(--esp-5) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.plataforma-auth__marca-lista li {
+  position: relative;
+  padding-left: 1.35rem;
+  font-size: var(--texto-sm);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.plataforma-auth__marca-lista li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.45rem;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radio-full);
+  background: var(--primario);
+}
+
 .plataforma-auth__marca-pie {
   margin-top: var(--esp-5) !important;
   padding-top: var(--esp-4);
@@ -674,13 +704,19 @@
   background: var(--fondo-pagina);
 }
 
+/* v8.0 (rebrand, Fase B): sidebar en navy institucional (--marca), fijo en
+   claro y oscuro -- el patron de cualquier herramienta seria (el panel de
+   navegacion viste la marca; el contenido sigue en superficie clara/oscura
+   segun el tema). Los textos y estados dentro del sidebar se recolorean
+   sobre navy en el bloque de abajo. */
 .plataforma-sidebar {
   width: 240px;
   flex: none;
   display: flex;
   flex-direction: column;
-  background: var(--superficie);
-  border-right: 1px solid var(--borde);
+  background: var(--marca);
+  color: rgba(255, 255, 255, 0.72);
+  border-right: none;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -694,8 +730,12 @@
   justify-content: space-between;
   gap: 0.5rem;
   padding: var(--esp-4);
-  border-bottom: 1px solid var(--borde);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   flex: none;
+}
+
+.plataforma-sidebar__txt-marca {
+  color: #fff;
 }
 
 .plataforma-header__marca {
@@ -731,8 +771,8 @@
 }
 
 .plataforma-sidebar__colapsar:hover {
-  background: var(--superficie-2);
-  color: var(--texto);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 .plataforma-sidebar__nav {
@@ -756,7 +796,7 @@
   font: inherit;
   font-size: 0.88rem;
   font-weight: 500;
-  color: var(--texto-2);
+  color: rgba(255, 255, 255, 0.68);
   text-decoration: none;
   white-space: nowrap;
   position: relative;
@@ -764,13 +804,13 @@
 }
 
 .plataforma-nav__item:hover {
-  background: var(--superficie-2);
-  color: var(--texto);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 
 .plataforma-nav__item--activo {
-  background: var(--primario-suave);
-  color: var(--primario-tinta);
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
   font-weight: 600;
 }
 
@@ -791,7 +831,7 @@
 }
 
 .plataforma-sidebar__pie {
-  border-top: 1px solid var(--borde);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
   padding: var(--esp-3);
   display: flex;
   flex-direction: column;
@@ -810,14 +850,14 @@
   cursor: pointer;
   font: inherit;
   font-size: 0.85rem;
-  color: var(--texto-2);
+  color: rgba(255, 255, 255, 0.68);
   white-space: nowrap;
   transition: background var(--mov-normal), color var(--mov-normal);
 }
 
 .plataforma-sidebar__tema:hover {
-  background: var(--superficie-2);
-  color: var(--texto);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 
 .plataforma-header__usuario {
@@ -1032,6 +1072,21 @@
 .plataforma-usuario[aria-expanded="true"] {
   background: var(--superficie-2);
   border-color: var(--borde);
+}
+
+/* Dentro del sidebar navy: mismo boton, recoloreado sobre fondo oscuro. */
+.plataforma-sidebar .plataforma-usuario {
+  color: #fff;
+}
+
+.plataforma-sidebar .plataforma-usuario:hover,
+.plataforma-sidebar .plataforma-usuario[aria-expanded="true"] {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: transparent;
+}
+
+.plataforma-sidebar .plataforma-usuario__rol {
+  color: rgba(255, 255, 255, 0.6);
 }
 
 /* v6.4: el circulo lo pinta ahora .sigso-avatar (Componentes.avatar), que es
