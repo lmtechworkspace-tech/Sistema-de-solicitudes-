@@ -21,6 +21,34 @@ function load() {
   return ctx;
 }
 
+function makeEventBO(body) {
+  return { postData: { contents: JSON.stringify(body), type: 'text/plain' } };
+}
+
+// v9.0f: reproduce el flujo REAL reportado -- acceso por el portal (token),
+// no llamando las funciones internas directo (eso ya no distingue si el
+// bug esta en como doPost resuelve la identidad del token). Sesion de
+// portal, "marcar todas" via doPost, y una sincronizacion nueva (como
+// recargar la pagina) para confirmar que no vuelve.
+function loadPortalConSesion() {
+  const ctx = loadBackofficeProject({
+    scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' },
+    activeUserEmail: ''
+  });
+  seedSheet(ctx, 'NOTIFICACIONES_APP', ctx.COLUMNAS.NOTIFICACIONES_APP, []);
+  seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
+  seedSheet(ctx, 'CUENTAS_PORTAL', ctx.COLUMNAS.CUENTAS_PORTAL, [
+    ['CTA-1', 'lisseth', 'Lisseth Vilchez', 'Gestor técnico', 'hash-x', 'sal-x',
+      JSON.stringify(['Lisseth.Vilchez@GrupoB.cl']), 'DEV',
+      JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo', 'proyectos', 'pausas']),
+      'HP', true, false, '', 'test']
+  ]);
+  seedSheet(ctx, 'SESIONES_PORTAL', ctx.COLUMNAS.SESIONES_PORTAL, [
+    ['token-lisseth', 'CTA-1', new Date(Date.now() + 3600000).toISOString(), new Date().toISOString()]
+  ]);
+  return ctx;
+}
+
 test('encolarNotificacionApp_ escribe una fila no leida con expiracion futura', () => {
   const ctx = load();
   const r = ctx.encolarNotificacionApp_('ana@hp.cl', 'PRUEBA', 'Título', 'Mensaje', 'pausas', 'Ver', 6);
@@ -109,6 +137,35 @@ test('sincronizarNotificacionesApp / marcarNotificacionAppLeida no tienen gate d
   assert.equal(typeof ctx.BACKOFFICE_ACTIONS.marcarTodasNotificacionesAppLeidas, 'function');
 });
 
+test('v9.0g: sincronizarNotificacionesApp_/marcarTodas_/purgar tratan leida=true (booleano real) igual que \'TRUE\' (string)', () => {
+  // Sheets no siempre devuelve el mismo tipo para una celda escrita como el
+  // string 'TRUE' -- si la columna llega a tener formato de casilla
+  // (checkbox), getValues() la devuelve como booleano real `true`. La
+  // comparacion vieja (String(valor) !== 'TRUE') fallaba en ese caso:
+  // String(true) es 'true' (minuscula), nunca 'TRUE' -- una fila realmente
+  // leida se seguia contando como pendiente.
+  const ctx = load();
+  ctx.encolarNotificacionApp_('ana@hp.cl', 'A', 'Ya leida (booleano)', '');
+  ctx.encolarNotificacionApp_('ana@hp.cl', 'B', 'Pendiente', '');
+  const filas = ctx.leerFilas_('NOTIFICACIONES_APP');
+  // Simula lo que Sheets devolveria con la columna en formato casilla:
+  // se pisa el valor crudo con el booleano JS `true`, no el string.
+  ctx.actualizarFilaPorId_('NOTIFICACIONES_APP', 'notif_id', filas[0].notif_id, { leida: true });
+
+  const sync = ctx.sincronizarNotificacionesApp_({ email: 'ana@hp.cl' });
+  assert.equal(sync.notificaciones.length, 1);
+  assert.equal(sync.notificaciones[0].titulo, 'Pendiente');
+
+  // marcarTodas no debe re-marcar (ni fallar) sobre la que ya esta leida con
+  // booleano real -- solo actualiza la pendiente real.
+  const r = ctx.marcarTodasNotificacionesAppLeidas_({ email: 'ana@hp.cl' });
+  assert.equal(r.actualizadas, 1);
+
+  // Y la purga la reconoce como "ya leida" (booleano) para poder borrarla.
+  const p = ctx.purgarNotificacionesApp_();
+  assert.equal(p.borradas, 2);
+});
+
 // ---- v7.1 Bloque B: escritura por lote, marcar todas, purga --------------
 
 test('encolarNotificacionAppLote_ escribe varias filas en una sola pasada', () => {
@@ -166,6 +223,34 @@ test('v9.0e: marcarNotificacionAppLeida_ tambien tolera distinta capitalizacion 
   const r = ctx.marcarNotificacionAppLeida_({ email: ' juan@hp.cl ' }, notifId);
   assert.equal(r.actualizado, true);
   assert.equal(ctx.leerFilas_('NOTIFICACIONES_APP')[0].leida, 'TRUE');
+});
+
+test('v9.0f: flujo real via el portal (token) -- "marcar todas" via doPost persiste, y una sincronizacion nueva (recargar la pagina) no las vuelve a traer', () => {
+  const ctx = loadPortalConSesion();
+  // El primer correo de la cuenta trae mayusculas/espacios distintos a como
+  // otro modulo pudo haber encolado la notificacion -- exactamente el
+  // escenario reportado.
+  ctx.encolarNotificacionApp_('lisseth.vilchez@grupob.cl', 'PROYECTO_INTEGRANTE',
+    'Te agregaron a un proyecto', 'Ahora participas en "X".', 'proyectos', 'Ver proyecto', 72);
+  ctx.encolarNotificacionApp_(' Lisseth.Vilchez@GrupoB.cl ', 'PAUSA_RECORDATORIO',
+    'Pausa activa de hoy', 'Tu pausa es a las 12:00.', 'pausas', 'Ver pausas activas', 6);
+
+  const datos = { portal_token: 'token-lisseth' };
+
+  const sync1 = JSON.parse(ctx.doPost(makeEventBO({ action: 'sincronizarNotificacionesApp', data: datos })).getContent());
+  assert.equal(sync1.ok, true, JSON.stringify(sync1).slice(0, 200));
+  assert.equal(sync1.data.notificaciones.length, 2);
+
+  const marcar = JSON.parse(ctx.doPost(makeEventBO({ action: 'marcarTodasNotificacionesAppLeidas', data: datos })).getContent());
+  assert.equal(marcar.ok, true, JSON.stringify(marcar).slice(0, 200));
+  assert.equal(marcar.data.actualizadas, 2);
+
+  // "Recargar la pagina": una sincronizacion COMPLETAMENTE NUEVA, misma
+  // sesion de portal. Si el bug reportado sigue vivo, esto vuelve a traer
+  // las 2 notificaciones.
+  const sync2 = JSON.parse(ctx.doPost(makeEventBO({ action: 'sincronizarNotificacionesApp', data: datos })).getContent());
+  assert.equal(sync2.ok, true, JSON.stringify(sync2).slice(0, 200));
+  assert.equal(sync2.data.notificaciones.length, 0, JSON.stringify(sync2.data.notificaciones));
 });
 
 test('purgarNotificacionesApp_ borra las leidas y las vencidas, conserva las vivas', () => {

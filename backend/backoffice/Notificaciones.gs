@@ -1079,6 +1079,23 @@ function generarAdjuntoOt_(solicitudId, usuario) {
 // (sincronizarNotificacionesApp_) deja de devolverla aunque siga sin leerse
 // -- evita que una alerta de hace semanas reaparezca como "nueva" si el
 // usuario no abrio SIGSO en mucho tiempo.
+// v9.0g (bug real: "marcar todas"/"marcar leida" no persistian a ojos del
+// usuario). Sheets no siempre devuelve el mismo TIPO para una celda que se
+// escribio como el string 'TRUE': si la columna llega a tener formato de
+// casilla (checkbox) -- por Instalador, por el propio Sheets al detectar
+// una columna de solo TRUE/FALSE, o porque alguien la formateo a mano --
+// getValues() devuelve el booleano real `true`, no el string "TRUE". La
+// comparacion `String(valor) !== 'TRUE'` FALLA en ese caso: String(true) es
+// 'true' (minuscula), nunca igual a 'TRUE', asi que una fila recien marcada
+// leida se seguia leyendo como "no leida" en la siguiente sincronizacion --
+// exactamente el sintoma reportado ("marco todas, recargo, vuelven a
+// salir"). Mismo criterio que esVerdaderoProyecto_/esVerdaderoPausas_ ya
+// usan en el resto de SIGSO para columnas booleanas: aceptar boolean TRUE,
+// el string 'TRUE' y 1, no solo una de las tres formas.
+function esNotifLeida_(valor) {
+  return valor === true || valor === 'TRUE' || valor === 1;
+}
+
 function encolarNotificacionApp_(destinatario, tipo, titulo, mensaje, moduloId, textoAccion, vidaHoras) {
   if (!destinatario) return { encolado: false, motivo: 'sin_destinatario' };
   var r = encolarNotificacionAppLote_([{
@@ -1147,7 +1164,7 @@ function marcarTodasNotificacionesAppLeidas_(contexto) {
   var n = 0;
   var emailSesion = normalizarEmail_(contexto.email);
   for (var i = 1; i < datos.valores.length; i++) {
-    if (normalizarEmail_(datos.valores[i][idxDest]) === emailSesion && String(datos.valores[i][idxLeida]) !== 'TRUE') {
+    if (normalizarEmail_(datos.valores[i][idxDest]) === emailSesion && !esNotifLeida_(datos.valores[i][idxLeida])) {
       datos.hoja.getRange(i + 1, idxLeida + 1).setValue('TRUE');
       n++;
     }
@@ -1168,7 +1185,7 @@ function purgarNotificacionesApp_() {
   var ahora = Date.now();
   var borradas = 0;
   for (var i = datos.valores.length - 1; i >= 1; i--) {
-    var leida = idxLeida !== -1 && String(datos.valores[i][idxLeida]) === 'TRUE';
+    var leida = idxLeida !== -1 && esNotifLeida_(datos.valores[i][idxLeida]);
     var vencida = idxExpira !== -1 && datos.valores[i][idxExpira] &&
       new Date(datos.valores[i][idxExpira]).getTime() <= ahora;
     if (leida || vencida) {
@@ -1263,7 +1280,7 @@ function sincronizarNotificacionesApp_(contexto) {
   var emailSesion = normalizarEmail_(contexto.email);
   var pendientes = leerFilasSeguro_(SHEETS.NOTIFICACIONES_APP).filter(function (n) {
     return normalizarEmail_(n.destinatario_email) === emailSesion &&
-      String(n.leida) !== 'TRUE' &&
+      !esNotifLeida_(n.leida) &&
       (!n.expira_en || new Date(n.expira_en).getTime() > ahora);
   });
   pendientes.sort(function (a, b) { return new Date(b.creada_en) - new Date(a.creada_en); });
