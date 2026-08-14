@@ -13,7 +13,21 @@
  * tareas nuevo aca.
  */
 (function () {
-  window.SigsoProyectos = { cargar: cargarPortafolio_ };
+  // v9.0b: 'refrescar' -- a diferencia de 'cargar' (siempre portafolio), esta
+  // entrada respeta donde esta el usuario: si tiene un proyecto abierto, lo
+  // vuelve a cargar A ESE MISMO proyecto en vez de sacarlo al portafolio. La
+  // usa el auto-refresco de plataforma.js (al volver a la pestana del
+  // navegador) -- antes llamaba 'cargar' sin condicion, lo que reseteaba
+  // proyectoActivoId_ a null y sacaba al usuario del proyecto que estaba
+  // gestionando; si en ese instante tenia un formulario abierto (crear tarea,
+  // agregar integrante...), el guardado viajaba con proyecto_id vacio y el
+  // backend lo rechazaba en silencio (parecia "no se guarda").
+  window.SigsoProyectos = {
+    cargar: cargarPortafolio_,
+    refrescar: function () {
+      if (proyectoActivoId_) refrescarDetalle_(); else cargarPortafolio_();
+    }
+  };
 
   function urlBackoffice_() {
     return (window.SIGSO_CONFIG || {}).BACKOFFICE_URL;
@@ -41,6 +55,7 @@
 
   function cargarPortafolio_() {
     proyectoActivoId_ = null;
+    datosDetalleActual_ = null;
     var cont = document.getElementById('proyectos-contenido');
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando proyectos...');
@@ -157,10 +172,29 @@
 
   // --- detalle del proyecto ------------------------------------------------
 
+  // v9.0b: cache del ultimo detalle/tareas/sala cargados -- cambiar de
+  // pestana (Resumen/Sala/Tareas/Hitos/Equipo) es solo PRESENTACION, los
+  // datos no cambian por eso. Antes cada clic en una pestana volvia a pedir
+  // los 3 endpoints (getDetalleProyecto + listarTareasProyecto +
+  // listarSalaProyecto), lo que hacia lenta la navegacion dentro de un
+  // mismo proyecto sin necesidad. Ahora solo se vuelve a la red al abrir el
+  // proyecto, tras una accion que cambia datos, o en el refresco de fondo.
+  var datosDetalleActual_ = null;
+
   function abrirProyecto_(id) {
     proyectoActivoId_ = id;
     pestanaActiva_ = 'resumen';
+    datosDetalleActual_ = null;
     refrescarDetalle_();
+  }
+
+  // Cambia de pestana SIN red: repinta con lo que ya se cargo. Si por algun
+  // motivo no hay nada en cache todavia (carga interrumpida), cae a pedirlo.
+  function cambiarPestana_(id) {
+    pestanaActiva_ = id;
+    var cont = document.getElementById('proyectos-contenido');
+    if (!cont || !datosDetalleActual_) { refrescarDetalle_(); return; }
+    pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala);
   }
 
   function refrescarDetalle_() {
@@ -178,7 +212,10 @@
         cont.innerHTML = Componentes.alerta((rDetalle && rDetalle.message) || 'No se pudo abrir el proyecto.', 'error');
         return;
       }
-      pintarDetalle_(cont, rDetalle.data, (rTareas && rTareas.ok) ? rTareas.data : [], (rSala && rSala.ok) ? rSala.data : []);
+      var tareas = (rTareas && rTareas.ok) ? rTareas.data : [];
+      var sala = (rSala && rSala.ok) ? rSala.data : [];
+      datosDetalleActual_ = { detalle: rDetalle.data, tareas: tareas, sala: sala };
+      pintarDetalle_(cont, rDetalle.data, tareas, sala);
     }).catch(function () {
       cont.innerHTML = Componentes.alerta('No se pudo conectar para abrir el proyecto.', 'error');
     });
@@ -222,8 +259,7 @@
     cont.querySelector('.js-py-volver').addEventListener('click', cargarPortafolio_);
     cont.querySelectorAll('.js-py-tab').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        pestanaActiva_ = btn.getAttribute('data-tab');
-        refrescarDetalle_();
+        cambiarPestana_(btn.getAttribute('data-tab'));
       });
     });
 

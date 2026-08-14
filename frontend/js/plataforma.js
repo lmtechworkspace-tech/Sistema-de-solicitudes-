@@ -332,6 +332,11 @@
   function refrescarModuloActivoSiCorresponde_() {
     if (!sesion.token || !moduloActivo_) return;
     if (document.getElementById('vista-shell').classList.contains('sigso-oculto')) return;
+    // v9.0b: nunca interrumpir un formulario abierto (modal) con un
+    // refresco de fondo -- si el usuario esta a mitad de "Nueva tarea" en
+    // Proyectos (u otro modal similar) y llega este refresco, un re-render
+    // por debajo puede dejar el guardado apuntando a datos viejos.
+    if (document.querySelector('.sigso-modal-fondo')) return;
     var ultima = ultimaCargaModulo_[moduloActivo_] || 0;
     if (Date.now() - ultima < UMBRAL_REFRESCO_MS) return;
     ultimaCargaModulo_[moduloActivo_] = Date.now();
@@ -359,7 +364,13 @@
         if (window.SigsoActividades) window.SigsoActividades.cargar();
         break;
       case 'proyectos':
-        if (window.SigsoProyectos) window.SigsoProyectos.cargar();
+        // v9.0b: 'refrescar' (no 'cargar') -- si el usuario tiene un
+        // proyecto abierto, lo mantiene ahi en vez de devolverlo al
+        // portafolio en cada refresco de fondo (ver proyectos.js).
+        if (window.SigsoProyectos) {
+          if (window.SigsoProyectos.refrescar) window.SigsoProyectos.refrescar();
+          else window.SigsoProyectos.cargar();
+        }
         break;
       default:
         break; // nueva_solicitud / administracion: sin auto-refresco
