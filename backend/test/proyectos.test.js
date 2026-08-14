@@ -131,6 +131,23 @@ test('getDetalle: un OBSERVADOR ve el proyecto (rol_actual=OBSERVADOR) pero un a
   assert.equal(rechazado._forbidden, true);
 });
 
+test('getDetalle: puede_gestionar es true para LIDER y ADM, false para INTEGRANTE/OBSERVADOR/GERENCIA', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  ctx.Proyectos.gestionarIntegrante({
+    proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE'
+  }, CTX_LEO);
+
+  // LIDER del proyecto.
+  assert.equal(ctx.Proyectos.getDetalle({ proyecto_id: proyecto.proyecto_id }, CTX_LEO).puede_gestionar, true);
+  // ADM: gestiona cualquier proyecto aunque NO sea integrante.
+  assert.equal(ctx.Proyectos.getDetalle({ proyecto_id: proyecto.proyecto_id }, CTX_ADM).puede_gestionar, true);
+  // INTEGRANTE (no lider): no gestiona.
+  assert.equal(ctx.Proyectos.getDetalle({ proyecto_id: proyecto.proyecto_id }, CTX_MARCELO).puede_gestionar, false);
+  // GERENCIA: ve todo pero es solo lectura.
+  assert.equal(ctx.Proyectos.getDetalle({ proyecto_id: proyecto.proyecto_id }, CTX_GERENCIA).puede_gestionar, false);
+});
+
 test('actualizar: cerrar un proyecto exige motivo y fija fecha_cierre_real', () => {
   const ctx = loadConSchema();
   const proyecto = crearProyectoBase(ctx);

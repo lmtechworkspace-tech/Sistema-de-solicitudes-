@@ -96,6 +96,12 @@ var Proyectos = {
     return {
       proyecto: proyecto,
       rol_actual: rolEnProyecto_(proyecto.proyecto_id, contexto),
+      // v9.2: capacidad de gestion resuelta en el backend (no reimplementada
+      // en el frontend). Cubre al LIDER del proyecto Y al ADM (que puede
+      // gestionar cualquier proyecto aunque no sea integrante) -- antes el
+      // frontend solo miraba rol_actual==='LIDER', dejando al ADM sin
+      // controles en proyectos ajenos. GERENCIA siempre false (solo lectura).
+      puede_gestionar: puedeGestionarProyecto_(proyecto, contexto),
       integrantes: integrantes,
       hitos: hitos.map(function (h) {
         var tareasHito = tareas.filter(function (a) { return a.hito_id === h.hito_id; });

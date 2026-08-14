@@ -227,7 +227,12 @@
 
   function pintarDetalle_(cont, detalle, tareas, sala) {
     var p = detalle.proyecto;
-    var puedeGestionar = detalle.rol_actual === 'LIDER';
+    // v9.2: la capacidad de gestion la resuelve el backend (puede_gestionar:
+    // LIDER del proyecto o ADM). Fallback a rol_actual==='LIDER' para que el
+    // frontend siga funcionando ANTES de desplegar el backend nuevo (el ADM
+    // gana los controles recien cuando el Backoffice actualizado esta en
+    // produccion) -- degradacion elegante, sin regresion.
+    var puedeGestionar = detalle.puede_gestionar === true || detalle.rol_actual === 'LIDER';
     var PESTANAS = [
       { id: 'resumen', texto: 'Resumen' },
       { id: 'sala', texto: 'Sala' },
@@ -463,7 +468,13 @@
       });
     }
     cont.querySelectorAll('.js-py-convertir').forEach(function (btn) {
-      btn.addEventListener('click', function () { abrirFormularioConvertir_(btn.getAttribute('data-idx')); });
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-idx');
+        var sala = (datosDetalleActual_ && datosDetalleActual_.sala) || [];
+        var ev = null;
+        for (var i = 0; i < sala.length; i++) { if (sala[i].evento_id === id) { ev = sala[i]; break; } }
+        abrirFormularioConvertir_(ev || { evento_id: id }, detalle);
+      });
     });
 
     var nuevaTarea = cont.querySelector('.js-py-nueva-tarea');
@@ -554,12 +565,24 @@
         '<form id="form-py-editar">' +
           Componentes.campoTexto({ id: 'py-ed-nombre', label: 'Nombre', valor: p.nombre, requerido: true }) +
           Componentes.campoTextarea({ id: 'py-ed-descripcion', label: 'Descripción', valor: p.descripcion }) +
-          Componentes.campoSelect({
-            id: 'py-ed-estado', label: 'Estado', valor: p.estado, placeholder: false,
-            opciones: Object.keys(ESTADO_PROYECTO_ETIQUETA).filter(function (e) { return e !== 'CERRADO'; }).map(function (e) {
-              return { valor: e, texto: ESTADO_PROYECTO_ETIQUETA[e] };
-            })
-          }) +
+          Componentes.campoTextarea({ id: 'py-ed-objetivo', label: 'Objetivo / resultado esperado', valor: p.objetivo }) +
+          '<div class="sigso-py-form-fila">' +
+            Componentes.campoTexto({ id: 'py-ed-fecha-inicio', label: 'Fecha de inicio', tipo: 'date', valor: fechaISOCorta_(p.fecha_inicio) }) +
+            Componentes.campoTexto({ id: 'py-ed-fecha-objetivo', label: 'Fecha objetivo', tipo: 'date', valor: fechaISOCorta_(p.fecha_objetivo) }) +
+          '</div>' +
+          '<div class="sigso-py-form-fila">' +
+            Componentes.campoSelect({
+              id: 'py-ed-prioridad', label: 'Prioridad', valor: p.prioridad || 'P4', placeholder: false,
+              opciones: [{ valor: 'P1', texto: 'P1 — Crítica' }, { valor: 'P2', texto: 'P2 — Alta' },
+                { valor: 'P3', texto: 'P3 — Media' }, { valor: 'P4', texto: 'P4 — Normal' }, { valor: 'P5', texto: 'P5 — Baja' }]
+            }) +
+            Componentes.campoSelect({
+              id: 'py-ed-estado', label: 'Estado', valor: p.estado, placeholder: false,
+              opciones: Object.keys(ESTADO_PROYECTO_ETIQUETA).filter(function (e) { return e !== 'CERRADO'; }).map(function (e) {
+                return { valor: e, texto: ESTADO_PROYECTO_ETIQUETA[e] };
+              })
+            }) +
+          '</div>' +
           '<div class="sigso-modal__acciones">' +
             Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
             Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
@@ -573,6 +596,10 @@
         proyecto_id: p.proyecto_id,
         nombre: document.getElementById('py-ed-nombre').value,
         descripcion: document.getElementById('py-ed-descripcion').value,
+        objetivo: document.getElementById('py-ed-objetivo').value,
+        fecha_inicio: document.getElementById('py-ed-fecha-inicio').value,
+        fecha_objetivo: document.getElementById('py-ed-fecha-objetivo').value,
+        prioridad: document.getElementById('py-ed-prioridad').value,
         estado: document.getElementById('py-ed-estado').value
       }).then(function (respuesta) {
         if (!respuesta || !respuesta.ok) {
@@ -755,24 +782,62 @@
     });
   }
 
-  function abrirFormularioConvertir_(eventoId) {
-    Componentes.prompt({ titulo: 'Título de la tarea', mensaje: 'Ej: Revisar documento' }).then(function (titulo) {
-      if (!titulo || !String(titulo).trim()) return;
-      Componentes.prompt({ titulo: 'Responsable', mensaje: 'Correo de quien la hará' }).then(function (email) {
-        if (!email || !String(email).trim()) return;
-        Componentes.prompt({ titulo: 'Fecha comprometida', tipo: 'date' }).then(function (fecha) {
-          if (!fecha) return;
-          api_('convertirEventoEnTareaProyecto', {
-            proyecto_id: proyectoActivoId_, evento_id: eventoId, titulo: titulo,
-            responsable_email: email, fecha_compromiso: fecha
-          }).then(function (respuesta) {
-            if (!respuesta || !respuesta.ok) {
-              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo convertir.', tipo: 'error' });
-              return;
-            }
-            refrescarDetalle_();
-          });
-        });
+  // v9.1: convertir un evento de la sala (comentario/decisión/solicitud) en
+  // una tarea real, con un modal en vez de 3 prompts encadenados. Prellena
+  // título y descripción desde el texto del evento y ofrece los integrantes
+  // del proyecto como responsable (evita el correo escrito a mano, que el
+  // backend rechazaba si no era integrante). Reusa convertirEventoEnTareaProyecto.
+  function abrirFormularioConvertir_(ev, detalle) {
+    var opcionesIntegrantes = (detalle.integrantes || []).map(function (i) {
+      return { valor: i.usuario_email, texto: i.usuario_nombre || i.usuario_email };
+    });
+    var opcionesHitos = (detalle.hitos || []).map(function (h) { return { valor: h.hito_id, texto: h.nombre }; });
+    var cuerpoOrigen = ev.cuerpo || '';
+    var tituloSugerido = cuerpoOrigen.length > 60 ? cuerpoOrigen.slice(0, 57).trim() + '…' : cuerpoOrigen;
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Convertir en tarea</h3>' +
+        (cuerpoOrigen ? '<p class="sigso-ayuda">Desde: “' + Componentes.escaparHtml(cuerpoOrigen.slice(0, 140)) + '”</p>' : '') +
+        '<form id="form-py-convertir">' +
+          Componentes.campoTexto({ id: 'py-cv-titulo', label: 'Título', requerido: true, valor: tituloSugerido }) +
+          Componentes.campoTextarea({ id: 'py-cv-descripcion', label: 'Descripción', valor: cuerpoOrigen }) +
+          Componentes.campoSelect({ id: 'py-cv-responsable', label: 'Responsable', opciones: opcionesIntegrantes, requerido: true }) +
+          (opcionesHitos.length ? Componentes.campoSelect({ id: 'py-cv-hito', label: 'Hito (opcional)', opciones: opcionesHitos }) : '') +
+          '<div class="sigso-py-form-fila">' +
+            Componentes.campoTexto({ id: 'py-cv-fecha', label: 'Fecha comprometida', tipo: 'date', requerido: true }) +
+            Componentes.campoSelect({
+              id: 'py-cv-prioridad', label: 'Prioridad', valor: 'P4', placeholder: false,
+              opciones: [{ valor: 'P1', texto: 'P1' }, { valor: 'P2', texto: 'P2' }, { valor: 'P3', texto: 'P3' }, { valor: 'P4', texto: 'P4' }, { valor: 'P5', texto: 'P5' }]
+            }) +
+          '</div>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Crear tarea', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-py-convertir').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var hitoEl = document.getElementById('py-cv-hito');
+      api_('convertirEventoEnTareaProyecto', {
+        proyecto_id: proyectoActivoId_,
+        evento_id: ev.evento_id,
+        titulo: document.getElementById('py-cv-titulo').value,
+        descripcion: document.getElementById('py-cv-descripcion').value,
+        responsable_email: document.getElementById('py-cv-responsable').value,
+        hito_id: hitoEl ? hitoEl.value : '',
+        fecha_compromiso: document.getElementById('py-cv-fecha').value,
+        prioridad: document.getElementById('py-cv-prioridad').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo convertir.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        refrescarDetalle_();
       });
     });
   }
