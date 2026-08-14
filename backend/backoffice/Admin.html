@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SIGSO — Administración</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27><rect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%236D5DF6%27/><text x=%2716%27 y=%2723%27 font-family=%27Arial,sans-serif%27 font-weight=%27700%27 font-size=%2720%27 fill=%27white%27 text-anchor=%27middle%27>S</text></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27><rect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%2314213D%27/><text x=%2716%27 y=%2723%27 font-family=%27Arial,sans-serif%27 font-weight=%27700%27 font-size=%2720%27 fill=%27white%27 text-anchor=%27middle%27>S</text></svg>" />
   <!-- v4.0: la marca declara Inter desde §12.3 pero nunca se cargaba: todos
        veian la fuente por defecto del sistema. display=swap evita el bloqueo
        de render. -->
@@ -13,29 +13,42 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-/* tokens.css — SIGSO Design System v5.0 (Fase 1).
-   FUENTE UNICA DE VERDAD de color, tipografia, espaciado, radio, sombra y
-   movimiento (documentacion/SIGSO-v5.0-propuesta-rediseno-total.md §2-3).
+/* tokens.css — SIGSO Design System v8.0 (rebrand "Control y Gestion
+   Empresarial"). FUENTE UNICA DE VERDAD de color, tipografia, espaciado,
+   radio, sombra y movimiento.
 
    Debe cargarse ANTES de main.css: main.css re-apunta sus tokens historicos
    (--naranja, --azul, --gris-*) hacia estos, para que las 5 paginas y los
    ~15 css/js existentes hereden la piel nueva sin tocar cada regla.
 
-   Regla de uso del color (§2.2): el 90% de una pantalla es fondo/superficie/
-   texto. El indigo (--primario) aparece SOLO en la accion primaria, links,
-   foco y seleccion. Los semanticos SOLO en estados. El naranja historico
-   queda como acento de MARCA (logo, momentos puntuales) -- nunca botones. */
+   v8.0 (rebrand): SIGSO deja de ser "solo solicitudes" y se posiciona como
+   plataforma de Control y Gestion Empresarial. Identidad "azul marino
+   corporativo":
+     - --marca (navy #14213D): ESTRUCTURA e identidad -- sidebar, cabeceras,
+       logo, sellos. Es el color que "viste" el sistema, casi nunca texto de
+       accion.
+     - --primario (azul #2A5FD6): ACCION -- botones, links, foco, seleccion.
+       Aparece solo en lo accionable (regla del 90/10 de siempre).
+     - Semanticos SOLO en estados. Se retiro el naranja historico: el acento
+       de marca ahora es el propio navy, para una sola identidad coherente
+       con la Orden de Trabajo y los correos (v7.6). */
 
 :root {
-  /* --- Color: primario (indigo SIGSO) --------------------------------- */
-  --primario: #6D5DF6;
-  --primario-intenso: #5747E8;   /* hover/active */
-  --primario-suave: #EEEDFE;     /* seleccion, fondos informativos */
-  --primario-tinta: #3B2FA3;     /* texto sobre primario-suave (AA) */
+  /* --- Color: marca institucional (navy) ------------------------------ */
+  /* Estructura e identidad: sidebar, cabeceras, logo, sellos. */
+  --marca: #14213D;
+  --marca-2: #24344F;            /* hover/borde sobre superficies navy */
+  --marca-contraste: #FFFFFF;    /* texto sobre navy */
 
-  /* Acento de marca: el naranja historico de SIGSO. Solo logo/marca. */
-  --acento-marca: #E8622A;
-  --acento-marca-suave: #FAD7C3;
+  /* --- Color: primario (azul de accion) ------------------------------- */
+  --primario: #2A5FD6;
+  --primario-intenso: #1E4DB8;   /* hover/active */
+  --primario-suave: #E7EEFC;     /* seleccion, fondos informativos */
+  --primario-tinta: #1A3A8A;     /* texto sobre primario-suave (AA) */
+
+  /* Acento de marca: ahora el navy institucional (retirado el naranja). */
+  --acento-marca: #14213D;
+  --acento-marca-suave: #DCE3EF;
 
   /* --- Color: neutros frios (base Linear/Stripe) ----------------------- */
   --fondo-pagina: #F8FAFC;
@@ -123,13 +136,17 @@
    conmutador manual (F2); el media query cubre el default del sistema. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-tema="claro"]) {
-    --primario: #8B7DFF;
-    --primario-intenso: #A398FF;
-    --primario-suave: rgba(139, 125, 255, 0.16);
-    --primario-tinta: #C4BCFF;
+    --marca: #1B2A47;
+    --marca-2: #26395C;
+    --marca-contraste: #FFFFFF;
 
-    --acento-marca: #F0793F;
-    --acento-marca-suave: #4A2E1C;
+    --primario: #6BA0FF;
+    --primario-intenso: #86B4FF;
+    --primario-suave: rgba(107, 160, 255, 0.16);
+    --primario-tinta: #BCD6FF;
+
+    --acento-marca: #6BA0FF;
+    --acento-marca-suave: #24344F;
 
     --fondo-pagina: #0E1116;
     --superficie: #161B22;
@@ -165,13 +182,17 @@
 /* Conmutador manual (F2): data-tema="oscuro" fuerza oscuro sin importar el
    SO; data-tema="claro" fuerza claro (cubierto por el :not() de arriba). */
 :root[data-tema="oscuro"] {
-  --primario: #8B7DFF;
-  --primario-intenso: #A398FF;
-  --primario-suave: rgba(139, 125, 255, 0.16);
-  --primario-tinta: #C4BCFF;
+  --marca: #1B2A47;
+  --marca-2: #26395C;
+  --marca-contraste: #FFFFFF;
 
-  --acento-marca: #F0793F;
-  --acento-marca-suave: #4A2E1C;
+  --primario: #6BA0FF;
+  --primario-intenso: #86B4FF;
+  --primario-suave: rgba(107, 160, 255, 0.16);
+  --primario-tinta: #BCD6FF;
+
+  --acento-marca: #6BA0FF;
+  --acento-marca-suave: #24344F;
 
   --fondo-pagina: #0E1116;
   --superficie: #161B22;
@@ -1127,7 +1148,9 @@ button {
   align-items: center;
   justify-content: center;
   padding: var(--esp-6);
-  background: linear-gradient(155deg, var(--primario-tinta), var(--primario-intenso));
+  /* v8.0: panel de marca en navy institucional (--marca), no en el azul de
+     accion -- la estructura viste, el primario solo acciona. */
+  background: linear-gradient(160deg, var(--marca), var(--marca-2));
   color: #fff;
   overflow: hidden;
 }
@@ -2686,7 +2709,7 @@ button {
 .sigso-animo-btn:hover { opacity: 0.85; }
 .sigso-animo-btn--activo {
   opacity: 1;
-  border-color: var(--primario, #6D5DF6);
+  border-color: var(--primario, #2A5FD6);
   transform: scale(1.08);
 }
 
@@ -2720,8 +2743,8 @@ button {
 .sigso-lista-item:last-child { border-bottom: none; }
 .sigso-lista-item__botones { display: flex; gap: 0.4rem; flex-shrink: 0; }
 .sigso-boton--activo {
-  border-color: var(--primario, #6D5DF6) !important;
-  color: var(--primario, #6D5DF6) !important;
+  border-color: var(--primario, #2A5FD6) !important;
+  color: var(--primario, #2A5FD6) !important;
   font-weight: 600;
 }
 
@@ -4903,7 +4926,7 @@ function renderHeaderSigso(paginaActiva) {
     MARCA_SIGSO_SVG +
     '<div>' +
     '<p class="sigso-header__titulo">SIGSO</p>' +
-    '<p class="sigso-header__subtitulo">HomePymes / RLD &mdash; Gesti&oacute;n de solicitudes</p>' +
+    '<p class="sigso-header__subtitulo">Control y Gesti&oacute;n Empresarial</p>' +
     '</div>' +
     '</div>' +
     '<nav class="sigso-nav">' + enlaces + '</nav>' +
@@ -4919,8 +4942,9 @@ function renderHeaderSigso(paginaActiva) {
 // dentro de la pagina -- antes "SIGSO" era solo texto, sin una marca que se
 // reconociera de un vistazo entre pestanas o capturas de pantalla.
 var MARCA_SIGSO_SVG = '<svg class="sigso-marca" width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">' +
-  '<rect width="32" height="32" rx="8" fill="#6D5DF6"></rect>' +
-  '<text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">S</text>' +
+  '<rect width="32" height="32" rx="8" fill="#14213D"></rect>' +
+  '<rect x="1" y="1" width="30" height="30" rx="7" fill="none" stroke="#2A5FD6" stroke-width="1.5"></rect>' +
+  '<text x="16" y="22.5" font-family="Georgia, \'Times New Roman\', serif" font-weight="700" font-size="18" fill="#fff" text-anchor="middle">S</text>' +
   '</svg>';
 
 </script>

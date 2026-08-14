@@ -543,7 +543,9 @@
   align-items: center;
   justify-content: center;
   padding: var(--esp-6);
-  background: linear-gradient(155deg, var(--primario-tinta), var(--primario-intenso));
+  /* v8.0: panel de marca en navy institucional (--marca), no en el azul de
+     accion -- la estructura viste, el primario solo acciona. */
+  background: linear-gradient(160deg, var(--marca), var(--marca-2));
   color: #fff;
   overflow: hidden;
 }
@@ -2102,7 +2104,7 @@
 .sigso-animo-btn:hover { opacity: 0.85; }
 .sigso-animo-btn--activo {
   opacity: 1;
-  border-color: var(--primario, #6D5DF6);
+  border-color: var(--primario, #2A5FD6);
   transform: scale(1.08);
 }
 
@@ -2136,8 +2138,8 @@
 .sigso-lista-item:last-child { border-bottom: none; }
 .sigso-lista-item__botones { display: flex; gap: 0.4rem; flex-shrink: 0; }
 .sigso-boton--activo {
-  border-color: var(--primario, #6D5DF6) !important;
-  color: var(--primario, #6D5DF6) !important;
+  border-color: var(--primario, #2A5FD6) !important;
+  color: var(--primario, #2A5FD6) !important;
   font-weight: 600;
 }
 

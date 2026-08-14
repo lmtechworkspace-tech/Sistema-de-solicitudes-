@@ -38,7 +38,7 @@ function renderHeaderSigso(paginaActiva) {
     MARCA_SIGSO_SVG +
     '<div>' +
     '<p class="sigso-header__titulo">SIGSO</p>' +
-    '<p class="sigso-header__subtitulo">HomePymes / RLD &mdash; Gesti&oacute;n de solicitudes</p>' +
+    '<p class="sigso-header__subtitulo">Control y Gesti&oacute;n Empresarial</p>' +
     '</div>' +
     '</div>' +
     '<nav class="sigso-nav">' + enlaces + '</nav>' +
@@ -54,6 +54,7 @@ function renderHeaderSigso(paginaActiva) {
 // dentro de la pagina -- antes "SIGSO" era solo texto, sin una marca que se
 // reconociera de un vistazo entre pestanas o capturas de pantalla.
 var MARCA_SIGSO_SVG = '<svg class="sigso-marca" width="28" height="28" viewBox="0 0 32 32" aria-hidden="true">' +
-  '<rect width="32" height="32" rx="8" fill="#6D5DF6"></rect>' +
-  '<text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">S</text>' +
+  '<rect width="32" height="32" rx="8" fill="#14213D"></rect>' +
+  '<rect x="1" y="1" width="30" height="30" rx="7" fill="none" stroke="#2A5FD6" stroke-width="1.5"></rect>' +
+  '<text x="16" y="22.5" font-family="Georgia, \'Times New Roman\', serif" font-weight="700" font-size="18" fill="#fff" text-anchor="middle">S</text>' +
   '</svg>';

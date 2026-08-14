@@ -1,26 +1,39 @@
-/* tokens.css — SIGSO Design System v5.0 (Fase 1).
-   FUENTE UNICA DE VERDAD de color, tipografia, espaciado, radio, sombra y
-   movimiento (documentacion/SIGSO-v5.0-propuesta-rediseno-total.md §2-3).
+/* tokens.css — SIGSO Design System v8.0 (rebrand "Control y Gestion
+   Empresarial"). FUENTE UNICA DE VERDAD de color, tipografia, espaciado,
+   radio, sombra y movimiento.
 
    Debe cargarse ANTES de main.css: main.css re-apunta sus tokens historicos
    (--naranja, --azul, --gris-*) hacia estos, para que las 5 paginas y los
    ~15 css/js existentes hereden la piel nueva sin tocar cada regla.
 
-   Regla de uso del color (§2.2): el 90% de una pantalla es fondo/superficie/
-   texto. El indigo (--primario) aparece SOLO en la accion primaria, links,
-   foco y seleccion. Los semanticos SOLO en estados. El naranja historico
-   queda como acento de MARCA (logo, momentos puntuales) -- nunca botones. */
+   v8.0 (rebrand): SIGSO deja de ser "solo solicitudes" y se posiciona como
+   plataforma de Control y Gestion Empresarial. Identidad "azul marino
+   corporativo":
+     - --marca (navy #14213D): ESTRUCTURA e identidad -- sidebar, cabeceras,
+       logo, sellos. Es el color que "viste" el sistema, casi nunca texto de
+       accion.
+     - --primario (azul #2A5FD6): ACCION -- botones, links, foco, seleccion.
+       Aparece solo en lo accionable (regla del 90/10 de siempre).
+     - Semanticos SOLO en estados. Se retiro el naranja historico: el acento
+       de marca ahora es el propio navy, para una sola identidad coherente
+       con la Orden de Trabajo y los correos (v7.6). */
 
 :root {
-  /* --- Color: primario (indigo SIGSO) --------------------------------- */
-  --primario: #6D5DF6;
-  --primario-intenso: #5747E8;   /* hover/active */
-  --primario-suave: #EEEDFE;     /* seleccion, fondos informativos */
-  --primario-tinta: #3B2FA3;     /* texto sobre primario-suave (AA) */
+  /* --- Color: marca institucional (navy) ------------------------------ */
+  /* Estructura e identidad: sidebar, cabeceras, logo, sellos. */
+  --marca: #14213D;
+  --marca-2: #24344F;            /* hover/borde sobre superficies navy */
+  --marca-contraste: #FFFFFF;    /* texto sobre navy */
 
-  /* Acento de marca: el naranja historico de SIGSO. Solo logo/marca. */
-  --acento-marca: #E8622A;
-  --acento-marca-suave: #FAD7C3;
+  /* --- Color: primario (azul de accion) ------------------------------- */
+  --primario: #2A5FD6;
+  --primario-intenso: #1E4DB8;   /* hover/active */
+  --primario-suave: #E7EEFC;     /* seleccion, fondos informativos */
+  --primario-tinta: #1A3A8A;     /* texto sobre primario-suave (AA) */
+
+  /* Acento de marca: ahora el navy institucional (retirado el naranja). */
+  --acento-marca: #14213D;
+  --acento-marca-suave: #DCE3EF;
 
   /* --- Color: neutros frios (base Linear/Stripe) ----------------------- */
   --fondo-pagina: #F8FAFC;
@@ -108,13 +121,17 @@
    conmutador manual (F2); el media query cubre el default del sistema. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-tema="claro"]) {
-    --primario: #8B7DFF;
-    --primario-intenso: #A398FF;
-    --primario-suave: rgba(139, 125, 255, 0.16);
-    --primario-tinta: #C4BCFF;
+    --marca: #1B2A47;
+    --marca-2: #26395C;
+    --marca-contraste: #FFFFFF;
 
-    --acento-marca: #F0793F;
-    --acento-marca-suave: #4A2E1C;
+    --primario: #6BA0FF;
+    --primario-intenso: #86B4FF;
+    --primario-suave: rgba(107, 160, 255, 0.16);
+    --primario-tinta: #BCD6FF;
+
+    --acento-marca: #6BA0FF;
+    --acento-marca-suave: #24344F;
 
     --fondo-pagina: #0E1116;
     --superficie: #161B22;
@@ -150,13 +167,17 @@
 /* Conmutador manual (F2): data-tema="oscuro" fuerza oscuro sin importar el
    SO; data-tema="claro" fuerza claro (cubierto por el :not() de arriba). */
 :root[data-tema="oscuro"] {
-  --primario: #8B7DFF;
-  --primario-intenso: #A398FF;
-  --primario-suave: rgba(139, 125, 255, 0.16);
-  --primario-tinta: #C4BCFF;
+  --marca: #1B2A47;
+  --marca-2: #26395C;
+  --marca-contraste: #FFFFFF;
 
-  --acento-marca: #F0793F;
-  --acento-marca-suave: #4A2E1C;
+  --primario: #6BA0FF;
+  --primario-intenso: #86B4FF;
+  --primario-suave: rgba(107, 160, 255, 0.16);
+  --primario-tinta: #BCD6FF;
+
+  --acento-marca: #6BA0FF;
+  --acento-marca-suave: #24344F;
 
   --fondo-pagina: #0E1116;
   --superficie: #161B22;

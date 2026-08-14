@@ -270,7 +270,7 @@
       banner.style.cssText = [
         'position:fixed', 'left:0', 'right:0', 'top:0', 'z-index:10000',
         'display:flex', 'flex-wrap:wrap', 'align-items:center', 'gap:10px',
-        'padding:10px 16px', 'background:var(--primario,#6D5DF6)', 'color:#fff',
+        'padding:10px 16px', 'background:var(--primario,#2A5FD6)', 'color:#fff',
         'font:14px Arial,sans-serif', 'box-shadow:0 2px 10px rgba(0,0,0,0.2)'
       ].join(';');
       document.body.appendChild(banner);
@@ -283,7 +283,7 @@
           ? '🔕 Las alertas de SIGSO estan bloqueadas en este navegador. Actívalas desde el ícono de candado/información junto a la URL → Notificaciones → Permitir, y recarga la página.'
           : '🔔 Activa las alertas de SIGSO para no perderte avisos importantes (derivaciones, vencimientos, pausas).') +
       '</span>' +
-      (denegado ? '' : '<button type="button" class="js-notif-banner-activar" style="background:#fff;color:var(--primario,#6D5DF6);border:none;border-radius:6px;padding:6px 12px;font:600 13px Arial,sans-serif;cursor:pointer">Activar alertas</button>') +
+      (denegado ? '' : '<button type="button" class="js-notif-banner-activar" style="background:#fff;color:var(--primario,#2A5FD6);border:none;border-radius:6px;padding:6px 12px;font:600 13px Arial,sans-serif;cursor:pointer">Activar alertas</button>') +
       '<button type="button" class="js-notif-banner-cerrar" aria-label="Cerrar aviso" style="background:none;border:none;color:#fff;font:600 16px Arial,sans-serif;cursor:pointer;padding:2px 6px">✕</button>';
 
     var btnActivar = banner.querySelector('.js-notif-banner-activar');
@@ -419,7 +419,7 @@
     boton.style.cssText = [
       'position:fixed', 'right:20px', 'bottom:20px', 'z-index:9998',
       'width:52px', 'height:52px', 'border-radius:50%', 'border:none', 'cursor:pointer',
-      'background:var(--primario,#6D5DF6)', 'color:#fff',
+      'background:var(--primario,#2A5FD6)', 'color:#fff',
       'box-shadow:0 6px 18px rgba(0,0,0,0.22)', 'display:none',
       'align-items:center', 'justify-content:center'
     ].join(';');
@@ -479,7 +479,7 @@
         '<strong style="font:600 15px Arial,sans-serif">Notificaciones</strong>' +
         '<span>' +
           '<button type="button" class="js-notif-mute" title="' + (mudo ? 'Activar sonido' : 'Silenciar') + '" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px">' + (mudo ? '🔕' : '🔔') + '</button>' +
-          (n ? '<button type="button" class="js-notif-todas" style="background:none;border:none;cursor:pointer;color:var(--primario,#6D5DF6);font:600 12px Arial,sans-serif;padding:4px">Marcar todas</button>' : '') +
+          (n ? '<button type="button" class="js-notif-todas" style="background:none;border:none;cursor:pointer;color:var(--primario,#2A5FD6);font:600 12px Arial,sans-serif;padding:4px">Marcar todas</button>' : '') +
         '</span>' +
       '</div>';
 
@@ -495,7 +495,7 @@
           '</div>' +
           (notif.mensaje ? '<div style="margin-top:2px;color:var(--texto-2,#5b6472);font:13px Arial,sans-serif">' + escaparHtml_(notif.mensaje) + '</div>' : '') +
           '<div style="margin-top:8px;display:flex;gap:12px">' +
-            (notif.modulo_id ? '<button type="button" class="js-notif-item-ir" data-id="' + escaparHtml_(notif.notif_id) + '" data-mod="' + escaparHtml_(notif.modulo_id) + '" style="background:none;border:none;cursor:pointer;color:var(--primario,#6D5DF6);font:600 13px Arial,sans-serif;padding:0">' + escaparHtml_(notif.texto_accion || 'Ver') + '</button>' : '') +
+            (notif.modulo_id ? '<button type="button" class="js-notif-item-ir" data-id="' + escaparHtml_(notif.notif_id) + '" data-mod="' + escaparHtml_(notif.modulo_id) + '" style="background:none;border:none;cursor:pointer;color:var(--primario,#2A5FD6);font:600 13px Arial,sans-serif;padding:0">' + escaparHtml_(notif.texto_accion || 'Ver') + '</button>' : '') +
             '<button type="button" class="js-notif-item-leida" data-id="' + escaparHtml_(notif.notif_id) + '" style="background:none;border:none;cursor:pointer;color:var(--texto-2,#8A93A5);font:13px Arial,sans-serif;padding:0">Marcar leída</button>' +
           '</div>' +
         '</div>';
