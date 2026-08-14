@@ -28,7 +28,34 @@
 // de Gmail. Las que sobran se mencionan pero no se embeben.
 var MAX_IMAGENES_OT = 6;
 
-var COLOR_MARCA_OT = '#6D5DF6';
+// v7.6 (documentos profesionales): paleta "corporativa sobria" -- tinta
+// oscura, grises, hairlines finas y un acento azul marino discreto (no el
+// morado saturado de la app). Pensada para que la OT (y el resto de PDF que
+// reusen estos tokens) se lea como un documento formal de empresa. El motor
+// HTML->PDF de Apps Script no soporta flexbox/grid ni fuentes web, asi que
+// todo va con tablas + estilos inline + fuentes seguras (Georgia para
+// titulos, Arial para el cuerpo).
+var DOC = {
+  INK: '#1F2937',       // tinta principal
+  INK_SOFT: '#374151',  // texto secundario
+  MUTED: '#6B7280',     // etiquetas / metadatos
+  FAINT: '#9AA1AC',     // notas al pie de bloque
+  HAIRLINE: '#E5E7EB',  // lineas finas / bordes
+  PANEL: '#F8FAFC',     // fondo suave de bloques
+  NAVY: '#14213D',      // acento formal (reglas, encabezados de bloque)
+  SERIF: 'Georgia, "Times New Roman", serif',
+  SANS: 'Arial, Helvetica, sans-serif'
+};
+
+// Compat: algun caller viejo podria referenciar COLOR_MARCA_OT.
+var COLOR_MARCA_OT = DOC.NAVY;
+
+// Codigo de estado -> etiqueta legible (mismo texto que la app).
+var ESTADO_LABEL_OT = {
+  S01: 'Nueva', S02: 'Recibida', S03: 'En revisión', S04: 'Aprobada',
+  S05: 'En desarrollo', S06: 'Esperando información', S07: 'En pruebas',
+  S08: 'Terminada', S09: 'Cerrada', S10: 'Rechazada', S11: 'Cancelada'
+};
 
 var OrdenTrabajo = {
   /**
@@ -70,98 +97,215 @@ function construirHtmlOt_(detalle) {
   var subsolicitudes = detalle.subsolicitudes || [];
   var archivos = detalle.archivos || [];
   var contadorImagenes = { usadas: 0 };
+  var total = subsolicitudes.length;
 
-  var itemsHtml = subsolicitudes.map(function (sub) {
-    return bloqueItemOt_(sub, archivos, contadorImagenes);
-  }).join('') || '<p style="color:#5B6474;">Sin items.</p>';
+  var itemsHtml = subsolicitudes.map(function (sub, i) {
+    return bloqueItemOt_(sub, archivos, contadorImagenes, i + 1, total);
+  }).join('') || '<p style="color:' + DOC.MUTED + ';margin:0;">Sin ítems registrados.</p>';
 
-  var generada = 'Generada el ' + formatearFechaLegible_(new Date());
-
-  return '<!DOCTYPE html><html><head><meta charset="utf-8"></head>' +
-    '<body style="margin:0;font-family:Arial,Helvetica,sans-serif;color:#0F172A;font-size:14px;line-height:1.45;">' +
-    // Barra de marca
-    '<table width="100%" style="border-collapse:collapse;"><tr>' +
-    '<td style="background:' + COLOR_MARCA_OT + ';padding:14px 22px;">' +
-    '<span style="color:#ffffff;font-size:20px;font-weight:bold;letter-spacing:0.3px;">SIGSO</span>' +
-    '<span style="color:#E7E4FF;font-size:15px;margin-left:10px;">Orden de trabajo</span>' +
-    '</td></tr></table>' +
-    '<div style="padding:20px 22px;">' +
-    '<h1 style="font-size:26px;margin:0 0 4px;letter-spacing:-0.5px;">' + escaparHtml_(s.solicitud_id) + '</h1>' +
-    '<p style="margin:0 0 2px;color:#5B6474;">' + escaparHtml_(s.empresa_nombre || s.empresa_id) +
-    ' &middot; Solicitante: ' + escaparHtml_(s.solicitante_nombre || '') +
-    (s.solicitante_email ? ' (' + escaparHtml_(s.solicitante_email) + ')' : '') + '</p>' +
-    (s.es_cliente && s.empresa_cliente
-      ? '<p style="margin:0 0 2px;color:#5B6474;">Cliente: ' + escaparHtml_(s.empresa_cliente) +
-        (s.contacto_cliente ? ' &middot; ' + escaparHtml_(s.contacto_cliente) : '') + '</p>'
+  var cuerpo =
+    docSeccionOt_('Ficha de la solicitud') +
+    fichaSolicitudOt_(s, total) +
+    (s.observaciones_generales
+      ? docSeccionOt_('Observaciones generales') +
+        '<p style="margin:0 0 16px;color:' + DOC.INK_SOFT + ';">' +
+        escaparHtml_(s.observaciones_generales).replace(/\n/g, '<br>') + '</p>'
       : '') +
-    '<p style="margin:0 0 16px;font-size:12px;color:#8A93A5;">' + escaparHtml_(generada) + '</p>' +
+    docSeccionOt_('Detalle de los ítems') +
     itemsHtml +
-    // Adjuntos a nivel de solicitud (sin subsolicitud_id): que no se pierdan.
     bloqueAdjuntosGeneralesOt_(archivos, contadorImagenes) +
-    // Pie: como cerrarla
-    '<div style="background:#F1F4F9;border-left:4px solid ' + COLOR_MARCA_OT + ';padding:12px 16px;margin-top:18px;font-size:13px;">' +
-    '&#9989; <strong>Para cerrar:</strong> responde <strong>"LISTO ' + escaparHtml_(s.solicitud_id) +
-    '"</strong> por este mismo WhatsApp, o marca el item como Terminada en el sistema si ya tienes acceso.' +
+    cierreOt_();
+
+  return docChromeOt_({
+    tipoDoc: 'Orden de trabajo',
+    referencia: s.solicitud_id,
+    empresa: s.empresa_nombre || s.empresa_id
+  }, cuerpo);
+}
+
+// --- chrome compartido (reutilizable por otros PDF, v7.6) -------------------
+
+// Envuelve el contenido con el encabezado (marca + metadatos), la doble regla
+// y el pie institucional con nota de confidencialidad. Sin barra de color
+// saturada: wordmark + metadatos a la derecha + reglas finas = documento
+// formal.
+function docChromeOt_(meta, contenidoHtml) {
+  var emitida = formatearFechaLegible_(new Date());
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"></head>' +
+    '<body style="margin:0;font-family:' + DOC.SANS + ';color:' + DOC.INK + ';font-size:13px;line-height:1.5;">' +
+    '<div style="padding:26px 30px;">' +
+    // Encabezado: wordmark izq + metadatos der
+    '<table width="100%" style="border-collapse:collapse;"><tr>' +
+    '<td style="vertical-align:middle;">' +
+    '<table style="border-collapse:collapse;"><tr>' +
+    '<td style="background:' + DOC.NAVY + ';color:#ffffff;font-family:' + DOC.SERIF + ';font-weight:bold;font-size:18px;' +
+    'width:30px;height:30px;text-align:center;vertical-align:middle;border-radius:5px;">S</td>' +
+    '<td style="padding-left:10px;vertical-align:middle;">' +
+    '<div style="font-size:17px;font-weight:bold;letter-spacing:2px;color:' + DOC.INK + ';">SIGSO</div>' +
+    '<div style="font-size:10px;color:' + DOC.MUTED + ';letter-spacing:0.3px;">Sistema de Gestión de Solicitudes</div>' +
+    '</td></tr></table>' +
+    '</td>' +
+    '<td style="vertical-align:middle;text-align:right;">' +
+    '<div style="font-size:12px;letter-spacing:2px;color:' + DOC.NAVY + ';font-weight:bold;text-transform:uppercase;">' +
+    escaparHtml_(meta.tipoDoc) + '</div>' +
+    '<div style="font-size:14px;color:' + DOC.INK + ';font-weight:bold;margin-top:2px;">N.º ' + escaparHtml_(meta.referencia) + '</div>' +
+    '<div style="font-size:10px;color:' + DOC.MUTED + ';margin-top:2px;">Emitida: ' + escaparHtml_(emitida) + '</div>' +
+    '</td></tr></table>' +
+    // Doble regla (formal)
+    '<div style="border-top:2px solid ' + DOC.NAVY + ';margin-top:12px;"></div>' +
+    '<div style="border-top:1px solid ' + DOC.HAIRLINE + ';margin-top:2px;margin-bottom:18px;"></div>' +
+    contenidoHtml +
+    // Pie institucional
+    '<div style="border-top:1px solid ' + DOC.HAIRLINE + ';margin-top:22px;padding-top:10px;font-size:10px;color:' + DOC.FAINT + ';line-height:1.5;">' +
+    'SIGSO · Sistema de Gestión de Solicitudes · Documento generado automáticamente el ' + escaparHtml_(emitida) + '.<br>' +
+    '<strong style="color:' + DOC.MUTED + ';">Confidencial — uso interno.</strong> Contiene datos de acceso y de la operación; no lo redistribuyas fuera del equipo autorizado.' +
     '</div>' +
     '</div></body></html>';
 }
 
-function bloqueItemOt_(sub, archivos, contador) {
-  var fecha = sub.fecha_comprometida
-    ? '&#128197; <strong>Comprometida:</strong> ' + escaparHtml_(fechaCortaOt_(sub.fecha_comprometida))
-    : '&#128197; <span style="color:#8A93A5;">Sin fecha comprometida</span>';
+// Etiqueta de seccion en versalitas, con una barra de acento a la izquierda.
+function docSeccionOt_(texto) {
+  return '<table style="border-collapse:collapse;margin:0 0 8px;"><tr>' +
+    '<td style="width:3px;background:' + DOC.NAVY + ';"></td>' +
+    '<td style="padding-left:8px;font-size:11px;font-weight:bold;letter-spacing:1.2px;text-transform:uppercase;color:' + DOC.NAVY + ';">' +
+    escaparHtml_(texto) + '</td></tr></table>';
+}
 
-  // "Donde ejecutar": URLs como enlaces reales, mas usuario/credencial.
-  var filasContexto = [];
-  if (sub.url_modulo) {
-    filasContexto.push(filaContextoOt_('URL principal', enlaceOt_(sub.url_modulo)));
+// Ficha resumen: los datos "de un vistazo" en una tabla con hairlines.
+function fichaSolicitudOt_(s, total) {
+  var solicitante = escaparHtml_(s.solicitante_nombre || '—') +
+    (s.solicitante_cargo ? ' <span style="color:' + DOC.MUTED + ';">— ' + escaparHtml_(s.solicitante_cargo) + '</span>' : '');
+  var filas = [
+    ['Empresa', escaparHtml_(s.empresa_nombre || s.empresa_id || '—'), 'Plataforma', escaparHtml_(s.plataforma_nombre || '—')],
+    ['Estado', estadoOt_(s.estado_derivado), 'Prioridad', chipPrioridadOt_(s.prioridad_derivada)],
+    ['Ítems', String(total), 'Ingresada', escaparHtml_(fechaCortaOt_(s.fecha_creacion))],
+    ['Solicitante', solicitante, 'Correo', escaparHtml_(s.solicitante_email || '—')]
+  ];
+  if (s.es_cliente && s.empresa_cliente) {
+    filas.push(['Cliente', escaparHtml_(s.empresa_cliente), 'Contacto', escaparHtml_(s.contacto_cliente || '—')]);
   }
+  var cuerpo = filas.map(function (f) {
+    return '<tr>' +
+      '<td style="' + celdaLabelFicha_() + '">' + f[0] + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + f[1] + '</td>' +
+      '<td style="' + celdaLabelFicha_() + '">' + f[2] + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + f[3] + '</td>' +
+      '</tr>';
+  }).join('');
+  return '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' +
+    cuerpo + '</table>';
+}
+function celdaLabelFicha_() {
+  return 'width:15%;padding:6px 8px;background:' + DOC.PANEL + ';border:1px solid ' + DOC.HAIRLINE +
+    ';color:' + DOC.MUTED + ';font-size:10px;text-transform:uppercase;letter-spacing:0.5px;vertical-align:top;white-space:nowrap;';
+}
+function celdaValorFicha_() {
+  return 'width:35%;padding:6px 8px;border:1px solid ' + DOC.HAIRLINE + ';color:' + DOC.INK + ';vertical-align:top;';
+}
+
+// --- bloque de un item -----------------------------------------------------
+
+function bloqueItemOt_(sub, archivos, contador, indice, total) {
+  var tipo = sub.tipo_nombre || sub.tipo || '';
+  var estado = estadoOt_(sub.estado);
+  var fecha = sub.fecha_comprometida
+    ? escaparHtml_(fechaCortaOt_(sub.fecha_comprometida))
+    : '<span style="color:' + DOC.MUTED + ';">Sin definir</span>';
+
+  // Encabezado del item: "Ítem N de T" + tipo | chip prioridad + estado.
+  var encabezado =
+    '<table width="100%" style="border-collapse:collapse;background:' + DOC.PANEL +
+    ';border-bottom:1px solid ' + DOC.HAIRLINE + ';"><tr>' +
+    '<td style="padding:9px 12px;vertical-align:top;">' +
+    '<div style="font-size:10px;letter-spacing:0.5px;text-transform:uppercase;color:' + DOC.MUTED + ';">' +
+    'Ítem ' + indice + ' de ' + total + (tipo ? ' · ' + escaparHtml_(tipo) : '') + '</div>' +
+    '<div style="font-size:15px;font-weight:bold;color:' + DOC.INK + ';font-family:' + DOC.SERIF + ';margin-top:2px;">' +
+    escaparHtml_(sub.titulo || 'Sin título') + '</div>' +
+    '</td>' +
+    '<td style="padding:9px 12px;text-align:right;white-space:nowrap;vertical-align:top;">' +
+    chipPrioridadOt_(sub.prioridad) + '<div style="font-size:11px;color:' + DOC.MUTED + ';margin-top:4px;">' + estado + '</div>' +
+    '</td></tr></table>';
+
+  // Secciones de contenido.
+  var secciones = '';
+  secciones += campoTextoOt_('Descripción del problema', sub.descripcion);
+  secciones += campoTextoOt_('Contexto', sub.contexto);
+  secciones += campoTextoOt_('Resultado esperado', sub.resultado_esperado);
+
+  // Donde ejecutar (accesos).
+  var filasEjec = [];
+  if (sub.url_modulo) filasEjec.push(['URL principal', enlaceOt_(sub.url_modulo)]);
   parsearUrlsAdicionales_(sub.urls_adicionales).forEach(function (u) {
-    if (u.url) filasContexto.push(filaContextoOt_(u.titulo || 'URL adicional', enlaceOt_(u.url)));
+    if (u.url) filasEjec.push([u.titulo || 'URL adicional', enlaceOt_(u.url)]);
   });
-  if (sub.usuario_prueba) filasContexto.push(filaContextoOt_('Usuario de prueba', escaparHtml_(sub.usuario_prueba)));
-  if (sub.ref_credencial) filasContexto.push(filaContextoOt_('Credencial', escaparHtml_(sub.ref_credencial)));
-  var contextoHtml = filasContexto.length
-    ? '<p style="margin:10px 0 4px;font-weight:bold;font-size:13px;color:#5B6474;">&#128269; Donde ejecutar</p>' +
-      '<table style="border-collapse:collapse;font-size:13px;">' + filasContexto.join('') + '</table>'
-    : '';
+  if (sub.usuario_prueba) filasEjec.push(['Usuario de prueba', escaparHtml_(sub.usuario_prueba)]);
+  if (sub.ref_credencial) filasEjec.push(['Credencial', escaparHtml_(sub.ref_credencial)]);
+  if (filasEjec.length) secciones += subseccionOt_('Dónde ejecutar') + tablaDatosOt_(filasEjec);
+
+  // Detalles del pedido (contexto operativo para el desarrollador).
+  var filasDet = [];
+  if (sub.modulo_nombre) filasDet.push(['Módulo', escaparHtml_(sub.modulo_nombre)]);
+  if (sub.area_nombre) filasDet.push(['Área', escaparHtml_(sub.area_nombre)]);
+  if (sub.frecuencia) filasDet.push(['Frecuencia', escaparHtml_(sub.frecuencia)]);
+  if (sub.personas_afectadas) filasDet.push(['Personas afectadas', escaparHtml_(sub.personas_afectadas)]);
+  if (sub.desarrollador_asignado) filasDet.push(['Responsable asignado', escaparHtml_(sub.desarrollador_asignado)]);
+  filasDet.push(['Fecha comprometida', fecha]);
+  if (sub.observaciones) filasDet.push(['Observaciones', escaparHtml_(sub.observaciones)]);
+  secciones += subseccionOt_('Detalles del pedido') + tablaDatosOt_(filasDet);
 
   var archivosItem = (archivos || []).filter(function (a) { return a.subsolicitud_id === sub.subsolicitud_id; });
-  var imagenesHtml = bloqueImagenesOt_(archivosItem.filter(esImagenOt_), contador);
-  var documentosHtml = bloqueDocumentosOt_(archivosItem.filter(function (a) { return !esImagenOt_(a); }));
+  secciones += bloqueImagenesOt_(archivosItem.filter(esImagenOt_), contador);
+  secciones += bloqueDocumentosOt_(archivosItem.filter(function (a) { return !esImagenOt_(a); }));
 
-  return '<div style="border:1px solid #E5E8EF;border-radius:8px;padding:14px 16px;margin-bottom:14px;">' +
-    '<h2 style="font-size:17px;margin:0 0 6px;">' + escaparHtml_(sub.numero_item + '. ' + (sub.titulo || '')) + '</h2>' +
-    '<p style="margin:0 0 8px;">' + badgePrioridadOt_(sub.prioridad) + ' &nbsp; ' + fecha + '</p>' +
-    (sub.descripcion ? '<p style="margin:0 0 8px;">' + escaparHtml_(sub.descripcion) + '</p>' : '') +
-    (sub.resultado_esperado
-      ? '<p style="margin:0 0 8px;"><strong>Resultado esperado:</strong> ' + escaparHtml_(sub.resultado_esperado) + '</p>'
-      : '') +
-    contextoHtml +
-    imagenesHtml +
-    documentosHtml +
+  // page-break-inside:avoid para que un item no se parta feo entre paginas.
+  return '<div style="border:1px solid ' + DOC.HAIRLINE + ';border-radius:4px;margin-bottom:14px;overflow:hidden;page-break-inside:avoid;">' +
+    encabezado +
+    '<div style="padding:12px 14px;">' + secciones + '</div>' +
     '</div>';
 }
 
-function filaContextoOt_(etiqueta, valorHtml) {
-  return '<tr>' +
-    '<td style="padding:2px 12px 2px 0;color:#8A93A5;vertical-align:top;white-space:nowrap;">' + escaparHtml_(etiqueta) + '</td>' +
-    '<td style="padding:2px 0;word-break:break-all;">' + valorHtml + '</td>' +
-    '</tr>';
+// Campo de texto libre con su etiqueta en versalitas (omite si vacio).
+function campoTextoOt_(etiqueta, valor) {
+  if (!valor) return '';
+  return subseccionOt_(etiqueta) +
+    '<p style="margin:0 0 12px;color:' + DOC.INK_SOFT + ';">' + escaparHtml_(valor).replace(/\n/g, '<br>') + '</p>';
+}
+
+// Sub-etiqueta dentro de un item.
+function subseccionOt_(texto) {
+  return '<div style="font-size:10px;font-weight:bold;letter-spacing:0.8px;text-transform:uppercase;color:' + DOC.MUTED +
+    ';margin:0 0 4px;">' + escaparHtml_(texto) + '</div>';
+}
+
+// Tabla etiqueta/valor (accesos, detalles).
+function tablaDatosOt_(filas) {
+  var cuerpo = filas.map(function (f) {
+    return '<tr>' +
+      '<td style="padding:3px 12px 3px 0;color:' + DOC.MUTED + ';vertical-align:top;white-space:nowrap;width:150px;">' + f[0] + '</td>' +
+      '<td style="padding:3px 0;color:' + DOC.INK + ';vertical-align:top;word-break:break-word;">' + f[1] + '</td>' +
+      '</tr>';
+  }).join('');
+  return '<table style="border-collapse:collapse;font-size:12px;margin:0 0 12px;width:100%;">' + cuerpo + '</table>';
 }
 
 function enlaceOt_(url) {
   var limpia = escaparHtml_(url);
-  return '<a href="' + limpia + '" style="color:' + COLOR_MARCA_OT + ';text-decoration:underline;">' + limpia + '</a>';
+  return '<a href="' + limpia + '" style="color:' + DOC.NAVY + ';text-decoration:underline;word-break:break-all;">' + limpia + '</a>';
 }
 
-function badgePrioridadOt_(prioridad) {
-  var colores = {
-    P1: '#C0392B', P2: '#E67E22', P3: '#B7950B', P4: '#7F8C8D', P5: '#95A5A6'
-  };
-  var fondo = colores[prioridad] || '#7F8C8D';
-  return '<span style="background:' + fondo + ';color:#ffffff;padding:2px 9px;border-radius:10px;font-size:12px;font-weight:bold;">' +
+// Chip de prioridad sobrio: punto de color + codigo, borde fino (no relleno
+// saturado). Se lee claro pero sin gritar.
+function chipPrioridadOt_(prioridad) {
+  var colores = { P1: '#B4232A', P2: '#B26A00', P3: '#8A6D00', P4: '#556070', P5: '#6B7280' };
+  var c = colores[prioridad] || '#556070';
+  return '<span style="display:inline-block;border:1px solid ' + DOC.HAIRLINE + ';border-radius:11px;padding:2px 9px 2px 7px;' +
+    'font-size:11px;font-weight:bold;color:' + DOC.INK + ';white-space:nowrap;">' +
+    '<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:' + c + ';margin-right:5px;"></span>' +
     escaparHtml_(prioridad || '—') + '</span>';
+}
+
+function estadoOt_(codigo) {
+  return escaparHtml_(ESTADO_LABEL_OT[codigo] || codigo || '—');
 }
 
 // v5.2: true si el archivo es una imagen (se embebe); false si es documento
@@ -177,57 +321,78 @@ function esImagenOt_(archivo) {
 function bloqueImagenesOt_(imagenes, contador) {
   if (!imagenes || imagenes.length === 0) return '';
 
-  var tags = [];
+  var figuras = [];
   var omitidas = 0;
   imagenes.forEach(function (archivo) {
     if (contador.usadas >= MAX_IMAGENES_OT) { omitidas++; return; }
     var tag = imgEmbebidaOt_(archivo);
-    if (tag) { tags.push(tag); contador.usadas++; }
+    if (tag) {
+      contador.usadas++;
+      var nombre = archivo.nombre_original || '';
+      figuras.push(
+        '<div style="margin:6px 0 10px;page-break-inside:avoid;">' +
+        tag +
+        '<div style="font-size:10px;color:' + DOC.MUTED + ';margin-top:3px;">Figura ' + contador.usadas +
+        (nombre ? ' — ' + escaparHtml_(nombre) : '') + '</div></div>'
+      );
+    }
   });
-  if (tags.length === 0 && omitidas === 0) return '';
+  if (figuras.length === 0 && omitidas === 0) return '';
 
-  return '<div style="margin-top:10px;">' +
-    '<p style="margin:0 0 4px;font-weight:bold;font-size:13px;color:#5B6474;">&#128247; Capturas</p>' +
-    tags.join('') +
+  return '<div style="margin-top:8px;">' +
+    subseccionOt_('Capturas') +
+    figuras.join('') +
     (omitidas > 0
-      ? '<p style="margin:4px 0 0;font-size:12px;color:#8A93A5;">(+' + omitidas + ' captura(s) mas en el sistema)</p>'
+      ? '<p style="margin:2px 0 0;font-size:11px;color:' + DOC.FAINT + ';">(+' + omitidas + ' captura(s) adicional(es) disponibles en el sistema)</p>'
       : '') +
     '</div>';
 }
 
 // v5.2: los documentos (PDF/Word/Excel) NO se embeben (un PDF dentro de otro
 // no tiene sentido) -- se listan con un ENLACE para verlos/descargarlos desde
-// Drive. Sin esto, un solicitante que sube un documento pierde esa info en la
-// OT. Recibe la lista de documentos YA filtrada (no imagenes).
+// Drive. Recibe la lista de documentos YA filtrada (no imagenes).
 function bloqueDocumentosOt_(documentos) {
   if (!documentos || documentos.length === 0) return '';
   var items = documentos.map(function (d) {
     var nombre = d.nombre_original || 'documento';
-    return '<li style="margin-bottom:5px;">' +
-      '<a href="' + escaparHtml_(d.url) + '" style="color:' + COLOR_MARCA_OT + ';text-decoration:underline;">' +
+    return '<li style="margin-bottom:4px;">' +
+      '<a href="' + escaparHtml_(d.url) + '" style="color:' + DOC.NAVY + ';text-decoration:underline;">' +
       escaparHtml_(nombre) + '</a></li>';
   }).join('');
-  return '<div style="margin-top:10px;">' +
-    '<p style="margin:0 0 4px;font-weight:bold;font-size:13px;color:#5B6474;">&#128206; Documentos adjuntos</p>' +
-    '<ul style="margin:0;padding-left:20px;font-size:13px;line-height:1.5;">' + items + '</ul>' +
-    '<p style="margin:4px 0 0;font-size:12px;color:#8A93A5;">Abre el enlace para ver o descargar el documento.</p>' +
+  return '<div style="margin-top:8px;">' +
+    subseccionOt_('Documentos adjuntos') +
+    '<ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.5;color:' + DOC.INK + ';">' + items + '</ul>' +
+    '<p style="margin:3px 0 0;font-size:11px;color:' + DOC.FAINT + ';">Abre el enlace para ver o descargar el documento.</p>' +
     '</div>';
 }
 
 // v5.2: adjuntos a nivel de SOLICITUD (sin subsolicitud_id) -- imagenes y
-// documentos que el solicitante subio al bloque general del formulario. Van en
-// su propia tarjeta al final para que no se pierdan.
+// documentos del bloque general del formulario. Van en su propia tarjeta al
+// final para que no se pierdan.
 function bloqueAdjuntosGeneralesOt_(archivos, contador) {
   var generales = (archivos || []).filter(function (a) { return !a.subsolicitud_id; });
   if (generales.length === 0) return '';
   var imagenesHtml = bloqueImagenesOt_(generales.filter(esImagenOt_), contador);
   var documentosHtml = bloqueDocumentosOt_(generales.filter(function (a) { return !esImagenOt_(a); }));
   if (!imagenesHtml && !documentosHtml) return '';
-  return '<div style="border:1px solid #E5E8EF;border-radius:8px;padding:14px 16px;margin-bottom:14px;">' +
-    '<h2 style="font-size:16px;margin:0 0 2px;">Adjuntos de la solicitud</h2>' +
+  return docSeccionOt_('Adjuntos de la solicitud') +
+    '<div style="border:1px solid ' + DOC.HAIRLINE + ';border-radius:4px;padding:12px 14px;margin-bottom:14px;page-break-inside:avoid;">' +
     imagenesHtml +
     documentosHtml +
     '</div>';
+}
+
+// Bloque de cierre: instrucciones profesionales (reemplaza el "responde LISTO
+// por WhatsApp" informal de v5.2).
+function cierreOt_() {
+  return docSeccionOt_('Cómo cerrar esta orden') +
+    '<table width="100%" style="border-collapse:collapse;background:' + DOC.PANEL +
+    ';border:1px solid ' + DOC.HAIRLINE + ';border-radius:4px;margin-bottom:4px;"><tr>' +
+    '<td style="padding:12px 14px;font-size:12px;color:' + DOC.INK_SOFT + ';line-height:1.6;">' +
+    '<strong style="color:' + DOC.INK + ';">1.</strong> Ejecuta el trabajo descrito en los ítems anteriores.<br>' +
+    '<strong style="color:' + DOC.INK + ';">2.</strong> Marca cada ítem como <strong>Terminada</strong> en SIGSO, o confirma su cierre por el canal acordado con tu coordinación.<br>' +
+    '<strong style="color:' + DOC.INK + ';">3.</strong> Adjunta evidencia del resultado (captura o enlace) cuando corresponda, para agilizar la validación.' +
+    '</td></tr></table>';
 }
 
 function imgEmbebidaOt_(archivo) {
@@ -240,7 +405,7 @@ function imgEmbebidaOt_(archivo) {
     var mime = archivo.tipo_mime || blob.getContentType() || 'image/png';
     var b64 = Utilities.base64Encode(bytes);
     return '<img src="data:' + mime + ';base64,' + b64 +
-      '" style="max-width:100%;height:auto;border:1px solid #E5E8EF;border-radius:6px;margin:6px 0;display:block;">';
+      '" style="max-width:100%;height:auto;border:1px solid ' + DOC.HAIRLINE + ';border-radius:4px;display:block;">';
   } catch (err) {
     return '';
   }

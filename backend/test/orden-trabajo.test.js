@@ -94,6 +94,40 @@ test('El HTML de la OT trae el ID, los datos del item y la URL como enlace <a> r
   assert.match(html, /P1/);
 });
 
+// v7.6 (documentos profesionales): la OT ahora incluye la ficha resumen y
+// los campos que antes se omitian (contexto, frecuencia, personas afectadas,
+// area, responsable, tipo) -- "mas detallado para que el desarrollador lo
+// tenga lo mas claro posible". Y un cierre profesional (sin el "responde
+// LISTO por WhatsApp" informal).
+test('v7.6: la OT trae ficha resumen, contexto operativo y cierre profesional (sin WhatsApp/LISTO)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, {
+    contexto: 'Al cambiar los banners no deja guardar',
+    frecuencia: 'SIEMPRE', personas_afectadas: '2000',
+    area_nombre: 'INGRESOS ADM', modulo_nombre: 'INGRESOS ADM',
+    tipo_nombre: 'Error / Bug', desarrollador_asignado: 'leo@rld.cl'
+  });
+
+  const html = ctx.OrdenTrabajo.generar('SOL-2026-HP-0001', ADMIN)._html;
+
+  // Ficha resumen + estado legible (S05 -> "En desarrollo").
+  assert.match(html, /Ficha de la solicitud/);
+  assert.match(html, /En desarrollo/);
+  // Campos nuevos, antes ausentes en la OT.
+  assert.match(html, /Al cambiar los banners no deja guardar/); // contexto
+  assert.match(html, /SIEMPRE/);        // frecuencia
+  assert.match(html, /2000/);           // personas afectadas
+  assert.match(html, /INGRESOS ADM/);   // area / modulo
+  assert.match(html, /Error \/ Bug/);   // tipo
+  assert.match(html, /leo@rld\.cl/);    // responsable asignado
+  // Cierre profesional, sin el tono informal viejo.
+  assert.match(html, /Cómo cerrar esta orden/);
+  assert.ok(!/WhatsApp/i.test(html), 'no debe mencionar WhatsApp');
+  assert.ok(!/LISTO SOL/i.test(html), 'no debe pedir responder "LISTO"');
+  // Pie institucional con confidencialidad.
+  assert.match(html, /Confidencial/);
+});
+
 test('La imagen del item se lee de Drive y se embebe como data URI base64', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);

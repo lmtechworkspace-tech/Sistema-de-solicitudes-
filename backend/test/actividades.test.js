@@ -360,9 +360,13 @@ test('listar: cada actividad trae su semaforo calculado en el servidor', () => {
 
 test('panelEquipo: excluye al propio supervisor y arma la carga por persona', () => {
   const ctx = loadConSchema();
-  ctx.Actividades.crear({ titulo: 'De Marcelo', fecha_compromiso: '2026-08-14' }, CTX_MARCELO);
-  ctx.Actividades.crear({ titulo: 'Otra de Marcelo', fecha_compromiso: '2026-08-14' }, CTX_MARCELO);
-  ctx.Actividades.crear({ titulo: 'De Barbara (no debe salir)', fecha_compromiso: '2026-08-14' }, CTX_BARBARA);
+  // Fecha holgada (relativa a hoy) para que el semaforo quede 'al-dia' y
+  // en_riesgo sea 0 sin importar cuando se corra la suite: una fecha fija
+  // termina cayendo dentro de 'dias <= 1' y volviendo el test flaky.
+  const enUnMes = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  ctx.Actividades.crear({ titulo: 'De Marcelo', fecha_compromiso: enUnMes }, CTX_MARCELO);
+  ctx.Actividades.crear({ titulo: 'Otra de Marcelo', fecha_compromiso: enUnMes }, CTX_MARCELO);
+  ctx.Actividades.crear({ titulo: 'De Barbara (no debe salir)', fecha_compromiso: enUnMes }, CTX_BARBARA);
   const panel = ctx.Actividades.panelEquipo({}, CTX_BARBARA);
   assert.deepEqual(panel.items.map((a) => a.titulo).sort(), ['De Marcelo', 'Otra de Marcelo']);
   assert.deepEqual(toPlain(panel.por_persona), [{ email: 'marcelo@rld.cl', nombre: 'marcelo@rld.cl', total: 2, en_riesgo: 0, bloqueadas: 0 }]);
