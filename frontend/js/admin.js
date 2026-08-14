@@ -294,6 +294,10 @@
     // nuevos (CuentasPortal.gs), pero las cuentas ya existentes necesitan
     // que el Admin lo marque aca a mano.
     { valor: 'mi_trabajo', texto: 'Mi trabajo' },
+    // v9.0 (Modulo de Proyectos): mismo caso que 'mi_trabajo' -- se agrega
+    // a la plantilla de cuentas nuevas, pero las ya existentes necesitan
+    // que el Admin lo marque aca a mano.
+    { valor: 'proyectos', texto: 'Proyectos' },
     { valor: 'gerencia', texto: 'Panel de gerencia' },
     { valor: 'jefatura', texto: 'Mi departamento (Jefatura)' },
     { valor: 'administracion', texto: 'Administración' },
