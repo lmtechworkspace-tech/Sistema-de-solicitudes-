@@ -17,7 +17,8 @@
         gerencia: mostrarGerencia_,
         jefatura: mostrarJefatura_,
         novedades: mostrarNovedades_,
-        mi_trabajo: mostrarMiTrabajo_
+        mi_trabajo: mostrarMiTrabajo_,
+        proyectos: mostrarProyectos_
       };
       if (destinos[id]) destinos[id]();
     }
@@ -69,10 +70,17 @@
     // staff, mismo criterio de visibilidad que la bandeja.
     document.getElementById('btn-ver-mi-trabajo').addEventListener('click', mostrarMiTrabajo_);
     document.getElementById('btn-volver-dashboard-mi-trabajo').addEventListener('click', mostrarDashboard_);
+
+    // v9.0 (Modulo de Proyectos): igual criterio de visibilidad que "Mi
+    // trabajo" -- disponible para cualquier sesion de staff; el aislamiento
+    // real (que proyectos ve cada quien) lo impone Proyectos.gs por su
+    // cuenta (membresia en PROYECTO_INTEGRANTES).
+    document.getElementById('btn-ver-proyectos').addEventListener('click', mostrarProyectos_);
+    document.getElementById('btn-volver-dashboard-proyectos').addEventListener('click', mostrarDashboard_);
   });
 
   function ocultarTodasLasVistas_() {
-    ['vista-dashboard', 'vista-detalle', 'vista-gerencia', 'vista-jefatura', 'vista-novedades', 'vista-mi-trabajo'].forEach(function (id) {
+    ['vista-dashboard', 'vista-detalle', 'vista-gerencia', 'vista-jefatura', 'vista-novedades', 'vista-mi-trabajo', 'vista-proyectos'].forEach(function (id) {
       document.getElementById(id).classList.add('sigso-oculto');
     });
   }
@@ -112,5 +120,11 @@
     ocultarTodasLasVistas_();
     document.getElementById('vista-mi-trabajo').classList.remove('sigso-oculto');
     if (window.SigsoActividades) SigsoActividades.cargar();
+  }
+
+  function mostrarProyectos_() {
+    ocultarTodasLasVistas_();
+    document.getElementById('vista-proyectos').classList.remove('sigso-oculto');
+    if (window.SigsoProyectos) SigsoProyectos.cargar();
   }
 })();

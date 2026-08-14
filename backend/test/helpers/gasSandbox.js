@@ -160,6 +160,12 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // Actividades.generarReporte/generarActaReunion (ya cargado) y
   // escaparHtml_/formatearFechaLegible_/fechaCortaOt_ de OrdenTrabajo.gs.
   'ReporteActividades.gs',
+  // v9.0 (Modulo de Proyectos): capa contenedora sobre Actividades.gs (ya
+  // cargado) -- crearTarea/listarTareas llaman Actividades.crear/
+  // semaforoActividad_ solo en tiempo de ejecucion, asi que basta con
+  // cargar despues. Usa tambien encolarNotificacionApp_ (Notificaciones.gs)
+  // y obtenerFeriados_ (Dashboard.gs), ambos ya cargados arriba.
+  'Proyectos.gs',
   'Triggers.gs',
   'Code.gs'
 ];

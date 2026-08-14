@@ -39,6 +39,11 @@
       <button type="button" class="sigso-boton--con-icono sigso-boton--secundario" id="btn-ver-mi-trabajo">
         <span id="ico-ver-mi-trabajo"></span> Mi trabajo
       </button>
+      <!-- v9.0 (Modulo de Proyectos): visible para cualquiera con sesion de
+           staff, mismo criterio que "Mi trabajo". -->
+      <button type="button" class="sigso-boton--con-icono sigso-boton--secundario" id="btn-ver-proyectos">
+        <span id="ico-ver-proyectos"></span> Proyectos
+      </button>
 
       <!-- v3.0 (Fase 2, multi-bandeja): un responsable individual (DEV) ya
            esta auto-acotado a la suya -- solo se le avisa. ADM/GERENCIA ven
@@ -453,6 +458,14 @@
       <p class="sigso-ayuda">Tus compromisos, con un check-in de un clic. "Sin cambios" también cuenta.</p>
       <div id="actividades-contenido"></div>
     </section>
+
+    <!-- v9.0 (Modulo de Proyectos): mismo modulo compartido (proyectos.js)
+         que usa plataforma.html. -->
+    <section id="vista-proyectos" class="sigso-oculto">
+      <button type="button" class="sigso-boton--secundario" id="btn-volver-dashboard-proyectos">&larr; Volver al dashboard</button>
+      <h1>Proyectos</h1>
+      <div id="proyectos-contenido"></div>
+    </section>
   </main>
 
   <script src="js/config.js"></script>
@@ -468,6 +481,8 @@
   <script src="js/novedades.js"></script>
   <!-- v7.0 (Fase 2): modulo "Mi trabajo". -->
   <script src="js/actividades.js"></script>
+  <!-- v9.0 (Modulo de Proyectos): portafolio + sala de trabajo. -->
+  <script src="js/proyectos.js"></script>
   <!-- v6.4: panel "Mi perfil" + identidad en el header. -->
   <script src="js/perfil.js"></script>
   <!-- v7.1: notificaciones "en vivo" (modal + toast del SO), transversal.

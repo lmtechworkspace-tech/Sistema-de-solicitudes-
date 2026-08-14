@@ -101,7 +101,14 @@ var SHEETS = {
   // v7.3 (Nivel 0): vive en el Backoffice; Intake mantiene la copia solo
   // para que el esquema no diverja. Ver la nota identica en
   // backend/backoffice/Constantes.gs.
-  NOTIF_PERMISOS_SO: 'NOTIF_PERMISOS_SO'
+  NOTIF_PERMISOS_SO: 'NOTIF_PERMISOS_SO',
+  // v9.0 (Modulo de Proyectos): vive 100% en el Backoffice (es interno);
+  // Intake mantiene la copia solo para que el esquema no diverja. Ver la
+  // nota identica en backend/backoffice/Constantes.gs.
+  PROYECTOS: 'PROYECTOS',
+  PROYECTO_INTEGRANTES: 'PROYECTO_INTEGRANTES',
+  PROYECTO_HITOS: 'PROYECTO_HITOS',
+  PROYECTO_EVENTOS: 'PROYECTO_EVENTOS'
 };
 
 var COLUMNAS = {
@@ -373,7 +380,10 @@ var COLUMNAS = {
     'recurrencia', 'recurrencia_origen_id', 'fecha_inicio_plan', 'fecha_terminada',
     'confianza', 'avance_pct', 'bloqueo_motivo', 'bloqueo_responsable_email',
     'bloqueo_desde', 'ultima_actualizacion', 'reprogramaciones',
-    'fecha_creacion', 'creado_por', 'activa'
+    'fecha_creacion', 'creado_por', 'activa',
+    // v9.0 (Modulo de Proyectos): ver la nota identica en
+    // backend/backoffice/Constantes.gs.
+    'proyecto_id', 'hito_id'
   ],
   ACTIVIDADES_BITACORA: [
     'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',
@@ -389,7 +399,29 @@ var COLUMNAS = {
     'modulo_id', 'texto_accion', 'leida', 'creada_en', 'expira_en'
   ],
   // v7.3 (Nivel 0): ver la nota identica en backend/backoffice/Constantes.gs.
-  NOTIF_PERMISOS_SO: ['email', 'permiso', 'actualizado_en']
+  NOTIF_PERMISOS_SO: ['email', 'permiso', 'actualizado_en'],
+  // v9.0 (Modulo de Proyectos): ver la nota identica en
+  // backend/backoffice/Constantes.gs.
+  PROYECTOS: [
+    'proyecto_id', 'codigo', 'nombre', 'descripcion', 'objetivo',
+    'resultado_esperado', 'lider_email', 'area_id', 'cliente_id',
+    'categoria', 'prioridad', 'estado',
+    'fecha_inicio', 'fecha_objetivo', 'fecha_cierre_real',
+    'salud_override', 'salud_override_motivo',
+    'ultima_actualizacion', 'creado_por', 'fecha_creacion', 'activa'
+  ],
+  PROYECTO_INTEGRANTES: [
+    'integrante_id', 'proyecto_id', 'usuario_email', 'usuario_nombre',
+    'rol_proyecto', 'responsabilidad', 'activo', 'agregado_por', 'fecha_creacion'
+  ],
+  PROYECTO_HITOS: [
+    'hito_id', 'proyecto_id', 'nombre', 'descripcion', 'fecha_objetivo',
+    'estado', 'orden', 'fecha_creacion'
+  ],
+  PROYECTO_EVENTOS: [
+    'evento_id', 'proyecto_id', 'tipo', 'autor_email', 'autor_nombre',
+    'titulo', 'cuerpo', 'ref_tipo', 'ref_id', 'menciones', 'timestamp'
+  ]
 };
 
 // S01-S11 completos desde la Fase 1 aunque solo S01 se use aqui: la maquina

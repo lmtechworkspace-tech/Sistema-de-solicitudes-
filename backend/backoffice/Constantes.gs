@@ -106,7 +106,18 @@ var SHEETS = {
   // sesion -- para que el Admin vea quien nunca acepto el permiso del SO
   // (causa mas probable de "a unos les llega el aviso y a otros no"). Ver
   // la nota identica en backend/intake/Constantes.gs.
-  NOTIF_PERMISOS_SO: 'NOTIF_PERMISOS_SO'
+  NOTIF_PERMISOS_SO: 'NOTIF_PERMISOS_SO',
+  // v9.0 (documentacion/SIGSO-v9.0-propuesta-modulo-gestion-proyectos.md):
+  // modulo de Gestion de Proyectos Internos. Decision central de la
+  // propuesta: las TAREAS de un proyecto no son una entidad nueva -- son
+  // ACTIVIDADES (extendida con proyecto_id/hito_id mas abajo). Estas 4 hojas
+  // son el contenedor + la sala de trabajo que faltaban.
+  PROYECTOS: 'PROYECTOS',
+  PROYECTO_INTEGRANTES: 'PROYECTO_INTEGRANTES',
+  PROYECTO_HITOS: 'PROYECTO_HITOS',
+  // La sala del proyecto: feed append-only tipado, mismo patron de bitacora
+  // unificada que ACTIVIDADES_BITACORA (una tabla, no HISTORIAL_* x N).
+  PROYECTO_EVENTOS: 'PROYECTO_EVENTOS'
 };
 
 var COLUMNAS = {
@@ -373,7 +384,14 @@ var COLUMNAS = {
     'recurrencia', 'recurrencia_origen_id', 'fecha_inicio_plan', 'fecha_terminada',
     'confianza', 'avance_pct', 'bloqueo_motivo', 'bloqueo_responsable_email',
     'bloqueo_desde', 'ultima_actualizacion', 'reprogramaciones',
-    'fecha_creacion', 'creado_por', 'activa'
+    'fecha_creacion', 'creado_por', 'activa',
+    // v9.0 (Modulo de Proyectos): aditivas al final, mismo criterio que
+    // 'cc' en SOLICITUDES -- no rompe el orden ya desplegado. Una actividad
+    // sin proyecto_id sigue siendo una actividad suelta de "Mi trabajo",
+    // exactamente igual que antes (cero regresion). proyecto_id/hito_id
+    // vinculan la tarea a PROYECTOS/PROYECTO_HITOS; el motor de estados,
+    // check-in, bloqueo, etc. no cambia en absoluto.
+    'proyecto_id', 'hito_id'
   ],
   ACTIVIDADES_BITACORA: [
     'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',
@@ -387,7 +405,41 @@ var COLUMNAS = {
   ],
   // v7.3 (Nivel 0): permiso: 'granted' | 'denied' | 'default'. Una fila por
   // email (upsert) -- no es historico, es el ULTIMO estado reportado.
-  NOTIF_PERMISOS_SO: ['email', 'permiso', 'actualizado_en']
+  NOTIF_PERMISOS_SO: ['email', 'permiso', 'actualizado_en'],
+
+  // v9.0 (Modulo de Proyectos, MVP Fase 1) ------------------------------
+  // estado: PLANIFICACION | ACTIVO | EN_PAUSA | EN_REVISION | CERRADO |
+  // CANCELADO (mayusculas, igual criterio que ACTIVIDADES_ESTADOS).
+  // salud_override: normalmente vacio -- la salud se CALCULA on-read
+  // (Proyectos.gs); solo un ADM/lider puede fijarla a mano de forma
+  // excepcional, con motivo registrado en PROYECTO_EVENTOS.
+  PROYECTOS: [
+    'proyecto_id', 'codigo', 'nombre', 'descripcion', 'objetivo',
+    'resultado_esperado', 'lider_email', 'area_id', 'cliente_id',
+    'categoria', 'prioridad', 'estado',
+    'fecha_inicio', 'fecha_objetivo', 'fecha_cierre_real',
+    'salud_override', 'salud_override_motivo',
+    'ultima_actualizacion', 'creado_por', 'fecha_creacion', 'activa'
+  ],
+  // rol_proyecto: LIDER | INTEGRANTE | COLABORADOR | OBSERVADOR (§6 de la
+  // propuesta). La membresia es el "gate fino" de todo el modulo -- igual
+  // patron que JEFATURAS para Actividades.
+  PROYECTO_INTEGRANTES: [
+    'integrante_id', 'proyecto_id', 'usuario_email', 'usuario_nombre',
+    'rol_proyecto', 'responsabilidad', 'activo', 'agregado_por', 'fecha_creacion'
+  ],
+  PROYECTO_HITOS: [
+    'hito_id', 'proyecto_id', 'nombre', 'descripcion', 'fecha_objetivo',
+    'estado', 'orden', 'fecha_creacion'
+  ],
+  // La sala: feed append-only tipado. tipo: ACTUALIZACION | COMENTARIO |
+  // DECISION | REUNION | BLOQUEO | SOLICITUD_LIDER | CAMBIO_ESTADO.
+  // ref_tipo/ref_id enlazan el evento a una tarea/hito cuando corresponde
+  // (p.ej. "convertir comentario en tarea" guarda ref_tipo='ACTIVIDAD').
+  PROYECTO_EVENTOS: [
+    'evento_id', 'proyecto_id', 'tipo', 'autor_email', 'autor_nombre',
+    'titulo', 'cuerpo', 'ref_tipo', 'ref_id', 'menciones', 'timestamp'
+  ]
 };
 
 var ESTADOS = {

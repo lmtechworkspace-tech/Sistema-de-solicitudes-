@@ -159,7 +159,23 @@ var BACKOFFICE_ACTIONS = {
   guardarCanalAlerta: handleGuardarCanalAlerta_,
   // v7.5 Fase 2 (enviar alerta): megafono manual del Admin -- ambas ADM-only.
   getDirectorioAlerta: handleGetDirectorioAlerta_,
-  enviarAlertaManual: handleEnviarAlertaManual_
+  enviarAlertaManual: handleEnviarAlertaManual_,
+  // v9.0 (Modulo de Proyectos, MVP Fase 1): portafolio + sala de trabajo.
+  // Las tareas de un proyecto son ACTIVIDADES (Proyectos.crearTarea /
+  // listarTareas son wrappers finos sobre Actividades.gs) -- el resto del
+  // ciclo de vida de la tarea sigue usando las acciones de Actividades ya
+  // conectadas arriba (checkinActividad, reasignarActividad, etc.).
+  listarProyectos: handleListarProyectos_,
+  getDetalleProyecto: handleGetDetalleProyecto_,
+  crearProyecto: handleCrearProyecto_,
+  actualizarProyecto: handleActualizarProyecto_,
+  gestionarIntegranteProyecto: handleGestionarIntegranteProyecto_,
+  gestionarHitoProyecto: handleGestionarHitoProyecto_,
+  crearTareaProyecto: handleCrearTareaProyecto_,
+  listarTareasProyecto: handleListarTareasProyecto_,
+  listarSalaProyecto: handleListarSalaProyecto_,
+  publicarEnSalaProyecto: handlePublicarEnSalaProyecto_,
+  convertirEventoEnTareaProyecto: handleConvertirEventoEnTareaProyecto_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -259,7 +275,25 @@ var MODULO_POR_ACCION = {
   generarReporteActividades: 'gerencia',
   descargarReporteActividadesPdf: 'gerencia',
   descargarActaReunionPdf: 'gerencia',
-  pedirActualizacionActividad: 'jefatura'
+  pedirActualizacionActividad: 'jefatura',
+  // v9.0 (Modulo de Proyectos): el modulo 'proyectos' es el gate GRUESO;
+  // la membresia en PROYECTO_INTEGRANTES (Proyectos.gs) es el gate FINO
+  // (quien ve/edita que proyecto). getDetalleProyecto/listarTareasProyecto/
+  // listarSalaProyecto tambien aceptan 'gerencia' -- mismo patron que
+  // getSolicitudDetalle: Gerencia necesita poder abrir el detalle de
+  // cualquier proyecto desde su propio panel, de solo lectura (Proyectos.gs
+  // ya lo permite: puedeVerProyecto_ acepta rol GERENCIA).
+  listarProyectos: ['proyectos', 'gerencia'],
+  getDetalleProyecto: ['proyectos', 'gerencia'],
+  crearProyecto: 'proyectos',
+  actualizarProyecto: 'proyectos',
+  gestionarIntegranteProyecto: 'proyectos',
+  gestionarHitoProyecto: 'proyectos',
+  crearTareaProyecto: 'proyectos',
+  listarTareasProyecto: ['proyectos', 'gerencia'],
+  listarSalaProyecto: ['proyectos', 'gerencia'],
+  publicarEnSalaProyecto: 'proyectos',
+  convertirEventoEnTareaProyecto: 'proyectos'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -703,6 +737,55 @@ function handleDescargarReporteActividadesPdf_(data, contexto) {
 
 function handleDescargarActaReunionPdf_(data, contexto) {
   return responderResultado_(ReporteActividades.descargarActa(data, contexto));
+}
+
+// v9.0 (Modulo de Proyectos, MVP Fase 1): ver documentacion/
+// SIGSO-v9.0-propuesta-modulo-gestion-proyectos.md. crearTareaProyecto/
+// listarTareasProyecto son wrappers finos sobre Actividades.gs -- el resto
+// del ciclo de vida de la tarea (check-in, bloqueo, reasignar...) usa las
+// acciones de Actividades ya conectadas mas arriba.
+function handleListarProyectos_(data, contexto) {
+  return responderResultado_(Proyectos.listar(data, contexto));
+}
+
+function handleGetDetalleProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.getDetalle(data, contexto));
+}
+
+function handleCrearProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.crear(data, contexto));
+}
+
+function handleActualizarProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.actualizar(data, contexto));
+}
+
+function handleGestionarIntegranteProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.gestionarIntegrante(data, contexto));
+}
+
+function handleGestionarHitoProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.gestionarHito(data, contexto));
+}
+
+function handleCrearTareaProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.crearTarea(data, contexto));
+}
+
+function handleListarTareasProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.listarTareas(data, contexto));
+}
+
+function handleListarSalaProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.listarSala(data, contexto));
+}
+
+function handlePublicarEnSalaProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.publicarEnSala(data, contexto));
+}
+
+function handleConvertirEventoEnTareaProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.convertirEventoEnTarea(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

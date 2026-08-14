@@ -53,7 +53,12 @@
     // check-in de 1 clic (documentacion/SIGSO-v7.0-propuesta-modulo-
     // gestion-operacional.md §4.4/§5.1). No es core como 'novedades' --
     // depende de que la cuenta lo tenga en CUENTAS_PORTAL.modulos.
-    mi_trabajo: { icono: 'check', nombre: 'Mi trabajo', descripcion: 'Tus compromisos, con un check-in de un clic', interno: true }
+    mi_trabajo: { icono: 'check', nombre: 'Mi trabajo', descripcion: 'Tus compromisos, con un check-in de un clic', interno: true },
+    // v9.0 (documentacion/SIGSO-v9.0-propuesta-modulo-gestion-proyectos.md):
+    // portafolio + sala de trabajo de proyectos internos. No es core --
+    // depende de que la cuenta lo tenga en CUENTAS_PORTAL.modulos, igual
+    // que 'mi_trabajo'.
+    proyectos: { icono: 'caja', nombre: 'Proyectos', descripcion: 'Portafolio, equipo y sala de trabajo de tus proyectos', interno: true }
   };
 
   // v4.0 Frente 3: cada modulo tiene su propio acento -- antes todo el shell
@@ -70,7 +75,8 @@
     pausas: { acento: 'var(--info)', suave: 'var(--info-suave)' },
     pausas_coordinacion: { acento: 'var(--alerta)', suave: 'var(--alerta-suave)' },
     novedades: { acento: 'var(--primario)', suave: 'var(--primario-suave)' },
-    mi_trabajo: { acento: 'var(--ok)', suave: 'var(--ok-suave)' }
+    mi_trabajo: { acento: 'var(--ok)', suave: 'var(--ok-suave)' },
+    proyectos: { acento: 'var(--primario)', suave: 'var(--primario-suave)' }
   };
 
   function acentoInline_(id) {
@@ -351,6 +357,9 @@
         break;
       case 'mi_trabajo':
         if (window.SigsoActividades) window.SigsoActividades.cargar();
+        break;
+      case 'proyectos':
+        if (window.SigsoProyectos) window.SigsoProyectos.cargar();
         break;
       default:
         break; // nueva_solicitud / administracion: sin auto-refresco
@@ -1121,7 +1130,7 @@
   // el contenedor ancho, como app.html. Los demas (formulario, mis
   // solicitudes) se leen mejor angostos y centrados -- por eso el ancho del
   // <main> se adapta al modulo en vez de ser fijo.
-  var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion'];
+  var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos'];
 
   // v5.1: modulo activo + cuando se cargaron por ultima vez sus datos, para
   // el auto-refresco al volver a la pestana (sin recargar la pagina).
@@ -1179,6 +1188,9 @@
     }
     if (id === 'mi_trabajo' && window.SigsoActividades) {
       window.SigsoActividades.cargar();
+    }
+    if (id === 'proyectos' && window.SigsoProyectos) {
+      window.SigsoProyectos.cargar();
     }
     window.scrollTo(0, 0);
   }

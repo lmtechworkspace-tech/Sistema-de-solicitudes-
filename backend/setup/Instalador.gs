@@ -210,7 +210,10 @@ var ESQUEMA_HOJAS = {
     'recurrencia', 'recurrencia_origen_id', 'fecha_inicio_plan', 'fecha_terminada',
     'confianza', 'avance_pct', 'bloqueo_motivo', 'bloqueo_responsable_email',
     'bloqueo_desde', 'ultima_actualizacion', 'reprogramaciones',
-    'fecha_creacion', 'creado_por', 'activa'
+    'fecha_creacion', 'creado_por', 'activa',
+    // v9.0 (Modulo de Proyectos): ver la nota identica en
+    // backend/backoffice/Constantes.gs.
+    'proyecto_id', 'hito_id'
   ],
   ACTIVIDADES_BITACORA: [
     'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',
@@ -224,7 +227,30 @@ var ESQUEMA_HOJAS = {
   ],
   // v7.3 (notificaciones vivas, Nivel 0): ver la nota identica en
   // backend/backoffice/Constantes.gs.
-  NOTIF_PERMISOS_SO: ['email', 'permiso', 'actualizado_en']
+  NOTIF_PERMISOS_SO: ['email', 'permiso', 'actualizado_en'],
+  // v9.0 (documentacion/SIGSO-v9.0-propuesta-modulo-gestion-proyectos.md):
+  // ver la nota identica en backend/backoffice/Constantes.gs sobre cada
+  // hoja y cada campo.
+  PROYECTOS: [
+    'proyecto_id', 'codigo', 'nombre', 'descripcion', 'objetivo',
+    'resultado_esperado', 'lider_email', 'area_id', 'cliente_id',
+    'categoria', 'prioridad', 'estado',
+    'fecha_inicio', 'fecha_objetivo', 'fecha_cierre_real',
+    'salud_override', 'salud_override_motivo',
+    'ultima_actualizacion', 'creado_por', 'fecha_creacion', 'activa'
+  ],
+  PROYECTO_INTEGRANTES: [
+    'integrante_id', 'proyecto_id', 'usuario_email', 'usuario_nombre',
+    'rol_proyecto', 'responsabilidad', 'activo', 'agregado_por', 'fecha_creacion'
+  ],
+  PROYECTO_HITOS: [
+    'hito_id', 'proyecto_id', 'nombre', 'descripcion', 'fecha_objetivo',
+    'estado', 'orden', 'fecha_creacion'
+  ],
+  PROYECTO_EVENTOS: [
+    'evento_id', 'proyecto_id', 'tipo', 'autor_email', 'autor_nombre',
+    'titulo', 'cuerpo', 'ref_tipo', 'ref_id', 'menciones', 'timestamp'
+  ]
 };
 
 // SLA por prioridad en horas habiles (§7.2). P5 no tiene SLA.

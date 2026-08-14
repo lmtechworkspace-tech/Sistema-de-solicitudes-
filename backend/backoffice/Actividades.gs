@@ -104,10 +104,21 @@ var Actividades = {
     }
     var esParaSiMismo = responsableEmail === normalizarEmail_(contexto.email);
 
-    // RN-709: quien puede crear para quien.
+    // RN-709: quien puede crear para quien. v9.0 (Modulo de Proyectos):
+    // ademas del equipo por JEFATURAS, un LIDER/INTEGRANTE/COLABORADOR del
+    // proyecto (data.proyecto_id) puede crear tareas para cualquier otro
+    // integrante de ESE MISMO proyecto -- la membresia del proyecto es su
+    // propio circulo de confianza, independiente de la jerarquia formal.
+    // rolEnProyecto_ vive en Proyectos.gs (mismo scope global de Apps
+    // Script); si no hay proyecto_id, este bloque no cambia nada del
+    // comportamiento de siempre.
     if (!esParaSiMismo && contexto.rol !== 'ADM') {
       var equipo = obtenerEquipoJefe_(contexto.email).map(normalizarEmail_);
-      if (equipo.indexOf(responsableEmail) === -1) {
+      var esDelEquipoJefatura = equipo.indexOf(responsableEmail) !== -1;
+      var esDelEquipoProyecto = data.proyecto_id &&
+        !!rolEnProyecto_(data.proyecto_id, contexto) &&
+        !!rolEnProyecto_(data.proyecto_id, { email: responsableEmail });
+      if (!esDelEquipoJefatura && !esDelEquipoProyecto) {
         return { _forbidden: true, message: 'Solo puedes crear actividades para tu equipo.' };
       }
     }
@@ -170,7 +181,12 @@ var Actividades = {
       reprogramaciones: 0,
       fecha_creacion: ahora.toISOString(),
       creado_por: contexto.email || '',
-      activa: true
+      activa: true,
+      // v9.0 (Modulo de Proyectos): aditivo -- una tarea de proyecto trae
+      // proyecto_id/hito_id; una actividad suelta de "Mi trabajo" los deja
+      // vacios, exactamente igual que antes (ver Proyectos.crearTarea).
+      proyecto_id: data.proyecto_id || '',
+      hito_id: data.hito_id || ''
     };
     agregarFila_(SHEETS.ACTIVIDADES, actividad);
     registrarEventoActividad_(actividad.actividad_id, 'CREADA', contexto, '');

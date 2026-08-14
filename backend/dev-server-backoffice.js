@@ -65,12 +65,12 @@ function construirContexto() {
     // primero, asi que este correo resuelve a la empresa HP del roster de abajo.
     ['CTA-DEMO-3', 'leo', 'Leo Estay', 'Desarrollador', 'hash-no-usado-aqui', 'sal',
       JSON.stringify(['leo@rld.cl', 'juan@hp.cl']),
-      'DEV', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo', 'pausas']),
+      'DEV', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo', 'pausas', 'proyectos']),
       'RLD', true, false, '', 'dev-server'],
     // P4: cuenta ADM con todos los modulos, para probar Administracion.
     ['CTA-DEMO-4', 'ladmin', 'Luis Admin', 'Administrador', 'hash-no-usado-aqui', 'sal',
       JSON.stringify(['luis@rld.cl']),
-      'ADM', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo']),
+      'ADM', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos']),
       'RLD', true, false, '', 'dev-server'],
     // Cuenta GERENCIA SIN modulo bandeja -- prueba que el detalle de solo
     // lectura se vea desde el Panel de Gerencia sin ese modulo (ver Code.gs,
@@ -175,6 +175,38 @@ function construirContexto() {
       new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(), 'leo@rld.cl', true]
   ]);
   seedSheet(ctx, 'ACTIVIDADES_BITACORA', ctx.COLUMNAS.ACTIVIDADES_BITACORA);
+  // v9.0: Proyectos -- un proyecto demo con Leo de lider y jefe@homepymes.cl
+  // de integrante, para poder ver el portafolio, la sala y las tareas
+  // (ACTIVIDADES con proyecto_id) sin tener que crear todo a mano en local.
+  seedSheet(ctx, 'PROYECTOS', ctx.COLUMNAS.PROYECTOS, [
+    ['PROY-DEMO-1', 'PRY-0001', 'Migración Intranet GDE a v2', 'Reemplazar el intranet actual por la nueva version modular.',
+      'Dejar el intranet en produccion sin perdida de datos', 'Todo el modulo de Charla Diaria migrado y validado',
+      'leo@rld.cl', 'AREA_PLAT', '', 'INTERNO', 'ALTA', 'EN_CURSO',
+      new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(),
+      new Date(Date.now() + 20 * 24 * 3600 * 1000).toISOString(), '',
+      '', '', new Date().toISOString(), 'leo@rld.cl',
+      new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(), true]
+  ]);
+  seedSheet(ctx, 'PROYECTO_INTEGRANTES', ctx.COLUMNAS.PROYECTO_INTEGRANTES, [
+    ['PYI-DEMO-1', 'PROY-DEMO-1', 'leo@rld.cl', 'Leo Estay', 'LIDER', 'Coordinacion general', true, 'leo@rld.cl',
+      new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString()],
+    ['PYI-DEMO-2', 'PROY-DEMO-1', 'jefe@homepymes.cl', 'Jefe Demo', 'INTEGRANTE', 'Revision de contenidos', true, 'leo@rld.cl',
+      new Date(Date.now() - 9 * 24 * 3600 * 1000).toISOString()]
+  ]);
+  seedSheet(ctx, 'PROYECTO_HITOS', ctx.COLUMNAS.PROYECTO_HITOS, [
+    ['PYH-DEMO-1', 'PROY-DEMO-1', 'Migracion de contenidos', 'Pasar todo el contenido actual a la nueva estructura',
+      new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(), 'EN_CURSO', 1, new Date(Date.now() - 9 * 24 * 3600 * 1000).toISOString()],
+    ['PYH-DEMO-2', 'PROY-DEMO-1', 'Validacion con usuarios', 'Piloto con el equipo de Charla Diaria',
+      new Date(Date.now() + 18 * 24 * 3600 * 1000).toISOString(), 'PENDIENTE', 2, new Date(Date.now() - 9 * 24 * 3600 * 1000).toISOString()]
+  ]);
+  seedSheet(ctx, 'PROYECTO_EVENTOS', ctx.COLUMNAS.PROYECTO_EVENTOS, [
+    ['PYE-DEMO-1', 'PROY-DEMO-1', 'ACTUALIZACION', 'leo@rld.cl', 'Leo Estay',
+      'Proyecto creado', 'Arranca la migracion del intranet.', '', '', '[]',
+      new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString()],
+    ['PYE-DEMO-2', 'PROY-DEMO-1', 'RIESGO', 'leo@rld.cl', 'Leo Estay',
+      'Riesgo: dependencia externa', 'El proveedor de hosting aun no confirma la ventana de corte.', '', '', '[]',
+      new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString()]
+  ]);
   // v6.1 (Fase 4): DOCUMENTOS demo (las capturas ya las siembra
   // sembrarSolicitudesDemo_ mas abajo). Hacen falta para ver la lista de
   // archivos con metadata -- formato, peso y fecha --, que es justo lo que un
