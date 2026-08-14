@@ -51,6 +51,21 @@ test('enviarAcuseRecibo copia el cc opcional (Fase 9, hallazgo de datos reales)'
   assert.equal(ctx.GmailApp._enviados[0].opciones.cc, 'copia@x.cl');
 });
 
+test('v7.6: enviarAcuseRecibo (correo al solicitante externo) trae htmlBody branded con marca SIGSO', () => {
+  const ctx = loadIntakeConSchema();
+  ctx.Notificaciones.enviarAcuseRecibo({
+    solicitud_id: 'SOL-2026-HP-0003', solicitante_nombre: 'Juan', solicitante_email: 'juan@x.cl',
+    resumen_whatsapp: 'r', empresa_id: 'HP', prioridad: 'P2', total_items: 1
+  });
+  const opciones = ctx.GmailApp._enviados[0].opciones;
+  assert.ok(opciones.htmlBody, 'debe traer htmlBody');
+  assert.match(opciones.htmlBody, /SIGSO/);
+  assert.match(opciones.htmlBody, /Confirmamos la recepci/);
+  // El pie de texto plano no debe duplicarse dentro del HTML (la plantilla
+  // pone su propio pie institucional).
+  assert.ok(opciones.htmlBody.indexOf('--------------------------------------------------') === -1);
+});
+
 test('el mismo evento para la misma solicitud se deduplica dentro de 30 minutos (RN-026)', () => {
   const ctx = loadIntakeConSchema();
   const datos = { solicitud_id: 'SOL-2026-HP-0001', solicitante_nombre: 'Juan', solicitante_email: 'juan@x.cl', resumen_whatsapp: 'r' };

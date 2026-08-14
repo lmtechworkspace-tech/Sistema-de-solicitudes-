@@ -32,6 +32,74 @@ function pieCorreo_() {
     'Equipo SIGSO — HomePymes / RLD';
 }
 
+// v7.6 (correos "corporativo sobrio"): estos son los correos que le llegan al
+// SOLICITANTE -- externo a la empresa, el que primero forma una impresion de
+// SIGSO -- asi que se les aplica la misma plantilla branded que ya tiene el
+// Backoffice (backend/backoffice/Notificaciones.gs), duplicada aqui por ser
+// un proyecto Apps Script separado (misma nota de siempre). Estilos INLINE
+// (los clientes de correo ignoran <style>/CSS externo). `opts.pie` agrega un
+// bloque de accion destacado bajo el cuerpo.
+function plantillaCorreoHtml_(titulo, cuerpoHtml, opts) {
+  opts = opts || {};
+  var pie = opts.pie
+    ? '<div style="background:#F8FAFC;border:1px solid #E5E7EB;border-left:3px solid #14213D;padding:12px 16px;margin:20px 0 0;font-size:14px;color:#1F2937;">' +
+      opts.pie + '</div>'
+    : '';
+  return '<div style="margin:0;padding:0;background:#EEF1F6;">' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="background:#EEF1F6;padding:32px 0;">' +
+    '<tr><td align="center">' +
+    '<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border:1px solid #E5E7EB;font-family:Arial,Helvetica,sans-serif;">' +
+    // Cabecera institucional: sello + marca.
+    '<tr><td style="background:#14213D;padding:22px 28px;">' +
+    '<table cellpadding="0" cellspacing="0" role="presentation"><tr>' +
+    '<td style="width:34px;height:34px;background:#ffffff;text-align:center;vertical-align:middle;font-family:Georgia,\'Times New Roman\',serif;font-weight:bold;font-size:17px;color:#14213D;">S</td>' +
+    '<td style="padding-left:12px;vertical-align:middle;">' +
+    '<div style="color:#ffffff;font-family:Georgia,\'Times New Roman\',serif;font-size:19px;font-weight:bold;letter-spacing:0.3px;">SIGSO</div>' +
+    '<div style="color:#AEB8CC;font-size:11px;letter-spacing:0.3px;">Sistema de Gestión de Solicitudes</div>' +
+    '</td></tr></table>' +
+    '</td></tr>' +
+    // Categoria del correo (eyebrow).
+    '<tr><td style="padding:14px 28px;background:#F8FAFC;border-bottom:1px solid #E5E7EB;">' +
+    '<span style="display:inline-block;width:3px;height:12px;background:#14213D;margin-right:8px;"></span>' +
+    '<span style="font-size:12px;font-weight:bold;letter-spacing:0.8px;color:#374151;text-transform:uppercase;">' + escaparHtmlCorreo_(titulo) + '</span>' +
+    '</td></tr>' +
+    // Cuerpo
+    '<tr><td style="padding:26px 28px;color:#1F2937;font-size:15px;line-height:1.6;">' +
+    cuerpoHtml +
+    pie +
+    '</td></tr>' +
+    // Pie institucional
+    '<tr><td style="padding:16px 28px;background:#F8FAFC;border-top:1px solid #E5E7EB;color:#6B7280;font-size:12px;line-height:1.6;">' +
+    'Mensaje automático del sistema SIGSO. Por favor no respondas directamente a este correo.<br>' +
+    'Equipo SIGSO — HomePymes / RLD' +
+    '</td></tr>' +
+    '</table></td></tr></table></div>';
+}
+
+function escaparHtmlCorreo_(valor) {
+  return String(valor === undefined || valor === null ? '' : valor)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Convierte el cuerpo de texto plano (el que ya escribe cada metodo de
+// Notificaciones) en el HTML branded, sin tener que reescribir cada correo a
+// mano. Corta el pie de texto plano (pieCorreo_) porque la plantilla ya pone
+// su propio pie institucional.
+function htmlAutoDesdeTexto_(asunto, textoPlano) {
+  var texto = String(textoPlano || '');
+  var corte = texto.indexOf('\n--------------------------------------------------');
+  if (corte !== -1) texto = texto.slice(0, corte);
+  var cuerpoHtml = '<p style="margin:0;">' +
+    escaparHtmlCorreo_(texto.trim()).replace(/\n/g, '<br>') +
+    '</p>';
+  var titulo = String(asunto || 'Notificación').replace(/^SIGSO\s*[—-]\s*/, '').trim() || 'Notificación';
+  return plantillaCorreoHtml_(titulo, cuerpoHtml);
+}
+
 var Notificaciones = {
   enviarAcuseRecibo: function (solicitud) {
     var asunto = 'SIGSO — Confirmación de recepción de su solicitud ' + solicitud.solicitud_id;
@@ -242,7 +310,11 @@ function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo, cc) {
   try {
     // MailApp (no GmailApp): solo necesita el scope script.send_mail para
     // enviar, en vez del scope completo de Gmail. Soporta cc en opciones.
-    MailApp.sendEmail(destinatario, asunto, cuerpo, cc ? { cc: cc } : {});
+    // v7.6: htmlBody branded (el texto plano sigue viajando como fallback
+    // para clientes de correo que no rendericen HTML).
+    var opciones = { name: 'SIGSO — HomePymes / RLD', htmlBody: htmlAutoDesdeTexto_(asunto, cuerpo) };
+    if (cc) opciones.cc = cc;
+    MailApp.sendEmail(destinatario, asunto, cuerpo, opciones);
     registrarNotificacion_(solicitudId, 'EMAIL', destinatario, evento, 'ENVIADO', 0);
     return { enviado: true };
   } catch (err) {

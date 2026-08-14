@@ -1628,13 +1628,13 @@ function enlaceMagicoPausas_(email, modulo) {
   return sitio + separador + 'plataforma.html?token=' + token + '&modulo=' + (modulo || 'pausas');
 }
 
-// Boton de llamado a la accion para los correos de pausas -- mismo morado de
-// marca que plantillaCorreoHtml_, con estilos inline (los clientes de correo
-// ignoran CSS externo).
+// Boton de llamado a la accion para los correos de pausas -- mismo navy
+// institucional que plantillaCorreoHtml_ (v7.6, corporativo sobrio), con
+// estilos inline (los clientes de correo ignoran CSS externo).
 function botonCorreoPausas_(url, texto) {
   return '<p style="margin:0;"><a href="' + escaparHtmlCorreo_(url) + '" ' +
-    'style="display:inline-block;background:#6D5DF6;color:#ffffff;text-decoration:none;' +
-    'font-weight:bold;font-size:14px;padding:10px 18px;border-radius:6px;">' +
+    'style="display:inline-block;background:#14213D;color:#ffffff;text-decoration:none;' +
+    'font-weight:bold;font-size:14px;padding:10px 18px;">' +
     escaparHtmlCorreo_(texto) + '</a></p>';
 }
 

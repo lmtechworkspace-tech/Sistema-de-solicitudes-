@@ -973,34 +973,44 @@ function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo, ventan
   }
 }
 
-// v5.2 (correos profesionales): plantilla HTML branded, con estilos INLINE
-// (los clientes de correo -- Gmail/Outlook/movil -- ignoran <style> y CSS
-// externo; solo respetan estilos inline). Barra de encabezado con la marca,
-// cuerpo estructurado y pie institucional. `cuerpoHtml` es el contenido ya
+// v7.6 (correos "corporativo sobrio"): plantilla HTML branded, con estilos
+// INLINE (los clientes de correo -- Gmail/Outlook/movil -- ignoran <style> y
+// CSS externo; solo respetan estilos inline). Misma paleta institucional
+// (navy + grises) que la Orden de Trabajo (OrdenTrabajo.gs) para que todo lo
+// que sale de SIGSO se vea de la misma casa. `cuerpoHtml` es el contenido ya
 // formateado (parrafos/listas/tablas). `opts.pie` permite un texto de accion
 // destacado bajo el cuerpo.
 function plantillaCorreoHtml_(titulo, cuerpoHtml, opts) {
   opts = opts || {};
   var pie = opts.pie
-    ? '<div style="background:#F1F4F9;border-left:4px solid #6D5DF6;padding:12px 16px;margin:16px 0 0;font-size:14px;color:#0F172A;">' +
+    ? '<div style="background:#F8FAFC;border:1px solid #E5E7EB;border-left:3px solid #14213D;padding:12px 16px;margin:20px 0 0;font-size:14px;color:#1F2937;">' +
       opts.pie + '</div>'
     : '';
   return '<div style="margin:0;padding:0;background:#EEF1F6;">' +
-    '<table width="100%" cellpadding="0" cellspacing="0" style="background:#EEF1F6;padding:24px 0;">' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="background:#EEF1F6;padding:32px 0;">' +
     '<tr><td align="center">' +
-    '<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:10px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;">' +
-    // Encabezado con marca
-    '<tr><td style="background:#6D5DF6;padding:18px 24px;">' +
-    '<span style="color:#ffffff;font-size:20px;font-weight:bold;letter-spacing:0.3px;">SIGSO</span>' +
-    '<span style="color:#E7E4FF;font-size:14px;margin-left:10px;">' + escaparHtmlCorreo_(titulo) + '</span>' +
+    '<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border:1px solid #E5E7EB;font-family:Arial,Helvetica,sans-serif;">' +
+    // Cabecera institucional: sello + marca (mismo lenguaje visual que la OT).
+    '<tr><td style="background:#14213D;padding:22px 28px;">' +
+    '<table cellpadding="0" cellspacing="0" role="presentation"><tr>' +
+    '<td style="width:34px;height:34px;background:#ffffff;text-align:center;vertical-align:middle;font-family:Georgia,\'Times New Roman\',serif;font-weight:bold;font-size:17px;color:#14213D;">S</td>' +
+    '<td style="padding-left:12px;vertical-align:middle;">' +
+    '<div style="color:#ffffff;font-family:Georgia,\'Times New Roman\',serif;font-size:19px;font-weight:bold;letter-spacing:0.3px;">SIGSO</div>' +
+    '<div style="color:#AEB8CC;font-size:11px;letter-spacing:0.3px;">Sistema de Gestión de Solicitudes</div>' +
+    '</td></tr></table>' +
+    '</td></tr>' +
+    // Categoria del correo (eyebrow), separada de la marca.
+    '<tr><td style="padding:14px 28px;background:#F8FAFC;border-bottom:1px solid #E5E7EB;">' +
+    '<span style="display:inline-block;width:3px;height:12px;background:#14213D;margin-right:8px;"></span>' +
+    '<span style="font-size:12px;font-weight:bold;letter-spacing:0.8px;color:#374151;text-transform:uppercase;">' + escaparHtmlCorreo_(titulo) + '</span>' +
     '</td></tr>' +
     // Cuerpo
-    '<tr><td style="padding:24px;color:#0F172A;font-size:15px;line-height:1.5;">' +
+    '<tr><td style="padding:26px 28px;color:#1F2937;font-size:15px;line-height:1.6;">' +
     cuerpoHtml +
     pie +
     '</td></tr>' +
     // Pie institucional
-    '<tr><td style="padding:16px 24px;background:#F8FAFC;border-top:1px solid #E5E8EF;color:#8A93A5;font-size:12px;line-height:1.5;">' +
+    '<tr><td style="padding:16px 28px;background:#F8FAFC;border-top:1px solid #E5E7EB;color:#6B7280;font-size:12px;line-height:1.6;">' +
     'Mensaje automático del sistema SIGSO. Por favor no respondas directamente a este correo.<br>' +
     'Equipo SIGSO — HomePymes / RLD' +
     '</td></tr>' +
@@ -1010,8 +1020,8 @@ function plantillaCorreoHtml_(titulo, cuerpoHtml, opts) {
 // Fila etiqueta/valor para el bloque "DETALLE" de los correos HTML.
 function filaDetalleCorreo_(etiqueta, valor) {
   return '<tr>' +
-    '<td style="padding:3px 14px 3px 0;color:#8A93A5;white-space:nowrap;vertical-align:top;">' + escaparHtmlCorreo_(etiqueta) + '</td>' +
-    '<td style="padding:3px 0;">' + escaparHtmlCorreo_(valor) + '</td>' +
+    '<td style="padding:4px 14px 4px 0;color:#6B7280;white-space:nowrap;vertical-align:top;">' + escaparHtmlCorreo_(etiqueta) + '</td>' +
+    '<td style="padding:4px 0;">' + escaparHtmlCorreo_(valor) + '</td>' +
     '</tr>';
 }
 
