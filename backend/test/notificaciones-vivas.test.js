@@ -135,6 +135,39 @@ test('marcarTodasNotificacionesAppLeidas_ marca solo las del destinatario de la 
   assert.equal(ctx.sincronizarNotificacionesApp_({ email: 'juan@hp.cl' }).notificaciones.length, 1);
 });
 
+test('v9.0e: encolar/sincronizar/marcar-leida no dependen de mayusculas/espacios en el correo', () => {
+  // Bug real (feedback usuario): "marcar todas" no persistia -- las
+  // comparaciones de destinatario_email eran case-sensitive, y algun
+  // llamador encolaba el correo con distinta capitalizacion/espacios a como
+  // llega contexto.email en la sesion (Google/portal), asi que la fila
+  // nunca calzaba al marcar leida: al recargar, la notificacion "ya vista"
+  // volvia a aparecer como pendiente.
+  const ctx = load();
+  ctx.encolarNotificacionApp_('  Ana@HP.cl ', 'A', 'Para Ana', '');
+  // Se guarda ya normalizado (minuscula, sin espacios).
+  assert.equal(ctx.leerFilas_('NOTIFICACIONES_APP')[0].destinatario_email, 'ana@hp.cl');
+
+  // La sesion trae el correo con otra capitalizacion (tipico de un login
+  // Google que ya normaliza distinto, o un dato tecleado por un Admin).
+  const sesion = { email: 'ANA@hp.cl' };
+  assert.equal(ctx.sincronizarNotificacionesApp_(sesion).notificaciones.length, 1);
+
+  const r = ctx.marcarTodasNotificacionesAppLeidas_(sesion);
+  assert.equal(r.actualizadas, 1);
+  assert.equal(ctx.sincronizarNotificacionesApp_(sesion).notificaciones.length, 0);
+  // Y tras "recargar la pagina" (una sincronizacion nueva), sigue sin volver.
+  assert.equal(ctx.sincronizarNotificacionesApp_({ email: 'ana@hp.cl' }).notificaciones.length, 0);
+});
+
+test('v9.0e: marcarNotificacionAppLeida_ tambien tolera distinta capitalizacion del correo', () => {
+  const ctx = load();
+  ctx.encolarNotificacionApp_('Juan@HP.cl', 'A', 'Para Juan', '');
+  const notifId = ctx.leerFilas_('NOTIFICACIONES_APP')[0].notif_id;
+  const r = ctx.marcarNotificacionAppLeida_({ email: ' juan@hp.cl ' }, notifId);
+  assert.equal(r.actualizado, true);
+  assert.equal(ctx.leerFilas_('NOTIFICACIONES_APP')[0].leida, 'TRUE');
+});
+
 test('purgarNotificacionesApp_ borra las leidas y las vencidas, conserva las vivas', () => {
   const ctx = load();
   ctx.encolarNotificacionAppLote_([

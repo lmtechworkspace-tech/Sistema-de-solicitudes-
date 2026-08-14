@@ -1107,7 +1107,15 @@ function encolarNotificacionAppLote_(items) {
         var expira = new Date(ahora.getTime() + (it.vidaHoras || 72) * 60 * 60 * 1000);
         return {
           notif_id: Utilities.getUuid(),
-          destinatario_email: it.destinatario,
+          // v9.0e (bug real: "marcar todas" no persistia -- las
+          // comparaciones de destinatario eran case-sensitive y algunos
+          // llamadores encolaban el correo con mayusculas/espacios distintos
+          // a como contexto.email lo trae en la sesion, asi que la fila
+          // nunca calzaba al marcar leida). Se normaliza SIEMPRE al
+          // encolar, y las lecturas/escrituras de abajo tambien normalizan,
+          // para que una fila vieja (encolada antes de este fix) tambien
+          // calce.
+          destinatario_email: normalizarEmail_(it.destinatario),
           tipo: it.tipo,
           titulo: it.titulo,
           mensaje: it.mensaje || '',
@@ -1137,8 +1145,9 @@ function marcarTodasNotificacionesAppLeidas_(contexto) {
   var idxLeida = datos.encabezados.indexOf('leida');
   if (idxDest === -1 || idxLeida === -1) return { actualizadas: 0 };
   var n = 0;
+  var emailSesion = normalizarEmail_(contexto.email);
   for (var i = 1; i < datos.valores.length; i++) {
-    if (String(datos.valores[i][idxDest]) === contexto.email && String(datos.valores[i][idxLeida]) !== 'TRUE') {
+    if (normalizarEmail_(datos.valores[i][idxDest]) === emailSesion && String(datos.valores[i][idxLeida]) !== 'TRUE') {
       datos.hoja.getRange(i + 1, idxLeida + 1).setValue('TRUE');
       n++;
     }
@@ -1251,8 +1260,9 @@ function listarPermisosNotificacionesSO_(contexto) {
 // por Google Session o portal_token, igual criterio que Perfiles.gs).
 function sincronizarNotificacionesApp_(contexto) {
   var ahora = Date.now();
+  var emailSesion = normalizarEmail_(contexto.email);
   var pendientes = leerFilasSeguro_(SHEETS.NOTIFICACIONES_APP).filter(function (n) {
-    return n.destinatario_email === contexto.email &&
+    return normalizarEmail_(n.destinatario_email) === emailSesion &&
       String(n.leida) !== 'TRUE' &&
       (!n.expira_en || new Date(n.expira_en).getTime() > ahora);
   });
@@ -1281,7 +1291,7 @@ function marcarNotificacionAppLeida_(contexto, notifId) {
   var fila = leerFilasSeguro_(SHEETS.NOTIFICACIONES_APP).filter(function (n) {
     return n.notif_id === notifId;
   })[0];
-  if (!fila || fila.destinatario_email !== contexto.email) {
+  if (!fila || normalizarEmail_(fila.destinatario_email) !== normalizarEmail_(contexto.email)) {
     return { actualizado: false };
   }
   actualizarFilaPorId_(SHEETS.NOTIFICACIONES_APP, 'notif_id', notifId, { leida: 'TRUE' });
