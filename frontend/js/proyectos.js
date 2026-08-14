@@ -42,6 +42,10 @@
     EN_REVISION: 'En revisión', CERRADO: 'Cerrado', CANCELADO: 'Cancelado'
   };
   var ROL_PROYECTO_ETIQUETA = { LIDER: 'Líder', INTEGRANTE: 'Integrante', COLABORADOR: 'Colaborador', OBSERVADOR: 'Observador' };
+  // v9.1: estados de hito con etiqueta amable. COMPLETADO y CANCELADO son los
+  // dos "terminales" que la salud (calcularSaludProyecto_) NO cuenta como
+  // vencidos -- por eso el lider necesita poder marcar un hito completado.
+  var HITO_ESTADO_ETIQUETA = { PENDIENTE: 'Pendiente', EN_CURSO: 'En curso', COMPLETADO: 'Completado', CANCELADO: 'Cancelado' };
   var TIPO_EVENTO_ETIQUETA = {
     ACTUALIZACION: 'Actualización', COMENTARIO: 'Comentario', DECISION: 'Decisión',
     REUNION: 'Reunión', BLOQUEO: 'Bloqueo', SOLICITUD_LIDER: 'Solicitud del líder',
@@ -384,16 +388,28 @@
     if (!detalle.hitos || detalle.hitos.length === 0) {
       return acciones + Componentes.vacio({ texto: 'Todavía no hay hitos definidos.' });
     }
+    var ahora = new Date();
     var filas = detalle.hitos.map(function (h) {
       var avance = h.avance_pct === null || h.avance_pct === undefined ? '—' : h.avance_pct + '%';
-      return '<div class="sigso-py-hito">' +
+      var terminal = h.estado === 'COMPLETADO' || h.estado === 'CANCELADO';
+      var vencido = !terminal && h.fecha_objetivo && new Date(h.fecha_objetivo) < ahora;
+      var botones = puedeGestionar
+        ? '<div class="sigso-py-hito__acciones">' +
+            (!terminal ? Componentes.boton({ texto: '✓ Completar', variante: 'sutil', clase: 'js-py-hito-completar', idx: h.hito_id }) : '') +
+            Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-py-hito-editar', idx: h.hito_id }) +
+            (h.total_tareas === 0 && h.estado !== 'CANCELADO' ? Componentes.boton({ texto: 'Eliminar', variante: 'sutil', clase: 'js-py-hito-eliminar', idx: h.hito_id }) : '') +
+          '</div>'
+        : '';
+      return '<div class="sigso-py-hito' + (vencido ? ' sigso-py-hito--vencido' : '') + '">' +
         '<div class="sigso-py-hito__top">' +
           '<span class="sigso-py-hito__nombre">' + Componentes.escaparHtml(h.nombre) + '</span>' +
-          Componentes.badge(h.estado, 'neutro') +
+          Componentes.badge(HITO_ESTADO_ETIQUETA[h.estado] || h.estado, 'neutro') +
         '</div>' +
         (h.descripcion ? '<p>' + Componentes.escaparHtml(h.descripcion) + '</p>' : '') +
         '<p class="sigso-ayuda">' + h.total_tareas + ' tarea(s) · ' + avance + ' de avance' +
-          (h.fecha_objetivo ? ' · vence ' + fechaCorta_(h.fecha_objetivo) : '') + '</p>' +
+          (h.fecha_objetivo ? ' · vence ' + fechaCorta_(h.fecha_objetivo) : '') +
+          (vencido ? ' · <b class="sigso-py-hito__vencido-tag">vencido</b>' : '') + '</p>' +
+        botones +
       '</div>';
     }).join('');
     return acciones + '<div class="sigso-py-lista">' + filas + '</div>';
@@ -455,6 +471,49 @@
 
     var nuevoHito = cont.querySelector('.js-py-nuevo-hito');
     if (nuevoHito) nuevoHito.addEventListener('click', abrirFormularioHito_);
+
+    // v9.1: gestion de hitos (editar / completar / eliminar). Los datos del
+    // hito se toman de la cache de detalle -- no hay endpoint "getHito".
+    var hitosCache = (datosDetalleActual_ && datosDetalleActual_.detalle && datosDetalleActual_.detalle.hitos) || [];
+    function hitoPorId_(id) {
+      for (var i = 0; i < hitosCache.length; i++) { if (hitosCache[i].hito_id === id) return hitosCache[i]; }
+      return null;
+    }
+    cont.querySelectorAll('.js-py-hito-editar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var h = hitoPorId_(btn.getAttribute('data-idx'));
+        if (h) abrirFormularioEditarHito_(h);
+      });
+    });
+    cont.querySelectorAll('.js-py-hito-completar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        api_('gestionarHitoProyecto', {
+          proyecto_id: proyectoActivoId_, hito_id: btn.getAttribute('data-idx'), estado: 'COMPLETADO'
+        }).then(function (respuesta) {
+          if (!respuesta || !respuesta.ok) {
+            Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo actualizar el hito.', tipo: 'error' });
+            return;
+          }
+          refrescarDetalle_();
+        });
+      });
+    });
+    cont.querySelectorAll('.js-py-hito-eliminar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        Componentes.confirmar({ titulo: 'Eliminar hito', mensaje: '¿Confirmas eliminar este hito? (solo se puede si no tiene tareas)' }).then(function (ok) {
+          if (!ok) return;
+          api_('gestionarHitoProyecto', {
+            proyecto_id: proyectoActivoId_, accion: 'eliminar', hito_id: btn.getAttribute('data-idx')
+          }).then(function (respuesta) {
+            if (!respuesta || !respuesta.ok) {
+              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo eliminar el hito.', tipo: 'error' });
+              return;
+            }
+            refrescarDetalle_();
+          });
+        });
+      });
+    });
 
     var nuevoIntegrante = cont.querySelector('.js-py-nuevo-integrante');
     if (nuevoIntegrante) nuevoIntegrante.addEventListener('click', abrirFormularioIntegrante_);
@@ -612,6 +671,50 @@
     });
   }
 
+  // v9.1: editar un hito existente (nombre, descripcion, fecha, estado).
+  // Reusa gestionarHitoProyecto con hito_id -> el backend actualiza en vez
+  // de crear (ver Proyectos.gestionarHito).
+  function abrirFormularioEditarHito_(h) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Editar hito</h3>' +
+        '<form id="form-py-hito-editar">' +
+          Componentes.campoTexto({ id: 'py-he-nombre', label: 'Nombre', valor: h.nombre, requerido: true }) +
+          Componentes.campoTextarea({ id: 'py-he-descripcion', label: 'Descripción', valor: h.descripcion }) +
+          Componentes.campoTexto({ id: 'py-he-fecha', label: 'Fecha objetivo', tipo: 'date', valor: fechaISOCorta_(h.fecha_objetivo) }) +
+          Componentes.campoSelect({
+            id: 'py-he-estado', label: 'Estado', valor: h.estado || 'PENDIENTE', placeholder: false,
+            opciones: Object.keys(HITO_ESTADO_ETIQUETA).map(function (e) { return { valor: e, texto: HITO_ESTADO_ETIQUETA[e] }; })
+          }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-py-hito-editar').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('gestionarHitoProyecto', {
+        proyecto_id: proyectoActivoId_,
+        hito_id: h.hito_id,
+        nombre: document.getElementById('py-he-nombre').value,
+        descripcion: document.getElementById('py-he-descripcion').value,
+        fecha_objetivo: document.getElementById('py-he-fecha').value,
+        estado: document.getElementById('py-he-estado').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar el hito.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        refrescarDetalle_();
+      });
+    });
+  }
+
   function abrirFormularioIntegrante_() {
     var fondo = document.createElement('div');
     fondo.className = 'sigso-modal-fondo';
@@ -694,6 +797,15 @@
     var f = new Date(iso);
     if (isNaN(f.getTime())) return '—';
     return ('0' + f.getUTCDate()).slice(-2) + '/' + ('0' + (f.getUTCMonth() + 1)).slice(-2) + '/' + f.getUTCFullYear();
+  }
+
+  // ISO -> 'YYYY-MM-DD' para prellenar un <input type="date"> (UTC, igual
+  // criterio que fechaCorta_). Vacio si no hay fecha valida.
+  function fechaISOCorta_(iso) {
+    if (!iso) return '';
+    var f = new Date(iso);
+    if (isNaN(f.getTime())) return '';
+    return f.getUTCFullYear() + '-' + ('0' + (f.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + f.getUTCDate()).slice(-2);
   }
 
   function fechaHora_(iso) {

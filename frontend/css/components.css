@@ -2800,6 +2800,13 @@
   display: flex; gap: var(--esp-4); flex-wrap: wrap;
 }
 
+/* v9.1: gestion de hitos (editar / completar / eliminar) */
+.sigso-py-hito__acciones {
+  margin-top: var(--esp-2); display: flex; gap: var(--esp-2); flex-wrap: wrap;
+}
+.sigso-py-hito--vencido { border-left: 3px solid var(--critico); }
+.sigso-py-hito__vencido-tag { color: var(--critico); }
+
 .sigso-py-integrante {
   display: flex; align-items: center; gap: var(--esp-3);
   background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio-md);
