@@ -1752,18 +1752,29 @@ function generarPdfReportePausas_(titulo, reporte) {
 function construirHtmlReportePausas_(titulo, reporte) {
   var k = reporte.kpis;
   function tabla_(filas, campoA, campoB, encA, encB) {
-    if (!filas || filas.length === 0) return '<p style="color:#8A93A5;">— sin datos —</p>';
+    if (!filas || filas.length === 0) return '<p style="color:#6B7280;">— sin datos —</p>';
     var cuerpo = filas.map(function (f) {
-      return '<tr><td style="padding:4px 12px 4px 0;border-bottom:1px solid #eee;">' + escaparHtmlCorreo_(String(f[campoA])) +
-        '</td><td style="padding:4px 0;border-bottom:1px solid #eee;text-align:right;">' + escaparHtmlCorreo_(String(f[campoB])) + '</td></tr>';
+      return '<tr><td style="padding:4px 12px 4px 0;border-bottom:1px solid #E5E7EB;">' + escaparHtmlCorreo_(String(f[campoA])) +
+        '</td><td style="padding:4px 0;border-bottom:1px solid #E5E7EB;text-align:right;">' + escaparHtmlCorreo_(String(f[campoB])) + '</td></tr>';
     }).join('');
     return '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr>' +
-      '<th style="text-align:left;color:#8A93A5;border-bottom:2px solid #ddd;padding:4px 0;">' + encA + '</th>' +
-      '<th style="text-align:right;color:#8A93A5;border-bottom:2px solid #ddd;padding:4px 0;">' + encB + '</th></tr></thead><tbody>' + cuerpo + '</tbody></table>';
+      '<th style="text-align:left;color:#6B7280;border-bottom:2px solid #1F2937;padding:4px 0;">' + encA + '</th>' +
+      '<th style="text-align:right;color:#6B7280;border-bottom:2px solid #1F2937;padding:4px 0;">' + encB + '</th></tr></thead><tbody>' + cuerpo + '</tbody></table>';
   }
-  return '<html><body style="font-family:Arial,Helvetica,sans-serif;color:#0F172A;padding:24px;">' +
-    '<div style="background:#6D5DF6;color:#fff;padding:14px 18px;border-radius:8px;margin-bottom:18px;">' +
-    '<span style="font-size:20px;font-weight:bold;">SIGSO</span> · ' + escaparHtmlCorreo_(titulo) + '</div>' +
+  // v7.6 (correos y descargables "corporativo sobrio"): mismo navy + sello
+  // "S" que ya usan la Orden de Trabajo y los correos -- toda la papeleria
+  // de SIGSO sale de la misma casa.
+  var encabezado = '<table width="100%" style="border-collapse:collapse;margin-bottom:18px;"><tr>' +
+    '<td style="background:#14213D;padding:16px 22px;">' +
+    '<table cellpadding="0" cellspacing="0"><tr>' +
+    '<td style="width:30px;height:30px;background:#ffffff;text-align:center;vertical-align:middle;font-family:Georgia,\'Times New Roman\',serif;font-weight:bold;font-size:15px;color:#14213D;">S</td>' +
+    '<td style="padding-left:12px;vertical-align:middle;">' +
+    '<span style="color:#ffffff;font-size:18px;font-weight:bold;letter-spacing:0.3px;font-family:Georgia,\'Times New Roman\',serif;">SIGSO</span>' +
+    '<span style="color:#AEB8CC;font-size:13px;margin-left:10px;">' + escaparHtmlCorreo_(titulo) + '</span>' +
+    '</td></tr></table>' +
+    '</td></tr></table>';
+  return '<html><body style="font-family:Arial,Helvetica,sans-serif;color:#1F2937;padding:24px;">' +
+    encabezado +
     '<p>Periodo: <strong>' + escaparHtmlCorreo_(reporte.periodo.desde) + '</strong> a <strong>' + escaparHtmlCorreo_(reporte.periodo.hasta) + '</strong></p>' +
     '<table style="width:100%;border-collapse:collapse;margin:12px 0 20px;font-size:14px;"><tbody>' +
     '<tr><td style="padding:6px 0;">Cumplimiento</td><td style="text-align:right;font-weight:bold;">' + (k.pct_cumplimiento == null ? '—' : k.pct_cumplimiento + '%') + '</td></tr>' +

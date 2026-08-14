@@ -408,7 +408,7 @@
     contenedor.innerHTML =
       '<div class="sigso-encabezado-reporte">' +
       '<svg class="sigso-marca" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">' +
-      '<rect width="32" height="32" rx="8" fill="#6D5DF6"></rect>' +
+      '<rect width="32" height="32" rx="8" fill="#14213D"></rect>' +
       '<text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">S</text>' +
       '</svg>' +
       '<div><h1>SIGSO — Reporte ejecutivo</h1>' +
