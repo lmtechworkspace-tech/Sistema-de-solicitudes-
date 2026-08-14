@@ -48,7 +48,10 @@ var MODULOS_POR_ROL = {
 // modulo-gestion-operacional.md §4.1). No es core como 'novedades' (no se
 // fuerza en cuentas ya existentes que el Admin no haya actualizado) pero SI
 // es parte del set por defecto de toda cuenta nueva.
-var MODULOS_VALIDOS = ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo'];
+// v9.0: 'proyectos' (Modulo de Proyectos) -- mismo criterio que 'mi_trabajo':
+// se agrega a la plantilla de cuentas nuevas, pero no se fuerza en las ya
+// existentes (el Admin lo activa a mano en Cuentas plataforma).
+var MODULOS_VALIDOS = ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos'];
 
 var CuentasPortal = {
   listar: function (data, contexto) {
