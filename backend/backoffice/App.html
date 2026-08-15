@@ -3392,10 +3392,26 @@ button {
 
 .sigso-py-lista { display: flex; flex-direction: column; gap: var(--esp-2); }
 
-.sigso-py-tarea, .sigso-py-hito {
+.sigso-py-tarea, .sigso-py-hito, .sigso-py-riesgo {
   background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio-md);
   padding: var(--esp-3) var(--esp-4);
 }
+
+/* v9.4: riesgos -- acento por nivel (probabilidad x impacto, calculado en el backend) */
+.sigso-py-riesgo { border-left: 3px solid var(--borde-fuerte); }
+.sigso-py-riesgo--alta { border-left-color: var(--critico); }
+.sigso-py-riesgo--media { border-left-color: var(--alerta); }
+.sigso-py-riesgo--baja { border-left-color: var(--ok); }
+
+/* v9.4: resumen ejecutivo del portafolio (KPIs + carga por persona) */
+.sigso-py-resumen-ejecutivo { margin: var(--esp-3) 0 var(--esp-4); }
+.sigso-py-resumen-ejecutivo summary { cursor: pointer; font-weight: 600; color: var(--texto); margin-bottom: var(--esp-3); }
+.sigso-py-carga-titulo { margin: var(--esp-3) 0 var(--esp-2); }
+.sigso-py-carga { display: flex; flex-direction: column; gap: var(--esp-2); }
+.sigso-py-carga-fila { display: grid; grid-template-columns: 10rem 1fr auto; align-items: center; gap: var(--esp-2); font-size: var(--texto-sm); }
+.sigso-py-carga-nombre { color: var(--texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sigso-py-carga-barra { background: var(--superficie-2); border-radius: var(--radio-sm); height: 0.5rem; overflow: hidden; }
+.sigso-py-carga-barra span { display: block; height: 100%; background: var(--primario); border-radius: var(--radio-sm); }
 .sigso-py-tarea__top, .sigso-py-hito__top {
   display: flex; align-items: center; justify-content: space-between; gap: var(--esp-2); flex-wrap: wrap;
 }
@@ -3404,6 +3420,95 @@ button {
   margin-top: var(--esp-1); font-size: var(--texto-sm); color: var(--texto-3);
   display: flex; gap: var(--esp-4); flex-wrap: wrap;
 }
+
+/* ===== v10.0: modulo Calidad / SGC ISO 9001 =============================
+   Repositorio documental. Reusa los tokens de siempre; el unico acento
+   propio es el codigo del documento en monoespaciada, porque en un SGC el
+   codigo (DOC-01, PRO-07) ES la identidad del documento y se busca por el. */
+.sgc-cabecera {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--esp-3); flex-wrap: wrap; margin-bottom: var(--esp-3);
+}
+.sgc-cabecera .sigso-ayuda { margin: 0; flex: 1 1 18rem; }
+
+.sgc-filtros {
+  display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap;
+  margin-bottom: var(--esp-4);
+}
+.sgc-filtros .sigso-campo { margin: 0; flex: 0 1 14rem; min-width: min(9rem, 100%); }
+
+.sgc-lista { display: flex; flex-direction: column; gap: var(--esp-2); }
+
+.sgc-doc, .sgc-version {
+  background: var(--superficie); border: 1px solid var(--borde);
+  border-radius: var(--radio-md); padding: var(--esp-3) var(--esp-4);
+}
+.sgc-doc {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  border-left: 3px solid var(--ok); font: inherit; color: inherit;
+}
+.sgc-doc:hover { background: var(--superficie-2); }
+.sgc-doc--obsoleto { border-left-color: var(--critico); opacity: .72; }
+
+.sgc-doc__top {
+  display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap;
+}
+.sgc-doc__codigo {
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  font-weight: 700; color: var(--primario); font-size: var(--texto-sm);
+}
+.sgc-doc__nombre { font-weight: 600; color: var(--texto); flex: 1 1 auto; min-width: 0; }
+.sgc-doc__meta {
+  margin-top: var(--esp-1); font-size: var(--texto-sm); color: var(--texto-3);
+  display: flex; gap: var(--esp-4); flex-wrap: wrap;
+}
+
+.sgc-detalle-cab {
+  display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap;
+  margin-bottom: var(--esp-3);
+}
+.sgc-detalle-cab h1 { margin: 0; flex: 1 1 auto; min-width: 10rem; }
+.sgc-cuerpo { margin-top: var(--esp-3); }
+.sgc-sub { margin: var(--esp-5) 0 var(--esp-3); }
+
+.sgc-ficha {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+  gap: var(--esp-3); margin: var(--esp-4) 0;
+}
+.sgc-ficha__campo { display: flex; flex-direction: column; gap: 2px; }
+.sgc-ficha__campo dt {
+  font-size: var(--texto-xs); font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--texto-3);
+}
+.sgc-ficha__campo dd { margin: 0; color: var(--texto); }
+
+.sgc-acciones { display: flex; gap: var(--esp-2); flex-wrap: wrap; margin-top: var(--esp-4); }
+
+/* v10.0 Fase 1b: confirmación de lectura. Va arriba del detalle porque es
+   lo único que el personal operativo TIENE que hacer en este módulo. */
+.sgc-acuse {
+  border-radius: var(--radio-md); padding: var(--esp-3) var(--esp-4);
+  margin-bottom: var(--esp-4); display: flex; align-items: center;
+  gap: var(--esp-3); flex-wrap: wrap;
+}
+.sgc-acuse p { margin: 0; flex: 1 1 16rem; }
+.sgc-acuse--pendiente { background: var(--alerta-suave); border: 1px solid var(--alerta); }
+.sgc-acuse--hecho { background: var(--ok-suave); border: 1px solid var(--ok); color: var(--texto-2); }
+.sgc-form-fila { display: flex; gap: var(--esp-3); flex-wrap: wrap; }
+.sgc-form-fila > * { flex: 1 1 10rem; }
+
+/* v9.3: filtros del portafolio (estado + salud) */
+.sigso-py-filtros {
+  display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap; margin: var(--esp-3) 0 var(--esp-4);
+}
+.sigso-py-filtros .sigso-campo { margin: 0; flex: 0 1 12rem; min-width: 8rem; }
+
+/* v9.1: gestion de hitos (editar / completar / eliminar) */
+.sigso-py-hito__acciones {
+  margin-top: var(--esp-2); display: flex; gap: var(--esp-2); flex-wrap: wrap;
+}
+.sigso-py-hito--vencido { border-left: 3px solid var(--critico); }
+.sigso-py-hito__vencido-tag { color: var(--critico); }
 
 .sigso-py-integrante {
   display: flex; align-items: center; gap: var(--esp-3);
@@ -3417,6 +3522,12 @@ button {
 .sigso-py-sala-form__acciones { display: flex; gap: var(--esp-2); align-items: flex-end; flex-wrap: wrap; }
 .sigso-py-sala-form__acciones .sigso-campo { flex: 1 1 12rem; margin: 0; }
 
+/* v9.3: menciones -- checklist opcional plegada bajo el textarea de la sala */
+.sigso-py-menciones { margin: var(--esp-2) 0; }
+.sigso-py-menciones summary { cursor: pointer; font-size: var(--texto-sm); color: var(--primario); user-select: none; }
+.sigso-py-menciones[open] summary { margin-bottom: var(--esp-2); }
+.sigso-py-menciones .sigso-campo-check { padding: 2px 0; }
+
 .sigso-py-feed { display: flex; flex-direction: column; gap: var(--esp-2); }
 .sigso-py-evento {
   background: var(--superficie); border: 1px solid var(--borde); border-left: 3px solid var(--borde-fuerte);
@@ -3425,6 +3536,8 @@ button {
 .sigso-py-evento--solicitud_lider { border-left-color: var(--alerta); }
 .sigso-py-evento--bloqueo { border-left-color: var(--critico); }
 .sigso-py-evento--decision { border-left-color: var(--primario); }
+.sigso-py-evento--entregable { border-left-color: var(--ok); }
+.sigso-py-evento--riesgo { border-left-color: var(--critico); }
 .sigso-py-evento__top {
   display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap; font-size: var(--texto-sm);
 }
@@ -4762,6 +4875,11 @@ button.sigso-kpi {
       <button type="button" class="sigso-boton--con-icono sigso-boton--secundario" id="btn-ver-proyectos">
         <span id="ico-ver-proyectos"></span> Proyectos
       </button>
+      <!-- v10.0 (Modulo SGC ISO 9001): visible para cualquiera con sesion de
+           staff; QUE documentos ve cada quien lo decide Calidad.gs. -->
+      <button type="button" class="sigso-boton--con-icono sigso-boton--secundario" id="btn-ver-calidad">
+        <span id="ico-ver-calidad"></span> Calidad
+      </button>
 
       <!-- v3.0 (Fase 2, multi-bandeja): un responsable individual (DEV) ya
            esta auto-acotado a la suya -- solo se le avisa. ADM/GERENCIA ven
@@ -5183,6 +5301,15 @@ button.sigso-kpi {
       <button type="button" class="sigso-boton--secundario" id="btn-volver-dashboard-proyectos">&larr; Volver al dashboard</button>
       <h1>Proyectos</h1>
       <div id="proyectos-contenido"></div>
+    </section>
+
+    <!-- v10.0 (Modulo SGC ISO 9001): mismo modulo compartido (calidad.js)
+         que usa plataforma.html. -->
+    <section id="vista-calidad" class="sigso-oculto">
+      <button type="button" class="sigso-boton--secundario" id="btn-volver-dashboard-calidad">&larr; Volver al dashboard</button>
+      <h1>Calidad</h1>
+      <p class="sigso-ayuda">Documentos vigentes del Sistema de Gestión de Calidad (ISO 9001).</p>
+      <div id="calidad-contenido"></div>
     </section>
   </main>
 
@@ -11515,16 +11642,54 @@ var Iconos = (function () {
     EN_REVISION: 'En revisión', CERRADO: 'Cerrado', CANCELADO: 'Cancelado'
   };
   var ROL_PROYECTO_ETIQUETA = { LIDER: 'Líder', INTEGRANTE: 'Integrante', COLABORADOR: 'Colaborador', OBSERVADOR: 'Observador' };
+  // v9.1: estados de hito con etiqueta amable. COMPLETADO y CANCELADO son los
+  // dos "terminales" que la salud (calcularSaludProyecto_) NO cuenta como
+  // vencidos -- por eso el lider necesita poder marcar un hito completado.
+  var HITO_ESTADO_ETIQUETA = { PENDIENTE: 'Pendiente', EN_CURSO: 'En curso', COMPLETADO: 'Completado', CANCELADO: 'Cancelado' };
   var TIPO_EVENTO_ETIQUETA = {
     ACTUALIZACION: 'Actualización', COMENTARIO: 'Comentario', DECISION: 'Decisión',
     REUNION: 'Reunión', BLOQUEO: 'Bloqueo', SOLICITUD_LIDER: 'Solicitud del líder',
-    CAMBIO_ESTADO: 'Cambio de estado'
+    CAMBIO_ESTADO: 'Cambio de estado',
+    // v9.4: eventos que registra el sistema (no el usuario) al crear/marcar/
+    // revisar un entregable o registrar un riesgo -- mismo feed unico de
+    // siempre (registrarEventoProyecto_), no hay canal nuevo.
+    ENTREGABLE: 'Entregable', RIESGO: 'Riesgo'
   };
+  // v9.4 (Fase 2 de la propuesta): entregables (aprobar/observar).
+  // EN_REVISION queda mapeado por si el backend lo usa a futuro; el MVP usa
+  // ENTREGADO como "listo para revisión" (ver Proyectos.gestionarEntregable).
+  var ENTREGABLE_ESTADO_ETIQUETA = {
+    PENDIENTE: 'Pendiente', ENTREGADO: 'Entregado', EN_REVISION: 'En revisión',
+    APROBADO: 'Aprobado', OBSERVADO: 'Observado', CANCELADO: 'Cancelado'
+  };
+  // v9.4 (Fase 3 de la propuesta): riesgos. nivel lo deriva el backend
+  // (probabilidad x impacto) -- el frontend nunca lo calcula ni lo edita.
+  var RIESGO_NIVEL_ETIQUETA = { BAJA: 'Baja', MEDIA: 'Media', ALTA: 'Alta' };
+  var RIESGO_ESTADO_ETIQUETA = { ABIERTO: 'Abierto', EN_MITIGACION: 'En mitigación', CERRADO: 'Cerrado' };
 
   var proyectoActivoId_ = null;
   var pestanaActiva_ = 'resumen';
 
+  // Espejo liviano de normalizarEmailProyecto_ (Proyectos.gs) -- necesario
+  // aca solo para mapear menciones a nombres al pintar el feed; el backend
+  // sigue siendo la autoridad para permisos/comparaciones.
+  function normalizarEmail_(email) { return String(email || '').trim().toLowerCase(); }
+
   // --- portafolio ----------------------------------------------------------
+
+  // v9.3: filtros del portafolio. Estado va al backend (Proyectos.listar ya
+  // acepta filtros.estado); salud se filtra en el cliente porque ya viene
+  // calculada en cada tarjeta -- no hay razon para pedirla de nuevo al
+  // servidor. Se guardan a nivel de modulo para sobrevivir un refrescar_()
+  // (auto-refresco al volver a la pestaña) sin resetearse solos.
+  var filtroEstadoPortafolio_ = '';
+  var filtroSaludPortafolio_ = '';
+  var proyectosPortafolioSinFiltrarSalud_ = [];
+  // v9.4 (Fase 3): resumen ejecutivo del portafolio -- KPIs agregados + carga
+  // por persona. Se pide en paralelo con el listado (mismo patron que
+  // refrescarDetalle_ con Promise.all); si falla, el portafolio igual se
+  // muestra (el resumen es un plus, no un bloqueante).
+  var resumenPortafolioActual_ = null;
 
   function cargarPortafolio_() {
     proyectoActivoId_ = null;
@@ -11532,26 +11697,103 @@ var Iconos = (function () {
     var cont = document.getElementById('proyectos-contenido');
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando proyectos...');
-    api_('listarProyectos', {}).then(function (respuesta) {
-      if (!respuesta || !respuesta.ok) {
-        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el portafolio.', 'error');
+    var filtros = filtroEstadoPortafolio_ ? { estado: filtroEstadoPortafolio_ } : {};
+    Promise.all([
+      api_('listarProyectos', filtros),
+      api_('getResumenPortafolioProyectos', {})
+    ]).then(function (respuestas) {
+      var rProyectos = respuestas[0], rResumen = respuestas[1];
+      if (!rProyectos || !rProyectos.ok) {
+        cont.innerHTML = Componentes.alerta((rProyectos && rProyectos.message) || 'No se pudo cargar el portafolio.', 'error');
         return;
       }
-      pintarPortafolio_(cont, respuesta.data || []);
+      proyectosPortafolioSinFiltrarSalud_ = rProyectos.data || [];
+      resumenPortafolioActual_ = (rResumen && rResumen.ok) ? rResumen.data : null;
+      pintarPortafolio_(cont, proyectosPortafolioSinFiltrarSalud_);
     }).catch(function () {
       cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar los proyectos.', 'error');
     });
   }
 
-  function pintarPortafolio_(cont, proyectos) {
+  // KPIs agregados (activos/críticos/en riesgo, próximos a cerrar, sin
+  // actualizar) + carga por persona ponderada por tamaño (S=1,M=2,L=3,XL=5
+  // -- ver Proyectos.getResumenPortafolio). "Muchos L/XL" es sobrecarga
+  // real; un conteo plano de tareas no lo distingue (§L.3 de la propuesta).
+  function pintarResumenEjecutivo_(resumen) {
+    if (!resumen || !resumen.total_proyectos) return '';
+    var kpis = [
+      Componentes.kpi({ etiqueta: 'Proyectos activos', valor: resumen.total_proyectos }),
+      Componentes.kpi({ etiqueta: '🔴 Críticos', valor: (resumen.por_salud && resumen.por_salud.critico) || 0 }),
+      Componentes.kpi({ etiqueta: '🟡 En riesgo', valor: (resumen.por_salud && resumen.por_salud.riesgo) || 0 }),
+      Componentes.kpi({ etiqueta: 'Vencen en 14 días', valor: resumen.proximos_a_cerrar || 0 }),
+      Componentes.kpi({ etiqueta: 'Sin novedad 7+ días', valor: resumen.sin_actualizacion_reciente || 0 })
+    ].join('');
+    var maxCarga = Math.max(1, (resumen.carga_por_persona || []).reduce(function (m, c) { return Math.max(m, c.carga_ponderada); }, 1));
+    var carga = (resumen.carga_por_persona || []).slice(0, 8).map(function (c) {
+      return '<div class="sigso-py-carga-fila">' +
+        '<span class="sigso-py-carga-nombre">' + Componentes.escaparHtml(c.nombre) + '</span>' +
+        '<span class="sigso-py-carga-barra"><span style="width:' + Math.round((c.carga_ponderada / maxCarga) * 100) + '%"></span></span>' +
+        '<span class="sigso-ayuda">' + c.total_tareas + ' tarea(s)</span>' +
+      '</div>';
+    }).join('');
+    return '<details class="sigso-py-resumen-ejecutivo" open>' +
+      '<summary>Resumen ejecutivo del portafolio</summary>' +
+      '<div class="sigso-py-kpis">' + kpis + '</div>' +
+      (carga
+        ? '<p class="sigso-ayuda sigso-py-carga-titulo">Carga por persona (proyectos activos, ponderada por tamaño de tarea)</p>' +
+          '<div class="sigso-py-carga">' + carga + '</div>'
+        : '') +
+    '</details>';
+  }
+
+  function pintarPortafolio_(cont, proyectosSinFiltrarSalud) {
+    var hayFiltros = !!(filtroEstadoPortafolio_ || filtroSaludPortafolio_);
+    var proyectos = filtroSaludPortafolio_
+      ? proyectosSinFiltrarSalud.filter(function (p) { return p.salud === filtroSaludPortafolio_; })
+      : proyectosSinFiltrarSalud;
+
+    var filtrosBar = '<div class="sigso-py-filtros">' +
+      Componentes.campoSelect({
+        id: 'py-filtro-estado', label: false, valor: filtroEstadoPortafolio_,
+        placeholder: 'Todos los estados',
+        opciones: Object.keys(ESTADO_PROYECTO_ETIQUETA).map(function (e) { return { valor: e, texto: ESTADO_PROYECTO_ETIQUETA[e] }; })
+      }) +
+      Componentes.campoSelect({
+        id: 'py-filtro-salud', label: false, valor: filtroSaludPortafolio_,
+        placeholder: 'Toda salud',
+        opciones: Object.keys(SALUD_ETIQUETA).map(function (s) { return { valor: s, texto: SALUD_ETIQUETA[s] }; })
+      }) +
+      (hayFiltros ? Componentes.boton({ texto: 'Limpiar filtros', variante: 'sutil', clase: 'js-py-limpiar-filtros', tipo: 'button' }) : '') +
+      '</div>';
+
     var cabecera = '<div class="sigso-py-cabecera">' +
       '<p class="sigso-ayuda">Portafolio de proyectos internos: quién lidera cada uno, en qué estado está y qué necesita atención.</p>' +
       Componentes.boton({ texto: '+ Nuevo proyecto', clase: 'js-py-nuevo' }) +
-      '</div>';
+      '</div>' + pintarResumenEjecutivo_(resumenPortafolioActual_) + filtrosBar;
+
+    function wireFiltros() {
+      cont.querySelector('.js-py-nuevo').addEventListener('click', abrirFormularioProyecto_);
+      cont.querySelector('#py-filtro-estado').addEventListener('change', function () {
+        filtroEstadoPortafolio_ = this.value;
+        cargarPortafolio_();
+      });
+      cont.querySelector('#py-filtro-salud').addEventListener('change', function () {
+        filtroSaludPortafolio_ = this.value;
+        pintarPortafolio_(cont, proyectosPortafolioSinFiltrarSalud_);
+      });
+      var limpiar = cont.querySelector('.js-py-limpiar-filtros');
+      if (limpiar) limpiar.addEventListener('click', function () {
+        filtroEstadoPortafolio_ = ''; filtroSaludPortafolio_ = '';
+        cargarPortafolio_();
+      });
+    }
 
     if (proyectos.length === 0) {
-      cont.innerHTML = cabecera + Componentes.vacio({ texto: 'Todavía no participas en ningún proyecto.', detalle: 'Crea uno para empezar.' });
-      cont.querySelector('.js-py-nuevo').addEventListener('click', abrirFormularioProyecto_);
+      var vacio = hayFiltros
+        ? { texto: 'Ningún proyecto coincide con estos filtros.' }
+        : { texto: 'Todavía no participas en ningún proyecto.', detalle: 'Crea uno para empezar.' };
+      cont.innerHTML = cabecera + Componentes.vacio(vacio);
+      wireFiltros();
       return;
     }
 
@@ -11577,7 +11819,7 @@ var Iconos = (function () {
     }).join('');
 
     cont.innerHTML = cabecera + '<div class="sigso-py-grid">' + tarjetas + '</div>';
-    cont.querySelector('.js-py-nuevo').addEventListener('click', abrirFormularioProyecto_);
+    wireFiltros();
     cont.querySelectorAll('.js-py-abrir').forEach(function (btn) {
       btn.addEventListener('click', function () { abrirProyecto_(btn.getAttribute('data-id')); });
     });
@@ -11696,12 +11938,19 @@ var Iconos = (function () {
 
   function pintarDetalle_(cont, detalle, tareas, sala) {
     var p = detalle.proyecto;
-    var puedeGestionar = detalle.rol_actual === 'LIDER';
+    // v9.2: la capacidad de gestion la resuelve el backend (puede_gestionar:
+    // LIDER del proyecto o ADM). Fallback a rol_actual==='LIDER' para que el
+    // frontend siga funcionando ANTES de desplegar el backend nuevo (el ADM
+    // gana los controles recien cuando el Backoffice actualizado esta en
+    // produccion) -- degradacion elegante, sin regresion.
+    var puedeGestionar = detalle.puede_gestionar === true || detalle.rol_actual === 'LIDER';
     var PESTANAS = [
       { id: 'resumen', texto: 'Resumen' },
       { id: 'sala', texto: 'Sala' },
       { id: 'tareas', texto: 'Tareas' },
       { id: 'hitos', texto: 'Hitos' },
+      { id: 'entregables', texto: 'Entregables' },
+      { id: 'riesgos', texto: 'Riesgos' },
       { id: 'equipo', texto: 'Equipo' }
     ];
 
@@ -11725,6 +11974,8 @@ var Iconos = (function () {
     else if (pestanaActiva_ === 'sala') cuerpo = pintarSala_(sala, detalle);
     else if (pestanaActiva_ === 'tareas') cuerpo = pintarTareas_(tareas, detalle, puedeGestionar);
     else if (pestanaActiva_ === 'hitos') cuerpo = pintarHitos_(detalle, puedeGestionar);
+    else if (pestanaActiva_ === 'entregables') cuerpo = pintarEntregables_(detalle, puedeGestionar);
+    else if (pestanaActiva_ === 'riesgos') cuerpo = pintarRiesgos_(detalle, puedeGestionar);
     else if (pestanaActiva_ === 'equipo') cuerpo = pintarEquipo_(detalle, puedeGestionar);
 
     cont.innerHTML = cabecera + '<div class="sigso-py-cuerpo">' + cuerpo + '</div>';
@@ -11736,7 +11987,7 @@ var Iconos = (function () {
       });
     });
 
-    wireAccionesPestana_(cont, detalle, puedeGestionar);
+    wireAccionesPestana_(cont, detalle, tareas, puedeGestionar);
   }
 
   // --- Resumen ---------------------------------------------------------
@@ -11772,9 +12023,27 @@ var Iconos = (function () {
   function pintarSala_(sala, detalle) {
     var puedePublicar = !!detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
     var esLider = detalle.rol_actual === 'LIDER';
+    // v9.3: menciones -- el backend (notificarSala_) ya notifica a quien
+    // venga en evento.menciones, pero la UI nunca lo mandaba (campo muerto).
+    // Checklist opcional y plegada (patron <details> ya usado en
+    // dashboard.js/detalle.js para acciones secundarias) con los integrantes
+    // del proyecto. No se excluye al propio autor de la lista -- getDetalle
+    // no expone el email de quien consulta, y mencionarse a uno mismo es
+    // inofensivo (a lo sumo, una notificacion de mas); quien no lo quiera
+    // simplemente no marca su propia casilla.
+    var checklistMenciones = (detalle.integrantes || []).length
+      ? '<details class="sigso-py-menciones">' +
+          '<summary>Mencionar a alguien (opcional)</summary>' +
+          (detalle.integrantes || []).map(function (i) {
+            return '<label class="sigso-campo-check"><input type="checkbox" class="js-py-mencion" value="' +
+              Componentes.escaparHtml(i.usuario_email) + '"> ' + Componentes.escaparHtml(i.usuario_nombre || i.usuario_email) + '</label>';
+          }).join('') +
+        '</details>'
+      : '';
     var form = puedePublicar
       ? '<form id="form-py-sala" class="sigso-py-sala-form">' +
           Componentes.campoTextarea({ id: 'py-sala-cuerpo', label: 'Publicar en la sala', placeholder: 'Comparte un avance, decisión, o pide algo...', requerido: true }) +
+          checklistMenciones +
           '<div class="sigso-py-sala-form__acciones">' +
             Componentes.campoSelect({
               id: 'py-sala-tipo', label: false, valor: 'COMENTARIO', placeholder: false,
@@ -11795,8 +12064,16 @@ var Iconos = (function () {
       return form + Componentes.vacio({ texto: 'Todavía no hay nada en la sala.' });
     }
 
+    var integrantesPorEmail_ = {};
+    (detalle.integrantes || []).forEach(function (i) { integrantesPorEmail_[normalizarEmail_(i.usuario_email)] = i.usuario_nombre || i.usuario_email; });
+
     var feed = sala.map(function (e) {
-      var puedeConvertir = puedePublicar && !e.ref_id && (e.tipo === 'COMENTARIO' || e.tipo === 'SOLICITUD_LIDER' || e.tipo === 'DECISION');
+      // v9.4: REUNION se suma a los tipos convertibles -- "reunion -> tareas"
+      // (§L.6 de la propuesta) era casi gratis: el mecanismo ya existia para
+      // COMENTARIO/SOLICITUD_LIDER/DECISION, solo faltaba incluir el tipo.
+      var puedeConvertir = puedePublicar && !e.ref_id &&
+        (e.tipo === 'COMENTARIO' || e.tipo === 'SOLICITUD_LIDER' || e.tipo === 'DECISION' || e.tipo === 'REUNION');
+      var menciones = (e.menciones || '').split(',').map(function (m) { return normalizarEmail_(m); }).filter(Boolean);
       return '<div class="sigso-py-evento sigso-py-evento--' + e.tipo.toLowerCase() + '">' +
         '<div class="sigso-py-evento__top">' +
           '<span class="sigso-py-evento__autor">' + Componentes.escaparHtml(e.autor_nombre || e.autor_email) + '</span>' +
@@ -11805,7 +12082,14 @@ var Iconos = (function () {
         '</div>' +
         (e.titulo ? '<p class="sigso-py-evento__titulo">' + Componentes.escaparHtml(e.titulo) + '</p>' : '') +
         '<p class="sigso-py-evento__cuerpo">' + Componentes.escaparHtml(e.cuerpo || '') + '</p>' +
-        (e.ref_id ? '<p class="sigso-ayuda">→ Convertido en tarea.</p>' : '') +
+        (menciones.length
+          ? '<p class="sigso-ayuda">@ ' + menciones.map(function (m) { return Componentes.escaparHtml(integrantesPorEmail_[m] || m); }).join(', ') + '</p>'
+          : '') +
+        // v9.4: ref_tipo/ref_id ahora tambien enlazan eventos de sistema a
+        // su propio ENTREGABLE/RIESGO (autorreferencia, para trazabilidad),
+        // no solo a una tarea convertida -- el texto "Convertido en tarea"
+        // solo aplica cuando ref_tipo==='ACTIVIDAD'.
+        (e.ref_tipo === 'ACTIVIDAD' ? '<p class="sigso-ayuda">→ Convertido en tarea.</p>' : '') +
         (puedeConvertir
           ? Componentes.boton({ texto: 'Convertir en tarea', variante: 'sutil', clase: 'js-py-convertir', idx: e.evento_id })
           : '') +
@@ -11841,6 +12125,11 @@ var Iconos = (function () {
           (a.avance_pct !== '' && a.avance_pct !== undefined && a.avance_pct !== null ? '<span>' + a.avance_pct + '% avance</span>' : '') +
         '</div>' +
         (a.estado === 'BLOQUEADA' ? '<div class="sigso-mt-bloqueo">⏸ ' + Componentes.escaparHtml(a.bloqueo_motivo) + '</div>' : '') +
+        // v9.4: dependencia comprometida -- bandera derivada (nunca mueve
+        // fechas ni bloquea, §I de la propuesta), solo avisa.
+        (a.dependencia_comprometida
+          ? '<div class="sigso-mt-bloqueo">⚠ Depende de "' + Componentes.escaparHtml(a.dependencia_titulo) + '", que está atrasada.</div>'
+          : '') +
       '</div>';
     }).join('');
 
@@ -11857,16 +12146,123 @@ var Iconos = (function () {
     if (!detalle.hitos || detalle.hitos.length === 0) {
       return acciones + Componentes.vacio({ texto: 'Todavía no hay hitos definidos.' });
     }
+    var ahora = new Date();
     var filas = detalle.hitos.map(function (h) {
       var avance = h.avance_pct === null || h.avance_pct === undefined ? '—' : h.avance_pct + '%';
-      return '<div class="sigso-py-hito">' +
+      var terminal = h.estado === 'COMPLETADO' || h.estado === 'CANCELADO';
+      var vencido = !terminal && h.fecha_objetivo && new Date(h.fecha_objetivo) < ahora;
+      var botones = puedeGestionar
+        ? '<div class="sigso-py-hito__acciones">' +
+            (!terminal ? Componentes.boton({ texto: '✓ Completar', variante: 'sutil', clase: 'js-py-hito-completar', idx: h.hito_id }) : '') +
+            Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-py-hito-editar', idx: h.hito_id }) +
+            (h.total_tareas === 0 && h.estado !== 'CANCELADO' ? Componentes.boton({ texto: 'Eliminar', variante: 'sutil', clase: 'js-py-hito-eliminar', idx: h.hito_id }) : '') +
+          '</div>'
+        : '';
+      return '<div class="sigso-py-hito' + (vencido ? ' sigso-py-hito--vencido' : '') + '">' +
         '<div class="sigso-py-hito__top">' +
           '<span class="sigso-py-hito__nombre">' + Componentes.escaparHtml(h.nombre) + '</span>' +
-          Componentes.badge(h.estado, 'neutro') +
+          Componentes.badge(HITO_ESTADO_ETIQUETA[h.estado] || h.estado, 'neutro') +
         '</div>' +
         (h.descripcion ? '<p>' + Componentes.escaparHtml(h.descripcion) + '</p>' : '') +
         '<p class="sigso-ayuda">' + h.total_tareas + ' tarea(s) · ' + avance + ' de avance' +
-          (h.fecha_objetivo ? ' · vence ' + fechaCorta_(h.fecha_objetivo) : '') + '</p>' +
+          (h.fecha_objetivo ? ' · vence ' + fechaCorta_(h.fecha_objetivo) : '') +
+          (vencido ? ' · <b class="sigso-py-hito__vencido-tag">vencido</b>' : '') + '</p>' +
+        botones +
+      '</div>';
+    }).join('');
+    return acciones + '<div class="sigso-py-lista">' + filas + '</div>';
+  }
+
+  // --- Entregables (v9.4, Fase 2) -------------------------------------
+
+  function entregableBadgeVariante_(estado) {
+    if (estado === 'APROBADO') return 'ok';
+    if (estado === 'OBSERVADO') return 'alerta';
+    return 'neutro';
+  }
+
+  function pintarEntregables_(detalle, puedeGestionar) {
+    var puedeCrear = detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
+    var acciones = puedeCrear
+      ? '<div class="sigso-py-cabecera">' + Componentes.boton({ texto: '+ Nuevo entregable', clase: 'js-py-nuevo-entregable' }) + '</div>'
+      : '';
+    var entregables = detalle.entregables || [];
+    if (entregables.length === 0) {
+      return acciones + Componentes.vacio({ texto: 'Todavía no hay entregables definidos.' });
+    }
+    var integrantesPorEmail = {};
+    (detalle.integrantes || []).forEach(function (i) { integrantesPorEmail[normalizarEmail_(i.usuario_email)] = i.usuario_nombre || i.usuario_email; });
+
+    var filas = entregables.map(function (e) {
+      // El backend valida quien es realmente el responsable (mismo criterio
+      // que el check-in en pintarTareas_): el boton se muestra a cualquiera
+      // que pueda actuar en el proyecto, el servidor rechaza si no corresponde.
+      var puedeMarcar = puedeCrear && (e.estado === 'PENDIENTE' || e.estado === 'OBSERVADO');
+      var puedeRevisar = puedeGestionar && e.estado === 'ENTREGADO';
+      var botones = '<div class="sigso-py-hito__acciones">' +
+          (puedeMarcar ? Componentes.boton({ texto: 'Marcar entregado', variante: 'sutil', clase: 'js-py-entregable-marcar', idx: e.entregable_id }) : '') +
+          (puedeRevisar ? Componentes.boton({ texto: 'Aprobar', variante: 'sutil', clase: 'js-py-entregable-aprobar', idx: e.entregable_id }) : '') +
+          (puedeRevisar ? Componentes.boton({ texto: 'Observar', variante: 'sutil', clase: 'js-py-entregable-observar', idx: e.entregable_id }) : '') +
+          (puedeGestionar && e.estado === 'PENDIENTE' ? Componentes.boton({ texto: 'Eliminar', variante: 'sutil', clase: 'js-py-entregable-eliminar', idx: e.entregable_id }) : '') +
+        '</div>';
+      return '<div class="sigso-py-tarea">' +
+        '<div class="sigso-py-tarea__top">' +
+          '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(e.nombre) + '</span>' +
+          Componentes.badge(ENTREGABLE_ESTADO_ETIQUETA[e.estado] || e.estado, entregableBadgeVariante_(e.estado)) +
+        '</div>' +
+        (e.descripcion ? '<p>' + Componentes.escaparHtml(e.descripcion) + '</p>' : '') +
+        '<div class="sigso-py-tarea__meta">' +
+          '<span>' + Componentes.escaparHtml(integrantesPorEmail[normalizarEmail_(e.responsable_email)] || e.responsable_email) + '</span>' +
+          '<span>Vence ' + fechaCorta_(e.fecha_comprometida) + '</span>' +
+        '</div>' +
+        (e.estado === 'OBSERVADO' && e.observaciones ? '<div class="sigso-mt-bloqueo">⏸ ' + Componentes.escaparHtml(e.observaciones) + '</div>' : '') +
+        (e.url_evidencia ? '<p class="sigso-ayuda"><a href="' + Componentes.escaparHtml(e.url_evidencia) + '" target="_blank" rel="noopener noreferrer">Ver evidencia</a></p>' : '') +
+        botones +
+      '</div>';
+    }).join('');
+    return acciones + '<div class="sigso-py-lista">' + filas + '</div>';
+  }
+
+  // --- Riesgos (v9.4, Fase 3) -------------------------------------------
+
+  function riesgoBadgeVariante_(nivel) {
+    if (nivel === 'ALTA') return 'critico';
+    if (nivel === 'MEDIA') return 'alerta';
+    return 'ok';
+  }
+
+  function pintarRiesgos_(detalle, puedeGestionar) {
+    var puedeCrear = detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
+    var acciones = puedeCrear
+      ? '<div class="sigso-py-cabecera">' + Componentes.boton({ texto: '+ Nuevo riesgo', clase: 'js-py-nuevo-riesgo' }) + '</div>'
+      : '';
+    var riesgos = detalle.riesgos || [];
+    if (riesgos.length === 0) {
+      return acciones + Componentes.vacio({ texto: 'No hay riesgos registrados.' });
+    }
+    var integrantesPorEmail = {};
+    (detalle.integrantes || []).forEach(function (i) { integrantesPorEmail[normalizarEmail_(i.usuario_email)] = i.usuario_nombre || i.usuario_email; });
+
+    var filas = riesgos.map(function (r) {
+      var puedeEditar = puedeGestionar && r.estado !== 'CERRADO';
+      return '<div class="sigso-py-riesgo sigso-py-riesgo--' + (r.nivel || '').toLowerCase() + '">' +
+        '<div class="sigso-py-tarea__top">' +
+          '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(r.descripcion) + '</span>' +
+          Componentes.badge('Riesgo ' + (RIESGO_NIVEL_ETIQUETA[r.nivel] || r.nivel), riesgoBadgeVariante_(r.nivel)) +
+        '</div>' +
+        '<div class="sigso-py-tarea__meta">' +
+          '<span>Probabilidad ' + (RIESGO_NIVEL_ETIQUETA[r.probabilidad] || r.probabilidad) + '</span>' +
+          '<span>Impacto ' + (RIESGO_NIVEL_ETIQUETA[r.impacto] || r.impacto) + '</span>' +
+          '<span>' + Componentes.escaparHtml(integrantesPorEmail[normalizarEmail_(r.responsable_email)] || r.responsable_email) + '</span>' +
+          '<span>' + Componentes.badge(RIESGO_ESTADO_ETIQUETA[r.estado] || r.estado, 'neutro') + '</span>' +
+        '</div>' +
+        (r.mitigacion ? '<p class="sigso-ayuda"><b>Mitigación:</b> ' + Componentes.escaparHtml(r.mitigacion) + '</p>' : '') +
+        (puedeEditar
+          ? '<div class="sigso-py-hito__acciones">' +
+              Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-py-riesgo-editar', idx: r.riesgo_id }) +
+              Componentes.boton({ texto: 'Cerrar', variante: 'sutil', clase: 'js-py-riesgo-cerrar', idx: r.riesgo_id }) +
+            '</div>'
+          : '') +
       '</div>';
     }).join('');
     return acciones + '<div class="sigso-py-lista">' + filas + '</div>';
@@ -11896,7 +12292,7 @@ var Iconos = (function () {
 
   // --- acciones (delegadas por pestaña) -------------------------------
 
-  function wireAccionesPestana_(cont, detalle, puedeGestionar) {
+  function wireAccionesPestana_(cont, detalle, tareas, puedeGestionar) {
     var editar = cont.querySelector('.js-py-editar');
     if (editar) editar.addEventListener('click', function () { abrirFormularioEditar_(detalle.proyecto); });
 
@@ -11910,7 +12306,8 @@ var Iconos = (function () {
         var cuerpo = document.getElementById('py-sala-cuerpo').value;
         var tipo = document.getElementById('py-sala-tipo').value;
         if (!cuerpo.trim()) return;
-        api_('publicarEnSalaProyecto', { proyecto_id: proyectoActivoId_, tipo: tipo, cuerpo: cuerpo }).then(function (respuesta) {
+        var menciones = Array.from(cont.querySelectorAll('.js-py-mencion:checked')).map(function (el) { return el.value; });
+        api_('publicarEnSalaProyecto', { proyecto_id: proyectoActivoId_, tipo: tipo, cuerpo: cuerpo, menciones: menciones }).then(function (respuesta) {
           if (!respuesta || !respuesta.ok) {
             Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo publicar.', tipo: 'error' });
             return;
@@ -11920,14 +12317,63 @@ var Iconos = (function () {
       });
     }
     cont.querySelectorAll('.js-py-convertir').forEach(function (btn) {
-      btn.addEventListener('click', function () { abrirFormularioConvertir_(btn.getAttribute('data-idx')); });
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-idx');
+        var sala = (datosDetalleActual_ && datosDetalleActual_.sala) || [];
+        var ev = null;
+        for (var i = 0; i < sala.length; i++) { if (sala[i].evento_id === id) { ev = sala[i]; break; } }
+        abrirFormularioConvertir_(ev || { evento_id: id }, detalle);
+      });
     });
 
     var nuevaTarea = cont.querySelector('.js-py-nueva-tarea');
-    if (nuevaTarea) nuevaTarea.addEventListener('click', function () { abrirFormularioTarea_(detalle); });
+    if (nuevaTarea) nuevaTarea.addEventListener('click', function () { abrirFormularioTarea_(detalle, tareas); });
 
     var nuevoHito = cont.querySelector('.js-py-nuevo-hito');
     if (nuevoHito) nuevoHito.addEventListener('click', abrirFormularioHito_);
+
+    // v9.1: gestion de hitos (editar / completar / eliminar). Los datos del
+    // hito se toman de la cache de detalle -- no hay endpoint "getHito".
+    var hitosCache = (datosDetalleActual_ && datosDetalleActual_.detalle && datosDetalleActual_.detalle.hitos) || [];
+    function hitoPorId_(id) {
+      for (var i = 0; i < hitosCache.length; i++) { if (hitosCache[i].hito_id === id) return hitosCache[i]; }
+      return null;
+    }
+    cont.querySelectorAll('.js-py-hito-editar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var h = hitoPorId_(btn.getAttribute('data-idx'));
+        if (h) abrirFormularioEditarHito_(h);
+      });
+    });
+    cont.querySelectorAll('.js-py-hito-completar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        api_('gestionarHitoProyecto', {
+          proyecto_id: proyectoActivoId_, hito_id: btn.getAttribute('data-idx'), estado: 'COMPLETADO'
+        }).then(function (respuesta) {
+          if (!respuesta || !respuesta.ok) {
+            Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo actualizar el hito.', tipo: 'error' });
+            return;
+          }
+          refrescarDetalle_();
+        });
+      });
+    });
+    cont.querySelectorAll('.js-py-hito-eliminar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        Componentes.confirmar({ titulo: 'Eliminar hito', mensaje: '¿Confirmas eliminar este hito? (solo se puede si no tiene tareas)' }).then(function (ok) {
+          if (!ok) return;
+          api_('gestionarHitoProyecto', {
+            proyecto_id: proyectoActivoId_, accion: 'eliminar', hito_id: btn.getAttribute('data-idx')
+          }).then(function (respuesta) {
+            if (!respuesta || !respuesta.ok) {
+              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo eliminar el hito.', tipo: 'error' });
+              return;
+            }
+            refrescarDetalle_();
+          });
+        });
+      });
+    });
 
     var nuevoIntegrante = cont.querySelector('.js-py-nuevo-integrante');
     if (nuevoIntegrante) nuevoIntegrante.addEventListener('click', abrirFormularioIntegrante_);
@@ -11939,6 +12385,106 @@ var Iconos = (function () {
           api_('gestionarIntegranteProyecto', {
             proyecto_id: proyectoActivoId_, accion: 'quitar', integrante_id: btn.getAttribute('data-idx')
           }).then(refrescarDetalle_);
+        });
+      });
+    });
+
+    // --- v9.4: entregables ------------------------------------------------
+    var nuevoEntregable = cont.querySelector('.js-py-nuevo-entregable');
+    if (nuevoEntregable) nuevoEntregable.addEventListener('click', function () { abrirFormularioEntregable_(detalle); });
+
+    cont.querySelectorAll('.js-py-entregable-marcar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-idx');
+        Componentes.prompt({ titulo: 'Marcar como entregado', mensaje: 'Link de evidencia (opcional)' }).then(function (url) {
+          if (url === null || url === undefined) return; // cancelado; '' (vacio) SI procede -- ver comentario del prompt.
+          api_('gestionarEntregableProyecto', {
+            proyecto_id: proyectoActivoId_, accion: 'marcarEntregado', entregable_id: id, url_evidencia: url
+          }).then(function (respuesta) {
+            if (!respuesta || !respuesta.ok) {
+              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo marcar como entregado.', tipo: 'error' });
+              return;
+            }
+            refrescarDetalle_();
+          });
+        });
+      });
+    });
+    cont.querySelectorAll('.js-py-entregable-aprobar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-idx');
+        Componentes.confirmar({ titulo: 'Aprobar entregable', mensaje: '¿Confirmas aprobar este entregable?' }).then(function (ok) {
+          if (!ok) return;
+          api_('revisarEntregableProyecto', { proyecto_id: proyectoActivoId_, entregable_id: id, resultado: 'APROBADO' }).then(function (respuesta) {
+            if (!respuesta || !respuesta.ok) {
+              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo aprobar el entregable.', tipo: 'error' });
+              return;
+            }
+            refrescarDetalle_();
+          });
+        });
+      });
+    });
+    cont.querySelectorAll('.js-py-entregable-observar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-idx');
+        Componentes.prompt({ titulo: 'Observar entregable', mensaje: 'Indica qué falta corregir.' }).then(function (motivo) {
+          if (!motivo || !String(motivo).trim()) return;
+          api_('revisarEntregableProyecto', {
+            proyecto_id: proyectoActivoId_, entregable_id: id, resultado: 'OBSERVADO', observaciones: motivo
+          }).then(function (respuesta) {
+            if (!respuesta || !respuesta.ok) {
+              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo observar el entregable.', tipo: 'error' });
+              return;
+            }
+            refrescarDetalle_();
+          });
+        });
+      });
+    });
+    cont.querySelectorAll('.js-py-entregable-eliminar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-idx');
+        Componentes.confirmar({ titulo: 'Eliminar entregable', mensaje: '¿Confirmas eliminar este entregable?' }).then(function (ok) {
+          if (!ok) return;
+          api_('gestionarEntregableProyecto', { proyecto_id: proyectoActivoId_, accion: 'eliminar', entregable_id: id }).then(function (respuesta) {
+            if (!respuesta || !respuesta.ok) {
+              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo eliminar el entregable.', tipo: 'error' });
+              return;
+            }
+            refrescarDetalle_();
+          });
+        });
+      });
+    });
+
+    // --- v9.4: riesgos ------------------------------------------------------
+    var nuevoRiesgo = cont.querySelector('.js-py-nuevo-riesgo');
+    if (nuevoRiesgo) nuevoRiesgo.addEventListener('click', function () { abrirFormularioRiesgo_(detalle); });
+
+    var riesgosCache = (datosDetalleActual_ && datosDetalleActual_.detalle && datosDetalleActual_.detalle.riesgos) || [];
+    function riesgoPorId_(id) {
+      for (var i = 0; i < riesgosCache.length; i++) { if (riesgosCache[i].riesgo_id === id) return riesgosCache[i]; }
+      return null;
+    }
+    cont.querySelectorAll('.js-py-riesgo-editar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var r = riesgoPorId_(btn.getAttribute('data-idx'));
+        if (r) abrirFormularioEditarRiesgo_(r, detalle);
+      });
+    });
+    cont.querySelectorAll('.js-py-riesgo-cerrar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-idx');
+        Componentes.confirmar({ titulo: 'Cerrar riesgo', mensaje: '¿Confirmas cerrar este riesgo?' }).then(function (ok) {
+          if (!ok) return;
+          api_('gestionarRiesgoProyecto', { proyecto_id: proyectoActivoId_, accion: 'eliminar', riesgo_id: id }).then(function (respuesta) {
+            if (!respuesta || !respuesta.ok) {
+              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo cerrar el riesgo.', tipo: 'error' });
+              return;
+            }
+            refrescarDetalle_();
+          });
         });
       });
     });
@@ -11968,12 +12514,24 @@ var Iconos = (function () {
         '<form id="form-py-editar">' +
           Componentes.campoTexto({ id: 'py-ed-nombre', label: 'Nombre', valor: p.nombre, requerido: true }) +
           Componentes.campoTextarea({ id: 'py-ed-descripcion', label: 'Descripción', valor: p.descripcion }) +
-          Componentes.campoSelect({
-            id: 'py-ed-estado', label: 'Estado', valor: p.estado, placeholder: false,
-            opciones: Object.keys(ESTADO_PROYECTO_ETIQUETA).filter(function (e) { return e !== 'CERRADO'; }).map(function (e) {
-              return { valor: e, texto: ESTADO_PROYECTO_ETIQUETA[e] };
-            })
-          }) +
+          Componentes.campoTextarea({ id: 'py-ed-objetivo', label: 'Objetivo / resultado esperado', valor: p.objetivo }) +
+          '<div class="sigso-py-form-fila">' +
+            Componentes.campoTexto({ id: 'py-ed-fecha-inicio', label: 'Fecha de inicio', tipo: 'date', valor: fechaISOCorta_(p.fecha_inicio) }) +
+            Componentes.campoTexto({ id: 'py-ed-fecha-objetivo', label: 'Fecha objetivo', tipo: 'date', valor: fechaISOCorta_(p.fecha_objetivo) }) +
+          '</div>' +
+          '<div class="sigso-py-form-fila">' +
+            Componentes.campoSelect({
+              id: 'py-ed-prioridad', label: 'Prioridad', valor: p.prioridad || 'P4', placeholder: false,
+              opciones: [{ valor: 'P1', texto: 'P1 — Crítica' }, { valor: 'P2', texto: 'P2 — Alta' },
+                { valor: 'P3', texto: 'P3 — Media' }, { valor: 'P4', texto: 'P4 — Normal' }, { valor: 'P5', texto: 'P5 — Baja' }]
+            }) +
+            Componentes.campoSelect({
+              id: 'py-ed-estado', label: 'Estado', valor: p.estado, placeholder: false,
+              opciones: Object.keys(ESTADO_PROYECTO_ETIQUETA).filter(function (e) { return e !== 'CERRADO'; }).map(function (e) {
+                return { valor: e, texto: ESTADO_PROYECTO_ETIQUETA[e] };
+              })
+            }) +
+          '</div>' +
           '<div class="sigso-modal__acciones">' +
             Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
             Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
@@ -11987,6 +12545,10 @@ var Iconos = (function () {
         proyecto_id: p.proyecto_id,
         nombre: document.getElementById('py-ed-nombre').value,
         descripcion: document.getElementById('py-ed-descripcion').value,
+        objetivo: document.getElementById('py-ed-objetivo').value,
+        fecha_inicio: document.getElementById('py-ed-fecha-inicio').value,
+        fecha_objetivo: document.getElementById('py-ed-fecha-objetivo').value,
+        prioridad: document.getElementById('py-ed-prioridad').value,
         estado: document.getElementById('py-ed-estado').value
       }).then(function (respuesta) {
         if (!respuesta || !respuesta.ok) {
@@ -11999,11 +12561,14 @@ var Iconos = (function () {
     });
   }
 
-  function abrirFormularioTarea_(detalle) {
+  function abrirFormularioTarea_(detalle, tareas) {
     var opcionesIntegrantes = (detalle.integrantes || []).map(function (i) {
       return { valor: i.usuario_email, texto: i.usuario_nombre || i.usuario_email };
     });
     var opcionesHitos = (detalle.hitos || []).map(function (h) { return { valor: h.hito_id, texto: h.nombre }; });
+    // v9.4 (Fase 2): dependencia opcional -- solo informativa, nunca bloquea
+    // ni mueve fechas (§I de la propuesta). Solo tareas de este mismo proyecto.
+    var opcionesDependencia = (tareas || []).map(function (a) { return { valor: a.actividad_id, texto: a.titulo }; });
     var fondo = document.createElement('div');
     fondo.className = 'sigso-modal-fondo';
     fondo.innerHTML =
@@ -12014,6 +12579,7 @@ var Iconos = (function () {
           Componentes.campoTextarea({ id: 'py-t-descripcion', label: 'Descripción' }) +
           Componentes.campoSelect({ id: 'py-t-responsable', label: 'Responsable', opciones: opcionesIntegrantes, requerido: true }) +
           (opcionesHitos.length ? Componentes.campoSelect({ id: 'py-t-hito', label: 'Hito (opcional)', opciones: opcionesHitos }) : '') +
+          (opcionesDependencia.length ? Componentes.campoSelect({ id: 'py-t-depende', label: 'Depende de (opcional)', opciones: opcionesDependencia }) : '') +
           '<div class="sigso-py-form-fila">' +
             Componentes.campoTexto({ id: 'py-t-fecha', label: 'Fecha comprometida', tipo: 'date', requerido: true }) +
             Componentes.campoSelect({
@@ -12031,9 +12597,11 @@ var Iconos = (function () {
     document.getElementById('form-py-tarea').addEventListener('submit', function (evento) {
       evento.preventDefault();
       var hitoEl = document.getElementById('py-t-hito');
+      var dependeEl = document.getElementById('py-t-depende');
       api_('crearTareaProyecto', {
         proyecto_id: proyectoActivoId_,
         hito_id: hitoEl ? hitoEl.value : '',
+        depende_de: dependeEl ? dependeEl.value : '',
         titulo: document.getElementById('py-t-titulo').value,
         descripcion: document.getElementById('py-t-descripcion').value,
         responsable_email: document.getElementById('py-t-responsable').value,
@@ -12085,6 +12653,50 @@ var Iconos = (function () {
     });
   }
 
+  // v9.1: editar un hito existente (nombre, descripcion, fecha, estado).
+  // Reusa gestionarHitoProyecto con hito_id -> el backend actualiza en vez
+  // de crear (ver Proyectos.gestionarHito).
+  function abrirFormularioEditarHito_(h) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Editar hito</h3>' +
+        '<form id="form-py-hito-editar">' +
+          Componentes.campoTexto({ id: 'py-he-nombre', label: 'Nombre', valor: h.nombre, requerido: true }) +
+          Componentes.campoTextarea({ id: 'py-he-descripcion', label: 'Descripción', valor: h.descripcion }) +
+          Componentes.campoTexto({ id: 'py-he-fecha', label: 'Fecha objetivo', tipo: 'date', valor: fechaISOCorta_(h.fecha_objetivo) }) +
+          Componentes.campoSelect({
+            id: 'py-he-estado', label: 'Estado', valor: h.estado || 'PENDIENTE', placeholder: false,
+            opciones: Object.keys(HITO_ESTADO_ETIQUETA).map(function (e) { return { valor: e, texto: HITO_ESTADO_ETIQUETA[e] }; })
+          }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-py-hito-editar').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('gestionarHitoProyecto', {
+        proyecto_id: proyectoActivoId_,
+        hito_id: h.hito_id,
+        nombre: document.getElementById('py-he-nombre').value,
+        descripcion: document.getElementById('py-he-descripcion').value,
+        fecha_objetivo: document.getElementById('py-he-fecha').value,
+        estado: document.getElementById('py-he-estado').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar el hito.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        refrescarDetalle_();
+      });
+    });
+  }
+
   function abrirFormularioIntegrante_() {
     var fondo = document.createElement('div');
     fondo.className = 'sigso-modal-fondo';
@@ -12125,24 +12737,217 @@ var Iconos = (function () {
     });
   }
 
-  function abrirFormularioConvertir_(eventoId) {
-    Componentes.prompt({ titulo: 'Título de la tarea', mensaje: 'Ej: Revisar documento' }).then(function (titulo) {
-      if (!titulo || !String(titulo).trim()) return;
-      Componentes.prompt({ titulo: 'Responsable', mensaje: 'Correo de quien la hará' }).then(function (email) {
-        if (!email || !String(email).trim()) return;
-        Componentes.prompt({ titulo: 'Fecha comprometida', tipo: 'date' }).then(function (fecha) {
-          if (!fecha) return;
-          api_('convertirEventoEnTareaProyecto', {
-            proyecto_id: proyectoActivoId_, evento_id: eventoId, titulo: titulo,
-            responsable_email: email, fecha_compromiso: fecha
-          }).then(function (respuesta) {
-            if (!respuesta || !respuesta.ok) {
-              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo convertir.', tipo: 'error' });
-              return;
-            }
-            refrescarDetalle_();
-          });
-        });
+  // v9.4 (Fase 2): nuevo entregable.
+  function abrirFormularioEntregable_(detalle) {
+    var opcionesIntegrantes = (detalle.integrantes || []).map(function (i) {
+      return { valor: i.usuario_email, texto: i.usuario_nombre || i.usuario_email };
+    });
+    var opcionesHitos = (detalle.hitos || []).map(function (h) { return { valor: h.hito_id, texto: h.nombre }; });
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Nuevo entregable</h3>' +
+        '<form id="form-py-entregable">' +
+          Componentes.campoTexto({ id: 'py-e-nombre', label: 'Nombre', requerido: true }) +
+          Componentes.campoTextarea({ id: 'py-e-descripcion', label: 'Descripción' }) +
+          Componentes.campoSelect({ id: 'py-e-responsable', label: 'Responsable', opciones: opcionesIntegrantes, requerido: true }) +
+          (opcionesHitos.length ? Componentes.campoSelect({ id: 'py-e-hito', label: 'Hito (opcional)', opciones: opcionesHitos }) : '') +
+          Componentes.campoTexto({ id: 'py-e-fecha', label: 'Fecha comprometida', tipo: 'date', requerido: true }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Crear entregable', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-py-entregable').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var hitoEl = document.getElementById('py-e-hito');
+      api_('gestionarEntregableProyecto', {
+        proyecto_id: proyectoActivoId_,
+        nombre: document.getElementById('py-e-nombre').value,
+        descripcion: document.getElementById('py-e-descripcion').value,
+        responsable_email: document.getElementById('py-e-responsable').value,
+        hito_id: hitoEl ? hitoEl.value : '',
+        fecha_comprometida: document.getElementById('py-e-fecha').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo crear el entregable.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        refrescarDetalle_();
+      });
+    });
+  }
+
+  // v9.4 (Fase 3): nuevo riesgo. nivel lo calcula el backend (probabilidad x
+  // impacto) -- el formulario nunca lo pide ni lo muestra como campo editable.
+  function abrirFormularioRiesgo_(detalle) {
+    var opcionesIntegrantes = (detalle.integrantes || []).map(function (i) {
+      return { valor: i.usuario_email, texto: i.usuario_nombre || i.usuario_email };
+    });
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Nuevo riesgo</h3>' +
+        '<form id="form-py-riesgo">' +
+          Componentes.campoTextarea({ id: 'py-r-descripcion', label: 'Descripción del riesgo', requerido: true }) +
+          '<div class="sigso-py-form-fila">' +
+            Componentes.campoSelect({
+              id: 'py-r-probabilidad', label: 'Probabilidad', valor: 'MEDIA', placeholder: false,
+              opciones: [{ valor: 'BAJA', texto: 'Baja' }, { valor: 'MEDIA', texto: 'Media' }, { valor: 'ALTA', texto: 'Alta' }]
+            }) +
+            Componentes.campoSelect({
+              id: 'py-r-impacto', label: 'Impacto', valor: 'MEDIA', placeholder: false,
+              opciones: [{ valor: 'BAJA', texto: 'Baja' }, { valor: 'MEDIA', texto: 'Media' }, { valor: 'ALTA', texto: 'Alta' }]
+            }) +
+          '</div>' +
+          // Responsable opcional -- sin elegir, el backend lo asigna al lider
+          // del proyecto por defecto (Proyectos.gestionarRiesgo).
+          Componentes.campoSelect({ id: 'py-r-responsable', label: 'Responsable (opcional, por defecto el líder)', opciones: opcionesIntegrantes }) +
+          Componentes.campoTextarea({ id: 'py-r-mitigacion', label: 'Mitigación (opcional)' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Registrar riesgo', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-py-riesgo').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('gestionarRiesgoProyecto', {
+        proyecto_id: proyectoActivoId_,
+        descripcion: document.getElementById('py-r-descripcion').value,
+        probabilidad: document.getElementById('py-r-probabilidad').value,
+        impacto: document.getElementById('py-r-impacto').value,
+        responsable_email: document.getElementById('py-r-responsable').value,
+        mitigacion: document.getElementById('py-r-mitigacion').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo registrar el riesgo.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        refrescarDetalle_();
+      });
+    });
+  }
+
+  function abrirFormularioEditarRiesgo_(r, detalle) {
+    var opcionesIntegrantes = (detalle.integrantes || []).map(function (i) {
+      return { valor: i.usuario_email, texto: i.usuario_nombre || i.usuario_email };
+    });
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Editar riesgo</h3>' +
+        '<form id="form-py-riesgo-editar">' +
+          Componentes.campoTextarea({ id: 'py-re-descripcion', label: 'Descripción del riesgo', valor: r.descripcion, requerido: true }) +
+          '<div class="sigso-py-form-fila">' +
+            Componentes.campoSelect({
+              id: 'py-re-probabilidad', label: 'Probabilidad', valor: r.probabilidad, placeholder: false,
+              opciones: [{ valor: 'BAJA', texto: 'Baja' }, { valor: 'MEDIA', texto: 'Media' }, { valor: 'ALTA', texto: 'Alta' }]
+            }) +
+            Componentes.campoSelect({
+              id: 'py-re-impacto', label: 'Impacto', valor: r.impacto, placeholder: false,
+              opciones: [{ valor: 'BAJA', texto: 'Baja' }, { valor: 'MEDIA', texto: 'Media' }, { valor: 'ALTA', texto: 'Alta' }]
+            }) +
+          '</div>' +
+          Componentes.campoSelect({ id: 'py-re-responsable', label: 'Responsable', valor: r.responsable_email, opciones: opcionesIntegrantes }) +
+          Componentes.campoTextarea({ id: 'py-re-mitigacion', label: 'Mitigación', valor: r.mitigacion }) +
+          Componentes.campoSelect({
+            id: 'py-re-estado', label: 'Estado', valor: r.estado || 'ABIERTO', placeholder: false,
+            opciones: [{ valor: 'ABIERTO', texto: 'Abierto' }, { valor: 'EN_MITIGACION', texto: 'En mitigación' }]
+          }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-py-riesgo-editar').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('gestionarRiesgoProyecto', {
+        proyecto_id: proyectoActivoId_,
+        riesgo_id: r.riesgo_id,
+        descripcion: document.getElementById('py-re-descripcion').value,
+        probabilidad: document.getElementById('py-re-probabilidad').value,
+        impacto: document.getElementById('py-re-impacto').value,
+        responsable_email: document.getElementById('py-re-responsable').value,
+        mitigacion: document.getElementById('py-re-mitigacion').value,
+        estado: document.getElementById('py-re-estado').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar el riesgo.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        refrescarDetalle_();
+      });
+    });
+  }
+
+  // v9.1: convertir un evento de la sala (comentario/decisión/solicitud) en
+  // una tarea real, con un modal en vez de 3 prompts encadenados. Prellena
+  // título y descripción desde el texto del evento y ofrece los integrantes
+  // del proyecto como responsable (evita el correo escrito a mano, que el
+  // backend rechazaba si no era integrante). Reusa convertirEventoEnTareaProyecto.
+  function abrirFormularioConvertir_(ev, detalle) {
+    var opcionesIntegrantes = (detalle.integrantes || []).map(function (i) {
+      return { valor: i.usuario_email, texto: i.usuario_nombre || i.usuario_email };
+    });
+    var opcionesHitos = (detalle.hitos || []).map(function (h) { return { valor: h.hito_id, texto: h.nombre }; });
+    var cuerpoOrigen = ev.cuerpo || '';
+    var tituloSugerido = cuerpoOrigen.length > 60 ? cuerpoOrigen.slice(0, 57).trim() + '…' : cuerpoOrigen;
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Convertir en tarea</h3>' +
+        (cuerpoOrigen ? '<p class="sigso-ayuda">Desde: “' + Componentes.escaparHtml(cuerpoOrigen.slice(0, 140)) + '”</p>' : '') +
+        '<form id="form-py-convertir">' +
+          Componentes.campoTexto({ id: 'py-cv-titulo', label: 'Título', requerido: true, valor: tituloSugerido }) +
+          Componentes.campoTextarea({ id: 'py-cv-descripcion', label: 'Descripción', valor: cuerpoOrigen }) +
+          Componentes.campoSelect({ id: 'py-cv-responsable', label: 'Responsable', opciones: opcionesIntegrantes, requerido: true }) +
+          (opcionesHitos.length ? Componentes.campoSelect({ id: 'py-cv-hito', label: 'Hito (opcional)', opciones: opcionesHitos }) : '') +
+          '<div class="sigso-py-form-fila">' +
+            Componentes.campoTexto({ id: 'py-cv-fecha', label: 'Fecha comprometida', tipo: 'date', requerido: true }) +
+            Componentes.campoSelect({
+              id: 'py-cv-prioridad', label: 'Prioridad', valor: 'P4', placeholder: false,
+              opciones: [{ valor: 'P1', texto: 'P1' }, { valor: 'P2', texto: 'P2' }, { valor: 'P3', texto: 'P3' }, { valor: 'P4', texto: 'P4' }, { valor: 'P5', texto: 'P5' }]
+            }) +
+          '</div>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Crear tarea', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-py-convertir').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var hitoEl = document.getElementById('py-cv-hito');
+      api_('convertirEventoEnTareaProyecto', {
+        proyecto_id: proyectoActivoId_,
+        evento_id: ev.evento_id,
+        titulo: document.getElementById('py-cv-titulo').value,
+        descripcion: document.getElementById('py-cv-descripcion').value,
+        responsable_email: document.getElementById('py-cv-responsable').value,
+        hito_id: hitoEl ? hitoEl.value : '',
+        fecha_compromiso: document.getElementById('py-cv-fecha').value,
+        prioridad: document.getElementById('py-cv-prioridad').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo convertir.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        refrescarDetalle_();
       });
     });
   }
@@ -12169,11 +12974,1640 @@ var Iconos = (function () {
     return ('0' + f.getUTCDate()).slice(-2) + '/' + ('0' + (f.getUTCMonth() + 1)).slice(-2) + '/' + f.getUTCFullYear();
   }
 
+  // ISO -> 'YYYY-MM-DD' para prellenar un <input type="date"> (UTC, igual
+  // criterio que fechaCorta_). Vacio si no hay fecha valida.
+  function fechaISOCorta_(iso) {
+    if (!iso) return '';
+    var f = new Date(iso);
+    if (isNaN(f.getTime())) return '';
+    return f.getUTCFullYear() + '-' + ('0' + (f.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + f.getUTCDate()).slice(-2);
+  }
+
   function fechaHora_(iso) {
     if (!iso) return '';
     var f = new Date(iso);
     if (isNaN(f.getTime())) return '';
     return f.toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  }
+})();
+
+</script>
+  <script>
+/**
+ * calidad.js — modulo "Calidad" / SGC ISO 9001 (v10.0, Fase 1).
+ * documentacion/SIGSO-v10.0-propuesta-modulo-sgc-iso9001.md.
+ *
+ * Compartido por las dos vias de acceso (plataforma.js con token y app.js
+ * con login Google), mismo patron que proyectos.js/novedades.js.
+ *
+ * REGLA QUE ATRAVIESA TODO ESTE ARCHIVO: aca NUNCA se decide que documento
+ * puede ver una persona. El backend (Calidad.gs) ya devuelve la lista
+ * filtrada segun el rol SGC y la visibilidad de cada documento, y vuelve a
+ * validar en cada descarga. Esconder un boton no protege nada -- y en este
+ * modulo el control de acceso no es una preferencia de producto, es un
+ * requisito de la norma.
+ */
+(function () {
+  window.SigsoCalidad = {
+    cargar: function () {
+      seccionActiva_ = 'documentos';
+      documentoActivoId_ = null;
+      personaActivaId_ = null;
+      render_();
+    },
+    // Respeta donde esta el usuario: el auto-refresco de fondo no debe
+    // sacarlo del documento o la ficha que esta mirando (misma leccion que
+    // proyectos.js aprendio en v9.0b).
+    refrescar: render_
+  };
+
+  function render_() {
+    if (seccionActiva_ === 'personas') {
+      if (personaActivaId_) abrirPersona_(personaActivaId_); else cargarPersonas_();
+    } else if (seccionActiva_ === 'capacitaciones') {
+      cargarCapacitaciones_();
+    } else {
+      if (documentoActivoId_) abrirDocumento_(documentoActivoId_); else cargarListado_();
+    }
+  }
+
+  // Barra de secciones del modulo. Documentos y Personas son los dos
+  // submodulos del SGC que existen hoy (PRO-01 y PRO-02).
+  function barraSecciones_() {
+    var secciones = [
+      { id: 'documentos', texto: 'Documentos' },
+      { id: 'personas', texto: 'Personas' },
+      { id: 'capacitaciones', texto: 'Capacitaciones' }
+    ];
+    return '<div class="sigso-tabs sgc-secciones">' + secciones.map(function (s) {
+      return '<button type="button" class="sigso-tab js-sgc-seccion' +
+        (s.id === seccionActiva_ ? ' sigso-tab--activo' : '') + '" data-sec="' + s.id + '">' + s.texto + '</button>';
+    }).join('') + '</div>';
+  }
+
+  function wireSecciones_(cont) {
+    cont.querySelectorAll('.js-sgc-seccion').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        seccionActiva_ = btn.getAttribute('data-sec');
+        documentoActivoId_ = null;
+        personaActivaId_ = null;
+        render_();
+      });
+    });
+  }
+
+  function urlBackoffice_() {
+    return (window.SIGSO_CONFIG || {}).BACKOFFICE_URL;
+  }
+  function api_(accion, datos) {
+    return llamarApi(urlBackoffice_(), accion, datos || {});
+  }
+
+  var TIPO_ETIQUETA = {
+    DOC: 'Documento maestro', PRO: 'Procedimiento', INS: 'Instructivo',
+    FO: 'Formulario', EXTERNO: 'Documento externo'
+  };
+  var VISIBILIDAD_ETIQUETA = {
+    TODOS: 'Todo el personal', AREA: 'Solo su área', SELECCION: 'Personas específicas'
+  };
+  var ROL_SGC_ETIQUETA = {
+    ENCARGADO_SGC: 'Encargado SGC', DIRECCION: 'Dirección', GERENCIA_ADM: 'Gerencia Adm.',
+    JEFATURA_AREA: 'Jefatura de área', ENC_ADMIN: 'Enc. Administración',
+    OPERATIVO: 'Personal operativo', AUDITOR_EXTERNO: 'Auditor externo'
+  };
+  var TIPOS = ['DOC', 'PRO', 'INS', 'FO', 'EXTERNO'];
+
+  var seccionActiva_ = 'documentos';
+  var documentoActivoId_ = null;
+  var personaActivaId_ = null;
+  var pestanaFicha_ = 'datos';
+  var puedeGestionar_ = false;
+  var filtroTipo_ = '';
+  var filtroEstado_ = '';
+  var filtroBusqueda_ = '';
+
+  // --- listado maestro (FO-PRO-01-01) --------------------------------------
+
+  function cargarListado_() {
+    documentoActivoId_ = null;
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando documentos...');
+    var filtros = {};
+    if (filtroTipo_) filtros.tipo = filtroTipo_;
+    if (filtroEstado_) filtros.estado = filtroEstado_;
+    if (filtroBusqueda_) filtros.busqueda = filtroBusqueda_;
+
+    api_('listarDocumentosSgc', filtros).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el listado de documentos.', 'error');
+        return;
+      }
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      pintarListado_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar los documentos.', 'error');
+    });
+  }
+
+  function pintarListado_(cont, data) {
+    var docs = data.documentos || [];
+    var hayFiltros = !!(filtroTipo_ || filtroEstado_ || filtroBusqueda_);
+
+    // v10.0 Fase 1b: lo primero que ve la persona es lo que le falta
+    // confirmar. Es la unica obligacion que el SGC le impone al personal
+    // operativo, asi que va arriba y no escondida en el listado.
+    var avisoAcuse = data.pendientes_de_acuse
+      ? Componentes.alerta(
+          'Tienes ' + data.pendientes_de_acuse + ' documento(s) que debes confirmar como leídos. ' +
+          'Ábrelos y marca "Enterado".', 'aviso')
+      : '';
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">Listado maestro: los documentos vigentes del SGC que te corresponden. ' +
+        'Tu rol: <b>' + Componentes.escaparHtml(ROL_SGC_ETIQUETA[data.rol_sgc] || data.rol_sgc) + '</b>.</p>' +
+      (puedeGestionar_ ? Componentes.boton({ texto: '+ Cargar documento', clase: 'js-sgc-nuevo' }) : '') +
+      '</div>' + avisoAcuse +
+      '<div class="sgc-filtros">' +
+        Componentes.campoTexto({ id: 'sgc-f-busqueda', label: false, valor: filtroBusqueda_, placeholder: 'Buscar por código o nombre...' }) +
+        Componentes.campoSelect({
+          id: 'sgc-f-tipo', label: false, valor: filtroTipo_, placeholder: 'Todos los tipos',
+          opciones: TIPOS.map(function (t) { return { valor: t, texto: TIPO_ETIQUETA[t] }; })
+        }) +
+        (puedeGestionar_
+          ? Componentes.campoSelect({
+              id: 'sgc-f-estado', label: false, valor: filtroEstado_, placeholder: 'Vigentes y obsoletos',
+              opciones: [{ valor: 'VIGENTE', texto: 'Solo vigentes' }, { valor: 'OBSOLETO', texto: 'Solo obsoletos' }]
+            })
+          : '') +
+        (hayFiltros ? Componentes.boton({ texto: 'Limpiar', variante: 'sutil', clase: 'js-sgc-limpiar', tipo: 'button' }) : '') +
+      '</div>';
+
+    function wire() {
+      wireSecciones_(cont);
+      var nuevo = cont.querySelector('.js-sgc-nuevo');
+      if (nuevo) nuevo.addEventListener('click', abrirFormularioNuevo_);
+
+      var busqueda = cont.querySelector('#sgc-f-busqueda');
+      if (busqueda) {
+        busqueda.addEventListener('change', function () { filtroBusqueda_ = this.value; cargarListado_(); });
+        busqueda.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter') { ev.preventDefault(); filtroBusqueda_ = this.value; cargarListado_(); }
+        });
+      }
+      var tipo = cont.querySelector('#sgc-f-tipo');
+      if (tipo) tipo.addEventListener('change', function () { filtroTipo_ = this.value; cargarListado_(); });
+      var estado = cont.querySelector('#sgc-f-estado');
+      if (estado) estado.addEventListener('change', function () { filtroEstado_ = this.value; cargarListado_(); });
+      var limpiar = cont.querySelector('.js-sgc-limpiar');
+      if (limpiar) limpiar.addEventListener('click', function () {
+        filtroTipo_ = ''; filtroEstado_ = ''; filtroBusqueda_ = '';
+        cargarListado_();
+      });
+      cont.querySelectorAll('.js-sgc-abrir').forEach(function (btn) {
+        btn.addEventListener('click', function () { abrirDocumento_(btn.getAttribute('data-id')); });
+      });
+    }
+
+    if (docs.length === 0) {
+      cont.innerHTML = cabecera + Componentes.vacio(hayFiltros
+        ? { texto: 'Ningún documento coincide con estos filtros.' }
+        : { texto: 'Todavía no hay documentos disponibles para ti.', detalle: puedeGestionar_ ? 'Carga el primero para empezar.' : 'El Encargado SGC los irá publicando.' });
+      wire();
+      return;
+    }
+
+    var filas = docs.map(function (d) {
+      var obsoleto = d.estado === 'OBSOLETO';
+      return '<button type="button" class="sgc-doc js-sgc-abrir' + (obsoleto ? ' sgc-doc--obsoleto' : '') + '" data-id="' + d.documento_id + '">' +
+        '<div class="sgc-doc__top">' +
+          '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(d.codigo) + '</span>' +
+          '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(d.nombre) + '</span>' +
+          Componentes.badge('v' === String(d.version_vigente).charAt(0) ? d.version_vigente : ('v' + d.version_vigente), 'neutro') +
+          (obsoleto ? Componentes.badge('Obsoleto', 'critico') : '') +
+          (d.debo_acusar ? Componentes.badge('Debes confirmar', 'alerta') : '') +
+          (d.revision_vencida && !obsoleto ? Componentes.badge('Revisión vencida', 'alerta') : '') +
+        '</div>' +
+        '<div class="sgc-doc__meta">' +
+          '<span>' + Componentes.escaparHtml(TIPO_ETIQUETA[d.tipo] || d.tipo) + '</span>' +
+          (d.fecha_vigencia ? '<span>Vigente desde ' + fechaCorta_(d.fecha_vigencia) + '</span>' : '') +
+          (d.proxima_revision ? '<span>Revisar ' + fechaCorta_(d.proxima_revision) + '</span>' : '') +
+          (puedeGestionar_ ? '<span>' + Componentes.escaparHtml(VISIBILIDAD_ETIQUETA[d.visibilidad] || d.visibilidad) + '</span>' : '') +
+        '</div>' +
+      '</button>';
+    }).join('');
+
+    cont.innerHTML = cabecera + '<div class="sgc-lista">' + filas + '</div>';
+    wire();
+  }
+
+  // --- detalle del documento ------------------------------------------------
+
+  function abrirDocumento_(id) {
+    documentoActivoId_ = id;
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando documento...');
+    api_('getDocumentoSgc', { documento_id: id }).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo abrir el documento.', 'error');
+        return;
+      }
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      pintarDetalle_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = Componentes.alerta('No se pudo conectar para abrir el documento.', 'error');
+    });
+  }
+
+  function pintarDetalle_(cont, data) {
+    var d = data.documento;
+    var obsoleto = d.estado === 'OBSOLETO';
+
+    var acciones = '<div class="sgc-acciones">' +
+      (d.archivo_id ? Componentes.boton({ texto: '⬇ Descargar', clase: 'js-sgc-descargar' }) : '') +
+      (puedeGestionar_ ? Componentes.boton({ texto: 'Nueva versión', variante: 'secundario', clase: 'js-sgc-version' }) : '') +
+      (puedeGestionar_ ? Componentes.boton({ texto: 'Editar', variante: 'secundario', clase: 'js-sgc-editar' }) : '') +
+      (puedeGestionar_ ? Componentes.boton({ texto: 'Ver quién confirmó', variante: 'secundario', clase: 'js-sgc-cumplimiento' }) : '') +
+      (puedeGestionar_ && !obsoleto ? Componentes.boton({ texto: 'Marcar obsoleto', variante: 'peligro', clase: 'js-sgc-obsoleto' }) : '') +
+      (puedeGestionar_ && obsoleto ? Componentes.boton({ texto: 'Volver a vigente', variante: 'secundario', clase: 'js-sgc-vigente' }) : '') +
+      '</div>';
+
+    // v10.0 Fase 1b: la confirmacion de lectura. Se muestra arriba, antes de
+    // la ficha, porque es lo unico que esta persona TIENE que hacer aca.
+    var bloqueAcuse = '';
+    if (data.debo_acusar) {
+      var plazo = d.fecha_limite_acuse
+        ? ' Plazo: ' + fechaCorta_(d.fecha_limite_acuse) + '.'
+        : '';
+      bloqueAcuse = '<div class="sgc-acuse sgc-acuse--pendiente">' +
+        '<p><b>Debes confirmar que conoces este documento.</b>' + Componentes.escaparHtml(plazo) +
+          ' Descárgalo, léelo y marca "Enterado".</p>' +
+        Componentes.boton({ texto: '✓ Enterado', clase: 'js-sgc-acusar' }) +
+      '</div>';
+    } else if (data.mi_acuse) {
+      bloqueAcuse = '<div class="sgc-acuse sgc-acuse--hecho">' +
+        '<p>✓ Confirmaste este documento (versión ' + Componentes.escaparHtml(d.version_vigente) +
+          ') el ' + fechaCorta_(data.mi_acuse) + '.</p>' +
+      '</div>';
+    }
+
+    var ficha = '<dl class="sgc-ficha">' +
+      campoFicha_('Tipo', TIPO_ETIQUETA[d.tipo] || d.tipo) +
+      campoFicha_('Versión vigente', d.version_vigente) +
+      campoFicha_('Vigente desde', fechaCorta_(d.fecha_vigencia)) +
+      campoFicha_('Próxima revisión', fechaCorta_(d.proxima_revision)) +
+      (d.area_id ? campoFicha_('Área', d.area_id) : '') +
+      (puedeGestionar_ ? campoFicha_('Visibilidad', VISIBILIDAD_ETIQUETA[d.visibilidad] || d.visibilidad) : '') +
+      (d.elaborado_por ? campoFicha_('Elaborado por', d.elaborado_por) : '') +
+      (d.revisado_por ? campoFicha_('Revisado por', d.revisado_por) : '') +
+      (d.aprobado_por ? campoFicha_('Aprobado por', d.aprobado_por) : '') +
+      '</dl>';
+
+    var versiones = (data.versiones || []).length
+      ? '<h3 class="sgc-sub">Historial de versiones</h3>' +
+        '<div class="sgc-lista">' + (data.versiones || []).map(function (v) {
+          var esVigente = v.vigente === true || v.vigente === 'TRUE';
+          return '<div class="sgc-version">' +
+            '<div class="sgc-doc__top">' +
+              '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(v.version) + '</span>' +
+              (esVigente ? Componentes.badge('Vigente', 'ok') : Componentes.badge('Archivada', 'neutro')) +
+              '<span class="sigso-ayuda">' + fechaCorta_(v.fecha) + '</span>' +
+            '</div>' +
+            (v.cambios ? '<p class="sigso-ayuda">' + Componentes.escaparHtml(v.cambios) + '</p>' : '') +
+            (puedeGestionar_ && !esVigente && v.archivo_id
+              ? Componentes.boton({ texto: 'Descargar esta versión', variante: 'sutil', clase: 'js-sgc-descargar-version', idx: v.version_id })
+              : '') +
+          '</div>';
+        }).join('') + '</div>'
+      : '';
+
+    cont.innerHTML =
+      '<div class="sgc-detalle-cab">' +
+        Componentes.boton({ texto: '← Listado', variante: 'sutil', clase: 'js-sgc-volver' }) +
+        '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(d.codigo) + '</span>' +
+        '<h1>' + Componentes.escaparHtml(d.nombre) + '</h1>' +
+        (obsoleto ? Componentes.badge('Obsoleto', 'critico') : '') +
+      '</div>' +
+      (obsoleto
+        ? Componentes.alerta('Este documento está fuera de circulación. Se conserva solo para trazabilidad; no debe usarse.', 'aviso')
+        : '') +
+      '<div class="sgc-cuerpo">' +
+        bloqueAcuse +
+        (d.descripcion ? '<p>' + Componentes.escaparHtml(d.descripcion) + '</p>' : '') +
+        ficha +
+        (d.archivo_nombre ? '<p class="sigso-ayuda">Archivo: ' + Componentes.escaparHtml(d.archivo_nombre) + '</p>' : '') +
+        acciones +
+        '<div class="js-sgc-cumplimiento-panel"></div>' +
+        versiones +
+      '</div>';
+
+    cont.querySelector('.js-sgc-volver').addEventListener('click', cargarListado_);
+
+    var btnDescargar = cont.querySelector('.js-sgc-descargar');
+    if (btnDescargar) btnDescargar.addEventListener('click', function () { descargar_(d.documento_id, null); });
+
+    cont.querySelectorAll('.js-sgc-descargar-version').forEach(function (btn) {
+      btn.addEventListener('click', function () { descargar_(d.documento_id, btn.getAttribute('data-idx')); });
+    });
+
+    var btnVersion = cont.querySelector('.js-sgc-version');
+    if (btnVersion) btnVersion.addEventListener('click', function () { abrirFormularioVersion_(d); });
+
+    var btnEditar = cont.querySelector('.js-sgc-editar');
+    if (btnEditar) btnEditar.addEventListener('click', function () { abrirFormularioEditar_(d, data.destinatarios || []); });
+
+    var btnObsoleto = cont.querySelector('.js-sgc-obsoleto');
+    if (btnObsoleto) btnObsoleto.addEventListener('click', function () {
+      Componentes.confirmar({
+        titulo: 'Marcar como obsoleto',
+        mensaje: 'El documento saldrá de circulación y el personal dejará de verlo. No se elimina: queda archivado para trazabilidad.'
+      }).then(function (ok) {
+        if (!ok) return;
+        cambiarEstado_(d.documento_id, 'OBSOLETO');
+      });
+    });
+
+    var btnVigente = cont.querySelector('.js-sgc-vigente');
+    if (btnVigente) btnVigente.addEventListener('click', function () { cambiarEstado_(d.documento_id, 'VIGENTE'); });
+
+    var btnAcusar = cont.querySelector('.js-sgc-acusar');
+    if (btnAcusar) btnAcusar.addEventListener('click', function () {
+      btnAcusar.disabled = true;
+      api_('acusarDocumentoSgc', { documento_id: d.documento_id }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          btnAcusar.disabled = false;
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo confirmar.', tipo: 'error' });
+          return;
+        }
+        Componentes.aviso({ texto: 'Confirmado. Queda registrado con tu nombre y la fecha.', tipo: 'ok' });
+        abrirDocumento_(d.documento_id);
+      });
+    });
+
+    var btnCumplimiento = cont.querySelector('.js-sgc-cumplimiento');
+    if (btnCumplimiento) btnCumplimiento.addEventListener('click', function () {
+      var panel = cont.querySelector('.js-sgc-cumplimiento-panel');
+      panel.innerHTML = Componentes.cargando('Cargando...');
+      api_('getCumplimientoDocumentoSgc', { documento_id: d.documento_id }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          panel.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar.', 'error');
+          return;
+        }
+        pintarCumplimiento_(panel, respuesta.data);
+      }).catch(function () {
+        panel.innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
+      });
+    });
+  }
+
+  // Quién confirmó y quién falta, de la VERSIÓN VIGENTE. Es lo que el
+  // Encargado SGC le muestra al auditor cuando pregunta cómo prueba que su
+  // personal conoce el documento.
+  function pintarCumplimiento_(panel, c) {
+    if (!c.requiere_acuse) {
+      panel.innerHTML = '<p class="sigso-ayuda">Este documento no exige confirmación de lectura.</p>';
+      return;
+    }
+    var total = c.confirmados.length + c.pendientes.length;
+    panel.innerHTML =
+      '<h3 class="sgc-sub">Confirmación de lectura — versión ' + Componentes.escaparHtml(c.version) + '</h3>' +
+      '<p class="sigso-ayuda">' + c.confirmados.length + ' de ' + total + ' persona(s) han confirmado' +
+        (c.fecha_limite_acuse ? ' · plazo ' + fechaCorta_(c.fecha_limite_acuse) : '') + '.</p>' +
+      '<div class="sgc-lista">' +
+        (c.pendientes.length
+          ? '<div class="sgc-version"><div class="sgc-doc__top">' +
+              Componentes.badge('Falta confirmar (' + c.pendientes.length + ')', 'alerta') +
+            '</div><p class="sigso-ayuda">' +
+              c.pendientes.map(function (e) { return Componentes.escaparHtml(e); }).join(', ') +
+            '</p></div>'
+          : '') +
+        (c.confirmados.length
+          ? '<div class="sgc-version"><div class="sgc-doc__top">' +
+              Componentes.badge('Confirmado (' + c.confirmados.length + ')', 'ok') +
+            '</div>' +
+            c.confirmados.map(function (x) {
+              return '<p class="sigso-ayuda">' + Componentes.escaparHtml(x.usuario_email) +
+                ' — ' + fechaCorta_(x.acusado_en) + '</p>';
+            }).join('') +
+            '</div>'
+          : '') +
+      '</div>';
+  }
+
+  function campoFicha_(etiqueta, valor) {
+    if (valor === undefined || valor === null || valor === '') return '';
+    return '<div class="sgc-ficha__campo"><dt>' + Componentes.escaparHtml(etiqueta) + '</dt>' +
+      '<dd>' + Componentes.escaparHtml(String(valor)) + '</dd></div>';
+  }
+
+  function cambiarEstado_(documentoId, estado) {
+    api_('actualizarDocumentoSgc', { documento_id: documentoId, estado: estado }).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo actualizar el documento.', tipo: 'error' });
+        return;
+      }
+      abrirDocumento_(documentoId);
+    });
+  }
+
+  function descargar_(documentoId, versionId) {
+    var datos = { documento_id: documentoId };
+    if (versionId) datos.version_id = versionId;
+    api_('descargarDocumentoSgc', datos).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo descargar el documento.', tipo: 'error' });
+        return;
+      }
+      descargarBase64Sgc_(respuesta.data.contenido_base64, respuesta.data.nombre_archivo, respuesta.data.mime);
+    });
+  }
+
+  // --- formularios -----------------------------------------------------------
+
+  function camposComunes_(d) {
+    d = d || {};
+    return Componentes.campoTexto({ id: 'sgc-codigo', label: 'Código', valor: d.codigo, requerido: true, placeholder: 'Ej: DOC-01, PRO-07, FO-PRO-02-01' }) +
+      Componentes.campoTexto({ id: 'sgc-nombre', label: 'Nombre', valor: d.nombre, requerido: true, placeholder: 'Ej: Manual de Calidad' }) +
+      Componentes.campoTextarea({ id: 'sgc-descripcion', label: 'Descripción (opcional)', valor: d.descripcion }) +
+      '<div class="sgc-form-fila">' +
+        Componentes.campoSelect({
+          id: 'sgc-tipo', label: 'Tipo', valor: d.tipo || 'DOC', placeholder: false,
+          opciones: TIPOS.map(function (t) { return { valor: t, texto: TIPO_ETIQUETA[t] }; })
+        }) +
+        Componentes.campoTexto({ id: 'sgc-area', label: 'Área (opcional)', valor: d.area_id, placeholder: 'Ej: PREVENCION' }) +
+      '</div>' +
+      Componentes.campoSelect({
+        id: 'sgc-visibilidad', label: '¿Quién puede verlo?', valor: d.visibilidad || 'TODOS', placeholder: false,
+        opciones: Object.keys(VISIBILIDAD_ETIQUETA).map(function (v) { return { valor: v, texto: VISIBILIDAD_ETIQUETA[v] }; })
+      }) +
+      Componentes.campoTextarea({
+        id: 'sgc-destinatarios', label: 'Correos autorizados (uno por línea)',
+        ayuda: 'Solo se usa si elegiste "Personas específicas".'
+      }) +
+      '<div class="sgc-form-fila">' +
+        Componentes.campoTexto({ id: 'sgc-elaborado', label: 'Elaborado por', valor: d.elaborado_por }) +
+        Componentes.campoTexto({ id: 'sgc-revisado', label: 'Revisado por', valor: d.revisado_por }) +
+        Componentes.campoTexto({ id: 'sgc-aprobado', label: 'Aprobado por', valor: d.aprobado_por }) +
+      '</div>' +
+      // v10.0 Fase 1b: por defecto SÍ exige confirmación -- es lo que
+      // convierte "lo publiqué" en evidencia de que la gente lo conoce.
+      '<label class="sigso-campo-check"><input type="checkbox" id="sgc-requiere-acuse"' +
+        (d.documento_id && d.requiere_acuse === false ? '' : ' checked') +
+        '> Exigir confirmación de lectura ("Enterado")</label>' +
+      Componentes.campoTexto({
+        id: 'sgc-limite-acuse', label: 'Plazo para confirmar (opcional)', tipo: 'date',
+        valor: fechaISO_(d.fecha_limite_acuse)
+      });
+  }
+
+  function leerAcuse_() {
+    var chk = document.getElementById('sgc-requiere-acuse');
+    var limite = document.getElementById('sgc-limite-acuse');
+    return {
+      requiere_acuse: chk ? chk.checked : true,
+      fecha_limite_acuse: limite ? limite.value : ''
+    };
+  }
+
+  function leerDestinatarios_() {
+    var el = document.getElementById('sgc-destinatarios');
+    if (!el) return [];
+    return el.value.split(/[\n,;]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+
+  function abrirFormularioNuevo_() {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Cargar documento del SGC</h3>' +
+        '<p class="sigso-ayuda">Sube el archivo que ya tienes (PDF, Word o Excel) y registra su control documental.</p>' +
+        '<form id="form-sgc-nuevo">' +
+          camposComunes_(null) +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'sgc-version', label: 'Versión', valor: 'v01', requerido: true }) +
+            Componentes.campoTexto({ id: 'sgc-vigencia', label: 'Vigente desde', tipo: 'date', requerido: true }) +
+          '</div>' +
+          '<div class="sigso-campo">' +
+            '<label for="sgc-archivo">Archivo (PDF, Word o Excel · máx. 10 MB)</label>' +
+            '<input type="file" id="sgc-archivo" accept=".pdf,.doc,.docx,.xls,.xlsx" required>' +
+          '</div>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Cargar documento', tipo: 'submit', clase: 'js-sgc-guardar' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-sgc-nuevo').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var archivo = document.getElementById('sgc-archivo').files[0];
+      if (!archivo) {
+        Componentes.aviso({ texto: 'Selecciona el archivo del documento.', tipo: 'error' });
+        return;
+      }
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true; boton.textContent = 'Subiendo...';
+
+      leerArchivoBase64Sgc_(archivo).then(function (base64) {
+        var acuse = leerAcuse_();
+        return api_('crearDocumentoSgc', {
+          codigo: document.getElementById('sgc-codigo').value,
+          nombre: document.getElementById('sgc-nombre').value,
+          descripcion: document.getElementById('sgc-descripcion').value,
+          tipo: document.getElementById('sgc-tipo').value,
+          area_id: document.getElementById('sgc-area').value,
+          visibilidad: document.getElementById('sgc-visibilidad').value,
+          destinatarios: leerDestinatarios_(),
+          version_vigente: document.getElementById('sgc-version').value,
+          fecha_vigencia: document.getElementById('sgc-vigencia').value,
+          elaborado_por: document.getElementById('sgc-elaborado').value,
+          revisado_por: document.getElementById('sgc-revisado').value,
+          aprobado_por: document.getElementById('sgc-aprobado').value,
+          requiere_acuse: acuse.requiere_acuse,
+          fecha_limite_acuse: acuse.fecha_limite_acuse,
+          nombre_archivo: archivo.name,
+          contenido_base64: base64
+        });
+      }).then(function (respuesta) {
+        boton.disabled = false; boton.textContent = 'Cargar documento';
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo cargar el documento.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        cargarListado_();
+      }).catch(function () {
+        boton.disabled = false; boton.textContent = 'Cargar documento';
+        Componentes.aviso({ texto: 'No se pudo leer o subir el archivo.', tipo: 'error' });
+      });
+    });
+  }
+
+  function abrirFormularioVersion_(d) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Nueva versión de ' + Componentes.escaparHtml(d.codigo) + '</h3>' +
+        '<p class="sigso-ayuda">La versión ' + Componentes.escaparHtml(d.version_vigente) +
+          ' quedará archivada (no se elimina) y esta pasará a ser la vigente.</p>' +
+        '<form id="form-sgc-version">' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'sgc-v-version', label: 'Nueva versión', requerido: true, placeholder: 'Ej: v02' }) +
+            Componentes.campoTexto({ id: 'sgc-v-vigencia', label: 'Vigente desde', tipo: 'date', requerido: true }) +
+          '</div>' +
+          Componentes.campoTextarea({ id: 'sgc-v-cambios', label: 'Descripción del cambio', requerido: true, placeholder: '¿Qué cambió respecto de la versión anterior?' }) +
+          '<div class="sigso-campo">' +
+            '<label for="sgc-v-archivo">Archivo de la nueva versión</label>' +
+            '<input type="file" id="sgc-v-archivo" accept=".pdf,.doc,.docx,.xls,.xlsx" required>' +
+          '</div>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Subir versión', tipo: 'submit', clase: 'js-sgc-guardar' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-sgc-version').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var archivo = document.getElementById('sgc-v-archivo').files[0];
+      if (!archivo) return;
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true; boton.textContent = 'Subiendo...';
+
+      leerArchivoBase64Sgc_(archivo).then(function (base64) {
+        return api_('nuevaVersionDocumentoSgc', {
+          documento_id: d.documento_id,
+          version: document.getElementById('sgc-v-version').value,
+          fecha_vigencia: document.getElementById('sgc-v-vigencia').value,
+          cambios: document.getElementById('sgc-v-cambios').value,
+          nombre_archivo: archivo.name,
+          contenido_base64: base64
+        });
+      }).then(function (respuesta) {
+        boton.disabled = false; boton.textContent = 'Subir versión';
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo subir la nueva versión.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        abrirDocumento_(d.documento_id);
+      }).catch(function () {
+        boton.disabled = false; boton.textContent = 'Subir versión';
+        Componentes.aviso({ texto: 'No se pudo leer o subir el archivo.', tipo: 'error' });
+      });
+    });
+  }
+
+  function abrirFormularioEditar_(d, destinatarios) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Editar ' + Componentes.escaparHtml(d.codigo) + '</h3>' +
+        '<form id="form-sgc-editar">' +
+          camposComunes_(d) +
+          Componentes.campoTexto({ id: 'sgc-vigencia-ed', label: 'Vigente desde', tipo: 'date', valor: fechaISO_(d.fecha_vigencia) }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    // El codigo identifica al documento en el listado maestro: cambiarlo
+    // despues de creado confunde la trazabilidad, asi que se muestra pero
+    // no se edita.
+    document.getElementById('sgc-codigo').readOnly = true;
+    document.getElementById('sgc-destinatarios').value = (destinatarios || []).join('\n');
+
+    document.getElementById('form-sgc-editar').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var acuseEd = leerAcuse_();
+      api_('actualizarDocumentoSgc', {
+        documento_id: d.documento_id,
+        nombre: document.getElementById('sgc-nombre').value,
+        descripcion: document.getElementById('sgc-descripcion').value,
+        tipo: document.getElementById('sgc-tipo').value,
+        area_id: document.getElementById('sgc-area').value,
+        visibilidad: document.getElementById('sgc-visibilidad').value,
+        destinatarios: leerDestinatarios_(),
+        fecha_vigencia: document.getElementById('sgc-vigencia-ed').value,
+        elaborado_por: document.getElementById('sgc-elaborado').value,
+        revisado_por: document.getElementById('sgc-revisado').value,
+        aprobado_por: document.getElementById('sgc-aprobado').value,
+        requiere_acuse: acuseEd.requiere_acuse,
+        fecha_limite_acuse: acuseEd.fecha_limite_acuse
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        abrirDocumento_(d.documento_id);
+      });
+    });
+  }
+
+  // ==========================================================================
+  // PERSONAS (Fase 2a, PRO-02) — la ficha del trabajador
+  //
+  // Recordatorio de diseño: el backend ya decide QUÉ fichas ve cada quien
+  // (el personal operativo, solo la suya). Acá nunca se filtra por permiso.
+  // ==========================================================================
+
+  var TIPO_PERSONA_ETIQUETA = { INT: 'Interno', EXT: 'Externo' };
+  var TIPO_DOC_PERSONA_ETIQUETA = {
+    CV: 'CV', TITULO: 'Título / diploma', ISO9001: 'Curso ISO 9001',
+    CONTRATO: 'Contrato o anexo', CERTIFICADO: 'Certificado de capacitación', OTRO: 'Otro'
+  };
+
+  var filtroPersonasArea_ = '';
+  var incluirDesvinculados_ = false;
+
+  function cargarPersonas_() {
+    personaActivaId_ = null;
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando personal...');
+    var filtros = {};
+    if (filtroPersonasArea_) filtros.area_id = filtroPersonasArea_;
+    if (incluirDesvinculados_) filtros.incluir_desvinculados = true;
+
+    api_('listarPersonasSgc', filtros).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el personal.', 'error');
+        return;
+      }
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      pintarPersonas_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar el personal.', 'error');
+    });
+  }
+
+  function pintarPersonas_(cont, data) {
+    var personas = data.personas || [];
+
+    // El personal operativo solo se ve a sí mismo: mostrarle un "listado"
+    // de una fila es ruido. Se entra directo a su ficha.
+    if (!puedeGestionar_ && personas.length === 1) {
+      personaActivaId_ = personas[0].persona_id;
+      abrirPersona_(personas[0].persona_id);
+      return;
+    }
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">Personal en alcance del SGC: su ficha, descriptor de cargo, documentos e inducción.</p>' +
+      (puedeGestionar_ ? Componentes.boton({ texto: '+ Nueva persona', clase: 'js-sgc-nueva-persona' }) : '') +
+      '</div>' +
+      (puedeGestionar_
+        ? '<div class="sgc-filtros">' +
+            Componentes.campoTexto({ id: 'sgc-p-area', label: false, valor: filtroPersonasArea_, placeholder: 'Filtrar por área...' }) +
+            '<label class="sigso-campo-check"><input type="checkbox" id="sgc-p-desv"' +
+              (incluirDesvinculados_ ? ' checked' : '') + '> Incluir desvinculados</label>' +
+          '</div>'
+        : '');
+
+    function wire() {
+      wireSecciones_(cont);
+      var nueva = cont.querySelector('.js-sgc-nueva-persona');
+      if (nueva) nueva.addEventListener('click', function () { abrirFormularioPersona_(null); });
+      var area = cont.querySelector('#sgc-p-area');
+      if (area) {
+        area.addEventListener('change', function () { filtroPersonasArea_ = this.value; cargarPersonas_(); });
+        area.addEventListener('keydown', function (ev) {
+          if (ev.key === 'Enter') { ev.preventDefault(); filtroPersonasArea_ = this.value; cargarPersonas_(); }
+        });
+      }
+      var desv = cont.querySelector('#sgc-p-desv');
+      if (desv) desv.addEventListener('change', function () { incluirDesvinculados_ = this.checked; cargarPersonas_(); });
+      cont.querySelectorAll('.js-sgc-abrir-persona').forEach(function (btn) {
+        btn.addEventListener('click', function () { abrirPersona_(btn.getAttribute('data-id')); });
+      });
+    }
+
+    if (personas.length === 0) {
+      cont.innerHTML = cabecera + Componentes.vacio({
+        texto: 'Todavía no hay personal registrado.',
+        detalle: puedeGestionar_ ? 'Agrega a las personas en alcance del SGC.' : ''
+      });
+      wire();
+      return;
+    }
+
+    var filas = personas.map(function (p) {
+      var baja = p.estado === 'DESVINCULADO';
+      var induccionCompleta = p.induccion_total > 0 && p.induccion_completadas >= p.induccion_total;
+      return '<button type="button" class="sgc-doc js-sgc-abrir-persona' + (baja ? ' sgc-doc--obsoleto' : '') +
+        '" data-id="' + p.persona_id + '">' +
+        '<div class="sgc-doc__top">' +
+          '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(p.nombre) + '</span>' +
+          Componentes.badge(TIPO_PERSONA_ETIQUETA[p.tipo] || p.tipo, 'neutro') +
+          (baja ? Componentes.badge('Desvinculado', 'critico') : '') +
+          (!baja && !p.tiene_descriptor ? Componentes.badge('Sin descriptor', 'alerta') : '') +
+          (!baja && !induccionCompleta ? Componentes.badge('Inducción pendiente', 'alerta') : '') +
+        '</div>' +
+        '<div class="sgc-doc__meta">' +
+          (p.cargo ? '<span>' + Componentes.escaparHtml(p.cargo) + '</span>' : '') +
+          (p.area_id ? '<span>' + Componentes.escaparHtml(p.area_id) + '</span>' : '') +
+          (p.fecha_ingreso ? '<span>Ingreso ' + fechaCorta_(p.fecha_ingreso) + '</span>' : '') +
+          '<span>Inducción ' + p.induccion_completadas + '/' + p.induccion_total + '</span>' +
+        '</div>' +
+      '</button>';
+    }).join('');
+
+    cont.innerHTML = cabecera + '<div class="sgc-lista">' + filas + '</div>';
+    wire();
+  }
+
+  // --- ficha de la persona ---------------------------------------------------
+
+  function abrirPersona_(id) {
+    personaActivaId_ = id;
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando ficha...');
+    api_('getFichaPersonaSgc', { persona_id: id }).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo abrir la ficha.', 'error');
+        return;
+      }
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      pintarFicha_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = Componentes.alerta('No se pudo conectar para abrir la ficha.', 'error');
+    });
+  }
+
+  function pintarFicha_(cont, data) {
+    var p = data.persona;
+    var baja = p.estado === 'DESVINCULADO';
+    var PESTANAS = [
+      { id: 'datos', texto: 'Datos' },
+      { id: 'descriptor', texto: 'Descriptor de cargo' },
+      { id: 'documentos', texto: 'Documentos' },
+      { id: 'induccion', texto: 'Inducción' },
+      { id: 'competencias', texto: 'Competencias' }
+    ];
+    var tabs = PESTANAS.map(function (t) {
+      return '<button type="button" class="sigso-tab js-sgc-ficha-tab' +
+        (t.id === pestanaFicha_ ? ' sigso-tab--activo' : '') + '" data-tab="' + t.id + '">' + t.texto + '</button>';
+    }).join('');
+
+    var cuerpo = '';
+    if (pestanaFicha_ === 'datos') cuerpo = pintarDatosPersona_(data);
+    else if (pestanaFicha_ === 'descriptor') cuerpo = pintarDescriptor_(data);
+    else if (pestanaFicha_ === 'documentos') cuerpo = pintarDocsPersona_(data);
+    else if (pestanaFicha_ === 'induccion') cuerpo = pintarInduccion_(data);
+    else if (pestanaFicha_ === 'competencias') cuerpo = pintarCompetencias_(data);
+
+    cont.innerHTML =
+      '<div class="sgc-detalle-cab">' +
+        Componentes.boton({ texto: '← Personal', variante: 'sutil', clase: 'js-sgc-volver-personas' }) +
+        '<h1>' + Componentes.escaparHtml(p.nombre) + '</h1>' +
+        Componentes.badge(TIPO_PERSONA_ETIQUETA[p.tipo] || p.tipo, 'neutro') +
+        (baja ? Componentes.badge('Desvinculado', 'critico') : '') +
+      '</div>' +
+      (baja
+        ? Componentes.alerta('Esta persona ya no está vigente. Su ficha se conserva como historial del SGC.', 'aviso')
+        : '') +
+      '<div class="sigso-tabs">' + tabs + '</div>' +
+      '<div class="sgc-cuerpo">' + cuerpo + '</div>';
+
+    cont.querySelector('.js-sgc-volver-personas').addEventListener('click', cargarPersonas_);
+    cont.querySelectorAll('.js-sgc-ficha-tab').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        pestanaFicha_ = btn.getAttribute('data-tab');
+        pintarFicha_(cont, data);
+      });
+    });
+    wireFicha_(cont, data);
+  }
+
+  function pintarDatosPersona_(data) {
+    var p = data.persona;
+    var acciones = puedeGestionar_
+      ? '<div class="sgc-acciones">' +
+          Componentes.boton({ texto: 'Editar datos', variante: 'secundario', clase: 'js-sgc-editar-persona' }) +
+          (p.estado === 'DESVINCULADO'
+            ? Componentes.boton({ texto: 'Reactivar', variante: 'secundario', clase: 'js-sgc-reactivar' })
+            : Componentes.boton({ texto: 'Desvincular', variante: 'peligro', clase: 'js-sgc-desvincular' })) +
+        '</div>'
+      : '';
+    return '<dl class="sgc-ficha">' +
+      campoFicha_('Correo', p.usuario_email) +
+      campoFicha_('RUT', p.rut) +
+      campoFicha_('Cargo', p.cargo) +
+      campoFicha_('Tipo', TIPO_PERSONA_ETIQUETA[p.tipo] || p.tipo) +
+      campoFicha_('Área', p.area_id) +
+      campoFicha_('Jefatura directa', p.jefatura_email) +
+      campoFicha_('Subrogante', p.subrogante_email) +
+      campoFicha_('Fecha de ingreso', p.fecha_ingreso ? fechaCorta_(p.fecha_ingreso) : '') +
+      (p.estado === 'DESVINCULADO' ? campoFicha_('Desvinculación', fechaCorta_(p.fecha_desvinculacion)) : '') +
+    '</dl>' + acciones;
+  }
+
+  function pintarDescriptor_(data) {
+    var d = data.descriptor_vigente;
+    var acciones = puedeGestionar_
+      ? '<div class="sgc-acciones">' +
+          Componentes.boton({ texto: d ? 'Nueva versión del descriptor' : '+ Crear descriptor', clase: 'js-sgc-descriptor' }) +
+        '</div>'
+      : '';
+    if (!d) {
+      return Componentes.vacio({
+        texto: 'Esta persona todavía no tiene descriptor de cargo.',
+        detalle: 'El descriptor (FO-PRO-02-01) define qué se espera del cargo: es la base para evaluar competencia.'
+      }) + acciones;
+    }
+    var historial = (data.descriptores || []).length > 1
+      ? '<h3 class="sgc-sub">Versiones anteriores</h3><div class="sgc-lista">' +
+        (data.descriptores || []).filter(function (x) { return !(x.vigente === true || x.vigente === 'TRUE'); })
+          .map(function (x) {
+            return '<div class="sgc-version"><div class="sgc-doc__top">' +
+              '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(x.version) + '</span>' +
+              Componentes.badge('Archivada', 'neutro') +
+              '<span class="sigso-ayuda">' + fechaCorta_(x.fecha) + '</span>' +
+            '</div></div>';
+          }).join('') + '</div>'
+      : '';
+    return '<div class="sgc-doc__top" style="margin-bottom:.8rem">' +
+        '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(d.version) + '</span>' +
+        Componentes.badge('Vigente', 'ok') +
+        '<span class="sigso-ayuda">' + fechaCorta_(d.fecha) + '</span>' +
+      '</div>' +
+      '<dl class="sgc-ficha">' +
+        campoFicha_('Objetivo del cargo', d.objetivo) +
+        campoFicha_('Funciones', d.funciones) +
+        campoFicha_('Responsabilidades', d.responsabilidades) +
+        campoFicha_('Habilidades requeridas', d.habilidades) +
+        campoFicha_('Nivel educacional', d.nivel_educacional) +
+        campoFicha_('Formación técnica', d.formacion_tecnica) +
+        campoFicha_('Experiencia requerida', d.experiencia) +
+      '</dl>' + acciones + historial;
+  }
+
+  function pintarDocsPersona_(data) {
+    var docs = data.documentos || [];
+    var acciones = puedeGestionar_
+      ? '<div class="sgc-cabecera">' + Componentes.boton({ texto: '+ Cargar documento', clase: 'js-sgc-doc-persona' }) + '</div>'
+      : '';
+    if (docs.length === 0) {
+      return acciones + Componentes.vacio({ texto: 'Sin documentos cargados.', detalle: 'CV, título, contrato, certificados.' });
+    }
+    return acciones + '<div class="sgc-lista">' + docs.map(function (x) {
+      return '<div class="sgc-version">' +
+        '<div class="sgc-doc__top">' +
+          '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(x.nombre || x.archivo_nombre) + '</span>' +
+          Componentes.badge(TIPO_DOC_PERSONA_ETIQUETA[x.tipo] || x.tipo, 'neutro') +
+          '<span class="sigso-ayuda">' + fechaCorta_(x.fecha) + '</span>' +
+        '</div>' +
+        '<div class="sgc-acciones">' +
+          Componentes.boton({ texto: '⬇ Descargar', variante: 'sutil', clase: 'js-sgc-bajar-doc', idx: x.doc_id }) +
+          (puedeGestionar_ ? Componentes.boton({ texto: 'Quitar', variante: 'sutil', clase: 'js-sgc-quitar-doc', idx: x.doc_id }) : '') +
+        '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  function pintarInduccion_(data) {
+    var items = data.induccion || [];
+    var completadas = items.filter(function (i) { return i.estado === 'COMPLETADA'; }).length;
+    if (items.length === 0) return Componentes.vacio({ texto: 'Sin registro de inducción.' });
+    return '<p class="sigso-ayuda">Inducción al SGC (FO-PRO-02-02): ' + completadas + ' de ' + items.length + ' completadas.</p>' +
+      '<div class="sgc-lista">' + items.map(function (i) {
+        var hecha = i.estado === 'COMPLETADA';
+        return '<div class="sgc-version">' +
+          '<div class="sgc-doc__top">' +
+            '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(i.item) + '</span>' +
+            (hecha ? Componentes.badge('Completada', 'ok') : Componentes.badge('Pendiente', 'alerta')) +
+            (hecha && i.fecha ? '<span class="sigso-ayuda">' + fechaCorta_(i.fecha) + '</span>' : '') +
+          '</div>' +
+          (hecha && i.relator_email ? '<p class="sigso-ayuda">Relator: ' + Componentes.escaparHtml(i.relator_email) + '</p>' : '') +
+          (data.puede_gestionar_induccion && !hecha
+            ? Componentes.boton({ texto: '✓ Marcar completada', variante: 'sutil', clase: 'js-sgc-induccion', idx: i.induccion_id })
+            : '') +
+        '</div>';
+      }).join('') + '</div>';
+  }
+
+  // --- competencias (Fase 2b) -------------------------------------------------
+
+  function pintarCompetencias_(data) {
+    var ultima = data.ultima_evaluacion;
+    var acciones = data.puede_evaluar
+      ? '<div class="sgc-acciones">' +
+          Componentes.boton({ texto: ultima ? 'Nueva evaluación' : '+ Registrar evaluación', clase: 'js-sgc-evaluar' }) +
+        '</div>'
+      : '';
+
+    // Horas de formación del año: es el Objetivo de Calidad N°4, y a la
+    // persona le sirve verlo aunque no pueda evaluarse a sí misma.
+    var cumple = data.horas_formacion_anio >= data.meta_horas_formacion;
+    var horas = '<div class="sgc-acuse ' + (cumple ? 'sgc-acuse--hecho' : 'sgc-acuse--pendiente') + '">' +
+      '<p><b>Formación este año: ' + data.horas_formacion_anio + ' de ' + data.meta_horas_formacion + ' horas.</b> ' +
+      (cumple ? 'Cumple la meta anual.' : 'Bajo la meta del Objetivo de Calidad N°4.') + '</p>' +
+    '</div>';
+
+    if (!ultima) {
+      return horas + Componentes.vacio({
+        texto: 'Esta persona todavía no tiene evaluación de competencias.',
+        detalle: 'La evaluación (FO-PRO-02-04) se hace cada 12 meses y la registra la jefatura directa.'
+      }) + acciones;
+    }
+
+    var vencida = data.evaluacion_vencida;
+    var historial = (data.evaluaciones || []).map(function (e) {
+      var bajo = e.requiere_capacitacion === true || e.requiere_capacitacion === 'TRUE';
+      return '<div class="sgc-version">' +
+        '<div class="sgc-doc__top">' +
+          '<span class="sgc-doc__codigo">Promedio ' + e.promedio + '</span>' +
+          (bajo ? Componentes.badge('Requiere capacitación', 'alerta') : Componentes.badge('Conforme', 'ok')) +
+          '<span class="sigso-ayuda">' + fechaCorta_(e.fecha) + '</span>' +
+        '</div>' +
+        '<p class="sigso-ayuda">Evaluó: ' + Componentes.escaparHtml(e.evaluador_email) +
+          (e.proxima_evaluacion ? ' · próxima ' + fechaCorta_(e.proxima_evaluacion) : '') + '</p>' +
+        (e.observaciones ? '<p>' + Componentes.escaparHtml(e.observaciones) + '</p>' : '') +
+      '</div>';
+    }).join('');
+
+    return horas +
+      (vencida ? Componentes.alerta('La evaluación de competencias está vencida (se hace cada 12 meses).', 'aviso') : '') +
+      acciones +
+      '<h3 class="sgc-sub">Historial de evaluaciones</h3>' +
+      '<div class="sgc-lista">' + historial + '</div>';
+  }
+
+  function abrirFormularioEvaluacion_(p, items) {
+    var grupos = {};
+    (items || []).forEach(function (i) {
+      if (!grupos[i.grupo]) grupos[i.grupo] = [];
+      grupos[i.grupo].push(i);
+    });
+    var campos = Object.keys(grupos).map(function (grupo) {
+      return '<h4 class="sgc-sub">' + Componentes.escaparHtml(grupo) + '</h4>' +
+        grupos[grupo].map(function (i) {
+          return Componentes.campoSelect({
+            id: 'sgc-ev-' + i.clave, label: i.texto, valor: '3', placeholder: false,
+            opciones: [
+              { valor: '1', texto: '1 — No cumple' },
+              { valor: '2', texto: '2 — Cumple parcialmente' },
+              { valor: '3', texto: '3 — Cumple' },
+              { valor: '4', texto: '4 — Supera lo esperado' }
+            ]
+          });
+        }).join('');
+    }).join('');
+
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Evaluación de competencias — ' + Componentes.escaparHtml(p.nombre) + '</h3>' +
+        '<p class="sigso-ayuda">Escala 1 a 4. El promedio y la necesidad de capacitación los calcula el sistema.</p>' +
+        '<form id="form-sgc-evaluacion">' +
+          campos +
+          Componentes.campoTextarea({ id: 'sgc-ev-obs', label: 'Observaciones' }) +
+          Componentes.campoTexto({ id: 'sgc-ev-fecha', label: 'Fecha de la evaluación', tipo: 'date' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar evaluación', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-sgc-evaluacion').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var datos = { persona_id: p.persona_id, observaciones: document.getElementById('sgc-ev-obs').value };
+      var fecha = document.getElementById('sgc-ev-fecha').value;
+      if (fecha) datos.fecha = fecha;
+      (items || []).forEach(function (i) {
+        datos[i.clave] = Number(document.getElementById('sgc-ev-' + i.clave).value);
+      });
+      api_('registrarEvaluacionSgc', datos).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar la evaluación.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        if (respuesta.data.requiere_capacitacion) {
+          Componentes.aviso({
+            texto: 'Guardada. Promedio ' + respuesta.data.promedio + ': se detectó necesidad de capacitación.',
+            tipo: 'aviso'
+          });
+        }
+        abrirPersona_(p.persona_id);
+      });
+    });
+  }
+
+  // --- capacitaciones (Fase 2b) -----------------------------------------------
+
+  function cargarCapacitaciones_() {
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando capacitaciones...');
+    api_('listarCapacitacionesSgc', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el programa.', 'error');
+        return;
+      }
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      pintarCapacitaciones_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar las capacitaciones.', 'error');
+    });
+  }
+
+  function pintarCapacitaciones_(cont, data) {
+    var caps = data.capacitaciones || [];
+    var bajoMeta = (data.horas_por_persona || []).filter(function (h) { return !h.cumple_meta; });
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">Programa anual de capacitación y horas de formación por persona (Objetivo de Calidad N°4).</p>' +
+      (puedeGestionar_ ? Componentes.boton({ texto: '+ Programar capacitación', clase: 'js-sgc-nueva-cap' }) : '') +
+      '</div>';
+
+    // Horas por persona: lo que de verdad importa del indicador es quién
+    // está por debajo, así que eso va primero y con nombre.
+    var panelHoras = (data.horas_por_persona || []).length
+      ? '<h3 class="sgc-sub">Horas de formación ' + data.anio + '</h3>' +
+        (bajoMeta.length
+          ? Componentes.alerta(bajoMeta.length + ' persona(s) bajo la meta de 5 horas al año.', 'aviso')
+          : Componentes.alerta('Todo el personal cumple la meta de 5 horas al año.', 'ok')) +
+        '<div class="sgc-lista">' + (data.horas_por_persona || []).map(function (h) {
+          return '<div class="sgc-version"><div class="sgc-doc__top">' +
+            '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(h.nombre) + '</span>' +
+            (h.cumple_meta ? Componentes.badge(h.horas + ' hrs', 'ok') : Componentes.badge(h.horas + ' hrs', 'alerta')) +
+          '</div></div>';
+        }).join('') + '</div>'
+      : '';
+
+    function wire() {
+      wireSecciones_(cont);
+      var nueva = cont.querySelector('.js-sgc-nueva-cap');
+      if (nueva) nueva.addEventListener('click', function () { abrirFormularioCapacitacion_(null); });
+      cont.querySelectorAll('.js-sgc-realizar').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          abrirFormularioRealizacion_(btn.getAttribute('data-idx'));
+        });
+      });
+      cont.querySelectorAll('.js-sgc-eficacia').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          abrirFormularioEficacia_(btn.getAttribute('data-idx'));
+        });
+      });
+    }
+
+    if (caps.length === 0) {
+      cont.innerHTML = cabecera + Componentes.vacio({
+        texto: 'Todavía no hay capacitaciones registradas.',
+        detalle: puedeGestionar_ ? 'Programa la primera del año.' : ''
+      }) + panelHoras;
+      wire();
+      return;
+    }
+
+    var lista = caps.map(function (c) {
+      var realizada = c.estado === 'REALIZADA';
+      return '<div class="sgc-version">' +
+        '<div class="sgc-doc__top">' +
+          '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(c.nombre) + '</span>' +
+          Componentes.badge(realizada ? 'Realizada' : 'Programada', realizada ? 'ok' : 'neutro') +
+          Componentes.badge(c.horas + ' hrs', 'neutro') +
+          (c.eficacia_pendiente ? Componentes.badge('Eficacia pendiente', 'alerta') : '') +
+          (c.eficacia_resultado ? Componentes.badge(c.eficacia_resultado === 'EFICAZ' ? 'Eficaz' : 'No eficaz',
+            c.eficacia_resultado === 'EFICAZ' ? 'ok' : 'critico') : '') +
+        '</div>' +
+        '<div class="sgc-doc__meta">' +
+          (c.relator ? '<span>Relator: ' + Componentes.escaparHtml(c.relator) + '</span>' : '') +
+          (realizada
+            ? '<span>Realizada ' + fechaCorta_(c.fecha_realizada) + '</span>'
+            : (c.fecha_programada ? '<span>Programada ' + fechaCorta_(c.fecha_programada) + '</span>' : '')) +
+          (realizada ? '<span>' + c.total_asistieron + ' asistente(s)</span>' : '') +
+        '</div>' +
+        (c.descripcion ? '<p class="sigso-ayuda">' + Componentes.escaparHtml(c.descripcion) + '</p>' : '') +
+        (realizada && c.asistentes.length
+          ? '<p class="sigso-ayuda">' + c.asistentes.filter(function (a) { return a.asistio; })
+              .map(function (a) { return Componentes.escaparHtml(a.nombre); }).join(', ') + '</p>'
+          : '') +
+        (puedeGestionar_
+          ? '<div class="sgc-acciones">' +
+              (!realizada ? Componentes.boton({ texto: 'Registrar realización', variante: 'sutil', clase: 'js-sgc-realizar', idx: c.capacitacion_id }) : '') +
+              (realizada && !c.eficacia_resultado ? Componentes.boton({ texto: 'Evaluar eficacia', variante: 'sutil', clase: 'js-sgc-eficacia', idx: c.capacitacion_id }) : '') +
+            '</div>'
+          : '') +
+      '</div>';
+    }).join('');
+
+    cont.innerHTML = cabecera + '<div class="sgc-lista">' + lista + '</div>' + panelHoras;
+    wire();
+  }
+
+  function abrirFormularioCapacitacion_() {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Programar capacitación</h3>' +
+        '<form id="form-sgc-cap">' +
+          Componentes.campoTexto({ id: 'sgc-c-nombre', label: 'Nombre del curso', requerido: true }) +
+          Componentes.campoTextarea({ id: 'sgc-c-descripcion', label: 'Descripción' }) +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'sgc-c-horas', label: 'Horas', tipo: 'number', valor: '4', requerido: true }) +
+            Componentes.campoTexto({ id: 'sgc-c-fecha', label: 'Fecha programada', tipo: 'date' }) +
+          '</div>' +
+          Componentes.campoTexto({ id: 'sgc-c-relator', label: 'Relator' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Programar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-sgc-cap').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('guardarCapacitacionSgc', {
+        nombre: document.getElementById('sgc-c-nombre').value,
+        descripcion: document.getElementById('sgc-c-descripcion').value,
+        horas: Number(document.getElementById('sgc-c-horas').value),
+        fecha_programada: document.getElementById('sgc-c-fecha').value,
+        relator: document.getElementById('sgc-c-relator').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo programar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        cargarCapacitaciones_();
+      });
+    });
+  }
+
+  // Registrar realización: se elige quién asistió de la lista de personal.
+  function abrirFormularioRealizacion_(capacitacionId) {
+    api_('listarPersonasSgc', {}).then(function (r) {
+      var personas = (r && r.ok) ? (r.data.personas || []) : [];
+      var fondo = document.createElement('div');
+      fondo.className = 'sigso-modal-fondo';
+      fondo.innerHTML =
+        '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+          '<h3 class="sigso-modal__titulo">Registrar realización</h3>' +
+          '<p class="sigso-ayuda">Marca quiénes asistieron. Las horas del año solo se suman a quienes asistieron.</p>' +
+          '<form id="form-sgc-realizacion">' +
+            Componentes.campoTexto({ id: 'sgc-r-fecha', label: 'Fecha de realización', tipo: 'date', requerido: true }) +
+            Componentes.campoTexto({ id: 'sgc-r-relator', label: 'Relator' }) +
+            '<div class="sigso-campo"><label>Asistentes</label>' +
+              (personas.length
+                ? personas.map(function (p) {
+                    return '<label class="sigso-campo-check"><input type="checkbox" class="js-sgc-asistente" value="' +
+                      p.persona_id + '"> ' + Componentes.escaparHtml(p.nombre) + '</label>';
+                  }).join('')
+                : '<p class="sigso-ayuda">No hay personal registrado todavía.</p>') +
+            '</div>' +
+            '<div class="sigso-modal__acciones">' +
+              Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+              Componentes.boton({ texto: 'Registrar', tipo: 'submit' }) +
+            '</div>' +
+          '</form>' +
+        '</div>';
+      var cerrar = montarModal_(fondo);
+      document.getElementById('form-sgc-realizacion').addEventListener('submit', function (evento) {
+        evento.preventDefault();
+        var asistentes = Array.prototype.slice.call(fondo.querySelectorAll('.js-sgc-asistente:checked'))
+          .map(function (el) { return el.value; });
+        api_('registrarRealizacionCapacitacionSgc', {
+          capacitacion_id: capacitacionId,
+          fecha_realizada: document.getElementById('sgc-r-fecha').value,
+          relator: document.getElementById('sgc-r-relator').value,
+          asistentes: asistentes
+        }).then(function (respuesta) {
+          if (!respuesta || !respuesta.ok) {
+            Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo registrar.', tipo: 'error' });
+            return;
+          }
+          cerrar();
+          cargarCapacitaciones_();
+        });
+      });
+    });
+  }
+
+  function abrirFormularioEficacia_(capacitacionId) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Evaluar eficacia</h3>' +
+        '<p class="sigso-ayuda">A los 60 días de realizada: ¿la capacitación logró su objetivo?</p>' +
+        '<form id="form-sgc-eficacia">' +
+          Componentes.campoSelect({
+            id: 'sgc-ef-resultado', label: 'Resultado', valor: 'EFICAZ', placeholder: false,
+            opciones: [{ valor: 'EFICAZ', texto: 'Eficaz' }, { valor: 'NO_EFICAZ', texto: 'No eficaz' }]
+          }) +
+          Componentes.campoTextarea({
+            id: 'sgc-ef-obs', label: 'Observaciones',
+            ayuda: 'Obligatorio si no fue eficaz: es lo que justifica la siguiente acción.'
+          }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-sgc-eficacia').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('registrarEficaciaCapacitacionSgc', {
+        capacitacion_id: capacitacionId,
+        resultado: document.getElementById('sgc-ef-resultado').value,
+        observaciones: document.getElementById('sgc-ef-obs').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        cargarCapacitaciones_();
+      });
+    });
+  }
+
+  function wireFicha_(cont, data) {
+    var p = data.persona;
+
+    var evaluar = cont.querySelector('.js-sgc-evaluar');
+    if (evaluar) evaluar.addEventListener('click', function () {
+      abrirFormularioEvaluacion_(p, data.items_evaluacion);
+    });
+
+    var editar = cont.querySelector('.js-sgc-editar-persona');
+    if (editar) editar.addEventListener('click', function () { abrirFormularioPersona_(p); });
+
+    var desvincular = cont.querySelector('.js-sgc-desvincular');
+    if (desvincular) desvincular.addEventListener('click', function () {
+      Componentes.confirmar({
+        titulo: 'Desvincular a ' + p.nombre,
+        mensaje: 'Dejará de aparecer en el personal vigente. Su ficha e historial se conservan como evidencia del SGC.'
+      }).then(function (ok) {
+        if (!ok) return;
+        api_('desvincularPersonaSgc', { persona_id: p.persona_id }).then(function (r) {
+          if (!r || !r.ok) {
+            Componentes.aviso({ texto: (r && r.message) || 'No se pudo desvincular.', tipo: 'error' });
+            return;
+          }
+          abrirPersona_(p.persona_id);
+        });
+      });
+    });
+
+    var reactivar = cont.querySelector('.js-sgc-reactivar');
+    if (reactivar) reactivar.addEventListener('click', function () {
+      api_('desvincularPersonaSgc', { persona_id: p.persona_id, reactivar: true }).then(function () {
+        abrirPersona_(p.persona_id);
+      });
+    });
+
+    var descriptor = cont.querySelector('.js-sgc-descriptor');
+    if (descriptor) descriptor.addEventListener('click', function () {
+      abrirFormularioDescriptor_(p, data.descriptor_vigente);
+    });
+
+    var docPersona = cont.querySelector('.js-sgc-doc-persona');
+    if (docPersona) docPersona.addEventListener('click', function () { abrirFormularioDocPersona_(p); });
+
+    cont.querySelectorAll('.js-sgc-bajar-doc').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        api_('descargarDocumentoPersonaSgc', {
+          persona_id: p.persona_id, doc_id: btn.getAttribute('data-idx')
+        }).then(function (r) {
+          if (!r || !r.ok) {
+            Componentes.aviso({ texto: (r && r.message) || 'No se pudo descargar.', tipo: 'error' });
+            return;
+          }
+          descargarBase64Sgc_(r.data.contenido_base64, r.data.nombre_archivo, r.data.mime);
+        });
+      });
+    });
+
+    cont.querySelectorAll('.js-sgc-quitar-doc').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        Componentes.confirmar({ titulo: 'Quitar documento', mensaje: '¿Confirmas quitarlo de la ficha?' }).then(function (ok) {
+          if (!ok) return;
+          api_('guardarDocumentoPersonaSgc', {
+            persona_id: p.persona_id, accion: 'eliminar', doc_id: btn.getAttribute('data-idx')
+          }).then(function () { abrirPersona_(p.persona_id); });
+        });
+      });
+    });
+
+    cont.querySelectorAll('.js-sgc-induccion').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        api_('registrarInduccionSgc', {
+          persona_id: p.persona_id, induccion_id: btn.getAttribute('data-idx'), estado: 'COMPLETADA'
+        }).then(function (r) {
+          if (!r || !r.ok) {
+            Componentes.aviso({ texto: (r && r.message) || 'No se pudo registrar.', tipo: 'error' });
+            return;
+          }
+          abrirPersona_(p.persona_id);
+        });
+      });
+    });
+  }
+
+  // --- formularios de personas -----------------------------------------------
+
+  function abrirFormularioPersona_(p) {
+    var esNueva = !p;
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">' + (esNueva ? 'Nueva persona' : 'Editar datos') + '</h3>' +
+        '<form id="form-sgc-persona">' +
+          Componentes.campoTexto({ id: 'sgc-pe-nombre', label: 'Nombre completo', valor: p && p.nombre, requerido: true }) +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'sgc-pe-email', label: 'Correo', tipo: 'email', valor: p && p.usuario_email, requerido: true }) +
+            Componentes.campoTexto({ id: 'sgc-pe-rut', label: 'RUT', valor: p && p.rut }) +
+          '</div>' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'sgc-pe-cargo', label: 'Cargo según organigrama', valor: p && p.cargo }) +
+            Componentes.campoSelect({
+              id: 'sgc-pe-tipo', label: 'Tipo', valor: (p && p.tipo) || 'INT', placeholder: false,
+              opciones: [{ valor: 'INT', texto: 'Interno' }, { valor: 'EXT', texto: 'Externo' }]
+            }) +
+          '</div>' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'sgc-pe-area', label: 'Área', valor: p && p.area_id, placeholder: 'Ej: PREVENCION' }) +
+            Componentes.campoTexto({ id: 'sgc-pe-ingreso', label: 'Fecha de ingreso', tipo: 'date', valor: fechaISO_(p && p.fecha_ingreso) }) +
+          '</div>' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'sgc-pe-jefatura', label: 'Jefatura directa (correo)', tipo: 'email', valor: p && p.jefatura_email }) +
+            Componentes.campoTexto({ id: 'sgc-pe-subrogante', label: 'Subrogante (correo)', tipo: 'email', valor: p && p.subrogante_email }) +
+          '</div>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: esNueva ? 'Crear ficha' : 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    // El correo enlaza la ficha con su cuenta y con todo su historial:
+    // cambiarlo después partiría el registro en dos.
+    if (!esNueva) document.getElementById('sgc-pe-email').readOnly = true;
+
+    document.getElementById('form-sgc-persona').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var datos = {
+        nombre: document.getElementById('sgc-pe-nombre').value,
+        usuario_email: document.getElementById('sgc-pe-email').value,
+        rut: document.getElementById('sgc-pe-rut').value,
+        cargo: document.getElementById('sgc-pe-cargo').value,
+        tipo: document.getElementById('sgc-pe-tipo').value,
+        area_id: document.getElementById('sgc-pe-area').value,
+        fecha_ingreso: document.getElementById('sgc-pe-ingreso').value,
+        jefatura_email: document.getElementById('sgc-pe-jefatura').value,
+        subrogante_email: document.getElementById('sgc-pe-subrogante').value
+      };
+      if (p) datos.persona_id = p.persona_id;
+      api_('guardarPersonaSgc', datos).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        if (p) abrirPersona_(p.persona_id); else cargarPersonas_();
+      });
+    });
+  }
+
+  function abrirFormularioDescriptor_(p, vigente) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Descriptor de cargo — ' + Componentes.escaparHtml(p.nombre) + '</h3>' +
+        (vigente
+          ? '<p class="sigso-ayuda">La versión ' + Componentes.escaparHtml(vigente.version) +
+            ' quedará archivada (no se elimina) y esta pasará a ser la vigente.</p>'
+          : '') +
+        '<form id="form-sgc-descriptor">' +
+          Componentes.campoTexto({ id: 'sgc-de-version', label: 'Versión', requerido: true, valor: vigente ? '' : 'v01', placeholder: 'Ej: v01' }) +
+          Componentes.campoTextarea({ id: 'sgc-de-objetivo', label: 'Objetivo general del cargo', requerido: true }) +
+          Componentes.campoTextarea({ id: 'sgc-de-funciones', label: 'Funciones' }) +
+          Componentes.campoTextarea({ id: 'sgc-de-responsabilidades', label: 'Responsabilidades' }) +
+          Componentes.campoTextarea({ id: 'sgc-de-habilidades', label: 'Habilidades requeridas' }) +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'sgc-de-nivel', label: 'Nivel educacional' }) +
+            Componentes.campoTexto({ id: 'sgc-de-formacion', label: 'Formación técnica' }) +
+          '</div>' +
+          Componentes.campoTextarea({ id: 'sgc-de-experiencia', label: 'Experiencia laboral requerida' }) +
+          '<div class="sigso-campo">' +
+            '<label for="sgc-de-archivo">Archivo del descriptor (opcional)</label>' +
+            '<input type="file" id="sgc-de-archivo" accept=".pdf,.doc,.docx,.xls,.xlsx">' +
+          '</div>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar descriptor', tipo: 'submit', clase: 'js-sgc-guardar' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-sgc-descriptor').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true; boton.textContent = 'Guardando...';
+      var archivo = document.getElementById('sgc-de-archivo').files[0];
+
+      function enviar(base64, nombreArchivo) {
+        var datos = {
+          persona_id: p.persona_id,
+          version: document.getElementById('sgc-de-version').value,
+          objetivo: document.getElementById('sgc-de-objetivo').value,
+          funciones: document.getElementById('sgc-de-funciones').value,
+          responsabilidades: document.getElementById('sgc-de-responsabilidades').value,
+          habilidades: document.getElementById('sgc-de-habilidades').value,
+          nivel_educacional: document.getElementById('sgc-de-nivel').value,
+          formacion_tecnica: document.getElementById('sgc-de-formacion').value,
+          experiencia: document.getElementById('sgc-de-experiencia').value
+        };
+        if (base64) { datos.contenido_base64 = base64; datos.nombre_archivo = nombreArchivo; }
+        return api_('guardarDescriptorSgc', datos);
+      }
+
+      var promesa = archivo
+        ? leerArchivoBase64Sgc_(archivo).then(function (b64) { return enviar(b64, archivo.name); })
+        : enviar(null, null);
+
+      promesa.then(function (respuesta) {
+        boton.disabled = false; boton.textContent = 'Guardar descriptor';
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar el descriptor.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        abrirPersona_(p.persona_id);
+      }).catch(function () {
+        boton.disabled = false; boton.textContent = 'Guardar descriptor';
+        Componentes.aviso({ texto: 'No se pudo guardar el descriptor.', tipo: 'error' });
+      });
+    });
+  }
+
+  function abrirFormularioDocPersona_(p) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Cargar documento — ' + Componentes.escaparHtml(p.nombre) + '</h3>' +
+        '<form id="form-sgc-doc-persona">' +
+          Componentes.campoSelect({
+            id: 'sgc-dp-tipo', label: 'Tipo de documento', valor: 'CV', placeholder: false,
+            opciones: Object.keys(TIPO_DOC_PERSONA_ETIQUETA).map(function (t) {
+              return { valor: t, texto: TIPO_DOC_PERSONA_ETIQUETA[t] };
+            })
+          }) +
+          Componentes.campoTexto({ id: 'sgc-dp-nombre', label: 'Nombre (opcional)' }) +
+          '<div class="sigso-campo">' +
+            '<label for="sgc-dp-archivo">Archivo (PDF, Word o Excel · máx. 10 MB)</label>' +
+            '<input type="file" id="sgc-dp-archivo" accept=".pdf,.doc,.docx,.xls,.xlsx" required>' +
+          '</div>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Cargar', tipo: 'submit', clase: 'js-sgc-guardar' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-sgc-doc-persona').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var archivo = document.getElementById('sgc-dp-archivo').files[0];
+      if (!archivo) return;
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true; boton.textContent = 'Subiendo...';
+
+      leerArchivoBase64Sgc_(archivo).then(function (base64) {
+        return api_('guardarDocumentoPersonaSgc', {
+          persona_id: p.persona_id,
+          tipo: document.getElementById('sgc-dp-tipo').value,
+          nombre: document.getElementById('sgc-dp-nombre').value || archivo.name,
+          nombre_archivo: archivo.name,
+          contenido_base64: base64
+        });
+      }).then(function (respuesta) {
+        boton.disabled = false; boton.textContent = 'Cargar';
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo cargar el documento.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        abrirPersona_(p.persona_id);
+      }).catch(function () {
+        boton.disabled = false; boton.textContent = 'Cargar';
+        Componentes.aviso({ texto: 'No se pudo leer o subir el archivo.', tipo: 'error' });
+      });
+    });
+  }
+
+  // --- utilidades -------------------------------------------------------------
+
+  function montarModal_(fondo) {
+    function cerrar() {
+      document.removeEventListener('keydown', alTeclado);
+      if (fondo.parentNode) fondo.parentNode.removeChild(fondo);
+    }
+    function alTeclado(ev) { if (ev.key === 'Escape') cerrar(); }
+    fondo.addEventListener('click', function (ev) { if (ev.target === fondo) cerrar(); });
+    document.addEventListener('keydown', alTeclado);
+    document.body.appendChild(fondo);
+    fondo.querySelector('.js-sgc-cancelar').addEventListener('click', cerrar);
+    return cerrar;
+  }
+
+  // El dataURL viene como "data:<mime>;base64,<contenido>"; el backend solo
+  // necesita la parte base64 (mismo criterio que formulario.js/novedades.js).
+  function leerArchivoBase64Sgc_(archivo) {
+    return new Promise(function (resolver, rechazar) {
+      var lector = new FileReader();
+      lector.onload = function () { resolver(String(lector.result).split(',')[1]); };
+      lector.onerror = function () { rechazar(new Error('No se pudo leer el archivo.')); };
+      lector.readAsDataURL(archivo);
+    });
+  }
+
+  function descargarBase64Sgc_(base64, nombre, mime) {
+    var bytes = atob(base64);
+    var arr = new Uint8Array(bytes.length);
+    for (var i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    var blob = new Blob([arr], { type: mime || 'application/octet-stream' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = nombre || 'documento';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+
+  function fechaCorta_(iso) {
+    if (!iso) return '—';
+    var f = new Date(iso);
+    if (isNaN(f.getTime())) return '—';
+    return ('0' + f.getUTCDate()).slice(-2) + '/' + ('0' + (f.getUTCMonth() + 1)).slice(-2) + '/' + f.getUTCFullYear();
+  }
+
+  function fechaISO_(iso) {
+    if (!iso) return '';
+    var f = new Date(iso);
+    if (isNaN(f.getTime())) return '';
+    return f.getUTCFullYear() + '-' + ('0' + (f.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + f.getUTCDate()).slice(-2);
   }
 })();
 
@@ -13464,10 +15898,15 @@ var Iconos = (function () {
     // cuenta (membresia en PROYECTO_INTEGRANTES).
     document.getElementById('btn-ver-proyectos').addEventListener('click', mostrarProyectos_);
     document.getElementById('btn-volver-dashboard-proyectos').addEventListener('click', mostrarDashboard_);
+
+    // v10.0 (Modulo SGC ISO 9001): mismo criterio -- el boton se ve, y QUE
+    // documentos aparecen lo resuelve Calidad.gs segun el rol SGC.
+    document.getElementById('btn-ver-calidad').addEventListener('click', mostrarCalidad_);
+    document.getElementById('btn-volver-dashboard-calidad').addEventListener('click', mostrarDashboard_);
   });
 
   function ocultarTodasLasVistas_() {
-    ['vista-dashboard', 'vista-detalle', 'vista-gerencia', 'vista-jefatura', 'vista-novedades', 'vista-mi-trabajo', 'vista-proyectos'].forEach(function (id) {
+    ['vista-dashboard', 'vista-detalle', 'vista-gerencia', 'vista-jefatura', 'vista-novedades', 'vista-mi-trabajo', 'vista-proyectos', 'vista-calidad'].forEach(function (id) {
       document.getElementById(id).classList.add('sigso-oculto');
     });
   }
@@ -13513,6 +15952,12 @@ var Iconos = (function () {
     ocultarTodasLasVistas_();
     document.getElementById('vista-proyectos').classList.remove('sigso-oculto');
     if (window.SigsoProyectos) SigsoProyectos.cargar();
+  }
+
+  function mostrarCalidad_() {
+    ocultarTodasLasVistas_();
+    document.getElementById('vista-calidad').classList.remove('sigso-oculto');
+    if (window.SigsoCalidad) SigsoCalidad.cargar();
   }
 })();
 

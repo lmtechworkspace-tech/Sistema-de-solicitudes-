@@ -304,7 +304,14 @@
     // v6.0 (modulo Pausas Activas): 'pausas' = registrar participacion (todo
     // el personal); 'pausas_coordinacion' = operar + reportes (coordinadoras).
     { valor: 'pausas', texto: 'Pausas activas (registro)' },
-    { valor: 'pausas_coordinacion', texto: 'Coordinación de pausas' }
+    { valor: 'pausas_coordinacion', texto: 'Coordinación de pausas' },
+    // v10.0 (Modulo SGC ISO 9001): mismo caso que 'mi_trabajo'/'proyectos'
+    // -- esta lista es la que dibuja los botones de "Modulos" al editar una
+    // cuenta, y es INDEPENDIENTE de MODULOS_SHELL (plataforma.js) y de
+    // MODULOS_VALIDOS (CuentasPortal.gs). Si un modulo nuevo no se agrega
+    // aca, el Admin no tiene como activarlo y por lo tanto nadie lo ve en
+    // el menu, aunque el resto del sistema ya lo soporte.
+    { valor: 'calidad', texto: 'Calidad (SGC ISO 9001)' }
   ];
 
   function formularioCuentaPortal_() {

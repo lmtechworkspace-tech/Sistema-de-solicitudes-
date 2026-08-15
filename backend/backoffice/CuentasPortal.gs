@@ -34,7 +34,11 @@ var MODULOS_POR_ROL = {
   // Camila, reemplazo). Registra la pausa del dia y ve sus reportes. Modulos
   // aditivos: no toca ninguno de los del sistema principal.
   COORDINADOR: ['nueva_solicitud', 'mis_solicitudes', 'pausas', 'pausas_coordinacion', 'mi_trabajo'],
-  ADM: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo']
+  // v9.0/v10.0: 'proyectos' y 'calidad' se suman a la plantilla del ADM --
+  // faltaban, y por eso una cuenta ADM recien creada no los traia. Ojo: esta
+  // plantilla solo aplica a cuentas NUEVAS; las que ya existen necesitan que
+  // el Admin marque el modulo a mano en "Cuentas plataforma".
+  ADM: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos', 'calidad']
 };
 
 // v6.0: 'pausas' (registro del trabajador) y 'pausas_coordinacion' (coordinador

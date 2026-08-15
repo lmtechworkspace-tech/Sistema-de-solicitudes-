@@ -3392,10 +3392,26 @@ button {
 
 .sigso-py-lista { display: flex; flex-direction: column; gap: var(--esp-2); }
 
-.sigso-py-tarea, .sigso-py-hito {
+.sigso-py-tarea, .sigso-py-hito, .sigso-py-riesgo {
   background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio-md);
   padding: var(--esp-3) var(--esp-4);
 }
+
+/* v9.4: riesgos -- acento por nivel (probabilidad x impacto, calculado en el backend) */
+.sigso-py-riesgo { border-left: 3px solid var(--borde-fuerte); }
+.sigso-py-riesgo--alta { border-left-color: var(--critico); }
+.sigso-py-riesgo--media { border-left-color: var(--alerta); }
+.sigso-py-riesgo--baja { border-left-color: var(--ok); }
+
+/* v9.4: resumen ejecutivo del portafolio (KPIs + carga por persona) */
+.sigso-py-resumen-ejecutivo { margin: var(--esp-3) 0 var(--esp-4); }
+.sigso-py-resumen-ejecutivo summary { cursor: pointer; font-weight: 600; color: var(--texto); margin-bottom: var(--esp-3); }
+.sigso-py-carga-titulo { margin: var(--esp-3) 0 var(--esp-2); }
+.sigso-py-carga { display: flex; flex-direction: column; gap: var(--esp-2); }
+.sigso-py-carga-fila { display: grid; grid-template-columns: 10rem 1fr auto; align-items: center; gap: var(--esp-2); font-size: var(--texto-sm); }
+.sigso-py-carga-nombre { color: var(--texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sigso-py-carga-barra { background: var(--superficie-2); border-radius: var(--radio-sm); height: 0.5rem; overflow: hidden; }
+.sigso-py-carga-barra span { display: block; height: 100%; background: var(--primario); border-radius: var(--radio-sm); }
 .sigso-py-tarea__top, .sigso-py-hito__top {
   display: flex; align-items: center; justify-content: space-between; gap: var(--esp-2); flex-wrap: wrap;
 }
@@ -3404,6 +3420,95 @@ button {
   margin-top: var(--esp-1); font-size: var(--texto-sm); color: var(--texto-3);
   display: flex; gap: var(--esp-4); flex-wrap: wrap;
 }
+
+/* ===== v10.0: modulo Calidad / SGC ISO 9001 =============================
+   Repositorio documental. Reusa los tokens de siempre; el unico acento
+   propio es el codigo del documento en monoespaciada, porque en un SGC el
+   codigo (DOC-01, PRO-07) ES la identidad del documento y se busca por el. */
+.sgc-cabecera {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--esp-3); flex-wrap: wrap; margin-bottom: var(--esp-3);
+}
+.sgc-cabecera .sigso-ayuda { margin: 0; flex: 1 1 18rem; }
+
+.sgc-filtros {
+  display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap;
+  margin-bottom: var(--esp-4);
+}
+.sgc-filtros .sigso-campo { margin: 0; flex: 0 1 14rem; min-width: min(9rem, 100%); }
+
+.sgc-lista { display: flex; flex-direction: column; gap: var(--esp-2); }
+
+.sgc-doc, .sgc-version {
+  background: var(--superficie); border: 1px solid var(--borde);
+  border-radius: var(--radio-md); padding: var(--esp-3) var(--esp-4);
+}
+.sgc-doc {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  border-left: 3px solid var(--ok); font: inherit; color: inherit;
+}
+.sgc-doc:hover { background: var(--superficie-2); }
+.sgc-doc--obsoleto { border-left-color: var(--critico); opacity: .72; }
+
+.sgc-doc__top {
+  display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap;
+}
+.sgc-doc__codigo {
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  font-weight: 700; color: var(--primario); font-size: var(--texto-sm);
+}
+.sgc-doc__nombre { font-weight: 600; color: var(--texto); flex: 1 1 auto; min-width: 0; }
+.sgc-doc__meta {
+  margin-top: var(--esp-1); font-size: var(--texto-sm); color: var(--texto-3);
+  display: flex; gap: var(--esp-4); flex-wrap: wrap;
+}
+
+.sgc-detalle-cab {
+  display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap;
+  margin-bottom: var(--esp-3);
+}
+.sgc-detalle-cab h1 { margin: 0; flex: 1 1 auto; min-width: 10rem; }
+.sgc-cuerpo { margin-top: var(--esp-3); }
+.sgc-sub { margin: var(--esp-5) 0 var(--esp-3); }
+
+.sgc-ficha {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+  gap: var(--esp-3); margin: var(--esp-4) 0;
+}
+.sgc-ficha__campo { display: flex; flex-direction: column; gap: 2px; }
+.sgc-ficha__campo dt {
+  font-size: var(--texto-xs); font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--texto-3);
+}
+.sgc-ficha__campo dd { margin: 0; color: var(--texto); }
+
+.sgc-acciones { display: flex; gap: var(--esp-2); flex-wrap: wrap; margin-top: var(--esp-4); }
+
+/* v10.0 Fase 1b: confirmación de lectura. Va arriba del detalle porque es
+   lo único que el personal operativo TIENE que hacer en este módulo. */
+.sgc-acuse {
+  border-radius: var(--radio-md); padding: var(--esp-3) var(--esp-4);
+  margin-bottom: var(--esp-4); display: flex; align-items: center;
+  gap: var(--esp-3); flex-wrap: wrap;
+}
+.sgc-acuse p { margin: 0; flex: 1 1 16rem; }
+.sgc-acuse--pendiente { background: var(--alerta-suave); border: 1px solid var(--alerta); }
+.sgc-acuse--hecho { background: var(--ok-suave); border: 1px solid var(--ok); color: var(--texto-2); }
+.sgc-form-fila { display: flex; gap: var(--esp-3); flex-wrap: wrap; }
+.sgc-form-fila > * { flex: 1 1 10rem; }
+
+/* v9.3: filtros del portafolio (estado + salud) */
+.sigso-py-filtros {
+  display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap; margin: var(--esp-3) 0 var(--esp-4);
+}
+.sigso-py-filtros .sigso-campo { margin: 0; flex: 0 1 12rem; min-width: 8rem; }
+
+/* v9.1: gestion de hitos (editar / completar / eliminar) */
+.sigso-py-hito__acciones {
+  margin-top: var(--esp-2); display: flex; gap: var(--esp-2); flex-wrap: wrap;
+}
+.sigso-py-hito--vencido { border-left: 3px solid var(--critico); }
+.sigso-py-hito__vencido-tag { color: var(--critico); }
 
 .sigso-py-integrante {
   display: flex; align-items: center; gap: var(--esp-3);
@@ -3417,6 +3522,12 @@ button {
 .sigso-py-sala-form__acciones { display: flex; gap: var(--esp-2); align-items: flex-end; flex-wrap: wrap; }
 .sigso-py-sala-form__acciones .sigso-campo { flex: 1 1 12rem; margin: 0; }
 
+/* v9.3: menciones -- checklist opcional plegada bajo el textarea de la sala */
+.sigso-py-menciones { margin: var(--esp-2) 0; }
+.sigso-py-menciones summary { cursor: pointer; font-size: var(--texto-sm); color: var(--primario); user-select: none; }
+.sigso-py-menciones[open] summary { margin-bottom: var(--esp-2); }
+.sigso-py-menciones .sigso-campo-check { padding: 2px 0; }
+
 .sigso-py-feed { display: flex; flex-direction: column; gap: var(--esp-2); }
 .sigso-py-evento {
   background: var(--superficie); border: 1px solid var(--borde); border-left: 3px solid var(--borde-fuerte);
@@ -3425,6 +3536,8 @@ button {
 .sigso-py-evento--solicitud_lider { border-left-color: var(--alerta); }
 .sigso-py-evento--bloqueo { border-left-color: var(--critico); }
 .sigso-py-evento--decision { border-left-color: var(--primario); }
+.sigso-py-evento--entregable { border-left-color: var(--ok); }
+.sigso-py-evento--riesgo { border-left-color: var(--critico); }
 .sigso-py-evento__top {
   display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap; font-size: var(--texto-sm);
 }
@@ -6892,7 +7005,14 @@ var Iconos = (function () {
     // v6.0 (modulo Pausas Activas): 'pausas' = registrar participacion (todo
     // el personal); 'pausas_coordinacion' = operar + reportes (coordinadoras).
     { valor: 'pausas', texto: 'Pausas activas (registro)' },
-    { valor: 'pausas_coordinacion', texto: 'Coordinación de pausas' }
+    { valor: 'pausas_coordinacion', texto: 'Coordinación de pausas' },
+    // v10.0 (Modulo SGC ISO 9001): mismo caso que 'mi_trabajo'/'proyectos'
+    // -- esta lista es la que dibuja los botones de "Modulos" al editar una
+    // cuenta, y es INDEPENDIENTE de MODULOS_SHELL (plataforma.js) y de
+    // MODULOS_VALIDOS (CuentasPortal.gs). Si un modulo nuevo no se agrega
+    // aca, el Admin no tiene como activarlo y por lo tanto nadie lo ve en
+    // el menu, aunque el resto del sistema ya lo soporte.
+    { valor: 'calidad', texto: 'Calidad (SGC ISO 9001)' }
   ];
 
   function formularioCuentaPortal_() {
