@@ -2816,6 +2816,71 @@
   display: flex; gap: var(--esp-4); flex-wrap: wrap;
 }
 
+/* ===== v10.0: modulo Calidad / SGC ISO 9001 =============================
+   Repositorio documental. Reusa los tokens de siempre; el unico acento
+   propio es el codigo del documento en monoespaciada, porque en un SGC el
+   codigo (DOC-01, PRO-07) ES la identidad del documento y se busca por el. */
+.sgc-cabecera {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--esp-3); flex-wrap: wrap; margin-bottom: var(--esp-3);
+}
+.sgc-cabecera .sigso-ayuda { margin: 0; flex: 1 1 18rem; }
+
+.sgc-filtros {
+  display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap;
+  margin-bottom: var(--esp-4);
+}
+.sgc-filtros .sigso-campo { margin: 0; flex: 0 1 14rem; min-width: min(9rem, 100%); }
+
+.sgc-lista { display: flex; flex-direction: column; gap: var(--esp-2); }
+
+.sgc-doc, .sgc-version {
+  background: var(--superficie); border: 1px solid var(--borde);
+  border-radius: var(--radio-md); padding: var(--esp-3) var(--esp-4);
+}
+.sgc-doc {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  border-left: 3px solid var(--ok); font: inherit; color: inherit;
+}
+.sgc-doc:hover { background: var(--superficie-2); }
+.sgc-doc--obsoleto { border-left-color: var(--critico); opacity: .72; }
+
+.sgc-doc__top {
+  display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap;
+}
+.sgc-doc__codigo {
+  font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+  font-weight: 700; color: var(--primario); font-size: var(--texto-sm);
+}
+.sgc-doc__nombre { font-weight: 600; color: var(--texto); flex: 1 1 auto; min-width: 0; }
+.sgc-doc__meta {
+  margin-top: var(--esp-1); font-size: var(--texto-sm); color: var(--texto-3);
+  display: flex; gap: var(--esp-4); flex-wrap: wrap;
+}
+
+.sgc-detalle-cab {
+  display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap;
+  margin-bottom: var(--esp-3);
+}
+.sgc-detalle-cab h1 { margin: 0; flex: 1 1 auto; min-width: 10rem; }
+.sgc-cuerpo { margin-top: var(--esp-3); }
+.sgc-sub { margin: var(--esp-5) 0 var(--esp-3); }
+
+.sgc-ficha {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+  gap: var(--esp-3); margin: var(--esp-4) 0;
+}
+.sgc-ficha__campo { display: flex; flex-direction: column; gap: 2px; }
+.sgc-ficha__campo dt {
+  font-size: var(--texto-xs); font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--texto-3);
+}
+.sgc-ficha__campo dd { margin: 0; color: var(--texto); }
+
+.sgc-acciones { display: flex; gap: var(--esp-2); flex-wrap: wrap; margin-top: var(--esp-4); }
+.sgc-form-fila { display: flex; gap: var(--esp-3); flex-wrap: wrap; }
+.sgc-form-fila > * { flex: 1 1 10rem; }
+
 /* v9.3: filtros del portafolio (estado + salud) */
 .sigso-py-filtros {
   display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap; margin: var(--esp-3) 0 var(--esp-4);

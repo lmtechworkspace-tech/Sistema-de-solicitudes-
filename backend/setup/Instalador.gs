@@ -263,6 +263,26 @@ var ESQUEMA_HOJAS = {
   PROYECTO_RIESGOS: [
     'riesgo_id', 'proyecto_id', 'descripcion', 'probabilidad', 'impacto',
     'nivel', 'responsable_email', 'mitigacion', 'estado', 'fecha_creacion'
+  ],
+  // v10.0 (Modulo SGC ISO 9001): ver la nota identica en
+  // backend/backoffice/Constantes.gs sobre cada hoja y cada campo.
+  SGC_DOCUMENTOS: [
+    'documento_id', 'codigo', 'nombre', 'descripcion', 'tipo', 'area_id',
+    'version_vigente', 'estado', 'visibilidad',
+    'fecha_vigencia', 'proxima_revision',
+    'elaborado_por', 'revisado_por', 'aprobado_por',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+  SGC_DOC_VERSIONES: [
+    'version_id', 'documento_id', 'version', 'cambios',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'subido_por', 'fecha', 'vigente'
+  ],
+  SGC_DOC_DESTINATARIOS: ['destinatario_id', 'documento_id', 'usuario_email'],
+  SGC_ROLES: [
+    'rol_id', 'usuario_email', 'rol_sgc', 'area_id',
+    'vigencia_hasta', 'activo', 'fecha_creacion'
   ]
 };
 

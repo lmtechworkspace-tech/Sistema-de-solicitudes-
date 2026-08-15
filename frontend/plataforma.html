@@ -527,6 +527,16 @@
         <div id="proyectos-contenido"></div>
       </section>
 
+      <!-- ===== Modulo: Calidad / SGC ISO 9001 (v10.0, Calidad.gs) =====
+           Repositorio documental controlado. El listado que llega ya viene
+           filtrado por el backend segun el rol SGC de quien pregunta: aca
+           nunca se decide que puede ver una persona. -->
+      <section id="modulo-calidad" class="plataforma-modulo sigso-oculto">
+        <h1>Calidad</h1>
+        <p class="sigso-ayuda">Documentos vigentes del Sistema de Gestión de Calidad (ISO 9001).</p>
+        <div id="calidad-contenido"></div>
+      </section>
+
       <section id="modulo-pausas" class="plataforma-modulo sigso-oculto">
         <h1>Pausas activas</h1>
         <p class="sigso-ayuda">Registra tu participación en la pausa activa de hoy. Toma unos segundos.</p>
@@ -989,6 +999,7 @@
   <!-- v9.0: modulo "Proyectos". Antes de plataforma.js, que lo invoca desde
        mostrarModulo_. -->
   <script src="js/proyectos.js"></script>
+  <script src="js/calidad.js"></script>
   <!-- v7.1: notificaciones "en vivo" (modal + toast del SO), transversal.
        Antes de plataforma.js, que expone window.SigsoShell.irAModulo. -->
   <script src="js/notificaciones-vivas.js"></script>

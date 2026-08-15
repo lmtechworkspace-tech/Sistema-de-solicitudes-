@@ -122,7 +122,16 @@ var SHEETS = {
   // riesgos. Mismo patron de siempre -- hoja propia, gate por membresia del
   // proyecto (Proyectos.gs).
   PROYECTO_ENTREGABLES: 'PROYECTO_ENTREGABLES',
-  PROYECTO_RIESGOS: 'PROYECTO_RIESGOS'
+  PROYECTO_RIESGOS: 'PROYECTO_RIESGOS',
+  // v10.0 (documentacion/SIGSO-v10.0-propuesta-modulo-sgc-iso9001.md):
+  // modulo SGC ISO 9001. Fase 1 = repositorio documental controlado: los
+  // documentos del SGC ya existen en PDF/Word/Excel; lo que faltaba era
+  // subirlos con su metadata de control (codigo, version, vigencia) y que
+  // cada persona vea SOLO los que le corresponden.
+  SGC_DOCUMENTOS: 'SGC_DOCUMENTOS',
+  SGC_DOC_VERSIONES: 'SGC_DOC_VERSIONES',
+  SGC_DOC_DESTINATARIOS: 'SGC_DOC_DESTINATARIOS',
+  SGC_ROLES: 'SGC_ROLES'
 };
 
 var COLUMNAS = {
@@ -469,6 +478,54 @@ var COLUMNAS = {
   PROYECTO_RIESGOS: [
     'riesgo_id', 'proyecto_id', 'descripcion', 'probabilidad', 'impacto',
     'nivel', 'responsable_email', 'mitigacion', 'estado', 'fecha_creacion'
+  ],
+
+  // v10.0 (Modulo SGC ISO 9001, Fase 1) ---------------------------------
+  // El documento controlado. El ARCHIVO vigente vive en Drive
+  // (archivo_id/nombre/mime, mismo patron que el adjunto de NOVEDADES); el
+  // historial completo de archivos anteriores vive en SGC_DOC_VERSIONES.
+  //
+  // tipo: DOC (maestros) | PRO (procedimientos) | INS (instructivos) |
+  //       FO (formularios) | EXTERNO (normas, leyes, decretos).
+  // estado: VIGENTE | OBSOLETO. Un documento obsoleto NO se borra --
+  //   PRO-01 pide retirarlo de circulacion, pero ISO exige trazabilidad,
+  //   asi que se archiva (§4.3 de la propuesta v10.0).
+  // visibilidad: TODOS | AREA | SELECCION -- refleja la matriz de
+  //   responsabilidades del SGC ("documentos maestros: todo el personal;
+  //   procedimientos: personal segun area; formularios: segun formulario").
+  //   Mismo criterio que audiencia_tipo en NOVEDADES.
+  // proxima_revision: fecha_vigencia + 12 meses (PRO-01 exige revision
+  //   periodica anual). Se calcula al guardar, no se pide a mano.
+  SGC_DOCUMENTOS: [
+    'documento_id', 'codigo', 'nombre', 'descripcion', 'tipo', 'area_id',
+    'version_vigente', 'estado', 'visibilidad',
+    'fecha_vigencia', 'proxima_revision',
+    'elaborado_por', 'revisado_por', 'aprobado_por',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+  // Append-only: una fila por version subida. La vigente tambien queda
+  // aqui (vigente=true), asi el historial es completo y auditable sin
+  // tener que reconstruirlo desde SGC_DOCUMENTOS.
+  SGC_DOC_VERSIONES: [
+    'version_id', 'documento_id', 'version', 'cambios',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'subido_por', 'fecha', 'vigente'
+  ],
+  // Solo se usa cuando visibilidad = SELECCION. Una fila por persona,
+  // mismo patron que NOVEDADES_DESTINATARIOS.
+  SGC_DOC_DESTINATARIOS: ['destinatario_id', 'documento_id', 'usuario_email'],
+  // Gate FINO del modulo (el grueso es el modulo 'calidad' en
+  // MODULO_POR_ACCION). Mismo patron que PROYECTO_INTEGRANTES: el rol es
+  // DENTRO del modulo, no un rol global nuevo -- no se tocan los roles de
+  // SIGSO (ADM/GERENCIA/JEFATURA/...).
+  // rol_sgc: ENCARGADO_SGC | DIRECCION | GERENCIA_ADM | JEFATURA_AREA |
+  //          ENC_ADMIN | OPERATIVO | AUDITOR_EXTERNO.
+  // vigencia_hasta: para el AUDITOR_EXTERNO -- acceso temporal que expira
+  //   solo, sin depender de acordarse de desactivarlo.
+  SGC_ROLES: [
+    'rol_id', 'usuario_email', 'rol_sgc', 'area_id',
+    'vigencia_hasta', 'activo', 'fecha_creacion'
   ]
 };
 

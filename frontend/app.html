@@ -44,6 +44,11 @@
       <button type="button" class="sigso-boton--con-icono sigso-boton--secundario" id="btn-ver-proyectos">
         <span id="ico-ver-proyectos"></span> Proyectos
       </button>
+      <!-- v10.0 (Modulo SGC ISO 9001): visible para cualquiera con sesion de
+           staff; QUE documentos ve cada quien lo decide Calidad.gs. -->
+      <button type="button" class="sigso-boton--con-icono sigso-boton--secundario" id="btn-ver-calidad">
+        <span id="ico-ver-calidad"></span> Calidad
+      </button>
 
       <!-- v3.0 (Fase 2, multi-bandeja): un responsable individual (DEV) ya
            esta auto-acotado a la suya -- solo se le avisa. ADM/GERENCIA ven
@@ -466,6 +471,15 @@
       <h1>Proyectos</h1>
       <div id="proyectos-contenido"></div>
     </section>
+
+    <!-- v10.0 (Modulo SGC ISO 9001): mismo modulo compartido (calidad.js)
+         que usa plataforma.html. -->
+    <section id="vista-calidad" class="sigso-oculto">
+      <button type="button" class="sigso-boton--secundario" id="btn-volver-dashboard-calidad">&larr; Volver al dashboard</button>
+      <h1>Calidad</h1>
+      <p class="sigso-ayuda">Documentos vigentes del Sistema de Gestión de Calidad (ISO 9001).</p>
+      <div id="calidad-contenido"></div>
+    </section>
   </main>
 
   <script src="js/config.js"></script>
@@ -483,6 +497,7 @@
   <script src="js/actividades.js"></script>
   <!-- v9.0 (Modulo de Proyectos): portafolio + sala de trabajo. -->
   <script src="js/proyectos.js"></script>
+  <script src="js/calidad.js"></script>
   <!-- v6.4: panel "Mi perfil" + identidad en el header. -->
   <script src="js/perfil.js"></script>
   <!-- v7.1: notificaciones "en vivo" (modal + toast del SO), transversal.

@@ -77,10 +77,15 @@
     // cuenta (membresia en PROYECTO_INTEGRANTES).
     document.getElementById('btn-ver-proyectos').addEventListener('click', mostrarProyectos_);
     document.getElementById('btn-volver-dashboard-proyectos').addEventListener('click', mostrarDashboard_);
+
+    // v10.0 (Modulo SGC ISO 9001): mismo criterio -- el boton se ve, y QUE
+    // documentos aparecen lo resuelve Calidad.gs segun el rol SGC.
+    document.getElementById('btn-ver-calidad').addEventListener('click', mostrarCalidad_);
+    document.getElementById('btn-volver-dashboard-calidad').addEventListener('click', mostrarDashboard_);
   });
 
   function ocultarTodasLasVistas_() {
-    ['vista-dashboard', 'vista-detalle', 'vista-gerencia', 'vista-jefatura', 'vista-novedades', 'vista-mi-trabajo', 'vista-proyectos'].forEach(function (id) {
+    ['vista-dashboard', 'vista-detalle', 'vista-gerencia', 'vista-jefatura', 'vista-novedades', 'vista-mi-trabajo', 'vista-proyectos', 'vista-calidad'].forEach(function (id) {
       document.getElementById(id).classList.add('sigso-oculto');
     });
   }
@@ -126,5 +131,11 @@
     ocultarTodasLasVistas_();
     document.getElementById('vista-proyectos').classList.remove('sigso-oculto');
     if (window.SigsoProyectos) SigsoProyectos.cargar();
+  }
+
+  function mostrarCalidad_() {
+    ocultarTodasLasVistas_();
+    document.getElementById('vista-calidad').classList.remove('sigso-oculto');
+    if (window.SigsoCalidad) SigsoCalidad.cargar();
   }
 })();

@@ -181,7 +181,17 @@ var BACKOFFICE_ACTIONS = {
   gestionarEntregableProyecto: handleGestionarEntregableProyecto_,
   revisarEntregableProyecto: handleRevisarEntregableProyecto_,
   gestionarRiesgoProyecto: handleGestionarRiesgoProyecto_,
-  getResumenPortafolioProyectos: handleGetResumenPortafolioProyectos_
+  getResumenPortafolioProyectos: handleGetResumenPortafolioProyectos_,
+  // v10.0 (Modulo SGC ISO 9001, Fase 1): repositorio documental controlado.
+  // Ver documentacion/SIGSO-v10.0-propuesta-modulo-sgc-iso9001.md.
+  listarDocumentosSgc: handleListarDocumentosSgc_,
+  getDocumentoSgc: handleGetDocumentoSgc_,
+  crearDocumentoSgc: handleCrearDocumentoSgc_,
+  nuevaVersionDocumentoSgc: handleNuevaVersionDocumentoSgc_,
+  actualizarDocumentoSgc: handleActualizarDocumentoSgc_,
+  descargarDocumentoSgc: handleDescargarDocumentoSgc_,
+  listarRolesSgc: handleListarRolesSgc_,
+  gestionarRolSgc: handleGestionarRolSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -308,7 +318,21 @@ var MODULO_POR_ACCION = {
   gestionarEntregableProyecto: 'proyectos',
   revisarEntregableProyecto: 'proyectos',
   gestionarRiesgoProyecto: 'proyectos',
-  getResumenPortafolioProyectos: ['proyectos', 'gerencia']
+  getResumenPortafolioProyectos: ['proyectos', 'gerencia'],
+  // v10.0 (Modulo SGC ISO 9001): el modulo 'calidad' es el gate GRUESO; el
+  // rol dentro del SGC (SGC_ROLES, ver Calidad.gs) es el gate FINO -- que
+  // ademas decide QUE documentos ve cada persona, no solo si entra.
+  // Las de lectura aceptan tambien 'gerencia', mismo patron que
+  // listarProyectos: Gerencia necesita ver el estado del SGC desde su
+  // panel, de solo lectura (Calidad.gs ya lo permite en veTodoSgc_).
+  listarDocumentosSgc: ['calidad', 'gerencia'],
+  getDocumentoSgc: ['calidad', 'gerencia'],
+  descargarDocumentoSgc: ['calidad', 'gerencia'],
+  crearDocumentoSgc: 'calidad',
+  nuevaVersionDocumentoSgc: 'calidad',
+  actualizarDocumentoSgc: 'calidad',
+  listarRolesSgc: 'calidad',
+  gestionarRolSgc: 'calidad'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -817,6 +841,42 @@ function handleGestionarRiesgoProyecto_(data, contexto) {
 
 function handleGetResumenPortafolioProyectos_(data, contexto) {
   return responderResultado_(Proyectos.getResumenPortafolio(contexto));
+}
+
+// v10.0 (Modulo SGC ISO 9001, Fase 1): ver documentacion/
+// SIGSO-v10.0-propuesta-modulo-sgc-iso9001.md. Calidad.gs resuelve por su
+// cuenta QUE documentos ve cada quien (SGC_ROLES + visibilidad), por eso
+// aca no hay logica de permisos: solo el gate de modulo de la tabla.
+function handleListarDocumentosSgc_(data, contexto) {
+  return responderResultado_(Calidad.listarDocumentos(data, contexto));
+}
+
+function handleGetDocumentoSgc_(data, contexto) {
+  return responderResultado_(Calidad.getDocumento(data, contexto));
+}
+
+function handleCrearDocumentoSgc_(data, contexto) {
+  return responderResultado_(Calidad.crearDocumento(data, contexto));
+}
+
+function handleNuevaVersionDocumentoSgc_(data, contexto) {
+  return responderResultado_(Calidad.nuevaVersion(data, contexto));
+}
+
+function handleActualizarDocumentoSgc_(data, contexto) {
+  return responderResultado_(Calidad.actualizarDocumento(data, contexto));
+}
+
+function handleDescargarDocumentoSgc_(data, contexto) {
+  return responderResultado_(Calidad.descargarDocumento(data, contexto));
+}
+
+function handleListarRolesSgc_(data, contexto) {
+  return responderResultado_(Calidad.listarRoles(data, contexto));
+}
+
+function handleGestionarRolSgc_(data, contexto) {
+  return responderResultado_(Calidad.gestionarRol(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

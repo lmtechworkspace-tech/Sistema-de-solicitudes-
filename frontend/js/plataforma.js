@@ -58,7 +58,13 @@
     // portafolio + sala de trabajo de proyectos internos. No es core --
     // depende de que la cuenta lo tenga en CUENTAS_PORTAL.modulos, igual
     // que 'mi_trabajo'.
-    proyectos: { icono: 'caja', nombre: 'Proyectos', descripcion: 'Portafolio, equipo y sala de trabajo de tus proyectos', interno: true }
+    proyectos: { icono: 'caja', nombre: 'Proyectos', descripcion: 'Portafolio, equipo y sala de trabajo de tus proyectos', interno: true },
+    // v10.0 (documentacion/SIGSO-v10.0-propuesta-modulo-sgc-iso9001.md):
+    // repositorio documental del Sistema de Gestion de Calidad. Cada
+    // persona ve SOLO los documentos que le corresponden -- el filtrado lo
+    // hace el backend (Calidad.gs), no el shell. No es core: depende de que
+    // la cuenta tenga 'calidad' en CUENTAS_PORTAL.modulos.
+    calidad: { icono: 'documento', nombre: 'Calidad', descripcion: 'Documentos vigentes del Sistema de Gestión de Calidad', interno: true }
   };
 
   // v4.0 Frente 3: cada modulo tiene su propio acento -- antes todo el shell
@@ -76,7 +82,8 @@
     pausas_coordinacion: { acento: 'var(--alerta)', suave: 'var(--alerta-suave)' },
     novedades: { acento: 'var(--primario)', suave: 'var(--primario-suave)' },
     mi_trabajo: { acento: 'var(--ok)', suave: 'var(--ok-suave)' },
-    proyectos: { acento: 'var(--primario)', suave: 'var(--primario-suave)' }
+    proyectos: { acento: 'var(--primario)', suave: 'var(--primario-suave)' },
+    calidad: { acento: 'var(--ok)', suave: 'var(--ok-suave)' }
   };
 
   function acentoInline_(id) {
@@ -370,6 +377,14 @@
         if (window.SigsoProyectos) {
           if (window.SigsoProyectos.refrescar) window.SigsoProyectos.refrescar();
           else window.SigsoProyectos.cargar();
+        }
+        break;
+      case 'calidad':
+        // Mismo criterio que Proyectos: si hay un documento abierto, el
+        // refresco de fondo no debe sacar al usuario de ahi.
+        if (window.SigsoCalidad) {
+          if (window.SigsoCalidad.refrescar) window.SigsoCalidad.refrescar();
+          else window.SigsoCalidad.cargar();
         }
         break;
       default:
@@ -1141,7 +1156,7 @@
   // el contenedor ancho, como app.html. Los demas (formulario, mis
   // solicitudes) se leen mejor angostos y centrados -- por eso el ancho del
   // <main> se adapta al modulo en vez de ser fijo.
-  var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos'];
+  var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad'];
 
   // v5.1: modulo activo + cuando se cargaron por ultima vez sus datos, para
   // el auto-refresco al volver a la pestana (sin recargar la pagina).
@@ -1202,6 +1217,9 @@
     }
     if (id === 'proyectos' && window.SigsoProyectos) {
       window.SigsoProyectos.cargar();
+    }
+    if (id === 'calidad' && window.SigsoCalidad) {
+      window.SigsoCalidad.cargar();
     }
     window.scrollTo(0, 0);
   }

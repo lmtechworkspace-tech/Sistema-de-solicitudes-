@@ -52,3 +52,14 @@ function obtenerCarpetaPerfiles_() {
 function obtenerCarpetaNovedades_() {
   return obtenerOCrearSubcarpeta_(obtenerCarpetaRaiz_(), 'SIGSO_Novedades');
 }
+
+// v10.0 (Modulo SGC ISO 9001): documentos controlados del Sistema de
+// Gestion de Calidad (PDF/Word/Excel ya elaborados). Privada como el resto
+// y por el MISMO motivo que la de Novedades: quien tiene permiso baja el
+// archivo por una accion de backend que sirve el base64
+// (Calidad.descargarDocumento), nunca haciendo publica la carpeta. Esto
+// importa mas aca que en ningun otro modulo: el control de acceso a los
+// documentos ES un requisito de la norma, no una preferencia.
+function obtenerCarpetaCalidad_() {
+  return obtenerOCrearSubcarpeta_(obtenerCarpetaRaiz_(), 'SIGSO_Calidad');
+}

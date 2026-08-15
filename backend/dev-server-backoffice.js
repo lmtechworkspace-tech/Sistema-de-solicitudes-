@@ -219,6 +219,18 @@ function construirContexto() {
       'leo@rld.cl', 'Coordinar una ventana alternativa con 1 semana de margen.', 'ABIERTO',
       new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString()]
   ]);
+  // v10.0 (Modulo SGC ISO 9001): hojas del repositorio documental. Se
+  // siembran los ROLES (admin como Encargado SGC, jefe como operativo de
+  // CONTABILIDAD) para poder probar en local que cada quien ve lo suyo; los
+  // documentos se cargan desde la UI, que es justamente el flujo a probar.
+  seedSheet(ctx, 'SGC_DOCUMENTOS', ctx.COLUMNAS.SGC_DOCUMENTOS);
+  seedSheet(ctx, 'SGC_DOC_VERSIONES', ctx.COLUMNAS.SGC_DOC_VERSIONES);
+  seedSheet(ctx, 'SGC_DOC_DESTINATARIOS', ctx.COLUMNAS.SGC_DOC_DESTINATARIOS);
+  seedSheet(ctx, 'SGC_ROLES', ctx.COLUMNAS.SGC_ROLES, [
+    ['SGCR-1', 'admin@homepymes.cl', 'ENCARGADO_SGC', '', '', true, new Date().toISOString()],
+    ['SGCR-2', 'jefe@homepymes.cl', 'OPERATIVO', 'CONTABILIDAD', '', true, new Date().toISOString()],
+    ['SGCR-3', 'gerente@homepymes.cl', 'DIRECCION', '', '', true, new Date().toISOString()]
+  ]);
   // v6.1 (Fase 4): DOCUMENTOS demo (las capturas ya las siembra
   // sembrarSolicitudesDemo_ mas abajo). Hacen falta para ver la lista de
   // archivos con metadata -- formato, peso y fecha --, que es justo lo que un

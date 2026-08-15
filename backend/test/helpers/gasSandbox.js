@@ -166,6 +166,10 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // cargar despues. Usa tambien encolarNotificacionApp_ (Notificaciones.gs)
   // y obtenerFeriados_ (Dashboard.gs), ambos ya cargados arriba.
   'Proyectos.gs',
+  // v10.0 (Modulo SGC ISO 9001, Fase 1): repositorio documental controlado.
+  // Usa obtenerCarpetaCalidad_ (DriveRepo.gs) y agregarFila_/leerFilasSeguro_
+  // (SheetsRepo.gs), ambos ya cargados arriba.
+  'Calidad.gs',
   'Triggers.gs',
   'Code.gs'
 ];

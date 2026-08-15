@@ -51,7 +51,7 @@ var MODULOS_POR_ROL = {
 // v9.0: 'proyectos' (Modulo de Proyectos) -- mismo criterio que 'mi_trabajo':
 // se agrega a la plantilla de cuentas nuevas, pero no se fuerza en las ya
 // existentes (el Admin lo activa a mano en Cuentas plataforma).
-var MODULOS_VALIDOS = ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos'];
+var MODULOS_VALIDOS = ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos', 'calidad'];
 
 var CuentasPortal = {
   listar: function (data, contexto) {
