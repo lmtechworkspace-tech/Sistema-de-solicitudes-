@@ -136,7 +136,15 @@ var SHEETS = {
   // evidencia que ISO 9001 §7.5.3 exige ("la informacion documentada esta
   // disponible y es idonea"): el auditor lo pregunta como "¿como prueba que
   // su personal conoce la politica vigente?".
-  SGC_DOC_ACUSES: 'SGC_DOC_ACUSES'
+  SGC_DOC_ACUSES: 'SGC_DOC_ACUSES',
+  // v10.0 Fase 2a (PRO-02, gestion de personal): la ficha del trabajador.
+  // NO se toca USUARIOS (que es de autenticacion y la usa todo SIGSO) --
+  // estos datos son propios del SGC y ademas 6 de las 13 personas en
+  // alcance son externas y ni siquiera estan en USUARIOS.
+  SGC_PERSONAS: 'SGC_PERSONAS',
+  SGC_DESCRIPTORES: 'SGC_DESCRIPTORES',
+  SGC_PERSONA_DOCUMENTOS: 'SGC_PERSONA_DOCUMENTOS',
+  SGC_INDUCCIONES: 'SGC_INDUCCIONES'
 };
 
 var COLUMNAS = {
@@ -540,7 +548,47 @@ var COLUMNAS = {
   // que hace que el acuse sea evidencia real: si el Manual pasa a v02, el
   // acuse de la v01 ya no vale y todos deben confirmar la nueva. Sin esa
   // columna, "confirmado" significaria "confirmo algo alguna vez".
-  SGC_DOC_ACUSES: ['acuse_id', 'documento_id', 'version', 'usuario_email', 'acusado_en']
+  SGC_DOC_ACUSES: ['acuse_id', 'documento_id', 'version', 'usuario_email', 'acusado_en'],
+
+  // v10.0 Fase 2a (PRO-02) ------------------------------------------------
+  // La ficha del trabajador dentro del SGC.
+  // tipo: INT (interno) | EXT (externo) -- 6 de las 13 personas en alcance
+  //   son externas, y para el SGC cuentan igual.
+  // estado: ACTIVO | DESVINCULADO. Una persona desvinculada NO se borra
+  //   (la especificacion lo pide explicitamente): sus inducciones,
+  //   evaluaciones y capacitaciones son historia que el auditor puede
+  //   pedir. Se marca con fecha de salida y deja de aparecer por defecto.
+  // jefatura_email: puede diferir de JEFATURAS (que es la jerarquia
+  //   operativa); si no se indica, se toma de ahi como valor por defecto.
+  SGC_PERSONAS: [
+    'persona_id', 'usuario_email', 'nombre', 'rut', 'cargo', 'tipo',
+    'area_id', 'jefatura_email', 'subrogante_email',
+    'fecha_ingreso', 'estado', 'fecha_desvinculacion',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+  // Descriptor de cargo (FO-PRO-02-01), versionado: cada actualizacion crea
+  // una fila nueva y la anterior queda vigente=false. Mismo criterio que
+  // SGC_DOC_VERSIONES -- poder demostrar que descriptor regia y cuando.
+  SGC_DESCRIPTORES: [
+    'descriptor_id', 'persona_id', 'version', 'objetivo', 'funciones',
+    'responsabilidades', 'habilidades', 'nivel_educacional',
+    'formacion_tecnica', 'experiencia',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'vigente', 'creado_por', 'fecha'
+  ],
+  // Carpeta digital de la persona (CV, titulo, contrato, certificados...).
+  // tipo: CV | TITULO | ISO9001 | CONTRATO | CERTIFICADO | OTRO.
+  SGC_PERSONA_DOCUMENTOS: [
+    'doc_id', 'persona_id', 'tipo', 'nombre',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'subido_por', 'fecha', 'activa'
+  ],
+  // Registro de induccion (FO-PRO-02-02): los 5 items del SGC, una fila por
+  // item y persona. estado: PENDIENTE | COMPLETADA.
+  SGC_INDUCCIONES: [
+    'induccion_id', 'persona_id', 'item', 'fecha', 'relator_email',
+    'estado', 'observaciones'
+  ]
 };
 
 var ESTADOS = {

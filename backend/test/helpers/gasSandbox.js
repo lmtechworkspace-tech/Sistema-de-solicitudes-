@@ -170,6 +170,10 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // Usa obtenerCarpetaCalidad_ (DriveRepo.gs) y agregarFila_/leerFilasSeguro_
   // (SheetsRepo.gs), ambos ya cargados arriba.
   'Calidad.gs',
+  // v10.0 Fase 2a (PRO-02): ficha del trabajador. Usa helpers de Calidad.gs
+  // (rolSgc_, gobiernaSgc_, subirArchivoSgc_...) y de Jefatura.gs
+  // (obtenerEquipoJefe_, jefeDeSubordinado_), ambos ya cargados arriba.
+  'Personas.gs',
   'Triggers.gs',
   'Code.gs'
 ];

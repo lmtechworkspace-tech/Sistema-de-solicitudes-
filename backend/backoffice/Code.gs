@@ -194,7 +194,16 @@ var BACKOFFICE_ACTIONS = {
   gestionarRolSgc: handleGestionarRolSgc_,
   // v10.0 Fase 1b: acuse de recibo (evidencia de ISO §7.5.3).
   acusarDocumentoSgc: handleAcusarDocumentoSgc_,
-  getCumplimientoDocumentoSgc: handleGetCumplimientoDocumentoSgc_
+  getCumplimientoDocumentoSgc: handleGetCumplimientoDocumentoSgc_,
+  // v10.0 Fase 2a (PRO-02): ficha del trabajador.
+  listarPersonasSgc: handleListarPersonasSgc_,
+  getFichaPersonaSgc: handleGetFichaPersonaSgc_,
+  guardarPersonaSgc: handleGuardarPersonaSgc_,
+  desvincularPersonaSgc: handleDesvincularPersonaSgc_,
+  guardarDescriptorSgc: handleGuardarDescriptorSgc_,
+  guardarDocumentoPersonaSgc: handleGuardarDocumentoPersonaSgc_,
+  descargarDocumentoPersonaSgc: handleDescargarDocumentoPersonaSgc_,
+  registrarInduccionSgc: handleRegistrarInduccionSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -339,7 +348,17 @@ var MODULO_POR_ACCION = {
   // v10.0 Fase 1b: confirmar la lectura es del personal (mismo gate de
   // lectura); ver quien falta es gestion (Calidad.gs lo acota a ENCARGADO_SGC/ADM).
   acusarDocumentoSgc: ['calidad', 'gerencia'],
-  getCumplimientoDocumentoSgc: 'calidad'
+  getCumplimientoDocumentoSgc: 'calidad',
+  // v10.0 Fase 2a: el gate fino (QUE ficha ve cada quien -- el personal
+  // operativo solo la suya) lo aplica Personas.gs, no esta tabla.
+  listarPersonasSgc: ['calidad', 'gerencia'],
+  getFichaPersonaSgc: ['calidad', 'gerencia'],
+  descargarDocumentoPersonaSgc: ['calidad', 'gerencia'],
+  guardarPersonaSgc: 'calidad',
+  desvincularPersonaSgc: 'calidad',
+  guardarDescriptorSgc: 'calidad',
+  guardarDocumentoPersonaSgc: 'calidad',
+  registrarInduccionSgc: 'calidad'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -892,6 +911,41 @@ function handleAcusarDocumentoSgc_(data, contexto) {
 
 function handleGetCumplimientoDocumentoSgc_(data, contexto) {
   return responderResultado_(Calidad.getCumplimiento(data, contexto));
+}
+
+// v10.0 Fase 2a (PRO-02): Personas.gs resuelve por su cuenta QUE ficha ve
+// cada quien (el personal operativo, solo la suya), por eso aca no hay
+// logica de permisos.
+function handleListarPersonasSgc_(data, contexto) {
+  return responderResultado_(Personas.listar(data, contexto));
+}
+
+function handleGetFichaPersonaSgc_(data, contexto) {
+  return responderResultado_(Personas.getFicha(data, contexto));
+}
+
+function handleGuardarPersonaSgc_(data, contexto) {
+  return responderResultado_(Personas.guardarPersona(data, contexto));
+}
+
+function handleDesvincularPersonaSgc_(data, contexto) {
+  return responderResultado_(Personas.desvincular(data, contexto));
+}
+
+function handleGuardarDescriptorSgc_(data, contexto) {
+  return responderResultado_(Personas.guardarDescriptor(data, contexto));
+}
+
+function handleGuardarDocumentoPersonaSgc_(data, contexto) {
+  return responderResultado_(Personas.guardarDocumento(data, contexto));
+}
+
+function handleDescargarDocumentoPersonaSgc_(data, contexto) {
+  return responderResultado_(Personas.descargarDocumento(data, contexto));
+}
+
+function handleRegistrarInduccionSgc_(data, contexto) {
+  return responderResultado_(Personas.registrarInduccion(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

@@ -120,7 +120,12 @@ var SHEETS = {
   SGC_DOC_DESTINATARIOS: 'SGC_DOC_DESTINATARIOS',
   SGC_ROLES: 'SGC_ROLES',
   // v10.0 Fase 1b: idem -- copia solo para que el esquema no diverja.
-  SGC_DOC_ACUSES: 'SGC_DOC_ACUSES'
+  SGC_DOC_ACUSES: 'SGC_DOC_ACUSES',
+  // v10.0 Fase 2a: idem -- copia solo para que el esquema no diverja.
+  SGC_PERSONAS: 'SGC_PERSONAS',
+  SGC_DESCRIPTORES: 'SGC_DESCRIPTORES',
+  SGC_PERSONA_DOCUMENTOS: 'SGC_PERSONA_DOCUMENTOS',
+  SGC_INDUCCIONES: 'SGC_INDUCCIONES'
 };
 
 var COLUMNAS = {
@@ -470,7 +475,31 @@ var COLUMNAS = {
     'vigencia_hasta', 'activo', 'fecha_creacion'
   ],
   // v10.0 Fase 1b: ver la nota identica en backend/backoffice/Constantes.gs.
-  SGC_DOC_ACUSES: ['acuse_id', 'documento_id', 'version', 'usuario_email', 'acusado_en']
+  SGC_DOC_ACUSES: ['acuse_id', 'documento_id', 'version', 'usuario_email', 'acusado_en'],
+  // v10.0 Fase 2a (PRO-02): ver la nota identica en
+  // backend/backoffice/Constantes.gs sobre cada hoja y cada campo.
+  SGC_PERSONAS: [
+    'persona_id', 'usuario_email', 'nombre', 'rut', 'cargo', 'tipo',
+    'area_id', 'jefatura_email', 'subrogante_email',
+    'fecha_ingreso', 'estado', 'fecha_desvinculacion',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+  SGC_DESCRIPTORES: [
+    'descriptor_id', 'persona_id', 'version', 'objetivo', 'funciones',
+    'responsabilidades', 'habilidades', 'nivel_educacional',
+    'formacion_tecnica', 'experiencia',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'vigente', 'creado_por', 'fecha'
+  ],
+  SGC_PERSONA_DOCUMENTOS: [
+    'doc_id', 'persona_id', 'tipo', 'nombre',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'subido_por', 'fecha', 'activa'
+  ],
+  SGC_INDUCCIONES: [
+    'induccion_id', 'persona_id', 'item', 'fecha', 'relator_email',
+    'estado', 'observaciones'
+  ]
 };
 
 // S01-S11 completos desde la Fase 1 aunque solo S01 se use aqui: la maquina

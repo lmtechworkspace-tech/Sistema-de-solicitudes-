@@ -287,7 +287,31 @@ var ESQUEMA_HOJAS = {
     'vigencia_hasta', 'activo', 'fecha_creacion'
   ],
   // v10.0 Fase 1b: ver la nota identica en backend/backoffice/Constantes.gs.
-  SGC_DOC_ACUSES: ['acuse_id', 'documento_id', 'version', 'usuario_email', 'acusado_en']
+  SGC_DOC_ACUSES: ['acuse_id', 'documento_id', 'version', 'usuario_email', 'acusado_en'],
+  // v10.0 Fase 2a (PRO-02): ver la nota identica en
+  // backend/backoffice/Constantes.gs sobre cada hoja y cada campo.
+  SGC_PERSONAS: [
+    'persona_id', 'usuario_email', 'nombre', 'rut', 'cargo', 'tipo',
+    'area_id', 'jefatura_email', 'subrogante_email',
+    'fecha_ingreso', 'estado', 'fecha_desvinculacion',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+  SGC_DESCRIPTORES: [
+    'descriptor_id', 'persona_id', 'version', 'objetivo', 'funciones',
+    'responsabilidades', 'habilidades', 'nivel_educacional',
+    'formacion_tecnica', 'experiencia',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'vigente', 'creado_por', 'fecha'
+  ],
+  SGC_PERSONA_DOCUMENTOS: [
+    'doc_id', 'persona_id', 'tipo', 'nombre',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'subido_por', 'fecha', 'activa'
+  ],
+  SGC_INDUCCIONES: [
+    'induccion_id', 'persona_id', 'item', 'fecha', 'relator_email',
+    'estado', 'observaciones'
+  ]
 };
 
 // SLA por prioridad en horas habiles (§7.2). P5 no tiene SLA.

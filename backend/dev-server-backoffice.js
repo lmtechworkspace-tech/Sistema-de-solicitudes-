@@ -227,6 +227,26 @@ function construirContexto() {
   seedSheet(ctx, 'SGC_DOC_VERSIONES', ctx.COLUMNAS.SGC_DOC_VERSIONES);
   seedSheet(ctx, 'SGC_DOC_DESTINATARIOS', ctx.COLUMNAS.SGC_DOC_DESTINATARIOS);
   seedSheet(ctx, 'SGC_DOC_ACUSES', ctx.COLUMNAS.SGC_DOC_ACUSES);
+  // v10.0 Fase 2a: fichas del personal. Se siembran dos (una de cada tipo,
+  // con jefaturas distintas) para poder ver en local que el aislamiento
+  // funciona: jefe@ es OPERATIVO y solo debe ver la suya.
+  seedSheet(ctx, 'SGC_PERSONAS', ctx.COLUMNAS.SGC_PERSONAS, [
+    ['SGCP-1', 'jefe@homepymes.cl', 'Jefe Demo', '11.111.111-1', 'Analista Contable', 'INT',
+      'CONTABILIDAD', 'gerente@homepymes.cl', '', '2024-05-01', 'ACTIVO', '',
+      'admin@homepymes.cl', new Date().toISOString(), true],
+    ['SGCP-2', 'dev@homepymes.cl', 'Dev Demo', '22.222.222-2', 'Prevencionista', 'EXT',
+      'PREVENCION', 'gerente@homepymes.cl', '', '2025-03-01', 'ACTIVO', '',
+      'admin@homepymes.cl', new Date().toISOString(), true]
+  ]);
+  seedSheet(ctx, 'SGC_DESCRIPTORES', ctx.COLUMNAS.SGC_DESCRIPTORES);
+  seedSheet(ctx, 'SGC_PERSONA_DOCUMENTOS', ctx.COLUMNAS.SGC_PERSONA_DOCUMENTOS);
+  seedSheet(ctx, 'SGC_INDUCCIONES', ctx.COLUMNAS.SGC_INDUCCIONES, [
+    ['SGCI-1', 'SGCP-1', 'Organigrama', '', '', 'PENDIENTE', ''],
+    ['SGCI-2', 'SGCP-1', 'Política de Calidad', '', '', 'PENDIENTE', ''],
+    ['SGCI-3', 'SGCP-1', 'Objetivos de Calidad', '', '', 'PENDIENTE', ''],
+    ['SGCI-4', 'SGCP-1', 'Descriptor de cargo', '', '', 'PENDIENTE', ''],
+    ['SGCI-5', 'SGCP-1', 'Inducción ISO 9001', '', '', 'PENDIENTE', '']
+  ]);
   seedSheet(ctx, 'SGC_ROLES', ctx.COLUMNAS.SGC_ROLES, [
     ['SGCR-1', 'admin@homepymes.cl', 'ENCARGADO_SGC', '', '', true, new Date().toISOString()],
     ['SGCR-2', 'jefe@homepymes.cl', 'OPERATIVO', 'CONTABILIDAD', '', true, new Date().toISOString()],
