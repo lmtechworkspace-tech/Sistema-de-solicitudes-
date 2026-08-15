@@ -186,7 +186,11 @@ var Actividades = {
       // proyecto_id/hito_id; una actividad suelta de "Mi trabajo" los deja
       // vacios, exactamente igual que antes (ver Proyectos.crearTarea).
       proyecto_id: data.proyecto_id || '',
-      hito_id: data.hito_id || ''
+      hito_id: data.hito_id || '',
+      // v9.4: dependencia opcional tarea<->tarea (Proyectos.crearTarea ya
+      // valida que sea del mismo proyecto antes de llegar aca). Informativa,
+      // no bloquea nada -- ver Proyectos.listarTareas para como se usa.
+      depende_de: data.depende_de || ''
     };
     agregarFila_(SHEETS.ACTIVIDADES, actividad);
     registrarEventoActividad_(actividad.actividad_id, 'CREADA', contexto, '');

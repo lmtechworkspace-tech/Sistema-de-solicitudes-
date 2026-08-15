@@ -49,8 +49,23 @@
   var TIPO_EVENTO_ETIQUETA = {
     ACTUALIZACION: 'Actualización', COMENTARIO: 'Comentario', DECISION: 'Decisión',
     REUNION: 'Reunión', BLOQUEO: 'Bloqueo', SOLICITUD_LIDER: 'Solicitud del líder',
-    CAMBIO_ESTADO: 'Cambio de estado'
+    CAMBIO_ESTADO: 'Cambio de estado',
+    // v9.4: eventos que registra el sistema (no el usuario) al crear/marcar/
+    // revisar un entregable o registrar un riesgo -- mismo feed unico de
+    // siempre (registrarEventoProyecto_), no hay canal nuevo.
+    ENTREGABLE: 'Entregable', RIESGO: 'Riesgo'
   };
+  // v9.4 (Fase 2 de la propuesta): entregables (aprobar/observar).
+  // EN_REVISION queda mapeado por si el backend lo usa a futuro; el MVP usa
+  // ENTREGADO como "listo para revisión" (ver Proyectos.gestionarEntregable).
+  var ENTREGABLE_ESTADO_ETIQUETA = {
+    PENDIENTE: 'Pendiente', ENTREGADO: 'Entregado', EN_REVISION: 'En revisión',
+    APROBADO: 'Aprobado', OBSERVADO: 'Observado', CANCELADO: 'Cancelado'
+  };
+  // v9.4 (Fase 3 de la propuesta): riesgos. nivel lo deriva el backend
+  // (probabilidad x impacto) -- el frontend nunca lo calcula ni lo edita.
+  var RIESGO_NIVEL_ETIQUETA = { BAJA: 'Baja', MEDIA: 'Media', ALTA: 'Alta' };
+  var RIESGO_ESTADO_ETIQUETA = { ABIERTO: 'Abierto', EN_MITIGACION: 'En mitigación', CERRADO: 'Cerrado' };
 
   var proyectoActivoId_ = null;
   var pestanaActiva_ = 'resumen';
@@ -70,6 +85,11 @@
   var filtroEstadoPortafolio_ = '';
   var filtroSaludPortafolio_ = '';
   var proyectosPortafolioSinFiltrarSalud_ = [];
+  // v9.4 (Fase 3): resumen ejecutivo del portafolio -- KPIs agregados + carga
+  // por persona. Se pide en paralelo con el listado (mismo patron que
+  // refrescarDetalle_ con Promise.all); si falla, el portafolio igual se
+  // muestra (el resumen es un plus, no un bloqueante).
+  var resumenPortafolioActual_ = null;
 
   function cargarPortafolio_() {
     proyectoActivoId_ = null;
@@ -78,16 +98,52 @@
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando proyectos...');
     var filtros = filtroEstadoPortafolio_ ? { estado: filtroEstadoPortafolio_ } : {};
-    api_('listarProyectos', filtros).then(function (respuesta) {
-      if (!respuesta || !respuesta.ok) {
-        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el portafolio.', 'error');
+    Promise.all([
+      api_('listarProyectos', filtros),
+      api_('getResumenPortafolioProyectos', {})
+    ]).then(function (respuestas) {
+      var rProyectos = respuestas[0], rResumen = respuestas[1];
+      if (!rProyectos || !rProyectos.ok) {
+        cont.innerHTML = Componentes.alerta((rProyectos && rProyectos.message) || 'No se pudo cargar el portafolio.', 'error');
         return;
       }
-      proyectosPortafolioSinFiltrarSalud_ = respuesta.data || [];
+      proyectosPortafolioSinFiltrarSalud_ = rProyectos.data || [];
+      resumenPortafolioActual_ = (rResumen && rResumen.ok) ? rResumen.data : null;
       pintarPortafolio_(cont, proyectosPortafolioSinFiltrarSalud_);
     }).catch(function () {
       cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar los proyectos.', 'error');
     });
+  }
+
+  // KPIs agregados (activos/críticos/en riesgo, próximos a cerrar, sin
+  // actualizar) + carga por persona ponderada por tamaño (S=1,M=2,L=3,XL=5
+  // -- ver Proyectos.getResumenPortafolio). "Muchos L/XL" es sobrecarga
+  // real; un conteo plano de tareas no lo distingue (§L.3 de la propuesta).
+  function pintarResumenEjecutivo_(resumen) {
+    if (!resumen || !resumen.total_proyectos) return '';
+    var kpis = [
+      Componentes.kpi({ etiqueta: 'Proyectos activos', valor: resumen.total_proyectos }),
+      Componentes.kpi({ etiqueta: '🔴 Críticos', valor: (resumen.por_salud && resumen.por_salud.critico) || 0 }),
+      Componentes.kpi({ etiqueta: '🟡 En riesgo', valor: (resumen.por_salud && resumen.por_salud.riesgo) || 0 }),
+      Componentes.kpi({ etiqueta: 'Vencen en 14 días', valor: resumen.proximos_a_cerrar || 0 }),
+      Componentes.kpi({ etiqueta: 'Sin novedad 7+ días', valor: resumen.sin_actualizacion_reciente || 0 })
+    ].join('');
+    var maxCarga = Math.max(1, (resumen.carga_por_persona || []).reduce(function (m, c) { return Math.max(m, c.carga_ponderada); }, 1));
+    var carga = (resumen.carga_por_persona || []).slice(0, 8).map(function (c) {
+      return '<div class="sigso-py-carga-fila">' +
+        '<span class="sigso-py-carga-nombre">' + Componentes.escaparHtml(c.nombre) + '</span>' +
+        '<span class="sigso-py-carga-barra"><span style="width:' + Math.round((c.carga_ponderada / maxCarga) * 100) + '%"></span></span>' +
+        '<span class="sigso-ayuda">' + c.total_tareas + ' tarea(s)</span>' +
+      '</div>';
+    }).join('');
+    return '<details class="sigso-py-resumen-ejecutivo" open>' +
+      '<summary>Resumen ejecutivo del portafolio</summary>' +
+      '<div class="sigso-py-kpis">' + kpis + '</div>' +
+      (carga
+        ? '<p class="sigso-ayuda sigso-py-carga-titulo">Carga por persona (proyectos activos, ponderada por tamaño de tarea)</p>' +
+          '<div class="sigso-py-carga">' + carga + '</div>'
+        : '') +
+    '</details>';
   }
 
   function pintarPortafolio_(cont, proyectosSinFiltrarSalud) {
@@ -113,7 +169,7 @@
     var cabecera = '<div class="sigso-py-cabecera">' +
       '<p class="sigso-ayuda">Portafolio de proyectos internos: quién lidera cada uno, en qué estado está y qué necesita atención.</p>' +
       Componentes.boton({ texto: '+ Nuevo proyecto', clase: 'js-py-nuevo' }) +
-      '</div>' + filtrosBar;
+      '</div>' + pintarResumenEjecutivo_(resumenPortafolioActual_) + filtrosBar;
 
     function wireFiltros() {
       cont.querySelector('.js-py-nuevo').addEventListener('click', abrirFormularioProyecto_);
@@ -293,6 +349,8 @@
       { id: 'sala', texto: 'Sala' },
       { id: 'tareas', texto: 'Tareas' },
       { id: 'hitos', texto: 'Hitos' },
+      { id: 'entregables', texto: 'Entregables' },
+      { id: 'riesgos', texto: 'Riesgos' },
       { id: 'equipo', texto: 'Equipo' }
     ];
 
@@ -316,6 +374,8 @@
     else if (pestanaActiva_ === 'sala') cuerpo = pintarSala_(sala, detalle);
     else if (pestanaActiva_ === 'tareas') cuerpo = pintarTareas_(tareas, detalle, puedeGestionar);
     else if (pestanaActiva_ === 'hitos') cuerpo = pintarHitos_(detalle, puedeGestionar);
+    else if (pestanaActiva_ === 'entregables') cuerpo = pintarEntregables_(detalle, puedeGestionar);
+    else if (pestanaActiva_ === 'riesgos') cuerpo = pintarRiesgos_(detalle, puedeGestionar);
     else if (pestanaActiva_ === 'equipo') cuerpo = pintarEquipo_(detalle, puedeGestionar);
 
     cont.innerHTML = cabecera + '<div class="sigso-py-cuerpo">' + cuerpo + '</div>';
@@ -327,7 +387,7 @@
       });
     });
 
-    wireAccionesPestana_(cont, detalle, puedeGestionar);
+    wireAccionesPestana_(cont, detalle, tareas, puedeGestionar);
   }
 
   // --- Resumen ---------------------------------------------------------
@@ -408,7 +468,11 @@
     (detalle.integrantes || []).forEach(function (i) { integrantesPorEmail_[normalizarEmail_(i.usuario_email)] = i.usuario_nombre || i.usuario_email; });
 
     var feed = sala.map(function (e) {
-      var puedeConvertir = puedePublicar && !e.ref_id && (e.tipo === 'COMENTARIO' || e.tipo === 'SOLICITUD_LIDER' || e.tipo === 'DECISION');
+      // v9.4: REUNION se suma a los tipos convertibles -- "reunion -> tareas"
+      // (§L.6 de la propuesta) era casi gratis: el mecanismo ya existia para
+      // COMENTARIO/SOLICITUD_LIDER/DECISION, solo faltaba incluir el tipo.
+      var puedeConvertir = puedePublicar && !e.ref_id &&
+        (e.tipo === 'COMENTARIO' || e.tipo === 'SOLICITUD_LIDER' || e.tipo === 'DECISION' || e.tipo === 'REUNION');
       var menciones = (e.menciones || '').split(',').map(function (m) { return normalizarEmail_(m); }).filter(Boolean);
       return '<div class="sigso-py-evento sigso-py-evento--' + e.tipo.toLowerCase() + '">' +
         '<div class="sigso-py-evento__top">' +
@@ -421,7 +485,11 @@
         (menciones.length
           ? '<p class="sigso-ayuda">@ ' + menciones.map(function (m) { return Componentes.escaparHtml(integrantesPorEmail_[m] || m); }).join(', ') + '</p>'
           : '') +
-        (e.ref_id ? '<p class="sigso-ayuda">→ Convertido en tarea.</p>' : '') +
+        // v9.4: ref_tipo/ref_id ahora tambien enlazan eventos de sistema a
+        // su propio ENTREGABLE/RIESGO (autorreferencia, para trazabilidad),
+        // no solo a una tarea convertida -- el texto "Convertido en tarea"
+        // solo aplica cuando ref_tipo==='ACTIVIDAD'.
+        (e.ref_tipo === 'ACTIVIDAD' ? '<p class="sigso-ayuda">→ Convertido en tarea.</p>' : '') +
         (puedeConvertir
           ? Componentes.boton({ texto: 'Convertir en tarea', variante: 'sutil', clase: 'js-py-convertir', idx: e.evento_id })
           : '') +
@@ -457,6 +525,11 @@
           (a.avance_pct !== '' && a.avance_pct !== undefined && a.avance_pct !== null ? '<span>' + a.avance_pct + '% avance</span>' : '') +
         '</div>' +
         (a.estado === 'BLOQUEADA' ? '<div class="sigso-mt-bloqueo">⏸ ' + Componentes.escaparHtml(a.bloqueo_motivo) + '</div>' : '') +
+        // v9.4: dependencia comprometida -- bandera derivada (nunca mueve
+        // fechas ni bloquea, §I de la propuesta), solo avisa.
+        (a.dependencia_comprometida
+          ? '<div class="sigso-mt-bloqueo">⚠ Depende de "' + Componentes.escaparHtml(a.dependencia_titulo) + '", que está atrasada.</div>'
+          : '') +
       '</div>';
     }).join('');
 
@@ -500,6 +573,101 @@
     return acciones + '<div class="sigso-py-lista">' + filas + '</div>';
   }
 
+  // --- Entregables (v9.4, Fase 2) -------------------------------------
+
+  function entregableBadgeVariante_(estado) {
+    if (estado === 'APROBADO') return 'ok';
+    if (estado === 'OBSERVADO') return 'alerta';
+    return 'neutro';
+  }
+
+  function pintarEntregables_(detalle, puedeGestionar) {
+    var puedeCrear = detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
+    var acciones = puedeCrear
+      ? '<div class="sigso-py-cabecera">' + Componentes.boton({ texto: '+ Nuevo entregable', clase: 'js-py-nuevo-entregable' }) + '</div>'
+      : '';
+    var entregables = detalle.entregables || [];
+    if (entregables.length === 0) {
+      return acciones + Componentes.vacio({ texto: 'Todavía no hay entregables definidos.' });
+    }
+    var integrantesPorEmail = {};
+    (detalle.integrantes || []).forEach(function (i) { integrantesPorEmail[normalizarEmail_(i.usuario_email)] = i.usuario_nombre || i.usuario_email; });
+
+    var filas = entregables.map(function (e) {
+      // El backend valida quien es realmente el responsable (mismo criterio
+      // que el check-in en pintarTareas_): el boton se muestra a cualquiera
+      // que pueda actuar en el proyecto, el servidor rechaza si no corresponde.
+      var puedeMarcar = puedeCrear && (e.estado === 'PENDIENTE' || e.estado === 'OBSERVADO');
+      var puedeRevisar = puedeGestionar && e.estado === 'ENTREGADO';
+      var botones = '<div class="sigso-py-hito__acciones">' +
+          (puedeMarcar ? Componentes.boton({ texto: 'Marcar entregado', variante: 'sutil', clase: 'js-py-entregable-marcar', idx: e.entregable_id }) : '') +
+          (puedeRevisar ? Componentes.boton({ texto: 'Aprobar', variante: 'sutil', clase: 'js-py-entregable-aprobar', idx: e.entregable_id }) : '') +
+          (puedeRevisar ? Componentes.boton({ texto: 'Observar', variante: 'sutil', clase: 'js-py-entregable-observar', idx: e.entregable_id }) : '') +
+          (puedeGestionar && e.estado === 'PENDIENTE' ? Componentes.boton({ texto: 'Eliminar', variante: 'sutil', clase: 'js-py-entregable-eliminar', idx: e.entregable_id }) : '') +
+        '</div>';
+      return '<div class="sigso-py-tarea">' +
+        '<div class="sigso-py-tarea__top">' +
+          '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(e.nombre) + '</span>' +
+          Componentes.badge(ENTREGABLE_ESTADO_ETIQUETA[e.estado] || e.estado, entregableBadgeVariante_(e.estado)) +
+        '</div>' +
+        (e.descripcion ? '<p>' + Componentes.escaparHtml(e.descripcion) + '</p>' : '') +
+        '<div class="sigso-py-tarea__meta">' +
+          '<span>' + Componentes.escaparHtml(integrantesPorEmail[normalizarEmail_(e.responsable_email)] || e.responsable_email) + '</span>' +
+          '<span>Vence ' + fechaCorta_(e.fecha_comprometida) + '</span>' +
+        '</div>' +
+        (e.estado === 'OBSERVADO' && e.observaciones ? '<div class="sigso-mt-bloqueo">⏸ ' + Componentes.escaparHtml(e.observaciones) + '</div>' : '') +
+        (e.url_evidencia ? '<p class="sigso-ayuda"><a href="' + Componentes.escaparHtml(e.url_evidencia) + '" target="_blank" rel="noopener noreferrer">Ver evidencia</a></p>' : '') +
+        botones +
+      '</div>';
+    }).join('');
+    return acciones + '<div class="sigso-py-lista">' + filas + '</div>';
+  }
+
+  // --- Riesgos (v9.4, Fase 3) -------------------------------------------
+
+  function riesgoBadgeVariante_(nivel) {
+    if (nivel === 'ALTA') return 'critico';
+    if (nivel === 'MEDIA') return 'alerta';
+    return 'ok';
+  }
+
+  function pintarRiesgos_(detalle, puedeGestionar) {
+    var puedeCrear = detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
+    var acciones = puedeCrear
+      ? '<div class="sigso-py-cabecera">' + Componentes.boton({ texto: '+ Nuevo riesgo', clase: 'js-py-nuevo-riesgo' }) + '</div>'
+      : '';
+    var riesgos = detalle.riesgos || [];
+    if (riesgos.length === 0) {
+      return acciones + Componentes.vacio({ texto: 'No hay riesgos registrados.' });
+    }
+    var integrantesPorEmail = {};
+    (detalle.integrantes || []).forEach(function (i) { integrantesPorEmail[normalizarEmail_(i.usuario_email)] = i.usuario_nombre || i.usuario_email; });
+
+    var filas = riesgos.map(function (r) {
+      var puedeEditar = puedeGestionar && r.estado !== 'CERRADO';
+      return '<div class="sigso-py-riesgo sigso-py-riesgo--' + (r.nivel || '').toLowerCase() + '">' +
+        '<div class="sigso-py-tarea__top">' +
+          '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(r.descripcion) + '</span>' +
+          Componentes.badge('Riesgo ' + (RIESGO_NIVEL_ETIQUETA[r.nivel] || r.nivel), riesgoBadgeVariante_(r.nivel)) +
+        '</div>' +
+        '<div class="sigso-py-tarea__meta">' +
+          '<span>Probabilidad ' + (RIESGO_NIVEL_ETIQUETA[r.probabilidad] || r.probabilidad) + '</span>' +
+          '<span>Impacto ' + (RIESGO_NIVEL_ETIQUETA[r.impacto] || r.impacto) + '</span>' +
+          '<span>' + Componentes.escaparHtml(integrantesPorEmail[normalizarEmail_(r.responsable_email)] || r.responsable_email) + '</span>' +
+          '<span>' + Componentes.badge(RIESGO_ESTADO_ETIQUETA[r.estado] || r.estado, 'neutro') + '</span>' +
+        '</div>' +
+        (r.mitigacion ? '<p class="sigso-ayuda"><b>Mitigación:</b> ' + Componentes.escaparHtml(r.mitigacion) + '</p>' : '') +
+        (puedeEditar
+          ? '<div class="sigso-py-hito__acciones">' +
+              Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-py-riesgo-editar', idx: r.riesgo_id }) +
+              Componentes.boton({ texto: 'Cerrar', variante: 'sutil', clase: 'js-py-riesgo-cerrar', idx: r.riesgo_id }) +
+            '</div>'
+          : '') +
+      '</div>';
+    }).join('');
+    return acciones + '<div class="sigso-py-lista">' + filas + '</div>';
+  }
+
   // --- Equipo ---------------------------------------------------------
 
   function pintarEquipo_(detalle, puedeGestionar) {
@@ -524,7 +692,7 @@
 
   // --- acciones (delegadas por pestaña) -------------------------------
 
-  function wireAccionesPestana_(cont, detalle, puedeGestionar) {
+  function wireAccionesPestana_(cont, detalle, tareas, puedeGestionar) {
     var editar = cont.querySelector('.js-py-editar');
     if (editar) editar.addEventListener('click', function () { abrirFormularioEditar_(detalle.proyecto); });
 
@@ -559,7 +727,7 @@
     });
 
     var nuevaTarea = cont.querySelector('.js-py-nueva-tarea');
-    if (nuevaTarea) nuevaTarea.addEventListener('click', function () { abrirFormularioTarea_(detalle); });
+    if (nuevaTarea) nuevaTarea.addEventListener('click', function () { abrirFormularioTarea_(detalle, tareas); });
 
     var nuevoHito = cont.querySelector('.js-py-nuevo-hito');
     if (nuevoHito) nuevoHito.addEventListener('click', abrirFormularioHito_);
@@ -617,6 +785,106 @@
           api_('gestionarIntegranteProyecto', {
             proyecto_id: proyectoActivoId_, accion: 'quitar', integrante_id: btn.getAttribute('data-idx')
           }).then(refrescarDetalle_);
+        });
+      });
+    });
+
+    // --- v9.4: entregables ------------------------------------------------
+    var nuevoEntregable = cont.querySelector('.js-py-nuevo-entregable');
+    if (nuevoEntregable) nuevoEntregable.addEventListener('click', function () { abrirFormularioEntregable_(detalle); });
+
+    cont.querySelectorAll('.js-py-entregable-marcar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-idx');
+        Componentes.prompt({ titulo: 'Marcar como entregado', mensaje: 'Link de evidencia (opcional)' }).then(function (url) {
+          if (url === null || url === undefined) return; // cancelado; '' (vacio) SI procede -- ver comentario del prompt.
+          api_('gestionarEntregableProyecto', {
+            proyecto_id: proyectoActivoId_, accion: 'marcarEntregado', entregable_id: id, url_evidencia: url
+          }).then(function (respuesta) {
+            if (!respuesta || !respuesta.ok) {
+              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo marcar como entregado.', tipo: 'error' });
+              return;
+            }
+            refrescarDetalle_();
+          });
+        });
+      });
+    });
+    cont.querySelectorAll('.js-py-entregable-aprobar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-idx');
+        Componentes.confirmar({ titulo: 'Aprobar entregable', mensaje: '¿Confirmas aprobar este entregable?' }).then(function (ok) {
+          if (!ok) return;
+          api_('revisarEntregableProyecto', { proyecto_id: proyectoActivoId_, entregable_id: id, resultado: 'APROBADO' }).then(function (respuesta) {
+            if (!respuesta || !respuesta.ok) {
+              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo aprobar el entregable.', tipo: 'error' });
+              return;
+            }
+            refrescarDetalle_();
+          });
+        });
+      });
+    });
+    cont.querySelectorAll('.js-py-entregable-observar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-idx');
+        Componentes.prompt({ titulo: 'Observar entregable', mensaje: 'Indica qué falta corregir.' }).then(function (motivo) {
+          if (!motivo || !String(motivo).trim()) return;
+          api_('revisarEntregableProyecto', {
+            proyecto_id: proyectoActivoId_, entregable_id: id, resultado: 'OBSERVADO', observaciones: motivo
+          }).then(function (respuesta) {
+            if (!respuesta || !respuesta.ok) {
+              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo observar el entregable.', tipo: 'error' });
+              return;
+            }
+            refrescarDetalle_();
+          });
+        });
+      });
+    });
+    cont.querySelectorAll('.js-py-entregable-eliminar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-idx');
+        Componentes.confirmar({ titulo: 'Eliminar entregable', mensaje: '¿Confirmas eliminar este entregable?' }).then(function (ok) {
+          if (!ok) return;
+          api_('gestionarEntregableProyecto', { proyecto_id: proyectoActivoId_, accion: 'eliminar', entregable_id: id }).then(function (respuesta) {
+            if (!respuesta || !respuesta.ok) {
+              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo eliminar el entregable.', tipo: 'error' });
+              return;
+            }
+            refrescarDetalle_();
+          });
+        });
+      });
+    });
+
+    // --- v9.4: riesgos ------------------------------------------------------
+    var nuevoRiesgo = cont.querySelector('.js-py-nuevo-riesgo');
+    if (nuevoRiesgo) nuevoRiesgo.addEventListener('click', function () { abrirFormularioRiesgo_(detalle); });
+
+    var riesgosCache = (datosDetalleActual_ && datosDetalleActual_.detalle && datosDetalleActual_.detalle.riesgos) || [];
+    function riesgoPorId_(id) {
+      for (var i = 0; i < riesgosCache.length; i++) { if (riesgosCache[i].riesgo_id === id) return riesgosCache[i]; }
+      return null;
+    }
+    cont.querySelectorAll('.js-py-riesgo-editar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var r = riesgoPorId_(btn.getAttribute('data-idx'));
+        if (r) abrirFormularioEditarRiesgo_(r, detalle);
+      });
+    });
+    cont.querySelectorAll('.js-py-riesgo-cerrar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-idx');
+        Componentes.confirmar({ titulo: 'Cerrar riesgo', mensaje: '¿Confirmas cerrar este riesgo?' }).then(function (ok) {
+          if (!ok) return;
+          api_('gestionarRiesgoProyecto', { proyecto_id: proyectoActivoId_, accion: 'eliminar', riesgo_id: id }).then(function (respuesta) {
+            if (!respuesta || !respuesta.ok) {
+              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo cerrar el riesgo.', tipo: 'error' });
+              return;
+            }
+            refrescarDetalle_();
+          });
         });
       });
     });
@@ -693,11 +961,14 @@
     });
   }
 
-  function abrirFormularioTarea_(detalle) {
+  function abrirFormularioTarea_(detalle, tareas) {
     var opcionesIntegrantes = (detalle.integrantes || []).map(function (i) {
       return { valor: i.usuario_email, texto: i.usuario_nombre || i.usuario_email };
     });
     var opcionesHitos = (detalle.hitos || []).map(function (h) { return { valor: h.hito_id, texto: h.nombre }; });
+    // v9.4 (Fase 2): dependencia opcional -- solo informativa, nunca bloquea
+    // ni mueve fechas (§I de la propuesta). Solo tareas de este mismo proyecto.
+    var opcionesDependencia = (tareas || []).map(function (a) { return { valor: a.actividad_id, texto: a.titulo }; });
     var fondo = document.createElement('div');
     fondo.className = 'sigso-modal-fondo';
     fondo.innerHTML =
@@ -708,6 +979,7 @@
           Componentes.campoTextarea({ id: 'py-t-descripcion', label: 'Descripción' }) +
           Componentes.campoSelect({ id: 'py-t-responsable', label: 'Responsable', opciones: opcionesIntegrantes, requerido: true }) +
           (opcionesHitos.length ? Componentes.campoSelect({ id: 'py-t-hito', label: 'Hito (opcional)', opciones: opcionesHitos }) : '') +
+          (opcionesDependencia.length ? Componentes.campoSelect({ id: 'py-t-depende', label: 'Depende de (opcional)', opciones: opcionesDependencia }) : '') +
           '<div class="sigso-py-form-fila">' +
             Componentes.campoTexto({ id: 'py-t-fecha', label: 'Fecha comprometida', tipo: 'date', requerido: true }) +
             Componentes.campoSelect({
@@ -725,9 +997,11 @@
     document.getElementById('form-py-tarea').addEventListener('submit', function (evento) {
       evento.preventDefault();
       var hitoEl = document.getElementById('py-t-hito');
+      var dependeEl = document.getElementById('py-t-depende');
       api_('crearTareaProyecto', {
         proyecto_id: proyectoActivoId_,
         hito_id: hitoEl ? hitoEl.value : '',
+        depende_de: dependeEl ? dependeEl.value : '',
         titulo: document.getElementById('py-t-titulo').value,
         descripcion: document.getElementById('py-t-descripcion').value,
         responsable_email: document.getElementById('py-t-responsable').value,
@@ -855,6 +1129,161 @@
       }).then(function (respuesta) {
         if (!respuesta || !respuesta.ok) {
           Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo agregar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        refrescarDetalle_();
+      });
+    });
+  }
+
+  // v9.4 (Fase 2): nuevo entregable.
+  function abrirFormularioEntregable_(detalle) {
+    var opcionesIntegrantes = (detalle.integrantes || []).map(function (i) {
+      return { valor: i.usuario_email, texto: i.usuario_nombre || i.usuario_email };
+    });
+    var opcionesHitos = (detalle.hitos || []).map(function (h) { return { valor: h.hito_id, texto: h.nombre }; });
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Nuevo entregable</h3>' +
+        '<form id="form-py-entregable">' +
+          Componentes.campoTexto({ id: 'py-e-nombre', label: 'Nombre', requerido: true }) +
+          Componentes.campoTextarea({ id: 'py-e-descripcion', label: 'Descripción' }) +
+          Componentes.campoSelect({ id: 'py-e-responsable', label: 'Responsable', opciones: opcionesIntegrantes, requerido: true }) +
+          (opcionesHitos.length ? Componentes.campoSelect({ id: 'py-e-hito', label: 'Hito (opcional)', opciones: opcionesHitos }) : '') +
+          Componentes.campoTexto({ id: 'py-e-fecha', label: 'Fecha comprometida', tipo: 'date', requerido: true }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Crear entregable', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-py-entregable').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var hitoEl = document.getElementById('py-e-hito');
+      api_('gestionarEntregableProyecto', {
+        proyecto_id: proyectoActivoId_,
+        nombre: document.getElementById('py-e-nombre').value,
+        descripcion: document.getElementById('py-e-descripcion').value,
+        responsable_email: document.getElementById('py-e-responsable').value,
+        hito_id: hitoEl ? hitoEl.value : '',
+        fecha_comprometida: document.getElementById('py-e-fecha').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo crear el entregable.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        refrescarDetalle_();
+      });
+    });
+  }
+
+  // v9.4 (Fase 3): nuevo riesgo. nivel lo calcula el backend (probabilidad x
+  // impacto) -- el formulario nunca lo pide ni lo muestra como campo editable.
+  function abrirFormularioRiesgo_(detalle) {
+    var opcionesIntegrantes = (detalle.integrantes || []).map(function (i) {
+      return { valor: i.usuario_email, texto: i.usuario_nombre || i.usuario_email };
+    });
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Nuevo riesgo</h3>' +
+        '<form id="form-py-riesgo">' +
+          Componentes.campoTextarea({ id: 'py-r-descripcion', label: 'Descripción del riesgo', requerido: true }) +
+          '<div class="sigso-py-form-fila">' +
+            Componentes.campoSelect({
+              id: 'py-r-probabilidad', label: 'Probabilidad', valor: 'MEDIA', placeholder: false,
+              opciones: [{ valor: 'BAJA', texto: 'Baja' }, { valor: 'MEDIA', texto: 'Media' }, { valor: 'ALTA', texto: 'Alta' }]
+            }) +
+            Componentes.campoSelect({
+              id: 'py-r-impacto', label: 'Impacto', valor: 'MEDIA', placeholder: false,
+              opciones: [{ valor: 'BAJA', texto: 'Baja' }, { valor: 'MEDIA', texto: 'Media' }, { valor: 'ALTA', texto: 'Alta' }]
+            }) +
+          '</div>' +
+          // Responsable opcional -- sin elegir, el backend lo asigna al lider
+          // del proyecto por defecto (Proyectos.gestionarRiesgo).
+          Componentes.campoSelect({ id: 'py-r-responsable', label: 'Responsable (opcional, por defecto el líder)', opciones: opcionesIntegrantes }) +
+          Componentes.campoTextarea({ id: 'py-r-mitigacion', label: 'Mitigación (opcional)' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Registrar riesgo', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-py-riesgo').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('gestionarRiesgoProyecto', {
+        proyecto_id: proyectoActivoId_,
+        descripcion: document.getElementById('py-r-descripcion').value,
+        probabilidad: document.getElementById('py-r-probabilidad').value,
+        impacto: document.getElementById('py-r-impacto').value,
+        responsable_email: document.getElementById('py-r-responsable').value,
+        mitigacion: document.getElementById('py-r-mitigacion').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo registrar el riesgo.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        refrescarDetalle_();
+      });
+    });
+  }
+
+  function abrirFormularioEditarRiesgo_(r, detalle) {
+    var opcionesIntegrantes = (detalle.integrantes || []).map(function (i) {
+      return { valor: i.usuario_email, texto: i.usuario_nombre || i.usuario_email };
+    });
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Editar riesgo</h3>' +
+        '<form id="form-py-riesgo-editar">' +
+          Componentes.campoTextarea({ id: 'py-re-descripcion', label: 'Descripción del riesgo', valor: r.descripcion, requerido: true }) +
+          '<div class="sigso-py-form-fila">' +
+            Componentes.campoSelect({
+              id: 'py-re-probabilidad', label: 'Probabilidad', valor: r.probabilidad, placeholder: false,
+              opciones: [{ valor: 'BAJA', texto: 'Baja' }, { valor: 'MEDIA', texto: 'Media' }, { valor: 'ALTA', texto: 'Alta' }]
+            }) +
+            Componentes.campoSelect({
+              id: 'py-re-impacto', label: 'Impacto', valor: r.impacto, placeholder: false,
+              opciones: [{ valor: 'BAJA', texto: 'Baja' }, { valor: 'MEDIA', texto: 'Media' }, { valor: 'ALTA', texto: 'Alta' }]
+            }) +
+          '</div>' +
+          Componentes.campoSelect({ id: 'py-re-responsable', label: 'Responsable', valor: r.responsable_email, opciones: opcionesIntegrantes }) +
+          Componentes.campoTextarea({ id: 'py-re-mitigacion', label: 'Mitigación', valor: r.mitigacion }) +
+          Componentes.campoSelect({
+            id: 'py-re-estado', label: 'Estado', valor: r.estado || 'ABIERTO', placeholder: false,
+            opciones: [{ valor: 'ABIERTO', texto: 'Abierto' }, { valor: 'EN_MITIGACION', texto: 'En mitigación' }]
+          }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-py-riesgo-editar').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('gestionarRiesgoProyecto', {
+        proyecto_id: proyectoActivoId_,
+        riesgo_id: r.riesgo_id,
+        descripcion: document.getElementById('py-re-descripcion').value,
+        probabilidad: document.getElementById('py-re-probabilidad').value,
+        impacto: document.getElementById('py-re-impacto').value,
+        responsable_email: document.getElementById('py-re-responsable').value,
+        mitigacion: document.getElementById('py-re-mitigacion').value,
+        estado: document.getElementById('py-re-estado').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar el riesgo.', tipo: 'error' });
           return;
         }
         cerrar();

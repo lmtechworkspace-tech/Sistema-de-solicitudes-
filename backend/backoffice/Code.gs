@@ -175,7 +175,13 @@ var BACKOFFICE_ACTIONS = {
   listarTareasProyecto: handleListarTareasProyecto_,
   listarSalaProyecto: handleListarSalaProyecto_,
   publicarEnSalaProyecto: handlePublicarEnSalaProyecto_,
-  convertirEventoEnTareaProyecto: handleConvertirEventoEnTareaProyecto_
+  convertirEventoEnTareaProyecto: handleConvertirEventoEnTareaProyecto_,
+  // v9.4 (Fase 2/3 de la propuesta): entregables (aprobar/observar), riesgos
+  // y resumen ejecutivo del portafolio (KPIs + carga por persona).
+  gestionarEntregableProyecto: handleGestionarEntregableProyecto_,
+  revisarEntregableProyecto: handleRevisarEntregableProyecto_,
+  gestionarRiesgoProyecto: handleGestionarRiesgoProyecto_,
+  getResumenPortafolioProyectos: handleGetResumenPortafolioProyectos_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -293,7 +299,16 @@ var MODULO_POR_ACCION = {
   listarTareasProyecto: ['proyectos', 'gerencia'],
   listarSalaProyecto: ['proyectos', 'gerencia'],
   publicarEnSalaProyecto: 'proyectos',
-  convertirEventoEnTareaProyecto: 'proyectos'
+  convertirEventoEnTareaProyecto: 'proyectos',
+  // v9.4: entregables/riesgos son gestion dentro del proyecto -- mismo gate
+  // que crearTareaProyecto (el gate fino, LIDER vs resto, lo aplica
+  // Proyectos.gs). getResumenPortafolioProyectos acepta 'gerencia' tambien
+  // (mismo patron que listarProyectos: es una vista transversal de solo
+  // lectura, y Gerencia ya la necesita para su propio panel).
+  gestionarEntregableProyecto: 'proyectos',
+  revisarEntregableProyecto: 'proyectos',
+  gestionarRiesgoProyecto: 'proyectos',
+  getResumenPortafolioProyectos: ['proyectos', 'gerencia']
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -786,6 +801,22 @@ function handlePublicarEnSalaProyecto_(data, contexto) {
 
 function handleConvertirEventoEnTareaProyecto_(data, contexto) {
   return responderResultado_(Proyectos.convertirEventoEnTarea(data, contexto));
+}
+
+function handleGestionarEntregableProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.gestionarEntregable(data, contexto));
+}
+
+function handleRevisarEntregableProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.revisarEntregable(data, contexto));
+}
+
+function handleGestionarRiesgoProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.gestionarRiesgo(data, contexto));
+}
+
+function handleGetResumenPortafolioProyectos_(data, contexto) {
+  return responderResultado_(Proyectos.getResumenPortafolio(contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

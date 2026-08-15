@@ -17,6 +17,8 @@ function loadConSchema() {
   seedSheet(ctx, 'PROYECTO_INTEGRANTES', ctx.COLUMNAS.PROYECTO_INTEGRANTES);
   seedSheet(ctx, 'PROYECTO_HITOS', ctx.COLUMNAS.PROYECTO_HITOS);
   seedSheet(ctx, 'PROYECTO_EVENTOS', ctx.COLUMNAS.PROYECTO_EVENTOS);
+  seedSheet(ctx, 'PROYECTO_ENTREGABLES', ctx.COLUMNAS.PROYECTO_ENTREGABLES);
+  seedSheet(ctx, 'PROYECTO_RIESGOS', ctx.COLUMNAS.PROYECTO_RIESGOS);
   seedSheet(ctx, 'ACTIVIDADES', ctx.COLUMNAS.ACTIVIDADES);
   seedSheet(ctx, 'ACTIVIDADES_BITACORA', ctx.COLUMNAS.ACTIVIDADES_BITACORA);
   seedSheet(ctx, 'JEFATURAS', ctx.COLUMNAS.JEFATURAS);
@@ -359,4 +361,186 @@ test('avance_pct del proyecto se deriva de las tareas terminadas (no es un campo
 
   const detalle = ctx.Proyectos.getDetalle({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
   assert.equal(detalle.avance_pct, 50);
+});
+
+// --- v9.4 (Fase 2/3): entregables (aprobar/observar) -----------------------
+
+test('gestionarEntregable: crear exige nombre/responsable/fecha; marcarEntregado solo lo hace el responsable (o lider/ADM)', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  ctx.Proyectos.gestionarIntegrante({
+    proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE'
+  }, CTX_LEO);
+  // Otro tambien es integrante (no lider, no responsable del entregable) --
+  // aisla el rechazo especifico de "no eres el responsable" del gate general
+  // de acceso al proyecto.
+  ctx.Proyectos.gestionarIntegrante({
+    proyecto_id: proyecto.proyecto_id, usuario_email: 'otro@rld.cl', rol_proyecto: 'COLABORADOR'
+  }, CTX_LEO);
+
+  const sinNombre = ctx.Proyectos.gestionarEntregable({
+    proyecto_id: proyecto.proyecto_id, responsable_email: 'marcelo@rld.cl', fecha_comprometida: '2026-09-01'
+  }, CTX_LEO);
+  assert.equal(sinNombre._validationError, true);
+
+  const entregable = ctx.Proyectos.gestionarEntregable({
+    proyecto_id: proyecto.proyecto_id, nombre: 'Manual de usuario', responsable_email: 'marcelo@rld.cl', fecha_comprometida: '2026-09-01'
+  }, CTX_LEO);
+  assert.equal(entregable.estado, 'PENDIENTE');
+
+  // Otro es integrante del proyecto pero NO es el responsable del
+  // entregable ni el lider -> rechazado especificamente por eso.
+  const rechazado = ctx.Proyectos.gestionarEntregable({
+    proyecto_id: proyecto.proyecto_id, accion: 'marcarEntregado', entregable_id: entregable.entregable_id
+  }, CTX_OTRO);
+  assert.equal(rechazado._forbidden, true);
+
+  const marcado = ctx.Proyectos.gestionarEntregable({
+    proyecto_id: proyecto.proyecto_id, accion: 'marcarEntregado', entregable_id: entregable.entregable_id, url_evidencia: 'https://drive/doc'
+  }, CTX_MARCELO);
+  assert.equal(marcado.estado, 'ENTREGADO');
+  assert.ok(marcado.fecha_entrega_real);
+});
+
+test('revisarEntregable: exclusivo del lider/ADM; observar exige motivo; aprobar no', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  ctx.Proyectos.gestionarIntegrante({
+    proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE'
+  }, CTX_LEO);
+  const entregable = ctx.Proyectos.gestionarEntregable({
+    proyecto_id: proyecto.proyecto_id, nombre: 'Manual de usuario', responsable_email: 'marcelo@rld.cl', fecha_comprometida: '2026-09-01'
+  }, CTX_LEO);
+
+  const antesDeEntregar = ctx.Proyectos.revisarEntregable({ proyecto_id: proyecto.proyecto_id, entregable_id: entregable.entregable_id }, CTX_LEO);
+  assert.equal(antesDeEntregar._validationError, true, 'no se puede revisar antes de que este ENTREGADO');
+
+  ctx.Proyectos.gestionarEntregable({ proyecto_id: proyecto.proyecto_id, accion: 'marcarEntregado', entregable_id: entregable.entregable_id }, CTX_MARCELO);
+
+  const rechazado = ctx.Proyectos.revisarEntregable({
+    proyecto_id: proyecto.proyecto_id, entregable_id: entregable.entregable_id, resultado: 'APROBADO'
+  }, CTX_MARCELO);
+  assert.equal(rechazado._forbidden, true, 'solo el lider/ADM revisa');
+
+  const sinMotivo = ctx.Proyectos.revisarEntregable({
+    proyecto_id: proyecto.proyecto_id, entregable_id: entregable.entregable_id, resultado: 'OBSERVADO'
+  }, CTX_LEO);
+  assert.equal(sinMotivo._validationError, true);
+
+  const observado = ctx.Proyectos.revisarEntregable({
+    proyecto_id: proyecto.proyecto_id, entregable_id: entregable.entregable_id, resultado: 'OBSERVADO', observaciones: 'Falta el capítulo 3.'
+  }, CTX_LEO);
+  assert.equal(observado.estado, 'OBSERVADO');
+
+  // El responsable corrige y vuelve a marcar entregado -> puede revisarse de nuevo.
+  ctx.Proyectos.gestionarEntregable({ proyecto_id: proyecto.proyecto_id, accion: 'marcarEntregado', entregable_id: entregable.entregable_id }, CTX_MARCELO);
+  const aprobado = ctx.Proyectos.revisarEntregable({
+    proyecto_id: proyecto.proyecto_id, entregable_id: entregable.entregable_id, resultado: 'APROBADO'
+  }, CTX_LEO);
+  assert.equal(aprobado.estado, 'APROBADO');
+});
+
+test('salud: un entregable vencido u observado agrega motivo de riesgo', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  const entregable = ctx.Proyectos.gestionarEntregable({
+    proyecto_id: proyecto.proyecto_id, nombre: 'Informe vencido', responsable_email: 'leo@rld.cl', fecha_comprometida: '2020-01-01'
+  }, CTX_LEO);
+  const detalle = ctx.Proyectos.getDetalle({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  assert.equal(detalle.salud, 'riesgo');
+  assert.ok(detalle.salud_motivos.some((m) => m.indexOf('entregable') !== -1));
+});
+
+// --- v9.4 (Fase 3): riesgos --------------------------------------------------
+
+test('gestionarRiesgo: crear deriva el nivel de probabilidad x impacto; editar recalcula; eliminar cierra', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+
+  const sinDescripcion = ctx.Proyectos.gestionarRiesgo({ proyecto_id: proyecto.proyecto_id, probabilidad: 'ALTA', impacto: 'ALTA' }, CTX_LEO);
+  assert.equal(sinDescripcion._validationError, true);
+
+  const riesgo = ctx.Proyectos.gestionarRiesgo({
+    proyecto_id: proyecto.proyecto_id, descripcion: 'El proveedor puede atrasarse', probabilidad: 'ALTA', impacto: 'ALTA'
+  }, CTX_LEO);
+  assert.equal(riesgo.nivel, 'ALTA');
+
+  const editado = ctx.Proyectos.gestionarRiesgo({
+    proyecto_id: proyecto.proyecto_id, riesgo_id: riesgo.riesgo_id, probabilidad: 'BAJA', impacto: 'BAJA'
+  }, CTX_LEO);
+  assert.equal(editado.nivel, 'BAJA');
+
+  const eliminado = ctx.Proyectos.gestionarRiesgo({ proyecto_id: proyecto.proyecto_id, accion: 'eliminar', riesgo_id: riesgo.riesgo_id }, CTX_LEO);
+  assert.equal(eliminado.estado, 'CERRADO');
+});
+
+// --- v9.4 (Fase 2): dependencias tarea<->tarea -------------------------------
+
+test('crearTarea: depende_de debe ser una tarea del MISMO proyecto', () => {
+  const ctx = loadConSchema();
+  const proyectoA = crearProyectoBase(ctx, { nombre: 'Proyecto A' });
+  const proyectoB = crearProyectoBase(ctx, { nombre: 'Proyecto B' });
+  const tareaB = ctx.Proyectos.crearTarea({
+    proyecto_id: proyectoB.proyecto_id, titulo: 'Tarea de B', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-08-20'
+  }, CTX_LEO);
+
+  const rechazada = ctx.Proyectos.crearTarea({
+    proyecto_id: proyectoA.proyecto_id, titulo: 'Tarea de A', responsable_email: 'leo@rld.cl',
+    fecha_compromiso: '2026-08-20', depende_de: tareaB.actividad_id
+  }, CTX_LEO);
+  assert.equal(rechazada._validationError, true);
+});
+
+test('listarTareas: dependencia_comprometida es true cuando la tarea de la que se depende esta atrasada', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  const base = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Diseño', responsable_email: 'leo@rld.cl', fecha_compromiso: '2020-01-01'
+  }, CTX_LEO); // vencida a proposito -> atrasada
+  const dependiente = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Implementación', responsable_email: 'leo@rld.cl',
+    fecha_compromiso: '2026-12-01', depende_de: base.actividad_id
+  }, CTX_LEO);
+
+  const tareas = ctx.Proyectos.listarTareas({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  const fila = tareas.find((t) => t.actividad_id === dependiente.actividad_id);
+  assert.equal(fila.dependencia_comprometida, true);
+  assert.equal(fila.dependencia_titulo, 'Diseño');
+
+  // Al día -> no comprometida.
+  const otraBase = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Al día', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-12-01'
+  }, CTX_LEO);
+  const otroDependiente = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Depende de al día', responsable_email: 'leo@rld.cl',
+    fecha_compromiso: '2026-12-01', depende_de: otraBase.actividad_id
+  }, CTX_LEO);
+  const tareas2 = ctx.Proyectos.listarTareas({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  assert.equal(tareas2.find((t) => t.actividad_id === otroDependiente.actividad_id).dependencia_comprometida, false);
+});
+
+// --- v9.4 (Fase 3): resumen ejecutivo del portafolio -------------------------
+
+test('getResumenPortafolio: agrega por salud y calcula carga por persona ponderada por tamano', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx, { nombre: 'Portafolio' });
+  ctx.Proyectos.actualizar({ proyecto_id: proyecto.proyecto_id, estado: 'ACTIVO' }, CTX_LEO);
+  ctx.Proyectos.gestionarIntegrante({
+    proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE'
+  }, CTX_LEO);
+  ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Tarea S', responsable_email: 'marcelo@rld.cl',
+    fecha_compromiso: '2026-12-01', tamano: 'S'
+  }, CTX_LEO);
+  ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Tarea XL', responsable_email: 'marcelo@rld.cl',
+    fecha_compromiso: '2026-12-01', tamano: 'XL'
+  }, CTX_LEO);
+
+  const resumen = ctx.Proyectos.getResumenPortafolio(CTX_LEO);
+  assert.equal(resumen.total_proyectos, 1);
+  assert.equal(resumen.por_salud.normal, 1);
+  const cargaMarcelo = resumen.carga_por_persona.find((c) => c.email === 'marcelo@rld.cl');
+  assert.equal(cargaMarcelo.total_tareas, 2);
+  assert.equal(cargaMarcelo.carga_ponderada, 6); // S=1 + XL=5
 });

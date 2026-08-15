@@ -45,14 +45,16 @@ var Proyectos = {
     var todasActividades = leerFilasSeguro_(SHEETS.ACTIVIDADES);
     var todosIntegrantes = leerFilasSeguro_(SHEETS.PROYECTO_INTEGRANTES);
     var todosHitos = leerFilasSeguro_(SHEETS.PROYECTO_HITOS);
+    var todosEntregables = leerFilasSeguro_(SHEETS.PROYECTO_ENTREGABLES);
 
     return visibles.map(function (p) {
       var tareas = todasActividades.filter(function (a) { return a.proyecto_id === p.proyecto_id; });
       var hitos = todosHitos.filter(function (h) { return h.proyecto_id === p.proyecto_id; });
+      var entregables = todosEntregables.filter(function (e) { return e.proyecto_id === p.proyecto_id; });
       var integrantes = todosIntegrantes.filter(function (i) {
         return i.proyecto_id === p.proyecto_id && esVerdaderoProyecto_(i.activo);
       });
-      var salud = calcularSaludProyecto_(p, tareas, hitos);
+      var salud = calcularSaludProyecto_(p, tareas, hitos, entregables);
       return {
         proyecto_id: p.proyecto_id,
         codigo: p.codigo,
@@ -91,7 +93,12 @@ var Proyectos = {
       .sort(function (a, b) { return (Number(a.orden) || 0) - (Number(b.orden) || 0); });
     var integrantes = leerFilasSeguro_(SHEETS.PROYECTO_INTEGRANTES)
       .filter(function (i) { return i.proyecto_id === proyecto.proyecto_id && esVerdaderoProyecto_(i.activo); });
-    var salud = calcularSaludProyecto_(proyecto, tareas, hitos);
+    // v9.4 (Fase 2/3): entregables y riesgos. No se filtran por estado --
+    // igual criterio que hitos (CANCELADO/CERRADO siguen visibles con su
+    // badge, nunca se ocultan datos existentes).
+    var entregables = leerFilasSeguro_(SHEETS.PROYECTO_ENTREGABLES).filter(function (e) { return e.proyecto_id === proyecto.proyecto_id; });
+    var riesgos = leerFilasSeguro_(SHEETS.PROYECTO_RIESGOS).filter(function (r) { return r.proyecto_id === proyecto.proyecto_id; });
+    var salud = calcularSaludProyecto_(proyecto, tareas, hitos, entregables);
 
     return {
       proyecto: proyecto,
@@ -112,6 +119,8 @@ var Proyectos = {
           avance_pct: calcularAvanceProyecto_(tareasHito)
         };
       }),
+      entregables: entregables,
+      riesgos: riesgos,
       avance_pct: calcularAvanceProyecto_(tareas),
       salud: salud.codigo,
       salud_etiqueta: salud.etiqueta,
@@ -321,6 +330,16 @@ var Proyectos = {
         return errorValidacion_('hito_id', 'El hito no pertenece a este proyecto.');
       }
     }
+    // v9.4 (Fase 2): dependencia opcional, solo dentro del mismo proyecto.
+    // Es informativa (§I: "nada mueve fechas ni cierra cosas solo") --
+    // listarTareas la usa para marcar "potencialmente comprometida" cuando
+    // la tarea de la que se depende esta atrasada.
+    if (data.depende_de) {
+      var dependencia = leerFilasSeguro_(SHEETS.ACTIVIDADES).filter(function (a) { return a.actividad_id === data.depende_de; })[0];
+      if (!dependencia || dependencia.proyecto_id !== proyecto.proyecto_id) {
+        return errorValidacion_('depende_de', 'La tarea de la que depende debe ser del mismo proyecto.');
+      }
+    }
     var enriquecido = {};
     for (var k in data) enriquecido[k] = data[k];
     enriquecido.proyecto = proyecto.nombre; // compat: campo de texto libre ya existente en ACTIVIDADES
@@ -350,16 +369,25 @@ var Proyectos = {
     if (!puedeVerProyecto_(proyecto, contexto)) {
       return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
     }
-    return leerFilasSeguro_(SHEETS.ACTIVIDADES)
+    var tareas = leerFilasSeguro_(SHEETS.ACTIVIDADES)
       .filter(function (a) {
         var activa = a.activa === true || a.activa === 'TRUE' || a.activa === 1;
         return activa && a.proyecto_id === proyecto.proyecto_id;
-      })
-      .map(function (a) {
-        a.semaforo = semaforoActividad_(a).codigo;
-        a.semaforo_etiqueta = semaforoActividad_(a).etiqueta;
-        return a;
       });
+    var porId = {};
+    tareas.forEach(function (a) { porId[a.actividad_id] = a; });
+    return tareas.map(function (a) {
+      a.semaforo = semaforoActividad_(a).codigo;
+      a.semaforo_etiqueta = semaforoActividad_(a).etiqueta;
+      // v9.4: bandera derivada, no persistida -- se recalcula cada vez que
+      // se lee (§I: "nada mueve fechas ni cierra cosas solo").
+      if (a.depende_de) {
+        var dependencia = porId[a.depende_de];
+        a.dependencia_titulo = dependencia ? dependencia.titulo : '';
+        a.dependencia_comprometida = !!dependencia && semaforoActividad_(dependencia).codigo === 'atrasada';
+      }
+      return a;
+    });
   },
 
   // --- La sala --------------------------------------------------------------
@@ -424,6 +452,219 @@ var Proyectos = {
       });
     }
     return tarea;
+  },
+
+  // --- Entregables (Fase 2 de la propuesta): flujo aprobar/observar -------
+  // Quien puede crear/editar/marcar-entregado: LIDER/INTEGRANTE/COLABORADOR
+  // del proyecto o ADM (mismo circulo que crea tareas). Revisar (aprobar u
+  // observar) es exclusivo del LIDER/ADM -- ver revisarEntregable.
+  gestionarEntregable: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    var rol = rolEnProyecto_(proyecto.proyecto_id, contexto);
+    var puedeGestionar = contexto.rol === 'ADM' || rol === 'LIDER' || rol === 'INTEGRANTE' || rol === 'COLABORADOR';
+    if (!puedeGestionar) return { _forbidden: true, message: 'No puedes gestionar entregables en este proyecto.' };
+
+    if (data.accion === 'eliminar') {
+      if (!data.entregable_id) return errorValidacion_('entregable_id', 'Falta indicar el entregable.');
+      var paraEliminar = buscarEntregable_(data.entregable_id);
+      if (paraEliminar && paraEliminar.estado !== 'PENDIENTE') {
+        return errorValidacion_('entregable_id', 'Solo se puede eliminar un entregable que aun no se ha marcado como entregado.');
+      }
+      return actualizarFilaPorId_(SHEETS.PROYECTO_ENTREGABLES, 'entregable_id', data.entregable_id, { estado: 'CANCELADO' });
+    }
+
+    if (data.accion === 'marcarEntregado') {
+      if (!data.entregable_id) return errorValidacion_('entregable_id', 'Falta indicar el entregable.');
+      var entregable = buscarEntregable_(data.entregable_id);
+      if (!entregable || entregable.proyecto_id !== proyecto.proyecto_id) {
+        return errorValidacion_('entregable_id', 'Entregable no encontrado.');
+      }
+      // Solo el responsable (o LIDER/ADM en su lugar) marca la entrega --
+      // evita que cualquier integrante cierre el compromiso de otro.
+      var esResponsable = normalizarEmailProyecto_(entregable.responsable_email) === normalizarEmailProyecto_(contexto.email);
+      if (!esResponsable && contexto.rol !== 'ADM' && rol !== 'LIDER') {
+        return { _forbidden: true, message: 'Solo el responsable del entregable puede marcarlo como entregado.' };
+      }
+      var marcado = actualizarFilaPorId_(SHEETS.PROYECTO_ENTREGABLES, 'entregable_id', data.entregable_id, {
+        estado: 'ENTREGADO',
+        url_evidencia: data.url_evidencia || entregable.url_evidencia || '',
+        fecha_entrega_real: new Date().toISOString()
+      });
+      registrarEventoProyecto_(proyecto.proyecto_id, 'ENTREGABLE', contexto,
+        'Entregable "' + entregable.nombre + '" listo para revisión', 'ENTREGABLE', data.entregable_id, '');
+      notificarLideresProyecto_(proyecto, contexto, 'Entregable listo para revisar',
+        entregable.nombre + ' está listo para tu revisión.');
+      return marcado;
+    }
+
+    if (data.entregable_id) {
+      var cambios = {};
+      ['nombre', 'descripcion', 'hito_id', 'responsable_email', 'fecha_comprometida'].forEach(function (campo) {
+        if (data[campo] !== undefined) cambios[campo] = data[campo];
+      });
+      return actualizarFilaPorId_(SHEETS.PROYECTO_ENTREGABLES, 'entregable_id', data.entregable_id, cambios);
+    }
+
+    var nombre = String(data.nombre || '').trim();
+    if (!nombre) return errorValidacion_('nombre', 'El nombre del entregable es obligatorio.');
+    var responsable = normalizarEmailProyecto_(data.responsable_email);
+    if (!responsable) return errorValidacion_('responsable_email', 'Falta el responsable del entregable.');
+    if (!data.fecha_comprometida) return errorValidacion_('fecha_comprometida', 'La fecha comprometida es obligatoria.');
+    var nuevo = {
+      entregable_id: Utilities.getUuid(),
+      proyecto_id: proyecto.proyecto_id,
+      hito_id: data.hito_id || '',
+      nombre: nombre,
+      descripcion: data.descripcion || '',
+      responsable_email: responsable,
+      fecha_comprometida: data.fecha_comprometida,
+      estado: 'PENDIENTE',
+      url_evidencia: '',
+      fecha_entrega_real: '',
+      revisado_por: '',
+      resultado_revision: '',
+      observaciones: '',
+      fecha_creacion: new Date().toISOString()
+    };
+    agregarFila_(SHEETS.PROYECTO_ENTREGABLES, nuevo);
+    registrarEventoProyecto_(proyecto.proyecto_id, 'ENTREGABLE', contexto, 'Nuevo entregable: ' + nombre, 'ENTREGABLE', nuevo.entregable_id, '');
+    return nuevo;
+  },
+
+  // Aprobar u observar (devolver con motivo) un entregable ya marcado como
+  // ENTREGADO -- exclusivo del LIDER/ADM, mismo criterio que puedeGestionarProyecto_.
+  // Un entregable OBSERVADO no tiene estado terminal propio: el responsable
+  // puede volver a marcarEntregado tras corregir (mismo espiritu que
+  // "devolver con motivo" en el resto de SIGSO).
+  revisarEntregable: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeGestionarProyecto_(proyecto, contexto)) {
+      return { _forbidden: true, message: 'Solo el líder del proyecto o un administrador pueden revisar entregables.' };
+    }
+    var entregable = buscarEntregable_(data.entregable_id);
+    if (!entregable || entregable.proyecto_id !== proyecto.proyecto_id) {
+      return errorValidacion_('entregable_id', 'Entregable no encontrado.');
+    }
+    if (entregable.estado !== 'ENTREGADO') {
+      return errorValidacion_('entregable_id', 'Solo se puede revisar un entregable que ya fue marcado como entregado.');
+    }
+    var resultado = data.resultado === 'OBSERVADO' ? 'OBSERVADO' : 'APROBADO';
+    if (resultado === 'OBSERVADO' && !String(data.observaciones || '').trim()) {
+      return errorValidacion_('observaciones', 'Observar un entregable exige indicar el motivo.');
+    }
+    var revisado = actualizarFilaPorId_(SHEETS.PROYECTO_ENTREGABLES, 'entregable_id', data.entregable_id, {
+      estado: resultado, revisado_por: contexto.email || '', resultado_revision: resultado,
+      observaciones: data.observaciones || ''
+    });
+    registrarEventoProyecto_(proyecto.proyecto_id, 'ENTREGABLE', contexto,
+      'Entregable "' + entregable.nombre + '": ' + (resultado === 'APROBADO' ? 'aprobado' : 'observado') +
+        (data.observaciones ? '. ' + data.observaciones : ''), 'ENTREGABLE', data.entregable_id, '');
+    encolarNotificacionApp_(entregable.responsable_email,
+      'PROYECTO_ENTREGABLE', resultado === 'APROBADO' ? 'Entregable aprobado' : 'Entregable observado',
+      entregable.nombre + (data.observaciones ? ': ' + data.observaciones : ''), 'proyectos', 'Ver proyecto', 72);
+    return revisado;
+  },
+
+  // --- Riesgos (Fase 3 de la propuesta) -------------------------------------
+  // nivel se DERIVA de probabilidad x impacto (calcularNivelRiesgo_) -- nunca
+  // se pide a mano, para que no quede desalineado del cruce real.
+  gestionarRiesgo: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    var rol = rolEnProyecto_(proyecto.proyecto_id, contexto);
+    var puedeGestionar = contexto.rol === 'ADM' || rol === 'LIDER' || rol === 'INTEGRANTE' || rol === 'COLABORADOR';
+    if (!puedeGestionar) return { _forbidden: true, message: 'No puedes gestionar riesgos en este proyecto.' };
+
+    if (data.accion === 'eliminar') {
+      if (!data.riesgo_id) return errorValidacion_('riesgo_id', 'Falta indicar el riesgo.');
+      return actualizarFilaPorId_(SHEETS.PROYECTO_RIESGOS, 'riesgo_id', data.riesgo_id, { estado: 'CERRADO' });
+    }
+    if (data.riesgo_id) {
+      var actual = buscarRiesgo_(data.riesgo_id);
+      if (!actual) return errorValidacion_('riesgo_id', 'Riesgo no encontrado.');
+      var cambios = {};
+      ['descripcion', 'responsable_email', 'mitigacion', 'estado'].forEach(function (campo) {
+        if (data[campo] !== undefined) cambios[campo] = data[campo];
+      });
+      if (data.probabilidad !== undefined) cambios.probabilidad = data.probabilidad;
+      if (data.impacto !== undefined) cambios.impacto = data.impacto;
+      if (data.probabilidad !== undefined || data.impacto !== undefined) {
+        cambios.nivel = calcularNivelRiesgo_(cambios.probabilidad || actual.probabilidad, cambios.impacto || actual.impacto);
+      }
+      return actualizarFilaPorId_(SHEETS.PROYECTO_RIESGOS, 'riesgo_id', data.riesgo_id, cambios);
+    }
+
+    var descripcion = String(data.descripcion || '').trim();
+    if (!descripcion) return errorValidacion_('descripcion', 'La descripción del riesgo es obligatoria.');
+    var probabilidad = ['BAJA', 'MEDIA', 'ALTA'].indexOf(data.probabilidad) !== -1 ? data.probabilidad : 'MEDIA';
+    var impacto = ['BAJA', 'MEDIA', 'ALTA'].indexOf(data.impacto) !== -1 ? data.impacto : 'MEDIA';
+    var riesgo = {
+      riesgo_id: Utilities.getUuid(),
+      proyecto_id: proyecto.proyecto_id,
+      descripcion: descripcion,
+      probabilidad: probabilidad,
+      impacto: impacto,
+      nivel: calcularNivelRiesgo_(probabilidad, impacto),
+      responsable_email: normalizarEmailProyecto_(data.responsable_email) || proyecto.lider_email,
+      mitigacion: data.mitigacion || '',
+      estado: 'ABIERTO',
+      fecha_creacion: new Date().toISOString()
+    };
+    agregarFila_(SHEETS.PROYECTO_RIESGOS, riesgo);
+    registrarEventoProyecto_(proyecto.proyecto_id, 'RIESGO', contexto,
+      'Riesgo registrado (' + riesgo.nivel + '): ' + descripcion, 'RIESGO', riesgo.riesgo_id, '');
+    return riesgo;
+  },
+
+  // --- Resumen ejecutivo del portafolio (Fase 3) ----------------------------
+  // Reusa Proyectos.listar (misma visibilidad: ADM/GERENCIA ven todo, el
+  // resto solo sus proyectos) -- cero logica de permisos nueva. Carga por
+  // persona pondera por tamano (S/M/L/XL, ya existe en ACTIVIDADES): "muchos
+  // L/XL" es sobrecarga real, un conteo plano no lo distingue (§L.3).
+  getResumenPortafolio: function (contexto) {
+    var proyectos = Proyectos.listar({}, contexto);
+    var activos = proyectos.filter(function (p) { return p.estado !== 'CERRADO' && p.estado !== 'CANCELADO'; });
+    var porSalud = { normal: 0, riesgo: 0, critico: 0 };
+    activos.forEach(function (p) { porSalud[p.salud] = (porSalud[p.salud] || 0) + 1; });
+
+    var ahora = new Date();
+    var proximosACerrar = activos.filter(function (p) {
+      if (!p.fecha_objetivo) return false;
+      var dias = (new Date(p.fecha_objetivo) - ahora) / 86400000;
+      return dias >= 0 && dias <= 14;
+    });
+    var sinActualizacionReciente = activos.filter(function (p) {
+      if (!p.ultima_actualizacion) return false;
+      return (ahora - new Date(p.ultima_actualizacion)) / 86400000 >= 7;
+    });
+
+    // Carga: solo tareas activas y no terminales de proyectos VISIBLES y
+    // ACTIVOS (cerrados/cancelados no representan trabajo vigente).
+    var idsActivos = {};
+    activos.forEach(function (p) { idsActivos[p.proyecto_id] = true; });
+    var pesoTamano = { S: 1, M: 2, L: 3, XL: 5 };
+    var cargaPorPersona = {};
+    leerFilasSeguro_(SHEETS.ACTIVIDADES).forEach(function (a) {
+      var activa = a.activa === true || a.activa === 'TRUE' || a.activa === 1;
+      if (!activa || !a.proyecto_id || !idsActivos[a.proyecto_id] || esEstadoTerminal_(a.estado)) return;
+      var email = a.responsable_email || '(sin responsable)';
+      if (!cargaPorPersona[email]) {
+        cargaPorPersona[email] = { email: email, nombre: a.responsable_nombre || email, total_tareas: 0, carga_ponderada: 0 };
+      }
+      cargaPorPersona[email].total_tareas += 1;
+      cargaPorPersona[email].carga_ponderada += pesoTamano[a.tamano] || 2;
+    });
+
+    return {
+      total_proyectos: activos.length,
+      por_salud: porSalud,
+      proximos_a_cerrar: proximosACerrar.length,
+      sin_actualizacion_reciente: sinActualizacionReciente.length,
+      carga_por_persona: Object.keys(cargaPorPersona).map(function (email) { return cargaPorPersona[email]; })
+        .sort(function (x, y) { return y.carga_ponderada - x.carga_ponderada; })
+    };
   }
 };
 
@@ -514,6 +755,46 @@ function agregarIntegrante_(proyectoId, email, nombre, rolProyecto, responsabili
   return integrante;
 }
 
+function buscarEntregable_(entregableId) {
+  if (!entregableId) return null;
+  var filas = leerFilasSeguro_(SHEETS.PROYECTO_ENTREGABLES);
+  for (var i = 0; i < filas.length; i++) {
+    if (filas[i].entregable_id === entregableId) return filas[i];
+  }
+  return null;
+}
+
+function buscarRiesgo_(riesgoId) {
+  if (!riesgoId) return null;
+  var filas = leerFilasSeguro_(SHEETS.PROYECTO_RIESGOS);
+  for (var i = 0; i < filas.length; i++) {
+    if (filas[i].riesgo_id === riesgoId) return filas[i];
+  }
+  return null;
+}
+
+// Matriz de riesgo 3x3 simple (BAJA/MEDIA/ALTA x BAJA/MEDIA/ALTA). El
+// producto de pesos evita que "probabilidad alta + impacto bajo" y
+// "probabilidad baja + impacto alto" queden en niveles distintos sin razon.
+function calcularNivelRiesgo_(probabilidad, impacto) {
+  var peso = { BAJA: 1, MEDIA: 2, ALTA: 3 };
+  var score = (peso[probabilidad] || 2) * (peso[impacto] || 2);
+  if (score >= 6) return 'ALTA';
+  if (score >= 3) return 'MEDIA';
+  return 'BAJA';
+}
+
+// Notifica a los LIDER(es) activos del proyecto, salvo quien dispara la
+// accion (mismo criterio que notificarSala_ para SOLICITUD_LIDER).
+function notificarLideresProyecto_(proyecto, contexto, titulo, mensaje) {
+  leerFilasSeguro_(SHEETS.PROYECTO_INTEGRANTES).forEach(function (i) {
+    if (i.proyecto_id === proyecto.proyecto_id && i.rol_proyecto === 'LIDER' && esVerdaderoProyecto_(i.activo) &&
+      normalizarEmailProyecto_(i.usuario_email) !== normalizarEmailProyecto_(contexto.email)) {
+      encolarNotificacionApp_(i.usuario_email, 'PROYECTO_ENTREGABLE', titulo, mensaje, 'proyectos', 'Ver proyecto', 72);
+    }
+  });
+}
+
 function eliminarFilaHito_(hitoId) {
   // No hay borrado fisico estandar en SheetsRepo (solo actualizarFilaPorId_/
   // agregarFila_) -- se marca el estado como CANCELADO, mismo criterio que
@@ -582,7 +863,7 @@ function calcularAvanceProyecto_(tareas) {
 // codigo + los motivos en texto plano (nunca una caja negra). Reusa
 // semaforoActividad_ (Actividades.gs) por tarea. salud_override permite una
 // correccion manual excepcional, siempre con motivo visible.
-function calcularSaludProyecto_(proyecto, tareas, hitos) {
+function calcularSaludProyecto_(proyecto, tareas, hitos, entregables) {
   if (proyecto.salud_override) {
     var etiquetas = { critico: 'Crítico', riesgo: 'En riesgo', normal: 'Normal' };
     return {
@@ -622,6 +903,17 @@ function calcularSaludProyecto_(proyecto, tareas, hitos) {
     return Utils.horasHabilesEntre(a.ultima_actualizacion, ahora, { feriados: feriados }) / 9 >= 5;
   });
   if (sinActualizar.length > 0) motivosRiesgo.push(sinActualizar.length + ' tarea(s) sin actualizar hace 5+ días hábiles');
+
+  // v9.4 (Fase 2, §J de la propuesta): "entregable observado/vencido" como
+  // señal de riesgo. APROBADO/CANCELADO son estados que ya no aportan
+  // riesgo; el resto (PENDIENTE/ENTREGADO/OBSERVADO) sigue vigente.
+  var entregablesVigentes = (entregables || []).filter(function (e) { return e.estado !== 'APROBADO' && e.estado !== 'CANCELADO'; });
+  var entregablesVencidos = entregablesVigentes.filter(function (e) {
+    return e.fecha_comprometida && new Date(e.fecha_comprometida) < ahora;
+  });
+  if (entregablesVencidos.length > 0) motivosRiesgo.push(entregablesVencidos.length + ' entregable(s) vencido(s)');
+  var entregablesObservados = entregablesVigentes.filter(function (e) { return e.estado === 'OBSERVADO'; });
+  if (entregablesObservados.length > 0) motivosRiesgo.push(entregablesObservados.length + ' entregable(s) observado(s)');
 
   if (motivosCriticos.length > 0) {
     return { codigo: 'critico', etiqueta: 'Crítico', motivos: motivosCriticos.concat(motivosRiesgo) };

@@ -117,7 +117,12 @@ var SHEETS = {
   PROYECTO_HITOS: 'PROYECTO_HITOS',
   // La sala del proyecto: feed append-only tipado, mismo patron de bitacora
   // unificada que ACTIVIDADES_BITACORA (una tabla, no HISTORIAL_* x N).
-  PROYECTO_EVENTOS: 'PROYECTO_EVENTOS'
+  PROYECTO_EVENTOS: 'PROYECTO_EVENTOS',
+  // v9.4 (Fase 2/3 de la propuesta): entregables (aprobar/observar) y
+  // riesgos. Mismo patron de siempre -- hoja propia, gate por membresia del
+  // proyecto (Proyectos.gs).
+  PROYECTO_ENTREGABLES: 'PROYECTO_ENTREGABLES',
+  PROYECTO_RIESGOS: 'PROYECTO_RIESGOS'
 };
 
 var COLUMNAS = {
@@ -391,7 +396,14 @@ var COLUMNAS = {
     // exactamente igual que antes (cero regresion). proyecto_id/hito_id
     // vinculan la tarea a PROYECTOS/PROYECTO_HITOS; el motor de estados,
     // check-in, bloqueo, etc. no cambia en absoluto.
-    'proyecto_id', 'hito_id'
+    'proyecto_id', 'hito_id',
+    // v9.4 (Fase 2 de la propuesta): dependencia opcional tarea<->tarea,
+    // solo dentro de un mismo proyecto. Es aditiva e informativa -- NO
+    // bloquea ni cambia fechas de nada: Proyectos.listarTareas la usa para
+    // marcar "potencialmente comprometida" cuando la tarea de la que se
+    // depende esta atrasada (bandera derivada, ver §I de la propuesta:
+    // "nada mueve fechas ni cierra cosas solo").
+    'depende_de'
   ],
   ACTIVIDADES_BITACORA: [
     'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',
@@ -439,6 +451,24 @@ var COLUMNAS = {
   PROYECTO_EVENTOS: [
     'evento_id', 'proyecto_id', 'tipo', 'autor_email', 'autor_nombre',
     'titulo', 'cuerpo', 'ref_tipo', 'ref_id', 'menciones', 'timestamp'
+  ],
+  // v9.4 (Fase 2 de la propuesta): entregables con flujo aprobar/observar.
+  // estado: PENDIENTE | ENTREGADO | EN_REVISION | APROBADO | OBSERVADO.
+  // Un entregable OBSERVADO vuelve a PENDIENTE (no hay estado "rechazado"
+  // final) para que el responsable pueda reintentar -- mismo espiritu que
+  // "devolver con motivo" del resto de SIGSO.
+  PROYECTO_ENTREGABLES: [
+    'entregable_id', 'proyecto_id', 'hito_id', 'nombre', 'descripcion',
+    'responsable_email', 'fecha_comprometida', 'estado', 'url_evidencia',
+    'fecha_entrega_real', 'revisado_por', 'resultado_revision',
+    'observaciones', 'fecha_creacion'
+  ],
+  // v9.4 (Fase 3 de la propuesta): registro de riesgos. nivel se deriva de
+  // probabilidad x impacto (ALTA/MEDIA/BAJA), lo calcula Proyectos.gs, no
+  // se pide a mano -- evita que quede desalineado del cruce real.
+  PROYECTO_RIESGOS: [
+    'riesgo_id', 'proyecto_id', 'descripcion', 'probabilidad', 'impacto',
+    'nivel', 'responsable_email', 'mitigacion', 'estado', 'fecha_creacion'
   ]
 };
 

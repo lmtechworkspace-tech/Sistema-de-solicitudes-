@@ -2787,10 +2787,26 @@
 
 .sigso-py-lista { display: flex; flex-direction: column; gap: var(--esp-2); }
 
-.sigso-py-tarea, .sigso-py-hito {
+.sigso-py-tarea, .sigso-py-hito, .sigso-py-riesgo {
   background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio-md);
   padding: var(--esp-3) var(--esp-4);
 }
+
+/* v9.4: riesgos -- acento por nivel (probabilidad x impacto, calculado en el backend) */
+.sigso-py-riesgo { border-left: 3px solid var(--borde-fuerte); }
+.sigso-py-riesgo--alta { border-left-color: var(--critico); }
+.sigso-py-riesgo--media { border-left-color: var(--alerta); }
+.sigso-py-riesgo--baja { border-left-color: var(--ok); }
+
+/* v9.4: resumen ejecutivo del portafolio (KPIs + carga por persona) */
+.sigso-py-resumen-ejecutivo { margin: var(--esp-3) 0 var(--esp-4); }
+.sigso-py-resumen-ejecutivo summary { cursor: pointer; font-weight: 600; color: var(--texto); margin-bottom: var(--esp-3); }
+.sigso-py-carga-titulo { margin: var(--esp-3) 0 var(--esp-2); }
+.sigso-py-carga { display: flex; flex-direction: column; gap: var(--esp-2); }
+.sigso-py-carga-fila { display: grid; grid-template-columns: 10rem 1fr auto; align-items: center; gap: var(--esp-2); font-size: var(--texto-sm); }
+.sigso-py-carga-nombre { color: var(--texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sigso-py-carga-barra { background: var(--superficie-2); border-radius: var(--radio-sm); height: 0.5rem; overflow: hidden; }
+.sigso-py-carga-barra span { display: block; height: 100%; background: var(--primario); border-radius: var(--radio-sm); }
 .sigso-py-tarea__top, .sigso-py-hito__top {
   display: flex; align-items: center; justify-content: space-between; gap: var(--esp-2); flex-wrap: wrap;
 }
@@ -2839,6 +2855,8 @@
 .sigso-py-evento--solicitud_lider { border-left-color: var(--alerta); }
 .sigso-py-evento--bloqueo { border-left-color: var(--critico); }
 .sigso-py-evento--decision { border-left-color: var(--primario); }
+.sigso-py-evento--entregable { border-left-color: var(--ok); }
+.sigso-py-evento--riesgo { border-left-color: var(--critico); }
 .sigso-py-evento__top {
   display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap; font-size: var(--texto-sm);
 }

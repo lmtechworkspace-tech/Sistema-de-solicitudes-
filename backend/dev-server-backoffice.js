@@ -207,6 +207,18 @@ function construirContexto() {
       'Riesgo: dependencia externa', 'El proveedor de hosting aun no confirma la ventana de corte.', '', '', '[]',
       new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString()]
   ]);
+  // v9.4 (Fase 2/3): entregables y riesgos -- un ejemplo de cada uno para
+  // poder ver las pestanas nuevas sin tener que crear todo a mano en local.
+  seedSheet(ctx, 'PROYECTO_ENTREGABLES', ctx.COLUMNAS.PROYECTO_ENTREGABLES, [
+    ['PYD-DEMO-1', 'PROY-DEMO-1', 'PYH-DEMO-1', 'Manual de migracion', 'Guia paso a paso para el equipo de soporte.',
+      'jefe@homepymes.cl', new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(), 'PENDIENTE', '', '', '', '', '',
+      new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString()]
+  ]);
+  seedSheet(ctx, 'PROYECTO_RIESGOS', ctx.COLUMNAS.PROYECTO_RIESGOS, [
+    ['PYR-DEMO-1', 'PROY-DEMO-1', 'El proveedor de hosting puede atrasar la ventana de corte', 'ALTA', 'ALTA', 'ALTA',
+      'leo@rld.cl', 'Coordinar una ventana alternativa con 1 semana de margen.', 'ABIERTO',
+      new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString()]
+  ]);
   // v6.1 (Fase 4): DOCUMENTOS demo (las capturas ya las siembra
   // sembrarSolicitudesDemo_ mas abajo). Hacen falta para ver la lista de
   // archivos con metadata -- formato, peso y fecha --, que es justo lo que un

@@ -213,7 +213,9 @@ var ESQUEMA_HOJAS = {
     'fecha_creacion', 'creado_por', 'activa',
     // v9.0 (Modulo de Proyectos): ver la nota identica en
     // backend/backoffice/Constantes.gs.
-    'proyecto_id', 'hito_id'
+    'proyecto_id', 'hito_id',
+    // v9.4: ver la nota identica en backend/backoffice/Constantes.gs.
+    'depende_de'
   ],
   ACTIVIDADES_BITACORA: [
     'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',
@@ -250,6 +252,17 @@ var ESQUEMA_HOJAS = {
   PROYECTO_EVENTOS: [
     'evento_id', 'proyecto_id', 'tipo', 'autor_email', 'autor_nombre',
     'titulo', 'cuerpo', 'ref_tipo', 'ref_id', 'menciones', 'timestamp'
+  ],
+  // v9.4: ver la nota identica en backend/backoffice/Constantes.gs.
+  PROYECTO_ENTREGABLES: [
+    'entregable_id', 'proyecto_id', 'hito_id', 'nombre', 'descripcion',
+    'responsable_email', 'fecha_comprometida', 'estado', 'url_evidencia',
+    'fecha_entrega_real', 'revisado_por', 'resultado_revision',
+    'observaciones', 'fecha_creacion'
+  ],
+  PROYECTO_RIESGOS: [
+    'riesgo_id', 'proyecto_id', 'descripcion', 'probabilidad', 'impacto',
+    'nivel', 'responsable_email', 'mitigacion', 'estado', 'fecha_creacion'
   ]
 };
 
