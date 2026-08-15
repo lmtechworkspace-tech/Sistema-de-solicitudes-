@@ -191,7 +191,10 @@ var BACKOFFICE_ACTIONS = {
   actualizarDocumentoSgc: handleActualizarDocumentoSgc_,
   descargarDocumentoSgc: handleDescargarDocumentoSgc_,
   listarRolesSgc: handleListarRolesSgc_,
-  gestionarRolSgc: handleGestionarRolSgc_
+  gestionarRolSgc: handleGestionarRolSgc_,
+  // v10.0 Fase 1b: acuse de recibo (evidencia de ISO §7.5.3).
+  acusarDocumentoSgc: handleAcusarDocumentoSgc_,
+  getCumplimientoDocumentoSgc: handleGetCumplimientoDocumentoSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -332,7 +335,11 @@ var MODULO_POR_ACCION = {
   nuevaVersionDocumentoSgc: 'calidad',
   actualizarDocumentoSgc: 'calidad',
   listarRolesSgc: 'calidad',
-  gestionarRolSgc: 'calidad'
+  gestionarRolSgc: 'calidad',
+  // v10.0 Fase 1b: confirmar la lectura es del personal (mismo gate de
+  // lectura); ver quien falta es gestion (Calidad.gs lo acota a ENCARGADO_SGC/ADM).
+  acusarDocumentoSgc: ['calidad', 'gerencia'],
+  getCumplimientoDocumentoSgc: 'calidad'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -877,6 +884,14 @@ function handleListarRolesSgc_(data, contexto) {
 
 function handleGestionarRolSgc_(data, contexto) {
   return responderResultado_(Calidad.gestionarRol(data, contexto));
+}
+
+function handleAcusarDocumentoSgc_(data, contexto) {
+  return responderResultado_(Calidad.acusarDocumento(data, contexto));
+}
+
+function handleGetCumplimientoDocumentoSgc_(data, contexto) {
+  return responderResultado_(Calidad.getCumplimiento(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

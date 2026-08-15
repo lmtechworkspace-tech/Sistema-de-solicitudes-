@@ -61,9 +61,19 @@ var Calidad = {
     }
 
     var ahora = new Date();
+    // v10.0 Fase 1b: que me falta confirmar. Se resuelve UNA vez para toda
+    // la lista (no una consulta por documento) -- misma leccion de
+    // rendimiento que Novedades aprendio en v6.9 con su trigger diario.
+    var acuses = leerFilasSeguro_(SHEETS.SGC_DOC_ACUSES);
+    var pendientesMios = {};
+    documentosPendientesDeAcuse_(contexto.email, visibles, acuses).forEach(function (d) {
+      pendientesMios[d.documento_id] = true;
+    });
+
     return {
       puede_gestionar: gobierna,
       rol_sgc: rol || 'OPERATIVO',
+      pendientes_de_acuse: Object.keys(pendientesMios).length,
       documentos: visibles.map(function (d) {
         return {
           documento_id: d.documento_id,
@@ -86,7 +96,11 @@ var Calidad = {
           // Señal calculada, no persistida: PRO-01 exige revision cada 12
           // meses. Se recalcula al leer para que nunca quede desfasada.
           revision_vencida: esRevisionVencida_(d.proxima_revision, ahora),
-          dias_para_revision: diasHastaSgc_(d.proxima_revision, ahora)
+          dias_para_revision: diasHastaSgc_(d.proxima_revision, ahora),
+          requiere_acuse: esVerdaderoSgc_(d.requiere_acuse),
+          fecha_limite_acuse: d.fecha_limite_acuse || '',
+          debo_acusar: !!pendientesMios[d.documento_id],
+          dias_para_acuse: d.fecha_limite_acuse ? diasHastaSgc_(d.fecha_limite_acuse, ahora) : null
         };
       }).sort(function (a, b) {
         return String(a.codigo || '').localeCompare(String(b.codigo || ''));
@@ -109,9 +123,18 @@ var Calidad = {
       .filter(function (v) { return v.documento_id === doc.documento_id; })
       .sort(function (a, b) { return new Date(b.fecha || 0) - new Date(a.fecha || 0); });
 
+    var acuses = leerFilasSeguro_(SHEETS.SGC_DOC_ACUSES);
+    var debeAcusar = documentosPendientesDeAcuse_(contexto.email, [doc], acuses).length > 0;
+    var miAcuse = acuses.filter(function (a) {
+      return a.documento_id === doc.documento_id && a.version === doc.version_vigente &&
+        normalizarEmailSgc_(a.usuario_email) === normalizarEmailSgc_(contexto.email);
+    })[0];
+
     return {
       documento: doc,
       puede_gestionar: gobierna,
+      debo_acusar: debeAcusar,
+      mi_acuse: miAcuse ? miAcuse.acusado_en : '',
       versiones: versiones,
       destinatarios: doc.visibilidad === 'SELECCION'
         ? destinatarios.filter(function (x) { return x.documento_id === doc.documento_id; })
@@ -172,7 +195,12 @@ var Calidad = {
       archivo_mime: archivo.archivo_mime,
       creado_por: contexto.email || '',
       fecha_creacion: ahora.toISOString(),
-      activa: true
+      activa: true,
+      // v10.0 Fase 1b: por defecto SI exige acuse -- mismo criterio que
+      // Novedades ("el punto de partida es que alguien se haga responsable
+      // de que la info llegue, y eso se demuestra con el acuse").
+      requiere_acuse: data.requiere_acuse === false ? false : true,
+      fecha_limite_acuse: data.fecha_limite_acuse || ''
     };
     agregarFila_(SHEETS.SGC_DOCUMENTOS, documento);
 
@@ -249,6 +277,8 @@ var Calidad = {
       cambios.fecha_vigencia = data.fecha_vigencia;
       cambios.proxima_revision = proximaRevisionSgc_(data.fecha_vigencia);
     }
+    if (data.requiere_acuse !== undefined) cambios.requiere_acuse = data.requiere_acuse === true;
+    if (data.fecha_limite_acuse !== undefined) cambios.fecha_limite_acuse = data.fecha_limite_acuse || '';
     if (data.estado !== undefined) {
       if (['VIGENTE', 'OBSOLETO'].indexOf(data.estado) === -1) {
         return errorValidacion_('estado', 'Estado inválido.');
@@ -300,6 +330,71 @@ var Calidad = {
     };
   },
 
+  // --- Acuse de recibo (Fase 1b) -------------------------------------------
+  // ISO 9001 §7.5.3: hay que poder demostrar que la informacion documentada
+  // llego a quien corresponde. El acuse se guarda POR VERSION: si el
+  // documento pasa a v02, el acuse de la v01 deja de valer y todos deben
+  // confirmar la nueva. Sin eso, "confirmado" solo significaria "confirmo
+  // algo alguna vez", que no es evidencia de nada.
+  acusarDocumento: function (data, contexto) {
+    var doc = buscarDocumentoSgc_(data.documento_id);
+    if (!doc) return errorValidacion_('documento_id', 'Documento no encontrado.');
+    var rol = rolSgc_(contexto);
+    var gobierna = gobiernaSgc_(contexto, rol);
+    var destinatarios = leerFilasSeguro_(SHEETS.SGC_DOC_DESTINATARIOS);
+    // No se puede confirmar lo que no se puede ver.
+    if (!puedeVerDocumento_(doc, contexto, rol, areaSgc_(contexto), gobierna, destinatarios)) {
+      return { _forbidden: true, message: 'No tienes acceso a este documento.' };
+    }
+    if (!esVerdaderoSgc_(doc.requiere_acuse)) {
+      return errorValidacion_('documento_id', 'Este documento no exige confirmación de lectura.');
+    }
+    var email = normalizarEmailSgc_(contexto.email);
+    var yaAcuso = leerFilasSeguro_(SHEETS.SGC_DOC_ACUSES).filter(function (a) {
+      return a.documento_id === doc.documento_id && a.version === doc.version_vigente &&
+        normalizarEmailSgc_(a.usuario_email) === email;
+    })[0];
+    if (yaAcuso) return yaAcuso; // idempotente: confirmar dos veces no duplica
+
+    var acuse = {
+      acuse_id: Utilities.getUuid(),
+      documento_id: doc.documento_id,
+      version: doc.version_vigente,
+      usuario_email: email,
+      acusado_en: new Date().toISOString()
+    };
+    agregarFila_(SHEETS.SGC_DOC_ACUSES, acuse);
+    registrarLogSgc_('SGC_DOC_ACUSE', doc.codigo + ' ' + doc.version_vigente, contexto);
+    return acuse;
+  },
+
+  // Panel de cumplimiento de un documento: quien confirmo y quien falta.
+  // Es lo que el Encargado SGC le muestra al auditor.
+  getCumplimiento: function (data, contexto) {
+    var doc = buscarDocumentoSgc_(data.documento_id);
+    if (!doc) return errorValidacion_('documento_id', 'Documento no encontrado.');
+    if (!gobiernaSgc_(contexto, rolSgc_(contexto))) {
+      return { _forbidden: true, message: 'Solo el Encargado SGC o un administrador pueden ver el cumplimiento.' };
+    }
+    var obligados = audienciaDocumentoSgc_(doc);
+    var acusaron = {};
+    leerFilasSeguro_(SHEETS.SGC_DOC_ACUSES).forEach(function (a) {
+      if (a.documento_id === doc.documento_id && a.version === doc.version_vigente) {
+        acusaron[normalizarEmailSgc_(a.usuario_email)] = a.acusado_en;
+      }
+    });
+    return {
+      documento_id: doc.documento_id,
+      codigo: doc.codigo,
+      version: doc.version_vigente,
+      requiere_acuse: esVerdaderoSgc_(doc.requiere_acuse),
+      fecha_limite_acuse: doc.fecha_limite_acuse || '',
+      confirmados: obligados.filter(function (e) { return !!acusaron[e]; })
+        .map(function (e) { return { usuario_email: e, acusado_en: acusaron[e] }; }),
+      pendientes: obligados.filter(function (e) { return !acusaron[e]; })
+    };
+  },
+
   // --- Roles del SGC --------------------------------------------------------
   listarRoles: function (data, contexto) {
     if (!gobiernaSgc_(contexto, rolSgc_(contexto))) {
@@ -343,6 +438,122 @@ var Calidad = {
     agregarFila_(SHEETS.SGC_ROLES, fila);
     return fila;
   }
+};
+
+// --- motor diario de vencimientos del SGC (Fase 1b) ------------------------
+//
+// SIN TRIGGER PROPIO. Apps Script limita a 20 triggers de tiempo por script
+// y SIGSO ya los tiene todos usados (ver la nota en Triggers.gs); esta
+// pasada se cuelga del slot diario de las 09:00, igual que ya hacen el
+// recordatorio de Novedades y las alertas de Actividades.
+//
+// Y la restriccion resulta mejor producto: en vez de una alerta suelta por
+// cada cosa, cada persona recibe UN SOLO correo con todo lo suyo. Es lo que
+// evita que el personal empiece a filtrar los correos del SGC a los dos
+// meses -- que es como muere un sistema de gestion.
+Calidad.recordatorioPendientes = function () {
+  var docs = leerFilasSeguro_(SHEETS.SGC_DOCUMENTOS).filter(esActivoSgc_);
+  if (!docs.length) return { acuses: 0, revisiones: 0 };
+  var acuses = leerFilasSeguro_(SHEETS.SGC_DOC_ACUSES);
+  var hoy = new Date().toISOString().slice(0, 10);
+  var ahora = new Date();
+
+  // 1) Acuses pendientes, agrupados por persona.
+  var pendientesPorPersona = {};
+  docs.forEach(function (d) {
+    if (d.estado !== 'VIGENTE' || !esVerdaderoSgc_(d.requiere_acuse)) return;
+    var yaAcuso = {};
+    acuses.forEach(function (a) {
+      if (a.documento_id === d.documento_id && a.version === d.version_vigente) {
+        yaAcuso[normalizarEmailSgc_(a.usuario_email)] = true;
+      }
+    });
+    audienciaDocumentoSgc_(d).forEach(function (email) {
+      if (yaAcuso[email]) return;
+      if (!pendientesPorPersona[email]) pendientesPorPersona[email] = [];
+      pendientesPorPersona[email].push(d);
+    });
+  });
+
+  var enviadosAcuse = 0;
+  Object.keys(pendientesPorPersona).forEach(function (email) {
+    var lista = pendientesPorPersona[email];
+    function plazo_(d) {
+      if (!d.fecha_limite_acuse) return '';
+      var dias = diasHastaSgc_(d.fecha_limite_acuse, ahora);
+      if (dias === null) return '';
+      return dias < 0 ? ' (VENCIDO hace ' + (-dias) + ' día(s))' : ' (vence en ' + dias + ' día(s))';
+    }
+    var asunto = 'SIGSO - Tienes ' + lista.length + ' documento(s) del SGC por confirmar';
+    var cuerpoTexto = 'Tienes ' + lista.length + ' documento(s) del Sistema de Gestion de Calidad que aun no confirmas como leidos:\n' +
+      lista.map(function (d) { return '- ' + d.codigo + ' ' + d.nombre + ' (' + d.version_vigente + ')' + plazo_(d); }).join('\n') +
+      '\n\nEntra a SIGSO > Calidad para revisarlos y marcar "Enterado".';
+    var cuerpoHtml = plantillaCorreoHtml_('Documentos del SGC por confirmar',
+      '<p>Tienes <strong>' + lista.length + '</strong> documento(s) del Sistema de Gestión de Calidad que aún no confirmas como leídos:</p>' +
+      '<ul style="margin:0 0 12px 18px;padding:0;">' +
+      lista.map(function (d) {
+        return '<li><strong>' + escaparHtmlCorreo_(d.codigo) + '</strong> — ' + escaparHtmlCorreo_(d.nombre) +
+          ' <em>(' + escaparHtmlCorreo_(d.version_vigente) + ')</em>' + escaparHtmlCorreo_(plazo_(d)) + '</li>';
+      }).join('') +
+      '</ul><p>Entra a SIGSO &gt; Calidad para revisarlos y marcar &quot;Enterado&quot;.</p>');
+
+    // El evento lleva la fecha: si la pasada se repite el mismo dia (o se
+    // fuerza a mano), enviarCorreo_ no manda el mismo aviso dos veces.
+    var resultado = enviarCorreo_('SGC_DIGEST', email, 'SGC_ACUSE_RECORDATORIO:' + hoy,
+      asunto, cuerpoTexto, null, { htmlBody: cuerpoHtml });
+    if (resultado && resultado.enviado) enviadosAcuse++;
+    encolarNotificacionApp_(email, 'SGC_ACUSE_PENDIENTE', 'Documentos del SGC por confirmar',
+      lista.length + ' documento(s) esperan tu confirmación.', 'calidad', 'Ver documentos', 72);
+  });
+
+  // 2) Revision a 12 meses: se avisa 30 dias antes (§13 de la
+  // especificacion) y se sigue avisando si ya vencio. Va al Encargado SGC
+  // -- y al elaborador original solo si quedo registrado como correo, ya
+  // que ese campo admite texto libre (un nombre no sirve para notificar).
+  var porRevisar = docs.filter(function (d) {
+    if (d.estado !== 'VIGENTE' || !d.proxima_revision) return false;
+    var dias = diasHastaSgc_(d.proxima_revision, ahora);
+    return dias !== null && dias <= 30;
+  });
+  var enviadosRevision = 0;
+  if (porRevisar.length) {
+    var encargados = leerFilasSeguro_(SHEETS.SGC_ROLES)
+      .filter(function (r) { return esVerdaderoActivoSgc_(r) && r.rol_sgc === 'ENCARGADO_SGC'; })
+      .map(function (r) { return normalizarEmailSgc_(r.usuario_email); });
+    porRevisar.forEach(function (d) {
+      var elaborador = normalizarEmailSgc_(d.elaborado_por);
+      if (elaborador.indexOf('@') !== -1 && encargados.indexOf(elaborador) === -1) encargados.push(elaborador);
+    });
+
+    var itemsTexto = porRevisar.map(function (d) {
+      var dias = diasHastaSgc_(d.proxima_revision, ahora);
+      return '- ' + d.codigo + ' ' + d.nombre + (dias < 0 ? ' (revisión VENCIDA hace ' + (-dias) + ' día(s))' : ' (a revisar en ' + dias + ' día(s))');
+    }).join('\n');
+    var itemsHtml = porRevisar.map(function (d) {
+      var dias = diasHastaSgc_(d.proxima_revision, ahora);
+      return '<li><strong>' + escaparHtmlCorreo_(d.codigo) + '</strong> — ' + escaparHtmlCorreo_(d.nombre) +
+        (dias < 0 ? ' <span style="color:#B42318;">(revisión VENCIDA hace ' + (-dias) + ' día(s))</span>'
+                  : ' (a revisar en ' + dias + ' día(s))') + '</li>';
+    }).join('');
+    var asuntoRev = 'SIGSO - ' + porRevisar.length + ' documento(s) del SGC por revisar';
+    var textoRev = 'Estos documentos del SGC cumplen su revisión periódica (PRO-01, cada 12 meses):\n' +
+      itemsTexto + '\n\nEntra a SIGSO > Calidad para revisarlos y, si corresponde, subir una nueva versión.';
+    var htmlRev = plantillaCorreoHtml_('Documentos del SGC por revisar',
+      '<p>Estos documentos cumplen su <strong>revisión periódica</strong> (PRO-01, cada 12 meses):</p>' +
+      '<ul style="margin:0 0 12px 18px;padding:0;">' + itemsHtml + '</ul>' +
+      '<p>Entra a SIGSO &gt; Calidad para revisarlos y, si corresponde, subir una nueva versión.</p>');
+
+    encargados.forEach(function (email) {
+      if (!email) return;
+      var r = enviarCorreo_('SGC_REVISION', email, 'SGC_REVISION_RECORDATORIO:' + hoy,
+        asuntoRev, textoRev, null, { htmlBody: htmlRev });
+      if (r && r.enviado) enviadosRevision++;
+      encolarNotificacionApp_(email, 'SGC_REVISION_PENDIENTE', 'Documentos del SGC por revisar',
+        porRevisar.length + ' documento(s) cumplen su revisión de 12 meses.', 'calidad', 'Ver documentos', 72);
+    });
+  }
+
+  return { acuses: enviadosAcuse, revisiones: enviadosRevision };
 };
 
 // --- constantes del modulo -------------------------------------------------
@@ -446,6 +657,60 @@ function puedeVerDocumento_(doc, contexto, rol, area, gobierna, destinatarios) {
     });
   }
   return false;
+}
+
+// --- audiencia obligada a acusar (Fase 1b) ---------------------------------
+
+// Quienes DEBEN confirmar que conocen el documento. Se deriva de la
+// visibilidad, no se declara aparte: si alguien no puede ver el documento,
+// exigirle el acuse seria absurdo (y un hallazgo de auditoria al reves).
+//
+//  - SELECCION -> exactamente las personas indicadas.
+//  - TODOS/AREA -> el personal registrado en SGC_ROLES (que es, por
+//    definicion, "el personal en alcance del SGC"), filtrado por area.
+//
+// Se excluye siempre al AUDITOR_EXTERNO (no forma parte del personal: no
+// tiene por que acusar documentos internos) y a quien cargo el documento
+// (mismo criterio que Novedades con el autor).
+function audienciaDocumentoSgc_(doc) {
+  var creador = normalizarEmailSgc_(doc.creado_por);
+  if (doc.visibilidad === 'SELECCION') {
+    return leerFilasSeguro_(SHEETS.SGC_DOC_DESTINATARIOS)
+      .filter(function (d) { return d.documento_id === doc.documento_id; })
+      .map(function (d) { return normalizarEmailSgc_(d.usuario_email); })
+      .filter(function (e) { return e && e !== creador; });
+  }
+  var vistos = {};
+  return leerFilasSeguro_(SHEETS.SGC_ROLES)
+    .filter(function (r) {
+      if (!esVerdaderoActivoSgc_(r)) return false;
+      if (r.rol_sgc === 'AUDITOR_EXTERNO') return false;
+      if (doc.visibilidad === 'AREA') return String(r.area_id || '') === String(doc.area_id || '');
+      return true; // TODOS
+    })
+    .map(function (r) { return normalizarEmailSgc_(r.usuario_email); })
+    .filter(function (e) {
+      if (!e || e === creador || vistos[e]) return false;
+      vistos[e] = true;
+      return true;
+    });
+}
+
+// Documentos VIGENTES que exigen acuse y que esta persona todavia no
+// confirmo en su version vigente.
+function documentosPendientesDeAcuse_(email, docs, acuses) {
+  var normalizado = normalizarEmailSgc_(email);
+  var yaAcuso = {};
+  (acuses || []).forEach(function (a) {
+    if (normalizarEmailSgc_(a.usuario_email) === normalizado) {
+      yaAcuso[a.documento_id + '|' + a.version] = true;
+    }
+  });
+  return (docs || []).filter(function (d) {
+    if (!esActivoSgc_(d) || d.estado !== 'VIGENTE' || !esVerdaderoSgc_(d.requiere_acuse)) return false;
+    if (yaAcuso[d.documento_id + '|' + d.version_vigente]) return false;
+    return audienciaDocumentoSgc_(d).indexOf(normalizado) !== -1;
+  });
 }
 
 // --- helpers ---------------------------------------------------------------

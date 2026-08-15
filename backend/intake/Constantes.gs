@@ -118,7 +118,9 @@ var SHEETS = {
   SGC_DOCUMENTOS: 'SGC_DOCUMENTOS',
   SGC_DOC_VERSIONES: 'SGC_DOC_VERSIONES',
   SGC_DOC_DESTINATARIOS: 'SGC_DOC_DESTINATARIOS',
-  SGC_ROLES: 'SGC_ROLES'
+  SGC_ROLES: 'SGC_ROLES',
+  // v10.0 Fase 1b: idem -- copia solo para que el esquema no diverja.
+  SGC_DOC_ACUSES: 'SGC_DOC_ACUSES'
 };
 
 var COLUMNAS = {
@@ -453,7 +455,9 @@ var COLUMNAS = {
     'fecha_vigencia', 'proxima_revision',
     'elaborado_por', 'revisado_por', 'aprobado_por',
     'archivo_id', 'archivo_nombre', 'archivo_mime',
-    'creado_por', 'fecha_creacion', 'activa'
+    'creado_por', 'fecha_creacion', 'activa',
+    // v10.0 Fase 1b: ver la nota identica en backend/backoffice/Constantes.gs.
+    'requiere_acuse', 'fecha_limite_acuse'
   ],
   SGC_DOC_VERSIONES: [
     'version_id', 'documento_id', 'version', 'cambios',
@@ -464,7 +468,9 @@ var COLUMNAS = {
   SGC_ROLES: [
     'rol_id', 'usuario_email', 'rol_sgc', 'area_id',
     'vigencia_hasta', 'activo', 'fecha_creacion'
-  ]
+  ],
+  // v10.0 Fase 1b: ver la nota identica en backend/backoffice/Constantes.gs.
+  SGC_DOC_ACUSES: ['acuse_id', 'documento_id', 'version', 'usuario_email', 'acusado_en']
 };
 
 // S01-S11 completos desde la Fase 1 aunque solo S01 se use aqui: la maquina

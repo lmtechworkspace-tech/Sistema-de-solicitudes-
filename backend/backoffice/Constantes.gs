@@ -131,7 +131,12 @@ var SHEETS = {
   SGC_DOCUMENTOS: 'SGC_DOCUMENTOS',
   SGC_DOC_VERSIONES: 'SGC_DOC_VERSIONES',
   SGC_DOC_DESTINATARIOS: 'SGC_DOC_DESTINATARIOS',
-  SGC_ROLES: 'SGC_ROLES'
+  SGC_ROLES: 'SGC_ROLES',
+  // v10.0 Fase 1b: acuse de recibo del documento controlado. Es la
+  // evidencia que ISO 9001 §7.5.3 exige ("la informacion documentada esta
+  // disponible y es idonea"): el auditor lo pregunta como "¿como prueba que
+  // su personal conoce la politica vigente?".
+  SGC_DOC_ACUSES: 'SGC_DOC_ACUSES'
 };
 
 var COLUMNAS = {
@@ -502,7 +507,11 @@ var COLUMNAS = {
     'fecha_vigencia', 'proxima_revision',
     'elaborado_por', 'revisado_por', 'aprobado_por',
     'archivo_id', 'archivo_nombre', 'archivo_mime',
-    'creado_por', 'fecha_creacion', 'activa'
+    'creado_por', 'fecha_creacion', 'activa',
+    // v10.0 Fase 1b: aditivas al final (mismo criterio de siempre).
+    // requiere_acuse: si el personal debe confirmar que lo conoce.
+    // fecha_limite_acuse: plazo para confirmarlo (opcional).
+    'requiere_acuse', 'fecha_limite_acuse'
   ],
   // Append-only: una fila por version subida. La vigente tambien queda
   // aqui (vigente=true), asi el historial es completo y auditable sin
@@ -526,7 +535,12 @@ var COLUMNAS = {
   SGC_ROLES: [
     'rol_id', 'usuario_email', 'rol_sgc', 'area_id',
     'vigencia_hasta', 'activo', 'fecha_creacion'
-  ]
+  ],
+  // v10.0 Fase 1b: una fila por persona Y VERSION. Guardar la version es lo
+  // que hace que el acuse sea evidencia real: si el Manual pasa a v02, el
+  // acuse de la v01 ya no vale y todos deben confirmar la nueva. Sin esa
+  // columna, "confirmado" significaria "confirmo algo alguna vez".
+  SGC_DOC_ACUSES: ['acuse_id', 'documento_id', 'version', 'usuario_email', 'acusado_en']
 };
 
 var ESTADOS = {

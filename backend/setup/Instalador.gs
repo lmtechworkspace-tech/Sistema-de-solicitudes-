@@ -272,7 +272,9 @@ var ESQUEMA_HOJAS = {
     'fecha_vigencia', 'proxima_revision',
     'elaborado_por', 'revisado_por', 'aprobado_por',
     'archivo_id', 'archivo_nombre', 'archivo_mime',
-    'creado_por', 'fecha_creacion', 'activa'
+    'creado_por', 'fecha_creacion', 'activa',
+    // v10.0 Fase 1b: ver la nota identica en backend/backoffice/Constantes.gs.
+    'requiere_acuse', 'fecha_limite_acuse'
   ],
   SGC_DOC_VERSIONES: [
     'version_id', 'documento_id', 'version', 'cambios',
@@ -283,7 +285,9 @@ var ESQUEMA_HOJAS = {
   SGC_ROLES: [
     'rol_id', 'usuario_email', 'rol_sgc', 'area_id',
     'vigencia_hasta', 'activo', 'fecha_creacion'
-  ]
+  ],
+  // v10.0 Fase 1b: ver la nota identica en backend/backoffice/Constantes.gs.
+  SGC_DOC_ACUSES: ['acuse_id', 'documento_id', 'version', 'usuario_email', 'acusado_en']
 };
 
 // SLA por prioridad en horas habiles (§7.2). P5 no tiene SLA.

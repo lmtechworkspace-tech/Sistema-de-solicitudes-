@@ -2878,6 +2878,17 @@
 .sgc-ficha__campo dd { margin: 0; color: var(--texto); }
 
 .sgc-acciones { display: flex; gap: var(--esp-2); flex-wrap: wrap; margin-top: var(--esp-4); }
+
+/* v10.0 Fase 1b: confirmación de lectura. Va arriba del detalle porque es
+   lo único que el personal operativo TIENE que hacer en este módulo. */
+.sgc-acuse {
+  border-radius: var(--radio-md); padding: var(--esp-3) var(--esp-4);
+  margin-bottom: var(--esp-4); display: flex; align-items: center;
+  gap: var(--esp-3); flex-wrap: wrap;
+}
+.sgc-acuse p { margin: 0; flex: 1 1 16rem; }
+.sgc-acuse--pendiente { background: var(--alerta-suave); border: 1px solid var(--alerta); }
+.sgc-acuse--hecho { background: var(--ok-suave); border: 1px solid var(--ok); color: var(--texto-2); }
 .sgc-form-fila { display: flex; gap: var(--esp-3); flex-wrap: wrap; }
 .sgc-form-fila > * { flex: 1 1 10rem; }
 

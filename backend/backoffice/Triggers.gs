@@ -292,6 +292,15 @@ function recordarValidacionPendienteTrigger() {
   } catch (err) {
     logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAlertasActividadesTrigger');
   }
+  // v10.0 Fase 1b (SGC ISO 9001): acuses pendientes + revision a 12 meses.
+  // Mismo criterio que las dos de arriba -- sin trigger propio (limite de 20
+  // ya copado) y en try/catch, para que un fallo del SGC no tumbe al dueno
+  // real de este slot.
+  try {
+    enviarRecordatorioCalidadTrigger();
+  } catch (err) {
+    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarRecordatorioCalidadTrigger');
+  }
   // v7.1 (notificaciones vivas, B5): mantenimiento diario -- purga las
   // notificaciones ya leidas o vencidas para que la hoja NOTIFICACIONES_APP
   // no crezca sin limite (cada sincronizacion del cliente la lee completa).
@@ -316,6 +325,13 @@ function enviarRecordatorioNovedadesTrigger() {
 // forzarla a mano desde el editor de Apps Script.
 function enviarAlertasActividadesTrigger() {
   return Notificaciones.enviarAlertasActividades();
+}
+
+// v10.0 Fase 1b (SGC ISO 9001): ver Calidad.recordatorioPendientes().
+// Nombrada igual que las anteriores y por el mismo motivo: poder forzarla a
+// mano desde el editor de Apps Script sin esperar a las 09:00.
+function enviarRecordatorioCalidadTrigger() {
+  return Calidad.recordatorioPendientes();
 }
 
 // v7.1 (notificaciones vivas, B5): ver purgarNotificacionesApp_(). Nombrada

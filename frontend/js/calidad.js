@@ -75,11 +75,20 @@
     var docs = data.documentos || [];
     var hayFiltros = !!(filtroTipo_ || filtroEstado_ || filtroBusqueda_);
 
+    // v10.0 Fase 1b: lo primero que ve la persona es lo que le falta
+    // confirmar. Es la unica obligacion que el SGC le impone al personal
+    // operativo, asi que va arriba y no escondida en el listado.
+    var avisoAcuse = data.pendientes_de_acuse
+      ? Componentes.alerta(
+          'Tienes ' + data.pendientes_de_acuse + ' documento(s) que debes confirmar como leídos. ' +
+          'Ábrelos y marca "Enterado".', 'aviso')
+      : '';
+
     var cabecera = '<div class="sgc-cabecera">' +
       '<p class="sigso-ayuda">Listado maestro: los documentos vigentes del SGC que te corresponden. ' +
         'Tu rol: <b>' + Componentes.escaparHtml(ROL_SGC_ETIQUETA[data.rol_sgc] || data.rol_sgc) + '</b>.</p>' +
       (puedeGestionar_ ? Componentes.boton({ texto: '+ Cargar documento', clase: 'js-sgc-nuevo' }) : '') +
-      '</div>' +
+      '</div>' + avisoAcuse +
       '<div class="sgc-filtros">' +
         Componentes.campoTexto({ id: 'sgc-f-busqueda', label: false, valor: filtroBusqueda_, placeholder: 'Buscar por código o nombre...' }) +
         Componentes.campoSelect({
@@ -136,6 +145,7 @@
           '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(d.nombre) + '</span>' +
           Componentes.badge('v' === String(d.version_vigente).charAt(0) ? d.version_vigente : ('v' + d.version_vigente), 'neutro') +
           (obsoleto ? Componentes.badge('Obsoleto', 'critico') : '') +
+          (d.debo_acusar ? Componentes.badge('Debes confirmar', 'alerta') : '') +
           (d.revision_vencida && !obsoleto ? Componentes.badge('Revisión vencida', 'alerta') : '') +
         '</div>' +
         '<div class="sgc-doc__meta">' +
@@ -178,9 +188,29 @@
       (d.archivo_id ? Componentes.boton({ texto: '⬇ Descargar', clase: 'js-sgc-descargar' }) : '') +
       (puedeGestionar_ ? Componentes.boton({ texto: 'Nueva versión', variante: 'secundario', clase: 'js-sgc-version' }) : '') +
       (puedeGestionar_ ? Componentes.boton({ texto: 'Editar', variante: 'secundario', clase: 'js-sgc-editar' }) : '') +
+      (puedeGestionar_ ? Componentes.boton({ texto: 'Ver quién confirmó', variante: 'secundario', clase: 'js-sgc-cumplimiento' }) : '') +
       (puedeGestionar_ && !obsoleto ? Componentes.boton({ texto: 'Marcar obsoleto', variante: 'peligro', clase: 'js-sgc-obsoleto' }) : '') +
       (puedeGestionar_ && obsoleto ? Componentes.boton({ texto: 'Volver a vigente', variante: 'secundario', clase: 'js-sgc-vigente' }) : '') +
       '</div>';
+
+    // v10.0 Fase 1b: la confirmacion de lectura. Se muestra arriba, antes de
+    // la ficha, porque es lo unico que esta persona TIENE que hacer aca.
+    var bloqueAcuse = '';
+    if (data.debo_acusar) {
+      var plazo = d.fecha_limite_acuse
+        ? ' Plazo: ' + fechaCorta_(d.fecha_limite_acuse) + '.'
+        : '';
+      bloqueAcuse = '<div class="sgc-acuse sgc-acuse--pendiente">' +
+        '<p><b>Debes confirmar que conoces este documento.</b>' + Componentes.escaparHtml(plazo) +
+          ' Descárgalo, léelo y marca "Enterado".</p>' +
+        Componentes.boton({ texto: '✓ Enterado', clase: 'js-sgc-acusar' }) +
+      '</div>';
+    } else if (data.mi_acuse) {
+      bloqueAcuse = '<div class="sgc-acuse sgc-acuse--hecho">' +
+        '<p>✓ Confirmaste este documento (versión ' + Componentes.escaparHtml(d.version_vigente) +
+          ') el ' + fechaCorta_(data.mi_acuse) + '.</p>' +
+      '</div>';
+    }
 
     var ficha = '<dl class="sgc-ficha">' +
       campoFicha_('Tipo', TIPO_ETIQUETA[d.tipo] || d.tipo) +
@@ -223,10 +253,12 @@
         ? Componentes.alerta('Este documento está fuera de circulación. Se conserva solo para trazabilidad; no debe usarse.', 'aviso')
         : '') +
       '<div class="sgc-cuerpo">' +
+        bloqueAcuse +
         (d.descripcion ? '<p>' + Componentes.escaparHtml(d.descripcion) + '</p>' : '') +
         ficha +
         (d.archivo_nombre ? '<p class="sigso-ayuda">Archivo: ' + Componentes.escaparHtml(d.archivo_nombre) + '</p>' : '') +
         acciones +
+        '<div class="js-sgc-cumplimiento-panel"></div>' +
         versiones +
       '</div>';
 
@@ -258,6 +290,69 @@
 
     var btnVigente = cont.querySelector('.js-sgc-vigente');
     if (btnVigente) btnVigente.addEventListener('click', function () { cambiarEstado_(d.documento_id, 'VIGENTE'); });
+
+    var btnAcusar = cont.querySelector('.js-sgc-acusar');
+    if (btnAcusar) btnAcusar.addEventListener('click', function () {
+      btnAcusar.disabled = true;
+      api_('acusarDocumentoSgc', { documento_id: d.documento_id }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          btnAcusar.disabled = false;
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo confirmar.', tipo: 'error' });
+          return;
+        }
+        Componentes.aviso({ texto: 'Confirmado. Queda registrado con tu nombre y la fecha.', tipo: 'ok' });
+        abrirDocumento_(d.documento_id);
+      });
+    });
+
+    var btnCumplimiento = cont.querySelector('.js-sgc-cumplimiento');
+    if (btnCumplimiento) btnCumplimiento.addEventListener('click', function () {
+      var panel = cont.querySelector('.js-sgc-cumplimiento-panel');
+      panel.innerHTML = Componentes.cargando('Cargando...');
+      api_('getCumplimientoDocumentoSgc', { documento_id: d.documento_id }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          panel.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar.', 'error');
+          return;
+        }
+        pintarCumplimiento_(panel, respuesta.data);
+      }).catch(function () {
+        panel.innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
+      });
+    });
+  }
+
+  // Quién confirmó y quién falta, de la VERSIÓN VIGENTE. Es lo que el
+  // Encargado SGC le muestra al auditor cuando pregunta cómo prueba que su
+  // personal conoce el documento.
+  function pintarCumplimiento_(panel, c) {
+    if (!c.requiere_acuse) {
+      panel.innerHTML = '<p class="sigso-ayuda">Este documento no exige confirmación de lectura.</p>';
+      return;
+    }
+    var total = c.confirmados.length + c.pendientes.length;
+    panel.innerHTML =
+      '<h3 class="sgc-sub">Confirmación de lectura — versión ' + Componentes.escaparHtml(c.version) + '</h3>' +
+      '<p class="sigso-ayuda">' + c.confirmados.length + ' de ' + total + ' persona(s) han confirmado' +
+        (c.fecha_limite_acuse ? ' · plazo ' + fechaCorta_(c.fecha_limite_acuse) : '') + '.</p>' +
+      '<div class="sgc-lista">' +
+        (c.pendientes.length
+          ? '<div class="sgc-version"><div class="sgc-doc__top">' +
+              Componentes.badge('Falta confirmar (' + c.pendientes.length + ')', 'alerta') +
+            '</div><p class="sigso-ayuda">' +
+              c.pendientes.map(function (e) { return Componentes.escaparHtml(e); }).join(', ') +
+            '</p></div>'
+          : '') +
+        (c.confirmados.length
+          ? '<div class="sgc-version"><div class="sgc-doc__top">' +
+              Componentes.badge('Confirmado (' + c.confirmados.length + ')', 'ok') +
+            '</div>' +
+            c.confirmados.map(function (x) {
+              return '<p class="sigso-ayuda">' + Componentes.escaparHtml(x.usuario_email) +
+                ' — ' + fechaCorta_(x.acusado_en) + '</p>';
+            }).join('') +
+            '</div>'
+          : '') +
+      '</div>';
   }
 
   function campoFicha_(etiqueta, valor) {
@@ -314,7 +409,25 @@
         Componentes.campoTexto({ id: 'sgc-elaborado', label: 'Elaborado por', valor: d.elaborado_por }) +
         Componentes.campoTexto({ id: 'sgc-revisado', label: 'Revisado por', valor: d.revisado_por }) +
         Componentes.campoTexto({ id: 'sgc-aprobado', label: 'Aprobado por', valor: d.aprobado_por }) +
-      '</div>';
+      '</div>' +
+      // v10.0 Fase 1b: por defecto SÍ exige confirmación -- es lo que
+      // convierte "lo publiqué" en evidencia de que la gente lo conoce.
+      '<label class="sigso-campo-check"><input type="checkbox" id="sgc-requiere-acuse"' +
+        (d.documento_id && d.requiere_acuse === false ? '' : ' checked') +
+        '> Exigir confirmación de lectura ("Enterado")</label>' +
+      Componentes.campoTexto({
+        id: 'sgc-limite-acuse', label: 'Plazo para confirmar (opcional)', tipo: 'date',
+        valor: fechaISO_(d.fecha_limite_acuse)
+      });
+  }
+
+  function leerAcuse_() {
+    var chk = document.getElementById('sgc-requiere-acuse');
+    var limite = document.getElementById('sgc-limite-acuse');
+    return {
+      requiere_acuse: chk ? chk.checked : true,
+      fecha_limite_acuse: limite ? limite.value : ''
+    };
   }
 
   function leerDestinatarios_() {
@@ -359,6 +472,7 @@
       boton.disabled = true; boton.textContent = 'Subiendo...';
 
       leerArchivoBase64Sgc_(archivo).then(function (base64) {
+        var acuse = leerAcuse_();
         return api_('crearDocumentoSgc', {
           codigo: document.getElementById('sgc-codigo').value,
           nombre: document.getElementById('sgc-nombre').value,
@@ -372,6 +486,8 @@
           elaborado_por: document.getElementById('sgc-elaborado').value,
           revisado_por: document.getElementById('sgc-revisado').value,
           aprobado_por: document.getElementById('sgc-aprobado').value,
+          requiere_acuse: acuse.requiere_acuse,
+          fecha_limite_acuse: acuse.fecha_limite_acuse,
           nombre_archivo: archivo.name,
           contenido_base64: base64
         });
@@ -471,6 +587,7 @@
 
     document.getElementById('form-sgc-editar').addEventListener('submit', function (evento) {
       evento.preventDefault();
+      var acuseEd = leerAcuse_();
       api_('actualizarDocumentoSgc', {
         documento_id: d.documento_id,
         nombre: document.getElementById('sgc-nombre').value,
@@ -482,7 +599,9 @@
         fecha_vigencia: document.getElementById('sgc-vigencia-ed').value,
         elaborado_por: document.getElementById('sgc-elaborado').value,
         revisado_por: document.getElementById('sgc-revisado').value,
-        aprobado_por: document.getElementById('sgc-aprobado').value
+        aprobado_por: document.getElementById('sgc-aprobado').value,
+        requiere_acuse: acuseEd.requiere_acuse,
+        fecha_limite_acuse: acuseEd.fecha_limite_acuse
       }).then(function (respuesta) {
         if (!respuesta || !respuesta.ok) {
           Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });

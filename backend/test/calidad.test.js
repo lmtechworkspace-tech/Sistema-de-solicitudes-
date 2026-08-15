@@ -23,7 +23,12 @@ function loadConSchema() {
   seedSheet(ctx, 'SGC_DOC_VERSIONES', ctx.COLUMNAS.SGC_DOC_VERSIONES);
   seedSheet(ctx, 'SGC_DOC_DESTINATARIOS', ctx.COLUMNAS.SGC_DOC_DESTINATARIOS);
   seedSheet(ctx, 'SGC_ROLES', ctx.COLUMNAS.SGC_ROLES);
+  seedSheet(ctx, 'SGC_DOC_ACUSES', ctx.COLUMNAS.SGC_DOC_ACUSES);
   seedSheet(ctx, 'LOG_SISTEMA', ctx.COLUMNAS.LOG_SISTEMA);
+  // v10.0 Fase 1b: el recordatorio diario manda correo + notificacion viva.
+  seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
+  seedSheet(ctx, 'NOTIFICACIONES_APP', ctx.COLUMNAS.NOTIFICACIONES_APP);
+  seedSheet(ctx, 'CONFIG_NOTIFICACIONES', ctx.COLUMNAS.CONFIG_NOTIFICACIONES);
   return ctx;
 }
 
@@ -300,4 +305,153 @@ test('sin rol en SGC_ROLES la persona ve solo lo de acceso general (default segu
   assert.equal(r.documentos[0].codigo, 'DOC-A');
   assert.equal(r.puede_gestionar, false);
   assert.equal(r.rol_sgc, 'OPERATIVO');
+});
+
+// --- v10.0 Fase 1b: acuse de recibo (evidencia de ISO 7.5.3) --------------
+//
+// Lo que protegen estos tests: que "confirmado" signifique algo. Un acuse
+// que no se reinicia al cambiar la version, o que se le exige a quien no
+// puede ver el documento, no es evidencia -- es ruido que ademas falla en
+// auditoria.
+
+test('acuse: solo se le exige a quien realmente ve el documento', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+  const doc = crearDoc(ctx, { codigo: 'PRO-50', visibilidad: 'AREA', area_id: 'PREVENCION' });
+
+  const cumplimiento = ctx.Calidad.getCumplimiento({ documento_id: doc.documento_id }, CTX_ENCARGADO);
+  assert.deepEqual(toPlain(cumplimiento.pendientes), ['prevencion@homepymes.cl'],
+    'solo prevencion debe estar obligado; contabilidad ni siquiera lo ve');
+});
+
+test('acuse: el auditor externo y quien cargo el documento quedan fuera de la obligacion', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+  ctx.Calidad.gestionarRol({ usuario_email: 'auditor@externo.cl', rol_sgc: 'AUDITOR_EXTERNO' }, CTX_ADM);
+  const doc = crearDoc(ctx, { codigo: 'DOC-70', visibilidad: 'TODOS' }); // lo carga CTX_ENCARGADO
+
+  const pendientes = toPlain(ctx.Calidad.getCumplimiento({ documento_id: doc.documento_id }, CTX_ENCARGADO).pendientes);
+  assert.ok(pendientes.indexOf('auditor@externo.cl') === -1, 'un auditor externo no acusa documentos internos');
+  assert.ok(pendientes.indexOf('sgc@homepymes.cl') === -1, 'quien carga el documento no se lo acusa a si mismo');
+  assert.ok(pendientes.indexOf('prevencion@homepymes.cl') !== -1);
+});
+
+test('acuse: confirmar mueve a la persona de pendiente a confirmado, y es idempotente', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+  const doc = crearDoc(ctx, { codigo: 'DOC-71', visibilidad: 'TODOS' });
+
+  assert.equal(ctx.Calidad.listarDocumentos({}, CTX_PREVENCION).pendientes_de_acuse, 1);
+
+  ctx.Calidad.acusarDocumento({ documento_id: doc.documento_id }, CTX_PREVENCION);
+  ctx.Calidad.acusarDocumento({ documento_id: doc.documento_id }, CTX_PREVENCION); // repetido a proposito
+
+  assert.equal(ctx.leerFilas_('SGC_DOC_ACUSES').length, 1, 'confirmar dos veces no debe duplicar');
+  assert.equal(ctx.Calidad.listarDocumentos({}, CTX_PREVENCION).pendientes_de_acuse, 0);
+
+  const c = ctx.Calidad.getCumplimiento({ documento_id: doc.documento_id }, CTX_ENCARGADO);
+  assert.equal(c.confirmados.length, 1);
+  assert.equal(c.confirmados[0].usuario_email, 'prevencion@homepymes.cl');
+  assert.ok(toPlain(c.pendientes).indexOf('prevencion@homepymes.cl') === -1);
+});
+
+test('acuse: una NUEVA VERSION reinicia el ciclo -- lo confirmado antes ya no vale', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+  const doc = crearDoc(ctx, { codigo: 'DOC-72', visibilidad: 'TODOS' });
+  ctx.Calidad.acusarDocumento({ documento_id: doc.documento_id }, CTX_PREVENCION);
+  assert.equal(ctx.Calidad.listarDocumentos({}, CTX_PREVENCION).pendientes_de_acuse, 0);
+
+  ctx.Calidad.nuevaVersion({
+    documento_id: doc.documento_id, version: 'v02', cambios: 'Cambio de alcance.',
+    nombre_archivo: 'v2.pdf', contenido_base64: PDF_B64
+  }, CTX_ENCARGADO);
+
+  assert.equal(ctx.Calidad.listarDocumentos({}, CTX_PREVENCION).pendientes_de_acuse, 1,
+    'si el documento cambio, la confirmacion anterior no puede seguir valiendo');
+  const c = ctx.Calidad.getCumplimiento({ documento_id: doc.documento_id }, CTX_ENCARGADO);
+  assert.equal(c.version, 'v02');
+  assert.equal(c.confirmados.length, 0);
+  // El acuse de la v01 se conserva: es historia, no se borra.
+  assert.equal(ctx.leerFilas_('SGC_DOC_ACUSES').length, 1);
+});
+
+test('acuse: no se puede confirmar un documento que no se puede ver', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+  const doc = crearDoc(ctx, { codigo: 'PRO-73', visibilidad: 'AREA', area_id: 'PREVENCION' });
+  assert.equal(ctx.Calidad.acusarDocumento({ documento_id: doc.documento_id }, CTX_CONTABILIDAD)._forbidden, true);
+});
+
+test('acuse: un documento sin acuse exigido no aparece como pendiente de nadie', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+  const doc = crearDoc(ctx, { codigo: 'FO-80', visibilidad: 'TODOS', requiere_acuse: false });
+  assert.equal(ctx.Calidad.listarDocumentos({}, CTX_PREVENCION).pendientes_de_acuse, 0);
+  assert.equal(ctx.Calidad.acusarDocumento({ documento_id: doc.documento_id }, CTX_PREVENCION)._validationError, true);
+});
+
+test('getCumplimiento es solo para quien gobierna el SGC', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+  const doc = crearDoc(ctx, { codigo: 'DOC-81', visibilidad: 'TODOS' });
+  assert.equal(ctx.Calidad.getCumplimiento({ documento_id: doc.documento_id }, CTX_PREVENCION)._forbidden, true);
+});
+
+// --- motor diario de vencimientos -----------------------------------------
+
+test('recordatorio diario: UN correo por persona con todos sus pendientes juntos', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+  crearDoc(ctx, { codigo: 'DOC-90', nombre: 'Manual', visibilidad: 'TODOS' });
+  crearDoc(ctx, { codigo: 'DOC-91', nombre: 'Politica', visibilidad: 'TODOS' });
+  crearDoc(ctx, { codigo: 'PRO-92', nombre: 'Proc. Prevencion', visibilidad: 'AREA', area_id: 'PREVENCION' });
+
+  const r = ctx.Calidad.recordatorioPendientes();
+  assert.ok(r.acuses >= 1);
+
+  const correos = ctx.leerFilas_('LOG_NOTIFICACIONES')
+    .filter((l) => String(l.evento || '').indexOf('SGC_ACUSE_RECORDATORIO') === 0);
+  const aPrevencion = correos.filter((c) => c.destinatario === 'prevencion@homepymes.cl');
+  assert.equal(aPrevencion.length, 1, 'debe ser UN solo correo agrupado, no uno por documento');
+
+  const aContabilidad = correos.filter((c) => c.destinatario === 'conta@homepymes.cl');
+  assert.equal(aContabilidad.length, 1);
+});
+
+test('recordatorio diario: no se repite el mismo dia', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+  crearDoc(ctx, { codigo: 'DOC-93', visibilidad: 'TODOS' });
+
+  ctx.Calidad.recordatorioPendientes();
+  const primera = ctx.leerFilas_('LOG_NOTIFICACIONES')
+    .filter((l) => String(l.evento || '').indexOf('SGC_ACUSE_RECORDATORIO') === 0).length;
+  ctx.Calidad.recordatorioPendientes();
+  const segunda = ctx.leerFilas_('LOG_NOTIFICACIONES')
+    .filter((l) => String(l.evento || '').indexOf('SGC_ACUSE_RECORDATORIO') === 0).length;
+  assert.equal(segunda, primera, 'forzar la pasada dos veces el mismo dia no debe reenviar');
+});
+
+test('recordatorio diario: avisa al Encargado SGC de la revision a 12 meses', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+  // Vigencia de hace mas de un ano -> revision ya vencida.
+  crearDoc(ctx, { codigo: 'DOC-94', visibilidad: 'TODOS', fecha_vigencia: '2020-01-01T00:00:00.000Z' });
+
+  const r = ctx.Calidad.recordatorioPendientes();
+  assert.ok(r.revisiones >= 1);
+  const avisos = ctx.leerFilas_('LOG_NOTIFICACIONES')
+    .filter((l) => String(l.evento || '').indexOf('SGC_REVISION_RECORDATORIO') === 0);
+  assert.ok(avisos.some((a) => a.destinatario === 'sgc@homepymes.cl'));
+});
+
+test('recordatorio diario: un documento al dia no genera aviso de revision', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+  const enSeisMeses = new Date(Date.now() + 180 * 86400000).toISOString();
+  crearDoc(ctx, { codigo: 'DOC-95', visibilidad: 'TODOS', fecha_vigencia: enSeisMeses });
+
+  const r = ctx.Calidad.recordatorioPendientes();
+  assert.equal(r.revisiones, 0);
 });
