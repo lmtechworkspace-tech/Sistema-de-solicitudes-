@@ -55,7 +55,21 @@
   var proyectoActivoId_ = null;
   var pestanaActiva_ = 'resumen';
 
+  // Espejo liviano de normalizarEmailProyecto_ (Proyectos.gs) -- necesario
+  // aca solo para mapear menciones a nombres al pintar el feed; el backend
+  // sigue siendo la autoridad para permisos/comparaciones.
+  function normalizarEmail_(email) { return String(email || '').trim().toLowerCase(); }
+
   // --- portafolio ----------------------------------------------------------
+
+  // v9.3: filtros del portafolio. Estado va al backend (Proyectos.listar ya
+  // acepta filtros.estado); salud se filtra en el cliente porque ya viene
+  // calculada en cada tarjeta -- no hay razon para pedirla de nuevo al
+  // servidor. Se guardan a nivel de modulo para sobrevivir un refrescar_()
+  // (auto-refresco al volver a la pestaña) sin resetearse solos.
+  var filtroEstadoPortafolio_ = '';
+  var filtroSaludPortafolio_ = '';
+  var proyectosPortafolioSinFiltrarSalud_ = [];
 
   function cargarPortafolio_() {
     proyectoActivoId_ = null;
@@ -63,26 +77,67 @@
     var cont = document.getElementById('proyectos-contenido');
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando proyectos...');
-    api_('listarProyectos', {}).then(function (respuesta) {
+    var filtros = filtroEstadoPortafolio_ ? { estado: filtroEstadoPortafolio_ } : {};
+    api_('listarProyectos', filtros).then(function (respuesta) {
       if (!respuesta || !respuesta.ok) {
         cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el portafolio.', 'error');
         return;
       }
-      pintarPortafolio_(cont, respuesta.data || []);
+      proyectosPortafolioSinFiltrarSalud_ = respuesta.data || [];
+      pintarPortafolio_(cont, proyectosPortafolioSinFiltrarSalud_);
     }).catch(function () {
       cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar los proyectos.', 'error');
     });
   }
 
-  function pintarPortafolio_(cont, proyectos) {
+  function pintarPortafolio_(cont, proyectosSinFiltrarSalud) {
+    var hayFiltros = !!(filtroEstadoPortafolio_ || filtroSaludPortafolio_);
+    var proyectos = filtroSaludPortafolio_
+      ? proyectosSinFiltrarSalud.filter(function (p) { return p.salud === filtroSaludPortafolio_; })
+      : proyectosSinFiltrarSalud;
+
+    var filtrosBar = '<div class="sigso-py-filtros">' +
+      Componentes.campoSelect({
+        id: 'py-filtro-estado', label: false, valor: filtroEstadoPortafolio_,
+        placeholder: 'Todos los estados',
+        opciones: Object.keys(ESTADO_PROYECTO_ETIQUETA).map(function (e) { return { valor: e, texto: ESTADO_PROYECTO_ETIQUETA[e] }; })
+      }) +
+      Componentes.campoSelect({
+        id: 'py-filtro-salud', label: false, valor: filtroSaludPortafolio_,
+        placeholder: 'Toda salud',
+        opciones: Object.keys(SALUD_ETIQUETA).map(function (s) { return { valor: s, texto: SALUD_ETIQUETA[s] }; })
+      }) +
+      (hayFiltros ? Componentes.boton({ texto: 'Limpiar filtros', variante: 'sutil', clase: 'js-py-limpiar-filtros', tipo: 'button' }) : '') +
+      '</div>';
+
     var cabecera = '<div class="sigso-py-cabecera">' +
       '<p class="sigso-ayuda">Portafolio de proyectos internos: quién lidera cada uno, en qué estado está y qué necesita atención.</p>' +
       Componentes.boton({ texto: '+ Nuevo proyecto', clase: 'js-py-nuevo' }) +
-      '</div>';
+      '</div>' + filtrosBar;
+
+    function wireFiltros() {
+      cont.querySelector('.js-py-nuevo').addEventListener('click', abrirFormularioProyecto_);
+      cont.querySelector('#py-filtro-estado').addEventListener('change', function () {
+        filtroEstadoPortafolio_ = this.value;
+        cargarPortafolio_();
+      });
+      cont.querySelector('#py-filtro-salud').addEventListener('change', function () {
+        filtroSaludPortafolio_ = this.value;
+        pintarPortafolio_(cont, proyectosPortafolioSinFiltrarSalud_);
+      });
+      var limpiar = cont.querySelector('.js-py-limpiar-filtros');
+      if (limpiar) limpiar.addEventListener('click', function () {
+        filtroEstadoPortafolio_ = ''; filtroSaludPortafolio_ = '';
+        cargarPortafolio_();
+      });
+    }
 
     if (proyectos.length === 0) {
-      cont.innerHTML = cabecera + Componentes.vacio({ texto: 'Todavía no participas en ningún proyecto.', detalle: 'Crea uno para empezar.' });
-      cont.querySelector('.js-py-nuevo').addEventListener('click', abrirFormularioProyecto_);
+      var vacio = hayFiltros
+        ? { texto: 'Ningún proyecto coincide con estos filtros.' }
+        : { texto: 'Todavía no participas en ningún proyecto.', detalle: 'Crea uno para empezar.' };
+      cont.innerHTML = cabecera + Componentes.vacio(vacio);
+      wireFiltros();
       return;
     }
 
@@ -108,7 +163,7 @@
     }).join('');
 
     cont.innerHTML = cabecera + '<div class="sigso-py-grid">' + tarjetas + '</div>';
-    cont.querySelector('.js-py-nuevo').addEventListener('click', abrirFormularioProyecto_);
+    wireFiltros();
     cont.querySelectorAll('.js-py-abrir').forEach(function (btn) {
       btn.addEventListener('click', function () { abrirProyecto_(btn.getAttribute('data-id')); });
     });
@@ -308,9 +363,27 @@
   function pintarSala_(sala, detalle) {
     var puedePublicar = !!detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
     var esLider = detalle.rol_actual === 'LIDER';
+    // v9.3: menciones -- el backend (notificarSala_) ya notifica a quien
+    // venga en evento.menciones, pero la UI nunca lo mandaba (campo muerto).
+    // Checklist opcional y plegada (patron <details> ya usado en
+    // dashboard.js/detalle.js para acciones secundarias) con los integrantes
+    // del proyecto. No se excluye al propio autor de la lista -- getDetalle
+    // no expone el email de quien consulta, y mencionarse a uno mismo es
+    // inofensivo (a lo sumo, una notificacion de mas); quien no lo quiera
+    // simplemente no marca su propia casilla.
+    var checklistMenciones = (detalle.integrantes || []).length
+      ? '<details class="sigso-py-menciones">' +
+          '<summary>Mencionar a alguien (opcional)</summary>' +
+          (detalle.integrantes || []).map(function (i) {
+            return '<label class="sigso-campo-check"><input type="checkbox" class="js-py-mencion" value="' +
+              Componentes.escaparHtml(i.usuario_email) + '"> ' + Componentes.escaparHtml(i.usuario_nombre || i.usuario_email) + '</label>';
+          }).join('') +
+        '</details>'
+      : '';
     var form = puedePublicar
       ? '<form id="form-py-sala" class="sigso-py-sala-form">' +
           Componentes.campoTextarea({ id: 'py-sala-cuerpo', label: 'Publicar en la sala', placeholder: 'Comparte un avance, decisión, o pide algo...', requerido: true }) +
+          checklistMenciones +
           '<div class="sigso-py-sala-form__acciones">' +
             Componentes.campoSelect({
               id: 'py-sala-tipo', label: false, valor: 'COMENTARIO', placeholder: false,
@@ -331,8 +404,12 @@
       return form + Componentes.vacio({ texto: 'Todavía no hay nada en la sala.' });
     }
 
+    var integrantesPorEmail_ = {};
+    (detalle.integrantes || []).forEach(function (i) { integrantesPorEmail_[normalizarEmail_(i.usuario_email)] = i.usuario_nombre || i.usuario_email; });
+
     var feed = sala.map(function (e) {
       var puedeConvertir = puedePublicar && !e.ref_id && (e.tipo === 'COMENTARIO' || e.tipo === 'SOLICITUD_LIDER' || e.tipo === 'DECISION');
+      var menciones = (e.menciones || '').split(',').map(function (m) { return normalizarEmail_(m); }).filter(Boolean);
       return '<div class="sigso-py-evento sigso-py-evento--' + e.tipo.toLowerCase() + '">' +
         '<div class="sigso-py-evento__top">' +
           '<span class="sigso-py-evento__autor">' + Componentes.escaparHtml(e.autor_nombre || e.autor_email) + '</span>' +
@@ -341,6 +418,9 @@
         '</div>' +
         (e.titulo ? '<p class="sigso-py-evento__titulo">' + Componentes.escaparHtml(e.titulo) + '</p>' : '') +
         '<p class="sigso-py-evento__cuerpo">' + Componentes.escaparHtml(e.cuerpo || '') + '</p>' +
+        (menciones.length
+          ? '<p class="sigso-ayuda">@ ' + menciones.map(function (m) { return Componentes.escaparHtml(integrantesPorEmail_[m] || m); }).join(', ') + '</p>'
+          : '') +
         (e.ref_id ? '<p class="sigso-ayuda">→ Convertido en tarea.</p>' : '') +
         (puedeConvertir
           ? Componentes.boton({ texto: 'Convertir en tarea', variante: 'sutil', clase: 'js-py-convertir', idx: e.evento_id })
@@ -458,7 +538,8 @@
         var cuerpo = document.getElementById('py-sala-cuerpo').value;
         var tipo = document.getElementById('py-sala-tipo').value;
         if (!cuerpo.trim()) return;
-        api_('publicarEnSalaProyecto', { proyecto_id: proyectoActivoId_, tipo: tipo, cuerpo: cuerpo }).then(function (respuesta) {
+        var menciones = Array.from(cont.querySelectorAll('.js-py-mencion:checked')).map(function (el) { return el.value; });
+        api_('publicarEnSalaProyecto', { proyecto_id: proyectoActivoId_, tipo: tipo, cuerpo: cuerpo, menciones: menciones }).then(function (respuesta) {
           if (!respuesta || !respuesta.ok) {
             Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo publicar.', tipo: 'error' });
             return;

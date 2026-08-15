@@ -2800,6 +2800,12 @@
   display: flex; gap: var(--esp-4); flex-wrap: wrap;
 }
 
+/* v9.3: filtros del portafolio (estado + salud) */
+.sigso-py-filtros {
+  display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap; margin: var(--esp-3) 0 var(--esp-4);
+}
+.sigso-py-filtros .sigso-campo { margin: 0; flex: 0 1 12rem; min-width: 8rem; }
+
 /* v9.1: gestion de hitos (editar / completar / eliminar) */
 .sigso-py-hito__acciones {
   margin-top: var(--esp-2); display: flex; gap: var(--esp-2); flex-wrap: wrap;
@@ -2818,6 +2824,12 @@
 .sigso-py-sala-form { margin-bottom: var(--esp-4); }
 .sigso-py-sala-form__acciones { display: flex; gap: var(--esp-2); align-items: flex-end; flex-wrap: wrap; }
 .sigso-py-sala-form__acciones .sigso-campo { flex: 1 1 12rem; margin: 0; }
+
+/* v9.3: menciones -- checklist opcional plegada bajo el textarea de la sala */
+.sigso-py-menciones { margin: var(--esp-2) 0; }
+.sigso-py-menciones summary { cursor: pointer; font-size: var(--texto-sm); color: var(--primario); user-select: none; }
+.sigso-py-menciones[open] summary { margin-bottom: var(--esp-2); }
+.sigso-py-menciones .sigso-campo-check { padding: 2px 0; }
 
 .sigso-py-feed { display: flex; flex-direction: column; gap: var(--esp-2); }
 .sigso-py-evento {
