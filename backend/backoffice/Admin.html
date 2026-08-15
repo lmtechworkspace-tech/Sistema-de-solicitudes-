@@ -3497,6 +3497,47 @@ button {
 .sgc-form-fila { display: flex; gap: var(--esp-3); flex-wrap: wrap; }
 .sgc-form-fila > * { flex: 1 1 10rem; }
 
+/* v10.0 Fase 3a: no conformidades. */
+.sgc-kpis {
+  display: grid; gap: var(--esp-3); margin: var(--esp-3) 0 var(--esp-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr));
+}
+.sgc-nc--vencida { border-left-color: var(--critico); background: var(--critico-suave); }
+
+/* El ciclo de mejora es una secuencia: primero corregir, después entender
+   por qué, después evitar que se repita, y al final comprobar que funcionó.
+   Se pinta como pasos numerados porque el orden es la norma, no un detalle
+   de presentación -- definir la acción antes de la causa es exactamente el
+   error que la ISO 9001 §10.2 busca impedir. */
+.sgc-etapas { display: flex; flex-direction: column; gap: var(--esp-3); margin: var(--esp-4) 0; }
+.sgc-etapa {
+  display: flex; gap: var(--esp-3); padding: var(--esp-4);
+  background: var(--superficie); border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
+}
+.sgc-etapa__num {
+  flex: 0 0 auto; width: 1.75rem; height: 1.75rem; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--superficie-2); color: var(--texto-2);
+  font-weight: 700; font-size: var(--texto-sm);
+}
+.sgc-etapa--hecha { border-color: var(--ok); }
+.sgc-etapa--hecha .sgc-etapa__num { background: var(--ok-suave); color: var(--ok); }
+.sgc-etapa__cuerpo { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.sgc-etapa__cuerpo h3 { margin: 0 0 var(--esp-2); font-size: var(--texto-base); }
+.sgc-etapa__cuerpo p { margin: 0 0 var(--esp-2); }
+.sgc-etapa .sgc-acciones { margin-top: var(--esp-3); }
+
+/* La tarea vinculada: el estado real lo dice la ACTIVIDAD que la persona ve
+   en "Mi trabajo", no un campo copiado aquí. */
+.sgc-tarea-vinculada {
+  background: var(--superficie-2); border-radius: var(--radio-sm);
+  padding: var(--esp-3); margin: var(--esp-2) 0;
+}
+.sgc-tarea-vinculada p { margin: 0 0 var(--esp-2); }
+.sgc-porques { margin: 0 0 var(--esp-3); padding-left: var(--esp-5); color: var(--texto-2); }
+.sgc-porques li { margin-bottom: 2px; }
+
 /* v9.3: filtros del portafolio (estado + salud) */
 .sigso-py-filtros {
   display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap; margin: var(--esp-3) 0 var(--esp-4);

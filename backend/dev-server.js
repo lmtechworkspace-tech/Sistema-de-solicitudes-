@@ -73,7 +73,7 @@ function construirContexto() {
     ['CTA-DEMO-4', 'ladmin', 'Luis Admin', 'Administrador',
       ctx.hashPassword_('demo12345', 'sal-demo-4'), 'sal-demo-4',
       JSON.stringify(['luis@rld.cl']),
-      'ADM', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos']),
+      'ADM', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos', 'calidad']),
       'RLD', true, false, '', 'dev-server'],
     // Cuenta GERENCIA SIN modulo bandeja (solo el suyo) para probar que el
     // detalle de solo lectura se ve desde su propio panel sin ese modulo.

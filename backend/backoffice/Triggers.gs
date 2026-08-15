@@ -309,6 +309,14 @@ function recordarValidacionPendienteTrigger() {
   } catch (err) {
     logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarRecordatorioCompetenciasTrigger');
   }
+  // v10.0 Fase 3a (PRO-06): no conformidades con plazo vencido, con
+  // escalado a Direccion. Mismo criterio -- sin trigger propio, en
+  // try/catch, colgada de este slot de las 09:00.
+  try {
+    enviarAvisosNcVencidasTrigger();
+  } catch (err) {
+    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosNcVencidasTrigger');
+  }
   // v7.1 (notificaciones vivas, B5): mantenimiento diario -- purga las
   // notificaciones ya leidas o vencidas para que la hoja NOTIFICACIONES_APP
   // no crezca sin limite (cada sincronizacion del cliente la lee completa).
@@ -346,6 +354,12 @@ function enviarRecordatorioCalidadTrigger() {
 // que las anteriores, mismo motivo: poder forzarla a mano desde el editor.
 function enviarRecordatorioCompetenciasTrigger() {
   return Personas.recordatorioCompetencias();
+}
+
+// v10.0 Fase 3a: ver NoConformidades.recordatorioVencidas(). Nombrada igual
+// que las anteriores, mismo motivo: poder forzarla a mano desde el editor.
+function enviarAvisosNcVencidasTrigger() {
+  return NoConformidades.recordatorioVencidas();
 }
 
 // v7.1 (notificaciones vivas, B5): ver purgarNotificacionesApp_(). Nombrada

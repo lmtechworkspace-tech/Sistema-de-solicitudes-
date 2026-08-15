@@ -3497,6 +3497,47 @@ button {
 .sgc-form-fila { display: flex; gap: var(--esp-3); flex-wrap: wrap; }
 .sgc-form-fila > * { flex: 1 1 10rem; }
 
+/* v10.0 Fase 3a: no conformidades. */
+.sgc-kpis {
+  display: grid; gap: var(--esp-3); margin: var(--esp-3) 0 var(--esp-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr));
+}
+.sgc-nc--vencida { border-left-color: var(--critico); background: var(--critico-suave); }
+
+/* El ciclo de mejora es una secuencia: primero corregir, después entender
+   por qué, después evitar que se repita, y al final comprobar que funcionó.
+   Se pinta como pasos numerados porque el orden es la norma, no un detalle
+   de presentación -- definir la acción antes de la causa es exactamente el
+   error que la ISO 9001 §10.2 busca impedir. */
+.sgc-etapas { display: flex; flex-direction: column; gap: var(--esp-3); margin: var(--esp-4) 0; }
+.sgc-etapa {
+  display: flex; gap: var(--esp-3); padding: var(--esp-4);
+  background: var(--superficie); border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
+}
+.sgc-etapa__num {
+  flex: 0 0 auto; width: 1.75rem; height: 1.75rem; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--superficie-2); color: var(--texto-2);
+  font-weight: 700; font-size: var(--texto-sm);
+}
+.sgc-etapa--hecha { border-color: var(--ok); }
+.sgc-etapa--hecha .sgc-etapa__num { background: var(--ok-suave); color: var(--ok); }
+.sgc-etapa__cuerpo { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.sgc-etapa__cuerpo h3 { margin: 0 0 var(--esp-2); font-size: var(--texto-base); }
+.sgc-etapa__cuerpo p { margin: 0 0 var(--esp-2); }
+.sgc-etapa .sgc-acciones { margin-top: var(--esp-3); }
+
+/* La tarea vinculada: el estado real lo dice la ACTIVIDAD que la persona ve
+   en "Mi trabajo", no un campo copiado aquí. */
+.sgc-tarea-vinculada {
+  background: var(--superficie-2); border-radius: var(--radio-sm);
+  padding: var(--esp-3); margin: var(--esp-2) 0;
+}
+.sgc-tarea-vinculada p { margin: 0 0 var(--esp-2); }
+.sgc-porques { margin: 0 0 var(--esp-3); padding-left: var(--esp-5); color: var(--texto-2); }
+.sgc-porques li { margin-bottom: 2px; }
+
 /* v9.3: filtros del portafolio (estado + salud) */
 .sigso-py-filtros {
   display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap; margin: var(--esp-3) 0 var(--esp-4);
@@ -13026,6 +13067,8 @@ var Iconos = (function () {
       if (personaActivaId_) abrirPersona_(personaActivaId_); else cargarPersonas_();
     } else if (seccionActiva_ === 'capacitaciones') {
       cargarCapacitaciones_();
+    } else if (seccionActiva_ === 'nc') {
+      if (ncActivaId_) abrirNc_(ncActivaId_); else cargarNc_();
     } else {
       if (documentoActivoId_) abrirDocumento_(documentoActivoId_); else cargarListado_();
     }
@@ -13037,7 +13080,8 @@ var Iconos = (function () {
     var secciones = [
       { id: 'documentos', texto: 'Documentos' },
       { id: 'personas', texto: 'Personas' },
-      { id: 'capacitaciones', texto: 'Capacitaciones' }
+      { id: 'capacitaciones', texto: 'Capacitaciones' },
+      { id: 'nc', texto: 'No conformidades' }
     ];
     return '<div class="sigso-tabs sgc-secciones">' + secciones.map(function (s) {
       return '<button type="button" class="sigso-tab js-sgc-seccion' +
@@ -13051,6 +13095,7 @@ var Iconos = (function () {
         seccionActiva_ = btn.getAttribute('data-sec');
         documentoActivoId_ = null;
         personaActivaId_ = null;
+        ncActivaId_ = null;
         render_();
       });
     });
@@ -13080,6 +13125,7 @@ var Iconos = (function () {
   var seccionActiva_ = 'documentos';
   var documentoActivoId_ = null;
   var personaActivaId_ = null;
+  var ncActivaId_ = null;
   var pestanaFicha_ = 'datos';
   var puedeGestionar_ = false;
   var filtroTipo_ = '';
@@ -13340,7 +13386,7 @@ var Iconos = (function () {
           Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo confirmar.', tipo: 'error' });
           return;
         }
-        Componentes.aviso({ texto: 'Confirmado. Queda registrado con tu nombre y la fecha.', tipo: 'ok' });
+        Componentes.aviso({ texto: 'Confirmado. Queda registrado con tu nombre y la fecha.', tipo: 'exito' });
         abrirDocumento_(d.documento_id);
       });
     });
@@ -14039,7 +14085,7 @@ var Iconos = (function () {
         if (respuesta.data.requiere_capacitacion) {
           Componentes.aviso({
             texto: 'Guardada. Promedio ' + respuesta.data.promedio + ': se detectó necesidad de capacitación.',
-            tipo: 'aviso'
+            tipo: 'info'
           });
         }
         abrirPersona_(p.persona_id);
@@ -14554,6 +14600,538 @@ var Iconos = (function () {
       }).catch(function () {
         boton.disabled = false; boton.textContent = 'Cargar';
         Componentes.aviso({ texto: 'No se pudo leer o subir el archivo.', tipo: 'error' });
+      });
+    });
+  }
+
+  // ==========================================================================
+  // NO CONFORMIDADES (Fase 3a, PRO-06) — el motor de mejora
+  //
+  // La corrección y la acción correctiva NO se gestionan acá: son
+  // ACTIVIDADES que el responsable ve en "Mi trabajo". Esta pantalla es
+  // donde el Encargado SGC gobierna el ciclo, y muestra el estado real de
+  // esas actividades sin duplicarlo.
+  // ==========================================================================
+
+  var FUENTE_NC_ETIQUETA = {
+    AUDITORIA_INTERNA: 'Auditoría interna', AUDITORIA_EXTERNA: 'Auditoría externa',
+    QUEJA: 'Queja de cliente', REVISION_DIRECCION: 'Revisión por la dirección',
+    PROCESO: 'Detectada en el proceso', OTRO: 'Otra'
+  };
+  var ESTADO_NC_ETIQUETA = {
+    ABIERTA: 'Abierta', EN_CORRECCION: 'En corrección', EN_ACCION: 'En acción correctiva',
+    EN_VERIFICACION: 'Verificando eficacia', CERRADA: 'Cerrada', ANULADA: 'Anulada'
+  };
+
+  // La tarea vinculada llega con el estado crudo de ACTIVIDADES; acá se
+  // muestra en el idioma del resto del módulo.
+  var ESTADO_TAREA_ETIQUETA = {
+    NO_INICIADA: 'Sin empezar', EN_CURSO: 'En curso', BLOQUEADA: 'Bloqueada',
+    EN_REVISION: 'En revisión', TERMINADA: 'Terminada', CANCELADA: 'Cancelada'
+  };
+
+  var filtroNcAbiertas_ = false;
+
+  function cargarNc_() {
+    ncActivaId_ = null;
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando no conformidades...');
+    api_('listarNcSgc', filtroNcAbiertas_ ? { abiertas: true } : {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar.', 'error');
+        return;
+      }
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      pintarNc_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar las no conformidades.', 'error');
+    });
+  }
+
+  function pintarNc_(cont, data) {
+    var lista = data.no_conformidades || [];
+    var ind = data.indicadores || {};
+
+    var kpis = '<div class="sgc-kpis">' + [
+      Componentes.kpi({ etiqueta: 'Abiertas', valor: ind.abiertas || 0 }),
+      Componentes.kpi({ etiqueta: 'Con plazo vencido', valor: ind.vencidas || 0 }),
+      Componentes.kpi({ etiqueta: 'Cerradas', valor: ind.cerradas || 0 }),
+      Componentes.kpi({
+        etiqueta: 'Días promedio',
+        valor: ind.dias_promedio_resolucion === null || ind.dias_promedio_resolucion === undefined
+          ? '—' : ind.dias_promedio_resolucion
+      }),
+      Componentes.kpi({
+        etiqueta: '% eficacia',
+        valor: ind.pct_eficacia_positiva === null || ind.pct_eficacia_positiva === undefined
+          ? '—' : ind.pct_eficacia_positiva + '%'
+      })
+    ].join('') + '</div>';
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">Ciclo de mejora: corregir, entender por qué pasó, evitar que se repita y verificar que funcionó.</p>' +
+      (puedeGestionar_ ? Componentes.boton({ texto: '+ Registrar no conformidad', clase: 'js-sgc-nueva-nc' }) : '') +
+      '</div>' + kpis +
+      '<div class="sgc-filtros">' +
+        '<label class="sigso-campo-check"><input type="checkbox" id="sgc-nc-abiertas"' +
+          (filtroNcAbiertas_ ? ' checked' : '') + '> Ver solo las abiertas</label>' +
+      '</div>';
+
+    function wire() {
+      wireSecciones_(cont);
+      var nueva = cont.querySelector('.js-sgc-nueva-nc');
+      if (nueva) nueva.addEventListener('click', abrirFormularioNc_);
+      var chk = cont.querySelector('#sgc-nc-abiertas');
+      if (chk) chk.addEventListener('change', function () { filtroNcAbiertas_ = this.checked; cargarNc_(); });
+      cont.querySelectorAll('.js-sgc-abrir-nc').forEach(function (btn) {
+        btn.addEventListener('click', function () { abrirNc_(btn.getAttribute('data-id')); });
+      });
+    }
+
+    if (lista.length === 0) {
+      cont.innerHTML = cabecera + Componentes.vacio({
+        texto: filtroNcAbiertas_ ? 'No hay no conformidades abiertas.' : 'Todavía no hay no conformidades registradas.',
+        detalle: 'Se registran desde una auditoría, una queja, la revisión por la dirección o el día a día.'
+      });
+      wire();
+      return;
+    }
+
+    var filas = lista.map(function (nc) {
+      var cerrada = nc.estado === 'CERRADA' || nc.estado === 'ANULADA';
+      return '<button type="button" class="sgc-doc js-sgc-abrir-nc' +
+        (nc.vencida ? ' sgc-nc--vencida' : (cerrada ? ' sgc-doc--obsoleto' : '')) +
+        '" data-id="' + nc.nc_id + '">' +
+        '<div class="sgc-doc__top">' +
+          '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(nc.correlativo) + '</span>' +
+          '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(String(nc.descripcion).slice(0, 110)) + '</span>' +
+          Componentes.badge(ESTADO_NC_ETIQUETA[nc.estado] || nc.estado, cerrada ? 'neutro' : 'info') +
+          (nc.vencida ? Componentes.badge('Vencida', 'critico') : '') +
+          (nc.ciclo > 1 ? Componentes.badge('Ciclo ' + nc.ciclo, 'alerta') : '') +
+        '</div>' +
+        '<div class="sgc-doc__meta">' +
+          '<span>' + Componentes.escaparHtml(FUENTE_NC_ETIQUETA[nc.fuente] || nc.fuente) + '</span>' +
+          (nc.area_id ? '<span>' + Componentes.escaparHtml(nc.area_id) + '</span>' : '') +
+          '<span>' + Componentes.escaparHtml(nc.responsable_email) + '</span>' +
+          '<span>Detectada ' + fechaCorta_(nc.fecha_deteccion) + '</span>' +
+          (nc.etapa_actual
+            ? '<span>' + Componentes.escaparHtml(nc.etapa_actual) +
+              (nc.dias_para_plazo !== null
+                ? (nc.dias_para_plazo < 0
+                    ? ' · vencida hace ' + (-nc.dias_para_plazo) + ' d'
+                    : ' · ' + nc.dias_para_plazo + ' d')
+                : '') + '</span>'
+            : '') +
+        '</div>' +
+      '</button>';
+    }).join('');
+
+    cont.innerHTML = cabecera + '<div class="sgc-lista">' + filas + '</div>';
+    wire();
+  }
+
+  // --- ficha de la NC: el ciclo completo, en orden --------------------------
+
+  function abrirNc_(id) {
+    ncActivaId_ = id;
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando no conformidad...');
+    api_('getDetalleNcSgc', { nc_id: id }).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo abrir.', 'error');
+        return;
+      }
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      pintarFichaNc_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
+    });
+  }
+
+  // Una etapa del ciclo. El orden importa y se muestra: no se puede definir
+  // la acción correctiva antes de entender la causa.
+  function etapaNc_(numero, titulo, hecho, cuerpo, acciones) {
+    return '<div class="sgc-etapa' + (hecho ? ' sgc-etapa--hecha' : '') + '">' +
+      '<div class="sgc-etapa__num">' + (hecho ? '✓' : numero) + '</div>' +
+      '<div class="sgc-etapa__cuerpo">' +
+        '<h3>' + Componentes.escaparHtml(titulo) + '</h3>' +
+        cuerpo +
+        (acciones || '') +
+      '</div>' +
+    '</div>';
+  }
+
+  function tareaVinculadaHtml_(tarea, etiqueta) {
+    if (!tarea) return '';
+    return '<div class="sgc-tarea-vinculada">' +
+      '<p class="sigso-ayuda">' + Componentes.escaparHtml(etiqueta) + ' — asignada a <b>' +
+        Componentes.escaparHtml(tarea.responsable_email) + '</b> en <b>Mi trabajo</b>' +
+        (tarea.fecha_compromiso ? ', vence ' + fechaCorta_(tarea.fecha_compromiso) : '') + '</p>' +
+      '<div class="sgc-doc__top">' +
+        '<span class="sigso-badge sigso-mt-badge--' + tarea.semaforo + '">' +
+          Componentes.escaparHtml(tarea.semaforo_etiqueta) + '</span>' +
+        Componentes.badge(ESTADO_TAREA_ETIQUETA[tarea.estado] || tarea.estado,
+          tarea.terminada ? 'ok' : 'neutro') +
+        (tarea.avance_pct !== '' && tarea.avance_pct !== undefined && tarea.avance_pct !== null
+          ? '<span class="sigso-ayuda">' + tarea.avance_pct + '% de avance</span>' : '') +
+      '</div>' +
+    '</div>';
+  }
+
+  function pintarFichaNc_(cont, data) {
+    var nc = data.nc;
+    var r = data.resumen;
+    var puede = puedeGestionar_;
+    var cerrada = nc.estado === 'CERRADA' || nc.estado === 'ANULADA';
+
+    // 1) Corrección
+    var e1 = etapaNc_(1, 'Corrección inmediata',
+      !!nc.correccion_fecha_cierre,
+      (nc.correccion_descripcion
+        ? '<p>' + Componentes.escaparHtml(nc.correccion_descripcion) + '</p>' +
+          tareaVinculadaHtml_(data.correccion_actividad, 'Corrección') +
+          (nc.correccion_fecha_cierre
+            ? '<p class="sigso-ayuda">Cerrada el ' + fechaCorta_(nc.correccion_fecha_cierre) + '.</p>' : '')
+        : '<p class="sigso-ayuda">Qué se hace ahora para contener el problema. Plazo: ' +
+          fechaCorta_(nc.correccion_plazo) + ' (10 días hábiles).</p>'),
+      puede && !cerrada
+        ? '<div class="sgc-acciones">' +
+            (!nc.correccion_actividad_id
+              ? Componentes.boton({ texto: 'Definir corrección', clase: 'js-nc-correccion' })
+              : (!nc.correccion_fecha_cierre
+                  ? Componentes.boton({ texto: '✓ Marcar corrección cerrada', variante: 'secundario', clase: 'js-nc-cerrar-correccion' })
+                  : '')) +
+          '</div>'
+        : '');
+
+    // 2) Causa raíz (5 por qué)
+    var porques = [];
+    for (var i = 1; i <= 5; i++) {
+      if (nc['porque_' + i]) porques.push('<li>' + Componentes.escaparHtml(nc['porque_' + i]) + '</li>');
+    }
+    var e2 = etapaNc_(2, 'Análisis de causa (5 por qué)',
+      r.tiene_causa,
+      (r.tiene_causa
+        ? (porques.length ? '<ol class="sgc-porques">' + porques.join('') + '</ol>' : '') +
+          '<p><b>Causa raíz:</b> ' + Componentes.escaparHtml(nc.causa_raiz) + '</p>'
+        : '<p class="sigso-ayuda">Por qué ocurrió realmente. Sin esto, la acción correctiva ataca el síntoma.</p>'),
+      puede && !cerrada
+        ? '<div class="sgc-acciones">' +
+            Componentes.boton({
+              texto: r.tiene_causa ? 'Editar análisis' : 'Registrar análisis',
+              variante: r.tiene_causa ? 'secundario' : 'primario', clase: 'js-nc-causa'
+            }) +
+          '</div>'
+        : '');
+
+    // 3) Acción correctiva
+    var e3 = etapaNc_(3, 'Acción correctiva',
+      !!nc.accion_fecha_cierre,
+      (nc.accion_descripcion
+        ? '<p>' + Componentes.escaparHtml(nc.accion_descripcion) + '</p>' +
+          tareaVinculadaHtml_(data.accion_actividad, 'Acción correctiva') +
+          (nc.accion_fecha_cierre
+            ? '<p class="sigso-ayuda">Implementada el ' + fechaCorta_(nc.accion_fecha_cierre) + '.</p>' : '')
+        : '<p class="sigso-ayuda">Qué se cambia para que no vuelva a pasar. Plazo: 20 días hábiles desde la corrección.</p>'),
+      puede && !cerrada && r.tiene_causa
+        ? '<div class="sgc-acciones">' +
+            (!nc.accion_actividad_id
+              ? Componentes.boton({ texto: 'Definir acción correctiva', clase: 'js-nc-accion' })
+              : (!nc.accion_fecha_cierre
+                  ? Componentes.boton({ texto: '✓ Marcar acción implementada', variante: 'secundario', clase: 'js-nc-cerrar-accion' })
+                  : '')) +
+          '</div>'
+        : '');
+
+    // 4) Eficacia
+    var e4 = etapaNc_(4, 'Verificación de eficacia',
+      nc.eficacia_resultado === 'EFICAZ',
+      (nc.eficacia_resultado
+        ? '<p>' + (nc.eficacia_resultado === 'EFICAZ'
+            ? Componentes.badge('Eficaz', 'ok') : Componentes.badge('No eficaz', 'critico')) +
+          ' ' + Componentes.escaparHtml(nc.eficacia_observaciones || '') + '</p>' +
+          // Tras un "no eficaz" la NC vuelve a la etapa 3: sin esta linea el
+          // resultado del ciclo anterior se leeria como el estado de ahora.
+          (r.ciclo > 1 && nc.estado !== 'CERRADA'
+            ? '<p class="sigso-ayuda">Resultado del ciclo ' + (r.ciclo - 1) +
+              '. La verificación se repetirá con la acción correctiva nueva.</p>'
+            : '')
+        : '<p class="sigso-ayuda">¿Funcionó? Se verifica 60 días hábiles después de implementarla' +
+          (nc.eficacia_plazo ? ', desde el ' + fechaCorta_(nc.eficacia_plazo) : '') + '.</p>'),
+      puede && nc.estado === 'EN_VERIFICACION'
+        ? '<div class="sgc-acciones">' +
+            Componentes.boton({ texto: 'Verificar eficacia', clase: 'js-nc-eficacia' }) +
+          '</div>'
+        : '');
+
+    cont.innerHTML =
+      '<div class="sgc-detalle-cab">' +
+        Componentes.boton({ texto: '← No conformidades', variante: 'sutil', clase: 'js-nc-volver' }) +
+        '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(nc.correlativo) + '</span>' +
+        '<h1>' + Componentes.escaparHtml(String(nc.descripcion).slice(0, 90)) + '</h1>' +
+        Componentes.badge(ESTADO_NC_ETIQUETA[nc.estado] || nc.estado, cerrada ? 'neutro' : 'info') +
+        (r.vencida ? Componentes.badge('Plazo vencido', 'critico') : '') +
+      '</div>' +
+      (r.ciclo > 1
+        ? Componentes.alerta('Esta es la vuelta ' + r.ciclo + ' del ciclo: la acción correctiva anterior no fue eficaz.', 'aviso')
+        : '') +
+      '<div class="sgc-cuerpo">' +
+        '<dl class="sgc-ficha">' +
+          campoFicha_('Fuente', FUENTE_NC_ETIQUETA[nc.fuente] || nc.fuente) +
+          campoFicha_('Área', nc.area_id) +
+          campoFicha_('Responsable', nc.responsable_email) +
+          campoFicha_('Detectada', fechaCorta_(nc.fecha_deteccion)) +
+          campoFicha_('Detectada por', nc.detectada_por) +
+          (nc.fecha_cierre
+            ? campoFicha_(nc.estado === 'ANULADA' ? 'Anulada' : 'Cerrada', fechaCorta_(nc.fecha_cierre))
+            : '') +
+        '</dl>' +
+        '<p>' + Componentes.escaparHtml(nc.descripcion) + '</p>' +
+        '<div class="sgc-etapas">' + e1 + e2 + e3 + e4 + '</div>' +
+        (puede && !cerrada
+          ? '<div class="sgc-acciones">' +
+              Componentes.boton({ texto: 'Anular', variante: 'peligro', clase: 'js-nc-anular' }) +
+            '</div>'
+          : '') +
+      '</div>';
+
+    cont.querySelector('.js-nc-volver').addEventListener('click', cargarNc_);
+    wireFichaNc_(cont, nc);
+  }
+
+  function wireFichaNc_(cont, nc) {
+    function accion_(selector, fn) {
+      var b = cont.querySelector(selector);
+      if (b) b.addEventListener('click', fn);
+    }
+    function enviar_(accion, datos, exito) {
+      api_(accion, datos).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        if (exito) Componentes.aviso({ texto: exito, tipo: 'exito' });
+        abrirNc_(nc.nc_id);
+      });
+    }
+
+    accion_('.js-nc-correccion', function () { abrirFormularioAccionNc_(nc, 'CORRECCION'); });
+    accion_('.js-nc-accion', function () { abrirFormularioAccionNc_(nc, 'ACCION'); });
+    accion_('.js-nc-causa', function () { abrirFormularioCausaNc_(nc); });
+    accion_('.js-nc-eficacia', function () { abrirFormularioEficaciaNc_(nc); });
+
+    accion_('.js-nc-cerrar-correccion', function () {
+      Componentes.confirmar({
+        titulo: 'Cerrar la corrección',
+        mensaje: '¿Confirmas que la corrección ya se realizó? Después viene el análisis de causa.'
+      }).then(function (ok) {
+        if (ok) enviar_('cerrarEtapaNcSgc', { nc_id: nc.nc_id, etapa: 'CORRECCION' });
+      });
+    });
+    accion_('.js-nc-cerrar-accion', function () {
+      Componentes.confirmar({
+        titulo: 'Marcar acción implementada',
+        mensaje: 'Arranca el plazo de 60 días hábiles para verificar si funcionó.'
+      }).then(function (ok) {
+        if (ok) enviar_('cerrarEtapaNcSgc', { nc_id: nc.nc_id, etapa: 'ACCION' });
+      });
+    });
+    accion_('.js-nc-anular', function () {
+      Componentes.prompt({
+        titulo: 'Anular no conformidad',
+        mensaje: '¿Por qué se anula? Queda registrado (la no conformidad no se borra).'
+      }).then(function (motivo) {
+        if (motivo && String(motivo).trim()) enviar_('anularNcSgc', { nc_id: nc.nc_id, motivo: motivo });
+      });
+    });
+  }
+
+  // --- formularios de NC -----------------------------------------------------
+
+  function abrirFormularioNc_() {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Registrar no conformidad</h3>' +
+        '<form id="form-nc">' +
+          Componentes.campoTextarea({ id: 'nc-descripcion', label: 'Qué pasó', requerido: true,
+            placeholder: 'Describe la desviación detectada, con hechos concretos.' }) +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoSelect({
+              id: 'nc-fuente', label: '¿De dónde salió?', valor: 'PROCESO', placeholder: false,
+              opciones: Object.keys(FUENTE_NC_ETIQUETA).map(function (f) {
+                return { valor: f, texto: FUENTE_NC_ETIQUETA[f] };
+              })
+            }) +
+            Componentes.campoTexto({ id: 'nc-area', label: 'Área', placeholder: 'Ej: RRHH' }) +
+          '</div>' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'nc-responsable', label: 'Responsable', tipo: 'email', requerido: true,
+              placeholder: 'A quién se le asigna resolverla' }) +
+            Componentes.campoTexto({ id: 'nc-fecha', label: 'Fecha de detección', tipo: 'date' }) +
+          '</div>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Registrar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-nc').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('crearNcSgc', {
+        descripcion: document.getElementById('nc-descripcion').value,
+        fuente: document.getElementById('nc-fuente').value,
+        area_id: document.getElementById('nc-area').value,
+        responsable_email: document.getElementById('nc-responsable').value,
+        fecha_deteccion: document.getElementById('nc-fecha').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo registrar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        cargarNc_();
+      });
+    });
+  }
+
+  // Corrección y acción correctiva comparten formulario: ambas crean una
+  // ACTIVIDAD para el responsable, solo cambia el texto.
+  function abrirFormularioAccionNc_(nc, tipo) {
+    var esCorreccion = tipo === 'CORRECCION';
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">' + (esCorreccion ? 'Definir corrección' : 'Definir acción correctiva') + '</h3>' +
+        '<p class="sigso-ayuda">' +
+          (esCorreccion
+            ? 'Qué se hace ahora para contener el problema.'
+            : 'Qué se cambia para que la causa raíz no vuelva a producirlo.') +
+          ' Se creará como una tarea en <b>Mi trabajo</b> del responsable.</p>' +
+        '<form id="form-nc-accion">' +
+          Componentes.campoTextarea({ id: 'nca-descripcion', label: 'Descripción', requerido: true }) +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'nca-responsable', label: 'Responsable', tipo: 'email',
+              valor: nc.responsable_email }) +
+            Componentes.campoTexto({ id: 'nca-fecha', label: 'Fecha comprometida', tipo: 'date',
+              valor: fechaISO_(esCorreccion ? nc.correccion_plazo : '') }) +
+          '</div>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Crear y asignar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-nc-accion').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var datos = {
+        nc_id: nc.nc_id,
+        descripcion: document.getElementById('nca-descripcion').value,
+        responsable_email: document.getElementById('nca-responsable').value
+      };
+      var fecha = document.getElementById('nca-fecha').value;
+      if (fecha) datos.fecha_compromiso = fecha;
+      api_(esCorreccion ? 'registrarCorreccionNcSgc' : 'registrarAccionNcSgc', datos).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo crear.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: 'Creada y asignada. Le aparece en "Mi trabajo".', tipo: 'exito' });
+        abrirNc_(nc.nc_id);
+      });
+    });
+  }
+
+  function abrirFormularioCausaNc_(nc) {
+    var campos = '';
+    for (var i = 1; i <= 5; i++) {
+      campos += Componentes.campoTexto({
+        id: 'ncc-porque-' + i, label: '¿Por qué? (' + i + ')', valor: nc['porque_' + i],
+        requerido: i === 1,
+        placeholder: i === 1 ? '¿Por qué ocurrió?' : '¿Y por qué pasó eso?'
+      });
+    }
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Análisis de causa — 5 por qué</h3>' +
+        '<p class="sigso-ayuda">Encadena los porqués hasta llegar a algo que puedas cambiar. ' +
+          'No siempre hacen falta los cinco.</p>' +
+        '<form id="form-nc-causa">' +
+          campos +
+          Componentes.campoTextarea({ id: 'ncc-causa', label: 'Causa raíz', valor: nc.causa_raiz, requerido: true,
+            placeholder: 'La causa real, la que hay que atacar.' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar análisis', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-nc-causa').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var datos = { nc_id: nc.nc_id, causa_raiz: document.getElementById('ncc-causa').value };
+      for (var j = 1; j <= 5; j++) datos['porque_' + j] = document.getElementById('ncc-porque-' + j).value;
+      api_('registrarCausaNcSgc', datos).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        abrirNc_(nc.nc_id);
+      });
+    });
+  }
+
+  function abrirFormularioEficaciaNc_(nc) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Verificar eficacia</h3>' +
+        '<p class="sigso-ayuda">¿La acción correctiva evitó que el problema se repitiera?</p>' +
+        '<form id="form-nc-eficacia">' +
+          Componentes.campoSelect({
+            id: 'nce-resultado', label: 'Resultado', valor: 'EFICAZ', placeholder: false,
+            opciones: [
+              { valor: 'EFICAZ', texto: 'Eficaz — se cierra la no conformidad' },
+              { valor: 'NO_EFICAZ', texto: 'No eficaz — se reabre con un ciclo nuevo' }
+            ]
+          }) +
+          Componentes.campoTextarea({ id: 'nce-obs', label: 'Cómo lo verificaste', requerido: true,
+            placeholder: 'Qué revisaste y qué encontraste. Es la evidencia de que se comprobó.' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-nc-eficacia').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var resultado = document.getElementById('nce-resultado').value;
+      api_('verificarEficaciaNcSgc', {
+        nc_id: nc.nc_id, resultado: resultado,
+        observaciones: document.getElementById('nce-obs').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({
+          texto: resultado === 'EFICAZ' ? 'No conformidad cerrada.' : 'Reabierta: hay que replantear la acción correctiva.',
+          tipo: resultado === 'EFICAZ' ? 'exito' : 'info'
+        });
+        abrirNc_(nc.nc_id);
       });
     });
   }

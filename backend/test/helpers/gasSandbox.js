@@ -174,6 +174,11 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // (rolSgc_, gobiernaSgc_, subirArchivoSgc_...) y de Jefatura.gs
   // (obtenerEquipoJefe_, jefeDeSubordinado_), ambos ya cargados arriba.
   'Personas.gs',
+  // v10.0 Fase 3a (PRO-06): no conformidades. Usa Actividades.crear y
+  // semaforoActividad_ (Actividades.gs, ya cargado) para que la correccion
+  // y la accion correctiva SEAN actividades de "Mi trabajo", y los helpers
+  // de dia habil de Utils.gs.
+  'NoConformidades.gs',
   'Triggers.gs',
   'Code.gs'
 ];

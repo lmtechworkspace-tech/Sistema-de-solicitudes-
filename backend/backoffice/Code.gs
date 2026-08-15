@@ -209,7 +209,17 @@ var BACKOFFICE_ACTIONS = {
   listarCapacitacionesSgc: handleListarCapacitacionesSgc_,
   guardarCapacitacionSgc: handleGuardarCapacitacionSgc_,
   registrarRealizacionCapacitacionSgc: handleRegistrarRealizacionCapacitacionSgc_,
-  registrarEficaciaCapacitacionSgc: handleRegistrarEficaciaCapacitacionSgc_
+  registrarEficaciaCapacitacionSgc: handleRegistrarEficaciaCapacitacionSgc_,
+  // v10.0 Fase 3a (PRO-06): no conformidades y acciones correctivas.
+  listarNcSgc: handleListarNcSgc_,
+  getDetalleNcSgc: handleGetDetalleNcSgc_,
+  crearNcSgc: handleCrearNcSgc_,
+  registrarCorreccionNcSgc: handleRegistrarCorreccionNcSgc_,
+  registrarCausaNcSgc: handleRegistrarCausaNcSgc_,
+  registrarAccionNcSgc: handleRegistrarAccionNcSgc_,
+  cerrarEtapaNcSgc: handleCerrarEtapaNcSgc_,
+  verificarEficaciaNcSgc: handleVerificarEficaciaNcSgc_,
+  anularNcSgc: handleAnularNcSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -372,7 +382,18 @@ var MODULO_POR_ACCION = {
   registrarEvaluacionSgc: 'calidad',
   guardarCapacitacionSgc: 'calidad',
   registrarRealizacionCapacitacionSgc: 'calidad',
-  registrarEficaciaCapacitacionSgc: 'calidad'
+  registrarEficaciaCapacitacionSgc: 'calidad',
+  // v10.0 Fase 3a: quien ve QUE no conformidad lo acota NoConformidades.gs
+  // (quien gobierna el SGC ve todas; el resto, solo las suyas).
+  listarNcSgc: ['calidad', 'gerencia'],
+  getDetalleNcSgc: ['calidad', 'gerencia'],
+  crearNcSgc: 'calidad',
+  registrarCorreccionNcSgc: 'calidad',
+  registrarCausaNcSgc: 'calidad',
+  registrarAccionNcSgc: 'calidad',
+  cerrarEtapaNcSgc: 'calidad',
+  verificarEficaciaNcSgc: 'calidad',
+  anularNcSgc: 'calidad'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -980,6 +1001,44 @@ function handleRegistrarRealizacionCapacitacionSgc_(data, contexto) {
 
 function handleRegistrarEficaciaCapacitacionSgc_(data, contexto) {
   return responderResultado_(Personas.registrarEficacia(data, contexto));
+}
+
+// v10.0 Fase 3a (PRO-06): el motor de mejora. NoConformidades.gs acota por
+// su cuenta quien ve que, por eso aca no hay logica de permisos.
+function handleListarNcSgc_(data, contexto) {
+  return responderResultado_(NoConformidades.listar(data, contexto));
+}
+
+function handleGetDetalleNcSgc_(data, contexto) {
+  return responderResultado_(NoConformidades.getDetalle(data, contexto));
+}
+
+function handleCrearNcSgc_(data, contexto) {
+  return responderResultado_(NoConformidades.crear(data, contexto));
+}
+
+function handleRegistrarCorreccionNcSgc_(data, contexto) {
+  return responderResultado_(NoConformidades.registrarCorreccion(data, contexto));
+}
+
+function handleRegistrarCausaNcSgc_(data, contexto) {
+  return responderResultado_(NoConformidades.registrarCausa(data, contexto));
+}
+
+function handleRegistrarAccionNcSgc_(data, contexto) {
+  return responderResultado_(NoConformidades.registrarAccion(data, contexto));
+}
+
+function handleCerrarEtapaNcSgc_(data, contexto) {
+  return responderResultado_(NoConformidades.cerrarEtapa(data, contexto));
+}
+
+function handleVerificarEficaciaNcSgc_(data, contexto) {
+  return responderResultado_(NoConformidades.verificarEficacia(data, contexto));
+}
+
+function handleAnularNcSgc_(data, contexto) {
+  return responderResultado_(NoConformidades.anular(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

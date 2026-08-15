@@ -112,13 +112,23 @@ var Actividades = {
     // rolEnProyecto_ vive en Proyectos.gs (mismo scope global de Apps
     // Script); si no hay proyecto_id, este bloque no cambia nada del
     // comportamiento de siempre.
+    // v10.0 (Fase 3a, SGC): tercer circulo, con el mismo criterio. Quien
+    // gobierna el SGC (Encargado SGC / ADM) puede asignar la CORRECCION o
+    // la ACCION CORRECTIVA de una no conformidad a quien corresponda,
+    // aunque no sea su subordinado en JEFATURAS -- una NC cruza areas por
+    // definicion, y el Encargado SGC no es jefe de nadie. Se exige que la
+    // actividad venga marcada con sgc_origen_tipo, asi este permiso solo
+    // aplica al SGC y no abre un portillo general.
+    // gobiernaSgc_/rolSgc_ viven en Calidad.gs (mismo scope global de Apps
+    // Script); sin sgc_origen_tipo, este bloque no cambia nada.
     if (!esParaSiMismo && contexto.rol !== 'ADM') {
       var equipo = obtenerEquipoJefe_(contexto.email).map(normalizarEmail_);
       var esDelEquipoJefatura = equipo.indexOf(responsableEmail) !== -1;
       var esDelEquipoProyecto = data.proyecto_id &&
         !!rolEnProyecto_(data.proyecto_id, contexto) &&
         !!rolEnProyecto_(data.proyecto_id, { email: responsableEmail });
-      if (!esDelEquipoJefatura && !esDelEquipoProyecto) {
+      var esTareaDelSgc = !!data.sgc_origen_tipo && gobiernaSgc_(contexto, rolSgc_(contexto));
+      if (!esDelEquipoJefatura && !esDelEquipoProyecto && !esTareaDelSgc) {
         return { _forbidden: true, message: 'Solo puedes crear actividades para tu equipo.' };
       }
     }
@@ -190,7 +200,15 @@ var Actividades = {
       // v9.4: dependencia opcional tarea<->tarea (Proyectos.crearTarea ya
       // valida que sea del mismo proyecto antes de llegar aca). Informativa,
       // no bloquea nada -- ver Proyectos.listarTareas para como se usa.
-      depende_de: data.depende_de || ''
+      depende_de: data.depende_de || '',
+      // v10.0 Fase 3a (SGC): de que cosa del SGC nacio esta actividad --
+      // hoy, la correccion o la accion correctiva de una NC
+      // (NoConformidades.gs). Aditivo: una actividad normal de "Mi trabajo"
+      // los deja vacios y se comporta igual que siempre. Es lo que permite
+      // que una accion correctiva le llegue al responsable donde ya
+      // trabaja, en vez de en una pantalla aparte del modulo ISO.
+      sgc_origen_tipo: data.sgc_origen_tipo || '',
+      sgc_origen_id: data.sgc_origen_id || ''
     };
     agregarFila_(SHEETS.ACTIVIDADES, actividad);
     registrarEventoActividad_(actividad.actividad_id, 'CREADA', contexto, '');

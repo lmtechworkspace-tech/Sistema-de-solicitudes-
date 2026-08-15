@@ -129,7 +129,9 @@ var SHEETS = {
   // v10.0 Fase 2b: idem -- copia solo para que el esquema no diverja.
   SGC_EVALUACIONES: 'SGC_EVALUACIONES',
   SGC_CAPACITACIONES: 'SGC_CAPACITACIONES',
-  SGC_CAPACITACION_ASISTENTES: 'SGC_CAPACITACION_ASISTENTES'
+  SGC_CAPACITACION_ASISTENTES: 'SGC_CAPACITACION_ASISTENTES',
+  // v10.0 Fase 3a: idem -- copia solo para que el esquema no diverja.
+  SGC_NC: 'SGC_NC'
 };
 
 var COLUMNAS = {
@@ -406,7 +408,9 @@ var COLUMNAS = {
     // backend/backoffice/Constantes.gs.
     'proyecto_id', 'hito_id',
     // v9.4: ver la nota identica en backend/backoffice/Constantes.gs.
-    'depende_de'
+    'depende_de',
+    // v10.0 Fase 3a: ver la nota identica en backend/backoffice/Constantes.gs.
+    'sgc_origen_tipo', 'sgc_origen_id'
   ],
   ACTIVIDADES_BITACORA: [
     'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',
@@ -520,6 +524,20 @@ var COLUMNAS = {
   ],
   SGC_CAPACITACION_ASISTENTES: [
     'asistencia_id', 'capacitacion_id', 'persona_id', 'asistio', 'fecha'
+  ],
+  // v10.0 Fase 3a (PRO-06): ver la nota identica en
+  // backend/backoffice/Constantes.gs sobre cada campo.
+  SGC_NC: [
+    'nc_id', 'correlativo', 'fuente', 'origen_ref', 'descripcion',
+    'area_id', 'detectada_por', 'fecha_deteccion', 'responsable_email',
+    'estado', 'ciclo',
+    'correccion_descripcion', 'correccion_actividad_id',
+    'correccion_plazo', 'correccion_fecha_cierre',
+    'porque_1', 'porque_2', 'porque_3', 'porque_4', 'porque_5', 'causa_raiz',
+    'accion_descripcion', 'accion_actividad_id',
+    'accion_plazo', 'accion_fecha_cierre',
+    'eficacia_plazo', 'eficacia_fecha', 'eficacia_resultado', 'eficacia_observaciones',
+    'fecha_cierre', 'cerrada_por', 'fecha_creacion', 'activa'
   ]
 };
 

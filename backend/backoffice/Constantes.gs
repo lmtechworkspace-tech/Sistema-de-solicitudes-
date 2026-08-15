@@ -151,7 +151,11 @@ var SHEETS = {
   // formarla cuando no.
   SGC_EVALUACIONES: 'SGC_EVALUACIONES',
   SGC_CAPACITACIONES: 'SGC_CAPACITACIONES',
-  SGC_CAPACITACION_ASISTENTES: 'SGC_CAPACITACION_ASISTENTES'
+  SGC_CAPACITACION_ASISTENTES: 'SGC_CAPACITACION_ASISTENTES',
+  // v10.0 Fase 3a (PRO-06): no conformidades y acciones correctivas. Es el
+  // motor de mejora del SGC y lo que la auditoria de certificacion revisa
+  // con mas profundidad (§10.2 de la norma).
+  SGC_NC: 'SGC_NC'
 };
 
 var COLUMNAS = {
@@ -432,7 +436,14 @@ var COLUMNAS = {
     // marcar "potencialmente comprometida" cuando la tarea de la que se
     // depende esta atrasada (bandera derivada, ver §I de la propuesta:
     // "nada mueve fechas ni cierra cosas solo").
-    'depende_de'
+    'depende_de',
+    // v10.0 Fase 3a (SGC): de que cosa del SGC nacio esta actividad.
+    // sgc_origen_tipo: NC_CORRECCION | NC_ACCION (mas adelante tambien
+    // acuerdos de revision por la direccion y tareas de auditoria).
+    // sgc_origen_id: el id de esa NC.
+    // Aditivas: una actividad normal de "Mi trabajo" las deja vacias y se
+    // comporta exactamente igual que antes.
+    'sgc_origen_tipo', 'sgc_origen_id'
   ],
   ACTIVIDADES_BITACORA: [
     'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',
@@ -627,6 +638,43 @@ var COLUMNAS = {
   // quienes asistieron.
   SGC_CAPACITACION_ASISTENTES: [
     'asistencia_id', 'capacitacion_id', 'persona_id', 'asistio', 'fecha'
+  ],
+
+  // v10.0 Fase 3a (PRO-06) ------------------------------------------------
+  // UNA fila = UN formulario FO-PRO-06-01 completo, con sus 4 fases. Se
+  // mantiene en una sola tabla a proposito: es como esta el formulario en
+  // papel, y partirlo en 4 obligaria a reconstruir el ciclo con joins para
+  // responder la pregunta que el auditor hace siempre ("muestreme una NC de
+  // punta a punta").
+  //
+  // fuente: AUDITORIA_INTERNA | AUDITORIA_EXTERNA | QUEJA |
+  //         REVISION_DIRECCION | PROCESO | OTRO.
+  // origen_ref: id del hallazgo/queja que la origino (Fases 3b y 4), para
+  //   la vinculacion bidireccional que pide la especificacion.
+  // estado: ABIERTA | EN_CORRECCION | EN_ACCION | EN_VERIFICACION |
+  //         CERRADA | ANULADA.
+  //
+  // correccion_actividad_id / accion_actividad_id: LA DECISION CENTRAL de
+  //   esta fase. La correccion y la accion correctiva NO son campos de
+  //   texto con una fecha: son ACTIVIDADES reales (motor v7.0), y aca solo
+  //   se guarda su id. Asi el responsable las ve en "Mi trabajo" junto a
+  //   todo lo demas, con check-in, semaforo y alertas -- sin aprender un
+  //   flujo nuevo ni entrar a "el modulo ISO".
+  //
+  // Los plazos (10 / 20 / 60) son DIAS HABILES, como exige PRO-06.
+  // ciclo: si la eficacia sale negativa la NC se reabre y arranca un ciclo
+  //   nuevo; el numero permite distinguirlos sin perder el anterior.
+  SGC_NC: [
+    'nc_id', 'correlativo', 'fuente', 'origen_ref', 'descripcion',
+    'area_id', 'detectada_por', 'fecha_deteccion', 'responsable_email',
+    'estado', 'ciclo',
+    'correccion_descripcion', 'correccion_actividad_id',
+    'correccion_plazo', 'correccion_fecha_cierre',
+    'porque_1', 'porque_2', 'porque_3', 'porque_4', 'porque_5', 'causa_raiz',
+    'accion_descripcion', 'accion_actividad_id',
+    'accion_plazo', 'accion_fecha_cierre',
+    'eficacia_plazo', 'eficacia_fecha', 'eficacia_resultado', 'eficacia_observaciones',
+    'fecha_cierre', 'cerrada_por', 'fecha_creacion', 'activa'
   ]
 };
 

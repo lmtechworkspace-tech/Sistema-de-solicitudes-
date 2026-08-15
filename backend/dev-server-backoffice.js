@@ -70,7 +70,7 @@ function construirContexto() {
     // P4: cuenta ADM con todos los modulos, para probar Administracion.
     ['CTA-DEMO-4', 'ladmin', 'Luis Admin', 'Administrador', 'hash-no-usado-aqui', 'sal',
       JSON.stringify(['luis@rld.cl']),
-      'ADM', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos']),
+      'ADM', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos', 'calidad']),
       'RLD', true, false, '', 'dev-server'],
     // Cuenta GERENCIA SIN modulo bandeja -- prueba que el detalle de solo
     // lectura se vea desde el Panel de Gerencia sin ese modulo (ver Code.gs,
@@ -252,6 +252,10 @@ function construirContexto() {
     ['SGCI-4', 'SGCP-1', 'Descriptor de cargo', '', '', 'PENDIENTE', ''],
     ['SGCI-5', 'SGCP-1', 'Inducción ISO 9001', '', '', 'PENDIENTE', '']
   ]);
+  // v10.0 Fase 3a: no conformidades (vacia -- el ciclo completo se prueba
+  // creandola desde la UI, que es lo que valida que la accion correctiva
+  // aparezca en "Mi trabajo").
+  seedSheet(ctx, 'SGC_NC', ctx.COLUMNAS.SGC_NC);
   seedSheet(ctx, 'SGC_ROLES', ctx.COLUMNAS.SGC_ROLES, [
     ['SGCR-1', 'admin@homepymes.cl', 'ENCARGADO_SGC', '', '', true, new Date().toISOString()],
     ['SGCR-2', 'jefe@homepymes.cl', 'OPERATIVO', 'CONTABILIDAD', '', true, new Date().toISOString()],
