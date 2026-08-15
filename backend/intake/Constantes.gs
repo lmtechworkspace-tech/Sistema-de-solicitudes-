@@ -125,7 +125,11 @@ var SHEETS = {
   SGC_PERSONAS: 'SGC_PERSONAS',
   SGC_DESCRIPTORES: 'SGC_DESCRIPTORES',
   SGC_PERSONA_DOCUMENTOS: 'SGC_PERSONA_DOCUMENTOS',
-  SGC_INDUCCIONES: 'SGC_INDUCCIONES'
+  SGC_INDUCCIONES: 'SGC_INDUCCIONES',
+  // v10.0 Fase 2b: idem -- copia solo para que el esquema no diverja.
+  SGC_EVALUACIONES: 'SGC_EVALUACIONES',
+  SGC_CAPACITACIONES: 'SGC_CAPACITACIONES',
+  SGC_CAPACITACION_ASISTENTES: 'SGC_CAPACITACION_ASISTENTES'
 };
 
 var COLUMNAS = {
@@ -499,6 +503,23 @@ var COLUMNAS = {
   SGC_INDUCCIONES: [
     'induccion_id', 'persona_id', 'item', 'fecha', 'relator_email',
     'estado', 'observaciones'
+  ],
+  // v10.0 Fase 2b (PRO-02): ver la nota identica en
+  // backend/backoffice/Constantes.gs sobre cada hoja y cada campo.
+  SGC_EVALUACIONES: [
+    'evaluacion_id', 'persona_id', 'fecha', 'evaluador_email',
+    'r1', 'r2', 'r3', 'r4', 'h1', 'h2', 'h3', 'h4',
+    'promedio', 'requiere_capacitacion', 'observaciones',
+    'proxima_evaluacion'
+  ],
+  SGC_CAPACITACIONES: [
+    'capacitacion_id', 'nombre', 'descripcion', 'horas',
+    'fecha_programada', 'fecha_realizada', 'relator', 'estado',
+    'eficacia_fecha', 'eficacia_resultado', 'eficacia_observaciones',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+  SGC_CAPACITACION_ASISTENTES: [
+    'asistencia_id', 'capacitacion_id', 'persona_id', 'asistio', 'fecha'
   ]
 };
 

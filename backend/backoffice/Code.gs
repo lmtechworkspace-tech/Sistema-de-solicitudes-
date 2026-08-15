@@ -203,7 +203,13 @@ var BACKOFFICE_ACTIONS = {
   guardarDescriptorSgc: handleGuardarDescriptorSgc_,
   guardarDocumentoPersonaSgc: handleGuardarDocumentoPersonaSgc_,
   descargarDocumentoPersonaSgc: handleDescargarDocumentoPersonaSgc_,
-  registrarInduccionSgc: handleRegistrarInduccionSgc_
+  registrarInduccionSgc: handleRegistrarInduccionSgc_,
+  // v10.0 Fase 2b: competencias y capacitaciones.
+  registrarEvaluacionSgc: handleRegistrarEvaluacionSgc_,
+  listarCapacitacionesSgc: handleListarCapacitacionesSgc_,
+  guardarCapacitacionSgc: handleGuardarCapacitacionSgc_,
+  registrarRealizacionCapacitacionSgc: handleRegistrarRealizacionCapacitacionSgc_,
+  registrarEficaciaCapacitacionSgc: handleRegistrarEficaciaCapacitacionSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -358,7 +364,15 @@ var MODULO_POR_ACCION = {
   desvincularPersonaSgc: 'calidad',
   guardarDescriptorSgc: 'calidad',
   guardarDocumentoPersonaSgc: 'calidad',
-  registrarInduccionSgc: 'calidad'
+  registrarInduccionSgc: 'calidad',
+  // v10.0 Fase 2b: el programa de capacitacion es de lectura general dentro
+  // del SGC (todos deben poder ver a que se los convoco); registrar y
+  // evaluar lo acota Personas.gs al Encargado SGC / jefatura.
+  listarCapacitacionesSgc: ['calidad', 'gerencia'],
+  registrarEvaluacionSgc: 'calidad',
+  guardarCapacitacionSgc: 'calidad',
+  registrarRealizacionCapacitacionSgc: 'calidad',
+  registrarEficaciaCapacitacionSgc: 'calidad'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -946,6 +960,26 @@ function handleDescargarDocumentoPersonaSgc_(data, contexto) {
 
 function handleRegistrarInduccionSgc_(data, contexto) {
   return responderResultado_(Personas.registrarInduccion(data, contexto));
+}
+
+function handleRegistrarEvaluacionSgc_(data, contexto) {
+  return responderResultado_(Personas.registrarEvaluacion(data, contexto));
+}
+
+function handleListarCapacitacionesSgc_(data, contexto) {
+  return responderResultado_(Personas.listarCapacitaciones(data, contexto));
+}
+
+function handleGuardarCapacitacionSgc_(data, contexto) {
+  return responderResultado_(Personas.guardarCapacitacion(data, contexto));
+}
+
+function handleRegistrarRealizacionCapacitacionSgc_(data, contexto) {
+  return responderResultado_(Personas.registrarRealizacion(data, contexto));
+}
+
+function handleRegistrarEficaciaCapacitacionSgc_(data, contexto) {
+  return responderResultado_(Personas.registrarEficacia(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

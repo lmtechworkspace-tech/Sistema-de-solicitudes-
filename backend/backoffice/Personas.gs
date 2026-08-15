@@ -95,6 +95,12 @@ var Personas = {
     var induccion = leerFilasSeguro_(SHEETS.SGC_INDUCCIONES)
       .filter(function (i) { return i.persona_id === persona.persona_id; });
 
+    // v10.0 Fase 2b: historial de evaluaciones, mas reciente primero.
+    var evaluaciones = leerFilasSeguro_(SHEETS.SGC_EVALUACIONES)
+      .filter(function (e) { return e.persona_id === persona.persona_id; })
+      .sort(function (a, b) { return new Date(b.fecha || 0) - new Date(a.fecha || 0); });
+    var ultimaEval = evaluaciones[0] || null;
+
     return {
       persona: persona,
       puede_gestionar: gobierna,
@@ -102,6 +108,19 @@ var Personas = {
       // no gobierne el SGC (§15 de la especificacion: "Jefatura de area ->
       // monitorear personal a cargo").
       puede_gestionar_induccion: gobierna || esJefaturaDe_(persona, contexto),
+      // Evaluar es de la jefatura directa (asi lo pide PRO-02) o del
+      // Encargado SGC; y nadie se evalua a si mismo.
+      puede_evaluar: (gobierna || esJefaturaDe_(persona, contexto)) &&
+        !(normalizarEmailSgc_(persona.usuario_email) === normalizarEmailSgc_(contexto.email) && !gobierna),
+      items_evaluacion: ITEMS_EVALUACION_SGC,
+      evaluaciones: evaluaciones,
+      ultima_evaluacion: ultimaEval,
+      evaluacion_vencida: !ultimaEval || (ultimaEval.proxima_evaluacion &&
+        new Date(ultimaEval.proxima_evaluacion) < new Date()),
+      // Horas de formacion del ano en curso (Objetivo de Calidad N°4).
+      horas_formacion_anio: (horasFormacionPorPersonaSgc_(new Date().getFullYear())
+        .filter(function (h) { return h.persona_id === persona.persona_id; })[0] || { horas: 0 }).horas,
+      meta_horas_formacion: META_HORAS_FORMACION_SGC,
       descriptores: descriptores,
       descriptor_vigente: descriptores.filter(function (d) { return esVerdaderoSgc_(d.vigente); })[0] || null,
       documentos: documentos,
@@ -331,7 +350,377 @@ var Personas = {
       relator_email: completada ? (normalizarEmailSgc_(data.relator_email) || normalizarEmailSgc_(contexto.email)) : '',
       observaciones: data.observaciones || ''
     });
+  },
+
+  // --- Monitoreo de competencias (FO-PRO-02-04, Fase 2b) --------------------
+  // Quien evalua: la JEFATURA DIRECTA (asi lo pide la especificacion: "el
+  // evaluador es la jefatura directa segun organigrama") o el Encargado
+  // SGC / ADM. Nadie se evalua a si mismo -- una autoevaluacion no es
+  // evidencia de competencia para un auditor.
+  registrarEvaluacion: function (data, contexto) {
+    var persona = buscarPersonaSgc_(data.persona_id);
+    if (!persona) return errorValidacion_('persona_id', 'Persona no encontrada.');
+    var rol = rolSgc_(contexto);
+    var gobierna = gobiernaSgc_(contexto, rol);
+    if (!(gobierna || esJefaturaDe_(persona, contexto))) {
+      return { _forbidden: true, message: 'Solo la jefatura directa o el Encargado SGC pueden evaluar.' };
+    }
+    if (normalizarEmailSgc_(persona.usuario_email) === normalizarEmailSgc_(contexto.email) && !gobierna) {
+      return { _forbidden: true, message: 'Nadie puede evaluarse a sí mismo.' };
+    }
+
+    var puntajes = {};
+    var faltante = null;
+    ITEMS_EVALUACION_SGC.forEach(function (item) {
+      var valor = Number(data[item.clave]);
+      if (!(valor >= 1 && valor <= 4)) faltante = item.clave;
+      puntajes[item.clave] = valor;
+    });
+    if (faltante) {
+      return errorValidacion_(faltante, 'Cada ítem se califica de 1 a 4.');
+    }
+
+    var suma = 0;
+    ITEMS_EVALUACION_SGC.forEach(function (item) { suma += puntajes[item.clave]; });
+    var promedio = Math.round((suma / ITEMS_EVALUACION_SGC.length) * 100) / 100;
+    var fecha = data.fecha || new Date().toISOString();
+
+    var evaluacion = {
+      evaluacion_id: Utilities.getUuid(),
+      persona_id: persona.persona_id,
+      fecha: fecha,
+      evaluador_email: normalizarEmailSgc_(contexto.email),
+      r1: puntajes.r1, r2: puntajes.r2, r3: puntajes.r3, r4: puntajes.r4,
+      h1: puntajes.h1, h2: puntajes.h2, h3: puntajes.h3, h4: puntajes.h4,
+      promedio: promedio,
+      // Regla de la especificacion: promedio bajo 3 dispara la necesidad de
+      // capacitacion. Se DERIVA del puntaje, no se marca a mano -- asi no
+      // puede quedar en desacuerdo con la evaluacion real.
+      requiere_capacitacion: promedio < UMBRAL_CAPACITACION_SGC,
+      observaciones: data.observaciones || '',
+      proxima_evaluacion: sumarMesesSgc_(fecha, 12)
+    };
+    agregarFila_(SHEETS.SGC_EVALUACIONES, evaluacion);
+    registrarLogSgc_('SGC_EVALUACION', persona.nombre + ' promedio ' + promedio, contexto);
+
+    if (evaluacion.requiere_capacitacion) {
+      // El hallazgo no sirve si se queda en la planilla: se avisa al
+      // Encargado SGC, que es quien programa la capacitacion.
+      leerFilasSeguro_(SHEETS.SGC_ROLES).forEach(function (r) {
+        if (esVerdaderoActivoSgc_(r) && r.rol_sgc === 'ENCARGADO_SGC') {
+          encolarNotificacionApp_(r.usuario_email, 'SGC_COMPETENCIA',
+            'Necesidad de capacitación detectada',
+            persona.nombre + ' obtuvo promedio ' + promedio + ' en su evaluación de competencias.',
+            'calidad', 'Ver ficha', 72);
+        }
+      });
+    }
+    return evaluacion;
+  },
+
+  // --- Capacitaciones (FO-PRO-02-03 programa / FO-PRO-02-05 registro) -------
+  listarCapacitaciones: function (data, contexto) {
+    var rol = rolSgc_(contexto);
+    var gobierna = gobiernaSgc_(contexto, rol);
+    var capacitaciones = leerFilasSeguro_(SHEETS.SGC_CAPACITACIONES).filter(esActivoSgc_);
+    var asistentes = leerFilasSeguro_(SHEETS.SGC_CAPACITACION_ASISTENTES);
+    var personas = leerFilasSeguro_(SHEETS.SGC_PERSONAS).filter(esActivoSgc_);
+    var nombrePorId = {};
+    personas.forEach(function (p) { nombrePorId[p.persona_id] = p.nombre; });
+
+    var anio = data && data.anio ? Number(data.anio) : new Date().getFullYear();
+
+    return {
+      puede_gestionar: gobierna,
+      anio: anio,
+      capacitaciones: capacitaciones.map(function (c) {
+        var suyos = asistentes.filter(function (a) { return a.capacitacion_id === c.capacitacion_id; });
+        return {
+          capacitacion_id: c.capacitacion_id,
+          nombre: c.nombre,
+          descripcion: c.descripcion,
+          horas: Number(c.horas) || 0,
+          fecha_programada: c.fecha_programada,
+          fecha_realizada: c.fecha_realizada,
+          relator: c.relator,
+          estado: c.estado,
+          eficacia_fecha: c.eficacia_fecha,
+          eficacia_resultado: c.eficacia_resultado,
+          // Aviso derivado: la especificacion pide evaluar la eficacia a 60
+          // dias de realizada. Se calcula al leer, nunca queda desfasado.
+          eficacia_pendiente: eficaciaPendienteSgc_(c),
+          total_convocados: suyos.length,
+          total_asistieron: suyos.filter(function (a) { return esVerdaderoSgc_(a.asistio); }).length,
+          asistentes: suyos.map(function (a) {
+            return {
+              asistencia_id: a.asistencia_id,
+              persona_id: a.persona_id,
+              nombre: nombrePorId[a.persona_id] || a.persona_id,
+              asistio: esVerdaderoSgc_(a.asistio)
+            };
+          })
+        };
+      }).sort(function (a, b) {
+        return new Date(b.fecha_realizada || b.fecha_programada || 0) - new Date(a.fecha_realizada || a.fecha_programada || 0);
+      }),
+      // Horas de formacion por persona en el ano: alimenta el Objetivo 4
+      // del DOC-07 (>= 5 hrs/colaborador/ano).
+      horas_por_persona: horasFormacionPorPersonaSgc_(anio).map(function (h) {
+        return {
+          persona_id: h.persona_id,
+          nombre: nombrePorId[h.persona_id] || h.persona_id,
+          horas: h.horas,
+          cumple_meta: h.horas >= META_HORAS_FORMACION_SGC
+        };
+      })
+    };
+  },
+
+  guardarCapacitacion: function (data, contexto) {
+    if (!gobiernaSgc_(contexto, rolSgc_(contexto))) {
+      return { _forbidden: true, message: 'Solo el Encargado SGC o un administrador pueden gestionar capacitaciones.' };
+    }
+    if (data.accion === 'eliminar') {
+      if (!data.capacitacion_id) return errorValidacion_('capacitacion_id', 'Falta indicar la capacitación.');
+      return actualizarFilaPorId_(SHEETS.SGC_CAPACITACIONES, 'capacitacion_id', data.capacitacion_id, { activa: false });
+    }
+    var nombre = String(data.nombre || '').trim();
+    if (!nombre) return errorValidacion_('nombre', 'El nombre del curso es obligatorio.');
+    var horas = Number(data.horas);
+    if (!(horas > 0)) return errorValidacion_('horas', 'Indica las horas de duración (mayor que cero).');
+
+    if (data.capacitacion_id) {
+      var cambios = {};
+      ['nombre', 'descripcion', 'relator', 'fecha_programada'].forEach(function (campo) {
+        if (data[campo] !== undefined) cambios[campo] = data[campo];
+      });
+      if (data.horas !== undefined) cambios.horas = horas;
+      return actualizarFilaPorId_(SHEETS.SGC_CAPACITACIONES, 'capacitacion_id', data.capacitacion_id, cambios);
+    }
+
+    var capacitacion = {
+      capacitacion_id: Utilities.getUuid(),
+      nombre: nombre,
+      descripcion: data.descripcion || '',
+      horas: horas,
+      fecha_programada: data.fecha_programada || '',
+      fecha_realizada: '',
+      relator: data.relator || '',
+      estado: 'PROGRAMADA',
+      eficacia_fecha: '',
+      eficacia_resultado: '',
+      eficacia_observaciones: '',
+      creado_por: contexto.email || '',
+      fecha_creacion: new Date().toISOString(),
+      activa: true
+    };
+    agregarFila_(SHEETS.SGC_CAPACITACIONES, capacitacion);
+    registrarLogSgc_('SGC_CAPACITACION', nombre, contexto);
+    return capacitacion;
+  },
+
+  // Marcar realizada + registrar quien asistio. Las horas del año solo
+  // cuentan a quienes efectivamente asistieron.
+  registrarRealizacion: function (data, contexto) {
+    if (!gobiernaSgc_(contexto, rolSgc_(contexto))) {
+      return { _forbidden: true, message: 'Solo el Encargado SGC o un administrador pueden registrar la realización.' };
+    }
+    var c = buscarCapacitacionSgc_(data.capacitacion_id);
+    if (!c) return errorValidacion_('capacitacion_id', 'Capacitación no encontrada.');
+
+    var fechaRealizada = data.fecha_realizada || new Date().toISOString();
+    var actualizada = actualizarFilaPorId_(SHEETS.SGC_CAPACITACIONES, 'capacitacion_id', c.capacitacion_id, {
+      estado: 'REALIZADA',
+      fecha_realizada: fechaRealizada,
+      relator: data.relator || c.relator
+    });
+
+    // Se reescribe la lista de asistentes con lo que llega.
+    var previos = leerFilasSeguro_(SHEETS.SGC_CAPACITACION_ASISTENTES)
+      .filter(function (a) { return a.capacitacion_id === c.capacitacion_id; });
+    var deseados = {};
+    (data.asistentes || []).forEach(function (pid) { if (pid) deseados[pid] = true; });
+
+    previos.forEach(function (a) {
+      var debeEstar = !!deseados[a.persona_id];
+      actualizarFilaPorId_(SHEETS.SGC_CAPACITACION_ASISTENTES, 'asistencia_id', a.asistencia_id, {
+        asistio: debeEstar, fecha: fechaRealizada
+      });
+      delete deseados[a.persona_id];
+    });
+    Object.keys(deseados).forEach(function (pid) {
+      agregarFila_(SHEETS.SGC_CAPACITACION_ASISTENTES, {
+        asistencia_id: Utilities.getUuid(),
+        capacitacion_id: c.capacitacion_id,
+        persona_id: pid,
+        asistio: true,
+        fecha: fechaRealizada
+      });
+    });
+    registrarLogSgc_('SGC_CAPACITACION_REALIZADA', c.nombre, contexto);
+    return actualizada;
+  },
+
+  // Eficacia a 60 dias (FO-PRO-02-05): ¿sirvió la capacitación?
+  registrarEficacia: function (data, contexto) {
+    if (!gobiernaSgc_(contexto, rolSgc_(contexto))) {
+      return { _forbidden: true, message: 'Solo el Encargado SGC o un administrador pueden registrar la eficacia.' };
+    }
+    var c = buscarCapacitacionSgc_(data.capacitacion_id);
+    if (!c) return errorValidacion_('capacitacion_id', 'Capacitación no encontrada.');
+    if (c.estado !== 'REALIZADA') {
+      return errorValidacion_('capacitacion_id', 'Solo se evalúa la eficacia de una capacitación ya realizada.');
+    }
+    if (['EFICAZ', 'NO_EFICAZ'].indexOf(data.resultado) === -1) {
+      return errorValidacion_('resultado', 'Indica si la capacitación fue eficaz o no.');
+    }
+    if (data.resultado === 'NO_EFICAZ' && !String(data.observaciones || '').trim()) {
+      return errorValidacion_('observaciones', 'Si no fue eficaz, explica por qué: es lo que justifica la siguiente acción.');
+    }
+    return actualizarFilaPorId_(SHEETS.SGC_CAPACITACIONES, 'capacitacion_id', c.capacitacion_id, {
+      eficacia_fecha: data.fecha || new Date().toISOString(),
+      eficacia_resultado: data.resultado,
+      eficacia_observaciones: data.observaciones || ''
+    });
   }
+};
+
+// --- motor de avisos de competencia (Fase 2b) -------------------------------
+//
+// SIN TRIGGER PROPIO, igual que todo lo demas del SGC: se cuelga de la
+// pasada diaria de las 09:00 (ver Triggers.gs y la nota del limite de 20).
+//
+// CADENCIA POR TIPO DE AVISO. La pasada corre a diario, pero cada aviso usa
+// una clave de evento distinta y enviarCorreo_ deduplica por esa clave, asi
+// que la cadencia real la decide la clave:
+//   - Evaluacion por vencer -> clave SEMANAL. Avisar todos los dias durante
+//     30 dias conseguiria que la jefatura filtre el correo, no que evalue.
+//   - Horas de formacion    -> clave SEMESTRAL, que es lo que pide la
+//     especificacion para ese indicador.
+//   - Eficacia pendiente    -> clave SEMANAL, solo al Encargado SGC.
+Personas.recordatorioCompetencias = function () {
+  var personas = leerFilasSeguro_(SHEETS.SGC_PERSONAS)
+    .filter(function (p) { return esActivoSgc_(p) && p.estado !== 'DESVINCULADO'; });
+  if (!personas.length) return { evaluaciones: 0, horas: 0, eficacia: 0 };
+
+  var ahora = new Date();
+  var claveSemana = inicioSemanaUTC_(ahora).toISOString().slice(0, 10);
+  var encargados = leerFilasSeguro_(SHEETS.SGC_ROLES)
+    .filter(function (r) { return esVerdaderoActivoSgc_(r) && r.rol_sgc === 'ENCARGADO_SGC'; })
+    .map(function (r) { return normalizarEmailSgc_(r.usuario_email); })
+    .filter(Boolean);
+
+  // 1) Evaluaciones vencidas o por vencer (12 meses, aviso 30 dias antes).
+  var evaluaciones = leerFilasSeguro_(SHEETS.SGC_EVALUACIONES);
+  var ultimaPorPersona = {};
+  evaluaciones.forEach(function (e) {
+    var previa = ultimaPorPersona[e.persona_id];
+    if (!previa || new Date(e.fecha) > new Date(previa.fecha)) ultimaPorPersona[e.persona_id] = e;
+  });
+
+  var pendientes = personas.filter(function (p) {
+    var ultima = ultimaPorPersona[p.persona_id];
+    // Quien nunca fue evaluado tambien cuenta: es el caso mas grave, y es
+    // justo el que un sistema basado en "fecha de vencimiento" olvidaria.
+    if (!ultima) return true;
+    if (!ultima.proxima_evaluacion) return false;
+    var dias = (new Date(ultima.proxima_evaluacion) - ahora) / 86400000;
+    return dias <= 30;
+  });
+
+  var enviadosEval = 0;
+  if (pendientes.length) {
+    // Se agrupa por jefatura: cada jefe recibe UN correo con su equipo.
+    var porJefe = {};
+    pendientes.forEach(function (p) {
+      var jefe = normalizarEmailSgc_(p.jefatura_email);
+      if (!jefe) return;
+      if (!porJefe[jefe]) porJefe[jefe] = [];
+      porJefe[jefe].push(p);
+    });
+    // El Encargado SGC recibe la lista completa (es quien vela por el ciclo).
+    encargados.forEach(function (email) {
+      if (!porJefe[email]) porJefe[email] = pendientes;
+    });
+
+    Object.keys(porJefe).forEach(function (email) {
+      var lista = porJefe[email];
+      var items = lista.map(function (p) {
+        var ultima = ultimaPorPersona[p.persona_id];
+        if (!ultima) return '<li><strong>' + escaparHtmlCorreo_(p.nombre) + '</strong> — sin evaluación registrada</li>';
+        var dias = Math.round((new Date(ultima.proxima_evaluacion) - ahora) / 86400000);
+        return '<li><strong>' + escaparHtmlCorreo_(p.nombre) + '</strong> — ' +
+          (dias < 0 ? 'evaluación VENCIDA hace ' + (-dias) + ' día(s)' : 'a evaluar en ' + dias + ' día(s)') + '</li>';
+      }).join('');
+      var asunto = 'SIGSO - ' + lista.length + ' evaluación(es) de competencia por hacer';
+      var texto = 'Estas personas necesitan su evaluación de competencias (cada 12 meses):\n' +
+        lista.map(function (p) { return '- ' + p.nombre; }).join('\n') +
+        '\n\nEntra a SIGSO > Calidad > Personas para registrarla.';
+      var html = plantillaCorreoHtml_('Evaluaciones de competencia pendientes',
+        '<p>Estas personas necesitan su <strong>evaluación de competencias</strong> (cada 12 meses):</p>' +
+        '<ul style="margin:0 0 12px 18px;padding:0;">' + items + '</ul>' +
+        '<p>Entra a SIGSO &gt; Calidad &gt; Personas para registrarla.</p>');
+      var r = enviarCorreo_('SGC_COMPETENCIA', email, 'SGC_EVAL_PENDIENTE:' + claveSemana,
+        asunto, texto, null, { htmlBody: html });
+      if (r && r.enviado) enviadosEval++;
+      encolarNotificacionApp_(email, 'SGC_EVAL_PENDIENTE', 'Evaluaciones de competencia por hacer',
+        lista.length + ' persona(s) esperan su evaluación.', 'calidad', 'Ver personas', 72);
+    });
+  }
+
+  // 2) Horas de formacion bajo la meta del Objetivo 4 (aviso semestral).
+  var anio = ahora.getFullYear();
+  var semestre = ahora.getMonth() < 6 ? 'S1' : 'S2';
+  var claveSemestre = anio + '-' + semestre;
+  var bajoMeta = horasFormacionPorPersonaSgc_(anio)
+    .filter(function (h) { return h.horas < META_HORAS_FORMACION_SGC; });
+
+  var enviadosHoras = 0;
+  if (bajoMeta.length) {
+    var itemsHoras = bajoMeta.map(function (h) {
+      return '<li><strong>' + escaparHtmlCorreo_(h.nombre) + '</strong> — ' + h.horas + ' de ' +
+        META_HORAS_FORMACION_SGC + ' horas</li>';
+    }).join('');
+    var asuntoH = 'SIGSO - ' + bajoMeta.length + ' persona(s) bajo la meta de formación';
+    var textoH = 'Estas personas están bajo la meta de ' + META_HORAS_FORMACION_SGC +
+      ' horas de formación al año (Objetivo de Calidad N°4):\n' +
+      bajoMeta.map(function (h) { return '- ' + h.nombre + ': ' + h.horas + ' hrs'; }).join('\n') +
+      '\n\nEntra a SIGSO > Calidad > Capacitaciones para programar formación.';
+    var htmlH = plantillaCorreoHtml_('Horas de formación bajo la meta',
+      '<p>Estas personas están bajo la meta de <strong>' + META_HORAS_FORMACION_SGC +
+      ' horas de formación al año</strong> (Objetivo de Calidad N°4):</p>' +
+      '<ul style="margin:0 0 12px 18px;padding:0;">' + itemsHoras + '</ul>' +
+      '<p>Entra a SIGSO &gt; Calidad &gt; Capacitaciones para programar formación.</p>');
+    encargados.forEach(function (email) {
+      var r = enviarCorreo_('SGC_FORMACION', email, 'SGC_HORAS_BAJO_META:' + claveSemestre,
+        asuntoH, textoH, null, { htmlBody: htmlH });
+      if (r && r.enviado) enviadosHoras++;
+    });
+  }
+
+  // 3) Eficacia de capacitaciones pendiente (60 dias post-realizacion).
+  var sinEficacia = leerFilasSeguro_(SHEETS.SGC_CAPACITACIONES)
+    .filter(function (c) { return esActivoSgc_(c) && eficaciaPendienteSgc_(c); });
+  var enviadosEficacia = 0;
+  if (sinEficacia.length) {
+    var itemsEf = sinEficacia.map(function (c) {
+      return '<li><strong>' + escaparHtmlCorreo_(c.nombre) + '</strong> — realizada el ' +
+        String(c.fecha_realizada).slice(0, 10) + '</li>';
+    }).join('');
+    var asuntoE = 'SIGSO - ' + sinEficacia.length + ' capacitación(es) sin evaluar su eficacia';
+    var textoE = 'Estas capacitaciones cumplieron 60 días y aún no tienen evaluación de eficacia:\n' +
+      sinEficacia.map(function (c) { return '- ' + c.nombre; }).join('\n');
+    var htmlE = plantillaCorreoHtml_('Eficacia de capacitación pendiente',
+      '<p>Estas capacitaciones cumplieron <strong>60 días</strong> y aún no tienen evaluación de eficacia:</p>' +
+      '<ul style="margin:0 0 12px 18px;padding:0;">' + itemsEf + '</ul>');
+    encargados.forEach(function (email) {
+      var r = enviarCorreo_('SGC_FORMACION', email, 'SGC_EFICACIA_PENDIENTE:' + claveSemana,
+        asuntoE, textoE, null, { htmlBody: htmlE });
+      if (r && r.enviado) enviadosEficacia++;
+    });
+  }
+
+  return { evaluaciones: enviadosEval, horas: enviadosHoras, eficacia: enviadosEficacia };
 };
 
 // --- constantes -------------------------------------------------------------
@@ -346,6 +735,31 @@ var ITEMS_INDUCCION_SGC = [
 ];
 
 var TIPOS_DOC_PERSONA_SGC = ['CV', 'TITULO', 'ISO9001', 'CONTRATO', 'CERTIFICADO', 'OTRO'];
+
+// Los 8 items del monitoreo de competencias (FO-PRO-02-04): 4 de
+// responsabilidades + 4 de habilidades, escala 1 a 4.
+//
+// NOTA PARA QUIEN MANTENGA ESTO: los textos de abajo son una redaccion
+// razonable de lo que evalua ese formulario. Si el FO-PRO-02-04 real de la
+// empresa usa otra redaccion, se cambia AQUI (solo el texto) y la interfaz
+// se actualiza sola -- los puntajes se guardan en r1..r4/h1..h4, que no
+// dependen del texto.
+var ITEMS_EVALUACION_SGC = [
+  { clave: 'r1', grupo: 'Responsabilidades', texto: 'Cumple las funciones definidas en su descriptor de cargo' },
+  { clave: 'r2', grupo: 'Responsabilidades', texto: 'Cumple los plazos comprometidos' },
+  { clave: 'r3', grupo: 'Responsabilidades', texto: 'Aplica los procedimientos del SGC en su trabajo' },
+  { clave: 'r4', grupo: 'Responsabilidades', texto: 'Reporta oportunamente problemas y desviaciones' },
+  { clave: 'h1', grupo: 'Habilidades', texto: 'Conocimiento técnico requerido por el cargo' },
+  { clave: 'h2', grupo: 'Habilidades', texto: 'Comunicación y trabajo en equipo' },
+  { clave: 'h3', grupo: 'Habilidades', texto: 'Autonomía y resolución de problemas' },
+  { clave: 'h4', grupo: 'Habilidades', texto: 'Orientación al cliente y calidad del servicio' }
+];
+
+// Promedio bajo este valor => necesidad de capacitacion (§5.1.E).
+var UMBRAL_CAPACITACION_SGC = 3;
+// Meta del Objetivo de Calidad N°4 (DOC-07): horas de formacion por
+// colaborador al ano.
+var META_HORAS_FORMACION_SGC = 5;
 
 // --- permisos ---------------------------------------------------------------
 
@@ -381,6 +795,59 @@ function buscarPersonaSgc_(personaId) {
     if (filas[i].persona_id === personaId && esActivoSgc_(filas[i])) return filas[i];
   }
   return null;
+}
+
+function buscarCapacitacionSgc_(capacitacionId) {
+  if (!capacitacionId) return null;
+  var filas = leerFilasSeguro_(SHEETS.SGC_CAPACITACIONES);
+  for (var i = 0; i < filas.length; i++) {
+    if (filas[i].capacitacion_id === capacitacionId && esActivoSgc_(filas[i])) return filas[i];
+  }
+  return null;
+}
+
+function sumarMesesSgc_(fecha, meses) {
+  var f = new Date(fecha);
+  if (isNaN(f.getTime())) return '';
+  var r = new Date(f.getTime());
+  r.setMonth(r.getMonth() + meses);
+  return r.toISOString();
+}
+
+// Eficacia pendiente: realizada hace 60+ dias y todavia sin evaluar.
+function eficaciaPendienteSgc_(capacitacion) {
+  if (capacitacion.estado !== 'REALIZADA' || capacitacion.eficacia_resultado) return false;
+  if (!capacitacion.fecha_realizada) return false;
+  var dias = (new Date() - new Date(capacitacion.fecha_realizada)) / 86400000;
+  return dias >= 60;
+}
+
+// Horas de formacion acumuladas por persona en un ano. Solo cuentan las
+// capacitaciones REALIZADAS y solo a quienes efectivamente asistieron.
+function horasFormacionPorPersonaSgc_(anio) {
+  var capacitaciones = leerFilasSeguro_(SHEETS.SGC_CAPACITACIONES).filter(function (c) {
+    if (!esActivoSgc_(c) || c.estado !== 'REALIZADA' || !c.fecha_realizada) return false;
+    var f = new Date(c.fecha_realizada);
+    return !isNaN(f.getTime()) && f.getFullYear() === Number(anio);
+  });
+  var horasPorId = {};
+  capacitaciones.forEach(function (c) { horasPorId[c.capacitacion_id] = Number(c.horas) || 0; });
+
+  var acumulado = {};
+  leerFilasSeguro_(SHEETS.SGC_CAPACITACION_ASISTENTES).forEach(function (a) {
+    if (!esVerdaderoSgc_(a.asistio)) return;
+    if (horasPorId[a.capacitacion_id] === undefined) return;
+    acumulado[a.persona_id] = (acumulado[a.persona_id] || 0) + horasPorId[a.capacitacion_id];
+  });
+
+  // Toda persona vigente aparece, aunque tenga 0 horas: justamente esas
+  // son las que hay que ver (§4 de los objetivos de calidad).
+  return leerFilasSeguro_(SHEETS.SGC_PERSONAS)
+    .filter(function (p) { return esActivoSgc_(p) && p.estado !== 'DESVINCULADO'; })
+    .map(function (p) {
+      return { persona_id: p.persona_id, nombre: p.nombre, horas: acumulado[p.persona_id] || 0 };
+    })
+    .sort(function (a, b) { return a.horas - b.horas; }); // los que menos tienen, primero
 }
 
 // La ficha de quien esta preguntando (para que el personal operativo entre

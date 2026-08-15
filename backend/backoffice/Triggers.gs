@@ -301,6 +301,14 @@ function recordarValidacionPendienteTrigger() {
   } catch (err) {
     logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarRecordatorioCalidadTrigger');
   }
+  // v10.0 Fase 2b (competencias): evaluaciones a 12 meses, horas de
+  // formacion bajo la meta y eficacia de capacitaciones. Mismo criterio --
+  // sin trigger propio, en try/catch, colgada de este slot de las 09:00.
+  try {
+    enviarRecordatorioCompetenciasTrigger();
+  } catch (err) {
+    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarRecordatorioCompetenciasTrigger');
+  }
   // v7.1 (notificaciones vivas, B5): mantenimiento diario -- purga las
   // notificaciones ya leidas o vencidas para que la hoja NOTIFICACIONES_APP
   // no crezca sin limite (cada sincronizacion del cliente la lee completa).
@@ -332,6 +340,12 @@ function enviarAlertasActividadesTrigger() {
 // mano desde el editor de Apps Script sin esperar a las 09:00.
 function enviarRecordatorioCalidadTrigger() {
   return Calidad.recordatorioPendientes();
+}
+
+// v10.0 Fase 2b: ver Personas.recordatorioCompetencias(). Nombrada igual
+// que las anteriores, mismo motivo: poder forzarla a mano desde el editor.
+function enviarRecordatorioCompetenciasTrigger() {
+  return Personas.recordatorioCompetencias();
 }
 
 // v7.1 (notificaciones vivas, B5): ver purgarNotificacionesApp_(). Nombrada

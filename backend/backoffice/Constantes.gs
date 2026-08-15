@@ -144,7 +144,14 @@ var SHEETS = {
   SGC_PERSONAS: 'SGC_PERSONAS',
   SGC_DESCRIPTORES: 'SGC_DESCRIPTORES',
   SGC_PERSONA_DOCUMENTOS: 'SGC_PERSONA_DOCUMENTOS',
-  SGC_INDUCCIONES: 'SGC_INDUCCIONES'
+  SGC_INDUCCIONES: 'SGC_INDUCCIONES',
+  // v10.0 Fase 2b (PRO-02): monitoreo de competencias y capacitaciones.
+  // Es lo que cierra §7.2 de la norma -- no basta con definir el cargo
+  // (descriptor), hay que evaluar periodicamente si la persona lo cumple y
+  // formarla cuando no.
+  SGC_EVALUACIONES: 'SGC_EVALUACIONES',
+  SGC_CAPACITACIONES: 'SGC_CAPACITACIONES',
+  SGC_CAPACITACION_ASISTENTES: 'SGC_CAPACITACION_ASISTENTES'
 };
 
 var COLUMNAS = {
@@ -588,6 +595,38 @@ var COLUMNAS = {
   SGC_INDUCCIONES: [
     'induccion_id', 'persona_id', 'item', 'fecha', 'relator_email',
     'estado', 'observaciones'
+  ],
+
+  // v10.0 Fase 2b (PRO-02) ------------------------------------------------
+  // Monitoreo de competencias (FO-PRO-02-04): 4 items de responsabilidades
+  // (r1..r4) + 4 de habilidades (h1..h4), escala 1 a 4. Los puntajes se
+  // guardan sueltos y NO el promedio calculado a mano: promedio y
+  // requiere_capacitacion se derivan al guardar, para que nunca queden
+  // desalineados de los puntajes reales.
+  // proxima_evaluacion: fecha + 12 meses (la norma pide seguimiento
+  // periodico; la especificacion fija 12 meses).
+  SGC_EVALUACIONES: [
+    'evaluacion_id', 'persona_id', 'fecha', 'evaluador_email',
+    'r1', 'r2', 'r3', 'r4', 'h1', 'h2', 'h3', 'h4',
+    'promedio', 'requiere_capacitacion', 'observaciones',
+    'proxima_evaluacion'
+  ],
+  // Programa anual (FO-PRO-02-03) y registro de lo realizado
+  // (FO-PRO-02-05) en UNA sola hoja: una capacitacion nace PROGRAMADA y
+  // pasa a REALIZADA. Separarlas en dos tablas obligaria a copiar la fila
+  // y perderia el vinculo entre lo planificado y lo hecho.
+  // eficacia_*: la especificacion pide evaluarla a 60 dias de realizada.
+  SGC_CAPACITACIONES: [
+    'capacitacion_id', 'nombre', 'descripcion', 'horas',
+    'fecha_programada', 'fecha_realizada', 'relator', 'estado',
+    'eficacia_fecha', 'eficacia_resultado', 'eficacia_observaciones',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+  // Quien participo. asistio permite convocar a varias personas y despues
+  // registrar quien fue realmente -- las horas del ano solo cuentan a
+  // quienes asistieron.
+  SGC_CAPACITACION_ASISTENTES: [
+    'asistencia_id', 'capacitacion_id', 'persona_id', 'asistio', 'fecha'
   ]
 };
 

@@ -240,6 +240,11 @@ function construirContexto() {
   ]);
   seedSheet(ctx, 'SGC_DESCRIPTORES', ctx.COLUMNAS.SGC_DESCRIPTORES);
   seedSheet(ctx, 'SGC_PERSONA_DOCUMENTOS', ctx.COLUMNAS.SGC_PERSONA_DOCUMENTOS);
+  // v10.0 Fase 2b: competencias y capacitaciones (vacias -- el flujo a
+  // probar es justamente crearlas desde la UI).
+  seedSheet(ctx, 'SGC_EVALUACIONES', ctx.COLUMNAS.SGC_EVALUACIONES);
+  seedSheet(ctx, 'SGC_CAPACITACIONES', ctx.COLUMNAS.SGC_CAPACITACIONES);
+  seedSheet(ctx, 'SGC_CAPACITACION_ASISTENTES', ctx.COLUMNAS.SGC_CAPACITACION_ASISTENTES);
   seedSheet(ctx, 'SGC_INDUCCIONES', ctx.COLUMNAS.SGC_INDUCCIONES, [
     ['SGCI-1', 'SGCP-1', 'Organigrama', '', '', 'PENDIENTE', ''],
     ['SGCI-2', 'SGCP-1', 'Política de Calidad', '', '', 'PENDIENTE', ''],

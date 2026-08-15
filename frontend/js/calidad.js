@@ -29,6 +29,8 @@
   function render_() {
     if (seccionActiva_ === 'personas') {
       if (personaActivaId_) abrirPersona_(personaActivaId_); else cargarPersonas_();
+    } else if (seccionActiva_ === 'capacitaciones') {
+      cargarCapacitaciones_();
     } else {
       if (documentoActivoId_) abrirDocumento_(documentoActivoId_); else cargarListado_();
     }
@@ -39,7 +41,8 @@
   function barraSecciones_() {
     var secciones = [
       { id: 'documentos', texto: 'Documentos' },
-      { id: 'personas', texto: 'Personas' }
+      { id: 'personas', texto: 'Personas' },
+      { id: 'capacitaciones', texto: 'Capacitaciones' }
     ];
     return '<div class="sigso-tabs sgc-secciones">' + secciones.map(function (s) {
       return '<button type="button" class="sigso-tab js-sgc-seccion' +
@@ -793,7 +796,8 @@
       { id: 'datos', texto: 'Datos' },
       { id: 'descriptor', texto: 'Descriptor de cargo' },
       { id: 'documentos', texto: 'Documentos' },
-      { id: 'induccion', texto: 'Inducción' }
+      { id: 'induccion', texto: 'Inducción' },
+      { id: 'competencias', texto: 'Competencias' }
     ];
     var tabs = PESTANAS.map(function (t) {
       return '<button type="button" class="sigso-tab js-sgc-ficha-tab' +
@@ -805,6 +809,7 @@
     else if (pestanaFicha_ === 'descriptor') cuerpo = pintarDescriptor_(data);
     else if (pestanaFicha_ === 'documentos') cuerpo = pintarDocsPersona_(data);
     else if (pestanaFicha_ === 'induccion') cuerpo = pintarInduccion_(data);
+    else if (pestanaFicha_ === 'competencias') cuerpo = pintarCompetencias_(data);
 
     cont.innerHTML =
       '<div class="sgc-detalle-cab">' +
@@ -936,8 +941,356 @@
       }).join('') + '</div>';
   }
 
+  // --- competencias (Fase 2b) -------------------------------------------------
+
+  function pintarCompetencias_(data) {
+    var ultima = data.ultima_evaluacion;
+    var acciones = data.puede_evaluar
+      ? '<div class="sgc-acciones">' +
+          Componentes.boton({ texto: ultima ? 'Nueva evaluación' : '+ Registrar evaluación', clase: 'js-sgc-evaluar' }) +
+        '</div>'
+      : '';
+
+    // Horas de formación del año: es el Objetivo de Calidad N°4, y a la
+    // persona le sirve verlo aunque no pueda evaluarse a sí misma.
+    var cumple = data.horas_formacion_anio >= data.meta_horas_formacion;
+    var horas = '<div class="sgc-acuse ' + (cumple ? 'sgc-acuse--hecho' : 'sgc-acuse--pendiente') + '">' +
+      '<p><b>Formación este año: ' + data.horas_formacion_anio + ' de ' + data.meta_horas_formacion + ' horas.</b> ' +
+      (cumple ? 'Cumple la meta anual.' : 'Bajo la meta del Objetivo de Calidad N°4.') + '</p>' +
+    '</div>';
+
+    if (!ultima) {
+      return horas + Componentes.vacio({
+        texto: 'Esta persona todavía no tiene evaluación de competencias.',
+        detalle: 'La evaluación (FO-PRO-02-04) se hace cada 12 meses y la registra la jefatura directa.'
+      }) + acciones;
+    }
+
+    var vencida = data.evaluacion_vencida;
+    var historial = (data.evaluaciones || []).map(function (e) {
+      var bajo = e.requiere_capacitacion === true || e.requiere_capacitacion === 'TRUE';
+      return '<div class="sgc-version">' +
+        '<div class="sgc-doc__top">' +
+          '<span class="sgc-doc__codigo">Promedio ' + e.promedio + '</span>' +
+          (bajo ? Componentes.badge('Requiere capacitación', 'alerta') : Componentes.badge('Conforme', 'ok')) +
+          '<span class="sigso-ayuda">' + fechaCorta_(e.fecha) + '</span>' +
+        '</div>' +
+        '<p class="sigso-ayuda">Evaluó: ' + Componentes.escaparHtml(e.evaluador_email) +
+          (e.proxima_evaluacion ? ' · próxima ' + fechaCorta_(e.proxima_evaluacion) : '') + '</p>' +
+        (e.observaciones ? '<p>' + Componentes.escaparHtml(e.observaciones) + '</p>' : '') +
+      '</div>';
+    }).join('');
+
+    return horas +
+      (vencida ? Componentes.alerta('La evaluación de competencias está vencida (se hace cada 12 meses).', 'aviso') : '') +
+      acciones +
+      '<h3 class="sgc-sub">Historial de evaluaciones</h3>' +
+      '<div class="sgc-lista">' + historial + '</div>';
+  }
+
+  function abrirFormularioEvaluacion_(p, items) {
+    var grupos = {};
+    (items || []).forEach(function (i) {
+      if (!grupos[i.grupo]) grupos[i.grupo] = [];
+      grupos[i.grupo].push(i);
+    });
+    var campos = Object.keys(grupos).map(function (grupo) {
+      return '<h4 class="sgc-sub">' + Componentes.escaparHtml(grupo) + '</h4>' +
+        grupos[grupo].map(function (i) {
+          return Componentes.campoSelect({
+            id: 'sgc-ev-' + i.clave, label: i.texto, valor: '3', placeholder: false,
+            opciones: [
+              { valor: '1', texto: '1 — No cumple' },
+              { valor: '2', texto: '2 — Cumple parcialmente' },
+              { valor: '3', texto: '3 — Cumple' },
+              { valor: '4', texto: '4 — Supera lo esperado' }
+            ]
+          });
+        }).join('');
+    }).join('');
+
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Evaluación de competencias — ' + Componentes.escaparHtml(p.nombre) + '</h3>' +
+        '<p class="sigso-ayuda">Escala 1 a 4. El promedio y la necesidad de capacitación los calcula el sistema.</p>' +
+        '<form id="form-sgc-evaluacion">' +
+          campos +
+          Componentes.campoTextarea({ id: 'sgc-ev-obs', label: 'Observaciones' }) +
+          Componentes.campoTexto({ id: 'sgc-ev-fecha', label: 'Fecha de la evaluación', tipo: 'date' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar evaluación', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-sgc-evaluacion').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var datos = { persona_id: p.persona_id, observaciones: document.getElementById('sgc-ev-obs').value };
+      var fecha = document.getElementById('sgc-ev-fecha').value;
+      if (fecha) datos.fecha = fecha;
+      (items || []).forEach(function (i) {
+        datos[i.clave] = Number(document.getElementById('sgc-ev-' + i.clave).value);
+      });
+      api_('registrarEvaluacionSgc', datos).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar la evaluación.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        if (respuesta.data.requiere_capacitacion) {
+          Componentes.aviso({
+            texto: 'Guardada. Promedio ' + respuesta.data.promedio + ': se detectó necesidad de capacitación.',
+            tipo: 'aviso'
+          });
+        }
+        abrirPersona_(p.persona_id);
+      });
+    });
+  }
+
+  // --- capacitaciones (Fase 2b) -----------------------------------------------
+
+  function cargarCapacitaciones_() {
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando capacitaciones...');
+    api_('listarCapacitacionesSgc', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el programa.', 'error');
+        return;
+      }
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      pintarCapacitaciones_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar las capacitaciones.', 'error');
+    });
+  }
+
+  function pintarCapacitaciones_(cont, data) {
+    var caps = data.capacitaciones || [];
+    var bajoMeta = (data.horas_por_persona || []).filter(function (h) { return !h.cumple_meta; });
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">Programa anual de capacitación y horas de formación por persona (Objetivo de Calidad N°4).</p>' +
+      (puedeGestionar_ ? Componentes.boton({ texto: '+ Programar capacitación', clase: 'js-sgc-nueva-cap' }) : '') +
+      '</div>';
+
+    // Horas por persona: lo que de verdad importa del indicador es quién
+    // está por debajo, así que eso va primero y con nombre.
+    var panelHoras = (data.horas_por_persona || []).length
+      ? '<h3 class="sgc-sub">Horas de formación ' + data.anio + '</h3>' +
+        (bajoMeta.length
+          ? Componentes.alerta(bajoMeta.length + ' persona(s) bajo la meta de 5 horas al año.', 'aviso')
+          : Componentes.alerta('Todo el personal cumple la meta de 5 horas al año.', 'ok')) +
+        '<div class="sgc-lista">' + (data.horas_por_persona || []).map(function (h) {
+          return '<div class="sgc-version"><div class="sgc-doc__top">' +
+            '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(h.nombre) + '</span>' +
+            (h.cumple_meta ? Componentes.badge(h.horas + ' hrs', 'ok') : Componentes.badge(h.horas + ' hrs', 'alerta')) +
+          '</div></div>';
+        }).join('') + '</div>'
+      : '';
+
+    function wire() {
+      wireSecciones_(cont);
+      var nueva = cont.querySelector('.js-sgc-nueva-cap');
+      if (nueva) nueva.addEventListener('click', function () { abrirFormularioCapacitacion_(null); });
+      cont.querySelectorAll('.js-sgc-realizar').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          abrirFormularioRealizacion_(btn.getAttribute('data-idx'));
+        });
+      });
+      cont.querySelectorAll('.js-sgc-eficacia').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          abrirFormularioEficacia_(btn.getAttribute('data-idx'));
+        });
+      });
+    }
+
+    if (caps.length === 0) {
+      cont.innerHTML = cabecera + Componentes.vacio({
+        texto: 'Todavía no hay capacitaciones registradas.',
+        detalle: puedeGestionar_ ? 'Programa la primera del año.' : ''
+      }) + panelHoras;
+      wire();
+      return;
+    }
+
+    var lista = caps.map(function (c) {
+      var realizada = c.estado === 'REALIZADA';
+      return '<div class="sgc-version">' +
+        '<div class="sgc-doc__top">' +
+          '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(c.nombre) + '</span>' +
+          Componentes.badge(realizada ? 'Realizada' : 'Programada', realizada ? 'ok' : 'neutro') +
+          Componentes.badge(c.horas + ' hrs', 'neutro') +
+          (c.eficacia_pendiente ? Componentes.badge('Eficacia pendiente', 'alerta') : '') +
+          (c.eficacia_resultado ? Componentes.badge(c.eficacia_resultado === 'EFICAZ' ? 'Eficaz' : 'No eficaz',
+            c.eficacia_resultado === 'EFICAZ' ? 'ok' : 'critico') : '') +
+        '</div>' +
+        '<div class="sgc-doc__meta">' +
+          (c.relator ? '<span>Relator: ' + Componentes.escaparHtml(c.relator) + '</span>' : '') +
+          (realizada
+            ? '<span>Realizada ' + fechaCorta_(c.fecha_realizada) + '</span>'
+            : (c.fecha_programada ? '<span>Programada ' + fechaCorta_(c.fecha_programada) + '</span>' : '')) +
+          (realizada ? '<span>' + c.total_asistieron + ' asistente(s)</span>' : '') +
+        '</div>' +
+        (c.descripcion ? '<p class="sigso-ayuda">' + Componentes.escaparHtml(c.descripcion) + '</p>' : '') +
+        (realizada && c.asistentes.length
+          ? '<p class="sigso-ayuda">' + c.asistentes.filter(function (a) { return a.asistio; })
+              .map(function (a) { return Componentes.escaparHtml(a.nombre); }).join(', ') + '</p>'
+          : '') +
+        (puedeGestionar_
+          ? '<div class="sgc-acciones">' +
+              (!realizada ? Componentes.boton({ texto: 'Registrar realización', variante: 'sutil', clase: 'js-sgc-realizar', idx: c.capacitacion_id }) : '') +
+              (realizada && !c.eficacia_resultado ? Componentes.boton({ texto: 'Evaluar eficacia', variante: 'sutil', clase: 'js-sgc-eficacia', idx: c.capacitacion_id }) : '') +
+            '</div>'
+          : '') +
+      '</div>';
+    }).join('');
+
+    cont.innerHTML = cabecera + '<div class="sgc-lista">' + lista + '</div>' + panelHoras;
+    wire();
+  }
+
+  function abrirFormularioCapacitacion_() {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Programar capacitación</h3>' +
+        '<form id="form-sgc-cap">' +
+          Componentes.campoTexto({ id: 'sgc-c-nombre', label: 'Nombre del curso', requerido: true }) +
+          Componentes.campoTextarea({ id: 'sgc-c-descripcion', label: 'Descripción' }) +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'sgc-c-horas', label: 'Horas', tipo: 'number', valor: '4', requerido: true }) +
+            Componentes.campoTexto({ id: 'sgc-c-fecha', label: 'Fecha programada', tipo: 'date' }) +
+          '</div>' +
+          Componentes.campoTexto({ id: 'sgc-c-relator', label: 'Relator' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Programar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-sgc-cap').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('guardarCapacitacionSgc', {
+        nombre: document.getElementById('sgc-c-nombre').value,
+        descripcion: document.getElementById('sgc-c-descripcion').value,
+        horas: Number(document.getElementById('sgc-c-horas').value),
+        fecha_programada: document.getElementById('sgc-c-fecha').value,
+        relator: document.getElementById('sgc-c-relator').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo programar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        cargarCapacitaciones_();
+      });
+    });
+  }
+
+  // Registrar realización: se elige quién asistió de la lista de personal.
+  function abrirFormularioRealizacion_(capacitacionId) {
+    api_('listarPersonasSgc', {}).then(function (r) {
+      var personas = (r && r.ok) ? (r.data.personas || []) : [];
+      var fondo = document.createElement('div');
+      fondo.className = 'sigso-modal-fondo';
+      fondo.innerHTML =
+        '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+          '<h3 class="sigso-modal__titulo">Registrar realización</h3>' +
+          '<p class="sigso-ayuda">Marca quiénes asistieron. Las horas del año solo se suman a quienes asistieron.</p>' +
+          '<form id="form-sgc-realizacion">' +
+            Componentes.campoTexto({ id: 'sgc-r-fecha', label: 'Fecha de realización', tipo: 'date', requerido: true }) +
+            Componentes.campoTexto({ id: 'sgc-r-relator', label: 'Relator' }) +
+            '<div class="sigso-campo"><label>Asistentes</label>' +
+              (personas.length
+                ? personas.map(function (p) {
+                    return '<label class="sigso-campo-check"><input type="checkbox" class="js-sgc-asistente" value="' +
+                      p.persona_id + '"> ' + Componentes.escaparHtml(p.nombre) + '</label>';
+                  }).join('')
+                : '<p class="sigso-ayuda">No hay personal registrado todavía.</p>') +
+            '</div>' +
+            '<div class="sigso-modal__acciones">' +
+              Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+              Componentes.boton({ texto: 'Registrar', tipo: 'submit' }) +
+            '</div>' +
+          '</form>' +
+        '</div>';
+      var cerrar = montarModal_(fondo);
+      document.getElementById('form-sgc-realizacion').addEventListener('submit', function (evento) {
+        evento.preventDefault();
+        var asistentes = Array.prototype.slice.call(fondo.querySelectorAll('.js-sgc-asistente:checked'))
+          .map(function (el) { return el.value; });
+        api_('registrarRealizacionCapacitacionSgc', {
+          capacitacion_id: capacitacionId,
+          fecha_realizada: document.getElementById('sgc-r-fecha').value,
+          relator: document.getElementById('sgc-r-relator').value,
+          asistentes: asistentes
+        }).then(function (respuesta) {
+          if (!respuesta || !respuesta.ok) {
+            Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo registrar.', tipo: 'error' });
+            return;
+          }
+          cerrar();
+          cargarCapacitaciones_();
+        });
+      });
+    });
+  }
+
+  function abrirFormularioEficacia_(capacitacionId) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Evaluar eficacia</h3>' +
+        '<p class="sigso-ayuda">A los 60 días de realizada: ¿la capacitación logró su objetivo?</p>' +
+        '<form id="form-sgc-eficacia">' +
+          Componentes.campoSelect({
+            id: 'sgc-ef-resultado', label: 'Resultado', valor: 'EFICAZ', placeholder: false,
+            opciones: [{ valor: 'EFICAZ', texto: 'Eficaz' }, { valor: 'NO_EFICAZ', texto: 'No eficaz' }]
+          }) +
+          Componentes.campoTextarea({
+            id: 'sgc-ef-obs', label: 'Observaciones',
+            ayuda: 'Obligatorio si no fue eficaz: es lo que justifica la siguiente acción.'
+          }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-sgc-eficacia').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('registrarEficaciaCapacitacionSgc', {
+        capacitacion_id: capacitacionId,
+        resultado: document.getElementById('sgc-ef-resultado').value,
+        observaciones: document.getElementById('sgc-ef-obs').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        cargarCapacitaciones_();
+      });
+    });
+  }
+
   function wireFicha_(cont, data) {
     var p = data.persona;
+
+    var evaluar = cont.querySelector('.js-sgc-evaluar');
+    if (evaluar) evaluar.addEventListener('click', function () {
+      abrirFormularioEvaluacion_(p, data.items_evaluacion);
+    });
 
     var editar = cont.querySelector('.js-sgc-editar-persona');
     if (editar) editar.addEventListener('click', function () { abrirFormularioPersona_(p); });
