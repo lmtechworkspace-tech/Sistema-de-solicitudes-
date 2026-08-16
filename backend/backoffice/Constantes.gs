@@ -592,10 +592,19 @@ var COLUMNAS = {
   // Descriptor de cargo (FO-PRO-02-01), versionado: cada actualizacion crea
   // una fila nueva y la anterior queda vigente=false. Mismo criterio que
   // SGC_DOC_VERSIONES -- poder demostrar que descriptor regia y cuando.
+  // v10.0 Tanda A (fidelidad con FO-PRO-02-01 real): 'responsabilidades' y
+  // 'habilidades' siguen siendo el texto libre del descriptor (para mostrarlo
+  // tal como esta en el documento aprobado). 'items_responsabilidades' e
+  // 'items_habilidades' son ADEMAS listas discretas (JSON de strings) porque
+  // el FO-PRO-02-04 evalua "segun descriptor de cargo": cada responsabilidad
+  // y cada habilidad del cargo se califica una por una. Sin esta lista, la
+  // evaluacion tendria que inventar items genericos que no corresponden al
+  // cargo real de la persona.
   SGC_DESCRIPTORES: [
     'descriptor_id', 'persona_id', 'version', 'objetivo', 'funciones',
-    'responsabilidades', 'habilidades', 'nivel_educacional',
-    'formacion_tecnica', 'experiencia',
+    'responsabilidades', 'habilidades',
+    'items_responsabilidades', 'items_habilidades',
+    'nivel_educacional', 'formacion_tecnica', 'experiencia',
     'archivo_id', 'archivo_nombre', 'archivo_mime',
     'vigente', 'creado_por', 'fecha'
   ],
@@ -614,35 +623,46 @@ var COLUMNAS = {
   ],
 
   // v10.0 Fase 2b (PRO-02) ------------------------------------------------
-  // Monitoreo de competencias (FO-PRO-02-04): 4 items de responsabilidades
-  // (r1..r4) + 4 de habilidades (h1..h4), escala 1 a 4. Los puntajes se
-  // guardan sueltos y NO el promedio calculado a mano: promedio y
-  // requiere_capacitacion se derivan al guardar, para que nunca queden
-  // desalineados de los puntajes reales.
+  // Monitoreo de competencias (FO-PRO-02-04). v10.0 Tanda A: el formulario
+  // real tiene DOS bloques calificados por separado ("2.- Calificacion de
+  // principales responsabilidades" y "3.- Calificacion de responsabilidades
+  // secundarias/habilidades"), cada uno con su propio promedio (§4.-
+  // Resultados). Los items salen del descriptor vigente de la persona, y su
+  // cantidad varia por cargo -- por eso los puntajes se guardan como JSON
+  // [{item, valor}] en vez de columnas r1..r4/h1..h4 fijas.
+  // Escala real (no generica 1-4): 1 No cumple, 2 Cumple en algunas
+  // ocasiones, 3 Cumple en la mayoria de los casos, 4 Cumple en su totalidad.
+  // requiere_capacitacion se deriva: EFICAZ si CUALQUIERA de los dos
+  // promedios cae bajo el umbral (un area debil ya amerita formacion,
+  // aunque la otra vaya bien).
   // proxima_evaluacion: fecha + 12 meses (la norma pide seguimiento
   // periodico; la especificacion fija 12 meses).
   SGC_EVALUACIONES: [
-    'evaluacion_id', 'persona_id', 'fecha', 'evaluador_email',
-    'r1', 'r2', 'r3', 'r4', 'h1', 'h2', 'h3', 'h4',
-    'promedio', 'requiere_capacitacion', 'observaciones',
+    'evaluacion_id', 'persona_id', 'descriptor_id', 'fecha', 'evaluador_email',
+    'respuestas_responsabilidades', 'respuestas_habilidades',
+    'promedio_responsabilidades', 'promedio_habilidades',
+    'requiere_capacitacion', 'observaciones', 'recomendado_por',
     'proxima_evaluacion'
   ],
   // Programa anual (FO-PRO-02-03) y registro de lo realizado
   // (FO-PRO-02-05) en UNA sola hoja: una capacitacion nace PROGRAMADA y
   // pasa a REALIZADA. Separarlas en dos tablas obligaria a copiar la fila
   // y perderia el vinculo entre lo planificado y lo hecho.
-  // eficacia_*: la especificacion pide evaluarla a 60 dias de realizada.
   SGC_CAPACITACIONES: [
     'capacitacion_id', 'nombre', 'descripcion', 'horas',
     'fecha_programada', 'fecha_realizada', 'relator', 'estado',
-    'eficacia_fecha', 'eficacia_resultado', 'eficacia_observaciones',
     'creado_por', 'fecha_creacion', 'activa'
   ],
   // Quien participo. asistio permite convocar a varias personas y despues
   // registrar quien fue realmente -- las horas del ano solo cuentan a
   // quienes asistieron.
+  // v10.0 Tanda A: la eficacia (FO-PRO-02-05 §2, columna "Eficacia de la
+  // capacitacion (60 dias despues)") es POR PARTICIPANTE, no por curso --
+  // dos personas en el mismo curso pueden tener resultados distintos. Se
+  // movio de SGC_CAPACITACIONES (nivel curso) a esta fila (nivel persona).
   SGC_CAPACITACION_ASISTENTES: [
-    'asistencia_id', 'capacitacion_id', 'persona_id', 'asistio', 'fecha'
+    'asistencia_id', 'capacitacion_id', 'persona_id', 'asistio', 'fecha',
+    'eficacia_fecha', 'eficacia_resultado', 'eficacia_observaciones'
   ],
 
   // v10.0 Fase 3a (PRO-06) ------------------------------------------------
@@ -669,8 +689,14 @@ var COLUMNAS = {
   // Los plazos (10 / 20 / 60) son DIAS HABILES, como exige PRO-06.
   // ciclo: si la eficacia sale negativa la NC se reabre y arranca un ciclo
   //   nuevo; el numero permite distinguirlos sin perder el anterior.
+  // referencia_normativa: campo del FO-PRO-06-01 real ("1.- Generalidades")
+  // y lo que pide el resumen del informe de auditoria (FO-PRO-03-02,
+  // columna "Punto normativo"). Cuando la NC nace de un hallazgo de
+  // auditoria se autocompleta con la clausula del hallazgo (Auditorias.gs);
+  // en una NC manual queda a criterio de quien la crea.
   SGC_NC: [
-    'nc_id', 'correlativo', 'fuente', 'origen_ref', 'descripcion',
+    'nc_id', 'correlativo', 'fuente', 'origen_ref', 'referencia_normativa',
+    'descripcion',
     'area_id', 'detectada_por', 'fecha_deteccion', 'responsable_email',
     'estado', 'ciclo',
     'correccion_descripcion', 'correccion_actividad_id',
@@ -704,12 +730,22 @@ var COLUMNAS = {
   //   pueda verlo tal como paso.
   //
   // informe_plazo: 10 dias habiles desde la ejecucion, como pide PRO-03.
+  //
+  // v10.0 Tanda A (fidelidad con FO-PRO-03-01/02 reales):
+  //   coauditores: PRO-03 habla de "equipo auditor" (plural). auditor_email
+  //     sigue siendo el auditor LIDER (responsable, permisos); coauditores
+  //     es el resto del equipo -- JSON de emails, con el mismo control de
+  //     conflicto de interes que el lider.
+  //   personas_entrevistadas: el informe (FO-PRO-03-02) trae una seccion
+  //     "Personas entrevistadas - Cargo". JSON de strings "Nombre - Cargo",
+  //     se completa al emitir el informe (es lo que efectivamente paso
+  //     durante la ejecucion, no algo planificable de antemano).
   SGC_AUDITORIAS: [
     'auditoria_id', 'correlativo', 'anio', 'area_id', 'proceso', 'clausulas',
-    'auditor_email', 'auditados', 'objetivo', 'alcance', 'criterios',
+    'auditor_email', 'coauditores', 'auditados', 'objetivo', 'alcance', 'criterios',
     'fecha_programada', 'fecha_plan', 'fecha_ejecucion',
     'estado',
-    'informe_plazo', 'informe_fecha', 'informe_conclusion',
+    'informe_plazo', 'informe_fecha', 'informe_conclusion', 'personas_entrevistadas',
     'fecha_cierre', 'cerrada_por', 'creada_por', 'fecha_creacion', 'activa'
   ],
 

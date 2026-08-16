@@ -127,6 +127,12 @@ var NoConformidades = {
       correlativo: siguienteCorrelativoNc_(fechaDeteccion),
       fuente: data.fuente,
       origen_ref: data.origen_ref || '',
+      // Campo del FO-PRO-06-01 real ("1.- Generalidades") y lo que pide el
+      // resumen del informe de auditoria (FO-PRO-03-02, "Punto normativo").
+      // Cuando la NC nace de un hallazgo de auditoria llega ya resuelta
+      // (Auditorias.convertirHallazgoEnNc pasa la clausula del hallazgo);
+      // en una NC manual, opcional.
+      referencia_normativa: String(data.referencia_normativa || '').trim(),
       descripcion: descripcion,
       area_id: data.area_id || '',
       detectada_por: normalizarEmailSgc_(contexto.email),
@@ -211,6 +217,12 @@ var NoConformidades = {
     var cambios = { causa_raiz: data.causa_raiz };
     for (var i = 1; i <= 5; i++) {
       if (data['porque_' + i] !== undefined) cambios['porque_' + i] = data['porque_' + i];
+    }
+    // La referencia normativa a veces solo queda clara despues de analizar
+    // la causa; se puede completar o corregir aca sin reabrir "1.-
+    // Generalidades".
+    if (data.referencia_normativa !== undefined) {
+      cambios.referencia_normativa = String(data.referencia_normativa || '').trim();
     }
     var actualizada = actualizarFilaPorId_(SHEETS.SGC_NC, 'nc_id', nc.nc_id, cambios);
     registrarLogSgc_('SGC_NC_CAUSA', nc.correlativo, contexto);
@@ -574,6 +586,7 @@ function resumenNc_(nc, actividadesPorId, ahora) {
     nc_id: nc.nc_id,
     correlativo: nc.correlativo,
     fuente: nc.fuente,
+    referencia_normativa: nc.referencia_normativa || '',
     descripcion: nc.descripcion,
     area_id: nc.area_id,
     responsable_email: nc.responsable_email,

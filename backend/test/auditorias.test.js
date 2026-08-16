@@ -42,7 +42,8 @@ function loadConSchema() {
     ['U1', 'Encargado SGC', 'sgc@homepymes.cl', 'HP', 'DEV', true, '', 'sistema'],
     ['U2', 'Auditor', 'auditor@homepymes.cl', 'HP', 'DEV', true, '', 'sistema'],
     ['U3', 'Auditado', 'auditado@homepymes.cl', 'HP', 'DEV', true, '', 'sistema'],
-    ['U4', 'Ajeno', 'ajeno@homepymes.cl', 'HP', 'DEV', true, '', 'sistema']
+    ['U4', 'Ajeno', 'ajeno@homepymes.cl', 'HP', 'DEV', true, '', 'sistema'],
+    ['U5', 'Coauditor', 'coauditor@homepymes.cl', 'HP', 'DEV', true, '', 'sistema']
   ]);
   return ctx;
 }
@@ -51,6 +52,7 @@ const CTX_SGC = { email: 'sgc@homepymes.cl', nombre: 'Encargado SGC', rol: 'DEV'
 const CTX_AUDITOR = { email: 'auditor@homepymes.cl', nombre: 'Auditor', rol: 'DEV' };
 const CTX_AUDITADO = { email: 'auditado@homepymes.cl', nombre: 'Auditado', rol: 'DEV' };
 const CTX_AJENO = { email: 'ajeno@homepymes.cl', nombre: 'Ajeno', rol: 'DEV' };
+const CTX_COAUDITOR = { email: 'coauditor@homepymes.cl', nombre: 'Coauditor', rol: 'DEV' };
 const CTX_ADM = { email: 'admin@homepymes.cl', nombre: 'Admin', rol: 'ADM' };
 
 // El auditor es de CONTABILIDAD y el area auditada es RRHH: asi el
@@ -63,6 +65,9 @@ function sembrar(ctx) {
   }, CTX_ADM);
   ctx.Calidad.gestionarRol({
     usuario_email: 'auditado@homepymes.cl', rol_sgc: 'OPERATIVO', area_id: 'RRHH'
+  }, CTX_ADM);
+  ctx.Calidad.gestionarRol({
+    usuario_email: 'coauditor@homepymes.cl', rol_sgc: 'OPERATIVO', area_id: 'PREVENCION'
   }, CTX_ADM);
 }
 
@@ -116,6 +121,9 @@ test('la cadena llega hasta "Mi trabajo": auditoria -> hallazgo -> NC -> activid
   assert.equal(convertido.nc.area_id, 'RRHH');
   // Por defecto la asume el auditado: es quien responde por el proceso.
   assert.equal(convertido.nc.responsable_email, 'auditado@homepymes.cl');
+  // v10.0 Tanda A: el punto normativo se autocompleta con la clausula del
+  // hallazgo -- ya se sabe, no hay por que volver a escribirlo.
+  assert.equal(convertido.nc.referencia_normativa, '7.2');
 
   // Y desde ahi sigue el ciclo de la Fase 3a hasta una tarea real.
   const conAccion = ctx.NoConformidades.registrarCorreccion({
@@ -565,4 +573,148 @@ test('una celda de clausulas corrupta no tumba el listado', () => {
   // Los arreglos vienen del sandbox (otro realm), así que se compara el
   // largo y no la referencia del prototipo.
   assert.equal(listado.auditorias[0].clausulas.length, 0);
+});
+
+// --- v10.0 Tanda A: equipo auditor, entrevistados y catalogo de preguntas --
+
+test('el equipo auditor (coauditores) tambien puede registrar hallazgos', () => {
+  const ctx = loadConSchema();
+  sembrar(ctx);
+  const aud = programar(ctx);
+  planificar(ctx, aud, { coauditores: ['coauditor@homepymes.cl'] });
+  const h = ctx.Auditorias.registrarHallazgo({
+    auditoria_id: aud.auditoria_id, clausula: '7.5',
+    aspecto_verificado: 'Control documental.', resultado: 'CONFORME'
+  }, CTX_COAUDITOR);
+  assert.ok(h.hallazgo_id, 'el coauditor tiene que poder auditar');
+});
+
+test('un coauditor tampoco puede auditar su propia area', () => {
+  const ctx = loadConSchema();
+  sembrar(ctx);
+  const aud = programar(ctx);
+  // coauditor@ es de PREVENCION; se lo pone a auditar su propia area.
+  const r = ctx.Auditorias.planificar({
+    auditoria_id: aud.auditoria_id,
+    objetivo: 'X', alcance: 'Y', auditados: [],
+    coauditores: ['coauditor@homepymes.cl'],
+    fecha_ejecucion: '2026-09-15T12:00:00.000Z'
+  }, CTX_SGC);
+  // No hay conflicto de AREA aca (la auditoria es de RRHH, no PREVENCION),
+  // asi que se prueba el otro camino: que no pueda ser tambien auditado.
+  assert.ok(r.auditoria_id, 'sin conflicto de area, planifica normal');
+  const r2 = ctx.Auditorias.planificar({
+    auditoria_id: aud.auditoria_id,
+    objetivo: 'X', alcance: 'Y',
+    auditados: ['coauditor@homepymes.cl'],
+    coauditores: ['coauditor@homepymes.cl'],
+    fecha_ejecucion: '2026-09-15T12:00:00.000Z'
+  }, CTX_SGC);
+  assert.equal(r2._validationError, true, 'un coauditor no puede ser tambien auditado');
+});
+
+test('un tercero fuera del equipo auditor no puede registrar hallazgos', () => {
+  const ctx = loadConSchema();
+  sembrar(ctx);
+  const aud = programar(ctx);
+  planificar(ctx, aud, { coauditores: ['coauditor@homepymes.cl'] });
+  const r = ctx.Auditorias.registrarHallazgo({
+    auditoria_id: aud.auditoria_id, clausula: '7.2',
+    aspecto_verificado: 'X', resultado: 'CONFORME'
+  }, CTX_AJENO);
+  assert.equal(r._forbidden, true);
+});
+
+test('el informe registra a las personas entrevistadas', () => {
+  const ctx = loadConSchema();
+  sembrar(ctx);
+  const aud = programar(ctx);
+  planificar(ctx, aud);
+  verificar(ctx, aud);
+  ctx.Auditorias.cerrarEjecucion({ auditoria_id: aud.auditoria_id }, CTX_AUDITOR);
+  ctx.Auditorias.emitirInforme({
+    auditoria_id: aud.auditoria_id, conclusion: 'Conforme.',
+    personas_entrevistadas: ['Lisseth Vilchez - Encargada de Administración', 'Vanessa Sepúlveda - Analista de RRHH']
+  }, CTX_AUDITOR);
+  const detalle = ctx.Auditorias.getDetalle({ auditoria_id: aud.auditoria_id }, CTX_SGC);
+  // El arreglo viene del sandbox (otro realm): se compara por contenido.
+  assert.deepEqual(Array.from(detalle.auditoria.personas_entrevistadas),
+    ['Lisseth Vilchez - Encargada de Administración', 'Vanessa Sepúlveda - Analista de RRHH']);
+});
+
+test('el detalle trae el catalogo de preguntas de verificacion, sacado del FO-PRO-03-04 real', () => {
+  const ctx = loadConSchema();
+  sembrar(ctx);
+  const aud = programar(ctx);
+  const detalle = ctx.Auditorias.getDetalle({ auditoria_id: aud.auditoria_id }, CTX_SGC);
+  assert.ok(detalle.preguntas_catalogo['7.2'].length > 0);
+  assert.match(detalle.preguntas_catalogo['7.2'][0], /¿/, 'las preguntas van tal como estan en el formulario');
+  // 4.4 esta en el catalogo de clausulas pero el checklist real no la
+  // desarrolla (salta de 4.3 a 5.1) -- no se inventan preguntas.
+  assert.equal(Array.from(detalle.preguntas_catalogo['4.4']).length, 0);
+
+  // El listado (para programar sin haber abierto ninguna ficha) tambien
+  // trae el catalogo de clausulas.
+  const listado = ctx.Auditorias.listar({}, CTX_SGC);
+  assert.ok(listado.clausulas_catalogo.length > 0);
+});
+
+test('el informe trae el resumen de NC con punto normativo y evidencia objetiva (FO-PRO-03-02)', () => {
+  const ctx = loadConSchema();
+  sembrar(ctx);
+  const aud = programar(ctx);
+  planificar(ctx, aud);
+  const h = verificar(ctx, aud, {
+    clausula: '7.5', resultado: 'NO_CONFORMIDAD',
+    descripcion: 'Falta el listado maestro actualizado.', evidencia: 'Revisión de la carpeta compartida.'
+  });
+  ctx.Auditorias.convertirHallazgoEnNc({ hallazgo_id: h.hallazgo_id }, CTX_SGC);
+
+  const detalle = ctx.Auditorias.getDetalle({ auditoria_id: aud.auditoria_id }, CTX_SGC);
+  assert.equal(detalle.informe_resumen_nc.length, 1);
+  assert.equal(detalle.informe_resumen_nc[0].punto_normativo, '7.5');
+  assert.equal(detalle.informe_resumen_nc[0].evidencia_objetiva, 'Revisión de la carpeta compartida.');
+  assert.match(detalle.informe_resumen_nc[0].nc_correlativo, /^NC-\d{4}-\d{3}$/);
+});
+
+// --- v10.0 Tanda A: plazo de 15 dias habiles para redactar la NC (PRO-03 §6.5) --
+
+test('aviso: hallazgos de no conformidad sin redactar fuera del plazo de 15 dias habiles', () => {
+  const ctx = loadConSchema();
+  sembrar(ctx);
+  const aud = programar(ctx);
+  planificar(ctx, aud);
+  verificar(ctx, aud, { resultado: 'NO_CONFORMIDAD', descripcion: 'Sin evidencia.' });
+  ctx.Auditorias.cerrarEjecucion({ auditoria_id: aud.auditoria_id }, CTX_AUDITOR);
+  ctx.Auditorias.emitirInforme({ auditoria_id: aud.auditoria_id, conclusion: 'Con desviaciones.' }, CTX_AUDITOR);
+  // Se fuerza el informe a una fecha vieja para que el plazo de 15 dias
+  // habiles ya haya pasado.
+  ctx.actualizarFilaPorId_('SGC_AUDITORIAS', 'auditoria_id', aud.auditoria_id, {
+    informe_fecha: '2020-01-01T00:00:00.000Z'
+  });
+
+  const r = ctx.Auditorias.recordatorioPendientes();
+  assert.ok(r.avisos >= 2, 'auditado y Encargado SGC');
+  const destinos = ctx.leerFilas_('LOG_NOTIFICACIONES').map((n) => n.destinatario);
+  assert.ok(destinos.includes('auditado@homepymes.cl'));
+  assert.ok(destinos.includes('sgc@homepymes.cl'));
+});
+
+test('aviso de NC sin redactar: no se dispara si ya no quedan hallazgos pendientes', () => {
+  const ctx = loadConSchema();
+  sembrar(ctx);
+  const aud = programar(ctx);
+  planificar(ctx, aud);
+  const h = verificar(ctx, aud, { resultado: 'NO_CONFORMIDAD', descripcion: 'Sin evidencia.' });
+  ctx.Auditorias.cerrarEjecucion({ auditoria_id: aud.auditoria_id }, CTX_AUDITOR);
+  ctx.Auditorias.emitirInforme({ auditoria_id: aud.auditoria_id, conclusion: 'Con desviaciones.' }, CTX_AUDITOR);
+  ctx.actualizarFilaPorId_('SGC_AUDITORIAS', 'auditoria_id', aud.auditoria_id, {
+    informe_fecha: '2020-01-01T00:00:00.000Z'
+  });
+  ctx.Auditorias.convertirHallazgoEnNc({ hallazgo_id: h.hallazgo_id }, CTX_SGC);
+
+  const r = ctx.Auditorias.recordatorioPendientes();
+  const destinos = ctx.leerFilas_('LOG_NOTIFICACIONES').filter((n) =>
+    String(n.evento || '').indexOf('SGC_AUD_NC_PENDIENTE') === 0);
+  assert.equal(destinos.length, 0, 'ya esta redactada, no hay nada que avisar');
 });

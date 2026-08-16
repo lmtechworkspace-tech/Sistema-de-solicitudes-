@@ -1025,7 +1025,7 @@ function handleRegistrarRealizacionCapacitacionSgc_(data, contexto) {
 }
 
 function handleRegistrarEficaciaCapacitacionSgc_(data, contexto) {
-  return responderResultado_(Personas.registrarEficacia(data, contexto));
+  return responderResultado_(Personas.registrarEficaciaAsistente(data, contexto));
 }
 
 // v10.0 Fase 3a (PRO-06): el motor de mejora. NoConformidades.gs acota por

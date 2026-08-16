@@ -904,7 +904,18 @@
         campoFicha_('Nivel educacional', d.nivel_educacional) +
         campoFicha_('Formación técnica', d.formacion_tecnica) +
         campoFicha_('Experiencia requerida', d.experiencia) +
-      '</dl>' + acciones + historial;
+      '</dl>' +
+      itemsDescriptorHtml_('Se califican en la evaluación (responsabilidades)', d.items_responsabilidades) +
+      itemsDescriptorHtml_('Se califican en la evaluación (habilidades)', d.items_habilidades) +
+      acciones + historial;
+  }
+
+  function itemsDescriptorHtml_(titulo, items) {
+    if (!items || !items.length) return '';
+    return '<h3 class="sgc-sub">' + Componentes.escaparHtml(titulo) + '</h3>' +
+      '<ol class="sgc-porques">' + items.map(function (i) {
+        return '<li>' + Componentes.escaparHtml(i) + '</li>';
+      }).join('') + '</ol>';
   }
 
   function pintarDocsPersona_(data) {
@@ -981,13 +992,14 @@
       var bajo = e.requiere_capacitacion === true || e.requiere_capacitacion === 'TRUE';
       return '<div class="sgc-version">' +
         '<div class="sgc-doc__top">' +
-          '<span class="sgc-doc__codigo">Promedio ' + e.promedio + '</span>' +
+          '<span class="sgc-doc__codigo">Resp. ' + e.promedio_responsabilidades + ' · Hab. ' + e.promedio_habilidades + '</span>' +
           (bajo ? Componentes.badge('Requiere capacitación', 'alerta') : Componentes.badge('Conforme', 'ok')) +
           '<span class="sigso-ayuda">' + fechaCorta_(e.fecha) + '</span>' +
         '</div>' +
         '<p class="sigso-ayuda">Evaluó: ' + Componentes.escaparHtml(e.evaluador_email) +
           (e.proxima_evaluacion ? ' · próxima ' + fechaCorta_(e.proxima_evaluacion) : '') + '</p>' +
         (e.observaciones ? '<p>' + Componentes.escaparHtml(e.observaciones) + '</p>' : '') +
+        (e.recomendado_por ? '<p class="sigso-ayuda">Recomienda capacitación: ' + Componentes.escaparHtml(e.recomendado_por) + '</p>' : '') +
       '</div>';
     }).join('');
 
@@ -998,36 +1010,44 @@
       '<div class="sgc-lista">' + historial + '</div>';
   }
 
-  function abrirFormularioEvaluacion_(p, items) {
-    var grupos = {};
-    (items || []).forEach(function (i) {
-      if (!grupos[i.grupo]) grupos[i.grupo] = [];
-      grupos[i.grupo].push(i);
+  // v10.0 Tanda A: los items salen del descriptor VIGENTE de la persona
+  // (FO-PRO-02-04 "segun descriptor de cargo"), no de una lista fija. Se
+  // califican DOS bloques por separado -- responsabilidades y habilidades
+  // -- cada uno con su propio promedio, como el formulario real.
+  function abrirFormularioEvaluacion_(p, itemsResp, itemsHab, escala) {
+    if (!itemsResp.length || !itemsHab.length) {
+      Componentes.aviso({
+        texto: 'Esta persona no tiene un descriptor de cargo con responsabilidades y habilidades cargadas como lista.',
+        detalle: 'Completa esa parte del descriptor antes de evaluar.', tipo: 'error'
+      });
+      return;
+    }
+    var opciones = (escala || []).map(function (e) {
+      return { valor: String(e.valor), texto: e.valor + ' — ' + e.texto };
     });
-    var campos = Object.keys(grupos).map(function (grupo) {
-      return '<h4 class="sgc-sub">' + Componentes.escaparHtml(grupo) + '</h4>' +
-        grupos[grupo].map(function (i) {
+    function bloque(titulo, subtitulo, items, prefijo) {
+      return '<h4 class="sgc-sub">' + Componentes.escaparHtml(titulo) + '</h4>' +
+        '<p class="sigso-ayuda">' + Componentes.escaparHtml(subtitulo) + '</p>' +
+        items.map(function (texto, i) {
           return Componentes.campoSelect({
-            id: 'sgc-ev-' + i.clave, label: i.texto, valor: '3', placeholder: false,
-            opciones: [
-              { valor: '1', texto: '1 — No cumple' },
-              { valor: '2', texto: '2 — Cumple parcialmente' },
-              { valor: '3', texto: '3 — Cumple' },
-              { valor: '4', texto: '4 — Supera lo esperado' }
-            ]
+            id: 'sgc-ev-' + prefijo + '-' + i, label: texto, valor: '3', placeholder: false, opciones: opciones
           });
         }).join('');
-    }).join('');
+    }
 
     var fondo = document.createElement('div');
     fondo.className = 'sigso-modal-fondo';
     fondo.innerHTML =
       '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
         '<h3 class="sigso-modal__titulo">Evaluación de competencias — ' + Componentes.escaparHtml(p.nombre) + '</h3>' +
-        '<p class="sigso-ayuda">Escala 1 a 4. El promedio y la necesidad de capacitación los calcula el sistema.</p>' +
+        '<p class="sigso-ayuda">El promedio de cada bloque y la necesidad de capacitación los calcula el sistema.</p>' +
         '<form id="form-sgc-evaluacion">' +
-          campos +
+          bloque('2.- Principales responsabilidades', 'Según el descriptor de cargo vigente.', itemsResp, 'r') +
+          bloque('3.- Responsabilidades secundarias / habilidades', '', itemsHab, 'h') +
           Componentes.campoTextarea({ id: 'sgc-ev-obs', label: 'Observaciones' }) +
+          Componentes.campoTexto({
+            id: 'sgc-ev-recomendado', label: '¿Quién recomienda capacitación, si aplica? (opcional)'
+          }) +
           Componentes.campoTexto({ id: 'sgc-ev-fecha', label: 'Fecha de la evaluación', tipo: 'date' }) +
           '<div class="sigso-modal__acciones">' +
             Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
@@ -1039,12 +1059,19 @@
 
     document.getElementById('form-sgc-evaluacion').addEventListener('submit', function (evento) {
       evento.preventDefault();
-      var datos = { persona_id: p.persona_id, observaciones: document.getElementById('sgc-ev-obs').value };
+      var datos = {
+        persona_id: p.persona_id,
+        observaciones: document.getElementById('sgc-ev-obs').value,
+        recomendado_por: document.getElementById('sgc-ev-recomendado').value,
+        respuestas_responsabilidades: itemsResp.map(function (_, i) {
+          return Number(document.getElementById('sgc-ev-r-' + i).value);
+        }),
+        respuestas_habilidades: itemsHab.map(function (_, i) {
+          return Number(document.getElementById('sgc-ev-h-' + i).value);
+        })
+      };
       var fecha = document.getElementById('sgc-ev-fecha').value;
       if (fecha) datos.fecha = fecha;
-      (items || []).forEach(function (i) {
-        datos[i.clave] = Number(document.getElementById('sgc-ev-' + i.clave).value);
-      });
       api_('registrarEvaluacionSgc', datos).then(function (respuesta) {
         if (!respuesta || !respuesta.ok) {
           Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar la evaluación.', tipo: 'error' });
@@ -1053,7 +1080,8 @@
         cerrar();
         if (respuesta.data.requiere_capacitacion) {
           Componentes.aviso({
-            texto: 'Guardada. Promedio ' + respuesta.data.promedio + ': se detectó necesidad de capacitación.',
+            texto: 'Guardada. Promedios ' + respuesta.data.promedio_responsabilidades + ' / ' +
+              respuesta.data.promedio_habilidades + ': se detectó necesidad de capacitación.',
             tipo: 'info'
           });
         }
@@ -1115,7 +1143,9 @@
       });
       cont.querySelectorAll('.js-sgc-eficacia').forEach(function (btn) {
         btn.addEventListener('click', function () {
-          abrirFormularioEficacia_(btn.getAttribute('data-idx'));
+          abrirFormularioEficacia_(
+            btn.getAttribute('data-capacitacion'), btn.getAttribute('data-persona'), btn.getAttribute('data-nombre')
+          );
         });
       });
     }
@@ -1131,14 +1161,33 @@
 
     var lista = caps.map(function (c) {
       var realizada = c.estado === 'REALIZADA';
+      var asistieron = (c.asistentes || []).filter(function (a) { return a.asistio; });
+      // v10.0 Tanda A: la eficacia (FO-PRO-02-05 §2) es POR PARTICIPANTE --
+      // el mismo curso le puede servir a una persona y no a otra, asi que
+      // cada asistente tiene su propio badge y su propio boton.
+      var filasAsistentes = realizada && asistieron.length
+        ? '<div class="sgc-lista sgc-lista--anidada">' + asistieron.map(function (a) {
+            return '<div class="sgc-doc__top">' +
+              '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(a.nombre) + '</span>' +
+              (a.eficacia_resultado
+                ? Componentes.badge(a.eficacia_resultado === 'EFICAZ' ? 'Eficaz' : 'No eficaz',
+                    a.eficacia_resultado === 'EFICAZ' ? 'ok' : 'critico')
+                : (a.eficacia_pendiente ? Componentes.badge('Eficacia pendiente', 'alerta') : Componentes.badge('Aún no toca (60 días)', 'neutro'))) +
+              (puedeGestionar_ && !a.eficacia_resultado
+                ? Componentes.boton({
+                    texto: 'Evaluar', variante: 'sutil', clase: 'js-sgc-eficacia'
+                  }).replace('<button ', '<button data-capacitacion="' + c.capacitacion_id +
+                    '" data-persona="' + a.persona_id + '" data-nombre="' + Componentes.escaparHtml(a.nombre) + '" ')
+                : '') +
+            '</div>';
+          }).join('') + '</div>'
+        : '';
       return '<div class="sgc-version">' +
         '<div class="sgc-doc__top">' +
           '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(c.nombre) + '</span>' +
           Componentes.badge(realizada ? 'Realizada' : 'Programada', realizada ? 'ok' : 'neutro') +
           Componentes.badge(c.horas + ' hrs', 'neutro') +
           (c.eficacia_pendiente ? Componentes.badge('Eficacia pendiente', 'alerta') : '') +
-          (c.eficacia_resultado ? Componentes.badge(c.eficacia_resultado === 'EFICAZ' ? 'Eficaz' : 'No eficaz',
-            c.eficacia_resultado === 'EFICAZ' ? 'ok' : 'critico') : '') +
         '</div>' +
         '<div class="sgc-doc__meta">' +
           (c.relator ? '<span>Relator: ' + Componentes.escaparHtml(c.relator) + '</span>' : '') +
@@ -1148,14 +1197,10 @@
           (realizada ? '<span>' + c.total_asistieron + ' asistente(s)</span>' : '') +
         '</div>' +
         (c.descripcion ? '<p class="sigso-ayuda">' + Componentes.escaparHtml(c.descripcion) + '</p>' : '') +
-        (realizada && c.asistentes.length
-          ? '<p class="sigso-ayuda">' + c.asistentes.filter(function (a) { return a.asistio; })
-              .map(function (a) { return Componentes.escaparHtml(a.nombre); }).join(', ') + '</p>'
-          : '') +
-        (puedeGestionar_
+        filasAsistentes +
+        (puedeGestionar_ && !realizada
           ? '<div class="sgc-acciones">' +
-              (!realizada ? Componentes.boton({ texto: 'Registrar realización', variante: 'sutil', clase: 'js-sgc-realizar', idx: c.capacitacion_id }) : '') +
-              (realizada && !c.eficacia_resultado ? Componentes.boton({ texto: 'Evaluar eficacia', variante: 'sutil', clase: 'js-sgc-eficacia', idx: c.capacitacion_id }) : '') +
+              Componentes.boton({ texto: 'Registrar realización', variante: 'sutil', clase: 'js-sgc-realizar', idx: c.capacitacion_id }) +
             '</div>'
           : '') +
       '</div>';
@@ -1254,13 +1299,15 @@
     });
   }
 
-  function abrirFormularioEficacia_(capacitacionId) {
+  // v10.0 Tanda A: la eficacia es POR PARTICIPANTE (FO-PRO-02-05 §2) -- el
+  // mismo curso puede servirle a una persona y no a otra.
+  function abrirFormularioEficacia_(capacitacionId, personaId, nombre) {
     var fondo = document.createElement('div');
     fondo.className = 'sigso-modal-fondo';
     fondo.innerHTML =
       '<div class="sigso-modal" role="dialog" aria-modal="true">' +
-        '<h3 class="sigso-modal__titulo">Evaluar eficacia</h3>' +
-        '<p class="sigso-ayuda">A los 60 días de realizada: ¿la capacitación logró su objetivo?</p>' +
+        '<h3 class="sigso-modal__titulo">Evaluar eficacia — ' + Componentes.escaparHtml(nombre || '') + '</h3>' +
+        '<p class="sigso-ayuda">A los 60 días de realizada: ¿le sirvió a esta persona?</p>' +
         '<form id="form-sgc-eficacia">' +
           Componentes.campoSelect({
             id: 'sgc-ef-resultado', label: 'Resultado', valor: 'EFICAZ', placeholder: false,
@@ -1281,6 +1328,7 @@
       evento.preventDefault();
       api_('registrarEficaciaCapacitacionSgc', {
         capacitacion_id: capacitacionId,
+        persona_id: personaId,
         resultado: document.getElementById('sgc-ef-resultado').value,
         observaciones: document.getElementById('sgc-ef-obs').value
       }).then(function (respuesta) {
@@ -1299,7 +1347,7 @@
 
     var evaluar = cont.querySelector('.js-sgc-evaluar');
     if (evaluar) evaluar.addEventListener('click', function () {
-      abrirFormularioEvaluacion_(p, data.items_evaluacion);
+      abrirFormularioEvaluacion_(p, data.items_responsabilidades, data.items_habilidades, data.escala_evaluacion);
     });
 
     var editar = cont.querySelector('.js-sgc-editar-persona');
@@ -1457,8 +1505,17 @@
           Componentes.campoTexto({ id: 'sgc-de-version', label: 'Versión', requerido: true, valor: vigente ? '' : 'v01', placeholder: 'Ej: v01' }) +
           Componentes.campoTextarea({ id: 'sgc-de-objetivo', label: 'Objetivo general del cargo', requerido: true }) +
           Componentes.campoTextarea({ id: 'sgc-de-funciones', label: 'Funciones' }) +
-          Componentes.campoTextarea({ id: 'sgc-de-responsabilidades', label: 'Responsabilidades' }) +
-          Componentes.campoTextarea({ id: 'sgc-de-habilidades', label: 'Habilidades requeridas' }) +
+          Componentes.campoTextarea({ id: 'sgc-de-responsabilidades', label: 'Responsabilidades (texto, tal como está en el documento)' }) +
+          Componentes.campoTextarea({ id: 'sgc-de-habilidades', label: 'Habilidades requeridas (texto, tal como está en el documento)' }) +
+          Componentes.campoTextarea({
+            id: 'sgc-de-items-resp', label: 'Responsabilidades a evaluar (una por línea)',
+            valor: (vigente && vigente.items_responsabilidades ? vigente.items_responsabilidades.join('\n') : ''),
+            ayuda: 'La evaluación de competencias (FO-PRO-02-04) califica cada una por separado.'
+          }) +
+          Componentes.campoTextarea({
+            id: 'sgc-de-items-hab', label: 'Habilidades a evaluar (una por línea)',
+            valor: (vigente && vigente.items_habilidades ? vigente.items_habilidades.join('\n') : '')
+          }) +
           '<div class="sgc-form-fila">' +
             Componentes.campoTexto({ id: 'sgc-de-nivel', label: 'Nivel educacional' }) +
             Componentes.campoTexto({ id: 'sgc-de-formacion', label: 'Formación técnica' }) +
@@ -1490,6 +1547,8 @@
           funciones: document.getElementById('sgc-de-funciones').value,
           responsabilidades: document.getElementById('sgc-de-responsabilidades').value,
           habilidades: document.getElementById('sgc-de-habilidades').value,
+          items_responsabilidades: lineasNoVacias_(document.getElementById('sgc-de-items-resp').value),
+          items_habilidades: lineasNoVacias_(document.getElementById('sgc-de-items-hab').value),
           nivel_educacional: document.getElementById('sgc-de-nivel').value,
           formacion_tecnica: document.getElementById('sgc-de-formacion').value,
           experiencia: document.getElementById('sgc-de-experiencia').value
@@ -1582,9 +1641,13 @@
   // esas actividades sin duplicarlo.
   // ==========================================================================
 
+  // Vocabulario alineado con el FO-PRO-06-01 real (marca con X entre
+  // Auditoría / Revisión por la dirección / Reclamo / Otro). Se mantiene el
+  // desglose interno/externo de auditoría porque distinguirlas es util y no
+  // contradice el formulario -- ambas caen bajo "Auditoría".
   var FUENTE_NC_ETIQUETA = {
     AUDITORIA_INTERNA: 'Auditoría interna', AUDITORIA_EXTERNA: 'Auditoría externa',
-    QUEJA: 'Queja de cliente', REVISION_DIRECCION: 'Revisión por la dirección',
+    QUEJA: 'Queja / reclamo', REVISION_DIRECCION: 'Revisión por la dirección',
     PROCESO: 'Detectada en el proceso', OTRO: 'Otra'
   };
   var ESTADO_NC_ETIQUETA = {
@@ -1681,6 +1744,7 @@
         '</div>' +
         '<div class="sgc-doc__meta">' +
           '<span>' + Componentes.escaparHtml(FUENTE_NC_ETIQUETA[nc.fuente] || nc.fuente) + '</span>' +
+          (nc.referencia_normativa ? '<span>' + Componentes.escaparHtml(nc.referencia_normativa) + '</span>' : '') +
           (nc.area_id ? '<span>' + Componentes.escaparHtml(nc.area_id) + '</span>' : '') +
           '<span>' + Componentes.escaparHtml(nc.responsable_email) + '</span>' +
           '<span>Detectada ' + fechaCorta_(nc.fecha_deteccion) + '</span>' +
@@ -1849,6 +1913,7 @@
       '<div class="sgc-cuerpo">' +
         '<dl class="sgc-ficha">' +
           campoFicha_('Fuente', FUENTE_NC_ETIQUETA[nc.fuente] || nc.fuente) +
+          campoFicha_('Referencia normativa', nc.referencia_normativa) +
           campoFicha_('Área', nc.area_id) +
           campoFicha_('Responsable', nc.responsable_email) +
           campoFicha_('Detectada', fechaCorta_(nc.fecha_deteccion)) +
@@ -1942,6 +2007,10 @@
               placeholder: 'A quién se le asigna resolverla' }) +
             Componentes.campoTexto({ id: 'nc-fecha', label: 'Fecha de detección', tipo: 'date' }) +
           '</div>' +
+          Componentes.campoTexto({
+            id: 'nc-referencia', label: 'Referencia normativa (opcional)',
+            placeholder: 'Ej: 7.5, si ya sabes qué cláusula se incumplió'
+          }) +
           '<div class="sigso-modal__acciones">' +
             Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
             Componentes.boton({ texto: 'Registrar', tipo: 'submit' }) +
@@ -1956,7 +2025,8 @@
         fuente: document.getElementById('nc-fuente').value,
         area_id: document.getElementById('nc-area').value,
         responsable_email: document.getElementById('nc-responsable').value,
-        fecha_deteccion: document.getElementById('nc-fecha').value
+        fecha_deteccion: document.getElementById('nc-fecha').value,
+        referencia_normativa: document.getElementById('nc-referencia').value
       }).then(function (respuesta) {
         if (!respuesta || !respuesta.ok) {
           Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo registrar.', tipo: 'error' });
@@ -2038,6 +2108,10 @@
           campos +
           Componentes.campoTextarea({ id: 'ncc-causa', label: 'Causa raíz', valor: nc.causa_raiz, requerido: true,
             placeholder: 'La causa real, la que hay que atacar.' }) +
+          Componentes.campoTexto({
+            id: 'ncc-referencia', label: 'Referencia normativa', valor: nc.referencia_normativa,
+            placeholder: 'Ej: 7.5 — a veces solo queda clara después del análisis.'
+          }) +
           '<div class="sigso-modal__acciones">' +
             Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
             Componentes.boton({ texto: 'Guardar análisis', tipo: 'submit' }) +
@@ -2047,7 +2121,10 @@
     var cerrar = montarModal_(fondo);
     document.getElementById('form-nc-causa').addEventListener('submit', function (evento) {
       evento.preventDefault();
-      var datos = { nc_id: nc.nc_id, causa_raiz: document.getElementById('ncc-causa').value };
+      var datos = {
+        nc_id: nc.nc_id, causa_raiz: document.getElementById('ncc-causa').value,
+        referencia_normativa: document.getElementById('ncc-referencia').value
+      };
       for (var j = 1; j <= 5; j++) datos['porque_' + j] = document.getElementById('ncc-porque-' + j).value;
       api_('registrarCausaNcSgc', datos).then(function (respuesta) {
         if (!respuesta || !respuesta.ok) {
@@ -2129,6 +2206,9 @@
 
   var filtroAnioAud_ = '';
   var clausulasCatalogo_ = [];
+  // v10.0 Tanda A: las 132 preguntas reales del FO-PRO-03-04, por clausula.
+  // Solo viaja en el detalle (getDetalleAuditoriaSgc), no en el listado.
+  var preguntasCatalogo_ = {};
 
   function cargarAuditorias_() {
     auditoriaActivaId_ = null;
@@ -2244,6 +2324,7 @@
         return;
       }
       clausulasCatalogo_ = respuesta.data.clausulas_catalogo || [];
+      preguntasCatalogo_ = respuesta.data.preguntas_catalogo || {};
       puedeGestionar_ = respuesta.data.puede_gestionar === true;
       pintarFichaAuditoria_(cont, respuesta.data);
     }).catch(function () {
@@ -2306,10 +2387,29 @@
         : '');
 
     // 3) Informe
+    var entrevistados = (aud.personas_entrevistadas || []);
+    var resumenNc = data.informe_resumen_nc || [];
     var e3 = etapaNc_(3, 'Informe', !!aud.informe_fecha,
       (aud.informe_fecha
         ? '<p>' + Componentes.escaparHtml(aud.informe_conclusion) + '</p>' +
-          '<p class="sigso-ayuda">Emitido el ' + fechaCorta_(aud.informe_fecha) + '.</p>'
+          '<p class="sigso-ayuda">Emitido el ' + fechaCorta_(aud.informe_fecha) + '.</p>' +
+          (entrevistados.length
+            ? '<p class="sigso-ayuda"><b>Personas entrevistadas:</b> ' +
+              entrevistados.map(Componentes.escaparHtml).join(' · ') + '</p>'
+            : '') +
+          (resumenNc.length
+            ? '<h4 class="sgc-sub">Resumen de no conformidades</h4>' +
+              '<div class="sgc-hallazgos">' + resumenNc.map(function (n) {
+                return '<div class="sgc-hallazgo sgc-hallazgo--no_conformidad">' +
+                  '<div class="sgc-doc__top">' +
+                    '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(n.nc_correlativo) + '</span>' +
+                    '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(n.punto_normativo) + '</span>' +
+                  '</div>' +
+                  '<p>' + Componentes.escaparHtml(n.no_conformidad) + '</p>' +
+                  (n.evidencia_objetiva ? '<p class="sigso-ayuda">Evidencia: ' + Componentes.escaparHtml(n.evidencia_objetiva) + '</p>' : '') +
+                '</div>';
+              }).join('') + '</div>'
+            : '')
         : '<p class="sigso-ayuda">La conclusión de la auditoría. PRO-03 da 10 días hábiles desde que se realiza' +
           (aud.informe_plazo ? ', vence el ' + fechaCorta_(aud.informe_plazo) : '') + '.</p>'),
       audita && aud.estado === 'EJECUTADA'
@@ -2346,6 +2446,7 @@
         '<dl class="sgc-ficha">' +
           campoFicha_('Área', aud.area_id) +
           campoFicha_('Auditor', aud.auditor_email) +
+          campoFicha_('Equipo auditor', (aud.coauditores || []).join(', ')) +
           campoFicha_('Programada', fechaCorta_(aud.fecha_programada)) +
           campoFicha_('Cláusulas en alcance', (data.clausulas_alcance || []).join(' · ')) +
         '</dl>' +
@@ -2566,6 +2667,11 @@
             Componentes.campoTexto({ id: 'audp-fecha', label: 'Fecha de realización', tipo: 'date',
               valor: fechaISO_(aud.fecha_ejecucion), requerido: true }) +
           '</div>' +
+          Componentes.campoTexto({
+            id: 'audp-coauditores', label: 'Resto del equipo auditor (correos separados por coma, opcional)',
+            valor: (data.auditoria && data.auditoria.coauditores || []).join(', '),
+            placeholder: 'El auditor líder ya está definido; aquí va el resto del equipo.'
+          }) +
           '<div class="sigso-modal__acciones">' +
             Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
             Componentes.boton({ texto: 'Guardar y comunicar', tipo: 'submit' }) +
@@ -2577,12 +2683,15 @@
       evento.preventDefault();
       var auditados = document.getElementById('audp-auditados').value
         .split(',').map(function (e) { return e.trim(); }).filter(Boolean);
+      var coauditores = document.getElementById('audp-coauditores').value
+        .split(',').map(function (e) { return e.trim(); }).filter(Boolean);
       api_('planificarAuditoriaSgc', {
         auditoria_id: aud.auditoria_id,
         objetivo: document.getElementById('audp-objetivo').value,
         alcance: document.getElementById('audp-alcance').value,
         criterios: document.getElementById('audp-criterios').value,
         auditados: auditados,
+        coauditores: coauditores,
         fecha_ejecucion: document.getElementById('audp-fecha').value
       }).then(function (respuesta) {
         if (!respuesta || !respuesta.ok) {
@@ -2622,6 +2731,7 @@
                 return { valor: k, texto: RESULTADO_HALLAZGO_ETIQUETA[k] };
               }) }) +
           '</div>' +
+          '<div class="sigso-campo" id="audh-preguntas-cont"></div>' +
           Componentes.campoTextarea({ id: 'audh-aspecto', label: 'Qué se verificó', requerido: true,
             valor: hallazgo ? hallazgo.aspecto_verificado : '',
             placeholder: 'Ej: evaluaciones de competencia del personal del área.' }) +
@@ -2638,6 +2748,27 @@
         '</form>' +
       '</div>';
     var cerrar = montarModal_(fondo);
+
+    // Al elegir la cláusula, se ofrecen las preguntas reales del FO-PRO-03-04
+    // como sugerencia -- elegir una copia su texto al campo "Qué se
+    // verificó" (editable después). Si la cláusula no tiene preguntas en el
+    // catálogo (ej. 4.4), el selector simplemente no aparece.
+    function repoblarPreguntas_() {
+      var clausula = document.getElementById('audh-clausula').value;
+      var preguntas = preguntasCatalogo_[clausula] || [];
+      var elCont = document.getElementById('audh-preguntas-cont');
+      if (!preguntas.length) { elCont.innerHTML = ''; return; }
+      elCont.innerHTML = Componentes.campoSelect({
+        id: 'audh-pregunta', label: 'Elegir de la lista de verificación (opcional)',
+        opciones: preguntas.map(function (p) { return { valor: p, texto: p.length > 90 ? p.slice(0, 90) + '…' : p }; })
+      });
+      document.getElementById('audh-pregunta').addEventListener('change', function () {
+        if (this.value) document.getElementById('audh-aspecto').value = this.value;
+      });
+    }
+    document.getElementById('audh-clausula').addEventListener('change', repoblarPreguntas_);
+    repoblarPreguntas_();
+
     document.getElementById('form-aud-h').addEventListener('submit', function (evento) {
       evento.preventDefault();
       var datos = {
@@ -2671,6 +2802,10 @@
         '<form id="form-aud-inf">' +
           Componentes.campoTextarea({ id: 'audi-conclusion', label: 'Conclusión', requerido: true,
             placeholder: '¿El proceso cumple los requisitos? ¿Qué es lo más relevante que se encontró?' }) +
+          Componentes.campoTextarea({
+            id: 'audi-entrevistados', label: 'Personas entrevistadas (una por línea: "Nombre - Cargo")',
+            placeholder: 'Lisseth Vilchez - Encargada de Administración'
+          }) +
           '<div class="sigso-modal__acciones">' +
             Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
             Componentes.boton({ texto: 'Emitir informe', tipo: 'submit' }) +
@@ -2682,7 +2817,8 @@
       evento.preventDefault();
       api_('emitirInformeAuditoriaSgc', {
         auditoria_id: aud.auditoria_id,
-        conclusion: document.getElementById('audi-conclusion').value
+        conclusion: document.getElementById('audi-conclusion').value,
+        personas_entrevistadas: lineasNoVacias_(document.getElementById('audi-entrevistados').value)
       }).then(function (respuesta) {
         if (!respuesta || !respuesta.ok) {
           Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo emitir.', tipo: 'error' });
@@ -2745,5 +2881,11 @@
     var f = new Date(iso);
     if (isNaN(f.getTime())) return '';
     return f.getUTCFullYear() + '-' + ('0' + (f.getUTCMonth() + 1)).slice(-2) + '-' + ('0' + f.getUTCDate()).slice(-2);
+  }
+
+  // Un textarea "uno por línea" -> arreglo sin líneas vacías. Se usa para
+  // los items del descriptor y para las personas entrevistadas de auditoría.
+  function lineasNoVacias_(texto) {
+    return String(texto || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
   }
 })();

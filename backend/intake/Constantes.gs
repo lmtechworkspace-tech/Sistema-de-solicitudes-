@@ -495,10 +495,12 @@ var COLUMNAS = {
     'fecha_ingreso', 'estado', 'fecha_desvinculacion',
     'creado_por', 'fecha_creacion', 'activa'
   ],
+  // v10.0 Tanda A: idem -- copia solo para que el esquema no diverja.
   SGC_DESCRIPTORES: [
     'descriptor_id', 'persona_id', 'version', 'objetivo', 'funciones',
-    'responsabilidades', 'habilidades', 'nivel_educacional',
-    'formacion_tecnica', 'experiencia',
+    'responsabilidades', 'habilidades',
+    'items_responsabilidades', 'items_habilidades',
+    'nivel_educacional', 'formacion_tecnica', 'experiencia',
     'archivo_id', 'archivo_nombre', 'archivo_mime',
     'vigente', 'creado_por', 'fecha'
   ],
@@ -513,25 +515,28 @@ var COLUMNAS = {
   ],
   // v10.0 Fase 2b (PRO-02): ver la nota identica en
   // backend/backoffice/Constantes.gs sobre cada hoja y cada campo.
+  // v10.0 Tanda A: idem -- copia solo para que el esquema no diverja.
   SGC_EVALUACIONES: [
-    'evaluacion_id', 'persona_id', 'fecha', 'evaluador_email',
-    'r1', 'r2', 'r3', 'r4', 'h1', 'h2', 'h3', 'h4',
-    'promedio', 'requiere_capacitacion', 'observaciones',
+    'evaluacion_id', 'persona_id', 'descriptor_id', 'fecha', 'evaluador_email',
+    'respuestas_responsabilidades', 'respuestas_habilidades',
+    'promedio_responsabilidades', 'promedio_habilidades',
+    'requiere_capacitacion', 'observaciones', 'recomendado_por',
     'proxima_evaluacion'
   ],
   SGC_CAPACITACIONES: [
     'capacitacion_id', 'nombre', 'descripcion', 'horas',
     'fecha_programada', 'fecha_realizada', 'relator', 'estado',
-    'eficacia_fecha', 'eficacia_resultado', 'eficacia_observaciones',
     'creado_por', 'fecha_creacion', 'activa'
   ],
   SGC_CAPACITACION_ASISTENTES: [
-    'asistencia_id', 'capacitacion_id', 'persona_id', 'asistio', 'fecha'
+    'asistencia_id', 'capacitacion_id', 'persona_id', 'asistio', 'fecha',
+    'eficacia_fecha', 'eficacia_resultado', 'eficacia_observaciones'
   ],
   // v10.0 Fase 3a (PRO-06): ver la nota identica en
   // backend/backoffice/Constantes.gs sobre cada campo.
   SGC_NC: [
-    'nc_id', 'correlativo', 'fuente', 'origen_ref', 'descripcion',
+    'nc_id', 'correlativo', 'fuente', 'origen_ref', 'referencia_normativa',
+    'descripcion',
     'area_id', 'detectada_por', 'fecha_deteccion', 'responsable_email',
     'estado', 'ciclo',
     'correccion_descripcion', 'correccion_actividad_id',
@@ -546,10 +551,10 @@ var COLUMNAS = {
   // backend/backoffice/Constantes.gs sobre cada campo.
   SGC_AUDITORIAS: [
     'auditoria_id', 'correlativo', 'anio', 'area_id', 'proceso', 'clausulas',
-    'auditor_email', 'auditados', 'objetivo', 'alcance', 'criterios',
+    'auditor_email', 'coauditores', 'auditados', 'objetivo', 'alcance', 'criterios',
     'fecha_programada', 'fecha_plan', 'fecha_ejecucion',
     'estado',
-    'informe_plazo', 'informe_fecha', 'informe_conclusion',
+    'informe_plazo', 'informe_fecha', 'informe_conclusion', 'personas_entrevistadas',
     'fecha_cierre', 'cerrada_por', 'creada_por', 'fecha_creacion', 'activa'
   ],
   SGC_AUD_HALLAZGOS: [

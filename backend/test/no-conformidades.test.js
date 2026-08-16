@@ -327,6 +327,37 @@ test('crear exige descripcion, fuente valida y responsable', () => {
   assert.equal(ctx.NoConformidades.crear({ descripcion: 'X', fuente: 'PROCESO' }, CTX_SGC)._validationError, true);
 });
 
+// --- referencia normativa (v10.0 Tanda A, fidelidad con FO-PRO-06-01) ------
+// El formulario real trae este campo en "1.- Generalidades", y el informe
+// de auditoria (FO-PRO-03-02) lo pide como "Punto normativo" del resumen.
+
+test('referencia_normativa es opcional al crear una NC manual', () => {
+  const ctx = loadConSchema();
+  sembrar(ctx);
+  const sinRef = crearNc(ctx);
+  assert.equal(sinRef.referencia_normativa, '');
+  const conRef = crearNc(ctx, { referencia_normativa: '7.5' });
+  assert.equal(conRef.referencia_normativa, '7.5');
+});
+
+test('referencia_normativa se puede completar o corregir al registrar la causa', () => {
+  const ctx = loadConSchema();
+  sembrar(ctx);
+  const nc = crearNc(ctx);
+  const actualizada = ctx.NoConformidades.registrarCausa({
+    nc_id: nc.nc_id, porque_1: 'X', causa_raiz: 'Y', referencia_normativa: '8.5'
+  }, CTX_SGC);
+  assert.equal(actualizada.referencia_normativa, '8.5');
+});
+
+test('el resumen y el detalle de la NC muestran la referencia normativa', () => {
+  const ctx = loadConSchema();
+  sembrar(ctx);
+  crearNc(ctx, { referencia_normativa: '7.2' });
+  const listado = ctx.NoConformidades.listar({}, CTX_SGC);
+  assert.equal(listado.no_conformidades[0].referencia_normativa, '7.2');
+});
+
 // --- indicadores (§9.1 de la especificacion) --------------------------------
 
 test('los indicadores cuentan abiertas, cerradas, vencidas y % de eficacia', () => {

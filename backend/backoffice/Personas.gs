@@ -89,17 +89,43 @@ var Personas = {
 
     var descriptores = leerFilasSeguro_(SHEETS.SGC_DESCRIPTORES)
       .filter(function (d) { return d.persona_id === persona.persona_id; })
-      .sort(function (a, b) { return new Date(b.fecha || 0) - new Date(a.fecha || 0); });
+      .sort(function (a, b) { return new Date(b.fecha || 0) - new Date(a.fecha || 0); })
+      .map(function (d) {
+        return Object.assign({}, d, {
+          items_responsabilidades: parsearItemsDescriptor_(d.items_responsabilidades),
+          items_habilidades: parsearItemsDescriptor_(d.items_habilidades)
+        });
+      });
     var documentos = leerFilasSeguro_(SHEETS.SGC_PERSONA_DOCUMENTOS)
       .filter(function (d) { return d.persona_id === persona.persona_id && esActivoSgc_(d); });
     var induccion = leerFilasSeguro_(SHEETS.SGC_INDUCCIONES)
       .filter(function (i) { return i.persona_id === persona.persona_id; });
 
     // v10.0 Fase 2b: historial de evaluaciones, mas reciente primero.
+    // v10.0 Tanda A: las respuestas se guardan como JSON; se devuelven ya
+    // parseadas (no el string crudo) para que el frontend no tenga que
+    // saber el formato de almacenamiento.
     var evaluaciones = leerFilasSeguro_(SHEETS.SGC_EVALUACIONES)
       .filter(function (e) { return e.persona_id === persona.persona_id; })
-      .sort(function (a, b) { return new Date(b.fecha || 0) - new Date(a.fecha || 0); });
+      .sort(function (a, b) { return new Date(b.fecha || 0) - new Date(a.fecha || 0); })
+      .map(function (e) {
+        return {
+          evaluacion_id: e.evaluacion_id,
+          fecha: e.fecha,
+          evaluador_email: e.evaluador_email,
+          respuestas_responsabilidades: parsearItemsDescriptor_(e.respuestas_responsabilidades),
+          respuestas_habilidades: parsearItemsDescriptor_(e.respuestas_habilidades),
+          promedio_responsabilidades: Number(e.promedio_responsabilidades) || 0,
+          promedio_habilidades: Number(e.promedio_habilidades) || 0,
+          requiere_capacitacion: esVerdaderoSgc_(e.requiere_capacitacion),
+          observaciones: e.observaciones,
+          recomendado_por: e.recomendado_por,
+          proxima_evaluacion: e.proxima_evaluacion
+        };
+      });
     var ultimaEval = evaluaciones[0] || null;
+
+    var descriptorVigente = descriptores.filter(function (d) { return esVerdaderoSgc_(d.vigente); })[0] || null;
 
     return {
       persona: persona,
@@ -112,7 +138,7 @@ var Personas = {
       // Encargado SGC; y nadie se evalua a si mismo.
       puede_evaluar: (gobierna || esJefaturaDe_(persona, contexto)) &&
         !(normalizarEmailSgc_(persona.usuario_email) === normalizarEmailSgc_(contexto.email) && !gobierna),
-      items_evaluacion: ITEMS_EVALUACION_SGC,
+      escala_evaluacion: ESCALA_EVALUACION_SGC,
       evaluaciones: evaluaciones,
       ultima_evaluacion: ultimaEval,
       evaluacion_vencida: !ultimaEval || (ultimaEval.proxima_evaluacion &&
@@ -122,7 +148,11 @@ var Personas = {
         .filter(function (h) { return h.persona_id === persona.persona_id; })[0] || { horas: 0 }).horas,
       meta_horas_formacion: META_HORAS_FORMACION_SGC,
       descriptores: descriptores,
-      descriptor_vigente: descriptores.filter(function (d) { return esVerdaderoSgc_(d.vigente); })[0] || null,
+      descriptor_vigente: descriptorVigente,
+      // Los items que la evaluacion va a calificar, ya parseados: asi el
+      // formulario de evaluacion no depende de saber leer JSON.
+      items_responsabilidades: descriptorVigente ? parsearItemsDescriptor_(descriptorVigente.items_responsabilidades) : [],
+      items_habilidades: descriptorVigente ? parsearItemsDescriptor_(descriptorVigente.items_habilidades) : [],
       documentos: documentos,
       induccion: induccion
     };
@@ -232,6 +262,13 @@ var Personas = {
       return errorValidacion_('objetivo', 'El objetivo general del cargo es obligatorio.');
     }
 
+    // items_responsabilidades / items_habilidades: la lista discreta que
+    // despues califica el FO-PRO-02-04 ("segun descriptor de cargo"). Llegan
+    // como arreglo de strings (una por linea, en el frontend) o ya como
+    // arreglo; se limpia y se descarta lo vacio.
+    var itemsResp = normalizarItemsDescriptor_(data.items_responsabilidades);
+    var itemsHab = normalizarItemsDescriptor_(data.items_habilidades);
+
     var archivo = { archivo_id: '', archivo_nombre: '', archivo_mime: '' };
     if (data.contenido_base64) {
       var subido = subirArchivoSgc_(data, 'DESCRIPTOR-' + (persona.rut || persona.nombre));
@@ -255,6 +292,8 @@ var Personas = {
       funciones: data.funciones || '',
       responsabilidades: data.responsabilidades || '',
       habilidades: data.habilidades || '',
+      items_responsabilidades: JSON.stringify(itemsResp),
+      items_habilidades: JSON.stringify(itemsHab),
       nivel_educacional: data.nivel_educacional || '',
       formacion_tecnica: data.formacion_tecnica || '',
       experiencia: data.experiencia || '',
@@ -353,6 +392,13 @@ var Personas = {
   },
 
   // --- Monitoreo de competencias (FO-PRO-02-04, Fase 2b) --------------------
+  // v10.0 Tanda A: el formulario real califica DOS bloques por separado
+  // ("2.- Calificacion de principales responsabilidades" y "3.- ...
+  // responsabilidades secundarias/habilidades"), con un promedio cada uno
+  // (§4.- Resultados). Los items salen del descriptor VIGENTE de la
+  // persona -- no de una lista generica -- porque el formulario evalua
+  // "segun descriptor de cargo".
+  //
   // Quien evalua: la JEFATURA DIRECTA (asi lo pide la especificacion: "el
   // evaluador es la jefatura directa segun organigrama") o el Encargado
   // SGC / ADM. Nadie se evalua a si mismo -- una autoevaluacion no es
@@ -369,39 +415,48 @@ var Personas = {
       return { _forbidden: true, message: 'Nadie puede evaluarse a sí mismo.' };
     }
 
-    var puntajes = {};
-    var faltante = null;
-    ITEMS_EVALUACION_SGC.forEach(function (item) {
-      var valor = Number(data[item.clave]);
-      if (!(valor >= 1 && valor <= 4)) faltante = item.clave;
-      puntajes[item.clave] = valor;
-    });
-    if (faltante) {
-      return errorValidacion_(faltante, 'Cada ítem se califica de 1 a 4.');
+    var descriptor = descriptorVigenteDe_(persona.persona_id);
+    if (!descriptor) {
+      return errorValidacion_('persona_id',
+        'Esta persona no tiene un descriptor de cargo vigente. Complétalo primero: la evaluación califica según su descriptor.');
+    }
+    var itemsResp = parsearItemsDescriptor_(descriptor.items_responsabilidades);
+    var itemsHab = parsearItemsDescriptor_(descriptor.items_habilidades);
+    if (!itemsResp.length || !itemsHab.length) {
+      return errorValidacion_('persona_id',
+        'El descriptor de cargo vigente no tiene responsabilidades y habilidades cargadas como lista. Complétalo antes de evaluar.');
     }
 
-    var suma = 0;
-    ITEMS_EVALUACION_SGC.forEach(function (item) { suma += puntajes[item.clave]; });
-    var promedio = Math.round((suma / ITEMS_EVALUACION_SGC.length) * 100) / 100;
+    var puntuadosResp = puntuarItemsEvaluacion_(itemsResp, data.respuestas_responsabilidades);
+    if (puntuadosResp._validationError) return puntuadosResp;
+    var puntuadosHab = puntuarItemsEvaluacion_(itemsHab, data.respuestas_habilidades);
+    if (puntuadosHab._validationError) return puntuadosHab;
+
+    var promedioResp = promedioItems_(puntuadosResp);
+    var promedioHab = promedioItems_(puntuadosHab);
     var fecha = data.fecha || new Date().toISOString();
 
     var evaluacion = {
       evaluacion_id: Utilities.getUuid(),
       persona_id: persona.persona_id,
+      descriptor_id: descriptor.descriptor_id,
       fecha: fecha,
       evaluador_email: normalizarEmailSgc_(contexto.email),
-      r1: puntajes.r1, r2: puntajes.r2, r3: puntajes.r3, r4: puntajes.r4,
-      h1: puntajes.h1, h2: puntajes.h2, h3: puntajes.h3, h4: puntajes.h4,
-      promedio: promedio,
-      // Regla de la especificacion: promedio bajo 3 dispara la necesidad de
-      // capacitacion. Se DERIVA del puntaje, no se marca a mano -- asi no
-      // puede quedar en desacuerdo con la evaluacion real.
-      requiere_capacitacion: promedio < UMBRAL_CAPACITACION_SGC,
+      respuestas_responsabilidades: JSON.stringify(puntuadosResp),
+      respuestas_habilidades: JSON.stringify(puntuadosHab),
+      promedio_responsabilidades: promedioResp,
+      promedio_habilidades: promedioHab,
+      // Un area debil ya amerita formacion aunque la otra vaya bien -- no
+      // se promedian entre si, porque eso escondería una debilidad puntual
+      // detras de un numero general aceptable.
+      requiere_capacitacion: promedioResp < UMBRAL_CAPACITACION_SGC || promedioHab < UMBRAL_CAPACITACION_SGC,
       observaciones: data.observaciones || '',
+      recomendado_por: String(data.recomendado_por || '').trim(),
       proxima_evaluacion: sumarMesesSgc_(fecha, 12)
     };
     agregarFila_(SHEETS.SGC_EVALUACIONES, evaluacion);
-    registrarLogSgc_('SGC_EVALUACION', persona.nombre + ' promedio ' + promedio, contexto);
+    registrarLogSgc_('SGC_EVALUACION',
+      persona.nombre + ' resp ' + promedioResp + ' / hab ' + promedioHab, contexto);
 
     if (evaluacion.requiere_capacitacion) {
       // El hallazgo no sirve si se queda en la planilla: se avisa al
@@ -410,8 +465,8 @@ var Personas = {
         if (esVerdaderoActivoSgc_(r) && r.rol_sgc === 'ENCARGADO_SGC') {
           encolarNotificacionApp_(r.usuario_email, 'SGC_COMPETENCIA',
             'Necesidad de capacitación detectada',
-            persona.nombre + ' obtuvo promedio ' + promedio + ' en su evaluación de competencias.',
-            'calidad', 'Ver ficha', 72);
+            persona.nombre + ' obtuvo promedio ' + Math.min(promedioResp, promedioHab) +
+            ' en su evaluación de competencias.', 'calidad', 'Ver ficha', 72);
         }
       });
     }
@@ -444,19 +499,25 @@ var Personas = {
           fecha_realizada: c.fecha_realizada,
           relator: c.relator,
           estado: c.estado,
-          eficacia_fecha: c.eficacia_fecha,
-          eficacia_resultado: c.eficacia_resultado,
-          // Aviso derivado: la especificacion pide evaluar la eficacia a 60
-          // dias de realizada. Se calcula al leer, nunca queda desfasado.
-          eficacia_pendiente: eficaciaPendienteSgc_(c),
           total_convocados: suyos.length,
           total_asistieron: suyos.filter(function (a) { return esVerdaderoSgc_(a.asistio); }).length,
+          // v10.0 Tanda A: la eficacia (FO-PRO-02-05 §2) es POR PARTICIPANTE
+          // -- dos personas del mismo curso pueden tener resultado distinto.
+          // eficacia_pendiente aca es a nivel de curso: al menos un asistente
+          // sin evaluar todavia, util para la lista maestra.
+          eficacia_pendiente: suyos.some(function (a) {
+            return esVerdaderoSgc_(a.asistio) && eficaciaPendienteAsistenteSgc_(c, a);
+          }),
           asistentes: suyos.map(function (a) {
             return {
               asistencia_id: a.asistencia_id,
               persona_id: a.persona_id,
               nombre: nombrePorId[a.persona_id] || a.persona_id,
-              asistio: esVerdaderoSgc_(a.asistio)
+              asistio: esVerdaderoSgc_(a.asistio),
+              eficacia_fecha: a.eficacia_fecha,
+              eficacia_resultado: a.eficacia_resultado,
+              eficacia_observaciones: a.eficacia_observaciones,
+              eficacia_pendiente: esVerdaderoSgc_(a.asistio) && eficaciaPendienteAsistenteSgc_(c, a)
             };
           })
         };
@@ -507,9 +568,6 @@ var Personas = {
       fecha_realizada: '',
       relator: data.relator || '',
       estado: 'PROGRAMADA',
-      eficacia_fecha: '',
-      eficacia_resultado: '',
-      eficacia_observaciones: '',
       creado_por: contexto.email || '',
       fecha_creacion: new Date().toISOString(),
       activa: true
@@ -554,15 +612,18 @@ var Personas = {
         capacitacion_id: c.capacitacion_id,
         persona_id: pid,
         asistio: true,
-        fecha: fechaRealizada
+        fecha: fechaRealizada,
+        eficacia_fecha: '', eficacia_resultado: '', eficacia_observaciones: ''
       });
     });
     registrarLogSgc_('SGC_CAPACITACION_REALIZADA', c.nombre, contexto);
     return actualizada;
   },
 
-  // Eficacia a 60 dias (FO-PRO-02-05): ¿sirvió la capacitación?
-  registrarEficacia: function (data, contexto) {
+  // Eficacia a 60 dias (FO-PRO-02-05 §2, columna "Eficacia de la
+  // capacitacion (60 dias despues)"): es POR PARTICIPANTE, no por curso --
+  // el mismo curso puede haberle servido a una persona y no a otra.
+  registrarEficaciaAsistente: function (data, contexto) {
     if (!gobiernaSgc_(contexto, rolSgc_(contexto))) {
       return { _forbidden: true, message: 'Solo el Encargado SGC o un administrador pueden registrar la eficacia.' };
     }
@@ -571,13 +632,19 @@ var Personas = {
     if (c.estado !== 'REALIZADA') {
       return errorValidacion_('capacitacion_id', 'Solo se evalúa la eficacia de una capacitación ya realizada.');
     }
+    var asistente = leerFilasSeguro_(SHEETS.SGC_CAPACITACION_ASISTENTES).filter(function (a) {
+      return a.capacitacion_id === c.capacitacion_id && a.persona_id === data.persona_id;
+    })[0];
+    if (!asistente || !esVerdaderoSgc_(asistente.asistio)) {
+      return errorValidacion_('persona_id', 'Esta persona no asistió a la capacitación.');
+    }
     if (['EFICAZ', 'NO_EFICAZ'].indexOf(data.resultado) === -1) {
-      return errorValidacion_('resultado', 'Indica si la capacitación fue eficaz o no.');
+      return errorValidacion_('resultado', 'Indica si la capacitación fue eficaz o no para esta persona.');
     }
     if (data.resultado === 'NO_EFICAZ' && !String(data.observaciones || '').trim()) {
       return errorValidacion_('observaciones', 'Si no fue eficaz, explica por qué: es lo que justifica la siguiente acción.');
     }
-    return actualizarFilaPorId_(SHEETS.SGC_CAPACITACIONES, 'capacitacion_id', c.capacitacion_id, {
+    return actualizarFilaPorId_(SHEETS.SGC_CAPACITACION_ASISTENTES, 'asistencia_id', asistente.asistencia_id, {
       eficacia_fecha: data.fecha || new Date().toISOString(),
       eficacia_resultado: data.resultado,
       eficacia_observaciones: data.observaciones || ''
@@ -699,19 +766,31 @@ Personas.recordatorioCompetencias = function () {
   }
 
   // 3) Eficacia de capacitaciones pendiente (60 dias post-realizacion).
-  var sinEficacia = leerFilasSeguro_(SHEETS.SGC_CAPACITACIONES)
-    .filter(function (c) { return esActivoSgc_(c) && eficaciaPendienteSgc_(c); });
+  // v10.0 Tanda A: es por PERSONA, no por curso -- se listan asistentes,
+  // no capacitaciones (dos personas del mismo curso pueden estar en
+  // situacion distinta: una ya evaluada, la otra no).
+  var capacitacionesPorId = {};
+  leerFilasSeguro_(SHEETS.SGC_CAPACITACIONES).filter(esActivoSgc_).forEach(function (c) {
+    capacitacionesPorId[c.capacitacion_id] = c;
+  });
+  var nombrePorPersonaId = {};
+  personas.forEach(function (p) { nombrePorPersonaId[p.persona_id] = p.nombre; });
+  var sinEficacia = leerFilasSeguro_(SHEETS.SGC_CAPACITACION_ASISTENTES).filter(function (a) {
+    var c = capacitacionesPorId[a.capacitacion_id];
+    return c && esVerdaderoSgc_(a.asistio) && eficaciaPendienteAsistenteSgc_(c, a);
+  }).map(function (a) {
+    return { curso: capacitacionesPorId[a.capacitacion_id].nombre, persona: nombrePorPersonaId[a.persona_id] || a.persona_id };
+  });
   var enviadosEficacia = 0;
   if (sinEficacia.length) {
-    var itemsEf = sinEficacia.map(function (c) {
-      return '<li><strong>' + escaparHtmlCorreo_(c.nombre) + '</strong> — realizada el ' +
-        String(c.fecha_realizada).slice(0, 10) + '</li>';
+    var itemsEf = sinEficacia.map(function (x) {
+      return '<li><strong>' + escaparHtmlCorreo_(x.persona) + '</strong> — ' + escaparHtmlCorreo_(x.curso) + '</li>';
     }).join('');
-    var asuntoE = 'SIGSO - ' + sinEficacia.length + ' capacitación(es) sin evaluar su eficacia';
-    var textoE = 'Estas capacitaciones cumplieron 60 días y aún no tienen evaluación de eficacia:\n' +
-      sinEficacia.map(function (c) { return '- ' + c.nombre; }).join('\n');
+    var asuntoE = 'SIGSO - ' + sinEficacia.length + ' eficacia(s) de capacitación sin evaluar';
+    var textoE = 'Estos participantes cumplieron 60 días desde su capacitación y aún no tienen evaluación de eficacia:\n' +
+      sinEficacia.map(function (x) { return '- ' + x.persona + ' (' + x.curso + ')'; }).join('\n');
     var htmlE = plantillaCorreoHtml_('Eficacia de capacitación pendiente',
-      '<p>Estas capacitaciones cumplieron <strong>60 días</strong> y aún no tienen evaluación de eficacia:</p>' +
+      '<p>Estos participantes cumplieron <strong>60 días</strong> desde su capacitación y aún no tienen evaluación de eficacia:</p>' +
       '<ul style="margin:0 0 12px 18px;padding:0;">' + itemsEf + '</ul>');
     encargados.forEach(function (email) {
       var r = enviarCorreo_('SGC_FORMACION', email, 'SGC_EFICACIA_PENDIENTE:' + claveSemana,
@@ -736,23 +815,13 @@ var ITEMS_INDUCCION_SGC = [
 
 var TIPOS_DOC_PERSONA_SGC = ['CV', 'TITULO', 'ISO9001', 'CONTRATO', 'CERTIFICADO', 'OTRO'];
 
-// Los 8 items del monitoreo de competencias (FO-PRO-02-04): 4 de
-// responsabilidades + 4 de habilidades, escala 1 a 4.
-//
-// NOTA PARA QUIEN MANTENGA ESTO: los textos de abajo son una redaccion
-// razonable de lo que evalua ese formulario. Si el FO-PRO-02-04 real de la
-// empresa usa otra redaccion, se cambia AQUI (solo el texto) y la interfaz
-// se actualiza sola -- los puntajes se guardan en r1..r4/h1..h4, que no
-// dependen del texto.
-var ITEMS_EVALUACION_SGC = [
-  { clave: 'r1', grupo: 'Responsabilidades', texto: 'Cumple las funciones definidas en su descriptor de cargo' },
-  { clave: 'r2', grupo: 'Responsabilidades', texto: 'Cumple los plazos comprometidos' },
-  { clave: 'r3', grupo: 'Responsabilidades', texto: 'Aplica los procedimientos del SGC en su trabajo' },
-  { clave: 'r4', grupo: 'Responsabilidades', texto: 'Reporta oportunamente problemas y desviaciones' },
-  { clave: 'h1', grupo: 'Habilidades', texto: 'Conocimiento técnico requerido por el cargo' },
-  { clave: 'h2', grupo: 'Habilidades', texto: 'Comunicación y trabajo en equipo' },
-  { clave: 'h3', grupo: 'Habilidades', texto: 'Autonomía y resolución de problemas' },
-  { clave: 'h4', grupo: 'Habilidades', texto: 'Orientación al cliente y calidad del servicio' }
+// Escala real del FO-PRO-02-04 (no una generica "1 a 4"): cada numero tiene
+// un significado fijo que el formulario imprime como leyenda.
+var ESCALA_EVALUACION_SGC = [
+  { valor: 1, texto: 'No cumple' },
+  { valor: 2, texto: 'Cumple en algunas ocasiones' },
+  { valor: 3, texto: 'Cumple en la mayoría de los casos' },
+  { valor: 4, texto: 'Cumple en su totalidad' }
 ];
 
 // Promedio bajo este valor => necesidad de capacitacion (§5.1.E).
@@ -797,6 +866,65 @@ function buscarPersonaSgc_(personaId) {
   return null;
 }
 
+// --- items del descriptor (Tanda A) -----------------------------------------
+
+// Acepta un arreglo ya armado (frontend) o una unica string con saltos de
+// linea (por si llega de otra forma); descarta lineas vacias y recorta
+// espacios. Nunca lanza: una entrada rara simplemente da una lista vacia,
+// y guardarDescriptor_/registrarEvaluacion ya validan eso explicitamente.
+function normalizarItemsDescriptor_(valor) {
+  var lista = valor;
+  if (typeof lista === 'string') lista = lista.split('\n');
+  if (Object.prototype.toString.call(lista) !== '[object Array]') return [];
+  return lista.map(function (s) { return String(s || '').trim(); }).filter(Boolean);
+}
+
+// El inverso de JSON.stringify(normalizarItemsDescriptor_(...)): nunca
+// lanza, una celda corrupta (editada a mano en la hoja) da lista vacia en
+// vez de tumbar toda la ficha o la evaluacion.
+function parsearItemsDescriptor_(valor) {
+  if (!valor) return [];
+  if (Object.prototype.toString.call(valor) === '[object Array]') return valor;
+  try {
+    var parsed = JSON.parse(valor);
+    return Object.prototype.toString.call(parsed) === '[object Array]' ? parsed : [];
+  } catch (err) {
+    return [];
+  }
+}
+
+function descriptorVigenteDe_(personaId) {
+  var filas = leerFilasSeguro_(SHEETS.SGC_DESCRIPTORES).filter(function (d) {
+    return d.persona_id === personaId && esVerdaderoSgc_(d.vigente);
+  });
+  return filas[0] || null;
+}
+
+// Empareja la lista de items del descriptor con los puntajes que llegaron
+// (objeto { "0": valor, "1": valor, ... } o arreglo en el mismo orden).
+// Devuelve [{item, valor}] o un _validationError si falta o esta fuera de
+// escala alguno -- self-explanatorio: el formulario exige calificar TODOS
+// los items del cargo, no una muestra.
+function puntuarItemsEvaluacion_(items, respuestas) {
+  var resultado = [];
+  for (var i = 0; i < items.length; i++) {
+    var crudo = respuestas ? respuestas[i] : undefined;
+    var valor = Number(crudo);
+    if (!(valor >= 1 && valor <= 4)) {
+      return errorValidacion_('respuestas', 'Falta calificar "' + items[i] + '" (escala 1 a 4).');
+    }
+    resultado.push({ item: items[i], valor: valor });
+  }
+  return resultado;
+}
+
+function promedioItems_(puntuados) {
+  if (!puntuados.length) return 0;
+  var suma = 0;
+  puntuados.forEach(function (p) { suma += p.valor; });
+  return Math.round((suma / puntuados.length) * 100) / 100;
+}
+
 function buscarCapacitacionSgc_(capacitacionId) {
   if (!capacitacionId) return null;
   var filas = leerFilasSeguro_(SHEETS.SGC_CAPACITACIONES);
@@ -814,9 +942,11 @@ function sumarMesesSgc_(fecha, meses) {
   return r.toISOString();
 }
 
-// Eficacia pendiente: realizada hace 60+ dias y todavia sin evaluar.
-function eficaciaPendienteSgc_(capacitacion) {
-  if (capacitacion.estado !== 'REALIZADA' || capacitacion.eficacia_resultado) return false;
+// Eficacia pendiente de un asistente: la capacitacion se realizo hace 60+
+// dias y esa persona todavia no tiene resultado (v10.0 Tanda A: es por
+// participante, ver la nota en SGC_CAPACITACION_ASISTENTES).
+function eficaciaPendienteAsistenteSgc_(capacitacion, asistente) {
+  if (capacitacion.estado !== 'REALIZADA' || asistente.eficacia_resultado) return false;
   if (!capacitacion.fecha_realizada) return false;
   var dias = (new Date() - new Date(capacitacion.fecha_realizada)) / 86400000;
   return dias >= 60;
