@@ -39,6 +39,8 @@
       if (quejaActivaId_) abrirQueja_(quejaActivaId_); else cargarQuejas_();
     } else if (seccionActiva_ === 'proveedores') {
       if (proveedorActivoId_) abrirProveedor_(proveedorActivoId_); else cargarProveedores_();
+    } else if (seccionActiva_ === 'revision') {
+      if (revisionActivaId_) abrirRevision_(revisionActivaId_); else cargarRevisiones_();
     } else {
       if (documentoActivoId_) abrirDocumento_(documentoActivoId_); else cargarListado_();
     }
@@ -54,7 +56,8 @@
       { id: 'nc', texto: 'No conformidades' },
       { id: 'auditorias', texto: 'Auditorías' },
       { id: 'quejas', texto: 'Quejas' },
-      { id: 'proveedores', texto: 'Proveedores' }
+      { id: 'proveedores', texto: 'Proveedores' },
+      { id: 'revision', texto: 'Revisión por la dirección' }
     ];
     return '<div class="sigso-tabs sgc-secciones">' + secciones.map(function (s) {
       return '<button type="button" class="sigso-tab js-sgc-seccion' +
@@ -72,6 +75,7 @@
         auditoriaActivaId_ = null;
         quejaActivaId_ = null;
         proveedorActivoId_ = null;
+        revisionActivaId_ = null;
         render_();
       });
     });
@@ -105,6 +109,7 @@
   var auditoriaActivaId_ = null;
   var quejaActivaId_ = null;
   var proveedorActivoId_ = null;
+  var revisionActivaId_ = null;
   var pestanaFicha_ = 'datos';
   var puedeGestionar_ = false;
   var filtroTipo_ = '';
@@ -3744,6 +3749,454 @@
         cerrar();
         proveedorActivoId_ = null;
         cargarProveedores_();
+      });
+    });
+  }
+
+  // --- Revisión por la dirección (PRO-05) -------------------------------------
+  // El acta tiene 13 temas obligatorios. Cinco los responde el sistema con
+  // sus propios datos: el botón "Traer datos del sistema" los rellena y
+  // quedan editables. El dato lo pone SIGSO, la conclusión la escribe quien
+  // preside — si el sistema opinara, el registro dejaría de ser evidencia de
+  // que la Dirección revisó.
+
+  var ESTADO_REVISION_ETIQUETA = {
+    PROGRAMADA: 'Programada', CONVOCADA: 'Convocada', REALIZADA: 'Realizada',
+    CERRADA: 'Cerrada', ANULADA: 'Anulada'
+  };
+  var ESTADO_REVISION_TONO = {
+    PROGRAMADA: 'neutro', CONVOCADA: 'info', REALIZADA: 'alerta',
+    CERRADA: 'ok', ANULADA: 'neutro'
+  };
+
+  function cargarRevisiones_() {
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando revisiones...');
+    api_('listarRevisionesSgc', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = barraSecciones_() +
+          Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar.', 'error');
+        wireSecciones_(cont);
+        return;
+      }
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      pintarRevisiones_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
+      wireSecciones_(cont);
+    });
+  }
+
+  function pintarRevisiones_(cont, data) {
+    var lista = data.revisiones || [];
+    var vig = data.vigencia || {};
+
+    var avisoVigencia = vig.vencida
+      ? Componentes.alerta(vig.ultima_fecha
+          ? 'La última revisión fue el ' + fechaCorta_(vig.ultima_fecha) + '. PRO-05 pide una al menos cada ' +
+            (data.meses_frecuencia || 12) + ' meses.'
+          : 'Todavía no se ha registrado ninguna revisión por la dirección. La norma (§9.3) la exige.', 'error')
+      : (vig.proxima
+          ? '<p class="sigso-ayuda">Última revisión: ' + fechaCorta_(vig.ultima_fecha) +
+            '. La próxima corresponde antes del ' + fechaCorta_(vig.proxima) + '.</p>'
+          : '');
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">Informe de revisión por la dirección (FO-PRO-05-01). Se convoca con ' +
+      (data.dias_convocatoria || 10) + ' días hábiles de anticipación y se registra el acta con los ' +
+      '13 temas que exige la norma.</p>' +
+      (puedeGestionar_ ? Componentes.boton({ texto: '+ Programar revisión', clase: 'js-sgc-nueva-rev' }) : '') +
+      '</div>' + avisoVigencia;
+
+    function wire() {
+      wireSecciones_(cont);
+      var nueva = cont.querySelector('.js-sgc-nueva-rev');
+      if (nueva) nueva.addEventListener('click', function () { abrirFormularioProgramarRevision_(); });
+      cont.querySelectorAll('.js-sgc-abrir-rev').forEach(function (btn) {
+        btn.addEventListener('click', function () { abrirRevision_(btn.getAttribute('data-id')); });
+      });
+    }
+
+    if (!lista.length) {
+      cont.innerHTML = cabecera + Componentes.vacio({
+        texto: 'Todavía no hay revisiones registradas.',
+        detalle: 'La revisión por la dirección es anual y la ejecuta la Dirección (PRO-05 §4).'
+      });
+      wire();
+      return;
+    }
+
+    cont.innerHTML = cabecera + '<div class="sgc-lista">' + lista.map(function (r) {
+      var badges = Componentes.badge(ESTADO_REVISION_ETIQUETA[r.estado] || r.estado,
+        ESTADO_REVISION_TONO[r.estado] || 'neutro');
+      if (r.convocatoria_atrasada) badges += Componentes.badge('Falta convocar', 'critico');
+
+      return '<button type="button" class="sgc-doc js-sgc-abrir-rev" data-id="' +
+        Componentes.escaparHtml(r.revision_id) + '">' +
+        '<div class="sgc-doc__linea">' +
+          '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(r.correlativo) + '</span>' + badges +
+        '</div>' +
+        '<div class="sgc-doc__meta">' +
+          '<span>Reunión: ' + fechaCorta_(r.fecha_reunion || r.fecha_programada) + '</span>' +
+          '<span>' + r.entradas_completas + '/' + r.total_entradas + ' temas</span>' +
+          '<span>' + r.total_acuerdos + ' acuerdo(s)</span>' +
+        '</div>' +
+        '</button>';
+    }).join('') + '</div>';
+    wire();
+  }
+
+  function abrirRevision_(id) {
+    revisionActivaId_ = id;
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando revisión...');
+    api_('getDetalleRevisionSgc', { revision_id: id }).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo abrir.', 'error');
+        return;
+      }
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      pintarFichaRevision_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
+    });
+  }
+
+  function pintarFichaRevision_(cont, data) {
+    var r = data.revision;
+    var entradas = data.entradas || [];
+    var acuerdos = data.acuerdos || [];
+    var cerrada = r.estado === 'CERRADA';
+
+    var badges = Componentes.badge(ESTADO_REVISION_ETIQUETA[r.estado] || r.estado,
+      ESTADO_REVISION_TONO[r.estado] || 'neutro');
+    if (r.convocatoria_atrasada) badges += Componentes.badge('Falta convocar', 'critico');
+
+    var asistentes = (r.asistentes || []).length
+      ? '<ul class="sgc-items">' + r.asistentes.map(function (a) {
+          return '<li><span>' + Componentes.escaparHtml(a.nombre) + '</span> <strong>' +
+            Componentes.escaparHtml(a.cargo || '') + '</strong></li>';
+        }).join('') + '</ul>'
+      : '<p class="sigso-ayuda">Todavía no se registraron asistentes.</p>';
+
+    var temas = '<h3 class="sgc-subtitulo">Información a tratar (§9.3.2)</h3>' +
+      '<div class="sgc-lista">' + entradas.map(function (e) {
+        return '<div class="sgc-version">' +
+          '<div class="sgc-version__cab">' +
+            '<strong>' + e.numero + '. ' + Componentes.escaparHtml(e.titulo) + '</strong>' +
+            (e.auto ? Componentes.badge('Lo trae el sistema', 'info') : '') +
+          '</div>' +
+          (e.observaciones
+            ? '<p>' + Componentes.escaparHtml(e.observaciones) + '</p>'
+            : '<p class="sigso-ayuda">' +
+                (e.pendiente_fase
+                  ? 'Sin completar. Se podrá traer automáticamente cuando exista: ' +
+                    Componentes.escaparHtml(e.pendiente_fase) + '.'
+                  : 'Sin completar.') +
+              '</p>') +
+        '</div>';
+      }).join('') + '</div>';
+
+    var listaAcuerdos = '<h3 class="sgc-subtitulo">Acuerdos tomados (§9.3.3)</h3>' +
+      (acuerdos.length
+        ? '<div class="sgc-lista">' + acuerdos.map(function (a) {
+            var t = a.tarea;
+            return '<div class="sgc-version">' +
+              '<div class="sgc-version__cab">' +
+                '<strong>' + Componentes.escaparHtml(a.tipo_etiqueta) + '</strong>' +
+                (t ? Componentes.badge(t.terminada ? 'Cumplido' : 'En curso', t.terminada ? 'ok' : 'alerta') : '') +
+              '</div>' +
+              '<p>' + Componentes.escaparHtml(a.observaciones) + '</p>' +
+              '<p class="sigso-ayuda">Responsable: ' + Componentes.escaparHtml(a.responsable_email) +
+                ' · Plazo: ' + fechaCorta_(a.plazo) +
+                (t ? ' · Aparece en "Mi trabajo" de esa persona' : '') + '</p>' +
+            '</div>';
+          }).join('') + '</div>'
+        : Componentes.vacio({
+            texto: 'Todavía no hay acuerdos.',
+            detalle: '§9.3.3 exige que la revisión produzca decisiones: sin acuerdos no se puede cerrar.'
+          }));
+
+    cont.innerHTML =
+      '<button type="button" class="sigso-boton sigso-boton--sutil js-sgc-volver-rev">← Revisiones</button>' +
+      '<div class="sgc-ficha">' +
+        '<div class="sgc-ficha__cab">' +
+          '<h2>' + Componentes.escaparHtml(r.correlativo) + '</h2>' + badges +
+        '</div>' +
+        '<div class="sgc-ficha__datos">' +
+          campoFicha_('Fecha programada', fechaCorta_(r.fecha_programada)) +
+          campoFicha_('Convocar antes de', r.aviso_plazo ? fechaCorta_(r.aviso_plazo) : '—') +
+          campoFicha_('Convocada el', r.fecha_convocatoria ? fechaCorta_(r.fecha_convocatoria) : '—') +
+          campoFicha_('Reunión realizada', r.fecha_reunion ? fechaCorta_(r.fecha_reunion) : '—') +
+          campoFicha_('Director', r.director_email) +
+          campoFicha_('Responsable de calidad', r.responsable_calidad_email) +
+        '</div>' +
+        '<h3 class="sgc-subtitulo">Asistentes</h3>' + asistentes +
+        (puedeGestionar_ && !cerrada
+          ? '<div class="sgc-ficha__acciones">' +
+              (r.estado === 'PROGRAMADA'
+                ? Componentes.boton({ texto: 'Convocar', clase: 'js-sgc-convocar-rev' }) : '') +
+              Componentes.boton({ texto: 'Registrar acta', variante: 'secundario', clase: 'js-sgc-acta-rev' }) +
+              (r.estado === 'REALIZADA'
+                ? Componentes.boton({ texto: '+ Acuerdo', variante: 'secundario', clase: 'js-sgc-acuerdo-rev' }) : '') +
+              (r.estado === 'REALIZADA'
+                ? Componentes.boton({ texto: 'Cerrar revisión', clase: 'js-sgc-cerrar-rev' }) : '') +
+              Componentes.boton({ texto: 'Anular', variante: 'peligro', clase: 'js-sgc-anular-rev' }) +
+            '</div>'
+          : '') +
+        temas +
+        (r.conclusiones
+          ? '<h3 class="sgc-subtitulo">Conclusiones</h3><p>' + Componentes.escaparHtml(r.conclusiones) + '</p>'
+          : '') +
+        listaAcuerdos +
+        (r.anexos ? '<h3 class="sgc-subtitulo">Anexos</h3><p>' + Componentes.escaparHtml(r.anexos) + '</p>' : '') +
+      '</div>';
+
+    function accion_(sel, fn) {
+      var b = cont.querySelector(sel);
+      if (b) b.addEventListener('click', fn);
+    }
+    accion_('.js-sgc-volver-rev', function () { revisionActivaId_ = null; cargarRevisiones_(); });
+    accion_('.js-sgc-convocar-rev', function () { abrirFormularioConvocarRevision_(r); });
+    accion_('.js-sgc-acta-rev', function () { abrirFormularioActaRevision_(r, data); });
+    accion_('.js-sgc-acuerdo-rev', function () { abrirFormularioAcuerdoRevision_(r, data); });
+    accion_('.js-sgc-cerrar-rev', function () {
+      Componentes.confirmar({
+        titulo: 'Cerrar la revisión',
+        mensaje: 'Queda como registro definitivo del año. ¿Confirmas?'
+      }).then(function (ok) {
+        if (!ok) return;
+        api_('cerrarRevisionSgc', { revision_id: r.revision_id }).then(function (resp) {
+          if (!resp || !resp.ok) {
+            Componentes.aviso({ texto: (resp && resp.message) || 'No se pudo cerrar.', tipo: 'error' });
+            return;
+          }
+          abrirRevision_(r.revision_id);
+        });
+      });
+    });
+    accion_('.js-sgc-anular-rev', function () {
+      Componentes.prompt({
+        titulo: 'Anular revisión',
+        mensaje: '¿Por qué se anula? Queda registrado (no se borra).'
+      }).then(function (motivo) {
+        if (!motivo || !String(motivo).trim()) return;
+        api_('anularRevisionSgc', { revision_id: r.revision_id, motivo: motivo }).then(function (resp) {
+          if (!resp || !resp.ok) {
+            Componentes.aviso({ texto: (resp && resp.message) || 'No se pudo anular.', tipo: 'error' });
+            return;
+          }
+          revisionActivaId_ = null;
+          cargarRevisiones_();
+        });
+      });
+    });
+  }
+
+  function abrirFormularioProgramarRevision_() {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Programar revisión por la dirección</h3>' +
+        '<p class="sigso-ayuda">La frecuencia mínima es anual. El sistema calcula solo hasta cuándo ' +
+        'hay plazo para convocar (10 días hábiles antes).</p>' +
+        '<form id="form-sgc-rev">' +
+          Componentes.campoTexto({ id: 'rev-fecha', label: 'Fecha de la reunión', tipo: 'date', requerido: true }) +
+          Componentes.campoTexto({ id: 'rev-director', label: 'Correo del Director', tipo: 'email' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Programar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-sgc-rev').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('programarRevisionSgc', {
+        fecha_programada: document.getElementById('rev-fecha').value,
+        director_email: document.getElementById('rev-director').value
+      }).then(function (resp) {
+        if (!resp || !resp.ok) {
+          Componentes.aviso({ texto: (resp && resp.message) || 'No se pudo programar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        cargarRevisiones_();
+      });
+    });
+  }
+
+  function abrirFormularioConvocarRevision_(r) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Convocar a la revisión ' + Componentes.escaparHtml(r.correlativo) + '</h3>' +
+        '<p class="sigso-ayuda">Se envía por correo la agenda con los 13 temas que exige la norma.</p>' +
+        '<form id="form-sgc-rev-conv">' +
+          Componentes.campoTextarea({ id: 'revc-asistentes', label: 'Asistentes (uno por línea: Nombre - Cargo)', requerido: true }) +
+          Componentes.campoTextarea({ id: 'revc-correos', label: 'Correos a convocar (uno por línea)', requerido: true }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Enviar convocatoria', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-sgc-rev-conv').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('convocarRevisionSgc', {
+        revision_id: r.revision_id,
+        asistentes: document.getElementById('revc-asistentes').value,
+        correos: document.getElementById('revc-correos').value.split('\n')
+          .map(function (x) { return x.trim(); }).filter(Boolean)
+      }).then(function (resp) {
+        if (!resp || !resp.ok) {
+          Componentes.aviso({ texto: (resp && resp.message) || 'No se pudo convocar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: 'Convocatoria enviada.', tipo: 'exito' });
+        abrirRevision_(r.revision_id);
+      });
+    });
+  }
+
+  function abrirFormularioActaRevision_(r, data) {
+    var entradas = data.entradas || [];
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Acta de la revisión ' + Componentes.escaparHtml(r.correlativo) + '</h3>' +
+        '<p class="sigso-ayuda">Los 13 temas son obligatorios (§9.3.2). Dejar uno en blanco es un ' +
+        'hallazgo de auditoría.</p>' +
+        Componentes.boton({ texto: '⤓ Traer datos del sistema', variante: 'secundario', clase: 'js-sgc-rev-auto', tipo: 'button' }) +
+        '<form id="form-sgc-rev-acta">' +
+          Componentes.campoTexto({ id: 'reva-fecha', label: 'Fecha en que se realizó', tipo: 'date',
+            requerido: true, valor: fechaISO_(r.fecha_reunion || r.fecha_programada) }) +
+          Componentes.campoTextarea({ id: 'reva-asistentes', label: 'Asistentes (Nombre - Cargo, uno por línea)',
+            requerido: true, valor: (r.asistentes || []).map(function (a) {
+              return a.nombre + (a.cargo ? ' - ' + a.cargo : '');
+            }).join('\n') }) +
+          entradas.map(function (e) {
+            return Componentes.campoTextarea({
+              id: 'reva-e' + e.numero,
+              label: e.numero + '. ' + e.titulo + (e.auto ? '  (lo trae el sistema)' : ''),
+              valor: e.observaciones || ''
+            });
+          }).join('') +
+          Componentes.campoTextarea({ id: 'reva-concl',
+            label: 'Conclusiones (¿el SGC es adecuado y eficaz? ¿hay recursos?)',
+            valor: r.conclusiones || '' }) +
+          Componentes.campoTextarea({ id: 'reva-anexos', label: 'Anexos asociados', valor: r.anexos || '' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar acta', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    // El resumen se pide al backend y rellena SOLO los campos que estén
+    // vacíos: si alguien ya escribió su propia observación, no se pisa.
+    var btnAuto = fondo.querySelector('.js-sgc-rev-auto');
+    if (btnAuto) btnAuto.addEventListener('click', function () {
+      btnAuto.disabled = true;
+      api_('getResumenRevisionSgc', { revision_id: r.revision_id }).then(function (resp) {
+        btnAuto.disabled = false;
+        if (!resp || !resp.ok) {
+          Componentes.aviso({ texto: (resp && resp.message) || 'No se pudo traer el resumen.', tipo: 'error' });
+          return;
+        }
+        var resumen = resp.data.resumen || {};
+        var puestos = 0;
+        Object.keys(resumen).forEach(function (num) {
+          var campo = document.getElementById('reva-e' + num);
+          if (campo && !campo.value.trim()) { campo.value = resumen[num]; puestos++; }
+        });
+        Componentes.aviso({
+          texto: puestos
+            ? 'Se completaron ' + puestos + ' tema(s) con los datos del sistema. Revísalos y ajústalos.'
+            : 'Los temas que trae el sistema ya estaban escritos: no se pisó nada.',
+          tipo: 'exito'
+        });
+      }).catch(function () {
+        btnAuto.disabled = false;
+        Componentes.aviso({ texto: 'No se pudo traer el resumen.', tipo: 'error' });
+      });
+    });
+
+    document.getElementById('form-sgc-rev-acta').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var obs = {};
+      entradas.forEach(function (e) {
+        obs[e.numero] = document.getElementById('reva-e' + e.numero).value;
+      });
+      api_('registrarActaRevisionSgc', {
+        revision_id: r.revision_id,
+        fecha_reunion: document.getElementById('reva-fecha').value,
+        asistentes: document.getElementById('reva-asistentes').value,
+        entradas: obs,
+        conclusiones: document.getElementById('reva-concl').value,
+        anexos: document.getElementById('reva-anexos').value
+      }).then(function (resp) {
+        if (!resp || !resp.ok) {
+          Componentes.aviso({ texto: (resp && resp.message) || 'No se pudo guardar el acta.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        abrirRevision_(r.revision_id);
+      });
+    });
+  }
+
+  function abrirFormularioAcuerdoRevision_(r, data) {
+    var tipos = data.catalogo_acuerdos || [];
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Nuevo acuerdo</h3>' +
+        '<p class="sigso-ayuda">El acuerdo se convierte en una tarea real: le aparece al responsable ' +
+        'en "Mi trabajo", con su plazo.</p>' +
+        '<form id="form-sgc-rev-acu">' +
+          Componentes.campoSelect({
+            id: 'reva-tipo', label: 'Acuerdo relacionado con', placeholder: false,
+            opciones: tipos.map(function (t) { return { valor: t.tipo, texto: t.etiqueta }; })
+          }) +
+          Componentes.campoTextarea({ id: 'reva-obs', label: 'Observaciones', requerido: true }) +
+          Componentes.campoTexto({ id: 'reva-resp', label: 'Responsable de la actividad', tipo: 'email', requerido: true }) +
+          Componentes.campoTexto({ id: 'reva-plazo', label: 'Plazo establecido', tipo: 'date', requerido: true }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar acuerdo', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-sgc-rev-acu').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('registrarAcuerdoRevisionSgc', {
+        revision_id: r.revision_id,
+        tipo: document.getElementById('reva-tipo').value,
+        observaciones: document.getElementById('reva-obs').value,
+        responsable_email: document.getElementById('reva-resp').value,
+        plazo: document.getElementById('reva-plazo').value
+      }).then(function (resp) {
+        if (!resp || !resp.ok) {
+          Componentes.aviso({ texto: (resp && resp.message) || 'No se pudo guardar el acuerdo.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: 'Acuerdo registrado: ya aparece en "Mi trabajo" del responsable.', tipo: 'exito' });
+        abrirRevision_(r.revision_id);
       });
     });
   }

@@ -295,6 +295,11 @@ function construirContexto() {
       'admin@homepymes.cl', new Date().toISOString(), true]
   ]);
   seedSheet(ctx, 'SGC_PROVEEDOR_EVALUACIONES', ctx.COLUMNAS.SGC_PROVEEDOR_EVALUACIONES);
+  // v10.0 Fase 5b (PRO-05): revision por la direccion. Vacias -- el flujo a
+  // probar es programar -> convocar -> acta (con el resumen que el sistema
+  // arma solo) -> acuerdos -> cierre.
+  seedSheet(ctx, 'SGC_REVISIONES', ctx.COLUMNAS.SGC_REVISIONES);
+  seedSheet(ctx, 'SGC_REVISION_ACUERDOS', ctx.COLUMNAS.SGC_REVISION_ACUERDOS);
   seedSheet(ctx, 'SGC_ROLES', ctx.COLUMNAS.SGC_ROLES, [
     ['SGCR-1', 'admin@homepymes.cl', 'ENCARGADO_SGC', '', '', true, new Date().toISOString()],
     ['SGCR-2', 'jefe@homepymes.cl', 'OPERATIVO', 'CONTABILIDAD', '', true, new Date().toISOString()],

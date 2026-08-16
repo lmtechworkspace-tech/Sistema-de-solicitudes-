@@ -165,7 +165,9 @@ var SHEETS = {
   // Intake (formulario publico, sin cuenta) y se gestiona en el Backoffice.
   SGC_QUEJAS: 'SGC_QUEJAS',
   SGC_PROVEEDORES: 'SGC_PROVEEDORES',
-  SGC_PROVEEDOR_EVALUACIONES: 'SGC_PROVEEDOR_EVALUACIONES'
+  SGC_PROVEEDOR_EVALUACIONES: 'SGC_PROVEEDOR_EVALUACIONES',
+  SGC_REVISIONES: 'SGC_REVISIONES',
+  SGC_REVISION_ACUERDOS: 'SGC_REVISION_ACUERDOS'
 };
 
 var COLUMNAS = {
@@ -859,6 +861,45 @@ var COLUMNAS = {
     'calidad', 'plazo_entrega', 'costos', 'tiempo_respuesta', 'precio', 'postventa',
     'promedio', 'resultado', 'aprobado',
     'observaciones', 'evaluador_email', 'proxima_evaluacion'
+  ],
+
+  // --- v10.0 Fase 5b: revision por la direccion (PRO-05, §9.3) --------------
+  // Una fila = un FO-PRO-05-01 completo, igual criterio que SGC_NC,
+  // SGC_AUDITORIAS y SGC_QUEJAS: el auditor pide "muestrame la revision del
+  // 2026" y tiene que salir entera, sin recomponerla desde cuatro tablas.
+  //
+  // asistentes: JSON [{nombre, cargo}] -- la tabla 1 del formulario. La
+  //   columna "Firma" del papel no se guarda: la evidencia equivalente es
+  //   quien quedo registrado y cuando, con trazabilidad de quien lo escribio.
+  // entradas: JSON [{item, observaciones}] con los 13 items FIJOS de §9.3.2.
+  //   Son fijos y estan en el codigo (ENTRADAS_REVISION), no en esta hoja:
+  //   la norma los enumera, no los define la organizacion.
+  //
+  // aviso_plazo: PRO-05 §6 exige avisar a los asistentes con al menos 10
+  //   DIAS HABILES de anticipacion. Se guarda calculado para poder avisar
+  //   antes de que sea tarde, no para constatar despues que no se cumplio.
+  //
+  // estado: PROGRAMADA | CONVOCADA | REALIZADA | CERRADA | ANULADA
+  SGC_REVISIONES: [
+    'revision_id', 'correlativo', 'anio',
+    'fecha_programada', 'aviso_plazo', 'fecha_convocatoria', 'fecha_reunion',
+    'asistentes', 'entradas', 'conclusiones', 'anexos',
+    'director_email', 'responsable_calidad_email',
+    'estado', 'fecha_cierre', 'cerrada_por',
+    'creada_por', 'fecha_creacion', 'activa'
+  ],
+
+  // Los acuerdos de la tabla 3 del FO-PRO-05-01. Van en su propia hoja y no
+  // en un JSON dentro de la revision porque cada uno tiene responsable y
+  // plazo, y se convierte en una ACTIVIDAD real (motor v7.0): necesitan
+  // fila propia para poder enlazar actividad_id y consultarlos sueltos.
+  //
+  // tipo: MEJORA | CAMBIO_SGC | RECURSOS -- las tres salidas obligatorias
+  // de §9.3.3, en el mismo orden del formulario.
+  SGC_REVISION_ACUERDOS: [
+    'acuerdo_id', 'revision_id', 'tipo', 'observaciones',
+    'responsable_email', 'plazo', 'actividad_id',
+    'creado_por', 'fecha_creacion', 'activa'
   ]
 };
 

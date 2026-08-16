@@ -341,6 +341,13 @@ function recordarValidacionPendienteTrigger() {
   } catch (err) {
     logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosProveedoresTrigger');
   }
+  // v10.0 Fase 5b (PRO-05 §6): falta convocar la revision por la direccion
+  // (10 dias habiles antes) o se paso el ciclo de 12 meses. Mismo criterio.
+  try {
+    enviarAvisosRevisionTrigger();
+  } catch (err) {
+    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosRevisionTrigger');
+  }
   // v7.1 (notificaciones vivas, B5): mantenimiento diario -- purga las
   // notificaciones ya leidas o vencidas para que la hoja NOTIFICACIONES_APP
   // no crezca sin limite (cada sincronizacion del cliente la lee completa).
@@ -402,6 +409,11 @@ function enviarAvisosQuejasTrigger() {
 // nombre que las anteriores, para poder forzarla a mano desde el editor.
 function enviarAvisosProveedoresTrigger() {
   return Proveedores.recordatorioPendientes();
+}
+
+// v10.0 Fase 5b: ver RevisionDireccion.recordatorioPendientes().
+function enviarAvisosRevisionTrigger() {
+  return RevisionDireccion.recordatorioPendientes();
 }
 
 // v7.1 (notificaciones vivas, B5): ver purgarNotificacionesApp_(). Nombrada

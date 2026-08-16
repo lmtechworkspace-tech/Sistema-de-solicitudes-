@@ -251,7 +251,18 @@ var BACKOFFICE_ACTIONS = {
   getDetalleProveedorSgc: handleGetDetalleProveedorSgc_,
   guardarProveedorSgc: handleGuardarProveedorSgc_,
   evaluarProveedorSgc: handleEvaluarProveedorSgc_,
-  desactivarProveedorSgc: handleDesactivarProveedorSgc_
+  desactivarProveedorSgc: handleDesactivarProveedorSgc_,
+
+  // v10.0 Fase 5b (PRO-05): revision por la direccion.
+  listarRevisionesSgc: handleListarRevisionesSgc_,
+  getDetalleRevisionSgc: handleGetDetalleRevisionSgc_,
+  getResumenRevisionSgc: handleGetResumenRevisionSgc_,
+  programarRevisionSgc: handleProgramarRevisionSgc_,
+  convocarRevisionSgc: handleConvocarRevisionSgc_,
+  registrarActaRevisionSgc: handleRegistrarActaRevisionSgc_,
+  registrarAcuerdoRevisionSgc: handleRegistrarAcuerdoRevisionSgc_,
+  cerrarRevisionSgc: handleCerrarRevisionSgc_,
+  anularRevisionSgc: handleAnularRevisionSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -459,7 +470,21 @@ var MODULO_POR_ACCION = {
   getDetalleProveedorSgc: ['calidad', 'gerencia'],
   guardarProveedorSgc: 'calidad',
   evaluarProveedorSgc: 'calidad',
-  desactivarProveedorSgc: 'calidad'
+  desactivarProveedorSgc: 'calidad',
+
+  // v10.0 Fase 5b: la revision por la direccion la EJECUTA la Direccion
+  // (PRO-05 §4), asi que Gerencia tiene que poder leerla aunque no gestione
+  // el SGC. Registrarla y cerrarla sigue siendo del Encargado SGC, que es
+  // quien "verifica, organiza y coordina" segun el mismo punto.
+  listarRevisionesSgc: ['calidad', 'gerencia'],
+  getDetalleRevisionSgc: ['calidad', 'gerencia'],
+  getResumenRevisionSgc: ['calidad', 'gerencia'],
+  programarRevisionSgc: 'calidad',
+  convocarRevisionSgc: 'calidad',
+  registrarActaRevisionSgc: 'calidad',
+  registrarAcuerdoRevisionSgc: 'calidad',
+  cerrarRevisionSgc: 'calidad',
+  anularRevisionSgc: 'calidad'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -1214,6 +1239,43 @@ function handleEvaluarProveedorSgc_(data, contexto) {
 
 function handleDesactivarProveedorSgc_(data, contexto) {
   return responderResultado_(Proveedores.desactivar(data, contexto));
+}
+
+// v10.0 Fase 5b (PRO-05): revision por la direccion.
+function handleListarRevisionesSgc_(data, contexto) {
+  return responderResultado_(RevisionDireccion.listar(data, contexto));
+}
+
+function handleGetDetalleRevisionSgc_(data, contexto) {
+  return responderResultado_(RevisionDireccion.getDetalle(data, contexto));
+}
+
+function handleGetResumenRevisionSgc_(data, contexto) {
+  return responderResultado_(RevisionDireccion.getResumenAutomatico(data, contexto));
+}
+
+function handleProgramarRevisionSgc_(data, contexto) {
+  return responderResultado_(RevisionDireccion.programar(data, contexto));
+}
+
+function handleConvocarRevisionSgc_(data, contexto) {
+  return responderResultado_(RevisionDireccion.convocar(data, contexto));
+}
+
+function handleRegistrarActaRevisionSgc_(data, contexto) {
+  return responderResultado_(RevisionDireccion.registrarActa(data, contexto));
+}
+
+function handleRegistrarAcuerdoRevisionSgc_(data, contexto) {
+  return responderResultado_(RevisionDireccion.registrarAcuerdo(data, contexto));
+}
+
+function handleCerrarRevisionSgc_(data, contexto) {
+  return responderResultado_(RevisionDireccion.cerrar(data, contexto));
+}
+
+function handleAnularRevisionSgc_(data, contexto) {
+  return responderResultado_(RevisionDireccion.anular(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

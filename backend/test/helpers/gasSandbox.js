@@ -188,6 +188,9 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // v10.0 Fase 5a (PRO-04): proveedores externos. Reutiliza los helpers de
   // Calidad.gs (roles/permisos) y encargadosSgc_ de Auditorias.gs.
   'Proveedores.gs',
+  // v10.0 Fase 5b (PRO-05): usa crearTareaSgc_/tareaResumen_ de
+  // NoConformidades.gs y los resumenes de proveedores, quejas y auditorias.
+  'RevisionDireccion.gs',
   'Triggers.gs',
   'Code.gs'
 ];
