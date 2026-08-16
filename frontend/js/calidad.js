@@ -33,6 +33,8 @@
       cargarCapacitaciones_();
     } else if (seccionActiva_ === 'nc') {
       if (ncActivaId_) abrirNc_(ncActivaId_); else cargarNc_();
+    } else if (seccionActiva_ === 'auditorias') {
+      if (auditoriaActivaId_) abrirAuditoria_(auditoriaActivaId_); else cargarAuditorias_();
     } else {
       if (documentoActivoId_) abrirDocumento_(documentoActivoId_); else cargarListado_();
     }
@@ -45,7 +47,8 @@
       { id: 'documentos', texto: 'Documentos' },
       { id: 'personas', texto: 'Personas' },
       { id: 'capacitaciones', texto: 'Capacitaciones' },
-      { id: 'nc', texto: 'No conformidades' }
+      { id: 'nc', texto: 'No conformidades' },
+      { id: 'auditorias', texto: 'Auditorías' }
     ];
     return '<div class="sigso-tabs sgc-secciones">' + secciones.map(function (s) {
       return '<button type="button" class="sigso-tab js-sgc-seccion' +
@@ -60,6 +63,7 @@
         documentoActivoId_ = null;
         personaActivaId_ = null;
         ncActivaId_ = null;
+        auditoriaActivaId_ = null;
         render_();
       });
     });
@@ -90,6 +94,7 @@
   var documentoActivoId_ = null;
   var personaActivaId_ = null;
   var ncActivaId_ = null;
+  var auditoriaActivaId_ = null;
   var pestanaFicha_ = 'datos';
   var puedeGestionar_ = false;
   var filtroTipo_ = '';
@@ -2096,6 +2101,596 @@
           tipo: resultado === 'EFICAZ' ? 'exito' : 'info'
         });
         abrirNc_(nc.nc_id);
+      });
+    });
+  }
+
+  // ==========================================================================
+  // AUDITORÍAS INTERNAS (Fase 3b, PRO-03) — cómo la empresa se encuentra
+  // sus propios problemas.
+  //
+  // La pantalla sigue el ciclo del procedimiento: el programa anual arriba,
+  // y dentro de cada auditoría el plan, la lista de verificación por
+  // cláusula y el informe. El hallazgo de no conformidad se convierte en NC
+  // con un botón: ahí es donde esta sección se conecta con la anterior.
+  // ==========================================================================
+
+  var ESTADO_AUD_ETIQUETA = {
+    PROGRAMADA: 'Programada', PLANIFICADA: 'Planificada', EJECUTADA: 'Ejecutada',
+    INFORMADA: 'Informada', CERRADA: 'Cerrada', ANULADA: 'Anulada'
+  };
+  var RESULTADO_HALLAZGO_ETIQUETA = {
+    CONFORME: 'Conforme', OBSERVACION: 'Observación',
+    NO_CONFORMIDAD: 'No conformidad', OPORTUNIDAD: 'Oportunidad de mejora'
+  };
+  var RESULTADO_HALLAZGO_TONO = {
+    CONFORME: 'ok', OBSERVACION: 'alerta', NO_CONFORMIDAD: 'critico', OPORTUNIDAD: 'info'
+  };
+
+  var filtroAnioAud_ = '';
+  var clausulasCatalogo_ = [];
+
+  function cargarAuditorias_() {
+    auditoriaActivaId_ = null;
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando el programa de auditorías...');
+    api_('listarAuditoriasSgc', filtroAnioAud_ ? { anio: filtroAnioAud_ } : {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar.', 'error');
+        return;
+      }
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      // La norma la define el backend (Auditorias.gs, CLAUSULAS_ISO9001):
+      // la pantalla nunca guarda su propia copia.
+      clausulasCatalogo_ = respuesta.data.clausulas_catalogo || [];
+      pintarAuditorias_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar las auditorías.', 'error');
+    });
+  }
+
+  function pintarAuditorias_(cont, data) {
+    var lista = data.auditorias || [];
+    var ind = data.indicadores || {};
+
+    var kpis = '<div class="sgc-kpis">' + [
+      Componentes.kpi({ etiqueta: 'Programadas ' + new Date().getFullYear(), valor: ind.programadas || 0 }),
+      Componentes.kpi({ etiqueta: 'Ejecutadas', valor: ind.ejecutadas || 0 }),
+      Componentes.kpi({
+        etiqueta: '% del programa',
+        valor: ind.pct_cumplimiento === null || ind.pct_cumplimiento === undefined
+          ? '—' : ind.pct_cumplimiento + '%'
+      }),
+      Componentes.kpi({ etiqueta: 'Informes atrasados', valor: ind.informes_vencidos || 0 }),
+      Componentes.kpi({ etiqueta: 'NC por levantar', valor: ind.nc_pendientes || 0 }),
+      Componentes.kpi({ etiqueta: 'Procesos sin auditar', valor: ind.procesos_sin_auditar || 0 })
+    ].join('') + '</div>';
+
+    var opciones = (data.anios || []).map(function (a) {
+      return '<option value="' + a + '"' + (String(a) === String(filtroAnioAud_) ? ' selected' : '') + '>' + a + '</option>';
+    }).join('');
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">El programa anual: qué proceso se audita, cuándo y quién lo audita. ' +
+      'Nadie audita su propia área.</p>' +
+      (puedeGestionar_ ? Componentes.boton({ texto: '+ Programar auditoría', clase: 'js-sgc-nueva-aud' }) : '') +
+      '</div>' + kpis +
+      '<div class="sgc-filtros">' +
+        '<label class="sigso-campo"><span class="sigso-campo__label">Año</span>' +
+        '<select id="sgc-aud-anio"><option value="">Todos</option>' + opciones + '</select></label>' +
+      '</div>';
+
+    function wire() {
+      wireSecciones_(cont);
+      var nueva = cont.querySelector('.js-sgc-nueva-aud');
+      if (nueva) nueva.addEventListener('click', abrirFormularioAuditoria_);
+      var sel = cont.querySelector('#sgc-aud-anio');
+      if (sel) sel.addEventListener('change', function () { filtroAnioAud_ = this.value; cargarAuditorias_(); });
+      cont.querySelectorAll('.js-sgc-abrir-aud').forEach(function (btn) {
+        btn.addEventListener('click', function () { abrirAuditoria_(btn.getAttribute('data-id')); });
+      });
+    }
+
+    if (lista.length === 0) {
+      cont.innerHTML = cabecera + Componentes.vacio({
+        texto: 'Todavía no hay auditorías en el programa.',
+        detalle: 'El §9.2 de la norma pide auditar todos los procesos dentro del período.'
+      });
+      wire();
+      return;
+    }
+
+    var filas = lista.map(function (a) {
+      var cerrada = a.estado === 'CERRADA' || a.estado === 'ANULADA';
+      return '<button type="button" class="sgc-doc js-sgc-abrir-aud' +
+        (a.informe_vencido ? ' sgc-nc--vencida' : (cerrada ? ' sgc-doc--obsoleto' : '')) +
+        '" data-id="' + a.auditoria_id + '">' +
+        '<div class="sgc-doc__top">' +
+          '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(a.correlativo) + '</span>' +
+          '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(a.proceso) + '</span>' +
+          Componentes.badge(ESTADO_AUD_ETIQUETA[a.estado] || a.estado, cerrada ? 'neutro' : 'info') +
+          (a.informe_vencido ? Componentes.badge('Informe atrasado', 'critico') : '') +
+          (a.nc_pendientes ? Componentes.badge(a.nc_pendientes + ' NC por levantar', 'alerta') : '') +
+        '</div>' +
+        '<div class="sgc-doc__meta">' +
+          (a.area_id ? '<span>' + Componentes.escaparHtml(a.area_id) + '</span>' : '') +
+          '<span>Auditor: ' + Componentes.escaparHtml(a.auditor_email) + '</span>' +
+          '<span>' + (a.fecha_ejecucion
+            ? 'Realizada ' + fechaCorta_(a.fecha_ejecucion)
+            : 'Programada ' + fechaCorta_(a.fecha_programada)) + '</span>' +
+          (a.verificaciones
+            ? '<span>' + a.verificaciones + ' cláusula(s) verificada(s)</span>'
+            : '<span>' + a.clausulas.length + ' cláusula(s) en alcance</span>') +
+          (a.no_conformidades ? '<span>' + a.no_conformidades + ' no conformidad(es)</span>' : '') +
+        '</div>' +
+      '</button>';
+    }).join('');
+
+    cont.innerHTML = cabecera + '<div class="sgc-lista">' + filas + '</div>';
+    wire();
+  }
+
+  // --- ficha de la auditoría --------------------------------------------------
+
+  function abrirAuditoria_(id) {
+    auditoriaActivaId_ = id;
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando auditoría...');
+    api_('getDetalleAuditoriaSgc', { auditoria_id: id }).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo abrir.', 'error');
+        return;
+      }
+      clausulasCatalogo_ = respuesta.data.clausulas_catalogo || [];
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      pintarFichaAuditoria_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
+    });
+  }
+
+  function pintarFichaAuditoria_(cont, data) {
+    var aud = data.auditoria;
+    var r = data.resumen;
+    var audita = data.puede_auditar === true;
+    var gestiona = data.puede_gestionar === true;
+    var cerrada = aud.estado === 'CERRADA' || aud.estado === 'ANULADA';
+    var enCurso = aud.estado === 'PLANIFICADA' || aud.estado === 'EJECUTADA';
+
+    // 1) Plan
+    var planificada = aud.estado !== 'PROGRAMADA';
+    var ant = r.anticipacion_plan;
+    var e1 = etapaNc_(1, 'Plan de auditoría', planificada,
+      (planificada
+        ? '<dl class="sgc-ficha">' +
+            campoFicha_('Objetivo', aud.objetivo) +
+            campoFicha_('Alcance', aud.alcance) +
+            campoFicha_('Criterios', aud.criterios) +
+            campoFicha_('Se realiza', fechaCorta_(aud.fecha_ejecucion)) +
+            campoFicha_('Auditados', (data.auditados || []).join(', ')) +
+          '</dl>' +
+          (ant
+            ? '<p class="sigso-ayuda">Plan comunicado con ' + ant.dias_naturales + ' día(s) de anticipación' +
+              (ant.suficiente ? '.' : ' — PRO-03 pide 5 días hábiles.') + '</p>'
+            : '')
+        : '<p class="sigso-ayuda">Objetivo, alcance, criterios y a quiénes se audita. Al guardarlo se les avisa.</p>'),
+      audita && ['PROGRAMADA', 'PLANIFICADA'].indexOf(aud.estado) !== -1
+        ? '<div class="sgc-acciones">' +
+            Componentes.boton({
+              texto: planificada ? 'Editar plan' : 'Definir plan',
+              variante: planificada ? 'secundario' : 'primario', clase: 'js-aud-plan'
+            }) +
+          '</div>'
+        : '');
+
+    // 2) Lista de verificación
+    var e2 = etapaNc_(2, 'Lista de verificación', r.verificaciones > 0,
+      (r.verificaciones
+        ? '<div class="sgc-conteos">' +
+            Componentes.badge(r.conformes + ' conforme(s)', 'ok') +
+            (r.observaciones ? Componentes.badge(r.observaciones + ' observación(es)', 'alerta') : '') +
+            (r.no_conformidades ? Componentes.badge(r.no_conformidades + ' no conformidad(es)', 'critico') : '') +
+            (r.oportunidades ? Componentes.badge(r.oportunidades + ' oportunidad(es)', 'info') : '') +
+          '</div>' + tablaHallazgos_(data, audita, gestiona)
+        : '<p class="sigso-ayuda">Cláusula por cláusula: qué se revisó, con qué evidencia y qué se encontró. ' +
+          'Una cláusula conforme también se registra: es la evidencia de que se revisó.</p>'),
+      audita && enCurso
+        ? '<div class="sgc-acciones">' +
+            Componentes.boton({ texto: '+ Verificar cláusula', clase: 'js-aud-hallazgo' }) +
+            (aud.estado === 'PLANIFICADA' && r.verificaciones
+              ? Componentes.boton({ texto: '✓ Terminar la auditoría', variante: 'secundario', clase: 'js-aud-ejecutada' })
+              : '') +
+          '</div>'
+        : '');
+
+    // 3) Informe
+    var e3 = etapaNc_(3, 'Informe', !!aud.informe_fecha,
+      (aud.informe_fecha
+        ? '<p>' + Componentes.escaparHtml(aud.informe_conclusion) + '</p>' +
+          '<p class="sigso-ayuda">Emitido el ' + fechaCorta_(aud.informe_fecha) + '.</p>'
+        : '<p class="sigso-ayuda">La conclusión de la auditoría. PRO-03 da 10 días hábiles desde que se realiza' +
+          (aud.informe_plazo ? ', vence el ' + fechaCorta_(aud.informe_plazo) : '') + '.</p>'),
+      audita && aud.estado === 'EJECUTADA'
+        ? '<div class="sgc-acciones">' +
+            Componentes.boton({ texto: 'Emitir informe', clase: 'js-aud-informe' }) +
+          '</div>'
+        : '');
+
+    // 4) Cierre
+    var e4 = etapaNc_(4, 'Cierre', aud.estado === 'CERRADA',
+      (aud.estado === 'CERRADA'
+        ? '<p class="sigso-ayuda">Cerrada el ' + fechaCorta_(aud.fecha_cierre) + '.</p>'
+        : (r.nc_pendientes
+            ? Componentes.alerta((r.nc_pendientes === 1
+                ? 'Falta 1 no conformidad por levantar. '
+                : 'Faltan ' + r.nc_pendientes + ' no conformidades por levantar. ') +
+              'Una auditoría no se cierra dejando hallazgos sin canalizar.', 'aviso')
+            : '<p class="sigso-ayuda">Se cierra cuando cada hallazgo de no conformidad ya tiene su NC.</p>')),
+      gestiona && aud.estado === 'INFORMADA' && !r.nc_pendientes
+        ? '<div class="sgc-acciones">' +
+            Componentes.boton({ texto: 'Cerrar auditoría', clase: 'js-aud-cerrar' }) +
+          '</div>'
+        : '');
+
+    cont.innerHTML =
+      '<div class="sgc-detalle-cab">' +
+        Componentes.boton({ texto: '← Auditorías', variante: 'sutil', clase: 'js-aud-volver' }) +
+        '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(aud.correlativo) + '</span>' +
+        '<h1>' + Componentes.escaparHtml(aud.proceso) + '</h1>' +
+        Componentes.badge(ESTADO_AUD_ETIQUETA[aud.estado] || aud.estado, cerrada ? 'neutro' : 'info') +
+        (r.informe_vencido ? Componentes.badge('Informe atrasado', 'critico') : '') +
+      '</div>' +
+      '<div class="sgc-cuerpo">' +
+        '<dl class="sgc-ficha">' +
+          campoFicha_('Área', aud.area_id) +
+          campoFicha_('Auditor', aud.auditor_email) +
+          campoFicha_('Programada', fechaCorta_(aud.fecha_programada)) +
+          campoFicha_('Cláusulas en alcance', (data.clausulas_alcance || []).join(' · ')) +
+        '</dl>' +
+        '<div class="sgc-etapas">' + e1 + e2 + e3 + e4 + '</div>' +
+        (gestiona && !cerrada
+          ? '<div class="sgc-acciones">' +
+              Componentes.boton({ texto: 'Anular', variante: 'peligro', clase: 'js-aud-anular' }) +
+            '</div>'
+          : '') +
+      '</div>';
+
+    cont.querySelector('.js-aud-volver').addEventListener('click', cargarAuditorias_);
+    wireFichaAuditoria_(cont, aud, data);
+  }
+
+  // La lista de verificación. Cada fila lleva su resultado y, si es una no
+  // conformidad, el botón que la convierte en NC (o el enlace a la que ya
+  // existe): ése es el eslabón que hace que la auditoría sirva de algo.
+  function tablaHallazgos_(data, audita, gestiona) {
+    var editable = ['PLANIFICADA', 'EJECUTADA'].indexOf(data.auditoria.estado) !== -1;
+    return '<div class="sgc-hallazgos">' + (data.hallazgos || []).map(function (h) {
+      return '<div class="sgc-hallazgo sgc-hallazgo--' + h.resultado.toLowerCase() + '">' +
+        '<div class="sgc-doc__top">' +
+          '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(h.clausula) + '</span>' +
+          '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(h.clausula_titulo) + '</span>' +
+          Componentes.badge(RESULTADO_HALLAZGO_ETIQUETA[h.resultado] || h.resultado,
+            RESULTADO_HALLAZGO_TONO[h.resultado] || 'neutro') +
+        '</div>' +
+        '<p>' + Componentes.escaparHtml(h.aspecto_verificado) + '</p>' +
+        (h.evidencia ? '<p class="sigso-ayuda">Evidencia: ' + Componentes.escaparHtml(h.evidencia) + '</p>' : '') +
+        (h.descripcion ? '<p>' + Componentes.escaparHtml(h.descripcion) + '</p>' : '') +
+        (h.nc_correlativo
+          ? '<p class="sigso-ayuda">→ ' + Componentes.escaparHtml(h.nc_correlativo) + ' (' +
+            Componentes.escaparHtml(ESTADO_NC_ETIQUETA[h.nc_estado] || h.nc_estado) + ')</p>'
+          : '') +
+        '<div class="sgc-acciones">' +
+          (gestiona && !h.nc_id && ['NO_CONFORMIDAD', 'OBSERVACION'].indexOf(h.resultado) !== -1
+            ? Componentes.boton({
+                texto: 'Levantar no conformidad', clase: 'js-aud-a-nc',
+                variante: h.resultado === 'NO_CONFORMIDAD' ? 'primario' : 'secundario'
+              }).replace('<button ', '<button data-hallazgo="' + h.hallazgo_id + '" ')
+            : '') +
+          (audita && editable && !h.nc_id
+            ? Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-aud-editar-h' })
+                .replace('<button ', '<button data-hallazgo="' + h.hallazgo_id + '" ') +
+              Componentes.boton({ texto: 'Quitar', variante: 'sutil', clase: 'js-aud-quitar-h' })
+                .replace('<button ', '<button data-hallazgo="' + h.hallazgo_id + '" ')
+            : '') +
+        '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+  }
+
+  function wireFichaAuditoria_(cont, aud, data) {
+    function accion_(selector, fn) {
+      var b = cont.querySelector(selector);
+      if (b) b.addEventListener('click', fn);
+    }
+    function enviar_(accion, datos, exito) {
+      api_(accion, datos).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        if (exito) Componentes.aviso({ texto: exito, tipo: 'exito' });
+        abrirAuditoria_(aud.auditoria_id);
+      });
+    }
+
+    accion_('.js-aud-plan', function () { abrirFormularioPlanAud_(aud, data); });
+    accion_('.js-aud-hallazgo', function () { abrirFormularioHallazgo_(aud, data, null); });
+    accion_('.js-aud-informe', function () { abrirFormularioInformeAud_(aud); });
+
+    accion_('.js-aud-ejecutada', function () {
+      Componentes.confirmar({
+        titulo: 'Terminar la auditoría',
+        mensaje: 'Después de esto la lista de verificación sigue editable, pero arranca el plazo de 10 días hábiles para el informe.'
+      }).then(function (ok) {
+        if (ok) enviar_('cerrarEjecucionAuditoriaSgc', { auditoria_id: aud.auditoria_id });
+      });
+    });
+    accion_('.js-aud-cerrar', function () {
+      Componentes.confirmar({
+        titulo: 'Cerrar la auditoría',
+        mensaje: 'Todos los hallazgos ya están canalizados. La auditoría queda como evidencia cerrada.'
+      }).then(function (ok) {
+        if (ok) enviar_('cerrarAuditoriaSgc', { auditoria_id: aud.auditoria_id }, 'Auditoría cerrada.');
+      });
+    });
+    accion_('.js-aud-anular', function () {
+      Componentes.prompt({
+        titulo: 'Anular auditoría',
+        mensaje: '¿Por qué se anula? Queda registrado (la auditoría no se borra).'
+      }).then(function (motivo) {
+        if (motivo && String(motivo).trim()) {
+          enviar_('anularAuditoriaSgc', { auditoria_id: aud.auditoria_id, motivo: motivo });
+        }
+      });
+    });
+
+    cont.querySelectorAll('.js-aud-a-nc').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        Componentes.confirmar({
+          titulo: 'Levantar no conformidad',
+          mensaje: 'Se crea la no conformidad con este hallazgo como origen, y de ahí sale la acción correctiva.'
+        }).then(function (ok) {
+          if (ok) {
+            enviar_('convertirHallazgoEnNcSgc', { hallazgo_id: btn.getAttribute('data-hallazgo') },
+              'No conformidad creada desde el hallazgo.');
+          }
+        });
+      });
+    });
+    cont.querySelectorAll('.js-aud-editar-h').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-hallazgo');
+        var h = (data.hallazgos || []).filter(function (x) { return x.hallazgo_id === id; })[0];
+        abrirFormularioHallazgo_(aud, data, h);
+      });
+    });
+    cont.querySelectorAll('.js-aud-quitar-h').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        Componentes.confirmar({
+          titulo: 'Quitar de la lista',
+          mensaje: 'Se saca de la lista de verificación. Queda en el registro del sistema.',
+          peligro: true
+        }).then(function (ok) {
+          if (ok) enviar_('eliminarHallazgoSgc', { hallazgo_id: btn.getAttribute('data-hallazgo') });
+        });
+      });
+    });
+  }
+
+  // --- formularios de auditoría -----------------------------------------------
+
+  function selectorClausulas_(seleccionadas) {
+    var marcadas = seleccionadas || [];
+    return '<fieldset class="sgc-clausulas"><legend>Cláusulas de la norma a auditar</legend>' +
+      clausulasCatalogo_.map(function (c) {
+        return '<label class="sigso-campo-check"><input type="checkbox" class="js-aud-clausula" value="' +
+          c.codigo + '"' + (marcadas.indexOf(c.codigo) !== -1 ? ' checked' : '') + '> <b>' +
+          Componentes.escaparHtml(c.codigo) + '</b> ' + Componentes.escaparHtml(c.titulo) + '</label>';
+      }).join('') + '</fieldset>';
+  }
+
+  function clausulasMarcadas_() {
+    return Array.prototype.slice.call(document.querySelectorAll('.js-aud-clausula:checked'))
+      .map(function (c) { return c.value; });
+  }
+
+  function abrirFormularioAuditoria_() {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Programar auditoría interna</h3>' +
+        '<form id="form-aud">' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'aud-proceso', label: 'Proceso a auditar', requerido: true,
+              placeholder: 'Ej: Gestión de personas' }) +
+            Componentes.campoTexto({ id: 'aud-area', label: 'Área', placeholder: 'Ej: RRHH' }) +
+          '</div>' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'aud-auditor', label: 'Auditor', tipo: 'email', requerido: true,
+              placeholder: 'De otra área: nadie audita su propio trabajo' }) +
+            Componentes.campoTexto({ id: 'aud-fecha', label: 'Fecha planeada', tipo: 'date', requerido: true }) +
+          '</div>' +
+          selectorClausulas_([]) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Programar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-aud').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var clausulas = clausulasMarcadas_();
+      if (!clausulas.length) {
+        Componentes.aviso({ texto: 'Elige al menos una cláusula a auditar.', tipo: 'error' });
+        return;
+      }
+      api_('programarAuditoriaSgc', {
+        proceso: document.getElementById('aud-proceso').value,
+        area_id: document.getElementById('aud-area').value,
+        auditor_email: document.getElementById('aud-auditor').value,
+        fecha_programada: document.getElementById('aud-fecha').value,
+        clausulas: clausulas
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo programar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        cargarAuditorias_();
+      });
+    });
+  }
+
+  function abrirFormularioPlanAud_(aud, data) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Plan de auditoría</h3>' +
+        '<p class="sigso-ayuda">Al guardarlo se le avisa a las personas auditadas. ' +
+        'PRO-03 pide comunicarlo con 5 días hábiles de anticipación.</p>' +
+        '<form id="form-aud-plan">' +
+          Componentes.campoTextarea({ id: 'audp-objetivo', label: 'Objetivo', valor: aud.objetivo, requerido: true,
+            placeholder: '¿Qué se quiere comprobar con esta auditoría?' }) +
+          Componentes.campoTextarea({ id: 'audp-alcance', label: 'Alcance', valor: aud.alcance, requerido: true,
+            placeholder: 'Qué queda dentro y qué no: período, sedes, registros.' }) +
+          Componentes.campoTexto({ id: 'audp-criterios', label: 'Criterios', valor: aud.criterios,
+            placeholder: 'Ej: ISO 9001:2015, PRO-02' }) +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'audp-auditados', label: 'Auditados (correos separados por coma)',
+              valor: (data.auditados || []).join(', ') }) +
+            Componentes.campoTexto({ id: 'audp-fecha', label: 'Fecha de realización', tipo: 'date',
+              valor: fechaISO_(aud.fecha_ejecucion), requerido: true }) +
+          '</div>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar y comunicar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-aud-plan').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var auditados = document.getElementById('audp-auditados').value
+        .split(',').map(function (e) { return e.trim(); }).filter(Boolean);
+      api_('planificarAuditoriaSgc', {
+        auditoria_id: aud.auditoria_id,
+        objetivo: document.getElementById('audp-objetivo').value,
+        alcance: document.getElementById('audp-alcance').value,
+        criterios: document.getElementById('audp-criterios').value,
+        auditados: auditados,
+        fecha_ejecucion: document.getElementById('audp-fecha').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar el plan.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: 'Plan guardado y comunicado a los auditados.', tipo: 'exito' });
+        abrirAuditoria_(aud.auditoria_id);
+      });
+    });
+  }
+
+  function abrirFormularioHallazgo_(aud, data, hallazgo) {
+    var enAlcance = data.clausulas_alcance || [];
+    // Se ofrecen primero las cláusulas del alcance, pero no se limita a
+    // ellas: una auditoría puede encontrar algo fuera de lo planeado, y eso
+    // no se puede perder.
+    var opciones = clausulasCatalogo_.map(function (c) {
+      return {
+        valor: c.codigo,
+        texto: c.codigo + ' — ' + c.titulo + (enAlcance.indexOf(c.codigo) === -1 ? ' (fuera del alcance)' : '')
+      };
+    });
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">' + (hallazgo ? 'Editar verificación' : 'Verificar cláusula') + '</h3>' +
+        '<form id="form-aud-h">' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoSelect({ id: 'audh-clausula', label: 'Cláusula', placeholder: false,
+              valor: hallazgo ? hallazgo.clausula : (enAlcance[0] || ''), opciones: opciones }) +
+            Componentes.campoSelect({ id: 'audh-resultado', label: 'Resultado', placeholder: false,
+              valor: hallazgo ? hallazgo.resultado : 'CONFORME',
+              opciones: Object.keys(RESULTADO_HALLAZGO_ETIQUETA).map(function (k) {
+                return { valor: k, texto: RESULTADO_HALLAZGO_ETIQUETA[k] };
+              }) }) +
+          '</div>' +
+          Componentes.campoTextarea({ id: 'audh-aspecto', label: 'Qué se verificó', requerido: true,
+            valor: hallazgo ? hallazgo.aspecto_verificado : '',
+            placeholder: 'Ej: evaluaciones de competencia del personal del área.' }) +
+          Componentes.campoTextarea({ id: 'audh-evidencia', label: 'Evidencia revisada',
+            valor: hallazgo ? hallazgo.evidencia : '',
+            placeholder: 'Qué documentos o registros se miraron, y cuántos.' }) +
+          Componentes.campoTextarea({ id: 'audh-descripcion', label: 'Hallazgo',
+            valor: hallazgo ? hallazgo.descripcion : '',
+            placeholder: 'Obligatorio si no es conforme: es lo que después se convierte en no conformidad.' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-aud-h').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var datos = {
+        auditoria_id: aud.auditoria_id,
+        clausula: document.getElementById('audh-clausula').value,
+        resultado: document.getElementById('audh-resultado').value,
+        aspecto_verificado: document.getElementById('audh-aspecto').value,
+        evidencia: document.getElementById('audh-evidencia').value,
+        descripcion: document.getElementById('audh-descripcion').value
+      };
+      if (hallazgo) datos.hallazgo_id = hallazgo.hallazgo_id;
+      api_('registrarHallazgoSgc', datos).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        abrirAuditoria_(aud.auditoria_id);
+      });
+    });
+  }
+
+  function abrirFormularioInformeAud_(aud) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Informe de auditoría</h3>' +
+        '<p class="sigso-ayuda">La conclusión sobre el proceso auditado. Al emitirlo se avisa a los auditados ' +
+        'y al Encargado SGC, y la lista de verificación queda cerrada.</p>' +
+        '<form id="form-aud-inf">' +
+          Componentes.campoTextarea({ id: 'audi-conclusion', label: 'Conclusión', requerido: true,
+            placeholder: '¿El proceso cumple los requisitos? ¿Qué es lo más relevante que se encontró?' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Emitir informe', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-aud-inf').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('emitirInformeAuditoriaSgc', {
+        auditoria_id: aud.auditoria_id,
+        conclusion: document.getElementById('audi-conclusion').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo emitir.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: 'Informe emitido.', tipo: 'exito' });
+        abrirAuditoria_(aud.auditoria_id);
       });
     });
   }

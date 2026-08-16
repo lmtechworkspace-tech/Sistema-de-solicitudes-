@@ -1630,8 +1630,17 @@ button {
    para los modulos de trabajo (bandeja, gerencia, administracion) que traen
    tablas y el detalle de 3 columnas -- sin esto el detalle se aplasta como
    en app.html cuando hereda el ancho de 720px del formulario. */
+/* v10.0 Fase 3b: el tope es `min(1180px, 100%)`, no 1180px a secas. Esto es
+   un item de un flex en column (.plataforma-main), y ahi el ancho es el eje
+   TRANSVERSAL: el item se estira a su contenido y el minimo automatico no
+   lo frena. Un bloque interno ancho -- la barra de secciones del SGC, ya
+   con cinco pestañas -- lo empujaba mas alla del viewport y sacaba scroll
+   horizontal a la pagina entera. Con el 100% (que se resuelve contra el
+   contenedor, ancho definido) el ancho lo manda el contenedor y cada bloque
+   interno scrollea por su cuenta si hace falta. */
 .sigso-contenido.plataforma-contenido--ancho {
-  max-width: 1180px;
+  max-width: min(1180px, 100%);
+  min-width: 0;
 }
 
 /* ============ v4.0 Frentes 2 y 3: identidad y navegacion ============ */
@@ -2028,8 +2037,15 @@ button {
 /* v6.4: "Mi perfil" no cabe en 420px (avatar grande + ficha de datos en dos
    columnas). El alto tambien se limita para que en un movil apaisado el
    modal no se salga de la pantalla. */
+/* v10.0 Fase 3b: el tope se mide contra el VIEWPORT, no contra el padre.
+   El velo es un grid con place-items:center, asi que el modal se dimensiona
+   por su contenido y un `100%` ahi es circular (se resuelve contra un area
+   que depende del propio modal). Con un bloque interno ancho -- la grilla
+   de las 28 clausulas de la norma -- el modal desbordaba el viewport en
+   movil y sacaba scroll horizontal a la pagina entera. `100vw` siempre es
+   definido; el `- 2rem` descuenta el padding del velo. */
 .sigso-modal--ancho {
-  max-width: 620px;
+  max-width: min(620px, calc(100vw - 2rem));
   max-height: calc(100vh - 2rem);
   overflow-y: auto;
 }
@@ -3537,6 +3553,49 @@ button {
 .sgc-tarea-vinculada p { margin: 0 0 var(--esp-2); }
 .sgc-porques { margin: 0 0 var(--esp-3); padding-left: var(--esp-5); color: var(--texto-2); }
 .sgc-porques li { margin-bottom: 2px; }
+
+/* v10.0 Fase 3b: auditoría interna. Reusa .sgc-etapa (el ciclo se pinta
+   igual que el de una no conformidad) y agrega lo propio de la lista de
+   verificación. */
+.sgc-conteos { display: flex; gap: var(--esp-2); flex-wrap: wrap; margin-bottom: var(--esp-3); }
+.sgc-hallazgos { display: flex; flex-direction: column; gap: var(--esp-2); }
+.sgc-hallazgo {
+  padding: var(--esp-3); border-radius: var(--radio-sm);
+  background: var(--superficie-2); border-left: 3px solid var(--borde);
+  overflow-wrap: anywhere;
+}
+.sgc-hallazgo p { margin: 0 0 var(--esp-2); }
+.sgc-hallazgo .sgc-acciones { margin-top: 0; }
+/* El color del borde dice el resultado sin tener que leer el badge. */
+.sgc-hallazgo--conforme { border-left-color: var(--ok); }
+.sgc-hallazgo--observacion { border-left-color: var(--alerta); }
+.sgc-hallazgo--no_conformidad { border-left-color: var(--critico); }
+.sgc-hallazgo--oportunidad { border-left-color: var(--info); }
+
+/* Las 28 cláusulas de la norma no caben en una lista vertical sin volver
+   el modal impracticable: se distribuyen en columnas y el bloque scrollea
+   por dentro. */
+.sgc-clausulas {
+  border: 1px solid var(--borde); border-radius: var(--radio-sm);
+  padding: var(--esp-3); margin-bottom: var(--esp-3);
+  max-height: 15rem; overflow-y: auto;
+  display: grid; gap: var(--esp-1);
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
+}
+.sgc-clausulas legend { font-size: var(--texto-sm); color: var(--texto-2); padding: 0 var(--esp-2); }
+.sgc-clausulas .sigso-campo-check { margin: 0; }
+
+/* Con la quinta seccion (Auditorias) la barra dejo de caber en un movil y
+   estiraba la pagina entera: .sigso-tabs es un flex sin wrap, asi que el
+   ancho de la barra se volvia el ancho del contenido. Scrollea ella sola
+   en vez de sacar scroll horizontal a la pagina. Envolver no sirve: dos
+   filas de pestañas se leen como dos niveles de navegacion. */
+.sgc-secciones {
+  overflow-x: auto;
+  max-width: 100%;
+  scrollbar-width: thin;
+}
+.sgc-secciones .sigso-tab { flex: 0 0 auto; }
 
 /* v9.3: filtros del portafolio (estado + salud) */
 .sigso-py-filtros {

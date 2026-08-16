@@ -256,6 +256,10 @@ function construirContexto() {
   // creandola desde la UI, que es lo que valida que la accion correctiva
   // aparezca en "Mi trabajo").
   seedSheet(ctx, 'SGC_NC', ctx.COLUMNAS.SGC_NC);
+  // v10.0 Fase 3b: auditoria interna. Vacias -- lo que hay que poder probar
+  // en local es la cadena completa auditoria -> hallazgo -> NC -> actividad.
+  seedSheet(ctx, 'SGC_AUDITORIAS', ctx.COLUMNAS.SGC_AUDITORIAS);
+  seedSheet(ctx, 'SGC_AUD_HALLAZGOS', ctx.COLUMNAS.SGC_AUD_HALLAZGOS);
   seedSheet(ctx, 'SGC_ROLES', ctx.COLUMNAS.SGC_ROLES, [
     ['SGCR-1', 'admin@homepymes.cl', 'ENCARGADO_SGC', '', '', true, new Date().toISOString()],
     ['SGCR-2', 'jefe@homepymes.cl', 'OPERATIVO', 'CONTABILIDAD', '', true, new Date().toISOString()],

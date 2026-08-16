@@ -155,7 +155,12 @@ var SHEETS = {
   // v10.0 Fase 3a (PRO-06): no conformidades y acciones correctivas. Es el
   // motor de mejora del SGC y lo que la auditoria de certificacion revisa
   // con mas profundidad (§10.2 de la norma).
-  SGC_NC: 'SGC_NC'
+  SGC_NC: 'SGC_NC',
+  // v10.0 Fase 3b (PRO-03): auditoria interna (§9.2). Es la otra mitad del
+  // motor de mejora: el mecanismo por el que la organizacion se encuentra
+  // sus propios problemas antes de que se los encuentre el auditor.
+  SGC_AUDITORIAS: 'SGC_AUDITORIAS',
+  SGC_AUD_HALLAZGOS: 'SGC_AUD_HALLAZGOS'
 };
 
 var COLUMNAS = {
@@ -675,6 +680,52 @@ var COLUMNAS = {
     'accion_plazo', 'accion_fecha_cierre',
     'eficacia_plazo', 'eficacia_fecha', 'eficacia_resultado', 'eficacia_observaciones',
     'fecha_cierre', 'cerrada_por', 'fecha_creacion', 'activa'
+  ],
+
+  // v10.0 Fase 3b (PRO-03) ------------------------------------------------
+  // UNA fila = UNA auditoria, desde que se programa en el plan anual hasta
+  // que se emite el informe. Las tres etapas (programa / plan / informe)
+  // viven juntas porque son el mismo evento visto en tres momentos: el
+  // auditor pregunta "muestreme la auditoria de RRHH de marzo", no
+  // "muestreme el programa" y aparte "el informe".
+  //
+  // estado: PROGRAMADA (esta en el plan anual) | PLANIFICADA (ya tiene
+  //   objetivo, alcance y fecha comunicada) | EJECUTADA (se realizo, corre
+  //   el plazo del informe) | INFORMADA (informe emitido) | CERRADA |
+  //   ANULADA.
+  //
+  // clausulas: JSON con las clausulas ISO en alcance (ver CLAUSULAS_ISO9001
+  //   en Auditorias.gs). Se guarda serializado porque es una lista corta que
+  //   solo se lee completa; una tabla puente aqui seria costo sin uso.
+  //
+  // fecha_plan: cuando se COMUNICO el plan. PRO-03 pide 5 dias habiles de
+  //   anticipacion; el sistema no bloquea si son menos (bloquear empujaria
+  //   a falsear fechas), pero deja el dato visible para que el auditor
+  //   pueda verlo tal como paso.
+  //
+  // informe_plazo: 10 dias habiles desde la ejecucion, como pide PRO-03.
+  SGC_AUDITORIAS: [
+    'auditoria_id', 'correlativo', 'anio', 'area_id', 'proceso', 'clausulas',
+    'auditor_email', 'auditados', 'objetivo', 'alcance', 'criterios',
+    'fecha_programada', 'fecha_plan', 'fecha_ejecucion',
+    'estado',
+    'informe_plazo', 'informe_fecha', 'informe_conclusion',
+    'fecha_cierre', 'cerrada_por', 'creada_por', 'fecha_creacion', 'activa'
+  ],
+
+  // La lista de verificacion Y los hallazgos son la MISMA tabla: cada fila
+  // es "se reviso tal clausula y esto se encontro". Separarlas obligaria a
+  // duplicar la clausula y el aspecto revisado en dos lados, y dejaria sin
+  // respuesta la pregunta que el auditor si hace: "¿revisaron 7.2? ¿que
+  // vieron?" -- una clausula revisada y CONFORME es evidencia, no un vacio.
+  //
+  // resultado: CONFORME | OBSERVACION | NO_CONFORMIDAD | OPORTUNIDAD.
+  // nc_id: se llena cuando el hallazgo se convierte en no conformidad
+  //   (§10.2). Es el eslabon de la cadena auditoria -> NC -> actividad.
+  SGC_AUD_HALLAZGOS: [
+    'hallazgo_id', 'auditoria_id', 'clausula', 'aspecto_verificado',
+    'evidencia', 'resultado', 'descripcion', 'nc_id',
+    'registrado_por', 'fecha_registro', 'activo'
   ]
 };
 

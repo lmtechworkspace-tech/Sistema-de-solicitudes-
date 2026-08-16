@@ -179,6 +179,7 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // y la accion correctiva SEAN actividades de "Mi trabajo", y los helpers
   // de dia habil de Utils.gs.
   'NoConformidades.gs',
+  'Auditorias.gs',
   'Triggers.gs',
   'Code.gs'
 ];

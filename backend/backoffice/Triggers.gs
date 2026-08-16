@@ -317,6 +317,14 @@ function recordarValidacionPendienteTrigger() {
   } catch (err) {
     logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosNcVencidasTrigger');
   }
+  // v10.0 Fase 3b (PRO-03): informes de auditoria fuera de plazo, auditorias
+  // proximas y procesos sin auditar en 12 meses. Mismo criterio -- sin
+  // trigger propio, en try/catch, colgada de este slot de las 09:00.
+  try {
+    enviarAvisosAuditoriasTrigger();
+  } catch (err) {
+    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosAuditoriasTrigger');
+  }
   // v7.1 (notificaciones vivas, B5): mantenimiento diario -- purga las
   // notificaciones ya leidas o vencidas para que la hoja NOTIFICACIONES_APP
   // no crezca sin limite (cada sincronizacion del cliente la lee completa).
@@ -360,6 +368,12 @@ function enviarRecordatorioCompetenciasTrigger() {
 // que las anteriores, mismo motivo: poder forzarla a mano desde el editor.
 function enviarAvisosNcVencidasTrigger() {
   return NoConformidades.recordatorioVencidas();
+}
+
+// v10.0 Fase 3b: ver Auditorias.recordatorioPendientes(). Nombrada igual
+// que las anteriores, mismo motivo: poder forzarla a mano desde el editor.
+function enviarAvisosAuditoriasTrigger() {
+  return Auditorias.recordatorioPendientes();
 }
 
 // v7.1 (notificaciones vivas, B5): ver purgarNotificacionesApp_(). Nombrada

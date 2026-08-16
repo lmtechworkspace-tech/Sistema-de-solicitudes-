@@ -219,7 +219,19 @@ var BACKOFFICE_ACTIONS = {
   registrarAccionNcSgc: handleRegistrarAccionNcSgc_,
   cerrarEtapaNcSgc: handleCerrarEtapaNcSgc_,
   verificarEficaciaNcSgc: handleVerificarEficaciaNcSgc_,
-  anularNcSgc: handleAnularNcSgc_
+  anularNcSgc: handleAnularNcSgc_,
+  // v10.0 Fase 3b (PRO-03): auditoria interna.
+  listarAuditoriasSgc: handleListarAuditoriasSgc_,
+  getDetalleAuditoriaSgc: handleGetDetalleAuditoriaSgc_,
+  programarAuditoriaSgc: handleProgramarAuditoriaSgc_,
+  planificarAuditoriaSgc: handlePlanificarAuditoriaSgc_,
+  registrarHallazgoSgc: handleRegistrarHallazgoSgc_,
+  eliminarHallazgoSgc: handleEliminarHallazgoSgc_,
+  cerrarEjecucionAuditoriaSgc: handleCerrarEjecucionAuditoriaSgc_,
+  emitirInformeAuditoriaSgc: handleEmitirInformeAuditoriaSgc_,
+  convertirHallazgoEnNcSgc: handleConvertirHallazgoEnNcSgc_,
+  cerrarAuditoriaSgc: handleCerrarAuditoriaSgc_,
+  anularAuditoriaSgc: handleAnularAuditoriaSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -393,7 +405,20 @@ var MODULO_POR_ACCION = {
   registrarAccionNcSgc: 'calidad',
   cerrarEtapaNcSgc: 'calidad',
   verificarEficaciaNcSgc: 'calidad',
-  anularNcSgc: 'calidad'
+  anularNcSgc: 'calidad',
+  // v10.0 Fase 3b: igual criterio -- quien ve QUE auditoria lo acota
+  // Auditorias.gs (auditor, auditados y area, ademas de quien gobierna).
+  listarAuditoriasSgc: ['calidad', 'gerencia'],
+  getDetalleAuditoriaSgc: ['calidad', 'gerencia'],
+  programarAuditoriaSgc: 'calidad',
+  planificarAuditoriaSgc: 'calidad',
+  registrarHallazgoSgc: 'calidad',
+  eliminarHallazgoSgc: 'calidad',
+  cerrarEjecucionAuditoriaSgc: 'calidad',
+  emitirInformeAuditoriaSgc: 'calidad',
+  convertirHallazgoEnNcSgc: 'calidad',
+  cerrarAuditoriaSgc: 'calidad',
+  anularAuditoriaSgc: 'calidad'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -1039,6 +1064,52 @@ function handleVerificarEficaciaNcSgc_(data, contexto) {
 
 function handleAnularNcSgc_(data, contexto) {
   return responderResultado_(NoConformidades.anular(data, contexto));
+}
+
+// v10.0 Fase 3b (PRO-03): auditoria interna. Igual que arriba, Auditorias.gs
+// acota por su cuenta quien ve y quien puede que cosa.
+function handleListarAuditoriasSgc_(data, contexto) {
+  return responderResultado_(Auditorias.listar(data, contexto));
+}
+
+function handleGetDetalleAuditoriaSgc_(data, contexto) {
+  return responderResultado_(Auditorias.getDetalle(data, contexto));
+}
+
+function handleProgramarAuditoriaSgc_(data, contexto) {
+  return responderResultado_(Auditorias.programar(data, contexto));
+}
+
+function handlePlanificarAuditoriaSgc_(data, contexto) {
+  return responderResultado_(Auditorias.planificar(data, contexto));
+}
+
+function handleRegistrarHallazgoSgc_(data, contexto) {
+  return responderResultado_(Auditorias.registrarHallazgo(data, contexto));
+}
+
+function handleEliminarHallazgoSgc_(data, contexto) {
+  return responderResultado_(Auditorias.eliminarHallazgo(data, contexto));
+}
+
+function handleCerrarEjecucionAuditoriaSgc_(data, contexto) {
+  return responderResultado_(Auditorias.cerrarEjecucion(data, contexto));
+}
+
+function handleEmitirInformeAuditoriaSgc_(data, contexto) {
+  return responderResultado_(Auditorias.emitirInforme(data, contexto));
+}
+
+function handleConvertirHallazgoEnNcSgc_(data, contexto) {
+  return responderResultado_(Auditorias.convertirHallazgoEnNc(data, contexto));
+}
+
+function handleCerrarAuditoriaSgc_(data, contexto) {
+  return responderResultado_(Auditorias.cerrar(data, contexto));
+}
+
+function handleAnularAuditoriaSgc_(data, contexto) {
+  return responderResultado_(Auditorias.anular(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

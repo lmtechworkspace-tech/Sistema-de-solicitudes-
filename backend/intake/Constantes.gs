@@ -131,7 +131,10 @@ var SHEETS = {
   SGC_CAPACITACIONES: 'SGC_CAPACITACIONES',
   SGC_CAPACITACION_ASISTENTES: 'SGC_CAPACITACION_ASISTENTES',
   // v10.0 Fase 3a: idem -- copia solo para que el esquema no diverja.
-  SGC_NC: 'SGC_NC'
+  SGC_NC: 'SGC_NC',
+  // v10.0 Fase 3b: idem -- copia solo para que el esquema no diverja.
+  SGC_AUDITORIAS: 'SGC_AUDITORIAS',
+  SGC_AUD_HALLAZGOS: 'SGC_AUD_HALLAZGOS'
 };
 
 var COLUMNAS = {
@@ -538,6 +541,21 @@ var COLUMNAS = {
     'accion_plazo', 'accion_fecha_cierre',
     'eficacia_plazo', 'eficacia_fecha', 'eficacia_resultado', 'eficacia_observaciones',
     'fecha_cierre', 'cerrada_por', 'fecha_creacion', 'activa'
+  ],
+  // v10.0 Fase 3b (PRO-03): ver la nota identica en
+  // backend/backoffice/Constantes.gs sobre cada campo.
+  SGC_AUDITORIAS: [
+    'auditoria_id', 'correlativo', 'anio', 'area_id', 'proceso', 'clausulas',
+    'auditor_email', 'auditados', 'objetivo', 'alcance', 'criterios',
+    'fecha_programada', 'fecha_plan', 'fecha_ejecucion',
+    'estado',
+    'informe_plazo', 'informe_fecha', 'informe_conclusion',
+    'fecha_cierre', 'cerrada_por', 'creada_por', 'fecha_creacion', 'activa'
+  ],
+  SGC_AUD_HALLAZGOS: [
+    'hallazgo_id', 'auditoria_id', 'clausula', 'aspecto_verificado',
+    'evidencia', 'resultado', 'descripcion', 'nc_id',
+    'registrado_por', 'fecha_registro', 'activo'
   ]
 };
 
