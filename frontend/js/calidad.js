@@ -37,6 +37,8 @@
       if (auditoriaActivaId_) abrirAuditoria_(auditoriaActivaId_); else cargarAuditorias_();
     } else if (seccionActiva_ === 'quejas') {
       if (quejaActivaId_) abrirQueja_(quejaActivaId_); else cargarQuejas_();
+    } else if (seccionActiva_ === 'proveedores') {
+      if (proveedorActivoId_) abrirProveedor_(proveedorActivoId_); else cargarProveedores_();
     } else {
       if (documentoActivoId_) abrirDocumento_(documentoActivoId_); else cargarListado_();
     }
@@ -51,7 +53,8 @@
       { id: 'capacitaciones', texto: 'Capacitaciones' },
       { id: 'nc', texto: 'No conformidades' },
       { id: 'auditorias', texto: 'Auditorías' },
-      { id: 'quejas', texto: 'Quejas' }
+      { id: 'quejas', texto: 'Quejas' },
+      { id: 'proveedores', texto: 'Proveedores' }
     ];
     return '<div class="sigso-tabs sgc-secciones">' + secciones.map(function (s) {
       return '<button type="button" class="sigso-tab js-sgc-seccion' +
@@ -68,6 +71,7 @@
         ncActivaId_ = null;
         auditoriaActivaId_ = null;
         quejaActivaId_ = null;
+        proveedorActivoId_ = null;
         render_();
       });
     });
@@ -100,6 +104,7 @@
   var ncActivaId_ = null;
   var auditoriaActivaId_ = null;
   var quejaActivaId_ = null;
+  var proveedorActivoId_ = null;
   var pestanaFicha_ = 'datos';
   var puedeGestionar_ = false;
   var filtroTipo_ = '';
@@ -3363,6 +3368,382 @@
         cerrar();
         Componentes.aviso({ texto: conforme ? 'Queja cerrada.' : 'Reabierta: hay que retomar la resolución.', tipo: conforme ? 'exito' : 'info' });
         abrirQueja_(q.queja_id);
+      });
+    });
+  }
+
+  // --- Proveedores (PRO-04) ---------------------------------------------------
+  // El listado maestro (FO-PRO-04-01) no se edita a mano en la parte del
+  // resultado: el estado y la nota los escribe la evaluacion (FO-PRO-04-02).
+  // Por eso aca no hay ningun control para "marcar aprobado".
+
+  var ESTADO_PROVEEDOR_ETIQUETA = {
+    APROBADO: 'Aprobado', REPROBADO: 'Reprobado', SIN_EVALUAR: 'Sin evaluar'
+  };
+  var ESTADO_PROVEEDOR_TONO = {
+    APROBADO: 'ok', REPROBADO: 'critico', SIN_EVALUAR: 'neutro'
+  };
+  var filtroProveedoresPendientes_ = false;
+
+  function cargarProveedores_() {
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando proveedores...');
+    api_('listarProveedoresSgc', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = barraSecciones_() +
+          Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el listado de proveedores.', 'error');
+        wireSecciones_(cont);
+        return;
+      }
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      pintarProveedores_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
+      wireSecciones_(cont);
+    });
+  }
+
+  function pintarProveedores_(cont, data) {
+    var lista = data.proveedores || [];
+    var ind = data.indicadores || {};
+
+    var kpis = '<div class="sgc-kpis">' + [
+      Componentes.kpi({ etiqueta: 'Proveedores', valor: ind.total || 0 }),
+      Componentes.kpi({ etiqueta: 'Aprobados', valor: ind.aprobados || 0 }),
+      Componentes.kpi({ etiqueta: 'Reprobados', valor: ind.reprobados || 0 }),
+      Componentes.kpi({ etiqueta: 'Sin evaluar', valor: ind.sin_evaluar || 0 }),
+      Componentes.kpi({ etiqueta: 'Por evaluar', valor: ind.por_evaluar || 0 })
+    ].join('') + '</div>';
+
+    var avisoUnicos = ind.unicos_reprobados
+      ? Componentes.alerta(ind.unicos_reprobados + ' proveedor(es) único(s) están reprobados. ' +
+          'No corresponde reemplazarlos: hay que pedirles una reunión para exigir mejoras (PRO-04 §6.2).', 'advertencia')
+      : '';
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">Listado de proveedores aprobados (FO-PRO-04-01). ' +
+      'La evaluación es anual y el proveedor reprueba con promedio menor o igual a ' +
+      (data.corte_aprobacion || 5) + '.</p>' +
+      (puedeGestionar_
+        ? Componentes.boton({ texto: '+ Nuevo proveedor', clase: 'js-sgc-nuevo-prov' })
+        : '') +
+      '</div>' + kpis + avisoUnicos +
+      '<div class="sgc-filtros">' +
+        '<label class="sigso-campo-check"><input type="checkbox" id="sgc-prov-pend"' +
+          (filtroProveedoresPendientes_ ? ' checked' : '') + '> Ver solo los que faltan evaluar</label>' +
+      '</div>';
+
+    function wire() {
+      wireSecciones_(cont);
+      var chk = cont.querySelector('#sgc-prov-pend');
+      if (chk) chk.addEventListener('change', function () {
+        filtroProveedoresPendientes_ = this.checked;
+        cargarProveedores_();
+      });
+      var nuevo = cont.querySelector('.js-sgc-nuevo-prov');
+      if (nuevo) nuevo.addEventListener('click', function () { abrirFormularioProveedor_(null, data); });
+      cont.querySelectorAll('.js-sgc-abrir-prov').forEach(function (btn) {
+        btn.addEventListener('click', function () { abrirProveedor_(btn.getAttribute('data-id')); });
+      });
+    }
+
+    var visibles = filtroProveedoresPendientes_
+      ? lista.filter(function (p) { return p.evaluacion_vencida; })
+      : lista;
+
+    if (!visibles.length) {
+      cont.innerHTML = cabecera + Componentes.vacio({
+        texto: lista.length ? 'Ningún proveedor pendiente de evaluar.' : 'Todavía no hay proveedores en el listado.',
+        detalle: lista.length
+          ? 'Desmarca el filtro para ver todo el listado.'
+          : 'El listado maestro (FO-PRO-04-01) registra a quién se le compra y si está aprobado.'
+      });
+      wire();
+      return;
+    }
+
+    cont.innerHTML = cabecera + '<div class="sgc-lista">' + visibles.map(function (p) {
+      var badges = Componentes.badge(ESTADO_PROVEEDOR_ETIQUETA[p.estado] || p.estado,
+        ESTADO_PROVEEDOR_TONO[p.estado] || 'neutro');
+      if (p.es_unico) badges += Componentes.badge('Único', 'info');
+      if (p.evaluacion_vencida) badges += Componentes.badge('Por evaluar', 'alerta');
+
+      return '<button type="button" class="sgc-doc js-sgc-abrir-prov" data-id="' +
+        Componentes.escaparHtml(p.proveedor_id) + '">' +
+        '<div class="sgc-doc__linea">' +
+          '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(p.nombre) + '</span>' +
+          badges +
+        '</div>' +
+        '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(p.producto_servicio || '') + '</span>' +
+        '<div class="sgc-doc__meta">' +
+          (p.rut ? '<span>' + Componentes.escaparHtml(p.rut) + '</span>' : '') +
+          (p.ultima_evaluacion_promedio !== null && p.ultima_evaluacion_promedio !== undefined
+            ? '<span>Última nota: ' + p.ultima_evaluacion_promedio +
+              (p.ultima_evaluacion_resultado ? ' (' + Componentes.escaparHtml(p.ultima_evaluacion_resultado) + ')' : '') + '</span>'
+            : '<span>Nunca evaluado</span>') +
+          (p.proxima_evaluacion ? '<span>Próxima: ' + fechaCorta_(p.proxima_evaluacion) + '</span>' : '') +
+        '</div>' +
+        '</button>';
+    }).join('') + '</div>';
+    wire();
+  }
+
+  function abrirProveedor_(id) {
+    proveedorActivoId_ = id;
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando proveedor...');
+    api_('getDetalleProveedorSgc', { proveedor_id: id }).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo abrir el proveedor.', 'error');
+        return;
+      }
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      pintarFichaProveedor_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
+    });
+  }
+
+  function pintarFichaProveedor_(cont, data) {
+    var p = data.proveedor;
+    var evaluaciones = data.evaluaciones || [];
+
+    var badges = Componentes.badge(ESTADO_PROVEEDOR_ETIQUETA[p.estado] || p.estado,
+      ESTADO_PROVEEDOR_TONO[p.estado] || 'neutro');
+    if (p.es_unico) badges += Componentes.badge('Proveedor único', 'info');
+
+    // Lo que hay que HACER con un reprobado depende de si es unico. Se dice
+    // aca, en la ficha, porque es donde se toma la decision.
+    var avisoReprobado = '';
+    if (p.estado === 'REPROBADO') {
+      avisoReprobado = Componentes.alerta(p.es_unico
+        ? 'Reprobado, pero es proveedor único: PRO-04 §6.2 no permite desecharlo. Corresponde ' +
+          'enviarle un correo pidiendo una reunión para exigir mejoras.'
+        : 'Reprobado: según PRO-04 §6.2 corresponde dejar de comprarle y buscar un reemplazo.',
+        p.es_unico ? 'advertencia' : 'error');
+    }
+
+    var historial = evaluaciones.length
+      ? '<h3 class="sgc-subtitulo">Evaluaciones (FO-PRO-04-02)</h3>' +
+        evaluaciones.map(function (e) {
+          return '<div class="sgc-version">' +
+            '<div class="sgc-version__cab">' +
+              '<strong>' + e.promedio + '</strong> ' +
+              Componentes.badge(e.resultado, e.aprobado ? 'ok' : 'critico') +
+              '<span class="sgc-version__fecha">' + fechaCorta_(e.fecha) + '</span>' +
+            '</div>' +
+            '<ul class="sgc-items">' + e.calificaciones.map(function (c) {
+              return '<li><span>' + Componentes.escaparHtml(c.etiqueta) + '</span> <strong>' + c.valor + '</strong></li>';
+            }).join('') + '</ul>' +
+            (e.orden_compra ? '<p class="sigso-ayuda">Orden de compra: ' + Componentes.escaparHtml(e.orden_compra) + '</p>' : '') +
+            (e.observaciones ? '<p>' + Componentes.escaparHtml(e.observaciones) + '</p>' : '') +
+            '<p class="sigso-ayuda">Evaluó ' + Componentes.escaparHtml(e.evaluador_email || '') +
+              (e.proxima_evaluacion ? ' · próxima: ' + fechaCorta_(e.proxima_evaluacion) : '') + '</p>' +
+          '</div>';
+        }).join('')
+      : Componentes.vacio({
+          texto: 'Todavía no se ha evaluado.',
+          detalle: 'PRO-04 §6.2 pide evaluarlo cada 12 meses. Sin evaluación no puede quedar aprobado.'
+        });
+
+    cont.innerHTML =
+      '<button type="button" class="sigso-boton sigso-boton--sutil js-sgc-volver-prov">← Proveedores</button>' +
+      '<div class="sgc-ficha">' +
+        '<div class="sgc-ficha__cab">' +
+          '<h2>' + Componentes.escaparHtml(p.nombre) + '</h2>' + badges +
+        '</div>' +
+        avisoReprobado +
+        '<div class="sgc-ficha__datos">' +
+          campoFicha_('Producto o servicio', p.producto_servicio) +
+          campoFicha_('RUT', p.rut) +
+          campoFicha_('Contacto', p.nombre_contacto) +
+          campoFicha_('Correo', p.email) +
+          campoFicha_('Teléfono', p.telefono) +
+          campoFicha_('Dirección', p.direccion) +
+          campoFicha_('Última evaluación', p.ultima_evaluacion_fecha ? fechaCorta_(p.ultima_evaluacion_fecha) : '—') +
+          campoFicha_('Próxima evaluación', p.proxima_evaluacion ? fechaCorta_(p.proxima_evaluacion) : '—') +
+        '</div>' +
+        (puedeGestionar_
+          ? '<div class="sgc-ficha__acciones">' +
+              Componentes.boton({ texto: 'Evaluar', clase: 'js-sgc-evaluar-prov' }) +
+              Componentes.boton({ texto: 'Editar datos', variante: 'secundario', clase: 'js-sgc-editar-prov' }) +
+              Componentes.boton({ texto: 'Dar de baja', variante: 'peligro', clase: 'js-sgc-baja-prov' }) +
+            '</div>'
+          : '') +
+        historial +
+      '</div>';
+
+    var volver = cont.querySelector('.js-sgc-volver-prov');
+    if (volver) volver.addEventListener('click', function () {
+      proveedorActivoId_ = null;
+      cargarProveedores_();
+    });
+    var evaluar = cont.querySelector('.js-sgc-evaluar-prov');
+    if (evaluar) evaluar.addEventListener('click', function () { abrirFormularioEvaluarProveedor_(p, data); });
+    var editar = cont.querySelector('.js-sgc-editar-prov');
+    if (editar) editar.addEventListener('click', function () { abrirFormularioProveedor_(p, data); });
+    var baja = cont.querySelector('.js-sgc-baja-prov');
+    if (baja) baja.addEventListener('click', function () { abrirFormularioBajaProveedor_(p); });
+  }
+
+  function abrirFormularioProveedor_(p, data) {
+    var esNuevo = !p;
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">' + (esNuevo ? 'Nuevo proveedor' : 'Editar proveedor') + '</h3>' +
+        '<form id="form-sgc-prov">' +
+          Componentes.campoTexto({ id: 'prov-nombre', label: 'Nombre o razón social', requerido: true, valor: esNuevo ? '' : p.nombre }) +
+          Componentes.campoTexto({ id: 'prov-producto', label: 'Producto o servicio que provee', requerido: true, valor: esNuevo ? '' : p.producto_servicio }) +
+          Componentes.campoTexto({ id: 'prov-rut', label: 'RUT', valor: esNuevo ? '' : p.rut }) +
+          Componentes.campoTexto({ id: 'prov-contacto', label: 'Nombre de contacto', valor: esNuevo ? '' : p.nombre_contacto }) +
+          Componentes.campoTexto({ id: 'prov-email', label: 'Correo', tipo: 'email', valor: esNuevo ? '' : p.email }) +
+          Componentes.campoTexto({ id: 'prov-telefono', label: 'Teléfono', valor: esNuevo ? '' : p.telefono }) +
+          Componentes.campoTexto({ id: 'prov-direccion', label: 'Dirección', valor: esNuevo ? '' : p.direccion }) +
+          '<label class="sigso-campo-check"><input type="checkbox" id="prov-unico"' +
+            (!esNuevo && p.es_unico ? ' checked' : '') + '> Es proveedor único</label>' +
+          '<p class="sigso-ayuda">Márcalo si no hay con quién reemplazarlo. Cambia qué se hace si ' +
+          'reprueba: en vez de dejar de comprarle, se le pide una reunión de mejora (PRO-04 §6.2).</p>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-sgc-prov').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var datos = {
+        nombre: document.getElementById('prov-nombre').value,
+        producto_servicio: document.getElementById('prov-producto').value,
+        rut: document.getElementById('prov-rut').value,
+        nombre_contacto: document.getElementById('prov-contacto').value,
+        email: document.getElementById('prov-email').value,
+        telefono: document.getElementById('prov-telefono').value,
+        direccion: document.getElementById('prov-direccion').value,
+        es_unico: document.getElementById('prov-unico').checked
+      };
+      if (!esNuevo) datos.proveedor_id = p.proveedor_id;
+
+      api_('guardarProveedorSgc', datos).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        if (esNuevo) { proveedorActivoId_ = null; cargarProveedores_(); }
+        else abrirProveedor_(p.proveedor_id);
+      });
+    });
+  }
+
+  function abrirFormularioEvaluarProveedor_(p, data) {
+    var criterios = data.criterios || [];
+    var escala = data.escala || [];
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Evaluar a ' + Componentes.escaparHtml(p.nombre) + '</h3>' +
+        '<p class="sigso-ayuda">Califica cada ítem de 1 a 10 (FO-PRO-04-02). ' +
+          escala.map(function (e) { return e.etiqueta + ': ' + e.desde + ' a ' + e.hasta; }).join(' · ') +
+        '</p>' +
+        '<form id="form-sgc-prov-eval">' +
+          Componentes.campoTexto({ id: 'peval-oc', label: 'Orden de compra N° (opcional)' }) +
+          criterios.map(function (c) {
+            return Componentes.campoTexto({
+              id: 'peval-' + c.campo, label: c.etiqueta, tipo: 'number', requerido: true
+            });
+          }).join('') +
+          Componentes.campoTextarea({ id: 'peval-obs', label: 'Observaciones' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar evaluación', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    // La escala es 1 a 10: acotar el input evita el error antes de enviarlo.
+    criterios.forEach(function (c) {
+      var input = document.getElementById('peval-' + c.campo);
+      if (input) { input.min = 1; input.max = 10; input.step = 1; }
+    });
+
+    document.getElementById('form-sgc-prov-eval').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var datos = {
+        proveedor_id: p.proveedor_id,
+        orden_compra: document.getElementById('peval-oc').value,
+        observaciones: document.getElementById('peval-obs').value
+      };
+      criterios.forEach(function (c) {
+        datos[c.campo] = Number(document.getElementById('peval-' + c.campo).value);
+      });
+
+      api_('evaluarProveedorSgc', datos).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar la evaluación.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        var r = respuesta.data || {};
+        var ev = r.evaluacion || {};
+        // El resultado se dice de inmediato, con la consecuencia: es el
+        // momento en que hay que decidir qué hacer con el proveedor.
+        if (r.consecuencia === 'REUNION_MEJORA') {
+          Componentes.aviso({
+            texto: 'Promedio ' + ev.promedio + ': reprobado. Es proveedor único, corresponde pedirle una reunión de mejora.',
+            tipo: 'advertencia'
+          });
+        } else if (r.consecuencia === 'DESECHAR') {
+          Componentes.aviso({
+            texto: 'Promedio ' + ev.promedio + ': reprobado. Corresponde dejar de comprarle (PRO-04 §6.2).',
+            tipo: 'error'
+          });
+        } else {
+          Componentes.aviso({ texto: 'Promedio ' + ev.promedio + ' (' + ev.resultado + '): aprobado.', tipo: 'exito' });
+        }
+        abrirProveedor_(p.proveedor_id);
+      });
+    });
+  }
+
+  function abrirFormularioBajaProveedor_(p) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Dar de baja a ' + Componentes.escaparHtml(p.nombre) + '</h3>' +
+        '<p class="sigso-ayuda">Sale del listado, pero sus evaluaciones se conservan: son la evidencia ' +
+        'de que el control de proveedores se aplicaba.</p>' +
+        '<form id="form-sgc-prov-baja">' +
+          Componentes.campoTextarea({ id: 'pbaja-motivo', label: 'Motivo', requerido: true }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Dar de baja', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-sgc-prov-baja').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('desactivarProveedorSgc', {
+        proveedor_id: p.proveedor_id,
+        motivo: document.getElementById('pbaja-motivo').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo dar de baja.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        proveedorActivoId_ = null;
+        cargarProveedores_();
       });
     });
   }

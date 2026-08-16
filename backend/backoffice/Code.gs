@@ -244,7 +244,14 @@ var BACKOFFICE_ACTIONS = {
   convertirQuejaEnNcSgc: handleConvertirQuejaEnNcSgc_,
   registrarNotificacionQuejaSgc: handleRegistrarNotificacionQuejaSgc_,
   registrarSeguimientoQuejaSgc: handleRegistrarSeguimientoQuejaSgc_,
-  anularQuejaSgc: handleAnularQuejaSgc_
+  anularQuejaSgc: handleAnularQuejaSgc_,
+
+  // v10.0 Fase 5a (PRO-04): proveedores externos.
+  listarProveedoresSgc: handleListarProveedoresSgc_,
+  getDetalleProveedorSgc: handleGetDetalleProveedorSgc_,
+  guardarProveedorSgc: handleGuardarProveedorSgc_,
+  evaluarProveedorSgc: handleEvaluarProveedorSgc_,
+  desactivarProveedorSgc: handleDesactivarProveedorSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -443,7 +450,16 @@ var MODULO_POR_ACCION = {
   convertirQuejaEnNcSgc: 'calidad',
   registrarNotificacionQuejaSgc: 'calidad',
   registrarSeguimientoQuejaSgc: 'calidad',
-  anularQuejaSgc: 'calidad'
+  anularQuejaSgc: 'calidad',
+
+  // v10.0 Fase 5a: el listado de proveedores tambien lo consulta Gerencia
+  // (el desempeño de los proveedores externos es una entrada obligatoria de
+  // la revision por la direccion, §9.3.2).
+  listarProveedoresSgc: ['calidad', 'gerencia'],
+  getDetalleProveedorSgc: ['calidad', 'gerencia'],
+  guardarProveedorSgc: 'calidad',
+  evaluarProveedorSgc: 'calidad',
+  desactivarProveedorSgc: 'calidad'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -1177,6 +1193,27 @@ function handleRegistrarSeguimientoQuejaSgc_(data, contexto) {
 
 function handleAnularQuejaSgc_(data, contexto) {
   return responderResultado_(Quejas.anular(data, contexto));
+}
+
+// v10.0 Fase 5a (PRO-04): proveedores externos.
+function handleListarProveedoresSgc_(data, contexto) {
+  return responderResultado_(Proveedores.listar(data, contexto));
+}
+
+function handleGetDetalleProveedorSgc_(data, contexto) {
+  return responderResultado_(Proveedores.getDetalle(data, contexto));
+}
+
+function handleGuardarProveedorSgc_(data, contexto) {
+  return responderResultado_(Proveedores.guardar(data, contexto));
+}
+
+function handleEvaluarProveedorSgc_(data, contexto) {
+  return responderResultado_(Proveedores.evaluar(data, contexto));
+}
+
+function handleDesactivarProveedorSgc_(data, contexto) {
+  return responderResultado_(Proveedores.desactivar(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

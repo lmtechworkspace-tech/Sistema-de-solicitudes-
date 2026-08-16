@@ -333,6 +333,14 @@ function recordarValidacionPendienteTrigger() {
   } catch (err) {
     logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosQuejasTrigger');
   }
+  // v10.0 Fase 5a (PRO-04 §6.2): evaluacion anual de proveedores vencida y
+  // proveedores reprobados sin gestionar. Mismo criterio -- sin trigger
+  // propio, colgada de este slot de las 09:00.
+  try {
+    enviarAvisosProveedoresTrigger();
+  } catch (err) {
+    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosProveedoresTrigger');
+  }
   // v7.1 (notificaciones vivas, B5): mantenimiento diario -- purga las
   // notificaciones ya leidas o vencidas para que la hoja NOTIFICACIONES_APP
   // no crezca sin limite (cada sincronizacion del cliente la lee completa).
@@ -388,6 +396,12 @@ function enviarAvisosAuditoriasTrigger() {
 // las anteriores, mismo motivo: poder forzarla a mano desde el editor.
 function enviarAvisosQuejasTrigger() {
   return Quejas.recordatorioPendientes();
+}
+
+// v10.0 Fase 5a: ver Proveedores.recordatorioPendientes(). Mismo criterio de
+// nombre que las anteriores, para poder forzarla a mano desde el editor.
+function enviarAvisosProveedoresTrigger() {
+  return Proveedores.recordatorioPendientes();
 }
 
 // v7.1 (notificaciones vivas, B5): ver purgarNotificacionesApp_(). Nombrada

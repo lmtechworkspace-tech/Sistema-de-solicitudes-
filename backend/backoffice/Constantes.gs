@@ -163,7 +163,9 @@ var SHEETS = {
   SGC_AUD_HALLAZGOS: 'SGC_AUD_HALLAZGOS',
   // v10.0 Fase 4 (PRO-07): quejas, felicitaciones y consultas. Entra por el
   // Intake (formulario publico, sin cuenta) y se gestiona en el Backoffice.
-  SGC_QUEJAS: 'SGC_QUEJAS'
+  SGC_QUEJAS: 'SGC_QUEJAS',
+  SGC_PROVEEDORES: 'SGC_PROVEEDORES',
+  SGC_PROVEEDOR_EVALUACIONES: 'SGC_PROVEEDOR_EVALUACIONES'
 };
 
 var COLUMNAS = {
@@ -816,6 +818,47 @@ var COLUMNAS = {
     'seguimiento_plazo', 'fecha_seguimiento', 'cliente_conforme',
     'estado',
     'fecha_cierre', 'cerrada_por', 'fecha_creacion', 'activa'
+  ],
+
+  // --- v10.0 Fase 5a: proveedores externos (PRO-04) -------------------------
+  // FO-PRO-04-01 "Listado de proveedores aprobados" es el maestro: a quien se
+  // le compra que, y si esta aprobado. El "Resultado evaluacion" y el
+  // "Estatus" que pide el formulario se guardan desnormalizados (ultima_*)
+  // para poder listar sin recorrer todas las evaluaciones -- mismo criterio
+  // que el resto del modulo.
+  //
+  // es_unico: PRO-04 §6.2 distingue al proveedor UNICO. Al resto se le
+  // desecha si el promedio cae a 5.0 o menos; al unico no se le puede
+  // desechar (no hay con quien reemplazarlo), asi que en su lugar se le pide
+  // una reunion para exigir mejoras. Sin este dato el sistema daria una
+  // instruccion imposible de cumplir.
+  //
+  // estado: APROBADO | REPROBADO | SIN_EVALUAR
+  SGC_PROVEEDORES: [
+    'proveedor_id', 'nombre', 'rut', 'producto_servicio',
+    'direccion', 'telefono', 'email', 'nombre_contacto',
+    'es_unico', 'estado',
+    'ultima_evaluacion_fecha', 'ultima_evaluacion_promedio', 'ultima_evaluacion_resultado',
+    'proxima_evaluacion',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // FO-PRO-04-02 "Evaluacion de proveedores". Los seis criterios van en
+  // columnas fijas y no en un JSON: PRO-04 §6.2 los enumera de la a) a la f)
+  // como una lista cerrada, a diferencia de la evaluacion de personas, que
+  // califica "segun descriptor de cargo" y por eso si necesita ser variable.
+  // En columnas quedan ademas legibles para el auditor que abra la planilla.
+  //
+  // resultado: MALO (1 a 3,9) | REGULAR (4 a 6,5) | BUENO (6,6 a 10) -- la
+  // escala cualitativa textual de PRO-04 §6.2.
+  // aprobado: promedio > 5.0. Ojo que el corte NUMERICO y la escala
+  // cualitativa no coinciden: un 5.0 cae en "Regular" pero igual reprueba,
+  // porque el procedimiento dice "inferior o igual a 5.0".
+  SGC_PROVEEDOR_EVALUACIONES: [
+    'evaluacion_id', 'proveedor_id', 'fecha', 'orden_compra',
+    'calidad', 'plazo_entrega', 'costos', 'tiempo_respuesta', 'precio', 'postventa',
+    'promedio', 'resultado', 'aprobado',
+    'observaciones', 'evaluador_email', 'proxima_evaluacion'
   ]
 };
 

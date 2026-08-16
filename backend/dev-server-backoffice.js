@@ -281,6 +281,20 @@ function construirContexto() {
       'RECIBIDA',
       '', '', new Date().toISOString(), true]
   ]);
+  // v10.0 Fase 5a (PRO-04): proveedores. Se siembran dos casos que hay que
+  // poder distinguir en pantalla -- uno normal y uno UNICO, porque reprobar
+  // a cada uno tiene una consecuencia distinta.
+  seedSheet(ctx, 'SGC_PROVEEDORES', ctx.COLUMNAS.SGC_PROVEEDORES, [
+    ['PROV-DEMO-1', 'Insumos Oficina SpA', '76.111.111-1', 'Artículos de oficina y papelería',
+      'Av. Siempreviva 742', '+56 2 2345 6789', 'ventas@insumosoficina.cl', 'Marcela Ríos',
+      false, 'SIN_EVALUAR', '', '', '', '',
+      'admin@homepymes.cl', new Date().toISOString(), true],
+    ['PROV-DEMO-2', 'Certificaciones Andinas Ltda.', '77.222.222-2', 'Auditoría externa de certificación ISO',
+      'Providencia 1234', '+56 2 2999 0000', 'contacto@certandinas.cl', 'Jorge Núñez',
+      true, 'SIN_EVALUAR', '', '', '', '',
+      'admin@homepymes.cl', new Date().toISOString(), true]
+  ]);
+  seedSheet(ctx, 'SGC_PROVEEDOR_EVALUACIONES', ctx.COLUMNAS.SGC_PROVEEDOR_EVALUACIONES);
   seedSheet(ctx, 'SGC_ROLES', ctx.COLUMNAS.SGC_ROLES, [
     ['SGCR-1', 'admin@homepymes.cl', 'ENCARGADO_SGC', '', '', true, new Date().toISOString()],
     ['SGCR-2', 'jefe@homepymes.cl', 'OPERATIVO', 'CONTABILIDAD', '', true, new Date().toISOString()],

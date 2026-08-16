@@ -185,6 +185,9 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // v10.0 Fase 4 (PRO-07): quejas. Usa NoConformidades.crear (ya cargado)
   // para el eslabon queja -> NC, y los mismos helpers de Calidad.gs.
   'Quejas.gs',
+  // v10.0 Fase 5a (PRO-04): proveedores externos. Reutiliza los helpers de
+  // Calidad.gs (roles/permisos) y encargadosSgc_ de Auditorias.gs.
+  'Proveedores.gs',
   'Triggers.gs',
   'Code.gs'
 ];
