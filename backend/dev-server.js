@@ -34,6 +34,8 @@ function construirContexto() {
   seedSheet(ctx, 'COUNTERS', ctx.COLUMNAS.COUNTERS);
   seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);
   seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
+  // v10.0 Fase 4 (PRO-07): formulario publico de quejas.
+  seedSheet(ctx, 'SGC_QUEJAS', ctx.COLUMNAS.SGC_QUEJAS);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
   seedSheet(ctx, 'HISTORIAL_COMPROMISO', ctx.COLUMNAS.HISTORIAL_COMPROMISO);
   // v3.3 (plataforma): cuenta demo con DOS correos, para probar el login y

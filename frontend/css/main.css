@@ -147,6 +147,7 @@ a {
 
 .sigso-nav {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--esp-4);
 }
 

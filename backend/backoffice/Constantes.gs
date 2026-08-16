@@ -160,7 +160,10 @@ var SHEETS = {
   // motor de mejora: el mecanismo por el que la organizacion se encuentra
   // sus propios problemas antes de que se los encuentre el auditor.
   SGC_AUDITORIAS: 'SGC_AUDITORIAS',
-  SGC_AUD_HALLAZGOS: 'SGC_AUD_HALLAZGOS'
+  SGC_AUD_HALLAZGOS: 'SGC_AUD_HALLAZGOS',
+  // v10.0 Fase 4 (PRO-07): quejas, felicitaciones y consultas. Entra por el
+  // Intake (formulario publico, sin cuenta) y se gestiona en el Backoffice.
+  SGC_QUEJAS: 'SGC_QUEJAS'
 };
 
 var COLUMNAS = {
@@ -762,6 +765,57 @@ var COLUMNAS = {
     'hallazgo_id', 'auditoria_id', 'clausula', 'aspecto_verificado',
     'evidencia', 'resultado', 'descripcion', 'nc_id',
     'registrado_por', 'fecha_registro', 'activo'
+  ],
+
+  // v10.0 Fase 4 (PRO-07) ---------------------------------------------------
+  // UNA fila = UN formulario FO-PRO-07-01 completo, con sus 5 partes. Mismo
+  // criterio que SGC_NC y SGC_AUDITORIAS: partirlo en varias tablas
+  // obligaria a reconstruir el caso con joins para responder la pregunta
+  // que siempre se hace ("muestreme esta queja de punta a punta").
+  //
+  // PARTE 1 (la llena el reclamante, sin cuenta, desde el Intake):
+  //   nombre_completo, empresa, rut, email, telefono, tipo, area,
+  //   descripcion, canal, fecha_envio.
+  // tipo: QUEJA | RECLAMACION | FELICITACION | CONSULTA.
+  // area: RRHH | CONTABILIDAD | PREVENCION | MARKETING | ADMINISTRACION |
+  //       OTRO -- mismo desglose que el formulario web real.
+  // canal: WEB | CORREO | TELEFONO | ENCUESTA.
+  //
+  // PARTE 2 (la completa el Responsable SGC al recibirla):
+  //   fecha_recepcion, procede, motivo_no_procede, registrado_por.
+  // procede: si el reclamo esta dentro del plazo vigente (servicio activo
+  //   o hasta 30 dias corridos post-termino, y no suspendido por falta de
+  //   pago). Es un juicio del Responsable SGC -- SIGSO no tiene el dato de
+  //   si el servicio esta suspendido, asi que no se puede derivar solo.
+  //
+  // PARTE 3 (investigacion):
+  //   investigador_email, resultado_investigacion, valida.
+  // El investigador NO puede ser de la misma area que origino el reclamo
+  // (mismo principio de imparcialidad que en auditoria interna, §9.2.2,
+  // aplicado aca por PRO-07 §6.2: "no hayan participado en las actividades
+  // que dieron origen a la queja").
+  //
+  // PARTE 4 (resolucion, plazo 30 dias CORRIDOS desde que se valida):
+  //   accion_implementada, nc_id, fecha_resolucion, responsable_resolucion.
+  // nc_id: si la resolucion requirio abrir una no conformidad (Fase 3a),
+  //   igual patron que el hallazgo de auditoria -> NC.
+  //
+  // PARTE 5 (notificacion y seguimiento, 30 dias CORRIDOS post-respuesta):
+  //   fecha_notificacion, revisado_por, fecha_seguimiento, cliente_conforme.
+  //
+  // estado: RECIBIDA | NO_PROCEDE | EN_INVESTIGACION | NO_VALIDA |
+  //         EN_RESOLUCION | NOTIFICADA | CERRADA | REABIERTA | ANULADA.
+  SGC_QUEJAS: [
+    'queja_id', 'correlativo',
+    'nombre_completo', 'empresa', 'rut', 'email', 'telefono',
+    'tipo', 'area', 'descripcion', 'canal', 'fecha_envio',
+    'fecha_recepcion', 'procede', 'motivo_no_procede', 'registrado_por',
+    'investigador_email', 'resultado_investigacion', 'valida',
+    'accion_implementada', 'nc_id', 'resolucion_plazo', 'fecha_resolucion', 'responsable_resolucion',
+    'fecha_notificacion', 'revisado_por',
+    'seguimiento_plazo', 'fecha_seguimiento', 'cliente_conforme',
+    'estado',
+    'fecha_cierre', 'cerrada_por', 'fecha_creacion', 'activa'
   ]
 };
 

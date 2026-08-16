@@ -134,7 +134,10 @@ var SHEETS = {
   SGC_NC: 'SGC_NC',
   // v10.0 Fase 3b: idem -- copia solo para que el esquema no diverja.
   SGC_AUDITORIAS: 'SGC_AUDITORIAS',
-  SGC_AUD_HALLAZGOS: 'SGC_AUD_HALLAZGOS'
+  SGC_AUD_HALLAZGOS: 'SGC_AUD_HALLAZGOS',
+  // v10.0 Fase 4 (PRO-07): esta SI la escribe el Intake (formulario publico
+  // de quejas), no es solo copia de esquema.
+  SGC_QUEJAS: 'SGC_QUEJAS'
 };
 
 var COLUMNAS = {
@@ -561,6 +564,20 @@ var COLUMNAS = {
     'hallazgo_id', 'auditoria_id', 'clausula', 'aspecto_verificado',
     'evidencia', 'resultado', 'descripcion', 'nc_id',
     'registrado_por', 'fecha_registro', 'activo'
+  ],
+  // v10.0 Fase 4 (PRO-07): ver la nota identica en
+  // backend/backoffice/Constantes.gs sobre cada campo.
+  SGC_QUEJAS: [
+    'queja_id', 'correlativo',
+    'nombre_completo', 'empresa', 'rut', 'email', 'telefono',
+    'tipo', 'area', 'descripcion', 'canal', 'fecha_envio',
+    'fecha_recepcion', 'procede', 'motivo_no_procede', 'registrado_por',
+    'investigador_email', 'resultado_investigacion', 'valida',
+    'accion_implementada', 'nc_id', 'resolucion_plazo', 'fecha_resolucion', 'responsable_resolucion',
+    'fecha_notificacion', 'revisado_por',
+    'seguimiento_plazo', 'fecha_seguimiento', 'cliente_conforme',
+    'estado',
+    'fecha_cierre', 'cerrada_por', 'fecha_creacion', 'activa'
   ]
 };
 

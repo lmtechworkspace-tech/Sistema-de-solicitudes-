@@ -35,6 +35,8 @@
       if (ncActivaId_) abrirNc_(ncActivaId_); else cargarNc_();
     } else if (seccionActiva_ === 'auditorias') {
       if (auditoriaActivaId_) abrirAuditoria_(auditoriaActivaId_); else cargarAuditorias_();
+    } else if (seccionActiva_ === 'quejas') {
+      if (quejaActivaId_) abrirQueja_(quejaActivaId_); else cargarQuejas_();
     } else {
       if (documentoActivoId_) abrirDocumento_(documentoActivoId_); else cargarListado_();
     }
@@ -48,7 +50,8 @@
       { id: 'personas', texto: 'Personas' },
       { id: 'capacitaciones', texto: 'Capacitaciones' },
       { id: 'nc', texto: 'No conformidades' },
-      { id: 'auditorias', texto: 'Auditorías' }
+      { id: 'auditorias', texto: 'Auditorías' },
+      { id: 'quejas', texto: 'Quejas' }
     ];
     return '<div class="sigso-tabs sgc-secciones">' + secciones.map(function (s) {
       return '<button type="button" class="sigso-tab js-sgc-seccion' +
@@ -64,6 +67,7 @@
         personaActivaId_ = null;
         ncActivaId_ = null;
         auditoriaActivaId_ = null;
+        quejaActivaId_ = null;
         render_();
       });
     });
@@ -95,6 +99,7 @@
   var personaActivaId_ = null;
   var ncActivaId_ = null;
   var auditoriaActivaId_ = null;
+  var quejaActivaId_ = null;
   var pestanaFicha_ = 'datos';
   var puedeGestionar_ = false;
   var filtroTipo_ = '';
@@ -2827,6 +2832,500 @@
         cerrar();
         Componentes.aviso({ texto: 'Informe emitido.', tipo: 'exito' });
         abrirAuditoria_(aud.auditoria_id);
+      });
+    });
+  }
+
+  // ==========================================================================
+  // QUEJAS, FELICITACIONES Y CONSULTAS (Fase 4, PRO-07) — la Parte 1 la
+  // llena el cliente sin cuenta desde frontend/quejas.html; esta sección
+  // gestiona las Partes 2 a 5: registro interno, investigación (con la
+  // misma imparcialidad que la auditoría interna), resolución, notificación
+  // y seguimiento.
+  // ==========================================================================
+
+  var TIPO_QUEJA_ETIQUETA = { QUEJA: 'Queja', RECLAMACION: 'Reclamación', FELICITACION: 'Felicitación', CONSULTA: 'Consulta' };
+  var TIPO_QUEJA_TONO = { QUEJA: 'critico', RECLAMACION: 'critico', FELICITACION: 'ok', CONSULTA: 'info' };
+  var ESTADO_QUEJA_ETIQUETA = {
+    RECIBIDA: 'Recibida', NO_PROCEDE: 'No procede', EN_INVESTIGACION: 'En investigación',
+    NO_VALIDA: 'No válida', EN_RESOLUCION: 'En resolución', RESUELTA: 'Resuelta',
+    NOTIFICADA: 'Notificada', CERRADA: 'Cerrada', REABIERTA: 'Reabierta', ANULADA: 'Anulada'
+  };
+  var AREA_QUEJA_ETIQUETA = {
+    RRHH: 'RRHH', CONTABILIDAD: 'Contabilidad', PREVENCION: 'Prevención de Riesgos',
+    MARKETING: 'Marketing', ADMINISTRACION: 'Administración', OTRO: 'Otro'
+  };
+
+  var filtroQuejasAbiertas_ = false;
+
+  function cargarQuejas_() {
+    quejaActivaId_ = null;
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando quejas...');
+    api_('listarQuejasSgc', filtroQuejasAbiertas_ ? { abiertas: true } : {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar.', 'error');
+        return;
+      }
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      pintarQuejas_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar las quejas.', 'error');
+    });
+  }
+
+  function pintarQuejas_(cont, data) {
+    var lista = data.quejas || [];
+    var ind = data.indicadores || {};
+
+    var kpis = '<div class="sgc-kpis">' + [
+      Componentes.kpi({ etiqueta: 'Este año', valor: ind.total_anio || 0 }),
+      Componentes.kpi({ etiqueta: 'Quejas/reclamos', valor: ind.quejas_anio || 0 }),
+      Componentes.kpi({ etiqueta: 'Felicitaciones', valor: ind.felicitaciones_anio || 0 }),
+      Componentes.kpi({ etiqueta: 'Consultas', valor: ind.consultas_anio || 0 }),
+      Componentes.kpi({ etiqueta: 'Abiertas', valor: ind.abiertas || 0 }),
+      Componentes.kpi({ etiqueta: 'Con plazo vencido', valor: ind.vencidas || 0 })
+    ].join('') + '</div>';
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">Formulario público en <code>quejas.html</code>. El plazo de respuesta ' +
+      'es de 30 días corridos desde que se valida la queja.</p>' +
+      '</div>' + kpis +
+      '<div class="sgc-filtros">' +
+        '<label class="sigso-campo-check"><input type="checkbox" id="sgc-q-abiertas"' +
+          (filtroQuejasAbiertas_ ? ' checked' : '') + '> Ver solo las abiertas</label>' +
+      '</div>';
+
+    function wire() {
+      wireSecciones_(cont);
+      var chk = cont.querySelector('#sgc-q-abiertas');
+      if (chk) chk.addEventListener('change', function () { filtroQuejasAbiertas_ = this.checked; cargarQuejas_(); });
+      cont.querySelectorAll('.js-sgc-abrir-queja').forEach(function (btn) {
+        btn.addEventListener('click', function () { abrirQueja_(btn.getAttribute('data-id')); });
+      });
+    }
+
+    if (lista.length === 0) {
+      cont.innerHTML = cabecera + Componentes.vacio({
+        texto: filtroQuejasAbiertas_ ? 'No hay quejas abiertas.' : 'Todavía no hay quejas, felicitaciones ni consultas registradas.',
+        detalle: 'Llegan solas desde el formulario público del sitio.'
+      });
+      wire();
+      return;
+    }
+
+    var filas = lista.map(function (q) {
+      var cerrada = ['CERRADA', 'NO_PROCEDE', 'NO_VALIDA', 'ANULADA'].indexOf(q.estado) !== -1;
+      return '<button type="button" class="sgc-doc js-sgc-abrir-queja' +
+        (q.vencida ? ' sgc-nc--vencida' : (cerrada ? ' sgc-doc--obsoleto' : '')) +
+        '" data-id="' + q.queja_id + '">' +
+        '<div class="sgc-doc__top">' +
+          '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(q.correlativo) + '</span>' +
+          '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(q.nombre_completo) +
+            (q.empresa ? ' (' + Componentes.escaparHtml(q.empresa) + ')' : '') + '</span>' +
+          Componentes.badge(TIPO_QUEJA_ETIQUETA[q.tipo] || q.tipo, TIPO_QUEJA_TONO[q.tipo] || 'neutro') +
+          Componentes.badge(ESTADO_QUEJA_ETIQUETA[q.estado] || q.estado, cerrada ? 'neutro' : 'info') +
+          (q.vencida ? Componentes.badge('Vencida', 'critico') : '') +
+          (q.tiene_nc ? Componentes.badge('Con NC', 'alerta') : '') +
+        '</div>' +
+        '<div class="sgc-doc__meta">' +
+          '<span>' + Componentes.escaparHtml(AREA_QUEJA_ETIQUETA[q.area] || q.area) + '</span>' +
+          '<span>Recibida ' + fechaCorta_(q.fecha_envio) + '</span>' +
+          (q.investigador_email ? '<span>Investiga: ' + Componentes.escaparHtml(q.investigador_email) + '</span>' : '') +
+          (q.etapa_actual
+            ? '<span>' + Componentes.escaparHtml(q.etapa_actual) +
+              (q.dias_para_plazo !== null
+                ? (q.dias_para_plazo < 0 ? ' · vencida hace ' + (-q.dias_para_plazo) + ' d' : ' · ' + q.dias_para_plazo + ' d')
+                : '') + '</span>'
+            : '') +
+        '</div>' +
+        '<p class="sigso-ayuda">' + Componentes.escaparHtml(String(q.descripcion).slice(0, 140)) + '</p>' +
+      '</button>';
+    }).join('');
+
+    cont.innerHTML = cabecera + '<div class="sgc-lista">' + filas + '</div>';
+    wire();
+  }
+
+  // --- ficha de la queja: las cinco partes del FO-PRO-07-01 -------------------
+
+  function abrirQueja_(id) {
+    quejaActivaId_ = id;
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando queja...');
+    api_('getDetalleQuejaSgc', { queja_id: id }).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo abrir.', 'error');
+        return;
+      }
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      pintarFichaQueja_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
+    });
+  }
+
+  function pintarFichaQueja_(cont, data) {
+    var q = data.queja;
+    var puede = data.puede_gestionar === true;
+    var puedeInvestigar = data.puede_investigar === true;
+    var cerrada = ['CERRADA', 'NO_PROCEDE', 'NO_VALIDA', 'ANULADA'].indexOf(q.estado) !== -1;
+
+    // 1) Recepción
+    var e1 = etapaNc_(1, 'Recepción', !!q.fecha_recepcion,
+      (q.fecha_recepcion
+        ? '<p>' + (q.procede === true || q.procede === 'TRUE'
+            ? Componentes.badge('Procede', 'ok')
+            : Componentes.badge('No procede', 'critico') + ' — ' + Componentes.escaparHtml(q.motivo_no_procede)) + '</p>' +
+          '<p class="sigso-ayuda">Registrada el ' + fechaCorta_(q.fecha_recepcion) + ' por ' + Componentes.escaparHtml(q.registrado_por) + '.</p>'
+        : '<p class="sigso-ayuda">¿El servicio está vigente (o dentro de los 30 días post-término) y no suspendido por falta de pago?</p>'),
+      puede && q.estado === 'RECIBIDA'
+        ? '<div class="sgc-acciones">' + Componentes.boton({ texto: 'Registrar recepción', clase: 'js-q-recepcion' }) + '</div>'
+        : '');
+
+    // 2) Investigación
+    var e2 = etapaNc_(2, 'Investigación',
+      q.estado !== 'RECIBIDA' && q.estado !== 'NO_PROCEDE' && !!q.resultado_investigacion,
+      (q.estado === 'RECIBIDA' || q.estado === 'NO_PROCEDE'
+        ? '<p class="sigso-ayuda">Quién investiga no puede ser del área que originó la queja (PRO-07 §6.2).</p>'
+        : (q.investigador_email
+            ? '<p class="sigso-ayuda">Investiga: <b>' + Componentes.escaparHtml(q.investigador_email) + '</b></p>' +
+              (q.resultado_investigacion
+                ? '<p>' + Componentes.escaparHtml(q.resultado_investigacion) + '</p>' +
+                  '<p>' + (q.valida === true || q.valida === 'TRUE' ? Componentes.badge('Válida', 'ok') : Componentes.badge('No válida', 'critico')) + '</p>'
+                : '<p class="sigso-ayuda">Investigación en curso.</p>')
+            : '<p class="sigso-ayuda">Falta asignar quién investiga.</p>')),
+      puede && q.estado === 'EN_INVESTIGACION' && !q.investigador_email
+        ? '<div class="sgc-acciones">' + Componentes.boton({ texto: 'Asignar investigador', clase: 'js-q-investigador' }) + '</div>'
+        : (puedeInvestigar && q.estado === 'EN_INVESTIGACION' && q.investigador_email && !q.resultado_investigacion
+            ? '<div class="sgc-acciones">' + Componentes.boton({ texto: 'Registrar resultado', clase: 'js-q-resultado' }) + '</div>'
+            : ''));
+
+    // 3) Resolución
+    var e3 = etapaNc_(3, 'Resolución', !!q.fecha_resolucion,
+      (q.accion_implementada && q.estado !== 'NO_VALIDA'
+        ? '<p>' + Componentes.escaparHtml(q.accion_implementada) + '</p>' +
+          (q.fecha_resolucion ? '<p class="sigso-ayuda">Resuelta el ' + fechaCorta_(q.fecha_resolucion) + '.</p>' : '') +
+          (data.nc_correlativo
+            ? '<p class="sigso-ayuda">→ ' + Componentes.escaparHtml(data.nc_correlativo) + ' (' +
+              Componentes.escaparHtml(ESTADO_NC_ETIQUETA[data.nc_estado] || data.nc_estado) + ')</p>'
+            : '')
+        : '<p class="sigso-ayuda">Qué se hizo para resolverlo. Plazo: 30 días corridos desde que se validó' +
+          (q.resolucion_plazo ? ', vence el ' + fechaCorta_(q.resolucion_plazo) : '') + '.</p>'),
+      puede && q.estado === 'EN_RESOLUCION'
+        ? '<div class="sgc-acciones">' + Componentes.boton({ texto: 'Registrar resolución', clase: 'js-q-resolucion' }) + '</div>'
+        : (puede && q.estado === 'RESUELTA' && !q.nc_id
+            ? '<div class="sgc-acciones">' + Componentes.boton({ texto: 'Levantar no conformidad', variante: 'secundario', clase: 'js-q-a-nc' }) + '</div>'
+            : ''));
+
+    // 4) Notificación
+    var e4 = etapaNc_(4, 'Notificación al cliente', !!q.fecha_notificacion,
+      (q.fecha_notificacion
+        ? '<p class="sigso-ayuda">Notificada el ' + fechaCorta_(q.fecha_notificacion) +
+          '. Revisó: ' + Componentes.escaparHtml(q.revisado_por) + '.</p>'
+        : '<p class="sigso-ayuda">Se le envía al cliente la respuesta final. La decisión la revisa alguien no involucrado en el origen.</p>'),
+      puede && q.estado === 'RESUELTA'
+        ? '<div class="sgc-acciones">' + Componentes.boton({ texto: 'Notificar al cliente', clase: 'js-q-notificar' }) + '</div>'
+        : '');
+
+    // 5) Seguimiento
+    var e5 = etapaNc_(5, 'Seguimiento', !!q.fecha_seguimiento,
+      (q.fecha_seguimiento
+        ? '<p>' + (q.cliente_conforme === true || q.cliente_conforme === 'TRUE'
+            ? Componentes.badge('Cliente conforme', 'ok') : Componentes.badge('No conforme — reabierta', 'critico')) + '</p>'
+        : '<p class="sigso-ayuda">30 días corridos después de la respuesta: ¿el cliente quedó conforme?' +
+          (q.seguimiento_plazo ? ' Vence el ' + fechaCorta_(q.seguimiento_plazo) + '.' : '') + '</p>'),
+      puede && (q.estado === 'NOTIFICADA' || q.estado === 'REABIERTA')
+        ? '<div class="sgc-acciones">' + Componentes.boton({ texto: 'Registrar seguimiento', clase: 'js-q-seguimiento' }) + '</div>'
+        : '');
+
+    cont.innerHTML =
+      '<div class="sgc-detalle-cab">' +
+        Componentes.boton({ texto: '← Quejas', variante: 'sutil', clase: 'js-q-volver' }) +
+        '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(q.correlativo) + '</span>' +
+        '<h1>' + Componentes.escaparHtml(q.nombre_completo) + '</h1>' +
+        Componentes.badge(TIPO_QUEJA_ETIQUETA[q.tipo] || q.tipo, TIPO_QUEJA_TONO[q.tipo] || 'neutro') +
+        Componentes.badge(ESTADO_QUEJA_ETIQUETA[q.estado] || q.estado, cerrada ? 'neutro' : 'info') +
+        (data.resumen && data.resumen.vencida ? Componentes.badge('Plazo vencido', 'critico') : '') +
+      '</div>' +
+      '<div class="sgc-cuerpo">' +
+        '<dl class="sgc-ficha">' +
+          campoFicha_('Empresa', q.empresa) +
+          campoFicha_('RUT', q.rut) +
+          campoFicha_('Correo', q.email) +
+          campoFicha_('Teléfono', q.telefono) +
+          campoFicha_('Área', AREA_QUEJA_ETIQUETA[q.area] || q.area) +
+          campoFicha_('Canal', q.canal) +
+          campoFicha_('Recibida', fechaCorta_(q.fecha_envio)) +
+        '</dl>' +
+        '<p>' + Componentes.escaparHtml(q.descripcion) + '</p>' +
+        '<div class="sgc-etapas">' + e1 + e2 + e3 + e4 + e5 + '</div>' +
+        (puede && !cerrada
+          ? '<div class="sgc-acciones">' + Componentes.boton({ texto: 'Anular', variante: 'peligro', clase: 'js-q-anular' }) + '</div>'
+          : '') +
+      '</div>';
+
+    cont.querySelector('.js-q-volver').addEventListener('click', cargarQuejas_);
+    wireFichaQueja_(cont, q, data);
+  }
+
+  function wireFichaQueja_(cont, q, data) {
+    function accion_(selector, fn) {
+      var b = cont.querySelector(selector);
+      if (b) b.addEventListener('click', fn);
+    }
+    function enviar_(accion, datos, exito) {
+      api_(accion, datos).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        if (exito) Componentes.aviso({ texto: exito, tipo: 'exito' });
+        abrirQueja_(q.queja_id);
+      });
+    }
+
+    accion_('.js-q-recepcion', function () { abrirFormularioRecepcionQueja_(q); });
+    accion_('.js-q-investigador', function () { abrirFormularioInvestigadorQueja_(q); });
+    accion_('.js-q-resultado', function () { abrirFormularioResultadoQueja_(q); });
+    accion_('.js-q-resolucion', function () { abrirFormularioResolucionQueja_(q); });
+    accion_('.js-q-notificar', function () { abrirFormularioNotificacionQueja_(q); });
+    accion_('.js-q-seguimiento', function () { abrirFormularioSeguimientoQueja_(q); });
+
+    accion_('.js-q-a-nc', function () {
+      Componentes.confirmar({
+        titulo: 'Levantar no conformidad',
+        mensaje: 'Se crea la no conformidad con esta queja como origen, y de ahí sale la acción correctiva.'
+      }).then(function (ok) {
+        if (ok) {
+          enviar_('convertirQuejaEnNcSgc', { queja_id: q.queja_id, responsable_email: q.investigador_email },
+            'No conformidad creada desde la queja.');
+        }
+      });
+    });
+    accion_('.js-q-anular', function () {
+      Componentes.prompt({
+        titulo: 'Anular queja', mensaje: '¿Por qué se anula? Queda registrado (la queja no se borra).'
+      }).then(function (motivo) {
+        if (motivo && String(motivo).trim()) enviar_('anularQuejaSgc', { queja_id: q.queja_id, motivo: motivo });
+      });
+    });
+  }
+
+  // --- formularios de queja -----------------------------------------------------
+
+  function abrirFormularioRecepcionQueja_(q) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Registrar recepción</h3>' +
+        '<p class="sigso-ayuda">¿El servicio está vigente (o dentro de los 30 días post-término) y no suspendido por falta de pago?</p>' +
+        '<form id="form-q-recepcion">' +
+          Componentes.campoSelect({
+            id: 'qr-procede', label: 'Procede', valor: 'SI', placeholder: false,
+            opciones: [{ valor: 'SI', texto: 'Sí, procede' }, { valor: 'NO', texto: 'No procede' }]
+          }) +
+          Componentes.campoTextarea({ id: 'qr-motivo', label: 'Motivo (si no procede)' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-q-recepcion').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('registrarRecepcionQuejaSgc', {
+        queja_id: q.queja_id,
+        procede: document.getElementById('qr-procede').value === 'SI',
+        motivo_no_procede: document.getElementById('qr-motivo').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        abrirQueja_(q.queja_id);
+      });
+    });
+  }
+
+  function abrirFormularioInvestigadorQueja_(q) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Asignar investigador</h3>' +
+        '<p class="sigso-ayuda">No puede ser de la misma área que originó la queja (' +
+          Componentes.escaparHtml(AREA_QUEJA_ETIQUETA[q.area] || q.area) + ').</p>' +
+        '<form id="form-q-investigador">' +
+          Componentes.campoTexto({ id: 'qi-email', label: 'Investigador', tipo: 'email', requerido: true }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Asignar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-q-investigador').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('registrarInvestigacionQuejaSgc', {
+        queja_id: q.queja_id, investigador_email: document.getElementById('qi-email').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo asignar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        abrirQueja_(q.queja_id);
+      });
+    });
+  }
+
+  function abrirFormularioResultadoQueja_(q) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Resultado de la investigación</h3>' +
+        '<form id="form-q-resultado">' +
+          Componentes.campoTextarea({ id: 'qres-resultado', label: 'Qué se encontró', requerido: true }) +
+          Componentes.campoSelect({
+            id: 'qres-valida', label: '¿La queja es válida?', valor: 'SI', placeholder: false,
+            opciones: [{ valor: 'SI', texto: 'Sí, es válida' }, { valor: 'NO', texto: 'No es válida' }]
+          }) +
+          Componentes.campoTextarea({
+            id: 'qres-justificacion', label: 'Justificación (si no es válida)',
+            ayuda: 'Se adjunta a la respuesta que recibe el cliente.'
+          }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-q-resultado').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('registrarResultadoQuejaSgc', {
+        queja_id: q.queja_id,
+        resultado_investigacion: document.getElementById('qres-resultado').value,
+        valida: document.getElementById('qres-valida').value === 'SI',
+        justificacion: document.getElementById('qres-justificacion').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        abrirQueja_(q.queja_id);
+      });
+    });
+  }
+
+  function abrirFormularioResolucionQueja_(q) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Registrar resolución</h3>' +
+        '<form id="form-q-resolucion">' +
+          Componentes.campoTextarea({ id: 'qsol-accion', label: 'Acción o corrección implementada', requerido: true }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-q-resolucion').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('registrarResolucionQuejaSgc', {
+        queja_id: q.queja_id, accion_implementada: document.getElementById('qsol-accion').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        abrirQueja_(q.queja_id);
+      });
+    });
+  }
+
+  function abrirFormularioNotificacionQueja_(q) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Notificar al cliente</h3>' +
+        '<p class="sigso-ayuda">Se envía por correo la respuesta final con la acción implementada.</p>' +
+        '<form id="form-q-notificar">' +
+          Componentes.campoTexto({
+            id: 'qn-revisado', label: 'Revisado y aprobado por', tipo: 'email', requerido: true,
+            placeholder: 'Persona no involucrada en el origen del mensaje'
+          }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Notificar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-q-notificar').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      api_('registrarNotificacionQuejaSgc', {
+        queja_id: q.queja_id, revisado_por: document.getElementById('qn-revisado').value
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo notificar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: 'Cliente notificado.', tipo: 'exito' });
+        abrirQueja_(q.queja_id);
+      });
+    });
+  }
+
+  function abrirFormularioSeguimientoQueja_(q) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Registrar seguimiento</h3>' +
+        '<p class="sigso-ayuda">30 días corridos después de la respuesta: ¿el cliente quedó conforme?</p>' +
+        '<form id="form-q-seguimiento">' +
+          Componentes.campoSelect({
+            id: 'qseg-conforme', label: 'Resultado', valor: 'SI', placeholder: false,
+            opciones: [
+              { valor: 'SI', texto: 'Sí, conforme — se cierra la queja' },
+              { valor: 'NO', texto: 'No conforme — reabrir el caso' }
+            ]
+          }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-q-seguimiento').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var conforme = document.getElementById('qseg-conforme').value === 'SI';
+      api_('registrarSeguimientoQuejaSgc', {
+        queja_id: q.queja_id, cliente_conforme: conforme
+      }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: conforme ? 'Queja cerrada.' : 'Reabierta: hay que retomar la resolución.', tipo: conforme ? 'exito' : 'info' });
+        abrirQueja_(q.queja_id);
       });
     });
   }

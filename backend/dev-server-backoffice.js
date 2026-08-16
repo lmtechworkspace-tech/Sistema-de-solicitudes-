@@ -260,6 +260,27 @@ function construirContexto() {
   // en local es la cadena completa auditoria -> hallazgo -> NC -> actividad.
   seedSheet(ctx, 'SGC_AUDITORIAS', ctx.COLUMNAS.SGC_AUDITORIAS);
   seedSheet(ctx, 'SGC_AUD_HALLAZGOS', ctx.COLUMNAS.SGC_AUD_HALLAZGOS);
+  // v10.0 Fase 4 (PRO-07): quejas. En produccion nace SIEMPRE desde el
+  // formulario publico del Intake -- pero Intake y Backoffice son proyectos
+  // de Apps Script (y, en local, procesos Node) separados que solo
+  // comparten la hoja real; en local no hay forma de "crearla desde la UI"
+  // dentro de ESTE servidor. Se siembra una fila demo en RECIBIDA (recien
+  // llegada, sin Parte 2 en adelante) para poder probar el ciclo completo
+  // (recepcion -> investigacion -> resultado -> resolucion -> notificacion
+  // -> seguimiento) desde Calidad > Quejas.
+  seedSheet(ctx, 'SGC_QUEJAS', ctx.COLUMNAS.SGC_QUEJAS, [
+    ['QUEJA-DEMO-1', 'Q-2026-001',
+      'María González', 'Constructora XYZ', '', 'maria.gonzalez@ejemplo.cl', '',
+      'QUEJA', 'CONTABILIDAD', 'La factura de enero llegó con un monto distinto al cotizado y nadie me ha respondido los correos que he enviado.', 'WEB',
+      new Date().toISOString(),
+      '', '', '', '',
+      '', '', '',
+      '', '', '', '', '',
+      '', '',
+      '', '', '',
+      'RECIBIDA',
+      '', '', new Date().toISOString(), true]
+  ]);
   seedSheet(ctx, 'SGC_ROLES', ctx.COLUMNAS.SGC_ROLES, [
     ['SGCR-1', 'admin@homepymes.cl', 'ENCARGADO_SGC', '', '', true, new Date().toISOString()],
     ['SGCR-2', 'jefe@homepymes.cl', 'OPERATIVO', 'CONTABILIDAD', '', true, new Date().toISOString()],

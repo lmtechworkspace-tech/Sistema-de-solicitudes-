@@ -300,7 +300,11 @@ function registrarNotificacion_(solicitudId, canal, destinatario, evento, result
   });
 }
 
-function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo, cc) {
+// opts (v10.0 Fase 4): opcional, { htmlBody } -- si el caller trae un HTML
+// propio (Quejas.gs, con su propio formato) se respeta; si no, se genera
+// uno branded a partir del texto plano, igual que siempre. Parametro
+// aditivo al final: no cambia ningun llamador existente de 6 argumentos.
+function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo, cc, opts) {
   if (!destinatario) {
     return { enviado: false, motivo: 'sin_destinatario' };
   }
@@ -312,7 +316,10 @@ function enviarCorreo_(solicitudId, destinatario, evento, asunto, cuerpo, cc) {
     // enviar, en vez del scope completo de Gmail. Soporta cc en opciones.
     // v7.6: htmlBody branded (el texto plano sigue viajando como fallback
     // para clientes de correo que no rendericen HTML).
-    var opciones = { name: 'SIGSO — Control y Gestión Empresarial', htmlBody: htmlAutoDesdeTexto_(asunto, cuerpo) };
+    var opciones = {
+      name: 'SIGSO — Control y Gestión Empresarial',
+      htmlBody: (opts && opts.htmlBody) ? opts.htmlBody : htmlAutoDesdeTexto_(asunto, cuerpo)
+    };
     if (cc) opciones.cc = cc;
     MailApp.sendEmail(destinatario, asunto, cuerpo, opciones);
     registrarNotificacion_(solicitudId, 'EMAIL', destinatario, evento, 'ENVIADO', 0);

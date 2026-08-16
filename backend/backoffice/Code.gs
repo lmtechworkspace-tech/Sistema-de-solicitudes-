@@ -231,7 +231,20 @@ var BACKOFFICE_ACTIONS = {
   emitirInformeAuditoriaSgc: handleEmitirInformeAuditoriaSgc_,
   convertirHallazgoEnNcSgc: handleConvertirHallazgoEnNcSgc_,
   cerrarAuditoriaSgc: handleCerrarAuditoriaSgc_,
-  anularAuditoriaSgc: handleAnularAuditoriaSgc_
+  anularAuditoriaSgc: handleAnularAuditoriaSgc_,
+  // v10.0 Fase 4 (PRO-07): quejas, felicitaciones y consultas. La Parte 1
+  // (crearQuejaSgc) vive en el Intake, sin cuenta; esto es lo que se
+  // gestiona con sesion.
+  listarQuejasSgc: handleListarQuejasSgc_,
+  getDetalleQuejaSgc: handleGetDetalleQuejaSgc_,
+  registrarRecepcionQuejaSgc: handleRegistrarRecepcionQuejaSgc_,
+  registrarInvestigacionQuejaSgc: handleRegistrarInvestigacionQuejaSgc_,
+  registrarResultadoQuejaSgc: handleRegistrarResultadoQuejaSgc_,
+  registrarResolucionQuejaSgc: handleRegistrarResolucionQuejaSgc_,
+  convertirQuejaEnNcSgc: handleConvertirQuejaEnNcSgc_,
+  registrarNotificacionQuejaSgc: handleRegistrarNotificacionQuejaSgc_,
+  registrarSeguimientoQuejaSgc: handleRegistrarSeguimientoQuejaSgc_,
+  anularQuejaSgc: handleAnularQuejaSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -418,7 +431,19 @@ var MODULO_POR_ACCION = {
   emitirInformeAuditoriaSgc: 'calidad',
   convertirHallazgoEnNcSgc: 'calidad',
   cerrarAuditoriaSgc: 'calidad',
-  anularAuditoriaSgc: 'calidad'
+  anularAuditoriaSgc: 'calidad',
+  // v10.0 Fase 4: igual criterio -- Quejas.gs acota por su cuenta quien ve
+  // que queja (gobierna ve todas; el investigador asignado, la suya).
+  listarQuejasSgc: ['calidad', 'gerencia'],
+  getDetalleQuejaSgc: ['calidad', 'gerencia'],
+  registrarRecepcionQuejaSgc: 'calidad',
+  registrarInvestigacionQuejaSgc: 'calidad',
+  registrarResultadoQuejaSgc: 'calidad',
+  registrarResolucionQuejaSgc: 'calidad',
+  convertirQuejaEnNcSgc: 'calidad',
+  registrarNotificacionQuejaSgc: 'calidad',
+  registrarSeguimientoQuejaSgc: 'calidad',
+  anularQuejaSgc: 'calidad'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -1110,6 +1135,48 @@ function handleCerrarAuditoriaSgc_(data, contexto) {
 
 function handleAnularAuditoriaSgc_(data, contexto) {
   return responderResultado_(Auditorias.anular(data, contexto));
+}
+
+// v10.0 Fase 4 (PRO-07): quejas. Igual que arriba, Quejas.gs acota por su
+// cuenta quien ve y quien puede que cosa.
+function handleListarQuejasSgc_(data, contexto) {
+  return responderResultado_(Quejas.listar(data, contexto));
+}
+
+function handleGetDetalleQuejaSgc_(data, contexto) {
+  return responderResultado_(Quejas.getDetalle(data, contexto));
+}
+
+function handleRegistrarRecepcionQuejaSgc_(data, contexto) {
+  return responderResultado_(Quejas.registrarRecepcion(data, contexto));
+}
+
+function handleRegistrarInvestigacionQuejaSgc_(data, contexto) {
+  return responderResultado_(Quejas.registrarInvestigacion(data, contexto));
+}
+
+function handleRegistrarResultadoQuejaSgc_(data, contexto) {
+  return responderResultado_(Quejas.registrarResultado(data, contexto));
+}
+
+function handleRegistrarResolucionQuejaSgc_(data, contexto) {
+  return responderResultado_(Quejas.registrarResolucion(data, contexto));
+}
+
+function handleConvertirQuejaEnNcSgc_(data, contexto) {
+  return responderResultado_(Quejas.convertirEnNc(data, contexto));
+}
+
+function handleRegistrarNotificacionQuejaSgc_(data, contexto) {
+  return responderResultado_(Quejas.registrarNotificacion(data, contexto));
+}
+
+function handleRegistrarSeguimientoQuejaSgc_(data, contexto) {
+  return responderResultado_(Quejas.registrarSeguimiento(data, contexto));
+}
+
+function handleAnularQuejaSgc_(data, contexto) {
+  return responderResultado_(Quejas.anular(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

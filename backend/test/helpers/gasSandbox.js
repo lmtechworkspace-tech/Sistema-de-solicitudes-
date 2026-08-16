@@ -113,6 +113,8 @@ const INTAKE_FILES_EN_ORDEN = [
   'Drive.gs',
   // v3.3: identidad de la plataforma (login/sesiones).
   'Portal.gs',
+  // v10.0 Fase 4 (PRO-07): formulario publico de quejas.
+  'Quejas.gs',
   'Code.gs'
 ];
 
@@ -180,6 +182,9 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // de dia habil de Utils.gs.
   'NoConformidades.gs',
   'Auditorias.gs',
+  // v10.0 Fase 4 (PRO-07): quejas. Usa NoConformidades.crear (ya cargado)
+  // para el eslabon queja -> NC, y los mismos helpers de Calidad.gs.
+  'Quejas.gs',
   'Triggers.gs',
   'Code.gs'
 ];

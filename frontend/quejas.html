@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HomePymes — Quejas, felicitaciones y consultas</title>
+  <meta name="description" content="Formulario para presentar quejas, reclamaciones, felicitaciones o consultas sobre nuestros servicios." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27><rect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%2314213D%27/><text x=%2716%27 y=%2723%27 font-family=%27Arial,sans-serif%27 font-weight=%27700%27 font-size=%2720%27 fill=%27white%27 text-anchor=%27middle%27>S</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/main.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/formulario.css" />
+</head>
+<body>
+  <header id="sigso-header" class="sigso-header"></header>
+
+  <main class="sigso-contenido">
+    <form id="form-queja" class="sigso-card" novalidate>
+      <h1>Quejas, felicitaciones y consultas</h1>
+      <p>
+        A través de este medio puedes ingresar quejas, reclamaciones, felicitaciones o
+        consultas sobre nuestros servicios. Revisaremos tu mensaje y te daremos respuesta
+        en un plazo máximo de <strong>30 días corridos</strong>.
+      </p>
+
+      <div class="sigso-form-fila">
+        <div class="sigso-campo">
+          <label for="q-nombre">Nombre completo</label>
+          <input type="text" id="q-nombre" required />
+        </div>
+        <div class="sigso-campo">
+          <label for="q-empresa">Empresa / razón social (opcional)</label>
+          <input type="text" id="q-empresa" />
+        </div>
+      </div>
+
+      <div class="sigso-form-fila">
+        <div class="sigso-campo">
+          <label for="q-rut">RUT — empresa o persona (opcional)</label>
+          <input type="text" id="q-rut" placeholder="XX.XXX.XXX-X" />
+        </div>
+        <div class="sigso-campo">
+          <label for="q-telefono">Teléfono de contacto (opcional)</label>
+          <input type="tel" id="q-telefono" placeholder="+56 9 XXXXXXXX" />
+        </div>
+      </div>
+
+      <div class="sigso-campo">
+        <label for="q-email">Correo electrónico</label>
+        <input type="email" id="q-email" required />
+      </div>
+
+      <div class="sigso-form-fila">
+        <div class="sigso-campo">
+          <label for="q-tipo">Tipo de mensaje</label>
+          <select id="q-tipo" required>
+            <option value="">Selecciona...</option>
+            <option value="QUEJA">Queja</option>
+            <option value="RECLAMACION">Reclamación</option>
+            <option value="FELICITACION">Felicitación</option>
+            <option value="CONSULTA">Consulta</option>
+          </select>
+        </div>
+        <div class="sigso-campo">
+          <label for="q-area">Área o servicio relacionado</label>
+          <select id="q-area" required>
+            <option value="">Selecciona...</option>
+            <option value="RRHH">RRHH</option>
+            <option value="CONTABILIDAD">Contabilidad</option>
+            <option value="PREVENCION">Prevención de Riesgos</option>
+            <option value="MARKETING">Marketing</option>
+            <option value="ADMINISTRACION">Administración</option>
+            <option value="OTRO">Otro</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="sigso-campo">
+        <label for="q-descripcion">Descripción del mensaje</label>
+        <textarea id="q-descripcion" rows="5" minlength="20" required></textarea>
+        <p class="sigso-ayuda">Cuéntanos con detalle qué pasó: nos ayuda a resolverlo más rápido.</p>
+      </div>
+
+      <button type="submit" class="sigso-boton" id="btn-enviar-queja">Enviar</button>
+      <p id="queja-error" class="sigso-campo__error sigso-oculto"></p>
+    </form>
+
+    <div id="resultado" class="sigso-card sigso-oculto"></div>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/ui-components.js"></script>
+  <script src="js/components.js"></script>
+  <script src="js/iconos.js"></script>
+  <script src="js/quejas-publico.js"></script>
+</body>
+</html>

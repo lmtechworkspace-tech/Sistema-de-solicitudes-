@@ -892,11 +892,7 @@ function buscarHallazgo_(hallazgoId) {
 }
 
 // SGC_AUD_HALLAZGOS usa 'activo' (no 'activa') como el resto de tablas de
-// detalle del SGC; esActivoSgc_ mira ambos, pero se deja explícito.
-function esVerdaderoActivoSgc_(fila) {
-  return esVerdaderoSgc_(fila && fila.activo);
-}
-
+// detalle del SGC. esVerdaderoActivoSgc_ (Calidad.gs) ya mira ese campo.
 function hallazgosDe_(auditoriaId) {
   return leerFilasSeguro_(SHEETS.SGC_AUD_HALLAZGOS).filter(function (h) {
     return h.auditoria_id === auditoriaId && esVerdaderoActivoSgc_(h);

@@ -29,7 +29,10 @@ var INTAKE_ACTIONS = {
   portalLogin: handlePortalLogin_,
   portalLogout: handlePortalLogout_,
   portalSesion: handlePortalSesion_,
-  portalCambiarPassword: handlePortalCambiarPassword_
+  portalCambiarPassword: handlePortalCambiarPassword_,
+  // v10.0 Fase 4 (PRO-07): formulario publico de quejas, felicitaciones y
+  // consultas -- misma logica de transporte que crearSolicitud, sin cuenta.
+  crearQuejaSgc: handleCrearQuejaSgc_
 };
 
 function doGet(e) {
@@ -102,6 +105,10 @@ function handleMisSolicitudes_(data) {
 
 function handleSubirArchivo_(data) {
   return responderResultado_(Drive.subirArchivo(data));
+}
+
+function handleCrearQuejaSgc_(data) {
+  return responderResultado_(Quejas.crear(data));
 }
 
 function handlePortalLogin_(data) {

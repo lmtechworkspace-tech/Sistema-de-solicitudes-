@@ -325,6 +325,14 @@ function recordarValidacionPendienteTrigger() {
   } catch (err) {
     logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosAuditoriasTrigger');
   }
+  // v10.0 Fase 4 (PRO-07): quejas con plazo de resolucion o de seguimiento
+  // vencido (30 dias corridos). Mismo criterio -- sin trigger propio,
+  // colgada de este slot de las 09:00.
+  try {
+    enviarAvisosQuejasTrigger();
+  } catch (err) {
+    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosQuejasTrigger');
+  }
   // v7.1 (notificaciones vivas, B5): mantenimiento diario -- purga las
   // notificaciones ya leidas o vencidas para que la hoja NOTIFICACIONES_APP
   // no crezca sin limite (cada sincronizacion del cliente la lee completa).
@@ -374,6 +382,12 @@ function enviarAvisosNcVencidasTrigger() {
 // que las anteriores, mismo motivo: poder forzarla a mano desde el editor.
 function enviarAvisosAuditoriasTrigger() {
   return Auditorias.recordatorioPendientes();
+}
+
+// v10.0 Fase 4: ver Quejas.recordatorioPendientes(). Nombrada igual que
+// las anteriores, mismo motivo: poder forzarla a mano desde el editor.
+function enviarAvisosQuejasTrigger() {
+  return Quejas.recordatorioPendientes();
 }
 
 // v7.1 (notificaciones vivas, B5): ver purgarNotificacionesApp_(). Nombrada

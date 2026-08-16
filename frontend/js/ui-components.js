@@ -21,6 +21,9 @@ function renderHeaderSigso(paginaActiva) {
   var paginas = [
     { href: sitioPublico + 'index.html', id: 'formulario', texto: 'Nueva solicitud' },
     { href: sitioPublico + 'estado.html', id: 'estado', texto: 'Consultar estado' },
+    // v10.0 Fase 4 (PRO-07): formulario publico de quejas -- sin cuenta,
+    // igual criterio que "Nueva solicitud".
+    { href: sitioPublico + 'quejas.html', id: 'quejas', texto: 'Quejas y consultas' },
     { href: backofficeUrl + '?page=app', id: 'app', texto: 'Backoffice' },
     { href: backofficeUrl + '?page=admin', id: 'admin', texto: 'Administración' }
   ];
