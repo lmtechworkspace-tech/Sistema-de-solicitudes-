@@ -412,25 +412,76 @@ var TIPOS_INICIALES = [
   ['CON', 'Consulta Tecnica', 'P4', true, false]
 ];
 
-function instalarHojas() {
+/**
+ * Deja la planilla al dia con el esquema del codigo: crea las hojas que
+ * faltan Y agrega a las que ya existen las columnas nuevas.
+ *
+ * Lo segundo faltaba, y es la razon de un problema real: cada version que
+ * agrega una columna (por ejemplo items_responsabilidades en SGC_DESCRIPTORES)
+ * dejaba la hoja existente con el encabezado viejo. Al pegar datos con el
+ * formato nuevo, todo quedaba corrido una o dos columnas y el modulo mostraba
+ * la ficha vacia -- sin ningun error visible, que es lo peor de todo.
+ *
+ * Las columnas nuevas se agregan AL FINAL, no en la posicion que tienen en
+ * el esquema. Es seguro porque toda la lectura y escritura de la planilla se
+ * resuelve POR NOMBRE de encabezado (leerHojaConEncabezados_ /
+ * agregarFila_ / actualizarFilaPorId_), nunca por posicion. Agregar al final
+ * ademas no mueve ni una celda de los datos que ya estan cargados, que es
+ * justo lo que no se puede arriesgar en una planilla en produccion.
+ */
+function actualizarEsquema() {
   var ss = SpreadsheetApp.openById(getConfig_().sheetId);
   var creadas = [];
+  var ampliadas = {};
 
   Object.keys(ESQUEMA_HOJAS).forEach(function (nombre) {
+    var esperadas = ESQUEMA_HOJAS[nombre];
     var hoja = ss.getSheetByName(nombre);
+
     if (!hoja) {
       hoja = ss.insertSheet(nombre);
-      hoja.appendRow(ESQUEMA_HOJAS[nombre]);
+      hoja.appendRow(esperadas);
       creadas.push(nombre);
+      return;
     }
+
+    var ultimaCol = hoja.getLastColumn();
+    var actuales = ultimaCol < 1 ? [] : hoja.getRange(1, 1, 1, ultimaCol).getValues()[0]
+      .map(function (h) { return String(h == null ? '' : h).trim(); });
+
+    // Hoja existente pero sin encabezado (se creo a mano y quedo vacia).
+    if (!actuales.join('')) {
+      hoja.getRange(1, 1, 1, esperadas.length).setValues([esperadas]);
+      ampliadas[nombre] = esperadas.slice();
+      return;
+    }
+
+    var faltan = esperadas.filter(function (col) { return actuales.indexOf(col) === -1; });
+    if (!faltan.length) return;
+
+    hoja.getRange(1, actuales.length + 1, 1, faltan.length).setValues([faltan]);
+    ampliadas[nombre] = faltan;
   });
 
   sembrarConfigSlaSiVacia_(ss);
   sembrarTiposSiVacia_(ss);
   sembrarConfigNotificacionesSiVacia_(ss);
 
-  Logger.log('Hojas creadas en esta corrida: ' + creadas.join(', '));
-  return creadas;
+  Logger.log('Hojas creadas: ' + (creadas.join(', ') || '(ninguna)'));
+  Object.keys(ampliadas).forEach(function (nombre) {
+    Logger.log('Columnas agregadas a ' + nombre + ': ' + ampliadas[nombre].join(', '));
+  });
+  if (!creadas.length && !Object.keys(ampliadas).length) {
+    Logger.log('La planilla ya estaba al dia: no hubo cambios.');
+  }
+
+  return { creadas: creadas, ampliadas: ampliadas };
+}
+
+// Nombre historico. Se mantiene para no romper la costumbre de correr
+// "instalarHojas", pero ahora tambien actualiza las columnas.
+function instalarHojas() {
+  return actualizarEsquema().creadas;
 }
 
 function sembrarConfigSlaSiVacia_(ss) {
