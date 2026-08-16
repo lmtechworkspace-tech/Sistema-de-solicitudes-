@@ -13740,6 +13740,22 @@ var Iconos = (function () {
         '<form id="form-sgc-editar">' +
           camposComunes_(d) +
           Componentes.campoTexto({ id: 'sgc-vigencia-ed', label: 'Vigente desde', tipo: 'date', valor: fechaISO_(d.fecha_vigencia) }) +
+          // Un documento puede existir sin archivo (asi entra la carga
+          // inicial del listado maestro): aca es donde se le adjunta, sin
+          // tener que inventar una version nueva.
+          '<div class="sigso-campo">' +
+            '<label for="sgc-archivo-ed">' +
+              (d.archivo_id ? 'Reemplazar el archivo (opcional)' : 'Adjuntar el archivo') +
+            '</label>' +
+            '<input type="file" id="sgc-archivo-ed" accept=".pdf,.doc,.docx,.xls,.xlsx">' +
+            '<p class="sigso-ayuda">' +
+              (d.archivo_id
+                ? 'Actual: ' + Componentes.escaparHtml(d.archivo_nombre || 'sin nombre') +
+                  '. Déjalo vacío para no cambiarlo. Si alguien ya confirmó esta versión, usa "Nueva versión".'
+                : 'Este documento todavía no tiene archivo: sin él, el personal no puede consultarlo. ' +
+                  'PDF, Word o Excel · máx. 10 MB.') +
+            '</p>' +
+          '</div>' +
           '<div class="sigso-modal__acciones">' +
             Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
             Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
@@ -13756,27 +13772,48 @@ var Iconos = (function () {
     document.getElementById('form-sgc-editar').addEventListener('submit', function (evento) {
       evento.preventDefault();
       var acuseEd = leerAcuse_();
-      api_('actualizarDocumentoSgc', {
-        documento_id: d.documento_id,
-        nombre: document.getElementById('sgc-nombre').value,
-        descripcion: document.getElementById('sgc-descripcion').value,
-        tipo: document.getElementById('sgc-tipo').value,
-        area_id: document.getElementById('sgc-area').value,
-        visibilidad: document.getElementById('sgc-visibilidad').value,
-        destinatarios: leerDestinatarios_(),
-        fecha_vigencia: document.getElementById('sgc-vigencia-ed').value,
-        elaborado_por: document.getElementById('sgc-elaborado').value,
-        revisado_por: document.getElementById('sgc-revisado').value,
-        aprobado_por: document.getElementById('sgc-aprobado').value,
-        requiere_acuse: acuseEd.requiere_acuse,
-        fecha_limite_acuse: acuseEd.fecha_limite_acuse
+      var archivoEd = document.getElementById('sgc-archivo-ed').files[0];
+      var boton = fondo.querySelector('button[type="submit"]');
+      var etiqueta = boton ? boton.textContent : '';
+      if (boton && archivoEd) { boton.disabled = true; boton.textContent = 'Subiendo...'; }
+
+      // Sin archivo nuevo no se toca el que ya esta: el backend solo lo
+      // reemplaza si le llega contenido_base64.
+      var leerlo = archivoEd ? leerArchivoBase64Sgc_(archivoEd) : Promise.resolve(null);
+
+      leerlo.then(function (base64) {
+        var datos = {
+          documento_id: d.documento_id,
+          nombre: document.getElementById('sgc-nombre').value,
+          descripcion: document.getElementById('sgc-descripcion').value,
+          tipo: document.getElementById('sgc-tipo').value,
+          area_id: document.getElementById('sgc-area').value,
+          visibilidad: document.getElementById('sgc-visibilidad').value,
+          destinatarios: leerDestinatarios_(),
+          fecha_vigencia: document.getElementById('sgc-vigencia-ed').value,
+          elaborado_por: document.getElementById('sgc-elaborado').value,
+          revisado_por: document.getElementById('sgc-revisado').value,
+          aprobado_por: document.getElementById('sgc-aprobado').value,
+          requiere_acuse: acuseEd.requiere_acuse,
+          fecha_limite_acuse: acuseEd.fecha_limite_acuse
+        };
+        if (base64) {
+          datos.nombre_archivo = archivoEd.name;
+          datos.contenido_base64 = base64;
+        }
+        return api_('actualizarDocumentoSgc', datos);
       }).then(function (respuesta) {
+        if (boton) { boton.disabled = false; boton.textContent = etiqueta; }
         if (!respuesta || !respuesta.ok) {
           Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
           return;
         }
         cerrar();
+        if (archivoEd) Componentes.aviso({ texto: 'Documento actualizado con su archivo.', tipo: 'exito' });
         abrirDocumento_(d.documento_id);
+      }).catch(function () {
+        if (boton) { boton.disabled = false; boton.textContent = etiqueta; }
+        Componentes.aviso({ texto: 'No se pudo leer o subir el archivo.', tipo: 'error' });
       });
     });
   }

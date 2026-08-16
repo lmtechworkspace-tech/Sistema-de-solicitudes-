@@ -279,6 +279,35 @@ var Calidad = {
     }
     if (data.requiere_acuse !== undefined) cambios.requiere_acuse = data.requiere_acuse === true;
     if (data.fecha_limite_acuse !== undefined) cambios.fecha_limite_acuse = data.fecha_limite_acuse || '';
+
+    // v10.0: adjuntar (o corregir) el archivo de la version que YA rige, sin
+    // inventar una version nueva. Hace falta porque un documento puede nacer
+    // sin archivo -- la carga inicial del listado maestro entra asi, y antes
+    // quedaba sin ninguna forma de subir el PDF: "nueva version" exige un
+    // numero distinto al vigente, y editar no tocaba el archivo.
+    //
+    // El limite es el acuse: mientras nadie haya confirmado la version, el
+    // archivo todavia se esta armando y reemplazarlo no altera evidencia.
+    // Una vez que alguien la confirmo, cambiar el archivo por debajo haria
+    // que su "Enterado" apunte a algo que ya no existe, y eso SI exige una
+    // version nueva (§7.5.2: identificar y controlar los cambios).
+    if (data.contenido_base64) {
+      var yaConfirmada = leerFilasSeguro_(SHEETS.SGC_DOC_ACUSES).filter(function (a) {
+        return a.documento_id === doc.documento_id && String(a.version) === String(doc.version_vigente);
+      })[0];
+      if (yaConfirmada) {
+        return errorValidacion_('contenido_base64',
+          'Alguien ya confirmó la versión ' + doc.version_vigente + ': su archivo es evidencia y no se reemplaza. ' +
+          'Sube una versión nueva para dejar el cambio trazado.');
+      }
+      var archivoNuevo = subirArchivoSgc_(data, doc.codigo);
+      if (archivoNuevo._validationError) return archivoNuevo;
+      cambios.archivo_id = archivoNuevo.archivo_id;
+      cambios.archivo_nombre = archivoNuevo.archivo_nombre;
+      cambios.archivo_mime = archivoNuevo.archivo_mime;
+      sincronizarArchivoVersionSgc_(doc, archivoNuevo, contexto);
+    }
+
     if (data.estado !== undefined) {
       if (['VIGENTE', 'OBSOLETO'].indexOf(data.estado) === -1) {
         return errorValidacion_('estado', 'Estado inválido.');
@@ -288,7 +317,10 @@ var Calidad = {
       cambios.estado = data.estado;
     }
     var actualizado = actualizarFilaPorId_(SHEETS.SGC_DOCUMENTOS, 'documento_id', doc.documento_id, cambios);
-    registrarLogSgc_('SGC_DOC_EDITADO', doc.codigo, contexto);
+    // Adjuntar el archivo se registra aparte: es lo que convierte al
+    // documento en consultable, no un cambio de metadata mas.
+    registrarLogSgc_(cambios.archivo_id ? 'SGC_DOC_ARCHIVO_ADJUNTADO' : 'SGC_DOC_EDITADO',
+      doc.codigo + (cambios.archivo_id ? ' ' + doc.version_vigente : ''), contexto);
     return actualizado;
   },
 
@@ -820,6 +852,31 @@ function registrarVersionSgc_(documentoId, version, cambios, archivo, contexto, 
   };
   agregarFila_(SHEETS.SGC_DOC_VERSIONES, fila);
   return fila;
+}
+
+// Deja el historial de versiones apuntando al archivo recien adjuntado.
+// Si la version vigente ya tiene fila, se le actualiza el archivo; si no
+// existe (documento cargado directo en la planilla, sin pasar por la app),
+// se crea -- de otro modo el detalle mostraria un documento con archivo
+// pero sin ninguna version que lo respalde.
+function sincronizarArchivoVersionSgc_(doc, archivo, contexto) {
+  var fila = leerFilasSeguro_(SHEETS.SGC_DOC_VERSIONES).filter(function (v) {
+    return v.documento_id === doc.documento_id &&
+      String(v.version) === String(doc.version_vigente);
+  })[0];
+
+  if (!fila) {
+    return registrarVersionSgc_(doc.documento_id, doc.version_vigente,
+      'Archivo adjuntado a la versión vigente.', archivo, contexto, true);
+  }
+  return actualizarFilaPorId_(SHEETS.SGC_DOC_VERSIONES, 'version_id', fila.version_id, {
+    archivo_id: archivo.archivo_id,
+    archivo_nombre: archivo.archivo_nombre,
+    archivo_mime: archivo.archivo_mime,
+    subido_por: (contexto && contexto.email) || '',
+    fecha: new Date().toISOString(),
+    vigente: true
+  });
 }
 
 // Reescribe la lista de destinatarios explicitos. Solo aplica a

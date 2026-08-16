@@ -113,6 +113,128 @@ test('archivos: acepta PDF, Word y Excel validados por BYTES; rechaza cualquier 
   assert.equal(basura._validationError, true, 'renombrar a .pdf no debe alcanzar: se valida el contenido');
 });
 
+// --- adjuntar el archivo a la version que ya rige --------------------------
+// Un documento puede existir sin archivo: asi entra la carga inicial del
+// listado maestro (se pega la metadata en la planilla y el PDF se sube
+// despues). Antes quedaba atrapado -- "nueva version" exige un numero
+// distinto al vigente y editar no tocaba el archivo -- y un documento sin
+// archivo no se puede consultar, que es justamente para lo que existe.
+
+test('actualizarDocumento: adjunta el archivo a un documento que no tenia, sin inventar una version', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+  // Documento cargado sin archivo (equivale a pegarlo directo en la planilla).
+  const doc = crearDoc(ctx, { nombre_archivo: undefined, contenido_base64: undefined });
+  assert.equal(doc.archivo_id, '', 'nace sin archivo');
+
+  const actualizado = ctx.Calidad.actualizarDocumento({
+    documento_id: doc.documento_id,
+    nombre_archivo: 'manual.pdf', contenido_base64: PDF_B64
+  }, CTX_ENCARGADO);
+
+  assert.ok(actualizado.archivo_id, 'queda con archivo');
+  assert.equal(actualizado.archivo_mime, 'application/pdf');
+  // La version vigente NO cambia: es el mismo documento, solo que ahora
+  // tiene su respaldo.
+  assert.equal(actualizado.version_vigente, doc.version_vigente);
+
+  // Y el historial de versiones queda apuntando al archivo, para que el
+  // detalle pueda ofrecer la descarga.
+  const versiones = ctx.leerFilas_('SGC_DOC_VERSIONES')
+    .filter((v) => v.documento_id === doc.documento_id);
+  assert.equal(versiones.length, 1, 'no se duplica la version');
+  assert.equal(versiones[0].version, doc.version_vigente);
+  assert.equal(versiones[0].archivo_id, actualizado.archivo_id);
+});
+
+test('actualizarDocumento: si la version ya tenia fila en el historial, se le pone el archivo (no se duplica)', () => {
+  // Este es el caso de la carga inicial real: la planilla trae el documento
+  // Y su fila de version, ambos sin archivo. Al adjuntarlo hay que ACTUALIZAR
+  // esa fila, no crear una segunda para la misma version.
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+  seedSheet(ctx, 'SGC_DOCUMENTOS', ctx.COLUMNAS.SGC_DOCUMENTOS, [
+    ['SGCDOC-01', 'PRO-01', 'Control de documentos', '', 'PRO', 'CALIDAD', 'v01', 'VIGENTE',
+      'TODOS', '2026-06-01', '2027-06-01', 'Equipo de SGC', '', '', '', '', '',
+      'carga-inicial', '2026-08-16T12:00:00.000Z', 'TRUE', 'FALSE', '']
+  ]);
+  seedSheet(ctx, 'SGC_DOC_VERSIONES', ctx.COLUMNAS.SGC_DOC_VERSIONES, [
+    ['SGCV-01', 'SGCDOC-01', 'v01', 'Versión inicial.', '', '', '',
+      'carga-inicial', '2026-08-16T12:00:00.000Z', 'TRUE']
+  ]);
+
+  const actualizado = ctx.Calidad.actualizarDocumento({
+    documento_id: 'SGCDOC-01',
+    nombre_archivo: 'pro-01.pdf', contenido_base64: PDF_B64
+  }, CTX_ENCARGADO);
+
+  assert.ok(actualizado.archivo_id, 'el documento queda con archivo');
+  const versiones = ctx.leerFilas_('SGC_DOC_VERSIONES').filter((v) => v.documento_id === 'SGCDOC-01');
+  assert.equal(versiones.length, 1, 'sigue habiendo UNA sola v01');
+  assert.equal(versiones[0].version_id, 'SGCV-01', 'es la misma fila, actualizada');
+  assert.equal(versiones[0].archivo_id, actualizado.archivo_id);
+  assert.equal(versiones[0].subido_por, CTX_ENCARGADO.email, 'queda quien lo subio');
+});
+
+test('actualizarDocumento: editar metadata sin adjuntar nada NO borra el archivo que ya estaba', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+  const doc = crearDoc(ctx);
+
+  const actualizado = ctx.Calidad.actualizarDocumento({
+    documento_id: doc.documento_id, nombre: 'Manual de Calidad (rev. redaccion)'
+  }, CTX_ENCARGADO);
+
+  assert.equal(actualizado.nombre, 'Manual de Calidad (rev. redaccion)');
+  assert.equal(actualizado.archivo_id, doc.archivo_id, 'conserva el archivo');
+});
+
+test('actualizarDocumento: si alguien YA confirmo esa version, el archivo no se reemplaza', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+  const doc = crearDoc(ctx, { requiere_acuse: true });
+  // El operativo declara que lo leyo: desde ese momento el archivo es
+  // evidencia y cambiarlo por debajo dejaria su acuse apuntando a otra cosa.
+  ctx.Calidad.acusarDocumento({ documento_id: doc.documento_id }, CTX_PREVENCION);
+
+  const rechazo = ctx.Calidad.actualizarDocumento({
+    documento_id: doc.documento_id,
+    nombre_archivo: 'otro.pdf', contenido_base64: PDF_B64
+  }, CTX_ENCARGADO);
+
+  assert.ok(rechazo._validationError, 'lo rechaza');
+  assert.match(rechazo.message, /nueva/i, 'explica que hay que subir una version nueva');
+  const sinCambiar = ctx.leerFilas_('SGC_DOCUMENTOS')
+    .filter((d) => d.documento_id === doc.documento_id)[0];
+  assert.equal(sinCambiar.archivo_id, doc.archivo_id, 'el archivo sigue siendo el original');
+});
+
+test('actualizarDocumento: valida el archivo por bytes, igual que al crearlo', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+  const doc = crearDoc(ctx, { nombre_archivo: undefined, contenido_base64: undefined });
+
+  const rechazo = ctx.Calidad.actualizarDocumento({
+    documento_id: doc.documento_id,
+    nombre_archivo: 'virus.pdf', contenido_base64: BASURA_B64
+  }, CTX_ENCARGADO);
+
+  assert.ok(rechazo._validationError, 'no acepta cualquier cosa con extension .pdf');
+});
+
+test('actualizarDocumento: solo el Encargado SGC puede adjuntar el archivo', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+  const doc = crearDoc(ctx, { nombre_archivo: undefined, contenido_base64: undefined });
+
+  const rechazo = ctx.Calidad.actualizarDocumento({
+    documento_id: doc.documento_id,
+    nombre_archivo: 'manual.pdf', contenido_base64: PDF_B64
+  }, CTX_PREVENCION);
+
+  assert.ok(rechazo._forbidden);
+});
+
 test('nuevaVersion: la anterior se archiva (no se borra) y la vigente pasa a ser la nueva', () => {
   const ctx = loadConSchema();
   sembrarRoles(ctx);
