@@ -262,7 +262,16 @@ var BACKOFFICE_ACTIONS = {
   registrarActaRevisionSgc: handleRegistrarActaRevisionSgc_,
   registrarAcuerdoRevisionSgc: handleRegistrarAcuerdoRevisionSgc_,
   cerrarRevisionSgc: handleCerrarRevisionSgc_,
-  anularRevisionSgc: handleAnularRevisionSgc_
+  anularRevisionSgc: handleAnularRevisionSgc_,
+
+  // v10.0 Fase 6a (DOC-07): tablero de objetivos de calidad.
+  listarObjetivosSgc: handleListarObjetivosSgc_,
+  getDetalleObjetivoSgc: handleGetDetalleObjetivoSgc_,
+  sembrarAnioObjetivosSgc: handleSembrarAnioObjetivosSgc_,
+  guardarObjetivoSgc: handleGuardarObjetivoSgc_,
+  sugerirLecturaObjetivoSgc: handleSugerirLecturaObjetivoSgc_,
+  registrarLecturaObjetivoSgc: handleRegistrarLecturaObjetivoSgc_,
+  anularLecturaObjetivoSgc: handleAnularLecturaObjetivoSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -484,7 +493,19 @@ var MODULO_POR_ACCION = {
   registrarActaRevisionSgc: 'calidad',
   registrarAcuerdoRevisionSgc: 'calidad',
   cerrarRevisionSgc: 'calidad',
-  anularRevisionSgc: 'calidad'
+  anularRevisionSgc: 'calidad',
+
+  // v10.0 Fase 6a (DOC-07): objetivos de calidad. Gerencia consulta el
+  // tablero sin poder tocarlo -- el grado de logro de los objetivos es
+  // entrada de la revision por la direccion (§9.3.2 e), asi que tiene que
+  // poder verlo, pero medir es responsabilidad del Encargado SGC.
+  listarObjetivosSgc: ['calidad', 'gerencia'],
+  getDetalleObjetivoSgc: ['calidad', 'gerencia'],
+  sembrarAnioObjetivosSgc: 'calidad',
+  guardarObjetivoSgc: 'calidad',
+  sugerirLecturaObjetivoSgc: 'calidad',
+  registrarLecturaObjetivoSgc: 'calidad',
+  anularLecturaObjetivoSgc: 'calidad'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -1276,6 +1297,35 @@ function handleCerrarRevisionSgc_(data, contexto) {
 
 function handleAnularRevisionSgc_(data, contexto) {
   return responderResultado_(RevisionDireccion.anular(data, contexto));
+}
+
+// v10.0 Fase 6a (DOC-07): tablero de objetivos de calidad.
+function handleListarObjetivosSgc_(data, contexto) {
+  return responderResultado_(Objetivos.listar(data, contexto));
+}
+
+function handleGetDetalleObjetivoSgc_(data, contexto) {
+  return responderResultado_(Objetivos.getDetalle(data, contexto));
+}
+
+function handleSembrarAnioObjetivosSgc_(data, contexto) {
+  return responderResultado_(Objetivos.sembrarAnio(data, contexto));
+}
+
+function handleGuardarObjetivoSgc_(data, contexto) {
+  return responderResultado_(Objetivos.guardar(data, contexto));
+}
+
+function handleSugerirLecturaObjetivoSgc_(data, contexto) {
+  return responderResultado_(Objetivos.sugerirLectura(data, contexto));
+}
+
+function handleRegistrarLecturaObjetivoSgc_(data, contexto) {
+  return responderResultado_(Objetivos.registrarLectura(data, contexto));
+}
+
+function handleAnularLecturaObjetivoSgc_(data, contexto) {
+  return responderResultado_(Objetivos.anularLectura(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

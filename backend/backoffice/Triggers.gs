@@ -348,6 +348,14 @@ function recordarValidacionPendienteTrigger() {
   } catch (err) {
     logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosRevisionTrigger');
   }
+  // v10.0 Fase 6a (DOC-07): periodos ya cerrados sin su lectura. No medir un
+  // objetivo es no evaluar el desempeño (§9.1.1), asi que cuelga del mismo
+  // recorrido diario -- sin gastar uno de los 20 triggers.
+  try {
+    enviarAvisosObjetivosTrigger();
+  } catch (err) {
+    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosObjetivosTrigger');
+  }
   // v7.1 (notificaciones vivas, B5): mantenimiento diario -- purga las
   // notificaciones ya leidas o vencidas para que la hoja NOTIFICACIONES_APP
   // no crezca sin limite (cada sincronizacion del cliente la lee completa).
@@ -414,6 +422,12 @@ function enviarAvisosProveedoresTrigger() {
 // v10.0 Fase 5b: ver RevisionDireccion.recordatorioPendientes().
 function enviarAvisosRevisionTrigger() {
   return RevisionDireccion.recordatorioPendientes();
+}
+
+// v10.0 Fase 6a: ver Objetivos.alertarLecturasPendientes(). Avisa cuando un
+// periodo ya cerro y su objetivo sigue sin medirse.
+function enviarAvisosObjetivosTrigger() {
+  return Objetivos.alertarLecturasPendientes();
 }
 
 // v7.1 (notificaciones vivas, B5): ver purgarNotificacionesApp_(). Nombrada

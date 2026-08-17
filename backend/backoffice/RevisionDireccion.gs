@@ -420,7 +420,8 @@ var ENTRADAS_REVISION = [
   { numero: 5, titulo: 'Las oportunidades de mejora', auto: false },
   { numero: 6, titulo: 'La información sobre el desempeño y la eficacia del sistema de gestión de la calidad', auto: false },
   { numero: 7, titulo: 'La satisfacción del cliente y la retroalimentación de las partes interesadas pertinentes', auto: true },
-  { numero: 8, titulo: 'El grado en que se han logrado los objetivos de la calidad', auto: false, pendiente_fase: 'Tablero de objetivos de calidad (DOC-07)' },
+  // v10.0 Fase 6a: dejo de estar pendiente -- ya existe el tablero de DOC-07.
+  { numero: 8, titulo: 'El grado en que se han logrado los objetivos de la calidad', auto: true },
   { numero: 9, titulo: 'El desempeño de los procesos y conformidad de los productos y servicios', auto: false },
   { numero: 10, titulo: 'Las no conformidades y acciones correctivas', auto: true },
   { numero: 11, titulo: 'Los resultados de seguimiento y medición', auto: false },
@@ -502,6 +503,10 @@ function resumenAutomaticoRevision_(revision) {
         ? 'De los casos con seguimiento cerrado, ' + conformes + ' de ' + medidos + ' clientes quedaron conformes.'
         : 'Todavía no hay seguimientos cerrados que midan conformidad.')
     : 'En ' + anio + ' no se recibieron quejas, felicitaciones ni consultas por el canal formal.';
+
+  // Item 8 — grado de logro de los objetivos de calidad (Fase 6a). El texto
+  // lo arma Objetivos.gs, que es el que sabe leer una meta y una lectura.
+  resumen[8] = Objetivos.resumenParaRevision(anio);
 
   // Item 10 — no conformidades y acciones correctivas.
   var ncs = leerFilasSeguro_(SHEETS.SGC_NC).filter(function (n) {

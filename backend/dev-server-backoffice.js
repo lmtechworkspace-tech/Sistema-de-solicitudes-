@@ -300,6 +300,10 @@ function construirContexto() {
   // arma solo) -> acuerdos -> cierre.
   seedSheet(ctx, 'SGC_REVISIONES', ctx.COLUMNAS.SGC_REVISIONES);
   seedSheet(ctx, 'SGC_REVISION_ACUERDOS', ctx.COLUMNAS.SGC_REVISION_ACUERDOS);
+  // v10.0 Fase 6a: vacias a proposito -- el año se abre desde la pantalla
+  // ("Abrir año"), que es justo el flujo que hay que poder probar aca.
+  seedSheet(ctx, 'SGC_OBJETIVOS', ctx.COLUMNAS.SGC_OBJETIVOS);
+  seedSheet(ctx, 'SGC_INDICADOR_LECTURAS', ctx.COLUMNAS.SGC_INDICADOR_LECTURAS);
   seedSheet(ctx, 'SGC_ROLES', ctx.COLUMNAS.SGC_ROLES, [
     ['SGCR-1', 'admin@homepymes.cl', 'ENCARGADO_SGC', '', '', true, new Date().toISOString()],
     ['SGCR-2', 'jefe@homepymes.cl', 'OPERATIVO', 'CONTABILIDAD', '', true, new Date().toISOString()],

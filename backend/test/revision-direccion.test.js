@@ -224,7 +224,7 @@ test('resumen automático: sin datos lo dice explícitamente, no deja el tema en
   assert.match(resumen[13], /No hay proveedores externos registrados/i);
 });
 
-test('el catálogo declara qué entradas resuelve el sistema y cuál espera a la Fase 6', () => {
+test('el catálogo declara qué entradas resuelve el sistema', () => {
   const ctx = loadConSchema();
   sembrarRoles(ctx);
   const r = programar(ctx);
@@ -232,11 +232,14 @@ test('el catálogo declara qué entradas resuelve el sistema y cuál espera a la
 
   assert.equal(detalle.catalogo_entradas.length, 13, 'las 13 entradas de §9.3.2');
   const auto = detalle.catalogo_entradas.filter((e) => e.auto).map((e) => e.numero);
-  assert.deepEqual(toPlain(auto), [1, 7, 10, 12, 13]);
+  // v10.0 Fase 6a: el 8 (grado de logro de los objetivos) se suma a los que
+  // el sistema prellena -- antes quedaba declarado como pendiente de fase,
+  // porque todavia no existia el tablero de DOC-07.
+  assert.deepEqual(toPlain(auto), [1, 7, 8, 10, 12, 13]);
 
   const objetivos = detalle.catalogo_entradas.filter((e) => e.numero === 8)[0];
-  assert.match(objetivos.pendiente_fase, /objetivos de calidad/i,
-    'el ítem 8 debe quedar declarado como pendiente, no como si no aplicara');
+  assert.equal(objetivos.pendiente_fase, undefined,
+    'el ítem 8 ya no espera a una fase futura: lo resuelve el tablero de objetivos');
 });
 
 // --- el acta ----------------------------------------------------------------

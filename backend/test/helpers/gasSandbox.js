@@ -191,6 +191,10 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // v10.0 Fase 5b (PRO-05): usa crearTareaSgc_/tareaResumen_ de
   // NoConformidades.gs y los resumenes de proveedores, quejas y auditorias.
   'RevisionDireccion.gs',
+  // v10.0 Fase 6a (DOC-07): objetivos de calidad. Usa
+  // horasFormacionPorPersonaSgc_ de Personas.gs y encargadosSgc_ de
+  // Auditorias.gs, asi que va despues de ambos.
+  'Objetivos.gs',
   'Triggers.gs',
   'Code.gs'
 ];

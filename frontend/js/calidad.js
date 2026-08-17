@@ -41,6 +41,8 @@
       if (proveedorActivoId_) abrirProveedor_(proveedorActivoId_); else cargarProveedores_();
     } else if (seccionActiva_ === 'revision') {
       if (revisionActivaId_) abrirRevision_(revisionActivaId_); else cargarRevisiones_();
+    } else if (seccionActiva_ === 'objetivos') {
+      if (objetivoActivoId_) abrirObjetivo_(objetivoActivoId_); else cargarObjetivos_();
     } else {
       if (documentoActivoId_) abrirDocumento_(documentoActivoId_); else cargarListado_();
     }
@@ -57,7 +59,8 @@
       { id: 'auditorias', texto: 'Auditorías' },
       { id: 'quejas', texto: 'Quejas' },
       { id: 'proveedores', texto: 'Proveedores' },
-      { id: 'revision', texto: 'Revisión por la dirección' }
+      { id: 'revision', texto: 'Revisión por la dirección' },
+      { id: 'objetivos', texto: 'Objetivos de calidad' }
     ];
     return '<div class="sigso-tabs sgc-secciones">' + secciones.map(function (s) {
       return '<button type="button" class="sigso-tab js-sgc-seccion' +
@@ -76,6 +79,7 @@
         quejaActivaId_ = null;
         proveedorActivoId_ = null;
         revisionActivaId_ = null;
+        objetivoActivoId_ = null;
         render_();
       });
     });
@@ -110,6 +114,7 @@
   var quejaActivaId_ = null;
   var proveedorActivoId_ = null;
   var revisionActivaId_ = null;
+  var objetivoActivoId_ = null;
   var pestanaFicha_ = 'datos';
   var puedeGestionar_ = false;
   var filtroTipo_ = '';
@@ -3703,7 +3708,7 @@
         if (r.consecuencia === 'REUNION_MEJORA') {
           Componentes.aviso({
             texto: 'Promedio ' + ev.promedio + ': reprobado. Es proveedor único, corresponde pedirle una reunión de mejora.',
-            tipo: 'advertencia'
+            tipo: 'info'
           });
         } else if (r.consecuencia === 'DESECHAR') {
           Componentes.aviso({
@@ -4197,6 +4202,457 @@
         cerrar();
         Componentes.aviso({ texto: 'Acuerdo registrado: ya aparece en "Mi trabajo" del responsable.', tipo: 'exito' });
         abrirRevision_(r.revision_id);
+      });
+    });
+  }
+
+  // --- Objetivos de calidad (DOC-07) ------------------------------------------
+  // El tablero de los seis objetivos. Lo distintivo frente a las otras
+  // secciones: aca el sistema NO decide si un objetivo se cumple mirando la
+  // pantalla -- el veredicto viene calculado del backend y la pantalla solo
+  // lo muestra. Y de los seis, hoy solo uno se puede medir solo; los demas
+  // los registra la persona responsable, con la ayuda que el sistema pueda
+  // dar en cada caso.
+
+  var UNIDAD_SUFIJO = { PORCENTAJE: '%', HORAS: ' h', NUMERO: '' };
+  var FUENTE_ETIQUETA = {
+    AUTO: 'Lo calcula el sistema',
+    ASISTIDA: 'El sistema aporta parte',
+    MANUAL: 'Registro manual'
+  };
+  var FUENTE_TONO = { AUTO: 'ok', ASISTIDA: 'info', MANUAL: 'neutro' };
+  var anioObjetivos_ = null;
+
+  function formatearValor_(valor, unidad) {
+    if (valor === null || valor === undefined || valor === '') return '—';
+    return valor + (UNIDAD_SUFIJO[unidad] !== undefined ? UNIDAD_SUFIJO[unidad] : '');
+  }
+
+  function cargarObjetivos_() {
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando objetivos de calidad...');
+    api_('listarObjetivosSgc', anioObjetivos_ ? { anio: anioObjetivos_ } : {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = barraSecciones_() +
+          Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el tablero de objetivos.', 'error');
+        wireSecciones_(cont);
+        return;
+      }
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      anioObjetivos_ = respuesta.data.anio;
+      pintarObjetivos_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
+      wireSecciones_(cont);
+    });
+  }
+
+  function pintarObjetivos_(cont, data) {
+    var lista = data.objetivos || [];
+    var ind = data.indicadores || {};
+    var anios = data.anios_disponibles || [];
+    if (anios.indexOf(data.anio) === -1) anios = [data.anio].concat(anios);
+
+    var selectorAnio = '<select id="sgc-obj-anio" class="sigso-select">' +
+      anios.map(function (a) {
+        return '<option value="' + a + '"' + (a === data.anio ? ' selected' : '') + '>' + a + '</option>';
+      }).join('') + '</select>';
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">Objetivos de calidad (DOC-07). Cada uno se mide en su ' +
+      'frecuencia y se compara solo contra su meta.</p>' +
+      selectorAnio +
+      '</div>';
+
+    function wire() {
+      wireSecciones_(cont);
+      var sel = cont.querySelector('#sgc-obj-anio');
+      if (sel) sel.addEventListener('change', function () {
+        anioObjetivos_ = Number(this.value);
+        cargarObjetivos_();
+      });
+      var abrirAnio = cont.querySelector('.js-sgc-abrir-anio');
+      if (abrirAnio) abrirAnio.addEventListener('click', function () { confirmarAbrirAnio_(data.anio); });
+      cont.querySelectorAll('.js-sgc-abrir-obj').forEach(function (btn) {
+        btn.addEventListener('click', function () { abrirObjetivo_(btn.getAttribute('data-id')); });
+      });
+    }
+
+    if (!data.sembrado) {
+      cont.innerHTML = cabecera + Componentes.vacio({
+        texto: 'El año ' + data.anio + ' todavía no tiene objetivos cargados.',
+        detalle: puedeGestionar_
+          ? 'Al abrirlo se cargan los seis objetivos de DOC-07 con su indicador, meta, frecuencia y responsable. Después puedes ajustarlos.'
+          : 'El Encargado SGC tiene que abrir el año antes de poder medir.'
+      }) + (puedeGestionar_
+        ? '<div class="sgc-cabecera">' +
+            Componentes.boton({ texto: 'Abrir año ' + data.anio, clase: 'js-sgc-abrir-anio' }) +
+          '</div>'
+        : '');
+      wire();
+      return;
+    }
+
+    var kpis = '<div class="sgc-kpis">' + [
+      Componentes.kpi({ etiqueta: 'Objetivos', valor: ind.total || 0 }),
+      Componentes.kpi({ etiqueta: 'Cumplen', valor: ind.cumplen || 0 }),
+      Componentes.kpi({ etiqueta: 'No cumplen', valor: ind.no_cumplen || 0 }),
+      Componentes.kpi({ etiqueta: 'Sin medir', valor: ind.sin_medir || 0 }),
+      Componentes.kpi({ etiqueta: 'Lecturas pendientes', valor: ind.lecturas_pendientes || 0 })
+    ].join('') + '</div>';
+
+    // "No cumple" y "nadie lo midio" son hallazgos distintos y se avisan
+    // por separado: el primero pide accion sobre el proceso, el segundo
+    // sobre el seguimiento (§9.1.1).
+    var avisos = '';
+    if (ind.lecturas_pendientes) {
+      avisos += Componentes.alerta(ind.lecturas_pendientes + ' período(s) ya cerrados siguen sin medir. ' +
+        'No medir un objetivo es no evaluar el desempeño (§9.1.1).', 'advertencia');
+    }
+    if (ind.no_cumplen) {
+      avisos += Componentes.alerta(ind.no_cumplen + ' objetivo(s) no alcanzan su meta. ' +
+        'Es entrada obligatoria de la revisión por la dirección (§9.3.2 e).', 'advertencia');
+    }
+
+    cont.innerHTML = cabecera + kpis + avisos + '<div class="sgc-lista">' + lista.map(function (o) {
+      var badges = '';
+      if (o.ultima_lectura) {
+        badges += Componentes.badge(o.ultima_lectura.cumple ? 'Cumple' : 'No cumple',
+          o.ultima_lectura.cumple ? 'ok' : 'critico');
+      } else {
+        badges += Componentes.badge('Sin medir', 'neutro');
+      }
+      badges += Componentes.badge(FUENTE_ETIQUETA[o.fuente] || o.fuente, FUENTE_TONO[o.fuente] || 'neutro');
+      if (o.lecturas_pendientes) badges += Componentes.badge(o.lecturas_pendientes + ' por medir', 'alerta');
+
+      return '<button type="button" class="sgc-doc js-sgc-abrir-obj" data-id="' +
+        Componentes.escaparHtml(o.objetivo_id) + '">' +
+        '<div class="sgc-doc__linea">' +
+          '<span class="sgc-doc__codigo">' + o.numero + '. ' + Componentes.escaparHtml(o.objetivo_general) + '</span>' +
+          badges +
+        '</div>' +
+        '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(o.indicador) + '</span>' +
+        '<div class="sgc-doc__meta">' +
+          '<span>Meta: ' + Componentes.escaparHtml(o.meta_texto || '') + '</span>' +
+          '<span>' + Componentes.escaparHtml(o.frecuencia_texto || o.frecuencia) + '</span>' +
+          (o.ultima_lectura
+            ? '<span>Última: ' + formatearValor_(o.ultima_lectura.valor, o.unidad) +
+              ' (' + Componentes.escaparHtml(o.ultima_lectura.periodo_etiqueta) + ')</span>'
+            : '<span>Nunca medido</span>') +
+        '</div>' +
+        '</button>';
+    }).join('') + '</div>';
+    wire();
+  }
+
+  function confirmarAbrirAnio_(anio) {
+    Componentes.confirmar({
+      titulo: 'Abrir el año ' + anio,
+      mensaje: 'Se cargarán los seis objetivos de DOC-07 con su indicador, meta, frecuencia y ' +
+        'responsable. Si el año anterior ya existe, se copian desde ahí para conservar los ajustes que hayas hecho.',
+      confirmar: 'Abrir año'
+    }).then(function (ok) {
+      if (!ok) return;
+      api_('sembrarAnioObjetivosSgc', { anio: anio }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo abrir el año.', tipo: 'error' });
+          return;
+        }
+        Componentes.aviso({ texto: 'Año ' + anio + ' abierto con ' + respuesta.data.creados + ' objetivos.', tipo: 'exito' });
+        cargarObjetivos_();
+      });
+    });
+  }
+
+  function abrirObjetivo_(id) {
+    objetivoActivoId_ = id;
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando objetivo...');
+    api_('getDetalleObjetivoSgc', { objetivo_id: id }).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = barraSecciones_() +
+          Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el objetivo.', 'error');
+        wireSecciones_(cont);
+        return;
+      }
+      puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      pintarFichaObjetivo_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
+      wireSecciones_(cont);
+    });
+  }
+
+  function pintarFichaObjetivo_(cont, data) {
+    var o = data.objetivo;
+    var lecturas = data.lecturas || [];
+    var periodos = data.periodos || [];
+    var medidos = {};
+    lecturas.forEach(function (l) { medidos[l.periodo] = l; });
+
+    var acciones = puedeGestionar_
+      ? Componentes.boton({ texto: 'Registrar medición', clase: 'js-sgc-obj-medir' }) +
+        Componentes.boton({ texto: 'Editar objetivo', variante: 'sutil', clase: 'js-sgc-obj-editar' })
+      : '';
+
+    // La tabla de periodos muestra TODOS los del año, medidos o no: el hueco
+    // es justamente lo que hay que ver.
+    var filas = periodos.map(function (p) {
+      var l = medidos[p.clave];
+      var estado;
+      if (l) {
+        estado = Componentes.badge(l.cumple ? 'Cumple' : 'No cumple', l.cumple ? 'ok' : 'critico');
+      } else if (p.cerrado) {
+        estado = Componentes.badge('Sin medir', 'alerta');
+      } else {
+        estado = Componentes.badge('En curso', 'neutro');
+      }
+      return '<tr>' +
+        '<td>' + Componentes.escaparHtml(p.etiqueta) + '</td>' +
+        '<td>' + (l ? formatearValor_(l.valor, o.unidad) : '—') + '</td>' +
+        '<td>' + (l && l.numerador !== null && l.denominador !== null
+          ? l.numerador + ' / ' + l.denominador : '') + '</td>' +
+        '<td>' + estado + '</td>' +
+        '<td>' + Componentes.escaparHtml((l && l.observaciones) || '') + '</td>' +
+        '<td>' + (l && puedeGestionar_
+          ? '<button type="button" class="sigso-boton sigso-boton--sutil js-sgc-obj-anular" data-id="' +
+            Componentes.escaparHtml(l.lectura_id) + '">Anular</button>'
+          : '') + '</td>' +
+        '</tr>';
+    }).join('');
+
+    var badgeFuente = Componentes.badge(FUENTE_ETIQUETA[o.fuente] || o.fuente, FUENTE_TONO[o.fuente] || 'neutro');
+
+    cont.innerHTML =
+      '<button type="button" class="sigso-boton sigso-boton--sutil js-sgc-volver-obj">← Objetivos</button>' +
+      '<div class="sgc-ficha">' +
+        '<div class="sgc-ficha__cab">' +
+          '<h2>' + o.numero + '. ' + Componentes.escaparHtml(o.objetivo_general) + '</h2>' + badgeFuente +
+        '</div>' +
+        '<p class="sigso-ayuda">' + Componentes.escaparHtml(o.objetivo_especifico || '') + '</p>' +
+        '<div class="sgc-ficha__datos">' +
+          campoFicha_('Indicador', o.indicador) +
+          campoFicha_('Meta', o.meta_texto) +
+          campoFicha_('Frecuencia', o.frecuencia_texto || o.frecuencia) +
+          campoFicha_('Responsable', o.responsable_texto) +
+          campoFicha_('Acciones para lograrlo', o.acciones) +
+        '</div>' +
+        (acciones ? '<div class="sgc-ficha__acciones">' + acciones + '</div>' : '') +
+        '<h3 class="sgc-subtitulo">Mediciones de ' + o.anio + '</h3>' +
+        '<table class="sigso-tabla">' +
+          '<thead><tr><th>Período</th><th>Valor</th><th>Detalle</th><th>Estado</th><th>Observaciones</th><th></th></tr></thead>' +
+          '<tbody>' + filas + '</tbody>' +
+        '</table>' +
+      '</div>';
+
+    cont.querySelector('.js-sgc-volver-obj').addEventListener('click', function () {
+      objetivoActivoId_ = null;
+      cargarObjetivos_();
+    });
+    var medir = cont.querySelector('.js-sgc-obj-medir');
+    if (medir) medir.addEventListener('click', function () { abrirFormularioMedicion_(o, data); });
+    var editar = cont.querySelector('.js-sgc-obj-editar');
+    if (editar) editar.addEventListener('click', function () { abrirFormularioObjetivo_(o, data); });
+    cont.querySelectorAll('.js-sgc-obj-anular').forEach(function (btn) {
+      btn.addEventListener('click', function () { anularLectura_(btn.getAttribute('data-id'), o); });
+    });
+  }
+
+  function anularLectura_(lecturaId, o) {
+    Componentes.prompt({
+      titulo: 'Anular medición',
+      mensaje: 'La medición deja de contar en el tablero, pero queda registrada con el motivo. Indica por qué.',
+      placeholder: 'Motivo de la anulación',
+      confirmar: 'Anular'
+    }).then(function (motivo) {
+      if (!motivo) return;
+      api_('anularLecturaObjetivoSgc', { lectura_id: lecturaId, motivo: motivo }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo anular.', tipo: 'error' });
+          return;
+        }
+        abrirObjetivo_(o.objetivo_id);
+      });
+    });
+  }
+
+  function abrirFormularioMedicion_(o, data) {
+    var periodos = data.periodos || [];
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Medir: ' + Componentes.escaparHtml(o.objetivo_general) + '</h3>' +
+        '<p class="sigso-ayuda">' + Componentes.escaparHtml(o.indicador) +
+          '<br>Meta: <strong>' + Componentes.escaparHtml(o.meta_texto || '') + '</strong></p>' +
+        '<form id="form-sgc-obj-medir">' +
+          '<label class="sigso-campo"><span class="sigso-campo__label">Período</span>' +
+            '<select id="obj-periodo" class="sigso-select">' +
+              periodos.map(function (p) {
+                return '<option value="' + p.clave + '"' + (p.cerrado ? '' : ' data-encurso="1"') + '>' +
+                  Componentes.escaparHtml(p.etiqueta) + (p.cerrado ? '' : ' (en curso)') + '</option>';
+              }).join('') +
+            '</select>' +
+          '</label>' +
+          '<div id="obj-sugerencia"></div>' +
+          Componentes.campoTexto({ id: 'obj-numerador', label: 'Numerador (opcional)', tipo: 'number' }) +
+          Componentes.campoTexto({ id: 'obj-denominador', label: 'Denominador (opcional)', tipo: 'number' }) +
+          Componentes.campoTexto({
+            id: 'obj-valor',
+            label: 'Valor medido' + (UNIDAD_SUFIJO[o.unidad] ? ' (' + UNIDAD_SUFIJO[o.unidad].trim() + ')' : ''),
+            tipo: 'number', requerido: true
+          }) +
+          Componentes.campoTextarea({ id: 'obj-obs', label: 'Observaciones (opcional)' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Traer datos del sistema', variante: 'sutil', clase: 'js-sgc-obj-sugerir', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar medición', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    // Si el numerador y el denominador estan, el porcentaje se calcula solo:
+    // que la persona haga esa division a mano es justo donde se cuelan los
+    // errores que despues nadie puede auditar.
+    function recalcular() {
+      if (o.unidad !== 'PORCENTAJE') return;
+      var n = parseFloat(document.getElementById('obj-numerador').value);
+      var d = parseFloat(document.getElementById('obj-denominador').value);
+      if (isFinite(n) && isFinite(d) && d > 0) {
+        document.getElementById('obj-valor').value = Math.round((n / d) * 1000) / 10;
+      }
+    }
+    document.getElementById('obj-numerador').addEventListener('input', recalcular);
+    document.getElementById('obj-denominador').addEventListener('input', recalcular);
+
+    var origenValor = 'MANUAL';
+    fondo.querySelector('.js-sgc-obj-sugerir').addEventListener('click', function () {
+      var periodo = document.getElementById('obj-periodo').value;
+      var caja = document.getElementById('obj-sugerencia');
+      caja.innerHTML = Componentes.cargando('Consultando...');
+      api_('sugerirLecturaObjetivoSgc', { objetivo_id: o.objetivo_id, periodo: periodo }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          caja.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo consultar.', 'error');
+          return;
+        }
+        var s = respuesta.data;
+        caja.innerHTML = Componentes.alerta(s.nota, s.completo ? 'info' : 'advertencia');
+        if (s.numerador !== '' && s.numerador !== null && s.numerador !== undefined) {
+          document.getElementById('obj-numerador').value = s.numerador;
+        }
+        if (s.denominador !== '' && s.denominador !== null && s.denominador !== undefined) {
+          document.getElementById('obj-denominador').value = s.denominador;
+        }
+        if (s.valor !== null && s.valor !== undefined) {
+          document.getElementById('obj-valor').value = s.valor;
+          origenValor = s.fuente === 'AUTO' ? 'AUTO' : 'MANUAL';
+        }
+      });
+    });
+
+    document.getElementById('form-sgc-obj-medir').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      // Se leen TODOS los valores del formulario ANTES de cerrar el modal:
+      // cerrar() saca el <form> del DOM y cualquier lectura posterior
+      // reventaria en silencio (bug real de la Fase 4).
+      var datos = {
+        objetivo_id: o.objetivo_id,
+        periodo: document.getElementById('obj-periodo').value,
+        valor: document.getElementById('obj-valor').value,
+        numerador: document.getElementById('obj-numerador').value,
+        denominador: document.getElementById('obj-denominador').value,
+        observaciones: document.getElementById('obj-obs').value,
+        origen: origenValor
+      };
+      api_('registrarLecturaObjetivoSgc', datos).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar la medición.', tipo: 'error' });
+          return;
+        }
+        var cumple = respuesta.data.cumple;
+        cerrar();
+        Componentes.aviso({
+          texto: cumple ? 'Medición registrada: alcanza la meta.' : 'Medición registrada: NO alcanza la meta.',
+          tipo: cumple ? 'exito' : 'info'
+        });
+        abrirObjetivo_(o.objetivo_id);
+      });
+    });
+  }
+
+  function abrirFormularioObjetivo_(o, data) {
+    var cat = (data.catalogos || {});
+    var frecuencias = cat.frecuencias || [];
+    var operadores = cat.operadores || [];
+    var unidades = cat.unidades || [];
+
+    function opciones(lista, seleccionado) {
+      return lista.map(function (x) {
+        return '<option value="' + x.clave + '"' + (x.clave === seleccionado ? ' selected' : '') + '>' +
+          Componentes.escaparHtml(x.etiqueta) + '</option>';
+      }).join('');
+    }
+
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Editar objetivo ' + o.numero + '</h3>' +
+        '<p class="sigso-ayuda">Estos son los datos de DOC-07. Ajustarlos aquí no cambia el ' +
+          'documento: actualiza el documento y deja el tablero igual.</p>' +
+        '<form id="form-sgc-obj">' +
+          Componentes.campoTexto({ id: 'obje-general', label: 'Objetivo general', valor: o.objetivo_general, requerido: true }) +
+          Componentes.campoTextarea({ id: 'obje-especifico', label: 'Objetivo específico', valor: o.objetivo_especifico }) +
+          Componentes.campoTextarea({ id: 'obje-indicador', label: 'Indicador', valor: o.indicador, requerido: true }) +
+          Componentes.campoTexto({ id: 'obje-meta-texto', label: 'Meta (como la escribe DOC-07)', valor: o.meta_texto }) +
+          '<div class="sgc-ficha__datos">' +
+            '<label class="sigso-campo"><span class="sigso-campo__label">Comparación</span>' +
+              '<select id="obje-operador" class="sigso-select">' + opciones(operadores, o.meta_operador) + '</select></label>' +
+            Componentes.campoTexto({ id: 'obje-meta-valor', label: 'Valor de la meta', tipo: 'number', valor: o.meta_valor, requerido: true }) +
+            '<label class="sigso-campo"><span class="sigso-campo__label">Unidad</span>' +
+              '<select id="obje-unidad" class="sigso-select">' + opciones(unidades, o.unidad) + '</select></label>' +
+          '</div>' +
+          '<label class="sigso-campo"><span class="sigso-campo__label">Frecuencia de seguimiento</span>' +
+            '<select id="obje-frecuencia" class="sigso-select">' + opciones(frecuencias, o.frecuencia) + '</select></label>' +
+          Componentes.campoTexto({ id: 'obje-frecuencia-texto', label: 'Frecuencia (texto de DOC-07)', valor: o.frecuencia_texto }) +
+          Componentes.campoTextarea({ id: 'obje-acciones', label: 'Acciones para lograrlo', valor: o.acciones }) +
+          Componentes.campoTexto({ id: 'obje-responsable', label: 'Responsable', valor: o.responsable_texto }) +
+          Componentes.campoTexto({ id: 'obje-responsable-email', label: 'Correo del responsable (opcional)', tipo: 'email', valor: o.responsable_email }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-sgc-obj').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var datos = {
+        objetivo_id: o.objetivo_id,
+        objetivo_general: document.getElementById('obje-general').value,
+        objetivo_especifico: document.getElementById('obje-especifico').value,
+        indicador: document.getElementById('obje-indicador').value,
+        meta_texto: document.getElementById('obje-meta-texto').value,
+        meta_operador: document.getElementById('obje-operador').value,
+        meta_valor: document.getElementById('obje-meta-valor').value,
+        unidad: document.getElementById('obje-unidad').value,
+        frecuencia: document.getElementById('obje-frecuencia').value,
+        frecuencia_texto: document.getElementById('obje-frecuencia-texto').value,
+        acciones: document.getElementById('obje-acciones').value,
+        responsable_texto: document.getElementById('obje-responsable').value,
+        responsable_email: document.getElementById('obje-responsable-email').value
+      };
+      api_('guardarObjetivoSgc', datos).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        abrirObjetivo_(o.objetivo_id);
       });
     });
   }

@@ -167,7 +167,11 @@ var SHEETS = {
   SGC_PROVEEDORES: 'SGC_PROVEEDORES',
   SGC_PROVEEDOR_EVALUACIONES: 'SGC_PROVEEDOR_EVALUACIONES',
   SGC_REVISIONES: 'SGC_REVISIONES',
-  SGC_REVISION_ACUERDOS: 'SGC_REVISION_ACUERDOS'
+  SGC_REVISION_ACUERDOS: 'SGC_REVISION_ACUERDOS',
+
+  // v10.0 Fase 6a: tablero de objetivos de calidad (DOC-07).
+  SGC_OBJETIVOS: 'SGC_OBJETIVOS',
+  SGC_INDICADOR_LECTURAS: 'SGC_INDICADOR_LECTURAS'
 };
 
 var COLUMNAS = {
@@ -900,6 +904,66 @@ var COLUMNAS = {
     'acuerdo_id', 'revision_id', 'tipo', 'observaciones',
     'responsable_email', 'plazo', 'actividad_id',
     'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // --- v10.0 Fase 6a: objetivos de calidad (DOC-07, §6.2) -------------------
+  // Una fila = un objetivo EN UN AÑO. La clave es (anio, numero): DOC-07 es
+  // un documento vivo ("Fecha actualizacion: Junio 2026") y la meta, el
+  // responsable y hasta la frecuencia se ajustan de un año a otro. Guardar
+  // una fila por año conserva contra que meta se midio cada periodo -- sin
+  // eso, subir la meta en 2027 reescribiria la historia de 2026 y el tablero
+  // dejaria de ser evidencia.
+  //
+  // Por eso los objetivos NO son un catalogo en el codigo (a diferencia de
+  // las 13 entradas de la revision o las 28 clausulas ISO, que las define la
+  // norma y no la organizacion): estos los define la empresa en su DOC-07.
+  //
+  // meta_operador / meta_valor / unidad: la meta en forma COMPARABLE, para
+  //   poder decir "cumple" sin que nadie lo interprete a mano.
+  // meta_texto: la meta LITERAL del documento. Se conserva porque es lo que
+  //   el auditor lee en DOC-07, y porque varias traen matices que ningun
+  //   operador numerico captura ("≥ 90% anual, con calificacion ≥ nota 8").
+  //
+  // fuente: de donde sale el valor de cada lectura.
+  //   AUTO     el sistema lo calcula entero (hoy solo el objetivo 4).
+  //   ASISTIDA el sistema aporta parte y la persona completa el resto
+  //            (objetivo 2: sabe cuantos reclamos hubo, no cuantos
+  //            servicios se prestaron -- eso llega con la Fase 7).
+  //   MANUAL   lo entra la persona responsable.
+  // calculo: clave del calculo automatico (ver CALCULOS_INDICADOR_SGC).
+  //   Vacio en los MANUAL.
+  //
+  // frecuencia: la normalizada, que es la que dispara el aviso de lectura
+  //   pendiente. frecuencia_texto guarda la del documento, que a veces trae
+  //   dos ("Mensual / Trimestral") o una aclaracion ("Anual (post-proyecto)").
+  SGC_OBJETIVOS: [
+    'objetivo_id', 'anio', 'numero',
+    'objetivo_general', 'objetivo_especifico', 'indicador',
+    'meta_texto', 'meta_operador', 'meta_valor', 'unidad',
+    'acciones', 'frecuencia', 'frecuencia_texto',
+    'responsable_texto', 'responsable_email',
+    'fuente', 'calculo',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // Las lecturas del periodo. Una fila = "en tal periodo, el indicador dio
+  // tanto". periodo es una clave ordenable y comparable: '2026-M03',
+  // '2026-T2', '2026-S1', '2026'. La forma la define la frecuencia del
+  // objetivo, asi que un objetivo semestral nunca genera claves mensuales.
+  //
+  // numerador/denominador: se guardan aparte del valor cuando el indicador
+  //   es un cociente. Sin ellos, un 1,8% no se puede auditar (¿1,8% de que?)
+  //   ni recalcular si mañana cambia el denominador.
+  // cumple: derivado de comparar valor contra la meta del objetivo, pero se
+  //   PERSISTE: la meta puede cambiar el año que viene y el "cumplio" de
+  //   2026 tiene que seguir siendo el que se evaluo en 2026.
+  // detalle: JSON opcional con el desglose que sustenta el numero (por
+  //   ejemplo, quienes quedaron bajo las 5 horas de formacion).
+  SGC_INDICADOR_LECTURAS: [
+    'lectura_id', 'objetivo_id', 'anio', 'periodo',
+    'valor', 'numerador', 'denominador',
+    'cumple', 'origen', 'detalle', 'observaciones',
+    'registrado_por', 'fecha_registro', 'activa'
   ]
 };
 
