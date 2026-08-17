@@ -74,6 +74,10 @@ var Calidad = {
       puede_gestionar: gobierna,
       rol_sgc: rol || 'OPERATIVO',
       pendientes_de_acuse: Object.keys(pendientesMios).length,
+      // v10.0 Fase 6b: mismo catalogo que expone Auditorias.gs -- para que
+      // el formulario de documento pueda ofrecer el selector de clausulas
+      // ISO sin duplicar la lista en el frontend.
+      catalogo_clausulas: CLAUSULAS_ISO9001,
       documentos: visibles.map(function (d) {
         return {
           documento_id: d.documento_id,
@@ -100,7 +104,8 @@ var Calidad = {
           requiere_acuse: esVerdaderoSgc_(d.requiere_acuse),
           fecha_limite_acuse: d.fecha_limite_acuse || '',
           debo_acusar: !!pendientesMios[d.documento_id],
-          dias_para_acuse: d.fecha_limite_acuse ? diasHastaSgc_(d.fecha_limite_acuse, ahora) : null
+          dias_para_acuse: d.fecha_limite_acuse ? diasHastaSgc_(d.fecha_limite_acuse, ahora) : null,
+          clausulas_iso: parsearClausulasIsoSgc_(d.clausulas_iso)
         };
       }).sort(function (a, b) {
         return String(a.codigo || '').localeCompare(String(b.codigo || ''));
@@ -131,8 +136,9 @@ var Calidad = {
     })[0];
 
     return {
-      documento: doc,
+      documento: Object.assign({}, doc, { clausulas_iso: parsearClausulasIsoSgc_(doc.clausulas_iso) }),
       puede_gestionar: gobierna,
+      catalogo_clausulas: CLAUSULAS_ISO9001,
       debo_acusar: debeAcusar,
       mi_acuse: miAcuse ? miAcuse.acusado_en : '',
       versiones: versiones,
@@ -200,7 +206,11 @@ var Calidad = {
       // Novedades ("el punto de partida es que alguien se haga responsable
       // de que la info llegue, y eso se demuestra con el acuse").
       requiere_acuse: data.requiere_acuse === false ? false : true,
-      fecha_limite_acuse: data.fecha_limite_acuse || ''
+      fecha_limite_acuse: data.fecha_limite_acuse || '',
+      // v10.0 Fase 6b: que clausulas ISO sustenta este documento como
+      // evidencia (matriz de cobertura). Nace vacio -- taggearlo es un acto
+      // deliberado del Encargado SGC, no una inferencia del sistema.
+      clausulas_iso: JSON.stringify(clausulasIsoValidas_(data.clausulas_iso))
     };
     agregarFila_(SHEETS.SGC_DOCUMENTOS, documento);
 
@@ -279,6 +289,9 @@ var Calidad = {
     }
     if (data.requiere_acuse !== undefined) cambios.requiere_acuse = data.requiere_acuse === true;
     if (data.fecha_limite_acuse !== undefined) cambios.fecha_limite_acuse = data.fecha_limite_acuse || '';
+    if (data.clausulas_iso !== undefined) {
+      cambios.clausulas_iso = JSON.stringify(clausulasIsoValidas_(data.clausulas_iso));
+    }
 
     // v10.0: adjuntar (o corregir) el archivo de la version que YA rige, sin
     // inventar una version nueva. Hace falta porque un documento puede nacer
@@ -623,6 +636,28 @@ function esVerdaderoSgc_(valor) {
 
 function esActivoSgc_(fila) {
   return esVerdaderoSgc_(fila.activa);
+}
+
+// v10.0 Fase 6b: etiquetado de un documento con las clausulas ISO que
+// sustenta. CLAUSULAS_ISO9001 vive en Auditorias.gs (catalogo compartido de
+// las 28 clausulas auditables) -- se referencia aca porque es la misma
+// lista, no una copia: taggear con un codigo que la auditoria no reconoce
+// rompe el cruce con la matriz de cobertura.
+function clausulasIsoValidas_(valor) {
+  var lista = Array.isArray(valor) ? valor : [];
+  var codigos = CLAUSULAS_ISO9001.map(function (c) { return c.codigo; });
+  var vistos = {};
+  return lista
+    .map(function (c) { return String(c || '').trim(); })
+    .filter(function (c) { return c && codigos.indexOf(c) !== -1 && !vistos[c] && (vistos[c] = true); });
+}
+
+function parsearClausulasIsoSgc_(valor) {
+  if (!valor) return [];
+  try {
+    var lista = JSON.parse(valor);
+    return Array.isArray(lista) ? lista : [];
+  } catch (err) { return []; }
 }
 
 function esVerdaderoActivoSgc_(fila) {

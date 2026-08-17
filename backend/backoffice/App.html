@@ -13151,6 +13151,8 @@ var Iconos = (function () {
       if (revisionActivaId_) abrirRevision_(revisionActivaId_); else cargarRevisiones_();
     } else if (seccionActiva_ === 'objetivos') {
       if (objetivoActivoId_) abrirObjetivo_(objetivoActivoId_); else cargarObjetivos_();
+    } else if (seccionActiva_ === 'cobertura') {
+      cargarCobertura_();
     } else {
       if (documentoActivoId_) abrirDocumento_(documentoActivoId_); else cargarListado_();
     }
@@ -13168,7 +13170,8 @@ var Iconos = (function () {
       { id: 'quejas', texto: 'Quejas' },
       { id: 'proveedores', texto: 'Proveedores' },
       { id: 'revision', texto: 'Revisión por la dirección' },
-      { id: 'objetivos', texto: 'Objetivos de calidad' }
+      { id: 'objetivos', texto: 'Objetivos de calidad' },
+      { id: 'cobertura', texto: 'Cobertura ISO' }
     ];
     return '<div class="sigso-tabs sgc-secciones">' + secciones.map(function (s) {
       return '<button type="button" class="sigso-tab js-sgc-seccion' +
@@ -13407,6 +13410,20 @@ var Iconos = (function () {
       (d.aprobado_por ? campoFicha_('Aprobado por', d.aprobado_por) : '') +
       '</dl>';
 
+    // v10.0 Fase 6b: que clausulas ISO sustenta este documento como
+    // evidencia (matriz de cobertura). Se etiqueta aca, en la ficha, porque
+    // es donde el Encargado SGC ya esta mirando el documento -- no un paso
+    // aparte que nadie recuerda hacer.
+    var clausulasTexto = (d.clausulas_iso || []).map(function (c) {
+      var cat = (data.catalogo_clausulas || []).filter(function (x) { return x.codigo === c; })[0];
+      return cat ? cat.codigo + ' — ' + cat.titulo : c;
+    });
+    var bloqueClausulas = '<h3 class="sgc-sub">Cláusulas ISO que sustenta</h3>' +
+      (clausulasTexto.length
+        ? '<ul class="sgc-porques">' + clausulasTexto.map(function (t) { return '<li>' + Componentes.escaparHtml(t) + '</li>'; }).join('') + '</ul>'
+        : Componentes.vacio({ texto: 'No está etiquetado con ninguna cláusula.', detalle: 'Si este documento es evidencia de una cláusula (por ejemplo, la política de calidad), etiquétalo para que aparezca en la Matriz de cobertura ISO.' })) +
+      (puedeGestionar_ ? Componentes.boton({ texto: 'Etiquetar cláusulas', variante: 'sutil', clase: 'js-sgc-doc-clausulas' }) : '');
+
     var versiones = (data.versiones || []).length
       ? '<h3 class="sgc-sub">Historial de versiones</h3>' +
         '<div class="sgc-lista">' + (data.versiones || []).map(function (v) {
@@ -13442,6 +13459,7 @@ var Iconos = (function () {
         (d.archivo_nombre ? '<p class="sigso-ayuda">Archivo: ' + Componentes.escaparHtml(d.archivo_nombre) + '</p>' : '') +
         acciones +
         '<div class="js-sgc-cumplimiento-panel"></div>' +
+        bloqueClausulas +
         versiones +
       '</div>';
 
@@ -13459,6 +13477,9 @@ var Iconos = (function () {
 
     var btnEditar = cont.querySelector('.js-sgc-editar');
     if (btnEditar) btnEditar.addEventListener('click', function () { abrirFormularioEditar_(d, data.destinatarios || []); });
+
+    var btnClausulas = cont.querySelector('.js-sgc-doc-clausulas');
+    if (btnClausulas) btnClausulas.addEventListener('click', function () { abrirFormularioClausulasDoc_(d, data.catalogo_clausulas || []); });
 
     var btnObsoleto = cont.querySelector('.js-sgc-obsoleto');
     if (btnObsoleto) btnObsoleto.addEventListener('click', function () {
@@ -13829,6 +13850,54 @@ var Iconos = (function () {
       }).catch(function () {
         if (boton) { boton.disabled = false; boton.textContent = etiqueta; }
         Componentes.aviso({ texto: 'No se pudo leer o subir el archivo.', tipo: 'error' });
+      });
+    });
+  }
+
+  // v10.0 Fase 6b: etiquetar con que clausulas ISO este documento es
+  // evidencia (matriz de cobertura). Aparte de "Editar" porque es una
+  // decision distinta: no cambia el documento, solo dice donde encaja en la
+  // norma.
+  function abrirFormularioClausulasDoc_(d, catalogo) {
+    var seleccionadas = {};
+    (d.clausulas_iso || []).forEach(function (c) { seleccionadas[c] = true; });
+
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Cláusulas ISO que sustenta ' + Componentes.escaparHtml(d.codigo) + '</h3>' +
+        '<p class="sigso-ayuda">Marca las cláusulas para las que este documento es evidencia (por ejemplo, la política de calidad para 5.2). ' +
+          'Solo aparecen en la Matriz de cobertura ISO los documentos etiquetados aquí — el sistema no lo adivina por el nombre.</p>' +
+        '<form id="form-sgc-doc-clausulas">' +
+          '<fieldset class="sgc-clausulas"><legend>Cláusulas de la norma</legend>' +
+            catalogo.map(function (c) {
+              return '<label class="sigso-campo-check">' +
+                '<input type="checkbox" value="' + Componentes.escaparHtml(c.codigo) + '"' +
+                  (seleccionadas[c.codigo] ? ' checked' : '') + '> ' +
+                Componentes.escaparHtml(c.codigo) + ' — ' + Componentes.escaparHtml(c.titulo) +
+              '</label>';
+            }).join('') +
+          '</fieldset>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-sgc-doc-clausulas').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var elegidas = Array.prototype.slice.call(fondo.querySelectorAll('input[type="checkbox"]:checked'))
+        .map(function (chk) { return chk.value; });
+      api_('actualizarDocumentoSgc', { documento_id: d.documento_id, clausulas_iso: elegidas }).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        abrirDocumento_(d.documento_id);
       });
     });
   }
@@ -17763,6 +17832,140 @@ var Iconos = (function () {
         abrirObjetivo_(o.objetivo_id);
       });
     });
+  }
+
+  // --- Cobertura ISO (mejora propuesta, no en la especificación original) ----
+  // Responde "¿estamos listos para la auditoría?": las 28 cláusulas de la
+  // norma, con su estado calculado desde datos reales (no una opinión). El
+  // "modo auditoría" es la ficha de cada cláusula: la lista de registros que
+  // la sustentan, con boton para bajarla en PDF -- el auditor pide "muéstreme
+  // 7.2" y sale en un clic.
+
+  var ESTADO_COBERTURA_ETIQUETA = { COMPLETO: 'Completo', PARCIAL: 'Parcial', FALTANTE: 'Faltante' };
+  var ESTADO_COBERTURA_TONO = { COMPLETO: 'ok', PARCIAL: 'alerta', FALTANTE: 'critico' };
+
+  function cargarCobertura_() {
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando matriz de cobertura...');
+    api_('listarMatrizCoberturaSgc', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = barraSecciones_() +
+          Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar la matriz de cobertura.', 'error');
+        wireSecciones_(cont);
+        return;
+      }
+      pintarCobertura_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
+      wireSecciones_(cont);
+    });
+  }
+
+  function pintarCobertura_(cont, data) {
+    var r = data.resumen || {};
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">Las 28 cláusulas auditables de ISO 9001:2015, con el estado que se puede sustentar hoy con datos del sistema. ' +
+      'Responde "¿estamos listos para la auditoría?"</p>' +
+      '</div>';
+
+    var kpis = '<div class="sgc-kpis">' + [
+      Componentes.kpi({ etiqueta: 'Cláusulas', valor: r.total || 0 }),
+      Componentes.kpi({ etiqueta: 'Completo', valor: r.completo || 0 }),
+      Componentes.kpi({ etiqueta: 'Parcial', valor: r.parcial || 0 }),
+      Componentes.kpi({ etiqueta: 'Faltante', valor: r.faltante || 0 }),
+      Componentes.kpi({ etiqueta: 'Listos (estimado)', valor: (r.pct_listo || 0) + '%' })
+    ].join('') + '</div>';
+
+    var filas = (data.clausulas || []).map(function (c) {
+      return '<button type="button" class="sgc-doc js-sgc-abrir-clausula" data-codigo="' +
+        Componentes.escaparHtml(c.codigo) + '">' +
+        '<div class="sgc-doc__linea">' +
+          '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(c.codigo) + ' — ' + Componentes.escaparHtml(c.titulo) + '</span>' +
+          Componentes.badge(ESTADO_COBERTURA_ETIQUETA[c.estado] || c.estado, ESTADO_COBERTURA_TONO[c.estado] || 'neutro') +
+        '</div>' +
+        '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(c.resumen) + '</span>' +
+        '</button>';
+    }).join('');
+
+    cont.innerHTML = cabecera + kpis + '<div class="sgc-lista">' + filas + '</div>';
+    wireSecciones_(cont);
+    cont.querySelectorAll('.js-sgc-abrir-clausula').forEach(function (btn) {
+      btn.addEventListener('click', function () { abrirDetalleClausula_(btn.getAttribute('data-codigo')); });
+    });
+  }
+
+  function abrirDetalleClausula_(codigo) {
+    api_('getDetalleClausulaCoberturaSgc', { codigo: codigo }).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo cargar la cláusula.', tipo: 'error' });
+        return;
+      }
+      pintarDetalleClausula_(respuesta.data);
+    });
+  }
+
+  function pintarDetalleClausula_(c) {
+    var filas = (c.evidencia || []).map(function (e) {
+      return '<tr>' +
+        '<td>' + Componentes.escaparHtml(e.tipo) + '</td>' +
+        '<td>' + Componentes.escaparHtml(e.descripcion || '') + '</td>' +
+        '<td>' + (e.fecha ? fechaCorta_(e.fecha) : '—') + '</td>' +
+        '<td>' + Componentes.escaparHtml(e.responsable || '—') + '</td>' +
+        '</tr>';
+    }).join('');
+
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">' + Componentes.escaparHtml(c.codigo) + ' — ' + Componentes.escaparHtml(c.titulo) + '</h3>' +
+        '<p>' + Componentes.badge(ESTADO_COBERTURA_ETIQUETA[c.estado] || c.estado, ESTADO_COBERTURA_TONO[c.estado] || 'neutro') + '</p>' +
+        '<p class="sigso-ayuda">' + Componentes.escaparHtml(c.resumen) + '</p>' +
+        (c.nota ? Componentes.alerta(c.nota, 'aviso') : '') +
+        (filas
+          ? '<table class="sigso-tabla">' +
+              '<thead><tr><th>Tipo</th><th>Descripción</th><th>Fecha</th><th>Responsable</th></tr></thead>' +
+              '<tbody>' + filas + '</tbody>' +
+            '</table>'
+          : '') +
+        '<div class="sigso-modal__acciones">' +
+          Componentes.boton({ texto: 'Cerrar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+          Componentes.boton({ texto: '⬇ Descargar evidencia (PDF)', clase: 'js-sgc-descargar-evidencia', tipo: 'button' }) +
+        '</div>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    fondo.querySelector('.js-sgc-descargar-evidencia').addEventListener('click', function (evento) {
+      var boton = evento.currentTarget;
+      var textoOriginal = boton.textContent;
+      boton.disabled = true; boton.textContent = 'Generando...';
+      api_('descargarEvidenciaClausulaSgc', { codigo: c.codigo }).then(function (respuesta) {
+        boton.disabled = false; boton.textContent = textoOriginal;
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo generar el PDF.', tipo: 'error' });
+          return;
+        }
+        descargarBase64Pdf_(respuesta.data.pdf_base64, respuesta.data.filename);
+      });
+    });
+  }
+
+  // Mismo patron que descargarOrdenTrabajo_ (detalle.js): base64 -> Blob ->
+  // descarga, sin lo cual un binario que llega por llamarApi no se puede bajar.
+  function descargarBase64Pdf_(base64, filename) {
+    var bytes = atob(base64);
+    var buffer = new Uint8Array(bytes.length);
+    for (var i = 0; i < bytes.length; i++) buffer[i] = bytes.charCodeAt(i);
+    var blob = new Blob([buffer], { type: 'application/pdf' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'evidencia.pdf';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
   // --- utilidades -------------------------------------------------------------

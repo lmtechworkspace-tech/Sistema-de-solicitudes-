@@ -271,7 +271,12 @@ var BACKOFFICE_ACTIONS = {
   guardarObjetivoSgc: handleGuardarObjetivoSgc_,
   sugerirLecturaObjetivoSgc: handleSugerirLecturaObjetivoSgc_,
   registrarLecturaObjetivoSgc: handleRegistrarLecturaObjetivoSgc_,
-  anularLecturaObjetivoSgc: handleAnularLecturaObjetivoSgc_
+  anularLecturaObjetivoSgc: handleAnularLecturaObjetivoSgc_,
+
+  // v10.0 Fase 6b: matriz de cobertura ISO + "modo auditoria".
+  listarMatrizCoberturaSgc: handleListarMatrizCoberturaSgc_,
+  getDetalleClausulaCoberturaSgc: handleGetDetalleClausulaCoberturaSgc_,
+  descargarEvidenciaClausulaSgc: handleDescargarEvidenciaClausulaSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -505,7 +510,15 @@ var MODULO_POR_ACCION = {
   guardarObjetivoSgc: 'calidad',
   sugerirLecturaObjetivoSgc: 'calidad',
   registrarLecturaObjetivoSgc: 'calidad',
-  anularLecturaObjetivoSgc: 'calidad'
+  anularLecturaObjetivoSgc: 'calidad',
+
+  // v10.0 Fase 6b: matriz de cobertura ISO + "modo auditoria". Es de solo
+  // lectura del lado del gate coarse -- el fino (auditor externo incluido)
+  // lo resuelve veTodoSgc_ adentro del modulo, mismo criterio que el resto
+  // del SGC.
+  listarMatrizCoberturaSgc: ['calidad', 'gerencia'],
+  getDetalleClausulaCoberturaSgc: ['calidad', 'gerencia'],
+  descargarEvidenciaClausulaSgc: ['calidad', 'gerencia']
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -1326,6 +1339,19 @@ function handleRegistrarLecturaObjetivoSgc_(data, contexto) {
 
 function handleAnularLecturaObjetivoSgc_(data, contexto) {
   return responderResultado_(Objetivos.anularLectura(data, contexto));
+}
+
+// v10.0 Fase 6b: matriz de cobertura ISO + "modo auditoria".
+function handleListarMatrizCoberturaSgc_(data, contexto) {
+  return responderResultado_(MatrizCobertura.listar(data, contexto));
+}
+
+function handleGetDetalleClausulaCoberturaSgc_(data, contexto) {
+  return responderResultado_(MatrizCobertura.getDetalle(data, contexto));
+}
+
+function handleDescargarEvidenciaClausulaSgc_(data, contexto) {
+  return responderResultado_(MatrizCobertura.descargarEvidencia(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

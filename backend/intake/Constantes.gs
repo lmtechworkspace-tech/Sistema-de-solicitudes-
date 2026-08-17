@@ -484,7 +484,14 @@ var COLUMNAS = {
     'archivo_id', 'archivo_nombre', 'archivo_mime',
     'creado_por', 'fecha_creacion', 'activa',
     // v10.0 Fase 1b: ver la nota identica en backend/backoffice/Constantes.gs.
-    'requiere_acuse', 'fecha_limite_acuse'
+    'requiere_acuse', 'fecha_limite_acuse',
+
+    // v10.0 Fase 6b: clausulas ISO 9001 que este documento sustenta como
+    // evidencia (JSON de codigos, ej. '["5.2","7.5"]'). Lo etiqueta el
+    // Encargado SGC -- SIGSO no adivina que documento es la politica de
+    // calidad o el mapa de procesos, eso lo sabe quien conoce sus propios
+    // documentos.
+    'clausulas_iso'
   ],
   SGC_DOC_VERSIONES: [
     'version_id', 'documento_id', 'version', 'cambios',

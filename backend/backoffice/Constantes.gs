@@ -553,7 +553,14 @@ var COLUMNAS = {
     // v10.0 Fase 1b: aditivas al final (mismo criterio de siempre).
     // requiere_acuse: si el personal debe confirmar que lo conoce.
     // fecha_limite_acuse: plazo para confirmarlo (opcional).
-    'requiere_acuse', 'fecha_limite_acuse'
+    'requiere_acuse', 'fecha_limite_acuse',
+
+    // v10.0 Fase 6b: clausulas ISO 9001 que este documento sustenta como
+    // evidencia (JSON de codigos, ej. '["5.2","7.5"]'). Lo etiqueta el
+    // Encargado SGC -- SIGSO no adivina que documento es la politica de
+    // calidad o el mapa de procesos, eso lo sabe quien conoce sus propios
+    // documentos.
+    'clausulas_iso'
   ],
   // Append-only: una fila por version subida. La vigente tambien queda
   // aqui (vigente=true), asi el historial es completo y auditable sin

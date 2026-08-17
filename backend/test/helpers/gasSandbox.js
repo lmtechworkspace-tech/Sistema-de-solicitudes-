@@ -195,6 +195,9 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // horasFormacionPorPersonaSgc_ de Personas.gs y encargadosSgc_ de
   // Auditorias.gs, asi que va despues de ambos.
   'Objetivos.gs',
+  // v10.0 Fase 6b: matriz de cobertura ISO. Usa CLAUSULAS_ISO9001 de
+  // Auditorias.gs y datos de casi todos los modulos SGC ya cargados.
+  'MatrizCobertura.gs',
   'Triggers.gs',
   'Code.gs'
 ];
