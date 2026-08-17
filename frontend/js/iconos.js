@@ -74,7 +74,12 @@ var Iconos = (function () {
     menu: '<path d="M3 6h18M3 12h18M3 18h18"/>',
     sol: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
     luna: '<path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/>',
-    colapsar: '<path d="M9 3v18"/><path d="M15 9l-3 3 3 3"/><rect x="3" y="3" width="18" height="18" rx="2"/>'
+    colapsar: '<path d="M9 3v18"/><path d="M15 9l-3 3 3 3"/><rect x="3" y="3" width="18" height="18" rx="2"/>',
+
+    // v10.0 Fase 2 (rediseno visual del modulo Calidad): objetivos de
+    // calidad (una meta -> diana) y cobertura ISO (conformidad -> escudo).
+    diana: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
+    escudo: '<path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/>'
   };
 
   /**

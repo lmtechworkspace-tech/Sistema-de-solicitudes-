@@ -2998,8 +2998,67 @@
   overflow-x: auto;
   max-width: 100%;
   scrollbar-width: thin;
+  align-items: center;
 }
 .sgc-secciones .sigso-tab { flex: 0 0 auto; }
+
+/* v10.0 Fase 2 (rediseno visual): la barra deja de ser 11 botones planos --
+   se agrupa por sentido (Documentacion/Personas/Procesos/Direccion/
+   Administracion), cada grupo con una etiqueta muda chiquita y separador.
+   Los botones antes no tenian NINGUN estilo propio (heredaban el boton por
+   defecto del navegador); ahora son pildoras con icono, igual que el resto
+   de la navegacion de SIGSO (plataforma.js). */
+.sgc-nav-grupo {
+  display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto;
+}
+.sgc-nav-grupo__label {
+  font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--texto-3); padding: 0 var(--esp-2) 0 var(--esp-1); white-space: nowrap;
+}
+.sgc-nav-separador {
+  width: 1px; height: 1.5rem; background: var(--borde); margin: 0 var(--esp-2); flex: 0 0 auto;
+}
+.sgc-secciones .js-sgc-seccion {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: .4rem .8rem; border-radius: 999px; border: 1px solid transparent;
+  background: transparent; color: var(--texto-2); font-weight: 600;
+  font-size: var(--texto-sm); cursor: pointer; white-space: nowrap;
+  transition: background .15s, color .15s;
+}
+.sgc-secciones .js-sgc-seccion:hover { background: var(--superficie-2); color: var(--texto); }
+.sgc-secciones .js-sgc-seccion.sigso-tab--activo { background: var(--primario); color: #fff; }
+.sgc-secciones .js-sgc-seccion .sigso-ico { flex: 0 0 auto; }
+
+/* Sub-nav de Accesos (Personas/Matriz/Confidenciales): mismas pildoras, un
+   punto mas chicas, sin icono -- vive DENTRO de un grupo ya identificado. */
+.sgc-subnav-accesos .js-acc-vista {
+  display: inline-flex; align-items: center; padding: .35rem .75rem;
+  border-radius: 999px; border: 1px solid transparent; background: transparent;
+  color: var(--texto-2); font-weight: 600; font-size: var(--texto-sm); cursor: pointer;
+  white-space: nowrap; transition: background .15s, color .15s;
+}
+.sgc-subnav-accesos .js-acc-vista:hover { background: var(--superficie-2); color: var(--texto); }
+.sgc-subnav-accesos .js-acc-vista.sigso-tab--activo { background: var(--primario); color: #fff; }
+
+/* v10.0 Fase 2: tablero de KPIs sobre el listado de Documentos -- lo
+   primero que se ve al entrar a Calidad, para que se sienta un puesto de
+   trabajo y no una lista plana. */
+.sgc-kpis-tablero {
+  display: grid; gap: var(--esp-3); margin: var(--esp-3) 0 var(--esp-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+}
+.sgc-kpi-tablero {
+  background: var(--superficie); border: 1px solid var(--borde);
+  border-left: 3px solid var(--borde); border-radius: var(--radio-md);
+  padding: var(--esp-3) var(--esp-4);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.sgc-kpi-tablero__valor { font-size: 1.5rem; font-weight: 800; color: var(--texto); line-height: 1.1; }
+.sgc-kpi-tablero__etiqueta { font-size: var(--texto-xs); color: var(--texto-3); }
+.sgc-kpi-tablero--ok { border-left-color: var(--ok); }
+.sgc-kpi-tablero--ok .sgc-kpi-tablero__valor { color: var(--ok); }
+.sgc-kpi-tablero--alerta { border-left-color: var(--alerta); }
+.sgc-kpi-tablero--alerta .sgc-kpi-tablero__valor { color: var(--alerta); }
 
 /* v10.0 "Centro de Control de Accesos": sub-navegacion dentro de Accesos
    (Personas / Matriz de distribucion / Confidenciales). Mismo criterio de

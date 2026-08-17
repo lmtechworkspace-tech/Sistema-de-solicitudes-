@@ -3604,8 +3604,67 @@ button {
   overflow-x: auto;
   max-width: 100%;
   scrollbar-width: thin;
+  align-items: center;
 }
 .sgc-secciones .sigso-tab { flex: 0 0 auto; }
+
+/* v10.0 Fase 2 (rediseno visual): la barra deja de ser 11 botones planos --
+   se agrupa por sentido (Documentacion/Personas/Procesos/Direccion/
+   Administracion), cada grupo con una etiqueta muda chiquita y separador.
+   Los botones antes no tenian NINGUN estilo propio (heredaban el boton por
+   defecto del navegador); ahora son pildoras con icono, igual que el resto
+   de la navegacion de SIGSO (plataforma.js). */
+.sgc-nav-grupo {
+  display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto;
+}
+.sgc-nav-grupo__label {
+  font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--texto-3); padding: 0 var(--esp-2) 0 var(--esp-1); white-space: nowrap;
+}
+.sgc-nav-separador {
+  width: 1px; height: 1.5rem; background: var(--borde); margin: 0 var(--esp-2); flex: 0 0 auto;
+}
+.sgc-secciones .js-sgc-seccion {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: .4rem .8rem; border-radius: 999px; border: 1px solid transparent;
+  background: transparent; color: var(--texto-2); font-weight: 600;
+  font-size: var(--texto-sm); cursor: pointer; white-space: nowrap;
+  transition: background .15s, color .15s;
+}
+.sgc-secciones .js-sgc-seccion:hover { background: var(--superficie-2); color: var(--texto); }
+.sgc-secciones .js-sgc-seccion.sigso-tab--activo { background: var(--primario); color: #fff; }
+.sgc-secciones .js-sgc-seccion .sigso-ico { flex: 0 0 auto; }
+
+/* Sub-nav de Accesos (Personas/Matriz/Confidenciales): mismas pildoras, un
+   punto mas chicas, sin icono -- vive DENTRO de un grupo ya identificado. */
+.sgc-subnav-accesos .js-acc-vista {
+  display: inline-flex; align-items: center; padding: .35rem .75rem;
+  border-radius: 999px; border: 1px solid transparent; background: transparent;
+  color: var(--texto-2); font-weight: 600; font-size: var(--texto-sm); cursor: pointer;
+  white-space: nowrap; transition: background .15s, color .15s;
+}
+.sgc-subnav-accesos .js-acc-vista:hover { background: var(--superficie-2); color: var(--texto); }
+.sgc-subnav-accesos .js-acc-vista.sigso-tab--activo { background: var(--primario); color: #fff; }
+
+/* v10.0 Fase 2: tablero de KPIs sobre el listado de Documentos -- lo
+   primero que se ve al entrar a Calidad, para que se sienta un puesto de
+   trabajo y no una lista plana. */
+.sgc-kpis-tablero {
+  display: grid; gap: var(--esp-3); margin: var(--esp-3) 0 var(--esp-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+}
+.sgc-kpi-tablero {
+  background: var(--superficie); border: 1px solid var(--borde);
+  border-left: 3px solid var(--borde); border-radius: var(--radio-md);
+  padding: var(--esp-3) var(--esp-4);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.sgc-kpi-tablero__valor { font-size: 1.5rem; font-weight: 800; color: var(--texto); line-height: 1.1; }
+.sgc-kpi-tablero__etiqueta { font-size: var(--texto-xs); color: var(--texto-3); }
+.sgc-kpi-tablero--ok { border-left-color: var(--ok); }
+.sgc-kpi-tablero--ok .sgc-kpi-tablero__valor { color: var(--ok); }
+.sgc-kpi-tablero--alerta { border-left-color: var(--alerta); }
+.sgc-kpi-tablero--alerta .sgc-kpi-tablero__valor { color: var(--alerta); }
 
 /* v10.0 "Centro de Control de Accesos": sub-navegacion dentro de Accesos
    (Personas / Matriz de distribucion / Confidenciales). Mismo criterio de
@@ -6519,7 +6578,12 @@ var Iconos = (function () {
     menu: '<path d="M3 6h18M3 12h18M3 18h18"/>',
     sol: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
     luna: '<path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/>',
-    colapsar: '<path d="M9 3v18"/><path d="M15 9l-3 3 3 3"/><rect x="3" y="3" width="18" height="18" rx="2"/>'
+    colapsar: '<path d="M9 3v18"/><path d="M15 9l-3 3 3 3"/><rect x="3" y="3" width="18" height="18" rx="2"/>',
+
+    // v10.0 Fase 2 (rediseno visual del modulo Calidad): objetivos de
+    // calidad (una meta -> diana) y cobertura ISO (conformidad -> escudo).
+    diana: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
+    escudo: '<path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/>'
   };
 
   /**
@@ -13206,36 +13270,61 @@ var Iconos = (function () {
     }
   }
 
+  // v10.0 Fase 2 (rediseno visual): la barra de 11 pestanas planas se
+  // reagrupa en 4 clusters con sentido (Documentacion/Personas/Procesos/
+  // Direccion) + un cluster de Administracion para Accesos. Cada boton lleva
+  // icono (antes no tenia ninguno) para escanear la barra sin leer texto.
+  var GRUPOS_SECCIONES_SGC = [
+    { label: 'Documentación', items: [
+      { id: 'documentos', texto: 'Documentos', icono: 'documento' }
+    ] },
+    { label: 'Personas', items: [
+      { id: 'personas', texto: 'Personas', icono: 'persona' },
+      { id: 'capacitaciones', texto: 'Capacitaciones', icono: 'caja' }
+    ] },
+    { label: 'Procesos', items: [
+      { id: 'nc', texto: 'No conformidades', icono: 'alerta' },
+      { id: 'auditorias', texto: 'Auditorías', icono: 'lupa' },
+      { id: 'quejas', texto: 'Quejas', icono: 'comentario' },
+      { id: 'proveedores', texto: 'Proveedores', icono: 'empresa' }
+    ] },
+    { label: 'Dirección', items: [
+      { id: 'revision', texto: 'Revisión por la dirección', icono: 'estado' },
+      { id: 'objetivos', texto: 'Objetivos de calidad', icono: 'diana' },
+      { id: 'cobertura', texto: 'Cobertura ISO', icono: 'escudo' }
+    ] },
+    { label: 'Administración', items: [
+      { id: 'accesos', texto: 'Accesos', icono: 'llave' }
+    ] }
+  ];
+
   // Barra de secciones del modulo. Las pestanas que se muestran dependen de
   // lo que la persona puede abrir (seccionesVisibles_, que llega del backend
   // en listarDocumentos). Asi un operativo no ve pestanas de gobierno que
   // igual le darian "sin acceso", y solo el admin ve "Accesos".
   function barraSecciones_() {
-    var todas = [
-      { id: 'documentos', texto: 'Documentos' },
-      { id: 'personas', texto: 'Personas' },
-      { id: 'capacitaciones', texto: 'Capacitaciones' },
-      { id: 'nc', texto: 'No conformidades' },
-      { id: 'auditorias', texto: 'Auditorías' },
-      { id: 'quejas', texto: 'Quejas' },
-      { id: 'proveedores', texto: 'Proveedores' },
-      { id: 'revision', texto: 'Revisión por la dirección' },
-      { id: 'objetivos', texto: 'Objetivos de calidad' },
-      { id: 'cobertura', texto: 'Cobertura ISO' },
-      { id: 'accesos', texto: 'Accesos' }
-    ];
     // Si aun no llego el mapa (no deberia: siempre se entra por Documentos),
     // se muestra todo menos Accesos -- el backend igual bloquea cada seccion.
     var vis = seccionesVisibles_;
-    var secciones = todas.filter(function (s) {
-      if (s.id === 'documentos' || s.id === 'personas') return true;
-      if (!vis) return s.id !== 'accesos';
-      return vis[s.id] === true;
-    });
-    return '<div class="sigso-tabs sgc-secciones">' + secciones.map(function (s) {
-      return '<button type="button" class="sigso-tab js-sgc-seccion' +
-        (s.id === seccionActiva_ ? ' sigso-tab--activo' : '') + '" data-sec="' + s.id + '">' + s.texto + '</button>';
-    }).join('') + '</div>';
+    var grupos = GRUPOS_SECCIONES_SGC.map(function (g) {
+      var items = g.items.filter(function (s) {
+        if (s.id === 'documentos' || s.id === 'personas') return true;
+        if (!vis) return s.id !== 'accesos';
+        return vis[s.id] === true;
+      });
+      if (!items.length) return '';
+      return '<span class="sgc-nav-grupo">' +
+        '<span class="sgc-nav-grupo__label">' + g.label + '</span>' +
+        items.map(function (s) {
+          return '<button type="button" class="sigso-tab js-sgc-seccion' +
+            (s.id === seccionActiva_ ? ' sigso-tab--activo' : '') + '" data-sec="' + s.id + '">' +
+            Iconos.svg(s.icono, { tam: 15 }) + '<span>' + s.texto + '</span></button>';
+        }).join('') +
+      '</span>';
+    }).filter(function (html) { return html; });
+    return '<div class="sigso-tabs sgc-secciones">' +
+      grupos.join('<span class="sgc-nav-separador" aria-hidden="true"></span>') +
+      '</div>';
   }
 
   function wireSecciones_(cont) {
@@ -13333,7 +13422,25 @@ var Iconos = (function () {
           'Ábrelos y marca "Enterado".', 'aviso')
       : '';
 
-    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+    // v10.0 Fase 2 (rediseno visual): tablero de 3 KPIs sobre lo que esta
+    // persona puede ver -- no varia con los filtros de la lista de abajo
+    // (viene de "resumen", calculado en el backend ANTES de aplicarlos).
+    var r = data.resumen || {};
+    var kpis = '<div class="sgc-kpis-tablero">' +
+      '<div class="sgc-kpi-tablero"><span class="sgc-kpi-tablero__valor">' + (r.total || 0) + '</span>' +
+        '<span class="sgc-kpi-tablero__etiqueta">Documentos a tu alcance</span></div>' +
+      '<div class="sgc-kpi-tablero sgc-kpi-tablero--ok"><span class="sgc-kpi-tablero__valor">' + (r.vigentes || 0) + '</span>' +
+        '<span class="sgc-kpi-tablero__etiqueta">Vigentes</span></div>' +
+      (data.pendientes_de_acuse
+        ? '<div class="sgc-kpi-tablero sgc-kpi-tablero--alerta"><span class="sgc-kpi-tablero__valor">' + data.pendientes_de_acuse + '</span>' +
+            '<span class="sgc-kpi-tablero__etiqueta">Por confirmar</span></div>'
+        : '<div class="sgc-kpi-tablero sgc-kpi-tablero--ok"><span class="sgc-kpi-tablero__valor">✓</span>' +
+            '<span class="sgc-kpi-tablero__etiqueta">Al día con tus confirmaciones</span></div>') +
+      (puedeGestionar_ ? '<div class="sgc-kpi-tablero"><span class="sgc-kpi-tablero__valor">' + (r.obsoletos || 0) + '</span>' +
+        '<span class="sgc-kpi-tablero__etiqueta">Obsoletos (archivo)</span></div>' : '') +
+    '</div>';
+
+    var cabecera = barraSecciones_() + kpis + '<div class="sgc-cabecera">' +
       '<p class="sigso-ayuda">Listado maestro: los documentos vigentes del SGC que te corresponden. ' +
         'Tu rol: <b>' + Componentes.escaparHtml(ROL_SGC_ETIQUETA[data.rol_sgc] || data.rol_sgc) + '</b>.</p>' +
       (puedeGestionar_ ? Componentes.boton({ texto: '+ Cargar documento', clase: 'js-sgc-nuevo' }) : '') +

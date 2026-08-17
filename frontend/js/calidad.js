@@ -52,36 +52,61 @@
     }
   }
 
+  // v10.0 Fase 2 (rediseno visual): la barra de 11 pestanas planas se
+  // reagrupa en 4 clusters con sentido (Documentacion/Personas/Procesos/
+  // Direccion) + un cluster de Administracion para Accesos. Cada boton lleva
+  // icono (antes no tenia ninguno) para escanear la barra sin leer texto.
+  var GRUPOS_SECCIONES_SGC = [
+    { label: 'Documentación', items: [
+      { id: 'documentos', texto: 'Documentos', icono: 'documento' }
+    ] },
+    { label: 'Personas', items: [
+      { id: 'personas', texto: 'Personas', icono: 'persona' },
+      { id: 'capacitaciones', texto: 'Capacitaciones', icono: 'caja' }
+    ] },
+    { label: 'Procesos', items: [
+      { id: 'nc', texto: 'No conformidades', icono: 'alerta' },
+      { id: 'auditorias', texto: 'Auditorías', icono: 'lupa' },
+      { id: 'quejas', texto: 'Quejas', icono: 'comentario' },
+      { id: 'proveedores', texto: 'Proveedores', icono: 'empresa' }
+    ] },
+    { label: 'Dirección', items: [
+      { id: 'revision', texto: 'Revisión por la dirección', icono: 'estado' },
+      { id: 'objetivos', texto: 'Objetivos de calidad', icono: 'diana' },
+      { id: 'cobertura', texto: 'Cobertura ISO', icono: 'escudo' }
+    ] },
+    { label: 'Administración', items: [
+      { id: 'accesos', texto: 'Accesos', icono: 'llave' }
+    ] }
+  ];
+
   // Barra de secciones del modulo. Las pestanas que se muestran dependen de
   // lo que la persona puede abrir (seccionesVisibles_, que llega del backend
   // en listarDocumentos). Asi un operativo no ve pestanas de gobierno que
   // igual le darian "sin acceso", y solo el admin ve "Accesos".
   function barraSecciones_() {
-    var todas = [
-      { id: 'documentos', texto: 'Documentos' },
-      { id: 'personas', texto: 'Personas' },
-      { id: 'capacitaciones', texto: 'Capacitaciones' },
-      { id: 'nc', texto: 'No conformidades' },
-      { id: 'auditorias', texto: 'Auditorías' },
-      { id: 'quejas', texto: 'Quejas' },
-      { id: 'proveedores', texto: 'Proveedores' },
-      { id: 'revision', texto: 'Revisión por la dirección' },
-      { id: 'objetivos', texto: 'Objetivos de calidad' },
-      { id: 'cobertura', texto: 'Cobertura ISO' },
-      { id: 'accesos', texto: 'Accesos' }
-    ];
     // Si aun no llego el mapa (no deberia: siempre se entra por Documentos),
     // se muestra todo menos Accesos -- el backend igual bloquea cada seccion.
     var vis = seccionesVisibles_;
-    var secciones = todas.filter(function (s) {
-      if (s.id === 'documentos' || s.id === 'personas') return true;
-      if (!vis) return s.id !== 'accesos';
-      return vis[s.id] === true;
-    });
-    return '<div class="sigso-tabs sgc-secciones">' + secciones.map(function (s) {
-      return '<button type="button" class="sigso-tab js-sgc-seccion' +
-        (s.id === seccionActiva_ ? ' sigso-tab--activo' : '') + '" data-sec="' + s.id + '">' + s.texto + '</button>';
-    }).join('') + '</div>';
+    var grupos = GRUPOS_SECCIONES_SGC.map(function (g) {
+      var items = g.items.filter(function (s) {
+        if (s.id === 'documentos' || s.id === 'personas') return true;
+        if (!vis) return s.id !== 'accesos';
+        return vis[s.id] === true;
+      });
+      if (!items.length) return '';
+      return '<span class="sgc-nav-grupo">' +
+        '<span class="sgc-nav-grupo__label">' + g.label + '</span>' +
+        items.map(function (s) {
+          return '<button type="button" class="sigso-tab js-sgc-seccion' +
+            (s.id === seccionActiva_ ? ' sigso-tab--activo' : '') + '" data-sec="' + s.id + '">' +
+            Iconos.svg(s.icono, { tam: 15 }) + '<span>' + s.texto + '</span></button>';
+        }).join('') +
+      '</span>';
+    }).filter(function (html) { return html; });
+    return '<div class="sigso-tabs sgc-secciones">' +
+      grupos.join('<span class="sgc-nav-separador" aria-hidden="true"></span>') +
+      '</div>';
   }
 
   function wireSecciones_(cont) {
@@ -179,7 +204,25 @@
           'Ábrelos y marca "Enterado".', 'aviso')
       : '';
 
-    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+    // v10.0 Fase 2 (rediseno visual): tablero de 3 KPIs sobre lo que esta
+    // persona puede ver -- no varia con los filtros de la lista de abajo
+    // (viene de "resumen", calculado en el backend ANTES de aplicarlos).
+    var r = data.resumen || {};
+    var kpis = '<div class="sgc-kpis-tablero">' +
+      '<div class="sgc-kpi-tablero"><span class="sgc-kpi-tablero__valor">' + (r.total || 0) + '</span>' +
+        '<span class="sgc-kpi-tablero__etiqueta">Documentos a tu alcance</span></div>' +
+      '<div class="sgc-kpi-tablero sgc-kpi-tablero--ok"><span class="sgc-kpi-tablero__valor">' + (r.vigentes || 0) + '</span>' +
+        '<span class="sgc-kpi-tablero__etiqueta">Vigentes</span></div>' +
+      (data.pendientes_de_acuse
+        ? '<div class="sgc-kpi-tablero sgc-kpi-tablero--alerta"><span class="sgc-kpi-tablero__valor">' + data.pendientes_de_acuse + '</span>' +
+            '<span class="sgc-kpi-tablero__etiqueta">Por confirmar</span></div>'
+        : '<div class="sgc-kpi-tablero sgc-kpi-tablero--ok"><span class="sgc-kpi-tablero__valor">✓</span>' +
+            '<span class="sgc-kpi-tablero__etiqueta">Al día con tus confirmaciones</span></div>') +
+      (puedeGestionar_ ? '<div class="sgc-kpi-tablero"><span class="sgc-kpi-tablero__valor">' + (r.obsoletos || 0) + '</span>' +
+        '<span class="sgc-kpi-tablero__etiqueta">Obsoletos (archivo)</span></div>' : '') +
+    '</div>';
+
+    var cabecera = barraSecciones_() + kpis + '<div class="sgc-cabecera">' +
       '<p class="sigso-ayuda">Listado maestro: los documentos vigentes del SGC que te corresponden. ' +
         'Tu rol: <b>' + Componentes.escaparHtml(ROL_SGC_ETIQUETA[data.rol_sgc] || data.rol_sgc) + '</b>.</p>' +
       (puedeGestionar_ ? Componentes.boton({ texto: '+ Cargar documento', clase: 'js-sgc-nuevo' }) : '') +

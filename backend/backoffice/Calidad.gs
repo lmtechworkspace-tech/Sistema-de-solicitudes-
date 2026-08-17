@@ -43,6 +43,15 @@ var Calidad = {
       return puedeVerDocumento_(d, contexto, rol, area, gobierna, destinatarios);
     });
 
+    // v10.0 "Tablero": conteos SOBRE LO VISIBLE PARA ESTA PERSONA, antes de
+    // aplicar tipo/estado/busqueda -- para que el resumen de arriba no varie
+    // cuando la persona solo esta filtrando la lista de abajo.
+    var resumen = {
+      total: visibles.length,
+      vigentes: visibles.filter(function (d) { return d.estado === 'VIGENTE'; }).length,
+      obsoletos: visibles.filter(function (d) { return d.estado === 'OBSOLETO'; }).length
+    };
+
     if (filtros.tipo) {
       visibles = visibles.filter(function (d) { return d.tipo === filtros.tipo; });
     }
@@ -77,6 +86,7 @@ var Calidad = {
       // que la persona no puede abrir (el backend igual bloquea cada una).
       secciones_visibles: seccionesVisiblesSgc_(contexto),
       pendientes_de_acuse: Object.keys(pendientesMios).length,
+      resumen: resumen,
       // v10.0 Fase 6b: mismo catalogo que expone Auditorias.gs -- para que
       // el formulario de documento pueda ofrecer el selector de clausulas
       // ISO sin duplicar la lista en el frontend.
