@@ -45,15 +45,19 @@
       if (objetivoActivoId_) abrirObjetivo_(objetivoActivoId_); else cargarObjetivos_();
     } else if (seccionActiva_ === 'cobertura') {
       cargarCobertura_();
+    } else if (seccionActiva_ === 'accesos') {
+      cargarAccesos_();
     } else {
       if (documentoActivoId_) abrirDocumento_(documentoActivoId_); else cargarListado_();
     }
   }
 
-  // Barra de secciones del modulo. Documentos y Personas son los dos
-  // submodulos del SGC que existen hoy (PRO-01 y PRO-02).
+  // Barra de secciones del modulo. Las pestanas que se muestran dependen de
+  // lo que la persona puede abrir (seccionesVisibles_, que llega del backend
+  // en listarDocumentos). Asi un operativo no ve pestanas de gobierno que
+  // igual le darian "sin acceso", y solo el admin ve "Accesos".
   function barraSecciones_() {
-    var secciones = [
+    var todas = [
       { id: 'documentos', texto: 'Documentos' },
       { id: 'personas', texto: 'Personas' },
       { id: 'capacitaciones', texto: 'Capacitaciones' },
@@ -63,8 +67,17 @@
       { id: 'proveedores', texto: 'Proveedores' },
       { id: 'revision', texto: 'Revisión por la dirección' },
       { id: 'objetivos', texto: 'Objetivos de calidad' },
-      { id: 'cobertura', texto: 'Cobertura ISO' }
+      { id: 'cobertura', texto: 'Cobertura ISO' },
+      { id: 'accesos', texto: 'Accesos' }
     ];
+    // Si aun no llego el mapa (no deberia: siempre se entra por Documentos),
+    // se muestra todo menos Accesos -- el backend igual bloquea cada seccion.
+    var vis = seccionesVisibles_;
+    var secciones = todas.filter(function (s) {
+      if (s.id === 'documentos' || s.id === 'personas') return true;
+      if (!vis) return s.id !== 'accesos';
+      return vis[s.id] === true;
+    });
     return '<div class="sigso-tabs sgc-secciones">' + secciones.map(function (s) {
       return '<button type="button" class="sigso-tab js-sgc-seccion' +
         (s.id === seccionActiva_ ? ' sigso-tab--activo' : '') + '" data-sec="' + s.id + '">' + s.texto + '</button>';
@@ -110,6 +123,10 @@
   var TIPOS = ['DOC', 'PRO', 'INS', 'FO', 'EXTERNO'];
 
   var seccionActiva_ = 'documentos';
+  // v10.0 "Accesos SGC": mapa de secciones que la persona puede abrir. Llega
+  // del backend en listarDocumentos; hasta entonces null (barraSecciones_ lo
+  // maneja). Controla que pestanas se muestran.
+  var seccionesVisibles_ = null;
   var documentoActivoId_ = null;
   var personaActivaId_ = null;
   var ncActivaId_ = null;
@@ -142,6 +159,7 @@
         return;
       }
       puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      if (respuesta.data.secciones_visibles) seccionesVisibles_ = respuesta.data.secciones_visibles;
       pintarListado_(cont, respuesta.data);
     }).catch(function () {
       cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar los documentos.', 'error');
@@ -4858,6 +4876,222 @@
     a.click();
     document.body.removeChild(a);
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  // --- Accesos SGC (admin-only) -----------------------------------------------
+  // El panel de "quién ve qué". Exclusivo del administrador: repartir accesos
+  // es el poder más sensible del módulo. El rol define las secciones; la
+  // visibilidad del documento define los documentos; los datos personales son
+  // siempre solo-propios. Nada de esto se marca casilla-por-casilla.
+
+  function cargarAccesos_() {
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando accesos...');
+    api_('listarAccesosSgc', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = barraSecciones_() +
+          Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el panel de accesos.', 'error');
+        wireSecciones_(cont);
+        return;
+      }
+      pintarAccesos_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
+      wireSecciones_(cont);
+    });
+  }
+
+  function etiquetaRolAcceso_(clave, roles) {
+    if (!clave) return 'Sin rol · solo documentos generales';
+    var r = (roles || []).filter(function (x) { return x.clave === clave; })[0];
+    return r ? r.etiqueta : clave;
+  }
+
+  function pintarAccesos_(cont, data) {
+    var cuentas = data.cuentas || [];
+    var areas = data.areas || [];
+    var roles = data.roles || [];
+    var enr = data.enrolamiento || {};
+    var areaNombre = {};
+    areas.forEach(function (a) { areaNombre[a.area_id] = a.nombre; });
+
+    var intro = barraSecciones_() +
+      '<p class="sigso-ayuda">Aquí defines qué ve cada persona en Calidad. El <b>rol</b> decide las secciones y el alcance; ' +
+      'los documentos confidenciales se restringen documento por documento (al cargarlos o editarlos). ' +
+      'Este panel es exclusivo del administrador.</p>';
+
+    // Catalogo de roles, auto-explicativo (evidencia de "acceso por rol").
+    var catRoles = '<details class="sgc-roles-ref"><summary>Qué ve cada rol</summary><ul class="sgc-items">' +
+      roles.map(function (r) {
+        return '<li><b>' + Componentes.escaparHtml(r.etiqueta) + ':</b> ' + Componentes.escaparHtml(r.descripcion) + '</li>';
+      }).join('') + '</ul></details>';
+
+    // Avisos de enrolamiento para el go-live.
+    var avisos = '';
+    if ((enr.personas_sin_cuenta || []).length) {
+      avisos += Componentes.alerta((enr.personas_sin_cuenta.length) + ' persona(s) del alcance del SGC todavía no tienen cuenta para entrar: ' +
+        enr.personas_sin_cuenta.map(function (p) { return p.nombre; }).join(', ') + '.', 'aviso');
+    }
+    if ((enr.roles_sin_cuenta || []).length) {
+      avisos += Componentes.alerta((enr.roles_sin_cuenta.length) + ' rol(es) asignado(s) a un correo sin cuenta activa (residuo a limpiar): ' +
+        enr.roles_sin_cuenta.map(function (r) { return r.email; }).join(', ') + '.', 'aviso');
+    }
+
+    var filas = cuentas.map(function (c) {
+      var rolTxt = etiquetaRolAcceso_(c.rol_sgc, roles);
+      var areaTxt = c.area_id ? (areaNombre[c.area_id] || c.area_id) : '—';
+      var venc = c.vigencia_hasta ? ' · vence ' + fechaCorta_(c.vigencia_hasta) : '';
+      return '<tr>' +
+        '<td>' + Componentes.escaparHtml(c.nombre) + '<br><span class="sigso-ayuda">' + Componentes.escaparHtml(c.email) + '</span></td>' +
+        '<td>' + Componentes.escaparHtml(rolTxt) + Componentes.escaparHtml(venc) + '</td>' +
+        '<td>' + Componentes.escaparHtml(areaTxt) + '</td>' +
+        '<td>' +
+          '<button type="button" class="sigso-boton sigso-boton--sutil js-acc-editar" data-email="' + Componentes.escaparHtml(c.email) + '">Asignar rol</button> ' +
+          '<button type="button" class="sigso-boton sigso-boton--sutil js-acc-previa" data-email="' + Componentes.escaparHtml(c.email) + '">¿Qué ve?</button>' +
+          (c.rol_id ? ' <button type="button" class="sigso-boton sigso-boton--sutil js-acc-quitar" data-rolid="' + Componentes.escaparHtml(c.rol_id) + '" data-email="' + Componentes.escaparHtml(c.email) + '">Quitar</button>' : '') +
+        '</td>' +
+        '</tr>';
+    }).join('');
+
+    cont.innerHTML = intro + catRoles + avisos +
+      '<table class="sigso-tabla"><thead><tr>' +
+        '<th>Persona</th><th>Rol en el SGC</th><th>Área</th><th></th>' +
+      '</tr></thead><tbody>' + filas + '</tbody></table>';
+
+    wireSecciones_(cont);
+    cont.querySelectorAll('.js-acc-editar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var c = cuentas.filter(function (x) { return x.email === btn.getAttribute('data-email'); })[0];
+        abrirFormularioAcceso_(c, data);
+      });
+    });
+    cont.querySelectorAll('.js-acc-previa').forEach(function (btn) {
+      btn.addEventListener('click', function () { previsualizarAcceso_(btn.getAttribute('data-email'), data); });
+    });
+    cont.querySelectorAll('.js-acc-quitar').forEach(function (btn) {
+      btn.addEventListener('click', function () { quitarAcceso_(btn.getAttribute('data-rolid'), btn.getAttribute('data-email')); });
+    });
+  }
+
+  function abrirFormularioAcceso_(cuenta, data) {
+    var roles = data.roles || [];
+    var areas = data.areas || [];
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Rol de ' + Componentes.escaparHtml(cuenta.nombre) + '</h3>' +
+        '<p class="sigso-ayuda">' + Componentes.escaparHtml(cuenta.email) + '</p>' +
+        '<form id="form-acc">' +
+          '<label class="sigso-campo"><span class="sigso-campo__label">Rol en el SGC</span>' +
+            '<select id="acc-rol" class="sigso-select">' +
+              '<option value="">Sin rol (solo documentos generales)</option>' +
+              roles.map(function (r) {
+                return '<option value="' + r.clave + '"' + (r.clave === cuenta.rol_sgc ? ' selected' : '') + '>' +
+                  Componentes.escaparHtml(r.etiqueta) + '</option>';
+              }).join('') +
+            '</select>' +
+          '</label>' +
+          '<label class="sigso-campo"><span class="sigso-campo__label">Área (define qué documentos "de área" ve)</span>' +
+            '<select id="acc-area" class="sigso-select">' +
+              '<option value="">Sin área</option>' +
+              areas.map(function (a) {
+                return '<option value="' + Componentes.escaparHtml(a.area_id) + '"' + (a.area_id === cuenta.area_id ? ' selected' : '') + '>' +
+                  Componentes.escaparHtml(a.nombre) + '</option>';
+              }).join('') +
+            '</select>' +
+          '</label>' +
+          Componentes.campoTexto({ id: 'acc-vigencia', label: 'Vence el (solo para auditor externo, opcional)', tipo: 'date', valor: fechaISO_(cuenta.vigencia_hasta) }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-acc').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var rol = document.getElementById('acc-rol').value;
+      if (!rol) {
+        // "Sin rol" = quitar el acceso SGC (vuelve a ver solo lo general).
+        if (!cuenta.rol_id) { cerrar(); return; }
+        api_('gestionarRolSgc', { accion: 'quitar', rol_id: cuenta.rol_id }).then(function (r) {
+          if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo quitar.', tipo: 'error' }); return; }
+          cerrar(); cargarAccesos_();
+        });
+        return;
+      }
+      api_('gestionarRolSgc', {
+        usuario_email: cuenta.email,
+        rol_sgc: rol,
+        area_id: document.getElementById('acc-area').value,
+        vigencia_hasta: document.getElementById('acc-vigencia').value
+      }).then(function (r) {
+        if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo guardar.', tipo: 'error' }); return; }
+        cerrar(); cargarAccesos_();
+      });
+    });
+  }
+
+  function quitarAcceso_(rolId, email) {
+    Componentes.confirmar({
+      titulo: 'Quitar acceso',
+      mensaje: 'La persona volverá a ver solo los documentos de acceso general. No se borra nada de su ficha.'
+    }).then(function (ok) {
+      if (!ok) return;
+      api_('gestionarRolSgc', { accion: 'quitar', rol_id: rolId }).then(function (r) {
+        if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo quitar.', tipo: 'error' }); return; }
+        cargarAccesos_();
+      });
+    });
+  }
+
+  var SECCION_ACCESO_ETIQUETA = {
+    documentos: 'Documentos', personas: 'Personas (su ficha)', capacitaciones: 'Capacitaciones',
+    nc: 'No conformidades', auditorias: 'Auditorías', quejas: 'Quejas', proveedores: 'Proveedores',
+    revision: 'Revisión por la dirección', objetivos: 'Objetivos de calidad', cobertura: 'Cobertura ISO'
+  };
+
+  function previsualizarAcceso_(email, data) {
+    api_('previsualizarAccesoSgc', { email: email }).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo previsualizar.', tipo: 'error' });
+        return;
+      }
+      var d = respuesta.data;
+      var secc = d.secciones || {};
+      var seccionesTxt = Object.keys(SECCION_ACCESO_ETIQUETA)
+        .filter(function (k) { return secc[k] === true; })
+        .map(function (k) { return SECCION_ACCESO_ETIQUETA[k]; });
+
+      var docs = (d.documentos || []).length
+        ? '<ul class="sgc-items">' + d.documentos.map(function (x) {
+            return '<li>' + Componentes.escaparHtml(x.codigo) + ' — ' + Componentes.escaparHtml(x.nombre) +
+              ' <span class="sigso-ayuda">(' + Componentes.escaparHtml(x.visibilidad) + ')</span></li>';
+          }).join('') + '</ul>'
+        : '<p class="sigso-ayuda">Ningún documento (solo vería lo que se marque como acceso general o se le asigne).</p>';
+
+      var fondo = document.createElement('div');
+      fondo.className = 'sigso-modal-fondo';
+      fondo.innerHTML =
+        '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+          '<h3 class="sigso-modal__titulo">Qué vería ' + Componentes.escaparHtml(email) + '</h3>' +
+          '<p class="sigso-ayuda">Asumiendo cuenta de personal (no gerencia/admin del sistema).</p>' +
+          '<dl class="sgc-ficha">' +
+            campoFicha_('Rol en el SGC', etiquetaRolAcceso_(d.rol_sgc, (data && data.roles) || [])) +
+            campoFicha_('Fichas de personas', d.personas_scope) +
+            campoFicha_('Secciones que puede abrir', seccionesTxt.join(' · ')) +
+          '</dl>' +
+          '<h4 class="sgc-subtitulo">Documentos que vería (' + (d.total_documentos || 0) + ')</h4>' +
+          docs +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cerrar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+          '</div>' +
+        '</div>';
+      montarModal_(fondo);
+    });
   }
 
   // --- utilidades -------------------------------------------------------------

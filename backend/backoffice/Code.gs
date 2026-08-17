@@ -192,6 +192,9 @@ var BACKOFFICE_ACTIONS = {
   descargarDocumentoSgc: handleDescargarDocumentoSgc_,
   listarRolesSgc: handleListarRolesSgc_,
   gestionarRolSgc: handleGestionarRolSgc_,
+  // v10.0 "Accesos SGC": panel admin-only de "quien ve que".
+  listarAccesosSgc: handleListarAccesosSgc_,
+  previsualizarAccesoSgc: handlePrevisualizarAccesoSgc_,
   // v10.0 Fase 1b: acuse de recibo (evidencia de ISO §7.5.3).
   acusarDocumentoSgc: handleAcusarDocumentoSgc_,
   getCumplimientoDocumentoSgc: handleGetCumplimientoDocumentoSgc_,
@@ -418,6 +421,8 @@ var MODULO_POR_ACCION = {
   actualizarDocumentoSgc: 'calidad',
   listarRolesSgc: 'calidad',
   gestionarRolSgc: 'calidad',
+  listarAccesosSgc: 'calidad',
+  previsualizarAccesoSgc: 'calidad',
   // v10.0 Fase 1b: confirmar la lectura es del personal (mismo gate de
   // lectura); ver quien falta es gestion (Calidad.gs lo acota a ENCARGADO_SGC/ADM).
   acusarDocumentoSgc: ['calidad', 'gerencia'],
@@ -1063,6 +1068,14 @@ function handleListarRolesSgc_(data, contexto) {
 
 function handleGestionarRolSgc_(data, contexto) {
   return responderResultado_(Calidad.gestionarRol(data, contexto));
+}
+
+function handleListarAccesosSgc_(data, contexto) {
+  return responderResultado_(Calidad.listarAccesos(data, contexto));
+}
+
+function handlePrevisualizarAccesoSgc_(data, contexto) {
+  return responderResultado_(Calidad.previsualizarAcceso(data, contexto));
 }
 
 function handleAcusarDocumentoSgc_(data, contexto) {

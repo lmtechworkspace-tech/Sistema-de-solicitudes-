@@ -73,6 +73,9 @@ var Calidad = {
     return {
       puede_gestionar: gobierna,
       rol_sgc: rol || 'OPERATIVO',
+      // v10.0 "Accesos SGC": el frontend usa esto para no mostrar pestanas
+      // que la persona no puede abrir (el backend igual bloquea cada una).
+      secciones_visibles: seccionesVisiblesSgc_(contexto),
       pendientes_de_acuse: Object.keys(pendientesMios).length,
       // v10.0 Fase 6b: mismo catalogo que expone Auditorias.gs -- para que
       // el formulario de documento pueda ofrecer el selector de clausulas
@@ -442,15 +445,17 @@ var Calidad = {
 
   // --- Roles del SGC --------------------------------------------------------
   listarRoles: function (data, contexto) {
-    if (!gobiernaSgc_(contexto, rolSgc_(contexto))) {
-      return { _forbidden: true, message: 'Solo el Encargado SGC o un administrador pueden ver los roles del SGC.' };
+    // v10.0 "Accesos SGC": repartir accesos es admin-only (mas estricto que
+    // gobiernaSgc_ a proposito -- ver esAdminSgc_).
+    if (!esAdminSgc_(contexto)) {
+      return { _forbidden: true, message: 'Solo el administrador del sistema puede ver los accesos del SGC.' };
     }
     return leerFilasSeguro_(SHEETS.SGC_ROLES).filter(esVerdaderoActivoSgc_);
   },
 
   gestionarRol: function (data, contexto) {
-    if (!gobiernaSgc_(contexto, rolSgc_(contexto))) {
-      return { _forbidden: true, message: 'Solo el Encargado SGC o un administrador pueden gestionar los roles del SGC.' };
+    if (!esAdminSgc_(contexto)) {
+      return { _forbidden: true, message: 'Solo el administrador del sistema puede asignar accesos del SGC.' };
     }
     if (data.accion === 'quitar') {
       if (!data.rol_id) return errorValidacion_('rol_id', 'Falta indicar el rol.');
@@ -481,7 +486,99 @@ var Calidad = {
       fecha_creacion: new Date().toISOString()
     };
     agregarFila_(SHEETS.SGC_ROLES, fila);
+    registrarLogSgc_('SGC_ACCESO_ASIGNADO', data.rol_sgc + ' -> ' + email, contexto);
     return fila;
+  },
+
+  // v10.0 "Accesos SGC": el panel admin-only de "quien ve que". Cruza las
+  // cuentas reales (portal + Google) con su rol SGC y su area, mas el
+  // catalogo de roles/areas y un chequeo de enrolamiento para el go-live.
+  listarAccesos: function (data, contexto) {
+    if (!esAdminSgc_(contexto)) {
+      return { _forbidden: true, message: 'Solo el administrador del sistema puede administrar los accesos del SGC.' };
+    }
+    var rolesPorEmail = {};
+    leerFilasSeguro_(SHEETS.SGC_ROLES).filter(esVerdaderoActivoSgc_).forEach(function (r) {
+      rolesPorEmail[normalizarEmailSgc_(r.usuario_email)] = r;
+    });
+
+    var cuentas = directorioPersonalActivo_().map(function (p) {
+      var r = rolesPorEmail[normalizarEmailSgc_(p.email)];
+      return {
+        email: p.email,
+        nombre: p.nombre,
+        rol_sgc: r ? r.rol_sgc : '',
+        area_id: r ? (r.area_id || '') : '',
+        vigencia_hasta: r ? (r.vigencia_hasta || '') : '',
+        rol_id: r ? r.rol_id : ''
+      };
+    }).sort(function (a, b) { return String(a.nombre || '').localeCompare(String(b.nombre || '')); });
+
+    // Enrolamiento para el go-live: personas del alcance del SGC
+    // (SGC_PERSONAS) que todavia no tienen cuenta con que entrar, y roles
+    // asignados a un correo que ya no tiene cuenta activa (residuo a limpiar).
+    var emailsCuenta = {};
+    cuentas.forEach(function (c) { emailsCuenta[normalizarEmailSgc_(c.email)] = true; });
+    var personasSinCuenta = leerFilasSeguro_(SHEETS.SGC_PERSONAS)
+      .filter(function (p) { return esActivoSgc_(p) && p.estado !== 'DESVINCULADO' && p.usuario_email; })
+      .filter(function (p) { return !emailsCuenta[normalizarEmailSgc_(p.usuario_email)]; })
+      .map(function (p) { return { nombre: p.nombre, email: p.usuario_email }; });
+    var rolesSinCuenta = leerFilasSeguro_(SHEETS.SGC_ROLES).filter(esVerdaderoActivoSgc_)
+      .filter(function (r) { return !emailsCuenta[normalizarEmailSgc_(r.usuario_email)]; })
+      .map(function (r) { return { email: r.usuario_email, rol_sgc: r.rol_sgc }; });
+
+    return {
+      cuentas: cuentas,
+      areas: leerFilasSeguro_(SHEETS.CAT_AREAS).filter(esVerdaderoActivoSgc_)
+        .map(function (a) { return { area_id: a.area_id, nombre: a.nombre }; }),
+      roles: catalogoRolesSgc_(),
+      enrolamiento: { personas_sin_cuenta: personasSinCuenta, roles_sin_cuenta: rolesSinCuenta }
+    };
+  },
+
+  // "¿Que veria esta persona?" -- calcula, para un correo dado, los
+  // documentos y secciones que alcanzaria ANTES de activarle nada. Es la red
+  // de seguridad del go-live (y le encanta al auditor). Admin-only.
+  previsualizarAcceso: function (data, contexto) {
+    if (!esAdminSgc_(contexto)) {
+      return { _forbidden: true, message: 'Solo el administrador del sistema puede previsualizar accesos.' };
+    }
+    var email = normalizarEmailSgc_(data && data.email);
+    if (!email) return errorValidacion_('email', 'Indica la cuenta a previsualizar.');
+
+    // Contexto sintetico: la persona como PERSONAL (rol SIGSO neutro, no
+    // admin/gerencia). Es el caso que importa para "el operativo no ve lo
+    // ajeno" -- si ademas fuera GERENCIA de SIGSO veria mas, pero eso ya lo
+    // sabe el admin y no es lo que se esta verificando aca.
+    var ctx = { email: email, rol: '' };
+    var rol = rolSgc_(ctx);
+    var area = areaSgc_(ctx);
+    var gobierna = gobiernaSgc_(ctx, rol);
+    var veTodo = veTodoSgc_(ctx, rol, gobierna);
+    var destinatarios = leerFilasSeguro_(SHEETS.SGC_DOC_DESTINATARIOS);
+
+    var docs = leerFilasSeguro_(SHEETS.SGC_DOCUMENTOS).filter(esActivoSgc_)
+      .filter(function (d) { return puedeVerDocumento_(d, ctx, rol, area, gobierna, destinatarios); })
+      .map(function (d) { return { codigo: d.codigo, nombre: d.nombre, visibilidad: d.visibilidad }; })
+      .sort(function (a, b) { return String(a.codigo || '').localeCompare(String(b.codigo || '')); });
+
+    var personasScope;
+    if (veTodo) {
+      personasScope = 'todas las fichas';
+    } else {
+      var equipo = obtenerEquipoJefe_(email) || [];
+      personasScope = equipo.length ? ('su propia ficha + su equipo (' + equipo.length + ')') : 'solo su propia ficha';
+    }
+
+    return {
+      email: email,
+      rol_sgc: rol || '',
+      area_id: area || '',
+      documentos: docs,
+      total_documentos: docs.length,
+      personas_scope: personasScope,
+      secciones: seccionesVisiblesSgc_(ctx)
+    };
   }
 };
 
@@ -698,6 +795,58 @@ function gobiernaSgc_(contexto, rol) {
   return ROLES_SGC_GESTION.indexOf(rol) !== -1;
 }
 
+// v10.0 "Accesos SGC": gate ESTRICTO, solo el administrador de SIGSO. Es
+// deliberadamente mas cerrado que gobiernaSgc_: repartir accesos (quien ve
+// que) es el poder mas sensible del modulo, y el cliente pidio que sea
+// exclusivo de su cuenta -- ni siquiera un ENCARGADO_SGC puede hacerlo. Asi
+// se separan dos poderes que antes iban juntos: gestionar el CONTENIDO
+// (documentos, NC, etc. -> gobiernaSgc_) vs gestionar los ACCESOS (-> esto).
+function esAdminSgc_(contexto) {
+  return !!contexto && contexto.rol === 'ADM';
+}
+
+// Que SECCIONES del modulo puede abrir esta persona. El principio: el rol
+// define las secciones, la visibilidad del documento define los documentos,
+// y los datos personales son siempre solo-propios (o de equipo para una
+// jefatura). Un operativo ve Documentos + su ficha, y solo las NC /
+// auditorias / quejas donde figura. El resto (gobierno del SGC) es de
+// gestion. El backend YA bloquea cada seccion por su cuenta; esto es lo que
+// permite al frontend no mostrar pestanas que igual darian "sin acceso".
+function seccionesVisiblesSgc_(contexto) {
+  var rol = rolSgc_(contexto);
+  var gobierna = gobiernaSgc_(contexto, rol);
+  var veTodo = veTodoSgc_(contexto, rol, gobierna);
+  var esAdmin = esAdminSgc_(contexto);
+  var email = normalizarEmailSgc_(contexto && contexto.email);
+
+  // NC / auditorias / quejas: quien gestiona las ve todas; el resto ve una
+  // pestana solo si tiene al menos una donde figura (asi el operativo sin
+  // nada asignado no ve pestanas vacias). El detalle de cada una lo sigue
+  // filtrando su propio modulo.
+  function tieneAlgunaAsignada_(hoja, campos) {
+    if (veTodo) return true;
+    if (!email) return false;
+    return leerFilasSeguro_(hoja).some(function (fila) {
+      if (!esVerdaderoSgc_(fila.activa)) return false;
+      return campos.some(function (c) { return normalizarEmailSgc_(fila[c]) === email; });
+    });
+  }
+
+  return {
+    documentos: true,
+    personas: true,
+    nc: tieneAlgunaAsignada_(SHEETS.SGC_NC, ['responsable_email', 'detectada_por']),
+    auditorias: tieneAlgunaAsignada_(SHEETS.SGC_AUDITORIAS, ['auditor_email']),
+    quejas: veTodo, // el flujo de quejas es de gestion; el solicitante externo no entra al modulo
+    capacitaciones: veTodo,
+    proveedores: veTodo,
+    revision: veTodo,
+    objetivos: veTodo,
+    cobertura: veTodo,
+    accesos: esAdmin
+  };
+}
+
 // Lectura total (incluye obsoletos): quien gobierna, mas Direccion,
 // Gerencia y el auditor externo vigente. GERENCIA de SIGSO tambien, por el
 // mismo criterio de solo-lectura transversal que el resto del sistema.
@@ -705,6 +854,22 @@ function veTodoSgc_(contexto, rol, gobierna) {
   if (gobierna) return true;
   if (contexto && contexto.rol === 'GERENCIA') return true;
   return ROLES_SGC_LECTURA_TOTAL.indexOf(rol) !== -1;
+}
+
+// v10.0 "Accesos SGC": los roles con etiqueta legible y una linea de que ve
+// cada uno -- para que el panel del admin sea auto-explicativo y quede como
+// evidencia de "el acceso esta definido por rol/responsabilidad" (lo que el
+// auditor espera). El orden va de menor a mayor alcance.
+function catalogoRolesSgc_() {
+  return [
+    { clave: 'OPERATIVO', etiqueta: 'Personal operativo', descripcion: 'Los documentos de acceso general y los de su área, su propia ficha, y solo las NC/auditorías donde figura. Nada más.' },
+    { clave: 'JEFATURA_AREA', etiqueta: 'Jefatura de área', descripcion: 'Lo del personal operativo y, además, las fichas de su equipo.' },
+    { clave: 'ENC_ADMIN', etiqueta: 'Encargada de Administración', descripcion: 'Personal operativo con foco administrativo (sin lectura total del SGC).' },
+    { clave: 'ENCARGADO_SGC', etiqueta: 'Encargado del SGC', descripcion: 'Gestiona todo el contenido del SGC (documentos, personas, NC, auditorías…). NO reparte accesos: eso es exclusivo del administrador.' },
+    { clave: 'DIRECCION', etiqueta: 'Dirección', descripcion: 'Lectura total del SGC, incluidos documentos obsoletos. No gestiona.' },
+    { clave: 'GERENCIA_ADM', etiqueta: 'Gerencia / Administración', descripcion: 'Lectura total del SGC. No gestiona.' },
+    { clave: 'AUDITOR_EXTERNO', etiqueta: 'Auditor externo', descripcion: 'Lectura total temporal (con fecha de vencimiento). No forma parte del personal ni acusa documentos.' }
+  ];
 }
 
 function puedeVerDocumento_(doc, contexto, rol, area, gobierna, destinatarios) {

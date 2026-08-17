@@ -477,6 +477,13 @@ var Personas = {
   listarCapacitaciones: function (data, contexto) {
     var rol = rolSgc_(contexto);
     var gobierna = gobiernaSgc_(contexto, rol);
+    // v10.0 "Accesos SGC": el programa de capacitaciones (con las horas de
+    // TODO el personal) es informacion de gestion. El personal ve SU propia
+    // formacion en su ficha (pestana Competencias), no aca -- asi no se
+    // filtra quien asistio a que a colegas que no gestionan el SGC.
+    if (!veTodoSgc_(contexto, rol, gobierna)) {
+      return { _forbidden: true, message: 'El programa de capacitaciones es del Encargado del SGC. Tu formación aparece en tu ficha, en Personas.' };
+    }
     var capacitaciones = leerFilasSeguro_(SHEETS.SGC_CAPACITACIONES).filter(esActivoSgc_);
     var asistentes = leerFilasSeguro_(SHEETS.SGC_CAPACITACION_ASISTENTES);
     var personas = leerFilasSeguro_(SHEETS.SGC_PERSONAS).filter(esActivoSgc_);
