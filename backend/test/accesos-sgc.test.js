@@ -178,3 +178,90 @@ test('Accesos: quitar un rol lo desactiva y la persona vuelve a ver solo lo gene
   assert.equal(previa.documentos.some(function (d) { return d.codigo === 'PRO-PREV'; }), false);
   assert.equal(previa.rol_sgc, '');
 });
+
+// --- v10.0 "Centro de Control de Accesos" ------------------------------------
+// Matriz de distribución, confidenciales, y la previsualización enriquecida
+// (confidencial/confirmado por documento, rol de sistema real).
+
+test('Centro de Control: getMatrizDistribucion y getDocumentosConfidenciales son admin-only', () => {
+  const ctx = loadConSchema();
+  sembrarEncargado(ctx);
+  assert.equal(toPlain(ctx.Calidad.getMatrizDistribucion({}, CTX_ENCARGADO))._forbidden, true);
+  assert.equal(toPlain(ctx.Calidad.getDocumentosConfidenciales({}, CTX_ENCARGADO))._forbidden, true);
+  assert.equal(toPlain(ctx.Calidad.getMatrizDistribucion({}, CTX_ANA))._forbidden, true);
+});
+
+test('Centro de Control: la matriz marca confirmado/pendiente/no-corresponde correctamente', () => {
+  const ctx = loadConSchema();
+  sembrarEncargado(ctx);
+  ctx.Calidad.gestionarRol({ usuario_email: 'ana@homepymes.cl', rol_sgc: 'OPERATIVO', area_id: 'PREVENCION' }, CTX_ADMIN);
+  ctx.Calidad.crearDocumento({ codigo: 'DOC-GEN', nombre: 'Manual general', tipo: 'DOC', visibilidad: 'TODOS' }, CTX_ENCARGADO);
+  ctx.Calidad.crearDocumento({ codigo: 'PRO-ADM', nombre: 'Procedimiento admin', tipo: 'PRO', visibilidad: 'AREA', area_id: 'ADMIN' }, CTX_ENCARGADO);
+
+  // Ana confirma el general.
+  ctx.Calidad.acusarDocumento({ documento_id: ctx.leerFilas_(ctx.SHEETS.SGC_DOCUMENTOS).filter(function (d) { return d.codigo === 'DOC-GEN'; })[0].documento_id }, CTX_ANA);
+
+  const matriz = toPlain(ctx.Calidad.getMatrizDistribucion({}, CTX_ADMIN));
+  const cols = matriz.documentos.map(function (d) { return d.codigo; });
+  const iGen = cols.indexOf('DOC-GEN');
+  const iAdm = cols.indexOf('PRO-ADM');
+  const filaAna = matriz.personas.filter(function (p) { return p.email === 'ana@homepymes.cl'; })[0];
+  assert.equal(filaAna.celdas[iGen].estado, 'confirmado', 've el general y ya confirmó');
+  assert.equal(filaAna.celdas[iAdm].estado, 'no', 'no le corresponde (es de otra área)');
+
+  const filaBruno = matriz.personas.filter(function (p) { return p.email === 'bruno@homepymes.cl'; })[0];
+  assert.equal(filaBruno.celdas[iGen].estado, 'pendiente', 've el general pero no ha confirmado');
+});
+
+test('Centro de Control: confidenciales lista exactamente quién está en cada documento SELECCION', () => {
+  const ctx = loadConSchema();
+  sembrarEncargado(ctx);
+  ctx.Calidad.crearDocumento({
+    codigo: 'FO-CONF', nombre: 'Formulario confidencial', tipo: 'FO', visibilidad: 'SELECCION',
+    destinatarios: ['ana@homepymes.cl']
+  }, CTX_ENCARGADO);
+  ctx.Calidad.crearDocumento({ codigo: 'DOC-GEN', nombre: 'Manual general', tipo: 'DOC', visibilidad: 'TODOS' }, CTX_ENCARGADO);
+
+  const conf = toPlain(ctx.Calidad.getDocumentosConfidenciales({}, CTX_ADMIN));
+  assert.equal(conf.length, 1, 'solo el documento SELECCION aparece, no el general');
+  assert.equal(conf[0].codigo, 'FO-CONF');
+  assert.deepEqual(conf[0].destinatarios.map(function (d) { return d.email; }), ['ana@homepymes.cl']);
+});
+
+test('Centro de Control: la previsualización marca confidencial/confirmado por documento y cuenta pendientes', () => {
+  const ctx = loadConSchema();
+  sembrarEncargado(ctx);
+  ctx.Calidad.gestionarRol({ usuario_email: 'ana@homepymes.cl', rol_sgc: 'OPERATIVO', area_id: 'PREVENCION' }, CTX_ADMIN);
+  ctx.Calidad.crearDocumento({
+    codigo: 'FO-CONF', nombre: 'Formulario confidencial', tipo: 'FO', visibilidad: 'SELECCION',
+    destinatarios: ['ana@homepymes.cl']
+  }, CTX_ENCARGADO);
+  ctx.Calidad.crearDocumento({ codigo: 'DOC-GEN', nombre: 'Manual general', tipo: 'DOC', visibilidad: 'TODOS' }, CTX_ENCARGADO);
+
+  var previa = toPlain(ctx.Calidad.previsualizarAcceso({ email: 'ana@homepymes.cl' }, CTX_ADMIN));
+  var conf = previa.documentos.filter(function (d) { return d.codigo === 'FO-CONF'; })[0];
+  var gen = previa.documentos.filter(function (d) { return d.codigo === 'DOC-GEN'; })[0];
+  assert.equal(conf.confidencial, true);
+  assert.equal(gen.confidencial, false);
+  assert.equal(conf.confirmado, false);
+  assert.equal(previa.pendientes_acuse, 2, 'ninguno de los dos documentos con acuse exigido está confirmado');
+
+  ctx.Calidad.acusarDocumento({ documento_id: ctx.leerFilas_(ctx.SHEETS.SGC_DOCUMENTOS).filter(function (d) { return d.codigo === 'FO-CONF'; })[0].documento_id }, CTX_ANA);
+  previa = toPlain(ctx.Calidad.previsualizarAcceso({ email: 'ana@homepymes.cl' }, CTX_ADMIN));
+  conf = previa.documentos.filter(function (d) { return d.codigo === 'FO-CONF'; })[0];
+  assert.equal(conf.confirmado, true);
+  assert.equal(previa.pendientes_acuse, 1);
+});
+
+test('Centro de Control: avisa cuando la cuenta además es ADM/GERENCIA de SIGSO (ve todo igual)', () => {
+  const ctx = loadConSchema();
+  sembrarEncargado(ctx);
+  ctx.agregarFila_(ctx.SHEETS.USUARIOS, { email: 'gerente@homepymes.cl', nombre: 'Gerente', rol: 'GERENCIA', activo: true });
+
+  var previaOperativa = toPlain(ctx.Calidad.previsualizarAcceso({ email: 'ana@homepymes.cl' }, CTX_ADMIN));
+  assert.equal(previaOperativa.acceso_amplio_sistema, false);
+
+  var previaGerencia = toPlain(ctx.Calidad.previsualizarAcceso({ email: 'gerente@homepymes.cl' }, CTX_ADMIN));
+  assert.equal(previaGerencia.rol_sistema, 'GERENCIA');
+  assert.equal(previaGerencia.acceso_amplio_sistema, true);
+});

@@ -3607,6 +3607,52 @@ button {
 }
 .sgc-secciones .sigso-tab { flex: 0 0 auto; }
 
+/* v10.0 "Centro de Control de Accesos": sub-navegacion dentro de Accesos
+   (Personas / Matriz de distribucion / Confidenciales). Mismo criterio de
+   scroll propio que .sgc-secciones, mas margen chico porque va debajo de la
+   barra principal, no reemplazandola. */
+.sgc-subnav-accesos {
+  overflow-x: auto; max-width: 100%; scrollbar-width: thin;
+  margin-top: calc(-1 * var(--esp-2)); margin-bottom: var(--esp-3);
+}
+.sgc-subnav-accesos .sigso-tab { flex: 0 0 auto; font-size: var(--texto-sm); }
+
+/* Matriz de distribucion: personas x documentos. Scrollea horizontal por
+   dentro (puede haber muchas columnas) sin sacar scroll a la pagina. */
+.sgc-matriz-scroll { overflow-x: auto; max-width: 100%; }
+.sgc-matriz { border-collapse: collapse; }
+.sgc-matriz th, .sgc-matriz td { text-align: center; white-space: nowrap; }
+.sgc-matriz td:first-child, .sgc-matriz th:first-child {
+  text-align: left; white-space: nowrap; position: sticky; left: 0;
+  background: var(--superficie); z-index: 1;
+}
+.sgc-matriz-codigo { font-family: var(--fuente-mono, monospace); font-size: var(--texto-xs); }
+.sgc-celda { width: 2.5rem; font-weight: 700; }
+.sgc-celda--ok { background: var(--ok-suave); color: var(--ok); }
+.sgc-celda--pendiente { background: var(--alerta-suave); color: var(--alerta); }
+.sgc-celda--no { color: var(--texto-3); }
+.sgc-celda--na { color: var(--texto-3); }
+.sgc-leyenda {
+  display: flex; gap: var(--esp-4); flex-wrap: wrap; margin-top: var(--esp-3);
+  font-size: var(--texto-xs); color: var(--texto-3); align-items: center;
+}
+.sgc-leyenda span { display: inline-flex; align-items: center; gap: var(--esp-1); }
+.sgc-leyenda .sgc-celda {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.25rem; height: 1.25rem; border-radius: 4px; padding: 0;
+}
+
+/* Confidenciales: una tarjeta por documento restringido, con su lista de
+   destinatarios -- para revisar de un vistazo que nadie sobra. */
+.sgc-confidenciales-grid {
+  display: grid; gap: var(--esp-3);
+  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+}
+.sgc-card-confidencial {
+  border: 1px solid var(--borde); border-radius: var(--radio-md);
+  padding: var(--esp-4); background: var(--superficie);
+}
+
 /* v9.3: filtros del portafolio (estado + salud) */
 .sigso-py-filtros {
   display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap; margin: var(--esp-3) 0 var(--esp-4);
@@ -17986,27 +18032,85 @@ var Iconos = (function () {
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
   }
 
-  // --- Accesos SGC (admin-only) -----------------------------------------------
+  // --- Accesos SGC / Centro de Control (admin-only) ---------------------------
   // El panel de "quién ve qué". Exclusivo del administrador: repartir accesos
   // es el poder más sensible del módulo. El rol define las secciones; la
   // visibilidad del documento define los documentos; los datos personales son
   // siempre solo-propios. Nada de esto se marca casilla-por-casilla.
+  //
+  // v10.0 "Centro de Control de Accesos": 3 vistas dentro de Accesos --
+  // Personas (asignar), Matriz de distribución (quién vio qué) y
+  // Confidenciales (quién está en cada lista restringida). "¿Qué ve?" abre
+  // la carpeta de acceso completa de una persona (previsualizarAcceso_).
+
+  var vistaAcceso_ = 'personas';
 
   function cargarAccesos_() {
     var cont = document.getElementById('calidad-contenido');
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando accesos...');
+    if (vistaAcceso_ === 'matriz') {
+      api_('getMatrizDistribucionSgc', {}).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          cont.innerHTML = barraSecciones_() + subNavAccesos_() +
+            Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar la matriz.', 'error');
+          wireSecciones_(cont); wireSubNavAccesos_(cont);
+          return;
+        }
+        pintarMatriz_(cont, respuesta.data);
+      }).catch(function () {
+        cont.innerHTML = barraSecciones_() + subNavAccesos_() + Componentes.alerta('No se pudo conectar.', 'error');
+        wireSecciones_(cont); wireSubNavAccesos_(cont);
+      });
+      return;
+    }
+    if (vistaAcceso_ === 'confidenciales') {
+      api_('getDocumentosConfidencialesSgc', {}).then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) {
+          cont.innerHTML = barraSecciones_() + subNavAccesos_() +
+            Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar la lista de confidenciales.', 'error');
+          wireSecciones_(cont); wireSubNavAccesos_(cont);
+          return;
+        }
+        pintarConfidenciales_(cont, respuesta.data);
+      }).catch(function () {
+        cont.innerHTML = barraSecciones_() + subNavAccesos_() + Componentes.alerta('No se pudo conectar.', 'error');
+        wireSecciones_(cont); wireSubNavAccesos_(cont);
+      });
+      return;
+    }
     api_('listarAccesosSgc', {}).then(function (respuesta) {
       if (!respuesta || !respuesta.ok) {
-        cont.innerHTML = barraSecciones_() +
+        cont.innerHTML = barraSecciones_() + subNavAccesos_() +
           Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el panel de accesos.', 'error');
-        wireSecciones_(cont);
+        wireSecciones_(cont); wireSubNavAccesos_(cont);
         return;
       }
       pintarAccesos_(cont, respuesta.data);
     }).catch(function () {
-      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
-      wireSecciones_(cont);
+      cont.innerHTML = barraSecciones_() + subNavAccesos_() + Componentes.alerta('No se pudo conectar.', 'error');
+      wireSecciones_(cont); wireSubNavAccesos_(cont);
+    });
+  }
+
+  function subNavAccesos_() {
+    var subs = [
+      { id: 'personas', texto: 'Personas' },
+      { id: 'matriz', texto: 'Matriz de distribución' },
+      { id: 'confidenciales', texto: 'Confidenciales' }
+    ];
+    return '<div class="sigso-tabs sigso-tabs--sub sgc-subnav-accesos">' + subs.map(function (s) {
+      return '<button type="button" class="sigso-tab js-acc-vista' +
+        (s.id === vistaAcceso_ ? ' sigso-tab--activo' : '') + '" data-vista="' + s.id + '">' + s.texto + '</button>';
+    }).join('') + '</div>';
+  }
+
+  function wireSubNavAccesos_(cont) {
+    cont.querySelectorAll('.js-acc-vista').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        vistaAcceso_ = btn.getAttribute('data-vista');
+        cargarAccesos_();
+      });
     });
   }
 
@@ -18024,10 +18128,10 @@ var Iconos = (function () {
     var areaNombre = {};
     areas.forEach(function (a) { areaNombre[a.area_id] = a.nombre; });
 
-    var intro = barraSecciones_() +
+    var intro = barraSecciones_() + subNavAccesos_() +
       '<p class="sigso-ayuda">Aquí defines qué ve cada persona en Calidad. El <b>rol</b> decide las secciones y el alcance; ' +
-      'los documentos confidenciales se restringen documento por documento (al cargarlos o editarlos). ' +
-      'Este panel es exclusivo del administrador.</p>';
+      'los documentos confidenciales se restringen documento por documento (al cargarlos o editarlos, o desde la pestaña ' +
+      '"Confidenciales"). Este panel es exclusivo del administrador.</p>';
 
     // Catalogo de roles, auto-explicativo (evidencia de "acceso por rol").
     var catRoles = '<details class="sgc-roles-ref"><summary>Qué ve cada rol</summary><ul class="sgc-items">' +
@@ -18068,6 +18172,7 @@ var Iconos = (function () {
       '</tr></thead><tbody>' + filas + '</tbody></table>';
 
     wireSecciones_(cont);
+    wireSubNavAccesos_(cont);
     cont.querySelectorAll('.js-acc-editar').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var c = cuentas.filter(function (x) { return x.email === btn.getAttribute('data-email'); })[0];
@@ -18080,6 +18185,85 @@ var Iconos = (function () {
     cont.querySelectorAll('.js-acc-quitar').forEach(function (btn) {
       btn.addEventListener('click', function () { quitarAcceso_(btn.getAttribute('data-rolid'), btn.getAttribute('data-email')); });
     });
+  }
+
+  // Matriz de distribución: personas x documentos vigentes, con el estado de
+  // cada celda. Responde "¿quién puede ver y quién ya confirmó?" de un
+  // vistazo -- evidencia de distribución (ISO §7.5.3) sin armarla a mano.
+  var CELDA_MATRIZ_TXT = { confirmado: '✓', pendiente: '○', no: '—', na: '·' };
+  var CELDA_MATRIZ_CLASE = { confirmado: 'sgc-celda--ok', pendiente: 'sgc-celda--pendiente', no: 'sgc-celda--no', na: 'sgc-celda--na' };
+  var CELDA_MATRIZ_TITULO = {
+    confirmado: 'Puede verlo y ya confirmó la lectura', pendiente: 'Puede verlo, aún no confirma',
+    no: 'No le corresponde', na: 'Puede verlo (no requiere confirmación)'
+  };
+
+  function pintarMatriz_(cont, data) {
+    var docs = data.documentos || [];
+    var personas = data.personas || [];
+    var intro = barraSecciones_() + subNavAccesos_() +
+      '<p class="sigso-ayuda">Quién puede ver y quién ya confirmó cada documento vigente. Es la evidencia de distribución para la auditoría (ISO §7.5.3).</p>';
+
+    if (!docs.length || !personas.length) {
+      cont.innerHTML = intro + Componentes.alerta('Aún no hay documentos vigentes o personal con cuenta para mostrar en la matriz.', 'info');
+      wireSecciones_(cont); wireSubNavAccesos_(cont);
+      return;
+    }
+
+    var encabezado = '<th>Persona</th>' + docs.map(function (d) {
+      return '<th title="' + Componentes.escaparHtml(d.nombre) + '"><span class="sgc-matriz-codigo">' + Componentes.escaparHtml(d.codigo) + '</span></th>';
+    }).join('');
+
+    var filas = personas.map(function (p) {
+      var celdas = (p.celdas || []).map(function (c) {
+        return '<td class="sgc-celda ' + (CELDA_MATRIZ_CLASE[c.estado] || '') + '" title="' + Componentes.escaparHtml(CELDA_MATRIZ_TITULO[c.estado] || '') + '">' +
+          (CELDA_MATRIZ_TXT[c.estado] || '') + '</td>';
+      }).join('');
+      return '<tr><td>' + Componentes.escaparHtml(p.nombre) + '</td>' + celdas + '</tr>';
+    }).join('');
+
+    var leyenda = '<div class="sgc-leyenda">' +
+      '<span><span class="sgc-celda sgc-celda--ok">✓</span> Confirmó la lectura</span>' +
+      '<span><span class="sgc-celda sgc-celda--pendiente">○</span> Puede verlo, falta confirmar</span>' +
+      '<span><span class="sgc-celda sgc-celda--na">·</span> Puede verlo (sin confirmación exigida)</span>' +
+      '<span><span class="sgc-celda sgc-celda--no">—</span> No le corresponde</span>' +
+      '</div>';
+
+    cont.innerHTML = intro +
+      '<div class="sgc-matriz-scroll"><table class="sigso-tabla sgc-matriz"><thead><tr>' + encabezado + '</tr></thead><tbody>' + filas + '</tbody></table></div>' +
+      leyenda;
+    wireSecciones_(cont);
+    wireSubNavAccesos_(cont);
+  }
+
+  // Confidenciales: cada documento SELECCION y exactamente quién está en su
+  // lista -- para revisar de un vistazo que nadie sobra.
+  function pintarConfidenciales_(cont, docs) {
+    docs = docs || [];
+    var intro = barraSecciones_() + subNavAccesos_() +
+      '<p class="sigso-ayuda">Documentos de acceso restringido a personas específicas, y quién está en cada lista.</p>';
+
+    if (!docs.length) {
+      cont.innerHTML = intro + Componentes.alerta('No hay documentos con visibilidad restringida a personas específicas.', 'info');
+      wireSecciones_(cont); wireSubNavAccesos_(cont);
+      return;
+    }
+
+    var tarjetas = docs.map(function (d) {
+      var lista = (d.destinatarios || []).length
+        ? '<ul class="sgc-items">' + d.destinatarios.map(function (x) {
+            return '<li>' + Componentes.escaparHtml(x.nombre) + ' <span class="sigso-ayuda">(' + Componentes.escaparHtml(x.email) + ')</span></li>';
+          }).join('') + '</ul>'
+        : '<p class="sigso-ayuda">Sin destinatarios asignados todavía.</p>';
+      return '<div class="sgc-card-confidencial">' +
+        '<h4 class="sgc-subtitulo"><span class="sgc-matriz-codigo">' + Componentes.escaparHtml(d.codigo) + '</span> ' + Componentes.escaparHtml(d.nombre) +
+        (d.estado === 'OBSOLETO' ? ' ' + Componentes.badge('Obsoleto', 'neutro') : '') + '</h4>' +
+        '<p class="sigso-ayuda">' + d.destinatarios.length + ' persona(s) con acceso</p>' + lista +
+        '</div>';
+    }).join('');
+
+    cont.innerHTML = intro + '<div class="sgc-confidenciales-grid">' + tarjetas + '</div>';
+    wireSecciones_(cont);
+    wireSubNavAccesos_(cont);
   }
 
   function abrirFormularioAcceso_(cuenta, data) {
@@ -18174,26 +18358,47 @@ var Iconos = (function () {
         .filter(function (k) { return secc[k] === true; })
         .map(function (k) { return SECCION_ACCESO_ETIQUETA[k]; });
 
+      // v10.0 "Centro de Control": si la cuenta ademas tiene un rol de SIGSO
+      // que le da lectura total (ADM/GERENCIA), lo de abajo se queda corto
+      // -- se avisa aparte en vez de simularlo como si no existiera.
+      var avisoAmplio = d.acceso_amplio_sistema
+        ? Componentes.alerta('Esta cuenta además es ' + (d.rol_sistema === 'ADM' ? 'Administradora' : 'Gerencia') +
+            ' de SIGSO: en la práctica ve TODO el SGC, más allá de lo que muestra esta previsualización.', 'aviso')
+        : '';
+
       var docs = (d.documentos || []).length
         ? '<ul class="sgc-items">' + d.documentos.map(function (x) {
+            var estadoAcuse = x.requiere_acuse
+              ? (x.confirmado ? Componentes.badge('Confirmado', 'ok') : Componentes.badge('Sin confirmar', 'alerta'))
+              : '';
             return '<li>' + Componentes.escaparHtml(x.codigo) + ' — ' + Componentes.escaparHtml(x.nombre) +
+              (x.confidencial ? ' ' + Componentes.badge('Confidencial', 'info') : '') + ' ' + estadoAcuse +
               ' <span class="sigso-ayuda">(' + Componentes.escaparHtml(x.visibilidad) + ')</span></li>';
           }).join('') + '</ul>'
         : '<p class="sigso-ayuda">Ningún documento (solo vería lo que se marque como acceso general o se le asigne).</p>';
+
+      var descargas = (d.descargas_recientes || []).length
+        ? '<ul class="sgc-items">' + d.descargas_recientes.map(function (l) {
+            return '<li>' + fechaCorta_(l.timestamp) + ' — ' + Componentes.escaparHtml(l.detalle) + '</li>';
+          }).join('') + '</ul>'
+        : '<p class="sigso-ayuda">Sin descargas registradas.</p>';
 
       var fondo = document.createElement('div');
       fondo.className = 'sigso-modal-fondo';
       fondo.innerHTML =
         '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
           '<h3 class="sigso-modal__titulo">Qué vería ' + Componentes.escaparHtml(email) + '</h3>' +
-          '<p class="sigso-ayuda">Asumiendo cuenta de personal (no gerencia/admin del sistema).</p>' +
+          avisoAmplio +
           '<dl class="sgc-ficha">' +
             campoFicha_('Rol en el SGC', etiquetaRolAcceso_(d.rol_sgc, (data && data.roles) || [])) +
             campoFicha_('Fichas de personas', d.personas_scope) +
             campoFicha_('Secciones que puede abrir', seccionesTxt.join(' · ')) +
+            campoFicha_('Documentos por confirmar', String(d.pendientes_acuse || 0)) +
           '</dl>' +
           '<h4 class="sgc-subtitulo">Documentos que vería (' + (d.total_documentos || 0) + ')</h4>' +
           docs +
+          '<h4 class="sgc-subtitulo">Últimas descargas</h4>' +
+          descargas +
           '<div class="sigso-modal__acciones">' +
             Componentes.boton({ texto: 'Cerrar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
           '</div>' +

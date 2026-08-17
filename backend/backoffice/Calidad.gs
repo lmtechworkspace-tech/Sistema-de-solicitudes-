@@ -536,9 +536,10 @@ var Calidad = {
     };
   },
 
-  // "¿Que veria esta persona?" -- calcula, para un correo dado, los
-  // documentos y secciones que alcanzaria ANTES de activarle nada. Es la red
-  // de seguridad del go-live (y le encanta al auditor). Admin-only.
+  // "¿Que veria esta persona?" -- la "carpeta de acceso" completa de una
+  // cuenta: rol, area, secciones, documentos (marcando los confidenciales y
+  // si ya los confirmo), alcance de fichas, y su historial de descargas.
+  // Es la red de seguridad del go-live (y le encanta al auditor). Admin-only.
   previsualizarAcceso: function (data, contexto) {
     if (!esAdminSgc_(contexto)) {
       return { _forbidden: true, message: 'Solo el administrador del sistema puede previsualizar accesos.' };
@@ -548,19 +549,35 @@ var Calidad = {
 
     // Contexto sintetico: la persona como PERSONAL (rol SIGSO neutro, no
     // admin/gerencia). Es el caso que importa para "el operativo no ve lo
-    // ajeno" -- si ademas fuera GERENCIA de SIGSO veria mas, pero eso ya lo
-    // sabe el admin y no es lo que se esta verificando aca.
+    // ajeno". Pero si la cuenta ADEMAS tiene un rol de SIGSO (ADM/GERENCIA)
+    // que le da lectura total, el "que ve" de aqui abajo se quedaria corto
+    // -- por eso se informa aparte con rol_sistema/acceso_amplio_sistema,
+    // en vez de simularlo como si no existiera.
     var ctx = { email: email, rol: '' };
     var rol = rolSgc_(ctx);
     var area = areaSgc_(ctx);
     var gobierna = gobiernaSgc_(ctx, rol);
     var veTodo = veTodoSgc_(ctx, rol, gobierna);
     var destinatarios = leerFilasSeguro_(SHEETS.SGC_DOC_DESTINATARIOS);
+    var acuses = leerFilasSeguro_(SHEETS.SGC_DOC_ACUSES).filter(function (a) {
+      return normalizarEmailSgc_(a.usuario_email) === email;
+    });
+    var acusoVersion = {};
+    acuses.forEach(function (a) { acusoVersion[a.documento_id + '::' + a.version] = a.acusado_en; });
 
     var docs = leerFilasSeguro_(SHEETS.SGC_DOCUMENTOS).filter(esActivoSgc_)
       .filter(function (d) { return puedeVerDocumento_(d, ctx, rol, area, gobierna, destinatarios); })
-      .map(function (d) { return { codigo: d.codigo, nombre: d.nombre, visibilidad: d.visibilidad }; })
+      .map(function (d) {
+        var requiereAcuse = esVerdaderoSgc_(d.requiere_acuse);
+        return {
+          codigo: d.codigo, nombre: d.nombre, visibilidad: d.visibilidad,
+          confidencial: d.visibilidad === 'SELECCION',
+          requiere_acuse: requiereAcuse,
+          confirmado: requiereAcuse ? !!acusoVersion[d.documento_id + '::' + d.version_vigente] : null
+        };
+      })
       .sort(function (a, b) { return String(a.codigo || '').localeCompare(String(b.codigo || '')); });
+    var pendientesAcuse = docs.filter(function (d) { return d.requiere_acuse && !d.confirmado; }).length;
 
     var personasScope;
     if (veTodo) {
@@ -570,15 +587,94 @@ var Calidad = {
       personasScope = equipo.length ? ('su propia ficha + su equipo (' + equipo.length + ')') : 'solo su propia ficha';
     }
 
+    var rolSistema = rolCuentaSigsoPorEmail_(email);
+
+    // Historial de descargas: registrarLogSgc_ escribe "<email> -> <detalle>"
+    // en LOG_SISTEMA con contexto SGC_DOC_DESCARGADO -- se lee el mismo
+    // formato, sin tocar el log (que es compartido con el resto de SIGSO).
+    var descargas = leerFilasSeguro_(SHEETS.LOG_SISTEMA).filter(function (l) {
+      return l.contexto === 'SGC_DOC_DESCARGADO' && normalizarEmailSgc_(String(l.mensaje || '').split(' → ')[0]) === email;
+    }).sort(function (a, b) { return String(b.timestamp || '').localeCompare(String(a.timestamp || '')); })
+      .slice(0, 15)
+      .map(function (l) { return { timestamp: l.timestamp, detalle: String(l.mensaje || '').split(' → ')[1] || '' }; });
+
     return {
       email: email,
       rol_sgc: rol || '',
       area_id: area || '',
+      rol_sistema: rolSistema || '',
+      acceso_amplio_sistema: rolSistema === 'ADM' || rolSistema === 'GERENCIA',
       documentos: docs,
       total_documentos: docs.length,
+      pendientes_acuse: pendientesAcuse,
       personas_scope: personasScope,
-      secciones: seccionesVisiblesSgc_(ctx)
+      secciones: seccionesVisiblesSgc_(ctx),
+      descargas_recientes: descargas
     };
+  },
+
+  // v10.0 "Centro de Control de Accesos": matriz personas x documentos.
+  // Responde de un vistazo "¿quien puede ver y quien ya confirmo cada
+  // documento vigente?" -- la evidencia de distribucion que pide ISO
+  // §7.5.3 y el tablero de control que el admin necesita para no tener que
+  // abrir documento por documento. Admin-only (mismo poder que Accesos).
+  getMatrizDistribucion: function (data, contexto) {
+    if (!esAdminSgc_(contexto)) {
+      return { _forbidden: true, message: 'Solo el administrador del sistema puede ver la matriz de distribución.' };
+    }
+    var destinatarios = leerFilasSeguro_(SHEETS.SGC_DOC_DESTINATARIOS);
+    var acuses = leerFilasSeguro_(SHEETS.SGC_DOC_ACUSES);
+    var docs = leerFilasSeguro_(SHEETS.SGC_DOCUMENTOS).filter(esActivoSgc_)
+      .filter(function (d) { return d.estado === 'VIGENTE'; })
+      .sort(function (a, b) { return String(a.codigo || '').localeCompare(String(b.codigo || '')); });
+
+    var filas = directorioPersonalActivo_().map(function (p) {
+      var email = normalizarEmailSgc_(p.email);
+      var ctx = { email: p.email, rol: '' };
+      var rol = rolSgc_(ctx);
+      var area = areaSgc_(ctx);
+      var gobierna = gobiernaSgc_(ctx, rol);
+      var celdas = docs.map(function (d) {
+        if (!puedeVerDocumento_(d, ctx, rol, area, gobierna, destinatarios)) return { estado: 'no' };
+        if (!esVerdaderoSgc_(d.requiere_acuse)) return { estado: 'na' };
+        var confirmado = acuses.some(function (a) {
+          return a.documento_id === d.documento_id && a.version === d.version_vigente &&
+            normalizarEmailSgc_(a.usuario_email) === email;
+        });
+        return { estado: confirmado ? 'confirmado' : 'pendiente' };
+      });
+      return { email: p.email, nombre: p.nombre, celdas: celdas };
+    }).sort(function (a, b) { return String(a.nombre || '').localeCompare(String(b.nombre || '')); });
+
+    return {
+      documentos: docs.map(function (d) { return { codigo: d.codigo, nombre: d.nombre }; }),
+      personas: filas
+    };
+  },
+
+  // v10.0 "Centro de Control de Accesos": todos los documentos de acceso
+  // restringido (SELECCION) y exactamente quien esta en cada lista -- para
+  // revisar de un vistazo que nadie sobra antes de abrir el modulo.
+  // Admin-only.
+  getDocumentosConfidenciales: function (data, contexto) {
+    if (!esAdminSgc_(contexto)) {
+      return { _forbidden: true, message: 'Solo el administrador del sistema puede ver esto.' };
+    }
+    var destinatarios = leerFilasSeguro_(SHEETS.SGC_DOC_DESTINATARIOS);
+    var nombrePorEmail = {};
+    directorioPersonalActivo_().forEach(function (p) { nombrePorEmail[normalizarEmailSgc_(p.email)] = p.nombre; });
+
+    return leerFilasSeguro_(SHEETS.SGC_DOCUMENTOS).filter(esActivoSgc_)
+      .filter(function (d) { return d.visibilidad === 'SELECCION'; })
+      .sort(function (a, b) { return String(a.codigo || '').localeCompare(String(b.codigo || '')); })
+      .map(function (d) {
+        var lista = destinatarios.filter(function (x) { return x.documento_id === d.documento_id; })
+          .map(function (x) {
+            var email = normalizarEmailSgc_(x.usuario_email);
+            return { email: x.usuario_email, nombre: nombrePorEmail[email] || x.usuario_email };
+          });
+        return { documento_id: d.documento_id, codigo: d.codigo, nombre: d.nombre, estado: d.estado, destinatarios: lista };
+      });
   }
 };
 
@@ -870,6 +966,26 @@ function catalogoRolesSgc_() {
     { clave: 'GERENCIA_ADM', etiqueta: 'Gerencia / Administración', descripcion: 'Lectura total del SGC. No gestiona.' },
     { clave: 'AUDITOR_EXTERNO', etiqueta: 'Auditor externo', descripcion: 'Lectura total temporal (con fecha de vencimiento). No forma parte del personal ni acusa documentos.' }
   ];
+}
+
+// Rol REAL de la cuenta SIGSO (ADM/GERENCIA/DEV/ANA/... o el rol de una
+// cuenta del portal) -- NO es el rol del SGC. Sirve para advertir en el
+// Centro de Control cuando una cuenta, ademas de lo que le toque en el SGC,
+// tiene un rol de SIGSO que igual le da lectura total (ADM ve todo por
+// gobiernaSgc_, GERENCIA por veTodoSgc_) -- la previsualizacion con
+// contexto neutro por si sola no lo cuenta.
+function rolCuentaSigsoPorEmail_(email) {
+  var norm = normalizarEmailSgc_(email);
+  if (!norm) return '';
+  var usuario = leerFilasSeguro_(SHEETS.USUARIOS).filter(function (r) {
+    return normalizarEmailSgc_(r.email) === norm && esVerdaderoActivoSgc_(r);
+  })[0];
+  if (usuario) return usuario.rol || '';
+  var cuenta = leerFilasSeguro_(SHEETS.CUENTAS_PORTAL).filter(function (c) {
+    if (!esVerdaderoActivoSgc_(c)) return false;
+    return parsearListaPortal_(c.emails).map(normalizarEmailSgc_).indexOf(norm) !== -1;
+  })[0];
+  return cuenta ? (cuenta.rol || '') : '';
 }
 
 function puedeVerDocumento_(doc, contexto, rol, area, gobierna, destinatarios) {

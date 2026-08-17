@@ -3001,6 +3001,52 @@
 }
 .sgc-secciones .sigso-tab { flex: 0 0 auto; }
 
+/* v10.0 "Centro de Control de Accesos": sub-navegacion dentro de Accesos
+   (Personas / Matriz de distribucion / Confidenciales). Mismo criterio de
+   scroll propio que .sgc-secciones, mas margen chico porque va debajo de la
+   barra principal, no reemplazandola. */
+.sgc-subnav-accesos {
+  overflow-x: auto; max-width: 100%; scrollbar-width: thin;
+  margin-top: calc(-1 * var(--esp-2)); margin-bottom: var(--esp-3);
+}
+.sgc-subnav-accesos .sigso-tab { flex: 0 0 auto; font-size: var(--texto-sm); }
+
+/* Matriz de distribucion: personas x documentos. Scrollea horizontal por
+   dentro (puede haber muchas columnas) sin sacar scroll a la pagina. */
+.sgc-matriz-scroll { overflow-x: auto; max-width: 100%; }
+.sgc-matriz { border-collapse: collapse; }
+.sgc-matriz th, .sgc-matriz td { text-align: center; white-space: nowrap; }
+.sgc-matriz td:first-child, .sgc-matriz th:first-child {
+  text-align: left; white-space: nowrap; position: sticky; left: 0;
+  background: var(--superficie); z-index: 1;
+}
+.sgc-matriz-codigo { font-family: var(--fuente-mono, monospace); font-size: var(--texto-xs); }
+.sgc-celda { width: 2.5rem; font-weight: 700; }
+.sgc-celda--ok { background: var(--ok-suave); color: var(--ok); }
+.sgc-celda--pendiente { background: var(--alerta-suave); color: var(--alerta); }
+.sgc-celda--no { color: var(--texto-3); }
+.sgc-celda--na { color: var(--texto-3); }
+.sgc-leyenda {
+  display: flex; gap: var(--esp-4); flex-wrap: wrap; margin-top: var(--esp-3);
+  font-size: var(--texto-xs); color: var(--texto-3); align-items: center;
+}
+.sgc-leyenda span { display: inline-flex; align-items: center; gap: var(--esp-1); }
+.sgc-leyenda .sgc-celda {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.25rem; height: 1.25rem; border-radius: 4px; padding: 0;
+}
+
+/* Confidenciales: una tarjeta por documento restringido, con su lista de
+   destinatarios -- para revisar de un vistazo que nadie sobra. */
+.sgc-confidenciales-grid {
+  display: grid; gap: var(--esp-3);
+  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+}
+.sgc-card-confidencial {
+  border: 1px solid var(--borde); border-radius: var(--radio-md);
+  padding: var(--esp-4); background: var(--superficie);
+}
+
 /* v9.3: filtros del portafolio (estado + salud) */
 .sigso-py-filtros {
   display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap; margin: var(--esp-3) 0 var(--esp-4);

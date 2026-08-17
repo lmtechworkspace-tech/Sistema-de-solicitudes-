@@ -195,6 +195,10 @@ var BACKOFFICE_ACTIONS = {
   // v10.0 "Accesos SGC": panel admin-only de "quien ve que".
   listarAccesosSgc: handleListarAccesosSgc_,
   previsualizarAccesoSgc: handlePrevisualizarAccesoSgc_,
+  // v10.0 "Centro de Control de Accesos": matriz de distribucion y
+  // documentos confidenciales -- ambas admin-only, mismo poder que Accesos.
+  getMatrizDistribucionSgc: handleGetMatrizDistribucionSgc_,
+  getDocumentosConfidencialesSgc: handleGetDocumentosConfidencialesSgc_,
   // v10.0 Fase 1b: acuse de recibo (evidencia de ISO §7.5.3).
   acusarDocumentoSgc: handleAcusarDocumentoSgc_,
   getCumplimientoDocumentoSgc: handleGetCumplimientoDocumentoSgc_,
@@ -423,6 +427,8 @@ var MODULO_POR_ACCION = {
   gestionarRolSgc: 'calidad',
   listarAccesosSgc: 'calidad',
   previsualizarAccesoSgc: 'calidad',
+  getMatrizDistribucionSgc: 'calidad',
+  getDocumentosConfidencialesSgc: 'calidad',
   // v10.0 Fase 1b: confirmar la lectura es del personal (mismo gate de
   // lectura); ver quien falta es gestion (Calidad.gs lo acota a ENCARGADO_SGC/ADM).
   acusarDocumentoSgc: ['calidad', 'gerencia'],
@@ -1076,6 +1082,14 @@ function handleListarAccesosSgc_(data, contexto) {
 
 function handlePrevisualizarAccesoSgc_(data, contexto) {
   return responderResultado_(Calidad.previsualizarAcceso(data, contexto));
+}
+
+function handleGetMatrizDistribucionSgc_(data, contexto) {
+  return responderResultado_(Calidad.getMatrizDistribucion(data, contexto));
+}
+
+function handleGetDocumentosConfidencialesSgc_(data, contexto) {
+  return responderResultado_(Calidad.getDocumentosConfidenciales(data, contexto));
 }
 
 function handleAcusarDocumentoSgc_(data, contexto) {
