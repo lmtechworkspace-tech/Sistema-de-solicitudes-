@@ -3476,6 +3476,22 @@ button {
 .sgc-doc:hover { background: var(--superficie-2); }
 .sgc-doc--obsoleto { border-left-color: var(--critico); opacity: .72; }
 
+/* v10.0 Fase 2 (cont.): icono por tipo, SOLO en el listado de Documentos
+   (`.sgc-doc--con-icono`, un modificador -- `.sgc-doc` a secas lo reusan
+   Personas/NC/Auditorias/Quejas/Proveedores/Revision/Objetivos/Cobertura
+   con su estructura de siempre (top+meta apilados), y cambiar la clase base
+   a flex les habria roto el layout a los ocho). Fondo neutro a proposito:
+   el color de estado ya vive en el borde izquierdo y en los badges; darle
+   color propio al icono competiria por atencion con esas dos senales. */
+.sgc-doc--con-icono { display: flex; align-items: flex-start; gap: var(--esp-3); }
+.sgc-doc__icono {
+  flex: 0 0 auto; width: 2.125rem; height: 2.125rem; margin-top: 1px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radio-sm); background: var(--superficie-2); color: var(--texto-3);
+}
+.sgc-doc--obsoleto .sgc-doc__icono { color: var(--critico); }
+.sgc-doc__cuerpo { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+
 .sgc-doc__top {
   display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap;
 }
@@ -3488,6 +3504,7 @@ button {
   margin-top: var(--esp-1); font-size: var(--texto-sm); color: var(--texto-3);
   display: flex; gap: var(--esp-4); flex-wrap: wrap;
 }
+.sgc-doc--con-icono .sgc-doc__meta { margin-top: 0; }
 
 .sgc-detalle-cab {
   display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap;

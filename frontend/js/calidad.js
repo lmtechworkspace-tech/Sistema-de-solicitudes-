@@ -137,6 +137,10 @@
     DOC: 'Documento maestro', PRO: 'Procedimiento', INS: 'Instructivo',
     FO: 'Formulario', EXTERNO: 'Documento externo'
   };
+  // v10.0 Fase 2 (cont.): icono por tipo, para la tarjeta del listado.
+  var TIPO_ICONO_SGC = {
+    DOC: 'documento', PRO: 'estado', INS: 'lista', FO: 'etiqueta', EXTERNO: 'empresa'
+  };
   var VISIBILIDAD_ETIQUETA = {
     TODOS: 'Todo el personal', AREA: 'Solo su área', SELECCION: 'Personas específicas'
   };
@@ -278,21 +282,27 @@
 
     var filas = docs.map(function (d) {
       var obsoleto = d.estado === 'OBSOLETO';
-      return '<button type="button" class="sgc-doc js-sgc-abrir' + (obsoleto ? ' sgc-doc--obsoleto' : '') + '" data-id="' + d.documento_id + '">' +
-        '<div class="sgc-doc__top">' +
-          '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(d.codigo) + '</span>' +
-          '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(d.nombre) + '</span>' +
-          Componentes.badge('v' === String(d.version_vigente).charAt(0) ? d.version_vigente : ('v' + d.version_vigente), 'neutro') +
-          (obsoleto ? Componentes.badge('Obsoleto', 'critico') : '') +
-          (d.debo_acusar ? Componentes.badge('Debes confirmar', 'alerta') : '') +
-          (d.revision_vencida && !obsoleto ? Componentes.badge('Revisión vencida', 'alerta') : '') +
-        '</div>' +
-        '<div class="sgc-doc__meta">' +
-          '<span>' + Componentes.escaparHtml(TIPO_ETIQUETA[d.tipo] || d.tipo) + '</span>' +
-          (d.fecha_vigencia ? '<span>Vigente desde ' + fechaCorta_(d.fecha_vigencia) + '</span>' : '') +
-          (d.proxima_revision ? '<span>Revisar ' + fechaCorta_(d.proxima_revision) + '</span>' : '') +
-          (puedeGestionar_ ? '<span>' + Componentes.escaparHtml(VISIBILIDAD_ETIQUETA[d.visibilidad] || d.visibilidad) + '</span>' : '') +
-        '</div>' +
+      // v10.0 Fase 2 (cont.): icono a la izquierda por tipo de documento --
+      // antes la unica pista del tipo era texto chico en la fila de meta;
+      // ahora se escanea la lista por forma/color antes de leer nada.
+      return '<button type="button" class="sgc-doc sgc-doc--con-icono js-sgc-abrir' + (obsoleto ? ' sgc-doc--obsoleto' : '') + '" data-id="' + d.documento_id + '">' +
+        '<span class="sgc-doc__icono">' + Iconos.svg(TIPO_ICONO_SGC[d.tipo] || 'documento', { tam: 17 }) + '</span>' +
+        '<span class="sgc-doc__cuerpo">' +
+          '<span class="sgc-doc__top">' +
+            '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(d.codigo) + '</span>' +
+            '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(d.nombre) + '</span>' +
+            Componentes.badge('v' === String(d.version_vigente).charAt(0) ? d.version_vigente : ('v' + d.version_vigente), 'neutro') +
+            (obsoleto ? Componentes.badge('Obsoleto', 'critico') : '') +
+            (d.debo_acusar ? Componentes.badge('Debes confirmar', 'alerta') : '') +
+            (d.revision_vencida && !obsoleto ? Componentes.badge('Revisión vencida', 'alerta') : '') +
+          '</span>' +
+          '<span class="sgc-doc__meta">' +
+            '<span>' + Componentes.escaparHtml(TIPO_ETIQUETA[d.tipo] || d.tipo) + '</span>' +
+            (d.fecha_vigencia ? '<span>Vigente desde ' + fechaCorta_(d.fecha_vigencia) + '</span>' : '') +
+            (d.proxima_revision ? '<span>Revisar ' + fechaCorta_(d.proxima_revision) + '</span>' : '') +
+            (puedeGestionar_ ? '<span>' + Componentes.escaparHtml(VISIBILIDAD_ETIQUETA[d.visibilidad] || d.visibilidad) + '</span>' : '') +
+          '</span>' +
+        '</span>' +
       '</button>';
     }).join('');
 
