@@ -44,28 +44,42 @@ var MatrizCobertura = {
       return { _forbidden: true, message: 'No tienes acceso a la matriz de cobertura ISO.' };
     }
 
+    var excluidas = exclusionesVigentesPorClausula_();
+
     var clausulas = CLAUSULAS_ISO9001.map(function (c) {
-      var r = evaluarClausula_(c.codigo);
+      var r = evaluarClausula_(c.codigo, excluidas);
       return {
         codigo: c.codigo,
         titulo: c.titulo,
         estado: r.estado,
         resumen: r.resumen,
-        total_evidencia: r.evidencia.length
+        total_evidencia: r.evidencia.length,
+        exclusiones: (excluidas[c.codigo] || []).length
       };
     });
 
-    var resumen = { total: clausulas.length, completo: 0, parcial: 0, faltante: 0 };
+    // NO_APLICA sale del denominador. Contarla como faltante castigaria a la
+    // organizacion por una exclusion legitima; contarla como completa le
+    // regalaria un punto que no trabajo. Sale del calculo y se informa aparte.
+    var resumen = { total: clausulas.length, completo: 0, parcial: 0, faltante: 0, no_aplica: 0 };
     clausulas.forEach(function (c) {
-      if (c.estado === 'COMPLETO') resumen.completo++;
+      if (c.estado === 'NO_APLICA') resumen.no_aplica++;
+      else if (c.estado === 'COMPLETO') resumen.completo++;
       else if (c.estado === 'PARCIAL') resumen.parcial++;
       else resumen.faltante++;
     });
-    resumen.pct_listo = resumen.total
-      ? Math.round(((resumen.completo + resumen.parcial * 0.5) / resumen.total) * 100)
+    var aplicables = resumen.total - resumen.no_aplica;
+    resumen.aplicables = aplicables;
+    resumen.pct_listo = aplicables
+      ? Math.round(((resumen.completo + resumen.parcial * 0.5) / aplicables) * 100)
       : 0;
 
-    return { puede_gestionar: gobierna, resumen: resumen, clausulas: clausulas };
+    return {
+      puede_gestionar: gobierna,
+      resumen: resumen,
+      clausulas: clausulas,
+      norma: normaDeclarada_()
+    };
   },
 
   getDetalle: function (data, contexto) {
@@ -78,14 +92,17 @@ var MatrizCobertura = {
     var clausula = CLAUSULAS_ISO9001.filter(function (c) { return c.codigo === codigo; })[0];
     if (!clausula) return errorValidacion_('codigo', 'Cláusula no encontrada.');
 
-    var r = evaluarClausula_(codigo);
+    var excluidas = exclusionesVigentesPorClausula_();
+    var r = evaluarClausula_(codigo, excluidas);
     return {
       codigo: clausula.codigo,
       titulo: clausula.titulo,
       estado: r.estado,
       resumen: r.resumen,
       nota: r.nota,
-      evidencia: r.evidencia
+      evidencia: r.evidencia,
+      exclusiones: excluidas[codigo] || [],
+      norma: normaDeclarada_()
     };
   },
 
@@ -119,7 +136,50 @@ var MatrizCobertura = {
 var EVALUADORES_CLAUSULA_ISO = {
 
   '5.3': function () { return evaluarPorDocumentos_('5.3'); },
-  '4.3': function () { return evaluarPorDocumentos_('4.3'); },
+  '4.3': function () { return evaluarAlcanceDeclarado_(); },
+  // v11.0 Fase 1. Era la unica de las 28 sin evaluador NI nota: caia al
+  // texto generico y al auditor le aparecia 'sin evidencia' sin decirle por
+  // que, mientras las otras diez si explicaban su situacion.
+  //
+  // El liderazgo no se declara, se demuestra. La norma (§5.1.1) pide que la
+  // alta direccion rinda cuentas del SGC, y su evidencia natural ya esta en
+  // el sistema: la revision por la direccion, la politica aprobada y unos
+  // objetivos que efectivamente se miden. Un acta cerrada vale mas que
+  // cualquier declaracion de compromiso.
+  '5.1': function () {
+    var revisiones = leerFilasSeguro_(SHEETS.SGC_REVISIONES).filter(function (r) {
+      return esVerdaderoSgc_(r.activa) && r.estado === 'CERRADA';
+    });
+    var politica = evaluarPorDocumentos_('5.2');
+    var objetivos = EVALUADORES_CLAUSULA_ISO['6.2']();
+
+    var ev = [];
+    revisiones.slice(0, 5).forEach(function (r) {
+      ev.push({ tipo: 'Revisión por la dirección cerrada', descripcion: r.correlativo,
+        fecha: r.fecha_cierre, responsable: r.responsable_calidad_email });
+    });
+    politica.evidencia.forEach(function (e) { ev.push(e); });
+
+    // Los tres pilares: la direccion revisa, aprobo una politica y hay
+    // objetivos medidos. Con los tres, completo; con alguno, parcial.
+    var pilares = (revisiones.length ? 1 : 0) +
+      (politica.estado === 'COMPLETO' ? 1 : 0) +
+      (objetivos.estado === 'FALTANTE' ? 0 : 1);
+
+    var faltan = [];
+    if (!revisiones.length) faltan.push('no hay revisiones por la dirección cerradas');
+    if (politica.estado !== 'COMPLETO') faltan.push('la política de calidad no está etiquetada como documento de 5.2');
+    if (objetivos.estado === 'FALTANTE') faltan.push('no hay objetivos de calidad con medición');
+
+    return {
+      estado: pilares === 3 ? 'COMPLETO' : (pilares ? 'PARCIAL' : 'FALTANTE'),
+      resumen: revisiones.length + ' revisión(es) por la dirección cerradas; política y objetivos como respaldo.',
+      nota: faltan.length
+        ? 'La alta dirección demuestra su compromiso con hechos registrados: ' + faltan.join('; ') + '.'
+        : '',
+      evidencia: ev
+    };
+  },
   '4.4': function () { return evaluarPorDocumentos_('4.4'); },
   '5.2': function () { return evaluarPorDocumentos_('5.2'); },
   '7.4': function () {
@@ -337,6 +397,61 @@ function evaluarNoConformidades_() {
 // Clausulas cuya evidencia son documentos ETIQUETADOS por el Encargado SGC
 // (SGC_DOCUMENTOS.clausulas_iso) -- SIGSO no adivina cual documento es la
 // politica o el mapa de procesos.
+// v11.0 Fase 1 (§4.3). Antes esta clausula se media SOLO por documentos
+// etiquetados a mano: el sistema no sabia cual era el alcance ni que se
+// habia excluido, y esas son dos de las primeras preguntas de una auditoria
+// de certificacion. Ahora la fuente principal es la declaracion registrada,
+// y el documento que la sustenta suma como respaldo.
+//
+// La norma pide tres cosas en 4.3 y las tres se revisan por separado, para
+// que la nota diga cual falta y no un generico "incompleto".
+function evaluarAlcanceDeclarado_() {
+  var vigente = (typeof alcanceVigente_ === 'function') ? alcanceVigente_() : null;
+  var porDocs = evaluarPorDocumentos_('4.3');
+
+  if (!vigente) {
+    return {
+      estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
+      resumen: 'El alcance del SGC no está declarado en el sistema.',
+      nota: 'Declara el alcance en la sección Alcance: qué servicios cubre, en qué ubicaciones y qué cláusulas se excluyen con su justificación. ' +
+        (porDocs.evidencia.length ? 'Hay documentos etiquetados para 4.3, pero un documento adjunto no responde por sí solo qué se excluyó.' : ''),
+      evidencia: porDocs.evidencia
+    };
+  }
+
+  var exclusiones = exclusionesDe_(vigente.alcance_id);
+  var ev = [{
+    tipo: 'Alcance declarado',
+    descripcion: 'v' + vigente.version + ' — ' + String(vigente.declaracion || '').slice(0, 160),
+    fecha: vigente.vigente_desde || vigente.fecha_creacion,
+    responsable: vigente.creado_por
+  }];
+  exclusiones.forEach(function (e) {
+    ev.push({
+      tipo: 'Exclusión declarada',
+      descripcion: e.clausula + (e.titulo ? ' — ' + e.titulo : '') + ': ' + e.justificacion,
+      fecha: e.fecha_creacion,
+      responsable: e.creado_por
+    });
+  });
+  porDocs.evidencia.forEach(function (e) { ev.push(e); });
+
+  var falta = [];
+  if (!listaDesdeJson_(vigente.areas).length) falta.push('no hay áreas declaradas');
+  if (!String(vigente.declaracion || '').trim()) falta.push('falta la declaración de alcance');
+  // Una exclusion sin justificacion no es una exclusion valida para §4.3.
+  var sinJustificar = exclusiones.filter(function (e) { return !String(e.justificacion || '').trim(); });
+  if (sinJustificar.length) falta.push(sinJustificar.length + ' exclusión(es) sin justificación');
+  if (!porDocs.evidencia.length) falta.push('ningún documento etiquetado como respaldo de 4.3');
+
+  return {
+    estado: falta.length ? 'PARCIAL' : 'COMPLETO',
+    resumen: 'Alcance v' + vigente.version + ' declarado, con ' + exclusiones.length + ' exclusión(es).',
+    nota: falta.length ? 'Para cerrar 4.3: ' + falta.join('; ') + '.' : '',
+    evidencia: ev
+  };
+}
+
 function evaluarPorDocumentos_(codigo) {
   var docs = leerFilasSeguro_(SHEETS.SGC_DOCUMENTOS).filter(function (d) {
     return esVerdaderoSgc_(d.activa) && d.estado === 'VIGENTE' &&
@@ -365,26 +480,66 @@ var NOTA_FALTANTE_POR_DEFECTO_ISO = {
   '7.1': 'La planificación de recursos no tiene un módulo propio en SIGSO hoy.',
   '8.1': 'Requiere la evidencia de servicios (matriz cliente × proceso × período), pendiente para la Fase 7.',
   '8.2': 'Los requisitos de productos y servicios no tienen un módulo propio en SIGSO hoy.',
-  '8.3': 'Diseño y desarrollo: si la organización no diseña productos (solo presta servicios), esta cláusula puede no aplicar — decisión de la Dirección, no del sistema.',
+  // La nota anterior sugeria que 8.3 "puede no aplicar". Decidir eso por
+  // insinuacion es justo lo que §4.3 prohibe: mientras no exista una
+  // exclusion declarada CON justificacion, la norma considera la clausula
+  // aplicable. La nota ahora apunta al lugar donde esa decision se toma.
+  '8.3': 'Sin evidencia estructurada. Si la organización determinó que esta cláusula no le aplica, tiene que declararlo como exclusión en Alcance, con su justificación (§4.3): mientras no esté declarada, la cláusula se considera aplicable.',
   '8.5': 'Requiere la evidencia de servicios (matriz cliente × proceso × período), pendiente para la Fase 7.',
   '8.6': 'La liberación de productos y servicios no tiene un módulo propio en SIGSO hoy.'
 };
 
-function evaluarClausula_(codigo) {
+function evaluarClausula_(codigo, excluidas) {
+  var exclusiones = (excluidas || exclusionesVigentesPorClausula_())[codigo] || [];
+
+  // Una exclusion de la clausula COMPLETA la saca de la evaluacion. Una de
+  // sub-clausula (7.1.5.2 dentro de 7.1) NO: el resto de la clausula sigue
+  // aplicando, solo se anota para que el auditor lo vea junto a la evidencia.
+  var total = exclusiones.filter(function (e) { return e.total; })[0];
+  if (total) {
+    return {
+      estado: 'NO_APLICA',
+      resumen: 'Excluida del alcance del SGC.',
+      nota: 'Exclusión declarada en el alcance (§4.3): ' + (total.justificacion || 'sin justificación registrada.'),
+      evidencia: []
+    };
+  }
+
   var evaluador = EVALUADORES_CLAUSULA_ISO[codigo];
-  if (evaluador) return evaluador();
-  return {
+  var r = evaluador ? evaluador() : {
     estado: 'FALTANTE',
     resumen: 'Sin evidencia estructurada en el sistema.',
     nota: NOTA_FALTANTE_POR_DEFECTO_ISO[codigo] || 'Sin evidencia estructurada en el sistema todavía.',
     evidencia: []
   };
+
+  if (exclusiones.length) {
+    var listado = exclusiones.map(function (e) { return e.clausula; }).join(', ');
+    r.nota = (r.nota ? r.nota + ' ' : '') +
+      'Con exclusión parcial declarada en el alcance (' + listado + '): el resto de la cláusula sí aplica.';
+  }
+  return r;
+}
+
+// La edicion de norma que declara el alcance vigente. Si todavia no hay
+// alcance declarado se responde la del sistema, para que la matriz nunca
+// quede sin decir contra que norma esta midiendo.
+function normaDeclarada_() {
+  var vigente = (typeof alcanceVigente_ === 'function') ? alcanceVigente_() : null;
+  if (vigente && vigente.norma_codigo) {
+    return { codigo: vigente.norma_codigo, version: vigente.norma_version, declarada: true };
+  }
+  return {
+    codigo: NORMA_SGC_POR_DEFECTO.codigo,
+    version: NORMA_SGC_POR_DEFECTO.version,
+    declarada: false
+  };
 }
 
 // --- PDF del modo auditoria ---------------------------------------------------
 
-var ETIQUETA_ESTADO_COBERTURA = { COMPLETO: 'Completo', PARCIAL: 'Parcial', FALTANTE: 'Faltante' };
-var COLOR_ESTADO_COBERTURA = { COMPLETO: '#166534', PARCIAL: '#92400E', FALTANTE: '#991B1B' };
+var ETIQUETA_ESTADO_COBERTURA = { COMPLETO: 'Completo', PARCIAL: 'Parcial', FALTANTE: 'Faltante', NO_APLICA: 'No aplica' };
+var COLOR_ESTADO_COBERTURA = { COMPLETO: '#166534', PARCIAL: '#92400E', FALTANTE: '#991B1B', NO_APLICA: '#475569' };
 
 function construirHtmlEvidenciaClausula_(clausula, r) {
   var filas = r.evidencia.map(function (e) {

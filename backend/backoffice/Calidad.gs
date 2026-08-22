@@ -941,6 +941,11 @@ function seccionesVisiblesSgc_(contexto) {
   return {
     documentos: true,
     personas: true,
+    // v11.0 Fase 1: el alcance lo ve cualquiera que entre a Calidad. §4.3 pide
+    // que este "disponible" -- es lo mas publico que tiene un SGC, y saber
+    // que cubre el sistema es lo primero que necesita quien trabaja en el.
+    // Declararlo sigue siendo del Encargado (gobiernaSgc_ dentro del modulo).
+    alcance: true,
     nc: tieneAlgunaAsignada_(SHEETS.SGC_NC, ['responsable_email', 'detectada_por']),
     auditorias: tieneAlgunaAsignada_(SHEETS.SGC_AUDITORIAS, ['auditor_email']),
     quejas: veTodo, // el flujo de quejas es de gestion; el solicitante externo no entra al modulo

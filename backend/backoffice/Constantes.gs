@@ -171,7 +171,9 @@ var SHEETS = {
 
   // v10.0 Fase 6a: tablero de objetivos de calidad (DOC-07).
   SGC_OBJETIVOS: 'SGC_OBJETIVOS',
-  SGC_INDICADOR_LECTURAS: 'SGC_INDICADOR_LECTURAS'
+  SGC_INDICADOR_LECTURAS: 'SGC_INDICADOR_LECTURAS',
+  SGC_ALCANCE: 'SGC_ALCANCE',
+  SGC_EXCLUSIONES: 'SGC_EXCLUSIONES'
 };
 
 var COLUMNAS = {
@@ -971,6 +973,54 @@ var COLUMNAS = {
     'valor', 'numerador', 'denominador',
     'cumple', 'origen', 'detalle', 'observaciones',
     'registrado_por', 'fecha_registro', 'activa'
+  ],
+
+  // --- v11.0 Fase 1: alcance del SGC y exclusiones (§4.3) -----------------
+  //
+  // §4.3 exige que el alcance del sistema se mantenga como informacion
+  // documentada, y que toda clausula que la organizacion no aplique quede
+  // declarada CON SU JUSTIFICACION. Hasta ahora eso vivia unicamente dentro
+  // del DOC-01 en Word: el sistema no podia responder "cual es el alcance"
+  // ni "que se excluyo y por que", que son dos de las primeras preguntas de
+  // una auditoria de certificacion.
+  //
+  // Una fila = una VERSION del alcance. La que rige es la que tiene estado
+  // VIGENTE; las anteriores se conservan (mismo criterio que los documentos
+  // obsoletos) porque el auditor puede preguntar contra que alcance se
+  // certifico el periodo pasado.
+  //
+  // norma_codigo / norma_version: el alcance declara CONTRA QUE EDICION de la
+  //   norma rige. Es lo que permite que manana convivan ISO 9001:2015 y una
+  //   edicion posterior sin reescribir el modulo: se agrega el catalogo de
+  //   clausulas de la version nueva y un alcance que la declare.
+  // areas / ubicaciones: JSON de listas. Son listas cortas y sin vida propia
+  //   -- no se consultan por separado ni tienen estado -- asi que no
+  //   justifican una hoja aparte.
+  // documento_id: el documento que sustenta la declaracion, si esta cargado.
+  SGC_ALCANCE: [
+    'alcance_id', 'version', 'estado',
+    'razon_social', 'nombre_fantasia', 'rut',
+    'declaracion', 'areas', 'ubicaciones',
+    'norma_codigo', 'norma_version',
+    'documento_id', 'observaciones',
+    'vigente_desde', 'reemplazado_por',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // Una exclusion por fila. Van en hoja aparte y no como JSON dentro del
+  // alcance por dos razones: cada una es un registro auditable por si mismo
+  // (el auditor pide "muestrame tus exclusiones y sus justificaciones"), y
+  // la matriz de cobertura las consulta POR CLAUSULA.
+  //
+  // clausula: se guarda con la granularidad que use el manual, incluida la
+  //   SUB-clausula ('7.1.5.2', '8.5.1 f'). Ese era exactamente el vacio: el
+  //   catalogo de la matriz trabaja a nivel de clausula (7.1, 8.5) y no
+  //   habia donde anotar que se excluyo solo una parte.
+  // clausula_padre: se deriva al guardar (los dos primeros segmentos) y es
+  //   por donde la matriz encuentra la exclusion.
+  SGC_EXCLUSIONES: [
+    'exclusion_id', 'alcance_id', 'clausula', 'clausula_padre', 'titulo',
+    'justificacion', 'creado_por', 'fecha_creacion', 'activa'
   ]
 };
 

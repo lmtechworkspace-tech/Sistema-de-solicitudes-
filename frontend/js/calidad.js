@@ -43,6 +43,8 @@
       if (revisionActivaId_) abrirRevision_(revisionActivaId_); else cargarRevisiones_();
     } else if (seccionActiva_ === 'objetivos') {
       if (objetivoActivoId_) abrirObjetivo_(objetivoActivoId_); else cargarObjetivos_();
+    } else if (seccionActiva_ === 'alcance') {
+      cargarAlcance_();
     } else if (seccionActiva_ === 'cobertura') {
       cargarCobertura_();
     } else if (seccionActiva_ === 'accesos') {
@@ -71,6 +73,9 @@
       { id: 'proveedores', texto: 'Proveedores', icono: 'empresa' }
     ] },
     { label: 'Dirección', items: [
+      // v11.0 Fase 1: el alcance abre el grupo porque es la base de lo demas
+      // -- define contra que se audita todo el resto.
+      { id: 'alcance', texto: 'Alcance', icono: 'diana' },
       { id: 'revision', texto: 'Revisión por la dirección', icono: 'estado' },
       { id: 'objetivos', texto: 'Objetivos de calidad', icono: 'diana' },
       { id: 'cobertura', texto: 'Cobertura ISO', icono: 'escudo' }
@@ -4804,8 +4809,375 @@
   // la sustentan, con boton para bajarla en PDF -- el auditor pide "muéstreme
   // 7.2" y sale en un clic.
 
-  var ESTADO_COBERTURA_ETIQUETA = { COMPLETO: 'Completo', PARCIAL: 'Parcial', FALTANTE: 'Faltante' };
-  var ESTADO_COBERTURA_TONO = { COMPLETO: 'ok', PARCIAL: 'alerta', FALTANTE: 'critico' };
+  // ==========================================================================
+  // v11.0 Fase 1 (§4.3): alcance del SGC y exclusiones.
+  //
+  // Es la pantalla que responde las dos primeras preguntas de una auditoria
+  // de certificacion: que cubre el sistema, y que quedo fuera y por que.
+  // Antes ambas vivian unicamente dentro del DOC-01, en Word.
+  // ==========================================================================
+
+  function cargarAlcance_() {
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando alcance del SGC...');
+    api_('obtenerAlcanceSgc', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = barraSecciones_() +
+          Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el alcance.', 'error');
+        wireSecciones_(cont);
+        return;
+      }
+      pintarAlcance_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
+      wireSecciones_(cont);
+    });
+  }
+
+  function campoFichaSgc_(etiqueta, valor) {
+    return '<div class="sgc-ficha__campo"><dt>' + Componentes.escaparHtml(etiqueta) + '</dt>' +
+      '<dd>' + Componentes.escaparHtml(valor == null || valor === '' ? '—' : String(valor)) + '</dd></div>';
+  }
+
+  function pintarAlcance_(cont, data) {
+    var a = data.alcance;
+    var puede = !!data.puede_gestionar;
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">Qué cubre el sistema de gestión de la calidad y qué cláusulas quedaron fuera. ' +
+      'La norma (§4.3) pide mantenerlo documentado y disponible, y exige justificar cada exclusión.</p>' +
+      '</div>';
+
+    if (!a) {
+      cont.innerHTML = cabecera + pintarSinAlcance_(data, puede);
+      wireSecciones_(cont);
+      var btnDeclarar = cont.querySelector('.js-sgc-declarar-alcance');
+      if (btnDeclarar) {
+        btnDeclarar.addEventListener('click', function () {
+          abrirFormularioAlcance_(null, data.propuesta, false);
+        });
+      }
+      return;
+    }
+
+    var ficha = '<dl class="sgc-ficha">' + [
+      campoFichaSgc_('Razón social', a.razon_social),
+      campoFichaSgc_('Nombre de fantasía', a.nombre_fantasia),
+      campoFichaSgc_('RUT', a.rut),
+      campoFichaSgc_('Norma', a.norma_codigo + ':' + a.norma_version),
+      campoFichaSgc_('Versión del alcance', 'v' + a.version),
+      campoFichaSgc_('Vigente desde', a.vigente_desde ? fechaCorta_(a.vigente_desde) : '')
+    ].join('') + '</dl>';
+
+    var declaracion = '<h4 class="sgc-sub">Declaración de alcance</h4>' +
+      '<p>' + Componentes.escaparHtml(a.declaracion) + '</p>' +
+      '<dl class="sgc-ficha">' + [
+        campoFichaSgc_('Áreas', a.areas.join(' · ')),
+        campoFichaSgc_('Ubicaciones', a.ubicaciones.join(' · '))
+      ].join('') + '</dl>';
+
+    var lista = data.exclusiones || [];
+    var exclusiones = '<h4 class="sgc-sub">Exclusiones declaradas (' + lista.length + ')</h4>';
+    if (!lista.length) {
+      exclusiones += '<p class="sigso-ayuda">Ninguna. Todas las cláusulas de la norma se consideran aplicables.</p>';
+    } else {
+      exclusiones += '<div class="sgc-lista">' + lista.map(function (e) {
+        return '<div class="sgc-doc" data-exclusion="' + Componentes.escaparHtml(JSON.stringify(e)) + '">' +
+          '<div class="sgc-doc__linea">' +
+            '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(e.clausula) +
+              (e.titulo ? ' — ' + Componentes.escaparHtml(e.titulo) : '') + '</span>' +
+            Componentes.badge(e.total ? 'Cláusula completa' : 'Parcial', e.total ? 'critico' : 'neutro') +
+          '</div>' +
+          '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(e.justificacion) + '</span>' +
+          (puede ? '<div class="sgc-acciones">' +
+            Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-sgc-editar-exclusion' }) +
+            Componentes.boton({ texto: 'Retirar', variante: 'peligro', clase: 'js-sgc-retirar-exclusion' }) +
+          '</div>' : '') +
+        '</div>';
+      }).join('') + '</div>';
+    }
+
+    var acciones = puede ? '<div class="sgc-acciones">' +
+      Componentes.boton({ texto: 'Corregir alcance', variante: 'secundario', clase: 'js-sgc-editar-alcance' }) +
+      Componentes.boton({ texto: 'Declarar exclusión', variante: 'secundario', clase: 'js-sgc-nueva-exclusion' }) +
+      Componentes.boton({ texto: 'Publicar nueva versión', clase: 'js-sgc-version-alcance' }) +
+      '</div>' : '';
+
+    var historial = '';
+    if ((data.historial || []).length) {
+      historial = '<h4 class="sgc-sub">Versiones anteriores</h4><div class="sgc-lista">' +
+        data.historial.map(function (h) {
+          return '<div class="sgc-doc sgc-doc--obsoleto">' +
+            '<div class="sgc-doc__linea">' +
+              '<span class="sgc-doc__codigo">v' + Componentes.escaparHtml(h.version) + '</span>' +
+              Componentes.badge('Reemplazada', 'neutro') +
+            '</div>' +
+            '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(h.declaracion || '') + '</span>' +
+            (h.observaciones
+              ? '<span class="sgc-doc__meta">Motivo del cambio: ' + Componentes.escaparHtml(h.observaciones) + '</span>'
+              : '') +
+          '</div>';
+        }).join('') + '</div>';
+    }
+
+    cont.innerHTML = cabecera + ficha + declaracion + exclusiones + acciones + historial;
+    wireSecciones_(cont);
+    if (!puede) return;
+
+    cont.querySelector('.js-sgc-editar-alcance').addEventListener('click', function () {
+      abrirFormularioAlcance_(a, null, false);
+    });
+    cont.querySelector('.js-sgc-version-alcance').addEventListener('click', function () {
+      abrirFormularioAlcance_(a, null, true);
+    });
+    cont.querySelector('.js-sgc-nueva-exclusion').addEventListener('click', function () {
+      abrirFormularioExclusion_(null, data.clausulas_catalogo || []);
+    });
+    cont.querySelectorAll('.js-sgc-editar-exclusion').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var caja = btn.parentNode.parentNode;
+        abrirFormularioExclusion_(JSON.parse(caja.getAttribute('data-exclusion')), data.clausulas_catalogo || []);
+      });
+    });
+    cont.querySelectorAll('.js-sgc-retirar-exclusion').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var caja = btn.parentNode.parentNode;
+        var ex = JSON.parse(caja.getAttribute('data-exclusion'));
+        Componentes.confirmar({
+          titulo: '¿Retirar la exclusión de ' + ex.clausula + '?',
+          mensaje: 'La cláusula vuelve a considerarse aplicable y se evaluará en la matriz de cobertura.',
+          confirmar: 'Retirar',
+          peligro: true
+        }).then(function (ok) {
+          if (!ok) return;
+          api_('anularExclusionSgc', { exclusion_id: ex.exclusion_id }).then(function (r) {
+            Componentes.aviso({
+              texto: (r && r.data && r.data.message) || (r && r.message) || 'Exclusión retirada.',
+              tipo: (r && r.ok) ? 'exito' : 'error'
+            });
+            if (r && r.ok) cargarAlcance_();
+          });
+        });
+      });
+    });
+  }
+
+  // Sin alcance declarado la pantalla no muestra un vacio: muestra la
+  // propuesta transcrita del DOC-01 para revisar y confirmar. Nada de eso
+  // esta guardado todavia -- el sistema no pone en boca de la organizacion
+  // algo que nadie aprobo aca adentro.
+  function pintarSinAlcance_(data, puede) {
+    var p = data.propuesta || {};
+    var aviso = Componentes.alerta('El alcance del SGC todavía no está declarado en el sistema. ' +
+      'Es lo primero que pide una auditoría de certificación (§4.3).', 'aviso');
+
+    if (!puede) {
+      return aviso + '<p class="sigso-ayuda">El Encargado del SGC es quien lo declara.</p>';
+    }
+
+    var prev = '<h4 class="sgc-sub">Propuesta tomada del DOC-01 (Manual de calidad)</h4>' +
+      '<p class="sigso-ayuda">Está transcrita del manual, no redactada por el sistema. Revísala antes de confirmar.</p>' +
+      '<dl class="sgc-ficha">' + [
+        campoFichaSgc_('Razón social', p.razon_social),
+        campoFichaSgc_('Nombre de fantasía', p.nombre_fantasia),
+        campoFichaSgc_('RUT', p.rut),
+        campoFichaSgc_('Áreas', (p.areas || []).join(' · ')),
+        campoFichaSgc_('Ubicaciones', (p.ubicaciones || []).join(' · ')),
+        campoFichaSgc_('Exclusiones propuestas', String((p.exclusiones || []).length))
+      ].join('') + '</dl>' +
+      '<p>' + Componentes.escaparHtml(p.declaracion || '') + '</p>';
+
+    var advertencias = (p.advertencias || []).map(function (t) {
+      return Componentes.alerta(t, 'aviso');
+    }).join('');
+
+    return aviso + prev + advertencias + '<div class="sgc-acciones">' +
+      Componentes.boton({ texto: 'Revisar y declarar el alcance', clase: 'js-sgc-declarar-alcance' }) +
+      '</div>';
+  }
+
+  // Un solo formulario para los tres caminos (declarar, corregir, publicar
+  // version nueva). La diferencia es el destino y, en la version nueva, un
+  // campo mas: por que cambia -- sin eso la version anterior queda archivada
+  // sin explicacion, que es lo que el auditor pregunta.
+  function abrirFormularioAlcance_(actual, propuesta, esNuevaVersion) {
+    var base = actual || propuesta || {};
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">' +
+          (esNuevaVersion ? 'Publicar nueva versión del alcance'
+            : (actual ? 'Corregir el alcance' : 'Declarar el alcance del SGC')) + '</h3>' +
+        (esNuevaVersion
+          ? '<p class="sigso-ayuda">La versión actual se conserva como reemplazada. Las exclusiones se copian a la nueva.</p>'
+          : (actual
+            ? '<p class="sigso-ayuda">Para corregir un dato de la versión vigente. Si el alcance cambia de verdad, publica una versión nueva.</p>'
+            : '<p class="sigso-ayuda">Revisa cada campo antes de guardar: esto es lo que se muestra al auditor.</p>')) +
+        '<form id="form-sgc-alcance">' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'sgc-alc-razon', label: 'Razón social', valor: base.razon_social || '', requerido: true }) +
+            Componentes.campoTexto({ id: 'sgc-alc-fantasia', label: 'Nombre de fantasía', valor: base.nombre_fantasia || '' }) +
+          '</div>' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'sgc-alc-rut', label: 'RUT', valor: base.rut || '' }) +
+            Componentes.campoTexto({ id: 'sgc-alc-desde', label: 'Vigente desde', tipo: 'date', valor: base.vigente_desde || '' }) +
+          '</div>' +
+          Componentes.campoTextarea({ id: 'sgc-alc-declaracion', label: 'Declaración de alcance',
+            valor: base.declaracion || '', requerido: true,
+            ayuda: 'Qué servicios cubre el SGC y para qué tipo de clientes.' }) +
+          Componentes.campoTextarea({ id: 'sgc-alc-areas', label: 'Áreas incluidas',
+            valor: (base.areas || []).join(String.fromCharCode(10)), requerido: true,
+            ayuda: 'Una por línea.' }) +
+          Componentes.campoTextarea({ id: 'sgc-alc-ubicaciones', label: 'Ubicaciones',
+            valor: (base.ubicaciones || []).join(String.fromCharCode(10)),
+            ayuda: 'Una por línea. Las direcciones llevan comas, por eso no sirven como separador.' }) +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'sgc-alc-norma', label: 'Norma',
+              valor: base.norma_codigo || 'ISO 9001', requerido: true }) +
+            Componentes.campoTexto({ id: 'sgc-alc-version-norma', label: 'Edición de la norma',
+              valor: base.norma_version || '2015', requerido: true }) +
+          '</div>' +
+          (esNuevaVersion
+            ? Componentes.campoTextarea({ id: 'sgc-alc-motivo', label: 'Por qué cambia el alcance',
+                valor: '', requerido: true,
+                ayuda: 'Queda como trazabilidad junto a la versión que se reemplaza.' })
+            : '') +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: esNuevaVersion ? 'Publicar versión' : 'Guardar',
+              tipo: 'submit', clase: 'js-sgc-guardar' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-sgc-alcance').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true;
+
+      var payload = {
+        razon_social: document.getElementById('sgc-alc-razon').value,
+        nombre_fantasia: document.getElementById('sgc-alc-fantasia').value,
+        rut: document.getElementById('sgc-alc-rut').value,
+        vigente_desde: document.getElementById('sgc-alc-desde').value,
+        declaracion: document.getElementById('sgc-alc-declaracion').value,
+        areas: listaDesdeTexto_(document.getElementById('sgc-alc-areas').value),
+        ubicaciones: listaDesdeTexto_(document.getElementById('sgc-alc-ubicaciones').value),
+        norma_codigo: document.getElementById('sgc-alc-norma').value,
+        norma_version: document.getElementById('sgc-alc-version-norma').value
+      };
+      if (esNuevaVersion) {
+        payload.justificacion_cambio = document.getElementById('sgc-alc-motivo').value;
+      }
+
+      api_(esNuevaVersion ? 'nuevaVersionAlcanceSgc' : 'guardarAlcanceSgc', payload).then(function (r) {
+        var datos = (r && r.data) || {};
+        if (!r || !r.ok || datos.ok === false) {
+          boton.disabled = false;
+          Componentes.aviso({ texto: datos.message || (r && r.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: datos.message || 'Alcance guardado.', tipo: 'exito' });
+        // Al declarar el alcance por primera vez, las exclusiones propuestas
+        // NO se guardan solas: se ofrecen una por una, para que cada
+        // justificacion pase por una decision explicita.
+        var pendientes = (!actual && propuesta && propuesta.exclusiones) ? propuesta.exclusiones.slice() : [];
+        if (pendientes.length) declararExclusionesPropuestas_(pendientes);
+        else cargarAlcance_();
+      }).catch(function () {
+        boton.disabled = false;
+        Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
+      });
+    });
+  }
+
+  function declararExclusionesPropuestas_(pendientes) {
+    Componentes.confirmar({
+      titulo: 'Declarar también las ' + pendientes.length + ' exclusiones del DOC-01?',
+      mensaje: pendientes.map(function (e) { return e.clausula + ' — ' + e.titulo; }).join('\n') +
+        '\n\nQuedan registradas con la justificación que trae el manual. Puedes editarlas después.',
+      confirmar: 'Declararlas'
+    }).then(function (ok) {
+      if (!ok) { cargarAlcance_(); return; }
+      var i = 0;
+      function siguiente() {
+        if (i >= pendientes.length) { cargarAlcance_(); return; }
+        api_('guardarExclusionSgc', pendientes[i++]).then(siguiente).catch(siguiente);
+      }
+      siguiente();
+    });
+  }
+
+  function abrirFormularioExclusion_(actual, catalogo) {
+    var a = actual || {};
+    var opciones = (catalogo || []).map(function (c) {
+      return { valor: c.codigo, texto: c.codigo + ' — ' + c.titulo };
+    });
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">' + (actual ? 'Corregir exclusión' : 'Declarar exclusión') + '</h3>' +
+        '<p class="sigso-ayuda">Escribe la cláusula con la misma granularidad que el manual. ' +
+        'Una sub-cláusula (7.1.5.2) excluye solo esa parte; una cláusula completa (8.3) la saca entera de la evaluación.</p>' +
+        '<form id="form-sgc-exclusion">' +
+          Componentes.campoTexto({ id: 'sgc-exc-clausula', label: 'Cláusula excluida',
+            valor: a.clausula || '', requerido: true, ayuda: 'Por ejemplo 7.1.5.2, 8.5.1 f, u 8.3.' }) +
+          Componentes.campoTexto({ id: 'sgc-exc-titulo', label: 'Título de la cláusula', valor: a.titulo || '' }) +
+          Componentes.campoTextarea({ id: 'sgc-exc-justificacion', label: 'Justificación',
+            valor: a.justificacion || '', requerido: true,
+            ayuda: 'Obligatoria: §4.3 exige explicar por qué la cláusula no aplica a la organización.' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit', clase: 'js-sgc-guardar' }) +
+          '</div>' +
+        '</form>' +
+        '<p class="sigso-ayuda">Cláusulas del catálogo: ' +
+          Componentes.escaparHtml(opciones.map(function (o) { return o.valor; }).join(', ')) + '</p>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-sgc-exclusion').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true;
+      api_('guardarExclusionSgc', {
+        exclusion_id: a.exclusion_id || '',
+        clausula: document.getElementById('sgc-exc-clausula').value,
+        titulo: document.getElementById('sgc-exc-titulo').value,
+        justificacion: document.getElementById('sgc-exc-justificacion').value
+      }).then(function (r) {
+        var datos = (r && r.data) || {};
+        if (!r || !r.ok || datos.ok === false) {
+          boton.disabled = false;
+          Componentes.aviso({ texto: datos.message || (r && r.message) || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: datos.message || 'Exclusión guardada.', tipo: 'exito' });
+        cargarAlcance_();
+      }).catch(function () {
+        boton.disabled = false;
+        Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
+      });
+    });
+  }
+
+  // Se separa por SALTO DE LINEA, no por coma: una direccion como
+  // 'Av. Grecia 1938, Ñuñoa' es UNA ubicacion, y con coma se partia en dos.
+  function listaDesdeTexto_(texto) {
+    return String(texto || '').split(String.fromCharCode(10))
+      .map(function (s) { return s.trim(); }).filter(Boolean);
+  }
+
+  // v11.0 Fase 1: NO_APLICA es el cuarto estado. Una clausula excluida del
+  // alcance con justificacion no es un vacio -- se muestra neutra, no roja.
+  var ESTADO_COBERTURA_ETIQUETA = { COMPLETO: 'Completo', PARCIAL: 'Parcial', FALTANTE: 'Faltante', NO_APLICA: 'No aplica' };
+  var ESTADO_COBERTURA_TONO = { COMPLETO: 'ok', PARCIAL: 'alerta', FALTANTE: 'critico', NO_APLICA: 'neutro' };
 
   function cargarCobertura_() {
     var cont = document.getElementById('calidad-contenido');
@@ -4837,7 +5209,10 @@
       Componentes.kpi({ etiqueta: 'Completo', valor: r.completo || 0 }),
       Componentes.kpi({ etiqueta: 'Parcial', valor: r.parcial || 0 }),
       Componentes.kpi({ etiqueta: 'Faltante', valor: r.faltante || 0 }),
-      Componentes.kpi({ etiqueta: 'Listos (estimado)', valor: (r.pct_listo || 0) + '%' })
+      Componentes.kpi({ etiqueta: 'No aplica', valor: r.no_aplica || 0,
+        titulo: 'Cláusulas excluidas del alcance con justificación (§4.3). No cuentan para el porcentaje.' }),
+      Componentes.kpi({ etiqueta: 'Listos (estimado)', valor: (r.pct_listo || 0) + '%',
+        titulo: 'Sobre ' + (r.aplicables || 0) + ' cláusulas aplicables. Indicador interno de gestión, no un porcentaje oficial de certificación.' })
     ].join('') + '</div>';
 
     var filas = (data.clausulas || []).map(function (c) {
@@ -4847,7 +5222,9 @@
           '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(c.codigo) + ' — ' + Componentes.escaparHtml(c.titulo) + '</span>' +
           Componentes.badge(ESTADO_COBERTURA_ETIQUETA[c.estado] || c.estado, ESTADO_COBERTURA_TONO[c.estado] || 'neutro') +
         '</div>' +
-        '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(c.resumen) + '</span>' +
+        '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(c.resumen) +
+          (c.exclusiones && c.estado !== 'NO_APLICA'
+            ? ' · ' + c.exclusiones + ' exclusión(es) parcial(es) declarada(s)' : '') + '</span>' +
         '</button>';
     }).join('');
 

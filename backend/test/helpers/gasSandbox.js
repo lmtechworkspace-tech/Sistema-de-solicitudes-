@@ -195,6 +195,10 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // horasFormacionPorPersonaSgc_ de Personas.gs y encargadosSgc_ de
   // Auditorias.gs, asi que va despues de ambos.
   'Objetivos.gs',
+  // v11.0 Fase 1 (§4.3): alcance y exclusiones. Va ANTES de
+  // MatrizCobertura.gs porque esta lo consulta (alcanceVigente_,
+  // exclusionesVigentesPorClausula_) para saber que se excluyo del alcance.
+  'Alcance.gs',
   // v10.0 Fase 6b: matriz de cobertura ISO. Usa CLAUSULAS_ISO9001 de
   // Auditorias.gs y datos de casi todos los modulos SGC ya cargados.
   'MatrizCobertura.gs',

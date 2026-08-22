@@ -304,6 +304,11 @@ function construirContexto() {
   // ("Abrir año"), que es justo el flujo que hay que poder probar aca.
   seedSheet(ctx, 'SGC_OBJETIVOS', ctx.COLUMNAS.SGC_OBJETIVOS);
   seedSheet(ctx, 'SGC_INDICADOR_LECTURAS', ctx.COLUMNAS.SGC_INDICADOR_LECTURAS);
+  // v11.0 Fase 1 (§4.3): vacias a proposito. El flujo a probar empieza en
+  // "no hay alcance declarado", que es donde la pantalla ofrece la
+  // propuesta del DOC-01 para revisar y confirmar.
+  seedSheet(ctx, 'SGC_ALCANCE', ctx.COLUMNAS.SGC_ALCANCE);
+  seedSheet(ctx, 'SGC_EXCLUSIONES', ctx.COLUMNAS.SGC_EXCLUSIONES);
   seedSheet(ctx, 'SGC_ROLES', ctx.COLUMNAS.SGC_ROLES, [
     ['SGCR-1', 'admin@homepymes.cl', 'ENCARGADO_SGC', '', '', true, new Date().toISOString()],
     ['SGCR-2', 'jefe@homepymes.cl', 'OPERATIVO', 'CONTABILIDAD', '', true, new Date().toISOString()],

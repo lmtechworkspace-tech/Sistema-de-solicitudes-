@@ -285,7 +285,13 @@ var BACKOFFICE_ACTIONS = {
   // v10.0 Fase 6b: matriz de cobertura ISO + "modo auditoria".
   listarMatrizCoberturaSgc: handleListarMatrizCoberturaSgc_,
   getDetalleClausulaCoberturaSgc: handleGetDetalleClausulaCoberturaSgc_,
-  descargarEvidenciaClausulaSgc: handleDescargarEvidenciaClausulaSgc_
+  descargarEvidenciaClausulaSgc: handleDescargarEvidenciaClausulaSgc_,
+  // v11.0 Fase 1 (§4.3): alcance del SGC y exclusiones.
+  obtenerAlcanceSgc: handleObtenerAlcanceSgc_,
+  guardarAlcanceSgc: handleGuardarAlcanceSgc_,
+  nuevaVersionAlcanceSgc: handleNuevaVersionAlcanceSgc_,
+  guardarExclusionSgc: handleGuardarExclusionSgc_,
+  anularExclusionSgc: handleAnularExclusionSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -532,7 +538,17 @@ var MODULO_POR_ACCION = {
   // del SGC.
   listarMatrizCoberturaSgc: ['calidad', 'gerencia'],
   getDetalleClausulaCoberturaSgc: ['calidad', 'gerencia'],
-  descargarEvidenciaClausulaSgc: ['calidad', 'gerencia']
+  descargarEvidenciaClausulaSgc: ['calidad', 'gerencia'],
+
+  // v11.0 Fase 1: el alcance se LEE con solo entrar a Calidad -- §4.3 pide
+  // que este disponible, y es lo mas publico que tiene un SGC. Declararlo y
+  // excluir clausulas es del Encargado, y eso lo resuelve gobiernaSgc_
+  // adentro del modulo.
+  obtenerAlcanceSgc: ['calidad', 'gerencia'],
+  guardarAlcanceSgc: 'calidad',
+  nuevaVersionAlcanceSgc: 'calidad',
+  guardarExclusionSgc: 'calidad',
+  anularExclusionSgc: 'calidad'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -1397,6 +1413,27 @@ function handleGetDetalleClausulaCoberturaSgc_(data, contexto) {
 
 function handleDescargarEvidenciaClausulaSgc_(data, contexto) {
   return responderResultado_(MatrizCobertura.descargarEvidencia(data, contexto));
+}
+
+// v11.0 Fase 1 (§4.3): alcance del SGC y exclusiones.
+function handleObtenerAlcanceSgc_(data, contexto) {
+  return responderResultado_(Alcance.obtener(data, contexto));
+}
+
+function handleGuardarAlcanceSgc_(data, contexto) {
+  return responderResultado_(Alcance.guardar(data, contexto));
+}
+
+function handleNuevaVersionAlcanceSgc_(data, contexto) {
+  return responderResultado_(Alcance.nuevaVersion(data, contexto));
+}
+
+function handleGuardarExclusionSgc_(data, contexto) {
+  return responderResultado_(Alcance.guardarExclusion(data, contexto));
+}
+
+function handleAnularExclusionSgc_(data, contexto) {
+  return responderResultado_(Alcance.anularExclusion(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).
