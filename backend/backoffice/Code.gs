@@ -291,7 +291,17 @@ var BACKOFFICE_ACTIONS = {
   guardarAlcanceSgc: handleGuardarAlcanceSgc_,
   nuevaVersionAlcanceSgc: handleNuevaVersionAlcanceSgc_,
   guardarExclusionSgc: handleGuardarExclusionSgc_,
-  anularExclusionSgc: handleAnularExclusionSgc_
+  anularExclusionSgc: handleAnularExclusionSgc_,
+
+  // v11.0 Fase 2 (§4.1 y §4.2): contexto de la organizacion y partes interesadas.
+  obtenerContextoSgc: handleObtenerContextoSgc_,
+  sembrarFodaSgc: handleSembrarFodaSgc_,
+  guardarFactorContextoSgc: handleGuardarFactorContextoSgc_,
+  anularFactorContextoSgc: handleAnularFactorContextoSgc_,
+  registrarRevisionContextoSgc: handleRegistrarRevisionContextoSgc_,
+  sembrarPartesSgc: handleSembrarPartesSgc_,
+  guardarParteInteresadaSgc: handleGuardarParteInteresadaSgc_,
+  anularParteInteresadaSgc: handleAnularParteInteresadaSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -548,7 +558,19 @@ var MODULO_POR_ACCION = {
   guardarAlcanceSgc: 'calidad',
   nuevaVersionAlcanceSgc: 'calidad',
   guardarExclusionSgc: 'calidad',
-  anularExclusionSgc: 'calidad'
+  anularExclusionSgc: 'calidad',
+
+  // v11.0 Fase 2: el contexto se LEE con solo entrar a Calidad -- conocer
+  // en que entorno opera la organizacion es parte de la toma de conciencia
+  // (§7.3), no informacion reservada. Editarlo es del Encargado.
+  obtenerContextoSgc: ['calidad', 'gerencia'],
+  sembrarFodaSgc: 'calidad',
+  guardarFactorContextoSgc: 'calidad',
+  anularFactorContextoSgc: 'calidad',
+  registrarRevisionContextoSgc: 'calidad',
+  sembrarPartesSgc: 'calidad',
+  guardarParteInteresadaSgc: 'calidad',
+  anularParteInteresadaSgc: 'calidad'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -1434,6 +1456,39 @@ function handleGuardarExclusionSgc_(data, contexto) {
 
 function handleAnularExclusionSgc_(data, contexto) {
   return responderResultado_(Alcance.anularExclusion(data, contexto));
+}
+
+// v11.0 Fase 2 (§4.1 y §4.2): contexto de la organizacion y partes interesadas.
+function handleObtenerContextoSgc_(data, contexto) {
+  return responderResultado_(Contexto.obtener(data, contexto));
+}
+
+function handleSembrarFodaSgc_(data, contexto) {
+  return responderResultado_(Contexto.sembrarFoda(data, contexto));
+}
+
+function handleGuardarFactorContextoSgc_(data, contexto) {
+  return responderResultado_(Contexto.guardarFactor(data, contexto));
+}
+
+function handleAnularFactorContextoSgc_(data, contexto) {
+  return responderResultado_(Contexto.anularFactor(data, contexto));
+}
+
+function handleRegistrarRevisionContextoSgc_(data, contexto) {
+  return responderResultado_(Contexto.registrarRevision(data, contexto));
+}
+
+function handleSembrarPartesSgc_(data, contexto) {
+  return responderResultado_(Contexto.sembrarPartes(data, contexto));
+}
+
+function handleGuardarParteInteresadaSgc_(data, contexto) {
+  return responderResultado_(Contexto.guardarParte(data, contexto));
+}
+
+function handleAnularParteInteresadaSgc_(data, contexto) {
+  return responderResultado_(Contexto.anularParte(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

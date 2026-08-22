@@ -946,6 +946,10 @@ function seccionesVisiblesSgc_(contexto) {
     // que cubre el sistema es lo primero que necesita quien trabaja en el.
     // Declararlo sigue siendo del Encargado (gobiernaSgc_ dentro del modulo).
     alcance: true,
+    // v11.0 Fase 2: mismo criterio. Saber en que entorno opera la
+    // organizacion y quienes son sus partes interesadas es toma de
+    // conciencia (§7.3), no informacion reservada.
+    contexto: true,
     nc: tieneAlgunaAsignada_(SHEETS.SGC_NC, ['responsable_email', 'detectada_por']),
     auditorias: tieneAlgunaAsignada_(SHEETS.SGC_AUDITORIAS, ['auditor_email']),
     quejas: veTodo, // el flujo de quejas es de gestion; el solicitante externo no entra al modulo

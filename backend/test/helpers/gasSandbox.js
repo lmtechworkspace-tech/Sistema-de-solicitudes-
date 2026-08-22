@@ -199,6 +199,9 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // MatrizCobertura.gs porque esta lo consulta (alcanceVigente_,
   // exclusionesVigentesPorClausula_) para saber que se excluyo del alcance.
   'Alcance.gs',
+  // v11.0 Fase 2 (§4.1/§4.2): contexto y partes interesadas. Va antes de
+  // MatrizCobertura.gs por lo mismo que Alcance.gs: esta lo consulta.
+  'Contexto.gs',
   // v10.0 Fase 6b: matriz de cobertura ISO. Usa CLAUSULAS_ISO9001 de
   // Auditorias.gs y datos de casi todos los modulos SGC ya cargados.
   'MatrizCobertura.gs',

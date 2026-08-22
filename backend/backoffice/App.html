@@ -13342,6 +13342,8 @@ var Iconos = (function () {
       if (revisionActivaId_) abrirRevision_(revisionActivaId_); else cargarRevisiones_();
     } else if (seccionActiva_ === 'objetivos') {
       if (objetivoActivoId_) abrirObjetivo_(objetivoActivoId_); else cargarObjetivos_();
+    } else if (seccionActiva_ === 'contexto') {
+      cargarContexto_();
     } else if (seccionActiva_ === 'alcance') {
       cargarAlcance_();
     } else if (seccionActiva_ === 'cobertura') {
@@ -13371,10 +13373,15 @@ var Iconos = (function () {
       { id: 'quejas', texto: 'Quejas', icono: 'comentario' },
       { id: 'proveedores', texto: 'Proveedores', icono: 'empresa' }
     ] },
+    // v11.0 Fase 2: grupo nuevo. Contexto, partes interesadas y alcance son
+    // el capitulo 4 completo -- la base contra la que se audita todo lo
+    // demas. El alcance se muda aca desde Dirección, donde estaba de paso.
+    // Las fases siguientes suman Riesgos y Procesos a este mismo grupo.
+    { label: 'Planificación', items: [
+      { id: 'contexto', texto: 'Contexto', icono: 'lupa' },
+      { id: 'alcance', texto: 'Alcance', icono: 'diana' }
+    ] },
     { label: 'Dirección', items: [
-      // v11.0 Fase 1: el alcance abre el grupo porque es la base de lo demas
-      // -- define contra que se audita todo el resto.
-      { id: 'alcance', texto: 'Alcance', icono: 'diana' },
       { id: 'revision', texto: 'Revisión por la dirección', icono: 'estado' },
       { id: 'objetivos', texto: 'Objetivos de calidad', icono: 'diana' },
       { id: 'cobertura', texto: 'Cobertura ISO', icono: 'escudo' }
@@ -18107,6 +18114,406 @@ var Iconos = (function () {
   // "modo auditoría" es la ficha de cada cláusula: la lista de registros que
   // la sustentan, con boton para bajarla en PDF -- el auditor pide "muéstreme
   // 7.2" y sale en un clic.
+
+  // ==========================================================================
+  // v11.0 Fase 2 (§4.1 y §4.2): contexto de la organizacion y partes
+  // interesadas. Una sola seccion con dos vistas, para no sumar dos pestañas
+  // planas a una barra que ya tiene once.
+  // ==========================================================================
+
+  var vistaContexto_ = 'foda';
+
+  function cargarContexto_() {
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando contexto de la organización...');
+    api_('obtenerContextoSgc', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = barraSecciones_() +
+          Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el contexto.', 'error');
+        wireSecciones_(cont);
+        return;
+      }
+      pintarContexto_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
+      wireSecciones_(cont);
+    });
+  }
+
+  var TONO_FACTOR_SGC = {
+    FORTALEZA: 'ok', OPORTUNIDAD: 'info', DEBILIDAD: 'alerta', AMENAZA: 'critico'
+  };
+  var ETIQUETA_FACTOR_SGC = {
+    FORTALEZA: 'Fortaleza', OPORTUNIDAD: 'Oportunidad',
+    DEBILIDAD: 'Debilidad', AMENAZA: 'Amenaza'
+  };
+  // El plural va explícito: sufijar una 's' produce "debilidads".
+  var ETIQUETA_FACTOR_PLURAL_SGC = {
+    FORTALEZA: 'Fortalezas', OPORTUNIDAD: 'Oportunidades',
+    DEBILIDAD: 'Debilidades', AMENAZA: 'Amenazas'
+  };
+
+  function pintarContexto_(cont, data) {
+    var puede = !!data.puede_gestionar;
+    var r = data.resumen || {};
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">El entorno en que opera la organización (§4.1) y quiénes esperan algo de ella (§4.2). ' +
+      'La norma no pide solo listarlos: pide revisarlos periódicamente, y aquí se lleva esa cuenta.</p>' +
+      '</div>';
+
+    var subnav = '<div class="sgc-subnav-accesos">' +
+      [{ id: 'foda', texto: 'Análisis de contexto' }, { id: 'partes', texto: 'Partes interesadas' }]
+        .map(function (v) {
+          return '<button type="button" class="sigso-tab js-ctx-vista' +
+            (v.id === vistaContexto_ ? ' sigso-tab--activo' : '') + '" data-vista="' + v.id + '">' +
+            v.texto + '</button>';
+        }).join('') + '</div>';
+
+    // El aviso de revisión encabeza las dos vistas: es lo que la norma
+    // pregunta y lo único que no se ve mirando la tabla.
+    var avisoRevision = '';
+    if (r.ultima_revision) {
+      var texto = 'Última revisión del contexto: ' + fechaCorta_(r.ultima_revision) +
+        (r.meses_desde_revision !== null && r.meses_desde_revision !== undefined
+          ? ' (hace ' + r.meses_desde_revision + ' meses)' : '') + '. ' +
+        'La frecuencia definida es cada ' + data.meses_revision + ' meses.';
+      avisoRevision = Componentes.alerta(texto, r.revision_vencida ? 'error' : 'aviso');
+    }
+
+    var cuerpo = vistaContexto_ === 'partes'
+      ? vistaPartes_(data, puede)
+      : vistaFoda_(data, puede, r);
+
+    cont.innerHTML = cabecera + subnav + avisoRevision + cuerpo;
+    wireSecciones_(cont);
+
+    cont.querySelectorAll('.js-ctx-vista').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        vistaContexto_ = btn.getAttribute('data-vista');
+        cargarContexto_();
+      });
+    });
+
+    if (!puede) return;
+    wireAccionesContexto_(cont, data);
+  }
+
+  function vistaFoda_(data, puede, r) {
+    if (!data.factores.length) {
+      var p = data.propuesta_foda || [];
+      var conteo = {};
+      p.forEach(function (f) { conteo[f.tipo] = (conteo[f.tipo] || 0) + 1; });
+      return Componentes.alerta('El análisis de contexto todavía no está cargado en el sistema.', 'aviso') +
+        (puede
+          ? '<h4 class="sgc-sub">Propuesta tomada del DOC-02 (Análisis FODA)</h4>' +
+            '<p class="sigso-ayuda">Son los ' + p.length + ' factores transcritos del documento aprobado: ' +
+            Object.keys(conteo).map(function (t) {
+              var etiqueta = conteo[t] > 1 ? ETIQUETA_FACTOR_PLURAL_SGC[t] : ETIQUETA_FACTOR_SGC[t];
+              return conteo[t] + ' ' + String(etiqueta || t).toLowerCase();
+            }).join(', ') + '. Revísalos antes de cargarlos; después los puedes editar uno a uno.</p>' +
+            '<div class="sgc-lista">' + p.slice(0, 4).map(function (f) {
+              return '<div class="sgc-doc">' +
+                '<div class="sgc-doc__linea">' +
+                  '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(String(f.tipo).slice(0, 1) + f.numero) + '</span>' +
+                  Componentes.badge(ETIQUETA_FACTOR_SGC[f.tipo] || f.tipo, TONO_FACTOR_SGC[f.tipo] || 'neutro') +
+                '</div>' +
+                '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(f.descripcion) + '</span>' +
+              '</div>';
+            }).join('') + '</div>' +
+            '<p class="sigso-ayuda">…y ' + (p.length - 4) + ' más.</p>' +
+            '<div class="sgc-acciones">' +
+              Componentes.boton({ texto: 'Cargar los ' + p.length + ' factores del DOC-02', clase: 'js-ctx-sembrar-foda' }) +
+            '</div>'
+          : '<p class="sigso-ayuda">El Encargado del SGC es quien lo carga.</p>');
+    }
+
+    var kpis = '<div class="sgc-kpis">' + [
+      Componentes.kpi({ etiqueta: 'Fortalezas', valor: (r.por_tipo || {}).FORTALEZA || 0 }),
+      Componentes.kpi({ etiqueta: 'Oportunidades', valor: (r.por_tipo || {}).OPORTUNIDAD || 0 }),
+      Componentes.kpi({ etiqueta: 'Debilidades', valor: (r.por_tipo || {}).DEBILIDAD || 0 }),
+      Componentes.kpi({ etiqueta: 'Amenazas', valor: (r.por_tipo || {}).AMENAZA || 0 })
+    ].join('') + '</div>';
+
+    var grupos = ['FORTALEZA', 'DEBILIDAD', 'OPORTUNIDAD', 'AMENAZA'].map(function (tipo) {
+      var delTipo = data.factores.filter(function (f) { return f.tipo === tipo; });
+      if (!delTipo.length) return '';
+      return '<h4 class="sgc-sub">' + ETIQUETA_FACTOR_PLURAL_SGC[tipo] + ' ' +
+        '<span class="sigso-ayuda">(' + (tipo === 'FORTALEZA' || tipo === 'DEBILIDAD' ? 'internas' : 'externas') + ')</span></h4>' +
+        '<div class="sgc-lista">' + delTipo.map(function (f) {
+          return '<div class="sgc-doc' + (f.estado === 'SUPERADO' ? ' sgc-doc--obsoleto' : '') +
+            '" data-factor="' + Componentes.escaparHtml(JSON.stringify(f)) + '">' +
+            '<div class="sgc-doc__linea">' +
+              '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(f.codigo) + '</span>' +
+              Componentes.badge(ETIQUETA_FACTOR_SGC[f.tipo] || f.tipo, TONO_FACTOR_SGC[f.tipo] || 'neutro') +
+              (f.estado === 'SUPERADO' ? Componentes.badge('Superado', 'neutro') : '') +
+            '</div>' +
+            '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(f.descripcion) + '</span>' +
+            (f.observaciones ? '<span class="sgc-doc__meta">' + Componentes.escaparHtml(f.observaciones) + '</span>' : '') +
+            (puede ? '<div class="sgc-acciones">' +
+              Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-ctx-editar-factor' }) +
+              Componentes.boton({ texto: 'Quitar', variante: 'peligro', clase: 'js-ctx-quitar-factor' }) +
+            '</div>' : '') +
+          '</div>';
+        }).join('') + '</div>';
+    }).join('');
+
+    var acciones = puede ? '<div class="sgc-acciones">' +
+      Componentes.boton({ texto: 'Agregar factor', variante: 'secundario', clase: 'js-ctx-nuevo-factor' }) +
+      Componentes.boton({ texto: 'Registrar revisión del contexto', clase: 'js-ctx-revisar' }) +
+      '</div>' : '';
+
+    return kpis + grupos + acciones;
+  }
+
+  function vistaPartes_(data, puede) {
+    if (!data.partes.length) {
+      var p = data.propuesta_partes || [];
+      return Componentes.alerta('Las partes interesadas todavía no están cargadas en el sistema.', 'aviso') +
+        (puede
+          ? '<h4 class="sgc-sub">Propuesta tomada del DOC-04 v02</h4>' +
+            '<p class="sigso-ayuda">Son las ' + p.length + ' partes del documento, con sus seis columnas reales: ' +
+            Componentes.escaparHtml(p.map(function (x) { return x.nombre; }).join(' · ')) + '.</p>' +
+            '<div class="sgc-acciones">' +
+              Componentes.boton({ texto: 'Cargar las ' + p.length + ' partes del DOC-04', clase: 'js-ctx-sembrar-partes' }) +
+            '</div>'
+          : '<p class="sigso-ayuda">El Encargado del SGC es quien las carga.</p>');
+    }
+
+    var lista = '<div class="sgc-lista">' + data.partes.map(function (p) {
+      return '<div class="sgc-doc" data-parte="' + Componentes.escaparHtml(JSON.stringify(p)) + '">' +
+        '<div class="sgc-doc__linea">' +
+          '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(p.nombre) + '</span>' +
+          Componentes.badge('Impacto ' + (p.impacto || '—'), p.impacto === 'Alto' ? 'critico' : 'neutro') +
+          Componentes.badge('Influencia ' + (p.influencia || '—'), p.influencia === 'Alto' ? 'alerta' : 'neutro') +
+        '</div>' +
+        '<dl class="sgc-ficha">' + [
+          campoFichaSgc_('Necesidades', p.necesidades),
+          campoFichaSgc_('Expectativa', p.expectativa),
+          campoFichaSgc_('Cómo afecta al SGC', p.efecto_sgc),
+          campoFichaSgc_('Método de seguimiento', p.metodo_seguimiento),
+          campoFichaSgc_('Frecuencia', p.frecuencia_seguimiento),
+          campoFichaSgc_('Responsable', p.responsable_email)
+        ].join('') + '</dl>' +
+        (puede ? '<div class="sgc-acciones">' +
+          Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-ctx-editar-parte' }) +
+          Componentes.boton({ texto: 'Quitar', variante: 'peligro', clase: 'js-ctx-quitar-parte' }) +
+        '</div>' : '') +
+      '</div>';
+    }).join('') + '</div>';
+
+    var acciones = puede ? '<div class="sgc-acciones">' +
+      Componentes.boton({ texto: 'Agregar parte interesada', variante: 'secundario', clase: 'js-ctx-nueva-parte' }) +
+      Componentes.boton({ texto: 'Registrar revisión del contexto', clase: 'js-ctx-revisar' }) +
+      '</div>' : '';
+
+    return '<p class="sigso-ayuda">Los tres últimos campos van vacíos a propósito: el DOC-04 no los trae. ' +
+      'Se pueden completar, pero el sistema no los inventa.</p>' + lista + acciones;
+  }
+
+  function wireAccionesContexto_(cont, data) {
+    function enviar_(accion, datos, exito) {
+      api_(accion, datos).then(function (r) {
+        var d = (r && r.data) || {};
+        Componentes.aviso({
+          texto: d.message || (r && r.message) || exito,
+          tipo: (r && r.ok && d.ok !== false) ? 'exito' : 'error'
+        });
+        if (r && r.ok && d.ok !== false) cargarContexto_();
+      });
+    }
+
+    var sembrarFoda = cont.querySelector('.js-ctx-sembrar-foda');
+    if (sembrarFoda) {
+      sembrarFoda.addEventListener('click', function () {
+        enviar_('sembrarFodaSgc', {}, 'Contexto cargado.');
+      });
+    }
+    var sembrarPartes = cont.querySelector('.js-ctx-sembrar-partes');
+    if (sembrarPartes) {
+      sembrarPartes.addEventListener('click', function () {
+        enviar_('sembrarPartesSgc', {}, 'Partes cargadas.');
+      });
+    }
+    cont.querySelectorAll('.js-ctx-revisar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        Componentes.confirmar({
+          titulo: '¿Registrar la revisión del contexto?',
+          mensaje: 'Deja constancia de que hoy se revisaron los factores y las partes interesadas, ' +
+            'aunque no cambie nada. Eso es lo que la norma pide demostrar.',
+          confirmar: 'Registrar'
+        }).then(function (ok) {
+          if (ok) enviar_('registrarRevisionContextoSgc', {}, 'Revisión registrada.');
+        });
+      });
+    });
+
+    var nuevoFactor = cont.querySelector('.js-ctx-nuevo-factor');
+    if (nuevoFactor) nuevoFactor.addEventListener('click', function () { abrirFormularioFactor_(null); });
+    cont.querySelectorAll('.js-ctx-editar-factor').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        abrirFormularioFactor_(JSON.parse(btn.parentNode.parentNode.getAttribute('data-factor')));
+      });
+    });
+    cont.querySelectorAll('.js-ctx-quitar-factor').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var f = JSON.parse(btn.parentNode.parentNode.getAttribute('data-factor'));
+        Componentes.confirmar({
+          titulo: '¿Quitar ' + f.codigo + ' del análisis?',
+          mensaje: 'Si el factor dejó de aplicar pero quieres conservarlo, edítalo y márcalo como superado.',
+          confirmar: 'Quitar', peligro: true
+        }).then(function (ok) {
+          if (ok) enviar_('anularFactorContextoSgc', { factor_id: f.factor_id }, 'Factor quitado.');
+        });
+      });
+    });
+
+    var nuevaParte = cont.querySelector('.js-ctx-nueva-parte');
+    if (nuevaParte) nuevaParte.addEventListener('click', function () { abrirFormularioParte_(null, data.niveles); });
+    cont.querySelectorAll('.js-ctx-editar-parte').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        abrirFormularioParte_(JSON.parse(btn.parentNode.parentNode.getAttribute('data-parte')), data.niveles);
+      });
+    });
+    cont.querySelectorAll('.js-ctx-quitar-parte').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var p = JSON.parse(btn.parentNode.parentNode.getAttribute('data-parte'));
+        Componentes.confirmar({
+          titulo: '¿Quitar a ' + p.nombre + '?',
+          confirmar: 'Quitar', peligro: true
+        }).then(function (ok) {
+          if (ok) enviar_('anularParteInteresadaSgc', { parte_id: p.parte_id }, 'Parte quitada.');
+        });
+      });
+    });
+  }
+
+  function abrirFormularioFactor_(actual) {
+    var f = actual || {};
+    var opciones = ['FORTALEZA', 'OPORTUNIDAD', 'DEBILIDAD', 'AMENAZA'].map(function (t) {
+      return { valor: t, texto: ETIQUETA_FACTOR_SGC[t] + (t === 'FORTALEZA' || t === 'DEBILIDAD' ? ' (interna)' : ' (externa)') };
+    });
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">' + (actual ? 'Editar ' + Componentes.escaparHtml(f.codigo) : 'Agregar factor de contexto') + '</h3>' +
+        '<form id="form-ctx-factor">' +
+          Componentes.campoSelect({ id: 'ctx-tipo', label: 'Tipo', valor: f.tipo || 'FORTALEZA',
+            opciones: opciones, requerido: true }) +
+          Componentes.campoTextarea({ id: 'ctx-descripcion', label: 'Descripción del factor',
+            valor: f.descripcion || '', requerido: true }) +
+          Componentes.campoTextarea({ id: 'ctx-observaciones', label: 'Observaciones', valor: f.observaciones || '' }) +
+          (actual
+            ? Componentes.campoSelect({ id: 'ctx-estado', label: 'Estado', valor: f.estado || 'VIGENTE',
+                opciones: [{ valor: 'VIGENTE', texto: 'Vigente' }, { valor: 'SUPERADO', texto: 'Superado' }] })
+            : '') +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit', clase: 'js-sgc-guardar' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-ctx-factor').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true;
+      var estadoEl = document.getElementById('ctx-estado');
+      api_('guardarFactorContextoSgc', {
+        factor_id: f.factor_id || '',
+        tipo: document.getElementById('ctx-tipo').value,
+        descripcion: document.getElementById('ctx-descripcion').value,
+        observaciones: document.getElementById('ctx-observaciones').value,
+        estado: estadoEl ? estadoEl.value : 'VIGENTE'
+      }).then(function (r) {
+        var d = (r && r.data) || {};
+        if (!r || !r.ok || d.ok === false) {
+          boton.disabled = false;
+          Componentes.aviso({ texto: d.message || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: d.message || 'Factor guardado.', tipo: 'exito' });
+        cargarContexto_();
+      }).catch(function () {
+        boton.disabled = false;
+        Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
+      });
+    });
+  }
+
+  function abrirFormularioParte_(actual, niveles) {
+    var p = actual || {};
+    var ops = (niveles || ['Alto', 'Medio', 'Bajo']).map(function (n) { return { valor: n, texto: n }; });
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">' + (actual ? 'Editar parte interesada' : 'Agregar parte interesada') + '</h3>' +
+        '<form id="form-ctx-parte">' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'ctx-p-nombre', label: 'Parte interesada', valor: p.nombre || '', requerido: true }) +
+            Componentes.campoTexto({ id: 'ctx-p-categoria', label: 'Categoría', valor: p.categoria || '',
+              ayuda: 'Interna o externa, por ejemplo.' }) +
+          '</div>' +
+          Componentes.campoTextarea({ id: 'ctx-p-necesidades', label: 'Necesidades y requisitos',
+            valor: p.necesidades || '', requerido: true }) +
+          Componentes.campoTextarea({ id: 'ctx-p-expectativa', label: 'Expectativa', valor: p.expectativa || '' }) +
+          Componentes.campoTextarea({ id: 'ctx-p-efecto', label: 'Cómo afecta al SGC', valor: p.efecto_sgc || '' }) +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoSelect({ id: 'ctx-p-impacto', label: 'Impacto', valor: p.impacto || 'Alto', opciones: ops, requerido: true }) +
+            Componentes.campoSelect({ id: 'ctx-p-influencia', label: 'Nivel de influencia', valor: p.influencia || 'Alto', opciones: ops, requerido: true }) +
+          '</div>' +
+          '<h4 class="sgc-sub">Seguimiento (opcional)</h4>' +
+          '<p class="sigso-ayuda">El DOC-04 no trae estos campos. Complétalos solo si la organización los definió.</p>' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'ctx-p-metodo', label: 'Método de seguimiento', valor: p.metodo_seguimiento || '' }) +
+            Componentes.campoTexto({ id: 'ctx-p-frecuencia', label: 'Frecuencia', valor: p.frecuencia_seguimiento || '' }) +
+          '</div>' +
+          Componentes.campoTexto({ id: 'ctx-p-responsable', label: 'Responsable (correo)', valor: p.responsable_email || '' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit', clase: 'js-sgc-guardar' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-ctx-parte').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true;
+      api_('guardarParteInteresadaSgc', {
+        parte_id: p.parte_id || '',
+        nombre: document.getElementById('ctx-p-nombre').value,
+        categoria: document.getElementById('ctx-p-categoria').value,
+        necesidades: document.getElementById('ctx-p-necesidades').value,
+        expectativa: document.getElementById('ctx-p-expectativa').value,
+        efecto_sgc: document.getElementById('ctx-p-efecto').value,
+        impacto: document.getElementById('ctx-p-impacto').value,
+        influencia: document.getElementById('ctx-p-influencia').value,
+        metodo_seguimiento: document.getElementById('ctx-p-metodo').value,
+        frecuencia_seguimiento: document.getElementById('ctx-p-frecuencia').value,
+        responsable_email: document.getElementById('ctx-p-responsable').value
+      }).then(function (r) {
+        var d = (r && r.data) || {};
+        if (!r || !r.ok || d.ok === false) {
+          boton.disabled = false;
+          Componentes.aviso({ texto: d.message || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: d.message || 'Parte interesada guardada.', tipo: 'exito' });
+        cargarContexto_();
+      }).catch(function () {
+        boton.disabled = false;
+        Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
+      });
+    });
+  }
 
   // ==========================================================================
   // v11.0 Fase 1 (§4.3): alcance del SGC y exclusiones.

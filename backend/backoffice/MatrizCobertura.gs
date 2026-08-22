@@ -136,6 +136,8 @@ var MatrizCobertura = {
 var EVALUADORES_CLAUSULA_ISO = {
 
   '5.3': function () { return evaluarPorDocumentos_('5.3'); },
+  '4.1': function () { return evaluarContextoOrganizacion_(); },
+  '4.2': function () { return evaluarPartesInteresadas_(); },
   '4.3': function () { return evaluarAlcanceDeclarado_(); },
   // v11.0 Fase 1. Era la unica de las 28 sin evaluador NI nota: caia al
   // texto generico y al auditor le aparecia 'sin evidencia' sin decirle por
@@ -452,6 +454,108 @@ function evaluarAlcanceDeclarado_() {
   };
 }
 
+// v11.0 Fase 2 (§4.1). El contexto se mide por dos cosas distintas, y por
+// eso no basta con contar factores: la norma pide DETERMINAR las cuestiones
+// internas y externas, y ademas hacerles SEGUIMIENTO Y REVISION. Un FODA
+// completo pero sin revisar en dos años no cumple §4.1, y contarlo como
+// completo le mentiria al Encargado justo en la pantalla que usa para
+// prepararse la auditoria.
+function evaluarContextoOrganizacion_() {
+  var factores = (typeof factoresContextoActivos_ === 'function') ? factoresContextoActivos_() : [];
+  var partes = (typeof partesInteresadasActivas_ === 'function') ? partesInteresadasActivas_() : [];
+  var porDocs = evaluarPorDocumentos_('4.1');
+
+  if (!factores.length) {
+    return {
+      estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
+      resumen: 'El análisis de contexto no está cargado en el sistema.',
+      nota: 'Carga el análisis FODA en la sección Contexto. ' +
+        (porDocs.evidencia.length
+          ? 'Hay documentos etiquetados para 4.1, pero un archivo adjunto no permite demostrar el seguimiento periódico que pide la cláusula.'
+          : ''),
+      evidencia: porDocs.evidencia
+    };
+  }
+
+  var resumen = resumenContexto_(factores, partes);
+  var ev = factores.slice(0, 12).map(function (f) {
+    return {
+      tipo: 'Factor de contexto (' + f.tipo + ')',
+      descripcion: String(f.tipo || '').slice(0, 1) + f.numero + ' — ' + f.descripcion,
+      fecha: f.fecha_ultima_revision || f.fecha_identificacion,
+      responsable: f.revisado_por || f.creado_por
+    };
+  });
+  porDocs.evidencia.forEach(function (e) { ev.push(e); });
+
+  var falta = [];
+  // Los cuatro cuadrantes: un FODA al que le falta un cuadrante entero no es
+  // un analisis de contexto completo.
+  ['FORTALEZA', 'OPORTUNIDAD', 'DEBILIDAD', 'AMENAZA'].forEach(function (t) {
+    if (!resumen.por_tipo[t]) falta.push('no hay ningún factor del tipo ' + t.toLowerCase());
+  });
+  if (resumen.revision_vencida) {
+    falta.push('la última revisión tiene ' + resumen.meses_desde_revision +
+      ' meses y la frecuencia definida es de ' + MESES_REVISION_CONTEXTO);
+  }
+
+  return {
+    estado: falta.length ? 'PARCIAL' : 'COMPLETO',
+    resumen: resumen.total_factores + ' factores de contexto identificados' +
+      (resumen.ultima_revision ? ', revisados al ' + resumen.ultima_revision : '') + '.',
+    nota: falta.length ? 'Para cerrar 4.1: ' + falta.join('; ') + '.' : '',
+    evidencia: ev
+  };
+}
+
+// v11.0 Fase 2 (§4.2). Misma logica: determinar las partes y sus requisitos,
+// y hacerles seguimiento. Se revisa ademas que cada parte tenga sus
+// necesidades escritas -- una fila con nombre y nada mas no es haber
+// determinado sus requisitos.
+function evaluarPartesInteresadas_() {
+  var partes = (typeof partesInteresadasActivas_ === 'function') ? partesInteresadasActivas_() : [];
+  var factores = (typeof factoresContextoActivos_ === 'function') ? factoresContextoActivos_() : [];
+  var porDocs = evaluarPorDocumentos_('4.2');
+
+  if (!partes.length) {
+    return {
+      estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
+      resumen: 'Las partes interesadas no están cargadas en el sistema.',
+      nota: 'Carga la matriz de partes interesadas en la sección Contexto.',
+      evidencia: porDocs.evidencia
+    };
+  }
+
+  var ev = partes.map(function (p) {
+    return {
+      tipo: 'Parte interesada',
+      descripcion: p.nombre + ' — impacto ' + (p.impacto || '—') + ', influencia ' + (p.influencia || '—'),
+      fecha: p.fecha_ultima_revision || p.fecha_creacion,
+      responsable: p.responsable_email || p.revisado_por || p.creado_por
+    };
+  });
+  porDocs.evidencia.forEach(function (e) { ev.push(e); });
+
+  var sinRequisitos = partes.filter(function (p) { return !String(p.necesidades || '').trim(); });
+  var resumen = resumenContexto_(factores, partes);
+
+  var falta = [];
+  if (sinRequisitos.length) {
+    falta.push(sinRequisitos.length + ' parte(s) sin necesidades o requisitos determinados');
+  }
+  if (resumen.revision_vencida) {
+    falta.push('la última revisión tiene ' + resumen.meses_desde_revision +
+      ' meses y la frecuencia definida es de ' + MESES_REVISION_CONTEXTO);
+  }
+
+  return {
+    estado: falta.length ? 'PARCIAL' : 'COMPLETO',
+    resumen: partes.length + ' partes interesadas determinadas, con sus necesidades y expectativas.',
+    nota: falta.length ? 'Para cerrar 4.2: ' + falta.join('; ') + '.' : '',
+    evidencia: ev
+  };
+}
+
 function evaluarPorDocumentos_(codigo) {
   var docs = leerFilasSeguro_(SHEETS.SGC_DOCUMENTOS).filter(function (d) {
     return esVerdaderoSgc_(d.activa) && d.estado === 'VIGENTE' &&
@@ -473,8 +577,6 @@ function evaluarPorDocumentos_(codigo) {
 // servicios...). Se declara explicito por que, en vez de mostrar un vacio
 // sin explicacion.
 var NOTA_FALTANTE_POR_DEFECTO_ISO = {
-  '4.1': 'El análisis de contexto (factores externos/internos) no tiene un módulo propio en SIGSO hoy; se documenta fuera del sistema.',
-  '4.2': 'Las necesidades y expectativas de las partes interesadas no tienen un módulo propio en SIGSO hoy.',
   '6.1': 'La gestión de riesgos y oportunidades no tiene un módulo propio en SIGSO hoy.',
   '6.3': 'La planificación de cambios no tiene un módulo propio en SIGSO hoy.',
   '7.1': 'La planificación de recursos no tiene un módulo propio en SIGSO hoy.',

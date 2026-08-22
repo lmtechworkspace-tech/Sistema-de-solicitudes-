@@ -147,7 +147,9 @@ var SHEETS = {
   SGC_OBJETIVOS: 'SGC_OBJETIVOS',
   SGC_INDICADOR_LECTURAS: 'SGC_INDICADOR_LECTURAS',
   SGC_ALCANCE: 'SGC_ALCANCE',
-  SGC_EXCLUSIONES: 'SGC_EXCLUSIONES'
+  SGC_EXCLUSIONES: 'SGC_EXCLUSIONES',
+  SGC_CONTEXTO: 'SGC_CONTEXTO',
+  SGC_PARTES_INTERESADAS: 'SGC_PARTES_INTERESADAS'
 };
 
 var COLUMNAS = {
@@ -783,6 +785,51 @@ var COLUMNAS = {
   SGC_EXCLUSIONES: [
     'exclusion_id', 'alcance_id', 'clausula', 'clausula_padre', 'titulo',
     'justificacion', 'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // --- v11.0 Fase 2: contexto de la organizacion (§4.1) -------------------
+  //
+  // El DOC-02 "Analisis FODA" es una tabla de cuatro cuadrantes con 24
+  // factores. Se estructura por dos razones que un Word no da: §4.1 exige
+  // hacer SEGUIMIENTO Y REVISION de estas cuestiones (no solo listarlas), y
+  // siete de los once riesgos del DOC-08 son literalmente debilidades y
+  // amenazas de este documento -- la cadena factor -> riesgo -> accion hoy
+  // solo existe en la cabeza de quien redacto ambos.
+  //
+  // tipo: FORTALEZA / OPORTUNIDAD / DEBILIDAD / AMENAZA.
+  // origen: INTERNO / EXTERNO. Se deriva del tipo, pero se PERSISTE porque
+  //   es el vocabulario de la norma ("cuestiones externas e internas") y es
+  //   por donde se agrupa al mostrarlo y al evaluar la clausula.
+  // numero: el correlativo dentro de su cuadrante, tal como lo trae el
+  //   DOC-02. Permite citar "D3" en un riesgo y que se entienda.
+  // estado: VIGENTE / SUPERADO. Un factor puede dejar de aplicar sin que
+  //   haya que borrarlo -- el historico es parte de la evidencia de que la
+  //   organizacion revisa su contexto.
+  SGC_CONTEXTO: [
+    'factor_id', 'tipo', 'origen', 'numero', 'descripcion',
+    'estado', 'observaciones',
+    'fecha_identificacion', 'fecha_ultima_revision', 'revisado_por',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // --- v11.0 Fase 2: partes interesadas (§4.2) ----------------------------
+  //
+  // Las columnas siguen al DOC-04 v02 y no a una plantilla generica: parte,
+  // necesidades, impacto, nivel de influencia, expectativa y como afecta al
+  // SGC. Son las SEIS que el documento real tiene.
+  //
+  // metodo_seguimiento / frecuencia_seguimiento / responsable_email quedan
+  // OPCIONALES y vacios: §4.2 pide hacer seguimiento y revision de la
+  // informacion sobre las partes interesadas, asi que tienen donde vivir,
+  // pero no se rellenan con algo inventado para que la pantalla se vea
+  // completa. Un campo vacio es honesto; uno inventado es un hallazgo.
+  SGC_PARTES_INTERESADAS: [
+    'parte_id', 'nombre', 'categoria',
+    'necesidades', 'expectativa', 'efecto_sgc',
+    'impacto', 'influencia',
+    'metodo_seguimiento', 'frecuencia_seguimiento', 'responsable_email',
+    'estado', 'fecha_ultima_revision', 'revisado_por',
+    'creado_por', 'fecha_creacion', 'activa'
   ]
 };
 
