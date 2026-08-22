@@ -274,107 +274,132 @@ function verificarFechasComprometidasTrigger() {
 }
 
 // v2.1 (Fase D, §8): ver Triggers.recordarValidacionPendiente().
+/**
+ * Presupuesto de tiempo del pase diario.
+ *
+ * Apps Script corta una ejecucion a los 6 minutos. De este unico slot cuelgan
+ * el mantenimiento y diez avisos, y hasta ahora corrian en cascada sin mirar
+ * el reloj: si el tiempo se agotaba, la ejecucion moria a medias -- sin pasar
+ * por ningun catch, sin registro, y con los ultimos avisos sin ejecutar.
+ *
+ * Se reservan 5 de los 6 minutos para EMPEZAR trabajos nuevos. El minuto que
+ * queda es el margen para que termine el ultimo que alcanzo a arrancar.
+ *
+ * ALCANCE HONESTO: esto evita la cascada ("arrancar el aviso 8 en el minuto
+ * 5:55"), no evita que un solo aviso se demore mas que todo el presupuesto.
+ * Para eso haria falta que cada aviso supiera abortarse a si mismo.
+ */
+var MS_PRESUPUESTO_PASE = 5 * 60 * 1000;
+
+// Donde arrancar la proxima vez. Sin esto, un presupuesto que siempre se
+// agota en el mismo punto convertiria "fallo silencioso" en algo peor: los
+// ultimos avisos de la lista no correrian NUNCA. Rotando, todos se atienden.
+var CLAVE_ROTACION_PASE = 'SIGSO_PASE_DIARIO_DESDE';
+
+// Los avisos que comparten este slot, en su orden historico. Cada uno ya
+// existe como funcion propia para poder forzarlo a mano desde el editor.
+var AVISOS_DEL_PASE_DIARIO = [
+  ['recordatorio_novedades', enviarRecordatorioNovedadesTrigger],
+  ['alertas_actividades', enviarAlertasActividadesTrigger],
+  ['recordatorio_calidad', enviarRecordatorioCalidadTrigger],
+  ['recordatorio_competencias', enviarRecordatorioCompetenciasTrigger],
+  ['avisos_nc_vencidas', enviarAvisosNcVencidasTrigger],
+  ['avisos_auditorias', enviarAvisosAuditoriasTrigger],
+  ['avisos_quejas', enviarAvisosQuejasTrigger],
+  ['avisos_proveedores', enviarAvisosProveedoresTrigger],
+  ['avisos_revision', enviarAvisosRevisionTrigger],
+  ['avisos_objetivos', enviarAvisosObjetivosTrigger]
+];
+
 function recordarValidacionPendienteTrigger() {
-  // MANTENIMIENTO PRIMERO, y no al final como estaba (H-03).
-  //
-  // De este unico slot cuelgan once trabajos que comparten los 6 minutos de
-  // ejecucion de Apps Script. Con las purgas al final, el dia que el
-  // presupuesto se agotara lo PRIMERO que se perderia seria justamente lo que
-  // contiene el crecimiento de las hojas -- y esas hojas, al crecer, hacen
-  // mas lento todo lo demas. Es el orden que se realimenta solo en la
-  // direccion mala.
-  //
-  // Ademas es barato y acotado (unas pocas lecturas y borrados), mientras que
-  // los avisos recorren modulo por modulo. Purgar antes deja las hojas mas
-  // chicas para el resto de la corrida.
+  var inicio = Date.now();
+
+  // MANTENIMIENTO PRIMERO (H-03) y siempre, fuera del presupuesto: es barato,
+  // acotado, y es lo que impide que las hojas crezcan sin freno. Con las
+  // purgas al final, el dia que el tiempo se agotara se perderia justo lo que
+  // contiene el crecimiento -- y esas hojas, al crecer, hacen mas lento todo
+  // lo demas.
   try {
     mantenimientoDiarioTrigger();
   } catch (err) {
     logError_(err, 'Triggers.recordarValidacionPendienteTrigger:mantenimientoDiarioTrigger');
   }
 
+  // El dueno real de este slot: corre siempre, antes que los invitados.
   var resultado = Triggers.recordarValidacionPendiente();
-  // v6.5 Fase 2 (Novedades): sin trigger propio (§ nota de configurarTriggers
-  // mas arriba -- limite de 20 triggers de tiempo ya copado). Se cuelga aqui
-  // en try/catch: si el recordatorio de Novedades fallara, no debe tumbar el
-  // recordatorio de validacion pendiente, que es el dueno real de este slot.
-  try {
-    enviarRecordatorioNovedadesTrigger();
-  } catch (err) {
-    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarRecordatorioNovedadesTrigger');
-  }
-  // v7.0 (Fase 4, §4.6): mismo criterio -- sin trigger propio (limite de 20
-  // ya copado), colgada en try/catch de este mismo slot de las 09:00.
-  try {
-    enviarAlertasActividadesTrigger();
-  } catch (err) {
-    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAlertasActividadesTrigger');
-  }
-  // v10.0 Fase 1b (SGC ISO 9001): acuses pendientes + revision a 12 meses.
-  // Mismo criterio que las dos de arriba -- sin trigger propio (limite de 20
-  // ya copado) y en try/catch, para que un fallo del SGC no tumbe al dueno
-  // real de este slot.
-  try {
-    enviarRecordatorioCalidadTrigger();
-  } catch (err) {
-    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarRecordatorioCalidadTrigger');
-  }
-  // v10.0 Fase 2b (competencias): evaluaciones a 12 meses, horas de
-  // formacion bajo la meta y eficacia de capacitaciones. Mismo criterio --
-  // sin trigger propio, en try/catch, colgada de este slot de las 09:00.
-  try {
-    enviarRecordatorioCompetenciasTrigger();
-  } catch (err) {
-    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarRecordatorioCompetenciasTrigger');
-  }
-  // v10.0 Fase 3a (PRO-06): no conformidades con plazo vencido, con
-  // escalado a Direccion. Mismo criterio -- sin trigger propio, en
-  // try/catch, colgada de este slot de las 09:00.
-  try {
-    enviarAvisosNcVencidasTrigger();
-  } catch (err) {
-    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosNcVencidasTrigger');
-  }
-  // v10.0 Fase 3b (PRO-03): informes de auditoria fuera de plazo, auditorias
-  // proximas y procesos sin auditar en 12 meses. Mismo criterio -- sin
-  // trigger propio, en try/catch, colgada de este slot de las 09:00.
-  try {
-    enviarAvisosAuditoriasTrigger();
-  } catch (err) {
-    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosAuditoriasTrigger');
-  }
-  // v10.0 Fase 4 (PRO-07): quejas con plazo de resolucion o de seguimiento
-  // vencido (30 dias corridos). Mismo criterio -- sin trigger propio,
-  // colgada de este slot de las 09:00.
-  try {
-    enviarAvisosQuejasTrigger();
-  } catch (err) {
-    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosQuejasTrigger');
-  }
-  // v10.0 Fase 5a (PRO-04 §6.2): evaluacion anual de proveedores vencida y
-  // proveedores reprobados sin gestionar. Mismo criterio -- sin trigger
-  // propio, colgada de este slot de las 09:00.
-  try {
-    enviarAvisosProveedoresTrigger();
-  } catch (err) {
-    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosProveedoresTrigger');
-  }
-  // v10.0 Fase 5b (PRO-05 §6): falta convocar la revision por la direccion
-  // (10 dias habiles antes) o se paso el ciclo de 12 meses. Mismo criterio.
-  try {
-    enviarAvisosRevisionTrigger();
-  } catch (err) {
-    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosRevisionTrigger');
-  }
-  // v10.0 Fase 6a (DOC-07): periodos ya cerrados sin su lectura. No medir un
-  // objetivo es no evaluar el desempeño (§9.1.1), asi que cuelga del mismo
-  // recorrido diario -- sin gastar uno de los 20 triggers.
-  try {
-    enviarAvisosObjetivosTrigger();
-  } catch (err) {
-    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosObjetivosTrigger');
-  }
+
+  // Los diez avisos que se cuelgan de aqui (limite de 20 triggers copado),
+  // bajo presupuesto y rotando.
+  resultado.pase = ejecutarAvisosDelPase_(inicio);
+
   return resultado;
+}
+
+/**
+ * Corre los avisos mientras quede presupuesto, empezando donde se quedo el
+ * pase anterior. Lo que no alcanza a correr queda REGISTRADO: el problema de
+ * antes no era que faltara tiempo, era que nadie se enteraba.
+ */
+function ejecutarAvisosDelPase_(inicio) {
+  var total = AVISOS_DEL_PASE_DIARIO.length;
+  var desde = leerDesdePase_(total);
+  var corridos = [];
+  var omitidos = [];
+
+  for (var i = 0; i < total; i++) {
+    var par = AVISOS_DEL_PASE_DIARIO[(desde + i) % total];
+    if (Date.now() - inicio > MS_PRESUPUESTO_PASE) {
+      omitidos.push(par[0]);
+      continue;
+    }
+    // El try/catch por aviso se mantiene: que uno falle no debe impedir los
+    // que vienen detras. Un fallo cuenta como "corrido" -- ya tuvo su turno,
+    // y repetirlo manana antes que los demas seria castigar al resto.
+    try {
+      par[1]();
+    } catch (err) {
+      logError_(err, 'Triggers.paseDiario:' + par[0]);
+    }
+    corridos.push(par[0]);
+  }
+
+  // Si algo quedo fuera, manana se arranca por ahi. Si corrio todo, se vuelve
+  // al orden natural para que el pase sea predecible.
+  guardarDesdePase_(omitidos.length ? (desde + corridos.length) % total : 0);
+
+  if (omitidos.length) {
+    try {
+      agregarFila_(SHEETS.LOG_SISTEMA, {
+        log_id: Utilities.getUuid(),
+        timestamp: new Date().toISOString(),
+        contexto: 'PASE_DIARIO_INCOMPLETO',
+        mensaje: 'Se agoto el presupuesto de tiempo. Sin ejecutar: ' + omitidos.join(', ') +
+          '. Se retomaran manana desde ahi.',
+        ref: 'PASE_DIARIO'
+      });
+    } catch (err) { /* trazabilidad best-effort */ }
+  }
+
+  return {
+    corridos: corridos,
+    omitidos: omitidos,
+    ms: Date.now() - inicio
+  };
+}
+
+function leerDesdePase_(total) {
+  try {
+    var valor = Number(PropertiesService.getScriptProperties().getProperty(CLAVE_ROTACION_PASE));
+    return (valor >= 0 && valor < total) ? valor : 0;
+  } catch (err) {
+    return 0;
+  }
+}
+
+function guardarDesdePase_(valor) {
+  try {
+    PropertiesService.getScriptProperties().setProperty(CLAVE_ROTACION_PASE, String(valor));
+  } catch (err) { /* sin Script Properties: el pase igual corre, sin rotar */ }
 }
 
 // v6.5 Fase 2: ver Novedades.recordatorioPendientes(). Se deja como funcion

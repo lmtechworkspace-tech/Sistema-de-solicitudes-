@@ -271,3 +271,131 @@ test('recordarValidacionPendienteTrigger no se rompe si las alertas de Actividad
 
   assert.doesNotThrow(() => ctx.recordarValidacionPendienteTrigger());
 });
+
+// --- H-05: presupuesto de tiempo del pase diario -----------------------------
+// Apps Script corta a los 6 minutos. De este slot cuelgan diez avisos que
+// corrian en cascada sin mirar el reloj: al agotarse el tiempo la ejecucion
+// moria a medias, sin pasar por ningun catch y sin dejar rastro.
+
+function cargarPase(props) {
+  const ctx = loadBackofficeProject({
+    scriptProperties: Object.assign({ SIGSO_SHEET_ID: 'fake-sheet-id' }, props || {})
+  });
+  Object.keys(ctx.COLUMNAS).forEach((h) => seedSheet(ctx, h, ctx.COLUMNAS[h]));
+  return ctx;
+}
+
+// Sustituye los avisos reales por sondas que registran su nombre, para poder
+// observar el orden y el corte sin depender de lo que hace cada modulo.
+function instrumentarAvisos(ctx, alCorrer) {
+  const nombres = toPlain(ctx.AVISOS_DEL_PASE_DIARIO).map((p) => p[0]);
+  ctx.AVISOS_DEL_PASE_DIARIO = nombres.map((n) => [n, () => alCorrer(n)]);
+  return nombres;
+}
+
+test('el pase corre los diez avisos cuando hay tiempo de sobra', () => {
+  const ctx = cargarPase();
+  const corridos = [];
+  const nombres = instrumentarAvisos(ctx, (n) => corridos.push(n));
+
+  const r = toPlain(ctx.ejecutarAvisosDelPase_(Date.now()));
+
+  assert.deepEqual(corridos, nombres, 'corren todos y en su orden natural');
+  assert.deepEqual(r.omitidos, []);
+});
+
+test('si se agotó el presupuesto, no arranca ningún aviso nuevo y lo deja REGISTRADO', () => {
+  const ctx = cargarPase();
+  const corridos = [];
+  instrumentarAvisos(ctx, (n) => corridos.push(n));
+
+  // Se simula un pase que empezó hace mucho: el presupuesto ya está gastado.
+  const inicioViejo = Date.now() - (ctx.MS_PRESUPUESTO_PASE + 1000);
+  const r = toPlain(ctx.ejecutarAvisosDelPase_(inicioViejo));
+
+  assert.deepEqual(corridos, [], 'no se arranca nada sin presupuesto');
+  assert.equal(r.omitidos.length, 10);
+
+  // Lo importante: que se sepa. Antes esto era silencio absoluto.
+  const log = ctx.leerFilas_('LOG_SISTEMA').filter((l) => l.contexto === 'PASE_DIARIO_INCOMPLETO');
+  assert.equal(log.length, 1);
+  assert.match(String(log[0].mensaje), /Sin ejecutar:/);
+  assert.match(String(log[0].mensaje), /retomaran manana/i);
+});
+
+// El reloj se interviene DENTRO del sandbox: el codigo corre ahi y usa el
+// Date de ese contexto, no el del proceso de test.
+function congelarReloj(ctx, fn) {
+  const vm = require('node:vm');
+  ctx.__ahoraFalso = fn;
+  vm.runInContext('__relojReal = Date.now; Date.now = function () { return __ahoraFalso(); };', ctx);
+  return () => vm.runInContext('Date.now = __relojReal;', ctx);
+}
+
+test('ROTACIÓN: el pase siguiente arranca donde se quedó el anterior', () => {
+  // Sin esto, un presupuesto que siempre se agota en el mismo punto haría que
+  // los últimos avisos de la lista no corrieran NUNCA: cambiaríamos un fallo
+  // silencioso por una inanición permanente.
+  const ctx = cargarPase();
+  const corridos = [];
+  const nombres = toPlain(ctx.AVISOS_DEL_PASE_DIARIO).map((p) => p[0]);
+
+  // Primer pase: alcanza para tres y se corta.
+  let n = 0;
+  const inicio = Date.now();
+  ctx.AVISOS_DEL_PASE_DIARIO = nombres.map((nom) => [nom, () => { corridos.push(nom); n++; }]);
+  const restaurar = congelarReloj(ctx, () => (n >= 3 ? inicio + ctx.MS_PRESUPUESTO_PASE + 1 : inicio));
+  try {
+    ctx.ejecutarAvisosDelPase_(inicio);
+  } finally {
+    restaurar();
+  }
+
+  assert.deepEqual(corridos, nombres.slice(0, 3), 'el primer pase alcanzó tres');
+
+  // Segundo pase, con tiempo de sobra: debe EMPEZAR por el cuarto.
+  const corridos2 = [];
+  ctx.AVISOS_DEL_PASE_DIARIO = nombres.map((nom) => [nom, () => corridos2.push(nom)]);
+  ctx.ejecutarAvisosDelPase_(Date.now());
+
+  assert.equal(corridos2[0], nombres[3],
+    'el aviso que quedó fuera ayer es el primero en correr hoy');
+  assert.equal(corridos2.length, 10, 'y de paso corren todos');
+});
+
+test('un aviso que falla no frena a los que vienen detrás, y cuenta como atendido', () => {
+  const ctx = cargarPase();
+  const corridos = [];
+  const nombres = toPlain(ctx.AVISOS_DEL_PASE_DIARIO).map((p) => p[0]);
+  ctx.AVISOS_DEL_PASE_DIARIO = nombres.map((n, i) => [n, () => {
+    if (i === 2) throw new Error('falla simulada');
+    corridos.push(n);
+  }]);
+
+  const r = toPlain(ctx.ejecutarAvisosDelPase_(Date.now()));
+
+  assert.equal(corridos.length, 9, 'los otros nueve corrieron igual');
+  assert.deepEqual(r.omitidos, []);
+  assert.equal(r.corridos.length, 10, 'el que falló ya tuvo su turno: no se repite antes que el resto');
+});
+
+test('tras un pase completo la rotación vuelve a cero: el orden es predecible', () => {
+  const ctx = cargarPase({ SIGSO_PASE_DIARIO_DESDE: '7' });
+  instrumentarAvisos(ctx, () => {});
+
+  ctx.ejecutarAvisosDelPase_(Date.now());
+
+  assert.equal(ctx.PropertiesService.getScriptProperties().getProperty('SIGSO_PASE_DIARIO_DESDE'), '0');
+});
+
+test('el mantenimiento corre SIEMPRE, aunque no quede presupuesto para los avisos', () => {
+  const ctx = cargarPase();
+  let mantenimiento = 0;
+  ctx.mantenimientoDiarioTrigger = () => { mantenimiento++; return {}; };
+  instrumentarAvisos(ctx, () => {});
+
+  ctx.recordarValidacionPendienteTrigger();
+
+  assert.equal(mantenimiento, 1,
+    'las purgas están fuera del presupuesto: son lo que impide que las hojas crezcan sin freno');
+});
