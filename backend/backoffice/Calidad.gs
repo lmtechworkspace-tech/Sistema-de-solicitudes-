@@ -950,6 +950,11 @@ function seccionesVisiblesSgc_(contexto) {
     // organizacion y quienes son sus partes interesadas es toma de
     // conciencia (§7.3), no informacion reservada.
     contexto: true,
+    // v11.0 Fase 3: la matriz de riesgos NO sigue ese criterio. Expone
+    // debilidades del negocio (falta de contratos, dependencia de
+    // plataformas) que no corresponde repartir a todo el personal, asi que
+    // se restringe a quien ya tiene lectura amplia del SGC.
+    riesgos: veTodo,
     nc: tieneAlgunaAsignada_(SHEETS.SGC_NC, ['responsable_email', 'detectada_por']),
     auditorias: tieneAlgunaAsignada_(SHEETS.SGC_AUDITORIAS, ['auditor_email']),
     quejas: veTodo, // el flujo de quejas es de gestion; el solicitante externo no entra al modulo

@@ -136,6 +136,7 @@ var MatrizCobertura = {
 var EVALUADORES_CLAUSULA_ISO = {
 
   '5.3': function () { return evaluarPorDocumentos_('5.3'); },
+  '6.1': function () { return evaluarRiesgosOportunidades_(); },
   '4.1': function () { return evaluarContextoOrganizacion_(); },
   '4.2': function () { return evaluarPartesInteresadas_(); },
   '4.3': function () { return evaluarAlcanceDeclarado_(); },
@@ -556,6 +557,75 @@ function evaluarPartesInteresadas_() {
   };
 }
 
+// v11.0 Fase 3 (§6.1). La clausula no pide tener una matriz: pide
+// DETERMINAR los riesgos y oportunidades, PLANIFICAR acciones para
+// abordarlos e integrarlas en los procesos del sistema. Por eso no basta
+// con contar filas.
+//
+// Se revisan cuatro cosas, y la nota dice cual falta:
+//   · que haya riesgos Y oportunidades (§6.1.1 nombra las dos);
+//   · que los altos y criticos tengan revaloracion -- una accion escrita sin
+//     revalorar no demuestra que el riesgo se haya abordado;
+//   · que las acciones esten asignadas a alguien como actividad, que es lo
+//     que la norma llama "integrar e implementar" (§6.1.2 b);
+//   · que la matriz se haya revisado dentro de la frecuencia definida.
+function evaluarRiesgosOportunidades_() {
+  var filas = (typeof riesgosActivos_ === 'function') ? riesgosActivos_() : [];
+  var porDocs = evaluarPorDocumentos_('6.1');
+
+  if (!filas.length) {
+    return {
+      estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
+      resumen: 'La matriz de riesgos y oportunidades no está cargada en el sistema.',
+      nota: 'Carga la matriz en la sección Riesgos. ' +
+        (porDocs.evidencia.length
+          ? 'Hay documentos etiquetados para 6.1, pero un archivo adjunto no demuestra que las acciones se hayan asignado ni revalorado.'
+          : ''),
+      evidencia: porDocs.evidencia
+    };
+  }
+
+  var lista = filas.map(function (r) { return formatearRiesgo_(r, '', null); });
+  var resumen = resumenRiesgos_(lista);
+
+  var ev = lista.slice(0, 15).map(function (r) {
+    var val = r.inherente ? r.inherente.banda + ' (' + r.inherente.magnitud + ')' : 'sin valorar';
+    return {
+      tipo: r.clase === 'OPORTUNIDAD' ? 'Oportunidad' : 'Riesgo',
+      descripcion: r.codigo + ' — ' + r.factor + ': ' + val +
+        (r.residual ? ' → ' + r.residual.banda + ' (' + r.residual.magnitud + ')' : ''),
+      fecha: r.fecha_ultima_revision || r.fecha_identificacion,
+      responsable: r.responsable_email || r.revisado_por
+    };
+  });
+  porDocs.evidencia.forEach(function (e) { ev.push(e); });
+
+  var falta = [];
+  if (!resumen.total_riesgos) falta.push('no hay riesgos identificados');
+  if (!resumen.total_oportunidades) falta.push('no hay oportunidades identificadas');
+  if (resumen.sin_tratar) {
+    falta.push(resumen.sin_tratar + ' riesgo(s) alto o crítico sin revaloración tras los controles');
+  }
+  if (resumen.sin_accion) {
+    falta.push(resumen.sin_accion + ' riesgo(s) sin acción definida');
+  }
+  if (!resumen.con_actividad) {
+    falta.push('ninguna acción está asignada como actividad a un responsable');
+  }
+  if (resumen.revision_vencida) {
+    falta.push('la última revisión tiene ' + resumen.meses_desde_revision +
+      ' meses y la frecuencia definida es de ' + MESES_REVISION_RIESGOS);
+  }
+
+  return {
+    estado: falta.length ? 'PARCIAL' : 'COMPLETO',
+    resumen: resumen.total_riesgos + ' riesgos y ' + resumen.total_oportunidades +
+      ' oportunidades determinados; ' + resumen.con_actividad + ' con acción asignada.',
+    nota: falta.length ? 'Para cerrar 6.1: ' + falta.join('; ') + '.' : '',
+    evidencia: ev
+  };
+}
+
 function evaluarPorDocumentos_(codigo) {
   var docs = leerFilasSeguro_(SHEETS.SGC_DOCUMENTOS).filter(function (d) {
     return esVerdaderoSgc_(d.activa) && d.estado === 'VIGENTE' &&
@@ -577,7 +647,6 @@ function evaluarPorDocumentos_(codigo) {
 // servicios...). Se declara explicito por que, en vez de mostrar un vacio
 // sin explicacion.
 var NOTA_FALTANTE_POR_DEFECTO_ISO = {
-  '6.1': 'La gestión de riesgos y oportunidades no tiene un módulo propio en SIGSO hoy.',
   '6.3': 'La planificación de cambios no tiene un módulo propio en SIGSO hoy.',
   '7.1': 'La planificación de recursos no tiene un módulo propio en SIGSO hoy.',
   '8.1': 'Requiere la evidencia de servicios (matriz cliente × proceso × período), pendiente para la Fase 7.',

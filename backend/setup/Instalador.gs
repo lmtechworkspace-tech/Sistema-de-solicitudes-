@@ -618,7 +618,46 @@ var ESQUEMA_HOJAS = {
     'metodo_seguimiento', 'frecuencia_seguimiento', 'responsable_email',
     'estado', 'fecha_ultima_revision', 'revisado_por',
     'creado_por', 'fecha_creacion', 'activa'
-  ]
+  ],
+
+  // --- v11.0 Fase 3: riesgos y oportunidades (§6.1) -----------------------
+  //
+  // El DOC-08 es el documento mas rico del material y el que mas gana al
+  // digitalizarse, porque trae un modelo de valoracion NUMERICO completo:
+  // probabilidad x impacto = magnitud, con bandas definidas, y una segunda
+  // pasada de revaloracion despues de aplicar los controles.
+  //
+  // Riesgos y oportunidades comparten hoja con un campo `clase`. Son la misma
+  // estructura (§6.1 las trata juntas) y separarlas en dos hojas obligaria a
+  // duplicar cada consulta. Lo que SI cambia es el significado: en una
+  // oportunidad, una magnitud alta es BUENA y la revaloracion deberia SUBIR.
+  //
+  // NO se guardan `magnitud` ni la banda: se CALCULAN a partir de
+  // probabilidad e impacto. Ese es el punto -- en el documento original 7 de
+  // las 32 valoraciones no coinciden con su propia tabla de criterios, y al
+  // calcularlas deja de ser posible que discrepen.
+  //
+  // factor_contexto_id: enlace al factor del FODA que origina el riesgo.
+  //   Siete de los once riesgos del DOC-08 son literalmente debilidades y
+  //   amenazas del DOC-02; sin este campo esa cadena se pierde.
+  // accion_actividad_id: la accion de tratamiento es una ACTIVIDAD del motor
+  //   v7.0, igual que las correcciones de una NC y los acuerdos de la
+  //   revision por la direccion. No se crea un tercer sistema de tareas.
+  // fecha_implementacion: texto libre a proposito. El documento usa "Agosto
+  //   2026", "Continuo" y "Post-certificacion"; forzar una fecha exacta
+  //   obligaria a inventar un dia que nadie decidio.
+  SGC_RIESGOS: [
+    'riesgo_id', 'clase', 'codigo',
+    'relacion_actividad', 'factor', 'descripcion',
+    'analisis_causa', 'procedencia', 'origen', 'factor_contexto_id',
+    'probabilidad', 'impacto',
+    'accion', 'fecha_implementacion', 'medidas_control',
+    'responsable_email', 'accion_actividad_id',
+    'probabilidad_residual', 'impacto_residual',
+    'estado', 'observaciones',
+    'fecha_identificacion', 'fecha_ultima_revision', 'revisado_por',
+    'creado_por', 'fecha_creacion', 'activa'
+  ]
 };
 
 // SLA por prioridad en horas habiles (§7.2). P5 no tiene SLA.

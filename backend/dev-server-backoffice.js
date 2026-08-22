@@ -313,6 +313,9 @@ function construirContexto() {
   // "no hay contexto cargado", que es donde la pantalla ofrece el DOC-02.
   seedSheet(ctx, 'SGC_CONTEXTO', ctx.COLUMNAS.SGC_CONTEXTO);
   seedSheet(ctx, 'SGC_PARTES_INTERESADAS', ctx.COLUMNAS.SGC_PARTES_INTERESADAS);
+  // v11.0 Fase 3: vacia a proposito -- el flujo a probar arranca en
+  // "la matriz no esta cargada", que es donde se ofrece el DOC-08.
+  seedSheet(ctx, 'SGC_RIESGOS', ctx.COLUMNAS.SGC_RIESGOS);
   seedSheet(ctx, 'SGC_ROLES', ctx.COLUMNAS.SGC_ROLES, [
     ['SGCR-1', 'admin@homepymes.cl', 'ENCARGADO_SGC', '', '', true, new Date().toISOString()],
     ['SGCR-2', 'jefe@homepymes.cl', 'OPERATIVO', 'CONTABILIDAD', '', true, new Date().toISOString()],

@@ -192,9 +192,12 @@ test('v10.0 F6b: un código de cláusula inventado se descarta al guardar, no se
 test('v10.0 F6b: una cláusula sin ningún módulo que la cubra explica por qué, no queda muda', () => {
   const ctx = loadConSchema();
   sembrarRoles(ctx);
-  const c61 = toPlain(ctx.MatrizCobertura.getDetalle({ codigo: '6.1' }, CTX_ENCARGADO));
-  assert.equal(c61.estado, 'FALTANTE');
-  assert.match(c61.nota, /no tiene un módulo propio/i);
+  // 6.1 servia de ejemplo hasta la v11.0 F3, que le dio modulo propio.
+  // 6.3 (planificacion de cambios) sigue sin tenerlo, y lo que este test
+  // protege es que la matriz DIGA por que, no que 6.1 este vacia.
+  const c63 = toPlain(ctx.MatrizCobertura.getDetalle({ codigo: '6.3' }, CTX_ENCARGADO));
+  assert.equal(c63.estado, 'FALTANTE');
+  assert.match(c63.nota, /no tiene un módulo propio/i);
 });
 
 // --- resumen global ------------------------------------------------------------
@@ -205,7 +208,7 @@ test('v10.0 F6b: el resumen global cuenta 28 cláusulas y las clasifica correcta
   const m = toPlain(ctx.MatrizCobertura.listar({}, CTX_ENCARGADO));
   assert.equal(m.clausulas.length, 28);
   assert.equal(m.resumen.total, 28);
-  assert.equal(m.resumen.completo + m.resumen.parcial + m.resumen.faltante, 28);
+  assert.equal(m.resumen.completo + m.resumen.parcial + m.resumen.faltante + m.resumen.no_aplica, 28);
 });
 
 // --- permisos --------------------------------------------------------------

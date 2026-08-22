@@ -301,7 +301,15 @@ var BACKOFFICE_ACTIONS = {
   registrarRevisionContextoSgc: handleRegistrarRevisionContextoSgc_,
   sembrarPartesSgc: handleSembrarPartesSgc_,
   guardarParteInteresadaSgc: handleGuardarParteInteresadaSgc_,
-  anularParteInteresadaSgc: handleAnularParteInteresadaSgc_
+  anularParteInteresadaSgc: handleAnularParteInteresadaSgc_,
+
+  // v11.0 Fase 3 (§6.1): riesgos y oportunidades.
+  listarRiesgosSgc: handleListarRiesgosSgc_,
+  sembrarRiesgosSgc: handleSembrarRiesgosSgc_,
+  guardarRiesgoSgc: handleGuardarRiesgoSgc_,
+  asignarAccionRiesgoSgc: handleAsignarAccionRiesgoSgc_,
+  registrarRevisionRiesgosSgc: handleRegistrarRevisionRiesgosSgc_,
+  anularRiesgoSgc: handleAnularRiesgoSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -570,7 +578,17 @@ var MODULO_POR_ACCION = {
   registrarRevisionContextoSgc: 'calidad',
   sembrarPartesSgc: 'calidad',
   guardarParteInteresadaSgc: 'calidad',
-  anularParteInteresadaSgc: 'calidad'
+  anularParteInteresadaSgc: 'calidad',
+
+  // v11.0 Fase 3: la matriz de riesgos la LEE quien tiene lectura amplia
+  // del SGC (el gate fino lo resuelve veTodoSgc_ dentro del modulo);
+  // editarla es del Encargado.
+  listarRiesgosSgc: ['calidad', 'gerencia'],
+  sembrarRiesgosSgc: 'calidad',
+  guardarRiesgoSgc: 'calidad',
+  asignarAccionRiesgoSgc: 'calidad',
+  registrarRevisionRiesgosSgc: 'calidad',
+  anularRiesgoSgc: 'calidad'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -1489,6 +1507,31 @@ function handleGuardarParteInteresadaSgc_(data, contexto) {
 
 function handleAnularParteInteresadaSgc_(data, contexto) {
   return responderResultado_(Contexto.anularParte(data, contexto));
+}
+
+// v11.0 Fase 3 (§6.1): riesgos y oportunidades.
+function handleListarRiesgosSgc_(data, contexto) {
+  return responderResultado_(Riesgos.listar(data, contexto));
+}
+
+function handleSembrarRiesgosSgc_(data, contexto) {
+  return responderResultado_(Riesgos.sembrarDesdeDoc08(data, contexto));
+}
+
+function handleGuardarRiesgoSgc_(data, contexto) {
+  return responderResultado_(Riesgos.guardar(data, contexto));
+}
+
+function handleAsignarAccionRiesgoSgc_(data, contexto) {
+  return responderResultado_(Riesgos.asignarAccion(data, contexto));
+}
+
+function handleRegistrarRevisionRiesgosSgc_(data, contexto) {
+  return responderResultado_(Riesgos.registrarRevision(data, contexto));
+}
+
+function handleAnularRiesgoSgc_(data, contexto) {
+  return responderResultado_(Riesgos.anular(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

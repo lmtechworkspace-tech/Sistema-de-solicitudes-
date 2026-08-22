@@ -202,6 +202,10 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // v11.0 Fase 2 (§4.1/§4.2): contexto y partes interesadas. Va antes de
   // MatrizCobertura.gs por lo mismo que Alcance.gs: esta lo consulta.
   'Contexto.gs',
+  // v11.0 Fase 3 (§6.1): riesgos y oportunidades. Usa crearTareaSgc_ y
+  // tareaResumen_ de NoConformidades.gs, y factoresContextoActivos_ /
+  // mesesDesde_ de Contexto.gs -- por eso va despues de ambos.
+  'Riesgos.gs',
   // v10.0 Fase 6b: matriz de cobertura ISO. Usa CLAUSULAS_ISO9001 de
   // Auditorias.gs y datos de casi todos los modulos SGC ya cargados.
   'MatrizCobertura.gs',

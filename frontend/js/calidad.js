@@ -43,6 +43,8 @@
       if (revisionActivaId_) abrirRevision_(revisionActivaId_); else cargarRevisiones_();
     } else if (seccionActiva_ === 'objetivos') {
       if (objetivoActivoId_) abrirObjetivo_(objetivoActivoId_); else cargarObjetivos_();
+    } else if (seccionActiva_ === 'riesgos') {
+      cargarRiesgos_();
     } else if (seccionActiva_ === 'contexto') {
       cargarContexto_();
     } else if (seccionActiva_ === 'alcance') {
@@ -80,7 +82,8 @@
     // Las fases siguientes suman Riesgos y Procesos a este mismo grupo.
     { label: 'Planificación', items: [
       { id: 'contexto', texto: 'Contexto', icono: 'lupa' },
-      { id: 'alcance', texto: 'Alcance', icono: 'diana' }
+      { id: 'alcance', texto: 'Alcance', icono: 'diana' },
+      { id: 'riesgos', texto: 'Riesgos', icono: 'alerta' }
     ] },
     { label: 'Dirección', items: [
       { id: 'revision', texto: 'Revisión por la dirección', icono: 'estado' },
@@ -4817,6 +4820,388 @@
   // 7.2" y sale en un clic.
 
   // ==========================================================================
+  // v11.0 Fase 3 (§6.1): riesgos y oportunidades.
+  //
+  // Lo que esta pantalla hace y un Excel no: calcula la magnitud y su banda
+  // desde probabilidad x impacto, asi que la etiqueta no puede contradecir
+  // al numero. En el DOC-08 original 7 de las 32 valoraciones no coinciden
+  // con su propia tabla de criterios.
+  //
+  // Y trata las oportunidades al reves a proposito: ahi una magnitud alta es
+  // BUENA y la revaloracion deberia subir.
+  // ==========================================================================
+
+  var vistaRiesgos_ = 'riesgos';
+
+  function cargarRiesgos_() {
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando matriz de riesgos...');
+    api_('listarRiesgosSgc', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = barraSecciones_() +
+          Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar la matriz.', 'error');
+        wireSecciones_(cont);
+        return;
+      }
+      pintarRiesgos_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
+      wireSecciones_(cont);
+    });
+  }
+
+  function pintarRiesgos_(cont, data) {
+    var puede = !!data.puede_gestionar;
+    var r = data.resumen || {};
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">Riesgos y oportunidades del SGC (§6.1). La magnitud y su nivel los calcula el sistema ' +
+      'desde probabilidad × impacto, así que la etiqueta nunca puede contradecir al número.</p>' +
+      '</div>';
+
+    if (!data.riesgos.length && !data.oportunidades.length) {
+      cont.innerHTML = cabecera + pintarSinRiesgos_(data, puede);
+      wireSecciones_(cont);
+      var b = cont.querySelector('.js-rsg-sembrar');
+      if (b) b.addEventListener('click', function () {
+        api_('sembrarRiesgosSgc', {}).then(function (resp) {
+          var d = (resp && resp.data) || {};
+          Componentes.aviso({ texto: d.message || 'Matriz cargada.', tipo: (resp && resp.ok && d.ok !== false) ? 'exito' : 'error' });
+          if (resp && resp.ok && d.ok !== false) cargarRiesgos_();
+        });
+      });
+      return;
+    }
+
+    var subnav = '<div class="sgc-subnav-accesos">' +
+      [{ id: 'riesgos', texto: 'Riesgos (' + data.riesgos.length + ')' },
+       { id: 'oportunidades', texto: 'Oportunidades (' + data.oportunidades.length + ')' }]
+        .map(function (v) {
+          return '<button type="button" class="sigso-tab js-rsg-vista' +
+            (v.id === vistaRiesgos_ ? ' sigso-tab--activo' : '') + '" data-vista="' + v.id + '">' +
+            v.texto + '</button>';
+        }).join('') + '</div>';
+
+    var avisoRevision = '';
+    if (r.ultima_revision) {
+      avisoRevision = Componentes.alerta(
+        'Última revisión de la matriz: ' + fechaCorta_(r.ultima_revision) +
+        (r.meses_desde_revision !== null && r.meses_desde_revision !== undefined
+          ? ' (hace ' + r.meses_desde_revision + ' meses)' : '') +
+        '. La frecuencia definida es cada ' + data.meses_revision + ' meses.',
+        r.revision_vencida ? 'error' : 'aviso');
+    }
+
+    var kpis = '<div class="sgc-kpis">' + [
+      Componentes.kpi({ etiqueta: 'Riesgos', valor: r.total_riesgos || 0 }),
+      Componentes.kpi({ etiqueta: 'Altos o críticos', valor: r.criticos_o_altos || 0,
+        alerta: !!r.criticos_o_altos,
+        titulo: 'Riesgos cuya valoración inherente cae en Alto o Crítico.' }),
+      Componentes.kpi({ etiqueta: 'Sin revalorar', valor: r.sin_tratar || 0,
+        alerta: !!r.sin_tratar,
+        titulo: 'Altos o críticos sin valoración residual: una acción escrita sin revalorar no demuestra que el riesgo se abordó.' }),
+      Componentes.kpi({ etiqueta: 'Con actividad', valor: r.con_actividad || 0,
+        titulo: 'Acciones asignadas a un responsable como actividad de "Mi trabajo".' }),
+      Componentes.kpi({ etiqueta: 'Oportunidades', valor: r.total_oportunidades || 0 })
+    ].join('') + '</div>';
+
+    var lista = vistaRiesgos_ === 'oportunidades' ? data.oportunidades : data.riesgos;
+    var nota = vistaRiesgos_ === 'oportunidades'
+      ? '<p class="sigso-ayuda">En una oportunidad, una magnitud <strong>alta es buena</strong>: la revaloración ' +
+        'debería subir tras las acciones, no bajar. El sistema lee el semáforo al revés en esta pestaña.</p>'
+      : '';
+
+    var filas = '<div class="sgc-lista">' + lista.map(function (x) { return tarjetaRiesgo_(x, puede); }).join('') + '</div>';
+
+    var acciones = puede ? '<div class="sgc-acciones">' +
+      Componentes.boton({ texto: 'Agregar registro', variante: 'secundario', clase: 'js-rsg-nuevo' }) +
+      Componentes.boton({ texto: 'Registrar revisión de la matriz', clase: 'js-rsg-revisar' }) +
+      '</div>' : '';
+
+    cont.innerHTML = cabecera + subnav + avisoRevision + kpis + nota + filas + acciones;
+    wireSecciones_(cont);
+
+    cont.querySelectorAll('.js-rsg-vista').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        vistaRiesgos_ = btn.getAttribute('data-vista');
+        cargarRiesgos_();
+      });
+    });
+    if (puede) wireAccionesRiesgos_(cont, data);
+  }
+
+  function pintarSinRiesgos_(data, puede) {
+    var p = data.propuesta || {};
+    return Componentes.alerta('La matriz de riesgos y oportunidades todavía no está cargada.', 'aviso') +
+      (puede
+        ? '<h4 class="sgc-sub">Propuesta tomada del DOC-08 v02</h4>' +
+          '<p class="sigso-ayuda">Son ' + (p.riesgos || 0) + ' riesgos y ' + (p.oportunidades || 0) +
+          ' oportunidades transcritos del documento. Se cargan solo la probabilidad y el impacto: ' +
+          'la magnitud y el nivel los calcula el sistema, y por eso se corrigen solas las siete ' +
+          'valoraciones que en el documento no coinciden con su propia tabla de criterios.</p>' +
+          '<p class="sigso-ayuda">Si ya cargaste el análisis de contexto, cada riesgo queda enlazado ' +
+          'al factor del FODA que lo origina.</p>' +
+          '<div class="sgc-acciones">' +
+            Componentes.boton({ texto: 'Cargar la matriz del DOC-08', clase: 'js-rsg-sembrar' }) +
+          '</div>'
+        : '<p class="sigso-ayuda">El Encargado del SGC es quien la carga.</p>');
+  }
+
+  function valoracionHtml_(v, tono, etiqueta) {
+    if (!v) return '<span class="sgc-doc__meta">' + etiqueta + ': sin valorar</span>';
+    return '<span class="sgc-doc__meta">' + etiqueta + ': ' +
+      Componentes.badge(v.banda + ' · ' + v.magnitud, tono) + '</span>';
+  }
+
+  function tarjetaRiesgo_(x, puede) {
+    var flecha = '';
+    if (x.inherente && x.residual) {
+      flecha = x.mejora
+        ? Componentes.badge(x.favorable ? 'Mejora' : 'Reduce', 'ok')
+        : Componentes.badge('Sin cambio', 'neutro');
+    }
+    return '<div class="sgc-doc" data-riesgo-id="' + Componentes.escaparHtml(x.riesgo_id) + '">' +
+      '<div class="sgc-doc__linea">' +
+        '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(x.codigo + ' — ' + x.factor) + '</span>' +
+        Componentes.badge(x.origen === 'EXTERNO' ? 'Externo' : 'Interno', 'neutro') +
+        flecha +
+      '</div>' +
+      '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(x.descripcion) + '</span>' +
+      '<div class="sgc-doc__linea">' +
+        valoracionHtml_(x.inherente, x.tono_inherente, 'Inherente') +
+        valoracionHtml_(x.residual, x.tono_residual, 'Tras controles') +
+      '</div>' +
+      (x.factor_contexto
+        ? '<span class="sgc-doc__meta">Factor de contexto: ' + Componentes.escaparHtml(x.factor_contexto) + '</span>'
+        : '') +
+      (x.accion ? '<span class="sgc-doc__meta">Acción: ' + Componentes.escaparHtml(x.accion) + '</span>' : '') +
+      (x.tarea
+        ? '<span class="sgc-doc__meta">Actividad asignada a ' + Componentes.escaparHtml(x.tarea.responsable_email) +
+          ' — ' + Componentes.escaparHtml(x.tarea.estado) + '</span>'
+        : '') +
+      (puede ? '<div class="sgc-acciones">' +
+        Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-rsg-editar' }) +
+        (x.accion_actividad_id ? ''
+          : Componentes.boton({ texto: 'Asignar acción', variante: 'secundario', clase: 'js-rsg-asignar' })) +
+        Componentes.boton({ texto: 'Quitar', variante: 'peligro', clase: 'js-rsg-quitar' }) +
+      '</div>' : '') +
+    '</div>';
+  }
+
+  function wireAccionesRiesgos_(cont, data) {
+    function enviar_(accion, datos) {
+      api_(accion, datos).then(function (resp) {
+        var d = (resp && resp.data) || {};
+        Componentes.aviso({
+          texto: d.message || (resp && resp.message) || 'Listo.',
+          tipo: (resp && resp.ok && d.ok !== false) ? 'exito' : 'error'
+        });
+        if (resp && resp.ok && d.ok !== false) cargarRiesgos_();
+      });
+    }
+    function delBoton_(btn) {
+      var id = btn.parentNode.parentNode.getAttribute('data-riesgo-id');
+      return [].concat(data.riesgos, data.oportunidades).filter(function (x) {
+        return x.riesgo_id === id;
+      })[0];
+    }
+
+    var nuevo = cont.querySelector('.js-rsg-nuevo');
+    if (nuevo) nuevo.addEventListener('click', function () { abrirFormularioRiesgo_(null, data); });
+
+    cont.querySelectorAll('.js-rsg-editar').forEach(function (btn) {
+      btn.addEventListener('click', function () { abrirFormularioRiesgo_(delBoton_(btn), data); });
+    });
+
+    cont.querySelectorAll('.js-rsg-asignar').forEach(function (btn) {
+      btn.addEventListener('click', function () { abrirAsignarAccion_(delBoton_(btn)); });
+    });
+
+    cont.querySelectorAll('.js-rsg-quitar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var x = delBoton_(btn);
+        Componentes.confirmar({
+          titulo: '¿Quitar ' + x.codigo + ' de la matriz?',
+          mensaje: 'Deja de contar en la evaluación de 6.1. La actividad asignada, si la hay, no se toca.',
+          confirmar: 'Quitar', peligro: true
+        }).then(function (ok) { if (ok) enviar_('anularRiesgoSgc', { riesgo_id: x.riesgo_id }); });
+      });
+    });
+
+    cont.querySelectorAll('.js-rsg-revisar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        Componentes.confirmar({
+          titulo: '¿Registrar la revisión de la matriz?',
+          mensaje: 'Deja constancia de que hoy se revisaron los riesgos y oportunidades, aunque no cambie nada.',
+          confirmar: 'Registrar'
+        }).then(function (ok) { if (ok) enviar_('registrarRevisionRiesgosSgc', {}); });
+      });
+    });
+  }
+
+  function abrirAsignarAccion_(x) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Asignar la acción de ' + Componentes.escaparHtml(x.codigo) + '</h3>' +
+        '<p class="sigso-ayuda">' + Componentes.escaparHtml(x.accion) + '</p>' +
+        '<p class="sigso-ayuda">Se crea una actividad en "Mi trabajo" del responsable, igual que las ' +
+        'correcciones de una no conformidad. No hay un flujo aparte que aprender.</p>' +
+        '<form id="form-rsg-asignar">' +
+          Componentes.campoTexto({ id: 'rsg-responsable', label: 'Responsable (correo)',
+            valor: x.responsable_email || '', requerido: true }) +
+          Componentes.campoTexto({ id: 'rsg-fecha', label: 'Fecha comprometida', tipo: 'date',
+            valor: '', requerido: true,
+            ayuda: x.fecha_implementacion ? 'El DOC-08 dice: ' + x.fecha_implementacion : '' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Crear actividad', tipo: 'submit', clase: 'js-sgc-guardar' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-rsg-asignar').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true;
+      api_('asignarAccionRiesgoSgc', {
+        riesgo_id: x.riesgo_id,
+        responsable_email: document.getElementById('rsg-responsable').value,
+        fecha_compromiso: document.getElementById('rsg-fecha').value
+      }).then(function (resp) {
+        var d = (resp && resp.data) || {};
+        if (!resp || !resp.ok || d.ok === false) {
+          boton.disabled = false;
+          Componentes.aviso({ texto: d.message || 'No se pudo asignar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: d.message || 'Acción asignada.', tipo: 'exito' });
+        cargarRiesgos_();
+      }).catch(function () {
+        boton.disabled = false;
+        Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
+      });
+    });
+  }
+
+  function abrirFormularioRiesgo_(actual, data) {
+    var x = actual || {};
+    var esNuevo = !actual;
+    var opsProb = (data.escala_probabilidad || []).map(function (p) {
+      return { valor: p.valor, texto: p.etiqueta + ' (' + p.valor + ')' };
+    });
+    var opsImp = (data.escala_impacto || []).map(function (i) {
+      return { valor: i.valor, texto: i.etiqueta + ' (' + i.valor + ')' };
+    });
+    var opsFactor = [{ valor: '', texto: 'Sin enlazar' }].concat(
+      (data.factores_contexto || []).map(function (f) {
+        return { valor: f.factor_id, texto: f.codigo + ' — ' + String(f.descripcion).slice(0, 60) };
+      }));
+
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">' +
+          (esNuevo ? 'Agregar riesgo u oportunidad' : 'Editar ' + Componentes.escaparHtml(x.codigo)) + '</h3>' +
+        '<form id="form-rsg">' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoSelect({ id: 'rsg-clase', label: 'Tipo', valor: x.clase || 'RIESGO',
+              placeholder: false, requerido: true,
+              opciones: [{ valor: 'RIESGO', texto: 'Riesgo' }, { valor: 'OPORTUNIDAD', texto: 'Oportunidad (alto = bueno)' }] }) +
+            Componentes.campoSelect({ id: 'rsg-origen', label: 'Origen', valor: x.origen || 'INTERNO',
+              placeholder: false,
+              opciones: [{ valor: 'INTERNO', texto: 'Interno' }, { valor: 'EXTERNO', texto: 'Externo' }] }) +
+          '</div>' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'rsg-relacion', label: 'Relación / actividad',
+              valor: x.relacion_actividad || '', ayuda: 'El proceso o área donde ocurre.' }) +
+            Componentes.campoTexto({ id: 'rsg-factor', label: 'Factor', valor: x.factor || '',
+              requerido: true, ayuda: 'Título corto con el que se identifica.' }) +
+          '</div>' +
+          Componentes.campoTextarea({ id: 'rsg-descripcion', label: 'Descripción',
+            valor: x.descripcion || '', requerido: true }) +
+          Componentes.campoTextarea({ id: 'rsg-causa', label: 'Análisis de causa', valor: x.analisis_causa || '' }) +
+          Componentes.campoTextarea({ id: 'rsg-procedencia', label: 'Procedencia', valor: x.procedencia || '' }) +
+          Componentes.campoSelect({ id: 'rsg-factor-ctx', label: 'Factor del contexto que lo origina',
+            valor: x.factor_contexto_id || '', placeholder: false, opciones: opsFactor,
+            ayuda: 'Enlaza con el análisis FODA. Deja "sin enlazar" si no corresponde.' }) +
+          '<h4 class="sgc-sub">Valoración inherente</h4>' +
+          '<p class="sigso-ayuda">La magnitud y el nivel se calculan solos: probabilidad × impacto.</p>' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoSelect({ id: 'rsg-prob', label: 'Probabilidad',
+              valor: x.probabilidad || 0.5, placeholder: false, requerido: true, opciones: opsProb }) +
+            Componentes.campoSelect({ id: 'rsg-imp', label: 'Impacto',
+              valor: x.impacto || 10, placeholder: false, requerido: true, opciones: opsImp }) +
+          '</div>' +
+          '<h4 class="sgc-sub">Tratamiento</h4>' +
+          Componentes.campoTextarea({ id: 'rsg-accion', label: 'Acción', valor: x.accion || '' }) +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'rsg-fecha-impl', label: 'Fecha de implementación',
+              valor: x.fecha_implementacion || '',
+              ayuda: 'Texto libre: el DOC-08 usa "Agosto 2026", "Continuo", "Post-certificación".' }) +
+            Componentes.campoTextarea({ id: 'rsg-control', label: 'Medidas de control', valor: x.medidas_control || '' }) +
+          '</div>' +
+          '<h4 class="sgc-sub">Revaloración tras los controles</h4>' +
+          '<p class="sigso-ayuda">Opcional mientras el riesgo no se haya tratado. Si la completas, ' +
+          'tienen que ir las dos: con una sola no se puede calcular la magnitud.</p>' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoSelect({ id: 'rsg-prob-res', label: 'Probabilidad residual',
+              valor: x.probabilidad_residual || '', opciones: opsProb, placeholder: 'Sin revalorar' }) +
+            Componentes.campoSelect({ id: 'rsg-imp-res', label: 'Impacto residual',
+              valor: x.impacto_residual || '', opciones: opsImp, placeholder: 'Sin revalorar' }) +
+          '</div>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit', clase: 'js-sgc-guardar' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-rsg').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true;
+      api_('guardarRiesgoSgc', {
+        riesgo_id: x.riesgo_id || '',
+        clase: document.getElementById('rsg-clase').value,
+        origen: document.getElementById('rsg-origen').value,
+        relacion_actividad: document.getElementById('rsg-relacion').value,
+        factor: document.getElementById('rsg-factor').value,
+        descripcion: document.getElementById('rsg-descripcion').value,
+        analisis_causa: document.getElementById('rsg-causa').value,
+        procedencia: document.getElementById('rsg-procedencia').value,
+        factor_contexto_id: document.getElementById('rsg-factor-ctx').value,
+        probabilidad: document.getElementById('rsg-prob').value,
+        impacto: document.getElementById('rsg-imp').value,
+        accion: document.getElementById('rsg-accion').value,
+        fecha_implementacion: document.getElementById('rsg-fecha-impl').value,
+        medidas_control: document.getElementById('rsg-control').value,
+        probabilidad_residual: document.getElementById('rsg-prob-res').value,
+        impacto_residual: document.getElementById('rsg-imp-res').value
+      }).then(function (resp) {
+        var d = (resp && resp.data) || {};
+        if (!resp || !resp.ok || d.ok === false) {
+          boton.disabled = false;
+          Componentes.aviso({ texto: d.message || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: d.message || 'Registro guardado.', tipo: 'exito' });
+        cargarRiesgos_();
+      }).catch(function () {
+        boton.disabled = false;
+        Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
+      });
+    });
+  }
+
+  // ==========================================================================
   // v11.0 Fase 2 (§4.1 y §4.2): contexto de la organizacion y partes
   // interesadas. Una sola seccion con dos vistas, para no sumar dos pestañas
   // planas a una barra que ya tiene once.
@@ -4944,7 +5329,7 @@
         '<span class="sigso-ayuda">(' + (tipo === 'FORTALEZA' || tipo === 'DEBILIDAD' ? 'internas' : 'externas') + ')</span></h4>' +
         '<div class="sgc-lista">' + delTipo.map(function (f) {
           return '<div class="sgc-doc' + (f.estado === 'SUPERADO' ? ' sgc-doc--obsoleto' : '') +
-            '" data-factor="' + Componentes.escaparHtml(JSON.stringify(f)) + '">' +
+            '" data-factor-id="' + Componentes.escaparHtml(f.factor_id) + '">' +
             '<div class="sgc-doc__linea">' +
               '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(f.codigo) + '</span>' +
               Componentes.badge(ETIQUETA_FACTOR_SGC[f.tipo] || f.tipo, TONO_FACTOR_SGC[f.tipo] || 'neutro') +
@@ -4983,7 +5368,7 @@
     }
 
     var lista = '<div class="sgc-lista">' + data.partes.map(function (p) {
-      return '<div class="sgc-doc" data-parte="' + Componentes.escaparHtml(JSON.stringify(p)) + '">' +
+      return '<div class="sgc-doc" data-parte-id="' + Componentes.escaparHtml(p.parte_id) + '">' +
         '<div class="sgc-doc__linea">' +
           '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(p.nombre) + '</span>' +
           Componentes.badge('Impacto ' + (p.impacto || '—'), p.impacto === 'Alto' ? 'critico' : 'neutro') +
@@ -5054,12 +5439,14 @@
     if (nuevoFactor) nuevoFactor.addEventListener('click', function () { abrirFormularioFactor_(null); });
     cont.querySelectorAll('.js-ctx-editar-factor').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        abrirFormularioFactor_(JSON.parse(btn.parentNode.parentNode.getAttribute('data-factor')));
+        abrirFormularioFactor_(buscarPorId_(data.factores, 'factor_id',
+          btn.parentNode.parentNode.getAttribute('data-factor-id')));
       });
     });
     cont.querySelectorAll('.js-ctx-quitar-factor').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var f = JSON.parse(btn.parentNode.parentNode.getAttribute('data-factor'));
+        var f = buscarPorId_(data.factores, 'factor_id',
+          btn.parentNode.parentNode.getAttribute('data-factor-id'));
         Componentes.confirmar({
           titulo: '¿Quitar ' + f.codigo + ' del análisis?',
           mensaje: 'Si el factor dejó de aplicar pero quieres conservarlo, edítalo y márcalo como superado.',
@@ -5074,12 +5461,14 @@
     if (nuevaParte) nuevaParte.addEventListener('click', function () { abrirFormularioParte_(null, data.niveles); });
     cont.querySelectorAll('.js-ctx-editar-parte').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        abrirFormularioParte_(JSON.parse(btn.parentNode.parentNode.getAttribute('data-parte')), data.niveles);
+        abrirFormularioParte_(buscarPorId_(data.partes, 'parte_id',
+          btn.parentNode.parentNode.getAttribute('data-parte-id')), data.niveles);
       });
     });
     cont.querySelectorAll('.js-ctx-quitar-parte').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var p = JSON.parse(btn.parentNode.parentNode.getAttribute('data-parte'));
+        var p = buscarPorId_(data.partes, 'parte_id',
+          btn.parentNode.parentNode.getAttribute('data-parte-id'));
         Componentes.confirmar({
           titulo: '¿Quitar a ' + p.nombre + '?',
           confirmar: 'Quitar', peligro: true
@@ -5242,6 +5631,14 @@
     });
   }
 
+  // El objeto se busca en los datos que ya estan en memoria y en el
+  // atributo va solo el id. Componentes.escaparHtml (textContent ->
+  // innerHTML) NO escapa comillas dobles, asi que un JSON.stringify en un
+  // atributo se corta en la primera comilla del primer nombre de campo.
+  function buscarPorId_(lista, campo, id) {
+    return (lista || []).filter(function (x) { return x[campo] === id; })[0] || null;
+  }
+
   function campoFichaSgc_(etiqueta, valor) {
     return '<div class="sgc-ficha__campo"><dt>' + Componentes.escaparHtml(etiqueta) + '</dt>' +
       '<dd>' + Componentes.escaparHtml(valor == null || valor === '' ? '—' : String(valor)) + '</dd></div>';
@@ -5290,7 +5687,7 @@
       exclusiones += '<p class="sigso-ayuda">Ninguna. Todas las cláusulas de la norma se consideran aplicables.</p>';
     } else {
       exclusiones += '<div class="sgc-lista">' + lista.map(function (e) {
-        return '<div class="sgc-doc" data-exclusion="' + Componentes.escaparHtml(JSON.stringify(e)) + '">' +
+        return '<div class="sgc-doc" data-exclusion-id="' + Componentes.escaparHtml(e.exclusion_id) + '">' +
           '<div class="sgc-doc__linea">' +
             '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(e.clausula) +
               (e.titulo ? ' — ' + Componentes.escaparHtml(e.titulo) : '') + '</span>' +
@@ -5344,13 +5741,14 @@
     cont.querySelectorAll('.js-sgc-editar-exclusion').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var caja = btn.parentNode.parentNode;
-        abrirFormularioExclusion_(JSON.parse(caja.getAttribute('data-exclusion')), data.clausulas_catalogo || []);
+        abrirFormularioExclusion_(buscarPorId_(data.exclusiones, 'exclusion_id',
+          caja.getAttribute('data-exclusion-id')), data.clausulas_catalogo || []);
       });
     });
     cont.querySelectorAll('.js-sgc-retirar-exclusion').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var caja = btn.parentNode.parentNode;
-        var ex = JSON.parse(caja.getAttribute('data-exclusion'));
+        var ex = buscarPorId_(data.exclusiones, 'exclusion_id', caja.getAttribute('data-exclusion-id'));
         Componentes.confirmar({
           titulo: '¿Retirar la exclusión de ' + ex.clausula + '?',
           mensaje: 'La cláusula vuelve a considerarse aplicable y se evaluará en la matriz de cobertura.',
