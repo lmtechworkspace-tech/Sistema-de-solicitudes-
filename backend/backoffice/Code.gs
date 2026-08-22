@@ -317,7 +317,10 @@ var BACKOFFICE_ACTIONS = {
   sembrarMapaProcesosSgc: handleSembrarMapaProcesosSgc_,
   guardarProcesoSgc: handleGuardarProcesoSgc_,
   anularProcesoSgc: handleAnularProcesoSgc_,
-  registrarRevisionProcesosSgc: handleRegistrarRevisionProcesosSgc_
+  registrarRevisionProcesosSgc: handleRegistrarRevisionProcesosSgc_,
+
+  // v11.0 Fase 5 (§7.5.3.2): listado de documentos de origen externo.
+  sembrarDocumentosExternosSgc: handleSembrarDocumentosExternosSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -606,7 +609,8 @@ var MODULO_POR_ACCION = {
   sembrarMapaProcesosSgc: 'calidad',
   guardarProcesoSgc: 'calidad',
   anularProcesoSgc: 'calidad',
-  registrarRevisionProcesosSgc: 'calidad'
+  registrarRevisionProcesosSgc: 'calidad',
+  sembrarDocumentosExternosSgc: 'calidad'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -1575,6 +1579,11 @@ function handleAnularProcesoSgc_(data, contexto) {
 
 function handleRegistrarRevisionProcesosSgc_(data, contexto) {
   return responderResultado_(Procesos.registrarRevision(data, contexto));
+}
+
+// v11.0 Fase 5 (§7.5.3.2): listado de documentos de origen externo.
+function handleSembrarDocumentosExternosSgc_(data, contexto) {
+  return responderResultado_(Calidad.sembrarDocumentosExternos(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

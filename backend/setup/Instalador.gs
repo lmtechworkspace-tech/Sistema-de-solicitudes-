@@ -283,7 +283,14 @@ var ESQUEMA_HOJAS = {
     // Encargado SGC -- SIGSO no adivina que documento es la politica de
     // calidad o el mapa de procesos, eso lo sabe quien conoce sus propios
     // documentos.
-    'clausulas_iso'
+    'clausulas_iso',
+    // v11.0 Fase 5 (§7.5.3.2): documentos de origen EXTERNO.
+    // emisor: quien lo publica (ISO, Ministerio del Trabajo...). La
+    //   organizacion no controla su version: solo lo identifica y controla
+    //   su distribucion, que es exactamente lo que pide la clausula.
+    // clase_externa: Norma / Decreto / Ley / Codigo, tal como los
+    //   clasifica la hoja "Externos" del FO-PRO-01-01.
+    'emisor', 'clase_externa'
   ],
   SGC_DOC_VERSIONES: [
     'version_id', 'documento_id', 'version', 'cambios',

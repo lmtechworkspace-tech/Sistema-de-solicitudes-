@@ -214,18 +214,52 @@ var EVALUADORES_CLAUSULA_ISO = {
     };
   },
   '7.5': function () {
-    // Informacion documentada: el nucleo del Modulo 1. Vigentes con acuse
-    // exigido y confirmado es la evidencia mas fuerte de §7.5.3.
+    // Informacion documentada. §7.5.3 pide controlar la que la organizacion
+    // crea, y §7.5.3.2 ademas IDENTIFICAR y controlar la de origen EXTERNO.
+    // Son dos obligaciones distintas y aca se miden por separado: un SGC con
+    // 40 procedimientos propios y ninguna norma identificada no cumple 7.5,
+    // por muy ordenado que tenga lo suyo.
     var docs = leerFilasSeguro_(SHEETS.SGC_DOCUMENTOS).filter(function (d) {
       return esVerdaderoSgc_(d.activa) && d.estado === 'VIGENTE';
     });
-    var ev = docs.slice(0, 15).map(function (d) {
-      return { tipo: 'Documento vigente', descripcion: d.codigo + ' — ' + d.nombre, fecha: d.fecha_vigencia, responsable: d.aprobado_por };
+    var externos = docs.filter(function (d) { return d.tipo === 'EXTERNO'; });
+    var internos = docs.filter(function (d) { return d.tipo !== 'EXTERNO'; });
+
+    var ev = internos.slice(0, 10).map(function (d) {
+      return {
+        tipo: 'Documento interno vigente',
+        descripcion: d.codigo + ' — ' + d.nombre,
+        fecha: d.fecha_vigencia,
+        responsable: d.aprobado_por
+      };
     });
+    externos.forEach(function (d) {
+      ev.push({
+        tipo: 'Documento externo identificado',
+        descripcion: d.codigo + ' — ' + d.nombre + (d.emisor ? ' (' + d.emisor + ')' : ''),
+        fecha: d.proxima_revision,
+        responsable: d.emisor || ''
+      });
+    });
+
+    var falta = [];
+    if (!internos.length) falta.push('no hay documentos internos vigentes');
+    else if (internos.length < 5) falta.push('solo ' + internos.length + ' documento(s) interno(s) vigente(s)');
+    if (!externos.length) {
+      falta.push('no hay documentos de origen externo identificados (§7.5.3.2): normas, decretos y leyes aplicables');
+    }
+    // Un documento externo sin emisor no esta identificado: "DS 44" a secas
+    // no dice quien lo publica ni donde buscar la version vigente.
+    var sinEmisor = externos.filter(function (d) { return !String(d.emisor || '').trim(); });
+    if (sinEmisor.length) {
+      falta.push(sinEmisor.length + ' documento(s) externo(s) sin emisor identificado');
+    }
+
     return {
-      estado: docs.length >= 5 ? 'COMPLETO' : (docs.length ? 'PARCIAL' : 'FALTANTE'),
-      resumen: docs.length + ' documentos vigentes en el listado maestro.',
-      nota: docs.length ? '' : 'No hay documentos vigentes cargados.',
+      estado: falta.length ? (internos.length ? 'PARCIAL' : 'FALTANTE') : 'COMPLETO',
+      resumen: internos.length + ' documentos internos vigentes y ' +
+        externos.length + ' de origen externo identificados.',
+      nota: falta.length ? 'Para cerrar 7.5: ' + falta.join('; ') + '.' : '',
       evidencia: ev
     };
   },

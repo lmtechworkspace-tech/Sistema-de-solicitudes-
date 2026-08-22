@@ -162,6 +162,78 @@ var Calidad = {
     };
   },
 
+  /**
+   * v11.0 Fase 5 (§7.5.3.2): carga los seis documentos de origen externo del
+   * FO-PRO-01-01 (hoja "Externos"). Se ofrecen, no se siembran solos, igual
+   * que el resto de las cargas iniciales del modulo.
+   *
+   * Nacen SIN archivo y sin elaborador/revisor/aprobador: de un documento
+   * externo la organizacion no controla la version, solo lo identifica y
+   * controla su distribucion.
+   */
+  sembrarDocumentosExternos: function (data, contexto) {
+    var rol = rolSgc_(contexto);
+    if (!gobiernaSgc_(contexto, rol)) {
+      return { _forbidden: true, message: 'Solo el Encargado del SGC puede cargar el listado de documentos externos.' };
+    }
+
+    var existentes = leerFilasSeguro_(SHEETS.SGC_DOCUMENTOS).filter(esActivoSgc_);
+    var porCodigo = {};
+    existentes.forEach(function (d) { porCodigo[String(d.codigo || '').toUpperCase()] = true; });
+
+    var ahora = new Date().toISOString();
+    var creados = 0;
+    var omitidos = [];
+
+    DOCUMENTOS_EXTERNOS_FO0101.forEach(function (e) {
+      if (porCodigo[e.codigo.toUpperCase()]) { omitidos.push(e.codigo); return; }
+      agregarFila_(SHEETS.SGC_DOCUMENTOS, {
+        documento_id: Utilities.getUuid(),
+        codigo: e.codigo,
+        nombre: e.nombre,
+        descripcion: e.descripcion || '',
+        tipo: 'EXTERNO',
+        area_id: e.area_id || '',
+        version_vigente: '',
+        estado: 'VIGENTE',
+        // Un texto legal o una norma la conoce quien la necesita para su
+        // trabajo, no toda la organizacion: la distribucion se define
+        // documento por documento, y por eso nace en SELECCION sin nadie.
+        visibilidad: 'SELECCION',
+        fecha_vigencia: '',
+        proxima_revision: FECHA_REVISION_EXTERNOS_FO0101,
+        elaborado_por: '',
+        revisado_por: '',
+        aprobado_por: '',
+        archivo_id: '',
+        archivo_nombre: '',
+        archivo_mime: '',
+        creado_por: (contexto && contexto.email) || '',
+        fecha_creacion: ahora,
+        activa: true,
+        // Sin acuse: no se le puede exigir a nadie que confirme que "conoce"
+        // el Codigo del Trabajo entero. El acuse es para los documentos que
+        // la organizacion redacta y distribuye.
+        requiere_acuse: false,
+        fecha_limite_acuse: '',
+        clausulas_iso: JSON.stringify([]),
+        emisor: e.emisor || '',
+        clase_externa: e.clase_externa || ''
+      });
+      creados++;
+    });
+
+    registrarLogSgc_('SGC_DOC_EXTERNOS_SEMBRADOS',
+      creados + ' documentos externos del FO-PRO-01-01 cargados', contexto);
+    return {
+      ok: true, total: creados, omitidos: omitidos,
+      message: creados
+        ? creados + ' documento(s) externo(s) cargado(s).' +
+          (omitidos.length ? ' Ya existían: ' + omitidos.join(', ') + '.' : '')
+        : 'Ya estaban todos cargados.'
+    };
+  },
+
   // --- Crear documento (subir el archivo que ya existe) --------------------
   crearDocumento: function (data, contexto) {
     var rol = rolSgc_(contexto);
@@ -223,7 +295,11 @@ var Calidad = {
       // v10.0 Fase 6b: que clausulas ISO sustenta este documento como
       // evidencia (matriz de cobertura). Nace vacio -- taggearlo es un acto
       // deliberado del Encargado SGC, no una inferencia del sistema.
-      clausulas_iso: JSON.stringify(clausulasIsoValidas_(data.clausulas_iso))
+      clausulas_iso: JSON.stringify(clausulasIsoValidas_(data.clausulas_iso)),
+      // v11.0 Fase 5: solo tienen sentido en un documento externo; en uno
+      // interno quedan vacios y no estorban.
+      emisor: String(data.emisor || '').trim(),
+      clase_externa: String(data.clase_externa || '').trim()
     };
     agregarFila_(SHEETS.SGC_DOCUMENTOS, documento);
 
@@ -805,6 +881,76 @@ Calidad.recordatorioPendientes = function () {
 };
 
 // --- constantes del modulo -------------------------------------------------
+
+// --- v11.0 Fase 5 (§7.5.3.2): documentos de origen externo ------------------
+//
+// La norma los trata distinto que a los internos, y la diferencia importa:
+// de un documento externo la organizacion NO controla la version -- no puede
+// elaborarlo, revisarlo ni aprobarlo. Lo que tiene que hacer es
+// IDENTIFICARLO y controlar su DISTRIBUCION. Por eso estos registros nacen
+// sin elaborador/revisor/aprobador y, casi siempre, sin archivo adjunto:
+// nadie sube el texto de la Ley 16.744 a un Drive.
+//
+// Lo que si tiene fecha real es la REVISION: hay que volver a mirarlos cada
+// cierto tiempo para ver si salio una edicion nueva. El FO-PRO-01-01 fija
+// esa revision al 2027-03-01 para los seis.
+//
+// La fecha de entrada en vigencia va vacia a proposito: el documento solo
+// declara el AÑO de la edicion (2015, 1968...), que ya viaja en el codigo y
+// el nombre. Inventar un dia y un mes seria poner en el sistema una
+// precision que el documento no tiene.
+var FECHA_REVISION_EXTERNOS_FO0101 = '2027-03-01';
+
+var DOCUMENTOS_EXTERNOS_FO0101 = [
+  {
+    codigo: 'ISO 9001:2015',
+    nombre: 'Sistemas de gestión de la calidad — Requisitos',
+    clase_externa: 'Norma',
+    emisor: 'ISO (Organización Internacional de Normalización)',
+    area_id: 'CALIDAD',
+    descripcion: 'Norma sobre la que se certifica el SGC. Edición 2015.'
+  },
+  {
+    codigo: 'ISO 19011:2018',
+    nombre: 'Directrices para la auditoría de los sistemas de gestión',
+    clase_externa: 'Norma',
+    emisor: 'ISO (Organización Internacional de Normalización)',
+    area_id: 'CALIDAD',
+    descripcion: 'Referencia metodológica para el programa de auditorías internas (PRO-03).'
+  },
+  {
+    codigo: 'DS 44',
+    nombre: 'Aprueba nuevo reglamento sobre gestión preventiva de los riesgos laborales para un entorno de trabajo seguro y saludable',
+    clase_externa: 'Decreto',
+    emisor: 'Ministerio del Trabajo y Previsión Social (Chile)',
+    area_id: 'PREVENCION',
+    descripcion: 'Vigente desde 2025.'
+  },
+  {
+    codigo: 'Ley 16.744',
+    nombre: 'Establece normas sobre accidentes del trabajo y enfermedades profesionales',
+    clase_externa: 'Ley',
+    emisor: 'Congreso Nacional de Chile',
+    area_id: 'PREVENCION',
+    descripcion: 'Vigente desde 1968.'
+  },
+  {
+    codigo: 'DS 594',
+    nombre: 'Aprueba reglamento sobre condiciones sanitarias y ambientales básicas en los lugares de trabajo',
+    clase_externa: 'Decreto',
+    emisor: 'Ministerio de Salud (Chile)',
+    area_id: 'PREVENCION',
+    descripcion: 'Vigente desde 2000.'
+  },
+  {
+    codigo: 'Código del Trabajo',
+    nombre: 'Derechos y obligaciones de los trabajadores',
+    clase_externa: 'Código',
+    emisor: 'Ministerio del Trabajo y Previsión Social (Chile)',
+    area_id: 'RRHH',
+    descripcion: 'Texto refundido vigente.'
+  }
+];
 
 var TIPOS_DOC_SGC = ['DOC', 'PRO', 'INS', 'FO', 'EXTERNO'];
 var VISIBILIDAD_SGC = ['TODOS', 'AREA', 'SELECCION'];

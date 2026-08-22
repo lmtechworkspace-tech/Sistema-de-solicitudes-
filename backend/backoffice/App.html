@@ -13371,7 +13371,10 @@ var Iconos = (function () {
       { id: 'personas', texto: 'Personas', icono: 'persona' },
       { id: 'capacitaciones', texto: 'Capacitaciones', icono: 'caja' }
     ] },
-    { label: 'Procesos', items: [
+    // v11.0 Fase 5: este grupo se llamaba 'Procesos' y colisionaba con la
+    // seccion 'Procesos' que la Fase 4 puso en Planificacion. Lo que hay
+    // aca es control y mejora: hallazgos, auditorias, quejas y proveedores.
+    { label: 'Control y mejora', items: [
       { id: 'nc', texto: 'No conformidades', icono: 'alerta' },
       { id: 'auditorias', texto: 'Auditorías', icono: 'lupa' },
       { id: 'quejas', texto: 'Quejas', icono: 'comentario' },
@@ -13548,6 +13551,11 @@ var Iconos = (function () {
       '<p class="sigso-ayuda">Listado maestro: los documentos vigentes del SGC que te corresponden. ' +
         'Tu rol: <b>' + Componentes.escaparHtml(ROL_SGC_ETIQUETA[data.rol_sgc] || data.rol_sgc) + '</b>.</p>' +
       (puedeGestionar_ ? Componentes.boton({ texto: '+ Cargar documento', clase: 'js-sgc-nuevo' }) : '') +
+      // v11.0 Fase 5: el listado de documentos externos (§7.5.3.2) se ofrece
+      // mientras no haya ninguno identificado. Despues estorba.
+      (puedeGestionar_ && !(data.documentos || []).some(function (x) { return x.tipo === 'EXTERNO'; })
+        ? Componentes.boton({ texto: 'Cargar normas y leyes aplicables', variante: 'secundario', clase: 'js-sgc-externos' })
+        : '') +
       '</div>' + avisoAcuse +
       '<div class="sgc-filtros">' +
         Componentes.campoTexto({ id: 'sgc-f-busqueda', label: false, valor: filtroBusqueda_, placeholder: 'Buscar por código o nombre...' }) +
@@ -13566,6 +13574,28 @@ var Iconos = (function () {
 
     function wire() {
       wireSecciones_(cont);
+      var externos = cont.querySelector('.js-sgc-externos');
+      if (externos) {
+        externos.addEventListener('click', function () {
+          Componentes.confirmar({
+            titulo: '¿Cargar el listado de documentos externos?',
+            mensaje: 'Son las 6 normas, decretos y leyes del FO-PRO-01-01: ISO 9001, ISO 19011, ' +
+              'DS 44, Ley 16.744, DS 594 y el Código del Trabajo. Se registran como referencia, ' +
+              'sin archivo adjunto y sin acuse.',
+            confirmar: 'Cargarlos'
+          }).then(function (ok) {
+            if (!ok) return;
+            api_('sembrarDocumentosExternosSgc', {}).then(function (resp) {
+              var d = (resp && resp.data) || {};
+              Componentes.aviso({
+                texto: d.message || 'Documentos externos cargados.',
+                tipo: (resp && resp.ok && d.ok !== false) ? 'exito' : 'error'
+              });
+              if (resp && resp.ok) cargarListado_();
+            });
+          });
+        });
+      }
       var nuevo = cont.querySelector('.js-sgc-nuevo');
       if (nuevo) nuevo.addEventListener('click', abrirFormularioNuevo_);
 
@@ -13934,9 +13964,16 @@ var Iconos = (function () {
             Componentes.campoTexto({ id: 'sgc-version', label: 'Versión', valor: 'v01', requerido: true }) +
             Componentes.campoTexto({ id: 'sgc-vigencia', label: 'Vigente desde', tipo: 'date', requerido: true }) +
           '</div>' +
+          '<div class="sgc-form-fila" id="sgc-campos-externo">' +
+            Componentes.campoTexto({ id: 'sgc-emisor', label: 'Emisor (solo documentos externos)',
+              valor: '', placeholder: 'Ej: ISO, Ministerio del Trabajo' }) +
+            Componentes.campoTexto({ id: 'sgc-clase-externa', label: 'Clase (solo documentos externos)',
+              valor: '', placeholder: 'Ej: Norma, Decreto, Ley, Código' }) +
+          '</div>' +
           '<div class="sigso-campo">' +
             '<label for="sgc-archivo">Archivo (PDF, Word o Excel · máx. 10 MB)</label>' +
-            '<input type="file" id="sgc-archivo" accept=".pdf,.doc,.docx,.xls,.xlsx" required>' +
+            '<input type="file" id="sgc-archivo" accept=".pdf,.doc,.docx,.xls,.xlsx">' +
+            '<p class="sigso-ayuda">Obligatorio salvo para un documento externo: nadie sube el texto de una ley al repositorio.</p>' +
           '</div>' +
           '<div class="sigso-modal__acciones">' +
             Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
@@ -13946,17 +13983,38 @@ var Iconos = (function () {
       '</div>';
     var cerrar = montarModal_(fondo);
 
+    // v11.0 Fase 5: en un documento EXTERNO no aplican ni la version ni la
+    // fecha de vigencia -- una ley no tiene "v01", y su edicion ya viaja en
+    // el codigo (ISO 9001:2015). Dejarlos obligatorios obligaria a inventar
+    // datos para poder guardar.
+    function ajustarCamposPorTipo_() {
+      var externo = document.getElementById('sgc-tipo').value === 'EXTERNO';
+      [['sgc-version', !externo], ['sgc-vigencia', !externo]].forEach(function (par) {
+        var el = document.getElementById(par[0]);
+        if (el) el.required = par[1];
+      });
+      var caja = document.getElementById('sgc-campos-externo');
+      if (caja) caja.style.display = externo ? '' : 'none';
+    }
+    document.getElementById('sgc-tipo').addEventListener('change', ajustarCamposPorTipo_);
+    ajustarCamposPorTipo_();
+
     document.getElementById('form-sgc-nuevo').addEventListener('submit', function (evento) {
       evento.preventDefault();
       var archivo = document.getElementById('sgc-archivo').files[0];
-      if (!archivo) {
+      var esExterno = document.getElementById('sgc-tipo').value === 'EXTERNO';
+      // De un documento externo la organizacion no controla la version:
+      // lo identifica y controla su distribucion (§7.5.3.2). Casi nunca
+      // hay un archivo que subir.
+      if (!archivo && !esExterno) {
         Componentes.aviso({ texto: 'Selecciona el archivo del documento.', tipo: 'error' });
         return;
       }
       var boton = fondo.querySelector('.js-sgc-guardar');
       boton.disabled = true; boton.textContent = 'Subiendo...';
 
-      leerArchivoBase64Sgc_(archivo).then(function (base64) {
+      var lectura = archivo ? leerArchivoBase64Sgc_(archivo) : Promise.resolve('');
+      lectura.then(function (base64) {
         var acuse = leerAcuse_();
         return api_('crearDocumentoSgc', {
           codigo: document.getElementById('sgc-codigo').value,
@@ -13973,7 +14031,9 @@ var Iconos = (function () {
           aprobado_por: document.getElementById('sgc-aprobado').value,
           requiere_acuse: acuse.requiere_acuse,
           fecha_limite_acuse: acuse.fecha_limite_acuse,
-          nombre_archivo: archivo.name,
+          emisor: document.getElementById('sgc-emisor').value,
+          clase_externa: document.getElementById('sgc-clase-externa').value,
+          nombre_archivo: archivo ? archivo.name : '',
           contenido_base64: base64
         });
       }).then(function (respuesta) {
@@ -14024,13 +14084,16 @@ var Iconos = (function () {
       var boton = fondo.querySelector('.js-sgc-guardar');
       boton.disabled = true; boton.textContent = 'Subiendo...';
 
-      leerArchivoBase64Sgc_(archivo).then(function (base64) {
+      var lectura = archivo ? leerArchivoBase64Sgc_(archivo) : Promise.resolve('');
+      lectura.then(function (base64) {
         return api_('nuevaVersionDocumentoSgc', {
           documento_id: d.documento_id,
           version: document.getElementById('sgc-v-version').value,
           fecha_vigencia: document.getElementById('sgc-v-vigencia').value,
           cambios: document.getElementById('sgc-v-cambios').value,
-          nombre_archivo: archivo.name,
+          emisor: document.getElementById('sgc-emisor').value,
+          clase_externa: document.getElementById('sgc-clase-externa').value,
+          nombre_archivo: archivo ? archivo.name : '',
           contenido_base64: base64
         });
       }).then(function (respuesta) {
@@ -15124,12 +15187,15 @@ var Iconos = (function () {
       var boton = fondo.querySelector('.js-sgc-guardar');
       boton.disabled = true; boton.textContent = 'Subiendo...';
 
-      leerArchivoBase64Sgc_(archivo).then(function (base64) {
+      var lectura = archivo ? leerArchivoBase64Sgc_(archivo) : Promise.resolve('');
+      lectura.then(function (base64) {
         return api_('guardarDocumentoPersonaSgc', {
           persona_id: p.persona_id,
           tipo: document.getElementById('sgc-dp-tipo').value,
           nombre: document.getElementById('sgc-dp-nombre').value || archivo.name,
-          nombre_archivo: archivo.name,
+          emisor: document.getElementById('sgc-emisor').value,
+          clase_externa: document.getElementById('sgc-clase-externa').value,
+          nombre_archivo: archivo ? archivo.name : '',
           contenido_base64: base64
         });
       }).then(function (respuesta) {
