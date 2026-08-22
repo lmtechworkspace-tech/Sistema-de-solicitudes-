@@ -275,6 +275,24 @@ function verificarFechasComprometidasTrigger() {
 
 // v2.1 (Fase D, §8): ver Triggers.recordarValidacionPendiente().
 function recordarValidacionPendienteTrigger() {
+  // MANTENIMIENTO PRIMERO, y no al final como estaba (H-03).
+  //
+  // De este unico slot cuelgan once trabajos que comparten los 6 minutos de
+  // ejecucion de Apps Script. Con las purgas al final, el dia que el
+  // presupuesto se agotara lo PRIMERO que se perderia seria justamente lo que
+  // contiene el crecimiento de las hojas -- y esas hojas, al crecer, hacen
+  // mas lento todo lo demas. Es el orden que se realimenta solo en la
+  // direccion mala.
+  //
+  // Ademas es barato y acotado (unas pocas lecturas y borrados), mientras que
+  // los avisos recorren modulo por modulo. Purgar antes deja las hojas mas
+  // chicas para el resto de la corrida.
+  try {
+    mantenimientoDiarioTrigger();
+  } catch (err) {
+    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:mantenimientoDiarioTrigger');
+  }
+
   var resultado = Triggers.recordarValidacionPendiente();
   // v6.5 Fase 2 (Novedades): sin trigger propio (§ nota de configurarTriggers
   // mas arriba -- limite de 20 triggers de tiempo ya copado). Se cuelga aqui
@@ -356,25 +374,6 @@ function recordarValidacionPendienteTrigger() {
   } catch (err) {
     logError_(err, 'Triggers.recordarValidacionPendienteTrigger:enviarAvisosObjetivosTrigger');
   }
-  // v7.1 (notificaciones vivas, B5): mantenimiento diario -- purga las
-  // notificaciones ya leidas o vencidas para que la hoja NOTIFICACIONES_APP
-  // no crezca sin limite (cada sincronizacion del cliente la lee completa).
-  // Sin trigger propio (limite de 20 ya copado), colgada de este mismo slot.
-  try {
-    purgarNotificacionesAppTrigger();
-  } catch (err) {
-    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:purgarNotificacionesAppTrigger');
-  }
-  // Mantenimiento diario: borra las sesiones vencidas de SESIONES_PORTAL.
-  // Esa hoja se lee ENTERA en cada peticion autenticada
-  // (resolverContextoPortal_), y hasta ahora solo se limpiaba al eliminar
-  // una cuenta completa: crecia con cada login sin techo. Ver
-  // purgarSesionesExpiradas_ en CuentasPortal.gs.
-  try {
-    purgarSesionesExpiradasTrigger();
-  } catch (err) {
-    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:purgarSesionesExpiradasTrigger');
-  }
   return resultado;
 }
 
@@ -438,6 +437,33 @@ function enviarAvisosRevisionTrigger() {
 // periodo ya cerro y su objetivo sigue sin medirse.
 function enviarAvisosObjetivosTrigger() {
   return Objetivos.alertarLecturasPendientes();
+}
+
+
+// Mantenimiento diario de las hojas que crecen sin freno. Agrupado en una
+// sola funcion para que corra COMPLETO o no corra: si quedara repartido, un
+// corte por tiempo dejaria unas hojas purgadas y otras no, sin forma de
+// saber cuales. Cada purga va en su propio try/catch -- que falle una no
+// debe impedir las demas.
+//
+// Se puede ejecutar a mano desde el editor de Apps Script.
+function mantenimientoDiarioTrigger() {
+  var resumen = {};
+  [
+    ['notificaciones_app', purgarNotificacionesApp_],
+    ['sesiones_portal', purgarSesionesExpiradas_],
+    ['log_notificaciones', purgarLogNotificaciones_],
+    ['log_sistema', purgarLogSistema_]
+  ].forEach(function (par) {
+    try {
+      resumen[par[0]] = par[1]().borradas;
+    } catch (err) {
+      resumen[par[0]] = null;
+      logError_(err, 'Triggers.mantenimientoDiario:' + par[0]);
+    }
+  });
+  Logger.log('Mantenimiento diario: ' + JSON.stringify(resumen));
+  return resumen;
 }
 
 // v7.1 (notificaciones vivas, B5): ver purgarNotificacionesApp_(). Nombrada

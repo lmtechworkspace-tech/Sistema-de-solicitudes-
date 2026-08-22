@@ -12,7 +12,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadBackofficeProject, seedSheet } = require('./helpers/gasSandbox');
+const { loadBackofficeProject, seedSheet, toPlain } = require('./helpers/gasSandbox');
 
 function load() {
   const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
@@ -373,4 +373,113 @@ test('Actividades.pedirActualizacion encola una notificacion en vivo para el res
   assert.equal(notifs[0].destinatario_email, 'ana@hp.cl');
   assert.equal(notifs[0].modulo_id, 'mi_trabajo');
   assert.equal(notifs[0].tipo, 'PEDIR_ACTUALIZACION_ACTIVIDAD');
+});
+
+// --- H-03: retencion de los registros de log --------------------------------
+// LOG_NOTIFICACIONES es la hoja que mas crece de SIGSO (una fila por correo)
+// y era la unica de ese tamaño sin retencion. Lo delicado no es borrar lo
+// viejo: es NO borrar lo que todavia se usa.
+
+function cargarLogs() {
+  const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
+  seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
+  seedSheet(ctx, 'LOG_SISTEMA', ctx.COLUMNAS.LOG_SISTEMA);
+  seedSheet(ctx, 'NOTIFICACIONES_APP', ctx.COLUMNAS.NOTIFICACIONES_APP);
+  seedSheet(ctx, 'CUENTAS_PORTAL', ctx.COLUMNAS.CUENTAS_PORTAL);
+  seedSheet(ctx, 'SESIONES_PORTAL', ctx.COLUMNAS.SESIONES_PORTAL);
+  return ctx;
+}
+
+function hace(dias) {
+  return new Date(Date.now() - dias * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function filaLog(ctx, overrides) {
+  const base = Object.assign({
+    log_id: 'L-' + Math.random().toString(36).slice(2),
+    timestamp: hace(200), solicitud_id: 'SOL-1', canal: 'EMAIL',
+    destinatario: 'x@y.cl', evento: 'ALGO', resultado: 'ENVIADO', reintentos: 0,
+    asunto: '', cuerpo: ''
+  }, overrides);
+  ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('LOG_NOTIFICACIONES')
+    .appendRow(ctx.COLUMNAS.LOG_NOTIFICACIONES.map((c) => (base[c] !== undefined ? base[c] : '')));
+  return base;
+}
+
+test('purgarLogNotificaciones_ borra lo viejo y conserva lo reciente', () => {
+  const ctx = cargarLogs();
+  filaLog(ctx, { log_id: 'VIEJO', timestamp: hace(200) });
+  filaLog(ctx, { log_id: 'RECIENTE', timestamp: hace(3) });
+  filaLog(ctx, { log_id: 'JUSTO-DENTRO', timestamp: hace(89) });
+
+  const r = ctx.purgarLogNotificaciones_();
+  assert.equal(r.borradas, 1);
+
+  const quedan = ctx.leerFilas_('LOG_NOTIFICACIONES').map((l) => l.log_id).sort();
+  assert.deepEqual(quedan, ['JUSTO-DENTRO', 'RECIENTE']);
+});
+
+test('purgarLogNotificaciones_ NUNCA borra la cola de reintentos, por vieja que sea', () => {
+  const ctx = cargarLogs();
+  filaLog(ctx, { log_id: 'PENDIENTE', timestamp: hace(500), resultado: 'PENDIENTE_REINTENTO' });
+  filaLog(ctx, { log_id: 'ENVIADO-VIEJO', timestamp: hace(500), resultado: 'ENVIADO' });
+
+  ctx.purgarLogNotificaciones_();
+
+  const quedan = ctx.leerFilas_('LOG_NOTIFICACIONES').map((l) => l.log_id);
+  assert.deepEqual(quedan, ['PENDIENTE'],
+    'esas filas son la COLA de correo: borrarlas es perder un correo que nunca salió');
+});
+
+test('purgarLogNotificaciones_ respeta con holgura la ventana de deduplicación', () => {
+  // El tope duro: la dedup mira hasta 24 h atrás (VENTANA_DEDUP_SLA_VENCIDO_
+  // MINUTOS). Purgar por debajo de eso haría que SIGSO reenviara alertas.
+  const ctx = cargarLogs();
+  assert.ok(ctx.DIAS_RETENCION_LOG * 24 * 60 > ctx.VENTANA_DEDUP_SLA_VENCIDO_MINUTOS * 10,
+    'la retención debe estar muy por encima de la ventana de dedup');
+
+  filaLog(ctx, { log_id: 'DE-AYER', timestamp: hace(1) });
+  ctx.purgarLogNotificaciones_();
+  assert.equal(ctx.leerFilas_('LOG_NOTIFICACIONES').length, 1, 'lo de ayer no se toca');
+});
+
+test('purgarLogNotificaciones_ no toca una fila con fecha ilegible', () => {
+  const ctx = cargarLogs();
+  filaLog(ctx, { log_id: 'RARA', timestamp: 'no-es-fecha' });
+  assert.equal(ctx.purgarLogNotificaciones_().borradas, 0);
+  assert.equal(ctx.leerFilas_('LOG_NOTIFICACIONES').length, 1);
+});
+
+test('purgarLogSistema_ CONSERVA la trazabilidad del SGC aunque sea antigua', () => {
+  const ctx = cargarLogs();
+  const hoja = ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('LOG_SISTEMA');
+  // Evidencia ISO: quién descargó qué documento controlado. Se lee de vuelta
+  // en la ficha de la persona (Calidad.gs) y un auditor puede pedirla.
+  hoja.appendRow(['L1', hace(900), 'SGC_DOC_DESCARGADO', 'camila@x.cl → PRO-01', 'SGC']);
+  // Ruido operativo: marca de dedup que solo sirvió el día que se escribió.
+  hoja.appendRow(['L2', hace(900), 'ALERTA_PATRON', 'MOD_X acumula 5 reportes', 'MOD_X||ERR']);
+
+  const r = ctx.purgarLogSistema_();
+  assert.equal(r.borradas, 1);
+
+  const quedan = ctx.leerFilas_('LOG_SISTEMA');
+  assert.equal(quedan.length, 1);
+  assert.equal(quedan[0].ref, 'SGC',
+    'purgar la evidencia del SGC sería destruir justo lo que el sistema existe para demostrar');
+});
+
+test('mantenimientoDiario deja un resumen de lo que borró en cada hoja', () => {
+  const ctx = cargarLogs();
+  filaLog(ctx, { timestamp: hace(300) });
+  const hoja = ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('LOG_SISTEMA');
+  hoja.appendRow(['L1', hace(300), 'ALERTA_PATRON', 'x', 'k']);
+  ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('SESIONES_PORTAL')
+    .appendRow(['tok', 'CTA-1', hace(1), hace(2)]);
+
+  const resumen = toPlain(ctx.mantenimientoDiarioTrigger());
+
+  assert.equal(resumen.log_notificaciones, 1);
+  assert.equal(resumen.log_sistema, 1);
+  assert.equal(resumen.sesiones_portal, 1);
+  assert.equal(resumen.notificaciones_app, 0);
 });

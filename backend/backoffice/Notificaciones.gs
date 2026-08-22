@@ -1314,3 +1314,95 @@ function marcarNotificacionAppLeida_(contexto, notifId) {
   actualizarFilaPorId_(SHEETS.NOTIFICACIONES_APP, 'notif_id', notifId, { leida: 'TRUE' });
   return { actualizado: true };
 }
+
+// --- retencion de los registros de log (H-03) --------------------------------
+
+/**
+ * Dias que se conservan los registros de log antes de purgarlos.
+ *
+ * 90 dias es holgado a proposito. El tope duro lo pone la deduplicacion de
+ * correo, que mira hacia atras como maximo 24 horas
+ * (VENTANA_DEDUP_SLA_VENCIDO_MINUTOS); borrar por debajo de eso haria que
+ * SIGSO reenviara alertas que ya habia mandado. 90 dias deja ademas un
+ * trimestre de historial para responder "¿le llego el correo?", que es para
+ * lo que se consulta en la practica.
+ */
+var DIAS_RETENCION_LOG = 90;
+
+/**
+ * Purga LOG_NOTIFICACIONES por antiguedad.
+ *
+ * Es la hoja que mas crece de todo SIGSO -- una fila por cada correo -- y era
+ * la unica de ese tamaño sin ninguna retencion.
+ *
+ * DOS COSAS QUE NO SE TOCAN, y son la razon de que esto no sea un simple
+ * "borrar lo viejo":
+ *
+ *  1. Las filas PENDIENTE_REINTENTO son la COLA de correo, no historial:
+ *     procesarColaCorreo las sigue leyendo. Se conservan siempre, sin
+ *     importar la edad. Son pocas (un fallo de envio es raro) y perder una
+ *     significa perder un correo que nunca salio.
+ *  2. Nada por debajo de la ventana de deduplicacion, cubierto de sobra por
+ *     los 90 dias.
+ */
+function purgarLogNotificaciones_(diasRetencion) {
+  var dias = diasRetencion || DIAS_RETENCION_LOG;
+  var datos;
+  try { datos = leerHojaConEncabezados_(SHEETS.LOG_NOTIFICACIONES); } catch (err) { return { borradas: 0 }; }
+
+  var idxFecha = datos.encabezados.indexOf('timestamp');
+  var idxResultado = datos.encabezados.indexOf('resultado');
+  if (idxFecha === -1) return { borradas: 0 };
+
+  var corte = Date.now() - dias * 24 * 60 * 60 * 1000;
+  var borradas = 0;
+  for (var i = datos.valores.length - 1; i >= 1; i--) {
+    if (idxResultado !== -1 && datos.valores[i][idxResultado] === 'PENDIENTE_REINTENTO') continue;
+    var t = new Date(datos.valores[i][idxFecha]).getTime();
+    // Fecha ilegible: se conserva. Ante la duda, no se borra.
+    if (isNaN(t) || t >= corte) continue;
+    datos.hoja.deleteRow(i + 1);
+    borradas++;
+  }
+  if (borradas) {
+    invalidarCacheHoja_(SHEETS.LOG_NOTIFICACIONES);
+    invalidarIndiceDedup_();
+  }
+  return { borradas: borradas };
+}
+
+/**
+ * Purga LOG_SISTEMA por antiguedad, PERO conserva la trazabilidad del SGC.
+ *
+ * Esta hoja mezcla dos cosas que no se pueden tratar igual:
+ *
+ *  · ref = 'SGC' -- lo que escribe registrarLogSgc_: quien descargo que
+ *    documento controlado, quien cerro que no conformidad. Eso es EVIDENCIA
+ *    de auditoria ISO, se lee de vuelta en la ficha de cada persona
+ *    (Calidad.gs) y no se borra nunca. Purgarlo por antiguedad seria destruir
+ *    justamente lo que el sistema existe para poder demostrar.
+ *
+ *  · el resto (ALERTA_PATRON, ALERTA_ADMIN) -- marcas operativas que solo
+ *    sirven el mismo dia que se escriben, para no repetir un aviso.
+ */
+function purgarLogSistema_(diasRetencion) {
+  var dias = diasRetencion || DIAS_RETENCION_LOG;
+  var datos;
+  try { datos = leerHojaConEncabezados_(SHEETS.LOG_SISTEMA); } catch (err) { return { borradas: 0 }; }
+
+  var idxFecha = datos.encabezados.indexOf('timestamp');
+  var idxRef = datos.encabezados.indexOf('ref');
+  if (idxFecha === -1) return { borradas: 0 };
+
+  var corte = Date.now() - dias * 24 * 60 * 60 * 1000;
+  var borradas = 0;
+  for (var i = datos.valores.length - 1; i >= 1; i--) {
+    if (idxRef !== -1 && String(datos.valores[i][idxRef]) === 'SGC') continue;
+    var t = new Date(datos.valores[i][idxFecha]).getTime();
+    if (isNaN(t) || t >= corte) continue;
+    datos.hoja.deleteRow(i + 1);
+    borradas++;
+  }
+  if (borradas) invalidarCacheHoja_(SHEETS.LOG_SISTEMA);
+  return { borradas: borradas };
+}
