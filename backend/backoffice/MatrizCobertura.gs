@@ -137,6 +137,18 @@ var EVALUADORES_CLAUSULA_ISO = {
 
   '5.3': function () { return evaluarPorDocumentos_('5.3'); },
   '6.1': function () { return evaluarRiesgosOportunidades_(); },
+  '8.1': function () {
+    return evaluarOperacionPorProcesos_('8.1',
+      'La planificación está definida, pero falta la evidencia de ejecución por cliente y período (Fase 8).');
+  },
+  '8.5': function () {
+    return evaluarOperacionPorProcesos_('8.5',
+      'La prestación está definida, pero falta el registro de cada servicio efectivamente prestado (Fase 8).');
+  },
+  '8.6': function () {
+    return evaluarOperacionPorProcesos_('8.6',
+      'La liberación está definida en los pasos de cada proceso, pero falta el registro de cada liberación (Fase 8).');
+  },
   '4.1': function () { return evaluarContextoOrganizacion_(); },
   '4.2': function () { return evaluarPartesInteresadas_(); },
   '4.3': function () { return evaluarAlcanceDeclarado_(); },
@@ -183,7 +195,7 @@ var EVALUADORES_CLAUSULA_ISO = {
       evidencia: ev
     };
   },
-  '4.4': function () { return evaluarPorDocumentos_('4.4'); },
+  '4.4': function () { return evaluarProcesosSgc_(); },
   '5.2': function () { return evaluarPorDocumentos_('5.2'); },
   '7.4': function () {
     // Comunicacion interna: Novedades publicadas es evidencia de que la
@@ -622,6 +634,126 @@ function evaluarRiesgosOportunidades_() {
     resumen: resumen.total_riesgos + ' riesgos y ' + resumen.total_oportunidades +
       ' oportunidades determinados; ' + resumen.con_actividad + ' con acción asignada.',
     nota: falta.length ? 'Para cerrar 6.1: ' + falta.join('; ') + '.' : '',
+    evidencia: ev
+  };
+}
+
+// v11.0 Fase 4 (§4.4). Antes esta clausula se media solo por documentos
+// etiquetados a mano. Ahora la fuente principal es el mapa registrado, y el
+// documento que lo sustenta suma como respaldo.
+//
+// §4.4.1 pide cuatro cosas concretas y se revisan por separado: que los
+// procesos esten determinados, que se sepan sus entradas y salidas, que cada
+// uno tenga un responsable con autoridad definida (§4.4.2 e), y que el
+// conjunto se mantenga al dia.
+function evaluarProcesosSgc_() {
+  var filas = (typeof procesosActivos_ === 'function') ? procesosActivos_() : [];
+  var porDocs = evaluarPorDocumentos_('4.4');
+
+  if (!filas.length) {
+    return {
+      estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
+      resumen: 'El mapa de procesos no está cargado en el sistema.',
+      nota: 'Carga el mapa en la sección Procesos. ' +
+        (porDocs.evidencia.length
+          ? 'Hay documentos etiquetados para 4.4, pero un diagrama adjunto no permite decir quién responde por cada proceso ni si sigue vigente.'
+          : ''),
+      evidencia: porDocs.evidencia
+    };
+  }
+
+  var pasos = (typeof pasosActivos_ === 'function') ? pasosActivos_() : [];
+  var lista = filas.map(function (p) { return formatearProceso_(p, 0, 0); });
+  var resumen = resumenProcesos_(lista, pasos);
+
+  var ev = lista.filter(function (p) { return p.nivel === 'MAPA'; }).map(function (p) {
+    return {
+      tipo: 'Proceso ' + (p.tipo_etiqueta || '').toLowerCase(),
+      descripcion: p.codigo + ' — ' + p.nombre +
+        (p.responsable_email ? '' : ' (sin responsable)'),
+      fecha: p.fecha_ultima_revision,
+      responsable: p.responsable_email || p.revisado_por
+    };
+  });
+  porDocs.evidencia.forEach(function (e) { ev.push(e); });
+
+  var falta = [];
+  ['ESTRATEGICO', 'OPERATIVO', 'APOYO'].forEach(function (t) {
+    if (!resumen.por_tipo[t]) {
+      falta.push('no hay procesos del tipo ' + (ETIQUETA_TIPO_PROCESO[t] || t).toLowerCase());
+    }
+  });
+  if (resumen.sin_responsable) {
+    falta.push(resumen.sin_responsable + ' proceso(s) del mapa sin responsable asignado');
+  }
+  if (resumen.sin_objetivo) {
+    falta.push(resumen.sin_objetivo + ' proceso(s) del mapa sin objetivo definido');
+  }
+  if (resumen.revision_vencida) {
+    falta.push('la última revisión tiene ' + resumen.meses_desde_revision +
+      ' meses y la frecuencia definida es de ' + MESES_REVISION_PROCESOS);
+  }
+
+  return {
+    estado: falta.length ? 'PARCIAL' : 'COMPLETO',
+    resumen: resumen.total_mapa + ' procesos en el mapa' +
+      (resumen.total_servicios ? ', ' + resumen.total_servicios + ' procesos de servicio con ' +
+        resumen.total_pasos + ' pasos' : '') + '.',
+    nota: falta.length ? 'Para cerrar 4.4: ' + falta.join('; ') + '.' : '',
+    evidencia: ev
+  };
+}
+
+/**
+ * v11.0 Fase 4. Las clausulas de operacion (§8.1, §8.5, §8.6) se apoyan en
+ * los procesos de SERVICIO: son los que el DOC-01 cita para planificar,
+ * prestar y liberar el servicio.
+ *
+ * Con la definicion cargada quedan en PARCIAL, no en COMPLETO: tener escrito
+ * como se presta un servicio no demuestra que se haya prestado. Eso es la
+ * evidencia de ejecucion, que llega con la Fase 8. Decirlo explicito evita
+ * que alguien lea "completo" y crea que la clausula esta resuelta.
+ */
+function evaluarOperacionPorProcesos_(codigo, queFalta) {
+  var servicios = (typeof procesosActivos_ === 'function')
+    ? procesosActivos_().filter(function (p) { return p.nivel === 'SERVICIO'; })
+    : [];
+  var porDocs = evaluarPorDocumentos_(codigo);
+
+  if (!servicios.length) {
+    return {
+      estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
+      resumen: 'Los procesos de servicio no están cargados en el sistema.',
+      nota: NOTA_FALTANTE_POR_DEFECTO_ISO[codigo] ||
+        'Carga los procesos de servicio (DOC-10 a DOC-13) en la sección Procesos.',
+      evidencia: porDocs.evidencia
+    };
+  }
+
+  var pasos = (typeof pasosActivos_ === 'function') ? pasosActivos_() : [];
+  var conPasos = {};
+  pasos.forEach(function (p) { conPasos[p.proceso_id] = true; });
+  var sinPasos = servicios.filter(function (p) { return !conPasos[p.proceso_id]; });
+
+  var ev = servicios.slice(0, 15).map(function (p) {
+    return {
+      tipo: 'Proceso de servicio',
+      descripcion: p.codigo + ' — ' + p.nombre + (p.area ? ' (' + p.area + ')' : ''),
+      fecha: p.fecha_ultima_revision,
+      responsable: p.responsable_email || p.revisado_por
+    };
+  });
+  porDocs.evidencia.forEach(function (e) { ev.push(e); });
+
+  var nota = queFalta;
+  if (sinPasos.length) {
+    nota = sinPasos.length + ' proceso(s) de servicio sin pasos definidos. ' + nota;
+  }
+
+  return {
+    estado: 'PARCIAL',
+    resumen: servicios.length + ' procesos de servicio definidos, con ' + pasos.length + ' pasos.',
+    nota: nota,
     evidencia: ev
   };
 }

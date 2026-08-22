@@ -309,7 +309,15 @@ var BACKOFFICE_ACTIONS = {
   guardarRiesgoSgc: handleGuardarRiesgoSgc_,
   asignarAccionRiesgoSgc: handleAsignarAccionRiesgoSgc_,
   registrarRevisionRiesgosSgc: handleRegistrarRevisionRiesgosSgc_,
-  anularRiesgoSgc: handleAnularRiesgoSgc_
+  anularRiesgoSgc: handleAnularRiesgoSgc_,
+
+  // v11.0 Fase 4 (§4.4): procesos del SGC.
+  listarProcesosSgc: handleListarProcesosSgc_,
+  getDetalleProcesoSgc: handleGetDetalleProcesoSgc_,
+  sembrarMapaProcesosSgc: handleSembrarMapaProcesosSgc_,
+  guardarProcesoSgc: handleGuardarProcesoSgc_,
+  anularProcesoSgc: handleAnularProcesoSgc_,
+  registrarRevisionProcesosSgc: handleRegistrarRevisionProcesosSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -588,7 +596,17 @@ var MODULO_POR_ACCION = {
   guardarRiesgoSgc: 'calidad',
   asignarAccionRiesgoSgc: 'calidad',
   registrarRevisionRiesgosSgc: 'calidad',
-  anularRiesgoSgc: 'calidad'
+  anularRiesgoSgc: 'calidad',
+
+  // v11.0 Fase 4: el mapa de procesos lo LEE cualquiera que entre a
+  // Calidad -- saber como opera la organizacion es toma de conciencia
+  // (§7.3). Editarlo es del Encargado.
+  listarProcesosSgc: ['calidad', 'gerencia'],
+  getDetalleProcesoSgc: ['calidad', 'gerencia'],
+  sembrarMapaProcesosSgc: 'calidad',
+  guardarProcesoSgc: 'calidad',
+  anularProcesoSgc: 'calidad',
+  registrarRevisionProcesosSgc: 'calidad'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -1532,6 +1550,31 @@ function handleRegistrarRevisionRiesgosSgc_(data, contexto) {
 
 function handleAnularRiesgoSgc_(data, contexto) {
   return responderResultado_(Riesgos.anular(data, contexto));
+}
+
+// v11.0 Fase 4 (§4.4): procesos del SGC.
+function handleListarProcesosSgc_(data, contexto) {
+  return responderResultado_(Procesos.listar(data, contexto));
+}
+
+function handleGetDetalleProcesoSgc_(data, contexto) {
+  return responderResultado_(Procesos.getDetalle(data, contexto));
+}
+
+function handleSembrarMapaProcesosSgc_(data, contexto) {
+  return responderResultado_(Procesos.sembrarMapa(data, contexto));
+}
+
+function handleGuardarProcesoSgc_(data, contexto) {
+  return responderResultado_(Procesos.guardar(data, contexto));
+}
+
+function handleAnularProcesoSgc_(data, contexto) {
+  return responderResultado_(Procesos.anular(data, contexto));
+}
+
+function handleRegistrarRevisionProcesosSgc_(data, contexto) {
+  return responderResultado_(Procesos.registrarRevision(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

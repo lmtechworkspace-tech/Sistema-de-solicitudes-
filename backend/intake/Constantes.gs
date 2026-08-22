@@ -150,7 +150,9 @@ var SHEETS = {
   SGC_EXCLUSIONES: 'SGC_EXCLUSIONES',
   SGC_CONTEXTO: 'SGC_CONTEXTO',
   SGC_PARTES_INTERESADAS: 'SGC_PARTES_INTERESADAS',
-  SGC_RIESGOS: 'SGC_RIESGOS'
+  SGC_RIESGOS: 'SGC_RIESGOS',
+  SGC_PROCESOS: 'SGC_PROCESOS',
+  SGC_PROCESO_PASOS: 'SGC_PROCESO_PASOS'
 };
 
 var COLUMNAS = {
@@ -867,10 +869,53 @@ var COLUMNAS = {
     'accion', 'fecha_implementacion', 'medidas_control',
     'responsable_email', 'accion_actividad_id',
     'probabilidad_residual', 'impacto_residual',
-    'estado', 'observaciones',
+    'estado', 'observaciones', 'proceso_id',
     'fecha_identificacion', 'fecha_ultima_revision', 'revisado_por',
     'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+// --- v11.0 Fase 4: procesos del SGC (§4.4, y base de §8.1/§8.5/§8.6) ----
+  //
+  // Hay DOS niveles y comparten hoja porque son la misma entidad con distinto
+  // grado de detalle:
+  //
+  //   MAPA     los 14 procesos del DOC-03 "Mapa de procesos v02", repartidos
+  //            en estrategicos, operativos y de apoyo. Son la vista que pide
+  //            §4.4: que procesos hay y como se relacionan.
+  //   SERVICIO los 40 procesos de servicio de los DOC-10 a DOC-13, cada uno
+  //            colgando del proceso del mapa al que pertenece
+  //            (`proceso_padre_id`). Son el detalle operativo.
+  //
+  // La distincion importa: el mapa es chico y estable, y cierra §4.4 solo.
+  // El detalle operativo es grande (143 pasos) y se carga por planilla, no
+  // desde el codigo -- meter 135 KB de texto en un archivo que se pega a
+  // mano en Apps Script seria pagar ese costo en cada despliegue.
+  //
+  // clausulas_iso: mismo campo y mismo criterio que SGC_DOCUMENTOS. El
+  //   Encargado etiqueta que clausulas sustenta cada proceso; adivinarlo por
+  //   palabras clave seria inventar evidencia.
+  SGC_PROCESOS: [
+    'proceso_id', 'codigo', 'nombre', 'tipo', 'nivel',
+    'proceso_padre_id', 'area',
+    'objetivo', 'alcance', 'responsable_email',
+    'entradas', 'actividades', 'salidas',
+    'clientes', 'proveedores', 'recursos',
+    'documentos', 'clausulas_iso',
+    'estado', 'observaciones',
+    'fecha_ultima_revision', 'revisado_por',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // Un paso por fila, con las cinco columnas que traen los DOC-10 a DOC-13:
+  // responsable, input, actividades, evidencias y output. Se respeta esa
+  // estructura tal cual en vez de normalizarla, porque es el formato que la
+  // empresa ya aprobo y con el que trabaja cada area.
+  SGC_PROCESO_PASOS: [
+    'paso_id', 'proceso_id', 'numero', 'nombre',
+    'responsable', 'input', 'actividades', 'evidencias', 'output',
+    'observaciones', 'creado_por', 'fecha_creacion', 'activa'
   ]
+
 };
 
 // S01-S11 completos desde la Fase 1 aunque solo S01 se use aqui: la maquina

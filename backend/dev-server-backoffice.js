@@ -316,6 +316,26 @@ function construirContexto() {
   // v11.0 Fase 3: vacia a proposito -- el flujo a probar arranca en
   // "la matriz no esta cargada", que es donde se ofrece el DOC-08.
   seedSheet(ctx, 'SGC_RIESGOS', ctx.COLUMNAS.SGC_RIESGOS);
+  // v11.0 Fase 4: vacias -- el mapa se carga desde la pantalla, y los
+  // procesos de servicio por planilla.
+  seedSheet(ctx, 'SGC_PROCESOS', ctx.COLUMNAS.SGC_PROCESOS);
+  seedSheet(ctx, 'SGC_PROCESO_PASOS', ctx.COLUMNAS.SGC_PROCESO_PASOS);
+  // v11.0 Fase 4: si estan los TSV de _datos-manual, se cargan para poder
+  // probar la jerarquia completa en local. En produccion se pegan a mano.
+  const PROCESOS_DEMO_TSV = __dirname + '/../_datos-manual/';
+  [['SGC_PROCESOS_servicios_para_pegar.tsv', 'SGC_PROCESOS'],
+   ['SGC_PROCESO_PASOS_para_pegar.tsv', 'SGC_PROCESO_PASOS']].forEach(function (par) {
+    const ruta = PROCESOS_DEMO_TSV + par[0];
+    if (!require('fs').existsSync(ruta)) return;
+    const lineas = require('fs').readFileSync(ruta, 'utf8')
+      .split(String.fromCharCode(10)).slice(1).filter(Boolean);
+    lineas.forEach(function (l) {
+      const c = l.split(String.fromCharCode(9));
+      const fila = {};
+      ctx.COLUMNAS[par[1]].forEach(function (col, i) { fila[col] = c[i] === undefined ? '' : c[i]; });
+      ctx.agregarFila_(par[1], fila);
+    });
+  });
   seedSheet(ctx, 'SGC_ROLES', ctx.COLUMNAS.SGC_ROLES, [
     ['SGCR-1', 'admin@homepymes.cl', 'ENCARGADO_SGC', '', '', true, new Date().toISOString()],
     ['SGCR-2', 'jefe@homepymes.cl', 'OPERATIVO', 'CONTABILIDAD', '', true, new Date().toISOString()],

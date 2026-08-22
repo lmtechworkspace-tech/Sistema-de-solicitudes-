@@ -13342,6 +13342,8 @@ var Iconos = (function () {
       if (revisionActivaId_) abrirRevision_(revisionActivaId_); else cargarRevisiones_();
     } else if (seccionActiva_ === 'objetivos') {
       if (objetivoActivoId_) abrirObjetivo_(objetivoActivoId_); else cargarObjetivos_();
+    } else if (seccionActiva_ === 'procesos') {
+      if (procesoActivoId_) abrirProceso_(procesoActivoId_); else cargarProcesos_();
     } else if (seccionActiva_ === 'riesgos') {
       cargarRiesgos_();
     } else if (seccionActiva_ === 'contexto') {
@@ -13382,7 +13384,8 @@ var Iconos = (function () {
     { label: 'Planificación', items: [
       { id: 'contexto', texto: 'Contexto', icono: 'lupa' },
       { id: 'alcance', texto: 'Alcance', icono: 'diana' },
-      { id: 'riesgos', texto: 'Riesgos', icono: 'alerta' }
+      { id: 'riesgos', texto: 'Riesgos', icono: 'alerta' },
+      { id: 'procesos', texto: 'Procesos', icono: 'lista' }
     ] },
     { label: 'Dirección', items: [
       { id: 'revision', texto: 'Revisión por la dirección', icono: 'estado' },
@@ -13435,6 +13438,7 @@ var Iconos = (function () {
         proveedorActivoId_ = null;
         revisionActivaId_ = null;
         objetivoActivoId_ = null;
+        procesoActivoId_ = null;
         render_();
       });
     });
@@ -18117,6 +18121,382 @@ var Iconos = (function () {
   // "modo auditoría" es la ficha de cada cláusula: la lista de registros que
   // la sustentan, con boton para bajarla en PDF -- el auditor pide "muéstreme
   // 7.2" y sale en un clic.
+
+  // ==========================================================================
+  // v11.0 Fase 4 (§4.4): procesos del SGC.
+  //
+  // Dos niveles: el MAPA (los 14 del DOC-03, agrupados por tipo) y los
+  // procesos de SERVICIO que cuelgan de cada uno. La ficha de un proceso
+  // muestra sus pasos, sus subprocesos y sus riesgos, que es lo que un
+  // diagrama en PDF no puede hacer.
+  // ==========================================================================
+
+  var procesoActivoId_ = null;
+
+  function cargarProcesos_() {
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando mapa de procesos...');
+    api_('listarProcesosSgc', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = barraSecciones_() +
+          Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el mapa.', 'error');
+        wireSecciones_(cont);
+        return;
+      }
+      pintarProcesos_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
+      wireSecciones_(cont);
+    });
+  }
+
+  var TONO_TIPO_PROCESO = { ESTRATEGICO: 'info', OPERATIVO: 'ok', APOYO: 'neutro' };
+
+  function pintarProcesos_(cont, data) {
+    var puede = !!data.puede_gestionar;
+    var r = data.resumen || {};
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">Los procesos del SGC y cómo se relacionan (§4.4). El mapa define qué procesos hay; ' +
+      'los procesos de servicio son el detalle operativo que cuelga de cada uno.</p>' +
+      '</div>';
+
+    // Basta con que falte el MAPA: si los servicios se cargaron por
+    // planilla primero, igual hay que poder cargar el mapa del que cuelgan.
+    if (!data.mapa.length) {
+      cont.innerHTML = cabecera +
+        Componentes.alerta('El mapa de procesos todavía no está cargado.', 'aviso') +
+        (puede
+          ? '<h4 class="sgc-sub">Propuesta tomada del DOC-03 v02</h4>' +
+            '<p class="sigso-ayuda">Son los ' + ((data.propuesta || {}).mapa || 0) +
+            ' procesos del mapa, repartidos en estratégicos, operativos y de apoyo. ' +
+            'Los procesos de servicio (DOC-10 a DOC-13) se cargan aparte, por planilla.</p>' +
+            '<div class="sgc-acciones">' +
+              Componentes.boton({ texto: 'Cargar el mapa del DOC-03', clase: 'js-prc-sembrar' }) +
+            '</div>'
+          : '<p class="sigso-ayuda">El Encargado del SGC es quien lo carga.</p>');
+      wireSecciones_(cont);
+      var b = cont.querySelector('.js-prc-sembrar');
+      if (b) b.addEventListener('click', function () {
+        api_('sembrarMapaProcesosSgc', {}).then(function (resp) {
+          var d = (resp && resp.data) || {};
+          Componentes.aviso({ texto: d.message || 'Mapa cargado.', tipo: (resp && resp.ok && d.ok !== false) ? 'exito' : 'error' });
+          if (resp && resp.ok && d.ok !== false) cargarProcesos_();
+        });
+      });
+      return;
+    }
+
+    var avisoRevision = '';
+    if (r.ultima_revision) {
+      avisoRevision = Componentes.alerta(
+        'Última revisión del mapa: ' + fechaCorta_(r.ultima_revision) +
+        (r.meses_desde_revision !== null && r.meses_desde_revision !== undefined
+          ? ' (hace ' + r.meses_desde_revision + ' meses)' : '') +
+        '. La frecuencia definida es cada ' + data.meses_revision + ' meses.',
+        r.revision_vencida ? 'error' : 'aviso');
+    }
+
+    var kpis = '<div class="sgc-kpis">' + [
+      Componentes.kpi({ etiqueta: 'Procesos del mapa', valor: r.total_mapa || 0 }),
+      Componentes.kpi({ etiqueta: 'De servicio', valor: r.total_servicios || 0 }),
+      Componentes.kpi({ etiqueta: 'Pasos definidos', valor: r.total_pasos || 0 }),
+      Componentes.kpi({ etiqueta: 'Sin responsable', valor: r.sin_responsable || 0,
+        alerta: !!r.sin_responsable,
+        titulo: '§4.4.2 e) pide asignar la responsabilidad y autoridad de cada proceso.' })
+    ].join('') + '</div>';
+
+    // El flujo del DOC-03: necesidades -> procesos -> satisfacción.
+    var flujo = data.flujo || {};
+    var bordes = '<div class="sgc-kpis">' +
+      '<div class="sgc-doc"><div class="sgc-doc__linea"><span class="sgc-doc__codigo">' +
+        Componentes.escaparHtml((flujo.entrada || {}).titulo || '') + '</span></div>' +
+        '<span class="sgc-doc__nombre">' +
+        Componentes.escaparHtml(((flujo.entrada || {}).items || []).join(' · ')) + '</span></div>' +
+      '<div class="sgc-doc"><div class="sgc-doc__linea"><span class="sgc-doc__codigo">' +
+        Componentes.escaparHtml((flujo.salida || {}).titulo || '') + '</span></div>' +
+        '<span class="sgc-doc__nombre">' +
+        Componentes.escaparHtml(((flujo.salida || {}).items || []).join(' · ')) + '</span></div>' +
+      '</div>' +
+      '<p class="sigso-ayuda">' + Componentes.escaparHtml(flujo.ciclo || '') + '</p>';
+
+    var porTipo = ['ESTRATEGICO', 'OPERATIVO', 'APOYO'].map(function (tipo) {
+      var delTipo = data.mapa.filter(function (p) { return p.tipo === tipo; });
+      if (!delTipo.length) return '';
+      var etiqueta = { ESTRATEGICO: 'Procesos estratégicos', OPERATIVO: 'Procesos operativos', APOYO: 'Procesos de apoyo' }[tipo];
+      return '<h4 class="sgc-sub">' + etiqueta + ' (' + delTipo.length + ')</h4>' +
+        '<div class="sgc-lista">' + delTipo.map(function (p) {
+          var hijos = data.servicios.filter(function (s) { return s.proceso_padre_id === p.proceso_id; });
+          return '<button type="button" class="sgc-doc js-prc-abrir" data-proceso-id="' +
+            Componentes.escaparHtml(p.proceso_id) + '">' +
+            '<div class="sgc-doc__linea">' +
+              '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(p.codigo + ' — ' + p.nombre) + '</span>' +
+              Componentes.badge(p.tipo_etiqueta, TONO_TIPO_PROCESO[p.tipo] || 'neutro') +
+              (p.responsable_email ? '' : Componentes.badge('Sin responsable', 'alerta')) +
+            '</div>' +
+            (p.area ? '<span class="sgc-doc__meta">Área: ' + Componentes.escaparHtml(p.area) + '</span>' : '') +
+            (p.actividades
+              ? '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(String(p.actividades).split('\n').join(' · ')) + '</span>'
+              : '') +
+            (hijos.length
+              ? '<span class="sgc-doc__meta">' + hijos.length + ' proceso(s) de servicio</span>'
+              : '') +
+          '</button>';
+        }).join('') + '</div>';
+    }).join('');
+
+    var acciones = puede ? '<div class="sgc-acciones">' +
+      Componentes.boton({ texto: 'Agregar proceso', variante: 'secundario', clase: 'js-prc-nuevo' }) +
+      Componentes.boton({ texto: 'Registrar revisión del mapa', clase: 'js-prc-revisar' }) +
+      '</div>' : '';
+
+    var huerfanos = data.servicios.filter(function (s) {
+      return !data.mapa.some(function (p) { return p.proceso_id === s.proceso_padre_id; });
+    });
+    var avisoHuerfanos = huerfanos.length
+      ? Componentes.alerta(huerfanos.length + ' proceso(s) de servicio no cuelgan de ningún proceso del mapa. ' +
+          'Revisa que la columna proceso_padre_id de la planilla use el código correcto (PO-03, PO-04...).', 'error')
+      : '';
+
+    cont.innerHTML = cabecera + avisoRevision + kpis + bordes + avisoHuerfanos + porTipo + acciones;
+    wireSecciones_(cont);
+
+    cont.querySelectorAll('.js-prc-abrir').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        procesoActivoId_ = btn.getAttribute('data-proceso-id');
+        abrirProceso_(procesoActivoId_);
+      });
+    });
+    if (!puede) return;
+
+    cont.querySelector('.js-prc-nuevo').addEventListener('click', function () {
+      abrirFormularioProceso_(null, data);
+    });
+    cont.querySelector('.js-prc-revisar').addEventListener('click', function () {
+      Componentes.confirmar({
+        titulo: '¿Registrar la revisión del mapa?',
+        mensaje: 'Deja constancia de que hoy se revisaron los procesos, aunque no cambie nada.',
+        confirmar: 'Registrar'
+      }).then(function (ok) {
+        if (!ok) return;
+        api_('registrarRevisionProcesosSgc', {}).then(function (resp) {
+          var d = (resp && resp.data) || {};
+          Componentes.aviso({ texto: d.message || 'Revisión registrada.', tipo: (resp && resp.ok) ? 'exito' : 'error' });
+          if (resp && resp.ok) cargarProcesos_();
+        });
+      });
+    });
+  }
+
+  function abrirProceso_(procesoId) {
+    var cont = document.getElementById('calidad-contenido');
+    cont.innerHTML = Componentes.cargando('Cargando proceso...');
+    api_('getDetalleProcesoSgc', { proceso_id: procesoId }).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        procesoActivoId_ = null;
+        cargarProcesos_();
+        return;
+      }
+      pintarFichaProceso_(cont, respuesta.data);
+    });
+  }
+
+  function pintarFichaProceso_(cont, data) {
+    var p = data.proceso;
+    var puede = !!data.puede_gestionar;
+
+    var ficha = '<dl class="sgc-ficha">' + [
+      campoFichaSgc_('Código', p.codigo),
+      campoFichaSgc_('Tipo', p.tipo_etiqueta),
+      campoFichaSgc_('Nivel', p.nivel === 'SERVICIO' ? 'Proceso de servicio' : 'Proceso del mapa'),
+      campoFichaSgc_('Área', p.area),
+      campoFichaSgc_('Responsable', p.responsable_email),
+      campoFichaSgc_('Última revisión', p.fecha_ultima_revision ? fechaCorta_(p.fecha_ultima_revision) : '')
+    ].join('') + '</dl>';
+
+    var bloques = [
+      ['Objetivo', p.objetivo], ['Alcance', p.alcance],
+      ['Entradas', p.entradas], ['Actividades', p.actividades], ['Salidas', p.salidas],
+      ['Clientes', p.clientes], ['Proveedores', p.proveedores], ['Recursos', p.recursos],
+      ['Documentos', p.documentos]
+    ].filter(function (b) { return String(b[1] || '').trim(); })
+      .map(function (b) {
+        return '<h4 class="sgc-sub">' + b[0] + '</h4><p>' +
+          Componentes.escaparHtml(String(b[1]).split('\n').join(' · ')) + '</p>';
+      }).join('');
+
+    var pasos = '';
+    if (data.pasos.length) {
+      pasos = '<h4 class="sgc-sub">Pasos (' + data.pasos.length + ')</h4>' +
+        '<div class="sgc-etapas">' + data.pasos.map(function (x) {
+          return '<div class="sgc-etapa">' +
+            '<div class="sgc-etapa__num">' + x.numero + '</div>' +
+            '<div class="sgc-etapa__cuerpo">' +
+              '<strong>' + Componentes.escaparHtml(x.nombre || ('Paso ' + x.numero)) + '</strong>' +
+              '<dl class="sgc-ficha">' + [
+                campoFichaSgc_('Responsable', x.responsable),
+                campoFichaSgc_('Input', x.input),
+                campoFichaSgc_('Actividades', x.actividades),
+                campoFichaSgc_('Evidencias', x.evidencias),
+                campoFichaSgc_('Output', x.output)
+              ].join('') + '</dl>' +
+            '</div>' +
+          '</div>';
+        }).join('') + '</div>';
+    }
+
+    var subprocesos = '';
+    if (data.subprocesos.length) {
+      subprocesos = '<h4 class="sgc-sub">Procesos de servicio (' + data.subprocesos.length + ')</h4>' +
+        '<div class="sgc-lista">' + data.subprocesos.map(function (s) {
+          return '<button type="button" class="sgc-doc js-prc-abrir" data-proceso-id="' +
+            Componentes.escaparHtml(s.proceso_id) + '">' +
+            '<div class="sgc-doc__linea"><span class="sgc-doc__codigo">' +
+            Componentes.escaparHtml(s.codigo + ' — ' + s.nombre) + '</span></div>' +
+          '</button>';
+        }).join('') + '</div>';
+    }
+
+    var riesgos = '';
+    if (data.riesgos.length) {
+      riesgos = '<h4 class="sgc-sub">Riesgos y oportunidades de este proceso (' + data.riesgos.length + ')</h4>' +
+        '<div class="sgc-lista">' + data.riesgos.map(function (x) {
+          return '<div class="sgc-doc"><div class="sgc-doc__linea">' +
+            '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(x.codigo + ' — ' + x.factor) + '</span>' +
+            Componentes.badge(x.banda + ' · ' + x.magnitud,
+              x.clase === 'OPORTUNIDAD' ? 'ok' : (x.banda === 'Crítico' ? 'critico' : 'alerta')) +
+            '</div></div>';
+        }).join('') + '</div>';
+    }
+
+    cont.innerHTML = barraSecciones_() +
+      '<div class="sgc-detalle-cab">' +
+        Componentes.boton({ texto: '← Volver al mapa', variante: 'sutil', clase: 'js-prc-volver' }) +
+        '<h3>' + Componentes.escaparHtml(p.nombre) + '</h3>' +
+      '</div>' +
+      ficha + bloques + subprocesos + pasos + riesgos +
+      (puede ? '<div class="sgc-acciones">' +
+        Componentes.boton({ texto: 'Editar proceso', variante: 'secundario', clase: 'js-prc-editar' }) +
+        '</div>' : '');
+
+    wireSecciones_(cont);
+    cont.querySelector('.js-prc-volver').addEventListener('click', function () {
+      procesoActivoId_ = null;
+      cargarProcesos_();
+    });
+    cont.querySelectorAll('.js-prc-abrir').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        procesoActivoId_ = btn.getAttribute('data-proceso-id');
+        abrirProceso_(procesoActivoId_);
+      });
+    });
+    if (!puede) return;
+    cont.querySelector('.js-prc-editar').addEventListener('click', function () {
+      api_('listarProcesosSgc', {}).then(function (resp) {
+        abrirFormularioProceso_(p, (resp && resp.data) || { mapa: [] });
+      });
+    });
+  }
+
+  function abrirFormularioProceso_(actual, data) {
+    var p = actual || {};
+    var opsPadre = [{ valor: '', texto: 'Ninguno (proceso del mapa)' }].concat(
+      (data.mapa || []).filter(function (m) { return m.proceso_id !== p.proceso_id; })
+        .map(function (m) { return { valor: m.proceso_id, texto: m.codigo + ' — ' + m.nombre }; }));
+
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">' +
+          (actual ? 'Editar ' + Componentes.escaparHtml(p.codigo) : 'Agregar proceso') + '</h3>' +
+        '<form id="form-prc">' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'prc-nombre', label: 'Nombre', valor: p.nombre || '', requerido: true }) +
+            Componentes.campoTexto({ id: 'prc-codigo', label: 'Código', valor: p.codigo || '',
+              ayuda: 'Si lo dejas vacío, el sistema lo asigna.' }) +
+          '</div>' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoSelect({ id: 'prc-tipo', label: 'Tipo', valor: p.tipo || 'OPERATIVO',
+              placeholder: false, requerido: true,
+              opciones: [{ valor: 'ESTRATEGICO', texto: 'Estratégico' }, { valor: 'OPERATIVO', texto: 'Operativo' }, { valor: 'APOYO', texto: 'Apoyo' }] }) +
+            Componentes.campoSelect({ id: 'prc-nivel', label: 'Nivel', valor: p.nivel || 'MAPA',
+              placeholder: false,
+              opciones: [{ valor: 'MAPA', texto: 'Proceso del mapa' }, { valor: 'SERVICIO', texto: 'Proceso de servicio' }] }) +
+          '</div>' +
+          Componentes.campoSelect({ id: 'prc-padre', label: 'Cuelga de', valor: p.proceso_padre_id || '',
+            placeholder: false, opciones: opsPadre,
+            ayuda: 'Obligatorio para un proceso de servicio; vacío para uno del mapa.' }) +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'prc-area', label: 'Área', valor: p.area || '' }) +
+            Componentes.campoTexto({ id: 'prc-responsable', label: 'Responsable (correo)',
+              valor: p.responsable_email || '',
+              ayuda: '§4.4.2 e) pide asignar responsabilidad y autoridad.' }) +
+          '</div>' +
+          Componentes.campoTextarea({ id: 'prc-objetivo', label: 'Objetivo', valor: p.objetivo || '' }) +
+          Componentes.campoTextarea({ id: 'prc-alcance', label: 'Alcance', valor: p.alcance || '' }) +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTextarea({ id: 'prc-entradas', label: 'Entradas', valor: p.entradas || '' }) +
+            Componentes.campoTextarea({ id: 'prc-salidas', label: 'Salidas', valor: p.salidas || '' }) +
+          '</div>' +
+          Componentes.campoTextarea({ id: 'prc-actividades', label: 'Actividades', valor: p.actividades || '' }) +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'prc-clientes', label: 'Clientes', valor: p.clientes || '' }) +
+            Componentes.campoTexto({ id: 'prc-proveedores', label: 'Proveedores', valor: p.proveedores || '' }) +
+          '</div>' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'prc-recursos', label: 'Recursos', valor: p.recursos || '' }) +
+            Componentes.campoTexto({ id: 'prc-documentos', label: 'Documentos', valor: p.documentos || '' }) +
+          '</div>' +
+          Componentes.campoTextarea({ id: 'prc-observaciones', label: 'Observaciones', valor: p.observaciones || '' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit', clase: 'js-sgc-guardar' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-prc').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true;
+      api_('guardarProcesoSgc', {
+        proceso_id: p.proceso_id || '',
+        nombre: document.getElementById('prc-nombre').value,
+        codigo: document.getElementById('prc-codigo').value,
+        tipo: document.getElementById('prc-tipo').value,
+        nivel: document.getElementById('prc-nivel').value,
+        proceso_padre_id: document.getElementById('prc-padre').value,
+        area: document.getElementById('prc-area').value,
+        responsable_email: document.getElementById('prc-responsable').value,
+        objetivo: document.getElementById('prc-objetivo').value,
+        alcance: document.getElementById('prc-alcance').value,
+        entradas: document.getElementById('prc-entradas').value,
+        salidas: document.getElementById('prc-salidas').value,
+        actividades: document.getElementById('prc-actividades').value,
+        clientes: document.getElementById('prc-clientes').value,
+        proveedores: document.getElementById('prc-proveedores').value,
+        recursos: document.getElementById('prc-recursos').value,
+        documentos: document.getElementById('prc-documentos').value,
+        observaciones: document.getElementById('prc-observaciones').value
+      }).then(function (resp) {
+        var d = (resp && resp.data) || {};
+        if (!resp || !resp.ok || d.ok === false) {
+          boton.disabled = false;
+          Componentes.aviso({ texto: d.message || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: d.message || 'Proceso guardado.', tipo: 'exito' });
+        if (procesoActivoId_) abrirProceso_(procesoActivoId_); else cargarProcesos_();
+      }).catch(function () {
+        boton.disabled = false;
+        Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
+      });
+    });
+  }
 
   // ==========================================================================
   // v11.0 Fase 3 (§6.1): riesgos y oportunidades.

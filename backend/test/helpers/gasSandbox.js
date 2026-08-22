@@ -206,6 +206,10 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // tareaResumen_ de NoConformidades.gs, y factoresContextoActivos_ /
   // mesesDesde_ de Contexto.gs -- por eso va despues de ambos.
   'Riesgos.gs',
+  // v11.0 Fase 4 (§4.4): procesos del SGC. Usa valorarRiesgo_ de
+  // Riesgos.gs para mostrar los riesgos de cada proceso, y mesesDesde_
+  // de Contexto.gs.
+  'Procesos.gs',
   // v10.0 Fase 6b: matriz de cobertura ISO. Usa CLAUSULAS_ISO9001 de
   // Auditorias.gs y datos de casi todos los modulos SGC ya cargados.
   'MatrizCobertura.gs',

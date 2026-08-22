@@ -955,6 +955,9 @@ function seccionesVisiblesSgc_(contexto) {
     // plataformas) que no corresponde repartir a todo el personal, asi que
     // se restringe a quien ya tiene lectura amplia del SGC.
     riesgos: veTodo,
+    // v11.0 Fase 4: el mapa de procesos si es de todos -- saber como
+    // opera la organizacion es parte de la toma de conciencia (§7.3).
+    procesos: true,
     nc: tieneAlgunaAsignada_(SHEETS.SGC_NC, ['responsable_email', 'detectada_por']),
     auditorias: tieneAlgunaAsignada_(SHEETS.SGC_AUDITORIAS, ['auditor_email']),
     quejas: veTodo, // el flujo de quejas es de gestion; el solicitante externo no entra al modulo
