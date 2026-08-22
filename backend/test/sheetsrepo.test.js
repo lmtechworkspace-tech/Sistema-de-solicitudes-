@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadIntakeProject, loadBackofficeProject, seedSheet } = require('./helpers/gasSandbox');
+const { loadIntakeProject, loadBackofficeProject, seedSheet, toPlain } = require('./helpers/gasSandbox');
 
 // Regresion del bug real de produccion: al agregar columnas al esquema
 // (rut_cliente/codigo_cliente) el dashboard/consultar/gerencia dejaron de
@@ -112,4 +112,67 @@ test('agregarFila_ NO releega la hoja en escrituras sucesivas al mismo destino (
   }
   assert.equal(lecturas, 0, 'agregarFila_ no debe releer la hoja entre escrituras sucesivas');
   assert.equal(ctx.leerFilas_('LOG_NOTIFICACIONES').length, 5);
+});
+
+// --- H-04: diagnostico de esquema -----------------------------------------
+// El sintoma que motivo esto: pegar datos con el formato nuevo en una hoja
+// con el encabezado viejo los mete CORRIDOS de columna, y lo que se ve
+// despues es una pantalla vacia sin ningun error. Este diagnostico convierte
+// ese silencio en una respuesta concreta.
+
+test('diagnosticarEsquema_ detecta una columna que falta en una hoja existente', () => {
+  const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
+  // Todas las hojas al dia salvo SGC_DESCRIPTORES, a la que le faltan los dos
+  // items_* -- exactamente el caso real que se produjo.
+  Object.keys(ctx.COLUMNAS).forEach((hoja) => {
+    const cols = hoja === 'SGC_DESCRIPTORES'
+      ? ctx.COLUMNAS[hoja].filter((c) => c !== 'items_responsabilidades' && c !== 'items_habilidades')
+      : ctx.COLUMNAS[hoja];
+    seedSheet(ctx, hoja, cols);
+  });
+
+  const d = ctx.diagnosticarEsquema_();
+  assert.equal(d.al_dia, false);
+  assert.deepEqual(toPlain(d.hojas_faltantes), []);
+  assert.equal(d.columnas_faltantes.length, 1);
+  assert.equal(d.columnas_faltantes[0].hoja, 'SGC_DESCRIPTORES');
+  assert.deepEqual(toPlain(d.columnas_faltantes[0].columnas),
+    ['items_responsabilidades', 'items_habilidades']);
+  assert.match(d.accion, /actualizarEsquema/, 'debe decir qué hacer, no solo que algo falta');
+});
+
+test('diagnosticarEsquema_ detecta una hoja que no existe', () => {
+  const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
+  Object.keys(ctx.COLUMNAS).forEach((hoja) => {
+    if (hoja !== 'SGC_QUEJAS') seedSheet(ctx, hoja, ctx.COLUMNAS[hoja]);
+  });
+
+  const d = ctx.diagnosticarEsquema_();
+  assert.equal(d.al_dia, false);
+  assert.ok(d.hojas_faltantes.indexOf('SGC_QUEJAS') !== -1);
+});
+
+test('diagnosticarEsquema_ dice "al día" cuando la planilla está completa', () => {
+  const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
+  Object.keys(ctx.COLUMNAS).forEach((hoja) => seedSheet(ctx, hoja, ctx.COLUMNAS[hoja]));
+
+  const d = ctx.diagnosticarEsquema_();
+  assert.equal(d.al_dia, true, JSON.stringify(d, null, 1));
+  assert.equal(d.accion, '');
+});
+
+test('diagnosticarEsquema_ NO se queja por columnas de más', () => {
+  // Al agregar columnas al final (que es lo que hace actualizarEsquema) el
+  // orden deja de coincidir con COLUMNAS. Eso es correcto y no debe reportarse:
+  // todo se lee por NOMBRE de encabezado, no por posicion.
+  const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
+  Object.keys(ctx.COLUMNAS).forEach((hoja) => {
+    const cols = hoja === 'SGC_ROLES'
+      ? ctx.COLUMNAS[hoja].slice().reverse().concat(['columna_de_otro_sistema'])
+      : ctx.COLUMNAS[hoja];
+    seedSheet(ctx, hoja, cols);
+  });
+
+  const d = ctx.diagnosticarEsquema_();
+  assert.equal(d.al_dia, true, 'orden distinto y columnas extra son válidos');
 });

@@ -1445,6 +1445,34 @@ button {
   flex: none;
 }
 
+/* H-04: version desplegada. Discreta por defecto -- es un dato de apoyo, no
+   algo que competir con la navegacion; solo levanta la voz cuando el backend
+   quedo atras y quien mira puede arreglarlo. */
+.plataforma-sidebar__version {
+  margin: 0 0 0.35rem;
+  padding: 0 var(--esp-2);
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+  color: rgba(255, 255, 255, 0.38);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.plataforma-sidebar__version--alerta {
+  color: #FFD9A0;
+  font-weight: 500;
+  white-space: normal;
+  line-height: 1.35;
+}
+
+/* Con la barra colapsada no hay ancho para un texto asi: se oculta, igual
+   que las etiquetas de los demas controles. */
+.plataforma-sidebar--colapsado .plataforma-sidebar__version {
+  display: none;
+}
+
 .plataforma-sidebar__tema {
   display: flex;
   align-items: center;

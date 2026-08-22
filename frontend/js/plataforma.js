@@ -304,6 +304,8 @@
     cargarFotoPropia_();
     renderNav_();
     renderHome_();
+    // H-04: qué versión del backend está respondiendo de verdad.
+    comprobarVersionBackend_();
     // v6.0 (Pausas P4.1): si el enlace magico pedia un modulo puntual (p.ej.
     // el recordatorio de pausas) y la cuenta SI lo tiene, se abre directo ese
     // modulo -- si no, se ignora en silencio y entra a Home como siempre. Se
@@ -489,6 +491,47 @@
 
   // v4.0: avatar de iniciales + rol visible. Antes solo se veia el nombre
   // suelto junto a un boton de salir, y el rol no aparecia en ningun lado.
+  /**
+   * H-04: pregunta al backend qué versión está corriendo y la deja visible.
+   *
+   * El frontend se publica solo con cada push; el backend se pega a mano en
+   * Apps Script. Por eso la versión del frontend es siempre la buena: si el
+   * backend responde otra, es que falta pegarlo. Antes no había forma de
+   * notarlo — la planilla llegó a quedar dos fases atrás y solo se supo
+   * cuando unos datos entraron corridos de columna.
+   *
+   * El aviso es solo para Admin: al resto no le sirve de nada enterarse de
+   * algo que no puede resolver. Y si la consulta falla, no pasa nada: es
+   * información de apoyo, no puede romper la entrada al sistema.
+   */
+  function comprobarVersionBackend_() {
+    var el = document.getElementById('sigso-version');
+    if (!el) return;
+    var esperada = (window.SIGSO_CONFIG || {}).VERSION || '';
+
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'ping', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok || !respuesta.data) return;
+      var backend = respuesta.data.version || '';
+      if (!backend) return;
+
+      el.hidden = false;
+      var desfasado = esperada && backend !== esperada;
+      var esAdmin = sesion && sesion.cuenta && sesion.cuenta.rol === 'ADM';
+
+      if (desfasado && esAdmin) {
+        el.classList.add('plataforma-sidebar__version--alerta');
+        el.textContent = 'Backend ' + backend + ' — falta pegar ' + esperada;
+        el.title = 'El backend de Apps Script quedó atrás respecto de esta versión del sitio. ' +
+          'Pega los archivos del último paquete y vuelve a publicar la implementación.';
+      } else {
+        el.textContent = 'v' + backend;
+        el.title = desfasado
+          ? 'Backend ' + backend + ' · sitio ' + esperada
+          : 'Versión desplegada';
+      }
+    }).catch(function () { /* sin versión: no es motivo para molestar a nadie */ });
+  }
+
   function renderIdentidad_() {
     var cuenta = sesion.cuenta;
     document.getElementById('nav-nombre-usuario').textContent = cuenta.nombre;

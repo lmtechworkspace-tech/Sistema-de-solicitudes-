@@ -154,6 +154,8 @@ var BACKOFFICE_ACTIONS = {
   // ping); listar es solo Admin (gate 'administracion' mas abajo).
   reportarPermisoNotificacionesSO: handleReportarPermisoNotificacionesSO_,
   listarPermisosNotificacionesSO: handleListarPermisosNotificacionesSO_,
+  // H-04: que version del backend esta pegada y si la planilla esta al dia.
+  getEstadoSistema: handleGetEstadoSistema_,
   // v7.5 (canales de alerta): que categorias mandan correo -- ambas ADM-only.
   listarCanalesAlerta: handleListarCanalesAlerta_,
   guardarCanalAlerta: handleGuardarCanalAlerta_,
@@ -322,6 +324,7 @@ var MODULO_POR_ACCION = {
   guardarCatalogo: 'administracion',
   listarCatalogo: 'administracion',
   listarPermisosNotificacionesSO: 'administracion',
+  getEstadoSistema: 'administracion',
   listarCanalesAlerta: 'administracion',
   guardarCanalAlerta: 'administracion',
   getDirectorioAlerta: 'administracion',
@@ -790,6 +793,20 @@ function handleListarPermisosNotificacionesSO_(data, contexto) {
   return responderResultado_(listarPermisosNotificacionesSO_(contexto));
 }
 
+// H-04: estado de lo desplegado. Version del codigo que corre en ESTE
+// proyecto + si la planilla tiene todas las hojas y columnas que el codigo
+// espera. Es de Administracion porque quien despliega es el Admin: avisarle
+// al resto de algo que no puede arreglar solo seria ruido.
+function handleGetEstadoSistema_(data, contexto) {
+  if (contexto.rol !== 'ADM') {
+    return responderResultado_({ _forbidden: true, message: 'Solo Admin puede ver el estado del sistema.' });
+  }
+  return responderResultado_({
+    version_backend: VERSION_SIGSO,
+    esquema: diagnosticarEsquema_()
+  });
+}
+
 function handleListarCanalesAlerta_(data, contexto) {
   return responderResultado_(listarCanalesAlerta_(contexto));
 }
@@ -811,6 +828,7 @@ function handlePing_(data, contexto) {
     ok: true,
     data: {
       pong: true,
+      version: VERSION_SIGSO,
       ts: new Date().toISOString(),
       tz: getConfig_().timezone,
       usuario: contexto.email,

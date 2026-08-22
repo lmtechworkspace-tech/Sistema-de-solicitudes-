@@ -118,3 +118,45 @@ test('ejecutarAccionBackoffice responde error de validacion para una accion desc
   assert.equal(resultado.ok, false);
   assert.equal(resultado.error, 'validation');
 });
+
+// --- H-04: saber que hay desplegado ---------------------------------------
+// El backend se pega a mano en Apps Script, asi que sin una marca no habia
+// forma de saber si lo que corre es lo ultimo. Ya paso: la planilla quedo dos
+// fases atras y solo se noto cuando unos datos entraron corridos de columna.
+
+test('ping devuelve la version del backend, para poder compararla con la del sitio', () => {
+  const ctx = loadBackoffice({ activeUserEmail: 'admin@homepymes.cl' });
+  seedUsuario(ctx, 'admin@homepymes.cl', 'ADM');
+
+  const parsed = JSON.parse(ctx.doPost(makeEvent({ action: 'ping', data: {} })).getContent());
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.data.version, ctx.VERSION_SIGSO);
+  assert.match(String(parsed.data.version), /\d{4}-\d{2}-\d{2}/, 'la versión debe ser reconocible');
+});
+
+test('getEstadoSistema es solo del Admin: quien no despliega no necesita el diagnóstico', () => {
+  const ctx = loadBackoffice({ activeUserEmail: 'gerente@homepymes.cl' });
+  seedUsuario(ctx, 'gerente@homepymes.cl', 'GERENCIA');
+  Object.keys(ctx.COLUMNAS).forEach((h) => {
+    if (h !== 'USUARIOS') seedSheet(ctx, h, ctx.COLUMNAS[h]);
+  });
+
+  const parsed = JSON.parse(ctx.doPost(makeEvent({ action: 'getEstadoSistema', data: {} })).getContent());
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.error, 'forbidden');
+});
+
+test('getEstadoSistema le dice al Admin la versión y si la planilla está al día', () => {
+  const ctx = loadBackoffice({ activeUserEmail: 'admin@homepymes.cl' });
+  Object.keys(ctx.COLUMNAS).forEach((h) => seedSheet(ctx, h, ctx.COLUMNAS[h]));
+  seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS, [
+    ['U1', 'Admin', 'admin@homepymes.cl', 'HP', 'ADM', true, '', 'sistema']
+  ]);
+
+  const parsed = JSON.parse(ctx.doPost(makeEvent({ action: 'getEstadoSistema', data: {} })).getContent());
+
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.data.version_backend, ctx.VERSION_SIGSO);
+  assert.equal(parsed.data.esquema.al_dia, true);
+});

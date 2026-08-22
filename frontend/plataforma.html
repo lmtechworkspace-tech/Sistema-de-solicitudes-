@@ -159,6 +159,12 @@
       <nav class="plataforma-sidebar__nav" id="nav-modulos"></nav>
 
       <div class="plataforma-sidebar__pie">
+        <!-- H-04: version del backend que esta REALMENTE respondiendo. Sirve
+             para dos cosas: saber que hay desplegado sin abrir Apps Script, y
+             poder decirla cuando algo falla ("¿qué versión tienes?"). Si el
+             backend quedó atrás, esto se convierte en un aviso -- solo para
+             Admin, que es quien puede resolverlo. -->
+        <p class="plataforma-sidebar__version" id="sigso-version" hidden></p>
         <button type="button" class="plataforma-sidebar__tema" id="btn-tema" aria-label="Cambiar a modo oscuro">
           <span id="ico-tema"></span><span class="plataforma-sidebar__txt">Modo oscuro</span>
         </button>

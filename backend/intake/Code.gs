@@ -61,7 +61,7 @@ function doPost(e) {
 function handlePing_() {
   return jsonResponse_({
     ok: true,
-    data: { pong: true, ts: new Date().toISOString(), tz: getConfig_().timezone }
+    data: { pong: true, version: VERSION_SIGSO, ts: new Date().toISOString(), tz: getConfig_().timezone }
   });
 }
 

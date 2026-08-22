@@ -242,3 +242,56 @@ function eliminarFilasPorId_(nombreHoja, columnaId, valorId) {
   if (borradas) invalidarCacheHoja_(nombreHoja); // v6.9
   return borradas;
 }
+
+/**
+ * Compara la planilla REAL contra el esquema que espera el codigo
+ * (COLUMNAS) y devuelve lo que falta.
+ *
+ * POR QUE EXISTE. Cada version que agrega una columna deja la planilla en
+ * produccion con el encabezado viejo hasta que alguien corre
+ * actualizarEsquema en el proyecto Setup. Cuando eso no pasa, los datos que
+ * se peguen entran CORRIDOS de columna y el sintoma aparece lejos de la
+ * causa: pantallas vacias, sin ningun error. Ya ocurrio una vez.
+ *
+ * No arregla nada -- solo mira. El arreglo sigue siendo actualizarEsquema,
+ * que es quien tiene permiso para tocar la estructura.
+ *
+ * Es una operacion cara (una lectura por hoja), asi que se llama a demanda
+ * desde Administracion, nunca en el camino de una peticion normal.
+ */
+function diagnosticarEsquema_() {
+  var faltanHojas = [];
+  var faltanColumnas = [];
+
+  Object.keys(COLUMNAS).forEach(function (nombre) {
+    var esperadas = COLUMNAS[nombre];
+    var reales;
+    try {
+      reales = leerHojaConEncabezados_(nombre).encabezados || [];
+    } catch (err) {
+      faltanHojas.push(nombre);
+      return;
+    }
+    // Una hoja existente pero sin encabezado cuenta como ausente: no se
+    // puede escribir en ella de forma alineada.
+    if (!reales.join('')) {
+      faltanHojas.push(nombre);
+      return;
+    }
+    var ausentes = esperadas.filter(function (col) { return reales.indexOf(col) === -1; });
+    if (ausentes.length) {
+      faltanColumnas.push({ hoja: nombre, columnas: ausentes });
+    }
+  });
+
+  return {
+    al_dia: faltanHojas.length === 0 && faltanColumnas.length === 0,
+    hojas_faltantes: faltanHojas,
+    columnas_faltantes: faltanColumnas,
+    // Lo que hay que hacer si algo falta, dicho una sola vez y en un solo
+    // lugar: la pantalla no tiene que saberlo.
+    accion: (faltanHojas.length || faltanColumnas.length)
+      ? 'Ejecuta actualizarEsquema en el proyecto SETUP de Apps Script.'
+      : ''
+  };
+}

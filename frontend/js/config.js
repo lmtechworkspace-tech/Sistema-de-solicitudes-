@@ -6,6 +6,13 @@
  * reemplaza por el ID real al desplegar cada Web App (checklist §17.2).
  */
 window.SIGSO_CONFIG = Object.freeze({
+  // Version que este frontend ESPERA del backend. Como el frontend se publica
+  // solo con cada push y el backend se pega a mano, esta es siempre la version
+  // buena: si el backend responde otra, es que falta pegarlo. La plataforma se
+  // lo avisa al Admin, que es quien puede resolverlo.
+  // Debe coincidir con VERSION_SIGSO de los tres proyectos Apps Script; hay un
+  // test que falla si divergen.
+  VERSION: '2026-08-21',
   INTAKE_URL: 'https://script.google.com/macros/s/AKfycbypI38IfuisU2DFMnvM9_knsbqgm8T-9rnkUUr5MbLlc5_J7BZuXhy8mZC-GtVHzEV9aA/exec',
   BACKOFFICE_URL: 'https://script.google.com/macros/s/AKfycbzoC2IsvrwPIElUeTgIxmNxLcNsEH3SXU8TrKLM-sFntZjd8ratSv8w_1-zGo1MmdCcFg/exec',
   // '' porque este archivo se sirve desde el sitio publico (GitHub Pages):
