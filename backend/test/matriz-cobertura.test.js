@@ -38,6 +38,7 @@ function loadConSchema() {
   seedSheet(ctx, 'SGC_REVISION_ACUERDOS', ctx.COLUMNAS.SGC_REVISION_ACUERDOS);
   seedSheet(ctx, 'SGC_OBJETIVOS', ctx.COLUMNAS.SGC_OBJETIVOS);
   seedSheet(ctx, 'SGC_INDICADOR_LECTURAS', ctx.COLUMNAS.SGC_INDICADOR_LECTURAS);
+  seedSheet(ctx, 'SGC_INDICADORES', ctx.COLUMNAS.SGC_INDICADORES);
   seedSheet(ctx, 'SGC_PERSONAS', ctx.COLUMNAS.SGC_PERSONAS);
   seedSheet(ctx, 'SGC_DESCRIPTORES', ctx.COLUMNAS.SGC_DESCRIPTORES);
   seedSheet(ctx, 'SGC_EVALUACIONES', ctx.COLUMNAS.SGC_EVALUACIONES);
@@ -128,7 +129,25 @@ test('v10.0 F6b: objetivos abiertos y todos medidos dejan 6.2 y 9.1 en COMPLETO'
   });
 
   assert.equal(clausula(ctx, '6.2').estado, 'COMPLETO');
-  assert.equal(clausula(ctx, '9.1').estado, 'COMPLETO', '9.1 comparte la evidencia de 6.2');
+
+  // Hasta la v11.0 F6, 9.1 solo reflejaba 6.2. Desde que existen los
+  // indicadores de proceso exige ademas medir el DESEMPEÑO DE LOS PROCESOS,
+  // que §9.1.3 e) pide analizar explicitamente. Con los objetivos medidos y
+  // ningun indicador, la clausula no puede darse por cerrada.
+  assert.equal(clausula(ctx, '9.1').estado, 'PARCIAL');
+  assert.match(ctx.MatrizCobertura.getDetalle({ codigo: '9.1' }, CTX_ENCARGADO).nota,
+    /indicadores de proceso/i);
+
+  const ind = toPlain(ctx.Indicadores.guardar({
+    nombre: 'Cumplimiento de plazos por proceso', formula: 'a tiempo / total x 100',
+    meta_operador: 'MAYOR_IGUAL', meta_valor: 90, frecuencia: 'ANUAL'
+  }, CTX_ENCARGADO));
+  ctx.Indicadores.registrarLectura({
+    indicador_id: ind.indicador_id, periodo: String(anio), valor: 95
+  }, CTX_ENCARGADO);
+
+  assert.equal(clausula(ctx, '9.1').estado, 'COMPLETO');
+  assert.equal(clausula(ctx, '6.2').estado, 'COMPLETO', '6.2 no cambia: mide otra cosa');
 });
 
 test('v10.0 F6b: 7.2 y 7.3 llegan a COMPLETO solo cuando la cobertura de personal supera el umbral', () => {

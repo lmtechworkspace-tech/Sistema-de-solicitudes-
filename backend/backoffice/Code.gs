@@ -320,7 +320,14 @@ var BACKOFFICE_ACTIONS = {
   registrarRevisionProcesosSgc: handleRegistrarRevisionProcesosSgc_,
 
   // v11.0 Fase 5 (§7.5.3.2): listado de documentos de origen externo.
-  sembrarDocumentosExternosSgc: handleSembrarDocumentosExternosSgc_
+  sembrarDocumentosExternosSgc: handleSembrarDocumentosExternosSgc_,
+
+  // v11.0 Fase 6 (§9.1.1): indicadores de proceso.
+  listarIndicadoresSgc: handleListarIndicadoresSgc_,
+  guardarIndicadorSgc: handleGuardarIndicadorSgc_,
+  anularIndicadorSgc: handleAnularIndicadorSgc_,
+  registrarLecturaIndicadorSgc: handleRegistrarLecturaIndicadorSgc_,
+  anularLecturaIndicadorSgc: handleAnularLecturaIndicadorSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -610,7 +617,15 @@ var MODULO_POR_ACCION = {
   guardarProcesoSgc: 'calidad',
   anularProcesoSgc: 'calidad',
   registrarRevisionProcesosSgc: 'calidad',
-  sembrarDocumentosExternosSgc: 'calidad'
+  sembrarDocumentosExternosSgc: 'calidad',
+
+  // v11.0 Fase 6: el tablero de indicadores lo LEE quien tiene lectura
+  // amplia del SGC; definir y medir es del Encargado.
+  listarIndicadoresSgc: ['calidad', 'gerencia'],
+  guardarIndicadorSgc: 'calidad',
+  anularIndicadorSgc: 'calidad',
+  registrarLecturaIndicadorSgc: 'calidad',
+  anularLecturaIndicadorSgc: 'calidad'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -1584,6 +1599,27 @@ function handleRegistrarRevisionProcesosSgc_(data, contexto) {
 // v11.0 Fase 5 (§7.5.3.2): listado de documentos de origen externo.
 function handleSembrarDocumentosExternosSgc_(data, contexto) {
   return responderResultado_(Calidad.sembrarDocumentosExternos(data, contexto));
+}
+
+// v11.0 Fase 6 (§9.1.1): indicadores de proceso.
+function handleListarIndicadoresSgc_(data, contexto) {
+  return responderResultado_(Indicadores.listar(data, contexto));
+}
+
+function handleGuardarIndicadorSgc_(data, contexto) {
+  return responderResultado_(Indicadores.guardar(data, contexto));
+}
+
+function handleAnularIndicadorSgc_(data, contexto) {
+  return responderResultado_(Indicadores.anular(data, contexto));
+}
+
+function handleRegistrarLecturaIndicadorSgc_(data, contexto) {
+  return responderResultado_(Indicadores.registrarLectura(data, contexto));
+}
+
+function handleAnularLecturaIndicadorSgc_(data, contexto) {
+  return responderResultado_(Indicadores.anularLectura(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

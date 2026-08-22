@@ -1104,6 +1104,9 @@ function seccionesVisiblesSgc_(contexto) {
     // v11.0 Fase 4: el mapa de procesos si es de todos -- saber como
     // opera la organizacion es parte de la toma de conciencia (§7.3).
     procesos: true,
+    // v11.0 Fase 6: el tablero de indicadores muestra desempeno por area,
+    // asi que se restringe a quien ya tiene lectura amplia del SGC.
+    indicadores: veTodo,
     nc: tieneAlgunaAsignada_(SHEETS.SGC_NC, ['responsable_email', 'detectada_por']),
     auditorias: tieneAlgunaAsignada_(SHEETS.SGC_AUDITORIAS, ['auditor_email']),
     quejas: veTodo, // el flujo de quejas es de gestion; el solicitante externo no entra al modulo

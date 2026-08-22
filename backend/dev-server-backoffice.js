@@ -304,6 +304,8 @@ function construirContexto() {
   // ("Abrir año"), que es justo el flujo que hay que poder probar aca.
   seedSheet(ctx, 'SGC_OBJETIVOS', ctx.COLUMNAS.SGC_OBJETIVOS);
   seedSheet(ctx, 'SGC_INDICADOR_LECTURAS', ctx.COLUMNAS.SGC_INDICADOR_LECTURAS);
+  // v11.0 Fase 6: vacia -- los indicadores los define el Encargado.
+  seedSheet(ctx, 'SGC_INDICADORES', ctx.COLUMNAS.SGC_INDICADORES);
   // v11.0 Fase 1 (§4.3): vacias a proposito. El flujo a probar empieza en
   // "no hay alcance declarado", que es donde la pantalla ofrece la
   // propuesta del DOC-01 para revisar y confirmar.

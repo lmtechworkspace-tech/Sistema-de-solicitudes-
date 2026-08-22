@@ -212,6 +212,10 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   'Procesos.gs',
   // v10.0 Fase 6b: matriz de cobertura ISO. Usa CLAUSULAS_ISO9001 de
   // Auditorias.gs y datos de casi todos los modulos SGC ya cargados.
+  // v11.0 Fase 6 (§9.1.1): indicadores de proceso. Reutiliza de
+  // Objetivos.gs los catalogos, periodosDelAnio_ y cumpleMeta_, y de
+  // Procesos.gs el mapa -- por eso va despues de ambos.
+  'Indicadores.gs',
   'MatrizCobertura.gs',
   'Triggers.gs',
   'Code.gs'

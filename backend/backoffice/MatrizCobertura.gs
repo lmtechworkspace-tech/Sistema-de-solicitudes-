@@ -364,15 +364,60 @@ var EVALUADORES_CLAUSULA_ISO = {
     return evaluarNoConformidades_();
   },
   '9.1': function () {
-    // Seguimiento y medicion: objetivos + auditorias, la misma fuente que
-    // usa el auditor para saber si la organizacion se esta mirando a si
-    // misma.
+    // Seguimiento, medicion, analisis y evaluacion. §9.1.1 pide determinar
+    // QUE hay que medir, no solo medir lo que ya se venia midiendo. Por eso
+    // se mira lo corporativo (los seis objetivos del DOC-07) Y los
+    // indicadores por proceso: medir solo los objetivos generales deja los
+    // procesos sin medicion.
+    //
+    // Exigir indicadores de proceso no es una opinion del sistema: la
+    // debilidad D1 del FODA de la organizacion dice "no se han establecido
+    // indicadores de gestion (KPI) en todas las areas", y la accion del
+    // riesgo R1 es implementarlos. La clausula mide lo que la propia empresa
+    // se comprometio a hacer.
     var objetivos6 = EVALUADORES_CLAUSULA_ISO['6.2']();
+    var indicadores = (typeof indicadoresActivos_ === 'function') ? indicadoresActivos_() : [];
+    var lecturas = leerFilasSeguro_(SHEETS.SGC_INDICADOR_LECTURAS).filter(function (l) {
+      return esVerdaderoSgc_(l.activa) && l.indicador_id;
+    });
+
+    var ev = objetivos6.evidencia.slice(0);
+    indicadores.slice(0, 12).forEach(function (i) {
+      var propias = lecturas.filter(function (l) { return l.indicador_id === i.indicador_id; });
+      var ultima = propias.sort(function (a, b) {
+        return String(a.periodo).localeCompare(String(b.periodo));
+      })[propias.length - 1];
+      ev.push({
+        tipo: 'Indicador de proceso',
+        descripcion: i.codigo + ' — ' + i.nombre +
+          (ultima ? ': ' + ultima.periodo + ' = ' + ultima.valor + ' (' + (ultima.origen || '') + ')' : ' (sin mediciones)'),
+        fecha: ultima ? ultima.fecha_registro : '',
+        responsable: i.responsable_email || ''
+      });
+    });
+
+    var falta = [];
+    if (objetivos6.estado !== 'COMPLETO') {
+      falta.push('los objetivos de calidad no están al día (ver 6.2)');
+    }
+    if (!indicadores.length) {
+      falta.push('no hay indicadores de proceso definidos: §9.1.3 e) pide analizar el desempeño de los procesos, y sin indicadores no hay con qué');
+    } else {
+      var sinMedir = indicadores.filter(function (i) {
+        return !lecturas.some(function (l) { return l.indicador_id === i.indicador_id; });
+      });
+      if (sinMedir.length) {
+        falta.push(sinMedir.length + ' indicador(es) definido(s) pero nunca medido(s)');
+      }
+    }
+
     return {
-      estado: objetivos6.estado,
-      resumen: objetivos6.resumen,
-      nota: 'Se comparte evidencia con 6.2 (objetivos de calidad).',
-      evidencia: objetivos6.evidencia
+      estado: falta.length ? (indicadores.length || objetivos6.estado !== 'FALTANTE' ? 'PARCIAL' : 'FALTANTE') : 'COMPLETO',
+      resumen: objetivos6.resumen + ' ' + indicadores.length + ' indicador(es) de proceso definido(s).',
+      nota: falta.length
+        ? 'Para cerrar 9.1: ' + falta.join('; ') + '.'
+        : 'Se comparte evidencia con 6.2 (objetivos de calidad).',
+      evidencia: ev
     };
   },
   '9.2': function () {

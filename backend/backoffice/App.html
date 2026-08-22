@@ -13342,6 +13342,8 @@ var Iconos = (function () {
       if (revisionActivaId_) abrirRevision_(revisionActivaId_); else cargarRevisiones_();
     } else if (seccionActiva_ === 'objetivos') {
       if (objetivoActivoId_) abrirObjetivo_(objetivoActivoId_); else cargarObjetivos_();
+    } else if (seccionActiva_ === 'indicadores') {
+      cargarIndicadores_();
     } else if (seccionActiva_ === 'procesos') {
       if (procesoActivoId_) abrirProceso_(procesoActivoId_); else cargarProcesos_();
     } else if (seccionActiva_ === 'riesgos') {
@@ -13393,6 +13395,7 @@ var Iconos = (function () {
     { label: 'Dirección', items: [
       { id: 'revision', texto: 'Revisión por la dirección', icono: 'estado' },
       { id: 'objetivos', texto: 'Objetivos de calidad', icono: 'diana' },
+      { id: 'indicadores', texto: 'Indicadores', icono: 'grafico' },
       { id: 'cobertura', texto: 'Cobertura ISO', icono: 'escudo' }
     ] },
     { label: 'Administración', items: [
@@ -18187,6 +18190,300 @@ var Iconos = (function () {
   // "modo auditoría" es la ficha de cada cláusula: la lista de registros que
   // la sustentan, con boton para bajarla en PDF -- el auditor pide "muéstreme
   // 7.2" y sale en un clic.
+
+  // ==========================================================================
+  // v11.0 Fase 6 (§9.1.1): indicadores de proceso.
+  //
+  // Distinto del tablero de Objetivos: aquellos son los seis del DOC-07,
+  // corporativos y anuales. Estos miden un proceso concreto y tienen un
+  // escalon intermedio -- cumple / alerta / no cumple -- porque un 88%
+  // contra una meta de 90% no es lo mismo que un 40%.
+  // ==========================================================================
+
+  var VEREDICTO_ETIQUETA_IND = { CUMPLE: 'Cumple', ALERTA: 'En alerta', NO_CUMPLE: 'No cumple' };
+  var VEREDICTO_TONO_IND = { CUMPLE: 'ok', ALERTA: 'alerta', NO_CUMPLE: 'critico' };
+
+  function cargarIndicadores_() {
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando indicadores...');
+    api_('listarIndicadoresSgc', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = barraSecciones_() +
+          Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el tablero.', 'error');
+        wireSecciones_(cont);
+        return;
+      }
+      pintarIndicadores_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
+      wireSecciones_(cont);
+    });
+  }
+
+  function pintarIndicadores_(cont, data) {
+    var puede = !!data.puede_gestionar;
+    var r = data.resumen || {};
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">Indicadores por proceso (§9.1.1). Los objetivos de calidad del DOC-07 ' +
+      'viven en su propia sección: esto mide cómo va cada proceso, con su fórmula y su responsable.</p>' +
+      '</div>';
+
+    var kpis = '<div class="sgc-kpis">' + [
+      Componentes.kpi({ etiqueta: 'Indicadores', valor: r.total || 0 }),
+      Componentes.kpi({ etiqueta: 'Cumplen', valor: r.cumplen || 0 }),
+      Componentes.kpi({ etiqueta: 'En alerta', valor: r.alerta || 0, alerta: !!r.alerta,
+        titulo: 'Bajo la meta pero dentro de la tolerancia definida.' }),
+      Componentes.kpi({ etiqueta: 'No cumplen', valor: r.no_cumplen || 0, alerta: !!r.no_cumplen }),
+      Componentes.kpi({ etiqueta: 'Sin medir', valor: r.sin_medir || 0 })
+    ].join('') + '</div>';
+
+    // El dato que la organizacion se comprometio a cerrar: la debilidad D1
+    // del FODA es "no hay KPIs en todas las areas".
+    var avisoProcesos = '';
+    if (r.procesos_mapa && r.procesos_sin_indicador) {
+      avisoProcesos = Componentes.alerta(
+        r.procesos_sin_indicador + ' de los ' + r.procesos_mapa + ' procesos del mapa no tienen ningún ' +
+        'indicador. Es la debilidad D1 del FODA ("no se han establecido KPIs en todas las áreas") ' +
+        'y la acción del riesgo R1.',
+        'aviso');
+    }
+
+    var lista = '';
+    if (!data.indicadores.length) {
+      lista = Componentes.alerta('Todavía no hay indicadores definidos.', 'aviso') +
+        (puede ? '<p class="sigso-ayuda">Cada indicador necesita una fórmula: sin ella, dos personas ' +
+          'pueden medir lo mismo de forma distinta y el número deja de ser comparable.</p>' : '');
+    } else {
+      lista = '<div class="sgc-lista">' + data.indicadores.map(function (i) {
+        var u = i.ultima_lectura;
+        return '<div class="sgc-doc" data-indicador-id="' + Componentes.escaparHtml(i.indicador_id) + '">' +
+          '<div class="sgc-doc__linea">' +
+            '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(i.codigo + ' — ' + i.nombre) + '</span>' +
+            (u ? Componentes.badge(VEREDICTO_ETIQUETA_IND[u.veredicto] || u.veredicto,
+                   VEREDICTO_TONO_IND[u.veredicto] || 'neutro')
+               : Componentes.badge('Sin medir', 'neutro')) +
+            (i.lecturas_pendientes ? Componentes.badge(i.lecturas_pendientes + ' pendiente(s)', 'alerta') : '') +
+          '</div>' +
+          '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(i.formula) + '</span>' +
+          '<div class="sgc-doc__linea">' +
+            '<span class="sgc-doc__meta">Meta: ' + Componentes.escaparHtml(textoMetaIndicador_(i)) + '</span>' +
+            (u ? '<span class="sgc-doc__meta">Última: ' + Componentes.escaparHtml(u.periodo) + ' = ' + u.valor +
+                 (i.unidad === 'PORCENTAJE' ? '%' : '') + '</span>' : '') +
+          '</div>' +
+          (i.proceso ? '<span class="sgc-doc__meta">Proceso: ' + Componentes.escaparHtml(i.proceso) + '</span>' : '') +
+          (i.objetivo ? '<span class="sgc-doc__meta">Alimenta: ' + Componentes.escaparHtml(i.objetivo) + '</span>' : '') +
+          (i.responsable_email ? '<span class="sgc-doc__meta">Responsable: ' + Componentes.escaparHtml(i.responsable_email) + '</span>' : '') +
+          (puede ? '<div class="sgc-acciones">' +
+            Componentes.boton({ texto: 'Medir', clase: 'js-ind-medir' }) +
+            Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-ind-editar' }) +
+            Componentes.boton({ texto: 'Quitar', variante: 'peligro', clase: 'js-ind-quitar' }) +
+          '</div>' : '') +
+        '</div>';
+      }).join('') + '</div>';
+    }
+
+    var acciones = puede ? '<div class="sgc-acciones">' +
+      Componentes.boton({ texto: 'Definir indicador', clase: 'js-ind-nuevo' }) +
+      '</div>' : '';
+
+    cont.innerHTML = cabecera + kpis + avisoProcesos + acciones + lista;
+    wireSecciones_(cont);
+    if (!puede) return;
+
+    function delBoton_(btn) {
+      var id = btn.parentNode.parentNode.getAttribute('data-indicador-id');
+      return buscarPorId_(data.indicadores, 'indicador_id', id);
+    }
+    function enviar_(accion, datos) {
+      api_(accion, datos).then(function (resp) {
+        var d = (resp && resp.data) || {};
+        Componentes.aviso({
+          texto: d.message || (resp && resp.message) || 'Listo.',
+          tipo: (resp && resp.ok && d.ok !== false) ? 'exito' : 'error'
+        });
+        if (resp && resp.ok && d.ok !== false) cargarIndicadores_();
+      });
+    }
+
+    cont.querySelector('.js-ind-nuevo').addEventListener('click', function () {
+      abrirFormularioIndicador_(null, data);
+    });
+    cont.querySelectorAll('.js-ind-editar').forEach(function (b) {
+      b.addEventListener('click', function () { abrirFormularioIndicador_(delBoton_(b), data); });
+    });
+    cont.querySelectorAll('.js-ind-medir').forEach(function (b) {
+      b.addEventListener('click', function () { abrirMedicionIndicador_(delBoton_(b), data.anio); });
+    });
+    cont.querySelectorAll('.js-ind-quitar').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var i = delBoton_(b);
+        Componentes.confirmar({
+          titulo: '¿Quitar ' + i.codigo + '?',
+          mensaje: 'Sus mediciones se conservan como historial.',
+          confirmar: 'Quitar', peligro: true
+        }).then(function (ok) { if (ok) enviar_('anularIndicadorSgc', { indicador_id: i.indicador_id }); });
+      });
+    });
+  }
+
+  function textoMetaIndicador_(i) {
+    var op = { MAYOR_IGUAL: '≥', MAYOR: '>', MENOR_IGUAL: '≤', MENOR: '<' }[i.meta_operador] || '';
+    var sufijo = i.unidad === 'PORCENTAJE' ? '%' : '';
+    return op + ' ' + i.meta_valor + sufijo +
+      (i.tolerancia_valor !== null && i.tolerancia_valor !== undefined
+        ? '  ·  tolerancia ' + op + ' ' + i.tolerancia_valor + sufijo : '');
+  }
+
+  function abrirMedicionIndicador_(i, anio) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Medir ' + Componentes.escaparHtml(i.codigo) + '</h3>' +
+        '<p class="sigso-ayuda">' + Componentes.escaparHtml(i.formula) + '</p>' +
+        '<p class="sigso-ayuda">Meta: ' + Componentes.escaparHtml(textoMetaIndicador_(i)) + '</p>' +
+        '<form id="form-ind-medir">' +
+          Componentes.campoTexto({ id: 'ind-periodo', label: 'Período', valor: '', requerido: true,
+            ayuda: 'Formato ' + anio + '-M01 (mensual), ' + anio + '-T1, ' + anio + '-S1 o ' + anio + '.' }) +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'ind-numerador', label: 'Numerador', valor: '',
+              ayuda: 'Opcional, pero deja el número auditable.' }) +
+            Componentes.campoTexto({ id: 'ind-denominador', label: 'Denominador', valor: '' }) +
+          '</div>' +
+          Componentes.campoTexto({ id: 'ind-valor', label: 'O el valor directo', valor: '' }) +
+          Componentes.campoTextarea({ id: 'ind-obs', label: 'Observaciones', valor: '' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Registrar medición', tipo: 'submit', clase: 'js-sgc-guardar' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-ind-medir').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true;
+      api_('registrarLecturaIndicadorSgc', {
+        indicador_id: i.indicador_id,
+        periodo: document.getElementById('ind-periodo').value,
+        numerador: document.getElementById('ind-numerador').value,
+        denominador: document.getElementById('ind-denominador').value,
+        valor: document.getElementById('ind-valor').value,
+        observaciones: document.getElementById('ind-obs').value
+      }).then(function (resp) {
+        var d = (resp && resp.data) || {};
+        if (!resp || !resp.ok || d.ok === false) {
+          boton.disabled = false;
+          Componentes.aviso({ texto: d.message || 'No se pudo registrar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: d.message || 'Medición registrada.', tipo: 'exito' });
+        cargarIndicadores_();
+      }).catch(function () {
+        boton.disabled = false;
+        Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
+      });
+    });
+  }
+
+  function abrirFormularioIndicador_(actual, data) {
+    var i = actual || {};
+    var cat = data.catalogos || {};
+    var opsProceso = [{ valor: '', texto: 'Sin proceso asociado' }].concat(
+      (data.procesos || []).map(function (p) {
+        return { valor: p.proceso_id, texto: p.codigo + ' — ' + p.nombre };
+      }));
+    var opsObjetivo = [{ valor: '', texto: 'No alimenta ningún objetivo' }].concat(
+      (data.objetivos || []).map(function (o) {
+        return { valor: o.objetivo_id, texto: 'OBJ-' + o.numero + ' (' + o.anio + '): ' + String(o.nombre).slice(0, 50) };
+      }));
+
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">' +
+          (actual ? 'Editar ' + Componentes.escaparHtml(i.codigo) : 'Definir indicador') + '</h3>' +
+        '<form id="form-ind">' +
+          Componentes.campoTexto({ id: 'ind-nombre', label: 'Nombre', valor: i.nombre || '', requerido: true }) +
+          Componentes.campoTextarea({ id: 'ind-formula', label: 'Fórmula de cálculo',
+            valor: i.formula || '', requerido: true,
+            ayuda: 'Sin fórmula, dos personas pueden medir lo mismo de forma distinta.' }) +
+          Componentes.campoTextarea({ id: 'ind-descripcion', label: 'Descripción', valor: i.descripcion || '' }) +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoSelect({ id: 'ind-proceso', label: 'Proceso que mide',
+              valor: i.proceso_id || '', placeholder: false, opciones: opsProceso }) +
+            Componentes.campoSelect({ id: 'ind-objetivo', label: 'Objetivo de calidad que alimenta',
+              valor: i.objetivo_id || '', placeholder: false, opciones: opsObjetivo }) +
+          '</div>' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoSelect({ id: 'ind-operador', label: 'La meta se cumple si el valor es',
+              valor: i.meta_operador || 'MAYOR_IGUAL', placeholder: false,
+              opciones: (cat.operadores || []).map(function (o) { return { valor: o.clave, texto: o.etiqueta }; }) }) +
+            Componentes.campoTexto({ id: 'ind-meta', label: 'Meta', valor: i.meta_valor === undefined ? '' : i.meta_valor, requerido: true }) +
+          '</div>' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'ind-tolerancia', label: 'Tolerancia (opcional)',
+              valor: (i.tolerancia_valor === null || i.tolerancia_valor === undefined) ? '' : i.tolerancia_valor,
+              ayuda: 'Umbral más laxo que la meta. Entre los dos, el indicador queda "en alerta" en vez de rojo.' }) +
+            Componentes.campoSelect({ id: 'ind-unidad', label: 'Unidad',
+              valor: i.unidad || 'PORCENTAJE', placeholder: false,
+              opciones: (cat.unidades || []).map(function (u) { return { valor: u.clave, texto: u.etiqueta }; }) }) +
+          '</div>' +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoSelect({ id: 'ind-frecuencia', label: 'Frecuencia de medición',
+              valor: i.frecuencia || 'MENSUAL', placeholder: false,
+              opciones: (cat.frecuencias || []).map(function (f) { return { valor: f.clave, texto: f.etiqueta }; }) }) +
+            Componentes.campoTexto({ id: 'ind-responsable', label: 'Responsable (correo)', valor: i.responsable_email || '' }) +
+          '</div>' +
+          Componentes.campoTexto({ id: 'ind-fuente', label: 'Fuente del dato', valor: i.fuente || '',
+            ayuda: 'De dónde sale el número: una planilla, el sistema, un informe.' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit', clase: 'js-sgc-guardar' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-ind').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true;
+      api_('guardarIndicadorSgc', {
+        indicador_id: i.indicador_id || '',
+        nombre: document.getElementById('ind-nombre').value,
+        formula: document.getElementById('ind-formula').value,
+        descripcion: document.getElementById('ind-descripcion').value,
+        proceso_id: document.getElementById('ind-proceso').value,
+        objetivo_id: document.getElementById('ind-objetivo').value,
+        meta_operador: document.getElementById('ind-operador').value,
+        meta_valor: document.getElementById('ind-meta').value,
+        tolerancia_valor: document.getElementById('ind-tolerancia').value,
+        unidad: document.getElementById('ind-unidad').value,
+        frecuencia: document.getElementById('ind-frecuencia').value,
+        responsable_email: document.getElementById('ind-responsable').value,
+        fuente: document.getElementById('ind-fuente').value
+      }).then(function (resp) {
+        var d = (resp && resp.data) || {};
+        if (!resp || !resp.ok || d.ok === false) {
+          boton.disabled = false;
+          Componentes.aviso({ texto: d.message || 'No se pudo guardar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: d.message || 'Indicador guardado.', tipo: 'exito' });
+        cargarIndicadores_();
+      }).catch(function () {
+        boton.disabled = false;
+        Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
+      });
+    });
+  }
 
   // ==========================================================================
   // v11.0 Fase 4 (§4.4): procesos del SGC.

@@ -152,7 +152,8 @@ var SHEETS = {
   SGC_PARTES_INTERESADAS: 'SGC_PARTES_INTERESADAS',
   SGC_RIESGOS: 'SGC_RIESGOS',
   SGC_PROCESOS: 'SGC_PROCESOS',
-  SGC_PROCESO_PASOS: 'SGC_PROCESO_PASOS'
+  SGC_PROCESO_PASOS: 'SGC_PROCESO_PASOS',
+  SGC_INDICADORES: 'SGC_INDICADORES'
 };
 
 var COLUMNAS = {
@@ -743,7 +744,7 @@ var COLUMNAS = {
   // detalle: JSON opcional con el desglose que sustenta el numero (por
   //   ejemplo, quienes quedaron bajo las 5 horas de formacion).
   SGC_INDICADOR_LECTURAS: [
-    'lectura_id', 'objetivo_id', 'anio', 'periodo',
+    'lectura_id', 'objetivo_id', 'indicador_id', 'anio', 'periodo',
     'valor', 'numerador', 'denominador',
     'cumple', 'origen', 'detalle', 'observaciones',
     'registrado_por', 'fecha_registro', 'activa'
@@ -921,7 +922,43 @@ var COLUMNAS = {
     'paso_id', 'proceso_id', 'numero', 'nombre',
     'responsable', 'input', 'actividades', 'evidencias', 'output',
     'observaciones', 'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+// --- v11.0 Fase 6: indicadores de proceso (§9.1.1) ----------------------
+  //
+  // Los SGC_OBJETIVOS son los seis del DOC-07: corporativos, anuales, y
+  // fijados por la Direccion. Un indicador de PROCESO es otra cosa -- mide
+  // como va un proceso concreto, lo define su responsable y no se reabre
+  // cada enero.
+  //
+  // Por que en hoja aparte y no generalizando SGC_OBJETIVOS: los objetivos
+  // se guardan POR AÑO a proposito (subir una meta en 2027 no puede
+  // reescribir contra que se midio 2026). Un indicador de proceso vive
+  // mientras el proceso viva. Mezclarlos obligaria a duplicar cada
+  // indicador cada año sin motivo.
+  //
+  // Las LECTURAS si se comparten: `SGC_INDICADOR_LECTURAS` gano un
+  // `indicador_id` aditivo, y una lectura pertenece o a un objetivo o a un
+  // indicador. Todo lo que ya existia cruza por `objetivo_id`, asi que las
+  // filas nuevas son invisibles para el tablero de objetivos.
+  //
+  // proceso_id: que proceso mide. Es el enlace con la Fase 4 y lo que hace
+  //   que la ficha de un proceso pueda mostrar sus indicadores.
+  // objetivo_id: opcional. El DOC-03 pide KPIs "alineados a los objetivos de
+  //   calidad": cuando el indicador alimenta uno, queda dicho cual.
+  // tolerancia_valor: el escalon intermedio. Sin el solo hay cumple / no
+  //   cumple, y un 88% contra una meta de 90% se ve igual de rojo que un
+  //   40% -- que es justo lo que impide priorizar.
+  SGC_INDICADORES: [
+    'indicador_id', 'codigo', 'nombre', 'descripcion',
+    'proceso_id', 'objetivo_id', 'area',
+    'formula', 'fuente', 'unidad',
+    'meta_operador', 'meta_valor', 'meta_texto', 'tolerancia_valor',
+    'frecuencia', 'responsable_email',
+    'estado', 'observaciones',
+    'creado_por', 'fecha_creacion', 'activa'
   ]
+
 
 };
 
