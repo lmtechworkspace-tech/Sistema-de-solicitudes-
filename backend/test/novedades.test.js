@@ -370,6 +370,47 @@ test('19. descargarAdjunto devuelve el contenido base64 del original', () => {
   assert.equal(Buffer.from(res.contenido_base64, 'base64').toString('binary'), PDF_MINIMO);
 });
 
+// El adjunto es parte de la novedad y se protege igual que el detalle. Antes
+// bastaba con conocer el id para bajarse el archivo de una novedad que no se
+// podia ni abrir -- incluida una todavia en revision.
+
+test('19b. SEGURIDAD: no se descarga el adjunto de una novedad fuera de la audiencia', () => {
+  const ctx = cargarConAudiencia();
+  seedArea(ctx);
+  // Audiencia acotada a Juan: Leo no deberia poder ver ni bajar nada.
+  ctx.Novedades.publicar(publicarBase_({
+    contenido_base64: b64(PDF_MINIMO), nombre_archivo: 'ley.pdf',
+    audiencia_tipo: 'SELECCION', destinatarios: ['juan@homepymes.cl']
+  }), ctxResponsable());
+  const id = ctx.leerFilas_('NOVEDADES')[0].novedad_id;
+
+  const ajeno = ctx.Novedades.descargarAdjunto({ novedad_id: id }, ctxCualquiera('leo@rld.cl'));
+  assert.equal(ajeno._forbidden, true, 'quien no está en la audiencia no baja el archivo');
+  assert.equal(ajeno.contenido_base64, undefined, 'y no se filtra el contenido');
+
+  // El destinatario legítimo sí puede.
+  const propio = toPlain(ctx.Novedades.descargarAdjunto({ novedad_id: id }, ctxCualquiera('juan@homepymes.cl')));
+  assert.equal(propio.nombre_archivo, 'ley.pdf');
+});
+
+test('19c. SEGURIDAD: no se descarga el adjunto de una novedad que todavía está en revisión', () => {
+  const ctx = cargarConAudiencia();
+  seedArea(ctx);
+  // Carril CONTROLADO: queda EN_REVISION, sin publicar.
+  ctx.Novedades.publicar(publicarBase_({
+    tipo: 'LEY', titulo: 'Nueva ley laboral', contenido_base64: b64(PDF_MINIMO), nombre_archivo: 'ley.pdf'
+  }), ctxResponsable());
+  const fila = ctx.leerFilas_('NOVEDADES')[0];
+  assert.notEqual(fila.estado, 'PUBLICADA', 'precondición: la novedad no está publicada');
+
+  const tercero = ctx.Novedades.descargarAdjunto({ novedad_id: fila.novedad_id }, ctxCualquiera('leo@rld.cl'));
+  assert.equal(tercero._forbidden, true, 'un borrador no se filtra por la vía del adjunto');
+
+  // Quien la redactó sí puede seguir viendo su propio archivo.
+  const autor = toPlain(ctx.Novedades.descargarAdjunto({ novedad_id: fila.novedad_id }, ctxResponsable()));
+  assert.equal(autor.nombre_archivo, 'ley.pdf');
+});
+
 test('20. listarAreasPublicables: ADM ve todas, el responsable solo la suya', () => {
   const ctx = cargar();
   seedArea(ctx, { area_id: 'RRHH', responsable_email: 'vanessa@rld.cl' });

@@ -340,6 +340,49 @@ function eliminarCuenta_(data) {
   return { cuenta_id: data.cuenta_id, usuario: cuenta.usuario, eliminada: true };
 }
 
+/**
+ * Borra las sesiones ya vencidas. La llama el pase diario (Triggers.gs), sin
+ * trigger propio: el limite de 20 esta copado.
+ *
+ * POR QUE HACE FALTA. Hasta ahora una fila de SESIONES_PORTAL solo se
+ * borraba al eliminar la cuenta entera, asi que cada login y cada enlace
+ * magico dejaba una fila para siempre. El costo no es el espacio: es que
+ * resolverContextoPortal_ (Code.gs) lee la hoja COMPLETA en cada peticion
+ * autenticada -- la ruta mas transitada del sistema -- y esa hoja solo crece.
+ *
+ * No cambia nada de seguridad: un token vencido YA se rechazaba al validar
+ * la sesion. Lo que se gana es que deje de leerse, y de guardarse, un
+ * historial de tokens que ya no sirve para nada.
+ *
+ * Es la misma mecanica que purgarNotificacionesApp_: una sola lectura y
+ * borrado de abajo hacia arriba para no correr los indices.
+ */
+function purgarSesionesExpiradas_() {
+  var datos;
+  try {
+    datos = leerHojaConEncabezados_(SHEETS.SESIONES_PORTAL);
+  } catch (err) {
+    return { borradas: 0 };
+  }
+  var idxExpira = datos.encabezados.indexOf('expira');
+  if (idxExpira === -1) return { borradas: 0 };
+
+  var ahora = Date.now();
+  var borradas = 0;
+  for (var i = datos.valores.length - 1; i >= 1; i--) {
+    var expira = datos.valores[i][idxExpira];
+    if (!expira) continue;
+    var t = new Date(expira).getTime();
+    // Una fecha ilegible no se toca: ante la duda se conserva la fila, que
+    // es lo barato. Borrar por no saber leerla si seria un problema.
+    if (isNaN(t) || t > ahora) continue;
+    datos.hoja.deleteRow(i + 1);
+    borradas++;
+  }
+  if (borradas) invalidarCacheHoja_(SHEETS.SESIONES_PORTAL);
+  return { borradas: borradas };
+}
+
 // --- helpers -------------------------------------------------------------
 
 function leerCuentasPortal_() {

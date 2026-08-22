@@ -1074,6 +1074,13 @@ var Novedades = (function () {
       }
       var n = buscarNovedad_(data.novedad_id);
       if (!n) return errorValidacion_('novedad_id', 'No existe esa novedad.');
+      // El adjunto es parte de la novedad: se protege con el MISMO criterio
+      // que getDetalle. Sin esto, quien no puede ni abrirla igual podia
+      // bajarse el archivo sabiendo el id -- incluida una que todavia esta
+      // en revision y no se publico.
+      if (!puedeVerDetalle_(n, contexto)) {
+        return { _forbidden: true, message: 'No tienes acceso a esta novedad.' };
+      }
       if (!n.archivo_id) return errorValidacion_('novedad_id', 'Esta novedad no tiene adjunto.');
 
       var archivo = DriveApp.getFileById(n.archivo_id);

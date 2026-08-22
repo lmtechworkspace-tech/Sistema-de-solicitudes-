@@ -198,3 +198,66 @@ test('generar_enlace (v5.2 Fase C) exige rol ADM', () => {
   const res = bo.CuentasPortal.gestionar({ operacion: 'generar_enlace', cuenta_id: creada.cuenta_id }, NO_ADMIN);
   assert.equal(res._forbidden, true);
 });
+
+// --- purga de sesiones vencidas -------------------------------------------
+// SESIONES_PORTAL se lee ENTERA en cada peticion autenticada
+// (resolverContextoPortal_), y hasta ahora una fila solo se borraba al
+// eliminar la cuenta completa: cada login dejaba una fila para siempre.
+
+function sembrarSesion(ctx, token, cuentaId, expira) {
+  ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('SESIONES_PORTAL')
+    .appendRow([token, cuentaId, expira, new Date().toISOString()]);
+}
+
+test('purgarSesionesExpiradas_ borra las vencidas y conserva las vivas', () => {
+  const bo = loadBackoffice();
+  const futuro = new Date(Date.now() + 6 * 3600 * 1000).toISOString();
+  const pasado = new Date(Date.now() - 6 * 3600 * 1000).toISOString();
+
+  sembrarSesion(bo, 'viva-1', 'CTA-1', futuro);
+  sembrarSesion(bo, 'vencida-1', 'CTA-1', pasado);
+  sembrarSesion(bo, 'vencida-2', 'CTA-2', pasado);
+  sembrarSesion(bo, 'viva-2', 'CTA-2', futuro);
+
+  const r = bo.purgarSesionesExpiradas_();
+  assert.equal(r.borradas, 2);
+
+  const quedan = bo.leerFilas_('SESIONES_PORTAL').map((s) => s.token).sort();
+  assert.deepEqual(quedan, ['viva-1', 'viva-2'], 'solo sobreviven las sesiones vigentes');
+});
+
+test('purgarSesionesExpiradas_ no toca una fila con fecha ilegible', () => {
+  const bo = loadBackoffice();
+  sembrarSesion(bo, 'rara', 'CTA-1', 'no-es-una-fecha');
+  sembrarSesion(bo, 'vacia', 'CTA-1', '');
+
+  const r = bo.purgarSesionesExpiradas_();
+  assert.equal(r.borradas, 0, 'ante la duda se conserva: borrar por no saber leer sí sería un problema');
+  assert.equal(bo.leerFilas_('SESIONES_PORTAL').length, 2);
+});
+
+test('purgarSesionesExpiradas_ es idempotente y aguanta la hoja vacía', () => {
+  const bo = loadBackoffice();
+  assert.equal(bo.purgarSesionesExpiradas_().borradas, 0, 'hoja vacía: no falla');
+
+  sembrarSesion(bo, 'vencida', 'CTA-1', new Date(Date.now() - 1000).toISOString());
+  assert.equal(bo.purgarSesionesExpiradas_().borradas, 1);
+  assert.equal(bo.purgarSesionesExpiradas_().borradas, 0, 'la segunda corrida no borra de nuevo');
+});
+
+test('una sesión vencida deja de servir Y deja de ocupar la hoja', () => {
+  const bo = loadBackoffice();
+  const intake = loadIntake();
+  const creada = crearCuentaReal(bo, intake, {
+    usuario: 'leo', nombre: 'Leo', emails: 'leo@rld.cl', rol: 'DEV', modulos: 'bandeja'
+  });
+  sembrarSesion(bo, 'token-vencido', creada.cuenta_id, new Date(Date.now() - 1000).toISOString());
+
+  // Antes de purgar: el token ya se rechaza (la expiración siempre se validó).
+  const antes = bo.resolverContextoPortal_('token-vencido', 'ping');
+  assert.ok(antes.error, 'un token vencido nunca sirvió, purga o no');
+
+  // La purga es sobre el COSTO: que esa fila deje de leerse en cada petición.
+  assert.equal(bo.purgarSesionesExpiradas_().borradas, 1);
+  assert.equal(bo.leerFilas_('SESIONES_PORTAL').length, 0);
+});

@@ -68,10 +68,24 @@ function seedSubsolicitud(ctx, overrides) {
   return base;
 }
 
+// Una fecha comprometida que todavia NO vence, en el formato local que usa
+// el sistema ('YYYY-MM-DDTHH:mm', sin zona -- lo lee new Date() como hora
+// local). Antes esto era la constante '2026-08-20T18:00', y el 2026-08-21 la
+// suite se puso en rojo sola: el compromiso "futuro" habia quedado en el
+// pasado. Un test que caduca con el calendario no protege nada.
+function fechaComprometidaFutura_(diasDesdeHoy) {
+  const d = new Date();
+  d.setHours(18, 0, 0, 0);
+  d.setDate(d.getDate() + (diasDesdeHoy || 30));
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return d.getFullYear() + '-' + mm + '-' + dd + 'T18:00';
+}
+
 test('Gerencia.getPanel (v2.1): agrupa items con su semaforo de cumplimiento', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
-  seedSubsolicitud(ctx, { fecha_comprometida: '2026-08-20T18:00' });
+  seedSubsolicitud(ctx, { fecha_comprometida: fechaComprometidaFutura_() });
 
   const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
 
@@ -179,7 +193,7 @@ test('Gerencia.getPanel (v3.0): dias_abierta y dias_desarrollador de un item act
   const ahora = new Date('2026-07-10T10:00:00.000Z');
   seedSubsolicitud(ctx, {
     fecha_creacion: '2026-07-01T10:00:00.000Z',
-    fecha_comprometida: '2026-08-20T18:00'
+    fecha_comprometida: fechaComprometidaFutura_()
   });
 
   const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
@@ -203,7 +217,7 @@ test('Gerencia.getPanel (v3.0): dias_desarrollador es null si el item aun no tie
 test('Gerencia.getPanel (v3.0): semaforo_solicitante es null salvo cuando el item esta ESPERANDO_VALIDACION', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
-  seedSubsolicitud(ctx, { fecha_comprometida: '2026-08-20T18:00' }); // EN_PLAZO, no ESPERANDO_VALIDACION
+  seedSubsolicitud(ctx, { fecha_comprometida: fechaComprometidaFutura_() }); // EN_PLAZO, no ESPERANDO_VALIDACION
 
   const panel = ctx.Gerencia.getPanel({}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
 
@@ -270,7 +284,7 @@ test('Gerencia.getPanel (v3.0): semaforo_solicitante verde cuando recien se entr
 test('Gerencia.getPanel (v3.1): las atenciones directas no entran al semaforo', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
-  seedSubsolicitud(ctx, { fecha_comprometida: '2026-08-20T18:00' });
+  seedSubsolicitud(ctx, { fecha_comprometida: fechaComprometidaFutura_() });
   // Una segunda solicitud, registrada como atencion directa (ya resuelta).
   seedSolicitud(ctx, {
     solicitud_id: 'SOL-2026-HP-0002', estado_derivado: 'S09', atencion_directa: true

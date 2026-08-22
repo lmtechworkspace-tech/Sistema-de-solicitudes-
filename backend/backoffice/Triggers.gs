@@ -365,6 +365,16 @@ function recordarValidacionPendienteTrigger() {
   } catch (err) {
     logError_(err, 'Triggers.recordarValidacionPendienteTrigger:purgarNotificacionesAppTrigger');
   }
+  // Mantenimiento diario: borra las sesiones vencidas de SESIONES_PORTAL.
+  // Esa hoja se lee ENTERA en cada peticion autenticada
+  // (resolverContextoPortal_), y hasta ahora solo se limpiaba al eliminar
+  // una cuenta completa: crecia con cada login sin techo. Ver
+  // purgarSesionesExpiradas_ en CuentasPortal.gs.
+  try {
+    purgarSesionesExpiradasTrigger();
+  } catch (err) {
+    logError_(err, 'Triggers.recordarValidacionPendienteTrigger:purgarSesionesExpiradasTrigger');
+  }
   return resultado;
 }
 
@@ -434,6 +444,12 @@ function enviarAvisosObjetivosTrigger() {
 // para poder forzarla a mano desde el editor de Apps Script.
 function purgarNotificacionesAppTrigger() {
   return purgarNotificacionesApp_();
+}
+
+// Ver purgarSesionesExpiradas_ (CuentasPortal.gs). Nombrada igual que el
+// resto para poder forzarla a mano desde el editor de Apps Script.
+function purgarSesionesExpiradasTrigger() {
+  return purgarSesionesExpiradas_();
 }
 
 // RN-201/RF-208: dias habiles que un item puede quedar en "Terminada" (S08)
