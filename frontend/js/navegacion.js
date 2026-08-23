@@ -300,6 +300,37 @@
   }
 
   /**
+   * Ensambla el sidebar: agrupado si vienen grupos, plano si no.
+   *
+   * Agrupar tiene sentido con muchos modulos; con cuatro es ruido. Por eso el
+   * shell decide si manda `grupos` o no, segun cuantos ve la cuenta. Un grupo
+   * sin modulos visibles NO se dibuja: si el admin no le dio ninguno de esa
+   * familia, el encabezado sobraria.
+   *
+   * Lo que no cae en ningun grupo va al final. Asi, agregar un modulo nuevo
+   * sin acordarse de meterlo en un grupo NUNCA lo hace desaparecer del menu.
+   */
+  function ensamblar_(opts, htmlPorModulo) {
+    var orden = (opts.modulos || []).map(function (m) { return m.id; });
+    if (!opts.grupos || !opts.grupos.length) {
+      return orden.map(function (id) { return htmlPorModulo[id] || ''; }).join('');
+    }
+    var usados = {};
+    var html = opts.grupos.map(function (g) {
+      var suyos = (g.modulos || []).filter(function (id) { return htmlPorModulo[id]; });
+      if (!suyos.length) return '';
+      suyos.forEach(function (id) { usados[id] = true; });
+      return '<div class="plataforma-nav__grupo">' +
+        (g.titulo ? '<p class="plataforma-nav__grupo-tit">' + esc_(g.titulo) + '</p>' : '') +
+        suyos.map(function (id) { return htmlPorModulo[id]; }).join('') +
+      '</div>';
+    }).join('');
+    var sueltos = orden.filter(function (id) { return htmlPorModulo[id] && !usados[id]; });
+    return html + (sueltos.length
+      ? '<div class="plataforma-nav__grupo">' + sueltos.map(function (id) { return htmlPorModulo[id]; }).join('') + '</div>'
+      : '');
+  }
+  /**
    * Pinta el árbol completo de la barra lateral.
    *
    * @param {Object} opts
@@ -316,7 +347,11 @@
     var moduloActivo = opts.moduloActivo || '';
     var itemActivo = opts.itemActivo || '';
 
-    cont.innerHTML = (opts.modulos || []).map(function (m) {
+    // v13.1: se construye el HTML de cada modulo y DESPUES se ensambla,
+    // agrupado o plano. Antes se concatenaba directo y no habia donde meter
+    // los encabezados de grupo.
+    var htmlPorModulo = {};
+    (opts.modulos || []).forEach(function (m) {
       var def = obtener(m.id);
       var esExpandible = !!(def && (def.submodulos || []).length);
       var abiertoModulo = m.id === moduloActivo;
@@ -346,7 +381,7 @@
         '</button>';
       }
 
-      if (!esExpandible || !abiertoModulo) return cabecera;
+      if (!esExpandible || !abiertoModulo) { htmlPorModulo[m.id] = cabecera; return; }
 
       // --- Nivel 2 y 3: sólo del módulo abierto ---
       var visible = def.visible;
@@ -393,8 +428,30 @@
         '</div>';
       }).join('');
 
-      return cabecera + '<div class="plataforma-nav__rama">' + ramas + '</div>';
-    }).join('');
+      htmlPorModulo[m.id] = cabecera + '<div class="plataforma-nav__rama">' + ramas + '</div>';
+    });
+
+    // Repintar con innerHTML tira el DOM entero, y con el se van dos cosas
+    // que el usuario SI nota: donde tenia scrolleado el menu (si esta abajo
+    // en Calidad, el arbol saltaba arriba en cada clic) y que boton tenia
+    // enfocado con el teclado. Se guardan y se reponen.
+    var scrollPrevio = cont.scrollTop;
+    var enfocado = document.activeElement;
+    var refFoco = (enfocado && cont.contains(enfocado))
+      ? (enfocado.getAttribute('data-item') ? 'item:' + enfocado.getAttribute('data-item')
+        : enfocado.getAttribute('data-sub') ? 'sub:' + enfocado.getAttribute('data-sub')
+        : enfocado.getAttribute('data-modulo') ? 'modulo:' + enfocado.getAttribute('data-modulo') : null)
+      : null;
+
+    cont.innerHTML = ensamblar_(opts, htmlPorModulo);
+    cont.scrollTop = scrollPrevio;
+    if (refFoco) {
+      var partes_ = refFoco.split(':');
+      var attr = partes_.shift();
+      var valor = partes_.join(':');
+      var destino = cont.querySelector('[data-' + attr + '="' + valor.replace(/"/g, '\\"') + '"]');
+      if (destino) destino.focus();
+    }
 
     // --- interacción ---------------------------------------------------------
     cont.querySelectorAll('[data-modulo]').forEach(function (b) {

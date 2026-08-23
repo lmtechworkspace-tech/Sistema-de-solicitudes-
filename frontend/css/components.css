@@ -3622,3 +3622,20 @@
    como contenedor, pero pasa a UNA sola columna. */
 .sigso-modulo-layout { grid-template-columns: minmax(0, 1fr); }
 .sigso-modulo-layout__nav { display: none; }
+
+/* v13.1 — Familias de módulos en el sidebar.
+   Sólo aparecen cuando la cuenta ve suficientes módulos: con cuatro
+   destinos, tres encabezados encima serían decoración, no orden. */
+.plataforma-nav__grupo { display: flex; flex-direction: column; gap: 0.15rem; }
+.plataforma-nav__grupo + .plataforma-nav__grupo { margin-top: var(--esp-4); }
+.plataforma-nav__grupo-tit {
+  margin: 0 0 0.15rem 0.7rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+}
+/* Colapsada no hay espacio para los títulos, pero el aire entre familias
+   sigue separando visualmente los bloques de iconos. */
+.plataforma-sidebar--colapsado:not(.plataforma-sidebar--abierto) .plataforma-nav__grupo-tit { display: none; }

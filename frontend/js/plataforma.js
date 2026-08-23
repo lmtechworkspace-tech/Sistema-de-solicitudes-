@@ -1023,7 +1023,46 @@
   var itemActivoDelModulo_ = '';
   var badgesRecordados_ = {};
 
+  // v13.1: familias de modulos para el sidebar. SIGSO fue creciendo modulo a
+  // modulo y la lista quedo plana; agrupar por lo que la persona esta HACIENDO
+  // es lo que la vuelve legible cuando son doce.
+  //
+  // El orden dentro de cada grupo lo manda esta lista, no el orden en que el
+  // Admin marco los modulos en la cuenta.
+  //
+  // Un modulo que no este aca igual aparece (al final): agregar uno nuevo y
+  // olvidar clasificarlo nunca puede hacerlo desaparecer del menu.
+  var GRUPOS_SIDEBAR = [
+    // Inicio va primero y SIN encabezado: no es una familia, es el punto de
+    // partida. Si cayera en 'sueltos' terminaria abajo del todo.
+    { titulo: '', modulos: ['home'] },
+    { titulo: 'Mi espacio', modulos: ['novedades', 'mis_solicitudes', 'mi_trabajo', 'pausas'] },
+    { titulo: 'Solicitudes', modulos: ['nueva_solicitud', 'bandeja'] },
+    { titulo: 'Gestión', modulos: ['proyectos', 'jefatura', 'gerencia', 'pausas_coordinacion', 'calidad'] },
+    { titulo: 'Sistema', modulos: ['administracion'] }
+  ];
+
+  // Debajo de este numero de destinos NO se agrupa. Un solicitante ve cuatro
+  // cosas: ponerle tres encabezados encima seria decorar, no ordenar.
+  var MINIMO_PARA_AGRUPAR = 7;
+
+  // Una sola navegacion dispara hasta tres repintados (el modulo se monta,
+  // publica su item y refresca sus permisos). Cada uno reconstruia el arbol
+  // entero. Se agrupan en uno por frame: el resultado visible es el mismo y
+  // se evita el parpadeo de reconstruir el DOM tres veces seguidas.
+  var repintadoPedido_ = false;
+
   function renderNav_() {
+    if (repintadoPedido_) return;
+    repintadoPedido_ = true;
+    // setTimeout y NO requestAnimationFrame: rAF no dispara cuando la pagina
+    // no se esta pintando (pestaña en segundo plano). Con rAF, volver a una
+    // pestaña dejada atras mostraba el menu VACIO -- el repintado quedaba
+    // pendiente para siempre. Un timeout corre igual, y agrupa lo mismo.
+    setTimeout(function () { repintadoPedido_ = false; renderNavAhora_(); }, 0);
+  }
+
+  function renderNavAhora_() {
     var nav = document.getElementById('nav-modulos');
     if (!nav) return;
 
@@ -1044,6 +1083,7 @@
     SigsoNav.renderArbol({
       contenedor: nav,
       modulos: modulos,
+      grupos: modulos.length >= MINIMO_PARA_AGRUPAR ? GRUPOS_SIDEBAR : null,
       moduloActivo: moduloActivo_,
       itemActivo: itemActivoDelModulo_,
       onModulo: function (id) {

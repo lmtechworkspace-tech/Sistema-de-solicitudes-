@@ -451,4 +451,14 @@
       if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(itemId);
       cargar();
     }, cargar: cargar };
+
+  // v13.1: registro TEMPRANO del arbol. Antes esto pasaba recien al abrir
+  // el modulo, asi que el sidebar no le dibujaba el chevron ni lo dejaba
+  // desplegar hasta que entrabas una vez.
+  if (window.SigsoNav) {
+    SigsoNav.registrar('pausas_coordinacion', {
+      nombre: 'Coordinación de pausas',
+      submodulos: ARQUITECTURA_COORD
+    });
+  }
 })();

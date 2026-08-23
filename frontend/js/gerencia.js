@@ -1413,4 +1413,14 @@
     ], filas, { vacio: 'No hay indicadores comparables en esta ventana.' });
   }
 
+
+  // v13.1: registro TEMPRANO del arbol. Antes esto pasaba recien al abrir
+  // el modulo, asi que el sidebar no le dibujaba el chevron ni lo dejaba
+  // desplegar hasta que entrabas una vez.
+  if (window.SigsoNav) {
+    SigsoNav.registrar('gerencia', {
+      nombre: 'Panel de gerencia',
+      submodulos: ARQUITECTURA_GERENCIA
+    });
+  }
 })();

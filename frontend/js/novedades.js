@@ -1157,4 +1157,15 @@
       }
     });
   }
+
+  // v13.1: registro TEMPRANO del arbol. Antes esto pasaba recien al abrir
+  // el modulo, asi que el sidebar no le dibujaba el chevron ni lo dejaba
+  // desplegar hasta que entrabas una vez.
+  if (window.SigsoNav) {
+    SigsoNav.registrar('novedades', {
+      nombre: 'Novedades',
+      submodulos: ARQUITECTURA_NOVEDADES,
+      visible: function (llave) { return llave === 'cumplimiento' ? !!puedeGeneral_ : true; }
+    });
+  }
 })();
