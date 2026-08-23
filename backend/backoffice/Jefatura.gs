@@ -64,6 +64,14 @@ var Jefatura = {
 
     var nombrePorEmail = mapaNombresUsuarios_();
     var historialEstados = leerFilasSeguro_(SHEETS.HISTORIAL_ESTADOS);
+    // v12.5: el "resbalon" (mover una fecha ya comprometida) y las
+    // reaperturas. Gerencia los calcula desde la v4.1 con estos mismos
+    // ayudantes; un jefe necesita verlos de su equipo igual que Gerencia
+    // de todos. Se reusan las funciones, no se reimplementa el criterio.
+    var historialCompromiso = leerFilasSeguro_(SHEETS.HISTORIAL_COMPROMISO);
+    var lineasBaseJef = lineaBasePorItem_(historialCompromiso);
+    var reCompromisosJef = contarPorSubsolicitud_(historialCompromiso);
+    var reaperturasJef = contarReaperturasPorSubsolicitud_(historialEstados);
 
     var solicitudes = leerFilas_(SHEETS.SOLICITUDES).filter(function (s) {
       return !esAtencionDirecta_(s);
@@ -113,7 +121,13 @@ var Jefatura = {
           dias_abierta: diasHabilesRedondeado_(
             sub.fecha_creacion,
             ESTADOS_CERRADOS.indexOf(sub.estado) !== -1 ? (sub.fecha_terminada || sub.fecha_creacion) : ahora
-          )
+          ),
+          // La fecha ORIGINAL (antes del primer re-compromiso) es lo que
+          // hace visible el resbalon: sin ella solo se ve la fecha vigente,
+          // que ya incorpora el atraso y por eso parece que no lo hubo.
+          fecha_original: lineasBaseJef[sub.subsolicitud_id] || sub.fecha_comprometida || '',
+          re_compromisos: reCompromisosJef[sub.subsolicitud_id] || 0,
+          reaperturas: reaperturasJef[sub.subsolicitud_id] || 0
         };
       });
 

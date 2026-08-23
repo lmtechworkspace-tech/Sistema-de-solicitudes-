@@ -498,6 +498,48 @@
     ], serie);
   }
 
+  /**
+   * Resbalón de compromisos: ítems que movieron su fecha comprometida o que
+   * se reabrieron. Vive en el motor porque Gerencia y Jefatura lo miden
+   * igual desde la v12.5, cuando Jefatura.getPanel empezó a exponer los
+   * mismos campos.
+   *
+   * La REAPERTURA importa aparte del re-compromiso: es la medida de "se
+   * entregó mal", y el % de cumplimiento no la captura -- un cierre rápido
+   * que se reabre tres veces igual cuenta como "a tiempo" ahí.
+   *
+   * `columnasExtra` deja que cada módulo agregue sus propias dimensiones
+   * (Gerencia tiene área; Jefatura no).
+   */
+  function cuerpoResbalon(items, opts) {
+    opts = opts || {};
+    items = items || [];
+    var movidos = items.filter(function (i) {
+      return Number(i.re_compromisos) > 0 || Number(i.reaperturas) > 0;
+    }).sort(function (a, b) {
+      return (Number(b.re_compromisos) + Number(b.reaperturas)) -
+             (Number(a.re_compromisos) + Number(a.reaperturas));
+    });
+    var totalRe = items.reduce(function (s, i) { return s + (Number(i.re_compromisos) || 0); }, 0);
+    var totalReab = items.reduce(function (s, i) { return s + (Number(i.reaperturas) || 0); }, 0);
+    var columnas = [{ campo: 'titulo', titulo: 'Ítem' }]
+      .concat(opts.columnasExtra || [])
+      .concat([
+        { campo: 'desarrollador_nombre', titulo: 'Responsable' },
+        { campo: 're_compromisos', titulo: 'Movió fecha', alinear: 'derecha' },
+        { campo: 'reaperturas', titulo: 'Reaperturas', alinear: 'derecha' },
+        { campo: 'fecha_original', titulo: 'Fecha original' },
+        { campo: 'fecha_comprometida', titulo: 'Fecha vigente' }
+      ]);
+    return kpis([
+      { etiqueta: 'Ítems que movieron fecha',
+        valor: items.filter(function (i) { return Number(i.re_compromisos) > 0; }).length },
+      { etiqueta: 'Re-compromisos', valor: totalRe },
+      { etiqueta: 'Reaperturas', valor: totalReab, alerta: totalReab > 0,
+        titulo: 'Un ítem que se cerró y volvió a abrirse: el % de cumplimiento no lo captura.' }
+    ]) +
+    tabla(columnas, movidos, { vacio: 'Ningún ítem movió su fecha ni se reabrió. Nada que revisar.' });
+  }
   // ==========================================================================
   // EXPORTACIÓN (§13)
   // ==========================================================================
@@ -575,6 +617,7 @@
     tablaCumplimiento: tablaCumplimiento,
     cuerpoCumplimientoPor: cuerpoCumplimientoPor,
     cuerpoEntradaSalida: cuerpoEntradaSalida,
+    cuerpoResbalon: cuerpoResbalon,
     barraAcciones: barraAcciones,
     wireAcciones: wireAcciones
   };

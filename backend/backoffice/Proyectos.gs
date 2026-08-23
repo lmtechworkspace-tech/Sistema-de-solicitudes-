@@ -67,6 +67,10 @@ var Proyectos = {
         fecha_objetivo: p.fecha_objetivo,
         ultima_actualizacion: p.ultima_actualizacion,
         avance_pct: calcularAvanceProyecto_(tareas),
+        // v12.5: cumplimiento de plazos de las tareas del proyecto. Es
+        // distinto del avance: avance dice CUANTO se hizo, esto dice si lo
+        // que se hizo llego a tiempo.
+        cumplimiento_tareas: calcularCumplimientoTareasProyecto_(tareas),
         total_integrantes: integrantes.length,
         total_tareas: tareas.filter(function (a) { return a.activa === true || a.activa === 'TRUE' || a.activa === 1; }).length,
         salud: salud.codigo,
@@ -852,6 +856,36 @@ function notificarSala_(proyecto, evento, contexto) {
 // Avance derivado: % de tareas activas TERMINADAS sobre el total activo.
 // Vacio (sin tareas) devuelve null -- no 0%, que se leeria como "sin avance"
 // en vez de "todavia no hay nada que medir".
+// v12.5: cumplimiento de plazos de las tareas de un proyecto.
+//
+// MISMA REGLA que el motor de reportes del frontend (SigsoReportes.
+// agruparCumplimiento): solo cuenta lo ENTREGADO que ademas tenia fecha de
+// compromiso. Una tarea sin comprometer no es un incumplimiento -- no hay
+// promesa que romper todavia -- y contarla hundiria el porcentaje de un
+// proyecto que recien parte.
+//
+// Devuelve pct = null (y no 0) cuando no hay ninguna entrega medible: son
+// cosas distintas y no pueden verse iguales en un reporte.
+function calcularCumplimientoTareasProyecto_(tareas) {
+  var activas = (tareas || []).filter(function (a) {
+    return a.activa === true || a.activa === 'TRUE' || a.activa === 1;
+  });
+  var entregadas = activas.filter(function (a) {
+    return a.fecha_terminada && a.fecha_compromiso;
+  });
+  var aTiempo = entregadas.filter(function (a) {
+    return new Date(a.fecha_terminada) <= new Date(a.fecha_compromiso);
+  });
+  return {
+    total: activas.length,
+    entregadas: entregadas.length,
+    a_tiempo: aTiempo.length,
+    sin_comprometer: activas.filter(function (a) { return !a.fecha_compromiso; }).length,
+    pct: entregadas.length
+      ? Math.round((aTiempo.length / entregadas.length) * 1000) / 10
+      : null
+  };
+}
 function calcularAvanceProyecto_(tareas) {
   var activas = tareas.filter(function (a) { return a.activa === true || a.activa === 'TRUE' || a.activa === 1; });
   if (activas.length === 0) return null;

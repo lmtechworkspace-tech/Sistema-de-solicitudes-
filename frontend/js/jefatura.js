@@ -411,9 +411,12 @@
       { id: 'jef-tipo', nombre: 'Cumplimiento por tipo', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
         desc: 'Si el atraso se concentra en errores, mejoras o alguna otra clase.',
         fuente: 'getPanelJefatura', filtros: [] },
-      { id: 'jef-resbalon', nombre: 'Resbalón de compromisos', tipo: 'DETALLE', estado: 'PENDIENTE',
-        desc: 'Ítems que movieron su fecha comprometida o se reabrieron.',
-        falta: 'getPanelJefatura no devuelve re_compromisos ni reaperturas — Gerencia sí los calcula (calcularPanelGerencia_). Habría que agregarlos a Jefatura.getPanel.' }
+      // v12.5: dejo de estar pendiente -- Jefatura.getPanel ya expone
+      // re_compromisos, reaperturas y fecha_original, reusando los mismos
+      // ayudantes que Gerencia (no se reimplemento el criterio).
+      { id: 'jef-resbalon', nombre: 'Resbalón de compromisos', tipo: 'DETALLE', estado: 'LISTO',
+        desc: 'Ítems de tu equipo que movieron su fecha comprometida, y cuántas veces se reabrieron.',
+        fuente: 'getPanelJefatura', filtros: [] }
     ] },
     { grupo: 'Evolución', icono: 'grafico', reportes: [
       { id: 'jef-throughput', nombre: 'Entrada vs salida por mes', tipo: 'TENDENCIA', estado: 'LISTO',
@@ -480,6 +483,11 @@
       });
     } else if (r.id === 'jef-throughput') {
       cuerpo = SigsoReportes.cuerpoEntradaSalida(panelJefatura_.tendencia || []);
+    } else if (r.id === 'jef-resbalon') {
+      // Jefatura no tiene area_nombre en sus items; sí modulo_nombre.
+      cuerpo = SigsoReportes.cuerpoResbalon(items, {
+        columnasExtra: [{ campo: 'modulo_nombre', titulo: 'Módulo' }]
+      });
     }
 
     cont.innerHTML =

@@ -1483,9 +1483,11 @@
       { id: 'py-lider', nombre: 'Carga por líder', tipo: 'RANKING', estado: 'LISTO',
         desc: 'Cuántos proyectos lidera cada persona y cuántos de ellos no están sanos.',
         fuente: 'listarProyectos', filtros: [] },
-      { id: 'py-cumplimiento', nombre: 'Cumplimiento de tareas', tipo: 'CUMPLIMIENTO', estado: 'PENDIENTE',
-        desc: 'Tareas entregadas dentro de su fecha comprometida, por proyecto.',
-        falta: 'listarProyectos devuelve el CONTEO de tareas, no sus fechas. Habría que exponer las tareas con fecha_compromiso y fecha_terminada, o calcular el cumplimiento en el backend.' }
+      // v12.5: deja de estar pendiente -- listarProyectos ahora calcula
+      // cumplimiento_tareas por proyecto, con la MISMA regla del motor.
+      { id: 'py-cumplimiento', nombre: 'Cumplimiento de tareas', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
+        desc: 'Tareas entregadas dentro de su fecha comprometida, proyecto por proyecto.',
+        fuente: 'listarProyectos', filtros: [] }
     ] }
   ];
 
@@ -1543,6 +1545,7 @@
     else if (r.id === 'py-avance') cuerpo = cuerpoAvance_(ps);
     else if (r.id === 'py-plazos') cuerpo = cuerpoPlazos_(ps);
     else if (r.id === 'py-lider') cuerpo = cuerpoPorLider_(ps);
+    else if (r.id === 'py-cumplimiento') cuerpo = cuerpoCumplimientoTareas_(ps);
 
     cont.innerHTML =
       SigsoReportes.barraAcciones({}) +
@@ -1642,6 +1645,47 @@
     ], conPlazo, { vacio: 'Ningún proyecto activo tiene fecha objetivo definida.' });
   }
 
+  // El cumplimiento lo calcula el BACKEND (calcularCumplimientoTareasProyecto_)
+  // con la misma regla del motor: solo sobre tareas ENTREGADAS que tenian
+  // fecha de compromiso. pct null = no hay entregas medibles, que NO es 0%.
+  function cuerpoCumplimientoTareas_(ps) {
+    if (!ps.length) return Componentes.vacio('No hay proyectos que mostrar.');
+    var conDato = ps.filter(function (p) { return p.cumplimiento_tareas; });
+    if (!conDato.length) {
+      return Componentes.vacio(
+        'El backend todavia no envia el cumplimiento por proyecto. Si acabas de ' +
+        'pegar la version nueva de Proyectos.gs, vuelve a publicar la implementacion.');
+    }
+    var medibles = conDato.filter(function (p) { return p.cumplimiento_tareas.pct !== null; });
+    var ordenados = medibles.slice().sort(function (a, b) {
+      return b.cumplimiento_tareas.pct - a.cumplimiento_tareas.pct;
+    });
+    return SigsoReportes.kpis([
+      { etiqueta: 'Proyectos', valor: conDato.length },
+      { etiqueta: 'Ya medibles', valor: medibles.length,
+        titulo: 'Solo se puede medir donde hay tareas entregadas con fecha de compromiso.' },
+      { etiqueta: 'Tareas sin comprometer',
+        valor: conDato.reduce(function (s, p) { return s + p.cumplimiento_tareas.sin_comprometer; }, 0) }
+    ]) +
+    SigsoReportes.ranking(ordenados.map(function (p) {
+      return { etiqueta: p.codigo + ' — ' + p.nombre, valor: p.cumplimiento_tareas.pct,
+        texto: p.cumplimiento_tareas.pct + '%' };
+    }), { vacio: 'Ningun proyecto tiene todavia tareas entregadas con fecha de compromiso.' }) +
+    '<h3>Detalle</h3>' +
+    SigsoReportes.tabla([
+      { campo: 'codigo', titulo: 'Código' },
+      { campo: 'nombre', titulo: 'Proyecto' },
+      { campo: 'total', titulo: 'Tareas', alinear: 'derecha' },
+      { campo: 'entregadas', titulo: 'Entregadas', alinear: 'derecha' },
+      { campo: 'aTiempo', titulo: 'A tiempo', alinear: 'derecha' },
+      { campo: 'pct', titulo: 'Cumplimiento', alinear: 'derecha' }
+    ], conDato.map(function (p) {
+      var c = p.cumplimiento_tareas;
+      return { codigo: p.codigo, nombre: p.nombre, total: c.total,
+        entregadas: c.entregadas, aTiempo: c.a_tiempo,
+        pct: c.pct === null ? 'sin entregas' : c.pct + '%' };
+    }));
+  }
   function cuerpoPorLider_(ps) {
     if (!ps.length) return Componentes.vacio('No hay proyectos que mostrar.');
     var porLider = {};

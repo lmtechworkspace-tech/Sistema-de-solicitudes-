@@ -1322,7 +1322,11 @@
         campo: 'desarrollador_nombre', etiquetaVacia: '(sin asignar)',
         dimension: 'Responsable', etiquetaTotal: 'Responsables'
       });
-    } else if (r.id === 'ger-resbalon') cuerpo = cuerpoResbalon_(items);
+    } else if (r.id === 'ger-resbalon') {
+      cuerpo = SigsoReportes.cuerpoResbalon(items, {
+        columnasExtra: [{ campo: 'area_nombre', titulo: 'Área' }]
+      });
+    }
     else if (r.id === 'ger-throughput') cuerpo = SigsoReportes.cuerpoEntradaSalida(panelActual.tendencia || []);
     else if (r.id === 'ger-comparativo') cuerpo = cuerpoComparativo_(panelActual.kpis || {});
 
@@ -1342,31 +1346,6 @@
 
 
 
-  function cuerpoResbalon_(items) {
-    var movidos = items.filter(function (i) {
-      return Number(i.re_compromisos) > 0 || Number(i.reaperturas) > 0;
-    }).sort(function (a, b) {
-      return (Number(b.re_compromisos) + Number(b.reaperturas)) -
-             (Number(a.re_compromisos) + Number(a.reaperturas));
-    });
-    var totalRe = items.reduce(function (s, i) { return s + (Number(i.re_compromisos) || 0); }, 0);
-    var totalReab = items.reduce(function (s, i) { return s + (Number(i.reaperturas) || 0); }, 0);
-    return SigsoReportes.kpis([
-      { etiqueta: 'Ítems que movieron fecha', valor: items.filter(function (i) { return Number(i.re_compromisos) > 0; }).length },
-      { etiqueta: 'Re-compromisos', valor: totalRe },
-      { etiqueta: 'Reaperturas', valor: totalReab, alerta: totalReab > 0,
-        titulo: 'Un ítem que se cerró y volvió a abrirse: el % de cumplimiento no lo captura.' }
-    ]) +
-    SigsoReportes.tabla([
-      { campo: 'titulo', titulo: 'Ítem' },
-      { campo: 'area_nombre', titulo: 'Área' },
-      { campo: 'desarrollador_nombre', titulo: 'Responsable' },
-      { campo: 're_compromisos', titulo: 'Movió fecha', alinear: 'derecha' },
-      { campo: 'reaperturas', titulo: 'Reaperturas', alinear: 'derecha' },
-      { campo: 'fecha_original', titulo: 'Fecha original' },
-      { campo: 'fecha_comprometida', titulo: 'Fecha vigente' }
-    ], movidos, { vacio: 'Ningún ítem movió su fecha ni se reabrió. Nada que revisar.' });
-  }
 
 
   // Etiquetas legibles de los KPIs de Gerencia, y si BAJAR es lo bueno.

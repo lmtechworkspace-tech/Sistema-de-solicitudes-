@@ -3644,41 +3644,11 @@ button {
    estiraba la pagina entera: .sigso-tabs es un flex sin wrap, asi que el
    ancho de la barra se volvia el ancho del contenido. Scrollea ella sola
    en vez de sacar scroll horizontal a la pagina. Envolver no sirve: dos
-   filas de pestañas se leen como dos niveles de navegacion. */
-.sgc-secciones {
-  overflow-x: auto;
-  max-width: 100%;
-  scrollbar-width: thin;
-  align-items: center;
-}
-.sgc-secciones .sigso-tab { flex: 0 0 auto; }
-
-/* v10.0 Fase 2 (rediseno visual): la barra deja de ser 11 botones planos --
-   se agrupa por sentido (Documentacion/Personas/Procesos/Direccion/
-   Administracion), cada grupo con una etiqueta muda chiquita y separador.
-   Los botones antes no tenian NINGUN estilo propio (heredaban el boton por
-   defecto del navegador); ahora son pildoras con icono, igual que el resto
-   de la navegacion de SIGSO (plataforma.js). */
-.sgc-nav-grupo {
-  display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto;
-}
-.sgc-nav-grupo__label {
-  font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--texto-3); padding: 0 var(--esp-2) 0 var(--esp-1); white-space: nowrap;
-}
-.sgc-nav-separador {
-  width: 1px; height: 1.5rem; background: var(--borde); margin: 0 var(--esp-2); flex: 0 0 auto;
-}
-.sgc-secciones .js-sgc-seccion {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: .4rem .8rem; border-radius: 999px; border: 1px solid transparent;
-  background: transparent; color: var(--texto-2); font-weight: 600;
-  font-size: var(--texto-sm); cursor: pointer; white-space: nowrap;
-  transition: background .15s, color .15s;
-}
-.sgc-secciones .js-sgc-seccion:hover { background: var(--superficie-2); color: var(--texto); }
-.sgc-secciones .js-sgc-seccion.sigso-tab--activo { background: var(--primario); color: #fff; }
-.sgc-secciones .js-sgc-seccion .sigso-ico { flex: 0 0 auto; }
+/* v12.0: aqui vivia la barra HORIZONTAL de secciones del SGC
+   (.sgc-secciones / .sgc-nav-grupo / .sgc-nav-separador). La reemplazo la
+   navegacion vertical .sigso-nav2 (ver el bloque al final de este archivo).
+   El comentario que estaba aca describia el sintoma que la condeno: "con la
+   quinta seccion la barra dejo de caber en un movil". Llego a dieciseis. */
 
 /* Sub-nav de Accesos (Personas/Matriz/Confidenciales): mismas pildoras, un
    punto mas chicas, sin icono -- vive DENTRO de un grupo ya identificado. */
@@ -3841,6 +3811,306 @@ button {
 
 @media (max-width: 640px) {
   .sgc-salud { grid-template-columns: 1fr; }
+}
+
+/* ==========================================================================
+   v12.0 — Navegación Módulo > Submódulo > Ítem (navegacion.js)
+   Reemplaza la barra horizontal de pestañas dentro de los módulos. El
+   síntoma que la retiró está documentado más arriba, en .sgc-secciones:
+   "con la quinta sección la barra dejó de caber en un móvil". Hoy Calidad
+   tiene dieciséis.
+
+   Sin colores nuevos: todo sale de tokens.css, así el modo oscuro funciona
+   sin una sola regla extra.
+   ========================================================================== */
+
+/* Layout de dos columnas: nav fija a la izquierda, panel a la derecha. */
+.sigso-modulo-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: var(--esp-5);
+  align-items: start;
+}
+.sigso-modulo-layout__nav { position: sticky; top: var(--esp-4); }
+/* minmax(0,1fr) + min-width:0 es lo que impide que una tabla ancha del panel
+   empuje la grilla y devuelva el scroll horizontal que veníamos a quitar. */
+.sigso-modulo-layout__panel { min-width: 0; }
+
+@media (max-width: 900px) {
+  .sigso-modulo-layout { grid-template-columns: 1fr; gap: var(--esp-4); }
+  .sigso-modulo-layout__nav { position: static; }
+}
+
+/* --- Bloques (submódulos) ------------------------------------------------ */
+.sigso-nav2 { display: flex; flex-direction: column; gap: var(--esp-2); }
+
+.sigso-nav2__bloque {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
+  overflow: hidden;
+}
+
+/* Reportes va destacado (§23 del encargo): tiene que leerse como un destino
+   propio, no como un submódulo más perdido en la lista. */
+.sigso-nav2__bloque--destacado {
+  border-color: var(--primario);
+  background: var(--primario-suave);
+}
+
+/* --- Cabecera del submódulo (el acordeón) -------------------------------- */
+.sigso-nav2__cab,
+.sigso-nav2__directo {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  /* Alto cómodo: el encargo pide áreas de clic amplias (§20). */
+  padding: var(--esp-3) var(--esp-3);
+  background: transparent;
+  border: 0;
+  color: var(--texto);
+  font: var(--t-body);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--mov-normal);
+}
+.sigso-nav2__cab:hover,
+.sigso-nav2__directo:hover { background: var(--superficie-2); }
+
+.sigso-nav2__cab:focus-visible,
+.sigso-nav2__directo:focus-visible,
+.sigso-nav2__item:focus-visible {
+  outline: none;
+  box-shadow: var(--foco-anillo);
+  border-radius: var(--radio-sm);
+}
+
+.sigso-nav2__ico { display: inline-flex; flex: 0 0 auto; color: var(--texto-2); }
+.sigso-nav2__txt { flex: 1 1 auto; min-width: 0; }
+.sigso-nav2__desc {
+  flex: 0 0 100%;
+  order: 10;
+  font: var(--t-small);
+  color: var(--texto-3);
+  font-weight: 400;
+}
+
+/* Chevron dibujado en CSS: no depende de que iconos.js tenga una clave. */
+.sigso-nav2__chevron {
+  flex: 0 0 auto;
+  width: 8px; height: 8px;
+  border-right: 2px solid var(--texto-3);
+  border-bottom: 2px solid var(--texto-3);
+  transform: rotate(45deg);
+  transition: transform var(--mov-normal);
+}
+.sigso-nav2__cab--abierto .sigso-nav2__chevron { transform: rotate(-135deg); }
+
+/* El estado del enlace directo activo NO se comunica sólo por color (§20):
+   lleva además la barra lateral y el peso tipográfico. */
+.sigso-nav2__directo--activo {
+  background: var(--primario-suave);
+  color: var(--primario-tinta);
+  box-shadow: inset 3px 0 0 var(--primario);
+}
+.sigso-nav2__directo--activo .sigso-nav2__ico { color: var(--primario); }
+
+/* --- Ítems --------------------------------------------------------------- */
+.sigso-nav2__items {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--esp-2) var(--esp-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sigso-nav2__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  padding: var(--esp-2) var(--esp-2) var(--esp-2) var(--esp-3);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radio-sm);
+  color: var(--texto-2);
+  font: var(--t-body);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--mov-normal), color var(--mov-normal);
+}
+.sigso-nav2__item:hover { background: var(--superficie-2); color: var(--texto); }
+.sigso-nav2__item--activo {
+  background: var(--primario-suave);
+  color: var(--primario-tinta);
+  font-weight: 600;
+}
+.sigso-nav2__punto {
+  flex: 0 0 auto;
+  width: 5px; height: 5px;
+  border-radius: var(--radio-full);
+  background: var(--borde-fuerte);
+}
+.sigso-nav2__item--activo .sigso-nav2__punto { background: var(--primario); }
+
+.sigso-nav2__badge {
+  flex: 0 0 auto;
+  min-width: 1.25rem;
+  padding: 0 var(--esp-1);
+  border-radius: var(--radio-full);
+  background: var(--superficie-2);
+  color: var(--texto-2);
+  font: var(--t-small);
+  font-weight: 700;
+  text-align: center;
+}
+.sigso-nav2__item--activo .sigso-nav2__badge,
+.sigso-nav2__directo--activo .sigso-nav2__badge {
+  background: var(--primario); color: #fff;
+}
+
+/* --- Migas de pan -------------------------------------------------------- */
+.sigso-migas { margin: 0 0 var(--esp-3); }
+.sigso-migas ol {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-1);
+  font: var(--t-small); color: var(--texto-3);
+}
+.sigso-migas li { display: inline-flex; align-items: center; gap: var(--esp-1); }
+.sigso-migas li + li::before { content: '/'; color: var(--borde-fuerte); }
+.sigso-migas [aria-current="page"] { color: var(--texto); font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sigso-nav2__cab, .sigso-nav2__directo, .sigso-nav2__item, .sigso-nav2__chevron {
+    transition: none;
+  }
+}
+
+/* --- Centro de reportes del SGC (calidad.js, submódulo transversal) ------- */
+.sgc-rep-grupo { margin: var(--esp-5) 0 0; }
+.sgc-rep-grupo__tit {
+  display: flex; align-items: center; gap: var(--esp-2);
+  margin: 0 0 var(--esp-3);
+  font: var(--t-title);
+  color: var(--texto);
+}
+.sgc-rep-grupo__tit .sigso-ico { color: var(--texto-2); }
+
+.sgc-rep-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--esp-3);
+}
+.sgc-rep-card {
+  display: flex; flex-direction: column; gap: var(--esp-2);
+  padding: var(--esp-4);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
+}
+/* Sólo las fichas de reportes que YA se pueden abrir se ven accionables. Una
+   ficha "requiere desarrollo" no debe invitar al clic: prometería algo que
+   no existe. */
+.sgc-rep-card--activa { cursor: pointer; transition: border-color var(--mov-normal), box-shadow var(--mov-normal); }
+.sgc-rep-card--activa:hover { border-color: var(--primario); box-shadow: var(--sombra-1); }
+.sgc-rep-card--activa:focus-visible { outline: none; box-shadow: var(--foco-anillo); }
+
+.sgc-rep-card__cab { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--esp-2); }
+.sgc-rep-card__cab h4 { margin: 0; font: var(--t-body); font-weight: 600; color: var(--texto); }
+.sgc-rep-card__desc { margin: 0; font: var(--t-small); color: var(--texto-2); }
+.sgc-rep-card__falta { margin: 0; font: var(--t-small); color: var(--texto-3); }
+.sgc-rep-card__fuente { margin: 0; font: var(--t-small); color: var(--texto-3); }
+.sgc-rep-card__fuente code {
+  font-family: var(--fuente-mono); font-size: 0.72rem;
+  background: var(--superficie-2); padding: 1px 5px; border-radius: var(--radio-sm);
+}
+
+/* ==========================================================================
+   v12.2 — Motor de reportes (reportes.js)
+   Sin colores nuevos ni librerías: todo sale de tokens.css, y las tendencias
+   y rankings se dibujan con SVG inline y CSS para que funcionen también donde
+   Chart.js no está cargado (admin.html) y para que impriman bien.
+   ========================================================================== */
+
+.sgc-rep-card__tipo {
+  align-self: flex-start;
+  font: var(--t-small);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--texto-3);
+}
+
+/* --- Filtros -------------------------------------------------------------- */
+.sigso-rep-filtros {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--esp-3);
+  padding: var(--esp-3);
+  background: var(--superficie-2);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
+  margin-bottom: var(--esp-4);
+}
+.sigso-rep-filtro { display: flex; flex-direction: column; gap: var(--esp-1); min-width: 0; }
+.sigso-rep-filtro > span { font: var(--t-small); font-weight: 600; color: var(--texto-2); }
+.sigso-rep-filtro select,
+.sigso-rep-filtro input {
+  padding: .4rem .6rem;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-sm);
+  background: var(--superficie);
+  color: var(--texto);
+  font: var(--t-body);
+}
+
+/* --- Acciones / exportación ---------------------------------------------- */
+.sigso-rep-acciones {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-2);
+  margin-bottom: var(--esp-4);
+}
+.sigso-rep-acciones__sep { flex: 1 1 auto; }
+
+/* --- Tablas --------------------------------------------------------------- */
+/* La tabla scrollea DENTRO de su caja: sin esto una tabla ancha devuelve el
+   scroll horizontal a la página, que es justo lo que quitamos en la v12.0. */
+.sigso-rep-tabla-caja { overflow-x: auto; max-width: 100%; }
+.sigso-rep-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* --- Ranking -------------------------------------------------------------- */
+.sigso-rep-ranking { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--esp-2); }
+.sigso-rep-ranking__fila { display: grid; grid-template-columns: 1.5rem minmax(6rem, 12rem) 1fr auto; align-items: center; gap: var(--esp-2); }
+.sigso-rep-ranking__pos { font: var(--t-small); font-weight: 700; color: var(--texto-3); text-align: right; }
+.sigso-rep-ranking__etq { font: var(--t-body); color: var(--texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sigso-rep-ranking__barra { height: 10px; background: var(--superficie-2); border-radius: var(--radio-full); overflow: hidden; }
+.sigso-rep-ranking__barra > span { display: block; height: 100%; background: var(--primario); border-radius: var(--radio-full); }
+.sigso-rep-ranking__val { font: var(--t-body); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--texto); }
+
+/* --- Tendencia (SVG) ------------------------------------------------------ */
+.sigso-rep-tendencia { margin: 0 0 var(--esp-4); }
+.sigso-rep-tendencia svg { width: 100%; height: auto; display: block; }
+.sigso-rep-eje { stroke: var(--borde-fuerte); stroke-width: 1; }
+.sigso-rep-tick { fill: var(--texto-3); font-size: 11px; font-family: var(--fuente); }
+.sigso-rep-linea { fill: none; stroke: var(--primario); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.sigso-rep-punto { fill: var(--primario); }
+.sigso-rep-meta { stroke: var(--alerta); stroke-width: 1; stroke-dasharray: 4 3; }
+.sigso-rep-meta-txt { fill: var(--alerta); font-size: 10px; font-family: var(--fuente); }
+.sigso-rep-tendencia__pie { font: var(--t-small); color: var(--texto-3); margin-top: var(--esp-2); }
+
+/* --- Comparación ---------------------------------------------------------- */
+/* El signo va ESCRITO además del color: el estado no puede depender sólo del
+   color (§20 del encargo, y WCAG 1.4.1). */
+.sigso-rep-var { font-weight: 700; font-variant-numeric: tabular-nums; }
+.sigso-rep-var--ok { color: var(--ok); }
+.sigso-rep-var--critico { color: var(--critico); }
+.sigso-rep-var--neutro { color: var(--texto-3); }
+
+/* Al imprimir/guardar en PDF sobra todo lo que no es el reporte. */
+@media print {
+  .plataforma-sidebar, .plataforma-topbar, .sigso-modulo-layout__nav,
+  .sigso-rep-acciones, .sigso-rep-filtros { display: none !important; }
+  .sigso-modulo-layout { grid-template-columns: 1fr !important; }
+  .sigso-rep-tabla-caja { overflow: visible !important; }
 }
 
 </style>
@@ -5156,11 +5426,15 @@ button.sigso-kpi {
   min-width: 0;
 }
 
+/* v12.1: el menu pasa a ser la navegacion vertical agrupada (.sigso-nav2,
+   ver components.css). Aca solo queda lo que es propio del layout de
+   Administracion: cuanto mide y como se comporta al angostarse. */
 .sigso-admin-menu {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  min-width: 180px;
+  gap: var(--esp-2);
+  flex: 0 0 240px;
+  min-width: 240px;
 }
 
 /* Fase 10 (pulido): el sidebar fijo + contenido no cabe en mobile (375px) --
@@ -5169,34 +5443,17 @@ button.sigso-kpi {
   .sigso-admin-layout {
     flex-direction: column;
   }
+  /* v12.1: sigue en COLUMNA. Antes se pasaba a fila envolviendo, que con
+     botones planos funcionaba; con acordeones seria ilegible. */
   .sigso-admin-menu {
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex: 0 0 auto;
     min-width: 0;
+    width: 100%;
   }
 }
 
-.sigso-admin-menu__item {
-  text-align: left;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio-sm);
-  padding: 0.6rem 0.8rem;
-  cursor: pointer;
-  font-size: var(--texto-sm);
-  color: var(--texto);
-  transition: background var(--mov-normal), border-color var(--mov-normal);
-}
-
-.sigso-admin-menu__item:hover {
-  background: var(--superficie-2);
-}
-
-.sigso-admin-menu__item--activo {
-  background: var(--primario);
-  color: #fff;
-  border-color: var(--primario);
-}
+/* v12.1: aqui vivian .sigso-admin-menu__item / :hover / --activo. Los 14
+   botones planos ya no existen: los pinta SigsoNav. */
 
 .sigso-admin-form {
   display: grid;
@@ -5329,22 +5586,11 @@ button.sigso-kpi {
   <header id="sigso-header" class="sigso-header"></header>
 
   <main class="sigso-contenido sigso-admin-layout" style="max-width: 1100px;">
-    <nav class="sigso-admin-menu" id="admin-menu">
-      <button type="button" class="sigso-admin-menu__item" data-tipo="EMPRESA">Empresas</button>
-      <button type="button" class="sigso-admin-menu__item" data-tipo="PLATAFORMA">Plataformas</button>
-      <button type="button" class="sigso-admin-menu__item" data-tipo="MODULO">Módulos</button>
-      <button type="button" class="sigso-admin-menu__item" data-tipo="TIPO">Tipos de solicitud</button>
-      <button type="button" class="sigso-admin-menu__item" data-tipo="AREA">Áreas / responsables</button>
-      <button type="button" class="sigso-admin-menu__item" data-tipo="NOTIFICACION">Notificaciones</button>
-      <button type="button" class="sigso-admin-menu__item" data-tipo="USUARIOS">Usuarios</button>
-      <button type="button" class="sigso-admin-menu__item" data-tipo="CUENTAS_PORTAL">Cuentas plataforma</button>
-      <button type="button" class="sigso-admin-menu__item" data-tipo="JEFATURAS">Jefaturas</button>
-      <button type="button" class="sigso-admin-menu__item" data-tipo="PAUSAS">Pausas activas</button>
-      <button type="button" class="sigso-admin-menu__item" data-tipo="LOGS">Automatizaciones</button>
-      <button type="button" class="sigso-admin-menu__item" data-tipo="NOTIF_PERMISOS">Alertas en vivo</button>
-      <button type="button" class="sigso-admin-menu__item" data-tipo="CANALES_ALERTA">Canales de alerta</button>
-      <button type="button" class="sigso-admin-menu__item" data-tipo="ENVIAR_ALERTA">Enviar alerta</button>
-    </nav>
+    <!-- v12.1: los 14 botones ya no van hardcodeados aca. Los pinta
+         admin.js con SigsoNav, agrupados en submodulos. Tenerlos en el
+         HTML obligaba a mantener la MISMA lista en dos archivos
+         (plataforma.html y admin.html) y a que no se salieran de sincronia. -->
+    <nav class="sigso-admin-menu sigso-nav2" id="admin-menu" aria-label="Secciones de Administración"></nav>
 
     <section id="admin-contenido" class="sigso-admin-contenido"></section>
   </main>
@@ -6467,6 +6713,972 @@ var Iconos = (function () {
 })();
 
 </script>
+  <script>
+/**
+ * navegacion.js — arquitectura de navegación de SIGSO (v12.0).
+ *
+ * PROBLEMA QUE RESUELVE
+ * Cada módulo resolvía su navegación interna por su cuenta y casi siempre con
+ * una barra horizontal de pestañas:
+ *   - calidad.js       16 secciones en 7 grupos, en UNA barra con scroll lateral
+ *   - proyectos.js      7 pestañas por proyecto
+ *   - novedades.js      3-4 vistas
+ *   - coordinacion.js   3 vistas
+ *   - admin.js         14 ítems (ya vertical) + sub-pestañas dentro de Pausas
+ * El propio CSS de Calidad dejó escrito el síntoma: "con la quinta sección la
+ * barra dejó de caber en un móvil y estiraba la página entera". Hoy son 16.
+ *
+ * QUÉ HACE ESTE ARCHIVO
+ * Da UNA sola forma de declarar y pintar la navegación interna de cualquier
+ * módulo, con la jerarquía Módulo -> Submódulo -> Ítem, en vertical.
+ *
+ * LO QUE **NO** HACE, A PROPÓSITO
+ *  - No decide permisos. Recibe un predicado `visible` y lo obedece. Quien
+ *    manda sigue siendo el backend (en Calidad, seccionesVisiblesSgc_).
+ *  - No conoce ningún módulo en particular. La arquitectura de cada uno se
+ *    declara al llamar, o se registra en SigsoNav.registrar().
+ *  - No navega solo: avisa por onSeleccion y el módulo decide qué pintar.
+ *
+ * REGLA DE PROFUNDIDAD
+ * Un submódulo con UN solo ítem que se llama igual que él no se dibuja como
+ * acordeón: se dibuja como un enlace directo. Tres niveles visibles siempre
+ * serían más ruido que ayuda (§24 del encargo: "no sobrediseñar").
+ */
+(function () {
+  'use strict';
+
+  // Submódulo de Reportes: es transversal a todos los módulos y por eso su id
+  // está fijado aquí y no lo elige cada módulo. Se dibuja destacado (§23).
+  var ID_REPORTES = 'reportes';
+
+  // Registro central de arquitecturas por módulo. Un módulo puede registrarse
+  // aquí (compartido) o pasar sus submódulos directo en cada render.
+  var registro_ = {};
+
+  /**
+   * Registra la arquitectura de un módulo.
+   * @param {string} moduloId
+   * @param {{nombre:string, submodulos:Array}} definicion
+   */
+  function registrar(moduloId, definicion) {
+    registro_[moduloId] = definicion;
+  }
+
+  function obtener(moduloId) {
+    return registro_[moduloId] || null;
+  }
+
+  /**
+   * Separa un id de ítem compuesto: "documentos:PRO" -> {seccion, argumento}.
+   * Permite que un submódulo tenga ítems que son VISTAS FILTRADAS de una misma
+   * sección ya existente, sin duplicar pantallas ni inventar endpoints.
+   */
+  function partes(itemId) {
+    var i = String(itemId || '').indexOf(':');
+    if (i === -1) return { seccion: String(itemId || ''), argumento: '' };
+    return {
+      seccion: String(itemId).slice(0, i),
+      argumento: String(itemId).slice(i + 1)
+    };
+  }
+
+  function icono_(nombre, tam) {
+    if (!nombre || !window.Iconos || !window.Iconos.svg) return '';
+    return window.Iconos.svg(nombre, { tam: tam || 16 });
+  }
+
+  function esc_(texto) {
+    return window.Componentes ? window.Componentes.escaparHtml(texto) : String(texto == null ? '' : texto);
+  }
+
+  /**
+   * ¿Qué ítems de este submódulo puede ver la persona?
+   * `visible` puede faltar (todo visible) o ser una función id -> bool.
+   */
+  function itemsVisibles_(sub, visible) {
+    var items = sub.items || [];
+    if (typeof visible !== 'function') return items.slice();
+    return items.filter(function (it) {
+      // El permiso puede declararse aparte del id: un ítem "documentos:PRO"
+      // se rige por el permiso de "documentos", no por uno propio.
+      var llave = it.permiso || partes(it.id).seccion;
+      return visible(llave, it) !== false;
+    });
+  }
+
+  /**
+   * Un submódulo con un único ítem homónimo se aplana a enlace directo.
+   * Ej.: "Inicio > Tablero" se dibuja solo como "Inicio".
+   */
+  function esPlano_(sub, items) {
+    if (items.length !== 1) return false;
+    if (sub.plano === false) return false;
+    return sub.plano === true || items[0].nombre === sub.nombre;
+  }
+
+  function badgeHtml_(valor) {
+    if (valor === undefined || valor === null || valor === '' || valor === 0) return '';
+    return '<span class="sigso-nav2__badge">' + esc_(valor) + '</span>';
+  }
+
+  /**
+   * Pinta la navegación vertical de un módulo dentro de `contenedor`.
+   *
+   * @param {Object} opts
+   *   contenedor   {HTMLElement}  dónde pintar
+   *   modulo       {string}       id del módulo (para data-attrs y registro)
+   *   submodulos   {Array}        si falta, se toma del registro
+   *   activo       {string}       id del ítem activo
+   *   visible      {Function}     (llavePermiso, item) -> bool
+   *   badges       {Object}       { itemId: valor }
+   *   onSeleccion  {Function}     (itemId, item) -> void
+   */
+  function render(opts) {
+    var cont = opts.contenedor;
+    if (!cont) return;
+
+    var def = opts.submodulos ? { submodulos: opts.submodulos } : obtener(opts.modulo);
+    if (!def) { cont.innerHTML = ''; return; }
+
+    var activo = opts.activo || '';
+    var seccionActiva = partes(activo).seccion;
+    var badges = opts.badges || {};
+
+    // Sólo submódulos con al menos un ítem visible.
+    var grupos = [];
+    (def.submodulos || []).forEach(function (sub) {
+      var items = itemsVisibles_(sub, opts.visible);
+      if (!items.length) return;
+      grupos.push({ sub: sub, items: items });
+    });
+
+    var html = grupos.map(function (g, indice) {
+      var sub = g.sub;
+      var items = g.items;
+      // Un submódulo se abre si contiene el ítem activo. Es lo que hace que al
+      // entrar por un enlace directo el usuario vea DÓNDE está parado.
+      var contieneActivo = items.some(function (it) {
+        return it.id === activo || partes(it.id).seccion === seccionActiva;
+      });
+      var destacado = sub.id === ID_REPORTES;
+
+      if (esPlano_(sub, items)) {
+        var it0 = items[0];
+        var activoPlano = it0.id === activo;
+        return '<div class="sigso-nav2__bloque' + (destacado ? ' sigso-nav2__bloque--destacado' : '') + '">' +
+          '<button type="button" class="sigso-nav2__directo' + (activoPlano ? ' sigso-nav2__directo--activo' : '') + '"' +
+            ' data-nav-item="' + esc_(it0.id) + '"' +
+            (activoPlano ? ' aria-current="page"' : '') + '>' +
+            '<span class="sigso-nav2__ico">' + icono_(sub.icono || it0.icono, 16) + '</span>' +
+            '<span class="sigso-nav2__txt">' + esc_(sub.nombre) + '</span>' +
+            badgeHtml_(badges[it0.id]) +
+          '</button>' +
+        '</div>';
+      }
+
+      var idPanel = 'nav2-' + esc_(opts.modulo || 'mod') + '-' + esc_(sub.id);
+      return '<div class="sigso-nav2__bloque' + (destacado ? ' sigso-nav2__bloque--destacado' : '') + '">' +
+        '<button type="button" class="sigso-nav2__cab' + (contieneActivo ? ' sigso-nav2__cab--abierto' : '') + '"' +
+          ' data-nav-sub="' + esc_(sub.id) + '"' +
+          ' aria-expanded="' + (contieneActivo ? 'true' : 'false') + '"' +
+          ' aria-controls="' + idPanel + '">' +
+          '<span class="sigso-nav2__ico">' + icono_(sub.icono, 16) + '</span>' +
+          '<span class="sigso-nav2__txt">' + esc_(sub.nombre) + '</span>' +
+          (sub.descripcion ? '<span class="sigso-nav2__desc">' + esc_(sub.descripcion) + '</span>' : '') +
+          '<span class="sigso-nav2__chevron" aria-hidden="true"></span>' +
+        '</button>' +
+        '<ul class="sigso-nav2__items" id="' + idPanel + '" role="list"' +
+            (contieneActivo ? '' : ' hidden') + '>' +
+          items.map(function (it) {
+            var esActivo = it.id === activo;
+            return '<li>' +
+              '<button type="button" class="sigso-nav2__item' + (esActivo ? ' sigso-nav2__item--activo' : '') + '"' +
+                ' data-nav-item="' + esc_(it.id) + '"' +
+                (esActivo ? ' aria-current="page"' : '') + '>' +
+                '<span class="sigso-nav2__punto" aria-hidden="true"></span>' +
+                '<span class="sigso-nav2__txt">' + esc_(it.nombre) + '</span>' +
+                badgeHtml_(badges[it.id]) +
+              '</button>' +
+            '</li>';
+          }).join('') +
+        '</ul>' +
+      '</div>';
+    }).join('');
+
+    cont.innerHTML = html;
+    cont.setAttribute('data-nav-modulo', opts.modulo || '');
+
+    // --- interacción ---------------------------------------------------------
+    cont.querySelectorAll('[data-nav-sub]').forEach(function (cab) {
+      cab.addEventListener('click', function () {
+        var abierto = cab.getAttribute('aria-expanded') === 'true';
+        var panel = document.getElementById(cab.getAttribute('aria-controls'));
+        cab.setAttribute('aria-expanded', abierto ? 'false' : 'true');
+        cab.classList.toggle('sigso-nav2__cab--abierto', !abierto);
+        if (panel) panel.hidden = abierto;
+      });
+    });
+
+    cont.querySelectorAll('[data-nav-item]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-nav-item');
+        if (typeof opts.onSeleccion === 'function') opts.onSeleccion(id, partes(id));
+      });
+    });
+  }
+
+  /**
+   * Migas de pan. Devuelve el HTML de "SIGSO / Módulo / Submódulo / Ítem".
+   * El último tramo NO es un botón: es donde estás.
+   */
+  function migas(opts) {
+    var def = opts.submodulos ? { submodulos: opts.submodulos } : obtener(opts.modulo);
+    // `ruta` es a dónde lleva el tramo. Sin ruta, el tramo es texto muerto.
+    // Antes de la v12.1 TODOS eran texto muerto, porque no había enrutamiento
+    // y no existía destino al que enlazar.
+    var tramos = [{ texto: 'SIGSO', ruta: 'home' }];
+    if (opts.moduloNombre) {
+      tramos.push({ texto: opts.moduloNombre, ruta: opts.modulo });
+    }
+
+    if (def) {
+      var activo = opts.activo || '';
+      (def.submodulos || []).forEach(function (sub) {
+        (sub.items || []).forEach(function (it) {
+          if (it.id !== activo) return;
+          // Un submódulo aplanado no aporta un tramo propio: sería repetir
+          // el mismo nombre dos veces seguidas.
+          // El submódulo NO lleva ruta: no es un destino, es una agrupación.
+          // Enlazarlo al primero de sus ítems mentiría sobre a dónde va.
+          if (!esPlano_(sub, sub.items || [])) tramos.push({ texto: sub.nombre });
+          tramos.push({ texto: it.nombre, ruta: opts.modulo, item: it.id });
+        });
+      });
+    }
+    if (opts.detalle) tramos.push({ texto: opts.detalle });
+
+    return '<nav class="sigso-migas" aria-label="Ruta de navegación"><ol>' +
+      tramos.map(function (t, i) {
+        var ultimo = i === tramos.length - 1;
+        if (ultimo || !t.ruta) {
+          return '<li>' + (ultimo
+            ? '<span aria-current="page">' + esc_(t.texto) + '</span>'
+            : '<span>' + esc_(t.texto) + '</span>') + '</li>';
+        }
+        // Un <a> con href real: se puede abrir en pestaña nueva, copiar el
+        // enlace y usar con el teclado sin que haya que programar nada.
+        var destino = '#/' + encodeURIComponent(t.ruta) +
+          (t.item ? '/' + encodeURIComponent(t.item) : '');
+        return '<li><a href="' + destino + '">' + esc_(t.texto) + '</a></li>';
+      }).join('') +
+      '</ol></nav>';
+  }
+
+  // ==========================================================================
+  // RUTAS (v12.1)
+  //
+  // Hasta la v12.0 SIGSO no tenia enrutamiento: los modulos se mostraban y
+  // ocultaban con clases, y plataforma.js borraba la URL con replaceState. Eso
+  // dejaba tres cosas rotas que nadie podia arreglar desde la UI:
+  //   - no habia forma de compartir un enlace a una seccion;
+  //   - el boton ATRAS del navegador sacaba al usuario de SIGSO entero;
+  //   - las migas de pan no podian ser clicables, porque no habia destino.
+  //
+  // Formato:  #/<modulo>            ->  #/calidad
+  //           #/<modulo>/<itemId>   ->  #/calidad/documentos:PRO
+  //
+  // Se usa HASH y no History API a proposito: SIGSO se publica en GitHub
+  // Pages, que sirve archivos estaticos. Con pushState, recargar en
+  // /plataforma/calidad daria 404 porque no hay servidor que reescriba.
+  var RUTA_SILENCIO = false;
+
+  function leerRuta() {
+    var h = String(window.location.hash || '').replace(new RegExp('^#/?'), '');
+    if (!h) return { modulo: '', item: '' };
+    var trozos = h.split('/');
+    return {
+      modulo: decodeURIComponent(trozos[0] || ''),
+      // El item puede traer ':' (documentos:PRO); se rearma por si el split
+      // lo partio en mas trozos de la cuenta.
+      item: decodeURIComponent(trozos.slice(1).join('/') || '')
+    };
+  }
+
+  // Escribe la ruta SIN disparar el manejador de hashchange: quien llama ya
+  // esta navegando, y volver a navegar por el evento seria un bucle.
+  function escribirRuta(modulo, item, reemplazar) {
+    var destino = '#/' + encodeURIComponent(modulo || '') +
+      (item ? '/' + encodeURIComponent(item) : '');
+    if (window.location.hash === destino) return;
+    RUTA_SILENCIO = true;
+    try {
+      // replaceState para los cambios que NO son navegacion del usuario (p.ej.
+      // restaurar la seccion por defecto al entrar): asi el boton atras no
+      // acumula pasos que el usuario nunca dio.
+      if (reemplazar && window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search + destino);
+      } else {
+        window.location.hash = destino;
+      }
+    } finally {
+      // El evento hashchange llega en el siguiente tick, no de inmediato.
+      setTimeout(function () { RUTA_SILENCIO = false; }, 0);
+    }
+  }
+
+  function alCambiarRuta(fn) {
+    window.addEventListener('hashchange', function () {
+      if (RUTA_SILENCIO) return;   // lo escribimos nosotros, no el usuario
+      fn(leerRuta());
+    });
+  }
+
+  window.SigsoRutas = {
+    leer: leerRuta,
+    escribir: escribirRuta,
+    alCambiar: alCambiarRuta
+  };
+
+  window.SigsoNav = {
+    ID_REPORTES: ID_REPORTES,
+    registrar: registrar,
+    obtener: obtener,
+    partes: partes,
+    render: render,
+    migas: migas
+  };
+})();
+
+</script>
+  <!-- v12.2: motor de reportes (catalogo, filtros, exportacion y piezas
+       visuales) compartido por todos los modulos. -->
+  <script>
+/**
+ * reportes.js — motor de reportes de SIGSO (v12.2, Fase 2 del encargo).
+ *
+ * QUÉ RESUELVE
+ * Hasta la v12.1, "Reportes" era un submódulo con un catálogo declarativo que
+ * vivía dentro de calidad.js. Funcionaba, pero cada módulo que quisiera
+ * reportes tendría que reescribir lo mismo: el catálogo, los filtros, la
+ * exportación y las piezas visuales.
+ *
+ * Este archivo es esa base compartida. NO trae reportes: trae con qué
+ * construirlos.
+ *
+ * LAS TRES REGLAS QUE LO ORDENAN
+ *
+ * 1. UN REPORTE DECLARA DE QUÉ DATO REAL SALE.
+ *    Si el dato no existe todavía, el reporte aparece igual pero marcado
+ *    PENDIENTE y diciendo qué le falta. Nunca se dibuja un gráfico con datos
+ *    inventados para llenar la pantalla: en un SGC lo que se muestra es
+ *    evidencia frente a un auditor, y un reporte que miente es peor que uno
+ *    que falta.
+ *
+ * 2. SÓLO SE MUESTRAN LOS FILTROS QUE APLICAN.
+ *    Cada reporte declara sus filtros. Un selector de "área" en un reporte
+ *    que no desagrega por área no es neutro: promete un corte que no existe.
+ *
+ * 3. NO DECIDE PERMISOS.
+ *    Igual que navegacion.js: recibe un predicado y lo obedece. El backend
+ *    sigue siendo quien manda.
+ *
+ * DEPENDENCIAS: ninguna externa. Las tendencias y los rankings se dibujan con
+ * SVG inline y CSS, no con Chart.js -- así el motor funciona también en
+ * admin.html, que no carga la librería.
+ */
+(function () {
+  'use strict';
+
+  // --- Tipos de reporte (§13 del encargo) ------------------------------------
+  // El tipo NO es decorativo: determina qué filtros tienen sentido por defecto
+  // y con qué pieza visual se dibuja el resultado.
+  var TIPOS = {
+    ESTADO: { etiqueta: 'Estado', filtros: ['periodo', 'area', 'responsable', 'estado'] },
+    CUMPLIMIENTO: { etiqueta: 'Cumplimiento', filtros: ['periodo', 'area', 'responsable'] },
+    TENDENCIA: { etiqueta: 'Tendencia', filtros: ['desde', 'hasta', 'area'] },
+    COMPARACION: { etiqueta: 'Comparación', filtros: ['periodo', 'periodo_previo', 'area'] },
+    RANKING: { etiqueta: 'Ranking', filtros: ['periodo', 'dimension'] },
+    DETALLE: { etiqueta: 'Detalle', filtros: ['periodo', 'area', 'responsable', 'estado'] }
+  };
+
+  var ETIQUETA_ESTADO = {
+    LISTO: 'Disponible',
+    SIN_DATOS: 'Sin datos aún',
+    PENDIENTE: 'Requiere desarrollo'
+  };
+  var TONO_ESTADO = { LISTO: 'ok', SIN_DATOS: 'alerta', PENDIENTE: 'neutro' };
+
+  var registro_ = {};
+
+  function esc_(t) {
+    return window.Componentes ? window.Componentes.escaparHtml(t) : String(t == null ? '' : t);
+  }
+  function icono_(n, tam) {
+    if (!n || !window.Iconos || !window.Iconos.svg) return '';
+    return window.Iconos.svg(n, { tam: tam || 16 });
+  }
+
+  /**
+   * Registra el catálogo de reportes de un módulo.
+   * @param {string} moduloId
+   * @param {{grupos:Array, abrir:Function}} definicion
+   *   grupos: [{ grupo, icono, reportes: [{id,nombre,tipo,estado,desc,fuente,falta,filtros,seccion}] }]
+   *   abrir:  function (reporteId, filtros, contenedor) -> pinta el reporte
+   */
+  function registrar(moduloId, definicion) {
+    registro_[moduloId] = definicion;
+  }
+
+  function obtener(moduloId) { return registro_[moduloId] || null; }
+
+  function buscarReporte(moduloId, reporteId) {
+    var def = obtener(moduloId);
+    if (!def) return null;
+    var hallado = null;
+    (def.grupos || []).forEach(function (g) {
+      (g.reportes || []).forEach(function (r) { if (r.id === reporteId) hallado = r; });
+    });
+    return hallado;
+  }
+
+  // ==========================================================================
+  // CATÁLOGO
+  // ==========================================================================
+  function pintarCatalogo(opts) {
+    var cont = opts.contenedor;
+    var def = obtener(opts.modulo);
+    if (!cont || !def) return;
+
+    var listos = 0, total = 0;
+    (def.grupos || []).forEach(function (g) {
+      (g.reportes || []).forEach(function (r) {
+        if (typeof opts.visible === 'function' && opts.visible(r) === false) return;
+        total++;
+        if (r.estado === 'LISTO') listos++;
+      });
+    });
+
+    cont.innerHTML =
+      (opts.encabezado || '') +
+      '<div class="sgc-cabecera"><div>' +
+        '<h2>' + esc_(def.titulo || 'Centro de reportes') + '</h2>' +
+        '<p class="sigso-ayuda">' + listos + ' de ' + total + ' reportes se arman hoy con datos reales ' +
+        'del sistema; el resto dice qué le falta.</p>' +
+      '</div></div>' +
+      (def.nota ? window.Componentes.alerta(def.nota, 'info') : '') +
+      (def.grupos || []).map(function (g) {
+        var reportes = (g.reportes || []).filter(function (r) {
+          return typeof opts.visible !== 'function' || opts.visible(r) !== false;
+        });
+        if (!reportes.length) return '';
+        return '<section class="sgc-rep-grupo">' +
+          '<h3 class="sgc-rep-grupo__tit">' + icono_(g.icono, 16) +
+            '<span>' + esc_(g.grupo) + '</span></h3>' +
+          '<div class="sgc-rep-lista">' + reportes.map(tarjeta_).join('') + '</div>' +
+        '</section>';
+      }).join('');
+
+    cont.querySelectorAll('[data-reporte]').forEach(function (card) {
+      function abrir() {
+        var id = card.getAttribute('data-reporte');
+        var seccion = card.getAttribute('data-seccion');
+        // Un reporte que ya vive dentro de una sección no se duplica: se
+        // navega a ella. Duplicarlo sería crear la segunda versión de algo
+        // que ya existe.
+        if (seccion && typeof opts.onIrASeccion === 'function') { opts.onIrASeccion(seccion); return; }
+        if (typeof opts.onAbrir === 'function') opts.onAbrir(id);
+      }
+      card.addEventListener('click', abrir);
+      card.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); }
+      });
+    });
+  }
+
+  function tarjeta_(r) {
+    var accionable = r.estado === 'LISTO';
+    var tipo = TIPOS[r.tipo];
+    return '<article class="sgc-rep-card' + (accionable ? ' sgc-rep-card--activa' : '') + '"' +
+        (accionable ? ' tabindex="0" role="button" data-reporte="' + esc_(r.id) + '"' +
+          ' data-seccion="' + esc_(r.seccion || '') + '"' : '') + '>' +
+      '<div class="sgc-rep-card__cab">' +
+        '<h4>' + esc_(r.nombre) + '</h4>' +
+        window.Componentes.badge(ETIQUETA_ESTADO[r.estado], TONO_ESTADO[r.estado]) +
+      '</div>' +
+      (tipo ? '<span class="sgc-rep-card__tipo">' + esc_(tipo.etiqueta) + '</span>' : '') +
+      '<p class="sgc-rep-card__desc">' + esc_(r.desc) + '</p>' +
+      (r.falta
+        ? '<p class="sgc-rep-card__falta"><strong>Falta:</strong> ' + esc_(r.falta) + '</p>'
+        : '<p class="sgc-rep-card__fuente">Sale de: <code>' + esc_(r.fuente || '') + '</code></p>') +
+    '</article>';
+  }
+
+  // ==========================================================================
+  // FILTROS
+  // ==========================================================================
+  // Sólo se dibujan los que el reporte declara. Cada uno sabe qué opciones
+  // ofrecer; las dinámicas (áreas, responsables) las provee el módulo.
+  function pintarFiltros(reporte, opciones, valores) {
+    var lista = reporte.filtros || (TIPOS[reporte.tipo] || {}).filtros || [];
+    if (!lista.length) return '';
+    valores = valores || {};
+    opciones = opciones || {};
+
+    var campos = lista.map(function (f) {
+      if (f === 'periodo') return select_('periodo', 'Período', opciones.periodo || PERIODOS_POR_DEFECTO, valores.periodo);
+      if (f === 'periodo_previo') return select_('periodo_previo', 'Comparar con', opciones.periodo || PERIODOS_POR_DEFECTO, valores.periodo_previo);
+      if (f === 'desde') return fecha_('desde', 'Desde', valores.desde);
+      if (f === 'hasta') return fecha_('hasta', 'Hasta', valores.hasta);
+      if (f === 'area') return select_('area', 'Área', opciones.area || [], valores.area, 'Todas');
+      if (f === 'responsable') return select_('responsable', 'Responsable', opciones.responsable || [], valores.responsable, 'Todos');
+      if (f === 'estado') return select_('estado', 'Estado', opciones.estado || [], valores.estado, 'Todos');
+      if (f === 'dimension') return select_('dimension', 'Agrupar por', opciones.dimension || [], valores.dimension);
+      if (f === 'proceso') return select_('proceso', 'Proceso', opciones.proceso || [], valores.proceso, 'Todos');
+      return '';
+    }).filter(Boolean).join('');
+
+    return '<form class="sigso-rep-filtros" id="rep-filtros">' + campos +
+      '<button type="submit" class="sigso-boton sigso-boton--secundario">Aplicar</button>' +
+      '</form>';
+  }
+
+  var PERIODOS_POR_DEFECTO = [
+    { valor: 'mes', texto: 'Este mes' },
+    { valor: 'trimestre', texto: 'Este trimestre' },
+    { valor: 'anio', texto: 'Este año' },
+    { valor: 'todo', texto: 'Todo' }
+  ];
+
+  function select_(nombre, etiqueta, opciones, valor, textoVacio) {
+    var opts = (textoVacio ? '<option value="">' + esc_(textoVacio) + '</option>' : '') +
+      (opciones || []).map(function (o) {
+        var v = o.valor !== undefined ? o.valor : o;
+        var t = o.texto !== undefined ? o.texto : o;
+        return '<option value="' + esc_(v) + '"' + (String(v) === String(valor || '') ? ' selected' : '') + '>' +
+          esc_(t) + '</option>';
+      }).join('');
+    return '<label class="sigso-rep-filtro"><span>' + esc_(etiqueta) + '</span>' +
+      '<select name="' + esc_(nombre) + '">' + opts + '</select></label>';
+  }
+
+  function fecha_(nombre, etiqueta, valor) {
+    return '<label class="sigso-rep-filtro"><span>' + esc_(etiqueta) + '</span>' +
+      '<input type="date" name="' + esc_(nombre) + '" value="' + esc_(valor || '') + '"></label>';
+  }
+
+  function leerFiltros(contenedor) {
+    var form = contenedor.querySelector('#rep-filtros');
+    if (!form) return {};
+    var out = {};
+    Array.prototype.forEach.call(form.elements, function (el) {
+      if (el.name) out[el.name] = el.value;
+    });
+    return out;
+  }
+
+  function alAplicarFiltros(contenedor, fn) {
+    var form = contenedor.querySelector('#rep-filtros');
+    if (!form) return;
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      fn(leerFiltros(contenedor));
+    });
+  }
+
+  // ==========================================================================
+  // PIEZAS VISUALES
+  // ==========================================================================
+
+  /** Fila de KPIs. Reusa Componentes.kpi para no inventar un segundo estilo. */
+  function kpis(lista) {
+    if (!lista || !lista.length) return '';
+    return '<div class="sgc-kpis">' + lista.map(function (k) {
+      return window.Componentes.kpi(k);
+    }).join('') + '</div>';
+  }
+
+  /**
+   * Tabla con exportación. `columnas` = [{campo, titulo, alinear}].
+   * Se declara la tabla una vez y de ahí sale el CSV: así lo exportado es
+   * exactamente lo que se ve, y no una segunda consulta que podría diferir.
+   */
+  function tabla(columnas, filas, opts) {
+    opts = opts || {};
+    if (!filas || !filas.length) {
+      return window.Componentes.vacio(opts.vacio || 'No hay datos para este corte.');
+    }
+    var id = opts.id || 'rep-tabla';
+    return '<div class="sigso-rep-tabla-caja">' +
+      '<table class="sigso-tabla" id="' + esc_(id) + '"><thead><tr>' +
+        columnas.map(function (c) {
+          return '<th' + (c.alinear === 'derecha' ? ' class="sigso-rep-num"' : '') + '>' + esc_(c.titulo) + '</th>';
+        }).join('') +
+      '</tr></thead><tbody>' +
+        filas.map(function (f) {
+          return '<tr>' + columnas.map(function (c) {
+            var v = f[c.campo];
+            return '<td' + (c.alinear === 'derecha' ? ' class="sigso-rep-num"' : '') + '>' +
+              (c.html ? (v == null ? '' : v) : esc_(v == null ? '' : v)) + '</td>';
+          }).join('') + '</tr>';
+        }).join('') +
+      '</tbody></table></div>';
+  }
+
+  /**
+   * Ranking: barras horizontales en CSS puro. El ancho es proporcional al
+   * máximo, y el valor va SIEMPRE escrito -- una barra sin número obliga a
+   * estimar a ojo, que es justo lo que un reporte no debe pedir.
+   */
+  function ranking(filas, opts) {
+    opts = opts || {};
+    if (!filas || !filas.length) {
+      return window.Componentes.vacio(opts.vacio || 'No hay datos para este ranking.');
+    }
+    var max = filas.reduce(function (m, f) { return Math.max(m, Number(f.valor) || 0); }, 0) || 1;
+    return '<ol class="sigso-rep-ranking">' + filas.map(function (f, i) {
+      var pct = Math.round((Number(f.valor) || 0) / max * 100);
+      return '<li class="sigso-rep-ranking__fila">' +
+        '<span class="sigso-rep-ranking__pos">' + (i + 1) + '</span>' +
+        '<span class="sigso-rep-ranking__etq">' + esc_(f.etiqueta) + '</span>' +
+        '<span class="sigso-rep-ranking__barra"><span style="width:' + pct + '%"></span></span>' +
+        '<span class="sigso-rep-ranking__val">' + esc_(f.texto !== undefined ? f.texto : f.valor) + '</span>' +
+      '</li>';
+    }).join('') + '</ol>';
+  }
+
+  /**
+   * Serie temporal en SVG inline. `puntos` = [{etiqueta, valor}].
+   * SVG y no Chart.js para que el motor sirva también donde la librería no
+   * está cargada (admin.html), y para que el reporte se imprima bien.
+   */
+  function tendencia(puntos, opts) {
+    opts = opts || {};
+    if (!puntos || puntos.length < 2) {
+      return window.Componentes.vacio(opts.vacio ||
+        'Hacen falta al menos dos períodos medidos para dibujar una tendencia.');
+    }
+    var an = 640, al = 180, m = { i: 44, d: 12, s: 16, b: 28 };
+    var valores = puntos.map(function (p) { return Number(p.valor) || 0; });
+    var max = Math.max.apply(null, valores);
+    var min = Math.min.apply(null, valores);
+    if (max === min) { max = max + 1; min = Math.max(0, min - 1); }
+    var ax = an - m.i - m.d, ay = al - m.s - m.b;
+    var x = function (i) { return m.i + (puntos.length === 1 ? ax / 2 : (i / (puntos.length - 1)) * ax); };
+    var y = function (v) { return m.s + ay - ((v - min) / (max - min)) * ay; };
+
+    var linea = puntos.map(function (p, i) {
+      return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(Number(p.valor) || 0).toFixed(1);
+    }).join(' ');
+
+    var meta = opts.meta !== undefined && opts.meta !== null && opts.meta !== ''
+      ? '<line x1="' + m.i + '" y1="' + y(Number(opts.meta)).toFixed(1) + '" x2="' + (an - m.d) +
+        '" y2="' + y(Number(opts.meta)).toFixed(1) + '" class="sigso-rep-meta"/>' +
+        '<text x="' + (an - m.d) + '" y="' + (y(Number(opts.meta)) - 4).toFixed(1) +
+        '" class="sigso-rep-meta-txt" text-anchor="end">meta ' + esc_(opts.meta) + '</text>'
+      : '';
+
+    return '<figure class="sigso-rep-tendencia">' +
+      '<svg viewBox="0 0 ' + an + ' ' + al + '" role="img" aria-label="' +
+        esc_(opts.titulo || 'Serie temporal') + '">' +
+        '<line x1="' + m.i + '" y1="' + m.s + '" x2="' + m.i + '" y2="' + (m.s + ay) + '" class="sigso-rep-eje"/>' +
+        '<line x1="' + m.i + '" y1="' + (m.s + ay) + '" x2="' + (an - m.d) + '" y2="' + (m.s + ay) + '" class="sigso-rep-eje"/>' +
+        '<text x="' + (m.i - 6) + '" y="' + (m.s + 4) + '" class="sigso-rep-tick" text-anchor="end">' + esc_(max) + '</text>' +
+        '<text x="' + (m.i - 6) + '" y="' + (m.s + ay) + '" class="sigso-rep-tick" text-anchor="end">' + esc_(min) + '</text>' +
+        meta +
+        '<path d="' + linea + '" class="sigso-rep-linea"/>' +
+        puntos.map(function (p, i) {
+          return '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(Number(p.valor) || 0).toFixed(1) +
+            '" r="3.5" class="sigso-rep-punto"><title>' + esc_(p.etiqueta) + ': ' + esc_(p.valor) + '</title></circle>';
+        }).join('') +
+        puntos.map(function (p, i) {
+          // Con muchos períodos las etiquetas se pisan: se muestra una de cada N.
+          var salto = Math.ceil(puntos.length / 8);
+          if (i % salto !== 0 && i !== puntos.length - 1) return '';
+          return '<text x="' + x(i).toFixed(1) + '" y="' + (al - 8) + '" class="sigso-rep-tick" text-anchor="middle">' +
+            esc_(p.etiqueta) + '</text>';
+        }).join('') +
+      '</svg>' +
+      // La tabla es la versión accesible del gráfico: un lector de pantalla no
+      // puede leer un <path>, y además permite exportar lo mismo que se ve.
+      '<figcaption class="sigso-rep-tendencia__pie">' +
+        puntos.map(function (p) { return esc_(p.etiqueta) + ': ' + esc_(p.valor); }).join(' · ') +
+      '</figcaption>' +
+    '</figure>';
+  }
+
+  /**
+   * Comparación de dos períodos. Muestra ambos valores y la variación, con
+   * el signo escrito -- el color solo no basta (§20 del encargo).
+   */
+  function comparacion(filas, opts) {
+    opts = opts || {};
+    if (!filas || !filas.length) {
+      return window.Componentes.vacio(opts.vacio || 'No hay datos para comparar.');
+    }
+    return '<table class="sigso-tabla sigso-rep-comparacion"><thead><tr>' +
+      '<th>' + esc_(opts.dimension || 'Concepto') + '</th>' +
+      '<th class="sigso-rep-num">' + esc_(opts.etiquetaPrevio || 'Período anterior') + '</th>' +
+      '<th class="sigso-rep-num">' + esc_(opts.etiquetaActual || 'Período actual') + '</th>' +
+      '<th class="sigso-rep-num">Variación</th>' +
+      '</tr></thead><tbody>' +
+      filas.map(function (f) {
+        var a = Number(f.previo) || 0, b = Number(f.actual) || 0;
+        var d = b - a;
+        // "mejor" invierte el sentido: en "no conformidades abiertas" bajar es bueno.
+        var bueno = opts.menosEsMejor ? d < 0 : d > 0;
+        var tono = d === 0 ? 'neutro' : (bueno ? 'ok' : 'critico');
+        var signo = d > 0 ? '+' : (d < 0 ? '−' : '=');
+        return '<tr>' +
+          '<td>' + esc_(f.etiqueta) + '</td>' +
+          '<td class="sigso-rep-num">' + esc_(a) + '</td>' +
+          '<td class="sigso-rep-num">' + esc_(b) + '</td>' +
+          '<td class="sigso-rep-num"><span class="sigso-rep-var sigso-rep-var--' + tono + '">' +
+            signo + ' ' + esc_(Math.abs(d)) + '</span></td>' +
+        '</tr>';
+      }).join('') +
+      '</tbody></table>';
+  }
+
+  // ==========================================================================
+  // CUMPLIMIENTO SOBRE ÍTEMS CON FECHA (v12.4)
+  //
+  // Se promueve al motor porque Gerencia y Jefatura la necesitan igual, y
+  // porque la REGLA de qué se cuenta no debe poder divergir entre módulos:
+  // si un panel midiera distinto que el otro, los dos números serían
+  // sospechosos y no habría forma de saber cuál creer.
+  //
+  // LA REGLA: el cumplimiento se mide SOLO sobre lo entregado CON fecha
+  // comprometida. Un ítem sin comprometer no cuenta como incumplido -- no hay
+  // promesa que romper todavía, y meterlo hundiría el porcentaje de quien
+  // recién recibió trabajo. Quien no tiene entregas queda con pct = null, que
+  // se muestra como "sin entregas" y NUNCA como 0%.
+  // ==========================================================================
+
+  function agruparCumplimiento(items, campo, etiquetaVacia) {
+    var grupos = {};
+    (items || []).forEach(function (i) {
+      var k = i[campo] || etiquetaVacia || '(sin dato)';
+      if (!grupos[k]) grupos[k] = { total: 0, entregados: 0, aTiempo: 0, abiertos: 0 };
+      grupos[k].total++;
+      if (i.fecha_terminada && i.fecha_comprometida) {
+        grupos[k].entregados++;
+        if (new Date(i.fecha_terminada) <= new Date(i.fecha_comprometida)) grupos[k].aTiempo++;
+      } else if (!i.fecha_terminada) {
+        grupos[k].abiertos++;
+      }
+    });
+    return Object.keys(grupos).map(function (k) {
+      var g = grupos[k];
+      return {
+        etiqueta: k, total: g.total, entregados: g.entregados,
+        aTiempo: g.aTiempo, abiertos: g.abiertos,
+        pct: g.entregados ? Math.round(g.aTiempo / g.entregados * 100) : null
+      };
+    }).sort(function (a, b) {
+      // Los que no tienen entregas van al final: no se pueden ordenar por un
+      // porcentaje que no existe.
+      if (a.pct === null && b.pct === null) return b.total - a.total;
+      if (a.pct === null) return 1;
+      if (b.pct === null) return -1;
+      return b.pct - a.pct;
+    });
+  }
+
+  function tablaCumplimiento(filas, etiquetaDimension) {
+    return tabla([
+      { campo: 'etiqueta', titulo: etiquetaDimension },
+      { campo: 'total', titulo: 'Ítems', alinear: 'derecha' },
+      { campo: 'abiertos', titulo: 'Abiertos', alinear: 'derecha' },
+      { campo: 'entregados', titulo: 'Entregados', alinear: 'derecha' },
+      { campo: 'aTiempo', titulo: 'A tiempo', alinear: 'derecha' },
+      { campo: 'pctTexto', titulo: 'Cumplimiento', alinear: 'derecha' }
+    ], filas.map(function (f) {
+      var o = {};
+      Object.keys(f).forEach(function (k) { o[k] = f[k]; });
+      o.pctTexto = f.pct === null ? 'sin entregas' : f.pct + '%';
+      return o;
+    }), { vacio: 'No hay ítems en este corte.' });
+  }
+
+  /**
+   * Cuerpo completo de un reporte de cumplimiento por una dimensión.
+   * @param {Array} items
+   * @param {Object} opts { campo, etiquetaVacia, dimension, etiquetaTotal }
+   */
+  function cuerpoCumplimientoPor(items, opts) {
+    opts = opts || {};
+    var filas = agruparCumplimiento(items, opts.campo, opts.etiquetaVacia);
+    var medibles = filas.filter(function (f) { return f.pct !== null; });
+    return kpis([
+      { etiqueta: opts.etiquetaTotal || (opts.dimension + 's'), valor: filas.length },
+      { etiqueta: 'Ítems considerados', valor: (items || []).length },
+      { etiqueta: 'Ya medibles', valor: medibles.length,
+        titulo: 'Sólo se puede medir cumplimiento donde hay entregas con fecha comprometida.' }
+    ]) +
+    ranking(medibles.map(function (f) {
+      return { etiqueta: f.etiqueta, valor: f.pct, texto: f.pct + '%' };
+    }), { vacio: 'Todavía no hay entregas con fecha comprometida: no hay cumplimiento que medir.' }) +
+    '<h4>Detalle</h4>' +
+    tablaCumplimiento(filas, opts.dimension || 'Grupo');
+  }
+
+  /**
+   * Entrada vs salida por mes. `serie` = [{etiqueta, creadas, cerradas, ...}],
+   * el formato que ya devuelven calcularTendenciaTemporal_ (Gerencia) y
+   * calcularTendenciaJefatura_.
+   */
+  function cuerpoEntradaSalida(serie) {
+    serie = serie || [];
+    if (!serie.length) return window.Componentes.vacio('Sin datos de los últimos meses.');
+    var entraron = serie.reduce(function (s, t) { return s + (Number(t.creadas) || 0); }, 0);
+    var cerradas = serie.reduce(function (s, t) { return s + (Number(t.cerradas) || 0); }, 0);
+    var saldo = entraron - cerradas;
+    return kpis([
+      { etiqueta: 'Entraron', valor: entraron },
+      { etiqueta: 'Se cerraron', valor: cerradas },
+      { etiqueta: 'Saldo de la cola', valor: (saldo > 0 ? '+' : '') + saldo, alerta: saldo > 0,
+        titulo: 'Positivo = entra más de lo que sale: la cola crece.' }
+    ]) +
+    '<h4>Entradas por mes</h4>' +
+    tendencia(serie.map(function (t) { return { etiqueta: t.etiqueta, valor: t.creadas }; }),
+      { titulo: 'Creadas por mes' }) +
+    '<h4>Cierres por mes</h4>' +
+    tendencia(serie.map(function (t) { return { etiqueta: t.etiqueta, valor: t.cerradas }; }),
+      { titulo: 'Cerradas por mes' }) +
+    '<h4>Detalle</h4>' +
+    tabla([
+      { campo: 'etiqueta', titulo: 'Mes' },
+      { campo: 'creadas', titulo: 'Entraron', alinear: 'derecha' },
+      { campo: 'cerradas', titulo: 'Se cerraron', alinear: 'derecha' }
+    ], serie);
+  }
+
+  /**
+   * Resbalón de compromisos: ítems que movieron su fecha comprometida o que
+   * se reabrieron. Vive en el motor porque Gerencia y Jefatura lo miden
+   * igual desde la v12.5, cuando Jefatura.getPanel empezó a exponer los
+   * mismos campos.
+   *
+   * La REAPERTURA importa aparte del re-compromiso: es la medida de "se
+   * entregó mal", y el % de cumplimiento no la captura -- un cierre rápido
+   * que se reabre tres veces igual cuenta como "a tiempo" ahí.
+   *
+   * `columnasExtra` deja que cada módulo agregue sus propias dimensiones
+   * (Gerencia tiene área; Jefatura no).
+   */
+  function cuerpoResbalon(items, opts) {
+    opts = opts || {};
+    items = items || [];
+    var movidos = items.filter(function (i) {
+      return Number(i.re_compromisos) > 0 || Number(i.reaperturas) > 0;
+    }).sort(function (a, b) {
+      return (Number(b.re_compromisos) + Number(b.reaperturas)) -
+             (Number(a.re_compromisos) + Number(a.reaperturas));
+    });
+    var totalRe = items.reduce(function (s, i) { return s + (Number(i.re_compromisos) || 0); }, 0);
+    var totalReab = items.reduce(function (s, i) { return s + (Number(i.reaperturas) || 0); }, 0);
+    var columnas = [{ campo: 'titulo', titulo: 'Ítem' }]
+      .concat(opts.columnasExtra || [])
+      .concat([
+        { campo: 'desarrollador_nombre', titulo: 'Responsable' },
+        { campo: 're_compromisos', titulo: 'Movió fecha', alinear: 'derecha' },
+        { campo: 'reaperturas', titulo: 'Reaperturas', alinear: 'derecha' },
+        { campo: 'fecha_original', titulo: 'Fecha original' },
+        { campo: 'fecha_comprometida', titulo: 'Fecha vigente' }
+      ]);
+    return kpis([
+      { etiqueta: 'Ítems que movieron fecha',
+        valor: items.filter(function (i) { return Number(i.re_compromisos) > 0; }).length },
+      { etiqueta: 'Re-compromisos', valor: totalRe },
+      { etiqueta: 'Reaperturas', valor: totalReab, alerta: totalReab > 0,
+        titulo: 'Un ítem que se cerró y volvió a abrirse: el % de cumplimiento no lo captura.' }
+    ]) +
+    tabla(columnas, movidos, { vacio: 'Ningún ítem movió su fecha ni se reabrió. Nada que revisar.' });
+  }
+  // ==========================================================================
+  // EXPORTACIÓN (§13)
+  // ==========================================================================
+  // El CSV sale de la TABLA YA PINTADA, no de una segunda consulta: así lo que
+  // se descarga es exactamente lo que la persona está viendo. Si saliera de
+  // otra consulta podrían diferir, y en un reporte de gestión eso es grave.
+  function barraAcciones(opts) {
+    opts = opts || {};
+    return '<div class="sigso-rep-acciones">' +
+      (opts.volver !== false
+        ? '<button type="button" class="sigso-boton--sutil js-rep-volver">← Centro de reportes</button>' : '') +
+      '<span class="sigso-rep-acciones__sep"></span>' +
+      '<button type="button" class="sigso-boton--secundario js-rep-csv">Exportar CSV</button>' +
+      '<button type="button" class="sigso-boton--secundario js-rep-imprimir">Imprimir / PDF</button>' +
+    '</div>';
+  }
+
+  function wireAcciones(contenedor, opts) {
+    opts = opts || {};
+    contenedor.querySelectorAll('.js-rep-volver').forEach(function (b) {
+      b.addEventListener('click', function () { if (opts.onVolver) opts.onVolver(); });
+    });
+    contenedor.querySelectorAll('.js-rep-csv').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var tabla = contenedor.querySelector('table');
+        if (!tabla) {
+          window.Componentes.aviso({ texto: 'Este reporte no tiene una tabla que exportar.', tipo: 'aviso' });
+          return;
+        }
+        descargarCsv_(tabla, opts.nombreArchivo || 'sigso-reporte');
+      });
+    });
+    contenedor.querySelectorAll('.js-rep-imprimir').forEach(function (b) {
+      b.addEventListener('click', function () { window.print(); });
+    });
+  }
+
+  function descargarCsv_(tabla, nombre) {
+    var lineas = [];
+    Array.prototype.forEach.call(tabla.querySelectorAll('tr'), function (tr) {
+      var celdas = Array.prototype.map.call(tr.querySelectorAll('th,td'), function (c) {
+        // El texto visible, no el HTML: lo que se exporta es lo que se lee.
+        return '"' + String(c.innerText || '').trim().replace(/"/g, '""') + '"';
+      });
+      if (celdas.length) lineas.push(celdas.join(','));
+    });
+    // El primer caracter del literal de abajo es un BOM (U+FEFF). Es
+    // INVISIBLE en el editor, asi que no lo borres: sin el, Excel en Windows
+    // abre el CSV con los acentos rotos y hay que importarlo a mano.
+    var blob = new Blob(['﻿' + lineas.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = nombre + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  }
+
+  window.SigsoReportes = {
+    TIPOS: TIPOS,
+    registrar: registrar,
+    obtener: obtener,
+    buscarReporte: buscarReporte,
+    pintarCatalogo: pintarCatalogo,
+    pintarFiltros: pintarFiltros,
+    leerFiltros: leerFiltros,
+    alAplicarFiltros: alAplicarFiltros,
+    kpis: kpis,
+    tabla: tabla,
+    ranking: ranking,
+    tendencia: tendencia,
+    comparacion: comparacion,
+    agruparCumplimiento: agruparCumplimiento,
+    tablaCumplimiento: tablaCumplimiento,
+    cuerpoCumplimientoPor: cuerpoCumplimientoPor,
+    cuerpoEntradaSalida: cuerpoEntradaSalida,
+    cuerpoResbalon: cuerpoResbalon,
+    barraAcciones: barraAcciones,
+    wireAcciones: wireAcciones
+  };
+})();
+
+</script>
   <!-- v6.4: panel "Mi perfil" + identidad en el header. -->
   <script>
 /**
@@ -7144,12 +8356,106 @@ var Iconos = (function () {
   // sesion valida -- si se disparara al cargar la pagina, pediria catalogos
   // antes del login. En admin.html (standalone, identidad Google) el
   // comportamiento de siempre no cambia.
+
+  // ==========================================================================
+  // v12.1 — Arquitectura del módulo Administración (navegacion.js)
+  //
+  // Antes: 14 botones planos en una columna, sin agrupar. Ya era vertical (fue
+  // el único módulo que nació así), pero una lista de 14 sin jerarquía obliga
+  // a leerla entera para encontrar algo.
+  //
+  // El agrupamiento NO inventa pantallas: los 14 ítems son los mismos 14
+  // `data-tipo` que ya existían, con el mismo comportamiento. Lo único que
+  // cambia es cómo se ordenan.
+  //
+  // Los ids son los `data-tipo` de siempre, así que el resto de admin.js
+  // (renderCatalogo_, renderUsuarios_, ...) no se entera del cambio.
+  var ARQUITECTURA_ADMIN = [
+    { id: 'organizacion', nombre: 'Organización', icono: 'empresa', items: [
+      { id: 'EMPRESA', nombre: 'Empresas' },
+      { id: 'PLATAFORMA', nombre: 'Plataformas' },
+      { id: 'AREA', nombre: 'Áreas / responsables' },
+      { id: 'JEFATURAS', nombre: 'Jefaturas' }
+    ] },
+    { id: 'catalogos', nombre: 'Catálogos', icono: 'lista', items: [
+      { id: 'MODULO', nombre: 'Módulos' },
+      { id: 'TIPO', nombre: 'Tipos de solicitud' }
+    ] },
+    { id: 'accesos', nombre: 'Accesos', icono: 'llave', items: [
+      { id: 'USUARIOS', nombre: 'Usuarios' },
+      { id: 'CUENTAS_PORTAL', nombre: 'Cuentas plataforma' }
+    ] },
+    { id: 'comunicaciones', nombre: 'Comunicaciones', icono: 'campana', items: [
+      { id: 'NOTIFICACION', nombre: 'Notificaciones' },
+      { id: 'NOTIF_PERMISOS', nombre: 'Alertas en vivo' },
+      { id: 'CANALES_ALERTA', nombre: 'Canales de alerta' },
+      { id: 'ENVIAR_ALERTA', nombre: 'Enviar alerta' }
+    ] },
+    { id: 'operacion', nombre: 'Operación', icono: 'reloj', items: [
+      { id: 'PAUSAS', nombre: 'Pausas activas' }
+    ] },
+    // Submódulo transversal. NO se inventa contenido: "Automatizaciones" ya
+    // era un reporte (el historial de ejecuciones de los triggers), sólo que
+    // estaba suelto entre los catálogos. Aquí queda donde corresponde.
+    // v12.2: Reportes deja de ser un atajo a Automatizaciones y pasa a ser
+    // el centro de reportes del modulo, sobre el motor compartido.
+    { id: 'reportes', nombre: 'Reportes', icono: 'grafico', plano: true,
+      descripcion: 'Entregabilidad, salud del sistema y accesos', items: [
+      { id: 'REPORTES', nombre: 'Centro de reportes' }
+    ] }
+  ];
+
   window.SigsoAdmin = {
     abrir: function () {
-      var primero = document.querySelector('.sigso-admin-menu__item');
-      if (primero) primero.click();
+      // v12.1: si la URL pedia una seccion (#/administracion/USUARIOS) se abre
+      // esa; si no, la primera de la arquitectura. Se valida que exista: una
+      // URL escrita a mano no puede inventar una seccion.
+      var pedida = (window.SigsoShell && SigsoShell.tomarItemDeRuta)
+        ? SigsoShell.tomarItemDeRuta() : '';
+      irASeccionAdmin_(existeSeccionAdmin_(pedida) ? pedida : ARQUITECTURA_ADMIN[0].items[0].id);
     }
   };
+
+  var seccionAdminActiva_ = '';
+
+  function existeSeccionAdmin_(id) {
+    if (!id) return false;
+    return ARQUITECTURA_ADMIN.some(function (sub) {
+      return sub.items.some(function (it) { return it.id === id; });
+    });
+  }
+
+  function pintarNavAdmin_() {
+    var cont = document.getElementById('admin-menu');
+    if (!cont || !window.SigsoNav) return;
+    SigsoNav.render({
+      contenedor: cont,
+      modulo: 'administracion',
+      submodulos: ARQUITECTURA_ADMIN,
+      activo: seccionAdminActiva_,
+      onSeleccion: function (id) { irASeccionAdmin_(id); }
+    });
+  }
+
+  function irASeccionAdmin_(tipo) {
+    seccionAdminActiva_ = tipo;
+    // Salir de Reportes cierra el reporte abierto: volver a entrar debe
+    // mostrar el catalogo, no el ultimo reporte que se miro.
+    if (tipo !== 'REPORTES') reporteAdminAbierto_ = null;
+    pintarNavAdmin_();
+    cerrarDrawerAdmin_();
+    if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(tipo);
+    if (tipo === 'USUARIOS') renderUsuarios_();
+    else if (tipo === 'CUENTAS_PORTAL') renderCuentasPortal_();
+    else if (tipo === 'REPORTES') renderReportes_();
+    else if (tipo === 'LOGS') renderLogs_();
+    else if (tipo === 'JEFATURAS') renderJefaturas_();
+    else if (tipo === 'PAUSAS') renderPausas_();
+    else if (tipo === 'NOTIF_PERMISOS') renderPermisosNotif_();
+    else if (tipo === 'CANALES_ALERTA') renderCanalesAlerta_();
+    else if (tipo === 'ENVIAR_ALERTA') renderEnviarAlerta_();
+    else renderCatalogo_(tipo);
+  }
 
   document.addEventListener('DOMContentLoaded', function () {
     if (typeof renderHeaderSigso === 'function') {
@@ -7159,39 +8465,13 @@ var Iconos = (function () {
     if (window.SigsoPerfil) {
       SigsoPerfil.montarHeaderUsuario();
     }
-    document.querySelectorAll('.sigso-admin-menu__item').forEach(function (boton) {
-      boton.addEventListener('click', function () {
-        document.querySelectorAll('.sigso-admin-menu__item').forEach(function (b) {
-          b.classList.remove('sigso-admin-menu__item--activo');
-        });
-        boton.classList.add('sigso-admin-menu__item--activo');
-        cerrarDrawerAdmin_();
-        var tipo = boton.getAttribute('data-tipo');
-        if (tipo === 'USUARIOS') {
-          renderUsuarios_();
-        } else if (tipo === 'CUENTAS_PORTAL') {
-          renderCuentasPortal_();
-        } else if (tipo === 'LOGS') {
-          renderLogs_();
-        } else if (tipo === 'JEFATURAS') {
-          renderJefaturas_();
-        } else if (tipo === 'PAUSAS') {
-          renderPausas_();
-        } else if (tipo === 'NOTIF_PERMISOS') {
-          renderPermisosNotif_();
-        } else if (tipo === 'CANALES_ALERTA') {
-          renderCanalesAlerta_();
-        } else if (tipo === 'ENVIAR_ALERTA') {
-          renderEnviarAlerta_();
-        } else {
-          renderCatalogo_(tipo);
-        }
-      });
-    });
+    // v12.1: el menu de 14 botones planos lo reemplaza la navegacion vertical
+    // agrupada (SigsoNav). El cableado ya no vive aca: lo hace onSeleccion.
+    pintarNavAdmin_();
     // #vista-shell solo existe en plataforma.html: ahi el arranque lo hace
     // SigsoAdmin.abrir() al entrar al modulo.
     if (!document.getElementById('vista-shell')) {
-      document.querySelector('.sigso-admin-menu__item').click();
+      window.SigsoAdmin.abrir();
     }
     wireDrawerAdmin_();
   });
@@ -8550,6 +9830,221 @@ var Iconos = (function () {
       }
       document.getElementById('resultado-admin').innerHTML = Componentes.alerta(respuesta.message || 'Error al guardar.', 'error');
     });
+  }
+
+
+  // ==========================================================================
+  // v12.2 — Reportes de Administración (sobre SigsoReportes)
+  //
+  // Segundo módulo que usa el motor. Sirve de prueba de que la base es
+  // reutilizable de verdad: acá no se reescribe ni el catálogo, ni los
+  // filtros, ni la exportación, ni las piezas visuales.
+  //
+  // Todos salen de datos que YA existen. "Entregabilidad" y "Por canal" son
+  // agregaciones de LOG_NOTIFICACIONES, la misma tabla que alimenta la vista
+  // de Automatizaciones: no se pide nada nuevo al backend.
+  var REPORTES_ADMIN = [
+    { grupo: 'Notificaciones', icono: 'campana', reportes: [
+      { id: 'notif-entregabilidad', nombre: 'Entregabilidad', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
+        desc: 'Cuántas notificaciones salieron bien, cuántas fallaron y cuántas siguen reintentando.',
+        fuente: 'listarLogs', filtros: [] },
+      { id: 'notif-evento', nombre: 'Fallas por evento', tipo: 'RANKING', estado: 'LISTO',
+        desc: 'Qué eventos concentran los problemas de envío.',
+        fuente: 'listarLogs', filtros: [] },
+      { id: 'notif-detalle', nombre: 'Automatizaciones (detalle)', tipo: 'DETALLE', estado: 'LISTO',
+        desc: 'El historial crudo de envíos, tal como lo registra el sistema.',
+        fuente: 'listarLogs', seccion: 'LOGS' }
+    ] },
+    { grupo: 'Salud del sistema', icono: 'escudo', reportes: [
+      { id: 'sis-esquema', nombre: 'Estado del esquema', tipo: 'ESTADO', estado: 'LISTO',
+        desc: 'Versión del backend y si alguna hoja o columna de la planilla falta.',
+        fuente: 'getEstadoSistema', filtros: [] }
+    ] },
+    { grupo: 'Accesos', icono: 'llave', reportes: [
+      { id: 'acc-modulos', nombre: 'Cuentas por módulo', tipo: 'RANKING', estado: 'LISTO',
+        desc: 'Cuántas cuentas de la plataforma tienen habilitado cada módulo.',
+        fuente: 'listarCuentasPortal', filtros: [] },
+      { id: 'acc-inactivas', nombre: 'Cuentas sin uso', tipo: 'ESTADO', estado: 'PENDIENTE',
+        desc: 'Cuentas creadas que nunca iniciaron sesión, o que llevan meses sin entrar.',
+        falta: 'SESIONES_PORTAL guarda la sesión vigente, no el último acceso histórico de cada cuenta. Requiere registrar la fecha del último ingreso en CUENTAS_PORTAL.' }
+    ] }
+  ];
+
+  var reporteAdminAbierto_ = null;
+
+  function registrarReportesAdmin_() {
+    if (!window.SigsoReportes || registrarReportesAdmin_.hecho) return;
+    SigsoReportes.registrar('administracion', {
+      titulo: 'Reportes de Administración',
+      nota: 'Todos salen de datos que el sistema ya guarda. Los marcados como ' +
+        '"Requiere desarrollo" indican qué información habría que empezar a registrar.',
+      grupos: REPORTES_ADMIN
+    });
+    registrarReportesAdmin_.hecho = true;
+  }
+
+  var ACCION_POR_REPORTE_ADMIN = {
+    'notif-entregabilidad': 'listarLogs',
+    'notif-evento': 'listarLogs',
+    'sis-esquema': 'getEstadoSistema',
+    'acc-modulos': 'listarCuentasPortal'
+  };
+
+  function renderReportes_() {
+    var cont = document.getElementById('admin-contenido');
+    if (!cont) return;
+    registrarReportesAdmin_();
+    if (!window.SigsoReportes) {
+      cont.innerHTML = Componentes.alerta('El motor de reportes no está disponible.', 'error');
+      return;
+    }
+    if (reporteAdminAbierto_) { abrirReporteAdmin_(cont); return; }
+    SigsoReportes.pintarCatalogo({
+      contenedor: cont,
+      modulo: 'administracion',
+      onAbrir: function (id) { reporteAdminAbierto_ = id; renderReportes_(); },
+      onIrASeccion: function (seccion) { irASeccionAdmin_(seccion); }
+    });
+  }
+
+  function abrirReporteAdmin_(cont) {
+    var r = SigsoReportes.buscarReporte('administracion', reporteAdminAbierto_);
+    var accion = ACCION_POR_REPORTE_ADMIN[reporteAdminAbierto_];
+    if (!r || !accion) { reporteAdminAbierto_ = null; renderReportes_(); return; }
+
+    cont.innerHTML = Componentes.cargando('Armando el reporte...');
+    var datos = accion === 'listarLogs' ? { limite: 500 } : {};
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, accion, datos).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el reporte.', 'error');
+        return;
+      }
+      pintarReporteAdmin_(cont, r, respuesta.data);
+    }).catch(mostrarErrorAdmin_);
+  }
+
+  function pintarReporteAdmin_(cont, r, data) {
+    var cuerpo = '';
+    if (r.id === 'notif-entregabilidad') cuerpo = cuerpoEntregabilidad_(data);
+    else if (r.id === 'notif-evento') cuerpo = cuerpoFallasPorEvento_(data);
+    else if (r.id === 'sis-esquema') cuerpo = cuerpoEstadoEsquema_(data);
+    else if (r.id === 'acc-modulos') cuerpo = cuerpoCuentasPorModulo_(data);
+
+    cont.innerHTML =
+      SigsoReportes.barraAcciones({}) +
+      '<h2>' + Componentes.escaparHtml(r.nombre) + '</h2>' +
+      '<p class="sigso-ayuda">' + Componentes.escaparHtml(r.desc) + '</p>' +
+      cuerpo;
+
+    SigsoReportes.wireAcciones(cont, {
+      nombreArchivo: 'sigso-admin-' + r.id,
+      onVolver: function () { reporteAdminAbierto_ = null; renderReportes_(); }
+    });
+  }
+
+  // Un envío se considera OK cuando el sistema no registró error ni dejó el
+  // item reintentando. No se inventa una categoría "parcial": el log tiene
+  // tres estados y son esos tres los que se muestran.
+  function cuerpoEntregabilidad_(logs) {
+    var filas = Array.isArray(logs) ? logs : [];
+    if (!filas.length) return Componentes.vacio('Todavía no hay envíos registrados.');
+    var porResultado = {};
+    filas.forEach(function (l) {
+      var k = l.resultado || '(sin resultado)';
+      porResultado[k] = (porResultado[k] || 0) + 1;
+    });
+    var ok = porResultado.OK || porResultado.ENVIADO || 0;
+    var reintentando = porResultado.PENDIENTE_REINTENTO || 0;
+    var pct = filas.length ? Math.round(ok / filas.length * 100) : 0;
+
+    return SigsoReportes.kpis([
+      { etiqueta: 'Envíos registrados', valor: filas.length },
+      { etiqueta: 'Entregados', valor: ok },
+      { etiqueta: 'Reintentando', valor: reintentando, alerta: reintentando > 0 },
+      { etiqueta: 'Tasa de entrega', valor: pct + '%' }
+    ]) +
+    SigsoReportes.tabla([
+      { campo: 'resultado', titulo: 'Resultado' },
+      { campo: 'total', titulo: 'Envíos', alinear: 'derecha' },
+      { campo: 'pct', titulo: 'Del total', alinear: 'derecha' }
+    ], Object.keys(porResultado).sort(function (a, b) {
+      return porResultado[b] - porResultado[a];
+    }).map(function (k) {
+      return {
+        resultado: k, total: porResultado[k],
+        pct: Math.round(porResultado[k] / filas.length * 100) + '%'
+      };
+    }));
+  }
+
+  function cuerpoFallasPorEvento_(logs) {
+    var filas = Array.isArray(logs) ? logs : [];
+    var fallidos = filas.filter(function (l) {
+      return l.resultado && l.resultado !== 'OK' && l.resultado !== 'ENVIADO';
+    });
+    if (!fallidos.length) {
+      return Componentes.vacio('Ningún envío con problemas en los últimos registros. Nada que rankear.');
+    }
+    var porEvento = {};
+    fallidos.forEach(function (l) {
+      var k = l.evento || '(sin evento)';
+      porEvento[k] = (porEvento[k] || 0) + 1;
+    });
+    return SigsoReportes.ranking(
+      Object.keys(porEvento).sort(function (a, b) { return porEvento[b] - porEvento[a]; })
+        .map(function (k) { return { etiqueta: k, valor: porEvento[k] }; })
+    ) +
+    '<h3>Detalle</h3>' +
+    SigsoReportes.tabla([
+      { campo: 'timestamp', titulo: 'Fecha' },
+      { campo: 'evento', titulo: 'Evento' },
+      { campo: 'destinatario', titulo: 'Destinatario' },
+      { campo: 'resultado', titulo: 'Resultado' },
+      { campo: 'reintentos', titulo: 'Reintentos', alinear: 'derecha' }
+    ], fallidos.slice(0, 100));
+  }
+
+  function cuerpoEstadoEsquema_(data) {
+    var e = (data && data.esquema) || {};
+    var problemas = [];
+    // diagnosticarEsquema_ devuelve la forma que use el backend; se recorre
+    // sin asumir nombres de campo, para no romper si cambia.
+    Object.keys(e).forEach(function (k) {
+      var v = e[k];
+      if (Array.isArray(v) && v.length) {
+        v.forEach(function (item) {
+          problemas.push({ tipo: k, detalle: typeof item === 'string' ? item : JSON.stringify(item) });
+        });
+      }
+    });
+    return SigsoReportes.kpis([
+      { etiqueta: 'Versión del backend', valor: (data && data.version_backend) || '—' },
+      { etiqueta: 'Problemas de esquema', valor: problemas.length, alerta: problemas.length > 0 }
+    ]) +
+    (problemas.length
+      ? SigsoReportes.tabla(
+          [{ campo: 'tipo', titulo: 'Tipo' }, { campo: 'detalle', titulo: 'Detalle' }], problemas)
+      : Componentes.vacio('La planilla tiene todas las hojas y columnas que el backend espera.'));
+  }
+
+  function cuerpoCuentasPorModulo_(data) {
+    var cuentas = (data && data.cuentas) || (Array.isArray(data) ? data : []);
+    if (!cuentas.length) return Componentes.vacio('No hay cuentas de plataforma cargadas.');
+    var porModulo = {};
+    cuentas.forEach(function (c) {
+      var mods = c.modulos;
+      if (typeof mods === 'string') { try { mods = JSON.parse(mods); } catch (err) { mods = []; } }
+      (mods || []).forEach(function (m) { porModulo[m] = (porModulo[m] || 0) + 1; });
+    });
+    return SigsoReportes.kpis([
+      { etiqueta: 'Cuentas', valor: cuentas.length },
+      { etiqueta: 'Módulos en uso', valor: Object.keys(porModulo).length }
+    ]) +
+    SigsoReportes.ranking(
+      Object.keys(porModulo).sort(function (a, b) { return porModulo[b] - porModulo[a]; })
+        .map(function (m) { return { etiqueta: m, valor: porModulo[m] }; }),
+      { vacio: 'Ninguna cuenta tiene módulos asignados.' }
+    );
   }
 
 })();
