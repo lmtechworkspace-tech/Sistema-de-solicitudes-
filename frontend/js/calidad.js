@@ -15,7 +15,10 @@
 (function () {
   window.SigsoCalidad = {
     cargar: function () {
-      seccionActiva_ = 'documentos';
+      // v11.0 Fase 7: se entra por el tablero. Quien no pueda verlo cae a
+      // Documentos solo -- lo resuelve cargarTablero_ con la respuesta del
+      // backend, no adivinando el rol desde aca.
+      seccionActiva_ = 'tablero';
       documentoActivoId_ = null;
       personaActivaId_ = null;
       render_();
@@ -43,6 +46,8 @@
       if (revisionActivaId_) abrirRevision_(revisionActivaId_); else cargarRevisiones_();
     } else if (seccionActiva_ === 'objetivos') {
       if (objetivoActivoId_) abrirObjetivo_(objetivoActivoId_); else cargarObjetivos_();
+    } else if (seccionActiva_ === 'tablero') {
+      cargarTablero_();
     } else if (seccionActiva_ === 'indicadores') {
       cargarIndicadores_();
     } else if (seccionActiva_ === 'procesos') {
@@ -67,6 +72,11 @@
   // Direccion) + un cluster de Administracion para Accesos. Cada boton lleva
   // icono (antes no tenia ninguno) para escanear la barra sin leer texto.
   var GRUPOS_SECCIONES_SGC = [
+    // v11.0 Fase 7: la portada. Grupo propio y primero porque es donde
+    // se entra a ver como esta el sistema antes de ir a nada concreto.
+    { label: 'Inicio', items: [
+      { id: 'tablero', texto: 'Tablero', icono: 'estado' }
+    ] },
     { label: 'Documentación', items: [
       { id: 'documentos', texto: 'Documentos', icono: 'documento' }
     ] },
@@ -176,7 +186,7 @@
   };
   var TIPOS = ['DOC', 'PRO', 'INS', 'FO', 'EXTERNO'];
 
-  var seccionActiva_ = 'documentos';
+  var seccionActiva_ = 'tablero';
   // v10.0 "Accesos SGC": mapa de secciones que la persona puede abrir. Llega
   // del backend en listarDocumentos; hasta entonces null (barraSecciones_ lo
   // maneja). Controla que pestanas se muestran.
@@ -4891,6 +4901,140 @@
   // "modo auditoría" es la ficha de cada cláusula: la lista de registros que
   // la sustentan, con boton para bajarla en PDF -- el auditor pide "muéstreme
   // 7.2" y sale en un clic.
+
+  // ==========================================================================
+  // v11.0 Fase 7: el tablero del SGC.
+  //
+  // Responde de una mirada las preguntas del Encargado: dónde estamos, qué
+  // está vencido, qué viene. Cada alerta sabe a qué sección lleva: una lista
+  // de problemas sin el camino para resolverlos es una lista de reproches.
+  // ==========================================================================
+
+  var SEV_TONO = { CRITICA: 'critico', ALTA: 'alerta', MEDIA: 'info' };
+  var SEV_ETIQUETA = { CRITICA: 'Crítico', ALTA: 'Requiere atención', MEDIA: 'Próximo' };
+
+  function cargarTablero_() {
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Calculando el estado del SGC...');
+    api_('resumenTableroSgc', {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        // Quien no gobierna el SGC no tiene portada: se le lleva a Documentos,
+        // que es lo que sí le corresponde.
+        seccionActiva_ = 'documentos';
+        cargarListado_();
+        return;
+      }
+      if (respuesta.data.secciones_visibles) seccionesVisibles_ = respuesta.data.secciones_visibles;
+      pintarTablero_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
+      wireSecciones_(cont);
+    });
+  }
+
+  function pintarTablero_(cont, data) {
+    var s = data.salud || {};
+    var c = data.conteos || {};
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      (data.alcance
+        ? '<p class="sigso-ayuda">' + Componentes.escaparHtml(data.alcance.razon_social) +
+          (data.alcance.nombre_fantasia ? ' (' + Componentes.escaparHtml(data.alcance.nombre_fantasia) + ')' : '') +
+          ' — ' + Componentes.escaparHtml(data.alcance.norma) +
+          ', alcance v' + Componentes.escaparHtml(data.alcance.version) + '.</p>'
+        : '<p class="sigso-ayuda">El alcance del SGC todavía no está declarado.</p>') +
+      '</div>';
+
+    // --- salud -----------------------------------------------------------
+    var barras = (s.capitulos || []).map(function (cap) {
+      var tono = cap.pct >= 80 ? 'ok' : (cap.pct >= 40 ? 'alerta' : 'critico');
+      return '<div class="sgc-cap">' +
+        '<div class="sgc-cap__cab">' +
+          '<span class="sgc-cap__num">' + Componentes.escaparHtml(cap.numero) + '</span>' +
+          '<span class="sgc-cap__titulo">' + Componentes.escaparHtml(cap.titulo) + '</span>' +
+          '<span class="sgc-cap__pct">' + cap.pct + '%</span>' +
+        '</div>' +
+        '<div class="sgc-cap__barra"><span class="sgc-cap__relleno sgc-cap__relleno--' + tono +
+          '" style="width:' + cap.pct + '%"></span></div>' +
+        '<span class="sgc-cap__detalle">' + cap.completo + ' completas · ' + cap.parcial +
+          ' parciales · ' + cap.faltante + ' faltantes' +
+          (cap.no_aplica ? ' · ' + cap.no_aplica + ' no aplica' : '') + '</span>' +
+      '</div>';
+    }).join('');
+
+    var salud = '<div class="sgc-salud">' +
+      '<div class="sgc-salud__global">' +
+        '<span class="sgc-salud__pct">' + (s.pct || 0) + '%</span>' +
+        '<span class="sgc-salud__etiqueta">sobre ' + (s.aplicables || 0) + ' cláusulas aplicables' +
+          (s.no_aplica ? ' (' + s.no_aplica + ' excluida(s))' : '') + '</span>' +
+      '</div>' +
+      '<div class="sgc-salud__capitulos">' + barras + '</div>' +
+      '</div>' +
+      Componentes.alerta(s.aviso || '', 'aviso');
+
+    // --- alertas ----------------------------------------------------------
+    var alertas = '';
+    if (!(data.alertas || []).length) {
+      alertas = '<h4 class="sgc-sub">Alertas y pendientes</h4>' +
+        Componentes.alerta('No hay nada vencido ni por vencer. El SGC está al día.', 'exito');
+    } else {
+      alertas = '<h4 class="sgc-sub">Alertas y pendientes (' + data.alertas.length + ')</h4>' +
+        '<div class="sgc-lista">' + data.alertas.map(function (a) {
+          return '<button type="button" class="sgc-doc js-tab-ir" data-seccion="' +
+            Componentes.escaparHtml(a.seccion) + '">' +
+            '<div class="sgc-doc__linea">' +
+              '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(a.titulo) + '</span>' +
+              Componentes.badge(String(a.total), SEV_TONO[a.severidad] || 'neutro') +
+              Componentes.badge(SEV_ETIQUETA[a.severidad] || a.severidad, SEV_TONO[a.severidad] || 'neutro') +
+            '</div>' +
+            '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(a.detalle) + '</span>' +
+          '</button>';
+        }).join('') + '</div>';
+    }
+
+    // --- hitos -------------------------------------------------------------
+    var hitos = '';
+    if ((data.hitos || []).length) {
+      hitos = '<h4 class="sgc-sub">Próximos hitos</h4>' +
+        '<div class="sgc-lista">' + data.hitos.map(function (h) {
+          return '<button type="button" class="sgc-doc js-tab-ir" data-seccion="' +
+            Componentes.escaparHtml(h.seccion) + '">' +
+            '<div class="sgc-doc__linea">' +
+              '<span class="sgc-doc__codigo">' + fechaCorta_(h.fecha) + '</span>' +
+              '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(h.titulo) + '</span>' +
+            '</div>' +
+          '</button>';
+        }).join('') + '</div>';
+    } else {
+      hitos = '<h4 class="sgc-sub">Próximos hitos</h4>' +
+        '<p class="sigso-ayuda">No hay fechas comprometidas por delante.</p>';
+    }
+
+    // --- conteos -----------------------------------------------------------
+    var conteos = '<h4 class="sgc-sub">El sistema en números</h4><div class="sgc-kpis">' + [
+      Componentes.kpi({ etiqueta: 'Documentos vigentes', valor: c.documentos_vigentes || 0,
+        titulo: (c.documentos_externos || 0) + ' de origen externo' }),
+      Componentes.kpi({ etiqueta: 'Procesos', valor: (c.procesos_mapa || 0) + ' + ' + (c.procesos_servicio || 0),
+        titulo: 'Del mapa + de servicio' }),
+      Componentes.kpi({ etiqueta: 'Riesgos', valor: c.riesgos || 0,
+        titulo: (c.riesgos_altos || 0) + ' altos o críticos' }),
+      Componentes.kpi({ etiqueta: 'Indicadores', valor: c.indicadores || 0 }),
+      Componentes.kpi({ etiqueta: 'NC abiertas', valor: c.nc_abiertas || 0, alerta: !!c.nc_abiertas }),
+      Componentes.kpi({ etiqueta: 'Quejas abiertas', valor: c.quejas_abiertas || 0, alerta: !!c.quejas_abiertas }),
+      Componentes.kpi({ etiqueta: 'Auditorías hechas', valor: c.auditorias_ejecutadas || 0 })
+    ].join('') + '</div>';
+
+    cont.innerHTML = cabecera + salud + alertas + hitos + conteos;
+    wireSecciones_(cont);
+
+    cont.querySelectorAll('.js-tab-ir').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        seccionActiva_ = btn.getAttribute('data-seccion');
+        render_();
+      });
+    });
+  }
 
   // ==========================================================================
   // v11.0 Fase 6 (§9.1.1): indicadores de proceso.

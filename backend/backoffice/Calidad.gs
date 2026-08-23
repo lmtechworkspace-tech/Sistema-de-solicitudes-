@@ -1106,6 +1106,9 @@ function seccionesVisiblesSgc_(contexto) {
     procesos: true,
     // v11.0 Fase 6: el tablero de indicadores muestra desempeno por area,
     // asi que se restringe a quien ya tiene lectura amplia del SGC.
+    // v11.0 Fase 7: la portada del modulo. Es una vista de gobierno
+    // (salud, alertas, hitos), asi que solo la ve quien supervisa.
+    tablero: veTodo,
     indicadores: veTodo,
     nc: tieneAlgunaAsignada_(SHEETS.SGC_NC, ['responsable_email', 'detectada_por']),
     auditorias: tieneAlgunaAsignada_(SHEETS.SGC_AUDITORIAS, ['auditor_email']),

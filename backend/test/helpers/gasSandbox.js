@@ -217,6 +217,10 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // Procesos.gs el mapa -- por eso va despues de ambos.
   'Indicadores.gs',
   'MatrizCobertura.gs',
+  // v11.0 Fase 7: el tablero del SGC. Va al final de los modulos del SGC
+  // porque consulta a casi todos: MatrizCobertura, Alcance, Riesgos,
+  // Procesos, Contexto e Indicadores.
+  'Tablero.gs',
   'Triggers.gs',
   'Code.gs'
 ];

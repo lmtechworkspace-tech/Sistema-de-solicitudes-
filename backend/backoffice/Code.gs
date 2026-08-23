@@ -327,7 +327,10 @@ var BACKOFFICE_ACTIONS = {
   guardarIndicadorSgc: handleGuardarIndicadorSgc_,
   anularIndicadorSgc: handleAnularIndicadorSgc_,
   registrarLecturaIndicadorSgc: handleRegistrarLecturaIndicadorSgc_,
-  anularLecturaIndicadorSgc: handleAnularLecturaIndicadorSgc_
+  anularLecturaIndicadorSgc: handleAnularLecturaIndicadorSgc_,
+
+  // v11.0 Fase 7: tablero del SGC.
+  resumenTableroSgc: handleResumenTableroSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -625,7 +628,8 @@ var MODULO_POR_ACCION = {
   guardarIndicadorSgc: 'calidad',
   anularIndicadorSgc: 'calidad',
   registrarLecturaIndicadorSgc: 'calidad',
-  anularLecturaIndicadorSgc: 'calidad'
+  anularLecturaIndicadorSgc: 'calidad',
+  resumenTableroSgc: ['calidad', 'gerencia']
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -1620,6 +1624,11 @@ function handleRegistrarLecturaIndicadorSgc_(data, contexto) {
 
 function handleAnularLecturaIndicadorSgc_(data, contexto) {
   return responderResultado_(Indicadores.anularLectura(data, contexto));
+}
+
+// v11.0 Fase 7: tablero del SGC.
+function handleResumenTableroSgc_(data, contexto) {
+  return responderResultado_(Tablero.resumen(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).

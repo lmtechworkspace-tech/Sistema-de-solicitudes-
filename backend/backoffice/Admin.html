@@ -3806,6 +3806,43 @@ button {
 .sigso-py-evento__titulo { margin: var(--esp-1) 0 0; font-weight: 600; }
 .sigso-py-evento__cuerpo { margin: var(--esp-1) 0 0; color: var(--texto-2); white-space: pre-wrap; }
 
+/* v11.0 Fase 7: tablero del SGC. La salud por capitulo de la norma -- una
+   barra por capitulo, con el porcentaje al lado del numero para que se lea
+   sin tener que interpretar el largo de la barra. */
+.sgc-salud {
+  display: grid; grid-template-columns: minmax(140px, 200px) 1fr;
+  gap: var(--esp-4); align-items: start; margin: var(--esp-4) 0;
+}
+.sgc-salud__global {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: var(--esp-4); border: 1px solid var(--borde); border-radius: var(--radio);
+  background: var(--fondo-2); text-align: center;
+}
+.sgc-salud__pct { font-size: 2.5rem; font-weight: 700; line-height: 1; color: var(--texto); }
+.sgc-salud__etiqueta { font-size: var(--texto-xs); color: var(--texto-3); }
+.sgc-salud__capitulos { display: flex; flex-direction: column; gap: var(--esp-2); }
+
+.sgc-cap { display: flex; flex-direction: column; gap: 3px; }
+.sgc-cap__cab { display: flex; align-items: baseline; gap: var(--esp-2); }
+.sgc-cap__num {
+  font-weight: 700; font-size: var(--texto-xs); color: var(--texto-3);
+  min-width: 1.4rem;
+}
+.sgc-cap__titulo { flex: 1; font-size: var(--texto-sm); }
+.sgc-cap__pct { font-weight: 700; font-size: var(--texto-sm); font-variant-numeric: tabular-nums; }
+.sgc-cap__barra {
+  height: 8px; border-radius: 999px; background: var(--borde); overflow: hidden;
+}
+.sgc-cap__relleno { display: block; height: 100%; border-radius: 999px; }
+.sgc-cap__relleno--ok { background: var(--exito); }
+.sgc-cap__relleno--alerta { background: var(--advertencia); }
+.sgc-cap__relleno--critico { background: var(--error); }
+.sgc-cap__detalle { font-size: var(--texto-xs); color: var(--texto-3); }
+
+@media (max-width: 640px) {
+  .sgc-salud { grid-template-columns: 1fr; }
+}
+
 </style>
   <style>
 /* dashboard.css — Backoffice: KPIs, graficos, tabla, detalle (§12.4/12.5). */
