@@ -372,3 +372,83 @@ SigsoReportes.barraAcciones / wireAcciones                 // CSV + imprimir/PDF
 - **Los reportes que la auditoría destrabó y todavía no están construidos:** cumplimiento de SLA por área y por responsable, tiempo de ciclo por estado, resbalón de fechas comprometidas, throughput mensual. Todos salen de `SUBSOLICITUDES` + `HISTORIAL_*`.
 - **Foto periódica de la cobertura ISO** — sigue siendo el único bloqueo real para comparar períodos en Calidad.
 - **Filtros contra el backend.** Hoy los filtros se aplican en el cliente sobre datos ya traídos. Sirve para volúmenes actuales; con muchas filas habrá que filtrar en origen.
+
+---
+
+# v12.3 — FASE 3: Gerencia, el módulo que ya era un centro de reportes
+
+## R. Lo que la auditoría encontró en Gerencia
+
+`getPanelGerencia` **ya calculaba casi todo** lo que la v12.2 dejó como pendiente:
+
+| Ya venía en la respuesta | Desde |
+|---|---|
+| `items[]` con `area_nombre`, `desarrollador_nombre`, `cumplimiento`, `dias_abierta`, `dias_desarrollador`, `re_compromisos`, `reaperturas`, `fecha_original` | v3.0 / v4.1 |
+| `tendencia` — seis meses de creadas / cerradas / entregados / a tiempo | v4.1 (G3) |
+| `ciclo_por_etapa` — dónde se va el tiempo | v4.1 (G4) |
+| `carga` — por empresa, plataforma y área | v4.1 (G6) |
+| `recurrencia` — ranking módulo × tipo | v4.1 (G2) |
+| `kpis.comparativo` — variación vs la ventana anterior | v4.1 (G7) |
+
+**Los tres reportes "nuevos" no piden nada al backend.** Estaban en la respuesta desde la v4.1; lo que faltaba era mirarlos así.
+
+## S. Gerencia migrada
+
+Sus **siete pestañas horizontales** eran navegación de módulo (vistas analíticas completas), no pestañas sobre una entidad. Aplicaba el mismo criterio que en Calidad y Administración, así que pasan a la navegación vertical:
+
+```
+Gerencia
+├── Seguimiento
+│   ├── Tablero de seguimiento
+│   └── Línea de tiempo
+├── Operación
+│   ├── Actividades
+│   └── Pausas activas
+└── ★ Reportes
+    ├── Centro de reportes
+    ├── Tendencia y ciclo
+    ├── Recurrencia
+    └── Carga
+```
+
+Tendencia, Recurrencia y Carga quedan **dentro de Reportes** y no sueltas entre las vistas de trabajo: son reportes. Siguen siendo ítems propios de la navegación además de estar en el catálogo, para que al entrar a una de ellas la navegación marque dónde estás.
+
+## T. Los ocho reportes de Gerencia
+
+**Cumplimiento**
+- *Por área* y *Por responsable* — miden sólo sobre lo **entregado con fecha comprometida**. Un ítem sin comprometer no cuenta como incumplido: todavía no hay promesa que romper, y meterlo hundiría el porcentaje de quien recién recibió trabajo. Quien no tiene entregas aparece como "sin entregas", no como 0%.
+- *Resbalón de compromisos* — ítems que movieron fecha (`re_compromisos`) o se reabrieron (`reaperturas`). La reapertura es la medida de "se entregó mal" que el % de cumplimiento no captura: un cierre rápido que se reabre tres veces igual cuenta como "a tiempo".
+
+**Evolución**
+- *Entrada vs salida por mes* — dos series y el **saldo de la cola**: positivo significa que entra más de lo que sale.
+- *Tendencia y ciclo*, *Recurrencia*, *Carga* — navegan a las vistas que ya existían, no las duplican.
+
+**Comparación**
+- *Período actual vs anterior* — ver abajo.
+
+## U. Un error propio que el dato corrigió
+
+Asumí que `kpis.comparativo` traía `{actual, anterior}` por indicador. **No**: trae la **variación ya calculada** (`actual − anterior`), y además sobre las dos ventanas de comparación, mientras la banda de KPIs se calcula sobre el conjunto completo.
+
+Mi primera versión buscaba `.actual`/`.anterior`, no los encontraba y mostraba *"No hay indicadores comparables"* — **un vacío que mentía**: sí había datos.
+
+La corrección no fue sólo leer bien el campo. Restar la variación del KPI de la banda para "recuperar" el valor anterior habría dado un número de otro universo: **sería inventarlo**. El reporte ahora muestra la variación, dice explícitamente qué dos ventanas compara y con qué fechas, y distingue `null` ("una de las dos ventanas no tenía datos") de cero ("igual que la ventana anterior"). El sentido de cada indicador está declarado: en *atrasadas activas* bajar es bueno; en *cumplimiento* es al revés.
+
+## V. Verificación de la v12.3
+
+- **8 vistas** de Gerencia: exactamente un panel visible en cada una, la navegación marca la correcta, la URL sigue el cambio, cero errores JS.
+- **5 reportes** ejercidos: los que no tienen datos muestran el estado vacío **con la razón** ("Ningún área tiene todavía entregas con fecha comprometida"), no un 0% falso.
+- *Entrada vs salida*: 2 gráficos, 6 meses, saldo `+5`.
+- *Período actual vs anterior*: fechas reales de ambas ventanas, `sin comparación` donde el backend manda `null`, `+5 → Empeora` en "sin comprometer" (donde subir es malo).
+- Enlace directo `#/gerencia/reportes` con recarga.
+- Funciona igual en `app.html`, donde `SigsoShell` no existe: degrada sin romperse.
+- 1197/1197 tests.
+
+**Defecto encontrado al verificar:** entrar por enlace directo a `#/gerencia/reportes` dejaba fijo el "Esperando los datos del panel". El catálogo se pintaba antes que `panelActual` y nadie lo volvía a mirar. `renderTodo_` ahora lo repinta al llegar los datos.
+
+## W. Pendientes tras la v12.3
+
+- **Proyectos y Jefatura** sin submódulo Reportes. Jefatura es "Gerencia acotado al equipo": puede reusar los mismos cuerpos de reporte casi sin cambios.
+- **Bandeja** — su `exportarCSV_` propio podría pasar al motor.
+- **Los filtros del motor no están conectados en Gerencia**: los reportes usan el conjunto que ya trajo el panel, que respeta los filtros de la barra superior. Es coherente, pero los filtros por período/área del motor todavía no se aplican ahí.
+- **Foto periódica de la cobertura ISO** — sigue siendo el único bloqueo real para comparar períodos en Calidad.

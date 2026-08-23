@@ -729,6 +729,10 @@
             </div>
           </div>
 
+          <div class="sigso-modulo-layout">
+            <nav class="sigso-modulo-layout__nav sigso-nav2 sigso-no-imprimir" id="ger-nav"
+                 aria-label="Secciones del panel de gerencia"></nav>
+            <div class="sigso-modulo-layout__panel">
           <div class="sigso-kpis" id="ger-contenedor-kpis"></div>
 
           <div class="sigso-card">
@@ -736,16 +740,14 @@
             <div id="ger-contenedor-semaforo"></div>
           </div>
 
-          <div class="sigso-tabs sigso-no-imprimir" role="tablist">
-            <button type="button" class="sigso-tabs__boton sigso-tabs__boton--activo" id="ger-tab-tablero" data-ger-tab="tablero">Tablero de seguimiento</button>
-            <button type="button" class="sigso-tabs__boton" id="ger-tab-gantt" data-ger-tab="gantt">Línea de tiempo</button>
-            <button type="button" class="sigso-tabs__boton" id="ger-tab-recurrencia" data-ger-tab="recurrencia">Recurrencia</button>
-            <button type="button" class="sigso-tabs__boton" id="ger-tab-tendencia" data-ger-tab="tendencia">Tendencia</button>
-            <button type="button" class="sigso-tabs__boton" id="ger-tab-carga" data-ger-tab="carga">Carga</button>
-            <button type="button" class="sigso-tabs__boton" id="ger-tab-pausas" data-ger-tab="pausas">Pausas activas</button>
-            <!-- v7.0 Fase 5 (§5.3): KPIs de Actividades, mapa de calor, criticas, reportes y acta de reunion. -->
-            <button type="button" class="sigso-tabs__boton" id="ger-tab-actividades" data-ger-tab="actividades">Actividades</button>
-          </div>
+          <!-- v12.3: las 7 pestañas de Gerencia pasaron a la navegación vertical
+               (#ger-nav, arriba). Eran navegación de MÓDULO -- vistas analíticas
+               completas, no pestañas sobre una entidad -- así que aplicaba el
+               mismo criterio que en Calidad y Administración. -->
+
+          <!-- v12.3 (Fase 3): centro de reportes del modulo. Lo llena gerencia.js
+               con SigsoReportes; nace oculto igual que los demas paneles. -->
+          <div id="ger-panel-reportes" class="sigso-card sigso-oculto sigso-no-imprimir"></div>
 
           <div id="ger-panel-tablero" class="sigso-card">
             <div class="sigso-tablero-toolbar sigso-no-imprimir">
@@ -886,6 +888,8 @@
             <h3>Control del solicitante — entregado y sin validar</h3>
             <div id="ger-contenedor-solicitante"></div>
           </div>
+            </div>
+          </div><!-- /sigso-modulo-layout de Gerencia -->
         </section>
 
         <!-- v4.2: "Mi Departamento" -- un "Gerencia acotado" al equipo del

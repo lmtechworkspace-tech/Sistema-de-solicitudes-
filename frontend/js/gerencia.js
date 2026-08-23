@@ -132,35 +132,19 @@
         renderTodo_();
       });
     }
-    document.querySelectorAll('[data-ger-tab]').forEach(function (boton) {
-      boton.addEventListener('click', function () {
-        document.querySelectorAll('[data-ger-tab]').forEach(function (b) {
-          b.classList.remove('sigso-tabs__boton--activo');
-        });
-        boton.classList.add('sigso-tabs__boton--activo');
-        var tab = boton.getAttribute('data-ger-tab');
-        document.getElementById('ger-panel-tablero').classList.toggle('sigso-oculto', tab !== 'tablero');
-        document.getElementById('ger-panel-gantt').classList.toggle('sigso-oculto', tab !== 'gantt');
-        var panelRecurrencia = document.getElementById('ger-panel-recurrencia');
-        var panelTendencia = document.getElementById('ger-panel-tendencia');
-        var panelCarga = document.getElementById('ger-panel-carga');
-        if (panelRecurrencia) panelRecurrencia.classList.toggle('sigso-oculto', tab !== 'recurrencia');
-        if (panelTendencia) panelTendencia.classList.toggle('sigso-oculto', tab !== 'tendencia');
-        if (panelCarga) panelCarga.classList.toggle('sigso-oculto', tab !== 'carga');
-        // v6.0 Fase P5: pestaña de Pausas activas (su propio endpoint).
-        var panelPausas = document.getElementById('ger-panel-pausas');
-        if (panelPausas) panelPausas.classList.toggle('sigso-oculto', tab !== 'pausas');
-        // v7.0 Fase 5: pestaña de Actividades (su propio endpoint).
-        var panelActividades = document.getElementById('ger-panel-actividades');
-        if (panelActividades) panelActividades.classList.toggle('sigso-oculto', tab !== 'actividades');
-        // Chart.js no dibuja bien en un canvas que estaba con display:none;
-        // al entrar a la pestaña de Tendencia, se re-renderiza con las
-        // dimensiones ya visibles.
-        if (tab === 'tendencia' && panelActual) renderTendencia_(panelActual.tendencia, panelActual.ciclo_por_etapa);
-        if (tab === 'pausas') cargarPausasGerencia_();
-        if (tab === 'actividades') cargarActividadesGerencia_();
-      });
-    });
+    // v12.3: las 7 pestañas pasaron a la navegacion vertical. El cableado
+    // ya no vive aca: lo hace onSeleccion de SigsoNav.
+    // v12.3: la vista puede venir de la URL (#/gerencia/reportes). Se valida
+    // contra la arquitectura: una URL no puede inventar una vista.
+    var pedidaGer = (window.SigsoShell && SigsoShell.tomarItemDeRuta)
+      ? SigsoShell.tomarItemDeRuta() : '';
+    if (pedidaGer && ARQUITECTURA_GERENCIA.some(function (sub) {
+      return sub.items.some(function (it) { return it.id === pedidaGer; });
+    })) {
+      itemGerenciaActivo_ = pedidaGer;
+    }
+    pintarNavGerencia_();
+    irAVistaGerencia_(itemGerenciaActivo_);
     inicializarFiltrosActividadesGerencia_();
   }
 
@@ -464,6 +448,11 @@
     renderTablero_(filtradosTablero);
     renderGantt_(filtrados);
     renderControlSolicitante_(filtrados);
+    // v12.3: si la persona esta parada en Reportes, hay que repintarlo al
+    // llegar los datos. Sin esto, entrar por un enlace directo a
+    // #/gerencia/reportes dejaba el 'Esperando los datos del panel' fijo:
+    // el catalogo se pintaba antes que panelActual y nadie lo volvia a mirar.
+    if (itemGerenciaActivo_ === 'reportes') renderReportesGerencia_();
   }
 
   // §7B: tarjetas por categoria, clicables para filtrar el Gantt y el
@@ -1165,4 +1154,372 @@
     document.body.removeChild(enlace);
     setTimeout(function () { URL.revokeObjectURL(enlace.href); }, 1000);
   }
+
+  // ==========================================================================
+  // v12.3 (Fase 3) — Navegación y reportes de Gerencia
+  //
+  // Gerencia tenía SIETE pestañas horizontales que no eran pestañas sobre una
+  // entidad: eran vistas analíticas completas del módulo. Por eso aplica el
+  // mismo criterio que en Calidad y Administración y pasan a la navegación
+  // vertical.
+  //
+  // Los tres reportes NUEVOS (por área, por responsable, resbalón) NO piden
+  // nada al backend: getPanelGerencia ya devuelve `items` con area_nombre,
+  // desarrollador_nombre, cumplimiento, re_compromisos y reaperturas. Estaban
+  // en la respuesta desde la v4.1; lo que faltaba era mirarlos así.
+  var ARQUITECTURA_GERENCIA = [
+    { id: 'seguimiento', nombre: 'Seguimiento', icono: 'lista', items: [
+      { id: 'tablero', nombre: 'Tablero de seguimiento' },
+      { id: 'gantt', nombre: 'Línea de tiempo' }
+    ] },
+    { id: 'operacion', nombre: 'Operación', icono: 'reloj', items: [
+      { id: 'actividades', nombre: 'Actividades' },
+      { id: 'pausas', nombre: 'Pausas activas' }
+    ] },
+    // Las tres vistas analiticas que ya existian (Tendencia, Recurrencia,
+    // Carga) viven ACA y no sueltas entre las de trabajo: son reportes. Se
+    // dejan como items propios ademas del catalogo para que la navegacion
+    // marque donde estas cuando entras a una de ellas.
+    { id: 'reportes', nombre: 'Reportes', icono: 'grafico',
+      descripcion: 'Analiza el desempeño del área', items: [
+      { id: 'reportes', nombre: 'Centro de reportes' },
+      { id: 'tendencia', nombre: 'Tendencia y ciclo' },
+      { id: 'recurrencia', nombre: 'Recurrencia' },
+      { id: 'carga', nombre: 'Carga' }
+    ] }
+  ];
+
+  // Paneles que ya existían en el HTML, por id de ítem.
+  var PANEL_POR_ITEM_GER = {
+    tablero: 'ger-panel-tablero',
+    gantt: 'ger-panel-gantt',
+    recurrencia: 'ger-panel-recurrencia',
+    tendencia: 'ger-panel-tendencia',
+    carga: 'ger-panel-carga',
+    pausas: 'ger-panel-pausas',
+    actividades: 'ger-panel-actividades',
+    reportes: 'ger-panel-reportes'
+  };
+
+  var itemGerenciaActivo_ = 'tablero';
+  var reporteGerAbierto_ = null;
+
+  function pintarNavGerencia_() {
+    var cont = document.getElementById('ger-nav');
+    if (!cont || !window.SigsoNav) return;
+    SigsoNav.render({
+      contenedor: cont,
+      modulo: 'gerencia',
+      submodulos: ARQUITECTURA_GERENCIA,
+      activo: itemGerenciaActivo_,
+      onSeleccion: function (id) { irAVistaGerencia_(id); }
+    });
+  }
+
+  function irAVistaGerencia_(id) {
+    itemGerenciaActivo_ = id;
+    // Salir de Reportes cierra el reporte abierto: volver debe mostrar el
+    // catálogo y no el último que se miró.
+    if (id !== 'reportes') reporteGerAbierto_ = null;
+    pintarNavGerencia_();
+    if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id);
+
+    Object.keys(PANEL_POR_ITEM_GER).forEach(function (k) {
+      var el = document.getElementById(PANEL_POR_ITEM_GER[k]);
+      if (el) el.classList.toggle('sigso-oculto', k !== id);
+    });
+
+    // Chart.js no dibuja bien en un canvas que estaba con display:none; al
+    // entrar a Tendencia se re-renderiza con las dimensiones ya visibles.
+    if (id === 'tendencia' && panelActual) renderTendencia_(panelActual.tendencia, panelActual.ciclo_por_etapa);
+    if (id === 'pausas') cargarPausasGerencia_();
+    if (id === 'actividades') cargarActividadesGerencia_();
+    if (id === 'reportes') renderReportesGerencia_();
+  }
+
+  // --- Centro de reportes ----------------------------------------------------
+  var REPORTES_GERENCIA = [
+    { grupo: 'Cumplimiento', icono: 'escudo', reportes: [
+      { id: 'ger-area', nombre: 'Cumplimiento por área', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
+        desc: 'Qué áreas entregan dentro de la fecha comprometida y cuáles no.',
+        fuente: 'getPanelGerencia', filtros: [] },
+      { id: 'ger-responsable', nombre: 'Cumplimiento por responsable', tipo: 'RANKING', estado: 'LISTO',
+        desc: 'Entregas a tiempo por cada responsable, sobre lo que ya cerró.',
+        fuente: 'getPanelGerencia', filtros: [] },
+      { id: 'ger-resbalon', nombre: 'Resbalón de compromisos', tipo: 'DETALLE', estado: 'LISTO',
+        desc: 'Ítems que movieron su fecha comprometida, y cuántas veces se reabrieron.',
+        fuente: 'getPanelGerencia', filtros: [] }
+    ] },
+    { grupo: 'Evolución', icono: 'grafico', reportes: [
+      { id: 'ger-throughput', nombre: 'Entrada vs salida por mes', tipo: 'TENDENCIA', estado: 'LISTO',
+        desc: 'Cuánto entra y cuánto se cierra cada mes: dice si la cola crece o baja.',
+        fuente: 'getPanelGerencia', filtros: [] },
+      { id: 'ger-tendencia', nombre: 'Tendencia y ciclo por etapa', tipo: 'TENDENCIA', estado: 'LISTO',
+        desc: 'Los gráficos de seis meses y dónde se va el tiempo.',
+        fuente: 'getPanelGerencia', seccion: 'tendencia' },
+      { id: 'ger-recurrencia', nombre: 'Recurrencia', tipo: 'RANKING', estado: 'LISTO',
+        desc: 'Qué módulo y tipo se repite: lo que conviene resolver de raíz.',
+        fuente: 'getPanelGerencia', seccion: 'recurrencia' },
+      { id: 'ger-carga', nombre: 'Carga', tipo: 'RANKING', estado: 'LISTO',
+        desc: 'Qué empresa, plataforma y área consumen más solicitudes.',
+        fuente: 'getPanelGerencia', seccion: 'carga' }
+    ] },
+    { grupo: 'Comparación', icono: 'lista', reportes: [
+      { id: 'ger-comparativo', nombre: 'Período actual vs anterior', tipo: 'COMPARACION', estado: 'LISTO',
+        desc: 'Cómo cambiaron los indicadores respecto de la ventana anterior.',
+        fuente: 'getPanelGerencia', filtros: [] }
+    ] }
+  ];
+
+  function registrarReportesGerencia_() {
+    if (!window.SigsoReportes || registrarReportesGerencia_.hecho) return;
+    SigsoReportes.registrar('gerencia', {
+      titulo: 'Reportes de Gerencia',
+      nota: 'Todos se arman con lo que ya devuelve el panel: no hay una segunda ' +
+        'consulta, así que lo que se ve aquí y lo que se ve en el tablero salen ' +
+        'del mismo conjunto ya filtrado.',
+      grupos: REPORTES_GERENCIA
+    });
+    registrarReportesGerencia_.hecho = true;
+  }
+
+  function renderReportesGerencia_() {
+    var cont = document.getElementById('ger-panel-reportes');
+    if (!cont) return;
+    registrarReportesGerencia_();
+    if (!window.SigsoReportes) {
+      cont.innerHTML = Componentes.alerta('El motor de reportes no está disponible.', 'error');
+      return;
+    }
+    if (!panelActual) {
+      cont.innerHTML = Componentes.cargando('Esperando los datos del panel...');
+      return;
+    }
+    if (reporteGerAbierto_) { pintarReporteGerencia_(cont); return; }
+    SigsoReportes.pintarCatalogo({
+      contenedor: cont,
+      modulo: 'gerencia',
+      onAbrir: function (id) { reporteGerAbierto_ = id; renderReportesGerencia_(); },
+      onIrASeccion: function (vista) { irAVistaGerencia_(vista); }
+    });
+  }
+
+  function pintarReporteGerencia_(cont) {
+    var r = SigsoReportes.buscarReporte('gerencia', reporteGerAbierto_);
+    if (!r) { reporteGerAbierto_ = null; renderReportesGerencia_(); return; }
+    var items = panelActual.items || [];
+    var cuerpo = '';
+    if (r.id === 'ger-area') cuerpo = cuerpoCumplimientoPorArea_(items);
+    else if (r.id === 'ger-responsable') cuerpo = cuerpoCumplimientoPorResponsable_(items);
+    else if (r.id === 'ger-resbalon') cuerpo = cuerpoResbalon_(items);
+    else if (r.id === 'ger-throughput') cuerpo = cuerpoThroughput_(panelActual.tendencia || []);
+    else if (r.id === 'ger-comparativo') cuerpo = cuerpoComparativo_(panelActual.kpis || {});
+
+    cont.innerHTML =
+      SigsoReportes.barraAcciones({}) +
+      '<h3>' + Componentes.escaparHtml(r.nombre) + '</h3>' +
+      '<p class="sigso-ayuda">' + Componentes.escaparHtml(r.desc) + '</p>' +
+      cuerpo;
+
+    SigsoReportes.wireAcciones(cont, {
+      nombreArchivo: 'sigso-gerencia-' + r.id,
+      onVolver: function () { reporteGerAbierto_ = null; renderReportesGerencia_(); }
+    });
+  }
+
+  /**
+   * Agrupa por una dimensión y mide cumplimiento SOLO sobre lo entregado con
+   * fecha comprometida. Un ítem sin comprometer no se cuenta como incumplido:
+   * todavía no hay promesa que romper, y meterlo hundiría el porcentaje de
+   * quien recién recibió trabajo.
+   */
+  function agruparCumplimiento_(items, campo, etiquetaVacia) {
+    var grupos = {};
+    items.forEach(function (i) {
+      var k = i[campo] || etiquetaVacia;
+      if (!grupos[k]) grupos[k] = { total: 0, entregados: 0, aTiempo: 0, abiertos: 0 };
+      grupos[k].total++;
+      if (i.fecha_terminada && i.fecha_comprometida) {
+        grupos[k].entregados++;
+        if (new Date(i.fecha_terminada) <= new Date(i.fecha_comprometida)) grupos[k].aTiempo++;
+      } else if (!i.fecha_terminada) {
+        grupos[k].abiertos++;
+      }
+    });
+    return Object.keys(grupos).map(function (k) {
+      var g = grupos[k];
+      return {
+        etiqueta: k, total: g.total, entregados: g.entregados,
+        aTiempo: g.aTiempo, abiertos: g.abiertos,
+        pct: g.entregados ? Math.round(g.aTiempo / g.entregados * 100) : null
+      };
+    }).sort(function (a, b) {
+      // Los que no tienen entregas van al final: no se pueden ordenar por un
+      // porcentaje que no existe.
+      if (a.pct === null && b.pct === null) return b.total - a.total;
+      if (a.pct === null) return 1;
+      if (b.pct === null) return -1;
+      return b.pct - a.pct;
+    });
+  }
+
+  function tablaCumplimiento_(filas, etiquetaDimension) {
+    return SigsoReportes.tabla([
+      { campo: 'etiqueta', titulo: etiquetaDimension },
+      { campo: 'total', titulo: 'Ítems', alinear: 'derecha' },
+      { campo: 'abiertos', titulo: 'Abiertos', alinear: 'derecha' },
+      { campo: 'entregados', titulo: 'Entregados', alinear: 'derecha' },
+      { campo: 'aTiempo', titulo: 'A tiempo', alinear: 'derecha' },
+      { campo: 'pctTexto', titulo: 'Cumplimiento', alinear: 'derecha' }
+    ], filas.map(function (f) {
+      return Object.assign({}, f, {
+        pctTexto: f.pct === null ? 'sin entregas' : f.pct + '%'
+      });
+    }), { vacio: 'No hay ítems en este corte.' });
+  }
+
+  function cuerpoCumplimientoPorArea_(items) {
+    var filas = agruparCumplimiento_(items, 'area_nombre', '(sin área)');
+    var conEntregas = filas.filter(function (f) { return f.pct !== null; });
+    return SigsoReportes.kpis([
+      { etiqueta: 'Áreas con actividad', valor: filas.length },
+      { etiqueta: 'Ítems considerados', valor: items.length },
+      { etiqueta: 'Áreas ya medibles', valor: conEntregas.length,
+        titulo: 'Un área sólo es medible cuando tiene ítems entregados con fecha comprometida.' }
+    ]) +
+    SigsoReportes.ranking(conEntregas.map(function (f) {
+      return { etiqueta: f.etiqueta, valor: f.pct, texto: f.pct + '%' };
+    }), { vacio: 'Ningún área tiene todavía entregas con fecha comprometida: no hay cumplimiento que medir.' }) +
+    '<h4>Detalle</h4>' +
+    tablaCumplimiento_(filas, 'Área');
+  }
+
+  function cuerpoCumplimientoPorResponsable_(items) {
+    var filas = agruparCumplimiento_(items, 'desarrollador_nombre', '(sin asignar)');
+    var conEntregas = filas.filter(function (f) { return f.pct !== null; });
+    return SigsoReportes.kpis([
+      { etiqueta: 'Responsables', valor: filas.length },
+      { etiqueta: 'Ya medibles', valor: conEntregas.length }
+    ]) +
+    SigsoReportes.ranking(conEntregas.map(function (f) {
+      return { etiqueta: f.etiqueta, valor: f.pct, texto: f.pct + '%' };
+    }), { vacio: 'Nadie tiene todavía entregas con fecha comprometida.' }) +
+    '<h4>Detalle</h4>' +
+    tablaCumplimiento_(filas, 'Responsable');
+  }
+
+  function cuerpoResbalon_(items) {
+    var movidos = items.filter(function (i) {
+      return Number(i.re_compromisos) > 0 || Number(i.reaperturas) > 0;
+    }).sort(function (a, b) {
+      return (Number(b.re_compromisos) + Number(b.reaperturas)) -
+             (Number(a.re_compromisos) + Number(a.reaperturas));
+    });
+    var totalRe = items.reduce(function (s, i) { return s + (Number(i.re_compromisos) || 0); }, 0);
+    var totalReab = items.reduce(function (s, i) { return s + (Number(i.reaperturas) || 0); }, 0);
+    return SigsoReportes.kpis([
+      { etiqueta: 'Ítems que movieron fecha', valor: items.filter(function (i) { return Number(i.re_compromisos) > 0; }).length },
+      { etiqueta: 'Re-compromisos', valor: totalRe },
+      { etiqueta: 'Reaperturas', valor: totalReab, alerta: totalReab > 0,
+        titulo: 'Un ítem que se cerró y volvió a abrirse: el % de cumplimiento no lo captura.' }
+    ]) +
+    SigsoReportes.tabla([
+      { campo: 'titulo', titulo: 'Ítem' },
+      { campo: 'area_nombre', titulo: 'Área' },
+      { campo: 'desarrollador_nombre', titulo: 'Responsable' },
+      { campo: 're_compromisos', titulo: 'Movió fecha', alinear: 'derecha' },
+      { campo: 'reaperturas', titulo: 'Reaperturas', alinear: 'derecha' },
+      { campo: 'fecha_original', titulo: 'Fecha original' },
+      { campo: 'fecha_comprometida', titulo: 'Fecha vigente' }
+    ], movidos, { vacio: 'Ningún ítem movió su fecha ni se reabrió. Nada que revisar.' });
+  }
+
+  function cuerpoThroughput_(tendencia) {
+    if (!tendencia.length) return Componentes.vacio('Sin datos de los últimos meses.');
+    var entra = tendencia.map(function (t) { return { etiqueta: t.etiqueta, valor: t.creadas }; });
+    var sale = tendencia.map(function (t) { return { etiqueta: t.etiqueta, valor: t.cerradas }; });
+    var saldo = tendencia.reduce(function (s, t) { return s + (t.creadas - t.cerradas); }, 0);
+    return SigsoReportes.kpis([
+      { etiqueta: 'Entraron (6 meses)', valor: tendencia.reduce(function (s, t) { return s + t.creadas; }, 0) },
+      { etiqueta: 'Se cerraron', valor: tendencia.reduce(function (s, t) { return s + t.cerradas; }, 0) },
+      { etiqueta: 'Saldo de la cola', valor: (saldo > 0 ? '+' : '') + saldo, alerta: saldo > 0,
+        titulo: 'Positivo = entra más de lo que sale: la cola crece.' }
+    ]) +
+    '<h4>Entradas por mes</h4>' + SigsoReportes.tendencia(entra, { titulo: 'Solicitudes creadas por mes' }) +
+    '<h4>Cierres por mes</h4>' + SigsoReportes.tendencia(sale, { titulo: 'Solicitudes cerradas por mes' }) +
+    '<h4>Detalle</h4>' +
+    SigsoReportes.tabla([
+      { campo: 'etiqueta', titulo: 'Mes' },
+      { campo: 'creadas', titulo: 'Entraron', alinear: 'derecha' },
+      { campo: 'cerradas', titulo: 'Se cerraron', alinear: 'derecha' },
+      { campo: 'entregados', titulo: 'Entregados', alinear: 'derecha' },
+      { campo: 'entregadosATiempo', titulo: 'A tiempo', alinear: 'derecha' }
+    ], tendencia);
+  }
+
+  // Etiquetas legibles de los KPIs de Gerencia, y si BAJAR es lo bueno.
+  // "atrasadas_activas" subiendo es malo; "pct_cumplimiento" subiendo es bueno.
+  var KPI_GERENCIA_META = {
+    pct_cumplimiento_desarrollador: { texto: 'Cumplimiento del desarrollador (%)', menosEsMejor: false },
+    atrasadas_activas: { texto: 'Atrasadas activas', menosEsMejor: true },
+    esperando_validacion: { texto: 'Esperando validación', menosEsMejor: true },
+    atraso_promedio_dias: { texto: 'Atraso promedio (días)', menosEsMejor: true },
+    sin_comprometer: { texto: 'Sin comprometer', menosEsMejor: true }
+  };
+
+  /**
+   * IMPORTANTE sobre este reporte: `kpis.comparativo` NO trae {actual,
+   * anterior} -- trae la VARIACIÓN ya calculada (actual menos anterior), y
+   * además sobre las dos VENTANAS de comparación, no sobre el conjunto
+   * completo que alimenta la banda de KPIs. Por eso acá se muestra la
+   * variación y no se deriva un "valor anterior": restarla del KPI de la
+   * banda daría un número de otro universo, y sería inventarlo.
+   *
+   * Un delta null significa que una de las dos ventanas no tenía con qué
+   * comparar. Se dice, no se convierte en cero.
+   */
+  function cuerpoComparativo_(kpis) {
+    var c = kpis.comparativo;
+    if (!c) return Componentes.vacio('El panel no trajo el comparativo de períodos.');
+
+    var v = (panelActual && panelActual.ventana) || {};
+    var fmt = function (iso) {
+      if (!iso) return '—';
+      var d = new Date(iso);
+      return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('es-CL');
+    };
+
+    var filas = Object.keys(c).map(function (k) {
+      var meta = KPI_GERENCIA_META[k] || { texto: k.replace(/_/g, ' '), menosEsMejor: false };
+      var d = c[k];
+      var comparable = d !== null && d !== undefined;
+      var tono = !comparable ? 'neutro'
+        : (d === 0 ? 'neutro' : ((meta.menosEsMejor ? d < 0 : d > 0) ? 'ok' : 'critico'));
+      var signo = d > 0 ? '+' : (d < 0 ? '−' : '=');
+      return {
+        indicador: meta.texto,
+        variacion: comparable
+          ? '<span class="sigso-rep-var sigso-rep-var--' + tono + '">' + signo + ' ' +
+            Componentes.escaparHtml(Math.abs(d)) + '</span>'
+          : '<span class="sigso-rep-var sigso-rep-var--neutro">sin comparación</span>',
+        lectura: !comparable
+          ? 'Una de las dos ventanas no tenía datos.'
+          : (d === 0 ? 'Igual que la ventana anterior.'
+            : ((meta.menosEsMejor ? d < 0 : d > 0) ? 'Mejora respecto de la ventana anterior.'
+              : 'Empeora respecto de la ventana anterior.'))
+      };
+    });
+
+    return Componentes.alerta(
+      'Compara la ventana ' + fmt(v.desde) + ' — ' + fmt(v.hasta) +
+      ' contra ' + fmt(v.desde_anterior) + ' — ' + fmt(v.hasta_anterior) +
+      '. Se muestra la variación, no el valor anterior: el backend entrega la ' +
+      'diferencia ya calculada sobre esas dos ventanas.', 'info') +
+    SigsoReportes.tabla([
+      { campo: 'indicador', titulo: 'Indicador' },
+      { campo: 'variacion', titulo: 'Variación', alinear: 'derecha', html: true },
+      { campo: 'lectura', titulo: 'Cómo se lee' }
+    ], filas, { vacio: 'No hay indicadores comparables en esta ventana.' });
+  }
+
 })();
