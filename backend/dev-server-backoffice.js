@@ -303,9 +303,36 @@ function construirContexto() {
   // v10.0 Fase 6a: vacias a proposito -- el año se abre desde la pantalla
   // ("Abrir año"), que es justo el flujo que hay que poder probar aca.
   seedSheet(ctx, 'SGC_OBJETIVOS', ctx.COLUMNAS.SGC_OBJETIVOS);
-  seedSheet(ctx, 'SGC_INDICADOR_LECTURAS', ctx.COLUMNAS.SGC_INDICADOR_LECTURAS);
+  seedSheet(ctx, 'SGC_INDICADOR_LECTURAS', ctx.COLUMNAS.SGC_INDICADOR_LECTURAS, [
+    ['LEC-1-1', '', 'IND-1', 2026, '2026-M01', 72, '', '', false, '', '', '', 'dev-server', new Date().toISOString(), true],
+    ['LEC-2-1', '', 'IND-2', 2026, '2026-M01', 60, '', '', false, '', '', '', 'dev-server', new Date().toISOString(), true],
+    ['LEC-1-2', '', 'IND-1', 2026, '2026-M02', 78, '', '', false, '', '', '', 'dev-server', new Date().toISOString(), true],
+    ['LEC-2-2', '', 'IND-2', 2026, '2026-M02', 66, '', '', false, '', '', '', 'dev-server', new Date().toISOString(), true],
+    ['LEC-1-3', '', 'IND-1', 2026, '2026-M03', 75, '', '', false, '', '', '', 'dev-server', new Date().toISOString(), true],
+    ['LEC-2-3', '', 'IND-2', 2026, '2026-M03', 71, '', '', false, '', '', '', 'dev-server', new Date().toISOString(), true],
+    ['LEC-1-4', '', 'IND-1', 2026, '2026-M04', 84, '', '', false, '', '', '', 'dev-server', new Date().toISOString(), true],
+    ['LEC-2-4', '', 'IND-2', 2026, '2026-M04', 69, '', '', false, '', '', '', 'dev-server', new Date().toISOString(), true],
+    ['LEC-1-5', '', 'IND-1', 2026, '2026-M05', 88, '', '', false, '', '', '', 'dev-server', new Date().toISOString(), true],
+    ['LEC-2-5', '', 'IND-2', 2026, '2026-M05', 77, '', '', false, '', '', '', 'dev-server', new Date().toISOString(), true],
+    ['LEC-1-6', '', 'IND-1', 2026, '2026-M06', 91, '', '', true, '', '', '', 'dev-server', new Date().toISOString(), true],
+    ['LEC-2-6', '', 'IND-2', 2026, '2026-M06', 82, '', '', true, '', '', '', 'dev-server', new Date().toISOString(), true]
+  ]);
   // v11.0 Fase 6: vacia -- los indicadores los define el Encargado.
-  seedSheet(ctx, 'SGC_INDICADORES', ctx.COLUMNAS.SGC_INDICADORES);
+  // v12.2: dos indicadores CON lecturas de varios periodos. Sin esto no se
+  // puede probar en local el reporte de tendencia (necesita >= 2 periodos
+  // medidos) y un fallo solo aparecería en produccion.
+  seedSheet(ctx, 'SGC_INDICADORES', ctx.COLUMNAS.SGC_INDICADORES, [
+    ['IND-1', 'KPI-01', 'Solicitudes atendidas en plazo',
+      'Porcentaje de items cerrados dentro de la fecha comprometida',
+      '', '', 'ADMINISTRACION', '(en plazo / total) * 100', 'MANUAL', 'PORCENTAJE',
+      'MAYOR_IGUAL', 90, '>= 90%', '', 'MENSUAL', 'admin@homepymes.cl', 'ACTIVO', '',
+      'dev-server', new Date().toISOString(), true],
+    ['IND-2', 'KPI-02', 'Quejas resueltas en 5 dias',
+      'Porcentaje de quejas cerradas dentro de cinco dias habiles',
+      '', '', 'RRHH', '(resueltas <=5d / total) * 100', 'MANUAL', 'PORCENTAJE',
+      'MAYOR_IGUAL', 80, '>= 80%', '', 'MENSUAL', 'admin@homepymes.cl', 'ACTIVO', '',
+      'dev-server', new Date().toISOString(), true]
+  ]);
   // v11.0 Fase 8: vacia. Nada se pre-genera: una fila existe cuando
   // alguien registra que el servicio se presto.
   seedSheet(ctx, 'SGC_PRESTACIONES', ctx.COLUMNAS.SGC_PRESTACIONES);

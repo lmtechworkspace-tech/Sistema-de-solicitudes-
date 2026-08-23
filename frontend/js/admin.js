@@ -143,9 +143,11 @@
     // Submódulo transversal. NO se inventa contenido: "Automatizaciones" ya
     // era un reporte (el historial de ejecuciones de los triggers), sólo que
     // estaba suelto entre los catálogos. Aquí queda donde corresponde.
+    // v12.2: Reportes deja de ser un atajo a Automatizaciones y pasa a ser
+    // el centro de reportes del modulo, sobre el motor compartido.
     { id: 'reportes', nombre: 'Reportes', icono: 'grafico', plano: true,
-      descripcion: 'Qué hizo el sistema por su cuenta', items: [
-      { id: 'LOGS', nombre: 'Automatizaciones' }
+      descripcion: 'Entregabilidad, salud del sistema y accesos', items: [
+      { id: 'REPORTES', nombre: 'Centro de reportes' }
     ] }
   ];
 
@@ -183,11 +185,15 @@
 
   function irASeccionAdmin_(tipo) {
     seccionAdminActiva_ = tipo;
+    // Salir de Reportes cierra el reporte abierto: volver a entrar debe
+    // mostrar el catalogo, no el ultimo reporte que se miro.
+    if (tipo !== 'REPORTES') reporteAdminAbierto_ = null;
     pintarNavAdmin_();
     cerrarDrawerAdmin_();
     if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(tipo);
     if (tipo === 'USUARIOS') renderUsuarios_();
     else if (tipo === 'CUENTAS_PORTAL') renderCuentasPortal_();
+    else if (tipo === 'REPORTES') renderReportes_();
     else if (tipo === 'LOGS') renderLogs_();
     else if (tipo === 'JEFATURAS') renderJefaturas_();
     else if (tipo === 'PAUSAS') renderPausas_();
@@ -1570,6 +1576,221 @@
       }
       document.getElementById('resultado-admin').innerHTML = Componentes.alerta(respuesta.message || 'Error al guardar.', 'error');
     });
+  }
+
+
+  // ==========================================================================
+  // v12.2 — Reportes de Administración (sobre SigsoReportes)
+  //
+  // Segundo módulo que usa el motor. Sirve de prueba de que la base es
+  // reutilizable de verdad: acá no se reescribe ni el catálogo, ni los
+  // filtros, ni la exportación, ni las piezas visuales.
+  //
+  // Todos salen de datos que YA existen. "Entregabilidad" y "Por canal" son
+  // agregaciones de LOG_NOTIFICACIONES, la misma tabla que alimenta la vista
+  // de Automatizaciones: no se pide nada nuevo al backend.
+  var REPORTES_ADMIN = [
+    { grupo: 'Notificaciones', icono: 'campana', reportes: [
+      { id: 'notif-entregabilidad', nombre: 'Entregabilidad', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
+        desc: 'Cuántas notificaciones salieron bien, cuántas fallaron y cuántas siguen reintentando.',
+        fuente: 'listarLogs', filtros: [] },
+      { id: 'notif-evento', nombre: 'Fallas por evento', tipo: 'RANKING', estado: 'LISTO',
+        desc: 'Qué eventos concentran los problemas de envío.',
+        fuente: 'listarLogs', filtros: [] },
+      { id: 'notif-detalle', nombre: 'Automatizaciones (detalle)', tipo: 'DETALLE', estado: 'LISTO',
+        desc: 'El historial crudo de envíos, tal como lo registra el sistema.',
+        fuente: 'listarLogs', seccion: 'LOGS' }
+    ] },
+    { grupo: 'Salud del sistema', icono: 'escudo', reportes: [
+      { id: 'sis-esquema', nombre: 'Estado del esquema', tipo: 'ESTADO', estado: 'LISTO',
+        desc: 'Versión del backend y si alguna hoja o columna de la planilla falta.',
+        fuente: 'getEstadoSistema', filtros: [] }
+    ] },
+    { grupo: 'Accesos', icono: 'llave', reportes: [
+      { id: 'acc-modulos', nombre: 'Cuentas por módulo', tipo: 'RANKING', estado: 'LISTO',
+        desc: 'Cuántas cuentas de la plataforma tienen habilitado cada módulo.',
+        fuente: 'listarCuentasPortal', filtros: [] },
+      { id: 'acc-inactivas', nombre: 'Cuentas sin uso', tipo: 'ESTADO', estado: 'PENDIENTE',
+        desc: 'Cuentas creadas que nunca iniciaron sesión, o que llevan meses sin entrar.',
+        falta: 'SESIONES_PORTAL guarda la sesión vigente, no el último acceso histórico de cada cuenta. Requiere registrar la fecha del último ingreso en CUENTAS_PORTAL.' }
+    ] }
+  ];
+
+  var reporteAdminAbierto_ = null;
+
+  function registrarReportesAdmin_() {
+    if (!window.SigsoReportes || registrarReportesAdmin_.hecho) return;
+    SigsoReportes.registrar('administracion', {
+      titulo: 'Reportes de Administración',
+      nota: 'Todos salen de datos que el sistema ya guarda. Los marcados como ' +
+        '"Requiere desarrollo" indican qué información habría que empezar a registrar.',
+      grupos: REPORTES_ADMIN
+    });
+    registrarReportesAdmin_.hecho = true;
+  }
+
+  var ACCION_POR_REPORTE_ADMIN = {
+    'notif-entregabilidad': 'listarLogs',
+    'notif-evento': 'listarLogs',
+    'sis-esquema': 'getEstadoSistema',
+    'acc-modulos': 'listarCuentasPortal'
+  };
+
+  function renderReportes_() {
+    var cont = document.getElementById('admin-contenido');
+    if (!cont) return;
+    registrarReportesAdmin_();
+    if (!window.SigsoReportes) {
+      cont.innerHTML = Componentes.alerta('El motor de reportes no está disponible.', 'error');
+      return;
+    }
+    if (reporteAdminAbierto_) { abrirReporteAdmin_(cont); return; }
+    SigsoReportes.pintarCatalogo({
+      contenedor: cont,
+      modulo: 'administracion',
+      onAbrir: function (id) { reporteAdminAbierto_ = id; renderReportes_(); },
+      onIrASeccion: function (seccion) { irASeccionAdmin_(seccion); }
+    });
+  }
+
+  function abrirReporteAdmin_(cont) {
+    var r = SigsoReportes.buscarReporte('administracion', reporteAdminAbierto_);
+    var accion = ACCION_POR_REPORTE_ADMIN[reporteAdminAbierto_];
+    if (!r || !accion) { reporteAdminAbierto_ = null; renderReportes_(); return; }
+
+    cont.innerHTML = Componentes.cargando('Armando el reporte...');
+    var datos = accion === 'listarLogs' ? { limite: 500 } : {};
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, accion, datos).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el reporte.', 'error');
+        return;
+      }
+      pintarReporteAdmin_(cont, r, respuesta.data);
+    }).catch(mostrarErrorAdmin_);
+  }
+
+  function pintarReporteAdmin_(cont, r, data) {
+    var cuerpo = '';
+    if (r.id === 'notif-entregabilidad') cuerpo = cuerpoEntregabilidad_(data);
+    else if (r.id === 'notif-evento') cuerpo = cuerpoFallasPorEvento_(data);
+    else if (r.id === 'sis-esquema') cuerpo = cuerpoEstadoEsquema_(data);
+    else if (r.id === 'acc-modulos') cuerpo = cuerpoCuentasPorModulo_(data);
+
+    cont.innerHTML =
+      SigsoReportes.barraAcciones({}) +
+      '<h2>' + Componentes.escaparHtml(r.nombre) + '</h2>' +
+      '<p class="sigso-ayuda">' + Componentes.escaparHtml(r.desc) + '</p>' +
+      cuerpo;
+
+    SigsoReportes.wireAcciones(cont, {
+      nombreArchivo: 'sigso-admin-' + r.id,
+      onVolver: function () { reporteAdminAbierto_ = null; renderReportes_(); }
+    });
+  }
+
+  // Un envío se considera OK cuando el sistema no registró error ni dejó el
+  // item reintentando. No se inventa una categoría "parcial": el log tiene
+  // tres estados y son esos tres los que se muestran.
+  function cuerpoEntregabilidad_(logs) {
+    var filas = Array.isArray(logs) ? logs : [];
+    if (!filas.length) return Componentes.vacio('Todavía no hay envíos registrados.');
+    var porResultado = {};
+    filas.forEach(function (l) {
+      var k = l.resultado || '(sin resultado)';
+      porResultado[k] = (porResultado[k] || 0) + 1;
+    });
+    var ok = porResultado.OK || porResultado.ENVIADO || 0;
+    var reintentando = porResultado.PENDIENTE_REINTENTO || 0;
+    var pct = filas.length ? Math.round(ok / filas.length * 100) : 0;
+
+    return SigsoReportes.kpis([
+      { etiqueta: 'Envíos registrados', valor: filas.length },
+      { etiqueta: 'Entregados', valor: ok },
+      { etiqueta: 'Reintentando', valor: reintentando, alerta: reintentando > 0 },
+      { etiqueta: 'Tasa de entrega', valor: pct + '%' }
+    ]) +
+    SigsoReportes.tabla([
+      { campo: 'resultado', titulo: 'Resultado' },
+      { campo: 'total', titulo: 'Envíos', alinear: 'derecha' },
+      { campo: 'pct', titulo: 'Del total', alinear: 'derecha' }
+    ], Object.keys(porResultado).sort(function (a, b) {
+      return porResultado[b] - porResultado[a];
+    }).map(function (k) {
+      return {
+        resultado: k, total: porResultado[k],
+        pct: Math.round(porResultado[k] / filas.length * 100) + '%'
+      };
+    }));
+  }
+
+  function cuerpoFallasPorEvento_(logs) {
+    var filas = Array.isArray(logs) ? logs : [];
+    var fallidos = filas.filter(function (l) {
+      return l.resultado && l.resultado !== 'OK' && l.resultado !== 'ENVIADO';
+    });
+    if (!fallidos.length) {
+      return Componentes.vacio('Ningún envío con problemas en los últimos registros. Nada que rankear.');
+    }
+    var porEvento = {};
+    fallidos.forEach(function (l) {
+      var k = l.evento || '(sin evento)';
+      porEvento[k] = (porEvento[k] || 0) + 1;
+    });
+    return SigsoReportes.ranking(
+      Object.keys(porEvento).sort(function (a, b) { return porEvento[b] - porEvento[a]; })
+        .map(function (k) { return { etiqueta: k, valor: porEvento[k] }; })
+    ) +
+    '<h3>Detalle</h3>' +
+    SigsoReportes.tabla([
+      { campo: 'timestamp', titulo: 'Fecha' },
+      { campo: 'evento', titulo: 'Evento' },
+      { campo: 'destinatario', titulo: 'Destinatario' },
+      { campo: 'resultado', titulo: 'Resultado' },
+      { campo: 'reintentos', titulo: 'Reintentos', alinear: 'derecha' }
+    ], fallidos.slice(0, 100));
+  }
+
+  function cuerpoEstadoEsquema_(data) {
+    var e = (data && data.esquema) || {};
+    var problemas = [];
+    // diagnosticarEsquema_ devuelve la forma que use el backend; se recorre
+    // sin asumir nombres de campo, para no romper si cambia.
+    Object.keys(e).forEach(function (k) {
+      var v = e[k];
+      if (Array.isArray(v) && v.length) {
+        v.forEach(function (item) {
+          problemas.push({ tipo: k, detalle: typeof item === 'string' ? item : JSON.stringify(item) });
+        });
+      }
+    });
+    return SigsoReportes.kpis([
+      { etiqueta: 'Versión del backend', valor: (data && data.version_backend) || '—' },
+      { etiqueta: 'Problemas de esquema', valor: problemas.length, alerta: problemas.length > 0 }
+    ]) +
+    (problemas.length
+      ? SigsoReportes.tabla(
+          [{ campo: 'tipo', titulo: 'Tipo' }, { campo: 'detalle', titulo: 'Detalle' }], problemas)
+      : Componentes.vacio('La planilla tiene todas las hojas y columnas que el backend espera.'));
+  }
+
+  function cuerpoCuentasPorModulo_(data) {
+    var cuentas = (data && data.cuentas) || (Array.isArray(data) ? data : []);
+    if (!cuentas.length) return Componentes.vacio('No hay cuentas de plataforma cargadas.');
+    var porModulo = {};
+    cuentas.forEach(function (c) {
+      var mods = c.modulos;
+      if (typeof mods === 'string') { try { mods = JSON.parse(mods); } catch (err) { mods = []; } }
+      (mods || []).forEach(function (m) { porModulo[m] = (porModulo[m] || 0) + 1; });
+    });
+    return SigsoReportes.kpis([
+      { etiqueta: 'Cuentas', valor: cuentas.length },
+      { etiqueta: 'Módulos en uso', valor: Object.keys(porModulo).length }
+    ]) +
+    SigsoReportes.ranking(
+      Object.keys(porModulo).sort(function (a, b) { return porModulo[b] - porModulo[a]; })
+        .map(function (m) { return { etiqueta: m, valor: porModulo[m] }; }),
+      { vacio: 'Ninguna cuenta tiene módulos asignados.' }
+    );
   }
 
 })();

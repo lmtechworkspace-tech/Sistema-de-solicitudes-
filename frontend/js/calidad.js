@@ -7896,278 +7896,359 @@
   }
 
   // ==========================================================================
-  // v12.0 — CENTRO DE REPORTES DEL SGC
+  // v12.2 — CENTRO DE REPORTES DEL SGC (sobre el motor de reportes.js)
   //
-  // Submódulo transversal (§10 del encargo: todo módulo principal tiene uno).
-  // Acá va la ARQUITECTURA; los reportes profundos son la fase siguiente.
+  // En la v12.0 este catálogo y su renderizado vivían acá enteros. Ahora sólo
+  // queda lo que es PROPIO de Calidad: qué reportes hay y cómo se arma cada
+  // uno. Los filtros, la exportación y las piezas visuales (tendencia,
+  // ranking, comparación) las pone SigsoReportes, y las comparte con los
+  // demás módulos.
   //
-  // LA REGLA QUE ORDENA ESTE CATÁLOGO
-  // Cada reporte declara de qué DATO REAL sale. Si el dato no existe todavía
-  // en SIGSO, el reporte aparece igual pero marcado, y dice qué le falta. No
-  // se dibuja un gráfico con datos inventados para llenar la pantalla: un
-  // reporte que miente es peor que un reporte que falta, y en un SGC lo que
-  // se muestra es evidencia frente a un auditor.
+  // LA REGLA NO CAMBIA: cada reporte declara de qué dato real sale. Si el dato
+  // no existe, el reporte aparece marcado y dice qué le falta. Nunca un
+  // gráfico con datos inventados: acá lo que se muestra es evidencia frente a
+  // un auditor.
   //
-  // Estados:
-  //   LISTO      el reporte se arma con endpoints que YA responden
-  //   SIN_DATOS  la pantalla existe, pero la organización todavía no cargó
-  //              el dato (ej.: no hay auditorías ejecutadas)
-  //   PENDIENTE  requiere desarrollo: el dato no se guarda hoy en SIGSO
+  // CORRECCIÓN DE LA v12.0: entonces marqué "tendencias de indicadores" como
+  // pendiente por falta de datos. Era un error de auditoría mío:
+  // listarIndicadoresSgc YA devuelve, por indicador, todas sus lecturas con
+  // período, valor, veredicto y meta. El reporte se construye sin tocar el
+  // backend, y acá está.
   var REPORTES_SGC = [
     { grupo: 'Cumplimiento', icono: 'escudo', reportes: [
-      { id: 'cump-general', nombre: 'Cumplimiento general', estado: 'LISTO',
+      { id: 'cump-general', nombre: 'Cumplimiento general', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
         desc: 'Indicador interno de gestión y su desglose por capítulo de la norma.',
-        fuente: 'resumenTableroSgc' },
-      { id: 'cump-clausula', nombre: 'Por cláusula', estado: 'LISTO',
+        fuente: 'resumenTableroSgc', filtros: [] },
+      { id: 'cump-clausula', nombre: 'Por cláusula', tipo: 'DETALLE', estado: 'LISTO',
         desc: 'Las 28 cláusulas del catálogo con su estado y qué evidencia las sustenta.',
-        fuente: 'listarMatrizCoberturaSgc' },
-      { id: 'cump-area', nombre: 'Por área', estado: 'PENDIENTE',
+        fuente: 'listarMatrizCoberturaSgc', filtros: ['estado'] },
+      { id: 'rank-capitulo', nombre: 'Ranking de capítulos', tipo: 'RANKING', estado: 'LISTO',
+        desc: 'Qué capítulos de la norma van más avanzados y cuáles quedaron atrás.',
+        fuente: 'resumenTableroSgc', filtros: [] },
+      { id: 'cump-area', nombre: 'Por área', tipo: 'CUMPLIMIENTO', estado: 'PENDIENTE',
         desc: 'Cumplimiento desagregado por área de la organización.',
         falta: 'Las cláusulas no se atribuyen a un área: la cobertura se mide por evidencia del sistema, no por unidad organizacional.' },
-      { id: 'cump-proceso', nombre: 'Por proceso', estado: 'PENDIENTE',
+      { id: 'cump-proceso', nombre: 'Por proceso', tipo: 'CUMPLIMIENTO', estado: 'PENDIENTE',
         desc: 'Cumplimiento de cada proceso del mapa (§4.4).',
         falta: 'Requiere enlazar cada cláusula con los procesos que la sustentan. Hoy sólo los indicadores tienen proceso_id.' },
-      { id: 'cump-responsable', nombre: 'Por responsable', estado: 'PENDIENTE',
+      { id: 'cump-responsable', nombre: 'Por responsable', tipo: 'CUMPLIMIENTO', estado: 'PENDIENTE',
         desc: 'Qué tiene pendiente cada responsable del SGC.',
         falta: 'Los 14 procesos del mapa están sin responsable asignado (ver REVISAR de la carga inicial).' }
     ] },
 
+    { grupo: 'Indicadores y objetivos', icono: 'grafico', reportes: [
+      { id: 'ind-tendencia', nombre: 'Tendencia de un indicador', tipo: 'TENDENCIA', estado: 'LISTO',
+        desc: 'Cómo evolucionó un indicador período a período, contra su meta.',
+        fuente: 'listarIndicadoresSgc', filtros: [] },
+      { id: 'ind-objetivos', nombre: 'Objetivos de calidad', tipo: 'ESTADO', estado: 'LISTO',
+        desc: 'Meta, mediciones del año y si cumple.',
+        fuente: 'listarObjetivosSgc', seccion: 'objetivos' },
+      { id: 'ind-proceso', nombre: 'Indicadores de proceso', tipo: 'ESTADO', estado: 'LISTO',
+        desc: 'Indicadores §9.1.1 con su última lectura y evaluación.',
+        fuente: 'listarIndicadoresSgc', seccion: 'indicadores' }
+    ] },
+
     { grupo: 'Documentación', icono: 'documento', reportes: [
-      { id: 'doc-estado', nombre: 'Estado documental', estado: 'LISTO',
+      { id: 'doc-estado', nombre: 'Estado documental', tipo: 'ESTADO', estado: 'LISTO',
         desc: 'Vigentes, de origen externo, próximos a revisión y vencidos.',
-        fuente: 'resumenTableroSgc' },
-      { id: 'doc-distribucion', nombre: 'Distribución documental', estado: 'LISTO',
+        fuente: 'resumenTableroSgc', filtros: [] },
+      { id: 'doc-distribucion', nombre: 'Distribución documental', tipo: 'DETALLE', estado: 'LISTO',
         desc: 'Quién debe acusar cada documento controlado y quién ya lo hizo.',
         fuente: 'getMatrizDistribucionSgc', seccion: 'accesos' },
-      { id: 'doc-acuses', nombre: 'Cumplimiento de acuses', estado: 'LISTO',
+      { id: 'doc-acuses', nombre: 'Cumplimiento de acuses', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
         desc: 'Por documento: cuántos destinatarios confirmaron lectura.',
         fuente: 'getCumplimientoDocumentoSgc', seccion: 'documentos' }
     ] },
 
     { grupo: 'Auditorías y mejora', icono: 'lupa', reportes: [
-      { id: 'aud-estado', nombre: 'Auditorías y hallazgos', estado: 'LISTO',
+      { id: 'aud-estado', nombre: 'Auditorías y hallazgos', tipo: 'ESTADO', estado: 'LISTO',
         desc: 'Programadas, ejecutadas y hallazgos abiertos.',
         fuente: 'listarAuditoriasSgc', seccion: 'auditorias' },
-      { id: 'nc-abiertas', nombre: 'No conformidades', estado: 'LISTO',
+      { id: 'nc-abiertas', nombre: 'No conformidades', tipo: 'ESTADO', estado: 'LISTO',
         desc: 'Abiertas por etapa del PRO-06, con acciones y verificación de eficacia.',
         fuente: 'listarNcSgc', seccion: 'nc' },
-      { id: 'quejas-estado', nombre: 'Quejas', estado: 'LISTO',
+      { id: 'quejas-estado', nombre: 'Quejas', tipo: 'ESTADO', estado: 'LISTO',
         desc: 'Recibidas, en investigación y resueltas.',
         fuente: 'listarQuejasSgc', seccion: 'quejas' }
     ] },
 
     { grupo: 'Riesgos', icono: 'alerta', reportes: [
-      { id: 'riesgo-nivel', nombre: 'Riesgos por nivel', estado: 'LISTO',
+      { id: 'riesgo-nivel', nombre: 'Riesgos por nivel', tipo: 'ESTADO', estado: 'LISTO',
         desc: 'Magnitud y banda de cada riesgo, antes y después de los controles.',
         fuente: 'listarRiesgosSgc', seccion: 'riesgos' },
-      { id: 'riesgo-evolucion', nombre: 'Evolución del riesgo', estado: 'PENDIENTE',
+      { id: 'riesgo-evolucion', nombre: 'Evolución del riesgo', tipo: 'TENDENCIA', estado: 'PENDIENTE',
         desc: 'Cómo cambió la valoración a lo largo del tiempo.',
-        falta: 'SIGSO guarda la valoración VIGENTE, no su historia. Requiere versionar cada revisión de la matriz.' }
+        falta: 'SGC_RIESGOS guarda la valoración VIGENTE, no su historia. A diferencia de los indicadores, acá no hay tabla de lecturas: requiere versionar cada revisión de la matriz.' }
     ] },
 
     { grupo: 'Personas', icono: 'persona', reportes: [
-      { id: 'per-competencia', nombre: 'Competencia (§7.2)', estado: 'LISTO',
+      { id: 'per-competencia', nombre: 'Competencia (§7.2)', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
         desc: 'Quién tiene descriptor vigente y evaluación registrada.',
         fuente: 'listarPersonasSgc', seccion: 'personas' },
-      { id: 'per-induccion', nombre: 'Inducciones (§7.3)', estado: 'LISTO',
+      { id: 'per-induccion', nombre: 'Inducciones (§7.3)', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
         desc: 'Avance de los cinco ítems de inducción, persona por persona.',
         fuente: 'listarPersonasSgc', seccion: 'personas' },
-      { id: 'per-capacitacion', nombre: 'Capacitación', estado: 'LISTO',
+      { id: 'per-capacitacion', nombre: 'Capacitación', tipo: 'ESTADO', estado: 'LISTO',
         desc: 'Cursos realizados, asistencia y verificación de eficacia.',
         fuente: 'listarCapacitacionesSgc', seccion: 'capacitaciones' }
     ] },
 
-    { grupo: 'Indicadores y objetivos', icono: 'grafico', reportes: [
-      { id: 'ind-objetivos', nombre: 'Objetivos de calidad', estado: 'LISTO',
-        desc: 'Meta, mediciones del año y si cumple.',
-        fuente: 'listarObjetivosSgc', seccion: 'objetivos' },
-      { id: 'ind-proceso', nombre: 'Indicadores de proceso', estado: 'LISTO',
-        desc: 'Indicadores §9.1.1 con su última lectura y evaluación.',
-        fuente: 'listarIndicadoresSgc', seccion: 'indicadores' },
-      { id: 'ind-tendencia', nombre: 'Tendencias', estado: 'PENDIENTE',
-        desc: 'Evolución de cada indicador a lo largo de los períodos.',
-        falta: 'Las lecturas ya se guardan con período; falta la vista de serie temporal. Es el primer reporte a construir en la fase siguiente.' }
-    ] },
-
     { grupo: 'Dirección', icono: 'estado', reportes: [
-      { id: 'dir-revision', nombre: 'Revisión por la dirección', estado: 'LISTO',
+      { id: 'dir-revision', nombre: 'Revisión por la dirección', tipo: 'ESTADO', estado: 'LISTO',
         desc: 'Las entradas del §9.3 reunidas para el acta.',
         fuente: 'getResumenRevisionSgc', seccion: 'revision' },
-      { id: 'dir-proveedores', nombre: 'Proveedores', estado: 'LISTO',
+      { id: 'dir-proveedores', nombre: 'Proveedores', tipo: 'ESTADO', estado: 'LISTO',
         desc: 'Evaluación y reevaluación de proveedores críticos (§8.4).',
         fuente: 'listarProveedoresSgc', seccion: 'proveedores' }
     ] },
 
-    { grupo: 'Comparaciones y rankings', icono: 'lista', reportes: [
-      { id: 'comp-periodo', nombre: 'Período actual vs anterior', estado: 'PENDIENTE',
+    { grupo: 'Comparaciones', icono: 'lista', reportes: [
+      { id: 'comp-periodo', nombre: 'Cobertura: período actual vs anterior', tipo: 'COMPARACION', estado: 'PENDIENTE',
         desc: 'Cómo cambió el cumplimiento respecto del período pasado.',
-        falta: 'Requiere una foto periódica del estado del SGC. Hoy SIGSO calcula la cobertura SIEMPRE contra el presente y no la archiva.' },
-      { id: 'rank-area', nombre: 'Ranking por área', estado: 'PENDIENTE',
-        desc: 'Áreas ordenadas por cumplimiento o por hallazgos.',
-        falta: 'Depende de "Cumplimiento por área", que a su vez necesita atribuir evidencia a un área.' }
+        falta: 'La cobertura se calcula SIEMPRE contra el presente y no se archiva. Requiere guardar una foto periódica del estado del SGC (una fila por capítulo y mes).' }
     ] }
   ];
 
-  var ETIQUETA_ESTADO_REPORTE = {
-    LISTO: 'Disponible', SIN_DATOS: 'Sin datos aún', PENDIENTE: 'Requiere desarrollo'
-  };
-  var TONO_ESTADO_REPORTE = { LISTO: 'ok', SIN_DATOS: 'alerta', PENDIENTE: 'neutro' };
-
   var reporteAbierto_ = null;
+  var filtrosReporte_ = {};
+
+  function registrarReportesSgc_() {
+    if (!window.SigsoReportes || registrarReportesSgc_.hecho) return;
+    SigsoReportes.registrar('calidad', {
+      titulo: 'Centro de reportes del SGC',
+      nota: 'Cada reporte declara de dónde sale su dato. Los marcados como ' +
+        '"Requiere desarrollo" no se muestran vacíos ni con datos de ejemplo: ' +
+        'se indica qué información habría que empezar a guardar para construirlos.',
+      grupos: REPORTES_SGC
+    });
+    registrarReportesSgc_.hecho = true;
+  }
 
   function cargarReportes_() {
     var cont = panelSgc_();
     if (!cont) return;
-    if (reporteAbierto_ === 'cump-general' || reporteAbierto_ === 'cump-clausula') {
-      cargarReporteCumplimiento_(cont);
+    registrarReportesSgc_();
+    if (!window.SigsoReportes) {
+      cont.innerHTML = barraSecciones_() +
+        Componentes.alerta('El motor de reportes no está disponible.', 'error');
+      wireSecciones_(cont);
       return;
     }
-    pintarCatalogoReportes_(cont);
-  }
+    if (reporteAbierto_) { abrirReporteSgc_(cont); return; }
 
-  function pintarCatalogoReportes_(cont) {
-    var listos = 0, total = 0;
-    REPORTES_SGC.forEach(function (g) {
-      g.reportes.forEach(function (r) { total++; if (r.estado === 'LISTO') listos++; });
+    SigsoReportes.pintarCatalogo({
+      contenedor: cont,
+      modulo: 'calidad',
+      encabezado: barraSecciones_(),
+      onAbrir: function (id) { reporteAbierto_ = id; filtrosReporte_ = {}; cargarReportes_(); },
+      onIrASeccion: function (seccion) { irASeccion_(seccion, ''); }
     });
-
-    cont.innerHTML = barraSecciones_() +
-      '<div class="sgc-cabecera">' +
-        '<div><h2>Centro de reportes</h2>' +
-        '<p class="sigso-ayuda">Análisis del Sistema de Gestión de Calidad. ' +
-          listos + ' de ' + total + ' reportes se arman hoy con datos reales del sistema; ' +
-          'el resto dice qué le falta.</p></div>' +
-      '</div>' +
-      Componentes.alerta(
-        'Cada reporte declara de dónde sale su dato. Los marcados como "Requiere desarrollo" ' +
-        'no se muestran vacíos ni con datos de ejemplo: se indica qué información habría que ' +
-        'empezar a guardar para poder construirlos.', 'info') +
-      REPORTES_SGC.map(function (g) {
-        return '<section class="sgc-rep-grupo">' +
-          '<h3 class="sgc-rep-grupo__tit">' + Iconos.svg(g.icono, { tam: 16 }) +
-            '<span>' + Componentes.escaparHtml(g.grupo) + '</span></h3>' +
-          '<div class="sgc-rep-lista">' +
-            g.reportes.map(function (r) {
-              var accionable = r.estado === 'LISTO';
-              return '<article class="sgc-rep-card' + (accionable ? ' sgc-rep-card--activa' : '') + '"' +
-                  (accionable ? ' tabindex="0" role="button" data-reporte="' + r.id + '"' +
-                    ' data-seccion="' + Componentes.escaparHtml(r.seccion || '') + '"' : '') + '>' +
-                '<div class="sgc-rep-card__cab">' +
-                  '<h4>' + Componentes.escaparHtml(r.nombre) + '</h4>' +
-                  Componentes.badge(ETIQUETA_ESTADO_REPORTE[r.estado], TONO_ESTADO_REPORTE[r.estado]) +
-                '</div>' +
-                '<p class="sgc-rep-card__desc">' + Componentes.escaparHtml(r.desc) + '</p>' +
-                (r.falta
-                  ? '<p class="sgc-rep-card__falta"><strong>Falta:</strong> ' + Componentes.escaparHtml(r.falta) + '</p>'
-                  : '<p class="sgc-rep-card__fuente">Sale de: <code>' + Componentes.escaparHtml(r.fuente || '') + '</code></p>') +
-              '</article>';
-            }).join('') +
-          '</div>' +
-        '</section>';
-      }).join('');
-
     wireSecciones_(cont);
-
-    cont.querySelectorAll('[data-reporte]').forEach(function (card) {
-      function abrir() {
-        var id = card.getAttribute('data-reporte');
-        var seccion = card.getAttribute('data-seccion');
-        // Un reporte que ya vive dentro de una sección no se duplica: se
-        // navega a ella. Duplicar la pantalla sería crear la segunda versión
-        // de una funcionalidad que ya existe.
-        if (seccion) { irASeccion_(seccion, ''); return; }
-        reporteAbierto_ = id;
-        cargarReportes_();
-      }
-      card.addEventListener('click', abrir);
-      card.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); }
-      });
-    });
   }
 
-  // --- Reporte de cumplimiento (el único que se arma acá y no en su sección)
-  function cargarReporteCumplimiento_(cont) {
+  // --- Los reportes que se arman ACÁ (el resto navega a su sección) ---------
+  var ACCION_POR_REPORTE_SGC = {
+    'cump-general': 'resumenTableroSgc',
+    'rank-capitulo': 'resumenTableroSgc',
+    'doc-estado': 'resumenTableroSgc',
+    'cump-clausula': 'listarMatrizCoberturaSgc',
+    'ind-tendencia': 'listarIndicadoresSgc'
+  };
+
+  function abrirReporteSgc_(cont) {
+    var r = SigsoReportes.buscarReporte('calidad', reporteAbierto_);
+    var accion = ACCION_POR_REPORTE_SGC[reporteAbierto_];
+    if (!r || !accion) { reporteAbierto_ = null; cargarReportes_(); return; }
+
     cont.innerHTML = Componentes.cargando('Armando el reporte...');
-    var esPorClausula = reporteAbierto_ === 'cump-clausula';
-    var accion = esPorClausula ? 'listarMatrizCoberturaSgc' : 'resumenTableroSgc';
     api_(accion, {}).then(function (respuesta) {
       if (!respuesta || !respuesta.ok) {
-        cont.innerHTML = barraSecciones_('Reportes') +
+        cont.innerHTML = barraSecciones_(r.nombre) +
           Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el reporte.', 'error');
         wireSecciones_(cont);
         return;
       }
-      if (esPorClausula) pintarReporteClausulas_(cont, respuesta.data);
-      else pintarReporteGeneral_(cont, respuesta.data);
+      pintarReporteSgc_(cont, r, respuesta.data);
     }).catch(function () {
-      cont.innerHTML = barraSecciones_('Reportes') + Componentes.alerta('No se pudo conectar.', 'error');
+      cont.innerHTML = barraSecciones_(r.nombre) + Componentes.alerta('No se pudo conectar.', 'error');
       wireSecciones_(cont);
     });
   }
 
-  function volverAlCatalogo_(cont) {
-    cont.querySelectorAll('.js-rep-volver').forEach(function (b) {
-      b.addEventListener('click', function () { reporteAbierto_ = null; cargarReportes_(); });
+  function pintarReporteSgc_(cont, r, data) {
+    var cuerpo = '';
+    var opcionesFiltro = {};
+
+    if (r.id === 'cump-general') cuerpo = cuerpoCumplimientoGeneral_(data);
+    else if (r.id === 'rank-capitulo') cuerpo = cuerpoRankingCapitulos_(data);
+    else if (r.id === 'doc-estado') cuerpo = cuerpoEstadoDocumental_(data);
+    else if (r.id === 'cump-clausula') {
+      opcionesFiltro.estado = [
+        { valor: 'COMPLETO', texto: 'Completo' }, { valor: 'PARCIAL', texto: 'Parcial' },
+        { valor: 'FALTANTE', texto: 'Faltante' }, { valor: 'NO_APLICA', texto: 'No aplica' }
+      ];
+      cuerpo = cuerpoClausulas_(data, filtrosReporte_);
+    } else if (r.id === 'ind-tendencia') {
+      cuerpo = cuerpoTendenciaIndicador_(data, filtrosReporte_);
+    }
+
+    cont.innerHTML = barraSecciones_(r.nombre) +
+      SigsoReportes.barraAcciones({}) +
+      '<div class="sgc-cabecera"><div><h2>' + Componentes.escaparHtml(r.nombre) + '</h2>' +
+        '<p class="sigso-ayuda">' + Componentes.escaparHtml(r.desc) + '</p></div></div>' +
+      SigsoReportes.pintarFiltros(r, opcionesFiltro, filtrosReporte_) +
+      cuerpo;
+
+    wireSecciones_(cont);
+    SigsoReportes.wireAcciones(cont, {
+      nombreArchivo: 'sigso-calidad-' + r.id,
+      onVolver: function () { reporteAbierto_ = null; filtrosReporte_ = {}; cargarReportes_(); }
+    });
+    SigsoReportes.alAplicarFiltros(cont, function (valores) {
+      filtrosReporte_ = valores;
+      // Los filtros de estos reportes se aplican en el cliente sobre datos ya
+      // traídos: no se vuelve a pedir al backend por cambiar un select.
+      pintarReporteSgc_(cont, r, data);
     });
   }
 
-  function pintarReporteGeneral_(cont, data) {
+  // --- Cuerpos ---------------------------------------------------------------
+  function cuerpoCumplimientoGeneral_(data) {
     var salud = data.salud || {};
     var c = data.conteos || {};
-    cont.innerHTML = barraSecciones_('Cumplimiento general') +
-      Componentes.boton({ texto: '← Centro de reportes', variante: 'sutil', clase: 'js-rep-volver' }) +
-      '<div class="sgc-cabecera"><div><h2>Cumplimiento general</h2>' +
-        '<p class="sigso-ayuda">' + Componentes.escaparHtml(salud.aviso || '') + '</p></div></div>' +
-      '<div class="sgc-kpis">' +
-        Componentes.kpi({ etiqueta: 'Indicador interno', valor: (salud.pct || 0) + '%' }) +
-        Componentes.kpi({ etiqueta: 'Cláusulas aplicables', valor: salud.aplicables || 0 }) +
-        Componentes.kpi({ etiqueta: 'No conformidades abiertas', valor: c.nc_abiertas || 0 }) +
-        Componentes.kpi({ etiqueta: 'Documentos vigentes', valor: c.documentos_vigentes || 0 }) +
-      '</div>' +
-      '<h3>Por capítulo de la norma</h3>' +
-      '<table class="sigso-tabla"><thead><tr>' +
-        '<th>Capítulo</th><th>Aplicables</th><th>Completas</th><th>Parciales</th><th>Avance</th>' +
-      '</tr></thead><tbody>' +
-      (salud.capitulos || []).map(function (cap) {
-        return '<tr>' +
-          '<td><strong>' + Componentes.escaparHtml(cap.numero) + '</strong> ' +
-            Componentes.escaparHtml(cap.titulo) + '</td>' +
-          '<td>' + cap.aplicables + '</td>' +
-          '<td>' + cap.completo + '</td>' +
-          '<td>' + cap.parcial + '</td>' +
-          '<td>' + cap.pct + '%</td>' +
-        '</tr>';
-      }).join('') +
-      '</tbody></table>';
-    wireSecciones_(cont);
-    volverAlCatalogo_(cont);
+    return SigsoReportes.kpis([
+      { etiqueta: 'Indicador interno', valor: (salud.pct || 0) + '%' },
+      { etiqueta: 'Cláusulas aplicables', valor: salud.aplicables || 0 },
+      { etiqueta: 'No conformidades abiertas', valor: c.nc_abiertas || 0 },
+      { etiqueta: 'Documentos vigentes', valor: c.documentos_vigentes || 0 }
+    ]) +
+    Componentes.alerta(salud.aviso || '', 'info') +
+    '<h3>Por capítulo de la norma</h3>' +
+    SigsoReportes.tabla([
+      { campo: 'capitulo', titulo: 'Capítulo' },
+      { campo: 'aplicables', titulo: 'Aplicables', alinear: 'derecha' },
+      { campo: 'completo', titulo: 'Completas', alinear: 'derecha' },
+      { campo: 'parcial', titulo: 'Parciales', alinear: 'derecha' },
+      { campo: 'pct', titulo: 'Avance', alinear: 'derecha' }
+    ], (salud.capitulos || []).map(function (cap) {
+      return {
+        capitulo: cap.numero + ' ' + cap.titulo,
+        aplicables: cap.aplicables, completo: cap.completo,
+        parcial: cap.parcial, pct: cap.pct + '%'
+      };
+    }));
   }
 
-  function pintarReporteClausulas_(cont, data) {
+  function cuerpoRankingCapitulos_(data) {
+    var caps = ((data.salud || {}).capitulos || []).slice().sort(function (a, b) { return b.pct - a.pct; });
+    return SigsoReportes.ranking(caps.map(function (c) {
+      return { etiqueta: c.numero + ' ' + c.titulo, valor: c.pct, texto: c.pct + '%' };
+    }), { vacio: 'Todavía no hay cláusulas evaluadas.' }) +
+    '<h3>Detalle</h3>' +
+    SigsoReportes.tabla([
+      { campo: 'capitulo', titulo: 'Capítulo' },
+      { campo: 'pct', titulo: 'Avance', alinear: 'derecha' },
+      { campo: 'faltan', titulo: 'Cláusulas sin completar', alinear: 'derecha' }
+    ], caps.map(function (c) {
+      return {
+        capitulo: c.numero + ' ' + c.titulo,
+        pct: c.pct + '%',
+        faltan: (c.aplicables || 0) - (c.completo || 0)
+      };
+    }));
+  }
+
+  function cuerpoEstadoDocumental_(data) {
+    var c = data.conteos || {};
+    var alertasDoc = (data.alertas || []).filter(function (a) {
+      return /document/i.test(a.titulo || '');
+    });
+    return SigsoReportes.kpis([
+      { etiqueta: 'Vigentes', valor: c.documentos_vigentes || 0 },
+      { etiqueta: 'De origen externo', valor: c.documentos_externos || 0 }
+    ]) +
+    '<h3>Alertas documentales</h3>' +
+    SigsoReportes.tabla([
+      { campo: 'titulo', titulo: 'Alerta' },
+      { campo: 'severidad', titulo: 'Severidad' },
+      { campo: 'total', titulo: 'Cuántos', alinear: 'derecha' }
+    ], alertasDoc, { vacio: 'Ningún documento vencido ni próximo a revisión.' });
+  }
+
+  function cuerpoClausulas_(data, filtros) {
     var r = data.resumen || {};
-    cont.innerHTML = barraSecciones_('Cumplimiento por cláusula') +
-      Componentes.boton({ texto: '← Centro de reportes', variante: 'sutil', clase: 'js-rep-volver' }) +
-      '<div class="sgc-cabecera"><div><h2>Cumplimiento por cláusula</h2>' +
-        '<p class="sigso-ayuda">' + (r.aplicables || 0) + ' cláusulas aplicables · ' +
-        (r.completo || 0) + ' completas · ' + (r.parcial || 0) + ' parciales · ' +
-        (r.faltante || 0) + ' faltantes · ' + (r.no_aplica || 0) + ' no aplican.</p></div></div>' +
-      '<table class="sigso-tabla"><thead><tr>' +
-        '<th>Cláusula</th><th>Estado</th><th>Qué hay hoy</th>' +
-      '</tr></thead><tbody>' +
-      (data.clausulas || []).map(function (c) {
-        return '<tr>' +
-          '<td><strong>' + Componentes.escaparHtml(c.codigo) + '</strong> ' +
-            Componentes.escaparHtml(c.titulo) + '</td>' +
-          '<td>' + Componentes.badge(
-              ETIQUETA_ESTADO_COBERTURA_REP[c.estado] || c.estado,
-              TONO_ESTADO_COBERTURA_REP[c.estado] || 'neutro') + '</td>' +
-          '<td>' + Componentes.escaparHtml(c.resumen || '') + '</td>' +
-        '</tr>';
+    var clausulas = (data.clausulas || []).filter(function (c) {
+      return !filtros.estado || c.estado === filtros.estado;
+    });
+    return SigsoReportes.kpis([
+      { etiqueta: 'Aplicables', valor: r.aplicables || 0 },
+      { etiqueta: 'Completas', valor: r.completo || 0 },
+      { etiqueta: 'Parciales', valor: r.parcial || 0 },
+      { etiqueta: 'Faltantes', valor: r.faltante || 0 }
+    ]) +
+    SigsoReportes.tabla([
+      { campo: 'clausula', titulo: 'Cláusula' },
+      { campo: 'estado', titulo: 'Estado', html: true },
+      { campo: 'resumen', titulo: 'Qué hay hoy' }
+    ], clausulas.map(function (c) {
+      return {
+        clausula: c.codigo + ' ' + c.titulo,
+        estado: Componentes.badge(
+          ETIQUETA_ESTADO_COBERTURA_REP[c.estado] || c.estado,
+          TONO_ESTADO_COBERTURA_REP[c.estado] || 'neutro'),
+        resumen: c.resumen || ''
+      };
+    }), { vacio: 'Ninguna cláusula en ese estado.' });
+  }
+
+  // El reporte que la v12.0 daba por imposible. Los datos ya venían en la
+  // respuesta: cada indicador trae su lista de lecturas con período y valor.
+  function cuerpoTendenciaIndicador_(data, filtros) {
+    var indicadores = (data.indicadores || []).filter(function (i) {
+      return (i.lecturas || []).length > 0;
+    });
+    if (!indicadores.length) {
+      return Componentes.vacio(
+        'Todavía no hay lecturas registradas. Una tendencia necesita al menos ' +
+        'dos períodos medidos: registra las mediciones en Control y mejora › Indicadores.');
+    }
+    var elegido = indicadores.filter(function (i) { return i.indicador_id === filtros.indicador; })[0]
+      || indicadores[0];
+    var puntos = (elegido.lecturas || []).slice().sort(function (a, b) {
+      return String(a.periodo).localeCompare(String(b.periodo));
+    }).map(function (l) {
+      return { etiqueta: l.periodo, valor: l.valor };
+    });
+
+    var selector = '<form class="sigso-rep-filtros" id="rep-filtros">' +
+      '<label class="sigso-rep-filtro"><span>Indicador</span><select name="indicador">' +
+      indicadores.map(function (i) {
+        return '<option value="' + Componentes.escaparHtml(i.indicador_id) + '"' +
+          (i.indicador_id === elegido.indicador_id ? ' selected' : '') + '>' +
+          Componentes.escaparHtml(i.codigo + ' — ' + i.nombre) + '</option>';
       }).join('') +
-      '</tbody></table>';
-    wireSecciones_(cont);
-    volverAlCatalogo_(cont);
+      '</select></label>' +
+      '<button type="submit" class="sigso-boton sigso-boton--secundario">Ver</button></form>';
+
+    return selector +
+      SigsoReportes.kpis([
+        { etiqueta: 'Períodos medidos', valor: puntos.length },
+        { etiqueta: 'Última lectura', valor: puntos.length ? puntos[puntos.length - 1].valor : '—' },
+        { etiqueta: 'Meta', valor: elegido.meta_texto || elegido.meta_valor },
+        { etiqueta: 'Pendientes de medir', valor: elegido.lecturas_pendientes || 0 }
+      ]) +
+      SigsoReportes.tendencia(puntos, {
+        meta: elegido.meta_valor,
+        titulo: 'Evolución de ' + elegido.codigo
+      }) +
+      SigsoReportes.tabla([
+        { campo: 'periodo', titulo: 'Período' },
+        { campo: 'valor', titulo: 'Valor', alinear: 'derecha' },
+        { campo: 'veredicto', titulo: 'Resultado' },
+        { campo: 'observaciones', titulo: 'Observaciones' }
+      ], (elegido.lecturas || []).slice().sort(function (a, b) {
+        return String(b.periodo).localeCompare(String(a.periodo));
+      }));
   }
 
   var ETIQUETA_ESTADO_COBERTURA_REP = {

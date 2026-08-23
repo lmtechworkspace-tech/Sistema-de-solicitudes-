@@ -283,3 +283,92 @@ Con 3-7 pestañas sobre una entidad, una barra horizontal no scrollea ni fragmen
 - **Proyectos, Gerencia, Jefatura, Bandeja** no tienen submódulo Reportes. Gerencia y Jefatura *son* casi enteramente reportes: la conversión ahí es más una reorganización que un agregado, y conviene hacerla junto con la Fase 2 de Reportes.
 - **`app.html`** (la vía con login Google) no tiene enrutamiento: `SigsoShell` sólo existe en `plataforma.html`. Los módulos degradan bien —se comportan como antes— pero no hay enlaces profundos por esa vía.
 - **Captura visual**: sigue pendiente. El panel del navegador de esta sesión no compone frames; la verificación fue por DOM y estilos computados.
+
+---
+
+# v12.2 — FASE 2: arquitectura de Reportes
+
+## M. Auditoría de datos (lo que pedía el §32)
+
+### M.1 Corrección a la v12.0: **sí hay historia**
+
+En la v12.0 marqué "tendencias" y "comparación de períodos" como imposibles por falta de datos históricos. **Era un error de auditoría mío.** SIGSO guarda historia en varias tablas:
+
+| Tabla | Qué guarda | Sirve para |
+|---|---|---|
+| `HISTORIAL_ESTADOS` | Cada transición de estado, con timestamp | Tiempo de ciclo, throughput por mes |
+| `HISTORIAL_COMPROMISO` | Fecha anterior → nueva, con motivo | Reporte de "resbalón" de plazos |
+| `HISTORIAL_PRIORIDAD` / `HISTORIAL_ASIGNACION` | Cambios con justificación | Trazabilidad de decisiones |
+| `ACTIVIDADES_BITACORA` | `avance_pct` con timestamp | Avance en el tiempo |
+| `SGC_INDICADOR_LECTURAS` | `anio` + `periodo` + `valor` + `cumple` | **Serie temporal de indicadores** |
+| `NOVEDADES_LECTURAS`, `SGC_DOC_ACUSES` | Fecha de lectura/acuse | Cumplimiento de difusión |
+| `PAUSAS_ASISTENCIA` | Registro con fecha y hora | Cumplimiento de pausas |
+| `LOG_NOTIFICACIONES` | Envío, resultado, reintentos | Entregabilidad |
+
+Lo que **de verdad** no existe es una **foto periódica de la cobertura ISO**: se calcula siempre contra el presente y no se archiva. Ese sigue siendo el único bloqueo real para "cobertura: período actual vs anterior".
+
+### M.2 Dónde están los hechos reportables
+
+- **Solicitudes**: la tabla de hechos es `SUBSOLICITUDES`, no `SOLICITUDES`. Ahí viven `area`, `estado`, `prioridad`, `sla_objetivo_horas`, `estimacion_horas`, `horas_reales`, `fecha_comprometida`, `fecha_terminada`, `desarrollador_asignado`, `centro_costos`.
+- **Actividades**: `responsable_email`, `area_id`, `cliente_id`, `estado`, `prioridad` + cinco campos de fecha.
+- **Proyectos**: `lider_email`, `area_id`, `cliente_id`, `categoria`, `estado`, fechas objetivo/cierre.
+- **Calidad**: los indicadores traen su meta y `listarIndicadoresSgc` ya devuelve **todas las lecturas de cada uno**.
+
+## N. El motor (`frontend/js/reportes.js`)
+
+```js
+SigsoReportes.registrar(moduloId, { titulo, nota, grupos });
+SigsoReportes.pintarCatalogo({ contenedor, modulo, onAbrir, onIrASeccion, visible });
+SigsoReportes.pintarFiltros(reporte, opciones, valores);   // sólo los declarados
+SigsoReportes.kpis / tabla / ranking / tendencia / comparacion
+SigsoReportes.barraAcciones / wireAcciones                 // CSV + imprimir/PDF
+```
+
+### N.1 Tres reglas que lo ordenan
+
+1. **Cada reporte declara de qué dato real sale.** Si el dato no existe, el reporte aparece marcado y dice qué le falta. Nunca un gráfico con datos inventados.
+2. **Sólo se muestran los filtros que aplican.** Un selector de "área" en un reporte que no desagrega por área no es neutro: promete un corte que no existe.
+3. **No decide permisos.** Recibe un predicado y lo obedece, igual que `navegacion.js`.
+
+### N.2 Decisiones técnicas
+
+| Decisión | Por qué |
+|---|---|
+| **SVG inline y CSS, no Chart.js** | El motor funciona también en `admin.html`, que no carga la librería, y los reportes se imprimen bien. |
+| **El CSV sale de la tabla YA PINTADA** | Lo que se descarga es exactamente lo que la persona ve. Si saliera de una segunda consulta podrían diferir, y en un reporte de gestión eso es grave. |
+| **BOM en el CSV** | Sin él, Excel en Windows abre los acentos rotos. |
+| **La tendencia lleva pie de texto con los valores** | Un lector de pantalla no puede leer un `<path>`. El pie es la versión accesible del gráfico. |
+| **La comparación escribe el signo (+/−/=)** | El estado no puede depender sólo del color (§20 del encargo, WCAG 1.4.1). |
+| **`@media print`** | Al guardar como PDF se ocultan sidebar, navegación, filtros y botones: queda el reporte. |
+
+## O. Aplicado a dos módulos
+
+**Calidad** (23 reportes, 8 grupos) — migrado al motor. Se implementaron aquí:
+
+- *Cumplimiento general* y *Por cláusula* (con filtro por estado)
+- ***Ranking de capítulos*** — nuevo
+- ***Tendencia de un indicador*** — **nuevo, y es el que la v12.0 daba por imposible.** Sale de `listarIndicadoresSgc` sin tocar el backend: dibuja la serie, la línea de meta, y la tabla de lecturas.
+
+**Administración** (6 reportes, 3 grupos) — segundo módulo, prueba de que el motor se reutiliza sin reescribir nada:
+
+- *Entregabilidad* y *Fallas por evento*, agregando `LOG_NOTIFICACIONES`
+- *Estado del esquema*, de `getEstadoSistema`
+- *Cuentas por módulo*, de `listarCuentasPortal`
+
+## P. Verificación de la v12.2
+
+- Tendencia: 6 períodos, línea de meta, selector entre indicadores, tabla y pie accesible; cambiar de indicador recalcula meta y serie.
+- Ranking: ordenado de mayor a menor, verificado programáticamente.
+- Filtros: en *Por cláusula* se muestra **sólo** el filtro declarado (`estado`); aplicarlo llevó la tabla de 28 a 23 filas, todas "Faltante".
+- **Exportación CSV**: el contenido coincide exactamente con lo filtrado en pantalla (24 líneas = 23 filas + encabezado).
+- *Entregabilidad* sin logs muestra el estado vacío, **no datos de ejemplo**.
+- 12 rutas recorridas, cero errores JS. 1197/1197 tests.
+
+**Falso positivo que conviene no repetir:** medir scroll horizontal con `scrollWidth > clientWidth` da un falso positivo cuando hay un elemento `position:fixed` a ancho completo: la diferencia es el ancho de la barra de scroll (`innerWidth − clientWidth`). La comprobación válida es intentar `window.scrollTo(500,0)` y ver si `scrollX` queda en 0.
+
+## Q. Pendientes tras la v12.2 (Fase 3)
+
+- **Reportes para Bandeja, Gerencia, Jefatura y Proyectos.** Los datos están (`SUBSOLICITUDES`, `HISTORIAL_*`, `ACTIVIDADES_BITACORA`); falta declarar sus catálogos. Gerencia y Jefatura *son* casi enteramente reportes: ahí es reorganizar, no agregar.
+- **Los reportes que la auditoría destrabó y todavía no están construidos:** cumplimiento de SLA por área y por responsable, tiempo de ciclo por estado, resbalón de fechas comprometidas, throughput mensual. Todos salen de `SUBSOLICITUDES` + `HISTORIAL_*`.
+- **Foto periódica de la cobertura ISO** — sigue siendo el único bloqueo real para comparar períodos en Calidad.
+- **Filtros contra el backend.** Hoy los filtros se aplican en el cliente sobre datos ya traídos. Sirve para volúmenes actuales; con muchas filas habrá que filtrar en origen.

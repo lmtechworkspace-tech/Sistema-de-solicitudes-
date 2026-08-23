@@ -3420,3 +3420,89 @@
   font-family: var(--fuente-mono); font-size: 0.72rem;
   background: var(--superficie-2); padding: 1px 5px; border-radius: var(--radio-sm);
 }
+
+/* ==========================================================================
+   v12.2 — Motor de reportes (reportes.js)
+   Sin colores nuevos ni librerías: todo sale de tokens.css, y las tendencias
+   y rankings se dibujan con SVG inline y CSS para que funcionen también donde
+   Chart.js no está cargado (admin.html) y para que impriman bien.
+   ========================================================================== */
+
+.sgc-rep-card__tipo {
+  align-self: flex-start;
+  font: var(--t-small);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--texto-3);
+}
+
+/* --- Filtros -------------------------------------------------------------- */
+.sigso-rep-filtros {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--esp-3);
+  padding: var(--esp-3);
+  background: var(--superficie-2);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
+  margin-bottom: var(--esp-4);
+}
+.sigso-rep-filtro { display: flex; flex-direction: column; gap: var(--esp-1); min-width: 0; }
+.sigso-rep-filtro > span { font: var(--t-small); font-weight: 600; color: var(--texto-2); }
+.sigso-rep-filtro select,
+.sigso-rep-filtro input {
+  padding: .4rem .6rem;
+  border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-sm);
+  background: var(--superficie);
+  color: var(--texto);
+  font: var(--t-body);
+}
+
+/* --- Acciones / exportación ---------------------------------------------- */
+.sigso-rep-acciones {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-2);
+  margin-bottom: var(--esp-4);
+}
+.sigso-rep-acciones__sep { flex: 1 1 auto; }
+
+/* --- Tablas --------------------------------------------------------------- */
+/* La tabla scrollea DENTRO de su caja: sin esto una tabla ancha devuelve el
+   scroll horizontal a la página, que es justo lo que quitamos en la v12.0. */
+.sigso-rep-tabla-caja { overflow-x: auto; max-width: 100%; }
+.sigso-rep-num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* --- Ranking -------------------------------------------------------------- */
+.sigso-rep-ranking { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--esp-2); }
+.sigso-rep-ranking__fila { display: grid; grid-template-columns: 1.5rem minmax(6rem, 12rem) 1fr auto; align-items: center; gap: var(--esp-2); }
+.sigso-rep-ranking__pos { font: var(--t-small); font-weight: 700; color: var(--texto-3); text-align: right; }
+.sigso-rep-ranking__etq { font: var(--t-body); color: var(--texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sigso-rep-ranking__barra { height: 10px; background: var(--superficie-2); border-radius: var(--radio-full); overflow: hidden; }
+.sigso-rep-ranking__barra > span { display: block; height: 100%; background: var(--primario); border-radius: var(--radio-full); }
+.sigso-rep-ranking__val { font: var(--t-body); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--texto); }
+
+/* --- Tendencia (SVG) ------------------------------------------------------ */
+.sigso-rep-tendencia { margin: 0 0 var(--esp-4); }
+.sigso-rep-tendencia svg { width: 100%; height: auto; display: block; }
+.sigso-rep-eje { stroke: var(--borde-fuerte); stroke-width: 1; }
+.sigso-rep-tick { fill: var(--texto-3); font-size: 11px; font-family: var(--fuente); }
+.sigso-rep-linea { fill: none; stroke: var(--primario); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.sigso-rep-punto { fill: var(--primario); }
+.sigso-rep-meta { stroke: var(--alerta); stroke-width: 1; stroke-dasharray: 4 3; }
+.sigso-rep-meta-txt { fill: var(--alerta); font-size: 10px; font-family: var(--fuente); }
+.sigso-rep-tendencia__pie { font: var(--t-small); color: var(--texto-3); margin-top: var(--esp-2); }
+
+/* --- Comparación ---------------------------------------------------------- */
+/* El signo va ESCRITO además del color: el estado no puede depender sólo del
+   color (§20 del encargo, y WCAG 1.4.1). */
+.sigso-rep-var { font-weight: 700; font-variant-numeric: tabular-nums; }
+.sigso-rep-var--ok { color: var(--ok); }
+.sigso-rep-var--critico { color: var(--critico); }
+.sigso-rep-var--neutro { color: var(--texto-3); }
+
+/* Al imprimir/guardar en PDF sobra todo lo que no es el reporte. */
+@media print {
+  .plataforma-sidebar, .plataforma-topbar, .sigso-modulo-layout__nav,
+  .sigso-rep-acciones, .sigso-rep-filtros { display: none !important; }
+  .sigso-modulo-layout { grid-template-columns: 1fr !important; }
+  .sigso-rep-tabla-caja { overflow: visible !important; }
+}
