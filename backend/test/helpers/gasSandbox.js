@@ -216,6 +216,10 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // Objetivos.gs los catalogos, periodosDelAnio_ y cumpleMeta_, y de
   // Procesos.gs el mapa -- por eso va despues de ambos.
   'Indicadores.gs',
+  // v11.0 Fase 8 (§8.1/8.5/8.6/8.7): evidencia de servicios prestados.
+  // Usa NoConformidades.crear y procesosActivos_, y MatrizCobertura la
+  // consulta -- por eso va despues de ambos y antes de la matriz.
+  'Prestaciones.gs',
   'MatrizCobertura.gs',
   // v11.0 Fase 7: el tablero del SGC. Va al final de los modulos del SGC
   // porque consulta a casi todos: MatrizCobertura, Alcance, Riesgos,

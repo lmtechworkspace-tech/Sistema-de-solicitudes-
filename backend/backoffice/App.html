@@ -13382,6 +13382,8 @@ var Iconos = (function () {
       if (revisionActivaId_) abrirRevision_(revisionActivaId_); else cargarRevisiones_();
     } else if (seccionActiva_ === 'objetivos') {
       if (objetivoActivoId_) abrirObjetivo_(objetivoActivoId_); else cargarObjetivos_();
+    } else if (seccionActiva_ === 'servicios') {
+      cargarPrestaciones_();
     } else if (seccionActiva_ === 'tablero') {
       cargarTablero_();
     } else if (seccionActiva_ === 'indicadores') {
@@ -13437,7 +13439,8 @@ var Iconos = (function () {
       { id: 'contexto', texto: 'Contexto', icono: 'lupa' },
       { id: 'alcance', texto: 'Alcance', icono: 'diana' },
       { id: 'riesgos', texto: 'Riesgos', icono: 'alerta' },
-      { id: 'procesos', texto: 'Procesos', icono: 'lista' }
+      { id: 'procesos', texto: 'Procesos', icono: 'lista' },
+      { id: 'servicios', texto: 'Servicios prestados', icono: 'caja' }
     ] },
     { label: 'Dirección', items: [
       { id: 'revision', texto: 'Revisión por la dirección', icono: 'estado' },
@@ -18237,6 +18240,356 @@ var Iconos = (function () {
   // "modo auditoría" es la ficha de cada cláusula: la lista de registros que
   // la sustentan, con boton para bajarla en PDF -- el auditor pide "muéstreme
   // 7.2" y sale en un clic.
+
+  // ==========================================================================
+  // v11.0 Fase 8 (§8.1, §8.5, §8.6 y §8.7): servicios prestados.
+  //
+  // Nada se pre-genera: una fila existe cuando alguien registra que el
+  // servicio se prestó. Por eso el listado arranca acotado y pide un filtro
+  // en vez de traerse el año entero.
+  // ==========================================================================
+
+  var filtrosPrestacion_ = { periodo: '', cliente_id: '', proceso_id: '', estado: '' };
+
+  var ESTADO_PRESTACION_ETIQUETA = {
+    PRESTADO: 'Prestado, sin liberar', LIBERADO: 'Liberado', NO_CONFORME: 'Salida no conforme'
+  };
+  var ESTADO_PRESTACION_TONO = { PRESTADO: 'alerta', LIBERADO: 'ok', NO_CONFORME: 'critico' };
+
+  function cargarPrestaciones_() {
+    var cont = document.getElementById('calidad-contenido');
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando servicios prestados...');
+    api_('listarPrestacionesSgc', filtrosPrestacion_).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = barraSecciones_() +
+          Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el registro.', 'error');
+        wireSecciones_(cont);
+        return;
+      }
+      pintarPrestaciones_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
+      wireSecciones_(cont);
+    });
+  }
+
+  function pintarPrestaciones_(cont, data) {
+    var puede = !!data.puede_gestionar;
+    var r = data.resumen || {};
+    var v = data.volumen || {};
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">El registro de lo que efectivamente se le entregó a cada cliente (§8.1 y §8.5), ' +
+      'quién autorizó la liberación (§8.6) y qué salió no conforme (§8.7).</p>' +
+      '</div>';
+
+    if (!data.procesos.length) {
+      cont.innerHTML = cabecera +
+        Componentes.alerta('No hay procesos de servicio cargados. Cárgalos primero en Procesos: ' +
+          'sin ellos no hay qué registrar.', 'aviso');
+      wireSecciones_(cont);
+      return;
+    }
+
+    var kpis = '<div class="sgc-kpis">' + [
+      Componentes.kpi({ etiqueta: 'Prestaciones', valor: r.total || 0 }),
+      Componentes.kpi({ etiqueta: 'Liberadas', valor: r.liberado || 0 }),
+      Componentes.kpi({ etiqueta: 'Sin liberar', valor: r.prestado || 0, alerta: !!r.prestado,
+        titulo: '§8.6 pide que la liberación quede trazada a quien la autoriza.' }),
+      Componentes.kpi({ etiqueta: 'No conformes', valor: r.no_conforme || 0, alerta: !!r.no_conforme }),
+      Componentes.kpi({ etiqueta: 'Sin evidencia', valor: r.sin_evidencia || 0, alerta: !!r.sin_evidencia })
+    ].join('') + '</div>';
+
+    var avisoVolumen = v.aviso ? Componentes.alerta(v.aviso, 'error') : '';
+
+    var opsCliente = [{ valor: '', texto: 'Todos los clientes' }].concat(
+      (data.clientes || []).map(function (c) { return { valor: c.cliente_id, texto: c.nombre }; }));
+    var opsProceso = [{ valor: '', texto: 'Todos los procesos' }].concat(
+      (data.procesos || []).map(function (p) { return { valor: p.proceso_id, texto: p.codigo + ' — ' + p.nombre }; }));
+    var opsEstado = [{ valor: '', texto: 'Todos los estados' }].concat(
+      (data.estados || []).map(function (e) { return { valor: e, texto: ESTADO_PRESTACION_ETIQUETA[e] || e }; }));
+
+    var filtros = '<div class="sgc-filtros">' +
+      Componentes.campoTexto({ id: 'prs-f-periodo', label: false, valor: data.filtros.periodo,
+        placeholder: 'Período (2026-M08)' }) +
+      Componentes.campoSelect({ id: 'prs-f-cliente', label: false, valor: data.filtros.cliente_id,
+        placeholder: false, opciones: opsCliente }) +
+      Componentes.campoSelect({ id: 'prs-f-proceso', label: false, valor: data.filtros.proceso_id,
+        placeholder: false, opciones: opsProceso }) +
+      Componentes.campoSelect({ id: 'prs-f-estado', label: false, valor: data.filtros.estado,
+        placeholder: false, opciones: opsEstado }) +
+      '</div>';
+
+    var avisoAcotado = data.acotada
+      ? Componentes.alerta('Sin filtro se muestran las últimas ' + data.tope + ' prestaciones de ' +
+          data.total_filtrado + '. Filtra por período o cliente para ver el resto.', 'aviso')
+      : '';
+
+    var lista = '';
+    if (!data.prestaciones.length) {
+      lista = '<p class="sigso-ayuda">No hay prestaciones registradas con esos filtros.</p>';
+    } else {
+      lista = '<div class="sgc-lista">' + data.prestaciones.map(function (p) {
+        return '<div class="sgc-doc" data-prestacion-id="' + Componentes.escaparHtml(p.prestacion_id) + '">' +
+          '<div class="sgc-doc__linea">' +
+            '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(p.proceso_codigo + ' → ' + p.cliente_nombre) + '</span>' +
+            Componentes.badge(ESTADO_PRESTACION_ETIQUETA[p.estado] || p.estado,
+              ESTADO_PRESTACION_TONO[p.estado] || 'neutro') +
+            (p.periodo ? Componentes.badge(p.periodo, 'neutro') : '') +
+            (p.liberada_por_el_mismo ? Componentes.badge('Liberó quien prestó', 'alerta') : '') +
+          '</div>' +
+          '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(p.proceso_nombre) + '</span>' +
+          '<div class="sgc-doc__linea">' +
+            '<span class="sgc-doc__meta">Prestado el ' + fechaCorta_(p.fecha_prestacion) +
+              ' por ' + Componentes.escaparHtml(p.responsable_email) + '</span>' +
+            (p.liberado_por
+              ? '<span class="sgc-doc__meta">Liberado el ' + fechaCorta_(p.fecha_liberacion) +
+                ' por ' + Componentes.escaparHtml(p.liberado_por) + '</span>'
+              : '') +
+          '</div>' +
+          (p.evidencia
+            ? '<span class="sgc-doc__meta">Evidencia: ' + Componentes.escaparHtml(p.evidencia) + '</span>'
+            : '<span class="sgc-doc__meta">Sin evidencia registrada</span>') +
+          (p.observaciones ? '<span class="sgc-doc__meta">' + Componentes.escaparHtml(p.observaciones) + '</span>' : '') +
+          (p.nc_id ? '<span class="sgc-doc__meta">Con no conformidad abierta</span>' : '') +
+          (puede ? '<div class="sgc-acciones">' +
+            (p.estado === 'PRESTADO'
+              ? Componentes.boton({ texto: 'Liberar', clase: 'js-prs-liberar' }) : '') +
+            (p.estado !== 'NO_CONFORME'
+              ? Componentes.boton({ texto: 'Marcar no conforme', variante: 'secundario', clase: 'js-prs-noconforme' }) : '') +
+            (p.estado === 'NO_CONFORME' && !p.nc_id
+              ? Componentes.boton({ texto: 'Abrir no conformidad', clase: 'js-prs-nc' }) : '') +
+            Componentes.boton({ texto: 'Anular', variante: 'peligro', clase: 'js-prs-anular' }) +
+          '</div>' : '') +
+        '</div>';
+      }).join('') + '</div>';
+    }
+
+    var acciones = puede ? '<div class="sgc-acciones">' +
+      Componentes.boton({ texto: 'Registrar prestación', clase: 'js-prs-nueva' }) +
+      '</div>' : '';
+
+    cont.innerHTML = cabecera + kpis + avisoVolumen + filtros + acciones + avisoAcotado + lista;
+    wireSecciones_(cont);
+
+    ['periodo', 'cliente_id', 'proceso_id', 'estado'].forEach(function (campo) {
+      var id = 'prs-f-' + (campo === 'cliente_id' ? 'cliente' : (campo === 'proceso_id' ? 'proceso' : campo));
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener('change', function () {
+        filtrosPrestacion_[campo] = el.value;
+        cargarPrestaciones_();
+      });
+    });
+
+    if (!puede) return;
+
+    function delBoton_(btn) {
+      var id = btn.parentNode.parentNode.getAttribute('data-prestacion-id');
+      return buscarPorId_(data.prestaciones, 'prestacion_id', id);
+    }
+    function enviar_(accion, datos) {
+      api_(accion, datos).then(function (resp) {
+        var d = (resp && resp.data) || {};
+        Componentes.aviso({
+          texto: d.message || (resp && resp.message) || 'Listo.',
+          tipo: (resp && resp.ok && d.ok !== false) ? 'exito' : 'error'
+        });
+        if (resp && resp.ok && d.ok !== false) cargarPrestaciones_();
+      });
+    }
+
+    cont.querySelector('.js-prs-nueva').addEventListener('click', function () {
+      abrirFormularioPrestacion_(data);
+    });
+
+    cont.querySelectorAll('.js-prs-liberar').forEach(function (b) {
+      b.addEventListener('click', function () { abrirLiberacion_(delBoton_(b)); });
+    });
+
+    cont.querySelectorAll('.js-prs-noconforme').forEach(function (b) {
+      b.addEventListener('click', function () { abrirNoConforme_(delBoton_(b)); });
+    });
+
+    cont.querySelectorAll('.js-prs-nc').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var p = delBoton_(b);
+        Componentes.confirmar({
+          titulo: '¿Abrir una no conformidad?',
+          mensaje: 'Se crea con el mismo ciclo del PRO-06 que ya usan las quejas y los hallazgos de auditoría: ' +
+            'corrección, causa raíz, acción correctiva y verificación de eficacia.',
+          confirmar: 'Abrirla'
+        }).then(function (ok) {
+          if (ok) enviar_('abrirNcPrestacionSgc', { prestacion_id: p.prestacion_id, responsable_email: p.responsable_email });
+        });
+      });
+    });
+
+    cont.querySelectorAll('.js-prs-anular').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var p = delBoton_(b);
+        Componentes.confirmar({
+          titulo: '¿Anular esta prestación?',
+          mensaje: 'Deja de contar como evidencia. Úsalo solo si se registró por error.',
+          confirmar: 'Anular', peligro: true
+        }).then(function (ok) {
+          if (ok) enviar_('anularPrestacionSgc', { prestacion_id: p.prestacion_id });
+        });
+      });
+    });
+  }
+
+  function abrirLiberacion_(p) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Liberar el servicio</h3>' +
+        '<p class="sigso-ayuda">' + Componentes.escaparHtml(p.proceso_codigo + ' → ' + p.cliente_nombre) + '</p>' +
+        '<p class="sigso-ayuda">§8.6 pide trazabilidad a la persona que autoriza la liberación. ' +
+        'El DOC-01 dice que la hace la jefatura de cada área.</p>' +
+        '<form id="form-prs-liberar">' +
+          Componentes.campoTexto({ id: 'prs-lib-quien', label: 'Autoriza (correo)',
+            valor: '', requerido: true }) +
+          Componentes.campoTexto({ id: 'prs-lib-fecha', label: 'Fecha de liberación', tipo: 'date', valor: '' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Liberar', tipo: 'submit', clase: 'js-sgc-guardar' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-prs-liberar').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true;
+      api_('liberarPrestacionSgc', {
+        prestacion_id: p.prestacion_id,
+        liberado_por: document.getElementById('prs-lib-quien').value,
+        fecha_liberacion: document.getElementById('prs-lib-fecha').value
+      }).then(function (resp) {
+        var d = (resp && resp.data) || {};
+        if (!resp || !resp.ok || d.ok === false) {
+          boton.disabled = false;
+          Componentes.aviso({ texto: d.message || 'No se pudo liberar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: d.message || 'Servicio liberado.', tipo: 'exito' });
+        cargarPrestaciones_();
+      });
+    });
+  }
+
+  function abrirNoConforme_(p) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Marcar como salida no conforme</h3>' +
+        '<p class="sigso-ayuda">' + Componentes.escaparHtml(p.proceso_codigo + ' → ' + p.cliente_nombre) + '</p>' +
+        '<p class="sigso-ayuda">Si estaba liberada, deja de estarlo: §8.7 pide no entregar una salida no conforme ' +
+        'hasta corregirla.</p>' +
+        '<form id="form-prs-nc">' +
+          Componentes.campoTextarea({ id: 'prs-nc-motivo', label: 'En qué no conformó',
+            valor: '', requerido: true,
+            ayuda: 'Sin esto no hay nada que tratar después.' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Marcar', tipo: 'submit', clase: 'js-sgc-guardar', variante: 'peligro' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-prs-nc').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true;
+      api_('marcarNoConformePrestacionSgc', {
+        prestacion_id: p.prestacion_id,
+        observaciones: document.getElementById('prs-nc-motivo').value
+      }).then(function (resp) {
+        var d = (resp && resp.data) || {};
+        if (!resp || !resp.ok || d.ok === false) {
+          boton.disabled = false;
+          Componentes.aviso({ texto: d.message || 'No se pudo marcar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: d.message || 'Marcada.', tipo: 'exito' });
+        cargarPrestaciones_();
+      });
+    });
+  }
+
+  function abrirFormularioPrestacion_(data) {
+    var opsCliente = (data.clientes || []).map(function (c) {
+      return { valor: c.cliente_id, texto: c.nombre + (c.rut ? ' (' + c.rut + ')' : '') };
+    });
+    var opsProceso = (data.procesos || []).map(function (p) {
+      return { valor: p.proceso_id, texto: p.codigo + ' — ' + p.nombre };
+    });
+
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Registrar prestación</h3>' +
+        '<p class="sigso-ayuda">Un registro por servicio efectivamente entregado. No se generan por adelantado: ' +
+        'lo que no ocurrió no ocupa lugar.</p>' +
+        '<form id="form-prs">' +
+          Componentes.campoSelect({ id: 'prs-cliente', label: 'Cliente', valor: '',
+            requerido: true, placeholder: 'Selecciona el cliente...', opciones: opsCliente }) +
+          Componentes.campoSelect({ id: 'prs-proceso', label: 'Proceso de servicio', valor: '',
+            requerido: true, placeholder: 'Selecciona el proceso...', opciones: opsProceso }) +
+          '<div class="sgc-form-fila">' +
+            Componentes.campoTexto({ id: 'prs-periodo', label: 'Período', valor: '',
+              ayuda: 'Solo para servicios recurrentes (2026-M08). Déjalo vacío si es puntual.' }) +
+            Componentes.campoTexto({ id: 'prs-fecha', label: 'Fecha de prestación', tipo: 'date',
+              valor: '', requerido: true }) +
+          '</div>' +
+          Componentes.campoTexto({ id: 'prs-responsable', label: 'Quién lo prestó (correo)',
+            valor: '', requerido: true }) +
+          Componentes.campoTextarea({ id: 'prs-evidencia', label: 'Evidencia',
+            valor: '', ayuda: 'Folio, número de formulario, enlace al archivo... lo que permita encontrarlo después.' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Registrar', tipo: 'submit', clase: 'js-sgc-guardar' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-prs').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true;
+      api_('registrarPrestacionSgc', {
+        cliente_id: document.getElementById('prs-cliente').value,
+        proceso_id: document.getElementById('prs-proceso').value,
+        periodo: document.getElementById('prs-periodo').value,
+        fecha_prestacion: document.getElementById('prs-fecha').value,
+        responsable_email: document.getElementById('prs-responsable').value,
+        evidencia: document.getElementById('prs-evidencia').value
+      }).then(function (resp) {
+        var d = (resp && resp.data) || {};
+        if (!resp || !resp.ok || d.ok === false) {
+          boton.disabled = false;
+          Componentes.aviso({ texto: d.message || 'No se pudo registrar.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        Componentes.aviso({ texto: d.message || 'Prestación registrada.', tipo: 'exito' });
+        cargarPrestaciones_();
+      }).catch(function () {
+        boton.disabled = false;
+        Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
+      });
+    });
+  }
 
   // ==========================================================================
   // v11.0 Fase 7: el tablero del SGC.

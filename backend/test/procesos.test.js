@@ -261,7 +261,10 @@ test('8.1, 8.5 y 8.6 quedan en PARCIAL con la definición: falta la ejecución',
     const d = ctx.MatrizCobertura.getDetalle({ codigo: cod }, ENC);
     assert.equal(d.estado, 'PARCIAL',
       cod + ': tener escrito cómo se presta un servicio no demuestra que se haya prestado');
-    assert.match(d.nota, /Fase 8/,
+    // Hasta la v11.0 F8 la nota decía "falta la Fase 8". Ahora esa fase
+    // existe, así que la nota apunta a lo que falta HACER: registrar las
+    // prestaciones. El estado no cambia -- la definición sola nunca cierra.
+    assert.match(d.nota, /prestaci/i,
       cod + ': la nota tiene que decir qué falta, no dejarlo a la interpretación');
   });
 });

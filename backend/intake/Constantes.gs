@@ -153,7 +153,8 @@ var SHEETS = {
   SGC_RIESGOS: 'SGC_RIESGOS',
   SGC_PROCESOS: 'SGC_PROCESOS',
   SGC_PROCESO_PASOS: 'SGC_PROCESO_PASOS',
-  SGC_INDICADORES: 'SGC_INDICADORES'
+  SGC_INDICADORES: 'SGC_INDICADORES',
+  SGC_PRESTACIONES: 'SGC_PRESTACIONES'
 };
 
 var COLUMNAS = {
@@ -957,7 +958,44 @@ var COLUMNAS = {
     'frecuencia', 'responsable_email',
     'estado', 'observaciones',
     'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+// --- v11.0 Fase 8: evidencia de servicios prestados (§8.1, §8.5, §8.6,
+  // --- §8.7) --------------------------------------------------------------
+  //
+  // La fase con riesgo de escala, y la razon por la que se dejo para el
+  // final. Una fila = UNA prestacion registrada. Las decisiones que la
+  // hacen viable:
+  //
+  // 1. NO se pre-generan filas. Nada de crear cliente x proceso x mes por
+  //    adelantado: con 50 clientes y 40 procesos eso serian 24.000 filas al
+  //    año de golpe, casi todas vacias. Una fila existe cuando alguien
+  //    registra que el servicio se presto.
+  //
+  // 2. `periodo` es OPCIONAL. Los DOC-10 a 13 distinguen servicios
+  //    "Mensual" de "Puntual": un proceso mensual tiene una prestacion por
+  //    periodo, uno puntual tiene tantas como veces ocurra. Forzar un
+  //    periodo a un servicio puntual obligaria a inventarlo.
+  //
+  // 3. El cliente NO se duplica: `cliente_id` apunta a CAT_CLIENTES, que ya
+  //    existe en SIGSO desde la v1. Se desnormaliza el nombre igual que en
+  //    SOLICITUDES, para que el listado no dependa de un cruce.
+  //
+  // estado: PRESTADO (entregado, aun sin liberar) / LIBERADO (§8.6, con
+  //   quien autorizo y cuando) / NO_CONFORME (§8.7, salida no conforme).
+  // nc_id: si la salida no conforme derivo en una no conformidad, con el
+  //   mismo eslabon que ya usan las quejas y los hallazgos de auditoria.
+  SGC_PRESTACIONES: [
+    'prestacion_id',
+    'cliente_id', 'cliente_nombre',
+    'proceso_id', 'proceso_codigo', 'proceso_nombre',
+    'periodo', 'fecha_prestacion', 'responsable_email',
+    'estado', 'evidencia',
+    'liberado_por', 'fecha_liberacion',
+    'nc_id', 'observaciones',
+    'creado_por', 'fecha_creacion', 'activa'
   ]
+
 
 
 };

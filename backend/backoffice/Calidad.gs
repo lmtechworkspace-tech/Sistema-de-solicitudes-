@@ -1110,6 +1110,9 @@ function seccionesVisiblesSgc_(contexto) {
     // (salud, alertas, hitos), asi que solo la ve quien supervisa.
     tablero: veTodo,
     indicadores: veTodo,
+    // v11.0 Fase 8: el registro de servicios prestados muestra que se le
+    // entrego a cada cliente, asi que se restringe a quien supervisa.
+    servicios: veTodo,
     nc: tieneAlgunaAsignada_(SHEETS.SGC_NC, ['responsable_email', 'detectada_por']),
     auditorias: tieneAlgunaAsignada_(SHEETS.SGC_AUDITORIAS, ['auditor_email']),
     quejas: veTodo, // el flujo de quejas es de gestion; el solicitante externo no entra al modulo

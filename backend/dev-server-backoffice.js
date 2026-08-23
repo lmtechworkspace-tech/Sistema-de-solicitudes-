@@ -306,6 +306,15 @@ function construirContexto() {
   seedSheet(ctx, 'SGC_INDICADOR_LECTURAS', ctx.COLUMNAS.SGC_INDICADOR_LECTURAS);
   // v11.0 Fase 6: vacia -- los indicadores los define el Encargado.
   seedSheet(ctx, 'SGC_INDICADORES', ctx.COLUMNAS.SGC_INDICADORES);
+  // v11.0 Fase 8: vacia. Nada se pre-genera: una fila existe cuando
+  // alguien registra que el servicio se presto.
+  seedSheet(ctx, 'SGC_PRESTACIONES', ctx.COLUMNAS.SGC_PRESTACIONES);
+  // v11.0 Fase 8: dos clientes demo, para poder probar el registro de
+  // servicios en local. En produccion CAT_CLIENTES ya tiene los reales.
+  seedSheet(ctx, 'CAT_CLIENTES', ctx.COLUMNAS.CAT_CLIENTES, [
+    ['CLI-DEMO-1', 'Constructora Andes SpA', '76.111.111-1', 'C001', 'Ana Ruiz', 'ana@andes.cl', '', '', '', 'ACTIVO', '', true],
+    ['CLI-DEMO-2', 'Pyme Sur Ltda', '77.222.222-2', 'C002', 'Luis Soto', 'luis@sur.cl', '', '', '', 'ACTIVO', '', true]
+  ]);
   // v11.0 Fase 1 (§4.3): vacias a proposito. El flujo a probar empieza en
   // "no hay alcance declarado", que es donde la pantalla ofrece la
   // propuesta del DOC-01 para revisar y confirmar.

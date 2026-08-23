@@ -102,8 +102,13 @@ test('v10.0 F6b: una NC abierta sube 10.2 a PARCIAL; con eficacia verificada sub
     eficacia_resultado: 'EFICAZ', activa: true
   });
   assert.equal(clausula(ctx, '10.2').estado, 'COMPLETO');
-  // 8.7 comparte la misma fuente (salidas no conformes).
-  assert.equal(clausula(ctx, '8.7').estado, 'COMPLETO');
+  // Hasta la v11.0 F8, 8.7 reusaba la evaluacion de NC. Ya no: §10.2 es
+  // "algo salio mal en el sistema" y §8.7 es "una salida concreta no
+  // cumplio y no se entrego asi". Sin prestaciones registradas no se puede
+  // afirmar que las salidas se controlan.
+  assert.equal(clausula(ctx, '8.7').estado, 'PARCIAL');
+  assert.match(ctx.MatrizCobertura.getDetalle({ codigo: '8.7' }, CTX_ENCARGADO).nota,
+    /Registra las prestaciones/i);
 });
 
 test('v10.0 F6b: objetivos abiertos y todos medidos dejan 6.2 y 9.1 en COMPLETO', () => {

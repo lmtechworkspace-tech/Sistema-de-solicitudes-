@@ -137,18 +137,9 @@ var EVALUADORES_CLAUSULA_ISO = {
 
   '5.3': function () { return evaluarPorDocumentos_('5.3'); },
   '6.1': function () { return evaluarRiesgosOportunidades_(); },
-  '8.1': function () {
-    return evaluarOperacionPorProcesos_('8.1',
-      'La planificación está definida, pero falta la evidencia de ejecución por cliente y período (Fase 8).');
-  },
-  '8.5': function () {
-    return evaluarOperacionPorProcesos_('8.5',
-      'La prestación está definida, pero falta el registro de cada servicio efectivamente prestado (Fase 8).');
-  },
-  '8.6': function () {
-    return evaluarOperacionPorProcesos_('8.6',
-      'La liberación está definida en los pasos de cada proceso, pero falta el registro de cada liberación (Fase 8).');
-  },
+  '8.1': function () { return evaluarPrestaciones_('8.1'); },
+  '8.5': function () { return evaluarPrestaciones_('8.5'); },
+  '8.6': function () { return evaluarPrestaciones_('8.6'); },
   '4.1': function () { return evaluarContextoOrganizacion_(); },
   '4.2': function () { return evaluarPartesInteresadas_(); },
   '4.3': function () { return evaluarAlcanceDeclarado_(); },
@@ -357,12 +348,7 @@ var EVALUADORES_CLAUSULA_ISO = {
       evidencia: ev
     };
   },
-  '8.7': function () {
-    // Salidas no conformes: se solapa con 10.2, pero la norma la cita
-    // aparte -- mismas NC como evidencia de que las no conformidades se
-    // detectan y controlan, no solo se corrigen.
-    return evaluarNoConformidades_();
-  },
+  '8.7': function () { return evaluarSalidasNoConformes_(); },
   '9.1': function () {
     // Seguimiento, medicion, analisis y evaluacion. §9.1.1 pide determinar
     // QUE hay que medir, no solo medir lo que ya se venia midiendo. Por eso
@@ -783,56 +769,170 @@ function evaluarProcesosSgc_() {
   };
 }
 
-/**
- * v11.0 Fase 4. Las clausulas de operacion (§8.1, §8.5, §8.6) se apoyan en
- * los procesos de SERVICIO: son los que el DOC-01 cita para planificar,
- * prestar y liberar el servicio.
- *
- * Con la definicion cargada quedan en PARCIAL, no en COMPLETO: tener escrito
- * como se presta un servicio no demuestra que se haya prestado. Eso es la
- * evidencia de ejecucion, que llega con la Fase 8. Decirlo explicito evita
- * que alguien lea "completo" y crea que la clausula esta resuelta.
- */
-function evaluarOperacionPorProcesos_(codigo, queFalta) {
+// v11.0 Fase 8. Hasta ahora §8.1, §8.5 y §8.6 se quedaban en PARCIAL con la
+// nota "falta la evidencia de ejecución (Fase 8)". Ya no: con prestaciones
+// registradas hay con qué cerrarlas.
+//
+// Sigue habiendo una diferencia entre las tres, y se respeta:
+//   §8.1  planificar y controlar la operación -> procesos definidos +
+//         prestaciones que demuestren que se ejecutan
+//   §8.5  prestar bajo condiciones controladas -> quién prestó y con qué
+//         evidencia
+//   §8.6  LIBERAR -> quién autorizó la entrega y cuándo. Es la única de las
+//         tres que la clausula ata a una persona, textual.
+function evaluarPrestaciones_(codigo) {
   var servicios = (typeof procesosActivos_ === 'function')
-    ? procesosActivos_().filter(function (p) { return p.nivel === 'SERVICIO'; })
-    : [];
+    ? procesosActivos_().filter(function (p) { return p.nivel === 'SERVICIO'; }) : [];
+  var prestaciones = leerFilasSeguro_(SHEETS.SGC_PRESTACIONES).filter(function (p) {
+    return esVerdaderoSgc_(p.activa);
+  });
   var porDocs = evaluarPorDocumentos_(codigo);
 
   if (!servicios.length) {
     return {
       estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
-      resumen: 'Los procesos de servicio no están cargados en el sistema.',
-      nota: NOTA_FALTANTE_POR_DEFECTO_ISO[codigo] ||
-        'Carga los procesos de servicio (DOC-10 a DOC-13) en la sección Procesos.',
+      resumen: 'Los procesos de servicio no están cargados.',
+      nota: 'Carga los procesos de servicio (DOC-10 a DOC-13) en la sección Procesos: sin ellos no hay qué registrar.',
+      evidencia: porDocs.evidencia
+    };
+  }
+  // Un proceso de servicio sin pasos no tiene definido COMO se presta, y
+  // §8.5.1 a) pide informacion documentada que defina las caracteristicas
+  // del servicio. Se calcula ANTES del retorno temprano: la falta existe
+  // igual aunque todavia no haya ninguna prestacion registrada.
+  var pasos = (typeof pasosActivos_ === 'function') ? pasosActivos_() : [];
+  var conPasos = {};
+  pasos.forEach(function (x) { conPasos[x.proceso_id] = true; });
+  var sinPasos = servicios.filter(function (p) { return !conPasos[p.proceso_id]; });
+
+  if (!prestaciones.length) {
+    return {
+      estado: 'PARCIAL',
+      resumen: servicios.length + ' procesos de servicio definidos, sin ninguna prestación registrada.',
+      nota: (sinPasos.length ? sinPasos.length + ' proceso(s) de servicio sin pasos definidos. ' : '') +
+        'La definición está, pero tener escrito cómo se presta un servicio no demuestra que se haya prestado. ' +
+        'Registra las prestaciones en la sección Servicios.',
       evidencia: porDocs.evidencia
     };
   }
 
-  var pasos = (typeof pasosActivos_ === 'function') ? pasosActivos_() : [];
-  var conPasos = {};
-  pasos.forEach(function (p) { conPasos[p.proceso_id] = true; });
-  var sinPasos = servicios.filter(function (p) { return !conPasos[p.proceso_id]; });
+  var liberadas = prestaciones.filter(function (p) { return p.estado === 'LIBERADO'; });
+  var noConformes = prestaciones.filter(function (p) { return p.estado === 'NO_CONFORME'; });
+  var pendientes = prestaciones.filter(function (p) { return p.estado === 'PRESTADO'; });
+  var sinEvidencia = prestaciones.filter(function (p) { return !String(p.evidencia || '').trim(); });
+  var autoliberadas = liberadas.filter(function (p) {
+    return normalizarEmailSgc_(p.liberado_por) === normalizarEmailSgc_(p.responsable_email);
+  });
 
-  var ev = servicios.slice(0, 15).map(function (p) {
+  var ev = prestaciones.slice(-15).map(function (p) {
     return {
-      tipo: 'Proceso de servicio',
-      descripcion: p.codigo + ' — ' + p.nombre + (p.area ? ' (' + p.area + ')' : ''),
-      fecha: p.fecha_ultima_revision,
-      responsable: p.responsable_email || p.revisado_por
+      tipo: p.estado === 'LIBERADO' ? 'Servicio liberado'
+        : (p.estado === 'NO_CONFORME' ? 'Salida no conforme' : 'Servicio prestado'),
+      descripcion: p.proceso_codigo + ' → ' + p.cliente_nombre + (p.periodo ? ' (' + p.periodo + ')' : ''),
+      fecha: p.fecha_liberacion || p.fecha_prestacion,
+      responsable: p.liberado_por || p.responsable_email
     };
   });
   porDocs.evidencia.forEach(function (e) { ev.push(e); });
 
-  var nota = queFalta;
+  var falta = [];
+  if (codigo === '8.6') {
+    // La liberacion es lo unico que mide esta clausula.
+    if (pendientes.length) {
+      falta.push(pendientes.length + ' prestación(es) entregadas sin liberación registrada');
+    }
+    if (autoliberadas.length) {
+      falta.push(autoliberadas.length + ' liberación(es) autorizadas por la misma persona que prestó el servicio ' +
+        '(el DOC-01 dice que libera la jefatura del área)');
+    }
+    return {
+      estado: falta.length ? 'PARCIAL' : 'COMPLETO',
+      // El denominador excluye las no conformes: §8.7 dice justamente que
+      // NO se entregan, asi que contarlas como pendientes de liberar haria
+      // que el numero contradiga al veredicto ("0 de 1" junto a COMPLETO).
+      resumen: liberadas.length + ' de ' + (prestaciones.length - noConformes.length) +
+        ' prestaciones liberables con autorización trazada' +
+        (noConformes.length ? ' (' + noConformes.length + ' no conforme(s), que no se liberan)' : '') + '.',
+      nota: falta.length ? 'Para cerrar 8.6: ' + falta.join('; ') + '.' : '',
+      evidencia: ev
+    };
+  }
+
+  if (sinEvidencia.length) {
+    falta.push(sinEvidencia.length + ' prestación(es) sin evidencia adjunta o referenciada');
+  }
   if (sinPasos.length) {
-    nota = sinPasos.length + ' proceso(s) de servicio sin pasos definidos. ' + nota;
+    falta.push(sinPasos.length + ' proceso(s) de servicio sin pasos definidos');
+  }
+  // Cuantos procesos de servicio nunca se registraron: un catalogo de 40
+  // procesos con prestaciones en 3 no demuestra que la operacion este
+  // controlada.
+  var conRegistro = {};
+  prestaciones.forEach(function (p) { conRegistro[p.proceso_id] = true; });
+  var sinNinguna = servicios.filter(function (p) { return !conRegistro[p.proceso_id]; });
+  if (sinNinguna.length) {
+    falta.push(sinNinguna.length + ' de ' + servicios.length + ' procesos de servicio sin ninguna prestación registrada');
   }
 
   return {
-    estado: 'PARCIAL',
-    resumen: servicios.length + ' procesos de servicio definidos, con ' + pasos.length + ' pasos.',
-    nota: nota,
+    estado: falta.length ? 'PARCIAL' : 'COMPLETO',
+    resumen: prestaciones.length + ' prestaciones registradas sobre ' + servicios.length +
+      ' procesos de servicio' + (noConformes.length ? '; ' + noConformes.length + ' salida(s) no conforme(s)' : '') + '.',
+    nota: falta.length ? 'Para cerrar ' + codigo + ': ' + falta.join('; ') + '.' : '',
+    evidencia: ev
+  };
+}
+
+/**
+ * v11.0 Fase 8 (§8.7). Antes esta clausula reusaba la evaluacion de no
+ * conformidades, que mide otra cosa: §10.2 es "algo salio mal en el
+ * sistema", §8.7 es "una salida concreta no cumplio y no se entrego asi".
+ *
+ * Lo que la clausula pide es que las salidas no conformes se IDENTIFIQUEN y
+ * se CONTROLEN. Sin ninguna registrada no se puede afirmar que se controlan
+ * -- pero tampoco que no existan: la nota lo dice en vez de dar por buena
+ * una ausencia.
+ */
+function evaluarSalidasNoConformes_() {
+  var prestaciones = leerFilasSeguro_(SHEETS.SGC_PRESTACIONES).filter(function (p) {
+    return esVerdaderoSgc_(p.activa);
+  });
+  var noConformes = prestaciones.filter(function (p) { return p.estado === 'NO_CONFORME'; });
+  var nc = evaluarNoConformidades_();
+
+  if (!prestaciones.length) {
+    return {
+      estado: nc.estado === 'FALTANTE' ? 'FALTANTE' : 'PARCIAL',
+      resumen: 'Sin registro de servicios prestados no hay dónde identificar una salida no conforme.',
+      nota: 'Registra las prestaciones en la sección Servicios. Mientras tanto, la evidencia disponible ' +
+        'son las no conformidades del sistema (§10.2), que miden algo distinto.',
+      evidencia: nc.evidencia
+    };
+  }
+
+  var tratadas = noConformes.filter(function (p) { return !!p.nc_id; });
+  var ev = noConformes.slice(-10).map(function (p) {
+    return {
+      tipo: 'Salida no conforme',
+      descripcion: p.proceso_codigo + ' → ' + p.cliente_nombre + ': ' + String(p.observaciones || '').slice(0, 90),
+      fecha: p.fecha_prestacion,
+      responsable: p.responsable_email
+    };
+  });
+  nc.evidencia.forEach(function (e) { ev.push(e); });
+
+  var falta = [];
+  if (noConformes.length && tratadas.length < noConformes.length) {
+    falta.push((noConformes.length - tratadas.length) + ' salida(s) no conforme(s) sin no conformidad abierta');
+  }
+
+  return {
+    estado: falta.length ? 'PARCIAL' : 'COMPLETO',
+    resumen: prestaciones.length + ' prestaciones controladas, ' + noConformes.length +
+      ' identificada(s) como no conforme(s)' + (tratadas.length ? ' y ' + tratadas.length + ' con NC abierta' : '') + '.',
+    nota: falta.length ? 'Para cerrar 8.7: ' + falta.join('; ') + '.'
+      : (noConformes.length ? '' : 'No se ha identificado ninguna salida no conforme. El control existe y está en uso; ' +
+        'que no haya hallazgos es un resultado, no una omisión.'),
     evidencia: ev
   };
 }

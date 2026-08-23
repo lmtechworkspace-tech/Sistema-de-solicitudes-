@@ -330,7 +330,15 @@ var BACKOFFICE_ACTIONS = {
   anularLecturaIndicadorSgc: handleAnularLecturaIndicadorSgc_,
 
   // v11.0 Fase 7: tablero del SGC.
-  resumenTableroSgc: handleResumenTableroSgc_
+  resumenTableroSgc: handleResumenTableroSgc_,
+
+  // v11.0 Fase 8 (§8.1/8.5/8.6/8.7): evidencia de servicios prestados.
+  listarPrestacionesSgc: handleListarPrestacionesSgc_,
+  registrarPrestacionSgc: handleRegistrarPrestacionSgc_,
+  liberarPrestacionSgc: handleLiberarPrestacionSgc_,
+  marcarNoConformePrestacionSgc: handleMarcarNoConformePrestacionSgc_,
+  abrirNcPrestacionSgc: handleAbrirNcPrestacionSgc_,
+  anularPrestacionSgc: handleAnularPrestacionSgc_
 };
 
 // ?page=app / ?page=admin sirve la UI real (Fase 8); sin ese parametro se
@@ -629,7 +637,16 @@ var MODULO_POR_ACCION = {
   anularIndicadorSgc: 'calidad',
   registrarLecturaIndicadorSgc: 'calidad',
   anularLecturaIndicadorSgc: 'calidad',
-  resumenTableroSgc: ['calidad', 'gerencia']
+  resumenTableroSgc: ['calidad', 'gerencia'],
+
+  // v11.0 Fase 8: el registro de servicios lo LEE quien supervisa el SGC;
+  // registrar y liberar es del Encargado.
+  listarPrestacionesSgc: ['calidad', 'gerencia'],
+  registrarPrestacionSgc: 'calidad',
+  liberarPrestacionSgc: 'calidad',
+  marcarNoConformePrestacionSgc: 'calidad',
+  abrirNcPrestacionSgc: 'calidad',
+  anularPrestacionSgc: 'calidad'
   // ping: sin modulo -- cualquier sesion valida.
   //
   // v6.4 (foto de perfil): getMiPerfil / guardarFotoPerfil /
@@ -1629,6 +1646,31 @@ function handleAnularLecturaIndicadorSgc_(data, contexto) {
 // v11.0 Fase 7: tablero del SGC.
 function handleResumenTableroSgc_(data, contexto) {
   return responderResultado_(Tablero.resumen(data, contexto));
+}
+
+// v11.0 Fase 8: evidencia de servicios prestados.
+function handleListarPrestacionesSgc_(data, contexto) {
+  return responderResultado_(Prestaciones.listar(data, contexto));
+}
+
+function handleRegistrarPrestacionSgc_(data, contexto) {
+  return responderResultado_(Prestaciones.registrar(data, contexto));
+}
+
+function handleLiberarPrestacionSgc_(data, contexto) {
+  return responderResultado_(Prestaciones.liberar(data, contexto));
+}
+
+function handleMarcarNoConformePrestacionSgc_(data, contexto) {
+  return responderResultado_(Prestaciones.marcarNoConforme(data, contexto));
+}
+
+function handleAbrirNcPrestacionSgc_(data, contexto) {
+  return responderResultado_(Prestaciones.abrirNoConformidad(data, contexto));
+}
+
+function handleAnularPrestacionSgc_(data, contexto) {
+  return responderResultado_(Prestaciones.anular(data, contexto));
 }
 
 // v6.0 (modulo Pausas Activas, Fase P0): CRUD de configuracion (ADM).
