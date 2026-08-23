@@ -175,6 +175,37 @@ test('v10.0 F6b: 7.2 y 7.3 llegan a COMPLETO solo cuando la cobertura de persona
   assert.equal(clausula(ctx, '7.2').estado, 'COMPLETO');
 });
 
+test('v11.0: 7.3 llega a COMPLETO cerrando la inducción por donde la cierra el sistema', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+
+  // El test de arriba se llama "7.2 y 7.3" pero solo ejercia 7.2, y por ese
+  // hueco paso que la matriz comparara COMPLETADO mientras el sistema
+  // escribe COMPLETADA: 7.3 no podia llegar a COMPLETO ni cerrando todo.
+  // Por eso este test NO escribe el estado a mano: usa registrarInduccion,
+  // que es quien lo escribe de verdad.
+  const p = toPlain(ctx.Personas.guardarPersona({
+    usuario_email: 'ana@homepymes.cl', nombre: 'Ana', tipo: 'INT'
+  }, CTX_ENCARGADO));
+
+  assert.equal(clausula(ctx, '7.3').estado, 'FALTANTE',
+    'recién creada, sus cinco ítems están en PENDIENTE');
+
+  const suyas = ctx.leerFilas_('SGC_INDUCCIONES')
+    .filter(function (i) { return i.persona_id === p.persona_id; });
+  assert.equal(suyas.length, 5);
+
+  suyas.forEach(function (item, n) {
+    ctx.Personas.registrarInduccion({
+      persona_id: p.persona_id, induccion_id: item.induccion_id,
+      estado: 'COMPLETADA', fecha: '2026-03-0' + (n + 1) + 'T00:00:00.000Z'
+    }, CTX_ENCARGADO);
+  });
+
+  assert.equal(clausula(ctx, '7.3').estado, 'COMPLETO',
+    'cerrados los cinco ítems, la cláusula tiene que darse por cubierta');
+});
+
 // --- las clausulas de documento NUNCA se adivinan -----------------------------
 
 test('v10.0 F6b: 5.2 (política) queda FALTANTE aunque existan documentos, hasta que se etiqueten', () => {
@@ -222,6 +253,34 @@ test('v10.0 F6b: una cláusula sin ningún módulo que la cubra explica por qué
   const c63 = toPlain(ctx.MatrizCobertura.getDetalle({ codigo: '6.3' }, CTX_ENCARGADO));
   assert.equal(c63.estado, 'FALTANTE');
   assert.match(c63.nota, /no tiene un módulo propio/i);
+});
+
+test('v11.0: una cláusula sin módulo propio SÍ cuenta el documento etiquetado', () => {
+  const ctx = loadConSchema();
+  sembrarRoles(ctx);
+
+  // 6.3 no tiene modulo en SIGSO. Antes devolvia FALTANTE sin mirar nada, y
+  // eso hacia inerte el etiquetado: se podia marcar un documento para 6.3 y
+  // no aparecia en ninguna parte.
+  const doc = toPlain(ctx.Calidad.crearDocumento({
+    codigo: 'DOC-01', nombre: 'Manual de Calidad', tipo: 'DOC', visibilidad: 'TODOS'
+  }, CTX_ENCARGADO));
+
+  assert.equal(clausula(ctx, '6.3').estado, 'FALTANTE',
+    'sin etiquetar sigue faltando: el documento existe pero nadie dijo que responda a 6.3');
+
+  ctx.Calidad.actualizarDocumento({
+    documento_id: doc.documento_id, clausulas_iso: ['6.3']
+  }, CTX_ENCARGADO);
+
+  const c63 = toPlain(ctx.MatrizCobertura.getDetalle({ codigo: '6.3' }, CTX_ENCARGADO));
+  // PARCIAL y no COMPLETO: un documento describe COMO se hace algo, no
+  // demuestra que se este haciendo, y aqui SIGSO no tiene la otra mitad.
+  assert.equal(c63.estado, 'PARCIAL');
+  assert.equal(c63.evidencia.length, 1);
+  assert.match(c63.evidencia[0].descripcion, /DOC-01/);
+  assert.match(c63.nota, /no tiene un módulo propio/i,
+    'la nota debe seguir diciendo que falta el módulo, no solo celebrar el documento');
 });
 
 // --- resumen global ------------------------------------------------------------

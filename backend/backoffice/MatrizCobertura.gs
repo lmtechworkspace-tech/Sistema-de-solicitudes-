@@ -320,7 +320,10 @@ var EVALUADORES_CLAUSULA_ISO = {
     var inducciones = leerFilasSeguro_(SHEETS.SGC_INDUCCIONES);
     var conInduccionCompleta = personas.filter(function (p) {
       var suyas = inducciones.filter(function (i) { return i.persona_id === p.persona_id; });
-      return suyas.length > 0 && suyas.every(function (i) { return i.estado === 'COMPLETADO'; });
+      // El valor que escribe registrarInduccion_ es COMPLETADA (asi lo dice
+      // tambien SGC_INDUCCIONES en Constantes y asi lo lee el front). Con
+      // COMPLETADO, 7.3 no podia llegar a COMPLETO ni cerrando todo.
+      return suyas.length > 0 && suyas.every(function (i) { return i.estado === 'COMPLETADA'; });
     });
     var pct = conInduccionCompleta.length / personas.length;
     var ev = conInduccionCompleta.slice(0, 15).map(function (p) {
@@ -960,16 +963,38 @@ function evaluarPorDocumentos_(codigo) {
 var NOTA_FALTANTE_POR_DEFECTO_ISO = {
   '6.3': 'La planificación de cambios no tiene un módulo propio en SIGSO hoy.',
   '7.1': 'La planificación de recursos no tiene un módulo propio en SIGSO hoy.',
-  '8.1': 'Requiere la evidencia de servicios (matriz cliente × proceso × período), pendiente para la Fase 7.',
   '8.2': 'Los requisitos de productos y servicios no tienen un módulo propio en SIGSO hoy.',
   // La nota anterior sugeria que 8.3 "puede no aplicar". Decidir eso por
   // insinuacion es justo lo que §4.3 prohibe: mientras no exista una
   // exclusion declarada CON justificacion, la norma considera la clausula
   // aplicable. La nota ahora apunta al lugar donde esa decision se toma.
-  '8.3': 'Sin evidencia estructurada. Si la organización determinó que esta cláusula no le aplica, tiene que declararlo como exclusión en Alcance, con su justificación (§4.3): mientras no esté declarada, la cláusula se considera aplicable.',
-  '8.5': 'Requiere la evidencia de servicios (matriz cliente × proceso × período), pendiente para la Fase 7.',
-  '8.6': 'La liberación de productos y servicios no tiene un módulo propio en SIGSO hoy.'
+  '8.3': 'Sin evidencia estructurada. Si la organización determinó que esta cláusula no le aplica, tiene que declararlo como exclusión en Alcance, con su justificación (§4.3): mientras no esté declarada, la cláusula se considera aplicable.'
 };
+
+// Clausulas que no tienen modulo propio en SIGSO (6.3, 7.1, 8.2, 8.3). Antes
+// devolvian FALTANTE sin mirar nada, y eso hacia INERTE el etiquetado: un
+// documento marcado para 6.3 en su ficha no aparecia por ningun lado. Ahora
+// el documento etiquetado si cuenta, pero como PARCIAL y no como COMPLETO:
+// un procedimiento describe COMO se hace algo, no demuestra que se este
+// haciendo, y para estas cuatro clausulas SIGSO no tiene la otra mitad.
+function evaluarClausulaSinModulo_(codigo) {
+  var porDocs = evaluarPorDocumentos_(codigo);
+  if (!porDocs.evidencia.length) {
+    return {
+      estado: 'FALTANTE',
+      resumen: 'Sin evidencia estructurada en el sistema.',
+      nota: NOTA_FALTANTE_POR_DEFECTO_ISO[codigo] || 'Sin evidencia estructurada en el sistema todavía.',
+      evidencia: []
+    };
+  }
+  return {
+    estado: 'PARCIAL',
+    resumen: porDocs.evidencia.length + ' documento(s) etiquetado(s) para esta cláusula.',
+    nota: (NOTA_FALTANTE_POR_DEFECTO_ISO[codigo] || '') +
+      ' El documento etiquetado respalda la cláusula, pero SIGSO no tiene dónde registrar que se esté aplicando: para el auditor, la evidencia es el documento.',
+    evidencia: porDocs.evidencia
+  };
+}
 
 function evaluarClausula_(codigo, excluidas) {
   var exclusiones = (excluidas || exclusionesVigentesPorClausula_())[codigo] || [];
@@ -988,12 +1013,7 @@ function evaluarClausula_(codigo, excluidas) {
   }
 
   var evaluador = EVALUADORES_CLAUSULA_ISO[codigo];
-  var r = evaluador ? evaluador() : {
-    estado: 'FALTANTE',
-    resumen: 'Sin evidencia estructurada en el sistema.',
-    nota: NOTA_FALTANTE_POR_DEFECTO_ISO[codigo] || 'Sin evidencia estructurada en el sistema todavía.',
-    evidencia: []
-  };
+  var r = evaluador ? evaluador() : evaluarClausulaSinModulo_(codigo);
 
   if (exclusiones.length) {
     var listado = exclusiones.map(function (e) { return e.clausula; }).join(', ');
