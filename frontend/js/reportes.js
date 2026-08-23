@@ -385,6 +385,120 @@
   }
 
   // ==========================================================================
+  // CUMPLIMIENTO SOBRE ÍTEMS CON FECHA (v12.4)
+  //
+  // Se promueve al motor porque Gerencia y Jefatura la necesitan igual, y
+  // porque la REGLA de qué se cuenta no debe poder divergir entre módulos:
+  // si un panel midiera distinto que el otro, los dos números serían
+  // sospechosos y no habría forma de saber cuál creer.
+  //
+  // LA REGLA: el cumplimiento se mide SOLO sobre lo entregado CON fecha
+  // comprometida. Un ítem sin comprometer no cuenta como incumplido -- no hay
+  // promesa que romper todavía, y meterlo hundiría el porcentaje de quien
+  // recién recibió trabajo. Quien no tiene entregas queda con pct = null, que
+  // se muestra como "sin entregas" y NUNCA como 0%.
+  // ==========================================================================
+
+  function agruparCumplimiento(items, campo, etiquetaVacia) {
+    var grupos = {};
+    (items || []).forEach(function (i) {
+      var k = i[campo] || etiquetaVacia || '(sin dato)';
+      if (!grupos[k]) grupos[k] = { total: 0, entregados: 0, aTiempo: 0, abiertos: 0 };
+      grupos[k].total++;
+      if (i.fecha_terminada && i.fecha_comprometida) {
+        grupos[k].entregados++;
+        if (new Date(i.fecha_terminada) <= new Date(i.fecha_comprometida)) grupos[k].aTiempo++;
+      } else if (!i.fecha_terminada) {
+        grupos[k].abiertos++;
+      }
+    });
+    return Object.keys(grupos).map(function (k) {
+      var g = grupos[k];
+      return {
+        etiqueta: k, total: g.total, entregados: g.entregados,
+        aTiempo: g.aTiempo, abiertos: g.abiertos,
+        pct: g.entregados ? Math.round(g.aTiempo / g.entregados * 100) : null
+      };
+    }).sort(function (a, b) {
+      // Los que no tienen entregas van al final: no se pueden ordenar por un
+      // porcentaje que no existe.
+      if (a.pct === null && b.pct === null) return b.total - a.total;
+      if (a.pct === null) return 1;
+      if (b.pct === null) return -1;
+      return b.pct - a.pct;
+    });
+  }
+
+  function tablaCumplimiento(filas, etiquetaDimension) {
+    return tabla([
+      { campo: 'etiqueta', titulo: etiquetaDimension },
+      { campo: 'total', titulo: 'Ítems', alinear: 'derecha' },
+      { campo: 'abiertos', titulo: 'Abiertos', alinear: 'derecha' },
+      { campo: 'entregados', titulo: 'Entregados', alinear: 'derecha' },
+      { campo: 'aTiempo', titulo: 'A tiempo', alinear: 'derecha' },
+      { campo: 'pctTexto', titulo: 'Cumplimiento', alinear: 'derecha' }
+    ], filas.map(function (f) {
+      var o = {};
+      Object.keys(f).forEach(function (k) { o[k] = f[k]; });
+      o.pctTexto = f.pct === null ? 'sin entregas' : f.pct + '%';
+      return o;
+    }), { vacio: 'No hay ítems en este corte.' });
+  }
+
+  /**
+   * Cuerpo completo de un reporte de cumplimiento por una dimensión.
+   * @param {Array} items
+   * @param {Object} opts { campo, etiquetaVacia, dimension, etiquetaTotal }
+   */
+  function cuerpoCumplimientoPor(items, opts) {
+    opts = opts || {};
+    var filas = agruparCumplimiento(items, opts.campo, opts.etiquetaVacia);
+    var medibles = filas.filter(function (f) { return f.pct !== null; });
+    return kpis([
+      { etiqueta: opts.etiquetaTotal || (opts.dimension + 's'), valor: filas.length },
+      { etiqueta: 'Ítems considerados', valor: (items || []).length },
+      { etiqueta: 'Ya medibles', valor: medibles.length,
+        titulo: 'Sólo se puede medir cumplimiento donde hay entregas con fecha comprometida.' }
+    ]) +
+    ranking(medibles.map(function (f) {
+      return { etiqueta: f.etiqueta, valor: f.pct, texto: f.pct + '%' };
+    }), { vacio: 'Todavía no hay entregas con fecha comprometida: no hay cumplimiento que medir.' }) +
+    '<h4>Detalle</h4>' +
+    tablaCumplimiento(filas, opts.dimension || 'Grupo');
+  }
+
+  /**
+   * Entrada vs salida por mes. `serie` = [{etiqueta, creadas, cerradas, ...}],
+   * el formato que ya devuelven calcularTendenciaTemporal_ (Gerencia) y
+   * calcularTendenciaJefatura_.
+   */
+  function cuerpoEntradaSalida(serie) {
+    serie = serie || [];
+    if (!serie.length) return window.Componentes.vacio('Sin datos de los últimos meses.');
+    var entraron = serie.reduce(function (s, t) { return s + (Number(t.creadas) || 0); }, 0);
+    var cerradas = serie.reduce(function (s, t) { return s + (Number(t.cerradas) || 0); }, 0);
+    var saldo = entraron - cerradas;
+    return kpis([
+      { etiqueta: 'Entraron', valor: entraron },
+      { etiqueta: 'Se cerraron', valor: cerradas },
+      { etiqueta: 'Saldo de la cola', valor: (saldo > 0 ? '+' : '') + saldo, alerta: saldo > 0,
+        titulo: 'Positivo = entra más de lo que sale: la cola crece.' }
+    ]) +
+    '<h4>Entradas por mes</h4>' +
+    tendencia(serie.map(function (t) { return { etiqueta: t.etiqueta, valor: t.creadas }; }),
+      { titulo: 'Creadas por mes' }) +
+    '<h4>Cierres por mes</h4>' +
+    tendencia(serie.map(function (t) { return { etiqueta: t.etiqueta, valor: t.cerradas }; }),
+      { titulo: 'Cerradas por mes' }) +
+    '<h4>Detalle</h4>' +
+    tabla([
+      { campo: 'etiqueta', titulo: 'Mes' },
+      { campo: 'creadas', titulo: 'Entraron', alinear: 'derecha' },
+      { campo: 'cerradas', titulo: 'Se cerraron', alinear: 'derecha' }
+    ], serie);
+  }
+
+  // ==========================================================================
   // EXPORTACIÓN (§13)
   // ==========================================================================
   // El CSV sale de la TABLA YA PINTADA, no de una segunda consulta: así lo que
@@ -457,6 +571,10 @@
     ranking: ranking,
     tendencia: tendencia,
     comparacion: comparacion,
+    agruparCumplimiento: agruparCumplimiento,
+    tablaCumplimiento: tablaCumplimiento,
+    cuerpoCumplimientoPor: cuerpoCumplimientoPor,
+    cuerpoEntradaSalida: cuerpoEntradaSalida,
     barraAcciones: barraAcciones,
     wireAcciones: wireAcciones
   };

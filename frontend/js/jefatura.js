@@ -14,27 +14,22 @@
   window.SigsoJefatura = { cargar: cargarJefatura_ };
 
   document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('[data-jef-tab]').forEach(function (boton) {
-      boton.addEventListener('click', function () {
-        document.querySelectorAll('[data-jef-tab]').forEach(function (b) {
-          b.classList.remove('sigso-tabs__boton--activo');
-        });
-        boton.classList.add('sigso-tabs__boton--activo');
-        var tab = boton.getAttribute('data-jef-tab');
-        document.getElementById('jef-panel-tablero').classList.toggle('sigso-oculto', tab !== 'tablero');
-        document.getElementById('jef-panel-persona').classList.toggle('sigso-oculto', tab !== 'persona');
-        document.getElementById('jef-panel-carga').classList.toggle('sigso-oculto', tab !== 'carga');
-        var panelActividades = document.getElementById('jef-panel-actividades');
-        if (panelActividades) panelActividades.classList.toggle('sigso-oculto', tab !== 'actividades');
-        // v7.0 (Fase 3): datos propios de Actividades.gs -- se piden solo al
-        // entrar a la pestana (igual patron que "Pausas activas" en
-        // Gerencia), no en cada carga de "Mi Departamento".
-        if (tab === 'actividades') cargarActividadesEquipo_();
-      });
-    });
+    // v12.4: las 4 pestañas pasaron a la navegacion vertical. El cableado
+    // ya no vive aca: lo hace onSeleccion de SigsoNav.
+    pintarNavJefatura_();
   });
 
   function cargarJefatura_() {
+    // v12.4: la vista puede venir de la URL (#/jefatura/reportes). Se valida
+    // contra la arquitectura: una URL no puede inventar una vista.
+    var pedidaJef = (window.SigsoShell && SigsoShell.tomarItemDeRuta)
+      ? SigsoShell.tomarItemDeRuta() : '';
+    if (pedidaJef && ARQUITECTURA_JEFATURA.some(function (sub) {
+      return sub.items.some(function (it) { return it.id === pedidaJef; });
+    })) {
+      itemJefaturaActivo_ = pedidaJef;
+    }
+    irAVistaJefatura_(itemJefaturaActivo_);
     // v5.0 F4 (§6.3): mismo esqueleto que Gerencia/Bandeja mientras se pide
     // getPanelJefatura.
     document.getElementById('jef-contenedor-kpis').innerHTML = new Array(4).fill(
@@ -50,6 +45,10 @@
           return respuesta;
         }
         var datos = respuesta.data;
+        // v12.4: se guarda para que el centro de reportes lo use sin volver
+        // a pedirlo -- lo que se ve en el reporte y en el tablero sale del
+        // MISMO conjunto ya acotado al equipo.
+        panelJefatura_ = datos;
         if (datos.equipo.length === 0) {
           document.getElementById('jef-contenedor-kpis').innerHTML = '';
           document.getElementById('jef-panel-hoy').classList.add('sigso-oculto');
@@ -64,6 +63,10 @@
         renderTablero_(datos.items);
         renderPorPersona_(datos.por_persona);
         renderCarga_(datos.carga);
+        // Si la persona esta parada en Reportes, hay que repintarlo ahora:
+        // el catalogo pudo pintarse antes de que llegaran los datos.
+        if (itemJefaturaActivo_ === 'reportes') renderReportesJefatura_();
+        pintarNavJefatura_();
         return respuesta;
       });
   }
@@ -327,4 +330,168 @@
       });
     });
   }
+
+  // ==========================================================================
+  // v12.4 (Fase 3) — Navegación y reportes de "Mi Departamento"
+  //
+  // Mismo criterio que Gerencia: sus cuatro pestañas eran navegación de
+  // MÓDULO, no pestañas sobre una entidad.
+  //
+  // Los reportes reusan los cuerpos del MOTOR (SigsoReportes), los mismos que
+  // usa Gerencia. Eso no es sólo ahorro de código: la regla de qué cuenta como
+  // cumplimiento no puede divergir entre los dos paneles, porque entonces un
+  // jefe y Gerencia verían números distintos del mismo equipo y no habría
+  // forma de saber cuál creer.
+  var ARQUITECTURA_JEFATURA = [
+    { id: 'equipo', nombre: 'Mi equipo', icono: 'persona', items: [
+      { id: 'tablero', nombre: 'Tablero' },
+      { id: 'persona', nombre: 'Por persona' },
+      { id: 'actividades', nombre: 'Actividades del equipo' }
+    ] },
+    { id: 'reportes', nombre: 'Reportes', icono: 'grafico',
+      descripcion: 'Desempeño de tu equipo', items: [
+      { id: 'reportes', nombre: 'Centro de reportes' },
+      { id: 'carga', nombre: 'Carga por módulo y tipo' }
+    ] }
+  ];
+
+  var PANEL_POR_ITEM_JEF = {
+    tablero: 'jef-panel-tablero',
+    persona: 'jef-panel-persona',
+    carga: 'jef-panel-carga',
+    actividades: 'jef-panel-actividades',
+    reportes: 'jef-panel-reportes'
+  };
+
+  var itemJefaturaActivo_ = 'tablero';
+  var reporteJefAbierto_ = null;
+  var panelJefatura_ = null;
+
+  function pintarNavJefatura_() {
+    var cont = document.getElementById('jef-nav');
+    if (!cont || !window.SigsoNav) return;
+    SigsoNav.render({
+      contenedor: cont,
+      modulo: 'jefatura',
+      submodulos: ARQUITECTURA_JEFATURA,
+      activo: itemJefaturaActivo_,
+      onSeleccion: function (id) { irAVistaJefatura_(id); }
+    });
+  }
+
+  function irAVistaJefatura_(id) {
+    itemJefaturaActivo_ = id;
+    if (id !== 'reportes') reporteJefAbierto_ = null;
+    pintarNavJefatura_();
+    if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id);
+
+    Object.keys(PANEL_POR_ITEM_JEF).forEach(function (k) {
+      var el = document.getElementById(PANEL_POR_ITEM_JEF[k]);
+      if (el) el.classList.toggle('sigso-oculto', k !== id);
+    });
+
+    // Datos propios de Actividades.gs: se piden sólo al entrar, no en cada
+    // carga del panel (mismo patrón que Pausas en Gerencia).
+    if (id === 'actividades') cargarActividadesEquipo_();
+    if (id === 'reportes') renderReportesJefatura_();
+  }
+
+  // --- Centro de reportes ----------------------------------------------------
+  // Jefatura NO tiene area_nombre ni re_compromisos/reaperturas en sus items
+  // (Gerencia sí). Los reportes que dependen de eso se declaran PENDIENTE con
+  // el motivo, en vez de omitirse en silencio.
+  var REPORTES_JEFATURA = [
+    { grupo: 'Cumplimiento', icono: 'escudo', reportes: [
+      { id: 'jef-responsable', nombre: 'Cumplimiento por persona', tipo: 'RANKING', estado: 'LISTO',
+        desc: 'Entregas a tiempo de cada integrante, sobre lo que ya cerró.',
+        fuente: 'getPanelJefatura', filtros: [] },
+      { id: 'jef-modulo', nombre: 'Cumplimiento por módulo', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
+        desc: 'Qué módulos del sistema concentran los atrasos del equipo.',
+        fuente: 'getPanelJefatura', filtros: [] },
+      { id: 'jef-tipo', nombre: 'Cumplimiento por tipo', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
+        desc: 'Si el atraso se concentra en errores, mejoras o alguna otra clase.',
+        fuente: 'getPanelJefatura', filtros: [] },
+      { id: 'jef-resbalon', nombre: 'Resbalón de compromisos', tipo: 'DETALLE', estado: 'PENDIENTE',
+        desc: 'Ítems que movieron su fecha comprometida o se reabrieron.',
+        falta: 'getPanelJefatura no devuelve re_compromisos ni reaperturas — Gerencia sí los calcula (calcularPanelGerencia_). Habría que agregarlos a Jefatura.getPanel.' }
+    ] },
+    { grupo: 'Evolución', icono: 'grafico', reportes: [
+      { id: 'jef-throughput', nombre: 'Entrada vs salida por mes', tipo: 'TENDENCIA', estado: 'LISTO',
+        desc: 'Cuánto entra y cuánto cierra tu equipo cada mes.',
+        fuente: 'getPanelJefatura', filtros: [] },
+      { id: 'jef-carga', nombre: 'Carga por módulo y tipo', tipo: 'RANKING', estado: 'LISTO',
+        desc: 'Qué se repite en tu equipo.',
+        fuente: 'getPanelJefatura', seccion: 'carga' }
+    ] }
+  ];
+
+  function registrarReportesJefatura_() {
+    if (!window.SigsoReportes || registrarReportesJefatura_.hecho) return;
+    SigsoReportes.registrar('jefatura', {
+      titulo: 'Reportes de tu departamento',
+      nota: 'Se arman con lo que ya devuelve el panel, siempre acotado a tu equipo. ' +
+        'La regla de cumplimiento es la MISMA que usa Gerencia: sólo se mide sobre ' +
+        'lo entregado con fecha comprometida.',
+      grupos: REPORTES_JEFATURA
+    });
+    registrarReportesJefatura_.hecho = true;
+  }
+
+  function renderReportesJefatura_() {
+    var cont = document.getElementById('jef-panel-reportes');
+    if (!cont) return;
+    registrarReportesJefatura_();
+    if (!window.SigsoReportes) {
+      cont.innerHTML = Componentes.alerta('El motor de reportes no está disponible.', 'error');
+      return;
+    }
+    if (!panelJefatura_) {
+      cont.innerHTML = Componentes.cargando('Esperando los datos del panel...');
+      return;
+    }
+    if (reporteJefAbierto_) { pintarReporteJefatura_(cont); return; }
+    SigsoReportes.pintarCatalogo({
+      contenedor: cont,
+      modulo: 'jefatura',
+      onAbrir: function (id) { reporteJefAbierto_ = id; renderReportesJefatura_(); },
+      onIrASeccion: function (vista) { irAVistaJefatura_(vista); }
+    });
+  }
+
+  function pintarReporteJefatura_(cont) {
+    var r = SigsoReportes.buscarReporte('jefatura', reporteJefAbierto_);
+    if (!r) { reporteJefAbierto_ = null; renderReportesJefatura_(); return; }
+    var items = panelJefatura_.items || [];
+    var cuerpo = '';
+    if (r.id === 'jef-responsable') {
+      cuerpo = SigsoReportes.cuerpoCumplimientoPor(items, {
+        campo: 'desarrollador_nombre', etiquetaVacia: '(sin asignar)',
+        dimension: 'Persona', etiquetaTotal: 'Personas'
+      });
+    } else if (r.id === 'jef-modulo') {
+      cuerpo = SigsoReportes.cuerpoCumplimientoPor(items, {
+        campo: 'modulo_nombre', etiquetaVacia: '(sin módulo)',
+        dimension: 'Módulo', etiquetaTotal: 'Módulos'
+      });
+    } else if (r.id === 'jef-tipo') {
+      cuerpo = SigsoReportes.cuerpoCumplimientoPor(items, {
+        campo: 'tipo_nombre', etiquetaVacia: '(sin tipo)',
+        dimension: 'Tipo', etiquetaTotal: 'Tipos'
+      });
+    } else if (r.id === 'jef-throughput') {
+      cuerpo = SigsoReportes.cuerpoEntradaSalida(panelJefatura_.tendencia || []);
+    }
+
+    cont.innerHTML =
+      SigsoReportes.barraAcciones({}) +
+      '<h3>' + Componentes.escaparHtml(r.nombre) + '</h3>' +
+      '<p class="sigso-ayuda">' + Componentes.escaparHtml(r.desc) + '</p>' +
+      cuerpo;
+
+    SigsoReportes.wireAcciones(cont, {
+      nombreArchivo: 'sigso-jefatura-' + r.id,
+      onVolver: function () { reporteJefAbierto_ = null; renderReportesJefatura_(); }
+    });
+  }
+
 })();

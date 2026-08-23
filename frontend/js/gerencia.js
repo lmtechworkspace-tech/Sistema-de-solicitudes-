@@ -1309,10 +1309,21 @@
     if (!r) { reporteGerAbierto_ = null; renderReportesGerencia_(); return; }
     var items = panelActual.items || [];
     var cuerpo = '';
-    if (r.id === 'ger-area') cuerpo = cuerpoCumplimientoPorArea_(items);
-    else if (r.id === 'ger-responsable') cuerpo = cuerpoCumplimientoPorResponsable_(items);
-    else if (r.id === 'ger-resbalon') cuerpo = cuerpoResbalon_(items);
-    else if (r.id === 'ger-throughput') cuerpo = cuerpoThroughput_(panelActual.tendencia || []);
+    // v12.4: la agregacion de cumplimiento y la de entrada/salida viven en el
+    // motor. Jefatura las usa igual, y asi la REGLA de que se cuenta no puede
+    // divergir entre los dos paneles.
+    if (r.id === 'ger-area') {
+      cuerpo = SigsoReportes.cuerpoCumplimientoPor(items, {
+        campo: 'area_nombre', etiquetaVacia: '(sin área)',
+        dimension: 'Área', etiquetaTotal: 'Áreas con actividad'
+      });
+    } else if (r.id === 'ger-responsable') {
+      cuerpo = SigsoReportes.cuerpoCumplimientoPor(items, {
+        campo: 'desarrollador_nombre', etiquetaVacia: '(sin asignar)',
+        dimension: 'Responsable', etiquetaTotal: 'Responsables'
+      });
+    } else if (r.id === 'ger-resbalon') cuerpo = cuerpoResbalon_(items);
+    else if (r.id === 'ger-throughput') cuerpo = SigsoReportes.cuerpoEntradaSalida(panelActual.tendencia || []);
     else if (r.id === 'ger-comparativo') cuerpo = cuerpoComparativo_(panelActual.kpis || {});
 
     cont.innerHTML =
@@ -1327,86 +1338,9 @@
     });
   }
 
-  /**
-   * Agrupa por una dimensión y mide cumplimiento SOLO sobre lo entregado con
-   * fecha comprometida. Un ítem sin comprometer no se cuenta como incumplido:
-   * todavía no hay promesa que romper, y meterlo hundiría el porcentaje de
-   * quien recién recibió trabajo.
-   */
-  function agruparCumplimiento_(items, campo, etiquetaVacia) {
-    var grupos = {};
-    items.forEach(function (i) {
-      var k = i[campo] || etiquetaVacia;
-      if (!grupos[k]) grupos[k] = { total: 0, entregados: 0, aTiempo: 0, abiertos: 0 };
-      grupos[k].total++;
-      if (i.fecha_terminada && i.fecha_comprometida) {
-        grupos[k].entregados++;
-        if (new Date(i.fecha_terminada) <= new Date(i.fecha_comprometida)) grupos[k].aTiempo++;
-      } else if (!i.fecha_terminada) {
-        grupos[k].abiertos++;
-      }
-    });
-    return Object.keys(grupos).map(function (k) {
-      var g = grupos[k];
-      return {
-        etiqueta: k, total: g.total, entregados: g.entregados,
-        aTiempo: g.aTiempo, abiertos: g.abiertos,
-        pct: g.entregados ? Math.round(g.aTiempo / g.entregados * 100) : null
-      };
-    }).sort(function (a, b) {
-      // Los que no tienen entregas van al final: no se pueden ordenar por un
-      // porcentaje que no existe.
-      if (a.pct === null && b.pct === null) return b.total - a.total;
-      if (a.pct === null) return 1;
-      if (b.pct === null) return -1;
-      return b.pct - a.pct;
-    });
-  }
 
-  function tablaCumplimiento_(filas, etiquetaDimension) {
-    return SigsoReportes.tabla([
-      { campo: 'etiqueta', titulo: etiquetaDimension },
-      { campo: 'total', titulo: 'Ítems', alinear: 'derecha' },
-      { campo: 'abiertos', titulo: 'Abiertos', alinear: 'derecha' },
-      { campo: 'entregados', titulo: 'Entregados', alinear: 'derecha' },
-      { campo: 'aTiempo', titulo: 'A tiempo', alinear: 'derecha' },
-      { campo: 'pctTexto', titulo: 'Cumplimiento', alinear: 'derecha' }
-    ], filas.map(function (f) {
-      return Object.assign({}, f, {
-        pctTexto: f.pct === null ? 'sin entregas' : f.pct + '%'
-      });
-    }), { vacio: 'No hay ítems en este corte.' });
-  }
 
-  function cuerpoCumplimientoPorArea_(items) {
-    var filas = agruparCumplimiento_(items, 'area_nombre', '(sin área)');
-    var conEntregas = filas.filter(function (f) { return f.pct !== null; });
-    return SigsoReportes.kpis([
-      { etiqueta: 'Áreas con actividad', valor: filas.length },
-      { etiqueta: 'Ítems considerados', valor: items.length },
-      { etiqueta: 'Áreas ya medibles', valor: conEntregas.length,
-        titulo: 'Un área sólo es medible cuando tiene ítems entregados con fecha comprometida.' }
-    ]) +
-    SigsoReportes.ranking(conEntregas.map(function (f) {
-      return { etiqueta: f.etiqueta, valor: f.pct, texto: f.pct + '%' };
-    }), { vacio: 'Ningún área tiene todavía entregas con fecha comprometida: no hay cumplimiento que medir.' }) +
-    '<h4>Detalle</h4>' +
-    tablaCumplimiento_(filas, 'Área');
-  }
 
-  function cuerpoCumplimientoPorResponsable_(items) {
-    var filas = agruparCumplimiento_(items, 'desarrollador_nombre', '(sin asignar)');
-    var conEntregas = filas.filter(function (f) { return f.pct !== null; });
-    return SigsoReportes.kpis([
-      { etiqueta: 'Responsables', valor: filas.length },
-      { etiqueta: 'Ya medibles', valor: conEntregas.length }
-    ]) +
-    SigsoReportes.ranking(conEntregas.map(function (f) {
-      return { etiqueta: f.etiqueta, valor: f.pct, texto: f.pct + '%' };
-    }), { vacio: 'Nadie tiene todavía entregas con fecha comprometida.' }) +
-    '<h4>Detalle</h4>' +
-    tablaCumplimiento_(filas, 'Responsable');
-  }
 
   function cuerpoResbalon_(items) {
     var movidos = items.filter(function (i) {
@@ -1434,28 +1368,6 @@
     ], movidos, { vacio: 'Ningún ítem movió su fecha ni se reabrió. Nada que revisar.' });
   }
 
-  function cuerpoThroughput_(tendencia) {
-    if (!tendencia.length) return Componentes.vacio('Sin datos de los últimos meses.');
-    var entra = tendencia.map(function (t) { return { etiqueta: t.etiqueta, valor: t.creadas }; });
-    var sale = tendencia.map(function (t) { return { etiqueta: t.etiqueta, valor: t.cerradas }; });
-    var saldo = tendencia.reduce(function (s, t) { return s + (t.creadas - t.cerradas); }, 0);
-    return SigsoReportes.kpis([
-      { etiqueta: 'Entraron (6 meses)', valor: tendencia.reduce(function (s, t) { return s + t.creadas; }, 0) },
-      { etiqueta: 'Se cerraron', valor: tendencia.reduce(function (s, t) { return s + t.cerradas; }, 0) },
-      { etiqueta: 'Saldo de la cola', valor: (saldo > 0 ? '+' : '') + saldo, alerta: saldo > 0,
-        titulo: 'Positivo = entra más de lo que sale: la cola crece.' }
-    ]) +
-    '<h4>Entradas por mes</h4>' + SigsoReportes.tendencia(entra, { titulo: 'Solicitudes creadas por mes' }) +
-    '<h4>Cierres por mes</h4>' + SigsoReportes.tendencia(sale, { titulo: 'Solicitudes cerradas por mes' }) +
-    '<h4>Detalle</h4>' +
-    SigsoReportes.tabla([
-      { campo: 'etiqueta', titulo: 'Mes' },
-      { campo: 'creadas', titulo: 'Entraron', alinear: 'derecha' },
-      { campo: 'cerradas', titulo: 'Se cerraron', alinear: 'derecha' },
-      { campo: 'entregados', titulo: 'Entregados', alinear: 'derecha' },
-      { campo: 'entregadosATiempo', titulo: 'A tiempo', alinear: 'derecha' }
-    ], tendencia);
-  }
 
   // Etiquetas legibles de los KPIs de Gerencia, y si BAJAR es lo bueno.
   // "atrasadas_activas" subiendo es malo; "pct_cumplimiento" subiendo es bueno.

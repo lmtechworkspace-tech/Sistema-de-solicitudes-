@@ -900,6 +900,10 @@
           <p class="sigso-ayuda">Solo ves lo asociado a las personas a cargo tuyo (como solicitantes o como responsables). Para ver todas las solicitudes, contacta a Gerencia.</p>
           <button type="button" class="sigso-boton--secundario" id="btn-actualizar-jefatura">Actualizar</button>
 
+          <div class="sigso-modulo-layout">
+            <nav class="sigso-modulo-layout__nav sigso-nav2" id="jef-nav"
+                 aria-label="Secciones de Mi Departamento"></nav>
+            <div class="sigso-modulo-layout__panel">
           <div class="sigso-kpis" id="jef-contenedor-kpis"></div>
 
           <div class="sigso-card" id="jef-panel-hoy">
@@ -907,16 +911,8 @@
             <div id="jef-contenedor-hoy"></div>
           </div>
 
-          <div class="sigso-tabs" role="tablist">
-            <button type="button" class="sigso-tabs__boton sigso-tabs__boton--activo" id="jef-tab-tablero" data-jef-tab="tablero">Tablero</button>
-            <button type="button" class="sigso-tabs__boton" id="jef-tab-persona" data-jef-tab="persona">Por persona</button>
-            <button type="button" class="sigso-tabs__boton" id="jef-tab-carga" data-jef-tab="carga">Carga</button>
-            <!-- v7.0 (Fase 3): "Actividades del equipo" -- deja de tener que
-                 preguntar (documentacion/SIGSO-v7.0-propuesta-modulo-gestion-
-                 operacional.md §5.2). Datos propios (Actividades.gs), no de
-                 Jefatura.getPanel -- se cargan al entrar a la pestaña. -->
-            <button type="button" class="sigso-tabs__boton" id="jef-tab-actividades" data-jef-tab="actividades">Actividades del equipo</button>
-          </div>
+          <!-- v12.4: las 4 pestañas pasaron a la navegación vertical (#jef-nav).
+               Mismo criterio que Gerencia: eran navegación de MÓDULO. -->
 
           <div id="jef-panel-tablero" class="sigso-card">
             <div id="jef-contenedor-tablero"></div>
@@ -936,6 +932,11 @@
             <div class="sigso-mt-resumen" id="jef-act-resumen"></div>
             <div id="jef-act-contenido"></div>
           </div>
+          <!-- v12.4: centro de reportes del modulo. Lo llena jefatura.js con
+               SigsoReportes; nace oculto igual que los demas paneles. -->
+          <div id="jef-panel-reportes" class="sigso-card sigso-oculto"></div>
+            </div>
+          </div><!-- /sigso-modulo-layout de Jefatura -->
         </section>
       </section>
 

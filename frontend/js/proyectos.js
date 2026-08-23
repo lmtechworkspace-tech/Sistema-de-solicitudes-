@@ -23,7 +23,16 @@
   // agregar integrante...), el guardado viajaba con proyecto_id vacio y el
   // backend lo rechazaba en silencio (parecia "no se guarda").
   window.SigsoProyectos = {
-    cargar: cargarPortafolio_,
+    cargar: function () {
+      // v12.4: la vista puede venir de la URL (#/proyectos/reportes). Se
+      // valida contra la arquitectura: una URL no puede inventar una vista.
+      var pedidaPy = (window.SigsoShell && SigsoShell.tomarItemDeRuta)
+        ? SigsoShell.tomarItemDeRuta() : '';
+      var valida = ARQUITECTURA_PROYECTOS.some(function (sub) {
+        return sub.items.some(function (it) { return it.id === pedidaPy; });
+      });
+      irAVistaProyectos_(valida ? pedidaPy : 'portafolio');
+    },
     refrescar: function () {
       if (proyectoActivoId_) refrescarDetalle_(); else cargarPortafolio_();
     }
@@ -94,7 +103,7 @@
   function cargarPortafolio_() {
     proyectoActivoId_ = null;
     datosDetalleActual_ = null;
-    var cont = document.getElementById('proyectos-contenido');
+    var cont = panelProyectos_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando proyectos...');
     var filtros = filtroEstadoPortafolio_ ? { estado: filtroEstadoPortafolio_ } : {};
@@ -108,6 +117,7 @@
         return;
       }
       proyectosPortafolioSinFiltrarSalud_ = rProyectos.data || [];
+      portafolioCargado_ = true;
       resumenPortafolioActual_ = (rResumen && rResumen.ok) ? rResumen.data : null;
       pintarPortafolio_(cont, proyectosPortafolioSinFiltrarSalud_);
     }).catch(function () {
@@ -307,13 +317,13 @@
   // motivo no hay nada en cache todavia (carga interrumpida), cae a pedirlo.
   function cambiarPestana_(id) {
     pestanaActiva_ = id;
-    var cont = document.getElementById('proyectos-contenido');
+    var cont = panelProyectos_();
     if (!cont || !datosDetalleActual_) { refrescarDetalle_(); return; }
     pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala);
   }
 
   function refrescarDetalle_() {
-    var cont = document.getElementById('proyectos-contenido');
+    var cont = panelProyectos_();
     if (!cont || !proyectoActivoId_) return;
     cont.innerHTML = Componentes.cargando('Cargando proyecto...');
 
@@ -1389,4 +1399,274 @@
     if (isNaN(f.getTime())) return '';
     return f.toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   }
+
+  // ==========================================================================
+  // v12.4 (Fase 3) — Navegación y reportes de Proyectos
+  //
+  // A diferencia de Gerencia y Jefatura, acá NO se tocan las 7 pestañas del
+  // detalle de un proyecto: esas son pestañas sobre una ENTIDAD (un proyecto
+  // concreto), no navegación de módulo. Convertirlas daría tres niveles
+  // verticales a la vez, que es lo que el encargo pedía evitar.
+  //
+  // Lo que sí es navegación de módulo son sus dos destinos: el portafolio y
+  // los reportes.
+  var ARQUITECTURA_PROYECTOS = [
+    { id: 'portafolio', nombre: 'Portafolio', icono: 'caja', plano: true, items: [
+      { id: 'portafolio', nombre: 'Portafolio' }
+    ] },
+    { id: 'reportes', nombre: 'Reportes', icono: 'grafico', plano: true,
+      descripcion: 'Estado y avance del portafolio', items: [
+      { id: 'reportes', nombre: 'Centro de reportes' }
+    ] }
+  ];
+
+  var vistaProyectos_ = 'portafolio';
+  // proyectosPortafolioSinFiltrarSalud_ arranca en [] y no en null, asi que
+  // no sirve para saber si YA se pidio: una lista vacia legitima (sin
+  // proyectos) se veria igual que 'todavia no cargue'.
+  var portafolioCargado_ = false;
+  var reportePyAbierto_ = null;
+
+  // Crea el layout de dos columnas una vez y devuelve SIEMPRE el panel
+  // derecho, para que las vistas que escriben el contenido no pisen la
+  // navegación (mismo patrón que panelSgc_ en Calidad).
+  function panelProyectos_() {
+    var raiz = document.getElementById('proyectos-contenido');
+    if (!raiz) return null;
+    var panel = raiz.querySelector('.sigso-modulo-layout__panel');
+    if (!panel) {
+      raiz.innerHTML =
+        '<div class="sigso-modulo-layout">' +
+          '<nav class="sigso-modulo-layout__nav sigso-nav2" id="py-nav" aria-label="Secciones de Proyectos"></nav>' +
+          '<div class="sigso-modulo-layout__panel"></div>' +
+        '</div>';
+      panel = raiz.querySelector('.sigso-modulo-layout__panel');
+    }
+    pintarNavProyectos_();
+    return panel;
+  }
+
+  function pintarNavProyectos_() {
+    var cont = document.getElementById('py-nav');
+    if (!cont || !window.SigsoNav) return;
+    SigsoNav.render({
+      contenedor: cont,
+      modulo: 'proyectos',
+      submodulos: ARQUITECTURA_PROYECTOS,
+      activo: vistaProyectos_,
+      onSeleccion: function (id) { irAVistaProyectos_(id); }
+    });
+  }
+
+  function irAVistaProyectos_(id) {
+    vistaProyectos_ = id;
+    if (id !== 'reportes') reportePyAbierto_ = null;
+    if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id);
+    if (id === 'reportes') renderReportesProyectos_();
+    else cargarPortafolio_();
+  }
+
+  // --- Centro de reportes ----------------------------------------------------
+  var REPORTES_PROYECTOS = [
+    { grupo: 'Estado del portafolio', icono: 'escudo', reportes: [
+      { id: 'py-salud', nombre: 'Salud del portafolio', tipo: 'ESTADO', estado: 'LISTO',
+        desc: 'Cuántos proyectos están normales, en riesgo o críticos, y por qué.',
+        fuente: 'listarProyectos', filtros: [] },
+      { id: 'py-avance', nombre: 'Avance por proyecto', tipo: 'RANKING', estado: 'LISTO',
+        desc: 'Porcentaje de avance de cada proyecto, del más adelantado al más atrasado.',
+        fuente: 'listarProyectos', filtros: [] },
+      { id: 'py-plazos', nombre: 'Plazos', tipo: 'DETALLE', estado: 'LISTO',
+        desc: 'Proyectos con fecha objetivo vencida o próxima a vencer.',
+        fuente: 'listarProyectos', filtros: [] }
+    ] },
+    { grupo: 'Personas', icono: 'persona', reportes: [
+      { id: 'py-lider', nombre: 'Carga por líder', tipo: 'RANKING', estado: 'LISTO',
+        desc: 'Cuántos proyectos lidera cada persona y cuántos de ellos no están sanos.',
+        fuente: 'listarProyectos', filtros: [] },
+      { id: 'py-cumplimiento', nombre: 'Cumplimiento de tareas', tipo: 'CUMPLIMIENTO', estado: 'PENDIENTE',
+        desc: 'Tareas entregadas dentro de su fecha comprometida, por proyecto.',
+        falta: 'listarProyectos devuelve el CONTEO de tareas, no sus fechas. Habría que exponer las tareas con fecha_compromiso y fecha_terminada, o calcular el cumplimiento en el backend.' }
+    ] }
+  ];
+
+  function registrarReportesProyectos_() {
+    if (!window.SigsoReportes || registrarReportesProyectos_.hecho) return;
+    SigsoReportes.registrar('proyectos', {
+      titulo: 'Reportes del portafolio',
+      nota: 'Se arman con los proyectos que ya puedes ver: el filtrado por permisos ' +
+        'lo hace el backend, y estos reportes trabajan sobre ese mismo conjunto.',
+      grupos: REPORTES_PROYECTOS
+    });
+    registrarReportesProyectos_.hecho = true;
+  }
+
+  function renderReportesProyectos_() {
+    var cont = panelProyectos_();
+    if (!cont) return;
+    registrarReportesProyectos_();
+    if (!window.SigsoReportes) {
+      cont.innerHTML = Componentes.alerta('El motor de reportes no está disponible.', 'error');
+      return;
+    }
+    // Los reportes usan el mismo listado del portafolio. Si todavía no se
+    // cargó (se entró directo por URL a Reportes), se pide ahora.
+    if (!portafolioCargado_) {
+      cont.innerHTML = Componentes.cargando('Cargando proyectos...');
+      api_('listarProyectos', {}).then(function (r) {
+        if (!r || !r.ok) {
+          cont.innerHTML = Componentes.alerta((r && r.message) || 'No se pudo cargar el portafolio.', 'error');
+          return;
+        }
+        proyectosPortafolioSinFiltrarSalud_ = r.data || [];
+        portafolioCargado_ = true;
+        renderReportesProyectos_();
+      }).catch(function () {
+        cont.innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
+      });
+      return;
+    }
+    if (reportePyAbierto_) { pintarReporteProyectos_(cont); return; }
+    SigsoReportes.pintarCatalogo({
+      contenedor: cont,
+      modulo: 'proyectos',
+      onAbrir: function (id) { reportePyAbierto_ = id; renderReportesProyectos_(); },
+      onIrASeccion: function (vista) { irAVistaProyectos_(vista); }
+    });
+  }
+
+  function pintarReporteProyectos_(cont) {
+    var r = SigsoReportes.buscarReporte('proyectos', reportePyAbierto_);
+    if (!r) { reportePyAbierto_ = null; renderReportesProyectos_(); return; }
+    var ps = proyectosPortafolioSinFiltrarSalud_ || [];
+    var cuerpo = '';
+    if (r.id === 'py-salud') cuerpo = cuerpoSaludPortafolio_(ps);
+    else if (r.id === 'py-avance') cuerpo = cuerpoAvance_(ps);
+    else if (r.id === 'py-plazos') cuerpo = cuerpoPlazos_(ps);
+    else if (r.id === 'py-lider') cuerpo = cuerpoPorLider_(ps);
+
+    cont.innerHTML =
+      SigsoReportes.barraAcciones({}) +
+      '<h2>' + Componentes.escaparHtml(r.nombre) + '</h2>' +
+      '<p class="sigso-ayuda">' + Componentes.escaparHtml(r.desc) + '</p>' +
+      cuerpo;
+
+    SigsoReportes.wireAcciones(cont, {
+      nombreArchivo: 'sigso-proyectos-' + r.id,
+      onVolver: function () { reportePyAbierto_ = null; renderReportesProyectos_(); }
+    });
+  }
+
+  function cuerpoSaludPortafolio_(ps) {
+    if (!ps.length) return Componentes.vacio('No hay proyectos que mostrar.');
+    var porSalud = { normal: 0, riesgo: 0, critico: 0 };
+    ps.forEach(function (p) { if (porSalud[p.salud] !== undefined) porSalud[p.salud]++; });
+    return SigsoReportes.kpis([
+      { etiqueta: 'Proyectos', valor: ps.length },
+      { etiqueta: 'Normales', valor: porSalud.normal },
+      { etiqueta: 'En riesgo', valor: porSalud.riesgo, alerta: porSalud.riesgo > 0 },
+      { etiqueta: 'Críticos', valor: porSalud.critico, alerta: porSalud.critico > 0 }
+    ]) +
+    '<h3>Los que no están sanos</h3>' +
+    SigsoReportes.tabla([
+      { campo: 'codigo', titulo: 'Código' },
+      { campo: 'nombre', titulo: 'Proyecto' },
+      { campo: 'salud_etiqueta', titulo: 'Salud' },
+      { campo: 'motivos', titulo: 'Por qué' }
+    ], ps.filter(function (p) { return p.salud !== 'normal'; }).map(function (p) {
+      return {
+        codigo: p.codigo, nombre: p.nombre, salud_etiqueta: p.salud_etiqueta,
+        motivos: (p.salud_motivos || []).join(' · ')
+      };
+    }), { vacio: 'Todos los proyectos están sanos.' });
+  }
+
+  function cuerpoAvance_(ps) {
+    if (!ps.length) return Componentes.vacio('No hay proyectos que mostrar.');
+    var ordenados = ps.slice().sort(function (a, b) { return (b.avance_pct || 0) - (a.avance_pct || 0); });
+    return SigsoReportes.ranking(ordenados.map(function (p) {
+      return { etiqueta: p.codigo + ' — ' + p.nombre, valor: p.avance_pct || 0, texto: (p.avance_pct || 0) + '%' };
+    })) +
+    '<h3>Detalle</h3>' +
+    SigsoReportes.tabla([
+      { campo: 'codigo', titulo: 'Código' },
+      { campo: 'nombre', titulo: 'Proyecto' },
+      { campo: 'estado', titulo: 'Estado' },
+      { campo: 'avance', titulo: 'Avance', alinear: 'derecha' },
+      { campo: 'total_tareas', titulo: 'Tareas', alinear: 'derecha' }
+    ], ordenados.map(function (p) {
+      return {
+        codigo: p.codigo, nombre: p.nombre,
+        estado: ESTADO_PROYECTO_ETIQUETA[p.estado] || p.estado,
+        avance: (p.avance_pct || 0) + '%', total_tareas: p.total_tareas
+      };
+    }));
+  }
+
+  function cuerpoPlazos_(ps) {
+    var hoy = new Date();
+    var en30 = new Date(hoy.getTime() + 30 * 86400000);
+    // Sólo proyectos VIVOS: uno cerrado con fecha pasada no es un atraso.
+    var vivos = ps.filter(function (p) {
+      return p.estado !== 'CERRADO' && p.estado !== 'CANCELADO' && p.fecha_objetivo;
+    });
+    var conPlazo = vivos.map(function (p) {
+      var f = new Date(p.fecha_objetivo);
+      var dias = Math.round((f - hoy) / 86400000);
+      return {
+        codigo: p.codigo, nombre: p.nombre,
+        estado: ESTADO_PROYECTO_ETIQUETA[p.estado] || p.estado,
+        fecha_objetivo: p.fecha_objetivo,
+        situacion: isNaN(f.getTime()) ? 'fecha inválida'
+          : (dias < 0 ? 'vencido hace ' + Math.abs(dias) + ' días'
+            : (f <= en30 ? 'vence en ' + dias + ' días' : 'a tiempo')),
+        dias: isNaN(f.getTime()) ? 9999 : dias
+      };
+    }).sort(function (a, b) { return a.dias - b.dias; });
+
+    var vencidos = conPlazo.filter(function (p) { return p.dias < 0; });
+    var porVencer = conPlazo.filter(function (p) { return p.dias >= 0 && p.dias <= 30; });
+
+    return SigsoReportes.kpis([
+      { etiqueta: 'Con fecha objetivo', valor: conPlazo.length },
+      { etiqueta: 'Vencidos', valor: vencidos.length, alerta: vencidos.length > 0 },
+      { etiqueta: 'Vencen en 30 días', valor: porVencer.length, alerta: porVencer.length > 0 },
+      { etiqueta: 'Sin fecha objetivo', valor: ps.length - vivos.length,
+        titulo: 'Incluye los cerrados y cancelados, que no cuentan como atraso.' }
+    ]) +
+    SigsoReportes.tabla([
+      { campo: 'codigo', titulo: 'Código' },
+      { campo: 'nombre', titulo: 'Proyecto' },
+      { campo: 'estado', titulo: 'Estado' },
+      { campo: 'fecha_objetivo', titulo: 'Fecha objetivo' },
+      { campo: 'situacion', titulo: 'Situación' }
+    ], conPlazo, { vacio: 'Ningún proyecto activo tiene fecha objetivo definida.' });
+  }
+
+  function cuerpoPorLider_(ps) {
+    if (!ps.length) return Componentes.vacio('No hay proyectos que mostrar.');
+    var porLider = {};
+    ps.forEach(function (p) {
+      var k = p.lider_email || '(sin líder)';
+      if (!porLider[k]) porLider[k] = { total: 0, noSanos: 0 };
+      porLider[k].total++;
+      if (p.salud !== 'normal') porLider[k].noSanos++;
+    });
+    var filas = Object.keys(porLider).map(function (k) {
+      return { etiqueta: k, total: porLider[k].total, noSanos: porLider[k].noSanos };
+    }).sort(function (a, b) { return b.total - a.total; });
+    return SigsoReportes.kpis([
+      { etiqueta: 'Líderes', valor: filas.length },
+      { etiqueta: 'Proyectos', valor: ps.length }
+    ]) +
+    SigsoReportes.ranking(filas.map(function (f) {
+      return { etiqueta: f.etiqueta, valor: f.total, texto: f.total };
+    })) +
+    '<h3>Detalle</h3>' +
+    SigsoReportes.tabla([
+      { campo: 'etiqueta', titulo: 'Líder' },
+      { campo: 'total', titulo: 'Proyectos', alinear: 'derecha' },
+      { campo: 'noSanos', titulo: 'En riesgo o críticos', alinear: 'derecha' }
+    ], filas);
+  }
+
 })();

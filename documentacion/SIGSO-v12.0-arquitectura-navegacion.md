@@ -452,3 +452,96 @@ La corrección no fue sólo leer bien el campo. Restar la variación del KPI de 
 - **Bandeja** — su `exportarCSV_` propio podría pasar al motor.
 - **Los filtros del motor no están conectados en Gerencia**: los reportes usan el conjunto que ya trajo el panel, que respeta los filtros de la barra superior. Es coherente, pero los filtros por período/área del motor todavía no se aplican ahí.
 - **Foto periódica de la cobertura ISO** — sigue siendo el único bloqueo real para comparar períodos en Calidad.
+
+---
+
+# v12.4 — Fase 3 (cont.): Jefatura, Proyectos y la regla compartida
+
+## X. La agregación de cumplimiento sube al motor
+
+Gerencia y Jefatura necesitaban la misma medición. Se promovió a `SigsoReportes`:
+
+```js
+SigsoReportes.agruparCumplimiento(items, campo, etiquetaVacia)
+SigsoReportes.tablaCumplimiento(filas, dimension)
+SigsoReportes.cuerpoCumplimientoPor(items, { campo, etiquetaVacia, dimension, etiquetaTotal })
+SigsoReportes.cuerpoEntradaSalida(serie)
+```
+
+**No es sólo ahorro de código.** Si un panel midiera el cumplimiento distinto que el otro, un jefe y Gerencia verían números distintos del mismo equipo y no habría forma de saber cuál creer. La regla vive en un solo lugar:
+
+> Se mide **sólo** sobre lo entregado **con fecha comprometida**. Un ítem sin comprometer no cuenta como incumplido — no hay promesa que romper todavía, y meterlo hundiría el porcentaje de quien recién recibió trabajo. Quien no tiene entregas queda en `pct = null`, que se muestra como **"sin entregas"** y nunca como 0%.
+
+`gerencia.js` perdió 99 líneas al pasar a usarlo.
+
+## Y. Jefatura — "Mi Departamento"
+
+Sus **4 pestañas** pasan a navegación vertical (mismo criterio: navegación de módulo).
+
+```
+Mi Departamento
+├── Mi equipo
+│   ├── Tablero
+│   ├── Por persona
+│   └── Actividades del equipo
+└── ★ Reportes
+    ├── Centro de reportes
+    └── Carga por módulo y tipo
+```
+
+**6 reportes, 5 disponibles:** cumplimiento por persona, por módulo y por tipo (los tres con los cuerpos del motor), entrada vs salida por mes, y carga.
+
+*Resbalón de compromisos* queda **PENDIENTE con el motivo exacto**: `getPanelJefatura` no devuelve `re_compromisos` ni `reaperturas`, que Gerencia sí calcula. Es una diferencia real entre dos endpoints, y decirlo vale más que omitir la ficha.
+
+## Z. Proyectos
+
+Aquí la decisión fue **no** tocar las 7 pestañas del detalle de un proyecto: son pestañas sobre una **entidad**, no navegación de módulo. Lo que sí es navegación de módulo son sus dos destinos:
+
+```
+Proyectos
+├── Portafolio
+└── ★ Reportes
+```
+
+Verificado que dentro de un proyecto la navegación de módulo queda al lado y las 7 pestañas de la entidad siguen intactas.
+
+**5 reportes, 4 disponibles:** salud del portafolio (con los motivos de cada proyecto no sano), avance por proyecto, plazos (vencidos y por vencer en 30 días, **excluyendo cerrados y cancelados** — un proyecto cerrado con fecha pasada no es un atraso) y carga por líder.
+
+*Cumplimiento de tareas* queda PENDIENTE: `listarProyectos` devuelve el **conteo** de tareas, no sus fechas.
+
+## AA. Un defecto que la inicialización escondía
+
+`proyectosPortafolioSinFiltrarSalud_` arranca en `[]`, no en `null`. Mi primera guarda (`if (!lista)`) para "todavía no cargué" **nunca se habría cumplido**, y entrar directo por URL a Reportes habría mostrado un portafolio vacío como si esa fuera la respuesta real. Se resolvió con una bandera propia `portafolioCargado_`: una lista vacía legítima y "aún no pedí" son estados distintos y no pueden compartir representación.
+
+## AB. Verificación de la v12.4
+
+- **13 rutas** recorridas, cero errores JS.
+- Scroll horizontal medido **de verdad** (`scrollTo(500,0)` y ver si `scrollX` queda en 0), no con `scrollWidth`: **ninguna ruta se desplaza**.
+- Gerencia: sus 5 reportes siguen funcionando tras quitarle las funciones que se fueron al motor.
+- Jefatura: catálogo de 6, tres reportes ejercidos.
+- Proyectos: catálogo de 5, cuatro reportes ejercidos; portafolio y detalle intactos.
+- **`#/jefatura/reportes` desde una cuenta sin ese módulo cae a Home** — la comprobación de permisos por URL sigue en pie.
+- 1197/1197 tests.
+
+## AC. Estado final de la arquitectura
+
+| Módulo | Navegación vertical | Submódulo Reportes |
+|---|---|---|
+| Calidad | ✅ 9 submódulos | ✅ 23 reportes |
+| Administración | ✅ 6 submódulos | ✅ 6 reportes |
+| Gerencia | ✅ 3 submódulos | ✅ 8 reportes |
+| Jefatura | ✅ 2 submódulos | ✅ 6 reportes |
+| Proyectos | ✅ 2 destinos | ✅ 5 reportes |
+| Novedades | ✅ 4 destinos | ✅ 1 reporte |
+| Coordinación | ✅ 3 destinos | ✅ 1 reporte |
+| Bandeja | ❌ | ❌ |
+
+**Bandeja** es lo único que queda: es una cola de trabajo más que un módulo analítico, y su `exportarCSV_` propio podría pasar al motor.
+
+## AD. Pendientes reales (no cosméticos)
+
+1. **Los filtros del motor no están conectados** en Gerencia, Jefatura ni Proyectos: sus reportes usan el conjunto que ya trajo el panel. Es coherente (respeta los filtros de la barra superior), pero el período y el área del motor todavía no operan ahí.
+2. **`re_compromisos`/`reaperturas` en `Jefatura.getPanel`** — desbloquearía el resbalón para jefes.
+3. **Tareas con fechas en `listarProyectos`** — desbloquearía el cumplimiento por proyecto.
+4. **Foto periódica de la cobertura ISO** — sigue siendo el único bloqueo para comparar períodos en Calidad.
+5. Los filtros se aplican **en el cliente**; con más volumen habrá que filtrar en origen.
