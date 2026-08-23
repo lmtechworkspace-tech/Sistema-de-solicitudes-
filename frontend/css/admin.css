@@ -10,11 +10,15 @@
   min-width: 0;
 }
 
+/* v12.1: el menu pasa a ser la navegacion vertical agrupada (.sigso-nav2,
+   ver components.css). Aca solo queda lo que es propio del layout de
+   Administracion: cuanto mide y como se comporta al angostarse. */
 .sigso-admin-menu {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  min-width: 180px;
+  gap: var(--esp-2);
+  flex: 0 0 240px;
+  min-width: 240px;
 }
 
 /* Fase 10 (pulido): el sidebar fijo + contenido no cabe en mobile (375px) --
@@ -23,34 +27,17 @@
   .sigso-admin-layout {
     flex-direction: column;
   }
+  /* v12.1: sigue en COLUMNA. Antes se pasaba a fila envolviendo, que con
+     botones planos funcionaba; con acordeones seria ilegible. */
   .sigso-admin-menu {
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex: 0 0 auto;
     min-width: 0;
+    width: 100%;
   }
 }
 
-.sigso-admin-menu__item {
-  text-align: left;
-  background: var(--superficie);
-  border: 1px solid var(--borde);
-  border-radius: var(--radio-sm);
-  padding: 0.6rem 0.8rem;
-  cursor: pointer;
-  font-size: var(--texto-sm);
-  color: var(--texto);
-  transition: background var(--mov-normal), border-color var(--mov-normal);
-}
-
-.sigso-admin-menu__item:hover {
-  background: var(--superficie-2);
-}
-
-.sigso-admin-menu__item--activo {
-  background: var(--primario);
-  color: #fff;
-  border-color: var(--primario);
-}
+/* v12.1: aqui vivian .sigso-admin-menu__item / :hover / --activo. Los 14
+   botones planos ya no existen: los pinta SigsoNav. */
 
 .sigso-admin-form {
   display: grid;

@@ -24,18 +24,57 @@
   }
   function cont() { return document.getElementById('coordinacion-contenido'); }
 
+  // v12.1: Coordinación pasa a la navegación vertical común. Es el módulo que
+  // YA tenía un apartado "Reportes" antes de que existiera la regla — aquí
+  // sólo se lo mueve al submódulo transversal, con el mismo contenido.
+  var ARQUITECTURA_COORD = [
+    { id: 'hoy', nombre: 'Hoy', icono: 'reloj', items: [
+      { id: 'hoy', nombre: 'Hoy' }
+    ] },
+    { id: 'historial', nombre: 'Historial por trabajador', icono: 'persona', items: [
+      { id: 'historial', nombre: 'Historial por trabajador' }
+    ] },
+    { id: 'reportes', nombre: 'Reportes', icono: 'grafico', plano: true,
+      descripcion: 'Cumplimiento de las pausas', items: [
+      { id: 'reportes', nombre: 'Cumplimiento' }
+    ] }
+  ];
+
   function cargar() {
     var c = cont();
     if (!c) return;
-    c.innerHTML =
-      '<div class="sigso-tabs" id="coord-subtabs">' +
-      '<button type="button" class="sigso-tabs__boton' + (subtab === 'hoy' ? ' sigso-tabs__boton--activo' : '') + '" data-coord-sub="hoy">Hoy</button>' +
-      '<button type="button" class="sigso-tabs__boton' + (subtab === 'reportes' ? ' sigso-tabs__boton--activo' : '') + '" data-coord-sub="reportes">Reportes</button>' +
-      '<button type="button" class="sigso-tabs__boton' + (subtab === 'historial' ? ' sigso-tabs__boton--activo' : '') + '" data-coord-sub="historial">Historial por trabajador</button>' +
-      '</div><div id="coord-sub-contenido"></div>';
-    c.querySelectorAll('[data-coord-sub]').forEach(function (b) {
-      b.addEventListener('click', function () { subtab = b.getAttribute('data-coord-sub'); cargar(); });
-    });
+    // La vista puede venir de la URL (#/pausas_coordinacion/reportes); se
+    // valida contra la arquitectura para que no se pueda inventar una.
+    var pedida = (window.SigsoShell && SigsoShell.tomarItemDeRuta)
+      ? SigsoShell.tomarItemDeRuta() : '';
+    if (pedida && ARQUITECTURA_COORD.some(function (s) {
+      return s.items.some(function (it) { return it.id === pedida; });
+    })) {
+      subtab = pedida;
+    }
+
+    // El layout se arma UNA vez: la navegación es persistente y sólo se
+    // reemplaza el panel. Antes se repintaba entera en cada cambio de vista.
+    if (!c.querySelector('.sigso-modulo-layout')) {
+      c.innerHTML =
+        '<div class="sigso-modulo-layout">' +
+          '<nav class="sigso-modulo-layout__nav sigso-nav2" id="coord-nav" aria-label="Secciones de Coordinación"></nav>' +
+          '<div class="sigso-modulo-layout__panel" id="coord-sub-contenido"></div>' +
+        '</div>';
+    }
+    if (window.SigsoNav) {
+      SigsoNav.render({
+        contenedor: document.getElementById('coord-nav'),
+        modulo: 'pausas_coordinacion',
+        submodulos: ARQUITECTURA_COORD,
+        activo: subtab,
+        onSeleccion: function (id) {
+          subtab = id;
+          if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id);
+          cargar();
+        }
+      });
+    }
     if (subtab === 'hoy') cargarHoy_();
     else if (subtab === 'reportes') cargarReportes_();
     else cargarHistorial_();

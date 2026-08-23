@@ -102,12 +102,100 @@
   // sesion valida -- si se disparara al cargar la pagina, pediria catalogos
   // antes del login. En admin.html (standalone, identidad Google) el
   // comportamiento de siempre no cambia.
+
+  // ==========================================================================
+  // v12.1 — Arquitectura del módulo Administración (navegacion.js)
+  //
+  // Antes: 14 botones planos en una columna, sin agrupar. Ya era vertical (fue
+  // el único módulo que nació así), pero una lista de 14 sin jerarquía obliga
+  // a leerla entera para encontrar algo.
+  //
+  // El agrupamiento NO inventa pantallas: los 14 ítems son los mismos 14
+  // `data-tipo` que ya existían, con el mismo comportamiento. Lo único que
+  // cambia es cómo se ordenan.
+  //
+  // Los ids son los `data-tipo` de siempre, así que el resto de admin.js
+  // (renderCatalogo_, renderUsuarios_, ...) no se entera del cambio.
+  var ARQUITECTURA_ADMIN = [
+    { id: 'organizacion', nombre: 'Organización', icono: 'empresa', items: [
+      { id: 'EMPRESA', nombre: 'Empresas' },
+      { id: 'PLATAFORMA', nombre: 'Plataformas' },
+      { id: 'AREA', nombre: 'Áreas / responsables' },
+      { id: 'JEFATURAS', nombre: 'Jefaturas' }
+    ] },
+    { id: 'catalogos', nombre: 'Catálogos', icono: 'lista', items: [
+      { id: 'MODULO', nombre: 'Módulos' },
+      { id: 'TIPO', nombre: 'Tipos de solicitud' }
+    ] },
+    { id: 'accesos', nombre: 'Accesos', icono: 'llave', items: [
+      { id: 'USUARIOS', nombre: 'Usuarios' },
+      { id: 'CUENTAS_PORTAL', nombre: 'Cuentas plataforma' }
+    ] },
+    { id: 'comunicaciones', nombre: 'Comunicaciones', icono: 'campana', items: [
+      { id: 'NOTIFICACION', nombre: 'Notificaciones' },
+      { id: 'NOTIF_PERMISOS', nombre: 'Alertas en vivo' },
+      { id: 'CANALES_ALERTA', nombre: 'Canales de alerta' },
+      { id: 'ENVIAR_ALERTA', nombre: 'Enviar alerta' }
+    ] },
+    { id: 'operacion', nombre: 'Operación', icono: 'reloj', items: [
+      { id: 'PAUSAS', nombre: 'Pausas activas' }
+    ] },
+    // Submódulo transversal. NO se inventa contenido: "Automatizaciones" ya
+    // era un reporte (el historial de ejecuciones de los triggers), sólo que
+    // estaba suelto entre los catálogos. Aquí queda donde corresponde.
+    { id: 'reportes', nombre: 'Reportes', icono: 'grafico', plano: true,
+      descripcion: 'Qué hizo el sistema por su cuenta', items: [
+      { id: 'LOGS', nombre: 'Automatizaciones' }
+    ] }
+  ];
+
   window.SigsoAdmin = {
     abrir: function () {
-      var primero = document.querySelector('.sigso-admin-menu__item');
-      if (primero) primero.click();
+      // v12.1: si la URL pedia una seccion (#/administracion/USUARIOS) se abre
+      // esa; si no, la primera de la arquitectura. Se valida que exista: una
+      // URL escrita a mano no puede inventar una seccion.
+      var pedida = (window.SigsoShell && SigsoShell.tomarItemDeRuta)
+        ? SigsoShell.tomarItemDeRuta() : '';
+      irASeccionAdmin_(existeSeccionAdmin_(pedida) ? pedida : ARQUITECTURA_ADMIN[0].items[0].id);
     }
   };
+
+  var seccionAdminActiva_ = '';
+
+  function existeSeccionAdmin_(id) {
+    if (!id) return false;
+    return ARQUITECTURA_ADMIN.some(function (sub) {
+      return sub.items.some(function (it) { return it.id === id; });
+    });
+  }
+
+  function pintarNavAdmin_() {
+    var cont = document.getElementById('admin-menu');
+    if (!cont || !window.SigsoNav) return;
+    SigsoNav.render({
+      contenedor: cont,
+      modulo: 'administracion',
+      submodulos: ARQUITECTURA_ADMIN,
+      activo: seccionAdminActiva_,
+      onSeleccion: function (id) { irASeccionAdmin_(id); }
+    });
+  }
+
+  function irASeccionAdmin_(tipo) {
+    seccionAdminActiva_ = tipo;
+    pintarNavAdmin_();
+    cerrarDrawerAdmin_();
+    if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(tipo);
+    if (tipo === 'USUARIOS') renderUsuarios_();
+    else if (tipo === 'CUENTAS_PORTAL') renderCuentasPortal_();
+    else if (tipo === 'LOGS') renderLogs_();
+    else if (tipo === 'JEFATURAS') renderJefaturas_();
+    else if (tipo === 'PAUSAS') renderPausas_();
+    else if (tipo === 'NOTIF_PERMISOS') renderPermisosNotif_();
+    else if (tipo === 'CANALES_ALERTA') renderCanalesAlerta_();
+    else if (tipo === 'ENVIAR_ALERTA') renderEnviarAlerta_();
+    else renderCatalogo_(tipo);
+  }
 
   document.addEventListener('DOMContentLoaded', function () {
     if (typeof renderHeaderSigso === 'function') {
@@ -117,39 +205,13 @@
     if (window.SigsoPerfil) {
       SigsoPerfil.montarHeaderUsuario();
     }
-    document.querySelectorAll('.sigso-admin-menu__item').forEach(function (boton) {
-      boton.addEventListener('click', function () {
-        document.querySelectorAll('.sigso-admin-menu__item').forEach(function (b) {
-          b.classList.remove('sigso-admin-menu__item--activo');
-        });
-        boton.classList.add('sigso-admin-menu__item--activo');
-        cerrarDrawerAdmin_();
-        var tipo = boton.getAttribute('data-tipo');
-        if (tipo === 'USUARIOS') {
-          renderUsuarios_();
-        } else if (tipo === 'CUENTAS_PORTAL') {
-          renderCuentasPortal_();
-        } else if (tipo === 'LOGS') {
-          renderLogs_();
-        } else if (tipo === 'JEFATURAS') {
-          renderJefaturas_();
-        } else if (tipo === 'PAUSAS') {
-          renderPausas_();
-        } else if (tipo === 'NOTIF_PERMISOS') {
-          renderPermisosNotif_();
-        } else if (tipo === 'CANALES_ALERTA') {
-          renderCanalesAlerta_();
-        } else if (tipo === 'ENVIAR_ALERTA') {
-          renderEnviarAlerta_();
-        } else {
-          renderCatalogo_(tipo);
-        }
-      });
-    });
+    // v12.1: el menu de 14 botones planos lo reemplaza la navegacion vertical
+    // agrupada (SigsoNav). El cableado ya no vive aca: lo hace onSeleccion.
+    pintarNavAdmin_();
     // #vista-shell solo existe en plataforma.html: ahi el arranque lo hace
     // SigsoAdmin.abrir() al entrar al modulo.
     if (!document.getElementById('vista-shell')) {
-      document.querySelector('.sigso-admin-menu__item').click();
+      window.SigsoAdmin.abrir();
     }
     wireDrawerAdmin_();
   });

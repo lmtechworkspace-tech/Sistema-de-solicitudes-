@@ -941,22 +941,11 @@
            abrir el modulo con sesion valida). -->
       <section id="modulo-administracion" class="plataforma-modulo sigso-oculto">
         <div class="sigso-admin-layout">
-          <nav class="sigso-admin-menu" id="admin-menu">
-            <button type="button" class="sigso-admin-menu__item" data-tipo="EMPRESA">Empresas</button>
-            <button type="button" class="sigso-admin-menu__item" data-tipo="PLATAFORMA">Plataformas</button>
-            <button type="button" class="sigso-admin-menu__item" data-tipo="MODULO">Módulos</button>
-            <button type="button" class="sigso-admin-menu__item" data-tipo="TIPO">Tipos de solicitud</button>
-            <button type="button" class="sigso-admin-menu__item" data-tipo="AREA">Áreas / responsables</button>
-            <button type="button" class="sigso-admin-menu__item" data-tipo="NOTIFICACION">Notificaciones</button>
-            <button type="button" class="sigso-admin-menu__item" data-tipo="USUARIOS">Usuarios</button>
-            <button type="button" class="sigso-admin-menu__item" data-tipo="CUENTAS_PORTAL">Cuentas plataforma</button>
-            <button type="button" class="sigso-admin-menu__item" data-tipo="JEFATURAS">Jefaturas</button>
-            <button type="button" class="sigso-admin-menu__item" data-tipo="PAUSAS">Pausas activas</button>
-            <button type="button" class="sigso-admin-menu__item" data-tipo="LOGS">Automatizaciones</button>
-            <button type="button" class="sigso-admin-menu__item" data-tipo="NOTIF_PERMISOS">Alertas en vivo</button>
-            <button type="button" class="sigso-admin-menu__item" data-tipo="CANALES_ALERTA">Canales de alerta</button>
-            <button type="button" class="sigso-admin-menu__item" data-tipo="ENVIAR_ALERTA">Enviar alerta</button>
-          </nav>
+          <!-- v12.1: los 14 botones ya no van hardcodeados aca. Los pinta
+               admin.js con SigsoNav, agrupados en submodulos. Tenerlos en el
+               HTML obligaba a mantener la MISMA lista en dos archivos
+               (plataforma.html y admin.html) y a que no se salieran de sincronia. -->
+          <nav class="sigso-admin-menu sigso-nav2" id="admin-menu" aria-label="Secciones de Administración"></nav>
 
           <section id="admin-contenido" class="sigso-admin-contenido"></section>
         </div>

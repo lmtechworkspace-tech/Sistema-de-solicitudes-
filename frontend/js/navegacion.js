@@ -217,8 +217,13 @@
    */
   function migas(opts) {
     var def = opts.submodulos ? { submodulos: opts.submodulos } : obtener(opts.modulo);
-    var tramos = [{ texto: 'SIGSO' }];
-    if (opts.moduloNombre) tramos.push({ texto: opts.moduloNombre });
+    // `ruta` es a dónde lleva el tramo. Sin ruta, el tramo es texto muerto.
+    // Antes de la v12.1 TODOS eran texto muerto, porque no había enrutamiento
+    // y no existía destino al que enlazar.
+    var tramos = [{ texto: 'SIGSO', ruta: 'home' }];
+    if (opts.moduloNombre) {
+      tramos.push({ texto: opts.moduloNombre, ruta: opts.modulo });
+    }
 
     if (def) {
       var activo = opts.activo || '';
@@ -227,8 +232,10 @@
           if (it.id !== activo) return;
           // Un submódulo aplanado no aporta un tramo propio: sería repetir
           // el mismo nombre dos veces seguidas.
+          // El submódulo NO lleva ruta: no es un destino, es una agrupación.
+          // Enlazarlo al primero de sus ítems mentiría sobre a dónde va.
           if (!esPlano_(sub, sub.items || [])) tramos.push({ texto: sub.nombre });
-          tramos.push({ texto: it.nombre });
+          tramos.push({ texto: it.nombre, ruta: opts.modulo, item: it.id });
         });
       });
     }
@@ -237,12 +244,84 @@
     return '<nav class="sigso-migas" aria-label="Ruta de navegación"><ol>' +
       tramos.map(function (t, i) {
         var ultimo = i === tramos.length - 1;
-        return '<li>' + (ultimo
-          ? '<span aria-current="page">' + esc_(t.texto) + '</span>'
-          : '<span>' + esc_(t.texto) + '</span>') + '</li>';
+        if (ultimo || !t.ruta) {
+          return '<li>' + (ultimo
+            ? '<span aria-current="page">' + esc_(t.texto) + '</span>'
+            : '<span>' + esc_(t.texto) + '</span>') + '</li>';
+        }
+        // Un <a> con href real: se puede abrir en pestaña nueva, copiar el
+        // enlace y usar con el teclado sin que haya que programar nada.
+        var destino = '#/' + encodeURIComponent(t.ruta) +
+          (t.item ? '/' + encodeURIComponent(t.item) : '');
+        return '<li><a href="' + destino + '">' + esc_(t.texto) + '</a></li>';
       }).join('') +
       '</ol></nav>';
   }
+
+  // ==========================================================================
+  // RUTAS (v12.1)
+  //
+  // Hasta la v12.0 SIGSO no tenia enrutamiento: los modulos se mostraban y
+  // ocultaban con clases, y plataforma.js borraba la URL con replaceState. Eso
+  // dejaba tres cosas rotas que nadie podia arreglar desde la UI:
+  //   - no habia forma de compartir un enlace a una seccion;
+  //   - el boton ATRAS del navegador sacaba al usuario de SIGSO entero;
+  //   - las migas de pan no podian ser clicables, porque no habia destino.
+  //
+  // Formato:  #/<modulo>            ->  #/calidad
+  //           #/<modulo>/<itemId>   ->  #/calidad/documentos:PRO
+  //
+  // Se usa HASH y no History API a proposito: SIGSO se publica en GitHub
+  // Pages, que sirve archivos estaticos. Con pushState, recargar en
+  // /plataforma/calidad daria 404 porque no hay servidor que reescriba.
+  var RUTA_SILENCIO = false;
+
+  function leerRuta() {
+    var h = String(window.location.hash || '').replace(new RegExp('^#/?'), '');
+    if (!h) return { modulo: '', item: '' };
+    var trozos = h.split('/');
+    return {
+      modulo: decodeURIComponent(trozos[0] || ''),
+      // El item puede traer ':' (documentos:PRO); se rearma por si el split
+      // lo partio en mas trozos de la cuenta.
+      item: decodeURIComponent(trozos.slice(1).join('/') || '')
+    };
+  }
+
+  // Escribe la ruta SIN disparar el manejador de hashchange: quien llama ya
+  // esta navegando, y volver a navegar por el evento seria un bucle.
+  function escribirRuta(modulo, item, reemplazar) {
+    var destino = '#/' + encodeURIComponent(modulo || '') +
+      (item ? '/' + encodeURIComponent(item) : '');
+    if (window.location.hash === destino) return;
+    RUTA_SILENCIO = true;
+    try {
+      // replaceState para los cambios que NO son navegacion del usuario (p.ej.
+      // restaurar la seccion por defecto al entrar): asi el boton atras no
+      // acumula pasos que el usuario nunca dio.
+      if (reemplazar && window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search + destino);
+      } else {
+        window.location.hash = destino;
+      }
+    } finally {
+      // El evento hashchange llega en el siguiente tick, no de inmediato.
+      setTimeout(function () { RUTA_SILENCIO = false; }, 0);
+    }
+  }
+
+  function alCambiarRuta(fn) {
+    window.addEventListener('hashchange', function () {
+      if (RUTA_SILENCIO) return;   // lo escribimos nosotros, no el usuario
+      fn(leerRuta());
+    });
+  }
+
+  window.SigsoRutas = {
+    leer: leerRuta,
+    escribir: escribirRuta,
+    alCambiar: alCambiarRuta
+  };
 
   window.SigsoNav = {
     ID_REPORTES: ID_REPORTES,

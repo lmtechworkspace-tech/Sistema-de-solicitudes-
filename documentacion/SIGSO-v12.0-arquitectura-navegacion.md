@@ -1,6 +1,6 @@
-# SIGSO v12.0 — Arquitectura de navegación Módulo → Submódulo → Ítem
+# SIGSO v12.0/v12.1 — Arquitectura de navegación Módulo → Submódulo → Ítem
 
-Fecha: 2026-08-23 · Estado: **Fase 2 y 3 entregadas (base + Calidad). Fases 4-6 parciales.**
+Fecha: 2026-08-23 · Estado: **v12.0 base + Calidad. v12.1 enrutamiento por URL + Administración, Novedades y Coordinación.**
 
 ---
 
@@ -205,3 +205,81 @@ Los pendientes y su motivo real:
 **Enrutamiento (no estaba en el encargo, pero lo condiciona):** sin URL no hay bookmarks, no se puede compartir un enlace a una sección, y el botón *atrás* del navegador no funciona dentro del módulo. Las migas de pan hoy **informan** dónde estás pero no son clicables, justamente porque no hay a dónde enlazar. Si se quiere navegación por URL, es un trabajo propio y previo.
 
 **Verificación pendiente:** captura visual. El panel del navegador de esta sesión no compone frames, así que la validación se hizo por DOM y estilos computados (más estricta para lo que importa aquí, pero no reemplaza mirar la pantalla).
+
+---
+
+# v12.1 — Enrutamiento por URL y migración de tres módulos más
+
+## H. Enrutamiento (el pendiente que condicionaba todo lo demás)
+
+En la v12.0 dejé escrito que sin URL no hay bookmarks, ni enlaces compartibles, ni botón atrás, y que **por eso las migas de pan informaban pero no eran clicables**. Eso ya está resuelto.
+
+### H.1 Por qué hash y no History API
+
+SIGSO se publica en **GitHub Pages**, que sirve archivos estáticos. Con `pushState`, recargar en `/plataforma/calidad` daría **404**: no hay servidor que reescriba la ruta al `index`. El hash no toca el servidor.
+
+```
+#/<modulo>            →  #/calidad
+#/<modulo>/<itemId>   →  #/calidad/documentos:PRO
+```
+
+### H.2 La URL no es una autorización
+
+Verificado con una cuenta sin el módulo `calidad` entrando por `#/calidad/riesgos`: **cae a Home, la URL se reescribe a `#/home`, y el módulo ni siquiera se renderiza.** Cada módulo valida además que el ítem exista en su arquitectura, así que una URL escrita a mano no puede inventar una sección. Y el backend sigue validando cada acción por su cuenta, como siempre.
+
+### H.3 Dos defectos reales que aparecieron al conectarlo
+
+| Defecto | Detalle |
+|---|---|
+| **El enlace mágico borraba la sección** | La limpieza del `?token=` usaba `replaceState(null,'',location.pathname)`, y `pathname` **descarta el hash**. Un enlace con token *y* sección (`?token=…#/calidad/riesgos`) abría Calidad en su sección por defecto y el usuario no tenía forma de saber por qué. |
+| **`SigsoShell` se definía demasiado tarde** | Estaba **después** de `mostrarModulo_(moduloInicial)`. Cuando el módulo preguntaba por la ruta, el puente todavía no existía, así que un enlace directo abría el módulo pero caía en su sección por defecto. |
+
+Los dos son del tipo que sólo aparece al ejercer el camino completo: ningún test unitario los habría visto.
+
+## I. Módulos migrados en la v12.1
+
+| Módulo | Antes | Ahora |
+|---|---|---|
+| **Administración** | 14 botones planos en una columna | 6 submódulos agrupados (Organización · Catálogos · Accesos · Comunicaciones · Operación · **Reportes**) |
+| **Novedades** | 4 pestañas horizontales | 4 enlaces directos verticales, con **Reportes** destacado |
+| **Coordinación de pausas** | 3 pestañas horizontales | 3 enlaces directos, con **Reportes** destacado |
+
+Ninguno perdió funcionalidad. En Administración los 14 ítems son los mismos 14 `data-tipo` de siempre; el resto de `admin.js` no se enteró del cambio.
+
+**De paso, una duplicación que se elimina:** el menú de Administración estaba **hardcodeado en dos HTML** (`plataforma.html` y `admin.html`), con la misma lista de 14 botones que había que mantener sincronizada a mano. Ahora lo pinta `admin.js` desde una sola definición.
+
+### I.1 Reportes: qué se puso en cada uno, sin inventar
+
+| Módulo | Reporte | De dónde salió |
+|---|---|---|
+| Administración | Automatizaciones | Ya existía (`listarLogs`, historial de triggers); estaba suelto entre los catálogos |
+| Novedades | Cumplimiento de lectura | Ya existía; era una pestaña más, indistinguible de las vistas de trabajo |
+| Coordinación | Cumplimiento de pausas | Ya tenía su apartado "Reportes" antes de que existiera la regla |
+
+## J. Lo que deliberadamente NO se convirtió
+
+Quedan barras horizontales en `admin.js` (sub-pestañas de Pausas), `calidad.js` (ficha de persona, sub-nav de Accesos), `proyectos.js` (7 pestañas de un proyecto), `dashboard.js`, `gerencia.js`, `jefatura.js` y `estado.js`.
+
+**No es trabajo pendiente: es una distinción de diseño.** Esas son pestañas **sobre una entidad** (una persona, un proyecto, una solicitud) o conmutadores de vista, no navegación de módulo. Convertirlas a acordeón vertical:
+
+- crearía **tres niveles verticales visibles a la vez** (nav de módulo + nav de entidad + contenido), que es justo lo que el §24 del encargo pedía evitar;
+- competiría visualmente con la navegación del módulo, que está a su izquierda;
+- y sería exactamente el *"cambiar los tabs por acordeones"* que el §31 dice que **no** es la solicitud.
+
+Con 3-7 pestañas sobre una entidad, una barra horizontal no scrollea ni fragmenta. El problema que motivó todo esto aparecía a los 16 ítems de navegación de módulo.
+
+## K. Verificación de la v12.1
+
+- **12 rutas** recorridas (home, calidad ×4, administración ×2, novedades, coordinación, proyectos, mi_trabajo, bandeja): todas cargan, **cero errores JS**, cero scroll horizontal.
+- **Atrás / adelante** del navegador: recorren el historial interno y la navegación lateral y las migas siguen el cambio.
+- **Enlace directo con recarga**: `#/calidad/auditorias` abre el módulo en esa sección.
+- **Enlace mágico + sección**: `?token=…#/calidad/riesgos` funciona y el token se limpia de la URL.
+- **Permiso por URL**: cuenta sin `calidad` pidiendo `#/calidad/riesgos` → Home.
+- **Móvil (375px)**: los cuatro módulos migrados sin scroll horizontal; el menú de Administración se mantiene en columna (antes pasaba a fila envolviendo, que con acordeones sería ilegible).
+- **1197/1197 tests** de backend.
+
+## L. Pendientes tras la v12.1
+
+- **Proyectos, Gerencia, Jefatura, Bandeja** no tienen submódulo Reportes. Gerencia y Jefatura *son* casi enteramente reportes: la conversión ahí es más una reorganización que un agregado, y conviene hacerla junto con la Fase 2 de Reportes.
+- **`app.html`** (la vía con login Google) no tiene enrutamiento: `SigsoShell` sólo existe en `plataforma.html`. Los módulos degradan bien —se comportan como antes— pero no hay enlaces profundos por esa vía.
+- **Captura visual**: sigue pendiente. El panel del navegador de esta sesión no compone frames; la verificación fue por DOM y estilos computados.

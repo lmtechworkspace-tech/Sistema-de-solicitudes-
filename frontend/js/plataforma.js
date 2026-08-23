@@ -137,7 +137,11 @@
       // que la validacion de red la corrija.
       olvidarSesion_();
       try { localStorage.setItem(LLAVE_TOKEN, tokenDeEnlace); } catch (err) { /* sin storage */ }
-      window.history.replaceState(null, '', window.location.pathname);
+      // v12.1: se conserva el HASH. location.pathname solo lo descartaba, y
+      // eso rompia los enlaces que traen token Y seccion a la vez
+      // (?token=...#/calidad/riesgos): la seccion se perdia al limpiar la
+      // URL y el usuario caia en Home sin saber por que.
+      window.history.replaceState(null, '', window.location.pathname + window.location.hash);
     }
 
     // Sesion guardada: restaurar sin re-loguear. Si expiro, al login.
@@ -310,17 +314,53 @@
     // el recordatorio de pausas) y la cuenta SI lo tiene, se abre directo ese
     // modulo -- si no, se ignora en silencio y entra a Home como siempre. Se
     // consume una sola vez (no debe reaplicarse en un logout/login posterior).
-    var moduloInicial = (moduloObjetivoEnlace_ && modulosDeLaCuenta_().indexOf(moduloObjetivoEnlace_) !== -1)
-      ? moduloObjetivoEnlace_ : 'home';
+    // v12.1: el modulo inicial puede venir de TRES lados, en este orden:
+    //   1. la URL (#/calidad) -- un enlace compartido o un bookmark;
+    //   2. el enlace magico (?modulo=), que se consume una sola vez;
+    //   3. Home.
+    // En los tres casos se valida contra los modulos DE LA CUENTA: una URL no
+    // es una autorizacion. Si pide un modulo que no le toca, entra a Home en
+    // silencio (el backend igual rechaza cada accion por su cuenta).
+    var rutaInicial = window.SigsoRutas ? SigsoRutas.leer() : { modulo: '', item: '' };
+    var moduloInicial = 'home';
+    if (rutaInicial.modulo && puedeAbrirModulo_(rutaInicial.modulo)) {
+      moduloInicial = rutaInicial.modulo;
+      itemPendienteDeRuta_ = rutaInicial.item;
+    } else if (moduloObjetivoEnlace_ && puedeAbrirModulo_(moduloObjetivoEnlace_)) {
+      moduloInicial = moduloObjetivoEnlace_;
+    }
     moduloObjetivoEnlace_ = null;
-    mostrarModulo_(moduloInicial);
+    // v12.1: SigsoShell se define ANTES de abrir el primer modulo. Estaba
+    // despues, y por eso un enlace directo a una seccion (#/calidad/riesgos)
+    // abria el modulo pero caia en su seccion por defecto: cuando el modulo
+    // preguntaba por la ruta, el puente todavia no existia.
     // v5.1: puente para que el formulario (formulario.js, compartido con
     // index.html) sepa que corre DENTRO del shell y navegue por modulos en
     // vez de saltar a estado.html (que sacaba al usuario del sistema).
     window.SigsoShell = {
       irAModulo: function (id) { mostrarModulo_(id); },
-      tieneModulo: function (id) { return modulosDeLaCuenta_().indexOf(id) !== -1; }
+      tieneModulo: function (id) { return modulosDeLaCuenta_().indexOf(id) !== -1; },
+      // v12.1: el modulo pregunta si la URL pedia una seccion concreta.
+      // Devuelve '' si no, y se consume una sola vez.
+      tomarItemDeRuta: tomarItemDeRuta_,
+      // Para que el modulo publique en que seccion quedo, sin conocer el
+      // formato de la URL.
+      publicarItem: function (itemId) {
+        if (window.SigsoRutas && moduloActivo_) SigsoRutas.escribir(moduloActivo_, itemId);
+      }
     };
+
+    mostrarModulo_(moduloInicial);
+
+    // Atras/adelante del navegador: hasta la v12.0 sacaban al usuario de
+    // SIGSO entero, porque no habia historial interno que recorrer.
+    if (window.SigsoRutas) {
+      SigsoRutas.alCambiar(function (ruta) {
+        var destino = ruta.modulo && puedeAbrirModulo_(ruta.modulo) ? ruta.modulo : 'home';
+        itemPendienteDeRuta_ = ruta.item;
+        mostrarModulo_(destino);
+      });
+    }
     setTimeout(iniciarTourSiCorresponde_, 400);
   }
 
@@ -1205,10 +1245,30 @@
   // el auto-refresco al volver a la pestana (sin recargar la pagina).
   var moduloActivo_ = null;
   var ultimaCargaModulo_ = {};
+  // v12.1: item pedido por la URL, para que el modulo lo abra al montarse.
+  // Se consume una sola vez: despues manda la navegacion del usuario.
+  var itemPendienteDeRuta_ = '';
+
+  // 'home' no esta en MODULOS_SHELL pero es un destino valido del shell.
+  function puedeAbrirModulo_(id) {
+    if (id === 'home') return true;
+    return modulosDeLaCuenta_().indexOf(id) !== -1;
+  }
+
+  // Lo consume el modulo al montarse (hoy Calidad).
+  function tomarItemDeRuta_() {
+    var v = itemPendienteDeRuta_;
+    itemPendienteDeRuta_ = '';
+    return v;
+  }
 
   function mostrarModulo_(id) {
     moduloActivo_ = id;
     ultimaCargaModulo_[id] = Date.now();
+    // v12.1: la URL refleja donde estas. replaceState (reemplazar=true) para
+    // que abrir un modulo no meta un paso extra en el historial: el paso lo
+    // mete el propio cambio de hash cuando navega el usuario.
+    if (window.SigsoRutas) SigsoRutas.escribir(id, itemPendienteDeRuta_, true);
     // bandeja, gerencia y jefatura comparten la seccion modulo-bandeja
     // (vistas internas dashboard/detalle/gerencia/jefatura, mismo layout
     // que app.html).

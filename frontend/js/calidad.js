@@ -18,7 +18,16 @@
       // v11.0 Fase 7: se entra por el tablero. Quien no pueda verlo cae a
       // Documentos solo -- lo resuelve cargarTablero_ con la respuesta del
       // backend, no adivinando el rol desde aca.
-      seccionActiva_ = 'tablero';
+      //
+      // v12.1: salvo que la URL pida otra seccion (#/calidad/riesgos). Eso NO
+      // es una autorizacion: la navegacion se pinta con seccionesVisibles_ y
+      // el backend valida cada accion. Una seccion que no le toque devuelve
+      // su propio 'sin acceso', igual que si la pidiera por cualquier via.
+      var pedida = (window.SigsoShell && SigsoShell.tomarItemDeRuta)
+        ? SigsoShell.tomarItemDeRuta() : '';
+      var p = pedida && window.SigsoNav ? SigsoNav.partes(pedida) : null;
+      seccionActiva_ = (p && p.seccion) || 'tablero';
+      filtroTipo_ = (p && p.seccion === 'documentos') ? (p.argumento || '') : '';
       documentoActivoId_ = null;
       personaActivaId_ = null;
       render_();
@@ -238,6 +247,9 @@
     revisionActivaId_ = null;
     objetivoActivoId_ = null;
     procesoActivoId_ = null;
+    // La URL sigue a la navegacion: asi el enlace se puede compartir y el
+    // boton atras vuelve a la seccion anterior en vez de salir del modulo.
+    if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(itemActivo_());
     render_();
   }
 

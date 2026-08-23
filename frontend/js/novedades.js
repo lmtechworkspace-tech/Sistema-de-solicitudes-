@@ -298,17 +298,31 @@
   function cargarNovedades_() {
     var cont = document.getElementById('novedades-contenido');
     if (!cont) return;
-    vista_ = 'feed';
+    // v12.1: la vista puede venir de la URL (#/novedades/aprobar). Se valida
+    // contra la arquitectura: una URL no puede inventar una vista. Y el filtro
+    // de permiso lo sigue aplicando renderTabs_ con puedeGeneral_.
+    var pedida = (window.SigsoShell && SigsoShell.tomarItemDeRuta)
+      ? SigsoShell.tomarItemDeRuta() : '';
+    var valida = ARQUITECTURA_NOVEDADES.some(function (sub) {
+      return sub.items.some(function (it) { return it.id === pedida; });
+    });
+    vista_ = valida ? pedida : 'feed';
 
+    // v12.1: mismo layout de dos columnas que Calidad y Administracion. La
+    // navegacion sale del contenido y pasa a ser persistente: antes vivia
+    // dentro del bloque que cada vista reemplazaba.
     cont.innerHTML =
-      '<div class="sigso-tabs" id="novedades-tabs" role="tablist"></div>' +
+      '<div class="sigso-modulo-layout">' +
+      '<nav class="sigso-modulo-layout__nav sigso-nav2" id="novedades-nav" aria-label="Secciones de Novedades"></nav>' +
+      '<div class="sigso-modulo-layout__panel">' +
       '<div class="sigso-novedades__cabecera">' +
         '<div class="sigso-novedades__chips" id="novedades-chips-tipo"></div>' +
         '<button type="button" class="sigso-boton sigso-boton--con-icono sigso-oculto" id="btn-publicar-novedad">' +
           Iconos.svg('mas', { tam: 15 }) + 'Publicar' +
         '</button>' +
       '</div>' +
-      '<div class="sigso-novedades__lista">' + Componentes.cargando('Cargando novedades...') + '</div>';
+      '<div class="sigso-novedades__lista">' + Componentes.cargando('Cargando novedades...') + '</div>' +
+      '</div></div>';
 
     api_('listarAreasPublicablesNovedad', {}).then(function (respuesta) {
       if (respuesta && respuesta.ok) {
@@ -343,30 +357,49 @@
    * aparece el contador -- no hace falta un permiso previo para decidir si
    * mostrar la pestaña.
    */
+  // v12.1: la barra de pestañas pasa a navegación vertical (SigsoNav). Con
+  // tres o cuatro vistas no hace falta acordeón: cada submódulo tiene un solo
+  // ítem y el componente los aplana a enlaces directos. Se mantiene el nombre
+  // renderTabs_ porque lo llaman varios sitios; lo que cambia es qué pinta.
+  var ARQUITECTURA_NOVEDADES = [
+    { id: 'publicadas', nombre: 'Publicadas', icono: 'campana', items: [
+      { id: 'feed', nombre: 'Publicadas' }
+    ] },
+    { id: 'aprobar', nombre: 'Por aprobar', icono: 'check', items: [
+      { id: 'aprobar', nombre: 'Por aprobar' }
+    ] },
+    { id: 'envios', nombre: 'Mis envíos', icono: 'subir', items: [
+      { id: 'envios', nombre: 'Mis envíos' }
+    ] },
+    // Submódulo transversal. NO se inventa contenido: "Cumplimiento" ya
+    // existía y ya era un reporte (quién leyó qué), sólo que estaba como una
+    // pestaña más, indistinguible de las vistas de trabajo.
+    { id: 'reportes', nombre: 'Reportes', icono: 'grafico', plano: true,
+      descripcion: 'Quién leyó qué', items: [
+      { id: 'cumplimiento', nombre: 'Cumplimiento de lectura' }
+    ] }
+  ];
+
   function renderTabs_(pendientesAprobar, misEnvios) {
-    var cont = document.getElementById('novedades-tabs');
-    if (!cont) return;
-    var segmentos = [
-      { id: 'feed', etiqueta: 'Publicadas' },
-      { id: 'aprobar', etiqueta: 'Por aprobar' + (pendientesAprobar ? ' (' + pendientesAprobar + ')' : '') },
-      { id: 'envios', etiqueta: 'Mis envíos' + (misEnvios ? ' (' + misEnvios + ')' : '') }
-    ];
-    // v6.8 (Fase 6): "Cumplimiento" solo para ADM -- puedeGeneral_ ya es
-    // exactamente esa señal (viene de listarAreasPublicablesNovedad).
-    if (puedeGeneral_) segmentos.push({ id: 'cumplimiento', etiqueta: 'Cumplimiento' });
-    cont.innerHTML = segmentos.map(function (s) {
-      var activo = s.id === vista_ ? ' sigso-tabs__boton--activo' : '';
-      return '<button type="button" class="sigso-tabs__boton' + activo + '" data-vista="' + s.id + '">' +
-        Componentes.escaparHtml(s.etiqueta) + '</button>';
-    }).join('');
-    cont.querySelectorAll('[data-vista]').forEach(function (boton) {
-      boton.addEventListener('click', function () {
-        vista_ = boton.getAttribute('data-vista');
+    var cont = document.getElementById('novedades-nav');
+    if (!cont || !window.SigsoNav) return;
+    SigsoNav.render({
+      contenedor: cont,
+      modulo: 'novedades',
+      submodulos: ARQUITECTURA_NOVEDADES,
+      activo: vista_,
+      // "Cumplimiento" sólo para ADM -- puedeGeneral_ es exactamente esa señal
+      // (viene de listarAreasPublicablesNovedad). Mismo criterio que antes.
+      visible: function (llave) { return llave === 'cumplimiento' ? !!puedeGeneral_ : true; },
+      badges: { aprobar: pendientesAprobar || '', envios: misEnvios || '' },
+      onSeleccion: function (id) {
+        vista_ = id;
+        if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id);
         cambiarVista_();
-      });
+      }
     });
     // Pide los contadores en segundo plano (no bloquea el feed inicial) y
-    // vuelve a pintar las pestañas con el numero real.
+    // vuelve a pintar con el número real.
     if (pendientesAprobar === undefined) {
       Promise.all([
         api_('listarPendientesAprobacionNovedad', {}).catch(function () { return null; }),
