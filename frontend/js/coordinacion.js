@@ -58,22 +58,16 @@
     if (!c.querySelector('.sigso-modulo-layout')) {
       c.innerHTML =
         '<div class="sigso-modulo-layout">' +
-          '<nav class="sigso-modulo-layout__nav sigso-nav2" id="coord-nav" aria-label="Secciones de Coordinación"></nav>' +
           '<div class="sigso-modulo-layout__panel" id="coord-sub-contenido"></div>' +
         '</div>';
     }
+    // v13.0: la navegacion vive en el sidebar; aca solo se registra el arbol.
     if (window.SigsoNav) {
-      SigsoNav.render({
-        contenedor: document.getElementById('coord-nav'),
-        modulo: 'pausas_coordinacion',
-        submodulos: ARQUITECTURA_COORD,
-        activo: subtab,
-        onSeleccion: function (id) {
-          subtab = id;
-          if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id);
-          cargar();
-        }
+      SigsoNav.registrar('pausas_coordinacion', {
+        nombre: 'Coordinación de pausas',
+        submodulos: ARQUITECTURA_COORD
       });
+      if (window.SigsoShell && SigsoShell.refrescarArbol) SigsoShell.refrescarArbol();
     }
     if (subtab === 'hoy') cargarHoy_();
     else if (subtab === 'reportes') cargarReportes_();
@@ -450,5 +444,11 @@
         : '<table class="sigso-tabla"><thead><tr><th>Fecha</th><th>Estado</th></tr></thead><tbody>' + filas + '</tbody></table>'));
   }
 
-  window.SigsoCoordinacion = { cargar: cargar };
+  window.SigsoCoordinacion = {
+    // v13.0: el arbol del sidebar entra por aca.
+    irAItem: function (itemId) {
+      subtab = itemId;
+      if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(itemId);
+      cargar();
+    }, cargar: cargar };
 })();

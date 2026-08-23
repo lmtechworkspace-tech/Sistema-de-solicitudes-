@@ -347,7 +347,16 @@
       // formato de la URL.
       publicarItem: function (itemId) {
         if (window.SigsoRutas && moduloActivo_) SigsoRutas.escribir(moduloActivo_, itemId);
-      }
+        // v13.0: el arbol del sidebar marca la hoja activa y deja su rama
+        // abierta. Sin esto, navegar dentro del modulo no se reflejaria en la
+        // navegacion -- que es justamente donde el usuario mira para saber
+        // donde esta.
+        itemActivoDelModulo_ = itemId;
+        renderNav_();
+      },
+      // El modulo avisa que cambiaron sus permisos (llego seccionesVisibles_)
+      // para que el arbol muestre lo que de verdad puede abrir.
+      refrescarArbol: function () { renderNav_(); }
     };
 
     mostrarModulo_(moduloInicial);
@@ -1004,33 +1013,92 @@
     return (window.SIGSO_CONFIG && window.SIGSO_CONFIG[def.urlConfig]) || '';
   }
 
+  // v13.0: el nav del sidebar deja de ser una lista plana de módulos y pasa a
+  // ser el ÁRBOL de navegación de SIGSO (SigsoNav.renderArbol). Cada módulo
+  // que haya registrado su arquitectura se despliega aquí, en la barra azul;
+  // el que no tenga árbol sigue siendo un enlace simple, como siempre.
+  //
+  // itemActivoDelModulo_ lo publica el propio módulo (SigsoShell.publicarItem)
+  // para que el árbol marque la hoja correcta y deje su rama abierta.
+  var itemActivoDelModulo_ = '';
+  var badgesRecordados_ = {};
+
   function renderNav_() {
     var nav = document.getElementById('nav-modulos');
-    nav.innerHTML = '<button type="button" class="plataforma-nav__item" data-modulo="home">' +
-      Iconos.svg('inicio') + ' <span class="plataforma-nav__etiqueta">Inicio</span></button>' +
-      modulosDeLaCuenta_().map(function (id) {
-        var def = MODULOS_SHELL[id];
-        // v4.0: contador de pendientes -- lo rellena actualizarContadores_()
-        // cuando llegan los datos; asi no hay que entrar al modulo para
-        // descubrir que hay algo esperando.
-        var ranura = '<span class="plataforma-nav__badge sigso-oculto" data-badge="' + id + '"></span>';
-        var etiqueta = '<span class="plataforma-nav__etiqueta">' + def.nombre + '</span>';
-        var acento = acentoInline_(id);
-        if (def.interno) {
-          return '<button type="button" class="plataforma-nav__item" data-modulo="' + id + '"' + acento + '>' +
-            Iconos.svg(def.icono) + ' ' + etiqueta + ranura + '</button>';
-        }
-        var url = urlExterna_(def);
-        return url
-          ? '<a class="plataforma-nav__item" href="' + Componentes.escaparHtml(url) + '" target="_blank" rel="noopener"' + acento + '>' +
-            Iconos.svg(def.icono) + ' ' + etiqueta + '</a>'
-          : '';
-      }).join('');
+    if (!nav) return;
 
-    nav.querySelectorAll('[data-modulo]').forEach(function (boton) {
-      boton.addEventListener('click', function () {
-        mostrarModulo_(boton.getAttribute('data-modulo'));
-      });
+    var modulos = [{ id: 'home', nombre: 'Inicio', icono: 'inicio' }]
+      .concat(modulosDeLaCuenta_().map(function (id) {
+        var def = MODULOS_SHELL[id];
+        var url = def.interno ? '' : urlExterna_(def);
+        return {
+          id: id,
+          nombre: def.nombre,
+          icono: def.icono,
+          acento: acentoInline_(id),
+          esEnlace: !def.interno,
+          href: url
+        };
+      }).filter(function (m) { return m.esEnlace ? !!m.href : true; }));
+
+    SigsoNav.renderArbol({
+      contenedor: nav,
+      modulos: modulos,
+      moduloActivo: moduloActivo_,
+      itemActivo: itemActivoDelModulo_,
+      onModulo: function (id) {
+        // Volver a tocar el módulo abierto lo cierra; tocar otro lo abre.
+        if (id === moduloActivo_ && id !== 'home') {
+          moduloActivo_ = null;
+          renderNav_();
+          return;
+        }
+        mostrarModulo_(id);
+      },
+      onItem: function (moduloId, itemId) {
+        // Si la hoja es de OTRO módulo, primero hay que abrirlo: el módulo
+        // consume la ruta al montarse (tomarItemDeRuta).
+        if (moduloId !== moduloActivo_) {
+          itemPendienteDeRuta_ = itemId;
+          mostrarModulo_(moduloId);
+          return;
+        }
+        irAItemDelModuloActivo_(moduloId, itemId);
+      }
+    });
+
+    // Los contadores los rellena actualizarContadores_ sobre [data-badge].
+    actualizarContadoresSiHay_();
+  }
+
+  // Cada módulo expone cómo ir a una de sus secciones. Se busca por convención
+  // (SigsoX.irAItem) para no tener que enumerarlos acá y que agregar un módulo
+  // nuevo no obligue a tocar el shell.
+  var IR_A_ITEM_POR_MODULO = {
+    calidad: function (id) { return window.SigsoCalidad && window.SigsoCalidad.irAItem && window.SigsoCalidad.irAItem(id); },
+    administracion: function (id) { return window.SigsoAdmin && window.SigsoAdmin.irAItem && window.SigsoAdmin.irAItem(id); },
+    gerencia: function (id) { return window.SigsoGerencia && window.SigsoGerencia.irAItem && window.SigsoGerencia.irAItem(id); },
+    jefatura: function (id) { return window.SigsoJefatura && window.SigsoJefatura.irAItem && window.SigsoJefatura.irAItem(id); },
+    proyectos: function (id) { return window.SigsoProyectos && window.SigsoProyectos.irAItem && window.SigsoProyectos.irAItem(id); },
+    novedades: function (id) { return window.SigsoNovedades && window.SigsoNovedades.irAItem && window.SigsoNovedades.irAItem(id); },
+    pausas_coordinacion: function (id) { return window.SigsoCoordinacion && window.SigsoCoordinacion.irAItem && window.SigsoCoordinacion.irAItem(id); }
+  };
+
+  function irAItemDelModuloActivo_(moduloId, itemId) {
+    var ir = IR_A_ITEM_POR_MODULO[moduloId];
+    if (ir) { ir(itemId); return; }
+    // Sin puente: al menos deja la URL y el árbol coherentes.
+    itemActivoDelModulo_ = itemId;
+    if (window.SigsoRutas) SigsoRutas.escribir(moduloId, itemId);
+    renderNav_();
+  }
+
+  // Los badges se piden una sola vez al entrar, pero el arbol se repinta cada
+  // vez que se abre o cierra una rama. Sin recordarlos, el contador
+  // desaparecia al primer clic en el sidebar.
+  function actualizarContadoresSiHay_() {
+    Object.keys(badgesRecordados_).forEach(function (id) {
+      pintarBadge_(id, badgesRecordados_[id]);
     });
   }
 
@@ -1229,6 +1297,9 @@
   }
 
   function pintarBadge_(modulo, cantidad) {
+    // v13.0: se recuerda, porque el arbol del sidebar se repinta al abrir y
+    // cerrar ramas y el contador se perdia en el primer clic.
+    badgesRecordados_[modulo] = cantidad;
     var badge = document.querySelector('[data-badge="' + modulo + '"]');
     if (!badge) return;
     badge.textContent = cantidad > 99 ? '99+' : String(cantidad);
@@ -1282,9 +1353,11 @@
       var color = MODULO_COLOR[id];
       main.style.setProperty('--acento-modulo', color ? color.acento : 'var(--naranja)');
     }
-    document.querySelectorAll('.plataforma-nav__item[data-modulo]').forEach(function (boton) {
-      boton.classList.toggle('plataforma-nav__item--activo', boton.getAttribute('data-modulo') === id);
-    });
+    // v13.0: el arbol se repinta entero -- ya no basta con mover una clase,
+    // porque al cambiar de modulo hay que cerrar la rama del anterior y abrir
+    // la del nuevo. El item lo publicara el modulo al montarse.
+    itemActivoDelModulo_ = itemPendienteDeRuta_ || '';
+    renderNav_();
 
     if (id === 'mis_solicitudes') {
       document.getElementById('nota-correos-cuenta').textContent =

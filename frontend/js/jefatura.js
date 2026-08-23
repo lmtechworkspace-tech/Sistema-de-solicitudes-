@@ -11,7 +11,11 @@
  * sea del equipo del jefe antes de devolverla).
  */
 (function () {
-  window.SigsoJefatura = { cargar: cargarJefatura_ };
+  window.SigsoJefatura = {
+    cargar: cargarJefatura_,
+    // v13.0: el arbol del sidebar entra por aca.
+    irAItem: function (itemId) { irAVistaJefatura_(itemId); }
+  };
 
   document.addEventListener('DOMContentLoaded', function () {
     // v12.4: las 4 pestañas pasaron a la navegacion vertical. El cableado
@@ -367,16 +371,14 @@
   var reporteJefAbierto_ = null;
   var panelJefatura_ = null;
 
+  // v13.0: la navegacion vive en el sidebar.
   function pintarNavJefatura_() {
-    var cont = document.getElementById('jef-nav');
-    if (!cont || !window.SigsoNav) return;
-    SigsoNav.render({
-      contenedor: cont,
-      modulo: 'jefatura',
-      submodulos: ARQUITECTURA_JEFATURA,
-      activo: itemJefaturaActivo_,
-      onSeleccion: function (id) { irAVistaJefatura_(id); }
+    if (!window.SigsoNav) return;
+    SigsoNav.registrar('jefatura', {
+      nombre: 'Mi departamento',
+      submodulos: ARQUITECTURA_JEFATURA
     });
+    if (window.SigsoShell && SigsoShell.refrescarArbol) SigsoShell.refrescarArbol();
   }
 
   function irAVistaJefatura_(id) {

@@ -33,6 +33,8 @@
       });
       irAVistaProyectos_(valida ? pedidaPy : 'portafolio');
     },
+    // v13.0: el arbol del sidebar entra por aca.
+    irAItem: function (itemId) { irAVistaProyectos_(itemId); },
     refrescar: function () {
       if (proyectoActivoId_) refrescarDetalle_(); else cargarPortafolio_();
     }
@@ -1435,9 +1437,9 @@
     if (!raiz) return null;
     var panel = raiz.querySelector('.sigso-modulo-layout__panel');
     if (!panel) {
+      // v13.0: sin <nav> interno -- la navegacion vive en el sidebar.
       raiz.innerHTML =
         '<div class="sigso-modulo-layout">' +
-          '<nav class="sigso-modulo-layout__nav sigso-nav2" id="py-nav" aria-label="Secciones de Proyectos"></nav>' +
           '<div class="sigso-modulo-layout__panel"></div>' +
         '</div>';
       panel = raiz.querySelector('.sigso-modulo-layout__panel');
@@ -1446,16 +1448,14 @@
     return panel;
   }
 
+  // v13.0: la navegacion vive en el sidebar.
   function pintarNavProyectos_() {
-    var cont = document.getElementById('py-nav');
-    if (!cont || !window.SigsoNav) return;
-    SigsoNav.render({
-      contenedor: cont,
-      modulo: 'proyectos',
-      submodulos: ARQUITECTURA_PROYECTOS,
-      activo: vistaProyectos_,
-      onSeleccion: function (id) { irAVistaProyectos_(id); }
+    if (!window.SigsoNav) return;
+    SigsoNav.registrar('proyectos', {
+      nombre: 'Proyectos',
+      submodulos: ARQUITECTURA_PROYECTOS
     });
+    if (window.SigsoShell && SigsoShell.refrescarArbol) SigsoShell.refrescarArbol();
   }
 
   function irAVistaProyectos_(id) {

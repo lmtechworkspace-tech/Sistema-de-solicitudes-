@@ -3506,3 +3506,119 @@
   .sigso-modulo-layout { grid-template-columns: 1fr !important; }
   .sigso-rep-tabla-caja { overflow: visible !important; }
 }
+
+/* ==========================================================================
+   v13.0 — Árbol jerárquico DENTRO de la barra lateral azul
+   La v12 puso la jerarquía en el contenido; su lugar es aquí. Se conserva la
+   identidad del sidebar (navy, iconos, tipografía): sólo se agregan los dos
+   niveles que faltaban, con la indentación comunicando la jerarquía.
+   ========================================================================== */
+
+/* Nivel 1 — el módulo. Reusa .plataforma-nav__item tal cual estaba; sólo se
+   suma el chevron cuando tiene árbol. */
+.plataforma-nav__ico { display: inline-flex; flex: 0 0 auto; }
+.plataforma-nav__chevron {
+  flex: 0 0 auto;
+  width: 6px; height: 6px;
+  margin-left: auto;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  opacity: .65;
+  transition: transform var(--mov-normal);
+}
+.plataforma-nav__item[aria-expanded="true"] > .plataforma-nav__chevron,
+.plataforma-nav__sub--abierto > .plataforma-nav__chevron { transform: rotate(45deg); }
+
+/* La rama del módulo abierto. La línea vertical es lo que hace leer de un
+   vistazo que todo eso cuelga del módulo de arriba. */
+.plataforma-nav__rama {
+  display: flex; flex-direction: column; gap: 1px;
+  margin: 2px 0 var(--esp-2) 1.05rem;
+  padding-left: 0.55rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+/* Nivel 2 — el submódulo. */
+.plataforma-nav__sub {
+  display: flex; align-items: center; gap: 0.4rem;
+  width: 100%;
+  border: none; background: transparent;
+  padding: 0.4rem 0.55rem;
+  border-radius: var(--radio-sm);
+  cursor: pointer;
+  font: inherit; font-size: 0.82rem; font-weight: 500;
+  color: rgba(255, 255, 255, 0.62);
+  text-align: left;
+  transition: background var(--mov-normal), color var(--mov-normal);
+}
+.plataforma-nav__sub:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.plataforma-nav__sub--abierto { color: rgba(255, 255, 255, 0.9); }
+.plataforma-nav__sub--activo { background: rgba(255, 255, 255, 0.12); color: #fff; font-weight: 600; }
+
+/* Reportes se distingue del resto de submódulos: es transversal y no debe
+   quedar escondido entre las secciones de trabajo. */
+.plataforma-nav__sub--reportes { color: rgba(255, 255, 255, 0.82); }
+.plataforma-nav__sub--reportes .plataforma-nav__etiqueta { letter-spacing: .02em; }
+
+/* Nivel 3 — el ítem. Más indentación y menos peso: la jerarquía se lee sin
+   tener que interpretarla. */
+.plataforma-nav__items {
+  display: flex; flex-direction: column; gap: 1px;
+  margin: 1px 0 var(--esp-2) 0.5rem;
+  padding-left: 0.5rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.10);
+}
+.plataforma-nav__hoja {
+  display: flex; align-items: center; gap: 0.45rem;
+  width: 100%;
+  border: none; background: transparent;
+  padding: 0.34rem 0.5rem;
+  border-radius: var(--radio-sm);
+  cursor: pointer;
+  font: inherit; font-size: 0.8rem; font-weight: 400;
+  color: rgba(255, 255, 255, 0.56);
+  text-align: left;
+  transition: background var(--mov-normal), color var(--mov-normal);
+}
+.plataforma-nav__hoja:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+/* El activo no se distingue SÓLO por color: lleva punto lleno y negrita. */
+.plataforma-nav__hoja--activo,
+.plataforma-nav__sub.plataforma-nav__hoja.plataforma-nav__sub--activo {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-weight: 600;
+}
+.plataforma-nav__punto {
+  flex: 0 0 auto;
+  width: 4px; height: 4px;
+  border-radius: var(--radio-full);
+  background: rgba(255, 255, 255, 0.32);
+}
+.plataforma-nav__hoja--activo .plataforma-nav__punto { background: var(--primario); box-shadow: 0 0 0 2px rgba(42, 95, 214, 0.35); }
+
+.plataforma-nav__sub:focus-visible,
+.plataforma-nav__hoja:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.65);
+  outline-offset: -2px;
+}
+
+/* Colapsada: el árbol no cabe en 68px de ancho, así que se oculta entero.
+   Al expandir vuelve con la rama abierta donde estaba.
+
+   :not(--abierto) es lo que impide un fallo real en móvil: ahí el sidebar
+   es un DRAWER y conserva la clase --colapsado (que se recuerda entre
+   sesiones). Sin esta excepción, quien hubiera colapsado el menú en el
+   escritorio abría el drawer en el teléfono y no veía ningún submódulo. */
+.plataforma-sidebar--colapsado:not(.plataforma-sidebar--abierto) .plataforma-nav__rama,
+.plataforma-sidebar--colapsado:not(.plataforma-sidebar--abierto) .plataforma-nav__chevron { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .plataforma-nav__chevron, .plataforma-nav__sub, .plataforma-nav__hoja { transition: none; }
+}
+
+/* El layout de dos columnas de la v12 queda sin navegación propia: ahora
+   vive en el sidebar. Se conserva la clase porque varios módulos la usan
+   como contenedor, pero pasa a UNA sola columna. */
+.sigso-modulo-layout { grid-template-columns: minmax(0, 1fr); }
+.sigso-modulo-layout__nav { display: none; }

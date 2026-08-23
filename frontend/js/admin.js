@@ -159,7 +159,9 @@
       var pedida = (window.SigsoShell && SigsoShell.tomarItemDeRuta)
         ? SigsoShell.tomarItemDeRuta() : '';
       irASeccionAdmin_(existeSeccionAdmin_(pedida) ? pedida : ARQUITECTURA_ADMIN[0].items[0].id);
-    }
+    },
+    // v13.0: el arbol del sidebar entra por aca.
+    irAItem: function (itemId) { irASeccionAdmin_(itemId); }
   };
 
   var seccionAdminActiva_ = '';
@@ -171,16 +173,15 @@
     });
   }
 
+  // v13.0: la navegacion vive en el sidebar. Aca solo se registra el arbol
+  // y se pide que se repinte.
   function pintarNavAdmin_() {
-    var cont = document.getElementById('admin-menu');
-    if (!cont || !window.SigsoNav) return;
-    SigsoNav.render({
-      contenedor: cont,
-      modulo: 'administracion',
-      submodulos: ARQUITECTURA_ADMIN,
-      activo: seccionAdminActiva_,
-      onSeleccion: function (id) { irASeccionAdmin_(id); }
+    if (!window.SigsoNav) return;
+    SigsoNav.registrar('administracion', {
+      nombre: 'Administración',
+      submodulos: ARQUITECTURA_ADMIN
     });
+    if (window.SigsoShell && SigsoShell.refrescarArbol) SigsoShell.refrescarArbol();
   }
 
   function irASeccionAdmin_(tipo) {

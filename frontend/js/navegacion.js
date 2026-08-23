@@ -259,6 +259,170 @@
   }
 
   // ==========================================================================
+  // ÁRBOL DE LA BARRA LATERAL (v13.0)
+  //
+  // CORRECCIÓN de la v12: la jerarquía Módulo > Submódulo > Ítem vivía en el
+  // CONTENIDO (una columna de acordeones a la izquierda del panel). Debía
+  // vivir en la BARRA AZUL. El contenido vuelve a ser sólo la pantalla
+  // seleccionada, con su título, sus migas y sus acciones.
+  //
+  // Tres niveles y no más:
+  //   1. Módulo    — lo que ya listaba el sidebar
+  //   2. Submódulo — agrupa; se expande y colapsa
+  //   3. Ítem      — la pantalla que se abre
+  //
+  // Un módulo SIN árbol registrado se dibuja como enlace simple, igual que
+  // siempre (Nueva solicitud, Mis solicitudes, Pausas...). No se le inventa
+  // una jerarquía que no tiene.
+  //
+  // El permiso lo sigue decidiendo cada módulo: registra un predicado
+  // `visible` y el árbol lo obedece. Si un ítem no se puede ver, no se dibuja
+  // -- y si un submódulo se queda sin ítems visibles, tampoco.
+
+  // Qué submódulos están abiertos, por módulo. Se recuerda al navegar para
+  // que la rama donde estás no se cierre sola.
+  var abiertos_ = {};
+
+  function llaveAbierto_(modulo, sub) { return modulo + '␟' + sub; }
+
+  function estaAbierto_(modulo, sub, contieneActivo) {
+    var k = llaveAbierto_(modulo, sub);
+    // Si nadie lo tocó todavía, manda dónde estás parado: la rama del ítem
+    // activo nace abierta para que la navegación diga dónde estás.
+    if (abiertos_[k] === undefined) return !!contieneActivo;
+    return abiertos_[k];
+  }
+
+  function alternarAbierto_(modulo, sub, contieneActivo) {
+    var k = llaveAbierto_(modulo, sub);
+    abiertos_[k] = !estaAbierto_(modulo, sub, contieneActivo);
+    return abiertos_[k];
+  }
+
+  /**
+   * Pinta el árbol completo de la barra lateral.
+   *
+   * @param {Object} opts
+   *   contenedor    {HTMLElement}
+   *   modulos       {Array}  [{id, nombre, icono, badge, esEnlace, href}]
+   *   moduloActivo  {string}
+   *   itemActivo    {string} id del ítem activo dentro del módulo activo
+   *   onModulo      {Function} (moduloId) -> void
+   *   onItem        {Function} (moduloId, itemId) -> void
+   */
+  function renderArbol(opts) {
+    var cont = opts.contenedor;
+    if (!cont) return;
+    var moduloActivo = opts.moduloActivo || '';
+    var itemActivo = opts.itemActivo || '';
+
+    cont.innerHTML = (opts.modulos || []).map(function (m) {
+      var def = obtener(m.id);
+      var esExpandible = !!(def && (def.submodulos || []).length);
+      var abiertoModulo = m.id === moduloActivo;
+
+      // --- Nivel 1: el módulo ---
+      var badge = (m.badge !== undefined && m.badge !== null && m.badge !== '' && m.badge !== 0)
+        ? '<span class="plataforma-nav__badge" data-badge="' + esc_(m.id) + '">' + esc_(m.badge) + '</span>'
+        : '<span class="plataforma-nav__badge sigso-oculto" data-badge="' + esc_(m.id) + '"></span>';
+
+      var cabecera;
+      if (m.esEnlace && m.href) {
+        // Módulo externo: sigue siendo un <a>, como antes.
+        cabecera = '<a class="plataforma-nav__item" href="' + esc_(m.href) + '"' +
+          ' target="_blank" rel="noopener"' + (m.acento || '') + '>' +
+          '<span class="plataforma-nav__ico">' + icono_(m.icono, 18) + '</span>' +
+          '<span class="plataforma-nav__etiqueta">' + esc_(m.nombre) + '</span></a>';
+      } else {
+        cabecera = '<button type="button" class="plataforma-nav__item' +
+            (abiertoModulo ? ' plataforma-nav__item--activo' : '') +
+            (esExpandible ? ' plataforma-nav__item--rama' : '') + '"' +
+          ' data-modulo="' + esc_(m.id) + '"' + (m.acento || '') +
+          (esExpandible ? ' aria-expanded="' + (abiertoModulo ? 'true' : 'false') + '"' : '') + '>' +
+          '<span class="plataforma-nav__ico">' + icono_(m.icono, 18) + '</span>' +
+          '<span class="plataforma-nav__etiqueta">' + esc_(m.nombre) + '</span>' +
+          badge +
+          (esExpandible ? '<span class="plataforma-nav__chevron" aria-hidden="true"></span>' : '') +
+        '</button>';
+      }
+
+      if (!esExpandible || !abiertoModulo) return cabecera;
+
+      // --- Nivel 2 y 3: sólo del módulo abierto ---
+      var visible = def.visible;
+      var ramas = (def.submodulos || []).map(function (sub) {
+        var items = itemsVisibles_(sub, visible);
+        if (!items.length) return '';
+
+        var contieneActivo = items.some(function (it) { return it.id === itemActivo; });
+
+        // Un submódulo de un solo ítem homónimo (o marcado plano) no se
+        // dibuja como rama que hay que abrir para encontrar una sola cosa:
+        // va directo como hoja de nivel 2.
+        if (esPlano_(sub, items)) {
+          var it0 = items[0];
+          return '<button type="button" class="plataforma-nav__sub plataforma-nav__hoja' +
+              (it0.id === itemActivo ? ' plataforma-nav__sub--activo' : '') +
+              (sub.id === ID_REPORTES ? ' plataforma-nav__sub--reportes' : '') + '"' +
+            ' data-item="' + esc_(it0.id) + '" data-de-modulo="' + esc_(m.id) + '"' +
+            (it0.id === itemActivo ? ' aria-current="page"' : '') + '>' +
+            '<span class="plataforma-nav__etiqueta">' + esc_(sub.nombre) + '</span>' +
+          '</button>';
+        }
+
+        var abierto = estaAbierto_(m.id, sub.id, contieneActivo);
+        var idLista = 'arbol-' + esc_(m.id) + '-' + esc_(sub.id);
+        return '<button type="button" class="plataforma-nav__sub' +
+            (abierto ? ' plataforma-nav__sub--abierto' : '') +
+            (sub.id === ID_REPORTES ? ' plataforma-nav__sub--reportes' : '') + '"' +
+          ' data-sub="' + esc_(sub.id) + '" data-de-modulo="' + esc_(m.id) + '"' +
+          ' aria-expanded="' + (abierto ? 'true' : 'false') + '" aria-controls="' + idLista + '">' +
+          '<span class="plataforma-nav__etiqueta">' + esc_(sub.nombre) + '</span>' +
+          '<span class="plataforma-nav__chevron" aria-hidden="true"></span>' +
+        '</button>' +
+        '<div class="plataforma-nav__items" id="' + idLista + '"' + (abierto ? '' : ' hidden') + '>' +
+          items.map(function (it) {
+            return '<button type="button" class="plataforma-nav__hoja' +
+                (it.id === itemActivo ? ' plataforma-nav__hoja--activo' : '') + '"' +
+              ' data-item="' + esc_(it.id) + '" data-de-modulo="' + esc_(m.id) + '"' +
+              (it.id === itemActivo ? ' aria-current="page"' : '') + '>' +
+              '<span class="plataforma-nav__punto" aria-hidden="true"></span>' +
+              '<span class="plataforma-nav__etiqueta">' + esc_(it.nombre) + '</span>' +
+            '</button>';
+          }).join('') +
+        '</div>';
+      }).join('');
+
+      return cabecera + '<div class="plataforma-nav__rama">' + ramas + '</div>';
+    }).join('');
+
+    // --- interacción ---------------------------------------------------------
+    cont.querySelectorAll('[data-modulo]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (typeof opts.onModulo === 'function') opts.onModulo(b.getAttribute('data-modulo'));
+      });
+    });
+    cont.querySelectorAll('[data-sub]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var mod = b.getAttribute('data-de-modulo');
+        var sub = b.getAttribute('data-sub');
+        var lista = document.getElementById(b.getAttribute('aria-controls'));
+        var ahora = alternarAbierto_(mod, sub, b.getAttribute('aria-expanded') === 'true');
+        b.setAttribute('aria-expanded', ahora ? 'true' : 'false');
+        b.classList.toggle('plataforma-nav__sub--abierto', ahora);
+        if (lista) lista.hidden = !ahora;
+      });
+    });
+    cont.querySelectorAll('[data-item]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (typeof opts.onItem === 'function') {
+          opts.onItem(b.getAttribute('data-de-modulo'), b.getAttribute('data-item'));
+        }
+      });
+    });
+  }
+
+  // ==========================================================================
   // RUTAS (v12.1)
   //
   // Hasta la v12.0 SIGSO no tenia enrutamiento: los modulos se mostraban y
@@ -329,6 +493,7 @@
     obtener: obtener,
     partes: partes,
     render: render,
+    renderArbol: renderArbol,
     migas: migas
   };
 })();

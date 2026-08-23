@@ -23,11 +23,16 @@
       // es una autorizacion: la navegacion se pinta con seccionesVisibles_ y
       // el backend valida cada accion. Una seccion que no le toque devuelve
       // su propio 'sin acceso', igual que si la pidiera por cualquier via.
+      registrarArbolSgc_();
       var pedida = (window.SigsoShell && SigsoShell.tomarItemDeRuta)
         ? SigsoShell.tomarItemDeRuta() : '';
       var p = pedida && window.SigsoNav ? SigsoNav.partes(pedida) : null;
       seccionActiva_ = (p && p.seccion) || 'tablero';
       filtroTipo_ = (p && p.seccion === 'documentos') ? (p.argumento || '') : '';
+      // v13.0: el argumento de 'reportes' abre ese reporte directo. Estaba
+      // solo en irASeccion_, asi que entrar por URL a un reporte dejaba el
+      // arbol marcandolo pero el contenido mostraba el catalogo.
+      reporteAbierto_ = (p && p.seccion === 'reportes') ? (p.argumento || null) : null;
       documentoActivoId_ = null;
       personaActivaId_ = null;
       render_();
@@ -35,8 +40,24 @@
     // Respeta donde esta el usuario: el auto-refresco de fondo no debe
     // sacarlo del documento o la ficha que esta mirando (misma leccion que
     // proyectos.js aprendio en v9.0b).
-    refrescar: render_
+    refrescar: render_,
+    // v13.0: el arbol del sidebar llama aca cuando eligen una seccion.
+    irAItem: function (itemId) {
+      var p = window.SigsoNav ? SigsoNav.partes(itemId) : { seccion: itemId, argumento: '' };
+      irASeccion_(p.seccion, p.argumento);
+    }
   };
+
+  // v13.0: la arquitectura se REGISTRA para que el sidebar la dibuje. El
+  // predicado de permisos va aca dentro: el arbol no decide nada, obedece.
+  function registrarArbolSgc_() {
+    if (!window.SigsoNav) return;
+    SigsoNav.registrar('calidad', {
+      nombre: 'Calidad',
+      submodulos: ARQUITECTURA_SGC,
+      visible: puedeVerSeccion_
+    });
+  }
 
   function render_() {
     if (seccionActiva_ === 'personas') {
@@ -154,9 +175,17 @@
     // plano: true -> se dibuja como enlace directo y no como acordeon de un
     // solo item. Reportes tiene que leerse como un destino, no como una
     // carpeta que hay que abrir para descubrir que adentro hay una sola cosa.
-    { id: 'reportes', nombre: 'Reportes', icono: 'grafico', plano: true,
+    // v13.0: los reportes son navegables desde el sidebar. Se listan los que
+    // se ARMAN aquí (los demás viven en su propia sección y ya están en el
+    // árbol por su cuenta: duplicarlos sería tener dos caminos al mismo sitio).
+    { id: 'reportes', nombre: 'Reportes', icono: 'grafico',
       descripcion: 'Analiza el desempeño del SGC', items: [
-      { id: 'reportes', nombre: 'Centro de reportes', permiso: 'cobertura' }
+      { id: 'reportes', nombre: 'Centro de reportes', permiso: 'cobertura' },
+      { id: 'reportes:cump-general', nombre: 'Cumplimiento general', permiso: 'cobertura' },
+      { id: 'reportes:cump-clausula', nombre: 'Por cláusula', permiso: 'cobertura' },
+      { id: 'reportes:rank-capitulo', nombre: 'Ranking de capítulos', permiso: 'cobertura' },
+      { id: 'reportes:ind-tendencia', nombre: 'Tendencia de indicador', permiso: 'cobertura' },
+      { id: 'reportes:doc-estado', nombre: 'Estado documental', permiso: 'cobertura' }
     ] },
 
     { id: 'administracion', nombre: 'Administración', icono: 'llave', items: [
@@ -199,8 +228,8 @@
     var panel = raiz.querySelector('.sigso-modulo-layout__panel');
     if (!panel) {
       raiz.innerHTML =
+        // v13.0: sin <nav> interno -- la navegacion vive en el sidebar.
         '<div class="sigso-modulo-layout">' +
-          '<nav class="sigso-modulo-layout__nav sigso-nav2" id="sgc-nav" aria-label="Secciones de Calidad"></nav>' +
           '<div class="sigso-modulo-layout__panel"></div>' +
         '</div>';
       panel = raiz.querySelector('.sigso-modulo-layout__panel');
@@ -211,25 +240,20 @@
     return panel;
   }
 
+  // v13.0: la navegacion ya no se pinta ACA -- vive en el sidebar. Esta
+  // funcion queda como el punto donde el modulo avisa que su arbol cambio
+  // (llego seccionesVisibles_ del backend, o se movio la seccion activa).
+  // La llaman los ~57 sitios que antes repintaban la barra interna.
   function pintarNavSgc_() {
-    var cont = document.getElementById('sgc-nav');
-    if (!cont || !window.SigsoNav) return;
-    SigsoNav.render({
-      contenedor: cont,
-      modulo: 'calidad',
-      submodulos: ARQUITECTURA_SGC,
-      activo: itemActivo_(),
-      visible: puedeVerSeccion_,
-      onSeleccion: function (_id, p) {
-        irASeccion_(p.seccion, p.argumento);
-      }
-    });
+    registrarArbolSgc_();
+    if (window.SigsoShell && SigsoShell.refrescarArbol) SigsoShell.refrescarArbol();
   }
 
   // El id del ítem activo incluye el filtro cuando la sección lo usa, para
   // que "Procedimientos" quede marcado y no "Lista maestra".
   function itemActivo_() {
     if (seccionActiva_ === 'documentos' && filtroTipo_) return 'documentos:' + filtroTipo_;
+    if (seccionActiva_ === 'reportes' && reporteAbierto_) return 'reportes:' + reporteAbierto_;
     return seccionActiva_;
   }
 
@@ -238,6 +262,9 @@
     // Los ítems por tipo de documento son la misma pantalla con el filtro ya
     // puesto. Elegir "Lista maestra" lo limpia.
     if (seccion === 'documentos') filtroTipo_ = argumento || '';
+    // v13.0: 'reportes:cump-general' abre ese reporte directo desde el arbol;
+    // 'reportes' a secas vuelve al catalogo.
+    if (seccion === 'reportes') { reporteAbierto_ = argumento || null; filtrosReporte_ = {}; }
     documentoActivoId_ = null;
     personaActivaId_ = null;
     ncActivaId_ = null;
@@ -8092,7 +8119,10 @@
       cuerpo = cuerpoTendenciaIndicador_(data, filtrosReporte_);
     }
 
-    cont.innerHTML = barraSecciones_(r.nombre) +
+    // v13.0: sin detalle en las migas -- el ítem del árbol YA nombra el
+    // reporte, y repetirlo daba '... / Tendencia de indicador / Tendencia de
+    // un indicador'.
+    cont.innerHTML = barraSecciones_() +
       SigsoReportes.barraAcciones({}) +
       '<div class="sgc-cabecera"><div><h2>' + Componentes.escaparHtml(r.nombre) + '</h2>' +
         '<p class="sigso-ayuda">' + Componentes.escaparHtml(r.desc) + '</p></div></div>' +

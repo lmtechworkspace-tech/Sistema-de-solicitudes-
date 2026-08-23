@@ -545,3 +545,90 @@ Verificado que dentro de un proyecto la navegación de módulo queda al lado y l
 3. **Tareas con fechas en `listarProyectos`** — desbloquearía el cumplimiento por proyecto.
 4. **Foto periódica de la cobertura ISO** — sigue siendo el único bloqueo para comparar períodos en Calidad.
 5. Los filtros se aplican **en el cliente**; con más volumen habrá que filtrar en origen.
+
+---
+
+# v13.0 — CORRECCIÓN: el árbol va en la barra lateral, no en el contenido
+
+## AE. Qué estaba mal
+
+La v12 leyó bien la jerarquía Módulo → Submódulo → Ítem, pero la puso **en el lugar equivocado**: una columna de acordeones dentro del contenido, a la izquierda del panel. Debía vivir en la **barra azul**.
+
+El síntoma de que estaba mal: había **dos navegaciones**. El sidebar listaba módulos y el contenido volvía a listar las secciones de ese módulo.
+
+```
+ANTES                                AHORA
+sidebar: Calidad                     sidebar: ▼ Calidad
+contenido: [acordeones] | panel                  Inicio
+                                                 Sistema de Gestión
+                                                 Documentación
+                                                    · Lista maestra
+                                     contenido: sólo la pantalla
+```
+
+## AF. `SigsoNav.renderArbol` — tres niveles en el sidebar
+
+| Nivel | Qué es | Cómo se lee |
+|---|---|---|
+| 1 | Módulo | El ítem del sidebar de siempre, + chevron si tiene árbol |
+| 2 | Submódulo | Indentado, con línea vertical que lo cuelga del módulo |
+| 3 | Ítem | Más indentado, punto, menor peso; el activo lleva punto lleno **y** negrita |
+
+**Un módulo sin árbol registrado sigue siendo un enlace simple.** No se le inventa jerarquía: Bandeja, Mi trabajo, Pausas, Nueva solicitud y Mis solicitudes se comportan igual que antes.
+
+### El contrato
+
+```js
+SigsoNav.registrar('calidad', { nombre, submodulos, visible });  // el módulo declara
+SigsoNav.renderArbol({ contenedor, modulos, moduloActivo, itemActivo, onModulo, onItem });
+SigsoShell.refrescarArbol();   // el módulo avisa que cambiaron sus permisos
+SigsoShell.publicarItem(id);   // el módulo avisa dónde quedó
+```
+
+El árbol **no decide permisos**: cada módulo registra su predicado `visible` y el árbol lo obedece. Un ítem sin permiso no se dibuja; un submódulo sin ítems visibles tampoco.
+
+## AG. Módulos migrados (todos los que tienen jerarquía)
+
+| Módulo | Submódulos en el sidebar |
+|---|---|
+| Calidad | Inicio · Sistema de Gestión · Planificación · Documentación · Personas · Operación · Control y mejora · **Reportes** · Administración |
+| Administración | Organización · Catálogos · Accesos · Comunicaciones · Operación · **Reportes** |
+| Gerencia | Seguimiento · Operación · **Reportes** |
+| Jefatura | Mi equipo · **Reportes** |
+| Proyectos | Portafolio · **Reportes** |
+| Novedades | Publicadas · Por aprobar · Mis envíos · **Reportes** |
+| Coordinación | Hoy · Historial · **Reportes** |
+
+**Reportes es navegable desde el sidebar**: en Calidad se despliega en Centro de reportes, Cumplimiento general, Por cláusula, Ranking de capítulos, Tendencia de indicador y Estado documental. Sólo se listan los que se **arman ahí**; los que viven en su propia sección ya están en el árbol por su cuenta, y duplicarlos daría dos caminos al mismo sitio.
+
+## AH. Las 7 pruebas del encargo
+
+| Prueba | Resultado |
+|---|---|
+| 1. Clic en Calidad → se expande **en la barra azul** | OK, 9 submódulos |
+| 2. Clic en Documentación → se expande debajo, en la barra | OK, `aria-expanded=true`, 5 ítems |
+| 3. Clic en Lista maestra → cambia el contenido | OK, + hoja marcada activa |
+| 4. Sin navegación horizontal duplicada arriba | OK, **0** elementos de nav en el contenido |
+| 5. Clic otra vez en Documentación → se contrae | OK, 0 hijos visibles |
+| 6. Clic otra vez en Calidad → se contrae todo | OK, 0 submódulos |
+| 7. URL directa → el sidebar se abre solo | OK, `#/calidad/documentos:PRO` abre Calidad → Documentación → Procedimientos |
+
+## AI. Dos defectos encontrados al verificar
+
+**Los badges se perdían al primer clic.** Los contadores se piden una vez al entrar, pero el árbol se repinta cada vez que se abre o cierra una rama. Se resolvió recordándolos (`badgesRecordados_`).
+
+**En móvil el drawer abría vacío de submódulos.** La regla que oculta el árbol con el sidebar colapsado también se aplicaba al drawer — y `--colapsado` se recuerda entre sesiones. Quien hubiera colapsado el menú en el escritorio abría el drawer en el teléfono y **no veía ningún submódulo**. Corregido acotando la regla con `:not(--abierto)`. Verificado: las 28 hojas tienen ancho real en el drawer de 375px.
+
+## AJ. Verificación
+
+- Permisos: un **OPERATIVO** del SGC ve **9 de 28 ítems** — se le ocultan Reportes completo, Accesos, Riesgos, Indicadores, Auditorías y el resto del gobierno.
+- Scroll independiente del sidebar: `overflow-y: auto`, 1887px de contenido en 528px de alto.
+- Colapsada: el árbol se oculta y al expandir vuelve con la rama y la hoja activa donde estaban.
+- Móvil 375px: drawer con el árbol completo, sin scroll horizontal.
+- 1197/1197 tests.
+
+**Nota de método:** medir el ancho de la sidebar colapsada dio 240px en lugar de 68px. **No era un fallo**: el panel del navegador de esta sesión no compone frames, así que la transición CSS queda congelada en el valor inicial. Al desactivar la transición midió 68px. Un `getAnimations().length === 1` permanente es la señal.
+
+## AK. Qué NO cambió
+
+Backend, datos, permisos y lógica de negocio quedaron intactos: la corrección es de arquitectura de navegación y UI. Las pestañas **sobre una entidad** (las 7 de un proyecto, la ficha de una persona, la sub-nav de Accesos) siguen donde estaban: no son navegación de módulo.

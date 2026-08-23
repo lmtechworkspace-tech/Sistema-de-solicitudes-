@@ -14,6 +14,12 @@
  */
 (function () {
   window.SigsoNovedades = {
+    // v13.0: el arbol del sidebar entra por aca.
+    irAItem: function (itemId) {
+      vista_ = itemId;
+      if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(itemId);
+      cambiarVista_();
+    },
     cargar: cargarNovedades_,
     actualizarBadge: actualizarBadgeStandalone_,
     pintarTarjetaHome: pintarTarjetaHome_
@@ -313,7 +319,6 @@
     // dentro del bloque que cada vista reemplazaba.
     cont.innerHTML =
       '<div class="sigso-modulo-layout">' +
-      '<nav class="sigso-modulo-layout__nav sigso-nav2" id="novedades-nav" aria-label="Secciones de Novedades"></nav>' +
       '<div class="sigso-modulo-layout__panel">' +
       '<div class="sigso-novedades__cabecera">' +
         '<div class="sigso-novedades__chips" id="novedades-chips-tipo"></div>' +
@@ -380,24 +385,19 @@
     ] }
   ];
 
+  // v13.0: la navegacion vive en el sidebar. renderTabs_ conserva el nombre
+  // porque lo llaman varios sitios; lo que hace ahora es registrar el arbol
+  // (con sus badges y su permiso) y pedir que se repinte.
   function renderTabs_(pendientesAprobar, misEnvios) {
-    var cont = document.getElementById('novedades-nav');
-    if (!cont || !window.SigsoNav) return;
-    SigsoNav.render({
-      contenedor: cont,
-      modulo: 'novedades',
+    if (!window.SigsoNav) return;
+    SigsoNav.registrar('novedades', {
+      nombre: 'Novedades',
       submodulos: ARQUITECTURA_NOVEDADES,
-      activo: vista_,
       // "Cumplimiento" sólo para ADM -- puedeGeneral_ es exactamente esa señal
       // (viene de listarAreasPublicablesNovedad). Mismo criterio que antes.
-      visible: function (llave) { return llave === 'cumplimiento' ? !!puedeGeneral_ : true; },
-      badges: { aprobar: pendientesAprobar || '', envios: misEnvios || '' },
-      onSeleccion: function (id) {
-        vista_ = id;
-        if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id);
-        cambiarVista_();
-      }
+      visible: function (llave) { return llave === 'cumplimiento' ? !!puedeGeneral_ : true; }
     });
+    if (window.SigsoShell && SigsoShell.refrescarArbol) SigsoShell.refrescarArbol();
     // Pide los contadores en segundo plano (no bloquea el feed inicial) y
     // vuelve a pintar con el número real.
     if (pendientesAprobar === undefined) {

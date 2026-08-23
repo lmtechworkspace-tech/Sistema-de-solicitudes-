@@ -7,7 +7,9 @@
  * visible, ver detalle.js).
  */
 (function () {
-  window.SigsoGerencia = { cargar: cargarGerencia_, inicializarFiltros: inicializarFiltrosGerencia_ };
+  window.SigsoGerencia = {
+    // v13.0: el arbol del sidebar entra por aca.
+    irAItem: function (itemId) { irAVistaGerencia_(itemId); }, cargar: cargarGerencia_, inicializarFiltros: inicializarFiltrosGerencia_ };
 
   var itemsActuales = [];
   var categoriaActiva = null;
@@ -1204,16 +1206,14 @@
   var itemGerenciaActivo_ = 'tablero';
   var reporteGerAbierto_ = null;
 
+  // v13.0: la navegacion vive en el sidebar.
   function pintarNavGerencia_() {
-    var cont = document.getElementById('ger-nav');
-    if (!cont || !window.SigsoNav) return;
-    SigsoNav.render({
-      contenedor: cont,
-      modulo: 'gerencia',
-      submodulos: ARQUITECTURA_GERENCIA,
-      activo: itemGerenciaActivo_,
-      onSeleccion: function (id) { irAVistaGerencia_(id); }
+    if (!window.SigsoNav) return;
+    SigsoNav.registrar('gerencia', {
+      nombre: 'Panel de gerencia',
+      submodulos: ARQUITECTURA_GERENCIA
     });
+    if (window.SigsoShell && SigsoShell.refrescarArbol) SigsoShell.refrescarArbol();
   }
 
   function irAVistaGerencia_(id) {
