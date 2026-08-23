@@ -477,7 +477,7 @@
     <section id="vista-calidad" class="sigso-oculto">
       <button type="button" class="sigso-boton--secundario" id="btn-volver-dashboard-calidad">&larr; Volver al dashboard</button>
       <h1>Calidad</h1>
-      <p class="sigso-ayuda">Documentos vigentes del Sistema de Gestión de Calidad (ISO 9001).</p>
+      <p class="sigso-ayuda">Sistema de Gestión de Calidad ISO 9001: documentación, procesos, personas, control y mejora.</p>
       <div id="calidad-contenido"></div>
     </section>
   </main>
@@ -488,6 +488,9 @@
   <script src="js/ui-components.js"></script>
   <script src="js/components.js"></script>
   <script src="js/iconos.js"></script>
+  <!-- v12.0: arquitectura de navegacion Modulo > Submodulo > Item.
+       Va antes que los modulos: calidad.js registra su arquitectura al cargar. -->
+  <script src="js/navegacion.js"></script>
   <script src="js/dashboard.js"></script>
   <script src="js/detalle.js"></script>
   <script src="js/gerencia.js"></script>

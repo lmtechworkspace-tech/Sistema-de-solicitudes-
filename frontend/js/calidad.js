@@ -62,6 +62,8 @@
       cargarAlcance_();
     } else if (seccionActiva_ === 'cobertura') {
       cargarCobertura_();
+    } else if (seccionActiva_ === 'reportes') {
+      cargarReportes_();
     } else if (seccionActiva_ === 'accesos') {
       cargarAccesos_();
     } else {
@@ -69,99 +71,194 @@
     }
   }
 
-  // v10.0 Fase 2 (rediseno visual): la barra de 11 pestanas planas se
-  // reagrupa en 4 clusters con sentido (Documentacion/Personas/Procesos/
-  // Direccion) + un cluster de Administracion para Accesos. Cada boton lleva
-  // icono (antes no tenia ninguno) para escanear la barra sin leer texto.
-  var GRUPOS_SECCIONES_SGC = [
-    // v11.0 Fase 7: la portada. Grupo propio y primero porque es donde
-    // se entra a ver como esta el sistema antes de ir a nada concreto.
-    { label: 'Inicio', items: [
-      { id: 'tablero', texto: 'Tablero', icono: 'estado' }
+  // ==========================================================================
+  // v12.0 — Arquitectura del módulo: Submódulo -> Ítem (navegacion.js).
+  //
+  // Sustituye a GRUPOS_SECCIONES_SGC, que ya declaraba 7 grupos con 16
+  // secciones pero se aplanaba en UNA barra horizontal con scroll lateral.
+  // La jerarquía ya existía en los datos; lo que faltaba era dibujarla.
+  //
+  // DE DÓNDE SALE ESTE AGRUPAMIENTO
+  // No es una invención: cada ítem es una sección que YA EXISTE, y el
+  // submódulo que la contiene es el capítulo de la norma que la sustenta
+  // (los mismos que usa saludPorCapitulo_ en Tablero.gs para agrupar las 28
+  // cláusulas). Los `permiso` apuntan a las llaves de seccionesVisiblesSgc_
+  // del backend, que sigue siendo quien decide.
+  //
+  // Los ítems "documentos:PRO", "documentos:FO"... NO son pantallas nuevas:
+  // son la MISMA sección de documentos con filtroTipo_ ya puesto. El filtro
+  // existe desde la v10.0; acá sólo se le da entrada por navegación.
+  var ARQUITECTURA_SGC = [
+    { id: 'inicio', nombre: 'Inicio', icono: 'estado', items: [
+      { id: 'tablero', nombre: 'Inicio' }
     ] },
-    { label: 'Documentación', items: [
-      { id: 'documentos', texto: 'Documentos', icono: 'documento' }
+
+    // Capítulo 4 de la norma: el marco contra el que se audita todo lo demás.
+    { id: 'sistema', nombre: 'Sistema de Gestión', icono: 'escudo',
+      descripcion: 'Alcance, contexto y procesos', items: [
+      { id: 'alcance', nombre: 'Alcance' },                    // §4.3
+      { id: 'contexto', nombre: 'Contexto y partes interesadas' }, // §4.1 / §4.2
+      { id: 'procesos', nombre: 'Mapa de procesos' },          // §4.4
+      { id: 'cobertura', nombre: 'Cobertura ISO' }             // transversal 4-10
     ] },
-    { label: 'Personas', items: [
-      { id: 'personas', texto: 'Personas', icono: 'persona' },
-      { id: 'capacitaciones', texto: 'Capacitaciones', icono: 'caja' }
+
+    // Capítulo 6: planificación.
+    { id: 'planificacion', nombre: 'Planificación', icono: 'diana', items: [
+      { id: 'riesgos', nombre: 'Riesgos y oportunidades' },    // §6.1
+      { id: 'objetivos', nombre: 'Objetivos de calidad' }      // §6.2
     ] },
-    // v11.0 Fase 5: este grupo se llamaba 'Procesos' y colisionaba con la
-    // seccion 'Procesos' que la Fase 4 puso en Planificacion. Lo que hay
-    // aca es control y mejora: hallazgos, auditorias, quejas y proveedores.
-    { label: 'Control y mejora', items: [
-      { id: 'nc', texto: 'No conformidades', icono: 'alerta' },
-      { id: 'auditorias', texto: 'Auditorías', icono: 'lupa' },
-      { id: 'quejas', texto: 'Quejas', icono: 'comentario' },
-      { id: 'proveedores', texto: 'Proveedores', icono: 'empresa' }
+
+    // Capítulo 7.5: información documentada. Los ítems por tipo son el
+    // filtro que ya existía, ahora navegable.
+    { id: 'documentacion', nombre: 'Documentación', icono: 'documento', items: [
+      { id: 'documentos', nombre: 'Lista maestra', permiso: 'documentos' },
+      { id: 'documentos:PRO', nombre: 'Procedimientos', permiso: 'documentos' },
+      { id: 'documentos:INS', nombre: 'Instructivos', permiso: 'documentos' },
+      { id: 'documentos:FO', nombre: 'Formularios', permiso: 'documentos' },
+      { id: 'documentos:EXTERNO', nombre: 'Documentos externos', permiso: 'documentos' }
     ] },
-    // v11.0 Fase 2: grupo nuevo. Contexto, partes interesadas y alcance son
-    // el capitulo 4 completo -- la base contra la que se audita todo lo
-    // demas. El alcance se muda aca desde Dirección, donde estaba de paso.
-    // Las fases siguientes suman Riesgos y Procesos a este mismo grupo.
-    { label: 'Planificación', items: [
-      { id: 'contexto', texto: 'Contexto', icono: 'lupa' },
-      { id: 'alcance', texto: 'Alcance', icono: 'diana' },
-      { id: 'riesgos', texto: 'Riesgos', icono: 'alerta' },
-      { id: 'procesos', texto: 'Procesos', icono: 'lista' },
-      { id: 'servicios', texto: 'Servicios prestados', icono: 'caja' }
+
+    // Capítulo 7.2 / 7.3: competencia y toma de conciencia.
+    { id: 'personas', nombre: 'Personas', icono: 'persona', items: [
+      { id: 'personas', nombre: 'Personal', permiso: 'personas' },
+      { id: 'capacitaciones', nombre: 'Capacitaciones' }
     ] },
-    { label: 'Dirección', items: [
-      { id: 'revision', texto: 'Revisión por la dirección', icono: 'estado' },
-      { id: 'objetivos', texto: 'Objetivos de calidad', icono: 'diana' },
-      { id: 'indicadores', texto: 'Indicadores', icono: 'grafico' },
-      { id: 'cobertura', texto: 'Cobertura ISO', icono: 'escudo' }
+
+    // Capítulo 8: operación.
+    { id: 'operacion', nombre: 'Operación', icono: 'caja', items: [
+      { id: 'servicios', nombre: 'Servicios prestados' },      // §8.1 / §8.5 / §8.6
+      { id: 'proveedores', nombre: 'Proveedores' }             // §8.4
     ] },
-    { label: 'Administración', items: [
-      { id: 'accesos', texto: 'Accesos', icono: 'llave' }
+
+    // Capítulos 9 y 10: evaluación del desempeño y mejora.
+    { id: 'control', nombre: 'Control y mejora', icono: 'alerta', items: [
+      { id: 'indicadores', nombre: 'Indicadores' },            // §9.1.1
+      { id: 'quejas', nombre: 'Quejas' },                      // §9.1.2
+      { id: 'auditorias', nombre: 'Auditorías internas' },     // §9.2
+      { id: 'revision', nombre: 'Revisión por la dirección' }, // §9.3
+      { id: 'nc', nombre: 'No conformidades' }                 // §10.2
+    ] },
+
+    // Submódulo transversal (§10 del encargo). Los reportes que YA se pueden
+    // construir con datos reales del módulo; el resto queda declarado como
+    // pendiente en REPORTES_SGC, no inventado como pantalla vacía.
+    // plano: true -> se dibuja como enlace directo y no como acordeon de un
+    // solo item. Reportes tiene que leerse como un destino, no como una
+    // carpeta que hay que abrir para descubrir que adentro hay una sola cosa.
+    { id: 'reportes', nombre: 'Reportes', icono: 'grafico', plano: true,
+      descripcion: 'Analiza el desempeño del SGC', items: [
+      { id: 'reportes', nombre: 'Centro de reportes', permiso: 'cobertura' }
+    ] },
+
+    { id: 'administracion', nombre: 'Administración', icono: 'llave', items: [
+      { id: 'accesos', nombre: 'Accesos' }
     ] }
   ];
 
-  // Barra de secciones del modulo. Las pestanas que se muestran dependen de
-  // lo que la persona puede abrir (seccionesVisibles_, que llega del backend
-  // en listarDocumentos). Asi un operativo no ve pestanas de gobierno que
-  // igual le darian "sin acceso", y solo el admin ve "Accesos".
-  function barraSecciones_() {
-    // Si aun no llego el mapa (no deberia: siempre se entra por Documentos),
-    // se muestra todo menos Accesos -- el backend igual bloquea cada seccion.
-    var vis = seccionesVisibles_;
-    var grupos = GRUPOS_SECCIONES_SGC.map(function (g) {
-      var items = g.items.filter(function (s) {
-        if (s.id === 'documentos' || s.id === 'personas') return true;
-        if (!vis) return s.id !== 'accesos';
-        return vis[s.id] === true;
-      });
-      if (!items.length) return '';
-      return '<span class="sgc-nav-grupo">' +
-        '<span class="sgc-nav-grupo__label">' + g.label + '</span>' +
-        items.map(function (s) {
-          return '<button type="button" class="sigso-tab js-sgc-seccion' +
-            (s.id === seccionActiva_ ? ' sigso-tab--activo' : '') + '" data-sec="' + s.id + '">' +
-            Iconos.svg(s.icono, { tam: 15 }) + '<span>' + s.texto + '</span></button>';
-        }).join('') +
-      '</span>';
-    }).filter(function (html) { return html; });
-    return '<div class="sigso-tabs sgc-secciones">' +
-      grupos.join('<span class="sgc-nav-separador" aria-hidden="true"></span>') +
-      '</div>';
+  // Nombre legible de cada ítem, para migas de pan y títulos. Se deriva de la
+  // arquitectura para que no haya dos listas que mantener sincronizadas.
+  var NOMBRE_ITEM_SGC = (function () {
+    var mapa = {};
+    ARQUITECTURA_SGC.forEach(function (sub) {
+      sub.items.forEach(function (it) { mapa[it.id] = it.nombre; });
+    });
+    return mapa;
+  })();
+
+  // --- Navegación del módulo (v12.0) ---------------------------------------
+  // Antes acá vivía barraSecciones_(): una barra HORIZONTAL con las 16
+  // secciones. Ahora la navegación es vertical y persistente (SigsoNav), y lo
+  // que se inyecta en cada vista son las MIGAS DE PAN. Se conservan los dos
+  // nombres de función porque los llaman 51 sitios de este archivo: cambiar
+  // qué devuelven es un solo punto de cambio, tocar 51 no lo es.
+
+  // ¿Puede la persona abrir esta sección? Única fuente: el mapa que manda el
+  // backend. Si aún no llegó, se muestra todo menos Accesos -- el backend
+  // vuelve a validar en cada acción, esconder un botón no protege nada.
+  function puedeVerSeccion_(llave) {
+    if (llave === 'documentos' || llave === 'personas') return true;
+    if (!seccionesVisibles_) return llave !== 'accesos';
+    return seccionesVisibles_[llave] === true;
   }
 
-  function wireSecciones_(cont) {
-    cont.querySelectorAll('.js-sgc-seccion').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        seccionActiva_ = btn.getAttribute('data-sec');
-        documentoActivoId_ = null;
-        personaActivaId_ = null;
-        ncActivaId_ = null;
-        auditoriaActivaId_ = null;
-        quejaActivaId_ = null;
-        proveedorActivoId_ = null;
-        revisionActivaId_ = null;
-        objetivoActivoId_ = null;
-        procesoActivoId_ = null;
-        render_();
-      });
+  // Contenedor del panel de contenido. Crea el layout de dos columnas la
+  // primera vez y devuelve SIEMPRE el panel derecho, para que las 27 vistas
+  // que antes escribían sobre #calidad-contenido no pisen la navegación.
+  function panelSgc_() {
+    var raiz = document.getElementById('calidad-contenido');
+    if (!raiz) return null;
+    var panel = raiz.querySelector('.sigso-modulo-layout__panel');
+    if (!panel) {
+      raiz.innerHTML =
+        '<div class="sigso-modulo-layout">' +
+          '<nav class="sigso-modulo-layout__nav sigso-nav2" id="sgc-nav" aria-label="Secciones de Calidad"></nav>' +
+          '<div class="sigso-modulo-layout__panel"></div>' +
+        '</div>';
+      panel = raiz.querySelector('.sigso-modulo-layout__panel');
+    }
+    // Se repinta en cada vista: es lo que mantiene marcado el item activo y
+    // lo que hace aparecer las secciones nuevas cuando llega seccionesVisibles_.
+    pintarNavSgc_();
+    return panel;
+  }
+
+  function pintarNavSgc_() {
+    var cont = document.getElementById('sgc-nav');
+    if (!cont || !window.SigsoNav) return;
+    SigsoNav.render({
+      contenedor: cont,
+      modulo: 'calidad',
+      submodulos: ARQUITECTURA_SGC,
+      activo: itemActivo_(),
+      visible: puedeVerSeccion_,
+      onSeleccion: function (_id, p) {
+        irASeccion_(p.seccion, p.argumento);
+      }
     });
+  }
+
+  // El id del ítem activo incluye el filtro cuando la sección lo usa, para
+  // que "Procedimientos" quede marcado y no "Lista maestra".
+  function itemActivo_() {
+    if (seccionActiva_ === 'documentos' && filtroTipo_) return 'documentos:' + filtroTipo_;
+    return seccionActiva_;
+  }
+
+  function irASeccion_(seccion, argumento) {
+    seccionActiva_ = seccion;
+    // Los ítems por tipo de documento son la misma pantalla con el filtro ya
+    // puesto. Elegir "Lista maestra" lo limpia.
+    if (seccion === 'documentos') filtroTipo_ = argumento || '';
+    documentoActivoId_ = null;
+    personaActivaId_ = null;
+    ncActivaId_ = null;
+    auditoriaActivaId_ = null;
+    quejaActivaId_ = null;
+    proveedorActivoId_ = null;
+    revisionActivaId_ = null;
+    objetivoActivoId_ = null;
+    procesoActivoId_ = null;
+    render_();
+  }
+
+  // Lo que se inyecta arriba de cada vista: migas de pan. Reemplaza a la
+  // barra de pestañas en los 51 sitios que la pedían.
+  function barraSecciones_(detalle) {
+    if (!window.SigsoNav) return '';
+    return SigsoNav.migas({
+      modulo: 'calidad',
+      moduloNombre: 'Calidad',
+      submodulos: ARQUITECTURA_SGC,
+      activo: itemActivo_(),
+      detalle: detalle || ''
+    });
+  }
+
+  // Se conserva por compatibilidad con los sitios que la llamaban tras pintar.
+  // La navegación ya no vive dentro del contenido, así que sólo se asegura de
+  // que el árbol lateral refleje dónde estamos.
+  function wireSecciones_() {
+    pintarNavSgc_();
   }
 
   function urlBackoffice_() {
@@ -212,7 +309,7 @@
 
   function cargarListado_() {
     documentoActivoId_ = null;
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando documentos...');
     var filtros = {};
@@ -379,7 +476,7 @@
 
   function abrirDocumento_(id) {
     documentoActivoId_ = id;
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando documento...');
     api_('getDocumentoSgc', { documento_id: id }).then(function (respuesta) {
@@ -981,7 +1078,7 @@
 
   function cargarPersonas_() {
     personaActivaId_ = null;
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando personal...');
     var filtros = {};
@@ -1079,7 +1176,7 @@
 
   function abrirPersona_(id) {
     personaActivaId_ = id;
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando ficha...');
     api_('getFichaPersonaSgc', { persona_id: id }).then(function (respuesta) {
@@ -1388,7 +1485,7 @@
   // --- capacitaciones (Fase 2b) -----------------------------------------------
 
   function cargarCapacitaciones_() {
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando capacitaciones...');
     api_('listarCapacitacionesSgc', {}).then(function (respuesta) {
@@ -1964,7 +2061,7 @@
 
   function cargarNc_() {
     ncActivaId_ = null;
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando no conformidades...');
     api_('listarNcSgc', filtroNcAbiertas_ ? { abiertas: true } : {}).then(function (respuesta) {
@@ -2066,7 +2163,7 @@
 
   function abrirNc_(id) {
     ncActivaId_ = id;
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando no conformidad...');
     api_('getDetalleNcSgc', { nc_id: id }).then(function (respuesta) {
@@ -2510,7 +2607,7 @@
 
   function cargarAuditorias_() {
     auditoriaActivaId_ = null;
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando el programa de auditorías...');
     api_('listarAuditoriasSgc', filtroAnioAud_ ? { anio: filtroAnioAud_ } : {}).then(function (respuesta) {
@@ -2613,7 +2710,7 @@
 
   function abrirAuditoria_(id) {
     auditoriaActivaId_ = id;
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando auditoría...');
     api_('getDetalleAuditoriaSgc', { auditoria_id: id }).then(function (respuesta) {
@@ -3153,7 +3250,7 @@
 
   function cargarQuejas_() {
     quejaActivaId_ = null;
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando quejas...');
     api_('listarQuejasSgc', filtroQuejasAbiertas_ ? { abiertas: true } : {}).then(function (respuesta) {
@@ -3245,7 +3342,7 @@
 
   function abrirQueja_(id) {
     quejaActivaId_ = id;
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando queja...');
     api_('getDetalleQuejaSgc', { queja_id: id }).then(function (respuesta) {
@@ -3637,7 +3734,7 @@
   var filtroProveedoresPendientes_ = false;
 
   function cargarProveedores_() {
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando proveedores...');
     api_('listarProveedoresSgc', {}).then(function (respuesta) {
@@ -3742,7 +3839,7 @@
 
   function abrirProveedor_(id) {
     proveedorActivoId_ = id;
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando proveedor...');
     api_('getDetalleProveedorSgc', { proveedor_id: id }).then(function (respuesta) {
@@ -4016,7 +4113,7 @@
   };
 
   function cargarRevisiones_() {
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando revisiones...');
     api_('listarRevisionesSgc', {}).then(function (respuesta) {
@@ -4095,7 +4192,7 @@
 
   function abrirRevision_(id) {
     revisionActivaId_ = id;
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando revisión...');
     api_('getDetalleRevisionSgc', { revision_id: id }).then(function (respuesta) {
@@ -4470,7 +4567,7 @@
   }
 
   function cargarObjetivos_() {
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando objetivos de calidad...');
     api_('listarObjetivosSgc', anioObjetivos_ ? { anio: anioObjetivos_ } : {}).then(function (respuesta) {
@@ -4608,7 +4705,7 @@
 
   function abrirObjetivo_(id) {
     objetivoActivoId_ = id;
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando objetivo...');
     api_('getDetalleObjetivoSgc', { objetivo_id: id }).then(function (respuesta) {
@@ -4921,7 +5018,7 @@
   var ESTADO_PRESTACION_TONO = { PRESTADO: 'alerta', LIBERADO: 'ok', NO_CONFORME: 'critico' };
 
   function cargarPrestaciones_() {
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando servicios prestados...');
     api_('listarPrestacionesSgc', filtrosPrestacion_).then(function (respuesta) {
@@ -5267,7 +5364,7 @@
   var SEV_ETIQUETA = { CRITICA: 'Crítico', ALTA: 'Requiere atención', MEDIA: 'Próximo' };
 
   function cargarTablero_() {
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Calculando el estado del SGC...');
     api_('resumenTableroSgc', {}).then(function (respuesta) {
@@ -5402,7 +5499,7 @@
   var VEREDICTO_TONO_IND = { CUMPLE: 'ok', ALERTA: 'alerta', NO_CUMPLE: 'critico' };
 
   function cargarIndicadores_() {
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando indicadores...');
     api_('listarIndicadoresSgc', {}).then(function (respuesta) {
@@ -5695,7 +5792,7 @@
   var procesoActivoId_ = null;
 
   function cargarProcesos_() {
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando mapa de procesos...');
     api_('listarProcesosSgc', {}).then(function (respuesta) {
@@ -5851,7 +5948,7 @@
   }
 
   function abrirProceso_(procesoId) {
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     cont.innerHTML = Componentes.cargando('Cargando proceso...');
     api_('getDetalleProcesoSgc', { proceso_id: procesoId }).then(function (respuesta) {
       if (!respuesta || !respuesta.ok) {
@@ -6074,7 +6171,7 @@
   var vistaRiesgos_ = 'riesgos';
 
   function cargarRiesgos_() {
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando matriz de riesgos...');
     api_('listarRiesgosSgc', {}).then(function (respuesta) {
@@ -6450,7 +6547,7 @@
   var vistaContexto_ = 'foda';
 
   function cargarContexto_() {
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando contexto de la organización...');
     api_('obtenerContextoSgc', {}).then(function (respuesta) {
@@ -6854,7 +6951,7 @@
   // ==========================================================================
 
   function cargarAlcance_() {
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando alcance del SGC...');
     api_('obtenerAlcanceSgc', {}).then(function (respuesta) {
@@ -7225,7 +7322,7 @@
   var ESTADO_COBERTURA_TONO = { COMPLETO: 'ok', PARCIAL: 'alerta', FALTANTE: 'critico', NO_APLICA: 'neutro' };
 
   function cargarCobertura_() {
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando matriz de cobertura...');
     api_('listarMatrizCoberturaSgc', {}).then(function (respuesta) {
@@ -7367,7 +7464,7 @@
   var vistaAcceso_ = 'personas';
 
   function cargarAccesos_() {
-    var cont = document.getElementById('calidad-contenido');
+    var cont = panelSgc_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando accesos...');
     if (vistaAcceso_ === 'matriz') {
@@ -7785,4 +7882,287 @@
   function lineasNoVacias_(texto) {
     return String(texto || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
   }
+
+  // ==========================================================================
+  // v12.0 — CENTRO DE REPORTES DEL SGC
+  //
+  // Submódulo transversal (§10 del encargo: todo módulo principal tiene uno).
+  // Acá va la ARQUITECTURA; los reportes profundos son la fase siguiente.
+  //
+  // LA REGLA QUE ORDENA ESTE CATÁLOGO
+  // Cada reporte declara de qué DATO REAL sale. Si el dato no existe todavía
+  // en SIGSO, el reporte aparece igual pero marcado, y dice qué le falta. No
+  // se dibuja un gráfico con datos inventados para llenar la pantalla: un
+  // reporte que miente es peor que un reporte que falta, y en un SGC lo que
+  // se muestra es evidencia frente a un auditor.
+  //
+  // Estados:
+  //   LISTO      el reporte se arma con endpoints que YA responden
+  //   SIN_DATOS  la pantalla existe, pero la organización todavía no cargó
+  //              el dato (ej.: no hay auditorías ejecutadas)
+  //   PENDIENTE  requiere desarrollo: el dato no se guarda hoy en SIGSO
+  var REPORTES_SGC = [
+    { grupo: 'Cumplimiento', icono: 'escudo', reportes: [
+      { id: 'cump-general', nombre: 'Cumplimiento general', estado: 'LISTO',
+        desc: 'Indicador interno de gestión y su desglose por capítulo de la norma.',
+        fuente: 'resumenTableroSgc' },
+      { id: 'cump-clausula', nombre: 'Por cláusula', estado: 'LISTO',
+        desc: 'Las 28 cláusulas del catálogo con su estado y qué evidencia las sustenta.',
+        fuente: 'listarMatrizCoberturaSgc' },
+      { id: 'cump-area', nombre: 'Por área', estado: 'PENDIENTE',
+        desc: 'Cumplimiento desagregado por área de la organización.',
+        falta: 'Las cláusulas no se atribuyen a un área: la cobertura se mide por evidencia del sistema, no por unidad organizacional.' },
+      { id: 'cump-proceso', nombre: 'Por proceso', estado: 'PENDIENTE',
+        desc: 'Cumplimiento de cada proceso del mapa (§4.4).',
+        falta: 'Requiere enlazar cada cláusula con los procesos que la sustentan. Hoy sólo los indicadores tienen proceso_id.' },
+      { id: 'cump-responsable', nombre: 'Por responsable', estado: 'PENDIENTE',
+        desc: 'Qué tiene pendiente cada responsable del SGC.',
+        falta: 'Los 14 procesos del mapa están sin responsable asignado (ver REVISAR de la carga inicial).' }
+    ] },
+
+    { grupo: 'Documentación', icono: 'documento', reportes: [
+      { id: 'doc-estado', nombre: 'Estado documental', estado: 'LISTO',
+        desc: 'Vigentes, de origen externo, próximos a revisión y vencidos.',
+        fuente: 'resumenTableroSgc' },
+      { id: 'doc-distribucion', nombre: 'Distribución documental', estado: 'LISTO',
+        desc: 'Quién debe acusar cada documento controlado y quién ya lo hizo.',
+        fuente: 'getMatrizDistribucionSgc', seccion: 'accesos' },
+      { id: 'doc-acuses', nombre: 'Cumplimiento de acuses', estado: 'LISTO',
+        desc: 'Por documento: cuántos destinatarios confirmaron lectura.',
+        fuente: 'getCumplimientoDocumentoSgc', seccion: 'documentos' }
+    ] },
+
+    { grupo: 'Auditorías y mejora', icono: 'lupa', reportes: [
+      { id: 'aud-estado', nombre: 'Auditorías y hallazgos', estado: 'LISTO',
+        desc: 'Programadas, ejecutadas y hallazgos abiertos.',
+        fuente: 'listarAuditoriasSgc', seccion: 'auditorias' },
+      { id: 'nc-abiertas', nombre: 'No conformidades', estado: 'LISTO',
+        desc: 'Abiertas por etapa del PRO-06, con acciones y verificación de eficacia.',
+        fuente: 'listarNcSgc', seccion: 'nc' },
+      { id: 'quejas-estado', nombre: 'Quejas', estado: 'LISTO',
+        desc: 'Recibidas, en investigación y resueltas.',
+        fuente: 'listarQuejasSgc', seccion: 'quejas' }
+    ] },
+
+    { grupo: 'Riesgos', icono: 'alerta', reportes: [
+      { id: 'riesgo-nivel', nombre: 'Riesgos por nivel', estado: 'LISTO',
+        desc: 'Magnitud y banda de cada riesgo, antes y después de los controles.',
+        fuente: 'listarRiesgosSgc', seccion: 'riesgos' },
+      { id: 'riesgo-evolucion', nombre: 'Evolución del riesgo', estado: 'PENDIENTE',
+        desc: 'Cómo cambió la valoración a lo largo del tiempo.',
+        falta: 'SIGSO guarda la valoración VIGENTE, no su historia. Requiere versionar cada revisión de la matriz.' }
+    ] },
+
+    { grupo: 'Personas', icono: 'persona', reportes: [
+      { id: 'per-competencia', nombre: 'Competencia (§7.2)', estado: 'LISTO',
+        desc: 'Quién tiene descriptor vigente y evaluación registrada.',
+        fuente: 'listarPersonasSgc', seccion: 'personas' },
+      { id: 'per-induccion', nombre: 'Inducciones (§7.3)', estado: 'LISTO',
+        desc: 'Avance de los cinco ítems de inducción, persona por persona.',
+        fuente: 'listarPersonasSgc', seccion: 'personas' },
+      { id: 'per-capacitacion', nombre: 'Capacitación', estado: 'LISTO',
+        desc: 'Cursos realizados, asistencia y verificación de eficacia.',
+        fuente: 'listarCapacitacionesSgc', seccion: 'capacitaciones' }
+    ] },
+
+    { grupo: 'Indicadores y objetivos', icono: 'grafico', reportes: [
+      { id: 'ind-objetivos', nombre: 'Objetivos de calidad', estado: 'LISTO',
+        desc: 'Meta, mediciones del año y si cumple.',
+        fuente: 'listarObjetivosSgc', seccion: 'objetivos' },
+      { id: 'ind-proceso', nombre: 'Indicadores de proceso', estado: 'LISTO',
+        desc: 'Indicadores §9.1.1 con su última lectura y evaluación.',
+        fuente: 'listarIndicadoresSgc', seccion: 'indicadores' },
+      { id: 'ind-tendencia', nombre: 'Tendencias', estado: 'PENDIENTE',
+        desc: 'Evolución de cada indicador a lo largo de los períodos.',
+        falta: 'Las lecturas ya se guardan con período; falta la vista de serie temporal. Es el primer reporte a construir en la fase siguiente.' }
+    ] },
+
+    { grupo: 'Dirección', icono: 'estado', reportes: [
+      { id: 'dir-revision', nombre: 'Revisión por la dirección', estado: 'LISTO',
+        desc: 'Las entradas del §9.3 reunidas para el acta.',
+        fuente: 'getResumenRevisionSgc', seccion: 'revision' },
+      { id: 'dir-proveedores', nombre: 'Proveedores', estado: 'LISTO',
+        desc: 'Evaluación y reevaluación de proveedores críticos (§8.4).',
+        fuente: 'listarProveedoresSgc', seccion: 'proveedores' }
+    ] },
+
+    { grupo: 'Comparaciones y rankings', icono: 'lista', reportes: [
+      { id: 'comp-periodo', nombre: 'Período actual vs anterior', estado: 'PENDIENTE',
+        desc: 'Cómo cambió el cumplimiento respecto del período pasado.',
+        falta: 'Requiere una foto periódica del estado del SGC. Hoy SIGSO calcula la cobertura SIEMPRE contra el presente y no la archiva.' },
+      { id: 'rank-area', nombre: 'Ranking por área', estado: 'PENDIENTE',
+        desc: 'Áreas ordenadas por cumplimiento o por hallazgos.',
+        falta: 'Depende de "Cumplimiento por área", que a su vez necesita atribuir evidencia a un área.' }
+    ] }
+  ];
+
+  var ETIQUETA_ESTADO_REPORTE = {
+    LISTO: 'Disponible', SIN_DATOS: 'Sin datos aún', PENDIENTE: 'Requiere desarrollo'
+  };
+  var TONO_ESTADO_REPORTE = { LISTO: 'ok', SIN_DATOS: 'alerta', PENDIENTE: 'neutro' };
+
+  var reporteAbierto_ = null;
+
+  function cargarReportes_() {
+    var cont = panelSgc_();
+    if (!cont) return;
+    if (reporteAbierto_ === 'cump-general' || reporteAbierto_ === 'cump-clausula') {
+      cargarReporteCumplimiento_(cont);
+      return;
+    }
+    pintarCatalogoReportes_(cont);
+  }
+
+  function pintarCatalogoReportes_(cont) {
+    var listos = 0, total = 0;
+    REPORTES_SGC.forEach(function (g) {
+      g.reportes.forEach(function (r) { total++; if (r.estado === 'LISTO') listos++; });
+    });
+
+    cont.innerHTML = barraSecciones_() +
+      '<div class="sgc-cabecera">' +
+        '<div><h2>Centro de reportes</h2>' +
+        '<p class="sigso-ayuda">Análisis del Sistema de Gestión de Calidad. ' +
+          listos + ' de ' + total + ' reportes se arman hoy con datos reales del sistema; ' +
+          'el resto dice qué le falta.</p></div>' +
+      '</div>' +
+      Componentes.alerta(
+        'Cada reporte declara de dónde sale su dato. Los marcados como "Requiere desarrollo" ' +
+        'no se muestran vacíos ni con datos de ejemplo: se indica qué información habría que ' +
+        'empezar a guardar para poder construirlos.', 'info') +
+      REPORTES_SGC.map(function (g) {
+        return '<section class="sgc-rep-grupo">' +
+          '<h3 class="sgc-rep-grupo__tit">' + Iconos.svg(g.icono, { tam: 16 }) +
+            '<span>' + Componentes.escaparHtml(g.grupo) + '</span></h3>' +
+          '<div class="sgc-rep-lista">' +
+            g.reportes.map(function (r) {
+              var accionable = r.estado === 'LISTO';
+              return '<article class="sgc-rep-card' + (accionable ? ' sgc-rep-card--activa' : '') + '"' +
+                  (accionable ? ' tabindex="0" role="button" data-reporte="' + r.id + '"' +
+                    ' data-seccion="' + Componentes.escaparHtml(r.seccion || '') + '"' : '') + '>' +
+                '<div class="sgc-rep-card__cab">' +
+                  '<h4>' + Componentes.escaparHtml(r.nombre) + '</h4>' +
+                  Componentes.badge(ETIQUETA_ESTADO_REPORTE[r.estado], TONO_ESTADO_REPORTE[r.estado]) +
+                '</div>' +
+                '<p class="sgc-rep-card__desc">' + Componentes.escaparHtml(r.desc) + '</p>' +
+                (r.falta
+                  ? '<p class="sgc-rep-card__falta"><strong>Falta:</strong> ' + Componentes.escaparHtml(r.falta) + '</p>'
+                  : '<p class="sgc-rep-card__fuente">Sale de: <code>' + Componentes.escaparHtml(r.fuente || '') + '</code></p>') +
+              '</article>';
+            }).join('') +
+          '</div>' +
+        '</section>';
+      }).join('');
+
+    wireSecciones_(cont);
+
+    cont.querySelectorAll('[data-reporte]').forEach(function (card) {
+      function abrir() {
+        var id = card.getAttribute('data-reporte');
+        var seccion = card.getAttribute('data-seccion');
+        // Un reporte que ya vive dentro de una sección no se duplica: se
+        // navega a ella. Duplicar la pantalla sería crear la segunda versión
+        // de una funcionalidad que ya existe.
+        if (seccion) { irASeccion_(seccion, ''); return; }
+        reporteAbierto_ = id;
+        cargarReportes_();
+      }
+      card.addEventListener('click', abrir);
+      card.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); }
+      });
+    });
+  }
+
+  // --- Reporte de cumplimiento (el único que se arma acá y no en su sección)
+  function cargarReporteCumplimiento_(cont) {
+    cont.innerHTML = Componentes.cargando('Armando el reporte...');
+    var esPorClausula = reporteAbierto_ === 'cump-clausula';
+    var accion = esPorClausula ? 'listarMatrizCoberturaSgc' : 'resumenTableroSgc';
+    api_(accion, {}).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        cont.innerHTML = barraSecciones_('Reportes') +
+          Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el reporte.', 'error');
+        wireSecciones_(cont);
+        return;
+      }
+      if (esPorClausula) pintarReporteClausulas_(cont, respuesta.data);
+      else pintarReporteGeneral_(cont, respuesta.data);
+    }).catch(function () {
+      cont.innerHTML = barraSecciones_('Reportes') + Componentes.alerta('No se pudo conectar.', 'error');
+      wireSecciones_(cont);
+    });
+  }
+
+  function volverAlCatalogo_(cont) {
+    cont.querySelectorAll('.js-rep-volver').forEach(function (b) {
+      b.addEventListener('click', function () { reporteAbierto_ = null; cargarReportes_(); });
+    });
+  }
+
+  function pintarReporteGeneral_(cont, data) {
+    var salud = data.salud || {};
+    var c = data.conteos || {};
+    cont.innerHTML = barraSecciones_('Cumplimiento general') +
+      Componentes.boton({ texto: '← Centro de reportes', variante: 'sutil', clase: 'js-rep-volver' }) +
+      '<div class="sgc-cabecera"><div><h2>Cumplimiento general</h2>' +
+        '<p class="sigso-ayuda">' + Componentes.escaparHtml(salud.aviso || '') + '</p></div></div>' +
+      '<div class="sgc-kpis">' +
+        Componentes.kpi({ etiqueta: 'Indicador interno', valor: (salud.pct || 0) + '%' }) +
+        Componentes.kpi({ etiqueta: 'Cláusulas aplicables', valor: salud.aplicables || 0 }) +
+        Componentes.kpi({ etiqueta: 'No conformidades abiertas', valor: c.nc_abiertas || 0 }) +
+        Componentes.kpi({ etiqueta: 'Documentos vigentes', valor: c.documentos_vigentes || 0 }) +
+      '</div>' +
+      '<h3>Por capítulo de la norma</h3>' +
+      '<table class="sigso-tabla"><thead><tr>' +
+        '<th>Capítulo</th><th>Aplicables</th><th>Completas</th><th>Parciales</th><th>Avance</th>' +
+      '</tr></thead><tbody>' +
+      (salud.capitulos || []).map(function (cap) {
+        return '<tr>' +
+          '<td><strong>' + Componentes.escaparHtml(cap.numero) + '</strong> ' +
+            Componentes.escaparHtml(cap.titulo) + '</td>' +
+          '<td>' + cap.aplicables + '</td>' +
+          '<td>' + cap.completo + '</td>' +
+          '<td>' + cap.parcial + '</td>' +
+          '<td>' + cap.pct + '%</td>' +
+        '</tr>';
+      }).join('') +
+      '</tbody></table>';
+    wireSecciones_(cont);
+    volverAlCatalogo_(cont);
+  }
+
+  function pintarReporteClausulas_(cont, data) {
+    var r = data.resumen || {};
+    cont.innerHTML = barraSecciones_('Cumplimiento por cláusula') +
+      Componentes.boton({ texto: '← Centro de reportes', variante: 'sutil', clase: 'js-rep-volver' }) +
+      '<div class="sgc-cabecera"><div><h2>Cumplimiento por cláusula</h2>' +
+        '<p class="sigso-ayuda">' + (r.aplicables || 0) + ' cláusulas aplicables · ' +
+        (r.completo || 0) + ' completas · ' + (r.parcial || 0) + ' parciales · ' +
+        (r.faltante || 0) + ' faltantes · ' + (r.no_aplica || 0) + ' no aplican.</p></div></div>' +
+      '<table class="sigso-tabla"><thead><tr>' +
+        '<th>Cláusula</th><th>Estado</th><th>Qué hay hoy</th>' +
+      '</tr></thead><tbody>' +
+      (data.clausulas || []).map(function (c) {
+        return '<tr>' +
+          '<td><strong>' + Componentes.escaparHtml(c.codigo) + '</strong> ' +
+            Componentes.escaparHtml(c.titulo) + '</td>' +
+          '<td>' + Componentes.badge(
+              ETIQUETA_ESTADO_COBERTURA_REP[c.estado] || c.estado,
+              TONO_ESTADO_COBERTURA_REP[c.estado] || 'neutro') + '</td>' +
+          '<td>' + Componentes.escaparHtml(c.resumen || '') + '</td>' +
+        '</tr>';
+      }).join('') +
+      '</tbody></table>';
+    wireSecciones_(cont);
+    volverAlCatalogo_(cont);
+  }
+
+  var ETIQUETA_ESTADO_COBERTURA_REP = {
+    COMPLETO: 'Completo', PARCIAL: 'Parcial', FALTANTE: 'Faltante', NO_APLICA: 'No aplica'
+  };
+  var TONO_ESTADO_COBERTURA_REP = {
+    COMPLETO: 'ok', PARCIAL: 'alerta', FALTANTE: 'critico', NO_APLICA: 'neutro'
+  };
+
 })();

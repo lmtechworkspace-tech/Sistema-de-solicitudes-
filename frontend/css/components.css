@@ -3038,41 +3038,11 @@
    estiraba la pagina entera: .sigso-tabs es un flex sin wrap, asi que el
    ancho de la barra se volvia el ancho del contenido. Scrollea ella sola
    en vez de sacar scroll horizontal a la pagina. Envolver no sirve: dos
-   filas de pestañas se leen como dos niveles de navegacion. */
-.sgc-secciones {
-  overflow-x: auto;
-  max-width: 100%;
-  scrollbar-width: thin;
-  align-items: center;
-}
-.sgc-secciones .sigso-tab { flex: 0 0 auto; }
-
-/* v10.0 Fase 2 (rediseno visual): la barra deja de ser 11 botones planos --
-   se agrupa por sentido (Documentacion/Personas/Procesos/Direccion/
-   Administracion), cada grupo con una etiqueta muda chiquita y separador.
-   Los botones antes no tenian NINGUN estilo propio (heredaban el boton por
-   defecto del navegador); ahora son pildoras con icono, igual que el resto
-   de la navegacion de SIGSO (plataforma.js). */
-.sgc-nav-grupo {
-  display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto;
-}
-.sgc-nav-grupo__label {
-  font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
-  color: var(--texto-3); padding: 0 var(--esp-2) 0 var(--esp-1); white-space: nowrap;
-}
-.sgc-nav-separador {
-  width: 1px; height: 1.5rem; background: var(--borde); margin: 0 var(--esp-2); flex: 0 0 auto;
-}
-.sgc-secciones .js-sgc-seccion {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: .4rem .8rem; border-radius: 999px; border: 1px solid transparent;
-  background: transparent; color: var(--texto-2); font-weight: 600;
-  font-size: var(--texto-sm); cursor: pointer; white-space: nowrap;
-  transition: background .15s, color .15s;
-}
-.sgc-secciones .js-sgc-seccion:hover { background: var(--superficie-2); color: var(--texto); }
-.sgc-secciones .js-sgc-seccion.sigso-tab--activo { background: var(--primario); color: #fff; }
-.sgc-secciones .js-sgc-seccion .sigso-ico { flex: 0 0 auto; }
+/* v12.0: aqui vivia la barra HORIZONTAL de secciones del SGC
+   (.sgc-secciones / .sgc-nav-grupo / .sgc-nav-separador). La reemplazo la
+   navegacion vertical .sigso-nav2 (ver el bloque al final de este archivo).
+   El comentario que estaba aca describia el sintoma que la condeno: "con la
+   quinta seccion la barra dejo de caber en un movil". Llego a dieciseis. */
 
 /* Sub-nav de Accesos (Personas/Matriz/Confidenciales): mismas pildoras, un
    punto mas chicas, sin icono -- vive DENTRO de un grupo ya identificado. */
@@ -3235,4 +3205,218 @@
 
 @media (max-width: 640px) {
   .sgc-salud { grid-template-columns: 1fr; }
+}
+
+/* ==========================================================================
+   v12.0 — Navegación Módulo > Submódulo > Ítem (navegacion.js)
+   Reemplaza la barra horizontal de pestañas dentro de los módulos. El
+   síntoma que la retiró está documentado más arriba, en .sgc-secciones:
+   "con la quinta sección la barra dejó de caber en un móvil". Hoy Calidad
+   tiene dieciséis.
+
+   Sin colores nuevos: todo sale de tokens.css, así el modo oscuro funciona
+   sin una sola regla extra.
+   ========================================================================== */
+
+/* Layout de dos columnas: nav fija a la izquierda, panel a la derecha. */
+.sigso-modulo-layout {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: var(--esp-5);
+  align-items: start;
+}
+.sigso-modulo-layout__nav { position: sticky; top: var(--esp-4); }
+/* minmax(0,1fr) + min-width:0 es lo que impide que una tabla ancha del panel
+   empuje la grilla y devuelva el scroll horizontal que veníamos a quitar. */
+.sigso-modulo-layout__panel { min-width: 0; }
+
+@media (max-width: 900px) {
+  .sigso-modulo-layout { grid-template-columns: 1fr; gap: var(--esp-4); }
+  .sigso-modulo-layout__nav { position: static; }
+}
+
+/* --- Bloques (submódulos) ------------------------------------------------ */
+.sigso-nav2 { display: flex; flex-direction: column; gap: var(--esp-2); }
+
+.sigso-nav2__bloque {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
+  overflow: hidden;
+}
+
+/* Reportes va destacado (§23 del encargo): tiene que leerse como un destino
+   propio, no como un submódulo más perdido en la lista. */
+.sigso-nav2__bloque--destacado {
+  border-color: var(--primario);
+  background: var(--primario-suave);
+}
+
+/* --- Cabecera del submódulo (el acordeón) -------------------------------- */
+.sigso-nav2__cab,
+.sigso-nav2__directo {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  /* Alto cómodo: el encargo pide áreas de clic amplias (§20). */
+  padding: var(--esp-3) var(--esp-3);
+  background: transparent;
+  border: 0;
+  color: var(--texto);
+  font: var(--t-body);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--mov-normal);
+}
+.sigso-nav2__cab:hover,
+.sigso-nav2__directo:hover { background: var(--superficie-2); }
+
+.sigso-nav2__cab:focus-visible,
+.sigso-nav2__directo:focus-visible,
+.sigso-nav2__item:focus-visible {
+  outline: none;
+  box-shadow: var(--foco-anillo);
+  border-radius: var(--radio-sm);
+}
+
+.sigso-nav2__ico { display: inline-flex; flex: 0 0 auto; color: var(--texto-2); }
+.sigso-nav2__txt { flex: 1 1 auto; min-width: 0; }
+.sigso-nav2__desc {
+  flex: 0 0 100%;
+  order: 10;
+  font: var(--t-small);
+  color: var(--texto-3);
+  font-weight: 400;
+}
+
+/* Chevron dibujado en CSS: no depende de que iconos.js tenga una clave. */
+.sigso-nav2__chevron {
+  flex: 0 0 auto;
+  width: 8px; height: 8px;
+  border-right: 2px solid var(--texto-3);
+  border-bottom: 2px solid var(--texto-3);
+  transform: rotate(45deg);
+  transition: transform var(--mov-normal);
+}
+.sigso-nav2__cab--abierto .sigso-nav2__chevron { transform: rotate(-135deg); }
+
+/* El estado del enlace directo activo NO se comunica sólo por color (§20):
+   lleva además la barra lateral y el peso tipográfico. */
+.sigso-nav2__directo--activo {
+  background: var(--primario-suave);
+  color: var(--primario-tinta);
+  box-shadow: inset 3px 0 0 var(--primario);
+}
+.sigso-nav2__directo--activo .sigso-nav2__ico { color: var(--primario); }
+
+/* --- Ítems --------------------------------------------------------------- */
+.sigso-nav2__items {
+  list-style: none;
+  margin: 0;
+  padding: 0 var(--esp-2) var(--esp-2);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sigso-nav2__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  padding: var(--esp-2) var(--esp-2) var(--esp-2) var(--esp-3);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radio-sm);
+  color: var(--texto-2);
+  font: var(--t-body);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--mov-normal), color var(--mov-normal);
+}
+.sigso-nav2__item:hover { background: var(--superficie-2); color: var(--texto); }
+.sigso-nav2__item--activo {
+  background: var(--primario-suave);
+  color: var(--primario-tinta);
+  font-weight: 600;
+}
+.sigso-nav2__punto {
+  flex: 0 0 auto;
+  width: 5px; height: 5px;
+  border-radius: var(--radio-full);
+  background: var(--borde-fuerte);
+}
+.sigso-nav2__item--activo .sigso-nav2__punto { background: var(--primario); }
+
+.sigso-nav2__badge {
+  flex: 0 0 auto;
+  min-width: 1.25rem;
+  padding: 0 var(--esp-1);
+  border-radius: var(--radio-full);
+  background: var(--superficie-2);
+  color: var(--texto-2);
+  font: var(--t-small);
+  font-weight: 700;
+  text-align: center;
+}
+.sigso-nav2__item--activo .sigso-nav2__badge,
+.sigso-nav2__directo--activo .sigso-nav2__badge {
+  background: var(--primario); color: #fff;
+}
+
+/* --- Migas de pan -------------------------------------------------------- */
+.sigso-migas { margin: 0 0 var(--esp-3); }
+.sigso-migas ol {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--esp-1);
+  font: var(--t-small); color: var(--texto-3);
+}
+.sigso-migas li { display: inline-flex; align-items: center; gap: var(--esp-1); }
+.sigso-migas li + li::before { content: '/'; color: var(--borde-fuerte); }
+.sigso-migas [aria-current="page"] { color: var(--texto); font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sigso-nav2__cab, .sigso-nav2__directo, .sigso-nav2__item, .sigso-nav2__chevron {
+    transition: none;
+  }
+}
+
+/* --- Centro de reportes del SGC (calidad.js, submódulo transversal) ------- */
+.sgc-rep-grupo { margin: var(--esp-5) 0 0; }
+.sgc-rep-grupo__tit {
+  display: flex; align-items: center; gap: var(--esp-2);
+  margin: 0 0 var(--esp-3);
+  font: var(--t-title);
+  color: var(--texto);
+}
+.sgc-rep-grupo__tit .sigso-ico { color: var(--texto-2); }
+
+.sgc-rep-lista {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--esp-3);
+}
+.sgc-rep-card {
+  display: flex; flex-direction: column; gap: var(--esp-2);
+  padding: var(--esp-4);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
+}
+/* Sólo las fichas de reportes que YA se pueden abrir se ven accionables. Una
+   ficha "requiere desarrollo" no debe invitar al clic: prometería algo que
+   no existe. */
+.sgc-rep-card--activa { cursor: pointer; transition: border-color var(--mov-normal), box-shadow var(--mov-normal); }
+.sgc-rep-card--activa:hover { border-color: var(--primario); box-shadow: var(--sombra-1); }
+.sgc-rep-card--activa:focus-visible { outline: none; box-shadow: var(--foco-anillo); }
+
+.sgc-rep-card__cab { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--esp-2); }
+.sgc-rep-card__cab h4 { margin: 0; font: var(--t-body); font-weight: 600; color: var(--texto); }
+.sgc-rep-card__desc { margin: 0; font: var(--t-small); color: var(--texto-2); }
+.sgc-rep-card__falta { margin: 0; font: var(--t-small); color: var(--texto-3); }
+.sgc-rep-card__fuente { margin: 0; font: var(--t-small); color: var(--texto-3); }
+.sgc-rep-card__fuente code {
+  font-family: var(--fuente-mono); font-size: 0.72rem;
+  background: var(--superficie-2); padding: 1px 5px; border-radius: var(--radio-sm);
 }

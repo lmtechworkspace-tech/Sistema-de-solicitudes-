@@ -64,7 +64,7 @@
     // persona ve SOLO los documentos que le corresponden -- el filtrado lo
     // hace el backend (Calidad.gs), no el shell. No es core: depende de que
     // la cuenta tenga 'calidad' en CUENTAS_PORTAL.modulos.
-    calidad: { icono: 'documento', nombre: 'Calidad', descripcion: 'Documentos vigentes del Sistema de Gestión de Calidad', interno: true }
+    calidad: { icono: 'documento', nombre: 'Calidad', descripcion: 'Documentación, procesos, personas, control y mejora del SGC', interno: true }
   };
 
   // v4.0 Frente 3: cada modulo tiene su propio acento -- antes todo el shell
