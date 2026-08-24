@@ -210,6 +210,9 @@ var BACKOFFICE_ACTIONS = {
   guardarPersonaSgc: handleGuardarPersonaSgc_,
   desvincularPersonaSgc: handleDesvincularPersonaSgc_,
   guardarDescriptorSgc: handleGuardarDescriptorSgc_,
+  // v14.0: corregir el descriptor vigente sin versionar, y bajar su archivo.
+  actualizarDescriptorSgc: handleActualizarDescriptorSgc_,
+  descargarDescriptorSgc: handleDescargarDescriptorSgc_,
   guardarDocumentoPersonaSgc: handleGuardarDocumentoPersonaSgc_,
   descargarDocumentoPersonaSgc: handleDescargarDocumentoPersonaSgc_,
   registrarInduccionSgc: handleRegistrarInduccionSgc_,
@@ -494,9 +497,11 @@ var MODULO_POR_ACCION = {
   listarPersonasSgc: ['calidad', 'gerencia'],
   getFichaPersonaSgc: ['calidad', 'gerencia'],
   descargarDocumentoPersonaSgc: ['calidad', 'gerencia'],
+  descargarDescriptorSgc: ['calidad', 'gerencia'],
   guardarPersonaSgc: 'calidad',
   desvincularPersonaSgc: 'calidad',
   guardarDescriptorSgc: 'calidad',
+  actualizarDescriptorSgc: 'calidad',
   guardarDocumentoPersonaSgc: 'calidad',
   registrarInduccionSgc: 'calidad',
   // v10.0 Fase 2b: el programa de capacitacion es de lectura general dentro
@@ -1253,6 +1258,14 @@ function handleDesvincularPersonaSgc_(data, contexto) {
 
 function handleGuardarDescriptorSgc_(data, contexto) {
   return responderResultado_(Personas.guardarDescriptor(data, contexto));
+}
+
+function handleActualizarDescriptorSgc_(data, contexto) {
+  return responderResultado_(Personas.actualizarDescriptor(data, contexto));
+}
+
+function handleDescargarDescriptorSgc_(data, contexto) {
+  return responderResultado_(Personas.descargarDescriptor(data, contexto));
 }
 
 function handleGuardarDocumentoPersonaSgc_(data, contexto) {

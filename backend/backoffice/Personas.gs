@@ -309,6 +309,75 @@ var Personas = {
     return descriptor;
   },
 
+  // v14.0: corrige el descriptor VIGENTE en el lugar -- mismo criterio que
+  // Calidad.actualizarDocumento con SGC_DOCUMENTOS. NO archiva la version
+  // actual ni crea una fila nueva (eso sigue siendo guardarDescriptor,
+  // "Nueva versión del descriptor"): es para arreglar una redacción o
+  // adjuntar/reemplazar el archivo sin fingir que cambió el contenido
+  // regido. La version (el numero) no se toca aca a proposito.
+  actualizarDescriptor: function (data, contexto) {
+    if (!gobiernaSgc_(contexto, rolSgc_(contexto))) {
+      return { _forbidden: true, message: 'Solo el Encargado SGC o un administrador pueden editar descriptores.' };
+    }
+    var persona = buscarPersonaSgc_(data.persona_id);
+    if (!persona) return errorValidacion_('persona_id', 'Persona no encontrada.');
+    var desc = leerFilasSeguro_(SHEETS.SGC_DESCRIPTORES).filter(function (d) {
+      return d.descriptor_id === data.descriptor_id && d.persona_id === persona.persona_id && esVerdaderoSgc_(d.vigente);
+    })[0];
+    if (!desc) return errorValidacion_('descriptor_id', 'Descriptor no encontrado o ya no es la versión vigente.');
+    if (!String(data.objetivo || '').trim()) {
+      return errorValidacion_('objetivo', 'El objetivo general del cargo es obligatorio.');
+    }
+
+    var cambios = {
+      objetivo: data.objetivo || '',
+      funciones: data.funciones || '',
+      responsabilidades: data.responsabilidades || '',
+      habilidades: data.habilidades || '',
+      items_responsabilidades: JSON.stringify(normalizarItemsDescriptor_(data.items_responsabilidades)),
+      items_habilidades: JSON.stringify(normalizarItemsDescriptor_(data.items_habilidades)),
+      nivel_educacional: data.nivel_educacional || '',
+      formacion_tecnica: data.formacion_tecnica || '',
+      experiencia: data.experiencia || ''
+    };
+    if (data.contenido_base64) {
+      var subido = subirArchivoSgc_(data, 'DESCRIPTOR-' + (persona.rut || persona.nombre));
+      if (subido._validationError) return subido;
+      cambios.archivo_id = subido.archivo_id;
+      cambios.archivo_nombre = subido.archivo_nombre;
+      cambios.archivo_mime = subido.archivo_mime;
+    }
+    actualizarFilaPorId_(SHEETS.SGC_DESCRIPTORES, 'descriptor_id', desc.descriptor_id, cambios);
+    registrarLogSgc_('SGC_DESCRIPTOR_EDITADO', persona.nombre + ' ' + desc.version, contexto);
+    return { descriptor_id: desc.descriptor_id };
+  },
+
+  // v14.0: descarga el archivo del descriptor -- mismo permiso que ver la
+  // ficha (puedeVerPersona_), igual que descargarDocumento de la carpeta
+  // digital. El descriptor de cargo no es mas sensible que el resto de la
+  // ficha, asi que no exige gobiernaSgc_.
+  descargarDescriptor: function (data, contexto) {
+    var persona = buscarPersonaSgc_(data.persona_id);
+    if (!persona) return errorValidacion_('persona_id', 'Persona no encontrada.');
+    var rol = rolSgc_(contexto);
+    if (!puedeVerPersona_(persona, contexto, rol, gobiernaSgc_(contexto, rol))) {
+      return { _forbidden: true, message: 'No tienes acceso a esta ficha.' };
+    }
+    var desc = leerFilasSeguro_(SHEETS.SGC_DESCRIPTORES).filter(function (d) {
+      return d.descriptor_id === data.descriptor_id && d.persona_id === persona.persona_id;
+    })[0];
+    if (!desc) return errorValidacion_('descriptor_id', 'Descriptor no encontrado.');
+    if (!desc.archivo_id) return errorValidacion_('descriptor_id', 'Este descriptor no tiene archivo adjunto.');
+
+    var archivo = DriveApp.getFileById(desc.archivo_id);
+    registrarLogSgc_('SGC_DESCRIPTOR_DESCARGADO', persona.nombre + ' ' + desc.version, contexto);
+    return {
+      contenido_base64: Utilities.base64Encode(archivo.getBlob().getBytes()),
+      nombre_archivo: desc.archivo_nombre || archivo.getName(),
+      mime: desc.archivo_mime || 'application/octet-stream'
+    };
+  },
+
   // --- Carpeta digital de documentos de la persona ---------------------------
   guardarDocumento: function (data, contexto) {
     var persona = buscarPersonaSgc_(data.persona_id);

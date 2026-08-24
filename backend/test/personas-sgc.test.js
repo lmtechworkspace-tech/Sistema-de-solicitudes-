@@ -223,6 +223,93 @@ test('el listado avisa quien no tiene descriptor todavia', () => {
   assert.equal(fPedro.tiene_descriptor, false);
 });
 
+// v14.0: "Editar" el descriptor vigente -- corrige la MISMA fila (una
+// redaccion, no un cambio real de contenido regido). Distinto de
+// guardarDescriptor ("Nueva versión"), que archiva y crea una fila nueva.
+test('actualizarDescriptor: corrige la version vigente SIN versionar (misma fila)', () => {
+  const ctx = loadConSchema();
+  const { ana } = sembrar(ctx);
+
+  const v01 = ctx.Personas.guardarDescriptor({
+    persona_id: ana.persona_id, version: 'v01', objetivo: 'Asesorar en prevencion de riesgos.',
+    items_responsabilidades: ['Cumple plazos']
+  }, CTX_ENCARGADO);
+
+  ctx.Personas.actualizarDescriptor({
+    persona_id: ana.persona_id, descriptor_id: v01.descriptor_id,
+    objetivo: 'Asesorar en prevención de riesgos laborales (corregido).',
+    items_responsabilidades: ['Cumple plazos']
+  }, CTX_ENCARGADO);
+
+  const todos = ctx.leerFilas_('SGC_DESCRIPTORES').filter((d) => d.persona_id === ana.persona_id);
+  assert.equal(todos.length, 1, 'editar NO crea una fila nueva');
+  assert.equal(todos[0].version, 'v01', 'la version no se toca al editar');
+  assert.equal(todos[0].objetivo, 'Asesorar en prevención de riesgos laborales (corregido).');
+
+  const ficha = ctx.Personas.getFicha({ persona_id: ana.persona_id }, CTX_ENCARGADO);
+  assert.equal(ficha.descriptor_vigente.objetivo, 'Asesorar en prevención de riesgos laborales (corregido).');
+});
+
+test('actualizarDescriptor: exige objetivo, solo gobierna lo edita, y no toca un descriptor ya archivado', () => {
+  const ctx = loadConSchema();
+  const { ana } = sembrar(ctx);
+  const v01 = ctx.Personas.guardarDescriptor({ persona_id: ana.persona_id, version: 'v01', objetivo: 'X' }, CTX_ENCARGADO);
+
+  assert.equal(ctx.Personas.actualizarDescriptor({
+    persona_id: ana.persona_id, descriptor_id: v01.descriptor_id, objetivo: ''
+  }, CTX_ENCARGADO)._validationError, true);
+
+  assert.equal(ctx.Personas.actualizarDescriptor({
+    persona_id: ana.persona_id, descriptor_id: v01.descriptor_id, objetivo: 'Y'
+  }, CTX_ANA)._forbidden, true, 'el propio trabajador no edita su descriptor');
+
+  // Se archiva v01 al crear v02 -- ahora v01 ya no es la vigente.
+  ctx.Personas.guardarDescriptor({ persona_id: ana.persona_id, version: 'v02', objetivo: 'Z' }, CTX_ENCARGADO);
+  assert.equal(ctx.Personas.actualizarDescriptor({
+    persona_id: ana.persona_id, descriptor_id: v01.descriptor_id, objetivo: 'Y'
+  }, CTX_ENCARGADO)._validationError, true, 'no se puede editar una version ya archivada');
+});
+
+test('actualizarDescriptor: si llega un archivo nuevo, reemplaza el de la MISMA fila', () => {
+  const ctx = loadConSchema();
+  const { ana } = sembrar(ctx);
+  const v01 = ctx.Personas.guardarDescriptor({
+    persona_id: ana.persona_id, version: 'v01', objetivo: 'X',
+    nombre_archivo: 'original.pdf', contenido_base64: PDF_B64
+  }, CTX_ENCARGADO);
+
+  ctx.Personas.actualizarDescriptor({
+    persona_id: ana.persona_id, descriptor_id: v01.descriptor_id, objetivo: 'X',
+    nombre_archivo: 'corregido.pdf', contenido_base64: PDF_B64
+  }, CTX_ENCARGADO);
+
+  const todos = ctx.leerFilas_('SGC_DESCRIPTORES').filter((d) => d.persona_id === ana.persona_id);
+  assert.equal(todos.length, 1);
+  assert.equal(todos[0].archivo_nombre, 'corregido.pdf');
+});
+
+test('descargarDescriptor: mismo permiso que ver la ficha, y exige que haya archivo', () => {
+  const ctx = loadConSchema();
+  const { ana, pedro } = sembrar(ctx);
+  const v01 = ctx.Personas.guardarDescriptor({
+    persona_id: ana.persona_id, version: 'v01', objetivo: 'X',
+    nombre_archivo: 'descriptor.pdf', contenido_base64: PDF_B64
+  }, CTX_ENCARGADO);
+
+  assert.ok(ctx.Personas.descargarDescriptor({
+    persona_id: ana.persona_id, descriptor_id: v01.descriptor_id
+  }, CTX_ANA).contenido_base64, 'Ana puede bajar el suyo');
+
+  assert.equal(ctx.Personas.descargarDescriptor({
+    persona_id: ana.persona_id, descriptor_id: v01.descriptor_id
+  }, CTX_PEDRO)._forbidden, true, 'Pedro no ve la ficha de Ana');
+
+  const sinArchivo = ctx.Personas.guardarDescriptor({ persona_id: pedro.persona_id, version: 'v01', objetivo: 'X' }, CTX_ENCARGADO);
+  assert.equal(ctx.Personas.descargarDescriptor({
+    persona_id: pedro.persona_id, descriptor_id: sinArchivo.descriptor_id
+  }, CTX_PEDRO)._validationError, true, 'sin archivo adjunto, no hay que descargar');
+});
+
 // --- documentos del personal ------------------------------------------------
 
 test('documentos del personal: se cargan validados y solo los ve quien ve la ficha', () => {

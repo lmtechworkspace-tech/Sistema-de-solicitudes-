@@ -17606,7 +17606,9 @@ var Iconos = (function () {
     var d = data.descriptor_vigente;
     var acciones = puedeGestionar_
       ? '<div class="sgc-acciones">' +
-          Componentes.boton({ texto: d ? 'Nueva versión del descriptor' : '+ Crear descriptor', clase: 'js-sgc-descriptor' }) +
+          (d ? Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-sgc-descriptor-editar' }) : '') +
+          Componentes.boton({ texto: d ? 'Nueva versión del descriptor' : '+ Crear descriptor', variante: d ? 'sutil' : undefined, clase: 'js-sgc-descriptor' }) +
+          (d && d.archivo_id ? Componentes.boton({ texto: 'Descargar archivo', icono: 'descargar', variante: 'sutil', clase: 'js-sgc-descriptor-bajar' }) : '') +
         '</div>'
       : '';
     if (!d) {
@@ -18114,7 +18116,22 @@ var Iconos = (function () {
 
     var descriptor = cont.querySelector('.js-sgc-descriptor');
     if (descriptor) descriptor.addEventListener('click', function () {
-      abrirFormularioDescriptor_(p, data.descriptor_vigente);
+      abrirFormularioDescriptor_(p, data.descriptor_vigente, false);
+    });
+    var descriptorEditar = cont.querySelector('.js-sgc-descriptor-editar');
+    if (descriptorEditar) descriptorEditar.addEventListener('click', function () {
+      abrirFormularioDescriptor_(p, data.descriptor_vigente, true);
+    });
+    var descriptorBajar = cont.querySelector('.js-sgc-descriptor-bajar');
+    if (descriptorBajar) descriptorBajar.addEventListener('click', function () {
+      api_('descargarDescriptorSgc', { persona_id: p.persona_id, descriptor_id: data.descriptor_vigente.descriptor_id })
+        .then(function (r) {
+          if (!r || !r.ok) {
+            Componentes.aviso({ texto: (r && r.message) || 'No se pudo descargar.', tipo: 'error' });
+            return;
+          }
+          descargarBase64Sgc_(r.data.contenido_base64, r.data.nombre_archivo, r.data.mime);
+        });
     });
 
     var docPersona = cont.querySelector('.js-sgc-doc-persona');
@@ -18198,8 +18215,11 @@ var Iconos = (function () {
       '</div>';
     var cerrar = montarModal_(fondo);
     // El correo enlaza la ficha con su cuenta y con todo su historial:
-    // cambiarlo después partiría el registro en dos.
-    if (!esNueva) document.getElementById('sgc-pe-email').readOnly = true;
+    // cambiarlo despues partiria el registro en dos. Pero eso SOLO aplica
+    // si ya hay un correo enlazado -- una ficha que entro sin correo (ej.
+    // por la carga inicial masiva del SGC) tiene que poder completarlo, o
+    // quedaba bloqueada para siempre sin forma de arreglarla.
+    if (!esNueva && p && p.usuario_email) document.getElementById('sgc-pe-email').readOnly = true;
 
     document.getElementById('form-sgc-persona').addEventListener('submit', function (evento) {
       evento.preventDefault();
@@ -18226,22 +18246,41 @@ var Iconos = (function () {
     });
   }
 
-  function abrirFormularioDescriptor_(p, vigente) {
+  // v14.0: tres modos posibles --
+  //   crear   (vigente ausente): version en blanco, todo vacío.
+  //   version (vigente presente, editar=false): "Nueva versión" -- el texto
+  //     arranca en blanco (se redacta de nuevo), salvo los items evaluables,
+  //     que SI se heredan como base. Va a guardarDescriptorSgc (archiva la
+  //     version anterior y crea una fila nueva).
+  //   editar  (vigente presente, editar=true): corrige la MISMA version en
+  //     el lugar -- todo se prellena desde `vigente`, la version queda de
+  //     solo lectura, y va a actualizarDescriptorSgc (sin versionar).
+  function abrirFormularioDescriptor_(p, vigente, editar) {
+    var modoEditar = !!(editar && vigente);
     var fondo = document.createElement('div');
     fondo.className = 'sigso-modal-fondo';
     fondo.innerHTML =
       '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
-        '<h3 class="sigso-modal__titulo">Descriptor de cargo — ' + Componentes.escaparHtml(p.nombre) + '</h3>' +
-        (vigente
+        '<h3 class="sigso-modal__titulo">' +
+          (modoEditar ? 'Editar descriptor de cargo — ' : 'Descriptor de cargo — ') +
+          Componentes.escaparHtml(p.nombre) + '</h3>' +
+        (vigente && !modoEditar
           ? '<p class="sigso-ayuda">La versión ' + Componentes.escaparHtml(vigente.version) +
             ' quedará archivada (no se elimina) y esta pasará a ser la vigente.</p>'
           : '') +
+        (modoEditar
+          ? '<p class="sigso-ayuda">Corrige la versión ' + Componentes.escaparHtml(vigente.version) +
+            ' vigente sin crear una nueva. Para un cambio real de contenido, usa "Nueva versión del descriptor".</p>'
+          : '') +
         '<form id="form-sgc-descriptor">' +
-          Componentes.campoTexto({ id: 'sgc-de-version', label: 'Versión', requerido: true, valor: vigente ? '' : 'v01', placeholder: 'Ej: v01' }) +
-          Componentes.campoTextarea({ id: 'sgc-de-objetivo', label: 'Objetivo general del cargo', requerido: true }) +
-          Componentes.campoTextarea({ id: 'sgc-de-funciones', label: 'Funciones' }) +
-          Componentes.campoTextarea({ id: 'sgc-de-responsabilidades', label: 'Responsabilidades (texto, tal como está en el documento)' }) +
-          Componentes.campoTextarea({ id: 'sgc-de-habilidades', label: 'Habilidades requeridas (texto, tal como está en el documento)' }) +
+          Componentes.campoTexto({
+            id: 'sgc-de-version', label: 'Versión', requerido: true,
+            valor: modoEditar ? vigente.version : (vigente ? '' : 'v01'), placeholder: 'Ej: v01'
+          }) +
+          Componentes.campoTextarea({ id: 'sgc-de-objetivo', label: 'Objetivo general del cargo', requerido: true, valor: modoEditar ? vigente.objetivo : '' }) +
+          Componentes.campoTextarea({ id: 'sgc-de-funciones', label: 'Funciones', valor: modoEditar ? vigente.funciones : '' }) +
+          Componentes.campoTextarea({ id: 'sgc-de-responsabilidades', label: 'Responsabilidades (texto, tal como está en el documento)', valor: modoEditar ? vigente.responsabilidades : '' }) +
+          Componentes.campoTextarea({ id: 'sgc-de-habilidades', label: 'Habilidades requeridas (texto, tal como está en el documento)', valor: modoEditar ? vigente.habilidades : '' }) +
           Componentes.campoTextarea({
             id: 'sgc-de-items-resp', label: 'Responsabilidades a evaluar (una por línea)',
             valor: (vigente && vigente.items_responsabilidades ? vigente.items_responsabilidades.join('\n') : ''),
@@ -18252,22 +18291,32 @@ var Iconos = (function () {
             valor: (vigente && vigente.items_habilidades ? vigente.items_habilidades.join('\n') : '')
           }) +
           '<div class="sgc-form-fila">' +
-            Componentes.campoTexto({ id: 'sgc-de-nivel', label: 'Nivel educacional' }) +
-            Componentes.campoTexto({ id: 'sgc-de-formacion', label: 'Formación técnica' }) +
+            Componentes.campoTexto({ id: 'sgc-de-nivel', label: 'Nivel educacional', valor: modoEditar ? vigente.nivel_educacional : '' }) +
+            Componentes.campoTexto({ id: 'sgc-de-formacion', label: 'Formación técnica', valor: modoEditar ? vigente.formacion_tecnica : '' }) +
           '</div>' +
-          Componentes.campoTextarea({ id: 'sgc-de-experiencia', label: 'Experiencia laboral requerida' }) +
+          Componentes.campoTextarea({ id: 'sgc-de-experiencia', label: 'Experiencia laboral requerida', valor: modoEditar ? vigente.experiencia : '' }) +
           '<div class="sigso-campo">' +
-            '<label for="sgc-de-archivo">Archivo del descriptor (opcional)</label>' +
+            '<label for="sgc-de-archivo">' +
+              (modoEditar && vigente.archivo_id ? 'Reemplazar el archivo (opcional)' : 'Archivo del descriptor (opcional)') +
+            '</label>' +
             '<input type="file" id="sgc-de-archivo" accept=".pdf,.doc,.docx,.xls,.xlsx">' +
+            (modoEditar && vigente.archivo_id
+              ? '<p class="sigso-ayuda">Actual: ' + Componentes.escaparHtml(vigente.archivo_nombre || 'sin nombre') + '. Déjalo vacío para no cambiarlo.</p>'
+              : '') +
           '</div>' +
           '<div class="sigso-modal__acciones">' +
             Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
-            Componentes.boton({ texto: 'Guardar descriptor', tipo: 'submit', clase: 'js-sgc-guardar' }) +
+            Componentes.boton({ texto: modoEditar ? 'Guardar cambios' : 'Guardar descriptor', tipo: 'submit', clase: 'js-sgc-guardar' }) +
           '</div>' +
         '</form>' +
       '</div>';
     var cerrar = montarModal_(fondo);
+    // La version identifica cuál era el descriptor vigente cuando se evaluó
+    // a la persona (FO-PRO-02-04 la referencia); corregir texto no puede
+    // cambiar silenciosamente ese número -- para eso está "Nueva versión".
+    if (modoEditar) document.getElementById('sgc-de-version').readOnly = true;
 
+    var textoOriginal = modoEditar ? 'Guardar cambios' : 'Guardar descriptor';
     document.getElementById('form-sgc-descriptor').addEventListener('submit', function (evento) {
       evento.preventDefault();
       var boton = fondo.querySelector('.js-sgc-guardar');
@@ -18289,6 +18338,10 @@ var Iconos = (function () {
           experiencia: document.getElementById('sgc-de-experiencia').value
         };
         if (base64) { datos.contenido_base64 = base64; datos.nombre_archivo = nombreArchivo; }
+        if (modoEditar) {
+          datos.descriptor_id = vigente.descriptor_id;
+          return api_('actualizarDescriptorSgc', datos);
+        }
         return api_('guardarDescriptorSgc', datos);
       }
 
@@ -18297,16 +18350,16 @@ var Iconos = (function () {
         : enviar(null, null);
 
       promesa.then(function (respuesta) {
-        boton.disabled = false; boton.textContent = 'Guardar descriptor';
+        boton.disabled = false; boton.textContent = textoOriginal;
         if (!respuesta || !respuesta.ok) {
           Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar el descriptor.', tipo: 'error' });
           return;
         }
         cerrar();
         abrirPersona_(p.persona_id);
-      }).catch(function () {
-        boton.disabled = false; boton.textContent = 'Guardar descriptor';
-        Componentes.aviso({ texto: 'No se pudo guardar el descriptor.', tipo: 'error' });
+      }).catch(function (err) {
+        boton.disabled = false; boton.textContent = textoOriginal;
+        Componentes.aviso({ texto: mensajeErrorSubidaSgc_(err), tipo: 'error' });
       });
     });
   }
