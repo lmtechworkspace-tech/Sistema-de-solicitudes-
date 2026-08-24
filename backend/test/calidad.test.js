@@ -577,3 +577,55 @@ test('recordatorio diario: un documento al dia no genera aviso de revision', () 
   const r = ctx.Calidad.recordatorioPendientes();
   assert.equal(r.revisiones, 0);
 });
+
+// --- v15.0: buscar como busca una persona ----------------------------------
+// La busqueda del listado documental era codigo+nombre, con acentos y como
+// una sola cadena: quien no se sabia el codigo quedaba a ciegas y "auditoria"
+// sin tilde no encontraba nada. Estos tests fijan el comportamiento nuevo.
+
+function sembrarParaBuscar(ctx) {
+  sembrarRoles(ctx);
+  crearDoc(ctx, { codigo: 'PRO-03', nombre: 'Auditorías Internas', tipo: 'PRO', visibilidad: 'TODOS' });
+  crearDoc(ctx, { codigo: 'FO-PRO-03-04', nombre: 'Lista de Verificación de Auditoría', tipo: 'FO', visibilidad: 'TODOS' });
+  crearDoc(ctx, { codigo: 'INS-02', nombre: 'Respaldo de Información', tipo: 'INS',
+    visibilidad: 'TODOS', descripcion: 'Cómo respaldar los archivos del servidor cada semana.' });
+  return ctx;
+}
+
+function buscar(ctx, termino) {
+  return toPlain(ctx.Calidad.listarDocumentos({ busqueda: termino }, CTX_ENCARGADO)).documentos
+    .map(function (d) { return d.codigo; }).sort();
+}
+
+test('busqueda documental: ignora los acentos en ambos sentidos', () => {
+  const ctx = sembrarParaBuscar(loadConSchema());
+  // Sin tilde encuentra lo que SI la tiene...
+  assert.deepEqual(buscar(ctx, 'auditoria'), ['FO-PRO-03-04', 'PRO-03']);
+  // ...y con tilde tambien.
+  assert.deepEqual(buscar(ctx, 'auditoría'), ['FO-PRO-03-04', 'PRO-03']);
+});
+
+test('busqueda documental: varias palabras funcionan como Y, en cualquier orden', () => {
+  const ctx = sembrarParaBuscar(loadConSchema());
+  assert.deepEqual(buscar(ctx, 'lista auditoria'), ['FO-PRO-03-04']);
+  assert.deepEqual(buscar(ctx, 'auditoria lista'), ['FO-PRO-03-04']);
+  // Una palabra que no esta en ningun campo descarta el documento.
+  assert.deepEqual(buscar(ctx, 'auditoria inexistente'), []);
+});
+
+test('busqueda documental: encuentra por tipo en palabras, sin saber el codigo', () => {
+  const ctx = sembrarParaBuscar(loadConSchema());
+  assert.deepEqual(buscar(ctx, 'procedimiento'), ['PRO-03']);
+  assert.deepEqual(buscar(ctx, 'formulario'), ['FO-PRO-03-04']);
+});
+
+test('busqueda documental: tambien mira la descripcion', () => {
+  const ctx = sembrarParaBuscar(loadConSchema());
+  // "servidor" solo aparece en la descripcion de INS-02.
+  assert.deepEqual(buscar(ctx, 'servidor'), ['INS-02']);
+});
+
+test('busqueda documental: sigue encontrando por codigo exacto', () => {
+  const ctx = sembrarParaBuscar(loadConSchema());
+  assert.deepEqual(buscar(ctx, 'FO-PRO-03-04'), ['FO-PRO-03-04']);
+});

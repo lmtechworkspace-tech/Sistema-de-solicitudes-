@@ -1064,6 +1064,14 @@
 .sigso-contenido.plataforma-contenido--ancho {
   max-width: min(1180px, 100%);
   min-width: 0;
+  /* v15.0: sin este 100%, el contenido se encogía al ancho de sus tarjetas.
+     Motivo: .sigso-contenido trae `margin: 0 auto`, y un margen automático en
+     el eje transversal ANULA el stretch de un item flex -- el elemento pasa a
+     medir fit-content y se centra. Resultado: en un monitor de 1440px el
+     panel de trabajo ocupaba ~635px y sobraba medio pantalla a los lados.
+     Con width:100% vuelve a estirarse hasta su max-width y el auto sólo
+     centra cuando de verdad sobra espacio. */
+  width: 100%;
 }
 
 /* ============ v4.0 Frentes 2 y 3: identidad y navegacion ============ */
@@ -3941,4 +3949,160 @@
 
   /* El gráfico de tendencia sí se imprime: es SVG, no un canvas. */
   .sigso-rep-tendencia svg { max-height: 70mm; }
+}
+
+/* ==========================================================================
+   v15.0 — Rearquitectura del módulo Calidad
+   Todo sale de los tokens de tokens.css: ni un color suelto, ni una sombra
+   nueva. La jerarquía se hace con tamaño, peso y espacio, no con cajas.
+   ========================================================================== */
+
+/* Utilidad: visible para lectores de pantalla, no para la vista. */
+.sigso-oculto-visual {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* Contenedor del Inicio: una sola columna con ritmo vertical constante.
+   El ritmo es lo que separa los bloques -- no hacen falta tarjetas. */
+/* Inicio es una columna de LECTURA y decisión, no una tabla: se acota para
+   que una fila no tenga el texto a la izquierda y su botón a mil píxeles.
+   Los listados y las tablas del módulo siguen usando todo el ancho. */
+.sgc-ini { display: flex; flex-direction: column; gap: var(--esp-6); max-width: 920px; }
+
+.sgc-ini-cab__titulo {
+  font: var(--t-display); letter-spacing: -0.02em; color: var(--texto); margin: 0;
+}
+.sgc-ini-cab__sub { font: var(--t-body); color: var(--texto-2); margin: var(--esp-1) 0 0; }
+
+/* --- Bloque de TAREA: el único nivel 1 de la pantalla -------------------- */
+.sgc-ini-tarea {
+  border: 1px solid var(--borde);
+  border-left: 3px solid var(--alerta);
+  border-radius: var(--radio-lg);
+  background: var(--superficie);
+  padding: var(--esp-5);
+}
+.sgc-ini-tarea--ok { border-left-color: var(--ok); }
+.sgc-ini-tarea__titulo { font: var(--t-title); color: var(--texto); margin: 0; }
+.sgc-ini-tarea__ayuda { font: var(--t-body); color: var(--texto-2); margin: var(--esp-2) 0 0; }
+.sgc-ini-tarea__cab { margin-bottom: var(--esp-4); }
+.sgc-ini-tarea__pie { margin-top: var(--esp-3); }
+
+/* --- Filas de tarea/alerta: texto a la izquierda, acción a la derecha ---- */
+.sgc-ini-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.sgc-ini-fila {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--esp-4); padding: var(--esp-3) 0;
+  border-top: 1px solid var(--borde);
+}
+.sgc-ini-lista > .sgc-ini-fila:first-child { border-top: 0; }
+.sgc-ini-fila__texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sgc-ini-fila__nombre {
+  font: var(--t-body); font-weight: 600; color: var(--texto);
+  display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap;
+}
+.sgc-ini-fila__meta { font: var(--t-small); color: var(--texto-2); }
+.sgc-ini-fila > .sigso-boton { flex: 0 0 auto; }
+
+.sgc-ini-plazo { margin-left: var(--esp-2); color: var(--alerta); font-weight: 600; }
+.sgc-ini-plazo--vencido { color: var(--critico); }
+
+/* --- "Requiere tu atención" (portada de gobierno) ------------------------ */
+.sgc-atencion {
+  border: 1px solid var(--borde); border-radius: var(--radio-lg);
+  background: var(--superficie); padding: var(--esp-5);
+}
+.sgc-atencion__titulo {
+  font: var(--t-title); color: var(--texto); margin: 0 0 var(--esp-3);
+  display: flex; align-items: center; gap: var(--esp-2);
+}
+.sgc-atencion__cuenta {
+  font: var(--t-small); font-weight: 600;
+  background: var(--superficie-2); color: var(--texto-2);
+  border-radius: var(--radio-full); padding: 2px var(--esp-2);
+}
+/* La severidad se lee en el borde izquierdo de la fila: color como refuerzo
+   del texto ("Crítico"/"Requiere atención"), nunca como única señal. */
+.sgc-ini-fila--critico { box-shadow: inset 2px 0 0 var(--critico); padding-left: var(--esp-3); }
+.sgc-ini-fila--alerta  { box-shadow: inset 2px 0 0 var(--alerta);  padding-left: var(--esp-3); }
+.sgc-ini-fila--info    { box-shadow: inset 2px 0 0 var(--info);    padding-left: var(--esp-3); }
+
+/* --- Bloques secundarios ------------------------------------------------- */
+.sgc-ini-bloque__titulo {
+  font: var(--t-title); font-size: var(--texto-base); color: var(--texto);
+  margin: 0 0 var(--esp-3);
+}
+.sgc-ini-buscar { display: flex; gap: var(--esp-2); flex-wrap: wrap; }
+.sgc-ini-buscar input {
+  flex: 1 1 20rem; min-width: 0;
+  font: var(--t-body); color: var(--texto);
+  background: var(--superficie); border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-sm); padding: var(--esp-2) var(--esp-3);
+}
+.sgc-ini-buscar input:focus-visible { outline: none; box-shadow: var(--foco-anillo); border-color: var(--primario); }
+.sgc-ini-chips { display: flex; flex-wrap: wrap; gap: var(--esp-2); margin-top: var(--esp-3); }
+
+.sgc-ini-ficha {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--esp-4); flex-wrap: wrap;
+  border: 1px solid var(--borde); border-radius: var(--radio-md);
+  background: var(--superficie); padding: var(--esp-4);
+}
+.sgc-ini-ficha__datos { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sgc-ini-ficha__nombre { font: var(--t-body); font-weight: 600; color: var(--texto); }
+.sgc-ini-ficha__meta { font: var(--t-small); color: var(--texto-2); }
+
+/* --- Fichas de filtro (tipos de documento) ------------------------------- */
+.sgc-chips { display: flex; flex-wrap: wrap; gap: var(--esp-2); margin: var(--esp-3) 0; }
+.sgc-chip {
+  font: var(--t-small); font-weight: 500; color: var(--texto-2);
+  background: var(--superficie); border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-full); padding: var(--esp-2) var(--esp-3);
+  cursor: pointer; transition: background var(--mov-rapido), color var(--mov-rapido), border-color var(--mov-rapido);
+}
+.sgc-chip:hover { background: var(--superficie-2); color: var(--texto); }
+.sgc-chip:focus-visible { outline: none; box-shadow: var(--foco-anillo); }
+.sgc-chip--activo {
+  background: var(--primario); border-color: var(--primario); color: var(--marca-contraste);
+}
+
+/* --- Barra de tarea del listado de documentos --------------------------- */
+.sgc-tarea-barra {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--esp-4); flex-wrap: wrap;
+  border: 1px solid var(--borde); border-left: 3px solid var(--alerta);
+  border-radius: var(--radio-md); background: var(--superficie);
+  padding: var(--esp-3) var(--esp-4); margin-bottom: var(--esp-3);
+}
+.sgc-tarea-barra--activa { border-left-color: var(--primario); background: var(--primario-suave); }
+.sgc-tarea-barra__texto { font: var(--t-body); color: var(--texto); min-width: 0; }
+
+/* --- Avance interno (plegable, al final de la portada) ------------------- */
+.sgc-avance {
+  border: 1px solid var(--borde); border-radius: var(--radio-md);
+  background: var(--superficie);
+}
+.sgc-avance__cab {
+  display: flex; align-items: baseline; gap: var(--esp-3); flex-wrap: wrap;
+  padding: var(--esp-4); cursor: pointer; list-style: none;
+}
+.sgc-avance__cab::-webkit-details-marker { display: none; }
+.sgc-avance__cab::after {
+  content: '▾'; margin-left: auto; color: var(--texto-3);
+  transition: transform var(--mov-normal);
+}
+.sgc-avance[open] .sgc-avance__cab::after { transform: rotate(180deg); }
+.sgc-avance__cab:focus-visible { outline: none; box-shadow: var(--foco-anillo); border-radius: var(--radio-md); }
+.sgc-avance__titulo { font: var(--t-body); font-weight: 600; color: var(--texto); }
+.sgc-avance__cifra { font: var(--t-title); color: var(--texto); font-variant-numeric: tabular-nums; }
+.sgc-avance__detalle { font: var(--t-small); color: var(--texto-2); }
+.sgc-avance__cuerpo { padding: 0 var(--esp-4) var(--esp-4); }
+
+/* --- Responsive: en pantallas chicas la acción baja bajo el texto -------- */
+@media (max-width: 640px) {
+  .sgc-ini-fila { align-items: flex-start; flex-direction: column; gap: var(--esp-2); }
+  .sgc-ini-fila > .sigso-boton { width: 100%; }
+  .sgc-tarea-barra > .sigso-boton { width: 100%; }
+  .sgc-ini-tarea, .sgc-atencion { padding: var(--esp-4); }
 }

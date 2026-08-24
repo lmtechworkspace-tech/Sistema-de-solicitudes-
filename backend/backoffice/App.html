@@ -1725,6 +1725,14 @@ button {
 .sigso-contenido.plataforma-contenido--ancho {
   max-width: min(1180px, 100%);
   min-width: 0;
+  /* v15.0: sin este 100%, el contenido se encogía al ancho de sus tarjetas.
+     Motivo: .sigso-contenido trae `margin: 0 auto`, y un margen automático en
+     el eje transversal ANULA el stretch de un item flex -- el elemento pasa a
+     medir fit-content y se centra. Resultado: en un monitor de 1440px el
+     panel de trabajo ocupaba ~635px y sobraba medio pantalla a los lados.
+     Con width:100% vuelve a estirarse hasta su max-width y el auto sólo
+     centra cuando de verdad sobra espacio. */
+  width: 100%;
 }
 
 /* ============ v4.0 Frentes 2 y 3: identidad y navegacion ============ */
@@ -4602,6 +4610,162 @@ button {
 
   /* El gráfico de tendencia sí se imprime: es SVG, no un canvas. */
   .sigso-rep-tendencia svg { max-height: 70mm; }
+}
+
+/* ==========================================================================
+   v15.0 — Rearquitectura del módulo Calidad
+   Todo sale de los tokens de tokens.css: ni un color suelto, ni una sombra
+   nueva. La jerarquía se hace con tamaño, peso y espacio, no con cajas.
+   ========================================================================== */
+
+/* Utilidad: visible para lectores de pantalla, no para la vista. */
+.sigso-oculto-visual {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* Contenedor del Inicio: una sola columna con ritmo vertical constante.
+   El ritmo es lo que separa los bloques -- no hacen falta tarjetas. */
+/* Inicio es una columna de LECTURA y decisión, no una tabla: se acota para
+   que una fila no tenga el texto a la izquierda y su botón a mil píxeles.
+   Los listados y las tablas del módulo siguen usando todo el ancho. */
+.sgc-ini { display: flex; flex-direction: column; gap: var(--esp-6); max-width: 920px; }
+
+.sgc-ini-cab__titulo {
+  font: var(--t-display); letter-spacing: -0.02em; color: var(--texto); margin: 0;
+}
+.sgc-ini-cab__sub { font: var(--t-body); color: var(--texto-2); margin: var(--esp-1) 0 0; }
+
+/* --- Bloque de TAREA: el único nivel 1 de la pantalla -------------------- */
+.sgc-ini-tarea {
+  border: 1px solid var(--borde);
+  border-left: 3px solid var(--alerta);
+  border-radius: var(--radio-lg);
+  background: var(--superficie);
+  padding: var(--esp-5);
+}
+.sgc-ini-tarea--ok { border-left-color: var(--ok); }
+.sgc-ini-tarea__titulo { font: var(--t-title); color: var(--texto); margin: 0; }
+.sgc-ini-tarea__ayuda { font: var(--t-body); color: var(--texto-2); margin: var(--esp-2) 0 0; }
+.sgc-ini-tarea__cab { margin-bottom: var(--esp-4); }
+.sgc-ini-tarea__pie { margin-top: var(--esp-3); }
+
+/* --- Filas de tarea/alerta: texto a la izquierda, acción a la derecha ---- */
+.sgc-ini-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.sgc-ini-fila {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--esp-4); padding: var(--esp-3) 0;
+  border-top: 1px solid var(--borde);
+}
+.sgc-ini-lista > .sgc-ini-fila:first-child { border-top: 0; }
+.sgc-ini-fila__texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sgc-ini-fila__nombre {
+  font: var(--t-body); font-weight: 600; color: var(--texto);
+  display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap;
+}
+.sgc-ini-fila__meta { font: var(--t-small); color: var(--texto-2); }
+.sgc-ini-fila > .sigso-boton { flex: 0 0 auto; }
+
+.sgc-ini-plazo { margin-left: var(--esp-2); color: var(--alerta); font-weight: 600; }
+.sgc-ini-plazo--vencido { color: var(--critico); }
+
+/* --- "Requiere tu atención" (portada de gobierno) ------------------------ */
+.sgc-atencion {
+  border: 1px solid var(--borde); border-radius: var(--radio-lg);
+  background: var(--superficie); padding: var(--esp-5);
+}
+.sgc-atencion__titulo {
+  font: var(--t-title); color: var(--texto); margin: 0 0 var(--esp-3);
+  display: flex; align-items: center; gap: var(--esp-2);
+}
+.sgc-atencion__cuenta {
+  font: var(--t-small); font-weight: 600;
+  background: var(--superficie-2); color: var(--texto-2);
+  border-radius: var(--radio-full); padding: 2px var(--esp-2);
+}
+/* La severidad se lee en el borde izquierdo de la fila: color como refuerzo
+   del texto ("Crítico"/"Requiere atención"), nunca como única señal. */
+.sgc-ini-fila--critico { box-shadow: inset 2px 0 0 var(--critico); padding-left: var(--esp-3); }
+.sgc-ini-fila--alerta  { box-shadow: inset 2px 0 0 var(--alerta);  padding-left: var(--esp-3); }
+.sgc-ini-fila--info    { box-shadow: inset 2px 0 0 var(--info);    padding-left: var(--esp-3); }
+
+/* --- Bloques secundarios ------------------------------------------------- */
+.sgc-ini-bloque__titulo {
+  font: var(--t-title); font-size: var(--texto-base); color: var(--texto);
+  margin: 0 0 var(--esp-3);
+}
+.sgc-ini-buscar { display: flex; gap: var(--esp-2); flex-wrap: wrap; }
+.sgc-ini-buscar input {
+  flex: 1 1 20rem; min-width: 0;
+  font: var(--t-body); color: var(--texto);
+  background: var(--superficie); border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-sm); padding: var(--esp-2) var(--esp-3);
+}
+.sgc-ini-buscar input:focus-visible { outline: none; box-shadow: var(--foco-anillo); border-color: var(--primario); }
+.sgc-ini-chips { display: flex; flex-wrap: wrap; gap: var(--esp-2); margin-top: var(--esp-3); }
+
+.sgc-ini-ficha {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--esp-4); flex-wrap: wrap;
+  border: 1px solid var(--borde); border-radius: var(--radio-md);
+  background: var(--superficie); padding: var(--esp-4);
+}
+.sgc-ini-ficha__datos { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sgc-ini-ficha__nombre { font: var(--t-body); font-weight: 600; color: var(--texto); }
+.sgc-ini-ficha__meta { font: var(--t-small); color: var(--texto-2); }
+
+/* --- Fichas de filtro (tipos de documento) ------------------------------- */
+.sgc-chips { display: flex; flex-wrap: wrap; gap: var(--esp-2); margin: var(--esp-3) 0; }
+.sgc-chip {
+  font: var(--t-small); font-weight: 500; color: var(--texto-2);
+  background: var(--superficie); border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-full); padding: var(--esp-2) var(--esp-3);
+  cursor: pointer; transition: background var(--mov-rapido), color var(--mov-rapido), border-color var(--mov-rapido);
+}
+.sgc-chip:hover { background: var(--superficie-2); color: var(--texto); }
+.sgc-chip:focus-visible { outline: none; box-shadow: var(--foco-anillo); }
+.sgc-chip--activo {
+  background: var(--primario); border-color: var(--primario); color: var(--marca-contraste);
+}
+
+/* --- Barra de tarea del listado de documentos --------------------------- */
+.sgc-tarea-barra {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--esp-4); flex-wrap: wrap;
+  border: 1px solid var(--borde); border-left: 3px solid var(--alerta);
+  border-radius: var(--radio-md); background: var(--superficie);
+  padding: var(--esp-3) var(--esp-4); margin-bottom: var(--esp-3);
+}
+.sgc-tarea-barra--activa { border-left-color: var(--primario); background: var(--primario-suave); }
+.sgc-tarea-barra__texto { font: var(--t-body); color: var(--texto); min-width: 0; }
+
+/* --- Avance interno (plegable, al final de la portada) ------------------- */
+.sgc-avance {
+  border: 1px solid var(--borde); border-radius: var(--radio-md);
+  background: var(--superficie);
+}
+.sgc-avance__cab {
+  display: flex; align-items: baseline; gap: var(--esp-3); flex-wrap: wrap;
+  padding: var(--esp-4); cursor: pointer; list-style: none;
+}
+.sgc-avance__cab::-webkit-details-marker { display: none; }
+.sgc-avance__cab::after {
+  content: '▾'; margin-left: auto; color: var(--texto-3);
+  transition: transform var(--mov-normal);
+}
+.sgc-avance[open] .sgc-avance__cab::after { transform: rotate(180deg); }
+.sgc-avance__cab:focus-visible { outline: none; box-shadow: var(--foco-anillo); border-radius: var(--radio-md); }
+.sgc-avance__titulo { font: var(--t-body); font-weight: 600; color: var(--texto); }
+.sgc-avance__cifra { font: var(--t-title); color: var(--texto); font-variant-numeric: tabular-nums; }
+.sgc-avance__detalle { font: var(--t-small); color: var(--texto-2); }
+.sgc-avance__cuerpo { padding: 0 var(--esp-4) var(--esp-4); }
+
+/* --- Responsive: en pantallas chicas la acción baja bajo el texto -------- */
+@media (max-width: 640px) {
+  .sgc-ini-fila { align-items: flex-start; flex-direction: column; gap: var(--esp-2); }
+  .sgc-ini-fila > .sigso-boton { width: 100%; }
+  .sgc-tarea-barra > .sigso-boton { width: 100%; }
+  .sgc-ini-tarea, .sgc-atencion { padding: var(--esp-4); }
 }
 
 </style>
@@ -16334,7 +16498,10 @@ var Iconos = (function () {
       var pedida = (window.SigsoShell && SigsoShell.tomarItemDeRuta)
         ? SigsoShell.tomarItemDeRuta() : '';
       var p = pedida && window.SigsoNav ? SigsoNav.partes(pedida) : null;
-      seccionActiva_ = (p && p.seccion) || 'tablero';
+      // v15.0: 'tablero' es el nombre viejo de la portada; sigue aceptándose
+      // para no romper enlaces guardados, pero la sección se llama 'inicio'.
+      seccionActiva_ = (p && p.seccion) || 'inicio';
+      if (seccionActiva_ === 'tablero') seccionActiva_ = 'inicio';
       filtroTipo_ = (p && p.seccion === 'documentos') ? (p.argumento || '') : '';
       // v13.0: el argumento de 'reportes' abre ese reporte directo. Estaba
       // solo en irASeccion_, asi que entrar por URL a un reporte dejaba el
@@ -16351,17 +16518,45 @@ var Iconos = (function () {
     // v13.0: el arbol del sidebar llama aca cuando eligen una seccion.
     irAItem: function (itemId) {
       var p = window.SigsoNav ? SigsoNav.partes(itemId) : { seccion: itemId, argumento: '' };
-      irASeccion_(p.seccion, p.argumento);
+      irASeccion_(p.seccion === 'tablero' ? 'inicio' : p.seccion, p.argumento);
     }
   };
 
   // v13.0: la arquitectura se REGISTRA para que el sidebar la dibuje. El
   // predicado de permisos va aca dentro: el arbol no decide nada, obedece.
+  // v15.0: el árbol se adapta a lo que la persona realmente ve.
+  //
+  // Dos reglas, ambas para que nadie tenga que abrir una carpeta y descubrir
+  // que adentro hay una sola cosa:
+  //   1. Un submódulo con UN solo ítem visible se dibuja como enlace directo,
+  //      con el nombre del ítem (no el del grupo).
+  //   2. Para quien no supervisa el SGC, "Personal" es literalmente UNA ficha
+  //      -- la suya --, así que se llama "Mi ficha".
+  function arquitecturaSgc_() {
+    var propia = !superviseSgc_();
+    return ARQUITECTURA_SGC.map(function (sub) {
+      var visibles = sub.items.filter(function (it) {
+        var llave = it.permiso || (window.SigsoNav ? SigsoNav.partes(it.id).seccion : it.id);
+        return puedeVerSeccion_(llave);
+      });
+      if (sub.id === 'personas' && propia) {
+        return { id: 'personas', nombre: 'Mi ficha', icono: sub.icono, plano: true,
+          items: [{ id: 'personas', nombre: 'Mi ficha', permiso: 'personas' }] };
+      }
+      if (visibles.length === 1 && !sub.plano) {
+        var uno = visibles[0];
+        return { id: sub.id, nombre: uno.nombre, icono: sub.icono, plano: true,
+          items: [{ id: uno.id, nombre: uno.nombre, permiso: uno.permiso }] };
+      }
+      return sub;
+    });
+  }
+
   function registrarArbolSgc_() {
     if (!window.SigsoNav) return;
     SigsoNav.registrar('calidad', {
       nombre: 'Calidad',
-      submodulos: ARQUITECTURA_SGC,
+      submodulos: arquitecturaSgc_(),
       visible: puedeVerSeccion_
     });
   }
@@ -16385,8 +16580,8 @@ var Iconos = (function () {
       if (objetivoActivoId_) abrirObjetivo_(objetivoActivoId_); else cargarObjetivos_();
     } else if (seccionActiva_ === 'servicios') {
       cargarPrestaciones_();
-    } else if (seccionActiva_ === 'tablero') {
-      cargarTablero_();
+    } else if (seccionActiva_ === 'inicio' || seccionActiva_ === 'tablero') {
+      cargarInicio_();
     } else if (seccionActiva_ === 'indicadores') {
       cargarIndicadores_();
     } else if (seccionActiva_ === 'procesos') {
@@ -16425,40 +16620,79 @@ var Iconos = (function () {
   // Los ítems "documentos:PRO", "documentos:FO"... NO son pantallas nuevas:
   // son la MISMA sección de documentos con filtroTipo_ ya puesto. El filtro
   // existe desde la v10.0; acá sólo se le da entrada por navegación.
+  //
+  // v15.0 — REARQUITECTURA POR TAREA (no por capítulo de la norma).
+  //
+  // Hasta la v14 el árbol era el índice de la ISO 9001: "Sistema de Gestión"
+  // (capítulo 4) primero, luego "Planificación" (6), "Documentación" (7.5),
+  // "Operación" (8), "Control y mejora" (9-10). Eso obliga a la persona a
+  // saber cómo está construido un SGC para encontrar su trabajo: lo más
+  // estructural quedaba arriba y lo más usado (documentos) al medio.
+  //
+  // El orden ahora sale de lo que la gente viene a hacer, y de cuán seguido:
+  //   1. Inicio      — qué pasa y qué tengo que hacer
+  //   2. Documentos  — lo que más se busca (una pantalla, no cinco entradas)
+  //   3. Personas    — fichas, competencias
+  //   4. Seguimiento — lo que hay que trabajar hasta cerrarlo
+  //   5. Medición    — cómo vamos
+  //   6. El sistema  — la estructura del SGC (consulta, no tarea diaria)
+  //   7. Operación   — registros operativos
+  //   8. Administración
+  //
+  // Los permisos NO cambian: el mismo `permiso` de siempre por ítem, y el
+  // árbol se poda solo. Un operativo ve Inicio + Documentos + su ficha + la
+  // parte consultable del sistema, sin tocar una línea de autorización.
   var ARQUITECTURA_SGC = [
-    { id: 'inicio', nombre: 'Inicio', icono: 'estado', items: [
-      { id: 'tablero', nombre: 'Inicio' }
+    // 'inicio' es un id NUEVO y visible para todos; adentro decide qué
+    // pintar según el rol (ver cargarInicio_). El id 'tablero' se conserva
+    // como sinónimo para no romper enlaces guardados.
+    { id: 'inicio', nombre: 'Inicio', icono: 'estado', plano: true, items: [
+      { id: 'inicio', nombre: 'Inicio', permiso: 'inicio' }
     ] },
 
-    // Capítulo 4 de la norma: el marco contra el que se audita todo lo demás.
-    { id: 'sistema', nombre: 'Sistema de Gestión', icono: 'escudo',
-      descripcion: 'Alcance, contexto y procesos', items: [
-      { id: 'alcance', nombre: 'Alcance' },                    // §4.3
-      { id: 'contexto', nombre: 'Contexto y partes interesadas' }, // §4.1 / §4.2
-      { id: 'procesos', nombre: 'Mapa de procesos' },          // §4.4
-      { id: 'cobertura', nombre: 'Cobertura ISO' }             // transversal 4-10
+    // Lo más buscado del módulo. Antes eran CINCO entradas de sidebar para
+    // UNA sola pantalla con el filtro puesto; ahora es una, y los tipos son
+    // fichas dentro de la pantalla (las rutas 'documentos:PRO' siguen vivas,
+    // así que los enlaces guardados y las migas no se rompen).
+    { id: 'documentos', nombre: 'Documentos', icono: 'documento', plano: true, items: [
+      { id: 'documentos', nombre: 'Documentos', permiso: 'documentos' }
     ] },
 
-    // Capítulo 6: planificación.
-    { id: 'planificacion', nombre: 'Planificación', icono: 'diana', items: [
-      { id: 'riesgos', nombre: 'Riesgos y oportunidades' },    // §6.1
-      { id: 'objetivos', nombre: 'Objetivos de calidad' }      // §6.2
-    ] },
-
-    // Capítulo 7.5: información documentada. Los ítems por tipo son el
-    // filtro que ya existía, ahora navegable.
-    { id: 'documentacion', nombre: 'Documentación', icono: 'documento', items: [
-      { id: 'documentos', nombre: 'Lista maestra', permiso: 'documentos' },
-      { id: 'documentos:PRO', nombre: 'Procedimientos', permiso: 'documentos' },
-      { id: 'documentos:INS', nombre: 'Instructivos', permiso: 'documentos' },
-      { id: 'documentos:FO', nombre: 'Formularios', permiso: 'documentos' },
-      { id: 'documentos:EXTERNO', nombre: 'Documentos externos', permiso: 'documentos' }
-    ] },
-
-    // Capítulo 7.2 / 7.3: competencia y toma de conciencia.
+    // §7.2 / §7.3: competencia y toma de conciencia. Para un operativo esto
+    // es sólo su propia ficha, y así se llama en su caso (ver nombreItemSgc_).
     { id: 'personas', nombre: 'Personas', icono: 'persona', items: [
       { id: 'personas', nombre: 'Personal', permiso: 'personas' },
       { id: 'capacitaciones', nombre: 'Capacitaciones' }
+    ] },
+
+    // Lo que hay que trabajar hasta cerrarlo. Antes se llamaba "Control y
+    // mejora" (§9-10) y mezclaba indicadores (medir) con no conformidades
+    // (resolver): son dos trabajos distintos, ahora separados.
+    { id: 'seguimiento', nombre: 'Seguimiento y mejora', icono: 'alerta',
+      descripcion: 'Lo que hay que resolver', items: [
+      { id: 'nc', nombre: 'No conformidades' },                // §10.2
+      { id: 'quejas', nombre: 'Quejas' },                      // §9.1.2
+      { id: 'auditorias', nombre: 'Auditorías internas' },     // §9.2
+      { id: 'revision', nombre: 'Revisión por la dirección' }  // §9.3
+    ] },
+
+    // Cómo vamos: medir y mirar. Objetivos vive acá (y no en "Planificación")
+    // porque en el día a día se consulta junto a los indicadores que lo miden.
+    { id: 'medicion', nombre: 'Medición', icono: 'grafico',
+      descripcion: 'Cómo vamos', items: [
+      { id: 'indicadores', nombre: 'Indicadores' },            // §9.1.1
+      { id: 'objetivos', nombre: 'Objetivos de calidad' }      // §6.2
+    ] },
+
+    // La estructura del SGC: se consulta, no es tarea diaria. Por eso baja
+    // del primer lugar (donde estaba como "Sistema de Gestión") a acá.
+    { id: 'sistema', nombre: 'El sistema', icono: 'escudo',
+      descripcion: 'Cómo está definido el SGC', items: [
+      { id: 'alcance', nombre: 'Alcance' },                    // §4.3
+      { id: 'contexto', nombre: 'Contexto y partes interesadas' }, // §4.1 / §4.2
+      { id: 'procesos', nombre: 'Mapa de procesos' },          // §4.4
+      { id: 'riesgos', nombre: 'Riesgos y oportunidades' },    // §6.1
+      { id: 'cobertura', nombre: 'Cobertura ISO' }             // transversal 4-10
     ] },
 
     // Capítulo 8: operación.
@@ -16467,32 +16701,13 @@ var Iconos = (function () {
       { id: 'proveedores', nombre: 'Proveedores' }             // §8.4
     ] },
 
-    // Capítulos 9 y 10: evaluación del desempeño y mejora.
-    { id: 'control', nombre: 'Control y mejora', icono: 'alerta', items: [
-      { id: 'indicadores', nombre: 'Indicadores' },            // §9.1.1
-      { id: 'quejas', nombre: 'Quejas' },                      // §9.1.2
-      { id: 'auditorias', nombre: 'Auditorías internas' },     // §9.2
-      { id: 'revision', nombre: 'Revisión por la dirección' }, // §9.3
-      { id: 'nc', nombre: 'No conformidades' }                 // §10.2
-    ] },
-
-    // Submódulo transversal (§10 del encargo). Los reportes que YA se pueden
-    // construir con datos reales del módulo; el resto queda declarado como
-    // pendiente en REPORTES_SGC, no inventado como pantalla vacía.
-    // plano: true -> se dibuja como enlace directo y no como acordeon de un
-    // solo item. Reportes tiene que leerse como un destino, no como una
-    // carpeta que hay que abrir para descubrir que adentro hay una sola cosa.
-    // v13.0: los reportes son navegables desde el sidebar. Se listan los que
-    // se ARMAN aquí (los demás viven en su propia sección y ya están en el
-    // árbol por su cuenta: duplicarlos sería tener dos caminos al mismo sitio).
-    { id: 'reportes', nombre: 'Reportes', icono: 'grafico',
-      descripcion: 'Analiza el desempeño del SGC', items: [
-      { id: 'reportes', nombre: 'Centro de reportes', permiso: 'cobertura' },
-      { id: 'reportes:cump-general', nombre: 'Cumplimiento general', permiso: 'cobertura' },
-      { id: 'reportes:cump-clausula', nombre: 'Por cláusula', permiso: 'cobertura' },
-      { id: 'reportes:rank-capitulo', nombre: 'Ranking de capítulos', permiso: 'cobertura' },
-      { id: 'reportes:ind-tendencia', nombre: 'Tendencia de indicador', permiso: 'cobertura' },
-      { id: 'reportes:doc-estado', nombre: 'Estado documental', permiso: 'cobertura' }
+    // v15.0: UNA entrada, no seis. Los cinco reportes con nombre propio ya
+    // están listados dentro del Centro de reportes -- con su descripción y su
+    // estado -- así que repetirlos en el sidebar era ocupar cinco filas para
+    // duplicar una pantalla que ya explica mejor lo mismo. Las rutas
+    // 'reportes:cump-general' siguen funcionando para enlaces guardados.
+    { id: 'reportes', nombre: 'Reportes', icono: 'grafico', plano: true, items: [
+      { id: 'reportes', nombre: 'Reportes', permiso: 'cobertura' }
     ] },
 
     { id: 'administracion', nombre: 'Administración', icono: 'llave', items: [
@@ -16507,8 +16722,18 @@ var Iconos = (function () {
     ARQUITECTURA_SGC.forEach(function (sub) {
       sub.items.forEach(function (it) { mapa[it.id] = it.nombre; });
     });
+    // v15.0: los tipos de documento dejaron de ser entradas del sidebar
+    // (son fichas dentro de la pantalla), pero sus rutas siguen existiendo:
+    // sin esto una miga de '#/calidad/documentos:PRO' se quedaría sin nombre.
+    mapa['documentos:PRO'] = 'Procedimientos';
+    mapa['documentos:INS'] = 'Instructivos';
+    mapa['documentos:FO'] = 'Formularios';
+    mapa['documentos:EXTERNO'] = 'Documentos externos';
+    mapa['documentos:DOC'] = 'Documentos maestros';
+    mapa['tablero'] = 'Inicio';
     return mapa;
   })();
+
 
   // --- Navegación del módulo (v12.0) ---------------------------------------
   // Antes acá vivía barraSecciones_(): una barra HORIZONTAL con las 16
@@ -16522,9 +16747,21 @@ var Iconos = (function () {
   // vuelve a validar en cada acción, esconder un botón no protege nada.
   function puedeVerSeccion_(llave) {
     if (llave === 'documentos' || llave === 'personas') return true;
+    // v15.0: Inicio es de TODOS. Antes la portada era 'tablero' y el backend
+    // la reserva a quien supervisa (seccionesVisiblesSgc_.tablero = veTodo),
+    // así que el personal operativo entraba al módulo sin ninguna pantalla de
+    // orientación: caía directo en la lista de documentos. Ahora 'inicio'
+    // existe para todos y ADENTRO decide qué mostrar: el resumen de gobierno
+    // para quien supervisa, y "lo tuyo" para el resto. No se relaja ningún
+    // permiso -- resumenTableroSgc se sigue pidiendo sólo si .tablero es true.
+    if (llave === 'inicio') return true;
     if (!seccionesVisibles_) return llave !== 'accesos';
     return seccionesVisibles_[llave] === true;
   }
+
+  // ¿Esta persona tiene la vista de gobierno del SGC (salud, alertas, hitos)?
+  // Es la misma llave que decide el endpoint del tablero.
+  function superviseSgc_() { return !!(seccionesVisibles_ && seccionesVisibles_.tablero === true); }
 
   // Contenedor del panel de contenido. Crea el layout de dos columnas la
   // primera vez y devuelve SIEMPRE el panel derecho, para que las 27 vistas
@@ -16558,10 +16795,19 @@ var Iconos = (function () {
 
   // El id del ítem activo incluye el filtro cuando la sección lo usa, para
   // que "Procedimientos" quede marcado y no "Lista maestra".
+  // Qué ítem del ÁRBOL queda marcado. Desde la v15.0 los tipos de documento
+  // no son ítems del árbol (son filtros), así que 'documentos:PRO' marca
+  // igual "Documentos": si devolviera el id con tipo, no se marcaría nada.
   function itemActivo_() {
+    return seccionActiva_;
+  }
+
+  // Qué se escribe en la URL. Acá sí viaja el tipo, para que un enlace a
+  // "#/calidad/documentos:PRO" siga abriendo los procedimientos filtrados.
+  function rutaActiva_() {
     if (seccionActiva_ === 'documentos' && filtroTipo_) return 'documentos:' + filtroTipo_;
     if (seccionActiva_ === 'reportes' && reporteAbierto_) return 'reportes:' + reporteAbierto_;
-    return seccionActiva_;
+    return itemActivo_();
   }
 
   function irASeccion_(seccion, argumento) {
@@ -16583,7 +16829,7 @@ var Iconos = (function () {
     procesoActivoId_ = null;
     // La URL sigue a la navegacion: asi el enlace se puede compartir y el
     // boton atras vuelve a la seccion anterior en vez de salir del modulo.
-    if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(itemActivo_());
+    if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(rutaActiva_());
     render_();
   }
 
@@ -16591,12 +16837,20 @@ var Iconos = (function () {
   // barra de pestañas en los 51 sitios que la pedían.
   function barraSecciones_(detalle) {
     if (!window.SigsoNav) return '';
+    // v15.0: el tipo de documento ya no es un ítem del árbol, es un filtro
+    // dentro de la pantalla. Por eso se muestra como último tramo de la miga
+    // ("Calidad / Documentos / Procedimientos") en vez de marcar una entrada
+    // de sidebar que ya no existe.
+    var extra = detalle || '';
+    if (!extra && seccionActiva_ === 'documentos' && filtroTipo_) {
+      extra = TIPO_ETIQUETA_PLURAL[filtroTipo_] || TIPO_ETIQUETA[filtroTipo_] || '';
+    }
     return SigsoNav.migas({
       modulo: 'calidad',
       moduloNombre: 'Calidad',
-      submodulos: ARQUITECTURA_SGC,
+      submodulos: arquitecturaSgc_(),
       activo: itemActivo_(),
-      detalle: detalle || ''
+      detalle: extra
     });
   }
 
@@ -16669,6 +16923,12 @@ var Iconos = (function () {
     DOC: 'Documento maestro', PRO: 'Procedimiento', INS: 'Instructivo',
     FO: 'Formulario', EXTERNO: 'Documento externo'
   };
+  // v15.0: en las fichas de filtro se lee "Procedimientos", no "Procedimiento":
+  // ahí se está eligiendo un grupo, no describiendo una pieza.
+  var TIPO_ETIQUETA_PLURAL = {
+    DOC: 'Documentos maestros', PRO: 'Procedimientos', INS: 'Instructivos',
+    FO: 'Formularios', EXTERNO: 'Normas y leyes'
+  };
   // v10.0 Fase 2 (cont.): icono por tipo, para la tarjeta del listado.
   var TIPO_ICONO_SGC = {
     DOC: 'documento', PRO: 'estado', INS: 'lista', FO: 'etiqueta', EXTERNO: 'empresa'
@@ -16683,7 +16943,7 @@ var Iconos = (function () {
   };
   var TIPOS = ['DOC', 'PRO', 'INS', 'FO', 'EXTERNO'];
 
-  var seccionActiva_ = 'tablero';
+  var seccionActiva_ = 'inicio';
   // v10.0 "Accesos SGC": mapa de secciones que la persona puede abrir. Llega
   // del backend en listarDocumentos; hasta entonces null (barraSecciones_ lo
   // maneja). Controla que pestanas se muestran.
@@ -16701,6 +16961,14 @@ var Iconos = (function () {
   var filtroTipo_ = '';
   var filtroEstado_ = '';
   var filtroBusqueda_ = '';
+  // v15.0: "sólo los que debo confirmar". Es la tarea real del personal
+  // operativo, y hasta ahora obligaba a cazar insignias en una lista
+  // alfabética. Se filtra en el cliente porque el dato (debo_acusar) ya
+  // viene en cada documento del listado: no hace falta pedir nada nuevo.
+  var filtroPendientes_ = false;
+  // ¿La ficha abierta es la única que esta persona puede ver? Entonces no
+  // hay listado al que volver y el botón "← Personal" no se dibuja.
+  var fichaSinListado_ = false;
 
   // --- listado maestro (FO-PRO-01-01) --------------------------------------
 
@@ -16728,58 +16996,68 @@ var Iconos = (function () {
 
   function pintarListado_(cont, data) {
     var docs = data.documentos || [];
-    var hayFiltros = !!(filtroTipo_ || filtroEstado_ || filtroBusqueda_);
+    // v15.0: "sólo por confirmar" se aplica acá (el dato ya viene por
+    // documento). Es un filtro más, y como tal se refleja en "Limpiar".
+    if (filtroPendientes_) docs = docs.filter(function (x) { return x.debo_acusar; });
+    var hayFiltros = !!(filtroTipo_ || filtroEstado_ || filtroBusqueda_ || filtroPendientes_);
 
-    // v10.0 Fase 1b: lo primero que ve la persona es lo que le falta
-    // confirmar. Es la unica obligacion que el SGC le impone al personal
-    // operativo, asi que va arriba y no escondida en el listado.
-    var avisoAcuse = data.pendientes_de_acuse
-      ? Componentes.alerta(
-          'Tienes ' + data.pendientes_de_acuse + ' documento(s) que debes confirmar como leídos. ' +
-          'Ábrelos y marca "Enterado".', 'aviso')
-      : '';
 
     // v10.0 Fase 2 (rediseno visual): tablero de 3 KPIs sobre lo que esta
     // persona puede ver -- no varia con los filtros de la lista de abajo
     // (viene de "resumen", calculado en el backend ANTES de aplicarlos).
+    // v15.0: la tarea pendiente deja de ser un aviso decorativo y pasa a ser
+    // un FILTRO con un botón. Antes decía "tienes 9 por confirmar" y dejaba a
+    // la persona cazando insignias entre 21 filas ordenadas por código.
     var r = data.resumen || {};
-    var kpis = '<div class="sgc-kpis-tablero">' +
-      '<div class="sgc-kpi-tablero"><span class="sgc-kpi-tablero__valor">' + (r.total || 0) + '</span>' +
-        '<span class="sgc-kpi-tablero__etiqueta">Documentos a tu alcance</span></div>' +
-      '<div class="sgc-kpi-tablero sgc-kpi-tablero--ok"><span class="sgc-kpi-tablero__valor">' + (r.vigentes || 0) + '</span>' +
-        '<span class="sgc-kpi-tablero__etiqueta">Vigentes</span></div>' +
-      (data.pendientes_de_acuse
-        ? '<div class="sgc-kpi-tablero sgc-kpi-tablero--alerta"><span class="sgc-kpi-tablero__valor">' + data.pendientes_de_acuse + '</span>' +
-            '<span class="sgc-kpi-tablero__etiqueta">Por confirmar</span></div>'
-        : '<div class="sgc-kpi-tablero sgc-kpi-tablero--ok"><span class="sgc-kpi-tablero__valor">✓</span>' +
-            '<span class="sgc-kpi-tablero__etiqueta">Al día con tus confirmaciones</span></div>') +
-      (puedeGestionar_ ? '<div class="sgc-kpi-tablero"><span class="sgc-kpi-tablero__valor">' + (r.obsoletos || 0) + '</span>' +
-        '<span class="sgc-kpi-tablero__etiqueta">Obsoletos (archivo)</span></div>' : '') +
-    '</div>';
+    var kpis = '';
+    if (data.pendientes_de_acuse) {
+      kpis = '<div class="sgc-tarea-barra' + (filtroPendientes_ ? ' sgc-tarea-barra--activa' : '') + '">' +
+        '<div class="sgc-tarea-barra__texto">' +
+          '<b>' + data.pendientes_de_acuse + ' documento(s) esperan tu confirmación.</b> ' +
+          'Ábrelos y marca «Enterado».' +
+        '</div>' +
+        Componentes.boton({
+          texto: filtroPendientes_ ? 'Ver todos los documentos' : 'Ver sólo esos',
+          variante: 'secundario', clase: 'js-sgc-solo-pendientes'
+        }) +
+      '</div>';
+    }
 
-    var cabecera = barraSecciones_() + kpis + '<div class="sgc-cabecera">' +
-      '<p class="sigso-ayuda">Listado maestro: los documentos vigentes del SGC que te corresponden. ' +
-        'Tu rol: <b>' + Componentes.escaparHtml(ROL_SGC_ETIQUETA[data.rol_sgc] || data.rol_sgc) + '</b>.</p>' +
+    // v15.0: los tipos pasan del <select> (jerga ISO escondida en un menú) a
+    // fichas visibles. Responde de un vistazo "¿dónde están los
+    // procedimientos?", que era una de las preguntas que nadie podía contestar.
+    var fichas = [{ valor: '', texto: 'Todos' }].concat(TIPOS.map(function (t) {
+      return { valor: t, texto: TIPO_ETIQUETA_PLURAL[t] || TIPO_ETIQUETA[t] };
+    })).map(function (f) {
+      var activo = (filtroTipo_ || '') === f.valor;
+      // aria-pressed (no aria-current): son filtros que se activan y
+      // desactivan, no la página en la que estás.
+      return '<button type="button" class="sgc-chip' + (activo ? ' sgc-chip--activo' : '') +
+        ' js-sgc-chip-tipo" data-tipo="' + f.valor + '" aria-pressed="' + (activo ? 'true' : 'false') + '">' +
+        Componentes.escaparHtml(f.texto) + '</button>';
+    }).join('');
+
+    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
+      '<p class="sigso-ayuda">Los documentos del SGC que te corresponden' +
+        (data.rol_sgc ? ' según tu rol (<b>' + Componentes.escaparHtml(ROL_SGC_ETIQUETA[data.rol_sgc] || data.rol_sgc) + '</b>)' : '') +
+        '.</p>' +
       (puedeGestionar_ ? Componentes.boton({ texto: '+ Cargar documento', clase: 'js-sgc-nuevo' }) : '') +
       // v11.0 Fase 5: el listado de documentos externos (§7.5.3.2) se ofrece
       // mientras no haya ninguno identificado. Despues estorba.
       (puedeGestionar_ && !(data.documentos || []).some(function (x) { return x.tipo === 'EXTERNO'; })
         ? Componentes.boton({ texto: 'Cargar normas y leyes aplicables', variante: 'secundario', clase: 'js-sgc-externos' })
         : '') +
-      '</div>' + avisoAcuse +
+      '</div>' + kpis +
+      '<div class="sgc-chips" role="group" aria-label="Filtrar por tipo de documento">' + fichas + '</div>' +
       '<div class="sgc-filtros">' +
-        Componentes.campoTexto({ id: 'sgc-f-busqueda', label: false, valor: filtroBusqueda_, placeholder: 'Buscar por código o nombre...' }) +
-        Componentes.campoSelect({
-          id: 'sgc-f-tipo', label: false, valor: filtroTipo_, placeholder: 'Todos los tipos',
-          opciones: TIPOS.map(function (t) { return { valor: t, texto: TIPO_ETIQUETA[t] }; })
-        }) +
+        Componentes.campoTexto({ id: 'sgc-f-busqueda', label: false, valor: filtroBusqueda_, placeholder: 'Buscar: nombre, código o palabra clave...' }) +
         (puedeGestionar_
           ? Componentes.campoSelect({
               id: 'sgc-f-estado', label: false, valor: filtroEstado_, placeholder: 'Vigentes y obsoletos',
               opciones: [{ valor: 'VIGENTE', texto: 'Solo vigentes' }, { valor: 'OBSOLETO', texto: 'Solo obsoletos' }]
             })
           : '') +
-        (hayFiltros ? Componentes.boton({ texto: 'Limpiar', variante: 'sutil', clase: 'js-sgc-limpiar', tipo: 'button' }) : '') +
+        (hayFiltros ? Componentes.boton({ texto: 'Limpiar filtros', variante: 'sutil', clase: 'js-sgc-limpiar', tipo: 'button' }) : '') +
       '</div>';
 
     function wire() {
@@ -16816,13 +17094,25 @@ var Iconos = (function () {
           if (ev.key === 'Enter') { ev.preventDefault(); filtroBusqueda_ = this.value; cargarListado_(); }
         });
       }
-      var tipo = cont.querySelector('#sgc-f-tipo');
-      if (tipo) tipo.addEventListener('change', function () { filtroTipo_ = this.value; cargarListado_(); });
+      cont.querySelectorAll('.js-sgc-chip-tipo').forEach(function (b) {
+        b.addEventListener('click', function () {
+          filtroTipo_ = b.getAttribute('data-tipo') || '';
+          // El tipo se refleja en la ruta (documentos:PRO), que es como se
+          // compartía antes desde el sidebar: los enlaces siguen sirviendo.
+          if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(rutaActiva_());
+          cargarListado_();
+        });
+      });
+      var soloPend = cont.querySelector('.js-sgc-solo-pendientes');
+      if (soloPend) soloPend.addEventListener('click', function () {
+        filtroPendientes_ = !filtroPendientes_;
+        cargarListado_();
+      });
       var estado = cont.querySelector('#sgc-f-estado');
       if (estado) estado.addEventListener('change', function () { filtroEstado_ = this.value; cargarListado_(); });
       var limpiar = cont.querySelector('.js-sgc-limpiar');
       if (limpiar) limpiar.addEventListener('click', function () {
-        filtroTipo_ = ''; filtroEstado_ = ''; filtroBusqueda_ = '';
+        filtroTipo_ = ''; filtroEstado_ = ''; filtroBusqueda_ = ''; filtroPendientes_ = false;
         cargarListado_();
       });
       cont.querySelectorAll('.js-sgc-abrir').forEach(function (btn) {
@@ -16831,12 +17121,31 @@ var Iconos = (function () {
     }
 
     if (docs.length === 0) {
-      cont.innerHTML = cabecera + Componentes.vacio(hayFiltros
-        ? { texto: 'Ningún documento coincide con estos filtros.' }
-        : { texto: 'Todavía no hay documentos disponibles para ti.', detalle: puedeGestionar_ ? 'Carga el primero para empezar.' : 'El Encargado SGC los irá publicando.' });
+      var vacio;
+      if (filtroPendientes_) {
+        // No es "no hay resultados": es una buena noticia. Decirlo importa.
+        vacio = { texto: 'No te queda ningún documento por confirmar.',
+          detalle: 'Usa «Ver todos los documentos» para volver al listado completo.' };
+      } else if (hayFiltros) {
+        vacio = { texto: 'Ningún documento coincide con lo que buscas.',
+          detalle: 'Prueba con otra palabra, o usa «Limpiar filtros» para ver todos.' };
+      } else {
+        vacio = { texto: 'Todavía no hay documentos disponibles para ti.',
+          detalle: puedeGestionar_ ? 'Carga el primero para empezar.' : 'El Encargado SGC los irá publicando.' };
+      }
+      cont.innerHTML = cabecera + Componentes.vacio(vacio);
       wire();
       return;
     }
+
+    // v15.0: lo que la persona TIENE QUE HACER va arriba. Antes la lista salía
+    // ordenada por código (DOC-01, FO-..., INS-..., PRO-...), que es el orden
+    // del archivador, no el de la tarea: los 9 pendientes quedaban repartidos
+    // entre 21 filas y había que cazarlos por la insignia.
+    docs = docs.slice().sort(function (a, b) {
+      if (!!a.debo_acusar !== !!b.debo_acusar) return a.debo_acusar ? -1 : 1;
+      return String(a.codigo || '').localeCompare(String(b.codigo || ''));
+    });
 
     var filas = docs.map(function (d) {
       var obsoleto = d.estado === 'OBSOLETO';
@@ -16849,7 +17158,13 @@ var Iconos = (function () {
           '<span class="sgc-doc__top">' +
             '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(d.codigo) + '</span>' +
             '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(d.nombre) + '</span>' +
-            Componentes.badge('v' === String(d.version_vigente).charAt(0) ? d.version_vigente : ('v' + d.version_vigente), 'neutro') +
+            // v15.0: un documento EXTERNO (una ley, una norma) no tiene
+            // versión propia -- la organización no la controla. Antes se
+            // pintaba igual la insignia y quedaba una "v" suelta sin número.
+            (String(d.version_vigente || '').trim()
+              ? Componentes.badge('v' === String(d.version_vigente).charAt(0)
+                  ? d.version_vigente : ('v' + d.version_vigente), 'neutro')
+              : '') +
             (obsoleto ? Componentes.badge('Obsoleto', 'critico') : '') +
             (d.debo_acusar ? Componentes.badge('Debes confirmar', 'alerta') : '') +
             (d.revision_vencida && !obsoleto ? Componentes.badge('Revisión vencida', 'alerta') : '') +
@@ -16857,7 +17172,12 @@ var Iconos = (function () {
           '<span class="sgc-doc__meta">' +
             '<span>' + Componentes.escaparHtml(TIPO_ETIQUETA[d.tipo] || d.tipo) + '</span>' +
             (d.fecha_vigencia ? '<span>Vigente desde ' + fechaCorta_(d.fecha_vigencia) + '</span>' : '') +
-            (d.proxima_revision ? '<span>Revisar ' + fechaCorta_(d.proxima_revision) + '</span>' : '') +
+            // v15.0: la fecha de próxima revisión es un control de GESTIÓN
+            // (a quién le toca revisar el documento y cuándo). A quien sólo
+            // consulta le aparecía como "Revisar 24/08/2027", que se lee como
+            // una instrucción dirigida a él. Se muestra sólo a quien gestiona.
+            (puedeGestionar_ && d.proxima_revision
+              ? '<span>Revisar ' + fechaCorta_(d.proxima_revision) + '</span>' : '') +
             (puedeGestionar_ ? '<span>' + Componentes.escaparHtml(VISIBILIDAD_ETIQUETA[d.visibilidad] || d.visibilidad) + '</span>' : '') +
           '</span>' +
         '</span>' +
@@ -16923,7 +17243,8 @@ var Iconos = (function () {
       campoFicha_('Tipo', TIPO_ETIQUETA[d.tipo] || d.tipo) +
       campoFicha_('Versión vigente', d.version_vigente) +
       campoFicha_('Vigente desde', fechaCorta_(d.fecha_vigencia)) +
-      campoFicha_('Próxima revisión', fechaCorta_(d.proxima_revision)) +
+      // v15.0: control de gestión, no dato de lectura (ver la fila del listado).
+      (puedeGestionar_ ? campoFicha_('Próxima revisión', fechaCorta_(d.proxima_revision)) : '') +
       (d.area_id ? campoFicha_('Área', d.area_id) : '') +
       (puedeGestionar_ ? campoFicha_('Visibilidad', VISIBILIDAD_ETIQUETA[d.visibilidad] || d.visibilidad) : '') +
       (d.elaborado_por ? campoFicha_('Elaborado por', d.elaborado_por) : '') +
@@ -16939,11 +17260,20 @@ var Iconos = (function () {
       var cat = (data.catalogo_clausulas || []).filter(function (x) { return x.codigo === c; })[0];
       return cat ? cat.codigo + ' — ' + cat.titulo : c;
     });
-    var bloqueClausulas = '<h3 class="sgc-sub">Cláusulas ISO que sustenta</h3>' +
-      (clausulasTexto.length
-        ? '<ul class="sgc-porques">' + clausulasTexto.map(function (t) { return '<li>' + Componentes.escaparHtml(t) + '</li>'; }).join('') + '</ul>'
-        : Componentes.vacio({ texto: 'No está etiquetado con ninguna cláusula.', detalle: 'Si este documento es evidencia de una cláusula (por ejemplo, la política de calidad), etiquétalo para que aparezca en la Matriz de cobertura ISO.' })) +
-      (puedeGestionar_ ? Componentes.boton({ texto: 'Etiquetar cláusulas', variante: 'sutil', clase: 'js-sgc-doc-clausulas' }) : '');
+    // v15.0: este bloque es trabajo del Encargado (etiquetar evidencia para la
+    // matriz de cobertura). A quien sólo consulta le aparecía un "No está
+    // etiquetado con ninguna cláusula" con instrucciones para etiquetarlo --
+    // una tarea que no puede hacer, sobre un concepto de la norma que no
+    // necesita conocer. Si no gestiona y el documento no tiene etiquetas, el
+    // bloque no existe; si las tiene, se muestran como referencia sin pedir nada.
+    var bloqueClausulas = '';
+    if (puedeGestionar_ || clausulasTexto.length) {
+      bloqueClausulas = '<h3 class="sgc-sub">Cláusulas ISO que sustenta</h3>' +
+        (clausulasTexto.length
+          ? '<ul class="sgc-porques">' + clausulasTexto.map(function (t) { return '<li>' + Componentes.escaparHtml(t) + '</li>'; }).join('') + '</ul>'
+          : Componentes.vacio({ texto: 'No está etiquetado con ninguna cláusula.', detalle: 'Si este documento es evidencia de una cláusula (por ejemplo, la política de calidad), etiquétalo para que aparezca en la Matriz de cobertura ISO.' })) +
+        (puedeGestionar_ ? Componentes.boton({ texto: 'Etiquetar cláusulas', variante: 'sutil', clase: 'js-sgc-doc-clausulas' }) : '');
+    }
 
     var versiones = (data.versiones || []).length
       ? '<h3 class="sgc-sub">Historial de versiones</h3>' +
@@ -16965,7 +17295,7 @@ var Iconos = (function () {
 
     cont.innerHTML =
       '<div class="sgc-detalle-cab">' +
-        Componentes.boton({ texto: '← Listado', variante: 'sutil', clase: 'js-sgc-volver' }) +
+        Componentes.boton({ texto: '← Documentos', variante: 'sutil', clase: 'js-sgc-volver' }) +
         '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(d.codigo) + '</span>' +
         '<h1>' + Componentes.escaparHtml(d.nombre) + '</h1>' +
         (obsoleto ? Componentes.badge('Obsoleto', 'critico') : '') +
@@ -17500,10 +17830,16 @@ var Iconos = (function () {
     // El personal operativo solo se ve a sí mismo: mostrarle un "listado"
     // de una fila es ruido. Se entra directo a su ficha.
     if (!puedeGestionar_ && personas.length === 1) {
+      // v15.0: y en ese caso NO hay listado al que volver. Antes se dibujaba
+      // igual el botón "← Personal": al pulsarlo se recargaba el listado de
+      // una fila, que volvía a redirigir a esta misma ficha. Un control
+      // visible que no lleva a ninguna parte -- se oculta.
+      fichaSinListado_ = true;
       personaActivaId_ = personas[0].persona_id;
       abrirPersona_(personas[0].persona_id);
       return;
     }
+    fichaSinListado_ = false;
 
     var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
       '<p class="sigso-ayuda">Personal en alcance del SGC: su ficha, descriptor de cargo, documentos e inducción.</p>' +
@@ -17664,7 +18000,9 @@ var Iconos = (function () {
 
     cont.innerHTML =
       '<div class="sgc-detalle-cab">' +
-        Componentes.boton({ texto: '← Personal', variante: 'sutil', clase: 'js-sgc-volver-personas' }) +
+        (fichaSinListado_
+          ? ''
+          : Componentes.boton({ texto: '← Personal', variante: 'sutil', clase: 'js-sgc-volver-personas' })) +
         '<h1>' + Componentes.escaparHtml(p.nombre) + '</h1>' +
         Componentes.badge(TIPO_PERSONA_ETIQUETA[p.tipo] || p.tipo, 'neutro') +
         (baja ? Componentes.badge('Desvinculado', 'critico') : '') +
@@ -17680,7 +18018,8 @@ var Iconos = (function () {
       '<div class="sigso-tabs">' + tabs + '</div>' +
       '<div class="sgc-cuerpo">' + cuerpo + '</div>';
 
-    cont.querySelector('.js-sgc-volver-personas').addEventListener('click', cargarPersonas_);
+    var volverPersonas = cont.querySelector('.js-sgc-volver-personas');
+    if (volverPersonas) volverPersonas.addEventListener('click', cargarPersonas_);
     cont.querySelectorAll('.js-sgc-ficha-tab').forEach(function (btn) {
       btn.addEventListener('click', function () {
         pestanaFicha_ = btn.getAttribute('data-tab');
@@ -21897,38 +22236,248 @@ var Iconos = (function () {
   var SEV_TONO = { CRITICA: 'critico', ALTA: 'alerta', MEDIA: 'info' };
   var SEV_ETIQUETA = { CRITICA: 'Crítico', ALTA: 'Requiere atención', MEDIA: 'Próximo' };
 
-  function cargarTablero_() {
+  // ==========================================================================
+  // v15.0 — INICIO ADAPTATIVO
+  //
+  // Antes esta portada era SÓLO de gobierno: quien no supervisaba el SGC no
+  // tenía inicio y el módulo lo dejaba caer en la lista de documentos, sin
+  // saludo, sin saber qué tenía pendiente ni por dónde empezar. Era el
+  // origen real del "me pierdo": la mayoría de las personas entraba a un
+  // archivador ordenado por código ISO.
+  //
+  // Ahora Inicio existe para todos y tiene dos caras, decididas por el mismo
+  // permiso de siempre (secciones_visibles.tablero):
+  //   - GOBIERNO  (Encargado / Dirección / Gerencia): qué requiere atención,
+  //     qué viene, cómo está el sistema, y recién al final el avance ISO.
+  //   - PERSONAL  (operativo y jefatura): qué tengo que hacer, buscar un
+  //     documento, accesos rápidos y mi ficha.
+  // Ninguna de las dos inventa datos: ambas se arman con endpoints que ya
+  // existían (resumenTableroSgc / listarDocumentosSgc + listarPersonasSgc).
+  // ==========================================================================
+
+  function cargarInicio_() {
     var cont = panelSgc_();
     if (!cont) return;
-    cont.innerHTML = Componentes.cargando('Calculando el estado del SGC...');
+    var cache = cacheListadoSgc_.inicio;
+    if (cache) pintarInicio_(cont, cache);
+    else cont.innerHTML = Componentes.cargando('Preparando tu inicio...');
+
+    // Si ya sabemos que no supervisa, no se pide el resumen de gobierno:
+    // devolvería "sin acceso" y sería un viaje perdido en cada entrada.
+    if (seccionesVisibles_ && !superviseSgc_()) { cargarInicioPersonal_(cont, !!cache); return; }
+
     api_('resumenTableroSgc', {}).then(function (respuesta) {
-      if (!respuesta || !respuesta.ok) {
-        // Quien no gobierna el SGC no tiene portada: se le lleva a Documentos,
-        // que es lo que sí le corresponde.
-        seccionActiva_ = 'documentos';
-        cargarListado_();
-        return;
-      }
+      if (seccionActiva_ !== 'inicio') return;
+      if (!respuesta || !respuesta.ok) { cargarInicioPersonal_(cont, !!cache); return; }
       if (respuesta.data.secciones_visibles) seccionesVisibles_ = respuesta.data.secciones_visibles;
-      pintarTablero_(cont, respuesta.data);
+      var datos = { modo: 'gobierno', gob: respuesta.data };
+      cacheListadoSgc_.inicio = datos;
+      pintarInicio_(cont, datos);
     }).catch(function () {
-      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
+      if (cache || seccionActiva_ !== 'inicio') return;
+      cont.innerHTML = barraSecciones_() +
+        Componentes.alerta('No se pudo conectar para preparar tu inicio. Revisa tu conexión y vuelve a intentarlo.', 'error');
       wireSecciones_(cont);
     });
+  }
+
+  // "Lo tuyo": se arma con los dos listados que esta persona SÍ puede pedir.
+  function cargarInicioPersonal_(cont, hayCache) {
+    Promise.all([
+      api_('listarDocumentosSgc', {}),
+      api_('listarPersonasSgc', {}).catch(function () { return null; })
+    ]).then(function (res) {
+      if (seccionActiva_ !== 'inicio') return;
+      var docs = res[0];
+      if (!docs || !docs.ok) {
+        if (hayCache) return;
+        cont.innerHTML = barraSecciones_() +
+          Componentes.alerta((docs && docs.message) || 'No se pudo preparar tu inicio.', 'error');
+        wireSecciones_(cont);
+        return;
+      }
+      if (docs.data.secciones_visibles) seccionesVisibles_ = docs.data.secciones_visibles;
+      var personas = (res[1] && res[1].ok && res[1].data) ? res[1].data : null;
+      var datos = { modo: 'personal', docs: docs.data, personas: personas };
+      cacheListadoSgc_.inicio = datos;
+      pintarInicio_(cont, datos);
+    }).catch(function () {
+      if (hayCache || seccionActiva_ !== 'inicio') return;
+      cont.innerHTML = barraSecciones_() +
+        Componentes.alerta('No se pudo conectar para preparar tu inicio.', 'error');
+      wireSecciones_(cont);
+    });
+  }
+
+  function pintarInicio_(cont, datos) {
+    if (datos.modo === 'gobierno') pintarTablero_(cont, datos.gob);
+    else pintarInicioPersonal_(cont, datos);
+  }
+
+  // Cuántos ítems de la lista de tareas se muestran antes de "ver todos".
+  var MAX_PENDIENTES_INICIO = 4;
+
+  function pintarInicioPersonal_(cont, datos) {
+    var d = datos.docs || {};
+    var docs = d.documentos || [];
+    var pendientes = docs.filter(function (x) { return x.debo_acusar; });
+    var mia = (datos.personas && (datos.personas.personas || [])[0]) || null;
+    var nombre = (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || (mia && mia.nombre) || '';
+    var rol = ROL_SGC_ETIQUETA[d.rol_sgc] || d.rol_sgc || '';
+
+    // --- 1. Lo que hay que hacer -------------------------------------------
+    // Va PRIMERO y es lo único con peso visual de nivel 1: es la única
+    // acción real que el personal operativo tiene en el módulo.
+    var tarea;
+    if (pendientes.length) {
+      var visibles = pendientes.slice(0, MAX_PENDIENTES_INICIO);
+      tarea = '<section class="sgc-ini-tarea">' +
+        '<div class="sgc-ini-tarea__cab">' +
+          '<h2 class="sgc-ini-tarea__titulo">' +
+            (pendientes.length === 1
+              ? 'Tienes 1 documento por confirmar'
+              : 'Tienes ' + pendientes.length + ' documentos por confirmar') +
+          '</h2>' +
+          '<p class="sgc-ini-tarea__ayuda">Ábrelo, léelo y marca <b>Enterado</b>. Así queda registro de que lo conoces.</p>' +
+        '</div>' +
+        '<ul class="sgc-ini-lista" role="list">' + visibles.map(function (x) {
+          var vence = x.dias_para_acuse;
+          var plazo = (vence === null || vence === undefined) ? ''
+            : (vence < 0 ? '<span class="sgc-ini-plazo sgc-ini-plazo--vencido">Plazo vencido</span>'
+              : (vence <= 7 ? '<span class="sgc-ini-plazo">Quedan ' + vence + ' día(s)</span>' : ''));
+          return '<li class="sgc-ini-fila">' +
+            '<div class="sgc-ini-fila__texto">' +
+              '<span class="sgc-ini-fila__nombre">' + Componentes.escaparHtml(x.nombre) + '</span>' +
+              '<span class="sgc-ini-fila__meta">' +
+                Componentes.escaparHtml(TIPO_ETIQUETA[x.tipo] || x.tipo) +
+                ' · ' + Componentes.escaparHtml(x.codigo) + plazo +
+              '</span>' +
+            '</div>' +
+            Componentes.boton({ texto: 'Abrir y confirmar', variante: 'secundario',
+              clase: 'js-ini-doc', idx: x.documento_id }) +
+          '</li>';
+        }).join('') + '</ul>' +
+        (pendientes.length > visibles.length
+          ? '<div class="sgc-ini-tarea__pie">' +
+              Componentes.boton({ texto: 'Ver los ' + pendientes.length + ' pendientes',
+                variante: 'sutil', clase: 'js-ini-pendientes' }) +
+            '</div>'
+          : '') +
+      '</section>';
+    } else {
+      tarea = '<section class="sgc-ini-tarea sgc-ini-tarea--ok">' +
+        '<h2 class="sgc-ini-tarea__titulo">Estás al día</h2>' +
+        '<p class="sgc-ini-tarea__ayuda">No tienes documentos pendientes de confirmar. ' +
+          'Si se publica uno nuevo que te corresponda, aparecerá acá.</p>' +
+      '</section>';
+    }
+
+    // --- 2. Encontrar un documento -----------------------------------------
+    var atajos = [
+      { tipo: 'PRO', texto: 'Procedimientos' },
+      { tipo: 'INS', texto: 'Instructivos' },
+      { tipo: 'FO', texto: 'Formularios' },
+      { tipo: '', texto: 'Ver todos' }
+    ].map(function (a) {
+      return '<button type="button" class="sgc-chip js-ini-tipo" data-tipo="' + a.tipo + '">' +
+        Componentes.escaparHtml(a.texto) + '</button>';
+    }).join('');
+
+    var buscar = '<section class="sgc-ini-bloque">' +
+      '<h3 class="sgc-ini-bloque__titulo">¿Qué documento necesitas?</h3>' +
+      '<form class="sgc-ini-buscar" id="form-ini-buscar" role="search">' +
+        '<label class="sigso-oculto-visual" for="ini-q">Buscar un documento</label>' +
+        '<input type="search" id="ini-q" name="q" placeholder="Escribe una palabra: vacaciones, auditoría, reclamo...">' +
+        Componentes.boton({ texto: 'Buscar', tipo: 'submit' }) +
+      '</form>' +
+      '<div class="sgc-ini-chips">' + atajos + '</div>' +
+      '<p class="sigso-ayuda">Tienes ' + docs.length + ' documento(s) disponibles.</p>' +
+    '</section>';
+
+    // --- 3. Mi ficha (información, no tarea) --------------------------------
+    // La inducción se muestra como ESTADO: quien la marca es la jefatura o el
+    // Encargado (Personas.registrarInduccion), no la propia persona. Ponerle
+    // un botón acá sería prometer una acción que el backend va a rechazar.
+    var ficha = '';
+    if (mia) {
+      var indTotal = mia.induccion_total || 0;
+      var indHechas = mia.induccion_completadas || 0;
+      ficha = '<section class="sgc-ini-bloque">' +
+        '<h3 class="sgc-ini-bloque__titulo">Tu ficha</h3>' +
+        '<div class="sgc-ini-ficha">' +
+          '<div class="sgc-ini-ficha__datos">' +
+            '<span class="sgc-ini-ficha__nombre">' + Componentes.escaparHtml(mia.nombre) + '</span>' +
+            '<span class="sgc-ini-ficha__meta">' +
+              Componentes.escaparHtml(mia.cargo || 'Sin cargo registrado') +
+              (mia.area_id ? ' · ' + Componentes.escaparHtml(mia.area_id) : '') +
+            '</span>' +
+            (indTotal
+              ? '<span class="sgc-ini-ficha__meta">Inducción: ' + indHechas + ' de ' + indTotal +
+                (indHechas >= indTotal ? ' — completa' : ' — la registra tu jefatura') + '</span>'
+              : '') +
+          '</div>' +
+          Componentes.boton({ texto: 'Ver mi ficha', variante: 'sutil', clase: 'js-ini-ficha' }) +
+        '</div>' +
+      '</section>';
+    }
+
+    var saludo = '<div class="sgc-ini-cab">' +
+      '<h1 class="sgc-ini-cab__titulo">' +
+        (nombre ? 'Hola, ' + Componentes.escaparHtml(nombre) : 'Tus documentos y pendientes') + '</h1>' +
+      '<p class="sgc-ini-cab__sub">Acá tienes lo tuyo del Sistema de Gestión de Calidad' +
+        (rol ? ' · ' + Componentes.escaparHtml(rol) : '') + '.</p>' +
+    '</div>';
+
+    cont.innerHTML = barraSecciones_() +
+      '<div class="sgc-ini">' + saludo + tarea + buscar + ficha + '</div>';
+    wireSecciones_(cont);
+
+    cont.querySelectorAll('.js-ini-doc').forEach(function (b) {
+      b.addEventListener('click', function () {
+        seccionActiva_ = 'documentos';
+        abrirDocumento_(b.getAttribute('data-idx'));
+      });
+    });
+    var verPend = cont.querySelector('.js-ini-pendientes');
+    if (verPend) verPend.addEventListener('click', function () {
+      filtroPendientes_ = true; filtroTipo_ = ''; filtroBusqueda_ = '';
+      irASeccion_('documentos', '');
+    });
+    cont.querySelectorAll('.js-ini-tipo').forEach(function (b) {
+      b.addEventListener('click', function () {
+        filtroPendientes_ = false; filtroBusqueda_ = '';
+        irASeccion_('documentos', b.getAttribute('data-tipo') || '');
+      });
+    });
+    var formBuscar = cont.querySelector('#form-ini-buscar');
+    if (formBuscar) formBuscar.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      filtroPendientes_ = false; filtroTipo_ = '';
+      filtroBusqueda_ = (cont.querySelector('#ini-q') || {}).value || '';
+      irASeccion_('documentos', '');
+    });
+    var verFicha = cont.querySelector('.js-ini-ficha');
+    if (verFicha) verFicha.addEventListener('click', function () { irASeccion_('personas', ''); });
   }
 
   function pintarTablero_(cont, data) {
     var s = data.salud || {};
     var c = data.conteos || {};
 
-    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
-      (data.alcance
-        ? '<p class="sigso-ayuda">' + Componentes.escaparHtml(data.alcance.razon_social) +
-          (data.alcance.nombre_fantasia ? ' (' + Componentes.escaparHtml(data.alcance.nombre_fantasia) + ')' : '') +
-          ' — ' + Componentes.escaparHtml(data.alcance.norma) +
-          ', alcance v' + Componentes.escaparHtml(data.alcance.version) + '.</p>'
-        : '<p class="sigso-ayuda">El alcance del SGC todavía no está declarado.</p>') +
-      '</div>';
+    // v15.0: mismo encabezado que la portada del personal, para que las dos
+    // caras de Inicio se sientan la misma pantalla: saludo + una línea de
+    // contexto. Acá el contexto es a qué organización pertenece este SGC.
+    var cabecera = barraSecciones_() + '<div class="sgc-ini-cab">' +
+      '<h1 class="sgc-ini-cab__titulo">Estado del sistema</h1>' +
+      '<p class="sgc-ini-cab__sub">' +
+        (data.alcance
+          ? Componentes.escaparHtml(data.alcance.razon_social) +
+            (data.alcance.nombre_fantasia ? ' (' + Componentes.escaparHtml(data.alcance.nombre_fantasia) + ')' : '') +
+            ' — ' + Componentes.escaparHtml(data.alcance.norma) +
+            ', alcance v' + Componentes.escaparHtml(data.alcance.version) + '.'
+          : 'El alcance del SGC todavía no está declarado.') +
+      '</p>' +
+    '</div>';
 
     // --- salud -----------------------------------------------------------
     var barras = (s.capitulos || []).map(function (cap) {
@@ -21947,34 +22496,69 @@ var Iconos = (function () {
       '</div>';
     }).join('');
 
-    var salud = '<div class="sgc-salud">' +
-      '<div class="sgc-salud__global">' +
-        '<span class="sgc-salud__pct">' + (s.pct || 0) + '%</span>' +
-        '<span class="sgc-salud__etiqueta">sobre ' + (s.aplicables || 0) + ' cláusulas aplicables' +
-          (s.no_aplica ? ' (' + s.no_aplica + ' excluida(s))' : '') + '</span>' +
+    // v15.0: el avance ISO baja al final y se pliega.
+    //
+    // Antes era lo PRIMERO y lo más grande de la portada: un "27%" gigante
+    // sobre siete barras por capítulo de la norma. Dos problemas: (a) un
+    // número que necesita un párrafo de descargo para no leerse como "vamos
+    // 27% certificados" está mal presentado, no mal explicado; y (b) las
+    // barras son el índice de la ISO, útil para el Encargado en una revisión,
+    // inútil para decidir qué hacer hoy. Ahora se llama por lo que es
+    // -- avance interno de implementación -- y se abre sólo si lo buscas.
+    var salud = '<details class="sgc-avance">' +
+      '<summary class="sgc-avance__cab">' +
+        '<span class="sgc-avance__titulo">Avance interno de implementación</span>' +
+        '<span class="sgc-avance__cifra">' + (s.pct || 0) + '%</span>' +
+        '<span class="sgc-avance__detalle">' + (s.aplicables || 0) + ' requisitos en alcance' +
+          (s.no_aplica ? ' · ' + s.no_aplica + ' excluido(s)' : '') + '</span>' +
+      '</summary>' +
+      '<div class="sgc-avance__cuerpo">' +
+        '<p class="sigso-ayuda">Mide cuánta evidencia hay cargada en SIGSO. ' +
+          '<b>No es un porcentaje de certificación</b>: quien certifica es la casa ' +
+          'certificadora, y lo hace con hallazgos.</p>' +
+        '<div class="sgc-salud__capitulos">' + barras + '</div>' +
+        (s.aviso ? '<p class="sigso-ayuda">' + Componentes.escaparHtml(s.aviso) + '</p>' : '') +
       '</div>' +
-      '<div class="sgc-salud__capitulos">' + barras + '</div>' +
-      '</div>' +
-      Componentes.alerta(s.aviso || '', 'aviso');
+    '</details>';
 
-    // --- alertas ----------------------------------------------------------
+    // --- lo que requiere atención -------------------------------------------
+    // v15.0: pasa a ser lo PRIMERO de la portada (antes iba debajo del bloque
+    // de avance ISO). Es lo único accionable de esta pantalla, así que es lo
+    // único que merece el peso visual de nivel 1. Las alertas ya vienen del
+    // backend con severidad y sección de destino: acá sólo se ordenan de más
+    // grave a menos, y se dice hacia dónde lleva cada una.
+    var ORDEN_SEV = { CRITICA: 0, ALTA: 1, MEDIA: 2 };
+    var listaAlertas = (data.alertas || []).slice().sort(function (a, b) {
+      return (ORDEN_SEV[a.severidad] === undefined ? 9 : ORDEN_SEV[a.severidad]) -
+             (ORDEN_SEV[b.severidad] === undefined ? 9 : ORDEN_SEV[b.severidad]);
+    });
     var alertas = '';
-    if (!(data.alertas || []).length) {
-      alertas = '<h4 class="sgc-sub">Alertas y pendientes</h4>' +
-        Componentes.alerta('No hay nada vencido ni por vencer. El SGC está al día.', 'exito');
+    if (!listaAlertas.length) {
+      alertas = '<section class="sgc-ini-tarea sgc-ini-tarea--ok">' +
+        '<h2 class="sgc-ini-tarea__titulo">El sistema está al día</h2>' +
+        '<p class="sgc-ini-tarea__ayuda">No hay nada vencido ni por vencer. ' +
+          'Cuando algo requiera atención aparecerá acá primero.</p>' +
+      '</section>';
     } else {
-      alertas = '<h4 class="sgc-sub">Alertas y pendientes (' + data.alertas.length + ')</h4>' +
-        '<div class="sgc-lista">' + data.alertas.map(function (a) {
-          return '<button type="button" class="sgc-doc js-tab-ir" data-seccion="' +
-            Componentes.escaparHtml(a.seccion) + '">' +
-            '<div class="sgc-doc__linea">' +
-              '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(a.titulo) + '</span>' +
-              Componentes.badge(String(a.total), SEV_TONO[a.severidad] || 'neutro') +
-              Componentes.badge(SEV_ETIQUETA[a.severidad] || a.severidad, SEV_TONO[a.severidad] || 'neutro') +
+      alertas = '<section class="sgc-atencion">' +
+        '<h2 class="sgc-atencion__titulo">Requiere tu atención' +
+          '<span class="sgc-atencion__cuenta">' + listaAlertas.length + '</span></h2>' +
+        '<ul class="sgc-ini-lista" role="list">' + listaAlertas.map(function (a) {
+          var tono = SEV_TONO[a.severidad] || 'neutro';
+          return '<li class="sgc-ini-fila sgc-ini-fila--' + tono + '">' +
+            '<div class="sgc-ini-fila__texto">' +
+              '<span class="sgc-ini-fila__nombre">' +
+                Componentes.escaparHtml(a.titulo) +
+                Componentes.badge(String(a.total), tono) +
+                Componentes.badge(SEV_ETIQUETA[a.severidad] || a.severidad, tono) +
+              '</span>' +
+              '<span class="sgc-ini-fila__meta">' + Componentes.escaparHtml(a.detalle) + '</span>' +
             '</div>' +
-            '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(a.detalle) + '</span>' +
-          '</button>';
-        }).join('') + '</div>';
+            Componentes.boton({ texto: 'Revisar', variante: 'secundario',
+              clase: 'js-tab-ir', idx: a.seccion }) +
+          '</li>';
+        }).join('') + '</ul>' +
+      '</section>';
     }
 
     // --- hitos -------------------------------------------------------------
@@ -21996,26 +22580,35 @@ var Iconos = (function () {
     }
 
     // --- conteos -----------------------------------------------------------
-    var conteos = '<h4 class="sgc-sub">El sistema en números</h4><div class="sgc-kpis">' + [
+    // v15.0: "El sistema en números" pasa a ser una tira compacta al final.
+    // Son inventario (cuántas cosas hay), no decisiones: informan el tamaño
+    // del sistema, no qué hacer hoy. Se quita el "14 + 40" de Procesos, que
+    // nadie podía interpretar sin pasar el mouse por encima.
+    // Se quitan "NC abiertas" y "Quejas abiertas": ya aparecen arriba, en
+    // "Requiere tu atención", donde además llevan a resolverlas. Repetirlas
+    // acá como número suelto no agregaba una decisión, agregaba ruido.
+    var conteos = '<h3 class="sgc-ini-bloque__titulo">El sistema en números</h3><div class="sgc-kpis">' + [
       Componentes.kpi({ etiqueta: 'Documentos vigentes', valor: c.documentos_vigentes || 0,
         titulo: (c.documentos_externos || 0) + ' de origen externo' }),
-      Componentes.kpi({ etiqueta: 'Procesos', valor: (c.procesos_mapa || 0) + ' + ' + (c.procesos_servicio || 0),
-        titulo: 'Del mapa + de servicio' }),
+      Componentes.kpi({ etiqueta: 'Procesos', valor: (c.procesos_mapa || 0) + (c.procesos_servicio || 0),
+        titulo: (c.procesos_mapa || 0) + ' del mapa y ' + (c.procesos_servicio || 0) + ' de servicio' }),
       Componentes.kpi({ etiqueta: 'Riesgos', valor: c.riesgos || 0,
         titulo: (c.riesgos_altos || 0) + ' altos o críticos' }),
       Componentes.kpi({ etiqueta: 'Indicadores', valor: c.indicadores || 0 }),
-      Componentes.kpi({ etiqueta: 'NC abiertas', valor: c.nc_abiertas || 0, alerta: !!c.nc_abiertas }),
-      Componentes.kpi({ etiqueta: 'Quejas abiertas', valor: c.quejas_abiertas || 0, alerta: !!c.quejas_abiertas }),
       Componentes.kpi({ etiqueta: 'Auditorías hechas', valor: c.auditorias_ejecutadas || 0 })
     ].join('') + '</div>';
 
-    cont.innerHTML = cabecera + salud + alertas + hitos + conteos;
+    // Orden nuevo: qué requiere atención -> qué viene -> cuánto hay -> avance.
+    // (Antes: avance ISO -> alertas -> hitos -> números.)
+    cont.innerHTML = cabecera + '<div class="sgc-ini">' +
+      alertas + hitos + conteos + salud + '</div>';
     wireSecciones_(cont);
 
     cont.querySelectorAll('.js-tab-ir').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        seccionActiva_ = btn.getAttribute('data-seccion');
-        render_();
+        var destino = btn.getAttribute('data-idx') || btn.getAttribute('data-seccion');
+        if (!destino) return;
+        irASeccion_(destino, '');
       });
     });
   }
@@ -24774,13 +25367,14 @@ var Iconos = (function () {
       cuerpo = cuerpoTendenciaIndicador_(data, filtrosReporte_);
     }
 
-    // v13.0: sin detalle en las migas -- el ítem del árbol YA nombra el
-    // reporte, y repetirlo daba '... / Tendencia de indicador / Tendencia de
-    // un indicador'.
+    // v15.0: el reporte SÍ va en las migas. En la v13 se quitó porque el
+    // sidebar listaba los cinco reportes y el tramo se duplicaba; ahora el
+    // árbol tiene una sola entrada ("Reportes"), así que sin este tramo no
+    // habría forma de saber en qué reporte estás parado.
     // v13.2: el reporte se arma como DOCUMENTO -- con cabecera identificable,
     // para que al mandarlo a Gerencia se sepa de que es, de que periodo y
     // quien lo emitio sin tener que explicarlo por correo.
-    cont.innerHTML = barraSecciones_() +
+    cont.innerHTML = barraSecciones_(r.nombre) +
       SigsoReportes.barraAcciones({}) +
       SigsoReportes.cabeceraDocumento({
         titulo: r.nombre,
@@ -24957,13 +25551,7 @@ var Iconos = (function () {
   // v13.1: registro TEMPRANO del arbol. Antes esto pasaba recien al abrir
   // el modulo, asi que el sidebar no le dibujaba el chevron ni lo dejaba
   // desplegar hasta que entrabas una vez.
-  if (window.SigsoNav) {
-    SigsoNav.registrar('calidad', {
-      nombre: 'Calidad',
-      submodulos: ARQUITECTURA_SGC,
-      visible: puedeVerSeccion_
-    });
-  }
+  if (window.SigsoNav) registrarArbolSgc_();
 })();
 
 </script>

@@ -83,7 +83,7 @@ function construirContexto() {
     ['CTA-DEMO-5', 'fgerente', 'Felipe Gerente', 'Gerente General',
       ctx.hashPassword_('demo12345', 'sal-demo-5'), 'sal-demo-5',
       JSON.stringify(['gerencia@rld.cl']),
-      'GERENCIA', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'gerencia']),
+      'GERENCIA', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'gerencia', 'calidad']),
       'RLD', true, false, '', 'dev-server'],
     // v4.2: cuenta JEFATURA -- misma fila fija que dev-server-backoffice.js
     // (jefe@homepymes.cl), para probar "Mi Departamento" y "Actividades del
@@ -91,7 +91,7 @@ function construirContexto() {
     ['CTA-DEMO-6', 'ljefe', 'Lisseth Jefa', 'Jefa de Area',
       ctx.hashPassword_('demo12345', 'sal-demo-6'), 'sal-demo-6',
       JSON.stringify(['jefe@homepymes.cl']),
-      'JEFATURA', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'jefatura']),
+      'JEFATURA', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'jefatura', 'calidad']),
       'HP', true, false, '', 'dev-server']
   ]);
   // P12 (v2.0, Sprint 3): switch global de aviso a Leo -- activo=true

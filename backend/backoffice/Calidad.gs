@@ -61,12 +61,27 @@ var Calidad = {
     if (filtros.estado) {
       visibles = visibles.filter(function (d) { return d.estado === filtros.estado; });
     }
+    // v15.0: buscar como busca una persona, no como guarda la base.
+    //
+    // Antes se comparaba SOLO codigo y nombre, con acentos y como una sola
+    // cadena: "auditoria" no encontraba "Auditorias Internas", y quien no se
+    // sabia el codigo documental quedaba a ciegas. Ahora:
+    //   - se ignoran acentos y mayusculas (normalizarTextoSgc_);
+    //   - se busca ademas en descripcion, area y el tipo en palabras
+    //     ("procedimiento", "formulario"...);
+    //   - varias palabras funcionan como Y: "auditoria interna" exige las dos,
+    //     en cualquier campo y en cualquier orden.
     if (filtros.busqueda) {
-      var q = String(filtros.busqueda).trim().toLowerCase();
-      visibles = visibles.filter(function (d) {
-        return String(d.codigo || '').toLowerCase().indexOf(q) !== -1 ||
-          String(d.nombre || '').toLowerCase().indexOf(q) !== -1;
-      });
+      var palabras = normalizarTextoSgc_(filtros.busqueda).split(/\s+/).filter(Boolean);
+      if (palabras.length) {
+        visibles = visibles.filter(function (d) {
+          var heno = normalizarTextoSgc_([
+            d.codigo, d.nombre, d.descripcion, d.area_id,
+            TIPO_DOC_SGC_TEXTO[d.tipo] || d.tipo
+          ].join(' '));
+          return palabras.every(function (p) { return heno.indexOf(p) !== -1; });
+        });
+      }
     }
 
     var ahora = new Date();
@@ -954,6 +969,18 @@ var DOCUMENTOS_EXTERNOS_FO0101 = [
 
 var TIPOS_DOC_SGC = ['DOC', 'PRO', 'INS', 'FO', 'EXTERNO'];
 var VISIBILIDAD_SGC = ['TODOS', 'AREA', 'SELECCION'];
+
+// v15.0: el tipo en palabras, para que la busqueda del listado encuentre
+// "procedimiento" o "formulario" aunque la persona no sepa el codigo ni el
+// nombre exacto del documento. Es el MISMO vocabulario que la pantalla
+// muestra en las fichas de filtro.
+var TIPO_DOC_SGC_TEXTO = {
+  DOC: 'documento maestro manual',
+  PRO: 'procedimiento',
+  INS: 'instructivo',
+  FO: 'formulario registro',
+  EXTERNO: 'documento externo norma ley reglamento decreto'
+};
 var ROLES_SGC = [
   'ENCARGADO_SGC', 'DIRECCION', 'GERENCIA_ADM', 'JEFATURA_AREA',
   'ENC_ADMIN', 'OPERATIVO', 'AUDITOR_EXTERNO'
@@ -977,6 +1004,30 @@ var FIRMA_OLE_SGC = [0xD0, 0xCF, 0x11, 0xE0];              // doc/xls legado
 
 function normalizarEmailSgc_(email) {
   return String(email || '').trim().toLowerCase();
+}
+
+/**
+ * v15.0: texto listo para buscar -- minusculas y SIN acentos.
+ *
+ * Hasta la v14 la busqueda del listado documental comparaba tal cual, asi que
+ * "auditoria" no encontraba "Auditorias Internas" y habia que escribir el
+ * acento exacto. Quien busca un documento no deberia tener que acordarse de
+ * la tilde (ni del codigo: ver los campos que se comparan en Calidad.listar).
+ */
+// Rango Unicode de los signos diacriticos que NFD separa de su letra
+// (U+0300 a U+036F). Se arma con fromCharCode para que el archivo quede en
+// ASCII puro: este .gs se pega a mano en el editor de Apps Script y un
+// caracter combinante suelto es invisible y facil de romper al copiar.
+var DIACRITICOS_SGC = new RegExp('[' + String.fromCharCode(0x0300) + '-' + String.fromCharCode(0x036F) + ']', 'g');
+
+function normalizarTextoSgc_(texto) {
+  var s = String(texto == null ? '' : texto).toLowerCase();
+  // normalize() existe en el runtime V8 de Apps Script; el fallback cubre
+  // cualquier entorno viejo sin romper la busqueda (solo no quita acentos).
+  if (typeof s.normalize === 'function') {
+    s = s.normalize('NFD').replace(DIACRITICOS_SGC, '');
+  }
+  return s;
 }
 
 function esVerdaderoSgc_(valor) {

@@ -77,13 +77,13 @@ function construirContexto() {
     // MODULO_POR_ACCION.getSolicitudDetalle acepta 'bandeja' O 'gerencia').
     ['CTA-DEMO-5', 'fgerente', 'Felipe Gerente', 'Gerente General', 'hash-no-usado-aqui', 'sal',
       JSON.stringify(['gerencia@rld.cl']),
-      'GERENCIA', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'gerencia']),
+      'GERENCIA', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'gerencia', 'calidad']),
       'RLD', true, false, '', 'dev-server'],
     // v4.2: cuenta JEFATURA, para probar "Mi Departamento" en local -- su
     // equipo se siembra en JEFATURAS mas abajo (demo1@hp.cl).
     ['CTA-DEMO-6', 'ljefe', 'Lisseth Jefa', 'Jefa de Area', 'hash-no-usado-aqui', 'sal',
       JSON.stringify(['jefe@homepymes.cl']),
-      'JEFATURA', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'jefatura']),
+      'JEFATURA', JSON.stringify(['nueva_solicitud', 'mis_solicitudes', 'jefatura', 'calidad']),
       'HP', true, false, '', 'dev-server']
   ]);
   seedSheet(ctx, 'SESIONES_PORTAL', ctx.COLUMNAS.SESIONES_PORTAL, [
