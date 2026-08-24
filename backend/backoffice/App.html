@@ -18295,7 +18295,7 @@ var Iconos = (function () {
           '</div>' +
           '<div class="sigso-modal__acciones">' +
             Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
-            Componentes.boton({ texto: esNueva ? 'Crear ficha' : 'Guardar', tipo: 'submit' }) +
+            Componentes.boton({ texto: esNueva ? 'Crear ficha' : 'Guardar', tipo: 'submit', clase: 'js-sgc-guardar-persona' }) +
           '</div>' +
         '</form>' +
       '</div>';
@@ -18307,8 +18307,15 @@ var Iconos = (function () {
     // quedaba bloqueada para siempre sin forma de arreglarla.
     if (!esNueva && p && p.usuario_email) document.getElementById('sgc-pe-email').readOnly = true;
 
+    var textoOriginalPersona_ = esNueva ? 'Crear ficha' : 'Guardar';
     document.getElementById('form-sgc-persona').addEventListener('submit', function (evento) {
       evento.preventDefault();
+      // v14.0 (bug real: doble clic creaba dos fichas idénticas -- este
+      // formulario era el único de Calidad que no se deshabilitaba al
+      // enviar). El backend además lo blinda con LockService, pero esto
+      // evita el problema desde el origen: el segundo clic ni siquiera sale.
+      var boton = fondo.querySelector('.js-sgc-guardar-persona');
+      if (boton) { boton.disabled = true; boton.textContent = esNueva ? 'Creando...' : 'Guardando...'; }
       var datos = {
         nombre: document.getElementById('sgc-pe-nombre').value,
         usuario_email: document.getElementById('sgc-pe-email').value,
@@ -18323,11 +18330,15 @@ var Iconos = (function () {
       if (p) datos.persona_id = p.persona_id;
       api_('guardarPersonaSgc', datos).then(function (respuesta) {
         if (!respuesta || !respuesta.ok) {
+          if (boton) { boton.disabled = false; boton.textContent = textoOriginalPersona_; }
           Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
           return;
         }
         cerrar();
         if (p) abrirPersona_(p.persona_id); else cargarPersonas_();
+      }).catch(function (err) {
+        if (boton) { boton.disabled = false; boton.textContent = textoOriginalPersona_; }
+        Componentes.aviso({ texto: mensajeErrorSubidaSgc_(err), tipo: 'error' });
       });
     });
   }

@@ -208,37 +208,50 @@ var Personas = {
     // Cada fila sigue siendo su propia persona_id, asi que descriptor,
     // documentos, inducción y evaluaciones de un cargo nunca se mezclan con
     // los del otro -- son fichas independientes que solo comparten cuenta.
-    var cargoNuevo = String(data.cargo || '').trim().toLowerCase();
-    var yaExiste = leerFilasSeguro_(SHEETS.SGC_PERSONAS).filter(function (p) {
-      return esActivoSgc_(p) && normalizarEmailSgc_(p.usuario_email) === email &&
-        String(p.cargo || '').trim().toLowerCase() === cargoNuevo;
-    })[0];
-    if (yaExiste) {
-      return errorValidacion_('cargo', 'Ya existe una ficha con ese cargo para ' + email +
-        '. Si es un cargo distinto (ej. interno/externo), escribe un Cargo que lo diferencie.');
-    }
+    //
+    // "Verificar que no exista" y "crear" tienen que ser UNA sola operacion
+    // atomica: sin el lock, un doble clic (el boton no se deshabilitaba a
+    // tiempo) o dos pestañas mandando el mismo alta casi a la vez podian
+    // pasar AMBOS la verificacion antes de que cualquiera terminara de
+    // escribir, y creaban dos fichas identicas (bug real, reportado).
+    var lock = LockService.getScriptLock();
+    lock.waitLock(30000);
+    var persona;
+    try {
+      var cargoNuevo = String(data.cargo || '').trim().toLowerCase();
+      var yaExiste = leerFilasSeguro_(SHEETS.SGC_PERSONAS).filter(function (p) {
+        return esActivoSgc_(p) && normalizarEmailSgc_(p.usuario_email) === email &&
+          String(p.cargo || '').trim().toLowerCase() === cargoNuevo;
+      })[0];
+      if (yaExiste) {
+        return errorValidacion_('cargo', 'Ya existe una ficha con ese cargo para ' + email +
+          '. Si es un cargo distinto (ej. interno/externo), escribe un Cargo que lo diferencie.');
+      }
 
-    var ahora = new Date();
-    var persona = {
-      persona_id: Utilities.getUuid(),
-      usuario_email: email,
-      nombre: nombre,
-      rut: data.rut || '',
-      cargo: data.cargo || '',
-      tipo: data.tipo,
-      area_id: data.area_id || '',
-      // Si no se indica jefatura, se toma la jerarquia operativa que ya
-      // existe en JEFATURAS -- no se pide dos veces el mismo dato.
-      jefatura_email: normalizarEmailSgc_(data.jefatura_email) || normalizarEmailSgc_(jefeDeSubordinado_(email)),
-      subrogante_email: normalizarEmailSgc_(data.subrogante_email),
-      fecha_ingreso: data.fecha_ingreso || '',
-      estado: 'ACTIVO',
-      fecha_desvinculacion: '',
-      creado_por: contexto.email || '',
-      fecha_creacion: ahora.toISOString(),
-      activa: true
-    };
-    agregarFila_(SHEETS.SGC_PERSONAS, persona);
+      var ahora = new Date();
+      persona = {
+        persona_id: Utilities.getUuid(),
+        usuario_email: email,
+        nombre: nombre,
+        rut: data.rut || '',
+        cargo: data.cargo || '',
+        tipo: data.tipo,
+        area_id: data.area_id || '',
+        // Si no se indica jefatura, se toma la jerarquia operativa que ya
+        // existe en JEFATURAS -- no se pide dos veces el mismo dato.
+        jefatura_email: normalizarEmailSgc_(data.jefatura_email) || normalizarEmailSgc_(jefeDeSubordinado_(email)),
+        subrogante_email: normalizarEmailSgc_(data.subrogante_email),
+        fecha_ingreso: data.fecha_ingreso || '',
+        estado: 'ACTIVO',
+        fecha_desvinculacion: '',
+        creado_por: contexto.email || '',
+        fecha_creacion: ahora.toISOString(),
+        activa: true
+      };
+      agregarFila_(SHEETS.SGC_PERSONAS, persona);
+    } finally {
+      lock.releaseLock();
+    }
 
     // Se siembra la induccion con los 5 items del SGC en PENDIENTE: asi el
     // formulario FO-PRO-02-02 existe desde el dia uno y se ve que falta.

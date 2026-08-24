@@ -144,6 +144,34 @@ test('guardarPersona: exige nombre, correo y tipo; el mismo correo+cargo EXACTO 
   }, CTX_ENCARGADO)._validationError, true);
 });
 
+// v14.0 (bug real reportado): "Nueva persona" no deshabilitaba el boton al
+// enviar, y la verificacion de duplicado + la creacion no eran atomicas --
+// un doble clic (o dos pestañas) podian pasar AMBOS la verificacion antes
+// de que cualquiera terminara de escribir, y crear dos fichas identicas.
+// Fix real: LockService.getScriptLock().waitLock() alrededor de
+// "verificar que no exista" + "crear" (mismo patron que Correlativo.gs ya
+// usa para el numero de solicitud). Este test prueba que el lock se
+// SUELTA incluso cuando la verificacion rechaza el duplicado (el `return`
+// esta DENTRO del try) -- si no se soltara, la siguiente persona de este
+// mismo test quedaria trabada esperando un lock que nadie libera.
+test('guardarPersona: el lock se libera incluso si se rechaza un duplicado (no bloquea la siguiente creación)', () => {
+  const ctx = loadConSchema();
+  const { ana } = sembrar(ctx);
+
+  const rechazado = ctx.Personas.guardarPersona({
+    nombre: 'Ana Duplicada', usuario_email: 'ana@homepymes.cl', cargo: 'Prevencionista', tipo: 'INT'
+  }, CTX_ENCARGADO);
+  assert.equal(rechazado._validationError, true);
+
+  // Si el lock hubiera quedado tomado, esta segunda creación (persona y
+  // cargo totalmente distintos) fallaría o colgaría esperando el lock.
+  const nueva = ctx.Personas.guardarPersona({
+    nombre: 'Otra Persona', usuario_email: 'otra@homepymes.cl', cargo: 'Analista', tipo: 'INT'
+  }, CTX_ENCARGADO);
+  assert.equal(nueva._validationError, undefined);
+  assert.notEqual(nueva.persona_id, ana.persona_id);
+});
+
 // v14.0: una persona con DOS CARGOS reales en la empresa (ej. Camila es
 // Encargada de Prevención de Riesgos interna Y externa) se vincula con LA
 // MISMA cuenta -- nunca se le pide un segundo correo, y cada cargo lleva su
