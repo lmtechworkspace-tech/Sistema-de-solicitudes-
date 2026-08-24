@@ -897,9 +897,9 @@
         }
         cerrar();
         cargarListado_();
-      }).catch(function () {
+      }).catch(function (err) {
         boton.disabled = false; boton.textContent = 'Cargar documento';
-        Componentes.aviso({ texto: 'No se pudo leer o subir el archivo.', tipo: 'error' });
+        Componentes.aviso({ texto: mensajeErrorSubidaSgc_(err), tipo: 'error' });
       });
     });
   }
@@ -957,9 +957,9 @@
         }
         cerrar();
         abrirDocumento_(d.documento_id);
-      }).catch(function () {
+      }).catch(function (err) {
         boton.disabled = false; boton.textContent = 'Subir versión';
-        Componentes.aviso({ texto: 'No se pudo leer o subir el archivo.', tipo: 'error' });
+        Componentes.aviso({ texto: mensajeErrorSubidaSgc_(err), tipo: 'error' });
       });
     });
   }
@@ -1044,9 +1044,9 @@
         cerrar();
         if (archivoEd) Componentes.aviso({ texto: 'Documento actualizado con su archivo.', tipo: 'exito' });
         abrirDocumento_(d.documento_id);
-      }).catch(function () {
+      }).catch(function (err) {
         if (boton) { boton.disabled = false; boton.textContent = etiqueta; }
-        Componentes.aviso({ texto: 'No se pudo leer o subir el archivo.', tipo: 'error' });
+        Componentes.aviso({ texto: mensajeErrorSubidaSgc_(err), tipo: 'error' });
       });
     });
   }
@@ -2059,9 +2059,9 @@
         }
         cerrar();
         abrirPersona_(p.persona_id);
-      }).catch(function () {
+      }).catch(function (err) {
         boton.disabled = false; boton.textContent = 'Cargar';
-        Componentes.aviso({ texto: 'No se pudo leer o subir el archivo.', tipo: 'error' });
+        Componentes.aviso({ texto: mensajeErrorSubidaSgc_(err), tipo: 'error' });
       });
     });
   }
@@ -8038,6 +8038,19 @@
       lector.onerror = function () { rechazar(new Error('No se pudo leer el archivo.')); };
       lector.readAsDataURL(archivo);
     });
+  }
+
+  // Los 4 formularios que suben un archivo (documento nuevo, nueva versión,
+  // editar con archivo, documento de persona) atrapaban CUALQUIER falla de
+  // leerArchivoBase64Sgc_/api_ con el mismo aviso generico, descartando el
+  // motivo real -- justo el que api.js (v14.0) ya distingue (timeout /
+  // respuesta no-JSON / lectura de archivo). Aca se recupera ese motivo en
+  // vez de taparlo, y solo se cae al generico cuando el error crudo del
+  // navegador (Failed to fetch, etc.) no le diria nada util a quien lo lee.
+  function mensajeErrorSubidaSgc_(err) {
+    var msg = err && err.message ? String(err.message) : '';
+    if (msg && !/^(failed to fetch|networkerror|load failed|typeerror)/i.test(msg)) return msg;
+    return 'No se pudo leer o subir el archivo. Revisa tu conexión e inténtalo de nuevo.';
   }
 
   function descargarBase64Sgc_(base64, nombre, mime) {
