@@ -4246,6 +4246,90 @@ button {
    sigue separando visualmente los bloques de iconos. */
 .plataforma-sidebar--colapsado:not(.plataforma-sidebar--abierto) .plataforma-nav__grupo-tit { display: none; }
 
+/* ==========================================================================
+   v13.2 — El reporte como DOCUMENTO
+   Un reporte que se manda a Gerencia tiene que poder imprimirse o guardarse
+   en PDF y seguir diciendo de qué organización es, qué reporte es, sobre qué
+   período y quién lo emitió. Sin eso es un papel sin dueño, y en una
+   auditoría no vale como evidencia.
+   ========================================================================== */
+
+.sigso-doc {
+  border-bottom: 2px solid var(--marca);
+  padding-bottom: var(--esp-3);
+  margin-bottom: var(--esp-4);
+}
+.sigso-doc__cab {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: var(--esp-3); flex-wrap: wrap;
+}
+.sigso-doc__marca { display: flex; align-items: center; gap: var(--esp-2); }
+.sigso-doc__logo {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: var(--radio-sm);
+  background: var(--marca); color: #fff; font-weight: 700; font-size: 1rem;
+}
+.sigso-doc__marca strong { display: block; font-size: 0.95rem; color: var(--texto); letter-spacing: .02em; }
+.sigso-doc__org { display: block; font: var(--t-small); color: var(--texto-2); }
+.sigso-doc__ref { display: flex; flex-direction: column; text-align: right; font: var(--t-small); color: var(--texto-3); }
+.sigso-doc__tit { margin: var(--esp-3) 0 0; font: var(--t-display); color: var(--texto); text-wrap: balance; }
+.sigso-doc__sub { margin: var(--esp-1) 0 0; font: var(--t-body); color: var(--texto-2); max-width: 65ch; }
+
+.sigso-doc__meta {
+  display: flex; flex-wrap: wrap; gap: var(--esp-2) var(--esp-5);
+  margin: var(--esp-3) 0 0;
+}
+.sigso-doc__meta div { display: flex; flex-direction: column; }
+.sigso-doc__meta dt {
+  font: var(--t-small); font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; color: var(--texto-3);
+}
+.sigso-doc__meta dd { margin: 0; font: var(--t-body); color: var(--texto); }
+
+.sigso-doc-pie { display: none; }
+
+/* --- Impresión / Guardar como PDF ---------------------------------------- */
+@page { size: A4; margin: 14mm 12mm 16mm; }
+
+@media print {
+  /* Fuera todo lo que no es el documento. */
+  .plataforma-sidebar, .plataforma-topbar, .plataforma-sidebar__telon,
+  .sigso-modulo-layout__nav, .sigso-rep-acciones, .sigso-rep-filtros,
+  .sigso-migas, .sgc-rep-lista, .sigso-boton, .sigso-boton--secundario,
+  .sigso-boton--sutil, #sigso-notif-banner { display: none !important; }
+
+  body { background: #fff !important; }
+  .sigso-modulo-layout { grid-template-columns: 1fr !important; }
+  .sigso-rep-tabla-caja { overflow: visible !important; }
+
+  /* El documento imprime en negro sobre blanco: una tabla con fondos de
+     color se vuelve ilegible en una impresora en blanco y negro, y gasta
+     tinta sin aportar nada. */
+  .sigso-doc, .sigso-doc__tit, .sigso-doc__meta dd { color: #000; }
+  .sigso-doc { border-bottom-color: #000; }
+
+  .sigso-doc-pie {
+    display: block;
+    position: fixed; bottom: 0; left: 0; right: 0;
+    padding-top: 4pt; border-top: 1px solid #999;
+    font-size: 8pt; color: #555;
+  }
+
+  /* Una fila partida entre dos páginas es un dato ilegible; el encabezado
+     repetido es lo que permite leer la página 3 sin volver a la 1. */
+  table { page-break-inside: auto; }
+  thead { display: table-header-group; }
+  tr, .sigso-rep-ranking__fila, .sigso-kpi { page-break-inside: avoid; }
+  h2, h3, h4 { page-break-after: avoid; }
+
+  .sigso-kpi { border: 1px solid #999 !important; }
+  .sigso-tabla th { border-bottom: 1.5pt solid #000 !important; }
+  .sigso-tabla td { border-bottom: 0.5pt solid #bbb !important; }
+
+  /* El gráfico de tendencia sí se imprime: es SVG, no un canvas. */
+  .sigso-rep-tendencia svg { max-height: 70mm; }
+}
+
 </style>
   <style>
 /* dashboard.css — Backoffice: KPIs, graficos, tabla, detalle (§12.4/12.5). */
@@ -7951,6 +8035,60 @@ var Iconos = (function () {
     tabla(columnas, movidos, { vacio: 'Ningún ítem movió su fecha ni se reabrió. Nada que revisar.' });
   }
   // ==========================================================================
+  // DOCUMENTO IMPRIMIBLE (v13.2)
+  //
+  // Un reporte que se manda a Gerencia deja de ser una pantalla y pasa a ser
+  // un DOCUMENTO. Necesita decir, por si solo y sin que nadie lo explique:
+  // de que organizacion es, que reporte es, sobre que periodo, con que
+  // filtros, quien lo genero y cuando.
+  //
+  // Sin eso, una tabla impresa es un papel sin dueño: nadie puede saber si
+  // sigue vigente, y en una auditoria no vale como evidencia.
+  //
+  // Se dibuja SIEMPRE (no solo al imprimir) porque tambien sirve en pantalla
+  // para saber que se esta mirando; el CSS de impresion lo reordena a A4.
+  function cabeceraDocumento(opts) {
+    opts = opts || {};
+    var ahora = new Date();
+    var fmt = function (d) {
+      try { return d.toLocaleString('es-CL', { dateStyle: 'long', timeStyle: 'short' }); }
+      catch (e) { return d.toISOString().slice(0, 16).replace('T', ' '); }
+    };
+    var filtros = (opts.filtros || []).filter(function (f) { return f && f.valor; });
+    return '<header class="sigso-doc">' +
+      '<div class="sigso-doc__cab">' +
+        '<div class="sigso-doc__marca">' +
+          '<span class="sigso-doc__logo">S</span>' +
+          '<span>' +
+            '<strong>SIGSO</strong>' +
+            '<span class="sigso-doc__org">' + esc_(opts.organizacion || 'Asesorías Integrales AyS SpA') + '</span>' +
+          '</span>' +
+        '</div>' +
+        '<div class="sigso-doc__ref">' +
+          (opts.codigo ? '<span>' + esc_(opts.codigo) + '</span>' : '') +
+          '<span>' + fmt(ahora) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<h1 class="sigso-doc__tit">' + esc_(opts.titulo || 'Reporte') + '</h1>' +
+      (opts.subtitulo ? '<p class="sigso-doc__sub">' + esc_(opts.subtitulo) + '</p>' : '') +
+      '<dl class="sigso-doc__meta">' +
+        (opts.modulo ? '<div><dt>Módulo</dt><dd>' + esc_(opts.modulo) + '</dd></div>' : '') +
+        (opts.periodo ? '<div><dt>Período</dt><dd>' + esc_(opts.periodo) + '</dd></div>' : '') +
+        (opts.generadoPor ? '<div><dt>Generado por</dt><dd>' + esc_(opts.generadoPor) + '</dd></div>' : '') +
+        filtros.map(function (f) {
+          return '<div><dt>' + esc_(f.etiqueta) + '</dt><dd>' + esc_(f.valor) + '</dd></div>';
+        }).join('') +
+      '</dl>' +
+    '</header>';
+  }
+
+  // Pie que sólo aparece impreso: deja constancia del origen del documento.
+  function pieDocumento(nota) {
+    return '<footer class="sigso-doc-pie">' +
+      esc_(nota || 'Documento generado por SIGSO a partir de los datos vigentes al momento de su emisión.') +
+    '</footer>';
+  }
+  // ==========================================================================
   // EXPORTACIÓN (§13)
   // ==========================================================================
   // El CSV sale de la TABLA YA PINTADA, no de una segunda consulta: así lo que
@@ -8028,6 +8166,8 @@ var Iconos = (function () {
     cuerpoCumplimientoPor: cuerpoCumplimientoPor,
     cuerpoEntradaSalida: cuerpoEntradaSalida,
     cuerpoResbalon: cuerpoResbalon,
+    cabeceraDocumento: cabeceraDocumento,
+    pieDocumento: pieDocumento,
     barraAcciones: barraAcciones,
     wireAcciones: wireAcciones
   };

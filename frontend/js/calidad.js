@@ -8122,12 +8122,24 @@
     // v13.0: sin detalle en las migas -- el ítem del árbol YA nombra el
     // reporte, y repetirlo daba '... / Tendencia de indicador / Tendencia de
     // un indicador'.
+    // v13.2: el reporte se arma como DOCUMENTO -- con cabecera identificable,
+    // para que al mandarlo a Gerencia se sepa de que es, de que periodo y
+    // quien lo emitio sin tener que explicarlo por correo.
     cont.innerHTML = barraSecciones_() +
       SigsoReportes.barraAcciones({}) +
-      '<div class="sgc-cabecera"><div><h2>' + Componentes.escaparHtml(r.nombre) + '</h2>' +
-        '<p class="sigso-ayuda">' + Componentes.escaparHtml(r.desc) + '</p></div></div>' +
+      SigsoReportes.cabeceraDocumento({
+        titulo: r.nombre,
+        subtitulo: r.desc,
+        modulo: 'Calidad — Sistema de Gestión ISO 9001',
+        codigo: 'SIGSO-REP-' + String(r.id).toUpperCase(),
+        generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || '',
+        filtros: Object.keys(filtrosReporte_ || {}).map(function (k) {
+          return { etiqueta: k, valor: filtrosReporte_[k] };
+        })
+      }) +
       SigsoReportes.pintarFiltros(r, opcionesFiltro, filtrosReporte_) +
-      cuerpo;
+      cuerpo +
+      SigsoReportes.pieDocumento();
 
     wireSecciones_(cont);
     SigsoReportes.wireAcciones(cont, {

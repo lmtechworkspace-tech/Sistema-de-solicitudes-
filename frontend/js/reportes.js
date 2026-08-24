@@ -541,6 +541,60 @@
     tabla(columnas, movidos, { vacio: 'Ningún ítem movió su fecha ni se reabrió. Nada que revisar.' });
   }
   // ==========================================================================
+  // DOCUMENTO IMPRIMIBLE (v13.2)
+  //
+  // Un reporte que se manda a Gerencia deja de ser una pantalla y pasa a ser
+  // un DOCUMENTO. Necesita decir, por si solo y sin que nadie lo explique:
+  // de que organizacion es, que reporte es, sobre que periodo, con que
+  // filtros, quien lo genero y cuando.
+  //
+  // Sin eso, una tabla impresa es un papel sin dueño: nadie puede saber si
+  // sigue vigente, y en una auditoria no vale como evidencia.
+  //
+  // Se dibuja SIEMPRE (no solo al imprimir) porque tambien sirve en pantalla
+  // para saber que se esta mirando; el CSS de impresion lo reordena a A4.
+  function cabeceraDocumento(opts) {
+    opts = opts || {};
+    var ahora = new Date();
+    var fmt = function (d) {
+      try { return d.toLocaleString('es-CL', { dateStyle: 'long', timeStyle: 'short' }); }
+      catch (e) { return d.toISOString().slice(0, 16).replace('T', ' '); }
+    };
+    var filtros = (opts.filtros || []).filter(function (f) { return f && f.valor; });
+    return '<header class="sigso-doc">' +
+      '<div class="sigso-doc__cab">' +
+        '<div class="sigso-doc__marca">' +
+          '<span class="sigso-doc__logo">S</span>' +
+          '<span>' +
+            '<strong>SIGSO</strong>' +
+            '<span class="sigso-doc__org">' + esc_(opts.organizacion || 'Asesorías Integrales AyS SpA') + '</span>' +
+          '</span>' +
+        '</div>' +
+        '<div class="sigso-doc__ref">' +
+          (opts.codigo ? '<span>' + esc_(opts.codigo) + '</span>' : '') +
+          '<span>' + fmt(ahora) + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<h1 class="sigso-doc__tit">' + esc_(opts.titulo || 'Reporte') + '</h1>' +
+      (opts.subtitulo ? '<p class="sigso-doc__sub">' + esc_(opts.subtitulo) + '</p>' : '') +
+      '<dl class="sigso-doc__meta">' +
+        (opts.modulo ? '<div><dt>Módulo</dt><dd>' + esc_(opts.modulo) + '</dd></div>' : '') +
+        (opts.periodo ? '<div><dt>Período</dt><dd>' + esc_(opts.periodo) + '</dd></div>' : '') +
+        (opts.generadoPor ? '<div><dt>Generado por</dt><dd>' + esc_(opts.generadoPor) + '</dd></div>' : '') +
+        filtros.map(function (f) {
+          return '<div><dt>' + esc_(f.etiqueta) + '</dt><dd>' + esc_(f.valor) + '</dd></div>';
+        }).join('') +
+      '</dl>' +
+    '</header>';
+  }
+
+  // Pie que sólo aparece impreso: deja constancia del origen del documento.
+  function pieDocumento(nota) {
+    return '<footer class="sigso-doc-pie">' +
+      esc_(nota || 'Documento generado por SIGSO a partir de los datos vigentes al momento de su emisión.') +
+    '</footer>';
+  }
+  // ==========================================================================
   // EXPORTACIÓN (§13)
   // ==========================================================================
   // El CSV sale de la TABLA YA PINTADA, no de una segunda consulta: así lo que
@@ -618,6 +672,8 @@
     cuerpoCumplimientoPor: cuerpoCumplimientoPor,
     cuerpoEntradaSalida: cuerpoEntradaSalida,
     cuerpoResbalon: cuerpoResbalon,
+    cabeceraDocumento: cabeceraDocumento,
+    pieDocumento: pieDocumento,
     barraAcciones: barraAcciones,
     wireAcciones: wireAcciones
   };
