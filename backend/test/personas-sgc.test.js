@@ -130,15 +130,53 @@ test('Encargado SGC, ADM, Direccion y Gerencia ven todas las fichas', () => {
 
 // --- alta y baja -----------------------------------------------------------
 
-test('guardarPersona: exige nombre, correo y tipo; el correo no se puede duplicar', () => {
+test('guardarPersona: exige nombre, correo y tipo; el mismo correo+cargo EXACTO no se puede duplicar', () => {
   const ctx = loadConSchema();
   sembrar(ctx);
   assert.equal(ctx.Personas.guardarPersona({ usuario_email: 'x@y.cl', tipo: 'INT' }, CTX_ENCARGADO)._validationError, true);
   assert.equal(ctx.Personas.guardarPersona({ nombre: 'X', tipo: 'INT' }, CTX_ENCARGADO)._validationError, true);
   assert.equal(ctx.Personas.guardarPersona({ nombre: 'X', usuario_email: 'x@y.cl', tipo: 'RARO' }, CTX_ENCARGADO)._validationError, true);
+  // Ana ya existe con cargo 'Prevencionista' (ver sembrar()) -- repetir
+  // EXACTAMENTE el mismo cargo para el mismo correo es un duplicado real
+  // (tipico doble clic), no un segundo cargo.
   assert.equal(ctx.Personas.guardarPersona({
-    nombre: 'Ana Duplicada', usuario_email: 'ana@homepymes.cl', tipo: 'INT'
+    nombre: 'Ana Duplicada', usuario_email: 'ana@homepymes.cl', cargo: 'Prevencionista', tipo: 'INT'
   }, CTX_ENCARGADO)._validationError, true);
+});
+
+// v14.0: una persona con DOS CARGOS reales en la empresa (ej. Camila es
+// Encargada de Prevención de Riesgos interna Y externa) se vincula con LA
+// MISMA cuenta -- nunca se le pide un segundo correo, y cada cargo lleva su
+// propio descriptor/inducción/evaluaciones sin mezclarse.
+test('una persona puede tener DOS fichas (dos cargos) con el MISMO correo, cada una con su propio descriptor', () => {
+  const ctx = loadConSchema();
+  const { ana } = sembrar(ctx);
+
+  const anaExterna = ctx.Personas.guardarPersona({
+    nombre: 'Ana Perez', usuario_email: 'ana@homepymes.cl',
+    cargo: 'Prevencionista (servicios a clientes)', tipo: 'EXT', area_id: 'PREVENCION'
+  }, CTX_ENCARGADO);
+  assert.equal(anaExterna._validationError, undefined, 'un cargo DISTINTO para el mismo correo se debe poder crear');
+  assert.notEqual(anaExterna.persona_id, ana.persona_id, 'son dos fichas independientes');
+
+  // El personal operativo, con su UNICA cuenta, ve SUS DOS cargos -- ni uno
+  // solo, ni los de nadie mas.
+  const propias = ctx.Personas.listar({}, CTX_ANA).personas;
+  assert.equal(propias.length, 2);
+  assert.ok(propias.every((p) => p.usuario_email === 'ana@homepymes.cl'));
+
+  // Cada cargo lleva su propio descriptor, sin mezclarse con el del otro.
+  ctx.Personas.guardarDescriptor({
+    persona_id: ana.persona_id, version: 'v01', objetivo: 'Objetivo del cargo interno.'
+  }, CTX_ENCARGADO);
+  ctx.Personas.guardarDescriptor({
+    persona_id: anaExterna.persona_id, version: 'v01', objetivo: 'Objetivo del cargo externo (clientes).'
+  }, CTX_ENCARGADO);
+
+  const fichaInterna = ctx.Personas.getFicha({ persona_id: ana.persona_id }, CTX_ENCARGADO);
+  const fichaExterna = ctx.Personas.getFicha({ persona_id: anaExterna.persona_id }, CTX_ENCARGADO);
+  assert.equal(fichaInterna.descriptor_vigente.objetivo, 'Objetivo del cargo interno.');
+  assert.equal(fichaExterna.descriptor_vigente.objetivo, 'Objetivo del cargo externo (clientes).');
 });
 
 test('guardarPersona: solo el Encargado SGC o ADM; el personal no crea fichas', () => {

@@ -1248,6 +1248,10 @@
           (!baja && !p.tiene_descriptor ? Componentes.badge('Sin descriptor', 'alerta') : '') +
           (!baja && !induccionCompleta ? Componentes.badge('Inducción pendiente', 'alerta') : '') +
         '</div>' +
+        // v14.0: el correo visible en cada tarjeta -- con dos cargos bajo
+        // la misma cuenta (ej. Camila interna/externa), es lo que confirma
+        // de un vistazo que ambas fichas comparten cuenta.
+        (p.usuario_email ? '<div class="sigso-ayuda">' + Componentes.escaparHtml(p.usuario_email) + '</div>' : '') +
         '<div class="sgc-doc__meta">' +
           (p.cargo ? '<span>' + Componentes.escaparHtml(p.cargo) + '</span>' : '') +
           (p.area_id ? '<span>' + Componentes.escaparHtml(p.area_id) + '</span>' : '') +
@@ -1309,6 +1313,11 @@
         Componentes.badge(TIPO_PERSONA_ETIQUETA[p.tipo] || p.tipo, 'neutro') +
         (baja ? Componentes.badge('Desvinculado', 'critico') : '') +
       '</div>' +
+      // v14.0: cargo como subtitulo justo bajo el nombre -- una persona
+      // puede tener mas de una ficha bajo el mismo correo (dos cargos), y
+      // sin esto dos fichas de "Camila Peña" se ven identicas hasta que se
+      // lee el detalle de "Datos". El cargo es el diferenciador principal.
+      (p.cargo ? '<p class="sgc-detalle-subtitulo">' + Componentes.escaparHtml(p.cargo) + '</p>' : '') +
       (baja
         ? Componentes.alerta('Esta persona ya no está vigente. Su ficha se conserva como historial del SGC.', 'aviso')
         : '') +

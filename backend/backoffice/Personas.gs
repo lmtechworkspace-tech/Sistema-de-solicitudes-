@@ -12,10 +12,20 @@
  * estan ahi. La ficha del SGC vive en su propia hoja y se enlaza por correo
  * -- mismo criterio que el rol SGC vive en SGC_ROLES y no en el rol global.
  *
+ * v14.0: el correo YA NO identifica una UNICA ficha. Una persona puede
+ * tener mas de un CARGO en la empresa (ej. Encargada de Prevencion interna
+ * Y externa a la vez), cada uno con su propio descriptor, induccion y
+ * evaluaciones -- pero ambos deben entrar con la MISMA cuenta, sin pedirle
+ * un segundo correo. Por eso SGC_PERSONAS puede tener varias filas con el
+ * mismo `usuario_email`; lo que las distingue es el `cargo`. El acceso al
+ * modulo (SGC_ROLES) sigue siendo UNA fila por correo -- eso no cambia: es
+ * la cuenta, no el cargo, la que entra al sistema.
+ *
  * PERMISO CENTRAL DE ESTE ARCHIVO (§3 de la especificacion): el personal
- * operativo ve UNICAMENTE SU PROPIA FICHA. No la de sus companeros. Una
- * ficha trae RUT, contrato y evaluaciones: mostrarla de mas no es un
- * detalle de UX, es un problema de datos personales.
+ * operativo ve UNICAMENTE SU(S) PROPIA(S) FICHA(S) -- todas las que
+ * compartan su correo, nunca las de sus companeros. Una ficha trae RUT,
+ * contrato y evaluaciones: mostrarla de mas no es un detalle de UX, es un
+ * problema de datos personales.
  * La jefatura ve la suya y la de su equipo; Encargado SGC / ADM /
  * Direccion / Gerencia ven todas.
  */
@@ -189,12 +199,24 @@ var Personas = {
       return actualizarFilaPorId_(SHEETS.SGC_PERSONAS, 'persona_id', existente.persona_id, cambios);
     }
 
-    // El correo identifica a la persona dentro del SGC: duplicarlo partiria
-    // su historial (inducciones aca, evaluaciones alla).
+    // v14.0: una persona puede tener MAS DE UN CARGO en la empresa (ej.
+    // Camila es Encargada de Prevención de Riesgos interna Y externa, cada
+    // cargo con su propio descriptor, inducción y evaluaciones) -- por eso
+    // el correo YA NO es unico por si solo: lo que identifica cada FICHA es
+    // el correo + el cargo. Solo se bloquea el duplicado EXACTO (mismo
+    // correo, mismo cargo), que suele ser un doble clic, no un cargo nuevo.
+    // Cada fila sigue siendo su propia persona_id, asi que descriptor,
+    // documentos, inducción y evaluaciones de un cargo nunca se mezclan con
+    // los del otro -- son fichas independientes que solo comparten cuenta.
+    var cargoNuevo = String(data.cargo || '').trim().toLowerCase();
     var yaExiste = leerFilasSeguro_(SHEETS.SGC_PERSONAS).filter(function (p) {
-      return esActivoSgc_(p) && normalizarEmailSgc_(p.usuario_email) === email;
+      return esActivoSgc_(p) && normalizarEmailSgc_(p.usuario_email) === email &&
+        String(p.cargo || '').trim().toLowerCase() === cargoNuevo;
     })[0];
-    if (yaExiste) return errorValidacion_('usuario_email', 'Ya existe una ficha para ' + email + '.');
+    if (yaExiste) {
+      return errorValidacion_('cargo', 'Ya existe una ficha con ese cargo para ' + email +
+        '. Si es un cargo distinto (ej. interno/externo), escribe un Cargo que lo diferencie.');
+    }
 
     var ahora = new Date();
     var persona = {
