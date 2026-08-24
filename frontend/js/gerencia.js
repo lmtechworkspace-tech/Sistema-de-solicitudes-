@@ -18,6 +18,10 @@
   // ultimo panel cargado (recurrencia/tendencia/ciclo/carga), para poder
   // re-renderizar esas pestañas sin volver a pedirlos al servidor.
   var panelActual = null;
+  // Los filtros con los que se pidio panelActual, en texto legible, para
+  // poder estamparlos en la cabecera del reporte impreso. Se guardan aqui
+  // porque al pintar un reporte la barra de filtros ya no esta en el DOM.
+  var filtrosDelPanel_ = [];
   // G1-c: "Vista: Compacta/Completa" -- compacta oculta el bloque de
   // contenido (¿que pasa?/¿que deberia pasar?) para un PDF de solo plazos.
   var densidad = 'completa';
@@ -251,6 +255,26 @@
     if (botonTablero) botonTablero.click();
   }
 
+  // El texto visible de un filtro, no su valor interno: en el documento
+  // tiene que leerse "Constructora X", no un id.
+  function textoDeFiltro_(id) {
+    var el = document.getElementById(id);
+    if (!el) return '';
+    if (el.tagName === 'SELECT') {
+      var op = el.options[el.selectedIndex];
+      return (op && op.value) ? String(op.text || '').trim() : '';
+    }
+    return String(el.value || '').trim();
+  }
+
+  function capturarFiltrosDelPanel_() {
+    filtrosDelPanel_ = [
+      { etiqueta: 'Empresa', valor: textoDeFiltro_('ger-filtro-empresa') },
+      { etiqueta: 'Desarrollador', valor: textoDeFiltro_('ger-filtro-desarrollador') },
+      { etiqueta: 'Solicitante', valor: textoDeFiltro_('ger-filtro-solicitante') }
+    ].filter(function (f) { return f.valor; });
+  }
+
   function leerFiltrosServidor_() {
     return {
       empresa_id: document.getElementById('ger-filtro-empresa').value,
@@ -269,6 +293,7 @@
       '<span class="sigso-esq__barra" style="width:40%;height:22px;margin:0 auto 0.5rem"></span>' +
       '<span class="sigso-esq__barra" style="width:65%;height:10px;margin:0 auto"></span></div>'
     ).join('');
+    capturarFiltrosDelPanel_();
     return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getPanelGerencia', leerFiltrosServidor_())
       .then(function (respuesta) {
         if (!respuesta.ok) {
@@ -1337,7 +1362,8 @@
         subtitulo: r.desc,
         modulo: 'Gerencia — Panel de dirección',
         codigo: 'SIGSO-REP-GER-' + String(r.id).replace(/^[a-z]+-/, '').toUpperCase(),
-        generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || ''
+        generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || '',
+        filtros: filtrosDelPanel_
       }) +
       cuerpo +
       SigsoReportes.pieDocumento();

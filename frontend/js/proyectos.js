@@ -1536,6 +1536,15 @@
     });
   }
 
+  // Solo el estado: es el unico filtro que viaja al servidor y que por lo
+  // tanto esta aplicado sobre los datos del reporte. El de salud se aplica
+  // en el cliente y los reportes usan el arreglo previo, asi que estamparlo
+  // seria afirmar un recorte que no ocurrio.
+  function filtrosDelReporte_() {
+    if (!filtroEstadoPortafolio_) return [];
+    return [{ etiqueta: 'Estado', valor: filtroEstadoPortafolio_ }];
+  }
+
   function pintarReporteProyectos_(cont) {
     var r = SigsoReportes.buscarReporte('proyectos', reportePyAbierto_);
     if (!r) { reportePyAbierto_ = null; renderReportesProyectos_(); return; }
@@ -1554,7 +1563,8 @@
         subtitulo: r.desc,
         modulo: 'Proyectos — Portafolio',
         codigo: 'SIGSO-REP-PY-' + String(r.id).replace(/^[a-z]+-/, '').toUpperCase(),
-        generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || ''
+        generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || '',
+        filtros: filtrosDelReporte_()
       }) +
       cuerpo +
       SigsoReportes.pieDocumento();
