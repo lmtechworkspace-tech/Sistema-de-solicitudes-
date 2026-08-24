@@ -1155,6 +1155,39 @@
   // v14.0: el Inicio vive en inicio.js. Este shell le pasa lo que solo el
   // conoce (sesion, modulos de la cuenta, navegacion y badges) y no sabe
   // nada de como se arma la pantalla.
+  // v14.0 (Fase 3): envuelve el <h1> directo de una seccion de modulo en un
+  // encabezado consistente (icono del modulo en pastilla de acento + titulo +
+  // subtitulo). Idempotente: si el h1 ya esta dentro de la pastilla, no
+  // vuelve a envolver. 'home' se excluye (tiene su propio diseno de saludo).
+  function decorarCabModulo_(seccion, id) {
+    if (!seccion || id === 'home') return;
+    var h1 = seccion.querySelector(':scope > h1');
+    if (!h1 || (h1.parentNode && h1.parentNode.classList && h1.parentNode.classList.contains('sigso-modulo-cab__texto'))) return;
+    var def = MODULOS_SHELL[id];
+    var color = MODULO_COLOR[id];
+
+    var cab = document.createElement('header');
+    cab.className = 'sigso-modulo-cab';
+    if (color) {
+      cab.style.setProperty('--acento', color.acento);
+      cab.style.setProperty('--acento-suave', color.suave);
+    }
+    var icono = document.createElement('span');
+    icono.className = 'sigso-modulo-cab__icono';
+    icono.innerHTML = def ? Iconos.svg(def.icono, { tam: 22 }) : '';
+    var texto = document.createElement('div');
+    texto.className = 'sigso-modulo-cab__texto';
+
+    // El subtitulo (<p class="sigso-ayuda"> inmediatamente despues del h1) se
+    // mueve junto al titulo para que quede dentro del encabezado.
+    var sub = h1.nextElementSibling;
+    h1.parentNode.insertBefore(cab, h1);
+    cab.appendChild(icono);
+    cab.appendChild(texto);
+    texto.appendChild(h1);
+    if (sub && sub.classList && sub.classList.contains('sigso-ayuda')) texto.appendChild(sub);
+  }
+
   function renderHome_() {
     if (window.SigsoInicio) {
       SigsoInicio.render({
@@ -1262,6 +1295,13 @@
       var color = MODULO_COLOR[id];
       main.style.setProperty('--acento-modulo', color ? color.acento : 'var(--naranja)');
     }
+    // v14.0 (piel nueva, Fase 3): encabezado de modulo UNIFICADO. Cada modulo
+    // tenia un <h1> plano distinto; se decora con el icono del modulo en una
+    // pastilla de su acento + titulo + subtitulo. Se hace desde el shell (un
+    // solo lugar) en vez de retocar el markup de cada seccion. Solo toca el
+    // <h1> hijo DIRECTO de la seccion: los dashboards (bandeja/gerencia/
+    // jefatura) tienen su h1 anidado en una sub-vista y conservan su cabecera.
+    decorarCabModulo_(document.getElementById(seccionId), id);
     // v13.0: el arbol se repinta entero -- ya no basta con mover una clase,
     // porque al cambiar de modulo hay que cerrar la rama del anterior y abrir
     // la del nuevo. El item lo publicara el modulo al montarse.
