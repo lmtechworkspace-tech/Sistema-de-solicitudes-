@@ -1115,6 +1115,11 @@
   var filtroPersonasArea_ = '';
   var incluirDesvinculados_ = false;
   var incluirFueraAlcance_ = false;
+  // v14.1: el ultimo listado que se pinto, para que "<- Personal" vuelva
+  // al instante en vez de repetir el viaje al servidor (y el panel entero
+  // en blanco con "Cargando...") por algo que no cambio -- ver la persona
+  // y volver es el camino mas transitado del modulo.
+  var ultimaListaPersonas_ = null;
 
   function cargarPersonas_() {
     personaActivaId_ = null;
@@ -1132,10 +1137,24 @@
         return;
       }
       puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      ultimaListaPersonas_ = respuesta.data;
       pintarPersonas_(cont, respuesta.data);
     }).catch(function () {
       cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar el personal.', 'error');
     });
+  }
+
+  // "<- Personal" desde una ficha: si el listado no cambio (no se toco un
+  // filtro ni se hizo una accion que lo invalide), se repinta al instante
+  // con lo ultimo que ya se cargo. Sin esto, cada vistazo a una ficha y
+  // vuelta implicaba un viaje al servidor y el panel entero en blanco --
+  // exactamente lo que se siente como que "la pagina se recarga".
+  function volverAPersonas_() {
+    if (!ultimaListaPersonas_) { cargarPersonas_(); return; }
+    personaActivaId_ = null;
+    var cont = panelSgc_();
+    if (!cont) return;
+    pintarPersonas_(cont, ultimaListaPersonas_);
   }
 
   function pintarPersonas_(cont, data) {
@@ -1324,7 +1343,7 @@
       '<div class="sigso-tabs">' + tabs + '</div>' +
       '<div class="sgc-cuerpo">' + cuerpo + '</div>';
 
-    cont.querySelector('.js-sgc-volver-personas').addEventListener('click', cargarPersonas_);
+    cont.querySelector('.js-sgc-volver-personas').addEventListener('click', volverAPersonas_);
     cont.querySelectorAll('.js-sgc-ficha-tab').forEach(function (btn) {
       btn.addEventListener('click', function () {
         pestanaFicha_ = btn.getAttribute('data-tab');
@@ -1861,6 +1880,7 @@
             Componentes.aviso({ texto: (r && r.message) || 'No se pudo desvincular.', tipo: 'error' });
             return;
           }
+          ultimaListaPersonas_ = null;
           abrirPersona_(p.persona_id);
         });
       });
@@ -1869,6 +1889,7 @@
     var reactivar = cont.querySelector('.js-sgc-reactivar');
     if (reactivar) reactivar.addEventListener('click', function () {
       api_('desvincularPersonaSgc', { persona_id: p.persona_id, reactivar: true }).then(function () {
+        ultimaListaPersonas_ = null;
         abrirPersona_(p.persona_id);
       });
     });
@@ -1950,6 +1971,7 @@
             Componentes.aviso({ texto: (r && r.message) || 'No se pudo registrar.', tipo: 'error' });
             return;
           }
+          ultimaListaPersonas_ = null;
           abrirPersona_(p.persona_id);
         });
       });
@@ -2028,6 +2050,10 @@
           return;
         }
         cerrar();
+        // El listado cacheado (ver volverAPersonas_) quedaria desactualizado
+        // con estos datos nuevos -- se invalida para que el proximo "<-
+        // Personal" vuelva a pedirlo, en vez de mostrar el nombre/cargo viejo.
+        ultimaListaPersonas_ = null;
         if (p) abrirPersona_(p.persona_id); else cargarPersonas_();
       }).catch(function (err) {
         if (boton) { boton.disabled = false; boton.textContent = textoOriginalPersona_; }
@@ -2146,6 +2172,7 @@
           return;
         }
         cerrar();
+        ultimaListaPersonas_ = null;
         abrirPersona_(p.persona_id);
       }).catch(function (err) {
         boton.disabled = false; boton.textContent = textoOriginal;
