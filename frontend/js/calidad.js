@@ -430,12 +430,29 @@
   //   opts.sigo()   ¿seguimos en esta pantalla? (sección activa y sin detalle)
   //   opts.aplicar(cont, data)  fija el estado propio de la sección + pinta
   //   opts.error(cont, msg)     pinta el error (cada sección arma el suyo)
+  // Esqueleto de una lista: seis filas con dos barras cada una. No pretende
+  // adivinar el contenido, sólo reservar su forma para que nada salte.
+  function esqueletoListaSgc_(texto) {
+    var fila = '<div class="sgc-skel__fila">' +
+      '<div class="sgc-skel__barra" style="width:42%"></div>' +
+      '<div class="sgc-skel__barra" style="width:22%"></div>' +
+    '</div>';
+    return '<div class="sgc-skel" role="status" aria-busy="true" aria-live="polite">' +
+      '<span class="sigso-oculto-visual">' + Componentes.escaparHtml(texto || 'Cargando...') + '</span>' +
+      new Array(7).join(fila) +
+    '</div>';
+  }
+
   function cargarListadoSgc_(opts) {
     var cont = panelSgc_();
     if (!cont) return;
     var enCache = cacheListadoSgc_[opts.clave];
     if (enCache) opts.aplicar(cont, enCache);
-    else cont.innerHTML = Componentes.cargando(opts.spinner);
+    // v16.0: esqueleto en vez de un spinner centrado. El spinner deja la
+    // pantalla en blanco y al llegar los datos el contenido "salta"; el
+    // esqueleto mantiene la forma de la lista, así el cambio es un relleno y
+    // no un salto. Se anuncia por aria-busy para quien usa lector.
+    else cont.innerHTML = esqueletoListaSgc_(opts.spinner);
     api_(opts.accion, opts.datos || {}).then(function (respuesta) {
       if (!opts.sigo()) return;
       if (!respuesta || !respuesta.ok) {
@@ -542,7 +559,8 @@
     if (data.pendientes_de_acuse) {
       kpis = '<div class="sgc-tarea-barra' + (filtroPendientes_ ? ' sgc-tarea-barra--activa' : '') + '">' +
         '<div class="sgc-tarea-barra__texto">' +
-          '<b>' + data.pendientes_de_acuse + ' documento(s) esperan tu confirmación.</b> ' +
+          '<b>' + plural_(data.pendientes_de_acuse, 'documento espera', 'documentos esperan') +
+            ' tu confirmación.</b> ' +
           'Ábrelos y marca «Enterado».' +
         '</div>' +
         Componentes.boton({
@@ -555,39 +573,66 @@
     // v15.0: los tipos pasan del <select> (jerga ISO escondida en un menú) a
     // fichas visibles. Responde de un vistazo "¿dónde están los
     // procedimientos?", que era una de las preguntas que nadie podía contestar.
-    var fichas = [{ valor: '', texto: 'Todos' }].concat(TIPOS.map(function (t) {
-      return { valor: t, texto: TIPO_ETIQUETA_PLURAL[t] || TIPO_ETIQUETA[t] };
-    })).map(function (f) {
+    // v16.0: los tipos pasan de píldoras sueltas (que se leían como etiquetas)
+    // a un CONTROL SEGMENTADO con el recuento de cada grupo. Es navegación
+    // contextual: sólo existe dentro de Documentos, y dice cuánto hay en cada
+    // vista antes de entrar. El recuento sale del listado ya cargado, sin
+    // filtrar por búsqueda, para que no baile mientras se escribe.
+    var todos = data.documentos || [];
+    var porTipo = {};
+    todos.forEach(function (x) { porTipo[x.tipo] = (porTipo[x.tipo] || 0) + 1; });
+    var segmentos = [{ valor: '', texto: 'Todos', n: todos.length }].concat(
+      TIPOS.map(function (t) {
+        return { valor: t, texto: TIPO_ETIQUETA_PLURAL[t] || TIPO_ETIQUETA[t], n: porTipo[t] || 0 };
+      }).filter(function (s) { return s.n > 0 || filtroTipo_ === s.valor; })
+    ).map(function (f) {
       var activo = (filtroTipo_ || '') === f.valor;
-      // aria-pressed (no aria-current): son filtros que se activan y
-      // desactivan, no la página en la que estás.
-      return '<button type="button" class="sgc-chip' + (activo ? ' sgc-chip--activo' : '') +
+      return '<button type="button" class="sgc-segmento' + (activo ? ' sgc-segmento--activo' : '') +
         ' js-sgc-chip-tipo" data-tipo="' + f.valor + '" aria-pressed="' + (activo ? 'true' : 'false') + '">' +
-        Componentes.escaparHtml(f.texto) + '</button>';
+        Componentes.escaparHtml(f.texto) +
+        '<span class="sgc-segmento__n">' + f.n + '</span>' +
+      '</button>';
     }).join('');
 
-    var cabecera = barraSecciones_() + '<div class="sgc-cabecera">' +
-      '<p class="sigso-ayuda">Los documentos del SGC que te corresponden' +
-        (data.rol_sgc ? ' según tu rol (<b>' + Componentes.escaparHtml(ROL_SGC_ETIQUETA[data.rol_sgc] || data.rol_sgc) + '</b>)' : '') +
-        '.</p>' +
-      (puedeGestionar_ ? Componentes.boton({ texto: '+ Cargar documento', clase: 'js-sgc-nuevo' }) : '') +
-      // v11.0 Fase 5: el listado de documentos externos (§7.5.3.2) se ofrece
-      // mientras no haya ninguno identificado. Despues estorba.
-      (puedeGestionar_ && !(data.documentos || []).some(function (x) { return x.tipo === 'EXTERNO'; })
-        ? Componentes.boton({ texto: 'Cargar normas y leyes aplicables', variante: 'secundario', clase: 'js-sgc-externos' })
+    // v16.0: la pantalla se presenta por lo que sirve, no por cómo se llama en
+    // la norma, y el buscador deja de ser un campo más de una fila de filtros
+    // para ser el elemento principal: encontrar es la acción número uno acá.
+    var cabecera = barraSecciones_() +
+      '<div class="sgc-ini-cab">' +
+        '<h1 class="sgc-ini-cab__titulo">Documentos</h1>' +
+        '<p class="sgc-ini-cab__sub">Encuentra procedimientos, instructivos, formularios y las normas que aplican.' +
+          (data.rol_sgc ? ' Ves los que te corresponden como <b>' +
+            Componentes.escaparHtml(ROL_SGC_ETIQUETA[data.rol_sgc] || data.rol_sgc) + '</b>.' : '') +
+        '</p>' +
+      '</div>' +
+      (puedeGestionar_
+        ? '<div class="sgc-cabecera">' +
+            Componentes.boton({ texto: '+ Cargar documento', clase: 'js-sgc-nuevo' }) +
+            // v11.0 Fase 5: se ofrece mientras no haya ninguno identificado.
+            (!todos.some(function (x) { return x.tipo === 'EXTERNO'; })
+              ? Componentes.boton({ texto: 'Cargar normas y leyes aplicables', variante: 'secundario', clase: 'js-sgc-externos' })
+              : '') +
+          '</div>'
         : '') +
-      '</div>' + kpis +
-      '<div class="sgc-chips" role="group" aria-label="Filtrar por tipo de documento">' + fichas + '</div>' +
-      '<div class="sgc-filtros">' +
-        Componentes.campoTexto({ id: 'sgc-f-busqueda', label: false, valor: filtroBusqueda_, placeholder: 'Buscar: nombre, código o palabra clave...' }) +
+      kpis +
+      '<form class="sgc-toolbar" id="form-doc-buscar" role="search">' +
+        '<label class="sigso-oculto-visual" for="sgc-f-busqueda">Buscar un documento</label>' +
+        '<div class="sgc-toolbar__buscar">' +
+          '<input type="search" id="sgc-f-busqueda" name="q" value="' + Componentes.escaparHtml(filtroBusqueda_ || '') +
+            '" placeholder="Buscar por nombre, código o palabra clave...">' +
+        '</div>' +
         (puedeGestionar_
-          ? Componentes.campoSelect({
+          // El select va sin etiqueta visible (el placeholder ya dice qué
+          // filtra), así que necesita uno accesible o queda mudo al lector.
+          ? '<label class="sigso-oculto-visual" for="sgc-f-estado">Filtrar por estado del documento</label>' +
+            Componentes.campoSelect({
               id: 'sgc-f-estado', label: false, valor: filtroEstado_, placeholder: 'Vigentes y obsoletos',
               opciones: [{ valor: 'VIGENTE', texto: 'Solo vigentes' }, { valor: 'OBSOLETO', texto: 'Solo obsoletos' }]
             })
           : '') +
-        (hayFiltros ? Componentes.boton({ texto: 'Limpiar filtros', variante: 'sutil', clase: 'js-sgc-limpiar', tipo: 'button' }) : '') +
-      '</div>';
+        (hayFiltros ? Componentes.boton({ texto: 'Limpiar', variante: 'sutil', clase: 'js-sgc-limpiar', tipo: 'button' }) : '') +
+      '</form>' +
+      '<div class="sgc-segmentos" role="group" aria-label="Filtrar por tipo de documento">' + segmentos + '</div>';
 
     function wire() {
       wireSecciones_(cont);
@@ -619,10 +664,15 @@
       var busqueda = cont.querySelector('#sgc-f-busqueda');
       if (busqueda) {
         busqueda.addEventListener('change', function () { filtroBusqueda_ = this.value; cargarListado_(); });
-        busqueda.addEventListener('keydown', function (ev) {
-          if (ev.key === 'Enter') { ev.preventDefault(); filtroBusqueda_ = this.value; cargarListado_(); }
-        });
       }
+      // El buscador vive en un <form>: Enter envía, y eso basta. Antes se
+      // atrapaba la tecla a mano porque era un input suelto.
+      var formBuscar = cont.querySelector('#form-doc-buscar');
+      if (formBuscar) formBuscar.addEventListener('submit', function (ev) {
+        ev.preventDefault();
+        filtroBusqueda_ = (cont.querySelector('#sgc-f-busqueda') || {}).value || '';
+        cargarListado_();
+      });
       cont.querySelectorAll('.js-sgc-chip-tipo').forEach(function (b) {
         b.addEventListener('click', function () {
           filtroTipo_ = b.getAttribute('data-tipo') || '';
@@ -677,30 +727,31 @@
     });
 
     var filas = docs.map(function (d) {
-      var obsoleto = d.estado === 'OBSOLETO';
+      var est = estadoDocumentoSgc_(d);
       // v10.0 Fase 2 (cont.): icono a la izquierda por tipo de documento --
       // antes la unica pista del tipo era texto chico en la fila de meta;
       // ahora se escanea la lista por forma/color antes de leer nada.
-      return '<button type="button" class="sgc-doc sgc-doc--con-icono js-sgc-abrir' + (obsoleto ? ' sgc-doc--obsoleto' : '') + '" data-id="' + d.documento_id + '">' +
+      return '<button type="button" class="sgc-doc sgc-doc--con-icono js-sgc-abrir' +
+        (est.fila ? ' sgc-doc--' + est.fila : '') + '" data-id="' + d.documento_id + '">' +
         '<span class="sgc-doc__icono">' + Iconos.svg(TIPO_ICONO_SGC[d.tipo] || 'documento', { tam: 17 }) + '</span>' +
         '<span class="sgc-doc__cuerpo">' +
           '<span class="sgc-doc__top">' +
-            '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(d.codigo) + '</span>' +
             '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(d.nombre) + '</span>' +
-            // v15.0: un documento EXTERNO (una ley, una norma) no tiene
-            // versión propia -- la organización no la controla. Antes se
-            // pintaba igual la insignia y quedaba una "v" suelta sin número.
-            (String(d.version_vigente || '').trim()
-              ? Componentes.badge('v' === String(d.version_vigente).charAt(0)
-                  ? d.version_vigente : ('v' + d.version_vigente), 'neutro')
-              : '') +
-            (obsoleto ? Componentes.badge('Obsoleto', 'critico') : '') +
-            (d.debo_acusar ? Componentes.badge('Debes confirmar', 'alerta') : '') +
-            (d.revision_vencida && !obsoleto ? Componentes.badge('Revisión vencida', 'alerta') : '') +
+            // v16.0: UNA sola señal de estado, y sólo si el documento se sale
+            // de lo normal. Antes podían apilarse cuatro insignias (versión,
+            // obsoleto, debes confirmar, revisión vencida) y "Vigente" salía
+            // en las 28 filas: una etiqueta que aparece siempre no informa.
+            (est.chip ? '<span class="sgc-sev sgc-sev--' + est.tono + '">' +
+                Componentes.escaparHtml(est.chip) + '</span>' : '') +
           '</span>' +
           '<span class="sgc-doc__meta">' +
+            '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(d.codigo) + '</span>' +
             '<span>' + Componentes.escaparHtml(TIPO_ETIQUETA[d.tipo] || d.tipo) + '</span>' +
-            (d.fecha_vigencia ? '<span>Vigente desde ' + fechaCorta_(d.fecha_vigencia) + '</span>' : '') +
+            (String(d.version_vigente || '').trim()
+              ? '<span>' + Componentes.escaparHtml(
+                  'v' === String(d.version_vigente).charAt(0) ? d.version_vigente : 'v' + d.version_vigente) + '</span>'
+              : '') +
+            (d.fecha_vigencia ? '<span>Desde ' + fechaCorta_(d.fecha_vigencia) + '</span>' : '') +
             // v15.0: la fecha de próxima revisión es un control de GESTIÓN
             // (a quién le toca revisar el documento y cuándo). A quien sólo
             // consulta le aparecía como "Revisar 24/08/2027", que se lee como
@@ -713,8 +764,24 @@
       '</button>';
     }).join('');
 
-    cont.innerHTML = cabecera + '<div class="sgc-lista">' + filas + '</div>';
+    cont.innerHTML = cabecera +
+      '<div class="sgc-lista">' + filas + '</div>' +
+      '<p class="sgc-toolbar__cuenta" style="margin:var(--esp-3) 0 0">' +
+        docs.length + (docs.length === 1 ? ' documento' : ' documentos') +
+        (hayFiltros ? ' con los filtros aplicados' : '') + '</p>';
     wire();
+  }
+
+  // v16.0: UN vocabulario de estado para todo el módulo documental.
+  // Devuelve {chip, tono, fila}: qué etiqueta mostrar, con qué color, y qué
+  // rail lleva la fila. El caso normal (vigente y sin nada que hacer) no
+  // devuelve etiqueta: marcar lo normal es ruido, y deja sin fuerza a lo que
+  // sí requiere mirada.
+  function estadoDocumentoSgc_(d) {
+    if (d.estado === 'OBSOLETO') return { chip: 'Obsoleto', tono: 'critico', fila: 'obsoleto' };
+    if (d.debo_acusar) return { chip: 'Por confirmar', tono: 'alerta', fila: 'pendiente' };
+    if (d.revision_vencida && puedeGestionar_) return { chip: 'Revisión vencida', tono: 'alerta', fila: 'pendiente' };
+    return { chip: '', tono: '', fila: '' };
   }
 
   // --- detalle del documento ------------------------------------------------
@@ -768,9 +835,9 @@
       '</div>';
     }
 
+    // v16.0: Tipo y Versión ya viven en la línea de identidad de la cabecera;
+    // repetirlos acá era decir dos veces lo mismo en la misma pantalla.
     var ficha = '<dl class="sgc-ficha">' +
-      campoFicha_('Tipo', TIPO_ETIQUETA[d.tipo] || d.tipo) +
-      campoFicha_('Versión vigente', d.version_vigente) +
       campoFicha_('Vigente desde', fechaCorta_(d.fecha_vigencia)) +
       // v15.0: control de gestión, no dato de lectura (ver la fila del listado).
       (puedeGestionar_ ? campoFicha_('Próxima revisión', fechaCorta_(d.proxima_revision)) : '') +
@@ -822,22 +889,45 @@
         }).join('') + '</div>'
       : '';
 
+    // v16.0 — IDENTIDAD del documento arriba de todo.
+    //
+    // Antes la cabecera mezclaba en una misma línea el botón de volver, el
+    // código (en azul de acción, compitiendo), el nombre y una insignia. Se
+    // separa en dos niveles: volver es navegación y va suelto; debajo, la
+    // identidad -- nombre grande, y como subtítulo lo que identifica al
+    // documento de un vistazo (código · tipo · versión · estado).
+    var est = estadoDocumentoSgc_(Object.assign({}, d, { debo_acusar: data.debo_acusar }));
+    var identidad = '<div class="sgc-doc-cab">' +
+      '<h1 class="sgc-doc-cab__titulo">' + Componentes.escaparHtml(d.nombre) + '</h1>' +
+      '<p class="sgc-doc-cab__ident">' +
+        '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(d.codigo) + '</span>' +
+        '<span>' + Componentes.escaparHtml(TIPO_ETIQUETA[d.tipo] || d.tipo) + '</span>' +
+        (String(d.version_vigente || '').trim()
+          ? '<span>' + Componentes.escaparHtml(
+              'v' === String(d.version_vigente).charAt(0) ? d.version_vigente : 'v' + d.version_vigente) + '</span>'
+          : '') +
+        (est.chip ? '<span class="sgc-sev sgc-sev--' + est.tono + '">' +
+            Componentes.escaparHtml(est.chip) + '</span>' : '') +
+      '</p>' +
+      (d.descripcion ? '<p class="sgc-doc-cab__desc">' + Componentes.escaparHtml(d.descripcion) + '</p>' : '') +
+    '</div>';
+
     cont.innerHTML =
+      barraSecciones_(d.codigo) +
       '<div class="sgc-detalle-cab">' +
         Componentes.boton({ texto: '← Documentos', variante: 'sutil', clase: 'js-sgc-volver' }) +
-        '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(d.codigo) + '</span>' +
-        '<h1>' + Componentes.escaparHtml(d.nombre) + '</h1>' +
-        (obsoleto ? Componentes.badge('Obsoleto', 'critico') : '') +
       '</div>' +
+      identidad +
       (obsoleto
         ? Componentes.alerta('Este documento está fuera de circulación. Se conserva solo para trazabilidad; no debe usarse.', 'aviso')
         : '') +
       '<div class="sgc-cuerpo">' +
+        // La ACCIÓN antes que los metadatos: si hay algo que hacer con este
+        // documento, se ve sin desplazarse.
         bloqueAcuse +
-        (d.descripcion ? '<p>' + Componentes.escaparHtml(d.descripcion) + '</p>' : '') +
-        ficha +
-        (d.archivo_nombre ? '<p class="sigso-ayuda">Archivo: ' + Componentes.escaparHtml(d.archivo_nombre) + '</p>' : '') +
         acciones +
+        ficha +
+        (d.archivo_nombre ? '<p class="sigso-ayuda">Archivo adjunto: ' + Componentes.escaparHtml(d.archivo_nombre) + '</p>' : '') +
         '<div class="js-sgc-cumplimiento-panel"></div>' +
         bloqueClausulas +
         versiones +
@@ -916,7 +1006,7 @@
     var total = c.confirmados.length + c.pendientes.length;
     panel.innerHTML =
       '<h3 class="sgc-sub">Confirmación de lectura — versión ' + Componentes.escaparHtml(c.version) + '</h3>' +
-      '<p class="sigso-ayuda">' + c.confirmados.length + ' de ' + total + ' persona(s) han confirmado' +
+      '<p class="sigso-ayuda">' + c.confirmados.length + ' de ' + plural_(total, 'persona', 'personas') + (total === 1 ? ' ha confirmado' : ' han confirmado') +
         (c.fecha_limite_acuse ? ' · plazo ' + fechaCorta_(c.fecha_limite_acuse) : '') + '.</p>' +
       '<div class="sgc-lista">' +
         (c.pendientes.length
@@ -1842,7 +1932,7 @@
     var panelHoras = (data.horas_por_persona || []).length
       ? '<h3 class="sgc-sub">Horas de formación ' + data.anio + '</h3>' +
         (bajoMeta.length
-          ? Componentes.alerta(bajoMeta.length + ' persona(s) bajo la meta de 5 horas al año.', 'aviso')
+          ? Componentes.alerta(plural_(bajoMeta.length, 'persona', 'personas') + ' bajo la meta de 5 horas al año.', 'aviso')
           : Componentes.alerta('Todo el personal cumple la meta de 5 horas al año.', 'ok')) +
         '<div class="sgc-lista">' + (data.horas_por_persona || []).map(function (h) {
           return '<div class="sgc-version"><div class="sgc-doc__top">' +
@@ -1914,7 +2004,7 @@
           (realizada
             ? '<span>Realizada ' + fechaCorta_(c.fecha_realizada) + '</span>'
             : (c.fecha_programada ? '<span>Programada ' + fechaCorta_(c.fecha_programada) + '</span>' : '')) +
-          (realizada ? '<span>' + c.total_asistieron + ' asistente(s)</span>' : '') +
+          (realizada ? '<span>' + plural_(c.total_asistieron, 'asistente') + '</span>' : '') +
         '</div>' +
         (c.descripcion ? '<p class="sigso-ayuda">' + Componentes.escaparHtml(c.descripcion) + '</p>' : '') +
         filasAsistentes +
@@ -3103,9 +3193,10 @@
             ? 'Realizada ' + fechaCorta_(a.fecha_ejecucion)
             : 'Programada ' + fechaCorta_(a.fecha_programada)) + '</span>' +
           (a.verificaciones
-            ? '<span>' + a.verificaciones + ' cláusula(s) verificada(s)</span>'
-            : '<span>' + a.clausulas.length + ' cláusula(s) en alcance</span>') +
-          (a.no_conformidades ? '<span>' + a.no_conformidades + ' no conformidad(es)</span>' : '') +
+            ? '<span>' + plural_(a.verificaciones, 'cláusula verificada', 'cláusulas verificadas') + '</span>'
+            : '<span>' + plural_(a.clausulas.length, 'cláusula', 'cláusulas') + ' en alcance</span>') +
+          (a.no_conformidades
+            ? '<span>' + plural_(a.no_conformidades, 'no conformidad', 'no conformidades') + '</span>' : '') +
         '</div>' +
       '</button>';
     }).join('');
@@ -3156,7 +3247,7 @@
             campoFicha_('Auditados', (data.auditados || []).join(', ')) +
           '</dl>' +
           (ant
-            ? '<p class="sigso-ayuda">Plan comunicado con ' + ant.dias_naturales + ' día(s) de anticipación' +
+            ? '<p class="sigso-ayuda">Plan comunicado con ' + plural_(ant.dias_naturales, 'día') + ' de anticipación' +
               (ant.suficiente ? '.' : ' — PRO-03 pide 5 días hábiles.') + '</p>'
             : '')
         : '<p class="sigso-ayuda">Objetivo, alcance, criterios y a quiénes se audita. Al guardarlo se les avisa.</p>'),
@@ -3173,10 +3264,10 @@
     var e2 = etapaNc_(2, 'Lista de verificación', r.verificaciones > 0,
       (r.verificaciones
         ? '<div class="sgc-conteos">' +
-            Componentes.badge(r.conformes + ' conforme(s)', 'ok') +
-            (r.observaciones ? Componentes.badge(r.observaciones + ' observación(es)', 'alerta') : '') +
-            (r.no_conformidades ? Componentes.badge(r.no_conformidades + ' no conformidad(es)', 'critico') : '') +
-            (r.oportunidades ? Componentes.badge(r.oportunidades + ' oportunidad(es)', 'info') : '') +
+            Componentes.badge(plural_(r.conformes, 'conforme'), 'ok') +
+            (r.observaciones ? Componentes.badge(plural_(r.observaciones, 'observación', 'observaciones'), 'alerta') : '') +
+            (r.no_conformidades ? Componentes.badge(plural_(r.no_conformidades, 'no conformidad', 'no conformidades'), 'critico') : '') +
+            (r.oportunidades ? Componentes.badge(plural_(r.oportunidades, 'oportunidad', 'oportunidades'), 'info') : '') +
           '</div>' + tablaHallazgos_(data, audita, gestiona)
         : '<p class="sigso-ayuda">Cláusula por cláusula: qué se revisó, con qué evidencia y qué se encontró. ' +
           'Una cláusula conforme también se registra: es la evidencia de que se revisó.</p>'),
@@ -4173,7 +4264,7 @@
     ].join('') + '</div>';
 
     var avisoUnicos = ind.unicos_reprobados
-      ? Componentes.alerta(ind.unicos_reprobados + ' proveedor(es) único(s) están reprobados. ' +
+      ? Componentes.alerta(plural_(ind.unicos_reprobados, 'proveedor único está reprobado', 'proveedores únicos están reprobados') + '. ' +
           'No corresponde reemplazarlos: hay que pedirles una reunión para exigir mejoras (PRO-04 §6.2).', 'advertencia')
       : '';
 
@@ -4588,7 +4679,7 @@
         '<div class="sgc-doc__meta">' +
           '<span>Reunión: ' + fechaCorta_(r.fecha_reunion || r.fecha_programada) + '</span>' +
           '<span>' + r.entradas_completas + '/' + r.total_entradas + ' temas</span>' +
-          '<span>' + r.total_acuerdos + ' acuerdo(s)</span>' +
+          '<span>' + plural_(r.total_acuerdos, 'acuerdo') + '</span>' +
         '</div>' +
         '</button>';
     }).join('') + '</div>';
@@ -5763,7 +5854,28 @@
   // ==========================================================================
 
   var SEV_TONO = { CRITICA: 'critico', ALTA: 'alerta', MEDIA: 'info' };
-  var SEV_ETIQUETA = { CRITICA: 'Crítico', ALTA: 'Requiere atención', MEDIA: 'Próximo' };
+  var SEV_ETIQUETA = { CRITICA: 'Crítico', ALTA: 'Atender', MEDIA: 'Próximo' };
+
+  // v16.0: plural de verdad. El módulo escribía "10 documento(s)",
+  // "3 cláusula(s) verificada(s)", "2 no conformidad(es)": la marca de un
+  // texto escrito por el sistema y no para una persona. Con esto se dice
+  // "1 documento" o "10 documentos", que es como se habla.
+  function plural_(n, singular, pluralForma) {
+    return n + ' ' + (Number(n) === 1 ? singular : (pluralForma || singular + 's'));
+  }
+
+  // "en 14 días" / "hoy" / "hace 3 días". Un plazo en fecha absoluta obliga a
+  // calcular mentalmente; el relativo se entiende de una lectura.
+  function cuandoRelativoSgc_(iso, ahora) {
+    var f = new Date(iso);
+    if (isNaN(f.getTime())) return '';
+    var dias = Math.round((f - (ahora || new Date())) / 86400000);
+    if (dias === 0) return 'hoy';
+    if (dias === 1) return 'mañana';
+    if (dias === -1) return 'ayer';
+    if (dias > 0) return 'en ' + dias + ' días';
+    return 'hace ' + Math.abs(dias) + ' días';
+  }
 
   // ==========================================================================
   // v15.0 — INICIO ADAPTATIVO
@@ -5789,7 +5901,7 @@
     if (!cont) return;
     var cache = cacheListadoSgc_.inicio;
     if (cache) pintarInicio_(cont, cache);
-    else cont.innerHTML = Componentes.cargando('Preparando tu inicio...');
+    else cont.innerHTML = esqueletoListaSgc_('Preparando tu inicio...');
 
     // Si ya sabemos que no supervisa, no se pide el resumen de gobierno:
     // devolvería "sin acceso" y sería un viaje perdido en cada entrada.
@@ -5873,7 +5985,7 @@
           var vence = x.dias_para_acuse;
           var plazo = (vence === null || vence === undefined) ? ''
             : (vence < 0 ? '<span class="sgc-ini-plazo sgc-ini-plazo--vencido">Plazo vencido</span>'
-              : (vence <= 7 ? '<span class="sgc-ini-plazo">Quedan ' + vence + ' día(s)</span>' : ''));
+              : (vence <= 7 ? '<span class="sgc-ini-plazo">Quedan ' + plural_(vence, 'día') + '</span>' : ''));
           return '<li class="sgc-ini-fila">' +
             '<div class="sgc-ini-fila__texto">' +
               '<span class="sgc-ini-fila__nombre">' + Componentes.escaparHtml(x.nombre) + '</span>' +
@@ -5902,25 +6014,38 @@
     }
 
     // --- 2. Encontrar un documento -----------------------------------------
+    // v16.0: los atajos dejan de ser "chips". En Inicio NO son un filtro (no
+    // hay lista debajo que filtrar): son accesos que llevan a otra pantalla.
+    // Pintarlos igual que el conmutador de vista de Documentos era usar el
+    // mismo lenguaje visual para dos cosas distintas. Ahora se leen como lo
+    // que son -- destinos -- con su icono y el recuento de lo que hay dentro.
+    var porTipoIni = {};
+    docs.forEach(function (x) { porTipoIni[x.tipo] = (porTipoIni[x.tipo] || 0) + 1; });
     var atajos = [
-      { tipo: 'PRO', texto: 'Procedimientos' },
-      { tipo: 'INS', texto: 'Instructivos' },
-      { tipo: 'FO', texto: 'Formularios' },
-      { tipo: '', texto: 'Ver todos' }
+      { tipo: 'PRO', texto: 'Procedimientos', icono: 'documento' },
+      { tipo: 'INS', texto: 'Instructivos', icono: 'documento' },
+      { tipo: 'FO', texto: 'Formularios', icono: 'documento' },
+      { tipo: '', texto: 'Ver todos', icono: 'carpeta', n: docs.length }
     ].map(function (a) {
-      return '<button type="button" class="sgc-chip js-ini-tipo" data-tipo="' + a.tipo + '">' +
-        Componentes.escaparHtml(a.texto) + '</button>';
+      var n = a.n !== undefined ? a.n : (porTipoIni[a.tipo] || 0);
+      return '<button type="button" class="sgc-atajo js-ini-tipo" data-tipo="' + a.tipo + '">' +
+        '<span class="sgc-atajo__ico">' + Iconos.svg(a.icono, { tam: 16 }) + '</span>' +
+        '<span class="sgc-atajo__texto">' + Componentes.escaparHtml(a.texto) + '</span>' +
+        '<span class="sgc-atajo__n">' + n + '</span>' +
+      '</button>';
     }).join('');
 
-    var buscar = '<section class="sgc-ini-bloque">' +
-      '<h3 class="sgc-ini-bloque__titulo">¿Qué documento necesitas?</h3>' +
+    var buscar = '<section class="sgc-seccion">' +
+      '<div class="sgc-seccion__cab">' +
+        '<h2 class="sgc-seccion__titulo">Buscar un documento</h2>' +
+        '<p class="sgc-seccion__ayuda">Tienes ' + docs.length + ' disponibles</p>' +
+      '</div>' +
       '<form class="sgc-ini-buscar" id="form-ini-buscar" role="search">' +
         '<label class="sigso-oculto-visual" for="ini-q">Buscar un documento</label>' +
-        '<input type="search" id="ini-q" name="q" placeholder="Escribe una palabra: vacaciones, auditoría, reclamo...">' +
+        '<input type="search" id="ini-q" name="q" placeholder="Escribe una palabra: extintor, reclamo, vacaciones...">' +
         Componentes.boton({ texto: 'Buscar', tipo: 'submit' }) +
       '</form>' +
-      '<div class="sgc-ini-chips">' + atajos + '</div>' +
-      '<p class="sigso-ayuda">Tienes ' + docs.length + ' documento(s) disponibles.</p>' +
+      '<div class="sgc-atajos">' + atajos + '</div>' +
     '</section>';
 
     // --- 3. Mi ficha (información, no tarea) --------------------------------
@@ -5931,8 +6056,11 @@
     if (mia) {
       var indTotal = mia.induccion_total || 0;
       var indHechas = mia.induccion_completadas || 0;
-      ficha = '<section class="sgc-ini-bloque">' +
-        '<h3 class="sgc-ini-bloque__titulo">Tu ficha</h3>' +
+      ficha = '<section class="sgc-seccion">' +
+        '<div class="sgc-seccion__cab">' +
+          '<h2 class="sgc-seccion__titulo">Tu ficha</h2>' +
+          '<p class="sgc-seccion__ayuda">Tus datos en el sistema de calidad</p>' +
+        '</div>' +
         '<div class="sgc-ini-ficha">' +
           '<div class="sgc-ini-ficha__datos">' +
             '<span class="sgc-ini-ficha__nombre">' + Componentes.escaparHtml(mia.nombre) + '</span>' +
@@ -5992,6 +6120,10 @@
   function pintarTablero_(cont, data) {
     var s = data.salud || {};
     var c = data.conteos || {};
+    // v16.0: quien GESTIONA (Encargado) trabaja esta pantalla; quien sólo
+    // SUPERVISA (Dirección/Gerencia) la lee para decidir. Misma información,
+    // dos encuadres -- ver `resumen` y el verbo de los botones más abajo.
+    var gestiona = data.puede_gestionar === true;
 
     // v15.0: mismo encabezado que la portada del personal, para que las dos
     // caras de Inicio se sientan la misma pantalla: saludo + una línea de
@@ -6006,6 +6138,31 @@
             ', alcance v' + Componentes.escaparHtml(data.alcance.version) + '.'
           : 'El alcance del SGC todavía no está declarado.') +
       '</p>' +
+    '</div>';
+
+    // v16.0 — RESUMEN EJECUTIVO: una frase que responde "¿cómo vamos?".
+    // Es lo que Dirección venía a buscar y antes tenía que deducir sumando
+    // cinco alertas y un porcentaje. No inventa datos: cuenta lo que ya
+    // manda el backend (críticas, altas y avance) y lo dice en palabras.
+    var criticas = (data.alertas || []).filter(function (a) { return a.severidad === 'CRITICA'; }).length;
+    var altas = (data.alertas || []).filter(function (a) { return a.severidad === 'ALTA'; }).length;
+    var tonoResumen, textoResumen;
+    if (criticas) {
+      tonoResumen = 'critico';
+      textoResumen = criticas + (criticas === 1 ? ' asunto crítico' : ' asuntos críticos') +
+        ' bloquea' + (criticas === 1 ? '' : 'n') + ' el sistema. Resolverlo es lo primero.';
+    } else if (altas) {
+      tonoResumen = 'alerta';
+      textoResumen = 'Sin asuntos críticos. Hay ' + altas +
+        (altas === 1 ? ' tema que requiere atención' : ' temas que requieren atención') + '.';
+    } else {
+      tonoResumen = 'ok';
+      textoResumen = 'Sin asuntos críticos ni vencidos. El sistema está al día.';
+    }
+    var resumenEjecutivo = '<div class="sgc-resumen sgc-resumen--' + tonoResumen + '">' +
+      '<p class="sgc-resumen__frase">' + Componentes.escaparHtml(textoResumen) + '</p>' +
+      '<p class="sgc-resumen__dato">' + (s.pct || 0) + '% de los ' + (s.aplicables || 0) +
+        ' requisitos en alcance tienen evidencia cargada.</p>' +
     '</div>';
 
     // --- salud -----------------------------------------------------------
@@ -6042,11 +6199,13 @@
           (s.no_aplica ? ' · ' + s.no_aplica + ' excluido(s)' : '') + '</span>' +
       '</summary>' +
       '<div class="sgc-avance__cuerpo">' +
-        '<p class="sigso-ayuda">Mide cuánta evidencia hay cargada en SIGSO. ' +
-          '<b>No es un porcentaje de certificación</b>: quien certifica es la casa ' +
-          'certificadora, y lo hace con hallazgos.</p>' +
+        // v16.0: el descargo va UNA vez. En la v15 se escribía a mano acá y
+        // además se pintaba `s.aviso`, que dice exactamente lo mismo con
+        // otras palabras: el mismo párrafo dos veces en el mismo bloque. Se
+        // conserva el del backend, que es la redacción autorizada.
+        '<p class="sigso-ayuda">' + Componentes.escaparHtml(s.aviso ||
+          'Mide cuánta evidencia hay cargada en SIGSO; no es un porcentaje de certificación.') + '</p>' +
         '<div class="sgc-salud__capitulos">' + barras + '</div>' +
-        (s.aviso ? '<p class="sigso-ayuda">' + Componentes.escaparHtml(s.aviso) + '</p>' : '') +
       '</div>' +
     '</details>';
 
@@ -6061,6 +6220,11 @@
       return (ORDEN_SEV[a.severidad] === undefined ? 9 : ORDEN_SEV[a.severidad]) -
              (ORDEN_SEV[b.severidad] === undefined ? 9 : ORDEN_SEV[b.severidad]);
     });
+    // v16.0: cada alerta se escribe como TAREA -- qué pasa, por qué importa y
+    // el botón para ir a resolverlo. Antes el número y la severidad iban como
+    // dos insignias sueltas al lado del título ("No conformidades abiertas
+    // [3] [Requiere atención]"): tres señales para un mismo hecho, y ninguna
+    // decía qué hacer. Ahora el número está dentro de la frase.
     var alertas = '';
     if (!listaAlertas.length) {
       alertas = '<section class="sgc-ini-tarea sgc-ini-tarea--ok">' +
@@ -6069,44 +6233,67 @@
           'Cuando algo requiera atención aparecerá acá primero.</p>' +
       '</section>';
     } else {
-      alertas = '<section class="sgc-atencion">' +
-        '<h2 class="sgc-atencion__titulo">Requiere tu atención' +
-          '<span class="sgc-atencion__cuenta">' + listaAlertas.length + '</span></h2>' +
-        '<ul class="sgc-ini-lista" role="list">' + listaAlertas.map(function (a) {
-          var tono = SEV_TONO[a.severidad] || 'neutro';
-          return '<li class="sgc-ini-fila sgc-ini-fila--' + tono + '">' +
-            '<div class="sgc-ini-fila__texto">' +
-              '<span class="sgc-ini-fila__nombre">' +
+      alertas = '<section class="sgc-seccion">' +
+        '<div class="sgc-seccion__cab">' +
+          '<h2 class="sgc-seccion__titulo">Requiere tu atención</h2>' +
+          '<p class="sgc-seccion__ayuda">' + listaAlertas.length +
+            (listaAlertas.length === 1 ? ' asunto pendiente' : ' asuntos pendientes') + '</p>' +
+        '</div>' +
+        '<div class="sgc-tareas">' + listaAlertas.map(function (a) {
+          var tono = SEV_TONO[a.severidad] || 'info';
+          // La cifra va en su PROPIA columna, no incrustada en el título.
+          // Probé anteponerla a la frase ("3 no conformidades abiertas") y
+          // producía errores reales de idioma con los títulos que no son
+          // frases contables: "1 quejas en curso", "1 sin revisión por la
+          // dirección registrada". El backend manda el título ya redactado;
+          // reescribirlo desde el cliente es inventar gramática. En columna
+          // se lee igual de bien y nunca está mal escrito.
+          var n = Number(a.total);
+          return '<div class="sgc-tarea sgc-tarea--' + tono + '">' +
+            (isFinite(n) && n > 0
+              ? '<span class="sgc-tarea__n" aria-hidden="true">' + n + '</span>'
+              : '') +
+            '<div class="sgc-tarea__cuerpo">' +
+              '<span class="sgc-tarea__titulo">' +
                 Componentes.escaparHtml(a.titulo) +
-                Componentes.badge(String(a.total), tono) +
-                Componentes.badge(SEV_ETIQUETA[a.severidad] || a.severidad, tono) +
+                '<span class="sgc-sev sgc-sev--' + tono + '">' +
+                  Componentes.escaparHtml(SEV_ETIQUETA[a.severidad] || a.severidad) + '</span>' +
               '</span>' +
-              '<span class="sgc-ini-fila__meta">' + Componentes.escaparHtml(a.detalle) + '</span>' +
+              '<span class="sgc-tarea__detalle">' +
+                (isFinite(n) && n > 0 ? '<span class="sigso-oculto-visual">' + n + '. </span>' : '') +
+                Componentes.escaparHtml(a.detalle) + '</span>' +
             '</div>' +
-            Componentes.boton({ texto: 'Revisar', variante: 'secundario',
+            // El verbo cambia con lo que la persona puede hacer: el Encargado
+            // va a resolverlo; Dirección va a mirarlo. Prometer "Revisar" a
+            // quien no puede actuar sería ofrecer una acción que no existe.
+            Componentes.boton({ texto: gestiona ? 'Revisar' : 'Ver detalle', variante: 'secundario',
               clase: 'js-tab-ir', idx: a.seccion }) +
-          '</li>';
-        }).join('') + '</ul>' +
+          '</div>';
+        }).join('') + '</div>' +
       '</section>';
     }
 
-    // --- hitos -------------------------------------------------------------
-    var hitos = '';
-    if ((data.hitos || []).length) {
-      hitos = '<h4 class="sgc-sub">Próximos hitos</h4>' +
-        '<div class="sgc-lista">' + data.hitos.map(function (h) {
-          return '<button type="button" class="sgc-doc js-tab-ir" data-seccion="' +
-            Componentes.escaparHtml(h.seccion) + '">' +
-            '<div class="sgc-doc__linea">' +
-              '<span class="sgc-doc__codigo">' + fechaCorta_(h.fecha) + '</span>' +
-              '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(h.titulo) + '</span>' +
-            '</div>' +
-          '</button>';
-        }).join('') + '</div>';
-    } else {
-      hitos = '<h4 class="sgc-sub">Próximos hitos</h4>' +
-        '<p class="sigso-ayuda">No hay fechas comprometidas por delante.</p>';
-    }
+    // --- hitos: línea de tiempo --------------------------------------------
+    // v16.0: antes eran botones sueltos donde la FECHA usaba la clase del
+    // código (monoespaciada y azul) pegada al título, y encima esa clase
+    // (.sgc-doc__linea) no tenía CSS: salía "07/09/2026NC-2026-001". Ahora la
+    // fecha es una columna alineada y un riel enhebra las filas.
+    var hoyHitos = new Date();
+    var hitos = '<section class="sgc-seccion">' +
+      '<div class="sgc-seccion__cab"><h2 class="sgc-seccion__titulo">Lo que viene</h2></div>' +
+      ((data.hitos || []).length
+        ? '<div class="sgc-hitos">' + data.hitos.map(function (h) {
+            return '<button type="button" class="sgc-hito js-tab-ir" data-seccion="' +
+              Componentes.escaparHtml(h.seccion) + '">' +
+              '<span class="sgc-hito__fecha">' + fechaCorta_(h.fecha) + '</span>' +
+              '<span class="sgc-hito__punto" aria-hidden="true"></span>' +
+              '<span class="sgc-hito__titulo">' + Componentes.escaparHtml(h.titulo) + '</span>' +
+              '<span class="sgc-hito__cuando">' + Componentes.escaparHtml(cuandoRelativoSgc_(h.fecha, hoyHitos)) + '</span>' +
+            '</button>';
+          }).join('') + '</div>'
+        : '<p class="sigso-ayuda">No hay fechas comprometidas por delante. ' +
+          'Acá aparecerán los plazos de las acciones y auditorías cuando existan.</p>') +
+    '</section>';
 
     // --- conteos -----------------------------------------------------------
     // v15.0: "El sistema en números" pasa a ser una tira compacta al final.
@@ -6116,21 +6303,34 @@
     // Se quitan "NC abiertas" y "Quejas abiertas": ya aparecen arriba, en
     // "Requiere tu atención", donde además llevan a resolverlas. Repetirlas
     // acá como número suelto no agregaba una decisión, agregaba ruido.
-    var conteos = '<h3 class="sgc-ini-bloque__titulo">El sistema en números</h3><div class="sgc-kpis">' + [
-      Componentes.kpi({ etiqueta: 'Documentos vigentes', valor: c.documentos_vigentes || 0,
-        titulo: (c.documentos_externos || 0) + ' de origen externo' }),
-      Componentes.kpi({ etiqueta: 'Procesos', valor: (c.procesos_mapa || 0) + (c.procesos_servicio || 0),
-        titulo: (c.procesos_mapa || 0) + ' del mapa y ' + (c.procesos_servicio || 0) + ' de servicio' }),
-      Componentes.kpi({ etiqueta: 'Riesgos', valor: c.riesgos || 0,
-        titulo: (c.riesgos_altos || 0) + ' altos o críticos' }),
-      Componentes.kpi({ etiqueta: 'Indicadores', valor: c.indicadores || 0 }),
-      Componentes.kpi({ etiqueta: 'Auditorías hechas', valor: c.auditorias_ejecutadas || 0 })
-    ].join('') + '</div>';
+    // v16.0: se corrige además la jerarquía de encabezados, que iba
+    // H1 -> H2 -> H4 -> H3 (un salto y un retroceso). Ahora todas las
+    // secciones de la portada son H2, en orden.
+    var conteos = '<section class="sgc-seccion">' +
+      '<div class="sgc-seccion__cab">' +
+        '<h2 class="sgc-seccion__titulo">El sistema en números</h2>' +
+        '<p class="sgc-seccion__ayuda">Tamaño del SGC, para dimensionar</p>' +
+      '</div>' +
+      '<div class="sgc-kpis">' + [
+        Componentes.kpi({ etiqueta: 'Documentos vigentes', valor: c.documentos_vigentes || 0,
+          titulo: (c.documentos_externos || 0) + ' de origen externo' }),
+        Componentes.kpi({ etiqueta: 'Procesos', valor: (c.procesos_mapa || 0) + (c.procesos_servicio || 0),
+          titulo: (c.procesos_mapa || 0) + ' del mapa y ' + (c.procesos_servicio || 0) + ' de servicio' }),
+        Componentes.kpi({ etiqueta: 'Riesgos', valor: c.riesgos || 0,
+          titulo: (c.riesgos_altos || 0) + ' altos o críticos' }),
+        Componentes.kpi({ etiqueta: 'Indicadores', valor: c.indicadores || 0 }),
+        Componentes.kpi({ etiqueta: 'Auditorías hechas', valor: c.auditorias_ejecutadas || 0 })
+      ].join('') + '</div>' +
+    '</section>';
 
     // Orden nuevo: qué requiere atención -> qué viene -> cuánto hay -> avance.
     // (Antes: avance ISO -> alertas -> hitos -> números.)
+    // v16.0: el resumen ejecutivo abre la pantalla. Para quien supervisa, el
+    // avance interno además se muestra ABIERTO: "¿estamos listos para
+    // certificar?" es justamente su pregunta, no un detalle que plegar.
+    if (!gestiona) salud = salud.replace('<details class="sgc-avance">', '<details class="sgc-avance" open>');
     cont.innerHTML = cabecera + '<div class="sgc-ini">' +
-      alertas + hitos + conteos + salud + '</div>';
+      resumenEjecutivo + alertas + hitos + conteos + salud + '</div>';
     wireSecciones_(cont);
 
     cont.querySelectorAll('.js-tab-ir').forEach(function (btn) {
@@ -8478,7 +8678,7 @@
       return '<div class="sgc-card-confidencial">' +
         '<h4 class="sgc-subtitulo"><span class="sgc-matriz-codigo">' + Componentes.escaparHtml(d.codigo) + '</span> ' + Componentes.escaparHtml(d.nombre) +
         (d.estado === 'OBSOLETO' ? ' ' + Componentes.badge('Obsoleto', 'neutro') : '') + '</h4>' +
-        '<p class="sigso-ayuda">' + d.destinatarios.length + ' persona(s) con acceso</p>' + lista +
+        '<p class="sigso-ayuda">' + plural_(d.destinatarios.length, 'persona', 'personas') + ' con acceso</p>' + lista +
         '</div>';
     }).join('');
 

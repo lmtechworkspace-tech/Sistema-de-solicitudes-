@@ -2974,7 +2974,28 @@
 }
 .sgc-filtros .sigso-campo { margin: 0; flex: 0 1 14rem; min-width: min(9rem, 100%); }
 
-.sgc-lista { display: flex; flex-direction: column; gap: var(--esp-2); }
+/* v16.0 — LISTA AGRUPADA (afecta a todas las pantallas de lista del módulo)
+   Antes cada elemento era una tarjeta suelta con borde, radio de 12px y 8px
+   de separación: 28 documentos ocupaban 2.252px de alto y el ancho quedaba
+   desaprovechado. Un inventario se ESCANEA, no se contempla: ahora la lista
+   es UNA superficie con filas separadas por una línea de 1px. Mismo dato,
+   ~40% menos de scroll, y el ojo baja por un solo borde en vez de saltar
+   entre 28 cajas. */
+.sgc-lista {
+  display: flex; flex-direction: column; gap: 0;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
+  overflow: hidden;
+}
+.sgc-lista > .sgc-doc,
+.sgc-lista > .sgc-version {
+  border: 0; border-radius: 0;
+  border-top: 1px solid var(--borde);
+  background: transparent;
+}
+.sgc-lista > .sgc-doc:first-child,
+.sgc-lista > .sgc-version:first-child { border-top: 0; }
 
 /* v10.0 Tanda A: eficacia de capacitacion por participante, anidada dentro
    de la tarjeta del curso -- una fila compacta por persona, sin el borde
@@ -2991,10 +3012,27 @@
 }
 .sgc-doc {
   display: block; width: 100%; text-align: left; cursor: pointer;
-  border-left: 3px solid var(--ok); font: inherit; color: inherit;
+  font: inherit; color: inherit;
+  transition: background var(--mov-rapido);
 }
 .sgc-doc:hover { background: var(--superficie-2); }
-.sgc-doc--obsoleto { border-left-color: var(--critico); opacity: .72; }
+.sgc-doc:focus-visible { outline: none; box-shadow: var(--foco-anillo); position: relative; z-index: 1; }
+
+/* v16.0 — el color de la fila SIGNIFICA algo.
+   Antes toda fila nacía con `border-left: 3px solid var(--ok)`: verde de
+   "correcto" en absolutamente todo, incluidas las filas con problemas. Un
+   color que aparece siempre no informa nada y encima gasta la señal. Ahora
+   el rail sólo existe cuando hay un estado que mirar, y su color lo dice. */
+.sgc-doc--pendiente { box-shadow: inset 3px 0 0 var(--alerta); }
+.sgc-doc--critico   { box-shadow: inset 3px 0 0 var(--critico); }
+.sgc-doc--obsoleto  { box-shadow: inset 3px 0 0 var(--texto-3); opacity: .68; }
+.sgc-doc--ok        { box-shadow: inset 3px 0 0 var(--ok); }
+
+/* La fila necesita respirar sin engordar: título + metadatos en ~58px,
+   frente a los 71px (+8 de separación) de la tarjeta anterior. Con 28
+   documentos eso son ~600px menos de scroll sin apretar el texto. */
+.sgc-lista > .sgc-doc { padding: 10px var(--esp-4); }
+.sgc-lista > .sgc-doc .sgc-doc__icono { width: 1.75rem; height: 1.75rem; }
 
 /* v10.0 Fase 2 (cont.): icono por tipo, SOLO en el listado de Documentos
    (`.sgc-doc--con-icono`, un modificador -- `.sgc-doc` a secas lo reusan
@@ -3012,17 +3050,40 @@
 .sgc-doc--obsoleto .sgc-doc__icono { color: var(--critico); }
 .sgc-doc__cuerpo { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 
-.sgc-doc__top {
+/* v16.0 — `.sgc-doc__linea` se usaba en 21 sitios del módulo (proveedores,
+   revisiones, objetivos, indicadores, procesos, riesgos, contexto, alcance,
+   cobertura, accesos, hitos) y NO EXISTÍA ni una regla para ella: esas filas
+   caían a `display:block` y su contenido salía pegado, del tipo
+   "07/09/2026NC-2026-001: corrección". Es la misma fila superior que
+   `__top`, así que comparten estilo. */
+.sgc-doc__top,
+.sgc-doc__linea {
   display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap;
 }
+/* v16.0 — el código deja de gritar.
+   Antes iba en monoespaciada, negrita 700 y con el AZUL DE ACCIÓN: en cada
+   fila, lo más llamativo era la referencia técnica (PRO-01) y no el nombre
+   del documento. Se invierte: el nombre manda, el código acompaña. El azul
+   se reserva para lo accionable, que es su trabajo en el sistema. */
 .sgc-doc__codigo {
   font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
-  font-weight: 700; color: var(--primario); font-size: var(--texto-sm);
+  font-weight: 500; color: var(--texto-3); font-size: var(--texto-xs);
+  letter-spacing: .01em; flex: 0 0 auto;
 }
-.sgc-doc__nombre { font-weight: 600; color: var(--texto); flex: 1 1 auto; min-width: 0; }
+/* El nombre ENVUELVE, no se corta.
+   En la v16 se probó `white-space: nowrap` + elipsis para dejar la fila en
+   una línea. Falla en un flex con `flex-wrap: wrap`: el item no encoge por
+   debajo de su contenido, salta de línea con su ancho completo y se sale del
+   contenedor -- medido, 298px fuera de la fila en el mapa de procesos, donde
+   los nombres son largos. Envolver nunca desborda y no esconde el dato que
+   distingue un documento de otro. */
+.sgc-doc__nombre {
+  font-weight: 600; color: var(--texto); flex: 1 1 12rem; min-width: 0;
+  overflow-wrap: anywhere;
+}
 .sgc-doc__meta {
-  margin-top: var(--esp-1); font-size: var(--texto-sm); color: var(--texto-3);
-  display: flex; gap: var(--esp-4); flex-wrap: wrap;
+  margin-top: 2px; font-size: var(--texto-xs); color: var(--texto-3);
+  display: flex; gap: var(--esp-3); flex-wrap: wrap; align-items: center;
 }
 .sgc-doc--con-icono .sgc-doc__meta { margin-top: 0; }
 
@@ -4009,30 +4070,8 @@
 .sgc-ini-plazo--vencido { color: var(--critico); }
 
 /* --- "Requiere tu atención" (portada de gobierno) ------------------------ */
-.sgc-atencion {
-  border: 1px solid var(--borde); border-radius: var(--radio-lg);
-  background: var(--superficie); padding: var(--esp-5);
-}
-.sgc-atencion__titulo {
-  font: var(--t-title); color: var(--texto); margin: 0 0 var(--esp-3);
-  display: flex; align-items: center; gap: var(--esp-2);
-}
-.sgc-atencion__cuenta {
-  font: var(--t-small); font-weight: 600;
-  background: var(--superficie-2); color: var(--texto-2);
-  border-radius: var(--radio-full); padding: 2px var(--esp-2);
-}
-/* La severidad se lee en el borde izquierdo de la fila: color como refuerzo
-   del texto ("Crítico"/"Requiere atención"), nunca como única señal. */
-.sgc-ini-fila--critico { box-shadow: inset 2px 0 0 var(--critico); padding-left: var(--esp-3); }
-.sgc-ini-fila--alerta  { box-shadow: inset 2px 0 0 var(--alerta);  padding-left: var(--esp-3); }
-.sgc-ini-fila--info    { box-shadow: inset 2px 0 0 var(--info);    padding-left: var(--esp-3); }
 
 /* --- Bloques secundarios ------------------------------------------------- */
-.sgc-ini-bloque__titulo {
-  font: var(--t-title); font-size: var(--texto-base); color: var(--texto);
-  margin: 0 0 var(--esp-3);
-}
 .sgc-ini-buscar { display: flex; gap: var(--esp-2); flex-wrap: wrap; }
 .sgc-ini-buscar input {
   flex: 1 1 20rem; min-width: 0;
@@ -4041,7 +4080,6 @@
   border-radius: var(--radio-sm); padding: var(--esp-2) var(--esp-3);
 }
 .sgc-ini-buscar input:focus-visible { outline: none; box-shadow: var(--foco-anillo); border-color: var(--primario); }
-.sgc-ini-chips { display: flex; flex-wrap: wrap; gap: var(--esp-2); margin-top: var(--esp-3); }
 
 .sgc-ini-ficha {
   display: flex; align-items: center; justify-content: space-between;
@@ -4053,19 +4091,6 @@
 .sgc-ini-ficha__nombre { font: var(--t-body); font-weight: 600; color: var(--texto); }
 .sgc-ini-ficha__meta { font: var(--t-small); color: var(--texto-2); }
 
-/* --- Fichas de filtro (tipos de documento) ------------------------------- */
-.sgc-chips { display: flex; flex-wrap: wrap; gap: var(--esp-2); margin: var(--esp-3) 0; }
-.sgc-chip {
-  font: var(--t-small); font-weight: 500; color: var(--texto-2);
-  background: var(--superficie); border: 1px solid var(--borde-fuerte);
-  border-radius: var(--radio-full); padding: var(--esp-2) var(--esp-3);
-  cursor: pointer; transition: background var(--mov-rapido), color var(--mov-rapido), border-color var(--mov-rapido);
-}
-.sgc-chip:hover { background: var(--superficie-2); color: var(--texto); }
-.sgc-chip:focus-visible { outline: none; box-shadow: var(--foco-anillo); }
-.sgc-chip--activo {
-  background: var(--primario); border-color: var(--primario); color: var(--marca-contraste);
-}
 
 /* --- Barra de tarea del listado de documentos --------------------------- */
 .sgc-tarea-barra {
@@ -4106,3 +4131,251 @@
   .sgc-tarea-barra > .sigso-boton { width: 100%; }
   .sgc-ini-tarea, .sgc-atencion { padding: var(--esp-4); }
 }
+
+/* ==========================================================================
+   v16.0 — Calidad: de "funciona" a "se usa cómodo"
+   Extiende el design system (no lo reemplaza). Todo sale de tokens.css.
+   ========================================================================== */
+
+/* --- TAREA: problema + contexto + acción --------------------------------
+   Sustituye a la fila de alerta de la v15, que ponía el título, un badge con
+   el número y OTRO badge con la severidad uno al lado del otro:
+   "No conformidades abiertas [3] [Requiere atención]". Tres señales para un
+   solo hecho. Ahora el número vive dentro de la frase, la severidad la dice
+   el rail de color más una etiqueta, y la acción es siempre un botón. */
+.sgc-tareas {
+  display: flex; flex-direction: column; gap: 0;
+  background: var(--superficie);
+  border: 1px solid var(--borde); border-radius: var(--radio-md);
+  overflow: hidden;
+}
+.sgc-tarea {
+  display: flex; align-items: center; gap: var(--esp-4);
+  padding: var(--esp-4);
+  border-top: 1px solid var(--borde);
+}
+.sgc-tareas > .sgc-tarea:first-child { border-top: 0; }
+.sgc-tarea--critico { box-shadow: inset 3px 0 0 var(--critico); }
+.sgc-tarea--alerta  { box-shadow: inset 3px 0 0 var(--alerta); }
+.sgc-tarea--info    { box-shadow: inset 3px 0 0 var(--info); }
+.sgc-tarea__cuerpo { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.sgc-tarea__titulo {
+  font: var(--t-body); font-weight: 600; color: var(--texto);
+  display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap;
+}
+.sgc-tarea__detalle { font: var(--t-small); color: var(--texto-2); }
+.sgc-tarea > .sigso-boton { flex: 0 0 auto; }
+
+/* Etiqueta de severidad: texto, no sólo color (daltonismo y B/N). */
+.sgc-sev {
+  font-size: var(--texto-xs); font-weight: 600; letter-spacing: .02em;
+  text-transform: uppercase; padding: 2px var(--esp-2);
+  border-radius: var(--radio-full); white-space: nowrap;
+}
+.sgc-sev--critico { background: var(--critico-suave); color: color-mix(in srgb, var(--critico) 84%, black); }
+.sgc-sev--alerta  { background: var(--alerta-suave);  color: color-mix(in srgb, var(--alerta) 84%, black); }
+.sgc-sev--info    { background: var(--info-suave);    color: color-mix(in srgb, var(--info) 84%, black); }
+
+/* --- HITOS: una línea de tiempo, no cajas sueltas -----------------------
+   Antes eran botones con la fecha estilada como CODIGO (mono + azul) pegada
+   al título. Ahora la fecha es una columna fija y alineada, con un punto que
+   enhebra las filas: se leen como "lo que viene", que es lo que son. */
+.sgc-hitos { display: flex; flex-direction: column; }
+.sgc-hito {
+  display: grid; grid-template-columns: 5.5rem 1rem 1fr auto;
+  align-items: center; gap: var(--esp-2);
+  width: 100%; text-align: left; cursor: pointer;
+  background: transparent; border: 0; font: inherit; color: inherit;
+  padding: var(--esp-3) var(--esp-2);
+  border-radius: var(--radio-sm);
+  transition: background var(--mov-rapido);
+}
+.sgc-hito:hover { background: var(--superficie-2); }
+.sgc-hito:focus-visible { outline: none; box-shadow: var(--foco-anillo); }
+.sgc-hito__fecha {
+  font: var(--t-small); font-weight: 600; color: var(--texto-2);
+  font-variant-numeric: tabular-nums;
+}
+/* El riel vertical que convierte las filas en una linea de tiempo. */
+.sgc-hito__punto { position: relative; align-self: stretch; min-height: 1.5rem; }
+.sgc-hito__punto::before {
+  content: ""; position: absolute; left: 50%; top: 0; bottom: 0;
+  width: 1px; background: var(--borde); transform: translateX(-50%);
+}
+.sgc-hito__punto::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--superficie); border: 2px solid var(--borde-fuerte);
+  transform: translate(-50%, -50%);
+}
+.sgc-hitos > .sgc-hito:first-child .sgc-hito__punto::before { top: 50%; }
+.sgc-hitos > .sgc-hito:last-child  .sgc-hito__punto::before { bottom: 50%; }
+.sgc-hito__titulo {
+  font: var(--t-body); color: var(--texto); min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sgc-hito__cuando { font: var(--t-small); color: var(--texto-2); white-space: nowrap; }
+
+/* --- CONTROL SEGMENTADO: navegacion contextual de una pantalla ----------
+   Los "chips" de la v15 eran pildoras sueltas que parecian etiquetas. Esto
+   se lee como lo que es: un conmutador de vista dentro de Documentos. */
+.sgc-segmentos {
+  display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px;
+  background: var(--superficie-2);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-sm);
+}
+.sgc-segmento {
+  font: var(--t-small); font-weight: 500; color: var(--texto-2);
+  background: transparent; border: 0; cursor: pointer;
+  padding: var(--esp-2) var(--esp-3); border-radius: 6px;
+  transition: background var(--mov-rapido), color var(--mov-rapido);
+  white-space: nowrap;
+}
+.sgc-segmento:hover { color: var(--texto); background: var(--superficie); }
+.sgc-segmento:focus-visible { outline: none; box-shadow: var(--foco-anillo); }
+.sgc-segmento--activo {
+  background: var(--superficie); color: var(--texto); font-weight: 600;
+  box-shadow: var(--sombra-1);
+}
+.sgc-segmento__n {
+  margin-left: var(--esp-1); font-variant-numeric: tabular-nums;
+  color: var(--texto-3); font-weight: 500;
+}
+.sgc-segmento--activo .sgc-segmento__n { color: var(--texto-2); }
+
+/* --- BARRA DE HERRAMIENTAS de una pantalla de lista --------------------- */
+.sgc-toolbar {
+  display: flex; align-items: center; gap: var(--esp-3);
+  flex-wrap: wrap; margin: var(--esp-4) 0 var(--esp-3);
+}
+.sgc-toolbar__buscar { flex: 1 1 22rem; min-width: 0; display: flex; }
+.sgc-toolbar__buscar input {
+  width: 100%; font: var(--t-body); color: var(--texto);
+  background: var(--superficie); border: 1px solid var(--borde-fuerte);
+  border-radius: var(--radio-sm); padding: var(--esp-2) var(--esp-3);
+}
+.sgc-toolbar__buscar input::placeholder { color: var(--texto-3); }
+.sgc-toolbar__buscar input:focus-visible {
+  outline: none; box-shadow: var(--foco-anillo); border-color: var(--primario);
+}
+.sgc-toolbar__cuenta { font: var(--t-small); color: var(--texto-2); margin-left: auto; }
+
+/* --- ESQUELETOS de carga ------------------------------------------------
+   Un spinner centrado vacia la pantalla y luego el contenido "salta". El
+   esqueleto mantiene la forma: se percibe mas rapido aunque tarde igual. */
+.sgc-skel {
+  display: flex; flex-direction: column; gap: 0;
+  background: var(--superficie); border: 1px solid var(--borde);
+  border-radius: var(--radio-md); overflow: hidden;
+}
+.sgc-skel__fila { padding: var(--esp-4); border-top: 1px solid var(--borde); }
+.sgc-skel__fila:first-child { border-top: 0; }
+.sgc-skel__barra {
+  height: 10px; border-radius: var(--radio-full);
+  background: linear-gradient(90deg, var(--superficie-2) 25%, var(--borde) 37%, var(--superficie-2) 63%);
+  background-size: 400% 100%;
+  animation: sgc-brillo 1.4s ease-in-out infinite;
+}
+.sgc-skel__barra + .sgc-skel__barra { margin-top: var(--esp-2); }
+@keyframes sgc-brillo { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+@media (prefers-reduced-motion: reduce) { .sgc-skel__barra { animation: none; } }
+
+/* --- Encabezado de seccion dentro de una pantalla ---------------------- */
+.sgc-seccion { display: flex; flex-direction: column; gap: var(--esp-3); }
+.sgc-seccion__cab { display: flex; align-items: baseline; gap: var(--esp-2); flex-wrap: wrap; }
+.sgc-seccion__titulo { font: var(--t-title); font-size: 1.0625rem; color: var(--texto); margin: 0; }
+.sgc-seccion__ayuda { font: var(--t-small); color: var(--texto-2); margin: 0; }
+
+@media (max-width: 640px) {
+  .sgc-tarea { flex-direction: column; align-items: stretch; gap: var(--esp-3); }
+  .sgc-tarea > .sigso-boton { width: 100%; }
+  .sgc-hito { grid-template-columns: 4.5rem 0.75rem 1fr; }
+  .sgc-hito__cuando { display: none; }
+  .sgc-toolbar__cuenta { margin-left: 0; }
+}
+
+/* Cifra de la tarea: columna propia, tabular y alineada. Nunca dentro de
+   la frase (ver el comentario en calidad.js: producia "1 quejas en curso"). */
+.sgc-tarea__n {
+  flex: 0 0 auto; min-width: 2.25rem; text-align: right;
+  font-size: 1.5rem; font-weight: 600; line-height: 1;
+  color: var(--texto); font-variant-numeric: tabular-nums;
+}
+.sgc-tarea--critico .sgc-tarea__n { color: var(--critico); }
+.sgc-tarea--alerta  .sgc-tarea__n { color: var(--alerta); }
+@media (max-width: 640px) {
+  .sgc-tarea__n { text-align: left; font-size: 1.25rem; }
+}
+
+/* --- ATAJOS del Inicio: destinos, no filtros ---------------------------
+   Se distinguen a proposito del control segmentado de Documentos: alli se
+   cambia de VISTA dentro de la misma pantalla; aqui se VA a otra pantalla.
+   Mismo sistema, dos gestos distintos, dos formas distintas. */
+.sgc-atajos {
+  display: grid; gap: var(--esp-2);
+  grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
+}
+.sgc-atajo {
+  display: flex; align-items: center; gap: var(--esp-3);
+  text-align: left; cursor: pointer; width: 100%;
+  background: var(--superficie); border: 1px solid var(--borde);
+  border-radius: var(--radio-md); padding: var(--esp-3) var(--esp-4);
+  font: var(--t-body); color: var(--texto);
+  transition: border-color var(--mov-rapido), background var(--mov-rapido);
+}
+.sgc-atajo:hover { background: var(--superficie-2); border-color: var(--borde-fuerte); }
+.sgc-atajo:focus-visible { outline: none; box-shadow: var(--foco-anillo); }
+.sgc-atajo__ico {
+  flex: 0 0 auto; width: 1.75rem; height: 1.75rem;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radio-sm); background: var(--superficie-2); color: var(--texto-3);
+}
+.sgc-atajo__texto { flex: 1 1 auto; font-weight: 500; min-width: 0; }
+.sgc-atajo__n { flex: 0 0 auto; color: var(--texto-3); font-variant-numeric: tabular-nums; font-size: var(--texto-sm); }
+
+/* --- Cabecera de identidad de un documento ------------------------------
+   El nombre manda; el codigo, tipo, version y estado van juntos debajo como
+   una sola linea de identificacion. Antes el codigo iba en la misma linea
+   del titulo y en azul de accion: competia con el nombre y parecia un enlace. */
+.sgc-doc-cab { margin-bottom: var(--esp-4); }
+.sgc-doc-cab__titulo {
+  font: var(--t-display); letter-spacing: -0.02em; color: var(--texto); margin: 0;
+}
+.sgc-doc-cab__ident {
+  display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap;
+  margin: var(--esp-2) 0 0; font: var(--t-small); color: var(--texto-3);
+}
+.sgc-doc-cab__desc {
+  margin: var(--esp-3) 0 0; font: var(--t-body); color: var(--texto-2);
+  max-width: 65ch;
+}
+
+/* --- Resumen ejecutivo del estado del SGC -------------------------------
+   Una frase que responde "como vamos" antes de cualquier lista. El color
+   refuerza, pero el texto ya lo dice: nunca depende solo del color. */
+.sgc-resumen {
+  border: 1px solid var(--borde); border-radius: var(--radio-md);
+  background: var(--superficie); padding: var(--esp-4) var(--esp-5);
+}
+.sgc-resumen--critico { box-shadow: inset 4px 0 0 var(--critico); }
+.sgc-resumen--alerta  { box-shadow: inset 4px 0 0 var(--alerta); }
+.sgc-resumen--ok      { box-shadow: inset 4px 0 0 var(--ok); }
+.sgc-resumen__frase {
+  margin: 0; font: var(--t-title); font-size: 1.125rem; color: var(--texto);
+  text-wrap: balance;
+}
+.sgc-resumen__dato { margin: var(--esp-2) 0 0; font: var(--t-small); color: var(--texto-2); }
+
+
+/* En modo oscuro los tokens semanticos YA son claros sobre fondo oscuro:
+   oscurecerlos (el color-mix con negro que sube el contraste en claro) lo
+   bajaria. Se vuelve al token puro. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) .sgc-sev--critico { color: var(--critico); }
+  :root:not([data-tema="claro"]) .sgc-sev--alerta  { color: var(--alerta); }
+  :root:not([data-tema="claro"]) .sgc-sev--info    { color: var(--info); }
+}
+:root[data-tema="oscuro"] .sgc-sev--critico { color: var(--critico); }
+:root[data-tema="oscuro"] .sgc-sev--alerta  { color: var(--alerta); }
+:root[data-tema="oscuro"] .sgc-sev--info    { color: var(--info); }
