@@ -535,7 +535,7 @@
     var obsoleto = d.estado === 'OBSOLETO';
 
     var acciones = '<div class="sgc-acciones">' +
-      (d.archivo_id ? Componentes.boton({ texto: '⬇ Descargar', clase: 'js-sgc-descargar' }) : '') +
+      (d.archivo_id ? Componentes.boton({ texto: 'Descargar', icono: 'descargar', clase: 'js-sgc-descargar' }) : '') +
       (puedeGestionar_ ? Componentes.boton({ texto: 'Nueva versión', variante: 'secundario', clase: 'js-sgc-version' }) : '') +
       (puedeGestionar_ ? Componentes.boton({ texto: 'Editar', variante: 'secundario', clase: 'js-sgc-editar' }) : '') +
       (puedeGestionar_ ? Componentes.boton({ texto: 'Ver quién confirmó', variante: 'secundario', clase: 'js-sgc-cumplimiento' }) : '') +
@@ -1365,7 +1365,7 @@
           '<span class="sigso-ayuda">' + fechaCorta_(x.fecha) + '</span>' +
         '</div>' +
         '<div class="sgc-acciones">' +
-          Componentes.boton({ texto: '⬇ Descargar', variante: 'sutil', clase: 'js-sgc-bajar-doc', idx: x.doc_id }) +
+          Componentes.boton({ texto: 'Descargar', icono: 'descargar', variante: 'sutil', clase: 'js-sgc-bajar-doc', idx: x.doc_id }) +
           (puedeGestionar_ ? Componentes.boton({ texto: 'Quitar', variante: 'sutil', clase: 'js-sgc-quitar-doc', idx: x.doc_id }) : '') +
         '</div>' +
       '</div>';
@@ -7452,7 +7452,7 @@
           : '') +
         '<div class="sigso-modal__acciones">' +
           Componentes.boton({ texto: 'Cerrar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
-          Componentes.boton({ texto: '⬇ Descargar evidencia (PDF)', clase: 'js-sgc-descargar-evidencia', tipo: 'button' }) +
+          Componentes.boton({ texto: 'Descargar evidencia (PDF)', icono: 'descargar', clase: 'js-sgc-descargar-evidencia', tipo: 'button' }) +
         '</div>' +
       '</div>';
     var cerrar = montarModal_(fondo);

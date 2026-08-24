@@ -47,7 +47,9 @@
     return llamarApi(urlBackoffice_(), accion, datos || {});
   }
 
-  var SALUD_ETIQUETA = { normal: '🟢 Normal', riesgo: '🟡 En riesgo', critico: '🔴 Crítico' };
+  var SALUD_ETIQUETA = { normal: 'Normal', riesgo: 'En riesgo', critico: 'Crítico' };
+  // v14.0 (piel nueva): salud -> tono del punto de estado (Componentes.punto).
+  var SALUD_TONO = { normal: 'ok', riesgo: 'riesgo', critico: 'critico' };
   var ESTADO_PROYECTO_ETIQUETA = {
     PLANIFICACION: 'Planificación', ACTIVO: 'Activo', EN_PAUSA: 'En pausa',
     EN_REVISION: 'En revisión', CERRADO: 'Cerrado', CANCELADO: 'Cancelado'
@@ -135,8 +137,8 @@
     if (!resumen || !resumen.total_proyectos) return '';
     var kpis = [
       Componentes.kpi({ etiqueta: 'Proyectos activos', valor: resumen.total_proyectos }),
-      Componentes.kpi({ etiqueta: '🔴 Críticos', valor: (resumen.por_salud && resumen.por_salud.critico) || 0 }),
-      Componentes.kpi({ etiqueta: '🟡 En riesgo', valor: (resumen.por_salud && resumen.por_salud.riesgo) || 0 }),
+      Componentes.kpi({ etiqueta: 'Críticos', valor: (resumen.por_salud && resumen.por_salud.critico) || 0, alerta: true }),
+      Componentes.kpi({ etiqueta: 'En riesgo', valor: (resumen.por_salud && resumen.por_salud.riesgo) || 0 }),
       Componentes.kpi({ etiqueta: 'Vencen en 14 días', valor: resumen.proximos_a_cerrar || 0 }),
       Componentes.kpi({ etiqueta: 'Sin novedad 7+ días', valor: resumen.sin_actualizacion_reciente || 0 })
     ].join('');
@@ -214,7 +216,7 @@
       return '<button type="button" class="sigso-py-card js-py-abrir" data-id="' + p.proyecto_id + '">' +
         '<div class="sigso-py-card__top">' +
           '<span class="sigso-py-card__nombre">' + Componentes.escaparHtml(p.nombre) + '</span>' +
-          '<span class="sigso-py-salud sigso-py-salud--' + p.salud + '">' + SALUD_ETIQUETA[p.salud] + '</span>' +
+          '<span class="sigso-py-salud sigso-py-salud--' + p.salud + '">' + Componentes.punto(SALUD_TONO[p.salud]) + SALUD_ETIQUETA[p.salud] + '</span>' +
         '</div>' +
         (p.descripcion ? '<p class="sigso-py-card__desc">' + Componentes.escaparHtml(p.descripcion) + '</p>' : '') +
         '<div class="sigso-py-card__barra"><div class="sigso-py-card__barra-fill" style="width:' + (p.avance_pct || 0) + '%"></div></div>' +
@@ -374,7 +376,7 @@
       '<div class="sigso-py-detalle-cab">' +
         Componentes.boton({ texto: '← Portafolio', variante: 'sutil', clase: 'js-py-volver' }) +
         '<h1>' + Componentes.escaparHtml(p.nombre) + '</h1>' +
-        '<span class="sigso-py-salud sigso-py-salud--' + detalle.salud + '">' + SALUD_ETIQUETA[detalle.salud] + '</span>' +
+        '<span class="sigso-py-salud sigso-py-salud--' + detalle.salud + '">' + Componentes.punto(SALUD_TONO[detalle.salud]) + SALUD_ETIQUETA[detalle.salud] + '</span>' +
         Componentes.badge(ESTADO_PROYECTO_ETIQUETA[p.estado] || p.estado, 'neutro') +
       '</div>' +
       (detalle.salud_motivos && detalle.salud_motivos.length
@@ -536,11 +538,11 @@
           (a.fecha_compromiso ? '<span>Vence ' + fechaCorta_(a.fecha_compromiso) + '</span>' : '') +
           (a.avance_pct !== '' && a.avance_pct !== undefined && a.avance_pct !== null ? '<span>' + a.avance_pct + '% avance</span>' : '') +
         '</div>' +
-        (a.estado === 'BLOQUEADA' ? '<div class="sigso-mt-bloqueo">⏸ ' + Componentes.escaparHtml(a.bloqueo_motivo) + '</div>' : '') +
+        (a.estado === 'BLOQUEADA' ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('pausado', { tam: 14 }) + ' ' + Componentes.escaparHtml(a.bloqueo_motivo) + '</div>' : '') +
         // v9.4: dependencia comprometida -- bandera derivada (nunca mueve
         // fechas ni bloquea, §I de la propuesta), solo avisa.
         (a.dependencia_comprometida
-          ? '<div class="sigso-mt-bloqueo">⚠ Depende de "' + Componentes.escaparHtml(a.dependencia_titulo) + '", que está atrasada.</div>'
+          ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('alerta', { tam: 14 }) + ' Depende de "' + Componentes.escaparHtml(a.dependencia_titulo) + '", que está atrasada.</div>'
           : '') +
       '</div>';
     }).join('');
@@ -627,7 +629,7 @@
           '<span>' + Componentes.escaparHtml(integrantesPorEmail[normalizarEmail_(e.responsable_email)] || e.responsable_email) + '</span>' +
           '<span>Vence ' + fechaCorta_(e.fecha_comprometida) + '</span>' +
         '</div>' +
-        (e.estado === 'OBSERVADO' && e.observaciones ? '<div class="sigso-mt-bloqueo">⏸ ' + Componentes.escaparHtml(e.observaciones) + '</div>' : '') +
+        (e.estado === 'OBSERVADO' && e.observaciones ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('pausado', { tam: 14 }) + ' ' + Componentes.escaparHtml(e.observaciones) + '</div>' : '') +
         (e.url_evidencia ? '<p class="sigso-ayuda"><a href="' + Componentes.escaparHtml(e.url_evidencia) + '" target="_blank" rel="noopener noreferrer">Ver evidencia</a></p>' : '') +
         botones +
       '</div>';

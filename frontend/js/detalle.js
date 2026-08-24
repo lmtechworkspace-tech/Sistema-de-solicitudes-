@@ -228,7 +228,7 @@
       Componentes.escaparHtml(s.plataforma_nombre || s.plataforma) + '</span>' +
       '</div>' +
       '<div class="sigso-detalle-toolbar__acciones">' + cta +
-      '<button type="button" class="sigso-boton--secundario" id="btn-imprimir-ot">📄 Orden de trabajo (PDF)</button>' +
+      '<button type="button" class="sigso-boton--secundario sigso-boton--con-icono" id="btn-imprimir-ot">' + Iconos.svg('documento') + 'Orden de trabajo (PDF)</button>' +
       '</div>' +
       '</div>';
   }
@@ -241,7 +241,7 @@
     var itemAbierto = ESTADOS_CERRADOS_DETALLE.indexOf(sub.estado) === -1;
     if (!itemAbierto) return '';
     if (!sub.fecha_comprometida) {
-      return '<button type="button" class="sigso-boton sigso-cta-toolbar" data-cta="comprometer" data-subsolicitud="' + sub.subsolicitud_id + '">📅 Comprometer fecha</button>';
+      return '<button type="button" class="sigso-boton sigso-cta-toolbar sigso-boton--con-icono" data-cta="comprometer" data-subsolicitud="' + sub.subsolicitud_id + '">' + Iconos.svg('calendario') + 'Comprometer fecha</button>';
     }
     var opcionesTransicion = transicionesPorSub[sub.subsolicitud_id] || [];
     var rangoActual = RANGO_ESTADO[sub.estado] !== undefined ? RANGO_ESTADO[sub.estado] : -1;
@@ -278,7 +278,7 @@
     // recorrio el flujo -- sin esto, un cierre instantaneo parece un error.
     var esAtencionDirecta = s.atencion_directa === true || s.atencion_directa === 'TRUE' || s.atencion_directa === 1;
     var avisoAtencionDirecta = esAtencionDirecta
-      ? '<p class="sigso-insignia-directa">⚡ Atención directa — registrada después de resolver</p>'
+      ? '<p class="sigso-insignia-directa">' + Iconos.svg('rayo', { tam: 14 }) + ' Atención directa — registrada después de resolver</p>'
       : '';
 
     // v4.0 Frente 4: barra de flujo S01..S09 -- de un vistazo se ve cuanto
@@ -391,9 +391,9 @@
       // la vista nunca los mostraba, obligando a leer toda la descripcion
       // para saber "que es esto" (reporte real de uso).
       var metaChips = [];
-      if (sub.tipo_nombre || sub.tipo) metaChips.push('🏷 ' + Componentes.escaparHtml(sub.tipo_nombre || sub.tipo));
-      if (sub.modulo_nombre || sub.modulo) metaChips.push('📦 ' + Componentes.escaparHtml(sub.modulo_nombre || sub.modulo));
-      if (sub.fecha_propuesta) metaChips.push('📅 Propuesta: ' + Componentes.escaparHtml(fechaCorta_(sub.fecha_propuesta)));
+      if (sub.tipo_nombre || sub.tipo) metaChips.push(Iconos.svg('etiqueta', { tam: 13 }) + ' ' + Componentes.escaparHtml(sub.tipo_nombre || sub.tipo));
+      if (sub.modulo_nombre || sub.modulo) metaChips.push(Iconos.svg('caja', { tam: 13 }) + ' ' + Componentes.escaparHtml(sub.modulo_nombre || sub.modulo));
+      if (sub.fecha_propuesta) metaChips.push(Iconos.svg('calendario', { tam: 13 }) + ' Propuesta: ' + Componentes.escaparHtml(fechaCorta_(sub.fecha_propuesta)));
       var metaHtml = metaChips.length ? '<div class="sigso-item-meta">' + metaChips.join(' &middot; ') + '</div>' : '';
 
       // Propuesta 3: los datos del item se agrupan por proposito (donde
@@ -502,14 +502,14 @@
         '<p>' + Componentes.escaparHtml(sub.descripcion) + '</p>' +
         (sub.contexto ? '<p><strong>Contexto:</strong> ' + Componentes.escaparHtml(sub.contexto) + '</p>' : '') +
         (sub.resultado_esperado ? '<p><strong>Resultado esperado:</strong> ' + Componentes.escaparHtml(sub.resultado_esperado) + '</p>' : '') +
-        bloqueDatos_('🔍 Dónde reproducir', datosReproducir) +
-        bloqueDatos_('📋 Contexto del pedido', datosContexto) +
-        bloqueDatos_('⏱ Plazos y responsable', datosPlazos) +
+        bloqueDatos_(Iconos.svg('lupa', { tam: 15 }) + ' Dónde reproducir', datosReproducir) +
+        bloqueDatos_(Iconos.svg('lista', { tam: 15 }) + ' Contexto del pedido', datosContexto) +
+        bloqueDatos_(Iconos.svg('reloj', { tam: 15 }) + ' Plazos y responsable', datosPlazos) +
         // v3.1 (§1.4): el registro de la atencion directa. Es la memoria
         // tecnica del incidente -- lo unico que queda de algo que se
         // resolvio por telefono.
         (sub.atencion_resuelto_por
-          ? bloqueDatos_('⚡ Atención directa', [
+          ? bloqueDatos_(Iconos.svg('rayo', { tam: 15 }) + ' Atención directa', [
             renderCampoDato_('Resuelto por', Componentes.escaparHtml(sub.atencion_resuelto_por)),
             renderCampoDato_('Fecha de resolución', Componentes.escaparHtml(fechaCorta_(sub.atencion_fecha_resolucion))),
             renderCampoDato_('Qué se hizo', Componentes.escaparHtml(sub.atencion_detalle))
@@ -615,7 +615,7 @@
     // faltaComprometer calculado arriba) y se avisa antes de avanzar -- el
     // flujo real es evaluar -> comprometer -> recien ahi avanzar estados.
     var avisoFecha = faltaComprometer
-      ? '<div class="sigso-alerta"><p>⚠ Este ítem aún no tiene fecha comprometida — defínela antes de avanzar.</p></div>'
+      ? '<div class="sigso-alerta"><p>' + Iconos.svg('alerta', { tam: 15 }) + ' Este ítem aún no tiene fecha comprometida — defínela antes de avanzar.</p></div>'
       : '';
     var bloqueFecha =
       avisoFecha +

@@ -79,7 +79,26 @@ var Iconos = (function () {
     // v10.0 Fase 2 (rediseno visual del modulo Calidad): objetivos de
     // calidad (una meta -> diana) y cobertura ISO (conformidad -> escudo).
     diana: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
-    escudo: '<path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/>'
+    escudo: '<path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/>',
+
+    // v14.0 "piel nueva": iconos PROPIOS por modulo (antes Gerencia, Mi
+    // departamento y Coordinacion compartian 'grafico', y Administracion un
+    // engranaje anticuado), mas los glifos que faltaban para reemplazar los
+    // emoji de la interfaz por trazos que heredan color y tamano.
+    tendencia: '<path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/>',          // Gerencia
+    equipo: '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M15.5 5.6a3.2 3.2 0 0 1 0 5.6"/><path d="M18.5 20a5.5 5.5 0 0 0-3-4.9"/>', // Mi departamento
+    portapapeles: '<rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2.5" width="6" height="4" rx="1"/><path d="m9 13 2 2 4-4"/>', // Coordinacion de pausas
+    tareas: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3 6 1.4 1.4L6.5 4.2"/><path d="m3 12 1.4 1.4L6.5 10.2"/><path d="m3 18 1.4 1.4L6.5 16.2"/>', // Mi trabajo
+    ajustes: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="7" cy="17" r="2.2"/>', // Administracion
+    actividad: '<path d="M3 12h4l2 5 4-12 2 7h6"/>',                          // Pausas activas
+    capas: '<path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 13 9 5 9-5"/>',      // Proyectos
+    escudoCheck: '<path d="M12 3 5 6v5c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3Z"/><path d="m9 12 2 2 4-4"/>', // Calidad
+    enlace: '<path d="M10.5 13.5a4 4 0 0 0 5.7 0l2.3-2.3a4 4 0 0 0-5.7-5.7l-1.2 1.2"/><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-2.3 2.3a4 4 0 0 0 5.7 5.7l1.2-1.2"/>', // Enlace magico
+    correo: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/>', // Canal correo
+    campanaOff: '<path d="M8.7 3.9A6 6 0 0 1 18 8c0 2.6.5 4.4 1.2 5.7"/><path d="M17 17H4s3-2 3-9c0-.5 0-1 .1-1.4"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><path d="M2 2l20 20"/>', // Notificaciones silenciadas
+    // "Bloqueado / en pausa" -- reemplaza el simbolo ⏸ (que en Windows sale
+    // como emoji azul). Barras rellenas para que se lea a tamano chico.
+    pausado: '<rect x="7" y="5" width="3.4" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="13.6" y="5" width="3.4" height="14" rx="1" fill="currentColor" stroke="none"/>'
   };
 
   /**

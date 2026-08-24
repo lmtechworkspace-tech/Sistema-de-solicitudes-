@@ -280,8 +280,8 @@
     banner.innerHTML =
       '<span style="flex:1;min-width:220px">' +
         (denegado
-          ? '🔕 Las alertas de SIGSO estan bloqueadas en este navegador. Actívalas desde el ícono de candado/información junto a la URL → Notificaciones → Permitir, y recarga la página.'
-          : '🔔 Activa las alertas de SIGSO para no perderte avisos importantes (derivaciones, vencimientos, pausas).') +
+          ? Iconos.svg('campanaOff', { tam: 15 }) + ' Las alertas de SIGSO estan bloqueadas en este navegador. Actívalas desde el ícono de candado/información junto a la URL → Notificaciones → Permitir, y recarga la página.'
+          : Iconos.svg('campana', { tam: 15 }) + ' Activa las alertas de SIGSO para no perderte avisos importantes (derivaciones, vencimientos, pausas).') +
       '</span>' +
       (denegado ? '' : '<button type="button" class="js-notif-banner-activar" style="background:#fff;color:var(--primario,#2A5FD6);border:none;border-radius:6px;padding:6px 12px;font:600 13px Arial,sans-serif;cursor:pointer">Activar alertas</button>') +
       '<button type="button" class="js-notif-banner-cerrar" aria-label="Cerrar aviso" style="background:none;border:none;color:#fff;font:600 16px Arial,sans-serif;cursor:pointer;padding:2px 6px">✕</button>';
@@ -478,7 +478,7 @@
       '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--borde,#E5E8EF)">' +
         '<strong style="font:600 15px Arial,sans-serif">Notificaciones</strong>' +
         '<span>' +
-          '<button type="button" class="js-notif-mute" title="' + (mudo ? 'Activar sonido' : 'Silenciar') + '" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px">' + (mudo ? '🔕' : '🔔') + '</button>' +
+          '<button type="button" class="js-notif-mute" title="' + (mudo ? 'Activar sonido' : 'Silenciar') + '" style="background:none;border:none;cursor:pointer;padding:4px;color:inherit">' + Iconos.svg(mudo ? 'campanaOff' : 'campana', { tam: 16 }) + '</button>' +
           (n ? '<button type="button" class="js-notif-todas" style="background:none;border:none;cursor:pointer;color:var(--primario,#2A5FD6);font:600 12px Arial,sans-serif;padding:4px">Marcar todas</button>' : '') +
         '</span>' +
       '</div>';

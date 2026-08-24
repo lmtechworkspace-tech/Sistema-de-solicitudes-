@@ -193,8 +193,8 @@
       return '<div class="sigso-lista-item" data-trab="' + Componentes.escaparHtml(t.trabajador_id) + '">' +
         '<span>' + Componentes.escaparHtml(t.nombre) + (t.area ? ' · ' + Componentes.escaparHtml(t.area) : '') + '</span>' +
         '<span class="sigso-lista-item__botones">' +
-        '<button type="button" class="sigso-boton sigso-boton--sutil js-lista-participo" data-idx="' + idx + '">✅ Participó</button>' +
-        '<button type="button" class="sigso-boton sigso-boton--sutil js-lista-nopudo" data-idx="' + idx + '">✋ No pudo</button>' +
+        '<button type="button" class="sigso-boton sigso-boton--sutil sigso-boton--con-icono js-lista-participo" data-idx="' + idx + '">' + Iconos.svg('check', { tam: 15 }) + 'Participó</button>' +
+        '<button type="button" class="sigso-boton sigso-boton--sutil sigso-boton--con-icono js-lista-nopudo" data-idx="' + idx + '">' + Iconos.svg('equis', { tam: 15 }) + 'No pudo</button>' +
         '</span></div>';
     }).join('');
     fondo.innerHTML =

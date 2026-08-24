@@ -78,6 +78,28 @@
   --p4: #1F7A55;
   --p5: #2563EB;
 
+  /* --- v14.0 (piel nueva): identidad de color por MODULO ----------------
+     Antes el acento de cada modulo reusaba un color de ESTADO (verde-exito
+     para Calidad y Bandeja, ambar-alerta para Gerencia y Jefatura), lo que
+     confundia y hacia que pares de modulos compartieran color. Ahora cada
+     modulo tiene su acento propio, armonico con el navy, y los colores de
+     estado quedan solo para estados. El fondo "suave" se deriva del acento
+     con color-mix (una tinta translucida), asi funciona sobre claro y oscuro
+     y en modo oscuro basta con re-definir el acento (el suave lo sigue). */
+  --mod-inicio: #14213D;      --mod-inicio-suave: color-mix(in srgb, var(--mod-inicio) 14%, transparent);
+  --mod-nueva: #2A5FD6;       --mod-nueva-suave: color-mix(in srgb, var(--mod-nueva) 14%, transparent);
+  --mod-mis: #0E7490;         --mod-mis-suave: color-mix(in srgb, var(--mod-mis) 14%, transparent);
+  --mod-bandeja: #4F46E5;     --mod-bandeja-suave: color-mix(in srgb, var(--mod-bandeja) 14%, transparent);
+  --mod-gerencia: #B45309;    --mod-gerencia-suave: color-mix(in srgb, var(--mod-gerencia) 14%, transparent);
+  --mod-jefatura: #7C3AED;    --mod-jefatura-suave: color-mix(in srgb, var(--mod-jefatura) 14%, transparent);
+  --mod-admin: #5B6474;       --mod-admin-suave: color-mix(in srgb, var(--mod-admin) 14%, transparent);
+  --mod-pausas: #0F766E;      --mod-pausas-suave: color-mix(in srgb, var(--mod-pausas) 14%, transparent);
+  --mod-coord: #C2410C;       --mod-coord-suave: color-mix(in srgb, var(--mod-coord) 14%, transparent);
+  --mod-novedades: #BE185D;   --mod-novedades-suave: color-mix(in srgb, var(--mod-novedades) 14%, transparent);
+  --mod-mi-trabajo: #1D4ED8;  --mod-mi-trabajo-suave: color-mix(in srgb, var(--mod-mi-trabajo) 14%, transparent);
+  --mod-proyectos: #6D28D9;   --mod-proyectos-suave: color-mix(in srgb, var(--mod-proyectos) 14%, transparent);
+  --mod-calidad: #0D9488;     --mod-calidad-suave: color-mix(in srgb, var(--mod-calidad) 14%, transparent);
+
   /* --- Tipografia ------------------------------------------------------- */
   --fuente: 'Inter', system-ui, -apple-system, sans-serif;
   --fuente-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
@@ -172,6 +194,22 @@
     --p4: #34A374;
     --p5: #5B8DEF;
 
+    /* Acentos de modulo aclarados para el fondo oscuro (el navy/pizarra
+       serian invisibles); el -suave se recalcula solo via color-mix. */
+    --mod-inicio: #AEB9D0;
+    --mod-nueva: #6BA0FF;
+    --mod-mis: #3CC0D6;
+    --mod-bandeja: #9B93F7;
+    --mod-gerencia: #E0902E;
+    --mod-jefatura: #B79BFB;
+    --mod-admin: #9AA3B2;
+    --mod-pausas: #34C3B2;
+    --mod-coord: #F28356;
+    --mod-novedades: #EE5FA0;
+    --mod-mi-trabajo: #74B0FF;
+    --mod-proyectos: #B794F6;
+    --mod-calidad: #2DD4BF;
+
     --sombra-1: 0 1px 2px rgba(0, 0, 0, 0.35);
     --sombra-2: 0 8px 30px rgba(0, 0, 0, 0.5);
 
@@ -217,6 +255,20 @@
   --p3: #D4B13C;
   --p4: #34A374;
   --p5: #5B8DEF;
+
+  --mod-inicio: #AEB9D0;
+  --mod-nueva: #6BA0FF;
+  --mod-mis: #3CC0D6;
+  --mod-bandeja: #9B93F7;
+  --mod-gerencia: #E0902E;
+  --mod-jefatura: #B79BFB;
+  --mod-admin: #9AA3B2;
+  --mod-pausas: #34C3B2;
+  --mod-coord: #F28356;
+  --mod-novedades: #EE5FA0;
+  --mod-mi-trabajo: #74B0FF;
+  --mod-proyectos: #B794F6;
+  --mod-calidad: #2DD4BF;
 
   --sombra-1: 0 1px 2px rgba(0, 0, 0, 0.35);
   --sombra-2: 0 8px 30px rgba(0, 0, 0, 0.5);
@@ -580,7 +632,10 @@ button {
   flex: none;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.6;
+  /* v14.0 (piel nueva): 1.6 -> 1.8. El trazo fino hacia ver los iconos
+     "delgados/antiguos"; 1.8 les da cuerpo sin volverlos pesados a 16px.
+     Afecta a los ~46 iconos de una vez. */
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -3806,6 +3861,20 @@ button {
   width: 1.25rem; height: 1.25rem; border-radius: 4px; padding: 0;
 }
 
+/* v14.0 (piel nueva): punto de estado por token (Componentes.punto) --
+   reemplazo de los circulos de emoji. Hereda el color del token, monocromo
+   y consistente en claro/oscuro. */
+.sigso-punto {
+  display: inline-block; width: 0.6rem; height: 0.6rem; border-radius: 50%;
+  flex: none; vertical-align: middle; margin-right: 0.35rem; background: var(--texto-3);
+}
+.sigso-punto--critico { background: var(--critico); }
+.sigso-punto--riesgo  { background: var(--alerta); }
+.sigso-punto--mio     { background: var(--p3); }
+.sigso-punto--info    { background: var(--info); }
+.sigso-punto--ok      { background: var(--ok); }
+.sigso-punto--neutro  { background: var(--texto-3); }
+
 /* ===== v14.0: rediseño de la vista Personas de Accesos ==================
    De tabla plana a tarjetas con franja de color por nivel de acceso, con un
    resumen filtrable arriba y buscador. El color codifica "quién manda / quién
@@ -5859,11 +5928,11 @@ button.sigso-kpi {
              TODAS las pendientes del desarrollador elegido, en vez de una
              Orden de Trabajo suelta por solicitud. Solo tiene sentido con
              una persona concreta elegida (dashboard.js la muestra/oculta). -->
-        <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-imprimir-pauta">📋 Pauta de trabajo (PDF)</button>
+        <button type="button" class="sigso-boton--secundario sigso-boton--con-icono sigso-oculto" id="btn-imprimir-pauta"><svg class="sigso-ico" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg> Pauta de trabajo (PDF)</button>
         <!-- v5.2 Fase D (§5): sesion de planificacion -- fechas comprometidas
              a un lote de items en una sola sentada, con sugerencia de fechas
              escalonadas (P1 primero, "cada 2 dias"). -->
-        <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-sesion-planificacion">🗓 Sesión de planificación</button>
+        <button type="button" class="sigso-boton--secundario sigso-boton--con-icono sigso-oculto" id="btn-sesion-planificacion"><svg class="sigso-ico" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> Sesión de planificación</button>
       </div>
 
       <div class="sigso-card sigso-oculto" id="panel-sesion-planificacion">
@@ -6087,10 +6156,10 @@ button.sigso-kpi {
           <!-- v5.2 (§4.1, propuesta de adopcion): reporte de UNA hoja, simple
                (numeros grandes + semaforo + 3-5 lineas), pensado para
                Gerencia que "dificilmente va a navegar" el tablero detallado. -->
-          <button type="button" class="sigso-boton--secundario" id="btn-imprimir-ejecutivo">📋 Reporte ejecutivo (simple)</button>
+          <button type="button" class="sigso-boton--secundario sigso-boton--con-icono" id="btn-imprimir-ejecutivo"><svg class="sigso-ico" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg> Reporte ejecutivo (simple)</button>
           <!-- v5.2 (§4.2): complementa el envio programado (semanal/mensual) --
                solo el Administrador lo ve (rol_actual, ver Gerencia.gs). -->
-          <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-enviar-gerencia-ahora">📧 Enviar a Gerencia ahora</button>
+          <button type="button" class="sigso-boton--secundario sigso-boton--con-icono sigso-oculto" id="btn-enviar-gerencia-ahora"><svg class="sigso-ico" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></svg> Enviar a Gerencia ahora</button>
         </div>
         <!-- UI-1 (§6): encabezado institucional del reporte impreso. -->
         <div class="sigso-solo-imprimir sigso-encabezado-reporte">
@@ -6659,6 +6728,14 @@ var MARCA_SIGSO_SVG = '<svg class="sigso-marca" width="28" height="28" viewBox="
 
     badge: function (texto, variante) {
       return '<span class="sigso-badge' + (variante ? ' sigso-badge--' + variante : '') + '">' + escaparHtml(texto) + '</span>';
+    },
+
+    // v14.0 (piel nueva): punto de estado por token, reemplaza los circulos
+    // de EMOJI (🔴🟡🟢⚪) que se dibujaban distinto en cada SO. Tonos:
+    // critico / riesgo / mio / info / ok / neutro. Uso: como prefijo de una
+    // etiqueta de grupo o de una linea de estado.
+    punto: function (tono) {
+      return '<span class="sigso-punto sigso-punto--' + (tono || 'neutro') + '" aria-hidden="true"></span>';
     },
 
     // v4.0 Frente 2: la pastilla de estado deja de ser un badge azul plano
@@ -7376,7 +7453,26 @@ var Iconos = (function () {
     // v10.0 Fase 2 (rediseno visual del modulo Calidad): objetivos de
     // calidad (una meta -> diana) y cobertura ISO (conformidad -> escudo).
     diana: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
-    escudo: '<path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/>'
+    escudo: '<path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/>',
+
+    // v14.0 "piel nueva": iconos PROPIOS por modulo (antes Gerencia, Mi
+    // departamento y Coordinacion compartian 'grafico', y Administracion un
+    // engranaje anticuado), mas los glifos que faltaban para reemplazar los
+    // emoji de la interfaz por trazos que heredan color y tamano.
+    tendencia: '<path d="M3 17l6-6 4 4 8-8"/><path d="M17 7h4v4"/>',          // Gerencia
+    equipo: '<circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M15.5 5.6a3.2 3.2 0 0 1 0 5.6"/><path d="M18.5 20a5.5 5.5 0 0 0-3-4.9"/>', // Mi departamento
+    portapapeles: '<rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2.5" width="6" height="4" rx="1"/><path d="m9 13 2 2 4-4"/>', // Coordinacion de pausas
+    tareas: '<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3 6 1.4 1.4L6.5 4.2"/><path d="m3 12 1.4 1.4L6.5 10.2"/><path d="m3 18 1.4 1.4L6.5 16.2"/>', // Mi trabajo
+    ajustes: '<path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="7" cy="17" r="2.2"/>', // Administracion
+    actividad: '<path d="M3 12h4l2 5 4-12 2 7h6"/>',                          // Pausas activas
+    capas: '<path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 13 9 5 9-5"/>',      // Proyectos
+    escudoCheck: '<path d="M12 3 5 6v5c0 4.5 3 7.5 7 9 4-1.5 7-4.5 7-9V6l-7-3Z"/><path d="m9 12 2 2 4-4"/>', // Calidad
+    enlace: '<path d="M10.5 13.5a4 4 0 0 0 5.7 0l2.3-2.3a4 4 0 0 0-5.7-5.7l-1.2 1.2"/><path d="M13.5 10.5a4 4 0 0 0-5.7 0l-2.3 2.3a4 4 0 0 0 5.7 5.7l1.2-1.2"/>', // Enlace magico
+    correo: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/>', // Canal correo
+    campanaOff: '<path d="M8.7 3.9A6 6 0 0 1 18 8c0 2.6.5 4.4 1.2 5.7"/><path d="M17 17H4s3-2 3-9c0-.5 0-1 .1-1.4"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><path d="M2 2l20 20"/>', // Notificaciones silenciadas
+    // "Bloqueado / en pausa" -- reemplaza el simbolo ⏸ (que en Windows sale
+    // como emoji azul). Barras rellenas para que se lea a tamano chico.
+    pausado: '<rect x="7" y="5" width="3.4" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="13.6" y="5" width="3.4" height="14" rx="1" fill="currentColor" stroke="none"/>'
   };
 
   /**
@@ -8984,11 +9080,11 @@ var Iconos = (function () {
       if (item.usuario_prueba) contexto.push('Usuario de prueba: ' + item.usuario_prueba);
       if (item.ref_credencial) contexto.push('Credencial: ' + item.ref_credencial);
       var contextoHtml = contexto.length
-        ? '<p class="sigso-ot-item__contexto">🔍 ' + Componentes.escaparHtml(contexto.join(' · ')) + '</p>'
+        ? '<p class="sigso-ot-item__contexto">' + Iconos.svg('lupa', { tam: 14 }) + ' ' + Componentes.escaparHtml(contexto.join(' · ')) + '</p>'
         : '';
       var fechaHtml = item.fecha_comprometida
-        ? '<span class="sigso-ot-item__fecha">📅 Comprometida: ' + Componentes.escaparHtml(String(item.fecha_comprometida).replace('T', ' ').slice(0, 16)) + '</span>'
-        : '<span class="sigso-ot-item__fecha">📅 Sin fecha comprometida</span>';
+        ? '<span class="sigso-ot-item__fecha">' + Iconos.svg('calendario', { tam: 14 }) + ' Comprometida: ' + Componentes.escaparHtml(String(item.fecha_comprometida).replace('T', ' ').slice(0, 16)) + '</span>'
+        : '<span class="sigso-ot-item__fecha">' + Iconos.svg('calendario', { tam: 14 }) + ' Sin fecha comprometida</span>';
 
       return '<div class="sigso-ot-item">' +
         '<h3>' + Componentes.escaparHtml(item.solicitud_id) + '-' + item.numero_item + ' — ' + Componentes.escaparHtml(item.titulo) + '</h3>' +
@@ -9009,7 +9105,7 @@ var Iconos = (function () {
       '<p>' + items.length + ' pendiente(s) · Generada el ' + Componentes.escaparHtml(new Date().toLocaleString('es-CL')) + '</p>' +
       '</div></div>' +
       itemsHtml +
-      '<p class="sigso-ot-pie">✅ Para cerrar cada una: responde "LISTO &lt;N° de solicitud&gt;" por WhatsApp, o márcala Terminada en el sistema si ya tienes acceso.</p>' +
+      '<p class="sigso-ot-pie">' + Iconos.svg('check', { tam: 14 }) + ' Para cerrar cada una: responde "LISTO &lt;N° de solicitud&gt;" por WhatsApp, o márcala Terminada en el sistema si ya tienes acceso.</p>' +
       '</div>';
   }
 
@@ -9465,11 +9561,11 @@ var Iconos = (function () {
   // que faltaba: hasta v6.0 una solicitud pasaba de "todo bien" a "atrasada"
   // sin escalon intermedio donde todavia se podia evitar el incumplimiento.
   var GRUPOS_CLASIFICACION = [
-    { clave: 'critica', etiqueta: '🔴 Fuera de plazo y críticas', clase: 'critica' },
-    { clave: 'riesgo', etiqueta: '🟠 En riesgo — atender antes de que venza', clase: 'riesgo' },
-    { clave: 'esperando_mio', etiqueta: '🟡 Esperando algo mío', clase: 'esperando-mio' },
-    { clave: 'en_curso', etiqueta: '🔵 En curso', clase: 'en-curso' },
-    { clave: 'esperando_solicitante', etiqueta: '⚪ Esperando al solicitante', clase: 'esperando-solicitante' }
+    { clave: 'critica', etiqueta: 'Fuera de plazo y críticas', clase: 'critica', tono: 'critico' },
+    { clave: 'riesgo', etiqueta: 'En riesgo — atender antes de que venza', clase: 'riesgo', tono: 'riesgo' },
+    { clave: 'esperando_mio', etiqueta: 'Esperando algo mío', clase: 'esperando-mio', tono: 'mio' },
+    { clave: 'en_curso', etiqueta: 'En curso', clase: 'en-curso', tono: 'info' },
+    { clave: 'esperando_solicitante', etiqueta: 'Esperando al solicitante', clase: 'esperando-solicitante', tono: 'neutro' }
   ];
 
   function clasificar_(s) {
@@ -9629,14 +9725,14 @@ var Iconos = (function () {
       var filas = porClave[g.clave];
       if (filas.length === 0) return '';
       return '<h4 class="sigso-grupo__titulo sigso-grupo__titulo--' + g.clase + '">' +
-        Componentes.escaparHtml(g.etiqueta) + ' (' + filas.length + ')</h4>' +
+        Componentes.punto(g.tono) + Componentes.escaparHtml(g.etiqueta) + ' (' + filas.length + ')</h4>' +
         filas.map(renderFilaReciente_).join('');
     }).join('');
 
     // Las cerradas quedan colapsadas: siguen siendo consultables (un clic) sin
     // ocupar el espacio de arriba, que es para lo que todavia necesita algo.
     if (porClave.cerrada.length > 0) {
-      html += '<details class="sigso-grupo-cerradas"><summary>⚫ Cerradas recientes (' + porClave.cerrada.length + ')</summary>' +
+      html += '<details class="sigso-grupo-cerradas"><summary>' + Componentes.punto('neutro') + 'Cerradas recientes (' + porClave.cerrada.length + ')</summary>' +
         porClave.cerrada.map(renderFilaReciente_).join('') + '</details>';
     }
     return html || Componentes.vacio({
@@ -9860,7 +9956,7 @@ var Iconos = (function () {
     // Leo no dependa solo de encontrar el correo entre el resto de avisos.
     var badgeRespuesta = s.respuesta_pendiente ? ' ' + Componentes.badge('Respuesta recibida', 'P2') : '';
     var badgeSinMovimiento = (s.dias_sin_movimiento || 0) >= DIAS_SIN_MOVIMIENTO_UMBRAL
-      ? ' <span class="sigso-chip-sin-movimiento" title="Sin cambios de estado hace ' + s.dias_sin_movimiento + ' días">🕸 ' + s.dias_sin_movimiento + 'd sin mover</span>'
+      ? ' <span class="sigso-chip-sin-movimiento" title="Sin cambios de estado hace ' + s.dias_sin_movimiento + ' días">' + Iconos.svg('reloj', { tam: 13 }) + ' ' + s.dias_sin_movimiento + 'd sin mover</span>'
       : '';
     // Fase 10.2: el titulo del item (lo que el solicitante escribio) es lo
     // que dice de que se trata -- el codigo crudo del catalogo (s.modulo,
@@ -10167,7 +10263,7 @@ var Iconos = (function () {
       Componentes.escaparHtml(s.plataforma_nombre || s.plataforma) + '</span>' +
       '</div>' +
       '<div class="sigso-detalle-toolbar__acciones">' + cta +
-      '<button type="button" class="sigso-boton--secundario" id="btn-imprimir-ot">📄 Orden de trabajo (PDF)</button>' +
+      '<button type="button" class="sigso-boton--secundario sigso-boton--con-icono" id="btn-imprimir-ot">' + Iconos.svg('documento') + 'Orden de trabajo (PDF)</button>' +
       '</div>' +
       '</div>';
   }
@@ -10180,7 +10276,7 @@ var Iconos = (function () {
     var itemAbierto = ESTADOS_CERRADOS_DETALLE.indexOf(sub.estado) === -1;
     if (!itemAbierto) return '';
     if (!sub.fecha_comprometida) {
-      return '<button type="button" class="sigso-boton sigso-cta-toolbar" data-cta="comprometer" data-subsolicitud="' + sub.subsolicitud_id + '">📅 Comprometer fecha</button>';
+      return '<button type="button" class="sigso-boton sigso-cta-toolbar sigso-boton--con-icono" data-cta="comprometer" data-subsolicitud="' + sub.subsolicitud_id + '">' + Iconos.svg('calendario') + 'Comprometer fecha</button>';
     }
     var opcionesTransicion = transicionesPorSub[sub.subsolicitud_id] || [];
     var rangoActual = RANGO_ESTADO[sub.estado] !== undefined ? RANGO_ESTADO[sub.estado] : -1;
@@ -10217,7 +10313,7 @@ var Iconos = (function () {
     // recorrio el flujo -- sin esto, un cierre instantaneo parece un error.
     var esAtencionDirecta = s.atencion_directa === true || s.atencion_directa === 'TRUE' || s.atencion_directa === 1;
     var avisoAtencionDirecta = esAtencionDirecta
-      ? '<p class="sigso-insignia-directa">⚡ Atención directa — registrada después de resolver</p>'
+      ? '<p class="sigso-insignia-directa">' + Iconos.svg('rayo', { tam: 14 }) + ' Atención directa — registrada después de resolver</p>'
       : '';
 
     // v4.0 Frente 4: barra de flujo S01..S09 -- de un vistazo se ve cuanto
@@ -10330,9 +10426,9 @@ var Iconos = (function () {
       // la vista nunca los mostraba, obligando a leer toda la descripcion
       // para saber "que es esto" (reporte real de uso).
       var metaChips = [];
-      if (sub.tipo_nombre || sub.tipo) metaChips.push('🏷 ' + Componentes.escaparHtml(sub.tipo_nombre || sub.tipo));
-      if (sub.modulo_nombre || sub.modulo) metaChips.push('📦 ' + Componentes.escaparHtml(sub.modulo_nombre || sub.modulo));
-      if (sub.fecha_propuesta) metaChips.push('📅 Propuesta: ' + Componentes.escaparHtml(fechaCorta_(sub.fecha_propuesta)));
+      if (sub.tipo_nombre || sub.tipo) metaChips.push(Iconos.svg('etiqueta', { tam: 13 }) + ' ' + Componentes.escaparHtml(sub.tipo_nombre || sub.tipo));
+      if (sub.modulo_nombre || sub.modulo) metaChips.push(Iconos.svg('caja', { tam: 13 }) + ' ' + Componentes.escaparHtml(sub.modulo_nombre || sub.modulo));
+      if (sub.fecha_propuesta) metaChips.push(Iconos.svg('calendario', { tam: 13 }) + ' Propuesta: ' + Componentes.escaparHtml(fechaCorta_(sub.fecha_propuesta)));
       var metaHtml = metaChips.length ? '<div class="sigso-item-meta">' + metaChips.join(' &middot; ') + '</div>' : '';
 
       // Propuesta 3: los datos del item se agrupan por proposito (donde
@@ -10441,14 +10537,14 @@ var Iconos = (function () {
         '<p>' + Componentes.escaparHtml(sub.descripcion) + '</p>' +
         (sub.contexto ? '<p><strong>Contexto:</strong> ' + Componentes.escaparHtml(sub.contexto) + '</p>' : '') +
         (sub.resultado_esperado ? '<p><strong>Resultado esperado:</strong> ' + Componentes.escaparHtml(sub.resultado_esperado) + '</p>' : '') +
-        bloqueDatos_('🔍 Dónde reproducir', datosReproducir) +
-        bloqueDatos_('📋 Contexto del pedido', datosContexto) +
-        bloqueDatos_('⏱ Plazos y responsable', datosPlazos) +
+        bloqueDatos_(Iconos.svg('lupa', { tam: 15 }) + ' Dónde reproducir', datosReproducir) +
+        bloqueDatos_(Iconos.svg('lista', { tam: 15 }) + ' Contexto del pedido', datosContexto) +
+        bloqueDatos_(Iconos.svg('reloj', { tam: 15 }) + ' Plazos y responsable', datosPlazos) +
         // v3.1 (§1.4): el registro de la atencion directa. Es la memoria
         // tecnica del incidente -- lo unico que queda de algo que se
         // resolvio por telefono.
         (sub.atencion_resuelto_por
-          ? bloqueDatos_('⚡ Atención directa', [
+          ? bloqueDatos_(Iconos.svg('rayo', { tam: 15 }) + ' Atención directa', [
             renderCampoDato_('Resuelto por', Componentes.escaparHtml(sub.atencion_resuelto_por)),
             renderCampoDato_('Fecha de resolución', Componentes.escaparHtml(fechaCorta_(sub.atencion_fecha_resolucion))),
             renderCampoDato_('Qué se hizo', Componentes.escaparHtml(sub.atencion_detalle))
@@ -10554,7 +10650,7 @@ var Iconos = (function () {
     // faltaComprometer calculado arriba) y se avisa antes de avanzar -- el
     // flujo real es evaluar -> comprometer -> recien ahi avanzar estados.
     var avisoFecha = faltaComprometer
-      ? '<div class="sigso-alerta"><p>⚠ Este ítem aún no tiene fecha comprometida — defínela antes de avanzar.</p></div>'
+      ? '<div class="sigso-alerta"><p>' + Iconos.svg('alerta', { tam: 15 }) + ' Este ítem aún no tiene fecha comprometida — defínela antes de avanzar.</p></div>'
       : '';
     var bloqueFecha =
       avisoFecha +
@@ -10985,15 +11081,26 @@ var Iconos = (function () {
   var recurrenciaFiltro = null;
   var graficosGerencia = {};
 
+  // v14.0 (piel nueva): el semaforo deja de dibujarse con emoji; cada
+  // categoria lleva su TONO y se pinta con Componentes.punto (color por
+  // token, consistente en claro/oscuro). El backend sigue mandando su campo
+  // `emoji`, pero el frontend lo ignora y usa el `codigo` -> tono.
   var CATEGORIAS = [
-    { codigo: 'ATRASADA_DESARROLLADOR', emoji: '🔴', etiqueta: 'Atrasadas (desarrollador)' },
-    { codigo: 'EN_RIESGO', emoji: '🟡', etiqueta: 'En riesgo' },
-    { codigo: 'ESPERANDO_VALIDACION', emoji: '🔵', etiqueta: 'Esperando validación' },
-    { codigo: 'EN_PLAZO', emoji: '🟢', etiqueta: 'En plazo' },
-    { codigo: 'SIN_COMPROMISO', emoji: '⚪', etiqueta: 'Sin comprometer' },
-    { codigo: 'CERRADA_A_TIEMPO', emoji: '✅', etiqueta: 'Cerradas a tiempo' },
-    { codigo: 'CERRADA_CON_ATRASO', emoji: '❌', etiqueta: 'Cerradas con atraso' }
+    { codigo: 'ATRASADA_DESARROLLADOR', tono: 'critico', etiqueta: 'Atrasadas (desarrollador)' },
+    { codigo: 'EN_RIESGO', tono: 'riesgo', etiqueta: 'En riesgo' },
+    { codigo: 'ESPERANDO_VALIDACION', tono: 'info', etiqueta: 'Esperando validación' },
+    { codigo: 'EN_PLAZO', tono: 'ok', etiqueta: 'En plazo' },
+    { codigo: 'SIN_COMPROMISO', tono: 'neutro', etiqueta: 'Sin comprometer' },
+    { codigo: 'CERRADA_A_TIEMPO', tono: 'ok', etiqueta: 'Cerradas a tiempo' },
+    { codigo: 'CERRADA_CON_ATRASO', tono: 'critico', etiqueta: 'Cerradas con atraso' }
   ];
+  // codigo -> tono, para pintar el punto donde el item trae cumplimiento del
+  // backend (tablero, tarjetas) sin depender de su emoji.
+  var TONO_CUMPLIMIENTO = {
+    ATRASADA_DESARROLLADOR: 'critico', EN_RIESGO: 'riesgo', ESPERANDO_VALIDACION: 'info',
+    EN_PLAZO: 'ok', SIN_COMPROMISO: 'neutro', CERRADA_A_TIEMPO: 'ok', CERRADA_CON_ATRASO: 'critico'
+  };
+  function puntoCumplimiento_(codigo) { return Componentes.punto(TONO_CUMPLIMIENTO[codigo] || 'neutro'); }
 
   // v3.0 (Fase 4, §6.1): orden actual del tablero -- se conserva entre
   // renders (filtro nuevo, cambio de categoria, etc.) para no perder el
@@ -11358,8 +11465,8 @@ var Iconos = (function () {
     var enRiesgo = items.filter(function (i) { return i.cumplimiento.codigo === 'EN_RIESGO'; }).length;
 
     var semaforo = atrasadas > 0
-      ? '🔴 Hay solicitudes atrasadas que necesitan atención'
-      : (enRiesgo > 0 ? '🟡 Al día, pero hay ítems cerca de vencer' : '🟢 Todo al día');
+      ? Componentes.punto('critico') + 'Hay solicitudes atrasadas que necesitan atención'
+      : (enRiesgo > 0 ? Componentes.punto('riesgo') + 'Al día, pero hay ítems cerca de vencer' : Componentes.punto('ok') + 'Todo al día');
 
     var lineas = [];
     lineas.push((kpis.atrasadas_activas || 0) + ' solicitud(es) ya pasaron su fecha comprometida y siguen sin entregarse.');
@@ -11443,7 +11550,7 @@ var Iconos = (function () {
       var cantidad = items.filter(function (i) { return i.cumplimiento.codigo === cat.codigo; }).length;
       var activa = categoriaActiva === cat.codigo ? ' sigso-semaforo-tarjeta--activa' : '';
       return '<button type="button" class="sigso-semaforo-tarjeta' + activa + '" data-codigo="' + cat.codigo + '">' +
-        '<span class="sigso-semaforo-tarjeta__emoji">' + cat.emoji + '</span>' +
+        '<span class="sigso-semaforo-tarjeta__emoji">' + Componentes.punto(cat.tono) + '</span>' +
         '<span class="sigso-semaforo-tarjeta__cantidad">' + cantidad + '</span>' +
         '<span class="sigso-semaforo-tarjeta__etiqueta">' + Componentes.escaparHtml(cat.etiqueta) + '</span>' +
         '</button>';
@@ -11533,7 +11640,7 @@ var Iconos = (function () {
   function valorColumna_(item, campo) {
     if (campo === 'dias_esperando_solicitante') return item.cumplimiento.dias_esperando;
     if (campo === 'estado') return formatearEstadoSigso(item.estado);
-    if (campo === 'semaforo') return item.cumplimiento.emoji + ' ' + item.cumplimiento.etiqueta;
+    if (campo === 'semaforo') return item.cumplimiento.etiqueta;
     return item[campo];
   }
 
@@ -11588,7 +11695,7 @@ var Iconos = (function () {
     var diasEsperando = i.cumplimiento.dias_esperando;
     var celdaEsperando = diasEsperando === null || diasEsperando === undefined
       ? '—'
-      : (i.semaforo_solicitante ? i.semaforo_solicitante.emoji + ' ' : '') + diasEsperando + ' día(s)';
+      : (i.semaforo_solicitante ? puntoCumplimiento_(i.semaforo_solicitante.codigo) : '') + diasEsperando + ' día(s)';
     var etq = {};
     COLUMNAS_TABLERO.forEach(function (col) { etq[col.campo] = col.etiqueta; });
     var clave = i.solicitud_id + '-' + i.numero_item;
@@ -11614,7 +11721,7 @@ var Iconos = (function () {
       '<td data-label="' + etq.dias_desarrollador + '">' + (i.dias_desarrollador === null || i.dias_desarrollador === undefined ? '—' : i.dias_desarrollador + ' d') + '</td>' +
       '<td data-label="' + etq.dias_esperando_solicitante + '">' + celdaEsperando + '</td>' +
       '<td data-label="' + etq.fecha_comprometida + '">' + (i.fecha_comprometida ? Componentes.escaparHtml(String(i.fecha_comprometida).replace('T', ' ').slice(0, 16)) : '—') + '</td>' +
-      '<td data-label="' + etq.semaforo + '">' + i.cumplimiento.emoji + ' ' + Componentes.escaparHtml(i.cumplimiento.etiqueta) + '</td>' +
+      '<td data-label="' + etq.semaforo + '">' + puntoCumplimiento_(i.cumplimiento.codigo) + Componentes.escaparHtml(i.cumplimiento.etiqueta) + '</td>' +
       '</tr>';
 
     if (!expandido) return fila;
@@ -12519,11 +12626,11 @@ var Iconos = (function () {
       return;
     }
     contenedor.innerHTML =
-      bloqueHoy_('🆕 Nuevas (' + r.nuevas + ')', hoy.nuevas) +
-      bloqueHoy_('➡️ Avanzaron (' + r.avanzaron + ')', hoy.avanzaron) +
-      bloqueHoy_('✅ Cerradas hoy (' + r.cerradas + ')', hoy.cerradas) +
-      bloqueHoy_('🔴 En riesgo o vencidas (' + r.en_riesgo + ')', hoy.en_riesgo_o_vencidas) +
-      bloqueHoy_('⏳ Esperando validación de tu equipo (' + r.requieren_accion + ')', hoy.requieren_accion);
+      bloqueHoy_('nueva', 'Nuevas (' + r.nuevas + ')', hoy.nuevas) +
+      bloqueHoy_('derivar', 'Avanzaron (' + r.avanzaron + ')', hoy.avanzaron) +
+      bloqueHoy_('check', 'Cerradas hoy (' + r.cerradas + ')', hoy.cerradas) +
+      bloqueHoy_('alerta', 'En riesgo o vencidas (' + r.en_riesgo + ')', hoy.en_riesgo_o_vencidas) +
+      bloqueHoy_('reloj', 'Esperando validación de tu equipo (' + r.requieren_accion + ')', hoy.requieren_accion);
     contenedor.querySelectorAll('[data-id]').forEach(function (fila) {
       fila.addEventListener('click', function () {
         window.SigsoApp.mostrarDetalle(fila.getAttribute('data-id'));
@@ -12531,9 +12638,9 @@ var Iconos = (function () {
     });
   }
 
-  function bloqueHoy_(titulo, items) {
+  function bloqueHoy_(icono, titulo, items) {
     if (!items.length) return '';
-    return '<div class="sigso-jefatura-bloque-hoy"><h4>' + Componentes.escaparHtml(titulo) + '</h4>' +
+    return '<div class="sigso-jefatura-bloque-hoy"><h4>' + Iconos.svg(icono, { tam: 15 }) + ' ' + Componentes.escaparHtml(titulo) + '</h4>' +
       items.map(function (i) {
         return '<div class="sigso-fila-reciente" data-id="' + i.solicitud_id + '">' +
           '<div class="sigso-fila-reciente__principal">' +
@@ -12682,7 +12789,7 @@ var Iconos = (function () {
     var cuerpo = ordenados.map(function (a) {
       return '<tr>' +
         '<td title="' + Componentes.escaparHtml(a.titulo || '') + '">' + Componentes.escaparHtml(truncar_(a.titulo, 40)) +
-        (a.bloqueo_motivo ? '<div class="sigso-ayuda">⏸ ' + Componentes.escaparHtml(truncar_(a.bloqueo_motivo, 60)) + '</div>' : '') + '</td>' +
+        (a.bloqueo_motivo ? '<div class="sigso-ayuda">' + Iconos.svg('pausado', { tam: 13 }) + ' ' + Componentes.escaparHtml(truncar_(a.bloqueo_motivo, 60)) + '</div>' : '') + '</td>' +
         '<td>' + Componentes.escaparHtml(a.responsable_nombre || a.responsable_email) + '</td>' +
         '<td>' + Componentes.escaparHtml(ETIQUETA_TAMANO_JEF[a.tamano] || a.tamano || '—') + '</td>' +
         '<td>' + fechaCortaJef_(a.fecha_compromiso || a.fecha_propuesta) + '</td>' +
@@ -14301,7 +14408,7 @@ var Iconos = (function () {
     }
 
     var bloqueoInfo = a.estado === 'BLOQUEADA' && a.bloqueo_motivo
-      ? '<div class="sigso-mt-bloqueo">⏸ ' + Componentes.escaparHtml(a.bloqueo_motivo) +
+      ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('pausado', { tam: 14 }) + ' ' + Componentes.escaparHtml(a.bloqueo_motivo) +
         (a.bloqueo_responsable_email ? ' — espera a <b>' + Componentes.escaparHtml(a.bloqueo_responsable_email) + '</b>' : '') + '</div>'
       : '';
 
@@ -14478,7 +14585,9 @@ var Iconos = (function () {
     return llamarApi(urlBackoffice_(), accion, datos || {});
   }
 
-  var SALUD_ETIQUETA = { normal: '🟢 Normal', riesgo: '🟡 En riesgo', critico: '🔴 Crítico' };
+  var SALUD_ETIQUETA = { normal: 'Normal', riesgo: 'En riesgo', critico: 'Crítico' };
+  // v14.0 (piel nueva): salud -> tono del punto de estado (Componentes.punto).
+  var SALUD_TONO = { normal: 'ok', riesgo: 'riesgo', critico: 'critico' };
   var ESTADO_PROYECTO_ETIQUETA = {
     PLANIFICACION: 'Planificación', ACTIVO: 'Activo', EN_PAUSA: 'En pausa',
     EN_REVISION: 'En revisión', CERRADO: 'Cerrado', CANCELADO: 'Cancelado'
@@ -14566,8 +14675,8 @@ var Iconos = (function () {
     if (!resumen || !resumen.total_proyectos) return '';
     var kpis = [
       Componentes.kpi({ etiqueta: 'Proyectos activos', valor: resumen.total_proyectos }),
-      Componentes.kpi({ etiqueta: '🔴 Críticos', valor: (resumen.por_salud && resumen.por_salud.critico) || 0 }),
-      Componentes.kpi({ etiqueta: '🟡 En riesgo', valor: (resumen.por_salud && resumen.por_salud.riesgo) || 0 }),
+      Componentes.kpi({ etiqueta: 'Críticos', valor: (resumen.por_salud && resumen.por_salud.critico) || 0, alerta: true }),
+      Componentes.kpi({ etiqueta: 'En riesgo', valor: (resumen.por_salud && resumen.por_salud.riesgo) || 0 }),
       Componentes.kpi({ etiqueta: 'Vencen en 14 días', valor: resumen.proximos_a_cerrar || 0 }),
       Componentes.kpi({ etiqueta: 'Sin novedad 7+ días', valor: resumen.sin_actualizacion_reciente || 0 })
     ].join('');
@@ -14645,7 +14754,7 @@ var Iconos = (function () {
       return '<button type="button" class="sigso-py-card js-py-abrir" data-id="' + p.proyecto_id + '">' +
         '<div class="sigso-py-card__top">' +
           '<span class="sigso-py-card__nombre">' + Componentes.escaparHtml(p.nombre) + '</span>' +
-          '<span class="sigso-py-salud sigso-py-salud--' + p.salud + '">' + SALUD_ETIQUETA[p.salud] + '</span>' +
+          '<span class="sigso-py-salud sigso-py-salud--' + p.salud + '">' + Componentes.punto(SALUD_TONO[p.salud]) + SALUD_ETIQUETA[p.salud] + '</span>' +
         '</div>' +
         (p.descripcion ? '<p class="sigso-py-card__desc">' + Componentes.escaparHtml(p.descripcion) + '</p>' : '') +
         '<div class="sigso-py-card__barra"><div class="sigso-py-card__barra-fill" style="width:' + (p.avance_pct || 0) + '%"></div></div>' +
@@ -14805,7 +14914,7 @@ var Iconos = (function () {
       '<div class="sigso-py-detalle-cab">' +
         Componentes.boton({ texto: '← Portafolio', variante: 'sutil', clase: 'js-py-volver' }) +
         '<h1>' + Componentes.escaparHtml(p.nombre) + '</h1>' +
-        '<span class="sigso-py-salud sigso-py-salud--' + detalle.salud + '">' + SALUD_ETIQUETA[detalle.salud] + '</span>' +
+        '<span class="sigso-py-salud sigso-py-salud--' + detalle.salud + '">' + Componentes.punto(SALUD_TONO[detalle.salud]) + SALUD_ETIQUETA[detalle.salud] + '</span>' +
         Componentes.badge(ESTADO_PROYECTO_ETIQUETA[p.estado] || p.estado, 'neutro') +
       '</div>' +
       (detalle.salud_motivos && detalle.salud_motivos.length
@@ -14967,11 +15076,11 @@ var Iconos = (function () {
           (a.fecha_compromiso ? '<span>Vence ' + fechaCorta_(a.fecha_compromiso) + '</span>' : '') +
           (a.avance_pct !== '' && a.avance_pct !== undefined && a.avance_pct !== null ? '<span>' + a.avance_pct + '% avance</span>' : '') +
         '</div>' +
-        (a.estado === 'BLOQUEADA' ? '<div class="sigso-mt-bloqueo">⏸ ' + Componentes.escaparHtml(a.bloqueo_motivo) + '</div>' : '') +
+        (a.estado === 'BLOQUEADA' ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('pausado', { tam: 14 }) + ' ' + Componentes.escaparHtml(a.bloqueo_motivo) + '</div>' : '') +
         // v9.4: dependencia comprometida -- bandera derivada (nunca mueve
         // fechas ni bloquea, §I de la propuesta), solo avisa.
         (a.dependencia_comprometida
-          ? '<div class="sigso-mt-bloqueo">⚠ Depende de "' + Componentes.escaparHtml(a.dependencia_titulo) + '", que está atrasada.</div>'
+          ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('alerta', { tam: 14 }) + ' Depende de "' + Componentes.escaparHtml(a.dependencia_titulo) + '", que está atrasada.</div>'
           : '') +
       '</div>';
     }).join('');
@@ -15058,7 +15167,7 @@ var Iconos = (function () {
           '<span>' + Componentes.escaparHtml(integrantesPorEmail[normalizarEmail_(e.responsable_email)] || e.responsable_email) + '</span>' +
           '<span>Vence ' + fechaCorta_(e.fecha_comprometida) + '</span>' +
         '</div>' +
-        (e.estado === 'OBSERVADO' && e.observaciones ? '<div class="sigso-mt-bloqueo">⏸ ' + Componentes.escaparHtml(e.observaciones) + '</div>' : '') +
+        (e.estado === 'OBSERVADO' && e.observaciones ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('pausado', { tam: 14 }) + ' ' + Componentes.escaparHtml(e.observaciones) + '</div>' : '') +
         (e.url_evidencia ? '<p class="sigso-ayuda"><a href="' + Componentes.escaparHtml(e.url_evidencia) + '" target="_blank" rel="noopener noreferrer">Ver evidencia</a></p>' : '') +
         botones +
       '</div>';
@@ -16711,7 +16820,7 @@ var Iconos = (function () {
     var obsoleto = d.estado === 'OBSOLETO';
 
     var acciones = '<div class="sgc-acciones">' +
-      (d.archivo_id ? Componentes.boton({ texto: '⬇ Descargar', clase: 'js-sgc-descargar' }) : '') +
+      (d.archivo_id ? Componentes.boton({ texto: 'Descargar', icono: 'descargar', clase: 'js-sgc-descargar' }) : '') +
       (puedeGestionar_ ? Componentes.boton({ texto: 'Nueva versión', variante: 'secundario', clase: 'js-sgc-version' }) : '') +
       (puedeGestionar_ ? Componentes.boton({ texto: 'Editar', variante: 'secundario', clase: 'js-sgc-editar' }) : '') +
       (puedeGestionar_ ? Componentes.boton({ texto: 'Ver quién confirmó', variante: 'secundario', clase: 'js-sgc-cumplimiento' }) : '') +
@@ -17541,7 +17650,7 @@ var Iconos = (function () {
           '<span class="sigso-ayuda">' + fechaCorta_(x.fecha) + '</span>' +
         '</div>' +
         '<div class="sgc-acciones">' +
-          Componentes.boton({ texto: '⬇ Descargar', variante: 'sutil', clase: 'js-sgc-bajar-doc', idx: x.doc_id }) +
+          Componentes.boton({ texto: 'Descargar', icono: 'descargar', variante: 'sutil', clase: 'js-sgc-bajar-doc', idx: x.doc_id }) +
           (puedeGestionar_ ? Componentes.boton({ texto: 'Quitar', variante: 'sutil', clase: 'js-sgc-quitar-doc', idx: x.doc_id }) : '') +
         '</div>' +
       '</div>';
@@ -23628,7 +23737,7 @@ var Iconos = (function () {
           : '') +
         '<div class="sigso-modal__acciones">' +
           Componentes.boton({ texto: 'Cerrar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
-          Componentes.boton({ texto: '⬇ Descargar evidencia (PDF)', clase: 'js-sgc-descargar-evidencia', tipo: 'button' }) +
+          Componentes.boton({ texto: 'Descargar evidencia (PDF)', icono: 'descargar', clase: 'js-sgc-descargar-evidencia', tipo: 'button' }) +
         '</div>' +
       '</div>';
     var cerrar = montarModal_(fondo);
@@ -25495,8 +25604,8 @@ var Iconos = (function () {
     banner.innerHTML =
       '<span style="flex:1;min-width:220px">' +
         (denegado
-          ? '🔕 Las alertas de SIGSO estan bloqueadas en este navegador. Actívalas desde el ícono de candado/información junto a la URL → Notificaciones → Permitir, y recarga la página.'
-          : '🔔 Activa las alertas de SIGSO para no perderte avisos importantes (derivaciones, vencimientos, pausas).') +
+          ? Iconos.svg('campanaOff', { tam: 15 }) + ' Las alertas de SIGSO estan bloqueadas en este navegador. Actívalas desde el ícono de candado/información junto a la URL → Notificaciones → Permitir, y recarga la página.'
+          : Iconos.svg('campana', { tam: 15 }) + ' Activa las alertas de SIGSO para no perderte avisos importantes (derivaciones, vencimientos, pausas).') +
       '</span>' +
       (denegado ? '' : '<button type="button" class="js-notif-banner-activar" style="background:#fff;color:var(--primario,#2A5FD6);border:none;border-radius:6px;padding:6px 12px;font:600 13px Arial,sans-serif;cursor:pointer">Activar alertas</button>') +
       '<button type="button" class="js-notif-banner-cerrar" aria-label="Cerrar aviso" style="background:none;border:none;color:#fff;font:600 16px Arial,sans-serif;cursor:pointer;padding:2px 6px">✕</button>';
@@ -25693,7 +25802,7 @@ var Iconos = (function () {
       '<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--borde,#E5E8EF)">' +
         '<strong style="font:600 15px Arial,sans-serif">Notificaciones</strong>' +
         '<span>' +
-          '<button type="button" class="js-notif-mute" title="' + (mudo ? 'Activar sonido' : 'Silenciar') + '" style="background:none;border:none;cursor:pointer;font-size:16px;padding:4px">' + (mudo ? '🔕' : '🔔') + '</button>' +
+          '<button type="button" class="js-notif-mute" title="' + (mudo ? 'Activar sonido' : 'Silenciar') + '" style="background:none;border:none;cursor:pointer;padding:4px;color:inherit">' + Iconos.svg(mudo ? 'campanaOff' : 'campana', { tam: 16 }) + '</button>' +
           (n ? '<button type="button" class="js-notif-todas" style="background:none;border:none;cursor:pointer;color:var(--primario,#2A5FD6);font:600 12px Arial,sans-serif;padding:4px">Marcar todas</button>' : '') +
         '</span>' +
       '</div>';

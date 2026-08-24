@@ -8,6 +8,13 @@
 (function () {
   var ESTADOS_CERRADOS_PUBLICO = ['S09', 'S10', 'S11'];
 
+  // v14.0 (piel nueva): punto de estado por token en vez del emoji que
+  // manda el backend (item.cumplimiento.emoji). Mapea el `codigo`.
+  var TONO_CUMPLIMIENTO_PUB = {
+    ATRASADA_DESARROLLADOR: 'critico', EN_RIESGO: 'riesgo', ESPERANDO_VALIDACION: 'info',
+    EN_PLAZO: 'ok', SIN_COMPROMISO: 'neutro', CERRADA_A_TIEMPO: 'ok', CERRADA_CON_ATRASO: 'critico'
+  };
+
   document.addEventListener('DOMContentLoaded', function () {
     if (typeof renderHeaderSigso === 'function') {
       renderHeaderSigso('estado');
@@ -267,9 +274,9 @@
     if (abiertosConFecha.length === 0) return '';
     var item = abiertosConFecha[0];
     var semaforo = item.cumplimiento
-      ? ' <span class="sigso-semaforo-inline">' + item.cumplimiento.emoji + ' ' + Componentes.escaparHtml(item.cumplimiento.etiqueta) + '</span>'
+      ? ' <span class="sigso-semaforo-inline">' + Componentes.punto(TONO_CUMPLIMIENTO_PUB[item.cumplimiento.codigo] || 'neutro') + Componentes.escaparHtml(item.cumplimiento.etiqueta) + '</span>'
       : '';
-    return '<div class="sigso-fecha-destacada">📅 Próxima entrega comprometida: <strong>' +
+    return '<div class="sigso-fecha-destacada">' + Iconos.svg('calendario', { tam: 15 }) + ' Próxima entrega comprometida: <strong>' +
       Componentes.escaparHtml(formatearFechaHora_(item.fecha_comprometida)) + '</strong>' + semaforo +
       (abiertosConFecha.length > 1 ? ' <span class="sigso-ayuda-inline">(+' + (abiertosConFecha.length - 1) + ' ítem(s) más con fecha)</span>' : '') +
       '</div>';
@@ -551,7 +558,7 @@
 
     contenedor.innerHTML = filtradas.map(function (s) {
       var semaforo = s.items_pendientes_validar > 0
-        ? '<div class="sigso-bandeja__semaforo">🔵 Llevas ' + (s.dias_esperando_max || 0) +
+        ? '<div class="sigso-bandeja__semaforo">' + Componentes.punto('info') + 'Llevas ' + (s.dias_esperando_max || 0) +
           ' día(s) sin revisar ' + s.items_pendientes_validar + ' ítem(s)</div>'
         : '';
       // v3.3: con sesion de la plataforma (cuenta multi-correo), cada

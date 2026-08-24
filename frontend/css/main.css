@@ -352,7 +352,10 @@ button {
   flex: none;
   fill: none;
   stroke: currentColor;
-  stroke-width: 1.6;
+  /* v14.0 (piel nueva): 1.6 -> 1.8. El trazo fino hacia ver los iconos
+     "delgados/antiguos"; 1.8 les da cuerpo sin volverlos pesados a 16px.
+     Afecta a los ~46 iconos de una vez. */
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
 }

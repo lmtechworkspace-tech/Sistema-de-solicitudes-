@@ -63,6 +63,28 @@
   --p4: #1F7A55;
   --p5: #2563EB;
 
+  /* --- v14.0 (piel nueva): identidad de color por MODULO ----------------
+     Antes el acento de cada modulo reusaba un color de ESTADO (verde-exito
+     para Calidad y Bandeja, ambar-alerta para Gerencia y Jefatura), lo que
+     confundia y hacia que pares de modulos compartieran color. Ahora cada
+     modulo tiene su acento propio, armonico con el navy, y los colores de
+     estado quedan solo para estados. El fondo "suave" se deriva del acento
+     con color-mix (una tinta translucida), asi funciona sobre claro y oscuro
+     y en modo oscuro basta con re-definir el acento (el suave lo sigue). */
+  --mod-inicio: #14213D;      --mod-inicio-suave: color-mix(in srgb, var(--mod-inicio) 14%, transparent);
+  --mod-nueva: #2A5FD6;       --mod-nueva-suave: color-mix(in srgb, var(--mod-nueva) 14%, transparent);
+  --mod-mis: #0E7490;         --mod-mis-suave: color-mix(in srgb, var(--mod-mis) 14%, transparent);
+  --mod-bandeja: #4F46E5;     --mod-bandeja-suave: color-mix(in srgb, var(--mod-bandeja) 14%, transparent);
+  --mod-gerencia: #B45309;    --mod-gerencia-suave: color-mix(in srgb, var(--mod-gerencia) 14%, transparent);
+  --mod-jefatura: #7C3AED;    --mod-jefatura-suave: color-mix(in srgb, var(--mod-jefatura) 14%, transparent);
+  --mod-admin: #5B6474;       --mod-admin-suave: color-mix(in srgb, var(--mod-admin) 14%, transparent);
+  --mod-pausas: #0F766E;      --mod-pausas-suave: color-mix(in srgb, var(--mod-pausas) 14%, transparent);
+  --mod-coord: #C2410C;       --mod-coord-suave: color-mix(in srgb, var(--mod-coord) 14%, transparent);
+  --mod-novedades: #BE185D;   --mod-novedades-suave: color-mix(in srgb, var(--mod-novedades) 14%, transparent);
+  --mod-mi-trabajo: #1D4ED8;  --mod-mi-trabajo-suave: color-mix(in srgb, var(--mod-mi-trabajo) 14%, transparent);
+  --mod-proyectos: #6D28D9;   --mod-proyectos-suave: color-mix(in srgb, var(--mod-proyectos) 14%, transparent);
+  --mod-calidad: #0D9488;     --mod-calidad-suave: color-mix(in srgb, var(--mod-calidad) 14%, transparent);
+
   /* --- Tipografia ------------------------------------------------------- */
   --fuente: 'Inter', system-ui, -apple-system, sans-serif;
   --fuente-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
@@ -157,6 +179,22 @@
     --p4: #34A374;
     --p5: #5B8DEF;
 
+    /* Acentos de modulo aclarados para el fondo oscuro (el navy/pizarra
+       serian invisibles); el -suave se recalcula solo via color-mix. */
+    --mod-inicio: #AEB9D0;
+    --mod-nueva: #6BA0FF;
+    --mod-mis: #3CC0D6;
+    --mod-bandeja: #9B93F7;
+    --mod-gerencia: #E0902E;
+    --mod-jefatura: #B79BFB;
+    --mod-admin: #9AA3B2;
+    --mod-pausas: #34C3B2;
+    --mod-coord: #F28356;
+    --mod-novedades: #EE5FA0;
+    --mod-mi-trabajo: #74B0FF;
+    --mod-proyectos: #B794F6;
+    --mod-calidad: #2DD4BF;
+
     --sombra-1: 0 1px 2px rgba(0, 0, 0, 0.35);
     --sombra-2: 0 8px 30px rgba(0, 0, 0, 0.5);
 
@@ -202,6 +240,20 @@
   --p3: #D4B13C;
   --p4: #34A374;
   --p5: #5B8DEF;
+
+  --mod-inicio: #AEB9D0;
+  --mod-nueva: #6BA0FF;
+  --mod-mis: #3CC0D6;
+  --mod-bandeja: #9B93F7;
+  --mod-gerencia: #E0902E;
+  --mod-jefatura: #B79BFB;
+  --mod-admin: #9AA3B2;
+  --mod-pausas: #34C3B2;
+  --mod-coord: #F28356;
+  --mod-novedades: #EE5FA0;
+  --mod-mi-trabajo: #74B0FF;
+  --mod-proyectos: #B794F6;
+  --mod-calidad: #2DD4BF;
 
   --sombra-1: 0 1px 2px rgba(0, 0, 0, 0.35);
   --sombra-2: 0 8px 30px rgba(0, 0, 0, 0.5);

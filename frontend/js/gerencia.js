@@ -32,15 +32,26 @@
   var recurrenciaFiltro = null;
   var graficosGerencia = {};
 
+  // v14.0 (piel nueva): el semaforo deja de dibujarse con emoji; cada
+  // categoria lleva su TONO y se pinta con Componentes.punto (color por
+  // token, consistente en claro/oscuro). El backend sigue mandando su campo
+  // `emoji`, pero el frontend lo ignora y usa el `codigo` -> tono.
   var CATEGORIAS = [
-    { codigo: 'ATRASADA_DESARROLLADOR', emoji: '🔴', etiqueta: 'Atrasadas (desarrollador)' },
-    { codigo: 'EN_RIESGO', emoji: '🟡', etiqueta: 'En riesgo' },
-    { codigo: 'ESPERANDO_VALIDACION', emoji: '🔵', etiqueta: 'Esperando validación' },
-    { codigo: 'EN_PLAZO', emoji: '🟢', etiqueta: 'En plazo' },
-    { codigo: 'SIN_COMPROMISO', emoji: '⚪', etiqueta: 'Sin comprometer' },
-    { codigo: 'CERRADA_A_TIEMPO', emoji: '✅', etiqueta: 'Cerradas a tiempo' },
-    { codigo: 'CERRADA_CON_ATRASO', emoji: '❌', etiqueta: 'Cerradas con atraso' }
+    { codigo: 'ATRASADA_DESARROLLADOR', tono: 'critico', etiqueta: 'Atrasadas (desarrollador)' },
+    { codigo: 'EN_RIESGO', tono: 'riesgo', etiqueta: 'En riesgo' },
+    { codigo: 'ESPERANDO_VALIDACION', tono: 'info', etiqueta: 'Esperando validación' },
+    { codigo: 'EN_PLAZO', tono: 'ok', etiqueta: 'En plazo' },
+    { codigo: 'SIN_COMPROMISO', tono: 'neutro', etiqueta: 'Sin comprometer' },
+    { codigo: 'CERRADA_A_TIEMPO', tono: 'ok', etiqueta: 'Cerradas a tiempo' },
+    { codigo: 'CERRADA_CON_ATRASO', tono: 'critico', etiqueta: 'Cerradas con atraso' }
   ];
+  // codigo -> tono, para pintar el punto donde el item trae cumplimiento del
+  // backend (tablero, tarjetas) sin depender de su emoji.
+  var TONO_CUMPLIMIENTO = {
+    ATRASADA_DESARROLLADOR: 'critico', EN_RIESGO: 'riesgo', ESPERANDO_VALIDACION: 'info',
+    EN_PLAZO: 'ok', SIN_COMPROMISO: 'neutro', CERRADA_A_TIEMPO: 'ok', CERRADA_CON_ATRASO: 'critico'
+  };
+  function puntoCumplimiento_(codigo) { return Componentes.punto(TONO_CUMPLIMIENTO[codigo] || 'neutro'); }
 
   // v3.0 (Fase 4, §6.1): orden actual del tablero -- se conserva entre
   // renders (filtro nuevo, cambio de categoria, etc.) para no perder el
@@ -405,8 +416,8 @@
     var enRiesgo = items.filter(function (i) { return i.cumplimiento.codigo === 'EN_RIESGO'; }).length;
 
     var semaforo = atrasadas > 0
-      ? '🔴 Hay solicitudes atrasadas que necesitan atención'
-      : (enRiesgo > 0 ? '🟡 Al día, pero hay ítems cerca de vencer' : '🟢 Todo al día');
+      ? Componentes.punto('critico') + 'Hay solicitudes atrasadas que necesitan atención'
+      : (enRiesgo > 0 ? Componentes.punto('riesgo') + 'Al día, pero hay ítems cerca de vencer' : Componentes.punto('ok') + 'Todo al día');
 
     var lineas = [];
     lineas.push((kpis.atrasadas_activas || 0) + ' solicitud(es) ya pasaron su fecha comprometida y siguen sin entregarse.');
@@ -490,7 +501,7 @@
       var cantidad = items.filter(function (i) { return i.cumplimiento.codigo === cat.codigo; }).length;
       var activa = categoriaActiva === cat.codigo ? ' sigso-semaforo-tarjeta--activa' : '';
       return '<button type="button" class="sigso-semaforo-tarjeta' + activa + '" data-codigo="' + cat.codigo + '">' +
-        '<span class="sigso-semaforo-tarjeta__emoji">' + cat.emoji + '</span>' +
+        '<span class="sigso-semaforo-tarjeta__emoji">' + Componentes.punto(cat.tono) + '</span>' +
         '<span class="sigso-semaforo-tarjeta__cantidad">' + cantidad + '</span>' +
         '<span class="sigso-semaforo-tarjeta__etiqueta">' + Componentes.escaparHtml(cat.etiqueta) + '</span>' +
         '</button>';
@@ -580,7 +591,7 @@
   function valorColumna_(item, campo) {
     if (campo === 'dias_esperando_solicitante') return item.cumplimiento.dias_esperando;
     if (campo === 'estado') return formatearEstadoSigso(item.estado);
-    if (campo === 'semaforo') return item.cumplimiento.emoji + ' ' + item.cumplimiento.etiqueta;
+    if (campo === 'semaforo') return item.cumplimiento.etiqueta;
     return item[campo];
   }
 
@@ -635,7 +646,7 @@
     var diasEsperando = i.cumplimiento.dias_esperando;
     var celdaEsperando = diasEsperando === null || diasEsperando === undefined
       ? '—'
-      : (i.semaforo_solicitante ? i.semaforo_solicitante.emoji + ' ' : '') + diasEsperando + ' día(s)';
+      : (i.semaforo_solicitante ? puntoCumplimiento_(i.semaforo_solicitante.codigo) : '') + diasEsperando + ' día(s)';
     var etq = {};
     COLUMNAS_TABLERO.forEach(function (col) { etq[col.campo] = col.etiqueta; });
     var clave = i.solicitud_id + '-' + i.numero_item;
@@ -661,7 +672,7 @@
       '<td data-label="' + etq.dias_desarrollador + '">' + (i.dias_desarrollador === null || i.dias_desarrollador === undefined ? '—' : i.dias_desarrollador + ' d') + '</td>' +
       '<td data-label="' + etq.dias_esperando_solicitante + '">' + celdaEsperando + '</td>' +
       '<td data-label="' + etq.fecha_comprometida + '">' + (i.fecha_comprometida ? Componentes.escaparHtml(String(i.fecha_comprometida).replace('T', ' ').slice(0, 16)) : '—') + '</td>' +
-      '<td data-label="' + etq.semaforo + '">' + i.cumplimiento.emoji + ' ' + Componentes.escaparHtml(i.cumplimiento.etiqueta) + '</td>' +
+      '<td data-label="' + etq.semaforo + '">' + puntoCumplimiento_(i.cumplimiento.codigo) + Componentes.escaparHtml(i.cumplimiento.etiqueta) + '</td>' +
       '</tr>';
 
     if (!expandido) return fila;

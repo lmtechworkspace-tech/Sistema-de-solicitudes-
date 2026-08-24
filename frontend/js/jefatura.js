@@ -105,11 +105,11 @@
       return;
     }
     contenedor.innerHTML =
-      bloqueHoy_('🆕 Nuevas (' + r.nuevas + ')', hoy.nuevas) +
-      bloqueHoy_('➡️ Avanzaron (' + r.avanzaron + ')', hoy.avanzaron) +
-      bloqueHoy_('✅ Cerradas hoy (' + r.cerradas + ')', hoy.cerradas) +
-      bloqueHoy_('🔴 En riesgo o vencidas (' + r.en_riesgo + ')', hoy.en_riesgo_o_vencidas) +
-      bloqueHoy_('⏳ Esperando validación de tu equipo (' + r.requieren_accion + ')', hoy.requieren_accion);
+      bloqueHoy_('nueva', 'Nuevas (' + r.nuevas + ')', hoy.nuevas) +
+      bloqueHoy_('derivar', 'Avanzaron (' + r.avanzaron + ')', hoy.avanzaron) +
+      bloqueHoy_('check', 'Cerradas hoy (' + r.cerradas + ')', hoy.cerradas) +
+      bloqueHoy_('alerta', 'En riesgo o vencidas (' + r.en_riesgo + ')', hoy.en_riesgo_o_vencidas) +
+      bloqueHoy_('reloj', 'Esperando validación de tu equipo (' + r.requieren_accion + ')', hoy.requieren_accion);
     contenedor.querySelectorAll('[data-id]').forEach(function (fila) {
       fila.addEventListener('click', function () {
         window.SigsoApp.mostrarDetalle(fila.getAttribute('data-id'));
@@ -117,9 +117,9 @@
     });
   }
 
-  function bloqueHoy_(titulo, items) {
+  function bloqueHoy_(icono, titulo, items) {
     if (!items.length) return '';
-    return '<div class="sigso-jefatura-bloque-hoy"><h4>' + Componentes.escaparHtml(titulo) + '</h4>' +
+    return '<div class="sigso-jefatura-bloque-hoy"><h4>' + Iconos.svg(icono, { tam: 15 }) + ' ' + Componentes.escaparHtml(titulo) + '</h4>' +
       items.map(function (i) {
         return '<div class="sigso-fila-reciente" data-id="' + i.solicitud_id + '">' +
           '<div class="sigso-fila-reciente__principal">' +
@@ -268,7 +268,7 @@
     var cuerpo = ordenados.map(function (a) {
       return '<tr>' +
         '<td title="' + Componentes.escaparHtml(a.titulo || '') + '">' + Componentes.escaparHtml(truncar_(a.titulo, 40)) +
-        (a.bloqueo_motivo ? '<div class="sigso-ayuda">⏸ ' + Componentes.escaparHtml(truncar_(a.bloqueo_motivo, 60)) + '</div>' : '') + '</td>' +
+        (a.bloqueo_motivo ? '<div class="sigso-ayuda">' + Iconos.svg('pausado', { tam: 13 }) + ' ' + Componentes.escaparHtml(truncar_(a.bloqueo_motivo, 60)) + '</div>' : '') + '</td>' +
         '<td>' + Componentes.escaparHtml(a.responsable_nombre || a.responsable_email) + '</td>' +
         '<td>' + Componentes.escaparHtml(ETIQUETA_TAMANO_JEF[a.tamano] || a.tamano || '—') + '</td>' +
         '<td>' + fechaCortaJef_(a.fecha_compromiso || a.fecha_propuesta) + '</td>' +

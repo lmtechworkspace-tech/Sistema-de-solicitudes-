@@ -172,7 +172,7 @@
     }
 
     var bloqueoInfo = a.estado === 'BLOQUEADA' && a.bloqueo_motivo
-      ? '<div class="sigso-mt-bloqueo">⏸ ' + Componentes.escaparHtml(a.bloqueo_motivo) +
+      ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('pausado', { tam: 14 }) + ' ' + Componentes.escaparHtml(a.bloqueo_motivo) +
         (a.bloqueo_responsable_email ? ' — espera a <b>' + Componentes.escaparHtml(a.bloqueo_responsable_email) + '</b>' : '') + '</div>'
       : '';
 

@@ -471,7 +471,7 @@ var SigsoInicio = (function () {
       if (!d.pausa || !d.registrable) return;
       pausaHtml_ =
         '<div class="inicio-pausa">' +
-          '<span>🧘 La pausa activa de hoy está disponible' +
+          '<span>' + Iconos.svg('actividad', { tam: 15 }) + ' La pausa activa de hoy está disponible' +
             (d.pausa.hora_programada ? ' (' + esc_(d.pausa.hora_programada) + ')' : '') + '.</span>' +
           '<button type="button" class="sigso-boton sigso-boton--sutil" data-ir-pausa="1">Participar</button>' +
         '</div>';

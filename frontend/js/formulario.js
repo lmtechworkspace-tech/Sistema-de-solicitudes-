@@ -642,13 +642,11 @@
   // Idea 2: lista simple de documentos adjuntos del item (nombre + quitar).
   // Un icono por tipo ayuda a distinguir de un vistazo (los docs, a
   // diferencia de las imagenes, no tienen preview).
-  function iconoDocumento_(nombre) {
-    var ext = String(nombre).split('.').pop().toLowerCase();
-    if (ext === 'pdf') return '📕';
-    if (ext === 'doc' || ext === 'docx') return '📘';
-    if (ext === 'xls' || ext === 'xlsx') return '📗';
-    if (ext === 'ppt' || ext === 'pptx') return '📙';
-    return '📄';
+  // v14.0 (piel nueva): un solo icono vectorial para el documento adjunto,
+  // en vez de los emoji de tipo (📕📘📗) que se dibujaban distinto por SO. La
+  // extension ya se lee en el nombre del archivo, que va al lado.
+  function iconoDocumento_() {
+    return Iconos.svg('documento', { tam: 14 });
   }
 
   function renderListaDocumentos_(documentos, idx) {

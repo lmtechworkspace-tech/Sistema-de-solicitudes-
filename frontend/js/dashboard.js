@@ -302,11 +302,11 @@
       if (item.usuario_prueba) contexto.push('Usuario de prueba: ' + item.usuario_prueba);
       if (item.ref_credencial) contexto.push('Credencial: ' + item.ref_credencial);
       var contextoHtml = contexto.length
-        ? '<p class="sigso-ot-item__contexto">🔍 ' + Componentes.escaparHtml(contexto.join(' · ')) + '</p>'
+        ? '<p class="sigso-ot-item__contexto">' + Iconos.svg('lupa', { tam: 14 }) + ' ' + Componentes.escaparHtml(contexto.join(' · ')) + '</p>'
         : '';
       var fechaHtml = item.fecha_comprometida
-        ? '<span class="sigso-ot-item__fecha">📅 Comprometida: ' + Componentes.escaparHtml(String(item.fecha_comprometida).replace('T', ' ').slice(0, 16)) + '</span>'
-        : '<span class="sigso-ot-item__fecha">📅 Sin fecha comprometida</span>';
+        ? '<span class="sigso-ot-item__fecha">' + Iconos.svg('calendario', { tam: 14 }) + ' Comprometida: ' + Componentes.escaparHtml(String(item.fecha_comprometida).replace('T', ' ').slice(0, 16)) + '</span>'
+        : '<span class="sigso-ot-item__fecha">' + Iconos.svg('calendario', { tam: 14 }) + ' Sin fecha comprometida</span>';
 
       return '<div class="sigso-ot-item">' +
         '<h3>' + Componentes.escaparHtml(item.solicitud_id) + '-' + item.numero_item + ' — ' + Componentes.escaparHtml(item.titulo) + '</h3>' +
@@ -327,7 +327,7 @@
       '<p>' + items.length + ' pendiente(s) · Generada el ' + Componentes.escaparHtml(new Date().toLocaleString('es-CL')) + '</p>' +
       '</div></div>' +
       itemsHtml +
-      '<p class="sigso-ot-pie">✅ Para cerrar cada una: responde "LISTO &lt;N° de solicitud&gt;" por WhatsApp, o márcala Terminada en el sistema si ya tienes acceso.</p>' +
+      '<p class="sigso-ot-pie">' + Iconos.svg('check', { tam: 14 }) + ' Para cerrar cada una: responde "LISTO &lt;N° de solicitud&gt;" por WhatsApp, o márcala Terminada en el sistema si ya tienes acceso.</p>' +
       '</div>';
   }
 
@@ -783,11 +783,11 @@
   // que faltaba: hasta v6.0 una solicitud pasaba de "todo bien" a "atrasada"
   // sin escalon intermedio donde todavia se podia evitar el incumplimiento.
   var GRUPOS_CLASIFICACION = [
-    { clave: 'critica', etiqueta: '🔴 Fuera de plazo y críticas', clase: 'critica' },
-    { clave: 'riesgo', etiqueta: '🟠 En riesgo — atender antes de que venza', clase: 'riesgo' },
-    { clave: 'esperando_mio', etiqueta: '🟡 Esperando algo mío', clase: 'esperando-mio' },
-    { clave: 'en_curso', etiqueta: '🔵 En curso', clase: 'en-curso' },
-    { clave: 'esperando_solicitante', etiqueta: '⚪ Esperando al solicitante', clase: 'esperando-solicitante' }
+    { clave: 'critica', etiqueta: 'Fuera de plazo y críticas', clase: 'critica', tono: 'critico' },
+    { clave: 'riesgo', etiqueta: 'En riesgo — atender antes de que venza', clase: 'riesgo', tono: 'riesgo' },
+    { clave: 'esperando_mio', etiqueta: 'Esperando algo mío', clase: 'esperando-mio', tono: 'mio' },
+    { clave: 'en_curso', etiqueta: 'En curso', clase: 'en-curso', tono: 'info' },
+    { clave: 'esperando_solicitante', etiqueta: 'Esperando al solicitante', clase: 'esperando-solicitante', tono: 'neutro' }
   ];
 
   function clasificar_(s) {
@@ -947,14 +947,14 @@
       var filas = porClave[g.clave];
       if (filas.length === 0) return '';
       return '<h4 class="sigso-grupo__titulo sigso-grupo__titulo--' + g.clase + '">' +
-        Componentes.escaparHtml(g.etiqueta) + ' (' + filas.length + ')</h4>' +
+        Componentes.punto(g.tono) + Componentes.escaparHtml(g.etiqueta) + ' (' + filas.length + ')</h4>' +
         filas.map(renderFilaReciente_).join('');
     }).join('');
 
     // Las cerradas quedan colapsadas: siguen siendo consultables (un clic) sin
     // ocupar el espacio de arriba, que es para lo que todavia necesita algo.
     if (porClave.cerrada.length > 0) {
-      html += '<details class="sigso-grupo-cerradas"><summary>⚫ Cerradas recientes (' + porClave.cerrada.length + ')</summary>' +
+      html += '<details class="sigso-grupo-cerradas"><summary>' + Componentes.punto('neutro') + 'Cerradas recientes (' + porClave.cerrada.length + ')</summary>' +
         porClave.cerrada.map(renderFilaReciente_).join('') + '</details>';
     }
     return html || Componentes.vacio({
@@ -1178,7 +1178,7 @@
     // Leo no dependa solo de encontrar el correo entre el resto de avisos.
     var badgeRespuesta = s.respuesta_pendiente ? ' ' + Componentes.badge('Respuesta recibida', 'P2') : '';
     var badgeSinMovimiento = (s.dias_sin_movimiento || 0) >= DIAS_SIN_MOVIMIENTO_UMBRAL
-      ? ' <span class="sigso-chip-sin-movimiento" title="Sin cambios de estado hace ' + s.dias_sin_movimiento + ' días">🕸 ' + s.dias_sin_movimiento + 'd sin mover</span>'
+      ? ' <span class="sigso-chip-sin-movimiento" title="Sin cambios de estado hace ' + s.dias_sin_movimiento + ' días">' + Iconos.svg('reloj', { tam: 13 }) + ' ' + s.dias_sin_movimiento + 'd sin mover</span>'
       : '';
     // Fase 10.2: el titulo del item (lo que el solicitante escribio) es lo
     // que dice de que se trata -- el codigo crudo del catalogo (s.modulo,

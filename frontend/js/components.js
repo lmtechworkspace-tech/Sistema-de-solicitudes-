@@ -157,6 +157,14 @@
       return '<span class="sigso-badge' + (variante ? ' sigso-badge--' + variante : '') + '">' + escaparHtml(texto) + '</span>';
     },
 
+    // v14.0 (piel nueva): punto de estado por token, reemplaza los circulos
+    // de EMOJI (🔴🟡🟢⚪) que se dibujaban distinto en cada SO. Tonos:
+    // critico / riesgo / mio / info / ok / neutro. Uso: como prefijo de una
+    // etiqueta de grupo o de una linea de estado.
+    punto: function (tono) {
+      return '<span class="sigso-punto sigso-punto--' + (tono || 'neutro') + '" aria-hidden="true"></span>';
+    },
+
     // v4.0 Frente 2: la pastilla de estado deja de ser un badge azul plano
     // igual para los 11 estados. Ahora el color dice en que FAMILIA esta la
     // solicitud (en curso / esperando al solicitante / cerrada bien / cerrada

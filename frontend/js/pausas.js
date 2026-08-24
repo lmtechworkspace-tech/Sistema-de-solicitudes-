@@ -75,8 +75,8 @@
       c.innerHTML = Componentes.tarjeta(
         cabecera +
         Componentes.alerta(
-          (esParticipo ? '✅ Registraste: Participé. ¡Gracias!'
-                       : '✋ Registraste: No pude participar' +
+          (esParticipo ? 'Registraste: Participé. ¡Gracias!'
+                       : 'Registraste: No pude participar' +
                          (data.mi_registro.motivo ? ' (' + data.mi_registro.motivo + ')' : '') + '. ¡Gracias por avisar!'),
           esParticipo ? 'exito' : 'aviso') +
         (data.registrable
@@ -107,8 +107,8 @@
       '<p class="sigso-ayuda">Hora ' + Componentes.escaparHtml(p.hora_programada || '—') +
       ' · ' + Componentes.escaparHtml(String(p.duracion_min || '—')) + ' min. Registra en un toque:</p></div>' +
       '<div class="sigso-pausa-botonera">' +
-      Componentes.boton({ texto: '✅ Participé', id: 'btn-pausa-participe', clase: 'sigso-pausa-btn' }) +
-      Componentes.boton({ texto: '✋ No pude participar', variante: 'secundario', id: 'btn-pausa-nopude', clase: 'sigso-pausa-btn' }) +
+      Componentes.boton({ texto: 'Participé', icono: 'check', id: 'btn-pausa-participe', clase: 'sigso-pausa-btn' }) +
+      Componentes.boton({ texto: 'No pude participar', icono: 'equis', variante: 'secundario', id: 'btn-pausa-nopude', clase: 'sigso-pausa-btn' }) +
       '</div>' +
       '<div id="pausa-detalle-registro"></div>' +
       '<div id="pausa-resultado"></div>');

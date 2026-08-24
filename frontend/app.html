@@ -61,11 +61,11 @@
              TODAS las pendientes del desarrollador elegido, en vez de una
              Orden de Trabajo suelta por solicitud. Solo tiene sentido con
              una persona concreta elegida (dashboard.js la muestra/oculta). -->
-        <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-imprimir-pauta">📋 Pauta de trabajo (PDF)</button>
+        <button type="button" class="sigso-boton--secundario sigso-boton--con-icono sigso-oculto" id="btn-imprimir-pauta"><svg class="sigso-ico" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg> Pauta de trabajo (PDF)</button>
         <!-- v5.2 Fase D (§5): sesion de planificacion -- fechas comprometidas
              a un lote de items en una sola sentada, con sugerencia de fechas
              escalonadas (P1 primero, "cada 2 dias"). -->
-        <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-sesion-planificacion">🗓 Sesión de planificación</button>
+        <button type="button" class="sigso-boton--secundario sigso-boton--con-icono sigso-oculto" id="btn-sesion-planificacion"><svg class="sigso-ico" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg> Sesión de planificación</button>
       </div>
 
       <div class="sigso-card sigso-oculto" id="panel-sesion-planificacion">
@@ -289,10 +289,10 @@
           <!-- v5.2 (§4.1, propuesta de adopcion): reporte de UNA hoja, simple
                (numeros grandes + semaforo + 3-5 lineas), pensado para
                Gerencia que "dificilmente va a navegar" el tablero detallado. -->
-          <button type="button" class="sigso-boton--secundario" id="btn-imprimir-ejecutivo">📋 Reporte ejecutivo (simple)</button>
+          <button type="button" class="sigso-boton--secundario sigso-boton--con-icono" id="btn-imprimir-ejecutivo"><svg class="sigso-ico" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg> Reporte ejecutivo (simple)</button>
           <!-- v5.2 (§4.2): complementa el envio programado (semanal/mensual) --
                solo el Administrador lo ve (rol_actual, ver Gerencia.gs). -->
-          <button type="button" class="sigso-boton--secundario sigso-oculto" id="btn-enviar-gerencia-ahora">📧 Enviar a Gerencia ahora</button>
+          <button type="button" class="sigso-boton--secundario sigso-boton--con-icono sigso-oculto" id="btn-enviar-gerencia-ahora"><svg class="sigso-ico" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></svg> Enviar a Gerencia ahora</button>
         </div>
         <!-- UI-1 (§6): encabezado institucional del reporte impreso. -->
         <div class="sigso-solo-imprimir sigso-encabezado-reporte">

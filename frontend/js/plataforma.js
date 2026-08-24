@@ -31,19 +31,21 @@
     // P3: bandeja y gerencia viven DENTRO del shell (dashboard.js/detalle.js/
     // gerencia.js orquestados aqui, con el token de la sesion via api.js).
     bandeja: { icono: 'bandeja', nombre: 'Bandeja de trabajo', descripcion: 'Solicitudes del equipo: estados, fechas, derivaciones', interno: true },
-    gerencia: { icono: 'grafico', nombre: 'Panel de gerencia', descripcion: 'KPIs, semáforo de cumplimiento y seguimiento', interno: true },
+    // v14.0 (piel nueva): icono propio por modulo -- antes gerencia/jefatura/
+    // coordinacion compartian 'grafico' y no se distinguian en el sidebar.
+    gerencia: { icono: 'tendencia', nombre: 'Panel de gerencia', descripcion: 'KPIs, semáforo de cumplimiento y seguimiento', interno: true },
     // v4.2: "Gerencia acotado" al equipo del jefe (JEFATURAS, por correo) --
     // ver documentacion/SIGSO-v4.2-propuestas-modulo-jefatura.md.
-    jefatura: { icono: 'grafico', nombre: 'Mi departamento', descripcion: 'Qué pasó hoy con tu equipo: KPIs, seguimiento y validaciones pendientes', interno: true },
+    jefatura: { icono: 'equipo', nombre: 'Mi departamento', descripcion: 'Qué pasó hoy con tu equipo: KPIs, seguimiento y validaciones pendientes', interno: true },
     // P4: administracion tambien vive dentro del shell (admin.js con el
     // token de la sesion; el backend exige el modulo en cada accion).
-    administracion: { icono: 'config', nombre: 'Administración', descripcion: 'Catálogos, usuarios y cuentas de la plataforma', interno: true },
+    administracion: { icono: 'ajustes', nombre: 'Administración', descripcion: 'Catálogos, usuarios y cuentas de la plataforma', interno: true },
     // v6.0 Fase P2: el trabajador registra su participacion en la pausa activa
     // del dia (pausas.js). Cero friccion, pensado para el enlace magico.
-    pausas: { icono: 'reloj', nombre: 'Pausas activas', descripcion: 'Registra tu participación en la pausa de hoy', interno: true },
+    pausas: { icono: 'actividad', nombre: 'Pausas activas', descripcion: 'Registra tu participación en la pausa de hoy', interno: true },
     // v6.0 Fase P3: la coordinadora (prevencionista) opera la pausa del dia y
     // ve sus reportes de cumplimiento (coordinacion.js).
-    pausas_coordinacion: { icono: 'grafico', nombre: 'Coordinación de pausas', descripcion: 'Opera la pausa del día y ve el cumplimiento', interno: true },
+    pausas_coordinacion: { icono: 'portapapeles', nombre: 'Coordinación de pausas', descripcion: 'Opera la pausa del día y ve el cumplimiento', interno: true },
     // v6.5: Novedades es un modulo CORE, no asignable por cuenta (ver
     // modulosDeLaCuenta_) -- igual que "Mi perfil", disponible para
     // cualquiera con sesion, sin que un Admin tenga que activarlo cuenta por
@@ -53,37 +55,41 @@
     // check-in de 1 clic (documentacion/SIGSO-v7.0-propuesta-modulo-
     // gestion-operacional.md §4.4/§5.1). No es core como 'novedades' --
     // depende de que la cuenta lo tenga en CUENTAS_PORTAL.modulos.
-    mi_trabajo: { icono: 'check', nombre: 'Mi trabajo', descripcion: 'Tus compromisos, con un check-in de un clic', interno: true },
+    mi_trabajo: { icono: 'tareas', nombre: 'Mi trabajo', descripcion: 'Tus compromisos, con un check-in de un clic', interno: true },
     // v9.0 (documentacion/SIGSO-v9.0-propuesta-modulo-gestion-proyectos.md):
     // portafolio + sala de trabajo de proyectos internos. No es core --
     // depende de que la cuenta lo tenga en CUENTAS_PORTAL.modulos, igual
     // que 'mi_trabajo'.
-    proyectos: { icono: 'caja', nombre: 'Proyectos', descripcion: 'Portafolio, equipo y sala de trabajo de tus proyectos', interno: true },
+    proyectos: { icono: 'capas', nombre: 'Proyectos', descripcion: 'Portafolio, equipo y sala de trabajo de tus proyectos', interno: true },
     // v10.0 (documentacion/SIGSO-v10.0-propuesta-modulo-sgc-iso9001.md):
     // repositorio documental del Sistema de Gestion de Calidad. Cada
     // persona ve SOLO los documentos que le corresponden -- el filtrado lo
     // hace el backend (Calidad.gs), no el shell. No es core: depende de que
     // la cuenta tenga 'calidad' en CUENTAS_PORTAL.modulos.
-    calidad: { icono: 'documento', nombre: 'Calidad', descripcion: 'Documentación, procesos, personas, control y mejora del SGC', interno: true }
+    calidad: { icono: 'escudoCheck', nombre: 'Calidad', descripcion: 'Documentación, procesos, personas, control y mejora del SGC', interno: true }
   };
 
   // v4.0 Frente 3: cada modulo tiene su propio acento -- antes todo el shell
   // (nav activo, icono de tarjeta) usaba el mismo naranja de marca sin
   // importar donde estuvieras, asi que no ayudaba a orientarse. Los pares
   // acento/suave reusan tokens ya existentes (§main.css), no colores nuevos.
+  // v14.0 (piel nueva): cada modulo con su acento propio (tokens --mod-*
+  // en tokens.css, con par claro/oscuro). Antes se reusaban colores de
+  // ESTADO como identidad -- verde-exito para Calidad/Bandeja, ambar-alerta
+  // para Gerencia/Jefatura -- lo que confundia y repetia color entre modulos.
   var MODULO_COLOR = {
-    nueva_solicitud: { acento: 'var(--naranja)', suave: 'var(--naranja-claro)' },
-    mis_solicitudes: { acento: 'var(--info)', suave: 'var(--info-suave)' },
-    bandeja: { acento: 'var(--ok)', suave: 'var(--ok-suave)' },
-    gerencia: { acento: 'var(--alerta)', suave: 'var(--alerta-suave)' },
-    jefatura: { acento: 'var(--alerta)', suave: 'var(--alerta-suave)' },
-    administracion: { acento: 'var(--texto-2)', suave: 'var(--superficie-2)' },
-    pausas: { acento: 'var(--info)', suave: 'var(--info-suave)' },
-    pausas_coordinacion: { acento: 'var(--alerta)', suave: 'var(--alerta-suave)' },
-    novedades: { acento: 'var(--primario)', suave: 'var(--primario-suave)' },
-    mi_trabajo: { acento: 'var(--ok)', suave: 'var(--ok-suave)' },
-    proyectos: { acento: 'var(--primario)', suave: 'var(--primario-suave)' },
-    calidad: { acento: 'var(--ok)', suave: 'var(--ok-suave)' }
+    nueva_solicitud: { acento: 'var(--mod-nueva)', suave: 'var(--mod-nueva-suave)' },
+    mis_solicitudes: { acento: 'var(--mod-mis)', suave: 'var(--mod-mis-suave)' },
+    bandeja: { acento: 'var(--mod-bandeja)', suave: 'var(--mod-bandeja-suave)' },
+    gerencia: { acento: 'var(--mod-gerencia)', suave: 'var(--mod-gerencia-suave)' },
+    jefatura: { acento: 'var(--mod-jefatura)', suave: 'var(--mod-jefatura-suave)' },
+    administracion: { acento: 'var(--mod-admin)', suave: 'var(--mod-admin-suave)' },
+    pausas: { acento: 'var(--mod-pausas)', suave: 'var(--mod-pausas-suave)' },
+    pausas_coordinacion: { acento: 'var(--mod-coord)', suave: 'var(--mod-coord-suave)' },
+    novedades: { acento: 'var(--mod-novedades)', suave: 'var(--mod-novedades-suave)' },
+    mi_trabajo: { acento: 'var(--mod-mi-trabajo)', suave: 'var(--mod-mi-trabajo-suave)' },
+    proyectos: { acento: 'var(--mod-proyectos)', suave: 'var(--mod-proyectos-suave)' },
+    calidad: { acento: 'var(--mod-calidad)', suave: 'var(--mod-calidad-suave)' }
   };
 
   function acentoInline_(id) {

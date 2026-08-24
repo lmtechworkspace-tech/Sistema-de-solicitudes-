@@ -510,7 +510,7 @@
         // v5.2 (Fase C, propuesta de adopcion): enlace sin password -- para
         // la persona reacia (Leo/Gerencia) que no va a loguearse por su
         // cuenta. Entra directo a lo que sus modulos ya permiten ver.
-        '<button type="button" class="sigso-boton--secundario" data-accion-cuenta="enlace_magico" data-id="' + c.cuenta_id + '" data-usuario="' + Componentes.escaparHtml(c.usuario) + '">🔗 Enlace mágico</button> ' +
+        '<button type="button" class="sigso-boton--secundario sigso-boton--con-icono" data-accion-cuenta="enlace_magico" data-id="' + c.cuenta_id + '" data-usuario="' + Componentes.escaparHtml(c.usuario) + '">' + Iconos.svg('enlace', { tam: 15 }) + 'Enlace mágico</button> ' +
         '<button type="button" class="sigso-boton--peligro" data-accion-cuenta="eliminar" data-id="' + c.cuenta_id + '" data-usuario="' + Componentes.escaparHtml(c.usuario) + '">Eliminar</button>' +
         '</td></tr>';
     }).join('');
@@ -887,7 +887,7 @@
         '<td>' + Componentes.badge(activo ? 'Sí' : 'No', activo ? 'P4' : 'P1') + '</td>' +
         '</tr>';
     }).join('');
-    return '<table class="sigso-tabla"><thead><tr><th>Empresa</th><th>Hora</th><th>Días</th><th>Duración</th><th>Umbral 🟢/🟡</th><th>Activa</th></tr></thead><tbody>' + cuerpo + '</tbody></table>';
+    return '<table class="sigso-tabla"><thead><tr><th>Empresa</th><th>Hora</th><th>Días</th><th>Duración</th><th>Umbral</th><th>Activa</th></tr></thead><tbody>' + cuerpo + '</tbody></table>';
   }
 
   // v6.0 (mejora #9): QR de registro presencial. Apunta SOLO al login de la
@@ -1408,10 +1408,10 @@
 
   function tarjetaCanalAlerta_(c) {
     var badges = c.tiene_en_vivo
-      ? Componentes.badge('🔔 En vivo', 'P4') + ' ' + Componentes.badge('✉ Correo', 'P3')
-      : Componentes.badge('✉ Solo correo', 'P1');
+      ? Componentes.badge('En vivo', 'P4') + ' ' + Componentes.badge('Correo', 'P3')
+      : Componentes.badge('Solo correo', 'P1');
     var advertencia = (!c.tiene_en_vivo && c.correo_activo)
-      ? '<div class="sigso-ayuda" style="color:var(--alerta,#E5484D);margin-top:4px">⚠ Esta alerta hoy solo existe por correo. Si la apagas, nadie se enterará.</div>'
+      ? '<div class="sigso-ayuda" style="color:var(--alerta,#E5484D);margin-top:4px">' + Iconos.svg('alerta', { tam: 14 }) + ' Esta alerta hoy solo existe por correo. Si la apagas, nadie se enterará.</div>'
       : '';
     return '<div class="sigso-card" style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:10px">' +
       '<div style="flex:1">' +
@@ -1457,8 +1457,8 @@
           '<div class="sigso-campo sigso-oculto" id="alerta-campo-empresa"><label>Empresa</label><select data-campo="empresa_id">' + opcionesEmpresa + '</select></div>' +
           '<div class="sigso-campo sigso-oculto" id="alerta-campo-seleccion"><label>Personas (Ctrl/Cmd para varias)</label><select data-campo="destinatarios" multiple size="8">' + opcionesPersona + '</select></div>' +
           '<div class="sigso-campo"><label>Canales</label><div style="display:flex;gap:16px">' +
-            '<label class="sigso-toggle"><input type="checkbox" data-campo="por_en_vivo" checked> 🔔 Alerta en vivo</label>' +
-            '<label class="sigso-toggle"><input type="checkbox" data-campo="por_correo" checked> ✉ Correo</label>' +
+            '<label class="sigso-toggle"><input type="checkbox" data-campo="por_en_vivo" checked> ' + Iconos.svg('campana', { tam: 14 }) + ' Alerta en vivo</label>' +
+            '<label class="sigso-toggle"><input type="checkbox" data-campo="por_correo" checked> ' + Iconos.svg('correo', { tam: 14 }) + ' Correo</label>' +
           '</div></div>' +
           Componentes.boton({ tipo: 'submit', texto: 'Enviar alerta' }) +
           '<div id="resultado-alerta"></div>' +
