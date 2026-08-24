@@ -303,8 +303,40 @@
   function urlBackoffice_() {
     return (window.SIGSO_CONFIG || {}).BACKOFFICE_URL;
   }
+  // v14.1: caché del último listado pintado por sección. Entrar a un detalle
+  // y volver era, en TODOS los submódulos, un viaje completo al servidor + el
+  // panel del medio en blanco con "Cargando..." aunque nada hubiera cambiado
+  // -- eso es lo que se sentía como "se recarga la página" y obligaba a
+  // repetir la acción. Ahora "volver" repinta al instante desde acá.
+  // La caché se vacía SOLA tras cualquier acción que escriba (ver api_), así
+  // que nunca puede mostrar datos desactualizados: si editaste algo, el
+  // próximo "volver" vuelve a pedir el listado fresco.
+  var cacheListadoSgc_ = {};
+
   function api_(accion, datos) {
-    return llamarApi(urlBackoffice_(), accion, datos || {});
+    return llamarApi(urlBackoffice_(), accion, datos || {}).then(function (respuesta) {
+      // Cualquier acción que no sea de lectura pudo cambiar un listado: se
+      // invalida toda la caché para que el próximo "volver" traiga lo
+      // actualizado. Las lecturas empiezan por listar/get/descargar/
+      // buscar/exportar; todo lo demás (guardar, registrar, actualizar,
+      // desvincular, quitar, cerrar, programar...) escribe.
+      if (respuesta && respuesta.ok && !/^(listar|get|descargar|buscar|export)/i.test(accion)) {
+        cacheListadoSgc_ = {};
+      }
+      return respuesta;
+    });
+  }
+
+  // "Volver" a un listado desde un detalle: si sigue cacheado (nadie escribió
+  // desde que se cargó), se repinta al instante; si no, se recarga como
+  // siempre. pintarFn produce la pantalla completa (barra de secciones +
+  // wiring incluidos), igual que lo haría cargarFn tras un fetch exitoso.
+  function volverAListadoSgc_(clave, cargarFn, pintarFn) {
+    var cont = panelSgc_();
+    if (!cont) return;
+    var data = cacheListadoSgc_[clave];
+    if (!data) { cargarFn(); return; }
+    pintarFn(cont, data);
   }
 
   var TIPO_ETIQUETA = {
@@ -363,6 +395,7 @@
       }
       puedeGestionar_ = respuesta.data.puede_gestionar === true;
       if (respuesta.data.secciones_visibles) seccionesVisibles_ = respuesta.data.secciones_visibles;
+      cacheListadoSgc_.documentos = respuesta.data;
       pintarListado_(cont, respuesta.data);
     }).catch(function () {
       cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar los documentos.', 'error');
@@ -627,7 +660,10 @@
         versiones +
       '</div>';
 
-    cont.querySelector('.js-sgc-volver').addEventListener('click', cargarListado_);
+    cont.querySelector('.js-sgc-volver').addEventListener('click', function () {
+      documentoActivoId_ = null;
+      volverAListadoSgc_('documentos', cargarListado_, pintarListado_);
+    });
 
     var btnDescargar = cont.querySelector('.js-sgc-descargar');
     if (btnDescargar) btnDescargar.addEventListener('click', function () { descargar_(d.documento_id, null); });
@@ -1115,11 +1151,6 @@
   var filtroPersonasArea_ = '';
   var incluirDesvinculados_ = false;
   var incluirFueraAlcance_ = false;
-  // v14.1: el ultimo listado que se pinto, para que "<- Personal" vuelva
-  // al instante en vez de repetir el viaje al servidor (y el panel entero
-  // en blanco con "Cargando...") por algo que no cambio -- ver la persona
-  // y volver es el camino mas transitado del modulo.
-  var ultimaListaPersonas_ = null;
 
   function cargarPersonas_() {
     personaActivaId_ = null;
@@ -1137,24 +1168,11 @@
         return;
       }
       puedeGestionar_ = respuesta.data.puede_gestionar === true;
-      ultimaListaPersonas_ = respuesta.data;
+      cacheListadoSgc_.personas = respuesta.data;
       pintarPersonas_(cont, respuesta.data);
     }).catch(function () {
       cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar el personal.', 'error');
     });
-  }
-
-  // "<- Personal" desde una ficha: si el listado no cambio (no se toco un
-  // filtro ni se hizo una accion que lo invalide), se repinta al instante
-  // con lo ultimo que ya se cargo. Sin esto, cada vistazo a una ficha y
-  // vuelta implicaba un viaje al servidor y el panel entero en blanco --
-  // exactamente lo que se siente como que "la pagina se recarga".
-  function volverAPersonas_() {
-    if (!ultimaListaPersonas_) { cargarPersonas_(); return; }
-    personaActivaId_ = null;
-    var cont = panelSgc_();
-    if (!cont) return;
-    pintarPersonas_(cont, ultimaListaPersonas_);
   }
 
   function pintarPersonas_(cont, data) {
@@ -1343,7 +1361,10 @@
       '<div class="sigso-tabs">' + tabs + '</div>' +
       '<div class="sgc-cuerpo">' + cuerpo + '</div>';
 
-    cont.querySelector('.js-sgc-volver-personas').addEventListener('click', volverAPersonas_);
+    cont.querySelector('.js-sgc-volver-personas').addEventListener('click', function () {
+      personaActivaId_ = null;
+      volverAListadoSgc_('personas', cargarPersonas_, pintarPersonas_);
+    });
     cont.querySelectorAll('.js-sgc-ficha-tab').forEach(function (btn) {
       btn.addEventListener('click', function () {
         pestanaFicha_ = btn.getAttribute('data-tab');
@@ -1880,7 +1901,6 @@
             Componentes.aviso({ texto: (r && r.message) || 'No se pudo desvincular.', tipo: 'error' });
             return;
           }
-          ultimaListaPersonas_ = null;
           abrirPersona_(p.persona_id);
         });
       });
@@ -1889,7 +1909,6 @@
     var reactivar = cont.querySelector('.js-sgc-reactivar');
     if (reactivar) reactivar.addEventListener('click', function () {
       api_('desvincularPersonaSgc', { persona_id: p.persona_id, reactivar: true }).then(function () {
-        ultimaListaPersonas_ = null;
         abrirPersona_(p.persona_id);
       });
     });
@@ -1971,7 +1990,6 @@
             Componentes.aviso({ texto: (r && r.message) || 'No se pudo registrar.', tipo: 'error' });
             return;
           }
-          ultimaListaPersonas_ = null;
           abrirPersona_(p.persona_id);
         });
       });
@@ -2050,10 +2068,6 @@
           return;
         }
         cerrar();
-        // El listado cacheado (ver volverAPersonas_) quedaria desactualizado
-        // con estos datos nuevos -- se invalida para que el proximo "<-
-        // Personal" vuelva a pedirlo, en vez de mostrar el nombre/cargo viejo.
-        ultimaListaPersonas_ = null;
         if (p) abrirPersona_(p.persona_id); else cargarPersonas_();
       }).catch(function (err) {
         if (boton) { boton.disabled = false; boton.textContent = textoOriginalPersona_; }
@@ -2172,7 +2186,6 @@
           return;
         }
         cerrar();
-        ultimaListaPersonas_ = null;
         abrirPersona_(p.persona_id);
       }).catch(function (err) {
         boton.disabled = false; boton.textContent = textoOriginal;
@@ -2281,6 +2294,7 @@
         return;
       }
       puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      cacheListadoSgc_.nc = respuesta.data;
       pintarNc_(cont, respuesta.data);
     }).catch(function () {
       cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar las no conformidades.', 'error');
@@ -2537,7 +2551,10 @@
           : '') +
       '</div>';
 
-    cont.querySelector('.js-nc-volver').addEventListener('click', cargarNc_);
+    cont.querySelector('.js-nc-volver').addEventListener('click', function () {
+      ncActivaId_ = null;
+      volverAListadoSgc_('nc', cargarNc_, pintarNc_);
+    });
     wireFichaNc_(cont, nc);
   }
 
@@ -2830,6 +2847,7 @@
       // La norma la define el backend (Auditorias.gs, CLAUSULAS_ISO9001):
       // la pantalla nunca guarda su propia copia.
       clausulasCatalogo_ = respuesta.data.clausulas_catalogo || [];
+      cacheListadoSgc_.auditorias = respuesta.data;
       pintarAuditorias_(cont, respuesta.data);
     }).catch(function () {
       cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar las auditorías.', 'error');
@@ -3064,7 +3082,10 @@
           : '') +
       '</div>';
 
-    cont.querySelector('.js-aud-volver').addEventListener('click', cargarAuditorias_);
+    cont.querySelector('.js-aud-volver').addEventListener('click', function () {
+      auditoriaActivaId_ = null;
+      volverAListadoSgc_('auditorias', cargarAuditorias_, pintarAuditorias_);
+    });
     wireFichaAuditoria_(cont, aud, data);
   }
 
@@ -3470,6 +3491,7 @@
         return;
       }
       puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      cacheListadoSgc_.quejas = respuesta.data;
       pintarQuejas_(cont, respuesta.data);
     }).catch(function () {
       cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar las quejas.', 'error');
@@ -3668,7 +3690,10 @@
           : '') +
       '</div>';
 
-    cont.querySelector('.js-q-volver').addEventListener('click', cargarQuejas_);
+    cont.querySelector('.js-q-volver').addEventListener('click', function () {
+      quejaActivaId_ = null;
+      volverAListadoSgc_('quejas', cargarQuejas_, pintarQuejas_);
+    });
     wireFichaQueja_(cont, q, data);
   }
 
@@ -3956,6 +3981,7 @@
         return;
       }
       puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      cacheListadoSgc_.proveedores = respuesta.data;
       pintarProveedores_(cont, respuesta.data);
     }).catch(function () {
       cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
@@ -4137,7 +4163,7 @@
     var volver = cont.querySelector('.js-sgc-volver-prov');
     if (volver) volver.addEventListener('click', function () {
       proveedorActivoId_ = null;
-      cargarProveedores_();
+      volverAListadoSgc_('proveedores', cargarProveedores_, pintarProveedores_);
     });
     var evaluar = cont.querySelector('.js-sgc-evaluar-prov');
     if (evaluar) evaluar.addEventListener('click', function () { abrirFormularioEvaluarProveedor_(p, data); });
@@ -4335,6 +4361,7 @@
         return;
       }
       puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      cacheListadoSgc_.revision = respuesta.data;
       pintarRevisiones_(cont, respuesta.data);
     }).catch(function () {
       cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
@@ -4512,7 +4539,7 @@
       var b = cont.querySelector(sel);
       if (b) b.addEventListener('click', fn);
     }
-    accion_('.js-sgc-volver-rev', function () { revisionActivaId_ = null; cargarRevisiones_(); });
+    accion_('.js-sgc-volver-rev', function () { revisionActivaId_ = null; volverAListadoSgc_('revision', cargarRevisiones_, pintarRevisiones_); });
     accion_('.js-sgc-convocar-rev', function () { abrirFormularioConvocarRevision_(r); });
     accion_('.js-sgc-acta-rev', function () { abrirFormularioActaRevision_(r, data); });
     accion_('.js-sgc-acuerdo-rev', function () { abrirFormularioAcuerdoRevision_(r, data); });
@@ -4790,6 +4817,7 @@
       }
       puedeGestionar_ = respuesta.data.puede_gestionar === true;
       anioObjetivos_ = respuesta.data.anio;
+      cacheListadoSgc_.objetivos = respuesta.data;
       pintarObjetivos_(cont, respuesta.data);
     }).catch(function () {
       cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
@@ -4998,7 +5026,7 @@
 
     cont.querySelector('.js-sgc-volver-obj').addEventListener('click', function () {
       objetivoActivoId_ = null;
-      cargarObjetivos_();
+      volverAListadoSgc_('objetivos', cargarObjetivos_, pintarObjetivos_);
     });
     var medir = cont.querySelector('.js-sgc-obj-medir');
     if (medir) medir.addEventListener('click', function () { abrirFormularioMedicion_(o, data); });
@@ -6013,6 +6041,7 @@
         wireSecciones_(cont);
         return;
       }
+      cacheListadoSgc_.procesos = respuesta.data;
       pintarProcesos_(cont, respuesta.data);
     }).catch(function () {
       cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
@@ -6252,7 +6281,7 @@
     wireSecciones_(cont);
     cont.querySelector('.js-prc-volver').addEventListener('click', function () {
       procesoActivoId_ = null;
-      cargarProcesos_();
+      volverAListadoSgc_('procesos', cargarProcesos_, pintarProcesos_);
     });
     cont.querySelectorAll('.js-prc-abrir').forEach(function (btn) {
       btn.addEventListener('click', function () {
