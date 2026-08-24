@@ -25,6 +25,18 @@ const FRONTEND_DIR = path.join(__dirname, '..', 'frontend');
 const BACKOFFICE_DIR = path.join(__dirname, 'backoffice');
 const SITIO_PUBLICO = 'https://lmtechworkspace-tech.github.io/Sistema-de-solicitudes-/';
 
+// La VERSION sale de frontend/js/config.js, que es la fuente unica. Sin esto
+// el stub quedaba SIN version, y comprobarVersionBackend_ no tenia contra que
+// comparar: en la copia de Apps Script el aviso naranjo "falta pegar X" no se
+// disparaba nunca -- justo en el frente donde el despliegue es manual y donde
+// por lo tanto mas falta hace.
+const VERSION = (function () {
+  const cfg = fs.readFileSync(path.join(FRONTEND_DIR, 'js', 'config.js'), 'utf8');
+  const m = cfg.match(/VERSION:\s*'([^']+)'/);
+  if (!m) throw new Error('no se pudo leer VERSION de frontend/js/config.js');
+  return m[1];
+})();
+
 const PAGINAS = [
   { origen: 'app.html', destino: 'App.html' },
   { origen: 'admin.html', destino: 'Admin.html' }
@@ -48,7 +60,7 @@ function construirPagina(nombreArchivo) {
   html = html.replace(
     /<script src="js\/config\.js"><\/script>/,
     '<script>\n' +
-      "window.SIGSO_CONFIG = { BACKOFFICE_URL: '', SITIO_PUBLICO: '" + SITIO_PUBLICO + "' };\n" +
+      "window.SIGSO_CONFIG = { BACKOFFICE_URL: '', VERSION: '" + VERSION + "', SITIO_PUBLICO: '" + SITIO_PUBLICO + "' };\n" +
       '</script>'
   );
 

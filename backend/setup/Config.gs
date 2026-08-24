@@ -21,7 +21,7 @@
  * IMPORTANTE: el mismo valor va en los tres proyectos (Backoffice, Intake,
  * Setup) y en frontend/js/config.js. Hay un test que falla si divergen.
  */
-var VERSION_SIGSO = '2026-08-22';
+var VERSION_SIGSO = '2026-08-23';
 
 var CONFIG_KEYS = {
   SHEET_ID: 'SIGSO_SHEET_ID',
