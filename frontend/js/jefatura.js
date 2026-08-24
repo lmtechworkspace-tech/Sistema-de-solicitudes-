@@ -494,9 +494,15 @@
 
     cont.innerHTML =
       SigsoReportes.barraAcciones({}) +
-      '<h3>' + Componentes.escaparHtml(r.nombre) + '</h3>' +
-      '<p class="sigso-ayuda">' + Componentes.escaparHtml(r.desc) + '</p>' +
-      cuerpo;
+      SigsoReportes.cabeceraDocumento({
+        titulo: r.nombre,
+        subtitulo: r.desc,
+        modulo: 'Jefatura — Panel de equipo',
+        codigo: 'SIGSO-REP-JEF-' + String(r.id).replace(/^[a-z]+-/, '').toUpperCase(),
+        generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || ''
+      }) +
+      cuerpo +
+      SigsoReportes.pieDocumento();
 
     SigsoReportes.wireAcciones(cont, {
       nombreArchivo: 'sigso-jefatura-' + r.id,

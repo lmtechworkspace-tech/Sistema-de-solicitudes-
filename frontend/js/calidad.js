@@ -8133,9 +8133,7 @@
         modulo: 'Calidad — Sistema de Gestión ISO 9001',
         codigo: 'SIGSO-REP-' + String(r.id).toUpperCase(),
         generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || '',
-        filtros: Object.keys(filtrosReporte_ || {}).map(function (k) {
-          return { etiqueta: k, valor: filtrosReporte_[k] };
-        })
+        filtros: SigsoReportes.filtrosParaCabecera(r, opcionesFiltro, filtrosReporte_)
       }) +
       SigsoReportes.pintarFiltros(r, opcionesFiltro, filtrosReporte_) +
       cuerpo +

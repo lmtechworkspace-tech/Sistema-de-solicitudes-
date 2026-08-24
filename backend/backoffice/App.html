@@ -7951,6 +7951,33 @@ var Iconos = (function () {
   // ==========================================================================
   // Sólo se dibujan los que el reporte declara. Cada uno sabe qué opciones
   // ofrecer; las dinámicas (áreas, responsables) las provee el módulo.
+  // Traduce los filtros aplicados a { etiqueta, valor } legibles, para la
+  // cabecera del documento. Reusa el mismo mapa que dibuja el formulario:
+  // si mañana cambia el nombre visible de un filtro, cambia en los dos
+  // lados a la vez o en ninguno.
+  var ETIQUETAS_FILTRO = {
+    periodo: 'Período', periodo_previo: 'Comparado con', desde: 'Desde', hasta: 'Hasta',
+    area: 'Área', responsable: 'Responsable', estado: 'Estado',
+    dimension: 'Agrupado por', proceso: 'Proceso'
+  };
+
+  function filtrosParaCabecera(reporte, opciones, valores) {
+    valores = valores || {};
+    opciones = opciones || {};
+    var lista = (reporte && (reporte.filtros || (TIPOS[reporte.tipo] || {}).filtros)) || [];
+    return lista.map(function (nombre) {
+      var bruto = valores[nombre];
+      if (bruto === undefined || bruto === null || bruto === '') return null;
+      // El valor guardado es el de la opción; en el documento tiene que
+      // aparecer el texto que la persona vio en pantalla.
+      var catalogo = opciones[nombre] || (nombre === 'periodo' || nombre === 'periodo_previo' ? PERIODOS_POR_DEFECTO : []);
+      var elegida = (catalogo || []).filter(function (o) {
+        return String(o && o.valor !== undefined ? o.valor : o) === String(bruto);
+      })[0];
+      var texto = elegida && elegida.texto !== undefined ? elegida.texto : bruto;
+      return { etiqueta: ETIQUETAS_FILTRO[nombre] || nombre, valor: texto };
+    }).filter(Boolean);
+  }
   function pintarFiltros(reporte, opciones, valores) {
     var lista = reporte.filtros || (TIPOS[reporte.tipo] || {}).filtros || [];
     if (!lista.length) return '';
@@ -8461,6 +8488,7 @@ var Iconos = (function () {
     cuerpoEntradaSalida: cuerpoEntradaSalida,
     cuerpoResbalon: cuerpoResbalon,
     cabeceraDocumento: cabeceraDocumento,
+    filtrosParaCabecera: filtrosParaCabecera,
     pieDocumento: pieDocumento,
     barraAcciones: barraAcciones,
     wireAcciones: wireAcciones
@@ -12074,9 +12102,15 @@ var Iconos = (function () {
 
     cont.innerHTML =
       SigsoReportes.barraAcciones({}) +
-      '<h3>' + Componentes.escaparHtml(r.nombre) + '</h3>' +
-      '<p class="sigso-ayuda">' + Componentes.escaparHtml(r.desc) + '</p>' +
-      cuerpo;
+      SigsoReportes.cabeceraDocumento({
+        titulo: r.nombre,
+        subtitulo: r.desc,
+        modulo: 'Gerencia — Panel de dirección',
+        codigo: 'SIGSO-REP-GER-' + String(r.id).replace(/^[a-z]+-/, '').toUpperCase(),
+        generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || ''
+      }) +
+      cuerpo +
+      SigsoReportes.pieDocumento();
 
     SigsoReportes.wireAcciones(cont, {
       nombreArchivo: 'sigso-gerencia-' + r.id,
@@ -12665,9 +12699,15 @@ var Iconos = (function () {
 
     cont.innerHTML =
       SigsoReportes.barraAcciones({}) +
-      '<h3>' + Componentes.escaparHtml(r.nombre) + '</h3>' +
-      '<p class="sigso-ayuda">' + Componentes.escaparHtml(r.desc) + '</p>' +
-      cuerpo;
+      SigsoReportes.cabeceraDocumento({
+        titulo: r.nombre,
+        subtitulo: r.desc,
+        modulo: 'Jefatura — Panel de equipo',
+        codigo: 'SIGSO-REP-JEF-' + String(r.id).replace(/^[a-z]+-/, '').toUpperCase(),
+        generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || ''
+      }) +
+      cuerpo +
+      SigsoReportes.pieDocumento();
 
     SigsoReportes.wireAcciones(cont, {
       nombreArchivo: 'sigso-jefatura-' + r.id,
@@ -15717,9 +15757,15 @@ var Iconos = (function () {
 
     cont.innerHTML =
       SigsoReportes.barraAcciones({}) +
-      '<h2>' + Componentes.escaparHtml(r.nombre) + '</h2>' +
-      '<p class="sigso-ayuda">' + Componentes.escaparHtml(r.desc) + '</p>' +
-      cuerpo;
+      SigsoReportes.cabeceraDocumento({
+        titulo: r.nombre,
+        subtitulo: r.desc,
+        modulo: 'Proyectos — Portafolio',
+        codigo: 'SIGSO-REP-PY-' + String(r.id).replace(/^[a-z]+-/, '').toUpperCase(),
+        generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || ''
+      }) +
+      cuerpo +
+      SigsoReportes.pieDocumento();
 
     SigsoReportes.wireAcciones(cont, {
       nombreArchivo: 'sigso-proyectos-' + r.id,
@@ -24030,9 +24076,7 @@ var Iconos = (function () {
         modulo: 'Calidad — Sistema de Gestión ISO 9001',
         codigo: 'SIGSO-REP-' + String(r.id).toUpperCase(),
         generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || '',
-        filtros: Object.keys(filtrosReporte_ || {}).map(function (k) {
-          return { etiqueta: k, valor: filtrosReporte_[k] };
-        })
+        filtros: SigsoReportes.filtrosParaCabecera(r, opcionesFiltro, filtrosReporte_)
       }) +
       SigsoReportes.pintarFiltros(r, opcionesFiltro, filtrosReporte_) +
       cuerpo +

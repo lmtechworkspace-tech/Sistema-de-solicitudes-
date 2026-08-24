@@ -1001,7 +1001,11 @@
   }
 
   function modulosDeLaCuenta_() {
-    var propios = (sesion.cuenta.modulos || []).filter(function (m) { return MODULOS_SHELL[m]; });
+    // La sesion puede no haber cargado todavia (o el backend no responder).
+    // Sin esta guarda, renderNavAhora_ moria con una excepcion y el sidebar
+    // quedaba VACIO: la persona no veia ni Inicio para reintentar.
+    var cuenta = (sesion && sesion.cuenta) || {};
+    var propios = (cuenta.modulos || []).filter(function (m) { return MODULOS_SHELL[m]; });
     // v6.5: "novedades" es core -- se agrega siempre, aunque la cuenta no lo
     // tenga en su lista asignada. Justo despues de home (primera posicion
     // entre los internos) porque es lo que se quiere que se vea primero.

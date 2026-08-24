@@ -163,6 +163,33 @@
   // ==========================================================================
   // Sólo se dibujan los que el reporte declara. Cada uno sabe qué opciones
   // ofrecer; las dinámicas (áreas, responsables) las provee el módulo.
+  // Traduce los filtros aplicados a { etiqueta, valor } legibles, para la
+  // cabecera del documento. Reusa el mismo mapa que dibuja el formulario:
+  // si mañana cambia el nombre visible de un filtro, cambia en los dos
+  // lados a la vez o en ninguno.
+  var ETIQUETAS_FILTRO = {
+    periodo: 'Período', periodo_previo: 'Comparado con', desde: 'Desde', hasta: 'Hasta',
+    area: 'Área', responsable: 'Responsable', estado: 'Estado',
+    dimension: 'Agrupado por', proceso: 'Proceso'
+  };
+
+  function filtrosParaCabecera(reporte, opciones, valores) {
+    valores = valores || {};
+    opciones = opciones || {};
+    var lista = (reporte && (reporte.filtros || (TIPOS[reporte.tipo] || {}).filtros)) || [];
+    return lista.map(function (nombre) {
+      var bruto = valores[nombre];
+      if (bruto === undefined || bruto === null || bruto === '') return null;
+      // El valor guardado es el de la opción; en el documento tiene que
+      // aparecer el texto que la persona vio en pantalla.
+      var catalogo = opciones[nombre] || (nombre === 'periodo' || nombre === 'periodo_previo' ? PERIODOS_POR_DEFECTO : []);
+      var elegida = (catalogo || []).filter(function (o) {
+        return String(o && o.valor !== undefined ? o.valor : o) === String(bruto);
+      })[0];
+      var texto = elegida && elegida.texto !== undefined ? elegida.texto : bruto;
+      return { etiqueta: ETIQUETAS_FILTRO[nombre] || nombre, valor: texto };
+    }).filter(Boolean);
+  }
   function pintarFiltros(reporte, opciones, valores) {
     var lista = reporte.filtros || (TIPOS[reporte.tipo] || {}).filtros || [];
     if (!lista.length) return '';
@@ -673,6 +700,7 @@
     cuerpoEntradaSalida: cuerpoEntradaSalida,
     cuerpoResbalon: cuerpoResbalon,
     cabeceraDocumento: cabeceraDocumento,
+    filtrosParaCabecera: filtrosParaCabecera,
     pieDocumento: pieDocumento,
     barraAcciones: barraAcciones,
     wireAcciones: wireAcciones

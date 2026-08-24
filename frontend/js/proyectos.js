@@ -1549,9 +1549,15 @@
 
     cont.innerHTML =
       SigsoReportes.barraAcciones({}) +
-      '<h2>' + Componentes.escaparHtml(r.nombre) + '</h2>' +
-      '<p class="sigso-ayuda">' + Componentes.escaparHtml(r.desc) + '</p>' +
-      cuerpo;
+      SigsoReportes.cabeceraDocumento({
+        titulo: r.nombre,
+        subtitulo: r.desc,
+        modulo: 'Proyectos — Portafolio',
+        codigo: 'SIGSO-REP-PY-' + String(r.id).replace(/^[a-z]+-/, '').toUpperCase(),
+        generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || ''
+      }) +
+      cuerpo +
+      SigsoReportes.pieDocumento();
 
     SigsoReportes.wireAcciones(cont, {
       nombreArchivo: 'sigso-proyectos-' + r.id,
