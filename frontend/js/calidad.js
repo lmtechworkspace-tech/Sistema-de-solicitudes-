@@ -303,20 +303,20 @@
   function urlBackoffice_() {
     return (window.SIGSO_CONFIG || {}).BACKOFFICE_URL;
   }
-  // v14.1: caché del último listado pintado por sección. Entrar a un detalle
-  // y volver era, en TODOS los submódulos, un viaje completo al servidor + el
-  // panel del medio en blanco con "Cargando..." aunque nada hubiera cambiado
-  // -- eso es lo que se sentía como "se recarga la página" y obligaba a
-  // repetir la acción. Ahora "volver" repinta al instante desde acá.
+  // v14.1/v14.2/v14.3: caché del último listado pintado por sección. Cargar
+  // un listado (al entrar a la sección desde el menú, al volver de un detalle,
+  // o en el auto-refresco de fondo) dejaba el panel del medio en blanco con
+  // "Cargando..." y repetía el viaje completo al servidor -- aunque nada
+  // hubiera cambiado. Eso es lo que se sentía como que "se recarga la página".
   // La caché se vacía SOLA tras cualquier acción que escriba (ver api_), así
-  // que nunca puede mostrar datos desactualizados: si editaste algo, el
-  // próximo "volver" vuelve a pedir el listado fresco.
+  // que nunca puede mostrar datos desactualizados: si editaste algo, la
+  // próxima carga trae el listado fresco.
   var cacheListadoSgc_ = {};
 
   function api_(accion, datos) {
     return llamarApi(urlBackoffice_(), accion, datos || {}).then(function (respuesta) {
       // Cualquier acción que no sea de lectura pudo cambiar un listado: se
-      // invalida toda la caché para que el próximo "volver" traiga lo
+      // invalida toda la caché para que la próxima carga traiga lo
       // actualizado. Las lecturas empiezan por listar/get/descargar/
       // buscar/exportar; todo lo demás (guardar, registrar, actualizar,
       // desvincular, quitar, cerrar, programar...) escribe.
@@ -327,16 +327,35 @@
     });
   }
 
-  // "Volver" a un listado desde un detalle: si sigue cacheado (nadie escribió
-  // desde que se cargó), se repinta al instante; si no, se recarga como
-  // siempre. pintarFn produce la pantalla completa (barra de secciones +
-  // wiring incluidos), igual que lo haría cargarFn tras un fetch exitoso.
-  function volverAListadoSgc_(clave, cargarFn, pintarFn) {
+  // v14.3: motor común de "stale-while-revalidate" para los listados. Si hay
+  // algo cacheado, se pinta AL INSTANTE (sin panel en blanco) y de todas
+  // formas se revalida en segundo plano; cuando la respuesta llega se repinta
+  // -- pero SOLO si el usuario sigue en esa misma pantalla (sigo()), para que
+  // una respuesta que llega tarde nunca pise un detalle o una sección a la
+  // que ya navegó. Sin caché, se comporta como siempre: spinner y a esperar.
+  //   opts.clave    clave en cacheListadoSgc_
+  //   opts.accion   acción del backend (lectura)
+  //   opts.datos    payload
+  //   opts.spinner  texto del "Cargando..." cuando no hay caché
+  //   opts.sigo()   ¿seguimos en esta pantalla? (sección activa y sin detalle)
+  //   opts.aplicar(cont, data)  fija el estado propio de la sección + pinta
+  //   opts.error(cont, msg)     pinta el error (cada sección arma el suyo)
+  function cargarListadoSgc_(opts) {
     var cont = panelSgc_();
     if (!cont) return;
-    var data = cacheListadoSgc_[clave];
-    if (!data) { cargarFn(); return; }
-    pintarFn(cont, data);
+    var enCache = cacheListadoSgc_[opts.clave];
+    if (enCache) opts.aplicar(cont, enCache);
+    else cont.innerHTML = Componentes.cargando(opts.spinner);
+    api_(opts.accion, opts.datos || {}).then(function (respuesta) {
+      if (!opts.sigo()) return;
+      if (!respuesta || !respuesta.ok) {
+        if (!enCache) opts.error(cont, (respuesta && respuesta.message) || null);
+        return;
+      }
+      opts.aplicar(cont, respuesta.data);
+    }).catch(function () {
+      if (!enCache && opts.sigo()) opts.error(cont, null);
+    });
   }
 
   var TIPO_ETIQUETA = {
@@ -380,25 +399,23 @@
 
   function cargarListado_() {
     documentoActivoId_ = null;
-    var cont = panelSgc_();
-    if (!cont) return;
-    cont.innerHTML = Componentes.cargando('Cargando documentos...');
     var filtros = {};
     if (filtroTipo_) filtros.tipo = filtroTipo_;
     if (filtroEstado_) filtros.estado = filtroEstado_;
     if (filtroBusqueda_) filtros.busqueda = filtroBusqueda_;
-
-    api_('listarDocumentosSgc', filtros).then(function (respuesta) {
-      if (!respuesta || !respuesta.ok) {
-        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el listado de documentos.', 'error');
-        return;
+    cargarListadoSgc_({
+      clave: 'documentos', accion: 'listarDocumentosSgc', datos: filtros,
+      spinner: 'Cargando documentos...',
+      sigo: function () { return seccionActiva_ === 'documentos' && !documentoActivoId_; },
+      aplicar: function (cont, data) {
+        puedeGestionar_ = data.puede_gestionar === true;
+        if (data.secciones_visibles) seccionesVisibles_ = data.secciones_visibles;
+        cacheListadoSgc_.documentos = data;
+        pintarListado_(cont, data);
+      },
+      error: function (cont, msg) {
+        cont.innerHTML = Componentes.alerta(msg || 'No se pudo conectar para cargar los documentos.', 'error');
       }
-      puedeGestionar_ = respuesta.data.puede_gestionar === true;
-      if (respuesta.data.secciones_visibles) seccionesVisibles_ = respuesta.data.secciones_visibles;
-      cacheListadoSgc_.documentos = respuesta.data;
-      pintarListado_(cont, respuesta.data);
-    }).catch(function () {
-      cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar los documentos.', 'error');
     });
   }
 
@@ -660,10 +677,7 @@
         versiones +
       '</div>';
 
-    cont.querySelector('.js-sgc-volver').addEventListener('click', function () {
-      documentoActivoId_ = null;
-      volverAListadoSgc_('documentos', cargarListado_, pintarListado_);
-    });
+    cont.querySelector('.js-sgc-volver').addEventListener('click', cargarListado_);
 
     var btnDescargar = cont.querySelector('.js-sgc-descargar');
     if (btnDescargar) btnDescargar.addEventListener('click', function () { descargar_(d.documento_id, null); });
@@ -1154,24 +1168,22 @@
 
   function cargarPersonas_() {
     personaActivaId_ = null;
-    var cont = panelSgc_();
-    if (!cont) return;
-    cont.innerHTML = Componentes.cargando('Cargando personal...');
     var filtros = {};
     if (filtroPersonasArea_) filtros.area_id = filtroPersonasArea_;
     if (incluirDesvinculados_) filtros.incluir_desvinculados = true;
     if (incluirFueraAlcance_) filtros.incluir_fuera_alcance = true;
-
-    api_('listarPersonasSgc', filtros).then(function (respuesta) {
-      if (!respuesta || !respuesta.ok) {
-        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el personal.', 'error');
-        return;
+    cargarListadoSgc_({
+      clave: 'personas', accion: 'listarPersonasSgc', datos: filtros,
+      spinner: 'Cargando personal...',
+      sigo: function () { return seccionActiva_ === 'personas' && !personaActivaId_; },
+      aplicar: function (cont, data) {
+        puedeGestionar_ = data.puede_gestionar === true;
+        cacheListadoSgc_.personas = data;
+        pintarPersonas_(cont, data);
+      },
+      error: function (cont, msg) {
+        cont.innerHTML = Componentes.alerta(msg || 'No se pudo conectar para cargar el personal.', 'error');
       }
-      puedeGestionar_ = respuesta.data.puede_gestionar === true;
-      cacheListadoSgc_.personas = respuesta.data;
-      pintarPersonas_(cont, respuesta.data);
-    }).catch(function () {
-      cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar el personal.', 'error');
     });
   }
 
@@ -1361,10 +1373,7 @@
       '<div class="sigso-tabs">' + tabs + '</div>' +
       '<div class="sgc-cuerpo">' + cuerpo + '</div>';
 
-    cont.querySelector('.js-sgc-volver-personas').addEventListener('click', function () {
-      personaActivaId_ = null;
-      volverAListadoSgc_('personas', cargarPersonas_, pintarPersonas_);
-    });
+    cont.querySelector('.js-sgc-volver-personas').addEventListener('click', cargarPersonas_);
     cont.querySelectorAll('.js-sgc-ficha-tab').forEach(function (btn) {
       btn.addEventListener('click', function () {
         pestanaFicha_ = btn.getAttribute('data-tab');
@@ -2285,19 +2294,18 @@
 
   function cargarNc_() {
     ncActivaId_ = null;
-    var cont = panelSgc_();
-    if (!cont) return;
-    cont.innerHTML = Componentes.cargando('Cargando no conformidades...');
-    api_('listarNcSgc', filtroNcAbiertas_ ? { abiertas: true } : {}).then(function (respuesta) {
-      if (!respuesta || !respuesta.ok) {
-        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar.', 'error');
-        return;
+    cargarListadoSgc_({
+      clave: 'nc', accion: 'listarNcSgc', datos: filtroNcAbiertas_ ? { abiertas: true } : {},
+      spinner: 'Cargando no conformidades...',
+      sigo: function () { return seccionActiva_ === 'nc' && !ncActivaId_; },
+      aplicar: function (cont, data) {
+        puedeGestionar_ = data.puede_gestionar === true;
+        cacheListadoSgc_.nc = data;
+        pintarNc_(cont, data);
+      },
+      error: function (cont, msg) {
+        cont.innerHTML = Componentes.alerta(msg || 'No se pudo conectar para cargar las no conformidades.', 'error');
       }
-      puedeGestionar_ = respuesta.data.puede_gestionar === true;
-      cacheListadoSgc_.nc = respuesta.data;
-      pintarNc_(cont, respuesta.data);
-    }).catch(function () {
-      cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar las no conformidades.', 'error');
     });
   }
 
@@ -2551,10 +2559,7 @@
           : '') +
       '</div>';
 
-    cont.querySelector('.js-nc-volver').addEventListener('click', function () {
-      ncActivaId_ = null;
-      volverAListadoSgc_('nc', cargarNc_, pintarNc_);
-    });
+    cont.querySelector('.js-nc-volver').addEventListener('click', cargarNc_);
     wireFichaNc_(cont, nc);
   }
 
@@ -2835,22 +2840,21 @@
 
   function cargarAuditorias_() {
     auditoriaActivaId_ = null;
-    var cont = panelSgc_();
-    if (!cont) return;
-    cont.innerHTML = Componentes.cargando('Cargando el programa de auditorías...');
-    api_('listarAuditoriasSgc', filtroAnioAud_ ? { anio: filtroAnioAud_ } : {}).then(function (respuesta) {
-      if (!respuesta || !respuesta.ok) {
-        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar.', 'error');
-        return;
+    cargarListadoSgc_({
+      clave: 'auditorias', accion: 'listarAuditoriasSgc', datos: filtroAnioAud_ ? { anio: filtroAnioAud_ } : {},
+      spinner: 'Cargando el programa de auditorías...',
+      sigo: function () { return seccionActiva_ === 'auditorias' && !auditoriaActivaId_; },
+      aplicar: function (cont, data) {
+        puedeGestionar_ = data.puede_gestionar === true;
+        // La norma la define el backend (Auditorias.gs, CLAUSULAS_ISO9001):
+        // la pantalla nunca guarda su propia copia.
+        clausulasCatalogo_ = data.clausulas_catalogo || [];
+        cacheListadoSgc_.auditorias = data;
+        pintarAuditorias_(cont, data);
+      },
+      error: function (cont, msg) {
+        cont.innerHTML = Componentes.alerta(msg || 'No se pudo conectar para cargar las auditorías.', 'error');
       }
-      puedeGestionar_ = respuesta.data.puede_gestionar === true;
-      // La norma la define el backend (Auditorias.gs, CLAUSULAS_ISO9001):
-      // la pantalla nunca guarda su propia copia.
-      clausulasCatalogo_ = respuesta.data.clausulas_catalogo || [];
-      cacheListadoSgc_.auditorias = respuesta.data;
-      pintarAuditorias_(cont, respuesta.data);
-    }).catch(function () {
-      cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar las auditorías.', 'error');
     });
   }
 
@@ -3082,10 +3086,7 @@
           : '') +
       '</div>';
 
-    cont.querySelector('.js-aud-volver').addEventListener('click', function () {
-      auditoriaActivaId_ = null;
-      volverAListadoSgc_('auditorias', cargarAuditorias_, pintarAuditorias_);
-    });
+    cont.querySelector('.js-aud-volver').addEventListener('click', cargarAuditorias_);
     wireFichaAuditoria_(cont, aud, data);
   }
 
@@ -3482,19 +3483,18 @@
 
   function cargarQuejas_() {
     quejaActivaId_ = null;
-    var cont = panelSgc_();
-    if (!cont) return;
-    cont.innerHTML = Componentes.cargando('Cargando quejas...');
-    api_('listarQuejasSgc', filtroQuejasAbiertas_ ? { abiertas: true } : {}).then(function (respuesta) {
-      if (!respuesta || !respuesta.ok) {
-        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar.', 'error');
-        return;
+    cargarListadoSgc_({
+      clave: 'quejas', accion: 'listarQuejasSgc', datos: filtroQuejasAbiertas_ ? { abiertas: true } : {},
+      spinner: 'Cargando quejas...',
+      sigo: function () { return seccionActiva_ === 'quejas' && !quejaActivaId_; },
+      aplicar: function (cont, data) {
+        puedeGestionar_ = data.puede_gestionar === true;
+        cacheListadoSgc_.quejas = data;
+        pintarQuejas_(cont, data);
+      },
+      error: function (cont, msg) {
+        cont.innerHTML = Componentes.alerta(msg || 'No se pudo conectar para cargar las quejas.', 'error');
       }
-      puedeGestionar_ = respuesta.data.puede_gestionar === true;
-      cacheListadoSgc_.quejas = respuesta.data;
-      pintarQuejas_(cont, respuesta.data);
-    }).catch(function () {
-      cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar las quejas.', 'error');
     });
   }
 
@@ -3690,10 +3690,7 @@
           : '') +
       '</div>';
 
-    cont.querySelector('.js-q-volver').addEventListener('click', function () {
-      quejaActivaId_ = null;
-      volverAListadoSgc_('quejas', cargarQuejas_, pintarQuejas_);
-    });
+    cont.querySelector('.js-q-volver').addEventListener('click', cargarQuejas_);
     wireFichaQueja_(cont, q, data);
   }
 
@@ -3970,22 +3967,21 @@
   var filtroProveedoresPendientes_ = false;
 
   function cargarProveedores_() {
-    var cont = panelSgc_();
-    if (!cont) return;
-    cont.innerHTML = Componentes.cargando('Cargando proveedores...');
-    api_('listarProveedoresSgc', {}).then(function (respuesta) {
-      if (!respuesta || !respuesta.ok) {
+    proveedorActivoId_ = null;
+    cargarListadoSgc_({
+      clave: 'proveedores', accion: 'listarProveedoresSgc', datos: {},
+      spinner: 'Cargando proveedores...',
+      sigo: function () { return seccionActiva_ === 'proveedores' && !proveedorActivoId_; },
+      aplicar: function (cont, data) {
+        puedeGestionar_ = data.puede_gestionar === true;
+        cacheListadoSgc_.proveedores = data;
+        pintarProveedores_(cont, data);
+      },
+      error: function (cont, msg) {
         cont.innerHTML = barraSecciones_() +
-          Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el listado de proveedores.', 'error');
+          Componentes.alerta(msg || 'No se pudo cargar el listado de proveedores.', 'error');
         wireSecciones_(cont);
-        return;
       }
-      puedeGestionar_ = respuesta.data.puede_gestionar === true;
-      cacheListadoSgc_.proveedores = respuesta.data;
-      pintarProveedores_(cont, respuesta.data);
-    }).catch(function () {
-      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
-      wireSecciones_(cont);
     });
   }
 
@@ -4161,10 +4157,7 @@
       '</div>';
 
     var volver = cont.querySelector('.js-sgc-volver-prov');
-    if (volver) volver.addEventListener('click', function () {
-      proveedorActivoId_ = null;
-      volverAListadoSgc_('proveedores', cargarProveedores_, pintarProveedores_);
-    });
+    if (volver) volver.addEventListener('click', cargarProveedores_);
     var evaluar = cont.querySelector('.js-sgc-evaluar-prov');
     if (evaluar) evaluar.addEventListener('click', function () { abrirFormularioEvaluarProveedor_(p, data); });
     var editar = cont.querySelector('.js-sgc-editar-prov');
@@ -4350,22 +4343,21 @@
   };
 
   function cargarRevisiones_() {
-    var cont = panelSgc_();
-    if (!cont) return;
-    cont.innerHTML = Componentes.cargando('Cargando revisiones...');
-    api_('listarRevisionesSgc', {}).then(function (respuesta) {
-      if (!respuesta || !respuesta.ok) {
+    revisionActivaId_ = null;
+    cargarListadoSgc_({
+      clave: 'revision', accion: 'listarRevisionesSgc', datos: {},
+      spinner: 'Cargando revisiones...',
+      sigo: function () { return seccionActiva_ === 'revision' && !revisionActivaId_; },
+      aplicar: function (cont, data) {
+        puedeGestionar_ = data.puede_gestionar === true;
+        cacheListadoSgc_.revision = data;
+        pintarRevisiones_(cont, data);
+      },
+      error: function (cont, msg) {
         cont.innerHTML = barraSecciones_() +
-          Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar.', 'error');
+          Componentes.alerta(msg || 'No se pudo conectar.', 'error');
         wireSecciones_(cont);
-        return;
       }
-      puedeGestionar_ = respuesta.data.puede_gestionar === true;
-      cacheListadoSgc_.revision = respuesta.data;
-      pintarRevisiones_(cont, respuesta.data);
-    }).catch(function () {
-      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
-      wireSecciones_(cont);
     });
   }
 
@@ -4539,7 +4531,7 @@
       var b = cont.querySelector(sel);
       if (b) b.addEventListener('click', fn);
     }
-    accion_('.js-sgc-volver-rev', function () { revisionActivaId_ = null; volverAListadoSgc_('revision', cargarRevisiones_, pintarRevisiones_); });
+    accion_('.js-sgc-volver-rev', cargarRevisiones_);
     accion_('.js-sgc-convocar-rev', function () { abrirFormularioConvocarRevision_(r); });
     accion_('.js-sgc-acta-rev', function () { abrirFormularioActaRevision_(r, data); });
     accion_('.js-sgc-acuerdo-rev', function () { abrirFormularioAcuerdoRevision_(r, data); });
@@ -4805,23 +4797,22 @@
   }
 
   function cargarObjetivos_() {
-    var cont = panelSgc_();
-    if (!cont) return;
-    cont.innerHTML = Componentes.cargando('Cargando objetivos de calidad...');
-    api_('listarObjetivosSgc', anioObjetivos_ ? { anio: anioObjetivos_ } : {}).then(function (respuesta) {
-      if (!respuesta || !respuesta.ok) {
+    objetivoActivoId_ = null;
+    cargarListadoSgc_({
+      clave: 'objetivos', accion: 'listarObjetivosSgc', datos: anioObjetivos_ ? { anio: anioObjetivos_ } : {},
+      spinner: 'Cargando objetivos de calidad...',
+      sigo: function () { return seccionActiva_ === 'objetivos' && !objetivoActivoId_; },
+      aplicar: function (cont, data) {
+        puedeGestionar_ = data.puede_gestionar === true;
+        anioObjetivos_ = data.anio;
+        cacheListadoSgc_.objetivos = data;
+        pintarObjetivos_(cont, data);
+      },
+      error: function (cont, msg) {
         cont.innerHTML = barraSecciones_() +
-          Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el tablero de objetivos.', 'error');
+          Componentes.alerta(msg || 'No se pudo cargar el tablero de objetivos.', 'error');
         wireSecciones_(cont);
-        return;
       }
-      puedeGestionar_ = respuesta.data.puede_gestionar === true;
-      anioObjetivos_ = respuesta.data.anio;
-      cacheListadoSgc_.objetivos = respuesta.data;
-      pintarObjetivos_(cont, respuesta.data);
-    }).catch(function () {
-      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
-      wireSecciones_(cont);
     });
   }
 
@@ -5024,10 +5015,7 @@
         '</table>' +
       '</div>';
 
-    cont.querySelector('.js-sgc-volver-obj').addEventListener('click', function () {
-      objetivoActivoId_ = null;
-      volverAListadoSgc_('objetivos', cargarObjetivos_, pintarObjetivos_);
-    });
+    cont.querySelector('.js-sgc-volver-obj').addEventListener('click', cargarObjetivos_);
     var medir = cont.querySelector('.js-sgc-obj-medir');
     if (medir) medir.addEventListener('click', function () { abrirFormularioMedicion_(o, data); });
     var editar = cont.querySelector('.js-sgc-obj-editar');
@@ -6031,21 +6019,20 @@
   var procesoActivoId_ = null;
 
   function cargarProcesos_() {
-    var cont = panelSgc_();
-    if (!cont) return;
-    cont.innerHTML = Componentes.cargando('Cargando mapa de procesos...');
-    api_('listarProcesosSgc', {}).then(function (respuesta) {
-      if (!respuesta || !respuesta.ok) {
+    procesoActivoId_ = null;
+    cargarListadoSgc_({
+      clave: 'procesos', accion: 'listarProcesosSgc', datos: {},
+      spinner: 'Cargando mapa de procesos...',
+      sigo: function () { return seccionActiva_ === 'procesos' && !procesoActivoId_; },
+      aplicar: function (cont, data) {
+        cacheListadoSgc_.procesos = data;
+        pintarProcesos_(cont, data);
+      },
+      error: function (cont, msg) {
         cont.innerHTML = barraSecciones_() +
-          Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cargar el mapa.', 'error');
+          Componentes.alerta(msg || 'No se pudo conectar.', 'error');
         wireSecciones_(cont);
-        return;
       }
-      cacheListadoSgc_.procesos = respuesta.data;
-      pintarProcesos_(cont, respuesta.data);
-    }).catch(function () {
-      cont.innerHTML = barraSecciones_() + Componentes.alerta('No se pudo conectar.', 'error');
-      wireSecciones_(cont);
     });
   }
 
@@ -6279,10 +6266,7 @@
         '</div>' : '');
 
     wireSecciones_(cont);
-    cont.querySelector('.js-prc-volver').addEventListener('click', function () {
-      procesoActivoId_ = null;
-      volverAListadoSgc_('procesos', cargarProcesos_, pintarProcesos_);
-    });
+    cont.querySelector('.js-prc-volver').addEventListener('click', cargarProcesos_);
     cont.querySelectorAll('.js-prc-abrir').forEach(function (btn) {
       btn.addEventListener('click', function () {
         procesoActivoId_ = btn.getAttribute('data-proceso-id');
