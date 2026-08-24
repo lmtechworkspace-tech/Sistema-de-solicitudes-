@@ -175,6 +175,51 @@ test('desvincular NO borra: la persona sale del listado pero conserva su histori
   assert.equal(reactivada.estado, 'ACTIVO');
 });
 
+// v14.0: quitar del alcance del SGC -- DISTINTO de desvincular. Es para
+// corregir una carga masiva que trajo personal de mas, no una salida real
+// de la empresa (por eso no toca `estado`/`fecha_desvinculacion`, usa el
+// flag `activa` que ya filtraban listar/buscarPersonaSgc_/getFicha).
+test('quitarDelAlcance: NO es lo mismo que desvincular -- no toca estado ni fecha_desvinculacion', () => {
+  const ctx = loadConSchema();
+  const { ana } = sembrar(ctx);
+
+  ctx.Personas.quitarDelAlcance({ persona_id: ana.persona_id }, CTX_ENCARGADO);
+
+  assert.equal(ctx.Personas.listar({}, CTX_ENCARGADO).personas.length, 1, 'desaparece del listado por defecto');
+  const fila = ctx.leerFilas_('SGC_PERSONAS').filter((p) => p.persona_id === ana.persona_id)[0];
+  assert.equal(fila.estado, 'ACTIVO', 'no queda marcada como si hubiera renunciado');
+  assert.equal(fila.fecha_desvinculacion, '', 'sin fecha de salida falsa');
+  assert.equal(fila.activa, false);
+});
+
+test('quitarDelAlcance: solo quien gobierna, y solo el/la propia gobernante puede reincluir', () => {
+  const ctx = loadConSchema();
+  const { ana } = sembrar(ctx);
+  assert.equal(ctx.Personas.quitarDelAlcance({ persona_id: ana.persona_id }, CTX_ANA)._forbidden, true,
+    'el personal operativo no se puede quitar a si mismo del alcance');
+
+  ctx.Personas.quitarDelAlcance({ persona_id: ana.persona_id }, CTX_ENCARGADO);
+  const reincluida = ctx.Personas.quitarDelAlcance({ persona_id: ana.persona_id, reactivar: true }, CTX_ENCARGADO);
+  assert.equal(reincluida.activa, true);
+  assert.equal(ctx.Personas.listar({}, CTX_ENCARGADO).personas.length, 2, 'vuelve a aparecer');
+});
+
+test('quitarDelAlcance: solo quien gobierna puede pedir "incluir_fuera_alcance"; nadie mas los ve ni con el filtro', () => {
+  const ctx = loadConSchema();
+  const { ana, pedro } = sembrar(ctx);
+  ctx.Personas.quitarDelAlcance({ persona_id: ana.persona_id }, CTX_ENCARGADO);
+
+  assert.equal(ctx.Personas.listar({}, CTX_ENCARGADO).personas.length, 1, 'oculta por defecto');
+  const conFiltro = ctx.Personas.listar({ incluir_fuera_alcance: true }, CTX_ENCARGADO).personas;
+  assert.equal(conFiltro.length, 2, 'el Encargado SGC puede pedirlos para poder reincluirlos');
+  assert.equal(conFiltro.filter((p) => p.persona_id === ana.persona_id)[0].fuera_de_alcance, true);
+  assert.equal(conFiltro.filter((p) => p.persona_id === pedro.persona_id)[0].fuera_de_alcance, false);
+
+  // Pedro (operativo) no gobierna: el filtro se ignora, jamas ve a Ana.
+  const sinPermiso = ctx.Personas.listar({ incluir_fuera_alcance: true }, CTX_PEDRO).personas;
+  assert.equal(sinPermiso.filter((p) => p.persona_id === ana.persona_id).length, 0);
+});
+
 // --- descriptor de cargo (FO-PRO-02-01) ------------------------------------
 
 test('descriptor: se versiona -- el anterior deja de ser vigente pero se conserva', () => {

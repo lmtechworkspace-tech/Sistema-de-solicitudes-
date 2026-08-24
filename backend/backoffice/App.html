@@ -17418,6 +17418,7 @@ var Iconos = (function () {
 
   var filtroPersonasArea_ = '';
   var incluirDesvinculados_ = false;
+  var incluirFueraAlcance_ = false;
 
   function cargarPersonas_() {
     personaActivaId_ = null;
@@ -17427,6 +17428,7 @@ var Iconos = (function () {
     var filtros = {};
     if (filtroPersonasArea_) filtros.area_id = filtroPersonasArea_;
     if (incluirDesvinculados_) filtros.incluir_desvinculados = true;
+    if (incluirFueraAlcance_) filtros.incluir_fuera_alcance = true;
 
     api_('listarPersonasSgc', filtros).then(function (respuesta) {
       if (!respuesta || !respuesta.ok) {
@@ -17460,6 +17462,8 @@ var Iconos = (function () {
             Componentes.campoTexto({ id: 'sgc-p-area', label: false, valor: filtroPersonasArea_, placeholder: 'Filtrar por área...' }) +
             '<label class="sigso-campo-check"><input type="checkbox" id="sgc-p-desv"' +
               (incluirDesvinculados_ ? ' checked' : '') + '> Incluir desvinculados</label>' +
+            '<label class="sigso-campo-check"><input type="checkbox" id="sgc-p-fuera"' +
+              (incluirFueraAlcance_ ? ' checked' : '') + '> Incluir fuera de alcance</label>' +
           '</div>'
         : '');
 
@@ -17476,8 +17480,33 @@ var Iconos = (function () {
       }
       var desv = cont.querySelector('#sgc-p-desv');
       if (desv) desv.addEventListener('change', function () { incluirDesvinculados_ = this.checked; cargarPersonas_(); });
+      var fuera = cont.querySelector('#sgc-p-fuera');
+      if (fuera) fuera.addEventListener('change', function () { incluirFueraAlcance_ = this.checked; cargarPersonas_(); });
       cont.querySelectorAll('.js-sgc-abrir-persona').forEach(function (btn) {
         btn.addEventListener('click', function () { abrirPersona_(btn.getAttribute('data-id')); });
+      });
+      // Fuera de alcance no tiene ficha que abrir (quedó inactiva a
+      // proposito -- ver quitarDelAlcance); el unico camino de vuelta es
+      // reincluirla desde aca mismo.
+      cont.querySelectorAll('.js-sgc-reincluir-alcance').forEach(function (btn) {
+        btn.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          var id = btn.getAttribute('data-id');
+          var nombre = btn.getAttribute('data-nombre');
+          Componentes.confirmar({
+            titulo: 'Reincluir en el alcance del SGC',
+            mensaje: nombre + ' volverá a aparecer como personal vigente del SGC.'
+          }).then(function (ok) {
+            if (!ok) return;
+            api_('quitarPersonaAlcanceSgc', { persona_id: id, reactivar: true }).then(function (r) {
+              if (!r || !r.ok) {
+                Componentes.aviso({ texto: (r && r.message) || 'No se pudo reincluir.', tipo: 'error' });
+                return;
+              }
+              cargarPersonas_();
+            });
+          });
+        });
       });
     }
 
@@ -17493,6 +17522,27 @@ var Iconos = (function () {
     var filas = personas.map(function (p) {
       var baja = p.estado === 'DESVINCULADO';
       var induccionCompleta = p.induccion_total > 0 && p.induccion_completadas >= p.induccion_total;
+      // Fuera de alcance no tiene ficha que abrir (quedó inactiva a
+      // proposito): es una etiqueta, no un boton, y su unica accion es
+      // reincluir. El resto de las tarjetas sigue igual que siempre.
+      if (p.fuera_de_alcance) {
+        return '<div class="sgc-doc sgc-doc--obsoleto">' +
+          '<div class="sgc-doc__top">' +
+            '<span class="sgc-doc__nombre">' + Componentes.escaparHtml(p.nombre) + '</span>' +
+            Componentes.badge(TIPO_PERSONA_ETIQUETA[p.tipo] || p.tipo, 'neutro') +
+            Componentes.badge('Fuera de alcance', 'critico') +
+          '</div>' +
+          '<div class="sgc-doc__meta">' +
+            (p.cargo ? '<span>' + Componentes.escaparHtml(p.cargo) + '</span>' : '') +
+            (p.area_id ? '<span>' + Componentes.escaparHtml(p.area_id) + '</span>' : '') +
+          '</div>' +
+          '<div class="sgc-acciones">' +
+            '<button type="button" class="sigso-boton sigso-boton--sutil js-sgc-reincluir-alcance" ' +
+              'data-id="' + Componentes.escaparHtml(p.persona_id) + '" data-nombre="' + Componentes.escaparHtml(p.nombre) + '">' +
+              'Reincluir en el SGC</button>' +
+          '</div>' +
+        '</div>';
+      }
       return '<button type="button" class="sgc-doc js-sgc-abrir-persona' + (baja ? ' sgc-doc--obsoleto' : '') +
         '" data-id="' + p.persona_id + '">' +
         '<div class="sgc-doc__top">' +
@@ -17587,6 +17637,10 @@ var Iconos = (function () {
           (p.estado === 'DESVINCULADO'
             ? Componentes.boton({ texto: 'Reactivar', variante: 'secundario', clase: 'js-sgc-reactivar' })
             : Componentes.boton({ texto: 'Desvincular', variante: 'peligro', clase: 'js-sgc-desvincular' })) +
+          // v14.0: quitar del alcance es DISTINTO de desvincular -- es para
+          // corregir a alguien que nunca debió estar aquí (ej. una carga
+          // masiva con personal de mas), no una salida real de la empresa.
+          Componentes.boton({ texto: 'Quitar del alcance del SGC', variante: 'sutil', clase: 'js-sgc-quitar-alcance' }) +
         '</div>'
       : '';
     return '<dl class="sgc-ficha">' +
@@ -18111,6 +18165,26 @@ var Iconos = (function () {
     if (reactivar) reactivar.addEventListener('click', function () {
       api_('desvincularPersonaSgc', { persona_id: p.persona_id, reactivar: true }).then(function () {
         abrirPersona_(p.persona_id);
+      });
+    });
+
+    var quitarAlcance = cont.querySelector('.js-sgc-quitar-alcance');
+    if (quitarAlcance) quitarAlcance.addEventListener('click', function () {
+      Componentes.confirmar({
+        titulo: 'Quitar del alcance del SGC',
+        mensaje: 'Para cuando ' + p.nombre + ' nunca debió estar aquí (por ejemplo, una carga de personal por error) — ' +
+          'NO es lo mismo que desvincular a alguien que sí trabajó en la empresa. ' +
+          'Deja de aparecer en el listado, pero se puede volver a incluir desde "Incluir fuera de alcance".'
+      }).then(function (ok) {
+        if (!ok) return;
+        api_('quitarPersonaAlcanceSgc', { persona_id: p.persona_id }).then(function (r) {
+          if (!r || !r.ok) {
+            Componentes.aviso({ texto: (r && r.message) || 'No se pudo quitar del alcance.', tipo: 'error' });
+            return;
+          }
+          Componentes.aviso({ texto: p.nombre + ' se quitó del alcance del SGC.', tipo: 'exito' });
+          cargarPersonas_();
+        });
       });
     });
 

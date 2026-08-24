@@ -27,7 +27,12 @@ var Personas = {
     var filtros = data || {};
     var rol = rolSgc_(contexto);
     var gobierna = gobiernaSgc_(contexto, rol);
-    var todas = leerFilasSeguro_(SHEETS.SGC_PERSONAS).filter(esActivoSgc_);
+    // Quien no gobierna nunca ve a alguien fuera de alcance -- ni siquiera
+    // pidiendo el filtro a mano: son datos que se estan corrigiendo, no
+    // personal vigente del SGC.
+    var todas = (filtros.incluir_fuera_alcance && gobierna)
+      ? leerFilasSeguro_(SHEETS.SGC_PERSONAS)
+      : leerFilasSeguro_(SHEETS.SGC_PERSONAS).filter(esActivoSgc_);
 
     var visibles = todas.filter(function (p) {
       return puedeVerPersona_(p, contexto, rol, gobierna);
@@ -66,6 +71,9 @@ var Personas = {
           jefatura_email: p.jefatura_email,
           fecha_ingreso: p.fecha_ingreso,
           estado: p.estado,
+          // v14.0: distinto de `estado === 'DESVINCULADO'` -- esto es
+          // "nunca debió estar en el alcance", no "trabajó aquí y se fue".
+          fuera_de_alcance: !esActivoSgc_(p),
           // Señales que el Encargado SGC necesita ver de un vistazo: quien
           // no tiene descriptor y quien tiene la induccion a medias.
           tiene_descriptor: !!vigente,
@@ -247,6 +255,36 @@ var Personas = {
     });
     registrarLogSgc_('SGC_PERSONA_DESVINCULADA', persona.nombre, contexto);
     return actualizado;
+  },
+
+  // v14.0: quitar a alguien que NUNCA debió estar en el alcance del SGC --
+  // distinto de desvincular (que registra una salida real de la empresa,
+  // con su fecha). Suele hacer falta despues de una carga masiva que trajo
+  // personal de mas. Usa `activa` (SGC_PERSONAS ya la tenia, es el filtro
+  // "duro" que ya respetan listar/buscarPersonaSgc_/getFicha), NO `estado`
+  // -- asi no queda una "desvinculacion" falsa en el historial de alguien
+  // que sigue trabajando en la empresa, solo que no en el alcance del SGC.
+  //
+  // buscarPersonaSgc_ filtra por `activa`, asi que aca se busca la fila
+  // directo (sin ese filtro): es la unica forma de poder reincluir a
+  // alguien despues de haberlo quitado.
+  quitarDelAlcance: function (data, contexto) {
+    if (!gobiernaSgc_(contexto, rolSgc_(contexto))) {
+      return { _forbidden: true, message: 'Solo el Encargado SGC o un administrador pueden quitar a alguien del alcance del SGC.' };
+    }
+    var fila = leerFilasSeguro_(SHEETS.SGC_PERSONAS).filter(function (p) {
+      return p.persona_id === data.persona_id;
+    })[0];
+    if (!fila) return errorValidacion_('persona_id', 'Persona no encontrada.');
+
+    if (data.reactivar === true) {
+      var vuelta = actualizarFilaPorId_(SHEETS.SGC_PERSONAS, 'persona_id', fila.persona_id, { activa: true });
+      registrarLogSgc_('SGC_PERSONA_REINCLUIDA_ALCANCE', fila.nombre, contexto);
+      return vuelta;
+    }
+    var quitada = actualizarFilaPorId_(SHEETS.SGC_PERSONAS, 'persona_id', fila.persona_id, { activa: false });
+    registrarLogSgc_('SGC_PERSONA_FUERA_DE_ALCANCE', fila.nombre, contexto);
+    return quitada;
   },
 
   // --- Descriptor de cargo (FO-PRO-02-01), versionado ------------------------

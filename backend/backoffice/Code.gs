@@ -209,6 +209,10 @@ var BACKOFFICE_ACTIONS = {
   getFichaPersonaSgc: handleGetFichaPersonaSgc_,
   guardarPersonaSgc: handleGuardarPersonaSgc_,
   desvincularPersonaSgc: handleDesvincularPersonaSgc_,
+  // v14.0: sacar de la vista a alguien que nunca debió estar en el alcance
+  // del SGC (no es una salida real de la empresa -- eso sigue siendo
+  // desvincularPersonaSgc).
+  quitarPersonaAlcanceSgc: handleQuitarPersonaAlcanceSgc_,
   guardarDescriptorSgc: handleGuardarDescriptorSgc_,
   // v14.0: corregir el descriptor vigente sin versionar, y bajar su archivo.
   actualizarDescriptorSgc: handleActualizarDescriptorSgc_,
@@ -500,6 +504,7 @@ var MODULO_POR_ACCION = {
   descargarDescriptorSgc: ['calidad', 'gerencia'],
   guardarPersonaSgc: 'calidad',
   desvincularPersonaSgc: 'calidad',
+  quitarPersonaAlcanceSgc: 'calidad',
   guardarDescriptorSgc: 'calidad',
   actualizarDescriptorSgc: 'calidad',
   guardarDocumentoPersonaSgc: 'calidad',
@@ -1254,6 +1259,10 @@ function handleGuardarPersonaSgc_(data, contexto) {
 
 function handleDesvincularPersonaSgc_(data, contexto) {
   return responderResultado_(Personas.desvincular(data, contexto));
+}
+
+function handleQuitarPersonaAlcanceSgc_(data, contexto) {
+  return responderResultado_(Personas.quitarDelAlcance(data, contexto));
 }
 
 function handleGuardarDescriptorSgc_(data, contexto) {
