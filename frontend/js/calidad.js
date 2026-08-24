@@ -7577,69 +7577,219 @@
     return r ? r.etiqueta : clave;
   }
 
+  // v14.0 (rediseño de Accesos): el nivel de acceso de un rol, para colorear
+  // la tarjeta. Es lo que el admin quiere ver de un vistazo -- "quién manda,
+  // quién solo lee, quién ve lo justo" -- sin leer rol por rol.
+  function nivelAccesoRol_(clave) {
+    if (clave === 'ENCARGADO_SGC') return 'gobierno';
+    if (['DIRECCION', 'GERENCIA_ADM', 'AUDITOR_EXTERNO'].indexOf(clave) !== -1) return 'lectura';
+    return 'operativo'; // OPERATIVO, JEFATURA_AREA, ENC_ADMIN o sin rol
+  }
+  var NIVEL_ACCESO_ETIQUETA = { gobierno: 'Gobierno del SGC', lectura: 'Lectura total', operativo: 'Acceso acotado' };
+
+  function diasHastaAcceso_(iso) {
+    if (!iso) return null;
+    var f = new Date(iso);
+    if (isNaN(f.getTime())) return null;
+    var hoy = new Date();
+    return Math.round((Date.UTC(f.getUTCFullYear(), f.getUTCMonth(), f.getUTCDate()) -
+      Date.UTC(hoy.getFullYear(), hoy.getMonth(), hoy.getDate())) / 86400000);
+  }
+  // "Por vencer" incluye lo ya vencido: ambos casos piden acción del admin.
+  function porVencerAcceso_(c) {
+    var d = diasHastaAcceso_(c.vigencia_hasta);
+    return d !== null && d <= 30;
+  }
+  function inicialesAcceso_(nombre) {
+    var partes = String(nombre || '').trim().split(/\s+/).filter(Boolean);
+    if (!partes.length) return '?';
+    return (partes[0].charAt(0) + (partes.length > 1 ? partes[partes.length - 1].charAt(0) : '')).toUpperCase();
+  }
+
+  // Estado de la vista Personas de Accesos (filtros de cliente sobre lo ya
+  // traído: no se vuelve a pedir al backend al filtrar).
+  var filtroAccesoGrupo_ = 'todos';   // todos | con-rol | sin-rol | por-vencer | sin-cuenta
+  var filtroAccesoTexto_ = '';
+
   function pintarAccesos_(cont, data) {
     var cuentas = data.cuentas || [];
-    var areas = data.areas || [];
     var roles = data.roles || [];
     var enr = data.enrolamiento || {};
-    var areaNombre = {};
-    areas.forEach(function (a) { areaNombre[a.area_id] = a.nombre; });
+    var sinCuenta = (enr.personas_sin_cuenta || []);
+
+    var conRol = cuentas.filter(function (c) { return !!c.rol_sgc; }).length;
+    var sinRol = cuentas.length - conRol;
+    var porVencer = cuentas.filter(porVencerAcceso_).length;
 
     var intro = barraSecciones_() + subNavAccesos_() +
       '<p class="sigso-ayuda">Aquí defines qué ve cada persona en Calidad. El <b>rol</b> decide las secciones y el alcance; ' +
       'los documentos confidenciales se restringen documento por documento (al cargarlos o editarlos, o desde la pestaña ' +
       '"Confidenciales"). Este panel es exclusivo del administrador.</p>';
 
-    // Catalogo de roles, auto-explicativo (evidencia de "acceso por rol").
-    var catRoles = '<details class="sgc-roles-ref"><summary>Qué ve cada rol</summary><ul class="sgc-items">' +
+    // Resumen filtrable: los 4 números con los que el admin llega al panel,
+    // y cada uno acota la lista de abajo al hacer clic.
+    function tarjetaResumen_(grupo, valor, etiqueta, tono) {
+      return '<button type="button" class="sgc-acc-kpi' + (tono ? ' sgc-acc-kpi--' + tono : '') +
+        (filtroAccesoGrupo_ === grupo ? ' sgc-acc-kpi--activo' : '') + '" data-grupo="' + grupo + '">' +
+        '<span class="sgc-acc-kpi__valor">' + valor + '</span>' +
+        '<span class="sgc-acc-kpi__etiqueta">' + etiqueta + '</span></button>';
+    }
+    var resumen = '<div class="sgc-acc-kpis">' +
+      tarjetaResumen_('con-rol', conRol, 'Con rol asignado', 'ok') +
+      tarjetaResumen_('sin-rol', sinRol, 'Sin rol', 'neutro') +
+      tarjetaResumen_('por-vencer', porVencer, 'Por vencer', porVencer ? 'alerta' : 'neutro') +
+      tarjetaResumen_('sin-cuenta', sinCuenta.length, 'Sin cuenta', sinCuenta.length ? 'alerta' : 'neutro') +
+      '</div>';
+
+    // Leyenda de niveles SIEMPRE visible (antes el "qué ve cada rol" estaba
+    // escondido en un <details>); el detalle largo por rol queda plegado.
+    var leyenda = '<div class="sgc-acc-leyenda">' +
+      '<span><span class="sgc-acc-punto sgc-acc-punto--gobierno"></span>Gobierno del SGC</span>' +
+      '<span><span class="sgc-acc-punto sgc-acc-punto--lectura"></span>Lectura total</span>' +
+      '<span><span class="sgc-acc-punto sgc-acc-punto--operativo"></span>Acceso acotado</span>' +
+      '<details class="sgc-acc-roles-ref"><summary>Qué ve cada rol en detalle</summary><ul class="sgc-items">' +
       roles.map(function (r) {
         return '<li><b>' + Componentes.escaparHtml(r.etiqueta) + ':</b> ' + Componentes.escaparHtml(r.descripcion) + '</li>';
-      }).join('') + '</ul></details>';
+      }).join('') + '</ul></details>' +
+      '</div>';
 
-    // Avisos de enrolamiento para el go-live.
-    var avisos = '';
-    if ((enr.personas_sin_cuenta || []).length) {
-      avisos += Componentes.alerta((enr.personas_sin_cuenta.length) + ' persona(s) del alcance del SGC todavía no tienen cuenta para entrar: ' +
-        enr.personas_sin_cuenta.map(function (p) { return p.nombre; }).join(', ') + '.', 'aviso');
-    }
-    if ((enr.roles_sin_cuenta || []).length) {
-      avisos += Componentes.alerta((enr.roles_sin_cuenta.length) + ' rol(es) asignado(s) a un correo sin cuenta activa (residuo a limpiar): ' +
-        enr.roles_sin_cuenta.map(function (r) { return r.email; }).join(', ') + '.', 'aviso');
-    }
+    // Barra de herramientas: buscar + filtro por rol. La lista de tarjetas
+    // vive en su propio contenedor para re-pintarse sin perder el foco del
+    // buscador ni re-armar toda la pantalla.
+    // Roles asignados a un correo sin cuenta activa: residuo a limpiar antes
+    // del go-live. Es dato de higiene, va como aviso puntual (no como filtro).
+    var avisoResiduo = (enr.roles_sin_cuenta || []).length
+      ? Componentes.alerta((enr.roles_sin_cuenta.length) + ' rol(es) asignado(s) a un correo sin cuenta activa (residuo a limpiar): ' +
+          enr.roles_sin_cuenta.map(function (r) { return r.email; }).join(', ') + '.', 'info')
+      : '';
 
-    var filas = cuentas.map(function (c) {
-      var rolTxt = etiquetaRolAcceso_(c.rol_sgc, roles);
-      var areaTxt = c.area_id ? (areaNombre[c.area_id] || c.area_id) : '—';
-      var venc = c.vigencia_hasta ? ' · vence ' + fechaCorta_(c.vigencia_hasta) : '';
-      return '<tr>' +
-        '<td>' + Componentes.escaparHtml(c.nombre) + '<br><span class="sigso-ayuda">' + Componentes.escaparHtml(c.email) + '</span></td>' +
-        '<td>' + Componentes.escaparHtml(rolTxt) + Componentes.escaparHtml(venc) + '</td>' +
-        '<td>' + Componentes.escaparHtml(areaTxt) + '</td>' +
-        '<td>' +
-          '<button type="button" class="sigso-boton sigso-boton--sutil js-acc-editar" data-email="' + Componentes.escaparHtml(c.email) + '">Asignar rol</button> ' +
-          '<button type="button" class="sigso-boton sigso-boton--sutil js-acc-previa" data-email="' + Componentes.escaparHtml(c.email) + '">¿Qué ve?</button>' +
-          (c.rol_id ? ' <button type="button" class="sigso-boton sigso-boton--sutil js-acc-quitar" data-rolid="' + Componentes.escaparHtml(c.rol_id) + '" data-email="' + Componentes.escaparHtml(c.email) + '">Quitar</button>' : '') +
-        '</td>' +
-        '</tr>';
-    }).join('');
+    var toolbar = '<div class="sgc-acc-toolbar">' +
+      '<input type="text" id="sgc-acc-buscar" class="sgc-acc-buscar" placeholder="Buscar por nombre o correo…" value="' + Componentes.escaparHtml(filtroAccesoTexto_) + '">' +
+      '<select id="sgc-acc-rol"><option value="">Todos los roles</option>' +
+        '<option value="__sin">Sin rol</option>' +
+        roles.map(function (r) { return '<option value="' + r.clave + '"' + (filtroAccesoGrupo_ === 'rol:' + r.clave ? ' selected' : '') + '>' + Componentes.escaparHtml(r.etiqueta) + '</option>'; }).join('') +
+      '</select>' +
+      '</div>';
 
-    cont.innerHTML = intro + catRoles + avisos +
-      '<table class="sigso-tabla"><thead><tr>' +
-        '<th>Persona</th><th>Rol en el SGC</th><th>Área</th><th></th>' +
-      '</tr></thead><tbody>' + filas + '</tbody></table>';
+    cont.innerHTML = intro + resumen + leyenda + avisoResiduo + toolbar + '<div id="sgc-acc-lista"></div>';
 
     wireSecciones_(cont);
     wireSubNavAccesos_(cont);
-    cont.querySelectorAll('.js-acc-editar').forEach(function (btn) {
+
+    cont.querySelectorAll('.sgc-acc-kpi').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var g = btn.getAttribute('data-grupo');
+        filtroAccesoGrupo_ = (filtroAccesoGrupo_ === g) ? 'todos' : g; // segundo clic = quitar filtro
+        pintarAccesos_(cont, data);
+      });
+    });
+    var buscar = cont.querySelector('#sgc-acc-buscar');
+    if (buscar) buscar.addEventListener('input', function () {
+      filtroAccesoTexto_ = this.value;
+      pintarListaAccesos_(cont, data);
+    });
+    var selRol = cont.querySelector('#sgc-acc-rol');
+    if (selRol) selRol.addEventListener('change', function () {
+      // El desplegable de rol es un filtro fino aparte del grupo: al usarlo
+      // se sale del grupo (para no combinar dos filtros que se contradicen).
+      filtroAccesoGrupo_ = this.value ? ('rol:' + this.value) : 'todos';
+      pintarAccesos_(cont, data);
+    });
+
+    pintarListaAccesos_(cont, data);
+  }
+
+  function pintarListaAccesos_(cont, data) {
+    var lista = cont.querySelector('#sgc-acc-lista');
+    if (!lista) return;
+    var cuentas = data.cuentas || [];
+    var roles = data.roles || [];
+    var areas = data.areas || [];
+    var enr = data.enrolamiento || {};
+    var areaNombre = {};
+    areas.forEach(function (a) { areaNombre[a.area_id] = a.nombre; });
+
+    // "Sin cuenta" no son cuentas: son personas del alcance del SGC que aún
+    // no tienen con qué entrar. Se muestran como tarjetas apagadas, sin
+    // acciones -- lo accionable es crearles la cuenta, fuera de este panel.
+    if (filtroAccesoGrupo_ === 'sin-cuenta') {
+      var sinCuenta = enr.personas_sin_cuenta || [];
+      lista.innerHTML = sinCuenta.length
+        ? '<p class="sigso-ayuda">Personas en el alcance del SGC que todavía no tienen cuenta para entrar. Créales una cuenta en Administración para poder asignarles un rol.</p>' +
+          '<div class="sgc-acc-grid">' + sinCuenta.map(function (p) {
+            return '<div class="sgc-acc-card sgc-acc-card--vacia">' +
+              '<span class="sgc-acc-card__avatar">' + Componentes.escaparHtml(inicialesAcceso_(p.nombre)) + '</span>' +
+              '<div class="sgc-acc-card__info"><div class="sgc-acc-card__nombre">' + Componentes.escaparHtml(p.nombre) + '</div>' +
+              '<div class="sgc-acc-card__email">' + Componentes.escaparHtml(p.email || 'sin correo') + '</div>' +
+              '<div class="sgc-acc-card__meta"><span class="sgc-acc-chip sgc-acc-chip--alerta">Sin cuenta para entrar</span></div></div>' +
+              '</div>';
+          }).join('') + '</div>'
+        : Componentes.alerta('Todas las personas del alcance del SGC ya tienen cuenta. ✓', 'exito');
+      return;
+    }
+
+    var texto = filtroAccesoTexto_.trim().toLowerCase();
+    var filtradas = cuentas.filter(function (c) {
+      if (filtroAccesoGrupo_ === 'con-rol' && !c.rol_sgc) return false;
+      if (filtroAccesoGrupo_ === 'sin-rol' && c.rol_sgc) return false;
+      if (filtroAccesoGrupo_ === 'por-vencer' && !porVencerAcceso_(c)) return false;
+      if (filtroAccesoGrupo_.indexOf('rol:') === 0) {
+        var q = filtroAccesoGrupo_.slice(4);
+        if (q === '__sin' ? !!c.rol_sgc : c.rol_sgc !== q) return false;
+      }
+      if (texto) {
+        var enNombre = String(c.nombre || '').toLowerCase().indexOf(texto) !== -1;
+        var enEmail = String(c.email || '').toLowerCase().indexOf(texto) !== -1;
+        if (!enNombre && !enEmail) return false;
+      }
+      return true;
+    });
+
+    if (!filtradas.length) {
+      lista.innerHTML = Componentes.vacio({ texto: 'Ninguna persona coincide con este filtro.' });
+      return;
+    }
+
+    lista.innerHTML = '<div class="sgc-acc-grid">' + filtradas.map(function (c) {
+      var nivel = nivelAccesoRol_(c.rol_sgc);
+      var rolTxt = etiquetaRolAcceso_(c.rol_sgc, roles);
+      var areaTxt = c.area_id ? (areaNombre[c.area_id] || c.area_id) : '';
+      var dias = diasHastaAcceso_(c.vigencia_hasta);
+      var vigChip = '';
+      if (dias !== null) {
+        var vTono = dias < 0 ? 'critico' : (dias <= 30 ? 'alerta' : 'neutro');
+        var vTxt = dias < 0 ? ('Venció ' + fechaCorta_(c.vigencia_hasta)) : ('Vence ' + fechaCorta_(c.vigencia_hasta));
+        vigChip = '<span class="sgc-acc-chip sgc-acc-chip--' + vTono + '">' + Componentes.escaparHtml(vTxt) + '</span>';
+      }
+      return '<div class="sgc-acc-card sgc-acc-card--' + nivel + '">' +
+        '<span class="sgc-acc-card__avatar sgc-acc-card__avatar--' + nivel + '">' + Componentes.escaparHtml(inicialesAcceso_(c.nombre)) + '</span>' +
+        '<div class="sgc-acc-card__info">' +
+          '<div class="sgc-acc-card__nombre">' + Componentes.escaparHtml(c.nombre) + '</div>' +
+          '<div class="sgc-acc-card__email">' + Componentes.escaparHtml(c.email) + '</div>' +
+          '<div class="sgc-acc-card__meta">' +
+            '<span class="sgc-acc-chip sgc-acc-chip--' + nivel + '">' + Componentes.escaparHtml(rolTxt) + '</span>' +
+            (areaTxt ? '<span class="sgc-acc-chip">' + Componentes.escaparHtml(areaTxt) + '</span>' : '') +
+            vigChip +
+          '</div>' +
+        '</div>' +
+        '<div class="sgc-acc-card__acciones">' +
+          '<button type="button" class="sigso-boton sigso-boton--secundario js-acc-editar" data-email="' + Componentes.escaparHtml(c.email) + '">' + (c.rol_sgc ? 'Cambiar rol' : 'Asignar rol') + '</button>' +
+          '<button type="button" class="sigso-boton sigso-boton--sutil js-acc-previa" data-email="' + Componentes.escaparHtml(c.email) + '">¿Qué ve?</button>' +
+          (c.rol_id ? '<button type="button" class="sigso-boton sigso-boton--sutil js-acc-quitar" data-rolid="' + Componentes.escaparHtml(c.rol_id) + '" data-email="' + Componentes.escaparHtml(c.email) + '">Quitar</button>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+
+    lista.querySelectorAll('.js-acc-editar').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var c = cuentas.filter(function (x) { return x.email === btn.getAttribute('data-email'); })[0];
         abrirFormularioAcceso_(c, data);
       });
     });
-    cont.querySelectorAll('.js-acc-previa').forEach(function (btn) {
+    lista.querySelectorAll('.js-acc-previa').forEach(function (btn) {
       btn.addEventListener('click', function () { previsualizarAcceso_(btn.getAttribute('data-email'), data); });
     });
-    cont.querySelectorAll('.js-acc-quitar').forEach(function (btn) {
+    lista.querySelectorAll('.js-acc-quitar').forEach(function (btn) {
       btn.addEventListener('click', function () { quitarAcceso_(btn.getAttribute('data-rolid'), btn.getAttribute('data-email')); });
     });
   }

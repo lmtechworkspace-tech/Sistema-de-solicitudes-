@@ -259,20 +259,27 @@
 
     <main class="sigso-contenido">
       <!-- ===== Modulo: inicio ===== -->
-      <section id="modulo-home" class="plataforma-modulo">
-        <h1 id="saludo-home"></h1>
-        <p class="plataforma-home__fecha" id="fecha-home"></p>
-        <div id="pendientes-home"></div>
-        <!-- v6.5 Fase 3: tarjeta con la novedad pendiente mas relevante, para
-             que quede visible sin tener que entrar al modulo Novedades. -->
-        <div id="novedades-home"></div>
-        <!-- v5.0 F3 (§5.1): resumen del dia (KPIs de la bandeja, si la cuenta
-             la tiene) + actividad reciente -- composicion sobre datos que ya
-             se piden hoy para el badge del nav, sin backend nuevo. -->
-        <div id="kpis-home" class="sigso-oculto"></div>
+      <!-- v14.0: el Inicio se reordena por utilidad (ver inicio.js). Antes
+           todo salia de solicitudes y ademas dependia del modulo 'bandeja',
+           asi que quien no lo tenia veia un Inicio vacio. Los "accesos
+           rapidos" se retiran: desde la v13 el arbol de modulos vive en el
+           sidebar y esas tarjetas solo repetian el menu. -->
+      <section id="modulo-home" class="plataforma-modulo plataforma-home">
+        <header class="inicio-cab">
+          <h1 id="saludo-home"></h1>
+          <p class="plataforma-home__fecha" id="fecha-home"></p>
+        </header>
+        <!-- "¿hay algo que necesite de mi?" respondido de entrada -->
+        <div id="estado-home"></div>
+        <!-- pendientes personales cruzando TODOS los modulos -->
+        <div id="atencion-home"></div>
+        <!-- compromisos del dia, con accion de un clic -->
+        <div id="trabajo-home"></div>
+        <!-- KPIs segun el rol (bandeja y/o jefatura) -->
+        <div id="panel-home"></div>
+        <!-- bienestar + avance propio -->
+        <div id="semana-home"></div>
         <div id="reciente-home" class="sigso-oculto"></div>
-        <h2 class="plataforma-home__subtitulo">Accesos r&aacute;pidos</h2>
-        <div class="plataforma-cards" id="cards-home"></div>
       </section>
 
       <!-- ===== Modulo: nueva solicitud (markup de index.html) ===== -->
@@ -1007,6 +1014,9 @@
   <!-- v7.1: notificaciones "en vivo" (modal + toast del SO), transversal.
        Antes de plataforma.js, que expone window.SigsoShell.irAModulo. -->
   <script src="js/notificaciones-vivas.js"></script>
+  <!-- v14.0: el Inicio. Va ANTES de plataforma.js, que es quien lo invoca
+       (renderHome_) pasandole la sesion y la navegacion. -->
+  <script src="js/inicio.js"></script>
   <script src="js/plataforma.js"></script>
 </body>
 </html>

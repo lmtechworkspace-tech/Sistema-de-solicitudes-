@@ -22,7 +22,21 @@
     },
     cargar: cargarNovedades_,
     actualizarBadge: actualizarBadgeStandalone_,
-    pintarTarjetaHome: pintarTarjetaHome_
+    pintarTarjetaHome: pintarTarjetaHome_,
+    // v14.0 (nuevo Inicio): el bloque "Requiere tu atencion" necesita el
+    // conteo de pendientes. Pasa por feedSinFiltro_, que comparte UNA
+    // promesa por 10 s -- asi el Inicio no agrega una request propia
+    // encima de las que ya hacen el badge y la tarjeta del Home.
+    resumenPendientes: function () {
+      return feedSinFiltro_().then(function (respuesta) {
+        if (!respuesta || !respuesta.ok) return { pendientes: 0, destacada: null };
+        var recientes = respuesta.data.recientes || [];
+        return {
+          pendientes: respuesta.data.resumen.pendientes || 0,
+          destacada: recientes.filter(function (n) { return n.requiere_acuse && !n.leida; })[0] || null
+        };
+      }).catch(function () { return { pendientes: 0, destacada: null }; });
+    }
   };
 
   var ultimoFeed_ = [];

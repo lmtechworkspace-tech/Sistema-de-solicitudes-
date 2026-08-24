@@ -1146,171 +1146,30 @@
     });
   }
 
-  // "Hola" a cualquier hora no distinguia si alguien entraba a las 8am o a
-  // las 11pm; el saludo por franja horaria y la fecha dan un ancla de
-  // contexto minima en la pantalla que la persona ve primero cada dia.
-  function saludoSegunHora_() {
-    var hora = new Date().getHours();
-    if (hora < 12) return 'Buenos días';
-    if (hora < 20) return 'Buenas tardes';
-    return 'Buenas noches';
-  }
-
+  // v14.0: el Inicio vive en inicio.js. Este shell le pasa lo que solo el
+  // conoce (sesion, modulos de la cuenta, navegacion y badges) y no sabe
+  // nada de como se arma la pantalla.
   function renderHome_() {
-    var nombrePila = String(sesion.cuenta.nombre || '').split(' ')[0];
-    document.getElementById('saludo-home').textContent = saludoSegunHora_() + ', ' + nombrePila;
-    var fecha = document.getElementById('fecha-home');
-    if (fecha) {
-      var texto = new Intl.DateTimeFormat('es-CL', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
-      fecha.textContent = texto.charAt(0).toUpperCase() + texto.slice(1);
+    if (window.SigsoInicio) {
+      SigsoInicio.render({
+        cuenta: sesion.cuenta,
+        token: sesion.token,
+        modulos: modulosDeLaCuenta_(),
+        irAModulo: function (id) { mostrarModulo_(id); },
+        pintarBadge: pintarBadge_,
+        backofficeDisponible: backofficeDisponible_,
+        // El command palette reusa los recientes ya cargados por el Inicio,
+        // sin pedirle nada nuevo al backend (v5.0 F4 §6.1).
+        onRecientes: function (recientes) { ultimosRecientes_ = recientes || []; }
+      });
     }
 
-    document.getElementById('cards-home').innerHTML = modulosDeLaCuenta_().map(function (id) {
-      var def = MODULOS_SHELL[id];
-      var icono = '<span class="plataforma-card__icono">' + Iconos.svg(def.icono, { tam: 22 }) + '</span>';
-      var acento = acentoInline_(id);
-      if (def.interno) {
-        return '<button type="button" class="plataforma-card" data-modulo="' + id + '"' + acento + '>' +
-          icono +
-          '<strong>' + def.nombre + '</strong>' +
-          '<span class="sigso-ayuda">' + def.descripcion + '</span>' +
-          '</button>';
-      }
-      var url = urlExterna_(def);
-      return url
-        ? '<a class="plataforma-card" href="' + Componentes.escaparHtml(url) + '" target="_blank" rel="noopener"' + acento + '>' +
-          icono +
-          '<strong>' + def.nombre + '</strong>' +
-          '<span class="sigso-ayuda">' + def.descripcion + '</span>' +
-          '</a>'
-        : '';
-    }).join('');
-
-    document.getElementById('cards-home').querySelectorAll('[data-modulo]').forEach(function (card) {
-      card.addEventListener('click', function () {
-        mostrarModulo_(card.getAttribute('data-modulo'));
-      });
-    });
-
-    // v6.5: badge de novedades pendientes, en segundo plano, sin esperar a
-    // que se entre al modulo -- mismo criterio que "pendientes_validar".
-    // Fase 3: mas la tarjeta con la novedad pendiente mas relevante.
+    // v6.5: badge de novedades pendientes en el sidebar. La TARJETA suelta de
+    // novedades se retiro en la v14.0: las novedades por leer ahora salen en
+    // "Requiere tu atencion" (inicio.js), asi no aparecen dos veces.
     if (window.SigsoNovedades) {
       window.SigsoNovedades.actualizarBadge();
-      window.SigsoNovedades.pintarTarjetaHome('novedades-home');
     }
-
-    // "Requieren tu accion" del inicio: se pide el resumen una vez, en
-    // segundo plano -- si falla, el inicio funciona igual (sin el aviso).
-    if (modulosDeLaCuenta_().indexOf('mis_solicitudes') !== -1) {
-      llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'misSolicitudes', { token: sesion.token })
-        .then(function (respuesta) {
-          if (!respuesta.ok) return;
-          var resumen = respuesta.data.resumen;
-
-          // v4.0: el numero pendiente viaja al badge del nav -- antes habia
-          // que entrar al modulo para enterarse.
-          pintarBadge_('mis_solicitudes', resumen.pendientes_validar);
-
-          var pendientes = document.getElementById('pendientes-home');
-          if (resumen.pendientes_validar > 0) {
-            pendientes.innerHTML =
-              '<div class="plataforma-aviso plataforma-aviso--accion">' +
-              Iconos.svg('alerta', { tam: 18 }) +
-              '<div><strong>' + resumen.pendientes_validar + ' ítem(s) esperan tu validación.</strong>' +
-              '<div class="sigso-ayuda">Revísalos y confirma si quedaron resueltos.</div></div>' +
-              '<button type="button" class="sigso-boton--secundario" data-ir="mis_solicitudes">Revisar</button>' +
-              '</div>';
-            var btn = pendientes.querySelector('[data-ir]');
-            if (btn) {
-              btn.addEventListener('click', function () { mostrarModulo_('mis_solicitudes'); });
-            }
-          } else if (resumen.abiertas > 0) {
-            pendientes.innerHTML =
-              '<div class="plataforma-aviso">' + Iconos.svg('info', { tam: 18 }) +
-              '<div>Tienes <strong>' + resumen.abiertas + '</strong> solicitud(es) en curso. Nada pendiente de tu parte.</div>' +
-              '</div>';
-          } else {
-            pendientes.innerHTML = '';
-          }
-        })
-        .catch(function () {});
-    }
-
-    // Bandeja: lo que esta fuera de plazo es lo que necesita accion hoy.
-    // v5.0 F3 (§5.1): el mismo llamado que ya se hacia solo para el badge
-    // ahora tambien arma el resumen del dia (4 KPIs) y la actividad
-    // reciente del Home -- sin pedirle nada nuevo al backend.
-    if (modulosDeLaCuenta_().indexOf('bandeja') !== -1 && backofficeDisponible_()) {
-      // v5.0 F4 (§6.3): esqueleto mientras se resuelve -- antes el bloque
-      // quedaba invisible (sigso-oculto) hasta que llegaba la respuesta.
-      var kpisHomeEl = document.getElementById('kpis-home');
-      if (kpisHomeEl) {
-        kpisHomeEl.className = 'sigso-kpis';
-        kpisHomeEl.innerHTML = new Array(4).fill(
-          '<div class="sigso-kpi sigso-esq__tarjeta" aria-busy="true">' +
-          '<span class="sigso-esq__barra" style="width:40%;height:22px;margin:0 auto 0.5rem"></span>' +
-          '<span class="sigso-esq__barra" style="width:65%;height:10px;margin:0 auto"></span></div>'
-        ).join('');
-      }
-      llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getDashboardData', {})
-        .then(function (respuesta) {
-          if (!respuesta.ok) {
-            if (kpisHomeEl) kpisHomeEl.className = 'sigso-oculto';
-            return;
-          }
-          pintarBadge_('bandeja', respuesta.data.resumen.sla_vencido);
-          renderKpisHome_(respuesta.data.resumen);
-          renderRecienteHome_(respuesta.data.recientes || []);
-          ultimosRecientes_ = respuesta.data.recientes || [];
-        })
-        .catch(function () {
-          // Si falla, el esqueleto no debe quedar girando para siempre.
-          if (kpisHomeEl) kpisHomeEl.className = 'sigso-oculto';
-        });
-    }
-  }
-
-  var ETIQUETA_ESTADO_HOME = {
-    S01: 'Ingresada', S02: 'En revisión', S03: 'En desarrollo', S04: 'En prueba',
-    S05: 'Lista para validar', S06: 'Pausada', S07: 'Bloqueada', S08: 'Rechazada',
-    S09: 'Terminada', S10: 'Validada', S11: 'Cancelada'
-  };
-
-  function renderKpisHome_(resumen) {
-    var cont = document.getElementById('kpis-home');
-    if (!cont) return;
-    cont.className = 'sigso-kpis';
-    cont.innerHTML =
-      Componentes.kpi({ valor: resumen.total_abiertas, etiqueta: 'Abiertas', titulo: 'Solicitudes que aún no están cerradas, rechazadas ni canceladas.' }) +
-      Componentes.kpi({ valor: resumen.criticas_activas, etiqueta: 'Críticas activas', alerta: true, titulo: 'Solicitudes abiertas de prioridad P1.' }) +
-      Componentes.kpi({ valor: resumen.sla_vencido, etiqueta: 'Fuera de plazo', alerta: true, titulo: 'Ítems que ya pasaron su tiempo objetivo de respuesta.' }) +
-      Componentes.kpi({ valor: resumen.del_dia, etiqueta: 'Ingresadas hoy', titulo: 'Solicitudes creadas hoy.' });
-    cont.querySelectorAll('.sigso-kpi').forEach(function (tile) {
-      tile.addEventListener('click', function () { mostrarModulo_('bandeja'); });
-      tile.style.cursor = 'pointer';
-    });
-  }
-
-  function renderRecienteHome_(recientes) {
-    var cont = document.getElementById('reciente-home');
-    if (!cont || !recientes.length) return;
-    cont.className = 'plataforma-reciente';
-    cont.innerHTML =
-      '<h2 class="plataforma-home__subtitulo">Actividad reciente</h2>' +
-      '<div class="sigso-card plataforma-reciente__lista">' +
-      recientes.slice(0, 5).map(function (s) {
-        return '<button type="button" class="plataforma-reciente__fila" data-ir-solicitud="' + Componentes.escaparHtml(s.solicitud_id) + '">' +
-          '<span class="sigso-id">' + Componentes.escaparHtml(s.solicitud_id) + '</span>' +
-          '<span class="plataforma-reciente__meta">' + Componentes.escaparHtml(s.empresa_id) + ' &middot; ' + Componentes.escaparHtml(s.modulo || '—') + '</span>' +
-          '<span class="sigso-badge sigso-badge--' + Componentes.escaparHtml(s.prioridad_derivada) + '">' + Componentes.escaparHtml(s.prioridad_derivada) + '</span>' +
-          '<span class="plataforma-reciente__estado">' + Componentes.escaparHtml(ETIQUETA_ESTADO_HOME[s.estado_derivado] || s.estado_derivado) + '</span>' +
-          '</button>';
-      }).join('') +
-      '</div>';
-    cont.querySelectorAll('[data-ir-solicitud]').forEach(function (fila) {
-      fila.addEventListener('click', function () { mostrarModulo_('bandeja'); });
-    });
   }
 
   // v4.0: mostrar/ocultar la contrasena. Con claves temporales del tipo

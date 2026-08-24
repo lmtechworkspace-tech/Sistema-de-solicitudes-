@@ -2188,12 +2188,14 @@ button {
 }
 
 /* Fecha bajo el saludo de Inicio: contexto minimo (que dia es) sin competir
-   con el titulo. */
+   con el titulo. v14.0: la linea ahora lleva tambien el cargo, y el
+   `text-transform: capitalize` de antes rompia ambas cosas -- capitaliza
+   CADA palabra ("Jefa De Area", "24 De Agosto"). La mayuscula inicial la
+   pone el JS sobre la fecha, que es lo unico que la necesitaba. */
 .plataforma-home__fecha {
   margin: -0.5rem 0 1.25rem;
   color: var(--texto-2);
   font-size: var(--texto-sm);
-  text-transform: capitalize;
 }
 
 /* v5.0 F3 (§5.1): resumen del dia + actividad reciente del Home. */
@@ -2211,6 +2213,94 @@ button {
 #kpis-home.sigso-kpis {
   margin-bottom: var(--esp-2);
 }
+
+/* ===== v14.0: el Inicio ==================================================
+   Bloques apilados en orden de utilidad (atencion -> mi trabajo -> panel ->
+   tu semana). Todo reusa los tokens de siempre; lo unico propio de aca es
+   la fila compacta de "item accionable", que es el patron que se repite en
+   los tres primeros bloques. */
+.plataforma-home { display: flex; flex-direction: column; gap: var(--esp-4); }
+.inicio-cab { margin-bottom: calc(var(--esp-2) * -1); }
+
+/* Linea de estado: la respuesta a "¿hay algo que necesite de mi?". Se pinta
+   tanto cuando hay pendientes como cuando NO -- confirmar que estas al dia
+   es informacion, no ausencia de informacion. */
+.inicio-estado {
+  display: flex; align-items: center; gap: var(--esp-2);
+  padding: var(--esp-3) var(--esp-4); border-radius: var(--radio-md);
+  font-size: var(--texto-sm); font-weight: 600;
+}
+.inicio-estado--ok { background: var(--ok-suave); color: var(--ok); }
+.inicio-estado--accion { background: var(--alerta-suave); color: var(--alerta); }
+.inicio-estado .sigso-ico { flex: 0 0 auto; }
+
+.inicio-bloque {
+  background: var(--superficie); border: 1px solid var(--borde);
+  border-radius: var(--radio-md); padding: var(--esp-4);
+}
+/* El bloque de pendientes es el unico con acento propio: es lo que la
+   persona vino a ver, y tiene que ganarle visualmente al resto. */
+.inicio-bloque--atencion { border-left: 3px solid var(--alerta); }
+.inicio-bloque__titulo {
+  display: flex; align-items: center; gap: var(--esp-2);
+  margin: 0 0 var(--esp-3); font-size: var(--texto-sm); font-weight: 700;
+  color: var(--texto-2); text-transform: uppercase; letter-spacing: 0.05em;
+  border-left: none !important; padding-left: 0 !important;
+}
+.inicio-bloque__titulo .sigso-ico { color: var(--texto-3); flex: 0 0 auto; }
+.inicio-bloque__extra {
+  margin-left: auto; font-weight: 600; text-transform: none;
+  letter-spacing: 0; color: var(--texto-3);
+}
+.inicio-bloque__ir { margin-top: var(--esp-3); }
+
+.inicio-lista { display: flex; flex-direction: column; gap: var(--esp-2); }
+
+/* Fila accionable: origen (de que modulo viene) + que pasa + que hacer.
+   El origen va como etiqueta porque el valor del bloque esta justamente en
+   que mezcla modulos distintos: sin la etiqueta no se sabe de donde sale. */
+.inicio-item {
+  display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap;
+  padding: var(--esp-3); border: 1px solid var(--borde);
+  border-left: 3px solid var(--borde); border-radius: var(--radio-sm);
+  background: var(--superficie);
+}
+.inicio-item--critico { border-left-color: var(--critico); }
+.inicio-item--alerta { border-left-color: var(--alerta); }
+.inicio-item--ok { border-left-color: var(--ok); }
+.inicio-item__origen {
+  flex: 0 0 auto; font-size: var(--texto-xs); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--texto-3);
+  background: var(--superficie-2); padding: 2px var(--esp-2); border-radius: var(--radio-sm);
+}
+.inicio-item__texto { flex: 1 1 12rem; min-width: 0; font-size: var(--texto-sm); }
+.inicio-item__cta { flex: 0 0 auto; }
+
+.inicio-chip {
+  display: inline-block; font-size: var(--texto-xs); font-weight: 650;
+  padding: 1px var(--esp-2); border-radius: var(--radio-full);
+  background: var(--superficie-2); color: var(--texto-2);
+}
+.inicio-chip--critico { background: var(--critico-suave); color: var(--critico); }
+.inicio-chip--alerta { background: var(--alerta-suave); color: var(--alerta); }
+.inicio-chip--ok { background: var(--ok-suave); color: var(--ok); }
+
+.inicio-kpis { margin: 0; }
+
+/* "Tu semana": el apartado humano. Tono calmo a proposito -- no compite con
+   los pendientes ni usa color de alerta. */
+.inicio-bloque--semana { background: var(--superficie-2); }
+.inicio-pausa {
+  display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap;
+  padding: var(--esp-3); border-radius: var(--radio-sm);
+  background: var(--info-suave); color: var(--info);
+  font-size: var(--texto-sm); font-weight: 600;
+}
+.inicio-pausa > span { flex: 1 1 14rem; }
+.inicio-semana__texto {
+  margin: var(--esp-3) 0 0; font-size: var(--texto-sm); color: var(--texto-2);
+}
+.inicio-bloque--semana .inicio-pausa + .inicio-semana__texto { margin-top: var(--esp-3); }
 
 .plataforma-reciente__lista {
   padding: 0;
@@ -3714,6 +3804,99 @@ button {
 .sgc-leyenda .sgc-celda {
   display: inline-flex; align-items: center; justify-content: center;
   width: 1.25rem; height: 1.25rem; border-radius: 4px; padding: 0;
+}
+
+/* ===== v14.0: rediseño de la vista Personas de Accesos ==================
+   De tabla plana a tarjetas con franja de color por nivel de acceso, con un
+   resumen filtrable arriba y buscador. El color codifica "quién manda / quién
+   solo lee / quién ve lo justo" sin leer rol por rol. */
+
+/* Resumen de 4 numeros, cada uno filtra la lista al hacer clic. */
+.sgc-acc-kpis {
+  display: grid; gap: var(--esp-2); margin: var(--esp-3) 0;
+  grid-template-columns: repeat(auto-fit, minmax(min(9rem, 100%), 1fr));
+}
+.sgc-acc-kpi {
+  display: flex; flex-direction: column; gap: 2px; text-align: left;
+  padding: var(--esp-3) var(--esp-4); border: 1px solid var(--borde);
+  border-left: 3px solid var(--borde); border-radius: var(--radio-md);
+  background: var(--superficie); cursor: pointer; font: inherit; color: inherit;
+  transition: border-color var(--mov-normal), box-shadow var(--mov-normal), background var(--mov-normal);
+}
+.sgc-acc-kpi:hover { background: var(--superficie-2); }
+.sgc-acc-kpi--activo { border-color: var(--primario); box-shadow: 0 0 0 2px var(--primario-suave); }
+.sgc-acc-kpi__valor { font-size: var(--texto-xl); font-weight: 800; line-height: 1.1; }
+.sgc-acc-kpi__etiqueta { font-size: var(--texto-xs); color: var(--texto-3); }
+.sgc-acc-kpi--ok { border-left-color: var(--ok); }
+.sgc-acc-kpi--ok .sgc-acc-kpi__valor { color: var(--ok); }
+.sgc-acc-kpi--alerta { border-left-color: var(--alerta); }
+.sgc-acc-kpi--alerta .sgc-acc-kpi__valor { color: var(--alerta); }
+
+/* Leyenda de niveles, siempre visible; el detalle por rol queda plegado. */
+.sgc-acc-leyenda {
+  display: flex; flex-wrap: wrap; gap: var(--esp-2) var(--esp-4); align-items: center;
+  font-size: var(--texto-xs); color: var(--texto-2); margin-bottom: var(--esp-3);
+}
+.sgc-acc-leyenda > span { display: inline-flex; align-items: center; gap: var(--esp-1); }
+.sgc-acc-punto { width: 0.75rem; height: 0.75rem; border-radius: 3px; display: inline-block; }
+.sgc-acc-punto--gobierno { background: var(--primario); }
+.sgc-acc-punto--lectura { background: var(--info); }
+.sgc-acc-punto--operativo { background: var(--texto-3); }
+.sgc-acc-roles-ref { flex: 0 0 auto; margin-left: auto; }
+.sgc-acc-roles-ref summary { cursor: pointer; color: var(--primario); font-weight: 600; }
+.sgc-acc-roles-ref .sgc-items { margin: var(--esp-2) 0 0; }
+
+/* Barra de herramientas: buscar + filtro por rol. */
+.sgc-acc-toolbar {
+  display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap; margin-bottom: var(--esp-4);
+}
+.sgc-acc-toolbar .sgc-acc-buscar { flex: 1 1 16rem; min-width: min(10rem, 100%); }
+.sgc-acc-toolbar select { flex: 0 1 14rem; }
+
+/* Tarjetas de persona. */
+.sgc-acc-grid {
+  display: grid; gap: var(--esp-3);
+  grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
+}
+.sgc-acc-card {
+  display: flex; align-items: flex-start; gap: var(--esp-3);
+  padding: var(--esp-3) var(--esp-4); background: var(--superficie);
+  border: 1px solid var(--borde); border-left: 3px solid var(--texto-3);
+  border-radius: var(--radio-md);
+}
+.sgc-acc-card--gobierno { border-left-color: var(--primario); }
+.sgc-acc-card--lectura { border-left-color: var(--info); }
+.sgc-acc-card--operativo { border-left-color: var(--texto-3); }
+.sgc-acc-card--vacia { opacity: 0.72; border-left-color: var(--alerta); }
+.sgc-acc-card__avatar {
+  flex: 0 0 auto; width: 2.5rem; height: 2.5rem; border-radius: var(--radio-full);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: var(--texto-sm);
+  background: var(--superficie-2); color: var(--texto-2);
+}
+.sgc-acc-card__avatar--gobierno { background: var(--primario-suave); color: var(--primario-intenso, var(--primario)); }
+.sgc-acc-card__avatar--lectura { background: var(--info-suave); color: var(--info); }
+.sgc-acc-card__info { flex: 1 1 auto; min-width: 0; }
+.sgc-acc-card__nombre { font-weight: 600; color: var(--texto); }
+.sgc-acc-card__email { font-size: var(--texto-xs); color: var(--texto-3); word-break: break-all; }
+.sgc-acc-card__meta { display: flex; flex-wrap: wrap; gap: var(--esp-1); margin-top: var(--esp-2); }
+.sgc-acc-chip {
+  display: inline-block; font-size: var(--texto-xs); font-weight: 650;
+  padding: 1px var(--esp-2); border-radius: var(--radio-full);
+  background: var(--superficie-2); color: var(--texto-2);
+}
+.sgc-acc-chip--gobierno { background: var(--primario-suave); color: var(--primario-intenso, var(--primario)); }
+.sgc-acc-chip--lectura { background: var(--info-suave); color: var(--info); }
+.sgc-acc-chip--operativo { background: var(--superficie-2); color: var(--texto-2); }
+.sgc-acc-chip--alerta { background: var(--alerta-suave); color: var(--alerta); }
+.sgc-acc-chip--critico { background: var(--critico-suave); color: var(--critico); }
+.sgc-acc-chip--neutro { background: var(--superficie-2); color: var(--texto-2); }
+.sgc-acc-card__acciones {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: var(--esp-1); align-items: stretch;
+}
+@media (max-width: 560px) {
+  .sgc-acc-card { flex-wrap: wrap; }
+  .sgc-acc-card__acciones { flex-direction: row; flex-wrap: wrap; width: 100%; }
 }
 
 /* Confidenciales: una tarjeta por documento restringido, con su lista de
