@@ -4436,3 +4436,13 @@
   margin: 0; color: var(--texto); font: var(--t-body);
   max-width: 75ch; white-space: pre-wrap;
 }
+
+/* --- Datos de la persona: agrupados por tema -----------------------------
+   Antes eran 8 campos en una sola grilla plana sin ningún orden -- "Cargo"
+   podía traer una cláusula entre paréntesis y se envolvía en 3 líneas dentro
+   de una columna de ~11rem, dejando huecos en las columnas cortas de al
+   lado (Tipo, Área...). "Cargo" y "Tipo" ya se repiten arriba (subtítulo y
+   badge junto al nombre), así que se sacan de la grilla y el resto se separa
+   en dos bloques con sentido: lo laboral y el contacto/reporte. */
+.sgc-datos { display: flex; flex-direction: column; gap: var(--esp-5); }
+.sgc-datos > .sgc-seccion > .sgc-ficha { margin: 0; }

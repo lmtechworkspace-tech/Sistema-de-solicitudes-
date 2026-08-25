@@ -5098,6 +5098,16 @@ button {
   max-width: 75ch; white-space: pre-wrap;
 }
 
+/* --- Datos de la persona: agrupados por tema -----------------------------
+   Antes eran 8 campos en una sola grilla plana sin ningún orden -- "Cargo"
+   podía traer una cláusula entre paréntesis y se envolvía en 3 líneas dentro
+   de una columna de ~11rem, dejando huecos en las columnas cortas de al
+   lado (Tipo, Área...). "Cargo" y "Tipo" ya se repiten arriba (subtítulo y
+   badge junto al nombre), así que se sacan de la grilla y el resto se separa
+   en dos bloques con sentido: lo laboral y el contacto/reporte. */
+.sgc-datos { display: flex; flex-direction: column; gap: var(--esp-5); }
+.sgc-datos > .sgc-seccion > .sgc-ficha { margin: 0; }
+
 </style>
   <style>
 /* dashboard.css — Backoffice: KPIs, graficos, tabla, detalle (§12.4/12.5). */
@@ -18507,17 +18517,34 @@ var Iconos = (function () {
           Componentes.boton({ texto: 'Quitar del alcance del SGC', variante: 'sutil', clase: 'js-sgc-quitar-alcance' }) +
         '</div>'
       : '';
-    return '<dl class="sgc-ficha">' +
-      campoFicha_('Correo', p.usuario_email) +
-      campoFicha_('RUT', p.rut) +
-      campoFicha_('Cargo', p.cargo) +
-      campoFicha_('Tipo', TIPO_PERSONA_ETIQUETA[p.tipo] || p.tipo) +
-      campoFicha_('Área', p.area_id) +
-      campoFicha_('Jefatura directa', p.jefatura_email) +
-      campoFicha_('Subrogante', p.subrogante_email) +
-      campoFicha_('Fecha de ingreso', p.fecha_ingreso ? fechaCorta_(p.fecha_ingreso) : '') +
-      (p.estado === 'DESVINCULADO' ? campoFicha_('Desvinculación', fechaCorta_(p.fecha_desvinculacion)) : '') +
-    '</dl>' + acciones;
+    // v16.4: antes era una sola grilla plana de 8 campos sin ningun orden --
+    // "Cargo" (puede traer una clausula entre parentesis, ej. "Prevencionista
+    // de Riesgos (Servicios a Clientes segun DOC-05)") caia en una columna de
+    // ~11rem y se envolvia en 3 lineas, dejando huecos en las columnas cortas
+    // de al lado. Ademas "Cargo" y "Tipo" ya se ven arriba (subtitulo y badge
+    // junto al nombre) -- repetirlos aca no agrega nada, solo genera el
+    // desborde. Se saca "Cargo" de la grilla y se agrupan los campos que
+    // quedan en dos bloques con sentido: lo laboral y el contacto/reporte.
+    return '<div class="sgc-datos">' +
+      '<div class="sgc-seccion">' +
+        '<h3 class="sgc-seccion__titulo">Información laboral</h3>' +
+        '<dl class="sgc-ficha">' +
+          campoFicha_('Tipo', TIPO_PERSONA_ETIQUETA[p.tipo] || p.tipo) +
+          campoFicha_('Área', p.area_id) +
+          campoFicha_('Fecha de ingreso', p.fecha_ingreso ? fechaCorta_(p.fecha_ingreso) : '') +
+          (p.estado === 'DESVINCULADO' ? campoFicha_('Desvinculación', fechaCorta_(p.fecha_desvinculacion)) : '') +
+        '</dl>' +
+      '</div>' +
+      '<div class="sgc-seccion">' +
+        '<h3 class="sgc-seccion__titulo">Contacto y jefatura</h3>' +
+        '<dl class="sgc-ficha">' +
+          campoFicha_('Correo', p.usuario_email) +
+          campoFicha_('RUT', p.rut) +
+          campoFicha_('Jefatura directa', p.jefatura_email) +
+          campoFicha_('Subrogante', p.subrogante_email) +
+        '</dl>' +
+      '</div>' +
+    '</div>' + acciones;
   }
 
   function pintarDescriptor_(data) {
