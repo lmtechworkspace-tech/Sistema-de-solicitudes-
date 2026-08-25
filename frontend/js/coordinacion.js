@@ -350,7 +350,7 @@
         (k.animo_promedio == null ? '' : Componentes.kpi({ etiqueta: 'Ánimo promedio', valor: k.animo_promedio + '/5' })) +
         '</div>' +
         Componentes.tarjeta('<h3>Clima emocional</h3>' +
-          '<p class="sigso-ayuda">Autorreportado y opcional al registrar la participación. Agregado del período: nunca se muestra por persona.</p>' +
+          '<p class="sigso-ayuda">Autorreportado y opcional al registrar la participación.</p>' +
           climaEmocionalHtml_(d.clima_emocional)) +
         Componentes.tarjeta('<h3>Motivos de inasistencia</h3>' + tablaSimple_(d.motivos, 'motivo', 'cantidad', 'Sin justificaciones en el periodo.')) +
         Componentes.tarjeta('<h3>Participación por área</h3>' + tablaSimple_(d.por_area, 'area', 'participaciones', 'Sin participaciones en el periodo.')) +
@@ -363,8 +363,9 @@
   }
 
   // v-next: "reporte de las caras" -- distribucion agregada de la
-  // micro-encuesta de bienestar (1..5). RN-708: agregado del periodo
-  // completo, jamas por persona (mismo criterio que rachasAreaHtml_ arriba).
+  // micro-encuesta de bienestar (1..5), y (decision de producto,
+  // 2026-08-25) el detalle por persona debajo -- Coordinacion y Gerencia
+  // pidieron poder revisarlo por persona, no solo el agregado.
   var ANIMO_EMOJI_COORD_ = ['😞', '🙁', '😐', '🙂', '😄'];
   var ANIMO_ETIQUETA_COORD_ = ['Muy mal', 'Mal', 'Regular', 'Bien', 'Muy bien'];
   function climaEmocionalHtml_(clima) {
@@ -380,7 +381,21 @@
     });
     return Componentes.barras(filas) +
       '<p class="sigso-ayuda" style="margin-top:0.5rem;">' + clima.respuestas +
-      (clima.respuestas === 1 ? ' participación incluyó' : ' participaciones incluyeron') + ' esta respuesta.</p>';
+      (clima.respuestas === 1 ? ' participación incluyó' : ' participaciones incluyeron') + ' esta respuesta.</p>' +
+      detalleAnimoHtml_(clima.detalle);
+  }
+
+  function detalleAnimoHtml_(detalle) {
+    if (!detalle || !detalle.length) return '';
+    var filas = detalle.map(function (d) {
+      return '<tr><td>' + Componentes.escaparHtml(d.fecha) + '</td>' +
+        '<td>' + Componentes.escaparHtml(d.nombre) + '</td>' +
+        '<td>' + Componentes.escaparHtml(d.area) + '</td>' +
+        '<td>' + ANIMO_EMOJI_COORD_[d.valor - 1] + ' ' + Componentes.escaparHtml(ANIMO_ETIQUETA_COORD_[d.valor - 1]) + '</td></tr>';
+    }).join('');
+    return '<h4 style="margin-top:1rem;">Detalle por persona</h4>' +
+      '<table class="sigso-tabla"><thead><tr><th>Fecha</th><th>Nombre</th><th>Área</th><th>Respuesta</th></tr></thead>' +
+      '<tbody>' + filas + '</tbody></table>';
   }
 
   // v-next: boton "Descargar PDF" del reporte de cumplimiento -- mismo patron

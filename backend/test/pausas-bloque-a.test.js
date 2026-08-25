@@ -123,7 +123,7 @@ test('registrarAsistencia guarda "animo" (1..5) si viene valido, y lo deja vacio
   assert.equal(ctx3.leerFilas_('PAUSAS_ASISTENCIA')[0].animo, ''); // fuera de rango -- se ignora, no rompe
 });
 
-test('calcularReportePausas_ expone animo_promedio agregado, nunca por persona', () => {
+test('calcularReportePausas_ expone animo_promedio agregado', () => {
   const ctx = load({
     pausas: [['PA-1', 'HP', hoy(), '09:30', '', '', '', 'Realizada', 10, '']],
     asistencia: [
@@ -133,8 +133,31 @@ test('calcularReportePausas_ expone animo_promedio agregado, nunca por persona',
   });
   const res = ctx.Pausas.getReporteGerencia({}, ADMIN);
   assert.equal(res.kpis.animo_promedio, 3);
-  // El reporte agregado no debe filtrar el "animo" por persona en ningun lado.
-  assert.ok(!JSON.stringify(res).includes('juan@hp.cl'));
+});
+
+// v-next (decision de producto, 2026-08-25): Coordinacion y Gerencia
+// pidieron poder revisar el animo POR PERSONA -- revierte a proposito la
+// lectura original de RN-708 para ESTE reporte puntual (ver el comentario
+// junto a "detalleAnimo" en calcularReportePausas_, Pausas.gs). Antes esta
+// suite tenia un test que afirmaba lo contrario ("nunca por persona");
+// se reemplaza por este, que confirma el detalle correcto.
+test('calcularReportePausas_ expone clima_emocional.detalle por persona (fecha, nombre, area, empresa)', () => {
+  const ctx = load({
+    pausas: [['PA-1', 'HP', hoy(), '09:30', '', '', '', 'Realizada', 10, '']],
+    asistencia: [
+      ['R1', 'PA-1', 'T1', 'juan@hp.cl', new Date().toISOString(), 'participo', '', '', true, 'autoservicio', 4],
+      // T2 no dejo animo -- no debe aparecer en el detalle.
+      ['R2', 'PA-1', 'T2', 'ana@hp.cl', new Date().toISOString(), 'participo', '', '', true, 'autoservicio', '']
+    ]
+  });
+  const res = ctx.Pausas.getReporteGerencia({}, ADMIN);
+  assert.equal(res.clima_emocional.detalle.length, 1);
+  const fila = res.clima_emocional.detalle[0];
+  assert.equal(fila.nombre, 'Juan');
+  assert.equal(fila.area, 'Bodega');
+  assert.equal(fila.empresa_id, 'HP');
+  assert.equal(fila.fecha, hoy());
+  assert.equal(fila.valor, 4);
 });
 
 test('calcularReportePausas_ da animo_promedio null si nadie respondio la encuesta', () => {
@@ -146,9 +169,8 @@ test('calcularReportePausas_ da animo_promedio null si nadie respondio la encues
   assert.equal(res.kpis.animo_promedio, null);
 });
 
-// v-next ("reporte de las caras"): la distribucion agregada por nivel
-// (1..5), nunca por persona -- mismo RN-708 que animo_promedio.
-test('calcularReportePausas_ expone clima_emocional.distribucion agregada, nunca por persona', () => {
+// v-next ("reporte de las caras"): la distribucion agregada por nivel (1..5).
+test('calcularReportePausas_ expone clima_emocional.distribucion agregada', () => {
   const ctx = load({
     pausas: [['PA-1', 'HP', hoy(), '09:30', '', '', '', 'Realizada', 10, '']],
     asistencia: [
@@ -171,7 +193,6 @@ test('calcularReportePausas_ expone clima_emocional.distribucion agregada, nunca
     assert.equal(d.cantidad, esperado[i].cantidad);
     assert.equal(d.pct, esperado[i].pct);
   });
-  assert.ok(!JSON.stringify(res).includes('juan@hp.cl'));
 });
 
 test('calcularReportePausas_ da clima_emocional.respuestas 0 si nadie respondio', () => {
@@ -205,8 +226,10 @@ test('descargarReporteGerenciaPdf devuelve el PDF en base64, con el clima emocio
   assert.match(html, /Muy bien/); // etiqueta de texto junto al emoji (nivel 5)
   assert.match(html, /Estaba en terreno/); // motivo de inasistencia
   assert.match(html, /Racha de equipo por área/);
-  // RN-708: el HTML del PDF tampoco debe identificar personas.
-  assert.ok(!html.includes('juan@hp.cl'));
+  // Decision de producto (2026-08-25): el detalle por persona SI va en el
+  // PDF -- Coordinacion y Gerencia pidieron poder revisarlo por persona.
+  assert.match(html, /Detalle por persona/);
+  assert.match(html, /Juan/); // nombre de quien dejo la respuesta de nivel 5
 });
 
 test('descargarReporteGerenciaPdf exige ser GERENCIA/ADM con pausas configuradas', () => {

@@ -429,8 +429,10 @@ var Pausas = {
     // v7.2 (Bloque A, mejora A6): micro-encuesta de bienestar, OPCIONAL --
     // 1..5, nunca obligatoria (no debe ser una barrera para registrar la
     // participacion). Solo se guarda si viene un numero valido en ese rango;
-    // si no, queda vacia. Nunca se muestra por persona (RN-708) -- solo
-    // promedio agregado en calcularReportePausas_.
+    // si no, queda vacia. Se agrega en calcularReportePausas_ (promedio y
+    // distribucion) y, por decision de producto (2026-08-25), tambien se
+    // expone el detalle por persona a Coordinacion y Gerencia -- ver el
+    // comentario junto a "detalleAnimo" en calcularReportePausas_.
     var animo = enteroPositivoPausas_(data.animo);
     if (animo !== null && (animo < 1 || animo > 5)) animo = null;
 
@@ -1453,15 +1455,15 @@ function calcularReportePausas_(empresaIds, desde, hasta) {
   var participaciones = registros.filter(function (r) { return r.estado === 'participo'; });
   var justificaciones = registros.filter(function (r) { return r.estado === 'no_participo'; });
 
-  // v7.2 (Bloque A, mejora A6): bienestar -- SOLO promedio agregado, nunca
-  // por persona (RN-708: nunca rankear individuos). null si nadie dejo animo.
+  // v7.2 (Bloque A, mejora A6): bienestar -- promedio agregado. null si
+  // nadie dejo animo. (Hasta 2026-08-24 esto era ademas "nunca por persona"
+  // -- ver el detalle por persona mas abajo, agregado por decision de
+  // producto del 2026-08-25.)
   var animos = registros.map(function (r) { return Number(r.animo); }).filter(function (n) { return n >= 1 && n <= 5; });
   var animoPromedio = animos.length === 0 ? null
     : Math.round((animos.reduce(function (a, b) { return a + b; }, 0) / animos.length) * 10) / 10;
   // v-next ("reporte de las caras"): la DISTRIBUCION agregada (cuantas
-  // respuestas cayeron en cada una de las 5 caras), no solo el promedio --
-  // sigue siendo un agregado del periodo completo, jamas por persona
-  // (RN-708, mismo criterio que animoPromedio arriba).
+  // respuestas cayeron en cada una de las 5 caras), no solo el promedio.
   var animoDistribucion = [1, 2, 3, 4, 5].map(function (valor) {
     var cantidad = animos.filter(function (a) { return a === valor; }).length;
     return { valor: valor, cantidad: cantidad, pct: animos.length === 0 ? 0 : Math.round((cantidad / animos.length) * 1000) / 10 };
@@ -1477,10 +1479,15 @@ function calcularReportePausas_(empresaIds, desde, hasta) {
     .sort(function (a, b) { return b.cantidad - a.cantidad; });
 
   // Participacion por area (usa el area del roster; si el registro no matchea
-  // el roster, cae en "(sin area)").
+  // el roster, cae en "(sin area)"). De paso arma nombrePorCorreo, que
+  // reusa el detalle por persona del clima emocional (mas abajo).
   var areaPorCorreo = {};
+  var nombrePorCorreo = {};
   leerFilasSeguro_(SHEETS.PAUSAS_TRABAJADORES).forEach(function (t) {
-    if (setEmp[String(t.empresa_id)]) areaPorCorreo[String(t.email).toLowerCase()] = t.area || '(sin área)';
+    if (!setEmp[String(t.empresa_id)]) return;
+    var correo = String(t.email).toLowerCase();
+    areaPorCorreo[correo] = t.area || '(sin área)';
+    nombrePorCorreo[correo] = t.nombre || t.email;
   });
   var porArea = {};
   participaciones.forEach(function (r) {
@@ -1489,6 +1496,28 @@ function calcularReportePausas_(empresaIds, desde, hasta) {
   });
   var porAreaLista = Object.keys(porArea).map(function (a) { return { area: a, participaciones: porArea[a] }; })
     .sort(function (a, b) { return b.participaciones - a.participaciones; });
+
+  // v-next (decision de producto, 2026-08-25): Coordinacion y Gerencia
+  // pidieron ver el animo POR PERSONA, no solo agregado -- revierte a
+  // proposito la lectura de RN-708 para ESTE reporte puntual (RN-708 nacio en
+  // Actividades/v7.0 para prohibir RANKINGS COMPARATIVOS entre personas; aca
+  // no se ordena ni compara a nadie contra nadie, solo se lista quien
+  // respondio que en que dia -- decision explicita del cliente, no un
+  // descuido). El agregado de arriba (kpis.animo_promedio, distribucion) se
+  // mantiene igual y sigue siendo lo primero que se ve.
+  var detalleAnimo = registros
+    .filter(function (r) { return Number(r.animo) >= 1 && Number(r.animo) <= 5; })
+    .map(function (r) {
+      var pausa = idsPausa[r.pausa_id];
+      return {
+        fecha: pausa ? claveFechaPausa_(pausa.fecha) : '',
+        empresa_id: pausa ? pausa.empresa_id : '',
+        nombre: nombrePorCorreo[String(r.email).toLowerCase()] || r.email,
+        area: areaPorCorreo[String(r.email).toLowerCase()] || '(sin área)',
+        valor: Number(r.animo)
+      };
+    })
+    .sort(function (a, b) { return a.fecha < b.fecha ? 1 : (a.fecha > b.fecha ? -1 : 0); });
 
   return {
     periodo: { desde: desdeC, hasta: hastaC },
@@ -1516,7 +1545,7 @@ function calcularReportePausas_(empresaIds, desde, hasta) {
     // bienestar. `respuestas` es el total de registros con animo valido (el
     // denominador de los `pct` de arriba) -- se muestra para dejar claro que
     // es opcional y no todos responden.
-    clima_emocional: { respuestas: animos.length, distribucion: animoDistribucion },
+    clima_emocional: { respuestas: animos.length, distribucion: animoDistribucion, detalle: detalleAnimo },
     pausas: pausas.map(function (p) {
       return {
         pausa_id: p.pausa_id, empresa_id: p.empresa_id, fecha: claveFechaPausa_(p.fecha),
@@ -1847,10 +1876,10 @@ function fichaResumenPausas_(k, totalPausas, empresasLabel) {
 }
 
 // "Reporte de las caras": distribucion agregada de la micro-encuesta de
-// bienestar (1..5), con una barra por nivel. RN-708: SOLO agregado del
-// periodo completo -- nunca una fila ni un dato que identifique a una
-// persona. El emoji va acompañado de una etiqueta de texto porque el
-// conversor HTML->PDF de Apps Script no garantiza fuentes de emoji a color.
+// bienestar (1..5), con una barra por nivel, y (debajo, tablaDetalleAnimoPausas_)
+// el detalle por persona -- decision de producto del 2026-08-25. El emoji va
+// acompañado de una etiqueta de texto porque el conversor HTML->PDF de Apps
+// Script no garantiza fuentes de emoji a color.
 var ANIMO_EMOJI_PAUSAS_ = ['😞', '🙁', '😐', '🙂', '😄']; // 😞 🙁 😐 🙂 😄
 var ANIMO_ETIQUETA_PAUSAS_ = ['Muy mal', 'Mal', 'Regular', 'Bien', 'Muy bien'];
 var BARRA_CLIMA_PAUSAS_PX = 220;
@@ -1873,10 +1902,34 @@ function bloqueClimaEmocionalPausas_(reporte) {
       '</tr>';
   }).join('');
   return '<table style="border-collapse:collapse;margin:0 0 6px;">' + filas + '</table>' +
-    '<p style="margin:0 0 18px;font-size:11px;color:' + DOC.FAINT + ';">Autorreportado y opcional — ' + clima.respuestas +
+    '<p style="margin:0 0 14px;font-size:11px;color:' + DOC.FAINT + ';">Autorreportado y opcional — ' + clima.respuestas +
     (clima.respuestas === 1 ? ' participación incluyó' : ' participaciones incluyeron') + ' esta respuesta' +
-    (reporte.kpis.animo_promedio == null ? '' : ' · promedio ' + reporte.kpis.animo_promedio + '/5') +
-    '. Nunca se muestra por persona.</p>';
+    (reporte.kpis.animo_promedio == null ? '' : ' · promedio ' + reporte.kpis.animo_promedio + '/5') + '.</p>' +
+    tablaDetalleAnimoPausas_(clima.detalle);
+}
+
+// v-next: detalle por persona (decision de producto 2026-08-25, ver el
+// comentario en calcularReportePausas_ sobre por que esto ya no respeta la
+// lectura original de RN-708 para este reporte puntual).
+function tablaDetalleAnimoPausas_(detalle) {
+  if (!detalle || !detalle.length) return '';
+  var filas = detalle.map(function (d) {
+    var etiqueta = ANIMO_EMOJI_PAUSAS_[d.valor - 1] + ' ' + ANIMO_ETIQUETA_PAUSAS_[d.valor - 1];
+    return '<tr>' +
+      '<td style="padding:5px 10px;border-bottom:1px solid ' + DOC.HAIRLINE + ';color:' + DOC.INK + ';white-space:nowrap;">' + escaparHtml_(d.fecha) + '</td>' +
+      '<td style="padding:5px 10px;border-bottom:1px solid ' + DOC.HAIRLINE + ';color:' + DOC.INK + ';">' + escaparHtml_(d.nombre) + '</td>' +
+      '<td style="padding:5px 10px;border-bottom:1px solid ' + DOC.HAIRLINE + ';color:' + DOC.INK + ';">' + escaparHtml_(d.area) + '</td>' +
+      '<td style="padding:5px 10px;border-bottom:1px solid ' + DOC.HAIRLINE + ';color:' + DOC.INK + ';white-space:nowrap;">' + escaparHtml_(d.empresa_id) + '</td>' +
+      '<td style="padding:5px 10px;border-bottom:1px solid ' + DOC.HAIRLINE + ';color:' + DOC.INK + ';white-space:nowrap;">' + etiqueta + '</td>' +
+      '</tr>';
+  }).join('');
+  var encabezados = ['Fecha', 'Nombre', 'Área', 'Empresa', 'Respuesta'];
+  return '<p style="margin:0 0 6px;font-size:10px;font-weight:bold;letter-spacing:0.8px;text-transform:uppercase;color:' + DOC.MUTED + ';">Detalle por persona</p>' +
+    '<table width="100%" style="border-collapse:collapse;font-size:12px;margin:0 0 18px;"><thead><tr>' +
+    encabezados.map(function (e) {
+      return '<th style="text-align:left;padding:0 10px 6px;font-size:10px;letter-spacing:0.5px;text-transform:uppercase;color:' + DOC.MUTED + ';border-bottom:2px solid ' + DOC.NAVY + ';">' + e + '</th>';
+    }).join('') +
+    '</tr></thead><tbody>' + filas + '</tbody></table>';
 }
 
 // Tabla generica de 2 columnas con encabezado (motivos, participacion por

@@ -203,7 +203,7 @@
         '</div>' +
         '<h4>Tendencia semanal</h4><div class="sigso-grafico-contenedor"><canvas id="ger-grafico-tendencia-pausas" height="90"></canvas></div>' +
         '<h4>Clima emocional</h4>' +
-        '<p class="sigso-ayuda">Autorreportado y opcional al registrar la participación. Agregado del período: nunca se muestra por persona.</p>' +
+        '<p class="sigso-ayuda">Autorreportado y opcional al registrar la participación.</p>' +
         climaEmocionalPausasGerencia_(d.clima_emocional) +
         '<h4>Motivos de inasistencia</h4>' + tablaPausasGerencia_(d.motivos, 'motivo', 'cantidad', 'Sin justificaciones en el periodo.') +
         '<h4>Participación por área</h4>' + tablaPausasGerencia_(d.por_area, 'area', 'participaciones', 'Sin participaciones en el periodo.');
@@ -214,8 +214,10 @@
   }
 
   // v-next: "reporte de las caras" -- distribucion agregada de la
-  // micro-encuesta de bienestar (1..5). RN-708: agregado del periodo
-  // completo, jamas por persona.
+  // micro-encuesta de bienestar (1..5), y (decision de producto,
+  // 2026-08-25) el detalle por persona debajo -- Coordinacion y Gerencia
+  // pidieron poder revisarlo por persona, no solo el agregado. Gerencia
+  // ademas suma la columna Empresa (abarca mas de una).
   var ANIMO_EMOJI_GER_ = ['😞', '🙁', '😐', '🙂', '😄'];
   var ANIMO_ETIQUETA_GER_ = ['Muy mal', 'Mal', 'Regular', 'Bien', 'Muy bien'];
   function climaEmocionalPausasGerencia_(clima) {
@@ -231,7 +233,22 @@
     });
     return Componentes.barras(filas) +
       '<p class="sigso-ayuda" style="margin-top:0.5rem;">' + clima.respuestas +
-      (clima.respuestas === 1 ? ' participación incluyó' : ' participaciones incluyeron') + ' esta respuesta.</p>';
+      (clima.respuestas === 1 ? ' participación incluyó' : ' participaciones incluyeron') + ' esta respuesta.</p>' +
+      detalleAnimoPausasGerencia_(clima.detalle);
+  }
+
+  function detalleAnimoPausasGerencia_(detalle) {
+    if (!detalle || !detalle.length) return '';
+    var filas = detalle.map(function (d) {
+      return '<tr><td>' + Componentes.escaparHtml(d.fecha) + '</td>' +
+        '<td>' + Componentes.escaparHtml(d.nombre) + '</td>' +
+        '<td>' + Componentes.escaparHtml(d.area) + '</td>' +
+        '<td>' + Componentes.escaparHtml(d.empresa_id) + '</td>' +
+        '<td>' + ANIMO_EMOJI_GER_[d.valor - 1] + ' ' + Componentes.escaparHtml(ANIMO_ETIQUETA_GER_[d.valor - 1]) + '</td></tr>';
+    }).join('');
+    return '<h4 style="margin-top:1rem;">Detalle por persona</h4>' +
+      '<table class="sigso-tabla"><thead><tr><th>Fecha</th><th>Nombre</th><th>Área</th><th>Empresa</th><th>Respuesta</th></tr></thead>' +
+      '<tbody>' + filas + '</tbody></table>';
   }
 
   // v-next: boton "Descargar PDF" del reporte de pausas de Gerencia -- mismo
