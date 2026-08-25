@@ -3728,7 +3728,10 @@ button {
    se reserva para lo accionable, que es su trabajo en el sistema. */
 .sgc-doc__codigo {
   font-family: ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
-  font-weight: 500; color: var(--texto-3); font-size: var(--texto-xs);
+  /* v16.3: era --texto-3 (2.95:1 medido -- bajo el minimo AA de 4.5:1 para
+     texto normal). --texto-2 da 5.7:1, mismo tono que el resto de los
+     metadatos del modulo (.sgc-seccion__ayuda, .sgc-hito__fecha...). */
+  font-weight: 500; color: var(--texto-2); font-size: var(--texto-xs);
   letter-spacing: .01em; flex: 0 0 auto;
 }
 /* El nombre ENVUELVE, no se corta.
@@ -3765,8 +3768,12 @@ button {
 }
 .sgc-ficha__campo { display: flex; flex-direction: column; gap: 2px; }
 .sgc-ficha__campo dt {
+  /* v16.3: medido en vivo -- 2.95:1, bajo el minimo AA (4.5:1) para texto
+     normal. Afecta CADA etiqueta de la ficha (CORREO, RUT, CARGO, TIPO...).
+     --texto-2 da 5.7:1 y es el mismo tono ya usado en el resto de las
+     etiquetas del rediseño v16 (.sgc-seccion__ayuda, .sgc-hito__fecha). */
   font-size: var(--texto-xs); font-weight: 700; letter-spacing: .06em;
-  text-transform: uppercase; color: var(--texto-3);
+  text-transform: uppercase; color: var(--texto-2);
 }
 .sgc-ficha__campo dd { margin: 0; color: var(--texto); }
 
@@ -5005,7 +5012,9 @@ button {
 }
 .sgc-doc-cab__ident {
   display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap;
-  margin: var(--esp-2) 0 0; font: var(--t-small); color: var(--texto-3);
+  /* v16.3: idem .sgc-doc__codigo -- --texto-3 medía 2.95:1 en el texto
+     plano ("Actualizado el ..."), bajo AA. */
+  margin: var(--esp-2) 0 0; font: var(--t-small); color: var(--texto-2);
 }
 .sgc-doc-cab__desc {
   margin: var(--esp-3) 0 0; font: var(--t-body); color: var(--texto-2);
@@ -5040,6 +5049,54 @@ button {
 :root[data-tema="oscuro"] .sgc-sev--critico { color: var(--critico); }
 :root[data-tema="oscuro"] .sgc-sev--alerta  { color: var(--alerta); }
 :root[data-tema="oscuro"] .sgc-sev--info    { color: var(--info); }
+
+/* ==========================================================================
+   v16.3 — Ficha de persona: pestañas con ícono, descriptor reestructurado
+   ========================================================================== */
+
+/* --- Pestañas de la ficha (Datos / Descriptor / Documentos / Inducción /
+   Competencias) ------------------------------------------------------------
+   Antes ".sigso-tab" no tenía NINGUNA regla propia: salían con el estilo
+   nativo del navegador (borde gris en bisel). Ahora es una barra de pestañas
+   subrayadas, con ícono -- se reconoce la sección sin leer la palabra. */
+.sgc-ficha-tabs {
+  display: flex; flex-wrap: wrap; gap: var(--esp-1);
+  border-bottom: 1px solid var(--borde);
+  margin: var(--esp-4) 0;
+}
+.sgc-ficha-tab {
+  display: flex; align-items: center; gap: var(--esp-2);
+  padding: var(--esp-3) var(--esp-3);
+  margin-bottom: -1px;
+  background: transparent; border: none; border-bottom: 2px solid transparent;
+  font: var(--t-body); font-weight: 500; color: var(--texto-2);
+  cursor: pointer; white-space: nowrap;
+  transition: color var(--mov-rapido), border-color var(--mov-rapido);
+}
+.sgc-ficha-tab:hover { color: var(--texto); }
+.sgc-ficha-tab:focus-visible { outline: none; box-shadow: var(--foco-anillo); border-radius: var(--radio-sm); }
+.sgc-ficha-tab--activo { color: var(--primario); border-bottom-color: var(--primario); font-weight: 600; }
+.sgc-ficha-tab__ico { display: flex; color: inherit; flex: 0 0 auto; opacity: .85; }
+.sgc-ficha-tab--activo .sgc-ficha-tab__ico { opacity: 1; }
+
+@media (max-width: 640px) {
+  .sgc-ficha-tabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+}
+
+/* --- Descriptor de cargo: campos de texto largo, a ancho completo ---------
+   Antes vivían en la misma grilla angosta que "Tipo: Interno" -- un párrafo
+   de Funciones ahí se envolvía en una columna de ~11rem. Ahora cada campo es
+   su propia sección, con el mismo lenguaje de etiqueta que .sgc-ficha__campo
+   (mayúsculas pequeñas) pero con espacio real para el texto debajo. */
+.sgc-descriptor { display: flex; flex-direction: column; gap: var(--esp-5); }
+.sgc-descriptor-campo__titulo {
+  font-size: var(--texto-xs); font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--texto-2); margin: 0 0 var(--esp-2);
+}
+.sgc-descriptor-campo__texto {
+  margin: 0; color: var(--texto); font: var(--t-body);
+  max-width: 75ch; white-space: pre-wrap;
+}
 
 </style>
   <style>

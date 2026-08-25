@@ -1628,6 +1628,15 @@
   function pintarFicha_(cont, data) {
     var p = data.persona;
     var baja = p.estado === 'DESVINCULADO';
+    // v16.3: cada pestaña con su ícono. Antes ".sigso-tab" no tenía NINGUNA
+    // regla propia en el CSS -- los botones salían con el estilo nativo del
+    // navegador (el borde gris en bisel de las capturas). Ahora usan
+    // ".sgc-ficha-tab" (mismo lenguaje visual que el resto del rediseño v16)
+    // y un ícono que ayuda a reconocer la sección de un vistazo.
+    var ICONO_FICHA_TAB = {
+      datos: 'persona', descriptor: 'portapapeles', documentos: 'documento',
+      induccion: 'tareas', competencias: 'diana'
+    };
     var PESTANAS = [
       { id: 'datos', texto: 'Datos' },
       { id: 'descriptor', texto: 'Descriptor de cargo' },
@@ -1635,10 +1644,15 @@
       { id: 'induccion', texto: 'Inducción' },
       { id: 'competencias', texto: 'Competencias' }
     ];
-    var tabs = PESTANAS.map(function (t) {
-      return '<button type="button" class="sigso-tab js-sgc-ficha-tab' +
-        (t.id === pestanaFicha_ ? ' sigso-tab--activo' : '') + '" data-tab="' + t.id + '">' + t.texto + '</button>';
-    }).join('');
+    var tabs = '<div class="sgc-ficha-tabs" role="tablist">' + PESTANAS.map(function (t) {
+      var activo = t.id === pestanaFicha_;
+      return '<button type="button" role="tab" aria-selected="' + (activo ? 'true' : 'false') +
+        '" class="sgc-ficha-tab js-sgc-ficha-tab' + (activo ? ' sgc-ficha-tab--activo' : '') +
+        '" data-tab="' + t.id + '">' +
+        '<span class="sgc-ficha-tab__ico">' + Iconos.svg(ICONO_FICHA_TAB[t.id] || 'documento', { tam: 16 }) + '</span>' +
+        '<span>' + Componentes.escaparHtml(t.texto) + '</span>' +
+      '</button>';
+    }).join('') + '</div>';
 
     var cuerpo = '';
     if (pestanaFicha_ === 'datos') cuerpo = pintarDatosPersona_(data);
@@ -1664,7 +1678,7 @@
       (baja
         ? Componentes.alerta('Esta persona ya no está vigente. Su ficha se conserva como historial del SGC.', 'aviso')
         : '') +
-      '<div class="sigso-tabs">' + tabs + '</div>' +
+      tabs +
       '<div class="sgc-cuerpo">' + cuerpo + '</div>';
 
     var volverPersonas = cont.querySelector('.js-sgc-volver-personas');
@@ -1706,20 +1720,35 @@
   }
 
   function pintarDescriptor_(data) {
+    var p = data.persona;
     var d = data.descriptor_vigente;
-    var acciones = puedeGestionar_
+    // v16.3: "Editar"/"Nueva versión" son trabajo del Encargado -- se quedan
+    // gateadas a puedeGestionar_. "Ver archivo"/"Descargar archivo" NO son
+    // gestión: son la persona pidiendo SU PROPIO descriptor (o su jefatura, o
+    // quien gobierna). El backend ya lo permite así (descargarDescriptor usa
+    // el mismo permiso que ver la ficha, puedeVerPersona_) -- el bug real
+    // era que este botón sólo se dibujaba si puedeGestionar_, así que la
+    // propia persona nunca lo veía, aunque el backend jamás se lo negara.
+    var accionesGestion = puedeGestionar_
       ? '<div class="sgc-acciones">' +
           (d ? Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-sgc-descriptor-editar' }) : '') +
           Componentes.boton({ texto: d ? 'Nueva versión del descriptor' : '+ Crear descriptor', variante: d ? 'sutil' : undefined, clase: 'js-sgc-descriptor' }) +
-          (d && d.archivo_id ? Componentes.boton({ texto: 'Descargar archivo', icono: 'descargar', variante: 'sutil', clase: 'js-sgc-descriptor-bajar' }) : '') +
         '</div>'
       : '';
     if (!d) {
       return Componentes.vacio({
         texto: 'Esta persona todavía no tiene descriptor de cargo.',
         detalle: 'El descriptor (FO-PRO-02-01) define qué se espera del cargo: es la base para evaluar competencia.'
-      }) + acciones;
+      }) + accionesGestion;
     }
+    var accionesArchivo = d.archivo_id
+      ? '<div class="sgc-acciones">' +
+          (d.archivo_mime === 'application/pdf'
+            ? Componentes.boton({ texto: 'Ver', variante: 'secundario', clase: 'js-sgc-descriptor-ver' })
+            : '') +
+          Componentes.boton({ texto: 'Descargar archivo', icono: 'descargar', variante: 'sutil', clase: 'js-sgc-descriptor-bajar' }) +
+        '</div>'
+      : '';
     var historial = (data.descriptores || []).length > 1
       ? '<h3 class="sgc-sub">Versiones anteriores</h3><div class="sgc-lista">' +
         (data.descriptores || []).filter(function (x) { return !(x.vigente === true || x.vigente === 'TRUE'); })
@@ -1731,23 +1760,69 @@
             '</div></div>';
           }).join('') + '</div>'
       : '';
-    return '<div class="sgc-doc__top" style="margin-bottom:.8rem">' +
+
+    // v16.3 -- REESTRUCTURACIÓN VISUAL.
+    //
+    // Antes las 7 preguntas del descriptor (4 de texto largo + 3 de dato
+    // corto) vivían en LA MISMA grilla de columnas angostas (`.sgc-ficha`,
+    // pensada para pares etiqueta/valor cortos como "Tipo: Interno"). Meter
+    // ahí un párrafo de Funciones o Responsabilidades lo partía en una
+    // columna de ~11rem: exactamente la pared de texto envuelto que se ve en
+    // capturas reales. Ahora:
+    //   1. identidad (versión, estado, fecha) + acciones de archivo, arriba;
+    //   2. los 4 campos de texto largo, cada uno a ancho completo con su
+    //      propio título -- se leen como una ficha de cargo real, no como
+    //      una hoja de cálculo;
+    //   3. los 3 datos cortos (nivel, formación, experiencia), en una fila
+    //      compacta aparte -- ahí SÍ tiene sentido la grilla;
+    //   4. los criterios de evaluación, agrupados bajo un único encabezado
+    //      que explica qué son (antes eran dos <h3> sueltos sin contexto);
+    //   5. acciones de gestión y versiones anteriores, al final.
+    var identidad = '<p class="sgc-doc-cab__ident">' +
         '<span class="sgc-doc__codigo">' + Componentes.escaparHtml(d.version) + '</span>' +
         Componentes.badge('Vigente', 'ok') +
-        '<span class="sigso-ayuda">' + fechaCorta_(d.fecha) + '</span>' +
-      '</div>' +
-      '<dl class="sgc-ficha">' +
-        campoFicha_('Objetivo del cargo', d.objetivo) +
-        campoFicha_('Funciones', d.funciones) +
-        campoFicha_('Responsabilidades', d.responsabilidades) +
-        campoFicha_('Habilidades requeridas', d.habilidades) +
-        campoFicha_('Nivel educacional', d.nivel_educacional) +
-        campoFicha_('Formación técnica', d.formacion_tecnica) +
-        campoFicha_('Experiencia requerida', d.experiencia) +
-      '</dl>' +
-      itemsDescriptorHtml_('Se califican en la evaluación (responsabilidades)', d.items_responsabilidades) +
-      itemsDescriptorHtml_('Se califican en la evaluación (habilidades)', d.items_habilidades) +
-      acciones + historial;
+        '<span>Actualizado el ' + fechaCorta_(d.fecha) + '</span>' +
+      '</p>';
+
+    var camposLargos = [
+      ['Objetivo del cargo', d.objetivo],
+      ['Funciones', d.funciones],
+      ['Responsabilidades', d.responsabilidades],
+      ['Habilidades requeridas', d.habilidades]
+    ].map(function (par) { return campoLargoDescriptor_(par[0], par[1]); }).join('');
+
+    var datosBreves = ['Nivel educacional', 'Formación técnica', 'Experiencia requerida']
+      .map(function (etq, i) { return campoFicha_(etq, [d.nivel_educacional, d.formacion_tecnica, d.experiencia][i]); }).join('');
+
+    var criterios = (d.items_responsabilidades && d.items_responsabilidades.length) ||
+      (d.items_habilidades && d.items_habilidades.length)
+      ? '<div class="sgc-seccion">' +
+          '<div class="sgc-seccion__cab">' +
+            '<h3 class="sgc-seccion__titulo">Cómo se evalúa este cargo</h3>' +
+            '<p class="sgc-seccion__ayuda">Los puntos que se califican en cada evaluación de desempeño</p>' +
+          '</div>' +
+          itemsDescriptorHtml_('Responsabilidades a evaluar', d.items_responsabilidades) +
+          itemsDescriptorHtml_('Habilidades a evaluar', d.items_habilidades) +
+        '</div>'
+      : '';
+
+    return '<div class="sgc-descriptor">' +
+      identidad + accionesArchivo +
+      camposLargos +
+      (datosBreves ? '<dl class="sgc-ficha">' + datosBreves + '</dl>' : '') +
+      criterios +
+      accionesGestion + historial +
+    '</div>';
+  }
+
+  // Campo de texto largo del descriptor (Objetivo, Funciones, Responsabilidades,
+  // Habilidades): a ancho completo con su propio título, no una celda de grilla.
+  function campoLargoDescriptor_(etiqueta, valor) {
+    if (!valor) return '';
+    return '<div class="sgc-descriptor-campo">' +
+      '<h3 class="sgc-descriptor-campo__titulo">' + Componentes.escaparHtml(etiqueta) + '</h3>' +
+      '<p class="sgc-descriptor-campo__texto">' + Componentes.escaparHtml(valor) + '</p>' +
+    '</div>';
   }
 
   function itemsDescriptorHtml_(titulo, items) {
@@ -1759,6 +1834,7 @@
   }
 
   function pintarDocsPersona_(data) {
+    var p = data.persona;
     var docs = data.documentos || [];
     var acciones = puedeGestionar_
       ? '<div class="sgc-cabecera">' + Componentes.boton({ texto: '+ Cargar documento', clase: 'js-sgc-doc-persona' }) + '</div>'
@@ -1774,6 +1850,12 @@
           '<span class="sigso-ayuda">' + fechaCorta_(x.fecha) + '</span>' +
         '</div>' +
         '<div class="sgc-acciones">' +
+          // v16.3: "Ver" antes que "Descargar" -- mismo criterio que el
+          // documento maestro (ver verDocumentoSgc_): sólo para PDF, porque
+          // es el único formato que todo navegador abre sin descargarlo igual.
+          (x.archivo_mime === 'application/pdf'
+            ? Componentes.boton({ texto: 'Ver', variante: 'secundario', clase: 'js-sgc-ver-doc', idx: x.doc_id })
+            : '') +
           Componentes.boton({ texto: 'Descargar', icono: 'descargar', variante: 'sutil', clase: 'js-sgc-bajar-doc', idx: x.doc_id }) +
           (puedeGestionar_ ? Componentes.boton({ texto: 'Quitar', variante: 'sutil', clase: 'js-sgc-quitar-doc', idx: x.doc_id }) : '') +
         '</div>' +
@@ -2256,6 +2338,10 @@
           descargarBase64Sgc_(r.data.contenido_base64, r.data.nombre_archivo, r.data.mime);
         });
     });
+    var descriptorVer = cont.querySelector('.js-sgc-descriptor-ver');
+    if (descriptorVer) descriptorVer.addEventListener('click', function () {
+      verArchivoSgc_('descargarDescriptorSgc', { persona_id: p.persona_id, descriptor_id: data.descriptor_vigente.descriptor_id });
+    });
 
     var docPersona = cont.querySelector('.js-sgc-doc-persona');
     if (docPersona) docPersona.addEventListener('click', function () { abrirFormularioDocPersona_(p); });
@@ -2271,6 +2357,11 @@
           }
           descargarBase64Sgc_(r.data.contenido_base64, r.data.nombre_archivo, r.data.mime);
         });
+      });
+    });
+    cont.querySelectorAll('.js-sgc-ver-doc').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        verArchivoSgc_('descargarDocumentoPersonaSgc', { persona_id: p.persona_id, doc_id: btn.getAttribute('data-idx') });
       });
     });
 
@@ -8922,18 +9013,21 @@
   // acceso a la persona. Sólo se ofrece para PDF: es el único formato que
   // todo navegador sabe mostrar sin descargarlo igual -- prometer "Ver" en
   // un .docx sería un botón que no cumple lo que dice.
-  function verDocumentoSgc_(documentoId, versionId) {
+  // v16.3: generico -- cualquier accion que devuelva {contenido_base64, mime}
+  // puede abrirse en pestaña nueva con esto (documento maestro, descriptor de
+  // cargo, documento personal). Antes esta lógica vivía sólo para el
+  // documento maestro; duplicarla por cada tipo de archivo era el camino a
+  // que uno de los tres quedara con un bug distinto.
+  function verArchivoSgc_(accion, datos) {
     // La pestaña se abre AHORA, dentro del gesto de clic. Si se abriera
     // después de que lleguen los bytes (dentro del .then), el navegador ya
     // no la asocia al clic y la trata como un popup no pedido -- bloqueada
     // en la mayoría de los navegadores.
     var ventana = window.open('', '_blank');
-    var datos = { documento_id: documentoId };
-    if (versionId) datos.version_id = versionId;
-    api_('descargarDocumentoSgc', datos).then(function (respuesta) {
+    api_(accion, datos).then(function (respuesta) {
       if (!respuesta || !respuesta.ok) {
         if (ventana) ventana.close();
-        Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo abrir el documento.', tipo: 'error' });
+        Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo abrir el archivo.', tipo: 'error' });
         return;
       }
       if (!ventana) {
@@ -8945,8 +9039,14 @@
       setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
     }).catch(function () {
       if (ventana) ventana.close();
-      Componentes.aviso({ texto: 'No se pudo conectar para abrir el documento.', tipo: 'error' });
+      Componentes.aviso({ texto: 'No se pudo conectar para abrir el archivo.', tipo: 'error' });
     });
+  }
+
+  function verDocumentoSgc_(documentoId, versionId) {
+    var datos = { documento_id: documentoId };
+    if (versionId) datos.version_id = versionId;
+    verArchivoSgc_('descargarDocumentoSgc', datos);
   }
 
   function fechaCorta_(iso) {
