@@ -38,6 +38,19 @@
       reporteAbierto_ = (p && p.seccion === 'reportes') ? (p.argumento || null) : null;
       documentoActivoId_ = null;
       personaActivaId_ = null;
+      // v16.1 -- bug real reportado: al entrar a Calidad recien (clic en el
+      // modulo del sidebar, o "#/calidad" sin item), el contenido mostraba
+      // "Inicio" pero NINGUN item del arbol quedaba marcado como activo --
+      // los 5 grupos (Personas, Seguimiento y mejora, Medicion, El sistema,
+      // Operacion) se veian todos colapsados y sin resaltar nada, como si la
+      // navegacion no supiera donde esta parado el usuario. Causa: esta
+      // funcion nunca llamaba a SigsoShell.publicarItem -- solo lo hacia
+      // irASeccion_ (al navegar DESPUES de haber entrado). Con la ruta
+      // pedida ya resuelta arriba (seccionActiva_/filtroTipo_/reporteAbierto_),
+      // alcanza con publicar una vez aca. Si se entro por un enlace directo
+      // (#/calidad/alcance), la ruta no cambia (escribirRuta no hace nada si
+      // ya coincide); si se entro por el modulo a secas, esto dice "inicio".
+      if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(rutaActiva_());
       render_();
     },
     // Respeta donde esta el usuario: el auto-refresco de fondo no debe
@@ -808,6 +821,11 @@
     var obsoleto = d.estado === 'OBSOLETO';
 
     var acciones = '<div class="sgc-acciones">' +
+      // v16.2: "Ver" antes que "Descargar" -- mirar el documento es el gesto
+      // más liviano; descargar una copia es un paso más. Sólo para PDF (ver
+      // verDocumentoSgc_).
+      (d.archivo_id && d.archivo_mime === 'application/pdf'
+        ? Componentes.boton({ texto: 'Ver', variante: 'secundario', clase: 'js-sgc-ver' }) : '') +
       (d.archivo_id ? Componentes.boton({ texto: 'Descargar', icono: 'descargar', clase: 'js-sgc-descargar' }) : '') +
       (puedeGestionar_ ? Componentes.boton({ texto: 'Nueva versión', variante: 'secundario', clase: 'js-sgc-version' }) : '') +
       (puedeGestionar_ ? Componentes.boton({ texto: 'Editar', variante: 'secundario', clase: 'js-sgc-editar' }) : '') +
@@ -883,7 +901,12 @@
             '</div>' +
             (v.cambios ? '<p class="sigso-ayuda">' + Componentes.escaparHtml(v.cambios) + '</p>' : '') +
             (puedeGestionar_ && !esVigente && v.archivo_id
-              ? Componentes.boton({ texto: 'Descargar esta versión', variante: 'sutil', clase: 'js-sgc-descargar-version', idx: v.version_id })
+              ? '<div class="sgc-acciones">' +
+                  (v.archivo_mime === 'application/pdf'
+                    ? Componentes.boton({ texto: 'Ver', variante: 'sutil', clase: 'js-sgc-ver-version', idx: v.version_id })
+                    : '') +
+                  Componentes.boton({ texto: 'Descargar esta versión', variante: 'sutil', clase: 'js-sgc-descargar-version', idx: v.version_id }) +
+                '</div>'
               : '') +
           '</div>';
         }).join('') + '</div>'
@@ -938,8 +961,15 @@
     var btnDescargar = cont.querySelector('.js-sgc-descargar');
     if (btnDescargar) btnDescargar.addEventListener('click', function () { descargar_(d.documento_id, null); });
 
+    var btnVer = cont.querySelector('.js-sgc-ver');
+    if (btnVer) btnVer.addEventListener('click', function () { verDocumentoSgc_(d.documento_id, null); });
+
     cont.querySelectorAll('.js-sgc-descargar-version').forEach(function (btn) {
       btn.addEventListener('click', function () { descargar_(d.documento_id, btn.getAttribute('data-idx')); });
+    });
+
+    cont.querySelectorAll('.js-sgc-ver-version').forEach(function (btn) {
+      btn.addEventListener('click', function () { verDocumentoSgc_(d.documento_id, btn.getAttribute('data-idx')); });
     });
 
     var btnVersion = cont.querySelector('.js-sgc-version');
@@ -8867,16 +8897,56 @@
     return 'No se pudo leer o subir el archivo. Revisa tu conexión e inténtalo de nuevo.';
   }
 
-  function descargarBase64Sgc_(base64, nombre, mime) {
+  function blobUrlSgc_(base64, mime) {
     var bytes = atob(base64);
     var arr = new Uint8Array(bytes.length);
     for (var i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
     var blob = new Blob([arr], { type: mime || 'application/octet-stream' });
-    var url = URL.createObjectURL(blob);
+    return URL.createObjectURL(blob);
+  }
+
+  function descargarBase64Sgc_(base64, nombre, mime) {
+    var url = blobUrlSgc_(base64, mime);
     var a = document.createElement('a');
     a.href = url; a.download = nombre || 'documento';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+
+  // v16.2: "Ver" abre el documento en una pestaña nueva en vez de forzar la
+  // descarga. Usa EL MISMO permiso y el mismo dato que "Descargar"
+  // (descargarDocumentoSgc revalida acceso en cada llamada) -- lo único que
+  // cambia es qué se hace con los bytes una vez en el navegador. No existe
+  // (ni debe existir) una URL fija al archivo en Drive: eso dejaría el
+  // documento accesible por el enlace aunque después se le revoque el
+  // acceso a la persona. Sólo se ofrece para PDF: es el único formato que
+  // todo navegador sabe mostrar sin descargarlo igual -- prometer "Ver" en
+  // un .docx sería un botón que no cumple lo que dice.
+  function verDocumentoSgc_(documentoId, versionId) {
+    // La pestaña se abre AHORA, dentro del gesto de clic. Si se abriera
+    // después de que lleguen los bytes (dentro del .then), el navegador ya
+    // no la asocia al clic y la trata como un popup no pedido -- bloqueada
+    // en la mayoría de los navegadores.
+    var ventana = window.open('', '_blank');
+    var datos = { documento_id: documentoId };
+    if (versionId) datos.version_id = versionId;
+    api_('descargarDocumentoSgc', datos).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        if (ventana) ventana.close();
+        Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo abrir el documento.', tipo: 'error' });
+        return;
+      }
+      if (!ventana) {
+        Componentes.aviso({ texto: 'El navegador bloqueó la pestaña nueva. Permite ventanas emergentes para SIGSO e inténtalo de nuevo.', tipo: 'error' });
+        return;
+      }
+      var url = blobUrlSgc_(respuesta.data.contenido_base64, respuesta.data.mime);
+      ventana.location = url;
+      setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    }).catch(function () {
+      if (ventana) ventana.close();
+      Componentes.aviso({ texto: 'No se pudo conectar para abrir el documento.', tipo: 'error' });
+    });
   }
 
   function fechaCorta_(iso) {
