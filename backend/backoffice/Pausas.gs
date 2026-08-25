@@ -958,6 +958,33 @@ var Pausas = {
     return calcularReportePausas_(empresas, data && data.desde, data && data.hasta);
   },
 
+  // PDF descargable del reporte de cumplimiento del COORDINADOR (mismo dato
+  // que getReporteCumplimiento) -- boton "Descargar PDF" del apartado
+  // Reportes de Coordinación de pausas. Mismo patron que
+  // OrdenTrabajo.descargar / ReporteActividades.descargarReporte.
+  descargarReporteCumplimientoPdf: function (data, contexto) {
+    var empresas = empresasQueCoordina_(contexto);
+    if (empresas.length === 0) {
+      return errorValidacion_('empresa_id', 'No coordinas ninguna empresa con pausas activas.');
+    }
+    var reporte = calcularReportePausas_(empresas, data && data.desde, data && data.hasta);
+    return armarDescargaReportePausas_(reporte);
+  },
+
+  // PDF descargable del reporte de GERENCIA (todas las empresas, o una con
+  // data.empresa_id) -- mismo dato que getReporteGerencia.
+  descargarReporteGerenciaPdf: function (data, contexto) {
+    var empresas = empresasVisiblesGerencia_(contexto);
+    if (data && data.empresa_id) {
+      empresas = empresas.filter(function (e) { return String(e) === String(data.empresa_id); });
+    }
+    if (empresas.length === 0) {
+      return errorValidacion_('empresa_id', 'No hay pausas activas configuradas.');
+    }
+    var reporte = calcularReportePausas_(empresas, data && data.desde, data && data.hasta);
+    return armarDescargaReportePausas_(reporte);
+  },
+
   // Reporte periodico por correo (a Gerencia + prevencionistas) con el PDF
   // adjunto. `periodo` = 'semanal' | 'mensual'.
   enviarReporteSemanalPausas: function () { return enviarReportePeriodicoPausas_('semanal'); },
@@ -1431,6 +1458,14 @@ function calcularReportePausas_(empresaIds, desde, hasta) {
   var animos = registros.map(function (r) { return Number(r.animo); }).filter(function (n) { return n >= 1 && n <= 5; });
   var animoPromedio = animos.length === 0 ? null
     : Math.round((animos.reduce(function (a, b) { return a + b; }, 0) / animos.length) * 10) / 10;
+  // v-next ("reporte de las caras"): la DISTRIBUCION agregada (cuantas
+  // respuestas cayeron en cada una de las 5 caras), no solo el promedio --
+  // sigue siendo un agregado del periodo completo, jamas por persona
+  // (RN-708, mismo criterio que animoPromedio arriba).
+  var animoDistribucion = [1, 2, 3, 4, 5].map(function (valor) {
+    var cantidad = animos.filter(function (a) { return a === valor; }).length;
+    return { valor: valor, cantidad: cantidad, pct: animos.length === 0 ? 0 : Math.round((cantidad / animos.length) * 1000) / 10 };
+  });
 
   // Motivos de inasistencia (top).
   var motivos = {};
@@ -1477,6 +1512,11 @@ function calcularReportePausas_(empresaIds, desde, hasta) {
     // independiente del filtro desde/hasta -- mismo criterio que la tendencia
     // mensual de Gerencia (calcularTendenciaTemporal_ en Gerencia.gs).
     tendencia: calcularTendenciaPausas_(empresaIds),
+    // "reporte de las caras": distribucion agregada de la micro-encuesta de
+    // bienestar. `respuestas` es el total de registros con animo valido (el
+    // denominador de los `pct` de arriba) -- se muestra para dejar claro que
+    // es opcional y no todos responden.
+    clima_emocional: { respuestas: animos.length, distribucion: animoDistribucion },
     pausas: pausas.map(function (p) {
       return {
         pausa_id: p.pausa_id, empresa_id: p.empresa_id, fecha: claveFechaPausa_(p.fecha),
@@ -1749,44 +1789,150 @@ function generarPdfReportePausas_(titulo, reporte) {
   }
 }
 
+// Empaqueta un reporte ya calculado (calcularReportePausas_) como la
+// respuesta { pdf_base64, filename } que esperan los botones "Descargar PDF"
+// del frontend (mismo contrato que OrdenTrabajo.descargar).
+function armarDescargaReportePausas_(reporte) {
+  var html = construirHtmlReportePausas_('Reporte de pausas activas', reporte);
+  var pdf = Utilities.newBlob(html, 'text/html', 'reporte-pausas.html').getAs('application/pdf');
+  pdf.setName('SIGSO-reporte-pausas-' + reporte.periodo.desde + '_a_' + reporte.periodo.hasta + '.pdf');
+  return { pdf_base64: Utilities.base64Encode(pdf.getBytes()), filename: pdf.getName() };
+}
+
+// v-next (reporte "bastante profesional", a la altura de la Orden de
+// Trabajo): antes era HTML plano (dos tablas sueltas). Ahora reusa el mismo
+// chrome/ficha/hairlines que OrdenTrabajo.gs (DOC, docChromeOt_,
+// docSeccionOt_, celdaLabelFicha_/celdaValorFicha_) -- "misma casa" de
+// papeleria que la Orden de Trabajo que se descarga de una solicitud, mismo
+// pedido explicito del usuario.
 function construirHtmlReportePausas_(titulo, reporte) {
   var k = reporte.kpis;
-  function tabla_(filas, campoA, campoB, encA, encB) {
-    if (!filas || filas.length === 0) return '<p style="color:#6B7280;">— sin datos —</p>';
-    var cuerpo = filas.map(function (f) {
-      return '<tr><td style="padding:4px 12px 4px 0;border-bottom:1px solid #E5E7EB;">' + escaparHtmlCorreo_(String(f[campoA])) +
-        '</td><td style="padding:4px 0;border-bottom:1px solid #E5E7EB;text-align:right;">' + escaparHtmlCorreo_(String(f[campoB])) + '</td></tr>';
-    }).join('');
-    return '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr>' +
-      '<th style="text-align:left;color:#6B7280;border-bottom:2px solid #1F2937;padding:4px 0;">' + encA + '</th>' +
-      '<th style="text-align:right;color:#6B7280;border-bottom:2px solid #1F2937;padding:4px 0;">' + encB + '</th></tr></thead><tbody>' + cuerpo + '</tbody></table>';
+  var empresasLabel = nombresEmpresasPausas_(reporte.pausas);
+  var referencia = reporte.periodo.desde + ' a ' + reporte.periodo.hasta;
+
+  var cuerpo =
+    docSeccionOt_('Resumen del período') +
+    fichaResumenPausas_(k, reporte.pausas.length, empresasLabel) +
+    docSeccionOt_('Clima emocional (autorreportado, opcional)') +
+    bloqueClimaEmocionalPausas_(reporte) +
+    docSeccionOt_('Motivos de inasistencia') +
+    tablaReportePausas_(reporte.motivos, 'motivo', 'cantidad', 'Motivo', 'Cantidad', 'Sin justificaciones registradas en el período.') +
+    docSeccionOt_('Participación por área') +
+    tablaReportePausas_(reporte.por_area, 'area', 'participaciones', 'Área', 'Participaciones', 'Sin participaciones registradas en el período.') +
+    docSeccionOt_('Racha de equipo por área') +
+    '<p style="margin:0 0 8px;color:' + DOC.MUTED + ';font-size:11px;">Pausas consecutivas donde el área alcanzó su umbral de participación configurado. Es una racha de EQUIPO: nunca identifica ni ordena personas.</p>' +
+    tablaRachasPausas_(reporte.rachas_area);
+
+  return docChromeOt_({ tipoDoc: titulo, referencia: referencia, etiquetaReferencia: 'Periodo: ' }, cuerpo);
+}
+
+// Ficha resumen del periodo -- mismo formato (4 columnas, label/valor) que
+// fichaSolicitudOt_ usa para la Orden de Trabajo.
+function fichaResumenPausas_(k, totalPausas, empresasLabel) {
+  var filas = [
+    ['Empresa(s)', escaparHtml_(empresasLabel || '—'), 'Pausas en el período', String(totalPausas)],
+    ['Cumplimiento', (k.pct_cumplimiento == null ? '—' : k.pct_cumplimiento + '%'), 'Realizadas', String(k.realizadas)],
+    ['No realizadas', String(k.no_realizadas), 'Canceladas', String(k.canceladas)],
+    ['Participaciones', String(k.participaciones), 'Justificaciones', String(k.justificaciones)]
+  ];
+  var cuerpo = filas.map(function (f) {
+    return '<tr>' +
+      '<td style="' + celdaLabelFicha_() + '">' + f[0] + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + f[1] + '</td>' +
+      '<td style="' + celdaLabelFicha_() + '">' + f[2] + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + f[3] + '</td>' +
+      '</tr>';
+  }).join('');
+  return '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' + cuerpo + '</table>';
+}
+
+// "Reporte de las caras": distribucion agregada de la micro-encuesta de
+// bienestar (1..5), con una barra por nivel. RN-708: SOLO agregado del
+// periodo completo -- nunca una fila ni un dato que identifique a una
+// persona. El emoji va acompañado de una etiqueta de texto porque el
+// conversor HTML->PDF de Apps Script no garantiza fuentes de emoji a color.
+var ANIMO_EMOJI_PAUSAS_ = ['😞', '🙁', '😐', '🙂', '😄']; // 😞 🙁 😐 🙂 😄
+var ANIMO_ETIQUETA_PAUSAS_ = ['Muy mal', 'Mal', 'Regular', 'Bien', 'Muy bien'];
+var BARRA_CLIMA_PAUSAS_PX = 220;
+function bloqueClimaEmocionalPausas_(reporte) {
+  var clima = reporte.clima_emocional || { respuestas: 0, distribucion: [] };
+  if (!clima.respuestas) {
+    return '<p style="margin:0 0 18px;color:' + DOC.MUTED + ';">Nadie dejó esta respuesta opcional en el período.</p>';
   }
-  // v7.6 (correos y descargables "corporativo sobrio"): mismo navy + sello
-  // "S" que ya usan la Orden de Trabajo y los correos -- toda la papeleria
-  // de SIGSO sale de la misma casa.
-  var encabezado = '<table width="100%" style="border-collapse:collapse;margin-bottom:18px;"><tr>' +
-    '<td style="background:#14213D;padding:16px 22px;">' +
-    '<table cellpadding="0" cellspacing="0"><tr>' +
-    '<td style="width:30px;height:30px;background:#ffffff;text-align:center;vertical-align:middle;font-family:Georgia,\'Times New Roman\',serif;font-weight:bold;font-size:15px;color:#14213D;">S</td>' +
-    '<td style="padding-left:12px;vertical-align:middle;">' +
-    '<span style="color:#ffffff;font-size:18px;font-weight:bold;letter-spacing:0.3px;font-family:Georgia,\'Times New Roman\',serif;">SIGSO</span>' +
-    '<span style="color:#AEB8CC;font-size:13px;margin-left:10px;">' + escaparHtmlCorreo_(titulo) + '</span>' +
-    '</td></tr></table>' +
-    '</td></tr></table>';
-  return '<html><body style="font-family:Arial,Helvetica,sans-serif;color:#1F2937;padding:24px;">' +
-    encabezado +
-    '<p>Periodo: <strong>' + escaparHtmlCorreo_(reporte.periodo.desde) + '</strong> a <strong>' + escaparHtmlCorreo_(reporte.periodo.hasta) + '</strong></p>' +
-    '<table style="width:100%;border-collapse:collapse;margin:12px 0 20px;font-size:14px;"><tbody>' +
-    '<tr><td style="padding:6px 0;">Cumplimiento</td><td style="text-align:right;font-weight:bold;">' + (k.pct_cumplimiento == null ? '—' : k.pct_cumplimiento + '%') + '</td></tr>' +
-    '<tr><td style="padding:6px 0;">Programadas</td><td style="text-align:right;">' + k.programadas + '</td></tr>' +
-    '<tr><td style="padding:6px 0;">Realizadas</td><td style="text-align:right;">' + k.realizadas + '</td></tr>' +
-    '<tr><td style="padding:6px 0;">No realizadas</td><td style="text-align:right;">' + k.no_realizadas + '</td></tr>' +
-    '<tr><td style="padding:6px 0;">Participaciones</td><td style="text-align:right;">' + k.participaciones + '</td></tr>' +
-    '<tr><td style="padding:6px 0;">Justificaciones</td><td style="text-align:right;">' + k.justificaciones + '</td></tr>' +
-    '</tbody></table>' +
-    '<h3 style="margin:16px 0 6px;">Motivos de inasistencia</h3>' + tabla_(reporte.motivos, 'motivo', 'cantidad', 'Motivo', 'Cantidad') +
-    '<h3 style="margin:20px 0 6px;">Participación por área</h3>' + tabla_(reporte.por_area, 'area', 'participaciones', 'Área', 'Participaciones') +
-    '</body></html>';
+  var filas = clima.distribucion.map(function (d, i) {
+    var anchoPx = d.pct <= 0 ? 0 : Math.max(4, Math.round(BARRA_CLIMA_PAUSAS_PX * d.pct / 100));
+    return '<tr>' +
+      '<td style="padding:4px 10px 4px 0;white-space:nowrap;font-size:13px;vertical-align:middle;">' +
+      ANIMO_EMOJI_PAUSAS_[i] + ' ' + ANIMO_ETIQUETA_PAUSAS_[i] + '</td>' +
+      '<td style="padding:4px 0;vertical-align:middle;">' +
+      '<div style="background:' + DOC.PANEL + ';border:1px solid ' + DOC.HAIRLINE + ';border-radius:3px;width:' + BARRA_CLIMA_PAUSAS_PX + 'px;">' +
+      '<div style="background:' + DOC.NAVY + ';height:11px;border-radius:3px;width:' + anchoPx + 'px;"></div>' +
+      '</div></td>' +
+      '<td style="padding:4px 0 4px 12px;text-align:right;white-space:nowrap;font-size:12px;color:' + DOC.INK_SOFT + ';vertical-align:middle;">' +
+      d.cantidad + ' · ' + d.pct + '%</td>' +
+      '</tr>';
+  }).join('');
+  return '<table style="border-collapse:collapse;margin:0 0 6px;">' + filas + '</table>' +
+    '<p style="margin:0 0 18px;font-size:11px;color:' + DOC.FAINT + ';">Autorreportado y opcional — ' + clima.respuestas +
+    (clima.respuestas === 1 ? ' participación incluyó' : ' participaciones incluyeron') + ' esta respuesta' +
+    (reporte.kpis.animo_promedio == null ? '' : ' · promedio ' + reporte.kpis.animo_promedio + '/5') +
+    '. Nunca se muestra por persona.</p>';
+}
+
+// Tabla generica de 2 columnas con encabezado (motivos, participacion por
+// area) -- mismo lenguaje visual (hairlines, versalitas grises) que el resto
+// del documento.
+function tablaReportePausas_(filas, campoA, campoB, encA, encB, vacio) {
+  if (!filas || filas.length === 0) {
+    return '<p style="margin:0 0 18px;color:' + DOC.MUTED + ';">' + escaparHtml_(vacio) + '</p>';
+  }
+  var cuerpo = filas.map(function (f) {
+    return '<tr>' +
+      '<td style="padding:6px 10px;border-bottom:1px solid ' + DOC.HAIRLINE + ';color:' + DOC.INK + ';">' + escaparHtml_(String(f[campoA])) + '</td>' +
+      '<td style="padding:6px 10px;border-bottom:1px solid ' + DOC.HAIRLINE + ';color:' + DOC.INK + ';text-align:right;">' + escaparHtml_(String(f[campoB])) + '</td>' +
+      '</tr>';
+  }).join('');
+  return '<table width="100%" style="border-collapse:collapse;font-size:12px;margin:0 0 18px;">' +
+    '<thead><tr>' +
+    '<th style="text-align:left;padding:0 10px 6px;font-size:10px;letter-spacing:0.5px;text-transform:uppercase;color:' + DOC.MUTED + ';border-bottom:2px solid ' + DOC.NAVY + ';">' + escaparHtml_(encA) + '</th>' +
+    '<th style="text-align:right;padding:0 10px 6px;font-size:10px;letter-spacing:0.5px;text-transform:uppercase;color:' + DOC.MUTED + ';border-bottom:2px solid ' + DOC.NAVY + ';">' + escaparHtml_(encB) + '</th>' +
+    '</tr></thead><tbody>' + cuerpo + '</tbody></table>';
+}
+
+// Tabla de rachas de EQUIPO por area (nunca de personas, RN-708).
+function tablaRachasPausas_(rachas) {
+  if (!rachas || rachas.length === 0) {
+    return '<p style="margin:0 0 18px;color:' + DOC.MUTED + ';">Sin datos suficientes en el período.</p>';
+  }
+  var encabezados = ['Área', 'Personas', 'Racha actual', 'Racha máxima', 'Umbral'];
+  var filas = rachas.map(function (r) {
+    return '<tr>' +
+      '<td style="padding:6px 10px;border-bottom:1px solid ' + DOC.HAIRLINE + ';color:' + DOC.INK + ';">' + escaparHtml_(r.area) + '</td>' +
+      '<td style="padding:6px 10px;border-bottom:1px solid ' + DOC.HAIRLINE + ';text-align:right;">' + r.roster + '</td>' +
+      '<td style="padding:6px 10px;border-bottom:1px solid ' + DOC.HAIRLINE + ';text-align:right;">' + r.racha_actual + '</td>' +
+      '<td style="padding:6px 10px;border-bottom:1px solid ' + DOC.HAIRLINE + ';text-align:right;">' + r.racha_maxima + '</td>' +
+      '<td style="padding:6px 10px;border-bottom:1px solid ' + DOC.HAIRLINE + ';text-align:right;">≥' + r.umbral_pct + '%</td>' +
+      '</tr>';
+  }).join('');
+  return '<table width="100%" style="border-collapse:collapse;font-size:12px;margin:0 0 18px;"><thead><tr>' +
+    encabezados.map(function (e, i) {
+      return '<th style="text-align:' + (i === 0 ? 'left' : 'right') + ';padding:0 10px 6px;font-size:10px;letter-spacing:0.5px;text-transform:uppercase;color:' + DOC.MUTED + ';border-bottom:2px solid ' + DOC.NAVY + ';">' + e + '</th>';
+    }).join('') +
+    '</tr></thead><tbody>' + filas + '</tbody></table>';
+}
+
+// Nombre(s) de la(s) empresa(s) cubiertas por el reporte, para la ficha
+// resumen -- a partir de los empresa_id que de verdad aparecen en
+// reporte.pausas (no de la lista de empresas visibles, que puede incluir
+// alguna sin pausas en el periodo elegido).
+function nombresEmpresasPausas_(pausas) {
+  var ids = {};
+  (pausas || []).forEach(function (p) { ids[String(p.empresa_id)] = true; });
+  var lista = Object.keys(ids);
+  if (lista.length === 0) return '';
+  var mapa = {};
+  leerFilasSeguro_(SHEETS.CAT_EMPRESAS).forEach(function (e) { mapa[String(e.empresa_id)] = e.nombre || e.empresa_id; });
+  return lista.map(function (id) { return mapa[id] || id; }).join(', ');
 }
 
 // v6.0 (mejora #4): evidencia de la charla -- una foto opcional que la

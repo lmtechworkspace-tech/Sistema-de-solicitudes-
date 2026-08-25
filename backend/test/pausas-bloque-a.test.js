@@ -146,6 +146,92 @@ test('calcularReportePausas_ da animo_promedio null si nadie respondio la encues
   assert.equal(res.kpis.animo_promedio, null);
 });
 
+// v-next ("reporte de las caras"): la distribucion agregada por nivel
+// (1..5), nunca por persona -- mismo RN-708 que animo_promedio.
+test('calcularReportePausas_ expone clima_emocional.distribucion agregada, nunca por persona', () => {
+  const ctx = load({
+    pausas: [['PA-1', 'HP', hoy(), '09:30', '', '', '', 'Realizada', 10, '']],
+    asistencia: [
+      ['R1', 'PA-1', 'T1', 'juan@hp.cl', new Date().toISOString(), 'participo', '', '', true, 'autoservicio', 4],
+      ['R2', 'PA-1', 'T2', 'ana@hp.cl', new Date().toISOString(), 'participo', '', '', true, 'autoservicio', 4],
+      ['R3', 'PA-1', 'T3', 'luis@hp.cl', new Date().toISOString(), 'participo', '', '', true, 'autoservicio', 1]
+    ]
+  });
+  const res = ctx.Pausas.getReporteGerencia({}, ADMIN);
+  assert.equal(res.clima_emocional.respuestas, 3);
+  const esperado = [
+    { valor: 1, cantidad: 1, pct: 33.3 },
+    { valor: 2, cantidad: 0, pct: 0 },
+    { valor: 3, cantidad: 0, pct: 0 },
+    { valor: 4, cantidad: 2, pct: 66.7 },
+    { valor: 5, cantidad: 0, pct: 0 }
+  ];
+  res.clima_emocional.distribucion.forEach((d, i) => {
+    assert.equal(d.valor, esperado[i].valor);
+    assert.equal(d.cantidad, esperado[i].cantidad);
+    assert.equal(d.pct, esperado[i].pct);
+  });
+  assert.ok(!JSON.stringify(res).includes('juan@hp.cl'));
+});
+
+test('calcularReportePausas_ da clima_emocional.respuestas 0 si nadie respondio', () => {
+  const ctx = load({
+    pausas: [['PA-1', 'HP', hoy(), '09:30', '', '', '', 'Realizada', 10, '']],
+    asistencia: [['R1', 'PA-1', 'T1', 'juan@hp.cl', new Date().toISOString(), 'participo', '', '', true, 'autoservicio', '']]
+  });
+  const res = ctx.Pausas.getReporteGerencia({}, ADMIN);
+  assert.equal(res.clima_emocional.respuestas, 0);
+  assert.ok(res.clima_emocional.distribucion.every((d) => d.cantidad === 0));
+});
+
+// ---- Descargar PDF (Gerencia + Coordinador) --------------------------------
+
+test('descargarReporteGerenciaPdf devuelve el PDF en base64, con el clima emocional y las secciones del reporte', () => {
+  const ctx = load({
+    pausas: [['PA-1', 'HP', hoy(), '09:30', '', '', '', 'Realizada', 10, '']],
+    asistencia: [
+      ['R1', 'PA-1', 'T1', 'juan@hp.cl', new Date().toISOString(), 'participo', '', '', true, 'autoservicio', 5],
+      ['R2', 'PA-1', 'T2', 'ana@hp.cl', new Date().toISOString(), 'no_participo', 'Estaba en terreno', '', false, 'autoservicio', '']
+    ]
+  });
+  const res = ctx.Pausas.descargarReporteGerenciaPdf({}, ADMIN);
+  assert.ok(!res._validationError, JSON.stringify(res));
+  assert.ok(res.pdf_base64 && res.pdf_base64.length > 0);
+  assert.match(res.filename, /^SIGSO-reporte-pausas-.*\.pdf$/);
+
+  const html = Buffer.from(res.pdf_base64, 'base64').toString('utf8');
+  assert.match(html, /Resumen del período/);
+  assert.match(html, /Clima emocional/);
+  assert.match(html, /Muy bien/); // etiqueta de texto junto al emoji (nivel 5)
+  assert.match(html, /Estaba en terreno/); // motivo de inasistencia
+  assert.match(html, /Racha de equipo por área/);
+  // RN-708: el HTML del PDF tampoco debe identificar personas.
+  assert.ok(!html.includes('juan@hp.cl'));
+});
+
+test('descargarReporteGerenciaPdf exige ser GERENCIA/ADM con pausas configuradas', () => {
+  const ctx = load();
+  const res = ctx.Pausas.descargarReporteGerenciaPdf({}, { rol: 'SOLICITANTE', email: 'nadie@otra.cl' });
+  assert.equal(res._validationError, true);
+});
+
+test('descargarReporteCumplimientoPdf devuelve el PDF del coordinador, acotado a su empresa', () => {
+  const ctx = load({
+    pausas: [['PA-1', 'HP', hoy(), '09:30', '', '', '', 'Realizada', 10, '']],
+    asistencia: [['R1', 'PA-1', 'T1', 'juan@hp.cl', new Date().toISOString(), 'participo', '', '', true, 'autoservicio', 3]]
+  });
+  const res = ctx.Pausas.descargarReporteCumplimientoPdf({}, COORD);
+  assert.ok(res.pdf_base64 && res.pdf_base64.length > 0);
+  const html = Buffer.from(res.pdf_base64, 'base64').toString('utf8');
+  assert.match(html, /Regular/); // etiqueta de texto del nivel 3
+});
+
+test('descargarReporteCumplimientoPdf exige coordinar alguna empresa', () => {
+  const ctx = load();
+  const res = ctx.Pausas.descargarReporteCumplimientoPdf({}, { rol: 'SOLICITANTE', email: 'nadie@otra.cl' });
+  assert.equal(res._validationError, true);
+});
+
 // ---- A4: rachas de equipo por area -----------------------------------------
 
 test('calcularRachasPorArea_ (via getReporteGerencia) premia al EQUIPO, no a personas', () => {

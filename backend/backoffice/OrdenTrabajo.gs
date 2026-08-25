@@ -129,8 +129,14 @@ function construirHtmlOt_(detalle) {
 // y el pie institucional con nota de confidencialidad. Sin barra de color
 // saturada: wordmark + metadatos a la derecha + reglas finas = documento
 // formal.
+//
+// meta.etiquetaReferencia (opcional): por defecto la referencia es un numero
+// de documento ("N.º SOL-..."), pero un reporte por periodo (Pausas.gs) no
+// tiene numero -- pasa 'Periodo: ' para que la etiqueta calce con lo que
+// realmente se muestra.
 function docChromeOt_(meta, contenidoHtml) {
   var emitida = formatearFechaLegible_(new Date());
+  var etiquetaReferencia = meta.etiquetaReferencia === undefined ? 'N.º ' : meta.etiquetaReferencia;
   return '<!DOCTYPE html><html><head><meta charset="utf-8"></head>' +
     '<body style="margin:0;font-family:' + DOC.SANS + ';color:' + DOC.INK + ';font-size:13px;line-height:1.5;">' +
     '<div style="padding:26px 30px;">' +
@@ -148,7 +154,7 @@ function docChromeOt_(meta, contenidoHtml) {
     '<td style="vertical-align:middle;text-align:right;">' +
     '<div style="font-size:12px;letter-spacing:2px;color:' + DOC.NAVY + ';font-weight:bold;text-transform:uppercase;">' +
     escaparHtml_(meta.tipoDoc) + '</div>' +
-    '<div style="font-size:14px;color:' + DOC.INK + ';font-weight:bold;margin-top:2px;">N.º ' + escaparHtml_(meta.referencia) + '</div>' +
+    '<div style="font-size:14px;color:' + DOC.INK + ';font-weight:bold;margin-top:2px;">' + escaparHtml_(etiquetaReferencia) + escaparHtml_(meta.referencia) + '</div>' +
     '<div style="font-size:10px;color:' + DOC.MUTED + ';margin-top:2px;">Emitida: ' + escaparHtml_(emitida) + '</div>' +
     '</td></tr></table>' +
     // Doble regla (formal)

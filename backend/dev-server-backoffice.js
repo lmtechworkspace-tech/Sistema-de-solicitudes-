@@ -110,10 +110,13 @@ function construirContexto() {
   seedSheet(ctx, 'PAUSAS_CONFIG', ctx.COLUMNAS.PAUSAS_CONFIG, [
     ['HP', '09:30', '1,2,3,4,5,6,7', 10, 15, 80, 60, true]
   ]);
-  seedSheet(ctx, 'PAUSAS_COORDINADORES', ctx.COLUMNAS.PAUSAS_COORDINADORES);
+  seedSheet(ctx, 'PAUSAS_COORDINADORES', ctx.COLUMNAS.PAUSAS_COORDINADORES, [
+    ['CO-DEMO-1', 'HP', 'Amarlla Opazo', 'amarlla@hp.cl', 'titular', true]
+  ]);
   seedSheet(ctx, 'PAUSAS_TRABAJADORES', ctx.COLUMNAS.PAUSAS_TRABAJADORES, [
     ['TRB-1', 'HP', 'Juan Pérez', 'juan@hp.cl', 'Bodega', 'Operario', true, '2026-01-01'],
-    ['TRB-2', 'HP', 'Ana Díaz', 'ana@hp.cl', 'Ventas', 'Vendedora', true, '2026-01-01']
+    ['TRB-2', 'HP', 'Ana Díaz', 'ana@hp.cl', 'Ventas', 'Vendedora', true, '2026-01-01'],
+    ['TRB-3', 'HP', 'Luis Soto', 'luis@hp.cl', 'Ventas', 'Vendedor', true, '2026-01-01']
   ]);
   // Pausa demo de HOY para probar el registro del trabajador (P2) en local.
   // Se calcula en la zona del proyecto (igual que claveDia_ en el backend),
@@ -121,10 +124,24 @@ function construirContexto() {
   var hoyPausa = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit'
   }).format(new Date());
+  var ayerPausa = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date(Date.now() - 24 * 3600 * 1000));
   seedSheet(ctx, 'PAUSAS_PROGRAMADAS', ctx.COLUMNAS.PAUSAS_PROGRAMADAS, [
-    ['PA-DEMO-1', 'HP', hoyPausa, '09:30', '', '', '', 'Programada', 10, '']
+    ['PA-DEMO-1', 'HP', hoyPausa, '09:30', '', '', '', 'Programada', 10, ''],
+    // v-next: una pausa YA RESUELTA (ayer) para poder ver el reporte de
+    // cumplimiento (Coordinación de pausas / Panel de Gerencia) con datos
+    // reales en local, en vez de "sin datos en el periodo".
+    ['PA-DEMO-0', 'HP', ayerPausa, '09:30', ayerPausa + 'T12:30:00.000Z', ayerPausa + 'T12:40:00.000Z',
+      'amarlla@hp.cl', 'Realizada', 10, '']
   ]);
-  seedSheet(ctx, 'PAUSAS_ASISTENCIA', ctx.COLUMNAS.PAUSAS_ASISTENCIA);
+  seedSheet(ctx, 'PAUSAS_ASISTENCIA', ctx.COLUMNAS.PAUSAS_ASISTENCIA, [
+    // v-next: variedad de "animo" (1..5) para poder ver la distribucion del
+    // "reporte de las caras" con mas de una barra en local.
+    ['AS-DEMO-1', 'PA-DEMO-0', 'TRB-1', 'juan@hp.cl', ayerPausa + 'T12:40:00.000Z', 'participo', '', '', true, 'autoservicio', 5],
+    ['AS-DEMO-2', 'PA-DEMO-0', 'TRB-2', 'ana@hp.cl', ayerPausa + 'T12:40:00.000Z', 'participo', '', '', true, 'autoservicio', 4],
+    ['AS-DEMO-3', 'PA-DEMO-0', 'TRB-3', 'luis@hp.cl', ayerPausa + 'T12:40:00.000Z', 'no_participo', 'Estaba en terreno', '', false, 'autoservicio', '']
+  ]);
   seedSheet(ctx, 'PAUSAS_LOG', ctx.COLUMNAS.PAUSAS_LOG);
   // v6.4: foto de perfil. Se siembra VACIA a proposito, para poder probar el
   // camino "usuario sin foto -> avatar de iniciales" que es el estado

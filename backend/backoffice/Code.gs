@@ -79,11 +79,15 @@ var BACKOFFICE_ACTIONS = {
   // v7.2 (Bloque A, mejora A1 "pasar lista grupal").
   registrarAsistenciaGrupalPausas: handleRegistrarAsistenciaGrupalPausas_,
   getReporteCumplimientoPausas: handleGetReporteCumplimientoPausas_,
+  // v-next: boton "Descargar PDF" del reporte de cumplimiento del coordinador.
+  descargarReporteCumplimientoPausasPdf: handleDescargarReporteCumplimientoPausasPdf_,
   // v6.0 (mejora #7): roster + historial por trabajador.
   listarRosterCoordinadorPausas: handleListarRosterCoordinadorPausas_,
   getHistorialTrabajadorPausas: handleGetHistorialTrabajadorPausas_,
   // v6.0 Fase P5: reporte de pausas para el Panel de Gerencia (modulo 'gerencia').
   getReporteGerenciaPausas: handleGetReporteGerenciaPausas_,
+  // v-next: boton "Descargar PDF" del reporte de pausas de Gerencia.
+  descargarReporteGerenciaPausasPdf: handleDescargarReporteGerenciaPausasPdf_,
   // v6.4 (foto de perfil): gestionar la foto PROPIA. Ninguna de estas
   // acciones recibe un identificador de usuario -- Perfiles.gs deriva la
   // identidad del contexto ya autenticado.
@@ -417,11 +421,13 @@ var MODULO_POR_ACCION = {
   gestionarPausaCoordinador: 'pausas_coordinacion',
   registrarAsistenciaGrupalPausas: 'pausas_coordinacion',
   getReporteCumplimientoPausas: 'pausas_coordinacion',
+  descargarReporteCumplimientoPausasPdf: 'pausas_coordinacion',
   // v6.0 (mejora #7): roster + historial por trabajador (misma pestana de reportes).
   listarRosterCoordinadorPausas: 'pausas_coordinacion',
   getHistorialTrabajadorPausas: 'pausas_coordinacion',
   // v6.0 Fase P5: la pestana de pausas vive en el Panel de Gerencia.
   getReporteGerenciaPausas: 'gerencia',
+  descargarReporteGerenciaPausasPdf: 'gerencia',
   // v7.0 (Fase 2): "Mi trabajo" -- el colaborador ve y actualiza SUS
   // propias actividades.
   // v7.0 (Fase 3): "Actividades del equipo" vive dentro de 'jefatura' --
@@ -1768,6 +1774,10 @@ function handleGetReporteCumplimientoPausas_(data, contexto) {
   return responderResultado_(Pausas.getReporteCumplimiento(data, contexto));
 }
 
+function handleDescargarReporteCumplimientoPausasPdf_(data, contexto) {
+  return responderResultado_(Pausas.descargarReporteCumplimientoPdf(data, contexto));
+}
+
 // v6.0 (mejora #7): roster + historial por trabajador (racha de participacion).
 function handleListarRosterCoordinadorPausas_(data, contexto) {
   return responderResultado_(Pausas.listarRosterCoordinador(data, contexto));
@@ -1780,6 +1790,10 @@ function handleGetHistorialTrabajadorPausas_(data, contexto) {
 // v6.0 Fase P5: reporte de pausas para el Panel de Gerencia.
 function handleGetReporteGerenciaPausas_(data, contexto) {
   return responderResultado_(Pausas.getReporteGerencia(data, contexto));
+}
+
+function handleDescargarReporteGerenciaPausasPdf_(data, contexto) {
+  return responderResultado_(Pausas.descargarReporteGerenciaPdf(data, contexto));
 }
 
 // v6.4 (foto de perfil). Notese que `data` NO aporta identidad en ninguna de

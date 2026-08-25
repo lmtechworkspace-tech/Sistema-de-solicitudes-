@@ -375,6 +375,23 @@
         '</' + tag + '>';
     },
 
+    // Lista de barras horizontales simples -- una distribucion agregada (ej.
+    // clima emocional de Pausas activas: cuantas respuestas cayo en cada
+    // nivel). `filas`: [{ etiqueta, valor, pct }], pct 0..100 fija el ancho;
+    // `valor` es el texto ya formateado (ej. "3 · 60%") que se muestra a la
+    // derecha -- este componente no sabe de encuestas, solo dibuja barras.
+    barras: function (filas) {
+      if (!filas || !filas.length) return '';
+      return '<div class="sigso-barras">' + filas.map(function (f) {
+        var pct = Math.max(0, Math.min(100, f.pct || 0));
+        return '<div class="sigso-barras__fila">' +
+          '<span class="sigso-barras__etiqueta">' + escaparHtml(f.etiqueta) + '</span>' +
+          '<span class="sigso-barras__pista"><span class="sigso-barras__relleno" style="width:' + pct + '%"></span></span>' +
+          '<span class="sigso-barras__valor">' + escaparHtml(f.valor) + '</span>' +
+          '</div>';
+      }).join('') + '</div>';
+    },
+
     // Acepta el string de siempre (todos los llamadores previos) o un objeto
     // { texto, detalle, icono, accion:{texto,accion} } -- v4.0 Frente 2: un
     // parrafo gris no distingue "no hay nada" de "todavia esta cargando" ni

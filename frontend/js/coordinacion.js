@@ -337,7 +337,10 @@
       var k = d.kpis;
       var semaforo = k.pct_cumplimiento == null ? 'P3' : (k.pct_cumplimiento >= 90 ? 'P4' : (k.pct_cumplimiento >= 70 ? 'P3' : 'P1'));
       c.innerHTML =
-        '<p class="sigso-ayuda">Periodo: ' + Componentes.escaparHtml(d.periodo.desde) + ' a ' + Componentes.escaparHtml(d.periodo.hasta) + '</p>' +
+        '<div class="sigso-admin-cab"><p class="sigso-ayuda" style="margin:0;">Periodo: ' +
+        Componentes.escaparHtml(d.periodo.desde) + ' a ' + Componentes.escaparHtml(d.periodo.hasta) + '</p>' +
+        Componentes.boton({ texto: 'Descargar PDF', icono: 'descargar', variante: 'secundario', clase: 'js-coord-descargar-pdf' }) +
+        '</div>' +
         '<div class="sigso-kpis">' +
         Componentes.kpi({ etiqueta: 'Cumplimiento', valor: (k.pct_cumplimiento == null ? '—' : k.pct_cumplimiento + '%'), variante: semaforo }) +
         Componentes.kpi({ etiqueta: 'Realizadas', valor: k.realizadas }) +
@@ -346,12 +349,62 @@
         Componentes.kpi({ etiqueta: 'Justificaciones', valor: k.justificaciones }) +
         (k.animo_promedio == null ? '' : Componentes.kpi({ etiqueta: 'Ánimo promedio', valor: k.animo_promedio + '/5' })) +
         '</div>' +
+        Componentes.tarjeta('<h3>Clima emocional</h3>' +
+          '<p class="sigso-ayuda">Autorreportado y opcional al registrar la participación. Agregado del período: nunca se muestra por persona.</p>' +
+          climaEmocionalHtml_(d.clima_emocional)) +
         Componentes.tarjeta('<h3>Motivos de inasistencia</h3>' + tablaSimple_(d.motivos, 'motivo', 'cantidad', 'Sin justificaciones en el periodo.')) +
         Componentes.tarjeta('<h3>Participación por área</h3>' + tablaSimple_(d.por_area, 'area', 'participaciones', 'Sin participaciones en el periodo.')) +
         Componentes.tarjeta('<h3>Rachas de equipo por área</h3>' +
           '<p class="sigso-ayuda">Pausas consecutivas donde el área alcanzó su umbral de participación. Es una racha de EQUIPO, no de personas.</p>' +
           rachasAreaHtml_(d.rachas_area));
+      var btnPdf = c.querySelector('.js-coord-descargar-pdf');
+      if (btnPdf) btnPdf.addEventListener('click', descargarPdfReportePausas_);
     }).catch(function (e) { c.innerHTML = Componentes.alerta((e && e.message) || 'Error de conexión.', 'error'); });
+  }
+
+  // v-next: "reporte de las caras" -- distribucion agregada de la
+  // micro-encuesta de bienestar (1..5). RN-708: agregado del periodo
+  // completo, jamas por persona (mismo criterio que rachasAreaHtml_ arriba).
+  var ANIMO_EMOJI_COORD_ = ['😞', '🙁', '😐', '🙂', '😄'];
+  var ANIMO_ETIQUETA_COORD_ = ['Muy mal', 'Mal', 'Regular', 'Bien', 'Muy bien'];
+  function climaEmocionalHtml_(clima) {
+    if (!clima || !clima.respuestas) {
+      return '<p class="sigso-ayuda">Nadie dejó esta respuesta opcional en el periodo.</p>';
+    }
+    var filas = clima.distribucion.map(function (d, i) {
+      return {
+        etiqueta: ANIMO_EMOJI_COORD_[i] + ' ' + ANIMO_ETIQUETA_COORD_[i],
+        pct: d.pct,
+        valor: d.cantidad + ' · ' + d.pct + '%'
+      };
+    });
+    return Componentes.barras(filas) +
+      '<p class="sigso-ayuda" style="margin-top:0.5rem;">' + clima.respuestas +
+      (clima.respuestas === 1 ? ' participación incluyó' : ' participaciones incluyeron') + ' esta respuesta.</p>';
+  }
+
+  // v-next: boton "Descargar PDF" del reporte de cumplimiento -- mismo patron
+  // que descargarPdfActividadesGerencia_ (gerencia.js): decode base64 -> Blob
+  // -> <a download>.
+  function descargarPdfReportePausas_() {
+    api('descargarReporteCumplimientoPausasPdf', {}).then(function (r) {
+      if (!r.ok) { Componentes.aviso({ texto: r.message || 'No se pudo generar el PDF.', tipo: 'error' }); return; }
+      descargarPdfBase64Pausas_(r.data.pdf_base64, r.data.filename);
+    }).catch(function (e) { Componentes.aviso({ texto: (e && e.message) || 'Error de conexión.', tipo: 'error' }); });
+  }
+
+  function descargarPdfBase64Pausas_(base64, filename) {
+    var binario = atob(base64);
+    var buffer = new Uint8Array(binario.length);
+    for (var i = 0; i < binario.length; i++) buffer[i] = binario.charCodeAt(i);
+    var blob = new Blob([buffer], { type: 'application/pdf' });
+    var enlace = document.createElement('a');
+    enlace.href = URL.createObjectURL(blob);
+    enlace.download = filename;
+    document.body.appendChild(enlace);
+    enlace.click();
+    document.body.removeChild(enlace);
+    setTimeout(function () { URL.revokeObjectURL(enlace.href); }, 1000);
   }
 
   // v7.2 (Bloque A, mejora A4): "rachas por area" -- a proposito de EQUIPO,

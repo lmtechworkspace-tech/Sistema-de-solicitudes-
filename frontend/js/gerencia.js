@@ -188,7 +188,10 @@
       cont.innerHTML =
         '<div class="sigso-admin-cab"><p class="sigso-ayuda" style="margin:0;">Periodo: ' +
         Componentes.escaparHtml(d.periodo.desde) + ' a ' + Componentes.escaparHtml(d.periodo.hasta) + '</p>' +
-        '<button type="button" class="sigso-boton sigso-boton--secundario" id="btn-exportar-csv-pausas">Exportar CSV</button></div>' +
+        '<div style="display:flex;gap:0.5rem;">' +
+        '<button type="button" class="sigso-boton sigso-boton--secundario" id="btn-descargar-pdf-pausas">Descargar PDF</button>' +
+        '<button type="button" class="sigso-boton sigso-boton--secundario" id="btn-exportar-csv-pausas">Exportar CSV</button>' +
+        '</div></div>' +
         '<div class="sigso-kpis">' +
         Componentes.kpi({ etiqueta: 'Cumplimiento', valor: (k.pct_cumplimiento == null ? '—' : k.pct_cumplimiento + '%') }) +
         Componentes.kpi({ etiqueta: 'Programadas', valor: k.programadas }) +
@@ -196,13 +199,50 @@
         Componentes.kpi({ etiqueta: 'No realizadas', valor: k.no_realizadas }) +
         Componentes.kpi({ etiqueta: 'Participaciones', valor: k.participaciones }) +
         Componentes.kpi({ etiqueta: 'Justificaciones', valor: k.justificaciones }) +
+        (k.animo_promedio == null ? '' : Componentes.kpi({ etiqueta: 'Ánimo promedio', valor: k.animo_promedio + '/5' })) +
         '</div>' +
         '<h4>Tendencia semanal</h4><div class="sigso-grafico-contenedor"><canvas id="ger-grafico-tendencia-pausas" height="90"></canvas></div>' +
+        '<h4>Clima emocional</h4>' +
+        '<p class="sigso-ayuda">Autorreportado y opcional al registrar la participación. Agregado del período: nunca se muestra por persona.</p>' +
+        climaEmocionalPausasGerencia_(d.clima_emocional) +
         '<h4>Motivos de inasistencia</h4>' + tablaPausasGerencia_(d.motivos, 'motivo', 'cantidad', 'Sin justificaciones en el periodo.') +
         '<h4>Participación por área</h4>' + tablaPausasGerencia_(d.por_area, 'area', 'participaciones', 'Sin participaciones en el periodo.');
       document.getElementById('btn-exportar-csv-pausas').addEventListener('click', exportarCsvPausas_);
+      document.getElementById('btn-descargar-pdf-pausas').addEventListener('click', descargarPdfPausasGerencia_);
       renderTendenciaPausas_(d.tendencia);
     }).catch(function (e) { cont.innerHTML = Componentes.alerta((e && e.message) || 'Error de conexión.', 'error'); });
+  }
+
+  // v-next: "reporte de las caras" -- distribucion agregada de la
+  // micro-encuesta de bienestar (1..5). RN-708: agregado del periodo
+  // completo, jamas por persona.
+  var ANIMO_EMOJI_GER_ = ['😞', '🙁', '😐', '🙂', '😄'];
+  var ANIMO_ETIQUETA_GER_ = ['Muy mal', 'Mal', 'Regular', 'Bien', 'Muy bien'];
+  function climaEmocionalPausasGerencia_(clima) {
+    if (!clima || !clima.respuestas) {
+      return '<p class="sigso-ayuda">Nadie dejó esta respuesta opcional en el periodo.</p>';
+    }
+    var filas = clima.distribucion.map(function (d, i) {
+      return {
+        etiqueta: ANIMO_EMOJI_GER_[i] + ' ' + ANIMO_ETIQUETA_GER_[i],
+        pct: d.pct,
+        valor: d.cantidad + ' · ' + d.pct + '%'
+      };
+    });
+    return Componentes.barras(filas) +
+      '<p class="sigso-ayuda" style="margin-top:0.5rem;">' + clima.respuestas +
+      (clima.respuestas === 1 ? ' participación incluyó' : ' participaciones incluyeron') + ' esta respuesta.</p>';
+  }
+
+  // v-next: boton "Descargar PDF" del reporte de pausas de Gerencia -- mismo
+  // patron que descargarPdfActividadesGerencia_ (arriba en este archivo).
+  function descargarPdfPausasGerencia_() {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'descargarReporteGerenciaPausasPdf', {})
+      .then(function (r) {
+        if (!r.ok) { Componentes.aviso({ texto: r.message || 'No se pudo generar el PDF.', tipo: 'error' }); return; }
+        descargarPdfBase64ActividadesGerencia_(r.data.pdf_base64, r.data.filename);
+      })
+      .catch(function (e) { Componentes.aviso({ texto: (e && e.message) || 'Error de conexión.', tipo: 'error' }); });
   }
 
   // v6.0 (mejora #6): mismo patron que renderTendencia_ (barras + linea de
