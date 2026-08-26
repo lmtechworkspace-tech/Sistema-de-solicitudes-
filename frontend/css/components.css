@@ -233,24 +233,50 @@
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1rem;
-  border-bottom: 1px solid var(--gris-claro);
+  border-bottom: 1px solid var(--borde);
+  /* Con muchas pestañas (Proyectos tiene 7) la barra estiraba la página en
+     móvil: scrollea ella sola en vez de sacar scroll horizontal al body. */
+  overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
 }
 
-.sigso-tabs__boton {
+/* Pestañas subrayadas. Dos nombres conviven en el código para EL MISMO
+   componente: ".sigso-tabs__boton" (estado.html, admin, dashboard) tenía
+   estilo; ".sigso-tab" (Proyectos, subnavs de Calidad) se emitía SIN ninguna
+   regla propia -- por eso salía con el chrome nativo del navegador (los
+   botones "en caja" que se veían viejos). Se unifican aquí: misma barra
+   subrayada, con hover y foco visibles, para toda la app. */
+.sigso-tabs__boton,
+.sigso-tab {
   background: none;
   border: none;
-  border-bottom: 3px solid transparent;
-  padding: 0.6rem 1rem;
-  font-size: 0.95rem;
-  font-weight: 600;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;                 /* la línea activa se apoya en el borde de la barra */
+  padding: 0.55rem 0.9rem;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
   color: var(--texto-2);
   cursor: pointer;
-  transition: color var(--mov-normal), border-color var(--mov-normal);
+  white-space: nowrap;
+  flex: 0 0 auto;
+  transition: color var(--mov-rapido), border-color var(--mov-rapido);
+}
+.sigso-tabs__boton:hover,
+.sigso-tab:hover { color: var(--texto); }
+.sigso-tabs__boton:focus-visible,
+.sigso-tab:focus-visible {
+  outline: none;
+  box-shadow: var(--foco-anillo);
+  border-radius: var(--radio-sm);
 }
 
-.sigso-tabs__boton--activo {
+.sigso-tabs__boton--activo,
+.sigso-tab--activo {
   color: var(--primario);
   border-bottom-color: var(--primario);
+  font-weight: 600;
 }
 
 /* Filtros de "Mis solicitudes" (mismo patron visual que .sigso-filtros del
@@ -3213,16 +3239,23 @@
    El comentario que estaba aca describia el sintoma que la condeno: "con la
    quinta seccion la barra dejo de caber en un movil". Llego a dieciseis. */
 
-/* Sub-nav de Accesos (Personas/Matriz/Confidenciales): mismas pildoras, un
-   punto mas chicas, sin icono -- vive DENTRO de un grupo ya identificado. */
-.sgc-subnav-accesos .js-acc-vista {
+/* Sub-nav de Accesos / Riesgos / Contexto: mismas pildoras, un punto mas
+   chicas, sin icono -- viven DENTRO de un grupo ya identificado. Apunta a
+   .sigso-tab (no a .js-acc-vista) para cubrir los TRES subnavs que usan este
+   contenedor: Accesos (js-acc-vista), Riesgos/Oportunidades (js-rsg-vista) y
+   Contexto/Partes (js-ctx-vista). Antes solo Accesos recibia la pildora; los
+   otros dos caian al chrome nativo. Estas reglas (0,2,0 y 0,3,0) ganan al
+   estilo base subrayado de .sigso-tab, asi que aca son pildoras y en
+   Proyectos son pestañas subrayadas -- cada contexto con su forma. */
+.sgc-subnav-accesos .sigso-tab {
   display: inline-flex; align-items: center; padding: .35rem .75rem;
+  margin-bottom: 0;
   border-radius: 999px; border: 1px solid transparent; background: transparent;
   color: var(--texto-2); font-weight: 600; font-size: var(--texto-sm); cursor: pointer;
   white-space: nowrap; transition: background .15s, color .15s;
 }
-.sgc-subnav-accesos .js-acc-vista:hover { background: var(--superficie-2); color: var(--texto); }
-.sgc-subnav-accesos .js-acc-vista.sigso-tab--activo { background: var(--primario); color: #fff; }
+.sgc-subnav-accesos .sigso-tab:hover { background: var(--superficie-2); color: var(--texto); }
+.sgc-subnav-accesos .sigso-tab.sigso-tab--activo { background: var(--primario); color: #fff; }
 
 /* v10.0 Fase 2: tablero de KPIs sobre el listado de Documentos -- lo
    primero que se ve al entrar a Calidad, para que se sienta un puesto de
@@ -3249,10 +3282,12 @@
    scroll propio que .sgc-secciones, mas margen chico porque va debajo de la
    barra principal, no reemplazandola. */
 .sgc-subnav-accesos {
+  display: flex; gap: var(--esp-1);
   overflow-x: auto; max-width: 100%; scrollbar-width: thin;
   margin-top: calc(-1 * var(--esp-2)); margin-bottom: var(--esp-3);
 }
-.sgc-subnav-accesos .sigso-tab { flex: 0 0 auto; font-size: var(--texto-sm); }
+/* (el flex/font-size de .sgc-subnav-accesos .sigso-tab ya lo cubre la regla
+   de pildora de arriba) */
 
 /* Matriz de distribucion: personas x documentos. Scrollea horizontal por
    dentro (puede haber muchas columnas) sin sacar scroll a la pagina. */
