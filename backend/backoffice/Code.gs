@@ -440,7 +440,14 @@ var MODULO_POR_ACCION = {
   getDetalleActividad: ['mi_trabajo', 'jefatura'],
   crearActividad: 'mi_trabajo',
   confirmarActividad: 'mi_trabajo',
-  checkinActividad: 'mi_trabajo',
+  // v10 Proyectos (Fase A, "check-in inline"): una tarea de proyecto es una
+  // ACTIVIDADES normal (Proyectos.gs no reimplementa nada), asi que el mismo
+  // check-in de "Mi trabajo" tiene que poder llamarse tambien desde una
+  // cuenta que solo tiene el modulo 'proyectos' (no necesariamente
+  // 'mi_trabajo'). El limite real de seguridad sigue siendo el de siempre --
+  // Actividades.checkin exige ser el responsable de ESA actividad (RN-702) --
+  // esto solo amplia QUIEN puede intentarlo, no relaja esa validacion.
+  checkinActividad: ['mi_trabajo', 'proyectos'],
   cancelarActividad: ['mi_trabajo', 'jefatura'],
   reprogramarActividad: ['mi_trabajo', 'jefatura'],
   // validarActividad queda sin gate a proposito (ver comentario general de

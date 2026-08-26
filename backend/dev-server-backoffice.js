@@ -189,7 +189,20 @@ function construirContexto() {
       'NINGUNA', '', '', '',
       'AMARILLA', '', 'Esperando acceso al nuevo portal bancario', 'jefe@homepymes.cl', new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(),
       new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString(), 0,
-      new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(), 'leo@rld.cl', true]
+      new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(), 'leo@rld.cl', true],
+    // v10 (Fase A, "check-in inline"): tarea DENTRO del proyecto demo
+    // (PROY-DEMO-1), responsable leo@rld.cl (dev-token-leo) -- para poder
+    // probar en local el check-in sin salir de Proyectos, en la MISMA
+    // persona que ya es lider del proyecto demo.
+    ['ACT-DEMO-5', 'Redactar guion de la charla de lanzamiento', '',
+      'PROPIA', '', 'leo@rld.cl', 'Leo Estay', 'jefe@homepymes.cl',
+      'AREA_PLAT', '', '', 'P2', 'EN_CURSO', 'M',
+      '', new Date(Date.now() + 6 * 24 * 3600 * 1000).toISOString(), new Date().toISOString(), false,
+      'NINGUNA', '', '', '',
+      'VERDE', '', '', '', '',
+      new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString(), 0,
+      new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(), 'leo@rld.cl', true,
+      'PROY-DEMO-1', '']
   ]);
   seedSheet(ctx, 'ACTIVIDADES_BITACORA', ctx.COLUMNAS.ACTIVIDADES_BITACORA);
   // v9.0: Proyectos -- un proyecto demo con Leo de lider y jefe@homepymes.cl
@@ -202,13 +215,36 @@ function construirContexto() {
       new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(),
       new Date(Date.now() + 20 * 24 * 3600 * 1000).toISOString(), '',
       '', '', new Date().toISOString(), 'leo@rld.cl',
-      new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(), true]
+      new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString(), true],
+    // v10 (Fase A): dos proyectos mas -- para poder probar buscar/ordenar/
+    // agrupar en local con mas de una tarjeta. Uno con OTRO lider (para ver
+    // el agrupado) y fecha objetivo cercana; otro del mismo Leo pero ya
+    // VENCIDO y sin novedades hace dias (para ver "Vencio hace N dias" en
+    // rojo y "ultima novedad hace N dias").
+    ['PROY-DEMO-2', 'PRY-0002', 'Portal de proveedores', 'Autoservicio para que los proveedores vean sus pagos.',
+      '', '',
+      'jefe@homepymes.cl', 'AREA_CONTA', '', 'INTERNO', 'MEDIA', 'ACTIVO',
+      new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
+      new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(), '',
+      '', '', new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString(), 'jefe@homepymes.cl',
+      new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(), true],
+    ['PROY-DEMO-3', 'PRY-0003', 'Renovación certificado SSL corporativo', '',
+      '', '',
+      'leo@rld.cl', 'AREA_PLAT', '', 'INTERNO', 'BAJA', 'EN_PAUSA',
+      new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
+      new Date(Date.now() - 4 * 24 * 3600 * 1000).toISOString(), '',
+      '', '', new Date(Date.now() - 12 * 24 * 3600 * 1000).toISOString(), 'leo@rld.cl',
+      new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(), true]
   ]);
   seedSheet(ctx, 'PROYECTO_INTEGRANTES', ctx.COLUMNAS.PROYECTO_INTEGRANTES, [
     ['PYI-DEMO-1', 'PROY-DEMO-1', 'leo@rld.cl', 'Leo Estay', 'LIDER', 'Coordinacion general', true, 'leo@rld.cl',
       new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString()],
     ['PYI-DEMO-2', 'PROY-DEMO-1', 'jefe@homepymes.cl', 'Jefe Demo', 'INTEGRANTE', 'Revision de contenidos', true, 'leo@rld.cl',
-      new Date(Date.now() - 9 * 24 * 3600 * 1000).toISOString()]
+      new Date(Date.now() - 9 * 24 * 3600 * 1000).toISOString()],
+    ['PYI-DEMO-3', 'PROY-DEMO-2', 'jefe@homepymes.cl', 'Jefe Demo', 'LIDER', '', true, 'jefe@homepymes.cl',
+      new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString()],
+    ['PYI-DEMO-4', 'PROY-DEMO-3', 'leo@rld.cl', 'Leo Estay', 'LIDER', '', true, 'leo@rld.cl',
+      new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString()]
   ]);
   seedSheet(ctx, 'PROYECTO_HITOS', ctx.COLUMNAS.PROYECTO_HITOS, [
     ['PYH-DEMO-1', 'PROY-DEMO-1', 'Migracion de contenidos', 'Pasar todo el contenido actual a la nueva estructura',

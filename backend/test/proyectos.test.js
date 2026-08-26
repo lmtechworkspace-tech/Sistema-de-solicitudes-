@@ -92,6 +92,23 @@ test('listar (portafolio): un integrante solo ve sus proyectos; ADM/GERENCIA ven
   assert.equal(ctx.Proyectos.listar({}, CTX_GERENCIA).length, 2);
 });
 
+// v10 (Fase A, "tarjetas con mas pulso"): el portafolio trae quien esta en
+// el equipo, para pintar avatares sin pedir el detalle de cada proyecto.
+test('listar (portafolio): expone integrantes {email, nombre}, con el LIDER primero', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx, { lider_nombre: 'Leo Lider' });
+  ctx.Proyectos.gestionarIntegrante({
+    proyecto_id: proyecto.proyecto_id, accion: 'agregar',
+    usuario_email: 'marcelo@rld.cl', usuario_nombre: 'Marcelo Integrante', rol_proyecto: 'INTEGRANTE'
+  }, CTX_LEO);
+
+  const listado = ctx.Proyectos.listar({}, CTX_LEO).find((p) => p.proyecto_id === proyecto.proyecto_id);
+  assert.equal(listado.integrantes.length, 2);
+  assert.equal(listado.integrantes[0].email, 'leo@rld.cl');
+  assert.equal(listado.integrantes[0].nombre, 'Leo Lider');
+  assert.equal(listado.integrantes[1].email, 'marcelo@rld.cl');
+});
+
 test('gestionarIntegrante: el LIDER agrega integrantes; un INTEGRANTE no puede', () => {
   const ctx = loadConSchema();
   const proyecto = crearProyectoBase(ctx);

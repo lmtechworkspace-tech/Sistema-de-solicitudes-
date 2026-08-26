@@ -72,6 +72,16 @@ var Proyectos = {
         // que se hizo llego a tiempo.
         cumplimiento_tareas: calcularCumplimientoTareasProyecto_(tareas),
         total_integrantes: integrantes.length,
+        // v10 (Fase A, "tarjetas con mas pulso"): quien esta en el equipo,
+        // para pintar avatares en la tarjeta del portafolio sin que el
+        // frontend tenga que pedir el detalle de cada proyecto solo para
+        // eso. Ya esta filtrado arriba (activo=true, este proyecto) -- cero
+        // lecturas de hoja adicionales. El lider primero, es quien mas
+        // identifica al proyecto de un vistazo.
+        integrantes: integrantes
+          .slice()
+          .sort(function (a, b) { return (a.rol_proyecto === 'LIDER' ? -1 : 0) - (b.rol_proyecto === 'LIDER' ? -1 : 0); })
+          .map(function (i) { return { email: i.usuario_email, nombre: i.usuario_nombre || i.usuario_email }; }),
         total_tareas: tareas.filter(function (a) { return a.activa === true || a.activa === 'TRUE' || a.activa === 1; }).length,
         salud: salud.codigo,
         salud_etiqueta: salud.etiqueta,

@@ -83,6 +83,23 @@
   var proyectoActivoId_ = null;
   var pestanaActiva_ = 'resumen';
 
+  // v10 (Fase A, "check-in inline"): para saber si LA TAREA que se esta
+  // pintando es del usuario que mira (y ahi si ofrecerle los mismos botones
+  // de check-in de "Mi trabajo"), hace falta su propio correo. getMiPerfil
+  // no tiene gate de modulo (Code.gs) -- se puede pedir desde cualquier
+  // pantalla. Se pide UNA vez por carga de pagina y se cachea la PROMESA
+  // (no solo el resultado): si dos llamadas caen antes de que responda la
+  // primera, comparten el mismo pedido en vez de duplicarlo.
+  var miPerfilPromise_ = null;
+  function miPerfil_() {
+    if (!miPerfilPromise_) {
+      miPerfilPromise_ = api_('getMiPerfil', {}).then(function (r) {
+        return (r && r.ok) ? r.data : null;
+      }).catch(function () { return null; });
+    }
+    return miPerfilPromise_;
+  }
+
   // Espejo liviano de normalizarEmailProyecto_ (Proyectos.gs) -- necesario
   // aca solo para mapear menciones a nombres al pintar el feed; el backend
   // sigue siendo la autoridad para permisos/comparaciones.
@@ -109,7 +126,7 @@
     datosDetalleActual_ = null;
     var cont = panelProyectos_();
     if (!cont) return;
-    cont.innerHTML = Componentes.cargando('Cargando proyectos...');
+    cont.innerHTML = esqueletoPortafolio_();
     var filtros = filtroEstadoPortafolio_ ? { estado: filtroEstadoPortafolio_ } : {};
     Promise.all([
       api_('listarProyectos', filtros),
@@ -160,13 +177,220 @@
     '</details>';
   }
 
+  // v10 (Fase A, propuesta 06 "buscar/ordenar/agrupar"): todo client-side --
+  // el portafolio ya llega completo (sin paginación), así que no hay razón
+  // para volver a pedírselo al backend por esto. Estado a nivel de módulo,
+  // mismo criterio que filtroEstadoPortafolio_/filtroSaludPortafolio_ (arriba):
+  // sobrevive un refrescar_() de fondo sin resetearse solo.
+  var busquedaPortafolio_ = '';
+  var ordenPortafolio_ = 'salud';
+  var agruparPorLider_ = false;
+  var ORDEN_PORTAFOLIO_ETIQUETA = {
+    salud: 'Más urgente primero', fecha_objetivo: 'Vence antes', avance: 'Menos avanzado primero'
+  };
+
+  function ordenarProyectosPortafolio_(lista) {
+    if (ordenPortafolio_ === 'fecha_objetivo') {
+      return lista.slice().sort(function (a, b) { return new Date(a.fecha_objetivo || 0) - new Date(b.fecha_objetivo || 0); });
+    }
+    if (ordenPortafolio_ === 'avance') {
+      return lista.slice().sort(function (a, b) { return (a.avance_pct || 0) - (b.avance_pct || 0); });
+    }
+    return lista; // 'salud': el backend ya lo entrega así (crítico/riesgo/normal, luego última actualización) -- no hay que reordenar.
+  }
+
+  function filtrarPorBusquedaPortafolio_(lista) {
+    var q = busquedaPortafolio_.trim().toLowerCase();
+    if (!q) return lista;
+    return lista.filter(function (p) {
+      return (p.nombre || '').toLowerCase().indexOf(q) !== -1 ||
+        (p.lider_email || '').toLowerCase().indexOf(q) !== -1;
+    });
+  }
+
+  // Un proyecto sin líder (no debería pasar, pero un dato viejo podría venir
+  // así) cae en su propio grupo en vez de romper el agrupado.
+  function agruparProyectosPorLider_(lista) {
+    var grupos = {}, orden = [];
+    lista.forEach(function (p) {
+      var clave = p.lider_email || '(sin líder)';
+      if (!grupos[clave]) { grupos[clave] = []; orden.push(clave); }
+      grupos[clave].push(p);
+    });
+    orden.sort(function (a, b) { return a.localeCompare(b); });
+    return orden.map(function (clave) { return { lider: clave, proyectos: grupos[clave] }; });
+  }
+
+  // "hace 3 días" / "hoy" / "ayer" -- para "última novedad" (p.ultima_actualizacion,
+  // ya viene del backend) y en general cualquier fecha PASADA que se quiera
+  // leer relativa en vez de como calendario.
+  function diasRelativo_(iso) {
+    if (!iso) return '';
+    var f = new Date(iso);
+    if (isNaN(f.getTime())) return '';
+    var hoyUTC = Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+    var diaUTC = Date.UTC(f.getUTCFullYear(), f.getUTCMonth(), f.getUTCDate());
+    var dias = Math.round((hoyUTC - diaUTC) / 86400000);
+    if (dias <= 0) return 'hoy';
+    if (dias === 1) return 'ayer';
+    return 'hace ' + dias + ' días';
+  }
+
+  // "Vence en 5 días" / "Vence hoy" / "Venció hace 2 días" -- misma idea que
+  // Componentes.tiempoRelativoSla, pero en DÍAS DE CALENDARIO (fecha_objetivo
+  // es una fecha de proyecto, no un SLA en horas hábiles).
+  function venceEn_(iso) {
+    if (!iso) return '';
+    var f = new Date(iso);
+    if (isNaN(f.getTime())) return '';
+    var hoyUTC = Date.UTC(new Date().getFullYear(), new Date().getMonth(), new Date().getDate());
+    var diaUTC = Date.UTC(f.getUTCFullYear(), f.getUTCMonth(), f.getUTCDate());
+    var dias = Math.round((diaUTC - hoyUTC) / 86400000);
+    if (dias === 0) return 'Vence hoy';
+    if (dias === 1) return 'Vence mañana';
+    if (dias > 1) return 'Vence en ' + dias + ' días';
+    if (dias === -1) return 'Venció ayer';
+    return 'Venció hace ' + (-dias) + ' días';
+  }
+
+  // v10 (Fase A, propuesta "tarjetas con más pulso"): avatares del equipo
+  // (p.integrantes ya viene del backend, líder primero), barra de avance con
+  // el COLOR de la salud (antes siempre el mismo azul, sin importar si el
+  // proyecto estaba crítico) y "última novedad hace N días" -- de un vistazo,
+  // sin entrar al proyecto.
+  var MAX_AVATARES_TARJETA = 4;
+  function tarjetaProyecto_(p) {
+    var avance = p.avance_pct === null || p.avance_pct === undefined ? '—' : p.avance_pct + '%';
+    var integrantes = p.integrantes || [];
+    var avatares = integrantes.slice(0, MAX_AVATARES_TARJETA).map(function (i) {
+      return Componentes.avatar(
+        { nombre: i.nombre, foto: window.SigsoPerfil ? SigsoPerfil.fotoDe(i.email) : '' },
+        { tam: 'sm', clase: 'sigso-py-card__avatar' }
+      );
+    }).join('');
+    var restantes = integrantes.length - MAX_AVATARES_TARJETA;
+    var extra = restantes > 0
+      ? '<span class="sigso-py-card__avatar sigso-py-card__avatar--extra" title="' + restantes + ' más">+' + restantes + '</span>'
+      : '';
+    var vence = venceEn_(p.fecha_objetivo);
+
+    return '<button type="button" class="sigso-py-card js-py-abrir" data-id="' + p.proyecto_id + '">' +
+      '<div class="sigso-py-card__top">' +
+        '<span class="sigso-py-card__nombre">' + Componentes.escaparHtml(p.nombre) + '</span>' +
+        '<span class="sigso-py-salud sigso-py-salud--' + p.salud + '">' + Componentes.punto(SALUD_TONO[p.salud]) + SALUD_ETIQUETA[p.salud] + '</span>' +
+      '</div>' +
+      (p.descripcion ? '<p class="sigso-py-card__desc">' + Componentes.escaparHtml(p.descripcion) + '</p>' : '') +
+      '<div class="sigso-py-card__barra"><div class="sigso-py-card__barra-fill sigso-py-card__barra-fill--' + p.salud + '" style="width:' + (p.avance_pct || 0) + '%"></div></div>' +
+      '<div class="sigso-py-card__meta">' +
+        '<span>Avance <b>' + avance + '</b></span>' +
+        '<span>' + Componentes.badge(ESTADO_PROYECTO_ETIQUETA[p.estado] || p.estado, 'neutro') + '</span>' +
+        '<span>' + p.total_tareas + ' tarea(s)</span>' +
+      '</div>' +
+      '<div class="sigso-py-card__pulso">' +
+        (avatares ? '<span class="sigso-py-card__avatares">' + avatares + extra + '</span>' : '<span></span>') +
+        (vence ? '<span class="sigso-py-card__vence' + (vence.indexOf('Venció') === 0 ? ' sigso-py-card__vence--atrasado' : '') + '">' + vence + '</span>' : '') +
+      '</div>' +
+      (p.ultima_actualizacion
+        ? '<p class="sigso-py-card__novedad">' + Iconos.svg('reloj', { tam: 12 }) + ' Última novedad ' + diasRelativo_(p.ultima_actualizacion) + '</p>'
+        : '') +
+      (p.salud_motivos && p.salud_motivos.length
+        ? '<p class="sigso-py-card__motivos">' + Componentes.escaparHtml(p.salud_motivos.join(' · ')) + '</p>'
+        : '') +
+    '</button>';
+  }
+
+  // v10 (Fase A, "estados de carga con forma"): la MISMA cuadrícula que las
+  // tarjetas reales, con barras de esqueleto en vez de spinner -- así el
+  // contenido no "salta" cuando llega.
+  function esqueletoPortafolio_() {
+    var tarjeta = '<div class="sigso-esq__tarjeta" aria-hidden="true">' +
+      '<span class="sigso-esq__barra" style="width:60%"></span>' +
+      '<span class="sigso-esq__barra" style="width:90%"></span>' +
+      '<span class="sigso-esq__barra" style="width:40%"></span>' +
+    '</div>';
+    var html = '';
+    for (var i = 0; i < 6; i++) html += tarjeta;
+    return '<div class="sigso-py-grid" aria-busy="true" aria-label="Cargando proyectos">' + html + '</div>';
+  }
+
+  // Repinta SOLO la grilla (#py-grid-wrap), sin tocar la barra de
+  // filtros/búsqueda -- así escribir en el buscador no destruye el <input>
+  // en el que se está escribiendo (perdería el foco en cada tecla).
+  function pintarGridPortafolio_() {
+    var wrap = document.getElementById('py-grid-wrap');
+    if (!wrap) return;
+
+    var hayFiltros = !!(filtroEstadoPortafolio_ || filtroSaludPortafolio_ || busquedaPortafolio_.trim());
+    var proyectos = filtroSaludPortafolio_
+      ? proyectosPortafolioSinFiltrarSalud_.filter(function (p) { return p.salud === filtroSaludPortafolio_; })
+      : proyectosPortafolioSinFiltrarSalud_;
+    proyectos = filtrarPorBusquedaPortafolio_(proyectos);
+    proyectos = ordenarProyectosPortafolio_(proyectos);
+
+    if (proyectos.length === 0) {
+      wrap.innerHTML = Componentes.vacio(hayFiltros
+        ? { texto: 'Ningún proyecto coincide con la búsqueda o los filtros.' }
+        : { texto: 'Todavía no participas en ningún proyecto.', detalle: 'Crea uno para empezar.' });
+      return;
+    }
+
+    if (agruparPorLider_) {
+      wrap.innerHTML = agruparProyectosPorLider_(proyectos).map(function (g) {
+        return '<div class="sigso-py-grupo">' +
+          '<h3 class="sigso-py-grupo__titulo">' + Componentes.escaparHtml(g.lider) +
+            ' <span class="sigso-py-grupo__cuenta">' + g.proyectos.length + '</span></h3>' +
+          '<div class="sigso-py-grid">' + g.proyectos.map(tarjetaProyecto_).join('') + '</div>' +
+        '</div>';
+      }).join('');
+    } else {
+      wrap.innerHTML = '<div class="sigso-py-grid">' + proyectos.map(tarjetaProyecto_).join('') + '</div>';
+    }
+
+    wrap.querySelectorAll('.js-py-abrir').forEach(function (btn) {
+      btn.addEventListener('click', function () { abrirProyecto_(btn.getAttribute('data-id')); });
+    });
+  }
+
+  // v10: fotos reales del equipo (si existen) en vez de solo iniciales.
+  // Fire-and-forget: si el usuario ya entró a un proyecto mientras cargaban,
+  // no se repinta el portafolio por encima de otra pantalla.
+  function precargarAvataresPortafolio_(proyectos) {
+    if (!window.SigsoPerfil) return;
+    var correos = [];
+    proyectos.forEach(function (p) {
+      (p.integrantes || []).slice(0, MAX_AVATARES_TARJETA).forEach(function (i) {
+        if (i.email && correos.indexOf(i.email) === -1) correos.push(i.email);
+      });
+    });
+    if (!correos.length) return;
+    SigsoPerfil.precargarFotos(correos).then(function () {
+      if (!proyectoActivoId_) pintarGridPortafolio_();
+    });
+  }
+
+  var TEMPORIZADOR_BUSQUEDA_PORTAFOLIO_MS = 200;
+
   function pintarPortafolio_(cont, proyectosSinFiltrarSalud) {
     var hayFiltros = !!(filtroEstadoPortafolio_ || filtroSaludPortafolio_);
-    var proyectos = filtroSaludPortafolio_
-      ? proyectosSinFiltrarSalud.filter(function (p) { return p.salud === filtroSaludPortafolio_; })
-      : proyectosSinFiltrarSalud;
+    var cabeceraBase = '<div class="sigso-py-cabecera">' +
+      '<p class="sigso-ayuda">Portafolio de proyectos internos: quién lidera cada uno, en qué estado está y qué necesita atención.</p>' +
+      Componentes.boton({ texto: '+ Nuevo proyecto', clase: 'js-py-nuevo' }) +
+      '</div>' + pintarResumenEjecutivo_(resumenPortafolioActual_);
+
+    if (proyectosSinFiltrarSalud.length === 0 && !filtroEstadoPortafolio_) {
+      // Portafolio de verdad vacío (nadie ha creado nada aún): ni siquiera
+      // vale la pena mostrar la barra de búsqueda.
+      cont.innerHTML = cabeceraBase +
+        Componentes.vacio({ texto: 'Todavía no participas en ningún proyecto.', detalle: 'Crea uno para empezar.' });
+      cont.querySelector('.js-py-nuevo').addEventListener('click', abrirFormularioProyecto_);
+      return;
+    }
 
     var filtrosBar = '<div class="sigso-py-filtros">' +
+      Componentes.campoTexto({
+        id: 'py-buscar', label: false, tipo: 'search', valor: busquedaPortafolio_,
+        placeholder: 'Buscar por nombre o líder...', claseCampo: 'sigso-py-filtros__buscar'
+      }) +
       Componentes.campoSelect({
         id: 'py-filtro-estado', label: false, valor: filtroEstadoPortafolio_,
         placeholder: 'Todos los estados',
@@ -177,66 +401,51 @@
         placeholder: 'Toda salud',
         opciones: Object.keys(SALUD_ETIQUETA).map(function (s) { return { valor: s, texto: SALUD_ETIQUETA[s] }; })
       }) +
+      Componentes.campoSelect({
+        id: 'py-orden', label: false, valor: ordenPortafolio_, placeholder: false,
+        opciones: Object.keys(ORDEN_PORTAFOLIO_ETIQUETA).map(function (o) { return { valor: o, texto: ORDEN_PORTAFOLIO_ETIQUETA[o] }; })
+      }) +
+      '<label class="sigso-py-agrupar"><input type="checkbox" id="py-agrupar"' + (agruparPorLider_ ? ' checked' : '') + '> Agrupar por líder</label>' +
       (hayFiltros ? Componentes.boton({ texto: 'Limpiar filtros', variante: 'sutil', clase: 'js-py-limpiar-filtros', tipo: 'button' }) : '') +
       '</div>';
 
-    var cabecera = '<div class="sigso-py-cabecera">' +
-      '<p class="sigso-ayuda">Portafolio de proyectos internos: quién lidera cada uno, en qué estado está y qué necesita atención.</p>' +
-      Componentes.boton({ texto: '+ Nuevo proyecto', clase: 'js-py-nuevo' }) +
-      '</div>' + pintarResumenEjecutivo_(resumenPortafolioActual_) + filtrosBar;
+    cont.innerHTML = cabeceraBase + filtrosBar + '<div id="py-grid-wrap"></div>';
 
-    function wireFiltros() {
-      cont.querySelector('.js-py-nuevo').addEventListener('click', abrirFormularioProyecto_);
-      cont.querySelector('#py-filtro-estado').addEventListener('change', function () {
-        filtroEstadoPortafolio_ = this.value;
-        cargarPortafolio_();
-      });
-      cont.querySelector('#py-filtro-salud').addEventListener('change', function () {
-        filtroSaludPortafolio_ = this.value;
-        pintarPortafolio_(cont, proyectosPortafolioSinFiltrarSalud_);
-      });
-      var limpiar = cont.querySelector('.js-py-limpiar-filtros');
-      if (limpiar) limpiar.addEventListener('click', function () {
-        filtroEstadoPortafolio_ = ''; filtroSaludPortafolio_ = '';
-        cargarPortafolio_();
-      });
-    }
-
-    if (proyectos.length === 0) {
-      var vacio = hayFiltros
-        ? { texto: 'Ningún proyecto coincide con estos filtros.' }
-        : { texto: 'Todavía no participas en ningún proyecto.', detalle: 'Crea uno para empezar.' };
-      cont.innerHTML = cabecera + Componentes.vacio(vacio);
-      wireFiltros();
-      return;
-    }
-
-    var tarjetas = proyectos.map(function (p) {
-      var avance = p.avance_pct === null || p.avance_pct === undefined ? '—' : p.avance_pct + '%';
-      return '<button type="button" class="sigso-py-card js-py-abrir" data-id="' + p.proyecto_id + '">' +
-        '<div class="sigso-py-card__top">' +
-          '<span class="sigso-py-card__nombre">' + Componentes.escaparHtml(p.nombre) + '</span>' +
-          '<span class="sigso-py-salud sigso-py-salud--' + p.salud + '">' + Componentes.punto(SALUD_TONO[p.salud]) + SALUD_ETIQUETA[p.salud] + '</span>' +
-        '</div>' +
-        (p.descripcion ? '<p class="sigso-py-card__desc">' + Componentes.escaparHtml(p.descripcion) + '</p>' : '') +
-        '<div class="sigso-py-card__barra"><div class="sigso-py-card__barra-fill" style="width:' + (p.avance_pct || 0) + '%"></div></div>' +
-        '<div class="sigso-py-card__meta">' +
-          '<span>Avance <b>' + avance + '</b></span>' +
-          '<span>' + Componentes.badge(ESTADO_PROYECTO_ETIQUETA[p.estado] || p.estado, 'neutro') + '</span>' +
-          '<span>' + p.total_tareas + ' tarea(s) · ' + p.total_integrantes + ' integrante(s)</span>' +
-          '<span>Líder ' + Componentes.escaparHtml(p.lider_email) + '</span>' +
-        '</div>' +
-        (p.salud_motivos && p.salud_motivos.length
-          ? '<p class="sigso-py-card__motivos">' + Componentes.escaparHtml(p.salud_motivos.join(' · ')) + '</p>'
-          : '') +
-      '</button>';
-    }).join('');
-
-    cont.innerHTML = cabecera + '<div class="sigso-py-grid">' + tarjetas + '</div>';
-    wireFiltros();
-    cont.querySelectorAll('.js-py-abrir').forEach(function (btn) {
-      btn.addEventListener('click', function () { abrirProyecto_(btn.getAttribute('data-id')); });
+    cont.querySelector('.js-py-nuevo').addEventListener('click', abrirFormularioProyecto_);
+    cont.querySelector('#py-filtro-estado').addEventListener('change', function () {
+      filtroEstadoPortafolio_ = this.value;
+      cargarPortafolio_();
     });
+    cont.querySelector('#py-filtro-salud').addEventListener('change', function () {
+      filtroSaludPortafolio_ = this.value;
+      pintarGridPortafolio_();
+    });
+    cont.querySelector('#py-orden').addEventListener('change', function () {
+      ordenPortafolio_ = this.value;
+      pintarGridPortafolio_();
+    });
+    cont.querySelector('#py-agrupar').addEventListener('change', function () {
+      agruparPorLider_ = this.checked;
+      pintarGridPortafolio_();
+    });
+    var limpiar = cont.querySelector('.js-py-limpiar-filtros');
+    if (limpiar) limpiar.addEventListener('click', function () {
+      filtroEstadoPortafolio_ = ''; filtroSaludPortafolio_ = ''; busquedaPortafolio_ = '';
+      cargarPortafolio_();
+    });
+
+    var temporizadorBusqueda_ = null;
+    cont.querySelector('#py-buscar').addEventListener('input', function () {
+      var valor = this.value;
+      if (temporizadorBusqueda_) clearTimeout(temporizadorBusqueda_);
+      temporizadorBusqueda_ = setTimeout(function () {
+        busquedaPortafolio_ = valor;
+        pintarGridPortafolio_();
+      }, TEMPORIZADOR_BUSQUEDA_PORTAFOLIO_MS);
+    });
+
+    pintarGridPortafolio_();
+    precargarAvataresPortafolio_(proyectosSinFiltrarSalud);
   }
 
   // --- crear proyecto --------------------------------------------------
@@ -323,7 +532,7 @@
     pestanaActiva_ = id;
     var cont = panelProyectos_();
     if (!cont || !datosDetalleActual_) { refrescarDetalle_(); return; }
-    pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala);
+    pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala, datosDetalleActual_.miEmail);
   }
 
   function refrescarDetalle_() {
@@ -334,23 +543,25 @@
     Promise.all([
       api_('getDetalleProyecto', { proyecto_id: proyectoActivoId_ }),
       api_('listarTareasProyecto', { proyecto_id: proyectoActivoId_ }),
-      api_('listarSalaProyecto', { proyecto_id: proyectoActivoId_ })
+      api_('listarSalaProyecto', { proyecto_id: proyectoActivoId_ }),
+      miPerfil_()
     ]).then(function (respuestas) {
-      var rDetalle = respuestas[0], rTareas = respuestas[1], rSala = respuestas[2];
+      var rDetalle = respuestas[0], rTareas = respuestas[1], rSala = respuestas[2], perfil = respuestas[3];
       if (!rDetalle || !rDetalle.ok) {
         cont.innerHTML = Componentes.alerta((rDetalle && rDetalle.message) || 'No se pudo abrir el proyecto.', 'error');
         return;
       }
       var tareas = (rTareas && rTareas.ok) ? rTareas.data : [];
       var sala = (rSala && rSala.ok) ? rSala.data : [];
-      datosDetalleActual_ = { detalle: rDetalle.data, tareas: tareas, sala: sala };
-      pintarDetalle_(cont, rDetalle.data, tareas, sala);
+      var miEmail = normalizarEmail_(perfil && perfil.email);
+      datosDetalleActual_ = { detalle: rDetalle.data, tareas: tareas, sala: sala, miEmail: miEmail };
+      pintarDetalle_(cont, rDetalle.data, tareas, sala, miEmail);
     }).catch(function () {
       cont.innerHTML = Componentes.alerta('No se pudo conectar para abrir el proyecto.', 'error');
     });
   }
 
-  function pintarDetalle_(cont, detalle, tareas, sala) {
+  function pintarDetalle_(cont, detalle, tareas, sala, miEmail) {
     var p = detalle.proyecto;
     // v9.2: la capacidad de gestion la resuelve el backend (puede_gestionar:
     // LIDER del proyecto o ADM). Fallback a rol_actual==='LIDER' para que el
@@ -386,7 +597,7 @@
     var cuerpo = '';
     if (pestanaActiva_ === 'resumen') cuerpo = pintarResumen_(detalle, tareas, puedeGestionar);
     else if (pestanaActiva_ === 'sala') cuerpo = pintarSala_(sala, detalle);
-    else if (pestanaActiva_ === 'tareas') cuerpo = pintarTareas_(tareas, detalle, puedeGestionar);
+    else if (pestanaActiva_ === 'tareas') cuerpo = pintarTareas_(tareas, detalle, puedeGestionar, miEmail);
     else if (pestanaActiva_ === 'hitos') cuerpo = pintarHitos_(detalle, puedeGestionar);
     else if (pestanaActiva_ === 'entregables') cuerpo = pintarEntregables_(detalle, puedeGestionar);
     else if (pestanaActiva_ === 'riesgos') cuerpo = pintarRiesgos_(detalle, puedeGestionar);
@@ -515,7 +726,30 @@
 
   // --- Tareas --------------------------------------------------------------
 
-  function pintarTareas_(tareas, detalle, puedeGestionar) {
+  // v10 (Fase A, propuesta 01 "check-in sin salir del proyecto"): las
+  // pastillas de siempre de "Mi trabajo" (mismo texto, misma clase CSS
+  // sigso-mt-pastilla), pero SOLO en la tarea propia -- comparando el correo
+  // de la tarea con el de quien mira. El backend es quien de verdad manda
+  // (Actividades.checkin exige ser el responsable, RN-702); esto solo evita
+  // ofrecerle a cada integrante un boton que a el le va a rebotar.
+  function accionesCheckinTarea_(a, esMia) {
+    if (!esMia) return '';
+    var pendienteConfirmar = a.fecha_propuesta && !a.confirmada_en;
+    if (pendienteConfirmar || a.estado === 'EN_REVISION' || a.estado === 'TERMINADA' || a.estado === 'CANCELADA') return '';
+    if (a.estado === 'BLOQUEADA') {
+      return '<div class="sigso-mt-checkin">' +
+        '<button type="button" class="sigso-mt-pastilla sigso-mt-pastilla--destacada" data-py-checkin="desbloqueo" data-idx="' + a.actividad_id + '">Ya se destrabó</button>' +
+      '</div>';
+    }
+    return '<div class="sigso-mt-checkin">' +
+      '<button type="button" class="sigso-mt-pastilla" data-py-checkin="avance" data-idx="' + a.actividad_id + '">Avancé</button>' +
+      '<button type="button" class="sigso-mt-pastilla sigso-mt-pastilla--destacada" data-py-checkin="sin_cambio" data-idx="' + a.actividad_id + '">Sin cambios</button>' +
+      '<button type="button" class="sigso-mt-pastilla" data-py-checkin="bloqueo" data-idx="' + a.actividad_id + '">Estoy bloqueado</button>' +
+      '<button type="button" class="sigso-mt-pastilla" data-py-checkin="listo" data-idx="' + a.actividad_id + '">Listo</button>' +
+    '</div>';
+  }
+
+  function pintarTareas_(tareas, detalle, puedeGestionar, miEmail) {
     var puedeCrear = detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
     var acciones = puedeCrear
       ? '<div class="sigso-py-cabecera">' + Componentes.boton({ texto: '+ Nueva tarea', clase: 'js-py-nueva-tarea' }) + '</div>'
@@ -526,14 +760,14 @@
     }
 
     var filas = tareas.map(function (a) {
-      var esMia = true; // el backend ya filtra por acceso; el check-in exige ser el responsable, el boton igual se muestra y el servidor valida.
-      return '<div class="sigso-py-tarea">' +
+      var esMia = !!miEmail && normalizarEmail_(a.responsable_email) === miEmail;
+      return '<div class="sigso-py-tarea' + (esMia ? ' sigso-py-tarea--mia' : '') + '">' +
         '<div class="sigso-py-tarea__top">' +
           '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(a.titulo) + '</span>' +
           '<span class="sigso-badge sigso-mt-badge--' + a.semaforo + '">' + Componentes.escaparHtml(a.semaforo_etiqueta) + '</span>' +
         '</div>' +
         '<div class="sigso-py-tarea__meta">' +
-          '<span>' + Componentes.escaparHtml(a.responsable_nombre || a.responsable_email) + '</span>' +
+          '<span>' + (esMia ? '<b>Tú</b>' : Componentes.escaparHtml(a.responsable_nombre || a.responsable_email)) + '</span>' +
           '<span>Prioridad ' + a.prioridad + '</span>' +
           (a.fecha_compromiso ? '<span>Vence ' + fechaCorta_(a.fecha_compromiso) + '</span>' : '') +
           (a.avance_pct !== '' && a.avance_pct !== undefined && a.avance_pct !== null ? '<span>' + a.avance_pct + '% avance</span>' : '') +
@@ -544,11 +778,11 @@
         (a.dependencia_comprometida
           ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('alerta', { tam: 14 }) + ' Depende de "' + Componentes.escaparHtml(a.dependencia_titulo) + '", que está atrasada.</div>'
           : '') +
+        accionesCheckinTarea_(a, esMia) +
       '</div>';
     }).join('');
 
-    return acciones + '<div class="sigso-py-lista">' + filas + '</div>' +
-      '<p class="sigso-ayuda">Para actualizar el avance de una tarea, entra a "Mi trabajo" — el check-in es el mismo de siempre.</p>';
+    return acciones + '<div class="sigso-py-lista">' + filas + '</div>';
   }
 
   // --- Hitos --------------------------------------------------------------
@@ -742,6 +976,35 @@
 
     var nuevaTarea = cont.querySelector('.js-py-nueva-tarea');
     if (nuevaTarea) nuevaTarea.addEventListener('click', function () { abrirFormularioTarea_(detalle, tareas); });
+
+    // v10 (Fase A, propuesta 01): check-in inline -- mismo endpoint y mismos
+    // tipos que "Mi trabajo" (manejarCheckin_ en actividades.js); aca solo
+    // cambia que al terminar se refresca el PROYECTO, no la lista de "Mi
+    // trabajo".
+    cont.querySelectorAll('[data-py-checkin]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var tipo = btn.getAttribute('data-py-checkin');
+        var actividadId = btn.getAttribute('data-idx');
+        if (tipo === 'bloqueo') {
+          Componentes.prompt({
+            titulo: 'Motivo del bloqueo',
+            mensaje: '¿Qué necesitas para poder seguir? Si sabes quién debe destrabarlo, dilo también.',
+            placeholder: 'Ej: esperando la aprobación de Contabilidad'
+          }).then(function (motivo) {
+            if (motivo === null || motivo === undefined || String(motivo).trim() === '') return;
+            api_('checkinActividad', { actividad_id: actividadId, tipo: 'bloqueo', bloqueo_motivo: motivo }).then(function (r) {
+              if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo actualizar.', tipo: 'error' }); return; }
+              refrescarDetalle_();
+            });
+          });
+          return;
+        }
+        api_('checkinActividad', { actividad_id: actividadId, tipo: tipo }).then(function (r) {
+          if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo actualizar.', tipo: 'error' }); return; }
+          refrescarDetalle_();
+        });
+      });
+    });
 
     var nuevoHito = cont.querySelector('.js-py-nuevo-hito');
     if (nuevoHito) nuevoHito.addEventListener('click', abrirFormularioHito_);

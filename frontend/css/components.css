@@ -2915,14 +2915,48 @@
 .sigso-py-card__barra {
   height: 6px; border-radius: var(--radio-full); background: var(--superficie-2); overflow: hidden;
 }
+/* v10 (Fase A, "tarjetas con mas pulso"): antes la barra era SIEMPRE azul,
+   sin importar si el proyecto estaba critico -- la salud (color) ya vive en
+   la pildora de arriba, pero aca es donde el ojo mira primero. */
 .sigso-py-card__barra-fill { height: 100%; background: var(--primario); border-radius: var(--radio-full); }
+.sigso-py-card__barra-fill--riesgo { background: var(--alerta); }
+.sigso-py-card__barra-fill--critico { background: var(--critico); }
 
 .sigso-py-card__meta {
-  display: flex; gap: var(--esp-3); flex-wrap: wrap; font-size: var(--texto-sm); color: var(--texto-3);
+  display: flex; gap: var(--esp-3); flex-wrap: wrap; font-size: var(--texto-sm); color: var(--texto-2);
 }
-.sigso-py-card__meta b { color: var(--texto-2); font-weight: 600; }
+.sigso-py-card__meta b { color: var(--texto); font-weight: 600; }
 
-.sigso-py-card__motivos { margin: 0; font-size: var(--texto-xs); color: var(--texto-3); }
+/* v10.03.26 (medido en vivo): --texto-3 da 2.95:1, bajo el minimo AA (4.5:1)
+   para texto normal -- mismo defecto ya corregido en otros componentes esta
+   sesion. Se sube a --texto-2 (5.7:1). */
+.sigso-py-card__motivos { margin: 0; font-size: var(--texto-xs); color: var(--texto-2); }
+
+/* Fila de "pulso": avatares del equipo + proximo vencimiento, entre la meta
+   y los motivos -- lo que responde "¿quien esta, y para cuando?" sin abrir
+   el proyecto. */
+.sigso-py-card__pulso {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--esp-2);
+}
+.sigso-py-card__avatares { display: flex; }
+.sigso-py-card__avatar {
+  margin-left: -0.5rem; border: 2px solid var(--superficie); border-radius: 50%;
+}
+.sigso-py-card__avatar:first-child { margin-left: 0; }
+.sigso-py-card__avatar--extra {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 50%;
+  background: var(--superficie-2); color: var(--texto-2); font-size: 0.62rem; font-weight: 700;
+  border: 2px solid var(--superficie);
+}
+.sigso-py-card__vence { font-size: var(--texto-xs); color: var(--texto-2); white-space: nowrap; }
+.sigso-py-card__vence--atrasado { color: var(--critico); font-weight: 600; }
+
+.sigso-py-card__novedad {
+  display: flex; align-items: center; gap: 0.35rem;
+  margin: 0; font-size: var(--texto-xs); color: var(--texto-2);
+}
+.sigso-py-card__novedad svg { flex: 0 0 auto; opacity: .8; }
 
 .sigso-py-motivos {
   margin: 0 0 var(--esp-3); font-size: var(--texto-sm); color: var(--texto-3);
@@ -3456,6 +3490,24 @@
   display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap; margin: var(--esp-3) 0 var(--esp-4);
 }
 .sigso-py-filtros .sigso-campo { margin: 0; flex: 0 1 12rem; min-width: 8rem; }
+/* v10 (Fase A, "buscar/ordenar/agrupar"): el buscador pide mas ancho que un
+   select de opciones fijas -- nombres de proyecto no caben en 12rem. */
+.sigso-py-filtros__buscar { flex: 1 1 16rem; min-width: 12rem; }
+.sigso-py-agrupar {
+  display: inline-flex; align-items: center; gap: var(--esp-2);
+  font-size: var(--texto-sm); color: var(--texto-2); white-space: nowrap; cursor: pointer;
+}
+.sigso-py-agrupar input { margin: 0; }
+
+/* Encabezado de grupo cuando "Agrupar por líder" esta activo. */
+.sigso-py-grupo + .sigso-py-grupo { margin-top: var(--esp-5); }
+.sigso-py-grupo__titulo {
+  display: flex; align-items: baseline; gap: var(--esp-2);
+  font-size: var(--texto-sm); font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--texto-2); margin: 0 0 var(--esp-3); padding-bottom: var(--esp-2);
+  border-bottom: 1px solid var(--borde);
+}
+.sigso-py-grupo__cuenta { font-weight: 500; color: var(--texto-2); text-transform: none; letter-spacing: 0; opacity: .75; }
 
 /* v9.1: gestion de hitos (editar / completar / eliminar) */
 .sigso-py-hito__acciones {
