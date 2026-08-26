@@ -8374,24 +8374,34 @@ var Iconos = (function () {
   // `visible` y el árbol lo obedece. Si un ítem no se puede ver, no se dibuja
   // -- y si un submódulo se queda sin ítems visibles, tampoco.
 
-  // Qué submódulos están abiertos, por módulo. Se recuerda al navegar para
-  // que la rama donde estás no se cierre sola.
-  var abiertos_ = {};
+  // ACORDEÓN de una sola rama por módulo (bug real reportado: antes cada
+  // rama era un boolean INDEPENDIENTE que, una vez abierto, no se volvía a
+  // cerrar solo -- tras navegar un rato por Personas, Seguimiento, Medición
+  // y El sistema, las cuatro quedaban abiertas a la vez aunque el usuario ya
+  // estuviera en "Inicio", y el sidebar se veía "muy extenso"). Ahora se
+  // guarda COMO MUCHO una rama abierta por módulo.
+  //   - abiertoPorModulo_[modulo]: id de la rama abierta, o null si ninguna.
+  //   - activoRecordado_[modulo]: último itemActivo visto, para notar
+  //     cuándo la navegación se movió a otra parte.
+  // Regla: si el ítem activo CAMBIÓ desde el último repintado, manda dónde
+  // estás parado -- se abre la rama que lo contiene (o ninguna, si es un
+  // ítem plano sin grupo, como "Inicio"), y la que estuviera abierta antes
+  // se pliega. Si el ítem activo NO cambió (repintado por otro motivo, ej.
+  // una badge), se respeta lo último que el usuario abrió o cerró a mano.
+  var abiertoPorModulo_ = {};
+  var activoRecordado_ = {};
 
-  function llaveAbierto_(modulo, sub) { return modulo + '␟' + sub; }
-
-  function estaAbierto_(modulo, sub, contieneActivo) {
-    var k = llaveAbierto_(modulo, sub);
-    // Si nadie lo tocó todavía, manda dónde estás parado: la rama del ítem
-    // activo nace abierta para que la navegación diga dónde estás.
-    if (abiertos_[k] === undefined) return !!contieneActivo;
-    return abiertos_[k];
+  function estaAbierto_(modulo, sub) {
+    return abiertoPorModulo_[modulo] === sub;
   }
 
-  function alternarAbierto_(modulo, sub, contieneActivo) {
-    var k = llaveAbierto_(modulo, sub);
-    abiertos_[k] = !estaAbierto_(modulo, sub, contieneActivo);
-    return abiertos_[k];
+  // Un clic en la cabecera de una rama es SIEMPRE exclusivo: abrirla pliega
+  // cualquier otra del mismo módulo (y un segundo clic sobre la misma la
+  // cierra, volviendo a "nada abierto") -- así se navega de a un nivel por
+  // vez, como se pidió.
+  function alternarAbierto_(modulo, sub) {
+    abiertoPorModulo_[modulo] = (abiertoPorModulo_[modulo] === sub) ? null : sub;
+    return abiertoPorModulo_[modulo] === sub;
   }
 
   /**
@@ -8480,11 +8490,29 @@ var Iconos = (function () {
 
       // --- Nivel 2 y 3: sólo del módulo abierto ---
       var visible = def.visible;
-      var ramas = (def.submodulos || []).map(function (sub) {
-        var items = itemsVisibles_(sub, visible);
-        if (!items.length) return '';
+      var subsConItems = (def.submodulos || []).map(function (sub) {
+        return { sub: sub, items: itemsVisibles_(sub, visible) };
+      }).filter(function (x) { return x.items.length > 0; });
 
-        var contieneActivo = items.some(function (it) { return it.id === itemActivo; });
+      // Acordeón de una sola rama (ver abiertoPorModulo_ arriba): si el
+      // ítem activo cambió desde el último repintado de ESTE módulo, la
+      // rama que lo contiene manda -- se abre esa y se pliega cualquier
+      // otra. Si no cambió, se respeta lo último que el usuario abrió o
+      // cerró a mano (ej. está mirando "Inicio" pero abrió "Personas" para
+      // curiosear, sin haber hecho clic en ningún ítem todavía).
+      if (activoRecordado_[m.id] !== itemActivo) {
+        activoRecordado_[m.id] = itemActivo;
+        var grupoDelActivo = null;
+        subsConItems.forEach(function (x) {
+          if (esPlano_(x.sub, x.items)) return;
+          if (x.items.some(function (it) { return it.id === itemActivo; })) grupoDelActivo = x.sub.id;
+        });
+        abiertoPorModulo_[m.id] = grupoDelActivo;
+      }
+
+      var ramas = subsConItems.map(function (x) {
+        var sub = x.sub;
+        var items = x.items;
 
         // Un submódulo de un solo ítem homónimo (o marcado plano) no se
         // dibuja como rama que hay que abrir para encontrar una sola cosa:
@@ -8500,7 +8528,7 @@ var Iconos = (function () {
           '</button>';
         }
 
-        var abierto = estaAbierto_(m.id, sub.id, contieneActivo);
+        var abierto = estaAbierto_(m.id, sub.id);
         var idLista = 'arbol-' + esc_(m.id) + '-' + esc_(sub.id);
         return '<button type="button" class="plataforma-nav__sub' +
             (abierto ? ' plataforma-nav__sub--abierto' : '') +
@@ -8556,13 +8584,11 @@ var Iconos = (function () {
     });
     cont.querySelectorAll('[data-sub]').forEach(function (b) {
       b.addEventListener('click', function () {
-        var mod = b.getAttribute('data-de-modulo');
-        var sub = b.getAttribute('data-sub');
-        var lista = document.getElementById(b.getAttribute('aria-controls'));
-        var ahora = alternarAbierto_(mod, sub, b.getAttribute('aria-expanded') === 'true');
-        b.setAttribute('aria-expanded', ahora ? 'true' : 'false');
-        b.classList.toggle('plataforma-nav__sub--abierto', ahora);
-        if (lista) lista.hidden = !ahora;
+        // Acordeón exclusivo: repinta el árbol ENTERO (no solo este botón)
+        // porque abrir esta rama tiene que plegar cualquier otra del mismo
+        // módulo -- un parche local a un solo <ul> no alcanza para eso.
+        alternarAbierto_(b.getAttribute('data-de-modulo'), b.getAttribute('data-sub'));
+        renderArbol(opts);
       });
     });
     cont.querySelectorAll('[data-item]').forEach(function (b) {
