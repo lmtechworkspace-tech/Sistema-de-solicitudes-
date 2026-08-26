@@ -3615,6 +3615,9 @@
   flex-direction: column;
   gap: 2px;
 }
+/* Mismo defecto que .plataforma-nav__items (ver comentario ahi): sin esto,
+   el atributo `hidden` que pone navegacion.js no oculta nada. */
+.sigso-nav2__items[hidden] { display: none; }
 .sigso-nav2__item {
   width: 100%;
   display: flex;
@@ -3864,6 +3867,14 @@
   padding-left: 0.5rem;
   border-left: 1px solid rgba(255, 255, 255, 0.10);
 }
+/* Bug real reportado (con captura): esta regla fijaba "display:flex" sin
+   condición, y una regla del propio sitio le gana al "display:none" que el
+   navegador aplica por defecto al atributo `hidden` -- el JS (navegacion.js)
+   togglea `hidden` correctamente, pero visualmente la lista quedaba SIEMPRE
+   visible, sin importar si la rama estaba abierta o cerrada. Por eso el
+   acordeón (una rama a la vez) se veía "roto": todas las ramas mostraban
+   sus ítems a la vez, y el clic en el chevron no parecía hacer nada. */
+.plataforma-nav__items[hidden] { display: none; }
 .plataforma-nav__hoja {
   display: flex; align-items: center; gap: 0.45rem;
   width: 100%;
