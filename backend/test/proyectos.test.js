@@ -246,6 +246,57 @@ test('listarTareas: lee ACTIVIDADES filtrando por proyecto_id, acotado a integra
   assert.equal(rechazado._forbidden, true);
 });
 
+// v10 (Fase B, "Mi trabajo en proyectos"): tareas + entregables propios de
+// TODOS mis proyectos en una sola llamada, sin tener que abrir cada uno.
+test('listarMisTareas: junta tareas propias de VARIOS proyectos, ordenadas por urgencia; no trae las de otra persona', () => {
+  const ctx = loadConSchema();
+  const p1 = crearProyectoBase(ctx, { nombre: 'Proyecto 1' });
+  const p2 = crearProyectoBase(ctx, { nombre: 'Proyecto 2' });
+  ctx.Proyectos.gestionarIntegrante({ proyecto_id: p1.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE' }, CTX_LEO);
+  ctx.Proyectos.gestionarIntegrante({ proyecto_id: p2.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE' }, CTX_LEO);
+
+  const t1 = ctx.Proyectos.crearTarea({
+    proyecto_id: p1.proyecto_id, titulo: 'Tarea al día', responsable_email: 'marcelo@rld.cl', fecha_compromiso: '2026-12-01'
+  }, CTX_LEO);
+  const t2 = ctx.Proyectos.crearTarea({
+    proyecto_id: p2.proyecto_id, titulo: 'Tarea atrasada', responsable_email: 'marcelo@rld.cl', fecha_compromiso: '2020-01-01'
+  }, CTX_LEO);
+  // De Leo -- no debe aparecer en la lista de Marcelo.
+  ctx.Proyectos.crearTarea({
+    proyecto_id: p1.proyecto_id, titulo: 'Tarea de Leo', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-08-20'
+  }, CTX_LEO);
+  // RN-710: como las asigna un tercero (Leo), la fecha queda "propuesta" hasta
+  // que Marcelo confirma -- recien ahi cuenta como fecha_compromiso real.
+  ctx.Actividades.confirmar({ actividad_id: t1.actividad_id }, CTX_MARCELO);
+  ctx.Actividades.confirmar({ actividad_id: t2.actividad_id }, CTX_MARCELO);
+
+  const mias = ctx.Proyectos.listarMisTareas({}, CTX_MARCELO);
+  assert.equal(mias.tareas.length, 2);
+  // La atrasada (semaforo mas urgente) va primero, sin importar el orden de creacion.
+  assert.equal(mias.tareas[0].titulo, 'Tarea atrasada');
+  assert.equal(mias.tareas[0].proyecto_nombre, 'Proyecto 2');
+  assert.equal(mias.tareas[1].titulo, 'Tarea al día');
+});
+
+test('listarMisTareas: entregables pendientes propios, pero no los ya APROBADOS', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  const pendiente = ctx.Proyectos.gestionarEntregable({
+    proyecto_id: proyecto.proyecto_id, accion: 'crear', nombre: 'Manual de usuario',
+    responsable_email: 'leo@rld.cl', fecha_comprometida: '2026-09-01'
+  }, CTX_LEO);
+  const aprobado = ctx.Proyectos.gestionarEntregable({
+    proyecto_id: proyecto.proyecto_id, accion: 'crear', nombre: 'Diagrama de arquitectura',
+    responsable_email: 'leo@rld.cl', fecha_comprometida: '2026-09-01'
+  }, CTX_LEO);
+  ctx.Proyectos.gestionarEntregable({ proyecto_id: proyecto.proyecto_id, accion: 'marcarEntregado', entregable_id: aprobado.entregable_id }, CTX_LEO);
+  ctx.Proyectos.revisarEntregable({ proyecto_id: proyecto.proyecto_id, entregable_id: aprobado.entregable_id }, CTX_LEO);
+
+  const mias = ctx.Proyectos.listarMisTareas({}, CTX_LEO);
+  assert.equal(mias.entregables.length, 1);
+  assert.equal(mias.entregables[0].nombre, 'Manual de usuario');
+});
+
 // --- hitos ---------------------------------------------------------------
 
 test('gestionarHito: crear y asociar tareas; no se puede eliminar un hito con tareas', () => {

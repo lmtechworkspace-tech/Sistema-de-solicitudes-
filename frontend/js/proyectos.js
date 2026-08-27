@@ -724,6 +724,127 @@
     return form + '<div class="sigso-py-feed">' + feed + '</div>';
   }
 
+  // v10 (Fase A/B): check-in inline, compartido entre la pestaña "Tareas" de
+  // un proyecto (wireAccionesPestana_, tanto en Lista como en el tablero
+  // Kanban), la vista transversal "Mi trabajo en proyectos"
+  // (pintarMiTrabajoProyectos_) y ahora tambien arrastrar una tarjeta del
+  // Kanban a otra columna (wireKanbanDragDrop_) -- todos terminan en el
+  // MISMO endpoint (checkinActividad). Lo unico que cambia entre ellos es
+  // QUÉ se repinta al terminar.
+  function ejecutarCheckin_(actividadId, tipo, alExito) {
+    if (tipo === 'bloqueo') {
+      Componentes.prompt({
+        titulo: 'Motivo del bloqueo',
+        mensaje: '¿Qué necesitas para poder seguir? Si sabes quién debe destrabarlo, dilo también.',
+        placeholder: 'Ej: esperando la aprobación de Contabilidad'
+      }).then(function (motivo) {
+        if (motivo === null || motivo === undefined || String(motivo).trim() === '') return;
+        api_('checkinActividad', { actividad_id: actividadId, tipo: 'bloqueo', bloqueo_motivo: motivo }).then(function (r) {
+          if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo actualizar.', tipo: 'error' }); return; }
+          alExito();
+        });
+      });
+      return;
+    }
+    api_('checkinActividad', { actividad_id: actividadId, tipo: tipo }).then(function (r) {
+      if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo actualizar.', tipo: 'error' }); return; }
+      alExito();
+    });
+  }
+
+  function wireCheckin_(cont, alExito) {
+    cont.querySelectorAll('[data-py-checkin]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        ejecutarCheckin_(btn.getAttribute('data-idx'), btn.getAttribute('data-py-checkin'), alExito);
+      });
+    });
+  }
+
+  // --- Mi trabajo en proyectos (v10, Fase B) --------------------------------
+  //
+  // Vista transversal: TODAS mis tareas y entregables pendientes, de TODOS
+  // mis proyectos, en un solo lugar -- antes había que entrar proyecto por
+  // proyecto para saber qué toca. Backend: Proyectos.listarMisTareas (ya
+  // filtra por responsable_email === yo, no reusa Actividades.listar a
+  // propósito -- ver comentario en Proyectos.gs).
+  function cargarMiTrabajoProyectos_() {
+    proyectoActivoId_ = null;
+    datosDetalleActual_ = null;
+    var cont = panelProyectos_();
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando tu trabajo...');
+    api_('listarMisTareasProyectos', {}).then(function (r) {
+      if (!r || !r.ok) {
+        cont.innerHTML = Componentes.alerta((r && r.message) || 'No se pudo cargar tu trabajo.', 'error');
+        return;
+      }
+      pintarMiTrabajoProyectos_(cont, r.data || { tareas: [], entregables: [] });
+    }).catch(function () {
+      cont.innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
+    });
+  }
+
+  function pintarMiTrabajoProyectos_(cont, datos) {
+    var tareas = datos.tareas || [];
+    var entregables = datos.entregables || [];
+    var cabecera = '<div class="sigso-py-cabecera">' +
+      '<p class="sigso-ayuda">Tus tareas y entregables pendientes, de todos tus proyectos, en un solo lugar.</p>' +
+    '</div>';
+
+    if (tareas.length === 0 && entregables.length === 0) {
+      cont.innerHTML = cabecera + Componentes.vacio({ texto: 'No tienes tareas ni entregables pendientes en proyectos.' });
+      return;
+    }
+
+    function abrirBoton_(proyectoId, proyectoNombre) {
+      return '<button type="button" class="sigso-mt-link js-py-mt-abrir" data-id="' + proyectoId + '">' +
+        Componentes.escaparHtml(proyectoNombre) + '</button>';
+    }
+
+    var bloqueTareas = '<h3 class="sigso-py-grupo__titulo">Tareas <span class="sigso-py-grupo__cuenta">' + tareas.length + '</span></h3>' +
+      (tareas.length === 0
+        ? Componentes.vacio({ texto: 'No tienes tareas pendientes en proyectos.' })
+        : '<div class="sigso-py-lista">' + tareas.map(function (a) {
+            return '<div class="sigso-py-tarea sigso-py-tarea--mia">' +
+              '<div class="sigso-py-tarea__top">' +
+                '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(a.titulo) + '</span>' +
+                '<span class="sigso-badge sigso-mt-badge--' + a.semaforo + '">' + Componentes.escaparHtml(a.semaforo_etiqueta) + '</span>' +
+              '</div>' +
+              '<div class="sigso-py-tarea__meta">' +
+                abrirBoton_(a.proyecto_id, a.proyecto_nombre) +
+                '<span>Prioridad ' + a.prioridad + '</span>' +
+                (a.fecha_compromiso ? '<span>Vence ' + fechaCorta_(a.fecha_compromiso) + '</span>' : '') +
+                (a.avance_pct !== '' && a.avance_pct !== undefined && a.avance_pct !== null ? '<span>' + a.avance_pct + '% avance</span>' : '') +
+              '</div>' +
+              (a.estado === 'BLOQUEADA' ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('pausado', { tam: 14 }) + ' ' + Componentes.escaparHtml(a.bloqueo_motivo) + '</div>' : '') +
+              accionesCheckinTarea_(a, true) +
+            '</div>';
+          }).join('') + '</div>');
+
+    var bloqueEntregables = entregables.length
+      ? '<h3 class="sigso-py-grupo__titulo">Entregables pendientes <span class="sigso-py-grupo__cuenta">' + entregables.length + '</span></h3>' +
+        '<div class="sigso-py-lista">' + entregables.map(function (e) {
+          return '<div class="sigso-py-tarea">' +
+            '<div class="sigso-py-tarea__top">' +
+              '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(e.nombre) + '</span>' +
+              Componentes.badge(ENTREGABLE_ESTADO_ETIQUETA[e.estado] || e.estado, entregableBadgeVariante_(e.estado)) +
+            '</div>' +
+            '<div class="sigso-py-tarea__meta">' +
+              abrirBoton_(e.proyecto_id, e.proyecto_nombre) +
+              '<span>' + venceEn_(e.fecha_comprometida) + '</span>' +
+            '</div>' +
+          '</div>';
+        }).join('') + '</div>'
+      : '';
+
+    cont.innerHTML = cabecera + bloqueTareas + bloqueEntregables;
+
+    cont.querySelectorAll('.js-py-mt-abrir').forEach(function (btn) {
+      btn.addEventListener('click', function () { abrirProyecto_(btn.getAttribute('data-id')); });
+    });
+    wireCheckin_(cont, cargarMiTrabajoProyectos_);
+  }
+
   // --- Tareas --------------------------------------------------------------
 
   // v10 (Fase A, propuesta 01 "check-in sin salir del proyecto"): las
@@ -749,16 +870,33 @@
     '</div>';
   }
 
+  // v10 (Fase B, tablero Kanban): "Lista" y "Tablero" son dos PRESENTACIONES
+  // de las mismas tareas -- ni los datos ni los permisos cambian entre una y
+  // otra, por eso vive como un simple flag de modulo (mismo patron que
+  // pestanaActiva_), no algo que se pida de nuevo al servidor.
+  var vistaTareas_ = 'lista';
+
   function pintarTareas_(tareas, detalle, puedeGestionar, miEmail) {
     var puedeCrear = detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
-    var acciones = puedeCrear
-      ? '<div class="sigso-py-cabecera">' + Componentes.boton({ texto: '+ Nueva tarea', clase: 'js-py-nueva-tarea' }) + '</div>'
-      : '';
+    var toggle = '<div class="sigso-py-vista-toggle">' +
+        Componentes.boton({ texto: 'Lista', variante: vistaTareas_ === 'lista' ? undefined : 'sutil', clase: 'js-py-tareas-vista', idx: 'lista' }) +
+        Componentes.boton({ texto: 'Tablero', variante: vistaTareas_ === 'tablero' ? undefined : 'sutil', clase: 'js-py-tareas-vista', idx: 'tablero' }) +
+      '</div>';
+    var acciones = '<div class="sigso-py-cabecera">' +
+      (puedeCrear ? Componentes.boton({ texto: '+ Nueva tarea', clase: 'js-py-nueva-tarea' }) : '<span></span>') +
+      toggle +
+    '</div>';
 
     if (tareas.length === 0) {
       return acciones + Componentes.vacio({ texto: 'Todavía no hay tareas en este proyecto.' });
     }
 
+    return acciones + (vistaTareas_ === 'tablero'
+      ? pintarTareasTablero_(tareas, miEmail)
+      : pintarTareasLista_(tareas, miEmail));
+  }
+
+  function pintarTareasLista_(tareas, miEmail) {
     var filas = tareas.map(function (a) {
       var esMia = !!miEmail && normalizarEmail_(a.responsable_email) === miEmail;
       return '<div class="sigso-py-tarea' + (esMia ? ' sigso-py-tarea--mia' : '') + '">' +
@@ -782,7 +920,139 @@
       '</div>';
     }).join('');
 
-    return acciones + '<div class="sigso-py-lista">' + filas + '</div>';
+    return '<div class="sigso-py-lista">' + filas + '</div>';
+  }
+
+  // --- Tareas: tablero Kanban (v10, Fase B) ---------------------------------
+  //
+  // 4 columnas fijas, calcadas de los estados de Actividades.gs -- no hay un
+  // estado de tablero propio, es la MISMA maquina de estados de siempre
+  // vista como columnas. "Lista" agrupa los 3 estados terminales (no tiene
+  // sentido una columna por cada uno: nadie necesita distinguir a simple
+  // vista una tarea terminada de una cancelada en el tablero).
+  var KANBAN_COLUMNAS = [
+    { id: 'NO_INICIADA', titulo: 'Por hacer' },
+    { id: 'EN_CURSO', titulo: 'En curso' },
+    { id: 'BLOQUEADA', titulo: 'Bloqueada' },
+    { id: 'LISTA', titulo: 'Lista' }
+  ];
+
+  function columnaDeEstado_(estado) {
+    if (estado === 'NO_INICIADA' || estado === 'EN_CURSO' || estado === 'BLOQUEADA') return estado;
+    return 'LISTA'; // TERMINADA, EN_REVISION, CANCELADA
+  }
+
+  // Solo se puede arrastrar la tarjeta propia, y solo si el check-in de
+  // verdad podria hacer algo con ella (misma condicion que
+  // accionesCheckinTarea_): una tarea ajena rebotaria en el backend (RN-702)
+  // y una ya en "Lista" no tiene a donde volver (Actividades.gs no tiene
+  // transicion hacia atras desde un estado terminal).
+  function puedeArrastrarTarea_(a, esMia) {
+    if (!esMia) return false;
+    var pendienteConfirmar = a.fecha_propuesta && !a.confirmada_en;
+    if (pendienteConfirmar) return false;
+    return columnaDeEstado_(a.estado) !== 'LISTA';
+  }
+
+  // Que tipo de checkinActividad dispara soltar una tarjeta en `columnaDestino`,
+  // viniendo de `estadoOrigen`. null = no hay transicion valida (soltar ahi
+  // no hace nada -- p.ej. "Por hacer" nunca es un destino, o soltar en la
+  // misma columna de la que salio).
+  function tipoCheckinParaColumna_(columnaDestino, estadoOrigen) {
+    if (columnaDestino === columnaDeEstado_(estadoOrigen)) return null;
+    if (columnaDestino === 'NO_INICIADA') return null;
+    if (columnaDestino === 'BLOQUEADA') return 'bloqueo';
+    if (columnaDestino === 'EN_CURSO') return estadoOrigen === 'BLOQUEADA' ? 'desbloqueo' : 'sin_cambio';
+    if (columnaDestino === 'LISTA') return 'listo';
+    return null;
+  }
+
+  function tarjetaKanban_(a, esMia) {
+    var arrastrable = puedeArrastrarTarea_(a, esMia);
+    return '<div class="sigso-kanban__tarjeta' + (esMia ? ' sigso-kanban__tarjeta--mia' : '') +
+        (arrastrable ? ' sigso-kanban__tarjeta--arrastrable' : '') + '"' +
+        (arrastrable ? ' draggable="true"' : '') +
+        ' data-actividad-id="' + a.actividad_id + '" data-estado-origen="' + a.estado + '">' +
+      '<div class="sigso-py-tarea__top">' +
+        '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(a.titulo) + '</span>' +
+        '<span class="sigso-badge sigso-mt-badge--' + a.semaforo + '">' + Componentes.escaparHtml(a.semaforo_etiqueta) + '</span>' +
+      '</div>' +
+      '<div class="sigso-py-tarea__meta">' +
+        '<span>' + (esMia ? '<b>Tú</b>' : Componentes.escaparHtml(a.responsable_nombre || a.responsable_email)) + '</span>' +
+        (a.fecha_compromiso ? '<span>Vence ' + fechaCorta_(a.fecha_compromiso) + '</span>' : '') +
+      '</div>' +
+      (a.estado === 'BLOQUEADA' ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('pausado', { tam: 14 }) + ' ' + Componentes.escaparHtml(a.bloqueo_motivo) + '</div>' : '') +
+      // Las mismas pastillas de siempre, aca doblan de fallback tactil/mobile
+      // (donde arrastrar no es comodo): tocar "Listo" mueve la tarjeta igual
+      // que soltarla en la columna "Lista".
+      accionesCheckinTarea_(a, esMia) +
+    '</div>';
+  }
+
+  function pintarTareasTablero_(tareas, miEmail) {
+    var porColumna = { NO_INICIADA: [], EN_CURSO: [], BLOQUEADA: [], LISTA: [] };
+    tareas.forEach(function (a) { porColumna[columnaDeEstado_(a.estado)].push(a); });
+
+    var columnas = KANBAN_COLUMNAS.map(function (c) {
+      var items = porColumna[c.id];
+      var tarjetas = items.map(function (a) {
+        var esMia = !!miEmail && normalizarEmail_(a.responsable_email) === miEmail;
+        return tarjetaKanban_(a, esMia);
+      }).join('');
+      return '<div class="sigso-kanban__columna" data-columna="' + c.id + '">' +
+        '<h3 class="sigso-kanban__titulo">' + c.titulo + ' <span class="sigso-kanban__cuenta">' + items.length + '</span></h3>' +
+        '<div class="sigso-kanban__tarjetas">' + (tarjetas || '<p class="sigso-ayuda sigso-kanban__vacia">Sin tareas</p>') + '</div>' +
+      '</div>';
+    }).join('');
+
+    return '<div class="sigso-kanban">' + columnas + '</div>';
+  }
+
+  // Arrastre HTML5 nativo. Estado de "que se esta arrastrando" en una
+  // variable de modulo (no en dataTransfer): todo ocurre en la misma pagina,
+  // asi que no hace falta serializar nada -- alcanza con leerlo de vuelta en
+  // el 'drop'. dataTransfer.setData igual se llama (Firefox lo exige para
+  // permitir el drag en absoluto).
+  var arrastrandoId_ = null;
+  var arrastrandoEstado_ = null;
+
+  function wireKanbanDragDrop_(cont, alExito) {
+    cont.querySelectorAll('.sigso-kanban__tarjeta--arrastrable').forEach(function (tarjeta) {
+      tarjeta.addEventListener('dragstart', function (ev) {
+        arrastrandoId_ = tarjeta.getAttribute('data-actividad-id');
+        arrastrandoEstado_ = tarjeta.getAttribute('data-estado-origen');
+        tarjeta.classList.add('sigso-kanban__tarjeta--arrastrando');
+        if (ev.dataTransfer) {
+          ev.dataTransfer.effectAllowed = 'move';
+          ev.dataTransfer.setData('text/plain', arrastrandoId_);
+        }
+      });
+      tarjeta.addEventListener('dragend', function () {
+        tarjeta.classList.remove('sigso-kanban__tarjeta--arrastrando');
+      });
+    });
+
+    cont.querySelectorAll('.sigso-kanban__columna').forEach(function (columna) {
+      columna.addEventListener('dragover', function (ev) {
+        if (!arrastrandoId_) return;
+        ev.preventDefault();
+        columna.classList.add('sigso-kanban__columna--sobre');
+      });
+      columna.addEventListener('dragleave', function () {
+        columna.classList.remove('sigso-kanban__columna--sobre');
+      });
+      columna.addEventListener('drop', function (ev) {
+        ev.preventDefault();
+        columna.classList.remove('sigso-kanban__columna--sobre');
+        if (!arrastrandoId_) return;
+        var tipo = tipoCheckinParaColumna_(columna.getAttribute('data-columna'), arrastrandoEstado_);
+        var id = arrastrandoId_;
+        arrastrandoId_ = null;
+        arrastrandoEstado_ = null;
+        if (!tipo) return; // misma columna, o "Por hacer" como destino: no-op silencioso
+        ejecutarCheckin_(id, tipo, alExito);
+      });
+    });
   }
 
   // --- Hitos --------------------------------------------------------------
@@ -981,30 +1251,18 @@
     // tipos que "Mi trabajo" (manejarCheckin_ en actividades.js); aca solo
     // cambia que al terminar se refresca el PROYECTO, no la lista de "Mi
     // trabajo".
-    cont.querySelectorAll('[data-py-checkin]').forEach(function (btn) {
+    wireCheckin_(cont, refrescarDetalle_);
+
+    // v10 (Fase B): toggle Lista/Tablero -- solo cambia la PRESENTACION
+    // (vistaTareas_), asi que repinta con cambiarPestana_ (sin red) en vez
+    // de refrescarDetalle_.
+    cont.querySelectorAll('.js-py-tareas-vista').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        var tipo = btn.getAttribute('data-py-checkin');
-        var actividadId = btn.getAttribute('data-idx');
-        if (tipo === 'bloqueo') {
-          Componentes.prompt({
-            titulo: 'Motivo del bloqueo',
-            mensaje: '¿Qué necesitas para poder seguir? Si sabes quién debe destrabarlo, dilo también.',
-            placeholder: 'Ej: esperando la aprobación de Contabilidad'
-          }).then(function (motivo) {
-            if (motivo === null || motivo === undefined || String(motivo).trim() === '') return;
-            api_('checkinActividad', { actividad_id: actividadId, tipo: 'bloqueo', bloqueo_motivo: motivo }).then(function (r) {
-              if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo actualizar.', tipo: 'error' }); return; }
-              refrescarDetalle_();
-            });
-          });
-          return;
-        }
-        api_('checkinActividad', { actividad_id: actividadId, tipo: tipo }).then(function (r) {
-          if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo actualizar.', tipo: 'error' }); return; }
-          refrescarDetalle_();
-        });
+        vistaTareas_ = btn.getAttribute('data-idx');
+        cambiarPestana_('tareas');
       });
     });
+    wireKanbanDragDrop_(cont, refrescarDetalle_);
 
     var nuevoHito = cont.querySelector('.js-py-nuevo-hito');
     if (nuevoHito) nuevoHito.addEventListener('click', abrirFormularioHito_);
@@ -1678,6 +1936,12 @@
   // Lo que sí es navegación de módulo son sus dos destinos: el portafolio y
   // los reportes.
   var ARQUITECTURA_PROYECTOS = [
+    // v10 (Fase B, propuesta 03 "Mi trabajo en proyectos"): primero, porque es
+    // la vista personal -- lo que a MÍ me toca hoy, de todos mis proyectos a
+    // la vez -- en vez de tener que entrar proyecto por proyecto a revisarlo.
+    { id: 'mi-trabajo', nombre: 'Mi trabajo', icono: 'persona', plano: true, items: [
+      { id: 'mi-trabajo', nombre: 'Mi trabajo en proyectos' }
+    ] },
     { id: 'portafolio', nombre: 'Portafolio', icono: 'caja', plano: true, items: [
       { id: 'portafolio', nombre: 'Portafolio' }
     ] },
@@ -1728,6 +1992,7 @@
     if (id !== 'reportes') reportePyAbierto_ = null;
     if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id);
     if (id === 'reportes') renderReportesProyectos_();
+    else if (id === 'mi-trabajo') cargarMiTrabajoProyectos_();
     else cargarPortafolio_();
   }
 

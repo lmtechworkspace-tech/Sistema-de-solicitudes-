@@ -3017,6 +3017,44 @@
   margin-top: var(--esp-1); font-size: var(--texto-sm); color: var(--texto-3);
   display: flex; gap: var(--esp-4); flex-wrap: wrap;
 }
+/* v10 (Fase B, "Mi trabajo en proyectos"): el nombre del proyecto, dentro de
+   la meta de una tarea/entregable, es un enlace para volver a ese proyecto. */
+.sigso-mt-link {
+  background: none; border: none; padding: 0; margin: 0; font: inherit; font-size: inherit;
+  color: var(--primario); cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+}
+.sigso-mt-link:hover { color: var(--primario-tinta); }
+
+/* v10 (Fase B): toggle Lista/Tablero de la pestaña Tareas. */
+.sigso-py-vista-toggle { display: flex; gap: var(--esp-2); }
+
+/* v10 (Fase B): tablero Kanban de tareas. Columnas de ancho minimo fijo
+   dentro de un contenedor flex -- en desktop reparten el espacio disponible
+   (flex-grow), en mobile se desbordan y quedan scrolleables horizontalmente
+   solas, sin necesidad de una media query aparte. */
+.sigso-kanban {
+  display: flex; gap: var(--esp-3); overflow-x: auto; padding-bottom: var(--esp-2);
+}
+.sigso-kanban__columna {
+  flex: 1 1 16rem; min-width: 16rem; background: var(--superficie-2);
+  border-radius: var(--radio-md); padding: var(--esp-3);
+  display: flex; flex-direction: column; gap: var(--esp-2);
+  transition: background var(--mov-rapido), outline-color var(--mov-rapido);
+}
+.sigso-kanban__columna--sobre { outline: 2px dashed var(--primario); outline-offset: -2px; background: var(--primario-suave); }
+.sigso-kanban__titulo {
+  margin: 0; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
+  color: var(--texto-2); display: flex; align-items: center; gap: var(--esp-2);
+}
+.sigso-kanban__cuenta { font-weight: 500; opacity: .75; text-transform: none; letter-spacing: 0; }
+.sigso-kanban__tarjetas { display: flex; flex-direction: column; gap: var(--esp-2); min-height: 3rem; }
+.sigso-kanban__vacia { text-align: center; padding: var(--esp-3) 0; margin: 0; }
+.sigso-kanban__tarjeta {
+  background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio-md); padding: var(--esp-3);
+}
+.sigso-kanban__tarjeta--arrastrable { cursor: grab; }
+.sigso-kanban__tarjeta--arrastrable:active { cursor: grabbing; }
+.sigso-kanban__tarjeta--arrastrando { opacity: .5; }
 
 /* ===== v10.0: modulo Calidad / SGC ISO 9001 =============================
    Repositorio documental. Reusa los tokens de siempre; el unico acento

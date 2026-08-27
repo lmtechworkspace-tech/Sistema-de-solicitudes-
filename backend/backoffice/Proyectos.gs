@@ -95,6 +95,66 @@ var Proyectos = {
     });
   },
 
+  // v10 (Fase B, propuesta 03 "Mi trabajo en proyectos"): TODAS mis tareas y
+  // entregables pendientes, de TODOS mis proyectos, en un solo lugar --
+  // antes había que entrar proyecto por proyecto para saber qué te toca.
+  // Deliberadamente NO reusa Actividades.listar (mezclaria actividades
+  // sueltas de "Mi trabajo" con las de proyecto); filtra ACTIVIDADES
+  // directo, acotado a proyecto_id no vacío.
+  listarMisTareas: function (data, contexto) {
+    var email = normalizarEmailProyecto_(contexto.email);
+    var misProyectos = {};
+    proyectosDelUsuario_(contexto.email).forEach(function (id) { misProyectos[id] = true; });
+    var esAdmGerencia = contexto.rol === 'ADM' || contexto.rol === 'GERENCIA';
+
+    var proyectosPorId = {};
+    leerFilasSeguro_(SHEETS.PROYECTOS).forEach(function (p) { proyectosPorId[p.proyecto_id] = p; });
+
+    function esMiaYVisible(proyectoId, responsableEmail) {
+      if (normalizarEmailProyecto_(responsableEmail) !== email) return false;
+      return esAdmGerencia || misProyectos[proyectoId];
+    }
+
+    var tareas = leerFilasSeguro_(SHEETS.ACTIVIDADES).filter(function (a) {
+      var activa = a.activa === true || a.activa === 'TRUE' || a.activa === 1;
+      return activa && a.proyecto_id && esMiaYVisible(a.proyecto_id, a.responsable_email);
+    }).map(function (a) {
+      var s = semaforoActividad_(a);
+      var proyecto = proyectosPorId[a.proyecto_id];
+      return {
+        actividad_id: a.actividad_id, titulo: a.titulo, estado: a.estado,
+        prioridad: a.prioridad, fecha_compromiso: a.fecha_compromiso,
+        avance_pct: a.avance_pct, bloqueo_motivo: a.bloqueo_motivo,
+        fecha_propuesta: a.fecha_propuesta, confirmada_en: a.confirmada_en,
+        semaforo: s.codigo, semaforo_etiqueta: s.etiqueta,
+        proyecto_id: a.proyecto_id,
+        proyecto_nombre: proyecto ? proyecto.nombre : '(proyecto eliminado)'
+      };
+    }).sort(function (a, b) {
+      var orden = { atrasada: 0, riesgo: 1, pendiente: 2, bloqueada: 3, 'al-dia': 4, revision: 5, terminada: 6, cancelada: 7 };
+      var oa = orden[a.semaforo] === undefined ? 9 : orden[a.semaforo];
+      var ob = orden[b.semaforo] === undefined ? 9 : orden[b.semaforo];
+      if (oa !== ob) return oa - ob;
+      return new Date(a.fecha_compromiso || '9999-12-31') - new Date(b.fecha_compromiso || '9999-12-31');
+    });
+
+    // Entregables PENDIENTES/OBSERVADOS (APROBADO/CANCELADO ya no requieren
+    // accion de su responsable -- mismo criterio que la salud del proyecto,
+    // ver calcularSaludProyecto_).
+    var entregables = leerFilasSeguro_(SHEETS.PROYECTO_ENTREGABLES).filter(function (e) {
+      return e.estado !== 'APROBADO' && e.estado !== 'CANCELADO' && esMiaYVisible(e.proyecto_id, e.responsable_email);
+    }).map(function (e) {
+      var proyecto = proyectosPorId[e.proyecto_id];
+      return {
+        entregable_id: e.entregable_id, nombre: e.nombre, estado: e.estado,
+        fecha_comprometida: e.fecha_comprometida,
+        proyecto_id: e.proyecto_id, proyecto_nombre: proyecto ? proyecto.nombre : '(proyecto eliminado)'
+      };
+    }).sort(function (a, b) { return new Date(a.fecha_comprometida || '9999-12-31') - new Date(b.fecha_comprometida || '9999-12-31'); });
+
+    return { tareas: tareas, entregables: entregables };
+  },
+
   // --- Detalle de un proyecto (Resumen / Sala / Tareas / Hitos / Equipo) --
   getDetalle: function (data, contexto) {
     var proyecto = buscarProyecto_(data.proyecto_id);

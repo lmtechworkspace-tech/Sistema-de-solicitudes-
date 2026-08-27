@@ -202,7 +202,20 @@ function construirContexto() {
       'VERDE', '', '', '', '',
       new Date(Date.now() - 1 * 24 * 3600 * 1000).toISOString(), 0,
       new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(), 'leo@rld.cl', true,
-      'PROY-DEMO-1', '']
+      'PROY-DEMO-1', ''],
+    // v10 (Fase B, "Mi trabajo en proyectos" + tablero Kanban): tarea de Leo
+    // en OTRO proyecto (PROY-DEMO-3) -- prueba en vivo que la vista
+    // transversal junta tareas de VARIOS proyectos, y que el tablero tiene
+    // una tarjeta en "Por hacer" (NO_INICIADA), ademas ya vencida.
+    ['ACT-DEMO-6', 'Renovar el certificado SSL en el proveedor', '',
+      'PROPIA', '', 'leo@rld.cl', 'Leo Estay', 'jefe@homepymes.cl',
+      'AREA_PLAT', '', '', 'P1', 'NO_INICIADA', 'S',
+      '', new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(), new Date(Date.now() - 20 * 24 * 3600 * 1000).toISOString(), false,
+      'NINGUNA', '', '', '',
+      'VERDE', '', '', '', '',
+      new Date(Date.now() - 20 * 24 * 3600 * 1000).toISOString(), 0,
+      new Date(Date.now() - 20 * 24 * 3600 * 1000).toISOString(), 'leo@rld.cl', true,
+      'PROY-DEMO-3', '']
   ]);
   seedSheet(ctx, 'ACTIVIDADES_BITACORA', ctx.COLUMNAS.ACTIVIDADES_BITACORA);
   // v9.0: Proyectos -- un proyecto demo con Leo de lider y jefe@homepymes.cl
@@ -265,7 +278,12 @@ function construirContexto() {
   seedSheet(ctx, 'PROYECTO_ENTREGABLES', ctx.COLUMNAS.PROYECTO_ENTREGABLES, [
     ['PYD-DEMO-1', 'PROY-DEMO-1', 'PYH-DEMO-1', 'Manual de migracion', 'Guia paso a paso para el equipo de soporte.',
       'jefe@homepymes.cl', new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString(), 'PENDIENTE', '', '', '', '', '',
-      new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString()]
+      new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString()],
+    // v10 (Fase B, "Mi trabajo en proyectos"): entregable pendiente de Leo,
+    // para ver el bloque de entregables de la vista transversal en local.
+    ['PYD-DEMO-2', 'PROY-DEMO-1', '', 'Video resumen ejecutivo', 'Corto de 2 minutos para presentar el avance a gerencia.',
+      'leo@rld.cl', new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(), 'PENDIENTE', '', '', '', '', '',
+      new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString()]
   ]);
   seedSheet(ctx, 'PROYECTO_RIESGOS', ctx.COLUMNAS.PROYECTO_RIESGOS, [
     ['PYR-DEMO-1', 'PROY-DEMO-1', 'El proveedor de hosting puede atrasar la ventana de corte', 'ALTA', 'ALTA', 'ALTA',

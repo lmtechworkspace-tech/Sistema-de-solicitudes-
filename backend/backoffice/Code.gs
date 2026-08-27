@@ -172,6 +172,9 @@ var BACKOFFICE_ACTIONS = {
   // ciclo de vida de la tarea sigue usando las acciones de Actividades ya
   // conectadas arriba (checkinActividad, reasignarActividad, etc.).
   listarProyectos: handleListarProyectos_,
+  // v10 (Fase B, "Mi trabajo en proyectos"): tareas + entregables propios de
+  // TODOS mis proyectos, en una sola llamada.
+  listarMisTareasProyectos: handleListarMisTareasProyectos_,
   getDetalleProyecto: handleGetDetalleProyecto_,
   crearProyecto: handleCrearProyecto_,
   actualizarProyecto: handleActualizarProyecto_,
@@ -468,6 +471,7 @@ var MODULO_POR_ACCION = {
   // cualquier proyecto desde su propio panel, de solo lectura (Proyectos.gs
   // ya lo permite: puedeVerProyecto_ acepta rol GERENCIA).
   listarProyectos: ['proyectos', 'gerencia'],
+  listarMisTareasProyectos: 'proyectos',
   getDetalleProyecto: ['proyectos', 'gerencia'],
   crearProyecto: 'proyectos',
   actualizarProyecto: 'proyectos',
@@ -1137,6 +1141,10 @@ function handleDescargarActaReunionPdf_(data, contexto) {
 // acciones de Actividades ya conectadas mas arriba.
 function handleListarProyectos_(data, contexto) {
   return responderResultado_(Proyectos.listar(data, contexto));
+}
+
+function handleListarMisTareasProyectos_(data, contexto) {
+  return responderResultado_(Proyectos.listarMisTareas(data, contexto));
 }
 
 function handleGetDetalleProyecto_(data, contexto) {
