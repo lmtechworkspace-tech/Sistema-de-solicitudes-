@@ -151,6 +151,24 @@
         descargarOrdenTrabajo_(detalle.solicitud.solicitud_id, botonOt);
       });
     }
+
+    // v10 (Fase D, propuesta 10): abre el MISMO modal de "Nuevo proyecto"
+    // de Proyectos.js (via window.SigsoProyectos), prellenado con el título
+    // del primer ítem y el solicitante -- sin duplicar el formulario acá.
+    var botonConvertir = document.getElementById('btn-convertir-proyecto');
+    if (botonConvertir && window.SigsoProyectos && window.SigsoProyectos.abrirFormularioDesdeSolicitud) {
+      botonConvertir.addEventListener('click', function () {
+        var primerItem = (detalle.subsolicitudes || [])[0];
+        var solicitante = detalle.solicitud.solicitante_nombre
+          ? detalle.solicitud.solicitante_nombre + (detalle.solicitud.solicitante_email ? ' <' + detalle.solicitud.solicitante_email + '>' : '')
+          : '';
+        window.SigsoProyectos.abrirFormularioDesdeSolicitud({
+          nombre: (primerItem && primerItem.titulo) || ('Proyecto desde la solicitud ' + detalle.solicitud.solicitud_id),
+          descripcion: (solicitante ? 'Solicitante original: ' + solicitante + '. ' : '') + ((primerItem && primerItem.descripcion) || ''),
+          solicitud_id: detalle.solicitud.solicitud_id
+        });
+      });
+    }
   }
 
   // v5.2 (mejora OT): pide el PDF de la OT al backend (base64), lo convierte a
@@ -229,6 +247,13 @@
       '</div>' +
       '<div class="sigso-detalle-toolbar__acciones">' + cta +
       '<button type="button" class="sigso-boton--secundario sigso-boton--con-icono" id="btn-imprimir-ot">' + Iconos.svg('documento') + 'Orden de trabajo (PDF)</button>' +
+      // v10 (Fase D, propuesta 10 "Solicitud -> Proyecto"): una vez
+      // convertida, el boton desaparece (no se puede convertir dos veces --
+      // el backend igual lo rechazaria, pero ofrecer el boton invitaria al
+      // error) y en su lugar se ve un enlace de vuelta al proyecto.
+      (s.proyecto_id
+        ? '<span class="sigso-ayuda">Convertida en el proyecto <b>' + Componentes.escaparHtml(s.proyecto_id) + '</b></span>'
+        : '<button type="button" class="sigso-boton--secundario sigso-boton--con-icono" id="btn-convertir-proyecto">' + Iconos.svg('caja') + 'Convertir en proyecto</button>') +
       '</div>' +
       '</div>';
   }

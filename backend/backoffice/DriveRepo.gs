@@ -63,3 +63,13 @@ function obtenerCarpetaNovedades_() {
 function obtenerCarpetaCalidad_() {
   return obtenerOCrearSubcarpeta_(obtenerCarpetaRaiz_(), 'SIGSO_Calidad');
 }
+
+// v10 (Fase D, propuesta 08 "adjuntos por proyecto"): una subcarpeta por
+// proyecto (por proyecto_id, no por nombre -- un nombre de proyecto puede
+// repetirse o cambiar; el id nunca). Privada como el resto, mismo motivo
+// que Novedades/Calidad: se sirve por Proyectos.descargarAdjunto (verifica
+// puedeVerProyecto_), la carpeta nunca se hace publica.
+function obtenerCarpetaProyecto_(proyecto) {
+  var carpetaProyectos = obtenerOCrearSubcarpeta_(obtenerCarpetaRaiz_(), 'SIGSO_Proyectos');
+  return obtenerOCrearSubcarpeta_(carpetaProyectos, proyecto.proyecto_id);
+}

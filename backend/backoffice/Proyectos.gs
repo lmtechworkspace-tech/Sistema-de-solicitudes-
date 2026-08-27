@@ -20,6 +20,38 @@
  * tipada, mismo espiritu que ACTIVIDADES_BITACORA (no HISTORIAL_* x N).
  */
 
+// v10 (Fase D, "adjuntos por proyecto"): mismo tope que Calidad.gs/Novedades.gs.
+var MAX_ADJUNTO_PROYECTO_BYTES = 10 * 1024 * 1024;
+
+// Mismas firmas binarias que Perfiles.gs (detectarMimeImagen_) -- esa
+// funcion vive dentro del IIFE de Perfiles y no es global, asi que se
+// copia aca en vez de exportarla solo para este uso.
+var FIRMAS_IMAGEN_PROYECTO_ = [
+  { mime: 'image/jpeg', firma: [0xFF, 0xD8, 0xFF] },
+  { mime: 'image/png', firma: [0x89, 0x50, 0x4E, 0x47] }
+];
+function esWebpProyecto_(bytes) {
+  if (!bytes || bytes.length < 12) return false;
+  var riff = [0x52, 0x49, 0x46, 0x46], webp = [0x57, 0x45, 0x42, 0x50];
+  for (var i = 0; i < 4; i++) {
+    if ((bytes[i] & 0xFF) !== riff[i]) return false;
+    if ((bytes[8 + i] & 0xFF) !== webp[i]) return false;
+  }
+  return true;
+}
+function detectarMimeImagenProyecto_(bytes) {
+  if (!bytes || !bytes.length) return null;
+  for (var i = 0; i < FIRMAS_IMAGEN_PROYECTO_.length; i++) {
+    var candidato = FIRMAS_IMAGEN_PROYECTO_[i];
+    var coincide = true;
+    for (var j = 0; j < candidato.firma.length; j++) {
+      if ((bytes[j] & 0xFF) !== candidato.firma[j]) { coincide = false; break; }
+    }
+    if (coincide) return candidato.mime;
+  }
+  return esWebpProyecto_(bytes) ? 'image/webp' : null;
+}
+
 var Proyectos = {
   // --- Portafolio ----------------------------------------------------------
   // ADM/GERENCIA ven todos los proyectos activos; el resto ve solo los
@@ -254,8 +286,31 @@ var Proyectos = {
       salud: salud.codigo,
       salud_etiqueta: salud.etiqueta,
       salud_motivos: salud.motivos,
-      requiere_atencion: calcularRequiereAtencion_(tareas, hitos, integrantes)
+      requiere_atencion: calcularRequiereAtencion_(tareas, hitos, integrantes),
+      // v10 (Fase D, propuesta 09 "resumen diario"): "que se movio" desde la
+      // ULTIMA VEZ que ESTA persona vio la Sala -- null si nunca la visito
+      // (primera vez: no hay "desde" que mostrar, seria ruido).
+      resumen_desde_ultima_visita: calcularResumenVisitaProyecto_(proyecto, contexto, integrantes, tareas)
     };
+  },
+
+  // Actualiza "cuando vi la Sala por ultima vez" a ahora mismo -- lo llama
+  // el frontend al abrir la pestaña Sala (marcar como leido). Sin fila de
+  // integrante (ADM/GERENCIA mirando sin ser miembros) no hay donde guardarlo:
+  // no es un error, simplemente esas cuentas nunca ven el resumen "desde tu
+  // ultima visita" (tiene sentido: no son "su" proyecto).
+  marcarSalaVisitada: function (data, contexto) {
+    var proyecto = buscarProyecto_(data && data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    var integrante = leerFilasSeguro_(SHEETS.PROYECTO_INTEGRANTES).filter(function (i) {
+      return i.proyecto_id === proyecto.proyecto_id &&
+        normalizarEmailProyecto_(i.usuario_email) === normalizarEmailProyecto_(contexto.email) && esVerdaderoProyecto_(i.activo);
+    })[0];
+    if (!integrante) return { actualizado: false };
+    actualizarFilaPorId_(SHEETS.PROYECTO_INTEGRANTES, 'integrante_id', integrante.integrante_id, {
+      ultima_visita_sala: new Date().toISOString()
+    });
+    return { actualizado: true };
   },
 
   // --- CRUD del proyecto ---------------------------------------------------
@@ -266,6 +321,18 @@ var Proyectos = {
     if (!liderEmail) return errorValidacion_('lider_email', 'Falta el líder del proyecto.');
     if (!data.fecha_inicio) return errorValidacion_('fecha_inicio', 'La fecha de inicio es obligatoria.');
     if (!data.fecha_objetivo) return errorValidacion_('fecha_objetivo', 'La fecha objetivo es obligatoria.');
+
+    // v10 (Fase D, propuesta 10 "Solicitud -> Proyecto"): se valida ANTES de
+    // crear nada -- una solicitud inexistente o ya convertida no debe dejar
+    // un proyecto huerfano a medio crear.
+    var solicitudOrigen = null;
+    if (data.solicitud_id) {
+      solicitudOrigen = leerFilasSeguro_(SHEETS.SOLICITUDES).filter(function (s) { return s.solicitud_id === data.solicitud_id; })[0];
+      if (!solicitudOrigen) return errorValidacion_('solicitud_id', 'La solicitud de origen no existe.');
+      if (solicitudOrigen.proyecto_id) {
+        return errorValidacion_('solicitud_id', 'Esa solicitud ya se convirtió en el proyecto ' + solicitudOrigen.proyecto_id + '.');
+      }
+    }
 
     var ahora = new Date();
     var proyecto = {
@@ -289,7 +356,12 @@ var Proyectos = {
       ultima_actualizacion: ahora.toISOString(),
       creado_por: contexto.email || '',
       fecha_creacion: ahora.toISOString(),
-      activa: true
+      activa: true,
+      // v10 (Fase D, propuesta 10 "Solicitud -> Proyecto"): solo
+      // trazabilidad -- de donde salio este proyecto, si vino de convertir
+      // una solicitud. Nunca se usa para permisos ni cambia nada del ciclo
+      // de vida de la solicitud original.
+      solicitud_origen_id: data.solicitud_id || ''
     };
     agregarFila_(SHEETS.PROYECTOS, proyecto);
 
@@ -300,6 +372,20 @@ var Proyectos = {
     agregarIntegrante_(proyecto.proyecto_id, liderEmail, data.lider_nombre || '', 'LIDER', '', contexto);
     if (normalizarEmailProyecto_(contexto.email) !== liderEmail) {
       agregarIntegrante_(proyecto.proyecto_id, contexto.email, contexto.nombre || '', 'INTEGRANTE', 'Creador del proyecto', contexto);
+    }
+    // v10 (Fase D): enlace de vuelta -- la solicitud original queda marcada
+    // con el proyecto que salio de ella (para "ya se convirtió" y para el
+    // enlace desde su propia pantalla). El solicitante NO se agrega como
+    // integrante: PROYECTO_INTEGRANTES exige una identidad real de SIGSO
+    // (login Google o cuenta de portal), y el solicitante de un ticket
+    // puede ser un contacto externo sin ninguna de las dos -- agregarlo a
+    // ciegas seria un permiso, no una cortesia.
+    if (solicitudOrigen) {
+      actualizarFilaPorId_(SHEETS.SOLICITUDES, 'solicitud_id', solicitudOrigen.solicitud_id, { proyecto_id: proyecto.proyecto_id });
+      registrarEventoProyecto_(proyecto.proyecto_id, 'ACTUALIZACION', contexto,
+        'Proyecto creado a partir de la solicitud ' + solicitudOrigen.solicitud_id +
+          (solicitudOrigen.solicitante_nombre ? ' (solicitante: ' + solicitudOrigen.solicitante_nombre + ')' : ''),
+        '', '', '');
     }
     // v10 (Fase C, propuesta 07 "plantillas de proyecto"): si se pidio crear
     // desde una plantilla, se clonan sus hitos (solo estructura --
@@ -661,6 +747,74 @@ var Proyectos = {
     return tarea;
   },
 
+  // v10 (Fase D, propuesta 08 "adjuntos por proyecto"): una zona de
+  // archivos por proyecto, "enlazable desde la sala" -- en vez de una hoja
+  // nueva solo para metadata de archivos, el adjunto ES un evento mas de la
+  // Sala (tipo ARCHIVO, ref_id = id del archivo en Drive): aparece en el
+  // feed como cualquier otra novedad, con su autor y su fecha, sin
+  // duplicar "quien publico que y cuando" en dos tablas distintas. Mismo
+  // circulo que puede crear tareas (LIDER/INTEGRANTE/COLABORADOR o ADM).
+  subirAdjunto: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    var rol = rolEnProyecto_(proyecto.proyecto_id, contexto);
+    if (!(contexto.rol === 'ADM' || rol === 'LIDER' || rol === 'INTEGRANTE' || rol === 'COLABORADOR')) {
+      return { _forbidden: true, message: 'No puedes subir archivos a este proyecto.' };
+    }
+    if (!data.nombre_archivo) return errorValidacion_('nombre_archivo', 'Falta el nombre del archivo.');
+    var bytes;
+    try {
+      bytes = Utilities.base64Decode(data.contenido_base64);
+    } catch (err) {
+      return errorValidacion_('contenido_base64', 'El archivo no es base64 válido.');
+    }
+    if (!bytes.length) return errorValidacion_('contenido_base64', 'El archivo está vacío.');
+    if (bytes.length > MAX_ADJUNTO_PROYECTO_BYTES) {
+      return errorValidacion_('contenido_base64',
+        'El archivo supera el tamaño máximo (' + Math.round(MAX_ADJUNTO_PROYECTO_BYTES / (1024 * 1024)) + ' MB).');
+    }
+    // Reusa los mismos detectores de tipo por firma binaria que ya prueban
+    // Calidad.gs (documentos) y Perfiles.gs (imagenes) -- ni la extension
+    // ni el mime que manda el navegador se toman en cuenta, asi un
+    // ejecutable renombrado no pasa.
+    var mime = mimeArchivoSgc_(bytes, data.nombre_archivo) || detectarMimeImagenProyecto_(bytes);
+    if (!mime) {
+      return errorValidacion_('contenido_base64', 'Formato no admitido. Se aceptan PDF, Word, Excel, PowerPoint, JPG, PNG o WebP.');
+    }
+    var carpeta = obtenerCarpetaProyecto_(proyecto);
+    var archivoDrive = carpeta.createFile(Utilities.newBlob(bytes, mime, data.nombre_archivo));
+    var evento = registrarEventoProyecto_(proyecto.proyecto_id, 'ARCHIVO', contexto,
+      data.nombre_archivo, 'ARCHIVO', archivoDrive.getId(), data.comentario || '');
+    return evento;
+  },
+
+  // Sirve el archivo por backend (nunca la carpeta directo): re-valida el
+  // acceso al proyecto en cada descarga, mismo criterio que
+  // Novedades.descargarAdjunto/Calidad.descargarDocumento.
+  descargarAdjunto: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeVerProyecto_(proyecto, contexto)) {
+      return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+    }
+    var evento = leerFilasSeguro_(SHEETS.PROYECTO_EVENTOS).filter(function (e) {
+      return e.evento_id === data.evento_id && e.proyecto_id === proyecto.proyecto_id && e.tipo === 'ARCHIVO';
+    })[0];
+    if (!evento) return errorValidacion_('evento_id', 'Archivo no encontrado.');
+    var archivo;
+    try {
+      archivo = DriveApp.getFileById(evento.ref_id);
+    } catch (err) {
+      return errorValidacion_('evento_id', 'El archivo ya no está disponible en Drive.');
+    }
+    var blob = archivo.getBlob();
+    return {
+      contenido_base64: Utilities.base64Encode(blob.getBytes()),
+      nombre_archivo: evento.titulo,
+      mime: blob.getContentType()
+    };
+  },
+
   // --- Entregables (Fase 2 de la propuesta): flujo aprobar/observar -------
   // Quien puede crear/editar/marcar-entregado: LIDER/INTEGRANTE/COLABORADOR
   // del proyecto o ADM (mismo circulo que crea tareas). Revisar (aprobar u
@@ -872,8 +1026,132 @@ var Proyectos = {
       carga_por_persona: Object.keys(cargaPorPersona).map(function (email) { return cargaPorPersona[email]; })
         .sort(function (x, y) { return y.carga_ponderada - x.carga_ponderada; })
     };
+  },
+
+  // v10 (Fase D, propuesta 11 "reporte PDF del proyecto"): un PDF de una
+  // pagina con salud, avance, hitos, riesgos y proximos vencimientos --
+  // reusa el MISMO motor de documentos que la Orden de Trabajo y el reporte
+  // de Pausas (docChromeOt_/docSeccionOt_/celdaLabelFicha_/celdaValorFicha_/
+  // escaparHtml_/chipPrioridadOt_, definidos en OrdenTrabajo.gs -- mismo
+  // proyecto de Apps Script, mismo scope global, nada que importar). Quien
+  // puede VER el proyecto puede exportarlo (es un reporte de solo lectura,
+  // no una accion de gestion).
+  descargarReporte: function (data, contexto) {
+    var proyecto = buscarProyecto_(data && data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeVerProyecto_(proyecto, contexto)) {
+      return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+    }
+    var detalle = Proyectos.getDetalle({ proyecto_id: proyecto.proyecto_id }, contexto);
+    var tareas = Proyectos.listarTareas({ proyecto_id: proyecto.proyecto_id }, contexto);
+    var html = construirHtmlReporteProyecto_(detalle, tareas);
+    var pdf = Utilities.newBlob(html, 'text/html', 'Reporte-' + proyecto.proyecto_id + '.html').getAs('application/pdf');
+    pdf.setName('Reporte - ' + proyecto.nombre + '.pdf');
+    return {
+      pdf_base64: Utilities.base64Encode(pdf.getBytes()),
+      filename: pdf.getName()
+    };
   }
 };
+
+// --- reporte PDF: construccion del HTML (Fase D, propuesta 11) -----------
+
+var PROYECTOS_SALUD_LABEL_PDF = { normal: 'Normal', riesgo: 'En riesgo', critico: 'Crítico' };
+var PROYECTOS_ESTADO_LABEL_PDF = {
+  PLANIFICACION: 'Planificación', ACTIVO: 'Activo', EN_PAUSA: 'En pausa',
+  EN_REVISION: 'En revisión', CERRADO: 'Cerrado', CANCELADO: 'Cancelado'
+};
+
+// Los helpers de fecha del PDF de la OT (fechaCortaOt_) truncan un ISO
+// completo -- para una fecha de proyecto (sin hora que importe) alcanza con
+// el dia. Se queda local a este archivo, no vale la pena generalizarlo.
+function fechaCortaPdfProyecto_(valor) {
+  if (!valor) return '—';
+  try { return Utilities.formatDate(new Date(valor), 'America/Santiago', 'dd-MM-yyyy'); }
+  catch (err) { return String(valor).slice(0, 10); }
+}
+
+function construirHtmlReporteProyecto_(detalle, tareas) {
+  var cuerpo = fichaProyectoPdf_(detalle) +
+    seccionHitosPdf_(detalle.hitos || []) +
+    seccionRiesgosPdf_(detalle.riesgos || []) +
+    seccionVencimientosPdf_(tareas || []);
+  var p = detalle.proyecto;
+  return docChromeOt_({ tipoDoc: 'Reporte de proyecto', referencia: p.codigo || p.nombre }, cuerpo);
+}
+
+function fichaProyectoPdf_(detalle) {
+  var p = detalle.proyecto;
+  var filas = [
+    ['Líder', escaparHtml_(p.lider_email || '—'), 'Estado', escaparHtml_(PROYECTOS_ESTADO_LABEL_PDF[p.estado] || p.estado)],
+    ['Salud', escaparHtml_(PROYECTOS_SALUD_LABEL_PDF[detalle.salud] || detalle.salud), 'Avance', (detalle.avance_pct === null ? '—' : detalle.avance_pct + '%')],
+    ['Inicio', fechaCortaPdfProyecto_(p.fecha_inicio), 'Fecha objetivo', fechaCortaPdfProyecto_(p.fecha_objetivo)]
+  ];
+  var cuerpoFilas = filas.map(function (f) {
+    return '<tr>' +
+      '<td style="' + celdaLabelFicha_() + '">' + f[0] + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + f[1] + '</td>' +
+      '<td style="' + celdaLabelFicha_() + '">' + f[2] + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + f[3] + '</td>' +
+    '</tr>';
+  }).join('');
+  var motivos = (detalle.salud_motivos && detalle.salud_motivos.length)
+    ? '<div style="margin:0 0 16px;font-size:11px;color:' + DOC.MUTED + ';">' + escaparHtml_(detalle.salud_motivos.join(' · ')) + '</div>'
+    : '<div style="margin:0 0 16px;"></div>';
+  return '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 6px;font-size:12px;">' + cuerpoFilas + '</table>' + motivos;
+}
+
+function seccionHitosPdf_(hitos) {
+  if (!hitos.length) return '';
+  var filas = hitos.map(function (h) {
+    return '<tr>' +
+      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(h.nombre) + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(HITO_ESTADO_LABEL_PDF_[h.estado] || h.estado) + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + fechaCortaPdfProyecto_(h.fecha_objetivo) + '</td>' +
+    '</tr>';
+  }).join('');
+  return docSeccionOt_('Hitos') +
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' + filas + '</table>';
+}
+var HITO_ESTADO_LABEL_PDF_ = { PENDIENTE: 'Pendiente', EN_CURSO: 'En curso', COMPLETADO: 'Completado', CANCELADO: 'Cancelado' };
+
+function seccionRiesgosPdf_(riesgos) {
+  var abiertos = riesgos.filter(function (r) { return r.estado !== 'CERRADO'; });
+  if (!abiertos.length) return '';
+  var filas = abiertos.map(function (r) {
+    return '<tr>' +
+      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(r.descripcion) + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(r.nivel) + '</td>' +
+    '</tr>';
+  }).join('');
+  return docSeccionOt_('Riesgos abiertos') +
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' + filas + '</table>';
+}
+
+// Top 8: las que mas urgen primero (mismo orden de prioridad de semaforo
+// que listarMisTareas), no todas -- un reporte de una pagina no es un
+// volcado completo de la base de datos.
+var VENCIMIENTOS_PDF_ORDEN_ = { atrasada: 0, riesgo: 1, pendiente: 2, bloqueada: 3, 'al-dia': 4, revision: 5 };
+function seccionVencimientosPdf_(tareas) {
+  var pendientes = tareas.filter(function (a) { return a.estado !== 'TERMINADA' && a.estado !== 'CANCELADA'; })
+    .sort(function (a, b) {
+      var oa = VENCIMIENTOS_PDF_ORDEN_[a.semaforo] === undefined ? 9 : VENCIMIENTOS_PDF_ORDEN_[a.semaforo];
+      var ob = VENCIMIENTOS_PDF_ORDEN_[b.semaforo] === undefined ? 9 : VENCIMIENTOS_PDF_ORDEN_[b.semaforo];
+      if (oa !== ob) return oa - ob;
+      return new Date(a.fecha_compromiso || '9999-12-31') - new Date(b.fecha_compromiso || '9999-12-31');
+    })
+    .slice(0, 8);
+  if (!pendientes.length) return '';
+  var filas = pendientes.map(function (a) {
+    return '<tr>' +
+      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(a.titulo) + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(a.responsable_nombre || a.responsable_email || '—') + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + fechaCortaPdfProyecto_(a.fecha_compromiso) + '</td>' +
+    '</tr>';
+  }).join('');
+  return docSeccionOt_('Próximos vencimientos') +
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';font-size:12px;">' + filas + '</table>';
+}
 
 // --- estados y prioridades ---------------------------------------------
 
@@ -1187,5 +1465,47 @@ function calcularRequiereAtencion_(tareas, hitos, integrantes) {
     tareas_bloqueadas: bloqueadas.length,
     hitos_atrasados: hitosAtrasados.length,
     total_integrantes: (integrantes || []).length
+  };
+}
+
+// v10 (Fase D, propuesta 09 "resumen diario del proyecto"): "que se movio"
+// desde la ultima vez que ESTA persona (contexto.email) vio la Sala. No
+// reinventa deteccion de cambios: los eventos de la Sala (PROYECTO_EVENTOS)
+// YA registran comentarios, bloqueos, entregables aprobados/observados,
+// riesgos, etc. con su fecha real -- alcanza con contar los que quedaron
+// DESPUES de ultima_visita_sala. "Tareas completadas/bloqueadas" se sacan
+// aparte de ACTIVIDADES.ultima_actualizacion porque terminar/bloquear una
+// tarea no siempre genera un evento propio en la Sala.
+function calcularResumenVisitaProyecto_(proyecto, contexto, integrantes, tareas) {
+  var miIntegrante = integrantes.filter(function (i) {
+    return normalizarEmailProyecto_(i.usuario_email) === normalizarEmailProyecto_(contexto && contexto.email);
+  })[0];
+  if (!miIntegrante || !miIntegrante.ultima_visita_sala) return null;
+  var desde = miIntegrante.ultima_visita_sala;
+  // >= y no > : algo que cambio en el MISMO instante en que se marco la
+  // visita (p.ej. el usuario marca "vi la sala" y en el acto hace un
+  // check-in) debe seguir contando -- un digest de menos entrena a
+  // ignorarlo mas rapido que uno de mas.
+  var desdeMs = new Date(desde).getTime();
+
+  var eventos = leerFilasSeguro_(SHEETS.PROYECTO_EVENTOS).filter(function (e) {
+    return e.proyecto_id === proyecto.proyecto_id && new Date(e.timestamp).getTime() >= desdeMs;
+  });
+  var tareasCompletadas = tareas.filter(function (a) {
+    return a.estado === 'TERMINADA' && a.ultima_actualizacion && new Date(a.ultima_actualizacion).getTime() >= desdeMs;
+  }).length;
+  var tareasBloqueadas = tareas.filter(function (a) {
+    return a.estado === 'BLOQUEADA' && a.ultima_actualizacion && new Date(a.ultima_actualizacion).getTime() >= desdeMs;
+  }).length;
+  var entregablesAprobados = eventos.filter(function (e) {
+    return e.tipo === 'ENTREGABLE' && /aprobado/.test(e.titulo || '');
+  }).length;
+
+  return {
+    desde: desde,
+    eventos_sala: eventos.length,
+    tareas_completadas: tareasCompletadas,
+    tareas_bloqueadas: tareasBloqueadas,
+    entregables_aprobados: entregablesAprobados
   };
 }

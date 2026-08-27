@@ -12,7 +12,7 @@ const assert = require('node:assert/strict');
 const { loadBackofficeProject, seedSheet, toPlain } = require('./helpers/gasSandbox');
 
 function loadConSchema() {
-  const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } });
+  const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id', SIGSO_DRIVE_ROOT_FOLDER_ID: 'fake-drive-root' } });
   seedSheet(ctx, 'PROYECTOS', ctx.COLUMNAS.PROYECTOS);
   seedSheet(ctx, 'PROYECTO_INTEGRANTES', ctx.COLUMNAS.PROYECTO_INTEGRANTES);
   seedSheet(ctx, 'PROYECTO_HITOS', ctx.COLUMNAS.PROYECTO_HITOS);
@@ -21,6 +21,7 @@ function loadConSchema() {
   seedSheet(ctx, 'PROYECTO_RIESGOS', ctx.COLUMNAS.PROYECTO_RIESGOS);
   seedSheet(ctx, 'PROYECTO_PLANTILLAS', ctx.COLUMNAS.PROYECTO_PLANTILLAS);
   seedSheet(ctx, 'PROYECTO_PLANTILLA_HITOS', ctx.COLUMNAS.PROYECTO_PLANTILLA_HITOS);
+  seedSheet(ctx, 'SOLICITUDES', ctx.COLUMNAS.SOLICITUDES);
   seedSheet(ctx, 'ACTIVIDADES', ctx.COLUMNAS.ACTIVIDADES);
   seedSheet(ctx, 'ACTIVIDADES_BITACORA', ctx.COLUMNAS.ACTIVIDADES_BITACORA);
   seedSheet(ctx, 'JEFATURAS', ctx.COLUMNAS.JEFATURAS);
@@ -713,4 +714,164 @@ test('crear (con plantilla_id): clona los hitos de la plantilla, sin fecha_objet
   assert.equal(otro._validationError, undefined);
   const detalleOtro = ctx.Proyectos.getDetalle({ proyecto_id: otro.proyecto_id }, CTX_LEO);
   assert.equal(detalleOtro.hitos.length, 0);
+});
+
+// --- reporte PDF (Fase D) --------------------------------------------------
+
+test('descargarReporte: exige poder VER el proyecto; el PDF trae hitos, riesgos abiertos y proximos vencimientos', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  ctx.Proyectos.gestionarHito({ proyecto_id: proyecto.proyecto_id, nombre: 'Levantamiento inicial', fecha_objetivo: '2026-09-01' }, CTX_LEO);
+  ctx.Proyectos.gestionarRiesgo({
+    proyecto_id: proyecto.proyecto_id, descripcion: 'El proveedor externo puede atrasar la entrega',
+    probabilidad: 'ALTA', impacto: 'ALTA', responsable_email: 'leo@rld.cl'
+  }, CTX_LEO);
+  ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Tarea urgente y atrasada', responsable_email: 'leo@rld.cl', fecha_compromiso: '2020-01-01'
+  }, CTX_LEO);
+
+  const rechazado = ctx.Proyectos.descargarReporte({ proyecto_id: proyecto.proyecto_id }, CTX_OTRO);
+  assert.equal(rechazado._forbidden, true);
+
+  const res = ctx.Proyectos.descargarReporte({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  assert.ok(res.pdf_base64 && res.pdf_base64.length > 0);
+  assert.match(res.filename, /\.pdf$/);
+
+  // El mock de Utilities.newBlob().getAs('application/pdf') no convierte de
+  // verdad -- conserva el HTML como bytes, asi que decodificar el base64
+  // alcanza para verificar que el reporte trae los datos correctos.
+  const html = Buffer.from(res.pdf_base64, 'base64').toString('utf8');
+  assert.match(html, /Levantamiento inicial/);
+  assert.match(html, /El proveedor externo puede atrasar la entrega/);
+  assert.match(html, /Tarea urgente y atrasada/);
+});
+
+// --- Solicitud -> Proyecto (Fase D) ----------------------------------------
+
+function seedSolicitud(ctx, overrides) {
+  const sol = Object.assign({
+    solicitud_id: 'SOL-2026-HP-0001', empresa_id: 'HP', empresa_nombre: 'HomePymes',
+    solicitante_nombre: 'Juan Pérez', solicitante_email: 'juan@homepymes.cl',
+    estado_derivado: 'S05', fecha_creacion: new Date().toISOString()
+  }, overrides || {});
+  ctx.agregarFila_('SOLICITUDES', sol);
+  return sol;
+}
+
+test('crear (con solicitud_id): marca la solicitud como convertida, registra el enlace y no deja convertirla dos veces', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+
+  const inexistente = crearProyectoBase(ctx, { nombre: 'X', solicitud_id: 'NO-EXISTE' });
+  assert.equal(inexistente._validationError, true);
+
+  const proyecto = crearProyectoBase(ctx, { nombre: 'Migración desde ticket', solicitud_id: 'SOL-2026-HP-0001' });
+  assert.equal(proyecto._validationError, undefined);
+  assert.equal(proyecto.solicitud_origen_id, 'SOL-2026-HP-0001');
+
+  const solicitud = ctx.leerFilasSeguro_('SOLICITUDES').find((s) => s.solicitud_id === 'SOL-2026-HP-0001');
+  assert.equal(solicitud.proyecto_id, proyecto.proyecto_id);
+
+  const detalle = ctx.Proyectos.getDetalle({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  assert.equal(detalle.puede_gestionar, true); // sanity: el proyecto quedo usable de verdad
+
+  // Convertir la MISMA solicitud otra vez debe rechazarse (ya tiene proyecto_id).
+  const dosVeces = crearProyectoBase(ctx, { nombre: 'Otra vez', solicitud_id: 'SOL-2026-HP-0001' });
+  assert.equal(dosVeces._validationError, true);
+});
+
+// --- resumen diario / "que se movio desde tu ultima visita" (Fase D) ------
+
+test('marcarSalaVisitada + resumen_desde_ultima_visita: primera vez es null; despues cuenta lo nuevo', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+
+  const antes = ctx.Proyectos.getDetalle({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  assert.equal(antes.resumen_desde_ultima_visita, null);
+
+  const marcado = ctx.Proyectos.marcarSalaVisitada({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  assert.equal(marcado.actualizado, true);
+
+  // ADM sin fila de integrante: no rompe, simplemente no tiene donde guardarlo.
+  const marcadoAdm = ctx.Proyectos.marcarSalaVisitada({ proyecto_id: proyecto.proyecto_id }, CTX_ADM);
+  assert.equal(marcadoAdm.actualizado, false);
+
+  // Actividad DESPUES de la visita: un comentario, una tarea propia que se
+  // completa, otra que se bloquea, y un entregable aprobado.
+  ctx.Proyectos.publicarEnSala({ proyecto_id: proyecto.proyecto_id, tipo: 'COMENTARIO', cuerpo: 'Avanzamos bien' }, CTX_LEO);
+
+  const tareaListo = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Tarea que se completa', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-09-01'
+  }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: tareaListo.actividad_id, tipo: 'listo' }, CTX_LEO);
+
+  const tareaBloqueada = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Tarea que se bloquea', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-09-01'
+  }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: tareaBloqueada.actividad_id, tipo: 'bloqueo', bloqueo_motivo: 'Esperando acceso' }, CTX_LEO);
+
+  const entregable = ctx.Proyectos.gestionarEntregable({
+    proyecto_id: proyecto.proyecto_id, accion: 'crear', nombre: 'Manual', responsable_email: 'leo@rld.cl', fecha_comprometida: '2026-09-01'
+  }, CTX_LEO);
+  ctx.Proyectos.gestionarEntregable({ proyecto_id: proyecto.proyecto_id, accion: 'marcarEntregado', entregable_id: entregable.entregable_id }, CTX_LEO);
+  ctx.Proyectos.revisarEntregable({ proyecto_id: proyecto.proyecto_id, entregable_id: entregable.entregable_id }, CTX_LEO);
+
+  const despues = ctx.Proyectos.getDetalle({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  const resumen = despues.resumen_desde_ultima_visita;
+  assert.ok(resumen);
+  assert.equal(resumen.tareas_completadas, 1);
+  assert.equal(resumen.tareas_bloqueadas, 1);
+  assert.equal(resumen.entregables_aprobados, 1);
+  assert.ok(resumen.eventos_sala >= 3);
+});
+
+// --- adjuntos por proyecto (Fase D) ----------------------------------------
+
+const PDF_B64 = Buffer.from('%PDF-1.4 contenido de prueba').toString('base64');
+const BASURA_B64 = Buffer.from('esto no es un documento').toString('base64');
+
+test('subirAdjunto: exige poder crear tareas en el proyecto; valida el tipo de archivo por firma; aparece en la Sala', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  ctx.Proyectos.gestionarIntegrante({ proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'OBSERVADOR' }, CTX_LEO);
+
+  const sinPermiso = ctx.Proyectos.subirAdjunto({
+    proyecto_id: proyecto.proyecto_id, nombre_archivo: 'manual.pdf', contenido_base64: PDF_B64
+  }, CTX_MARCELO); // OBSERVADOR: no puede subir
+  assert.equal(sinPermiso._forbidden, true);
+
+  const basura = ctx.Proyectos.subirAdjunto({
+    proyecto_id: proyecto.proyecto_id, nombre_archivo: 'virus.pdf', contenido_base64: BASURA_B64
+  }, CTX_LEO);
+  assert.equal(basura._validationError, true);
+
+  const evento = ctx.Proyectos.subirAdjunto({
+    proyecto_id: proyecto.proyecto_id, nombre_archivo: 'manual.pdf', contenido_base64: PDF_B64
+  }, CTX_LEO);
+  assert.equal(evento.tipo, 'ARCHIVO');
+  assert.equal(evento.titulo, 'manual.pdf');
+  assert.ok(evento.ref_id);
+
+  const sala = ctx.Proyectos.listarSala({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  const archivos = sala.filter((e) => e.tipo === 'ARCHIVO');
+  assert.equal(archivos.length, 1);
+  assert.equal(archivos[0].titulo, 'manual.pdf');
+});
+
+test('descargarAdjunto: devuelve el contenido a quien puede VER el proyecto; rechaza a un ajeno y un evento_id inexistente', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  const evento = ctx.Proyectos.subirAdjunto({
+    proyecto_id: proyecto.proyecto_id, nombre_archivo: 'manual.pdf', contenido_base64: PDF_B64
+  }, CTX_LEO);
+
+  const ajeno = ctx.Proyectos.descargarAdjunto({ proyecto_id: proyecto.proyecto_id, evento_id: evento.evento_id }, CTX_OTRO);
+  assert.equal(ajeno._forbidden, true);
+
+  const noExiste = ctx.Proyectos.descargarAdjunto({ proyecto_id: proyecto.proyecto_id, evento_id: 'no-existe' }, CTX_LEO);
+  assert.equal(noExiste._validationError, true);
+
+  const descarga = ctx.Proyectos.descargarAdjunto({ proyecto_id: proyecto.proyecto_id, evento_id: evento.evento_id }, CTX_LEO);
+  assert.equal(descarga.nombre_archivo, 'manual.pdf');
+  assert.equal(Buffer.from(descarga.contenido_base64, 'base64').toString('utf8'), '%PDF-1.4 contenido de prueba');
 });

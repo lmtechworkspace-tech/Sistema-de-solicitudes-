@@ -13,6 +13,16 @@ var VENTANA_DEDUP_MINUTOS = 30;
 var VENTANA_DEDUP_SLA_VENCIDO_MINUTOS = 24 * 60;
 var MAX_REINTENTOS_CORREO = 3;
 
+// v10 (Fase D): espejo minimo del TIPO_EVENTO_ETIQUETA del frontend
+// (proyectos.js), solo para que el digest por correo/app se lea en
+// castellano en vez de mostrar el codigo crudo del evento.
+var TIPO_EVENTO_ETIQUETA_DIGEST_ = {
+  ACTUALIZACION: 'Actualización', COMENTARIO: 'Comentario', DECISION: 'Decisión',
+  REUNION: 'Reunión', BLOQUEO: 'Bloqueo', SOLICITUD_LIDER: 'Solicitud del líder',
+  CAMBIO_ESTADO: 'Cambio de estado', ENTREGABLE: 'Entregable', RIESGO: 'Riesgo',
+  ARCHIVO: 'Archivo'
+};
+
 var Notificaciones = {
   // Fase 10.2 (optimizacion, feedback real: "el cambio de estado tarda
   // mucho"): a diferencia del resto de enviarCorreo_ (que intenta enviar en
@@ -431,6 +441,74 @@ var Notificaciones = {
       });
     });
     encolarNotificacionAppLote_(notifs);
+    return resultados;
+  },
+
+  // v10 (Fase D, propuestas 09 "resumen diario del proyecto" + 12
+  // "notificaciones agrupadas"): UNA notificacion por proyecto con
+  // actividad nueva -- nunca una por evento (misma "regla de oro" que
+  // enviarAlertasActividades) -- al lider del proyecto: en la app
+  // (agrupada, encolarNotificacionAppLote_) y por correo (mismo criterio de
+  // enviarDigestJefatura: se salta si no hubo nada, dedup por dia via
+  // enviarCorreo_). No tiene trigger propio -- el limite de 20 triggers de
+  // tiempo ya esta copado (ver Triggers.gs) -- Triggers.gs la cuelga del
+  // MISMO pase diario de las 09:00 que ya usan Actividades/Calidad
+  // (AVISOS_DEL_PASE_DIARIO).
+  //
+  // "Desde cuando" no es "desde ayer": es desde la ULTIMA CORRIDA real,
+  // guardada en Script Properties -- si el pase se salto un dia (presupuesto
+  // agotado), el proximo digest igual junta todo lo que quedo pendiente en
+  // vez de perderlo.
+  enviarResumenDiarioProyectos: function () {
+    var CLAVE_ULTIMA_CORRIDA = 'SIGSO_PROY_DIGEST_ULTIMA_CORRIDA';
+    var ahora = new Date();
+    var propiedades = PropertiesService.getScriptProperties();
+    var desdeGuardado = propiedades.getProperty(CLAVE_ULTIMA_CORRIDA);
+    var desdeMs = desdeGuardado ? new Date(desdeGuardado).getTime() : (ahora.getTime() - 24 * 60 * 60 * 1000);
+
+    var proyectosPorId = {};
+    leerFilasSeguro_(SHEETS.PROYECTOS).forEach(function (p) {
+      if (esVerdaderoProyecto_(p.activa)) proyectosPorId[p.proyecto_id] = p;
+    });
+
+    var eventosPorProyecto = {};
+    leerFilasSeguro_(SHEETS.PROYECTO_EVENTOS).forEach(function (e) {
+      if (!proyectosPorId[e.proyecto_id]) return;
+      // < y no <= : un evento en el MISMO instante que la corrida anterior
+      // (posible en pruebas rapidas o dos triggers casi simultaneos) debe
+      // seguir contando -- mismo criterio que calcularResumenVisitaProyecto_.
+      if (new Date(e.timestamp).getTime() < desdeMs) return;
+      (eventosPorProyecto[e.proyecto_id] = eventosPorProyecto[e.proyecto_id] || []).push(e);
+    });
+
+    var resultados = [];
+    var notifsApp = [];
+    Object.keys(eventosPorProyecto).forEach(function (proyectoId) {
+      var eventos = eventosPorProyecto[proyectoId];
+      var proyecto = proyectosPorId[proyectoId];
+      if (!eventos.length || !proyecto.lider_email) return;
+
+      var titulo = eventos.length + (eventos.length === 1 ? ' novedad en ' : ' novedades en ') + proyecto.nombre;
+      var cuerpo = eventos.slice(0, 8).map(function (e) {
+        return '- ' + (TIPO_EVENTO_ETIQUETA_DIGEST_[e.tipo] || e.tipo) + ': ' + (e.titulo || e.cuerpo || '(sin título)');
+      }).join('\n') +
+        (eventos.length > 8 ? '\n… y ' + (eventos.length - 8) + ' más.' : '') +
+        '\n\nPuedes ver el detalle completo en la Sala del proyecto.';
+
+      var claveEvento = 'DIGEST_PROYECTO:' + proyectoId + ':' + claveDia_(ahora, 'America/Santiago');
+      resultados.push(Object.assign(
+        { proyecto_id: proyectoId, lider: proyecto.lider_email, eventos: eventos.length },
+        enviarCorreo_('DIGEST_PROYECTOS', proyecto.lider_email, claveEvento, 'SIGSO — ' + titulo, cuerpo, VENTANA_DEDUP_SLA_VENCIDO_MINUTOS)
+      ));
+      notifsApp.push({
+        destinatario: proyecto.lider_email, tipo: 'PROYECTO_RESUMEN_DIARIO', titulo: titulo,
+        mensaje: eventos.length + ' actualización(es) desde el aviso anterior.',
+        modulo_id: 'proyectos', texto_accion: 'Ver proyecto', vidaHoras: 48
+      });
+    });
+
+    encolarNotificacionAppLote_(notifsApp);
+    propiedades.setProperty(CLAVE_ULTIMA_CORRIDA, ahora.toISOString());
     return resultados;
   },
 

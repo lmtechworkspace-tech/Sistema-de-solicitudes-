@@ -201,7 +201,10 @@ var COLUMNAS = {
     // estado S09, porque estas solicitudes se crean y cierran en el mismo
     // instante: contarlas en el tiempo promedio de resolucion o en el
     // semaforo de cumplimiento distorsionaria los KPIs de Gerencia.
-    'atencion_directa'
+    'atencion_directa',
+    // v10 (Fase D): idem -- copia solo para que el esquema no diverja. Ver
+    // la nota identica en backend/backoffice/Constantes.gs.
+    'proyecto_id'
   ],
   // contexto/resultado_esperado/url_modulo/usuario_prueba/centro_costos/
   // url_video/observaciones/estimacion_horas/horas_reales y numero_item
@@ -462,11 +465,16 @@ var COLUMNAS = {
     'categoria', 'prioridad', 'estado',
     'fecha_inicio', 'fecha_objetivo', 'fecha_cierre_real',
     'salud_override', 'salud_override_motivo',
-    'ultima_actualizacion', 'creado_por', 'fecha_creacion', 'activa'
+    'ultima_actualizacion', 'creado_por', 'fecha_creacion', 'activa',
+    // v10 (Fase D): idem -- copia solo para que el esquema no diverja. Ver
+    // la nota identica en backend/backoffice/Constantes.gs.
+    'solicitud_origen_id'
   ],
   PROYECTO_INTEGRANTES: [
     'integrante_id', 'proyecto_id', 'usuario_email', 'usuario_nombre',
-    'rol_proyecto', 'responsabilidad', 'activo', 'agregado_por', 'fecha_creacion'
+    'rol_proyecto', 'responsabilidad', 'activo', 'agregado_por', 'fecha_creacion',
+    // v10 (Fase D): idem -- copia solo para que el esquema no diverja.
+    'ultima_visita_sala'
   ],
   PROYECTO_HITOS: [
     'hito_id', 'proyecto_id', 'nombre', 'descripcion', 'fecha_objetivo',

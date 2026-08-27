@@ -223,7 +223,13 @@ var COLUMNAS = {
     // estado S09, porque estas solicitudes se crean y cierran en el mismo
     // instante: contarlas en el tiempo promedio de resolucion o en el
     // semaforo de cumplimiento distorsionaria los KPIs de Gerencia.
-    'atencion_directa'
+    'atencion_directa',
+    // v10 (Fase D, propuesta 10 "Solicitud -> Proyecto"): vacio salvo que
+    // esta solicitud se haya convertido en un proyecto -- lo pone
+    // Proyectos.crear (backoffice) al recibir un solicitud_id, nunca se
+    // edita a mano. Sirve para el enlace de vuelta Y para evitar convertir
+    // la misma solicitud dos veces.
+    'proyecto_id'
   ],
   SUBSOLICITUDES: [
     'subsolicitud_id', 'solicitud_id', 'numero_item', 'titulo', 'descripcion',
@@ -504,14 +510,26 @@ var COLUMNAS = {
     'categoria', 'prioridad', 'estado',
     'fecha_inicio', 'fecha_objetivo', 'fecha_cierre_real',
     'salud_override', 'salud_override_motivo',
-    'ultima_actualizacion', 'creado_por', 'fecha_creacion', 'activa'
+    'ultima_actualizacion', 'creado_por', 'fecha_creacion', 'activa',
+    // v10 (Fase D, propuesta 10 "Solicitud -> Proyecto"): aditiva al final,
+    // mismo criterio que proyecto_id/hito_id en ACTIVIDADES -- un proyecto
+    // sin origen (la inmensa mayoria) la deja vacia y se comporta igual que
+    // siempre. Solo trazabilidad ("de donde salio este proyecto"); nunca se
+    // usa para permisos.
+    'solicitud_origen_id'
   ],
   // rol_proyecto: LIDER | INTEGRANTE | COLABORADOR | OBSERVADOR (§6 de la
   // propuesta). La membresia es el "gate fino" de todo el modulo -- igual
   // patron que JEFATURAS para Actividades.
   PROYECTO_INTEGRANTES: [
     'integrante_id', 'proyecto_id', 'usuario_email', 'usuario_nombre',
-    'rol_proyecto', 'responsabilidad', 'activo', 'agregado_por', 'fecha_creacion'
+    'rol_proyecto', 'responsabilidad', 'activo', 'agregado_por', 'fecha_creacion',
+    // v10 (Fase D, propuesta 09 "resumen diario"): cuando esta persona vio
+    // la Sala de este proyecto por ultima vez -- vacio hasta la primera
+    // visita. Vive aca (no en una hoja aparte) porque ya es la tabla
+    // "por persona x proyecto" del modulo; agregar una hoja nueva solo para
+    // un timestamp hubiera sido una hoja de una sola columna util.
+    'ultima_visita_sala'
   ],
   PROYECTO_HITOS: [
     'hito_id', 'proyecto_id', 'nombre', 'descripcion', 'fecha_objetivo',

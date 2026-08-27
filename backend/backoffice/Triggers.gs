@@ -308,7 +308,10 @@ var AVISOS_DEL_PASE_DIARIO = [
   ['avisos_quejas', enviarAvisosQuejasTrigger],
   ['avisos_proveedores', enviarAvisosProveedoresTrigger],
   ['avisos_revision', enviarAvisosRevisionTrigger],
-  ['avisos_objetivos', enviarAvisosObjetivosTrigger]
+  ['avisos_objetivos', enviarAvisosObjetivosTrigger],
+  // v10 (Fase D): el limite de 20 triggers de tiempo ya estaba copado --
+  // se cuelga aca como el resto en vez de pedir un slot nuevo.
+  ['resumen_diario_proyectos', enviarResumenDiarioProyectosTrigger]
 ];
 
 function recordarValidacionPendienteTrigger() {
@@ -421,6 +424,13 @@ function enviarAlertasActividadesTrigger() {
 // mano desde el editor de Apps Script sin esperar a las 09:00.
 function enviarRecordatorioCalidadTrigger() {
   return Calidad.recordatorioPendientes();
+}
+
+// v10 (Fase D, "resumen diario" + "notificaciones agrupadas"): ver
+// Notificaciones.enviarResumenDiarioProyectos(). Nombrada igual que las
+// anteriores, mismo motivo.
+function enviarResumenDiarioProyectosTrigger() {
+  return Notificaciones.enviarResumenDiarioProyectos();
 }
 
 // v10.0 Fase 2b: ver Personas.recordatorioCompetencias(). Nombrada igual

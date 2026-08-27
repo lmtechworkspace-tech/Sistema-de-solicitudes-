@@ -293,7 +293,7 @@ function instrumentarAvisos(ctx, alCorrer) {
   return nombres;
 }
 
-test('el pase corre los diez avisos cuando hay tiempo de sobra', () => {
+test('el pase corre los once avisos cuando hay tiempo de sobra', () => {
   const ctx = cargarPase();
   const corridos = [];
   const nombres = instrumentarAvisos(ctx, (n) => corridos.push(n));
@@ -314,7 +314,7 @@ test('si se agotó el presupuesto, no arranca ningún aviso nuevo y lo deja REGI
   const r = toPlain(ctx.ejecutarAvisosDelPase_(inicioViejo));
 
   assert.deepEqual(corridos, [], 'no se arranca nada sin presupuesto');
-  assert.equal(r.omitidos.length, 10);
+  assert.equal(r.omitidos.length, 11);
 
   // Lo importante: que se sepa. Antes esto era silencio absoluto.
   const log = ctx.leerFilas_('LOG_SISTEMA').filter((l) => l.contexto === 'PASE_DIARIO_INCOMPLETO');
@@ -360,7 +360,7 @@ test('ROTACIÓN: el pase siguiente arranca donde se quedó el anterior', () => {
 
   assert.equal(corridos2[0], nombres[3],
     'el aviso que quedó fuera ayer es el primero en correr hoy');
-  assert.equal(corridos2.length, 10, 'y de paso corren todos');
+  assert.equal(corridos2.length, 11, 'y de paso corren todos');
 });
 
 test('un aviso que falla no frena a los que vienen detrás, y cuenta como atendido', () => {
@@ -374,9 +374,9 @@ test('un aviso que falla no frena a los que vienen detrás, y cuenta como atendi
 
   const r = toPlain(ctx.ejecutarAvisosDelPase_(Date.now()));
 
-  assert.equal(corridos.length, 9, 'los otros nueve corrieron igual');
+  assert.equal(corridos.length, 10, 'los otros diez corrieron igual');
   assert.deepEqual(r.omitidos, []);
-  assert.equal(r.corridos.length, 10, 'el que falló ya tuvo su turno: no se repite antes que el resto');
+  assert.equal(r.corridos.length, 11, 'el que falló ya tuvo su turno: no se repite antes que el resto');
 });
 
 test('tras un pase completo la rotación vuelve a cero: el orden es predecible', () => {

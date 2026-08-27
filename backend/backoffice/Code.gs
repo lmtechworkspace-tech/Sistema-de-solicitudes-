@@ -182,6 +182,16 @@ var BACKOFFICE_ACTIONS = {
   // de un proyecto como plantilla, y listarlas para el selector al crear.
   guardarProyectoComoPlantilla: handleGuardarProyectoComoPlantilla_,
   listarPlantillasProyecto: handleListarPlantillasProyecto_,
+  // v10 (Fase D, "reporte PDF del proyecto"): mismo circulo que puede VER
+  // el proyecto (es un export de solo lectura, no una accion de gestion).
+  descargarReporteProyecto: handleDescargarReporteProyecto_,
+  // v10 (Fase D, "resumen diario"): marca "vi la Sala" a ahora -- el
+  // frontend la llama al abrir la pestaña Sala de un proyecto.
+  marcarSalaVisitadaProyecto: handleMarcarSalaVisitadaProyecto_,
+  // v10 (Fase D, "adjuntos por proyecto"): subir/bajar archivos de la
+  // carpeta Drive del proyecto.
+  subirAdjuntoProyecto: handleSubirAdjuntoProyecto_,
+  descargarAdjuntoProyecto: handleDescargarAdjuntoProyecto_,
   getDetalleProyecto: handleGetDetalleProyecto_,
   crearProyecto: handleCrearProyecto_,
   actualizarProyecto: handleActualizarProyecto_,
@@ -485,6 +495,10 @@ var MODULO_POR_ACCION = {
   // v10 (Fase C): mismo gate que crearProyecto -- son parte del mismo flujo.
   guardarProyectoComoPlantilla: 'proyectos',
   listarPlantillasProyecto: 'proyectos',
+  descargarReporteProyecto: ['proyectos', 'gerencia'],
+  marcarSalaVisitadaProyecto: ['proyectos', 'gerencia'],
+  subirAdjuntoProyecto: 'proyectos',
+  descargarAdjuntoProyecto: ['proyectos', 'gerencia'],
   getDetalleProyecto: ['proyectos', 'gerencia'],
   crearProyecto: 'proyectos',
   actualizarProyecto: 'proyectos',
@@ -1170,6 +1184,26 @@ function handleGuardarProyectoComoPlantilla_(data, contexto) {
 
 function handleListarPlantillasProyecto_(data, contexto) {
   return responderResultado_(Proyectos.listarPlantillas(data, contexto));
+}
+
+// v10 (Fase D): a diferencia del resto de acciones de Proyectos, esta
+// devuelve { pdf_base64, filename } directo (mismo contrato que
+// OrdenTrabajo.descargar) -- el frontend decodifica y descarga, no hay
+// "data.ok" que envolver distinto.
+function handleDescargarReporteProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.descargarReporte(data, contexto));
+}
+
+function handleMarcarSalaVisitadaProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.marcarSalaVisitada(data, contexto));
+}
+
+function handleSubirAdjuntoProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.subirAdjunto(data, contexto));
+}
+
+function handleDescargarAdjuntoProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.descargarAdjunto(data, contexto));
 }
 
 function handleGetDetalleProyecto_(data, contexto) {

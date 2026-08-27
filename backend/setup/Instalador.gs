@@ -44,7 +44,9 @@ var ESQUEMA_HOJAS = {
     // estado S09, porque estas solicitudes se crean y cierran en el mismo
     // instante: contarlas en el tiempo promedio de resolucion o en el
     // semaforo de cumplimiento distorsionaria los KPIs de Gerencia.
-    'atencion_directa'
+    'atencion_directa',
+    // v10 (Fase D): ver la nota identica en backend/backoffice/Constantes.gs.
+    'proyecto_id'
   ],
   SUBSOLICITUDES: [
     'subsolicitud_id', 'solicitud_id', 'numero_item', 'titulo', 'descripcion',
@@ -241,11 +243,15 @@ var ESQUEMA_HOJAS = {
     'categoria', 'prioridad', 'estado',
     'fecha_inicio', 'fecha_objetivo', 'fecha_cierre_real',
     'salud_override', 'salud_override_motivo',
-    'ultima_actualizacion', 'creado_por', 'fecha_creacion', 'activa'
+    'ultima_actualizacion', 'creado_por', 'fecha_creacion', 'activa',
+    // v10 (Fase D): ver la nota identica en backend/backoffice/Constantes.gs.
+    'solicitud_origen_id'
   ],
   PROYECTO_INTEGRANTES: [
     'integrante_id', 'proyecto_id', 'usuario_email', 'usuario_nombre',
-    'rol_proyecto', 'responsabilidad', 'activo', 'agregado_por', 'fecha_creacion'
+    'rol_proyecto', 'responsabilidad', 'activo', 'agregado_por', 'fecha_creacion',
+    // v10 (Fase D): ver la nota identica en backend/backoffice/Constantes.gs.
+    'ultima_visita_sala'
   ],
   PROYECTO_HITOS: [
     'hito_id', 'proyecto_id', 'nombre', 'descripcion', 'fecha_objetivo',
@@ -589,49 +595,49 @@ var ESQUEMA_HOJAS = {
     'justificacion', 'creado_por', 'fecha_creacion', 'activa'
   ],
 
-  // --- v11.0 Fase 2: contexto de la organizacion (§4.1) -------------------
-  //
-  // El DOC-02 "Analisis FODA" es una tabla de cuatro cuadrantes con 24
-  // factores. Se estructura por dos razones que un Word no da: §4.1 exige
-  // hacer SEGUIMIENTO Y REVISION de estas cuestiones (no solo listarlas), y
-  // siete de los once riesgos del DOC-08 son literalmente debilidades y
-  // amenazas de este documento -- la cadena factor -> riesgo -> accion hoy
-  // solo existe en la cabeza de quien redacto ambos.
-  //
-  // tipo: FORTALEZA / OPORTUNIDAD / DEBILIDAD / AMENAZA.
-  // origen: INTERNO / EXTERNO. Se deriva del tipo, pero se PERSISTE porque
-  //   es el vocabulario de la norma ("cuestiones externas e internas") y es
-  //   por donde se agrupa al mostrarlo y al evaluar la clausula.
-  // numero: el correlativo dentro de su cuadrante, tal como lo trae el
-  //   DOC-02. Permite citar "D3" en un riesgo y que se entienda.
-  // estado: VIGENTE / SUPERADO. Un factor puede dejar de aplicar sin que
-  //   haya que borrarlo -- el historico es parte de la evidencia de que la
-  //   organizacion revisa su contexto.
-  SGC_CONTEXTO: [
-    'factor_id', 'tipo', 'origen', 'numero', 'descripcion',
-    'estado', 'observaciones',
-    'fecha_identificacion', 'fecha_ultima_revision', 'revisado_por',
-    'creado_por', 'fecha_creacion', 'activa'
-  ],
-
-  // --- v11.0 Fase 2: partes interesadas (§4.2) ----------------------------
-  //
-  // Las columnas siguen al DOC-04 v02 y no a una plantilla generica: parte,
-  // necesidades, impacto, nivel de influencia, expectativa y como afecta al
-  // SGC. Son las SEIS que el documento real tiene.
-  //
-  // metodo_seguimiento / frecuencia_seguimiento / responsable_email quedan
-  // OPCIONALES y vacios: §4.2 pide hacer seguimiento y revision de la
-  // informacion sobre las partes interesadas, asi que tienen donde vivir,
-  // pero no se rellenan con algo inventado para que la pantalla se vea
-  // completa. Un campo vacio es honesto; uno inventado es un hallazgo.
-  SGC_PARTES_INTERESADAS: [
-    'parte_id', 'nombre', 'categoria',
-    'necesidades', 'expectativa', 'efecto_sgc',
-    'impacto', 'influencia',
-    'metodo_seguimiento', 'frecuencia_seguimiento', 'responsable_email',
-    'estado', 'fecha_ultima_revision', 'revisado_por',
-    'creado_por', 'fecha_creacion', 'activa'
+  // --- v11.0 Fase 2: contexto de la organizacion (§4.1) -------------------
+  //
+  // El DOC-02 "Analisis FODA" es una tabla de cuatro cuadrantes con 24
+  // factores. Se estructura por dos razones que un Word no da: §4.1 exige
+  // hacer SEGUIMIENTO Y REVISION de estas cuestiones (no solo listarlas), y
+  // siete de los once riesgos del DOC-08 son literalmente debilidades y
+  // amenazas de este documento -- la cadena factor -> riesgo -> accion hoy
+  // solo existe en la cabeza de quien redacto ambos.
+  //
+  // tipo: FORTALEZA / OPORTUNIDAD / DEBILIDAD / AMENAZA.
+  // origen: INTERNO / EXTERNO. Se deriva del tipo, pero se PERSISTE porque
+  //   es el vocabulario de la norma ("cuestiones externas e internas") y es
+  //   por donde se agrupa al mostrarlo y al evaluar la clausula.
+  // numero: el correlativo dentro de su cuadrante, tal como lo trae el
+  //   DOC-02. Permite citar "D3" en un riesgo y que se entienda.
+  // estado: VIGENTE / SUPERADO. Un factor puede dejar de aplicar sin que
+  //   haya que borrarlo -- el historico es parte de la evidencia de que la
+  //   organizacion revisa su contexto.
+  SGC_CONTEXTO: [
+    'factor_id', 'tipo', 'origen', 'numero', 'descripcion',
+    'estado', 'observaciones',
+    'fecha_identificacion', 'fecha_ultima_revision', 'revisado_por',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // --- v11.0 Fase 2: partes interesadas (§4.2) ----------------------------
+  //
+  // Las columnas siguen al DOC-04 v02 y no a una plantilla generica: parte,
+  // necesidades, impacto, nivel de influencia, expectativa y como afecta al
+  // SGC. Son las SEIS que el documento real tiene.
+  //
+  // metodo_seguimiento / frecuencia_seguimiento / responsable_email quedan
+  // OPCIONALES y vacios: §4.2 pide hacer seguimiento y revision de la
+  // informacion sobre las partes interesadas, asi que tienen donde vivir,
+  // pero no se rellenan con algo inventado para que la pantalla se vea
+  // completa. Un campo vacio es honesto; uno inventado es un hallazgo.
+  SGC_PARTES_INTERESADAS: [
+    'parte_id', 'nombre', 'categoria',
+    'necesidades', 'expectativa', 'efecto_sgc',
+    'impacto', 'influencia',
+    'metodo_seguimiento', 'frecuencia_seguimiento', 'responsable_email',
+    'estado', 'fecha_ultima_revision', 'revisado_por',
+    'creado_por', 'fecha_creacion', 'activa'
   ],
 
   // --- v11.0 Fase 3: riesgos y oportunidades (§6.1) -----------------------

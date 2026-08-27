@@ -37,7 +37,11 @@
     irAItem: function (itemId) { irAVistaProyectos_(itemId); },
     refrescar: function () {
       if (proyectoActivoId_) refrescarDetalle_(); else cargarPortafolio_();
-    }
+    },
+    // v10 (Fase D, "Solicitud -> Proyecto"): detalle.js llama esto desde el
+    // boton "Convertir en proyecto" -- abre el MISMO modal de "Nuevo
+    // proyecto", prellenado, en vez de duplicarlo en dos archivos.
+    abrirFormularioDesdeSolicitud: function (prellenado) { abrirFormularioProyecto_(prellenado); }
   };
 
   function urlBackoffice_() {
@@ -66,7 +70,10 @@
     // v9.4: eventos que registra el sistema (no el usuario) al crear/marcar/
     // revisar un entregable o registrar un riesgo -- mismo feed unico de
     // siempre (registrarEventoProyecto_), no hay canal nuevo.
-    ENTREGABLE: 'Entregable', RIESGO: 'Riesgo'
+    ENTREGABLE: 'Entregable', RIESGO: 'Riesgo',
+    // v10 (Fase D, "adjuntos por proyecto"): un archivo subido es un evento
+    // mas de la Sala (Proyectos.subirAdjunto).
+    ARCHIVO: 'Archivo'
   };
   // v9.4 (Fase 2 de la propuesta): entregables (aprobar/observar).
   // EN_REVISION queda mapeado por si el backend lo usa a futuro; el MVP usa
@@ -104,6 +111,24 @@
   // aca solo para mapear menciones a nombres al pintar el feed; el backend
   // sigue siendo la autoridad para permisos/comparaciones.
   function normalizarEmail_(email) { return String(email || '').trim().toLowerCase(); }
+
+  // v10 (Fase D): mismo patron de siempre (novedades.js/detalle.js) para
+  // bajar un binario que llega en base64 -- sin este paso no hay forma de
+  // convertir lo que devuelve fetch/google.script.run en un archivo real.
+  function descargarBase64Proyecto_(base64, nombre, mime) {
+    var bytes = atob(base64);
+    var buffer = new Uint8Array(bytes.length);
+    for (var i = 0; i < bytes.length; i++) buffer[i] = bytes.charCodeAt(i);
+    var blob = new Blob([buffer], { type: mime || 'application/octet-stream' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = nombre || 'adjunto';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
 
   // --- portafolio ----------------------------------------------------------
 
@@ -450,16 +475,22 @@
 
   // --- crear proyecto --------------------------------------------------
 
-  function abrirFormularioProyecto_() {
+  // v10 (Fase D, propuesta 10 "Solicitud -> Proyecto"): `prellenado` es
+  // opcional -- detalle.js (otro archivo, otro modulo) lo usa via
+  // window.SigsoProyectos.abrirFormularioDesdeSolicitud para abrir ESTE
+  // MISMO formulario con nombre/descripcion ya completados y el
+  // solicitud_id enganchado, en vez de duplicar el modal en dos archivos.
+  function abrirFormularioProyecto_(prellenado) {
+    prellenado = prellenado || {};
     var fondo = document.createElement('div');
     fondo.className = 'sigso-modal-fondo';
     fondo.innerHTML =
       '<div class="sigso-modal" role="dialog" aria-modal="true">' +
         '<h3 class="sigso-modal__titulo">Nuevo proyecto</h3>' +
         '<form id="form-py-nuevo">' +
-          Componentes.campoTexto({ id: 'py-nombre', label: 'Nombre', requerido: true, placeholder: 'Ej: Migración ERP' }) +
+          Componentes.campoTexto({ id: 'py-nombre', label: 'Nombre', requerido: true, placeholder: 'Ej: Migración ERP', valor: prellenado.nombre || '' }) +
           '<div id="py-plantilla-wrap"></div>' +
-          Componentes.campoTextarea({ id: 'py-descripcion', label: 'Descripción breve' }) +
+          Componentes.campoTextarea({ id: 'py-descripcion', label: 'Descripción breve', valor: prellenado.descripcion || '' }) +
           Componentes.campoTextarea({ id: 'py-objetivo', label: 'Objetivo / resultado esperado' }) +
           '<div class="sigso-py-form-fila">' +
             Componentes.campoTexto({ id: 'py-fecha-inicio', label: 'Fecha de inicio', tipo: 'date', requerido: true }) +
@@ -512,7 +543,8 @@
         fecha_inicio: document.getElementById('py-fecha-inicio').value,
         fecha_objetivo: document.getElementById('py-fecha-objetivo').value,
         prioridad: document.getElementById('py-prioridad').value,
-        plantilla_id: campoPlantilla ? campoPlantilla.value : ''
+        plantilla_id: campoPlantilla ? campoPlantilla.value : '',
+        solicitud_id: prellenado.solicitud_id || ''
       };
       api_('crearProyecto', datos).then(function (respuesta) {
         if (!respuesta || !respuesta.ok) {
@@ -550,6 +582,13 @@
     var cont = panelProyectos_();
     if (!cont || !datosDetalleActual_) { refrescarDetalle_(); return; }
     pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala, datosDetalleActual_.miEmail);
+    // v10 (Fase D, propuesta 09): marca "vi la Sala" a ahora -- de fondo, sin
+    // bloquear el repintado ni volver a pedir el detalle. El resumen que se
+    // acaba de mostrar usa la marca de tiempo ANTERIOR (ya estaba en cache);
+    // esta solo prepara la PROXIMA visita.
+    if (id === 'sala' && proyectoActivoId_) {
+      api_('marcarSalaVisitadaProyecto', { proyecto_id: proyectoActivoId_ }).catch(function () { /* best-effort */ });
+    }
   }
 
   function refrescarDetalle_() {
@@ -646,6 +685,11 @@
       Componentes.kpi({ etiqueta: 'Hitos atrasados', valor: atencion.hitos_atrasados || 0 })
     ].join('');
 
+    // v10 (Fase D, propuesta 11): "Descargar PDF" es de solo lectura --
+    // cualquiera que vea el proyecto puede exportarlo, no solo quien puede
+    // gestionarlo.
+    var descargarPdf = Componentes.boton({ texto: 'Descargar PDF', variante: 'secundario', clase: 'js-py-descargar-pdf' });
+
     var acciones = puedeGestionar
       ? '<div class="sigso-py-acciones">' +
           Componentes.boton({ texto: 'Editar proyecto', variante: 'secundario', clase: 'js-py-editar' }) +
@@ -653,9 +697,16 @@
           // ESTE proyecto como plantilla, para arrancar los proximos
           // proyectos parecidos desde ahi.
           Componentes.boton({ texto: 'Guardar como plantilla', variante: 'secundario', clase: 'js-py-guardar-plantilla' }) +
+          descargarPdf +
           (p.estado !== 'CERRADO' && p.estado !== 'CANCELADO'
             ? Componentes.boton({ texto: 'Cerrar proyecto', variante: 'peligro', clase: 'js-py-cerrar' }) : '') +
         '</div>'
+      : '<div class="sigso-py-acciones">' + descargarPdf + '</div>';
+
+    // v10 (Fase D, propuesta 10 "Solicitud -> Proyecto"): trazabilidad de
+    // donde salio este proyecto, si vino de una solicitud convertida.
+    var origenSolicitud = p.solicitud_origen_id
+      ? '<p class="sigso-ayuda">Creado a partir de la solicitud <b>' + Componentes.escaparHtml(p.solicitud_origen_id) + '</b>.</p>'
       : '';
 
     return '<div class="sigso-py-kpis">' + kpis + '</div>' +
@@ -663,13 +714,32 @@
       (p.objetivo ? '<p><b>Objetivo:</b> ' + Componentes.escaparHtml(p.objetivo) + '</p>' : '') +
       '<p class="sigso-ayuda">Líder: ' + Componentes.escaparHtml(p.lider_email) +
         ' · Del ' + fechaCorta_(p.fecha_inicio) + ' al ' + fechaCorta_(p.fecha_objetivo) + '</p>' +
+      origenSolicitud +
       acciones;
   }
 
   // --- Sala --------------------------------------------------------------
 
+  // v10 (Fase D, propuesta 09 "resumen diario"): "que se movió" desde la
+  // ultima vez que ESTA persona vio la Sala -- ya viene calculado del
+  // backend (calcularResumenVisitaProyecto_), aca solo se elige que texto
+  // mostrar segun que contadores vinieron en > 0.
+  function pintarResumenVisita_(resumen) {
+    if (!resumen) return ''; // primera visita: nada que "desde" mostrar
+    var partes = [];
+    if (resumen.eventos_sala > 0) partes.push(resumen.eventos_sala + ' publicación(es) en la sala');
+    if (resumen.tareas_completadas > 0) partes.push(resumen.tareas_completadas + ' tarea(s) completada(s)');
+    if (resumen.tareas_bloqueadas > 0) partes.push(resumen.tareas_bloqueadas + ' tarea(s) bloqueada(s)');
+    if (resumen.entregables_aprobados > 0) partes.push(resumen.entregables_aprobados + ' entregable(s) aprobado(s)');
+    var texto = partes.length ? partes.join(' · ') : 'Sin novedades';
+    return '<div class="sigso-py-resumen-visita">' +
+      '<b>Desde tu última visita</b> (' + diasRelativo_(resumen.desde) + '): ' + texto +
+    '</div>';
+  }
+
   function pintarSala_(sala, detalle) {
     var puedePublicar = !!detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
+    var resumenVisita = pintarResumenVisita_(detalle.resumen_desde_ultima_visita);
     var esLider = detalle.rol_actual === 'LIDER';
     // v9.3: menciones -- el backend (notificarSala_) ya notifica a quien
     // venga en evento.menciones, pero la UI nunca lo mandaba (campo muerto).
@@ -688,6 +758,20 @@
           }).join('') +
         '</details>'
       : '';
+    // v10 (Fase D, propuesta 08 "adjuntos por proyecto"): zona de archivos,
+    // literalmente dentro de la Sala -- el input queda oculto (el label
+    // hace de boton) y el nombre elegido se muestra al lado para que quede
+    // claro que hay algo listo para subir antes de tocar "Adjuntar".
+    var formAdjunto = puedePublicar
+      ? '<div class="sigso-py-adjuntar">' +
+          '<label for="py-sala-archivo" class="sigso-boton sigso-boton--sutil sigso-boton--con-icono">' +
+            Iconos.svg('adjunto', { tam: 14 }) + 'Elegir archivo</label>' +
+          '<input type="file" id="py-sala-archivo" class="sigso-oculto" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp">' +
+          '<span class="sigso-py-adjuntar__nombre" id="py-sala-archivo-nombre">Ningún archivo elegido</span>' +
+          Componentes.boton({ texto: 'Adjuntar', variante: 'sutil', clase: 'js-py-adjuntar-enviar', tipo: 'button', disabled: true }) +
+        '</div>'
+      : '';
+
     var form = puedePublicar
       ? '<form id="form-py-sala" class="sigso-py-sala-form">' +
           Componentes.campoTextarea({ id: 'py-sala-cuerpo', label: 'Publicar en la sala', placeholder: 'Comparte un avance, decisión, o pide algo...', requerido: true }) +
@@ -705,11 +789,12 @@
             }) +
             Componentes.boton({ texto: 'Publicar', tipo: 'submit' }) +
           '</div>' +
+          formAdjunto +
         '</form>'
       : '';
 
     if (sala.length === 0) {
-      return form + Componentes.vacio({ texto: 'Todavía no hay nada en la sala.' });
+      return resumenVisita + form + Componentes.vacio({ texto: 'Todavía no hay nada en la sala.' });
     }
 
     var integrantesPorEmail_ = {};
@@ -729,7 +814,14 @@
           '<span class="sigso-py-evento__fecha">' + fechaHora_(e.timestamp) + '</span>' +
         '</div>' +
         (e.titulo ? '<p class="sigso-py-evento__titulo">' + Componentes.escaparHtml(e.titulo) + '</p>' : '') +
-        '<p class="sigso-py-evento__cuerpo">' + Componentes.escaparHtml(e.cuerpo || '') + '</p>' +
+        // v10 (Fase D, "adjuntos por proyecto"): un archivo es un evento mas
+        // de la Sala (ver Proyectos.subirAdjunto) -- se distingue mostrando
+        // "Descargar" en vez del cuerpo de texto (que aca solo trae un
+        // comentario opcional sobre el archivo, si lo hubo).
+        (e.tipo === 'ARCHIVO'
+          ? (e.cuerpo ? '<p class="sigso-py-evento__cuerpo">' + Componentes.escaparHtml(e.cuerpo) + '</p>' : '') +
+            Componentes.boton({ texto: 'Descargar', variante: 'sutil', clase: 'js-py-descargar-adjunto', idx: e.evento_id })
+          : '<p class="sigso-py-evento__cuerpo">' + Componentes.escaparHtml(e.cuerpo || '') + '</p>') +
         (menciones.length
           ? '<p class="sigso-ayuda">@ ' + menciones.map(function (m) { return Componentes.escaparHtml(integrantesPorEmail_[m] || m); }).join(', ') + '</p>'
           : '') +
@@ -744,7 +836,7 @@
       '</div>';
     }).join('');
 
-    return form + '<div class="sigso-py-feed">' + feed + '</div>';
+    return resumenVisita + form + '<div class="sigso-py-feed">' + feed + '</div>';
   }
 
   // v10 (Fase A/B): check-in inline, compartido entre la pestaña "Tareas" de
@@ -1501,6 +1593,31 @@
     var cerrar = cont.querySelector('.js-py-cerrar');
     if (cerrar) cerrar.addEventListener('click', function () { manejarCerrarProyecto_(detalle.proyecto.proyecto_id); });
 
+    // v10 (Fase D, propuesta 11): mismo patron que descargarOrdenTrabajo_
+    // (detalle.js) -- pide el PDF en base64, lo pasa a Blob y dispara la
+    // descarga. Sin ese paso no hay forma de bajar un binario que llega por
+    // fetch/google.script.run como texto.
+    var descargarPdf = cont.querySelector('.js-py-descargar-pdf');
+    if (descargarPdf) {
+      descargarPdf.addEventListener('click', function () {
+        var textoOriginal = descargarPdf.textContent;
+        descargarPdf.disabled = true;
+        descargarPdf.innerHTML = '<span class="sigso-spinner"></span>Generando…';
+        api_('descargarReporteProyecto', { proyecto_id: detalle.proyecto.proyecto_id }).then(function (r) {
+          if (!r || !r.ok) {
+            Componentes.aviso({ texto: (r && r.message) || 'No se pudo generar el reporte.', tipo: 'error' });
+            return;
+          }
+          descargarBase64Proyecto_(r.data.pdf_base64, r.data.filename || ('Reporte-' + detalle.proyecto.proyecto_id + '.pdf'), 'application/pdf');
+        }).catch(function () {
+          Componentes.aviso({ texto: 'No se pudo conectar con el servidor.', tipo: 'error' });
+        }).finally(function () {
+          descargarPdf.disabled = false;
+          descargarPdf.textContent = textoOriginal;
+        });
+      });
+    }
+
     // v10 (Fase C, propuesta 07): guardar como plantilla -- solo pide el
     // nombre; la estructura (hitos) se copia tal cual esta ahora mismo.
     var guardarPlantilla = cont.querySelector('.js-py-guardar-plantilla');
@@ -1539,6 +1656,62 @@
         });
       });
     }
+    // v10 (Fase D, "adjuntos por proyecto"): elegir archivo solo habilita el
+    // boton y muestra el nombre -- subir es un paso aparte (evita mandar
+    // el archivo antes de que la persona confirme que es el correcto).
+    var campoArchivo = cont.querySelector('#py-sala-archivo');
+    var botonAdjuntar = cont.querySelector('.js-py-adjuntar-enviar');
+    if (campoArchivo && botonAdjuntar) {
+      campoArchivo.addEventListener('change', function () {
+        var archivo = campoArchivo.files[0];
+        cont.querySelector('#py-sala-archivo-nombre').textContent = archivo ? archivo.name : 'Ningún archivo elegido';
+        botonAdjuntar.disabled = !archivo;
+      });
+      botonAdjuntar.addEventListener('click', function () {
+        var archivo = campoArchivo.files[0];
+        if (!archivo) return;
+        var textoOriginal = botonAdjuntar.textContent;
+        botonAdjuntar.disabled = true;
+        botonAdjuntar.innerHTML = '<span class="sigso-spinner"></span>Subiendo…';
+        var lector = new FileReader();
+        lector.onload = function () {
+          var base64 = lector.result.slice(lector.result.indexOf(',') + 1);
+          api_('subirAdjuntoProyecto', {
+            proyecto_id: proyectoActivoId_, nombre_archivo: archivo.name, contenido_base64: base64
+          }).then(function (r) {
+            if (!r || !r.ok) {
+              Componentes.aviso({ texto: (r && r.message) || 'No se pudo subir el archivo.', tipo: 'error' });
+              botonAdjuntar.disabled = false;
+              botonAdjuntar.textContent = textoOriginal;
+              return;
+            }
+            refrescarDetalle_();
+          }).catch(function () {
+            Componentes.aviso({ texto: 'No se pudo conectar con el servidor.', tipo: 'error' });
+            botonAdjuntar.disabled = false;
+            botonAdjuntar.textContent = textoOriginal;
+          });
+        };
+        lector.readAsDataURL(archivo);
+      });
+    }
+    cont.querySelectorAll('.js-py-descargar-adjunto').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var textoOriginal = btn.textContent;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="sigso-spinner"></span>Descargando…';
+        api_('descargarAdjuntoProyecto', { proyecto_id: proyectoActivoId_, evento_id: btn.getAttribute('data-idx') }).then(function (r) {
+          if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo descargar el archivo.', tipo: 'error' }); return; }
+          descargarBase64Proyecto_(r.data.contenido_base64, r.data.nombre_archivo, r.data.mime);
+        }).catch(function () {
+          Componentes.aviso({ texto: 'No se pudo conectar con el servidor.', tipo: 'error' });
+        }).finally(function () {
+          btn.disabled = false;
+          btn.textContent = textoOriginal;
+        });
+      });
+    });
+
     cont.querySelectorAll('.js-py-convertir').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var id = btn.getAttribute('data-idx');

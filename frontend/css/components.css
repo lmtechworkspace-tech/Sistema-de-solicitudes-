@@ -3626,7 +3626,20 @@
 .sigso-py-integrante__info { display: flex; flex-direction: column; flex: 1 1 auto; }
 .sigso-py-integrante__nombre { font-weight: 600; color: var(--texto); }
 
+/* v10 (Fase D, "resumen diario"): franja de "que se movio" arriba de la
+   sala -- discreta (no es una alerta), solo informativa. */
+.sigso-py-resumen-visita {
+  background: var(--superficie-2); border: 1px solid var(--borde); border-radius: var(--radio-md);
+  padding: var(--esp-3); margin-bottom: var(--esp-3); font-size: var(--texto-sm); color: var(--texto-2);
+}
+.sigso-py-resumen-visita b { color: var(--texto); }
+
 .sigso-py-sala-form { margin-bottom: var(--esp-4); }
+/* v10 (Fase D, "adjuntos por proyecto"): fila de "elegir archivo" bajo el
+   formulario de la sala. El <input type="file"> real queda oculto (.sigso-oculto);
+   el label hace de boton, mismo patron que el resto de SIGSO. */
+.sigso-py-adjuntar { display: flex; align-items: center; gap: var(--esp-2); margin-top: var(--esp-2); flex-wrap: wrap; }
+.sigso-py-adjuntar__nombre { font-size: var(--texto-sm); color: var(--texto-2); }
 .sigso-py-sala-form__acciones { display: flex; gap: var(--esp-2); align-items: flex-end; flex-wrap: wrap; }
 .sigso-py-sala-form__acciones .sigso-campo { flex: 1 1 12rem; margin: 0; }
 
