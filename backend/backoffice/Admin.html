@@ -3717,6 +3717,70 @@ button {
 .sigso-kanban__tarjeta--arrastrable:active { cursor: grabbing; }
 .sigso-kanban__tarjeta--arrastrando { opacity: .5; }
 
+/* v10 (Fase C): cronograma -- misma tecnica que la Carta Gantt de Gerencia
+   (barras por CSS, sin libreria), colores por el mismo semaforo de siempre
+   en vez del cumplimiento de Solicitudes. */
+.sigso-py-cron { position: relative; padding-top: var(--esp-2); }
+.sigso-py-cron-hoy {
+  position: absolute; top: 0; bottom: 0; width: 2px; background: var(--primario); z-index: 1;
+}
+.sigso-py-cron-fila { margin-bottom: var(--esp-3); }
+.sigso-py-cron-etiqueta { font-size: var(--texto-sm); margin-bottom: 0.25rem; color: var(--texto); display: flex; align-items: center; gap: 0.3rem; }
+.sigso-py-cron-track { position: relative; height: 14px; background: var(--superficie-2); border-radius: var(--radio-sm); }
+.sigso-py-cron-barra { position: absolute; top: 0; height: 100%; border-radius: var(--radio-sm); min-width: 3px; }
+.sigso-py-cron-barra--al-dia, .sigso-py-cron-barra--terminada { background: var(--ok); }
+.sigso-py-cron-barra--riesgo { background: var(--alerta); }
+.sigso-py-cron-barra--atrasada { background: var(--critico); }
+.sigso-py-cron-barra--bloqueada { background: var(--info); }
+.sigso-py-cron-barra--pendiente, .sigso-py-cron-barra--cancelada { background: var(--texto-3); }
+.sigso-py-cron-barra--revision { background: var(--primario); }
+.sigso-py-cron-barra--atraso {
+  background: repeating-linear-gradient(45deg, var(--critico), var(--critico) 4px, color-mix(in srgb, var(--critico), black 25%) 4px, color-mix(in srgb, var(--critico), black 25%) 8px);
+}
+.sigso-py-cron-hito {
+  position: absolute; top: 50%; width: 12px; height: 12px; transform: translate(-50%, -50%) rotate(45deg);
+  border-radius: 2px; background: var(--ok);
+}
+.sigso-py-cron-hito--atrasada { background: var(--critico); }
+.sigso-py-cron-hito--terminada { background: var(--texto-3); }
+.sigso-py-cron-hito--cancelada { background: var(--texto-3); opacity: .6; }
+
+/* v10 (Fase C, "vista calendario"): grilla de mes, sin libreria -- mismo
+   espiritu que el resto del modulo (CSS liso, sin dependencias nuevas). */
+.sigso-py-cal-nav {
+  display: flex; align-items: center; gap: var(--esp-2); margin: var(--esp-3) 0;
+}
+.sigso-py-cal-mes { font-weight: 600; color: var(--texto); text-transform: capitalize; min-width: 10rem; text-align: center; }
+.sigso-py-cal-cabecera-dias {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--esp-1);
+  font-size: var(--texto-sm); color: var(--texto-2); text-align: center; margin-bottom: var(--esp-1);
+}
+.sigso-py-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--esp-1); }
+.sigso-py-cal-celda {
+  aspect-ratio: 1 / 1; min-height: 3.5rem; background: var(--superficie); border: 1px solid var(--borde);
+  border-radius: var(--radio-sm); padding: 0.35rem; display: flex; flex-direction: column; gap: 0.2rem;
+  cursor: pointer; font: inherit; text-align: left; transition: border-color var(--mov-rapido), background var(--mov-rapido);
+}
+.sigso-py-cal-celda:hover { border-color: var(--borde-fuerte); }
+.sigso-py-cal-celda--vacia { background: transparent; border-color: transparent; cursor: default; }
+.sigso-py-cal-celda--hoy { border-color: var(--primario); }
+.sigso-py-cal-celda--activa { background: var(--primario-suave); border-color: var(--primario); }
+.sigso-py-cal-numero { font-size: var(--texto-sm); font-weight: 600; color: var(--texto); font-variant-numeric: tabular-nums; }
+.sigso-py-cal-marcas { display: flex; align-items: center; gap: 0.2rem; flex-wrap: wrap; }
+.sigso-py-cal-marca { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.sigso-py-cal-marca--al-dia, .sigso-py-cal-marca--terminada { background: var(--ok); }
+.sigso-py-cal-marca--riesgo { background: var(--alerta); }
+.sigso-py-cal-marca--atrasada { background: var(--critico); }
+.sigso-py-cal-marca--bloqueada { background: var(--info); }
+.sigso-py-cal-marca--pendiente, .sigso-py-cal-marca--cancelada { background: var(--texto-3); }
+.sigso-py-cal-marca--revision { background: var(--primario); }
+.sigso-py-cal-extra { font-size: 0.65rem; color: var(--texto-2); }
+.sigso-py-cal-panel { margin-top: var(--esp-4); }
+@media (max-width: 640px) {
+  .sigso-py-cal-celda { min-height: 2.75rem; padding: 0.25rem; }
+  .sigso-py-cal-numero { font-size: 0.75rem; }
+}
+
 /* ===== v10.0: modulo Calidad / SGC ISO 9001 =============================
    Repositorio documental. Reusa los tokens de siempre; el unico acento
    propio es el codigo del documento en monoespaciada, porque en un SGC el

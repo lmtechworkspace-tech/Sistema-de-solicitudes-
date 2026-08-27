@@ -175,6 +175,13 @@ var BACKOFFICE_ACTIONS = {
   // v10 (Fase B, "Mi trabajo en proyectos"): tareas + entregables propios de
   // TODOS mis proyectos, en una sola llamada.
   listarMisTareasProyectos: handleListarMisTareasProyectos_,
+  // v10 (Fase C, "vista calendario"): fechas comprometidas de tareas, hitos
+  // y entregables de todos los proyectos visibles, en una sola llamada.
+  listarCalendarioProyectos: handleListarCalendarioProyectos_,
+  // v10 (Fase C, "plantillas de proyecto"): guardar la estructura de hitos
+  // de un proyecto como plantilla, y listarlas para el selector al crear.
+  guardarProyectoComoPlantilla: handleGuardarProyectoComoPlantilla_,
+  listarPlantillasProyecto: handleListarPlantillasProyecto_,
   getDetalleProyecto: handleGetDetalleProyecto_,
   crearProyecto: handleCrearProyecto_,
   actualizarProyecto: handleActualizarProyecto_,
@@ -472,6 +479,12 @@ var MODULO_POR_ACCION = {
   // ya lo permite: puedeVerProyecto_ acepta rol GERENCIA).
   listarProyectos: ['proyectos', 'gerencia'],
   listarMisTareasProyectos: 'proyectos',
+  // v10 (Fase C): mismo criterio que listarProyectos -- vista de portafolio,
+  // Gerencia tambien debe poder verla.
+  listarCalendarioProyectos: ['proyectos', 'gerencia'],
+  // v10 (Fase C): mismo gate que crearProyecto -- son parte del mismo flujo.
+  guardarProyectoComoPlantilla: 'proyectos',
+  listarPlantillasProyecto: 'proyectos',
   getDetalleProyecto: ['proyectos', 'gerencia'],
   crearProyecto: 'proyectos',
   actualizarProyecto: 'proyectos',
@@ -1145,6 +1158,18 @@ function handleListarProyectos_(data, contexto) {
 
 function handleListarMisTareasProyectos_(data, contexto) {
   return responderResultado_(Proyectos.listarMisTareas(data, contexto));
+}
+
+function handleListarCalendarioProyectos_(data, contexto) {
+  return responderResultado_(Proyectos.listarCalendario(data, contexto));
+}
+
+function handleGuardarProyectoComoPlantilla_(data, contexto) {
+  return responderResultado_(Proyectos.guardarComoPlantilla(data, contexto));
+}
+
+function handleListarPlantillasProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.listarPlantillas(data, contexto));
 }
 
 function handleGetDetalleProyecto_(data, contexto) {

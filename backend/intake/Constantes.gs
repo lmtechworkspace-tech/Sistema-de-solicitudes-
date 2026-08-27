@@ -112,6 +112,10 @@ var SHEETS = {
   // v9.4: idem -- copia solo para que el esquema no diverja.
   PROYECTO_ENTREGABLES: 'PROYECTO_ENTREGABLES',
   PROYECTO_RIESGOS: 'PROYECTO_RIESGOS',
+  // v10 (Fase C): idem -- copia solo para que el esquema no diverja. Ver la
+  // nota identica en backend/backoffice/Constantes.gs.
+  PROYECTO_PLANTILLAS: 'PROYECTO_PLANTILLAS',
+  PROYECTO_PLANTILLA_HITOS: 'PROYECTO_PLANTILLA_HITOS',
   // v10.0 (Modulo SGC ISO 9001): vive 100% en el Backoffice (es interno);
   // Intake mantiene la copia solo para que el esquema no diverja. Ver la
   // nota identica en backend/backoffice/Constantes.gs.
@@ -147,13 +151,13 @@ var SHEETS = {
   SGC_OBJETIVOS: 'SGC_OBJETIVOS',
   SGC_INDICADOR_LECTURAS: 'SGC_INDICADOR_LECTURAS',
   SGC_ALCANCE: 'SGC_ALCANCE',
-  SGC_EXCLUSIONES: 'SGC_EXCLUSIONES',
-  SGC_CONTEXTO: 'SGC_CONTEXTO',
-  SGC_PARTES_INTERESADAS: 'SGC_PARTES_INTERESADAS',
-  SGC_RIESGOS: 'SGC_RIESGOS',
-  SGC_PROCESOS: 'SGC_PROCESOS',
-  SGC_PROCESO_PASOS: 'SGC_PROCESO_PASOS',
-  SGC_INDICADORES: 'SGC_INDICADORES',
+  SGC_EXCLUSIONES: 'SGC_EXCLUSIONES',
+  SGC_CONTEXTO: 'SGC_CONTEXTO',
+  SGC_PARTES_INTERESADAS: 'SGC_PARTES_INTERESADAS',
+  SGC_RIESGOS: 'SGC_RIESGOS',
+  SGC_PROCESOS: 'SGC_PROCESOS',
+  SGC_PROCESO_PASOS: 'SGC_PROCESO_PASOS',
+  SGC_INDICADORES: 'SGC_INDICADORES',
   SGC_PRESTACIONES: 'SGC_PRESTACIONES'
 };
 
@@ -483,6 +487,13 @@ var COLUMNAS = {
     'riesgo_id', 'proyecto_id', 'descripcion', 'probabilidad', 'impacto',
     'nivel', 'responsable_email', 'mitigacion', 'estado', 'fecha_creacion'
   ],
+  // v10 (Fase C): ver la nota identica en backend/backoffice/Constantes.gs.
+  PROYECTO_PLANTILLAS: [
+    'plantilla_id', 'nombre', 'descripcion', 'creado_por', 'fecha_creacion', 'activa'
+  ],
+  PROYECTO_PLANTILLA_HITOS: [
+    'plantilla_hito_id', 'plantilla_id', 'nombre', 'descripcion', 'orden'
+  ],
   // v10.0 (Modulo SGC ISO 9001): ver la nota identica en
   // backend/backoffice/Constantes.gs sobre cada hoja y cada campo.
   SGC_DOCUMENTOS: [
@@ -691,64 +702,64 @@ var COLUMNAS = {
     'creado_por', 'fecha_creacion', 'activa'
   ],
 
-  // --- v10.0 Fase 6a: objetivos de calidad (DOC-07, §6.2) -------------------
-  // Una fila = un objetivo EN UN AÑO. La clave es (anio, numero): DOC-07 es
-  // un documento vivo ("Fecha actualizacion: Junio 2026") y la meta, el
-  // responsable y hasta la frecuencia se ajustan de un año a otro. Guardar
-  // una fila por año conserva contra que meta se midio cada periodo -- sin
-  // eso, subir la meta en 2027 reescribiria la historia de 2026 y el tablero
-  // dejaria de ser evidencia.
-  //
-  // Por eso los objetivos NO son un catalogo en el codigo (a diferencia de
-  // las 13 entradas de la revision o las 28 clausulas ISO, que las define la
-  // norma y no la organizacion): estos los define la empresa en su DOC-07.
-  //
-  // meta_operador / meta_valor / unidad: la meta en forma COMPARABLE, para
-  //   poder decir "cumple" sin que nadie lo interprete a mano.
-  // meta_texto: la meta LITERAL del documento. Se conserva porque es lo que
-  //   el auditor lee en DOC-07, y porque varias traen matices que ningun
-  //   operador numerico captura ("≥ 90% anual, con calificacion ≥ nota 8").
-  //
-  // fuente: de donde sale el valor de cada lectura.
-  //   AUTO     el sistema lo calcula entero (hoy solo el objetivo 4).
-  //   ASISTIDA el sistema aporta parte y la persona completa el resto
-  //            (objetivo 2: sabe cuantos reclamos hubo, no cuantos
-  //            servicios se prestaron -- eso llega con la Fase 7).
-  //   MANUAL   lo entra la persona responsable.
-  // calculo: clave del calculo automatico (ver CALCULOS_INDICADOR_SGC).
-  //   Vacio en los MANUAL.
-  //
-  // frecuencia: la normalizada, que es la que dispara el aviso de lectura
-  //   pendiente. frecuencia_texto guarda la del documento, que a veces trae
-  //   dos ("Mensual / Trimestral") o una aclaracion ("Anual (post-proyecto)").
-  SGC_OBJETIVOS: [
-    'objetivo_id', 'anio', 'numero',
-    'objetivo_general', 'objetivo_especifico', 'indicador',
-    'meta_texto', 'meta_operador', 'meta_valor', 'unidad',
-    'acciones', 'frecuencia', 'frecuencia_texto',
-    'responsable_texto', 'responsable_email',
-    'fuente', 'calculo',
-    'creado_por', 'fecha_creacion', 'activa'
-  ],
-
-  // Las lecturas del periodo. Una fila = "en tal periodo, el indicador dio
-  // tanto". periodo es una clave ordenable y comparable: '2026-M03',
-  // '2026-T2', '2026-S1', '2026'. La forma la define la frecuencia del
-  // objetivo, asi que un objetivo semestral nunca genera claves mensuales.
-  //
-  // numerador/denominador: se guardan aparte del valor cuando el indicador
-  //   es un cociente. Sin ellos, un 1,8% no se puede auditar (¿1,8% de que?)
-  //   ni recalcular si mañana cambia el denominador.
-  // cumple: derivado de comparar valor contra la meta del objetivo, pero se
-  //   PERSISTE: la meta puede cambiar el año que viene y el "cumplio" de
-  //   2026 tiene que seguir siendo el que se evaluo en 2026.
-  // detalle: JSON opcional con el desglose que sustenta el numero (por
-  //   ejemplo, quienes quedaron bajo las 5 horas de formacion).
-  SGC_INDICADOR_LECTURAS: [
-    'lectura_id', 'objetivo_id', 'indicador_id', 'anio', 'periodo',
-    'valor', 'numerador', 'denominador',
-    'cumple', 'origen', 'detalle', 'observaciones',
-    'registrado_por', 'fecha_registro', 'activa'
+  // --- v10.0 Fase 6a: objetivos de calidad (DOC-07, §6.2) -------------------
+  // Una fila = un objetivo EN UN AÑO. La clave es (anio, numero): DOC-07 es
+  // un documento vivo ("Fecha actualizacion: Junio 2026") y la meta, el
+  // responsable y hasta la frecuencia se ajustan de un año a otro. Guardar
+  // una fila por año conserva contra que meta se midio cada periodo -- sin
+  // eso, subir la meta en 2027 reescribiria la historia de 2026 y el tablero
+  // dejaria de ser evidencia.
+  //
+  // Por eso los objetivos NO son un catalogo en el codigo (a diferencia de
+  // las 13 entradas de la revision o las 28 clausulas ISO, que las define la
+  // norma y no la organizacion): estos los define la empresa en su DOC-07.
+  //
+  // meta_operador / meta_valor / unidad: la meta en forma COMPARABLE, para
+  //   poder decir "cumple" sin que nadie lo interprete a mano.
+  // meta_texto: la meta LITERAL del documento. Se conserva porque es lo que
+  //   el auditor lee en DOC-07, y porque varias traen matices que ningun
+  //   operador numerico captura ("≥ 90% anual, con calificacion ≥ nota 8").
+  //
+  // fuente: de donde sale el valor de cada lectura.
+  //   AUTO     el sistema lo calcula entero (hoy solo el objetivo 4).
+  //   ASISTIDA el sistema aporta parte y la persona completa el resto
+  //            (objetivo 2: sabe cuantos reclamos hubo, no cuantos
+  //            servicios se prestaron -- eso llega con la Fase 7).
+  //   MANUAL   lo entra la persona responsable.
+  // calculo: clave del calculo automatico (ver CALCULOS_INDICADOR_SGC).
+  //   Vacio en los MANUAL.
+  //
+  // frecuencia: la normalizada, que es la que dispara el aviso de lectura
+  //   pendiente. frecuencia_texto guarda la del documento, que a veces trae
+  //   dos ("Mensual / Trimestral") o una aclaracion ("Anual (post-proyecto)").
+  SGC_OBJETIVOS: [
+    'objetivo_id', 'anio', 'numero',
+    'objetivo_general', 'objetivo_especifico', 'indicador',
+    'meta_texto', 'meta_operador', 'meta_valor', 'unidad',
+    'acciones', 'frecuencia', 'frecuencia_texto',
+    'responsable_texto', 'responsable_email',
+    'fuente', 'calculo',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // Las lecturas del periodo. Una fila = "en tal periodo, el indicador dio
+  // tanto". periodo es una clave ordenable y comparable: '2026-M03',
+  // '2026-T2', '2026-S1', '2026'. La forma la define la frecuencia del
+  // objetivo, asi que un objetivo semestral nunca genera claves mensuales.
+  //
+  // numerador/denominador: se guardan aparte del valor cuando el indicador
+  //   es un cociente. Sin ellos, un 1,8% no se puede auditar (¿1,8% de que?)
+  //   ni recalcular si mañana cambia el denominador.
+  // cumple: derivado de comparar valor contra la meta del objetivo, pero se
+  //   PERSISTE: la meta puede cambiar el año que viene y el "cumplio" de
+  //   2026 tiene que seguir siendo el que se evaluo en 2026.
+  // detalle: JSON opcional con el desglose que sustenta el numero (por
+  //   ejemplo, quienes quedaron bajo las 5 horas de formacion).
+  SGC_INDICADOR_LECTURAS: [
+    'lectura_id', 'objetivo_id', 'indicador_id', 'anio', 'periodo',
+    'valor', 'numerador', 'denominador',
+    'cumple', 'origen', 'detalle', 'observaciones',
+    'registrado_por', 'fecha_registro', 'activa'
   ],
 
   // --- v11.0 Fase 1: alcance del SGC y exclusiones (§4.3) -----------------
@@ -797,207 +808,207 @@ var COLUMNAS = {
   SGC_EXCLUSIONES: [
     'exclusion_id', 'alcance_id', 'clausula', 'clausula_padre', 'titulo',
     'justificacion', 'creado_por', 'fecha_creacion', 'activa'
-  ],
-
-  // --- v11.0 Fase 2: contexto de la organizacion (§4.1) -------------------
-  //
-  // El DOC-02 "Analisis FODA" es una tabla de cuatro cuadrantes con 24
-  // factores. Se estructura por dos razones que un Word no da: §4.1 exige
-  // hacer SEGUIMIENTO Y REVISION de estas cuestiones (no solo listarlas), y
-  // siete de los once riesgos del DOC-08 son literalmente debilidades y
-  // amenazas de este documento -- la cadena factor -> riesgo -> accion hoy
-  // solo existe en la cabeza de quien redacto ambos.
-  //
-  // tipo: FORTALEZA / OPORTUNIDAD / DEBILIDAD / AMENAZA.
-  // origen: INTERNO / EXTERNO. Se deriva del tipo, pero se PERSISTE porque
-  //   es el vocabulario de la norma ("cuestiones externas e internas") y es
-  //   por donde se agrupa al mostrarlo y al evaluar la clausula.
-  // numero: el correlativo dentro de su cuadrante, tal como lo trae el
-  //   DOC-02. Permite citar "D3" en un riesgo y que se entienda.
-  // estado: VIGENTE / SUPERADO. Un factor puede dejar de aplicar sin que
-  //   haya que borrarlo -- el historico es parte de la evidencia de que la
-  //   organizacion revisa su contexto.
-  SGC_CONTEXTO: [
-    'factor_id', 'tipo', 'origen', 'numero', 'descripcion',
-    'estado', 'observaciones',
-    'fecha_identificacion', 'fecha_ultima_revision', 'revisado_por',
-    'creado_por', 'fecha_creacion', 'activa'
-  ],
-
-  // --- v11.0 Fase 2: partes interesadas (§4.2) ----------------------------
-  //
-  // Las columnas siguen al DOC-04 v02 y no a una plantilla generica: parte,
-  // necesidades, impacto, nivel de influencia, expectativa y como afecta al
-  // SGC. Son las SEIS que el documento real tiene.
-  //
-  // metodo_seguimiento / frecuencia_seguimiento / responsable_email quedan
-  // OPCIONALES y vacios: §4.2 pide hacer seguimiento y revision de la
-  // informacion sobre las partes interesadas, asi que tienen donde vivir,
-  // pero no se rellenan con algo inventado para que la pantalla se vea
-  // completa. Un campo vacio es honesto; uno inventado es un hallazgo.
-  SGC_PARTES_INTERESADAS: [
-    'parte_id', 'nombre', 'categoria',
-    'necesidades', 'expectativa', 'efecto_sgc',
-    'impacto', 'influencia',
-    'metodo_seguimiento', 'frecuencia_seguimiento', 'responsable_email',
-    'estado', 'fecha_ultima_revision', 'revisado_por',
-    'creado_por', 'fecha_creacion', 'activa'
-  ],
-
-  // --- v11.0 Fase 3: riesgos y oportunidades (§6.1) -----------------------
-  //
-  // El DOC-08 es el documento mas rico del material y el que mas gana al
-  // digitalizarse, porque trae un modelo de valoracion NUMERICO completo:
-  // probabilidad x impacto = magnitud, con bandas definidas, y una segunda
-  // pasada de revaloracion despues de aplicar los controles.
-  //
-  // Riesgos y oportunidades comparten hoja con un campo `clase`. Son la misma
-  // estructura (§6.1 las trata juntas) y separarlas en dos hojas obligaria a
-  // duplicar cada consulta. Lo que SI cambia es el significado: en una
-  // oportunidad, una magnitud alta es BUENA y la revaloracion deberia SUBIR.
-  //
-  // NO se guardan `magnitud` ni la banda: se CALCULAN a partir de
-  // probabilidad e impacto. Ese es el punto -- en el documento original 7 de
-  // las 32 valoraciones no coinciden con su propia tabla de criterios, y al
-  // calcularlas deja de ser posible que discrepen.
-  //
-  // factor_contexto_id: enlace al factor del FODA que origina el riesgo.
-  //   Siete de los once riesgos del DOC-08 son literalmente debilidades y
-  //   amenazas del DOC-02; sin este campo esa cadena se pierde.
-  // accion_actividad_id: la accion de tratamiento es una ACTIVIDAD del motor
-  //   v7.0, igual que las correcciones de una NC y los acuerdos de la
-  //   revision por la direccion. No se crea un tercer sistema de tareas.
-  // fecha_implementacion: texto libre a proposito. El documento usa "Agosto
-  //   2026", "Continuo" y "Post-certificacion"; forzar una fecha exacta
-  //   obligaria a inventar un dia que nadie decidio.
-  SGC_RIESGOS: [
-    'riesgo_id', 'clase', 'codigo',
-    'relacion_actividad', 'factor', 'descripcion',
-    'analisis_causa', 'procedencia', 'origen', 'factor_contexto_id',
-    'probabilidad', 'impacto',
-    'accion', 'fecha_implementacion', 'medidas_control',
-    'responsable_email', 'accion_actividad_id',
-    'probabilidad_residual', 'impacto_residual',
-    'estado', 'observaciones', 'proceso_id',
-    'fecha_identificacion', 'fecha_ultima_revision', 'revisado_por',
-    'creado_por', 'fecha_creacion', 'activa'
-  ],
-
-// --- v11.0 Fase 4: procesos del SGC (§4.4, y base de §8.1/§8.5/§8.6) ----
-  //
-  // Hay DOS niveles y comparten hoja porque son la misma entidad con distinto
-  // grado de detalle:
-  //
-  //   MAPA     los 14 procesos del DOC-03 "Mapa de procesos v02", repartidos
-  //            en estrategicos, operativos y de apoyo. Son la vista que pide
-  //            §4.4: que procesos hay y como se relacionan.
-  //   SERVICIO los 40 procesos de servicio de los DOC-10 a DOC-13, cada uno
-  //            colgando del proceso del mapa al que pertenece
-  //            (`proceso_padre_id`). Son el detalle operativo.
-  //
-  // La distincion importa: el mapa es chico y estable, y cierra §4.4 solo.
-  // El detalle operativo es grande (143 pasos) y se carga por planilla, no
-  // desde el codigo -- meter 135 KB de texto en un archivo que se pega a
-  // mano en Apps Script seria pagar ese costo en cada despliegue.
-  //
-  // clausulas_iso: mismo campo y mismo criterio que SGC_DOCUMENTOS. El
-  //   Encargado etiqueta que clausulas sustenta cada proceso; adivinarlo por
-  //   palabras clave seria inventar evidencia.
-  SGC_PROCESOS: [
-    'proceso_id', 'codigo', 'nombre', 'tipo', 'nivel',
-    'proceso_padre_id', 'area',
-    'objetivo', 'alcance', 'responsable_email',
-    'entradas', 'actividades', 'salidas',
-    'clientes', 'proveedores', 'recursos',
-    'documentos', 'clausulas_iso',
-    'estado', 'observaciones',
-    'fecha_ultima_revision', 'revisado_por',
-    'creado_por', 'fecha_creacion', 'activa'
-  ],
-
-  // Un paso por fila, con las cinco columnas que traen los DOC-10 a DOC-13:
-  // responsable, input, actividades, evidencias y output. Se respeta esa
-  // estructura tal cual en vez de normalizarla, porque es el formato que la
-  // empresa ya aprobo y con el que trabaja cada area.
-  SGC_PROCESO_PASOS: [
-    'paso_id', 'proceso_id', 'numero', 'nombre',
-    'responsable', 'input', 'actividades', 'evidencias', 'output',
-    'observaciones', 'creado_por', 'fecha_creacion', 'activa'
-  ],
-
-// --- v11.0 Fase 6: indicadores de proceso (§9.1.1) ----------------------
-  //
-  // Los SGC_OBJETIVOS son los seis del DOC-07: corporativos, anuales, y
-  // fijados por la Direccion. Un indicador de PROCESO es otra cosa -- mide
-  // como va un proceso concreto, lo define su responsable y no se reabre
-  // cada enero.
-  //
-  // Por que en hoja aparte y no generalizando SGC_OBJETIVOS: los objetivos
-  // se guardan POR AÑO a proposito (subir una meta en 2027 no puede
-  // reescribir contra que se midio 2026). Un indicador de proceso vive
-  // mientras el proceso viva. Mezclarlos obligaria a duplicar cada
-  // indicador cada año sin motivo.
-  //
-  // Las LECTURAS si se comparten: `SGC_INDICADOR_LECTURAS` gano un
-  // `indicador_id` aditivo, y una lectura pertenece o a un objetivo o a un
-  // indicador. Todo lo que ya existia cruza por `objetivo_id`, asi que las
-  // filas nuevas son invisibles para el tablero de objetivos.
-  //
-  // proceso_id: que proceso mide. Es el enlace con la Fase 4 y lo que hace
-  //   que la ficha de un proceso pueda mostrar sus indicadores.
-  // objetivo_id: opcional. El DOC-03 pide KPIs "alineados a los objetivos de
-  //   calidad": cuando el indicador alimenta uno, queda dicho cual.
-  // tolerancia_valor: el escalon intermedio. Sin el solo hay cumple / no
-  //   cumple, y un 88% contra una meta de 90% se ve igual de rojo que un
-  //   40% -- que es justo lo que impide priorizar.
-  SGC_INDICADORES: [
-    'indicador_id', 'codigo', 'nombre', 'descripcion',
-    'proceso_id', 'objetivo_id', 'area',
-    'formula', 'fuente', 'unidad',
-    'meta_operador', 'meta_valor', 'meta_texto', 'tolerancia_valor',
-    'frecuencia', 'responsable_email',
-    'estado', 'observaciones',
-    'creado_por', 'fecha_creacion', 'activa'
-  ],
-
-// --- v11.0 Fase 8: evidencia de servicios prestados (§8.1, §8.5, §8.6,
-  // --- §8.7) --------------------------------------------------------------
-  //
-  // La fase con riesgo de escala, y la razon por la que se dejo para el
-  // final. Una fila = UNA prestacion registrada. Las decisiones que la
-  // hacen viable:
-  //
-  // 1. NO se pre-generan filas. Nada de crear cliente x proceso x mes por
-  //    adelantado: con 50 clientes y 40 procesos eso serian 24.000 filas al
-  //    año de golpe, casi todas vacias. Una fila existe cuando alguien
-  //    registra que el servicio se presto.
-  //
-  // 2. `periodo` es OPCIONAL. Los DOC-10 a 13 distinguen servicios
-  //    "Mensual" de "Puntual": un proceso mensual tiene una prestacion por
-  //    periodo, uno puntual tiene tantas como veces ocurra. Forzar un
-  //    periodo a un servicio puntual obligaria a inventarlo.
-  //
-  // 3. El cliente NO se duplica: `cliente_id` apunta a CAT_CLIENTES, que ya
-  //    existe en SIGSO desde la v1. Se desnormaliza el nombre igual que en
-  //    SOLICITUDES, para que el listado no dependa de un cruce.
-  //
-  // estado: PRESTADO (entregado, aun sin liberar) / LIBERADO (§8.6, con
-  //   quien autorizo y cuando) / NO_CONFORME (§8.7, salida no conforme).
-  // nc_id: si la salida no conforme derivo en una no conformidad, con el
-  //   mismo eslabon que ya usan las quejas y los hallazgos de auditoria.
-  SGC_PRESTACIONES: [
-    'prestacion_id',
-    'cliente_id', 'cliente_nombre',
-    'proceso_id', 'proceso_codigo', 'proceso_nombre',
-    'periodo', 'fecha_prestacion', 'responsable_email',
-    'estado', 'evidencia',
-    'liberado_por', 'fecha_liberacion',
-    'nc_id', 'observaciones',
-    'creado_por', 'fecha_creacion', 'activa'
-  ]
-
-
-
+  ],
+
+  // --- v11.0 Fase 2: contexto de la organizacion (§4.1) -------------------
+  //
+  // El DOC-02 "Analisis FODA" es una tabla de cuatro cuadrantes con 24
+  // factores. Se estructura por dos razones que un Word no da: §4.1 exige
+  // hacer SEGUIMIENTO Y REVISION de estas cuestiones (no solo listarlas), y
+  // siete de los once riesgos del DOC-08 son literalmente debilidades y
+  // amenazas de este documento -- la cadena factor -> riesgo -> accion hoy
+  // solo existe en la cabeza de quien redacto ambos.
+  //
+  // tipo: FORTALEZA / OPORTUNIDAD / DEBILIDAD / AMENAZA.
+  // origen: INTERNO / EXTERNO. Se deriva del tipo, pero se PERSISTE porque
+  //   es el vocabulario de la norma ("cuestiones externas e internas") y es
+  //   por donde se agrupa al mostrarlo y al evaluar la clausula.
+  // numero: el correlativo dentro de su cuadrante, tal como lo trae el
+  //   DOC-02. Permite citar "D3" en un riesgo y que se entienda.
+  // estado: VIGENTE / SUPERADO. Un factor puede dejar de aplicar sin que
+  //   haya que borrarlo -- el historico es parte de la evidencia de que la
+  //   organizacion revisa su contexto.
+  SGC_CONTEXTO: [
+    'factor_id', 'tipo', 'origen', 'numero', 'descripcion',
+    'estado', 'observaciones',
+    'fecha_identificacion', 'fecha_ultima_revision', 'revisado_por',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // --- v11.0 Fase 2: partes interesadas (§4.2) ----------------------------
+  //
+  // Las columnas siguen al DOC-04 v02 y no a una plantilla generica: parte,
+  // necesidades, impacto, nivel de influencia, expectativa y como afecta al
+  // SGC. Son las SEIS que el documento real tiene.
+  //
+  // metodo_seguimiento / frecuencia_seguimiento / responsable_email quedan
+  // OPCIONALES y vacios: §4.2 pide hacer seguimiento y revision de la
+  // informacion sobre las partes interesadas, asi que tienen donde vivir,
+  // pero no se rellenan con algo inventado para que la pantalla se vea
+  // completa. Un campo vacio es honesto; uno inventado es un hallazgo.
+  SGC_PARTES_INTERESADAS: [
+    'parte_id', 'nombre', 'categoria',
+    'necesidades', 'expectativa', 'efecto_sgc',
+    'impacto', 'influencia',
+    'metodo_seguimiento', 'frecuencia_seguimiento', 'responsable_email',
+    'estado', 'fecha_ultima_revision', 'revisado_por',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // --- v11.0 Fase 3: riesgos y oportunidades (§6.1) -----------------------
+  //
+  // El DOC-08 es el documento mas rico del material y el que mas gana al
+  // digitalizarse, porque trae un modelo de valoracion NUMERICO completo:
+  // probabilidad x impacto = magnitud, con bandas definidas, y una segunda
+  // pasada de revaloracion despues de aplicar los controles.
+  //
+  // Riesgos y oportunidades comparten hoja con un campo `clase`. Son la misma
+  // estructura (§6.1 las trata juntas) y separarlas en dos hojas obligaria a
+  // duplicar cada consulta. Lo que SI cambia es el significado: en una
+  // oportunidad, una magnitud alta es BUENA y la revaloracion deberia SUBIR.
+  //
+  // NO se guardan `magnitud` ni la banda: se CALCULAN a partir de
+  // probabilidad e impacto. Ese es el punto -- en el documento original 7 de
+  // las 32 valoraciones no coinciden con su propia tabla de criterios, y al
+  // calcularlas deja de ser posible que discrepen.
+  //
+  // factor_contexto_id: enlace al factor del FODA que origina el riesgo.
+  //   Siete de los once riesgos del DOC-08 son literalmente debilidades y
+  //   amenazas del DOC-02; sin este campo esa cadena se pierde.
+  // accion_actividad_id: la accion de tratamiento es una ACTIVIDAD del motor
+  //   v7.0, igual que las correcciones de una NC y los acuerdos de la
+  //   revision por la direccion. No se crea un tercer sistema de tareas.
+  // fecha_implementacion: texto libre a proposito. El documento usa "Agosto
+  //   2026", "Continuo" y "Post-certificacion"; forzar una fecha exacta
+  //   obligaria a inventar un dia que nadie decidio.
+  SGC_RIESGOS: [
+    'riesgo_id', 'clase', 'codigo',
+    'relacion_actividad', 'factor', 'descripcion',
+    'analisis_causa', 'procedencia', 'origen', 'factor_contexto_id',
+    'probabilidad', 'impacto',
+    'accion', 'fecha_implementacion', 'medidas_control',
+    'responsable_email', 'accion_actividad_id',
+    'probabilidad_residual', 'impacto_residual',
+    'estado', 'observaciones', 'proceso_id',
+    'fecha_identificacion', 'fecha_ultima_revision', 'revisado_por',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+// --- v11.0 Fase 4: procesos del SGC (§4.4, y base de §8.1/§8.5/§8.6) ----
+  //
+  // Hay DOS niveles y comparten hoja porque son la misma entidad con distinto
+  // grado de detalle:
+  //
+  //   MAPA     los 14 procesos del DOC-03 "Mapa de procesos v02", repartidos
+  //            en estrategicos, operativos y de apoyo. Son la vista que pide
+  //            §4.4: que procesos hay y como se relacionan.
+  //   SERVICIO los 40 procesos de servicio de los DOC-10 a DOC-13, cada uno
+  //            colgando del proceso del mapa al que pertenece
+  //            (`proceso_padre_id`). Son el detalle operativo.
+  //
+  // La distincion importa: el mapa es chico y estable, y cierra §4.4 solo.
+  // El detalle operativo es grande (143 pasos) y se carga por planilla, no
+  // desde el codigo -- meter 135 KB de texto en un archivo que se pega a
+  // mano en Apps Script seria pagar ese costo en cada despliegue.
+  //
+  // clausulas_iso: mismo campo y mismo criterio que SGC_DOCUMENTOS. El
+  //   Encargado etiqueta que clausulas sustenta cada proceso; adivinarlo por
+  //   palabras clave seria inventar evidencia.
+  SGC_PROCESOS: [
+    'proceso_id', 'codigo', 'nombre', 'tipo', 'nivel',
+    'proceso_padre_id', 'area',
+    'objetivo', 'alcance', 'responsable_email',
+    'entradas', 'actividades', 'salidas',
+    'clientes', 'proveedores', 'recursos',
+    'documentos', 'clausulas_iso',
+    'estado', 'observaciones',
+    'fecha_ultima_revision', 'revisado_por',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // Un paso por fila, con las cinco columnas que traen los DOC-10 a DOC-13:
+  // responsable, input, actividades, evidencias y output. Se respeta esa
+  // estructura tal cual en vez de normalizarla, porque es el formato que la
+  // empresa ya aprobo y con el que trabaja cada area.
+  SGC_PROCESO_PASOS: [
+    'paso_id', 'proceso_id', 'numero', 'nombre',
+    'responsable', 'input', 'actividades', 'evidencias', 'output',
+    'observaciones', 'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+// --- v11.0 Fase 6: indicadores de proceso (§9.1.1) ----------------------
+  //
+  // Los SGC_OBJETIVOS son los seis del DOC-07: corporativos, anuales, y
+  // fijados por la Direccion. Un indicador de PROCESO es otra cosa -- mide
+  // como va un proceso concreto, lo define su responsable y no se reabre
+  // cada enero.
+  //
+  // Por que en hoja aparte y no generalizando SGC_OBJETIVOS: los objetivos
+  // se guardan POR AÑO a proposito (subir una meta en 2027 no puede
+  // reescribir contra que se midio 2026). Un indicador de proceso vive
+  // mientras el proceso viva. Mezclarlos obligaria a duplicar cada
+  // indicador cada año sin motivo.
+  //
+  // Las LECTURAS si se comparten: `SGC_INDICADOR_LECTURAS` gano un
+  // `indicador_id` aditivo, y una lectura pertenece o a un objetivo o a un
+  // indicador. Todo lo que ya existia cruza por `objetivo_id`, asi que las
+  // filas nuevas son invisibles para el tablero de objetivos.
+  //
+  // proceso_id: que proceso mide. Es el enlace con la Fase 4 y lo que hace
+  //   que la ficha de un proceso pueda mostrar sus indicadores.
+  // objetivo_id: opcional. El DOC-03 pide KPIs "alineados a los objetivos de
+  //   calidad": cuando el indicador alimenta uno, queda dicho cual.
+  // tolerancia_valor: el escalon intermedio. Sin el solo hay cumple / no
+  //   cumple, y un 88% contra una meta de 90% se ve igual de rojo que un
+  //   40% -- que es justo lo que impide priorizar.
+  SGC_INDICADORES: [
+    'indicador_id', 'codigo', 'nombre', 'descripcion',
+    'proceso_id', 'objetivo_id', 'area',
+    'formula', 'fuente', 'unidad',
+    'meta_operador', 'meta_valor', 'meta_texto', 'tolerancia_valor',
+    'frecuencia', 'responsable_email',
+    'estado', 'observaciones',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+// --- v11.0 Fase 8: evidencia de servicios prestados (§8.1, §8.5, §8.6,
+  // --- §8.7) --------------------------------------------------------------
+  //
+  // La fase con riesgo de escala, y la razon por la que se dejo para el
+  // final. Una fila = UNA prestacion registrada. Las decisiones que la
+  // hacen viable:
+  //
+  // 1. NO se pre-generan filas. Nada de crear cliente x proceso x mes por
+  //    adelantado: con 50 clientes y 40 procesos eso serian 24.000 filas al
+  //    año de golpe, casi todas vacias. Una fila existe cuando alguien
+  //    registra que el servicio se presto.
+  //
+  // 2. `periodo` es OPCIONAL. Los DOC-10 a 13 distinguen servicios
+  //    "Mensual" de "Puntual": un proceso mensual tiene una prestacion por
+  //    periodo, uno puntual tiene tantas como veces ocurra. Forzar un
+  //    periodo a un servicio puntual obligaria a inventarlo.
+  //
+  // 3. El cliente NO se duplica: `cliente_id` apunta a CAT_CLIENTES, que ya
+  //    existe en SIGSO desde la v1. Se desnormaliza el nombre igual que en
+  //    SOLICITUDES, para que el listado no dependa de un cruce.
+  //
+  // estado: PRESTADO (entregado, aun sin liberar) / LIBERADO (§8.6, con
+  //   quien autorizo y cuando) / NO_CONFORME (§8.7, salida no conforme).
+  // nc_id: si la salida no conforme derivo en una no conformidad, con el
+  //   mismo eslabon que ya usan las quejas y los hallazgos de auditoria.
+  SGC_PRESTACIONES: [
+    'prestacion_id',
+    'cliente_id', 'cliente_nombre',
+    'proceso_id', 'proceso_codigo', 'proceso_nombre',
+    'periodo', 'fecha_prestacion', 'responsable_email',
+    'estado', 'evidencia',
+    'liberado_por', 'fecha_liberacion',
+    'nc_id', 'observaciones',
+    'creado_por', 'fecha_creacion', 'activa'
+  ]
+
+
+
 };
 
 // S01-S11 completos desde la Fase 1 aunque solo S01 se use aqui: la maquina

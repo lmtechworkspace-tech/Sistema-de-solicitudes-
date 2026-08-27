@@ -123,6 +123,14 @@ var SHEETS = {
   // proyecto (Proyectos.gs).
   PROYECTO_ENTREGABLES: 'PROYECTO_ENTREGABLES',
   PROYECTO_RIESGOS: 'PROYECTO_RIESGOS',
+  // v10 (Fase C, propuesta 07 "plantillas de proyecto"): la plantilla es
+  // solo ESTRUCTURA (hitos: nombre/descripcion/orden), nunca datos reales --
+  // los entregables quedan fuera a proposito porque SIEMPRE necesitan un
+  // responsable y una fecha real (gestionarEntregable los exige), asi que
+  // no hay forma de clonarlos "sin datos"; se crean a mano en el proyecto
+  // nuevo, como siempre.
+  PROYECTO_PLANTILLAS: 'PROYECTO_PLANTILLAS',
+  PROYECTO_PLANTILLA_HITOS: 'PROYECTO_PLANTILLA_HITOS',
   // v10.0 (documentacion/SIGSO-v10.0-propuesta-modulo-sgc-iso9001.md):
   // modulo SGC ISO 9001. Fase 1 = repositorio documental controlado: los
   // documentos del SGC ya existen en PDF/Word/Excel; lo que faltaba era
@@ -534,6 +542,14 @@ var COLUMNAS = {
   PROYECTO_RIESGOS: [
     'riesgo_id', 'proyecto_id', 'descripcion', 'probabilidad', 'impacto',
     'nivel', 'responsable_email', 'mitigacion', 'estado', 'fecha_creacion'
+  ],
+  // v10 (Fase C, propuesta 07): plantillas -- solo metadata, la estructura
+  // (hitos) vive en PROYECTO_PLANTILLA_HITOS.
+  PROYECTO_PLANTILLAS: [
+    'plantilla_id', 'nombre', 'descripcion', 'creado_por', 'fecha_creacion', 'activa'
+  ],
+  PROYECTO_PLANTILLA_HITOS: [
+    'plantilla_hito_id', 'plantilla_id', 'nombre', 'descripcion', 'orden'
   ],
 
   // v10.0 (Modulo SGC ISO 9001, Fase 1) ---------------------------------

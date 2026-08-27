@@ -290,6 +290,17 @@ function construirContexto() {
       'leo@rld.cl', 'Coordinar una ventana alternativa con 1 semana de margen.', 'ABIERTO',
       new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString()]
   ]);
+  // v10 (Fase C, "plantillas de proyecto"): una plantilla demo con 2 hitos,
+  // para poder probar en local el selector "crear desde plantilla".
+  seedSheet(ctx, 'PROYECTO_PLANTILLAS', ctx.COLUMNAS.PROYECTO_PLANTILLAS, [
+    ['PYP-DEMO-1', 'Implementación de plataforma', 'Hitos tipicos de una implementacion a un cliente nuevo.',
+      'leo@rld.cl', new Date(Date.now() - 15 * 24 * 3600 * 1000).toISOString(), true]
+  ]);
+  seedSheet(ctx, 'PROYECTO_PLANTILLA_HITOS', ctx.COLUMNAS.PROYECTO_PLANTILLA_HITOS, [
+    ['PYPH-DEMO-1', 'PYP-DEMO-1', 'Levantamiento de requerimientos', '', 0],
+    ['PYPH-DEMO-2', 'PYP-DEMO-1', 'Configuración y pruebas', '', 1],
+    ['PYPH-DEMO-3', 'PYP-DEMO-1', 'Capacitación y cierre', '', 2]
+  ]);
   // v10.0 (Modulo SGC ISO 9001): hojas del repositorio documental. Se
   // siembran los ROLES (admin como Encargado SGC, jefe como operativo de
   // CONTABILIDAD) para poder probar en local que cada quien ve lo suyo; los

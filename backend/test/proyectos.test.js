@@ -19,6 +19,8 @@ function loadConSchema() {
   seedSheet(ctx, 'PROYECTO_EVENTOS', ctx.COLUMNAS.PROYECTO_EVENTOS);
   seedSheet(ctx, 'PROYECTO_ENTREGABLES', ctx.COLUMNAS.PROYECTO_ENTREGABLES);
   seedSheet(ctx, 'PROYECTO_RIESGOS', ctx.COLUMNAS.PROYECTO_RIESGOS);
+  seedSheet(ctx, 'PROYECTO_PLANTILLAS', ctx.COLUMNAS.PROYECTO_PLANTILLAS);
+  seedSheet(ctx, 'PROYECTO_PLANTILLA_HITOS', ctx.COLUMNAS.PROYECTO_PLANTILLA_HITOS);
   seedSheet(ctx, 'ACTIVIDADES', ctx.COLUMNAS.ACTIVIDADES);
   seedSheet(ctx, 'ACTIVIDADES_BITACORA', ctx.COLUMNAS.ACTIVIDADES_BITACORA);
   seedSheet(ctx, 'JEFATURAS', ctx.COLUMNAS.JEFATURAS);
@@ -295,6 +297,58 @@ test('listarMisTareas: entregables pendientes propios, pero no los ya APROBADOS'
   const mias = ctx.Proyectos.listarMisTareas({}, CTX_LEO);
   assert.equal(mias.entregables.length, 1);
   assert.equal(mias.entregables[0].nombre, 'Manual de usuario');
+});
+
+// --- calendario (Fase C) --------------------------------------------------
+
+test('listarCalendario: junta hitos, tareas y entregables de los proyectos visibles, ordenados por fecha; no trae los de un proyecto ajeno', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  ctx.Proyectos.gestionarIntegrante({ proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE' }, CTX_LEO);
+  ctx.Proyectos.gestionarHito({ proyecto_id: proyecto.proyecto_id, nombre: 'Cierre de levantamiento', fecha_objetivo: '2026-09-10' }, CTX_LEO);
+  const tarea = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Tarea de Marcelo', responsable_email: 'marcelo@rld.cl', fecha_compromiso: '2026-09-05'
+  }, CTX_LEO);
+  // RN-710: la asigna un tercero (Leo) -- fecha "propuesta" hasta que
+  // Marcelo confirma; sin confirmar no tiene fecha_compromiso que mostrar.
+  ctx.Actividades.confirmar({ actividad_id: tarea.actividad_id }, CTX_MARCELO);
+  ctx.Proyectos.gestionarEntregable({
+    proyecto_id: proyecto.proyecto_id, accion: 'crear', nombre: 'Acta de cierre',
+    responsable_email: 'leo@rld.cl', fecha_comprometida: '2026-09-20'
+  }, CTX_LEO);
+  // Un entregable ya aprobado no debe aparecer -- ya no aporta a "que viene".
+  const paraAprobar = ctx.Proyectos.gestionarEntregable({
+    proyecto_id: proyecto.proyecto_id, accion: 'crear', nombre: 'Diagrama viejo',
+    responsable_email: 'leo@rld.cl', fecha_comprometida: '2026-08-15'
+  }, CTX_LEO);
+  ctx.Proyectos.gestionarEntregable({ proyecto_id: proyecto.proyecto_id, accion: 'marcarEntregado', entregable_id: paraAprobar.entregable_id }, CTX_LEO);
+  ctx.Proyectos.revisarEntregable({ proyecto_id: proyecto.proyecto_id, entregable_id: paraAprobar.entregable_id }, CTX_LEO);
+
+  const cal = ctx.Proyectos.listarCalendario({}, CTX_MARCELO);
+  assert.equal(cal.items.length, 3);
+  assert.deepEqual(toPlain(cal.items.map((i) => i.titulo)), ['Tarea de Marcelo', 'Cierre de levantamiento', 'Acta de cierre']);
+  assert.deepEqual(toPlain(cal.items.map((i) => i.tipo)), ['tarea', 'hito', 'entregable']);
+  assert.equal(cal.proyectos.length, 1);
+
+  // Un ajeno (no integrante de ningun proyecto) no ve nada.
+  const calOtro = ctx.Proyectos.listarCalendario({}, CTX_OTRO);
+  assert.equal(calOtro.items.length, 0);
+  assert.equal(calOtro.proyectos.length, 0);
+});
+
+test('listarCalendario: ADM y GERENCIA ven los items de TODOS los proyectos, aunque no sean integrantes', () => {
+  const ctx = loadConSchema();
+  const p1 = crearProyectoBase(ctx, { nombre: 'Proyecto 1' });
+  const p2 = crearProyectoBase(ctx, { nombre: 'Proyecto 2', lider_email: 'marcelo@rld.cl', lider_nombre: 'Marcelo Integrante' });
+  ctx.Proyectos.gestionarHito({ proyecto_id: p1.proyecto_id, nombre: 'Hito 1', fecha_objetivo: '2026-09-01' }, CTX_LEO);
+  ctx.Proyectos.gestionarHito({ proyecto_id: p2.proyecto_id, nombre: 'Hito 2', fecha_objetivo: '2026-09-02' }, CTX_MARCELO);
+
+  const calAdm = ctx.Proyectos.listarCalendario({}, CTX_ADM);
+  assert.equal(calAdm.items.length, 2);
+  assert.equal(calAdm.proyectos.length, 2);
+
+  const calGerencia = ctx.Proyectos.listarCalendario({}, CTX_GERENCIA);
+  assert.equal(calGerencia.items.length, 2);
 });
 
 // --- hitos ---------------------------------------------------------------
@@ -611,4 +665,52 @@ test('getResumenPortafolio: agrega por salud y calcula carga por persona pondera
   const cargaMarcelo = resumen.carga_por_persona.find((c) => c.email === 'marcelo@rld.cl');
   assert.equal(cargaMarcelo.total_tareas, 2);
   assert.equal(cargaMarcelo.carga_ponderada, 6); // S=1 + XL=5
+});
+
+// --- plantillas de proyecto (Fase C) ---------------------------------------
+
+test('guardarComoPlantilla: exclusivo del lider/ADM; copia los hitos (nombre/descripcion/orden), nunca fechas', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  ctx.Proyectos.gestionarIntegrante({ proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE' }, CTX_LEO);
+  ctx.Proyectos.gestionarHito({ proyecto_id: proyecto.proyecto_id, nombre: 'Levantamiento', descripcion: 'Entrevistas iniciales', fecha_objetivo: '2026-09-01' }, CTX_LEO);
+  ctx.Proyectos.gestionarHito({ proyecto_id: proyecto.proyecto_id, nombre: 'Cierre', fecha_objetivo: '2026-10-01' }, CTX_LEO);
+
+  const rechazado = ctx.Proyectos.guardarComoPlantilla({ proyecto_id: proyecto.proyecto_id, nombre: 'Certificación tipo' }, CTX_MARCELO);
+  assert.equal(rechazado._forbidden, true);
+
+  const sinNombre = ctx.Proyectos.guardarComoPlantilla({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  assert.equal(sinNombre._validationError, true);
+
+  const plantilla = ctx.Proyectos.guardarComoPlantilla({ proyecto_id: proyecto.proyecto_id, nombre: 'Certificación tipo' }, CTX_LEO);
+  assert.equal(plantilla.total_hitos, 2);
+
+  const listado = ctx.Proyectos.listarPlantillas({}, CTX_LEO);
+  assert.equal(listado.length, 1);
+  assert.equal(listado[0].nombre, 'Certificación tipo');
+  assert.equal(listado[0].total_hitos, 2);
+});
+
+test('crear (con plantilla_id): clona los hitos de la plantilla, sin fecha_objetivo y en PENDIENTE; una plantilla inexistente no rompe la creacion', () => {
+  const ctx = loadConSchema();
+  const origen = crearProyectoBase(ctx, { nombre: 'Certificación ISO 2025' });
+  ctx.Proyectos.gestionarHito({ proyecto_id: origen.proyecto_id, nombre: 'Levantamiento', descripcion: 'Entrevistas iniciales', fecha_objetivo: '2026-09-01' }, CTX_LEO);
+  ctx.Proyectos.gestionarHito({ proyecto_id: origen.proyecto_id, nombre: 'Auditoría interna', fecha_objetivo: '2026-10-01' }, CTX_LEO);
+  const plantilla = ctx.Proyectos.guardarComoPlantilla({ proyecto_id: origen.proyecto_id, nombre: 'Certificación tipo' }, CTX_LEO);
+
+  const nuevo = crearProyectoBase(ctx, { nombre: 'Certificación ISO 2026', plantilla_id: plantilla.plantilla_id });
+  const detalle = ctx.Proyectos.getDetalle({ proyecto_id: nuevo.proyecto_id }, CTX_LEO);
+  assert.equal(detalle.hitos.length, 2);
+  assert.deepEqual(toPlain(detalle.hitos.map((h) => h.nombre)), ['Levantamiento', 'Auditoría interna']);
+  detalle.hitos.forEach((h) => {
+    assert.equal(h.fecha_objetivo, '');
+    assert.equal(h.estado, 'PENDIENTE');
+  });
+
+  // Una plantilla que no existe (o ya se desactivo) no debe romper la
+  // creacion del proyecto -- es un dato secundario, se ignora en silencio.
+  const otro = crearProyectoBase(ctx, { nombre: 'Proyecto sin plantilla real', plantilla_id: 'no-existe' });
+  assert.equal(otro._validationError, undefined);
+  const detalleOtro = ctx.Proyectos.getDetalle({ proyecto_id: otro.proyecto_id }, CTX_LEO);
+  assert.equal(detalleOtro.hitos.length, 0);
 });

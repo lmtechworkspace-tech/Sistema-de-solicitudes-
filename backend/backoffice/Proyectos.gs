@@ -155,6 +155,61 @@ var Proyectos = {
     return { tareas: tareas, entregables: entregables };
   },
 
+  // v10 (Fase C, propuesta 05 "vista calendario"): fechas comprometidas de
+  // tareas, hitos y entregables de TODOS los proyectos visibles, en un solo
+  // pedido -- filtrar por proyecto o "solo lo mío" lo hace el frontend
+  // sobre esta misma lista (mismo criterio que buscar/ordenar/agrupar el
+  // portafolio en Fase A: son pocos items, no vale la pena un viaje de red
+  // por cada combinacion de filtro). Mismo alcance de "quien ve que
+  // proyecto" que listar() (portafolio).
+  listarCalendario: function (data, contexto) {
+    var proyectosActivos = leerFilasSeguro_(SHEETS.PROYECTOS).filter(function (p) {
+      return p.activa === true || p.activa === 'TRUE' || p.activa === 1;
+    });
+    var vePropios = contexto.rol !== 'ADM' && contexto.rol !== 'GERENCIA';
+    var misProyectos = vePropios ? proyectosDelUsuario_(contexto.email) : null;
+    var visibles = proyectosActivos.filter(function (p) {
+      return !vePropios || misProyectos.indexOf(p.proyecto_id) !== -1;
+    });
+    var proyectosPorId = {};
+    visibles.forEach(function (p) { proyectosPorId[p.proyecto_id] = p; });
+
+    var items = [];
+    leerFilasSeguro_(SHEETS.ACTIVIDADES).forEach(function (a) {
+      var activa = a.activa === true || a.activa === 'TRUE' || a.activa === 1;
+      if (!activa || !a.fecha_compromiso || !proyectosPorId[a.proyecto_id]) return;
+      var s = semaforoActividad_(a);
+      items.push({
+        tipo: 'tarea', fecha: a.fecha_compromiso, titulo: a.titulo,
+        responsable_email: a.responsable_email,
+        semaforo: s.codigo, semaforo_etiqueta: s.etiqueta,
+        proyecto_id: a.proyecto_id, proyecto_nombre: proyectosPorId[a.proyecto_id].nombre
+      });
+    });
+    leerFilasSeguro_(SHEETS.PROYECTO_HITOS).forEach(function (h) {
+      if (!h.fecha_objetivo || !proyectosPorId[h.proyecto_id]) return;
+      items.push({
+        tipo: 'hito', fecha: h.fecha_objetivo, titulo: h.nombre, estado: h.estado,
+        proyecto_id: h.proyecto_id, proyecto_nombre: proyectosPorId[h.proyecto_id].nombre
+      });
+    });
+    // Entregables ya cerrados (aprobados/cancelados) no aportan nada a un
+    // calendario de "que viene" -- mismo criterio que listarMisTareas.
+    leerFilasSeguro_(SHEETS.PROYECTO_ENTREGABLES).forEach(function (e) {
+      if (!e.fecha_comprometida || e.estado === 'APROBADO' || e.estado === 'CANCELADO' || !proyectosPorId[e.proyecto_id]) return;
+      items.push({
+        tipo: 'entregable', fecha: e.fecha_comprometida, titulo: e.nombre, estado: e.estado,
+        responsable_email: e.responsable_email,
+        proyecto_id: e.proyecto_id, proyecto_nombre: proyectosPorId[e.proyecto_id].nombre
+      });
+    });
+
+    return {
+      items: items.sort(function (a, b) { return new Date(a.fecha) - new Date(b.fecha); }),
+      proyectos: visibles.map(function (p) { return { proyecto_id: p.proyecto_id, nombre: p.nombre }; })
+    };
+  },
+
   // --- Detalle de un proyecto (Resumen / Sala / Tareas / Hitos / Equipo) --
   getDetalle: function (data, contexto) {
     var proyecto = buscarProyecto_(data.proyecto_id);
@@ -246,8 +301,86 @@ var Proyectos = {
     if (normalizarEmailProyecto_(contexto.email) !== liderEmail) {
       agregarIntegrante_(proyecto.proyecto_id, contexto.email, contexto.nombre || '', 'INTEGRANTE', 'Creador del proyecto', contexto);
     }
+    // v10 (Fase C, propuesta 07 "plantillas de proyecto"): si se pidio crear
+    // desde una plantilla, se clonan sus hitos (solo estructura --
+    // nombre/descripcion/orden, nunca fechas) al proyecto nuevo. Una
+    // plantilla inexistente o ya desactivada se ignora en silencio: es un
+    // dato secundario, nunca debe bloquear la creacion del proyecto.
+    if (data.plantilla_id) {
+      var plantillaUsada = buscarPlantilla_(data.plantilla_id);
+      if (plantillaUsada) {
+        leerFilasSeguro_(SHEETS.PROYECTO_PLANTILLA_HITOS)
+          .filter(function (h) { return h.plantilla_id === plantillaUsada.plantilla_id; })
+          .sort(function (a, b) { return (Number(a.orden) || 0) - (Number(b.orden) || 0); })
+          .forEach(function (h, indice) {
+            agregarFila_(SHEETS.PROYECTO_HITOS, {
+              hito_id: Utilities.getUuid(), proyecto_id: proyecto.proyecto_id,
+              nombre: h.nombre, descripcion: h.descripcion || '', fecha_objetivo: '',
+              estado: 'PENDIENTE', orden: indice, fecha_creacion: ahora.toISOString()
+            });
+          });
+        registrarEventoProyecto_(proyecto.proyecto_id, 'ACTUALIZACION', contexto,
+          'Proyecto creado desde la plantilla "' + plantillaUsada.nombre + '"', '', '', '');
+      }
+    }
     registrarEventoProyecto_(proyecto.proyecto_id, 'ACTUALIZACION', contexto, 'Proyecto creado', '', '', '');
     return proyecto;
+  },
+
+  // v10 (Fase C, propuesta 07): guarda la ESTRUCTURA de hitos de un proyecto
+  // ya existente (nombre/descripcion/orden -- nunca fechas ni datos reales)
+  // para poder arrancar los proximos proyectos parecidos desde ahi. Los
+  // entregables quedan fuera a proposito: gestionarEntregable siempre exige
+  // un responsable y una fecha real, asi que no hay forma de clonarlos "sin
+  // datos" -- se crean a mano en el proyecto nuevo, como siempre. Puede
+  // convertirlo en plantilla quien puede gestionar el proyecto origen
+  // (mismo circulo que gestiona hitos: LIDER del proyecto o ADM).
+  guardarComoPlantilla: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeGestionarProyecto_(proyecto, contexto)) {
+      return { _forbidden: true, message: 'Solo el líder del proyecto o un administrador pueden guardarlo como plantilla.' };
+    }
+    var nombre = String(data.nombre || '').trim();
+    if (!nombre) return errorValidacion_('nombre', 'El nombre de la plantilla es obligatorio.');
+
+    var plantilla = {
+      plantilla_id: Utilities.getUuid(), nombre: nombre, descripcion: data.descripcion || '',
+      creado_por: contexto.email || '', fecha_creacion: new Date().toISOString(), activa: true
+    };
+    agregarFila_(SHEETS.PROYECTO_PLANTILLAS, plantilla);
+
+    var hitos = leerFilasSeguro_(SHEETS.PROYECTO_HITOS)
+      .filter(function (h) { return h.proyecto_id === proyecto.proyecto_id; })
+      .sort(function (a, b) { return (Number(a.orden) || 0) - (Number(b.orden) || 0); });
+    hitos.forEach(function (h, indice) {
+      agregarFila_(SHEETS.PROYECTO_PLANTILLA_HITOS, {
+        plantilla_hito_id: Utilities.getUuid(), plantilla_id: plantilla.plantilla_id,
+        nombre: h.nombre, descripcion: h.descripcion || '', orden: indice
+      });
+    });
+    plantilla.total_hitos = hitos.length;
+    return plantilla;
+  },
+
+  // Solo plantillas activas -- no hay UI de borrado en este MVP (la
+  // propuesta solo pide "guardar" y "crear desde una plantilla", no un
+  // mantenedor completo); si hiciera falta limpiar una vieja, un ADM puede
+  // poner activa=false directo en la hoja.
+  listarPlantillas: function (data, contexto) {
+    var hitosPorPlantilla = {};
+    leerFilasSeguro_(SHEETS.PROYECTO_PLANTILLA_HITOS).forEach(function (h) {
+      hitosPorPlantilla[h.plantilla_id] = (hitosPorPlantilla[h.plantilla_id] || 0) + 1;
+    });
+    return leerFilasSeguro_(SHEETS.PROYECTO_PLANTILLAS)
+      .filter(function (p) { return esVerdaderoProyecto_(p.activa); })
+      .map(function (p) {
+        return {
+          plantilla_id: p.plantilla_id, nombre: p.nombre, descripcion: p.descripcion,
+          total_hitos: hitosPorPlantilla[p.plantilla_id] || 0
+        };
+      })
+      .sort(function (a, b) { return a.nombre.localeCompare(b.nombre); });
   },
 
   actualizar: function (data, contexto) {
@@ -801,6 +934,17 @@ function buscarProyecto_(proyectoId) {
   var filas = leerFilasSeguro_(SHEETS.PROYECTOS);
   for (var i = 0; i < filas.length; i++) {
     if (filas[i].proyecto_id === proyectoId) return filas[i];
+  }
+  return null;
+}
+
+// v10 (Fase C): solo plantillas activas -- una desactivada se trata igual
+// que "no existe" (crear() la ignora en silencio, ver comentario ahi).
+function buscarPlantilla_(plantillaId) {
+  if (!plantillaId) return null;
+  var filas = leerFilasSeguro_(SHEETS.PROYECTO_PLANTILLAS);
+  for (var i = 0; i < filas.length; i++) {
+    if (filas[i].plantilla_id === plantillaId && esVerdaderoProyecto_(filas[i].activa)) return filas[i];
   }
   return null;
 }

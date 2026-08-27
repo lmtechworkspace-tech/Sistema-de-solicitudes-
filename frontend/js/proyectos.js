@@ -458,6 +458,7 @@
         '<h3 class="sigso-modal__titulo">Nuevo proyecto</h3>' +
         '<form id="form-py-nuevo">' +
           Componentes.campoTexto({ id: 'py-nombre', label: 'Nombre', requerido: true, placeholder: 'Ej: Migración ERP' }) +
+          '<div id="py-plantilla-wrap"></div>' +
           Componentes.campoTextarea({ id: 'py-descripcion', label: 'Descripción breve' }) +
           Componentes.campoTextarea({ id: 'py-objetivo', label: 'Objetivo / resultado esperado' }) +
           '<div class="sigso-py-form-fila">' +
@@ -487,15 +488,31 @@
     fondo.querySelector('.js-py-cancelar').addEventListener('click', cerrar);
     document.getElementById('py-nombre').focus();
 
+    // v10 (Fase C, propuesta 07): el selector de plantilla es progresivo --
+    // no vale la pena retrasar la apertura del modal (una accion muy comun)
+    // por un pedido que la mayoria de las veces va a estar vacio o no se va
+    // a usar. Si no hay ninguna plantilla activa, el modal se queda tal
+    // como estaba (sin el campo).
+    api_('listarPlantillasProyecto', {}).then(function (r) {
+      var wrap = document.getElementById('py-plantilla-wrap');
+      if (!wrap || !r || !r.ok || !r.data || !r.data.length) return;
+      wrap.innerHTML = Componentes.campoSelect({
+        id: 'py-plantilla', label: 'Crear desde una plantilla (opcional)', valor: '', placeholder: 'Empezar desde cero',
+        opciones: r.data.map(function (p) { return { valor: p.plantilla_id, texto: p.nombre + ' (' + p.total_hitos + ' hito(s))' }; })
+      });
+    });
+
     document.getElementById('form-py-nuevo').addEventListener('submit', function (evento) {
       evento.preventDefault();
+      var campoPlantilla = document.getElementById('py-plantilla');
       var datos = {
         nombre: document.getElementById('py-nombre').value,
         descripcion: document.getElementById('py-descripcion').value,
         objetivo: document.getElementById('py-objetivo').value,
         fecha_inicio: document.getElementById('py-fecha-inicio').value,
         fecha_objetivo: document.getElementById('py-fecha-objetivo').value,
-        prioridad: document.getElementById('py-prioridad').value
+        prioridad: document.getElementById('py-prioridad').value,
+        plantilla_id: campoPlantilla ? campoPlantilla.value : ''
       };
       api_('crearProyecto', datos).then(function (respuesta) {
         if (!respuesta || !respuesta.ok) {
@@ -574,6 +591,7 @@
       { id: 'sala', texto: 'Sala' },
       { id: 'tareas', texto: 'Tareas' },
       { id: 'hitos', texto: 'Hitos' },
+      { id: 'cronograma', texto: 'Cronograma' },
       { id: 'entregables', texto: 'Entregables' },
       { id: 'riesgos', texto: 'Riesgos' },
       { id: 'equipo', texto: 'Equipo' }
@@ -599,6 +617,7 @@
     else if (pestanaActiva_ === 'sala') cuerpo = pintarSala_(sala, detalle);
     else if (pestanaActiva_ === 'tareas') cuerpo = pintarTareas_(tareas, detalle, puedeGestionar, miEmail);
     else if (pestanaActiva_ === 'hitos') cuerpo = pintarHitos_(detalle, puedeGestionar);
+    else if (pestanaActiva_ === 'cronograma') cuerpo = pintarCronograma_(detalle, tareas);
     else if (pestanaActiva_ === 'entregables') cuerpo = pintarEntregables_(detalle, puedeGestionar);
     else if (pestanaActiva_ === 'riesgos') cuerpo = pintarRiesgos_(detalle, puedeGestionar);
     else if (pestanaActiva_ === 'equipo') cuerpo = pintarEquipo_(detalle, puedeGestionar);
@@ -630,6 +649,10 @@
     var acciones = puedeGestionar
       ? '<div class="sigso-py-acciones">' +
           Componentes.boton({ texto: 'Editar proyecto', variante: 'secundario', clase: 'js-py-editar' }) +
+          // v10 (Fase C, propuesta 07): guardar la estructura de hitos de
+          // ESTE proyecto como plantilla, para arrancar los proximos
+          // proyectos parecidos desde ahi.
+          Componentes.boton({ texto: 'Guardar como plantilla', variante: 'secundario', clase: 'js-py-guardar-plantilla' }) +
           (p.estado !== 'CERRADO' && p.estado !== 'CANCELADO'
             ? Componentes.boton({ texto: 'Cerrar proyecto', variante: 'peligro', clase: 'js-py-cerrar' }) : '') +
         '</div>'
@@ -843,6 +866,194 @@
       btn.addEventListener('click', function () { abrirProyecto_(btn.getAttribute('data-id')); });
     });
     wireCheckin_(cont, cargarMiTrabajoProyectos_);
+  }
+
+  // --- Calendario (v10, Fase C, propuesta 05) -------------------------------
+  //
+  // Un mes con las fechas comprometidas de tareas, hitos y entregables de
+  // TODOS los proyectos visibles, como marcas por día. El filtro por
+  // proyecto/"solo lo mío" es client-side sobre la MISMA lista (mismo
+  // criterio que buscar/ordenar/agrupar el portafolio en Fase A): son pocos
+  // items, no vale la pena un viaje de red por cada combinacion de filtro.
+  var calendarioDatos_ = null;
+  var calMiEmail_ = '';
+  var calAnio_ = null;
+  var calMes_ = null; // 0-indexado
+  var calFiltroProyecto_ = '';
+  var calSoloMio_ = false;
+  var calDiaSeleccionado_ = '';
+  var DIAS_SEMANA_CAL = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá', 'Do'];
+  var MESES_CAL = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+  var ITEM_TIPO_ETIQUETA_CAL = { tarea: 'Tarea', hito: 'Hito', entregable: 'Entregable' };
+
+  function pad2_(n) { return n < 10 ? '0' + n : '' + n; }
+  function claveDia_(anio, mes, dia) { return anio + '-' + pad2_(mes + 1) + '-' + pad2_(dia); }
+  // Mismo criterio que venceEn_/diasRelativo_: se leen los componentes de
+  // fecha guardados TAL CUAL (UTC), sin convertir a la zona horaria local --
+  // una fecha comprometida es un dia de calendario, no un instante.
+  function claveDeIso_(iso) {
+    var f = new Date(iso);
+    if (isNaN(f.getTime())) return '';
+    return claveDia_(f.getUTCFullYear(), f.getUTCMonth(), f.getUTCDate());
+  }
+  function claveHoy_() {
+    var h = new Date();
+    return claveDia_(h.getFullYear(), h.getMonth(), h.getDate());
+  }
+
+  function cargarCalendario_() {
+    proyectoActivoId_ = null;
+    datosDetalleActual_ = null;
+    var cont = panelProyectos_();
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando calendario...');
+    if (calAnio_ === null) {
+      var hoy = new Date();
+      calAnio_ = hoy.getFullYear();
+      calMes_ = hoy.getMonth();
+    }
+    Promise.all([api_('listarCalendarioProyectos', {}), miPerfil_()]).then(function (respuestas) {
+      var r = respuestas[0], perfil = respuestas[1];
+      if (!r || !r.ok) {
+        cont.innerHTML = Componentes.alerta((r && r.message) || 'No se pudo cargar el calendario.', 'error');
+        return;
+      }
+      calendarioDatos_ = r.data;
+      calMiEmail_ = normalizarEmail_(perfil && perfil.email);
+      pintarCalendario_(cont);
+    }).catch(function () {
+      cont.innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
+    });
+  }
+
+  function itemsCalendarioFiltrados_() {
+    var items = (calendarioDatos_ && calendarioDatos_.items) || [];
+    if (calFiltroProyecto_) items = items.filter(function (i) { return i.proyecto_id === calFiltroProyecto_; });
+    if (calSoloMio_) {
+      items = items.filter(function (i) { return !!i.responsable_email && normalizarEmail_(i.responsable_email) === calMiEmail_; });
+    }
+    return items;
+  }
+
+  // Un hito/entregable no trae semaforo del backend (no son "actividades") --
+  // se deriva aca mismo, con la misma idea de siempre (vencido = rojo).
+  function colorClaveItemCalendario_(item) {
+    if (item.tipo === 'tarea') return item.semaforo || 'al-dia';
+    var vencido = new Date(item.fecha) < new Date();
+    if (item.tipo === 'hito') {
+      if (item.estado === 'COMPLETADO') return 'terminada';
+      if (item.estado === 'CANCELADO') return 'cancelada';
+      return vencido ? 'atrasada' : 'al-dia';
+    }
+    if (item.estado === 'OBSERVADO') return 'riesgo';
+    return vencido ? 'atrasada' : 'al-dia';
+  }
+
+  function pintarDiaSeleccionadoCalendario_(items) {
+    if (items.length === 0) {
+      return '<div class="sigso-py-cal-panel">' + Componentes.vacio({ texto: 'Nada para este día.' }) + '</div>';
+    }
+    var filas = items.map(function (it) {
+      return '<div class="sigso-py-tarea">' +
+        '<div class="sigso-py-tarea__top">' +
+          '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(it.titulo) + '</span>' +
+          Componentes.badge(ITEM_TIPO_ETIQUETA_CAL[it.tipo] || it.tipo, 'neutro') +
+        '</div>' +
+        '<div class="sigso-py-tarea__meta">' +
+          '<button type="button" class="sigso-mt-link js-cal-abrir" data-id="' + it.proyecto_id + '">' + Componentes.escaparHtml(it.proyecto_nombre) + '</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+    return '<div class="sigso-py-cal-panel"><div class="sigso-py-lista">' + filas + '</div></div>';
+  }
+
+  function pintarCalendario_(cont) {
+    var items = itemsCalendarioFiltrados_();
+    var porDia = {};
+    items.forEach(function (i) {
+      var k = claveDeIso_(i.fecha);
+      if (!k) return;
+      (porDia[k] = porDia[k] || []).push(i);
+    });
+
+    var cabecera = '<div class="sigso-py-cabecera">' +
+        '<p class="sigso-ayuda">Fechas comprometidas de tareas, hitos y entregables de tus proyectos.</p>' +
+      '</div>';
+
+    var filtros = '<div class="sigso-py-filtros">' +
+        Componentes.campoSelect({
+          id: 'cal-filtro-proyecto', label: false, valor: calFiltroProyecto_, placeholder: 'Todos los proyectos',
+          opciones: (calendarioDatos_.proyectos || []).map(function (p) { return { valor: p.proyecto_id, texto: p.nombre }; })
+        }) +
+        '<label class="sigso-campo-check"><input type="checkbox" id="cal-solo-mio"' + (calSoloMio_ ? ' checked' : '') + '> Solo lo mío</label>' +
+      '</div>';
+
+    var nav = '<div class="sigso-py-cal-nav">' +
+        Componentes.boton({ texto: '←', variante: 'sutil', clase: 'js-cal-mes-anterior', tipo: 'button' }) +
+        '<span class="sigso-py-cal-mes">' + MESES_CAL[calMes_] + ' de ' + calAnio_ + '</span>' +
+        Componentes.boton({ texto: '→', variante: 'sutil', clase: 'js-cal-mes-siguiente', tipo: 'button' }) +
+        Componentes.boton({ texto: 'Hoy', variante: 'sutil', clase: 'js-cal-hoy', tipo: 'button' }) +
+      '</div>';
+
+    var primerDiaSemana = (new Date(calAnio_, calMes_, 1).getDay() + 6) % 7; // 0 = lunes
+    var diasEnMes = new Date(calAnio_, calMes_ + 1, 0).getDate();
+    var hoyClave = claveHoy_();
+
+    var celdas = '';
+    for (var i = 0; i < primerDiaSemana; i++) celdas += '<div class="sigso-py-cal-celda sigso-py-cal-celda--vacia"></div>';
+    for (var dia = 1; dia <= diasEnMes; dia++) {
+      var clave = claveDia_(calAnio_, calMes_, dia);
+      var itemsDia = porDia[clave] || [];
+      var marcas = itemsDia.slice(0, 3).map(function (it) {
+        return '<span class="sigso-py-cal-marca sigso-py-cal-marca--' + colorClaveItemCalendario_(it) + '" title="' + Componentes.escaparHtml(it.titulo) + '"></span>';
+      }).join('');
+      var extra = itemsDia.length > 3 ? '<span class="sigso-py-cal-extra">+' + (itemsDia.length - 3) + '</span>' : '';
+      celdas += '<button type="button" class="sigso-py-cal-celda js-cal-dia' +
+          (clave === hoyClave ? ' sigso-py-cal-celda--hoy' : '') +
+          (clave === calDiaSeleccionado_ ? ' sigso-py-cal-celda--activa' : '') + '" data-dia="' + clave + '">' +
+        '<span class="sigso-py-cal-numero">' + dia + '</span>' +
+        '<span class="sigso-py-cal-marcas">' + marcas + extra + '</span>' +
+      '</button>';
+    }
+
+    var grid = '<div class="sigso-py-cal-cabecera-dias">' + DIAS_SEMANA_CAL.map(function (d) { return '<span>' + d + '</span>'; }).join('') + '</div>' +
+      '<div class="sigso-py-cal-grid">' + celdas + '</div>';
+
+    var panelDia = calDiaSeleccionado_ ? pintarDiaSeleccionadoCalendario_(porDia[calDiaSeleccionado_] || []) : '';
+
+    cont.innerHTML = cabecera + filtros + nav + grid + panelDia;
+
+    cont.querySelector('#cal-filtro-proyecto').addEventListener('change', function () {
+      calFiltroProyecto_ = this.value;
+      pintarCalendario_(cont);
+    });
+    cont.querySelector('#cal-solo-mio').addEventListener('change', function () {
+      calSoloMio_ = this.checked;
+      pintarCalendario_(cont);
+    });
+    cont.querySelector('.js-cal-mes-anterior').addEventListener('click', function () {
+      calMes_--; if (calMes_ < 0) { calMes_ = 11; calAnio_--; }
+      pintarCalendario_(cont);
+    });
+    cont.querySelector('.js-cal-mes-siguiente').addEventListener('click', function () {
+      calMes_++; if (calMes_ > 11) { calMes_ = 0; calAnio_++; }
+      pintarCalendario_(cont);
+    });
+    cont.querySelector('.js-cal-hoy').addEventListener('click', function () {
+      var h = new Date();
+      calAnio_ = h.getFullYear(); calMes_ = h.getMonth(); calDiaSeleccionado_ = claveHoy_();
+      pintarCalendario_(cont);
+    });
+    cont.querySelectorAll('.js-cal-dia').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var d = btn.getAttribute('data-dia');
+        calDiaSeleccionado_ = (calDiaSeleccionado_ === d) ? '' : d;
+        pintarCalendario_(cont);
+      });
+    });
+    cont.querySelectorAll('.js-cal-abrir').forEach(function (btn) {
+      btn.addEventListener('click', function () { abrirProyecto_(btn.getAttribute('data-id')); });
+    });
   }
 
   // --- Tareas --------------------------------------------------------------
@@ -1091,6 +1302,79 @@
     return acciones + '<div class="sigso-py-lista">' + filas + '</div>';
   }
 
+  // --- Cronograma (v10, Fase C, propuesta 04 "línea de tiempo") -----------
+  //
+  // Misma tecnica que la Carta Gantt de Gerencia (renderGantt_ en
+  // gerencia.js): barras posicionadas por CSS sobre un eje de fechas, sin
+  // libreria externa. Los HITOS son un punto en el tiempo (fecha_objetivo,
+  // no tienen rango); las TAREAS con fecha comprometida son una barra desde
+  // que se crearon hasta esa fecha, extendida en rojo mas alla si ya vencio
+  // y sigue sin terminar. 100% con datos que la pestaña ya tenia cargados
+  // (detalle + tareas) -- no pide nada nuevo al servidor.
+  var CRONOGRAMA_HITO_ESTADO_CODIGO = { COMPLETADO: 'terminada', CANCELADO: 'cancelada' };
+
+  function pintarCronograma_(detalle, tareas) {
+    var p = detalle.proyecto;
+    var hitos = (detalle.hitos || []).filter(function (h) { return h.fecha_objetivo; });
+    var tareasConFecha = tareas.filter(function (a) { return a.fecha_compromiso; });
+
+    if (hitos.length === 0 && tareasConFecha.length === 0) {
+      return Componentes.vacio({ texto: 'Todavía no hay hitos ni tareas con fecha para mostrar en el cronograma.' });
+    }
+
+    var ahora = new Date();
+    var tiempos = [ahora.getTime()];
+    if (p.fecha_inicio) tiempos.push(new Date(p.fecha_inicio).getTime());
+    if (p.fecha_objetivo) tiempos.push(new Date(p.fecha_objetivo).getTime());
+    hitos.forEach(function (h) { tiempos.push(new Date(h.fecha_objetivo).getTime()); });
+    tareasConFecha.forEach(function (a) {
+      if (a.fecha_creacion) tiempos.push(new Date(a.fecha_creacion).getTime());
+      tiempos.push(new Date(a.fecha_compromiso).getTime());
+    });
+    var minTime = Math.min.apply(null, tiempos);
+    var maxTime = Math.max.apply(null, tiempos);
+    var rango = Math.max(maxTime - minTime, 1);
+    function pct_(fecha) { return Math.min(100, Math.max(0, ((new Date(fecha).getTime() - minTime) / rango) * 100)); }
+    var hoyPct = pct_(ahora);
+
+    var filasHitos = hitos.map(function (h) {
+      var vencido = h.estado !== 'COMPLETADO' && h.estado !== 'CANCELADO' && new Date(h.fecha_objetivo) < ahora;
+      var codigo = CRONOGRAMA_HITO_ESTADO_CODIGO[h.estado] || (vencido ? 'atrasada' : 'al-dia');
+      return '<div class="sigso-py-cron-fila">' +
+        '<div class="sigso-py-cron-etiqueta">' + Iconos.svg('diana', { tam: 14 }) + ' <b>' + Componentes.escaparHtml(h.nombre) + '</b> <span class="sigso-ayuda">(hito)</span></div>' +
+        '<div class="sigso-py-cron-track">' +
+          '<div class="sigso-py-cron-hito sigso-py-cron-hito--' + codigo + '" style="left:' + pct_(h.fecha_objetivo) + '%" title="' + Componentes.escaparHtml(fechaCorta_(h.fecha_objetivo)) + '"></div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    var filasTareas = tareasConFecha.slice().sort(function (a, b) {
+      return new Date(a.fecha_compromiso) - new Date(b.fecha_compromiso);
+    }).map(function (a) {
+      var inicioPct = pct_(a.fecha_creacion || p.fecha_inicio || a.fecha_compromiso);
+      var finPct = pct_(a.fecha_compromiso);
+      var codigo = a.semaforo || 'al-dia';
+      var extraAtraso = '';
+      if (codigo === 'atrasada' && hoyPct > finPct) {
+        extraAtraso = '<div class="sigso-py-cron-barra sigso-py-cron-barra--atraso" style="left:' + finPct + '%; width:' + (hoyPct - finPct) + '%"></div>';
+      }
+      return '<div class="sigso-py-cron-fila">' +
+        '<div class="sigso-py-cron-etiqueta">' + Componentes.escaparHtml(a.titulo) + '</div>' +
+        '<div class="sigso-py-cron-track">' +
+          '<div class="sigso-py-cron-barra sigso-py-cron-barra--' + codigo + '" style="left:' + inicioPct + '%; width:' + Math.max(finPct - inicioPct, 0.6) + '%" title="' + Componentes.escaparHtml(fechaCorta_(a.fecha_compromiso)) + '"></div>' +
+          extraAtraso +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    return '<p class="sigso-ayuda">Hitos (◆) y tareas con fecha comprometida, de ' +
+        (p.fecha_inicio ? fechaCorta_(p.fecha_inicio) : '—') + ' a ' + (p.fecha_objetivo ? fechaCorta_(p.fecha_objetivo) : '—') + '.</p>' +
+      '<div class="sigso-py-cron">' +
+        '<div class="sigso-py-cron-hoy" style="left:' + hoyPct + '%" title="Hoy"></div>' +
+        filasHitos + filasTareas +
+      '</div>';
+  }
+
   // --- Entregables (v9.4, Fase 2) -------------------------------------
 
   function entregableBadgeVariante_(estado) {
@@ -1216,6 +1500,27 @@
 
     var cerrar = cont.querySelector('.js-py-cerrar');
     if (cerrar) cerrar.addEventListener('click', function () { manejarCerrarProyecto_(detalle.proyecto.proyecto_id); });
+
+    // v10 (Fase C, propuesta 07): guardar como plantilla -- solo pide el
+    // nombre; la estructura (hitos) se copia tal cual esta ahora mismo.
+    var guardarPlantilla = cont.querySelector('.js-py-guardar-plantilla');
+    if (guardarPlantilla) {
+      guardarPlantilla.addEventListener('click', function () {
+        Componentes.prompt({
+          titulo: 'Guardar como plantilla',
+          mensaje: 'Se copian los hitos de este proyecto (nombre y descripción, sin fechas). Los entregables y las tareas no se copian.',
+          valorInicial: detalle.proyecto.nombre,
+          placeholder: 'Nombre de la plantilla',
+          confirmar: 'Guardar plantilla'
+        }).then(function (nombre) {
+          if (nombre === null || nombre === undefined || String(nombre).trim() === '') return;
+          api_('guardarProyectoComoPlantilla', { proyecto_id: detalle.proyecto.proyecto_id, nombre: nombre }).then(function (r) {
+            if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo guardar la plantilla.', tipo: 'error' }); return; }
+            Componentes.aviso({ texto: 'Plantilla "' + nombre + '" guardada (' + r.data.total_hitos + ' hito(s)).', tipo: 'exito' });
+          });
+        });
+      });
+    }
 
     var formSala = cont.querySelector('#form-py-sala');
     if (formSala) {
@@ -1945,6 +2250,10 @@
     { id: 'portafolio', nombre: 'Portafolio', icono: 'caja', plano: true, items: [
       { id: 'portafolio', nombre: 'Portafolio' }
     ] },
+    // v10 (Fase C, propuesta 05 "vista calendario").
+    { id: 'calendario', nombre: 'Calendario', icono: 'calendario', plano: true, items: [
+      { id: 'calendario', nombre: 'Calendario' }
+    ] },
     { id: 'reportes', nombre: 'Reportes', icono: 'grafico', plano: true,
       descripcion: 'Estado y avance del portafolio', items: [
       { id: 'reportes', nombre: 'Centro de reportes' }
@@ -1993,6 +2302,7 @@
     if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id);
     if (id === 'reportes') renderReportesProyectos_();
     else if (id === 'mi-trabajo') cargarMiTrabajoProyectos_();
+    else if (id === 'calendario') cargarCalendario_();
     else cargarPortafolio_();
   }
 
