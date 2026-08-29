@@ -852,7 +852,23 @@
   // Kanban a otra columna (wireKanbanDragDrop_) -- todos terminan en el
   // MISMO endpoint (checkinActividad). Lo unico que cambia entre ellos es
   // QUÉ se repinta al terminar.
-  function ejecutarCheckin_(actividadId, tipo, alExito) {
+  // v10 (Fase G2, "el dia se justifica mejor"): horas + nota OPCIONALES,
+  // leidas del <details> plegado que acompaña a las pastillas (si existe y
+  // tiene algo escrito) -- ver .sigso-mt-checkin-wrap. Sin eso, el check-in
+  // de un clic de siempre sigue funcionando exactamente igual.
+  function leerCheckinExtra_(btn) {
+    var wrap = btn.closest('.sigso-mt-checkin-wrap');
+    var extra = {};
+    if (!wrap) return extra;
+    var horasEl = wrap.querySelector('.js-checkin-horas');
+    var notaEl = wrap.querySelector('.js-checkin-nota');
+    if (horasEl && horasEl.value !== '') extra.horas = horasEl.value;
+    if (notaEl && notaEl.value.trim() !== '') extra.nota = notaEl.value.trim();
+    return extra;
+  }
+
+  function ejecutarCheckin_(actividadId, tipo, alExito, extra) {
+    extra = extra || {};
     if (tipo === 'bloqueo') {
       Componentes.prompt({
         titulo: 'Motivo del bloqueo',
@@ -860,14 +876,19 @@
         placeholder: 'Ej: esperando la aprobación de Contabilidad'
       }).then(function (motivo) {
         if (motivo === null || motivo === undefined || String(motivo).trim() === '') return;
-        api_('checkinActividad', { actividad_id: actividadId, tipo: 'bloqueo', bloqueo_motivo: motivo }).then(function (r) {
+        var payload = { actividad_id: actividadId, tipo: 'bloqueo', bloqueo_motivo: motivo };
+        if (extra.horas !== undefined) payload.horas = extra.horas;
+        api_('checkinActividad', payload).then(function (r) {
           if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo actualizar.', tipo: 'error' }); return; }
           alExito();
         });
       });
       return;
     }
-    api_('checkinActividad', { actividad_id: actividadId, tipo: tipo }).then(function (r) {
+    var payload = { actividad_id: actividadId, tipo: tipo };
+    if (extra.horas !== undefined) payload.horas = extra.horas;
+    if (extra.nota !== undefined) payload.nota = extra.nota;
+    api_('checkinActividad', payload).then(function (r) {
       if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo actualizar.', tipo: 'error' }); return; }
       alExito();
     });
@@ -876,7 +897,7 @@
   function wireCheckin_(cont, alExito) {
     cont.querySelectorAll('[data-py-checkin]').forEach(function (btn) {
       btn.addEventListener('click', function () {
-        ejecutarCheckin_(btn.getAttribute('data-idx'), btn.getAttribute('data-py-checkin'), alExito);
+        ejecutarCheckin_(btn.getAttribute('data-idx'), btn.getAttribute('data-py-checkin'), alExito, leerCheckinExtra_(btn));
       });
     });
   }
@@ -936,6 +957,7 @@
                 '<span>Prioridad ' + a.prioridad + '</span>' +
                 (a.fecha_compromiso ? '<span>Vence ' + fechaCorta_(a.fecha_compromiso) + '</span>' : '') +
                 (a.avance_pct !== '' && a.avance_pct !== undefined && a.avance_pct !== null ? '<span>' + a.avance_pct + '% avance</span>' : '') +
+                metaChipHtml_(a) +
               '</div>' +
               (a.estado === 'BLOQUEADA' ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('pausado', { tam: 14 }) + ' ' + Componentes.escaparHtml(a.bloqueo_motivo) + '</div>' : '') +
               accionesCheckinTarea_(a, true) +
@@ -1162,20 +1184,43 @@
   // de la tarea con el de quien mira. El backend es quien de verdad manda
   // (Actividades.checkin exige ser el responsable, RN-702); esto solo evita
   // ofrecerle a cada integrante un boton que a el le va a rebotar.
+  // v10 (Fase G2): chip "Meta: 16 imágenes" -- solo si la tarea tiene meta
+  // cuantificable cargada (ver "Nueva tarea"). Sin meta, no se muestra nada.
+  function metaChipHtml_(a) {
+    if (a.meta_cantidad === '' || a.meta_cantidad === undefined || a.meta_cantidad === null) return '';
+    return '<span>Meta ' + Componentes.escaparHtml(String(a.meta_cantidad)) + (a.meta_unidad ? ' ' + Componentes.escaparHtml(a.meta_unidad) : '') + '</span>';
+  }
+
+  // v10 (Fase G2): el disclosure de horas/nota se comparte entre TODOS los
+  // estados con pastillas -- ver leerCheckinExtra_/.sigso-mt-checkin-wrap.
+  function checkinExtraHtml_() {
+    return '<details class="sigso-mt-checkin-extra">' +
+      '<summary>+ Horas / nota de hoy (opcional)</summary>' +
+      '<div class="sigso-mt-checkin-extra__campos">' +
+        '<input type="number" class="js-checkin-horas" min="0" max="24" step="0.5" placeholder="Horas">' +
+        '<input type="text" class="js-checkin-nota" maxlength="280" placeholder="¿Qué hiciste hoy? (opcional)">' +
+      '</div>' +
+    '</details>';
+  }
+
   function accionesCheckinTarea_(a, esMia) {
     if (!esMia) return '';
     var pendienteConfirmar = a.fecha_propuesta && !a.confirmada_en;
     if (pendienteConfirmar || a.estado === 'EN_REVISION' || a.estado === 'TERMINADA' || a.estado === 'CANCELADA') return '';
     if (a.estado === 'BLOQUEADA') {
-      return '<div class="sigso-mt-checkin">' +
-        '<button type="button" class="sigso-mt-pastilla sigso-mt-pastilla--destacada" data-py-checkin="desbloqueo" data-idx="' + a.actividad_id + '">Ya se destrabó</button>' +
+      return '<div class="sigso-mt-checkin-wrap">' + checkinExtraHtml_() +
+        '<div class="sigso-mt-checkin">' +
+          '<button type="button" class="sigso-mt-pastilla sigso-mt-pastilla--destacada" data-py-checkin="desbloqueo" data-idx="' + a.actividad_id + '">Ya se destrabó</button>' +
+        '</div>' +
       '</div>';
     }
-    return '<div class="sigso-mt-checkin">' +
-      '<button type="button" class="sigso-mt-pastilla" data-py-checkin="avance" data-idx="' + a.actividad_id + '">Avancé</button>' +
-      '<button type="button" class="sigso-mt-pastilla sigso-mt-pastilla--destacada" data-py-checkin="sin_cambio" data-idx="' + a.actividad_id + '">Sin cambios</button>' +
-      '<button type="button" class="sigso-mt-pastilla" data-py-checkin="bloqueo" data-idx="' + a.actividad_id + '">Estoy bloqueado</button>' +
-      '<button type="button" class="sigso-mt-pastilla" data-py-checkin="listo" data-idx="' + a.actividad_id + '">Listo</button>' +
+    return '<div class="sigso-mt-checkin-wrap">' + checkinExtraHtml_() +
+      '<div class="sigso-mt-checkin">' +
+        '<button type="button" class="sigso-mt-pastilla" data-py-checkin="avance" data-idx="' + a.actividad_id + '">Avancé</button>' +
+        '<button type="button" class="sigso-mt-pastilla sigso-mt-pastilla--destacada" data-py-checkin="sin_cambio" data-idx="' + a.actividad_id + '">Sin cambios</button>' +
+        '<button type="button" class="sigso-mt-pastilla" data-py-checkin="bloqueo" data-idx="' + a.actividad_id + '">Estoy bloqueado</button>' +
+        '<button type="button" class="sigso-mt-pastilla" data-py-checkin="listo" data-idx="' + a.actividad_id + '">Listo</button>' +
+      '</div>' +
     '</div>';
   }
 
@@ -1218,6 +1263,7 @@
           '<span>Prioridad ' + a.prioridad + '</span>' +
           (a.fecha_compromiso ? '<span>Vence ' + fechaCorta_(a.fecha_compromiso) + '</span>' : '') +
           (a.avance_pct !== '' && a.avance_pct !== undefined && a.avance_pct !== null ? '<span>' + a.avance_pct + '% avance</span>' : '') +
+          metaChipHtml_(a) +
         '</div>' +
         (a.estado === 'BLOQUEADA' ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('pausado', { tam: 14 }) + ' ' + Componentes.escaparHtml(a.bloqueo_motivo) + '</div>' : '') +
         // v9.4: dependencia comprometida -- bandera derivada (nunca mueve
@@ -1505,8 +1551,12 @@
       var celdas = dias.map(function (x) {
         var eventos = porDia[x.clave] || [];
         var estado = '', txt = '';
+        // v10 (Fase G2): si el check-in trajo horas, se suman al tooltip --
+        // listarBitacora ya las expone parseadas (JSON libre 'datos').
         var notas = eventos.map(function (ev) {
-          return (DEDICACION_TIPO_ETIQUETA_[ev.tipo] || ev.tipo) + (ev.nota ? ': ' + ev.nota : '');
+          return (DEDICACION_TIPO_ETIQUETA_[ev.tipo] || ev.tipo) +
+            (ev.horas !== undefined && ev.horas !== null && ev.horas !== '' ? ' (' + ev.horas + 'h)' : '') +
+            (ev.nota ? ': ' + ev.nota : '');
         });
         eventos.forEach(function (ev) {
           if (ev.tipo === 'ENTREGA') { estado = 'done'; txt = 'F'; return; }
@@ -2186,6 +2236,18 @@
               opciones: [{ valor: 'P1', texto: 'P1' }, { valor: 'P2', texto: 'P2' }, { valor: 'P3', texto: 'P3' }, { valor: 'P4', texto: 'P4' }, { valor: 'P5', texto: 'P5' }]
             }) +
           '</div>' +
+          // v10 (Fase G2, "el dia se justifica mejor"): meta cuantificable
+          // OPCIONAL (ej. 16 "imágenes") -- habilita el rendimiento por
+          // unidad de la Fase G3. Plegada para no ensuciar el alta rapida
+          // de siempre cuando no aplica (mismo criterio que las menciones
+          // de la Sala, ver .sigso-py-menciones).
+          '<details class="sigso-py-meta-opcional">' +
+            '<summary>Meta cuantificable (opcional)</summary>' +
+            '<div class="sigso-py-form-fila">' +
+              Componentes.campoTexto({ id: 'py-t-meta-cantidad', label: 'Cantidad', tipo: 'number', placeholder: 'Ej: 16' }) +
+              Componentes.campoTexto({ id: 'py-t-meta-unidad', label: 'Unidad', placeholder: 'Ej: imágenes' }) +
+            '</div>' +
+          '</details>' +
           '<div class="sigso-modal__acciones">' +
             Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
             Componentes.boton({ texto: 'Crear tarea', tipo: 'submit' }) +
@@ -2205,7 +2267,9 @@
         descripcion: document.getElementById('py-t-descripcion').value,
         responsable_email: document.getElementById('py-t-responsable').value,
         fecha_compromiso: document.getElementById('py-t-fecha').value,
-        prioridad: document.getElementById('py-t-prioridad').value
+        prioridad: document.getElementById('py-t-prioridad').value,
+        meta_cantidad: document.getElementById('py-t-meta-cantidad').value,
+        meta_unidad: document.getElementById('py-t-meta-unidad').value
       }).then(function (respuesta) {
         if (!respuesta || !respuesta.ok) {
           Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo crear la tarea.', tipo: 'error' });

@@ -202,6 +202,61 @@ test('checkin "listo": sin requiere_validacion cierra directo; con ella pasa a E
   assert.equal(enRevision.fecha_terminada, '');
 });
 
+// v10 (Fase G2, "el dia se justifica mejor" de la Carta Gantt de Dedicacion)
+
+test('checkin: horas opcionales (0-24) quedan en la bitacora, en cualquier tipo de check-in', () => {
+  const ctx = loadConSchema();
+  const actividad = ctx.Actividades.crear({ titulo: 'Editar imagenes', fecha_compromiso: '2026-08-14' }, CTX_MARCELO);
+  const actualizado = ctx.Actividades.checkin(
+    { actividad_id: actividad.actividad_id, tipo: 'avance', horas: 3.5, nota: 'Terminé 3 imágenes' },
+    CTX_MARCELO
+  );
+  assert.equal(actualizado.estado, 'EN_CURSO');
+  const detalle = ctx.Actividades.obtenerDetalle({ actividad_id: actividad.actividad_id }, CTX_MARCELO);
+  const evento = detalle.bitacora[detalle.bitacora.length - 1];
+  assert.equal(evento.tipo, 'CHECKIN_AVANCE');
+  assert.equal(evento.nota, 'Terminé 3 imágenes');
+  assert.equal(JSON.parse(evento.datos).horas, 3.5);
+});
+
+test('checkin: horas fuera de 0-24 (o no numericas) devuelve error de validacion, sin tocar la actividad', () => {
+  const ctx = loadConSchema();
+  const actividad = ctx.Actividades.crear({ titulo: 'Editar imagenes', fecha_compromiso: '2026-08-14' }, CTX_MARCELO);
+  const negativas = ctx.Actividades.checkin({ actividad_id: actividad.actividad_id, tipo: 'avance', horas: -1 }, CTX_MARCELO);
+  assert.equal(negativas._validationError, true);
+  const excesivas = ctx.Actividades.checkin({ actividad_id: actividad.actividad_id, tipo: 'avance', horas: 25 }, CTX_MARCELO);
+  assert.equal(excesivas._validationError, true);
+  const noNumericas = ctx.Actividades.checkin({ actividad_id: actividad.actividad_id, tipo: 'avance', horas: 'muchas' }, CTX_MARCELO);
+  assert.equal(noNumericas._validationError, true);
+  // Sin check-in real de por medio: la actividad sigue como se creo.
+  const detalle = ctx.Actividades.obtenerDetalle({ actividad_id: actividad.actividad_id }, CTX_MARCELO);
+  assert.equal(detalle.actividad.estado, 'NO_INICIADA');
+});
+
+test('checkin: sin horas ni nota, se comporta exactamente igual que antes (ambas quedan vacias)', () => {
+  const ctx = loadConSchema();
+  const actividad = ctx.Actividades.crear({ titulo: 'Brochure', fecha_compromiso: '2026-08-14' }, CTX_MARCELO);
+  ctx.Actividades.checkin({ actividad_id: actividad.actividad_id, tipo: 'sin_cambio' }, CTX_MARCELO);
+  const detalle = ctx.Actividades.obtenerDetalle({ actividad_id: actividad.actividad_id }, CTX_MARCELO);
+  const evento = detalle.bitacora[detalle.bitacora.length - 1];
+  assert.equal(evento.nota, '');
+  assert.deepEqual(JSON.parse(evento.datos), {});
+});
+
+test('crear: meta_cantidad/meta_unidad son opcionales -- sin ellas quedan vacias, con ellas se guardan tal cual', () => {
+  const ctx = loadConSchema();
+  const sinMeta = ctx.Actividades.crear({ titulo: 'Tarea sin meta', fecha_compromiso: '2026-08-14' }, CTX_MARCELO);
+  assert.equal(sinMeta.meta_cantidad, '');
+  assert.equal(sinMeta.meta_unidad, '');
+
+  const conMeta = ctx.Actividades.crear(
+    { titulo: 'Imagenes página web', fecha_compromiso: '2026-08-14', meta_cantidad: '16', meta_unidad: 'imágenes' },
+    CTX_MARCELO
+  );
+  assert.equal(conMeta.meta_cantidad, 16);
+  assert.equal(conMeta.meta_unidad, 'imágenes');
+});
+
 test('checkin sobre actividad cerrada devuelve error de validacion', () => {
   const ctx = loadConSchema();
   const actividad = ctx.Actividades.crear({ titulo: 'Algo', fecha_compromiso: '2026-08-14' }, CTX_MARCELO);

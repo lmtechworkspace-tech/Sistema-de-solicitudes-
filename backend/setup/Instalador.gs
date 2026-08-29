@@ -219,7 +219,9 @@ var ESQUEMA_HOJAS = {
     // v9.4: ver la nota identica en backend/backoffice/Constantes.gs.
     'depende_de',
     // v10.0 Fase 3a: ver la nota identica en backend/backoffice/Constantes.gs.
-    'sgc_origen_tipo', 'sgc_origen_id'
+    'sgc_origen_tipo', 'sgc_origen_id',
+    // v10 (Fase G2): ver la nota identica en backend/backoffice/Constantes.gs.
+    'meta_cantidad', 'meta_unidad'
   ],
   ACTIVIDADES_BITACORA: [
     'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',

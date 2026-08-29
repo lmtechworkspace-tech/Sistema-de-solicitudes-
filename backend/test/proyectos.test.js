@@ -886,7 +886,7 @@ test('listarBitacora: junta los check-ins de TODAS las tareas del proyecto, en o
   const tareaLeo = ctx.Proyectos.crearTarea({
     proyecto_id: proyecto.proyecto_id, titulo: 'Tarea de Leo', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-09-01'
   }, CTX_LEO); // self-asignada: sin RN-710 de por medio, el checkin corre directo.
-  ctx.Actividades.checkin({ actividad_id: tareaLeo.actividad_id, tipo: 'avance' }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: tareaLeo.actividad_id, tipo: 'avance', horas: 2.5, nota: 'Avancé con las imágenes' }, CTX_LEO);
   ctx.Actividades.checkin({ actividad_id: tareaLeo.actividad_id, tipo: 'bloqueo', bloqueo_motivo: 'Esperando acceso' }, CTX_LEO);
   ctx.Actividades.checkin({ actividad_id: tareaLeo.actividad_id, tipo: 'desbloqueo' }, CTX_LEO);
   ctx.Actividades.checkin({ actividad_id: tareaLeo.actividad_id, tipo: 'listo' }, CTX_LEO);
@@ -904,4 +904,40 @@ test('listarBitacora: junta los check-ins de TODAS las tareas del proyecto, en o
   assert.deepEqual(toPlain(bitacora.map((b) => b.tipo)), ['CREADA', 'CHECKIN_AVANCE', 'BLOQUEO', 'DESBLOQUEO', 'ENTREGA']);
   assert.ok(bitacora.every((b) => b.actividad_id === tareaLeo.actividad_id));
   assert.equal(bitacora.find((b) => b.tipo === 'BLOQUEO').nota, 'Esperando acceso');
+});
+
+// v10 (Fase G2, "el dia se justifica mejor"): las horas dedicadas viajan en
+// el JSON libre de siempre (datos), pero listarBitacora ya las expone
+// parseadas -- el frontend de la carta no debe tocar JSON.parse.
+test('listarBitacora: expone las horas del check-in ya parseadas (vienen del JSON libre "datos")', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  const tarea = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Editar imágenes', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-09-01'
+  }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: tarea.actividad_id, tipo: 'avance', horas: 4 }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: tarea.actividad_id, tipo: 'sin_cambio' }, CTX_LEO); // sin horas: no debe romper nada
+
+  const bitacora = ctx.Proyectos.listarBitacora({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  assert.equal(bitacora.find((b) => b.tipo === 'CHECKIN_AVANCE').horas, 4);
+  assert.equal(bitacora.find((b) => b.tipo === 'CHECKIN_SIN_CAMBIO').horas, undefined);
+});
+
+// v10 (Fase G2): meta cuantificable opcional de la tarea, para habilitar el
+// rendimiento por unidad de la Fase G3 -- crearTarea es passthrough puro
+// (Proyectos.gs) hacia Actividades.crear, que es quien la valida/guarda.
+test('crearTarea: meta_cantidad/meta_unidad viajan hasta la tarea, y listarMisTareas las expone', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  const tarea = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Imágenes página web', responsable_email: 'leo@rld.cl',
+    fecha_compromiso: '2026-09-01', meta_cantidad: '16', meta_unidad: 'imágenes'
+  }, CTX_LEO);
+  assert.equal(tarea.meta_cantidad, 16);
+  assert.equal(tarea.meta_unidad, 'imágenes');
+
+  const misTareas = ctx.Proyectos.listarMisTareas({}, CTX_LEO).tareas;
+  const mia = misTareas.find((t) => t.actividad_id === tarea.actividad_id);
+  assert.equal(mia.meta_cantidad, 16);
+  assert.equal(mia.meta_unidad, 'imágenes');
 });

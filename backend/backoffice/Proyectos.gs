@@ -160,7 +160,9 @@ var Proyectos = {
         fecha_propuesta: a.fecha_propuesta, confirmada_en: a.confirmada_en,
         semaforo: s.codigo, semaforo_etiqueta: s.etiqueta,
         proyecto_id: a.proyecto_id,
-        proyecto_nombre: proyecto ? proyecto.nombre : '(proyecto eliminado)'
+        proyecto_nombre: proyecto ? proyecto.nombre : '(proyecto eliminado)',
+        // v10 (Fase G2): meta cuantificable opcional (ver Actividades.crear).
+        meta_cantidad: a.meta_cantidad, meta_unidad: a.meta_unidad
       };
     }).sort(function (a, b) {
       var orden = { atrasada: 0, riesgo: 1, pendiente: 2, bloqueada: 3, 'al-dia': 4, revision: 5, terminada: 6, cancelada: 7 };
@@ -704,8 +706,16 @@ var Proyectos = {
     return leerFilasSeguro_(SHEETS.ACTIVIDADES_BITACORA)
       .filter(function (b) { return idsTarea[b.actividad_id]; })
       .map(function (b) {
+        // v10 (Fase G2, "el dia se justifica mejor"): las horas dedicadas
+        // ese dia viajan dentro del JSON libre 'datos' (igual que
+        // avance_pct/confianza) -- se exponen ya parseadas para que el
+        // frontend no tenga que tocar JSON.parse.
+        var horas;
+        if (b.datos) {
+          try { var d = JSON.parse(b.datos); if (d && d.horas !== undefined) horas = d.horas; } catch (e) { /* dato viejo o corrupto: se ignora */ }
+        }
         return {
-          actividad_id: b.actividad_id, tipo: b.tipo, nota: b.nota,
+          actividad_id: b.actividad_id, tipo: b.tipo, nota: b.nota, horas: horas,
           timestamp: b.timestamp, autor_nombre: b.autor_nombre || b.autor_email
         };
       })

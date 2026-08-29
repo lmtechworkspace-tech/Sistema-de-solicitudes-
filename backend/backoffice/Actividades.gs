@@ -208,7 +208,13 @@ var Actividades = {
       // que una accion correctiva le llegue al responsable donde ya
       // trabaja, en vez de en una pantalla aparte del modulo ISO.
       sgc_origen_tipo: data.sgc_origen_tipo || '',
-      sgc_origen_id: data.sgc_origen_id || ''
+      sgc_origen_id: data.sgc_origen_id || '',
+      // v10 (Fase G2, "el dia se justifica mejor"): meta cuantificable
+      // OPCIONAL (ej. 16 "imagenes") -- habilita el rendimiento por unidad
+      // de la Fase G3. Sin meta, se comporta exactamente igual que antes.
+      meta_cantidad: (data.meta_cantidad !== undefined && data.meta_cantidad !== '' && !isNaN(Number(data.meta_cantidad)))
+        ? Number(data.meta_cantidad) : '',
+      meta_unidad: String(data.meta_unidad || '').trim()
     };
     agregarFila_(SHEETS.ACTIVIDADES, actividad);
     registrarEventoActividad_(actividad.actividad_id, 'CREADA', contexto, '');
@@ -259,6 +265,21 @@ var Actividades = {
     var ahora = new Date();
     var cambios = { ultima_actualizacion: ahora.toISOString() };
     var eventoBitacora, notaBitacora = data.nota || '';
+
+    // v10 (Fase G2, "el dia se justifica mejor" de la Carta Gantt de
+    // Dedicacion): horas dedicadas HOY a esta tarea, opcional, en
+    // CUALQUIER tipo de check-in -- es el "de la 9 a la 10 hice esto" de
+    // la sesion real que origino la propuesta. Va al mismo 'datos' JSON
+    // de siempre de ACTIVIDADES_BITACORA (cero columna nueva); 0-24 por
+    // sanity, nunca obligatorio -- sin horas, el check-in de un clic de
+    // siempre sigue funcionando exactamente igual.
+    var horasHoy;
+    if (data.horas !== undefined && data.horas !== null && data.horas !== '') {
+      horasHoy = Number(data.horas);
+      if (isNaN(horasHoy) || horasHoy < 0 || horasHoy > 24) {
+        return errorValidacion_('horas', 'Las horas deben ser un numero entre 0 y 24.');
+      }
+    }
 
     switch (tipo) {
       case 'avance':
@@ -313,7 +334,7 @@ var Actividades = {
 
     var actualizado = reescribirActividad_(actividad.actividad_id, cambios);
     registrarEventoActividad_(actividad.actividad_id, eventoBitacora, contexto, notaBitacora,
-      { avance_pct: cambios.avance_pct, confianza: cambios.confianza });
+      { avance_pct: cambios.avance_pct, confianza: cambios.confianza, horas: horasHoy });
 
     // RN-713: al cerrar una recurrente, nace la siguiente instancia.
     if (cambios.estado === ACTIVIDADES_ESTADOS.TERMINADA && actividad.recurrencia && actividad.recurrencia !== 'NINGUNA') {

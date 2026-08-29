@@ -482,7 +482,14 @@ var COLUMNAS = {
     // sgc_origen_id: el id de esa NC.
     // Aditivas: una actividad normal de "Mi trabajo" las deja vacias y se
     // comporta exactamente igual que antes.
-    'sgc_origen_tipo', 'sgc_origen_id'
+    'sgc_origen_tipo', 'sgc_origen_id',
+    // v10 (Fase G2, "el dia se justifica mejor" de la Carta Gantt de
+    // Dedicacion): meta cuantificable OPCIONAL de la tarea (ej. "16" +
+    // "imagenes") -- habilita el rendimiento por unidad de la Fase G3
+    // (unidades/dia, horas/unidad). Aditivas: sin meta, una tarea se
+    // comporta exactamente igual que antes. Hoy solo se cargan desde el
+    // formulario de "Nueva tarea" de Proyectos.
+    'meta_cantidad', 'meta_unidad'
   ],
   ACTIVIDADES_BITACORA: [
     'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',

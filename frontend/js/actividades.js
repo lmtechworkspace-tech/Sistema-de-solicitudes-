@@ -132,7 +132,7 @@
 
     cont.querySelectorAll('[data-checkin]').forEach(function (boton) {
       boton.addEventListener('click', function () {
-        manejarCheckin_(boton.getAttribute('data-id'), boton.getAttribute('data-checkin'));
+        manejarCheckin_(boton.getAttribute('data-id'), boton.getAttribute('data-checkin'), leerCheckinExtra_(boton));
       });
     });
     cont.querySelectorAll('[data-confirmar]').forEach(function (boton) {
@@ -157,17 +157,21 @@
         '<button type="button" class="sigso-mt-pastilla" data-contraproponer="' + a.actividad_id + '">Propongo otra fecha</button>' +
       '</div>';
     } else if (a.estado === 'BLOQUEADA') {
-      acciones = '<div class="sigso-mt-checkin">' +
-        '<button type="button" class="sigso-mt-pastilla sigso-mt-pastilla--destacada" data-checkin="desbloqueo" data-id="' + a.actividad_id + '">Ya se destrabó</button>' +
+      acciones = '<div class="sigso-mt-checkin-wrap">' + checkinExtraHtml_() +
+        '<div class="sigso-mt-checkin">' +
+          '<button type="button" class="sigso-mt-pastilla sigso-mt-pastilla--destacada" data-checkin="desbloqueo" data-id="' + a.actividad_id + '">Ya se destrabó</button>' +
+        '</div>' +
       '</div>';
     } else if (a.estado === 'EN_REVISION' || a.estado === 'TERMINADA' || a.estado === 'CANCELADA') {
       acciones = '';
     } else {
-      acciones = '<div class="sigso-mt-checkin">' +
-        '<button type="button" class="sigso-mt-pastilla" data-checkin="avance" data-id="' + a.actividad_id + '">Avancé</button>' +
-        '<button type="button" class="sigso-mt-pastilla sigso-mt-pastilla--destacada" data-checkin="sin_cambio" data-id="' + a.actividad_id + '">Sin cambios</button>' +
-        '<button type="button" class="sigso-mt-pastilla" data-checkin="bloqueo" data-id="' + a.actividad_id + '">Estoy bloqueado</button>' +
-        '<button type="button" class="sigso-mt-pastilla" data-checkin="listo" data-id="' + a.actividad_id + '">Listo</button>' +
+      acciones = '<div class="sigso-mt-checkin-wrap">' + checkinExtraHtml_() +
+        '<div class="sigso-mt-checkin">' +
+          '<button type="button" class="sigso-mt-pastilla" data-checkin="avance" data-id="' + a.actividad_id + '">Avancé</button>' +
+          '<button type="button" class="sigso-mt-pastilla sigso-mt-pastilla--destacada" data-checkin="sin_cambio" data-id="' + a.actividad_id + '">Sin cambios</button>' +
+          '<button type="button" class="sigso-mt-pastilla" data-checkin="bloqueo" data-id="' + a.actividad_id + '">Estoy bloqueado</button>' +
+          '<button type="button" class="sigso-mt-pastilla" data-checkin="listo" data-id="' + a.actividad_id + '">Listo</button>' +
+        '</div>' +
       '</div>';
     }
 
@@ -191,7 +195,33 @@
 
   // --- check-in (§4.4) --------------------------------------------------
 
-  function manejarCheckin_(id, tipo) {
+  // v10 (Fase G2, "el dia se justifica mejor"): el disclosure de horas/nota
+  // se comparte entre TODOS los estados con pastillas -- ver
+  // .sigso-mt-checkin-wrap (components.css). Plegado por defecto: no le
+  // agrega un solo clic al check-in de un clic de siempre.
+  function checkinExtraHtml_() {
+    return '<details class="sigso-mt-checkin-extra">' +
+      '<summary>+ Horas / nota de hoy (opcional)</summary>' +
+      '<div class="sigso-mt-checkin-extra__campos">' +
+        '<input type="number" class="js-checkin-horas" min="0" max="24" step="0.5" placeholder="Horas">' +
+        '<input type="text" class="js-checkin-nota" maxlength="280" placeholder="¿Qué hiciste hoy? (opcional)">' +
+      '</div>' +
+    '</details>';
+  }
+
+  function leerCheckinExtra_(btn) {
+    var wrap = btn.closest('.sigso-mt-checkin-wrap');
+    var extra = {};
+    if (!wrap) return extra;
+    var horasEl = wrap.querySelector('.js-checkin-horas');
+    var notaEl = wrap.querySelector('.js-checkin-nota');
+    if (horasEl && horasEl.value !== '') extra.horas = horasEl.value;
+    if (notaEl && notaEl.value.trim() !== '') extra.nota = notaEl.value.trim();
+    return extra;
+  }
+
+  function manejarCheckin_(id, tipo, extra) {
+    extra = extra || {};
     if (tipo === 'bloqueo') {
       Componentes.prompt({
         titulo: 'Motivo del bloqueo',
@@ -199,11 +229,16 @@
         placeholder: 'Ej: esperando la aprobación de Contabilidad'
       }).then(function (motivo) {
         if (motivo === null || motivo === undefined || String(motivo).trim() === '') return;
-        api_('checkinActividad', { actividad_id: id, tipo: 'bloqueo', bloqueo_motivo: motivo }).then(recargarTrasAccion_);
+        var payload = { actividad_id: id, tipo: 'bloqueo', bloqueo_motivo: motivo };
+        if (extra.horas !== undefined) payload.horas = extra.horas;
+        api_('checkinActividad', payload).then(recargarTrasAccion_);
       });
       return;
     }
-    api_('checkinActividad', { actividad_id: id, tipo: tipo }).then(recargarTrasAccion_);
+    var payload = { actividad_id: id, tipo: tipo };
+    if (extra.horas !== undefined) payload.horas = extra.horas;
+    if (extra.nota !== undefined) payload.nota = extra.nota;
+    api_('checkinActividad', payload).then(recargarTrasAccion_);
   }
 
   function manejarConfirmar_(id) {
