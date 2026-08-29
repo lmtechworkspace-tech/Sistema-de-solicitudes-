@@ -581,7 +581,7 @@
     pestanaActiva_ = id;
     var cont = panelProyectos_();
     if (!cont || !datosDetalleActual_) { refrescarDetalle_(); return; }
-    pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala, datosDetalleActual_.miEmail);
+    pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala, datosDetalleActual_.miEmail, datosDetalleActual_.bitacora);
     // v10 (Fase D, propuesta 09): marca "vi la Sala" a ahora -- de fondo, sin
     // bloquear el repintado ni volver a pedir el detalle. El resumen que se
     // acaba de mostrar usa la marca de tiempo ANTERIOR (ya estaba en cache);
@@ -600,24 +600,30 @@
       api_('getDetalleProyecto', { proyecto_id: proyectoActivoId_ }),
       api_('listarTareasProyecto', { proyecto_id: proyectoActivoId_ }),
       api_('listarSalaProyecto', { proyecto_id: proyectoActivoId_ }),
+      // v10 (Fase E, "Carta de Dedicación"): se pide junto con el resto --
+      // mismo criterio que tareas/sala, que tampoco esperan a que se abra
+      // su pestaña. Son pocas filas por proyecto (Actividades.gs ya opera
+      // asi con su propia bitacora), no vale la pena un fetch aparte.
+      api_('listarBitacoraProyecto', { proyecto_id: proyectoActivoId_ }),
       miPerfil_()
     ]).then(function (respuestas) {
-      var rDetalle = respuestas[0], rTareas = respuestas[1], rSala = respuestas[2], perfil = respuestas[3];
+      var rDetalle = respuestas[0], rTareas = respuestas[1], rSala = respuestas[2], rBitacora = respuestas[3], perfil = respuestas[4];
       if (!rDetalle || !rDetalle.ok) {
         cont.innerHTML = Componentes.alerta((rDetalle && rDetalle.message) || 'No se pudo abrir el proyecto.', 'error');
         return;
       }
       var tareas = (rTareas && rTareas.ok) ? rTareas.data : [];
       var sala = (rSala && rSala.ok) ? rSala.data : [];
+      var bitacora = (rBitacora && rBitacora.ok) ? rBitacora.data : [];
       var miEmail = normalizarEmail_(perfil && perfil.email);
-      datosDetalleActual_ = { detalle: rDetalle.data, tareas: tareas, sala: sala, miEmail: miEmail };
-      pintarDetalle_(cont, rDetalle.data, tareas, sala, miEmail);
+      datosDetalleActual_ = { detalle: rDetalle.data, tareas: tareas, sala: sala, bitacora: bitacora, miEmail: miEmail };
+      pintarDetalle_(cont, rDetalle.data, tareas, sala, miEmail, bitacora);
     }).catch(function () {
       cont.innerHTML = Componentes.alerta('No se pudo conectar para abrir el proyecto.', 'error');
     });
   }
 
-  function pintarDetalle_(cont, detalle, tareas, sala, miEmail) {
+  function pintarDetalle_(cont, detalle, tareas, sala, miEmail, bitacora) {
     var p = detalle.proyecto;
     // v9.2: la capacidad de gestion la resuelve el backend (puede_gestionar:
     // LIDER del proyecto o ADM). Fallback a rol_actual==='LIDER' para que el
@@ -656,7 +662,7 @@
     else if (pestanaActiva_ === 'sala') cuerpo = pintarSala_(sala, detalle);
     else if (pestanaActiva_ === 'tareas') cuerpo = pintarTareas_(tareas, detalle, puedeGestionar, miEmail);
     else if (pestanaActiva_ === 'hitos') cuerpo = pintarHitos_(detalle, puedeGestionar);
-    else if (pestanaActiva_ === 'cronograma') cuerpo = pintarCronograma_(detalle, tareas);
+    else if (pestanaActiva_ === 'cronograma') cuerpo = pintarCronograma_(detalle, tareas, bitacora || []);
     else if (pestanaActiva_ === 'entregables') cuerpo = pintarEntregables_(detalle, puedeGestionar);
     else if (pestanaActiva_ === 'riesgos') cuerpo = pintarRiesgos_(detalle, puedeGestionar);
     else if (pestanaActiva_ === 'equipo') cuerpo = pintarEquipo_(detalle, puedeGestionar);
@@ -1394,7 +1400,162 @@
     return acciones + '<div class="sigso-py-lista">' + filas + '</div>';
   }
 
-  // --- Cronograma (v10, Fase C, propuesta 04 "línea de tiempo") -----------
+  // --- Cronograma: Plan vs. Dedicación (v10, Fases C y E) -------------------
+  //
+  // Dos lentes sobre la MISMA pestaña: "Plan" (Fase C, ya existía) muestra
+  // la ventana comprometida de cada tarea -- lo que el cronograma de
+  // siempre dice. "Dedicación" (Fase E, propuesta "Carta Gantt de
+  // Dedicación") muestra, día por día, en qué se ocupó el recurso de
+  // verdad -- releyendo la MISMA bitácora de check-ins que "Mi trabajo" ya
+  // escribe, sin marcar nada a mano. La diferencia entre las dos vistas es
+  // literalmente la propuesta.
+  var vistaCronograma_ = 'dedicacion';
+
+  function pintarCronograma_(detalle, tareas, bitacora) {
+    var toggle = '<div class="sigso-py-vista-toggle" style="margin-bottom:var(--esp-3);">' +
+        Componentes.boton({ texto: 'Dedicación', variante: vistaCronograma_ === 'dedicacion' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'dedicacion' }) +
+        Componentes.boton({ texto: 'Plan', variante: vistaCronograma_ === 'plan' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'plan' }) +
+      '</div>';
+    var cuerpo = vistaCronograma_ === 'plan'
+      ? pintarCronogramaPlan_(detalle, tareas)
+      : pintarCronogramaDedicacion_(detalle, tareas, bitacora || []);
+    return toggle + cuerpo;
+  }
+
+  // v10 (Fase E, "Carta Gantt de Dedicación"): traduce el `tipo` que
+  // Actividades.checkin YA escribe en la bitácora a la letra de siempre --
+  // A/P/F, más "bloqueada" y "esperando a un tercero". Es un mapa de
+  // presentación (igual que TIPO_EVENTO_ETIQUETA o HITO_ESTADO_ETIQUETA),
+  // no una regla de negocio nueva: el enum de `tipo` es fijo y ya está
+  // documentado en Actividades.gs (checkin).
+  var DEDICACION_TIPO_ESTADO_ = {
+    CHECKIN_AVANCE: 'proc', CHECKIN_SIN_CAMBIO: 'proc', DESBLOQUEO: 'proc',
+    BLOQUEO: 'bloq', ENTREGA: 'done'
+  };
+  var DEDICACION_TIPO_ETIQUETA_ = {
+    CREADA: 'Tarea asignada', CHECKIN_AVANCE: 'Avanzó', CHECKIN_SIN_CAMBIO: 'Sin cambios',
+    DESBLOQUEO: 'Se destrabó', BLOQUEO: 'Bloqueado', ENTREGA: 'Entregó', VALIDACION: 'Revisión'
+  };
+  // Ancla = ULTIMO dia visible de la ventana (14 dias, movible). Modulo, no
+  // por proyecto -- mismo criterio que pestanaActiva_: al cambiar de
+  // proyecto se mantiene donde el usuario la dejo, no es una sorpresa
+  // nueva de este archivo.
+  var dedicacionAncla_ = null;
+  var DEDICACION_DIAS_VENTANA = 14;
+
+  function pintarCronogramaDedicacion_(detalle, tareas, bitacora) {
+    if (!tareas.length) {
+      return Componentes.vacio({ texto: 'Todavía no hay tareas para mostrar la dedicación.' });
+    }
+    if (!dedicacionAncla_) dedicacionAncla_ = new Date();
+
+    var dias = [];
+    for (var i = DEDICACION_DIAS_VENTANA - 1; i >= 0; i--) {
+      var d = new Date(dedicacionAncla_.getFullYear(), dedicacionAncla_.getMonth(), dedicacionAncla_.getDate() - i);
+      dias.push({ clave: claveDia_(d.getFullYear(), d.getMonth(), d.getDate()), dia: d.getDate(), we: (d.getDay() === 0 || d.getDay() === 6) });
+    }
+    var hoyClave = claveHoy_();
+    var finVentana = dias[dias.length - 1].clave;
+    var desdeTxt = fechaCorta_(dias[0].clave), hastaTxt = fechaCorta_(finVentana);
+
+    var nav = '<div class="sigso-py-ded-nav">' +
+        Componentes.boton({ texto: '← 2 semanas', variante: 'sutil', clase: 'js-py-ded-atras', tipo: 'button' }) +
+        '<span class="sigso-ayuda">' + Componentes.escaparHtml(desdeTxt) + ' – ' + Componentes.escaparHtml(hastaTxt) + '</span>' +
+        Componentes.boton({ texto: '2 semanas →', variante: 'sutil', clase: 'js-py-ded-adelante', tipo: 'button' }) +
+        Componentes.boton({ texto: 'Hoy', variante: 'sutil', clase: 'js-py-ded-hoy', tipo: 'button' }) +
+      '</div>';
+
+    // Bitácora de esta tarea, agrupada por día -- y la última fecha de
+    // ENTREGA (para saber desde cuándo "espera a un tercero" si quedó en
+    // EN_REVISION).
+    var eventosPorTareaDia = {};
+    var ultimaEntregaPorTarea = {};
+    bitacora.forEach(function (b) {
+      var k = claveDeIso_(b.timestamp);
+      if (!k) return;
+      var porDia = (eventosPorTareaDia[b.actividad_id] = eventosPorTareaDia[b.actividad_id] || {});
+      (porDia[k] = porDia[k] || []).push(b);
+      if (b.tipo === 'ENTREGA' && (!ultimaEntregaPorTarea[b.actividad_id] || k > ultimaEntregaPorTarea[b.actividad_id])) {
+        ultimaEntregaPorTarea[b.actividad_id] = k;
+      }
+    });
+
+    var filas = tareas.filter(function (a) {
+      // No tiene sentido una fila para una tarea que ni existía en esta
+      // ventana -- pero si existe DESDE antes (o no tiene fecha de
+      // creación conocida) igual se muestra, aunque esos días salgan vacíos.
+      return !a.fecha_creacion || claveDeIso_(a.fecha_creacion) <= finVentana;
+    });
+
+    if (!filas.length) {
+      return nav + Componentes.vacio({ texto: 'Ninguna tarea existía todavía en esta ventana de días.' });
+    }
+
+    var headDias = dias.map(function (x) {
+      return '<div class="sigso-py-ded-dia' + (x.we ? ' we' : '') + (x.clave === hoyClave ? ' hoy' : '') + '">' + x.dia + '</div>';
+    }).join('');
+
+    var filasHtml = filas.map(function (a) {
+      var claveCreacion = a.fecha_creacion ? claveDeIso_(a.fecha_creacion) : '';
+      var claveVence = a.fecha_compromiso ? claveDeIso_(a.fecha_compromiso) : '';
+      var terminal = a.estado === 'TERMINADA' || a.estado === 'CANCELADA';
+      var ultimaEntrega = ultimaEntregaPorTarea[a.actividad_id];
+      var porDia = eventosPorTareaDia[a.actividad_id] || {};
+
+      var celdas = dias.map(function (x) {
+        var eventos = porDia[x.clave] || [];
+        var estado = '', txt = '';
+        var notas = eventos.map(function (ev) {
+          return (DEDICACION_TIPO_ETIQUETA_[ev.tipo] || ev.tipo) + (ev.nota ? ': ' + ev.nota : '');
+        });
+        eventos.forEach(function (ev) {
+          if (ev.tipo === 'ENTREGA') { estado = 'done'; txt = 'F'; return; }
+          if (ev.tipo === 'VALIDACION') {
+            if (/^Aprobada/i.test(ev.nota || '')) { estado = 'done'; txt = 'F'; }
+            else if (estado !== 'done') { estado = 'bloq'; txt = '!'; }
+            return;
+          }
+          if (estado === 'done') return; // F del día manda sobre cualquier otra marca del mismo día
+          if (ev.tipo === 'BLOQUEO') { estado = 'bloq'; txt = '!'; return; }
+          if (DEDICACION_TIPO_ESTADO_[ev.tipo] && estado !== 'bloq') { estado = DEDICACION_TIPO_ESTADO_[ev.tipo]; txt = 'P'; }
+        });
+        if (!estado && x.clave === claveCreacion) { estado = 'asig'; txt = 'A'; }
+        // Esperando a un tercero: quedó EN_REVISION tras su última entrega,
+        // y sigue sin resolverse hoy.
+        if (!estado && a.estado === 'EN_REVISION' && ultimaEntrega && x.clave > ultimaEntrega && x.clave <= hoyClave) {
+          estado = 'wait';
+        }
+        // Vencida sin gestión: pasó la fecha comprometida, la tarea sigue
+        // abierta, y este día no tiene ninguna marca propia.
+        if (!estado && !terminal && claveVence && x.clave > claveVence && x.clave <= hoyClave) {
+          estado = 'late'; txt = '!';
+        }
+        var titulo = notas.length ? (fechaCorta_(x.clave) + ': ' + notas.join(' · ')) : '';
+        return '<div class="sigso-py-ded-celda' + (x.we ? ' we' : '') + (x.clave === hoyClave ? ' hoy' : '') + (estado ? ' e-' + estado : '') +
+          '"' + (titulo ? ' title="' + Componentes.escaparHtml(titulo) + '"' : '') + '>' + (txt ? '<span>' + txt + '</span>' : '') + '</div>';
+      }).join('');
+
+      return '<div class="sigso-py-ded-fila">' +
+        '<div class="sigso-py-ded-etiqueta"><span class="t">' + Componentes.escaparHtml(a.titulo) + '</span>' +
+          '<span class="m">' + Componentes.escaparHtml(a.responsable_nombre || a.responsable_email || '') + '</span></div>' +
+        celdas +
+      '</div>';
+    }).join('');
+
+    var leyenda = [
+      ['asig', 'Asignada (A)'], ['proc', 'Se trabajó (P)'], ['done', 'Finalizada / entregada (F)'],
+      ['wait', 'Esperando a un tercero'], ['bloq', 'Bloqueada / observada'], ['late', 'Vencida sin gestión']
+    ].map(function (p) { return '<span><i class="sigso-py-ded-sw sigso-py-ded-sw--' + p[0] + '"></i>' + p[1] + '</span>'; }).join('');
+
+    return nav +
+      '<div class="sigso-py-ded-scroll"><div class="sigso-py-ded">' +
+        '<div class="sigso-py-ded-fila sigso-py-ded-cabecera"><div class="sigso-py-ded-etiqueta">Tarea</div>' + headDias + '</div>' +
+        filasHtml +
+      '</div></div>' +
+      '<div class="sigso-py-ded-leyenda">' + leyenda + '</div>';
+  }
+
+  // --- Cronograma: vista Plan (v10, Fase C, propuesta 04 "línea de tiempo") --
   //
   // Misma tecnica que la Carta Gantt de Gerencia (renderGantt_ en
   // gerencia.js): barras posicionadas por CSS sobre un eje de fechas, sin
@@ -1405,7 +1566,7 @@
   // (detalle + tareas) -- no pide nada nuevo al servidor.
   var CRONOGRAMA_HITO_ESTADO_CODIGO = { COMPLETADO: 'terminada', CANCELADO: 'cancelada' };
 
-  function pintarCronograma_(detalle, tareas) {
+  function pintarCronogramaPlan_(detalle, tareas) {
     var p = detalle.proyecto;
     var hitos = (detalle.hitos || []).filter(function (h) { return h.fecha_objetivo; });
     var tareasConFecha = tareas.filter(function (a) { return a.fecha_compromiso; });
@@ -1741,6 +1902,31 @@
       });
     });
     wireKanbanDragDrop_(cont, refrescarDetalle_);
+
+    // v10 (Fase E, "Carta Gantt de Dedicación"): toggle Dedicación/Plan y
+    // navegación de la ventana de 14 días -- ambos repintan sin red, los
+    // datos (tareas + bitácora) ya están en cache.
+    cont.querySelectorAll('.js-py-cron-vista').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        vistaCronograma_ = btn.getAttribute('data-idx');
+        cambiarPestana_('cronograma');
+      });
+    });
+    var dedAtras = cont.querySelector('.js-py-ded-atras');
+    if (dedAtras) dedAtras.addEventListener('click', function () {
+      dedicacionAncla_ = new Date(dedicacionAncla_.getFullYear(), dedicacionAncla_.getMonth(), dedicacionAncla_.getDate() - DEDICACION_DIAS_VENTANA);
+      cambiarPestana_('cronograma');
+    });
+    var dedAdelante = cont.querySelector('.js-py-ded-adelante');
+    if (dedAdelante) dedAdelante.addEventListener('click', function () {
+      dedicacionAncla_ = new Date(dedicacionAncla_.getFullYear(), dedicacionAncla_.getMonth(), dedicacionAncla_.getDate() + DEDICACION_DIAS_VENTANA);
+      cambiarPestana_('cronograma');
+    });
+    var dedHoy = cont.querySelector('.js-py-ded-hoy');
+    if (dedHoy) dedHoy.addEventListener('click', function () {
+      dedicacionAncla_ = new Date();
+      cambiarPestana_('cronograma');
+    });
 
     var nuevoHito = cont.querySelector('.js-py-nuevo-hito');
     if (nuevoHito) nuevoHito.addEventListener('click', abrirFormularioHito_);

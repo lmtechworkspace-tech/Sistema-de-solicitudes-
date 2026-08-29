@@ -683,6 +683,35 @@ var Proyectos = {
     });
   },
 
+  // v10 (Fase E, propuesta "Carta Gantt de Dedicación"): la bitácora de
+  // TODAS las tareas del proyecto, para dibujar la grilla día × tarea con
+  // lo que el check-in YA registra (misma ACTIVIDADES_BITACORA que "Mi
+  // trabajo" usa para su propio historial) -- cero dato nuevo, cero doble
+  // digitación. La interpretación de cada tipo (CHECKIN_AVANCE -> "P",
+  // ENTREGA -> "F", etc.) la hace el frontend, igual que ya interpreta
+  // TIPO_EVENTO_ETIQUETA o HITO_ESTADO_ETIQUETA -- son mapas de
+  // presentación sobre un enum fijo, no una regla de negocio nueva.
+  listarBitacora: function (data, contexto) {
+    var proyecto = buscarProyecto_(data && data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeVerProyecto_(proyecto, contexto)) {
+      return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+    }
+    var idsTarea = {};
+    leerFilasSeguro_(SHEETS.ACTIVIDADES).forEach(function (a) {
+      if (a.proyecto_id === proyecto.proyecto_id) idsTarea[a.actividad_id] = true;
+    });
+    return leerFilasSeguro_(SHEETS.ACTIVIDADES_BITACORA)
+      .filter(function (b) { return idsTarea[b.actividad_id]; })
+      .map(function (b) {
+        return {
+          actividad_id: b.actividad_id, tipo: b.tipo, nota: b.nota,
+          timestamp: b.timestamp, autor_nombre: b.autor_nombre || b.autor_email
+        };
+      })
+      .sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
+  },
+
   // --- La sala --------------------------------------------------------------
   listarSala: function (data, contexto) {
     var proyecto = buscarProyecto_(data.proyecto_id);

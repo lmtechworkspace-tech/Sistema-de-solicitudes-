@@ -875,3 +875,33 @@ test('descargarAdjunto: devuelve el contenido a quien puede VER el proyecto; rec
   assert.equal(descarga.nombre_archivo, 'manual.pdf');
   assert.equal(Buffer.from(descarga.contenido_base64, 'base64').toString('utf8'), '%PDF-1.4 contenido de prueba');
 });
+
+// --- Carta de Dedicación: bitácora del proyecto (Fase E) -------------------
+
+test('listarBitacora: junta los check-ins de TODAS las tareas del proyecto, en orden; exige poder VER el proyecto; no trae la bitácora de otro proyecto', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  const otroProyecto = crearProyectoBase(ctx, { nombre: 'Otro proyecto' });
+
+  const tareaLeo = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Tarea de Leo', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-09-01'
+  }, CTX_LEO); // self-asignada: sin RN-710 de por medio, el checkin corre directo.
+  ctx.Actividades.checkin({ actividad_id: tareaLeo.actividad_id, tipo: 'avance' }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: tareaLeo.actividad_id, tipo: 'bloqueo', bloqueo_motivo: 'Esperando acceso' }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: tareaLeo.actividad_id, tipo: 'desbloqueo' }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: tareaLeo.actividad_id, tipo: 'listo' }, CTX_LEO);
+
+  // Bitácora de una tarea de OTRO proyecto -- no debe colarse.
+  const tareaOtro = ctx.Proyectos.crearTarea({
+    proyecto_id: otroProyecto.proyecto_id, titulo: 'Tarea de otro proyecto', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-09-01'
+  }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: tareaOtro.actividad_id, tipo: 'avance' }, CTX_LEO);
+
+  const rechazado = ctx.Proyectos.listarBitacora({ proyecto_id: proyecto.proyecto_id }, CTX_OTRO);
+  assert.equal(rechazado._forbidden, true);
+
+  const bitacora = ctx.Proyectos.listarBitacora({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  assert.deepEqual(toPlain(bitacora.map((b) => b.tipo)), ['CREADA', 'CHECKIN_AVANCE', 'BLOQUEO', 'DESBLOQUEO', 'ENTREGA']);
+  assert.ok(bitacora.every((b) => b.actividad_id === tareaLeo.actividad_id));
+  assert.equal(bitacora.find((b) => b.tipo === 'BLOQUEO').nota, 'Esperando acceso');
+});

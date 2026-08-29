@@ -3084,6 +3084,54 @@
 .sigso-py-cron-hito--terminada { background: var(--texto-3); }
 .sigso-py-cron-hito--cancelada { background: var(--texto-3); opacity: .6; }
 
+/* v10 (Fase E, "Carta Gantt de Dedicación"): grilla tarea x dia, leida de
+   ACTIVIDADES_BITACORA (el check-in de siempre) -- ningun estado se marca a
+   mano. Misma paleta semantica que el resto del modulo (--ok/--alerta/
+   --critico/--info), sin colores nuevos; "asignada" es la unica marca sin
+   equivalente previo, por eso usa el acento primario en vez de semaforo. */
+.sigso-py-ded-nav { display: flex; align-items: center; gap: var(--esp-3); margin-bottom: var(--esp-3); flex-wrap: wrap; }
+.sigso-py-ded-scroll { overflow-x: auto; }
+.sigso-py-ded { display: flex; flex-direction: column; gap: 2px; min-width: max-content; }
+.sigso-py-ded-fila { display: grid; grid-template-columns: 11rem repeat(14, 1.9rem); gap: 2px; align-items: center; }
+.sigso-py-ded-cabecera { margin-bottom: var(--esp-1); }
+.sigso-py-ded-etiqueta { padding-right: var(--esp-2); display: flex; flex-direction: column; min-width: 0; }
+.sigso-py-ded-etiqueta .t { font-size: var(--texto-sm); color: var(--texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sigso-py-ded-etiqueta .m { font-size: var(--texto-xs); color: var(--texto-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sigso-py-ded-dia {
+  text-align: center; font-size: var(--texto-xs); color: var(--texto-3); font-variant-numeric: tabular-nums;
+  padding-bottom: 0.2rem;
+}
+.sigso-py-ded-dia.we { color: var(--texto-2); }
+.sigso-py-ded-dia.hoy { color: var(--primario); font-weight: 600; }
+.sigso-py-ded-celda {
+  aspect-ratio: 1 / 1; border-radius: var(--radio-sm); background: var(--superficie-2);
+  display: flex; align-items: center; justify-content: center;
+}
+.sigso-py-ded-celda.we { background: color-mix(in srgb, var(--superficie-2), var(--fondo-pagina) 40%); }
+.sigso-py-ded-celda.hoy { outline: 2px solid var(--primario); outline-offset: -2px; }
+.sigso-py-ded-celda span { font-size: 0.65rem; font-weight: 700; line-height: 1; }
+.sigso-py-ded-celda.e-asig { background: var(--primario-suave); color: var(--primario); }
+.sigso-py-ded-celda.e-proc { background: var(--info-suave); color: var(--info); }
+.sigso-py-ded-celda.e-done { background: var(--ok-suave); color: var(--ok); }
+.sigso-py-ded-celda.e-wait { background: var(--superficie-2); color: var(--texto-3); border: 1px dashed var(--borde-fuerte); }
+.sigso-py-ded-celda.e-bloq { background: var(--critico-suave); color: var(--critico); }
+.sigso-py-ded-celda.e-late { background: var(--alerta-suave); color: var(--alerta); }
+.sigso-py-ded-leyenda {
+  display: flex; gap: var(--esp-4); flex-wrap: wrap; margin-top: var(--esp-3);
+  font-size: var(--texto-xs); color: var(--texto-3); align-items: center;
+}
+.sigso-py-ded-leyenda span { display: inline-flex; align-items: center; gap: var(--esp-1); }
+.sigso-py-ded-sw { display: inline-block; width: 0.8rem; height: 0.8rem; border-radius: 3px; background: var(--superficie-2); }
+.sigso-py-ded-sw--asig { background: var(--primario-suave); border: 1px solid var(--primario); }
+.sigso-py-ded-sw--proc { background: var(--info-suave); border: 1px solid var(--info); }
+.sigso-py-ded-sw--done { background: var(--ok-suave); border: 1px solid var(--ok); }
+.sigso-py-ded-sw--wait { background: var(--superficie-2); border: 1px dashed var(--borde-fuerte); }
+.sigso-py-ded-sw--bloq { background: var(--critico-suave); border: 1px solid var(--critico); }
+.sigso-py-ded-sw--late { background: var(--alerta-suave); border: 1px solid var(--alerta); }
+@media (max-width: 640px) {
+  .sigso-py-ded-fila { grid-template-columns: 8rem repeat(14, 1.6rem); }
+}
+
 /* v10 (Fase C, "vista calendario"): grilla de mes, sin libreria -- mismo
    espiritu que el resto del modulo (CSS liso, sin dependencias nuevas). */
 .sigso-py-cal-nav {
