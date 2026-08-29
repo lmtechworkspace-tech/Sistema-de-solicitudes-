@@ -746,6 +746,28 @@ test('descargarReporte: exige poder VER el proyecto; el PDF trae hitos, riesgos 
   assert.match(html, /Tarea urgente y atrasada/);
 });
 
+// v10 (Fase G4, "valor y salida ejecutiva"): el reporte ahora tambien trae
+// el rendimiento (Fase G3) y la bitacora reciente (la Carta de Dedicacion,
+// en forma de reporte).
+test('descargarReporte: incluye rendimiento (meta/ritmo) y la bitácora reciente de la tarea', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  const tarea = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Imágenes página web', responsable_email: 'leo@rld.cl',
+    fecha_compromiso: '2026-09-01', meta_cantidad: '16', meta_unidad: 'imágenes'
+  }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: tarea.actividad_id, tipo: 'avance', horas: 4, nota: 'Avance del día' }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: tarea.actividad_id, tipo: 'listo' }, CTX_LEO);
+
+  const res = ctx.Proyectos.descargarReporte({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  const html = Buffer.from(res.pdf_base64, 'base64').toString('utf8');
+  assert.match(html, /Rendimiento/);
+  assert.match(html, /16 imágenes/);
+  assert.match(html, /16\/día/); // 16 imágenes / 1 día trabajado
+  assert.match(html, /Actividad reciente/);
+  assert.match(html, /Avance \(4h\)/);
+});
+
 // --- Solicitud -> Proyecto (Fase D) ----------------------------------------
 
 function seedSolicitud(ctx, overrides) {

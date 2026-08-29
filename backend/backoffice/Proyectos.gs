@@ -1175,7 +1175,16 @@ var Proyectos = {
     }
     var detalle = Proyectos.getDetalle({ proyecto_id: proyecto.proyecto_id }, contexto);
     var tareas = Proyectos.listarTareas({ proyecto_id: proyecto.proyecto_id }, contexto);
-    var html = construirHtmlReporteProyecto_(detalle, tareas);
+    // v10 (Fase G4, "valor y salida ejecutiva"): el reporte ahora tambien
+    // cuenta COMO se llego al avance -- el rendimiento (Fase G3) y las
+    // ultimas marcas de la bitacora (la Carta de Dedicación, en forma de
+    // reporte: un registro cronologico, no la grilla interactiva dia x
+    // tarea, que existe para trabajar el dia a dia, no para imprimirse).
+    var tareasPorId = {};
+    tareas.forEach(function (a) { tareasPorId[a.actividad_id] = a; });
+    var rendimiento = Proyectos.obtenerRendimiento({ proyecto_id: proyecto.proyecto_id }, contexto);
+    var bitacoraReciente = Proyectos.listarBitacora({ proyecto_id: proyecto.proyecto_id }, contexto).slice(-15).reverse();
+    var html = construirHtmlReporteProyecto_(detalle, tareas, rendimiento, bitacoraReciente, tareasPorId);
     var pdf = Utilities.newBlob(html, 'text/html', 'Reporte-' + proyecto.proyecto_id + '.html').getAs('application/pdf');
     pdf.setName('Reporte - ' + proyecto.nombre + '.pdf');
     return {
@@ -1202,11 +1211,13 @@ function fechaCortaPdfProyecto_(valor) {
   catch (err) { return String(valor).slice(0, 10); }
 }
 
-function construirHtmlReporteProyecto_(detalle, tareas) {
+function construirHtmlReporteProyecto_(detalle, tareas, rendimiento, bitacoraReciente, tareasPorId) {
   var cuerpo = fichaProyectoPdf_(detalle) +
     seccionHitosPdf_(detalle.hitos || []) +
     seccionRiesgosPdf_(detalle.riesgos || []) +
-    seccionVencimientosPdf_(tareas || []);
+    seccionVencimientosPdf_(tareas || []) +
+    seccionRendimientoPdf_(rendimiento) +
+    seccionBitacoraPdf_(bitacoraReciente || [], tareasPorId || {});
   var p = detalle.proyecto;
   return docChromeOt_({ tipoDoc: 'Reporte de proyecto', referencia: p.codigo || p.nombre }, cuerpo);
 }
@@ -1281,6 +1292,65 @@ function seccionVencimientosPdf_(tareas) {
     '</tr>';
   }).join('');
   return docSeccionOt_('Próximos vencimientos') +
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';font-size:12px;">' + filas + '</table>';
+}
+
+// v10 (Fase G4, "valor y salida ejecutiva"): "el rendimiento" del reporte
+// -- mismo cálculo que ya usa la pestaña Cronograma > Dedicación (Fase G3),
+// cero número nuevo. Sin nada que medir todavía (proyecto recién creado),
+// no se agrega una sección vacía.
+function seccionRendimientoPdf_(rendimiento) {
+  if (!rendimiento) return '';
+  var c = rendimiento.cumplimiento_tareas || {};
+  var tieneRitmo = rendimiento.promedio_unidades_dia !== null && rendimiento.promedio_unidades_dia !== undefined;
+  var resumen = '<tr>' +
+      '<td style="' + celdaLabelFicha_() + '">Entregas a tiempo</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + (c.entregadas ? (c.a_tiempo + ' de ' + c.entregadas) : '—') + '</td>' +
+      '<td style="' + celdaLabelFicha_() + '">Horas registradas</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + (rendimiento.horas_totales_proyecto || '—') + '</td>' +
+    '</tr>' +
+    '<tr>' +
+      '<td style="' + celdaLabelFicha_() + '">Ritmo promedio</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + (tieneRitmo ? rendimiento.promedio_unidades_dia + '/día' : '—') + '</td>' +
+      '<td style="' + celdaLabelFicha_() + '">Tareas sin arrancar</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + rendimiento.tareas_sin_avance + '</td>' +
+    '</tr>';
+  var seccion = docSeccionOt_('Rendimiento') +
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 12px;font-size:12px;">' + resumen + '</table>';
+
+  if (!rendimiento.por_tarea.length) return seccion;
+  var filasTarea = rendimiento.por_tarea.map(function (t) {
+    return '<tr>' +
+      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(t.titulo) + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(t.meta_cantidad + (t.meta_unidad ? ' ' + t.meta_unidad : '')) + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + (t.unidades_por_dia !== '' ? t.unidades_por_dia + '/día' : '—') + '</td>' +
+    '</tr>';
+  }).join('');
+  return seccion +
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' + filasTarea + '</table>';
+}
+
+// v10 (Fase G4): "la carta" del reporte -- un registro cronológico de la
+// bitácora, en vez de replicar la grilla interactiva día × tarea (esa
+// existe para trabajar el día a día en pantalla, no para un PDF impreso).
+// Reusa Proyectos.listarBitacora tal cual, sin reinterpretar el tipo -- el
+// reporte solo traduce la etiqueta, no juzga estados (eso es lo que ya
+// hace la Carta de Dedicación en pantalla).
+var BITACORA_TIPO_LABEL_PDF_ = {
+  CREADA: 'Asignada', CHECKIN_AVANCE: 'Avance', CHECKIN_SIN_CAMBIO: 'Sin cambios',
+  DESBLOQUEO: 'Se destrabó', BLOQUEO: 'Bloqueada', ENTREGA: 'Entregada', VALIDACION: 'Revisión'
+};
+function seccionBitacoraPdf_(bitacora, tareasPorId) {
+  if (!bitacora.length) return '';
+  var filas = bitacora.map(function (b) {
+    var tarea = tareasPorId[b.actividad_id];
+    return '<tr>' +
+      '<td style="' + celdaValorFicha_() + '">' + fechaCortaPdfProyecto_(b.timestamp) + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(tarea ? tarea.titulo : '—') + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(BITACORA_TIPO_LABEL_PDF_[b.tipo] || b.tipo) + (b.horas ? ' (' + b.horas + 'h)' : '') + '</td>' +
+    '</tr>';
+  }).join('');
+  return docSeccionOt_('Actividad reciente') +
     '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';font-size:12px;">' + filas + '</table>';
 }
 
