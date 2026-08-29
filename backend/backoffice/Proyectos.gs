@@ -285,6 +285,10 @@ var Proyectos = {
       entregables: entregables,
       riesgos: riesgos,
       avance_pct: calcularAvanceProyecto_(tareas),
+      // v10 (Fase G3, "los numeros de rendimiento"): mismo calculo que ya
+      // usa el portafolio (Proyectos.listar) -- antes solo se veia ahi, un
+      // proyecto abierto no traia su propio numero de "entregas a tiempo".
+      cumplimiento_tareas: calcularCumplimientoTareasProyecto_(tareas),
       salud: salud.codigo,
       salud_etiqueta: salud.etiqueta,
       salud_motivos: salud.motivos,
@@ -706,20 +710,108 @@ var Proyectos = {
     return leerFilasSeguro_(SHEETS.ACTIVIDADES_BITACORA)
       .filter(function (b) { return idsTarea[b.actividad_id]; })
       .map(function (b) {
-        // v10 (Fase G2, "el dia se justifica mejor"): las horas dedicadas
-        // ese dia viajan dentro del JSON libre 'datos' (igual que
-        // avance_pct/confianza) -- se exponen ya parseadas para que el
-        // frontend no tenga que tocar JSON.parse.
-        var horas;
-        if (b.datos) {
-          try { var d = JSON.parse(b.datos); if (d && d.horas !== undefined) horas = d.horas; } catch (e) { /* dato viejo o corrupto: se ignora */ }
-        }
         return {
-          actividad_id: b.actividad_id, tipo: b.tipo, nota: b.nota, horas: horas,
+          actividad_id: b.actividad_id, tipo: b.tipo, nota: b.nota, horas: horasDeBitacora_(b),
           timestamp: b.timestamp, autor_nombre: b.autor_nombre || b.autor_email
         };
       })
       .sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
+  },
+
+  // v10 (Fase G3, "vista transversal por recurso"): la bitácora de TODAS
+  // mis tareas de proyecto, de TODOS mis proyectos -- mismo alcance que
+  // listarMisTareas (soy el responsable, y ADM/GERENCIA o integrante de
+  // ese proyecto). Alimenta "Mi dedicación": la misma Carta Gantt de
+  // Dedicación de un proyecto, cruzando todos los proyectos donde trabajo.
+  listarMiBitacora: function (data, contexto) {
+    var email = normalizarEmailProyecto_(contexto.email);
+    var misProyectos = {};
+    proyectosDelUsuario_(contexto.email).forEach(function (id) { misProyectos[id] = true; });
+    var esAdmGerencia = contexto.rol === 'ADM' || contexto.rol === 'GERENCIA';
+    var idsTarea = {};
+    leerFilasSeguro_(SHEETS.ACTIVIDADES).forEach(function (a) {
+      var activa = a.activa === true || a.activa === 'TRUE' || a.activa === 1;
+      if (!activa || !a.proyecto_id) return;
+      if (normalizarEmailProyecto_(a.responsable_email) !== email) return;
+      if (!esAdmGerencia && !misProyectos[a.proyecto_id]) return;
+      idsTarea[a.actividad_id] = true;
+    });
+    return leerFilasSeguro_(SHEETS.ACTIVIDADES_BITACORA)
+      .filter(function (b) { return idsTarea[b.actividad_id]; })
+      .map(function (b) {
+        return {
+          actividad_id: b.actividad_id, tipo: b.tipo, nota: b.nota, horas: horasDeBitacora_(b),
+          timestamp: b.timestamp, autor_nombre: b.autor_nombre || b.autor_email
+        };
+      })
+      .sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
+  },
+
+  // v10 (Fase G3, "los números de rendimiento"): unidades/día y horas/
+  // unidad, derivados de la MISMA bitácora y las MISMAS tareas con meta
+  // cuantificable que ya alimentan la Carta de Dedicación -- nada se mide
+  // aparte. Deliberadamente NO incluye "capacidad usada vs disponible":
+  // eso exigiría una jornada esperada por persona que hoy no existe en
+  // ningún lado de Proyectos/Actividades, y adivinar un número (ej. "8
+  // horas") sería inventar una política que nadie pidió -- mismo criterio
+  // que ya se aplicó en la Fase G1 (no se calcula "hito a tiempo" porque
+  // PROYECTO_HITOS no registra CUÁNDO se completó, solo su estado actual).
+  obtenerRendimiento: function (data, contexto) {
+    var proyecto = buscarProyecto_(data && data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeVerProyecto_(proyecto, contexto)) {
+      return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+    }
+    var tareas = leerFilasSeguro_(SHEETS.ACTIVIDADES).filter(function (a) {
+      var activa = a.activa === true || a.activa === 'TRUE' || a.activa === 1;
+      return activa && a.proyecto_id === proyecto.proyecto_id;
+    });
+    var idsTarea = {};
+    tareas.forEach(function (a) { idsTarea[a.actividad_id] = true; });
+
+    // Horas totales y dias distintos con check-in, por tarea -- del mismo
+    // JSON libre 'datos' que listarBitacora ya sabe leer.
+    var horasPorTarea = {}, diasPorTarea = {};
+    leerFilasSeguro_(SHEETS.ACTIVIDADES_BITACORA).forEach(function (b) {
+      if (!idsTarea[b.actividad_id]) return;
+      var horas = Number(horasDeBitacora_(b)) || 0;
+      if (horas) horasPorTarea[b.actividad_id] = (horasPorTarea[b.actividad_id] || 0) + horas;
+      var f = new Date(b.timestamp);
+      if (isNaN(f.getTime())) return;
+      var clave = f.toISOString().slice(0, 10);
+      (diasPorTarea[b.actividad_id] = diasPorTarea[b.actividad_id] || {})[clave] = true;
+    });
+
+    var porTarea = tareas.filter(function (a) { return a.meta_cantidad; }).map(function (a) {
+      var horas = horasPorTarea[a.actividad_id] || 0;
+      var dias = Object.keys(diasPorTarea[a.actividad_id] || {}).length;
+      // unidades/dia y horas/unidad solo se calculan sobre una tarea
+      // TERMINADA -- antes de eso, la meta no esta cumplida y dividir por
+      // "lo hecho hasta ahora" seria adivinar cuanto de la meta representa
+      // el avance parcial (no hay un %-de-meta, solo un avance_pct genérico).
+      var terminada = a.estado === 'TERMINADA';
+      return {
+        actividad_id: a.actividad_id, titulo: a.titulo, estado: a.estado,
+        meta_cantidad: a.meta_cantidad, meta_unidad: a.meta_unidad,
+        horas_totales: horas ? Math.round(horas * 10) / 10 : '',
+        dias_trabajados: dias,
+        unidades_por_dia: (terminada && dias > 0) ? Math.round((a.meta_cantidad / dias) * 10) / 10 : '',
+        horas_por_unidad: (terminada && horas > 0) ? Math.round((horas / a.meta_cantidad) * 100) / 100 : ''
+      };
+    });
+
+    var conRitmo = porTarea.filter(function (t) { return t.unidades_por_dia !== ''; });
+    var horasTotalesProyecto = Object.keys(horasPorTarea).reduce(function (s, k) { return s + horasPorTarea[k]; }, 0);
+
+    return {
+      por_tarea: porTarea,
+      promedio_unidades_dia: conRitmo.length
+        ? Math.round((conRitmo.reduce(function (s, t) { return s + t.unidades_por_dia; }, 0) / conRitmo.length) * 10) / 10
+        : null,
+      horas_totales_proyecto: horasTotalesProyecto ? Math.round(horasTotalesProyecto * 10) / 10 : 0,
+      tareas_sin_avance: tareas.filter(function (a) { return a.estado === 'NO_INICIADA'; }).length,
+      cumplimiento_tareas: calcularCumplimientoTareasProyecto_(tareas)
+    };
   },
 
   // --- La sala --------------------------------------------------------------
@@ -1245,6 +1337,20 @@ function puedeGestionarProyecto_(proyecto, contexto) {
 }
 
 // --- helpers internos ----------------------------------------------------
+
+// v10 (Fase G2/G3): las horas dedicadas ese dia viajan dentro del JSON
+// libre 'datos' de ACTIVIDADES_BITACORA (igual que avance_pct/confianza) --
+// un solo lugar donde parsearlas, usado por listarBitacora, listarMiBitacora
+// y obtenerRendimiento.
+function horasDeBitacora_(fila) {
+  if (!fila || !fila.datos) return undefined;
+  try {
+    var d = JSON.parse(fila.datos);
+    return (d && d.horas !== undefined) ? d.horas : undefined;
+  } catch (e) {
+    return undefined; // dato viejo o corrupto: se ignora
+  }
+}
 
 function buscarProyecto_(proyectoId) {
   if (!proyectoId) return null;

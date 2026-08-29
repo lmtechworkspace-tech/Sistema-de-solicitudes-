@@ -16135,7 +16135,7 @@ var Iconos = (function () {
     pestanaActiva_ = id;
     var cont = panelProyectos_();
     if (!cont || !datosDetalleActual_) { refrescarDetalle_(); return; }
-    pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala, datosDetalleActual_.miEmail, datosDetalleActual_.bitacora);
+    pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala, datosDetalleActual_.miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento);
     // v10 (Fase D, propuesta 09): marca "vi la Sala" a ahora -- de fondo, sin
     // bloquear el repintado ni volver a pedir el detalle. El resumen que se
     // acaba de mostrar usa la marca de tiempo ANTERIOR (ya estaba en cache);
@@ -16159,9 +16159,14 @@ var Iconos = (function () {
       // su pestaña. Son pocas filas por proyecto (Actividades.gs ya opera
       // asi con su propia bitacora), no vale la pena un fetch aparte.
       api_('listarBitacoraProyecto', { proyecto_id: proyectoActivoId_ }),
+      // v10 (Fase G3, "los números de rendimiento"): mismo criterio -- se
+      // pide junto con el resto para que el KPI de la Dedicación no espere
+      // un segundo viaje al servidor al abrir esa pestaña.
+      api_('obtenerRendimientoProyecto', { proyecto_id: proyectoActivoId_ }),
       miPerfil_()
     ]).then(function (respuestas) {
-      var rDetalle = respuestas[0], rTareas = respuestas[1], rSala = respuestas[2], rBitacora = respuestas[3], perfil = respuestas[4];
+      var rDetalle = respuestas[0], rTareas = respuestas[1], rSala = respuestas[2], rBitacora = respuestas[3],
+        rRendimiento = respuestas[4], perfil = respuestas[5];
       if (!rDetalle || !rDetalle.ok) {
         cont.innerHTML = Componentes.alerta((rDetalle && rDetalle.message) || 'No se pudo abrir el proyecto.', 'error');
         return;
@@ -16169,15 +16174,16 @@ var Iconos = (function () {
       var tareas = (rTareas && rTareas.ok) ? rTareas.data : [];
       var sala = (rSala && rSala.ok) ? rSala.data : [];
       var bitacora = (rBitacora && rBitacora.ok) ? rBitacora.data : [];
+      var rendimiento = (rRendimiento && rRendimiento.ok) ? rRendimiento.data : null;
       var miEmail = normalizarEmail_(perfil && perfil.email);
-      datosDetalleActual_ = { detalle: rDetalle.data, tareas: tareas, sala: sala, bitacora: bitacora, miEmail: miEmail };
-      pintarDetalle_(cont, rDetalle.data, tareas, sala, miEmail, bitacora);
+      datosDetalleActual_ = { detalle: rDetalle.data, tareas: tareas, sala: sala, bitacora: bitacora, rendimiento: rendimiento, miEmail: miEmail };
+      pintarDetalle_(cont, rDetalle.data, tareas, sala, miEmail, bitacora, rendimiento);
     }).catch(function () {
       cont.innerHTML = Componentes.alerta('No se pudo conectar para abrir el proyecto.', 'error');
     });
   }
 
-  function pintarDetalle_(cont, detalle, tareas, sala, miEmail, bitacora) {
+  function pintarDetalle_(cont, detalle, tareas, sala, miEmail, bitacora, rendimiento) {
     var p = detalle.proyecto;
     // v9.2: la capacidad de gestion la resuelve el backend (puede_gestionar:
     // LIDER del proyecto o ADM). Fallback a rol_actual==='LIDER' para que el
@@ -16216,7 +16222,7 @@ var Iconos = (function () {
     else if (pestanaActiva_ === 'sala') cuerpo = pintarSala_(sala, detalle);
     else if (pestanaActiva_ === 'tareas') cuerpo = pintarTareas_(tareas, detalle, puedeGestionar, miEmail);
     else if (pestanaActiva_ === 'hitos') cuerpo = pintarHitos_(detalle, puedeGestionar);
-    else if (pestanaActiva_ === 'cronograma') cuerpo = pintarCronograma_(detalle, tareas, bitacora || []);
+    else if (pestanaActiva_ === 'cronograma') cuerpo = pintarCronograma_(detalle, tareas, bitacora || [], rendimiento);
     else if (pestanaActiva_ === 'entregables') cuerpo = pintarEntregables_(detalle, puedeGestionar);
     else if (pestanaActiva_ === 'riesgos') cuerpo = pintarRiesgos_(detalle, puedeGestionar);
     else if (pestanaActiva_ === 'equipo') cuerpo = pintarEquipo_(detalle, puedeGestionar);
@@ -16463,9 +16469,18 @@ var Iconos = (function () {
   // proyecto para saber qué toca. Backend: Proyectos.listarMisTareas (ya
   // filtra por responsable_email === yo, no reusa Actividades.listar a
   // propósito -- ver comentario en Proyectos.gs).
+  var vistaMiTrabajo_ = 'lista';
+  // v10 (Fase G3): la bitácora transversal se pide solo la primera vez que
+  // se abre "Dedicación" en esta pantalla -- la mayoría de las visitas a
+  // "Mi trabajo en proyectos" solo miran la Lista, no vale la pena pedirla
+  // siempre (a diferencia del Cronograma de un proyecto, donde SÍ se pide
+  // junto con el resto porque esa pestaña puntual ya la necesita seguro).
+  var miBitacoraCache_ = null;
+
   function cargarMiTrabajoProyectos_() {
     proyectoActivoId_ = null;
     datosDetalleActual_ = null;
+    miBitacoraCache_ = null;
     var cont = panelProyectos_();
     if (!cont) return;
     cont.innerHTML = Componentes.cargando('Cargando tu trabajo...');
@@ -16474,13 +16489,63 @@ var Iconos = (function () {
         cont.innerHTML = Componentes.alerta((r && r.message) || 'No se pudo cargar tu trabajo.', 'error');
         return;
       }
-      pintarMiTrabajoProyectos_(cont, r.data || { tareas: [], entregables: [] });
+      pintarMiTrabajoVista_(cont, r.data || { tareas: [], entregables: [] });
     }).catch(function () {
       cont.innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
     });
   }
 
-  function pintarMiTrabajoProyectos_(cont, datos) {
+  // v10 (Fase G3, "vista transversal por recurso"): Lista (de siempre) vs.
+  // Dedicación -- la MISMA Carta Gantt de Dedicación de un proyecto, pero
+  // cruzando TODOS los proyectos donde trabajo. Mismo patrón de toggle que
+  // el Cronograma Plan/Dedicación de un proyecto.
+  function pintarMiTrabajoVista_(cont, datos) {
+    var toggle = '<div class="sigso-py-vista-toggle" style="margin-bottom:var(--esp-3);">' +
+        Componentes.boton({ texto: 'Lista', variante: vistaMiTrabajo_ === 'lista' ? undefined : 'sutil', clase: 'js-py-mt-vista', idx: 'lista' }) +
+        Componentes.boton({ texto: 'Dedicación', variante: vistaMiTrabajo_ === 'dedicacion' ? undefined : 'sutil', clase: 'js-py-mt-vista', idx: 'dedicacion' }) +
+      '</div>';
+    if (vistaMiTrabajo_ === 'dedicacion') {
+      pintarMiDedicacion_(cont, toggle, datos.tareas || []);
+      return;
+    }
+    pintarMiTrabajoLista_(cont, toggle, datos);
+  }
+
+  function wireMiTrabajoToggle_(cont, datos) {
+    cont.querySelectorAll('.js-py-mt-vista').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        vistaMiTrabajo_ = btn.getAttribute('data-idx');
+        pintarMiTrabajoVista_(cont, datos);
+      });
+    });
+  }
+
+  function pintarMiDedicacion_(cont, toggle, tareas) {
+    if (!tareas.length) {
+      cont.innerHTML = toggle + Componentes.vacio({ texto: 'No tienes tareas en proyectos para mostrar tu dedicación.' });
+      wireMiTrabajoToggle_(cont, { tareas: tareas });
+      return;
+    }
+    if (miBitacoraCache_ === null) {
+      cont.innerHTML = toggle + Componentes.cargando('Cargando tu dedicación...');
+      api_('listarMiBitacoraProyectos', {}).then(function (r) {
+        miBitacoraCache_ = (r && r.ok) ? r.data : [];
+        pintarMiDedicacion_(cont, toggle, tareas);
+      }).catch(function () {
+        miBitacoraCache_ = [];
+        pintarMiDedicacion_(cont, toggle, tareas);
+      });
+      return;
+    }
+    // Sin rendimiento (null): esa tira de KPIs es por proyecto (Fase G3
+    // Part A) -- un promedio cruzando proyectos distintos mezclaría metas
+    // de unidades diferentes (imágenes con piezas, por ejemplo).
+    cont.innerHTML = toggle + pintarCronogramaDedicacion_(null, tareas, miBitacoraCache_, null);
+    wireMiTrabajoToggle_(cont, { tareas: tareas });
+    wireDedicacionNav_(cont, function () { pintarMiDedicacion_(cont, toggle, tareas); });
+  }
+
+  function pintarMiTrabajoLista_(cont, toggle, datos) {
     var tareas = datos.tareas || [];
     var entregables = datos.entregables || [];
     var cabecera = '<div class="sigso-py-cabecera">' +
@@ -16488,7 +16553,8 @@ var Iconos = (function () {
     '</div>';
 
     if (tareas.length === 0 && entregables.length === 0) {
-      cont.innerHTML = cabecera + Componentes.vacio({ texto: 'No tienes tareas ni entregables pendientes en proyectos.' });
+      cont.innerHTML = toggle + cabecera + Componentes.vacio({ texto: 'No tienes tareas ni entregables pendientes en proyectos.' });
+      wireMiTrabajoToggle_(cont, datos);
       return;
     }
 
@@ -16534,11 +16600,12 @@ var Iconos = (function () {
         }).join('') + '</div>'
       : '';
 
-    cont.innerHTML = cabecera + bloqueTareas + bloqueEntregables;
+    cont.innerHTML = toggle + cabecera + bloqueTareas + bloqueEntregables;
 
     cont.querySelectorAll('.js-py-mt-abrir').forEach(function (btn) {
       btn.addEventListener('click', function () { abrirProyecto_(btn.getAttribute('data-id')); });
     });
+    wireMiTrabajoToggle_(cont, datos);
     wireCheckin_(cont, cargarMiTrabajoProyectos_);
   }
 
@@ -17011,14 +17078,14 @@ var Iconos = (function () {
   // literalmente la propuesta.
   var vistaCronograma_ = 'dedicacion';
 
-  function pintarCronograma_(detalle, tareas, bitacora) {
+  function pintarCronograma_(detalle, tareas, bitacora, rendimiento) {
     var toggle = '<div class="sigso-py-vista-toggle" style="margin-bottom:var(--esp-3);">' +
         Componentes.boton({ texto: 'Dedicación', variante: vistaCronograma_ === 'dedicacion' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'dedicacion' }) +
         Componentes.boton({ texto: 'Plan', variante: vistaCronograma_ === 'plan' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'plan' }) +
       '</div>';
     var cuerpo = vistaCronograma_ === 'plan'
       ? pintarCronogramaPlan_(detalle, tareas)
-      : pintarCronogramaDedicacion_(detalle, tareas, bitacora || []);
+      : pintarCronogramaDedicacion_(detalle, tareas, bitacora || [], rendimiento);
     return toggle + cuerpo;
   }
 
@@ -17043,11 +17110,67 @@ var Iconos = (function () {
   var dedicacionAncla_ = null;
   var DEDICACION_DIAS_VENTANA = 14;
 
-  function pintarCronogramaDedicacion_(detalle, tareas, bitacora) {
+  // v10 (Fase G3, "vista transversal por recurso"): la navegación de
+  // ventana se comparte entre el Cronograma de un proyecto y "Mi
+  // dedicación" (varios proyectos) -- ambas mueven la MISMA ancla de
+  // módulo, `alRepintar` es lo único que cambia entre las dos pantallas.
+  function wireDedicacionNav_(cont, alRepintar) {
+    var dedAtras = cont.querySelector('.js-py-ded-atras');
+    if (dedAtras) dedAtras.addEventListener('click', function () {
+      dedicacionAncla_ = new Date(dedicacionAncla_.getFullYear(), dedicacionAncla_.getMonth(), dedicacionAncla_.getDate() - DEDICACION_DIAS_VENTANA);
+      alRepintar();
+    });
+    var dedAdelante = cont.querySelector('.js-py-ded-adelante');
+    if (dedAdelante) dedAdelante.addEventListener('click', function () {
+      dedicacionAncla_ = new Date(dedicacionAncla_.getFullYear(), dedicacionAncla_.getMonth(), dedicacionAncla_.getDate() + DEDICACION_DIAS_VENTANA);
+      alRepintar();
+    });
+    var dedHoy = cont.querySelector('.js-py-ded-hoy');
+    if (dedHoy) dedHoy.addEventListener('click', function () {
+      dedicacionAncla_ = new Date();
+      alRepintar();
+    });
+  }
+
+  // v10 (Fase G3, "los números de rendimiento"): tira de KPIs derivados de
+  // la MISMA bitácora -- cumplimiento de entregas (mismo cálculo que ya
+  // usaba el portafolio), ritmo promedio (unidades/día) y horas
+  // registradas. Se omite si el proyecto no tiene todavía nada que medir
+  // (evita una tira vacía en un proyecto recién creado).
+  function pintarRendimientoKpis_(rendimiento) {
+    if (!rendimiento) return '';
+    var c = rendimiento.cumplimiento_tareas || {};
+    var kpis = [];
+    if (c.entregadas) {
+      kpis.push(Componentes.kpi({
+        etiqueta: 'Entregas a tiempo', valor: c.a_tiempo + '/' + c.entregadas,
+        alerta: c.pct !== null && c.pct < 100,
+        titulo: 'Entregadas dentro de su fecha comprometida'
+      }));
+    }
+    if (rendimiento.promedio_unidades_dia !== null && rendimiento.promedio_unidades_dia !== undefined) {
+      kpis.push(Componentes.kpi({
+        etiqueta: 'Ritmo promedio', valor: rendimiento.promedio_unidades_dia + '/día',
+        titulo: 'Unidades por día, sobre tareas con meta cuantificable ya terminadas'
+      }));
+    }
+    if (rendimiento.horas_totales_proyecto) {
+      kpis.push(Componentes.kpi({ etiqueta: 'Horas registradas', valor: rendimiento.horas_totales_proyecto + 'h' }));
+    }
+    if (rendimiento.tareas_sin_avance) {
+      kpis.push(Componentes.kpi({ etiqueta: 'Sin arrancar', valor: rendimiento.tareas_sin_avance, alerta: true }));
+    }
+    if (!kpis.length) return '';
+    return '<div class="sigso-py-kpis">' + kpis.join('') + '</div>';
+  }
+
+  function pintarCronogramaDedicacion_(detalle, tareas, bitacora, rendimiento) {
     if (!tareas.length) {
       return Componentes.vacio({ texto: 'Todavía no hay tareas para mostrar la dedicación.' });
     }
     if (!dedicacionAncla_) dedicacionAncla_ = new Date();
+    var porTareaRendimiento = {};
+    ((rendimiento && rendimiento.por_tarea) || []).forEach(function (t) { porTareaRendimiento[t.actividad_id] = t; });
 
     var dias = [];
     for (var i = DEDICACION_DIAS_VENTANA - 1; i >= 0; i--) {
@@ -17057,6 +17180,7 @@ var Iconos = (function () {
     var hoyClave = claveHoy_();
     var finVentana = dias[dias.length - 1].clave;
     var desdeTxt = fechaCorta_(dias[0].clave), hastaTxt = fechaCorta_(finVentana);
+    var kpis = pintarRendimientoKpis_(rendimiento);
 
     var nav = '<div class="sigso-py-ded-nav">' +
         Componentes.boton({ texto: '← 2 semanas', variante: 'sutil', clase: 'js-py-ded-atras', tipo: 'button' }) +
@@ -17139,9 +17263,26 @@ var Iconos = (function () {
           '"' + (titulo ? ' title="' + Componentes.escaparHtml(titulo) + '"' : '') + '>' + (txt ? '<span>' + txt + '</span>' : '') + '</div>';
       }).join('');
 
+      // v10 (Fase G3): meta + ritmo, como segunda línea de la etiqueta --
+      // "16 imágenes · 16/día" una vez terminada; solo "16 imágenes" antes
+      // (dividir por el avance parcial seria inventar un ritmo). El ritmo
+      // sale de `rendimiento` (por proyecto); la meta en si misma ya viene
+      // en la propia tarea (listarTareas/listarMisTareas), asi que en "Mi
+      // dedicación" (varios proyectos, sin rendimiento) igual se ve la
+      // meta, solo que sin ritmo -- mezclar imágenes con piezas en un solo
+      // promedio no tendria sentido.
+      var r = porTareaRendimiento[a.actividad_id];
+      var metaTxt = a.meta_cantidad
+        ? (a.meta_cantidad + (a.meta_unidad ? ' ' + a.meta_unidad : '') + (r && r.unidades_por_dia !== '' ? ' · ' + r.unidades_por_dia + '/día' : ''))
+        : '';
+      // v10 (Fase G3, "vista transversal por recurso"): si la fila viene de
+      // "Mi dedicación" (varios proyectos a la vez), a.proyecto_nombre
+      // existe y reemplaza al responsable (que en esa vista siempre soy yo).
+      var subEtiqueta = a.proyecto_nombre || a.responsable_nombre || a.responsable_email || '';
+
       return '<div class="sigso-py-ded-fila">' +
         '<div class="sigso-py-ded-etiqueta"><span class="t">' + Componentes.escaparHtml(a.titulo) + '</span>' +
-          '<span class="m">' + Componentes.escaparHtml(a.responsable_nombre || a.responsable_email || '') + '</span></div>' +
+          '<span class="m">' + Componentes.escaparHtml(subEtiqueta) + (metaTxt ? ' · ' + Componentes.escaparHtml(metaTxt) : '') + '</span></div>' +
         celdas +
       '</div>';
     }).join('');
@@ -17151,7 +17292,7 @@ var Iconos = (function () {
       ['wait', 'Esperando a un tercero'], ['bloq', 'Bloqueada / observada'], ['late', 'Vencida sin gestión']
     ].map(function (p) { return '<span><i class="sigso-py-ded-sw sigso-py-ded-sw--' + p[0] + '"></i>' + p[1] + '</span>'; }).join('');
 
-    return nav +
+    return kpis + nav +
       '<div class="sigso-py-ded-scroll"><div class="sigso-py-ded">' +
         '<div class="sigso-py-ded-fila sigso-py-ded-cabecera"><div class="sigso-py-ded-etiqueta">Tarea</div>' + headDias + '</div>' +
         filasHtml +
@@ -17516,21 +17657,7 @@ var Iconos = (function () {
         cambiarPestana_('cronograma');
       });
     });
-    var dedAtras = cont.querySelector('.js-py-ded-atras');
-    if (dedAtras) dedAtras.addEventListener('click', function () {
-      dedicacionAncla_ = new Date(dedicacionAncla_.getFullYear(), dedicacionAncla_.getMonth(), dedicacionAncla_.getDate() - DEDICACION_DIAS_VENTANA);
-      cambiarPestana_('cronograma');
-    });
-    var dedAdelante = cont.querySelector('.js-py-ded-adelante');
-    if (dedAdelante) dedAdelante.addEventListener('click', function () {
-      dedicacionAncla_ = new Date(dedicacionAncla_.getFullYear(), dedicacionAncla_.getMonth(), dedicacionAncla_.getDate() + DEDICACION_DIAS_VENTANA);
-      cambiarPestana_('cronograma');
-    });
-    var dedHoy = cont.querySelector('.js-py-ded-hoy');
-    if (dedHoy) dedHoy.addEventListener('click', function () {
-      dedicacionAncla_ = new Date();
-      cambiarPestana_('cronograma');
-    });
+    wireDedicacionNav_(cont, function () { cambiarPestana_('cronograma'); });
 
     var nuevoHito = cont.querySelector('.js-py-nuevo-hito');
     if (nuevoHito) nuevoHito.addEventListener('click', abrirFormularioHito_);

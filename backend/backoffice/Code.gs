@@ -175,6 +175,10 @@ var BACKOFFICE_ACTIONS = {
   // v10 (Fase B, "Mi trabajo en proyectos"): tareas + entregables propios de
   // TODOS mis proyectos, en una sola llamada.
   listarMisTareasProyectos: handleListarMisTareasProyectos_,
+  // v10 (Fase G3, "vista transversal por recurso"): la bitácora de esas
+  // mismas tareas, para "Mi dedicación" (la Carta de Dedicación cruzando
+  // todos mis proyectos).
+  listarMiBitacoraProyectos: handleListarMiBitacoraProyectos_,
   // v10 (Fase C, "vista calendario"): fechas comprometidas de tareas, hitos
   // y entregables de todos los proyectos visibles, en una sola llamada.
   listarCalendarioProyectos: handleListarCalendarioProyectos_,
@@ -202,6 +206,9 @@ var BACKOFFICE_ACTIONS = {
   // v10 (Fase E, "Carta de Dedicación"): bitácora de check-ins de todas las
   // tareas del proyecto, para la grilla día x tarea del Cronograma.
   listarBitacoraProyecto: handleListarBitacoraProyecto_,
+  // v10 (Fase G3, "los números de rendimiento"): unidades/día, horas/
+  // unidad y cumplimiento de entregas, derivados de la misma bitácora.
+  obtenerRendimientoProyecto: handleObtenerRendimientoProyecto_,
   listarSalaProyecto: handleListarSalaProyecto_,
   publicarEnSalaProyecto: handlePublicarEnSalaProyecto_,
   convertirEventoEnTareaProyecto: handleConvertirEventoEnTareaProyecto_,
@@ -492,6 +499,7 @@ var MODULO_POR_ACCION = {
   // ya lo permite: puedeVerProyecto_ acepta rol GERENCIA).
   listarProyectos: ['proyectos', 'gerencia'],
   listarMisTareasProyectos: 'proyectos',
+  listarMiBitacoraProyectos: 'proyectos',
   // v10 (Fase C): mismo criterio que listarProyectos -- vista de portafolio,
   // Gerencia tambien debe poder verla.
   listarCalendarioProyectos: ['proyectos', 'gerencia'],
@@ -510,6 +518,7 @@ var MODULO_POR_ACCION = {
   crearTareaProyecto: 'proyectos',
   listarTareasProyecto: ['proyectos', 'gerencia'],
   listarBitacoraProyecto: ['proyectos', 'gerencia'],
+  obtenerRendimientoProyecto: ['proyectos', 'gerencia'],
   listarSalaProyecto: ['proyectos', 'gerencia'],
   publicarEnSalaProyecto: 'proyectos',
   convertirEventoEnTareaProyecto: 'proyectos',
@@ -1178,6 +1187,10 @@ function handleListarMisTareasProyectos_(data, contexto) {
   return responderResultado_(Proyectos.listarMisTareas(data, contexto));
 }
 
+function handleListarMiBitacoraProyectos_(data, contexto) {
+  return responderResultado_(Proyectos.listarMiBitacora(data, contexto));
+}
+
 function handleListarCalendarioProyectos_(data, contexto) {
   return responderResultado_(Proyectos.listarCalendario(data, contexto));
 }
@@ -1240,6 +1253,10 @@ function handleListarTareasProyecto_(data, contexto) {
 
 function handleListarBitacoraProyecto_(data, contexto) {
   return responderResultado_(Proyectos.listarBitacora(data, contexto));
+}
+
+function handleObtenerRendimientoProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.obtenerRendimiento(data, contexto));
 }
 
 function handleListarSalaProyecto_(data, contexto) {

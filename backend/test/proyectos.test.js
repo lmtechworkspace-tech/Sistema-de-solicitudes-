@@ -941,3 +941,101 @@ test('crearTarea: meta_cantidad/meta_unidad viajan hasta la tarea, y listarMisTa
   assert.equal(mia.meta_cantidad, 16);
   assert.equal(mia.meta_unidad, 'imágenes');
 });
+
+// --- Los números de rendimiento (Fase G3) -----------------------------------
+
+test('getDetalle: expone cumplimiento_tareas (mismo cálculo que ya usa el portafolio)', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  const tarea = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Tarea de Leo', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-09-01'
+  }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: tarea.actividad_id, tipo: 'listo' }, CTX_LEO);
+
+  const detalle = ctx.Proyectos.getDetalle({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  assert.equal(detalle.cumplimiento_tareas.entregadas, 1);
+  assert.equal(detalle.cumplimiento_tareas.a_tiempo, 1);
+  assert.equal(detalle.cumplimiento_tareas.pct, 100);
+});
+
+test('obtenerRendimiento: unidades/dia y horas/unidad solo se calculan sobre tareas TERMINADAS con meta cuantificable', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+
+  // Tarea con meta, terminada el mismo día que se creó -- 1 día trabajado.
+  const conMeta = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Imágenes página web', responsable_email: 'leo@rld.cl',
+    fecha_compromiso: '2026-09-01', meta_cantidad: '16', meta_unidad: 'imágenes'
+  }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: conMeta.actividad_id, tipo: 'avance', horas: 4 }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: conMeta.actividad_id, tipo: 'listo' }, CTX_LEO);
+
+  // Tarea con meta pero AUN sin terminar -- no debe traer unidades_por_dia
+  // ni horas_por_unidad (dividir por avance parcial seria inventar un dato).
+  const sinTerminar = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Brochure', responsable_email: 'leo@rld.cl',
+    fecha_compromiso: '2026-09-01', meta_cantidad: '4', meta_unidad: 'piezas'
+  }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: sinTerminar.actividad_id, tipo: 'avance', horas: 1 }, CTX_LEO);
+
+  // Tarea SIN meta -- no debe aparecer en por_tarea.
+  ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Sin meta', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-09-01'
+  }, CTX_LEO);
+
+  const rechazado = ctx.Proyectos.obtenerRendimiento({ proyecto_id: proyecto.proyecto_id }, CTX_OTRO);
+  assert.equal(rechazado._forbidden, true);
+
+  const rendimiento = ctx.Proyectos.obtenerRendimiento({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  assert.equal(rendimiento.por_tarea.length, 2);
+
+  const filaConMeta = rendimiento.por_tarea.find((t) => t.actividad_id === conMeta.actividad_id);
+  assert.equal(filaConMeta.dias_trabajados, 1);
+  assert.equal(filaConMeta.unidades_por_dia, 16); // 16 imágenes / 1 día
+  assert.equal(filaConMeta.horas_por_unidad, 0.25); // 4h / 16 imágenes
+  assert.equal(filaConMeta.horas_totales, 4);
+
+  const filaSinTerminar = rendimiento.por_tarea.find((t) => t.actividad_id === sinTerminar.actividad_id);
+  assert.equal(filaSinTerminar.unidades_por_dia, '');
+  assert.equal(filaSinTerminar.horas_por_unidad, '');
+
+  assert.equal(rendimiento.promedio_unidades_dia, 16); // solo cuenta la tarea terminada
+  assert.equal(rendimiento.horas_totales_proyecto, 5); // 4h + 1h, de toda tarea con horas
+  assert.equal(rendimiento.tareas_sin_avance, 1); // "Sin meta" quedó NO_INICIADA
+  assert.equal(rendimiento.cumplimiento_tareas.entregadas, 1);
+});
+
+test('listarMiBitacora: junta la bitácora de MIS tareas de TODOS mis proyectos; no trae la de otra persona ni de un proyecto ajeno', () => {
+  const ctx = loadConSchema();
+  const p1 = crearProyectoBase(ctx, { nombre: 'Proyecto 1' });
+  const p2 = crearProyectoBase(ctx, { nombre: 'Proyecto 2', lider_email: 'jefe@homepymes.cl' });
+  ctx.Proyectos.gestionarIntegrante({
+    proyecto_id: p2.proyecto_id, usuario_email: 'leo@rld.cl', rol_proyecto: 'INTEGRANTE'
+  }, { email: 'jefe@homepymes.cl', nombre: 'Jefe', rol: 'JEFATURA' });
+
+  const tareaP1 = ctx.Proyectos.crearTarea({
+    proyecto_id: p1.proyecto_id, titulo: 'Tarea en P1', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-09-01'
+  }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: tareaP1.actividad_id, tipo: 'avance' }, CTX_LEO);
+
+  const tareaP2 = ctx.Proyectos.crearTarea({
+    proyecto_id: p2.proyecto_id, titulo: 'Tarea en P2', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-09-01'
+  }, { email: 'jefe@homepymes.cl', nombre: 'Jefe', rol: 'JEFATURA' });
+  ctx.Actividades.checkin({ actividad_id: tareaP2.actividad_id, tipo: 'bloqueo', bloqueo_motivo: 'Esperando algo' }, CTX_LEO);
+
+  // Tarea de OTRA persona en P1 -- no debe colarse en la bitácora de Leo.
+  ctx.Proyectos.gestionarIntegrante({
+    proyecto_id: p1.proyecto_id, usuario_email: 'jefe@homepymes.cl', rol_proyecto: 'INTEGRANTE'
+  }, CTX_LEO);
+  const tareaDeOtro = ctx.Proyectos.crearTarea({
+    proyecto_id: p1.proyecto_id, titulo: 'Tarea de otra persona', responsable_email: 'jefe@homepymes.cl', fecha_compromiso: '2026-09-01'
+  }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: tareaDeOtro.actividad_id, tipo: 'avance' }, { email: 'jefe@homepymes.cl', nombre: 'Jefe', rol: 'JEFATURA' });
+
+  const bitacora = ctx.Proyectos.listarMiBitacora({}, CTX_LEO);
+  const idsVistos = new Set(bitacora.map((b) => b.actividad_id));
+  assert.ok(idsVistos.has(tareaP1.actividad_id));
+  assert.ok(idsVistos.has(tareaP2.actividad_id));
+  assert.ok(!idsVistos.has(tareaDeOtro.actividad_id));
+  assert.equal(bitacora.find((b) => b.tipo === 'BLOQUEO').nota, 'Esperando algo');
+});
