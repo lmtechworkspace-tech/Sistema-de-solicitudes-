@@ -1506,7 +1506,9 @@
         var esMia = !!miEmail && normalizarEmail_(a.responsable_email) === miEmail;
         return tarjetaKanban_(a, esMia);
       }).join('');
-      return '<div class="sigso-kanban__columna" data-columna="' + c.id + '">' +
+      // v10 (auditoría G, visual): acento de color por columna (mismo
+      // semáforo del módulo) para que el tablero se lea de un vistazo.
+      return '<div class="sigso-kanban__columna sigso-kanban__columna--' + c.id + '" data-columna="' + c.id + '">' +
         '<h3 class="sigso-kanban__titulo">' + c.titulo + ' <span class="sigso-kanban__cuenta">' + items.length + '</span></h3>' +
         '<div class="sigso-kanban__tarjetas">' + (tarjetas || '<p class="sigso-ayuda sigso-kanban__vacia">Sin tareas</p>') + '</div>' +
       '</div>';
