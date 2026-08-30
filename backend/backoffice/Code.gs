@@ -197,6 +197,8 @@ var BACKOFFICE_ACTIONS = {
   subirAdjuntoProyecto: handleSubirAdjuntoProyecto_,
   descargarAdjuntoProyecto: handleDescargarAdjuntoProyecto_,
   getDetalleProyecto: handleGetDetalleProyecto_,
+  // v10 (auditoría G): detalle + tareas + sala en UN solo viaje (antes 3).
+  getDetalleCompletoProyecto: handleGetDetalleCompletoProyecto_,
   crearProyecto: handleCrearProyecto_,
   actualizarProyecto: handleActualizarProyecto_,
   gestionarIntegranteProyecto: handleGestionarIntegranteProyecto_,
@@ -511,6 +513,7 @@ var MODULO_POR_ACCION = {
   subirAdjuntoProyecto: 'proyectos',
   descargarAdjuntoProyecto: ['proyectos', 'gerencia'],
   getDetalleProyecto: ['proyectos', 'gerencia'],
+  getDetalleCompletoProyecto: ['proyectos', 'gerencia'],
   crearProyecto: 'proyectos',
   actualizarProyecto: 'proyectos',
   gestionarIntegranteProyecto: 'proyectos',
@@ -1225,6 +1228,10 @@ function handleDescargarAdjuntoProyecto_(data, contexto) {
 
 function handleGetDetalleProyecto_(data, contexto) {
   return responderResultado_(Proyectos.getDetalle(data, contexto));
+}
+
+function handleGetDetalleCompletoProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.getDetalleCompleto(data, contexto));
 }
 
 function handleCrearProyecto_(data, contexto) {

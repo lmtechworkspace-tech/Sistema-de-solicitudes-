@@ -609,37 +609,62 @@
     // vieja no debe pisar la pantalla nueva.
     var idAlPedir = proyectoActivoId_;
 
-    // v10 (auditoría G): solo lo ESENCIAL para el detalle se pide al abrir
-    // (getDetalle + tareas + sala; miPerfil ya viene cacheado). La bitácora
-    // y el rendimiento -- que escanean toda ACTIVIDADES_BITACORA y solo los
-    // usa la pestaña Cronograma -- se cargan LAZY al abrir esa pestaña
-    // (cargarDatosCronograma_). Antes eran 6 llamadas en paralelo por
-    // apertura; Apps Script las ejecuta EN SERIE por usuario, así que 6
-    // encoladas + arranque en frío hacían que la última pasara el timeout y
-    // Promise.all se cayera entero. Ahora son 3 (+1 cacheada).
+    // v10 (auditoría G): detalle + tareas + sala en UNA sola llamada
+    // (getDetalleCompletoProyecto) -- antes eran 3 acciones separadas, cada
+    // una una ejecución de Apps Script (que corre en SERIE por usuario y
+    // re-lee las hojas). La bitácora y el rendimiento -- que escanean toda
+    // ACTIVIDADES_BITACORA y solo los usa el Cronograma -- se cargan LAZY al
+    // abrir esa pestaña. miPerfil ya viene cacheado. Así abrir un proyecto es
+    // 1 viaje de red (+1 cacheado) en vez de los 6 de antes.
     Promise.all([
-      apiSeguro_('getDetalleProyecto', { proyecto_id: proyectoActivoId_ }),
-      apiSeguro_('listarTareasProyecto', { proyecto_id: proyectoActivoId_ }),
-      apiSeguro_('listarSalaProyecto', { proyecto_id: proyectoActivoId_ }),
+      apiSeguro_('getDetalleCompletoProyecto', { proyecto_id: proyectoActivoId_ }),
       miPerfil_()
     ]).then(function (respuestas) {
       if (idAlPedir !== proyectoActivoId_) return; // el usuario ya se movió
-      var rDetalle = respuestas[0], rTareas = respuestas[1], rSala = respuestas[2], perfil = respuestas[3];
+      var perfil = respuestas[1];
+      var miEmail = normalizarEmail_(perfil && perfil.email);
+      // Degradación elegante: si el backend nuevo todavía no está desplegado,
+      // getDetalleCompletoProyecto vuelve {ok:false} (acción desconocida) --
+      // se cae al camino viejo de 3 llamadas para no romper nada en la
+      // ventana entre publicar el frontend y pegar el backend.
+      var r = respuestas[0];
+      if (r && r.ok && r.data && r.data.detalle) {
+        pintarDetalleCargado_(cont, r.data.detalle, r.data.tareas || [], r.data.sala || [], miEmail);
+      } else if (r && r.ok === false && /desconocida/i.test(r.message || '')) {
+        refrescarDetalleLegacy_(cont, idAlPedir, miEmail);
+      } else {
+        cont.innerHTML = Componentes.alerta((r && r.message) || 'No se pudo abrir el proyecto.', 'error');
+      }
+    });
+    // Sin .catch: apiSeguro_ y miPerfil_ nunca rechazan.
+  }
+
+  // Camino de compatibilidad (backend viejo, sin getDetalleCompletoProyecto):
+  // las 3 llamadas de siempre, ya resilientes con apiSeguro_.
+  function refrescarDetalleLegacy_(cont, idAlPedir, miEmail) {
+    Promise.all([
+      apiSeguro_('getDetalleProyecto', { proyecto_id: proyectoActivoId_ }),
+      apiSeguro_('listarTareasProyecto', { proyecto_id: proyectoActivoId_ }),
+      apiSeguro_('listarSalaProyecto', { proyecto_id: proyectoActivoId_ })
+    ]).then(function (respuestas) {
+      if (idAlPedir !== proyectoActivoId_) return;
+      var rDetalle = respuestas[0], rTareas = respuestas[1], rSala = respuestas[2];
       if (!rDetalle || !rDetalle.ok) {
         cont.innerHTML = Componentes.alerta((rDetalle && rDetalle.message) || 'No se pudo abrir el proyecto.', 'error');
         return;
       }
-      var tareas = (rTareas && rTareas.ok) ? rTareas.data : [];
-      var sala = (rSala && rSala.ok) ? rSala.data : [];
-      var miEmail = normalizarEmail_(perfil && perfil.email);
-      // bitacora/rendimiento = undefined => "aún no cargados" (los carga
-      // cargarDatosCronograma_ la primera vez que se abre esa pestaña).
-      datosDetalleActual_ = { detalle: rDetalle.data, tareas: tareas, sala: sala, bitacora: undefined, rendimiento: undefined, miEmail: miEmail };
-      pintarDetalle_(cont, rDetalle.data, tareas, sala, miEmail, undefined, undefined);
-      if (pestanaActiva_ === 'cronograma') cargarDatosCronograma_(cont);
+      pintarDetalleCargado_(cont, rDetalle.data, (rTareas && rTareas.ok) ? rTareas.data : [], (rSala && rSala.ok) ? rSala.data : [], miEmail);
     });
-    // Sin .catch: apiSeguro_ y miPerfil_ nunca rechazan -- un fallo real
-    // llega como {ok:false} y se muestra con su mensaje arriba.
+  }
+
+  // Guarda el detalle en cache y lo pinta -- punto único, para que el camino
+  // consolidado y el legacy hagan exactamente lo mismo.
+  function pintarDetalleCargado_(cont, detalle, tareas, sala, miEmail) {
+    // bitacora/rendimiento = undefined => "aún no cargados" (los trae
+    // cargarDatosCronograma_ la primera vez que se abre el Cronograma).
+    datosDetalleActual_ = { detalle: detalle, tareas: tareas, sala: sala, bitacora: undefined, rendimiento: undefined, miEmail: miEmail };
+    pintarDetalle_(cont, detalle, tareas, sala, miEmail, undefined, undefined);
+    if (pestanaActiva_ === 'cronograma') cargarDatosCronograma_(cont);
   }
 
   // v10 (auditoría G): carga perezosa de la bitácora + el rendimiento (lo

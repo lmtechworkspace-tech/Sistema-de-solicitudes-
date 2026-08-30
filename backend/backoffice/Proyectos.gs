@@ -300,6 +300,24 @@ var Proyectos = {
     };
   },
 
+  // v10 (auditoría G, 2026-08-30): abrir un proyecto pedía 3 acciones por
+  // separado (getDetalle + listarTareas + listarSala). Apps Script las
+  // ejecuta EN SERIE y cada una re-abre la planilla y re-lee las hojas (el
+  // cache _cacheHojas_ es POR EJECUCIÓN, no sobrevive entre requests). Esta
+  // acción las junta en UNA sola ejecución: las 3 comparten el cache, así
+  // ACTIVIDADES se lee una vez en vez de dos, y es 1 viaje de red en vez de
+  // 3. Reusa los métodos tal cual (cero lógica nueva, cero permiso nuevo --
+  // cada uno revalida por su cuenta, barato con el cache caliente).
+  getDetalleCompleto: function (data, contexto) {
+    var detalle = Proyectos.getDetalle(data, contexto);
+    if (detalle && (detalle._forbidden || detalle._validationError)) return detalle;
+    return {
+      detalle: detalle,
+      tareas: Proyectos.listarTareas(data, contexto),
+      sala: Proyectos.listarSala(data, contexto)
+    };
+  },
+
   // Actualiza "cuando vi la Sala por ultima vez" a ahora mismo -- lo llama
   // el frontend al abrir la pestaña Sala (marcar como leido). Sin fila de
   // integrante (ADM/GERENCIA mirando sin ser miembros) no hay donde guardarlo:

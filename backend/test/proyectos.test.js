@@ -249,6 +249,25 @@ test('listarTareas: lee ACTIVIDADES filtrando por proyecto_id, acotado a integra
   assert.equal(rechazado._forbidden, true);
 });
 
+// v10 (auditoría G): detalle + tareas + sala en una sola llamada.
+test('getDetalleCompleto: junta detalle + tareas + sala en un solo objeto; rechaza a un ajeno', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Tarea 1', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-09-01'
+  }, CTX_LEO);
+  ctx.Proyectos.publicarEnSala({ proyecto_id: proyecto.proyecto_id, tipo: 'COMENTARIO', cuerpo: 'Hola equipo' }, CTX_LEO);
+
+  const rechazado = ctx.Proyectos.getDetalleCompleto({ proyecto_id: proyecto.proyecto_id }, CTX_OTRO);
+  assert.equal(rechazado._forbidden, true);
+
+  const completo = ctx.Proyectos.getDetalleCompleto({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  assert.equal(completo.detalle.proyecto.proyecto_id, proyecto.proyecto_id);
+  assert.equal(completo.tareas.length, 1);
+  assert.equal(completo.tareas[0].titulo, 'Tarea 1');
+  assert.ok(completo.sala.some((e) => e.cuerpo === 'Hola equipo'));
+});
+
 // v10 (Fase B, "Mi trabajo en proyectos"): tareas + entregables propios de
 // TODOS mis proyectos en una sola llamada, sin tener que abrir cada uno.
 test('listarMisTareas: junta tareas propias de VARIOS proyectos, ordenadas por urgencia; no trae las de otra persona', () => {
