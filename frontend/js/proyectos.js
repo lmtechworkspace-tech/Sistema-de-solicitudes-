@@ -548,9 +548,8 @@
     });
 
     document.getElementById('form-py-nuevo').addEventListener('submit', function (evento) {
-      evento.preventDefault();
       var campoPlantilla = document.getElementById('py-plantilla');
-      var datos = {
+      enviarModal_(evento, 'crearProyecto', {
         nombre: document.getElementById('py-nombre').value,
         descripcion: document.getElementById('py-descripcion').value,
         objetivo: document.getElementById('py-objetivo').value,
@@ -559,15 +558,7 @@
         prioridad: document.getElementById('py-prioridad').value,
         plantilla_id: campoPlantilla ? campoPlantilla.value : '',
         solicitud_id: prellenado.solicitud_id || ''
-      };
-      api_('crearProyecto', datos).then(function (respuesta) {
-        if (!respuesta || !respuesta.ok) {
-          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo crear el proyecto.', tipo: 'error' });
-          return;
-        }
-        cerrar();
-        cargarPortafolio_();
-      });
+      }, function () { cerrar(); cargarPortafolio_(); });
     });
   }
 
@@ -2051,13 +2042,9 @@
         var tipo = document.getElementById('py-sala-tipo').value;
         if (!cuerpo.trim()) return;
         var menciones = Array.from(cont.querySelectorAll('.js-py-mencion:checked')).map(function (el) { return el.value; });
-        api_('publicarEnSalaProyecto', { proyecto_id: proyectoActivoId_, tipo: tipo, cuerpo: cuerpo, menciones: menciones }).then(function (respuesta) {
-          if (!respuesta || !respuesta.ok) {
-            Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo publicar.', tipo: 'error' });
-            return;
-          }
-          refrescarDetalle_();
-        });
+        enviarModal_(evento, 'publicarEnSalaProyecto',
+          { proyecto_id: proyectoActivoId_, tipo: tipo, cuerpo: cuerpo, menciones: menciones },
+          function () { refrescarDetalle_(); });
       });
     }
     // v10 (Fase D, "adjuntos por proyecto"): elegir archivo solo habilita el
@@ -2368,8 +2355,7 @@
       '</div>';
     var cerrar = montarModal_(fondo);
     document.getElementById('form-py-editar').addEventListener('submit', function (evento) {
-      evento.preventDefault();
-      api_('actualizarProyecto', {
+      enviarModal_(evento, 'actualizarProyecto', {
         proyecto_id: p.proyecto_id,
         nombre: document.getElementById('py-ed-nombre').value,
         descripcion: document.getElementById('py-ed-descripcion').value,
@@ -2378,14 +2364,7 @@
         fecha_objetivo: document.getElementById('py-ed-fecha-objetivo').value,
         prioridad: document.getElementById('py-ed-prioridad').value,
         estado: document.getElementById('py-ed-estado').value
-      }).then(function (respuesta) {
-        if (!respuesta || !respuesta.ok) {
-          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
-          return;
-        }
-        cerrar();
-        refrescarDetalle_();
-      });
+      }, function () { cerrar(); refrescarDetalle_(); });
     });
   }
 
@@ -2435,10 +2414,9 @@
       '</div>';
     var cerrar = montarModal_(fondo);
     document.getElementById('form-py-tarea').addEventListener('submit', function (evento) {
-      evento.preventDefault();
       var hitoEl = document.getElementById('py-t-hito');
       var dependeEl = document.getElementById('py-t-depende');
-      api_('crearTareaProyecto', {
+      enviarModal_(evento, 'crearTareaProyecto', {
         proyecto_id: proyectoActivoId_,
         hito_id: hitoEl ? hitoEl.value : '',
         depende_de: dependeEl ? dependeEl.value : '',
@@ -2449,14 +2427,7 @@
         prioridad: document.getElementById('py-t-prioridad').value,
         meta_cantidad: document.getElementById('py-t-meta-cantidad').value,
         meta_unidad: document.getElementById('py-t-meta-unidad').value
-      }).then(function (respuesta) {
-        if (!respuesta || !respuesta.ok) {
-          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo crear la tarea.', tipo: 'error' });
-          return;
-        }
-        cerrar();
-        refrescarDetalle_();
-      });
+      }, function () { cerrar(); refrescarDetalle_(); });
     });
   }
 
@@ -2478,20 +2449,12 @@
       '</div>';
     var cerrar = montarModal_(fondo);
     document.getElementById('form-py-hito').addEventListener('submit', function (evento) {
-      evento.preventDefault();
-      api_('gestionarHitoProyecto', {
+      enviarModal_(evento, 'gestionarHitoProyecto', {
         proyecto_id: proyectoActivoId_,
         nombre: document.getElementById('py-h-nombre').value,
         descripcion: document.getElementById('py-h-descripcion').value,
         fecha_objetivo: document.getElementById('py-h-fecha').value
-      }).then(function (respuesta) {
-        if (!respuesta || !respuesta.ok) {
-          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo crear el hito.', tipo: 'error' });
-          return;
-        }
-        cerrar();
-        refrescarDetalle_();
-      });
+      }, function () { cerrar(); refrescarDetalle_(); });
     });
   }
 
@@ -2520,22 +2483,14 @@
       '</div>';
     var cerrar = montarModal_(fondo);
     document.getElementById('form-py-hito-editar').addEventListener('submit', function (evento) {
-      evento.preventDefault();
-      api_('gestionarHitoProyecto', {
+      enviarModal_(evento, 'gestionarHitoProyecto', {
         proyecto_id: proyectoActivoId_,
         hito_id: h.hito_id,
         nombre: document.getElementById('py-he-nombre').value,
         descripcion: document.getElementById('py-he-descripcion').value,
         fecha_objetivo: document.getElementById('py-he-fecha').value,
         estado: document.getElementById('py-he-estado').value
-      }).then(function (respuesta) {
-        if (!respuesta || !respuesta.ok) {
-          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar el hito.', tipo: 'error' });
-          return;
-        }
-        cerrar();
-        refrescarDetalle_();
-      });
+      }, function () { cerrar(); refrescarDetalle_(); });
     });
   }
 
@@ -2561,21 +2516,13 @@
       '</div>';
     var cerrar = montarModal_(fondo);
     document.getElementById('form-py-integrante').addEventListener('submit', function (evento) {
-      evento.preventDefault();
-      api_('gestionarIntegranteProyecto', {
+      enviarModal_(evento, 'gestionarIntegranteProyecto', {
         proyecto_id: proyectoActivoId_,
         usuario_email: document.getElementById('py-i-email').value,
         usuario_nombre: document.getElementById('py-i-nombre').value,
         rol_proyecto: document.getElementById('py-i-rol').value,
         responsabilidad: document.getElementById('py-i-responsabilidad').value
-      }).then(function (respuesta) {
-        if (!respuesta || !respuesta.ok) {
-          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo agregar.', tipo: 'error' });
-          return;
-        }
-        cerrar();
-        refrescarDetalle_();
-      });
+      }, function () { cerrar(); refrescarDetalle_(); });
     });
   }
 
@@ -2604,23 +2551,15 @@
       '</div>';
     var cerrar = montarModal_(fondo);
     document.getElementById('form-py-entregable').addEventListener('submit', function (evento) {
-      evento.preventDefault();
       var hitoEl = document.getElementById('py-e-hito');
-      api_('gestionarEntregableProyecto', {
+      enviarModal_(evento, 'gestionarEntregableProyecto', {
         proyecto_id: proyectoActivoId_,
         nombre: document.getElementById('py-e-nombre').value,
         descripcion: document.getElementById('py-e-descripcion').value,
         responsable_email: document.getElementById('py-e-responsable').value,
         hito_id: hitoEl ? hitoEl.value : '',
         fecha_comprometida: document.getElementById('py-e-fecha').value
-      }).then(function (respuesta) {
-        if (!respuesta || !respuesta.ok) {
-          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo crear el entregable.', tipo: 'error' });
-          return;
-        }
-        cerrar();
-        refrescarDetalle_();
-      });
+      }, function () { cerrar(); refrescarDetalle_(); });
     });
   }
 
@@ -2659,22 +2598,14 @@
       '</div>';
     var cerrar = montarModal_(fondo);
     document.getElementById('form-py-riesgo').addEventListener('submit', function (evento) {
-      evento.preventDefault();
-      api_('gestionarRiesgoProyecto', {
+      enviarModal_(evento, 'gestionarRiesgoProyecto', {
         proyecto_id: proyectoActivoId_,
         descripcion: document.getElementById('py-r-descripcion').value,
         probabilidad: document.getElementById('py-r-probabilidad').value,
         impacto: document.getElementById('py-r-impacto').value,
         responsable_email: document.getElementById('py-r-responsable').value,
         mitigacion: document.getElementById('py-r-mitigacion').value
-      }).then(function (respuesta) {
-        if (!respuesta || !respuesta.ok) {
-          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo registrar el riesgo.', tipo: 'error' });
-          return;
-        }
-        cerrar();
-        refrescarDetalle_();
-      });
+      }, function () { cerrar(); refrescarDetalle_(); });
     });
   }
 
@@ -2713,8 +2644,7 @@
       '</div>';
     var cerrar = montarModal_(fondo);
     document.getElementById('form-py-riesgo-editar').addEventListener('submit', function (evento) {
-      evento.preventDefault();
-      api_('gestionarRiesgoProyecto', {
+      enviarModal_(evento, 'gestionarRiesgoProyecto', {
         proyecto_id: proyectoActivoId_,
         riesgo_id: r.riesgo_id,
         descripcion: document.getElementById('py-re-descripcion').value,
@@ -2723,14 +2653,7 @@
         responsable_email: document.getElementById('py-re-responsable').value,
         mitigacion: document.getElementById('py-re-mitigacion').value,
         estado: document.getElementById('py-re-estado').value
-      }).then(function (respuesta) {
-        if (!respuesta || !respuesta.ok) {
-          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar el riesgo.', tipo: 'error' });
-          return;
-        }
-        cerrar();
-        refrescarDetalle_();
-      });
+      }, function () { cerrar(); refrescarDetalle_(); });
     });
   }
 
@@ -2772,9 +2695,8 @@
       '</div>';
     var cerrar = montarModal_(fondo);
     document.getElementById('form-py-convertir').addEventListener('submit', function (evento) {
-      evento.preventDefault();
       var hitoEl = document.getElementById('py-cv-hito');
-      api_('convertirEventoEnTareaProyecto', {
+      enviarModal_(evento, 'convertirEventoEnTareaProyecto', {
         proyecto_id: proyectoActivoId_,
         evento_id: ev.evento_id,
         titulo: document.getElementById('py-cv-titulo').value,
@@ -2783,18 +2705,34 @@
         hito_id: hitoEl ? hitoEl.value : '',
         fecha_compromiso: document.getElementById('py-cv-fecha').value,
         prioridad: document.getElementById('py-cv-prioridad').value
-      }).then(function (respuesta) {
-        if (!respuesta || !respuesta.ok) {
-          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo convertir.', tipo: 'error' });
-          return;
-        }
-        cerrar();
-        refrescarDetalle_();
-      });
+      }, function () { cerrar(); refrescarDetalle_(); });
     });
   }
 
   // --- utilidades ------------------------------------------------------
+
+  // v10 (auditoría G, 2026-08-29): envío de formulario de modal a prueba de
+  // doble-clic. Deshabilita el botón "guardar" mientras la llamada está en
+  // vuelo; si falla lo re-habilita para reintentar; si sale bien corre
+  // alExito (que normalmente cierra el modal y refresca). Antes, un
+  // doble-clic rápido -- o Enter + clic -- ANTES de que respondiera el
+  // backend creaba la fila DOS veces (p.ej. dos tareas idénticas). Usa
+  // apiSeguro_ para que un fallo de red llegue como {ok:false} y no como una
+  // promesa colgada que deja el botón muerto.
+  function enviarModal_(evento, accion, datos, alExito) {
+    evento.preventDefault();
+    var btn = evento.currentTarget.querySelector('button[type="submit"]');
+    if (btn && btn.disabled) return;            // segundo submit: ignorar
+    if (btn) btn.disabled = true;
+    apiSeguro_(accion, datos).then(function (respuesta) {
+      if (!respuesta || !respuesta.ok) {
+        if (btn) btn.disabled = false;
+        Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo guardar.', tipo: 'error' });
+        return;
+      }
+      alExito(respuesta);
+    });
+  }
 
   function montarModal_(fondo) {
     function cerrar() {
