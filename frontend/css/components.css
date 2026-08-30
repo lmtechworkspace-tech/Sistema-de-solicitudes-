@@ -3719,6 +3719,19 @@
 .sigso-py-meta-opcional summary { cursor: pointer; font-size: var(--texto-sm); color: var(--primario); user-select: none; }
 .sigso-py-meta-opcional[open] summary { margin-bottom: var(--esp-2); }
 
+/* v10 (multi-asignación): selector de colaboradores en "Nueva tarea" (mismo
+   patron plegado) y chip de colaboradores en las tarjetas de tarea. */
+.sigso-py-colab-opcional { margin: var(--esp-2) 0; }
+.sigso-py-colab-opcional summary { cursor: pointer; font-size: var(--texto-sm); color: var(--primario); user-select: none; }
+.sigso-py-colab-opcional[open] summary { margin-bottom: var(--esp-2); }
+.sigso-py-colab-opcional .sigso-campo-check { padding: 2px 0; }
+.sigso-py-colab-chip {
+  display: inline-flex; align-items: center; gap: 0.25rem;
+  color: var(--info); background: var(--info-suave);
+  padding: 1px var(--esp-2); border-radius: var(--radio-full); font-size: var(--texto-xs);
+}
+.sigso-py-colab-chip .sigso-ico { flex: 0 0 auto; }
+
 .sigso-py-feed { display: flex; flex-direction: column; gap: var(--esp-2); }
 .sigso-py-evento {
   background: var(--superficie); border: 1px solid var(--borde); border-left: 3px solid var(--borde-fuerte);

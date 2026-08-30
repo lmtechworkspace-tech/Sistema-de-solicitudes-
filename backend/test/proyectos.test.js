@@ -249,6 +249,39 @@ test('listarTareas: lee ACTIVIDADES filtrando por proyecto_id, acotado a integra
   assert.equal(rechazado._forbidden, true);
 });
 
+// v10 (multi-asignación): tarea con dueño + colaboradores.
+test('crearTarea: los colaboradores se filtran a integrantes del proyecto; listarTareas los expone con nombre', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx);
+  ctx.Proyectos.gestionarIntegrante({ proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', usuario_nombre: 'Marcelo', rol_proyecto: 'INTEGRANTE' }, CTX_LEO);
+  const tarea = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Tarea compartida', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-09-01',
+    colaboradores_emails: ['marcelo@rld.cl', 'ajeno@rld.cl'] // ajeno NO es integrante -> se descarta
+  }, CTX_LEO);
+  assert.deepEqual(JSON.parse(tarea.colaboradores_emails), ['marcelo@rld.cl']);
+
+  const tareas = ctx.Proyectos.listarTareas({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  const t = tareas.find((x) => x.actividad_id === tarea.actividad_id);
+  assert.equal(t.colaboradores.length, 1);
+  assert.equal(t.colaboradores[0].email, 'marcelo@rld.cl');
+  assert.equal(t.colaboradores[0].nombre, 'Marcelo');
+});
+
+test('listarMisTareas: una tarea donde soy COLABORADOR aparece marcada soy_responsable=false', () => {
+  const ctx = loadConSchema();
+  const proyecto = crearProyectoBase(ctx); // leo es líder
+  ctx.Proyectos.gestionarIntegrante({ proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE' }, CTX_LEO);
+  const tarea = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'Tarea de Leo con Marcelo', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-09-01',
+    colaboradores_emails: ['marcelo@rld.cl']
+  }, CTX_LEO);
+  // Marcelo la ve en SU "Mi trabajo en proyectos" aunque no sea el responsable.
+  const mias = ctx.Proyectos.listarMisTareas({}, CTX_MARCELO).tareas;
+  const mia = mias.find((t) => t.actividad_id === tarea.actividad_id);
+  assert.ok(mia, 'la tarea colaborada debe aparecer en Mi trabajo de Marcelo');
+  assert.equal(mia.soy_responsable, false);
+});
+
 // v10 (auditoría G): detalle + tareas + sala en una sola llamada.
 test('getDetalleCompleto: junta detalle + tareas + sala en un solo objeto; rechaza a un ajeno', () => {
   const ctx = loadConSchema();

@@ -265,6 +265,40 @@ test('checkin sobre actividad cerrada devuelve error de validacion', () => {
   assert.equal(resultado._validationError, true);
 });
 
+// v10 (multi-asignación): un responsable (dueño) + colaboradores.
+test('crear: colaboradores se normalizan, deduplican y excluyen al responsable', () => {
+  const ctx = loadConSchema();
+  const a = ctx.Actividades.crear({
+    titulo: 'Con equipo', fecha_compromiso: '2026-08-14',
+    colaboradores_emails: ['JAVIERA@rld.cl', 'javiera@rld.cl', 'marcelo@rld.cl', '', 'otro@rld.cl']
+  }, CTX_MARCELO);
+  // marcelo es el responsable -> se excluye; javiera se deduplica/normaliza.
+  assert.deepEqual(JSON.parse(a.colaboradores_emails), ['javiera@rld.cl', 'otro@rld.cl']);
+});
+
+test('checkin (RN-702 ampliada): un colaborador puede hacer check-in; un ajeno no', () => {
+  const ctx = loadConSchema();
+  const a = ctx.Actividades.crear({
+    titulo: 'Editar videos', fecha_compromiso: '2026-08-14', colaboradores_emails: ['javiera@rld.cl']
+  }, CTX_MARCELO);
+  // Javiera (colaboradora, no responsable) hace check-in: permitido.
+  const avance = ctx.Actividades.checkin({ actividad_id: a.actividad_id, tipo: 'avance' }, { email: 'javiera@rld.cl', nombre: 'Javiera', rol: 'DEV' });
+  assert.equal(avance.estado, 'EN_CURSO');
+  // Un ajeno (ni responsable ni colaborador) es rechazado.
+  const ajeno = ctx.Actividades.checkin({ actividad_id: a.actividad_id, tipo: 'sin_cambio' }, CTX_OTRO);
+  assert.equal(ajeno._forbidden, true);
+});
+
+test('obtenerDetalle: un colaborador puede ver la actividad aunque no esté en su jerarquía', () => {
+  const ctx = loadConSchema();
+  const a = ctx.Actividades.crear({
+    titulo: 'Compartida', fecha_compromiso: '2026-08-14', colaboradores_emails: ['otro@rld.cl']
+  }, CTX_MARCELO);
+  // 'otro' no está en el equipo de nadie relevante, pero es colaborador.
+  const detalle = ctx.Actividades.obtenerDetalle({ actividad_id: a.actividad_id }, CTX_OTRO);
+  assert.equal(detalle.actividad.actividad_id, a.actividad_id);
+});
+
 // --- validacion del supervisor ---------------------------------------------
 
 test('validar: el supervisor aprueba (EN_REVISION -> TERMINADA)', () => {

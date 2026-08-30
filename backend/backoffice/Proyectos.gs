@@ -146,10 +146,16 @@ var Proyectos = {
       if (normalizarEmailProyecto_(responsableEmail) !== email) return false;
       return esAdmGerencia || misProyectos[proyectoId];
     }
+    // v10 (multi-asignación): "mi trabajo" incluye las tareas donde soy
+    // colaborador, no solo donde soy el responsable.
+    function esMiaOColaboroYVisible(a) {
+      if (!(esAdmGerencia || misProyectos[a.proyecto_id])) return false;
+      return trabajaLaActividad_(a, email);
+    }
 
     var tareas = leerFilasSeguro_(SHEETS.ACTIVIDADES).filter(function (a) {
       var activa = a.activa === true || a.activa === 'TRUE' || a.activa === 1;
-      return activa && a.proyecto_id && esMiaYVisible(a.proyecto_id, a.responsable_email);
+      return activa && a.proyecto_id && esMiaOColaboroYVisible(a);
     }).map(function (a) {
       var s = semaforoActividad_(a);
       var proyecto = proyectosPorId[a.proyecto_id];
@@ -162,7 +168,10 @@ var Proyectos = {
         proyecto_id: a.proyecto_id,
         proyecto_nombre: proyecto ? proyecto.nombre : '(proyecto eliminado)',
         // v10 (Fase G2): meta cuantificable opcional (ver Actividades.crear).
-        meta_cantidad: a.meta_cantidad, meta_unidad: a.meta_unidad
+        meta_cantidad: a.meta_cantidad, meta_unidad: a.meta_unidad,
+        // v10 (multi-asignación): si aparezco por colaborador y no por dueño,
+        // el frontend lo marca ("Colaboras") en vez de mostrarme como titular.
+        soy_responsable: normalizarEmailProyecto_(a.responsable_email) === email
       };
     }).sort(function (a, b) {
       var orden = { atrasada: 0, riesgo: 1, pendiente: 2, bloqueada: 3, 'al-dia': 4, revision: 5, terminada: 6, cancelada: 7 };
@@ -661,6 +670,23 @@ var Proyectos = {
     for (var k in data) enriquecido[k] = data[k];
     enriquecido.proyecto = proyecto.nombre; // compat: campo de texto libre ya existente en ACTIVIDADES
     enriquecido.proyecto_id = proyecto.proyecto_id;
+    // v10 (multi-asignación): los colaboradores de una tarea de proyecto
+    // deben ser INTEGRANTES del proyecto (mismo círculo que el responsable,
+    // RN-709). El frontend solo ofrece integrantes; esto descarta cualquier
+    // correo ajeno que se cuele -- no otorga check-in a gente de afuera.
+    if (data.colaboradores_emails) {
+      var miembros = {};
+      leerFilasSeguro_(SHEETS.PROYECTO_INTEGRANTES).forEach(function (i) {
+        if (i.proyecto_id === proyecto.proyecto_id && esVerdaderoProyecto_(i.activo)) {
+          miembros[normalizarEmailProyecto_(i.usuario_email)] = true;
+        }
+      });
+      var lista = data.colaboradores_emails;
+      if (typeof lista === 'string') { try { lista = JSON.parse(lista); } catch (e) { lista = []; } }
+      enriquecido.colaboradores_emails = (Array.isArray(lista) ? lista : []).filter(function (correo) {
+        return miembros[normalizarEmailProyecto_(correo)];
+      });
+    }
     enriquecido.hito_id = data.hito_id || '';
     if (!enriquecido.area_id) enriquecido.area_id = proyecto.area_id;
     // El lider del proyecto es el supervisor por defecto de sus tareas --
@@ -693,6 +719,12 @@ var Proyectos = {
       });
     var porId = {};
     tareas.forEach(function (a) { porId[a.actividad_id] = a; });
+    // v10 (multi-asignación): nombres del equipo para mostrar colaboradores
+    // como nombre (no correo crudo) en las tarjetas.
+    var nombrePorEmail = {};
+    leerFilasSeguro_(SHEETS.PROYECTO_INTEGRANTES).forEach(function (i) {
+      if (i.proyecto_id === proyecto.proyecto_id) nombrePorEmail[normalizarEmailProyecto_(i.usuario_email)] = i.usuario_nombre || i.usuario_email;
+    });
     return tareas.map(function (a) {
       a.semaforo = semaforoActividad_(a).codigo;
       a.semaforo_etiqueta = semaforoActividad_(a).etiqueta;
@@ -703,6 +735,11 @@ var Proyectos = {
         a.dependencia_titulo = dependencia ? dependencia.titulo : '';
         a.dependencia_comprometida = !!dependencia && semaforoActividad_(dependencia).codigo === 'atrasada';
       }
+      // v10 (multi-asignación): la lista de colaboradores ya parseada y con
+      // nombre resuelto -- el frontend no toca JSON ni resuelve correos.
+      a.colaboradores = colaboradoresDeActividad_(a).map(function (email) {
+        return { email: email, nombre: nombrePorEmail[email] || email };
+      });
       return a;
     });
   },
@@ -750,7 +787,9 @@ var Proyectos = {
     leerFilasSeguro_(SHEETS.ACTIVIDADES).forEach(function (a) {
       var activa = a.activa === true || a.activa === 'TRUE' || a.activa === 1;
       if (!activa || !a.proyecto_id) return;
-      if (normalizarEmailProyecto_(a.responsable_email) !== email) return;
+      // v10 (multi-asignación): mi dedicación incluye tareas donde soy
+      // responsable O colaborador.
+      if (!trabajaLaActividad_(a, email)) return;
       if (!esAdmGerencia && !misProyectos[a.proyecto_id]) return;
       idsTarea[a.actividad_id] = true;
     });

@@ -489,7 +489,13 @@ var COLUMNAS = {
     // (unidades/dia, horas/unidad). Aditivas: sin meta, una tarea se
     // comporta exactamente igual que antes. Hoy solo se cargan desde el
     // formulario de "Nueva tarea" de Proyectos.
-    'meta_cantidad', 'meta_unidad'
+    'meta_cantidad', 'meta_unidad',
+    // v10 (auditoría G, multi-asignación): colaboradores ADEMÁS del
+    // responsable único (JSON de correos, ej. '["a@x.cl","b@x.cl"]'). El
+    // responsable sigue siendo el DUEÑO (accountability, RN-701); los
+    // colaboradores pueden hacer check-in (RN-702 ampliada) y ven la tarea
+    // en "Mi trabajo". Aditiva: sin colaboradores se comporta igual que antes.
+    'colaboradores_emails'
   ],
   ACTIVIDADES_BITACORA: [
     'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',

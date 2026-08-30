@@ -1084,6 +1084,9 @@
             return '<div class="sigso-py-tarea sigso-py-tarea--mia">' +
               '<div class="sigso-py-tarea__top">' +
                 '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(a.titulo) + '</span>' +
+                // v10 (multi-asignación): si aparezco por colaborador y no como
+                // dueño, se marca "Colaboras" para que quede claro el rol.
+                (a.soy_responsable === false ? '<span class="sigso-badge sigso-badge--neutro">Colaboras</span>' : '') +
                 '<span class="sigso-badge sigso-mt-badge--' + a.semaforo + '">' + Componentes.escaparHtml(a.semaforo_etiqueta) + '</span>' +
               '</div>' +
               '<div class="sigso-py-tarea__meta">' +
@@ -1326,6 +1329,18 @@
     return '<span>Meta ' + Componentes.escaparHtml(String(a.meta_cantidad)) + (a.meta_unidad ? ' ' + Componentes.escaparHtml(a.meta_unidad) : '') + '</span>';
   }
 
+  // v10 (multi-asignación): chip "+ N nombre(s)" con los colaboradores de la
+  // tarea (además del responsable). listarTareas ya los trae resueltos a
+  // {email, nombre}. Sin colaboradores, no muestra nada.
+  function colaboradoresChipHtml_(a) {
+    var colab = a.colaboradores || [];
+    if (!colab.length) return '';
+    var nombres = colab.map(function (c) { return c.nombre || c.email; });
+    var texto = nombres.length <= 2 ? nombres.join(', ') : (nombres.slice(0, 1).join('') + ' +' + (nombres.length - 1));
+    return '<span class="sigso-py-colab-chip" title="' + Componentes.escaparHtml('Colaboran: ' + nombres.join(', ')) + '">' +
+      Iconos.svg('equipo', { tam: 12 }) + ' ' + Componentes.escaparHtml(texto) + '</span>';
+  }
+
   // v10 (Fase G2): el disclosure de horas/nota se comparte entre TODOS los
   // estados con pastillas -- ver leerCheckinExtra_/.sigso-mt-checkin-wrap.
   function checkinExtraHtml_() {
@@ -1399,6 +1414,7 @@
           (a.fecha_compromiso ? '<span>Vence ' + fechaCorta_(a.fecha_compromiso) + '</span>' : '') +
           (a.avance_pct !== '' && a.avance_pct !== undefined && a.avance_pct !== null ? '<span>' + a.avance_pct + '% avance</span>' : '') +
           metaChipHtml_(a) +
+          colaboradoresChipHtml_(a) +
         '</div>' +
         (a.estado === 'BLOQUEADA' ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('pausado', { tam: 14 }) + ' ' + Componentes.escaparHtml(a.bloqueo_motivo) + '</div>' : '') +
         // v9.4: dependencia comprometida -- bandera derivada (nunca mueve
@@ -1470,6 +1486,7 @@
       '<div class="sigso-py-tarea__meta">' +
         '<span>' + (esMia ? '<b>Tú</b>' : Componentes.escaparHtml(a.responsable_nombre || a.responsable_email)) + '</span>' +
         (a.fecha_compromiso ? '<span>Vence ' + fechaCorta_(a.fecha_compromiso) + '</span>' : '') +
+        colaboradoresChipHtml_(a) +
       '</div>' +
       (a.estado === 'BLOQUEADA' ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('pausado', { tam: 14 }) + ' ' + Componentes.escaparHtml(a.bloqueo_motivo) + '</div>' : '') +
       // Las mismas pastillas de siempre, aca doblan de fallback tactil/mobile
@@ -2424,6 +2441,21 @@
           // unidad de la Fase G3. Plegada para no ensuciar el alta rapida
           // de siempre cuando no aplica (mismo criterio que las menciones
           // de la Sala, ver .sigso-py-menciones).
+          // v10 (multi-asignación): colaboradores OPCIONALES además del
+          // responsable único. Plegado, mismo patrón que la meta y las
+          // menciones de la Sala. El responsable es el dueño; los
+          // colaboradores también pueden hacer check-in y ven la tarea en
+          // "Mi trabajo".
+          (opcionesIntegrantes.length
+            ? '<details class="sigso-py-colab-opcional">' +
+                '<summary>Colaboradores (opcional)</summary>' +
+                '<p class="sigso-ayuda">Además del responsable. También podrán hacer check-in y verán la tarea en "Mi trabajo".</p>' +
+                opcionesIntegrantes.map(function (o) {
+                  return '<label class="sigso-campo-check"><input type="checkbox" class="js-py-colab" value="' +
+                    Componentes.escaparHtml(o.valor) + '"> ' + Componentes.escaparHtml(o.texto) + '</label>';
+                }).join('') +
+              '</details>'
+            : '') +
           '<details class="sigso-py-meta-opcional">' +
             '<summary>Meta cuantificable (opcional)</summary>' +
             '<div class="sigso-py-form-fila">' +
@@ -2441,12 +2473,19 @@
     document.getElementById('form-py-tarea').addEventListener('submit', function (evento) {
       var hitoEl = document.getElementById('py-t-hito');
       var dependeEl = document.getElementById('py-t-depende');
+      var responsable = document.getElementById('py-t-responsable').value;
+      // Colaboradores marcados, sin el que ya es responsable (el backend
+      // igual lo excluye, pero así el payload va limpio).
+      var colaboradores = Array.from(fondo.querySelectorAll('.js-py-colab:checked'))
+        .map(function (el) { return el.value; })
+        .filter(function (email) { return email !== responsable; });
       enviarModal_(evento, 'crearTareaProyecto', {
         proyecto_id: proyectoActivoId_,
         hito_id: hitoEl ? hitoEl.value : '',
         depende_de: dependeEl ? dependeEl.value : '',
         titulo: document.getElementById('py-t-titulo').value,
         descripcion: document.getElementById('py-t-descripcion').value,
+        colaboradores_emails: colaboradores,
         responsable_email: document.getElementById('py-t-responsable').value,
         fecha_compromiso: document.getElementById('py-t-fecha').value,
         prioridad: document.getElementById('py-t-prioridad').value,

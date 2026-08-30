@@ -214,7 +214,11 @@ var Actividades = {
       // de la Fase G3. Sin meta, se comporta exactamente igual que antes.
       meta_cantidad: (data.meta_cantidad !== undefined && data.meta_cantidad !== '' && !isNaN(Number(data.meta_cantidad)))
         ? Number(data.meta_cantidad) : '',
-      meta_unidad: String(data.meta_unidad || '').trim()
+      meta_unidad: String(data.meta_unidad || '').trim(),
+      // v10 (multi-asignación): colaboradores ADEMÁS del responsable único.
+      // Se normaliza, se deduplica y se EXCLUYE al responsable (ya está como
+      // dueño, no tiene sentido repetirlo). Se guarda como JSON; vacío => '[]'.
+      colaboradores_emails: JSON.stringify(normalizarColaboradores_(data.colaboradores_emails, responsableEmail))
     };
     agregarFila_(SHEETS.ACTIVIDADES, actividad);
     registrarEventoActividad_(actividad.actividad_id, 'CREADA', contexto, '');
@@ -253,9 +257,11 @@ var Actividades = {
   checkin: function (data, contexto) {
     var actividad = buscarActividad_(data.actividad_id);
     if (!actividad) return errorValidacion_('actividad_id', 'Actividad no encontrada.');
-    // RN-702: solo el responsable hace check-in de su actividad.
-    if (normalizarEmail_(actividad.responsable_email) !== normalizarEmail_(contexto.email)) {
-      return { _forbidden: true, message: 'Solo el responsable puede actualizar esta actividad.' };
+    // RN-702 (ampliada en v10, multi-asignación): el check-in lo hace quien
+    // TRABAJA la tarea -- el responsable (dueño) o cualquier colaborador. El
+    // responsable sigue siendo el único dueño para efectos de accountability.
+    if (!trabajaLaActividad_(actividad, contexto.email)) {
+      return { _forbidden: true, message: 'Solo el responsable o un colaborador pueden actualizar esta actividad.' };
     }
     if (esEstadoTerminal_(actividad.estado)) {
       return errorValidacion_('actividad_id', 'Esta actividad ya esta cerrada.');
@@ -648,7 +654,10 @@ function alcanceActividades_(contexto) {
 
 function puedeVerActividad_(actividad, contexto) {
   var alcance = alcanceActividades_(contexto);
-  return alcance.todas || !!alcance.emails[normalizarEmail_(actividad.responsable_email)];
+  if (alcance.todas || alcance.emails[normalizarEmail_(actividad.responsable_email)]) return true;
+  // v10 (multi-asignación): un colaborador ve la tarea aunque no sea el
+  // responsable ni esté en la jerarquía de quien la mira.
+  return trabajaLaActividad_(actividad, contexto && contexto.email);
 }
 
 // El supervisor asignado de la actividad, o ADM.
@@ -680,6 +689,49 @@ function puedeGestionarEquipo_(actividad, nuevoResponsableEmail, contexto) {
 
 function normalizarEmail_(email) {
   return String(email || '').trim().toLowerCase();
+}
+
+// v10 (multi-asignación): normaliza la entrada de colaboradores (array o
+// JSON string) a una lista limpia -- correos normalizados, sin vacíos, sin
+// duplicados y sin el responsable (que ya es el dueño). Usada al crear.
+function normalizarColaboradores_(entrada, responsableEmail) {
+  var lista = entrada;
+  if (typeof lista === 'string') {
+    try { lista = JSON.parse(lista); } catch (e) { lista = []; }
+  }
+  if (!Array.isArray(lista)) return [];
+  var dueno = normalizarEmail_(responsableEmail);
+  var vistos = {};
+  var salida = [];
+  lista.map(normalizarEmail_).forEach(function (e) {
+    if (!e || e === dueno || vistos[e]) return;
+    vistos[e] = true;
+    salida.push(e);
+  });
+  return salida;
+}
+
+// v10 (multi-asignación): colaboradores de una actividad, como lista de
+// correos normalizados. El campo es un JSON en ACTIVIDADES.colaboradores_emails;
+// tolera vacío/corrupto (se comporta como "sin colaboradores"). Un solo
+// lugar para leerlo, usado por el check-in, la vista y "Mi trabajo".
+function colaboradoresDeActividad_(actividad) {
+  if (!actividad || !actividad.colaboradores_emails) return [];
+  var lista = actividad.colaboradores_emails;
+  if (typeof lista === 'string') {
+    try { lista = JSON.parse(lista); } catch (e) { return []; }
+  }
+  if (!Array.isArray(lista)) return [];
+  return lista.map(normalizarEmail_).filter(function (e) { return !!e; });
+}
+
+// v10 (multi-asignación): ¿este correo trabaja la tarea? -- el responsable
+// (dueño) O un colaborador. Es la base de la RN-702 ampliada: el check-in
+// ya no es exclusivo del responsable, también lo hacen los colaboradores.
+function trabajaLaActividad_(actividad, email) {
+  var e = normalizarEmail_(email);
+  if (normalizarEmail_(actividad.responsable_email) === e) return true;
+  return colaboradoresDeActividad_(actividad).indexOf(e) !== -1;
 }
 
 // --- alertas (§4.6): umbrales -----------------------------------------
