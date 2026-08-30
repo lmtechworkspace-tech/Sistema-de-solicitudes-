@@ -51,6 +51,19 @@
     return llamarApi(urlBackoffice_(), accion, datos || {});
   }
 
+  // v10 (auditoría G, 2026-08-29): una llamada AUXILIAR que falla (timeout,
+  // red, o una acción que aún no está desplegada en el backend) NO debe
+  // tumbar toda la pantalla. Devuelve {ok:false} en vez de rechazar, para
+  // que un Promise.all nunca se caiga entero por una pieza secundaria -- la
+  // pieza ESENCIAL (getDetalle) se sigue validando por su propio .ok. Este
+  // era el bug de "No se pudo conectar para abrir el proyecto": bastaba con
+  // que UNA de las 6 llamadas paralelas fallara para perder todo el detalle.
+  function apiSeguro_(accion, datos) {
+    return api_(accion, datos).catch(function (err) {
+      return { ok: false, message: (err && err.message) || 'No se pudo conectar.' };
+    });
+  }
+
   var SALUD_ETIQUETA = { normal: 'Normal', riesgo: 'En riesgo', critico: 'Crítico' };
   // v14.0 (piel nueva): salud -> tono del punto de estado (Componentes.punto).
   var SALUD_TONO = { normal: 'ok', riesgo: 'riesgo', critico: 'critico' };
@@ -153,9 +166,12 @@
     if (!cont) return;
     cont.innerHTML = esqueletoPortafolio_();
     var filtros = filtroEstadoPortafolio_ ? { estado: filtroEstadoPortafolio_ } : {};
+    // v10 (auditoría G): el resumen ejecutivo es secundario -- si falla, el
+    // portafolio (lo esencial) igual se ve. apiSeguro_ evita que un fallo del
+    // resumen tumbe toda la lista de proyectos.
     Promise.all([
-      api_('listarProyectos', filtros),
-      api_('getResumenPortafolioProyectos', {})
+      apiSeguro_('listarProyectos', filtros),
+      apiSeguro_('getResumenPortafolioProyectos', {})
     ]).then(function (respuestas) {
       var rProyectos = respuestas[0], rResumen = respuestas[1];
       if (!rProyectos || !rProyectos.ok) {
@@ -166,8 +182,6 @@
       portafolioCargado_ = true;
       resumenPortafolioActual_ = (rResumen && rResumen.ok) ? rResumen.data : null;
       pintarPortafolio_(cont, proyectosPortafolioSinFiltrarSalud_);
-    }).catch(function () {
-      cont.innerHTML = Componentes.alerta('No se pudo conectar para cargar los proyectos.', 'error');
     });
   }
 
@@ -581,7 +595,11 @@
     pestanaActiva_ = id;
     var cont = panelProyectos_();
     if (!cont || !datosDetalleActual_) { refrescarDetalle_(); return; }
-    pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala, datosDetalleActual_.miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento);
+    // v10 (auditoría G): el Cronograma carga su data pesada (bitácora +
+    // rendimiento) de forma perezosa la primera vez -- las demás pestañas
+    // repintan desde cache al instante.
+    if (id === 'cronograma') { cargarDatosCronograma_(cont); }
+    else { pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala, datosDetalleActual_.miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento); }
     // v10 (Fase D, propuesta 09): marca "vi la Sala" a ahora -- de fondo, sin
     // bloquear el repintado ni volver a pedir el detalle. El resumen que se
     // acaba de mostrar usa la marca de tiempo ANTERIOR (ya estaba en cache);
@@ -595,37 +613,66 @@
     var cont = panelProyectos_();
     if (!cont || !proyectoActivoId_) return;
     cont.innerHTML = Componentes.cargando('Cargando proyecto...');
+    // v10 (auditoría G): guarda contra carreras -- si el usuario cambia de
+    // proyecto (o vuelve al portafolio) antes de que responda, la respuesta
+    // vieja no debe pisar la pantalla nueva.
+    var idAlPedir = proyectoActivoId_;
 
+    // v10 (auditoría G): solo lo ESENCIAL para el detalle se pide al abrir
+    // (getDetalle + tareas + sala; miPerfil ya viene cacheado). La bitácora
+    // y el rendimiento -- que escanean toda ACTIVIDADES_BITACORA y solo los
+    // usa la pestaña Cronograma -- se cargan LAZY al abrir esa pestaña
+    // (cargarDatosCronograma_). Antes eran 6 llamadas en paralelo por
+    // apertura; Apps Script las ejecuta EN SERIE por usuario, así que 6
+    // encoladas + arranque en frío hacían que la última pasara el timeout y
+    // Promise.all se cayera entero. Ahora son 3 (+1 cacheada).
     Promise.all([
-      api_('getDetalleProyecto', { proyecto_id: proyectoActivoId_ }),
-      api_('listarTareasProyecto', { proyecto_id: proyectoActivoId_ }),
-      api_('listarSalaProyecto', { proyecto_id: proyectoActivoId_ }),
-      // v10 (Fase E, "Carta de Dedicación"): se pide junto con el resto --
-      // mismo criterio que tareas/sala, que tampoco esperan a que se abra
-      // su pestaña. Son pocas filas por proyecto (Actividades.gs ya opera
-      // asi con su propia bitacora), no vale la pena un fetch aparte.
-      api_('listarBitacoraProyecto', { proyecto_id: proyectoActivoId_ }),
-      // v10 (Fase G3, "los números de rendimiento"): mismo criterio -- se
-      // pide junto con el resto para que el KPI de la Dedicación no espere
-      // un segundo viaje al servidor al abrir esa pestaña.
-      api_('obtenerRendimientoProyecto', { proyecto_id: proyectoActivoId_ }),
+      apiSeguro_('getDetalleProyecto', { proyecto_id: proyectoActivoId_ }),
+      apiSeguro_('listarTareasProyecto', { proyecto_id: proyectoActivoId_ }),
+      apiSeguro_('listarSalaProyecto', { proyecto_id: proyectoActivoId_ }),
       miPerfil_()
     ]).then(function (respuestas) {
-      var rDetalle = respuestas[0], rTareas = respuestas[1], rSala = respuestas[2], rBitacora = respuestas[3],
-        rRendimiento = respuestas[4], perfil = respuestas[5];
+      if (idAlPedir !== proyectoActivoId_) return; // el usuario ya se movió
+      var rDetalle = respuestas[0], rTareas = respuestas[1], rSala = respuestas[2], perfil = respuestas[3];
       if (!rDetalle || !rDetalle.ok) {
         cont.innerHTML = Componentes.alerta((rDetalle && rDetalle.message) || 'No se pudo abrir el proyecto.', 'error');
         return;
       }
       var tareas = (rTareas && rTareas.ok) ? rTareas.data : [];
       var sala = (rSala && rSala.ok) ? rSala.data : [];
-      var bitacora = (rBitacora && rBitacora.ok) ? rBitacora.data : [];
-      var rendimiento = (rRendimiento && rRendimiento.ok) ? rRendimiento.data : null;
       var miEmail = normalizarEmail_(perfil && perfil.email);
-      datosDetalleActual_ = { detalle: rDetalle.data, tareas: tareas, sala: sala, bitacora: bitacora, rendimiento: rendimiento, miEmail: miEmail };
-      pintarDetalle_(cont, rDetalle.data, tareas, sala, miEmail, bitacora, rendimiento);
-    }).catch(function () {
-      cont.innerHTML = Componentes.alerta('No se pudo conectar para abrir el proyecto.', 'error');
+      // bitacora/rendimiento = undefined => "aún no cargados" (los carga
+      // cargarDatosCronograma_ la primera vez que se abre esa pestaña).
+      datosDetalleActual_ = { detalle: rDetalle.data, tareas: tareas, sala: sala, bitacora: undefined, rendimiento: undefined, miEmail: miEmail };
+      pintarDetalle_(cont, rDetalle.data, tareas, sala, miEmail, undefined, undefined);
+      if (pestanaActiva_ === 'cronograma') cargarDatosCronograma_(cont);
+    });
+    // Sin .catch: apiSeguro_ y miPerfil_ nunca rechazan -- un fallo real
+    // llega como {ok:false} y se muestra con su mensaje arriba.
+  }
+
+  // v10 (auditoría G): carga perezosa de la bitácora + el rendimiento (lo
+  // caro), solo cuando de verdad se abre el Cronograma. Si ya se cargaron en
+  // esta apertura del proyecto, repinta desde cache sin red.
+  function cargarDatosCronograma_(cont) {
+    if (!datosDetalleActual_) return;
+    if (datosDetalleActual_.bitacora !== undefined) {
+      pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala,
+        datosDetalleActual_.miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento);
+      return;
+    }
+    var idAlPedir = proyectoActivoId_;
+    Promise.all([
+      apiSeguro_('listarBitacoraProyecto', { proyecto_id: proyectoActivoId_ }),
+      apiSeguro_('obtenerRendimientoProyecto', { proyecto_id: proyectoActivoId_ })
+    ]).then(function (r) {
+      if (!datosDetalleActual_ || idAlPedir !== proyectoActivoId_) return;
+      datosDetalleActual_.bitacora = (r[0] && r[0].ok) ? r[0].data : [];
+      datosDetalleActual_.rendimiento = (r[1] && r[1].ok) ? r[1].data : null;
+      if (pestanaActiva_ === 'cronograma') {
+        pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala,
+          datosDetalleActual_.miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento);
+      }
     });
   }
 
@@ -668,7 +715,12 @@
     else if (pestanaActiva_ === 'sala') cuerpo = pintarSala_(sala, detalle);
     else if (pestanaActiva_ === 'tareas') cuerpo = pintarTareas_(tareas, detalle, puedeGestionar, miEmail);
     else if (pestanaActiva_ === 'hitos') cuerpo = pintarHitos_(detalle, puedeGestionar);
-    else if (pestanaActiva_ === 'cronograma') cuerpo = pintarCronograma_(detalle, tareas, bitacora || [], rendimiento);
+    else if (pestanaActiva_ === 'cronograma') {
+      // v10 (auditoría G): bitacora === undefined => todavía cargando (lazy).
+      cuerpo = (bitacora === undefined)
+        ? Componentes.cargando('Cargando cronograma...')
+        : pintarCronograma_(detalle, tareas, bitacora, rendimiento);
+    }
     else if (pestanaActiva_ === 'entregables') cuerpo = pintarEntregables_(detalle, puedeGestionar);
     else if (pestanaActiva_ === 'riesgos') cuerpo = pintarRiesgos_(detalle, puedeGestionar);
     else if (pestanaActiva_ === 'equipo') cuerpo = pintarEquipo_(detalle, puedeGestionar);
