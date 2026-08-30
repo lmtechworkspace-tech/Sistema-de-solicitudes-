@@ -3117,10 +3117,23 @@
    mano. Misma paleta semantica que el resto del modulo (--ok/--alerta/
    --critico/--info), sin colores nuevos; "asignada" es la unica marca sin
    equivalente previo, por eso usa el acento primario en vez de semaforo. */
+/* Barra de controles de la carta (rango, nav, filtros, imprimir). */
+.sigso-py-ded-controles { display: flex; align-items: center; gap: var(--esp-2); margin-bottom: var(--esp-3); flex-wrap: wrap; }
+.sigso-py-ded-controles .sigso-py-ded-ctrl { margin: 0; }
+.sigso-py-ded-controles .sigso-py-ded-ctrl select { min-width: 8.5rem; }
+.sigso-py-ded-controles .sigso-boton { flex: 0 0 auto; }
+.sigso-py-ded-rangotxt { font-variant-numeric: tabular-nums; }
+.sigso-py-ded-controles .js-py-ded-imprimir { margin-left: auto; }
+
 .sigso-py-ded-nav { display: flex; align-items: center; gap: var(--esp-3); margin-bottom: var(--esp-3); flex-wrap: wrap; }
 .sigso-py-ded-scroll { overflow-x: auto; }
-.sigso-py-ded { display: flex; flex-direction: column; gap: 2px; min-width: max-content; }
-.sigso-py-ded-fila { display: grid; grid-template-columns: 11rem repeat(14, 1.9rem); gap: 2px; align-items: center; }
+/* Ancho de columnas como variables: --dias lo inyecta el JS (cuántos días
+   trae el rango), y las filas comparten la misma plantilla de grilla. */
+.sigso-py-ded { display: flex; flex-direction: column; gap: 2px; min-width: max-content; --dias: 14; --col-tarea: 12rem; --col-dia: 1.9rem; --col-total: 3.4rem; }
+.sigso-py-ded-fila {
+  display: grid; grid-template-columns: var(--col-tarea) repeat(var(--dias), var(--col-dia)) var(--col-total);
+  gap: 2px; align-items: center;
+}
 .sigso-py-ded-cabecera { margin-bottom: var(--esp-1); }
 .sigso-py-ded-etiqueta { padding-right: var(--esp-2); display: flex; flex-direction: column; min-width: 0; }
 .sigso-py-ded-etiqueta .t { font-size: var(--texto-sm); color: var(--texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -3130,20 +3143,45 @@
   padding-bottom: 0.2rem;
 }
 .sigso-py-ded-dia.we { color: var(--texto-2); }
+.sigso-py-ded-dia.feriado { color: var(--alerta); }
 .sigso-py-ded-dia.hoy { color: var(--primario); font-weight: 600; }
+.sigso-py-ded-dia.mes { border-left: 2px solid var(--borde-fuerte); }
+.sigso-py-ded-dia b { display: block; font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.02em; color: var(--texto-3); }
+/* Columna de totales (por tarea, cabecera y pie). */
+.sigso-py-ded-total {
+  font-size: var(--texto-xs); font-variant-numeric: tabular-nums; color: var(--texto-2);
+  text-align: right; padding-left: 0.2rem; white-space: nowrap; font-weight: 600;
+}
+.sigso-py-ded-cabecera .sigso-py-ded-total { color: var(--texto-3); font-weight: 600; text-transform: uppercase; font-size: 0.6rem; letter-spacing: 0.03em; }
 .sigso-py-ded-celda {
-  aspect-ratio: 1 / 1; border-radius: var(--radio-sm); background: var(--superficie-2);
+  aspect-ratio: 1 / 1; border-radius: var(--radio-sm); background: var(--superficie-2); --hcol: var(--info);
   display: flex; align-items: center; justify-content: center;
 }
 .sigso-py-ded-celda.we { background: color-mix(in srgb, var(--superficie-2), var(--fondo-pagina) 40%); }
+.sigso-py-ded-celda.feriado { background: repeating-linear-gradient(45deg, var(--superficie-2), var(--superficie-2) 3px, var(--alerta-suave) 3px, var(--alerta-suave) 6px); }
 .sigso-py-ded-celda.hoy { outline: 2px solid var(--primario); outline-offset: -2px; }
 .sigso-py-ded-celda span { font-size: 0.65rem; font-weight: 700; line-height: 1; }
-.sigso-py-ded-celda.e-asig { background: var(--primario-suave); color: var(--primario); }
-.sigso-py-ded-celda.e-proc { background: var(--info-suave); color: var(--info); }
-.sigso-py-ded-celda.e-done { background: var(--ok-suave); color: var(--ok); }
+.sigso-py-ded-celda.e-asig { background: var(--primario-suave); color: var(--primario); --hcol: var(--primario); }
+.sigso-py-ded-celda.e-proc { background: var(--info-suave); color: var(--info); --hcol: var(--info); }
+.sigso-py-ded-celda.e-done { background: var(--ok-suave); color: var(--ok); --hcol: var(--ok); }
 .sigso-py-ded-celda.e-wait { background: var(--superficie-2); color: var(--texto-3); border: 1px dashed var(--borde-fuerte); }
-.sigso-py-ded-celda.e-bloq { background: var(--critico-suave); color: var(--critico); }
-.sigso-py-ded-celda.e-late { background: var(--alerta-suave); color: var(--alerta); }
+.sigso-py-ded-celda.e-bloq { background: var(--critico-suave); color: var(--critico); --hcol: var(--critico); }
+.sigso-py-ded-celda.e-late { background: var(--alerta-suave); color: var(--alerta); --hcol: var(--alerta); }
+/* Heatmap: la intensidad de fondo crece con las horas del día (h1..h4).
+   Va DESPUÉS de las reglas e-* para ganar en orden de cascada. */
+.sigso-py-ded-celda.h1 { background: color-mix(in srgb, var(--hcol) 22%, var(--superficie)); }
+.sigso-py-ded-celda.h2 { background: color-mix(in srgb, var(--hcol) 45%, var(--superficie)); }
+.sigso-py-ded-celda.h3 { background: color-mix(in srgb, var(--hcol) 68%, var(--superficie)); }
+.sigso-py-ded-celda.h4 { background: color-mix(in srgb, var(--hcol) 92%, var(--superficie)); }
+.sigso-py-ded-celda.h3 span, .sigso-py-ded-celda.h4 span { color: #fff; }
+/* Fila de subtotal por persona (agrupar) y fila-pie de horas por día. */
+.sigso-py-ded-grupo { margin-top: var(--esp-2); }
+.sigso-py-ded-grupo .sigso-py-ded-etiqueta .t { font-weight: 700; color: var(--texto); }
+.sigso-py-ded-grupo .sigso-py-ded-celda { background: transparent; }
+.sigso-py-ded-footer { margin-top: var(--esp-1); border-top: 2px solid var(--borde-fuerte); padding-top: 2px; }
+.sigso-py-ded-footer .sigso-py-ded-etiqueta .t { font-weight: 600; color: var(--texto-2); font-size: var(--texto-xs); text-transform: uppercase; letter-spacing: 0.03em; }
+.sigso-py-ded-celda--total { background: transparent; }
+.sigso-py-ded-celda--total span { font-size: 0.6rem; font-weight: 600; color: var(--texto-2); }
 .sigso-py-ded-leyenda {
   display: flex; gap: var(--esp-4); flex-wrap: wrap; margin-top: var(--esp-3);
   font-size: var(--texto-xs); color: var(--texto-3); align-items: center;
@@ -3156,8 +3194,31 @@
 .sigso-py-ded-sw--wait { background: var(--superficie-2); border: 1px dashed var(--borde-fuerte); }
 .sigso-py-ded-sw--bloq { background: var(--critico-suave); border: 1px solid var(--critico); }
 .sigso-py-ded-sw--late { background: var(--alerta-suave); border: 1px solid var(--alerta); }
+.sigso-py-ded-heatleg { display: inline-flex; align-items: center; gap: 3px; }
+.sigso-py-ded-heatleg .hl { display: inline-block; width: 0.8rem; height: 0.8rem; border-radius: 3px; --hcol: var(--info); }
+.sigso-py-ded-heatleg .hl.h1 { background: color-mix(in srgb, var(--hcol) 22%, var(--superficie)); }
+.sigso-py-ded-heatleg .hl.h2 { background: color-mix(in srgb, var(--hcol) 45%, var(--superficie)); }
+.sigso-py-ded-heatleg .hl.h3 { background: color-mix(in srgb, var(--hcol) 68%, var(--superficie)); }
+.sigso-py-ded-heatleg .hl.h4 { background: color-mix(in srgb, var(--hcol) 92%, var(--superficie)); }
 @media (max-width: 640px) {
-  .sigso-py-ded-fila { grid-template-columns: 8rem repeat(14, 1.6rem); }
+  .sigso-py-ded { --col-tarea: 8rem; --col-dia: 1.6rem; --col-total: 2.8rem; }
+}
+
+/* Vista imprimible de la carta (Descargar / Imprimir). En pantalla el
+   contenedor está oculto; en impresión se oculta todo lo demás y la carta
+   se dibuja en horizontal, con los colores forzados a imprimirse. */
+#sigso-print-root { display: none; }
+.sigso-print-cab h1 { margin: 0 0 2px; font-size: 1.2rem; }
+.sigso-print-cab .sigso-print-proy { margin: 0; font-weight: 600; }
+.sigso-print-cab .sigso-print-sub { margin: 0 0 var(--esp-3); color: var(--texto-3); font-size: var(--texto-xs); }
+@media print {
+  @page { size: landscape; margin: 1cm; }
+  body.sigso-imprimiendo > *:not(#sigso-print-root) { display: none !important; }
+  body.sigso-imprimiendo #sigso-print-root { display: block; color: #000; }
+  #sigso-print-root, #sigso-print-root * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #sigso-print-root .sigso-py-ded-scroll { overflow: visible; }
+  #sigso-print-root .sigso-py-ded { --col-tarea: 9rem; --col-dia: 1.15rem; --col-total: 2.8rem; font-size: 9px; }
+  #sigso-print-root .sigso-py-ded-celda span { font-size: 8px; }
 }
 
 /* v10 (Fase C, "vista calendario"): grilla de mes, sin libreria -- mismo

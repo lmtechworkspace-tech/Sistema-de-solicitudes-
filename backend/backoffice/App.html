@@ -3778,10 +3778,23 @@ button {
    mano. Misma paleta semantica que el resto del modulo (--ok/--alerta/
    --critico/--info), sin colores nuevos; "asignada" es la unica marca sin
    equivalente previo, por eso usa el acento primario en vez de semaforo. */
+/* Barra de controles de la carta (rango, nav, filtros, imprimir). */
+.sigso-py-ded-controles { display: flex; align-items: center; gap: var(--esp-2); margin-bottom: var(--esp-3); flex-wrap: wrap; }
+.sigso-py-ded-controles .sigso-py-ded-ctrl { margin: 0; }
+.sigso-py-ded-controles .sigso-py-ded-ctrl select { min-width: 8.5rem; }
+.sigso-py-ded-controles .sigso-boton { flex: 0 0 auto; }
+.sigso-py-ded-rangotxt { font-variant-numeric: tabular-nums; }
+.sigso-py-ded-controles .js-py-ded-imprimir { margin-left: auto; }
+
 .sigso-py-ded-nav { display: flex; align-items: center; gap: var(--esp-3); margin-bottom: var(--esp-3); flex-wrap: wrap; }
 .sigso-py-ded-scroll { overflow-x: auto; }
-.sigso-py-ded { display: flex; flex-direction: column; gap: 2px; min-width: max-content; }
-.sigso-py-ded-fila { display: grid; grid-template-columns: 11rem repeat(14, 1.9rem); gap: 2px; align-items: center; }
+/* Ancho de columnas como variables: --dias lo inyecta el JS (cuántos días
+   trae el rango), y las filas comparten la misma plantilla de grilla. */
+.sigso-py-ded { display: flex; flex-direction: column; gap: 2px; min-width: max-content; --dias: 14; --col-tarea: 12rem; --col-dia: 1.9rem; --col-total: 3.4rem; }
+.sigso-py-ded-fila {
+  display: grid; grid-template-columns: var(--col-tarea) repeat(var(--dias), var(--col-dia)) var(--col-total);
+  gap: 2px; align-items: center;
+}
 .sigso-py-ded-cabecera { margin-bottom: var(--esp-1); }
 .sigso-py-ded-etiqueta { padding-right: var(--esp-2); display: flex; flex-direction: column; min-width: 0; }
 .sigso-py-ded-etiqueta .t { font-size: var(--texto-sm); color: var(--texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -3791,20 +3804,45 @@ button {
   padding-bottom: 0.2rem;
 }
 .sigso-py-ded-dia.we { color: var(--texto-2); }
+.sigso-py-ded-dia.feriado { color: var(--alerta); }
 .sigso-py-ded-dia.hoy { color: var(--primario); font-weight: 600; }
+.sigso-py-ded-dia.mes { border-left: 2px solid var(--borde-fuerte); }
+.sigso-py-ded-dia b { display: block; font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.02em; color: var(--texto-3); }
+/* Columna de totales (por tarea, cabecera y pie). */
+.sigso-py-ded-total {
+  font-size: var(--texto-xs); font-variant-numeric: tabular-nums; color: var(--texto-2);
+  text-align: right; padding-left: 0.2rem; white-space: nowrap; font-weight: 600;
+}
+.sigso-py-ded-cabecera .sigso-py-ded-total { color: var(--texto-3); font-weight: 600; text-transform: uppercase; font-size: 0.6rem; letter-spacing: 0.03em; }
 .sigso-py-ded-celda {
-  aspect-ratio: 1 / 1; border-radius: var(--radio-sm); background: var(--superficie-2);
+  aspect-ratio: 1 / 1; border-radius: var(--radio-sm); background: var(--superficie-2); --hcol: var(--info);
   display: flex; align-items: center; justify-content: center;
 }
 .sigso-py-ded-celda.we { background: color-mix(in srgb, var(--superficie-2), var(--fondo-pagina) 40%); }
+.sigso-py-ded-celda.feriado { background: repeating-linear-gradient(45deg, var(--superficie-2), var(--superficie-2) 3px, var(--alerta-suave) 3px, var(--alerta-suave) 6px); }
 .sigso-py-ded-celda.hoy { outline: 2px solid var(--primario); outline-offset: -2px; }
 .sigso-py-ded-celda span { font-size: 0.65rem; font-weight: 700; line-height: 1; }
-.sigso-py-ded-celda.e-asig { background: var(--primario-suave); color: var(--primario); }
-.sigso-py-ded-celda.e-proc { background: var(--info-suave); color: var(--info); }
-.sigso-py-ded-celda.e-done { background: var(--ok-suave); color: var(--ok); }
+.sigso-py-ded-celda.e-asig { background: var(--primario-suave); color: var(--primario); --hcol: var(--primario); }
+.sigso-py-ded-celda.e-proc { background: var(--info-suave); color: var(--info); --hcol: var(--info); }
+.sigso-py-ded-celda.e-done { background: var(--ok-suave); color: var(--ok); --hcol: var(--ok); }
 .sigso-py-ded-celda.e-wait { background: var(--superficie-2); color: var(--texto-3); border: 1px dashed var(--borde-fuerte); }
-.sigso-py-ded-celda.e-bloq { background: var(--critico-suave); color: var(--critico); }
-.sigso-py-ded-celda.e-late { background: var(--alerta-suave); color: var(--alerta); }
+.sigso-py-ded-celda.e-bloq { background: var(--critico-suave); color: var(--critico); --hcol: var(--critico); }
+.sigso-py-ded-celda.e-late { background: var(--alerta-suave); color: var(--alerta); --hcol: var(--alerta); }
+/* Heatmap: la intensidad de fondo crece con las horas del día (h1..h4).
+   Va DESPUÉS de las reglas e-* para ganar en orden de cascada. */
+.sigso-py-ded-celda.h1 { background: color-mix(in srgb, var(--hcol) 22%, var(--superficie)); }
+.sigso-py-ded-celda.h2 { background: color-mix(in srgb, var(--hcol) 45%, var(--superficie)); }
+.sigso-py-ded-celda.h3 { background: color-mix(in srgb, var(--hcol) 68%, var(--superficie)); }
+.sigso-py-ded-celda.h4 { background: color-mix(in srgb, var(--hcol) 92%, var(--superficie)); }
+.sigso-py-ded-celda.h3 span, .sigso-py-ded-celda.h4 span { color: #fff; }
+/* Fila de subtotal por persona (agrupar) y fila-pie de horas por día. */
+.sigso-py-ded-grupo { margin-top: var(--esp-2); }
+.sigso-py-ded-grupo .sigso-py-ded-etiqueta .t { font-weight: 700; color: var(--texto); }
+.sigso-py-ded-grupo .sigso-py-ded-celda { background: transparent; }
+.sigso-py-ded-footer { margin-top: var(--esp-1); border-top: 2px solid var(--borde-fuerte); padding-top: 2px; }
+.sigso-py-ded-footer .sigso-py-ded-etiqueta .t { font-weight: 600; color: var(--texto-2); font-size: var(--texto-xs); text-transform: uppercase; letter-spacing: 0.03em; }
+.sigso-py-ded-celda--total { background: transparent; }
+.sigso-py-ded-celda--total span { font-size: 0.6rem; font-weight: 600; color: var(--texto-2); }
 .sigso-py-ded-leyenda {
   display: flex; gap: var(--esp-4); flex-wrap: wrap; margin-top: var(--esp-3);
   font-size: var(--texto-xs); color: var(--texto-3); align-items: center;
@@ -3817,8 +3855,31 @@ button {
 .sigso-py-ded-sw--wait { background: var(--superficie-2); border: 1px dashed var(--borde-fuerte); }
 .sigso-py-ded-sw--bloq { background: var(--critico-suave); border: 1px solid var(--critico); }
 .sigso-py-ded-sw--late { background: var(--alerta-suave); border: 1px solid var(--alerta); }
+.sigso-py-ded-heatleg { display: inline-flex; align-items: center; gap: 3px; }
+.sigso-py-ded-heatleg .hl { display: inline-block; width: 0.8rem; height: 0.8rem; border-radius: 3px; --hcol: var(--info); }
+.sigso-py-ded-heatleg .hl.h1 { background: color-mix(in srgb, var(--hcol) 22%, var(--superficie)); }
+.sigso-py-ded-heatleg .hl.h2 { background: color-mix(in srgb, var(--hcol) 45%, var(--superficie)); }
+.sigso-py-ded-heatleg .hl.h3 { background: color-mix(in srgb, var(--hcol) 68%, var(--superficie)); }
+.sigso-py-ded-heatleg .hl.h4 { background: color-mix(in srgb, var(--hcol) 92%, var(--superficie)); }
 @media (max-width: 640px) {
-  .sigso-py-ded-fila { grid-template-columns: 8rem repeat(14, 1.6rem); }
+  .sigso-py-ded { --col-tarea: 8rem; --col-dia: 1.6rem; --col-total: 2.8rem; }
+}
+
+/* Vista imprimible de la carta (Descargar / Imprimir). En pantalla el
+   contenedor está oculto; en impresión se oculta todo lo demás y la carta
+   se dibuja en horizontal, con los colores forzados a imprimirse. */
+#sigso-print-root { display: none; }
+.sigso-print-cab h1 { margin: 0 0 2px; font-size: 1.2rem; }
+.sigso-print-cab .sigso-print-proy { margin: 0; font-weight: 600; }
+.sigso-print-cab .sigso-print-sub { margin: 0 0 var(--esp-3); color: var(--texto-3); font-size: var(--texto-xs); }
+@media print {
+  @page { size: landscape; margin: 1cm; }
+  body.sigso-imprimiendo > *:not(#sigso-print-root) { display: none !important; }
+  body.sigso-imprimiendo #sigso-print-root { display: block; color: #000; }
+  #sigso-print-root, #sigso-print-root * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #sigso-print-root .sigso-py-ded-scroll { overflow: visible; }
+  #sigso-print-root .sigso-py-ded { --col-tarea: 9rem; --col-dia: 1.15rem; --col-total: 2.8rem; font-size: 9px; }
+  #sigso-print-root .sigso-py-ded-celda span { font-size: 8px; }
 }
 
 /* v10 (Fase C, "vista calendario"): grilla de mes, sin libreria -- mismo
@@ -16635,7 +16696,7 @@ var Iconos = (function () {
     // de unidades diferentes (imágenes con piezas, por ejemplo).
     cont.innerHTML = toggle + pintarCronogramaDedicacion_(null, tareas, miBitacoraCache_, null);
     wireMiTrabajoToggle_(cont, { tareas: tareas });
-    wireDedicacionNav_(cont, function () { pintarMiDedicacion_(cont, toggle, tareas); });
+    wireCartaControles_(cont, function () { pintarMiDedicacion_(cont, toggle, tareas); }, null);
   }
 
   function pintarMiTrabajoLista_(cont, toggle, datos) {
@@ -17221,6 +17282,41 @@ var Iconos = (function () {
   // nueva de este archivo.
   var dedicacionAncla_ = null;
   var DEDICACION_DIAS_VENTANA = 14;
+  // v10 (auditoría G, carta de dedicación pro): controles de la carta.
+  // rango: cuántos días muestra ('todo' = todo el proyecto). agrupar: filas
+  // por persona. filtroPersona/filtroEstado: acotan qué tareas se ven.
+  var dedRango_ = 'quincena';       // semana | quincena | mes | todo
+  var DED_RANGO_DIAS = { semana: 7, quincena: 14, mes: 30 };
+  var dedAgruparPersona_ = false;
+  var dedFiltroPersona_ = '';
+  var dedFiltroEstado_ = '';        // '' | abiertas | atrasadas
+  // Heatmap: horas de un día -> nivel de intensidad (1..4). Cortes absolutos
+  // sobre una jornada ~8h: cuarto / medio / casi todo / día completo o más.
+  function nivelHoras_(horas) {
+    if (!horas || horas <= 0) return 0;
+    if (horas <= 2) return 1;
+    if (horas <= 4) return 2;
+    if (horas <= 6) return 3;
+    return 4;
+  }
+
+  // v10 (auditoría G): cablea TODOS los controles de la carta (rango,
+  // agrupar, filtros, imprimir) además de la navegación de ventana. Se usa
+  // igual en el Cronograma de un proyecto y en "Mi dedicación" -- solo
+  // cambian `alRepintar` y el `detalle` (para el título del reporte).
+  function wireCartaControles_(cont, alRepintar, detalle) {
+    wireDedicacionNav_(cont, alRepintar);
+    var rango = cont.querySelector('#py-ded-rango');
+    if (rango) rango.addEventListener('change', function () { dedRango_ = rango.value; alRepintar(); });
+    var agr = cont.querySelector('.js-py-ded-agrupar');
+    if (agr) agr.addEventListener('change', function () { dedAgruparPersona_ = agr.checked; alRepintar(); });
+    var per = cont.querySelector('#py-ded-persona');
+    if (per) per.addEventListener('change', function () { dedFiltroPersona_ = per.value; alRepintar(); });
+    var est = cont.querySelector('#py-ded-estado');
+    if (est) est.addEventListener('change', function () { dedFiltroEstado_ = est.value; alRepintar(); });
+    var imp = cont.querySelector('.js-py-ded-imprimir');
+    if (imp) imp.addEventListener('click', function () { imprimirCartaDedicacion_(cont, detalle); });
+  }
 
   // v10 (Fase G3, "vista transversal por recurso"): la navegación de
   // ventana se comparte entre el Cronograma de un proyecto y "Mi
@@ -17276,6 +17372,128 @@ var Iconos = (function () {
     return '<div class="sigso-py-kpis">' + kpis.join('') + '</div>';
   }
 
+  // --- helpers de la carta de dedicación (auditoría G, versión pro) --------
+  var MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  function redond1_(n) { return Math.round(n * 10) / 10; }
+  function fechaDeClave_(c) { var p = String(c).split('-'); return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])); }
+
+  // Días visibles según el rango elegido. 'todo' abarca de la fecha más
+  // temprana conocida (inicio del proyecto / creación de tareas / primera
+  // bitácora) a la más tardía (hoy / objetivo / compromisos), con un tope
+  // de 370 columnas para no dibujar ventanas absurdas.
+  function construirDiasCarta_(detalle, tareas, bitacora, feriadosSet, hoyClave) {
+    function dia(d) {
+      var c = claveDia_(d.getFullYear(), d.getMonth(), d.getDate());
+      return { clave: c, dia: d.getDate(), mes: d.getMonth(), primeroMes: d.getDate() === 1,
+        we: (d.getDay() === 0 || d.getDay() === 6), feriado: !!feriadosSet[c], hoy: c === hoyClave };
+    }
+    var dias = [];
+    if (dedRango_ === 'todo') {
+      var claves = [hoyClave];
+      if (detalle && detalle.proyecto) {
+        if (detalle.proyecto.fecha_inicio) claves.push(claveDeIso_(detalle.proyecto.fecha_inicio));
+        if (detalle.proyecto.fecha_objetivo) claves.push(claveDeIso_(detalle.proyecto.fecha_objetivo));
+      }
+      tareas.forEach(function (a) {
+        if (a.fecha_creacion) claves.push(claveDeIso_(a.fecha_creacion));
+        if (a.fecha_compromiso) claves.push(claveDeIso_(a.fecha_compromiso));
+      });
+      bitacora.forEach(function (b) { var k = claveDeIso_(b.timestamp); if (k) claves.push(k); });
+      claves = claves.filter(Boolean).sort();
+      var dIni = fechaDeClave_(claves[0]), dFin = fechaDeClave_(claves[claves.length - 1]);
+      if ((dFin - dIni) / 86400000 > 369) dIni = new Date(dFin.getTime() - 369 * 86400000);
+      for (var d = new Date(dIni); d <= dFin; d.setDate(d.getDate() + 1)) dias.push(dia(new Date(d)));
+    } else {
+      var n = DED_RANGO_DIAS[dedRango_] || 14;
+      for (var i = n - 1; i >= 0; i--) {
+        dias.push(dia(new Date(dedicacionAncla_.getFullYear(), dedicacionAncla_.getMonth(), dedicacionAncla_.getDate() - i)));
+      }
+    }
+    return dias;
+  }
+
+  function diaCabeceraHtml_(x) {
+    return '<div class="sigso-py-ded-dia' + (x.we ? ' we' : '') + (x.feriado ? ' feriado' : '') +
+      (x.hoy ? ' hoy' : '') + (x.primeroMes ? ' mes' : '') + '" title="' + fechaCorta_(x.clave) + '">' +
+      (x.primeroMes ? '<b>' + MESES_CORTOS[x.mes] + '</b>' : '') + x.dia + '</div>';
+  }
+
+  // Barra de controles: rango, navegación de ventana, agrupar por persona,
+  // filtros y el botón de imprimir/descargar.
+  function cartaControlesHtml_(tareas, dias) {
+    var esTodo = dedRango_ === 'todo';
+    var desdeTxt = fechaCorta_(dias[0].clave), hastaTxt = fechaCorta_(dias[dias.length - 1].clave);
+    var rangoSel = Componentes.campoSelect({ id: 'py-ded-rango', valor: dedRango_, placeholder: false, claseCampo: 'sigso-py-ded-ctrl',
+      opciones: [{ valor: 'semana', texto: 'Semana' }, { valor: 'quincena', texto: '2 semanas' }, { valor: 'mes', texto: 'Mes' }, { valor: 'todo', texto: 'Todo el proyecto' }] });
+    var vistos = {}, personas = [];
+    tareas.forEach(function (a) {
+      var e = normalizarEmail_(a.responsable_email);
+      if (e && !vistos[e]) { vistos[e] = true; personas.push({ valor: e, texto: a.responsable_nombre || a.responsable_email }); }
+    });
+    var filtroPersona = personas.length > 1
+      ? Componentes.campoSelect({ id: 'py-ded-persona', valor: dedFiltroPersona_, placeholder: 'Todas las personas', claseCampo: 'sigso-py-ded-ctrl', opciones: personas })
+      : '';
+    var filtroEstado = Componentes.campoSelect({ id: 'py-ded-estado', valor: dedFiltroEstado_, placeholder: 'Todos los estados', claseCampo: 'sigso-py-ded-ctrl',
+      opciones: [{ valor: 'abiertas', texto: 'Solo abiertas' }, { valor: 'atrasadas', texto: 'Solo atrasadas' }] });
+    var nav = esTodo ? '' :
+      (Componentes.boton({ texto: '←', variante: 'sutil', clase: 'js-py-ded-atras', tipo: 'button' }) +
+       Componentes.boton({ texto: '→', variante: 'sutil', clase: 'js-py-ded-adelante', tipo: 'button' }) +
+       Componentes.boton({ texto: 'Hoy', variante: 'sutil', clase: 'js-py-ded-hoy', tipo: 'button' }));
+    return '<div class="sigso-py-ded-controles">' +
+      rangoSel + nav +
+      '<span class="sigso-ayuda sigso-py-ded-rangotxt">' + Componentes.escaparHtml(desdeTxt) + ' – ' + Componentes.escaparHtml(hastaTxt) + '</span>' +
+      '<label class="sigso-campo-check sigso-py-ded-ctrl"><input type="checkbox" class="js-py-ded-agrupar"' + (dedAgruparPersona_ ? ' checked' : '') + '> Por persona</label>' +
+      filtroPersona + filtroEstado +
+      Componentes.boton({ texto: 'Descargar / Imprimir', variante: 'secundario', clase: 'js-py-ded-imprimir', tipo: 'button', icono: 'descargar' }) +
+    '</div>';
+  }
+
+  function cartaLeyendaHtml_() {
+    var estados = [
+      ['asig', 'Asignada (A)'], ['proc', 'Se trabajó (P)'], ['done', 'Finalizada / entregada (F)'],
+      ['wait', 'Esperando a un tercero'], ['bloq', 'Bloqueada / observada'], ['late', 'Vencida sin gestión']
+    ].map(function (p) { return '<span><i class="sigso-py-ded-sw sigso-py-ded-sw--' + p[0] + '"></i>' + p[1] + '</span>'; }).join('');
+    var heat = '<span class="sigso-py-ded-heatleg">Horas del día: <i class="hl h1"></i><i class="hl h2"></i><i class="hl h3"></i><i class="hl h4"></i> más</span>';
+    return '<div class="sigso-py-ded-leyenda">' + estados + heat + '</div>';
+  }
+
+  // Vista imprimible: arma un contenedor con encabezado + la grilla ya
+  // renderizada (misma del DOM) + leyenda, y dispara el diálogo del
+  // navegador. El @media print (components.css) oculta todo lo demás y pone
+  // la página en horizontal. Sin librerías: "Guardar como PDF" del navegador.
+  function imprimirCartaDedicacion_(cont, detalle) {
+    var scroll = cont.querySelector('.sigso-py-ded-scroll');
+    if (!scroll) return;
+    var titulo = (detalle && detalle.proyecto && detalle.proyecto.nombre) || 'Mi dedicación';
+    var rangoTxt = (cont.querySelector('.sigso-py-ded-rangotxt') || {}).textContent || '';
+    var leyenda = cont.querySelector('.sigso-py-ded-leyenda');
+    var root = document.getElementById('sigso-print-root');
+    if (!root) { root = document.createElement('div'); root.id = 'sigso-print-root'; document.body.appendChild(root); }
+    var generado = new Date().toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    root.innerHTML =
+      '<div class="sigso-print-cab">' +
+        '<h1>Carta de Dedicación</h1>' +
+        '<p class="sigso-print-proy">' + Componentes.escaparHtml(titulo) + '</p>' +
+        '<p class="sigso-print-sub">' + Componentes.escaparHtml(rangoTxt) + ' · generado ' + generado + '</p>' +
+      '</div>' +
+      '<div class="sigso-print-grid">' + scroll.innerHTML + '</div>' +
+      (leyenda ? leyenda.outerHTML : '');
+    // Forzar tema CLARO mientras se imprime: un reporte para gerentes va a
+    // papel/PDF y debe verse nítido con la paleta clara, aunque la persona
+    // tenga la app en modo oscuro. Se restaura al terminar.
+    var temaPrevio = document.documentElement.getAttribute('data-tema');
+    document.documentElement.setAttribute('data-tema', 'claro');
+    document.body.classList.add('sigso-imprimiendo');
+    function limpiar() {
+      document.body.classList.remove('sigso-imprimiendo');
+      if (temaPrevio) document.documentElement.setAttribute('data-tema', temaPrevio);
+      else document.documentElement.removeAttribute('data-tema');
+      window.removeEventListener('afterprint', limpiar);
+    }
+    window.addEventListener('afterprint', limpiar);
+    window.print();
+  }
+
   function pintarCronogramaDedicacion_(detalle, tareas, bitacora, rendimiento) {
     if (!tareas.length) {
       return Componentes.vacio({ texto: 'Todavía no hay tareas para mostrar la dedicación.' });
@@ -17284,65 +17502,60 @@ var Iconos = (function () {
     var porTareaRendimiento = {};
     ((rendimiento && rendimiento.por_tarea) || []).forEach(function (t) { porTareaRendimiento[t.actividad_id] = t; });
 
-    var dias = [];
-    for (var i = DEDICACION_DIAS_VENTANA - 1; i >= 0; i--) {
-      var d = new Date(dedicacionAncla_.getFullYear(), dedicacionAncla_.getMonth(), dedicacionAncla_.getDate() - i);
-      dias.push({ clave: claveDia_(d.getFullYear(), d.getMonth(), d.getDate()), dia: d.getDate(), we: (d.getDay() === 0 || d.getDay() === 6) });
-    }
+    var feriadosSet = {};
+    ((detalle && detalle.feriados) || []).forEach(function (f) { feriadosSet[f] = true; });
+
     var hoyClave = claveHoy_();
+    var dias = construirDiasCarta_(detalle, tareas, bitacora, feriadosSet, hoyClave);
     var finVentana = dias[dias.length - 1].clave;
-    var desdeTxt = fechaCorta_(dias[0].clave), hastaTxt = fechaCorta_(finVentana);
     var kpis = pintarRendimientoKpis_(rendimiento);
+    var controles = cartaControlesHtml_(tareas, dias);
 
-    var nav = '<div class="sigso-py-ded-nav">' +
-        Componentes.boton({ texto: '← 2 semanas', variante: 'sutil', clase: 'js-py-ded-atras', tipo: 'button' }) +
-        '<span class="sigso-ayuda">' + Componentes.escaparHtml(desdeTxt) + ' – ' + Componentes.escaparHtml(hastaTxt) + '</span>' +
-        Componentes.boton({ texto: '2 semanas →', variante: 'sutil', clase: 'js-py-ded-adelante', tipo: 'button' }) +
-        Componentes.boton({ texto: 'Hoy', variante: 'sutil', clase: 'js-py-ded-hoy', tipo: 'button' }) +
-      '</div>';
-
-    // Bitácora de esta tarea, agrupada por día -- y la última fecha de
-    // ENTREGA (para saber desde cuándo "espera a un tercero" si quedó en
-    // EN_REVISION).
-    var eventosPorTareaDia = {};
-    var ultimaEntregaPorTarea = {};
+    // Bitácora por tarea/día, horas por tarea/día, y última entrega (para
+    // "esperando a un tercero").
+    var eventosPorTareaDia = {}, horasPorTareaDia = {}, ultimaEntregaPorTarea = {};
     bitacora.forEach(function (b) {
       var k = claveDeIso_(b.timestamp);
       if (!k) return;
       var porDia = (eventosPorTareaDia[b.actividad_id] = eventosPorTareaDia[b.actividad_id] || {});
       (porDia[k] = porDia[k] || []).push(b);
+      if (b.horas) {
+        var hh = (horasPorTareaDia[b.actividad_id] = horasPorTareaDia[b.actividad_id] || {});
+        hh[k] = (hh[k] || 0) + Number(b.horas);
+      }
       if (b.tipo === 'ENTREGA' && (!ultimaEntregaPorTarea[b.actividad_id] || k > ultimaEntregaPorTarea[b.actividad_id])) {
         ultimaEntregaPorTarea[b.actividad_id] = k;
       }
     });
 
+    // Filtros (persona / estado) + "la tarea existía en la ventana".
     var filas = tareas.filter(function (a) {
-      // No tiene sentido una fila para una tarea que ni existía en esta
-      // ventana -- pero si existe DESDE antes (o no tiene fecha de
-      // creación conocida) igual se muestra, aunque esos días salgan vacíos.
+      if (dedFiltroPersona_ && normalizarEmail_(a.responsable_email) !== dedFiltroPersona_) return false;
+      if (dedFiltroEstado_ === 'abiertas' && (a.estado === 'TERMINADA' || a.estado === 'CANCELADA')) return false;
+      if (dedFiltroEstado_ === 'atrasadas' && a.semaforo !== 'atrasada') return false;
       return !a.fecha_creacion || claveDeIso_(a.fecha_creacion) <= finVentana;
     });
-
     if (!filas.length) {
-      return nav + Componentes.vacio({ texto: 'Ninguna tarea existía todavía en esta ventana de días.' });
+      return kpis + controles + Componentes.vacio({ texto: 'Ninguna tarea coincide con el filtro en esta ventana.' });
     }
 
-    var headDias = dias.map(function (x) {
-      return '<div class="sigso-py-ded-dia' + (x.we ? ' we' : '') + (x.clave === hoyClave ? ' hoy' : '') + '">' + x.dia + '</div>';
-    }).join('');
+    var headDias = dias.map(diaCabeceraHtml_).join('');
+    var totalPorDia = {};
+    dias.forEach(function (x) { totalPorDia[x.clave] = 0; });
 
-    var filasHtml = filas.map(function (a) {
+    // Una fila-tarea. Acumula horas por día en totalPorDia (para el pie).
+    function filaTareaHtml_(a) {
       var claveCreacion = a.fecha_creacion ? claveDeIso_(a.fecha_creacion) : '';
       var claveVence = a.fecha_compromiso ? claveDeIso_(a.fecha_compromiso) : '';
       var terminal = a.estado === 'TERMINADA' || a.estado === 'CANCELADA';
       var ultimaEntrega = ultimaEntregaPorTarea[a.actividad_id];
       var porDia = eventosPorTareaDia[a.actividad_id] || {};
+      var horasDia = horasPorTareaDia[a.actividad_id] || {};
+      var horasFila = 0, diasConActividad = 0;
 
       var celdas = dias.map(function (x) {
         var eventos = porDia[x.clave] || [];
         var estado = '', txt = '';
-        // v10 (Fase G2): si el check-in trajo horas, se suman al tooltip --
-        // listarBitacora ya las expone parseadas (JSON libre 'datos').
         var notas = eventos.map(function (ev) {
           return (DEDICACION_TIPO_ETIQUETA_[ev.tipo] || ev.tipo) +
             (ev.horas !== undefined && ev.horas !== null && ev.horas !== '' ? ' (' + ev.horas + 'h)' : '') +
@@ -17360,56 +17573,76 @@ var Iconos = (function () {
           if (DEDICACION_TIPO_ESTADO_[ev.tipo] && estado !== 'bloq') { estado = DEDICACION_TIPO_ESTADO_[ev.tipo]; txt = 'P'; }
         });
         if (!estado && x.clave === claveCreacion) { estado = 'asig'; txt = 'A'; }
-        // Esperando a un tercero: quedó EN_REVISION tras su última entrega,
-        // y sigue sin resolverse hoy.
-        if (!estado && a.estado === 'EN_REVISION' && ultimaEntrega && x.clave > ultimaEntrega && x.clave <= hoyClave) {
-          estado = 'wait';
-        }
-        // Vencida sin gestión: pasó la fecha comprometida, la tarea sigue
-        // abierta, y este día no tiene ninguna marca propia.
-        if (!estado && !terminal && claveVence && x.clave > claveVence && x.clave <= hoyClave) {
-          estado = 'late'; txt = '!';
-        }
-        var titulo = notas.length ? (fechaCorta_(x.clave) + ': ' + notas.join(' · ')) : '';
-        return '<div class="sigso-py-ded-celda' + (x.we ? ' we' : '') + (x.clave === hoyClave ? ' hoy' : '') + (estado ? ' e-' + estado : '') +
-          '"' + (titulo ? ' title="' + Componentes.escaparHtml(titulo) + '"' : '') + '>' + (txt ? '<span>' + txt + '</span>' : '') + '</div>';
+        if (!estado && a.estado === 'EN_REVISION' && ultimaEntrega && x.clave > ultimaEntrega && x.clave <= hoyClave) { estado = 'wait'; }
+        // Vencida sin gestión: SOLO días laborales (ni fin de semana ni
+        // feriado) pasado el compromiso, tarea abierta, sin marca ese día.
+        if (!estado && !terminal && !x.we && !x.feriado && claveVence && x.clave > claveVence && x.clave <= hoyClave) { estado = 'late'; txt = '!'; }
+
+        if (estado === 'proc' || estado === 'done' || estado === 'asig') diasConActividad++;
+        var horas = horasDia[x.clave] || 0;
+        if (horas) { horasFila += horas; totalPorDia[x.clave] += horas; }
+        var nivel = nivelHoras_(horas);
+        var tituloCelda = notas.length ? (fechaCorta_(x.clave) + ': ' + notas.join(' · ')) : '';
+        return '<div class="sigso-py-ded-celda' + (x.we ? ' we' : '') + (x.feriado ? ' feriado' : '') + (x.clave === hoyClave ? ' hoy' : '') +
+          (estado ? ' e-' + estado : '') + (nivel ? ' h' + nivel : '') + '"' +
+          (tituloCelda ? ' title="' + Componentes.escaparHtml(tituloCelda) + '"' : '') + '>' + (txt ? '<span>' + txt + '</span>' : '') + '</div>';
       }).join('');
 
-      // v10 (Fase G3): meta + ritmo, como segunda línea de la etiqueta --
-      // "16 imágenes · 16/día" una vez terminada; solo "16 imágenes" antes
-      // (dividir por el avance parcial seria inventar un ritmo). El ritmo
-      // sale de `rendimiento` (por proyecto); la meta en si misma ya viene
-      // en la propia tarea (listarTareas/listarMisTareas), asi que en "Mi
-      // dedicación" (varios proyectos, sin rendimiento) igual se ve la
-      // meta, solo que sin ritmo -- mezclar imágenes con piezas en un solo
-      // promedio no tendria sentido.
       var r = porTareaRendimiento[a.actividad_id];
       var metaTxt = a.meta_cantidad
         ? (a.meta_cantidad + (a.meta_unidad ? ' ' + a.meta_unidad : '') + (r && r.unidades_por_dia !== '' ? ' · ' + r.unidades_por_dia + '/día' : ''))
         : '';
-      // v10 (Fase G3, "vista transversal por recurso"): si la fila viene de
-      // "Mi dedicación" (varios proyectos a la vez), a.proyecto_nombre
-      // existe y reemplaza al responsable (que en esa vista siempre soy yo).
       var subEtiqueta = a.proyecto_nombre || a.responsable_nombre || a.responsable_email || '';
+      var totalTxt = horasFila ? redond1_(horasFila) + 'h' : '';
 
       return '<div class="sigso-py-ded-fila">' +
         '<div class="sigso-py-ded-etiqueta"><span class="t">' + Componentes.escaparHtml(a.titulo) + '</span>' +
           '<span class="m">' + Componentes.escaparHtml(subEtiqueta) + (metaTxt ? ' · ' + Componentes.escaparHtml(metaTxt) : '') + '</span></div>' +
         celdas +
+        '<div class="sigso-py-ded-total"' + (diasConActividad ? ' title="' + diasConActividad + ' día(s) con actividad"' : '') + '>' + totalTxt + '</div>' +
       '</div>';
+    }
+
+    // Cuerpo: agrupado por persona, o plano.
+    var cuerpo;
+    if (dedAgruparPersona_) {
+      var grupos = {}, ordenGrupos = [];
+      filas.forEach(function (a) {
+        var clave = a.responsable_nombre || a.responsable_email || '—';
+        if (!grupos[clave]) { grupos[clave] = []; ordenGrupos.push(clave); }
+        grupos[clave].push(a);
+      });
+      cuerpo = ordenGrupos.map(function (persona) {
+        var celdasVacias = dias.map(function () { return '<div class="sigso-py-ded-celda"></div>'; }).join('');
+        var head = '<div class="sigso-py-ded-fila sigso-py-ded-grupo">' +
+          '<div class="sigso-py-ded-etiqueta"><span class="t">' + Componentes.escaparHtml(persona) + '</span>' +
+            '<span class="m">' + grupos[persona].length + ' tarea(s)</span></div>' +
+          celdasVacias + '<div class="sigso-py-ded-total"></div></div>';
+        return head + grupos[persona].map(filaTareaHtml_).join('');
+      }).join('');
+    } else {
+      cuerpo = filas.map(filaTareaHtml_).join('');
+    }
+
+    // Pie: horas por día (y gran total).
+    var granTotal = 0;
+    var footerCeldas = dias.map(function (x) {
+      var h = totalPorDia[x.clave]; granTotal += h;
+      return '<div class="sigso-py-ded-celda sigso-py-ded-celda--total' + (x.we ? ' we' : '') + (x.feriado ? ' feriado' : '') + '">' +
+        (h ? '<span>' + redond1_(h) + '</span>' : '') + '</div>';
     }).join('');
+    var footer = '<div class="sigso-py-ded-fila sigso-py-ded-footer">' +
+      '<div class="sigso-py-ded-etiqueta"><span class="t">Horas por día</span></div>' +
+      footerCeldas + '<div class="sigso-py-ded-total">' + (granTotal ? redond1_(granTotal) + 'h' : '') + '</div></div>';
 
-    var leyenda = [
-      ['asig', 'Asignada (A)'], ['proc', 'Se trabajó (P)'], ['done', 'Finalizada / entregada (F)'],
-      ['wait', 'Esperando a un tercero'], ['bloq', 'Bloqueada / observada'], ['late', 'Vencida sin gestión']
-    ].map(function (p) { return '<span><i class="sigso-py-ded-sw sigso-py-ded-sw--' + p[0] + '"></i>' + p[1] + '</span>'; }).join('');
-
-    return kpis + nav +
-      '<div class="sigso-py-ded-scroll"><div class="sigso-py-ded">' +
-        '<div class="sigso-py-ded-fila sigso-py-ded-cabecera"><div class="sigso-py-ded-etiqueta">Tarea</div>' + headDias + '</div>' +
-        filasHtml +
+    return kpis + controles +
+      '<div class="sigso-py-ded-scroll"><div class="sigso-py-ded" style="--dias:' + dias.length + '">' +
+        '<div class="sigso-py-ded-fila sigso-py-ded-cabecera"><div class="sigso-py-ded-etiqueta">Tarea</div>' + headDias +
+          '<div class="sigso-py-ded-total">Horas</div></div>' +
+        cuerpo +
+        footer +
       '</div></div>' +
-      '<div class="sigso-py-ded-leyenda">' + leyenda + '</div>';
+      cartaLeyendaHtml_();
   }
 
   // --- Cronograma: vista Plan (v10, Fase C, propuesta 04 "línea de tiempo") --
@@ -17765,7 +17998,7 @@ var Iconos = (function () {
         cambiarPestana_('cronograma');
       });
     });
-    wireDedicacionNav_(cont, function () { cambiarPestana_('cronograma'); });
+    wireCartaControles_(cont, function () { cambiarPestana_('cronograma'); }, (datosDetalleActual_ && datosDetalleActual_.detalle) || null);
 
     var nuevoHito = cont.querySelector('.js-py-nuevo-hito');
     if (nuevoHito) nuevoHito.addEventListener('click', abrirFormularioHito_);

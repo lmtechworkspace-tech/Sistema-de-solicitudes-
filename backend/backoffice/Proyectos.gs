@@ -305,7 +305,12 @@ var Proyectos = {
       // v10 (Fase D, propuesta 09 "resumen diario"): "que se movio" desde la
       // ULTIMA VEZ que ESTA persona vio la Sala -- null si nunca la visito
       // (primera vez: no hay "desde" que mostrar, seria ruido).
-      resumen_desde_ultima_visita: calcularResumenVisitaProyecto_(proyecto, contexto, integrantes, tareas)
+      resumen_desde_ultima_visita: calcularResumenVisitaProyecto_(proyecto, contexto, integrantes, tareas),
+      // v10 (auditoría G, carta de dedicación pro): los feriados (org-wide,
+      // CONFIG_FERIADOS) para que la Carta de Dedicación los sombree y no los
+      // cuente como "vencida sin gestión" ni como día laboral. Array de
+      // 'YYYY-MM-DD'. Si la hoja no existe, obtenerFeriados_ devuelve [].
+      feriados: obtenerFeriados_()
     };
   },
 
