@@ -495,7 +495,14 @@ var COLUMNAS = {
     // responsable sigue siendo el DUEÑO (accountability, RN-701); los
     // colaboradores pueden hacer check-in (RN-702 ampliada) y ven la tarea
     // en "Mi trabajo". Aditiva: sin colaboradores se comporta igual que antes.
-    'colaboradores_emails'
+    'colaboradores_emails',
+    // v11 (Reingeniería Cronograma, P2 "subtareas con rollup"): una tarea
+    // puede colgar de otra del MISMO proyecto (un solo nivel, sin anidar
+    // subtareas de subtareas -- ver Proyectos.crearTarea). El avance del
+    // padre se calcula (nunca se guarda) a partir de sus hijas -- rollup
+    // on-read, mismo criterio que calcularAvanceProyecto_. Aditiva: sin
+    // tarea_padre_id una tarea se comporta exactamente igual que antes.
+    'tarea_padre_id'
   ],
   ACTIVIDADES_BITACORA: [
     'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',

@@ -2857,6 +2857,14 @@
   background: var(--info-suave); border-radius: var(--radio-sm); padding: var(--esp-1) var(--esp-2);
 }
 
+/* v11 (P2, "subtareas con rollup"): la subtarea aparece justo bajo su padre
+   (ordenarConSubtareas_), con una leve indentación + la referencia al padre. */
+.sigso-py-tarea--subtarea { margin-left: var(--esp-4); border-left: 2px solid var(--borde); padding-left: var(--esp-2); }
+.sigso-py-subtarea-de { font-size: var(--texto-xs); color: var(--texto-3); margin-bottom: 2px; }
+.sigso-py-rollup { margin-top: var(--esp-2); display: flex; align-items: center; gap: var(--esp-2); font-size: var(--texto-xs); color: var(--texto-3); }
+.sigso-py-rollup__barra { flex: 1 1 auto; max-width: 8rem; height: 0.4rem; border-radius: 999px; background: var(--superficie-2); overflow: hidden; }
+.sigso-py-rollup__barra-fill { height: 100%; background: var(--primario); border-radius: inherit; }
+
 .sigso-mt-badge--al-dia { background: var(--ok-suave); color: var(--ok); }
 .sigso-mt-badge--riesgo { background: var(--alerta-suave); color: var(--alerta); }
 .sigso-mt-badge--atrasada { background: var(--critico-suave); color: var(--critico); }
@@ -3084,17 +3092,35 @@
 .sigso-kanban__tarjeta--arrastrable:active { cursor: grabbing; }
 .sigso-kanban__tarjeta--arrastrando { opacity: .5; }
 
-/* v10 (Fase C): cronograma -- misma tecnica que la Carta Gantt de Gerencia
-   (barras por CSS, sin libreria), colores por el mismo semaforo de siempre
-   en vez del cumplimiento de Solicitudes. */
-.sigso-py-cron { position: relative; padding-top: var(--esp-2); }
-.sigso-py-cron-hoy {
-  position: absolute; top: 0; bottom: 0; width: 2px; background: var(--primario); z-index: 1;
+/* v11 (P2, "Gantt navegable"): línea de tiempo en píxeles-por-día real (zoom
+   de verdad, no solo "encoger para que quepa"), con la columna de etiquetas
+   FIJA (position:sticky) mientras el eje de tiempo se desplaza horizontal.
+   Las clases de color por estado (--al-dia/--atrasada/etc. y las de hito)
+   son las MISMAS de la v10 (Fase C) -- solo cambió el contenedor. */
+.sigso-py-gantt-scroll { overflow-x: auto; border: 1px solid var(--borde); border-radius: var(--radio-sm); }
+.sigso-py-gantt-body { display: inline-flex; flex-direction: column; position: relative; min-width: 100%; }
+.sigso-py-gantt-fila { display: flex; align-items: center; border-bottom: 1px solid var(--borde); }
+.sigso-py-gantt-fila:last-child { border-bottom: none; }
+.sigso-py-gantt-fila--regla { position: sticky; top: 0; z-index: 2; background: var(--superficie); border-bottom: 1px solid var(--borde-fuerte); }
+.sigso-py-gantt-etiqueta {
+  /* 200px fijo A PROPÓSITO (no rem): el JS (PLAN_ETIQUETA_ANCHO_PX_) calcula
+     dónde cae la línea de "Hoy" sumando este mismo número de píxeles -- si
+     esto se mueve, hay que mover esa constante también. */
+  flex: 0 0 200px; width: 200px; position: sticky; left: 0; z-index: 1; background: var(--superficie);
+  padding: var(--esp-1) var(--esp-2); font-size: var(--texto-sm); color: var(--texto);
+  display: flex; align-items: center; gap: 0.3rem; border-right: 1px solid var(--borde);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.sigso-py-cron-fila { margin-bottom: var(--esp-3); }
-.sigso-py-cron-etiqueta { font-size: var(--texto-sm); margin-bottom: 0.25rem; color: var(--texto); display: flex; align-items: center; gap: 0.3rem; }
-.sigso-py-cron-track { position: relative; height: 14px; background: var(--superficie-2); border-radius: var(--radio-sm); }
-.sigso-py-cron-barra { position: absolute; top: 0; height: 100%; border-radius: var(--radio-sm); min-width: 3px; }
+.sigso-py-gantt-track { position: relative; height: 2.25rem; flex: 0 0 auto; }
+.sigso-py-gantt-track--regla { height: 1.75rem; }
+.sigso-py-gantt-tick {
+  position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--borde); padding-left: 4px;
+  font-size: var(--texto-xs); color: var(--texto-3); white-space: nowrap; display: flex; align-items: center;
+}
+.sigso-py-gantt-hoy {
+  position: absolute; top: 0; bottom: 0; width: 2px; background: var(--primario); z-index: 1; pointer-events: none;
+}
+.sigso-py-cron-barra { position: absolute; top: 25%; height: 50%; border-radius: var(--radio-sm); min-width: 3px; }
 .sigso-py-cron-barra--al-dia, .sigso-py-cron-barra--terminada { background: var(--ok); }
 .sigso-py-cron-barra--riesgo { background: var(--alerta); }
 .sigso-py-cron-barra--atrasada { background: var(--critico); }
@@ -3112,6 +3138,21 @@
 .sigso-py-cron-hito--terminada { background: var(--texto-3); }
 .sigso-py-cron-hito--cancelada { background: var(--texto-3); opacity: .6; }
 
+/* v11 (P2, "drag & drop de fechas"): el handle solo existe si la tarea es
+   editable -- una franja angosta en el borde derecho de la barra, cursor de
+   resize, visible al pasar el mouse (no compite visualmente con la barra en
+   reposo). Mientras se arrastra, la barra se aclara para que el "fantasma"
+   de la nueva duración se lea con claridad. */
+.sigso-py-gantt-barra--editable { padding-right: 6px; }
+.sigso-py-gantt-resize {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 6px; cursor: ew-resize;
+  background: color-mix(in srgb, currentColor 35%, transparent); border-radius: 0 var(--radio-sm) var(--radio-sm) 0;
+  opacity: 0; transition: opacity 0.1s;
+}
+.sigso-py-gantt-barra--editable:hover .sigso-py-gantt-resize,
+.sigso-py-gantt-barra--arrastrando .sigso-py-gantt-resize { opacity: 1; }
+.sigso-py-gantt-barra--arrastrando { opacity: 0.75; outline: 2px dashed var(--primario); outline-offset: 1px; }
+
 /* v10 (Fase E, "Carta Gantt de Dedicación"): grilla tarea x dia, leida de
    ACTIVIDADES_BITACORA (el check-in de siempre) -- ningun estado se marca a
    mano. Misma paleta semantica que el resto del modulo (--ok/--alerta/
@@ -3124,6 +3165,13 @@
 .sigso-py-ded-controles .sigso-boton { flex: 0 0 auto; }
 .sigso-py-ded-rangotxt { font-variant-numeric: tabular-nums; }
 .sigso-py-ded-controles .js-py-ded-imprimir { margin-left: auto; }
+/* v11 (P1): nota + botón de "congelar línea base", agrupados a la derecha
+   junto con Descargar/Imprimir. */
+.sigso-py-ded-baseline { display: flex; align-items: center; gap: var(--esp-2); }
+/* v11 (P1): botón 📅 de reprogramar, inline junto al título de la tarea --
+   discreto hasta el hover/foco (no compite con el texto). */
+.sigso-py-ded-reprogramar { border: none; background: none; cursor: pointer; padding: 0 2px; font-size: 0.8rem; opacity: 0.55; border-radius: var(--radio-sm); line-height: 1; }
+.sigso-py-ded-reprogramar:hover, .sigso-py-ded-reprogramar:focus-visible { opacity: 1; background: var(--superficie-2); }
 
 .sigso-py-ded-nav { display: flex; align-items: center; gap: var(--esp-3); margin-bottom: var(--esp-3); flex-wrap: wrap; }
 .sigso-py-ded-scroll { overflow-x: auto; }
@@ -3167,6 +3215,21 @@
 .sigso-py-ded-celda.e-wait { background: var(--superficie-2); color: var(--texto-3); border: 1px dashed var(--borde-fuerte); }
 .sigso-py-ded-celda.e-bloq { background: var(--critico-suave); color: var(--critico); --hcol: var(--critico); }
 .sigso-py-ded-celda.e-late { background: var(--alerta-suave); color: var(--alerta); --hcol: var(--alerta); }
+/* v11 (P0): estados-del-día explícitos que no existían al derivar del
+   check-in -- planificado, en pausa, en revisión, esperando a un tercero. */
+.sigso-py-ded-celda.e-plan { background: color-mix(in srgb, var(--primario-suave), var(--superficie) 45%); color: var(--primario); --hcol: var(--primario); border: 1px dashed color-mix(in srgb, var(--primario) 45%, transparent); }
+.sigso-py-ded-celda.e-pausa { background: var(--superficie-2); color: var(--texto-2); --hcol: var(--texto-3); border: 1px solid var(--borde-fuerte); }
+.sigso-py-ded-celda.e-rev { background: color-mix(in srgb, var(--alerta-suave), var(--superficie) 25%); color: var(--alerta); --hcol: var(--alerta); }
+.sigso-py-ded-celda.e-esp { background: var(--superficie-2); color: var(--texto-3); border: 1px dashed var(--info); }
+/* v11 (P0): celda editable (registro del día). Afordancia solo al pasar el
+   mouse / enfocar, para no ensuciar la grilla; el "+" invita en celdas
+   vacías. El anillo ".reg" marca un día CON registro explícito (distinto de
+   una marca derivada del check-in). */
+.sigso-py-ded-celda--edit { cursor: pointer; }
+.sigso-py-ded-celda--edit:hover { outline: 2px solid var(--primario); outline-offset: -2px; }
+.sigso-py-ded-celda--edit:focus-visible { outline: 2px solid var(--primario); outline-offset: 1px; }
+.sigso-py-ded-celda--edit:hover:empty::after { content: '+'; color: var(--texto-3); font-size: 0.7rem; font-weight: 700; }
+.sigso-py-ded-celda.reg { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--texto) 22%, transparent); }
 /* Heatmap: la intensidad de fondo crece con las horas del día (h1..h4).
    Va DESPUÉS de las reglas e-* para ganar en orden de cascada. */
 .sigso-py-ded-celda.h1 { background: color-mix(in srgb, var(--hcol) 22%, var(--superficie)); }
@@ -3178,6 +3241,14 @@
 .sigso-py-ded-grupo { margin-top: var(--esp-2); }
 .sigso-py-ded-grupo .sigso-py-ded-etiqueta .t { font-weight: 700; color: var(--texto); }
 .sigso-py-ded-grupo .sigso-py-ded-celda { background: transparent; }
+/* v11 (P1): las celdas de workload SÍ quieren su heatmap de vuelta (misma
+   especificidad de 2 clases que la regla de arriba -- gana por venir
+   después en la cascada). */
+.sigso-py-ded-celda--workload.h1 { background: color-mix(in srgb, var(--hcol) 22%, var(--superficie)); }
+.sigso-py-ded-celda--workload.h2 { background: color-mix(in srgb, var(--hcol) 45%, var(--superficie)); }
+.sigso-py-ded-celda--workload.h3 { background: color-mix(in srgb, var(--hcol) 68%, var(--superficie)); }
+.sigso-py-ded-celda--workload.h4 { background: color-mix(in srgb, var(--hcol) 92%, var(--superficie)); }
+.sigso-py-ded-celda--workload.h3 span, .sigso-py-ded-celda--workload.h4 span { color: #fff; }
 .sigso-py-ded-footer { margin-top: var(--esp-1); border-top: 2px solid var(--borde-fuerte); padding-top: 2px; }
 .sigso-py-ded-footer .sigso-py-ded-etiqueta .t { font-weight: 600; color: var(--texto-2); font-size: var(--texto-xs); text-transform: uppercase; letter-spacing: 0.03em; }
 .sigso-py-ded-celda--total { background: transparent; }
@@ -3194,6 +3265,10 @@
 .sigso-py-ded-sw--wait { background: var(--superficie-2); border: 1px dashed var(--borde-fuerte); }
 .sigso-py-ded-sw--bloq { background: var(--critico-suave); border: 1px solid var(--critico); }
 .sigso-py-ded-sw--late { background: var(--alerta-suave); border: 1px solid var(--alerta); }
+.sigso-py-ded-sw--plan { background: color-mix(in srgb, var(--primario-suave), var(--superficie) 45%); border: 1px dashed var(--primario); }
+.sigso-py-ded-sw--pausa { background: var(--superficie-2); border: 1px solid var(--borde-fuerte); }
+.sigso-py-ded-sw--rev { background: color-mix(in srgb, var(--alerta-suave), var(--superficie) 25%); border: 1px solid var(--alerta); }
+.sigso-py-ded-sw--esp { background: var(--superficie-2); border: 1px dashed var(--info); }
 .sigso-py-ded-heatleg { display: inline-flex; align-items: center; gap: 3px; }
 .sigso-py-ded-heatleg .hl { display: inline-block; width: 0.8rem; height: 0.8rem; border-radius: 3px; --hcol: var(--info); }
 .sigso-py-ded-heatleg .hl.h1 { background: color-mix(in srgb, var(--hcol) 22%, var(--superficie)); }
@@ -3203,6 +3278,59 @@
 @media (max-width: 640px) {
   .sigso-py-ded { --col-tarea: 8rem; --col-dia: 1.6rem; --col-total: 2.8rem; }
 }
+
+/* v11 (P0): modal del registro del día. */
+.sigso-py-reg-cab { margin: 0 0 var(--esp-2); }
+.sigso-py-reg-traza { margin: 0 0 var(--esp-3); padding: var(--esp-1) var(--esp-2); background: var(--superficie-2); border-radius: var(--radio-sm); }
+.sigso-py-reg-tramos { margin: var(--esp-2) 0; }
+.sigso-py-reg-tramos__cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--esp-1); font-size: var(--texto-xs); color: var(--texto-2); text-transform: uppercase; letter-spacing: 0.03em; }
+.sigso-py-reg-tramo { display: flex; gap: var(--esp-1); align-items: center; margin-bottom: var(--esp-1); }
+.sigso-py-reg-tramo .js-py-reg-tramo-desde, .sigso-py-reg-tramo .js-py-reg-tramo-hasta { max-width: 6.5rem; }
+.sigso-py-reg-tramo .js-py-reg-tramo-nota { flex: 1 1 auto; min-width: 0; }
+.sigso-py-reg-tramo-quitar { flex: 0 0 auto; padding: 0 0.6rem; line-height: 1.6; }
+
+/* v11 ("PDF ejecutivo configurable"): checkboxes de secciones en grilla de
+   2 columnas -- son 12 opciones, una lista vertical sería demasiado larga. */
+.sigso-py-informe-secciones { display: grid; grid-template-columns: 1fr 1fr; gap: var(--esp-1) var(--esp-3); margin-bottom: var(--esp-3); }
+@media (max-width: 480px) { .sigso-py-informe-secciones { grid-template-columns: 1fr; } }
+
+/* v11 (P3, "analítica avanzada"): tabla simple lead/cycle/bloqueo/revisión
+   por tarea -- mismo contenedor con scroll horizontal que ya usa la carta
+   de Dedicación (.sigso-py-ded-scroll), para no desbordar en mobile. */
+.sigso-py-analitica-acciones { margin: var(--esp-2) 0; }
+.sigso-py-analitica-tabla { width: 100%; border-collapse: collapse; font-size: var(--texto-sm); }
+.sigso-py-analitica-tabla th, .sigso-py-analitica-tabla td { padding: var(--esp-1) var(--esp-2); border-bottom: 1px solid var(--borde); text-align: left; white-space: nowrap; }
+.sigso-py-analitica-tabla th { color: var(--texto-3); font-size: var(--texto-xs); text-transform: uppercase; letter-spacing: 0.03em; font-weight: 600; }
+.sigso-py-analitica-tabla td:not(:first-child) { font-variant-numeric: tabular-nums; }
+
+/* v11 (P1): feed de Historial -- reverso-cronológico, un ícono + frase +
+   momento por fila. Deliberadamente sin tarjeta pesada por fila (es una
+   lista larga, no tarjetas de portafolio); solo un hairline entre filas. */
+.sigso-py-hist { display: flex; flex-direction: column; }
+.sigso-py-hist-fila { display: flex; gap: var(--esp-2); padding: var(--esp-2) 0; border-bottom: 1px solid var(--borde); }
+.sigso-py-hist-fila:last-child { border-bottom: none; }
+.sigso-py-hist-icono { flex: 0 0 auto; width: 1.75rem; height: 1.75rem; border-radius: 50%; background: var(--superficie-2); display: flex; align-items: center; justify-content: center; font-size: 0.9rem; }
+.sigso-py-hist-cuerpo { min-width: 0; flex: 1 1 auto; }
+.sigso-py-hist-frase { color: var(--texto); line-height: 1.5; }
+.sigso-py-hist-cambio { font-weight: 600; color: var(--primario); }
+.sigso-py-hist-cuando { margin-top: 2px; font-size: var(--texto-xs); color: var(--texto-3); }
+
+/* v11 (P1): score de salud numérico junto al semáforo de siempre. */
+.sigso-py-salud-score { margin-left: var(--esp-1); font-variant-numeric: tabular-nums; color: var(--texto-3); font-size: var(--texto-xs); }
+
+/* v11 (P1): nota de Plan/Esperado/Real bajo el título de cada tarea en la
+   carta de Dedicación -- compacta, monoespaciada donde hay números para que
+   alineen al ojo entre filas. */
+.sigso-py-ded-plan { display: block; margin-top: 2px; font-size: var(--texto-xs); color: var(--texto-3); font-variant-numeric: tabular-nums; }
+.sigso-py-ded-plan .dev { font-weight: 700; }
+.sigso-py-ded-plan .dev--favor { color: var(--ok); }
+.sigso-py-ded-plan .dev--contra { color: var(--critico); }
+.sigso-py-ded-plan .baseline { color: var(--alerta); }
+
+/* v11 (P1): fila de workload por persona (agrupar) -- total diario propio +
+   marca de sobrecarga cuando supera la jornada. */
+.sigso-py-ded-celda--sobrecarga { box-shadow: inset 0 0 0 2px var(--critico); }
+.sigso-py-ded-grupo .sigso-py-ded-total { font-weight: 700; }
 
 /* Vista imprimible de la carta (Descargar / Imprimir). En pantalla el
    contenedor está oculto; en impresión se oculta todo lo demás y la carta

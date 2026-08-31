@@ -223,7 +223,9 @@ var ESQUEMA_HOJAS = {
     // v10 (Fase G2): ver la nota identica en backend/backoffice/Constantes.gs.
     'meta_cantidad', 'meta_unidad',
     // v10 (multi-asignación): ver la nota identica en backend/backoffice/Constantes.gs.
-    'colaboradores_emails'
+    'colaboradores_emails',
+    // v11 (P2, "subtareas con rollup"): ver la nota identica en backend/backoffice/Constantes.gs.
+    'tarea_padre_id'
   ],
   ACTIVIDADES_BITACORA: [
     'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',

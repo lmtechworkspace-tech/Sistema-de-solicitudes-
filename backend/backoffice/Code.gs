@@ -208,9 +208,20 @@ var BACKOFFICE_ACTIONS = {
   // v10 (Fase E, "Carta de Dedicación"): bitácora de check-ins de todas las
   // tareas del proyecto, para la grilla día x tarea del Cronograma.
   listarBitacoraProyecto: handleListarBitacoraProyecto_,
+  // v11 (Reingeniería Cronograma, P0): guarda/edita el registro del día de
+  // una tarea (la celda diaria de la Carta Gantt como unidad editable).
+  guardarRegistroDiaProyecto: handleGuardarRegistroDiaProyecto_,
   // v10 (Fase G3, "los números de rendimiento"): unidades/día, horas/
   // unidad y cumplimiento de entregas, derivados de la misma bitácora.
+  // v11 (P1): ahora también trae Plan/Esperado/Real por tarea y la baseline
+  // vigente (ver Proyectos.obtenerRendimiento).
   obtenerRendimientoProyecto: handleObtenerRendimientoProyecto_,
+  // v11 (P1, "congelar línea base" y "reprogramar con motivo").
+  congelarBaselineProyecto: handleCongelarBaselineProyecto_,
+  reprogramarTareaProyecto: handleReprogramarTareaProyecto_,
+  // v11 (P3, "analítica avanzada" y "workload cruzado multi-proyecto").
+  obtenerAnaliticaProyecto: handleObtenerAnaliticaProyecto_,
+  obtenerWorkloadPortafolioProyectos: handleObtenerWorkloadPortafolioProyectos_,
   listarSalaProyecto: handleListarSalaProyecto_,
   publicarEnSalaProyecto: handlePublicarEnSalaProyecto_,
   convertirEventoEnTareaProyecto: handleConvertirEventoEnTareaProyecto_,
@@ -521,7 +532,12 @@ var MODULO_POR_ACCION = {
   crearTareaProyecto: 'proyectos',
   listarTareasProyecto: ['proyectos', 'gerencia'],
   listarBitacoraProyecto: ['proyectos', 'gerencia'],
+  guardarRegistroDiaProyecto: 'proyectos',
   obtenerRendimientoProyecto: ['proyectos', 'gerencia'],
+  congelarBaselineProyecto: 'proyectos',
+  reprogramarTareaProyecto: 'proyectos',
+  obtenerAnaliticaProyecto: ['proyectos', 'gerencia'],
+  obtenerWorkloadPortafolioProyectos: ['proyectos', 'gerencia'],
   listarSalaProyecto: ['proyectos', 'gerencia'],
   publicarEnSalaProyecto: 'proyectos',
   convertirEventoEnTareaProyecto: 'proyectos',
@@ -1264,6 +1280,26 @@ function handleListarBitacoraProyecto_(data, contexto) {
 
 function handleObtenerRendimientoProyecto_(data, contexto) {
   return responderResultado_(Proyectos.obtenerRendimiento(data, contexto));
+}
+
+function handleGuardarRegistroDiaProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.guardarRegistroDia(data, contexto));
+}
+
+function handleCongelarBaselineProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.congelarBaseline(data, contexto));
+}
+
+function handleReprogramarTareaProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.reprogramarTarea(data, contexto));
+}
+
+function handleObtenerAnaliticaProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.obtenerAnalitica(data, contexto));
+}
+
+function handleObtenerWorkloadPortafolioProyectos_(data, contexto) {
+  return responderResultado_(Proyectos.obtenerWorkloadPortafolio(data, contexto));
 }
 
 function handleListarSalaProyecto_(data, contexto) {

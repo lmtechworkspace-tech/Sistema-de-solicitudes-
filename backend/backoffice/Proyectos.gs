@@ -117,7 +117,8 @@ var Proyectos = {
         total_tareas: tareas.filter(function (a) { return a.activa === true || a.activa === 'TRUE' || a.activa === 1; }).length,
         salud: salud.codigo,
         salud_etiqueta: salud.etiqueta,
-        salud_motivos: salud.motivos
+        salud_motivos: salud.motivos,
+        salud_score: salud.score
       };
     }).sort(function (a, b) {
       var orden = { critico: 0, riesgo: 1, normal: 2 };
@@ -301,6 +302,8 @@ var Proyectos = {
       salud: salud.codigo,
       salud_etiqueta: salud.etiqueta,
       salud_motivos: salud.motivos,
+      salud_score: salud.score,
+      salud_desglose: salud.desglose,
       requiere_atencion: calcularRequiereAtencion_(tareas, hitos, integrantes),
       // v10 (Fase D, propuesta 09 "resumen diario"): "que se movio" desde la
       // ULTIMA VEZ que ESTA persona vio la Sala -- null si nunca la visito
@@ -671,6 +674,19 @@ var Proyectos = {
         return errorValidacion_('depende_de', 'La tarea de la que depende debe ser del mismo proyecto.');
       }
     }
+    // v11 (P2, "subtareas con rollup"): un solo nivel -- el padre debe ser
+    // del mismo proyecto y NO puede ser a su vez una subtarea (evita anidar
+    // subtareas de subtareas, que complicaría el rollup sin aportar control
+    // real). El rollup de avance se calcula on-read en listarTareas.
+    if (data.tarea_padre_id) {
+      var padre = leerFilasSeguro_(SHEETS.ACTIVIDADES).filter(function (a) { return a.actividad_id === data.tarea_padre_id; })[0];
+      if (!padre || padre.proyecto_id !== proyecto.proyecto_id) {
+        return errorValidacion_('tarea_padre_id', 'La tarea padre debe ser del mismo proyecto.');
+      }
+      if (padre.tarea_padre_id) {
+        return errorValidacion_('tarea_padre_id', 'Esa tarea ya es una subtarea -- no se puede anidar un tercer nivel.');
+      }
+    }
     var enriquecido = {};
     for (var k in data) enriquecido[k] = data[k];
     enriquecido.proyecto = proyecto.nombre; // compat: campo de texto libre ya existente en ACTIVIDADES
@@ -730,6 +746,16 @@ var Proyectos = {
     leerFilasSeguro_(SHEETS.PROYECTO_INTEGRANTES).forEach(function (i) {
       if (i.proyecto_id === proyecto.proyecto_id) nombrePorEmail[normalizarEmailProyecto_(i.usuario_email)] = i.usuario_nombre || i.usuario_email;
     });
+    // v11 (P2, "dependencias con impacto"): quién depende de quién, en un
+    // solo mapa reusado por calcularImpactoDependencia_ para cada tarea (en
+    // vez de reconstruirlo N veces dentro del .map de abajo).
+    var dependientesDirectosPorId_ = {};
+    tareas.forEach(function (a) { if (a.depende_de) (dependientesDirectosPorId_[a.depende_de] = dependientesDirectosPorId_[a.depende_de] || []).push(a); });
+    // v11 (P2, "subtareas con rollup"): hijas por padre, para calcular el
+    // avance del padre on-read (nunca se guarda -- así nunca desincroniza).
+    var hijasPorPadre_ = {};
+    tareas.forEach(function (a) { if (a.tarea_padre_id) (hijasPorPadre_[a.tarea_padre_id] = hijasPorPadre_[a.tarea_padre_id] || []).push(a); });
+
     return tareas.map(function (a) {
       a.semaforo = semaforoActividad_(a).codigo;
       a.semaforo_etiqueta = semaforoActividad_(a).etiqueta;
@@ -740,11 +766,31 @@ var Proyectos = {
         a.dependencia_titulo = dependencia ? dependencia.titulo : '';
         a.dependencia_comprometida = !!dependencia && semaforoActividad_(dependencia).codigo === 'atrasada';
       }
+      // v11 (P2): "si esto se atrasa, ¿a qué más afecta?" -- tareas activas
+      // que dependen de esta, directa o transitivamente. Puramente
+      // informativo, igual criterio que dependencia_comprometida arriba.
+      var dependientes = calcularImpactoDependencia_(a.actividad_id, dependientesDirectosPorId_);
+      a.impacto_dependientes = dependientes.length;
+      a.impacto_titulos = dependientes.slice(0, 3).map(function (d) { return d.titulo; });
       // v10 (multi-asignación): la lista de colaboradores ya parseada y con
       // nombre resuelto -- el frontend no toca JSON ni resuelve correos.
       a.colaboradores = colaboradoresDeActividad_(a).map(function (email) {
         return { email: email, nombre: nombrePorEmail[email] || email };
       });
+      // v11 (P2, "subtareas con rollup"): sin hijas, una tarea se comporta
+      // exactamente igual que antes (solo su propio avance_pct). Con hijas,
+      // se agrega el resumen -- el promedio usa avanceRealTarea_ (P1, mismo
+      // criterio que Plan/Esperado/Real: avance_pct si existe, 100/0 en
+      // TERMINADA/NO_INICIADA, nunca inventado para el resto).
+      var hijas = hijasPorPadre_[a.actividad_id] || [];
+      if (hijas.length) {
+        a.subtareas_total = hijas.length;
+        a.subtareas_terminadas = hijas.filter(function (h) { return h.estado === 'TERMINADA'; }).length;
+        var suma = hijas.reduce(function (s, h) { return s + (avanceRealTarea_(h) || 0); }, 0);
+        a.avance_rollup_pct = Math.round((suma / hijas.length) * 10) / 10;
+      }
+      a.es_subtarea = !!a.tarea_padre_id;
+      if (a.es_subtarea && porId[a.tarea_padre_id]) a.padre_titulo = porId[a.tarea_padre_id].titulo;
       return a;
     });
   },
@@ -769,12 +815,7 @@ var Proyectos = {
     });
     return leerFilasSeguro_(SHEETS.ACTIVIDADES_BITACORA)
       .filter(function (b) { return idsTarea[b.actividad_id]; })
-      .map(function (b) {
-        return {
-          actividad_id: b.actividad_id, tipo: b.tipo, nota: b.nota, horas: horasDeBitacora_(b),
-          timestamp: b.timestamp, autor_nombre: b.autor_nombre || b.autor_email
-        };
-      })
+      .map(filaBitacoraSalida_)
       .sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
   },
 
@@ -800,13 +841,167 @@ var Proyectos = {
     });
     return leerFilasSeguro_(SHEETS.ACTIVIDADES_BITACORA)
       .filter(function (b) { return idsTarea[b.actividad_id]; })
-      .map(function (b) {
-        return {
-          actividad_id: b.actividad_id, tipo: b.tipo, nota: b.nota, horas: horasDeBitacora_(b),
-          timestamp: b.timestamp, autor_nombre: b.autor_nombre || b.autor_email
-        };
-      })
+      .map(filaBitacoraSalida_)
       .sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
+  },
+
+  // v11 (Reingeniería Cronograma, P0): guarda/edita el REGISTRO DEL DÍA de
+  // una tarea -- la celda diaria de la Carta Gantt convertida en unidad de
+  // información editable. Es el corazón de la reingeniería: cada celda deja
+  // de ser una lectura derivada del check-in y pasa a tener su propio
+  // estado-del-día explícito, horas, comentario, tramos y motivo de bloqueo.
+  //
+  // Diseño clave (por qué NO agrega columnas ni necesita Instalador): el
+  // registro vive como un 'tipo' nuevo (REGISTRO_DIA) dentro de la MISMA
+  // ACTIVIDADES_BITACORA, reusando el JSON libre 'datos' igual que ya hacen
+  // horas/avance/confianza. Es UPSERT: una sola fila por (tarea, día); al
+  // re-guardar se conserva la versión anterior en datos.ediciones (historial
+  // antes→después) y se sella editado_por/editado_en -- append-only real, la
+  // fila no se pierde, solo se versiona.
+  //
+  // Permiso: ver el proyecto Y (trabajar la tarea O poder gestionar el
+  // proyecto). Reusa los gates existentes -- cero sistema de usuarios nuevo.
+  //
+  // SIGSO no es vigilancia: esto registra el COMPROMISO y el RESULTADO del
+  // día (qué se hizo, en qué estado quedó), no controla personas. "Sin
+  // registro" nunca se guarda como estado -- simplemente no hay fila.
+  guardarRegistroDia: function (data, contexto) {
+    data = data || {};
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeVerProyecto_(proyecto, contexto)) {
+      return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+    }
+
+    var actividad = leerFilasSeguro_(SHEETS.ACTIVIDADES).filter(function (a) {
+      return a.actividad_id === data.actividad_id && a.proyecto_id === proyecto.proyecto_id;
+    })[0];
+    if (!actividad) return errorValidacion_('actividad_id', 'Tarea no encontrada en este proyecto.');
+
+    var email = normalizarEmailProyecto_(contexto && contexto.email);
+    if (!trabajaLaActividad_(actividad, email) && !puedeGestionarProyecto_(proyecto, contexto)) {
+      return { _forbidden: true, message: 'Solo quien trabaja la tarea o el líder del proyecto puede registrar el día.' };
+    }
+
+    // Día: 'YYYY-MM-DD'. Validación de forma + que no sea futuro (no se
+    // registra un día que todavía no ocurrió; "planificado" a futuro se
+    // maneja con el plan de la tarea, no con el registro del día).
+    var dia = String(data.dia || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) {
+      return errorValidacion_('dia', 'El día debe tener formato AAAA-MM-DD.');
+    }
+    var hoyClave = claveDia_(new Date(), 'America/Santiago');
+    if (dia > hoyClave) {
+      return errorValidacion_('dia', 'No se puede registrar un día futuro.');
+    }
+
+    var estadoDia = String(data.estado_dia || '').trim();
+    if (REGISTRO_DIA_ESTADOS_.indexOf(estadoDia) === -1) {
+      return errorValidacion_('estado_dia', 'Estado del día no válido.');
+    }
+
+    var horas;
+    if (data.horas !== undefined && data.horas !== null && data.horas !== '') {
+      horas = Number(data.horas);
+      if (isNaN(horas) || horas < 0 || horas > 24) {
+        return errorValidacion_('horas', 'Las horas deben ser un número entre 0 y 24.');
+      }
+    }
+
+    // Bloqueo requiere motivo: un bloqueo sin causa no se puede desatascar
+    // ni escalar. Misma regla que ya exige Actividades al bloquear una tarea.
+    var bloqueoMotivo = String(data.bloqueo_motivo || '').trim();
+    if (estadoDia === 'bloqueado' && !bloqueoMotivo) {
+      return errorValidacion_('bloqueo_motivo', 'Un día bloqueado necesita un motivo.');
+    }
+
+    // Tramos horarios opcionales ("de la 9 a la 11 hice X"): se validan de
+    // forma (desde/hasta como texto corto) sin imponer un formato de reloj
+    // rígido -- son una ayuda de contexto, no un fichaje.
+    var tramos = [];
+    if (Array.isArray(data.tramos)) {
+      tramos = data.tramos.map(function (t) {
+        return {
+          desde: String((t && t.desde) || '').slice(0, 5),
+          hasta: String((t && t.hasta) || '').slice(0, 5),
+          nota: String((t && t.nota) || '').slice(0, 200)
+        };
+      }).filter(function (t) { return t.desde || t.hasta || t.nota; });
+    }
+
+    var nota = String(data.nota || '').slice(0, 2000);
+    var ahora = new Date().toISOString();
+
+    // UPSERT por (actividad_id, día): buscamos un REGISTRO_DIA existente de
+    // esa tarea para ese día.
+    var existente = leerFilasSeguro_(SHEETS.ACTIVIDADES_BITACORA).filter(function (b) {
+      if (b.tipo !== 'REGISTRO_DIA' || b.actividad_id !== actividad.actividad_id) return false;
+      var d = datosDeBitacora_(b);
+      return d.dia === dia;
+    })[0];
+
+    var datos = {
+      dia: dia,
+      estado_dia: estadoDia,
+      horas: (horas !== undefined) ? horas : '',
+      bloqueo_motivo: bloqueoMotivo,
+      tramos: tramos,
+      creado_por: email,
+      creado_en: (existente ? (datosDeBitacora_(existente).creado_en || ahora) : ahora),
+      editado_por: email,
+      editado_en: ahora,
+      ediciones: []
+    };
+
+    // timestamp = mediodía del día registrado, para que la Carta lo ubique
+    // en la columna correcta sin depender de la hora real de edición.
+    var timestampDia = dia + 'T13:00:00.000Z';
+
+    if (existente) {
+      var previo = datosDeBitacora_(existente);
+      // Historial antes→después: guardamos una foto de la versión anterior
+      // (sin arrastrar su propio historial, para no crecer sin límite).
+      var edicionesPrevias = Array.isArray(previo.ediciones) ? previo.ediciones : [];
+      edicionesPrevias.push({
+        estado_dia: previo.estado_dia || '',
+        horas: (previo.horas !== undefined) ? previo.horas : '',
+        nota: existente.nota || '',
+        bloqueo_motivo: previo.bloqueo_motivo || '',
+        editado_por: previo.editado_por || previo.creado_por || '',
+        editado_en: previo.editado_en || previo.creado_en || existente.timestamp || ''
+      });
+      // Tope defensivo: conservamos las últimas 50 versiones (más que
+      // suficiente para trazabilidad; evita una celda JSON gigante).
+      datos.ediciones = edicionesPrevias.slice(-50);
+      actualizarFilaPorId_(SHEETS.ACTIVIDADES_BITACORA, 'bitacora_id', existente.bitacora_id, {
+        nota: nota,
+        avance_pct: '',
+        confianza: '',
+        datos: JSON.stringify(datos),
+        autor_nombre: (contexto && contexto.nombre) || existente.autor_nombre || '',
+        timestamp: timestampDia
+      });
+    } else {
+      agregarFila_(SHEETS.ACTIVIDADES_BITACORA, {
+        bitacora_id: Utilities.getUuid(),
+        actividad_id: actividad.actividad_id,
+        tipo: 'REGISTRO_DIA',
+        autor_email: (contexto && contexto.email) || '',
+        autor_nombre: (contexto && contexto.nombre) || '',
+        nota: nota,
+        avance_pct: '',
+        confianza: '',
+        datos: JSON.stringify(datos),
+        timestamp: timestampDia
+      });
+    }
+
+    // La tarea "se movió": refrescamos ultima_actualizacion para que salud/
+    // digest la vean, igual que hace un check-in.
+    actualizarFilaPorId_(SHEETS.ACTIVIDADES, 'actividad_id', actividad.actividad_id,
+      { ultima_actualizacion: ahora });
+
+    return { ok: true, dia: dia, estado_dia: estadoDia, editado: !!existente };
   },
 
   // v10 (Fase G3, "los números de rendimiento"): unidades/día y horas/
@@ -865,6 +1060,42 @@ var Proyectos = {
     var conRitmo = porTarea.filter(function (t) { return t.unidades_por_dia !== ''; });
     var horasTotalesProyecto = Object.keys(horasPorTarea).reduce(function (s, k) { return s + horasPorTarea[k]; }, 0);
 
+    // v11 (P1, "Plan · Esperado · Real"): a diferencia de por_tarea (arriba,
+    // solo tareas con meta_cantidad), esto es TODA tarea activa -- es sobre
+    // fechas, no sobre unidades. "Esperado a hoy" asume avance LINEAL entre
+    // fecha_creacion y fecha_compromiso (el mismo supuesto simple que usa
+    // SPI en MS Project, documentado y visible, no una IA prediciendo nada).
+    // "Real" es avance_pct si existe; si no, se infiere de estados terminales
+    // (TERMINADA=100, NO_INICIADA=0) -- para EN_CURSO/BLOQUEADA sin
+    // avance_pct explicito no hay numero: mejor "sin dato" que inventar uno
+    // (mismo criterio que calcularAvanceProyecto_/G3).
+    var baseline = obtenerUltimaBaseline_(proyecto.proyecto_id);
+    var ahora = new Date();
+    var planSeguimiento = tareas.map(function (a) {
+      var real = avanceRealTarea_(a);
+      var esperado = calcularAvanceEsperado_(a.fecha_creacion, a.fecha_compromiso, ahora);
+      var baseTarea = baseline && baseline.por_tarea[a.actividad_id];
+      return {
+        actividad_id: a.actividad_id,
+        plan_inicio: a.fecha_creacion || '',
+        plan_fin: a.fecha_compromiso || '',
+        baseline_inicio: baseTarea ? baseTarea.fecha_inicio : '',
+        baseline_fin: baseTarea ? baseTarea.fecha_fin : '',
+        avance_real_pct: real,
+        avance_esperado_pct: esperado,
+        desviacion_pp: (real !== null && esperado !== null) ? Math.round((real - esperado) * 10) / 10 : null,
+        // v11 (P3, "SPI conceptual"): real/esperado como razón (1.0 = a
+        // tiempo, <1 atrasada, >1 adelantada) -- mismo dato que
+        // desviacion_pp, en la forma de índice que usa el Schedule
+        // Performance Index de EVM. Documentado como "conceptual" a
+        // propósito: no es una implementación de EVM completa (no hay
+        // costo/CPI -- SIGSO no tiene un campo de valor monetario, decisión
+        // ya tomada en la Fase G4b de este mismo módulo), es la MISMA
+        // desviación de siempre, solo que expresada como índice.
+        spi: (real !== null && esperado > 0) ? Math.round((real / esperado) * 100) / 100 : null
+      };
+    });
+
     return {
       por_tarea: porTarea,
       promedio_unidades_dia: conRitmo.length
@@ -872,8 +1103,160 @@ var Proyectos = {
         : null,
       horas_totales_proyecto: horasTotalesProyecto ? Math.round(horasTotalesProyecto * 10) / 10 : 0,
       tareas_sin_avance: tareas.filter(function (a) { return a.estado === 'NO_INICIADA'; }).length,
-      cumplimiento_tareas: calcularCumplimientoTareasProyecto_(tareas)
+      cumplimiento_tareas: calcularCumplimientoTareasProyecto_(tareas),
+      plan_seguimiento: planSeguimiento,
+      baseline: baseline ? { timestamp: baseline.timestamp, autor_nombre: baseline.autor_nombre } : null
     };
+  },
+
+  // v11 (P3, "analítica avanzada -- explicable, no una metodología
+  // completa"): lead time, cycle time, tiempo en bloqueo, tiempo en
+  // revisión -- las 4 métricas conceptuales del roadmap que SÍ se pueden
+  // calcular con datos que YA existen (fechas de ACTIVIDADES + eventos de
+  // ACTIVIDADES_BITACORA). Deliberadamente NO incluye CPI: exigiría un
+  // campo de costo/valor que SIGSO no tiene (misma razón por la que la Fase
+  // G4b, "peso de valor por tarea/cliente", quedó diferida en su momento) --
+  // agregarlo ahora sería inventar un número sin respaldo real.
+  obtenerAnalitica: function (data, contexto) {
+    var proyecto = buscarProyecto_(data && data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeVerProyecto_(proyecto, contexto)) {
+      return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+    }
+    var tareas = leerFilasSeguro_(SHEETS.ACTIVIDADES).filter(function (a) {
+      var activa = a.activa === true || a.activa === 'TRUE' || a.activa === 1;
+      return activa && a.proyecto_id === proyecto.proyecto_id;
+    });
+    var idsTarea = {};
+    tareas.forEach(function (a) { idsTarea[a.actividad_id] = true; });
+    var bitacoraPorTarea = {};
+    leerFilasSeguro_(SHEETS.ACTIVIDADES_BITACORA).forEach(function (b) {
+      if (!idsTarea[b.actividad_id]) return;
+      (bitacoraPorTarea[b.actividad_id] = bitacoraPorTarea[b.actividad_id] || []).push(b);
+    });
+
+    var ahora = new Date();
+    var porTarea = tareas.map(function (a) {
+      var eventos = bitacoraPorTarea[a.actividad_id] || [];
+      return {
+        actividad_id: a.actividad_id,
+        titulo: a.titulo,
+        lead_time_dias: calcularLeadTimeDias_(a),
+        cycle_time_dias: calcularCycleTimeDias_(a, eventos),
+        tiempo_bloqueo_dias: redond1Analitica_(sumarIntervalosBitacora_(eventos, ['BLOQUEO'], ['DESBLOQUEO', 'ENTREGA'], ahora)),
+        // Una tarea que nunca requiere validación nunca entra en
+        // EN_REVISION -- no tiene sentido medirle un tiempo ahí.
+        tiempo_revision_dias: a.requiere_validacion
+          ? redond1Analitica_(sumarIntervalosBitacora_(eventos, ['ENTREGA'], ['VALIDACION'], ahora))
+          : 0
+      };
+    });
+
+    function promedioDe_(campo) {
+      var valores = porTarea.map(function (t) { return t[campo]; }).filter(function (v) { return v !== null && v !== undefined; });
+      if (!valores.length) return null;
+      return redond1Analitica_(valores.reduce(function (s, v) { return s + v; }, 0) / valores.length);
+    }
+    function sumaDe_(campo) {
+      return redond1Analitica_(porTarea.reduce(function (s, t) { return s + (t[campo] || 0); }, 0));
+    }
+    var spiValores = tareas.map(function (a) {
+      var real = avanceRealTarea_(a);
+      var esperado = calcularAvanceEsperado_(a.fecha_creacion, a.fecha_compromiso, ahora);
+      return (real !== null && esperado > 0) ? real / esperado : null;
+    }).filter(function (v) { return v !== null; });
+
+    return {
+      por_tarea: porTarea,
+      lead_time_promedio_dias: promedioDe_('lead_time_dias'),
+      cycle_time_promedio_dias: promedioDe_('cycle_time_dias'),
+      tiempo_bloqueo_total_dias: sumaDe_('tiempo_bloqueo_dias'),
+      tiempo_revision_total_dias: sumaDe_('tiempo_revision_dias'),
+      spi_promedio: spiValores.length ? Math.round((spiValores.reduce(function (s, v) { return s + v; }, 0) / spiValores.length) * 100) / 100 : null
+    };
+  },
+
+  // v11 (P3, "workload cruzado multi-proyecto"): la MISMA vista Workload de
+  // un proyecto (P2), pero cruzando TODOS los proyectos que este usuario
+  // puede ver -- reusa Proyectos.listar (ya scopea "visibles" por rol: ADM/
+  // GERENCIA ven todo el portafolio, cualquier otro solo sus propios
+  // proyectos, mismo criterio que getResumenPortafolio). No hay gate de rol
+  // extra acá: la visibilidad YA la resuelve listar().
+  obtenerWorkloadPortafolio: function (data, contexto) {
+    var proyectosVisibles = Proyectos.listar({}, contexto).filter(function (p) {
+      return p.estado !== 'CERRADO' && p.estado !== 'CANCELADO';
+    });
+    var nombrePorProyecto = {};
+    var idsProyecto = {};
+    proyectosVisibles.forEach(function (p) { nombrePorProyecto[p.proyecto_id] = p.nombre; idsProyecto[p.proyecto_id] = true; });
+
+    var tareas = leerFilasSeguro_(SHEETS.ACTIVIDADES).filter(function (a) {
+      var activa = a.activa === true || a.activa === 'TRUE' || a.activa === 1;
+      return activa && a.proyecto_id && idsProyecto[a.proyecto_id];
+    }).map(function (a) {
+      return {
+        actividad_id: a.actividad_id, titulo: a.titulo, estado: a.estado, semaforo: semaforoActividad_(a).codigo,
+        responsable_email: a.responsable_email, responsable_nombre: a.responsable_nombre,
+        proyecto_id: a.proyecto_id, proyecto_nombre: nombrePorProyecto[a.proyecto_id] || ''
+      };
+    });
+    var idsTarea = {};
+    tareas.forEach(function (a) { idsTarea[a.actividad_id] = true; });
+    var bitacora = leerFilasSeguro_(SHEETS.ACTIVIDADES_BITACORA)
+      .filter(function (b) { return idsTarea[b.actividad_id]; })
+      .map(filaBitacoraSalida_);
+
+    return {
+      proyectos: proyectosVisibles.map(function (p) { return { proyecto_id: p.proyecto_id, nombre: p.nombre }; }),
+      tareas: tareas,
+      bitacora: bitacora
+    };
+  },
+
+  // v11 (P1, "congelar línea base"): guarda una FOTO de fecha_creacion→
+  // fecha_compromiso de cada tarea activa como un evento más de
+  // PROYECTO_EVENTOS (tipo BASELINE, cuerpo=JSON) -- mismo patrón que P0
+  // (REGISTRO_DIA dentro de ACTIVIDADES_BITACORA): cero hoja nueva, cero
+  // columna nueva. Volver a congelar (tras una reprogramación grande) crea
+  // OTRA foto; la más reciente es LA baseline vigente para comparar contra
+  // el plan actual -- las anteriores quedan en el historial de la Sala, no
+  // se pierden, solo dejan de ser "la" referencia activa.
+  congelarBaseline: function (data, contexto) {
+    var proyecto = buscarProyecto_(data && data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeGestionarProyecto_(proyecto, contexto)) {
+      return { _forbidden: true, message: 'Solo el líder del proyecto (o ADM) puede congelar la línea base.' };
+    }
+    var tareas = leerFilasSeguro_(SHEETS.ACTIVIDADES).filter(function (a) {
+      var activa = a.activa === true || a.activa === 'TRUE' || a.activa === 1;
+      return activa && a.proyecto_id === proyecto.proyecto_id;
+    });
+    var snapshot = tareas.map(function (a) {
+      return { actividad_id: a.actividad_id, titulo: a.titulo, fecha_inicio: a.fecha_creacion || '', fecha_fin: a.fecha_compromiso || '' };
+    });
+    var evento = registrarEventoProyecto_(proyecto.proyecto_id, 'BASELINE', contexto,
+      'Línea base congelada (' + snapshot.length + ' tarea[s])', '', '', JSON.stringify({ tareas: snapshot }));
+    return { ok: true, evento_id: evento.evento_id, timestamp: evento.timestamp, total_tareas: snapshot.length };
+  },
+
+  // v11 (P1, "historial de fecha"): reprograma fecha_compromiso de una tarea
+  // DEL PROYECTO, con motivo obligatorio -- delega en Actividades.reprogramar
+  // (RN-703), cuyo permiso (responsable/supervisor/ADM) YA calza con
+  // Proyectos sin tocar nada: crearTarea deja al líder del proyecto como
+  // supervisor_email por defecto (ver crearTarea), así que "supervisor" ahí
+  // ES "líder del proyecto". Esta capa solo confirma que la tarea es de ESTE
+  // proyecto y que quien pide puede al menos VERLO, antes de delegar.
+  reprogramarTarea: function (data, contexto) {
+    var proyecto = buscarProyecto_(data && data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeVerProyecto_(proyecto, contexto)) {
+      return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+    }
+    var actividad = leerFilasSeguro_(SHEETS.ACTIVIDADES).filter(function (a) {
+      return a.actividad_id === data.actividad_id && a.proyecto_id === proyecto.proyecto_id;
+    })[0];
+    if (!actividad) return errorValidacion_('actividad_id', 'Tarea no encontrada en este proyecto.');
+    return Actividades.reprogramar(data, contexto);
   },
 
   // --- La sala --------------------------------------------------------------
@@ -1245,8 +1628,21 @@ var Proyectos = {
     var tareasPorId = {};
     tareas.forEach(function (a) { tareasPorId[a.actividad_id] = a; });
     var rendimiento = Proyectos.obtenerRendimiento({ proyecto_id: proyecto.proyecto_id }, contexto);
-    var bitacoraReciente = Proyectos.listarBitacora({ proyecto_id: proyecto.proyecto_id }, contexto).slice(-15).reverse();
-    var html = construirHtmlReporteProyecto_(detalle, tareas, rendimiento, bitacoraReciente, tareasPorId);
+
+    // v11 ("PDF ejecutivo configurable"): sin config (un clic de siempre,
+    // botón "Descargar PDF" del Resumen) el reporte es EXACTAMENTE el de
+    // siempre -- cero cambio para quien nunca abre "Configurar informe".
+    // Con config (secciones/rango/personas/estado elegidos en el modal
+    // nuevo) se arma un documento a medida: portada, salud ponderada,
+    // Gantt/workload multipágina, desviaciones Plan/Esperado/Real, etc.
+    var config = normalizarConfigReporte_(data && data.config);
+    var html;
+    if (!config) {
+      var bitacoraReciente = Proyectos.listarBitacora({ proyecto_id: proyecto.proyecto_id }, contexto).slice(-15).reverse();
+      html = construirHtmlReporteProyecto_(detalle, tareas, rendimiento, bitacoraReciente, tareasPorId);
+    } else {
+      html = construirHtmlReporteConfigurado_(detalle, tareas, rendimiento, tareasPorId, config, contexto);
+    }
     var pdf = Utilities.newBlob(html, 'text/html', 'Reporte-' + proyecto.proyecto_id + '.html').getAs('application/pdf');
     pdf.setName('Reporte - ' + proyecto.nombre + '.pdf');
     return {
@@ -1282,6 +1678,406 @@ function construirHtmlReporteProyecto_(detalle, tareas, rendimiento, bitacoraRec
     seccionBitacoraPdf_(bitacoraReciente || [], tareasPorId || {});
   var p = detalle.proyecto;
   return docChromeOt_({ tipoDoc: 'Reporte de proyecto', referencia: p.codigo || p.nombre }, cuerpo);
+}
+
+// --- reporte PDF configurable (v11, "PDF ejecutivo configurable") --------
+//
+// Decisión de diseño: `construirHtmlReporteProyecto_` (arriba) queda 100%
+// intacta -- es el camino de un clic, sin configurar, y no debía cambiar en
+// una coma. Todo lo nuevo vive en funciones aparte que SOLO se llaman cuando
+// el usuario abrió "Configurar informe" y envió una config explícita.
+
+// Secciones disponibles, en el ORDEN fijo en que aparecen en el documento
+// (el usuario elige subconjunto, no reordena). Hitos/Riesgos son del
+// proyecto completo -- no tienen "responsable" que filtrar como Gantt/
+// Workload/Desviaciones/Vencimientos sí tienen.
+var REPORTE_SECCIONES_DISPONIBLES_ = [
+  'portada', 'ficha', 'salud', 'hitos', 'riesgos', 'vencimientos',
+  'rendimiento', 'desviaciones', 'gantt', 'workload', 'bitacora', 'leyenda'
+];
+
+// Valida/normaliza la config que llega del frontend. null = "no hay config"
+// (el caller usa el camino clásico); nunca deja pasar un array/rango con
+// forma inesperada -- una config corrupta no debe tumbar la generación del
+// PDF, solo caer a valores seguros.
+function normalizarConfigReporte_(config) {
+  if (!config) return null;
+  var secciones = Array.isArray(config.secciones)
+    ? config.secciones.filter(function (s) { return REPORTE_SECCIONES_DISPONIBLES_.indexOf(s) !== -1; })
+    : [];
+  if (!secciones.length) secciones = ['ficha']; // nunca un PDF vacío
+  var personas = Array.isArray(config.personas)
+    ? config.personas.map(normalizarEmailProyecto_).filter(Boolean)
+    : [];
+  var estado = ['abiertas', 'atrasadas'].indexOf(config.estado) !== -1 ? config.estado : '';
+  var rango = null;
+  if (config.rango && /^\d{4}-\d{2}-\d{2}$/.test(config.rango.desde || '') &&
+      /^\d{4}-\d{2}-\d{2}$/.test(config.rango.hasta || '') && config.rango.desde <= config.rango.hasta) {
+    rango = { desde: config.rango.desde, hasta: config.rango.hasta };
+  }
+  return { secciones: secciones, personas: personas, estado: estado, rango: rango };
+}
+
+// 'YYYY-MM-DD' <-> Date, en UTC -- mismo criterio que ya usa obtenerRendimiento
+// para las claves de día (f.toISOString().slice(0,10)), para que un
+// REGISTRO_DIA (que guarda 'dia' como string plano) y un check-in (que solo
+// tiene 'timestamp') caigan en la MISMA clave sin desfases de huso horario.
+function clavePdf_(f) { return f.toISOString().slice(0, 10); }
+function fechaDeClavePdf_(c) { var p = String(c).split('-').map(Number); return new Date(Date.UTC(p[0], p[1] - 1, p[2])); }
+function redond1Pdf_(n) { return Math.round(n * 10) / 10; }
+
+// Días que cubre el Gantt/Workload del reporte: el rango explícito si el
+// usuario lo dio, o el tramo real del proyecto (desde la tarea más antigua
+// hasta la más lejana o hoy) si no -- tope de 60 días: un PDF más largo se
+// vuelve impracticable, y quien necesita más detalle puede pedir un rango
+// puntual desde "Configurar informe".
+var REPORTE_LIMITE_DIAS_GANTT_ = 60;
+function construirDiasReportePdf_(tareas, rango, hoyClave) {
+  var desde, hasta;
+  if (rango) {
+    desde = rango.desde; hasta = rango.hasta;
+  } else {
+    var claves = [hoyClave];
+    tareas.forEach(function (a) {
+      if (a.fecha_creacion) claves.push(clavePdf_(new Date(a.fecha_creacion)));
+      if (a.fecha_compromiso) claves.push(clavePdf_(new Date(a.fecha_compromiso)));
+    });
+    claves.sort();
+    desde = claves[0]; hasta = claves[claves.length - 1];
+  }
+  var dias = [], cursor = fechaDeClavePdf_(desde), fin = fechaDeClavePdf_(hasta);
+  while (cursor.getTime() <= fin.getTime() && dias.length < REPORTE_LIMITE_DIAS_GANTT_) {
+    dias.push(clavePdf_(cursor));
+    cursor = new Date(cursor.getTime() + 24 * 3600 * 1000);
+  }
+  return dias;
+}
+
+// v11: el motor HTML->PDF de Apps Script SÍ respeta @page si va en el <head>
+// del blob -- una vez que el informe trae Gantt/Workload (muchas columnas de
+// día), portrait ya no alcanza. Los cortes (18/30/45 días) son los MISMOS
+// que usa el chunking de las tablas (ver seccionGanttPdf_/seccionWorkloadPdf_
+// más abajo): cada página del PDF trae exactamente las columnas que le caben
+// a su tamaño. No hay forma de probar la geometría real en el sandbox de
+// tests (no tiene motor de PDF) -- se verifica leyendo el HTML generado.
+function paginaCssParaDias_(totalDias) {
+  var tamano = totalDias <= 18 ? 'A4' : (totalDias <= 30 ? 'A3' : 'A2');
+  return '@page { size: ' + tamano + ' landscape; margin: 1.2cm; }';
+}
+
+// Mismo chrome visual que docChromeOt_ (OrdenTrabajo.gs), pero con su propio
+// <head> para poder inyectar el <style>@page> de arriba -- deliberadamente
+// NO se toca docChromeOt_ (lo usan tambien la Orden de Trabajo y el reporte
+// de Pausas; cambiar su firma es un riesgo que no vale la pena para este
+// reporte). Duplicar este bloque es el mismo criterio ya aplicado en otras
+// fases: frontend/backend (y aquí, reporte "clásico" vs "configurado") son
+// caminos separados que no vale la pena forzar a compartir función.
+function docChromeProyectoPdf_(meta, contenidoHtml, paginaCss) {
+  var emitida = formatearFechaLegible_(new Date());
+  return '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+    (paginaCss ? '<style>' + paginaCss + '</style>' : '') +
+    '</head>' +
+    '<body style="margin:0;font-family:' + DOC.SANS + ';color:' + DOC.INK + ';font-size:13px;line-height:1.5;">' +
+    '<div style="padding:26px 30px;">' +
+    '<table width="100%" style="border-collapse:collapse;"><tr>' +
+    '<td style="vertical-align:middle;">' +
+    '<table style="border-collapse:collapse;"><tr>' +
+    '<td style="background:' + DOC.NAVY + ';color:#ffffff;font-family:' + DOC.SERIF + ';font-weight:bold;font-size:18px;' +
+    'width:30px;height:30px;text-align:center;vertical-align:middle;border-radius:5px;">S</td>' +
+    '<td style="padding-left:10px;vertical-align:middle;">' +
+    '<div style="font-size:17px;font-weight:bold;letter-spacing:2px;color:' + DOC.INK + ';">SIGSO</div>' +
+    '<div style="font-size:10px;color:' + DOC.MUTED + ';letter-spacing:0.3px;">Sistema de Gestión de Solicitudes</div>' +
+    '</td></tr></table>' +
+    '</td>' +
+    '<td style="vertical-align:middle;text-align:right;">' +
+    '<div style="font-size:12px;letter-spacing:2px;color:' + DOC.NAVY + ';font-weight:bold;text-transform:uppercase;">' +
+    escaparHtml_(meta.tipoDoc) + '</div>' +
+    '<div style="font-size:14px;color:' + DOC.INK + ';font-weight:bold;margin-top:2px;">N.º ' + escaparHtml_(meta.referencia) + '</div>' +
+    '<div style="font-size:10px;color:' + DOC.MUTED + ';margin-top:2px;">Emitida: ' + escaparHtml_(emitida) + '</div>' +
+    '</td></tr></table>' +
+    '<div style="border-top:2px solid ' + DOC.NAVY + ';margin-top:12px;"></div>' +
+    '<div style="border-top:1px solid ' + DOC.HAIRLINE + ';margin-top:2px;margin-bottom:18px;"></div>' +
+    contenidoHtml +
+    '<div style="border-top:1px solid ' + DOC.HAIRLINE + ';margin-top:22px;padding-top:10px;font-size:10px;color:' + DOC.FAINT + ';line-height:1.5;">' +
+    'SIGSO · Sistema de Gestión de Solicitudes · Documento generado automáticamente el ' + escaparHtml_(emitida) + '.<br>' +
+    '<strong style="color:' + DOC.MUTED + ';">Confidencial — uso interno.</strong> Contiene datos de acceso y de la operación; no lo redistribuyas fuera del equipo autorizado.' +
+    '</div>' +
+    '</div></body></html>';
+}
+
+// Arma el HTML completo del reporte configurado: filtra tareas por persona/
+// estado, calcula (si hace falta) los días del Gantt/Workload y arma solo
+// las secciones que el usuario eligió, en el orden fijo de
+// REPORTE_SECCIONES_DISPONIBLES_.
+function construirHtmlReporteConfigurado_(detalle, todasTareas, rendimiento, tareasPorId, config, contexto) {
+  function incluye(s) { return config.secciones.indexOf(s) !== -1; }
+
+  var tareasFiltradas = todasTareas.filter(function (a) {
+    if (config.personas.length && config.personas.indexOf(normalizarEmailProyecto_(a.responsable_email)) === -1) return false;
+    if (config.estado === 'abiertas' && (a.estado === 'TERMINADA' || a.estado === 'CANCELADA')) return false;
+    if (config.estado === 'atrasadas' && a.semaforo !== 'atrasada') return false;
+    return true;
+  });
+
+  var necesitaDias = incluye('gantt') || incluye('workload');
+  var hoyClave = clavePdf_(new Date());
+  var dias = necesitaDias ? construirDiasReportePdf_(tareasFiltradas, config.rango, hoyClave) : [];
+
+  // Bitácora de las tareas filtradas, partida en registroPorTareaDia (P0,
+  // manda sobre lo derivado del check-in) y eventosPorTareaDia (el resto) --
+  // MISMA estructura y prioridad que usa la carta en pantalla
+  // (pintarCronogramaDedicacion_), solo que aquí alimenta tablas de PDF.
+  var registroPorTareaDia = {}, eventosPorTareaDia = {}, bitacoraCompleta = [];
+  if (necesitaDias || incluye('bitacora')) {
+    var idsFiltrados = {};
+    tareasFiltradas.forEach(function (a) { idsFiltrados[a.actividad_id] = true; });
+    bitacoraCompleta = Proyectos.listarBitacora({ proyecto_id: detalle.proyecto.proyecto_id }, contexto)
+      .filter(function (b) { return idsFiltrados[b.actividad_id]; });
+    bitacoraCompleta.forEach(function (b) {
+      var k = (b.tipo === 'REGISTRO_DIA' && b.dia) ? b.dia : (b.timestamp ? clavePdf_(new Date(b.timestamp)) : '');
+      if (!k) return;
+      if (b.tipo === 'REGISTRO_DIA') {
+        (registroPorTareaDia[b.actividad_id] = registroPorTareaDia[b.actividad_id] || {})[k] = b;
+      } else {
+        var porDia = (eventosPorTareaDia[b.actividad_id] = eventosPorTareaDia[b.actividad_id] || {});
+        (porDia[k] = porDia[k] || []).push(b);
+      }
+    });
+  }
+
+  var partes = [];
+  if (incluye('portada')) partes.push(seccionPortadaPdf_(detalle));
+  if (incluye('ficha')) partes.push(fichaProyectoPdf_(detalle));
+  if (incluye('salud')) partes.push(seccionSaludPdf_(detalle));
+  if (incluye('hitos')) partes.push(seccionHitosPdf_(detalle.hitos || []));
+  if (incluye('riesgos')) partes.push(seccionRiesgosPdf_(detalle.riesgos || []));
+  if (incluye('vencimientos')) partes.push(seccionVencimientosPdf_(tareasFiltradas));
+  if (incluye('rendimiento')) partes.push(seccionRendimientoPdf_(rendimiento));
+  if (incluye('desviaciones')) partes.push(seccionDesviacionesPdf_(rendimiento, tareasFiltradas, tareasPorId));
+  if (incluye('gantt')) partes.push(seccionGanttPdf_(tareasFiltradas, dias, registroPorTareaDia, eventosPorTareaDia));
+  if (incluye('workload')) partes.push(seccionWorkloadPdf_(tareasFiltradas, dias, registroPorTareaDia, eventosPorTareaDia));
+  if (incluye('bitacora')) {
+    // v11: "la bitácora del día es la fuente, no una captura" -- si hay un
+    // rango (explícito o el que ya calculó el Gantt/Workload), la sección
+    // muestra TODO lo que pasó en esa ventana, en orden cronológico; sin
+    // rango, se queda en las últimas 30 (el doble que el reporte clásico,
+    // porque este SÍ es un informe a medida, no el de un clic).
+    var rangoEfectivo = dias.length ? { desde: dias[0], hasta: dias[dias.length - 1] } : config.rango;
+    var bitacoraSeccion;
+    if (rangoEfectivo) {
+      bitacoraSeccion = bitacoraCompleta.filter(function (b) {
+        var k = (b.tipo === 'REGISTRO_DIA' && b.dia) ? b.dia : (b.timestamp ? clavePdf_(new Date(b.timestamp)) : '');
+        return k >= rangoEfectivo.desde && k <= rangoEfectivo.hasta;
+      }).sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
+    } else {
+      bitacoraSeccion = bitacoraCompleta.slice(-30).reverse();
+    }
+    partes.push(seccionBitacoraPdf_(bitacoraSeccion, tareasPorId));
+  }
+  if (incluye('leyenda')) partes.push(seccionLeyendaPdf_());
+
+  var p = detalle.proyecto;
+  var paginaCss = necesitaDias ? paginaCssParaDias_(dias.length) : '';
+  return docChromeProyectoPdf_({ tipoDoc: 'Reporte de proyecto', referencia: p.codigo || p.nombre }, partes.join(''), paginaCss);
+}
+
+// --- portada / salud detallada / desviaciones / Gantt / workload / leyenda
+
+function seccionPortadaPdf_(detalle) {
+  var p = detalle.proyecto;
+  var scoreTxt = (detalle.salud_score === null || detalle.salud_score === undefined) ? '' : ' · ' + detalle.salud_score + '/100';
+  return '<div style="padding:60px 0 40px;text-align:center;page-break-after:always;">' +
+    '<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:' + DOC.MUTED + ';margin-bottom:10px;">Reporte ejecutivo de proyecto</div>' +
+    '<div style="font-size:26px;font-weight:bold;font-family:' + DOC.SERIF + ';color:' + DOC.INK + ';margin-bottom:14px;">' + escaparHtml_(p.nombre) + '</div>' +
+    '<div style="font-size:14px;color:' + DOC.NAVY + ';font-weight:bold;margin-bottom:24px;">' +
+      escaparHtml_(PROYECTOS_SALUD_LABEL_PDF[detalle.salud] || detalle.salud) + escaparHtml_(scoreTxt) + '</div>' +
+    '<table style="margin:0 auto;border-collapse:collapse;font-size:12px;">' +
+      '<tr><td style="' + celdaLabelFicha_() + '">Código</td><td style="' + celdaValorFicha_() + '">' + escaparHtml_(p.codigo || '—') + '</td></tr>' +
+      '<tr><td style="' + celdaLabelFicha_() + '">Líder</td><td style="' + celdaValorFicha_() + '">' + escaparHtml_(p.lider_email || '—') + '</td></tr>' +
+      '<tr><td style="' + celdaLabelFicha_() + '">Período</td><td style="' + celdaValorFicha_() + '">' + fechaCortaPdfProyecto_(p.fecha_inicio) + ' – ' + fechaCortaPdfProyecto_(p.fecha_objetivo) + '</td></tr>' +
+    '</table>' +
+    '</div>';
+}
+
+// v11 (P1, "score de salud ponderado" -> aquí, en el PDF): el mismo score/
+// desglose que ya se ve en pantalla, en forma de tabla -- cada factor con
+// cuántos puntos restó, para que el número no sea una caja negra tampoco en
+// el documento que gerencia reenvía.
+var SALUD_FACTOR_LABEL_PDF_ = {
+  hito_vencido: 'Hito(s) vencido(s)', tarea_critica_atrasada: 'Tarea(s) crítica(s) atrasada(s)',
+  tarea_atrasada: 'Tarea(s) atrasada(s)', bloqueo_estancado: 'Bloqueo(s) estancado(s)',
+  tarea_bloqueada: 'Tarea(s) bloqueada(s)', sin_actualizar: 'Tarea(s) sin actualizar',
+  entregable_vencido: 'Entregable(s) vencido(s)', entregable_observado: 'Entregable(s) observado(s)'
+};
+function seccionSaludPdf_(detalle) {
+  var scoreTxt = (detalle.salud_score === null || detalle.salud_score === undefined) ? 'Fijado manualmente' : detalle.salud_score + '/100';
+  var cabecera = '<div style="margin:0 0 10px;font-size:13px;font-weight:bold;color:' + DOC.INK + ';">' +
+    escaparHtml_(PROYECTOS_SALUD_LABEL_PDF[detalle.salud] || detalle.salud) + ' · ' + escaparHtml_(scoreTxt) + '</div>';
+  var filas = (detalle.salud_desglose || []).map(function (d) {
+    return '<tr>' +
+      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(SALUD_FACTOR_LABEL_PDF_[d.factor] || d.factor) + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + d.cantidad + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">-' + d.puntos + '</td>' +
+    '</tr>';
+  }).join('');
+  if (!filas) return docSeccionOt_('Salud del proyecto') + cabecera;
+  return docSeccionOt_('Salud del proyecto') + cabecera +
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' + filas + '</table>';
+}
+
+// v11 (P1, "Plan · Esperado · Real" -> aquí, en el PDF): mismo dato que ya
+// muestra la carta en pantalla bajo el título de cada tarea, en tabla.
+function seccionDesviacionesPdf_(rendimiento, tareas, tareasPorId) {
+  var plan = (rendimiento && rendimiento.plan_seguimiento) || [];
+  var idsFiltrados = {};
+  tareas.forEach(function (a) { idsFiltrados[a.actividad_id] = true; });
+  var filasPlan = plan.filter(function (t) { return idsFiltrados[t.actividad_id] && t.plan_fin; });
+  if (!filasPlan.length) return '';
+  var filas = filasPlan.map(function (t) {
+    var tarea = tareasPorId[t.actividad_id];
+    var desv = (t.desviacion_pp === null || t.desviacion_pp === undefined)
+      ? '—' : (t.desviacion_pp >= 0 ? '+' : '') + t.desviacion_pp + 'pp';
+    return '<tr>' +
+      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(tarea ? tarea.titulo : '—') + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + fechaCortaPdfProyecto_(t.plan_fin) + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + (t.avance_esperado_pct === null || t.avance_esperado_pct === undefined ? '—' : t.avance_esperado_pct + '%') + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + (t.avance_real_pct === null || t.avance_real_pct === undefined ? '—' : t.avance_real_pct + '%') + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + desv + '</td>' +
+    '</tr>';
+  }).join('');
+  return docSeccionOt_('Plan · Esperado · Real') +
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' + filas + '</table>';
+}
+
+// v11 ("Gantt multipágina"): la letra de cada celda tarea×día, misma
+// prioridad y misma derivación que ya usa la carta en pantalla
+// (pintarCronogramaDedicacion_/filaTareaHtml_ en proyectos.js) -- un
+// REGISTRO_DIA (P0) manda; si no hay, se deriva de los check-ins del día;
+// si tampoco, "A" en el día de creación. Deliberadamente NO replica las
+// marcas "esperando a un tercero"/"vencida sin gestión" de la pantalla (son
+// matices de UX en vivo; un Gantt impreso que muestra fielmente lo
+// REGISTRADO, y nada más, ya cumple "la bitácora es la fuente, no una
+// caja negra" sin arrastrar esa complejidad al backend).
+var GANTT_PDF_ESTADO_ = {
+  asignado: { letra: 'A', bg: '#EDE9FE' }, planificado: { letra: 'P', bg: '#DBEAFE' },
+  en_proceso: { letra: '●', bg: '#DBEAFE' }, bloqueado: { letra: '!', bg: '#FEE2E2' },
+  pausado: { letra: '‖', bg: '#F1F5F9' }, finalizado: { letra: '✓', bg: '#DCFCE7' },
+  entregado: { letra: 'F', bg: '#DCFCE7' }, revision: { letra: 'R', bg: '#FEF3C7' },
+  esperando_tercero: { letra: '…', bg: '#F1F5F9' }
+};
+function celdaGanttPdf_(actividadId, diaClave, claveCreacion, registroPorTareaDia, eventosPorTareaDia) {
+  var reg = (registroPorTareaDia[actividadId] || {})[diaClave];
+  if (reg) {
+    var vis = GANTT_PDF_ESTADO_[reg.estado_dia] || { letra: '•', bg: '#F1F5F9' };
+    return { letra: vis.letra, bg: vis.bg };
+  }
+  // Allowlist EXACTA de DEDICACION_TIPO_ESTADO_ (proyectos.js) -- CREADA
+  // (que también viaja en la bitácora) deliberadamente NO cuenta como "se
+  // trabajó ese día": el día de creación se marca "A" comparando contra
+  // fecha_creacion más abajo, no encontrando un evento CREADA.
+  var eventos = (eventosPorTareaDia[actividadId] || {})[diaClave] || [];
+  var letra = '', bg = '';
+  eventos.forEach(function (ev) {
+    if (ev.tipo === 'ENTREGA') { letra = 'F'; bg = '#DCFCE7'; return; }
+    if (ev.tipo === 'VALIDACION') {
+      if (/^Aprobada/i.test(ev.nota || '')) { letra = 'F'; bg = '#DCFCE7'; }
+      else if (letra !== 'F') { letra = '!'; bg = '#FEE2E2'; }
+      return;
+    }
+    if (letra === 'F') return;
+    if (ev.tipo === 'BLOQUEO') { letra = '!'; bg = '#FEE2E2'; return; }
+    if (['CHECKIN_AVANCE', 'CHECKIN_SIN_CAMBIO', 'DESBLOQUEO'].indexOf(ev.tipo) !== -1 && letra !== '!') {
+      letra = 'P'; bg = '#DBEAFE';
+    }
+  });
+  if (!letra && diaClave === claveCreacion) { letra = 'A'; bg = '#EDE9FE'; }
+  return { letra: letra, bg: bg };
+}
+
+// Días por página según el tamaño que va a usar paginaCssParaDias_ (mismos
+// cortes) -- así cada página del Gantt/Workload trae justo las columnas que
+// le caben a su tamaño de papel, sin adivinar por separado en dos lugares.
+function diasPorPaginaPdf_(totalDias) {
+  return totalDias <= 18 ? 18 : (totalDias <= 30 ? 30 : 45);
+}
+
+function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia) {
+  if (!tareas.length || !dias.length) return '';
+  var chunk = diasPorPaginaPdf_(dias.length);
+  var paginas = [];
+  for (var i = 0; i < dias.length; i += chunk) paginas.push(dias.slice(i, i + chunk));
+
+  var html = paginas.map(function (diasPagina, idx) {
+    var encabezado = '<tr><td style="' + celdaLabelFicha_() + 'width:auto;">Tarea</td>' +
+      diasPagina.map(function (d) {
+        return '<td style="' + celdaLabelFicha_() + 'width:auto;text-align:center;">' + fechaCortaPdfProyecto_(d) + '</td>';
+      }).join('') + '</tr>';
+    var filas = tareas.map(function (a) {
+      var claveCreacion = a.fecha_creacion ? clavePdf_(new Date(a.fecha_creacion)) : '';
+      var celdas = diasPagina.map(function (d) {
+        var c = celdaGanttPdf_(a.actividad_id, d, claveCreacion, registroPorTareaDia, eventosPorTareaDia);
+        return '<td style="' + celdaValorFicha_() + 'width:auto;text-align:center;' + (c.bg ? 'background:' + c.bg + ';' : '') + '">' + (c.letra || '') + '</td>';
+      }).join('');
+      return '<tr><td style="' + celdaValorFicha_() + 'width:auto;">' + escaparHtml_(a.titulo) + '</td>' + celdas + '</tr>';
+    }).join('');
+    return '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:10px;' +
+      (idx > 0 ? 'page-break-before:always;' : '') + '">' + encabezado + filas + '</table>';
+  }).join('');
+  return docSeccionOt_('Carta Gantt (día × tarea)') + html;
+}
+
+// v11 (P1, "workload heatmap" -> aquí, en el PDF): mismo total por persona/
+// día que ya muestra "Por persona" en pantalla, en tabla, con la misma
+// jornada de referencia (CUMPLIMIENTO_HORAS_JORNADA, Cumplimiento.gs) para
+// marcar sobrecarga.
+function seccionWorkloadPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia) {
+  if (!tareas.length || !dias.length) return '';
+  var porPersona = {}, orden = [];
+  tareas.forEach(function (a) {
+    var clave = a.responsable_nombre || a.responsable_email || '—';
+    if (!porPersona[clave]) { porPersona[clave] = []; orden.push(clave); }
+    porPersona[clave].push(a);
+  });
+  function horasDelDia_(actividadId, diaClave) {
+    var reg = (registroPorTareaDia[actividadId] || {})[diaClave];
+    if (reg) return Number(reg.horas) || 0;
+    var eventos = (eventosPorTareaDia[actividadId] || {})[diaClave] || [];
+    return eventos.reduce(function (s, ev) { return s + (Number(ev.horas) || 0); }, 0);
+  }
+  var chunk = diasPorPaginaPdf_(dias.length);
+  var paginas = [];
+  for (var i = 0; i < dias.length; i += chunk) paginas.push(dias.slice(i, i + chunk));
+
+  var html = paginas.map(function (diasPagina, idx) {
+    var encabezado = '<tr><td style="' + celdaLabelFicha_() + 'width:auto;">Persona</td>' +
+      diasPagina.map(function (d) { return '<td style="' + celdaLabelFicha_() + 'width:auto;text-align:center;">' + fechaCortaPdfProyecto_(d) + '</td>'; }).join('') + '</tr>';
+    var filas = orden.map(function (persona) {
+      var celdas = diasPagina.map(function (d) {
+        var total = porPersona[persona].reduce(function (s, a) { return s + horasDelDia_(a.actividad_id, d); }, 0);
+        var sobrecarga = total > CUMPLIMIENTO_HORAS_JORNADA;
+        return '<td style="' + celdaValorFicha_() + 'width:auto;text-align:center;' +
+          (sobrecarga ? 'background:#FEE2E2;font-weight:bold;color:#B91C1C;' : '') + '">' + (total ? redond1Pdf_(total) : '') + '</td>';
+      }).join('');
+      return '<tr><td style="' + celdaValorFicha_() + 'width:auto;">' + escaparHtml_(persona) + '</td>' + celdas + '</tr>';
+    }).join('');
+    return '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:10px;' +
+      (idx > 0 ? 'page-break-before:always;' : '') + '">' + encabezado + filas + '</table>';
+  }).join('');
+  return docSeccionOt_('Carga de trabajo (horas por día y persona)') + html;
+}
+
+function seccionLeyendaPdf_() {
+  var items = [
+    ['A', 'Asignado'], ['P', 'Planificado / se trabajó'], ['●', 'En proceso'],
+    ['✓ / F', 'Finalizado / entregado'], ['R', 'En revisión'], ['‖', 'En pausa'],
+    ['…', 'Esperando a un tercero'], ['!', 'Bloqueado']
+  ];
+  var filas = items.map(function (i) {
+    return '<tr><td style="' + celdaLabelFicha_() + 'width:10%;text-align:center;">' + i[0] + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + i[1] + '</td></tr>';
+  }).join('');
+  return docSeccionOt_('Leyenda') +
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:11px;">' + filas + '</table>';
 }
 
 function fichaProyectoPdf_(detalle) {
@@ -1400,16 +2196,28 @@ function seccionRendimientoPdf_(rendimiento) {
 // hace la Carta de Dedicación en pantalla).
 var BITACORA_TIPO_LABEL_PDF_ = {
   CREADA: 'Asignada', CHECKIN_AVANCE: 'Avance', CHECKIN_SIN_CAMBIO: 'Sin cambios',
-  DESBLOQUEO: 'Se destrabó', BLOQUEO: 'Bloqueada', ENTREGA: 'Entregada', VALIDACION: 'Revisión'
+  DESBLOQUEO: 'Se destrabó', BLOQUEO: 'Bloqueada', ENTREGA: 'Entregada', VALIDACION: 'Revisión',
+  REGISTRO_DIA: 'Registro del día' // v11 (P0)
+};
+var REGISTRO_DIA_ESTADO_LABEL_PDF_ = {
+  asignado: 'Asignado', planificado: 'Planificado', en_proceso: 'En proceso',
+  bloqueado: 'Bloqueado', pausado: 'En pausa', finalizado: 'Finalizado',
+  entregado: 'Entregado', revision: 'En revisión', esperando_tercero: 'Esperando a un tercero'
 };
 function seccionBitacoraPdf_(bitacora, tareasPorId) {
   if (!bitacora.length) return '';
   var filas = bitacora.map(function (b) {
     var tarea = tareasPorId[b.actividad_id];
+    // v11 (P0): las filas ya vienen normalizadas por filaBitacoraSalida_
+    // (listarBitacora), así que un REGISTRO_DIA trae estado_dia/horas directos.
+    var etiqueta = (b.tipo === 'REGISTRO_DIA')
+      ? (REGISTRO_DIA_ESTADO_LABEL_PDF_[b.estado_dia] || 'Registro del día')
+      : (BITACORA_TIPO_LABEL_PDF_[b.tipo] || b.tipo);
     return '<tr>' +
       '<td style="' + celdaValorFicha_() + '">' + fechaCortaPdfProyecto_(b.timestamp) + '</td>' +
       '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(tarea ? tarea.titulo : '—') + '</td>' +
-      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(BITACORA_TIPO_LABEL_PDF_[b.tipo] || b.tipo) + (b.horas ? ' (' + b.horas + 'h)' : '') + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(etiqueta) + (b.horas ? ' (' + b.horas + 'h)' : '') +
+        (b.nota ? ': ' + escaparHtml_(b.nota) : '') + '</td>' +
     '</tr>';
   }).join('');
   return docSeccionOt_('Actividad reciente') +
@@ -1475,13 +2283,212 @@ function puedeGestionarProyecto_(proyecto, contexto) {
 // un solo lugar donde parsearlas, usado por listarBitacora, listarMiBitacora
 // y obtenerRendimiento.
 function horasDeBitacora_(fila) {
-  if (!fila || !fila.datos) return undefined;
+  var d = datosDeBitacora_(fila);
+  return (d && d.horas !== undefined) ? d.horas : undefined;
+}
+
+// v11 (Reingeniería Cronograma, P0): un solo lugar donde se parsea el JSON
+// libre 'datos' de ACTIVIDADES_BITACORA. Devuelve {} si no hay datos o si
+// están corruptos -- nunca lanza, para que una fila vieja no tumbe la lectura
+// de toda la bitácora.
+function datosDeBitacora_(fila) {
+  if (!fila || !fila.datos) return {};
   try {
     var d = JSON.parse(fila.datos);
-    return (d && d.horas !== undefined) ? d.horas : undefined;
+    return (d && typeof d === 'object') ? d : {};
   } catch (e) {
-    return undefined; // dato viejo o corrupto: se ignora
+    return {}; // dato viejo o corrupto: se ignora
   }
+}
+
+// v11 (P0): los 9 estados-del-día del registro diario. Son el ESTADO DEL DÍA
+// (qué pasó ese día en esa tarea), distinto del estado de la tarea completa
+// (ACTIVIDADES.estado). SIGSO no es vigilancia: "sin registro" no es un
+// estado -- significa "SIGSO no tiene registro de ese día", nunca "no se
+// trabajó". Por eso no existe un estado "no_trabajo".
+var REGISTRO_DIA_ESTADOS_ = [
+  'asignado',        // se asignó / quedó comprometida para ese día, aún sin avance
+  'planificado',     // planificado para ese día (lo espero mover hoy)
+  'en_proceso',      // se trabajó, avanza
+  'bloqueado',       // frenado por algo (requiere motivo)
+  'pausado',         // en pausa deliberada (no es bloqueo externo)
+  'finalizado',      // terminado el trabajo del día
+  'entregado',       // entregado ese día
+  'revision',        // en revisión / validación
+  'esperando_tercero' // esperando a alguien externo (cliente, proveedor, otra área)
+];
+
+// v11 (P0): normaliza una fila cruda de ACTIVIDADES_BITACORA a la forma que
+// consume el frontend. Un REGISTRO_DIA (el registro editable de la celda
+// diaria) trae además el estado-del-día explícito, el día al que pertenece,
+// el motivo de bloqueo, los tramos horarios y la traza de edición (quién y
+// cuándo lo tocó por última vez, y cuántas versiones lleva) -- así la Carta
+// muestra "editado por X" sin exponer todo el historial en cada celda.
+function filaBitacoraSalida_(b) {
+  var d = datosDeBitacora_(b);
+  var salida = {
+    actividad_id: b.actividad_id,
+    tipo: b.tipo,
+    nota: b.nota,
+    horas: (d.horas !== undefined) ? d.horas : undefined,
+    timestamp: b.timestamp,
+    autor_nombre: b.autor_nombre || b.autor_email,
+    autor_email: b.autor_email
+  };
+  if (b.tipo === 'REGISTRO_DIA') {
+    salida.dia = d.dia || '';
+    salida.estado_dia = d.estado_dia || '';
+    salida.bloqueo_motivo = d.bloqueo_motivo || '';
+    salida.tramos = Array.isArray(d.tramos) ? d.tramos : [];
+    salida.editado_por = d.editado_por || '';
+    salida.editado_en = d.editado_en || '';
+    salida.ediciones = Array.isArray(d.ediciones) ? d.ediciones.length : 0;
+  }
+  // v11 (P1, "historial antes→después"): REPROGRAMACION/REASIGNACION ya
+  // guardan {fecha_anterior,fecha_nueva}/{responsable_anterior,
+  // responsable_nuevo} en 'datos' desde Actividades.gs (reprogramar/
+  // reasignar) -- solo hace falta exponerlos, cero cálculo nuevo.
+  if (b.tipo === 'REPROGRAMACION') {
+    salida.fecha_anterior = d.fecha_anterior || '';
+    salida.fecha_nueva = d.fecha_nueva || '';
+  }
+  if (b.tipo === 'REASIGNACION') {
+    salida.responsable_anterior = d.responsable_anterior || '';
+    salida.responsable_nuevo = d.responsable_nuevo || '';
+  }
+  return salida;
+}
+
+// v11 (P1, "Esperado a hoy"): supuesto de avance LINEAL entre el inicio y el
+// compromiso del plan -- el mismo supuesto simple, documentado y visible que
+// usa el SPI de MS Project (no una predicción "inteligente"). Sin ambas
+// fechas, o con el plan invertido/de un solo día, no hay curva que trazar:
+// null, no un 0% que se leería como "no ha empezado nada".
+function calcularAvanceEsperado_(fechaInicio, fechaFin, ahora) {
+  if (!fechaInicio || !fechaFin) return null;
+  var ini = new Date(fechaInicio), fin = new Date(fechaFin);
+  if (isNaN(ini.getTime()) || isNaN(fin.getTime()) || fin <= ini) return null;
+  var pct = ((ahora.getTime() - ini.getTime()) / (fin.getTime() - ini.getTime())) * 100;
+  return Math.round(Math.max(0, Math.min(100, pct)) * 10) / 10;
+}
+
+// v11 (P1, "Real"): avance_pct explícito si existe (lo pone un checkin
+// 'avance'); si no, solo se infiere en los dos estados donde el número es
+// inequívoco (TERMINADA=100, NO_INICIADA=0) -- para EN_CURSO/BLOQUEADA sin
+// avance_pct no se inventa un porcentaje (mismo criterio que
+// calcularAvanceProyecto_: mejor "sin dato" que un número adivinado).
+function avanceRealTarea_(a) {
+  if (a.avance_pct !== undefined && a.avance_pct !== null && a.avance_pct !== '') return Number(a.avance_pct);
+  if (a.estado === 'TERMINADA') return 100;
+  if (a.estado === 'NO_INICIADA') return 0;
+  return null;
+}
+
+// v11 (P2, "dependencias con impacto"): BFS sobre dependientesDirectosPorId_
+// (quién depende directamente de cada actividad_id, precomputado UNA vez en
+// listarTareas) para responder "si esta tarea se atrasa, ¿a cuántas otras
+// afecta, directa o transitivamente?". Protegido contra ciclos (aunque hoy
+// nada los crea -- depende_de es de solo lectura para el usuario) con un set
+// de visitados; sin eso, un ciclo dejaría este BFS dando vueltas para
+// siempre en vez de simplemente fallar la validación en otro lado.
+function calcularImpactoDependencia_(actividadId, dependientesDirectosPorId_) {
+  var vistos = {};
+  var cola = (dependientesDirectosPorId_[actividadId] || []).slice();
+  cola.forEach(function (a) { vistos[a.actividad_id] = true; });
+  var resultado = [];
+  while (cola.length) {
+    var actual = cola.shift();
+    resultado.push(actual);
+    (dependientesDirectosPorId_[actual.actividad_id] || []).forEach(function (siguiente) {
+      if (!vistos[siguiente.actividad_id]) { vistos[siguiente.actividad_id] = true; cola.push(siguiente); }
+    });
+  }
+  return resultado;
+}
+
+function redond1Analitica_(n) { return Math.round(n * 10) / 10; }
+
+// v11 (P3, "lead time"): desde que la tarea se CREÓ hasta que se TERMINÓ --
+// el tiempo total que estuvo en el sistema, incluyendo cualquier espera
+// antes de que alguien la empezara a trabajar de verdad. Sin fecha_terminada
+// (no ha cerrado) no hay lead time que medir todavía -- null, no un número
+// a medio camino.
+function calcularLeadTimeDias_(a) {
+  if (!a.fecha_creacion || !a.fecha_terminada) return null;
+  return redond1Analitica_((new Date(a.fecha_terminada) - new Date(a.fecha_creacion)) / 86400000);
+}
+
+// v11 (P3, "cycle time"): desde la PRIMERA señal de trabajo real (un
+// check-in que avanza algo, no solo la asignación) hasta que se terminó --
+// a diferencia del lead time, no cuenta el tiempo en cola antes de
+// arrancar. "Trabajo real" = CHECKIN_AVANCE/CHECKIN_SIN_CAMBIO/DESBLOQUEO,
+// o un REGISTRO_DIA (P0) cuyo estado_dia no sea "asignado"/"planificado"
+// (esos dos son intención, no trabajo hecho). Sin una señal así, o sin
+// fecha_terminada, no hay cycle time medible -- null.
+var CYCLE_TIME_TIPOS_TRABAJO_ = ['CHECKIN_AVANCE', 'CHECKIN_SIN_CAMBIO', 'DESBLOQUEO'];
+var CYCLE_TIME_ESTADOS_DIA_INTENCION_ = ['asignado', 'planificado'];
+function calcularCycleTimeDias_(a, eventos) {
+  if (!a.fecha_terminada) return null;
+  var primeraSenal = null;
+  eventos.forEach(function (b) {
+    var esTrabajo = CYCLE_TIME_TIPOS_TRABAJO_.indexOf(b.tipo) !== -1;
+    if (!esTrabajo && b.tipo === 'REGISTRO_DIA') {
+      var d = datosDeBitacora_(b);
+      esTrabajo = CYCLE_TIME_ESTADOS_DIA_INTENCION_.indexOf(d.estado_dia) === -1;
+    }
+    if (!esTrabajo) return;
+    var t = new Date(b.timestamp);
+    if (isNaN(t.getTime())) return;
+    if (primeraSenal === null || t < primeraSenal) primeraSenal = t;
+  });
+  if (primeraSenal === null) return null;
+  return redond1Analitica_((new Date(a.fecha_terminada) - primeraSenal) / 86400000);
+}
+
+// v11 (P3, "tiempo en bloqueo/revisión"): suma la duración de cada intervalo
+// [apertura, cierre] emparejando CRONOLÓGICAMENTE -- el primer evento de
+// cierre que aparece DESPUÉS de una apertura la resuelve (si una tarea se
+// bloquea/desbloquea varias veces, cada ciclo cuenta aparte). Si el último
+// intervalo quedó abierto (sigue bloqueada/en revisión ahora mismo), cuenta
+// hasta AHORA -- "cuánto lleva así" es más útil que "no medible todavía".
+function sumarIntervalosBitacora_(eventos, tiposApertura, tiposCierre, ahora) {
+  var ordenados = eventos.slice().sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
+  var totalMs = 0, abiertoDesde = null;
+  ordenados.forEach(function (ev) {
+    if (tiposApertura.indexOf(ev.tipo) !== -1 && abiertoDesde === null) {
+      abiertoDesde = new Date(ev.timestamp);
+    } else if (tiposCierre.indexOf(ev.tipo) !== -1 && abiertoDesde !== null) {
+      totalMs += new Date(ev.timestamp).getTime() - abiertoDesde.getTime();
+      abiertoDesde = null;
+    }
+  });
+  if (abiertoDesde !== null) totalMs += ahora.getTime() - abiertoDesde.getTime();
+  return totalMs / 86400000;
+}
+
+// v11 (P1, "congelar línea base"): la baseline VIGENTE es el evento BASELINE
+// más reciente de PROYECTO_EVENTOS -- ver Proyectos.congelarBaseline. Sin
+// hoja ni columna nueva (mismo patrón que REGISTRO_DIA en P0, aplicado a
+// eventos en vez de bitácora).
+function obtenerUltimaBaseline_(proyectoId) {
+  // .reverse() antes del sort: dos congelamientos seguidos en la misma
+  // ejecucion pueden empatar al milisegundo (new Date() sucesivos); un sort
+  // ESTABLE conserva el orden de empate tal cual llega, así que se arranca
+  // en orden "mas nuevo insertado primero" para que un empate lo resuelva a
+  // favor del ultimo congelado, no del primero.
+  var eventos = leerFilasSeguro_(SHEETS.PROYECTO_EVENTOS).filter(function (e) {
+    return e.proyecto_id === proyectoId && e.tipo === 'BASELINE';
+  }).reverse().sort(function (a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
+  if (!eventos.length) return null;
+  var evento = eventos[0];
+  var datos;
+  try { datos = JSON.parse(evento.cuerpo); } catch (e) { datos = null; }
+  if (!datos || !Array.isArray(datos.tareas)) return null;
+  var porTarea = {};
+  datos.tareas.forEach(function (t) {
+    porTarea[t.actividad_id] = { fecha_inicio: t.fecha_inicio || '', fecha_fin: t.fecha_fin || '' };
+  });
+  return { timestamp: evento.timestamp, autor_nombre: evento.autor_nombre || evento.autor_email, por_tarea: porTarea };
 }
 
 function buscarProyecto_(proyectoId) {
@@ -1666,46 +2673,66 @@ function calcularAvanceProyecto_(tareas) {
 // codigo + los motivos en texto plano (nunca una caja negra). Reusa
 // semaforoActividad_ (Actividades.gs) por tarea. salud_override permite una
 // correccion manual excepcional, siempre con motivo visible.
+// v11 (P1, "score de salud explicable y ponderado"): pesos DOCUMENTADOS (no
+// una IA, no una caja negra) que restan de 100 -- uno por cada señal objetiva
+// que ya alimentaba el semáforo codigo/etiqueta/motivos de siempre. El número
+// es un RESUMEN adicional, nunca reemplaza los motivos en texto plano: ambos
+// se calculan de la MISMA pasada, así que siempre son consistentes entre sí.
+var SALUD_PESOS_ = {
+  hito_vencido: 15, tarea_critica_atrasada: 12, tarea_atrasada: 5,
+  bloqueo_estancado: 15, tarea_bloqueada: 6, sin_actualizar: 4,
+  entregable_vencido: 8, entregable_observado: 5
+};
+
 function calcularSaludProyecto_(proyecto, tareas, hitos, entregables) {
   if (proyecto.salud_override) {
     var etiquetas = { critico: 'Crítico', riesgo: 'En riesgo', normal: 'Normal' };
     return {
       codigo: proyecto.salud_override,
       etiqueta: etiquetas[proyecto.salud_override] || proyecto.salud_override,
-      motivos: [proyecto.salud_override_motivo || 'Fijado manualmente.']
+      motivos: [proyecto.salud_override_motivo || 'Fijado manualmente.'],
+      // Sin score: es una corrección MANUAL, no vale la pena fingir una
+      // precisión numérica que nadie calculó.
+      score: null, desglose: []
     };
   }
   if (proyecto.estado === PROYECTOS_ESTADOS.CERRADO || proyecto.estado === PROYECTOS_ESTADOS.CANCELADO) {
-    return { codigo: 'normal', etiqueta: 'Normal', motivos: [] };
+    return { codigo: 'normal', etiqueta: 'Normal', motivos: [], score: 100, desglose: [] };
   }
 
   var activas = tareas.filter(function (a) { return a.activa === true || a.activa === 'TRUE' || a.activa === 1; });
-  var motivosCriticos = [], motivosRiesgo = [];
+  var motivosCriticos = [], motivosRiesgo = [], desglose = [];
   var ahora = new Date();
+
+  function anota(bucket, factor, cantidad, texto) {
+    var puntos = cantidad * SALUD_PESOS_[factor];
+    bucket.push(cantidad + texto);
+    desglose.push({ factor: factor, cantidad: cantidad, puntos: puntos });
+  }
 
   var hitosVencidos = (hitos || []).filter(function (h) {
     return h.estado !== 'COMPLETADO' && h.estado !== 'CANCELADO' && h.fecha_objetivo && new Date(h.fecha_objetivo) < ahora;
   });
-  if (hitosVencidos.length > 0) motivosCriticos.push(hitosVencidos.length + ' hito(s) vencido(s)');
+  if (hitosVencidos.length > 0) anota(motivosCriticos, 'hito_vencido', hitosVencidos.length, ' hito(s) vencido(s)');
 
   var tareasAtrasadas = activas.filter(function (a) { return semaforoActividad_(a).codigo === 'atrasada'; });
   var criticasAtrasadas = tareasAtrasadas.filter(function (a) { return ['P1', 'P2'].indexOf(a.prioridad) !== -1; });
-  if (criticasAtrasadas.length > 0) motivosCriticos.push(criticasAtrasadas.length + ' tarea(s) crítica(s) atrasada(s)');
-  else if (tareasAtrasadas.length > 0) motivosRiesgo.push(tareasAtrasadas.length + ' tarea(s) atrasada(s)');
+  if (criticasAtrasadas.length > 0) anota(motivosCriticos, 'tarea_critica_atrasada', criticasAtrasadas.length, ' tarea(s) crítica(s) atrasada(s)');
+  else if (tareasAtrasadas.length > 0) anota(motivosRiesgo, 'tarea_atrasada', tareasAtrasadas.length, ' tarea(s) atrasada(s)');
 
   var bloqueadas = activas.filter(function (a) { return a.estado === 'BLOQUEADA'; });
   var feriados = obtenerFeriados_();
   var bloqueoEstancado = bloqueadas.filter(function (a) {
     return a.bloqueo_desde && Utils.horasHabilesEntre(a.bloqueo_desde, ahora, { feriados: feriados }) / 9 >= 2;
   });
-  if (bloqueoEstancado.length > 0) motivosCriticos.push(bloqueoEstancado.length + ' bloqueo(s) estancado(s) (2+ días hábiles)');
-  else if (bloqueadas.length > 0) motivosRiesgo.push(bloqueadas.length + ' tarea(s) bloqueada(s)');
+  if (bloqueoEstancado.length > 0) anota(motivosCriticos, 'bloqueo_estancado', bloqueoEstancado.length, ' bloqueo(s) estancado(s) (2+ días hábiles)');
+  else if (bloqueadas.length > 0) anota(motivosRiesgo, 'tarea_bloqueada', bloqueadas.length, ' tarea(s) bloqueada(s)');
 
   var sinActualizar = activas.filter(function (a) {
     if (!a.ultima_actualizacion) return false;
     return Utils.horasHabilesEntre(a.ultima_actualizacion, ahora, { feriados: feriados }) / 9 >= 5;
   });
-  if (sinActualizar.length > 0) motivosRiesgo.push(sinActualizar.length + ' tarea(s) sin actualizar hace 5+ días hábiles');
+  if (sinActualizar.length > 0) anota(motivosRiesgo, 'sin_actualizar', sinActualizar.length, ' tarea(s) sin actualizar hace 5+ días hábiles');
 
   // v9.4 (Fase 2, §J de la propuesta): "entregable observado/vencido" como
   // señal de riesgo. APROBADO/CANCELADO son estados que ya no aportan
@@ -1714,17 +2741,19 @@ function calcularSaludProyecto_(proyecto, tareas, hitos, entregables) {
   var entregablesVencidos = entregablesVigentes.filter(function (e) {
     return e.fecha_comprometida && new Date(e.fecha_comprometida) < ahora;
   });
-  if (entregablesVencidos.length > 0) motivosRiesgo.push(entregablesVencidos.length + ' entregable(s) vencido(s)');
+  if (entregablesVencidos.length > 0) anota(motivosRiesgo, 'entregable_vencido', entregablesVencidos.length, ' entregable(s) vencido(s)');
   var entregablesObservados = entregablesVigentes.filter(function (e) { return e.estado === 'OBSERVADO'; });
-  if (entregablesObservados.length > 0) motivosRiesgo.push(entregablesObservados.length + ' entregable(s) observado(s)');
+  if (entregablesObservados.length > 0) anota(motivosRiesgo, 'entregable_observado', entregablesObservados.length, ' entregable(s) observado(s)');
+
+  var score = Math.max(0, 100 - desglose.reduce(function (s, d) { return s + d.puntos; }, 0));
 
   if (motivosCriticos.length > 0) {
-    return { codigo: 'critico', etiqueta: 'Crítico', motivos: motivosCriticos.concat(motivosRiesgo) };
+    return { codigo: 'critico', etiqueta: 'Crítico', motivos: motivosCriticos.concat(motivosRiesgo), score: score, desglose: desglose };
   }
   if (motivosRiesgo.length > 0) {
-    return { codigo: 'riesgo', etiqueta: 'En riesgo', motivos: motivosRiesgo };
+    return { codigo: 'riesgo', etiqueta: 'En riesgo', motivos: motivosRiesgo, score: score, desglose: desglose };
   }
-  return { codigo: 'normal', etiqueta: 'Normal', motivos: [] };
+  return { codigo: 'normal', etiqueta: 'Normal', motivos: [], score: 100, desglose: [] };
 }
 
 // "Requiere tu atencion" (§12 de la propuesta): lo que un lider necesita ver

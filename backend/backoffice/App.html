@@ -3518,6 +3518,14 @@ button {
   background: var(--info-suave); border-radius: var(--radio-sm); padding: var(--esp-1) var(--esp-2);
 }
 
+/* v11 (P2, "subtareas con rollup"): la subtarea aparece justo bajo su padre
+   (ordenarConSubtareas_), con una leve indentación + la referencia al padre. */
+.sigso-py-tarea--subtarea { margin-left: var(--esp-4); border-left: 2px solid var(--borde); padding-left: var(--esp-2); }
+.sigso-py-subtarea-de { font-size: var(--texto-xs); color: var(--texto-3); margin-bottom: 2px; }
+.sigso-py-rollup { margin-top: var(--esp-2); display: flex; align-items: center; gap: var(--esp-2); font-size: var(--texto-xs); color: var(--texto-3); }
+.sigso-py-rollup__barra { flex: 1 1 auto; max-width: 8rem; height: 0.4rem; border-radius: 999px; background: var(--superficie-2); overflow: hidden; }
+.sigso-py-rollup__barra-fill { height: 100%; background: var(--primario); border-radius: inherit; }
+
 .sigso-mt-badge--al-dia { background: var(--ok-suave); color: var(--ok); }
 .sigso-mt-badge--riesgo { background: var(--alerta-suave); color: var(--alerta); }
 .sigso-mt-badge--atrasada { background: var(--critico-suave); color: var(--critico); }
@@ -3745,17 +3753,35 @@ button {
 .sigso-kanban__tarjeta--arrastrable:active { cursor: grabbing; }
 .sigso-kanban__tarjeta--arrastrando { opacity: .5; }
 
-/* v10 (Fase C): cronograma -- misma tecnica que la Carta Gantt de Gerencia
-   (barras por CSS, sin libreria), colores por el mismo semaforo de siempre
-   en vez del cumplimiento de Solicitudes. */
-.sigso-py-cron { position: relative; padding-top: var(--esp-2); }
-.sigso-py-cron-hoy {
-  position: absolute; top: 0; bottom: 0; width: 2px; background: var(--primario); z-index: 1;
+/* v11 (P2, "Gantt navegable"): línea de tiempo en píxeles-por-día real (zoom
+   de verdad, no solo "encoger para que quepa"), con la columna de etiquetas
+   FIJA (position:sticky) mientras el eje de tiempo se desplaza horizontal.
+   Las clases de color por estado (--al-dia/--atrasada/etc. y las de hito)
+   son las MISMAS de la v10 (Fase C) -- solo cambió el contenedor. */
+.sigso-py-gantt-scroll { overflow-x: auto; border: 1px solid var(--borde); border-radius: var(--radio-sm); }
+.sigso-py-gantt-body { display: inline-flex; flex-direction: column; position: relative; min-width: 100%; }
+.sigso-py-gantt-fila { display: flex; align-items: center; border-bottom: 1px solid var(--borde); }
+.sigso-py-gantt-fila:last-child { border-bottom: none; }
+.sigso-py-gantt-fila--regla { position: sticky; top: 0; z-index: 2; background: var(--superficie); border-bottom: 1px solid var(--borde-fuerte); }
+.sigso-py-gantt-etiqueta {
+  /* 200px fijo A PROPÓSITO (no rem): el JS (PLAN_ETIQUETA_ANCHO_PX_) calcula
+     dónde cae la línea de "Hoy" sumando este mismo número de píxeles -- si
+     esto se mueve, hay que mover esa constante también. */
+  flex: 0 0 200px; width: 200px; position: sticky; left: 0; z-index: 1; background: var(--superficie);
+  padding: var(--esp-1) var(--esp-2); font-size: var(--texto-sm); color: var(--texto);
+  display: flex; align-items: center; gap: 0.3rem; border-right: 1px solid var(--borde);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.sigso-py-cron-fila { margin-bottom: var(--esp-3); }
-.sigso-py-cron-etiqueta { font-size: var(--texto-sm); margin-bottom: 0.25rem; color: var(--texto); display: flex; align-items: center; gap: 0.3rem; }
-.sigso-py-cron-track { position: relative; height: 14px; background: var(--superficie-2); border-radius: var(--radio-sm); }
-.sigso-py-cron-barra { position: absolute; top: 0; height: 100%; border-radius: var(--radio-sm); min-width: 3px; }
+.sigso-py-gantt-track { position: relative; height: 2.25rem; flex: 0 0 auto; }
+.sigso-py-gantt-track--regla { height: 1.75rem; }
+.sigso-py-gantt-tick {
+  position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--borde); padding-left: 4px;
+  font-size: var(--texto-xs); color: var(--texto-3); white-space: nowrap; display: flex; align-items: center;
+}
+.sigso-py-gantt-hoy {
+  position: absolute; top: 0; bottom: 0; width: 2px; background: var(--primario); z-index: 1; pointer-events: none;
+}
+.sigso-py-cron-barra { position: absolute; top: 25%; height: 50%; border-radius: var(--radio-sm); min-width: 3px; }
 .sigso-py-cron-barra--al-dia, .sigso-py-cron-barra--terminada { background: var(--ok); }
 .sigso-py-cron-barra--riesgo { background: var(--alerta); }
 .sigso-py-cron-barra--atrasada { background: var(--critico); }
@@ -3773,6 +3799,21 @@ button {
 .sigso-py-cron-hito--terminada { background: var(--texto-3); }
 .sigso-py-cron-hito--cancelada { background: var(--texto-3); opacity: .6; }
 
+/* v11 (P2, "drag & drop de fechas"): el handle solo existe si la tarea es
+   editable -- una franja angosta en el borde derecho de la barra, cursor de
+   resize, visible al pasar el mouse (no compite visualmente con la barra en
+   reposo). Mientras se arrastra, la barra se aclara para que el "fantasma"
+   de la nueva duración se lea con claridad. */
+.sigso-py-gantt-barra--editable { padding-right: 6px; }
+.sigso-py-gantt-resize {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 6px; cursor: ew-resize;
+  background: color-mix(in srgb, currentColor 35%, transparent); border-radius: 0 var(--radio-sm) var(--radio-sm) 0;
+  opacity: 0; transition: opacity 0.1s;
+}
+.sigso-py-gantt-barra--editable:hover .sigso-py-gantt-resize,
+.sigso-py-gantt-barra--arrastrando .sigso-py-gantt-resize { opacity: 1; }
+.sigso-py-gantt-barra--arrastrando { opacity: 0.75; outline: 2px dashed var(--primario); outline-offset: 1px; }
+
 /* v10 (Fase E, "Carta Gantt de Dedicación"): grilla tarea x dia, leida de
    ACTIVIDADES_BITACORA (el check-in de siempre) -- ningun estado se marca a
    mano. Misma paleta semantica que el resto del modulo (--ok/--alerta/
@@ -3785,6 +3826,13 @@ button {
 .sigso-py-ded-controles .sigso-boton { flex: 0 0 auto; }
 .sigso-py-ded-rangotxt { font-variant-numeric: tabular-nums; }
 .sigso-py-ded-controles .js-py-ded-imprimir { margin-left: auto; }
+/* v11 (P1): nota + botón de "congelar línea base", agrupados a la derecha
+   junto con Descargar/Imprimir. */
+.sigso-py-ded-baseline { display: flex; align-items: center; gap: var(--esp-2); }
+/* v11 (P1): botón 📅 de reprogramar, inline junto al título de la tarea --
+   discreto hasta el hover/foco (no compite con el texto). */
+.sigso-py-ded-reprogramar { border: none; background: none; cursor: pointer; padding: 0 2px; font-size: 0.8rem; opacity: 0.55; border-radius: var(--radio-sm); line-height: 1; }
+.sigso-py-ded-reprogramar:hover, .sigso-py-ded-reprogramar:focus-visible { opacity: 1; background: var(--superficie-2); }
 
 .sigso-py-ded-nav { display: flex; align-items: center; gap: var(--esp-3); margin-bottom: var(--esp-3); flex-wrap: wrap; }
 .sigso-py-ded-scroll { overflow-x: auto; }
@@ -3828,6 +3876,21 @@ button {
 .sigso-py-ded-celda.e-wait { background: var(--superficie-2); color: var(--texto-3); border: 1px dashed var(--borde-fuerte); }
 .sigso-py-ded-celda.e-bloq { background: var(--critico-suave); color: var(--critico); --hcol: var(--critico); }
 .sigso-py-ded-celda.e-late { background: var(--alerta-suave); color: var(--alerta); --hcol: var(--alerta); }
+/* v11 (P0): estados-del-día explícitos que no existían al derivar del
+   check-in -- planificado, en pausa, en revisión, esperando a un tercero. */
+.sigso-py-ded-celda.e-plan { background: color-mix(in srgb, var(--primario-suave), var(--superficie) 45%); color: var(--primario); --hcol: var(--primario); border: 1px dashed color-mix(in srgb, var(--primario) 45%, transparent); }
+.sigso-py-ded-celda.e-pausa { background: var(--superficie-2); color: var(--texto-2); --hcol: var(--texto-3); border: 1px solid var(--borde-fuerte); }
+.sigso-py-ded-celda.e-rev { background: color-mix(in srgb, var(--alerta-suave), var(--superficie) 25%); color: var(--alerta); --hcol: var(--alerta); }
+.sigso-py-ded-celda.e-esp { background: var(--superficie-2); color: var(--texto-3); border: 1px dashed var(--info); }
+/* v11 (P0): celda editable (registro del día). Afordancia solo al pasar el
+   mouse / enfocar, para no ensuciar la grilla; el "+" invita en celdas
+   vacías. El anillo ".reg" marca un día CON registro explícito (distinto de
+   una marca derivada del check-in). */
+.sigso-py-ded-celda--edit { cursor: pointer; }
+.sigso-py-ded-celda--edit:hover { outline: 2px solid var(--primario); outline-offset: -2px; }
+.sigso-py-ded-celda--edit:focus-visible { outline: 2px solid var(--primario); outline-offset: 1px; }
+.sigso-py-ded-celda--edit:hover:empty::after { content: '+'; color: var(--texto-3); font-size: 0.7rem; font-weight: 700; }
+.sigso-py-ded-celda.reg { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--texto) 22%, transparent); }
 /* Heatmap: la intensidad de fondo crece con las horas del día (h1..h4).
    Va DESPUÉS de las reglas e-* para ganar en orden de cascada. */
 .sigso-py-ded-celda.h1 { background: color-mix(in srgb, var(--hcol) 22%, var(--superficie)); }
@@ -3839,6 +3902,14 @@ button {
 .sigso-py-ded-grupo { margin-top: var(--esp-2); }
 .sigso-py-ded-grupo .sigso-py-ded-etiqueta .t { font-weight: 700; color: var(--texto); }
 .sigso-py-ded-grupo .sigso-py-ded-celda { background: transparent; }
+/* v11 (P1): las celdas de workload SÍ quieren su heatmap de vuelta (misma
+   especificidad de 2 clases que la regla de arriba -- gana por venir
+   después en la cascada). */
+.sigso-py-ded-celda--workload.h1 { background: color-mix(in srgb, var(--hcol) 22%, var(--superficie)); }
+.sigso-py-ded-celda--workload.h2 { background: color-mix(in srgb, var(--hcol) 45%, var(--superficie)); }
+.sigso-py-ded-celda--workload.h3 { background: color-mix(in srgb, var(--hcol) 68%, var(--superficie)); }
+.sigso-py-ded-celda--workload.h4 { background: color-mix(in srgb, var(--hcol) 92%, var(--superficie)); }
+.sigso-py-ded-celda--workload.h3 span, .sigso-py-ded-celda--workload.h4 span { color: #fff; }
 .sigso-py-ded-footer { margin-top: var(--esp-1); border-top: 2px solid var(--borde-fuerte); padding-top: 2px; }
 .sigso-py-ded-footer .sigso-py-ded-etiqueta .t { font-weight: 600; color: var(--texto-2); font-size: var(--texto-xs); text-transform: uppercase; letter-spacing: 0.03em; }
 .sigso-py-ded-celda--total { background: transparent; }
@@ -3855,6 +3926,10 @@ button {
 .sigso-py-ded-sw--wait { background: var(--superficie-2); border: 1px dashed var(--borde-fuerte); }
 .sigso-py-ded-sw--bloq { background: var(--critico-suave); border: 1px solid var(--critico); }
 .sigso-py-ded-sw--late { background: var(--alerta-suave); border: 1px solid var(--alerta); }
+.sigso-py-ded-sw--plan { background: color-mix(in srgb, var(--primario-suave), var(--superficie) 45%); border: 1px dashed var(--primario); }
+.sigso-py-ded-sw--pausa { background: var(--superficie-2); border: 1px solid var(--borde-fuerte); }
+.sigso-py-ded-sw--rev { background: color-mix(in srgb, var(--alerta-suave), var(--superficie) 25%); border: 1px solid var(--alerta); }
+.sigso-py-ded-sw--esp { background: var(--superficie-2); border: 1px dashed var(--info); }
 .sigso-py-ded-heatleg { display: inline-flex; align-items: center; gap: 3px; }
 .sigso-py-ded-heatleg .hl { display: inline-block; width: 0.8rem; height: 0.8rem; border-radius: 3px; --hcol: var(--info); }
 .sigso-py-ded-heatleg .hl.h1 { background: color-mix(in srgb, var(--hcol) 22%, var(--superficie)); }
@@ -3864,6 +3939,59 @@ button {
 @media (max-width: 640px) {
   .sigso-py-ded { --col-tarea: 8rem; --col-dia: 1.6rem; --col-total: 2.8rem; }
 }
+
+/* v11 (P0): modal del registro del día. */
+.sigso-py-reg-cab { margin: 0 0 var(--esp-2); }
+.sigso-py-reg-traza { margin: 0 0 var(--esp-3); padding: var(--esp-1) var(--esp-2); background: var(--superficie-2); border-radius: var(--radio-sm); }
+.sigso-py-reg-tramos { margin: var(--esp-2) 0; }
+.sigso-py-reg-tramos__cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--esp-1); font-size: var(--texto-xs); color: var(--texto-2); text-transform: uppercase; letter-spacing: 0.03em; }
+.sigso-py-reg-tramo { display: flex; gap: var(--esp-1); align-items: center; margin-bottom: var(--esp-1); }
+.sigso-py-reg-tramo .js-py-reg-tramo-desde, .sigso-py-reg-tramo .js-py-reg-tramo-hasta { max-width: 6.5rem; }
+.sigso-py-reg-tramo .js-py-reg-tramo-nota { flex: 1 1 auto; min-width: 0; }
+.sigso-py-reg-tramo-quitar { flex: 0 0 auto; padding: 0 0.6rem; line-height: 1.6; }
+
+/* v11 ("PDF ejecutivo configurable"): checkboxes de secciones en grilla de
+   2 columnas -- son 12 opciones, una lista vertical sería demasiado larga. */
+.sigso-py-informe-secciones { display: grid; grid-template-columns: 1fr 1fr; gap: var(--esp-1) var(--esp-3); margin-bottom: var(--esp-3); }
+@media (max-width: 480px) { .sigso-py-informe-secciones { grid-template-columns: 1fr; } }
+
+/* v11 (P3, "analítica avanzada"): tabla simple lead/cycle/bloqueo/revisión
+   por tarea -- mismo contenedor con scroll horizontal que ya usa la carta
+   de Dedicación (.sigso-py-ded-scroll), para no desbordar en mobile. */
+.sigso-py-analitica-acciones { margin: var(--esp-2) 0; }
+.sigso-py-analitica-tabla { width: 100%; border-collapse: collapse; font-size: var(--texto-sm); }
+.sigso-py-analitica-tabla th, .sigso-py-analitica-tabla td { padding: var(--esp-1) var(--esp-2); border-bottom: 1px solid var(--borde); text-align: left; white-space: nowrap; }
+.sigso-py-analitica-tabla th { color: var(--texto-3); font-size: var(--texto-xs); text-transform: uppercase; letter-spacing: 0.03em; font-weight: 600; }
+.sigso-py-analitica-tabla td:not(:first-child) { font-variant-numeric: tabular-nums; }
+
+/* v11 (P1): feed de Historial -- reverso-cronológico, un ícono + frase +
+   momento por fila. Deliberadamente sin tarjeta pesada por fila (es una
+   lista larga, no tarjetas de portafolio); solo un hairline entre filas. */
+.sigso-py-hist { display: flex; flex-direction: column; }
+.sigso-py-hist-fila { display: flex; gap: var(--esp-2); padding: var(--esp-2) 0; border-bottom: 1px solid var(--borde); }
+.sigso-py-hist-fila:last-child { border-bottom: none; }
+.sigso-py-hist-icono { flex: 0 0 auto; width: 1.75rem; height: 1.75rem; border-radius: 50%; background: var(--superficie-2); display: flex; align-items: center; justify-content: center; font-size: 0.9rem; }
+.sigso-py-hist-cuerpo { min-width: 0; flex: 1 1 auto; }
+.sigso-py-hist-frase { color: var(--texto); line-height: 1.5; }
+.sigso-py-hist-cambio { font-weight: 600; color: var(--primario); }
+.sigso-py-hist-cuando { margin-top: 2px; font-size: var(--texto-xs); color: var(--texto-3); }
+
+/* v11 (P1): score de salud numérico junto al semáforo de siempre. */
+.sigso-py-salud-score { margin-left: var(--esp-1); font-variant-numeric: tabular-nums; color: var(--texto-3); font-size: var(--texto-xs); }
+
+/* v11 (P1): nota de Plan/Esperado/Real bajo el título de cada tarea en la
+   carta de Dedicación -- compacta, monoespaciada donde hay números para que
+   alineen al ojo entre filas. */
+.sigso-py-ded-plan { display: block; margin-top: 2px; font-size: var(--texto-xs); color: var(--texto-3); font-variant-numeric: tabular-nums; }
+.sigso-py-ded-plan .dev { font-weight: 700; }
+.sigso-py-ded-plan .dev--favor { color: var(--ok); }
+.sigso-py-ded-plan .dev--contra { color: var(--critico); }
+.sigso-py-ded-plan .baseline { color: var(--alerta); }
+
+/* v11 (P1): fila de workload por persona (agrupar) -- total diario propio +
+   marca de sobrecarga cuando supera la jornada. */
+.sigso-py-ded-celda--sobrecarga { box-shadow: inset 0 0 0 2px var(--critico); }
+.sigso-py-ded-grupo .sigso-py-ded-total { font-weight: 700; }
 
 /* Vista imprimible de la carta (Descargar / Imprimir). En pantalla el
    contenedor está oculto; en impresión se oculta todo lo demás y la carta
@@ -15707,6 +15835,12 @@ var Iconos = (function () {
   var SALUD_ETIQUETA = { normal: 'Normal', riesgo: 'En riesgo', critico: 'Crítico' };
   // v14.0 (piel nueva): salud -> tono del punto de estado (Componentes.punto).
   var SALUD_TONO = { normal: 'ok', riesgo: 'riesgo', critico: 'critico' };
+  // v11 (P1, "score de salud ponderado"): el número que acompaña al pill de
+  // siempre -- null en salud_override (correccion manual, no aporta fingir
+  // precisión numérica).
+  function saludScoreHtml_(score) {
+    return (score === null || score === undefined) ? '' : '<span class="sigso-py-salud-score">· ' + score + '/100</span>';
+  }
   var ESTADO_PROYECTO_ETIQUETA = {
     PLANIFICACION: 'Planificación', ACTIVO: 'Activo', EN_PAUSA: 'En pausa',
     EN_REVISION: 'En revisión', CERRADO: 'Cerrado', CANCELADO: 'Cancelado'
@@ -15726,7 +15860,11 @@ var Iconos = (function () {
     ENTREGABLE: 'Entregable', RIESGO: 'Riesgo',
     // v10 (Fase D, "adjuntos por proyecto"): un archivo subido es un evento
     // mas de la Sala (Proyectos.subirAdjunto).
-    ARCHIVO: 'Archivo'
+    ARCHIVO: 'Archivo',
+    // v11 (P1, "congelar línea base"): un evento más del feed de siempre,
+    // igual que ENTREGABLE/RIESGO/ARCHIVO -- lo registra el sistema al
+    // congelar (Proyectos.congelarBaseline).
+    BASELINE: 'Línea base'
   };
   // v9.4 (Fase 2 de la propuesta): entregables (aprobar/observar).
   // EN_REVISION queda mapeado por si el backend lo usa a futuro; el MVP usa
@@ -15783,6 +15921,32 @@ var Iconos = (function () {
     setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
   }
 
+  // v11 (P3, "exportación CSV"): 100% cliente -- los datos ya están cargados
+  // (analítica/tareas), así que no hace falta un viaje al servidor solo para
+  // armar el archivo. BOM UTF-8 al inicio para que Excel abra los acentos
+  // bien (sin el BOM, Excel a veces asume Latin-1 y los rompe). CSV, no
+  // XLSX: un binario .xlsx de verdad necesitaría o bien un permiso de Drive
+  // nuevo (crear una Hoja temporal y exportarla) o construir el ZIP/XML de
+  // Office a mano -- ninguno de los dos aporta control real sobre lo que ya
+  // resuelve un CSV, que Excel y Sheets abren igual de bien.
+  function descargarCsv_(nombreArchivo, filas) {
+    var csv = filas.map(function (fila) {
+      return fila.map(function (v) {
+        var s = (v === null || v === undefined) ? '' : String(v);
+        return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      }).join(',');
+    }).join('\r\n');
+    var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = nombreArchivo;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+
   // --- portafolio ----------------------------------------------------------
 
   // v9.3: filtros del portafolio. Estado va al backend (Proyectos.listar ya
@@ -15825,6 +15989,41 @@ var Iconos = (function () {
     });
   }
 
+  // v11 (P3, "workload cruzado multi-proyecto"): pantalla dedicada (mismo
+  // patrón que abrir un proyecto: reemplaza el contenido del panel, con su
+  // propio "← Portafolio" para volver) -- reusa TAL CUAL
+  // pintarWorkloadProyecto_ (P2), que ya soporta detalle=null (igual que
+  // "Mi dedicación" para la vista Dedicación).
+  var workloadPortafolioCache_ = null;
+  function cargarWorkloadPortafolio_() {
+    proyectoActivoId_ = null;
+    datosDetalleActual_ = null;
+    var cont = panelProyectos_();
+    if (!cont) return;
+    cont.innerHTML = Componentes.cargando('Cargando carga de trabajo...');
+    apiSeguro_('obtenerWorkloadPortafolioProyectos', {}).then(function (r) {
+      if (!r || !r.ok) {
+        cont.innerHTML = Componentes.alerta((r && r.message) || 'No se pudo cargar la carga de trabajo.', 'error');
+        return;
+      }
+      workloadPortafolioCache_ = r.data;
+      pintarWorkloadPortafolioPantalla_(cont);
+    });
+  }
+
+  function pintarWorkloadPortafolioPantalla_(cont) {
+    var datos = workloadPortafolioCache_ || { proyectos: [], tareas: [], bitacora: [] };
+    var cabecera = '<div class="sigso-py-detalle-cab">' +
+        Componentes.boton({ texto: '← Portafolio', variante: 'sutil', clase: 'js-py-volver' }) +
+        '<h1>Carga de trabajo del portafolio</h1>' +
+      '</div>' +
+      '<p class="sigso-ayuda">Horas por persona, cruzando ' + datos.proyectos.length + ' proyecto(s) visibles para ti.</p>';
+    var cuerpo = pintarWorkloadProyecto_(null, datos.tareas, datos.bitacora);
+    cont.innerHTML = cabecera + '<div class="sigso-py-cuerpo">' + cuerpo + '</div>';
+    cont.querySelector('.js-py-volver').addEventListener('click', cargarPortafolio_);
+    wireCartaControles_(cont, function () { pintarWorkloadPortafolioPantalla_(cont); }, null);
+  }
+
   // KPIs agregados (activos/críticos/en riesgo, próximos a cerrar, sin
   // actualizar) + carga por persona ponderada por tamaño (S=1,M=2,L=3,XL=5
   // -- ver Proyectos.getResumenPortafolio). "Muchos L/XL" es sobrecarga
@@ -15851,7 +16050,11 @@ var Iconos = (function () {
       '<div class="sigso-py-kpis">' + kpis + '</div>' +
       (carga
         ? '<p class="sigso-ayuda sigso-py-carga-titulo">Carga por persona (proyectos activos, ponderada por tamaño de tarea)</p>' +
-          '<div class="sigso-py-carga">' + carga + '</div>'
+          '<div class="sigso-py-carga">' + carga + '</div>' +
+          // v11 (P3, "workload cruzado multi-proyecto"): esta barra es una
+          // ESTIMACIÓN por tamaño (S/M/L/XL); el link lleva a las horas REALES
+          // registradas, cruzando todos los proyectos visibles.
+          Componentes.boton({ texto: 'Ver carga de trabajo por horas (todos los proyectos)', variante: 'sutil', clase: 'js-py-ver-workload-portafolio', tipo: 'button' })
         : '') +
     '</details>';
   }
@@ -15956,7 +16159,7 @@ var Iconos = (function () {
     return '<button type="button" class="sigso-py-card js-py-abrir" data-id="' + p.proyecto_id + '">' +
       '<div class="sigso-py-card__top">' +
         '<span class="sigso-py-card__nombre">' + Componentes.escaparHtml(p.nombre) + '</span>' +
-        '<span class="sigso-py-salud sigso-py-salud--' + p.salud + '">' + Componentes.punto(SALUD_TONO[p.salud]) + SALUD_ETIQUETA[p.salud] + '</span>' +
+        '<span class="sigso-py-salud sigso-py-salud--' + p.salud + '">' + Componentes.punto(SALUD_TONO[p.salud]) + SALUD_ETIQUETA[p.salud] + saludScoreHtml_(p.salud_score) + '</span>' +
       '</div>' +
       (p.descripcion ? '<p class="sigso-py-card__desc">' + Componentes.escaparHtml(p.descripcion) + '</p>' : '') +
       '<div class="sigso-py-card__barra"><div class="sigso-py-card__barra-fill sigso-py-card__barra-fill--' + p.salud + '" style="width:' + (p.avance_pct || 0) + '%"></div></div>' +
@@ -16062,6 +16265,7 @@ var Iconos = (function () {
       cont.innerHTML = cabeceraBase +
         Componentes.vacio({ texto: 'Todavía no participas en ningún proyecto.', detalle: 'Crea uno para empezar.' });
       cont.querySelector('.js-py-nuevo').addEventListener('click', abrirFormularioProyecto_);
+      wireVerWorkloadPortafolio_(cont);
       return;
     }
 
@@ -16125,6 +16329,12 @@ var Iconos = (function () {
 
     pintarGridPortafolio_();
     precargarAvataresPortafolio_(proyectosSinFiltrarSalud);
+    wireVerWorkloadPortafolio_(cont);
+  }
+
+  function wireVerWorkloadPortafolio_(cont) {
+    var btn = cont.querySelector('.js-py-ver-workload-portafolio');
+    if (btn) btn.addEventListener('click', cargarWorkloadPortafolio_);
   }
 
   // --- crear proyecto --------------------------------------------------
@@ -16359,7 +16569,7 @@ var Iconos = (function () {
       '<div class="sigso-py-detalle-cab">' +
         Componentes.boton({ texto: '← Portafolio', variante: 'sutil', clase: 'js-py-volver' }) +
         '<h1>' + Componentes.escaparHtml(p.nombre) + '</h1>' +
-        '<span class="sigso-py-salud sigso-py-salud--' + detalle.salud + '">' + Componentes.punto(SALUD_TONO[detalle.salud]) + SALUD_ETIQUETA[detalle.salud] + '</span>' +
+        '<span class="sigso-py-salud sigso-py-salud--' + detalle.salud + '">' + Componentes.punto(SALUD_TONO[detalle.salud]) + SALUD_ETIQUETA[detalle.salud] + saludScoreHtml_(detalle.salud_score) + '</span>' +
         Componentes.badge(ESTADO_PROYECTO_ETIQUETA[p.estado] || p.estado, 'neutro') +
       '</div>' +
       (detalle.salud_motivos && detalle.salud_motivos.length
@@ -16375,7 +16585,16 @@ var Iconos = (function () {
       // v10 (auditoría G): bitacora === undefined => todavía cargando (lazy).
       cuerpo = (bitacora === undefined)
         ? Componentes.cargando('Cargando cronograma...')
-        : pintarCronograma_(detalle, tareas, bitacora, rendimiento);
+        // v11 (P0): contexto de edición de la celda diaria -- quién soy y si
+        // puedo gestionar el proyecto, para decidir qué celdas son editables.
+        : pintarCronograma_(detalle, tareas, bitacora, rendimiento, {
+            miEmail: miEmail,
+            proyectoId: detalle.proyecto.proyecto_id,
+            puedeEditarTarea: function (a) { return puedeGestionar || trabajoLaTarea_(a, miEmail); },
+            // v11 (P1): "congelar línea base" es gestión del proyecto (líder/
+            // ADM), no de una tarea puntual -- distinto de puedeEditarTarea.
+            puedeGestionar: puedeGestionar
+          });
     }
     else if (pestanaActiva_ === 'entregables') cuerpo = pintarEntregables_(detalle, puedeGestionar);
     else if (pestanaActiva_ === 'riesgos') cuerpo = pintarRiesgos_(detalle, puedeGestionar);
@@ -16409,6 +16628,10 @@ var Iconos = (function () {
     // cualquiera que vea el proyecto puede exportarlo, no solo quien puede
     // gestionarlo.
     var descargarPdf = Componentes.boton({ texto: 'Descargar PDF', variante: 'secundario', clase: 'js-py-descargar-pdf' });
+    // v11 ("PDF ejecutivo configurable"): un informe a medida -- secciones,
+    // rango, personas, estado. "Descargar PDF" (arriba) sigue siendo el
+    // camino de un clic, sin tocar nada.
+    var configurarInforme = Componentes.boton({ texto: 'Configurar informe', variante: 'sutil', clase: 'js-py-configurar-informe' });
 
     var acciones = puedeGestionar
       ? '<div class="sigso-py-acciones">' +
@@ -16417,11 +16640,11 @@ var Iconos = (function () {
           // ESTE proyecto como plantilla, para arrancar los proximos
           // proyectos parecidos desde ahi.
           Componentes.boton({ texto: 'Guardar como plantilla', variante: 'secundario', clase: 'js-py-guardar-plantilla' }) +
-          descargarPdf +
+          descargarPdf + configurarInforme +
           (p.estado !== 'CERRADO' && p.estado !== 'CANCELADO'
             ? Componentes.boton({ texto: 'Cerrar proyecto', variante: 'peligro', clase: 'js-py-cerrar' }) : '') +
         '</div>'
-      : '<div class="sigso-py-acciones">' + descargarPdf + '</div>';
+      : '<div class="sigso-py-acciones">' + descargarPdf + configurarInforme + '</div>';
 
     // v10 (Fase D, propuesta 10 "Solicitud -> Proyecto"): trazabilidad de
     // donde salio este proyecto, si vino de una solicitud convertida.
@@ -16694,9 +16917,14 @@ var Iconos = (function () {
     // Sin rendimiento (null): esa tira de KPIs es por proyecto (Fase G3
     // Part A) -- un promedio cruzando proyectos distintos mezclaría metas
     // de unidades diferentes (imágenes con piezas, por ejemplo).
-    cont.innerHTML = toggle + pintarCronogramaDedicacion_(null, tareas, miBitacoraCache_, null);
+    // v11 (P0): en "Mi dedicación" todas las tareas son mías (soy responsable
+    // o colaborador), así que toda celda no futura es editable; el proyecto de
+    // cada celda es el de su propia tarea (vista cruzada de proyectos).
+    var ctxEdicion = { proyectoId: null, puedeEditarTarea: function () { return true; } };
+    cont.innerHTML = toggle + pintarCronogramaDedicacion_(null, tareas, miBitacoraCache_, null, ctxEdicion);
     wireMiTrabajoToggle_(cont, { tareas: tareas });
-    wireCartaControles_(cont, function () { pintarMiDedicacion_(cont, toggle, tareas); }, null);
+    wireCartaControles_(cont, function () { pintarMiDedicacion_(cont, toggle, tareas); }, null,
+      function () { miBitacoraCache_ = null; pintarMiDedicacion_(cont, toggle, tareas); });
   }
 
   function pintarMiTrabajoLista_(cont, toggle, datos) {
@@ -17040,10 +17268,53 @@ var Iconos = (function () {
       : pintarTareasLista_(tareas, miEmail));
   }
 
+  // v11 (P2, "subtareas con rollup"): reordena para que cada subtarea
+  // aparezca inmediatamente después de su padre (nesting visual por orden,
+  // sin indentación de árbol de verdad -- un solo nivel, no hace falta más).
+  // Una subtarea cuyo padre no está en esta lista (ej. un filtro que ocultó
+  // al padre) se muestra igual, al final, para no perderla de vista.
+  function ordenarConSubtareas_(tareas) {
+    var porPadre = {}, idsHijas = {};
+    tareas.forEach(function (a) {
+      if (a.es_subtarea) { (porPadre[a.tarea_padre_id] = porPadre[a.tarea_padre_id] || []).push(a); idsHijas[a.actividad_id] = true; }
+    });
+    var resultado = [];
+    tareas.forEach(function (a) {
+      if (idsHijas[a.actividad_id]) return;
+      resultado.push(a);
+      (porPadre[a.actividad_id] || []).forEach(function (h) { resultado.push(h); });
+    });
+    var vistas = {};
+    resultado.forEach(function (a) { vistas[a.actividad_id] = true; });
+    tareas.forEach(function (a) { if (idsHijas[a.actividad_id] && !vistas[a.actividad_id]) resultado.push(a); });
+    return resultado;
+  }
+
+  // v11 (P2, "subtareas con rollup"): chip "2/5 subtareas" + barra de
+  // avance -- se calcula on-read (Proyectos.listarTareas), nunca se guarda.
+  function rollupSubtareasHtml_(a) {
+    if (!a.subtareas_total) return '';
+    return '<div class="sigso-py-rollup" title="' + a.subtareas_terminadas + ' de ' + a.subtareas_total + ' subtareas terminadas">' +
+      '<span>' + a.subtareas_terminadas + '/' + a.subtareas_total + ' subtareas</span>' +
+      '<div class="sigso-py-rollup__barra"><div class="sigso-py-rollup__barra-fill" style="width:' + (a.avance_rollup_pct || 0) + '%"></div></div>' +
+    '</div>';
+  }
+
+  // v11 (P2, "dependencias con impacto"): "si esto se atrasa, ¿a qué más
+  // afecta?" -- puramente informativo (§I: nada mueve fechas ni bloquea
+  // solo), calculado on-read en Proyectos.listarTareas.
+  function impactoDependenciaHtml_(a) {
+    if (!a.impacto_dependientes) return '';
+    var extra = a.impacto_dependientes > a.impacto_titulos.length ? ' y ' + (a.impacto_dependientes - a.impacto_titulos.length) + ' más' : '';
+    return '<div class="sigso-mt-bloqueo sigso-py-impacto" title="' + Componentes.escaparHtml(a.impacto_titulos.join(', ') + extra) + '">' +
+      Iconos.svg('enlace', { tam: 14 }) + ' Si se atrasa, afecta a ' + a.impacto_dependientes + ' tarea(s) más</div>';
+  }
+
   function pintarTareasLista_(tareas, miEmail) {
-    var filas = tareas.map(function (a) {
+    var filas = ordenarConSubtareas_(tareas).map(function (a) {
       var esMia = !!miEmail && normalizarEmail_(a.responsable_email) === miEmail;
-      return '<div class="sigso-py-tarea' + (esMia ? ' sigso-py-tarea--mia' : '') + '">' +
+      return '<div class="sigso-py-tarea' + (esMia ? ' sigso-py-tarea--mia' : '') + (a.es_subtarea ? ' sigso-py-tarea--subtarea' : '') + '">' +
+        (a.es_subtarea ? '<div class="sigso-py-subtarea-de">↳ Subtarea de "' + Componentes.escaparHtml(a.padre_titulo || '') + '"</div>' : '') +
         '<div class="sigso-py-tarea__top">' +
           '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(a.titulo) + '</span>' +
           '<span class="sigso-badge sigso-mt-badge--' + a.semaforo + '">' + Componentes.escaparHtml(a.semaforo_etiqueta) + '</span>' +
@@ -17056,12 +17327,14 @@ var Iconos = (function () {
           metaChipHtml_(a) +
           colaboradoresChipHtml_(a) +
         '</div>' +
+        rollupSubtareasHtml_(a) +
         (a.estado === 'BLOQUEADA' ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('pausado', { tam: 14 }) + ' ' + Componentes.escaparHtml(a.bloqueo_motivo) + '</div>' : '') +
         // v9.4: dependencia comprometida -- bandera derivada (nunca mueve
         // fechas ni bloquea, §I de la propuesta), solo avisa.
         (a.dependencia_comprometida
           ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('alerta', { tam: 14 }) + ' Depende de "' + Componentes.escaparHtml(a.dependencia_titulo) + '", que está atrasada.</div>'
           : '') +
+        impactoDependenciaHtml_(a) +
         accionesCheckinTarea_(a, esMia) +
       '</div>';
     }).join('');
@@ -17123,12 +17396,15 @@ var Iconos = (function () {
         '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(a.titulo) + '</span>' +
         '<span class="sigso-badge sigso-mt-badge--' + a.semaforo + '">' + Componentes.escaparHtml(a.semaforo_etiqueta) + '</span>' +
       '</div>' +
+      (a.es_subtarea ? '<div class="sigso-py-subtarea-de">↳ ' + Componentes.escaparHtml(a.padre_titulo || '') + '</div>' : '') +
       '<div class="sigso-py-tarea__meta">' +
         '<span>' + (esMia ? '<b>Tú</b>' : Componentes.escaparHtml(a.responsable_nombre || a.responsable_email)) + '</span>' +
         (a.fecha_compromiso ? '<span>Vence ' + fechaCorta_(a.fecha_compromiso) + '</span>' : '') +
         colaboradoresChipHtml_(a) +
       '</div>' +
+      rollupSubtareasHtml_(a) +
       (a.estado === 'BLOQUEADA' ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('pausado', { tam: 14 }) + ' ' + Componentes.escaparHtml(a.bloqueo_motivo) + '</div>' : '') +
+      impactoDependenciaHtml_(a) +
       // Las mismas pastillas de siempre, aca doblan de fallback tactil/mobile
       // (donde arrastrar no es comodo): tocar "Listo" mueve la tarjeta igual
       // que soltarla en la columna "Lista".
@@ -17251,16 +17527,345 @@ var Iconos = (function () {
   // literalmente la propuesta.
   var vistaCronograma_ = 'dedicacion';
 
-  function pintarCronograma_(detalle, tareas, bitacora, rendimiento) {
+  function pintarCronograma_(detalle, tareas, bitacora, rendimiento, ctxEdicion) {
     var toggle = '<div class="sigso-py-vista-toggle" style="margin-bottom:var(--esp-3);">' +
         Componentes.boton({ texto: 'Dedicación', variante: vistaCronograma_ === 'dedicacion' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'dedicacion' }) +
         Componentes.boton({ texto: 'Plan', variante: vistaCronograma_ === 'plan' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'plan' }) +
+        // v11 (P1, "historial visible"): 3ra vista -- un feed cronológico de
+        // TODO lo que pasó en el proyecto (reprogramaciones, check-ins,
+        // registros del día, entregas...), sin red nueva: reusa la MISMA
+        // bitácora que ya cargó Dedicación.
+        Componentes.boton({ texto: 'Historial', variante: vistaCronograma_ === 'historial' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'historial' }) +
+        // v11 (P2, "vistas Workload y Actividad"): Workload como vista
+        // propia (antes solo vivía como un checkbox "Por persona" dentro de
+        // Dedicación) -- el foco acá es SOLO la carga por persona, sin las
+        // marcas de tarea que ensucian la lectura de "quién está sobrecargado".
+        // "Actividad" YA es Historial (arriba): un feed de qué pasó, no hace
+        // falta una vista más para lo mismo.
+        Componentes.boton({ texto: 'Workload', variante: vistaCronograma_ === 'workload' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'workload' }) +
+        // v11 (P3, "analítica avanzada"): lead/cycle time, tiempo en
+        // bloqueo/revisión, SPI -- se carga aparte (lazy, al elegir esta
+        // vista) porque es la única subvista de Cronograma que pide un
+        // endpoint propio (obtenerAnaliticaProyecto), distinto de
+        // bitácora/rendimiento que ya cargaron las demás.
+        Componentes.boton({ texto: 'Analítica', variante: vistaCronograma_ === 'analitica' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'analitica' }) +
       '</div>';
-    var cuerpo = vistaCronograma_ === 'plan'
-      ? pintarCronogramaPlan_(detalle, tareas)
-      : pintarCronogramaDedicacion_(detalle, tareas, bitacora || [], rendimiento);
+    var cuerpo;
+    if (vistaCronograma_ === 'plan') cuerpo = pintarCronogramaPlan_(detalle, tareas, ctxEdicion);
+    else if (vistaCronograma_ === 'historial') cuerpo = pintarHistorialProyecto_(tareas, bitacora || []);
+    else if (vistaCronograma_ === 'workload') cuerpo = pintarWorkloadProyecto_(detalle, tareas, bitacora || []);
+    else if (vistaCronograma_ === 'analitica') cuerpo = pintarAnaliticaProyecto_(datosDetalleActual_ && datosDetalleActual_.analitica, tareas);
+    else cuerpo = pintarCronogramaDedicacion_(detalle, tareas, bitacora || [], rendimiento, ctxEdicion);
     return toggle + cuerpo;
   }
+
+  // v11 (P1, "historial antes→después"): un feed reverso-cronológico de la
+  // bitácora COMPLETA del proyecto (todas las tareas), con frase humana por
+  // tipo -- "Fulano reprogramó 'Tarea X': 20/08 → 25/08 (motivo: ...)",
+  // "Fulano registró el día 30/08 como Finalizado (5h)". Es SOLO lectura y
+  // SOLO presentación: cero cálculo nuevo, mismos datos que ya trae
+  // Dedicación (listarBitacoraProyecto), interpretados con más detalle.
+  var HISTORIAL_ICONO_ = {
+    CREADA: '＋', CHECKIN_AVANCE: '↗', CHECKIN_SIN_CAMBIO: '·', DESBLOQUEO: '🔓',
+    BLOQUEO: '🔒', ENTREGA: '✓', VALIDACION: '👁', REPROGRAMACION: '📅',
+    REASIGNACION: '👤', REGISTRO_DIA: '🗓'
+  };
+  function historialFraseHtml_(b, tituloTarea) {
+    var quien = '<strong>' + Componentes.escaparHtml(b.autor_nombre || 'Alguien') + '</strong>';
+    var tarea = '"' + Componentes.escaparHtml(tituloTarea || '(tarea eliminada)') + '"';
+    switch (b.tipo) {
+      case 'REPROGRAMACION':
+        return quien + ' reprogramó ' + tarea + ': ' +
+          '<span class="sigso-py-hist-cambio">' + fechaCorta_(b.fecha_anterior) + ' → ' + fechaCorta_(b.fecha_nueva) + '</span>' +
+          (b.nota ? ' — motivo: ' + Componentes.escaparHtml(b.nota) : '');
+      case 'REASIGNACION':
+        return quien + ' reasignó ' + tarea + ': ' +
+          '<span class="sigso-py-hist-cambio">' + Componentes.escaparHtml(b.responsable_anterior || '—') + ' → ' + Componentes.escaparHtml(b.responsable_nuevo || '—') + '</span>' +
+          (b.nota ? ' — motivo: ' + Componentes.escaparHtml(b.nota) : '');
+      case 'REGISTRO_DIA':
+        return quien + ' registró el día ' + fechaCorta_(b.dia) + ' en ' + tarea + ' como ' +
+          '<span class="sigso-py-hist-cambio">' + Componentes.escaparHtml(REGISTRO_DIA_ESTADO_LABEL_[b.estado_dia] || b.estado_dia) + '</span>' +
+          (b.horas ? ' (' + redond1_(b.horas) + 'h)' : '') +
+          (b.ediciones ? ' <span class="sigso-ayuda">· editado ' + b.ediciones + ' vez(ces)</span>' : '') +
+          (b.nota ? ': ' + Componentes.escaparHtml(b.nota) : '');
+      case 'BLOQUEO':
+        return quien + ' bloqueó ' + tarea + (b.nota ? ': ' + Componentes.escaparHtml(b.nota) : '');
+      case 'DESBLOQUEO':
+        return quien + ' destrabó ' + tarea + (b.nota ? ': ' + Componentes.escaparHtml(b.nota) : '');
+      case 'ENTREGA':
+        return quien + ' entregó ' + tarea + (b.nota ? ': ' + Componentes.escaparHtml(b.nota) : '');
+      case 'VALIDACION':
+        return quien + ' revisó ' + tarea + (b.nota ? ': ' + Componentes.escaparHtml(b.nota) : '');
+      case 'CREADA':
+        return tarea + ' fue asignada' + (b.nota ? ': ' + Componentes.escaparHtml(b.nota) : '');
+      default:
+        return quien + ' actualizó ' + tarea + (b.nota ? ': ' + Componentes.escaparHtml(b.nota) : '') +
+          (b.horas ? ' (' + redond1_(b.horas) + 'h)' : '');
+    }
+  }
+  function pintarHistorialProyecto_(tareas, bitacora) {
+    if (!bitacora.length) return Componentes.vacio({ texto: 'Todavía no hay historial que mostrar.' });
+    var tituloPorTarea = {};
+    tareas.forEach(function (a) { tituloPorTarea[a.actividad_id] = a.titulo; });
+    var filas = bitacora.slice().sort(function (a, b) { return new Date(b.timestamp) - new Date(a.timestamp); })
+      .map(function (b) {
+        return '<div class="sigso-py-hist-fila">' +
+          '<span class="sigso-py-hist-icono">' + (HISTORIAL_ICONO_[b.tipo] || '•') + '</span>' +
+          '<div class="sigso-py-hist-cuerpo">' +
+            '<div class="sigso-py-hist-frase">' + historialFraseHtml_(b, tituloPorTarea[b.actividad_id]) + '</div>' +
+            '<div class="sigso-py-hist-cuando">' + fechaHora_(b.timestamp) + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    return '<div class="sigso-py-hist">' + filas + '</div>';
+  }
+
+  // v11 (P2, "vistas Workload y Actividad"): controles mínimos de la vista
+  // Workload -- rango, navegación y estado, con los MISMOS ids/clases que
+  // cartaControlesHtml_ (Dedicación) para que wireCartaControles_ de siempre
+  // los cablee sin código nuevo. Sin "Por persona" (Workload YA está
+  // agrupada por persona siempre) ni "Descargar/Imprimir" (el informe
+  // configurable ya trae su propia sección de Carga de trabajo).
+  function cartaControlesWorkloadHtml_(dias) {
+    var esTodo = dedRango_ === 'todo';
+    var desdeTxt = fechaCorta_(dias[0].clave), hastaTxt = fechaCorta_(dias[dias.length - 1].clave);
+    var rangoSel = Componentes.campoSelect({ id: 'py-ded-rango', valor: dedRango_, placeholder: false, claseCampo: 'sigso-py-ded-ctrl',
+      opciones: [{ valor: 'semana', texto: 'Semana' }, { valor: 'quincena', texto: '2 semanas' }, { valor: 'mes', texto: 'Mes' }, { valor: 'todo', texto: 'Todo el proyecto' }] });
+    var filtroEstado = Componentes.campoSelect({ id: 'py-ded-estado', valor: dedFiltroEstado_, placeholder: 'Todos los estados', claseCampo: 'sigso-py-ded-ctrl',
+      opciones: [{ valor: 'abiertas', texto: 'Solo abiertas' }, { valor: 'atrasadas', texto: 'Solo atrasadas' }] });
+    var nav = esTodo ? '' :
+      (Componentes.boton({ texto: '←', variante: 'sutil', clase: 'js-py-ded-atras', tipo: 'button' }) +
+       Componentes.boton({ texto: '→', variante: 'sutil', clase: 'js-py-ded-adelante', tipo: 'button' }) +
+       Componentes.boton({ texto: 'Hoy', variante: 'sutil', clase: 'js-py-ded-hoy', tipo: 'button' }));
+    return '<div class="sigso-py-ded-controles">' +
+      rangoSel + nav +
+      '<span class="sigso-ayuda sigso-py-ded-rangotxt">' + Componentes.escaparHtml(desdeTxt) + ' – ' + Componentes.escaparHtml(hastaTxt) + '</span>' +
+      filtroEstado +
+    '</div>';
+  }
+
+  // v11 (P2, "vistas Workload y Actividad"): Workload como vista PROPIA --
+  // antes solo existía como el checkbox "Por persona" dentro de Dedicación,
+  // mezclado con las marcas de tarea. Acá el foco es SOLO la carga: cuántas
+  // horas tiene cada persona cada día (misma prioridad REGISTRO_DIA>check-in
+  // de siempre) y quién está sobrecargado, con KPIs de resumen arriba.
+  function pintarWorkloadProyecto_(detalle, tareas, bitacora) {
+    if (!tareas.length) return Componentes.vacio({ texto: 'Todavía no hay tareas para mostrar la carga de trabajo.' });
+    if (!dedicacionAncla_) dedicacionAncla_ = new Date();
+    var feriadosSet = {};
+    ((detalle && detalle.feriados) || []).forEach(function (f) { feriadosSet[f] = true; });
+    var hoyClave = claveHoy_();
+    var dias = construirDiasCarta_(detalle, tareas, bitacora, feriadosSet, hoyClave);
+    var controles = cartaControlesWorkloadHtml_(dias);
+
+    // Mismo filtro de estado que Dedicación (comparte el módulo dedFiltroEstado_);
+    // sin filtro de persona propio -- acá se ve a TODOS a la vez, es justo el
+    // punto de esta vista (comparar cargas entre personas).
+    var filas = tareas.filter(function (a) {
+      if (dedFiltroEstado_ === 'abiertas' && (a.estado === 'TERMINADA' || a.estado === 'CANCELADA')) return false;
+      if (dedFiltroEstado_ === 'atrasadas' && a.semaforo !== 'atrasada') return false;
+      return true;
+    });
+    if (!filas.length) return controles + Componentes.vacio({ texto: 'Ninguna tarea coincide con el filtro en esta ventana.' });
+
+    var registroPorTareaDia = {}, horasPorTareaDia = {};
+    bitacora.forEach(function (b) {
+      var k = (b.tipo === 'REGISTRO_DIA' && b.dia) ? b.dia : claveDeIso_(b.timestamp);
+      if (!k) return;
+      if (b.tipo === 'REGISTRO_DIA') {
+        (registroPorTareaDia[b.actividad_id] = registroPorTareaDia[b.actividad_id] || {})[k] = b;
+      } else if (b.horas) {
+        var hh = (horasPorTareaDia[b.actividad_id] = horasPorTareaDia[b.actividad_id] || {});
+        hh[k] = (hh[k] || 0) + Number(b.horas);
+      }
+    });
+    function horasDelDiaTarea_(actividadId, diaClave) {
+      var reg = (registroPorTareaDia[actividadId] || {})[diaClave];
+      if (reg) return Number(reg.horas) || 0;
+      return (horasPorTareaDia[actividadId] || {})[diaClave] || 0;
+    }
+
+    var porPersona = {}, orden = [];
+    filas.forEach(function (a) {
+      var clave = a.responsable_nombre || a.responsable_email || '—';
+      if (!porPersona[clave]) { porPersona[clave] = []; orden.push(clave); }
+      porPersona[clave].push(a);
+    });
+
+    var headDias = dias.map(diaCabeceraHtml_).join('');
+    var totalPorDia = {};
+    dias.forEach(function (x) { totalPorDia[x.clave] = 0; });
+    var granTotal = 0, diasSobrecarga = 0, maxPersona = null, maxHoras = 0;
+
+    var filasHtml = orden.map(function (persona) {
+      var totalPersona = 0, sobrecargaPersona = 0;
+      var celdas = dias.map(function (x) {
+        var total = porPersona[persona].reduce(function (s, a) { return s + horasDelDiaTarea_(a.actividad_id, x.clave); }, 0);
+        totalPersona += total; totalPorDia[x.clave] += total;
+        var sobrecarga = total > WORKLOAD_JORNADA_HORAS_;
+        if (sobrecarga) sobrecargaPersona++;
+        var nivel = nivelHoras_(total);
+        var tituloCelda = total
+          ? (persona + ' — ' + fechaCorta_(x.clave) + ': ' + redond1_(total) + 'h' + (sobrecarga ? ' (sobrecarga)' : ''))
+          : '';
+        return '<div class="sigso-py-ded-celda sigso-py-ded-celda--workload' + (x.we ? ' we' : '') + (x.feriado ? ' feriado' : '') + (x.clave === hoyClave ? ' hoy' : '') +
+          (nivel ? ' h' + nivel : '') + (sobrecarga ? ' sigso-py-ded-celda--sobrecarga' : '') + '"' +
+          (tituloCelda ? ' title="' + Componentes.escaparHtml(tituloCelda) + '"' : '') + '>' + (total ? '<span>' + redond1_(total) + '</span>' : '') + '</div>';
+      }).join('');
+      granTotal += totalPersona;
+      diasSobrecarga += sobrecargaPersona;
+      if (totalPersona > maxHoras) { maxHoras = totalPersona; maxPersona = persona; }
+      return '<div class="sigso-py-ded-fila">' +
+        '<div class="sigso-py-ded-etiqueta"><span class="t">' + Componentes.escaparHtml(persona) + '</span>' +
+          '<span class="m">' + porPersona[persona].length + ' tarea(s)' + (sobrecargaPersona ? ' · ' + sobrecargaPersona + ' día(s) con sobrecarga' : '') + '</span></div>' +
+        celdas +
+        '<div class="sigso-py-ded-total">' + (totalPersona ? redond1_(totalPersona) + 'h' : '') + '</div>' +
+      '</div>';
+    }).join('');
+
+    var footerCeldas = dias.map(function (x) {
+      var h = totalPorDia[x.clave];
+      return '<div class="sigso-py-ded-celda sigso-py-ded-celda--total' + (x.we ? ' we' : '') + (x.feriado ? ' feriado' : '') + '">' +
+        (h ? '<span>' + redond1_(h) + '</span>' : '') + '</div>';
+    }).join('');
+    var footer = '<div class="sigso-py-ded-fila sigso-py-ded-footer">' +
+      '<div class="sigso-py-ded-etiqueta"><span class="t">Horas por día</span></div>' +
+      footerCeldas + '<div class="sigso-py-ded-total">' + (granTotal ? redond1_(granTotal) + 'h' : '') + '</div></div>';
+
+    var promedioPersonaDia = (orden.length && dias.length) ? redond1_(granTotal / (orden.length * dias.length)) : 0;
+    var kpis = '<div class="sigso-py-kpis">' +
+      Componentes.kpi({ etiqueta: 'Horas del período', valor: redond1_(granTotal) + 'h' }) +
+      Componentes.kpi({ etiqueta: 'Promedio por persona/día', valor: promedioPersonaDia + 'h' }) +
+      Componentes.kpi({ etiqueta: 'Días con sobrecarga', valor: diasSobrecarga, alerta: diasSobrecarga > 0 }) +
+      (maxPersona ? Componentes.kpi({ etiqueta: 'Mayor carga', valor: Componentes.escaparHtml(maxPersona) + ' (' + redond1_(maxHoras) + 'h)' }) : '') +
+    '</div>';
+
+    return kpis + controles +
+      '<div class="sigso-py-ded-scroll"><div class="sigso-py-ded" style="--dias:' + dias.length + '">' +
+        '<div class="sigso-py-ded-fila sigso-py-ded-cabecera"><div class="sigso-py-ded-etiqueta">Persona</div>' + headDias +
+          '<div class="sigso-py-ded-total">Horas</div></div>' +
+        filasHtml +
+        footer +
+      '</div></div>' +
+      '<div class="sigso-py-ded-leyenda"><span><i class="sigso-py-ded-sw sigso-py-ded-sw--bloq"></i>Sobrecarga: más de ' + WORKLOAD_JORNADA_HORAS_ + 'h en un día</span>' +
+        '<span class="sigso-py-ded-heatleg">Horas del día: <i class="hl h1"></i><i class="hl h2"></i><i class="hl h3"></i><i class="hl h4"></i> más</span></div>';
+  }
+
+  // v11 (P3, "analítica avanzada"): se dispara al elegir la vista -- si ya
+  // está en caché, solo repinta (sin red); si no, pide obtenerAnaliticaProyecto
+  // una vez y la deja en datosDetalleActual_.analitica (mismo criterio de
+  // "cargar pesado solo si de verdad se abre" que bitácora/rendimiento).
+  function cargarAnaliticaProyecto_(cont) {
+    if (!datosDetalleActual_) return;
+    if (datosDetalleActual_.analitica !== undefined) { cambiarPestana_('cronograma'); return; }
+    cambiarPestana_('cronograma'); // repinta ya -- pintarAnaliticaProyecto_ muestra "Cargando..." mientras tanto
+    var idAlPedir = proyectoActivoId_;
+    apiSeguro_('obtenerAnaliticaProyecto', { proyecto_id: proyectoActivoId_ }).then(function (r) {
+      if (!datosDetalleActual_ || idAlPedir !== proyectoActivoId_) return;
+      datosDetalleActual_.analitica = (r && r.ok) ? r.data : null;
+      if (pestanaActiva_ === 'cronograma' && vistaCronograma_ === 'analitica') cambiarPestana_('cronograma');
+    });
+  }
+
+  // v11 (P3, "SPI conceptual" en pantalla): tooltips explican qué es cada
+  // métrica en una frase -- "explicable, no una metodología completa" aplica
+  // también a cómo se presenta, no solo a cómo se calcula.
+  function pintarAnaliticaProyecto_(analitica, tareas) {
+    if (analitica === undefined) return Componentes.cargando('Cargando analítica...');
+    if (!analitica) return Componentes.vacio({ texto: 'No se pudo cargar la analítica de este proyecto.' });
+
+    var kpis = '<div class="sigso-py-kpis">' +
+      Componentes.kpi({
+        etiqueta: 'Lead time promedio', valor: analitica.lead_time_promedio_dias === null ? '—' : analitica.lead_time_promedio_dias + ' d',
+        titulo: 'Desde que se creó la tarea hasta que se terminó (incluye la espera antes de empezar). Solo tareas terminadas.'
+      }) +
+      Componentes.kpi({
+        etiqueta: 'Cycle time promedio', valor: analitica.cycle_time_promedio_dias === null ? '—' : analitica.cycle_time_promedio_dias + ' d',
+        titulo: 'Desde el primer avance real hasta que se terminó (sin la espera). Solo tareas terminadas con al menos un avance registrado.'
+      }) +
+      Componentes.kpi({
+        etiqueta: 'Tiempo en bloqueo', valor: analitica.tiempo_bloqueo_total_dias + ' d', alerta: analitica.tiempo_bloqueo_total_dias > 0,
+        titulo: 'Suma de todos los días que las tareas del proyecto pasaron bloqueadas.'
+      }) +
+      Componentes.kpi({
+        etiqueta: 'Tiempo en revisión', valor: analitica.tiempo_revision_total_dias + ' d',
+        titulo: 'Suma de todos los días que las tareas pasaron esperando validación.'
+      }) +
+      (analitica.spi_promedio !== null
+        ? Componentes.kpi({
+            etiqueta: 'SPI promedio', valor: analitica.spi_promedio, alerta: analitica.spi_promedio < 1,
+            titulo: 'Avance real ÷ avance esperado a hoy. 1.0 = a tiempo, menos de 1 = atrasado, más de 1 = adelantado. Conceptual: no es una implementación completa de EVM (no incluye costo/CPI).'
+          })
+        : '') +
+    '</div>';
+
+    var conDato = (analitica.por_tarea || []).filter(function (t) {
+      return t.lead_time_dias !== null || t.cycle_time_dias !== null || t.tiempo_bloqueo_dias > 0 || t.tiempo_revision_dias > 0;
+    });
+    if (!conDato.length) {
+      return kpis + Componentes.vacio({ texto: 'Todavía no hay tareas terminadas, bloqueadas o en revisión para desglosar.' });
+    }
+    var filas = conDato.map(function (t) {
+      return '<tr>' +
+        '<td>' + Componentes.escaparHtml(t.titulo) + '</td>' +
+        '<td>' + (t.lead_time_dias === null ? '—' : t.lead_time_dias + ' d') + '</td>' +
+        '<td>' + (t.cycle_time_dias === null ? '—' : t.cycle_time_dias + ' d') + '</td>' +
+        '<td>' + (t.tiempo_bloqueo_dias > 0 ? t.tiempo_bloqueo_dias + ' d' : '—') + '</td>' +
+        '<td>' + (t.tiempo_revision_dias > 0 ? t.tiempo_revision_dias + ' d' : '—') + '</td>' +
+      '</tr>';
+    }).join('');
+    return kpis +
+      '<div class="sigso-py-analitica-acciones">' +
+        Componentes.boton({ texto: 'Exportar CSV', variante: 'secundario', clase: 'js-py-analitica-csv', tipo: 'button', icono: 'descargar' }) +
+      '</div>' +
+      '<div class="sigso-py-ded-scroll"><table class="sigso-py-analitica-tabla">' +
+        '<thead><tr><th>Tarea</th><th>Lead time</th><th>Cycle time</th><th>Bloqueo</th><th>Revisión</th></tr></thead>' +
+        '<tbody>' + filas + '</tbody>' +
+      '</table></div>';
+  }
+
+  // v11 (Reingeniería Cronograma, P0): el ESTADO DEL DÍA explícito -- lo que
+  // el usuario elige en la celda diaria (distinto del estado de la tarea
+  // completa). Cada estado tiene su clase visual (reusa las del heatmap donde
+  // calza y agrega las nuevas: plan/pausa/rev/esp) y su marca corta en la
+  // celda. SIGSO no es vigilancia: "sin registro" NO es un estado -- una
+  // celda vacía significa "SIGSO no tiene registro de ese día", nunca "no se
+  // trabajó".
+  var REGISTRO_DIA_ESTADO_VIS_ = {
+    asignado:          { cls: 'asig', txt: 'A' },
+    planificado:       { cls: 'plan', txt: 'P' },
+    en_proceso:        { cls: 'proc', txt: '●' },
+    bloqueado:         { cls: 'bloq', txt: '!' },
+    pausado:           { cls: 'pausa', txt: '‖' },
+    finalizado:        { cls: 'done', txt: '✓' },
+    entregado:         { cls: 'done', txt: 'F' },
+    revision:          { cls: 'rev', txt: 'R' },
+    esperando_tercero: { cls: 'esp', txt: '…' }
+  };
+  var REGISTRO_DIA_ESTADO_LABEL_ = {
+    asignado: 'Asignado', planificado: 'Planificado', en_proceso: 'En proceso',
+    bloqueado: 'Bloqueado', pausado: 'En pausa', finalizado: 'Finalizado',
+    entregado: 'Entregado', revision: 'En revisión', esperando_tercero: 'Esperando a un tercero'
+  };
+  var REGISTRO_DIA_ESTADO_ORDEN_ = [
+    'asignado', 'planificado', 'en_proceso', 'bloqueado', 'pausado',
+    'finalizado', 'entregado', 'revision', 'esperando_tercero'
+  ];
+
+  // v11 (P0): ¿esta persona trabaja la tarea? (responsable o colaborador) --
+  // espejo de trabajaLaActividad_ del backend, para decidir qué celdas son
+  // editables sin un viaje de red.
+  function trabajoLaTarea_(a, miEmail) {
+    if (!miEmail) return false;
+    if (normalizarEmail_(a.responsable_email) === miEmail) return true;
+    return (a.colaboradores || []).some(function (c) { return normalizarEmail_(c.email) === miEmail; });
+  }
+
+  // v11 (P0): referencias que el manejador de clic de la celda usa para abrir
+  // el modal y refrescar tras guardar -- se fijan en cada pintado de la carta.
+  var cartaBitacoraActual_ = [];
+  var cartaTareasActual_ = [];
+  var cartaOnGuardarRegistro_ = null;
 
   // v10 (Fase E, "Carta Gantt de Dedicación"): traduce el `tipo` que
   // Actividades.checkin YA escribe en la bitácora a la letra de siempre --
@@ -17300,11 +17905,43 @@ var Iconos = (function () {
     return 4;
   }
 
+  // v11 (P1, "workload / sobrecarga"): jornada de referencia para marcar un
+  // día sobrecargado -- 9h, la MISMA convención que ya usa el resto de SIGSO
+  // para "un día de trabajo" (ver CUMPLIMIENTO_HORAS_JORNADA en el backend,
+  // Cumplimiento.gs), no un número nuevo inventado para esta vista.
+  var WORKLOAD_JORNADA_HORAS_ = 9;
+
+  // v11 (P1, "Plan · Esperado · Real"): línea compacta bajo el título de la
+  // tarea en la carta de Dedicación -- Plan (fechas vigentes), Base (solo si
+  // difiere del plan actual: señal de que hubo slippage desde que se
+  // congeló), Esperado/Real a hoy, y la desviación en puntos porcentuales
+  // (verde a favor, rojo en contra). Nada se muestra sin fecha_compromiso
+  // confirmada -- RN-710 (pendiente de confirmar) no tiene curva que trazar.
+  function planLineaHtml_(plan) {
+    if (!plan || !plan.plan_fin) return '';
+    var partes = ['Plan ' + fechaCorta_(plan.plan_inicio) + '–' + fechaCorta_(plan.plan_fin)];
+    if (plan.baseline_fin && plan.baseline_fin !== plan.plan_fin) {
+      partes.push('<span class="baseline">Base ' + fechaCorta_(plan.baseline_fin) + '</span>');
+    }
+    if (plan.avance_esperado_pct !== null && plan.avance_esperado_pct !== undefined) {
+      partes.push('Esperado ' + redond1_(plan.avance_esperado_pct) + '%');
+    }
+    if (plan.avance_real_pct !== null && plan.avance_real_pct !== undefined) {
+      partes.push('Real ' + redond1_(plan.avance_real_pct) + '%');
+    }
+    if (plan.desviacion_pp !== null && plan.desviacion_pp !== undefined) {
+      var aFavor = plan.desviacion_pp >= 0;
+      partes.push('<span class="dev ' + (aFavor ? 'dev--favor' : 'dev--contra') + '">' +
+        (aFavor ? '+' : '') + redond1_(plan.desviacion_pp) + 'pp</span>');
+    }
+    return '<span class="sigso-py-ded-plan">' + partes.join(' · ') + '</span>';
+  }
+
   // v10 (auditoría G): cablea TODOS los controles de la carta (rango,
   // agrupar, filtros, imprimir) además de la navegación de ventana. Se usa
   // igual en el Cronograma de un proyecto y en "Mi dedicación" -- solo
   // cambian `alRepintar` y el `detalle` (para el título del reporte).
-  function wireCartaControles_(cont, alRepintar, detalle) {
+  function wireCartaControles_(cont, alRepintar, detalle, alGuardarRegistro) {
     wireDedicacionNav_(cont, alRepintar);
     var rango = cont.querySelector('#py-ded-rango');
     if (rango) rango.addEventListener('change', function () { dedRango_ = rango.value; alRepintar(); });
@@ -17316,6 +17953,235 @@ var Iconos = (function () {
     if (est) est.addEventListener('change', function () { dedFiltroEstado_ = est.value; alRepintar(); });
     var imp = cont.querySelector('.js-py-ded-imprimir');
     if (imp) imp.addEventListener('click', function () { imprimirCartaDedicacion_(cont, detalle); });
+
+    // v11 (P1, "congelar línea base"): solo existe en el Cronograma de UN
+    // proyecto (Mi dedicación no la ofrece -- ver cartaControlesHtml_). Solo
+    // afecta la baseline/plan_seguimiento, que viajan junto a la bitácora:
+    // basta con la MISMA invalidación que ya usa el registro del día.
+    var basBtn = cont.querySelector('.js-py-ded-baseline');
+    if (basBtn) {
+      basBtn.addEventListener('click', function () {
+        var proyectoId = detalle && detalle.proyecto && detalle.proyecto.proyecto_id;
+        if (!proyectoId) return;
+        Componentes.confirmar({
+          titulo: 'Congelar línea base',
+          mensaje: 'Guarda una foto de las fechas de plan de hoy, para comparar el avance contra ella más adelante. No borra la anterior.',
+          confirmar: 'Congelar'
+        }).then(function (ok) {
+          if (!ok) return;
+          basBtn.disabled = true;
+          apiSeguro_('congelarBaselineProyecto', { proyecto_id: proyectoId }).then(function (r) {
+            basBtn.disabled = false;
+            if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo congelar la línea base.', tipo: 'error' }); return; }
+            Componentes.aviso({ texto: 'Línea base congelada (' + r.data.total_tareas + ' tarea[s]).', tipo: 'exito' });
+            if (alGuardarRegistro) alGuardarRegistro();
+          });
+        });
+      });
+    }
+
+    // v11 (P1, "historial de fecha"): reprogramar cambia fecha_compromiso en
+    // ACTIVIDADES -- para que la tarea quede al día en TODAS las pestañas
+    // (Tareas, Kanban, Hitos), no solo en la carta, se recarga el proyecto
+    // completo (mismo patrón que cualquier otro modal de edición del
+    // módulo). En "Mi dedicación" (sin un único proyecto abierto) se hace el
+    // repintado liviano de siempre.
+    var scrollReprog = cont.querySelector('.sigso-py-ded-scroll');
+    if (scrollReprog) {
+      scrollReprog.addEventListener('click', function (ev) {
+        var btn = ev.target.closest('.js-py-ded-reprogramar');
+        if (btn) abrirReprogramarDesdeBoton_(btn, detalle, alGuardarRegistro);
+      });
+    }
+
+    // v11 (P0): la celda diaria como unidad editable -- clic (o Enter/Espacio)
+    // abre el modal de registro del día. Delegación sobre el contenedor: las
+    // celdas se re-crean en cada repintado, un solo listener las cubre todas.
+    cartaOnGuardarRegistro_ = alGuardarRegistro || null;
+    var scroll = cont.querySelector('.sigso-py-ded-scroll');
+    if (scroll) {
+      scroll.addEventListener('click', function (ev) {
+        var celda = ev.target.closest('.sigso-py-ded-celda--edit');
+        if (celda) abrirRegistroDiaDesdeCelda_(celda);
+      });
+      scroll.addEventListener('keydown', function (ev) {
+        if (ev.key !== 'Enter' && ev.key !== ' ') return;
+        var celda = ev.target.closest && ev.target.closest('.sigso-py-ded-celda--edit');
+        if (celda) { ev.preventDefault(); abrirRegistroDiaDesdeCelda_(celda); }
+      });
+    }
+  }
+
+  // v11 (P1, "historial de fecha"): abre el modal de reprogramar a partir
+  // del botón 📅 de una fila de la carta.
+  function abrirReprogramarDesdeBoton_(btn, detalle, alGuardarRegistro) {
+    var proyId = btn.getAttribute('data-proy');
+    var actId = btn.getAttribute('data-act');
+    if (!proyId || !actId) return;
+    var tarea = tareaPorIdEnCarta_(actId);
+    abrirReprogramarTarea_(proyId, tarea, function () {
+      if (detalle) refrescarDetalle_();
+      else if (alGuardarRegistro) alGuardarRegistro();
+    });
+  }
+
+  // v11 (P1): modal de reprogramar -- fecha nueva + motivo obligatorio
+  // (RN-703). Reusa el mismo par enviarModal_/montarModal_ de siempre.
+  // v11 (P2, "drag & drop de fechas"): `fechaSugerida` ('YYYY-MM-DD') es
+  // opcional -- la usa el arrastre del Gantt navegable para prellenar con la
+  // fecha que resultó de soltar la barra ahí; sin ella (el botón 📅 de
+  // siempre), se prellena con la fecha_compromiso actual de la tarea. En
+  // ambos casos el motivo sigue siendo obligatorio -- arrastrar NUNCA
+  // reprograma en silencio.
+  function abrirReprogramarTarea_(proyectoId, tarea, alExito, fechaSugerida) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Reprogramar</h3>' +
+        '<p class="sigso-py-reg-cab"><strong>' + Componentes.escaparHtml((tarea && tarea.titulo) || 'Tarea') + '</strong>' +
+          (tarea && tarea.fecha_compromiso ? '<br><span class="sigso-ayuda">Fecha actual: ' + Componentes.escaparHtml(fechaCorta_(tarea.fecha_compromiso)) + '</span>' : '') + '</p>' +
+        '<form id="form-py-reprogramar">' +
+          Componentes.campoTexto({ id: 'py-repro-fecha', label: 'Nueva fecha de compromiso', tipo: 'date', valor: fechaSugerida || fechaISOCorta_(tarea && tarea.fecha_compromiso), requerido: true }) +
+          Componentes.campoTextarea({ id: 'py-repro-motivo', label: 'Motivo (obligatorio)', requerido: true }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Reprogramar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    fondo.querySelector('#form-py-reprogramar').addEventListener('submit', function (evento) {
+      enviarModal_(evento, 'reprogramarTareaProyecto', {
+        proyecto_id: proyectoId,
+        actividad_id: tarea && tarea.actividad_id,
+        fecha_compromiso: fondo.querySelector('#py-repro-fecha').value,
+        motivo: fondo.querySelector('#py-repro-motivo').value
+      }, function () {
+        cerrar();
+        Componentes.aviso({ texto: 'Tarea reprogramada.', tipo: 'exito' });
+        if (typeof alExito === 'function') alExito();
+      });
+    });
+  }
+
+  // v11 ("PDF ejecutivo configurable"): las secciones disponibles, en el
+  // MISMO orden fijo del backend (REPORTE_SECCIONES_DISPONIBLES_,
+  // Proyectos.gs) -- lo que cambia es cuáles vienen marcadas por defecto:
+  // exactamente las del reporte clásico de "Descargar PDF" de siempre, para
+  // que abrir este modal sin tocar nada produzca el mismo documento de
+  // siempre y las secciones nuevas (portada/salud/desviaciones/gantt/
+  // workload/leyenda) se sumen a propósito.
+  var SECCIONES_INFORME_ = [
+    { valor: 'portada', texto: 'Portada' },
+    { valor: 'ficha', texto: 'Ficha resumen', defecto: true },
+    { valor: 'salud', texto: 'Salud detallada (score y desglose)' },
+    { valor: 'hitos', texto: 'Hitos', defecto: true },
+    { valor: 'riesgos', texto: 'Riesgos abiertos', defecto: true },
+    { valor: 'vencimientos', texto: 'Próximos vencimientos', defecto: true },
+    { valor: 'rendimiento', texto: 'Rendimiento', defecto: true },
+    { valor: 'desviaciones', texto: 'Plan · Esperado · Real' },
+    { valor: 'gantt', texto: 'Carta Gantt (día × tarea)' },
+    { valor: 'workload', texto: 'Carga de trabajo por persona' },
+    { valor: 'bitacora', texto: 'Actividad reciente / bitácora', defecto: true },
+    { valor: 'leyenda', texto: 'Leyenda' }
+  ];
+
+  // v11 ("Configurar informe"): secciones + rango + personas + estado. El
+  // PDF resultante llega igual que "Descargar PDF" (base64 -> Blob), solo
+  // que con `config` viajando en el payload -- Proyectos.descargarReporte
+  // (Proyectos.gs) arma el documento a medida cuando `config` está presente,
+  // y el reporte clásico (sin config) queda intacto para quien no abre esto.
+  function abrirConfigurarInforme_(detalle) {
+    var personas = (detalle.integrantes || []).map(function (i) {
+      return { email: i.usuario_email, nombre: i.usuario_nombre || i.usuario_email };
+    });
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Configurar informe</h3>' +
+        '<p class="sigso-ayuda">Elige qué incluir. El PDF se genera al momento, con los datos de ahora.</p>' +
+        '<form id="form-py-informe">' +
+          '<div class="sigso-py-informe-secciones">' +
+            SECCIONES_INFORME_.map(function (s) {
+              return '<label class="sigso-campo-check"><input type="checkbox" class="js-py-informe-seccion" value="' + s.valor + '"' +
+                (s.defecto ? ' checked' : '') + '> ' + Componentes.escaparHtml(s.texto) + '</label>';
+            }).join('') +
+          '</div>' +
+          '<div class="sigso-py-form-fila">' +
+            Componentes.campoTexto({ id: 'py-informe-desde', label: 'Desde (opcional)', tipo: 'date' }) +
+            Componentes.campoTexto({ id: 'py-informe-hasta', label: 'Hasta (opcional)', tipo: 'date' }) +
+          '</div>' +
+          '<p class="sigso-ayuda">El rango solo acota Gantt / Carga de trabajo / bitácora. Vacío = todo el proyecto.</p>' +
+          Componentes.campoSelect({
+            id: 'py-informe-estado', label: 'Estado de las tareas', valor: '', placeholder: 'Todos los estados',
+            opciones: [{ valor: 'abiertas', texto: 'Solo abiertas' }, { valor: 'atrasadas', texto: 'Solo atrasadas' }]
+          }) +
+          (personas.length
+            ? '<details class="sigso-py-colab-opcional" open>' +
+                '<summary>Personas (opcional -- vacío = todas)</summary>' +
+                personas.map(function (p) {
+                  return '<label class="sigso-campo-check"><input type="checkbox" class="js-py-informe-persona" value="' +
+                    Componentes.escaparHtml(p.email) + '"> ' + Componentes.escaparHtml(p.nombre) + '</label>';
+                }).join('') +
+              '</details>'
+            : '') +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Generar PDF', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    fondo.querySelector('#form-py-informe').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var btn = evento.currentTarget.querySelector('button[type="submit"]');
+      if (btn.disabled) return; // a prueba de doble-clic, mismo criterio que enviarModal_
+      var secciones = Array.prototype.map.call(fondo.querySelectorAll('.js-py-informe-seccion:checked'), function (el) { return el.value; });
+      var desde = fondo.querySelector('#py-informe-desde').value;
+      var hasta = fondo.querySelector('#py-informe-hasta').value;
+      var personasSel = Array.prototype.map.call(fondo.querySelectorAll('.js-py-informe-persona:checked'), function (el) { return el.value; });
+      var config = {
+        secciones: secciones,
+        estado: fondo.querySelector('#py-informe-estado').value,
+        personas: personasSel
+      };
+      if (desde && hasta) config.rango = { desde: desde, hasta: hasta };
+
+      var textoOriginal = btn.textContent;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="sigso-spinner"></span>Generando…';
+      apiSeguro_('descargarReporteProyecto', { proyecto_id: detalle.proyecto.proyecto_id, config: config }).then(function (r) {
+        btn.disabled = false;
+        btn.textContent = textoOriginal;
+        if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo generar el reporte.', tipo: 'error' }); return; }
+        descargarBase64Proyecto_(r.data.pdf_base64, r.data.filename || ('Reporte-' + detalle.proyecto.proyecto_id + '.pdf'), 'application/pdf');
+        cerrar();
+      });
+    });
+  }
+
+  // v11 (P0): abre el modal de registro del día a partir de una celda de la
+  // carta -- resuelve el registro existente (si lo hay) desde la bitácora en
+  // memoria y la tarea desde la caché actual.
+  function abrirRegistroDiaDesdeCelda_(celda) {
+    var proyId = celda.getAttribute('data-proy');
+    var actId = celda.getAttribute('data-act');
+    var dia = celda.getAttribute('data-dia');
+    if (!proyId || !actId || !dia) return;
+    var registro = (cartaBitacoraActual_ || []).filter(function (b) {
+      return b.tipo === 'REGISTRO_DIA' && b.actividad_id === actId && b.dia === dia;
+    })[0] || null;
+    var tarea = tareaPorIdEnCarta_(actId);
+    abrirRegistroDia_(proyId, tarea, dia, registro, cartaOnGuardarRegistro_);
+  }
+
+  // Busca la tarea por id entre las que la carta está mostrando ahora -- solo
+  // para el título del encabezado del modal (sirve igual en el Cronograma de
+  // un proyecto y en "Mi dedicación", que fija esta lista en cada pintado).
+  function tareaPorIdEnCarta_(actId) {
+    return (cartaTareasActual_ || []).filter(function (t) { return t.actividad_id === actId; })[0] || null;
   }
 
   // v10 (Fase G3, "vista transversal por recurso"): la navegación de
@@ -17420,7 +18286,7 @@ var Iconos = (function () {
 
   // Barra de controles: rango, navegación de ventana, agrupar por persona,
   // filtros y el botón de imprimir/descargar.
-  function cartaControlesHtml_(tareas, dias) {
+  function cartaControlesHtml_(tareas, dias, ctxEdicion, baseline) {
     var esTodo = dedRango_ === 'todo';
     var desdeTxt = fechaCorta_(dias[0].clave), hastaTxt = fechaCorta_(dias[dias.length - 1].clave);
     var rangoSel = Componentes.campoSelect({ id: 'py-ded-rango', valor: dedRango_, placeholder: false, claseCampo: 'sigso-py-ded-ctrl',
@@ -17439,19 +18305,33 @@ var Iconos = (function () {
       (Componentes.boton({ texto: '←', variante: 'sutil', clase: 'js-py-ded-atras', tipo: 'button' }) +
        Componentes.boton({ texto: '→', variante: 'sutil', clase: 'js-py-ded-adelante', tipo: 'button' }) +
        Componentes.boton({ texto: 'Hoy', variante: 'sutil', clase: 'js-py-ded-hoy', tipo: 'button' }));
+    // v11 (P1, "congelar línea base"): solo quien gestiona ESTE proyecto (no
+    // en "Mi dedicación", que cruza varios) puede fijar una nueva foto de
+    // referencia. Si ya hay una, se ve cuándo y quién -- nunca en silencio.
+    var baselineHtml = '';
+    if (ctxEdicion && ctxEdicion.puedeGestionar && ctxEdicion.proyectoId) {
+      var nota = baseline
+        ? '<span class="sigso-ayuda">Línea base: ' + Componentes.escaparHtml(fechaHora_(baseline.timestamp)) +
+            (baseline.autor_nombre ? ' por ' + Componentes.escaparHtml(baseline.autor_nombre) : '') + '</span>'
+        : '<span class="sigso-ayuda">Sin línea base todavía</span>';
+      baselineHtml = '<span class="sigso-py-ded-baseline">' + nota +
+        Componentes.boton({ texto: 'Congelar línea base', variante: 'sutil', clase: 'js-py-ded-baseline', tipo: 'button' }) + '</span>';
+    }
     return '<div class="sigso-py-ded-controles">' +
       rangoSel + nav +
       '<span class="sigso-ayuda sigso-py-ded-rangotxt">' + Componentes.escaparHtml(desdeTxt) + ' – ' + Componentes.escaparHtml(hastaTxt) + '</span>' +
       '<label class="sigso-campo-check sigso-py-ded-ctrl"><input type="checkbox" class="js-py-ded-agrupar"' + (dedAgruparPersona_ ? ' checked' : '') + '> Por persona</label>' +
       filtroPersona + filtroEstado +
       Componentes.boton({ texto: 'Descargar / Imprimir', variante: 'secundario', clase: 'js-py-ded-imprimir', tipo: 'button', icono: 'descargar' }) +
+      baselineHtml +
     '</div>';
   }
 
   function cartaLeyendaHtml_() {
     var estados = [
-      ['asig', 'Asignada (A)'], ['proc', 'Se trabajó (P)'], ['done', 'Finalizada / entregada (F)'],
-      ['wait', 'Esperando a un tercero'], ['bloq', 'Bloqueada / observada'], ['late', 'Vencida sin gestión']
+      ['asig', 'Asignado (A)'], ['plan', 'Planificado (P)'], ['proc', 'En proceso (●)'],
+      ['done', 'Finalizado / entregado (✓/F)'], ['rev', 'En revisión (R)'], ['pausa', 'En pausa (‖)'],
+      ['esp', 'Esperando a un tercero (…)'], ['bloq', 'Bloqueado (!)'], ['late', 'Vencida sin gestión']
     ].map(function (p) { return '<span><i class="sigso-py-ded-sw sigso-py-ded-sw--' + p[0] + '"></i>' + p[1] + '</span>'; }).join('');
     var heat = '<span class="sigso-py-ded-heatleg">Horas del día: <i class="hl h1"></i><i class="hl h2"></i><i class="hl h3"></i><i class="hl h4"></i> más</span>';
     return '<div class="sigso-py-ded-leyenda">' + estados + heat + '</div>';
@@ -17494,13 +18374,22 @@ var Iconos = (function () {
     window.print();
   }
 
-  function pintarCronogramaDedicacion_(detalle, tareas, bitacora, rendimiento) {
+  function pintarCronogramaDedicacion_(detalle, tareas, bitacora, rendimiento, ctxEdicion) {
     if (!tareas.length) {
       return Componentes.vacio({ texto: 'Todavía no hay tareas para mostrar la dedicación.' });
     }
     if (!dedicacionAncla_) dedicacionAncla_ = new Date();
+    // v11 (P0): se fijan las referencias que usa el manejador de clic de la
+    // celda para abrir el modal y refrescar tras guardar.
+    cartaBitacoraActual_ = bitacora;
+    cartaTareasActual_ = tareas;
     var porTareaRendimiento = {};
     ((rendimiento && rendimiento.por_tarea) || []).forEach(function (t) { porTareaRendimiento[t.actividad_id] = t; });
+    // v11 (P1, "Plan · Esperado · Real"): por TODA tarea activa, no solo las
+    // que tienen meta_cantidad -- viene de la MISMA llamada a rendimiento que
+    // ya se pedía (cero red nueva).
+    var planPorTarea = {};
+    ((rendimiento && rendimiento.plan_seguimiento) || []).forEach(function (t) { planPorTarea[t.actividad_id] = t; });
 
     var feriadosSet = {};
     ((detalle && detalle.feriados) || []).forEach(function (f) { feriadosSet[f] = true; });
@@ -17509,14 +18398,23 @@ var Iconos = (function () {
     var dias = construirDiasCarta_(detalle, tareas, bitacora, feriadosSet, hoyClave);
     var finVentana = dias[dias.length - 1].clave;
     var kpis = pintarRendimientoKpis_(rendimiento);
-    var controles = cartaControlesHtml_(tareas, dias);
+    var controles = cartaControlesHtml_(tareas, dias, ctxEdicion, rendimiento && rendimiento.baseline);
 
     // Bitácora por tarea/día, horas por tarea/día, y última entrega (para
-    // "esperando a un tercero").
-    var eventosPorTareaDia = {}, horasPorTareaDia = {}, ultimaEntregaPorTarea = {};
+    // "esperando a un tercero"). v11 (P0): los REGISTRO_DIA (el registro
+    // editable de la celda) van a su propio mapa -- son la fuente autoritativa
+    // del estado y las horas de ese día, y ganan sobre lo derivado del
+    // check-in. Sus horas NO se suman a las del check-in (evita doble conteo:
+    // el registro del día reemplaza, no acumula).
+    var eventosPorTareaDia = {}, horasPorTareaDia = {}, ultimaEntregaPorTarea = {}, registroPorTareaDia = {};
     bitacora.forEach(function (b) {
-      var k = claveDeIso_(b.timestamp);
+      var k = (b.tipo === 'REGISTRO_DIA' && b.dia) ? b.dia : claveDeIso_(b.timestamp);
       if (!k) return;
+      if (b.tipo === 'REGISTRO_DIA') {
+        var reg = (registroPorTareaDia[b.actividad_id] = registroPorTareaDia[b.actividad_id] || {});
+        reg[k] = b;
+        return;
+      }
       var porDia = (eventosPorTareaDia[b.actividad_id] = eventosPorTareaDia[b.actividad_id] || {});
       (porDia[k] = porDia[k] || []).push(b);
       if (b.horas) {
@@ -17543,6 +18441,10 @@ var Iconos = (function () {
     var totalPorDia = {};
     dias.forEach(function (x) { totalPorDia[x.clave] = 0; });
 
+    // v11 (P0): ¿puede esta persona editar la celda de ESTA tarea? y ¿a qué
+    // proyecto pertenece? (en "Mi dedicación", cada tarea trae el suyo).
+    var puedeEditarTarea = !!(ctxEdicion && typeof ctxEdicion.puedeEditarTarea === 'function');
+
     // Una fila-tarea. Acumula horas por día en totalPorDia (para el pie).
     function filaTareaHtml_(a) {
       var claveCreacion = a.fecha_creacion ? claveDeIso_(a.fecha_creacion) : '';
@@ -17551,40 +18453,71 @@ var Iconos = (function () {
       var ultimaEntrega = ultimaEntregaPorTarea[a.actividad_id];
       var porDia = eventosPorTareaDia[a.actividad_id] || {};
       var horasDia = horasPorTareaDia[a.actividad_id] || {};
+      var regDia = registroPorTareaDia[a.actividad_id] || {};
       var horasFila = 0, diasConActividad = 0;
+      // Editable: solo si el contexto lo permite Y la persona trabaja/gestiona
+      // esta tarea. El día futuro no es editable (el backend lo rechaza).
+      var editableTarea = puedeEditarTarea && ctxEdicion.puedeEditarTarea(a);
+      var proyIdCelda = (ctxEdicion && ctxEdicion.proyectoId) || a.proyecto_id || '';
 
       var celdas = dias.map(function (x) {
-        var eventos = porDia[x.clave] || [];
-        var estado = '', txt = '';
-        var notas = eventos.map(function (ev) {
-          return (DEDICACION_TIPO_ETIQUETA_[ev.tipo] || ev.tipo) +
-            (ev.horas !== undefined && ev.horas !== null && ev.horas !== '' ? ' (' + ev.horas + 'h)' : '') +
-            (ev.nota ? ': ' + ev.nota : '');
-        });
-        eventos.forEach(function (ev) {
-          if (ev.tipo === 'ENTREGA') { estado = 'done'; txt = 'F'; return; }
-          if (ev.tipo === 'VALIDACION') {
-            if (/^Aprobada/i.test(ev.nota || '')) { estado = 'done'; txt = 'F'; }
-            else if (estado !== 'done') { estado = 'bloq'; txt = '!'; }
-            return;
-          }
-          if (estado === 'done') return; // F del día manda sobre cualquier otra marca del mismo día
-          if (ev.tipo === 'BLOQUEO') { estado = 'bloq'; txt = '!'; return; }
-          if (DEDICACION_TIPO_ESTADO_[ev.tipo] && estado !== 'bloq') { estado = DEDICACION_TIPO_ESTADO_[ev.tipo]; txt = 'P'; }
-        });
-        if (!estado && x.clave === claveCreacion) { estado = 'asig'; txt = 'A'; }
-        if (!estado && a.estado === 'EN_REVISION' && ultimaEntrega && x.clave > ultimaEntrega && x.clave <= hoyClave) { estado = 'wait'; }
-        // Vencida sin gestión: SOLO días laborales (ni fin de semana ni
-        // feriado) pasado el compromiso, tarea abierta, sin marca ese día.
-        if (!estado && !terminal && !x.we && !x.feriado && claveVence && x.clave > claveVence && x.clave <= hoyClave) { estado = 'late'; txt = '!'; }
+        var registro = regDia[x.clave];
+        var estado = '', txt = '', tituloCelda = '', horas = 0;
 
-        if (estado === 'proc' || estado === 'done' || estado === 'asig') diasConActividad++;
-        var horas = horasDia[x.clave] || 0;
+        if (registro) {
+          // v11 (P0): el registro del día MANDA -- estado explícito, horas y
+          // comentario propios; ignora la derivación por check-in de ese día.
+          var vis = REGISTRO_DIA_ESTADO_VIS_[registro.estado_dia] || { cls: '', txt: '' };
+          estado = vis.cls; txt = vis.txt;
+          horas = Number(registro.horas) || 0;
+          var partes = [REGISTRO_DIA_ESTADO_LABEL_[registro.estado_dia] || registro.estado_dia];
+          if (horas) partes[0] += ' (' + redond1_(horas) + 'h)';
+          if (registro.nota) partes.push(registro.nota);
+          if (registro.bloqueo_motivo) partes.push('Bloqueo: ' + registro.bloqueo_motivo);
+          if (registro.editado_por) {
+            partes.push('registrado por ' + (registro.autor_nombre || registro.editado_por) +
+              (registro.ediciones ? ' · editado ' + registro.ediciones + ' vez(ces)' : ''));
+          }
+          tituloCelda = fechaCorta_(x.clave) + ': ' + partes.join(' — ');
+          if (['en_proceso', 'finalizado', 'entregado', 'revision'].indexOf(registro.estado_dia) !== -1) diasConActividad++;
+        } else {
+          var eventos = porDia[x.clave] || [];
+          var notas = eventos.map(function (ev) {
+            return (DEDICACION_TIPO_ETIQUETA_[ev.tipo] || ev.tipo) +
+              (ev.horas !== undefined && ev.horas !== null && ev.horas !== '' ? ' (' + ev.horas + 'h)' : '') +
+              (ev.nota ? ': ' + ev.nota : '');
+          });
+          eventos.forEach(function (ev) {
+            if (ev.tipo === 'ENTREGA') { estado = 'done'; txt = 'F'; return; }
+            if (ev.tipo === 'VALIDACION') {
+              if (/^Aprobada/i.test(ev.nota || '')) { estado = 'done'; txt = 'F'; }
+              else if (estado !== 'done') { estado = 'bloq'; txt = '!'; }
+              return;
+            }
+            if (estado === 'done') return; // F del día manda sobre cualquier otra marca del mismo día
+            if (ev.tipo === 'BLOQUEO') { estado = 'bloq'; txt = '!'; return; }
+            if (DEDICACION_TIPO_ESTADO_[ev.tipo] && estado !== 'bloq') { estado = DEDICACION_TIPO_ESTADO_[ev.tipo]; txt = 'P'; }
+          });
+          if (!estado && x.clave === claveCreacion) { estado = 'asig'; txt = 'A'; }
+          if (!estado && a.estado === 'EN_REVISION' && ultimaEntrega && x.clave > ultimaEntrega && x.clave <= hoyClave) { estado = 'wait'; }
+          // Vencida sin gestión: SOLO días laborales (ni fin de semana ni
+          // feriado) pasado el compromiso, tarea abierta, sin marca ese día.
+          if (!estado && !terminal && !x.we && !x.feriado && claveVence && x.clave > claveVence && x.clave <= hoyClave) { estado = 'late'; txt = '!'; }
+          if (estado === 'proc' || estado === 'done' || estado === 'asig') diasConActividad++;
+          horas = horasDia[x.clave] || 0;
+          tituloCelda = notas.length ? (fechaCorta_(x.clave) + ': ' + notas.join(' · ')) : '';
+        }
+
         if (horas) { horasFila += horas; totalPorDia[x.clave] += horas; }
         var nivel = nivelHoras_(horas);
-        var tituloCelda = notas.length ? (fechaCorta_(x.clave) + ': ' + notas.join(' · ')) : '';
+        // Editable: día no futuro. Lleva data-* para que el clic sepa qué
+        // (proyecto, tarea, día) registrar; el modal valida el resto.
+        var editableCelda = editableTarea && x.clave <= hoyClave;
         return '<div class="sigso-py-ded-celda' + (x.we ? ' we' : '') + (x.feriado ? ' feriado' : '') + (x.clave === hoyClave ? ' hoy' : '') +
-          (estado ? ' e-' + estado : '') + (nivel ? ' h' + nivel : '') + '"' +
+          (estado ? ' e-' + estado : '') + (nivel ? ' h' + nivel : '') + (registro ? ' reg' : '') +
+          (editableCelda ? ' sigso-py-ded-celda--edit' : '') + '"' +
+          (editableCelda ? ' role="button" tabindex="0" data-proy="' + Componentes.escaparHtml(proyIdCelda) +
+            '" data-act="' + Componentes.escaparHtml(a.actividad_id) + '" data-dia="' + x.clave + '"' : '') +
           (tituloCelda ? ' title="' + Componentes.escaparHtml(tituloCelda) + '"' : '') + '>' + (txt ? '<span>' + txt + '</span>' : '') + '</div>';
       }).join('');
 
@@ -17594,13 +18527,32 @@ var Iconos = (function () {
         : '';
       var subEtiqueta = a.proyecto_nombre || a.responsable_nombre || a.responsable_email || '';
       var totalTxt = horasFila ? redond1_(horasFila) + 'h' : '';
+      // v11 (P1): botón "Reprogramar" solo si esta persona puede editar la
+      // tarea Y la tarea ya tiene un plan vigente (sin fecha_compromiso
+      // confirmada -- RN-710 -- no hay nada que reprogramar todavía).
+      var proyIdFila = (ctxEdicion && ctxEdicion.proyectoId) || a.proyecto_id || '';
+      var reprogramarBtn = (editableTarea && a.fecha_compromiso)
+        ? '<button type="button" class="sigso-py-ded-reprogramar js-py-ded-reprogramar" data-proy="' + Componentes.escaparHtml(proyIdFila) + '" data-act="' + Componentes.escaparHtml(a.actividad_id) + '" title="Reprogramar fecha de compromiso">📅</button>'
+        : '';
 
       return '<div class="sigso-py-ded-fila">' +
-        '<div class="sigso-py-ded-etiqueta"><span class="t">' + Componentes.escaparHtml(a.titulo) + '</span>' +
-          '<span class="m">' + Componentes.escaparHtml(subEtiqueta) + (metaTxt ? ' · ' + Componentes.escaparHtml(metaTxt) : '') + '</span></div>' +
+        '<div class="sigso-py-ded-etiqueta"><span class="t">' + Componentes.escaparHtml(a.titulo) + reprogramarBtn + '</span>' +
+          '<span class="m">' + Componentes.escaparHtml(subEtiqueta) + (metaTxt ? ' · ' + Componentes.escaparHtml(metaTxt) : '') + '</span>' +
+          planLineaHtml_(planPorTarea[a.actividad_id]) +
+        '</div>' +
         celdas +
         '<div class="sigso-py-ded-total"' + (diasConActividad ? ' title="' + diasConActividad + ' día(s) con actividad"' : '') + '>' + totalTxt + '</div>' +
       '</div>';
+    }
+
+    // v11 (P1, "workload / sobrecarga"): horas de UNA tarea en UN día,
+    // priorizando el registro explícito del día (P0) sobre lo derivado del
+    // check-in -- misma regla que usa cada celda individual, reusada aquí
+    // para sumar por persona sin duplicar conteo.
+    function horasDelDiaTarea_(actividadId, diaClave) {
+      var reg = (registroPorTareaDia[actividadId] || {})[diaClave];
+      if (reg) return Number(reg.horas) || 0;
+      return (horasPorTareaDia[actividadId] || {})[diaClave] || 0;
     }
 
     // Cuerpo: agrupado por persona, o plano.
@@ -17613,11 +18565,26 @@ var Iconos = (function () {
         grupos[clave].push(a);
       });
       cuerpo = ordenGrupos.map(function (persona) {
-        var celdasVacias = dias.map(function () { return '<div class="sigso-py-ded-celda"></div>'; }).join('');
+        // v11 (P1): el total de horas de ESTA persona por día, sumando TODAS
+        // sus tareas visibles -- heatmapeado igual que una celda normal, con
+        // una marca de sobrecarga cuando el total del día supera la jornada
+        // (WORKLOAD_JORNADA_HORAS_, misma convención de "un día" que ya usa
+        // el resto de SIGSO -- ver CUMPLIMIENTO_HORAS_JORNADA en el backend).
+        var celdasWorkload = dias.map(function (x) {
+          var total = grupos[persona].reduce(function (s, a) { return s + horasDelDiaTarea_(a.actividad_id, x.clave); }, 0);
+          var nivel = nivelHoras_(total);
+          var sobrecarga = total > WORKLOAD_JORNADA_HORAS_;
+          var tituloCelda = total
+            ? (Componentes.escaparHtml(persona) + ' — ' + fechaCorta_(x.clave) + ': ' + redond1_(total) + 'h' + (sobrecarga ? ' (sobrecarga)' : ''))
+            : '';
+          return '<div class="sigso-py-ded-celda sigso-py-ded-celda--workload' + (x.we ? ' we' : '') + (x.feriado ? ' feriado' : '') +
+            (nivel ? ' h' + nivel : '') + (sobrecarga ? ' sigso-py-ded-celda--sobrecarga' : '') + '"' +
+            (tituloCelda ? ' title="' + tituloCelda + '"' : '') + '>' + (total ? '<span>' + redond1_(total) + '</span>' : '') + '</div>';
+        }).join('');
         var head = '<div class="sigso-py-ded-fila sigso-py-ded-grupo">' +
           '<div class="sigso-py-ded-etiqueta"><span class="t">' + Componentes.escaparHtml(persona) + '</span>' +
             '<span class="m">' + grupos[persona].length + ' tarea(s)</span></div>' +
-          celdasVacias + '<div class="sigso-py-ded-total"></div></div>';
+          celdasWorkload + '<div class="sigso-py-ded-total"></div></div>';
         return head + grupos[persona].map(filaTareaHtml_).join('');
       }).join('');
     } else {
@@ -17645,18 +18612,91 @@ var Iconos = (function () {
       cartaLeyendaHtml_();
   }
 
-  // --- Cronograma: vista Plan (v10, Fase C, propuesta 04 "línea de tiempo") --
+  // --- Cronograma: vista Plan -- Gantt navegable (v11, P2 "Gantt profesional") --
   //
-  // Misma tecnica que la Carta Gantt de Gerencia (renderGantt_ en
-  // gerencia.js): barras posicionadas por CSS sobre un eje de fechas, sin
-  // libreria externa. Los HITOS son un punto en el tiempo (fecha_objetivo,
-  // no tienen rango); las TAREAS con fecha comprometida son una barra desde
-  // que se crearon hasta esa fecha, extendida en rojo mas alla si ya vencio
-  // y sigue sin terminar. 100% con datos que la pestaña ya tenia cargados
-  // (detalle + tareas) -- no pide nada nuevo al servidor.
+  // v10 (Fase C) dibujaba las barras a PORCENTAJE del ancho del contenedor
+  // (auto-encoge todo para que quepa, sin scroll, sin zoom real). v11 lo
+  // reconstruye como una línea de tiempo de verdad: escala en PÍXELES POR
+  // DÍA (zoom real, no solo "cabe más o menos"), columna de etiquetas FIJA
+  // (position:sticky) mientras el eje de tiempo se desplaza horizontalmente,
+  // regla de meses, y el borde derecho de la barra de una tarea se puede
+  // ARRASTRAR para reprogramarla -- SIEMPRE con el modal de confirmación +
+  // motivo de siempre (reprogramarTareaProyecto, P1), nunca un commit mudo.
+  // Los HITOS son un punto en el tiempo (fecha_objetivo); las TAREAS con
+  // fecha comprometida son una barra desde que se crearon hasta esa fecha,
+  // extendida en rojo más allá si ya venció y sigue sin terminar. 100% con
+  // datos que la pestaña ya tenía cargados -- no pide nada nuevo al servidor.
   var CRONOGRAMA_HITO_ESTADO_CODIGO = { COMPLETADO: 'terminada', CANCELADO: 'cancelada' };
 
-  function pintarCronogramaPlan_(detalle, tareas) {
+  // Niveles de zoom -- píxeles por día. Módulo, no por proyecto (mismo
+  // criterio que dedRango_/vistaCronograma_: al cambiar de proyecto se
+  // mantiene donde el usuario lo dejó).
+  // Ancho de la columna de etiquetas (fija, position:sticky) -- en JS y en
+  // CSS (.sigso-py-gantt-etiqueta) para que la línea de "Hoy" (hija directa
+  // de .sigso-py-gantt-body, no de un track) calce con el eje de los días:
+  // su `left` es relativo al body COMPLETO, que arranca en la etiqueta.
+  var PLAN_ETIQUETA_ANCHO_PX_ = 200;
+  var PLAN_ZOOM_NIVELES_ = [
+    { id: 'trimestre', pxDia: 4, etiqueta: 'Trimestre' },
+    { id: 'mes', pxDia: 10, etiqueta: 'Mes' },
+    { id: 'quincena', pxDia: 20, etiqueta: 'Quincena' },
+    { id: 'semana', pxDia: 40, etiqueta: 'Semana' }
+  ];
+  var planZoomIdx_ = 1; // 'mes' por defecto
+  // v11 (P2): minTime/pxDia del último pintado -- wireAccionesPestana_ los
+  // necesita para traducir el ancho final de una barra arrastrada a una
+  // fecha, sin recalcular el rango completo (mismo criterio que
+  // cartaBitacoraActual_/cartaTareasActual_ para la carta de Dedicación).
+  var planMinTimeActual_ = 0;
+  var planPxDiaActual_ = 0;
+
+  // v11 (P2, "drag & drop de fechas"): estado de arrastre del handle de
+  // resize -- ÚNICO módulo, con los listeners de mousemove/mouseup
+  // registrados UNA SOLA VEZ (fuera de cualquier repintado) para no acumular
+  // handlers en `document` cada vez que se repinta la vista Plan. Los
+  // mousedown SÍ se re-wirean en cada repintado (viven en nodos que se
+  // recrean, mueren con ellos -- sin fuga).
+  var ganttArrastre_ = null;
+  document.addEventListener('mousemove', function (ev) {
+    if (!ganttArrastre_) return;
+    var delta = ev.clientX - ganttArrastre_.xInicial;
+    var nuevoAncho = Math.max(ganttArrastre_.pxDia, ganttArrastre_.anchoInicial + delta);
+    ganttArrastre_.barra.style.width = nuevoAncho + 'px';
+    ganttArrastre_.anchoActual = nuevoAncho;
+    ganttArrastre_.barra.classList.add('sigso-py-gantt-barra--arrastrando');
+  });
+  document.addEventListener('mouseup', function () {
+    if (!ganttArrastre_) return;
+    var g = ganttArrastre_;
+    ganttArrastre_ = null;
+    document.body.style.removeProperty('user-select');
+    g.barra.classList.remove('sigso-py-gantt-barra--arrastrando');
+    if (g.anchoActual === g.anchoInicial) return; // no se movió -- un clic no abre el modal
+    var diasDesdeInicio = Math.round((g.izquierdaPx + g.anchoActual) / g.pxDia);
+    var nuevaFecha = new Date(g.minTime + diasDesdeInicio * 86400000);
+    var tarea = tareaPorIdEnCarta_(g.actId);
+    abrirReprogramarTarea_(g.proyId, tarea, g.alExito, fechaISOCorta_(nuevaFecha.toISOString()));
+  });
+
+  // Cablea los handles de resize de la vista Plan actual -- se llama en cada
+  // repintado (los nodos son nuevos, los listeners viejos mueren con ellos).
+  function wireGanttResize_(cont, pxDia, minTime, alExito) {
+    cont.querySelectorAll('.sigso-py-gantt-resize').forEach(function (handle) {
+      handle.addEventListener('mousedown', function (ev) {
+        ev.preventDefault();
+        var barra = handle.closest('.sigso-py-gantt-barra');
+        ganttArrastre_ = {
+          barra: barra, pxDia: pxDia, minTime: minTime, alExito: alExito,
+          actId: handle.getAttribute('data-act'), proyId: handle.getAttribute('data-proy'),
+          anchoInicial: barra.offsetWidth, anchoActual: barra.offsetWidth,
+          xInicial: ev.clientX, izquierdaPx: parseFloat(barra.style.left) || 0
+        };
+        document.body.style.userSelect = 'none';
+      });
+    });
+  }
+
+  function pintarCronogramaPlan_(detalle, tareas, ctxEdicion) {
     var p = detalle.proyecto;
     var hitos = (detalle.hitos || []).filter(function (h) { return h.fecha_objetivo; });
     var tareasConFecha = tareas.filter(function (a) { return a.fecha_compromiso; });
@@ -17664,6 +18704,10 @@ var Iconos = (function () {
     if (hitos.length === 0 && tareasConFecha.length === 0) {
       return Componentes.vacio({ texto: 'Todavía no hay hitos ni tareas con fecha para mostrar en el cronograma.' });
     }
+    // v11 (P2): mismo mecanismo que Dedicación usa para resolver "¿qué tarea
+    // es esta?" al soltar el arrastre (tareaPorIdEnCarta_) -- se fija acá
+    // también, por si Plan se abre ANTES que Dedicación en esta sesión.
+    cartaTareasActual_ = tareas;
 
     var ahora = new Date();
     var tiempos = [ahora.getTime()];
@@ -17674,19 +18718,30 @@ var Iconos = (function () {
       if (a.fecha_creacion) tiempos.push(new Date(a.fecha_creacion).getTime());
       tiempos.push(new Date(a.fecha_compromiso).getTime());
     });
-    var minTime = Math.min.apply(null, tiempos);
-    var maxTime = Math.max.apply(null, tiempos);
-    var rango = Math.max(maxTime - minTime, 1);
-    function pct_(fecha) { return Math.min(100, Math.max(0, ((new Date(fecha).getTime() - minTime) / rango) * 100)); }
-    var hoyPct = pct_(ahora);
+    // Margen de 3 días a cada lado -- que la primera/última barra no queden
+    // pegadas al borde del todo, y que arrastrar la última tarea más allá de
+    // su fecha actual tenga a dónde crecer sin recalcular el rango al vuelo.
+    var minTime = Math.min.apply(null, tiempos) - 3 * 86400000;
+    var maxTime = Math.max.apply(null, tiempos) + 3 * 86400000;
+    var totalDias = Math.max(Math.ceil((maxTime - minTime) / 86400000), 1);
+    var pxDia = PLAN_ZOOM_NIVELES_[planZoomIdx_].pxDia;
+    var anchoTotal = totalDias * pxDia;
+    planMinTimeActual_ = minTime;
+    planPxDiaActual_ = pxDia;
+    function offsetPx_(fecha) { return Math.round(((new Date(fecha).getTime() - minTime) / 86400000) * pxDia); }
+    var hoyPx = offsetPx_(ahora);
+
+    // v11 (P2): quién puede arrastrar -- mismo criterio que la celda diaria
+    // de Dedicación (líder/ADM, o quien trabaja la tarea).
+    var puedeEditar = ctxEdicion && typeof ctxEdicion.puedeEditarTarea === 'function';
 
     var filasHitos = hitos.map(function (h) {
       var vencido = h.estado !== 'COMPLETADO' && h.estado !== 'CANCELADO' && new Date(h.fecha_objetivo) < ahora;
       var codigo = CRONOGRAMA_HITO_ESTADO_CODIGO[h.estado] || (vencido ? 'atrasada' : 'al-dia');
-      return '<div class="sigso-py-cron-fila">' +
-        '<div class="sigso-py-cron-etiqueta">' + Iconos.svg('diana', { tam: 14 }) + ' <b>' + Componentes.escaparHtml(h.nombre) + '</b> <span class="sigso-ayuda">(hito)</span></div>' +
-        '<div class="sigso-py-cron-track">' +
-          '<div class="sigso-py-cron-hito sigso-py-cron-hito--' + codigo + '" style="left:' + pct_(h.fecha_objetivo) + '%" title="' + Componentes.escaparHtml(fechaCorta_(h.fecha_objetivo)) + '"></div>' +
+      return '<div class="sigso-py-gantt-fila">' +
+        '<div class="sigso-py-gantt-etiqueta">' + Iconos.svg('diana', { tam: 14 }) + ' <b>' + Componentes.escaparHtml(h.nombre) + '</b> <span class="sigso-ayuda">(hito)</span></div>' +
+        '<div class="sigso-py-gantt-track" style="width:' + anchoTotal + 'px">' +
+          '<div class="sigso-py-cron-hito sigso-py-cron-hito--' + codigo + '" style="left:' + offsetPx_(h.fecha_objetivo) + 'px" title="' + Componentes.escaparHtml(fechaCorta_(h.fecha_objetivo)) + '"></div>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -17694,28 +18749,66 @@ var Iconos = (function () {
     var filasTareas = tareasConFecha.slice().sort(function (a, b) {
       return new Date(a.fecha_compromiso) - new Date(b.fecha_compromiso);
     }).map(function (a) {
-      var inicioPct = pct_(a.fecha_creacion || p.fecha_inicio || a.fecha_compromiso);
-      var finPct = pct_(a.fecha_compromiso);
+      var inicioPx = offsetPx_(a.fecha_creacion || p.fecha_inicio || a.fecha_compromiso);
+      var finPx = offsetPx_(a.fecha_compromiso);
       var codigo = a.semaforo || 'al-dia';
       var extraAtraso = '';
-      if (codigo === 'atrasada' && hoyPct > finPct) {
-        extraAtraso = '<div class="sigso-py-cron-barra sigso-py-cron-barra--atraso" style="left:' + finPct + '%; width:' + (hoyPct - finPct) + '%"></div>';
+      if (codigo === 'atrasada' && hoyPx > finPx) {
+        extraAtraso = '<div class="sigso-py-cron-barra sigso-py-cron-barra--atraso" style="left:' + finPx + 'px; width:' + (hoyPx - finPx) + 'px"></div>';
       }
-      return '<div class="sigso-py-cron-fila">' +
-        '<div class="sigso-py-cron-etiqueta">' + Componentes.escaparHtml(a.titulo) + '</div>' +
-        '<div class="sigso-py-cron-track">' +
-          '<div class="sigso-py-cron-barra sigso-py-cron-barra--' + codigo + '" style="left:' + inicioPct + '%; width:' + Math.max(finPct - inicioPct, 0.6) + '%" title="' + Componentes.escaparHtml(fechaCorta_(a.fecha_compromiso)) + '"></div>' +
+      var editable = puedeEditar && ctxEdicion.puedeEditarTarea(a);
+      var proyId = (ctxEdicion && ctxEdicion.proyectoId) || a.proyecto_id || '';
+      var handle = editable
+        ? '<div class="sigso-py-gantt-resize" data-act="' + Componentes.escaparHtml(a.actividad_id) + '" data-proy="' + Componentes.escaparHtml(proyId) + '" title="Arrastrar para reprogramar"></div>'
+        : '';
+      return '<div class="sigso-py-gantt-fila">' +
+        '<div class="sigso-py-gantt-etiqueta">' + Componentes.escaparHtml(a.titulo) + '</div>' +
+        '<div class="sigso-py-gantt-track" style="width:' + anchoTotal + 'px">' +
+          '<div class="sigso-py-cron-barra sigso-py-gantt-barra sigso-py-cron-barra--' + codigo + (editable ? ' sigso-py-gantt-barra--editable' : '') +
+            '" style="left:' + inicioPx + 'px; width:' + Math.max(finPx - inicioPx, 4) + 'px" title="' + Componentes.escaparHtml(fechaCorta_(a.fecha_compromiso)) + '">' + handle + '</div>' +
           extraAtraso +
         '</div>' +
       '</div>';
     }).join('');
 
-    return '<p class="sigso-ayuda">Hitos (◆) y tareas con fecha comprometida, de ' +
-        (p.fecha_inicio ? fechaCorta_(p.fecha_inicio) : '—') + ' a ' + (p.fecha_objetivo ? fechaCorta_(p.fecha_objetivo) : '—') + '.</p>' +
-      '<div class="sigso-py-cron">' +
-        '<div class="sigso-py-cron-hoy" style="left:' + hoyPct + '%" title="Hoy"></div>' +
-        filasHitos + filasTareas +
+    var zoomBtns = PLAN_ZOOM_NIVELES_.map(function (z, i) {
+      return Componentes.boton({ texto: z.etiqueta, variante: i === planZoomIdx_ ? undefined : 'sutil', clase: 'js-py-gantt-zoom', idx: i });
+    }).join('');
+    var controles = '<div class="sigso-py-ded-controles">' + zoomBtns +
+      Componentes.boton({ texto: 'Hoy', variante: 'sutil', clase: 'js-py-gantt-hoy', tipo: 'button' }) +
+      '<span class="sigso-ayuda">Hitos (◆) y tareas con fecha comprometida, de ' +
+        (p.fecha_inicio ? fechaCorta_(p.fecha_inicio) : '—') + ' a ' + (p.fecha_objetivo ? fechaCorta_(p.fecha_objetivo) : '—') +
+        (puedeEditar ? '. Arrastra el borde derecho de una barra para reprogramarla.' : '') + '</span>' +
+    '</div>';
+
+    return controles +
+      '<div class="sigso-py-gantt-scroll">' +
+        '<div class="sigso-py-gantt-body">' +
+          '<div class="sigso-py-gantt-fila sigso-py-gantt-fila--regla">' +
+            '<div class="sigso-py-gantt-etiqueta"></div>' +
+            '<div class="sigso-py-gantt-track sigso-py-gantt-track--regla" style="width:' + anchoTotal + 'px">' + reglaMesesHtml_(minTime, maxTime, pxDia) + '</div>' +
+          '</div>' +
+          filasHitos + filasTareas +
+          '<div class="sigso-py-gantt-hoy" style="left:' + (PLAN_ETIQUETA_ANCHO_PX_ + hoyPx) + 'px" title="Hoy"></div>' +
+        '</div>' +
       '</div>';
+  }
+
+  // Regla de meses: una marca + etiqueta en el primer día de cada mes que
+  // cae dentro del rango visible -- alcanza para ubicarse en cualquier zoom
+  // (trimestre a semana) sin saturar de marcas de semana/día.
+  function reglaMesesHtml_(minTime, maxTime, pxDia) {
+    var ticks = '';
+    var d = new Date(minTime);
+    d = new Date(d.getFullYear(), d.getMonth(), 1);
+    while (d.getTime() <= maxTime) {
+      var offsetPx = Math.round(((d.getTime() - minTime) / 86400000) * pxDia);
+      if (offsetPx >= 0) {
+        ticks += '<div class="sigso-py-gantt-tick" style="left:' + offsetPx + 'px"><span>' + MESES_CORTOS[d.getMonth()] + ' ' + d.getFullYear() + '</span></div>';
+      }
+      d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    }
+    return ticks;
   }
 
   // --- Entregables (v9.4, Fase 2) -------------------------------------
@@ -17869,6 +18962,16 @@ var Iconos = (function () {
       });
     }
 
+    // v11 ("PDF ejecutivo configurable"): abre el modal de secciones/rango/
+    // personas/estado -- la descarga en sí reusa exactamente el mismo patrón
+    // de base64->Blob que "Descargar PDF" (arriba).
+    var configurarInforme = cont.querySelector('.js-py-configurar-informe');
+    if (configurarInforme) {
+      configurarInforme.addEventListener('click', function () {
+        abrirConfigurarInforme_(detalle);
+      });
+    }
+
     // v10 (Fase C, propuesta 07): guardar como plantilla -- solo pide el
     // nombre; la estructura (hitos) se copia tal cual esta ahora mismo.
     var guardarPlantilla = cont.querySelector('.js-py-guardar-plantilla');
@@ -17995,10 +19098,54 @@ var Iconos = (function () {
     cont.querySelectorAll('.js-py-cron-vista').forEach(function (btn) {
       btn.addEventListener('click', function () {
         vistaCronograma_ = btn.getAttribute('data-idx');
+        // v11 (P3): "Analítica" es la única subvista con endpoint propio --
+        // las demás repintan directo desde caché (cambiarPestana_).
+        if (vistaCronograma_ === 'analitica') cargarAnaliticaProyecto_(cont);
+        else cambiarPestana_('cronograma');
+      });
+    });
+    var analiticaCsvBtn = cont.querySelector('.js-py-analitica-csv');
+    if (analiticaCsvBtn) {
+      analiticaCsvBtn.addEventListener('click', function () {
+        var analitica = datosDetalleActual_ && datosDetalleActual_.analitica;
+        if (!analitica) return;
+        var filas = [['Tarea', 'Lead time (días)', 'Cycle time (días)', 'Tiempo en bloqueo (días)', 'Tiempo en revisión (días)']];
+        analitica.por_tarea.forEach(function (t) {
+          filas.push([t.titulo, t.lead_time_dias, t.cycle_time_dias, t.tiempo_bloqueo_dias, t.tiempo_revision_dias]);
+        });
+        var nombreProyecto = (datosDetalleActual_.detalle && datosDetalleActual_.detalle.proyecto && datosDetalleActual_.detalle.proyecto.nombre) || 'proyecto';
+        descargarCsv_('Analitica - ' + nombreProyecto + '.csv', filas);
+      });
+    }
+    wireCartaControles_(cont, function () { cambiarPestana_('cronograma'); }, (datosDetalleActual_ && datosDetalleActual_.detalle) || null,
+      // v11 (P0): al guardar un registro del día, la bitácora en caché quedó
+      // vieja -- se invalida y se recarga (trae el nuevo REGISTRO_DIA) y la
+      // carta se repinta con el estado ya persistido (nada de mocks).
+      function () {
+        if (datosDetalleActual_) { datosDetalleActual_.bitacora = undefined; cargarDatosCronograma_(cont); }
+      });
+
+    // v11 (P2, "Gantt navegable"): zoom, "Hoy" y arrastrar-para-reprogramar
+    // -- solo existen cuando la vista Plan está pintada (los selectores
+    // simplemente no encuentran nada en las otras vistas).
+    cont.querySelectorAll('.js-py-gantt-zoom').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        planZoomIdx_ = Number(btn.getAttribute('data-idx'));
         cambiarPestana_('cronograma');
       });
     });
-    wireCartaControles_(cont, function () { cambiarPestana_('cronograma'); }, (datosDetalleActual_ && datosDetalleActual_.detalle) || null);
+    var ganttHoyBtn = cont.querySelector('.js-py-gantt-hoy');
+    if (ganttHoyBtn) {
+      ganttHoyBtn.addEventListener('click', function () {
+        var scroll = cont.querySelector('.sigso-py-gantt-scroll');
+        var hoy = cont.querySelector('.sigso-py-gantt-hoy');
+        if (scroll && hoy) scroll.scrollLeft = Math.max(0, parseFloat(hoy.style.left) - scroll.clientWidth / 2);
+      });
+    }
+    // Reprogramar tras un arrastre: refresco completo (mismo criterio que el
+    // botón 📅 de Dedicación -- fecha_compromiso vive en `tareas`, no en la
+    // bitácora, así que hace falta releer el proyecto).
+    wireGanttResize_(cont, planPxDiaActual_, planMinTimeActual_, function () { refrescarDetalle_(); });
 
     var nuevoHito = cont.querySelector('.js-py-nuevo-hito');
     if (nuevoHito) nuevoHito.addEventListener('click', abrirFormularioHito_);
@@ -18232,6 +19379,11 @@ var Iconos = (function () {
     // v9.4 (Fase 2): dependencia opcional -- solo informativa, nunca bloquea
     // ni mueve fechas (§I de la propuesta). Solo tareas de este mismo proyecto.
     var opcionesDependencia = (tareas || []).map(function (a) { return { valor: a.actividad_id, texto: a.titulo }; });
+    // v11 (P2, "subtareas con rollup"): un solo nivel -- una tarea que YA es
+    // subtarea no puede a su vez ser padre (mismo límite que valida el
+    // backend, Proyectos.crearTarea).
+    var opcionesPadre = (tareas || []).filter(function (a) { return !a.es_subtarea; })
+      .map(function (a) { return { valor: a.actividad_id, texto: a.titulo }; });
     var fondo = document.createElement('div');
     fondo.className = 'sigso-modal-fondo';
     fondo.innerHTML =
@@ -18243,6 +19395,7 @@ var Iconos = (function () {
           Componentes.campoSelect({ id: 'py-t-responsable', label: 'Responsable', opciones: opcionesIntegrantes, requerido: true }) +
           (opcionesHitos.length ? Componentes.campoSelect({ id: 'py-t-hito', label: 'Hito (opcional)', opciones: opcionesHitos }) : '') +
           (opcionesDependencia.length ? Componentes.campoSelect({ id: 'py-t-depende', label: 'Depende de (opcional)', opciones: opcionesDependencia }) : '') +
+          (opcionesPadre.length ? Componentes.campoSelect({ id: 'py-t-padre', label: 'Tarea padre (opcional, la convierte en subtarea)', opciones: opcionesPadre }) : '') +
           '<div class="sigso-py-form-fila">' +
             Componentes.campoTexto({ id: 'py-t-fecha', label: 'Fecha comprometida', tipo: 'date', requerido: true }) +
             Componentes.campoSelect({
@@ -18287,6 +19440,7 @@ var Iconos = (function () {
     document.getElementById('form-py-tarea').addEventListener('submit', function (evento) {
       var hitoEl = document.getElementById('py-t-hito');
       var dependeEl = document.getElementById('py-t-depende');
+      var padreEl = document.getElementById('py-t-padre');
       var responsable = document.getElementById('py-t-responsable').value;
       // Colaboradores marcados, sin el que ya es responsable (el backend
       // igual lo excluye, pero así el payload va limpio).
@@ -18297,6 +19451,7 @@ var Iconos = (function () {
         proyecto_id: proyectoActivoId_,
         hito_id: hitoEl ? hitoEl.value : '',
         depende_de: dependeEl ? dependeEl.value : '',
+        tarea_padre_id: padreEl ? padreEl.value : '',
         titulo: document.getElementById('py-t-titulo').value,
         descripcion: document.getElementById('py-t-descripcion').value,
         colaboradores_emails: colaboradores,
@@ -18585,6 +19740,134 @@ var Iconos = (function () {
         prioridad: document.getElementById('py-cv-prioridad').value
       }, function () { cerrar(); refrescarDetalle_(); });
     });
+  }
+
+  // v11 (Reingeniería Cronograma, P0): el modal del REGISTRO DEL DÍA -- la
+  // celda diaria como unidad de información editable. Registra/edita el estado
+  // del día (uno de 9), las horas, un comentario, los tramos horarios y, si el
+  // día quedó bloqueado, el motivo. Muestra la traza de edición (quién y
+  // cuántas veces) cuando ya existe un registro. Todo persiste vía
+  // guardarRegistroDiaProyecto -- nada es visual sin respaldo.
+  function abrirRegistroDia_(proyectoId, tarea, dia, registro, alGuardar) {
+    registro = registro || {};
+    var titulo = (tarea && tarea.titulo) || 'Tarea';
+    var fechaTxt = etiquetaDiaLargo_(dia);
+    var estadoActual = registro.estado_dia || 'en_proceso';
+    var horasActual = (registro.horas !== undefined && registro.horas !== null && registro.horas !== '') ? registro.horas : '';
+    var tramos = Array.isArray(registro.tramos) ? registro.tramos : [];
+
+    var opcionesEstado = REGISTRO_DIA_ESTADO_ORDEN_.map(function (e) {
+      return { valor: e, texto: REGISTRO_DIA_ESTADO_LABEL_[e] };
+    });
+
+    var trazaHtml = '';
+    if (registro.editado_por) {
+      trazaHtml = '<p class="sigso-ayuda sigso-py-reg-traza">Registrado por ' +
+        Componentes.escaparHtml(registro.autor_nombre || registro.editado_por) +
+        (registro.editado_en ? ' · última edición ' + Componentes.escaparHtml(fechaHora_(registro.editado_en)) : '') +
+        (registro.ediciones ? ' · ' + registro.ediciones + ' edición(es)' : '') + '</p>';
+    }
+
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Registro del día</h3>' +
+        '<p class="sigso-py-reg-cab"><strong>' + Componentes.escaparHtml(titulo) + '</strong><br>' +
+          '<span class="sigso-ayuda">' + Componentes.escaparHtml(fechaTxt) + '</span></p>' +
+        trazaHtml +
+        '<form id="form-py-registro-dia">' +
+          Componentes.campoSelect({ id: 'py-reg-estado', label: 'Estado del día', valor: estadoActual, placeholder: false, opciones: opcionesEstado }) +
+          Componentes.campoTexto({ id: 'py-reg-horas', label: 'Horas dedicadas (opcional)', tipo: 'number', valor: horasActual }) +
+          Componentes.campoTextarea({ id: 'py-reg-nota', label: 'Comentario del día (opcional)', valor: registro.nota || '' }) +
+          '<div class="sigso-campo js-py-reg-bloqueo-cont"' + (estadoActual === 'bloqueado' ? '' : ' style="display:none;"') + '>' +
+            Componentes.campoTexto({ id: 'py-reg-bloqueo', label: 'Motivo del bloqueo', valor: registro.bloqueo_motivo || '' }) +
+          '</div>' +
+          '<div class="sigso-py-reg-tramos">' +
+            '<div class="sigso-py-reg-tramos__cab"><span>Tramos horarios (opcional)</span>' +
+              Componentes.boton({ texto: '+ Tramo', variante: 'sutil', clase: 'js-py-reg-tramo-add', tipo: 'button' }) + '</div>' +
+            '<div class="js-py-reg-tramos-lista">' +
+              (tramos.length ? tramos.map(tramoFilaHtml_).join('') : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    // El campo de motivo aparece solo cuando el estado es "bloqueado".
+    var selEstado = fondo.querySelector('#py-reg-estado');
+    var bloqueoCont = fondo.querySelector('.js-py-reg-bloqueo-cont');
+    selEstado.addEventListener('change', function () {
+      bloqueoCont.style.display = selEstado.value === 'bloqueado' ? '' : 'none';
+    });
+
+    var listaTramos = fondo.querySelector('.js-py-reg-tramos-lista');
+    fondo.querySelector('.js-py-reg-tramo-add').addEventListener('click', function () {
+      listaTramos.insertAdjacentHTML('beforeend', tramoFilaHtml_({ desde: '', hasta: '', nota: '' }));
+    });
+    listaTramos.addEventListener('click', function (ev) {
+      var quitar = ev.target.closest('.js-py-reg-tramo-quitar');
+      if (quitar) quitar.closest('.sigso-py-reg-tramo').remove();
+    });
+
+    fondo.querySelector('#form-py-registro-dia').addEventListener('submit', function (evento) {
+      var estado = selEstado.value;
+      var motivo = fondo.querySelector('#py-reg-bloqueo').value.trim();
+      if (estado === 'bloqueado' && !motivo) {
+        evento.preventDefault();
+        Componentes.aviso({ texto: 'Un día bloqueado necesita un motivo.', tipo: 'error' });
+        return;
+      }
+      var tramosOut = Array.prototype.map.call(fondo.querySelectorAll('.sigso-py-reg-tramo'), function (fila) {
+        return {
+          desde: fila.querySelector('.js-py-reg-tramo-desde').value,
+          hasta: fila.querySelector('.js-py-reg-tramo-hasta').value,
+          nota: fila.querySelector('.js-py-reg-tramo-nota').value
+        };
+      }).filter(function (t) { return t.desde || t.hasta || t.nota; });
+      var horasVal = fondo.querySelector('#py-reg-horas').value;
+      enviarModal_(evento, 'guardarRegistroDiaProyecto', {
+        proyecto_id: proyectoId,
+        actividad_id: tarea && tarea.actividad_id,
+        dia: dia,
+        estado_dia: estado,
+        horas: horasVal === '' ? '' : Number(horasVal),
+        nota: fondo.querySelector('#py-reg-nota').value,
+        bloqueo_motivo: motivo,
+        tramos: tramosOut
+      }, function () {
+        cerrar();
+        Componentes.aviso({ texto: 'Día registrado.', tipo: 'exito' });
+        if (typeof alGuardar === 'function') alGuardar();
+      });
+    });
+  }
+
+  // Una fila del editor de tramos horarios (desde / hasta / qué se hizo).
+  function tramoFilaHtml_(t) {
+    t = t || {};
+    return '<div class="sigso-py-reg-tramo">' +
+      '<input type="time" class="sigso-campo__control js-py-reg-tramo-desde" value="' + Componentes.escaparHtml(t.desde || '') + '" aria-label="Desde">' +
+      '<input type="time" class="sigso-campo__control js-py-reg-tramo-hasta" value="' + Componentes.escaparHtml(t.hasta || '') + '" aria-label="Hasta">' +
+      '<input type="text" class="sigso-campo__control js-py-reg-tramo-nota" placeholder="¿Qué hiciste?" value="' + Componentes.escaparHtml(t.nota || '') + '" aria-label="Nota del tramo">' +
+      '<button type="button" class="sigso-boton sigso-boton--sutil js-py-reg-tramo-quitar" aria-label="Quitar tramo">×</button>' +
+    '</div>';
+  }
+
+  // 'YYYY-MM-DD' -> "sábado 30 de agosto de 2026" (para el encabezado del
+  // modal de registro). Usa la fecha local del calendario, no un instante.
+  function etiquetaDiaLargo_(dia) {
+    var f = fechaDeClave_(dia);
+    if (isNaN(f.getTime())) return dia;
+    try {
+      return f.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    } catch (e) {
+      return fechaCorta_(dia);
+    }
   }
 
   // --- utilidades ------------------------------------------------------

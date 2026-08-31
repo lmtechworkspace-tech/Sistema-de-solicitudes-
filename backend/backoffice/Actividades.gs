@@ -201,6 +201,11 @@ var Actividades = {
       // valida que sea del mismo proyecto antes de llegar aca). Informativa,
       // no bloquea nada -- ver Proyectos.listarTareas para como se usa.
       depende_de: data.depende_de || '',
+      // v11 (P2, "subtareas con rollup"): tarea padre opcional, un solo
+      // nivel (Proyectos.crearTarea ya valida mismo proyecto y que el padre
+      // no sea a su vez una subtarea, antes de llegar aca). El avance del
+      // padre se calcula on-read a partir de sus hijas, nunca se guarda acá.
+      tarea_padre_id: data.tarea_padre_id || '',
       // v10.0 Fase 3a (SGC): de que cosa del SGC nacio esta actividad --
       // hoy, la correccion o la accion correctiva de una NC
       // (NoConformidades.gs). Aditivo: una actividad normal de "Mi trabajo"
