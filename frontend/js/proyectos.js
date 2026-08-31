@@ -245,10 +245,13 @@
 
   function pintarWorkloadPortafolioPantalla_(cont) {
     var datos = workloadPortafolioCache_ || { proyectos: [], tareas: [], bitacora: [] };
-    var cabecera = '<div class="sigso-py-detalle-cab">' +
+    // v11 ("mejoras visuales del módulo"): "← Portafolio" en su propia línea
+    // de migaja de pan -- no compite en peso visual con el título, mismo
+    // criterio que la cabecera de un proyecto (pintarDetalle_).
+    var cabecera = '<div class="sigso-py-migaja">' +
         Componentes.boton({ texto: '← Portafolio', variante: 'sutil', clase: 'js-py-volver' }) +
-        '<h1>Carga de trabajo del portafolio</h1>' +
       '</div>' +
+      '<div class="sigso-py-detalle-cab"><h1>Carga de trabajo del portafolio</h1></div>' +
       '<p class="sigso-ayuda">Horas por persona, cruzando ' + datos.proyectos.length + ' proyecto(s) visibles para ti.</p>';
     var cuerpo = pintarWorkloadProyecto_(null, datos.tareas, datos.bitacora);
     cont.innerHTML = cabecera + '<div class="sigso-py-cuerpo">' + cuerpo + '</div>';
@@ -797,12 +800,21 @@
       return '<button type="button" class="sigso-tab js-py-tab' + (t.id === pestanaActiva_ ? ' sigso-tab--activo' : '') + '" data-tab="' + t.id + '">' + t.texto + '</button>';
     }).join('');
 
+    // v11 ("mejoras visuales del módulo"): "← Portafolio" pasa a su propia
+    // migaja de pan, más chica y muda -- antes competía en la misma línea
+    // con el título y la salud, los tres con el mismo peso visual. Salud +
+    // estado quedan agrupados como un "cluster" a la derecha del título
+    // (se van debajo en mobile), en vez de tres piezas sueltas envolviendo.
     var cabecera =
-      '<div class="sigso-py-detalle-cab">' +
+      '<div class="sigso-py-migaja">' +
         Componentes.boton({ texto: '← Portafolio', variante: 'sutil', clase: 'js-py-volver' }) +
+      '</div>' +
+      '<div class="sigso-py-detalle-cab">' +
         '<h1>' + Componentes.escaparHtml(p.nombre) + '</h1>' +
-        '<span class="sigso-py-salud sigso-py-salud--' + detalle.salud + '">' + Componentes.punto(SALUD_TONO[detalle.salud]) + SALUD_ETIQUETA[detalle.salud] + saludScoreHtml_(detalle.salud_score) + '</span>' +
-        Componentes.badge(ESTADO_PROYECTO_ETIQUETA[p.estado] || p.estado, 'neutro') +
+        '<div class="sigso-py-detalle-cab__estado">' +
+          '<span class="sigso-py-salud sigso-py-salud--' + detalle.salud + '">' + Componentes.punto(SALUD_TONO[detalle.salud]) + SALUD_ETIQUETA[detalle.salud] + saludScoreHtml_(detalle.salud_score) + '</span>' +
+          Componentes.badge(ESTADO_PROYECTO_ETIQUETA[p.estado] || p.estado, 'neutro') +
+        '</div>' +
       '</div>' +
       (detalle.salud_motivos && detalle.salud_motivos.length
         ? '<p class="sigso-py-motivos">' + Componentes.escaparHtml(detalle.salud_motivos.join(' · ')) + '</p>' : '') +

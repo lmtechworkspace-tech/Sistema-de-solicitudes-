@@ -3655,15 +3655,32 @@ button {
 .sigso-py-salud--riesgo { background: var(--alerta-suave); color: var(--alerta); }
 .sigso-py-salud--critico { background: var(--critico-suave); color: var(--critico); }
 
+/* v11 ("mejoras visuales del módulo"): "← Portafolio" vive en su propia
+   migaja de pan, chica y muda -- ya no compite en peso visual con el
+   título de la cabecera. */
+.sigso-py-migaja { margin-bottom: var(--esp-2); }
+.sigso-py-migaja .sigso-boton { padding-left: 0; }
+
 .sigso-py-detalle-cab {
-  display: flex; align-items: center; gap: var(--esp-3); flex-wrap: wrap; margin-bottom: var(--esp-2);
+  display: flex; align-items: center; justify-content: space-between; gap: var(--esp-3); flex-wrap: wrap; margin-bottom: var(--esp-2);
 }
-.sigso-py-detalle-cab h1 { margin: 0; flex: 1 1 auto; min-width: 10rem; }
+.sigso-py-detalle-cab h1 { margin: 0; flex: 1 1 auto; min-width: 10rem; font-size: 1.5rem; letter-spacing: -0.01em; }
+/* Salud + estado agrupados como un solo "cluster" a la derecha del título
+   (se van debajo en mobile) -- antes eran piezas sueltas envolviendo junto
+   al botón de volver y al h1, con el mismo peso visual que el título. */
+.sigso-py-detalle-cab__estado { display: flex; align-items: center; gap: var(--esp-2); flex-wrap: wrap; flex: 0 0 auto; }
 
 .sigso-py-cuerpo { margin-top: var(--esp-4); }
 
+/* v11 ("mejoras visuales del módulo", densidad de KPIs): antes cada tile
+   crecía hasta `1fr` -- con 3-4 KPIs en una fila ancha (Resumen, Rendimiento,
+   Analítica, Workload, el resumen del portafolio... todos usan esta misma
+   grilla) quedaban como rectángulos enormes y vacíos alrededor de un solo
+   número. Con un máximo (`12rem`) los tiles se quedan del tamaño de una
+   tarjeta real y el espacio sobrante de la fila queda como aire, no
+   estirado dentro de cada tile. */
 .sigso-py-kpis {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--esp-3);
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 12rem)); gap: var(--esp-3);
   margin-bottom: var(--esp-4);
 }
 
@@ -3752,6 +3769,20 @@ button {
 .sigso-kanban__tarjeta--arrastrable { cursor: grab; }
 .sigso-kanban__tarjeta--arrastrable:active { cursor: grabbing; }
 .sigso-kanban__tarjeta--arrastrando { opacity: .5; }
+
+/* v11 ("mejoras visuales del módulo", Kanban en celular): en mobile, 4
+   columnas de 16rem mínimo (64rem ≈ 1024px en total) obligaban a un scroll
+   HORIZONTAL del tablero completo -- incómodo en una pantalla que ya
+   scrollea todo lo demás verticalmente. Por debajo de 640px las columnas
+   se apilan a ancho completo, una tras otra: se sigue scrolleando la
+   página como siempre, sin un segundo scroll horizontal anidado. El
+   arrastre HTML5 (poco práctico en touch de todas formas) sigue existiendo
+   arriba de esta resolución; en mobile las 4 pastillas de cada tarjeta ya
+   son el camino principal para mover una tarea de columna. */
+@media (max-width: 640px) {
+  .sigso-kanban { flex-direction: column; overflow-x: visible; }
+  .sigso-kanban__columna { min-width: 0; width: 100%; }
+}
 
 /* v11 (P2, "Gantt navegable"): línea de tiempo en píxeles-por-día real (zoom
    de verdad, no solo "encoger para que quepa"), con la columna de etiquetas
@@ -3977,7 +4008,13 @@ button {
 .sigso-py-hist-cuando { margin-top: 2px; font-size: var(--texto-xs); color: var(--texto-3); }
 
 /* v11 (P1): score de salud numérico junto al semáforo de siempre. */
-.sigso-py-salud-score { margin-left: var(--esp-1); font-variant-numeric: tabular-nums; color: var(--texto-3); font-size: var(--texto-xs); }
+/* v11 ("mejoras visuales del módulo"): antes usaba --texto-3 (gris plano) a
+   proposito -- pero DENTRO de la píldora de salud, coloreada según el
+   estado (--ok/--alerta/--critico), un gris ajeno se leía como un error de
+   estilo, no como un número secundario. `inherit` + opacidad hace que el
+   score sea la MISMA tinta que la etiqueta, solo más suave -- una sola
+   unidad de color, no dos piezas sueltas. */
+.sigso-py-salud-score { margin-left: var(--esp-1); font-variant-numeric: tabular-nums; color: inherit; opacity: 0.75; font-size: var(--texto-xs); }
 
 /* v11 (P1): nota de Plan/Esperado/Real bajo el título de cada tarea en la
    carta de Dedicación -- compacta, monoespaciada donde hay números para que
