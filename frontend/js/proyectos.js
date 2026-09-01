@@ -686,26 +686,45 @@
     }
   }
 
+  // v12.4 ("nada de recargar la página ante un cambio"): refrescar el detalle
+  // tiene DOS modos:
+  //  - PRIMERA apertura (no hay datosDetalleActual_): se muestra "Cargando
+  //    proyecto..." y se arma la pantalla desde cero -- es la única vez que un
+  //    wipe tiene sentido (no hay nada que preservar).
+  //  - REFRESCO tras un cambio (ya hay detalle en pantalla -- reprogramar,
+  //    editar, cerrar, arrastrar el Gantt, etc.): NO se borra el panel. Se
+  //    re-piden los datos EN SEGUNDO PLANO (incluida bitácora+rendimiento si
+  //    estamos en el Cronograma, para no dejarlos en "Cargando cronograma...")
+  //    y recién cuando llegan TODOS se repinta una sola vez, preservando el
+  //    scroll de la carta. El usuario ve su vista intacta mientras tanto: el
+  //    cambio aparece sin parpadeo ni "recarga".
   function refrescarDetalle_() {
     var cont = panelProyectos_();
     if (!cont || !proyectoActivoId_) return;
-    cont.innerHTML = Componentes.cargando('Cargando proyecto...');
+    var suave = !!datosDetalleActual_;         // ya hay detalle en pantalla -> refresco sin wipe
+    var enCron = pestanaActiva_ === 'cronograma';
+    var previo = suave ? cont.querySelector('.sigso-py-ded-scroll') : null;
+    var sx = previo ? previo.scrollLeft : 0, sy = previo ? previo.scrollTop : 0;
+    if (!suave) cont.innerHTML = Componentes.cargando('Cargando proyecto...');
     // v10 (auditoría G): guarda contra carreras -- si el usuario cambia de
     // proyecto (o vuelve al portafolio) antes de que responda, la respuesta
     // vieja no debe pisar la pantalla nueva.
     var idAlPedir = proyectoActivoId_;
 
     // v10 (auditoría G): detalle + tareas + sala en UNA sola llamada
-    // (getDetalleCompletoProyecto) -- antes eran 3 acciones separadas, cada
-    // una una ejecución de Apps Script (que corre en SERIE por usuario y
-    // re-lee las hojas). La bitácora y el rendimiento -- que escanean toda
-    // ACTIVIDADES_BITACORA y solo los usa el Cronograma -- se cargan LAZY al
-    // abrir esa pestaña. miPerfil ya viene cacheado. Así abrir un proyecto es
-    // 1 viaje de red (+1 cacheado) en vez de los 6 de antes.
-    Promise.all([
+    // (getDetalleCompletoProyecto). En modo SUAVE dentro del Cronograma se
+    // piden también bitácora+rendimiento en el MISMO lote, para repintar una
+    // sola vez con todo fresco (y no caer en el "Cargando cronograma..." del
+    // lazy-load).
+    var peticiones = [
       apiSeguro_('getDetalleCompletoProyecto', { proyecto_id: proyectoActivoId_ }),
       miPerfil_()
-    ]).then(function (respuestas) {
+    ];
+    if (suave && enCron) {
+      peticiones.push(apiSeguro_('listarBitacoraProyecto', { proyecto_id: proyectoActivoId_ }));
+      peticiones.push(apiSeguro_('obtenerRendimientoProyecto', { proyecto_id: proyectoActivoId_ }));
+    }
+    Promise.all(peticiones).then(function (respuestas) {
       if (idAlPedir !== proyectoActivoId_) return; // el usuario ya se movió
       var perfil = respuestas[1];
       var miEmail = normalizarEmail_(perfil && perfil.email);
@@ -715,11 +734,30 @@
       // ventana entre publicar el frontend y pegar el backend.
       var r = respuestas[0];
       if (r && r.ok && r.data && r.data.detalle) {
-        pintarDetalleCargado_(cont, r.data.detalle, r.data.tareas || [], r.data.sala || [], miEmail);
+        if (suave) {
+          datosDetalleActual_ = {
+            detalle: r.data.detalle, tareas: r.data.tareas || [], sala: r.data.sala || [],
+            bitacora: enCron ? ((respuestas[2] && respuestas[2].ok) ? respuestas[2].data : []) : undefined,
+            rendimiento: enCron ? ((respuestas[3] && respuestas[3].ok) ? respuestas[3].data : null) : undefined,
+            miEmail: miEmail
+          };
+          fijarAnchoCarta_(enCron);
+          pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala,
+            miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento);
+          var nuevo = cont.querySelector('.sigso-py-ded-scroll');
+          if (nuevo) { nuevo.scrollLeft = sx; nuevo.scrollTop = sy; }
+        } else {
+          pintarDetalleCargado_(cont, r.data.detalle, r.data.tareas || [], r.data.sala || [], miEmail);
+        }
       } else if (r && r.ok === false && /desconocida/i.test(r.message || '')) {
+        if (suave) { datosDetalleActual_ = null; cont.innerHTML = Componentes.cargando('Cargando proyecto...'); }
         refrescarDetalleLegacy_(cont, idAlPedir, miEmail);
-      } else {
+      } else if (!suave) {
         cont.innerHTML = Componentes.alerta((r && r.message) || 'No se pudo abrir el proyecto.', 'error');
+      } else {
+        // Modo suave y falló: se deja la vista actual intacta y se avisa (no
+        // se rompe la pantalla que el usuario estaba mirando).
+        Componentes.aviso({ texto: (r && r.message) || 'No se pudo actualizar el proyecto.', tipo: 'error' });
       }
     });
     // Sin .catch: apiSeguro_ y miPerfil_ nunca rechazan.
