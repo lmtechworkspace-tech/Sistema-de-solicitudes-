@@ -3196,6 +3196,11 @@
 .sigso-py-ded-controles .sigso-boton { flex: 0 0 auto; }
 .sigso-py-ded-rangotxt { font-variant-numeric: tabular-nums; }
 .sigso-py-ded-controles .js-py-ded-imprimir { margin-left: auto; }
+/* El botón de imprimir ahora vive envuelto en un <span title> (para el
+   tooltip del consejo de impresión) -- el margen-auto que lo empuja a la
+   derecha del toolbar debe vivir en ese wrapper, que es el hijo directo del
+   flex container ahora, no en el botón. */
+.sigso-py-ded-controles > span:has(> .js-py-ded-imprimir) { margin-left: auto; }
 /* v11 (P1): nota + botón de "congelar línea base", agrupados a la derecha
    junto con Descargar/Imprimir. */
 .sigso-py-ded-baseline { display: flex; align-items: center; gap: var(--esp-2); }
@@ -3377,13 +3382,40 @@
 .sigso-print-cab .sigso-print-proy { margin: 0; font-weight: 600; }
 .sigso-print-cab .sigso-print-sub { margin: 0 0 var(--esp-3); color: var(--texto-3); font-size: var(--texto-xs); }
 @media print {
-  @page { size: landscape; margin: 1cm; }
+  @page { size: landscape; margin: 1.1cm; }
   body.sigso-imprimiendo > *:not(#sigso-print-root) { display: none !important; }
   body.sigso-imprimiendo #sigso-print-root { display: block; color: #000; }
   #sigso-print-root, #sigso-print-root * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   #sigso-print-root .sigso-py-ded-scroll { overflow: visible; }
   #sigso-print-root .sigso-py-ded { --col-tarea: 9rem; --col-dia: 1.15rem; --col-total: 2.8rem; font-size: 9px; }
   #sigso-print-root .sigso-py-ded-celda span { font-size: 8px; }
+  /* En pantalla la carta es un grid de <div> por fila (hace falta para el
+     drag&drop, el click-para-registrar y demás) -- pero un grid NO repite su
+     fila de cabecera al saltar de página al imprimir: una carta de 2+
+     páginas dejaba la 2a/3a SIN los números de día, así que las marcas de
+     cada tarea quedaban sin poder saber a qué día correspondían. Acá, SOLO
+     dentro de la copia impresa (nunca toca la pantalla), se reconstruye la
+     MISMA marca como tabla CSS -- ningún <table> nuevo, solo display:table*
+     -- para que el navegador repita cabecera y pie en cada hoja gratis. */
+  #sigso-print-root .sigso-py-ded {
+    display: table; table-layout: fixed; border-collapse: separate; border-spacing: 0 2px; width: auto;
+  }
+  #sigso-print-root .sigso-py-ded-fila { display: table-row; break-inside: avoid; }
+  #sigso-print-root .sigso-py-ded-fila.sigso-py-ded-cabecera { display: table-header-group; }
+  #sigso-print-root .sigso-py-ded-fila.sigso-py-ded-footer { display: table-footer-group; }
+  #sigso-print-root .sigso-py-ded-etiqueta,
+  #sigso-print-root .sigso-py-ded-dia,
+  #sigso-print-root .sigso-py-ded-celda,
+  #sigso-print-root .sigso-py-ded-total { display: table-cell; vertical-align: middle; }
+  #sigso-print-root .sigso-py-ded-etiqueta { width: var(--col-tarea); text-align: left; vertical-align: top; padding: 1px 4px 3px 0; }
+  #sigso-print-root .sigso-py-ded-etiqueta .t,
+  #sigso-print-root .sigso-py-ded-etiqueta .m { display: block; }
+  #sigso-print-root .sigso-py-ded-dia,
+  #sigso-print-root .sigso-py-ded-celda { width: var(--col-dia); height: var(--col-dia); aspect-ratio: auto; text-align: center; }
+  #sigso-print-root .sigso-py-ded-total { width: var(--col-total); text-align: right; }
+  /* El botón 📅 de reprogramar es una acción de pantalla -- en un reporte
+     para leer/imprimir no hace nada, solo ensucia el título de la tarea. */
+  #sigso-print-root .sigso-py-ded-reprogramar { display: none; }
 }
 
 /* v10 (Fase C, "vista calendario"): grilla de mes, sin libreria -- mismo

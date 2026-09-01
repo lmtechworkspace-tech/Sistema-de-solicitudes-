@@ -2566,7 +2566,13 @@
       '<span class="sigso-ayuda sigso-py-ded-rangotxt">' + Componentes.escaparHtml(desdeTxt) + ' – ' + Componentes.escaparHtml(hastaTxt) + '</span>' +
       '<label class="sigso-campo-check sigso-py-ded-ctrl"><input type="checkbox" class="js-py-ded-agrupar"' + (dedAgruparPersona_ ? ' checked' : '') + '> Por persona</label>' +
       filtroPersona + filtroEstado +
-      Componentes.boton({ texto: 'Descargar / Imprimir', variante: 'secundario', clase: 'js-py-ded-imprimir', tipo: 'button', icono: 'descargar' }) +
+      // v11 ("mejoras visuales"): el title del span envuelve el botón (un
+      // <button> sin title propio hereda el tooltip del ancestro) -- así el
+      // consejo aparece al pasar el mouse sin agregar un texto fijo más al
+      // toolbar, que ya venía cargado de controles.
+      '<span title="Consejo: en el diálogo de impresión, desactiva la opción Encabezados y pies de página para un PDF más limpio.">' +
+        Componentes.boton({ texto: 'Descargar / Imprimir', variante: 'secundario', clase: 'js-py-ded-imprimir', tipo: 'button', icono: 'descargar' }) +
+      '</span>' +
       baselineHtml +
     '</div>';
   }
