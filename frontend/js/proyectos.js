@@ -777,6 +777,49 @@
     });
   }
 
+  // v12.2 ("llenar rápido, sin recarga"): actualización OPTIMISTA al registrar
+  // un día. Antes, cada guardado invalidaba la bitácora en caché y volvía a
+  // pedir bitácora+rendimiento al backend (Apps Script en serie, 1-3 s) y
+  // repintaba todo perdiendo el scroll -- se sentía como recargar la página en
+  // cada celda. Ahora: el registro ya guardado se mergea en la bitácora en
+  // caché, la grilla se repinta al instante DESDE CACHÉ (sin red, sin perder
+  // el scroll), y solo el rendimiento (KPIs / Plan·Esperado·Real, que lo
+  // calcula el backend) se refresca en segundo plano, en silencio.
+  function mergeRegistroDiaEnCache_(reg) {
+    if (!datosDetalleActual_ || datosDetalleActual_.bitacora === undefined || !reg || !reg.actividad_id || !reg.dia) return false;
+    // Sella autor/momento para la traza del modal (el backend pondrá los
+    // definitivos en la próxima carga real; esto es solo para el repintado ya).
+    reg.editado_por = reg.editado_por || datosDetalleActual_.miEmail || '';
+    reg.editado_en = new Date().toISOString();
+    var b = datosDetalleActual_.bitacora;
+    for (var i = b.length - 1; i >= 0; i--) {
+      if (b[i].tipo === 'REGISTRO_DIA' && b[i].actividad_id === reg.actividad_id && b[i].dia === reg.dia) b.splice(i, 1);
+    }
+    b.push(reg);
+    return true;
+  }
+
+  // Repinta el detalle DESDE CACHÉ (sin red) preservando el scroll de la carta.
+  function repintarCronogramaDesdeCache_(cont) {
+    var previo = cont.querySelector('.sigso-py-ded-scroll');
+    var sx = previo ? previo.scrollLeft : 0, sy = previo ? previo.scrollTop : 0;
+    cambiarPestana_('cronograma'); // pinta desde datosDetalleActual_, sin viaje de red
+    var nuevo = cont.querySelector('.sigso-py-ded-scroll');
+    if (nuevo) { nuevo.scrollLeft = sx; nuevo.scrollTop = sy; }
+  }
+
+  // Refresca SOLO el rendimiento (KPIs y Plan·Esperado·Real, que los calcula el
+  // backend) en segundo plano, sin bloquear ni parpadear la grilla ya pintada.
+  function refrescarRendimientoEnSegundoPlano_(cont) {
+    if (!datosDetalleActual_ || !proyectoActivoId_) return;
+    var idAlPedir = proyectoActivoId_;
+    apiSeguro_('obtenerRendimientoProyecto', { proyecto_id: proyectoActivoId_ }).then(function (r) {
+      if (!datosDetalleActual_ || idAlPedir !== proyectoActivoId_ || !r || !r.ok) return;
+      datosDetalleActual_.rendimiento = r.data;
+      if (pestanaActiva_ === 'cronograma' && vistaCronograma_ === 'dedicacion') repintarCronogramaDesdeCache_(cont);
+    });
+  }
+
   function pintarDetalle_(cont, detalle, tareas, sala, miEmail, bitacora, rendimiento) {
     var p = detalle.proyecto;
     // v9.2: la capacidad de gestion la resuelve el backend (puede_gestionar:
@@ -2599,7 +2642,8 @@
     var estados = [
       ['asig', 'Asignado (A)'], ['plan', 'Planificado (P)'], ['proc', 'En proceso (●)'],
       ['done', 'Finalizado / entregado (✓/F)'], ['rev', 'En revisión (R)'], ['pausa', 'En pausa (‖)'],
-      ['esp', 'Esperando a un tercero (…)'], ['bloq', 'Bloqueado (!)'], ['late', 'Vencida sin gestión']
+      ['esp', 'Esperando a un tercero (…)'], ['bloq', 'Bloqueado (!)'], ['late', 'Vencida sin gestión'],
+      ['we', 'Fin de semana'], ['feriado', 'Feriado']
     ].map(function (p) { return '<span><i class="sigso-py-ded-sw sigso-py-ded-sw--' + p[0] + '"></i>' + p[1] + '</span>'; }).join('');
     var heat = '<span class="sigso-py-ded-heatleg">Horas del día: <i class="hl h1"></i><i class="hl h2"></i><i class="hl h3"></i><i class="hl h4"></i> más</span>';
     return '<div class="sigso-py-ded-leyenda">' + estados + heat + '</div>';
@@ -3467,11 +3511,18 @@
       });
     }
     wireCartaControles_(cont, function () { cambiarPestana_('cronograma'); }, (datosDetalleActual_ && datosDetalleActual_.detalle) || null,
-      // v11 (P0): al guardar un registro del día, la bitácora en caché quedó
-      // vieja -- se invalida y se recarga (trae el nuevo REGISTRO_DIA) y la
-      // carta se repinta con el estado ya persistido (nada de mocks).
-      function () {
-        if (datosDetalleActual_) { datosDetalleActual_.bitacora = undefined; cargarDatosCronograma_(cont); }
+      // v12.2 ("llenar rápido, sin recarga"): actualización OPTIMISTA -- se
+      // mergea el registro ya guardado en la bitácora en caché y se repinta al
+      // instante desde caché (sin red, sin perder scroll); el rendimiento se
+      // refresca en segundo plano. Fallback al refetch completo si por lo que
+      // sea no hay caché o no llegó el registro (p. ej. "Mi dedicación").
+      function (registroGuardado) {
+        if (datosDetalleActual_ && mergeRegistroDiaEnCache_(registroGuardado)) {
+          repintarCronogramaDesdeCache_(cont);
+          refrescarRendimientoEnSegundoPlano_(cont);
+        } else if (datosDetalleActual_) {
+          datosDetalleActual_.bitacora = undefined; cargarDatosCronograma_(cont);
+        }
       });
 
     // v11 (P2, "Gantt navegable"): zoom, "Hoy" y arrastrar-para-reprogramar
@@ -4191,7 +4242,19 @@
       }, function () {
         cerrar();
         Componentes.aviso({ texto: 'Día registrado.', tipo: 'exito' });
-        if (typeof alGuardar === 'function') alGuardar();
+        // v12.2 ("llenar rápido, sin recarga"): se pasa el registro recién
+        // guardado al callback, para que la carta pueda actualizarse en el
+        // acto (optimista) sin volver a pedir todo el proyecto al backend.
+        if (typeof alGuardar === 'function') alGuardar({
+          tipo: 'REGISTRO_DIA',
+          actividad_id: tarea && tarea.actividad_id,
+          dia: dia,
+          estado_dia: estado,
+          horas: horasVal === '' ? '' : Number(horasVal),
+          nota: fondo.querySelector('#py-reg-nota').value,
+          bloqueo_motivo: motivo,
+          tramos: tramosOut
+        });
       });
     });
   }

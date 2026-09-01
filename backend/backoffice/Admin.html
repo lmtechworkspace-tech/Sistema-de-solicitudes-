@@ -3915,8 +3915,14 @@ button {
   text-align: center; font-size: var(--texto-xs); color: var(--texto-3); font-variant-numeric: tabular-nums;
   padding-bottom: 0.2rem;
 }
-.sigso-py-ded-dia.we { color: var(--texto-2); }
-.sigso-py-ded-dia.feriado { color: var(--alerta); }
+/* v12.2 ("marcar fin de semana / feriado"): la columna del día no laboral se
+   tiñe DE VERDAD (antes casi imperceptible) -- para no registrar por error un
+   sábado/domingo o un feriado. Cabecera con fondo tintado + número en negrita;
+   las celdas vacías de esa columna llevan el mismo tinte (los días CON horas
+   igual muestran su heatmap, que gana en la cascada). Fin de semana = gris
+   frío neutro (no compite con los colores de estado); feriado = ámbar. */
+.sigso-py-ded-dia.we { color: var(--texto-2); font-weight: 600; background: color-mix(in srgb, var(--texto-2) 13%, transparent); border-radius: 5px 5px 0 0; }
+.sigso-py-ded-dia.feriado { color: var(--alerta); font-weight: 600; background: color-mix(in srgb, var(--alerta) 16%, transparent); border-radius: 5px 5px 0 0; }
 .sigso-py-ded-dia.hoy { color: var(--primario); font-weight: 600; }
 .sigso-py-ded-dia.mes { border-left: 2px solid var(--borde-fuerte); }
 .sigso-py-ded-dia b { display: block; font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.02em; color: var(--texto-3); }
@@ -3930,8 +3936,8 @@ button {
   aspect-ratio: 1 / 1; border-radius: var(--radio-sm); background: var(--superficie-2); --hcol: var(--info);
   display: flex; align-items: center; justify-content: center;
 }
-.sigso-py-ded-celda.we { background: color-mix(in srgb, var(--superficie-2), var(--fondo-pagina) 40%); }
-.sigso-py-ded-celda.feriado { background: repeating-linear-gradient(45deg, var(--superficie-2), var(--superficie-2) 3px, var(--alerta-suave) 3px, var(--alerta-suave) 6px); }
+.sigso-py-ded-celda.we { background: color-mix(in srgb, var(--texto-2) 12%, var(--superficie-2)); }
+.sigso-py-ded-celda.feriado { background: color-mix(in srgb, var(--alerta) 15%, var(--superficie-2)); }
 .sigso-py-ded-celda.hoy { outline: 2px solid var(--primario); outline-offset: -2px; }
 .sigso-py-ded-celda span { font-size: 0.65rem; font-weight: 700; line-height: 1; }
 .sigso-py-ded-celda.e-asig { background: var(--primario-suave); color: var(--primario); --hcol: var(--primario); }
@@ -3994,6 +4000,8 @@ button {
 .sigso-py-ded-sw--pausa { background: var(--superficie-2); border: 1px solid var(--borde-fuerte); }
 .sigso-py-ded-sw--rev { background: color-mix(in srgb, var(--alerta-suave), var(--superficie) 25%); border: 1px solid var(--alerta); }
 .sigso-py-ded-sw--esp { background: var(--superficie-2); border: 1px dashed var(--info); }
+.sigso-py-ded-sw--we { background: color-mix(in srgb, var(--texto-2) 20%, var(--superficie)); border: 1px solid color-mix(in srgb, var(--texto-2) 35%, transparent); }
+.sigso-py-ded-sw--feriado { background: color-mix(in srgb, var(--alerta) 24%, var(--superficie)); border: 1px solid var(--alerta); }
 .sigso-py-ded-heatleg { display: inline-flex; align-items: center; gap: 3px; }
 .sigso-py-ded-heatleg .hl { display: inline-block; width: 0.8rem; height: 0.8rem; border-radius: 3px; --hcol: var(--info); }
 .sigso-py-ded-heatleg .hl.h1 { background: color-mix(in srgb, var(--hcol) 22%, var(--superficie)); }
