@@ -3130,28 +3130,56 @@
    son las MISMAS de la v10 (Fase C) -- solo cambió el contenedor. */
 .sigso-py-gantt-scroll { overflow-x: auto; border: 1px solid var(--borde); border-radius: var(--radio-sm); }
 .sigso-py-gantt-body { display: inline-flex; flex-direction: column; position: relative; min-width: 100%; }
-.sigso-py-gantt-fila { display: flex; align-items: center; border-bottom: 1px solid var(--borde); }
+.sigso-py-gantt-fila { display: flex; align-items: stretch; border-bottom: 1px solid var(--borde); position: relative; z-index: 1; }
 .sigso-py-gantt-fila:last-child { border-bottom: none; }
-.sigso-py-gantt-fila--regla { position: sticky; top: 0; z-index: 2; background: var(--superficie); border-bottom: 1px solid var(--borde-fuerte); }
+.sigso-py-gantt-fila--regla { position: sticky; top: 0; z-index: 3; background: var(--superficie); border-bottom: 1px solid var(--borde-fuerte); }
 .sigso-py-gantt-etiqueta {
-  /* 200px fijo A PROPÓSITO (no rem): el JS (PLAN_ETIQUETA_ANCHO_PX_) calcula
-     dónde cae la línea de "Hoy" sumando este mismo número de píxeles -- si
-     esto se mueve, hay que mover esa constante también. */
-  flex: 0 0 200px; width: 200px; position: sticky; left: 0; z-index: 1; background: var(--superficie);
-  padding: var(--esp-1) var(--esp-2); font-size: var(--texto-sm); color: var(--texto);
-  display: flex; align-items: center; gap: 0.3rem; border-right: 1px solid var(--borde);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* 240px fijo A PROPÓSITO (no rem): el JS (PLAN_ETIQUETA_ANCHO_PX_) calcula
+     dónde cae la línea de "Hoy" y las bandas de fin de semana sumando este
+     mismo número de píxeles -- si esto se mueve, hay que mover esa constante. */
+  flex: 0 0 240px; width: 240px; position: sticky; left: 0; z-index: 2; background: var(--superficie);
+  padding: 0.35rem var(--esp-2); font-size: var(--texto-sm); color: var(--texto);
+  display: flex; flex-direction: column; justify-content: center; gap: 1px;
+  border-right: 1px solid var(--borde-fuerte); min-width: 0;
 }
-.sigso-py-gantt-track { position: relative; height: 2.25rem; flex: 0 0 auto; }
-.sigso-py-gantt-track--regla { height: 1.75rem; }
+/* v12: la etiqueta ahora es título + una subfila de meta (semáforo + persona
+   + fecha comprometida). El título trunca; la meta es más chica y tenue. */
+.sigso-py-gantt-etiqueta__titulo { display: flex; align-items: center; gap: 0.3rem; font-weight: 600; min-width: 0; }
+.sigso-py-gantt-etiqueta__titulo > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sigso-py-gantt-etiqueta__meta {
+  display: flex; align-items: center; gap: 0.3rem; font-size: var(--texto-xs); color: var(--texto-3);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sigso-py-gantt-etiqueta__punto { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; }
+.sigso-py-gantt-track { position: relative; height: 2.9rem; flex: 0 0 auto; }
+.sigso-py-gantt-track--regla { height: 1.9rem; }
 .sigso-py-gantt-tick {
-  position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--borde); padding-left: 4px;
-  font-size: var(--texto-xs); color: var(--texto-3); white-space: nowrap; display: flex; align-items: center;
+  position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--borde-fuerte); padding-left: 4px;
+  font-size: var(--texto-xs); color: var(--texto-2); white-space: nowrap; display: flex; align-items: center; font-weight: 600;
 }
+/* v12: capa de fondo (bandas de fin de semana + línea de meses) detrás de
+   todas las filas -- hija directa del body, top/bottom 0 la estira a todo el
+   alto. z-index bajo la deja detrás de las barras (que van en filas con
+   z-index 1). */
+.sigso-py-gantt-fondo { position: absolute; top: 0; bottom: 0; z-index: 0; pointer-events: none; }
+.sigso-py-gantt-weekend { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--texto) 5%, transparent); }
+.sigso-py-gantt-mesline { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--borde); }
 .sigso-py-gantt-hoy {
-  position: absolute; top: 0; bottom: 0; width: 2px; background: var(--primario); z-index: 1; pointer-events: none;
+  position: absolute; top: 0; bottom: 0; width: 2px; background: var(--primario); z-index: 2; pointer-events: none;
 }
-.sigso-py-cron-barra { position: absolute; top: 25%; height: 50%; border-radius: var(--radio-sm); min-width: 3px; }
+.sigso-py-gantt-hoy-pill {
+  position: absolute; top: 0; transform: translateX(-50%); z-index: 3; pointer-events: none;
+  background: var(--primario); color: #fff; font-size: 0.6rem; font-weight: 700; line-height: 1;
+  padding: 2px 5px; border-radius: 0 0 var(--radio-sm) var(--radio-sm); letter-spacing: 0.02em;
+}
+.sigso-py-cron-barra { position: absolute; top: 22%; height: 56%; border-radius: var(--radio-sm); min-width: 3px; display: flex; align-items: center; overflow: hidden; box-shadow: inset 0 0 0 1px color-mix(in srgb, black 8%, transparent); }
+/* v12: relleno de avance dentro de la barra (una capa más oscura del mismo
+   color) + fecha comprometida al final de la barra. */
+.sigso-py-cron-barra__fill { position: absolute; top: 0; left: 0; bottom: 0; background: color-mix(in srgb, black 22%, transparent); border-radius: inherit; }
+/* Chip de fecha comprometida: hijo del TRACK (no de la barra, que recorta),
+   posicionado en el extremo derecho de la barra vía `left` inline. */
+.sigso-py-gantt-fecha { position: absolute; top: 50%; transform: translateY(-50%); font-size: var(--texto-xs); color: var(--texto-3); white-space: nowrap; font-variant-numeric: tabular-nums; pointer-events: none; }
+.sigso-py-cron-barra__txt { position: relative; z-index: 1; padding: 0 6px; font-size: var(--texto-xs); font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 1px color-mix(in srgb, black 30%, transparent); }
 .sigso-py-cron-barra--al-dia, .sigso-py-cron-barra--terminada { background: var(--ok); }
 .sigso-py-cron-barra--riesgo { background: var(--alerta); }
 .sigso-py-cron-barra--atrasada { background: var(--critico); }

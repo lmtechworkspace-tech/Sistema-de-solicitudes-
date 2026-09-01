@@ -2937,7 +2937,7 @@
   // CSS (.sigso-py-gantt-etiqueta) para que la línea de "Hoy" (hija directa
   // de .sigso-py-gantt-body, no de un track) calce con el eje de los días:
   // su `left` es relativo al body COMPLETO, que arranca en la etiqueta.
-  var PLAN_ETIQUETA_ANCHO_PX_ = 200;
+  var PLAN_ETIQUETA_ANCHO_PX_ = 240;
   var PLAN_ZOOM_NIVELES_ = [
     { id: 'trimestre', pxDia: 4, etiqueta: 'Trimestre' },
     { id: 'mes', pxDia: 10, etiqueta: 'Mes' },
@@ -3040,10 +3040,15 @@
     var filasHitos = hitos.map(function (h) {
       var vencido = h.estado !== 'COMPLETADO' && h.estado !== 'CANCELADO' && new Date(h.fecha_objetivo) < ahora;
       var codigo = CRONOGRAMA_HITO_ESTADO_CODIGO[h.estado] || (vencido ? 'atrasada' : 'al-dia');
+      var hitoPx = offsetPx_(h.fecha_objetivo);
       return '<div class="sigso-py-gantt-fila">' +
-        '<div class="sigso-py-gantt-etiqueta">' + Iconos.svg('diana', { tam: 14 }) + ' <b>' + Componentes.escaparHtml(h.nombre) + '</b> <span class="sigso-ayuda">(hito)</span></div>' +
+        '<div class="sigso-py-gantt-etiqueta">' +
+          '<div class="sigso-py-gantt-etiqueta__titulo">' + Iconos.svg('diana', { tam: 13 }) + '<span>' + Componentes.escaparHtml(h.nombre) + '</span></div>' +
+          '<div class="sigso-py-gantt-etiqueta__meta">Hito · ' + Componentes.escaparHtml(fechaCorta_(h.fecha_objetivo)) + '</div>' +
+        '</div>' +
         '<div class="sigso-py-gantt-track" style="width:' + anchoTotal + 'px">' +
-          '<div class="sigso-py-cron-hito sigso-py-cron-hito--' + codigo + '" style="left:' + offsetPx_(h.fecha_objetivo) + 'px" title="' + Componentes.escaparHtml(fechaCorta_(h.fecha_objetivo)) + '"></div>' +
+          '<div class="sigso-py-cron-hito sigso-py-cron-hito--' + codigo + '" style="left:' + hitoPx + 'px" title="' + Componentes.escaparHtml(fechaCorta_(h.fecha_objetivo)) + '"></div>' +
+          '<div class="sigso-py-gantt-fecha" style="left:' + (hitoPx + 10) + 'px">' + Componentes.escaparHtml(h.nombre) + '</div>' +
         '</div>' +
       '</div>';
     }).join('');
@@ -3053,6 +3058,7 @@
     }).map(function (a) {
       var inicioPx = offsetPx_(a.fecha_creacion || p.fecha_inicio || a.fecha_compromiso);
       var finPx = offsetPx_(a.fecha_compromiso);
+      var anchoBarra = Math.max(finPx - inicioPx, 4);
       var codigo = a.semaforo || 'al-dia';
       var extraAtraso = '';
       if (codigo === 'atrasada' && hoyPx > finPx) {
@@ -3063,12 +3069,27 @@
       var handle = editable
         ? '<div class="sigso-py-gantt-resize" data-act="' + Componentes.escaparHtml(a.actividad_id) + '" data-proy="' + Componentes.escaparHtml(proyId) + '" title="Arrastrar para reprogramar"></div>'
         : '';
+      // v12: relleno de avance dentro de la barra + texto de % si la barra es
+      // ancha; el % siempre visible en la meta de la etiqueta si no cabe.
+      var avance = (a.avance_pct === null || a.avance_pct === undefined || a.avance_pct === '') ? null : Number(a.avance_pct);
+      var fill = (avance !== null && avance > 0)
+        ? '<div class="sigso-py-cron-barra__fill" style="width:' + Math.min(avance, 100) + '%"></div>' : '';
+      var txtBarra = (avance !== null && anchoBarra >= 34) ? '<span class="sigso-py-cron-barra__txt">' + avance + '%</span>' : '';
+      var resp = a.responsable_nombre || a.responsable_email || '';
+      var meta = '<span class="sigso-py-gantt-etiqueta__punto sigso-py-cron-barra--' + codigo + '"></span>' +
+        '<span>' + Componentes.escaparHtml(resp) + (avance !== null ? ' · ' + avance + '%' : '') + '</span>';
+      // El chip de fecha va a la DERECHA de la barra; si la barra termina muy a
+      // la derecha (poco espacio), no se pone (el title y la etiqueta lo dan).
+      var chipFecha = '<div class="sigso-py-gantt-fecha" style="left:' + (finPx + 6) + 'px">' + Componentes.escaparHtml(fechaCorta_(a.fecha_compromiso)) + '</div>';
       return '<div class="sigso-py-gantt-fila">' +
-        '<div class="sigso-py-gantt-etiqueta">' + Componentes.escaparHtml(a.titulo) + '</div>' +
+        '<div class="sigso-py-gantt-etiqueta">' +
+          '<div class="sigso-py-gantt-etiqueta__titulo"><span>' + Componentes.escaparHtml(a.titulo) + '</span></div>' +
+          '<div class="sigso-py-gantt-etiqueta__meta">' + meta + '</div>' +
+        '</div>' +
         '<div class="sigso-py-gantt-track" style="width:' + anchoTotal + 'px">' +
           '<div class="sigso-py-cron-barra sigso-py-gantt-barra sigso-py-cron-barra--' + codigo + (editable ? ' sigso-py-gantt-barra--editable' : '') +
-            '" style="left:' + inicioPx + 'px; width:' + Math.max(finPx - inicioPx, 4) + 'px" title="' + Componentes.escaparHtml(fechaCorta_(a.fecha_compromiso)) + '">' + handle + '</div>' +
-          extraAtraso +
+            '" style="left:' + inicioPx + 'px; width:' + anchoBarra + 'px" title="' + Componentes.escaparHtml(a.titulo + ' — compromiso ' + fechaCorta_(a.fecha_compromiso) + (avance !== null ? ' · ' + avance + '% avance' : '')) + '">' + fill + txtBarra + handle + '</div>' +
+          extraAtraso + chipFecha +
         '</div>' +
       '</div>';
     }).join('');
@@ -3086,14 +3107,40 @@
     return controles +
       '<div class="sigso-py-gantt-scroll">' +
         '<div class="sigso-py-gantt-body">' +
+          ganttFondoHtml_(minTime, maxTime, pxDia, totalDias) +
           '<div class="sigso-py-gantt-fila sigso-py-gantt-fila--regla">' +
             '<div class="sigso-py-gantt-etiqueta"></div>' +
             '<div class="sigso-py-gantt-track sigso-py-gantt-track--regla" style="width:' + anchoTotal + 'px">' + reglaMesesHtml_(minTime, maxTime, pxDia) + '</div>' +
           '</div>' +
           filasHitos + filasTareas +
           '<div class="sigso-py-gantt-hoy" style="left:' + (PLAN_ETIQUETA_ANCHO_PX_ + hoyPx) + 'px" title="Hoy"></div>' +
+          '<div class="sigso-py-gantt-hoy-pill" style="left:' + (PLAN_ETIQUETA_ANCHO_PX_ + hoyPx) + 'px">HOY</div>' +
         '</div>' +
       '</div>';
+  }
+
+  // v12: capa de fondo de la vista Plan -- bandas de fin de semana + líneas
+  // finas al inicio de cada mes, detrás de todas las filas (hija directa del
+  // body). Las posiciones se calculan sumando PLAN_ETIQUETA_ANCHO_PX_ (igual
+  // que la línea de "Hoy"), porque el body arranca en la columna de etiqueta.
+  function ganttFondoHtml_(minTime, maxTime, pxDia, totalDias) {
+    var base = PLAN_ETIQUETA_ANCHO_PX_;
+    var parts = '';
+    for (var i = 0; i <= totalDias; i++) {
+      var dia = new Date(minTime + i * 86400000);
+      var dow = dia.getDay();
+      if (dow === 0 || dow === 6) {
+        parts += '<div class="sigso-py-gantt-weekend" style="left:' + (base + Math.round(i * pxDia)) + 'px; width:' + Math.ceil(pxDia) + 'px"></div>';
+      }
+    }
+    var d = new Date(minTime);
+    d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    while (d.getTime() <= maxTime) {
+      var offsetPx = Math.round(((d.getTime() - minTime) / 86400000) * pxDia);
+      parts += '<div class="sigso-py-gantt-mesline" style="left:' + (base + offsetPx) + 'px"></div>';
+      d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    }
+    return '<div class="sigso-py-gantt-fondo">' + parts + '</div>';
   }
 
   // Regla de meses: una marca + etiqueta en el primer día de cada mes que
