@@ -215,9 +215,12 @@ test('descargarReporte config: el Gantt dibuja barras (fondo de color en el per�
   }, CTX_LEO);
   const html = htmlDe_(res);
   assert.match(html, /Carta Gantt/);
-  // Alguna celda del Gantt trae un background de barra (semáforo) -- señal de
-  // que se dibuja el período planificado, no solo las letras de cada día.
-  assert.match(html, /background:#(DCFCE7|FEF3C7|FEE2E2|DBEAFE|EEF2F7|EDE9FE)/);
+  // v12.1: alguna celda del Gantt trae un background SÓLIDO SATURADO de barra
+  // (semáforo) -- el motor HTML->PDF rinde los tintes pálidos casi blancos, así
+  // que las barras usan color saturado (verde/ámbar/rojo/azul/gris/violeta).
+  assert.match(html, /background-color:#(16A34A|D97706|DC2626|2563EB|64748B|94A3B8|7C3AED)/);
+  // Y una leyenda de colores para decodificar el semáforo.
+  assert.match(html, /Al día \/ entregado/);
 });
 
 test('descargarReporte config: la bitácora, con Gantt activo, se acota al mismo rango (no "últimas 30")', () => {

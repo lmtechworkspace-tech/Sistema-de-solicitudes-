@@ -1655,6 +1655,20 @@ var Proyectos = {
 // --- reporte PDF: construccion del HTML (Fase D, propuesta 11) -----------
 
 var PROYECTOS_SALUD_LABEL_PDF = { normal: 'Normal', riesgo: 'En riesgo', critico: 'Crítico' };
+// v12.1 ("color sobretodo"): color sólido por salud, para chips legibles en
+// el PDF (el motor rinde los tintes pálidos casi blancos -> se usa saturado).
+var PROYECTOS_SALUD_COLOR_PDF = { normal: '#16A34A', riesgo: '#D97706', critico: '#DC2626' };
+function saludChipPdf_(salud, texto) {
+  var color = PROYECTOS_SALUD_COLOR_PDF[salud] || DOC.MUTED;
+  return '<span style="display:inline-block;background-color:' + color + ';color:#ffffff;font-weight:bold;' +
+    'font-size:11px;padding:2px 9px;border-radius:3px;">' + escaparHtml_(texto) + '</span>';
+}
+// Color de una desviación en puntos porcentuales: rojo si va por debajo del
+// plan, verde si está a la par o por encima.
+function colorDesviacionPdf_(pp) {
+  if (pp === null || pp === undefined) return DOC.MUTED;
+  return pp < 0 ? '#DC2626' : '#16A34A';
+}
 var PROYECTOS_ESTADO_LABEL_PDF = {
   PLANIFICACION: 'Planificación', ACTIVO: 'Activo', EN_PAUSA: 'En pausa',
   EN_REVISION: 'En revisión', CERRADO: 'Cerrado', CANCELADO: 'Cancelado'
@@ -1890,8 +1904,8 @@ function seccionPortadaPdf_(detalle) {
   return '<div style="padding:60px 0 40px;text-align:center;page-break-after:always;">' +
     '<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:' + DOC.MUTED + ';margin-bottom:10px;">Reporte ejecutivo de proyecto</div>' +
     '<div style="font-size:26px;font-weight:bold;font-family:' + DOC.SERIF + ';color:' + DOC.INK + ';margin-bottom:14px;">' + escaparHtml_(p.nombre) + '</div>' +
-    '<div style="font-size:14px;color:' + DOC.NAVY + ';font-weight:bold;margin-bottom:24px;">' +
-      escaparHtml_(PROYECTOS_SALUD_LABEL_PDF[detalle.salud] || detalle.salud) + escaparHtml_(scoreTxt) + '</div>' +
+    '<div style="margin-bottom:24px;">' +
+      saludChipPdf_(detalle.salud, (PROYECTOS_SALUD_LABEL_PDF[detalle.salud] || detalle.salud) + scoreTxt) + '</div>' +
     '<table style="margin:0 auto;border-collapse:collapse;font-size:12px;">' +
       '<tr><td style="' + celdaLabelFicha_() + '">Código</td><td style="' + celdaValorFicha_() + '">' + escaparHtml_(p.codigo || '—') + '</td></tr>' +
       '<tr><td style="' + celdaLabelFicha_() + '">Líder</td><td style="' + celdaValorFicha_() + '">' + escaparHtml_(p.lider_email || '—') + '</td></tr>' +
@@ -1945,8 +1959,8 @@ var SALUD_FACTOR_LABEL_PDF_ = {
 };
 function seccionSaludPdf_(detalle) {
   var scoreTxt = (detalle.salud_score === null || detalle.salud_score === undefined) ? 'Fijado manualmente' : detalle.salud_score + '/100';
-  var cabecera = '<div style="margin:0 0 10px;font-size:13px;font-weight:bold;color:' + DOC.INK + ';">' +
-    escaparHtml_(PROYECTOS_SALUD_LABEL_PDF[detalle.salud] || detalle.salud) + ' · ' + escaparHtml_(scoreTxt) + '</div>';
+  var cabecera = '<div style="margin:0 0 10px;">' +
+    saludChipPdf_(detalle.salud, (PROYECTOS_SALUD_LABEL_PDF[detalle.salud] || detalle.salud) + ' · ' + scoreTxt) + '</div>';
   var filas = (detalle.salud_desglose || []).map(function (d) {
     return '<tr>' +
       '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(SALUD_FACTOR_LABEL_PDF_[d.factor] || d.factor) + '</td>' +
@@ -1969,14 +1983,15 @@ function seccionDesviacionesPdf_(rendimiento, tareas, tareasPorId) {
   if (!filasPlan.length) return '';
   var filas = filasPlan.map(function (t) {
     var tarea = tareasPorId[t.actividad_id];
-    var desv = (t.desviacion_pp === null || t.desviacion_pp === undefined)
-      ? '—' : (t.desviacion_pp >= 0 ? '+' : '') + t.desviacion_pp + 'pp';
+    var tieneDesv = !(t.desviacion_pp === null || t.desviacion_pp === undefined);
+    var desvTxt = tieneDesv ? (t.desviacion_pp >= 0 ? '+' : '') + t.desviacion_pp + 'pp' : '—';
+    var desvColor = tieneDesv ? colorDesviacionPdf_(t.desviacion_pp) : DOC.MUTED;
     return '<tr>' +
       '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(tarea ? tarea.titulo : '—') + '</td>' +
       '<td style="' + celdaValorFicha_() + '">' + fechaCortaPdfProyecto_(t.plan_fin) + '</td>' +
       '<td style="' + celdaValorFicha_() + '">' + (t.avance_esperado_pct === null || t.avance_esperado_pct === undefined ? '—' : t.avance_esperado_pct + '%') + '</td>' +
       '<td style="' + celdaValorFicha_() + '">' + (t.avance_real_pct === null || t.avance_real_pct === undefined ? '—' : t.avance_real_pct + '%') + '</td>' +
-      '<td style="' + celdaValorFicha_() + '">' + desv + '</td>' +
+      '<td style="' + celdaValorFicha_() + 'color:' + desvColor + ';font-weight:bold;">' + desvTxt + '</td>' +
     '</tr>';
   }).join('');
   return docSeccionOt_('Plan · Esperado · Real') +
@@ -2036,20 +2051,42 @@ function diasPorPaginaPdf_(totalDias) {
 }
 
 // v12 ("reporte PDF potenciado"): la Carta Gantt deja de ser una grilla de
-// letras sueltas (la mayoría de las celdas vacías) y pasa a dibujar una
-// BARRA real por tarea: el período planificado (de la creación a la fecha
-// comprometida) se pinta como una banda continua con el color del semáforo
-// de la tarea; los días con marca registrada mantienen su color propio (más
-// fuerte) y su letra encima; el atraso sin cerrar se trama en rojo más allá
-// de la fecha comprometida hasta hoy; y la columna de HOY lleva una línea
-// azul. Sigue siendo una tabla (100% robusta en el motor HTML->PDF de Apps
-// Script, sin posicionamiento absoluto), solo que ahora se LEE como un Gantt.
-var GANTT_SEMAFORO_BG_ = {
-  'al-dia': '#DCFCE7', 'terminada': '#DCFCE7', 'riesgo': '#FEF3C7',
-  'atrasada': '#FEE2E2', 'bloqueada': '#DBEAFE', 'pendiente': '#EEF2F7',
-  'cancelada': '#F1F5F9', 'revision': '#EDE9FE'
+// letras sueltas y pasa a dibujar una BARRA real por tarea. El período
+// planificado (de la creación a la fecha comprometida) se pinta como una
+// banda continua; los días CON actividad registrada llevan el color de SU
+// estado (más informativo que un color plano de barra); el atraso sin cerrar
+// va en rojo oscuro más allá del compromiso hasta hoy; la columna de HOY
+// lleva una línea azul. Sigue siendo una tabla (100% robusta en el motor
+// HTML->PDF de Apps Script, sin posicionamiento absoluto).
+//
+// v12.1 ("color sobretodo"): el motor HTML->PDF de Apps Script rinde los
+// fondos MUY pálidos casi como blanco -- en el PDF real la Carta Gantt salía
+// sin color. Se pasa a colores SÓLIDOS y SATURADOS (mismos que el semáforo en
+// pantalla) con la letra en BLANCO encima, para que se diferencie de un
+// vistazo. Nada de gradientes (el motor no los soporta).
+var GANTT_SEMAFORO_SOLIDO_ = {
+  'al-dia': '#16A34A', 'terminada': '#16A34A', 'riesgo': '#D97706',
+  'atrasada': '#DC2626', 'bloqueada': '#2563EB', 'pendiente': '#64748B',
+  'cancelada': '#94A3B8', 'revision': '#7C3AED'
 };
+var GANTT_ATRASO_SOLIDO_ = '#B91C1C';       // tramo vencido: rojo más oscuro que la barra
+// Color por LETRA de la marca del día (lo registrado ese día manda sobre el
+// color de barra) -- coherente con GANTT_SEMAFORO_SOLIDO_.
+function ganttColorMarcaPdf_(letra) {
+  if (letra === 'F' || letra === '✓') return '#16A34A';   // entregado / finalizado
+  if (letra === '!') return '#DC2626';                     // bloqueado
+  if (letra === 'R') return '#D97706';                     // en revisión
+  if (letra === 'A') return '#7C3AED';                     // asignado
+  if (letra === '‖' || letra === '…') return '#64748B';    // pausa / esperando
+  return '#2563EB';                                        // P / ● (en proceso / se trabajó)
+}
 function ganttDiaCortoPdf_(clave) { var p = String(clave).split('-'); return p[2] + '/' + p[1]; }
+
+// Chip de color para la leyenda del semáforo de la Carta Gantt.
+function ganttChipLeyendaPdf_(color, texto) {
+  return '<span style="display:inline-block;background-color:' + color + ';color:#ffffff;font-weight:bold;' +
+    'font-size:8px;padding:2px 7px;border-radius:3px;margin-right:5px;">' + escaparHtml_(texto) + '</span>';
+}
 
 function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia) {
   if (!tareas.length || !dias.length) return '';
@@ -2059,37 +2096,36 @@ function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia)
   for (var i = 0; i < dias.length; i += chunk) paginas.push(dias.slice(i, i + chunk));
 
   var html = paginas.map(function (diasPagina, idx) {
-    var encabezado = '<tr><td style="' + celdaLabelFicha_() + 'width:22%;">Tarea</td>' +
+    var encabezado = '<tr><td style="padding:5px 8px;width:22%;background-color:' + DOC.NAVY + ';color:#ffffff;' +
+        'font-size:9px;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;border:1px solid ' + DOC.NAVY + ';">Tarea</td>' +
       diasPagina.map(function (d) {
-        var dd = fechaDeClavePdf_(d);
         var esHoy = d === hoyClave;
-        var esLunes = dd.getUTCDay() === 1;
-        return '<td style="padding:4px 1px;text-align:center;font-size:8px;line-height:1.15;' +
-          'border:1px solid ' + DOC.HAIRLINE + ';color:' + (esHoy ? DOC.NAVY : DOC.MUTED) + ';' +
-          (esHoy ? 'background:#E8EDF6;font-weight:bold;' : (esLunes ? 'border-left:2px solid ' + DOC.HAIRLINE + ';' : '')) +
-          '">' + ganttDiaCortoPdf_(d) + '</td>';
+        return '<td style="padding:4px 1px;text-align:center;font-size:8px;line-height:1.15;font-weight:bold;' +
+          'border:1px solid ' + DOC.NAVY + ';background-color:' + (esHoy ? '#2563EB' : DOC.NAVY) + ';color:#ffffff;">' +
+          ganttDiaCortoPdf_(d) + '</td>';
       }).join('') + '</tr>';
     var filas = tareas.map(function (a) {
       var claveCreacion = a.fecha_creacion ? clavePdf_(new Date(a.fecha_creacion)) : '';
       var claveCommit = a.fecha_compromiso ? clavePdf_(new Date(a.fecha_compromiso)) : '';
       var claveInicioPlan = claveCreacion || claveCommit;
       var sem = a.semaforo || 'al-dia';
-      var bgBarra = GANTT_SEMAFORO_BG_[sem] || '#EEF2F7';
+      var bgBarra = GANTT_SEMAFORO_SOLIDO_[sem] || '#64748B';
       var terminal = (a.estado === 'TERMINADA' || a.estado === 'CANCELADA');
       var celdas = diasPagina.map(function (d) {
         var c = celdaGanttPdf_(a.actividad_id, d, claveCreacion, registroPorTareaDia, eventosPorTareaDia);
         var enPlan = claveInicioPlan && claveCommit && d >= claveInicioPlan && d <= claveCommit;
         var enAtraso = !terminal && claveCommit && d > claveCommit && d <= hoyClave;
         var esHoy = d === hoyClave;
+        // Prioridad de color (sólido, saturado): lo registrado ese día > barra
+        // planificada > tramo de atraso. La letra va en BLANCO sobre color.
         var bg = '';
-        // Atraso: color sólido de respaldo (#FECACA) + trama diagonal encima
-        // -- si el motor HTML->PDF no soporta gradientes, igual queda el rojo.
-        if (enAtraso) bg = 'background-color:#FECACA;background-image:repeating-linear-gradient(45deg,transparent,transparent 3px,#F87171 3px,#F87171 6px);';
-        else if (c.bg) bg = 'background:' + c.bg + ';';       // día con marca real -> su color propio, más fuerte
-        else if (enPlan) bg = 'background:' + bgBarra + ';';  // parte de la barra planificada
-        var borde = esHoy ? 'border-left:2px solid ' + DOC.NAVY + ';' : '';
-        return '<td style="padding:5px 1px;text-align:center;font-size:9px;font-weight:bold;color:' + DOC.INK_SOFT + ';' +
-          'border:1px solid ' + DOC.HAIRLINE + ';' + bg + borde + '">' + (c.letra || '') + '</td>';
+        if (c.letra) bg = ganttColorMarcaPdf_(c.letra);
+        else if (enPlan) bg = bgBarra;
+        else if (enAtraso) bg = GANTT_ATRASO_SOLIDO_;
+        var colorLetra = bg ? '#ffffff' : DOC.INK_SOFT;
+        var borde = esHoy ? 'border-left:2px solid #2563EB;' : '';
+        return '<td style="padding:6px 1px;text-align:center;font-size:9px;font-weight:bold;color:' + colorLetra + ';' +
+          'border:1px solid ' + DOC.HAIRLINE + ';' + (bg ? 'background-color:' + bg + ';' : '') + borde + '">' + (c.letra || '') + '</td>';
       }).join('');
       var meta = escaparHtml_(a.responsable_nombre || a.responsable_email || '—') +
         (claveCommit ? ' · compromiso ' + fechaCortaPdfProyecto_(a.fecha_compromiso) : '');
@@ -2100,10 +2136,17 @@ function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia)
     return '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 14px;table-layout:fixed;' +
       (idx > 0 ? 'page-break-before:always;' : '') + '"><thead>' + encabezado + '</thead><tbody>' + filas + '</tbody></table>';
   }).join('');
+  var leyendaColores =
+    ganttChipLeyendaPdf_('#16A34A', 'Al día / entregado') +
+    ganttChipLeyendaPdf_('#D97706', 'En riesgo / revisión') +
+    ganttChipLeyendaPdf_('#DC2626', 'Atrasada / bloqueada') +
+    ganttChipLeyendaPdf_('#2563EB', 'En proceso / hoy') +
+    ganttChipLeyendaPdf_('#64748B', 'Pendiente / pausa');
   return docSeccionOt_('Carta Gantt') +
+    '<div style="margin:0 0 8px;">' + leyendaColores + '</div>' +
     '<div style="font-size:9px;color:' + DOC.MUTED + ';margin:0 0 8px;line-height:1.5;">' +
-      'Cada barra es el período planificado de la tarea (de su creación a la fecha comprometida), coloreada según su semáforo. ' +
-      'La trama roja marca el atraso sin cerrar; la línea azul, el día de hoy; las letras, lo registrado cada día (ver Leyenda).' +
+      'Cada barra es el período planificado de la tarea (de su creación a la fecha comprometida), coloreada según su estado. ' +
+      'Cada celda con letra es lo registrado ese día (ver Leyenda de letras abajo); el tramo rojo oscuro marca el atraso sin cerrar.' +
     '</div>' + html;
 }
 
@@ -2165,7 +2208,7 @@ function fichaProyectoPdf_(detalle) {
   var p = detalle.proyecto;
   var filas = [
     ['Líder', escaparHtml_(p.lider_email || '—'), 'Estado', escaparHtml_(PROYECTOS_ESTADO_LABEL_PDF[p.estado] || p.estado)],
-    ['Salud', escaparHtml_(PROYECTOS_SALUD_LABEL_PDF[detalle.salud] || detalle.salud), 'Avance', (detalle.avance_pct === null ? '—' : detalle.avance_pct + '%')],
+    ['Salud', saludChipPdf_(detalle.salud, PROYECTOS_SALUD_LABEL_PDF[detalle.salud] || detalle.salud), 'Avance', (detalle.avance_pct === null ? '—' : detalle.avance_pct + '%')],
     ['Inicio', fechaCortaPdfProyecto_(p.fecha_inicio), 'Fecha objetivo', fechaCortaPdfProyecto_(p.fecha_objetivo)]
   ];
   var cuerpoFilas = filas.map(function (f) {
