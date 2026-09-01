@@ -167,3 +167,34 @@ test('guardarRegistroDia: listarMiBitacora incluye mis registros con estado_dia'
   assert.equal(reg.estado_dia, 'entregado');
   assert.equal(reg.horas, 3);
 });
+
+test('eliminarRegistroDia: borra el REGISTRO_DIA de (tarea, día) sin tocar otros eventos', () => {
+  const ctx = loadConSchema();
+  const { proyecto, tarea } = armarProyectoConTarea(ctx);
+  // dos registros en días distintos: borrar uno no debe tocar el otro
+  ctx.Proyectos.guardarRegistroDia({ proyecto_id: proyecto.proyecto_id, actividad_id: tarea.actividad_id, dia: AYER, estado_dia: 'en_proceso', horas: 4 }, CTX_MARCELO);
+  ctx.Proyectos.guardarRegistroDia({ proyecto_id: proyecto.proyecto_id, actividad_id: tarea.actividad_id, dia: HOY, estado_dia: 'entregado', horas: 2 }, CTX_MARCELO);
+
+  const r = ctx.Proyectos.eliminarRegistroDia({ proyecto_id: proyecto.proyecto_id, actividad_id: tarea.actividad_id, dia: AYER }, CTX_MARCELO);
+  assert.equal(r.ok, true);
+  assert.equal(r.eliminado, true);
+
+  const registros = ctx.leerFilas_('ACTIVIDADES_BITACORA').filter((b) => b.tipo === 'REGISTRO_DIA');
+  assert.equal(registros.length, 1, 'queda solo el registro de HOY');
+  const bitacora = ctx.Proyectos.listarBitacora({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  assert.equal(bitacora.filter((b) => b.tipo === 'REGISTRO_DIA' && b.dia === AYER).length, 0, 'el de AYER ya no está');
+  assert.equal(bitacora.filter((b) => b.tipo === 'REGISTRO_DIA' && b.dia === HOY).length, 1, 'el de HOY sigue');
+});
+
+test('eliminarRegistroDia: valida existencia y permisos', () => {
+  const ctx = loadConSchema();
+  const { proyecto, tarea } = armarProyectoConTarea(ctx);
+  ctx.Proyectos.guardarRegistroDia({ proyecto_id: proyecto.proyecto_id, actividad_id: tarea.actividad_id, dia: AYER, estado_dia: 'en_proceso', horas: 4 }, CTX_MARCELO);
+
+  // día sin registro -> error de validación
+  assert.equal(ctx.Proyectos.eliminarRegistroDia({ proyecto_id: proyecto.proyecto_id, actividad_id: tarea.actividad_id, dia: HOY }, CTX_MARCELO)._validationError, true);
+  // un ajeno no puede
+  assert.equal(ctx.Proyectos.eliminarRegistroDia({ proyecto_id: proyecto.proyecto_id, actividad_id: tarea.actividad_id, dia: AYER }, CTX_OTRO)._forbidden, true);
+  // el líder sí puede
+  assert.equal(ctx.Proyectos.eliminarRegistroDia({ proyecto_id: proyecto.proyecto_id, actividad_id: tarea.actividad_id, dia: AYER }, CTX_LEO).ok, true);
+});

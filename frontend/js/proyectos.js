@@ -838,6 +838,17 @@
     return true;
   }
 
+  // v12.5: quita de la bitácora en caché el REGISTRO_DIA de (tarea, día) --
+  // para el repintado optimista al eliminar un registro.
+  function eliminarRegistroDiaEnCache_(actId, dia) {
+    if (!datosDetalleActual_ || datosDetalleActual_.bitacora === undefined || !actId || !dia) return false;
+    var b = datosDetalleActual_.bitacora, quitados = 0;
+    for (var i = b.length - 1; i >= 0; i--) {
+      if (b[i].tipo === 'REGISTRO_DIA' && b[i].actividad_id === actId && b[i].dia === dia) { b.splice(i, 1); quitados++; }
+    }
+    return quitados > 0;
+  }
+
   // Repinta el detalle DESDE CACHÉ (sin red) preservando el scroll de la carta.
   function repintarCronogramaDesdeCache_(cont) {
     var previo = cont.querySelector('.sigso-py-ded-scroll');
@@ -3569,10 +3580,16 @@
       // refresca en segundo plano. Fallback al refetch completo si por lo que
       // sea no hay caché o no llegó el registro (p. ej. "Mi dedicación").
       function (registroGuardado) {
-        if (datosDetalleActual_ && mergeRegistroDiaEnCache_(registroGuardado)) {
+        if (!datosDetalleActual_) return;
+        // v12.5: el mismo callback sirve para guardar y para ELIMINAR (marca
+        // __eliminado) -- ambos actualizan la carta en el acto, sin recarga.
+        var ok = (registroGuardado && registroGuardado.__eliminado)
+          ? eliminarRegistroDiaEnCache_(registroGuardado.actividad_id, registroGuardado.dia)
+          : mergeRegistroDiaEnCache_(registroGuardado);
+        if (ok) {
           repintarCronogramaDesdeCache_(cont);
           refrescarRendimientoEnSegundoPlano_(cont);
-        } else if (datosDetalleActual_) {
+        } else {
           datosDetalleActual_.bitacora = undefined; cargarDatosCronograma_(cont);
         }
       });
@@ -4220,16 +4237,33 @@
         (registro.ediciones ? ' · ' + registro.ediciones + ' edición(es)' : '') + '</p>';
     }
 
+    // v12.5 ("rediseño del registro del día"): el estado deja de ser un
+    // dropdown y pasa a PILLS de color (una por estado, con el color de su
+    // semáforo) -- más moderno y de un solo toque. El valor viaja en un input
+    // oculto (#py-reg-estado) para no tocar el resto de la lógica del submit.
+    var esEdicion = !!registro.editado_por;
+    var pillsEstado = REGISTRO_DIA_ESTADO_ORDEN_.map(function (e) {
+      var meta = DEDICACION_TIPO_ESTADO_[e] || { cls: 'proc' };
+      var sel = e === estadoActual;
+      return '<button type="button" class="sigso-py-reg-pill sigso-py-reg-pill--' + meta.cls + (sel ? ' is-sel' : '') +
+        '" data-estado="' + e + '" aria-pressed="' + (sel ? 'true' : 'false') + '">' +
+        Componentes.escaparHtml(REGISTRO_DIA_ESTADO_LABEL_[e]) + '</button>';
+    }).join('');
+
     var fondo = document.createElement('div');
     fondo.className = 'sigso-modal-fondo';
     fondo.innerHTML =
-      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+      '<div class="sigso-modal sigso-py-reg-modal" role="dialog" aria-modal="true">' +
         '<h3 class="sigso-modal__titulo">Registro del día</h3>' +
-        '<p class="sigso-py-reg-cab"><strong>' + Componentes.escaparHtml(titulo) + '</strong><br>' +
-          '<span class="sigso-ayuda">' + Componentes.escaparHtml(fechaTxt) + '</span></p>' +
+        '<div class="sigso-py-reg-cab">' +
+          '<strong>' + Componentes.escaparHtml(titulo) + '</strong>' +
+          '<span class="sigso-py-reg-cab__fecha">' + Componentes.escaparHtml(fechaTxt) + '</span>' +
+        '</div>' +
         trazaHtml +
         '<form id="form-py-registro-dia">' +
-          Componentes.campoSelect({ id: 'py-reg-estado', label: 'Estado del día', valor: estadoActual, placeholder: false, opciones: opcionesEstado }) +
+          '<span class="sigso-py-reg-campo-label">Estado del día</span>' +
+          '<div class="sigso-py-reg-estados" role="group" aria-label="Estado del día">' + pillsEstado + '</div>' +
+          '<input type="hidden" id="py-reg-estado" value="' + Componentes.escaparHtml(estadoActual) + '">' +
           Componentes.campoTexto({ id: 'py-reg-horas', label: 'Horas dedicadas (opcional)', tipo: 'number', valor: horasActual }) +
           Componentes.campoTextarea({ id: 'py-reg-nota', label: 'Comentario del día (opcional)', valor: registro.nota || '' }) +
           '<div class="sigso-campo js-py-reg-bloqueo-cont"' + (estadoActual === 'bloqueado' ? '' : ' style="display:none;"') + '>' +
@@ -4242,20 +4276,57 @@
               (tramos.length ? tramos.map(tramoFilaHtml_).join('') : '') +
             '</div>' +
           '</div>' +
-          '<div class="sigso-modal__acciones">' +
-            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
-            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '<div class="sigso-py-reg-acciones">' +
+            (esEdicion ? '<button type="button" class="sigso-py-reg-eliminar js-py-reg-eliminar">Eliminar registro</button>' : '') +
+            '<div class="sigso-py-reg-acciones__der">' +
+              Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+              Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+            '</div>' +
           '</div>' +
         '</form>' +
       '</div>';
     var cerrar = montarModal_(fondo);
 
-    // El campo de motivo aparece solo cuando el estado es "bloqueado".
-    var selEstado = fondo.querySelector('#py-reg-estado');
+    // Estado como pills: sincroniza el input oculto y muestra el motivo de
+    // bloqueo solo cuando el estado elegido es "bloqueado".
+    var hiddenEstado = fondo.querySelector('#py-reg-estado');
     var bloqueoCont = fondo.querySelector('.js-py-reg-bloqueo-cont');
-    selEstado.addEventListener('change', function () {
-      bloqueoCont.style.display = selEstado.value === 'bloqueado' ? '' : 'none';
+    function syncBloqueo_() { bloqueoCont.style.display = hiddenEstado.value === 'bloqueado' ? '' : 'none'; }
+    fondo.querySelectorAll('.sigso-py-reg-pill').forEach(function (pill) {
+      pill.addEventListener('click', function () {
+        fondo.querySelectorAll('.sigso-py-reg-pill').forEach(function (o) { o.classList.remove('is-sel'); o.setAttribute('aria-pressed', 'false'); });
+        pill.classList.add('is-sel'); pill.setAttribute('aria-pressed', 'true');
+        hiddenEstado.value = pill.getAttribute('data-estado');
+        syncBloqueo_();
+      });
     });
+
+    // Eliminar registro (solo si ya existe): confirmación en DOS toques, sin
+    // diálogo nativo. Persiste vía eliminarRegistroDiaProyecto y actualiza la
+    // carta al instante (optimista, __eliminado) igual que el guardado.
+    var btnEliminar = fondo.querySelector('.js-py-reg-eliminar');
+    if (btnEliminar) {
+      btnEliminar.addEventListener('click', function () {
+        if (btnEliminar.dataset.armado !== '1') {
+          btnEliminar.dataset.armado = '1';
+          btnEliminar.textContent = 'Confirmar eliminación';
+          btnEliminar.classList.add('is-armado');
+          return;
+        }
+        btnEliminar.disabled = true;
+        api_('eliminarRegistroDiaProyecto', { proyecto_id: proyectoId, actividad_id: tarea && tarea.actividad_id, dia: dia }).then(function (r) {
+          if (!r || !r.ok) {
+            btnEliminar.disabled = false; btnEliminar.dataset.armado = '';
+            btnEliminar.textContent = 'Eliminar registro'; btnEliminar.classList.remove('is-armado');
+            Componentes.aviso({ texto: (r && r.message) || 'No se pudo eliminar el registro.', tipo: 'error' });
+            return;
+          }
+          cerrar();
+          Componentes.aviso({ texto: 'Registro eliminado.', tipo: 'exito' });
+          if (typeof alGuardar === 'function') alGuardar({ __eliminado: true, actividad_id: tarea && tarea.actividad_id, dia: dia });
+        });
+      });
+    }
 
     var listaTramos = fondo.querySelector('.js-py-reg-tramos-lista');
     fondo.querySelector('.js-py-reg-tramo-add').addEventListener('click', function () {
@@ -4267,7 +4338,7 @@
     });
 
     fondo.querySelector('#form-py-registro-dia').addEventListener('submit', function (evento) {
-      var estado = selEstado.value;
+      var estado = hiddenEstado.value;
       var motivo = fondo.querySelector('#py-reg-bloqueo').value.trim();
       if (estado === 'bloqueado' && !motivo) {
         evento.preventDefault();

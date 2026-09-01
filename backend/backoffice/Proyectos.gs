@@ -1004,6 +1004,47 @@ var Proyectos = {
     return { ok: true, dia: dia, estado_dia: estadoDia, editado: !!existente };
   },
 
+  // v12.5 ("eliminar un registro del día"): borra el REGISTRO_DIA de una
+  // (tarea, día) -- p. ej. si se registró un fin de semana por error. Mismo
+  // permiso que guardar (trabaja la tarea O gestiona el proyecto). A
+  // diferencia del UPSERT versionado de guardarRegistroDia, aquí SÍ se quita
+  // la fila: un registro equivocado no debe quedar en la Carta ni contar horas
+  // -- es una corrección, no un evento de auditoría. Los demás eventos de la
+  // bitácora (check-ins, entregas) NO se tocan.
+  eliminarRegistroDia: function (data, contexto) {
+    data = data || {};
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeVerProyecto_(proyecto, contexto)) {
+      return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+    }
+    var actividad = leerFilasSeguro_(SHEETS.ACTIVIDADES).filter(function (a) {
+      return a.actividad_id === data.actividad_id && a.proyecto_id === proyecto.proyecto_id;
+    })[0];
+    if (!actividad) return errorValidacion_('actividad_id', 'Tarea no encontrada en este proyecto.');
+
+    var email = normalizarEmailProyecto_(contexto && contexto.email);
+    if (!trabajaLaActividad_(actividad, email) && !puedeGestionarProyecto_(proyecto, contexto)) {
+      return { _forbidden: true, message: 'Solo quien trabaja la tarea o el líder del proyecto puede eliminar el registro.' };
+    }
+
+    var dia = String(data.dia || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) {
+      return errorValidacion_('dia', 'El día debe tener formato AAAA-MM-DD.');
+    }
+
+    var existente = leerFilasSeguro_(SHEETS.ACTIVIDADES_BITACORA).filter(function (b) {
+      if (b.tipo !== 'REGISTRO_DIA' || b.actividad_id !== actividad.actividad_id) return false;
+      return datosDeBitacora_(b).dia === dia;
+    })[0];
+    if (!existente) return errorValidacion_('dia', 'No hay un registro para ese día.');
+
+    eliminarFilasPorId_(SHEETS.ACTIVIDADES_BITACORA, 'bitacora_id', existente.bitacora_id);
+    actualizarFilaPorId_(SHEETS.ACTIVIDADES, 'actividad_id', actividad.actividad_id,
+      { ultima_actualizacion: new Date().toISOString() });
+    return { ok: true, dia: dia, eliminado: true };
+  },
+
   // v10 (Fase G3, "los números de rendimiento"): unidades/día y horas/
   // unidad, derivados de la MISMA bitácora y las MISMAS tareas con meta
   // cuantificable que ya alimentan la Carta de Dedicación -- nada se mide

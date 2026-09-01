@@ -211,6 +211,7 @@ var BACKOFFICE_ACTIONS = {
   // v11 (Reingeniería Cronograma, P0): guarda/edita el registro del día de
   // una tarea (la celda diaria de la Carta Gantt como unidad editable).
   guardarRegistroDiaProyecto: handleGuardarRegistroDiaProyecto_,
+  eliminarRegistroDiaProyecto: handleEliminarRegistroDiaProyecto_,
   // v10 (Fase G3, "los números de rendimiento"): unidades/día, horas/
   // unidad y cumplimiento de entregas, derivados de la misma bitácora.
   // v11 (P1): ahora también trae Plan/Esperado/Real por tarea y la baseline
@@ -533,6 +534,7 @@ var MODULO_POR_ACCION = {
   listarTareasProyecto: ['proyectos', 'gerencia'],
   listarBitacoraProyecto: ['proyectos', 'gerencia'],
   guardarRegistroDiaProyecto: 'proyectos',
+  eliminarRegistroDiaProyecto: 'proyectos',
   obtenerRendimientoProyecto: ['proyectos', 'gerencia'],
   congelarBaselineProyecto: 'proyectos',
   reprogramarTareaProyecto: 'proyectos',
@@ -1284,6 +1286,10 @@ function handleObtenerRendimientoProyecto_(data, contexto) {
 
 function handleGuardarRegistroDiaProyecto_(data, contexto) {
   return responderResultado_(Proyectos.guardarRegistroDia(data, contexto));
+}
+
+function handleEliminarRegistroDiaProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.eliminarRegistroDia(data, contexto));
 }
 
 function handleCongelarBaselineProyecto_(data, contexto) {

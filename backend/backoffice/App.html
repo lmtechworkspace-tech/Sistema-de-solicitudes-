@@ -4035,8 +4035,49 @@ button {
 }
 
 /* v11 (P0): modal del registro del día. */
-.sigso-py-reg-cab { margin: 0 0 var(--esp-2); }
+/* v12.5 ("rediseño del registro del día"): cabecera con la tarea + la fecha
+   en bloque claro, estado como pills de color, y una barra de acciones
+   moderna (Eliminar a la izquierda, Cancelar/Guardar a la derecha). */
+.sigso-py-reg-modal { max-width: min(30rem, calc(100vw - 2rem)); }
+.sigso-py-reg-cab { margin: 0 0 var(--esp-3); display: flex; flex-direction: column; gap: 2px; }
+.sigso-py-reg-cab strong { font-size: 1rem; color: var(--texto); }
+.sigso-py-reg-cab__fecha { font-size: var(--texto-sm); color: var(--texto-3); text-transform: capitalize; }
 .sigso-py-reg-traza { margin: 0 0 var(--esp-3); padding: var(--esp-1) var(--esp-2); background: var(--superficie-2); border-radius: var(--radio-sm); }
+
+/* Etiqueta de campo consistente con los <label> de los campos de siempre. */
+.sigso-py-reg-campo-label { display: block; font-size: var(--texto-sm); color: var(--texto-2); font-weight: 600; margin-bottom: var(--esp-1); }
+/* Pills de estado: una por estado, con el color de su semáforo como acento.
+   Al seleccionar, la pill se rellena con su color. Un solo toque, sin abrir
+   un dropdown -- más rápido para el uso diario. */
+.sigso-py-reg-estados { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--esp-3); }
+.sigso-py-reg-pill {
+  --acc: var(--info); font: inherit; font-size: 0.8rem; line-height: 1.2; padding: 5px 12px;
+  border-radius: 999px; cursor: pointer; border: 1.5px solid var(--borde);
+  background: var(--superficie); color: var(--texto-2); transition: border-color .12s, background .12s, color .12s;
+}
+.sigso-py-reg-pill:hover { border-color: var(--acc); color: var(--texto); }
+.sigso-py-reg-pill:focus-visible { outline: none; box-shadow: var(--foco-anillo); }
+.sigso-py-reg-pill.is-sel { background: var(--acc); border-color: var(--acc); color: #fff; font-weight: 600; }
+.sigso-py-reg-pill--asig { --acc: var(--primario); }
+.sigso-py-reg-pill--plan { --acc: var(--info); }
+.sigso-py-reg-pill--proc { --acc: var(--info); }
+.sigso-py-reg-pill--bloq { --acc: var(--critico); }
+.sigso-py-reg-pill--pausa { --acc: var(--texto-3); }
+.sigso-py-reg-pill--done { --acc: var(--ok); }
+.sigso-py-reg-pill--rev { --acc: var(--alerta); }
+.sigso-py-reg-pill--esp { --acc: var(--info); }
+
+/* Barra de acciones del modal: Eliminar (peligro, sutil) a la izquierda;
+   Cancelar + Guardar a la derecha. */
+.sigso-py-reg-acciones { display: flex; align-items: center; gap: var(--esp-2); margin-top: var(--esp-4); }
+.sigso-py-reg-acciones__der { display: flex; gap: var(--esp-2); margin-left: auto; }
+.sigso-py-reg-eliminar {
+  border: 1.5px solid transparent; background: none; cursor: pointer; font: inherit; font-size: 0.85rem;
+  color: var(--critico); padding: 7px 12px; border-radius: var(--radio-sm); transition: background .12s, border-color .12s, color .12s;
+}
+.sigso-py-reg-eliminar:hover { background: var(--critico-suave); border-color: color-mix(in srgb, var(--critico) 30%, transparent); }
+.sigso-py-reg-eliminar.is-armado { background: var(--critico); color: #fff; font-weight: 600; border-color: var(--critico); }
+.sigso-py-reg-eliminar:disabled { opacity: .6; cursor: default; }
 .sigso-py-reg-tramos { margin: var(--esp-2) 0; }
 .sigso-py-reg-tramos__cab { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--esp-1); font-size: var(--texto-xs); color: var(--texto-2); text-transform: uppercase; letter-spacing: 0.03em; }
 .sigso-py-reg-tramo { display: flex; gap: var(--esp-1); align-items: center; margin-bottom: var(--esp-1); }
@@ -16739,6 +16780,17 @@ var Iconos = (function () {
     return true;
   }
 
+  // v12.5: quita de la bitácora en caché el REGISTRO_DIA de (tarea, día) --
+  // para el repintado optimista al eliminar un registro.
+  function eliminarRegistroDiaEnCache_(actId, dia) {
+    if (!datosDetalleActual_ || datosDetalleActual_.bitacora === undefined || !actId || !dia) return false;
+    var b = datosDetalleActual_.bitacora, quitados = 0;
+    for (var i = b.length - 1; i >= 0; i--) {
+      if (b[i].tipo === 'REGISTRO_DIA' && b[i].actividad_id === actId && b[i].dia === dia) { b.splice(i, 1); quitados++; }
+    }
+    return quitados > 0;
+  }
+
   // Repinta el detalle DESDE CACHÉ (sin red) preservando el scroll de la carta.
   function repintarCronogramaDesdeCache_(cont) {
     var previo = cont.querySelector('.sigso-py-ded-scroll');
@@ -19470,10 +19522,16 @@ var Iconos = (function () {
       // refresca en segundo plano. Fallback al refetch completo si por lo que
       // sea no hay caché o no llegó el registro (p. ej. "Mi dedicación").
       function (registroGuardado) {
-        if (datosDetalleActual_ && mergeRegistroDiaEnCache_(registroGuardado)) {
+        if (!datosDetalleActual_) return;
+        // v12.5: el mismo callback sirve para guardar y para ELIMINAR (marca
+        // __eliminado) -- ambos actualizan la carta en el acto, sin recarga.
+        var ok = (registroGuardado && registroGuardado.__eliminado)
+          ? eliminarRegistroDiaEnCache_(registroGuardado.actividad_id, registroGuardado.dia)
+          : mergeRegistroDiaEnCache_(registroGuardado);
+        if (ok) {
           repintarCronogramaDesdeCache_(cont);
           refrescarRendimientoEnSegundoPlano_(cont);
-        } else if (datosDetalleActual_) {
+        } else {
           datosDetalleActual_.bitacora = undefined; cargarDatosCronograma_(cont);
         }
       });
@@ -20121,16 +20179,33 @@ var Iconos = (function () {
         (registro.ediciones ? ' · ' + registro.ediciones + ' edición(es)' : '') + '</p>';
     }
 
+    // v12.5 ("rediseño del registro del día"): el estado deja de ser un
+    // dropdown y pasa a PILLS de color (una por estado, con el color de su
+    // semáforo) -- más moderno y de un solo toque. El valor viaja en un input
+    // oculto (#py-reg-estado) para no tocar el resto de la lógica del submit.
+    var esEdicion = !!registro.editado_por;
+    var pillsEstado = REGISTRO_DIA_ESTADO_ORDEN_.map(function (e) {
+      var meta = DEDICACION_TIPO_ESTADO_[e] || { cls: 'proc' };
+      var sel = e === estadoActual;
+      return '<button type="button" class="sigso-py-reg-pill sigso-py-reg-pill--' + meta.cls + (sel ? ' is-sel' : '') +
+        '" data-estado="' + e + '" aria-pressed="' + (sel ? 'true' : 'false') + '">' +
+        Componentes.escaparHtml(REGISTRO_DIA_ESTADO_LABEL_[e]) + '</button>';
+    }).join('');
+
     var fondo = document.createElement('div');
     fondo.className = 'sigso-modal-fondo';
     fondo.innerHTML =
-      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+      '<div class="sigso-modal sigso-py-reg-modal" role="dialog" aria-modal="true">' +
         '<h3 class="sigso-modal__titulo">Registro del día</h3>' +
-        '<p class="sigso-py-reg-cab"><strong>' + Componentes.escaparHtml(titulo) + '</strong><br>' +
-          '<span class="sigso-ayuda">' + Componentes.escaparHtml(fechaTxt) + '</span></p>' +
+        '<div class="sigso-py-reg-cab">' +
+          '<strong>' + Componentes.escaparHtml(titulo) + '</strong>' +
+          '<span class="sigso-py-reg-cab__fecha">' + Componentes.escaparHtml(fechaTxt) + '</span>' +
+        '</div>' +
         trazaHtml +
         '<form id="form-py-registro-dia">' +
-          Componentes.campoSelect({ id: 'py-reg-estado', label: 'Estado del día', valor: estadoActual, placeholder: false, opciones: opcionesEstado }) +
+          '<span class="sigso-py-reg-campo-label">Estado del día</span>' +
+          '<div class="sigso-py-reg-estados" role="group" aria-label="Estado del día">' + pillsEstado + '</div>' +
+          '<input type="hidden" id="py-reg-estado" value="' + Componentes.escaparHtml(estadoActual) + '">' +
           Componentes.campoTexto({ id: 'py-reg-horas', label: 'Horas dedicadas (opcional)', tipo: 'number', valor: horasActual }) +
           Componentes.campoTextarea({ id: 'py-reg-nota', label: 'Comentario del día (opcional)', valor: registro.nota || '' }) +
           '<div class="sigso-campo js-py-reg-bloqueo-cont"' + (estadoActual === 'bloqueado' ? '' : ' style="display:none;"') + '>' +
@@ -20143,20 +20218,57 @@ var Iconos = (function () {
               (tramos.length ? tramos.map(tramoFilaHtml_).join('') : '') +
             '</div>' +
           '</div>' +
-          '<div class="sigso-modal__acciones">' +
-            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
-            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '<div class="sigso-py-reg-acciones">' +
+            (esEdicion ? '<button type="button" class="sigso-py-reg-eliminar js-py-reg-eliminar">Eliminar registro</button>' : '') +
+            '<div class="sigso-py-reg-acciones__der">' +
+              Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+              Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+            '</div>' +
           '</div>' +
         '</form>' +
       '</div>';
     var cerrar = montarModal_(fondo);
 
-    // El campo de motivo aparece solo cuando el estado es "bloqueado".
-    var selEstado = fondo.querySelector('#py-reg-estado');
+    // Estado como pills: sincroniza el input oculto y muestra el motivo de
+    // bloqueo solo cuando el estado elegido es "bloqueado".
+    var hiddenEstado = fondo.querySelector('#py-reg-estado');
     var bloqueoCont = fondo.querySelector('.js-py-reg-bloqueo-cont');
-    selEstado.addEventListener('change', function () {
-      bloqueoCont.style.display = selEstado.value === 'bloqueado' ? '' : 'none';
+    function syncBloqueo_() { bloqueoCont.style.display = hiddenEstado.value === 'bloqueado' ? '' : 'none'; }
+    fondo.querySelectorAll('.sigso-py-reg-pill').forEach(function (pill) {
+      pill.addEventListener('click', function () {
+        fondo.querySelectorAll('.sigso-py-reg-pill').forEach(function (o) { o.classList.remove('is-sel'); o.setAttribute('aria-pressed', 'false'); });
+        pill.classList.add('is-sel'); pill.setAttribute('aria-pressed', 'true');
+        hiddenEstado.value = pill.getAttribute('data-estado');
+        syncBloqueo_();
+      });
     });
+
+    // Eliminar registro (solo si ya existe): confirmación en DOS toques, sin
+    // diálogo nativo. Persiste vía eliminarRegistroDiaProyecto y actualiza la
+    // carta al instante (optimista, __eliminado) igual que el guardado.
+    var btnEliminar = fondo.querySelector('.js-py-reg-eliminar');
+    if (btnEliminar) {
+      btnEliminar.addEventListener('click', function () {
+        if (btnEliminar.dataset.armado !== '1') {
+          btnEliminar.dataset.armado = '1';
+          btnEliminar.textContent = 'Confirmar eliminación';
+          btnEliminar.classList.add('is-armado');
+          return;
+        }
+        btnEliminar.disabled = true;
+        api_('eliminarRegistroDiaProyecto', { proyecto_id: proyectoId, actividad_id: tarea && tarea.actividad_id, dia: dia }).then(function (r) {
+          if (!r || !r.ok) {
+            btnEliminar.disabled = false; btnEliminar.dataset.armado = '';
+            btnEliminar.textContent = 'Eliminar registro'; btnEliminar.classList.remove('is-armado');
+            Componentes.aviso({ texto: (r && r.message) || 'No se pudo eliminar el registro.', tipo: 'error' });
+            return;
+          }
+          cerrar();
+          Componentes.aviso({ texto: 'Registro eliminado.', tipo: 'exito' });
+          if (typeof alGuardar === 'function') alGuardar({ __eliminado: true, actividad_id: tarea && tarea.actividad_id, dia: dia });
+        });
+      });
+    }
 
     var listaTramos = fondo.querySelector('.js-py-reg-tramos-lista');
     fondo.querySelector('.js-py-reg-tramo-add').addEventListener('click', function () {
@@ -20168,7 +20280,7 @@ var Iconos = (function () {
     });
 
     fondo.querySelector('#form-py-registro-dia').addEventListener('submit', function (evento) {
-      var estado = selEstado.value;
+      var estado = hiddenEstado.value;
       var motivo = fondo.querySelector('#py-reg-bloqueo').value.trim();
       if (estado === 'bloqueado' && !motivo) {
         evento.preventDefault();
