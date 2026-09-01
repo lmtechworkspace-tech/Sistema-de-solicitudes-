@@ -1761,6 +1761,16 @@ button {
   width: 100%;
 }
 
+/* v12.3 ("usar todo el ancho"): el Cronograma de Proyectos suelta el tope de
+   1180px y ocupa toda la región principal (entre el sidebar y el borde) --
+   más días y tareas de la Carta Gantt visibles de un vistazo. Lo activa/quita
+   proyectos.js (fijarAnchoCarta_) solo mientras se ve el Cronograma. Mayor
+   especificidad (2 clases) que .plataforma-contenido--ancho, y va después. */
+/* !important a propósito: el shell (app.html) fija un `max-width:1100px`
+   INLINE en .sigso-contenido, y un estilo inline gana a cualquier clase salvo
+   con !important. Es la única forma de soltar el ancho sin tocar el shell. */
+.sigso-contenido.sigso-py-ancho-total { max-width: 100% !important; width: 100% !important; }
+
 /* ============ v4.0 Frentes 2 y 3: identidad y navegacion ============ */
 
 /* Contador de pendientes en el nav: la informacion que antes obligaba a
@@ -3908,7 +3918,19 @@ button {
   gap: 2px; align-items: center;
 }
 .sigso-py-ded-cabecera { margin-bottom: var(--esp-1); }
-.sigso-py-ded-etiqueta { padding-right: var(--esp-2); display: flex; flex-direction: column; min-width: 0; }
+.sigso-py-ded-etiqueta { padding-right: var(--esp-2); display: flex; flex-direction: column; min-width: 0;
+  /* v12.3: riel de color por semáforo (transparente por defecto -> cabecera,
+     pie, subtotal y workload quedan sin riel pero ALINEADOS con las tareas). */
+  border-left: 3px solid transparent; padding-left: 0.5rem; border-radius: 3px 0 0 3px;
+}
+.sigso-py-ded-fila--sem-al-dia > .sigso-py-ded-etiqueta,
+.sigso-py-ded-fila--sem-terminada > .sigso-py-ded-etiqueta { border-left-color: var(--ok); }
+.sigso-py-ded-fila--sem-riesgo > .sigso-py-ded-etiqueta { border-left-color: var(--alerta); }
+.sigso-py-ded-fila--sem-atrasada > .sigso-py-ded-etiqueta { border-left-color: var(--critico); }
+.sigso-py-ded-fila--sem-bloqueada > .sigso-py-ded-etiqueta { border-left-color: var(--info); }
+.sigso-py-ded-fila--sem-revision > .sigso-py-ded-etiqueta { border-left-color: var(--primario); }
+.sigso-py-ded-fila--sem-pendiente > .sigso-py-ded-etiqueta,
+.sigso-py-ded-fila--sem-cancelada > .sigso-py-ded-etiqueta { border-left-color: var(--texto-3); }
 .sigso-py-ded-etiqueta .t { font-size: var(--texto-sm); color: var(--texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sigso-py-ded-etiqueta .m { font-size: var(--texto-xs); color: var(--texto-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sigso-py-ded-dia {
@@ -4060,11 +4082,17 @@ button {
 /* v11 (P1): nota de Plan/Esperado/Real bajo el título de cada tarea en la
    carta de Dedicación -- compacta, monoespaciada donde hay números para que
    alineen al ojo entre filas. */
-.sigso-py-ded-plan { display: block; margin-top: 2px; font-size: var(--texto-xs); color: var(--texto-3); font-variant-numeric: tabular-nums; }
-.sigso-py-ded-plan .dev { font-weight: 700; }
-.sigso-py-ded-plan .dev--favor { color: var(--ok); }
-.sigso-py-ded-plan .dev--contra { color: var(--critico); }
-.sigso-py-ded-plan .baseline { color: var(--alerta); }
+/* v12.3 ("rediseño"): Plan/Esperado/Real/desviación como CHIPS (antes una
+   línea de texto apretada con "·"). */
+.sigso-py-ded-plan { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+.sigso-py-plan-chip {
+  font-size: 0.68rem; line-height: 1.4; padding: 1px 7px; border-radius: 999px;
+  background: var(--superficie-2); color: var(--texto-2); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.sigso-py-plan-chip--base { background: var(--alerta-suave); color: var(--alerta); }
+.sigso-py-plan-chip--dev { font-weight: 700; }
+.sigso-py-plan-chip--dev.is-favor { background: var(--ok-suave); color: var(--ok); }
+.sigso-py-plan-chip--dev.is-contra { background: var(--critico-suave); color: var(--critico); }
 
 /* v11 (P1): fila de workload por persona (agrupar) -- total diario propio +
    marca de sobrecarga cuando supera la jornada. */

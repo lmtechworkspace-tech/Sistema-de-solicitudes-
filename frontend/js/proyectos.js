@@ -198,6 +198,7 @@
   function cargarPortafolio_() {
     proyectoActivoId_ = null;
     datosDetalleActual_ = null;
+    fijarAnchoCarta_(false); // el portafolio vuelve al ancho normal
     var cont = panelProyectos_();
     if (!cont) return;
     cont.innerHTML = esqueletoPortafolio_();
@@ -821,6 +822,8 @@
   }
 
   function pintarDetalle_(cont, detalle, tareas, sala, miEmail, bitacora, rendimiento) {
+    // v12.3: el Cronograma va a ancho completo; las demás pestañas, angostas.
+    fijarAnchoCarta_(pestanaActiva_ === 'cronograma');
     var p = detalle.proyecto;
     // v9.2: la capacidad de gestion la resuelve el backend (puede_gestionar:
     // LIDER del proyecto o ADM). Fallback a rol_actual==='LIDER' para que el
@@ -2204,24 +2207,27 @@
   // congeló), Esperado/Real a hoy, y la desviación en puntos porcentuales
   // (verde a favor, rojo en contra). Nada se muestra sin fecha_compromiso
   // confirmada -- RN-710 (pendiente de confirmar) no tiene curva que trazar.
+  // v12.3 ("rediseño"): Plan · Esperado · Real dejan de ser una línea de texto
+  // apretada y pasan a CHIPS -- más legibles y modernos; la desviación va como
+  // pill de color (verde a favor / rojo en contra).
   function planLineaHtml_(plan) {
     if (!plan || !plan.plan_fin) return '';
-    var partes = ['Plan ' + fechaCorta_(plan.plan_inicio) + '–' + fechaCorta_(plan.plan_fin)];
+    var chips = ['<span class="sigso-py-plan-chip">Plan ' + fechaCorta_(plan.plan_inicio) + '–' + fechaCorta_(plan.plan_fin) + '</span>'];
     if (plan.baseline_fin && plan.baseline_fin !== plan.plan_fin) {
-      partes.push('<span class="baseline">Base ' + fechaCorta_(plan.baseline_fin) + '</span>');
+      chips.push('<span class="sigso-py-plan-chip sigso-py-plan-chip--base">Base ' + fechaCorta_(plan.baseline_fin) + '</span>');
     }
     if (plan.avance_esperado_pct !== null && plan.avance_esperado_pct !== undefined) {
-      partes.push('Esperado ' + redond1_(plan.avance_esperado_pct) + '%');
+      chips.push('<span class="sigso-py-plan-chip">Esp ' + redond1_(plan.avance_esperado_pct) + '%</span>');
     }
     if (plan.avance_real_pct !== null && plan.avance_real_pct !== undefined) {
-      partes.push('Real ' + redond1_(plan.avance_real_pct) + '%');
+      chips.push('<span class="sigso-py-plan-chip">Real ' + redond1_(plan.avance_real_pct) + '%</span>');
     }
     if (plan.desviacion_pp !== null && plan.desviacion_pp !== undefined) {
       var aFavor = plan.desviacion_pp >= 0;
-      partes.push('<span class="dev ' + (aFavor ? 'dev--favor' : 'dev--contra') + '">' +
+      chips.push('<span class="sigso-py-plan-chip sigso-py-plan-chip--dev ' + (aFavor ? 'is-favor' : 'is-contra') + '">' +
         (aFavor ? '+' : '') + redond1_(plan.desviacion_pp) + 'pp</span>');
     }
-    return '<span class="sigso-py-ded-plan">' + partes.join(' · ') + '</span>';
+    return '<span class="sigso-py-ded-plan">' + chips.join('') + '</span>';
   }
 
   // v10 (auditoría G): cablea TODOS los controles de la carta (rango,
@@ -2572,10 +2578,16 @@
     return dias;
   }
 
+  // v12.3 ("rediseño"): la cabecera del día muestra la INICIAL del día de la
+  // semana (L M X J V S D) sobre el número -- mucho más fácil ubicarse en la
+  // grilla (y el primer día del mes antepone el mes corto).
+  var DIA_SEMANA_INICIAL_ = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
   function diaCabeceraHtml_(x) {
+    var inicial = DIA_SEMANA_INICIAL_[fechaDeClave_(x.clave).getDay()];
+    var top = (x.primeroMes ? MESES_CORTOS[x.mes] + ' ' : '') + inicial;
     return '<div class="sigso-py-ded-dia' + (x.we ? ' we' : '') + (x.feriado ? ' feriado' : '') +
       (x.hoy ? ' hoy' : '') + (x.primeroMes ? ' mes' : '') + '" title="' + fechaCorta_(x.clave) + '">' +
-      (x.primeroMes ? '<b>' + MESES_CORTOS[x.mes] + '</b>' : '') + x.dia + '</div>';
+      '<b>' + top + '</b>' + x.dia + '</div>';
   }
 
   // Barra de controles: rango, navegación de ventana, agrupar por persona,
@@ -2881,7 +2893,9 @@
         ? '<button type="button" class="sigso-py-ded-reprogramar js-py-ded-reprogramar" data-proy="' + Componentes.escaparHtml(proyIdFila) + '" data-act="' + Componentes.escaparHtml(a.actividad_id) + '" title="Reprogramar fecha de compromiso">📅</button>'
         : '';
 
-      return '<div class="sigso-py-ded-fila">' +
+      // v12.3 ("rediseño"): riel de color por semáforo a la izquierda de la
+      // fila -- el estado de la tarea se lee de un vistazo, sin leer texto.
+      return '<div class="sigso-py-ded-fila sigso-py-ded-fila--sem-' + (a.semaforo || 'al-dia') + '">' +
         '<div class="sigso-py-ded-etiqueta"><span class="t">' + Componentes.escaparHtml(a.titulo) + reprogramarBtn + '</span>' +
           '<span class="m">' + Componentes.escaparHtml(subEtiqueta) + (metaTxt ? ' · ' + Componentes.escaparHtml(metaTxt) : '') + '</span>' +
           planLineaHtml_(planPorTarea[a.actividad_id]) +
@@ -4383,6 +4397,18 @@
   // Crea el layout de dos columnas una vez y devuelve SIEMPRE el panel
   // derecho, para que las vistas que escriben el contenido no pisen la
   // navegación (mismo patrón que panelSgc_ en Calidad).
+  // v12.3 ("usar todo el ancho"): el Cronograma (Carta Gantt / Dedicación) se
+  // ve mucho mejor a ancho completo -- más días y tareas de un vistazo. El
+  // resto de las pestañas (texto) se leen mejor angostas, así que el ancho
+  // total se activa SOLO en el Cronograma, soltando el tope de 1180px del
+  // contenedor del shell (queda relativo a la región principal -- funciona con
+  // y sin sidebar). Se limpia al volver al portafolio o cambiar de pestaña.
+  function fijarAnchoCarta_(activo) {
+    var raiz = document.getElementById('proyectos-contenido');
+    var caja = raiz && raiz.closest('.sigso-contenido');
+    if (caja) caja.classList.toggle('sigso-py-ancho-total', !!activo);
+  }
+
   function panelProyectos_() {
     var raiz = document.getElementById('proyectos-contenido');
     if (!raiz) return null;
