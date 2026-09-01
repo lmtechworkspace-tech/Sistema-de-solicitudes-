@@ -178,10 +178,46 @@ test('descargarReporte config: un rango explícito acota el Gantt a esos días',
     config: { secciones: ['gantt'], rango: { desde: AYER, hasta: AYER } }
   }, CTX_LEO);
   const html = htmlDe_(res);
-  // Un solo día de columna -> una sola fecha (AYER) en el encabezado del
-  // Gantt, y ninguna fecha fuera de ese rango (ej. hoy).
-  const coincidencias = html.match(new RegExp(AYER, 'g')) || [];
-  assert.ok(coincidencias.length >= 1);
+  // Un solo día de columna -> el encabezado del Gantt trae la fecha de AYER
+  // en formato corto DD/MM (v12: columnas angostas), y NO la de hoy (fuera
+  // del rango).
+  const cortaDe = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7);
+  const hoyIso = new Date().toISOString().slice(0, 10);
+  assert.match(html, new RegExp(cortaDe(AYER).replace('/', '\\/')));
+  if (cortaDe(hoyIso) !== cortaDe(AYER)) {
+    assert.doesNotMatch(html, new RegExp(cortaDe(hoyIso).replace('/', '\\/')), 'hoy queda fuera del rango de un solo día');
+  }
+});
+
+test('descargarReporte config: la sección KPIs trae la banda de indicadores ejecutivos', () => {
+  const ctx = loadConSchema();
+  const { proyecto } = armarProyectoConTarea(ctx);
+  const res = ctx.Proyectos.descargarReporte({
+    proyecto_id: proyecto.proyecto_id, config: { secciones: ['kpis'] }
+  }, CTX_LEO);
+  const html = htmlDe_(res);
+  assert.match(html, /Indicadores clave/);
+  assert.match(html, /Avance/);
+  assert.match(html, /Entregas a tiempo/);
+  assert.match(html, /Hitos atrasados/);
+});
+
+test('descargarReporte config: el Gantt dibuja barras (fondo de color en el período planificado), no solo letras', () => {
+  const ctx = loadConSchema();
+  const { proyecto, tarea } = armarProyectoConTarea(ctx);
+  // Rango que cubre desde antes de la creación hasta la fecha comprometida:
+  // la barra planificada (creación -> compromiso) debe pintar celdas con
+  // color de fondo aunque no haya ninguna marca registrada.
+  const hoy = new Date().toISOString().slice(0, 10);
+  const res = ctx.Proyectos.descargarReporte({
+    proyecto_id: proyecto.proyecto_id,
+    config: { secciones: ['gantt'], rango: { desde: hoy, hasta: '2026-09-20' } }
+  }, CTX_LEO);
+  const html = htmlDe_(res);
+  assert.match(html, /Carta Gantt/);
+  // Alguna celda del Gantt trae un background de barra (semáforo) -- señal de
+  // que se dibuja el período planificado, no solo las letras de cada día.
+  assert.match(html, /background:#(DCFCE7|FEF3C7|FEE2E2|DBEAFE|EEF2F7|EDE9FE)/);
 });
 
 test('descargarReporte config: la bitácora, con Gantt activo, se acota al mismo rango (no "últimas 30")', () => {

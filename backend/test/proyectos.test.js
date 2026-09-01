@@ -1021,8 +1021,12 @@ test('crearTarea: meta_cantidad/meta_unidad viajan hasta la tarea, y listarMisTa
 test('getDetalle: expone cumplimiento_tareas (mismo cálculo que ya usa el portafolio)', () => {
   const ctx = loadConSchema();
   const proyecto = crearProyectoBase(ctx);
+  // Fecha de compromiso RELATIVA a hoy (+3 días): con una fecha fija en el
+  // futuro, el test se vuelve flaky en cuanto el reloj real la sobrepasa
+  // (la tarea se termina "ahora" y se compara fecha_terminada <= compromiso).
+  const enTresDias = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
   const tarea = ctx.Proyectos.crearTarea({
-    proyecto_id: proyecto.proyecto_id, titulo: 'Tarea de Leo', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-09-01'
+    proyecto_id: proyecto.proyecto_id, titulo: 'Tarea de Leo', responsable_email: 'leo@rld.cl', fecha_compromiso: enTresDias
   }, CTX_LEO);
   ctx.Actividades.checkin({ actividad_id: tarea.actividad_id, tipo: 'listo' }, CTX_LEO);
 

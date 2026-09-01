@@ -2196,7 +2196,13 @@
     var est = cont.querySelector('#py-ded-estado');
     if (est) est.addEventListener('change', function () { dedFiltroEstado_ = est.value; alRepintar(); });
     var imp = cont.querySelector('.js-py-ded-imprimir');
-    if (imp) imp.addEventListener('click', function () { imprimirCartaDedicacion_(cont, detalle); });
+    if (imp) imp.addEventListener('click', function () {
+      // v12 ("reporte PDF potenciado"): en el Cronograma de UN proyecto el
+      // botón baja el PDF ejecutivo real del backend (no imprime la pantalla).
+      // "Mi dedicación" (sin proyecto único) conserva la impresión de la carta.
+      if (detalle && detalle.proyecto && detalle.proyecto.proyecto_id) descargarReporteCronograma_(imp, detalle);
+      else imprimirCartaDedicacion_(cont, detalle);
+    });
 
     // v11 (P1, "congelar línea base"): solo existe en el Cronograma de UN
     // proyecto (Mi dedicación no la ofrece -- ver cartaControlesHtml_). Solo
@@ -2319,6 +2325,7 @@
   var SECCIONES_INFORME_ = [
     { valor: 'portada', texto: 'Portada' },
     { valor: 'ficha', texto: 'Ficha resumen', defecto: true },
+    { valor: 'kpis', texto: 'Indicadores clave (KPIs)', defecto: true },
     { valor: 'salud', texto: 'Salud detallada (score y desglose)' },
     { valor: 'hitos', texto: 'Hitos', defecto: true },
     { valor: 'riesgos', texto: 'Riesgos abiertos', defecto: true },
@@ -2532,6 +2539,9 @@
   // filtros y el botón de imprimir/descargar.
   function cartaControlesHtml_(tareas, dias, ctxEdicion, baseline) {
     var esTodo = dedRango_ === 'todo';
+    // v12: hay un proyecto único abierto (Cronograma de un proyecto) vs. "Mi
+    // dedicación" (varios). Solo el primero tiene reporte PDF de backend.
+    var esProyecto = !!(ctxEdicion && ctxEdicion.proyectoId);
     var desdeTxt = fechaCorta_(dias[0].clave), hastaTxt = fechaCorta_(dias[dias.length - 1].clave);
     var rangoSel = Componentes.campoSelect({ id: 'py-ded-rango', valor: dedRango_, placeholder: false, claseCampo: 'sigso-py-ded-ctrl',
       opciones: [{ valor: 'semana', texto: 'Semana' }, { valor: 'quincena', texto: '2 semanas' }, { valor: 'mes', texto: 'Mes' }, { valor: 'todo', texto: 'Todo el proyecto' }] });
@@ -2566,13 +2576,21 @@
       '<span class="sigso-ayuda sigso-py-ded-rangotxt">' + Componentes.escaparHtml(desdeTxt) + ' – ' + Componentes.escaparHtml(hastaTxt) + '</span>' +
       '<label class="sigso-campo-check sigso-py-ded-ctrl"><input type="checkbox" class="js-py-ded-agrupar"' + (dedAgruparPersona_ ? ' checked' : '') + '> Por persona</label>' +
       filtroPersona + filtroEstado +
-      // v11 ("mejoras visuales"): el title del span envuelve el botón (un
-      // <button> sin title propio hereda el tooltip del ancestro) -- así el
-      // consejo aparece al pasar el mouse sin agregar un texto fijo más al
-      // toolbar, que ya venía cargado de controles.
-      '<span title="Consejo: en el diálogo de impresión, desactiva la opción Encabezados y pies de página para un PDF más limpio.">' +
-        Componentes.boton({ texto: 'Descargar / Imprimir', variante: 'secundario', clase: 'js-py-ded-imprimir', tipo: 'button', icono: 'descargar' }) +
-      '</span>' +
+      // v12 ("reporte PDF potenciado"): en el Cronograma de UN proyecto el
+      // botón ya NO imprime la pantalla -- genera el PDF ejecutivo real del
+      // backend (portada, KPIs, Carta Gantt de barras, riesgos, etc.),
+      // respetando el filtro de persona/estado que el usuario tenga puesto.
+      // En "Mi dedicación" (varios proyectos a la vez, sin un proyecto_id
+      // único) no hay ese reporte, así que ahí se conserva Imprimir (window.
+      // print de la carta). El title del span da el contexto sin sumar texto
+      // fijo al toolbar (un <button> sin title propio hereda el del ancestro).
+      (esProyecto
+        ? '<span title="Genera el PDF ejecutivo del proyecto: portada, indicadores, Carta Gantt, riesgos y más. Respeta el filtro de persona/estado.">' +
+            Componentes.boton({ texto: 'Descargar reporte (PDF)', variante: 'secundario', clase: 'js-py-ded-imprimir', tipo: 'button', icono: 'descargar' }) +
+          '</span>'
+        : '<span title="Consejo: en el diálogo de impresión, desactiva la opción Encabezados y pies de página para un PDF más limpio.">' +
+            Componentes.boton({ texto: 'Descargar / Imprimir', variante: 'secundario', clase: 'js-py-ded-imprimir', tipo: 'button', icono: 'descargar' }) +
+          '</span>') +
       baselineHtml +
     '</div>';
   }
@@ -2585,6 +2603,40 @@
     ].map(function (p) { return '<span><i class="sigso-py-ded-sw sigso-py-ded-sw--' + p[0] + '"></i>' + p[1] + '</span>'; }).join('');
     var heat = '<span class="sigso-py-ded-heatleg">Horas del día: <i class="hl h1"></i><i class="hl h2"></i><i class="hl h3"></i><i class="hl h4"></i> más</span>';
     return '<div class="sigso-py-ded-leyenda">' + estados + heat + '</div>';
+  }
+
+  // v12 ("reporte PDF potenciado"): el botón del Cronograma de un proyecto
+  // genera el PDF ejecutivo REAL del backend (Proyectos.descargarReporte con
+  // config), el mismo motor de "Configurar informe" del Resumen, pero con un
+  // set de secciones profesional por defecto (portada, KPIs, salud,
+  // desviaciones, Carta Gantt de barras, workload, hitos, riesgos,
+  // vencimientos, bitácora, leyenda). Respeta el filtro de persona/estado que
+  // el usuario tenga puesto en la carta -- así el PDF cuenta lo que está
+  // mirando, no un genérico. Llega en base64 y se baja como .pdf de verdad
+  // (descargarBase64Proyecto_), sin diálogo de impresión ni clon de pantalla.
+  var CRONOGRAMA_REPORTE_SECCIONES_ = [
+    'portada', 'ficha', 'kpis', 'salud', 'desviaciones', 'gantt',
+    'workload', 'hitos', 'riesgos', 'vencimientos', 'bitacora', 'leyenda'
+  ];
+  function descargarReporteCronograma_(btn, detalle) {
+    var config = { secciones: CRONOGRAMA_REPORTE_SECCIONES_ };
+    if (dedFiltroPersona_) config.personas = [dedFiltroPersona_];
+    if (dedFiltroEstado_) config.estado = dedFiltroEstado_;
+    var textoOriginal = btn.textContent;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="sigso-spinner"></span>Generando…';
+    api_('descargarReporteProyecto', { proyecto_id: detalle.proyecto.proyecto_id, config: config }).then(function (r) {
+      if (!r || !r.ok) {
+        Componentes.aviso({ texto: (r && r.message) || 'No se pudo generar el reporte.', tipo: 'error' });
+        return;
+      }
+      descargarBase64Proyecto_(r.data.pdf_base64, r.data.filename || ('Reporte-' + detalle.proyecto.proyecto_id + '.pdf'), 'application/pdf');
+    }).catch(function () {
+      Componentes.aviso({ texto: 'No se pudo conectar con el servidor.', tipo: 'error' });
+    }).finally(function () {
+      btn.disabled = false;
+      btn.textContent = textoOriginal;
+    });
   }
 
   // Vista imprimible: arma un contenedor con encabezado + la grilla ya
