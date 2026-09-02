@@ -552,6 +552,9 @@
       // contadores de los KPI ahora se calculan sobre esa misma lista (ver
       // renderKpis_) -- si se pintaran antes, contarian sobre la lista previa.
       recientesActuales = respuesta.data.recientes;
+      // v13 (Fase 3): se guardan para el asignado rápido de cada fila.
+      responsablesActuales_ = respuesta.data.responsables || [];
+      rolActual_ = respuesta.data.rol_actual || '';
       totalSolicitudes_ = respuesta.data.total_solicitudes;
       recientesTruncado_ = !!respuesta.data.recientes_truncado;
       renderKpis_();
@@ -720,6 +723,17 @@
   }
 
   var recientesActuales = [];
+  // v13 (Fase 3, "asignar desde la fila"): quién puede recibir trabajo y con
+  // qué rol miro la bandeja. Se guardan al cargar el dashboard para que la
+  // fila pueda ofrecer el asignado rápido sin volver a pedir nada.
+  // OJO: el backend solo manda `responsables` al rol ADM -- si la lista viene
+  // vacía, la acción sencillamente no se ofrece.
+  var responsablesActuales_ = [];
+  var rolActual_ = '';
+  // Motivo por defecto del asignado rápido. El backend exige 10+ caracteres
+  // (RN de derivarSolicitud) y la derivación queda en el historial, así que
+  // tiene que ser una frase honesta que explique de dónde salió el cambio.
+  var MOTIVO_ASIGNADO_RAPIDO_ = 'Asignada desde la bandeja';
   // v6.1: cuantas solicitudes hay en total vs. cuantas caben en la ventana de
   // RECIENTES_LIMITE. Se muestra explicitamente en vez de dejar creer que la
   // bandeja son todas -- con el orden por urgencia, lo que queda fuera es
@@ -891,6 +905,10 @@
     // v6.2 (F2): la lista ya esta en el DOM; recien ahora tiene sentido
     // devolver el scroll a donde estaba.
     restaurarScrollSiCorresponde_();
+
+    // v13 (Fase 3): el asignado rápido de cada fila, antes del wiring de la
+    // fila -- sus handlers cortan la propagación para no abrir el detalle.
+    wireAsignarRapido_(contenedor);
 
     contenedor.querySelectorAll('[data-id]').forEach(function (fila) {
       function abrir_() {
@@ -1227,9 +1245,105 @@
       '<span class="sigso-id">' + s.solicitud_id + '</span> &middot; ' +
       s.empresa_id + ' &middot; ' + Componentes.escaparHtml(s.plataforma || '') + ' &middot; ' +
       (s.asignado_nombre ? Componentes.escaparHtml(s.asignado_nombre) : 'Sin asignar') +
+      bloqueAsignarRapido_(s) +
       '</div>' +
       plazo +
       '</div>';
+  }
+
+  // v13 (Fase 3, "asignar desde la fila"): hasta ahora, para asignar a alguien
+  // había que ABRIR el detalle, derivar y volver -- por cada solicitud. La
+  // fila era puro triage de lectura. Este control hace el movimiento más
+  // común (dar dueño a lo que no lo tiene) sin salir de la bandeja.
+  //
+  // Reusa `derivarSolicitud` tal cual (acepta solicitud_ids), así que no hay
+  // backend nuevo. Como la bandeja lista SOLICITUDES y derivar actúa por
+  // ítem, aplica a TODOS los ítems de esa solicitud -- exactamente el mismo
+  // criterio que el "derivar en lote" que ya existía.
+  function bloqueAsignarRapido_(s) {
+    if (!responsablesActuales_.length) return '';                       // solo ADM recibe la lista
+    if (ESTADOS_CERRADOS_CLIENTE.indexOf(s.estado_derivado) !== -1) return ''; // cerrada: no se deriva
+    var id = s.solicitud_id;
+    return ' <button type="button" class="sigso-asignar-rapido js-asignar-abrir" data-sol="' + id + '"' +
+        ' title="Asignar responsable sin abrir el detalle">' + Iconos.svg('persona', { tam: 13 }) +
+        (s.asignado_nombre ? 'Reasignar' : 'Asignar') + '</button>' +
+      '<span class="sigso-asignar-panel sigso-oculto" data-panel-asignar="' + id + '">' +
+        '<select class="sigso-asignar-select" data-sol="' + id + '" aria-label="Responsable">' +
+          '<option value="">Elige responsable…</option>' +
+          responsablesActuales_.map(function (r) {
+            return '<option value="' + Componentes.escaparHtml(r.email) + '">' + Componentes.escaparHtml(r.nombre) + '</option>';
+          }).join('') +
+        '</select>' +
+        '<button type="button" class="sigso-boton js-asignar-confirmar" data-sol="' + id + '">Asignar</button>' +
+        '<button type="button" class="sigso-boton--sutil js-asignar-cancelar" data-sol="' + id + '">Cancelar</button>' +
+      '</span>';
+  }
+
+  // Cablea el asignado rápido de cada fila. Todo lleva stopPropagation: la
+  // fila entera es un boton que abre el detalle, y un clic en el select o en
+  // "Asignar" no debe navegar.
+  function wireAsignarRapido_(contenedor) {
+    function panelDe_(id) { return contenedor.querySelector('[data-panel-asignar="' + id + '"]'); }
+
+    contenedor.querySelectorAll('.js-asignar-abrir').forEach(function (boton) {
+      boton.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        // Cierra cualquier otro panel abierto: uno a la vez.
+        contenedor.querySelectorAll('.sigso-asignar-panel').forEach(function (p) { p.classList.add('sigso-oculto'); });
+        var panel = panelDe_(boton.getAttribute('data-sol'));
+        if (panel) { panel.classList.remove('sigso-oculto'); panel.querySelector('select').focus(); }
+      });
+    });
+
+    contenedor.querySelectorAll('.sigso-asignar-panel').forEach(function (panel) {
+      panel.addEventListener('click', function (ev) { ev.stopPropagation(); });
+      panel.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Escape') { ev.stopPropagation(); panel.classList.add('sigso-oculto'); }
+      });
+    });
+
+    contenedor.querySelectorAll('.js-asignar-cancelar').forEach(function (boton) {
+      boton.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var panel = panelDe_(boton.getAttribute('data-sol'));
+        if (panel) panel.classList.add('sigso-oculto');
+      });
+    });
+
+    contenedor.querySelectorAll('.js-asignar-confirmar').forEach(function (boton) {
+      boton.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var id = boton.getAttribute('data-sol');
+        var panel = panelDe_(id);
+        var select = panel.querySelector('select');
+        var responsable = select.value;
+        if (!responsable) {
+          Componentes.aviso({ tipo: 'error', texto: 'Elige a quién asignar.' });
+          return;
+        }
+        var nombre = select.selectedOptions[0].textContent;
+        boton.disabled = true;
+        boton.textContent = 'Asignando…';
+        llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'derivarSolicitud', {
+          solicitud_ids: [id],
+          responsable_nuevo: responsable,
+          motivo: MOTIVO_ASIGNADO_RAPIDO_
+        }).then(function (respuesta) {
+          if (!respuesta.ok) {
+            boton.disabled = false;
+            boton.textContent = 'Asignar';
+            Componentes.aviso({ tipo: 'error', texto: respuesta.message || 'No se pudo asignar.' });
+            return;
+          }
+          Componentes.aviso({ tipo: 'exito', texto: id + ' asignada a ' + nombre + '.' });
+          cargarDashboard_();
+        }).catch(function () {
+          boton.disabled = false;
+          boton.textContent = 'Asignar';
+          Componentes.aviso({ tipo: 'error', texto: 'No se pudo conectar con el servidor.' });
+        });
+      });
+    });
   }
 
   // P6 (v2.0, Sprint 2): Gerencia necesita responderle a su jefe sin entrar
