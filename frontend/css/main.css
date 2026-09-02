@@ -99,8 +99,14 @@ a {
   color: var(--primario);
 }
 
+/* v13 ("piel nueva del intake"): 720px dejaba media pantalla vacía en desktop
+   y apretaba justo lo que más lugar necesita -- los ítems de una solicitud con
+   su galería de imágenes, y la lista de "Mis solicitudes". 880px sigue siendo
+   una medida cómoda de lectura para un formulario (los campos largos son de
+   ancho completo y los cortos van de a dos), pero deja respirar al contenido.
+   La plataforma no se ve afectada: usa su propio modificador --ancho. */
 .sigso-contenido {
-  max-width: 720px;
+  max-width: min(880px, 100%);
   margin: 0 auto;
   padding: var(--esp-5);
 }

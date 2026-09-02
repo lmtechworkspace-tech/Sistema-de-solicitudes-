@@ -3,10 +3,19 @@
    (.sigso-card, .sigso-boton, .sigso-badge, .sigso-galeria...) siguen en
    main.css/dashboard.css -- aqui solo lo que es nuevo, para no duplicar CSS. */
 
+/* v13 ("piel nueva del intake"): el stepper es el único indicador de progreso
+   de un formulario de 3 pasos, pero se leía como texto gris menor. Ahora vive
+   en su propia banda, con los números más presentes y el paso actual anillado
+   -- se ve de un vistazo dónde estás y cuánto falta. */
 .sigso-stepper {
   display: flex;
   align-items: center;
-  margin-bottom: 1.5rem;
+  gap: var(--esp-2);
+  margin-bottom: var(--esp-5);
+  padding: var(--esp-3) var(--esp-4);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
 }
 
 .sigso-stepper__paso {
@@ -14,19 +23,27 @@
   align-items: center;
   gap: 0.5rem;
   font-size: 0.85rem;
-  color: var(--gris-medio);
+  color: var(--texto-3);
 }
 
 .sigso-stepper__numero {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 1.85rem;
+  height: 1.85rem;
   border-radius: 50%;
-  background: var(--gris-claro);
+  background: var(--superficie-2);
+  color: var(--texto-3);
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* El paso actual se anilla para destacar sin gritar. */
+.sigso-stepper__paso--actual .sigso-stepper__numero {
+  box-shadow: 0 0 0 4px var(--primario-suave);
 }
 
 .sigso-stepper__paso--actual .sigso-stepper__numero {
@@ -444,19 +461,35 @@
 /* UI-4 (§2): formulario publico en tarjetas tematicas -- agrupa campos
    relacionados (contexto / cliente / contacto) en vez de una lista plana de
    .sigso-campo uno tras otro. */
+/* v13 ("piel nueva del intake"): estas secciones usaban --gris-claro como
+   BORDE, que resuelve a --superficie-2 (#F1F4F9) -- un color pensado para
+   RELLENO. Sobre la tarjeta blanca quedaba casi invisible, así que los
+   bloques del formulario no se leían como secciones separadas. Pasan a usar
+   el token de borde de verdad, con el mismo radio de 12px del resto de las
+   tarjetas del sistema y un poco más de aire. */
 .sigso-tarjeta-grupo {
-  border: 1px solid var(--gris-claro);
-  border-radius: 8px;
-  padding: 1rem 1.25rem;
-  margin-bottom: 1.25rem;
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  padding: var(--esp-4) var(--esp-4) var(--esp-3);
+  margin-bottom: var(--esp-4);
   background: var(--superficie);
 }
 
+/* El título de sección ancla el bloque: peso real, tinta plena y una línea
+   fina que lo separa de sus campos (antes era texto suelto de 1rem). */
 .sigso-titulo-grupo {
-  margin: 0 0 0.9rem;
-  font-size: 1rem;
-  color: var(--gris-oscuro, #333);
+  display: flex;
+  align-items: center;
+  gap: var(--esp-2);
+  margin: 0 0 var(--esp-3);
+  padding-bottom: var(--esp-2);
+  border-bottom: 1px solid var(--borde);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--texto);
+  letter-spacing: -0.01em;
 }
+.sigso-titulo-grupo .sigso-ico { color: var(--primario); flex: 0 0 auto; }
 
 /* Dos columnas en desktop para campos cortos que caben lado a lado (nombre/
    cargo, correo/CC). En movil colapsa a una columna (media query abajo). */
