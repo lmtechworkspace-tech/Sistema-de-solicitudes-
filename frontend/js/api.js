@@ -32,6 +32,23 @@ var ACCIONES_REINTENTABLES = {
 };
 var MAX_INTENTOS_LECTURA = 3;
 
+// F1 (rediseño "Mis solicitudes", medicion de rendimiento): la auditoria F0
+// midio lecturas/filas del lado del servidor (sandbox), pero NO pudo medir
+// milisegundos reales de produccion -- eso necesita la sesion real del
+// usuario. En vez de inventar un numero, esto deja la medicion lista para
+// que el propio usuario la active cuando quiera: por defecto NO hace nada
+// (ni console.log ni red), asi que no cambia el comportamiento de nadie.
+//
+// Para activarla: en la consola del navegador, en produccion,
+//   localStorage.setItem('sigso_debug_timing', '1')
+// y usar el modulo con normalidad. Cada llamada imprime una linea con la
+// accion y los milisegundos reales que tardo esa vuelta (ida+vuelta a Apps
+// Script incluida). Para desactivar: localStorage.removeItem('sigso_debug_timing').
+function medicionTimingActiva_() {
+  try { return localStorage.getItem('sigso_debug_timing') === '1'; }
+  catch (err) { return false; }
+}
+
 // Techo de espera por intento. Sin esto, un Web App que se cuelga o que
 // quedo con un deploy roto deja el fetch PENDIENTE PARA SIEMPRE, y el modulo
 // gira sin fin sin avisar nada (el sintoma "no cargan los datos"). Apps
@@ -112,12 +129,23 @@ async function llamarApi(url, action, data) {
     data = Object.assign({}, data, { portal_token: tokenPortal });
   }
 
+  const medir = medicionTimingActiva_();
   const maxIntentos = ACCIONES_REINTENTABLES[action] ? MAX_INTENTOS_LECTURA : 1;
   let ultimoError;
   for (let intento = 1; intento <= maxIntentos; intento++) {
+    const inicio = medir ? performance.now() : 0;
     try {
-      return await ejecutarLlamada_(url, action, data);
+      const resultado = await ejecutarLlamada_(url, action, data);
+      if (medir) {
+        const ms = Math.round(performance.now() - inicio);
+        console.info('[SIGSO][timing] ' + action + ' ' + ms + 'ms' + (intento > 1 ? ' (intento ' + intento + ')' : ''));
+      }
+      return resultado;
     } catch (err) {
+      if (medir) {
+        const ms = Math.round(performance.now() - inicio);
+        console.info('[SIGSO][timing] ' + action + ' ' + ms + 'ms (fallo, intento ' + intento + ')');
+      }
       ultimoError = err;
       if (intento < maxIntentos) {
         await esperar_(300 * intento);
