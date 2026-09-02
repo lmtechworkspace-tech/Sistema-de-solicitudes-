@@ -272,6 +272,7 @@ test('estadoPublico tambien acepta el correo del cliente cuando es_cliente=true'
   assert.equal(resultado.solicitud_id, 'SOL-2026-HP-0001');
 });
 
+// Fase 4: 'no existe' y 'no es tuya' responden IGUAL (antienumeración).
 test('estadoPublico responde forbidden si el correo no coincide', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);
@@ -329,10 +330,15 @@ test('estadoPublico (P2) posicion_cola es null si la solicitud ya esta cerrada/r
   assert.equal(resultado.posicion_cola, null);
 });
 
-test('estadoPublico responde error de validacion si la solicitud no existe', () => {
+test('estadoPublico: una solicitud inexistente responde IGUAL que una ajena (no se puede enumerar)', () => {
   const ctx = loadConSchema();
-  const resultado = ctx.Solicitudes.estadoPublico('SOL-2026-HP-9999', 'juan@homepymes.cl');
-  assert.equal(resultado._validationError, true);
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx);
+  const inexistente = ctx.Solicitudes.estadoPublico('SOL-2026-HP-9999', 'juan@homepymes.cl');
+  const ajena = ctx.Solicitudes.estadoPublico('SOL-2026-HP-0001', 'otro@correo.cl');
+  assert.equal(inexistente._forbidden, true);
+  assert.equal(ajena._forbidden, true);
+  assert.equal(inexistente.message, ajena.message, 'el mensaje no debe delatar si el numero existe');
 });
 
 test('estadoPublico responde error de validacion si falta solicitud_id o email', () => {
@@ -472,4 +478,44 @@ test('doPost action=consultarEstado responde forbidden cuando el correo no coinc
 
   assert.equal(parsed.ok, false);
   assert.equal(parsed.error, 'forbidden');
+});
+
+// Fase 4 (endurecimiento): freno de fuerza bruta sobre (número, correo).
+test('estadoPublico corta tras demasiados intentos fallidos y se reinicia con un acierto', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx);
+
+  // Prueba fuerte: se agota la ventana usando el correo del DUEÑO contra
+  // números equivocados. Si el freno funciona, ni siquiera la combinación
+  // CORRECTA pasa después -- que es lo que un contador real debe hacer.
+  for (let i = 0; i < 10; i++) {
+    ctx.Solicitudes.estadoPublico('SOL-2026-HP-9999', 'juan@homepymes.cl');
+  }
+  const bloqueado = ctx.Solicitudes.estadoPublico('SOL-2026-HP-0001', 'juan@homepymes.cl');
+  assert.equal(bloqueado._forbidden, true, 'tras 10 fallos, hasta el par correcto queda frenado');
+
+  // El contador es POR CORREO: otra persona no queda afectada.
+  const otroOk = ctx.Solicitudes.estadoPublico('SOL-2026-HP-0001', 'JUAN2@homepymes.cl');
+  assert.equal(otroOk._forbidden, true, 'ese correo no es dueño, pero por permisos -- no por el freno');
+  const cliente = ctx.Solicitudes.estadoPublico('SOL-2026-HP-0001', 'nadie@otro.cl');
+  assert.equal(cliente._forbidden, true);
+});
+
+test('estadoPublico: un acierto limpia los intentos fallidos previos del dueño', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx);
+
+  // El dueño se equivoca de número unas veces (caso real: tipeo).
+  for (let i = 0; i < 5; i++) {
+    ctx.Solicitudes.estadoPublico('SOL-2026-HP-9999', 'juan@homepymes.cl');
+  }
+  // Acierta: se limpia el contador.
+  assert.equal(ctx.Solicitudes.estadoPublico('SOL-2026-HP-0001', 'juan@homepymes.cl').solicitud_id, 'SOL-2026-HP-0001');
+  // Y puede seguir equivocándose sin quedar bloqueado de inmediato.
+  for (let i = 0; i < 5; i++) {
+    ctx.Solicitudes.estadoPublico('SOL-2026-HP-9999', 'juan@homepymes.cl');
+  }
+  assert.equal(ctx.Solicitudes.estadoPublico('SOL-2026-HP-0001', 'juan@homepymes.cl').solicitud_id, 'SOL-2026-HP-0001');
 });

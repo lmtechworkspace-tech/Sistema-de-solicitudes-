@@ -287,17 +287,28 @@ var Solicitudes = {
       return errorValidacion_('solicitud_id', 'Debes indicar el numero de solicitud y el correo.');
     }
 
-    var solicitud = buscarSolicitudPorId_(solicitudId);
-    if (!solicitud) {
-      return errorValidacion_('solicitud_id', 'No existe una solicitud con ese numero.');
+    // Fase 4 (endurecimiento): freno de fuerza bruta. Los numeros de
+    // solicitud son correlativos y adivinables (SOL-2026-HP-0001, -0002...),
+    // asi que sin esto se podia recorrer la numeracion probando correos.
+    if (demasiadosIntentosEstado_(email)) {
+      return { _forbidden: true, message: MENSAJE_ESTADO_SIN_ACCESO_ };
     }
 
-    var coincide =
+    var solicitud = buscarSolicitudPorId_(solicitudId);
+    var coincide = !!solicitud && (
       compararEmail_(email, solicitud.solicitante_email) ||
-      (!!solicitud.es_cliente && compararEmail_(email, solicitud.correo_cliente));
+      (!!solicitud.es_cliente && compararEmail_(email, solicitud.correo_cliente))
+    );
+
+    // Fase 4 (endurecimiento): "no existe" y "el correo no coincide" devuelven
+    // EXACTAMENTE lo mismo. Antes eran errores distintos, y esa diferencia era
+    // un oraculo: permitia confirmar que un numero de solicitud existe (y de
+    // paso, probando correos, a quien pertenece) sin tener acceso a ella.
     if (!coincide) {
-      return { _forbidden: true, message: 'El correo no coincide con el registrado para esta solicitud.' };
+      registrarIntentoFallidoEstado_(email);
+      return { _forbidden: true, message: MENSAJE_ESTADO_SIN_ACCESO_ };
     }
+    limpiarIntentosEstado_(email);
 
     // Fase 1 ("ver adjuntos propios"): las imagenes/documentos que el
     // solicitante mismo subio -- hasta ahora el detalle publico no las
@@ -938,6 +949,49 @@ function buscarSolicitudPorId_(solicitudId) {
     }
   }
   return null;
+}
+
+// --- Fase 4: endurecimiento del acceso publico por numero + correo -------
+//
+// El acceso a "Consultar estado" se prueba con (numero de solicitud, correo).
+// Los numeros son correlativos, asi que lo unico que protege de verdad es el
+// correo -- y sin frenos se podia probar de a muchos. Dos medidas, ninguna
+// de las cuales le agrega un solo paso a quien SI es el dueño:
+//   1) Respuesta identica para "no existe" y "no es tu solicitud", para no
+//      confirmar la existencia de un numero (antienumeracion).
+//   2) Tope de intentos FALLIDOS por correo en una ventana de tiempo.
+// Un acierto limpia el contador, asi que el uso normal nunca lo toca.
+var MENSAJE_ESTADO_SIN_ACCESO_ =
+  'No encontramos una solicitud con ese número asociada a ese correo. Revisa ambos datos.';
+var LIMITE_INTENTOS_ESTADO_ = 10;
+var VENTANA_INTENTOS_ESTADO_SEG_ = 900; // 15 minutos
+
+function claveIntentosEstado_(email) {
+  return 'INTENTOS_ESTADO:' + String(email || '').trim().toLowerCase();
+}
+
+// CacheService puede no estar disponible en algun contexto (o fallar): el
+// freno es una defensa extra, nunca puede impedir que el dueño consulte.
+function demasiadosIntentosEstado_(email) {
+  try {
+    var n = Number(CacheService.getScriptCache().get(claveIntentosEstado_(email)) || 0);
+    return n >= LIMITE_INTENTOS_ESTADO_;
+  } catch (err) { return false; }
+}
+
+function registrarIntentoFallidoEstado_(email) {
+  try {
+    var cache = CacheService.getScriptCache();
+    var clave = claveIntentosEstado_(email);
+    var n = Number(cache.get(clave) || 0) + 1;
+    cache.put(clave, String(n), VENTANA_INTENTOS_ESTADO_SEG_);
+    return n;
+  } catch (err) { return 0; }
+}
+
+function limpiarIntentosEstado_(email) {
+  try { CacheService.getScriptCache().remove(claveIntentosEstado_(email)); }
+  catch (err) { /* sin cache: nada que limpiar */ }
 }
 
 function compararEmail_(a, b) {
