@@ -1040,6 +1040,80 @@ button {
   font-weight: 600;
 }
 
+/* ===== v13 (Fase 2, "piel del listado de Mis solicitudes") ==============
+   Solo CSS -- estado.js inyecta el mismo markup en la página pública y en la
+   plataforma; ambas cargan este archivo. ======================================= */
+
+/* KPIs compactos del resumen (antes: una frase en texto). Profesionales, no
+   tarjetas gigantes: número prominente, etiqueta discreta, un riel de color
+   superior por tipo (semántico, no decorativo). */
+.sigso-mis-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  gap: 0.6rem;
+  margin-bottom: var(--esp-3, 1rem);
+}
+.sigso-mis-kpi {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-top: 2px solid var(--borde-fuerte);
+  border-radius: 10px;
+  padding: 0.65rem 0.8rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.sigso-mis-kpi__n {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--texto);
+  font-variant-numeric: tabular-nums;
+}
+.sigso-mis-kpi__l {
+  font-size: 0.72rem;
+  color: var(--texto-2);
+  line-height: 1.25;
+}
+.sigso-mis-kpi--abiertas { border-top-color: var(--info); }
+.sigso-mis-kpi--desarrollo { border-top-color: var(--primario); }
+.sigso-mis-kpi--pendientes { border-top-color: var(--alerta); }
+.sigso-mis-kpi--cerradas { border-top-color: var(--ok); }
+/* "Pendientes de validar" con carga: el número toma color de alerta -- es lo
+   único que realmente pide acción del solicitante. */
+.sigso-mis-kpi--pendientes.is-alerta .sigso-mis-kpi__n { color: var(--alerta); }
+
+/* Fila de la lista: se corrige el borde (usaba --gris-claro, que resuelve a
+   --superficie-2 -- un color de RELLENO, casi invisible) y se da jerarquía:
+   el ID manda, la prioridad no compite. */
+.sigso-bandeja__fila {
+  border-color: var(--borde);
+  border-radius: 10px;
+  border-left: 3px solid transparent;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.sigso-bandeja__fila:hover { border-color: var(--borde-fuerte); border-left-color: var(--primario); }
+.sigso-bandeja__fila--activa { border-color: var(--primario); border-left-color: var(--primario); box-shadow: 0 0 0 1px var(--primario); }
+.sigso-bandeja__fila .sigso-id { font-size: 0.9rem; letter-spacing: -0.01em; color: var(--texto); }
+.sigso-bandeja__fila-cabecera > span { display: inline-flex; align-items: center; gap: 0.3rem; flex: 0 0 auto; }
+
+/* Estado de error del listado, con "Reintentar" (antes quedaba el esqueleto
+   girando sin salida ante un fallo de red). */
+.sigso-estado-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+  padding: 2rem 1rem;
+  color: var(--texto-2);
+  background: var(--superficie);
+  border: 1px dashed var(--borde-fuerte);
+  border-radius: 12px;
+}
+.sigso-estado-error svg { color: var(--alerta); }
+.sigso-estado-error p { margin: 0; max-width: 24rem; }
+
 /* UI-3 (§3): linea de tiempo de hitos en Consultar Estado. */
 .sigso-hitos {
   display: flex;

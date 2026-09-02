@@ -699,10 +699,12 @@
       var lista = document.getElementById('lista-mis-solicitudes');
       lista.innerHTML = Componentes.esqueleto({ filas: 4 });
       panel.classList.remove('sigso-oculto');
+      var self = this;
       return llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'misSolicitudes', { token: token })
         .then(function (respuesta) {
           if (!respuesta.ok) {
-            lista.innerHTML = Componentes.alerta(respuesta.message || 'No se pudieron cargar tus solicitudes.', 'error');
+            mostrarErrorMisSolicitudes_(lista, respuesta.message || 'No pudimos cargar tus solicitudes.',
+              function () { self.cargarConToken(token); });
             return respuesta;
           }
           // Sin email global: el drill-down usa el email_coincidente por fila.
@@ -711,16 +713,50 @@
           renderResumenMisSolicitudes_(respuesta.data.resumen);
           renderListaFiltrada_();
           return respuesta;
+        })
+        .catch(function () {
+          // v13 (Fase 2): un fallo de red también muestra el estado de error
+          // con "Reintentar" -- antes quedaba el esqueleto girando sin salida.
+          mostrarErrorMisSolicitudes_(lista, 'No pudimos conectar con el servidor.',
+            function () { self.cargarConToken(token); });
         });
     }
   };
 
+  // v13 (Fase 2): estado de error del listado, con acción de reintentar.
+  function mostrarErrorMisSolicitudes_(contenedor, mensaje, reintentar) {
+    contenedor.innerHTML =
+      '<div class="sigso-estado-error">' +
+        Iconos.svg('alerta', { tam: 22 }) +
+        '<p>' + Componentes.escaparHtml(mensaje) + '</p>' +
+        '<button type="button" class="sigso-boton--secundario js-mis-reintentar">Reintentar</button>' +
+      '</div>';
+    var boton = contenedor.querySelector('.js-mis-reintentar');
+    if (boton) boton.addEventListener('click', reintentar);
+  }
+
+  // v13 (Fase 2, "piel del listado"): el resumen deja de ser una frase en
+  // texto y pasa a KPIs compactos y escaneables (< 2 s para entender el
+  // estado general). "Cerradas" no viene del backend -- se calcula acá desde
+  // la lista completa (S09/S10/S11), sin pedir nada nuevo.
   function renderResumenMisSolicitudes_(resumen) {
+    var cerradas = listaCompleta_.filter(function (s) {
+      return ESTADOS_CERRADOS_PUBLICO.indexOf(s.estado_derivado) !== -1;
+    }).length;
+    var kpis = [
+      { n: resumen.total, l: 'Total', cls: 'total' },
+      { n: resumen.abiertas, l: 'Abiertas', cls: 'abiertas' },
+      { n: resumen.en_desarrollo, l: 'En desarrollo', cls: 'desarrollo' },
+      { n: resumen.pendientes_validar, l: 'Pendientes de validar', cls: 'pendientes', alerta: resumen.pendientes_validar > 0 },
+      { n: cerradas, l: 'Cerradas', cls: 'cerradas' }
+    ];
     document.getElementById('resumen-mis-solicitudes').innerHTML =
-      '<p><strong>' + resumen.total + '</strong> solicitud(es) — ' +
-      resumen.abiertas + ' abierta(s), ' +
-      resumen.en_desarrollo + ' en desarrollo, ' +
-      resumen.pendientes_validar + ' ítem(s) pendiente(s) de validar.</p>';
+      '<div class="sigso-mis-kpis">' + kpis.map(function (k) {
+        return '<div class="sigso-mis-kpi sigso-mis-kpi--' + k.cls + (k.alerta ? ' is-alerta' : '') + '">' +
+          '<span class="sigso-mis-kpi__n">' + k.n + '</span>' +
+          '<span class="sigso-mis-kpi__l">' + Componentes.escaparHtml(k.l) + '</span>' +
+        '</div>';
+      }).join('') + '</div>';
   }
 
   function poblarFiltroEstados_() {
@@ -752,11 +788,21 @@
     });
 
     var contenedor = document.getElementById('lista-mis-solicitudes');
+    // v13 (Fase 2): "no tienes solicitudes todavía" (vacío real) es distinto de
+    // "ninguna coincide con el filtro" -- un mensaje que sirva para cada caso.
+    if (listaCompleta_.length === 0) {
+      contenedor.innerHTML = Componentes.vacio({
+        icono: 'lista',
+        texto: 'No tienes solicitudes todavía.',
+        detalle: 'Cuando ingreses un pedido al equipo, aparecerá acá para que sigas su estado.'
+      });
+      return;
+    }
     if (filtradas.length === 0) {
       contenedor.innerHTML = Componentes.vacio({
         icono: 'filtro',
-        texto: 'Ninguna solicitud coincide con el filtro.',
-        detalle: 'Prueba con "Todas" para ver el listado completo.'
+        texto: 'No encontramos solicitudes con estos filtros.',
+        detalle: 'Ajusta la búsqueda o vuelve a "Todos" para ver el listado completo.'
       });
       return;
     }
