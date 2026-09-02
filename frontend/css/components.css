@@ -447,6 +447,44 @@
 .sigso-estado-error svg { color: var(--alerta); }
 .sigso-estado-error p { margin: 0; max-width: 24rem; }
 
+/* ===== v13 (Fase 3, "centro de revisión" del detalle) ==================== */
+/* El banner de acciones pasó de <div> a <button> (lleva a la pestaña Ítems):
+   necesita los resets de botón sin perder su look de aviso. */
+.sigso-banner-accion {
+  width: 100%; cursor: pointer; text-align: left; font-family: inherit;
+  border-top: none; border-right: none; border-bottom: none;
+}
+.sigso-banner-accion:hover { background: color-mix(in srgb, var(--alerta-suave), var(--alerta) 12%); }
+.sigso-banner-accion:focus-visible { outline: none; box-shadow: var(--foco-anillo); }
+
+/* Cabecera del detalle: número + chips de estado/prioridad en una línea. */
+.sigso-detalle-cab {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--esp-2); flex-wrap: wrap; margin-bottom: var(--esp-2);
+}
+.sigso-detalle-cab .sigso-numero-solicitud { margin: 0; }
+.sigso-detalle-cab__chips { display: inline-flex; align-items: center; gap: 0.35rem; flex: 0 0 auto; }
+
+/* Pestañas del detalle. Subrayado en la activa -- discreto, no cajas. */
+.sigso-detalle-tabs {
+  display: flex; gap: 0.1rem; border-bottom: 1px solid var(--borde);
+  margin: var(--esp-3) 0; flex-wrap: wrap;
+}
+.sigso-detalle-tab {
+  appearance: none; background: none; border: none; font: inherit; cursor: pointer;
+  padding: 0.5rem 0.9rem; color: var(--texto-2); font-size: 0.9rem; font-weight: 500;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; border-radius: 6px 6px 0 0;
+  transition: color 0.12s ease, background 0.12s ease;
+}
+.sigso-detalle-tab:hover { color: var(--texto); background: var(--superficie-2); }
+.sigso-detalle-tab.is-activa { color: var(--primario); border-bottom-color: var(--primario); font-weight: 600; }
+.sigso-detalle-tab:focus-visible { outline: none; box-shadow: var(--foco-anillo); }
+
+/* Grupo de archivos por ítem en la pestaña Archivos. */
+.sigso-archivos-grupo { margin-bottom: var(--esp-3); }
+.sigso-archivos-grupo:last-child { margin-bottom: 0; }
+.sigso-archivos-grupo__titulo { margin: 0 0 var(--esp-1); font-size: 0.9rem; color: var(--texto); font-weight: 600; }
+
 /* UI-3 (§3): linea de tiempo de hitos en Consultar Estado. */
 .sigso-hitos {
   display: flex;

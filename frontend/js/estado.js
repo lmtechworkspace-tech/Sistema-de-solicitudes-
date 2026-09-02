@@ -142,20 +142,71 @@
         : '<p class="sigso-ayuda">Eres la solicitud de mayor prioridad en espera de tu empresa.</p>';
     }
 
+    // v13 (Fase 3, "centro de revisión"): el detalle deja de ser un bloque
+    // continuo y pasa a cabecera + progreso + banner (siempre visible) +
+    // PESTAÑAS. Los adjuntos de todos los ítems se juntan en su propia
+    // pestaña (antes vivían dentro de cada ítem). Los paneles inactivos se
+    // OCULTAN por CSS (no se quitan del DOM): así todo el cableado de abajo
+    // -- responder, validar, corregir, quitar adjunto -- sigue enganchando
+    // igual con querySelectorAll.
+    var archivosTab = archivosTab_(data);
+    var totalArchivos = data.subsolicitudes.reduce(function (n, s) { return n + (s.archivos || []).length; }, 0);
+    var pestanas = [
+      { id: 'resumen', etiqueta: 'Resumen',
+        html: renderFechaComprometidaResumen_(data) + cola + pdf + resumenSolicitud_(data) },
+      { id: 'items', etiqueta: 'Ítems (' + data.subsolicitudes.length + ')', html: itemsHtml }
+    ];
+    if (archivosTab) pestanas.push({ id: 'archivos', etiqueta: 'Archivos (' + totalArchivos + ')', html: archivosTab });
+
+    // Si hay algo que el solicitante debe HACER (validar / responder), se
+    // arranca en la pestaña Ítems para que actúe de una; si no, en Resumen.
+    var hayPendiente = data.subsolicitudes.some(function (s) { return s.estado === 'S08' || s.pregunta_pendiente; });
+    var activa = hayPendiente ? 'items' : 'resumen';
+
     var contenedor = document.getElementById(contenedorId || 'resultado');
     contenedor.innerHTML =
       '<div class="sigso-resultado-exito">' +
-      renderBannerAcciones_(data) +
-      '<p class="sigso-numero-solicitud">' + data.solicitud_id + '</p>' +
+      '<div class="sigso-detalle-cab">' +
+        '<p class="sigso-numero-solicitud">' + data.solicitud_id + '</p>' +
+        '<span class="sigso-detalle-cab__chips">' +
+          Componentes.badgeEstado(data.estado_derivado) + ' ' + Componentes.badgePrioridad(data.prioridad_derivada) +
+        '</span>' +
+      '</div>' +
       renderHitos_(data.estado_derivado) +
-      '<p>Estado: <strong>' + formatearEstadoSigso(data.estado_derivado) + '</strong>' +
-      ' &mdash; Prioridad: ' + Componentes.badgePrioridad(data.prioridad_derivada) + '</p>' +
-      renderFechaComprometidaResumen_(data) +
-      cola +
-      '<p class="sigso-ayuda">Haz clic en cada &iacute;tem para ver su detalle.</p>' +
-      pdf +
-      itemsHtml +
+      renderBannerAcciones_(data) +
+      '<div class="sigso-detalle-tabs" role="tablist">' +
+        pestanas.map(function (t) {
+          return '<button type="button" class="sigso-detalle-tab' + (t.id === activa ? ' is-activa' : '') +
+            '" data-tab="' + t.id + '" role="tab" aria-selected="' + (t.id === activa) + '">' + t.etiqueta + '</button>';
+        }).join('') +
+      '</div>' +
+      pestanas.map(function (t) {
+        return '<div class="sigso-detalle-panel' + (t.id === activa ? '' : ' sigso-oculto') + '" data-panel="' + t.id + '" role="tabpanel">' +
+          t.html + '</div>';
+      }).join('') +
       '</div>';
+
+    // v13 (Fase 3): cambio de pestaña. Los paneles se ocultan/muestran; nada
+    // se saca del DOM, así que el cableado de acciones no se ve afectado.
+    contenedor.querySelectorAll('.sigso-detalle-tab').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-tab');
+        contenedor.querySelectorAll('.sigso-detalle-tab').forEach(function (b) {
+          var act = b === btn;
+          b.classList.toggle('is-activa', act);
+          b.setAttribute('aria-selected', act);
+        });
+        contenedor.querySelectorAll('.sigso-detalle-panel').forEach(function (p) {
+          p.classList.toggle('sigso-oculto', p.getAttribute('data-panel') !== id);
+        });
+      });
+    });
+    // El banner de acciones lleva a la pestaña Ítems de un clic.
+    var irItems = contenedor.querySelector('[data-accion="ir-items"]');
+    if (irItems) irItems.addEventListener('click', function () {
+      var tabItems = contenedor.querySelector('.sigso-detalle-tab[data-tab="items"]');
+      if (tabItems) tabItems.click();
+    });
 
     // Expandir/colapsar el detalle de cada item al hacer clic en la cabecera.
     contenedor.querySelectorAll('[data-accion="expandir"]').forEach(function (el) {
@@ -283,8 +334,39 @@
     if (porValidar > 0) avisos.push(porValidar + ' ítem(s) esperando tu validación');
     if (porResponder > 0) avisos.push(porResponder + ' pregunta(s) del equipo por responder');
     if (avisos.length === 0) return '';
-    return '<div class="sigso-banner-accion">' + Iconos.svg('alerta', { tam: 16 }) + ' Tienes ' + avisos.join(' y ') +
-      ' — están más abajo, expandidos.</div>';
+    // v13 (Fase 3): el banner es clickeable y lleva a la pestaña Ítems (donde
+    // están las acciones), en vez de "más abajo".
+    return '<button type="button" class="sigso-banner-accion" data-accion="ir-items">' +
+      Iconos.svg('alerta', { tam: 16 }) + ' Tienes ' + avisos.join(' y ') +
+      ' — revísalos en la pestaña Ítems.</button>';
+  }
+
+  // v13 (Fase 3): resumen chico de la solicitud para la pestaña Resumen --
+  // cuántos ítems y cómo van, sin tener que abrir cada uno.
+  function resumenSolicitud_(data) {
+    var subs = data.subsolicitudes || [];
+    var abiertos = subs.filter(function (s) { return ESTADOS_CERRADOS_PUBLICO.indexOf(s.estado) === -1 && s.estado !== 'S08'; }).length;
+    var terminados = subs.filter(function (s) { return s.estado === 'S08'; }).length;
+    var cerrados = subs.filter(function (s) { return ESTADOS_CERRADOS_PUBLICO.indexOf(s.estado) !== -1; }).length;
+    var partes = [];
+    if (abiertos) partes.push(abiertos + ' en curso');
+    if (terminados) partes.push(terminados + ' por validar');
+    if (cerrados) partes.push(cerrados + ' cerrado(s)');
+    return '<p class="sigso-ayuda">' + subs.length + ' ítem(s)' +
+      (partes.length ? ': ' + partes.join(' · ') : '') + '.</p>';
+  }
+
+  // v13 (Fase 3): pestaña Archivos -- junta los adjuntos de todos los ítems,
+  // agrupados por ítem para no perder el contexto. Vacío si no hay ninguno.
+  function archivosTab_(data) {
+    var conArchivos = (data.subsolicitudes || []).filter(function (s) { return (s.archivos || []).length; });
+    if (!conArchivos.length) return '';
+    return conArchivos.map(function (s) {
+      return '<div class="sigso-archivos-grupo">' +
+        '<h4 class="sigso-archivos-grupo__titulo">' + Componentes.escaparHtml(s.titulo || 'Ítem') + '</h4>' +
+        galeriaItemPublico_(s.archivos, true) +
+      '</div>';
+    }).join('');
   }
 
   // UI-3 (§3): la fecha comprometida mas proxima entre los items abiertos,
@@ -317,11 +399,9 @@
     } else if (s.fecha_propuesta) {
       filas += '<p class="sigso-ayuda">Para cuándo lo pediste: ' + Componentes.escaparHtml(formatearFechaHora_(s.fecha_propuesta)) + ' (a confirmar por el equipo).</p>';
     }
-    // Fase 1 ("ver adjuntos propios"): las imágenes/documentos que el
-    // solicitante subió al crear el ítem -- hasta ahora no se mostraban aquí,
-    // así que no podía revisar su propia evidencia. Reusa la galería + lista
-    // de archivos de Componentes (el lightbox se auto-cablea).
-    filas += galeriaItemPublico_(s.archivos);
+    // v13 (Fase 3): los adjuntos ya NO se muestran dentro del ítem -- viven en
+    // la pestaña Archivos del detalle (agrupados por ítem). Quitarlos de acá
+    // evita duplicar y aligera el bloque del ítem.
 
     // Fase 1 ("editar solicitud"): si el ítem todavía es editable, se ofrece
     // corregir lo que se llenó con un error (título, descripción, contexto,
@@ -598,7 +678,7 @@
   // Fase 1: galería de adjuntos del ítem (imágenes con lightbox + documentos
   // como lista). Mismo patrón que el detalle del staff (detalle.js), reusando
   // Componentes.galeriaImagenes / listaArchivos.
-  function galeriaItemPublico_(archivos) {
+  function galeriaItemPublico_(archivos, sinTitulo) {
     var todos = archivos || [];
     if (!todos.length) return '';
     var imagenes = todos.filter(function (a) { return String(a.tipo_mime || '').indexOf('image/') === 0; });
@@ -613,7 +693,11 @@
       }));
     }
     if (documentos.length) partes += Componentes.listaArchivos(documentos);
-    return '<div class="sigso-adjuntos-item"><p><strong>Adjuntos que enviaste</strong></p>' + partes + '</div>';
+    // v13 (Fase 3): en la pestaña Archivos, el título propio sobra (ya está el
+    // nombre del ítem arriba); sinTitulo lo omite.
+    return sinTitulo
+      ? '<div class="sigso-adjuntos-item">' + partes + '</div>'
+      : '<div class="sigso-adjuntos-item"><p><strong>Adjuntos que enviaste</strong></p>' + partes + '</div>';
   }
 
   function mostrarError_(respuesta, contenedorId) {
