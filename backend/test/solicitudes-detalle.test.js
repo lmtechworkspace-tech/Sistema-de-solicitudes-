@@ -154,3 +154,43 @@ test('doPost action=getSolicitudDetalle responde ok:true end-to-end', () => {
   assert.equal(parsed.ok, true);
   assert.equal(parsed.data.solicitud.solicitud_id, 'SOL-2026-HP-0001');
 });
+
+// Fase 1 de Solicitudes (cierre): el staff corrige el contenido del ítem.
+test('editarContenidoSubsolicitud (staff) corrige el ítem y deja traza, sin límite de estado', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  // Aun con el ítem YA en desarrollo, el staff puede corregir.
+  ctx.actualizarFilaPorId_('SUBSOLICITUDES', 'subsolicitud_id', 'SOL-2026-HP-0001-01', { estado: 'S05' });
+
+  const r = ctx.Solicitudes.editarContenidoSubsolicitud({
+    subsolicitud_id: 'SOL-2026-HP-0001-01',
+    titulo: 'Titulo corregido por Leo',
+    descripcion: 'Descripcion corregida por el equipo',
+    contexto: 'ctx', resultado_esperado: ''
+  }, { rol: 'DEV', email: 'dev@homepymes.cl' });
+
+  assert.equal(r.ok, true);
+  assert.ok(r.cambios >= 1);
+  const sub = ctx.leerFilas_('SUBSOLICITUDES')[0];
+  assert.equal(sub.titulo, 'Titulo corregido por Leo');
+  assert.equal(sub.descripcion, 'Descripcion corregida por el equipo');
+
+  const com = ctx.leerFilas_('COMENTARIOS');
+  assert.equal(com.length, 1);
+  assert.equal(com[0].es_interno, true);
+  assert.equal(com[0].usuario, 'dev@homepymes.cl');
+  assert.match(com[0].texto, /Corrigió el contenido/);
+});
+
+test('editarContenidoSubsolicitud rechaza roles de solo lectura y textos vacíos', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  assert.equal(ctx.Solicitudes.editarContenidoSubsolicitud(
+    { subsolicitud_id: 'SOL-2026-HP-0001-01', titulo: 'abc', descripcion: 'abcdef' },
+    { rol: 'GERENCIA', email: 'g@x.cl' }
+  )._forbidden, true);
+  assert.equal(ctx.Solicitudes.editarContenidoSubsolicitud(
+    { subsolicitud_id: 'SOL-2026-HP-0001-01', titulo: 'a', descripcion: 'abcdef' },
+    { rol: 'ADM', email: 'a@x.cl' }
+  )._validationError, true);
+});

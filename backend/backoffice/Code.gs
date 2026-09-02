@@ -40,6 +40,7 @@ var BACKOFFICE_ACTIONS = {
   getSolicitudDetalle: handleGetSolicitudDetalle_,
   actualizarEstado: handleActualizarEstado_,
   actualizarPrioridad: handleActualizarPrioridad_,
+  editarContenidoSubsolicitud: handleEditarContenidoSubsolicitud_,
   comprometerFecha: handleComprometerFecha_,
   derivarSolicitud: handleDerivarSolicitud_,
   agregarComentario: handleAgregarComentario_,
@@ -420,6 +421,7 @@ var MODULO_POR_ACCION = {
   getSolicitudDetalle: ['bandeja', 'gerencia', 'jefatura'],
   actualizarEstado: 'bandeja',
   actualizarPrioridad: 'bandeja',
+  editarContenidoSubsolicitud: 'bandeja',
   comprometerFecha: 'bandeja',
   derivarSolicitud: 'bandeja',
   agregarComentario: 'bandeja',
@@ -1047,6 +1049,10 @@ function handleActualizarEstado_(data, contexto) {
 function handleActualizarPrioridad_(data, contexto) {
   var resultado = Solicitudes.actualizarPrioridad(data, contexto);
   return responderResultado_(resultado);
+}
+
+function handleEditarContenidoSubsolicitud_(data, contexto) {
+  return responderResultado_(Solicitudes.editarContenidoSubsolicitud(data, contexto));
 }
 
 function handleComprometerFecha_(data, contexto) {

@@ -21,6 +21,7 @@ var INTAKE_ACTIONS = {
   getClientes: handleGetClientes_,
   consultarEstado: handleConsultarEstado_,
   editarSubsolicitud: handleEditarSubsolicitud_,
+  eliminarArchivo: handleEliminarArchivo_,
   responderConsulta: handleResponderConsulta_,
   validarCierre: handleValidarCierre_,
   solicitarCodigoAcceso: handleSolicitarCodigoAcceso_,
@@ -94,6 +95,10 @@ function handleResponderConsulta_(data) {
 
 function handleEditarSubsolicitud_(data) {
   return responderResultado_(Solicitudes.editarSubsolicitud(data));
+}
+
+function handleEliminarArchivo_(data) {
+  return responderResultado_(Solicitudes.eliminarArchivo(data));
 }
 
 function handleValidarCierre_(data) {

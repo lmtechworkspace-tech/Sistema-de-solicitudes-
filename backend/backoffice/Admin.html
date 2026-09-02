@@ -1225,6 +1225,26 @@ button {
 .sigso-item-editar[open] > summary { margin-bottom: 0.4rem; }
 .sigso-adjuntos-item { margin-top: 0.75rem; }
 .sigso-adjuntos-item > p { margin: 0 0 0.4rem; }
+/* Fila de "adjunto actual" dentro del bloque de corrección, con su botón de
+   quitar (armado en dos toques). */
+.sigso-adjunto-fila {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  padding: 0.3rem 0; border-bottom: 1px solid var(--sigso-borde, #d9d2c7);
+}
+.sigso-adjunto-fila:last-child { border-bottom: none; }
+.sigso-adjunto-quitar.is-armado { color: #b3261e; font-weight: 600; }
+
+/* Fase 1 de Solicitudes (cierre): editor de contenido del ítem en la bandeja
+   (detalle del staff). Usa los tokens del sistema nuevo, que es donde vive. */
+.sigso-editar-contenido {
+  margin-top: var(--esp-3); padding: var(--esp-2) var(--esp-3);
+  border: 1px dashed var(--borde-fuerte); border-radius: var(--radio-sm);
+}
+.sigso-editar-contenido > summary {
+  cursor: pointer; font-size: var(--texto-sm); color: var(--texto-2);
+  display: flex; align-items: center; gap: var(--esp-1);
+}
+.sigso-editar-contenido[open] > summary { margin-bottom: var(--esp-2); color: var(--texto); }
 
 /* ============ v3.3: shell de la plataforma ============ */
 

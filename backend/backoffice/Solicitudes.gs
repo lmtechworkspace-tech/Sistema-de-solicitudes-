@@ -346,6 +346,61 @@ var Solicitudes = {
     };
   },
 
+  /**
+   * Fase 1 de Solicitudes (cierre): el STAFF corrige el contenido de un ítem
+   * -- título, descripción, contexto, resultado esperado. Complementa a
+   * Intake.editarSubsolicitud (que usa el solicitante y solo antes de que el
+   * ítem entre a desarrollo): acá NO hay límite de estado, porque muchas
+   * correcciones se detectan justamente mientras se trabaja. Lo que sí hay,
+   * igual que allá, es TRAZA: cada edición deja un comentario interno con el
+   * antes→después. Gerencia/Jefatura son de solo lectura.
+   */
+  editarContenidoSubsolicitud: function (data, contexto) {
+    var rol = contexto ? contexto.rol : '';
+    if (rol === 'GERENCIA' || rol === 'JEFATURA') {
+      return { _forbidden: true, message: 'El rol ' + rol + ' es de solo lectura: no puede editar el contenido.' };
+    }
+    if (!data || !data.subsolicitud_id) {
+      return errorValidacion_('subsolicitud_id', 'Falta la subsolicitud a editar.');
+    }
+    var sub = buscarSubsolicitud_(data.subsolicitud_id);
+    if (!sub) {
+      return errorValidacion_('subsolicitud_id', 'Subsolicitud no encontrada: ' + data.subsolicitud_id);
+    }
+
+    var titulo = String(data.titulo || '').trim();
+    var descripcion = String(data.descripcion || '').trim();
+    if (titulo.length < 3) return errorValidacion_('titulo', 'El titulo es muy corto.');
+    if (descripcion.length < 5) return errorValidacion_('descripcion', 'La descripcion es muy corta.');
+    var contextoTxt = String(data.contexto || '').trim();
+    var resultado = String(data.resultado_esperado || '').trim();
+
+    var cambios = [];
+    if (titulo !== String(sub.titulo || '')) cambios.push('Título: "' + String(sub.titulo || '') + '" → "' + titulo + '"');
+    if (descripcion !== String(sub.descripcion || '')) cambios.push('Descripción actualizada');
+    if (contextoTxt !== String(sub.contexto || '')) cambios.push('Contexto actualizado');
+    if (resultado !== String(sub.resultado_esperado || '')) cambios.push('Resultado esperado actualizado');
+    if (!cambios.length) return { ok: true, cambios: 0 };
+
+    actualizarFilaPorId_(SHEETS.SUBSOLICITUDES, 'subsolicitud_id', data.subsolicitud_id, {
+      titulo: titulo, descripcion: descripcion, contexto: contextoTxt, resultado_esperado: resultado
+    });
+
+    try {
+      agregarFila_(SHEETS.COMENTARIOS, {
+        comentario_id: Utilities.getUuid(),
+        solicitud_id: sub.solicitud_id,
+        subsolicitud_id: data.subsolicitud_id,
+        usuario: (contexto && contexto.email) || '',
+        texto: 'Corrigió el contenido del ítem. ' + cambios.join('. ') + '.',
+        es_interno: true,
+        timestamp: new Date().toISOString()
+      });
+    } catch (errTraza_) { /* la corrección ya quedó guardada */ }
+
+    return { ok: true, cambios: cambios.length };
+  },
+
   getDetalle: function (solicitudId, contexto) {
     if (!solicitudId) {
       return errorValidacion_('solicitud_id', 'Falta indicar el numero de solicitud.');

@@ -37,7 +37,7 @@
 
   function bloquearAcciones_(botonActivo) {
     accionEnCurso = true;
-    document.querySelectorAll('.sigso-accion-estado, .sigso-aplicar-fecha, .sigso-aplicar-prioridad, .sigso-aplicar-derivacion').forEach(function (b) {
+    document.querySelectorAll('.sigso-accion-estado, .sigso-aplicar-fecha, .sigso-aplicar-prioridad, .sigso-aplicar-derivacion, .sigso-aplicar-edicion').forEach(function (b) {
       b.disabled = true;
     });
     if (botonActivo) {
@@ -48,7 +48,7 @@
 
   function desbloquearAcciones_() {
     accionEnCurso = false;
-    document.querySelectorAll('.sigso-accion-estado, .sigso-aplicar-fecha, .sigso-aplicar-prioridad, .sigso-aplicar-derivacion').forEach(function (b) {
+    document.querySelectorAll('.sigso-accion-estado, .sigso-aplicar-fecha, .sigso-aplicar-prioridad, .sigso-aplicar-derivacion, .sigso-aplicar-edicion').forEach(function (b) {
       b.disabled = false;
       var original = b.getAttribute('data-texto-original');
       if (original) {
@@ -543,9 +543,53 @@
         historialHtml +
         (sub.observaciones ? '<p><em>' + Componentes.escaparHtml(sub.observaciones) + '</em></p>' : '') +
         renderGaleria_(imagenesItem) +
+        // Fase 1 de Solicitudes (cierre): corregir el contenido del ítem desde
+        // la bandeja. Plegado, porque es la excepción -- lo normal es avanzar
+        // el flujo, no reescribir el pedido.
+        (soloLectura ? '' : bloqueEdicionStaff_(sub)) +
         (soloLectura ? '' : renderAccionesItem_(sub, transiciones[sub.subsolicitud_id] || [])) +
         '</div></div>';
     }).join('') || Componentes.vacio('Sin items.');
+  }
+
+  // Fase 1 de Solicitudes (cierre): editor del contenido del ítem para el
+  // staff. A diferencia del solicitante (que solo puede antes de desarrollo),
+  // acá no hay límite de estado -- muchas correcciones se detectan trabajando.
+  // Cada guardado deja traza en la historia (comentario interno).
+  function bloqueEdicionStaff_(sub) {
+    var id = sub.subsolicitud_id;
+    return '<details class="sigso-editar-contenido">' +
+      '<summary>' + Iconos.svg('editar', { tam: 14 }) + ' Corregir contenido del ítem</summary>' +
+      '<p class="sigso-ayuda">Arregla lo que se llenó mal. Queda registrado en la historia.</p>' +
+      '<div class="sigso-campo"><label for="ec-titulo-' + id + '">Título</label>' +
+        '<input type="text" id="ec-titulo-' + id + '" value="' + Componentes.escaparHtml(sub.titulo || '') + '" /></div>' +
+      '<div class="sigso-campo"><label for="ec-desc-' + id + '">Descripción</label>' +
+        '<textarea id="ec-desc-' + id + '">' + Componentes.escaparHtml(sub.descripcion || '') + '</textarea></div>' +
+      '<div class="sigso-campo"><label for="ec-ctx-' + id + '">Contexto</label>' +
+        '<textarea id="ec-ctx-' + id + '">' + Componentes.escaparHtml(sub.contexto || '') + '</textarea></div>' +
+      '<div class="sigso-campo"><label for="ec-res-' + id + '">Resultado esperado</label>' +
+        '<textarea id="ec-res-' + id + '">' + Componentes.escaparHtml(sub.resultado_esperado || '') + '</textarea></div>' +
+      '<button type="button" class="sigso-boton--secundario sigso-aplicar-edicion" data-subsolicitud="' + id + '">Guardar corrección</button> ' +
+      '<span class="sigso-resultado-accion" data-subsolicitud="' + id + '-edicion"></span>' +
+    '</details>';
+  }
+
+  function enviarEdicionContenido_(solicitudId, subsolicitudId, campos) {
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'editarContenidoSubsolicitud',
+      Object.assign({ subsolicitud_id: subsolicitudId }, campos))
+      .then(function (respuesta) {
+        if (respuesta.ok) {
+          return window.SigsoDetalle.cargar(solicitudId).then(function () { accionEnCurso = false; });
+        }
+        desbloquearAcciones_();
+        var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subsolicitudId + '-edicion"]');
+        if (span) span.textContent = respuesta.message || 'No se pudo guardar la corrección.';
+      })
+      .catch(function () {
+        desbloquearAcciones_();
+        var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subsolicitudId + '-edicion"]');
+        if (span) span.textContent = 'No se pudo conectar con el servidor. Intenta nuevamente.';
+      });
   }
 
   // Acciones inline: los 11 estados estan siempre disponibles (Fase 10.1,
@@ -922,6 +966,27 @@
         var justificacion = document.querySelector('.sigso-justificacion-prioridad[data-subsolicitud="' + subId + '"]').value;
         bloquearAcciones_(boton);
         enviarCambioPrioridad_(solicitudId, subId, prioridad, justificacion);
+      });
+    });
+
+    document.querySelectorAll('.sigso-aplicar-edicion').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        if (accionEnCurso) return;
+        var subId = boton.getAttribute('data-subsolicitud');
+        var span = document.querySelector('.sigso-resultado-accion[data-subsolicitud="' + subId + '-edicion"]');
+        var titulo = document.getElementById('ec-titulo-' + subId).value.trim();
+        var descripcion = document.getElementById('ec-desc-' + subId).value.trim();
+        if (titulo.length < 3 || descripcion.length < 5) {
+          if (span) span.textContent = 'El título y la descripción no pueden quedar vacíos.';
+          return;
+        }
+        bloquearAcciones_(boton);
+        enviarEdicionContenido_(solicitudId, subId, {
+          titulo: titulo,
+          descripcion: descripcion,
+          contexto: document.getElementById('ec-ctx-' + subId).value.trim(),
+          resultado_esperado: document.getElementById('ec-res-' + subId).value.trim()
+        });
       });
     });
 

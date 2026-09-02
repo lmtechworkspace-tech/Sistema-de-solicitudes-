@@ -210,6 +210,50 @@ test('editarSubsolicitud rechaza correo que no coincide, y valida largos mínimo
   })._validationError, true, 'título muy corto');
 });
 
+test('eliminarArchivo quita el adjunto de la solicitud y deja traza', () => {
+  const ctx = loadConSchema();
+  seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);
+  seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S02' });
+  ctx.agregarFila_('ARCHIVOS', {
+    archivo_id: 'a1', solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    nombre_original: 'malo.png', url: 'https://drive.google.com/file/d/ABC123/view',
+    tipo_mime: 'image/png', tamano_bytes: 10, fecha_subida: new Date().toISOString()
+  });
+
+  const r = ctx.Solicitudes.eliminarArchivo({
+    solicitud_id: 'SOL-2026-HP-0001', archivo_id: 'a1', email: 'juan@homepymes.cl'
+  });
+  assert.equal(r.ok, true);
+  assert.equal(ctx.leerFilas_('ARCHIVOS').length, 0, 'la fila del adjunto se borró');
+
+  const item = ctx.Solicitudes.estadoPublico('SOL-2026-HP-0001', 'juan@homepymes.cl').subsolicitudes[0];
+  assert.equal(item.archivos.length, 0, 'ya no aparece en el detalle');
+  const com = ctx.leerFilas_('COMENTARIOS');
+  assert.equal(com.length, 1);
+  assert.match(com[0].texto, /quitó el adjunto/);
+});
+
+test('eliminarArchivo rechaza correo ajeno y adjunto de ítem ya en desarrollo', () => {
+  const ctx = loadConSchema();
+  seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S05' });
+  ctx.agregarFila_('ARCHIVOS', {
+    archivo_id: 'a1', solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    nombre_original: 'x.png', url: 'u', tipo_mime: 'image/png', tamano_bytes: 1,
+    fecha_subida: new Date().toISOString()
+  });
+  assert.equal(ctx.Solicitudes.eliminarArchivo({
+    solicitud_id: 'SOL-2026-HP-0001', archivo_id: 'a1', email: 'otro@correo.cl'
+  })._forbidden, true);
+  assert.equal(ctx.Solicitudes.eliminarArchivo({
+    solicitud_id: 'SOL-2026-HP-0001', archivo_id: 'a1', email: 'juan@homepymes.cl'
+  })._validationError, true, 'ítem en desarrollo: no se puede quitar');
+  assert.equal(ctx.leerFilas_('ARCHIVOS').length, 1, 'el adjunto sigue ahí');
+});
+
 test('estadoPublico compara el correo sin distinguir mayusculas/espacios', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);

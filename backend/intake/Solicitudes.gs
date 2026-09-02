@@ -312,6 +312,9 @@ var Solicitudes = {
         .filter(function (a) { return a.solicitud_id === solicitudId && a.subsolicitud_id; })
         .forEach(function (a) {
           (archivosPorSub_[a.subsolicitud_id] = archivosPorSub_[a.subsolicitud_id] || []).push({
+            // archivo_id viaja para poder QUITAR un adjunto subido por error
+            // (eliminarArchivo); el dueño ya se identificó con su correo.
+            archivo_id: a.archivo_id,
             nombre_original: a.nombre_original,
             url: a.url,
             tipo_mime: a.tipo_mime,
@@ -457,6 +460,69 @@ var Solicitudes = {
     } catch (errTraza_) { /* la corrección ya está guardada */ }
 
     return { ok: true, cambios: cambios.length };
+  },
+
+  /**
+   * Fase 1 ("editar solicitud", cierre): quitar un adjunto que se subió por
+   * error. Mismas reglas que editarSubsolicitud (correo del solicitante +
+   * ítem todavía editable). Borra la fila de ARCHIVOS -- que es lo que hace
+   * que desaparezca de la app -- y, en el mejor esfuerzo, manda el archivo de
+   * Drive a la papelera. Si lo segundo falla, el adjunto igual ya no aparece.
+   */
+  eliminarArchivo: function (data) {
+    data = data || {};
+    if (!data.solicitud_id || !data.archivo_id || !data.email) {
+      return errorValidacion_('archivo_id', 'Faltan datos para quitar el adjunto.');
+    }
+    var solicitud = buscarSolicitudPorId_(data.solicitud_id);
+    if (!solicitud) return errorValidacion_('solicitud_id', 'No existe una solicitud con ese numero.');
+
+    var coincide = compararEmail_(data.email, solicitud.solicitante_email) ||
+      (!!solicitud.es_cliente && compararEmail_(data.email, solicitud.correo_cliente));
+    if (!coincide) {
+      return { _forbidden: true, message: 'El correo no coincide con el registrado para esta solicitud.' };
+    }
+
+    var archivo = leerFilas_(SHEETS.ARCHIVOS).filter(function (a) {
+      return a.archivo_id === data.archivo_id && a.solicitud_id === data.solicitud_id;
+    })[0];
+    if (!archivo) return errorValidacion_('archivo_id', 'No se encontró ese adjunto en esta solicitud.');
+
+    // El adjunto se puede quitar mientras SU ítem siga siendo editable.
+    if (archivo.subsolicitud_id) {
+      var sub = leerFilas_(SHEETS.SUBSOLICITUDES).filter(function (s) {
+        return s.subsolicitud_id === archivo.subsolicitud_id;
+      })[0];
+      var EDITABLES = [ESTADOS.S01, ESTADOS.S02, ESTADOS.S03, ESTADOS.S04];
+      if (sub && EDITABLES.indexOf(sub.estado) === -1) {
+        return errorValidacion_('estado',
+          'Ese ítem ya está en desarrollo o cerrado, no se pueden quitar sus adjuntos.');
+      }
+    }
+
+    eliminarFilasPorId_(SHEETS.ARCHIVOS, 'archivo_id', data.archivo_id);
+
+    // Mejor esfuerzo: mandar el archivo de Drive a la papelera. El id se saca
+    // de la URL (.../d/<ID>/...); si el formato no calza o Drive falla, la
+    // fila ya se borró y el adjunto no vuelve a aparecer.
+    try {
+      var m = String(archivo.url || '').match(/\/d\/([^\/?#]+)/);
+      if (m && m[1]) DriveApp.getFileById(m[1]).setTrashed(true);
+    } catch (errDrive_) { /* la fila ya no está: el adjunto desapareció igual */ }
+
+    try {
+      agregarFila_(SHEETS.COMENTARIOS, {
+        comentario_id: Utilities.getUuid(),
+        solicitud_id: data.solicitud_id,
+        subsolicitud_id: archivo.subsolicitud_id || '',
+        usuario: data.email,
+        texto: 'El solicitante quitó el adjunto "' + String(archivo.nombre_original || '') + '".',
+        es_interno: true,
+        timestamp: new Date().toISOString()
+      });
+    } catch (errTraza_) { /* el adjunto ya se quitó */ }
+
+    return { ok: true, archivo_id: data.archivo_id };
   },
 
   /**

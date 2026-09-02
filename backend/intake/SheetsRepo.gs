@@ -179,6 +179,26 @@ function actualizarFilaPorId_(nombreHoja, columnaId, valorId, cambios) {
   return null;
 }
 
+// Duplicado de backend/backoffice/SheetsRepo.gs (Fase 1 de Solicitudes):
+// Solicitudes.eliminarArchivo es la primera funcion de Intake que necesita
+// BORRAR una fila (un adjunto que el solicitante subio por error). Borra de
+// abajo hacia arriba para que quitar una fila no corra los indices de las
+// que faltan.
+function eliminarFilasPorId_(nombreHoja, columnaId, valorId) {
+  var datos = leerHojaConEncabezados_(nombreHoja);
+  var idxCol = datos.encabezados.indexOf(columnaId);
+  if (idxCol === -1) return 0;
+  var borradas = 0;
+  for (var i = datos.valores.length - 1; i >= 1; i--) {
+    if (String(datos.valores[i][idxCol]) === String(valorId)) {
+      datos.hoja.deleteRow(i + 1);
+      borradas++;
+    }
+  }
+  if (borradas) invalidarCacheHoja_(nombreHoja);
+  return borradas;
+}
+
 // §12.4 (v2.0, Sprint 4, blindaje de la abstraccion de datos): generaliza
 // actualizarFilaPorId_ para hojas que se identifican por una CLAVE
 // COMPUESTA (p.ej. COUNTERS, keyed por empresa_id+anio, no por una sola

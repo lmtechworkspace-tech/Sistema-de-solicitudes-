@@ -225,6 +225,11 @@
         guardarEdicion_(boton.getAttribute('data-subsolicitud'), boton);
       });
     });
+    contenedor.querySelectorAll('[data-accion="quitar-adjunto"]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        quitarAdjunto_(boton.getAttribute('data-archivo'), boton);
+      });
+    });
     contenedor.querySelectorAll('[data-accion="editar-cancelar"]').forEach(function (boton) {
       boton.addEventListener('click', function () {
         var det = boton.closest('.sigso-item-editar');
@@ -463,6 +468,7 @@
         '<label for="ed-res-' + id + '">Resultado esperado (opcional)</label>' +
         '<textarea id="ed-res-' + id + '">' + Componentes.escaparHtml(s.resultado_esperado || '') + '</textarea>' +
       '</div>' +
+      adjuntosActualesHtml_(s) +
       '<div class="sigso-campo">' +
         '<label for="ed-img-' + id + '">Agregar imágenes (opcional)</label>' +
         '<input type="file" id="ed-img-' + id + '" accept="image/png,image/jpeg,image/gif" multiple />' +
@@ -473,6 +479,54 @@
       '</div>' +
       '<div data-resultado-editar="' + id + '"></div>' +
     '</details>';
+  }
+
+  // Fase 1 (cierre): adjuntos ya subidos, con opción de quitar el que se
+  // subió por error. Confirmación en DOS toques, sin diálogo nativo.
+  function adjuntosActualesHtml_(s) {
+    var lista = s.archivos || [];
+    if (!lista.length) return '';
+    return '<div class="sigso-campo">' +
+      '<label>Adjuntos actuales</label>' +
+      lista.map(function (a) {
+        return '<div class="sigso-adjunto-fila">' +
+          '<span>' + Componentes.escaparHtml(a.nombre_original || 'archivo') + '</span>' +
+          '<button type="button" class="sigso-boton--sutil sigso-adjunto-quitar" ' +
+            'data-accion="quitar-adjunto" data-archivo="' + Componentes.escaparHtml(a.archivo_id || '') + '">Quitar</button>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  }
+
+  function quitarAdjunto_(archivoId, boton) {
+    if (boton.dataset.armado !== '1') {
+      boton.dataset.armado = '1';
+      boton.textContent = '¿Confirmar?';
+      boton.classList.add('is-armado');
+      return;
+    }
+    boton.disabled = true;
+    llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'eliminarArchivo', {
+      solicitud_id: ultimaConsulta.solicitud_id,
+      archivo_id: archivoId,
+      email: ultimaConsulta.email
+    }).then(function (respuesta) {
+      if (!respuesta.ok) {
+        Componentes.aviso({ texto: respuesta.message || 'No se pudo quitar el adjunto.', tipo: 'error' });
+        boton.disabled = false;
+        boton.dataset.armado = '';
+        boton.textContent = 'Quitar';
+        boton.classList.remove('is-armado');
+        return;
+      }
+      return consultar_(ultimaConsulta.solicitud_id, ultimaConsulta.email, ultimaConsulta.contenedorId);
+    }).catch(function () {
+      Componentes.aviso({ texto: 'No se pudo conectar. Intenta nuevamente.', tipo: 'error' });
+      boton.disabled = false;
+      boton.dataset.armado = '';
+      boton.textContent = 'Quitar';
+      boton.classList.remove('is-armado');
+    });
   }
 
   function guardarEdicion_(subId, boton) {
