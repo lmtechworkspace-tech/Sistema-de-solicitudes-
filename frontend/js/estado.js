@@ -157,6 +157,8 @@
       { id: 'items', etiqueta: 'Ítems (' + data.subsolicitudes.length + ')', html: itemsHtml }
     ];
     if (archivosTab) pestanas.push({ id: 'archivos', etiqueta: 'Archivos (' + totalArchivos + ')', html: archivosTab });
+    var historialTab = historialTab_(data);
+    if (historialTab) pestanas.push({ id: 'historial', etiqueta: 'Historial', html: historialTab });
 
     // Si hay algo que el solicitante debe HACER (validar / responder), se
     // arranca en la pestaña Ítems para que actúe de una; si no, en Resumen.
@@ -378,6 +380,42 @@
         galeriaItemPublico_(s.archivos, true) +
       '</div>';
     }).join('');
+  }
+
+  // v13 (Fase 4, rediseño): pestaña Historial -- la línea de tiempo de la
+  // solicitud completa (estadoPublico.historial, ver historialPublico_ en el
+  // backend). Se agrupa por ítem cuando hay más de uno, para no perder el
+  // contexto de "a cuál le pasó esto". El backend ya filtra lo sensible
+  // (correos de staff, comentarios internos) -- aquí solo se muestra.
+  var ACTOR_ETIQUETA_ = { tu: 'Tú', sistema: 'Sistema', equipo: 'El equipo' };
+  function historialTab_(data) {
+    var eventos = data.historial || [];
+    if (!eventos.length) return '';
+    var titulosPorItem_ = {};
+    (data.subsolicitudes || []).forEach(function (s) { titulosPorItem_[s.subsolicitud_id] = s.titulo; });
+    var multiItem = (data.subsolicitudes || []).length > 1;
+
+    var filas = eventos.map(function (h) {
+      var titulo = multiItem && h.subsolicitud_id ? Componentes.escaparHtml(titulosPorItem_[h.subsolicitud_id] || '') : '';
+      var transicion = h.estado_anterior
+        ? Componentes.badgeEstado(h.estado_anterior) + ' → ' + Componentes.badgeEstado(h.estado_nuevo)
+        : Componentes.badgeEstado(h.estado_nuevo);
+      return '<li class="sigso-historial-evento">' +
+        '<span class="sigso-historial-evento__punto"></span>' +
+        '<div class="sigso-historial-evento__cuerpo">' +
+          '<div class="sigso-historial-evento__cab">' +
+            (titulo ? '<span class="sigso-historial-evento__item">' + titulo + '</span> ' : '') +
+            transicion +
+          '</div>' +
+          '<p class="sigso-historial-evento__meta">' +
+            Componentes.escaparHtml(ACTOR_ETIQUETA_[h.actor] || 'El equipo') + ' · ' +
+            Componentes.escaparHtml(formatearFechaHora_(h.timestamp)) +
+          '</p>' +
+          (h.comentario ? '<p class="sigso-historial-evento__comentario">' + Componentes.escaparHtml(h.comentario) + '</p>' : '') +
+        '</div>' +
+      '</li>';
+    }).join('');
+    return '<ul class="sigso-historial-linea">' + filas + '</ul>';
   }
 
   // UI-3 (§3): la fecha comprometida mas proxima entre los items abiertos,

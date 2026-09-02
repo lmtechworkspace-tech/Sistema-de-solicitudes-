@@ -396,7 +396,10 @@ var Solicitudes = {
       posicion_cola: ESTADOS_CERRADOS.indexOf(solicitud.estado_derivado) === -1
         ? calcularPosicionCola_(solicitud)
         : null,
-      subsolicitudes: subsolicitudes
+      subsolicitudes: subsolicitudes,
+      // Fase 4 (rediseño, pestaña "Historial"): la linea de tiempo de la
+      // solicitud completa, ver historialPublico_ para que se expone y por que.
+      historial: historialPublico_(solicitudId, solicitud, email)
     };
   },
 
@@ -996,6 +999,52 @@ function limpiarIntentosEstado_(email) {
 
 function compararEmail_(a, b) {
   return !!a && !!b && String(a).trim().toLowerCase() === String(b).trim().toLowerCase();
+}
+
+/**
+ * Fase 4 (rediseño, pestaña "Historial"): arma la línea de tiempo pública de
+ * una solicitud a partir de HISTORIAL_ESTADOS -- que YA existe y registra
+ * cada cambio de estado de cada ítem (§8.2), solo que hasta ahora era de uso
+ * exclusivo del Backoffice (Gerencia/Jefatura/Dashboard). No se toca la hoja
+ * ni se agrega ninguna escritura nueva; esto es una LECTURA adicional.
+ *
+ * Dos cosas se filtran a propósito, porque HISTORIAL_ESTADOS.usuario y
+ * .comentario los escribe también el STAFF (Backoffice, cualquier rol puede
+ * mover cualquier estado -- ver Constantes.gs) y pueden traer un correo
+ * interno o un motivo de rechazo/cancelación pensado para uso interno, nunca
+ * para el solicitante:
+ *  - el AUTOR nunca viaja como correo: se reduce a 'tu' (coincide con el
+ *    correo con el que se está consultando), 'sistema' (alta automática) o
+ *    'equipo' (cualquier otro -- staff).
+ *  - el COMENTARIO solo se expone cuando el autor es el propio solicitante
+ *    (ej. el motivo que el mismo escribió al reabrir un ítem): es su propio
+ *    texto, ya lo conoce. Un comentario de staff (motivo de rechazo interno,
+ *    etc.) se omite.
+ */
+function historialPublico_(solicitudId, solicitud, email) {
+  var eventos;
+  try {
+    eventos = leerFilas_(SHEETS.HISTORIAL_ESTADOS).filter(function (h) {
+      return h.solicitud_id === solicitudId;
+    });
+  } catch (err) { return []; }
+
+  return eventos
+    .map(function (h) {
+      var esSolicitante = compararEmail_(h.usuario, email) ||
+        compararEmail_(h.usuario, solicitud.solicitante_email) ||
+        (!!solicitud.es_cliente && compararEmail_(h.usuario, solicitud.correo_cliente));
+      var actor = h.usuario === 'sistema' ? 'sistema' : (esSolicitante ? 'tu' : 'equipo');
+      return {
+        subsolicitud_id: h.subsolicitud_id || '',
+        estado_anterior: h.estado_anterior || '',
+        estado_nuevo: h.estado_nuevo,
+        actor: actor,
+        comentario: actor === 'tu' ? String(h.comentario || '') : '',
+        timestamp: h.timestamp
+      };
+    })
+    .sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
 }
 
 function validarSolicitud_(data) {

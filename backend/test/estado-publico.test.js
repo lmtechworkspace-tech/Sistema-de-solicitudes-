@@ -159,6 +159,82 @@ test('estadoPublico no rompe si la hoja ARCHIVOS no existe (tolerante)', () => {
   assert.equal(item.archivos.length, 0);
 });
 
+// Fase 4 (rediseño, pestaña "Historial"): estadoPublico expone la linea de
+// tiempo (HISTORIAL_ESTADOS), pero SIN filtrar correos de staff ni comentarios
+// internos -- ver historialPublico_.
+test('estadoPublico no rompe si la hoja HISTORIAL_ESTADOS no existe (tolerante)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx);
+  const resultado = ctx.Solicitudes.estadoPublico('SOL-2026-HP-0001', 'juan@homepymes.cl');
+  assert.ok(Array.isArray(resultado.historial));
+  assert.equal(resultado.historial.length, 0);
+});
+
+test('estadoPublico expone el historial de estados en orden cronologico', () => {
+  const ctx = loadConSchema();
+  seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx);
+  const hoja = ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('HISTORIAL_ESTADOS');
+  hoja.appendRow(ctx.COLUMNAS.HISTORIAL_ESTADOS.map((c) => ({
+    historial_id: 'h1', solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    estado_anterior: '', estado_nuevo: 'S01', usuario: 'sistema', comentario: '',
+    timestamp: '2026-01-01T00:00:00.000Z'
+  }[c])));
+  hoja.appendRow(ctx.COLUMNAS.HISTORIAL_ESTADOS.map((c) => ({
+    historial_id: 'h2', solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    estado_anterior: 'S01', estado_nuevo: 'S02', usuario: 'dev@rld.cl', comentario: 'motivo interno',
+    timestamp: '2026-01-02T00:00:00.000Z'
+  }[c])));
+
+  const historial = ctx.Solicitudes.estadoPublico('SOL-2026-HP-0001', 'juan@homepymes.cl').historial;
+  assert.equal(historial.length, 2);
+  assert.equal(historial[0].estado_nuevo, 'S01');
+  assert.equal(historial[0].actor, 'sistema');
+  assert.equal(historial[1].estado_nuevo, 'S02');
+  assert.equal(historial[1].actor, 'equipo');
+});
+
+test('estadoPublico NUNCA expone el correo de staff ni un comentario interno en el historial', () => {
+  const ctx = loadConSchema();
+  seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx);
+  const hoja = ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('HISTORIAL_ESTADOS');
+  hoja.appendRow(ctx.COLUMNAS.HISTORIAL_ESTADOS.map((c) => ({
+    historial_id: 'h1', solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    estado_anterior: 'S02', estado_nuevo: 'S10', usuario: 'dev@rld.cl',
+    comentario: 'motivo interno de rechazo que no debe llegar al cliente',
+    timestamp: '2026-01-03T00:00:00.000Z'
+  }[c])));
+
+  const historial = ctx.Solicitudes.estadoPublico('SOL-2026-HP-0001', 'juan@homepymes.cl').historial;
+  assert.equal(historial.length, 1);
+  assert.equal(historial[0].actor, 'equipo');
+  assert.equal(historial[0].comentario, '');
+  assert.equal(JSON.stringify(historial).includes('dev@rld.cl'), false);
+  assert.equal(JSON.stringify(historial).includes('motivo interno'), false);
+});
+
+test('estadoPublico SI expone el comentario del historial cuando lo escribio el propio solicitante', () => {
+  const ctx = loadConSchema();
+  seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S08' });
+  const hoja = ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('HISTORIAL_ESTADOS');
+  hoja.appendRow(ctx.COLUMNAS.HISTORIAL_ESTADOS.map((c) => ({
+    historial_id: 'h1', solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    estado_anterior: 'S08', estado_nuevo: 'S05', usuario: 'juan@homepymes.cl',
+    comentario: 'Todavia falta el reporte de exportacion',
+    timestamp: '2026-01-04T00:00:00.000Z'
+  }[c])));
+
+  const historial = ctx.Solicitudes.estadoPublico('SOL-2026-HP-0001', 'juan@homepymes.cl').historial;
+  assert.equal(historial[0].actor, 'tu');
+  assert.equal(historial[0].comentario, 'Todavia falta el reporte de exportacion');
+});
+
 // Fase 1 ("editar solicitud"): el solicitante corrige un item mal llenado.
 test('editarSubsolicitud actualiza los campos y deja traza mientras el item es editable', () => {
   const ctx = loadConSchema();

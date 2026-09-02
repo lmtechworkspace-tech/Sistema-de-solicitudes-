@@ -485,6 +485,35 @@
 .sigso-archivos-grupo:last-child { margin-bottom: 0; }
 .sigso-archivos-grupo__titulo { margin: 0 0 var(--esp-1); font-size: 0.9rem; color: var(--texto); font-weight: 600; }
 
+/* v13 (Fase 4, rediseño): pestaña Historial -- línea de tiempo vertical con
+   un riel continuo y un punto por evento (mismo lenguaje que .sigso-hitos,
+   pero para una lista de largo variable en vez de 5 pasos fijos). */
+.sigso-historial-linea {
+  list-style: none; margin: 0; padding: 0;
+  border-left: 2px solid var(--borde);
+  margin-left: 0.4rem;
+}
+.sigso-historial-evento {
+  position: relative;
+  padding: 0 0 var(--esp-3) var(--esp-3);
+}
+.sigso-historial-evento:last-child { padding-bottom: 0; }
+.sigso-historial-evento__punto {
+  position: absolute; left: -0.4rem; top: 0.3rem;
+  width: 0.65rem; height: 0.65rem; border-radius: 50%;
+  background: var(--primario); border: 2px solid var(--fondo, #fff);
+  box-shadow: 0 0 0 2px var(--borde);
+}
+.sigso-historial-evento__cab {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
+}
+.sigso-historial-evento__item { font-weight: 600; font-size: 0.85rem; color: var(--texto); }
+.sigso-historial-evento__meta { margin: 0.2rem 0 0; font-size: 0.8rem; color: var(--texto-2); }
+.sigso-historial-evento__comentario {
+  margin: 0.35rem 0 0; padding: 0.4rem 0.6rem; font-size: 0.85rem;
+  background: var(--superficie-2); border-radius: 6px; color: var(--texto);
+}
+
 /* UI-3 (§3): linea de tiempo de hitos en Consultar Estado. */
 .sigso-hitos {
   display: flex;
