@@ -91,6 +91,9 @@
     renderSelectorModo_();
     renderSelectorPlataformaAsociada_();
     renderSubsolicitudes_();
+    // Fase 2: los adjuntos del borrador viven en IndexedDB (async) -- se
+    // restauran despues del primer render y redibujan los items.
+    restaurarAdjuntosBorrador_();
 
     document.getElementById('form-solicitud').addEventListener('submit', manejarSubmit_);
     document.querySelectorAll('#selector-modo [data-modo]').forEach(function (boton) {
@@ -903,11 +906,13 @@
       estado.imagenesPorItem[idx].push({ file: file, descripcion: '', previewUrl: URL.createObjectURL(file) });
     });
     renderSubsolicitudes_();
+    guardarAdjuntosBorrador_();
   }
 
   function quitarImagen_(idx, imgIdx) {
     estado.imagenesPorItem[idx].splice(imgIdx, 1);
     renderSubsolicitudes_();
+    guardarAdjuntosBorrador_();
   }
 
   function agregarDocumentos_(idx, fileList) {
@@ -928,6 +933,7 @@
     // renderSubsolicitudes_ vuelve a dibujar el item (incluye el span de
     // error), asi que el mensaje se aplica DESPUES de redibujar.
     renderSubsolicitudes_();
+    guardarAdjuntosBorrador_();
     var errorEl = document.querySelector('[data-error-doc="' + idx + '"]');
     if (errorEl) {
       var msjs = [];
@@ -940,6 +946,7 @@
 
   function quitarDocumento_(idx, docIdx) {
     estado.documentosPorItem[idx].splice(docIdx, 1);
+    guardarAdjuntosBorrador_();
     renderSubsolicitudes_();
   }
 
@@ -1254,6 +1261,106 @@
     } catch (err) {
       // Sin efecto si localStorage no esta disponible.
     }
+    adjuntosBorrador_.limpiar();
+  }
+
+  // --- Fase 2: los ADJUNTOS del borrador -------------------------------
+  //
+  // El borrador de TEXTO ya vivia en localStorage, pero las imagenes y
+  // documentos no: un File no es serializable a JSON, asi que al cerrar la
+  // pestana se perdian (habia que volver a adjuntarlos). Se persisten como
+  // Blob en IndexedDB -- localStorage no sirve: guardar imagenes en base64
+  // revienta la cuota de ~5MB con dos capturas.
+  //
+  // Se guardan solo cuando CAMBIAN los adjuntos (agregar/quitar), no en cada
+  // tecla: escribir blobs en cada pulsacion seria un derroche.
+  var adjuntosBorrador_ = (function () {
+    var NOMBRE_DB = 'sigso_borrador_adjuntos';
+    var TIENDA = 'adjuntos';
+    var CLAVE = 'actual';
+
+    function abrir_() {
+      return new Promise(function (resolve, reject) {
+        if (!window.indexedDB) { reject(new Error('sin indexedDB')); return; }
+        var pedido = window.indexedDB.open(NOMBRE_DB, 1);
+        pedido.onupgradeneeded = function () {
+          var db = pedido.result;
+          if (!db.objectStoreNames.contains(TIENDA)) db.createObjectStore(TIENDA);
+        };
+        pedido.onsuccess = function () { resolve(pedido.result); };
+        pedido.onerror = function () { reject(pedido.error); };
+      });
+    }
+
+    function conTienda_(modo, fn) {
+      return abrir_().then(function (db) {
+        return new Promise(function (resolve, reject) {
+          var tx = db.transaction(TIENDA, modo);
+          var resultado = fn(tx.objectStore(TIENDA));
+          tx.oncomplete = function () { db.close(); resolve(resultado && resultado.result); };
+          tx.onerror = function () { db.close(); reject(tx.error); };
+        });
+      });
+    }
+
+    return {
+      // Guarda {imagenes: {idx: [{nombre, descripcion, blob}]}, documentos: {...}}
+      guardar: function (imagenesPorItem, documentosPorItem) {
+        var paquete = { imagenes: {}, documentos: {} };
+        Object.keys(imagenesPorItem || {}).forEach(function (idx) {
+          paquete.imagenes[idx] = (imagenesPorItem[idx] || []).map(function (img) {
+            return { nombre: img.file.name, tipo: img.file.type, descripcion: img.descripcion || '', blob: img.file };
+          });
+        });
+        Object.keys(documentosPorItem || {}).forEach(function (idx) {
+          paquete.documentos[idx] = (documentosPorItem[idx] || []).map(function (doc) {
+            return { nombre: doc.file.name, tipo: doc.file.type, blob: doc.file };
+          });
+        });
+        return conTienda_('readwrite', function (tienda) { tienda.put(paquete, CLAVE); })
+          .catch(function () { /* sin IndexedDB (modo privado): el texto igual se guarda */ });
+      },
+      leer: function () {
+        return conTienda_('readonly', function (tienda) { return tienda.get(CLAVE); })
+          .catch(function () { return null; });
+      },
+      limpiar: function () {
+        return conTienda_('readwrite', function (tienda) { tienda.delete(CLAVE); })
+          .catch(function () { /* nada que limpiar */ });
+      }
+    };
+  })();
+
+  function guardarAdjuntosBorrador_() {
+    adjuntosBorrador_.guardar(estado.imagenesPorItem, estado.documentosPorItem);
+  }
+
+  // Restaura los adjuntos del borrador y vuelve a dibujar los items. Es
+  // asincrono (IndexedDB), asi que corre despues del primer render: el
+  // formulario se ve al instante y los adjuntos aparecen al resolverse.
+  function restaurarAdjuntosBorrador_() {
+    return adjuntosBorrador_.leer().then(function (paquete) {
+      if (!paquete) return;
+      var huboAlgo = false;
+      Object.keys(paquete.imagenes || {}).forEach(function (idx) {
+        var lista = paquete.imagenes[idx] || [];
+        if (!lista.length || !estado.subsolicitudes[idx]) return;
+        estado.imagenesPorItem[idx] = lista.map(function (g) {
+          var file = new File([g.blob], g.nombre, { type: g.tipo || g.blob.type });
+          return { file: file, descripcion: g.descripcion || '', previewUrl: URL.createObjectURL(file) };
+        });
+        huboAlgo = true;
+      });
+      Object.keys(paquete.documentos || {}).forEach(function (idx) {
+        var lista = paquete.documentos[idx] || [];
+        if (!lista.length || !estado.subsolicitudes[idx]) return;
+        estado.documentosPorItem[idx] = lista.map(function (g) {
+          return { file: new File([g.blob], g.nombre, { type: g.tipo || g.blob.type }) };
+        });
+        huboAlgo = true;
+      });
+      if (huboAlgo) renderSubsolicitudes_();
+    }).catch(function () { /* sin adjuntos guardados */ });
   }
 
   function manejarSubmit_(evento) {
