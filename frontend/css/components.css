@@ -706,7 +706,52 @@
   border-radius: 6px;
 }
 .sigso-item-editar > summary { cursor: pointer; font-size: 0.9rem; font-weight: 600; }
+.sigso-item-editar > summary svg { vertical-align: -2px; }
 .sigso-item-editar[open] > summary { margin-bottom: 0.4rem; }
+/* Fase 4 ("flujo de corrección"): al abrirlo, el bloque deja de ser un
+   plegable discreto y se lee como un MODO de edición activo -- riel sólido,
+   fondo levísimo -- para que se note que estás cambiando datos enviados. */
+.sigso-item-editar[open] {
+  border-style: solid;
+  border-color: var(--primario, #1e3a5f);
+  border-left-width: 3px;
+  background: var(--primario-suave, rgba(30, 58, 95, 0.04));
+}
+.sigso-item-editar__cuerpo { padding-top: 0.25rem; }
+
+/* Fase de confirmación: resumen antes→después antes de persistir. */
+.sigso-editar-confirmar {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--primario, #1e3a5f);
+  border-radius: 6px;
+  background: var(--fondo, #fff);
+}
+.sigso-editar-confirmar__titulo {
+  margin: 0 0 0.15rem; font-weight: 700; font-size: 0.95rem;
+  color: var(--primario, #1e3a5f);
+}
+.sigso-editar-diff { margin: 0.5rem 0 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.sigso-editar-diff__campo {
+  display: grid;
+  grid-template-columns: 8rem 1fr auto 1fr;
+  align-items: baseline;
+  gap: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--borde, #e5ddd0);
+}
+.sigso-editar-diff__campo:last-child { border-bottom: none; padding-bottom: 0; }
+.sigso-editar-diff__l { font-weight: 600; color: var(--texto-2, #6b6357); }
+.sigso-editar-diff__antes {
+  color: #b3261e; text-decoration: line-through; text-decoration-color: rgba(179, 38, 30, 0.5);
+}
+.sigso-editar-diff__flecha { color: var(--texto-2, #6b6357); }
+.sigso-editar-diff__despues { color: #1a7f43; font-weight: 600; }
+@media (max-width: 560px) {
+  .sigso-editar-diff__campo { grid-template-columns: 1fr; gap: 0.15rem; }
+  .sigso-editar-diff__flecha { display: none; }
+}
 .sigso-adjuntos-item { margin-top: 0.75rem; }
 .sigso-adjuntos-item > p { margin: 0 0 0.4rem; }
 /* Fila de "adjunto actual" dentro del bloque de corrección, con su botón de

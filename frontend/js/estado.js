@@ -270,10 +270,21 @@
       });
     });
 
-    // Fase 1 ("editar solicitud"): guardar / cancelar la corrección del ítem.
-    contenedor.querySelectorAll('[data-accion="editar-guardar"]').forEach(function (boton) {
+    // Fase 1 + Fase 4 ("flujo de corrección"): revisar (muestra el resumen
+    // antes→después), confirmar (guarda de verdad), volver a editar, cancelar.
+    contenedor.querySelectorAll('[data-accion="editar-revisar"]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        revisarEdicion_(boton.getAttribute('data-subsolicitud'));
+      });
+    });
+    contenedor.querySelectorAll('[data-accion="editar-confirmar"]').forEach(function (boton) {
       boton.addEventListener('click', function () {
         guardarEdicion_(boton.getAttribute('data-subsolicitud'), boton);
+      });
+    });
+    contenedor.querySelectorAll('[data-accion="editar-volver"]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        volverAEditar_(boton.getAttribute('data-subsolicitud'));
       });
     });
     contenedor.querySelectorAll('[data-accion="quitar-adjunto"]').forEach(function (boton) {
@@ -526,39 +537,109 @@
     return '<p><strong>' + Componentes.escaparHtml(etiqueta) + ':</strong> ' + Componentes.escaparHtml(valor) + '</p>';
   }
 
-  // Fase 1 ("editar solicitud"): bloque de corrección plegado por ítem.
+  // Fase 1 ("editar solicitud") + v13 (Fase 4, "flujo de corrección"): bloque
+  // de corrección por ítem, ahora en DOS fases claras -- editar y CONFIRMAR.
+  // El valor original de cada campo queda en input.defaultValue (el value
+  // precargado), así que el diff antes→después se calcula sin guardar nada
+  // aparte. Guardar no persiste de una: primero muestra qué va a cambiar.
   function bloqueEdicion_(s) {
     var id = s.subsolicitud_id;
     return '<details class="sigso-item-editar">' +
-      '<summary>Corregir este ítem</summary>' +
-      '<p class="sigso-ayuda">¿Te equivocaste al llenarlo? Corrígelo aquí. El cambio queda registrado y el equipo lo verá.</p>' +
-      '<div class="sigso-campo">' +
-        '<label for="ed-titulo-' + id + '">Título</label>' +
-        '<input type="text" id="ed-titulo-' + id + '" value="' + Componentes.escaparHtml(s.titulo || '') + '" />' +
+      '<summary>' + Iconos.svg('editar', { tam: 14 }) + ' Corregir este ítem</summary>' +
+      '<div class="sigso-item-editar__cuerpo">' +
+        '<p class="sigso-ayuda">Estás modificando la información que enviaste para este ítem. Al guardar, verás un resumen de los cambios antes de confirmar.</p>' +
+        '<div class="sigso-campo">' +
+          '<label for="ed-titulo-' + id + '">Título</label>' +
+          '<input type="text" id="ed-titulo-' + id + '" value="' + Componentes.escaparHtml(s.titulo || '') + '" />' +
+        '</div>' +
+        '<div class="sigso-campo">' +
+          '<label for="ed-desc-' + id + '">Descripción</label>' +
+          '<textarea id="ed-desc-' + id + '">' + Componentes.escaparHtml(s.descripcion || '') + '</textarea>' +
+        '</div>' +
+        '<div class="sigso-campo">' +
+          '<label for="ed-ctx-' + id + '">Contexto (opcional)</label>' +
+          '<textarea id="ed-ctx-' + id + '">' + Componentes.escaparHtml(s.contexto || '') + '</textarea>' +
+        '</div>' +
+        '<div class="sigso-campo">' +
+          '<label for="ed-res-' + id + '">Resultado esperado (opcional)</label>' +
+          '<textarea id="ed-res-' + id + '">' + Componentes.escaparHtml(s.resultado_esperado || '') + '</textarea>' +
+        '</div>' +
+        adjuntosActualesHtml_(s) +
+        '<div class="sigso-campo">' +
+          '<label for="ed-img-' + id + '">Agregar imágenes (opcional)</label>' +
+          '<input type="file" id="ed-img-' + id + '" accept="image/png,image/jpeg,image/gif" multiple />' +
+        '</div>' +
+        // Fase de EDICIÓN: "Guardar cambios" no persiste; lleva a confirmar.
+        '<div class="sigso-acciones-item" data-fase-editar="' + id + '">' +
+          '<button type="button" class="sigso-boton" data-accion="editar-revisar" data-subsolicitud="' + id + '">Guardar cambios</button> ' +
+          '<button type="button" class="sigso-boton--secundario" data-accion="editar-cancelar" data-subsolicitud="' + id + '">Cancelar</button>' +
+        '</div>' +
+        // Fase de CONFIRMACIÓN: resumen antes→después + confirmar/volver.
+        '<div class="sigso-editar-confirmar sigso-oculto" data-fase-confirmar="' + id + '">' +
+          '<p class="sigso-editar-confirmar__titulo">¿Confirmar corrección?</p>' +
+          '<p class="sigso-ayuda">Se actualizará la información de este ítem. El cambio queda registrado y el equipo lo verá.</p>' +
+          '<div class="sigso-editar-diff" data-diff="' + id + '"></div>' +
+          '<div class="sigso-acciones-item">' +
+            '<button type="button" class="sigso-boton" data-accion="editar-confirmar" data-subsolicitud="' + id + '">Confirmar corrección</button> ' +
+            '<button type="button" class="sigso-boton--secundario" data-accion="editar-volver" data-subsolicitud="' + id + '">Volver a editar</button>' +
+          '</div>' +
+        '</div>' +
+        '<div data-resultado-editar="' + id + '"></div>' +
       '</div>' +
-      '<div class="sigso-campo">' +
-        '<label for="ed-desc-' + id + '">Descripción</label>' +
-        '<textarea id="ed-desc-' + id + '">' + Componentes.escaparHtml(s.descripcion || '') + '</textarea>' +
-      '</div>' +
-      '<div class="sigso-campo">' +
-        '<label for="ed-ctx-' + id + '">Contexto (opcional)</label>' +
-        '<textarea id="ed-ctx-' + id + '">' + Componentes.escaparHtml(s.contexto || '') + '</textarea>' +
-      '</div>' +
-      '<div class="sigso-campo">' +
-        '<label for="ed-res-' + id + '">Resultado esperado (opcional)</label>' +
-        '<textarea id="ed-res-' + id + '">' + Componentes.escaparHtml(s.resultado_esperado || '') + '</textarea>' +
-      '</div>' +
-      adjuntosActualesHtml_(s) +
-      '<div class="sigso-campo">' +
-        '<label for="ed-img-' + id + '">Agregar imágenes (opcional)</label>' +
-        '<input type="file" id="ed-img-' + id + '" accept="image/png,image/jpeg,image/gif" multiple />' +
-      '</div>' +
-      '<div class="sigso-acciones-item">' +
-        '<button type="button" class="sigso-boton" data-accion="editar-guardar" data-subsolicitud="' + id + '">Guardar cambios</button> ' +
-        '<button type="button" class="sigso-boton--secundario" data-accion="editar-cancelar" data-subsolicitud="' + id + '">Cancelar</button>' +
-      '</div>' +
-      '<div data-resultado-editar="' + id + '"></div>' +
     '</details>';
+  }
+
+  // v13 (Fase 4): al pulsar "Guardar cambios" se REVISA -- se valida, se
+  // calcula el diff antes→después contra los valores originales (defaultValue)
+  // y se muestra el resumen para confirmar. No persiste todavía.
+  function revisarEdicion_(subId) {
+    var salida = document.querySelector('[data-resultado-editar="' + subId + '"]');
+    salida.innerHTML = '';
+    var titulo = document.getElementById('ed-titulo-' + subId);
+    var descripcion = document.getElementById('ed-desc-' + subId);
+    if (titulo.value.trim().length < 3 || descripcion.value.trim().length < 5) {
+      salida.innerHTML = Componentes.alerta('El título y la descripción no pueden quedar vacíos.', 'error');
+      return;
+    }
+    var campos = [
+      { el: titulo, label: 'Título' },
+      { el: descripcion, label: 'Descripción' },
+      { el: document.getElementById('ed-ctx-' + subId), label: 'Contexto' },
+      { el: document.getElementById('ed-res-' + subId), label: 'Resultado esperado' }
+    ];
+    var cambios = campos.filter(function (c) { return c.el.defaultValue.trim() !== c.el.value.trim(); });
+    var imgs = (document.getElementById('ed-img-' + subId).files || []).length;
+
+    if (cambios.length === 0 && imgs === 0) {
+      salida.innerHTML = Componentes.alerta('No cambiaste nada todavía.', 'aviso');
+      return;
+    }
+
+    var diff = cambios.map(function (c) {
+      return '<div class="sigso-editar-diff__campo">' +
+        '<span class="sigso-editar-diff__l">' + c.label + '</span>' +
+        '<span class="sigso-editar-diff__antes">' + Componentes.escaparHtml(recortar_(c.el.defaultValue) || '(vacío)') + '</span>' +
+        '<span class="sigso-editar-diff__flecha">→</span>' +
+        '<span class="sigso-editar-diff__despues">' + Componentes.escaparHtml(recortar_(c.el.value) || '(vacío)') + '</span>' +
+      '</div>';
+    }).join('');
+    if (imgs > 0) {
+      diff += '<div class="sigso-editar-diff__campo"><span class="sigso-editar-diff__l">Imágenes</span>' +
+        '<span class="sigso-editar-diff__despues">+ ' + imgs + ' imagen(es) nueva(s)</span></div>';
+    }
+    document.querySelector('[data-diff="' + subId + '"]').innerHTML = diff;
+    document.querySelector('[data-fase-editar="' + subId + '"]').classList.add('sigso-oculto');
+    document.querySelector('[data-fase-confirmar="' + subId + '"]').classList.remove('sigso-oculto');
+  }
+
+  function volverAEditar_(subId) {
+    document.querySelector('[data-fase-confirmar="' + subId + '"]').classList.add('sigso-oculto');
+    document.querySelector('[data-fase-editar="' + subId + '"]').classList.remove('sigso-oculto');
+  }
+
+  function recortar_(texto) {
+    texto = String(texto || '').trim().replace(/\s+/g, ' ');
+    return texto.length > 90 ? texto.slice(0, 90) + '…' : texto;
   }
 
   // Fase 1 (cierre): adjuntos ya subidos, con opción de quitar el que se
@@ -640,6 +721,9 @@
       // Con la corrección ya guardada, suben las imágenes nuevas (si hay) y
       // recién ahí se recarga el estado para verlo todo actualizado.
       return subirImagenesEdicion_(ultimaConsulta.solicitud_id, subId, archivos).then(function () {
+        // v13 (Fase 4): feedback explícito de que quedó guardado, además del
+        // detalle recargado con los datos nuevos.
+        Componentes.aviso({ tipo: 'exito', texto: 'Corrección guardada.' });
         return consultar_(ultimaConsulta.solicitud_id, ultimaConsulta.email, ultimaConsulta.contenedorId);
       });
     }).catch(function () {
