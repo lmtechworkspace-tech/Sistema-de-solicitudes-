@@ -126,6 +126,90 @@ test('estadoPublico incluye el detalle que el solicitante escribio, para expandi
   assert.equal(item.modulo_nombre, 'Facturacion Electronica');
 });
 
+test('estadoPublico expone los adjuntos que el solicitante subio, por item (Fase 1)', () => {
+  const ctx = loadConSchema();
+  seedSheet(ctx, 'ARCHIVOS', ctx.COLUMNAS.ARCHIVOS);
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx);
+  ctx.agregarFila_('ARCHIVOS', {
+    archivo_id: 'a1', solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    nombre_original: 'captura.png', url: 'https://drive/x', tipo_mime: 'image/png',
+    tamano_bytes: 1234, fecha_subida: new Date().toISOString()
+  });
+  // Adjunto de OTRO item de la misma solicitud: no debe aparecer en este.
+  ctx.agregarFila_('ARCHIVOS', {
+    archivo_id: 'a2', solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-99',
+    nombre_original: 'otro.pdf', url: 'https://drive/y', tipo_mime: 'application/pdf',
+    tamano_bytes: 5, fecha_subida: new Date().toISOString()
+  });
+
+  const item = ctx.Solicitudes.estadoPublico('SOL-2026-HP-0001', 'juan@homepymes.cl').subsolicitudes[0];
+  assert.equal(item.archivos.length, 1);
+  assert.equal(item.archivos[0].nombre_original, 'captura.png');
+  assert.equal(item.archivos[0].url, 'https://drive/x');
+  assert.equal(item.archivos[0].tipo_mime, 'image/png');
+});
+
+test('estadoPublico no rompe si la hoja ARCHIVOS no existe (tolerante)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx);
+  const item = ctx.Solicitudes.estadoPublico('SOL-2026-HP-0001', 'juan@homepymes.cl').subsolicitudes[0];
+  assert.ok(Array.isArray(item.archivos));
+  assert.equal(item.archivos.length, 0);
+});
+
+// Fase 1 ("editar solicitud"): el solicitante corrige un item mal llenado.
+test('editarSubsolicitud actualiza los campos y deja traza mientras el item es editable', () => {
+  const ctx = loadConSchema();
+  seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S02', titulo: 'titulo malo', descripcion: 'desc vieja' });
+
+  const r = ctx.Solicitudes.editarSubsolicitud({
+    solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01', email: 'juan@homepymes.cl',
+    titulo: 'Título corregido', descripcion: 'Descripción corregida y más clara', contexto: 'nuevo contexto', resultado_esperado: ''
+  });
+  assert.equal(r.ok, true);
+  assert.ok(r.cambios >= 1);
+
+  const sub = ctx.leerFilas_('SUBSOLICITUDES')[0];
+  assert.equal(sub.titulo, 'Título corregido');
+  assert.equal(sub.descripcion, 'Descripción corregida y más clara');
+  assert.equal(sub.contexto, 'nuevo contexto');
+
+  const comentarios = ctx.leerFilas_('COMENTARIOS');
+  assert.equal(comentarios.length, 1);
+  assert.equal(comentarios[0].es_interno, true);
+  assert.equal(comentarios[0].usuario, 'juan@homepymes.cl');
+  assert.match(comentarios[0].texto, /corrigió el ítem/);
+});
+
+test('editarSubsolicitud rechaza si el item ya está en desarrollo (S05)', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S05' });
+  const r = ctx.Solicitudes.editarSubsolicitud({
+    solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01', email: 'juan@homepymes.cl',
+    titulo: 'Otro título', descripcion: 'Otra descripción larga'
+  });
+  assert.equal(r._validationError, true);
+});
+
+test('editarSubsolicitud rechaza correo que no coincide, y valida largos mínimos', () => {
+  const ctx = loadConSchema();
+  seedSolicitud(ctx);
+  seedSubsolicitud(ctx, { estado: 'S02' });
+  assert.equal(ctx.Solicitudes.editarSubsolicitud({
+    solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01', email: 'otro@correo.cl',
+    titulo: 'x', descripcion: 'y'
+  })._forbidden, true);
+  assert.equal(ctx.Solicitudes.editarSubsolicitud({
+    solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01', email: 'juan@homepymes.cl',
+    titulo: 'x', descripcion: 'descripción válida'
+  })._validationError, true, 'título muy corto');
+});
+
 test('estadoPublico compara el correo sin distinguir mayusculas/espacios', () => {
   const ctx = loadConSchema();
   seedSolicitud(ctx);

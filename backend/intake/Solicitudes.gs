@@ -299,6 +299,28 @@ var Solicitudes = {
       return { _forbidden: true, message: 'El correo no coincide con el registrado para esta solicitud.' };
     }
 
+    // Fase 1 ("ver adjuntos propios"): las imagenes/documentos que el
+    // solicitante mismo subio -- hasta ahora el detalle publico no las
+    // devolvia, asi que quien las adjunto no podia verlas de vuelta. Se
+    // exponen SOLO los campos seguros (nombre, url, tipo, tamano, fecha);
+    // nada interno. Se agrupan por subsolicitud_id mas abajo.
+    // Tolerante a que la hoja ARCHIVOS no exista todavía (instalación vieja o
+    // banco de pruebas sin sembrar): sin adjuntos, no rompe el detalle.
+    var archivosPorSub_ = {};
+    try {
+      leerFilas_(SHEETS.ARCHIVOS)
+        .filter(function (a) { return a.solicitud_id === solicitudId && a.subsolicitud_id; })
+        .forEach(function (a) {
+          (archivosPorSub_[a.subsolicitud_id] = archivosPorSub_[a.subsolicitud_id] || []).push({
+            nombre_original: a.nombre_original,
+            url: a.url,
+            tipo_mime: a.tipo_mime,
+            tamano_bytes: a.tamano_bytes,
+            fecha_subida: a.fecha_subida
+          });
+        });
+    } catch (errArchivos_) { archivosPorSub_ = {}; }
+
     var subsolicitudes = leerFilas_(SHEETS.SUBSOLICITUDES)
       .filter(function (s) {
         return s.solicitud_id === solicitudId;
@@ -337,6 +359,8 @@ var Solicitudes = {
           // que el solicitante sepa que le estan pidiendo sin tener que
           // llamar/escribir aparte.
           pregunta_pendiente: s.estado === ESTADOS.S06 ? obtenerUltimaPreguntaEsperandoInfo_(s.subsolicitud_id) : '',
+          // Fase 1: adjuntos que el solicitante subio para este item.
+          archivos: archivosPorSub_[s.subsolicitud_id] || [],
           // v3.0 (Fase 3, §4): "semaforo del solicitante" -- cuando el item
           // esta Terminada sin validar, dias_esperando muestra cuantos dias
           // habiles lleva SIN que el solicitante lo revise (Cumplimiento.gs,
@@ -360,6 +384,79 @@ var Solicitudes = {
         : null,
       subsolicitudes: subsolicitudes
     };
+  },
+
+  /**
+   * Fase 1 ("editar solicitud"): el solicitante corrige un item que llenó con
+   * un error -- titulo, descripcion, contexto, resultado esperado. Solo
+   * MIENTRAS el item no haya entrado a desarrollo (S01..S04): una vez que
+   * alguien lo está trabajando, un cambio de contenido a sus espaldas es
+   * peligroso, así que a partir de ahí se pide escribirle al equipo. Cada
+   * edición deja una traza (comentario interno con el antes→después), visible
+   * para el staff en la historia de la solicitud -- no se pisa el dato en
+   * silencio. Mismo control de correo que estadoPublico.
+   */
+  editarSubsolicitud: function (data) {
+    data = data || {};
+    if (!data.solicitud_id || !data.subsolicitud_id || !data.email) {
+      return errorValidacion_('solicitud_id', 'Faltan datos para editar el ítem.');
+    }
+    var solicitud = buscarSolicitudPorId_(data.solicitud_id);
+    if (!solicitud) return errorValidacion_('solicitud_id', 'No existe una solicitud con ese numero.');
+
+    var coincide = compararEmail_(data.email, solicitud.solicitante_email) ||
+      (!!solicitud.es_cliente && compararEmail_(data.email, solicitud.correo_cliente));
+    if (!coincide) {
+      return { _forbidden: true, message: 'El correo no coincide con el registrado para esta solicitud.' };
+    }
+
+    var sub = leerFilas_(SHEETS.SUBSOLICITUDES).filter(function (s) {
+      return s.subsolicitud_id === data.subsolicitud_id && s.solicitud_id === data.solicitud_id;
+    })[0];
+    if (!sub) return errorValidacion_('subsolicitud_id', 'No se encontró el ítem en esta solicitud.');
+
+    var EDITABLES = [ESTADOS.S01, ESTADOS.S02, ESTADOS.S03, ESTADOS.S04];
+    if (EDITABLES.indexOf(sub.estado) === -1) {
+      return errorValidacion_('estado',
+        'Este ítem ya está en desarrollo o cerrado, no se puede editar. Escríbele al equipo si necesitas un cambio.');
+    }
+
+    var titulo = String(data.titulo || '').trim();
+    var descripcion = String(data.descripcion || '').trim();
+    if (titulo.length < 3) return errorValidacion_('titulo', 'El título es muy corto.');
+    if (descripcion.length < 5) return errorValidacion_('descripcion', 'Cuéntanos un poco más en la descripción.');
+    var contexto = String(data.contexto || '').trim();
+    var resultado = String(data.resultado_esperado || '').trim();
+
+    // Traza legible del antes→después (solo de lo que efectivamente cambió).
+    var cambios = [];
+    if (titulo !== String(sub.titulo || '')) cambios.push('Título: "' + String(sub.titulo || '') + '" → "' + titulo + '"');
+    if (descripcion !== String(sub.descripcion || '')) cambios.push('Descripción actualizada');
+    if (contexto !== String(sub.contexto || '')) cambios.push('Contexto actualizado');
+    if (resultado !== String(sub.resultado_esperado || '')) cambios.push('Resultado esperado actualizado');
+
+    if (!cambios.length) return { ok: true, cambios: 0 };
+
+    actualizarFilaPorId_(SHEETS.SUBSOLICITUDES, 'subsolicitud_id', data.subsolicitud_id, {
+      titulo: titulo, descripcion: descripcion, contexto: contexto, resultado_esperado: resultado
+    });
+
+    // La edición queda en la historia (comentario interno para el staff). Se
+    // envuelve en try/catch: si por lo que sea no se puede escribir el
+    // comentario, la corrección ya quedó guardada y no debe fallar por la traza.
+    try {
+      agregarFila_(SHEETS.COMENTARIOS, {
+        comentario_id: Utilities.getUuid(),
+        solicitud_id: data.solicitud_id,
+        subsolicitud_id: data.subsolicitud_id,
+        usuario: data.email,
+        texto: 'El solicitante corrigió el ítem. ' + cambios.join('. ') + '.',
+        es_interno: true,
+        timestamp: new Date().toISOString()
+      });
+    } catch (errTraza_) { /* la corrección ya está guardada */ }
+
+    return { ok: true, cambios: cambios.length };
   },
 
   /**

@@ -7,6 +7,10 @@
  */
 (function () {
   var ESTADOS_CERRADOS_PUBLICO = ['S09', 'S10', 'S11'];
+  // Fase 1 ("editar solicitud"): un ítem es editable por el solicitante solo
+  // mientras no haya entrado a desarrollo (S01..S04). Espejo de la misma regla
+  // del backend (Solicitudes.editarSubsolicitud).
+  var EDITABLE_ESTADOS_ = ['S01', 'S02', 'S03', 'S04'];
 
   // v14.0 (piel nueva): punto de estado por token en vez del emoji que
   // manda el backend (item.cumplimiento.emoji). Mapea el `codigo`.
@@ -215,6 +219,19 @@
       });
     });
 
+    // Fase 1 ("editar solicitud"): guardar / cancelar la corrección del ítem.
+    contenedor.querySelectorAll('[data-accion="editar-guardar"]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        guardarEdicion_(boton.getAttribute('data-subsolicitud'), boton);
+      });
+    });
+    contenedor.querySelectorAll('[data-accion="editar-cancelar"]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        var det = boton.closest('.sigso-item-editar');
+        if (det) det.removeAttribute('open');
+      });
+    });
+
     // Expande automaticamente items con pregunta pendiente: son los que mas
     // le importan al solicitante en ese momento.
     contenedor.querySelectorAll('.sigso-acordeon-item[data-pregunta-pendiente="1"]').forEach(function (el) {
@@ -295,6 +312,19 @@
     } else if (s.fecha_propuesta) {
       filas += '<p class="sigso-ayuda">Para cuándo lo pediste: ' + Componentes.escaparHtml(formatearFechaHora_(s.fecha_propuesta)) + ' (a confirmar por el equipo).</p>';
     }
+    // Fase 1 ("ver adjuntos propios"): las imágenes/documentos que el
+    // solicitante subió al crear el ítem -- hasta ahora no se mostraban aquí,
+    // así que no podía revisar su propia evidencia. Reusa la galería + lista
+    // de archivos de Componentes (el lightbox se auto-cablea).
+    filas += galeriaItemPublico_(s.archivos);
+
+    // Fase 1 ("editar solicitud"): si el ítem todavía es editable, se ofrece
+    // corregir lo que se llenó con un error (título, descripción, contexto,
+    // resultado) y agregar imágenes -- plegado, para no competir con la lectura.
+    if (EDITABLE_ESTADOS_.indexOf(s.estado) !== -1) {
+      filas += bloqueEdicion_(s);
+    }
+
     if (s.pregunta_pendiente) {
       filas += Componentes.alerta('El equipo necesita más información: ' + s.pregunta_pendiente, 'aviso') +
         '<div class="sigso-campo">' +
@@ -409,6 +439,127 @@
 
   function campo_(etiqueta, valor) {
     return '<p><strong>' + Componentes.escaparHtml(etiqueta) + ':</strong> ' + Componentes.escaparHtml(valor) + '</p>';
+  }
+
+  // Fase 1 ("editar solicitud"): bloque de corrección plegado por ítem.
+  function bloqueEdicion_(s) {
+    var id = s.subsolicitud_id;
+    return '<details class="sigso-item-editar">' +
+      '<summary>Corregir este ítem</summary>' +
+      '<p class="sigso-ayuda">¿Te equivocaste al llenarlo? Corrígelo aquí. El cambio queda registrado y el equipo lo verá.</p>' +
+      '<div class="sigso-campo">' +
+        '<label for="ed-titulo-' + id + '">Título</label>' +
+        '<input type="text" id="ed-titulo-' + id + '" value="' + Componentes.escaparHtml(s.titulo || '') + '" />' +
+      '</div>' +
+      '<div class="sigso-campo">' +
+        '<label for="ed-desc-' + id + '">Descripción</label>' +
+        '<textarea id="ed-desc-' + id + '">' + Componentes.escaparHtml(s.descripcion || '') + '</textarea>' +
+      '</div>' +
+      '<div class="sigso-campo">' +
+        '<label for="ed-ctx-' + id + '">Contexto (opcional)</label>' +
+        '<textarea id="ed-ctx-' + id + '">' + Componentes.escaparHtml(s.contexto || '') + '</textarea>' +
+      '</div>' +
+      '<div class="sigso-campo">' +
+        '<label for="ed-res-' + id + '">Resultado esperado (opcional)</label>' +
+        '<textarea id="ed-res-' + id + '">' + Componentes.escaparHtml(s.resultado_esperado || '') + '</textarea>' +
+      '</div>' +
+      '<div class="sigso-campo">' +
+        '<label for="ed-img-' + id + '">Agregar imágenes (opcional)</label>' +
+        '<input type="file" id="ed-img-' + id + '" accept="image/png,image/jpeg,image/gif" multiple />' +
+      '</div>' +
+      '<div class="sigso-acciones-item">' +
+        '<button type="button" class="sigso-boton" data-accion="editar-guardar" data-subsolicitud="' + id + '">Guardar cambios</button> ' +
+        '<button type="button" class="sigso-boton--secundario" data-accion="editar-cancelar" data-subsolicitud="' + id + '">Cancelar</button>' +
+      '</div>' +
+      '<div data-resultado-editar="' + id + '"></div>' +
+    '</details>';
+  }
+
+  function guardarEdicion_(subId, boton) {
+    var salida = document.querySelector('[data-resultado-editar="' + subId + '"]');
+    var titulo = document.getElementById('ed-titulo-' + subId).value.trim();
+    var descripcion = document.getElementById('ed-desc-' + subId).value.trim();
+    if (titulo.length < 3 || descripcion.length < 5) {
+      salida.innerHTML = Componentes.alerta('El título y la descripción no pueden quedar vacíos.', 'error');
+      return;
+    }
+    var archivos = (document.getElementById('ed-img-' + subId).files) || [];
+    var textoPrevio = boton.textContent;
+    boton.disabled = true;
+    boton.innerHTML = '<span class="sigso-spinner"></span> Guardando...';
+
+    llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'editarSubsolicitud', {
+      solicitud_id: ultimaConsulta.solicitud_id,
+      subsolicitud_id: subId,
+      email: ultimaConsulta.email,
+      titulo: titulo,
+      descripcion: descripcion,
+      contexto: document.getElementById('ed-ctx-' + subId).value.trim(),
+      resultado_esperado: document.getElementById('ed-res-' + subId).value.trim()
+    }).then(function (respuesta) {
+      if (!respuesta.ok) {
+        salida.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo guardar la corrección.', 'error');
+        boton.disabled = false;
+        boton.textContent = textoPrevio;
+        return;
+      }
+      // Con la corrección ya guardada, suben las imágenes nuevas (si hay) y
+      // recién ahí se recarga el estado para verlo todo actualizado.
+      return subirImagenesEdicion_(ultimaConsulta.solicitud_id, subId, archivos).then(function () {
+        return consultar_(ultimaConsulta.solicitud_id, ultimaConsulta.email, ultimaConsulta.contenedorId);
+      });
+    }).catch(function () {
+      salida.innerHTML = Componentes.alerta('No se pudo conectar. Intenta nuevamente.', 'error');
+      boton.disabled = false;
+      boton.textContent = textoPrevio;
+    });
+  }
+
+  // Sube las imágenes nuevas de una edición en serie, reusando subirArchivo
+  // (mismo payload que el formulario de creación). Un fallo puntual no corta.
+  function subirImagenesEdicion_(solicitudId, subId, fileList) {
+    var files = [].slice.call(fileList || []);
+    if (!files.length) return Promise.resolve();
+    return files.reduce(function (p, file) {
+      return p.then(function () {
+        return leerArchivoBase64Estado_(file).then(function (base64) {
+          return llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'subirArchivo', {
+            solicitud_id: solicitudId, subsolicitud_id: subId,
+            nombre_archivo: file.name, contenido_base64: base64
+          });
+        }).catch(function () { /* un adjunto fallido no bloquea los demás */ });
+      });
+    }, Promise.resolve());
+  }
+
+  function leerArchivoBase64Estado_(archivo) {
+    return new Promise(function (resolve, reject) {
+      var lector = new FileReader();
+      lector.onload = function () { resolve(String(lector.result).split(',')[1] || ''); };
+      lector.onerror = reject;
+      lector.readAsDataURL(archivo);
+    });
+  }
+
+  // Fase 1: galería de adjuntos del ítem (imágenes con lightbox + documentos
+  // como lista). Mismo patrón que el detalle del staff (detalle.js), reusando
+  // Componentes.galeriaImagenes / listaArchivos.
+  function galeriaItemPublico_(archivos) {
+    var todos = archivos || [];
+    if (!todos.length) return '';
+    var imagenes = todos.filter(function (a) { return String(a.tipo_mime || '').indexOf('image/') === 0; });
+    var documentos = todos.filter(function (a) { return String(a.tipo_mime || '').indexOf('image/') !== 0; });
+    var partes = '';
+    if (imagenes.length) {
+      partes += Componentes.galeriaImagenes(imagenes.map(function (a) {
+        return {
+          url: a.url, nombre: a.nombre_original, descripcion: '', esImagen: true,
+          meta: { tipo_mime: a.tipo_mime, tamano_bytes: a.tamano_bytes, fecha_subida: a.fecha_subida }
+        };
+      }));
+    }
+    if (documentos.length) partes += Componentes.listaArchivos(documentos);
+    return '<div class="sigso-adjuntos-item"><p><strong>Adjuntos que enviaste</strong></p>' + partes + '</div>';
   }
 
   function mostrarError_(respuesta, contenedorId) {

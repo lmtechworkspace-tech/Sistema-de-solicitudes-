@@ -1213,6 +1213,19 @@ button {
   font-size: 0.9rem;
 }
 
+/* Fase 1 ("editar solicitud"): bloque de corrección plegado por ítem en "Mis
+   solicitudes" -- mismo lenguaje visual que .sigso-cierre-directo. */
+.sigso-item-editar {
+  margin-top: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed var(--sigso-borde, #d9d2c7);
+  border-radius: 6px;
+}
+.sigso-item-editar > summary { cursor: pointer; font-size: 0.9rem; font-weight: 600; }
+.sigso-item-editar[open] > summary { margin-bottom: 0.4rem; }
+.sigso-adjuntos-item { margin-top: 0.75rem; }
+.sigso-adjuntos-item > p { margin: 0 0 0.4rem; }
+
 /* ============ v3.3: shell de la plataforma ============ */
 
 /* v5.0 F3 (§5.7): login split-screen -- panel de marca a la izquierda con

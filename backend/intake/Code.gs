@@ -20,6 +20,7 @@ var INTAKE_ACTIONS = {
   getCatalogos: handleGetCatalogos_,
   getClientes: handleGetClientes_,
   consultarEstado: handleConsultarEstado_,
+  editarSubsolicitud: handleEditarSubsolicitud_,
   responderConsulta: handleResponderConsulta_,
   validarCierre: handleValidarCierre_,
   solicitarCodigoAcceso: handleSolicitarCodigoAcceso_,
@@ -89,6 +90,10 @@ function handleConsultarEstado_(data) {
 
 function handleResponderConsulta_(data) {
   return responderResultado_(Solicitudes.responderConsulta(data));
+}
+
+function handleEditarSubsolicitud_(data) {
+  return responderResultado_(Solicitudes.editarSubsolicitud(data));
 }
 
 function handleValidarCierre_(data) {
