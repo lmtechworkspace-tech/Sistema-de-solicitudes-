@@ -138,6 +138,13 @@ var SHEETS = {
   // completa junto a PROYECTO_DOCUMENTOS en COLUMNAS más abajo.
   PROYECTO_DOCUMENTOS: 'PROYECTO_DOCUMENTOS',
   PROYECTO_DOC_VERSIONES: 'PROYECTO_DOC_VERSIONES',
+  // v13 (Fase 5, "reuniones formales" + "registro de decisiones"): eleva los
+  // eventos REUNION/DECISION de la Sala (que siguen existiendo, solo texto
+  // libre) a entidades estructuradas. Ver la nota completa junto a
+  // PROYECTO_REUNIONES en COLUMNAS más abajo.
+  PROYECTO_REUNIONES: 'PROYECTO_REUNIONES',
+  PROYECTO_REUNION_ACUERDOS: 'PROYECTO_REUNION_ACUERDOS',
+  PROYECTO_DECISIONES: 'PROYECTO_DECISIONES',
   // v10.0 (documentacion/SIGSO-v10.0-propuesta-modulo-sgc-iso9001.md):
   // modulo SGC ISO 9001. Fase 1 = repositorio documental controlado: los
   // documentos del SGC ya existen en PDF/Word/Excel; lo que faltaba era
@@ -621,6 +628,35 @@ var COLUMNAS = {
     'version_id', 'documento_id', 'version', 'comentario',
     'archivo_id', 'archivo_nombre', 'archivo_mime', 'tamano_bytes',
     'subido_por', 'fecha', 'vigente'
+  ],
+
+  // v13 (Fase 5, "reuniones formales"): la reunión en sí (fecha, quién
+  // asistió, para qué, qué se conversó) + sus acuerdos como filas PROPIAS
+  // (append-only) -- cada acuerdo necesita SU PROPIO ref_tipo/ref_id para
+  // saber si YA se convirtió en tarea, algo que una lista de strings en un
+  // solo campo no podría representar. Sigue posteando UN evento REUNION en
+  // PROYECTO_EVENTOS (ref_tipo='REUNION') para que la Sala no pierda
+  // continuidad -- la reunión estructurada es la fuente completa, el evento
+  // es solo su aviso en el feed.
+  PROYECTO_REUNIONES: [
+    'reunion_id', 'proyecto_id', 'titulo', 'fecha', 'participantes',
+    'objetivo', 'minuta', 'creado_por', 'fecha_creacion'
+  ],
+  PROYECTO_REUNION_ACUERDOS: [
+    'acuerdo_id', 'reunion_id', 'texto', 'ref_tipo', 'ref_id', 'orden'
+  ],
+
+  // v13 (Fase 5, "registro de decisiones"): trazabilidad formal --
+  // responsable, contexto e impacto explícitos, no solo un párrafo suelto
+  // en la Sala. "Documentos asociados" se resuelve SIN columna nueva aquí:
+  // PROYECTO_DOCUMENTOS.ref_tipo ahora también acepta 'DECISION' (además de
+  // 'ACTIVIDAD'/'HITO'), así un documento puede enlazar a una decisión con
+  // el mismo mecanismo de Fase 4. activo=false es soft-delete, igual
+  // criterio que el resto del módulo -- una decisión documentada no debe
+  // desaparecer de verdad, solo dejar de listarse.
+  PROYECTO_DECISIONES: [
+    'decision_id', 'proyecto_id', 'descripcion', 'contexto', 'impacto',
+    'responsable_email', 'fecha_decision', 'creado_por', 'fecha_creacion', 'activo'
   ],
 
   // v10.0 (Modulo SGC ISO 9001, Fase 1) ---------------------------------

@@ -72,6 +72,14 @@ function buscarDocumentoProyecto_(documentoId) {
   return leerFilasSeguro_(SHEETS.PROYECTO_DOCUMENTOS).filter(function (d) { return d.documento_id === documentoId; })[0];
 }
 
+function buscarReunionProyecto_(reunionId) {
+  return leerFilasSeguro_(SHEETS.PROYECTO_REUNIONES).filter(function (r) { return r.reunion_id === reunionId; })[0];
+}
+
+function buscarDecisionProyecto_(decisionId) {
+  return leerFilasSeguro_(SHEETS.PROYECTO_DECISIONES).filter(function (d) { return d.decision_id === decisionId; })[0];
+}
+
 // Valida y sube el binario a Drive -- MISMA validación que subirAdjunto
 // (tamaño, firma binaria real, nunca la extensión ni el mime del navegador),
 // reusada aquí para no duplicar la regla de seguridad en dos lugares.
@@ -1650,6 +1658,21 @@ var Proyectos = {
         return errorValidacion_('ref_id', 'El hito indicado no pertenece a este proyecto.');
       }
       refTipo = 'HITO'; refId = data.ref_id;
+    } else if (data.ref_tipo === 'REUNION' && data.ref_id) {
+      // v13 (Fase 5): "documentos asociados" de una reunión -- sin columna
+      // nueva, reusa este mismo mecanismo de referencia.
+      var reunionRef = buscarReunionProyecto_(data.ref_id);
+      if (!reunionRef || reunionRef.proyecto_id !== proyecto.proyecto_id) {
+        return errorValidacion_('ref_id', 'La reunión indicada no pertenece a este proyecto.');
+      }
+      refTipo = 'REUNION'; refId = data.ref_id;
+    } else if (data.ref_tipo === 'DECISION' && data.ref_id) {
+      // v13 (Fase 5): "documentos asociados" de una decisión.
+      var decisionRef = buscarDecisionProyecto_(data.ref_id);
+      if (!decisionRef || decisionRef.proyecto_id !== proyecto.proyecto_id) {
+        return errorValidacion_('ref_id', 'La decisión indicada no pertenece a este proyecto.');
+      }
+      refTipo = 'DECISION'; refId = data.ref_id;
     }
 
     if (data.documento_id) {
@@ -1812,6 +1835,238 @@ var Proyectos = {
     };
   },
 
+  // --- Reuniones (Fase 5, "reuniones formales") ---------------------------
+  //
+  // Eleva el evento REUNION de la Sala (texto libre) a una entidad
+  // estructurada: fecha, participantes, objetivo, minuta y ACUERDOS propios
+  // -- cada uno con su propio ref_tipo/ref_id, porque "¿ya se convirtió en
+  // tarea?" es una pregunta POR ACUERDO, no por reunión completa. Sigue
+  // posteando un evento REUNION en la Sala (autorreferenciado, mismo
+  // criterio que ENTREGABLE/RIESGO/ARCHIVO) para no perder continuidad en
+  // el feed -- la reunión estructurada es la fuente completa.
+  gestionarReunion: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    var rol = rolEnProyecto_(proyecto.proyecto_id, contexto);
+    var puedeGestionar = contexto.rol === 'ADM' || rol === 'LIDER' || rol === 'INTEGRANTE' || rol === 'COLABORADOR';
+    if (!puedeGestionar) return { _forbidden: true, message: 'No puedes gestionar reuniones en este proyecto.' };
+
+    if (data.accion === 'eliminar') {
+      if (!data.reunion_id) return errorValidacion_('reunion_id', 'Falta indicar la reunión.');
+      var paraEliminar = buscarReunionProyecto_(data.reunion_id);
+      if (!paraEliminar || paraEliminar.proyecto_id !== proyecto.proyecto_id) {
+        return errorValidacion_('reunion_id', 'Reunión no encontrada.');
+      }
+      var acuerdosExistentes = leerFilasSeguro_(SHEETS.PROYECTO_REUNION_ACUERDOS)
+        .filter(function (a) { return a.reunion_id === data.reunion_id; });
+      if (acuerdosExistentes.some(function (a) { return a.ref_id; })) {
+        return errorValidacion_('reunion_id', 'Esta reunión tiene acuerdos ya convertidos en tarea; no se puede eliminar (perdería la trazabilidad).');
+      }
+      eliminarFilasPorId_(SHEETS.PROYECTO_REUNION_ACUERDOS, 'reunion_id', data.reunion_id);
+      eliminarFilasPorId_(SHEETS.PROYECTO_REUNIONES, 'reunion_id', data.reunion_id);
+      return { ok: true };
+    }
+
+    // Participantes: texto libre (nombre o correo) -- a diferencia de
+    // colaboradores_emails en tareas, NO otorga acceso a nada, así que no
+    // se restringe a integrantes del proyecto (una reunión real suele
+    // incluir gente externa, ej. el cliente).
+    var participantes = Array.isArray(data.participantes) ? data.participantes.filter(Boolean) : [];
+
+    if (data.reunion_id) {
+      var actual = buscarReunionProyecto_(data.reunion_id);
+      if (!actual || actual.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('reunion_id', 'Reunión no encontrada.');
+      var cambios = {};
+      if (data.titulo !== undefined) {
+        var tituloEdit = String(data.titulo || '').trim();
+        if (!tituloEdit) return errorValidacion_('titulo', 'El título es obligatorio.');
+        cambios.titulo = tituloEdit;
+      }
+      if (data.fecha !== undefined) cambios.fecha = data.fecha || '';
+      if (data.objetivo !== undefined) cambios.objetivo = data.objetivo || '';
+      if (data.minuta !== undefined) cambios.minuta = data.minuta || '';
+      if (data.participantes !== undefined) cambios.participantes = JSON.stringify(participantes);
+      return actualizarFilaPorId_(SHEETS.PROYECTO_REUNIONES, 'reunion_id', data.reunion_id, cambios);
+    }
+
+    var titulo = String(data.titulo || '').trim();
+    if (!titulo) return errorValidacion_('titulo', 'El título de la reunión es obligatorio.');
+    var reunionId = Utilities.getUuid();
+    var reunion = {
+      reunion_id: reunionId, proyecto_id: proyecto.proyecto_id, titulo: titulo,
+      fecha: data.fecha || new Date().toISOString(), participantes: JSON.stringify(participantes),
+      objetivo: data.objetivo || '', minuta: data.minuta || '',
+      creado_por: contexto.email || '', fecha_creacion: new Date().toISOString()
+    };
+    agregarFila_(SHEETS.PROYECTO_REUNIONES, reunion);
+    // Acuerdos iniciales (opcional) -- se pueden seguir agregando después
+    // con agregarAcuerdoReunion.
+    var acuerdosIniciales = Array.isArray(data.acuerdos) ? data.acuerdos.filter(function (t) { return String(t || '').trim(); }) : [];
+    acuerdosIniciales.forEach(function (texto, i) {
+      agregarFila_(SHEETS.PROYECTO_REUNION_ACUERDOS, {
+        acuerdo_id: Utilities.getUuid(), reunion_id: reunionId, texto: String(texto).trim(),
+        ref_tipo: '', ref_id: '', orden: i
+      });
+    });
+    registrarEventoProyecto_(proyecto.proyecto_id, 'REUNION', contexto,
+      'Reunión: ' + titulo, 'REUNION', reunionId, data.objetivo || '');
+    return buscarReunionProyecto_(reunionId);
+  },
+
+  // Agrega UN acuerdo a una reunión ya existente (la minuta se sigue
+  // completando después de creada la reunión, es normal).
+  agregarAcuerdoReunion: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    var rol = rolEnProyecto_(proyecto.proyecto_id, contexto);
+    if (!(contexto.rol === 'ADM' || rol === 'LIDER' || rol === 'INTEGRANTE' || rol === 'COLABORADOR')) {
+      return { _forbidden: true, message: 'No puedes agregar acuerdos en este proyecto.' };
+    }
+    var reunion = buscarReunionProyecto_(data.reunion_id);
+    if (!reunion || reunion.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('reunion_id', 'Reunión no encontrada.');
+    var texto = String(data.texto || '').trim();
+    if (!texto) return errorValidacion_('texto', 'El acuerdo no puede estar vacío.');
+    var totalActual = leerFilasSeguro_(SHEETS.PROYECTO_REUNION_ACUERDOS).filter(function (a) { return a.reunion_id === data.reunion_id; }).length;
+    var acuerdo = { acuerdo_id: Utilities.getUuid(), reunion_id: data.reunion_id, texto: texto, ref_tipo: '', ref_id: '', orden: totalActual };
+    agregarFila_(SHEETS.PROYECTO_REUNION_ACUERDOS, acuerdo);
+    return acuerdo;
+  },
+
+  // Quita un acuerdo -- solo si todavía NO se convirtió en tarea (mismo
+  // criterio protector que hitos: no se destruye trazabilidad ya creada).
+  eliminarAcuerdoReunion: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    var rol = rolEnProyecto_(proyecto.proyecto_id, contexto);
+    if (!(contexto.rol === 'ADM' || rol === 'LIDER' || rol === 'INTEGRANTE' || rol === 'COLABORADOR')) {
+      return { _forbidden: true, message: 'No puedes eliminar acuerdos en este proyecto.' };
+    }
+    var acuerdo = leerFilasSeguro_(SHEETS.PROYECTO_REUNION_ACUERDOS).filter(function (a) { return a.acuerdo_id === data.acuerdo_id; })[0];
+    if (!acuerdo) return errorValidacion_('acuerdo_id', 'Acuerdo no encontrado.');
+    var reunion = buscarReunionProyecto_(acuerdo.reunion_id);
+    if (!reunion || reunion.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('acuerdo_id', 'Acuerdo no encontrado en este proyecto.');
+    if (acuerdo.ref_id) return errorValidacion_('acuerdo_id', 'Este acuerdo ya se convirtió en tarea; no se puede eliminar.');
+    eliminarFilasPorId_(SHEETS.PROYECTO_REUNION_ACUERDOS, 'acuerdo_id', data.acuerdo_id);
+    return { ok: true };
+  },
+
+  // Convierte UN acuerdo en tarea real -- mismo mecanismo que
+  // convertirEventoEnTarea (reusa crearTarea), pero deja la traza en el
+  // ACUERDO en vez de en el evento de la Sala: así "¿de dónde salió esta
+  // tarea?" queda resoluble hasta el acuerdo puntual de la minuta, no solo
+  // "de alguna reunión".
+  convertirAcuerdoEnTarea: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    var acuerdo = leerFilasSeguro_(SHEETS.PROYECTO_REUNION_ACUERDOS).filter(function (a) { return a.acuerdo_id === data.acuerdo_id; })[0];
+    if (!acuerdo) return errorValidacion_('acuerdo_id', 'Acuerdo no encontrado.');
+    if (acuerdo.ref_id) return errorValidacion_('acuerdo_id', 'Este acuerdo ya se convirtió en tarea.');
+    var reunion = buscarReunionProyecto_(acuerdo.reunion_id);
+    if (!reunion || reunion.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('acuerdo_id', 'Acuerdo no encontrado en este proyecto.');
+    if (!data.responsable_email) return errorValidacion_('responsable_email', 'Falta el responsable.');
+    if (!data.fecha_compromiso) return errorValidacion_('fecha_compromiso', 'Falta la fecha comprometida.');
+    var tarea = Proyectos.crearTarea({
+      proyecto_id: proyecto.proyecto_id,
+      hito_id: data.hito_id || '',
+      titulo: data.titulo || acuerdo.texto,
+      descripcion: 'Acuerdo de la reunión "' + reunion.titulo + '": ' + acuerdo.texto,
+      responsable_email: data.responsable_email,
+      fecha_compromiso: data.fecha_compromiso,
+      prioridad: data.prioridad
+    }, contexto);
+    if (tarea && (tarea._validationError || tarea._forbidden)) return tarea;
+    actualizarFilaPorId_(SHEETS.PROYECTO_REUNION_ACUERDOS, 'acuerdo_id', data.acuerdo_id, { ref_tipo: 'ACTIVIDAD', ref_id: tarea.actividad_id });
+    return tarea;
+  },
+
+  // Lista las reuniones del proyecto CON sus acuerdos ya unidos -- son
+  // conjuntos chicos (nadie tiene cientos de reuniones por proyecto), así
+  // que traerlos siempre en un solo viaje es más simple que paginar.
+  listarReuniones: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeVerProyecto_(proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+    var acuerdosPorReunion = {};
+    leerFilasSeguro_(SHEETS.PROYECTO_REUNION_ACUERDOS).forEach(function (a) {
+      (acuerdosPorReunion[a.reunion_id] = acuerdosPorReunion[a.reunion_id] || []).push(a);
+    });
+    return leerFilasSeguro_(SHEETS.PROYECTO_REUNIONES)
+      .filter(function (r) { return r.proyecto_id === proyecto.proyecto_id; })
+      .map(function (r) {
+        var participantes = [];
+        try { participantes = JSON.parse(r.participantes || '[]'); } catch (e) { participantes = []; }
+        var acuerdos = (acuerdosPorReunion[r.reunion_id] || []).sort(function (a, b) { return (Number(a.orden) || 0) - (Number(b.orden) || 0); });
+        return {
+          reunion_id: r.reunion_id, titulo: r.titulo, fecha: r.fecha, objetivo: r.objetivo, minuta: r.minuta,
+          participantes: participantes, creado_por: r.creado_por, fecha_creacion: r.fecha_creacion, acuerdos: acuerdos
+        };
+      })
+      .sort(function (a, b) { return new Date(b.fecha) - new Date(a.fecha); });
+  },
+
+  // --- Decisiones (Fase 5, "registro de decisiones") ----------------------
+  //
+  // Trazabilidad formal de "qué se decidió, por qué y quién es responsable"
+  // -- para proyectos que después deben auditarse o explicarse (§16 del
+  // encargo). "Documentos asociados" se resuelve reusando el enlace que ya
+  // usan Documentos hacia tarea/hito (ver el bloque REF_TIPO en
+  // gestionarDocumento) -- sin columna nueva. Sigue posteando un evento
+  // DECISION en la Sala (autorreferenciado) por continuidad del feed.
+  gestionarDecision: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    var rol = rolEnProyecto_(proyecto.proyecto_id, contexto);
+    var puedeGestionar = contexto.rol === 'ADM' || rol === 'LIDER' || rol === 'INTEGRANTE' || rol === 'COLABORADOR';
+    if (!puedeGestionar) return { _forbidden: true, message: 'No puedes registrar decisiones en este proyecto.' };
+
+    if (data.accion === 'eliminar') {
+      if (!data.decision_id) return errorValidacion_('decision_id', 'Falta indicar la decisión.');
+      var paraEliminar = buscarDecisionProyecto_(data.decision_id);
+      if (!paraEliminar || paraEliminar.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('decision_id', 'Decisión no encontrada.');
+      return actualizarFilaPorId_(SHEETS.PROYECTO_DECISIONES, 'decision_id', data.decision_id, { activo: false });
+    }
+
+    if (data.decision_id) {
+      var actual = buscarDecisionProyecto_(data.decision_id);
+      if (!actual || actual.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('decision_id', 'Decisión no encontrada.');
+      var cambios = {};
+      if (data.descripcion !== undefined) {
+        var descripcionEdit = String(data.descripcion || '').trim();
+        if (!descripcionEdit) return errorValidacion_('descripcion', 'La descripción de la decisión es obligatoria.');
+        cambios.descripcion = descripcionEdit;
+      }
+      if (data.contexto !== undefined) cambios.contexto = data.contexto || '';
+      if (data.impacto !== undefined) cambios.impacto = data.impacto || '';
+      if (data.responsable_email !== undefined) cambios.responsable_email = normalizarEmailProyecto_(data.responsable_email) || proyecto.lider_email;
+      if (data.fecha_decision !== undefined) cambios.fecha_decision = data.fecha_decision || '';
+      return actualizarFilaPorId_(SHEETS.PROYECTO_DECISIONES, 'decision_id', data.decision_id, cambios);
+    }
+
+    var descripcion = String(data.descripcion || '').trim();
+    if (!descripcion) return errorValidacion_('descripcion', 'La descripción de la decisión es obligatoria.');
+    var decisionId = Utilities.getUuid();
+    var decision = {
+      decision_id: decisionId, proyecto_id: proyecto.proyecto_id, descripcion: descripcion,
+      contexto: data.contexto || '', impacto: data.impacto || '',
+      responsable_email: normalizarEmailProyecto_(data.responsable_email) || proyecto.lider_email,
+      fecha_decision: data.fecha_decision || new Date().toISOString(),
+      creado_por: contexto.email || '', fecha_creacion: new Date().toISOString(), activo: true
+    };
+    agregarFila_(SHEETS.PROYECTO_DECISIONES, decision);
+    registrarEventoProyecto_(proyecto.proyecto_id, 'DECISION', contexto,
+      'Decisión: ' + descripcion, 'DECISION', decisionId, data.contexto || '');
+    return buscarDecisionProyecto_(decisionId);
+  },
+
+  listarDecisiones: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeVerProyecto_(proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+    return leerFilasSeguro_(SHEETS.PROYECTO_DECISIONES)
+      .filter(function (d) { return d.proyecto_id === proyecto.proyecto_id && esVerdaderoProyecto_(d.activo); })
+      .sort(function (a, b) { return new Date(b.fecha_decision) - new Date(a.fecha_decision); });
+  },
+
   // --- Entregables (Fase 2 de la propuesta): flujo aprobar/observar -------
   // Quien puede crear/editar/marcar-entregado: LIDER/INTEGRANTE/COLABORADOR
   // del proyecto o ADM (mismo circulo que crea tareas). Revisar (aprobar u
@@ -1939,13 +2194,32 @@ var Proyectos = {
       if (!data.riesgo_id) return errorValidacion_('riesgo_id', 'Falta indicar el riesgo.');
       return actualizarFilaPorId_(SHEETS.PROYECTO_RIESGOS, 'riesgo_id', data.riesgo_id, { estado: 'CERRADO' });
     }
+    // v13 (Fase 5, "riesgo vs. problema"): RIESGO = podría ocurrir; PROBLEMA
+    // = ya está ocurriendo. Sin entidad nueva -- un riesgo ABIERTO puede
+    // "materializarse" (deja de ser hipotético) sin perder su historial de
+    // mitigación ni su nivel. Acción propia (no el edit genérico de abajo)
+    // para que quede como un evento explícito en la Sala, igual criterio que
+    // marcarEntregado en Entregables.
+    if (data.accion === 'materializar') {
+      if (!data.riesgo_id) return errorValidacion_('riesgo_id', 'Falta indicar el riesgo.');
+      var riesgoMat = buscarRiesgo_(data.riesgo_id);
+      if (!riesgoMat || riesgoMat.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('riesgo_id', 'Riesgo no encontrado.');
+      if (riesgoMat.estado !== 'ABIERTO') return errorValidacion_('riesgo_id', 'Solo un riesgo abierto puede materializarse en problema.');
+      var materializado = actualizarFilaPorId_(SHEETS.PROYECTO_RIESGOS, 'riesgo_id', data.riesgo_id, { estado: 'MATERIALIZADO' });
+      registrarEventoProyecto_(proyecto.proyecto_id, 'RIESGO', contexto,
+        'Riesgo materializado en problema: ' + riesgoMat.descripcion, 'RIESGO', data.riesgo_id, '');
+      return materializado;
+    }
     if (data.riesgo_id) {
       var actual = buscarRiesgo_(data.riesgo_id);
       if (!actual) return errorValidacion_('riesgo_id', 'Riesgo no encontrado.');
       var cambios = {};
-      ['descripcion', 'responsable_email', 'mitigacion', 'estado'].forEach(function (campo) {
+      ['descripcion', 'responsable_email', 'mitigacion'].forEach(function (campo) {
         if (data[campo] !== undefined) cambios[campo] = data[campo];
       });
+      // estado NUNCA se acepta a mano por este camino genérico -- solo
+      // 'eliminar' (->CERRADO) y 'materializar' (->MATERIALIZADO) arriba
+      // pueden moverlo, para que no llegue un valor inválido/arbitrario.
       if (data.probabilidad !== undefined) cambios.probabilidad = data.probabilidad;
       if (data.impacto !== undefined) cambios.impacto = data.impacto;
       if (data.probabilidad !== undefined || data.impacto !== undefined) {

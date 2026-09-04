@@ -205,6 +205,14 @@ var BACKOFFICE_ACTIONS = {
   listarVersionesDocumentoProyecto: handleListarVersionesDocumentoProyecto_,
   descargarVersionDocumentoProyecto: handleDescargarVersionDocumentoProyecto_,
   descargarDocumentoProyecto: handleDescargarDocumentoProyecto_,
+  // v13 (Fase 5, "reuniones formales" + "registro de decisiones").
+  gestionarReunionProyecto: handleGestionarReunionProyecto_,
+  agregarAcuerdoReunionProyecto: handleAgregarAcuerdoReunionProyecto_,
+  eliminarAcuerdoReunionProyecto: handleEliminarAcuerdoReunionProyecto_,
+  convertirAcuerdoEnTareaProyecto: handleConvertirAcuerdoEnTareaProyecto_,
+  listarReunionesProyecto: handleListarReunionesProyecto_,
+  gestionarDecisionProyecto: handleGestionarDecisionProyecto_,
+  listarDecisionesProyecto: handleListarDecisionesProyecto_,
   getDetalleProyecto: handleGetDetalleProyecto_,
   // v10 (auditoría G): detalle + tareas + sala en UN solo viaje (antes 3).
   getDetalleCompletoProyecto: handleGetDetalleCompletoProyecto_,
@@ -541,6 +549,13 @@ var MODULO_POR_ACCION = {
   listarVersionesDocumentoProyecto: ['proyectos', 'gerencia'],
   descargarVersionDocumentoProyecto: ['proyectos', 'gerencia'],
   descargarDocumentoProyecto: ['proyectos', 'gerencia'],
+  gestionarReunionProyecto: 'proyectos',
+  agregarAcuerdoReunionProyecto: 'proyectos',
+  eliminarAcuerdoReunionProyecto: 'proyectos',
+  convertirAcuerdoEnTareaProyecto: 'proyectos',
+  listarReunionesProyecto: ['proyectos', 'gerencia'],
+  gestionarDecisionProyecto: 'proyectos',
+  listarDecisionesProyecto: ['proyectos', 'gerencia'],
   getDetalleProyecto: ['proyectos', 'gerencia'],
   getDetalleCompletoProyecto: ['proyectos', 'gerencia'],
   crearProyecto: 'proyectos',
@@ -1288,6 +1303,34 @@ function handleDescargarVersionDocumentoProyecto_(data, contexto) {
 
 function handleDescargarDocumentoProyecto_(data, contexto) {
   return responderResultado_(Proyectos.descargarDocumento(data, contexto));
+}
+
+function handleGestionarReunionProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.gestionarReunion(data, contexto));
+}
+
+function handleAgregarAcuerdoReunionProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.agregarAcuerdoReunion(data, contexto));
+}
+
+function handleEliminarAcuerdoReunionProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.eliminarAcuerdoReunion(data, contexto));
+}
+
+function handleConvertirAcuerdoEnTareaProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.convertirAcuerdoEnTarea(data, contexto));
+}
+
+function handleListarReunionesProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.listarReuniones(data, contexto));
+}
+
+function handleGestionarDecisionProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.gestionarDecision(data, contexto));
+}
+
+function handleListarDecisionesProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.listarDecisiones(data, contexto));
 }
 
 function handleGetDetalleProyecto_(data, contexto) {

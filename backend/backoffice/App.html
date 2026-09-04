@@ -5070,6 +5070,19 @@ button {
 }
 .sigso-py-doc-ref:hover { text-decoration: underline; }
 
+/* v13 (Fase 5, "reuniones formales"): lista de acuerdos dentro de la
+   tarjeta de una reunión -- cada uno con su propio estado (pendiente vs.
+   convertido en tarea). */
+.sigso-py-acuerdos { list-style: none; margin: var(--esp-2) 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.sigso-py-acuerdo {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--esp-2);
+  background: var(--superficie-2); border-radius: var(--radio); padding: 6px 10px; font-size: var(--texto-sm);
+}
+.sigso-py-acuerdo--hecho { opacity: 0.7; }
+.sigso-py-acuerdo--hecho .sigso-py-acuerdo__texto { text-decoration: line-through; }
+.sigso-py-acuerdo__texto { flex: 1; min-width: 0; color: var(--texto); }
+.sigso-py-acuerdo__acciones { display: flex; gap: 6px; flex-shrink: 0; }
+
 .sigso-py-integrante {
   display: flex; align-items: center; gap: var(--esp-3);
   background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio-md);
@@ -16660,7 +16673,10 @@ var Iconos = (function () {
   // v9.4 (Fase 3 de la propuesta): riesgos. nivel lo deriva el backend
   // (probabilidad x impacto) -- el frontend nunca lo calcula ni lo edita.
   var RIESGO_NIVEL_ETIQUETA = { BAJA: 'Baja', MEDIA: 'Media', ALTA: 'Alta' };
-  var RIESGO_ESTADO_ETIQUETA = { ABIERTO: 'Abierto', EN_MITIGACION: 'En mitigación', CERRADO: 'Cerrado' };
+  // v13 (Fase 5, "riesgo vs. problema"): MATERIALIZADO = el riesgo dejó de
+  // ser hipotético, ya está ocurriendo (§17 del encargo). Mismo enum, sin
+  // entidad nueva.
+  var RIESGO_ESTADO_ETIQUETA = { ABIERTO: 'Abierto', EN_MITIGACION: 'En mitigación', CERRADO: 'Cerrado', MATERIALIZADO: 'Problema' };
 
   var proyectoActivoId_ = null;
   var pestanaActiva_ = 'resumen';
@@ -17226,8 +17242,12 @@ var Iconos = (function () {
     if (!cont || !datosDetalleActual_) { refrescarDetalle_(); return; }
     // v10 (auditoría G): el Cronograma carga su data pesada (bitácora +
     // rendimiento) de forma perezosa la primera vez -- las demás pestañas
-    // repintan desde cache al instante.
+    // repintan desde cache al instante. v13 (Fase 5): Reuniones/Decisiones
+    // siguen el mismo criterio (join con acuerdos / hoja propia, no vale la
+    // pena pedirlos si nunca se abre la pestaña).
     if (id === 'cronograma') { cargarDatosCronograma_(cont); }
+    else if (id === 'reuniones') { cargarReuniones_(cont); }
+    else if (id === 'decisiones') { cargarDecisiones_(cont); }
     else { pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala, datosDetalleActual_.miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento); }
     // v10 (Fase D, propuesta 09): marca "vi la Sala" a ahora -- de fondo, sin
     // bloquear el repintado ni volver a pedir el detalle. El resumen que se
@@ -17264,18 +17284,23 @@ var Iconos = (function () {
     var idAlPedir = proyectoActivoId_;
 
     // v10 (auditoría G): detalle + tareas + sala en UNA sola llamada
-    // (getDetalleCompletoProyecto). En modo SUAVE dentro del Cronograma se
-    // piden también bitácora+rendimiento en el MISMO lote, para repintar una
-    // sola vez con todo fresco (y no caer en el "Cargando cronograma..." del
-    // lazy-load).
+    // (getDetalleCompletoProyecto). En modo SUAVE, si la pestaña activa tiene
+    // datos propios "lazy" (Cronograma: bitácora+rendimiento; v13 Fase 5:
+    // Reuniones/Decisiones), se piden en el MISMO lote para repintar una
+    // sola vez con todo fresco (y no caer en su "Cargando..." de siempre).
+    var extras = [];
+    if (suave && enCron) {
+      extras.push(['bitacora', 'listarBitacoraProyecto'], ['rendimiento', 'obtenerRendimientoProyecto']);
+    } else if (suave && pestanaActiva_ === 'reuniones') {
+      extras.push(['reuniones', 'listarReunionesProyecto']);
+    } else if (suave && pestanaActiva_ === 'decisiones') {
+      extras.push(['decisiones', 'listarDecisionesProyecto']);
+    }
     var peticiones = [
       apiSeguro_('getDetalleCompletoProyecto', { proyecto_id: proyectoActivoId_ }),
       miPerfil_()
-    ];
-    if (suave && enCron) {
-      peticiones.push(apiSeguro_('listarBitacoraProyecto', { proyecto_id: proyectoActivoId_ }));
-      peticiones.push(apiSeguro_('obtenerRendimientoProyecto', { proyecto_id: proyectoActivoId_ }));
-    }
+    ].concat(extras.map(function (e) { return apiSeguro_(e[1], { proyecto_id: proyectoActivoId_ }); }));
+
     Promise.all(peticiones).then(function (respuestas) {
       if (idAlPedir !== proyectoActivoId_) return; // el usuario ya se movió
       var perfil = respuestas[1];
@@ -17289,10 +17314,13 @@ var Iconos = (function () {
         if (suave) {
           datosDetalleActual_ = {
             detalle: r.data.detalle, tareas: r.data.tareas || [], sala: r.data.sala || [],
-            bitacora: enCron ? ((respuestas[2] && respuestas[2].ok) ? respuestas[2].data : []) : undefined,
-            rendimiento: enCron ? ((respuestas[3] && respuestas[3].ok) ? respuestas[3].data : null) : undefined,
+            bitacora: undefined, rendimiento: undefined, reuniones: undefined, decisiones: undefined,
             miEmail: miEmail
           };
+          extras.forEach(function (e, i) {
+            var resp = respuestas[2 + i];
+            datosDetalleActual_[e[0]] = (resp && resp.ok) ? resp.data : (e[0] === 'rendimiento' ? null : []);
+          });
           fijarAnchoCarta_(enCron);
           pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala,
             miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento);
@@ -17341,6 +17369,8 @@ var Iconos = (function () {
     datosDetalleActual_ = { detalle: detalle, tareas: tareas, sala: sala, bitacora: undefined, rendimiento: undefined, miEmail: miEmail };
     pintarDetalle_(cont, detalle, tareas, sala, miEmail, undefined, undefined);
     if (pestanaActiva_ === 'cronograma') cargarDatosCronograma_(cont);
+    else if (pestanaActiva_ === 'reuniones') cargarReuniones_(cont);
+    else if (pestanaActiva_ === 'decisiones') cargarDecisiones_(cont);
   }
 
   // v10 (auditoría G): carga perezosa de la bitácora + el rendimiento (lo
@@ -17362,6 +17392,44 @@ var Iconos = (function () {
       datosDetalleActual_.bitacora = (r[0] && r[0].ok) ? r[0].data : [];
       datosDetalleActual_.rendimiento = (r[1] && r[1].ok) ? r[1].data : null;
       if (pestanaActiva_ === 'cronograma') {
+        pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala,
+          datosDetalleActual_.miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento);
+      }
+    });
+  }
+
+  // v13 (Fase 5): mismo patrón lazy que cronograma, para dos pestañas chicas
+  // que casi nadie abre en cada visita al proyecto.
+  function cargarReuniones_(cont) {
+    if (!datosDetalleActual_) return;
+    if (datosDetalleActual_.reuniones !== undefined) {
+      pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala,
+        datosDetalleActual_.miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento);
+      return;
+    }
+    var idAlPedir = proyectoActivoId_;
+    apiSeguro_('listarReunionesProyecto', { proyecto_id: proyectoActivoId_ }).then(function (r) {
+      if (!datosDetalleActual_ || idAlPedir !== proyectoActivoId_) return;
+      datosDetalleActual_.reuniones = (r && r.ok) ? r.data : [];
+      if (pestanaActiva_ === 'reuniones') {
+        pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala,
+          datosDetalleActual_.miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento);
+      }
+    });
+  }
+
+  function cargarDecisiones_(cont) {
+    if (!datosDetalleActual_) return;
+    if (datosDetalleActual_.decisiones !== undefined) {
+      pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala,
+        datosDetalleActual_.miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento);
+      return;
+    }
+    var idAlPedir = proyectoActivoId_;
+    apiSeguro_('listarDecisionesProyecto', { proyecto_id: proyectoActivoId_ }).then(function (r) {
+      if (!datosDetalleActual_ || idAlPedir !== proyectoActivoId_) return;
+      datosDetalleActual_.decisiones = (r && r.ok) ? r.data : [];
+      if (pestanaActiva_ === 'decisiones') {
         pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala,
           datosDetalleActual_.miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento);
       }
@@ -17440,6 +17508,8 @@ var Iconos = (function () {
       { id: 'cronograma', texto: 'Cronograma' },
       { id: 'entregables', texto: 'Entregables' },
       { id: 'documentos', texto: 'Documentos' },
+      { id: 'reuniones', texto: 'Reuniones' },
+      { id: 'decisiones', texto: 'Decisiones' },
       { id: 'riesgos', texto: 'Riesgos' },
       { id: 'equipo', texto: 'Equipo' }
     ];
@@ -17490,6 +17560,16 @@ var Iconos = (function () {
     }
     else if (pestanaActiva_ === 'entregables') cuerpo = pintarEntregables_(detalle, puedeGestionar);
     else if (pestanaActiva_ === 'documentos') cuerpo = pintarDocumentos_(detalle, tareas, puedeGestionar);
+    else if (pestanaActiva_ === 'reuniones') {
+      cuerpo = (datosDetalleActual_ && datosDetalleActual_.reuniones === undefined)
+        ? Componentes.cargando('Cargando reuniones...')
+        : pintarReuniones_(datosDetalleActual_ ? (datosDetalleActual_.reuniones || []) : [], detalle, tareas, puedeGestionar);
+    }
+    else if (pestanaActiva_ === 'decisiones') {
+      cuerpo = (datosDetalleActual_ && datosDetalleActual_.decisiones === undefined)
+        ? Componentes.cargando('Cargando decisiones...')
+        : pintarDecisiones_(datosDetalleActual_ ? (datosDetalleActual_.decisiones || []) : [], detalle, tareas, puedeGestionar);
+    }
     else if (pestanaActiva_ === 'riesgos') cuerpo = pintarRiesgos_(detalle, puedeGestionar);
     else if (pestanaActiva_ === 'equipo') cuerpo = pintarEquipo_(detalle, puedeGestionar);
 
@@ -20094,6 +20174,13 @@ var Iconos = (function () {
         refHtml = '<button type="button" class="sigso-py-doc-ref js-py-doc-ir-ref" data-tab="tareas">' + Iconos.svg('enlace', { tam: 12 }) + ' ' + Componentes.escaparHtml(tareasPorId[d.ref_id].titulo) + '</button>';
       } else if (d.ref_tipo === 'HITO' && hitosPorId[d.ref_id]) {
         refHtml = '<button type="button" class="sigso-py-doc-ref js-py-doc-ir-ref" data-tab="hitos">' + Iconos.svg('enlace', { tam: 12 }) + ' ' + Componentes.escaparHtml(hitosPorId[d.ref_id].nombre) + '</button>';
+      } else if (d.ref_tipo === 'REUNION') {
+        // v13 (Fase 5): Reuniones se carga lazy y por separado -- mostrar el
+        // título exacto aquí obligaría a cargarla solo para este chip. Un
+        // enlace genérico a la pestaña sigue siendo accionable.
+        refHtml = '<button type="button" class="sigso-py-doc-ref js-py-doc-ir-ref" data-tab="reuniones">' + Iconos.svg('enlace', { tam: 12 }) + ' Vinculado a una reunión</button>';
+      } else if (d.ref_tipo === 'DECISION') {
+        refHtml = '<button type="button" class="sigso-py-doc-ref js-py-doc-ir-ref" data-tab="decisiones">' + Iconos.svg('enlace', { tam: 12 }) + ' Vinculado a una decisión</button>';
       }
       var botones = '<div class="sigso-py-hito__acciones">' +
           Componentes.boton({ texto: 'Descargar', variante: 'sutil', clase: 'js-py-doc-descargar', idx: d.documento_id }) +
@@ -20194,6 +20281,89 @@ var Iconos = (function () {
     });
   }
 
+  // --- Reuniones (Fase 5, "reuniones formales") --------------------------
+
+  function pintarReuniones_(reuniones, detalle, tareas, puedeGestionar) {
+    var puedeCrear = detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
+    var acciones = '<div class="sigso-py-cabecera">' +
+      (puedeCrear ? Componentes.boton({ texto: '+ Nueva reunión', clase: 'js-py-nueva-reunion' }) : '<span></span>') +
+    '</div>';
+    if (!reuniones.length) {
+      return acciones + Componentes.vacio({ texto: 'Todavía no hay reuniones registradas.' });
+    }
+    var filas = reuniones.map(function (r) {
+      var participantesTxt = (r.participantes || []).join(', ');
+      var acuerdosHtml = (r.acuerdos || []).map(function (a) {
+        var convertido = !!a.ref_id;
+        return '<li class="sigso-py-acuerdo' + (convertido ? ' sigso-py-acuerdo--hecho' : '') + '">' +
+          '<span class="sigso-py-acuerdo__texto">' + Componentes.escaparHtml(a.texto) + '</span>' +
+          (convertido
+            ? '<button type="button" class="sigso-py-doc-ref js-py-acuerdo-ir-tarea" data-idx="' + a.ref_id + '">' + Iconos.svg('enlace', { tam: 12 }) + ' Convertido en tarea</button>'
+            : (puedeCrear
+              ? '<span class="sigso-py-acuerdo__acciones">' +
+                  Componentes.boton({ texto: 'Convertir en tarea', variante: 'sutil', clase: 'js-py-acuerdo-convertir', idx: a.acuerdo_id }) +
+                  Componentes.boton({ texto: 'Quitar', variante: 'sutil', clase: 'js-py-acuerdo-eliminar', idx: a.acuerdo_id }) +
+                '</span>'
+              : '')) +
+        '</li>';
+      }).join('');
+      var soloConTareasPendientes = (r.acuerdos || []).every(function (a) { return !a.ref_id; });
+      return '<div class="sigso-py-tarea">' +
+        '<div class="sigso-py-tarea__top">' +
+          '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(r.titulo) + '</span>' +
+          '<span class="sigso-py-doc-vigente">' + fechaCorta_(r.fecha) + '</span>' +
+        '</div>' +
+        (participantesTxt ? '<p class="sigso-ayuda"><b>Participantes:</b> ' + Componentes.escaparHtml(participantesTxt) + '</p>' : '') +
+        (r.objetivo ? '<p><b>Objetivo:</b> ' + Componentes.escaparHtml(r.objetivo) + '</p>' : '') +
+        (r.minuta ? '<p>' + Componentes.escaparHtml(r.minuta) + '</p>' : '') +
+        (acuerdosHtml ? '<ul class="sigso-py-acuerdos">' + acuerdosHtml + '</ul>' : '<p class="sigso-ayuda">Sin acuerdos registrados.</p>') +
+        (puedeCrear
+          ? '<div class="sigso-py-hito__acciones">' +
+              Componentes.boton({ texto: '+ Agregar acuerdo', variante: 'sutil', clase: 'js-py-reunion-agregar-acuerdo', idx: r.reunion_id }) +
+              Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-py-reunion-editar', idx: r.reunion_id }) +
+              (soloConTareasPendientes ? Componentes.boton({ texto: 'Eliminar', variante: 'sutil', clase: 'js-py-reunion-eliminar', idx: r.reunion_id }) : '') +
+            '</div>'
+          : '') +
+      '</div>';
+    }).join('');
+    return acciones + '<div class="sigso-py-lista">' + filas + '</div>';
+  }
+
+  // --- Decisiones (Fase 5, "registro de decisiones") ----------------------
+
+  function pintarDecisiones_(decisiones, detalle, tareas, puedeGestionar) {
+    var puedeCrear = detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
+    var acciones = '<div class="sigso-py-cabecera">' +
+      (puedeCrear ? Componentes.boton({ texto: '+ Nueva decisión', clase: 'js-py-nueva-decision' }) : '<span></span>') +
+    '</div>';
+    if (!decisiones.length) {
+      return acciones + Componentes.vacio({ texto: 'Todavía no hay decisiones registradas.' });
+    }
+    var integrantesPorEmail = {};
+    (detalle.integrantes || []).forEach(function (i) { integrantesPorEmail[normalizarEmail_(i.usuario_email)] = i.usuario_nombre || i.usuario_email; });
+
+    var filas = decisiones.map(function (d) {
+      return '<div class="sigso-py-tarea">' +
+        '<div class="sigso-py-tarea__top">' +
+          '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(d.descripcion) + '</span>' +
+          '<span class="sigso-py-doc-vigente">' + fechaCorta_(d.fecha_decision) + '</span>' +
+        '</div>' +
+        (d.contexto ? '<p><b>Contexto:</b> ' + Componentes.escaparHtml(d.contexto) + '</p>' : '') +
+        (d.impacto ? '<p><b>Impacto:</b> ' + Componentes.escaparHtml(d.impacto) + '</p>' : '') +
+        '<div class="sigso-py-tarea__meta">' +
+          '<span>Responsable: ' + Componentes.escaparHtml(integrantesPorEmail[normalizarEmail_(d.responsable_email)] || d.responsable_email) + '</span>' +
+        '</div>' +
+        (puedeCrear
+          ? '<div class="sigso-py-hito__acciones">' +
+              Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-py-decision-editar', idx: d.decision_id }) +
+              Componentes.boton({ texto: 'Eliminar', variante: 'sutil', clase: 'js-py-decision-eliminar', idx: d.decision_id }) +
+            '</div>'
+          : '') +
+      '</div>';
+    }).join('');
+    return acciones + '<div class="sigso-py-lista">' + filas + '</div>';
+  }
+
   // --- Riesgos (v9.4, Fase 3) -------------------------------------------
 
   function riesgoBadgeVariante_(nivel) {
@@ -20225,12 +20395,13 @@ var Iconos = (function () {
           '<span>Probabilidad ' + (RIESGO_NIVEL_ETIQUETA[r.probabilidad] || r.probabilidad) + '</span>' +
           '<span>Impacto ' + (RIESGO_NIVEL_ETIQUETA[r.impacto] || r.impacto) + '</span>' +
           '<span>' + Componentes.escaparHtml(integrantesPorEmail[normalizarEmail_(r.responsable_email)] || r.responsable_email) + '</span>' +
-          '<span>' + Componentes.badge(RIESGO_ESTADO_ETIQUETA[r.estado] || r.estado, 'neutro') + '</span>' +
+          '<span>' + Componentes.badge(RIESGO_ESTADO_ETIQUETA[r.estado] || r.estado, r.estado === 'MATERIALIZADO' ? 'critico' : 'neutro') + '</span>' +
         '</div>' +
         (r.mitigacion ? '<p class="sigso-ayuda"><b>Mitigación:</b> ' + Componentes.escaparHtml(r.mitigacion) + '</p>' : '') +
         (puedeEditar
           ? '<div class="sigso-py-hito__acciones">' +
               Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-py-riesgo-editar', idx: r.riesgo_id }) +
+              (r.estado === 'ABIERTO' ? Componentes.boton({ texto: 'Marcar como problema', variante: 'sutil', clase: 'js-py-riesgo-materializar', idx: r.riesgo_id }) : '') +
               Componentes.boton({ texto: 'Cerrar', variante: 'sutil', clase: 'js-py-riesgo-cerrar', idx: r.riesgo_id }) +
             '</div>'
           : '') +
@@ -20673,6 +20844,97 @@ var Iconos = (function () {
     }
     wireListaDocumentos_(cont, detalle, tareas, puedeGestionar);
 
+    // --- v13 (Fase 5): reuniones -----------------------------------------
+    var nuevaReunion = cont.querySelector('.js-py-nueva-reunion');
+    if (nuevaReunion) nuevaReunion.addEventListener('click', function () { abrirFormularioReunion_(detalle); });
+
+    function reunionesCache_() { return (datosDetalleActual_ && datosDetalleActual_.reuniones) || []; }
+    function reunionPorId_(id) {
+      var lista = reunionesCache_();
+      for (var i = 0; i < lista.length; i++) { if (lista[i].reunion_id === id) return lista[i]; }
+      return null;
+    }
+    function acuerdoPorId_(id) {
+      var lista = reunionesCache_();
+      for (var i = 0; i < lista.length; i++) {
+        var encontrado = (lista[i].acuerdos || []).filter(function (a) { return a.acuerdo_id === id; })[0];
+        if (encontrado) return encontrado;
+      }
+      return null;
+    }
+    cont.querySelectorAll('.js-py-reunion-editar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var r = reunionPorId_(btn.getAttribute('data-idx'));
+        if (r) abrirFormularioEditarReunion_(r);
+      });
+    });
+    cont.querySelectorAll('.js-py-reunion-eliminar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-idx');
+        Componentes.confirmar({ titulo: 'Eliminar reunión', mensaje: '¿Confirmas eliminar esta reunión y sus acuerdos sin convertir?' }).then(function (ok) {
+          if (!ok) return;
+          api_('gestionarReunionProyecto', { proyecto_id: proyectoActivoId_, accion: 'eliminar', reunion_id: id }).then(function (r) {
+            if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo eliminar la reunión.', tipo: 'error' }); return; }
+            if (datosDetalleActual_) datosDetalleActual_.reuniones = undefined;
+            refrescarDetalle_();
+          });
+        });
+      });
+    });
+    cont.querySelectorAll('.js-py-reunion-agregar-acuerdo').forEach(function (btn) {
+      btn.addEventListener('click', function () { abrirFormularioAgregarAcuerdo_(btn.getAttribute('data-idx')); });
+    });
+    cont.querySelectorAll('.js-py-acuerdo-convertir').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var a = acuerdoPorId_(btn.getAttribute('data-idx'));
+        if (a) abrirFormularioConvertirAcuerdo_(a, detalle);
+      });
+    });
+    cont.querySelectorAll('.js-py-acuerdo-eliminar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-idx');
+        Componentes.confirmar({ titulo: 'Quitar acuerdo', mensaje: '¿Confirmas quitar este acuerdo?' }).then(function (ok) {
+          if (!ok) return;
+          api_('eliminarAcuerdoReunionProyecto', { proyecto_id: proyectoActivoId_, acuerdo_id: id }).then(function (r) {
+            if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo quitar el acuerdo.', tipo: 'error' }); return; }
+            if (datosDetalleActual_) datosDetalleActual_.reuniones = undefined;
+            refrescarDetalle_();
+          });
+        });
+      });
+    });
+    cont.querySelectorAll('.js-py-acuerdo-ir-tarea').forEach(function (btn) {
+      btn.addEventListener('click', function () { cambiarPestana_('tareas'); });
+    });
+
+    // --- v13 (Fase 5): decisiones ------------------------------------------
+    var nuevaDecision = cont.querySelector('.js-py-nueva-decision');
+    if (nuevaDecision) nuevaDecision.addEventListener('click', function () { abrirFormularioDecision_(detalle); });
+    function decisionPorId_(id) {
+      var lista = (datosDetalleActual_ && datosDetalleActual_.decisiones) || [];
+      for (var i = 0; i < lista.length; i++) { if (lista[i].decision_id === id) return lista[i]; }
+      return null;
+    }
+    cont.querySelectorAll('.js-py-decision-editar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var d = decisionPorId_(btn.getAttribute('data-idx'));
+        if (d) abrirFormularioEditarDecision_(d, detalle);
+      });
+    });
+    cont.querySelectorAll('.js-py-decision-eliminar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-idx');
+        Componentes.confirmar({ titulo: 'Eliminar decisión', mensaje: '¿Confirmas eliminar esta decisión?' }).then(function (ok) {
+          if (!ok) return;
+          api_('gestionarDecisionProyecto', { proyecto_id: proyectoActivoId_, accion: 'eliminar', decision_id: id }).then(function (r) {
+            if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo eliminar la decisión.', tipo: 'error' }); return; }
+            if (datosDetalleActual_) datosDetalleActual_.decisiones = undefined;
+            refrescarDetalle_();
+          });
+        });
+      });
+    });
+
     // --- v9.4: riesgos ------------------------------------------------------
     var nuevoRiesgo = cont.querySelector('.js-py-nuevo-riesgo');
     if (nuevoRiesgo) nuevoRiesgo.addEventListener('click', function () { abrirFormularioRiesgo_(detalle); });
@@ -20696,6 +20958,23 @@ var Iconos = (function () {
           api_('gestionarRiesgoProyecto', { proyecto_id: proyectoActivoId_, accion: 'eliminar', riesgo_id: id }).then(function (respuesta) {
             if (!respuesta || !respuesta.ok) {
               Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo cerrar el riesgo.', tipo: 'error' });
+              return;
+            }
+            refrescarDetalle_();
+          });
+        });
+      });
+    });
+
+    // v13 (Fase 5, "riesgo vs. problema").
+    cont.querySelectorAll('.js-py-riesgo-materializar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-idx');
+        Componentes.confirmar({ titulo: 'Marcar como problema', mensaje: 'Este riesgo deja de ser hipotético: ya está ocurriendo. ¿Confirmas?' }).then(function (ok) {
+          if (!ok) return;
+          api_('gestionarRiesgoProyecto', { proyecto_id: proyectoActivoId_, accion: 'materializar', riesgo_id: id }).then(function (respuesta) {
+            if (!respuesta || !respuesta.ok) {
+              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo actualizar el riesgo.', tipo: 'error' });
               return;
             }
             refrescarDetalle_();
@@ -21145,6 +21424,211 @@ var Iconos = (function () {
 
   // v9.4 (Fase 3): nuevo riesgo. nivel lo calcula el backend (probabilidad x
   // impacto) -- el formulario nunca lo pide ni lo muestra como campo editable.
+  // --- Reuniones (Fase 5) --------------------------------------------------
+
+  // Crea una reunión: los acuerdos se escriben UNO POR LÍNEA en un textarea
+  // (mismo criterio que redactar una minuta real) -- se parten en el submit,
+  // no hace falta una UI de fieldset repetible para la primera versión.
+  function abrirFormularioReunion_(detalle) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Nueva reunión</h3>' +
+        '<form id="form-py-reunion">' +
+          Componentes.campoTexto({ id: 'py-reu-titulo', label: 'Título', requerido: true }) +
+          Componentes.campoTexto({ id: 'py-reu-fecha', label: 'Fecha', tipo: 'date', valor: fechaISOCorta_(new Date().toISOString()) }) +
+          Componentes.campoTexto({ id: 'py-reu-participantes', label: 'Participantes (separados por coma)', placeholder: 'leo@rld.cl, Cliente ACME' }) +
+          Componentes.campoTextarea({ id: 'py-reu-objetivo', label: 'Objetivo (opcional)' }) +
+          Componentes.campoTextarea({ id: 'py-reu-minuta', label: 'Minuta (opcional)' }) +
+          Componentes.campoTextarea({ id: 'py-reu-acuerdos', label: 'Acuerdos (opcional, uno por línea)', placeholder: 'Definir estados CRM\nEnviar propuesta de flujo' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Crear reunión', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    fondo.querySelector('#form-py-reunion').addEventListener('submit', function (evento) {
+      var participantes = document.getElementById('py-reu-participantes').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      var acuerdos = document.getElementById('py-reu-acuerdos').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+      enviarModal_(evento, 'gestionarReunionProyecto', {
+        proyecto_id: proyectoActivoId_,
+        titulo: document.getElementById('py-reu-titulo').value,
+        fecha: document.getElementById('py-reu-fecha').value,
+        participantes: participantes,
+        objetivo: document.getElementById('py-reu-objetivo').value,
+        minuta: document.getElementById('py-reu-minuta').value,
+        acuerdos: acuerdos
+      }, function () { cerrar(); refrescarDetalle_(); });
+    });
+  }
+
+  function abrirFormularioEditarReunion_(reunion) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Editar reunión</h3>' +
+        '<form id="form-py-reunion-editar">' +
+          Componentes.campoTexto({ id: 'py-ree-titulo', label: 'Título', valor: reunion.titulo, requerido: true }) +
+          Componentes.campoTexto({ id: 'py-ree-fecha', label: 'Fecha', tipo: 'date', valor: fechaISOCorta_(reunion.fecha) }) +
+          Componentes.campoTexto({ id: 'py-ree-participantes', label: 'Participantes (separados por coma)', valor: (reunion.participantes || []).join(', ') }) +
+          Componentes.campoTextarea({ id: 'py-ree-objetivo', label: 'Objetivo', valor: reunion.objetivo }) +
+          Componentes.campoTextarea({ id: 'py-ree-minuta', label: 'Minuta', valor: reunion.minuta }) +
+          '<p class="sigso-ayuda">Los acuerdos se agregan/quitan desde la tarjeta de la reunión, no aquí.</p>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    fondo.querySelector('#form-py-reunion-editar').addEventListener('submit', function (evento) {
+      var participantes = document.getElementById('py-ree-participantes').value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+      enviarModal_(evento, 'gestionarReunionProyecto', {
+        proyecto_id: proyectoActivoId_,
+        reunion_id: reunion.reunion_id,
+        titulo: document.getElementById('py-ree-titulo').value,
+        fecha: document.getElementById('py-ree-fecha').value,
+        participantes: participantes,
+        objetivo: document.getElementById('py-ree-objetivo').value,
+        minuta: document.getElementById('py-ree-minuta').value
+      }, function () { cerrar(); refrescarDetalle_(); });
+    });
+  }
+
+  function abrirFormularioAgregarAcuerdo_(reunionId) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Agregar acuerdo</h3>' +
+        '<form id="form-py-acuerdo">' +
+          Componentes.campoTextarea({ id: 'py-ac-texto', label: 'Acuerdo', requerido: true }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Agregar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    fondo.querySelector('#form-py-acuerdo').addEventListener('submit', function (evento) {
+      enviarModal_(evento, 'agregarAcuerdoReunionProyecto', {
+        proyecto_id: proyectoActivoId_, reunion_id: reunionId, texto: document.getElementById('py-ac-texto').value
+      }, function () { cerrar(); refrescarDetalle_(); });
+    });
+  }
+
+  // Convierte un acuerdo en tarea real -- mismo espíritu que "Convertir en
+  // tarea" de la Sala, pero con la traza en el acuerdo puntual.
+  function abrirFormularioConvertirAcuerdo_(acuerdo, detalle) {
+    var opcionesIntegrantes = (detalle.integrantes || []).map(function (i) {
+      return { valor: i.usuario_email, texto: i.usuario_nombre || i.usuario_email };
+    });
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Convertir en tarea</h3>' +
+        '<p class="sigso-ayuda">' + Componentes.escaparHtml(acuerdo.texto) + '</p>' +
+        '<form id="form-py-acuerdo-convertir">' +
+          Componentes.campoTexto({ id: 'py-acc-titulo', label: 'Título de la tarea', valor: acuerdo.texto, requerido: true }) +
+          Componentes.campoSelect({ id: 'py-acc-responsable', label: 'Responsable', opciones: opcionesIntegrantes, requerido: true }) +
+          Componentes.campoTexto({ id: 'py-acc-fecha', label: 'Fecha comprometida', tipo: 'date', requerido: true }) +
+          Componentes.campoSelect({
+            id: 'py-acc-prioridad', label: 'Prioridad', valor: 'P4', placeholder: false,
+            opciones: [{ valor: 'P1', texto: 'P1' }, { valor: 'P2', texto: 'P2' }, { valor: 'P3', texto: 'P3' }, { valor: 'P4', texto: 'P4' }, { valor: 'P5', texto: 'P5' }]
+          }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Convertir', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    fondo.querySelector('#form-py-acuerdo-convertir').addEventListener('submit', function (evento) {
+      enviarModal_(evento, 'convertirAcuerdoEnTareaProyecto', {
+        proyecto_id: proyectoActivoId_, acuerdo_id: acuerdo.acuerdo_id,
+        titulo: document.getElementById('py-acc-titulo').value,
+        responsable_email: document.getElementById('py-acc-responsable').value,
+        fecha_compromiso: document.getElementById('py-acc-fecha').value,
+        prioridad: document.getElementById('py-acc-prioridad').value
+      }, function () { cerrar(); refrescarDetalle_(); });
+    });
+  }
+
+  // --- Decisiones (Fase 5) --------------------------------------------------
+
+  function abrirFormularioDecision_(detalle) {
+    var opcionesIntegrantes = (detalle.integrantes || []).map(function (i) {
+      return { valor: i.usuario_email, texto: i.usuario_nombre || i.usuario_email };
+    });
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Nueva decisión</h3>' +
+        '<form id="form-py-decision">' +
+          Componentes.campoTextarea({ id: 'py-dec-descripcion', label: 'Decisión', requerido: true }) +
+          Componentes.campoTexto({ id: 'py-dec-fecha', label: 'Fecha', tipo: 'date', valor: fechaISOCorta_(new Date().toISOString()) }) +
+          Componentes.campoSelect({ id: 'py-dec-responsable', label: 'Responsable (opcional, por defecto el líder)', opciones: opcionesIntegrantes }) +
+          Componentes.campoTextarea({ id: 'py-dec-contexto', label: 'Contexto (opcional)' }) +
+          Componentes.campoTextarea({ id: 'py-dec-impacto', label: 'Impacto (opcional)' }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Registrar decisión', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    fondo.querySelector('#form-py-decision').addEventListener('submit', function (evento) {
+      enviarModal_(evento, 'gestionarDecisionProyecto', {
+        proyecto_id: proyectoActivoId_,
+        descripcion: document.getElementById('py-dec-descripcion').value,
+        fecha_decision: document.getElementById('py-dec-fecha').value,
+        responsable_email: document.getElementById('py-dec-responsable').value,
+        contexto: document.getElementById('py-dec-contexto').value,
+        impacto: document.getElementById('py-dec-impacto').value
+      }, function () { cerrar(); refrescarDetalle_(); });
+    });
+  }
+
+  function abrirFormularioEditarDecision_(decision, detalle) {
+    var opcionesIntegrantes = (detalle.integrantes || []).map(function (i) {
+      return { valor: i.usuario_email, texto: i.usuario_nombre || i.usuario_email };
+    });
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Editar decisión</h3>' +
+        '<form id="form-py-decision-editar">' +
+          Componentes.campoTextarea({ id: 'py-dece-descripcion', label: 'Decisión', valor: decision.descripcion, requerido: true }) +
+          Componentes.campoTexto({ id: 'py-dece-fecha', label: 'Fecha', tipo: 'date', valor: fechaISOCorta_(decision.fecha_decision) }) +
+          Componentes.campoSelect({ id: 'py-dece-responsable', label: 'Responsable', opciones: opcionesIntegrantes, valor: decision.responsable_email }) +
+          Componentes.campoTextarea({ id: 'py-dece-contexto', label: 'Contexto', valor: decision.contexto }) +
+          Componentes.campoTextarea({ id: 'py-dece-impacto', label: 'Impacto', valor: decision.impacto }) +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    fondo.querySelector('#form-py-decision-editar').addEventListener('submit', function (evento) {
+      enviarModal_(evento, 'gestionarDecisionProyecto', {
+        proyecto_id: proyectoActivoId_,
+        decision_id: decision.decision_id,
+        descripcion: document.getElementById('py-dece-descripcion').value,
+        fecha_decision: document.getElementById('py-dece-fecha').value,
+        responsable_email: document.getElementById('py-dece-responsable').value,
+        contexto: document.getElementById('py-dece-contexto').value,
+        impacto: document.getElementById('py-dece-impacto').value
+      }, function () { cerrar(); refrescarDetalle_(); });
+    });
+  }
+
   function abrirFormularioRiesgo_(detalle) {
     var opcionesIntegrantes = (detalle.integrantes || []).map(function (i) {
       return { valor: i.usuario_email, texto: i.usuario_nombre || i.usuario_email };
@@ -21196,8 +21680,16 @@ var Iconos = (function () {
   // tipo aparte -- more simple, y la lista de un proyecto rara vez es tan
   // larga como para necesitar dos selects).
   function opcionesReferenciaDocumento_(detalle, tareas) {
+    // v13 (Fase 5): Reuniones/Decisiones se agregan SOLO si ya están en
+    // caché (esas pestañas cargan lazy) -- no vale la pena forzar una
+    // llamada de red solo para poblar este selector; si el usuario nunca
+    // visitó esa pestaña en esta sesión, igual puede enlazar a tarea/hito.
+    var reuniones = (datosDetalleActual_ && datosDetalleActual_.reuniones) || [];
+    var decisiones = (datosDetalleActual_ && datosDetalleActual_.decisiones) || [];
     return (tareas || []).map(function (a) { return { valor: 'ACTIVIDAD::' + a.actividad_id, texto: 'Tarea: ' + a.titulo }; })
-      .concat((detalle.hitos || []).map(function (h) { return { valor: 'HITO::' + h.hito_id, texto: 'Hito: ' + h.nombre }; }));
+      .concat((detalle.hitos || []).map(function (h) { return { valor: 'HITO::' + h.hito_id, texto: 'Hito: ' + h.nombre }; }))
+      .concat(reuniones.map(function (r) { return { valor: 'REUNION::' + r.reunion_id, texto: 'Reunión: ' + r.titulo }; }))
+      .concat(decisiones.map(function (d) { return { valor: 'DECISION::' + d.decision_id, texto: 'Decisión: ' + d.descripcion.slice(0, 40) }; }));
   }
 
   // v13 (Fase 4): "elegir archivo habilita el nombre visible" -- mismo

@@ -305,6 +305,10 @@ function construirContexto() {
   // documentos a mano en el navegador local.
   seedSheet(ctx, 'PROYECTO_DOCUMENTOS', ctx.COLUMNAS.PROYECTO_DOCUMENTOS, []);
   seedSheet(ctx, 'PROYECTO_DOC_VERSIONES', ctx.COLUMNAS.PROYECTO_DOC_VERSIONES, []);
+  // v13 (Fase 5, "reuniones" + "decisiones"): vacías -- se prueban a mano.
+  seedSheet(ctx, 'PROYECTO_REUNIONES', ctx.COLUMNAS.PROYECTO_REUNIONES, []);
+  seedSheet(ctx, 'PROYECTO_REUNION_ACUERDOS', ctx.COLUMNAS.PROYECTO_REUNION_ACUERDOS, []);
+  seedSheet(ctx, 'PROYECTO_DECISIONES', ctx.COLUMNAS.PROYECTO_DECISIONES, []);
   // v10.0 (Modulo SGC ISO 9001): hojas del repositorio documental. Se
   // siembran los ROLES (admin como Encargado SGC, jefe como operativo de
   // CONTABILIDAD) para poder probar en local que cada quien ve lo suyo; los

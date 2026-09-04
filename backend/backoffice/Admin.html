@@ -5070,6 +5070,19 @@ button {
 }
 .sigso-py-doc-ref:hover { text-decoration: underline; }
 
+/* v13 (Fase 5, "reuniones formales"): lista de acuerdos dentro de la
+   tarjeta de una reunión -- cada uno con su propio estado (pendiente vs.
+   convertido en tarea). */
+.sigso-py-acuerdos { list-style: none; margin: var(--esp-2) 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.sigso-py-acuerdo {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--esp-2);
+  background: var(--superficie-2); border-radius: var(--radio); padding: 6px 10px; font-size: var(--texto-sm);
+}
+.sigso-py-acuerdo--hecho { opacity: 0.7; }
+.sigso-py-acuerdo--hecho .sigso-py-acuerdo__texto { text-decoration: line-through; }
+.sigso-py-acuerdo__texto { flex: 1; min-width: 0; color: var(--texto); }
+.sigso-py-acuerdo__acciones { display: flex; gap: 6px; flex-shrink: 0; }
+
 .sigso-py-integrante {
   display: flex; align-items: center; gap: var(--esp-3);
   background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio-md);

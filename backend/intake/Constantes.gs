@@ -121,6 +121,11 @@ var SHEETS = {
   // idéntica en backend/backoffice/Constantes.gs.
   PROYECTO_DOCUMENTOS: 'PROYECTO_DOCUMENTOS',
   PROYECTO_DOC_VERSIONES: 'PROYECTO_DOC_VERSIONES',
+  // v13 (Fase 5, "reuniones" + "decisiones"): vive 100% en el Backoffice;
+  // ver la nota idéntica en backend/backoffice/Constantes.gs.
+  PROYECTO_REUNIONES: 'PROYECTO_REUNIONES',
+  PROYECTO_REUNION_ACUERDOS: 'PROYECTO_REUNION_ACUERDOS',
+  PROYECTO_DECISIONES: 'PROYECTO_DECISIONES',
   // v10.0 (Modulo SGC ISO 9001): vive 100% en el Backoffice (es interno);
   // Intake mantiene la copia solo para que el esquema no diverja. Ver la
   // nota identica en backend/backoffice/Constantes.gs.
@@ -525,6 +530,18 @@ var COLUMNAS = {
     'version_id', 'documento_id', 'version', 'comentario',
     'archivo_id', 'archivo_nombre', 'archivo_mime', 'tamano_bytes',
     'subido_por', 'fecha', 'vigente'
+  ],
+  // v13 (Fase 5): ver la nota idéntica en backend/backoffice/Constantes.gs.
+  PROYECTO_REUNIONES: [
+    'reunion_id', 'proyecto_id', 'titulo', 'fecha', 'participantes',
+    'objetivo', 'minuta', 'creado_por', 'fecha_creacion'
+  ],
+  PROYECTO_REUNION_ACUERDOS: [
+    'acuerdo_id', 'reunion_id', 'texto', 'ref_tipo', 'ref_id', 'orden'
+  ],
+  PROYECTO_DECISIONES: [
+    'decision_id', 'proyecto_id', 'descripcion', 'contexto', 'impacto',
+    'responsable_email', 'fecha_decision', 'creado_por', 'fecha_creacion', 'activo'
   ],
   // v10.0 (Modulo SGC ISO 9001): ver la nota identica en
   // backend/backoffice/Constantes.gs sobre cada hoja y cada campo.
