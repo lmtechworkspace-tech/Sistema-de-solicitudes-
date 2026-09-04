@@ -919,7 +919,7 @@
     if (pestanaActiva_ === 'resumen') cuerpo = pintarResumen_(detalle, tareas, puedeGestionar);
     else if (pestanaActiva_ === 'sala') cuerpo = pintarSala_(sala, detalle);
     else if (pestanaActiva_ === 'tareas') cuerpo = pintarTareas_(tareas, detalle, puedeGestionar, miEmail);
-    else if (pestanaActiva_ === 'hitos') cuerpo = pintarHitos_(detalle, puedeGestionar);
+    else if (pestanaActiva_ === 'hitos') cuerpo = pintarHitos_(detalle, puedeGestionar, tareas);
     else if (pestanaActiva_ === 'cronograma') {
       // v10 (auditoría G): bitacora === undefined => todavía cargando (lazy).
       cuerpo = (bitacora === undefined)
@@ -1826,16 +1826,24 @@
 
   // --- Hitos --------------------------------------------------------------
 
-  function pintarHitos_(detalle, puedeGestionar) {
+  function pintarHitos_(detalle, puedeGestionar, tareas) {
     var acciones = puedeGestionar
       ? '<div class="sigso-py-cabecera">' + Componentes.boton({ texto: '+ Nuevo hito', clase: 'js-py-nuevo-hito' }) + '</div>'
       : '';
     if (!detalle.hitos || detalle.hitos.length === 0) {
       return acciones + Componentes.vacio({ texto: 'Todavía no hay hitos definidos.' });
     }
+    // v13 (Fase 1, "unificar tareas e hitos"): agrupo las tareas por hito para
+    // mostrar, dentro de cada hito, EXACTAMENTE qué tareas lo componen y su
+    // estado. El avance del hito ya lo calcula el backend desde estas tareas.
+    var tareasPorHito = {};
+    (tareas || []).forEach(function (a) {
+      if (a.hito_id) (tareasPorHito[a.hito_id] = tareasPorHito[a.hito_id] || []).push(a);
+    });
     var ahora = new Date();
     var filas = detalle.hitos.map(function (h) {
-      var avance = h.avance_pct === null || h.avance_pct === undefined ? '—' : h.avance_pct + '%';
+      var pct = (h.avance_pct === null || h.avance_pct === undefined) ? null : h.avance_pct;
+      var avance = pct === null ? '—' : pct + '%';
       var terminal = h.estado === 'COMPLETADO' || h.estado === 'CANCELADO';
       var vencido = !terminal && h.fecha_objetivo && new Date(h.fecha_objetivo) < ahora;
       var botones = puedeGestionar
@@ -1845,19 +1853,56 @@
             (h.total_tareas === 0 && h.estado !== 'CANCELADO' ? Componentes.boton({ texto: 'Eliminar', variante: 'sutil', clase: 'js-py-hito-eliminar', idx: h.hito_id }) : '') +
           '</div>'
         : '';
+      // Barra de avance derivada de las tareas del hito.
+      var barra = pct === null ? '' :
+        '<div class="sigso-py-hito__barra" title="' + pct + '% de las tareas del hito terminadas">' +
+          '<div class="sigso-py-hito__barra-fill" style="width:' + Math.min(pct, 100) + '%"></div>' +
+        '</div>';
+      // Lista plegable de las tareas que componen el hito.
+      var lista = tareasPorHito[h.hito_id] || [];
+      var tareasHtml = '';
+      if (lista.length) {
+        var items = lista.map(function (a) {
+          var resp = a.responsable_nombre || a.responsable_email || '';
+          var av = (a.avance_pct === null || a.avance_pct === undefined || a.avance_pct === '') ? '' : ' · ' + a.avance_pct + '%';
+          return '<li class="sigso-py-hito-tarea">' +
+            '<span class="sigso-badge sigso-mt-badge--' + (a.semaforo || 'al-dia') + '">' + Componentes.escaparHtml(a.semaforo_etiqueta || '') + '</span>' +
+            '<span class="sigso-py-hito-tarea__tit">' + Componentes.escaparHtml(a.titulo) + '</span>' +
+            '<span class="sigso-py-hito-tarea__meta">' + Componentes.escaparHtml(resp) + av + '</span>' +
+          '</li>';
+        }).join('');
+        tareasHtml = '<details class="sigso-py-hito-tareas"' + (lista.length <= 6 ? ' open' : '') + '>' +
+          '<summary>' + lista.length + ' tarea(s) en este hito</summary>' +
+          '<ul class="sigso-py-hito-tarea-lista">' + items + '</ul>' +
+        '</details>';
+      } else {
+        tareasHtml = '<p class="sigso-ayuda">Sin tareas asociadas todavía.</p>';
+      }
       return '<div class="sigso-py-hito' + (vencido ? ' sigso-py-hito--vencido' : '') + '">' +
         '<div class="sigso-py-hito__top">' +
           '<span class="sigso-py-hito__nombre">' + Componentes.escaparHtml(h.nombre) + '</span>' +
           Componentes.badge(HITO_ESTADO_ETIQUETA[h.estado] || h.estado, 'neutro') +
         '</div>' +
         (h.descripcion ? '<p>' + Componentes.escaparHtml(h.descripcion) + '</p>' : '') +
+        barra +
         '<p class="sigso-ayuda">' + h.total_tareas + ' tarea(s) · ' + avance + ' de avance' +
           (h.fecha_objetivo ? ' · vence ' + fechaCorta_(h.fecha_objetivo) : '') +
           (vencido ? ' · <b class="sigso-py-hito__vencido-tag">vencido</b>' : '') + '</p>' +
+        tareasHtml +
         botones +
       '</div>';
     }).join('');
-    return acciones + '<div class="sigso-py-lista">' + filas + '</div>';
+    // Tareas sin hito -- para que ninguna quede invisible en esta vista.
+    var sinHito = (tareas || []).filter(function (a) { return !a.hito_id; });
+    var sinHitoHtml = '';
+    if (sinHito.length) {
+      sinHitoHtml = '<div class="sigso-py-hito sigso-py-hito--sinhito">' +
+        '<div class="sigso-py-hito__top"><span class="sigso-py-hito__nombre">Sin hito asignado</span>' +
+          Componentes.badge(sinHito.length + ' tarea(s)', 'neutro') + '</div>' +
+        '<p class="sigso-ayuda">Estas tareas no están vinculadas a ningún hito. Puedes asignarlas editando la tarea.</p>' +
+      '</div>';
+    }
+    return acciones + '<div class="sigso-py-lista">' + filas + sinHitoHtml + '</div>';
   }
 
   // --- Cronograma: Plan vs. Dedicación (v10, Fases C y E) -------------------
@@ -3057,6 +3102,10 @@
     { id: 'semana', pxDia: 40, etiqueta: 'Semana' }
   ];
   var planZoomIdx_ = 1; // 'mes' por defecto
+  // v13 (Fase 1): resaltar la ruta crítica en el Gantt (flag de presentación,
+  // igual que planZoomIdx_ -- no se pide de nuevo al servidor, es_critica ya
+  // viene en cada tarea).
+  var mostrarRutaCritica_ = false;
   // v11 (P2): minTime/pxDia del último pintado -- wireAccionesPestana_ los
   // necesita para traducir el ancho final de una barra arrastrada a una
   // fecha, sin recalcular el rango completo (mismo criterio que
@@ -3123,6 +3172,12 @@
     // también, por si Plan se abre ANTES que Dedicación en esta sesión.
     cartaTareasActual_ = tareas;
 
+    // v13 (Fase 1, "ruta crítica"): el toggle solo tiene sentido si hay al
+    // menos una dependencia definida -- si no, resaltar "la tarea más larga"
+    // sería engañoso (ver calcularRutaCritica_ en el backend).
+    var hayRutaCritica = tareas.some(function (a) { return !!a.depende_de; });
+    var resaltarCritica = hayRutaCritica && mostrarRutaCritica_;
+
     var ahora = new Date();
     var tiempos = [ahora.getTime()];
     if (p.fecha_inicio) tiempos.push(new Date(p.fecha_inicio).getTime());
@@ -3188,8 +3243,15 @@
         ? '<div class="sigso-py-cron-barra__fill" style="width:' + Math.min(avance, 100) + '%"></div>' : '';
       var txtBarra = (avance !== null && anchoBarra >= 34) ? '<span class="sigso-py-cron-barra__txt">' + avance + '%</span>' : '';
       var resp = a.responsable_nombre || a.responsable_email || '';
+      // v13 (Fase 1): en modo ruta crítica, la tarea crítica se marca; las que
+      // NO están en la ruta se atenúan para que la cadena resalte sola.
+      var critClase = '';
+      if (resaltarCritica) critClase = a.es_critica ? ' sigso-py-gantt-barra--critica' : ' sigso-py-gantt-barra--holgada';
+      var critMeta = (resaltarCritica && a.es_critica) ? '<span class="sigso-py-gantt-critica-chip">Ruta crítica</span>' : '';
       var meta = '<span class="sigso-py-gantt-etiqueta__punto sigso-py-cron-barra--' + codigo + '"></span>' +
-        '<span>' + Componentes.escaparHtml(resp) + (avance !== null ? ' · ' + avance + '%' : '') + '</span>';
+        '<span>' + Componentes.escaparHtml(resp) + (avance !== null ? ' · ' + avance + '%' : '') + '</span>' + critMeta;
+      var holguraTxt = (a.holgura_dias !== null && a.holgura_dias !== undefined)
+        ? ' · ' + (a.es_critica ? 'ruta crítica (holgura 0)' : 'holgura ' + a.holgura_dias + ' día(s)') : '';
       // El chip de fecha va a la DERECHA de la barra; si la barra termina muy a
       // la derecha (poco espacio), no se pone (el title y la etiqueta lo dan).
       var chipFecha = '<div class="sigso-py-gantt-fecha" style="left:' + (finPx + 6) + 'px">' + Componentes.escaparHtml(fechaCorta_(a.fecha_compromiso)) + '</div>';
@@ -3199,8 +3261,8 @@
           '<div class="sigso-py-gantt-etiqueta__meta">' + meta + '</div>' +
         '</div>' +
         '<div class="sigso-py-gantt-track" style="width:' + anchoTotal + 'px">' +
-          '<div class="sigso-py-cron-barra sigso-py-gantt-barra sigso-py-cron-barra--' + codigo + (editable ? ' sigso-py-gantt-barra--editable' : '') +
-            '" style="left:' + inicioPx + 'px; width:' + anchoBarra + 'px" title="' + Componentes.escaparHtml(a.titulo + ' — compromiso ' + fechaCorta_(a.fecha_compromiso) + (avance !== null ? ' · ' + avance + '% avance' : '')) + '">' + fill + txtBarra + handle + '</div>' +
+          '<div class="sigso-py-cron-barra sigso-py-gantt-barra sigso-py-cron-barra--' + codigo + (editable ? ' sigso-py-gantt-barra--editable' : '') + critClase +
+            '" style="left:' + inicioPx + 'px; width:' + anchoBarra + 'px" title="' + Componentes.escaparHtml(a.titulo + ' — compromiso ' + fechaCorta_(a.fecha_compromiso) + (avance !== null ? ' · ' + avance + '% avance' : '') + holguraTxt) + '">' + fill + txtBarra + handle + '</div>' +
           extraAtraso + chipFecha +
         '</div>' +
       '</div>';
@@ -3209,11 +3271,18 @@
     var zoomBtns = PLAN_ZOOM_NIVELES_.map(function (z, i) {
       return Componentes.boton({ texto: z.etiqueta, variante: i === planZoomIdx_ ? undefined : 'sutil', clase: 'js-py-gantt-zoom', idx: i });
     }).join('');
+    // v13 (Fase 1): toggle de ruta crítica -- solo si hay dependencias que la
+    // hagan significativa.
+    var rutaCriticaBtn = hayRutaCritica
+      ? Componentes.boton({ texto: (mostrarRutaCritica_ ? '✓ Ruta crítica' : 'Ruta crítica'), variante: mostrarRutaCritica_ ? undefined : 'sutil', clase: 'js-py-gantt-ruta-critica', tipo: 'button' })
+      : '';
     var controles = '<div class="sigso-py-ded-controles">' + zoomBtns +
       Componentes.boton({ texto: 'Hoy', variante: 'sutil', clase: 'js-py-gantt-hoy', tipo: 'button' }) +
+      rutaCriticaBtn +
       '<span class="sigso-ayuda">Hitos (◆) y tareas con fecha comprometida, de ' +
         (p.fecha_inicio ? fechaCorta_(p.fecha_inicio) : '—') + ' a ' + (p.fecha_objetivo ? fechaCorta_(p.fecha_objetivo) : '—') +
-        (puedeEditar ? '. Arrastra el borde derecho de una barra para reprogramarla.' : '') + '</span>' +
+        (puedeEditar ? '. Arrastra el borde derecho de una barra para reprogramarla.' : '') +
+        (resaltarCritica ? ' Resaltadas: la cadena de tareas que determina la duración del proyecto.' : '') + '</span>' +
     '</div>';
 
     return controles +
@@ -3627,6 +3696,15 @@
         var scroll = cont.querySelector('.sigso-py-gantt-scroll');
         var hoy = cont.querySelector('.sigso-py-gantt-hoy');
         if (scroll && hoy) scroll.scrollLeft = Math.max(0, parseFloat(hoy.style.left) - scroll.clientWidth / 2);
+      });
+    }
+    // v13 (Fase 1): alternar el resaltado de ruta crítica -- solo repinta
+    // desde caché (cambiarPestana_), sin red, igual que el zoom.
+    var rutaCriticaBtn = cont.querySelector('.js-py-gantt-ruta-critica');
+    if (rutaCriticaBtn) {
+      rutaCriticaBtn.addEventListener('click', function () {
+        mostrarRutaCritica_ = !mostrarRutaCritica_;
+        cambiarPestana_('cronograma');
       });
     }
     // Reprogramar tras un arrastre: refresco completo (mismo criterio que el

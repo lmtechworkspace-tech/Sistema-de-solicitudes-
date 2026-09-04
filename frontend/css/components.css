@@ -3486,6 +3486,21 @@
 .sigso-py-gantt-barra--arrastrando .sigso-py-gantt-resize { opacity: 1; }
 .sigso-py-gantt-barra--arrastrando { opacity: 0.75; outline: 2px dashed var(--primario); outline-offset: 1px; }
 
+/* v13 (Fase 1, "ruta crítica"): al activar el toggle, la cadena que determina
+   la duración del proyecto se resalta con un anillo sólido; las tareas con
+   holgura se atenúan para que la ruta lea sola. */
+.sigso-py-gantt-barra--critica {
+  outline: 2px solid var(--critico); outline-offset: 1px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--critico) 22%, transparent);
+  z-index: 2;
+}
+.sigso-py-gantt-barra--holgada { opacity: 0.38; }
+.sigso-py-gantt-critica-chip {
+  display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+  color: #fff; background: var(--critico); vertical-align: middle;
+}
+
 /* v10 (Fase E, "Carta Gantt de Dedicación"): grilla tarea x dia, leida de
    ACTIVIDADES_BITACORA (el check-in de siempre) -- ningun estado se marca a
    mano. Misma paleta semantica que el resto del modulo (--ok/--alerta/
@@ -4320,6 +4335,28 @@
 }
 .sigso-py-hito--vencido { border-left: 3px solid var(--critico); }
 .sigso-py-hito__vencido-tag { color: var(--critico); }
+
+/* v13 (Fase 1, "unificar tareas e hitos"): barra de avance del hito + lista
+   de las tareas que lo componen. */
+.sigso-py-hito__barra {
+  height: 6px; border-radius: 999px; background: var(--superficie-2);
+  overflow: hidden; margin: 8px 0 2px;
+}
+.sigso-py-hito__barra-fill { height: 100%; background: var(--primario); border-radius: 999px; }
+.sigso-py-hito-tareas { margin: 6px 0 2px; }
+.sigso-py-hito-tareas > summary {
+  cursor: pointer; font-size: var(--texto-sm); color: var(--texto-2); font-weight: 600;
+  padding: 4px 0; user-select: none;
+}
+.sigso-py-hito-tareas > summary:hover { color: var(--primario); }
+.sigso-py-hito-tarea-lista { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.sigso-py-hito-tarea {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  background: var(--superficie-2); border-radius: var(--radio); font-size: var(--texto-sm);
+}
+.sigso-py-hito-tarea__tit { color: var(--texto); font-weight: 500; flex: 1; min-width: 0; }
+.sigso-py-hito-tarea__meta { color: var(--texto-3); white-space: nowrap; }
+.sigso-py-hito--sinhito { border-left: 3px dashed var(--borde); }
 
 .sigso-py-integrante {
   display: flex; align-items: center; gap: var(--esp-3);

@@ -828,6 +828,10 @@ var Proyectos = {
     var hijasPorPadre_ = {};
     tareas.forEach(function (a) { if (a.tarea_padre_id) (hijasPorPadre_[a.tarea_padre_id] = hijasPorPadre_[a.tarea_padre_id] || []).push(a); });
 
+    // v13 (Fase 1, "ruta crítica"): CPM sobre la red de dependencias, UNA vez
+    // para todo el proyecto (mismo patrón que el impacto de retraso).
+    var rutaCritica_ = calcularRutaCritica_(tareas);
+
     return tareas.map(function (a) {
       a.semaforo = semaforoActividad_(a).codigo;
       a.semaforo_etiqueta = semaforoActividad_(a).etiqueta;
@@ -844,6 +848,12 @@ var Proyectos = {
       var dependientes = calcularImpactoDependencia_(a.actividad_id, dependientesDirectosPorId_);
       a.impacto_dependientes = dependientes.length;
       a.impacto_titulos = dependientes.slice(0, 3).map(function (d) { return d.titulo; });
+      // v13 (Fase 1, "ruta crítica"): ¿está esta tarea en la cadena que
+      // determina la duración del proyecto? Holgura en días (null si la tarea
+      // no participa de ninguna dependencia).
+      var rc_ = rutaCritica_.porTarea[a.actividad_id];
+      a.es_critica = !!(rc_ && rc_.es_critica);
+      a.holgura_dias = rc_ ? rc_.holgura_dias : null;
       // v10 (multi-asignación): la lista de colaboradores ya parseada y con
       // nombre resuelto -- el frontend no toca JSON ni resuelve correos.
       a.colaboradores = colaboradoresDeActividad_(a).map(function (email) {
@@ -2641,6 +2651,98 @@ function calcularImpactoDependencia_(actividadId, dependientesDirectosPorId_) {
     });
   }
   return resultado;
+}
+
+// v13 (Fase 1, "ruta crítica"): responde la pregunta ejecutiva "¿qué cadena
+// de tareas puede atrasar el proyecto entero?". Es un CPM clásico (Critical
+// Path Method) sobre la MISMA red de dependencias que ya alimenta el impacto
+// de retraso -- cero dato nuevo, todo derivado on-read.
+//
+// Modelo, alineado con la filosofía del módulo (§I "nada mueve fechas solo"):
+//  - Duración plan de cada tarea = días entre fecha_creacion y
+//    fecha_compromiso (mín. 1). Sin fechas => 1 día (no la excluye, pero pesa
+//    lo mínimo).
+//  - Pase adelante: inicio-temprano/fin-temprano encadenando por depende_de.
+//  - Pase atrás: inicio-tardío/fin-tardío desde el fin del proyecto.
+//  - Holgura = inicio_tardío − inicio_temprano. Crítica = holgura ≈ 0.
+//
+// DECISIÓN deliberada: la ruta crítica es la cadena de DEPENDENCIAS más larga.
+// Una tarea SIN dependencias (ni predecesora ni dependientes) nunca se marca
+// crítica -- atrasarla no arrastra a ninguna otra, así que no forma "ruta".
+// Si el proyecto no tiene NINGUNA dependencia definida, `disponible:false` y
+// el frontend invita a definirlas en vez de resaltar la tarea más larga
+// (que sería un dato engañoso). Guarda de ciclos igual que el impacto.
+function calcularRutaCritica_(tareas) {
+  function dur(t) {
+    if (!t || !t.fecha_creacion || !t.fecha_compromiso) return 1;
+    var d = (new Date(t.fecha_compromiso) - new Date(t.fecha_creacion)) / 86400000;
+    return d > 1 ? d : 1;
+  }
+  var porId = {};
+  tareas.forEach(function (t) { porId[t.actividad_id] = t; });
+  var sucesores = {}, tienePred = {}, hayDependencias = false;
+  tareas.forEach(function (t) {
+    if (t.depende_de && porId[t.depende_de]) {
+      (sucesores[t.depende_de] = sucesores[t.depende_de] || []).push(t.actividad_id);
+      tienePred[t.actividad_id] = true;
+      hayDependencias = true;
+    }
+  });
+  if (!hayDependencias) return { disponible: false, porTarea: {} };
+
+  // Pase adelante: fin-temprano (EF) e inicio-temprano (ES), memoizado.
+  var EF = {}, ES = {};
+  function calcEF(id, pila) {
+    if (EF[id] !== undefined) return EF[id];
+    pila = pila || {};
+    if (pila[id]) return (EF[id] = dur(porId[id])); // ciclo: corta seguro
+    pila[id] = true;
+    var t = porId[id];
+    var es = (t.depende_de && porId[t.depende_de]) ? calcEF(t.depende_de, pila) : 0;
+    ES[id] = es; EF[id] = es + dur(t);
+    delete pila[id];
+    return EF[id];
+  }
+  tareas.forEach(function (t) { calcEF(t.actividad_id); });
+
+  // Fin del proyecto = mayor fin-temprano ENTRE las tareas de la red.
+  var finProyecto = 0;
+  tareas.forEach(function (t) {
+    if ((tienePred[t.actividad_id] || sucesores[t.actividad_id]) && EF[t.actividad_id] > finProyecto) {
+      finProyecto = EF[t.actividad_id];
+    }
+  });
+
+  // Pase atrás: fin-tardío (LF) e inicio-tardío (LS), memoizado.
+  var LF = {}, LS = {};
+  function calcLF(id, pila) {
+    if (LF[id] !== undefined) return LF[id];
+    pila = pila || {};
+    if (pila[id]) return (LF[id] = finProyecto);
+    pila[id] = true;
+    var succ = sucesores[id] || [];
+    var lf = finProyecto;
+    if (succ.length) {
+      lf = Infinity;
+      succ.forEach(function (sid) {
+        var ls = calcLF(sid, pila) - dur(porId[sid]);
+        if (ls < lf) lf = ls;
+      });
+    }
+    LF[id] = lf; LS[id] = lf - dur(porId[id]);
+    delete pila[id];
+    return LF[id];
+  }
+  tareas.forEach(function (t) { calcLF(t.actividad_id); });
+
+  var porTarea = {};
+  tareas.forEach(function (t) {
+    var id = t.actividad_id;
+    if (!(tienePred[id] || sucesores[id])) { porTarea[id] = { en_red: false, es_critica: false, holgura_dias: null }; return; }
+    var holgura = Math.round((LS[id] - ES[id]) * 10) / 10;
+    porTarea[id] = { en_red: true, es_critica: holgura <= 0.5, holgura_dias: holgura };
+  });
+  return { disponible: true, porTarea: porTarea };
 }
 
 function redond1Analitica_(n) { return Math.round(n * 10) / 10; }
