@@ -1813,8 +1813,170 @@ function fechaCortaPdfProyecto_(valor) {
   catch (err) { return String(valor).slice(0, 10); }
 }
 
+// v13 (Fase 3, "reporte ejecutivo -- prioridad máxima"): el Resumen
+// Ejecutivo narrativo. Responde en un párrafo lo que antes obligaba a leer
+// 4-5 tablas: cómo está, avance vs plan, qué está atrasado/en riesgo,
+// próximo hito y una decisión sugerida. Deliberadamente NO es texto generado
+// por IA -- es una plantilla de frases condicionadas sobre las MISMAS señales
+// objetivas que ya arma requiere_atencion_ (Fase 2) y calcularSaludProyecto_
+// (P1): nunca una caja negra, cada frase es trazable a un número real.
+// Criterio de la "prueba de los 60 segundos" del encargo: quien abre el PDF
+// sin conocer el proyecto debe entender en un vistazo si va bien, qué está
+// mal y qué necesita atención -- antes de llegar a cualquier tabla.
+function seccionNarrativaPdf_(detalle) {
+  var at = detalle.requiere_atencion || {};
+  var avance = detalle.avance_pct;
+  var esperado = detalle.avance_esperado_pct;
+  var desviacion = (avance !== null && avance !== undefined && esperado !== null && esperado !== undefined)
+    ? Math.round((avance - esperado) * 10) / 10 : null;
+
+  var frases = [];
+  var saludTxt = PROYECTOS_SALUD_LABEL_PDF[detalle.salud] || detalle.salud;
+  frases.push('El proyecto está en estado <b>' + escaparHtml_(saludTxt) + '</b>' +
+    (detalle.salud_score === null || detalle.salud_score === undefined ? '' : ' (' + detalle.salud_score + '/100)') + '.');
+
+  if (avance === null || avance === undefined) {
+    frases.push('Todavía no hay tareas activas para medir avance.');
+  } else if (desviacion === null) {
+    frases.push('Avance real: ' + avance + '%.');
+  } else if (desviacion < -5) {
+    frases.push('El avance real (' + avance + '%) está ' + Math.abs(desviacion) + ' puntos por DEBAJO de lo planificado (' + esperado + '%).');
+  } else if (desviacion > 5) {
+    frases.push('El avance real (' + avance + '%) está ' + desviacion + ' puntos por ENCIMA de lo planificado (' + esperado + '%).');
+  } else {
+    frases.push('El avance real (' + avance + '%) está en línea con lo planificado (' + esperado + '%).');
+  }
+
+  var problemas = [];
+  if (at.tareas_criticas_atrasadas > 0) problemas.push(at.tareas_criticas_atrasadas + ' tarea(s) crítica(s) (P1/P2) atrasada(s)');
+  if (at.tareas_bloqueadas > 0) problemas.push(at.tareas_bloqueadas + ' tarea(s) bloqueada(s)');
+  if (at.hitos_atrasados > 0) problemas.push(at.hitos_atrasados + ' hito(s) vencido(s)');
+  if (at.riesgos_altos > 0) problemas.push(at.riesgos_altos + ' riesgo(s) alto(s) abierto(s)');
+  frases.push(problemas.length
+    ? 'Requiere atención: ' + escaparHtml_(problemas.join(', ')) + '.'
+    : 'No hay tareas críticas atrasadas, bloqueos, hitos vencidos ni riesgos altos abiertos en este momento.');
+
+  var hitosVivos = (detalle.hitos || []).filter(function (h) { return h.estado !== 'COMPLETADO' && h.estado !== 'CANCELADO' && h.fecha_objetivo; })
+    .sort(function (a, b) { return new Date(a.fecha_objetivo) - new Date(b.fecha_objetivo); });
+  if (hitosVivos[0]) {
+    frases.push('Próximo hito: <b>' + escaparHtml_(hitosVivos[0].nombre) + '</b> (' + fechaCortaPdfProyecto_(hitosVivos[0].fecha_objetivo) + ').');
+  }
+
+  // Decisión sugerida: heurística simple y transparente sobre las MISMAS
+  // señales de arriba -- no reemplaza el juicio de gerencia, apunta a dónde
+  // mirar primero.
+  var decision;
+  if (at.riesgos_altos > 0) decision = 'Revisar la mitigación de los riesgos altos abiertos.';
+  else if (at.tareas_criticas_atrasadas > 0) decision = 'Priorizar destrabar las tareas críticas atrasadas.';
+  else if (at.hitos_atrasados > 0) decision = 'Replanificar el/los hito(s) vencido(s) con el equipo.';
+  else if (desviacion !== null && desviacion < -10) decision = 'Evaluar un ajuste de plan: el atraso acumulado supera 10 puntos.';
+  else decision = 'Sin decisiones urgentes -- seguimiento normal.';
+
+  return docSeccionOt_('Resumen ejecutivo') +
+    '<p style="font-size:12px;line-height:1.6;color:' + DOC.INK_SOFT + ';margin:0 0 10px;">' + frases.join(' ') + '</p>' +
+    '<table style="border-collapse:collapse;margin:0 0 18px;width:100%;"><tr>' +
+      '<td style="width:3px;background:' + DOC.NAVY + ';"></td>' +
+      '<td style="background:' + DOC.PANEL + ';padding:8px 12px;font-size:12px;color:' + DOC.INK + ';">' +
+        '<b>Decisión sugerida para gerencia:</b> ' + escaparHtml_(decision) +
+      '</td>' +
+    '</tr></table>';
+}
+
+// v13 (Fase 3, "mini Gantt semanal"): agrupa el mismo tramo del proyecto
+// (construirDiasReportePdf_) en semanas de lunes a domingo -- vista de PLAN
+// (fecha_creacion->fecha_compromiso), no de ejecución día a día (eso ya lo
+// cubre la sección 'gantt' configurable). Por eso NO necesita bitácora: es
+// pura fecha de tareas + hitos, cero costo extra en el reporte clásico.
+function construirSemanasReportePdf_(tareas, rango, hoyClave) {
+  var dias = construirDiasReportePdf_(tareas, rango, hoyClave);
+  if (!dias.length) return [];
+  var semanas = [];
+  var actual = null;
+  dias.forEach(function (clave) {
+    var dow = fechaDeClavePdf_(clave).getUTCDay(); // 0=domingo .. 1=lunes
+    if (!actual || dow === 1) {
+      actual = { desde: clave, hasta: clave };
+      semanas.push(actual);
+    }
+    actual.hasta = clave;
+  });
+  return semanas;
+}
+
+// v13 (Fase 3): "cada semana muestra: principales actividades, hitos, tareas
+// críticas y desviación" (§10 del encargo) -- NO es una captura del Gantt
+// interactivo, son chips de color sólido (el motor de Apps Script rinde
+// pálido casi blanco, ver v12.1) diseñados para leerse en papel. Tope de 6
+// tareas por semana -- una semana con más se resume con "+N más" (mismo
+// criterio que impacto_titulos/items de Atención Requerida: una lista que no
+// cabe en una pantalla/página deja de comunicar).
+var MINI_GANTT_TOPE_TAREAS_ = 6;
+function seccionMiniGanttSemanalPdf_(tareas, hitos, rendimiento, semanas) {
+  if (!semanas.length) return '';
+  var planPorTarea = {};
+  ((rendimiento && rendimiento.plan_seguimiento) || []).forEach(function (t) { planPorTarea[t.actividad_id] = t; });
+
+  var bloques = semanas.map(function (sem) {
+    var hitosSemana = (hitos || []).filter(function (h) {
+      if (!h.fecha_objetivo) return false;
+      var k = clavePdf_(new Date(h.fecha_objetivo));
+      return k >= sem.desde && k <= sem.hasta;
+    });
+    var tareasSemana = (tareas || []).filter(function (a) {
+      if (!a.fecha_compromiso) return false;
+      var kCompromiso = clavePdf_(new Date(a.fecha_compromiso));
+      var kCreacion = a.fecha_creacion ? clavePdf_(new Date(a.fecha_creacion)) : kCompromiso;
+      // v13: normalizado con min/max -- una tarea retroactiva (creada HOY con
+      // fecha_compromiso ya pasada) tiene creación > compromiso; sin esto, la
+      // ventana quedaba invertida y la tarea desaparecía en silencio del
+      // reporte. Un reporte ejecutivo no puede perder datos por una
+      // combinación de fechas atípica pero real.
+      var kIni = kCreacion < kCompromiso ? kCreacion : kCompromiso;
+      var kFin = kCreacion < kCompromiso ? kCompromiso : kCreacion;
+      return kIni <= sem.hasta && kFin >= sem.desde;
+    }).sort(function (a, b) {
+      var pa = (a.es_critica ? 0 : 2) + (a.semaforo === 'atrasada' ? 0 : 1);
+      var pb = (b.es_critica ? 0 : 2) + (b.semaforo === 'atrasada' ? 0 : 1);
+      if (pa !== pb) return pa - pb;
+      return new Date(a.fecha_compromiso) - new Date(b.fecha_compromiso);
+    });
+    if (!tareasSemana.length && !hitosSemana.length) return '';
+
+    var extra = tareasSemana.length - MINI_GANTT_TOPE_TAREAS_;
+    var chips = tareasSemana.slice(0, MINI_GANTT_TOPE_TAREAS_).map(function (a) {
+      var color = GANTT_SEMAFORO_SOLIDO_[a.semaforo] || '#64748B';
+      var plan = planPorTarea[a.actividad_id];
+      var flechaDesv = (plan && plan.desviacion_pp !== null && plan.desviacion_pp !== undefined)
+        ? (plan.desviacion_pp < 0 ? ' &#9660;' : ' &#9650;') : '';
+      var criticaTag = a.es_critica ? ' &#9733;' : '';
+      var titulo = a.titulo.length > 30 ? a.titulo.slice(0, 29) + '…' : a.titulo;
+      return '<span style="display:inline-block;background-color:' + color + ';color:#ffffff;font-size:9px;' +
+        'font-weight:bold;padding:3px 7px;border-radius:3px;margin:2px 4px 2px 0;white-space:nowrap;">' +
+        escaparHtml_(titulo) + criticaTag + flechaDesv + '</span>';
+    }).join('');
+    var masTxt = extra > 0 ? '<span style="font-size:9px;color:' + DOC.MUTED + ';">+' + extra + ' más</span>' : '';
+    var hitosTxt = hitosSemana.length
+      ? '<div style="margin-top:5px;font-size:10px;color:' + DOC.NAVY + ';font-weight:bold;">&#9670; ' +
+          escaparHtml_(hitosSemana.map(function (h) { return h.nombre; }).join(' · ')) + '</div>'
+      : '';
+    return '<div style="border:1px solid ' + DOC.HAIRLINE + ';border-radius:4px;padding:8px 10px;margin-bottom:7px;">' +
+      '<div style="font-size:10px;font-weight:bold;color:' + DOC.MUTED + ';text-transform:uppercase;letter-spacing:0.3px;margin-bottom:5px;">' +
+        'Semana del ' + fechaCortaPdfProyecto_(sem.desde) + ' al ' + fechaCortaPdfProyecto_(sem.hasta) + '</div>' +
+      '<div>' + chips + masTxt + '</div>' + hitosTxt +
+    '</div>';
+  }).join('');
+  if (!bloques) return '';
+  return docSeccionOt_('Plan de ejecución -- semana a semana') +
+    '<div style="margin:0 0 6px;">' + bloques + '</div>' +
+    '<div style="font-size:9px;color:' + DOC.MUTED + ';margin:0 0 18px;">&#9733; en la ruta crítica &nbsp;·&nbsp; &#9650; avance sobre lo esperado &nbsp;·&nbsp; &#9660; avance bajo lo esperado</div>';
+}
+
 function construirHtmlReporteProyecto_(detalle, tareas, rendimiento, bitacoraReciente, tareasPorId) {
+  var hoyClave = clavePdf_(new Date());
+  var semanas = construirSemanasReportePdf_(tareas || [], null, hoyClave);
   var cuerpo = fichaProyectoPdf_(detalle) +
+    seccionNarrativaPdf_(detalle) +
+    seccionMiniGanttSemanalPdf_(tareas, detalle.hitos || [], rendimiento, semanas) +
     seccionHitosPdf_(detalle.hitos || []) +
     seccionRiesgosPdf_(detalle.riesgos || []) +
     seccionVencimientosPdf_(tareas || []) +
@@ -1835,9 +1997,13 @@ function construirHtmlReporteProyecto_(detalle, tareas, rendimiento, bitacoraRec
 // (el usuario elige subconjunto, no reordena). Hitos/Riesgos son del
 // proyecto completo -- no tienen "responsable" que filtrar como Gantt/
 // Workload/Desviaciones/Vencimientos sí tienen.
+// v13 (Fase 3): 'narrativa' (Resumen ejecutivo en prosa) y 'mini_gantt'
+// (plan semana a semana) se suman en el orden en que deben LEERSE -- justo
+// después de portada/ficha y antes del detalle de hitos, para que cuenten
+// la historia ANTES de las tablas (§9 del encargo).
 var REPORTE_SECCIONES_DISPONIBLES_ = [
-  'portada', 'ficha', 'kpis', 'salud', 'hitos', 'riesgos', 'vencimientos',
-  'rendimiento', 'desviaciones', 'gantt', 'workload', 'bitacora', 'leyenda'
+  'portada', 'narrativa', 'ficha', 'kpis', 'salud', 'mini_gantt', 'hitos', 'riesgos',
+  'vencimientos', 'rendimiento', 'desviaciones', 'gantt', 'workload', 'bitacora', 'leyenda'
 ];
 
 // Valida/normaliza la config que llega del frontend. null = "no hay config"
@@ -1966,6 +2132,10 @@ function construirHtmlReporteConfigurado_(detalle, todasTareas, rendimiento, tar
   var necesitaDias = incluye('gantt') || incluye('workload');
   var hoyClave = clavePdf_(new Date());
   var dias = necesitaDias ? construirDiasReportePdf_(tareasFiltradas, config.rango, hoyClave) : [];
+  // v13 (Fase 3): las semanas del mini-Gantt son independientes del día×día
+  // de 'gantt'/'workload' -- misma fuente (fechas de tareasFiltradas) pero
+  // agrupada distinto, y sin costo si no se pidió.
+  var semanas = incluye('mini_gantt') ? construirSemanasReportePdf_(tareasFiltradas, config.rango, hoyClave) : [];
 
   // Bitácora de las tareas filtradas, partida en registroPorTareaDia (P0,
   // manda sobre lo derivado del check-in) y eventosPorTareaDia (el resto) --
@@ -1991,9 +2161,11 @@ function construirHtmlReporteConfigurado_(detalle, todasTareas, rendimiento, tar
 
   var partes = [];
   if (incluye('portada')) partes.push(seccionPortadaPdf_(detalle));
+  if (incluye('narrativa')) partes.push(seccionNarrativaPdf_(detalle));
   if (incluye('ficha')) partes.push(fichaProyectoPdf_(detalle));
   if (incluye('kpis')) partes.push(bandaKpisPdf_(detalle, rendimiento));
   if (incluye('salud')) partes.push(seccionSaludPdf_(detalle));
+  if (incluye('mini_gantt')) partes.push(seccionMiniGanttSemanalPdf_(tareasFiltradas, detalle.hitos || [], rendimiento, semanas));
   if (incluye('hitos')) partes.push(seccionHitosPdf_(detalle.hitos || []));
   if (incluye('riesgos')) partes.push(seccionRiesgosPdf_(detalle.riesgos || []));
   if (incluye('vencimientos')) partes.push(seccionVencimientosPdf_(tareasFiltradas));

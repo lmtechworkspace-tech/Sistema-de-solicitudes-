@@ -2539,9 +2539,14 @@
   // workload/leyenda) se sumen a propósito.
   var SECCIONES_INFORME_ = [
     { valor: 'portada', texto: 'Portada' },
+    // v13 (Fase 3, "reporte ejecutivo -- prioridad máxima"): las dos piezas
+    // nuevas van marcadas por defecto -- son justamente lo que responde la
+    // "prueba de los 60 segundos" del encargo, antes de cualquier tabla.
+    { valor: 'narrativa', texto: 'Resumen ejecutivo (narrativo)', defecto: true },
     { valor: 'ficha', texto: 'Ficha resumen', defecto: true },
     { valor: 'kpis', texto: 'Indicadores clave (KPIs)', defecto: true },
     { valor: 'salud', texto: 'Salud detallada (score y desglose)' },
+    { valor: 'mini_gantt', texto: 'Plan semana a semana (mini Gantt)', defecto: true },
     { valor: 'hitos', texto: 'Hitos', defecto: true },
     { valor: 'riesgos', texto: 'Riesgos abiertos', defecto: true },
     { valor: 'vencimientos', texto: 'Próximos vencimientos', defecto: true },
