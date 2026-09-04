@@ -304,7 +304,14 @@ var Proyectos = {
       salud_motivos: salud.motivos,
       salud_score: salud.score,
       salud_desglose: salud.desglose,
-      requiere_atencion: calcularRequiereAtencion_(tareas, hitos, integrantes),
+      requiere_atencion: calcularRequiereAtencion_(tareas, hitos, integrantes, riesgos),
+      // v13 (Fase 2, "dashboard ejecutivo"): avance ESPERADO a hoy y su
+      // desviación -- mismo supuesto lineal, documentado y ya probado, que
+      // usa Plan/Esperado/Real POR TAREA (P1); aquí se aplica una sola vez a
+      // nivel de PROYECTO completo (fecha_inicio->fecha_objetivo), sin pedir
+      // bitácora (que solo carga la pestaña Cronograma, lazy). Null si faltan
+      // fechas -- nunca un 0% inventado.
+      avance_esperado_pct: calcularAvanceEsperado_(proyecto.fecha_inicio, proyecto.fecha_objetivo, new Date()),
       // v10 (Fase D, propuesta 09 "resumen diario"): "que se movio" desde la
       // ULTIMA VEZ que ESTA persona vio la Sala -- null si nunca la visito
       // (primera vez: no hay "desde" que mostrar, seria ruido).
@@ -3097,7 +3104,14 @@ function calcularSaludProyecto_(proyecto, tareas, hitos, entregables) {
 
 // "Requiere tu atencion" (§12 de la propuesta): lo que un lider necesita ver
 // sin tener que ir a buscarlo.
-function calcularRequiereAtencion_(tareas, hitos, integrantes) {
+// v13 (Fase 2, "dashboard ejecutivo"): además de los CONTADORES de siempre
+// (que el PDF ya consume -- se mantienen intactos, byte a byte), ahora
+// también arma `items`: una lista ACCIONABLE (título + a qué pestaña
+// navegar) para que el Resumen deje de ser un número mudo y pase a señalar
+// el origen de cada alerta. Tope de 8 -- "atención requerida" que no cabe en
+// una pantalla deja de comunicar, ver criterio ya usado en impacto_titulos
+// (P2, tope 3) y las bandas de KPI (§8: "evitar indicadores vanidosos").
+function calcularRequiereAtencion_(tareas, hitos, integrantes, riesgos) {
   var ahora = new Date();
   var activas = tareas.filter(function (a) { return a.activa === true || a.activa === 'TRUE' || a.activa === 1; });
   var vencidas = activas.filter(function (a) { return semaforoActividad_(a).codigo === 'atrasada'; });
@@ -3105,11 +3119,40 @@ function calcularRequiereAtencion_(tareas, hitos, integrantes) {
   var hitosAtrasados = (hitos || []).filter(function (h) {
     return h.estado !== 'COMPLETADO' && h.estado !== 'CANCELADO' && h.fecha_objetivo && new Date(h.fecha_objetivo) < ahora;
   });
+  // Mismo criterio de "crítica" que ya usa la salud ponderada (SALUD_PESOS_,
+  // tarea_critica_atrasada): prioridad P1/P2 Y atrasada. Es un criterio
+  // distinto y más simple que la ruta crítica (CPM, Fase 1) -- aquí interesa
+  // "urgente por prioridad declarada", no "en la cadena que fija la fecha".
+  var criticasAtrasadas = vencidas.filter(function (a) { return ['P1', 'P2'].indexOf(a.prioridad) !== -1; });
+  var riesgosAltos = (riesgos || []).filter(function (r) { return r.nivel === 'ALTA' && r.estado === 'ABIERTO'; });
+
+  var items = [];
+  criticasAtrasadas.forEach(function (a) {
+    items.push({ tipo: 'tarea_critica_atrasada', tab: 'tareas', titulo: a.titulo, meta: 'Prioridad ' + a.prioridad + ' · vencida' });
+  });
+  bloqueadas.forEach(function (a) {
+    items.push({ tipo: 'tarea_bloqueada', tab: 'tareas', titulo: a.titulo, meta: a.bloqueo_motivo || 'Bloqueada' });
+  });
+  vencidas.forEach(function (a) {
+    if (['P1', 'P2'].indexOf(a.prioridad) !== -1) return; // ya listada arriba como crítica
+    items.push({ tipo: 'tarea_vencida', tab: 'tareas', titulo: a.titulo, meta: 'Venció ' + fechaCortaPdfProyecto_(a.fecha_compromiso) });
+  });
+  hitosAtrasados.forEach(function (h) {
+    items.push({ tipo: 'hito_atrasado', tab: 'hitos', titulo: h.nombre, meta: 'Vencía ' + fechaCortaPdfProyecto_(h.fecha_objetivo) });
+  });
+  riesgosAltos.forEach(function (r) {
+    items.push({ tipo: 'riesgo_alto', tab: 'riesgos', titulo: r.descripcion, meta: 'Riesgo alto · abierto' });
+  });
+
   return {
     tareas_vencidas: vencidas.length,
     tareas_bloqueadas: bloqueadas.length,
     hitos_atrasados: hitosAtrasados.length,
-    total_integrantes: (integrantes || []).length
+    total_integrantes: (integrantes || []).length,
+    tareas_criticas_atrasadas: criticasAtrasadas.length,
+    riesgos_altos: riesgosAltos.length,
+    items: items.slice(0, 8),
+    items_total: items.length
   };
 }
 

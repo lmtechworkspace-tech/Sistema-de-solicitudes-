@@ -953,15 +953,79 @@
 
   // --- Resumen ---------------------------------------------------------
 
+  // v13 (Fase 2, "dashboard ejecutivo"): tipo de dato -> a qué pestaña
+  // navega un ítem de "Atención requerida" al hacer click, y qué ícono lo
+  // representa. Mapa de presentación puro, igual criterio que
+  // HITO_ESTADO_ETIQUETA/TIPO_EVENTO_ETIQUETA -- no es una regla de negocio.
+  var ATENCION_ITEM_ICONO_ = {
+    tarea_critica_atrasada: 'alerta', tarea_vencida: 'alerta',
+    tarea_bloqueada: 'pausado', hito_atrasado: 'diana', riesgo_alto: 'escudo'
+  };
+
   function pintarResumen_(detalle, tareas, puedeGestionar) {
     var p = detalle.proyecto;
     var atencion = detalle.requiere_atencion || {};
+
+    // --- Banda de KPIs ejecutivos ------------------------------------------
+    // v13 (Fase 2): de 4 números sueltos a una banda que responde preguntas
+    // de gerencia (§8 de la propuesta: "qué decisión puede tomar con esto").
+    // Cada KPI en rojo SOLO si su valor es alarmante -- un cero no debe
+    // gritar (mismo criterio que ya usa el PDF, kpiTarjetaPdf_).
+    var avance = detalle.avance_pct;
+    var esperado = detalle.avance_esperado_pct;
+    var desviacion = (avance !== null && avance !== undefined && esperado !== null && esperado !== undefined)
+      ? Math.round((avance - esperado) * 10) / 10 : null;
+    var hitosTotal = (detalle.hitos || []).length;
+    var hitosCompletados = (detalle.hitos || []).filter(function (h) { return h.estado === 'COMPLETADO'; }).length;
+    var vencePlazo = venceEn_(p.fecha_objetivo);
+
     var kpis = [
-      Componentes.kpi({ etiqueta: 'Avance', valor: (detalle.avance_pct === null ? '—' : detalle.avance_pct + '%') }),
-      Componentes.kpi({ etiqueta: 'Tareas vencidas', valor: atencion.tareas_vencidas || 0 }),
-      Componentes.kpi({ etiqueta: 'Tareas bloqueadas', valor: atencion.tareas_bloqueadas || 0 }),
-      Componentes.kpi({ etiqueta: 'Hitos atrasados', valor: atencion.hitos_atrasados || 0 })
+      Componentes.kpi({ etiqueta: 'Avance real', valor: (avance === null ? '—' : avance + '%') }),
+      Componentes.kpi({ etiqueta: 'Avance esperado (plan)', valor: (esperado === null || esperado === undefined ? '—' : esperado + '%') }),
+      Componentes.kpi({
+        etiqueta: 'Desviación', alerta: desviacion !== null && desviacion < 0,
+        valor: desviacion === null ? '—' : (desviacion > 0 ? '+' : '') + desviacion + 'pp'
+      }),
+      Componentes.kpi({ etiqueta: 'Hitos completados', valor: hitosTotal ? (hitosCompletados + '/' + hitosTotal) : '—' }),
+      Componentes.kpi({ etiqueta: 'Tareas vencidas', alerta: (atencion.tareas_vencidas || 0) > 0, valor: atencion.tareas_vencidas || 0 }),
+      Componentes.kpi({ etiqueta: 'Críticas atrasadas (P1/P2)', alerta: (atencion.tareas_criticas_atrasadas || 0) > 0, valor: atencion.tareas_criticas_atrasadas || 0 }),
+      Componentes.kpi({ etiqueta: 'Riesgos altos abiertos', alerta: (atencion.riesgos_altos || 0) > 0, valor: atencion.riesgos_altos || 0 }),
+      Componentes.kpi({ etiqueta: 'Fecha objetivo', titulo: vencePlazo, valor: fechaCorta_(p.fecha_objetivo) })
     ].join('');
+
+    // --- Próximo hito --------------------------------------------------
+    // v13 (Fase 2): el hito no-terminal más próximo -- calculado en cliente
+    // a partir de `detalle.hitos` (ya viaja completo, cero llamada nueva).
+    var hitosVivos = (detalle.hitos || []).filter(function (h) { return h.estado !== 'COMPLETADO' && h.estado !== 'CANCELADO' && h.fecha_objetivo; })
+      .sort(function (a, b) { return new Date(a.fecha_objetivo) - new Date(b.fecha_objetivo); });
+    var proximoHito = hitosVivos[0];
+    var proximoHitoHtml = proximoHito
+      ? '<div class="sigso-py-proximo-hito">' + Iconos.svg('diana', { tam: 16 }) +
+          '<span><b>Próximo hito:</b> ' + Componentes.escaparHtml(proximoHito.nombre) + ' · ' + venceEn_(proximoHito.fecha_objetivo) + '</span>' +
+        '</div>'
+      : '';
+
+    // --- Atención requerida ----------------------------------------------
+    // v13 (Fase 2): la lista ACCIONABLE detrás de los números en rojo de
+    // arriba -- cada ítem navega a la pestaña donde vive (§7 de la
+    // propuesta: "solo lo que necesita atención, y que sea accionable").
+    var items = atencion.items || [];
+    var atencionHtml;
+    if (!items.length) {
+      atencionHtml = '<div class="sigso-py-atencion sigso-py-atencion--vacia">' +
+        Iconos.svg('check', { tam: 16 }) + '<span>Nada requiere atención ahora mismo.</span></div>';
+    } else {
+      var filas = items.map(function (it) {
+        return '<button type="button" class="sigso-py-atencion-item js-py-atencion-item" data-tab="' + Componentes.escaparHtml(it.tab) + '">' +
+          Iconos.svg(ATENCION_ITEM_ICONO_[it.tipo] || 'alerta', { tam: 15 }) +
+          '<span class="sigso-py-atencion-item__tit">' + Componentes.escaparHtml(it.titulo) + '</span>' +
+          '<span class="sigso-py-atencion-item__meta">' + Componentes.escaparHtml(it.meta || '') + '</span>' +
+        '</button>';
+      }).join('');
+      var masTexto = (atencion.items_total || 0) > items.length
+        ? '<p class="sigso-ayuda">Y ' + (atencion.items_total - items.length) + ' más -- revisa cada pestaña para verlos todos.</p>' : '';
+      atencionHtml = '<div class="sigso-py-atencion">' + filas + '</div>' + masTexto;
+    }
 
     // v10 (Fase D, propuesta 11): "Descargar PDF" es de solo lectura --
     // cualquiera que vea el proyecto puede exportarlo, no solo quien puede
@@ -991,7 +1055,10 @@
       ? '<p class="sigso-ayuda">Creado a partir de la solicitud <b>' + Componentes.escaparHtml(p.solicitud_origen_id) + '</b>.</p>'
       : '';
 
-    return '<div class="sigso-py-kpis">' + kpis + '</div>' +
+    return '<div class="sigso-py-kpis sigso-py-kpis--resumen">' + kpis + '</div>' +
+      proximoHitoHtml +
+      '<h3 class="sigso-py-seccion-tit">Atención requerida</h3>' +
+      atencionHtml +
       (p.descripcion ? '<p>' + Componentes.escaparHtml(p.descripcion) + '</p>' : '') +
       (p.objetivo ? '<p><b>Objetivo:</b> ' + Componentes.escaparHtml(p.objetivo) + '</p>' : '') +
       '<p class="sigso-ayuda">Líder: ' + Componentes.escaparHtml(p.lider_email) +
@@ -3461,6 +3528,16 @@
   // --- acciones (delegadas por pestaña) -------------------------------
 
   function wireAccionesPestana_(cont, detalle, tareas, puedeGestionar) {
+    // v13 (Fase 2, "dashboard ejecutivo"): cada ítem de "Atención requerida"
+    // navega a la pestaña donde vive -- mismo repintado sin red que el resto
+    // de las pestañas (cambiarPestana_), nunca un link roto.
+    cont.querySelectorAll('.js-py-atencion-item').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var tab = btn.getAttribute('data-tab');
+        if (tab) cambiarPestana_(tab);
+      });
+    });
+
     var editar = cont.querySelector('.js-py-editar');
     if (editar) editar.addEventListener('click', function () { abrirFormularioEditar_(detalle.proyecto); });
 

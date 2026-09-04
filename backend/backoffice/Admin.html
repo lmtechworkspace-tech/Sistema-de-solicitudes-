@@ -3959,6 +3959,36 @@ button {
   margin-bottom: var(--esp-4);
 }
 
+/* v13 (Fase 2, "dashboard ejecutivo"): la banda de 8 KPIs del Resumen es más
+   densa que las de siempre (que solían tener 4-5 tiles) -- tiles un poco más
+   angostos para que quepan más por fila sin scroll horizontal. */
+.sigso-py-kpis--resumen { grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); }
+
+.sigso-py-proximo-hito {
+  display: flex; align-items: center; gap: var(--esp-2); margin-bottom: var(--esp-4);
+  padding: var(--esp-3); background: var(--superficie-2); border-radius: var(--radio);
+  font-size: var(--texto-sm); color: var(--texto-2);
+}
+.sigso-py-proximo-hito svg { color: var(--primario); flex-shrink: 0; }
+
+.sigso-py-seccion-tit { font-size: var(--texto-base); font-weight: 600; margin: var(--esp-5) 0 var(--esp-2); color: var(--texto); }
+
+.sigso-py-atencion { display: flex; flex-direction: column; gap: var(--esp-2); }
+.sigso-py-atencion--vacia {
+  display: flex; align-items: center; gap: var(--esp-2); color: var(--ok);
+  background: var(--superficie-2); border-radius: var(--radio); padding: var(--esp-3);
+  font-size: var(--texto-sm);
+}
+.sigso-py-atencion-item {
+  display: flex; align-items: center; gap: var(--esp-2); width: 100%; text-align: left;
+  background: var(--superficie-2); border: 1px solid transparent; border-radius: var(--radio);
+  padding: var(--esp-2) var(--esp-3); cursor: pointer; font: inherit; color: var(--texto);
+}
+.sigso-py-atencion-item:hover { border-color: var(--borde); background: var(--superficie-3, var(--superficie-2)); }
+.sigso-py-atencion-item svg { color: var(--critico); flex-shrink: 0; }
+.sigso-py-atencion-item__tit { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.sigso-py-atencion-item__meta { color: var(--texto-3); font-size: var(--texto-sm); white-space: nowrap; }
+
 .sigso-py-acciones { display: flex; gap: var(--esp-2); margin-top: var(--esp-4); flex-wrap: wrap; }
 
 .sigso-py-form-fila { display: flex; gap: var(--esp-3); flex-wrap: wrap; }
