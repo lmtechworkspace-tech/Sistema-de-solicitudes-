@@ -285,6 +285,19 @@ var ESQUEMA_HOJAS = {
   PROYECTO_PLANTILLA_HITOS: [
     'plantilla_hito_id', 'plantilla_id', 'nombre', 'descripcion', 'orden'
   ],
+  // v13 (Fase 4, "centro documental"): ver la nota idéntica en
+  // backend/backoffice/Constantes.gs.
+  PROYECTO_DOCUMENTOS: [
+    'documento_id', 'proyecto_id', 'nombre', 'categoria', 'descripcion',
+    'ref_tipo', 'ref_id',
+    'version_vigente', 'archivo_id', 'archivo_nombre', 'archivo_mime', 'tamano_bytes',
+    'creado_por', 'fecha_creacion', 'activo'
+  ],
+  PROYECTO_DOC_VERSIONES: [
+    'version_id', 'documento_id', 'version', 'comentario',
+    'archivo_id', 'archivo_nombre', 'archivo_mime', 'tamano_bytes',
+    'subido_por', 'fecha', 'vigente'
+  ],
   // v10.0 (Modulo SGC ISO 9001): ver la nota identica en
   // backend/backoffice/Constantes.gs sobre cada hoja y cada campo.
   SGC_DOCUMENTOS: [

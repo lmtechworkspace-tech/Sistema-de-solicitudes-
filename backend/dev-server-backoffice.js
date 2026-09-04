@@ -301,6 +301,10 @@ function construirContexto() {
     ['PYPH-DEMO-2', 'PYP-DEMO-1', 'Configuración y pruebas', '', 1],
     ['PYPH-DEMO-3', 'PYP-DEMO-1', 'Capacitación y cierre', '', 2]
   ]);
+  // v13 (Fase 4, "centro documental"): vacías -- se prueban creando
+  // documentos a mano en el navegador local.
+  seedSheet(ctx, 'PROYECTO_DOCUMENTOS', ctx.COLUMNAS.PROYECTO_DOCUMENTOS, []);
+  seedSheet(ctx, 'PROYECTO_DOC_VERSIONES', ctx.COLUMNAS.PROYECTO_DOC_VERSIONES, []);
   // v10.0 (Modulo SGC ISO 9001): hojas del repositorio documental. Se
   // siembran los ROLES (admin como Encargado SGC, jefe como operativo de
   // CONTABILIDAD) para poder probar en local que cada quien ve lo suyo; los

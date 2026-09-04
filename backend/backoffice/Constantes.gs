@@ -131,6 +131,13 @@ var SHEETS = {
   // nuevo, como siempre.
   PROYECTO_PLANTILLAS: 'PROYECTO_PLANTILLAS',
   PROYECTO_PLANTILLA_HITOS: 'PROYECTO_PLANTILLA_HITOS',
+  // v13 (Fase 4, "centro documental"): documento LÓGICO de un proyecto
+  // (ej. "Flujo Comercial") + su historial de versiones -- mismo patrón ya
+  // probado en SGC_DOCUMENTOS/SGC_DOC_VERSIONES (documento controlado ISO),
+  // sin los campos propios de ISO (clausulas, acuse, área). Ver la nota
+  // completa junto a PROYECTO_DOCUMENTOS en COLUMNAS más abajo.
+  PROYECTO_DOCUMENTOS: 'PROYECTO_DOCUMENTOS',
+  PROYECTO_DOC_VERSIONES: 'PROYECTO_DOC_VERSIONES',
   // v10.0 (documentacion/SIGSO-v10.0-propuesta-modulo-sgc-iso9001.md):
   // modulo SGC ISO 9001. Fase 1 = repositorio documental controlado: los
   // documentos del SGC ya existen en PDF/Word/Excel; lo que faltaba era
@@ -588,6 +595,32 @@ var COLUMNAS = {
   ],
   PROYECTO_PLANTILLA_HITOS: [
     'plantilla_hito_id', 'plantilla_id', 'nombre', 'descripcion', 'orden'
+  ],
+
+  // v13 (Fase 4, "centro documental" -- evolución del módulo Proyectos):
+  // el documento LÓGICO (ej. "Flujo Comercial v2"), independiente de sus
+  // versiones. version_vigente/archivo_id/archivo_nombre/archivo_mime/
+  // tamano_bytes son una copia DENORMALIZADA de la versión vigente -- para
+  // listar documentos sin tener que cruzar con PROYECTO_DOC_VERSIONES en
+  // cada lectura (mismo patrón que SGC_DOCUMENTOS). ref_tipo/ref_id
+  // (opcional) enlaza el documento a una tarea o un hito -- incluso vacío,
+  // el documento sigue viviendo a nivel de proyecto.
+  PROYECTO_DOCUMENTOS: [
+    'documento_id', 'proyecto_id', 'nombre', 'categoria', 'descripcion',
+    'ref_tipo', 'ref_id',
+    'version_vigente', 'archivo_id', 'archivo_nombre', 'archivo_mime', 'tamano_bytes',
+    'creado_por', 'fecha_creacion', 'activo'
+  ],
+  // Append-only: una fila por versión subida (la vigente también queda
+  // aquí, vigente=true) -- el historial completo es auditable sin
+  // reconstruirlo desde PROYECTO_DOCUMENTOS. version es un entero simple
+  // ("v1","v2"...) autoincrementado por Proyectos.gs -- a diferencia de
+  // SGC (que exige un código de versión formal para auditoría externa),
+  // un documento de proyecto no necesita ese formalismo.
+  PROYECTO_DOC_VERSIONES: [
+    'version_id', 'documento_id', 'version', 'comentario',
+    'archivo_id', 'archivo_nombre', 'archivo_mime', 'tamano_bytes',
+    'subido_por', 'fecha', 'vigente'
   ],
 
   // v10.0 (Modulo SGC ISO 9001, Fase 1) ---------------------------------

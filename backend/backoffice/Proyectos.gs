@@ -52,6 +52,86 @@ function detectarMimeImagenProyecto_(bytes) {
   return esWebpProyecto_(bytes) ? 'image/webp' : null;
 }
 
+// v13 (Fase 4, "centro documental"): categorías fijas -- un enum chico y
+// genérico (a diferencia del `tipo` de SGC, que sigue una taxonomía ISO) que
+// cubre lo que de verdad varía entre documentos de un proyecto interno.
+var PROYECTO_DOC_CATEGORIAS_ = ['REQUISITOS', 'DISEÑO', 'CONTRATO', 'ACTA', 'APROBACION', 'ENTREGABLE', 'OTRO'];
+var PROYECTO_DOC_CATEGORIA_ETIQUETA_ = {
+  REQUISITOS: 'Requisitos', DISEÑO: 'Diseño', CONTRATO: 'Contrato',
+  ACTA: 'Acta', APROBACION: 'Aprobación', ENTREGABLE: 'Entregable', OTRO: 'Otro'
+};
+
+// Subcarpeta propia dentro de la carpeta del proyecto (que ya existe para
+// los adjuntos de la Sala) -- separa el repositorio formal de los archivos
+// sueltos de conversación sin crear una raíz de Drive nueva.
+function obtenerCarpetaDocumentosProyecto_(proyecto) {
+  return obtenerOCrearSubcarpeta_(obtenerCarpetaProyecto_(proyecto), 'Documentos');
+}
+
+function buscarDocumentoProyecto_(documentoId) {
+  return leerFilasSeguro_(SHEETS.PROYECTO_DOCUMENTOS).filter(function (d) { return d.documento_id === documentoId; })[0];
+}
+
+// Valida y sube el binario a Drive -- MISMA validación que subirAdjunto
+// (tamaño, firma binaria real, nunca la extensión ni el mime del navegador),
+// reusada aquí para no duplicar la regla de seguridad en dos lugares.
+function subirArchivoDocumentoProyecto_(data, proyecto) {
+  var bytes;
+  try {
+    bytes = Utilities.base64Decode(data.contenido_base64);
+  } catch (err) {
+    return errorValidacion_('contenido_base64', 'El archivo no es base64 válido.');
+  }
+  if (!bytes.length) return errorValidacion_('contenido_base64', 'El archivo está vacío.');
+  if (bytes.length > MAX_ADJUNTO_PROYECTO_BYTES) {
+    return errorValidacion_('contenido_base64',
+      'El archivo supera el tamaño máximo (' + Math.round(MAX_ADJUNTO_PROYECTO_BYTES / (1024 * 1024)) + ' MB).');
+  }
+  var mime = mimeArchivoSgc_(bytes, data.nombre_archivo) || detectarMimeImagenProyecto_(bytes);
+  if (!mime) {
+    return errorValidacion_('contenido_base64', 'Formato no admitido. Se aceptan PDF, Word, Excel, PowerPoint, JPG, PNG o WebP.');
+  }
+  var carpeta = obtenerCarpetaDocumentosProyecto_(proyecto);
+  var archivoDrive = carpeta.createFile(Utilities.newBlob(bytes, mime, data.nombre_archivo));
+  return { archivo_id: archivoDrive.getId(), archivo_nombre: data.nombre_archivo, archivo_mime: mime, tamano_bytes: bytes.length };
+}
+
+// vN autoincremental por documento -- un documento de proyecto no necesita
+// el código de versión formal que SGC exige para auditoría externa (v01,
+// v02...); alcanza con un entero simple que nunca colisiona.
+function siguienteVersionDocumentoProyecto_(documentoId) {
+  var max = 0;
+  leerFilasSeguro_(SHEETS.PROYECTO_DOC_VERSIONES).forEach(function (v) {
+    if (v.documento_id !== documentoId) return;
+    var n = Number(String(v.version || '').replace(/[^0-9]/g, ''));
+    if (n > max) max = n;
+  });
+  return 'v' + (max + 1);
+}
+
+// Registra la nueva versión (append-only, nunca se borra) y sincroniza la
+// copia denormalizada en PROYECTO_DOCUMENTOS -- mismo patrón que
+// registrarVersionSgc_/nuevaVersion en Calidad.gs.
+function registrarVersionDocumentoProyecto_(documentoId, version, comentario, archivo, contexto) {
+  leerFilasSeguro_(SHEETS.PROYECTO_DOC_VERSIONES).forEach(function (v) {
+    if (v.documento_id === documentoId && esVerdaderoProyecto_(v.vigente)) {
+      actualizarFilaPorId_(SHEETS.PROYECTO_DOC_VERSIONES, 'version_id', v.version_id, { vigente: false });
+    }
+  });
+  var fila = {
+    version_id: Utilities.getUuid(), documento_id: documentoId, version: version,
+    comentario: comentario || '', archivo_id: archivo.archivo_id, archivo_nombre: archivo.archivo_nombre,
+    archivo_mime: archivo.archivo_mime, tamano_bytes: archivo.tamano_bytes || 0,
+    subido_por: (contexto && contexto.email) || '', fecha: new Date().toISOString(), vigente: true
+  };
+  agregarFila_(SHEETS.PROYECTO_DOC_VERSIONES, fila);
+  actualizarFilaPorId_(SHEETS.PROYECTO_DOCUMENTOS, 'documento_id', documentoId, {
+    version_vigente: version, archivo_id: archivo.archivo_id, archivo_nombre: archivo.archivo_nombre,
+    archivo_mime: archivo.archivo_mime, tamano_bytes: archivo.tamano_bytes || 0
+  });
+  return fila;
+}
+
 var Proyectos = {
   // --- Portafolio ----------------------------------------------------------
   // ADM/GERENCIA ven todos los proyectos activos; el resto ve solo los
@@ -271,6 +351,13 @@ var Proyectos = {
     // badge, nunca se ocultan datos existentes).
     var entregables = leerFilasSeguro_(SHEETS.PROYECTO_ENTREGABLES).filter(function (e) { return e.proyecto_id === proyecto.proyecto_id; });
     var riesgos = leerFilasSeguro_(SHEETS.PROYECTO_RIESGOS).filter(function (r) { return r.proyecto_id === proyecto.proyecto_id; });
+    // v13 (Fase 4, "centro documental"): metadata liviana (nunca el binario)
+    // -- se puede cargar junto con el resto del detalle sin costo real. Solo
+    // los activos (activo=true); "eliminar" es soft-delete, igual criterio
+    // que el resto del módulo.
+    var documentos = leerFilasSeguro_(SHEETS.PROYECTO_DOCUMENTOS)
+      .filter(function (d) { return d.proyecto_id === proyecto.proyecto_id && esVerdaderoProyecto_(d.activo); })
+      .sort(function (a, b) { return new Date(b.fecha_creacion) - new Date(a.fecha_creacion); });
     var salud = calcularSaludProyecto_(proyecto, tareas, hitos, entregables);
 
     return {
@@ -283,6 +370,7 @@ var Proyectos = {
       // controles en proyectos ajenos. GERENCIA siempre false (solo lectura).
       puede_gestionar: puedeGestionarProyecto_(proyecto, contexto),
       integrantes: integrantes,
+      documentos: documentos,
       hitos: hitos.map(function (h) {
         var tareasHito = tareas.filter(function (a) { return a.hito_id === h.hito_id; });
         return {
@@ -1517,6 +1605,209 @@ var Proyectos = {
     return {
       contenido_base64: Utilities.base64Encode(blob.getBytes()),
       nombre_archivo: evento.titulo,
+      mime: blob.getContentType()
+    };
+  },
+
+  // --- Documentos (Fase 4, "centro documental"): repositorio FORMAL, con
+  // categoría, versionado real e historial -- distinto del adjunto suelto de
+  // la Sala (subirAdjunto/descargarAdjunto, arriba), que sigue existiendo
+  // igual para el archivo rápido de conversación. Mismo patrón ya probado en
+  // Calidad.gs (SGC_DOCUMENTOS/SGC_DOC_VERSIONES, documento controlado ISO),
+  // sin los campos propios de esa norma (clausulas, acuse, área) -- un
+  // documento de proyecto no necesita ese formalismo, solo trazabilidad.
+  gestionarDocumento: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    var rol = rolEnProyecto_(proyecto.proyecto_id, contexto);
+    var puedeGestionar = contexto.rol === 'ADM' || rol === 'LIDER' || rol === 'INTEGRANTE' || rol === 'COLABORADOR';
+    if (!puedeGestionar) return { _forbidden: true, message: 'No puedes gestionar documentos en este proyecto.' };
+
+    if (data.accion === 'eliminar') {
+      if (!data.documento_id) return errorValidacion_('documento_id', 'Falta indicar el documento.');
+      var paraEliminar = buscarDocumentoProyecto_(data.documento_id);
+      if (!paraEliminar || paraEliminar.proyecto_id !== proyecto.proyecto_id) {
+        return errorValidacion_('documento_id', 'Documento no encontrado.');
+      }
+      // Soft-delete (igual criterio que el resto del módulo: nunca se pierde
+      // historial). Las versiones en PROYECTO_DOC_VERSIONES y los archivos en
+      // Drive quedan intactos -- si algún día se necesita, sigue ahí.
+      return actualizarFilaPorId_(SHEETS.PROYECTO_DOCUMENTOS, 'documento_id', data.documento_id, { activo: false });
+    }
+
+    // Referencia opcional a una tarea o un hito -- RN-709 de siempre: debe
+    // ser del MISMO proyecto (nunca un enlace cruzado a otro proyecto).
+    var refTipo = '', refId = '';
+    if (data.ref_tipo === 'ACTIVIDAD' && data.ref_id) {
+      var tareaRef = leerFilasSeguro_(SHEETS.ACTIVIDADES).filter(function (a) { return a.actividad_id === data.ref_id; })[0];
+      if (!tareaRef || tareaRef.proyecto_id !== proyecto.proyecto_id) {
+        return errorValidacion_('ref_id', 'La tarea indicada no pertenece a este proyecto.');
+      }
+      refTipo = 'ACTIVIDAD'; refId = data.ref_id;
+    } else if (data.ref_tipo === 'HITO' && data.ref_id) {
+      var hitoRef = leerFilasSeguro_(SHEETS.PROYECTO_HITOS).filter(function (h) { return h.hito_id === data.ref_id; })[0];
+      if (!hitoRef || hitoRef.proyecto_id !== proyecto.proyecto_id) {
+        return errorValidacion_('ref_id', 'El hito indicado no pertenece a este proyecto.');
+      }
+      refTipo = 'HITO'; refId = data.ref_id;
+    }
+
+    if (data.documento_id) {
+      // Editar METADATA (nombre/categoría/descripción/referencia) -- nunca el
+      // archivo desde aquí, eso es subirVersionDocumento (deja traza propia).
+      var actual = buscarDocumentoProyecto_(data.documento_id);
+      if (!actual || actual.proyecto_id !== proyecto.proyecto_id) {
+        return errorValidacion_('documento_id', 'Documento no encontrado.');
+      }
+      var cambios = { ref_tipo: refTipo, ref_id: refId };
+      if (data.nombre !== undefined) {
+        var nombreEdit = String(data.nombre || '').trim();
+        if (!nombreEdit) return errorValidacion_('nombre', 'El nombre del documento es obligatorio.');
+        cambios.nombre = nombreEdit;
+      }
+      if (data.categoria !== undefined) {
+        cambios.categoria = PROYECTO_DOC_CATEGORIAS_.indexOf(data.categoria) !== -1 ? data.categoria : 'OTRO';
+      }
+      if (data.descripcion !== undefined) cambios.descripcion = data.descripcion || '';
+      return actualizarFilaPorId_(SHEETS.PROYECTO_DOCUMENTOS, 'documento_id', data.documento_id, cambios);
+    }
+
+    // Crear: exige nombre + primer archivo -- un documento sin ninguna
+    // versión no tiene sentido en un repositorio (a diferencia del adjunto
+    // suelto de la Sala, este SIEMPRE nace versionado).
+    var nombre = String(data.nombre || '').trim();
+    if (!nombre) return errorValidacion_('nombre', 'El nombre del documento es obligatorio.');
+    if (!data.contenido_base64) return errorValidacion_('contenido_base64', 'Adjunta el archivo del documento.');
+    var archivo = subirArchivoDocumentoProyecto_(data, proyecto);
+    if (archivo._validationError) return archivo;
+
+    var documentoId = Utilities.getUuid();
+    var categoria = PROYECTO_DOC_CATEGORIAS_.indexOf(data.categoria) !== -1 ? data.categoria : 'OTRO';
+    var version = 'v1';
+    var doc = {
+      documento_id: documentoId, proyecto_id: proyecto.proyecto_id, nombre: nombre,
+      categoria: categoria, descripcion: data.descripcion || '',
+      ref_tipo: refTipo, ref_id: refId,
+      version_vigente: version, archivo_id: archivo.archivo_id, archivo_nombre: archivo.archivo_nombre,
+      archivo_mime: archivo.archivo_mime, tamano_bytes: archivo.tamano_bytes,
+      creado_por: contexto.email || '', fecha_creacion: new Date().toISOString(), activo: true
+    };
+    agregarFila_(SHEETS.PROYECTO_DOCUMENTOS, doc);
+    registrarVersionDocumentoProyecto_(documentoId, version, data.comentario || 'Carga inicial', archivo, contexto);
+    registrarEventoProyecto_(proyecto.proyecto_id, 'ARCHIVO', contexto,
+      'Documento: ' + nombre, 'DOCUMENTO', documentoId, '');
+    return buscarDocumentoProyecto_(documentoId);
+  },
+
+  // Sube una nueva versión de un documento EXISTENTE -- la anterior deja de
+  // ser vigente pero se conserva completa (nunca se borra, es el historial
+  // auditable "qué versión regía en qué fecha").
+  subirVersionDocumento: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    var rol = rolEnProyecto_(proyecto.proyecto_id, contexto);
+    if (!(contexto.rol === 'ADM' || rol === 'LIDER' || rol === 'INTEGRANTE' || rol === 'COLABORADOR')) {
+      return { _forbidden: true, message: 'No puedes subir versiones en este proyecto.' };
+    }
+    var doc = buscarDocumentoProyecto_(data.documento_id);
+    if (!doc || doc.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('documento_id', 'Documento no encontrado.');
+    if (!data.contenido_base64) return errorValidacion_('contenido_base64', 'Adjunta el archivo de la nueva versión.');
+    var archivo = subirArchivoDocumentoProyecto_(data, proyecto);
+    if (archivo._validationError) return archivo;
+    var version = siguienteVersionDocumentoProyecto_(doc.documento_id);
+    registrarVersionDocumentoProyecto_(doc.documento_id, version, data.comentario || '', archivo, contexto);
+    registrarEventoProyecto_(proyecto.proyecto_id, 'ARCHIVO', contexto,
+      'Nueva versión (' + version + '): ' + doc.nombre, 'DOCUMENTO', doc.documento_id, '');
+    return buscarDocumentoProyecto_(doc.documento_id);
+  },
+
+  // "Marcar vigente" (rollback): vuelve a poner una versión ANTERIOR como la
+  // vigente, sin borrar la que hoy lo es -- para cuando una versión nueva
+  // resultó ser un error. Exclusivo de quien gestiona el proyecto (no
+  // cualquier colaborador, a diferencia de subir una versión nueva).
+  marcarVersionVigente: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeGestionarProyecto_(proyecto, contexto)) {
+      return { _forbidden: true, message: 'Solo el líder del proyecto o un administrador pueden cambiar la versión vigente.' };
+    }
+    var doc = buscarDocumentoProyecto_(data.documento_id);
+    if (!doc || doc.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('documento_id', 'Documento no encontrado.');
+    var version = leerFilasSeguro_(SHEETS.PROYECTO_DOC_VERSIONES).filter(function (v) {
+      return v.version_id === data.version_id && v.documento_id === doc.documento_id;
+    })[0];
+    if (!version) return errorValidacion_('version_id', 'Versión no encontrada.');
+    leerFilasSeguro_(SHEETS.PROYECTO_DOC_VERSIONES).forEach(function (v) {
+      if (v.documento_id === doc.documento_id) {
+        actualizarFilaPorId_(SHEETS.PROYECTO_DOC_VERSIONES, 'version_id', v.version_id, { vigente: v.version_id === version.version_id });
+      }
+    });
+    actualizarFilaPorId_(SHEETS.PROYECTO_DOCUMENTOS, 'documento_id', doc.documento_id, {
+      version_vigente: version.version, archivo_id: version.archivo_id, archivo_nombre: version.archivo_nombre,
+      archivo_mime: version.archivo_mime, tamano_bytes: version.tamano_bytes || 0
+    });
+    registrarEventoProyecto_(proyecto.proyecto_id, 'ARCHIVO', contexto,
+      'Vigente cambiada a ' + version.version + ': ' + doc.nombre, 'DOCUMENTO', doc.documento_id, '');
+    return buscarDocumentoProyecto_(doc.documento_id);
+  },
+
+  // Historial completo de un documento -- pedido LAZY (solo cuando alguien
+  // abre "Ver historial"), igual criterio que la bitácora del Cronograma.
+  listarVersionesDocumento: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeVerProyecto_(proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+    var doc = buscarDocumentoProyecto_(data.documento_id);
+    if (!doc || doc.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('documento_id', 'Documento no encontrado.');
+    return leerFilasSeguro_(SHEETS.PROYECTO_DOC_VERSIONES)
+      .filter(function (v) { return v.documento_id === doc.documento_id; })
+      .sort(function (a, b) { return new Date(b.fecha) - new Date(a.fecha); });
+  },
+
+  // Sirve una versión puntual (no necesariamente la vigente) -- re-valida el
+  // acceso al proyecto en cada descarga, mismo criterio que descargarAdjunto.
+  descargarVersionDocumento: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeVerProyecto_(proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+    var version = leerFilasSeguro_(SHEETS.PROYECTO_DOC_VERSIONES).filter(function (v) { return v.version_id === data.version_id; })[0];
+    if (!version) return errorValidacion_('version_id', 'Versión no encontrada.');
+    var doc = buscarDocumentoProyecto_(version.documento_id);
+    if (!doc || doc.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('version_id', 'Versión no encontrada en este proyecto.');
+    var archivo;
+    try {
+      archivo = DriveApp.getFileById(version.archivo_id);
+    } catch (err) {
+      return errorValidacion_('version_id', 'El archivo ya no está disponible en Drive.');
+    }
+    var blob = archivo.getBlob();
+    return {
+      contenido_base64: Utilities.base64Encode(blob.getBytes()),
+      nombre_archivo: version.archivo_nombre,
+      mime: blob.getContentType()
+    };
+  },
+
+  // Descarga directa de la versión VIGENTE de un documento -- usa el
+  // archivo_id ya denormalizado en PROYECTO_DOCUMENTOS, sin tener que
+  // resolver primero el version_id (eso es lo que hace posible el botón
+  // "Descargar" de la lista, sin un viaje extra a listarVersionesDocumento).
+  descargarDocumento: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeVerProyecto_(proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+    var doc = buscarDocumentoProyecto_(data.documento_id);
+    if (!doc || doc.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('documento_id', 'Documento no encontrado.');
+    var archivo;
+    try {
+      archivo = DriveApp.getFileById(doc.archivo_id);
+    } catch (err) {
+      return errorValidacion_('documento_id', 'El archivo ya no está disponible en Drive.');
+    }
+    var blob = archivo.getBlob();
+    return {
+      contenido_base64: Utilities.base64Encode(blob.getBytes()),
+      nombre_archivo: doc.archivo_nombre,
       mime: blob.getContentType()
     };
   },

@@ -5055,6 +5055,21 @@ button {
 .sigso-py-hito-tarea__meta { color: var(--texto-3); white-space: nowrap; }
 .sigso-py-hito--sinhito { border-left: 3px dashed var(--borde); }
 
+/* v13 (Fase 4, "centro documental"): pill de versión vigente + chip de
+   enlace a la tarea/hito relacionado, sobre la misma tarjeta .sigso-py-tarea
+   que ya usan Entregables/Riesgos. */
+.sigso-py-doc-vigente {
+  font-family: var(--fuente-mono, monospace); font-size: 11px;
+  color: var(--texto-3); background: var(--superficie-2); border-radius: 999px;
+  padding: 1px 8px; margin-left: auto;
+}
+.sigso-py-doc-ref {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: var(--esp-2);
+  background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--primario); font-size: var(--texto-sm); font: inherit;
+}
+.sigso-py-doc-ref:hover { text-decoration: underline; }
+
 .sigso-py-integrante {
   display: flex; align-items: center; gap: var(--esp-3);
   background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio-md);
@@ -17424,6 +17439,7 @@ var Iconos = (function () {
       { id: 'hitos', texto: 'Hitos' },
       { id: 'cronograma', texto: 'Cronograma' },
       { id: 'entregables', texto: 'Entregables' },
+      { id: 'documentos', texto: 'Documentos' },
       { id: 'riesgos', texto: 'Riesgos' },
       { id: 'equipo', texto: 'Equipo' }
     ];
@@ -17473,6 +17489,7 @@ var Iconos = (function () {
           });
     }
     else if (pestanaActiva_ === 'entregables') cuerpo = pintarEntregables_(detalle, puedeGestionar);
+    else if (pestanaActiva_ === 'documentos') cuerpo = pintarDocumentos_(detalle, tareas, puedeGestionar);
     else if (pestanaActiva_ === 'riesgos') cuerpo = pintarRiesgos_(detalle, puedeGestionar);
     else if (pestanaActiva_ === 'equipo') cuerpo = pintarEquipo_(detalle, puedeGestionar);
 
@@ -20000,6 +20017,183 @@ var Iconos = (function () {
     return acciones + '<div class="sigso-py-lista">' + filas + '</div>';
   }
 
+  // --- Documentos (Fase 4, "centro documental") -------------------------
+  //
+  // Repositorio FORMAL: categoría, versionado real, historial y enlace
+  // opcional a una tarea/hito -- distinto del adjunto suelto de la Sala
+  // (que sigue existiendo para el archivo rápido de conversación). Mismo
+  // patrón visual que Entregables/Riesgos arriba.
+
+  var PROYECTO_DOC_CATEGORIA_ETIQUETA_ = {
+    REQUISITOS: 'Requisitos', DISEÑO: 'Diseño', CONTRATO: 'Contrato',
+    ACTA: 'Acta', APROBACION: 'Aprobación', ENTREGABLE: 'Entregable', OTRO: 'Otro'
+  };
+  var PROYECTO_DOC_CATEGORIAS_OPCIONES_ = Object.keys(PROYECTO_DOC_CATEGORIA_ETIQUETA_).map(function (c) {
+    return { valor: c, texto: PROYECTO_DOC_CATEGORIA_ETIQUETA_[c] };
+  });
+
+  // v10 (lección de la Fase A del portafolio): la lista se repinta SOLA en
+  // su propio contenedor (#py-docs-lista-wrap) al buscar/filtrar -- si se
+  // repintara el toolbar completo en cada tecla, el <input> se destruiría y
+  // el foco se perdería a cada letra.
+  var docBusqueda_ = '';
+  var docFiltroCategoria_ = '';
+
+  function tamanoLegible_(bytes) {
+    bytes = Number(bytes) || 0;
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+    return (Math.round(bytes / (1024 * 1024) * 10) / 10) + ' MB';
+  }
+
+  function pintarDocumentos_(detalle, tareas, puedeGestionar) {
+    // v13: el backend acepta crear/editar/eliminar/subir-versión a
+    // cualquier miembro NO observador (mismo círculo que Entregables) --
+    // "puedeGestionar" (líder/ADM) es más estricto y aquí solo aplica a
+    // "marcar vigente" (rollback), dentro del modal de historial.
+    var puedeCrear = detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
+    var acciones = '<div class="sigso-py-cabecera">' +
+      (puedeCrear ? Componentes.boton({ texto: '+ Subir documento', clase: 'js-py-nuevo-documento' }) : '<span></span>') +
+    '</div>';
+    var todos = detalle.documentos || [];
+    if (todos.length === 0) {
+      return acciones + Componentes.vacio({ texto: 'Todavía no hay documentos en este proyecto.' });
+    }
+    var toolbar = '<div class="sigso-py-filtros">' +
+      Componentes.campoTexto({
+        id: 'py-docs-buscar', label: false, tipo: 'search', valor: docBusqueda_,
+        placeholder: 'Buscar documento...', claseCampo: 'sigso-py-filtros__buscar'
+      }) +
+      Componentes.campoSelect({
+        id: 'py-docs-filtro-categoria', label: false, placeholder: 'Todas las categorías', valor: docFiltroCategoria_,
+        opciones: PROYECTO_DOC_CATEGORIAS_OPCIONES_
+      }) +
+    '</div>';
+    return acciones + toolbar + '<div id="py-docs-lista-wrap">' + pintarListaDocumentos_(detalle, tareas, puedeCrear) + '</div>';
+  }
+
+  function pintarListaDocumentos_(detalle, tareas, puedeEditar) {
+    var todos = detalle.documentos || [];
+    var q = docBusqueda_.trim().toLowerCase();
+    var filtrados = todos.filter(function (d) {
+      if (docFiltroCategoria_ && d.categoria !== docFiltroCategoria_) return false;
+      if (!q) return true;
+      return (d.nombre || '').toLowerCase().indexOf(q) !== -1 || (d.descripcion || '').toLowerCase().indexOf(q) !== -1;
+    });
+    if (filtrados.length === 0) {
+      return Componentes.vacio({ texto: 'Ningún documento coincide con la búsqueda.' });
+    }
+    var tareasPorId = {};
+    (tareas || []).forEach(function (a) { tareasPorId[a.actividad_id] = a; });
+    var hitosPorId = {};
+    (detalle.hitos || []).forEach(function (h) { hitosPorId[h.hito_id] = h; });
+
+    var filas = filtrados.map(function (d) {
+      var refHtml = '';
+      if (d.ref_tipo === 'ACTIVIDAD' && tareasPorId[d.ref_id]) {
+        refHtml = '<button type="button" class="sigso-py-doc-ref js-py-doc-ir-ref" data-tab="tareas">' + Iconos.svg('enlace', { tam: 12 }) + ' ' + Componentes.escaparHtml(tareasPorId[d.ref_id].titulo) + '</button>';
+      } else if (d.ref_tipo === 'HITO' && hitosPorId[d.ref_id]) {
+        refHtml = '<button type="button" class="sigso-py-doc-ref js-py-doc-ir-ref" data-tab="hitos">' + Iconos.svg('enlace', { tam: 12 }) + ' ' + Componentes.escaparHtml(hitosPorId[d.ref_id].nombre) + '</button>';
+      }
+      var botones = '<div class="sigso-py-hito__acciones">' +
+          Componentes.boton({ texto: 'Descargar', variante: 'sutil', clase: 'js-py-doc-descargar', idx: d.documento_id }) +
+          (puedeEditar ? Componentes.boton({ texto: 'Nueva versión', variante: 'sutil', clase: 'js-py-doc-nueva-version', idx: d.documento_id }) : '') +
+          Componentes.boton({ texto: 'Historial', variante: 'sutil', clase: 'js-py-doc-historial', idx: d.documento_id }) +
+          (puedeEditar ? Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-py-doc-editar', idx: d.documento_id }) : '') +
+          (puedeEditar ? Componentes.boton({ texto: 'Eliminar', variante: 'sutil', clase: 'js-py-doc-eliminar', idx: d.documento_id }) : '') +
+        '</div>';
+      return '<div class="sigso-py-tarea">' +
+        '<div class="sigso-py-tarea__top">' +
+          '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(d.nombre) + '</span>' +
+          Componentes.badge(PROYECTO_DOC_CATEGORIA_ETIQUETA_[d.categoria] || d.categoria, 'neutro') +
+          '<span class="sigso-py-doc-vigente">' + Componentes.escaparHtml(d.version_vigente) + '</span>' +
+        '</div>' +
+        (d.descripcion ? '<p>' + Componentes.escaparHtml(d.descripcion) + '</p>' : '') +
+        '<div class="sigso-py-tarea__meta">' +
+          '<span>' + Componentes.escaparHtml(d.archivo_nombre || '') + '</span>' +
+          '<span>' + tamanoLegible_(d.tamano_bytes) + '</span>' +
+          '<span>Subido ' + fechaCorta_(d.fecha_creacion) + '</span>' +
+        '</div>' +
+        refHtml +
+        botones +
+      '</div>';
+    }).join('');
+    return '<div class="sigso-py-lista">' + filas + '</div>';
+  }
+
+  function repintarListaDocumentos_(cont) {
+    var wrap = cont.querySelector('#py-docs-lista-wrap');
+    if (!wrap || !datosDetalleActual_) return;
+    var detalle = datosDetalleActual_.detalle;
+    var puedeEditar = detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
+    wrap.innerHTML = pintarListaDocumentos_(detalle, datosDetalleActual_.tareas, puedeEditar);
+    wireListaDocumentos_(cont, detalle, datosDetalleActual_.tareas, puedeGestionarActual_(detalle));
+  }
+
+  // Mismo criterio que pintarDetalle_ usa para "puedeGestionar" (líder/ADM,
+  // con fallback si el Backoffice aún no publicó puede_gestionar) -- se
+  // repite aquí porque los repintados aislados (búsqueda/filtro) no pasan
+  // por pintarDetalle_.
+  function puedeGestionarActual_(detalle) {
+    return detalle.puede_gestionar === true || detalle.rol_actual === 'LIDER';
+  }
+
+  function wireListaDocumentos_(cont, detalle, tareas, puedeGestionarEstricto) {
+    function docPorId_(id) {
+      var lista = (datosDetalleActual_ && datosDetalleActual_.detalle && datosDetalleActual_.detalle.documentos) || detalle.documentos || [];
+      for (var i = 0; i < lista.length; i++) { if (lista[i].documento_id === id) return lista[i]; }
+      return null;
+    }
+    cont.querySelectorAll('.js-py-doc-descargar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var textoOriginal = btn.textContent;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="sigso-spinner"></span>Descargando…';
+        api_('descargarDocumentoProyecto', { proyecto_id: proyectoActivoId_, documento_id: btn.getAttribute('data-idx') }).then(function (r) {
+          if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo descargar el documento.', tipo: 'error' }); return; }
+          descargarBase64Proyecto_(r.data.contenido_base64, r.data.nombre_archivo, r.data.mime);
+        }).catch(function () {
+          Componentes.aviso({ texto: 'No se pudo conectar con el servidor.', tipo: 'error' });
+        }).finally(function () {
+          btn.disabled = false; btn.textContent = textoOriginal;
+        });
+      });
+    });
+    cont.querySelectorAll('.js-py-doc-nueva-version').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var doc = docPorId_(btn.getAttribute('data-idx'));
+        if (doc) abrirFormularioNuevaVersionDocumento_(doc);
+      });
+    });
+    cont.querySelectorAll('.js-py-doc-historial').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var doc = docPorId_(btn.getAttribute('data-idx'));
+        if (doc) abrirHistorialDocumento_(doc, puedeGestionarEstricto);
+      });
+    });
+    cont.querySelectorAll('.js-py-doc-editar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var doc = docPorId_(btn.getAttribute('data-idx'));
+        if (doc) abrirFormularioEditarDocumento_(doc, detalle, tareas);
+      });
+    });
+    cont.querySelectorAll('.js-py-doc-eliminar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var id = btn.getAttribute('data-idx');
+        Componentes.confirmar({ titulo: 'Eliminar documento', mensaje: 'Se elimina de la lista; su historial de versiones se conserva. ¿Confirmas?' }).then(function (ok) {
+          if (!ok) return;
+          api_('gestionarDocumentoProyecto', { proyecto_id: proyectoActivoId_, accion: 'eliminar', documento_id: id }).then(function (r) {
+            if (!r || !r.ok) { Componentes.aviso({ texto: (r && r.message) || 'No se pudo eliminar el documento.', tipo: 'error' }); return; }
+            refrescarDetalle_();
+          });
+        });
+      });
+    });
+    cont.querySelectorAll('.js-py-doc-ir-ref').forEach(function (btn) {
+      btn.addEventListener('click', function () { cambiarPestana_(btn.getAttribute('data-tab')); });
+    });
+  }
+
   // --- Riesgos (v9.4, Fase 3) -------------------------------------------
 
   function riesgoBadgeVariante_(nivel) {
@@ -20459,6 +20653,25 @@ var Iconos = (function () {
         });
       });
     });
+
+    // --- v13 (Fase 4): documentos --------------------------------------
+    var nuevoDocumento = cont.querySelector('.js-py-nuevo-documento');
+    if (nuevoDocumento) nuevoDocumento.addEventListener('click', function () { abrirFormularioDocumento_(detalle, tareas); });
+    var buscarDocs = cont.querySelector('#py-docs-buscar');
+    if (buscarDocs) {
+      buscarDocs.addEventListener('input', function () {
+        docBusqueda_ = buscarDocs.value;
+        repintarListaDocumentos_(cont);
+      });
+    }
+    var filtroCategoriaDocs = cont.querySelector('#py-docs-filtro-categoria');
+    if (filtroCategoriaDocs) {
+      filtroCategoriaDocs.addEventListener('change', function () {
+        docFiltroCategoria_ = filtroCategoriaDocs.value;
+        repintarListaDocumentos_(cont);
+      });
+    }
+    wireListaDocumentos_(cont, detalle, tareas, puedeGestionar);
 
     // --- v9.4: riesgos ------------------------------------------------------
     var nuevoRiesgo = cont.querySelector('.js-py-nuevo-riesgo');
@@ -20974,6 +21187,273 @@ var Iconos = (function () {
         mitigacion: document.getElementById('py-r-mitigacion').value
       }, function () { cerrar(); refrescarDetalle_(); });
     });
+  }
+
+  // --- Documentos (Fase 4, "centro documental") --------------------------
+
+  // Opciones "Relacionado con": tareas + hitos del proyecto, codificadas
+  // como "TIPO::id" en el <option value> (un solo <select>, sin agrupar por
+  // tipo aparte -- more simple, y la lista de un proyecto rara vez es tan
+  // larga como para necesitar dos selects).
+  function opcionesReferenciaDocumento_(detalle, tareas) {
+    return (tareas || []).map(function (a) { return { valor: 'ACTIVIDAD::' + a.actividad_id, texto: 'Tarea: ' + a.titulo }; })
+      .concat((detalle.hitos || []).map(function (h) { return { valor: 'HITO::' + h.hito_id, texto: 'Hito: ' + h.nombre }; }));
+  }
+
+  // v13 (Fase 4): "elegir archivo habilita el nombre visible" -- mismo
+  // patrón que ya usa el adjunto de la Sala (js-py-adjuntar-enviar), aquí
+  // factorizado porque se repite en "nuevo documento" y "nueva versión".
+  function wireCampoArchivoDocumento_(fondo, idInput, idNombre) {
+    var campo = fondo.querySelector('#' + idInput);
+    campo.addEventListener('change', function () {
+      var archivo = campo.files[0];
+      fondo.querySelector('#' + idNombre).textContent = archivo ? archivo.name : 'Ningún archivo elegido';
+    });
+    return campo;
+  }
+
+  function campoArchivoDocumentoHtml_(idInput, idNombre) {
+    return '<div class="sigso-py-adjuntar">' +
+      '<label for="' + idInput + '" class="sigso-boton sigso-boton--sutil sigso-boton--con-icono">' +
+        Iconos.svg('adjunto', { tam: 14 }) + 'Elegir archivo</label>' +
+      '<input type="file" id="' + idInput + '" class="sigso-oculto" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp">' +
+      '<span class="sigso-py-adjuntar__nombre" id="' + idNombre + '">Ningún archivo elegido</span>' +
+    '</div>';
+  }
+
+  // Sube un documento NUEVO -- a diferencia del adjunto suelto de la Sala,
+  // SIEMPRE nace con su primera versión (un documento sin ninguna versión no
+  // tiene sentido en un repositorio). No usa enviarModal_ porque el archivo
+  // necesita pasar primero por FileReader (async) antes del api_.
+  function abrirFormularioDocumento_(detalle, tareas) {
+    var opcionesRef = opcionesReferenciaDocumento_(detalle, tareas);
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Subir documento</h3>' +
+        '<form id="form-py-documento">' +
+          Componentes.campoTexto({ id: 'py-doc-nombre', label: 'Nombre', requerido: true }) +
+          Componentes.campoSelect({
+            id: 'py-doc-categoria', label: 'Categoría', valor: 'OTRO', placeholder: false,
+            opciones: PROYECTO_DOC_CATEGORIAS_OPCIONES_
+          }) +
+          Componentes.campoTextarea({ id: 'py-doc-descripcion', label: 'Descripción (opcional)' }) +
+          (opcionesRef.length ? Componentes.campoSelect({ id: 'py-doc-ref', label: 'Relacionado con (opcional)', opciones: opcionesRef, placeholder: 'Ninguna' }) : '') +
+          campoArchivoDocumentoHtml_('py-doc-archivo', 'py-doc-archivo-nombre') +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Subir documento', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    var campoArchivo = wireCampoArchivoDocumento_(fondo, 'py-doc-archivo', 'py-doc-archivo-nombre');
+    fondo.querySelector('#form-py-documento').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var btn = evento.currentTarget.querySelector('button[type="submit"]');
+      if (btn.disabled) return;
+      var archivo = campoArchivo.files[0];
+      if (!archivo) { Componentes.aviso({ texto: 'Elige un archivo.', tipo: 'error' }); return; }
+      var refEl = fondo.querySelector('#py-doc-ref');
+      var refPartes = (refEl && refEl.value) ? refEl.value.split('::') : ['', ''];
+      var textoOriginal = btn.textContent;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="sigso-spinner"></span>Subiendo…';
+      var lector = new FileReader();
+      lector.onload = function () {
+        var base64 = lector.result.slice(lector.result.indexOf(',') + 1);
+        api_('gestionarDocumentoProyecto', {
+          proyecto_id: proyectoActivoId_,
+          nombre: document.getElementById('py-doc-nombre').value,
+          categoria: document.getElementById('py-doc-categoria').value,
+          descripcion: document.getElementById('py-doc-descripcion').value,
+          ref_tipo: refPartes[0], ref_id: refPartes[1],
+          nombre_archivo: archivo.name, contenido_base64: base64
+        }).then(function (r) {
+          if (!r || !r.ok) {
+            Componentes.aviso({ texto: (r && r.message) || 'No se pudo subir el documento.', tipo: 'error' });
+            btn.disabled = false; btn.textContent = textoOriginal;
+            return;
+          }
+          cerrar(); refrescarDetalle_();
+        }).catch(function () {
+          Componentes.aviso({ texto: 'No se pudo conectar con el servidor.', tipo: 'error' });
+          btn.disabled = false; btn.textContent = textoOriginal;
+        });
+      };
+      lector.readAsDataURL(archivo);
+    });
+  }
+
+  // Sube una nueva versión de un documento EXISTENTE.
+  function abrirFormularioNuevaVersionDocumento_(doc) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Nueva versión</h3>' +
+        '<p class="sigso-ayuda">' + Componentes.escaparHtml(doc.nombre) + ' — vigente hoy: ' + Componentes.escaparHtml(doc.version_vigente) + '</p>' +
+        '<form id="form-py-doc-version">' +
+          Componentes.campoTextarea({ id: 'py-docv-comentario', label: 'Qué cambió (opcional)' }) +
+          campoArchivoDocumentoHtml_('py-docv-archivo', 'py-docv-archivo-nombre') +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Subir versión', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    var campoArchivo = wireCampoArchivoDocumento_(fondo, 'py-docv-archivo', 'py-docv-archivo-nombre');
+    fondo.querySelector('#form-py-doc-version').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var btn = evento.currentTarget.querySelector('button[type="submit"]');
+      if (btn.disabled) return;
+      var archivo = campoArchivo.files[0];
+      if (!archivo) { Componentes.aviso({ texto: 'Elige un archivo.', tipo: 'error' }); return; }
+      var textoOriginal = btn.textContent;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="sigso-spinner"></span>Subiendo…';
+      var lector = new FileReader();
+      lector.onload = function () {
+        var base64 = lector.result.slice(lector.result.indexOf(',') + 1);
+        api_('subirVersionDocumentoProyecto', {
+          proyecto_id: proyectoActivoId_, documento_id: doc.documento_id,
+          comentario: document.getElementById('py-docv-comentario').value,
+          nombre_archivo: archivo.name, contenido_base64: base64
+        }).then(function (r) {
+          if (!r || !r.ok) {
+            Componentes.aviso({ texto: (r && r.message) || 'No se pudo subir la versión.', tipo: 'error' });
+            btn.disabled = false; btn.textContent = textoOriginal;
+            return;
+          }
+          cerrar(); refrescarDetalle_();
+        }).catch(function () {
+          Componentes.aviso({ texto: 'No se pudo conectar con el servidor.', tipo: 'error' });
+          btn.disabled = false; btn.textContent = textoOriginal;
+        });
+      };
+      lector.readAsDataURL(archivo);
+    });
+  }
+
+  // Edita METADATA (nombre/categoría/descripción/referencia) -- nunca el
+  // archivo, eso es "Nueva versión". Sin FileReader de por medio, reusa
+  // enviarModal_ igual que el resto de los formularios síncronos.
+  function abrirFormularioEditarDocumento_(doc, detalle, tareas) {
+    var opcionesRef = opcionesReferenciaDocumento_(detalle, tareas);
+    var valorRefActual = (doc.ref_tipo && doc.ref_id) ? (doc.ref_tipo + '::' + doc.ref_id) : '';
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Editar documento</h3>' +
+        '<form id="form-py-doc-editar">' +
+          Componentes.campoTexto({ id: 'py-de-nombre', label: 'Nombre', valor: doc.nombre, requerido: true }) +
+          Componentes.campoSelect({
+            id: 'py-de-categoria', label: 'Categoría', valor: doc.categoria, placeholder: false,
+            opciones: PROYECTO_DOC_CATEGORIAS_OPCIONES_
+          }) +
+          Componentes.campoTextarea({ id: 'py-de-descripcion', label: 'Descripción', valor: doc.descripcion }) +
+          (opcionesRef.length ? Componentes.campoSelect({ id: 'py-de-ref', label: 'Relacionado con (opcional)', opciones: opcionesRef, valor: valorRefActual, placeholder: 'Ninguna' }) : '') +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    fondo.querySelector('#form-py-doc-editar').addEventListener('submit', function (evento) {
+      var refEl = document.getElementById('py-de-ref');
+      var refPartes = (refEl && refEl.value) ? refEl.value.split('::') : ['', ''];
+      enviarModal_(evento, 'gestionarDocumentoProyecto', {
+        proyecto_id: proyectoActivoId_,
+        documento_id: doc.documento_id,
+        nombre: document.getElementById('py-de-nombre').value,
+        categoria: document.getElementById('py-de-categoria').value,
+        descripcion: document.getElementById('py-de-descripcion').value,
+        ref_tipo: refPartes[0], ref_id: refPartes[1]
+      }, function () { cerrar(); refrescarDetalle_(); });
+    });
+  }
+
+  // Historial completo de un documento -- pedido LAZY (solo al abrir "Ver
+  // historial"), igual criterio que la bitácora del Cronograma. "Marcar
+  // vigente" (rollback) solo se ofrece a quien gestiona el proyecto
+  // (líder/ADM) -- el backend lo exige igual, esto solo evita un viaje que
+  // sabemos de antemano que el servidor va a rechazar.
+  function abrirHistorialDocumento_(doc, puedeGestionarEstricto) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Historial: ' + Componentes.escaparHtml(doc.nombre) + '</h3>' +
+        '<div id="py-doc-hist-lista">' + Componentes.cargando('Cargando historial...') + '</div>' +
+        '<div class="sigso-modal__acciones">' +
+          Componentes.boton({ texto: 'Cerrar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+        '</div>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    function cargar() {
+      api_('listarVersionesDocumentoProyecto', { proyecto_id: proyectoActivoId_, documento_id: doc.documento_id }).then(function (r) {
+        var lista = fondo.querySelector('#py-doc-hist-lista');
+        if (!r || !r.ok) { lista.innerHTML = '<p class="sigso-ayuda">No se pudo cargar el historial.</p>'; return; }
+        var versiones = r.data || [];
+        lista.innerHTML = '<div class="sigso-py-lista">' + versiones.map(function (v) {
+          return '<div class="sigso-py-tarea' + (v.vigente ? ' sigso-py-tarea--mia' : '') + '">' +
+            '<div class="sigso-py-tarea__top">' +
+              '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(v.version) + '</span>' +
+              (v.vigente ? Componentes.badge('Vigente', 'ok') : '') +
+            '</div>' +
+            (v.comentario ? '<p>' + Componentes.escaparHtml(v.comentario) + '</p>' : '') +
+            '<div class="sigso-py-tarea__meta">' +
+              '<span>' + Componentes.escaparHtml(v.archivo_nombre) + '</span>' +
+              '<span>' + tamanoLegible_(v.tamano_bytes) + '</span>' +
+              '<span>' + Componentes.escaparHtml(v.subido_por) + ' · ' + fechaHora_(v.fecha) + '</span>' +
+            '</div>' +
+            '<div class="sigso-py-hito__acciones">' +
+              Componentes.boton({ texto: 'Descargar', variante: 'sutil', clase: 'js-py-doc-hist-descargar', idx: v.version_id }) +
+              (!v.vigente && puedeGestionarEstricto ? Componentes.boton({ texto: 'Marcar vigente', variante: 'sutil', clase: 'js-py-doc-hist-vigente', idx: v.version_id }) : '') +
+            '</div>' +
+          '</div>';
+        }).join('') + '</div>';
+
+        lista.querySelectorAll('.js-py-doc-hist-descargar').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var textoOriginal = btn.textContent;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="sigso-spinner"></span>Descargando…';
+            api_('descargarVersionDocumentoProyecto', { proyecto_id: proyectoActivoId_, version_id: btn.getAttribute('data-idx') }).then(function (rd) {
+              if (!rd || !rd.ok) { Componentes.aviso({ texto: (rd && rd.message) || 'No se pudo descargar.', tipo: 'error' }); return; }
+              descargarBase64Proyecto_(rd.data.contenido_base64, rd.data.nombre_archivo, rd.data.mime);
+            }).catch(function () {
+              Componentes.aviso({ texto: 'No se pudo conectar con el servidor.', tipo: 'error' });
+            }).finally(function () {
+              btn.disabled = false; btn.textContent = textoOriginal;
+            });
+          });
+        });
+        lista.querySelectorAll('.js-py-doc-hist-vigente').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            btn.disabled = true;
+            api_('marcarVersionVigenteProyecto', {
+              proyecto_id: proyectoActivoId_, documento_id: doc.documento_id, version_id: btn.getAttribute('data-idx')
+            }).then(function (rv) {
+              if (!rv || !rv.ok) {
+                Componentes.aviso({ texto: (rv && rv.message) || 'No se pudo cambiar la versión vigente.', tipo: 'error' });
+                btn.disabled = false;
+                return;
+              }
+              Componentes.aviso({ texto: 'Versión vigente actualizada.' });
+              cargar();
+              refrescarDetalle_();
+            });
+          });
+        });
+      });
+    }
+    cargar();
   }
 
   function abrirFormularioEditarRiesgo_(r, detalle) {

@@ -197,6 +197,14 @@ var BACKOFFICE_ACTIONS = {
   // carpeta Drive del proyecto.
   subirAdjuntoProyecto: handleSubirAdjuntoProyecto_,
   descargarAdjuntoProyecto: handleDescargarAdjuntoProyecto_,
+  // v13 (Fase 4, "centro documental"): repositorio versionado, distinto del
+  // adjunto suelto de la Sala (arriba).
+  gestionarDocumentoProyecto: handleGestionarDocumentoProyecto_,
+  subirVersionDocumentoProyecto: handleSubirVersionDocumentoProyecto_,
+  marcarVersionVigenteProyecto: handleMarcarVersionVigenteProyecto_,
+  listarVersionesDocumentoProyecto: handleListarVersionesDocumentoProyecto_,
+  descargarVersionDocumentoProyecto: handleDescargarVersionDocumentoProyecto_,
+  descargarDocumentoProyecto: handleDescargarDocumentoProyecto_,
   getDetalleProyecto: handleGetDetalleProyecto_,
   // v10 (auditoría G): detalle + tareas + sala en UN solo viaje (antes 3).
   getDetalleCompletoProyecto: handleGetDetalleCompletoProyecto_,
@@ -527,6 +535,12 @@ var MODULO_POR_ACCION = {
   marcarSalaVisitadaProyecto: ['proyectos', 'gerencia'],
   subirAdjuntoProyecto: 'proyectos',
   descargarAdjuntoProyecto: ['proyectos', 'gerencia'],
+  gestionarDocumentoProyecto: 'proyectos',
+  subirVersionDocumentoProyecto: 'proyectos',
+  marcarVersionVigenteProyecto: 'proyectos',
+  listarVersionesDocumentoProyecto: ['proyectos', 'gerencia'],
+  descargarVersionDocumentoProyecto: ['proyectos', 'gerencia'],
+  descargarDocumentoProyecto: ['proyectos', 'gerencia'],
   getDetalleProyecto: ['proyectos', 'gerencia'],
   getDetalleCompletoProyecto: ['proyectos', 'gerencia'],
   crearProyecto: 'proyectos',
@@ -1250,6 +1264,30 @@ function handleSubirAdjuntoProyecto_(data, contexto) {
 
 function handleDescargarAdjuntoProyecto_(data, contexto) {
   return responderResultado_(Proyectos.descargarAdjunto(data, contexto));
+}
+
+function handleGestionarDocumentoProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.gestionarDocumento(data, contexto));
+}
+
+function handleSubirVersionDocumentoProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.subirVersionDocumento(data, contexto));
+}
+
+function handleMarcarVersionVigenteProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.marcarVersionVigente(data, contexto));
+}
+
+function handleListarVersionesDocumentoProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.listarVersionesDocumento(data, contexto));
+}
+
+function handleDescargarVersionDocumentoProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.descargarVersionDocumento(data, contexto));
+}
+
+function handleDescargarDocumentoProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.descargarDocumento(data, contexto));
 }
 
 function handleGetDetalleProyecto_(data, contexto) {
