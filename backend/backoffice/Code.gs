@@ -205,6 +205,7 @@ var BACKOFFICE_ACTIONS = {
   gestionarIntegranteProyecto: handleGestionarIntegranteProyecto_,
   gestionarHitoProyecto: handleGestionarHitoProyecto_,
   crearTareaProyecto: handleCrearTareaProyecto_,
+  editarTareaProyecto: handleEditarTareaProyecto_,
   listarTareasProyecto: handleListarTareasProyecto_,
   // v10 (Fase E, "Carta de Dedicación"): bitácora de check-ins de todas las
   // tareas del proyecto, para la grilla día x tarea del Cronograma.
@@ -533,6 +534,7 @@ var MODULO_POR_ACCION = {
   gestionarIntegranteProyecto: 'proyectos',
   gestionarHitoProyecto: 'proyectos',
   crearTareaProyecto: 'proyectos',
+  editarTareaProyecto: 'proyectos',
   listarTareasProyecto: ['proyectos', 'gerencia'],
   listarBitacoraProyecto: ['proyectos', 'gerencia'],
   guardarRegistroDiaProyecto: 'proyectos',
@@ -1276,6 +1278,10 @@ function handleGestionarHitoProyecto_(data, contexto) {
 
 function handleCrearTareaProyecto_(data, contexto) {
   return responderResultado_(Proyectos.crearTarea(data, contexto));
+}
+
+function handleEditarTareaProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.editarTarea(data, contexto));
 }
 
 function handleListarTareasProyecto_(data, contexto) {

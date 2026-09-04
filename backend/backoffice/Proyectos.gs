@@ -723,6 +723,78 @@ var Proyectos = {
     return tarea;
   },
 
+  editarTarea: function (data, contexto) {
+    var proyecto = buscarProyecto_(data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!data.actividad_id) return errorValidacion_('actividad_id', 'Falta indicar la tarea.');
+    var actividad = leerFilasSeguro_(SHEETS.ACTIVIDADES).filter(function (a) {
+      return a.actividad_id === data.actividad_id && a.proyecto_id === proyecto.proyecto_id;
+    })[0];
+    if (!actividad) return errorValidacion_('actividad_id', 'Tarea no encontrada en este proyecto.');
+    var esGestor = puedeGestionarProyecto_(proyecto, contexto);
+    var esTrabajador = trabajaLaActividad_(actividad, contexto.email);
+    if (!esGestor && !esTrabajador) {
+      return { _forbidden: true, message: 'Solo el líder, un administrador, o quien trabaja la tarea pueden editarla.' };
+    }
+    if (data.hito_id) {
+      var hito = leerFilasSeguro_(SHEETS.PROYECTO_HITOS).filter(function (h) { return h.hito_id === data.hito_id; })[0];
+      if (!hito || hito.proyecto_id !== proyecto.proyecto_id) {
+        return errorValidacion_('hito_id', 'El hito no pertenece a este proyecto.');
+      }
+    }
+    if (data.depende_de) {
+      var dependencia = leerFilasSeguro_(SHEETS.ACTIVIDADES).filter(function (a) { return a.actividad_id === data.depende_de; })[0];
+      if (!dependencia || dependencia.proyecto_id !== proyecto.proyecto_id) {
+        return errorValidacion_('depende_de', 'La tarea de la que depende debe ser del mismo proyecto.');
+      }
+    }
+    if (data.tarea_padre_id) {
+      var padre = leerFilasSeguro_(SHEETS.ACTIVIDADES).filter(function (a) { return a.actividad_id === data.tarea_padre_id; })[0];
+      if (!padre || padre.proyecto_id !== proyecto.proyecto_id) {
+        return errorValidacion_('tarea_padre_id', 'La tarea padre debe ser del mismo proyecto.');
+      }
+      if (padre.tarea_padre_id) {
+        return errorValidacion_('tarea_padre_id', 'Esa tarea ya es una subtarea -- no se puede anidar un tercer nivel.');
+      }
+      if (data.tarea_padre_id === data.actividad_id) {
+        return errorValidacion_('tarea_padre_id', 'Una tarea no puede ser padre de sí misma.');
+      }
+    }
+    var cambios = {};
+    var camposPermitidos = ['titulo', 'descripcion', 'responsable_email', 'fecha_compromiso', 'prioridad', 'hito_id', 'depende_de', 'tarea_padre_id', 'meta_cantidad', 'meta_unidad'];
+    camposPermitidos.forEach(function (campo) {
+      if (data[campo] !== undefined) cambios[campo] = data[campo];
+    });
+    if (data.colaboradores_emails !== undefined) {
+      var miembros = {};
+      leerFilasSeguro_(SHEETS.PROYECTO_INTEGRANTES).forEach(function (i) {
+        if (i.proyecto_id === proyecto.proyecto_id && esVerdaderoProyecto_(i.activo)) {
+          miembros[normalizarEmailProyecto_(i.usuario_email)] = true;
+        }
+      });
+      var lista = data.colaboradores_emails;
+      if (typeof lista === 'string') { try { lista = JSON.parse(lista); } catch (e) { lista = []; } }
+      var responsable = normalizarEmailProyecto_(data.responsable_email || actividad.responsable_email);
+      cambios.colaboradores_emails = JSON.stringify(
+        (Array.isArray(lista) ? lista : []).filter(function (correo) {
+          return miembros[normalizarEmailProyecto_(correo)] && normalizarEmailProyecto_(correo) !== responsable;
+        })
+      );
+    }
+    if (data.responsable_email && data.responsable_email !== actividad.responsable_email) {
+      var integrantes = leerFilasSeguro_(SHEETS.PROYECTO_INTEGRANTES);
+      var nuevoResp = integrantes.filter(function (i) {
+        return i.proyecto_id === proyecto.proyecto_id && normalizarEmailProyecto_(i.usuario_email) === normalizarEmailProyecto_(data.responsable_email);
+      })[0];
+      if (nuevoResp) cambios.responsable_nombre = nuevoResp.usuario_nombre || '';
+    }
+    cambios.ultima_actualizacion = new Date().toISOString();
+    var actualizado = reescribirActividad_(actividad.actividad_id, cambios);
+    registrarEventoProyecto_(proyecto.proyecto_id, 'ACTUALIZACION', contexto,
+      'Tarea editada: ' + (cambios.titulo || actividad.titulo), 'ACTIVIDAD', actividad.actividad_id, '');
+    return actualizado;
+  },
+
   // Lectura de las tareas del proyecto -- bypassa el alcance por JEFATURAS
   // de Actividades.listar() a proposito (mismo criterio que
   // Gerencia.getPanelGerenciaActividades: una vista transversal usa su

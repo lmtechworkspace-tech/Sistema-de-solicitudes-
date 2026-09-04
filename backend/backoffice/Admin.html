@@ -1152,6 +1152,35 @@ button {
 .sigso-archivos-grupo:last-child { margin-bottom: 0; }
 .sigso-archivos-grupo__titulo { margin: 0 0 var(--esp-1); font-size: 0.9rem; color: var(--texto); font-weight: 600; }
 
+/* v13 (Fase 4, rediseño): pestaña Historial -- línea de tiempo vertical con
+   un riel continuo y un punto por evento (mismo lenguaje que .sigso-hitos,
+   pero para una lista de largo variable en vez de 5 pasos fijos). */
+.sigso-historial-linea {
+  list-style: none; margin: 0; padding: 0;
+  border-left: 2px solid var(--borde);
+  margin-left: 0.4rem;
+}
+.sigso-historial-evento {
+  position: relative;
+  padding: 0 0 var(--esp-3) var(--esp-3);
+}
+.sigso-historial-evento:last-child { padding-bottom: 0; }
+.sigso-historial-evento__punto {
+  position: absolute; left: -0.4rem; top: 0.3rem;
+  width: 0.65rem; height: 0.65rem; border-radius: 50%;
+  background: var(--primario); border: 2px solid var(--fondo, #fff);
+  box-shadow: 0 0 0 2px var(--borde);
+}
+.sigso-historial-evento__cab {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.4rem;
+}
+.sigso-historial-evento__item { font-weight: 600; font-size: 0.85rem; color: var(--texto); }
+.sigso-historial-evento__meta { margin: 0.2rem 0 0; font-size: 0.8rem; color: var(--texto-2); }
+.sigso-historial-evento__comentario {
+  margin: 0.35rem 0 0; padding: 0.4rem 0.6rem; font-size: 0.85rem;
+  background: var(--superficie-2); border-radius: 6px; color: var(--texto);
+}
+
 /* UI-3 (§3): linea de tiempo de hitos en Consultar Estado. */
 .sigso-hitos {
   display: flex;
@@ -1373,7 +1402,52 @@ button {
   border-radius: 6px;
 }
 .sigso-item-editar > summary { cursor: pointer; font-size: 0.9rem; font-weight: 600; }
+.sigso-item-editar > summary svg { vertical-align: -2px; }
 .sigso-item-editar[open] > summary { margin-bottom: 0.4rem; }
+/* Fase 4 ("flujo de corrección"): al abrirlo, el bloque deja de ser un
+   plegable discreto y se lee como un MODO de edición activo -- riel sólido,
+   fondo levísimo -- para que se note que estás cambiando datos enviados. */
+.sigso-item-editar[open] {
+  border-style: solid;
+  border-color: var(--primario, #1e3a5f);
+  border-left-width: 3px;
+  background: var(--primario-suave, rgba(30, 58, 95, 0.04));
+}
+.sigso-item-editar__cuerpo { padding-top: 0.25rem; }
+
+/* Fase de confirmación: resumen antes→después antes de persistir. */
+.sigso-editar-confirmar {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--primario, #1e3a5f);
+  border-radius: 6px;
+  background: var(--fondo, #fff);
+}
+.sigso-editar-confirmar__titulo {
+  margin: 0 0 0.15rem; font-weight: 700; font-size: 0.95rem;
+  color: var(--primario, #1e3a5f);
+}
+.sigso-editar-diff { margin: 0.5rem 0 0.75rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.sigso-editar-diff__campo {
+  display: grid;
+  grid-template-columns: 8rem 1fr auto 1fr;
+  align-items: baseline;
+  gap: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--borde, #e5ddd0);
+}
+.sigso-editar-diff__campo:last-child { border-bottom: none; padding-bottom: 0; }
+.sigso-editar-diff__l { font-weight: 600; color: var(--texto-2, #6b6357); }
+.sigso-editar-diff__antes {
+  color: #b3261e; text-decoration: line-through; text-decoration-color: rgba(179, 38, 30, 0.5);
+}
+.sigso-editar-diff__flecha { color: var(--texto-2, #6b6357); }
+.sigso-editar-diff__despues { color: #1a7f43; font-weight: 600; }
+@media (max-width: 560px) {
+  .sigso-editar-diff__campo { grid-template-columns: 1fr; gap: 0.15rem; }
+  .sigso-editar-diff__flecha { display: none; }
+}
 .sigso-adjuntos-item { margin-top: 0.75rem; }
 .sigso-adjuntos-item > p { margin: 0 0 0.4rem; }
 /* Fila de "adjunto actual" dentro del bloque de corrección, con su botón de
@@ -3774,6 +3848,13 @@ button {
   display: flex; align-items: center; justify-content: space-between; gap: var(--esp-3);
   margin-bottom: var(--esp-4); flex-wrap: wrap;
 }
+.sigso-py-cabecera__izq { display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap; }
+.sigso-py-am-tareas {
+  border: 1px solid var(--borde); border-radius: var(--radio); padding: var(--esp-3); margin: var(--esp-3) 0;
+  max-height: 260px; overflow-y: auto;
+}
+.sigso-py-am-tareas legend { font-weight: 600; font-size: var(--texto-sm); }
+.sigso-py-am-todas { border-bottom: 1px solid var(--borde); padding-bottom: var(--esp-2); margin-bottom: var(--esp-2); }
 
 .sigso-py-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); gap: var(--esp-3);
@@ -3908,7 +3989,12 @@ button {
 .sigso-py-tarea__top, .sigso-py-hito__top {
   display: flex; align-items: center; justify-content: space-between; gap: var(--esp-2); flex-wrap: wrap;
 }
-.sigso-py-tarea__titulo, .sigso-py-hito__nombre { font-weight: 600; color: var(--texto); }
+.sigso-py-tarea__titulo, .sigso-py-hito__nombre { font-weight: 600; color: var(--texto); flex: 1; }
+.sigso-btn--icono {
+  background: none; border: none; cursor: pointer; padding: var(--esp-1); border-radius: var(--radio);
+  color: var(--texto-3); display: inline-flex; align-items: center; flex-shrink: 0;
+}
+.sigso-btn--icono:hover { color: var(--primario); background: var(--fondo-hover, rgba(0,0,0,.06)); }
 .sigso-py-tarea__meta {
   margin-top: var(--esp-1); font-size: var(--texto-sm); color: var(--texto-3);
   display: flex; gap: var(--esp-4); flex-wrap: wrap;
@@ -7595,6 +7681,23 @@ var ACCIONES_REINTENTABLES = {
 };
 var MAX_INTENTOS_LECTURA = 3;
 
+// F1 (rediseño "Mis solicitudes", medicion de rendimiento): la auditoria F0
+// midio lecturas/filas del lado del servidor (sandbox), pero NO pudo medir
+// milisegundos reales de produccion -- eso necesita la sesion real del
+// usuario. En vez de inventar un numero, esto deja la medicion lista para
+// que el propio usuario la active cuando quiera: por defecto NO hace nada
+// (ni console.log ni red), asi que no cambia el comportamiento de nadie.
+//
+// Para activarla: en la consola del navegador, en produccion,
+//   localStorage.setItem('sigso_debug_timing', '1')
+// y usar el modulo con normalidad. Cada llamada imprime una linea con la
+// accion y los milisegundos reales que tardo esa vuelta (ida+vuelta a Apps
+// Script incluida). Para desactivar: localStorage.removeItem('sigso_debug_timing').
+function medicionTimingActiva_() {
+  try { return localStorage.getItem('sigso_debug_timing') === '1'; }
+  catch (err) { return false; }
+}
+
 // Techo de espera por intento. Sin esto, un Web App que se cuelga o que
 // quedo con un deploy roto deja el fetch PENDIENTE PARA SIEMPRE, y el modulo
 // gira sin fin sin avisar nada (el sintoma "no cargan los datos"). Apps
@@ -7675,12 +7778,23 @@ async function llamarApi(url, action, data) {
     data = Object.assign({}, data, { portal_token: tokenPortal });
   }
 
+  const medir = medicionTimingActiva_();
   const maxIntentos = ACCIONES_REINTENTABLES[action] ? MAX_INTENTOS_LECTURA : 1;
   let ultimoError;
   for (let intento = 1; intento <= maxIntentos; intento++) {
+    const inicio = medir ? performance.now() : 0;
     try {
-      return await ejecutarLlamada_(url, action, data);
+      const resultado = await ejecutarLlamada_(url, action, data);
+      if (medir) {
+        const ms = Math.round(performance.now() - inicio);
+        console.info('[SIGSO][timing] ' + action + ' ' + ms + 'ms' + (intento > 1 ? ' (intento ' + intento + ')' : ''));
+      }
+      return resultado;
     } catch (err) {
+      if (medir) {
+        const ms = Math.round(performance.now() - inicio);
+        console.info('[SIGSO][timing] ' + action + ' ' + ms + 'ms (fallo, intento ' + intento + ')');
+      }
       ultimoError = err;
       if (intento < maxIntentos) {
         await esperar_(300 * intento);

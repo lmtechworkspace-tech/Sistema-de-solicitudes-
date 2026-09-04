@@ -3181,6 +3181,13 @@
   display: flex; align-items: center; justify-content: space-between; gap: var(--esp-3);
   margin-bottom: var(--esp-4); flex-wrap: wrap;
 }
+.sigso-py-cabecera__izq { display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap; }
+.sigso-py-am-tareas {
+  border: 1px solid var(--borde); border-radius: var(--radio); padding: var(--esp-3); margin: var(--esp-3) 0;
+  max-height: 260px; overflow-y: auto;
+}
+.sigso-py-am-tareas legend { font-weight: 600; font-size: var(--texto-sm); }
+.sigso-py-am-todas { border-bottom: 1px solid var(--borde); padding-bottom: var(--esp-2); margin-bottom: var(--esp-2); }
 
 .sigso-py-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr)); gap: var(--esp-3);
@@ -3315,7 +3322,12 @@
 .sigso-py-tarea__top, .sigso-py-hito__top {
   display: flex; align-items: center; justify-content: space-between; gap: var(--esp-2); flex-wrap: wrap;
 }
-.sigso-py-tarea__titulo, .sigso-py-hito__nombre { font-weight: 600; color: var(--texto); }
+.sigso-py-tarea__titulo, .sigso-py-hito__nombre { font-weight: 600; color: var(--texto); flex: 1; }
+.sigso-btn--icono {
+  background: none; border: none; cursor: pointer; padding: var(--esp-1); border-radius: var(--radio);
+  color: var(--texto-3); display: inline-flex; align-items: center; flex-shrink: 0;
+}
+.sigso-btn--icono:hover { color: var(--primario); background: var(--fondo-hover, rgba(0,0,0,.06)); }
 .sigso-py-tarea__meta {
   margin-top: var(--esp-1); font-size: var(--texto-sm); color: var(--texto-3);
   display: flex; gap: var(--esp-4); flex-wrap: wrap;

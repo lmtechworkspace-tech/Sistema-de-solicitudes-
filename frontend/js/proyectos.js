@@ -1594,7 +1594,10 @@
         Componentes.boton({ texto: 'Tablero', variante: vistaTareas_ === 'tablero' ? undefined : 'sutil', clase: 'js-py-tareas-vista', idx: 'tablero' }) +
       '</div>';
     var acciones = '<div class="sigso-py-cabecera">' +
-      (puedeCrear ? Componentes.boton({ texto: '+ Nueva tarea', clase: 'js-py-nueva-tarea' }) : '<span></span>') +
+      '<div class="sigso-py-cabecera__izq">' +
+        (puedeCrear ? Componentes.boton({ texto: '+ Nueva tarea', clase: 'js-py-nueva-tarea' }) : '') +
+        (puedeGestionar ? Componentes.boton({ texto: 'Asignar en lote', variante: 'secundario', clase: 'js-py-asignacion-masiva' }) : '') +
+      '</div>' +
       toggle +
     '</div>';
 
@@ -1603,8 +1606,8 @@
     }
 
     return acciones + (vistaTareas_ === 'tablero'
-      ? pintarTareasTablero_(tareas, miEmail)
-      : pintarTareasLista_(tareas, miEmail));
+      ? pintarTareasTablero_(tareas, miEmail, puedeGestionar)
+      : pintarTareasLista_(tareas, miEmail, puedeGestionar));
   }
 
   // v11 (P2, "subtareas con rollup"): reordena para que cada subtarea
@@ -1649,14 +1652,16 @@
       Iconos.svg('enlace', { tam: 14 }) + ' Si se atrasa, afecta a ' + a.impacto_dependientes + ' tarea(s) más</div>';
   }
 
-  function pintarTareasLista_(tareas, miEmail) {
+  function pintarTareasLista_(tareas, miEmail, puedeGestionar) {
     var filas = ordenarConSubtareas_(tareas).map(function (a) {
       var esMia = !!miEmail && normalizarEmail_(a.responsable_email) === miEmail;
+      var puedeEditar = puedeGestionar || trabajoLaTarea_(a, miEmail);
       return '<div class="sigso-py-tarea' + (esMia ? ' sigso-py-tarea--mia' : '') + (a.es_subtarea ? ' sigso-py-tarea--subtarea' : '') + '">' +
         (a.es_subtarea ? '<div class="sigso-py-subtarea-de">↳ Subtarea de "' + Componentes.escaparHtml(a.padre_titulo || '') + '"</div>' : '') +
         '<div class="sigso-py-tarea__top">' +
           '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(a.titulo) + '</span>' +
           '<span class="sigso-badge sigso-mt-badge--' + a.semaforo + '">' + Componentes.escaparHtml(a.semaforo_etiqueta) + '</span>' +
+          (puedeEditar ? '<button type="button" class="sigso-btn--icono js-py-editar-tarea" data-idx="' + a.actividad_id + '" title="Editar tarea">' + Iconos.svg('editar', { tam: 16 }) + '</button>' : '') +
         '</div>' +
         '<div class="sigso-py-tarea__meta">' +
           '<span>' + (esMia ? '<b>Tú</b>' : Componentes.escaparHtml(a.responsable_nombre || a.responsable_email)) + '</span>' +
@@ -1668,8 +1673,6 @@
         '</div>' +
         rollupSubtareasHtml_(a) +
         (a.estado === 'BLOQUEADA' ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('pausado', { tam: 14 }) + ' ' + Componentes.escaparHtml(a.bloqueo_motivo) + '</div>' : '') +
-        // v9.4: dependencia comprometida -- bandera derivada (nunca mueve
-        // fechas ni bloquea, §I de la propuesta), solo avisa.
         (a.dependencia_comprometida
           ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('alerta', { tam: 14 }) + ' Depende de "' + Componentes.escaparHtml(a.dependencia_titulo) + '", que está atrasada.</div>'
           : '') +
@@ -1725,7 +1728,7 @@
     return null;
   }
 
-  function tarjetaKanban_(a, esMia) {
+  function tarjetaKanban_(a, esMia, puedeEditar) {
     var arrastrable = puedeArrastrarTarea_(a, esMia);
     return '<div class="sigso-kanban__tarjeta' + (esMia ? ' sigso-kanban__tarjeta--mia' : '') +
         (arrastrable ? ' sigso-kanban__tarjeta--arrastrable' : '') + '"' +
@@ -1734,6 +1737,7 @@
       '<div class="sigso-py-tarea__top">' +
         '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(a.titulo) + '</span>' +
         '<span class="sigso-badge sigso-mt-badge--' + a.semaforo + '">' + Componentes.escaparHtml(a.semaforo_etiqueta) + '</span>' +
+        (puedeEditar ? '<button type="button" class="sigso-btn--icono js-py-editar-tarea" data-idx="' + a.actividad_id + '" title="Editar tarea">' + Iconos.svg('editar', { tam: 16 }) + '</button>' : '') +
       '</div>' +
       (a.es_subtarea ? '<div class="sigso-py-subtarea-de">↳ ' + Componentes.escaparHtml(a.padre_titulo || '') + '</div>' : '') +
       '<div class="sigso-py-tarea__meta">' +
@@ -1751,7 +1755,7 @@
     '</div>';
   }
 
-  function pintarTareasTablero_(tareas, miEmail) {
+  function pintarTareasTablero_(tareas, miEmail, puedeGestionar) {
     var porColumna = { NO_INICIADA: [], EN_CURSO: [], BLOQUEADA: [], LISTA: [] };
     tareas.forEach(function (a) { porColumna[columnaDeEstado_(a.estado)].push(a); });
 
@@ -1759,7 +1763,8 @@
       var items = porColumna[c.id];
       var tarjetas = items.map(function (a) {
         var esMia = !!miEmail && normalizarEmail_(a.responsable_email) === miEmail;
-        return tarjetaKanban_(a, esMia);
+        var puedeEditar = puedeGestionar || trabajoLaTarea_(a, miEmail);
+        return tarjetaKanban_(a, esMia, puedeEditar);
       }).join('');
       // v10 (auditoría G, visual): acento de color por columna (mismo
       // semáforo del módulo) para que el tablero se lea de un vistazo.
@@ -3531,6 +3536,19 @@
     var nuevaTarea = cont.querySelector('.js-py-nueva-tarea');
     if (nuevaTarea) nuevaTarea.addEventListener('click', function () { abrirFormularioTarea_(detalle, tareas); });
 
+    cont.querySelectorAll('.js-py-editar-tarea').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var id = btn.getAttribute('data-idx');
+        var tarea = null;
+        for (var i = 0; i < tareas.length; i++) { if (tareas[i].actividad_id === id) { tarea = tareas[i]; break; } }
+        if (tarea) abrirFormularioEditarTarea_(tarea, detalle, tareas);
+      });
+    });
+
+    var btnAsignMasiva = cont.querySelector('.js-py-asignacion-masiva');
+    if (btnAsignMasiva) btnAsignMasiva.addEventListener('click', function () { abrirAsignacionMasiva_(detalle, tareas); });
+
     // v10 (Fase A, propuesta 01): check-in inline -- mismo endpoint y mismos
     // tipos que "Mi trabajo" (manejarCheckin_ en actividades.js); aca solo
     // cambia que al terminar se refresca el PROYECTO, no la lista de "Mi
@@ -3930,6 +3948,156 @@
         meta_cantidad: document.getElementById('py-t-meta-cantidad').value,
         meta_unidad: document.getElementById('py-t-meta-unidad').value
       }, function () { cerrar(); refrescarDetalle_(); });
+    });
+  }
+
+  function abrirFormularioEditarTarea_(tarea, detalle, tareas) {
+    var opcionesIntegrantes = (detalle.integrantes || []).map(function (i) {
+      return { valor: i.usuario_email, texto: i.usuario_nombre || i.usuario_email };
+    });
+    var opcionesHitos = (detalle.hitos || []).map(function (h) { return { valor: h.hito_id, texto: h.nombre }; });
+    var opcionesDependencia = (tareas || []).filter(function (a) { return a.actividad_id !== tarea.actividad_id; })
+      .map(function (a) { return { valor: a.actividad_id, texto: a.titulo }; });
+    var opcionesPadre = (tareas || []).filter(function (a) { return !a.es_subtarea && a.actividad_id !== tarea.actividad_id; })
+      .map(function (a) { return { valor: a.actividad_id, texto: a.titulo }; });
+    var colabActuales = (tarea.colaboradores || []).map(function (c) { return normalizarEmail_(c.email); });
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Editar tarea</h3>' +
+        '<form id="form-py-tarea-editar">' +
+          Componentes.campoTexto({ id: 'py-te-titulo', label: 'Título', valor: tarea.titulo, requerido: true }) +
+          Componentes.campoTextarea({ id: 'py-te-descripcion', label: 'Descripción', valor: tarea.descripcion }) +
+          Componentes.campoSelect({ id: 'py-te-responsable', label: 'Responsable', opciones: opcionesIntegrantes, valor: tarea.responsable_email, requerido: true }) +
+          (opcionesHitos.length ? Componentes.campoSelect({ id: 'py-te-hito', label: 'Hito (opcional)', opciones: opcionesHitos, valor: tarea.hito_id }) : '') +
+          (opcionesDependencia.length ? Componentes.campoSelect({ id: 'py-te-depende', label: 'Depende de (opcional)', opciones: opcionesDependencia, valor: tarea.depende_de }) : '') +
+          (opcionesPadre.length ? Componentes.campoSelect({ id: 'py-te-padre', label: 'Tarea padre (opcional)', opciones: opcionesPadre, valor: tarea.tarea_padre_id }) : '') +
+          '<div class="sigso-py-form-fila">' +
+            Componentes.campoTexto({ id: 'py-te-fecha', label: 'Fecha comprometida', tipo: 'date', valor: fechaISOCorta_(tarea.fecha_compromiso), requerido: true }) +
+            Componentes.campoSelect({
+              id: 'py-te-prioridad', label: 'Prioridad', valor: tarea.prioridad || 'P4', placeholder: false,
+              opciones: [{ valor: 'P1', texto: 'P1' }, { valor: 'P2', texto: 'P2' }, { valor: 'P3', texto: 'P3' }, { valor: 'P4', texto: 'P4' }, { valor: 'P5', texto: 'P5' }]
+            }) +
+          '</div>' +
+          (opcionesIntegrantes.length
+            ? '<details class="sigso-py-colab-opcional" open>' +
+                '<summary>Colaboradores</summary>' +
+                '<p class="sigso-ayuda">Además del responsable. También podrán hacer check-in y verán la tarea en "Mi trabajo".</p>' +
+                opcionesIntegrantes.map(function (o) {
+                  var marcado = colabActuales.indexOf(normalizarEmail_(o.valor)) !== -1;
+                  return '<label class="sigso-campo-check"><input type="checkbox" class="js-py-colab-edit" value="' +
+                    Componentes.escaparHtml(o.valor) + '"' + (marcado ? ' checked' : '') + '> ' + Componentes.escaparHtml(o.texto) + '</label>';
+                }).join('') +
+              '</details>'
+            : '') +
+          '<details class="sigso-py-meta-opcional"' + (tarea.meta_cantidad ? ' open' : '') + '>' +
+            '<summary>Meta cuantificable (opcional)</summary>' +
+            '<div class="sigso-py-form-fila">' +
+              Componentes.campoTexto({ id: 'py-te-meta-cantidad', label: 'Cantidad', tipo: 'number', valor: tarea.meta_cantidad, placeholder: 'Ej: 16' }) +
+              Componentes.campoTexto({ id: 'py-te-meta-unidad', label: 'Unidad', valor: tarea.meta_unidad, placeholder: 'Ej: imágenes' }) +
+            '</div>' +
+          '</details>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Guardar cambios', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('form-py-tarea-editar').addEventListener('submit', function (evento) {
+      var hitoEl = document.getElementById('py-te-hito');
+      var dependeEl = document.getElementById('py-te-depende');
+      var padreEl = document.getElementById('py-te-padre');
+      var responsable = document.getElementById('py-te-responsable').value;
+      var colaboradores = Array.from(fondo.querySelectorAll('.js-py-colab-edit:checked'))
+        .map(function (el) { return el.value; })
+        .filter(function (email) { return email !== responsable; });
+      enviarModal_(evento, 'editarTareaProyecto', {
+        proyecto_id: proyectoActivoId_,
+        actividad_id: tarea.actividad_id,
+        hito_id: hitoEl ? hitoEl.value : '',
+        depende_de: dependeEl ? dependeEl.value : '',
+        tarea_padre_id: padreEl ? padreEl.value : '',
+        titulo: document.getElementById('py-te-titulo').value,
+        descripcion: document.getElementById('py-te-descripcion').value,
+        colaboradores_emails: colaboradores,
+        responsable_email: responsable,
+        fecha_compromiso: document.getElementById('py-te-fecha').value,
+        prioridad: document.getElementById('py-te-prioridad').value,
+        meta_cantidad: document.getElementById('py-te-meta-cantidad').value,
+        meta_unidad: document.getElementById('py-te-meta-unidad').value
+      }, function () { cerrar(); refrescarDetalle_(); });
+    });
+  }
+
+  function abrirAsignacionMasiva_(detalle, tareas) {
+    var opcionesIntegrantes = (detalle.integrantes || []).map(function (i) {
+      return { valor: i.usuario_email, texto: i.usuario_nombre || i.usuario_email };
+    });
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal sigso-modal--ancho" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Asignación masiva</h3>' +
+        '<form id="form-py-asignacion-masiva">' +
+          '<p class="sigso-ayuda">Selecciona las tareas y elige cómo asignar al integrante.</p>' +
+          Componentes.campoSelect({ id: 'py-am-persona', label: 'Integrante a asignar', opciones: opcionesIntegrantes, requerido: true }) +
+          Componentes.campoSelect({
+            id: 'py-am-modo', label: '¿Cómo asignar?', placeholder: false, valor: 'colaborador',
+            opciones: [
+              { valor: 'colaborador', texto: 'Agregar como colaborador' },
+              { valor: 'responsable', texto: 'Cambiar responsable' }
+            ]
+          }) +
+          '<fieldset class="sigso-py-am-tareas">' +
+            '<legend>Tareas</legend>' +
+            '<label class="sigso-campo-check sigso-py-am-todas"><input type="checkbox" id="py-am-todas"> <b>Seleccionar todas</b></label>' +
+            tareas.map(function (a) {
+              return '<label class="sigso-campo-check"><input type="checkbox" class="js-py-am-tarea" value="' +
+                Componentes.escaparHtml(a.actividad_id) + '"> ' + Componentes.escaparHtml(a.titulo) + '</label>';
+            }).join('') +
+          '</fieldset>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Aplicar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    document.getElementById('py-am-todas').addEventListener('change', function () {
+      var marcado = this.checked;
+      fondo.querySelectorAll('.js-py-am-tarea').forEach(function (cb) { cb.checked = marcado; });
+    });
+    document.getElementById('form-py-asignacion-masiva').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var persona = document.getElementById('py-am-persona').value;
+      var modo = document.getElementById('py-am-modo').value;
+      var seleccionadas = Array.from(fondo.querySelectorAll('.js-py-am-tarea:checked')).map(function (cb) { return cb.value; });
+      if (!seleccionadas.length) { Componentes.toast('Selecciona al menos una tarea.', 'error'); return; }
+      var tareasMap = {};
+      tareas.forEach(function (a) { tareasMap[a.actividad_id] = a; });
+      var btnSubmit = fondo.querySelector('[type="submit"]');
+      if (btnSubmit) { btnSubmit.disabled = true; btnSubmit.textContent = 'Aplicando...'; }
+      var promesas = seleccionadas.map(function (actId) {
+        var t = tareasMap[actId];
+        if (!t) return Promise.resolve({ ok: true });
+        var payload = { proyecto_id: proyectoActivoId_, actividad_id: actId };
+        if (modo === 'responsable') {
+          payload.responsable_email = persona;
+        } else {
+          var colabExistentes = (t.colaboradores || []).map(function (c) { return c.email; });
+          if (colabExistentes.indexOf(persona) === -1) colabExistentes.push(persona);
+          payload.colaboradores_emails = colabExistentes;
+        }
+        return apiSeguro_('editarTareaProyecto', payload);
+      });
+      Promise.all(promesas).then(function (resultados) {
+        var errores = resultados.filter(function (r) { return !r || !r.ok; }).length;
+        cerrar();
+        Componentes.aviso({ texto: seleccionadas.length + ' tarea(s) actualizadas.' + (errores ? ' (' + errores + ' con error)' : ''), tipo: errores ? 'error' : 'ok' });
+        refrescarDetalle_();
+      });
     });
   }
 
