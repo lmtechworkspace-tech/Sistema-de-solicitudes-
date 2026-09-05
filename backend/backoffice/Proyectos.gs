@@ -2319,6 +2319,21 @@ var Proyectos = {
   // proyecto de Apps Script, mismo scope global, nada que importar). Quien
   // puede VER el proyecto puede exportarlo (es un reporte de solo lectura,
   // no una accion de gestion).
+  // R-01: el proyecto entero en una hoja de calculo, para seguir
+  // trabajando sobre el. Mismo gate de lectura que el PDF.
+  descargarLibro: function (data, contexto) {
+    var proyecto = buscarProyecto_(data && data.proyecto_id);
+    if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+    if (!puedeVerProyecto_(proyecto, contexto)) {
+      return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+    }
+    var detalle = Proyectos.getDetalle({ proyecto_id: proyecto.proyecto_id }, contexto);
+    var tareas = Proyectos.listarTareas({ proyecto_id: proyecto.proyecto_id }, contexto);
+    var bitacora = Proyectos.listarBitacora({ proyecto_id: proyecto.proyecto_id }, contexto);
+    var hojas = armarLibroProyecto_(detalle, tareas, bitacora);
+    return generarXlsxProyecto_(proyecto, hojas);
+  },
+
   descargarReporte: function (data, contexto) {
     var proyecto = buscarProyecto_(data && data.proyecto_id);
     if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
@@ -2358,6 +2373,169 @@ var Proyectos = {
     };
   }
 };
+
+// --- R-01: el proyecto como hoja de calculo -------------------------------
+
+// Fecha corta y estable para una celda. No se reusa fechaCortaPdfProyecto_
+// porque aquella devuelve un guion largo cuando no hay fecha: en una columna
+// de fechas de Excel eso rompe el orden y el filtro. Aqui vacio es vacio. Se escribe como TEXTO y no como
+// Date a proposito: el destino es un archivo que se abre en Excel en otra
+// zona horaria, y una fecha "viva" se corre un dia. Aqui interesa que diga
+// lo mismo que la pantalla.
+function fechaLibro_(valor) {
+  if (!valor) return '';
+  var d = new Date(valor);
+  if (isNaN(d.getTime())) return String(valor);
+  return Utilities.formatDate(d, 'America/Santiago', 'dd-MM-yyyy');
+}
+
+function siNo_(v) { return v ? 'Sí' : 'No'; }
+
+/**
+ * Arma las hojas del libro. PURA: no toca Drive, ni la red, ni el reloj mas
+ * alla de formatear. Devuelve [{ nombre, filas }] con la primera fila de
+ * cada hoja como encabezado.
+ *
+ * Es la parte donde puede haber errores de verdad (una columna que cambio de
+ * nombre, un dato mal mapeado), asi que es la que se prueba.
+ */
+function armarLibroProyecto_(detalle, tareas, bitacora) {
+  var p = (detalle && detalle.proyecto) || {};
+  var hojas = [];
+
+  // Resumen: clave/valor, que es como se lee una ficha -- no una tabla de
+  // una sola fila con veinte columnas que obliga a barrer de lado.
+  hojas.push({ nombre: 'Resumen', filas: [
+    ['Campo', 'Valor'],
+    ['Proyecto', p.nombre || ''],
+    ['Código', p.codigo || ''],
+    ['Estado', p.estado || ''],
+    ['Líder', p.lider_email || ''],
+    ['Inicio', fechaLibro_(p.fecha_inicio)],
+    ['Fecha objetivo', fechaLibro_(p.fecha_objetivo)],
+    ['Avance real (%)', detalle.avance_pct === null || detalle.avance_pct === undefined ? '' : detalle.avance_pct],
+    ['Avance esperado (%)', detalle.avance_esperado_pct === null || detalle.avance_esperado_pct === undefined ? '' : detalle.avance_esperado_pct],
+    ['Salud', detalle.salud_etiqueta || ''],
+    // La MISMA cifra que muestra la pantalla desde P-02: puntos en contra,
+    // no una nota sobre 100 que contradiga a la etiqueta.
+    ['Puntos en contra', detalle.salud_penalizacion === null || detalle.salud_penalizacion === undefined ? '' : detalle.salud_penalizacion],
+    ['Motivos', (detalle.salud_motivos || []).join(' · ')],
+    ['Integrantes', (detalle.integrantes || []).length],
+    ['Emitido', Utilities.formatDate(new Date(), 'America/Santiago', 'dd-MM-yyyy HH:mm')]
+  ] });
+
+  var hitosPorId = {};
+  (detalle.hitos || []).forEach(function (h) { hitosPorId[h.hito_id] = h.nombre; });
+  var tituloPorTarea = {};
+  (tareas || []).forEach(function (t) { tituloPorTarea[t.actividad_id] = t.titulo; });
+
+  hojas.push({ nombre: 'Tareas', filas: [[
+    'Título', 'Estado', 'Semáforo', 'Responsable', 'Prioridad', 'Tamaño',
+    'Hito', 'Depende de', 'Ruta crítica', 'Holgura (días)',
+    'Creada', 'Compromiso', 'Terminada', 'Avance (%)', 'Reprogramaciones'
+  ]].concat((tareas || []).map(function (t) {
+    return [
+      t.titulo || '', t.estado || '', t.semaforo_etiqueta || t.semaforo || '',
+      t.responsable_nombre || t.responsable_email || '', t.prioridad || '', t.tamano || '',
+      hitosPorId[t.hito_id] || '',
+      // El titulo, no el id: un id no le dice nada a quien abre el archivo.
+      tituloPorTarea[t.depende_de] || '',
+      siNo_(t.es_critica),
+      (t.holgura_dias === null || t.holgura_dias === undefined) ? '' : t.holgura_dias,
+      fechaLibro_(t.fecha_creacion), fechaLibro_(t.fecha_compromiso), fechaLibro_(t.fecha_terminada),
+      (t.avance_pct === null || t.avance_pct === undefined || t.avance_pct === '') ? '' : Number(t.avance_pct),
+      t.reprogramaciones || 0
+    ];
+  })) });
+
+  hojas.push({ nombre: 'Hitos', filas: [[
+    'Hito', 'Estado', 'Fecha objetivo', 'Tareas', 'Avance (%)', 'Descripción'
+  ]].concat((detalle.hitos || []).map(function (h) {
+    return [h.nombre || '', h.estado || '', fechaLibro_(h.fecha_objetivo),
+      h.total_tareas || 0,
+      (h.avance_pct === null || h.avance_pct === undefined) ? '' : h.avance_pct,
+      h.descripcion || ''];
+  })) });
+
+  hojas.push({ nombre: 'Riesgos', filas: [[
+    'Descripción', 'Probabilidad', 'Impacto', 'Nivel', 'Estado', 'Responsable', 'Mitigación'
+  ]].concat((detalle.riesgos || []).map(function (r) {
+    return [r.descripcion || '', r.probabilidad || '', r.impacto || '', r.nivel || '',
+      r.estado || '', r.responsable_email || '', r.mitigacion || ''];
+  })) });
+
+  hojas.push({ nombre: 'Entregables', filas: [[
+    'Entregable', 'Estado', 'Fecha comprometida', 'Responsable'
+  ]].concat((detalle.entregables || []).map(function (e) {
+    return [e.nombre || '', e.estado || '', fechaLibro_(e.fecha_comprometida), e.responsable_email || ''];
+  })) });
+
+  hojas.push({ nombre: 'Equipo', filas: [[
+    'Nombre', 'Correo', 'Rol', 'Responsabilidad'
+  ]].concat((detalle.integrantes || []).map(function (i) {
+    return [i.usuario_nombre || '', i.usuario_email || '', i.rol_proyecto || '', i.responsabilidad || ''];
+  })) });
+
+  hojas.push({ nombre: 'Bitácora', filas: [[
+    'Fecha', 'Tarea', 'Tipo', 'Estado del día', 'Horas', 'Detalle', 'Autor'
+  ]].concat((bitacora || []).map(function (b) {
+    return [fechaLibro_(b.dia || b.timestamp), tituloPorTarea[b.actividad_id] || '',
+      b.tipo || '', b.estado_dia || '',
+      (b.horas === null || b.horas === undefined || b.horas === '') ? '' : Number(b.horas),
+      b.detalle || b.nota || '', b.autor_nombre || b.autor_email || ''];
+  })) });
+
+  return hojas;
+}
+
+/**
+ * Convierte las hojas armadas en un .xlsx real.
+ *
+ * Crea una hoja de calculo temporal, la exporta con el exportador de Google
+ * y la BORRA SIEMPRE. El try/finally no es decorativo: sin el, cada error a
+ * mitad de camino dejaria un archivo huerfano en el Drive de quien descarga.
+ */
+function generarXlsxProyecto_(proyecto, hojas) {
+  var libro = SpreadsheetApp.create('SIGSO temporal - ' + (proyecto.nombre || proyecto.proyecto_id));
+  var id = libro.getId();
+  try {
+    hojas.forEach(function (h, i) {
+      // La primera reusa la hoja que viene por defecto; el resto se crean.
+      var hoja = (i === 0) ? libro.getSheets()[0] : libro.insertSheet();
+      hoja.setName(h.nombre);
+      if (h.filas.length) {
+        // Una sola escritura por hoja: setValues por lote, no celda a celda.
+        var ancho = h.filas[0].length;
+        var normalizadas = h.filas.map(function (f) {
+          var fila = f.slice(0, ancho);
+          while (fila.length < ancho) fila.push('');
+          return fila;
+        });
+        hoja.getRange(1, 1, normalizadas.length, ancho).setValues(normalizadas);
+        hoja.getRange(1, 1, 1, ancho).setFontWeight('bold');
+        hoja.setFrozenRows(1);
+      }
+    });
+    SpreadsheetApp.flush();
+
+    var url = 'https://docs.google.com/spreadsheets/d/' + id + '/export?format=xlsx';
+    var resp = UrlFetchApp.fetch(url, {
+      headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+      muteHttpExceptions: true
+    });
+    if (resp.getResponseCode() !== 200) {
+      return { _validationError: true, message: 'No se pudo generar el archivo de Excel (' + resp.getResponseCode() + ').',
+        fields: [{ campo: 'proyecto_id', mensaje: 'Reintenta en unos segundos.' }] };
+    }
+    return {
+      xlsx_base64: Utilities.base64Encode(resp.getBlob().getBytes()),
+      filename: (proyecto.nombre || 'Proyecto') + '.xlsx'
+    };
+  } finally {
+    // SIEMPRE. Si algo falla arriba, el temporal no puede quedarse.
+    try { DriveApp.getFileById(id).setTrashed(true); } catch (e) { /* ya no existe */ }
+  }
+}
 
 // --- reporte PDF: construccion del HTML (Fase D, propuesta 11) -----------
 

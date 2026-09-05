@@ -87,6 +87,33 @@ function createUtilitiesMock() {
       while (bytes.length < 16) bytes.push(acc & 0xff);
       return bytes.slice(0, 16);
     },
+    // Utilities.formatDate(fecha, zonaHoraria, patron).
+    //
+    // Se implementa con Intl para que la ZONA HORARIA se respete de verdad:
+    // el backend formatea en America/Santiago y la maquina que corre los
+    // tests puede estar en cualquier otra. Un mock que ignorara la zona
+    // daria fechas corridas un dia y los tests lo aprobarian.
+    //
+    // Cubre los patrones que el proyecto usa (dd, MM, yyyy, HH, mm, ss); no
+    // pretende ser el formateador completo de Java.
+    formatDate(fecha, zona, patron) {
+      const d = (fecha instanceof Date) ? fecha : new Date(fecha);
+      if (isNaN(d.getTime())) throw new Error("formatDate: fecha invalida");
+      const partes = new Intl.DateTimeFormat("en-CA", {
+        timeZone: zona || "UTC", hour12: false,
+        year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", second: "2-digit"
+      }).formatToParts(d).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+      // La hora 24 que devuelve hour12:false en algunos entornos es medianoche.
+      const hh = partes.hour === "24" ? "00" : partes.hour;
+      return String(patron)
+        .replace(/yyyy/g, partes.year)
+        .replace(/MM/g, partes.month)
+        .replace(/dd/g, partes.day)
+        .replace(/HH/g, hh)
+        .replace(/mm/g, partes.minute)
+        .replace(/ss/g, partes.second);
+    },
     base64Decode(texto) {
       // Fiel al Apps Script real: Utilities.base64Decode devuelve Byte[] CON
       // SIGNO (-128..127), no 0..255. Replicarlo aqui es lo que hace que el

@@ -17747,6 +17747,8 @@ var Iconos = (function () {
     // cualquiera que vea el proyecto puede exportarlo, no solo quien puede
     // gestionarlo.
     var descargarPdf = Componentes.boton({ texto: 'Descargar PDF', variante: 'secundario', clase: 'js-py-descargar-pdf' });
+    // R-01: el PDF es para leer; el Excel es para seguir trabajando encima.
+    var descargarXlsx = Componentes.boton({ texto: 'Descargar Excel', variante: 'secundario', clase: 'js-py-descargar-xlsx' });
     // v11 ("PDF ejecutivo configurable"): un informe a medida -- secciones,
     // rango, personas, estado. "Descargar PDF" (arriba) sigue siendo el
     // camino de un clic, sin tocar nada.
@@ -17759,7 +17761,7 @@ var Iconos = (function () {
           // ESTE proyecto como plantilla, para arrancar los proximos
           // proyectos parecidos desde ahi.
           Componentes.boton({ texto: 'Guardar como plantilla', variante: 'secundario', clase: 'js-py-guardar-plantilla' }) +
-          descargarPdf + configurarInforme +
+          descargarPdf + descargarXlsx + configurarInforme +
           (p.estado !== 'CERRADO' && p.estado !== 'CANCELADO'
             ? Componentes.boton({ texto: 'Cerrar proyecto', variante: 'peligro', clase: 'js-py-cerrar' }) : '') +
         '</div>'
@@ -20735,6 +20737,27 @@ var Iconos = (function () {
     // (detalle.js) -- pide el PDF en base64, lo pasa a Blob y dispara la
     // descarga. Sin ese paso no hay forma de bajar un binario que llega por
     // fetch/google.script.run como texto.
+    var descargarXlsx = cont.querySelector('.js-py-descargar-xlsx');
+    if (descargarXlsx) {
+      descargarXlsx.addEventListener('click', function () {
+        var txt = descargarXlsx.textContent;
+        descargarXlsx.disabled = true;
+        descargarXlsx.innerHTML = '<span class="sigso-spinner"></span>Generando…';
+        api_('descargarLibroProyecto', { proyecto_id: detalle.proyecto.proyecto_id }).then(function (r) {
+          if (!r || !r.ok) {
+            Componentes.aviso({ texto: (r && r.message) || 'No se pudo generar el archivo.', tipo: 'error' });
+            return;
+          }
+          descargarBase64Proyecto_(r.data.xlsx_base64, r.data.filename || 'Proyecto.xlsx',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        }).catch(function () {
+          Componentes.aviso({ texto: 'No se pudo conectar con el servidor.', tipo: 'error' });
+        }).finally(function () {
+          descargarXlsx.disabled = false;
+          descargarXlsx.textContent = txt;
+        });
+      });
+    }
     var descargarPdf = cont.querySelector('.js-py-descargar-pdf');
     if (descargarPdf) {
       descargarPdf.addEventListener('click', function () {

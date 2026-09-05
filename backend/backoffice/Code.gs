@@ -190,6 +190,7 @@ var BACKOFFICE_ACTIONS = {
   // v10 (Fase D, "reporte PDF del proyecto"): mismo circulo que puede VER
   // el proyecto (es un export de solo lectura, no una accion de gestion).
   descargarReporteProyecto: handleDescargarReporteProyecto_,
+  descargarLibroProyecto: handleDescargarLibroProyecto_,
   // v10 (Fase D, "resumen diario"): marca "vi la Sala" a ahora -- el
   // frontend la llama al abrir la pestaña Sala de un proyecto.
   marcarSalaVisitadaProyecto: handleMarcarSalaVisitadaProyecto_,
@@ -540,6 +541,7 @@ var MODULO_POR_ACCION = {
   guardarProyectoComoPlantilla: 'proyectos',
   listarPlantillasProyecto: 'proyectos',
   descargarReporteProyecto: ['proyectos', 'gerencia'],
+  descargarLibroProyecto: ['proyectos', 'gerencia'],
   marcarSalaVisitadaProyecto: ['proyectos', 'gerencia'],
   subirAdjuntoProyecto: 'proyectos',
   descargarAdjuntoProyecto: ['proyectos', 'gerencia'],
@@ -1267,6 +1269,11 @@ function handleListarPlantillasProyecto_(data, contexto) {
 // "data.ok" que envolver distinto.
 function handleDescargarReporteProyecto_(data, contexto) {
   return responderResultado_(Proyectos.descargarReporte(data, contexto));
+}
+
+// R-01: el mismo proyecto, pero como hoja de calculo.
+function handleDescargarLibroProyecto_(data, contexto) {
+  return responderResultado_(Proyectos.descargarLibro(data, contexto));
 }
 
 function handleMarcarSalaVisitadaProyecto_(data, contexto) {
