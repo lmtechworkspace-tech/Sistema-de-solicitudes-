@@ -12,7 +12,7 @@ window.SIGSO_CONFIG = Object.freeze({
   // lo avisa al Admin, que es quien puede resolverlo.
   // Debe coincidir con VERSION_SIGSO de los tres proyectos Apps Script; hay un
   // test que falla si divergen.
-  VERSION: '2026-08-23',
+  VERSION: '2026-09-05',
   INTAKE_URL: 'https://script.google.com/macros/s/AKfycbypI38IfuisU2DFMnvM9_knsbqgm8T-9rnkUUr5MbLlc5_J7BZuXhy8mZC-GtVHzEV9aA/exec',
   BACKOFFICE_URL: 'https://script.google.com/macros/s/AKfycbzoC2IsvrwPIElUeTgIxmNxLcNsEH3SXU8TrKLM-sFntZjd8ratSv8w_1-zGo1MmdCcFg/exec',
   // '' porque este archivo se sirve desde el sitio publico (GitHub Pages):
