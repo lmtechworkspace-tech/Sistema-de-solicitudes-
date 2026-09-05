@@ -512,6 +512,80 @@ var Notificaciones = {
     return resultados;
   },
 
+  // R-02: el estado del portafolio, cada semana, sin que nadie lo pida.
+  //
+  // Cuelga del pase diario (no hay slot de trigger libre) con compuerta
+  // semanal en Script Properties. Si no paso una semana sale enseguida:
+  // el pase comparte cinco minutos entre once avisos y este no puede
+  // quedarse con el tiempo de los demas.
+  //
+  // Va a Gerencia y ADM con el portafolio COMPLETO, y a cada lider con
+  // SUS proyectos. Un lider no necesita el portafolio entero y Gerencia no
+  // necesita doce correos: cada quien recibe el recorte que puede accionar.
+  enviarReporteSemanalProyectos: function (opciones) {
+    var CLAVE = 'SIGSO_PROY_REPORTE_SEMANAL';
+    var propiedades = PropertiesService.getScriptProperties();
+    var ahora = new Date();
+    var forzar = !!(opciones && opciones.forzar);
+    if (!forzar) {
+      var ultima = propiedades.getProperty(CLAVE);
+      if (ultima) {
+        var dias = (ahora.getTime() - new Date(ultima).getTime()) / 86400000;
+        if (dias < 7) return { omitido: true, dias_desde_ultimo: Math.round(dias * 10) / 10 };
+      }
+    }
+
+    // Portafolio completo, con la mirada de un ADM: la funcion de siempre,
+    // no una consulta paralela que pueda divergir de lo que muestra la
+    // pantalla.
+    var todos = Proyectos.listar({}, { rol: 'ADM', email: '' });
+    var activos = todos.filter(function (p) {
+      return p.estado !== 'CERRADO' && p.estado !== 'CANCELADO';
+    });
+    if (!activos.length) {
+      propiedades.setProperty(CLAVE, ahora.toISOString());
+      return { enviados: 0, motivo: 'sin proyectos activos' };
+    }
+
+    var claveEvento = 'REPORTE_SEMANAL_PROYECTOS:' + claveDia_(ahora, 'America/Santiago');
+    var resultados = [];
+
+    // A Gerencia y ADM: todo.
+    var gerencia = leerFilasSeguro_(SHEETS.USUARIOS).filter(function (u) {
+      var activo = u.activo === true || u.activo === 'TRUE' || u.activo === 1;
+      return activo && (u.rol === 'GERENCIA' || u.rol === 'ADM');
+    }).map(function (u) { return u.email; });
+
+    var cuerpoGerencia = formatearReporteSemanalProyectos_(activos, 'todo el portafolio');
+    gerencia.forEach(function (email) {
+      resultados.push(enviarCorreo_('REPORTE:PROYECTOS', email, claveEvento,
+        'SIGSO - Proyectos: estado semanal del portafolio', cuerpoGerencia,
+        VENTANA_DEDUP_SLA_VENCIDO_MINUTOS));
+    });
+
+    // A cada lider: solo lo suyo. Se agrupa por lider para mandar UN correo
+    // por persona, no uno por proyecto.
+    var porLider = {};
+    activos.forEach(function (p) {
+      var lider = normalizarEmailProyecto_(p.lider_email);
+      if (!lider) return;
+      // Quien ya lo recibe como Gerencia/ADM no necesita un segundo correo.
+      if (gerencia.map(normalizarEmailProyecto_).indexOf(lider) !== -1) return;
+      (porLider[lider] = porLider[lider] || []).push(p);
+    });
+    Object.keys(porLider).forEach(function (email) {
+      var cuerpo = formatearReporteSemanalProyectos_(porLider[email], 'los proyectos que lideras');
+      resultados.push(enviarCorreo_('REPORTE:PROYECTOS', email, claveEvento,
+        'SIGSO - Tus proyectos: estado semanal', cuerpo,
+        VENTANA_DEDUP_SLA_VENCIDO_MINUTOS));
+    });
+
+    // La marca se pone al FINAL: si algo revienta a mitad, la semana
+    // siguiente se reintenta en vez de darse por enviada.
+    propiedades.setProperty(CLAVE, ahora.toISOString());
+    return { enviados: resultados.length, proyectos: activos.length, lideres: Object.keys(porLider).length };
+  },
+
   alertarAdminFalloDocumento: function (solicitud, ref) {
     var destinatarios = obtenerEmailsPorRol_(solicitud.empresa_id, ['ADM']);
     return destinatarios.map(function (email) {
@@ -749,6 +823,54 @@ function registrarNotificacion_(solicitudId, canal, destinatario, evento, result
 // cuando se pasa en filtros); el "solicitud_id" del log es un tag, no un FK
 // real (LOG_NOTIFICACIONES no fuerza esa relacion). La ventana de dedup
 // evita reenvios si el trigger corre dos veces el mismo dia.
+// El cuerpo del reporte semanal de proyectos. Texto plano: llega a un
+// correo que se lee muchas veces desde el telefono, y una tabla HTML ahi
+// se rompe mas de lo que ayuda.
+//
+// El orden NO es alfabetico: primero lo que esta peor. Un reporte que
+// obliga a buscar el problema entre doce lineas iguales no se lee.
+function formatearReporteSemanalProyectos_(proyectos, alcance) {
+  var ORDEN = { critico: 0, riesgo: 1, normal: 2 };
+  var lista = proyectos.slice().sort(function (a, b) {
+    var d = (ORDEN[a.salud] === undefined ? 3 : ORDEN[a.salud]) - (ORDEN[b.salud] === undefined ? 3 : ORDEN[b.salud]);
+    if (d !== 0) return d;
+    return (b.salud_penalizacion || 0) - (a.salud_penalizacion || 0);
+  });
+
+  var criticos = lista.filter(function (p) { return p.salud === 'critico'; }).length;
+  var enRiesgo = lista.filter(function (p) { return p.salud === 'riesgo'; }).length;
+
+  var lineas = [];
+  lineas.push('Estado de ' + alcance + ' al ' +
+    Utilities.formatDate(new Date(), 'America/Santiago', 'dd-MM-yyyy') + '.');
+  lineas.push('');
+  lineas.push(lista.length + ' proyecto(s) activo(s): ' + criticos + ' critico(s), ' +
+    enRiesgo + ' en riesgo, ' + (lista.length - criticos - enRiesgo) + ' normal(es).');
+  lineas.push('');
+
+  lista.forEach(function (p) {
+    var etiqueta = (p.salud_etiqueta || p.salud || '').toUpperCase();
+    // La MISMA cifra que la pantalla desde P-02: puntos en contra.
+    var pts = p.salud_penalizacion ? ' (' + p.salud_penalizacion + ' pts en contra)' : '';
+    lineas.push('[' + etiqueta + pts + '] ' + p.nombre);
+    var detalle = [];
+    if (p.avance_pct !== null && p.avance_pct !== undefined) detalle.push('avance ' + p.avance_pct + '%');
+    if (p.fecha_objetivo) detalle.push('objetivo ' + fechaCortaPdfProyecto_(p.fecha_objetivo));
+    if (p.lider_email) detalle.push('lider ' + p.lider_email);
+    if (detalle.length) lineas.push('   ' + detalle.join(' · '));
+    // Los motivos son lo unico accionable de todo el correo: el resto es
+    // contexto. Van completos, sin recortar.
+    if (p.salud_motivos && p.salud_motivos.length) {
+      lineas.push('   Motivo: ' + p.salud_motivos.join(' · '));
+    }
+    lineas.push('');
+  });
+
+  lineas.push('Para el detalle de un proyecto (Gantt, desviaciones, bitacora)' +
+    ' entra a SIGSO > Proyectos y descarga su informe en PDF o Excel.');
+  return lineas.join('\n');
+}
+
 function enviarReporteProgramado_(evento, roles, formatearCuerpo) {
   var empresas = {};
   leerFilas_(SHEETS.USUARIOS).forEach(function (u) { empresas[u.empresa_id] = true; });

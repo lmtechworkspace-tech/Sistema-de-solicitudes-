@@ -311,7 +311,11 @@ var AVISOS_DEL_PASE_DIARIO = [
   ['avisos_objetivos', enviarAvisosObjetivosTrigger],
   // v10 (Fase D): el limite de 20 triggers de tiempo ya estaba copado --
   // se cuelga aca como el resto en vez de pedir un slot nuevo.
-  ['resumen_diario_proyectos', enviarResumenDiarioProyectosTrigger]
+  ['resumen_diario_proyectos', enviarResumenDiarioProyectosTrigger],
+  // R-02: se cuelga aca por lo mismo que el de arriba -- no hay slot de
+  // trigger libre. Trae su propia compuerta semanal, asi que seis de cada
+  // siete dias sale enseguida sin gastar presupuesto del pase.
+  ['reporte_semanal_proyectos', enviarReporteSemanalProyectosTrigger]
 ];
 
 function recordarValidacionPendienteTrigger() {
@@ -431,6 +435,13 @@ function enviarRecordatorioCalidadTrigger() {
 // anteriores, mismo motivo.
 function enviarResumenDiarioProyectosTrigger() {
   return Notificaciones.enviarResumenDiarioProyectos();
+}
+
+// R-02: el estado del portafolio, semanal. Nombrada como el resto para
+// poder forzarla a mano desde el editor -- ahi conviene pasarle
+// { forzar: true } para saltarse la compuerta de los siete dias.
+function enviarReporteSemanalProyectosTrigger(opciones) {
+  return Notificaciones.enviarReporteSemanalProyectos(opciones);
 }
 
 // v10.0 Fase 2b: ver Personas.recordatorioCompetencias(). Nombrada igual
