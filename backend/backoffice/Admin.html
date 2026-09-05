@@ -4131,6 +4131,19 @@ button {
    + fecha comprometida). El título trunca; la meta es más chica y tenue. */
 .sigso-py-gantt-etiqueta__titulo { display: flex; align-items: center; gap: 0.3rem; font-weight: 600; min-width: 0; }
 .sigso-py-gantt-etiqueta__titulo > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* El boton de reprogramar del Gantt (alternativa por teclado al arrastre).
+   flex-shrink:0 es lo que impide que un titulo largo lo comprima hasta
+   desaparecer: el titulo YA se recorta con puntos suspensivos, asi que el
+   espacio lo cede el, no el boton. */
+.sigso-py-gantt-reprog {
+  flex: 0 0 auto; margin-left: auto;
+  /* 24x24 es el minimo recomendado para un objetivo tactil. El icono hereda
+     su tamaño de .sigso-py-ded-reprogramar (0.8rem) y quedaba en 22x13: se
+     puede apuntar con un mouse, no con un dedo. Se agranda el AREA, no el
+     icono, para no alterar la densidad visual de la fila. */
+  min-width: 24px; min-height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
 .sigso-py-gantt-etiqueta__meta {
   display: flex; align-items: center; gap: 0.3rem; font-size: var(--texto-xs); color: var(--texto-3);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

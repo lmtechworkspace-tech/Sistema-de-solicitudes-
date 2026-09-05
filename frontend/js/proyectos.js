@@ -391,6 +391,17 @@
   // proyecto estaba crítico) y "última novedad hace N días" -- de un vistazo,
   // sin entrar al proyecto.
   var MAX_AVATARES_TARJETA = 4;
+
+  // El texto que un lector de pantalla anuncia en lugar de los avatares.
+  // Se nombran TODOS, no solo los cuatro que caben: el recorte visual existe
+  // por espacio en la tarjeta, y ese limite no tiene por que trasladarse a
+  // quien escucha.
+  function etiquetaEquipo_(integrantes) {
+    var nombres = (integrantes || []).map(function (i) { return i.nombre || i.email || ''; })
+      .filter(Boolean);
+    if (!nombres.length) return 'Sin equipo asignado';
+    return 'Equipo: ' + nombres.join(', ');
+  }
   function tarjetaProyecto_(p) {
     var avance = p.avance_pct === null || p.avance_pct === undefined ? '—' : p.avance_pct + '%';
     var integrantes = p.integrantes || [];
@@ -419,7 +430,10 @@
         '<span>' + p.total_tareas + ' tarea(s)</span>' +
       '</div>' +
       '<div class="sigso-py-card__pulso">' +
-        (avatares ? '<span class="sigso-py-card__avatares">' + avatares + extra + '</span>' : '<span></span>') +
+        (avatares
+          ? '<span class="sigso-py-card__avatares" role="img" aria-label="' +
+              Componentes.escaparHtml(etiquetaEquipo_(integrantes)) + '">' + avatares + extra + '</span>'
+          : '<span></span>') +
         (vence ? '<span class="sigso-py-card__vence' + (vence.indexOf('Venció') === 0 ? ' sigso-py-card__vence--atrasado' : '') + '">' + vence + '</span>' : '') +
       '</div>' +
       (p.ultima_actualizacion
@@ -2569,13 +2583,18 @@
     // completo (mismo patrón que cualquier otro modal de edición del
     // módulo). En "Mi dedicación" (sin un único proyecto abierto) se hace el
     // repintado liviano de siempre.
-    var scrollReprog = cont.querySelector('.sigso-py-ded-scroll');
-    if (scrollReprog) {
-      scrollReprog.addEventListener('click', function (ev) {
+    // Los DOS contenedores scrollables donde vive el boton de reprogramar:
+    // la carta de Dedicacion y, desde la pasada de accesibilidad, el Gantt.
+    // Un solo manejador para ambos -- el boton, el modal y el flujo son los
+    // mismos; lo unico que cambia es donde esta dibujado.
+    ['.sigso-py-ded-scroll', '.sigso-py-gantt-scroll'].forEach(function (sel) {
+      var caja = cont.querySelector(sel);
+      if (!caja) return;
+      caja.addEventListener('click', function (ev) {
         var btn = ev.target.closest('.js-py-ded-reprogramar');
         if (btn) abrirReprogramarDesdeBoton_(btn, detalle, alGuardarRegistro);
       });
-    }
+    });
 
     // v11 (P0): la celda diaria como unidad editable -- clic (o Enter/Espacio)
     // abre el modal de registro del día. Delegación sobre el contenedor: las
@@ -3587,7 +3606,15 @@
       var chipFecha = '<div class="sigso-py-gantt-fecha" style="left:' + (finPx + 6) + 'px">' + Componentes.escaparHtml(fechaCorta_(a.fecha_compromiso)) + '</div>';
       return '<div class="sigso-py-gantt-fila">' +
         '<div class="sigso-py-gantt-etiqueta">' +
-          '<div class="sigso-py-gantt-etiqueta__titulo"><span>' + Componentes.escaparHtml(a.titulo) + '</span></div>' +
+          '<div class="sigso-py-gantt-etiqueta__titulo"><span>' + Componentes.escaparHtml(a.titulo) + '</span>' +
+            // Alternativa por teclado al arrastre: mismo boton y mismo modal
+            // que la vista Dedicacion, para no inventar un segundo camino.
+            (editable
+              ? '<button type="button" class="sigso-py-ded-reprogramar js-py-ded-reprogramar sigso-py-gantt-reprog"' +
+                ' data-proy="' + Componentes.escaparHtml(proyId) + '" data-act="' + Componentes.escaparHtml(a.actividad_id) + '"' +
+                ' title="Reprogramar ' + Componentes.escaparHtml(a.titulo) + '">📅</button>'
+              : '') +
+          '</div>' +
           '<div class="sigso-py-gantt-etiqueta__meta">' + meta + '</div>' +
         '</div>' +
         '<div class="sigso-py-gantt-track" style="width:' + anchoTotal + 'px">' +
