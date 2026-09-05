@@ -3371,7 +3371,21 @@
 .sigso-mt-link:hover { color: var(--primario-tinta); }
 
 /* v10 (Fase B): toggle Lista/Tablero de la pestaña Tareas. */
-.sigso-py-vista-toggle { display: flex; gap: var(--esp-2); }
+/* El selector de vista del Cronograma (Dedicación · Plan · Historial ·
+   Workload · Analítica). Sus 5 botones suman ~526px: en un móvil de 375
+   estiraban la PAGINA ENTERA a 550px, en las cinco sub-vistas a la vez.
+   Mismo remedio que .sigso-tabs, que tiene once pestañas y no desborda:
+   la barra scrollea sola en vez de sacarle scroll horizontal al body.
+   flex-shrink:0 es imprescindible -- sin el, los botones se comprimen
+   hasta partir sus etiquetas en vez de desbordar hacia el scroll. */
+.sigso-py-vista-toggle {
+  display: flex;
+  gap: var(--esp-2);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.sigso-py-vista-toggle > * { flex-shrink: 0; }
 
 /* v10 (Fase B): tablero Kanban de tareas. Columnas de ancho minimo fijo
    dentro de un contenedor flex -- en desktop reparten el espacio disponible

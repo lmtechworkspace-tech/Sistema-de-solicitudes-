@@ -1156,7 +1156,7 @@
   }
 
   function pintarSala_(sala, detalle) {
-    var puedePublicar = !!detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
+    var puedePublicar = puedeAportar_(detalle);
     var resumenVisita = pintarResumenVisita_(detalle.resumen_desde_ultima_visita);
     var esLider = detalle.rol_actual === 'LIDER';
     // v9.3: menciones -- el backend (notificarSala_) ya notifica a quien
@@ -1724,7 +1724,7 @@
   var vistaTareas_ = 'lista';
 
   function pintarTareas_(tareas, detalle, puedeGestionar, miEmail) {
-    var puedeCrear = detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
+    var puedeCrear = puedeAportar_(detalle);
     var toggle = '<div class="sigso-py-vista-toggle">' +
         Componentes.boton({ texto: 'Lista', variante: vistaTareas_ === 'lista' ? undefined : 'sutil', clase: 'js-py-tareas-vista', idx: 'lista' }) +
         Componentes.boton({ texto: 'Tablero', variante: vistaTareas_ === 'tablero' ? undefined : 'sutil', clase: 'js-py-tareas-vista', idx: 'tablero' }) +
@@ -3491,7 +3491,7 @@
   }
 
   function pintarEntregables_(detalle, puedeGestionar) {
-    var puedeCrear = detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
+    var puedeCrear = puedeAportar_(detalle);
     var acciones = puedeCrear
       ? '<div class="sigso-py-cabecera">' + Componentes.boton({ texto: '+ Nuevo entregable', clase: 'js-py-nuevo-entregable' }) + '</div>'
       : '';
@@ -3566,10 +3566,12 @@
     // cualquier miembro NO observador (mismo círculo que Entregables) --
     // "puedeGestionar" (líder/ADM) es más estricto y aquí solo aplica a
     // "marcar vigente" (rollback), dentro del modal de historial.
-    var puedeCrear = detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
-    var acciones = '<div class="sigso-py-cabecera">' +
-      (puedeCrear ? Componentes.boton({ texto: '+ Subir documento', clase: 'js-py-nuevo-documento' }) : '<span></span>') +
-    '</div>';
+    var puedeCrear = puedeAportar_(detalle);
+    // Sin accion disponible no se emite la barra: una cabecera vacia ocupa
+    // espacio y no dice nada. Mismo criterio que Entregables y Riesgos.
+    var acciones = puedeCrear
+      ? '<div class="sigso-py-cabecera">' + Componentes.boton({ texto: '+ Subir documento', clase: 'js-py-nuevo-documento' }) + '</div>'
+      : '';
     var todos = detalle.documentos || [];
     if (todos.length === 0) {
       return acciones + Componentes.vacio({ texto: 'Todavía no hay documentos en este proyecto.' });
@@ -3647,7 +3649,7 @@
     var wrap = cont.querySelector('#py-docs-lista-wrap');
     if (!wrap || !datosDetalleActual_) return;
     var detalle = datosDetalleActual_.detalle;
-    var puedeEditar = detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
+    var puedeEditar = puedeAportar_(detalle);
     wrap.innerHTML = pintarListaDocumentos_(detalle, datosDetalleActual_.tareas, puedeEditar);
     wireListaDocumentos_(cont, detalle, datosDetalleActual_.tareas, puedeGestionarActual_(detalle));
   }
@@ -3658,6 +3660,26 @@
   // por pintarDetalle_.
   function puedeGestionarActual_(detalle) {
     return detalle.puede_gestionar === true || detalle.rol_actual === 'LIDER';
+  }
+
+  // v13.5 (Fase 6): quien puede APORTAR al proyecto (crear tareas, subir
+  // documentos, registrar riesgos, entregables, reuniones y decisiones).
+  //
+  // Espejo EXACTO de la regla del backend, que en las siete acciones abre
+  // con:  contexto.rol === "ADM" || rol en {LIDER, INTEGRANTE, COLABORADOR}
+  //
+  // Antes cada pantalla repetia `rol_actual && rol_actual !== "OBSERVADOR"`,
+  // que deja fuera al ADM que no es miembro del proyecto: su rol_actual
+  // viene vacio. Resultado medido: Sala, Entregables, Documentos y Riesgos
+  // se le mostraban SIN un solo boton, aunque el servidor habria aceptado
+  // la accion. Es la UI escondiendo una capacidad que el backend concede.
+  //
+  // puede_gestionar ya vale true para ADM y para el LIDER, y false para
+  // GERENCIA (solo lectura por diseño), asi que el espejo se mantiene.
+  function puedeAportar_(detalle) {
+    if (!detalle) return false;
+    if (detalle.puede_gestionar === true) return true;
+    return !!detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
   }
 
   function wireListaDocumentos_(cont, detalle, tareas, puedeGestionarEstricto) {
@@ -3719,7 +3741,7 @@
   // --- Reuniones (Fase 5, "reuniones formales") --------------------------
 
   function pintarReuniones_(reuniones, detalle, tareas, puedeGestionar) {
-    var puedeCrear = detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
+    var puedeCrear = puedeAportar_(detalle);
     var acciones = '<div class="sigso-py-cabecera">' +
       (puedeCrear ? Componentes.boton({ texto: '+ Nueva reunión', clase: 'js-py-nueva-reunion' }) : '<span></span>') +
     '</div>';
@@ -3767,7 +3789,7 @@
   // --- Decisiones (Fase 5, "registro de decisiones") ----------------------
 
   function pintarDecisiones_(decisiones, detalle, tareas, puedeGestionar) {
-    var puedeCrear = detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
+    var puedeCrear = puedeAportar_(detalle);
     var acciones = '<div class="sigso-py-cabecera">' +
       (puedeCrear ? Componentes.boton({ texto: '+ Nueva decisión', clase: 'js-py-nueva-decision' }) : '<span></span>') +
     '</div>';
@@ -3808,13 +3830,13 @@
   }
 
   function pintarRiesgos_(detalle, puedeGestionar) {
-    var puedeCrear = detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
+    var puedeCrear = puedeAportar_(detalle);
     var acciones = puedeCrear
       ? '<div class="sigso-py-cabecera">' + Componentes.boton({ texto: '+ Nuevo riesgo', clase: 'js-py-nuevo-riesgo' }) + '</div>'
       : '';
     var riesgos = detalle.riesgos || [];
     if (riesgos.length === 0) {
-      return acciones + Componentes.vacio({ texto: 'No hay riesgos registrados.' });
+      return acciones + Componentes.vacio({ texto: 'Todavía no hay riesgos registrados.' });
     }
     var integrantesPorEmail = {};
     (detalle.integrantes || []).forEach(function (i) { integrantesPorEmail[normalizarEmail_(i.usuario_email)] = i.usuario_nombre || i.usuario_email; });
