@@ -9529,7 +9529,9 @@ var Iconos = (function () {
   // Se usa HASH y no History API a proposito: SIGSO se publica en GitHub
   // Pages, que sirve archivos estaticos. Con pushState, recargar en
   // /plataforma/calidad daria 404 porque no hay servidor que reescriba.
-  var RUTA_SILENCIO = false;
+  // El hash que escribimos nosotros y cuyo hashchange hay que ignorar.
+  // null = el proximo evento es del usuario.
+  var RUTA_ESCRITA_POR_NOSOTROS = null;
 
   function leerRuta() {
     var h = String(window.location.hash || '').replace(new RegExp('^#/?'), '');
@@ -9549,7 +9551,9 @@ var Iconos = (function () {
     var destino = '#/' + encodeURIComponent(modulo || '') +
       (item ? '/' + encodeURIComponent(item) : '');
     if (window.location.hash === destino) return;
-    RUTA_SILENCIO = true;
+    // Se RECUERDA lo que escribimos en vez de levantar una bandera temporal.
+    // Ver alCambiarRuta: la comparacion no puede perder una carrera.
+    RUTA_ESCRITA_POR_NOSOTROS = destino;
     try {
       // replaceState para los cambios que NO son navegacion del usuario (p.ej.
       // restaurar la seccion por defecto al entrar): asi el boton atras no
@@ -9559,15 +9563,29 @@ var Iconos = (function () {
       } else {
         window.location.hash = destino;
       }
-    } finally {
-      // El evento hashchange llega en el siguiente tick, no de inmediato.
-      setTimeout(function () { RUTA_SILENCIO = false; }, 0);
+    } catch (err) {
+      // Si la escritura fallo no hay evento que ignorar: se limpia la marca
+      // para no silenciar una navegacion real del usuario mas adelante.
+      RUTA_ESCRITA_POR_NOSOTROS = null;
+      throw err;
     }
   }
 
   function alCambiarRuta(fn) {
     window.addEventListener('hashchange', function () {
-      if (RUTA_SILENCIO) return;   // lo escribimos nosotros, no el usuario
+      // Si el hash actual es EXACTAMENTE el que acabamos de escribir, el evento
+      // es nuestro y no hay nada que navegar. Se consume la marca: un segundo
+      // hashchange al mismo destino ya seria del usuario (boton atras, por
+      // ejemplo) y tiene que pasar.
+      //
+      // Antes esto era una bandera que se bajaba con setTimeout(0), y perdia la
+      // carrera contra el propio evento cuando habia trabajo en el medio: el
+      // modulo se montaba dos veces y repetia TODAS sus llamadas al backend.
+      if (RUTA_ESCRITA_POR_NOSOTROS !== null && window.location.hash === RUTA_ESCRITA_POR_NOSOTROS) {
+        RUTA_ESCRITA_POR_NOSOTROS = null;
+        return;
+      }
+      RUTA_ESCRITA_POR_NOSOTROS = null;
       fn(leerRuta());
     });
   }

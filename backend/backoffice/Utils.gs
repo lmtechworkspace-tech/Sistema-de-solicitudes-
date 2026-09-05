@@ -72,13 +72,40 @@ function minFecha_(a, b) {
 // Offset de `tz` respecto de UTC, en minutos, para el instante `fecha`
 // (positivo = tz adelantada respecto de UTC). Se recalcula por instante
 // para que el horario de verano de la zona se resuelva solo.
+
+// Construir un Intl.DateTimeFormat es caro y estos son SIEMPRE los mismos
+// dos, por zona horaria. Se cachean: son objetos sin estado, reusarlos es
+// seguro y es para lo que existen.
+//
+// Antes se construia uno nuevo en cada llamada, y horasHabilesBrutas_ los
+// pide cuatro veces por cada DIA del rango que mide. Con eso, el panel de
+// Gerencia gastaba 14,9 segundos de CPU en 900 subsolicitudes.
+var _fmtOffset_ = {};
+var _fmtDia_ = {};
+
+function formateadorOffset_(tz) {
+  if (!_fmtOffset_[tz]) {
+    _fmtOffset_[tz] = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hour12: false,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    });
+  }
+  return _fmtOffset_[tz];
+}
+
+function formateadorDia_(tz) {
+  if (!_fmtDia_[tz]) {
+    _fmtDia_[tz] = new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
+    });
+  }
+  return _fmtDia_[tz];
+}
+
 function offsetMinutos_(fecha, tz) {
-  var dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone: tz,
-    hour12: false,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
-  });
+  var dtf = formateadorOffset_(tz);
   var partes = dtf.formatToParts(fecha).reduce(function (acc, p) {
     acc[p.type] = p.value;
     return acc;
@@ -99,9 +126,7 @@ function claveDia_(fecha, tz) {
   if (!(fecha instanceof Date) || isNaN(fecha.getTime())) {
     return '';
   }
-  var dtf = new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit'
-  });
+  var dtf = formateadorDia_(tz);
   return dtf.format(fecha); // en-CA formatea como YYYY-MM-DD
 }
 
@@ -109,13 +134,28 @@ function claveDia_(fecha, tz) {
 // en tz) al instante UTC correspondiente. Iteracion de punto fijo (2
 // pasadas) para resolver correctamente el offset incluso el dia del cambio
 // de horario de verano.
+// El inicio y el fin de jornada de un dia dado son SIEMPRE el mismo
+// instante. Se memoizan por (dia, hora, minuto, zona): hoy se recalculan
+// para CADA subsolicitud que cruce ese dia, y son cientos.
+//
+// La clave incluye la zona porque el mismo dia y hora dan instantes
+// distintos en zonas distintas.
+var _instanteLocal_ = {};
+
 function instanteLocal_(claveDia, hora, minuto, tz) {
+  var clave = tz + '|' + claveDia + '|' + hora + '|' + minuto;
+  var guardado = _instanteLocal_[clave];
+  if (guardado !== undefined) return new Date(guardado);
   var partes = claveDia.split('-').map(Number);
   var aproximado = new Date(Date.UTC(partes[0], partes[1] - 1, partes[2], hora, minuto, 0));
   var offset1 = offsetMinutos_(aproximado, tz);
   var candidato = new Date(aproximado.getTime() - offset1 * 60000);
   var offset2 = offsetMinutos_(candidato, tz);
-  return new Date(aproximado.getTime() - offset2 * 60000);
+  var resultado = aproximado.getTime() - offset2 * 60000;
+  _instanteLocal_[clave] = resultado;
+  // Se devuelve un Date NUEVO cada vez: quien llama podria mutarlo, y un
+  // Date compartido convertiria el cache en una fuente de errores raros.
+  return new Date(resultado);
 }
 
 function diaSemanaClave_(claveDia) {
