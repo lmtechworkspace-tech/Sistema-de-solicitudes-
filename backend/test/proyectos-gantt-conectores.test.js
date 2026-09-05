@@ -77,3 +77,32 @@ test('la barra del Gantt publica lo que el trazado necesita', () => {
   assert.match(JS, /a\.depende_de \? ' data-dep="'/,
     'la barra debe llevar data-dep cuando hay dependencia');
 });
+
+test('agrupado por hito, los hitos no se dibujan dos veces', () => {
+  // Agrupando, cada hito ES la cabecera de su grupo. Si además se siguieran
+  // emitiendo las filas de hitos de arriba, cada hito aparecería dos veces en
+  // la misma pantalla. Es el tipo de duplicación que nadie nota revisando un
+  // proyecto con un solo hito.
+  assert.match(
+    JS, /\(agruparPorHito_ \? '' : filasHitos\) \+ filasTareas/,
+    'con agrupación activa, filasHitos no debe emitirse: los hitos ya son las cabeceras'
+  );
+});
+
+test('la vista plana y la agrupada pintan la MISMA fila', () => {
+  // Las dos disposiciones son dos ordenamientos del mismo dibujo. Si cada una
+  // tuviera su propio render, se separarían al primer cambio de la barra.
+  assert.match(JS, /function filaTareaGantt_\(a\)/, 'falta la función de fila extraída');
+  const usos = (JS.match(/filaTareaGantt_/g) || []).length;
+  assert.ok(usos >= 3,
+    'debe usarse desde la vista plana y desde la agrupada, no duplicarse');
+});
+
+test('el grupo "Sin hito" no se puede plegar', () => {
+  // Esconder tareas que no cuelgan de ningún hito sería esconder trabajo al
+  // que nadie le asignó un objetivo -- justo lo que conviene tener a la vista.
+  const i = JS.indexOf('function filaGrupoGantt_');
+  const cuerpo = JS.slice(i, JS.indexOf('\n    }', i));
+  assert.match(cuerpo, /hito\s*\?[\s\S]*js-py-gantt-grupo[\s\S]*:\s*'<span/,
+    'el chevron solo se emite cuando hay hito; "Sin hito" lleva un marcador inerte');
+});

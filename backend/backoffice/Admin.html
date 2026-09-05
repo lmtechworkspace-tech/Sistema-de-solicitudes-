@@ -4117,6 +4117,22 @@ button {
 .sigso-py-gantt-body { display: inline-flex; flex-direction: column; position: relative; min-width: 100%; }
 .sigso-py-gantt-fila { display: flex; align-items: stretch; border-bottom: 1px solid var(--borde); position: relative; z-index: 1; }
 .sigso-py-gantt-fila:last-child { border-bottom: none; }
+/* Cabecera de grupo del Gantt (agrupado por hito). Se distingue del resto
+   con fondo y peso, no con un borde mas: la rejilla ya tiene muchas lineas
+   y una mas se pierde entre ellas. */
+.sigso-py-gantt-fila--grupo { background: var(--superficie-2); }
+.sigso-py-gantt-fila--grupo .sigso-py-gantt-etiqueta__titulo { font-weight: 700; }
+.sigso-py-gantt-grupo__toggle {
+  border: none; background: none; cursor: pointer; color: var(--texto-2);
+  /* 24x24: el mismo minimo tactil que el boton de reprogramar. */
+  min-width: 24px; min-height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--radio-sm); font-size: 0.75rem; line-height: 1; flex: 0 0 auto;
+}
+.sigso-py-gantt-grupo__toggle:hover, .sigso-py-gantt-grupo__toggle:focus-visible {
+  background: var(--superficie); color: var(--texto);
+}
+
 .sigso-py-gantt-fila--regla { position: sticky; top: 0; z-index: 3; background: var(--superficie); border-bottom: 1px solid var(--borde-fuerte); }
 .sigso-py-gantt-etiqueta {
   /* 240px fijo A PROPÓSITO (no rem): el JS (PLAN_ETIQUETA_ANCHO_PX_) calcula
