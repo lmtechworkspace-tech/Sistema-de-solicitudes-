@@ -226,6 +226,10 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // Procesos, Contexto e Indicadores.
   'Tablero.gs',
   'Triggers.gs',
+  // M-02: una sola llamada para la pantalla de Inicio. Delega en
+  // Actividades, Calidad, Dashboard, Jefatura, Pausas y Novedades, asi que
+  // carga DESPUES de todos ellos.
+  'Inicio.gs',
   'Code.gs'
 ];
 

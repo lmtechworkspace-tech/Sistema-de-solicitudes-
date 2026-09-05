@@ -191,6 +191,7 @@ var BACKOFFICE_ACTIONS = {
   // el proyecto (es un export de solo lectura, no una accion de gestion).
   descargarReporteProyecto: handleDescargarReporteProyecto_,
   descargarLibroProyecto: handleDescargarLibroProyecto_,
+  getInicio: handleGetInicio_,
   // v10 (Fase D, "resumen diario"): marca "vi la Sala" a ahora -- el
   // frontend la llama al abrir la pestaña Sala de un proyecto.
   marcarSalaVisitadaProyecto: handleMarcarSalaVisitadaProyecto_,
@@ -1274,6 +1275,16 @@ function handleDescargarReporteProyecto_(data, contexto) {
 // R-01: el mismo proyecto, pero como hoja de calculo.
 function handleDescargarLibroProyecto_(data, contexto) {
   return responderResultado_(Proyectos.descargarLibro(data, contexto));
+}
+
+// M-02: la pantalla de Inicio en una sola llamada.
+//
+// NO lleva entrada en MODULO_POR_ACCION a proposito: no pertenece a ningun
+// modulo, la pide cualquiera con sesion. Los permisos NO se relajan -- cada
+// bloque de adentro delega en la misma funcion que atendia su accion suelta,
+// con su propio control intacto.
+function handleGetInicio_(data, contexto) {
+  return responderResultado_(Inicio.getResumen(data, contexto));
 }
 
 function handleMarcarSalaVisitadaProyecto_(data, contexto) {

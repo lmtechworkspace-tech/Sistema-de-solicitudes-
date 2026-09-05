@@ -182,15 +182,48 @@ var SigsoInicio = (function () {
   // --- carga de fuentes ------------------------------------------------------
 
   function cargarFuentes_() {
-    // Cada fuente se declara viva ANTES de pedir, para que pintarEstado_
-    // sepa cuando ya estan todas y no cante "todo al dia" antes de tiempo.
-    if (tiene_('mi_trabajo')) { fuentesVivas_++; cargarMiTrabajo_(); }
-    if (tiene_('calidad')) { fuentesVivas_++; cargarCalidad_(); }
+    // M-02: UNA llamada para todo lo que vive en el Backoffice.
+    //
+    // Antes cada bloque pedia lo suyo: hasta siete viajes en paralelo. En
+    // local no se nota (435 ms); en Apps Script, a 300 ms - 2 s por viaje, la
+    // primera pantalla que ve todo el mundo tardaba segundos en asentarse.
+    //
+    // La lista de bloques la manda el cliente porque el servidor no siempre
+    // sabe que modulos tiene la persona: contexto.modulos solo existe si la
+    // identidad viene del portal, y quien entra por el enlace de Google se
+    // quedaria con un Inicio vacio. No relaja permisos: cada bloque del
+    // backend delega en la misma funcion que atendia su accion suelta.
+    var quiere = [];
+    if (tiene_('mi_trabajo')) quiere.push('mi_trabajo');
+    if (tiene_('calidad')) quiere.push('calidad');
+    if (tiene_('bandeja')) quiere.push('bandeja');
+    if (tiene_('jefatura')) quiere.push('jefatura');
+    if (tiene_('pausas')) quiere.push('pausas');
+
+    // Una promesa por bloque, todas resueltas desde la MISMA respuesta: asi
+    // cada cargador recibe lo que ya recibia y ningun pintor cambia. Si la
+    // llamada entera falla, cada bloque recibe {ok:false} y se salta lo suyo,
+    // igual que cuando fallaba su peticion propia.
+    var enVuelo = apiBack_('getInicio', { bloques: quiere })
+      .then(function (r) { return (r && r.ok && r.data && r.data.bloques) || {}; })
+      .catch(function () { return {}; });
+    function bloque_(nombre) {
+      return enVuelo.then(function (bloques) { return bloques[nombre] || { ok: false }; });
+    }
+
+    // Cada fuente se declara viva ANTES de pedir, para que pintarEstado_ sepa
+    // cuando ya estan todas y no cante "todo al dia" antes de tiempo.
+    if (tiene_('mi_trabajo')) { fuentesVivas_++; cargarMiTrabajo_(bloque_('mi_trabajo')); }
+    if (tiene_('calidad')) { fuentesVivas_++; cargarCalidad_(bloque_('calidad')); }
+    // Mis solicitudes se queda aparte: vive en el proyecto INTAKE, y traerla
+    // obligaria a duplicar aqui como se resuelven los correos de una cuenta
+    // desde su token -- la duplicacion que ya hizo divergir otras reglas.
     if (tiene_('mis_solicitudes')) { fuentesVivas_++; cargarMisSolicitudes_(); }
-    if (tiene_('bandeja')) { fuentesVivas_++; cargarBandeja_(); }
-    if (tiene_('jefatura')) { fuentesVivas_++; cargarJefatura_(); }
-    if (tiene_('pausas')) { fuentesVivas_++; cargarPausa_(); }
-    // Novedades es modulo core (no se asigna por cuenta), asi que siempre.
+    if (tiene_('bandeja')) { fuentesVivas_++; cargarBandeja_(bloque_('bandeja')); }
+    if (tiene_('jefatura')) { fuentesVivas_++; cargarJefatura_(bloque_('jefatura')); }
+    if (tiene_('pausas')) { fuentesVivas_++; cargarPausa_(bloque_('pausas')); }
+    // Novedades es modulo core (no se asigna por cuenta) y usa su feed
+    // compartido, el mismo que alimenta el badge del sidebar.
     fuentesVivas_++; cargarNovedades_();
 
     pintarEstado_();
@@ -210,9 +243,8 @@ var SigsoInicio = (function () {
 
   // Mi trabajo: la unica fuente que alimenta DOS bloques (atencion + "Mi
   // trabajo hoy") con una sola consulta.
-  function cargarMiTrabajo_() {
-    var mio = (ctx_.cuenta && (ctx_.cuenta.emails || [])[0]) || '';
-    conGuarda_(apiBack_('listarActividades', mio ? { responsable_email: mio } : {}),
+  function cargarMiTrabajo_(promesa) {
+    conGuarda_(promesa,
       function (r) {
         if (!r || !r.ok) return;
         var items = Array.isArray(r.data) ? r.data : (r.data.items || []);
@@ -246,8 +278,8 @@ var SigsoInicio = (function () {
       });
   }
 
-  function cargarCalidad_() {
-    conGuarda_(apiBack_('listarDocumentosSgc', {}), function (r) {
+  function cargarCalidad_(promesa) {
+    conGuarda_(promesa, function (r) {
       if (!r || !r.ok) return;
       var n = r.data.pendientes_de_acuse || 0;
       if (!n) return;
@@ -277,6 +309,10 @@ var SigsoInicio = (function () {
 
   function cargarNovedades_() {
     if (!window.SigsoNovedades || !SigsoNovedades.resumenPendientes) { fuenteLista_(); return; }
+    // NO viaja en getInicio a proposito: feedSinFiltro_ memoiza esta
+    // peticion con TTL y el badge del sidebar la pide igual al arrancar.
+    // Meterla en el bloque haria que el servidor calculara el feed dos
+    // veces. Aqui se reusa la que ya se iba a hacer.
     conGuarda_(SigsoNovedades.resumenPendientes(), function (res) {
       if (!res || !res.pendientes) return;
       var destacada = res.destacada;
@@ -401,9 +437,9 @@ var SigsoInicio = (function () {
     });
   }
 
-  function cargarBandeja_() {
+  function cargarBandeja_(promesa) {
     if (!ctx_.backofficeDisponible || !ctx_.backofficeDisponible()) { fuenteLista_(); return; }
-    conGuarda_(apiBack_('getDashboardData', {}), function (r) {
+    conGuarda_(promesa, function (r) {
       if (!r || !r.ok) return;
       var res = r.data.resumen || {};
       if (ctx_.pintarBadge) ctx_.pintarBadge('bandeja', res.sla_vencido);
@@ -419,8 +455,8 @@ var SigsoInicio = (function () {
     });
   }
 
-  function cargarJefatura_() {
-    conGuarda_(apiBack_('getPanelJefatura', {}), function (r) {
+  function cargarJefatura_(promesa) {
+    conGuarda_(promesa, function (r) {
         if (!r || !r.ok) return;
         var res = (r.data && r.data.resumen) || {};
         pintarPanel_('jefatura', 'Mi departamento',
@@ -464,8 +500,8 @@ var SigsoInicio = (function () {
     if (btn) btn.addEventListener('click', function () { ctx_.irAModulo('pausas'); });
   }
 
-  function cargarPausa_() {
-    conGuarda_(apiBack_('getPausaHoyTrabajador', {}), function (r) {
+  function cargarPausa_(promesa) {
+    conGuarda_(promesa, function (r) {
       if (!r || !r.ok) return;
       var d = r.data || {};
       if (!d.pausa || !d.registrable) return;
