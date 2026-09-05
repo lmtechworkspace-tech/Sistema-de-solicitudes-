@@ -67,11 +67,22 @@
   var SALUD_ETIQUETA = { normal: 'Normal', riesgo: 'En riesgo', critico: 'Crítico' };
   // v14.0 (piel nueva): salud -> tono del punto de estado (Componentes.punto).
   var SALUD_TONO = { normal: 'ok', riesgo: 'riesgo', critico: 'critico' };
-  // v11 (P1, "score de salud ponderado"): el número que acompaña al pill de
-  // siempre -- null en salud_override (correccion manual, no aporta fingir
-  // precisión numérica).
-  function saludScoreHtml_(score) {
-    return (score === null || score === undefined) ? '' : '<span class="sigso-py-salud-score">· ' + score + '/100</span>';
+  // El número que acompaña al pill de salud.
+  //
+  // Muestra la PENALIZACION acumulada, no una nota sobre 100. Antes decía
+  // "Crítico · 84/100" -- un 84 que parece nota excelente, pegado a una
+  // palabra roja. La etiqueta funciona por gatillo (un factor crítico basta)
+  // y el score por descuento, así que podían contradecirse tanto como
+  // quisieran. Ahora ambos apuntan al mismo lado: más puntos, peor.
+  //
+  // Sin penalización no se muestra nada: "Normal" ya lo dice todo, y un
+  // "· 0" solo agrega ruido. null es la corrección manual (salud_override):
+  // ahí no se calculó ningún número y no se finge uno.
+  function saludScoreHtml_(penalizacion) {
+    if (penalizacion === null || penalizacion === undefined || penalizacion === 0) return '';
+    return '<span class="sigso-py-salud-score" title="' + penalizacion +
+      ' puntos en contra, sumando los factores que arrastran al proyecto. Cuantos más, peor.">· ' +
+      penalizacion + ' pts</span>';
   }
   var ESTADO_PROYECTO_ETIQUETA = {
     PLANIFICACION: 'Planificación', ACTIVO: 'Activo', EN_PAUSA: 'En pausa',
@@ -398,7 +409,7 @@
     return '<button type="button" class="sigso-py-card js-py-abrir" data-id="' + p.proyecto_id + '">' +
       '<div class="sigso-py-card__top">' +
         '<span class="sigso-py-card__nombre">' + Componentes.escaparHtml(p.nombre) + '</span>' +
-        '<span class="sigso-py-salud sigso-py-salud--' + p.salud + '">' + Componentes.punto(SALUD_TONO[p.salud]) + SALUD_ETIQUETA[p.salud] + saludScoreHtml_(p.salud_score) + '</span>' +
+        '<span class="sigso-py-salud sigso-py-salud--' + p.salud + '">' + Componentes.punto(SALUD_TONO[p.salud]) + SALUD_ETIQUETA[p.salud] + saludScoreHtml_(p.salud_penalizacion) + '</span>' +
       '</div>' +
       (p.descripcion ? '<p class="sigso-py-card__desc">' + Componentes.escaparHtml(p.descripcion) + '</p>' : '') +
       '<div class="sigso-py-card__barra"><div class="sigso-py-card__barra-fill sigso-py-card__barra-fill--' + p.salud + '" style="width:' + (p.avance_pct || 0) + '%"></div></div>' +
@@ -974,7 +985,7 @@
       '<div class="sigso-py-detalle-cab">' +
         '<h1>' + Componentes.escaparHtml(p.nombre) + '</h1>' +
         '<div class="sigso-py-detalle-cab__estado">' +
-          '<span class="sigso-py-salud sigso-py-salud--' + detalle.salud + '">' + Componentes.punto(SALUD_TONO[detalle.salud]) + SALUD_ETIQUETA[detalle.salud] + saludScoreHtml_(detalle.salud_score) + '</span>' +
+          '<span class="sigso-py-salud sigso-py-salud--' + detalle.salud + '">' + Componentes.punto(SALUD_TONO[detalle.salud]) + SALUD_ETIQUETA[detalle.salud] + saludScoreHtml_(detalle.salud_penalizacion) + '</span>' +
           Componentes.badge(ESTADO_PROYECTO_ETIQUETA[p.estado] || p.estado, 'neutro') +
         '</div>' +
       '</div>' +

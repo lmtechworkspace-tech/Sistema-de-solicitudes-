@@ -88,7 +88,7 @@ test('descargarReporte config: una config vacía o corrupta cae a ["ficha"] -- n
   assert.match(html, /Migración ERP/, 'la ficha trae al menos el nombre del proyecto');
 });
 
-test('descargarReporte config: salud detallada expone el score y el desglose ponderado', () => {
+test('descargarReporte config: salud detallada expone la penalización y el desglose ponderado', () => {
   const ctx = loadConSchema();
   const { proyecto } = armarProyectoConTarea(ctx);
   const vencida = ctx.Proyectos.crearTarea({
@@ -101,7 +101,14 @@ test('descargarReporte config: salud detallada expone el score y el desglose pon
     proyecto_id: proyecto.proyecto_id, config: { secciones: ['salud'] }
   }, CTX_LEO);
   const html = htmlDe_(res);
-  assert.match(html, /88\/100/, 'score = 100 - 12 (tarea_critica_atrasada)');
+  // P-02: la cifra que se muestra es la PENALIZACION acumulada, no una nota
+  // sobre 100. Esto afirmaba "88/100", que junto a la palabra "Crítico" decía
+  // lo contrario que la etiqueta: un 88 parece una nota excelente. 12 puntos
+  // = un tarea_critica_atrasada.
+  assert.match(html, /12 puntos en contra/,
+    'la penalización acumulada, apuntando en la misma dirección que la etiqueta');
+  assert.doesNotMatch(html, /\/100/,
+    'no debe quedar ninguna nota sobre 100: es lo que contradecía a la etiqueta');
   assert.match(html, /Tarea\(s\) crítica\(s\) atrasada\(s\)/);
   assert.match(html, /-12/);
 });

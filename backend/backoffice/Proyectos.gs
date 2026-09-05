@@ -206,7 +206,8 @@ var Proyectos = {
         salud: salud.codigo,
         salud_etiqueta: salud.etiqueta,
         salud_motivos: salud.motivos,
-        salud_score: salud.score
+        salud_score: salud.score,
+        salud_penalizacion: salud.penalizacion
       };
     }).sort(function (a, b) {
       var orden = { critico: 0, riesgo: 1, normal: 2 };
@@ -399,6 +400,7 @@ var Proyectos = {
       salud_etiqueta: salud.etiqueta,
       salud_motivos: salud.motivos,
       salud_score: salud.score,
+      salud_penalizacion: salud.penalizacion,
       salud_desglose: salud.desglose,
       requiere_atencion: calcularRequiereAtencion_(tareas, hitos, integrantes, riesgos),
       // v13 (Fase 2, "dashboard ejecutivo"): avance ESPERADO a hoy y su
@@ -2408,7 +2410,7 @@ function seccionNarrativaPdf_(detalle) {
   var frases = [];
   var saludTxt = PROYECTOS_SALUD_LABEL_PDF[detalle.salud] || detalle.salud;
   frases.push('El proyecto está en estado <b>' + escaparHtml_(saludTxt) + '</b>' +
-    (detalle.salud_score === null || detalle.salud_score === undefined ? '' : ' (' + detalle.salud_score + '/100)') + '.');
+    (detalle.salud_penalizacion ? ' (' + detalle.salud_penalizacion + ' puntos en contra)' : '') + '.');
 
   if (avance === null || avance === undefined) {
     frases.push('Todavía no hay tareas activas para medir avance.');
@@ -2777,7 +2779,7 @@ function construirHtmlReporteConfigurado_(detalle, todasTareas, rendimiento, tar
 
 function seccionPortadaPdf_(detalle) {
   var p = detalle.proyecto;
-  var scoreTxt = (detalle.salud_score === null || detalle.salud_score === undefined) ? '' : ' · ' + detalle.salud_score + '/100';
+  var scoreTxt = detalle.salud_penalizacion ? ' · ' + detalle.salud_penalizacion + ' pts en contra' : '';
   return '<div style="padding:60px 0 40px;text-align:center;page-break-after:always;">' +
     '<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:' + DOC.MUTED + ';margin-bottom:10px;">Reporte ejecutivo de proyecto</div>' +
     '<div style="font-size:26px;font-weight:bold;font-family:' + DOC.SERIF + ';color:' + DOC.INK + ';margin-bottom:14px;">' + escaparHtml_(p.nombre) + '</div>' +
@@ -2835,7 +2837,9 @@ var SALUD_FACTOR_LABEL_PDF_ = {
   entregable_vencido: 'Entregable(s) vencido(s)', entregable_observado: 'Entregable(s) observado(s)'
 };
 function seccionSaludPdf_(detalle) {
-  var scoreTxt = (detalle.salud_score === null || detalle.salud_score === undefined) ? 'Fijado manualmente' : detalle.salud_score + '/100';
+  var scoreTxt = (detalle.salud_penalizacion === null || detalle.salud_penalizacion === undefined)
+    ? 'Fijado manualmente'
+    : (detalle.salud_penalizacion === 0 ? 'Sin factores en contra' : detalle.salud_penalizacion + ' puntos en contra');
   var cabecera = '<div style="margin:0 0 10px;">' +
     saludChipPdf_(detalle.salud, (PROYECTOS_SALUD_LABEL_PDF[detalle.salud] || detalle.salud) + ' · ' + scoreTxt) + '</div>';
   var filas = (detalle.salud_desglose || []).map(function (d) {
@@ -3800,11 +3804,11 @@ function calcularSaludProyecto_(proyecto, tareas, hitos, entregables) {
       motivos: [proyecto.salud_override_motivo || 'Fijado manualmente.'],
       // Sin score: es una corrección MANUAL, no vale la pena fingir una
       // precisión numérica que nadie calculó.
-      score: null, desglose: []
+      score: null, penalizacion: null, desglose: []
     };
   }
   if (proyecto.estado === PROYECTOS_ESTADOS.CERRADO || proyecto.estado === PROYECTOS_ESTADOS.CANCELADO) {
-    return { codigo: 'normal', etiqueta: 'Normal', motivos: [], score: 100, desglose: [] };
+    return { codigo: 'normal', etiqueta: 'Normal', motivos: [], score: 100, penalizacion: 0, desglose: [] };
   }
 
   var activas = tareas.filter(function (a) { return a.activa === true || a.activa === 'TRUE' || a.activa === 1; });
@@ -3852,13 +3856,18 @@ function calcularSaludProyecto_(proyecto, tareas, hitos, entregables) {
   var entregablesObservados = entregablesVigentes.filter(function (e) { return e.estado === 'OBSERVADO'; });
   if (entregablesObservados.length > 0) anota(motivosRiesgo, 'entregable_observado', entregablesObservados.length, ' entregable(s) observado(s)');
 
-  var score = Math.max(0, 100 - desglose.reduce(function (s, d) { return s + d.puntos; }, 0));
+  // La penalizacion acumulada es LA cifra que se muestra: apunta en la
+  // misma direccion que la etiqueta (mas puntos, peor). El score sobre 100
+  // se mantiene en el payload porque el PDF y el desglose lo venian usando,
+  // pero ya no es lo que se enseña junto al pill.
+  var penalizacion = Math.min(100, desglose.reduce(function (s, d) { return s + d.puntos; }, 0));
+  var score = Math.max(0, 100 - penalizacion);
 
   if (motivosCriticos.length > 0) {
-    return { codigo: 'critico', etiqueta: 'Crítico', motivos: motivosCriticos.concat(motivosRiesgo), score: score, desglose: desglose };
+    return { codigo: 'critico', etiqueta: 'Crítico', motivos: motivosCriticos.concat(motivosRiesgo), score: score, penalizacion: penalizacion, desglose: desglose };
   }
   if (motivosRiesgo.length > 0) {
-    return { codigo: 'riesgo', etiqueta: 'En riesgo', motivos: motivosRiesgo, score: score, desglose: desglose };
+    return { codigo: 'riesgo', etiqueta: 'En riesgo', motivos: motivosRiesgo, score: score, penalizacion: penalizacion, desglose: desglose };
   }
   return { codigo: 'normal', etiqueta: 'Normal', motivos: [], score: 100, desglose: [] };
 }
