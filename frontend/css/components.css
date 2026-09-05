@@ -3470,6 +3470,38 @@
 }
 .sigso-py-gantt-etiqueta__punto { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; }
 .sigso-py-gantt-track { position: relative; height: 2.9rem; flex: 0 0 auto; }
+
+/* G-01: conectores de dependencia. Capa SVG sobre las barras, dentro del
+   mismo body -- asi scrollea con el Gantt sin recalcular nada.
+
+   pointer-events:none es OBLIGATORIO: sin eso la capa se come el mousedown
+   del handle de resize y arrastrar para reprogramar deja de funcionar.
+
+   z-index 2 la deja por encima de las filas (z-index 1). Va encima a
+   proposito: la punta de flecha tiene que tocar el borde de la barra para
+   que se lea a donde llega. */
+.sigso-py-gantt-deps {
+  position: absolute; top: 0; left: 0;
+  pointer-events: none; z-index: 2; overflow: visible;
+}
+.sigso-py-gantt-deps path { fill: none; }
+.sigso-py-gantt-dep {
+  stroke: var(--texto-3, #94a3b8);
+  stroke-width: 1.5; opacity: 0.55;
+  transition: opacity .12s ease, stroke .12s ease;
+}
+.sigso-py-gantt-deps marker path { fill: var(--texto-3, #94a3b8); stroke: none; }
+.sigso-py-gantt-dep--critica { stroke: var(--critico); opacity: 0.75; stroke-width: 2; }
+
+/* Al enfocar una barra, el resto se apaga y su cadena queda sola. */
+.sigso-py-gantt-deps--enfocando .sigso-py-gantt-dep { opacity: 0.12; }
+.sigso-py-gantt-deps--enfocando .sigso-py-gantt-dep--activa {
+  opacity: 1; stroke: var(--primario); stroke-width: 2.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sigso-py-gantt-dep { transition: none; }
+}
 .sigso-py-gantt-track--regla { height: 1.9rem; }
 .sigso-py-gantt-tick {
   position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--borde-fuerte); padding-left: 4px;

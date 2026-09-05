@@ -3283,6 +3283,10 @@
   // igual que planZoomIdx_ -- no se pide de nuevo al servidor, es_critica ya
   // viene en cada tarea).
   var mostrarRutaCritica_ = false;
+  // v13.7 (G-01): los conectores de dependencia. Arrancan ENCENDIDOS -- son
+  // la estructura del proyecto, no un adorno opcional; quien tenga un Gantt
+  // muy poblado los apaga.
+  var mostrarDependencias_ = true;
   // v11 (P2): minTime/pxDia del último pintado -- wireAccionesPestana_ los
   // necesita para traducir el ancho final de una barra arrastrada a una
   // fecha, sin recalcular el rango completo (mismo criterio que
@@ -3317,6 +3321,113 @@
     var tarea = tareaPorIdEnCarta_(g.actId);
     abrirReprogramarTarea_(g.proyId, tarea, g.alExito, fechaISOCorta_(nuevaFecha.toISOString()));
   });
+
+  // --- G-01: conectores de dependencia -------------------------------------
+  //
+  // Une el FIN de la tarea de la que se depende con el INICIO de la que
+  // depende (fin -> comienzo, que es lo que significa depende_de aqui).
+  //
+  // Se dibuja midiendo el DOM ya pintado, no calculando: las alturas de fila
+  // estan en el CSS en rem, y duplicarlas en JS las desincroniza al primer
+  // retoque de estilo. Medir sobrevive tambien al zoom del navegador.
+  var GANTT_SALIENTE_PX_ = 9;   // cuanto sale la linea antes de doblar
+
+  function dibujarConectoresGantt_(cont) {
+    var body = cont.querySelector(".sigso-py-gantt-body");
+    if (!body) return;
+    var previo = body.querySelector(".sigso-py-gantt-deps");
+    if (previo) previo.parentNode.removeChild(previo);
+    if (!mostrarDependencias_) return;
+
+    var barras = {};
+    body.querySelectorAll(".sigso-py-gantt-barra[data-act]").forEach(function (b) {
+      barras[b.getAttribute("data-act")] = b;
+    });
+
+    var base = body.getBoundingClientRect();
+    var trazos = [];
+    Object.keys(barras).forEach(function (id) {
+      var destino = barras[id];
+      var depId = destino.getAttribute("data-dep");
+      if (!depId) return;
+      var origen = barras[depId];
+      if (!origen) return;   // la tarea de la que depende no tiene fecha, no se dibuja
+
+      // COMPROMISO -> COMPROMISO, no fin -> inicio.
+      //
+      // La convencion clasica del Gantt une el fin de una barra con el INICIO
+      // de la siguiente. Aqui seria mentir: la barra va de fecha_creacion a
+      // fecha_compromiso, asi que su extremo izquierdo es cuando alguien tecleo
+      // la tarea, no cuando se planifico empezarla. Todas las tareas creadas el
+      // mismo dia arrancan en el mismo punto, y apuntar ahi dibujaria flechas
+      // hacia atras en el caso NORMAL, afirmando un conflicto de plan que no
+      // existe.
+      //
+      // Lo que la dependencia sí ordena es la ENTREGA: primero se compromete
+      // una, despues la otra. Uniendo compromiso con compromiso la linea avanza
+      // siempre hacia adelante -- y si retrocede es porque la dependiente vence
+      // ANTES que aquella de la que depende, que es un problema real y merece
+      // verse.
+      // Se redondea: getBoundingClientRect devuelve subpixeles y un trazo de
+      // 1.5px sobre una coordenada fraccionaria sale borroso.
+      var o = origen.getBoundingClientRect(), d = destino.getBoundingClientRect();
+      var x1 = Math.round(o.right - base.left), y1 = Math.round(o.top + o.height / 2 - base.top);
+      var x2 = Math.round(d.right - base.left), y2 = Math.round(d.top + d.height / 2 - base.top);
+      var g = GANTT_SALIENTE_PX_;
+
+      // Ruta ortogonal. El caso de abajo es el que se olvida: cuando la
+      // tarea dependiente EMPIEZA antes de que termine aquella de la que
+      // depende (una planificacion que no se sostiene, pero que existe),
+      // la linea tiene que rodear en vez de volver sobre si misma.
+      var dir;
+      if (x2 >= x1 + g * 2) {
+        dir = "M " + x1 + " " + y1 + " H " + (x1 + g) + " V " + y2 + " H " + (x2 - 4);
+      } else {
+        var yMedio = (y1 + y2) / 2;
+        dir = "M " + x1 + " " + y1 +
+          " H " + (x1 + g) + " V " + yMedio +
+          " H " + (x2 - g * 2) + " V " + y2 + " H " + (x2 - 4);
+      }
+      var critica = destino.getAttribute("data-critica") === "1" &&
+        origen.getAttribute("data-critica") === "1";
+      trazos.push(
+        '<path d="' + dir + '" class="sigso-py-gantt-dep' + (critica ? ' sigso-py-gantt-dep--critica' : '') +
+        '" data-de="' + depId + '" data-a="' + id + '" marker-end="url(#sigso-dep-punta)"></path>'
+      );
+    });
+    if (!trazos.length) return;
+
+    var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "sigso-py-gantt-deps");
+    svg.setAttribute("width", body.scrollWidth);
+    svg.setAttribute("height", body.scrollHeight);
+    svg.setAttribute("aria-hidden", "true");   // la relacion ya se enuncia en el title de cada barra
+    svg.innerHTML =
+      '<defs><marker id="sigso-dep-punta" viewBox="0 0 8 8" refX="7" refY="4" ' +
+        'markerWidth="6" markerHeight="6" orient="auto">' +
+        '<path d="M0,0 L8,4 L0,8 z"></path></marker></defs>' + trazos.join("");
+    body.appendChild(svg);
+  }
+
+  // Al pasar el cursor por una barra, sus conectores (los que entran y los
+  // que salen) se destacan. Es lo que hace legible un Gantt poblado: la
+  // maraña se lee de a una cadena por vez.
+  function wireResaltadoDeps_(cont) {
+    var body = cont.querySelector(".sigso-py-gantt-body");
+    if (!body) return;
+    body.querySelectorAll(".sigso-py-gantt-barra[data-act]").forEach(function (b) {
+      var id = b.getAttribute("data-act");
+      function marcar(on) {
+        var svg = body.querySelector(".sigso-py-gantt-deps");
+        if (!svg) return;
+        svg.classList.toggle("sigso-py-gantt-deps--enfocando", on);
+        svg.querySelectorAll('path[data-de="' + id + '"], path[data-a="' + id + '"]')
+          .forEach(function (p) { p.classList.toggle("sigso-py-gantt-dep--activa", on); });
+      }
+      b.addEventListener("mouseenter", function () { marcar(true); });
+      b.addEventListener("mouseleave", function () { marcar(false); });
+    });
+  }
 
   // Cablea los handles de resize de la vista Plan actual -- se llama en cada
   // repintado (los nodos son nuevos, los listeners viejos mueren con ellos).
@@ -3439,7 +3550,10 @@
         '</div>' +
         '<div class="sigso-py-gantt-track" style="width:' + anchoTotal + 'px">' +
           '<div class="sigso-py-cron-barra sigso-py-gantt-barra sigso-py-cron-barra--' + codigo + (editable ? ' sigso-py-gantt-barra--editable' : '') + critClase +
-            '" style="left:' + inicioPx + 'px; width:' + anchoBarra + 'px" title="' + Componentes.escaparHtml(a.titulo + ' — compromiso ' + fechaCorta_(a.fecha_compromiso) + (avance !== null ? ' · ' + avance + '% avance' : '') + holguraTxt) + '">' + fill + txtBarra + handle + '</div>' +
+            '" data-act="' + Componentes.escaparHtml(a.actividad_id) + '"' +
+            (a.depende_de ? ' data-dep="' + Componentes.escaparHtml(a.depende_de) + '"' : '') +
+            (a.es_critica ? ' data-critica="1"' : '') +
+            ' style="left:' + inicioPx + 'px; width:' + anchoBarra + 'px" title="' + Componentes.escaparHtml(a.titulo + ' — compromiso ' + fechaCorta_(a.fecha_compromiso) + (avance !== null ? ' · ' + avance + '% avance' : '') + holguraTxt) + '">' + fill + txtBarra + handle + '</div>' +
           extraAtraso + chipFecha +
         '</div>' +
       '</div>';
@@ -3453,9 +3567,12 @@
     var rutaCriticaBtn = hayRutaCritica
       ? Componentes.boton({ texto: (mostrarRutaCritica_ ? '✓ Ruta crítica' : 'Ruta crítica'), variante: mostrarRutaCritica_ ? undefined : 'sutil', clase: 'js-py-gantt-ruta-critica', tipo: 'button' })
       : '';
+    var dependenciasBtn = hayRutaCritica
+      ? Componentes.boton({ texto: (mostrarDependencias_ ? '✓ Dependencias' : 'Dependencias'), variante: mostrarDependencias_ ? undefined : 'sutil', clase: 'js-py-gantt-dependencias', tipo: 'button' })
+      : '';
     var controles = '<div class="sigso-py-ded-controles">' + zoomBtns +
       Componentes.boton({ texto: 'Hoy', variante: 'sutil', clase: 'js-py-gantt-hoy', tipo: 'button' }) +
-      rutaCriticaBtn +
+      rutaCriticaBtn + dependenciasBtn +
       '<span class="sigso-ayuda">Hitos (◆) y tareas con fecha comprometida, de ' +
         (p.fecha_inicio ? fechaCorta_(p.fecha_inicio) : '—') + ' a ' + (p.fecha_objetivo ? fechaCorta_(p.fecha_objetivo) : '—') +
         (puedeEditar ? '. Arrastra el borde derecho de una barra para reprogramarla.' : '') +
@@ -4204,6 +4321,19 @@
     // botón 📅 de Dedicación -- fecha_compromiso vive en `tareas`, no en la
     // bitácora, así que hace falta releer el proyecto).
     wireGanttResize_(cont, planPxDiaActual_, planMinTimeActual_, function () { refrescarDetalle_(); });
+
+    // G-01: los conectores se dibujan DESPUES de que el navegador maqueto
+    // las barras -- se miden posiciones reales, no calculadas.
+    dibujarConectoresGantt_(cont);
+    wireResaltadoDeps_(cont);
+
+    var depsBtn = cont.querySelector(".js-py-gantt-dependencias");
+    if (depsBtn) {
+      depsBtn.addEventListener("click", function () {
+        mostrarDependencias_ = !mostrarDependencias_;
+        cambiarPestana_('cronograma');
+      });
+    }
 
     var nuevoHito = cont.querySelector('.js-py-nuevo-hito');
     if (nuevoHito) nuevoHito.addEventListener('click', abrirFormularioHito_);
