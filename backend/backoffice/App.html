@@ -17244,6 +17244,11 @@ var Iconos = (function () {
   function abrirProyecto_(id) {
     proyectoActivoId_ = id;
     pestanaActiva_ = 'resumen';
+    // La sub-vista del Cronograma tambien vuelve a su inicio. Sin esto
+    // sobrevivia al cambio de proyecto mientras sus datos NO: abrir otro
+    // proyecto con la vista en 'analitica' dejaba un spinner permanente,
+    // porque nadie pedia una analitica que ya se creia en curso.
+    vistaCronograma_ = 'dedicacion';
     datosDetalleActual_ = null;
     refrescarDetalle_();
   }
@@ -17392,6 +17397,10 @@ var Iconos = (function () {
   // esta apertura del proyecto, repinta desde cache sin red.
   function cargarDatosCronograma_(cont) {
     if (!datosDetalleActual_) return;
+    // Red de seguridad del spinner eterno: si se entra a la pestaña con la
+    // sub-vista ya en 'analitica', hay que pedirla aqui -- el manejador del
+    // cambio de sub-vista no se dispara porque la vista no cambio.
+    if (vistaCronograma_ === 'analitica') pedirAnaliticaProyecto_();
     if (datosDetalleActual_.bitacora !== undefined) {
       pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala,
         datosDetalleActual_.miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento);
@@ -18859,21 +18868,50 @@ var Iconos = (function () {
   // está en caché, solo repinta (sin red); si no, pide obtenerAnaliticaProyecto
   // una vez y la deja en datosDetalleActual_.analitica (mismo criterio de
   // "cargar pesado solo si de verdad se abre" que bitácora/rendimiento).
-  function cargarAnaliticaProyecto_(cont) {
+  // Proyecto cuya analitica se esta pidiendo ahora mismo. Evita disparar
+  // dos veces la misma peticion cuando el cargador de la pestaña y el
+  // cambio de sub-vista coinciden.
+  var analiticaEnVuelo_ = null;
+
+  // PIDE la analitica y la deja en cache. NO repinta: quien llama decide.
+  // Separar pedir de repintar es lo que permite llamarla tambien desde
+  // cargarDatosCronograma_ sin entrar en recursion (repintar vuelve a
+  // entrar al cargador).
+  function pedirAnaliticaProyecto_() {
     if (!datosDetalleActual_) return;
-    if (datosDetalleActual_.analitica !== undefined) { cambiarPestana_('cronograma'); return; }
-    cambiarPestana_('cronograma'); // repinta ya -- pintarAnaliticaProyecto_ muestra "Cargando..." mientras tanto
+    if (datosDetalleActual_.analitica !== undefined) return;   // ya esta
+    if (analiticaEnVuelo_ === proyectoActivoId_) return;       // ya se pidio
+    analiticaEnVuelo_ = proyectoActivoId_;
     var idAlPedir = proyectoActivoId_;
     apiSeguro_('obtenerAnaliticaProyecto', { proyecto_id: proyectoActivoId_ }).then(function (r) {
+      if (analiticaEnVuelo_ === idAlPedir) analiticaEnVuelo_ = null;
       if (!datosDetalleActual_ || idAlPedir !== proyectoActivoId_) return;
+      // null (no undefined) para que pintarAnaliticaProyecto_ muestre el
+      // estado de error en vez de seguir en "Cargando..." para siempre.
       datosDetalleActual_.analitica = (r && r.ok) ? r.data : null;
       if (pestanaActiva_ === 'cronograma' && vistaCronograma_ === 'analitica') cambiarPestana_('cronograma');
     });
   }
 
+  function cargarAnaliticaProyecto_(cont) {
+    if (!datosDetalleActual_) return;
+    cambiarPestana_('cronograma'); // repinta ya: cache si la hay, spinner si no
+    pedirAnaliticaProyecto_();
+  }
+
   // v11 (P3, "SPI conceptual" en pantalla): tooltips explican qué es cada
   // métrica en una frase -- "explicable, no una metodología completa" aplica
   // también a cómo se presenta, no solo a cómo se calcula.
+  // Las tareas que tienen ALGO que mostrar. Una sola definicion para la
+  // tabla y para el CSV: si divergen, se descarga algo distinto de lo que
+  // se ve, que es justo lo que pasaba.
+  function tareasConDatoAnalitica_(analitica) {
+    return ((analitica && analitica.por_tarea) || []).filter(function (t) {
+      return t.lead_time_dias !== null || t.cycle_time_dias !== null ||
+        t.tiempo_bloqueo_dias > 0 || t.tiempo_revision_dias > 0;
+    });
+  }
+
   function pintarAnaliticaProyecto_(analitica, tareas) {
     if (analitica === undefined) return Componentes.cargando('Cargando analítica...');
     if (!analitica) return Componentes.vacio({ texto: 'No se pudo cargar la analítica de este proyecto.' });
@@ -18903,9 +18941,7 @@ var Iconos = (function () {
         : '') +
     '</div>';
 
-    var conDato = (analitica.por_tarea || []).filter(function (t) {
-      return t.lead_time_dias !== null || t.cycle_time_dias !== null || t.tiempo_bloqueo_dias > 0 || t.tiempo_revision_dias > 0;
-    });
+    var conDato = tareasConDatoAnalitica_(analitica);
     if (!conDato.length) {
       return kpis + Componentes.vacio({ texto: 'Todavía no hay tareas terminadas, bloqueadas o en revisión para desglosar.' });
     }
@@ -20672,11 +20708,27 @@ var Iconos = (function () {
       analiticaCsvBtn.addEventListener('click', function () {
         var analitica = datosDetalleActual_ && datosDetalleActual_.analitica;
         if (!analitica) return;
-        var filas = [['Tarea', 'Lead time (días)', 'Cycle time (días)', 'Tiempo en bloqueo (días)', 'Tiempo en revisión (días)']];
-        analitica.por_tarea.forEach(function (t) {
+        var nombreProyecto = (datosDetalleActual_.detalle && datosDetalleActual_.detalle.proyecto && datosDetalleActual_.detalle.proyecto.nombre) || 'proyecto';
+        // Cabecera de documento, igual que los otros reportes del modulo:
+        // un CSV que se abre dos semanas despues tiene que decir solo de
+        // que proyecto es, de cuando y quien lo emitio.
+        var emitido = new Date();
+        var fechaTxt;
+        try { fechaTxt = emitido.toLocaleString('es-CL', { dateStyle: 'long', timeStyle: 'short' }); }
+        catch (e) { fechaTxt = emitido.toISOString().slice(0, 16).replace('T', ' '); }
+        var filas = [
+          ['SIGSO — Asesorías Integrales AyS SpA'],
+          ['Reporte', 'Analítica de tareas (lead time / cycle time)'],
+          ['Código', 'SIGSO-REP-PY-ANALITICA'],
+          ['Proyecto', nombreProyecto],
+          ['Emitido', fechaTxt],
+          ['Generado por', (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || ''],
+          [],
+          ['Tarea', 'Lead time (días)', 'Cycle time (días)', 'Tiempo en bloqueo (días)', 'Tiempo en revisión (días)']
+        ];
+        tareasConDatoAnalitica_(analitica).forEach(function (t) {
           filas.push([t.titulo, t.lead_time_dias, t.cycle_time_dias, t.tiempo_bloqueo_dias, t.tiempo_revision_dias]);
         });
-        var nombreProyecto = (datosDetalleActual_.detalle && datosDetalleActual_.detalle.proyecto && datosDetalleActual_.detalle.proyecto.nombre) || 'proyecto';
         descargarCsv_('Analitica - ' + nombreProyecto + '.csv', filas);
       });
     }

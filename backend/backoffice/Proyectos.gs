@@ -465,6 +465,8 @@ var Proyectos = {
     if (!liderEmail) return errorValidacion_('lider_email', 'Falta el líder del proyecto.');
     if (!data.fecha_inicio) return errorValidacion_('fecha_inicio', 'La fecha de inicio es obligatoria.');
     if (!data.fecha_objetivo) return errorValidacion_('fecha_objetivo', 'La fecha objetivo es obligatoria.');
+    var errFechas = errorFechasProyecto_(data.fecha_inicio, data.fecha_objetivo);
+    if (errFechas) return errFechas;
 
     // v10 (Fase D, propuesta 10 "Solicitud -> Proyecto"): se valida ANTES de
     // crear nada -- una solicitud inexistente o ya convertida no debe dejar
@@ -628,6 +630,14 @@ var Proyectos = {
       if (data[campo] !== undefined) cambios[campo] = data[campo];
     });
     if (data.prioridad && ORDEN_PRIORIDAD.indexOf(data.prioridad) !== -1) cambios.prioridad = data.prioridad;
+
+    // Se valida la combinacion que QUEDA, no el campo que llego: se puede
+    // mover una sola de las dos fechas y romper el orden contra la otra.
+    var errFechasAct = errorFechasProyecto_(
+      data.fecha_inicio !== undefined ? data.fecha_inicio : proyecto.fecha_inicio,
+      data.fecha_objetivo !== undefined ? data.fecha_objetivo : proyecto.fecha_objetivo
+    );
+    if (errFechasAct) return errFechasAct;
 
     var notaEstado = '';
     if (data.estado && data.estado !== proyecto.estado) {
@@ -3260,6 +3270,20 @@ function puedeVerProyecto_(proyecto, contexto) {
 }
 
 // Gestion (editar proyecto, equipo, hitos): LIDER del proyecto o ADM.
+// Un proyecto no puede terminar antes de empezar. Devuelve el error de
+// validacion o null. Fechas iguales se aceptan: un proyecto de un solo dia
+// es legitimo.
+function errorFechasProyecto_(inicio, objetivo) {
+  if (!inicio || !objetivo) return null;
+  var i = new Date(inicio), o = new Date(objetivo);
+  if (isNaN(i.getTime()) || isNaN(o.getTime())) return null;  // otras validaciones se ocupan
+  if (o < i) {
+    return errorValidacion_('fecha_objetivo',
+      'La fecha objetivo no puede ser anterior a la fecha de inicio.');
+  }
+  return null;
+}
+
 function puedeGestionarProyecto_(proyecto, contexto) {
   if (!contexto) return false;
   if (contexto.rol === 'ADM') return true;

@@ -589,6 +589,17 @@
 
   function renderIdentidad_() {
     var cuenta = sesion.cuenta;
+    // v13.6: quien esta usando la plataforma, publicado para los modulos.
+    // Las cabeceras de documento de los 38 reportes (Calidad, Gerencia,
+    // Jefatura, Proyectos) leen window.SIGSO_USUARIO para el "Generado por",
+    // y ese global no lo definia NADIE: el campo salia vacio siempre y la
+    // cabecera lo omitia en silencio. Se publica aca porque renderIdentidad_
+    // corre en todos los caminos por los que se establece la sesion.
+    window.SIGSO_USUARIO = {
+      nombre: cuenta.nombre,
+      rol: cuenta.rol,
+      email: (cuenta.emails || [])[0] || ''
+    };
     document.getElementById('nav-nombre-usuario').textContent = cuenta.nombre;
     document.getElementById('nav-rol-usuario').textContent =
       ETIQUETA_ROL[cuenta.rol] || cuenta.rol;
