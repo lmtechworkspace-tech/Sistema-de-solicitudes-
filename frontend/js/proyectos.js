@@ -2085,7 +2085,7 @@
         Componentes.boton({ texto: 'Analítica', variante: vistaCronograma_ === 'analitica' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'analitica' }) +
       '</div>';
     var cuerpo;
-    if (vistaCronograma_ === 'plan') cuerpo = pintarCronogramaPlan_(detalle, tareas, ctxEdicion);
+    if (vistaCronograma_ === 'plan') cuerpo = pintarCronogramaPlan_(detalle, tareas, ctxEdicion, rendimiento);
     else if (vistaCronograma_ === 'historial') cuerpo = pintarHistorialProyecto_(tareas, bitacora || []);
     else if (vistaCronograma_ === 'workload') cuerpo = pintarWorkloadProyecto_(detalle, tareas, bitacora || []);
     else if (vistaCronograma_ === 'analitica') cuerpo = pintarAnaliticaProyecto_(datosDetalleActual_ && datosDetalleActual_.analitica, tareas);
@@ -3447,7 +3447,7 @@
     });
   }
 
-  function pintarCronogramaPlan_(detalle, tareas, ctxEdicion) {
+  function pintarCronogramaPlan_(detalle, tareas, ctxEdicion, rendimiento) {
     var p = detalle.proyecto;
     var hitos = (detalle.hitos || []).filter(function (h) { return h.fecha_objetivo; });
     var tareasConFecha = tareas.filter(function (a) { return a.fecha_compromiso; });
@@ -3463,6 +3463,17 @@
     // v13 (Fase 1, "ruta crítica"): el toggle solo tiene sentido si hay al
     // menos una dependencia definida -- si no, resaltar "la tarea más larga"
     // sería engañoso (ver calcularRutaCritica_ en el backend).
+    // La linea base congelada, indexada por tarea. Viene dentro de
+    // rendimiento.plan_seguimiento (obtenerRendimiento ya la resolvia); aqui
+    // solo se cambia de forma para poder consultarla al dibujar cada fila.
+    var basePorTarea = {};
+    var infoBaseline = (rendimiento && rendimiento.baseline) || null;
+    ((rendimiento && rendimiento.plan_seguimiento) || []).forEach(function (t) {
+      if (t.baseline_inicio && t.baseline_fin) {
+        basePorTarea[t.actividad_id] = { inicio: t.baseline_inicio, fin: t.baseline_fin };
+      }
+    });
+
     var hayRutaCritica = tareas.some(function (a) { return !!a.depende_de; });
     var resaltarCritica = hayRutaCritica && mostrarRutaCritica_;
 
@@ -3542,6 +3553,24 @@
         ? ' · ' + (a.es_critica ? 'ruta crítica (holgura 0)' : 'holgura ' + a.holgura_dias + ' día(s)') : '';
       // El chip de fecha va a la DERECHA de la barra; si la barra termina muy a
       // la derecha (poco espacio), no se pone (el title y la etiqueta lo dan).
+      // Linea base: riel fino bajo la barra real. Solo si esta tarea estaba
+      // en la foto congelada -- una tarea creada DESPUES de congelar no
+      // tiene contra que compararse, y dibujarle un riel vacio mentiria.
+      var base = basePorTarea[a.actividad_id];
+      var rielBase = '';
+      if (base) {
+        var baseIni = offsetPx_(base.inicio), baseFin = offsetPx_(base.fin);
+        var corrimiento = Math.round((new Date(a.fecha_compromiso) - new Date(base.fin)) / 86400000);
+        var claseCorr = corrimiento > 0 ? ' sigso-py-gantt-base--atrasa'
+          : (corrimiento < 0 ? ' sigso-py-gantt-base--adelanta' : '');
+        var txtCorr = corrimiento === 0
+          ? 'sin cambios respecto de la línea base'
+          : (corrimiento > 0 ? corrimiento + ' día(s) más tarde que la línea base'
+                             : Math.abs(corrimiento) + ' día(s) antes que la línea base');
+        rielBase = '<div class="sigso-py-gantt-base' + claseCorr + '" style="left:' + baseIni +
+          'px; width:' + Math.max(baseFin - baseIni, 4) + 'px" title="Línea base: ' +
+          Componentes.escaparHtml(fechaCorta_(base.inicio) + ' → ' + fechaCorta_(base.fin) + ' · ' + txtCorr) + '"></div>';
+      }
       var chipFecha = '<div class="sigso-py-gantt-fecha" style="left:' + (finPx + 6) + 'px">' + Componentes.escaparHtml(fechaCorta_(a.fecha_compromiso)) + '</div>';
       return '<div class="sigso-py-gantt-fila">' +
         '<div class="sigso-py-gantt-etiqueta">' +
@@ -3549,6 +3578,7 @@
           '<div class="sigso-py-gantt-etiqueta__meta">' + meta + '</div>' +
         '</div>' +
         '<div class="sigso-py-gantt-track" style="width:' + anchoTotal + 'px">' +
+          rielBase +
           '<div class="sigso-py-cron-barra sigso-py-gantt-barra sigso-py-cron-barra--' + codigo + (editable ? ' sigso-py-gantt-barra--editable' : '') + critClase +
             '" data-act="' + Componentes.escaparHtml(a.actividad_id) + '"' +
             (a.depende_de ? ' data-dep="' + Componentes.escaparHtml(a.depende_de) + '"' : '') +
@@ -3576,7 +3606,9 @@
       '<span class="sigso-ayuda">Hitos (◆) y tareas con fecha comprometida, de ' +
         (p.fecha_inicio ? fechaCorta_(p.fecha_inicio) : '—') + ' a ' + (p.fecha_objetivo ? fechaCorta_(p.fecha_objetivo) : '—') +
         (puedeEditar ? '. Arrastra el borde derecho de una barra para reprogramarla.' : '') +
-        (resaltarCritica ? ' Resaltadas: la cadena de tareas que determina la duración del proyecto.' : '') + '</span>' +
+        (resaltarCritica ? ' Resaltadas: la cadena de tareas que determina la duración del proyecto.' : '') +
+        (infoBaseline ? ' El riel gris bajo cada barra es la línea base congelada el ' +
+          Componentes.escaparHtml(fechaCorta_(infoBaseline.timestamp)) + '.' : '') + '</span>' +
     '</div>';
 
     return controles +

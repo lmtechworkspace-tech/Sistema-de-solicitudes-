@@ -3471,6 +3471,22 @@
 .sigso-py-gantt-etiqueta__punto { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; }
 .sigso-py-gantt-track { position: relative; height: 2.9rem; flex: 0 0 auto; }
 
+/* Linea base congelada: riel fino DEBAJO de la barra real.
+
+   Debajo y no detras: detras seria mas literal, pero con fechas iguales
+   queda oculta y con fechas distintas se ve a medias tapada. Un riel
+   propio siempre se ve entero y la comparacion se lee de un vistazo.
+
+   El color dice el sentido del corrimiento: gris si no se movio, ambar si
+   la tarea se fue mas tarde, verde si se adelanto. */
+.sigso-py-gantt-base {
+  position: absolute; bottom: 3px; height: 4px;
+  border-radius: 2px; min-width: 4px;
+  background: color-mix(in srgb, var(--texto-3, #94a3b8) 55%, transparent);
+}
+.sigso-py-gantt-base--atrasa { background: color-mix(in srgb, var(--alerta) 60%, transparent); }
+.sigso-py-gantt-base--adelanta { background: color-mix(in srgb, var(--ok) 55%, transparent); }
+
 /* G-01: conectores de dependencia. Capa SVG sobre las barras, dentro del
    mismo body -- asi scrollea con el Gantt sin recalcular nada.
 
