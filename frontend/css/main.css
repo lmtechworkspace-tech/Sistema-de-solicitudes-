@@ -254,15 +254,59 @@ button {
   cursor: pointer;
 }
 
+/* FORMA COMPARTIDA DE TODOS LOS BOTONES (v13.1).
+
+   Hasta aqui el relleno vivia solo en .sigso-boton, y los modificadores
+   (--secundario, --sutil, --peligro) daban por hecho que la clase base
+   viajaba con ellos. En el codigo casi nunca viaja: MEDIDOS 102 botones
+   que usan el modificador solo y por tanto renderizaban con el relleno
+   por defecto del navegador -- 21 px de alto en vez de 36, aplastados al
+   lado de un campo de tamaño normal.
+
+   Ahora la forma la comparten los cuatro selectores y cada modificador se
+   ocupa solo del color. Se arregla aqui y no en las 102 llamadas porque
+   asi deja de poder repetirse: quien escriba mañana `--secundario` a
+   secas obtiene el boton correcto.
+
+   El minimo de 2.25rem (36 px) no es decorativo: es el alto que ya tenia
+   el primario, y lo que hace que un boton y un campo de formulario se
+   vean de la misma familia cuando estan uno al lado del otro. */
+.sigso-boton,
+.sigso-boton--secundario,
+.sigso-boton--sutil,
+.sigso-boton--peligro {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 2.25rem;
+  border-radius: var(--radio-sm);
+  padding: 0.6rem 1.25rem;
+  font-family: inherit;
+  font-size: var(--texto-sm);
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+/* En pantalla tactil, 36 px se queda corto: la pauta WCAG 2.2 (2.5.8, AA)
+   exige 24x24 y las guias de Apple y Google recomiendan 44. Se sube solo
+   bajo pointer:coarse para no perder densidad en escritorio, donde el
+   raton apunta con precision. */
+@media (pointer: coarse) {
+  .sigso-boton,
+  .sigso-boton--secundario,
+  .sigso-boton--sutil,
+  .sigso-boton--peligro {
+    min-height: 2.75rem;
+  }
+}
+
 /* Boton primario v5.0: indigo, la UNICA accion primaria por pantalla (§4.2).
    El naranja ya no es color de boton. */
 .sigso-boton {
   background: var(--primario);
   color: var(--texto-invertido);
   border: none;
-  border-radius: var(--radio-sm);
-  padding: 0.6rem 1.25rem;
-  font-size: var(--texto-sm);
   font-weight: 600;
   transition: background var(--mov-normal), transform var(--mov-rapido);
 }
