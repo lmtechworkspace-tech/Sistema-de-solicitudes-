@@ -1045,8 +1045,17 @@ var Novedades = (function () {
       if (!data || !data.novedad_id) {
         return errorValidacion_('novedad_id', 'Falta indicar la novedad.');
       }
-      if (!buscarNovedad_(data.novedad_id)) {
+      var novedad = buscarNovedad_(data.novedad_id);
+      if (!novedad) {
         return errorValidacion_('novedad_id', 'No existe esa novedad.');
+      }
+      // Mismo criterio que getDetalle y descargarAdjunto. Sin esto, con el id
+      // a mano se podia dejar un acuse sobre una novedad que ni siquiera se
+      // puede abrir -- incluida una en revision, todavia sin publicar. El
+      // acuse es la evidencia de que la persona LEYO algo: registrarlo sobre
+      // un texto al que no tiene acceso convierte esa evidencia en un papel.
+      if (!puedeVerDetalle_(novedad, contexto)) {
+        return { _forbidden: true, message: 'No tienes acceso a esta novedad.' };
       }
       var correo = normalizarEmail_(contexto.email);
       var yaLeida = filasLecturas_().some(function (l) {

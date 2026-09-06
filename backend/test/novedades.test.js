@@ -1065,3 +1065,33 @@ test('58. getPanelCumplimiento no incluye novedades sin fecha limite ni las inac
   assert.ok(!titulos.includes('Sin plazo'));
   assert.ok(!titulos.includes('Retirada'));
 });
+
+test('59. marcarLeida: SEGURIDAD -- no se puede acusar recibo de lo que no se puede leer', () => {
+  // Mismo criterio que el test 30 sobre getDetalle, y que descargarAdjunto:
+  // si la novedad no es visible, tampoco se le puede dejar un acuse encima.
+  //
+  // El acuse es la EVIDENCIA de que una persona leyo algo. Registrarlo sobre
+  // un texto que ni siquiera esta publicado no es un permiso de mas: es una
+  // evidencia falsa, y en un sistema que existe para sostener una
+  // certificacion eso pesa mas que la escritura misma.
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
+
+  const r = toPlain(ctx.Novedades.marcarLeida({ novedad_id: pub.novedad_id }, ctxCualquiera()));
+  assert.equal(r._forbidden, true, 'una novedad EN_REVISION no admite acuse de un tercero');
+  assert.equal(ctx.leerFilas_('NOVEDADES_LECTURAS').length, 0,
+    'y sobre todo: no queda la fila. Un forbidden que igual escribe no sirve de nada');
+});
+
+test('60. marcarLeida sigue funcionando en el caso normal: publicada y en audiencia', () => {
+  // Contrapeso del anterior. Un porton que cierra de mas rompe el modulo
+  // entero sin que ningun test de seguridad lo note.
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_(), ctxResponsable()));
+
+  const r = toPlain(ctx.Novedades.marcarLeida({ novedad_id: pub.novedad_id }, ctxCualquiera()));
+  assert.equal(r.leida, true);
+  assert.equal(ctx.leerFilas_('NOVEDADES_LECTURAS').length, 1);
+});
