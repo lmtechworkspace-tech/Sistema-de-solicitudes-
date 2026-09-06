@@ -362,3 +362,81 @@ test('Dashboard.getData: JEFATURA en "Bandeja de trabajo" solo ve lo asignado a 
 
   assert.equal(datos.recientes.length, 0, '"Bandeja de trabajo" no es "Mi departamento" -- se ve desde el Panel de Jefatura');
 });
+
+// --- el responsable de un ITEM es el suyo, no el de la cabecera ----------
+
+/** Siembra una subsolicitud suelta, con su propio responsable. */
+function seedSubConResponsable(ctx, solicitudId, numero, titulo, responsable) {
+  const datos = {
+    subsolicitud_id: solicitudId + '-0' + numero, solicitud_id: solicitudId, numero_item: numero,
+    titulo: titulo, descripcion: 'x', estado: 'S02', prioridad: 'P2', sla_objetivo_horas: 24,
+    fecha_creacion: new Date().toISOString(), desarrollador_asignado: responsable
+  };
+  const fila = ctx.COLUMNAS.SUBSOLICITUDES.map((c) => (datos[c] !== undefined ? datos[c] : ''));
+  ctx.SpreadsheetApp.openById('fake-sheet-id').getSheetByName('SUBSOLICITUDES').appendRow(fila);
+}
+
+test('el panel NO cuenta un item reasignado FUERA del equipo, aunque la cabecera sea de los mios', () => {
+  // Bastaba con que el desarrollador de CABECERA fuera del equipo para que
+  // se colaran tambien los items reasignados a terceros. El panel llegaba a
+  // contradecirse solo: la banda decia 2 abiertas del equipo y la tabla por
+  // persona atribuia 1, porque esa tabla si mira al responsable real.
+  const ctx = loadConSchema();
+  seedJefatura(ctx, { subordinado_email: 'vanessa@rld.cl' });
+  // La pide alguien de fuera; Vanessa figura como desarrolladora de cabecera.
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-RLD-0001', solicitante_email: 'fuera@rld.cl',
+    desarrollador_asignado: 'vanessa@rld.cl'
+  }, []);
+  seedSubConResponsable(ctx, 'SOL-2026-RLD-0001', 1, 'Item de Vanessa', 'vanessa@rld.cl');
+  seedSubConResponsable(ctx, 'SOL-2026-RLD-0001', 2, 'Item del ajeno', 'ajeno@rld.cl');
+
+  const panel = ctx.Jefatura.getPanel({}, { email: 'lisseth@rld.cl', rol: 'JEFATURA' });
+
+  assert.deepEqual(panel.items.map((i) => i.titulo), ['Item de Vanessa'],
+    'el item del ajeno no es trabajo de este equipo');
+
+  // La invariante que hace visible el fallo sin depender de un numero fijo:
+  // lo que dice la banda tiene que cuadrar con lo que dice la tabla.
+  const sumaPorPersona = panel.por_persona.reduce((s, p) => s + p.asignadas_abiertas, 0);
+  assert.equal(panel.kpis.abiertas, sumaPorPersona,
+    'la banda y la tabla por persona no pueden contar cosas distintas');
+});
+
+test('un item SIN responsable propio sigue contando por el de la cabecera', () => {
+  // El respaldo tiene que seguir vivo: es el caso normal cuando la solicitud
+  // se asigna entera y los items no llevan responsable suelto. Sin esto, el
+  // arreglo de arriba vaciaria el panel de casi todos los jefes.
+  const ctx = loadConSchema();
+  seedJefatura(ctx, { subordinado_email: 'vanessa@rld.cl' });
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-RLD-0002', solicitante_email: 'fuera@rld.cl',
+    desarrollador_asignado: 'vanessa@rld.cl'
+  }, []);
+  seedSubConResponsable(ctx, 'SOL-2026-RLD-0002', 1, 'Item sin responsable propio', '');
+
+  const panel = ctx.Jefatura.getPanel({}, { email: 'lisseth@rld.cl', rol: 'JEFATURA' });
+  assert.deepEqual(panel.items.map((i) => i.titulo), ['Item sin responsable propio']);
+});
+
+test('el arreglo del panel NO toca quien puede ABRIR una solicitud', () => {
+  // esDelEquipoJefaturaSolicitud_ (el porton de getDetalle) llama a la misma
+  // funcion con subsolicitud = null. Si el arreglo hubiera endurecido ese
+  // camino, un jefe habria dejado de poder abrir solicitudes que si le
+  // tocan -- una regresion de acceso disfrazada de arreglo de conteo.
+  const ctx = loadConSchema();
+  seedJefatura(ctx, { subordinado_email: 'vanessa@rld.cl' });
+  // La CABECERA es de un ajeno: el unico vinculo con el equipo es un ITEM
+  // suelto. Es el caso que SOLO cubre el recorrido de subsolicitudes; si la
+  // cabecera tambien fuera de Vanessa, el test pasaria aunque ese recorrido
+  // estuviera roto -- y asi estaba escrito al principio, sin detectar nada.
+  seedSolicitud(ctx, {
+    solicitud_id: 'SOL-2026-RLD-0003', solicitante_email: 'fuera@rld.cl',
+    desarrollador_asignado: 'ajeno@rld.cl'
+  }, []);
+  seedSubConResponsable(ctx, 'SOL-2026-RLD-0003', 1, 'Item del ajeno', 'ajeno@rld.cl');
+  seedSubConResponsable(ctx, 'SOL-2026-RLD-0003', 2, 'Item de Vanessa', 'vanessa@rld.cl');
+
+  const detalle = ctx.Solicitudes.getDetalle('SOL-2026-RLD-0003', { email: 'lisseth@rld.cl', rol: 'JEFATURA' });
+  assert.notEqual(detalle._forbidden, true, 'la jefa sigue pudiendo abrir la solicitud');
+});

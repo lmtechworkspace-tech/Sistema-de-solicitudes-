@@ -168,6 +168,33 @@
   }
 
   // v4.2 (§5): Lisseth ve a Vanessa individual.
+  /**
+   * Una celda que dice "aqui hay que hacer algo", en la FORMA y no solo en el
+   * numero.
+   *
+   * La tabla del equipo eran cinco columnas de digitos sueltos: un 0 y un 7 se
+   * leian igual, y las dos columnas donde el jefe tiene que actuar quedaban
+   * enterradas entre las que solo informan. Un jefe abre esta tabla para
+   * decidir a quien le pregunta hoy.
+   *
+   * El cero NO se pinta de color ni se destaca: se apaga. Si todo lleva
+   * distintivo, ninguno distingue nada -- que es exactamente lo que pasaba,
+   * solo que con numeros. Apagado, el unico 3 de la columna salta solo.
+   *
+   * Y sigue siendo un CERO, no un guion. En una tabla de datos el guion
+   * significa "no aplica" o "no se midio"; aqui si se midio y el resultado es
+   * ninguno. Son cosas distintas y un jefe no tiene por que adivinar cual.
+   *
+   * Se reusa el vocabulario que ya existe en el CSS (sigso-badge--critico /
+   * --alerta) en vez de inventar otro. Estaba declarado y sin usar desde
+   * ningun modulo.
+   */
+  function celdaAtencion_(valor, variante) {
+    var n = Number(valor) || 0;
+    if (n === 0) return '<span class="sigso-tabla-cero">0</span>';
+    return '<span class="sigso-badge sigso-badge--' + variante + '">' + n + '</span>';
+  }
+
   function renderPorPersona_(porPersona) {
     var contenedor = document.getElementById('jef-contenedor-persona');
     if (!porPersona.length) {
@@ -180,9 +207,9 @@
       return '<tr>' +
         '<td>' + Componentes.escaparHtml(p.nombre) + '</td>' +
         '<td>' + p.solicitadas_abiertas + ' / ' + p.solicitadas_total + '</td>' +
-        '<td>' + p.solicitadas_esperando_validacion + '</td>' +
+        '<td>' + celdaAtencion_(p.solicitadas_esperando_validacion, 'alerta') + '</td>' +
         '<td>' + p.asignadas_abiertas + ' / ' + p.asignadas_total + '</td>' +
-        '<td>' + p.asignadas_en_riesgo + '</td>' +
+        '<td>' + celdaAtencion_(p.asignadas_en_riesgo, 'critico') + '</td>' +
         '</tr>';
     }).join('');
     contenedor.innerHTML = '<div style="overflow-x:auto"><table class="sigso-tabla-tablero"><thead>' + encabezado + '</thead><tbody>' + cuerpo + '</tbody></table></div>';

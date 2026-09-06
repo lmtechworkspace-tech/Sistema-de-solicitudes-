@@ -196,9 +196,23 @@ function jefeDeSubordinado_(subordinadoEmail) {
 // sea uno solo, nunca dos implementaciones que puedan divergir.
 function esDelEquipoJefatura_(solicitud, subsolicitud, equipoSet) {
   if (equipoSet[solicitud.solicitante_email]) return true;
-  if (equipoSet[solicitud.desarrollador_asignado]) return true;
-  if (subsolicitud && equipoSet[subsolicitud.desarrollador_asignado]) return true;
-  return false;
+  // El responsable de un ITEM es el suyo propio; el de la solicitud es solo
+  // el respaldo cuando el item no lleva uno.
+  //
+  // Antes se aceptaban los dos por separado, y eso colaba items que no eran
+  // de nadie del equipo: bastaba con que el desarrollador de CABECERA fuera
+  // del equipo para que se vieran tambien los items reasignados fuera. El
+  // panel llegaba a contradecirse -- la banda decia 2 abiertas del equipo y
+  // la tabla por persona atribuia 1, porque esa tabla si mira al responsable
+  // real. Se usa la MISMA expresion que el mapeo de abajo, para que "de quien
+  // es este item" tenga una sola respuesta.
+  //
+  // Ojo: esto NO cambia quien puede ABRIR una solicitud. Ese porton es
+  // esDelEquipoJefaturaSolicitud_, que llama aqui con subsolicitud = null; el
+  // respaldo devuelve entonces el desarrollador de la solicitud, igual que
+  // siempre, y ademas recorre todas las subsolicitudes por su cuenta.
+  var responsable = (subsolicitud && subsolicitud.desarrollador_asignado) || solicitud.desarrollador_asignado;
+  return !!(responsable && equipoSet[responsable]);
 }
 
 // Igual que esDelEquipoJefatura_ pero evaluando TODAS las subsolicitudes de

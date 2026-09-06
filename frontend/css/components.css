@@ -2917,6 +2917,13 @@
    -- no comunica estado ni urgencia, solo un dato adicional del contexto. */
 .sigso-badge--neutro { background: var(--superficie-2); color: var(--texto-2); }
 
+/* El "nada que hacer" de una columna de atencion (tabla del equipo en
+   Jefatura). Sigue siendo un cero -- el dato existe y vale cero, que no es lo
+   mismo que "no aplica" -- pero deliberadamente APAGADO: si pesara igual que
+   los demas, la columna volveria a ser una fila de digitos donde no destaca
+   ninguno. */
+.sigso-tabla-cero { color: var(--texto-3); }
+
 .sigso-novedades__cabecera {
   display: flex;
   align-items: center;
