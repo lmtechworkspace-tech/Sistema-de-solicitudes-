@@ -1021,7 +1021,12 @@
   <!-- v9.0: modulo "Proyectos". Antes de plataforma.js, que lo invoca desde
        mostrarModulo_. -->
   <script src="js/proyectos.js"></script>
-  <script src="js/calidad.js"></script>
+  <!-- v15.1: calidad.js (102 KB, el archivo mas grande del frontend) NO se
+       carga aqui. Lo pide carga-diferida.js en cuanto el navegador queda
+       ocioso, con lo que sale del camino critico del arranque sin que nadie
+       llegue a esperarlo. El porque de que Proyectos SI siga arriba esta
+       explicado en la cabecera de carga-diferida.js. -->
+  <script src="js/carga-diferida.js"></script>
   <!-- v7.1: notificaciones "en vivo" (modal + toast del SO), transversal.
        Antes de plataforma.js, que expone window.SigsoShell.irAModulo. -->
   <script src="js/notificaciones-vivas.js"></script>

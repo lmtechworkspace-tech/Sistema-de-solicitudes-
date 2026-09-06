@@ -367,6 +367,15 @@
 
     mostrarModulo_(moduloInicial);
 
+    // Calidad sale del camino critico (carga-diferida.js) pero se pide en
+    // cuanto el navegador queda ocioso: asi no se paga en el arranque y ya
+    // esta cuando alguien la abre. Al llegar hay que repintar el arbol --
+    // Calidad registra sus submodulos al cargar, y de eso depende que el
+    // sidebar le dibuje la flechita de desplegable.
+    if (window.SigsoCarga) {
+      window.SigsoCarga.precargar().then(function () { renderNav_(); });
+    }
+
     // Atras/adelante del navegador: hasta la v12.0 sacaban al usuario de
     // SIGSO entero, porque no habia historial interno que recorrer.
     if (window.SigsoRutas) {
@@ -1354,10 +1363,39 @@
     if (id === 'proyectos' && window.SigsoProyectos) {
       window.SigsoProyectos.cargar();
     }
-    if (id === 'calidad' && window.SigsoCalidad) {
-      window.SigsoCalidad.cargar();
+    if (id === 'calidad') {
+      abrirCalidad_();
     }
     window.scrollTo(0, 0);
+  }
+
+  // Calidad es el unico modulo que se carga aparte (carga-diferida.js: 102 KB
+  // de los 438 del frontend). Casi siempre ya llego por la precarga ociosa y
+  // esto resuelve en el mismo tic; el camino lento solo se ve si alguien abre
+  // Calidad en los primeros segundos, o si la precarga fallo.
+  function abrirCalidad_() {
+    if (window.SigsoCalidad) { window.SigsoCalidad.cargar(); return; }
+    if (!window.SigsoCarga) return; // pagina sin carga diferida (app.html)
+
+    var contenedor = document.getElementById('calidad-contenido');
+    if (contenedor) contenedor.innerHTML = Componentes.cargando('Cargando Calidad...');
+
+    window.SigsoCarga.pedir('calidad').then(function () {
+      // El usuario pudo irse a otro modulo mientras bajaba: pintar aqui le
+      // cambiaria la pantalla debajo de las manos.
+      if (moduloActivo_ !== 'calidad') return;
+      if (!window.SigsoCalidad) {
+        if (contenedor) {
+          contenedor.innerHTML = Componentes.alerta(
+            'No se pudo cargar el módulo Calidad. Revisa tu conexión y vuelve a entrar.', 'error');
+        }
+        return;
+      }
+      // El arbol del sidebar se repinta porque Calidad acaba de registrar sus
+      // submodulos al cargar: sin esto se quedaria sin su rama desplegada.
+      renderNav_();
+      window.SigsoCalidad.cargar();
+    });
   }
 
   // P4: Administracion usa las mismas acciones del Backoffice por token, asi
