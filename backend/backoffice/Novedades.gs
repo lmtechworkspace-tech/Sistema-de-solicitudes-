@@ -301,8 +301,35 @@ var Novedades = (function () {
   // el autor al publicar (carril LIBRE) o quien aprueba (carril CONTROLADO).
   var TIPOS_EXIGEN_PLAZO = { LEY: true, DICTAMEN: true };
 
-  function validarFechaLimiteEntrante_(data, tipo) {
+  // Un plazo para dar el acuse solo significa algo si hay un acuse que dar.
+  // Sin esto, las dos opciones eran independientes y se podia guardar la
+  // combinacion contradictoria: la tarjeta anunciaba "Vence en 15 dia(s) para
+  // dar acuse" en una novedad que nadie tiene que confirmar -- un plazo para
+  // hacer algo que no hay como hacer. Reproducido desde el formulario real,
+  // que ofrece la fecha y la casilla como campos sueltos.
+  //
+  // Se RECHAZA en vez de borrar la fecha en silencio: quien publica eligio las
+  // dos cosas, y una de las dos esta de mas. Cual, lo sabe esa persona.
+  function validarFechaLimiteEntrante_(data, tipo, requiereAcuse) {
     var fecha = data.fecha_limite_acuse ? String(data.fecha_limite_acuse).trim() : '';
+    // `undefined` = quien llama todavia no distingue (no deberia quedar
+    // ninguno, pero no se asume acuse false por omision: eso convertiria un
+    // descuido en un rechazo de publicaciones legitimas).
+    var sinAcuse = requiereAcuse === false;
+
+    if (sinAcuse && TIPOS_EXIGEN_PLAZO[tipo]) {
+      // Ley y Dictamen exigen plazo justamente PORQUE hay que acusarlos: es
+      // lo unico con vigencia legal corriendo. Permitirlos sin acuse dejaria
+      // sin evidencia lo que la norma pide demostrar, y ademas chocaria con
+      // la regla de abajo dejando la publicacion imposible de completar.
+      return { error: errorValidacion_('requiere_acuse',
+        'Ley y Dictamen exigen acuse de lectura: son los que llevan un plazo legal que hay que poder demostrar.') };
+    }
+    if (fecha && sinAcuse) {
+      return { error: errorValidacion_('fecha_limite_acuse',
+        'Esta novedad no exige acuse, asi que no puede llevar una fecha limite para darlo. Marca "Exigir acuse" o quita la fecha.') };
+    }
+
     if (!fecha) {
       if (TIPOS_EXIGEN_PLAZO[tipo]) {
         return { error: errorValidacion_('fecha_limite_acuse', 'Este tipo exige una fecha límite para dar el acuse.') };
@@ -735,6 +762,20 @@ var Novedades = (function () {
       var carril = TIPOS[data.tipo].carril;
       var esLibre = carril === 'LIBRE';
 
+      // Ley y Dictamen exigen acuse: son los unicos con un plazo legal
+      // corriendo, y de ahi nacio el modulo ("no tenemos como el control de
+      // quien ya vio y acuso recibo").
+      //
+      // Se comprueba AQUI y no solo al aprobar, aunque el plazo lo fije quien
+      // aprueba. Dejarlo para entonces creaba una novedad IMPOSIBLE de
+      // aprobar: el tipo exige fecha limite, la fecha limite exige acuse, y el
+      // acuse ya se decidio al crearla y ahi nadie lo puede cambiar. Se
+      // quedaba en revision para siempre, sin que el mensaje dijera por que.
+      if (TIPOS_EXIGEN_PLAZO[data.tipo] && data.requiere_acuse === false) {
+        return errorValidacion_('requiere_acuse',
+          'Ley y Dictamen exigen acuse de lectura: son los que llevan un plazo legal que hay que poder demostrar.');
+      }
+
       // v6.7 (Fase 5): en LIBRE la audiencia la elige quien publica, ahora
       // mismo -- no hay aprobacion despues que la pueda corregir. En
       // CONTROLADO se ignora cualquier audiencia que venga en `data`: la
@@ -748,7 +789,9 @@ var Novedades = (function () {
         audiencia = validacionAudiencia;
         // v6.8 (Fase 6): opcional en LIBRE (Aviso/Logro nunca exigen plazo),
         // pero si se manda igual se valida formato/fecha futura.
-        var validacionFecha = validarFechaLimiteEntrante_(data, data.tipo);
+        // Mismo criterio que abajo al construir la fila: el acuse se exige
+        // salvo que lo desmarquen explicitamente.
+        var validacionFecha = validarFechaLimiteEntrante_(data, data.tipo, data.requiere_acuse !== false);
         if (validacionFecha.error) return validacionFecha.error;
         fechaLimite = validacionFecha;
       }
@@ -860,7 +903,10 @@ var Novedades = (function () {
       // v6.8 (Fase 6): Ley/Dictamen exigen fecha limite de acuse al
       // aprobar -- es el punto en que la novedad se hace visible, igual
       // criterio que la audiencia (Fase 5).
-      var validacionFecha = validarFechaLimiteEntrante_(data || {}, n.tipo);
+      // El acuse ya quedo decidido al crearla, asi que sale de la FILA y no
+      // del cuerpo de la peticion: quien aprueba no lo elige.
+      var exigeAcuse = n.requiere_acuse === true || n.requiere_acuse === 'TRUE' || n.requiere_acuse === 1;
+      var validacionFecha = validarFechaLimiteEntrante_(data || {}, n.tipo, exigeAcuse);
       if (validacionFecha.error) return validacionFecha.error;
 
       var ahora = new Date().toISOString();

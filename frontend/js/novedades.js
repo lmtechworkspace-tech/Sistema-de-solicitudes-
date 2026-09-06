@@ -100,6 +100,11 @@
   // v6.8 (Fase 6): plazo para dar el acuse -- el diferenciador de esta fase
   // es que "vence en X días" empuje a confirmar antes de que se cumpla.
   function chipPlazoAcuse_(n) {
+    // Sin acuse no hay plazo que mostrar: seria un vencimiento para hacer algo
+    // que la tarjeta ni siquiera ofrece. El backend ya no deja guardar esa
+    // combinacion, pero las filas anteriores al arreglo siguen en la hoja y
+    // esta pantalla es la que las muestra.
+    if (!n.requiere_acuse) return '';
     if (!n.fecha_limite_acuse || n.dias_para_vencer === undefined || n.dias_para_vencer === null) return '';
     var dias = n.dias_para_vencer;
     var variante = dias < 0 ? 'critico' : (dias <= 2 ? 'alerta' : 'info');
@@ -1110,10 +1115,21 @@
         ? Componentes.alerta('Este tipo requiere la aprobación de tu jefatura antes de publicarse.', 'info')
         : '';
       document.getElementById('np-audiencia-bloque').classList.toggle('sigso-oculto', esControlado);
-      document.getElementById('np-fecha-limite-campo').classList.toggle('sigso-oculto', esControlado);
+      // El plazo se esconde en CONTROLADO (lo fija quien aprueba) y tambien
+      // cuando no se exige acuse: un plazo para dar el acuse no significa nada
+      // si no hay acuse que dar. Antes eran dos campos sueltos y se podia
+      // guardar esa contradiccion -- la tarjeta acababa anunciando "Vence en
+      // 15 dia(s) para dar acuse" en algo que nadie tenia que confirmar.
+      var exigeAcuse = document.getElementById('np-requiere-acuse').checked;
+      document.getElementById('np-fecha-limite-campo')
+        .classList.toggle('sigso-oculto', esControlado || !exigeAcuse);
+      // Al ocultarlo se limpia: un campo invisible no puede seguir mandando su
+      // valor sin que nadie pueda verlo ni corregirlo.
+      if (esControlado || !exigeAcuse) document.getElementById('np-fecha-limite').value = '';
       botonSubmitRef.textContent = esControlado ? 'Enviar a revisión' : 'Publicar';
     }
     selectTipo.addEventListener('change', actualizarAvisoCarril_);
+    document.getElementById('np-requiere-acuse').addEventListener('change', actualizarAvisoCarril_);
     actualizarAvisoCarril_();
 
     var form = document.getElementById('form-publicar-novedad');

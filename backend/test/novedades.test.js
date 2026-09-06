@@ -1095,3 +1095,74 @@ test('60. marcarLeida sigue funcionando en el caso normal: publicada y en audien
   assert.equal(r.leida, true);
   assert.equal(ctx.leerFilas_('NOVEDADES_LECTURAS').length, 1);
 });
+
+test('61. un plazo para dar el acuse exige que haya acuse', () => {
+  // Las dos opciones eran independientes en el formulario, asi que se podia
+  // guardar la combinacion contradictoria. La tarjeta acababa anunciando
+  // "Vence en 15 dia(s) para dar acuse" en una novedad que nadie tiene que
+  // confirmar: un plazo para hacer algo que no hay como hacer.
+  const ctx = cargar();
+  seedArea(ctx);
+
+  const r = toPlain(ctx.Novedades.publicar(publicarBase_({
+    requiere_acuse: false, fecha_limite_acuse: fechaLimiteValida_()
+  }), ctxResponsable()));
+
+  assert.equal(r._validationError, true, 'no se puede fijar plazo de acuse sin acuse');
+  assert.equal(ctx.leerFilas_('NOVEDADES').length, 0, 'y no queda la fila a medias');
+});
+
+test('62. sin acuse y sin plazo se publica igual: el arreglo no cierra de mas', () => {
+  // Contrapeso. Un aviso que no exige confirmacion es perfectamente valido y
+  // es el caso mas comun del carril libre.
+  const ctx = cargar();
+  seedArea(ctx);
+
+  const r = toPlain(ctx.Novedades.publicar(publicarBase_({ requiere_acuse: false }), ctxResponsable()));
+
+  assert.equal(r._validationError, undefined);
+  const fila = ctx.leerFilas_('NOVEDADES')[0];
+  assert.equal(fila.requiere_acuse, false);
+  assert.equal(fila.fecha_limite_acuse, '');
+});
+
+test('63. Ley y Dictamen no se pueden publicar sin acuse', () => {
+  // Son los unicos con un plazo legal corriendo, y por eso el tipo exige
+  // fecha limite. Sin acuse esa fecha no tendria a que referirse, y las dos
+  // reglas se bloquearian entre si dejando la publicacion imposible de
+  // completar. Se rechaza en el campo que causa el problema.
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+
+  const r = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY', requiere_acuse: false }), ctxResponsable()));
+
+  assert.equal(r._validationError, true);
+  assert.ok(/acuse/i.test(JSON.stringify(r.fields || r.message || '')),
+    'el mensaje tiene que apuntar al acuse, no a la fecha: cambiar la fecha no arregla nada');
+});
+
+test('64. una fila vieja contradictoria no queda atrapada: se puede rechazar', () => {
+  // El arreglo impide CREAR la combinacion, pero en la planilla pueden
+  // quedar filas anteriores. Al aprobarlas el sistema las rechaza con un
+  // mensaje que apunta al acuse -- y eso solo es aceptable si existe una
+  // salida. La hay: rechazar. Sin este test, un cambio futuro podria
+  // poner la misma validacion en rechazar y dejar la novedad encerrada
+  // para siempre, sin forma de sacarla de la bandeja de aprobacion.
+  const ctx = cargarConJefatura();
+  seedArea(ctx);
+  const pub = toPlain(ctx.Novedades.publicar(publicarBase_({ tipo: 'LEY' }), ctxResponsable()));
+
+  // Se fuerza el estado contradictorio directamente en la hoja, como estaria
+  // una fila creada antes del arreglo.
+  ctx.actualizarFilaPorId_(ctx.SHEETS.NOVEDADES, 'novedad_id', pub.novedad_id, { requiere_acuse: false });
+
+  const alAprobar = toPlain(ctx.Novedades.aprobar({
+    novedad_id: pub.novedad_id, fecha_limite_acuse: fechaLimiteValida_()
+  }, ctxJefa()));
+  assert.equal(alAprobar._validationError, true, 'no se aprueba una contradiccion');
+
+  const alRechazar = toPlain(ctx.Novedades.rechazar({
+    novedad_id: pub.novedad_id, motivo: 'Se rehace con el acuse marcado.'
+  }, ctxJefa()));
+  assert.equal(alRechazar.estado, 'RECHAZADA', 'la salida existe');
+});
