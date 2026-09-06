@@ -269,6 +269,17 @@ function cuerpoTablero_() {
     return String(r.probabilidad) === String(r.probabilidad_residual) &&
       String(r.impacto) === String(r.impacto_residual);
   });
+  // §6.1: las acciones para abordar riesgos tienen que integrarse y
+  // evaluarse, y eso no se puede pedir a nadie si el riesgo no tiene dueño.
+  // El DOC-08 los nombra por CARGO ("Gerente Adm. y Finanzas"), que no sirve
+  // para asignar una actividad: hace falta el correo.
+  var riesgosSinDueno = riesgos.filter(function (r) {
+    return r.estado !== 'CERRADO' && !String(r.responsable_email || '').trim();
+  });
+  alerta(SEVERIDAD_ALERTA.ALTA, 'Riesgos sin responsable asignado',
+    '§6.1 pide integrar y evaluar las acciones. Sin un correo responsable no hay a quién asignarlas ni a quién preguntarle.',
+    'riesgos', riesgosSinDueno.length);
+
   alerta(SEVERIDAD_ALERTA.ALTA, 'Riesgos cuyos controles no reducen nada',
     'Su valoración es idéntica antes y después de las medidas: según el propio registro, los controles no cambian el riesgo. O la medida no sirve, o falta revalorar de verdad.',
     'riesgos', sinReduccion.length);
@@ -340,6 +351,15 @@ function cuerpoTablero_() {
   alerta(SEVERIDAD_ALERTA.MEDIA, 'Inducciones sin cerrar',
     'Registradas pero no completadas. §7.3 se sustenta en la inducción cerrada, no en la agendada.',
     'personas', induccionesAbiertas.length);
+
+  // Una evaluación sin fecha o sin quién evaluó no sirve como evidencia:
+  // ante un auditor, un registro que no dice cuándo ni quién es un papel.
+  var evalIncompletas = evaluaciones.filter(function (e) {
+    return !String(e.fecha || '').trim() || !String(e.evaluador_email || '').trim();
+  });
+  alerta(SEVERIDAD_ALERTA.MEDIA, 'Evaluaciones sin fecha o sin evaluador',
+    'Un registro que no dice cuándo se hizo ni quién evaluó no sustenta la competencia (§7.2).',
+    'personas', evalIncompletas.length);
 
   alerta(SEVERIDAD_ALERTA.MEDIA, 'Evaluaciones de competencia vencidas',
     'Su próxima evaluación ya debía haberse hecho (§7.2).', 'personas', evalVencidas.length);

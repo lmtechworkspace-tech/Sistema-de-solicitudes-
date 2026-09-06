@@ -185,3 +185,30 @@ test('sin datos, ninguno de los avisos nuevos cuenta de más', () => {
     assert.equal(titulos.indexOf(t), -1, t + ' no debería aparecer sin datos');
   });
 });
+
+test('un riesgo abierto sin responsable se avisa; uno cerrado no (§6.1)', () => {
+  // Sin correo responsable no hay a quién asignarle la acción. El DOC-08 los
+  // nombra por CARGO ("Gerente Adm. y Finanzas"), que no sirve para asignar.
+  // Un riesgo ya cerrado no necesita dueño: pedirlo sería ruido.
+  const ctx = ctxBase();
+  seedSheet(ctx, 'SGC_RIESGOS', ctx.COLUMNAS.SGC_RIESGOS, [
+    fila(ctx, 'SGC_RIESGOS', { riesgo_id: 'A', codigo: 'R1', clase: 'RIESGO', estado: 'ABIERTO', responsable_email: '', activa: true }),
+    fila(ctx, 'SGC_RIESGOS', { riesgo_id: 'B', codigo: 'R2', clase: 'RIESGO', estado: 'ABIERTO', responsable_email: 'a@x.cl', activa: true }),
+    fila(ctx, 'SGC_RIESGOS', { riesgo_id: 'C', codigo: 'R3', clase: 'RIESGO', estado: 'CERRADO', responsable_email: '', activa: true })
+  ]);
+  assert.equal(aviso(ctx, 'Riesgos sin responsable asignado').total, 1);
+});
+
+test('una evaluación sin fecha O sin evaluador se avisa, sin contarla dos veces', () => {
+  // Son dos huecos del mismo registro y se arreglan en la misma visita a la
+  // hoja. Contarlos por separado haría parecer que hay el doble de trabajo.
+  const ctx = ctxBase();
+  seedSheet(ctx, 'SGC_EVALUACIONES', ctx.COLUMNAS.SGC_EVALUACIONES, [
+    fila(ctx, 'SGC_EVALUACIONES', { evaluacion_id: 'E1', fecha: '', evaluador_email: '' }),
+    fila(ctx, 'SGC_EVALUACIONES', { evaluacion_id: 'E2', fecha: '2026-08-01', evaluador_email: '' }),
+    fila(ctx, 'SGC_EVALUACIONES', { evaluacion_id: 'E3', fecha: '', evaluador_email: 'a@x.cl' }),
+    fila(ctx, 'SGC_EVALUACIONES', { evaluacion_id: 'E4', fecha: '2026-08-01', evaluador_email: 'a@x.cl' })
+  ]);
+  assert.equal(aviso(ctx, 'Evaluaciones sin fecha o sin evaluador').total, 3,
+    'la que tiene ambas cosas no cuenta; la que no tiene ninguna cuenta UNA vez');
+});
