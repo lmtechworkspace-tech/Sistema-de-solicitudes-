@@ -15,7 +15,7 @@
   padding: var(--esp-3) var(--esp-4);
   background: var(--superficie);
   border: 1px solid var(--borde);
-  border-radius: 12px;
+  border-radius: var(--radio-md);
 }
 
 .sigso-stepper__paso {
@@ -108,7 +108,7 @@
 .sigso-chip {
   background: var(--superficie);
   border: 1px solid var(--borde-fuerte);
-  border-radius: 999px;
+  border-radius: var(--radio-full);
   padding: 0.4rem 0.9rem;
   font-size: 0.85rem;
   cursor: pointer;
@@ -338,7 +338,7 @@
   text-align: left;
   background: var(--superficie);
   border: 1px solid var(--gris-claro);
-  border-radius: 8px;
+  border-radius: var(--radio-sm);
   padding: 0.75rem 1rem;
   cursor: pointer;
 }
@@ -442,7 +442,7 @@
   color: var(--texto-2);
   background: var(--superficie);
   border: 1px dashed var(--borde-fuerte);
-  border-radius: 12px;
+  border-radius: var(--radio-md);
 }
 .sigso-estado-error svg { color: var(--alerta); }
 .sigso-estado-error p { margin: 0; max-width: 24rem; }
@@ -583,7 +583,7 @@
 .sigso-fecha-destacada {
   border: 1px solid var(--naranja-claro);
   background: var(--superficie);
-  border-radius: 8px;
+  border-radius: var(--radio-sm);
   padding: 0.6rem 0.9rem;
   margin: 0.5rem 0 0.75rem;
   font-size: 0.95rem;
@@ -610,7 +610,7 @@
    tarjetas del sistema y un poco más de aire. */
 .sigso-tarjeta-grupo {
   border: 1px solid var(--borde);
-  border-radius: 12px;
+  border-radius: var(--radio-md);
   padding: var(--esp-4) var(--esp-4) var(--esp-3);
   margin-bottom: var(--esp-4);
   background: var(--superficie);
@@ -1700,6 +1700,7 @@
    por telefono y hay que distinguir 0 de O. */
 .sigso-aviso__valor {
   display: block;
+  font-variant-numeric: tabular-nums;
   margin: 0.5rem 0;
   padding: 0.45rem 0.6rem;
   background: var(--superficie-2);
@@ -2580,7 +2581,7 @@
   line-height: 1;
   padding: 0.5rem;
   border: 1px solid var(--borde, #E5E8EF);
-  border-radius: 8px;
+  border-radius: var(--radio-sm);
   background: var(--superficie, #fff);
   cursor: pointer;
   opacity: 0.55;
@@ -2609,7 +2610,7 @@
   overflow-y: auto;
   margin: 0.75rem 0;
   border: 1px solid var(--borde, #E5E8EF);
-  border-radius: 8px;
+  border-radius: var(--radio-sm);
 }
 .sigso-lista-item {
   display: flex;
@@ -3124,7 +3125,7 @@
 .sigso-py-tarea--subtarea { margin-left: var(--esp-4); border-left: 2px solid var(--borde); padding-left: var(--esp-2); }
 .sigso-py-subtarea-de { font-size: var(--texto-xs); color: var(--texto-3); margin-bottom: 2px; }
 .sigso-py-rollup { margin-top: var(--esp-2); display: flex; align-items: center; gap: var(--esp-2); font-size: var(--texto-xs); color: var(--texto-3); }
-.sigso-py-rollup__barra { flex: 1 1 auto; max-width: 8rem; height: 0.4rem; border-radius: 999px; background: var(--superficie-2); overflow: hidden; }
+.sigso-py-rollup__barra { flex: 1 1 auto; max-width: 8rem; height: 0.4rem; border-radius: var(--radio-full); background: var(--superficie-2); overflow: hidden; }
 .sigso-py-rollup__barra-fill { height: 100%; background: var(--primario); border-radius: inherit; }
 
 .sigso-mt-badge--al-dia { background: var(--ok-suave); color: var(--ok); }
@@ -3183,7 +3184,7 @@
 }
 .sigso-py-cabecera__izq { display: flex; gap: var(--esp-2); align-items: center; flex-wrap: wrap; }
 .sigso-py-am-tareas {
-  border: 1px solid var(--borde); border-radius: var(--radio); padding: var(--esp-3); margin: var(--esp-3) 0;
+  border: 1px solid var(--borde); border-radius: var(--radio-md); padding: var(--esp-3); margin: var(--esp-3) 0;
   max-height: 260px; overflow-y: auto;
 }
 .sigso-py-am-tareas legend { font-weight: 600; font-size: var(--texto-sm); }
@@ -3299,7 +3300,7 @@
 
 .sigso-py-proximo-hito {
   display: flex; align-items: center; gap: var(--esp-2); margin-bottom: var(--esp-4);
-  padding: var(--esp-3); background: var(--superficie-2); border-radius: var(--radio);
+  padding: var(--esp-3); background: var(--superficie-2); border-radius: var(--radio-sm);
   font-size: var(--texto-sm); color: var(--texto-2);
 }
 .sigso-py-proximo-hito svg { color: var(--primario); flex-shrink: 0; }
@@ -3309,12 +3310,12 @@
 .sigso-py-atencion { display: flex; flex-direction: column; gap: var(--esp-2); }
 .sigso-py-atencion--vacia {
   display: flex; align-items: center; gap: var(--esp-2); color: var(--ok);
-  background: var(--superficie-2); border-radius: var(--radio); padding: var(--esp-3);
+  background: var(--superficie-2); border-radius: var(--radio-sm); padding: var(--esp-3);
   font-size: var(--texto-sm);
 }
 .sigso-py-atencion-item {
   display: flex; align-items: center; gap: var(--esp-2); width: 100%; text-align: left;
-  background: var(--superficie-2); border: 1px solid transparent; border-radius: var(--radio);
+  background: var(--superficie-2); border: 1px solid transparent; border-radius: var(--radio-sm);
   padding: var(--esp-2) var(--esp-3); cursor: pointer; font: inherit; color: var(--texto);
 }
 .sigso-py-atencion-item:hover { border-color: var(--borde); background: var(--superficie-3, var(--superficie-2)); }
@@ -3354,7 +3355,7 @@
 }
 .sigso-py-tarea__titulo, .sigso-py-hito__nombre { font-weight: 600; color: var(--texto); flex: 1; }
 .sigso-btn--icono {
-  background: none; border: none; cursor: pointer; padding: var(--esp-1); border-radius: var(--radio);
+  background: none; border: none; cursor: pointer; padding: var(--esp-1); border-radius: var(--radio-sm);
   color: var(--texto-3); display: inline-flex; align-items: center; flex-shrink: 0;
 }
 .sigso-btn--icono:hover { color: var(--primario); background: var(--fondo-hover, rgba(0,0,0,.06)); }
@@ -3617,7 +3618,7 @@
 }
 .sigso-py-gantt-barra--holgada { opacity: 0.38; }
 .sigso-py-gantt-critica-chip {
-  display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px;
+  display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: var(--radio-full);
   font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
   color: #fff; background: var(--critico); vertical-align: middle;
 }
@@ -3791,7 +3792,7 @@
 .sigso-py-reg-estados { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--esp-3); }
 .sigso-py-reg-pill {
   --acc: var(--info); font: inherit; font-size: 0.8rem; line-height: 1.2; padding: 5px 12px;
-  border-radius: 999px; cursor: pointer; border: 1.5px solid var(--borde);
+  border-radius: var(--radio-full); cursor: pointer; border: 1.5px solid var(--borde);
   background: var(--superficie); color: var(--texto-2); transition: border-color .12s, background .12s, color .12s;
 }
 .sigso-py-reg-pill:hover { border-color: var(--acc); color: var(--texto); }
@@ -3866,7 +3867,7 @@
    línea de texto apretada con "·"). */
 .sigso-py-ded-plan { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
 .sigso-py-plan-chip {
-  font-size: 0.68rem; line-height: 1.4; padding: 1px 7px; border-radius: 999px;
+  font-size: 0.68rem; line-height: 1.4; padding: 1px 7px; border-radius: var(--radio-full);
   background: var(--superficie-2); color: var(--texto-2); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .sigso-py-plan-chip--base { background: var(--alerta-suave); color: var(--alerta); }
@@ -4225,7 +4226,7 @@
 .sgc-subnav-accesos .sigso-tab {
   display: inline-flex; align-items: center; padding: .35rem .75rem;
   margin-bottom: 0;
-  border-radius: 999px; border: 1px solid transparent; background: transparent;
+  border-radius: var(--radio-full); border: 1px solid transparent; background: transparent;
   color: var(--texto-2); font-weight: 600; font-size: var(--texto-sm); cursor: pointer;
   white-space: nowrap; transition: background .15s, color .15s;
 }
@@ -4245,7 +4246,8 @@
   padding: var(--esp-3) var(--esp-4);
   display: flex; flex-direction: column; gap: 2px;
 }
-.sgc-kpi-tablero__valor { font-size: 1.5rem; font-weight: 800; color: var(--texto); line-height: 1.1; }
+.sgc-kpi-tablero__valor { font-size: 1.5rem; font-weight: 800; color: var(--texto); line-height: 1.1;
+  font-variant-numeric: tabular-nums; }
 .sgc-kpi-tablero__etiqueta { font-size: var(--texto-xs); color: var(--texto-3); }
 .sgc-kpi-tablero--ok { border-left-color: var(--ok); }
 .sgc-kpi-tablero--ok .sgc-kpi-tablero__valor { color: var(--ok); }
@@ -4341,7 +4343,8 @@
 }
 .sgc-acc-kpi:hover { background: var(--superficie-2); }
 .sgc-acc-kpi--activo { border-color: var(--primario); box-shadow: 0 0 0 2px var(--primario-suave); }
-.sgc-acc-kpi__valor { font-size: var(--texto-xl); font-weight: 800; line-height: 1.1; }
+.sgc-acc-kpi__valor { font-size: var(--texto-xl); font-weight: 800; line-height: 1.1;
+  font-variant-numeric: tabular-nums; }
 .sgc-acc-kpi__etiqueta { font-size: var(--texto-xs); color: var(--texto-3); }
 .sgc-acc-kpi--ok { border-left-color: var(--ok); }
 .sgc-acc-kpi--ok .sgc-acc-kpi__valor { color: var(--ok); }
@@ -4460,10 +4463,10 @@
 /* v13 (Fase 1, "unificar tareas e hitos"): barra de avance del hito + lista
    de las tareas que lo componen. */
 .sigso-py-hito__barra {
-  height: 6px; border-radius: 999px; background: var(--superficie-2);
+  height: 6px; border-radius: var(--radio-full); background: var(--superficie-2);
   overflow: hidden; margin: 8px 0 2px;
 }
-.sigso-py-hito__barra-fill { height: 100%; background: var(--primario); border-radius: 999px; }
+.sigso-py-hito__barra-fill { height: 100%; background: var(--primario); border-radius: var(--radio-full); }
 .sigso-py-hito-tareas { margin: 6px 0 2px; }
 .sigso-py-hito-tareas > summary {
   cursor: pointer; font-size: var(--texto-sm); color: var(--texto-2); font-weight: 600;
@@ -4473,7 +4476,7 @@
 .sigso-py-hito-tarea-lista { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .sigso-py-hito-tarea {
   display: flex; align-items: center; gap: 8px; padding: 6px 8px;
-  background: var(--superficie-2); border-radius: var(--radio); font-size: var(--texto-sm);
+  background: var(--superficie-2); border-radius: var(--radio-sm); font-size: var(--texto-sm);
 }
 .sigso-py-hito-tarea__tit { color: var(--texto); font-weight: 500; flex: 1; min-width: 0; }
 .sigso-py-hito-tarea__meta { color: var(--texto-3); white-space: nowrap; }
@@ -4484,7 +4487,7 @@
    que ya usan Entregables/Riesgos. */
 .sigso-py-doc-vigente {
   font-family: var(--fuente-mono, monospace); font-size: 11px;
-  color: var(--texto-3); background: var(--superficie-2); border-radius: 999px;
+  color: var(--texto-3); background: var(--superficie-2); border-radius: var(--radio-full);
   padding: 1px 8px; margin-left: auto;
 }
 .sigso-py-doc-ref {
@@ -4500,7 +4503,7 @@
 .sigso-py-acuerdos { list-style: none; margin: var(--esp-2) 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .sigso-py-acuerdo {
   display: flex; align-items: center; justify-content: space-between; gap: var(--esp-2);
-  background: var(--superficie-2); border-radius: var(--radio); padding: 6px 10px; font-size: var(--texto-sm);
+  background: var(--superficie-2); border-radius: var(--radio-sm); padding: 6px 10px; font-size: var(--texto-sm);
 }
 .sigso-py-acuerdo--hecho { opacity: 0.7; }
 .sigso-py-acuerdo--hecho .sigso-py-acuerdo__texto { text-decoration: line-through; }
@@ -4584,10 +4587,13 @@
 }
 .sgc-salud__global {
   display: flex; flex-direction: column; gap: 4px;
-  padding: var(--esp-4); border: 1px solid var(--borde); border-radius: var(--radio);
+  padding: var(--esp-4); border: 1px solid var(--borde); border-radius: var(--radio-md);
   background: var(--fondo-2); text-align: center;
 }
-.sgc-salud__pct { font-size: 2.5rem; font-weight: 700; line-height: 1; color: var(--texto); }
+/* El numero del que depende todo el modulo: sin tabular-nums, pasar de 9%
+   a 11% mueve el resto de la tarjeta. */
+.sgc-salud__pct { font-size: 2.5rem; font-weight: 700; line-height: 1; color: var(--texto);
+  font-variant-numeric: tabular-nums; }
 .sgc-salud__etiqueta { font-size: var(--texto-xs); color: var(--texto-3); }
 .sgc-salud__capitulos { display: flex; flex-direction: column; gap: var(--esp-2); }
 
@@ -4600,9 +4606,9 @@
 .sgc-cap__titulo { flex: 1; font-size: var(--texto-sm); }
 .sgc-cap__pct { font-weight: 700; font-size: var(--texto-sm); font-variant-numeric: tabular-nums; }
 .sgc-cap__barra {
-  height: 8px; border-radius: 999px; background: var(--borde); overflow: hidden;
+  height: 8px; border-radius: var(--radio-full); background: var(--borde); overflow: hidden;
 }
-.sgc-cap__relleno { display: block; height: 100%; border-radius: 999px; }
+.sgc-cap__relleno { display: block; height: 100%; border-radius: var(--radio-full); }
 .sgc-cap__relleno--ok { background: var(--exito); }
 .sgc-cap__relleno--alerta { background: var(--advertencia); }
 .sgc-cap__relleno--critico { background: var(--error); }
@@ -5591,6 +5597,19 @@
 
    Se usa min-height y no height para que un control con dos lineas de
    texto siga creciendo en vez de recortarse. */
+
+/* El chevron de expandir fila lo estilamos nosotros (padding 2.4px), asi
+   que NO cae en la excepcion de "tamaño decidido por el navegador": tiene
+   que cumplir el minimo de 24 tambien con raton. Las casillas y las migas si
+   caen en excepciones de la pauta (tamaño del navegador la una, enlace en
+   linea la otra) y por eso solo crecen con el dedo. */
+.sigso-boton-expandir {
+  min-width: 1.5rem;
+  min-height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .plataforma-topbar__hamburguesa,
 .sigso-asignar-rapido {

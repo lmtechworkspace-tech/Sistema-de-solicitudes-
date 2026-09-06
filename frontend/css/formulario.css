@@ -4,7 +4,7 @@
 
 .sigso-acordeon-item {
   border: 1px solid var(--borde);
-  border-radius: 8px;
+  border-radius: var(--radio-sm);
   margin-bottom: 0.75rem;
   overflow: hidden;
 }

@@ -120,6 +120,15 @@
   --radio-lg: 16px;   /* paneles, modales */
   --radio-full: 999px;
 
+  /* --- Riel semantico (la barra de color al borde izquierdo) --------- */
+  /* DOS niveles, y es a proposito: al medir el CSS aparecian rieles de 3
+     y de 4 px y parecia un descuido. No lo es -- los de 4 estan en
+     tarjetas de resumen con relleno grande y los de 3 en filas de lista,
+     donde un riel grueso pesaria demasiado. Se declaran para que la
+     proxima persona que lo vea sepa cual usar en vez de elegir al azar. */
+  --riel-fila: 3px;      /* filas de lista: sgc-doc, sgc-tarea */
+  --riel-tarjeta: 4px;   /* tarjetas de resumen: sgc-resumen */
+
   /* --- Elevacion: DOS niveles. El resto de la separacion la hacen bordes
      de 1px y diferencias de fondo, no sombras (§2.4). --------------------- */
   --sombra-1: 0 1px 2px rgba(15, 23, 42, 0.06);

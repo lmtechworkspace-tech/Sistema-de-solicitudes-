@@ -201,6 +201,11 @@ label {
   margin-bottom: 0.3rem;
 }
 
+/* MEDIDO: un campo de busqueda de Proyectos salia con padding 1px 2px --
+   el del navegador-- porque "search" no estaba en esta lista. Se veia como un
+   input crudo entre campos con estilo, igual que pasaba con los botones.
+   Se agregan los tipos que faltaban y los que todavia no se usan pero se
+   usaran, para que el proximo no vuelva a quedarse fuera. */
 input[type="text"],
 input[type="email"],
 input[type="tel"],
@@ -208,6 +213,11 @@ input[type="password"],
 input[type="date"],
 input[type="time"],
 input[type="datetime-local"],
+input[type="search"],
+input[type="number"],
+input[type="url"],
+input[type="month"],
+input[type="week"],
 select,
 textarea {
   width: 100%;

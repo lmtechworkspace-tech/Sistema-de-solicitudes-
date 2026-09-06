@@ -161,7 +161,7 @@ button.sigso-kpi {
 
 .sigso-barras__pista {
   background: var(--gris-claro);
-  border-radius: 999px;
+  border-radius: var(--radio-full);
   height: 10px;
   overflow: hidden;
 }
@@ -170,7 +170,7 @@ button.sigso-kpi {
   display: block;
   height: 100%;
   background: var(--acento-modulo, var(--primario));
-  border-radius: 999px;
+  border-radius: var(--radio-full);
 }
 
 .sigso-barras__valor {
@@ -391,7 +391,7 @@ button.sigso-kpi {
   display: inline-block;
   font-size: 0.72rem;
   font-weight: 600;
-  border-radius: 999px;
+  border-radius: var(--radio-full);
   padding: 0.1rem 0.5rem;
   border: 1px solid transparent;
   white-space: nowrap;
@@ -520,7 +520,7 @@ button.sigso-kpi {
   color: var(--texto-2);
   background: var(--superficie-2);
   border: 1px solid var(--borde);
-  border-radius: 999px;
+  border-radius: var(--radio-full);
   padding: 0.15rem 0.5rem;
   cursor: pointer;
 }
@@ -567,7 +567,7 @@ button.sigso-kpi {
   font-size: 0.72rem;
   color: var(--gris-medio);
   background: var(--gris-claro);
-  border-radius: 999px;
+  border-radius: var(--radio-full);
   padding: 0.05rem 0.5rem;
 }
 
@@ -730,7 +730,7 @@ button.sigso-kpi {
 .sigso-detalle-centro,
 .sigso-detalle-historia {
   background: var(--superficie);
-  border-radius: 8px;
+  border-radius: var(--radio-sm);
   padding: 1.25rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   /* v6.1 (revision UX): sin esto, las columnas del grid no pueden encoger por
@@ -823,7 +823,7 @@ button.sigso-kpi {
    realmente oculte el cuerpo del item, no solo cambie la clase. */
 .sigso-detalle-centro .sigso-acordeon-item {
   border: 1px solid var(--borde);
-  border-radius: 8px;
+  border-radius: var(--radio-sm);
   margin-bottom: 0.75rem;
   overflow: hidden;
 }
@@ -972,7 +972,7 @@ button.sigso-kpi {
   .sigso-tabla-tablero tr {
     margin-bottom: 0.75rem;
     border: 1px solid var(--gris-claro);
-    border-radius: 8px;
+    border-radius: var(--radio-sm);
     padding: 0.5rem 0.75rem;
     background: var(--superficie);
   }
@@ -1123,6 +1123,7 @@ button.sigso-kpi {
   display: block;
   font-size: 2.2rem;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .sigso-reporte-ejecutivo__numero span {
@@ -1352,7 +1353,7 @@ button.sigso-kpi {
   gap: 0.3rem;
   padding: 1px 8px;
   border: 1px solid var(--borde);
-  border-radius: 999px;
+  border-radius: var(--radio-full);
   background: var(--superficie);
   color: var(--texto-2);
   font: inherit;
