@@ -6280,6 +6280,115 @@ button {
 .sgc-datos { display: flex; flex-direction: column; gap: var(--esp-5); }
 .sgc-datos > .sgc-seccion > .sgc-ficha { margin: 0; }
 
+/* ==========================================================================
+   TACTO: TAMANO MINIMO DE LO PULSABLE (v13.1, fase 2)
+   ==========================================================================
+
+   MEDIDO a 375 px recorriendo los diez modulos. La pauta WCAG 2.2
+   (criterio 2.5.8, nivel AA) exige 24x24 px; las guias de Apple y Google
+   recomiendan 44 para el dedo.
+
+   Se separan los dos casos porque son problemas distintos:
+
+     · Lo que INCUMPLE la pauta se corrige siempre, con raton o con dedo.
+       Eran tres: el atajo de asignar (92x23), el cierre del aviso (25x25)
+       y el boton de menu (29x30) -- que es, ademas, lo unico que abre la
+       navegacion en un telefono.
+
+     · Lo que cumple pero se queda corto para un dedo (37-42 px) sube a 44
+       SOLO bajo pointer:coarse. En escritorio la densidad no cambia: un
+       raton apunta con precision, y agrandarlo todo alli solo haria que
+       cupiera menos en pantalla sin que nadie gane nada.
+
+   Se usa min-height y no height para que un control con dos lineas de
+   texto siga creciendo en vez de recortarse. */
+
+.plataforma-topbar__hamburguesa,
+.sigso-asignar-rapido {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* El atajo de asignar vive dentro de una fila de tabla apretada: ahi
+   2,75rem de ancho minimo lo deformaria. Le basta con cumplir el minimo
+   de la pauta y crecer solo cuando hay dedo. */
+.sigso-asignar-rapido {
+  min-width: 0;
+  min-height: 1.5rem;
+  padding-block: 0.35rem;
+}
+
+@media (pointer: coarse) {
+  .plataforma-nav__item,
+  .plataforma-nav__sub,
+  .plataforma-nav__hoja,
+  .plataforma-sidebar__tema,
+  .plataforma-usuario,
+  .sigso-tabs__boton,
+  .sigso-asignar-rapido {
+    min-height: 2.75rem;
+  }
+
+  /* Los campos tambien: escribir en un telefono con un campo de 37 px es
+     incomodo y errar el foco manda al de al lado. El select nativo no
+     acepta min-height de forma fiable en todos los navegadores, asi que
+     se le da altura por relleno. */
+  .sigso-campo input,
+  .sigso-campo textarea,
+  input[type="text"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="search"],
+  input[type="number"],
+  input[type="password"] {
+    min-height: 2.75rem;
+  }
+
+  /* 0,7rem dejaba el select en 43 px: uno por debajo. Medido, no supuesto. */
+  select {
+    padding-block: 0.78rem;
+  }
+
+  /* El chevron de expandir una fila medía 26x21. Es de los controles que
+     más se usan en el tablero de seguimiento y de los más faciles de
+     errar con el dedo. */
+  .sigso-boton-expandir {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Las casillas y radios quedan en los 13x13 del navegador. Se agrandan
+     con transform para no alterar el flujo del texto que llevan al lado:
+     cambiar width/height desplazaria la etiqueta. */
+  /* Escalar no bastaba: 13 x 1,35 son 18 px, todavia por debajo del
+     minimo. Se les da tamaño explicito de 24 px, que es el minimo de la
+     pauta, y no 44: una casilla de 44 px se ve mal y ademas su etiqueta
+     tambien es pulsable, asi que el area real de acierto es mayor. */
+  input[type="checkbox"],
+  input[type="radio"] {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    vertical-align: middle;
+    margin-inline-end: 0.4rem;
+  }
+
+  /* Las migas son enlaces en linea -- la pauta las exceptúa del tamaño
+     minimo-- pero a 18 px de alto son incomodas igual. Se les da aire
+     vertical sin tocar el ancho, que es lo que las mantiene en una linea. */
+  .sigso-migas a {
+    display: inline-block;
+    padding-block: 0.8rem;
+  }
+}
+
 </style>
   <style>
 /* dashboard.css — Backoffice: KPIs, graficos, tabla, detalle (§12.4/12.5). */

@@ -284,7 +284,7 @@
           : Iconos.svg('campana', { tam: 15 }) + ' Activa las alertas de SIGSO para no perderte avisos importantes (derivaciones, vencimientos, pausas).') +
       '</span>' +
       (denegado ? '' : '<button type="button" class="js-notif-banner-activar" style="background:#fff;color:var(--primario,#2A5FD6);border:none;border-radius:6px;padding:6px 12px;font:600 13px Arial,sans-serif;cursor:pointer">Activar alertas</button>') +
-      '<button type="button" class="js-notif-banner-cerrar" aria-label="Cerrar aviso" style="background:none;border:none;color:#fff;font:600 16px Arial,sans-serif;cursor:pointer;padding:2px 6px">✕</button>';
+      '<button type="button" class="js-notif-banner-cerrar" aria-label="Cerrar aviso" style="background:none;border:none;color:#fff;font:600 16px Arial,sans-serif;cursor:pointer;padding:2px 6px;min-width:2.75rem;min-height:2.75rem;display:inline-flex;align-items:center;justify-content:center">✕</button>';
 
     var btnActivar = banner.querySelector('.js-notif-banner-activar');
     if (btnActivar) {
