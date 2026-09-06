@@ -65,6 +65,24 @@ function fijarCacheHoja_(nombreHoja, hoja, encabezados, valoresPrevios, filasNue
   _cacheHojas_[nombreHoja] = { hoja: hoja, encabezados: encabezados, valores: valoresPrevios.concat(filasNuevas) };
 }
 
+/**
+ * Avisa de que se escribio una hoja, para lo que dependa de ella fuera de
+ * esta ejecucion.
+ *
+ * Hoy solo lo usa el tablero del SGC, que cachea un resumen de 22 hojas
+ * compartido por toda la empresa. Sin esto su TTL seria la espera habitual
+ * y no el techo: quien cierra una no conformidad veria el contador viejo
+ * durante cinco minutos.
+ *
+ * Se llama desde los CUATRO puntos de escritura de este archivo, que son
+ * por donde pasa todo. El typeof es porque Intake comparte este archivo y
+ * no tiene tablero.
+ */
+function tocarHojaSgc_(nombreHoja) {
+  if (String(nombreHoja || '').indexOf('SGC_') !== 0) return;
+  if (typeof invalidarTableroSgc_ === 'function') invalidarTableroSgc_();
+}
+
 function obtenerSpreadsheet_() {
   if (!_spreadsheetMemo_) {
     _spreadsheetMemo_ = SpreadsheetApp.openById(getConfig_().sheetId);
@@ -161,6 +179,7 @@ function agregarFila_(nombreHoja, objetoFila) {
   });
   datos.hoja.appendRow(fila);
   fijarCacheHoja_(nombreHoja, datos.hoja, datos.encabezados, datos.valores, [fila]); // v7.4b: sin releer
+  tocarHojaSgc_(nombreHoja);
   return objetoFila;
 }
 
@@ -185,6 +204,7 @@ function agregarFilas_(nombreHoja, objetosFila) {
   });
   datos.hoja.getRange(datos.hoja.getLastRow() + 1, 1, matriz.length, columnas.length).setValues(matriz);
   fijarCacheHoja_(nombreHoja, datos.hoja, datos.encabezados, datos.valores, matriz); // v7.4b: sin releer
+  tocarHojaSgc_(nombreHoja);
   return objetosFila;
 }
 
@@ -200,6 +220,7 @@ function reescribirFila_(datos, indiceFilaValores, cambios) {
   });
   datos.hoja.getRange(indiceFilaValores + 1, 1, 1, datos.encabezados.length).setValues([filaNueva]);
   invalidarCacheHoja_(datos.hoja.getName()); // v6.9
+  tocarHojaSgc_(datos.hoja.getName());
   return objetoActualizado;
 }
 
@@ -239,7 +260,7 @@ function eliminarFilasPorId_(nombreHoja, columnaId, valorId) {
       borradas++;
     }
   }
-  if (borradas) invalidarCacheHoja_(nombreHoja); // v6.9
+  if (borradas) { invalidarCacheHoja_(nombreHoja); tocarHojaSgc_(nombreHoja); } // v6.9
   return borradas;
 }
 

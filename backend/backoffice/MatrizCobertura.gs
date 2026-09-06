@@ -44,41 +44,12 @@ var MatrizCobertura = {
       return { _forbidden: true, message: 'No tienes acceso a la matriz de cobertura ISO.' };
     }
 
-    var excluidas = exclusionesVigentesPorClausula_();
-
-    var clausulas = CLAUSULAS_ISO9001.map(function (c) {
-      var r = evaluarClausula_(c.codigo, excluidas);
-      return {
-        codigo: c.codigo,
-        titulo: c.titulo,
-        estado: r.estado,
-        resumen: r.resumen,
-        total_evidencia: r.evidencia.length,
-        exclusiones: (excluidas[c.codigo] || []).length
-      };
-    });
-
-    // NO_APLICA sale del denominador. Contarla como faltante castigaria a la
-    // organizacion por una exclusion legitima; contarla como completa le
-    // regalaria un punto que no trabajo. Sale del calculo y se informa aparte.
-    var resumen = { total: clausulas.length, completo: 0, parcial: 0, faltante: 0, no_aplica: 0 };
-    clausulas.forEach(function (c) {
-      if (c.estado === 'NO_APLICA') resumen.no_aplica++;
-      else if (c.estado === 'COMPLETO') resumen.completo++;
-      else if (c.estado === 'PARCIAL') resumen.parcial++;
-      else resumen.faltante++;
-    });
-    var aplicables = resumen.total - resumen.no_aplica;
-    resumen.aplicables = aplicables;
-    resumen.pct_listo = aplicables
-      ? Math.round(((resumen.completo + resumen.parcial * 0.5) / aplicables) * 100)
-      : 0;
-
+    var calculada = matrizCalculada_();
     return {
       puede_gestionar: gobierna,
-      resumen: resumen,
-      clausulas: clausulas,
-      norma: normaDeclarada_()
+      resumen: calculada.resumen,
+      clausulas: calculada.clausulas,
+      norma: calculada.norma
     };
   },
 
@@ -1076,4 +1047,53 @@ function construirHtmlEvidenciaClausula_(clausula, r) {
 function escaparHtmlPdf_(texto) {
   return String(texto == null ? '' : texto)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
+ * El calculo de la matriz, SIN porton.
+ *
+ * Se separo de listar() porque tiene dos consumidores que ya no encajaban
+ * con un porton propio:
+ *
+ *   · el tablero del SGC, que comprueba EXACTAMENTE el mismo permiso justo
+ *     antes de pedirla -- comprobarlo dos veces no protege nada;
+ *   · el refresco automatico del tablero, que corre desde un disparador y
+ *     no tiene usuario a quien comprobarle nada.
+ *
+ * Lo que se calcula aqui NO depende de quien mira: la unica parte que si
+ * dependia (puede_gestionar) se quedo en listar(), que es donde vive el
+ * porton. Quien llame a esta funcion se hace cargo del permiso.
+ */
+function matrizCalculada_() {
+  var excluidas = exclusionesVigentesPorClausula_();
+
+  var clausulas = CLAUSULAS_ISO9001.map(function (c) {
+    var r = evaluarClausula_(c.codigo, excluidas);
+    return {
+      codigo: c.codigo,
+      titulo: c.titulo,
+      estado: r.estado,
+      resumen: r.resumen,
+      total_evidencia: r.evidencia.length,
+      exclusiones: (excluidas[c.codigo] || []).length
+    };
+  });
+
+  // NO_APLICA sale del denominador. Contarla como faltante castigaria a la
+  // organizacion por una exclusion legitima; contarla como completa le
+  // regalaria un punto que no trabajo. Sale del calculo y se informa aparte.
+  var resumen = { total: clausulas.length, completo: 0, parcial: 0, faltante: 0, no_aplica: 0 };
+  clausulas.forEach(function (c) {
+    if (c.estado === 'NO_APLICA') resumen.no_aplica++;
+    else if (c.estado === 'COMPLETO') resumen.completo++;
+    else if (c.estado === 'PARCIAL') resumen.parcial++;
+    else resumen.faltante++;
+  });
+  var aplicables = resumen.total - resumen.no_aplica;
+  resumen.aplicables = aplicables;
+  resumen.pct_listo = aplicables
+    ? Math.round(((resumen.completo + resumen.parcial * 0.5) / aplicables) * 100)
+    : 0;
+
+  return { resumen: resumen, clausulas: clausulas, norma: normaDeclarada_() };
 }

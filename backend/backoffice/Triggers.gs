@@ -315,8 +315,24 @@ var AVISOS_DEL_PASE_DIARIO = [
   // R-02: se cuelga aca por lo mismo que el de arriba -- no hay slot de
   // trigger libre. Trae su propia compuerta semanal, asi que seis de cada
   // siete dias sale enseguida sin gastar presupuesto del pase.
-  ['reporte_semanal_proyectos', enviarReporteSemanalProyectosTrigger]
+  ['reporte_semanal_proyectos', enviarReporteSemanalProyectosTrigger],
+  // M-03: deja caliente el cache del tablero del SGC (22 viajes a la hoja)
+  // para que la primera persona del dia no los pague. Va ULTIMO a proposito:
+  // es una comodidad, no una obligacion -- si un dia el presupuesto se acaba
+  // antes, no se pierde nada mas que ese primer arranque lento.
+  ['tablero_sgc_caliente', refrescarTableroSgcTrigger]
 ];
+
+/**
+ * Recalcula el tablero del SGC y deja el resultado en cache.
+ *
+ * No manda ningun aviso: es el unico invitado del pase que existe solo para
+ * que una pantalla abra rapido. Si falla, no se pierde nada -- la proxima
+ * visita lo calcula igual, solo que esperando.
+ */
+function refrescarTableroSgcTrigger() {
+  Tablero.refrescarCache();
+}
 
 function recordarValidacionPendienteTrigger() {
   var inicio = Date.now();
