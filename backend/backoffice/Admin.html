@@ -11671,7 +11671,8 @@ var Iconos = (function () {
       });
       document.querySelectorAll('[data-editar]').forEach(function (fila) {
         fila.addEventListener('click', function () {
-          var registro = JSON.parse(fila.getAttribute('data-editar'));
+          var registro = registroDeFila_(fila);
+          if (!registro) return;
           abrirDrawerAdmin_(config.titulo, renderFormulario_(config.campos), function () {
             wireForm();
             precargarFormulario_(config.campos, registro);
@@ -11703,7 +11704,8 @@ var Iconos = (function () {
       });
       document.querySelectorAll('[data-editar]').forEach(function (fila) {
         fila.addEventListener('click', function () {
-          var registro = JSON.parse(fila.getAttribute('data-editar'));
+          var registro = registroDeFila_(fila);
+          if (!registro) return;
           abrirDrawerAdmin_(USUARIOS_UI.titulo, renderFormulario_(USUARIOS_UI.campos), function () {
             wireForm();
             precargarFormulario_(USUARIOS_UI.campos, registro);
@@ -11804,7 +11806,8 @@ var Iconos = (function () {
       document.querySelectorAll('[data-cuenta]').forEach(function (fila) {
         fila.addEventListener('click', function (e) {
           if (e.target.closest('button')) return; // los botones de accion mandan
-          var cuenta = JSON.parse(fila.getAttribute('data-cuenta'));
+          var cuenta = filasCuentasPortal_[Number(fila.getAttribute('data-cuenta'))];
+          if (!cuenta) return;
           abrirDrawerAdmin_('Editar cuenta', formularioCuentaPortal_(), function () {
             wireForm();
             precargarCuenta_(cuenta);
@@ -11858,11 +11861,12 @@ var Iconos = (function () {
         detalle: 'Crea la primera con "Nuevo": el sistema genera una clave temporal que le entregas a la persona.'
       });
     }
-    var filas = cuentas.map(function (c) {
+    filasCuentasPortal_ = cuentas;
+    var filas = cuentas.map(function (c, indice) {
       var ultimoAcceso = c.ultimo_acceso
         ? Componentes.escaparHtml(String(c.ultimo_acceso).replace('T', ' ').slice(0, 16))
         : '<span class="sigso-cuenta-nunca-entro">Nunca entró</span>';
-      return '<tr data-cuenta=\'' + JSON.stringify(c).replace(/'/g, '&#39;') + '\'>' +
+      return '<tr data-cuenta="' + indice + '">' +
         '<td><div class="sigso-cuenta-fila">' +
         '<span class="sigso-cuenta-fila__avatar">' +
           Componentes.avatar(
@@ -12241,19 +12245,29 @@ var Iconos = (function () {
       document.getElementById('btn-qr-pausas').addEventListener('click', abrirQrRegistroPausas_);
       document.querySelectorAll('[data-editar-config-pausas]').forEach(function (fila) {
         fila.addEventListener('click', function () {
-          abrirFormPausasConfig_(JSON.parse(fila.getAttribute('data-editar-config-pausas')));
+          var cfg = filasPausasConfig_[Number(fila.getAttribute('data-editar-config-pausas'))];
+          if (cfg) abrirFormPausasConfig_(cfg);
         });
       });
     }).catch(mostrarErrorAdmin_);
   }
 
+  // Idem para las cuentas del portal: guardan correos y listas de modulos,
+  // justo el tipo de dato donde un & mal escapado se nota tarde.
+  var filasCuentasPortal_ = [];
+
+  // Mismo motivo que filasTablaAdmin_: el registro no vuelve a pasar por el
+  // DOM, asi que no hay escape que se pueda quedar corto.
+  var filasPausasConfig_ = [];
+
   function tablaPausasConfig_(filas) {
     if (filas.length === 0) {
       return Componentes.vacio({ icono: 'reloj', texto: 'Aún no hay empresas configuradas.', detalle: 'Agrega la primera con "Nueva / editar".' });
     }
-    var cuerpo = filas.map(function (c) {
+    filasPausasConfig_ = filas;
+    var cuerpo = filas.map(function (c, indice) {
       var activo = c.activo === true || c.activo === 'TRUE';
-      return '<tr data-editar-config-pausas=\'' + JSON.stringify(c).replace(/'/g, '&#39;') + '\'>' +
+      return '<tr data-editar-config-pausas="' + indice + '">' +
         '<td>' + Componentes.escaparHtml(nombreEmpresaPausas_(c.empresa_id)) + '</td>' +
         '<td>' + Componentes.escaparHtml(String(c.hora_habitual || '—')) + '</td>' +
         '<td>' + Componentes.escaparHtml(diasLegiblesPausas_(c.dias_semana)) + '</td>' +
@@ -12891,9 +12905,37 @@ var Iconos = (function () {
       '</form>';
   }
 
+  // Las filas de la tabla que se esta mostrando. Solo hay UNA a la vez: los
+  // tres renderizadores que usan renderTabla_ (catalogos, usuarios, logs)
+  // reemplazan el mismo #admin-contenido.
+  //
+  // Antes el registro completo viajaba SERIALIZADO dentro del atributo
+  // data-editar, y de ahi salia un defecto silencioso: el atributo escapaba
+  // las comillas simples pero no el `&`, asi que el navegador decodificaba de
+  // vuelta cualquier cosa con forma de entidad. Comprobado en el navegador:
+  //
+  //   guardado    "Bonos &amp; Comisiones"
+  //   recuperado  "Bonos & Comisiones"
+  //
+  // Y eso no se quedaba en pantalla: al pinchar la fila el formulario se
+  // precargaba con el valor corrompido, y al guardar se reescribia el
+  // catalogo con el texto mal. Nadie se enteraba.
+  //
+  // Guardar un INDICE en vez del registro no arregla el escape: quita la
+  // vuelta por el DOM entera, que es donde estaba el problema. (No es XSS:
+  // las comillas simples SI se escapaban, y se comprobo que un <script> en el
+  // dato viaja como texto.)
+  var filasTablaAdmin_ = [];
+
+  /** El registro de la fila pinchada, o null si la tabla ya se repinto. */
+  function registroDeFila_(tr) {
+    return filasTablaAdmin_[Number(tr.getAttribute('data-editar'))] || null;
+  }
+
   function renderTabla_(campos, filas) {
+    filasTablaAdmin_ = filas || [];
     var encabezados = campos.map(function (c) { return '<th>' + c.label + '</th>'; }).join('');
-    var cuerpo = filas.map(function (fila) {
+    var cuerpo = filas.map(function (fila, indice) {
       var celdas = campos.map(function (c) {
         // "activo" como badge (Si/No) en vez de TRUE/FALSE en crudo -- mas
         // facil de escanear en una tabla larga (Fase 10, rediseno UX).
@@ -12901,9 +12943,12 @@ var Iconos = (function () {
           var esActivo = fila[c.nombre] === true || fila[c.nombre] === 'TRUE';
           return '<td>' + Componentes.badge(esActivo ? 'Sí' : 'No', esActivo ? 'P4' : 'P1') + '</td>';
         }
-        return '<td>' + Componentes.escaparHtml(String(fila[c.nombre])) + '</td>';
+        // Un campo ausente se pinta VACIO, no con la palabra "undefined":
+        // String(undefined) la escribia tal cual en la celda.
+        var valor = fila[c.nombre];
+        return '<td>' + Componentes.escaparHtml(valor === undefined || valor === null ? '' : String(valor)) + '</td>';
       }).join('');
-      return '<tr data-editar=\'' + JSON.stringify(fila).replace(/'/g, '&#39;') + '\'>' + celdas + '</tr>';
+      return '<tr data-editar="' + indice + '">' + celdas + '</tr>';
     }).join('');
     return '<table class="sigso-tabla"><thead><tr>' + encabezados + '</tr></thead><tbody>' + cuerpo + '</tbody></table>';
   }
