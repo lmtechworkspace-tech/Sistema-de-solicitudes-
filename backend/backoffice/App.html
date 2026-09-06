@@ -10964,13 +10964,30 @@ var Iconos = (function () {
   }
 
   function descargarCsv_(tabla, nombre) {
-    var lineas = [];
+    var filas = [];
     Array.prototype.forEach.call(tabla.querySelectorAll('tr'), function (tr) {
       var celdas = Array.prototype.map.call(tr.querySelectorAll('th,td'), function (c) {
         // El texto visible, no el HTML: lo que se exporta es lo que se lee.
-        return '"' + String(c.innerText || '').trim().replace(/"/g, '""') + '"';
+        return String(c.innerText || '').trim();
       });
-      if (celdas.length) lineas.push(celdas.join(','));
+      if (celdas.length) filas.push(celdas);
+    });
+    descargarCsvDeFilas(filas, nombre);
+  }
+
+  /**
+   * Escribe y descarga un CSV a partir de filas (array de arrays).
+   *
+   * Existe aparte de descargarCsv_ porque no todas las pantallas exportan
+   * desde una <table>: la Bandeja, por ejemplo, pinta tarjetas agrupadas y
+   * arma sus filas a mano. Lo que NO puede volver a divergir es COMO se
+   * escribe el archivo -- el BOM, el fin de linea y el entrecomillado.
+   */
+  function descargarCsvDeFilas(filas, nombre) {
+    var lineas = (filas || []).map(function (fila) {
+      return fila.map(function (celda) {
+        return '"' + String(celda == null ? '' : celda).replace(/"/g, '""') + '"';
+      }).join(',');
     });
     // El primer caracter del literal de abajo es un BOM (U+FEFF). Es
     // INVISIBLE en el editor, asi que no lo borres: sin el, Excel en Windows
@@ -11011,7 +11028,8 @@ var Iconos = (function () {
     filtrosParaCabecera: filtrosParaCabecera,
     pieDocumento: pieDocumento,
     barraAcciones: barraAcciones,
-    wireAcciones: wireAcciones
+    wireAcciones: wireAcciones,
+    descargarCsvDeFilas: descargarCsvDeFilas
   };
 })();
 
@@ -12368,21 +12386,59 @@ var Iconos = (function () {
   // P6 (v2.0, Sprint 2): Gerencia necesita responderle a su jefe sin entrar
   // al sistema -- exporta exactamente lo que esta viendo (recientes +
   // filtro de texto ya aplicado), no un volcado completo aparte.
+  /**
+   * Las columnas del CSV: el nombre que lee una persona y de dónde sale.
+   *
+   * Se escriben aquí y no dentro de la función para que se vea de un golpe
+   * qué se exporta. El orden es el de lectura: primero qué es y de qué se
+   * trata, después su estado, y al final el detalle administrativo.
+   *
+   * Los CÓDIGOS se conservan en su propia columna además del texto
+   * legible: quien tuviera una planilla apoyada en este archivo sigue
+   * encontrando lo suyo.
+   */
+  var COLUMNAS_CSV = [
+    { titulo: 'N° solicitud', valor: function (s) { return s.solicitud_id; } },
+    { titulo: 'Título', valor: function (s) { return s.titulo_item || ''; } },
+    { titulo: 'Empresa', valor: function (s) { return s.empresa_id; } },
+    { titulo: 'Plataforma', valor: function (s) { return s.plataforma; } },
+    { titulo: 'Módulo', valor: function (s) { return s.modulo; } },
+    // El nombre del estado sale de la tabla canónica (utils.js), la misma
+    // que usan el correo y la Orden de Trabajo. Nunca se escribe aquí.
+    { titulo: 'Estado', valor: function (s) { return formatearEstadoSigso(s.estado_derivado); } },
+    { titulo: 'Código de estado', valor: function (s) { return s.estado_derivado; } },
+    { titulo: 'Prioridad', valor: function (s) { return s.prioridad_derivada; } },
+    { titulo: 'Situación del plazo', valor: function (s) { return SITUACION_CSV[s.situacion_sla] || ''; } },
+    { titulo: 'Solicitante', valor: function (s) { return s.solicitante_nombre || ''; } },
+    { titulo: 'Correo del solicitante', valor: function (s) { return s.solicitante_email || ''; } },
+    { titulo: 'Asignado a', valor: function (s) { return s.asignado_nombre || ''; } },
+    { titulo: 'Correo del asignado', valor: function (s) { return s.asignado_a || ''; } },
+    { titulo: 'Ítems', valor: function (s) { return s.cantidad_items; } },
+    { titulo: 'Fecha de creación', valor: function (s) { return s.fecha_creacion; } }
+  ];
+
+  // null = no hay SLA vigente que evaluar (cerrada, P5, atención directa).
+  // Se deja la celda vacía en vez de escribir "null", que no significa nada
+  // para quien abre la planilla.
+  var SITUACION_CSV = {
+    FUERA_DE_PLAZO: 'Fuera de plazo', EN_RIESGO: 'En riesgo', EN_PLAZO: 'En plazo'
+  };
+
+  // P6 (v2.0, Sprint 2): Gerencia necesita responderle a su jefe sin entrar
+  // al sistema -- exporta exactamente lo que esta viendo (recientes +
+  // filtro de texto ya aplicado), no un volcado completo aparte.
+  //
+  // v13.1: el archivo lo ESCRIBE el motor de reportes. Antes esta pantalla
+  // tenia su propio escritor y se le habia quedado sin BOM, asi que Excel
+  // en Windows abria los acentos rotos. Como se escribe un CSV se decide
+  // en un solo sitio.
   function exportarCSV_() {
     var filas = filtrarPorTexto_(recientesActuales);
-    var encabezado = ['solicitud_id', 'empresa_id', 'plataforma', 'modulo', 'estado_derivado', 'prioridad_derivada', 'solicitante_nombre', 'solicitante_email', 'asignado_a', 'cantidad_items', 'fecha_creacion'];
-    var lineas = [encabezado.join(',')].concat(filas.map(function (s) {
-      return encabezado.map(function (campo) {
-        return '"' + String(s[campo] || '').replace(/"/g, '""') + '"';
-      }).join(',');
-    }));
-    var blob = new Blob([lineas.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    var enlace = document.createElement('a');
-    enlace.href = URL.createObjectURL(blob);
-    enlace.download = 'sigso-solicitudes-' + new Date().toISOString().slice(0, 10) + '.csv';
-    document.body.appendChild(enlace);
-    enlace.click();
-    document.body.removeChild(enlace);
+    var matriz = [COLUMNAS_CSV.map(function (c) { return c.titulo; })].concat(
+      filas.map(function (s) {
+        return COLUMNAS_CSV.map(function (c) { return c.valor(s); });
+      }));
+    SigsoReportes.descargarCsvDeFilas(matriz, 'sigso-solicitudes');
   }
 })();
 

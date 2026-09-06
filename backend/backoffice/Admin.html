@@ -10670,13 +10670,30 @@ var Iconos = (function () {
   }
 
   function descargarCsv_(tabla, nombre) {
-    var lineas = [];
+    var filas = [];
     Array.prototype.forEach.call(tabla.querySelectorAll('tr'), function (tr) {
       var celdas = Array.prototype.map.call(tr.querySelectorAll('th,td'), function (c) {
         // El texto visible, no el HTML: lo que se exporta es lo que se lee.
-        return '"' + String(c.innerText || '').trim().replace(/"/g, '""') + '"';
+        return String(c.innerText || '').trim();
       });
-      if (celdas.length) lineas.push(celdas.join(','));
+      if (celdas.length) filas.push(celdas);
+    });
+    descargarCsvDeFilas(filas, nombre);
+  }
+
+  /**
+   * Escribe y descarga un CSV a partir de filas (array de arrays).
+   *
+   * Existe aparte de descargarCsv_ porque no todas las pantallas exportan
+   * desde una <table>: la Bandeja, por ejemplo, pinta tarjetas agrupadas y
+   * arma sus filas a mano. Lo que NO puede volver a divergir es COMO se
+   * escribe el archivo -- el BOM, el fin de linea y el entrecomillado.
+   */
+  function descargarCsvDeFilas(filas, nombre) {
+    var lineas = (filas || []).map(function (fila) {
+      return fila.map(function (celda) {
+        return '"' + String(celda == null ? '' : celda).replace(/"/g, '""') + '"';
+      }).join(',');
     });
     // El primer caracter del literal de abajo es un BOM (U+FEFF). Es
     // INVISIBLE en el editor, asi que no lo borres: sin el, Excel en Windows
@@ -10717,7 +10734,8 @@ var Iconos = (function () {
     filtrosParaCabecera: filtrosParaCabecera,
     pieDocumento: pieDocumento,
     barraAcciones: barraAcciones,
-    wireAcciones: wireAcciones
+    wireAcciones: wireAcciones,
+    descargarCsvDeFilas: descargarCsvDeFilas
   };
 })();
 
