@@ -564,8 +564,30 @@
     }
   }
 
-  function sincronizar_() {
+  // Ventana de coalescencia. Los gatillos de resync son AGRESIVOS a
+  // proposito (v7.3): el setInterval se estrangula en segundo plano y hay que
+  // recuperar al instante al volver. Pero varios de ellos se disparan JUNTOS.
+  //
+  // Medido en el arranque: la sincronizacion salia DOS veces -- una de
+  // iniciar_() y otra del pageshow, que dispara en toda carga y no solo al
+  // volver del bfcache. Lo mismo pasa al alt-tabbear rapido, donde
+  // visibilitychange y focus llegan casi a la vez.
+  //
+  // No se quita ningun gatillo: se colapsan los que caen dentro de la misma
+  // ventana. Tres segundos es corto para no estorbar al proposito (recuperar
+  // rapido) y suficiente para juntar los que llegan pegados.
+  var COALESCER_MS = 3000;
+  var ultimaSync_ = 0;
+
+  // OJO con la firma: focus, pageshow y online estan registrados como
+  // `sincronizar_` a secas, asi que el navegador pasa el Event en el hueco de
+  // `forzar`. Con un `if (!forzar)` la ventana no se aplicaba NUNCA a esos
+  // tres -- que son justo los que llegan pegados. Por eso se exige true.
+  function sincronizar_(forzar) {
     if (!haySesion_()) { estado.sesionActiva = false; renderCampana_(); return; }
+    var ahora = Date.now();
+    if (forzar !== true && (ahora - ultimaSync_) < COALESCER_MS) return;
+    ultimaSync_ = ahora;
     estado.sesionActiva = true;
     asegurarCampana_();
     renderCampana_();
@@ -597,7 +619,9 @@
     document.addEventListener('keydown', desbloquear);
 
     sincronizar_();
-    setInterval(sincronizar_, INTERVALO_MS);
+    // El tick periodico fuerza: es la red de seguridad, no un gatillo
+    // oportunista, y no puede quedar tapado por la ventana.
+    setInterval(function () { sincronizar_(true); }, INTERVALO_MS);
 
     // B4: el setInterval en segundo plano lo estrangula el navegador y se
     // congela con el equipo suspendido -- resync inmediato al volver.
@@ -616,7 +640,7 @@
     // dispara una sincronizacion inmediata en vez de esperar 2.5 min.
     setInterval(function () {
       var hay = haySesion_();
-      if (hay && !estado.sesionActiva) sincronizar_();
+      if (hay && !estado.sesionActiva) sincronizar_(true);   // sesion recien aparecida
       if (!hay && estado.sesionActiva) { estado.sesionActiva = false; renderCampana_(); }
     }, VIGILA_SESION_MS);
   }
