@@ -1,11 +1,12 @@
 'use strict';
 
 /**
- * M-03: el tablero del SGC deja de costar 23 viajes a la hoja en cada visita.
+ * M-03: el tablero del SGC deja de costar 25 viajes a la hoja en cada visita.
  *
- * Medido antes del cambio: la pantalla leia 23 hojas distintas, y 22 de esas
- * lecturas daban EXACTAMENTE lo mismo para todo el mundo. Solo SGC_ROLES
- * depende de quien mira.
+ * Medido antes del cambio: la pantalla leia 23 hojas distintas (25 desde que
+ * la v12.9 sumo tres avisos que la norma pide), y todas menos UNA daban
+ * exactamente lo mismo para todo el mundo. Solo SGC_ROLES depende de quien
+ * mira.
  *
  * De ahi la forma del arreglo: una sola entrada de cache para toda la
  * empresa, con los campos de permiso pegados encima al servir. Y de ahi
@@ -66,14 +67,17 @@ function nuevaEjecucion(ctx) {
   ctx.invalidarCacheHoja_();
 }
 
-test('la segunda visita cuesta 1 viaje a la hoja en vez de 23', () => {
+test('la segunda visita cuesta 1 viaje a la hoja en vez de 25', () => {
   const ctx = ctxBase();
 
   const primera = contarViajes(ctx, () => ctx.Tablero.resumen({}, ADM));
   nuevaEjecucion(ctx);
   const segunda = contarViajes(ctx, () => ctx.Tablero.resumen({}, ADM));
 
-  assert.equal(primera, 23, 'la primera visita paga el calculo entero');
+  assert.equal(primera, 25,
+    'la primera visita paga el calculo entero. Subio de 23 a 25 en la v12.9, ' +
+    'al sumar los avisos que la norma pide (personas, inducciones, ' +
+    'descriptores): se paga UNA vez y queda en cache compartido.');
   assert.equal(segunda, 1,
     'la segunda solo deberia leer SGC_ROLES, que es lo unico que depende de ' +
     'quien mira; el resto sale del cache compartido');
@@ -162,7 +166,7 @@ test('escribir en una hoja del SGC tira el cache', () => {
   nuevaEjecucion(ctx);
 
   const viajes = contarViajes(ctx, () => ctx.Tablero.resumen({}, ADM));
-  assert.equal(viajes, 23, 'tras escribir en el SGC, la pantalla se recalcula entera');
+  assert.equal(viajes, 25, 'tras escribir en el SGC, la pantalla se recalcula entera');
 
   const r = toPlain(ctx.Tablero.resumen({}, ADM));
   assert.equal(r.conteos.nc_abiertas, 1, 'y el contador refleja lo que se acaba de escribir');
@@ -194,7 +198,7 @@ test('al cambiar el dia el cache no sirve la foto de ayer', () => {
   const real = ctx.hoyClaveTablero_;
   ctx.hoyClaveTablero_ = function () { return '2099-01-01'; };
   try {
-    assert.equal(contarViajes(ctx, () => ctx.Tablero.resumen({}, ADM)), 23,
+    assert.equal(contarViajes(ctx, () => ctx.Tablero.resumen({}, ADM)), 25,
       'otro dia es otra clave: se recalcula');
   } finally {
     ctx.hoyClaveTablero_ = real;

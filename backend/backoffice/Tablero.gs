@@ -155,6 +155,12 @@ function cuerpoTablero_() {
   var indicadores = leerFilasSeguro_(SHEETS.SGC_INDICADORES).filter(esActivoSgc_);
   var lecturas = leerFilasSeguro_(SHEETS.SGC_INDICADOR_LECTURAS).filter(esActivoSgc_);
   var evaluaciones = leerFilasSeguro_(SHEETS.SGC_EVALUACIONES);
+  // v12.9: tres hojas mas. Suben el coste del calculo de 23 a 26 viajes,
+  // que se paga UNA vez -- el resultado va a cache compartido y se
+  // recalcula solo al escribir en el SGC o al cambiar el dia.
+  var personas = leerFilasSeguro_(SHEETS.SGC_PERSONAS).filter(esActivoSgc_);
+  var descriptores = leerFilasSeguro_(SHEETS.SGC_DESCRIPTORES);
+  var inducciones = leerFilasSeguro_(SHEETS.SGC_INDUCCIONES);
   var provEval = leerFilasSeguro_(SHEETS.SGC_PROVEEDOR_EVALUACIONES);
   var proveedores = leerFilasSeguro_(SHEETS.SGC_PROVEEDORES).filter(esActivoSgc_);
   var alcance = (typeof alcanceVigente_ === 'function') ? alcanceVigente_() : null;
@@ -253,6 +259,20 @@ function cuerpoTablero_() {
   var riesgosSinTratar = riesgosAltos.filter(function (r) {
     return !(typeof valorarRiesgo_ === 'function' && valorarRiesgo_(r.probabilidad_residual, r.impacto_residual));
   });
+  // Un riesgo revalorado EXACTAMENTE igual que antes de los controles dice,
+  // en sus propios términos, que las medidas no reducen nada. El aviso de
+  // abajo no lo ve: para él ya está revalorado. Es un caso distinto y se
+  // cuenta aparte.
+  var sinReduccion = riesgos.filter(function (r) {
+    if (r.clase === 'OPORTUNIDAD') return false;
+    if (String(r.probabilidad_residual) === '' || String(r.impacto_residual) === '') return false;
+    return String(r.probabilidad) === String(r.probabilidad_residual) &&
+      String(r.impacto) === String(r.impacto_residual);
+  });
+  alerta(SEVERIDAD_ALERTA.ALTA, 'Riesgos cuyos controles no reducen nada',
+    'Su valoración es idéntica antes y después de las medidas: según el propio registro, los controles no cambian el riesgo. O la medida no sirve, o falta revalorar de verdad.',
+    'riesgos', sinReduccion.length);
+
   alerta(SEVERIDAD_ALERTA.CRITICA, 'Riesgos altos o críticos sin revalorar',
     'Tienen acción definida pero nadie ha vuelto a valorarlos tras los controles: no hay evidencia de que se hayan abordado.',
     'riesgos', riesgosSinTratar.length);
@@ -299,6 +319,28 @@ function cuerpoTablero_() {
     var f = String(e.proxima_evaluacion || '').slice(0, 10);
     return f && f < hoyClave;
   });
+  // §7.2: la competencia se sustenta en el descriptor del cargo. Una
+  // persona sin descriptor no tiene contra qué evaluarse.
+  var sinDescriptor = personas.filter(function (p) {
+    return !descriptores.some(function (d) {
+      return String(d.vigente).toUpperCase() === 'TRUE' &&
+        String(d.persona_id || '') === String(p.persona_id || '');
+    });
+  });
+  alerta(SEVERIDAD_ALERTA.MEDIA, 'Personas sin descriptor de cargo',
+    '§7.2 pide determinar la competencia necesaria. Sin descriptor no hay contra qué evaluar a esa persona.',
+    'personas', sinDescriptor.length);
+
+  // §7.3: la inducción es la evidencia de que la persona conoce la política
+  // y su aporte al sistema. Mientras siga abierta, la cláusula queda en
+  // falta aunque el registro exista.
+  var induccionesAbiertas = inducciones.filter(function (i) {
+    return String(i.estado || '').toUpperCase() !== 'COMPLETADA';
+  });
+  alerta(SEVERIDAD_ALERTA.MEDIA, 'Inducciones sin cerrar',
+    'Registradas pero no completadas. §7.3 se sustenta en la inducción cerrada, no en la agendada.',
+    'personas', induccionesAbiertas.length);
+
   alerta(SEVERIDAD_ALERTA.MEDIA, 'Evaluaciones de competencia vencidas',
     'Su próxima evaluación ya debía haberse hecho (§7.2).', 'personas', evalVencidas.length);
   evaluaciones.forEach(function (e) { hito(e.proxima_evaluacion, 'Reevaluar competencias', 'personas'); });
@@ -324,6 +366,17 @@ function cuerpoTablero_() {
   });
   alerta(SEVERIDAD_ALERTA.MEDIA, 'Indicadores definidos y nunca medidos',
     'Definir el indicador no es medirlo (§9.1.1).', 'indicadores', indSinMedir.length);
+
+  // El aviso de arriba cuenta indicadores SIN medir; con CERO indicadores
+  // da cero y no dice nada. Y no tener ninguno es peor que tenerlos sin
+  // medir: §9.1.1 pide determinar qué se mide, y un SGC sin indicadores no
+  // puede demostrar que evalúa su desempeño. Era un punto ciego: el número
+  // que faltaba no aparecía por ningún lado.
+  if (!indicadores.length) {
+    alerta(SEVERIDAD_ALERTA.CRITICA, 'No hay ningún indicador definido',
+      '§9.1.1 pide determinar qué necesita medirse y cuándo. Sin indicadores no hay con qué demostrar que el sistema se evalúa.',
+      'indicadores', 1);
+  }
   var indNoCumplen = indicadores.filter(function (i) {
     var propias = lecturas.filter(function (l) { return l.indicador_id === i.indicador_id; })
       .sort(function (a, b) { return String(a.periodo).localeCompare(String(b.periodo)); });
@@ -359,6 +412,25 @@ function cuerpoTablero_() {
   alerta(SEVERIDAD_ALERTA.MEDIA, 'Procesos sin responsable asignado',
     '§4.4.2 e) pide asignar la responsabilidad y autoridad de cada proceso.',
     'procesos', procesosSinResponsable.length);
+
+  // §4.4.1 c): hay que determinar los criterios y métodos de cada proceso.
+  // Un proceso sin objetivo declarado no se puede evaluar.
+  var procesosSinObjetivo = procesosMapa.filter(function (p) { return !String(p.objetivo || '').trim(); });
+  alerta(SEVERIDAD_ALERTA.MEDIA, 'Procesos sin objetivo declarado',
+    '§4.4.1 pide determinar los criterios de cada proceso. Sin objetivo no hay contra qué medirlo.',
+    'procesos', procesosSinObjetivo.length);
+
+  // §4.2: no basta con determinar las partes interesadas; hay que hacer el
+  // seguimiento y la revisión de su información.
+  var partesSinSeguimiento = partes.filter(function (p) {
+    // La columna es frecuencia_seguimiento, no 'frecuencia': con el nombre
+    // equivocado el filtro daba SIEMPRE verdadero y habria marcado a todas,
+    // incluidas las que si tienen su seguimiento definido.
+    return !String(p.metodo_seguimiento || '').trim() || !String(p.frecuencia_seguimiento || '').trim();
+  });
+  alerta(SEVERIDAD_ALERTA.MEDIA, 'Partes interesadas sin seguimiento definido',
+    '§4.2 pide hacer seguimiento y revisión de su información. Sin método ni frecuencia, no hay seguimiento que mostrar.',
+    'contexto', partesSinSeguimiento.length);
 
   // --- salud por capítulo, reusando la matriz de cobertura ---------------
   // matrizCalculada_ y no MatrizCobertura.listar: el porton ya se
