@@ -82,10 +82,22 @@ var Jefatura = {
     var todasSubsolicitudes = leerFilas_(SHEETS.SUBSOLICITUDES);
     var ahora = new Date();
 
+    // v12.7: los filtros del reporte se resuelven AQUI, no en el navegador.
+    // getPanel ya recibia `filtros` y no los miraba: el panel viajaba entero
+    // y el recorte se hacia despues, cuando ya se habia pagado el viaje.
+    //
+    // El aislamiento por equipo va PRIMERO y no depende de `filtros`: es una
+    // regla de acceso, no un corte que la persona elige. Los filtros solo
+    // pueden quitar de lo que el jefe ya podia ver, nunca agregar.
+    var filtrosPanel = filtros || {};
     var items = todasSubsolicitudes
       .filter(function (sub) {
         var solicitud = solicitudPorId[sub.solicitud_id];
-        return solicitud && esDelEquipoJefatura_(solicitud, sub, equipoSet);
+        if (!solicitud || !esDelEquipoJefatura_(solicitud, sub, equipoSet)) return false;
+        // Se reusa el criterio de Gerencia (Gerencia.gs) en vez de repetirlo:
+        // si un jefe y Gerencia cortaran distinto, verian numeros distintos
+        // del mismo equipo.
+        return coincideFiltroItem_(sub, solicitud, filtrosPanel);
       })
       .map(function (sub) {
         var solicitud = solicitudPorId[sub.solicitud_id];

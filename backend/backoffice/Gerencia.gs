@@ -562,13 +562,45 @@ function contarPorSubsolicitud_(historialCompromiso) {
 // Filtros propios de este panel (§7B: "filtros por desarrollador, empresa,
 // tipo, solicitante, periodo") que no existen en Dashboard.coincideFiltros_
 // (esa funcion filtra a nivel SOLICITUD; estos son a nivel ITEM).
+/**
+ * ¿Cae esta fecha ISO dentro del rango [desde, hasta]?
+ *
+ * Se comparan los DIEZ primeros caracteres como TEXTO, no como Date.
+ * `new Date('2026-05-01')` es medianoche UTC, asi que un item creado el 1
+ * de mayo a las 21:00 en Chile (2 de mayo 01:00 UTC) caia en el dia
+ * siguiente y desaparecia de "este mes".
+ *
+ * Es la MISMA regla que aplica el motor de reportes en el navegador
+ * (filtrarItems, reportes.js). Tiene que serlo: desde que el corte se
+ * puede pedir al servidor, la misma pregunta se responde en dos sitios y
+ * dos respuestas distintas al mismo filtro es peor que no tener filtro.
+ *
+ * Los limites son INCLUSIVOS en los dos extremos: quien pide "mayo" espera
+ * que el dia 1 y el 31 esten dentro.
+ */
+function fechaEnRango_(valor, desde, hasta) {
+  var f = String(valor || '').slice(0, 10);
+  // Sin fecha no se puede afirmar que cae dentro de un rango. Solo estorba
+  // si hay rango: sin rango, no se filtra nada.
+  if (!desde && !hasta) return true;
+  if (!f) return false;
+  if (desde && f < String(desde).slice(0, 10)) return false;
+  if (hasta && f > String(hasta).slice(0, 10)) return false;
+  return true;
+}
+
 function coincideFiltroItem_(sub, solicitud, filtros) {
   if (filtros.desarrollador) {
     var asignado = sub.desarrollador_asignado || solicitud.desarrollador_asignado || '';
     if (asignado !== filtros.desarrollador) return false;
   }
   if (filtros.tipo && sub.tipo !== filtros.tipo) return false;
-  if (filtros.desde && new Date(sub.fecha_creacion) < new Date(filtros.desde)) return false;
-  if (filtros.hasta && new Date(sub.fecha_creacion) > new Date(filtros.hasta)) return false;
+  // v12.7: el area tambien se corta en el origen. Antes solo se podia en
+  // el navegador, sobre lo que ya habia viajado entero.
+  if (filtros.area) {
+    var area = sub.area_nombre || sub.area || '';
+    if (area !== filtros.area) return false;
+  }
+  if (!fechaEnRango_(sub.fecha_creacion, filtros.desde, filtros.hasta)) return false;
   return true;
 }

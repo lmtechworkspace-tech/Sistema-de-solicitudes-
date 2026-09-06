@@ -362,10 +362,25 @@
     });
   }
 
+  /**
+   * Un campo puede declararse de dos formas:
+   *
+   *   area: 'area_nombre'                                    (valor = texto)
+   *   responsable: { valor: '..._email', texto: '..._nombre' }
+   *
+   * La segunda existe porque el VALOR tiene que ser lo que el servidor sabe
+   * comparar (un correo) y el TEXTO lo que la persona reconoce (un nombre).
+   * Cuando el filtro se resuelve en el origen, mandar el nombre no
+   * encontraria nada y el reporte saldria vacio sin decir por que.
+   */
+  function campoValor_(campo) { return (campo && campo.valor) || campo; }
+  function campoTexto_(campo) { return (campo && campo.texto) || campoValor_(campo); }
+
   // Un filtro sin valor no filtra. Se compara como texto porque el valor
   // vuelve del <select> siempre como texto.
   function coincide_(item, campo, valor) {
     if (!campo || valor === undefined || valor === null || valor === '') return true;
+    campo = campoValor_(campo);
     return String(item[campo] || '') === String(valor);
   }
 
@@ -379,15 +394,22 @@
   function opcionesDeItems(items, campos) {
     var salida = {};
     Object.keys(campos || {}).forEach(function (filtro) {
-      var campo = campos[filtro];
-      var vistos = {};
+      var cValor = campoValor_(campos[filtro]);
+      var cTexto = campoTexto_(campos[filtro]);
+      var textoPorValor = {};
       (items || []).forEach(function (i) {
-        var v = String(i[campo] || '').trim();
-        if (v) vistos[v] = true;
+        var v = String(i[cValor] || '').trim();
+        if (!v) return;
+        // Si dos items traen el mismo valor con textos distintos gana el
+        // primero: da igual cual, pero tiene que ser SIEMPRE el mismo o el
+        // desplegable cambiaria de nombre entre recargas.
+        if (textoPorValor[v] === undefined) textoPorValor[v] = String(i[cTexto] || '').trim() || v;
       });
-      salida[filtro] = Object.keys(vistos).sort(function (a, b) {
-        return a.localeCompare(b, 'es');
-      }).map(function (v) { return { valor: v, texto: v }; });
+      salida[filtro] = Object.keys(textoPorValor).map(function (v) {
+        return { valor: v, texto: textoPorValor[v] };
+      }).sort(function (a, b) {
+        return a.texto.localeCompare(b.texto, 'es');
+      });
     });
     return salida;
   }

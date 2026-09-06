@@ -335,6 +335,19 @@
     return String(el.value || '').trim();
   }
 
+  // Solo crece: un área que desaparece de una respuesta filtrada no dejó de
+  // existir, solo se quedó fuera de ESTE corte.
+  function recordarAreas_(items) {
+    var vistas = {};
+    areasConocidas_.forEach(function (a) { vistas[a.area_nombre] = true; });
+    (items || []).forEach(function (i) {
+      var a = String(i.area_nombre || '').trim();
+      if (a && !vistas[a]) { vistas[a] = true; areasConocidas_.push({ area_nombre: a }); }
+    });
+  }
+
+  function opcionesDeAreas_() { return areasConocidas_; }
+
   function capturarFiltrosDelPanel_() {
     filtrosDelPanel_ = [
       { etiqueta: 'Empresa', valor: textoDeFiltro_('ger-filtro-empresa') },
@@ -344,11 +357,33 @@
   }
 
   function leerFiltrosServidor_() {
-    return {
+    var base = {
       empresa_id: document.getElementById('ger-filtro-empresa').value,
       desarrollador: document.getElementById('ger-filtro-desarrollador').value.trim(),
       solicitante: document.getElementById('ger-filtro-solicitante').value.trim()
     };
+    return Object.assign(base, filtrosDeReporteParaServidor_());
+  }
+
+  /**
+   * Traduce los filtros del reporte abierto a lo que el servidor entiende.
+   *
+   * El período se manda como desde/hasta y no como "mes": el servidor no
+   * tiene por qué saber qué significa "este trimestre", y si lo supiera
+   * habría dos sitios donde definirlo y podrían discrepar. La traducción la
+   * hace el motor, que es donde vive esa regla.
+   */
+  function filtrosDeReporteParaServidor_() {
+    var f = filtrosReporteGer_ || {};
+    var salida = {};
+    if (f.area) salida.area = f.area;
+    var rango = (window.SigsoReportes && SigsoReportes.rangoDePeriodo)
+      ? SigsoReportes.rangoDePeriodo(f.periodo) : { desde: '', hasta: '' };
+    var desde = f.desde || rango.desde;
+    var hasta = f.hasta || rango.hasta;
+    if (desde) salida.desde = desde;
+    if (hasta) salida.hasta = hasta;
+    return salida;
   }
 
   function cargarGerencia_() {
@@ -371,6 +406,7 @@
         }
         itemsActuales = respuesta.data.items;
         panelActual = respuesta.data;
+        recordarAreas_(respuesta.data.items);
         recurrenciaFiltro = null;
         renderKpis_(respuesta.data.kpis, respuesta.data.atenciones_directas);
         renderTodo_();
@@ -1301,6 +1337,11 @@
   // Los filtros se aplican en el CLIENTE, sobre los ítems que el panel ya
   // trajo: cambiar un select no vuelve a pedirle nada al servidor.
   var filtrosReporteGer_ = {};
+  // Las áreas que EXISTEN, guardadas de la última carga sin filtro de
+  // reporte. Hace falta porque ahora el panel llega ya recortado: si las
+  // opciones se sacaran de lo recibido, elegir un área dejaría solo esa en
+  // el desplegable y no habría cómo cambiar de opinión.
+  var areasConocidas_ = [];
 
   // v13.0: la navegacion vive en el sidebar.
   function pintarNavGerencia_() {
@@ -1347,7 +1388,27 @@
   // cuatro columnas (total, entregados, a tiempo, abiertos) siguen
   // significando lo que dicen. Y como "Periodo" a secas no deja claro cual
   // de las dos fechas es, la etiqueta lo escribe.
-  var CAMPOS_FILTRO_GER = { area: 'area_nombre', responsable: 'desarrollador_nombre' };
+  //
+  // DONDE SE APLICA EL CORTE: EN EL SERVIDOR.
+  //
+  // Medido: el panel pesa ~0,9 KB por ítem, y CacheService no guarda más de
+  // 100 KB. Pasados unos 109 ítems el panel DEJA DE CACHEARSE por completo
+  // (Gerencia.gs lo dice: "si no cabe, se sirve sin cachear") y se
+  // recalcula entero en cada visita. Recortar en el navegador no evita
+  // nada de eso: para cuando se recorta, el viaje ya se pagó.
+  //
+  // Así que estos filtros viajan en la petición del panel. El servidor ya
+  // sabía hacerlo -- coincideFiltroItem_ acepta desde/hasta desde la v4.1 --
+  // y nadie se lo pedía nunca.
+  //
+  // Los reportes ya NO declaran campoFecha: la fecha por la que se corta la
+  // decide el servidor (fecha_creacion, en coincideFiltroItem_). Dejarla aqui
+  // haria creer que es configurable desde el catalogo, y no lo es.
+  //
+  // NO se ofrece "responsable": la barra del panel ya tiene Desarrollador, y
+  // los dos terminarían peleando por el mismo parámetro del servidor sin
+  // que nadie sepa cuál manda.
+  var CAMPOS_FILTRO_GER = { area: 'area_nombre' };
   var ETIQUETA_COHORTE = 'Ítems creados en';
 
   var REPORTES_GERENCIA = [
@@ -1357,18 +1418,18 @@
         fuente: 'getPanelGerencia',
         // Sin 'area': el reporte YA desagrega por área. Un select de área
         // aquí dejaría una tabla de una sola fila.
-        filtros: ['periodo', 'responsable'], etiquetaPeriodo: ETIQUETA_COHORTE,
-        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_GER },
+        filtros: ['periodo'], etiquetaPeriodo: ETIQUETA_COHORTE,
+        campos: CAMPOS_FILTRO_GER },
       { id: 'ger-responsable', nombre: 'Cumplimiento por responsable', tipo: 'RANKING', estado: 'LISTO',
         desc: 'Entregas a tiempo por cada responsable, sobre lo que ya cerró.',
         fuente: 'getPanelGerencia',
         filtros: ['periodo', 'area'], etiquetaPeriodo: ETIQUETA_COHORTE,
-        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_GER },
+        campos: CAMPOS_FILTRO_GER },
       { id: 'ger-resbalon', nombre: 'Resbalón de compromisos', tipo: 'DETALLE', estado: 'LISTO',
         desc: 'Ítems que movieron su fecha comprometida, y cuántas veces se reabrieron.',
         fuente: 'getPanelGerencia',
-        filtros: ['periodo', 'area', 'responsable'], etiquetaPeriodo: ETIQUETA_COHORTE,
-        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_GER }
+        filtros: ['periodo', 'area'], etiquetaPeriodo: ETIQUETA_COHORTE,
+        campos: CAMPOS_FILTRO_GER }
     ] },
     { grupo: 'Evolución', icono: 'grafico', reportes: [
       { id: 'ger-throughput', nombre: 'Entrada vs salida por mes', tipo: 'TENDENCIA', estado: 'LISTO',
@@ -1435,14 +1496,14 @@
   function pintarReporteGerencia_(cont) {
     var r = SigsoReportes.buscarReporte('gerencia', reporteGerAbierto_);
     if (!r) { reporteGerAbierto_ = null; renderReportesGerencia_(); return; }
-    var todos = panelActual.items || [];
-    // Las opciones salen de TODOS los ítems, no de los ya filtrados: si se
-    // sacaran de los filtrados, elegir un área haría desaparecer del
-    // desplegable a las demás y no habría forma de volver.
-    var opcionesFiltro = SigsoReportes.opcionesDeItems(todos, r.campos || {});
-    var items = SigsoReportes.filtrarItems(todos, filtrosReporteGer_, {
-      campoFecha: r.campoFecha, campos: r.campos
-    });
+    // El recorte ya viene hecho del servidor: pedirlo otra vez aquí sería
+    // trabajo repetido y, peor, un segundo sitio donde el criterio podría
+    // divergir del que se aplicó de verdad.
+    var items = panelActual.items || [];
+    // Las opciones del desplegable salen del catálogo COMPLETO, no de lo
+    // que quedó tras el filtro: si salieran de lo filtrado, elegir un área
+    // borraría del desplegable a las demás y no habría forma de volver.
+    var opcionesFiltro = SigsoReportes.opcionesDeItems(opcionesDeAreas_(), r.campos || {});
     var cuerpo = '';
     // v12.4: la agregacion de cumplimiento y la de entrada/salida viven en el
     // motor. Jefatura las usa igual, y asi la REGLA de que se cuenta no puede
@@ -1490,7 +1551,11 @@
     });
     SigsoReportes.alAplicarFiltros(cont, function (valores) {
       filtrosReporteGer_ = valores;
-      pintarReporteGerencia_(cont);
+      // Se vuelve a pedir el panel con el corte incluido. Cuesta un viaje,
+      // y a cambio lo que llega es solo lo que se va a mostrar -- que es lo
+      // que hace que esto siga funcionando cuando haya miles de ítems.
+      cont.innerHTML = Componentes.cargando('Aplicando el filtro...');
+      cargarGerencia_();
     });
   }
 

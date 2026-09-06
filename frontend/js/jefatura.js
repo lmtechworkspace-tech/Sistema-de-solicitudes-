@@ -41,7 +41,7 @@
       '<span class="sigso-esq__barra" style="width:40%;height:22px;margin:0 auto 0.5rem"></span>' +
       '<span class="sigso-esq__barra" style="width:65%;height:10px;margin:0 auto"></span></div>'
     ).join('');
-    return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getPanelJefatura', {})
+    return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getPanelJefatura', filtrosJefParaServidor_())
       .then(function (respuesta) {
         if (!respuesta.ok) {
           document.getElementById('jef-contenedor-kpis').innerHTML =
@@ -53,6 +53,7 @@
         // a pedirlo -- lo que se ve en el reporte y en el tablero sale del
         // MISMO conjunto ya acotado al equipo.
         panelJefatura_ = datos;
+        recordarPersonas_(datos.items);
         if (datos.equipo.length === 0) {
           document.getElementById('jef-contenedor-kpis').innerHTML = '';
           document.getElementById('jef-panel-hoy').classList.add('sigso-oculto');
@@ -371,6 +372,49 @@
   var reporteJefAbierto_ = null;
   // Se aplican en el CLIENTE, sobre los ítems que el panel ya trajo.
   var filtrosReporteJef_ = {};
+  // El equipo que EXISTE, guardado de la última carga sin filtro. Hace
+  // falta porque el panel ahora llega ya recortado: si las opciones se
+  // sacaran de lo recibido, elegir a una persona dejaría solo a esa en el
+  // desplegable y no habría cómo cambiar de opinión.
+  var personasConocidas_ = [];
+
+  // Solo crece: quien no aparece en una respuesta filtrada no dejó de
+  // existir, solo se quedó fuera de ESTE corte.
+  function recordarPersonas_(items) {
+    var vistas = {};
+    personasConocidas_.forEach(function (p) { vistas[p.desarrollador_asignado] = true; });
+    (items || []).forEach(function (i) {
+      var email = String(i.desarrollador_asignado || '').trim();
+      if (email && !vistas[email]) {
+        vistas[email] = true;
+        personasConocidas_.push({
+          desarrollador_asignado: email,
+          desarrollador_nombre: i.desarrollador_nombre || email
+        });
+      }
+    });
+  }
+
+  /**
+   * Traduce los filtros del reporte a lo que el servidor entiende.
+   *
+   * El período viaja como desde/hasta y no como "mes": el servidor no tiene
+   * por qué saber qué significa "este trimestre", y si lo supiera habría dos
+   * definiciones que podrían discrepar. La traducción la hace el motor, que
+   * es donde vive esa regla.
+   */
+  function filtrosJefParaServidor_() {
+    var f = filtrosReporteJef_ || {};
+    var salida = {};
+    if (f.responsable) salida.desarrollador = f.responsable;
+    var rango = (window.SigsoReportes && SigsoReportes.rangoDePeriodo)
+      ? SigsoReportes.rangoDePeriodo(f.periodo) : { desde: '', hasta: '' };
+    var desde = f.desde || rango.desde;
+    var hasta = f.hasta || rango.hasta;
+    if (desde) salida.desde = desde;
+    if (hasta) salida.hasta = hasta;
+    return salida;
+  }
   var panelJefatura_ = null;
 
   // v13.0: la navegacion vive en el sidebar.
@@ -411,7 +455,11 @@
   // Solo responsable: Jefatura no trae area_nombre en sus ítems, y mapear
   // el hueco de "estado" a otra cosa (módulo, por ejemplo) daría un select
   // etiquetado Estado que filtra por algo distinto.
-  var CAMPOS_FILTRO_JEF = { responsable: 'desarrollador_nombre' };
+  //
+  // El VALOR es el correo y el TEXTO el nombre: el corte ahora lo hace el
+  // servidor, y allí las personas se identifican por correo. Mandar el
+  // nombre no encontraría nada y el reporte saldría vacío sin decir por qué.
+  var CAMPOS_FILTRO_JEF = { responsable: { valor: 'desarrollador_asignado', texto: 'desarrollador_nombre' } };
   var ETIQUETA_COHORTE_JEF = 'Ítems creados en';
 
   var REPORTES_JEFATURA = [
@@ -421,17 +469,17 @@
         fuente: 'getPanelJefatura',
         // Sin 'responsable': el reporte YA desagrega por persona.
         filtros: ['periodo'], etiquetaPeriodo: ETIQUETA_COHORTE_JEF,
-        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_JEF },
+        campos: CAMPOS_FILTRO_JEF },
       { id: 'jef-modulo', nombre: 'Cumplimiento por módulo', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
         desc: 'Qué módulos del sistema concentran los atrasos del equipo.',
         fuente: 'getPanelJefatura',
         filtros: ['periodo', 'responsable'], etiquetaPeriodo: ETIQUETA_COHORTE_JEF,
-        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_JEF },
+        campos: CAMPOS_FILTRO_JEF },
       { id: 'jef-tipo', nombre: 'Cumplimiento por tipo', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
         desc: 'Si el atraso se concentra en errores, mejoras o alguna otra clase.',
         fuente: 'getPanelJefatura',
         filtros: ['periodo', 'responsable'], etiquetaPeriodo: ETIQUETA_COHORTE_JEF,
-        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_JEF },
+        campos: CAMPOS_FILTRO_JEF },
       // v12.5: dejo de estar pendiente -- Jefatura.getPanel ya expone
       // re_compromisos, reaperturas y fecha_original, reusando los mismos
       // ayudantes que Gerencia (no se reimplemento el criterio).
@@ -439,7 +487,7 @@
         desc: 'Ítems de tu equipo que movieron su fecha comprometida, y cuántas veces se reabrieron.',
         fuente: 'getPanelJefatura',
         filtros: ['periodo', 'responsable'], etiquetaPeriodo: ETIQUETA_COHORTE_JEF,
-        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_JEF }
+        campos: CAMPOS_FILTRO_JEF }
     ] },
     { grupo: 'Evolución', icono: 'grafico', reportes: [
       { id: 'jef-throughput', nombre: 'Entrada vs salida por mes', tipo: 'TENDENCIA', estado: 'LISTO',
@@ -489,14 +537,13 @@
   function pintarReporteJefatura_(cont) {
     var r = SigsoReportes.buscarReporte('jefatura', reporteJefAbierto_);
     if (!r) { reporteJefAbierto_ = null; renderReportesJefatura_(); return; }
-    var todos = panelJefatura_.items || [];
-    // Las opciones salen de TODOS los ítems: si salieran de los ya
-    // filtrados, elegir a una persona borraría del desplegable a las demás
-    // y no habría forma de volver.
-    var opcionesFiltro = SigsoReportes.opcionesDeItems(todos, r.campos || {});
-    var items = SigsoReportes.filtrarItems(todos, filtrosReporteJef_, {
-      campoFecha: r.campoFecha, campos: r.campos
-    });
+    // El recorte ya viene hecho del servidor: repetirlo aquí sería trabajo
+    // duplicado y un segundo sitio donde el criterio podría divergir del
+    // que se aplicó de verdad.
+    var items = panelJefatura_.items || [];
+    // Las opciones salen del equipo COMPLETO, no de lo que quedó tras el
+    // filtro.
+    var opcionesFiltro = SigsoReportes.opcionesDeItems(personasConocidas_, r.campos || {});
     var cuerpo = '';
     if (r.id === 'jef-responsable') {
       cuerpo = SigsoReportes.cuerpoCumplimientoPor(items, {
@@ -544,7 +591,10 @@
     });
     SigsoReportes.alAplicarFiltros(cont, function (valores) {
       filtrosReporteJef_ = valores;
-      pintarReporteJefatura_(cont);
+      // Se vuelve a pedir el panel con el corte incluido: lo que llega es
+      // solo lo que se va a mostrar.
+      cont.innerHTML = Componentes.cargando('Aplicando el filtro...');
+      cargarJefatura_();
     });
   }
 
