@@ -4000,8 +4000,35 @@ button {
 .sigso-py-migaja { margin-bottom: var(--esp-2); }
 .sigso-py-migaja .sigso-boton { padding-left: 0; }
 
+/* v13.1: la cabecera del proyecto pasa a ser un panel.
+
+   MEDIDO antes: 29 px de alto, sin fondo, sin borde y sin relleno -- un
+   h1 suelto con dos pastillas al lado. Es la pagina mas importante del
+   modulo y su cabecera pesaba menos que una fila de tabla.
+
+   El riel de color no es decoracion: dice la SALUD del proyecto en el
+   mismo lenguaje que usa el resto del sistema, asi que al abrirlo ya se
+   sabe como viene sin leer la pastilla. Usa --riel-tarjeta, el token que
+   quedo declarado al ordenar los dos niveles de riel. */
 .sigso-py-detalle-cab {
-  display: flex; align-items: center; justify-content: space-between; gap: var(--esp-3); flex-wrap: wrap; margin-bottom: var(--esp-2);
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--esp-3); flex-wrap: wrap;
+  margin-bottom: var(--esp-3);
+  padding: var(--esp-4) var(--esp-5);
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio-md);
+  /* Neutro por defecto: un proyecto sano no necesita gritar. */
+  box-shadow: inset var(--riel-tarjeta) 0 0 var(--borde-fuerte);
+}
+.sigso-py-detalle-cab--critico { box-shadow: inset var(--riel-tarjeta) 0 0 var(--critico); }
+.sigso-py-detalle-cab--riesgo  { box-shadow: inset var(--riel-tarjeta) 0 0 var(--alerta); }
+.sigso-py-detalle-cab--normal  { box-shadow: inset var(--riel-tarjeta) 0 0 var(--ok); }
+
+/* En un telefono el titulo y el estado se apilan; el relleno baja para no
+   comerse media pantalla antes del contenido. */
+@media (max-width: 640px) {
+  .sigso-py-detalle-cab { padding: var(--esp-3) var(--esp-4); }
 }
 .sigso-py-detalle-cab h1 { margin: 0; flex: 1 1 auto; min-width: 10rem; font-size: 1.5rem; letter-spacing: -0.01em; }
 /* Salud + estado agrupados como un solo "cluster" a la derecha del título
@@ -4169,7 +4196,29 @@ button {
    son el camino principal para mover una tarea de columna. */
 @media (max-width: 640px) {
   .sigso-kanban { flex-direction: column; overflow-x: visible; }
-  .sigso-kanban__columna { min-width: 0; width: 100%; }
+  /* flex: 1 1 16rem se escribio para columnas UNA AL LADO DE OTRA, donde la
+     base es el ANCHO. Al apilar, esa misma base pasa a ser el ALTO: de ahi
+     los 256 px exactos de cada columna, llena o vacia. Apilada, una columna
+     tiene que medir lo que mide su contenido. */
+  .sigso-kanban__columna { min-width: 0; width: 100%; flex: 0 0 auto; }
+
+  /* MEDIDO en un proyecto con UNA tarea: el tablero ocupaba 1068 px de
+     alto en una pantalla de 812, y 768 de esos eran tres columnas vacias
+     repitiendo "Sin tareas". Apiladas, una columna sin nada no tiene por
+     que costar lo mismo que una llena: se queda en su titulo, que ya
+     lleva el contador en 0 y dice todo lo que hay que saber.
+
+     El apilado NO se toca: evita un scroll horizontal anidado y eso esta
+     decidido y razonado mas arriba. */
+  .sigso-kanban__columna:has(.sigso-kanban__vacia) {
+    padding-block: var(--esp-2);
+  }
+  .sigso-kanban__columna:has(.sigso-kanban__vacia) .sigso-kanban__tarjetas {
+    min-height: 0;
+  }
+  .sigso-kanban__columna:has(.sigso-kanban__vacia) .sigso-kanban__vacia {
+    display: none;
+  }
 }
 
 /* v11 (P2, "Gantt navegable"): línea de tiempo en píxeles-por-día real (zoom

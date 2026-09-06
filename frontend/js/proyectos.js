@@ -999,7 +999,9 @@
       '<div class="sigso-py-migaja">' +
         Componentes.boton({ texto: '← Portafolio', variante: 'sutil', clase: 'js-py-volver' }) +
       '</div>' +
-      '<div class="sigso-py-detalle-cab">' +
+      // La cabecera lleva la salud en su riel de color, no solo en la
+      // pastilla: al abrir el proyecto se sabe como viene sin leer nada.
+      '<div class="sigso-py-detalle-cab sigso-py-detalle-cab--' + detalle.salud + '">' +
         '<h1>' + Componentes.escaparHtml(p.nombre) + '</h1>' +
         '<div class="sigso-py-detalle-cab__estado">' +
           '<span class="sigso-py-salud sigso-py-salud--' + detalle.salud + '">' + Componentes.punto(SALUD_TONO[detalle.salud]) + SALUD_ETIQUETA[detalle.salud] + saludScoreHtml_(detalle.salud_penalizacion) + '</span>' +
