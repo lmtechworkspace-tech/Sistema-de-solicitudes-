@@ -426,6 +426,9 @@ function construirContexto() {
   // v11.0 Fase 8: vacia. Nada se pre-genera: una fila existe cuando
   // alguien registra que el servicio se presto.
   seedSheet(ctx, 'SGC_PRESTACIONES', ctx.COLUMNAS.SGC_PRESTACIONES);
+  // v12.8: la foto semanal de la cobertura ISO. Vacia: la escribe el pase
+  // diario, y en local se puede forzar llamando a archivarCoberturaIsoTrigger.
+  seedSheet(ctx, 'SGC_COBERTURA_HISTORICO', ctx.COLUMNAS.SGC_COBERTURA_HISTORICO);
   // v11.0 Fase 8: dos clientes demo, para poder probar el registro de
   // servicios en local. En produccion CAT_CLIENTES ya tiene los reales.
   seedSheet(ctx, 'CAT_CLIENTES', ctx.COLUMNAS.CAT_CLIENTES, [

@@ -359,6 +359,8 @@ var BACKOFFICE_ACTIONS = {
 
   // v10.0 Fase 6b: matriz de cobertura ISO + "modo auditoria".
   listarMatrizCoberturaSgc: handleListarMatrizCoberturaSgc_,
+  // v12.8: la serie temporal de la cobertura (las fotos semanales).
+  listarCoberturaHistoricoSgc: handleListarCoberturaHistoricoSgc_,
   getDetalleClausulaCoberturaSgc: handleGetDetalleClausulaCoberturaSgc_,
   descargarEvidenciaClausulaSgc: handleDescargarEvidenciaClausulaSgc_,
   // v11.0 Fase 1 (§4.3): alcance del SGC y exclusiones.
@@ -708,6 +710,9 @@ var MODULO_POR_ACCION = {
   // lo resuelve veTodoSgc_ adentro del modulo, mismo criterio que el resto
   // del SGC.
   listarMatrizCoberturaSgc: ['calidad', 'gerencia'],
+  // Mismo modulo que la matriz: quien no puede ver la cobertura de hoy
+  // tampoco puede ver la de hace tres meses.
+  listarCoberturaHistoricoSgc: ['calidad', 'gerencia'],
   getDetalleClausulaCoberturaSgc: ['calidad', 'gerencia'],
   descargarEvidenciaClausulaSgc: ['calidad', 'gerencia'],
 
@@ -1790,6 +1795,12 @@ function handleAnularLecturaObjetivoSgc_(data, contexto) {
 // v10.0 Fase 6b: matriz de cobertura ISO + "modo auditoria".
 function handleListarMatrizCoberturaSgc_(data, contexto) {
   return responderResultado_(MatrizCobertura.listar(data, contexto));
+}
+
+// v12.8: la cobertura a lo largo del tiempo. Era lo unico del SGC que no
+// dejaba rastro: se calculaba contra el presente y se tiraba.
+function handleListarCoberturaHistoricoSgc_(data, contexto) {
+  return responderResultado_(MatrizCobertura.listarHistorico(data, contexto));
 }
 
 function handleGetDetalleClausulaCoberturaSgc_(data, contexto) {

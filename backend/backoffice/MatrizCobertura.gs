@@ -53,6 +53,105 @@ var MatrizCobertura = {
     };
   },
 
+  /**
+   * La foto de la cobertura de ESTA semana, si todavía no está guardada.
+   *
+   * POR QUÉ EXISTE. La cobertura era lo ÚNICO del SGC que no dejaba rastro
+   * en el tiempo: se calculaba siempre contra el presente y se tiraba. Así,
+   * Calidad no podía responder "¿cómo veníamos hace tres meses?" — que es
+   * justo lo que pregunta una revisión por la dirección (§9.3) y lo que le
+   * dice a un auditor si el sistema AVANZA o solo existe.
+   *
+   * UNA FILA POR SEMANA. El período es el LUNES de la semana, no un número
+   * de semana ISO: los números de semana traen sus propios bordes (la 53,
+   * el cambio de año) y una fecha no. Además ordena solo y se lee sin
+   * explicarla, que importa cuando esta hoja es evidencia.
+   *
+   * IDEMPOTENTE. La llama el pase diario, que corre todos los días. Si la
+   * semana ya tiene su foto, no escribe: 52 filas al año en vez de 365, en
+   * una planilla que ya tuvo que aprender a purgar.
+   *
+   * NO calcula un número nuevo: archiva el MISMO que muestra el tablero
+   * (matrizCalculada_). Dos cifras distintas llamadas "avance del SGC" es
+   * lo que hace que nadie confíe en ninguna.
+   */
+  archivarFoto: function () {
+    var hoy = new Date();
+    var periodo = lunesDeLaSemana_(hoy);
+    var yaEsta = leerFilasSeguro_(SHEETS.SGC_COBERTURA_HISTORICO).some(function (f) {
+      return String(f.periodo).slice(0, 10) === periodo;
+    });
+    if (yaEsta) return { escrita: false, periodo: periodo, motivo: 'ya existe' };
+
+    var m = matrizCalculada_();
+    var porCapitulo = {};
+    saludPorCapitulo_(m.clausulas).forEach(function (c) { porCapitulo[c.numero] = c.pct; });
+
+    var fila = {
+      cobertura_id: Utilities.getUuid(),
+      periodo: periodo,
+      fecha: hoy.toISOString().slice(0, 10),
+      pct_listo: m.resumen.pct_listo,
+      aplicables: m.resumen.aplicables,
+      no_aplica: m.resumen.no_aplica,
+      completo: m.resumen.completo,
+      parcial: m.resumen.parcial,
+      faltante: m.resumen.faltante,
+      origen: 'automatico'
+    };
+    ['4', '5', '6', '7', '8', '9', '10'].forEach(function (n) {
+      fila['cap_' + n] = porCapitulo[n] || 0;
+    });
+
+    agregarFila_(SHEETS.SGC_COBERTURA_HISTORICO, fila);
+    return { escrita: true, periodo: periodo, pct_listo: fila.pct_listo };
+  },
+
+  /**
+   * Las fotos guardadas, de la más antigua a la más nueva.
+   *
+   * Mismo portón que el resto de la matriz: quien no puede ver la cobertura
+   * de hoy tampoco puede ver la de hace tres meses.
+   */
+  listarHistorico: function (data, contexto) {
+    var rol = rolSgc_(contexto);
+    var gobierna = gobiernaSgc_(contexto, rol);
+    if (!(gobierna || veTodoSgc_(contexto, rol, gobierna))) {
+      return { _forbidden: true, message: 'No tienes acceso a la matriz de cobertura ISO.' };
+    }
+
+    var fotos = leerFilasSeguro_(SHEETS.SGC_COBERTURA_HISTORICO)
+      .filter(function (f) { return !!String(f.periodo || '').trim(); })
+      .map(function (f) {
+        return {
+          periodo: String(f.periodo).slice(0, 10),
+          fecha: String(f.fecha || '').slice(0, 10),
+          pct_listo: Number(f.pct_listo) || 0,
+          aplicables: Number(f.aplicables) || 0,
+          no_aplica: Number(f.no_aplica) || 0,
+          completo: Number(f.completo) || 0,
+          parcial: Number(f.parcial) || 0,
+          faltante: Number(f.faltante) || 0,
+          capitulos: ['4', '5', '6', '7', '8', '9', '10'].map(function (n) {
+            return { numero: n, pct: Number(f['cap_' + n]) || 0 };
+          })
+        };
+      })
+      .sort(function (a, b) { return a.periodo.localeCompare(b.periodo); });
+
+    return {
+      puede_gestionar: gobierna,
+      fotos: fotos,
+      // Lo de HOY no sale de la hoja: se calcula, para que la pantalla no
+      // tenga que esperar al lunes para mostrar el estado actual.
+      actual: (function () {
+        var m = matrizCalculada_();
+        return { pct_listo: m.resumen.pct_listo, aplicables: m.resumen.aplicables };
+      })(),
+      aviso: MENSAJE_INDICADOR_INTERNO
+    };
+  },
+
   getDetalle: function (data, contexto) {
     var rol = rolSgc_(contexto);
     var gobierna = gobiernaSgc_(contexto, rol);
@@ -1064,6 +1163,26 @@ function escaparHtmlPdf_(texto) {
  * dependia (puede_gestionar) se quedo en listar(), que es donde vive el
  * porton. Quien llame a esta funcion se hace cargo del permiso.
  */
+// El lunes de la semana a la que pertenece una fecha, en YYYY-MM-DD.
+//
+// Se trabaja en UTC a proposito: la clave solo tiene que ser ESTABLE y
+// ordenable, y mezclar husos haria que dos ejecuciones del mismo dia
+// pudieran caer en semanas distintas y duplicar la foto.
+function lunesDeLaSemana_(fecha) {
+  var d = new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate()));
+  // getUTCDay(): domingo es 0. Se corre al lunes anterior; el domingo
+  // pertenece a la semana que ACABA, no a la que empieza.
+  var dia = d.getUTCDay();
+  var haciaAtras = (dia === 0) ? 6 : (dia - 1);
+  d.setUTCDate(d.getUTCDate() - haciaAtras);
+  return d.toISOString().slice(0, 10);
+}
+
+// El mismo texto que ya usa el tablero: es un indicador de gestion, no un
+// porcentaje oficial de certificacion. Se declara UNA vez para que las dos
+// pantallas no puedan decirlo distinto.
+var MENSAJE_INDICADOR_INTERNO = 'Indicador interno de gestión: mide cuánta evidencia hay cargada en SIGSO, no es un porcentaje oficial de certificación. Quien certifica es la casa certificadora, y lo hace con hallazgos.';
+
 function matrizCalculada_() {
   var excluidas = exclusionesVigentesPorClausula_();
 

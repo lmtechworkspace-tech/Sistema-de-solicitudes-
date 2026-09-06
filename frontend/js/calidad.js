@@ -9194,9 +9194,12 @@
     ] },
 
     { grupo: 'Comparaciones', icono: 'lista', reportes: [
-      { id: 'comp-periodo', nombre: 'Cobertura: período actual vs anterior', tipo: 'COMPARACION', estado: 'PENDIENTE',
-        desc: 'Cómo cambió el cumplimiento respecto del período pasado.',
-        falta: 'La cobertura se calcula SIEMPRE contra el presente y no se archiva. Requiere guardar una foto periódica del estado del SGC (una fila por capítulo y mes).' }
+      // v12.8: deja de estar PENDIENTE. Lo que le faltaba era justo lo que
+      // ahora existe: una foto periódica de la cobertura, que el pase diario
+      // archiva una vez por semana (SGC_COBERTURA_HISTORICO).
+      { id: 'comp-periodo', nombre: 'Cobertura: cómo evoluciona', tipo: 'COMPARACION', estado: 'LISTO',
+        desc: 'Cómo cambió el indicador interno semana a semana, y en qué capítulos.',
+        fuente: 'listarCoberturaHistoricoSgc', filtros: [] }
     ] }
   ];
 
@@ -9243,7 +9246,8 @@
     'rank-capitulo': 'resumenTableroSgc',
     'doc-estado': 'resumenTableroSgc',
     'cump-clausula': 'listarMatrizCoberturaSgc',
-    'ind-tendencia': 'listarIndicadoresSgc'
+    'ind-tendencia': 'listarIndicadoresSgc',
+    'comp-periodo': 'listarCoberturaHistoricoSgc'
   };
 
   function abrirReporteSgc_(cont) {
@@ -9281,6 +9285,8 @@
       cuerpo = cuerpoClausulas_(data, filtrosReporte_);
     } else if (r.id === 'ind-tendencia') {
       cuerpo = cuerpoTendenciaIndicador_(data, filtrosReporte_);
+    } else if (r.id === 'comp-periodo') {
+      cuerpo = cuerpoEvolucionCobertura_(data);
     }
 
     // v15.0: el reporte SÍ va en las migas. En la v13 se quitó porque el
@@ -9318,6 +9324,79 @@
   }
 
   // --- Cuerpos ---------------------------------------------------------------
+
+  /**
+   * La cobertura ISO a lo largo del tiempo.
+   *
+   * Es el único reporte de Calidad que puede decir si el sistema AVANZA, y
+   * no solo si existe. Hasta la v12.8 no se podía: la cobertura se
+   * calculaba contra el presente y se tiraba.
+   *
+   * Se compara la ÚLTIMA foto archivada contra la anterior, no contra hoy:
+   * hoy todavía no es un período cerrado, y compararlo con uno que sí lo
+   * está haría parecer un retroceso cada lunes por la mañana. El valor de
+   * hoy se muestra aparte, como lo que es.
+   */
+  function cuerpoEvolucionCobertura_(data) {
+    var fotos = (data && data.fotos) || [];
+    var actual = (data && data.actual) || {};
+
+    if (!fotos.length) {
+      // Un vacío que EXPLICA. Sin esto, quien entre el primer día vería una
+      // pantalla en blanco y pensaría que algo falló.
+      return SigsoReportes.kpis([
+        { etiqueta: 'Indicador interno hoy', valor: (actual.pct_listo || 0) + '%' }
+      ]) +
+      Componentes.vacio('Todavía no hay ninguna foto archivada. Se guarda una por semana, de forma automática, así que la primera aparecerá dentro de pocos días. A partir de la segunda se podrá ver la evolución.');
+    }
+
+    var ultima = fotos[fotos.length - 1];
+    var previa = fotos.length > 1 ? fotos[fotos.length - 2] : null;
+    var delta = previa ? (ultima.pct_listo - previa.pct_listo) : null;
+
+    var kpis = [
+      { etiqueta: 'Indicador interno hoy', valor: (actual.pct_listo || 0) + '%' },
+      { etiqueta: 'Última foto (' + ultima.periodo + ')', valor: ultima.pct_listo + '%' }
+    ];
+    if (delta !== null) {
+      kpis.push({
+        etiqueta: 'Variación vs. semana anterior',
+        valor: (delta > 0 ? '+' : (delta < 0 ? '−' : '=')) + Math.abs(delta) + ' pts',
+        alerta: delta < 0
+      });
+    }
+    kpis.push({ etiqueta: 'Semanas registradas', valor: fotos.length });
+
+    var salida = SigsoReportes.kpis(kpis) +
+      Componentes.alerta((data && data.aviso) || '', 'info');
+
+    salida += SigsoReportes.tendencia(
+      fotos.map(function (f) { return { etiqueta: f.periodo, valor: f.pct_listo }; }),
+      { vacio: 'Hace falta al menos una segunda foto para dibujar la evolución. Se archiva una por semana.' });
+
+    if (previa) {
+      // Por capítulo: el corte con el que un auditor recorre la norma. Sin
+      // esto, la serie diría que el sistema avanzó pero no dónde.
+      var porNumero = {};
+      (previa.capitulos || []).forEach(function (c) { porNumero[c.numero] = c.pct; });
+      salida += SigsoReportes.comparacion(
+        (ultima.capitulos || []).map(function (c) {
+          return {
+            etiqueta: 'Capítulo ' + c.numero,
+            previo: porNumero[c.numero] || 0,
+            actual: c.pct
+          };
+        }),
+        {
+          dimension: 'Capítulo de la norma',
+          etiquetaPrevio: previa.periodo,
+          etiquetaActual: ultima.periodo
+        });
+    }
+
+    return salida;
+  }
+
   function cuerpoCumplimientoGeneral_(data) {
     var salud = data.salud || {};
     var c = data.conteos || {};

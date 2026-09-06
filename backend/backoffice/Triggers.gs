@@ -320,7 +320,11 @@ var AVISOS_DEL_PASE_DIARIO = [
   // para que la primera persona del dia no los pague. Va ULTIMO a proposito:
   // es una comodidad, no una obligacion -- si un dia el presupuesto se acaba
   // antes, no se pierde nada mas que ese primer arranque lento.
-  ['tablero_sgc_caliente', refrescarTableroSgcTrigger]
+  ['tablero_sgc_caliente', refrescarTableroSgcTrigger],
+  // v12.8: la foto semanal de la cobertura ISO. Trae su propia compuerta
+  // (si la semana ya tiene foto, sale enseguida), asi que seis de cada
+  // siete dias no gasta presupuesto del pase.
+  ['foto_cobertura_iso', archivarCoberturaIsoTrigger]
 ];
 
 /**
@@ -330,6 +334,17 @@ var AVISOS_DEL_PASE_DIARIO = [
  * que una pantalla abra rapido. Si falla, no se pierde nada -- la proxima
  * visita lo calcula igual, solo que esperando.
  */
+/**
+ * Archiva la foto semanal de la cobertura ISO.
+ *
+ * Corre todos los dias porque es de donde cuelga, pero solo ESCRIBE una vez
+ * por semana: archivarFoto comprueba si la semana ya tiene la suya. Asi la
+ * hoja crece 52 filas al año y no 365.
+ */
+function archivarCoberturaIsoTrigger() {
+  MatrizCobertura.archivarFoto();
+}
+
 function refrescarTableroSgcTrigger() {
   Tablero.refrescarCache();
 }

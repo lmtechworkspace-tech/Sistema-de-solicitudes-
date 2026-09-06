@@ -202,7 +202,9 @@ var SHEETS = {
   SGC_PROCESOS: 'SGC_PROCESOS',
   SGC_PROCESO_PASOS: 'SGC_PROCESO_PASOS',
   SGC_INDICADORES: 'SGC_INDICADORES',
-  SGC_PRESTACIONES: 'SGC_PRESTACIONES'
+  SGC_PRESTACIONES: 'SGC_PRESTACIONES',
+  // v12.8: foto periodica de la cobertura ISO.
+  SGC_COBERTURA_HISTORICO: 'SGC_COBERTURA_HISTORICO'
 };
 
 var COLUMNAS = {
@@ -745,6 +747,26 @@ var COLUMNAS = {
     'area_id', 'jefatura_email', 'subrogante_email',
     'fecha_ingreso', 'estado', 'fecha_desvinculacion',
     'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // v12.8: una foto de la cobertura ISO por semana. La unica serie temporal
+  // que le faltaba al SGC. Ver la nota larga en MatrizCobertura.gs.
+  SGC_COBERTURA_HISTORICO: [
+    'cobertura_id',
+    // Clave de la semana (YYYY-Www). Es lo que hace la foto IDEMPOTENTE: el
+    // pase diario corre todos los dias y solo escribe si esa semana todavia
+    // no tiene la suya.
+    'periodo', 'fecha',
+    // El MISMO numero que muestra el tablero, no uno nuevo: sale de
+    // matrizCalculada_(). Dos numeros llamados 'avance del SGC' es lo que
+    // hace que nadie confie en ninguno.
+    'pct_listo',
+    'aplicables', 'no_aplica',
+    'completo', 'parcial', 'faltante',
+    // Por capitulo de la norma (4 a 10). Fijos porque los capitulos de la
+    // ISO 9001 lo son, y asi la hoja se lee sin descifrar nada.
+    'cap_4', 'cap_5', 'cap_6', 'cap_7', 'cap_8', 'cap_9', 'cap_10',
+    'origen'
   ],
   // Descriptor de cargo (FO-PRO-02-01), versionado: cada actualizacion crea
   // una fila nueva y la anterior queda vigente=false. Mismo criterio que
