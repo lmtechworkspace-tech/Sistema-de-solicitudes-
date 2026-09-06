@@ -10087,6 +10087,9 @@ var Iconos = (function () {
     return lista.map(function (nombre) {
       var bruto = valores[nombre];
       if (bruto === undefined || bruto === null || bruto === '') return null;
+      // 'todo' no es un corte, es la ausencia de uno: anunciarlo en la
+      // cabecera del documento seria ensuciarla con algo que no dejo nada fuera.
+      if (bruto === 'todo' && (nombre === 'periodo' || nombre === 'periodo_previo')) return null;
       // El valor guardado es el de la opción; en el documento tiene que
       // aparecer el texto que la persona vio en pantalla.
       var catalogo = opciones[nombre] || (nombre === 'periodo' || nombre === 'periodo_previo' ? PERIODOS_POR_DEFECTO : []);
@@ -10094,9 +10097,24 @@ var Iconos = (function () {
         return String(o && o.valor !== undefined ? o.valor : o) === String(bruto);
       })[0];
       var texto = elegida && elegida.texto !== undefined ? elegida.texto : bruto;
-      return { etiqueta: ETIQUETAS_FILTRO[nombre] || nombre, valor: texto };
+      return { etiqueta: etiquetaFiltro_(reporte, nombre), valor: texto };
     }).filter(Boolean);
   }
+  /**
+   * El nombre visible de un filtro, con la afinacion que el reporte pida.
+   *
+   * Existe por "Período": segun el reporte, el mismo select corta por una
+   * fecha distinta (cuando ENTRO el item, cuando se ENTREGO). Un select que
+   * dice solo "Período" deja a quien lo usa adivinando cual de las dos, y
+   * dos personas leyendo el mismo numero pueden entender cosas distintas.
+   * Asi que el reporte que corta por algo concreto lo escribe:
+   * `etiquetaPeriodo: "Ítems creados en"`.
+   */
+  function etiquetaFiltro_(reporte, nombre) {
+    if (nombre === 'periodo' && reporte && reporte.etiquetaPeriodo) return reporte.etiquetaPeriodo;
+    return ETIQUETAS_FILTRO[nombre] || nombre;
+  }
+
   function pintarFiltros(reporte, opciones, valores) {
     var lista = reporte.filtros || (TIPOS[reporte.tipo] || {}).filtros || [];
     if (!lista.length) return '';
@@ -10104,8 +10122,12 @@ var Iconos = (function () {
     opciones = opciones || {};
 
     var campos = lista.map(function (f) {
-      if (f === 'periodo') return select_('periodo', 'Período', opciones.periodo || PERIODOS_POR_DEFECTO, valores.periodo);
-      if (f === 'periodo_previo') return select_('periodo_previo', 'Comparar con', opciones.periodo || PERIODOS_POR_DEFECTO, valores.periodo_previo);
+      // Sin valor elegido, se marca 'todo' y NO la primera opcion. Un <select>
+      // siempre tiene algo seleccionado: si se dejara al navegador elegir, el
+      // desplegable diria "Este mes" mientras el reporte muestra todo, y quien
+      // lo lea creera que esta viendo un corte que no se aplico.
+      if (f === 'periodo') return select_('periodo', etiquetaFiltro_(reporte, 'periodo'), opciones.periodo || PERIODOS_POR_DEFECTO, valores.periodo || 'todo');
+      if (f === 'periodo_previo') return select_('periodo_previo', 'Comparar con', opciones.periodo || PERIODOS_POR_DEFECTO, valores.periodo_previo || 'todo');
       if (f === 'desde') return fecha_('desde', 'Desde', valores.desde);
       if (f === 'hasta') return fecha_('hasta', 'Hasta', valores.hasta);
       if (f === 'area') return select_('area', 'Área', opciones.area || [], valores.area, 'Todas');
@@ -10162,6 +10184,119 @@ var Iconos = (function () {
       e.preventDefault();
       fn(leerFiltros(contenedor));
     });
+  }
+
+  // ==========================================================================
+  // APLICAR LOS FILTROS
+  // ==========================================================================
+  // Esto vive AQUI y no en cada módulo por el mismo motivo que la agregación
+  // de cumplimiento: si Gerencia resolviera "este trimestre" de una forma y
+  // Jefatura de otra, un jefe y Gerencia verían números distintos del mismo
+  // equipo y nadie sabría cuál creer.
+
+  /**
+   * Traduce un período a un rango de fechas `YYYY-MM-DD`.
+   *
+   * Se trabaja con el prefijo de 10 caracteres y NO con objetos Date: los
+   * ítems traen la fecha como texto ISO, y compararlos como texto evita de
+   * raíz que un ítem del día 1 caiga en el mes anterior porque el navegador
+   * está en otro huso. Es el mismo criterio que usa el backend.
+   */
+  function rangoDePeriodo(periodo, hoyISO) {
+    var hoy = String(hoyISO || new Date().toISOString()).slice(0, 10);
+    var anio = hoy.slice(0, 4);
+    var mes = Number(hoy.slice(5, 7));
+    if (periodo === 'mes') return { desde: hoy.slice(0, 7) + '-01', hasta: finDeMes_(anio, mes) };
+    if (periodo === 'trimestre') {
+      var primerMes = Math.floor((mes - 1) / 3) * 3 + 1;
+      return {
+        desde: anio + '-' + dos_(primerMes) + '-01',
+        hasta: finDeMes_(anio, primerMes + 2)
+      };
+    }
+    if (periodo === 'anio') return { desde: anio + '-01-01', hasta: anio + '-12-31' };
+    return { desde: '', hasta: '' };   // 'todo', vacío o desconocido: sin corte
+  }
+
+  function dos_(n) { return (n < 10 ? '0' : '') + n; }
+
+  function finDeMes_(anio, mes) {
+    // Día 0 del mes siguiente = último del mes pedido, y así no hay que
+    // saberse cuáles tienen 31 ni acordarse de los bisiestos.
+    var d = new Date(Date.UTC(Number(anio), mes, 0));
+    return d.toISOString().slice(0, 10);
+  }
+
+  /**
+   * Aplica a una lista de ítems los filtros que la persona eligió.
+   *
+   * `opciones.campoFecha` dice SOBRE QUÉ FECHA corta el período. No hay un
+   * valor por defecto razonable para todos: cortar un reporte de
+   * cumplimiento por la fecha de entrega dejaría fuera todo lo que sigue
+   * abierto, y su columna "Abiertos" quedaría siempre en cero — el reporte
+   * seguiría dibujándose, diciendo otra cosa. Por eso cada reporte lo
+   * declara y la etiqueta del filtro lo dice en pantalla.
+   *
+   * Un ítem SIN esa fecha queda fuera cuando hay período elegido: no se
+   * puede afirmar que cae dentro de un rango que no tiene.
+   */
+  function filtrarItems(items, valores, opciones) {
+    items = items || [];
+    valores = valores || {};
+    opciones = opciones || {};
+    var campos = opciones.campos || {};
+
+    // Un desde/hasta explícito manda sobre el período: si la persona
+    // escribió fechas, son las suyas.
+    var rango = (valores.desde || valores.hasta)
+      ? { desde: String(valores.desde || '').slice(0, 10), hasta: String(valores.hasta || '').slice(0, 10) }
+      : rangoDePeriodo(valores.periodo, opciones.hoy);
+
+    var campoFecha = opciones.campoFecha;
+    var hayRango = !!(rango.desde || rango.hasta);
+
+    return items.filter(function (i) {
+      if (hayRango && campoFecha) {
+        var f = String(i[campoFecha] || '').slice(0, 10);
+        if (!f) return false;
+        if (rango.desde && f < rango.desde) return false;
+        if (rango.hasta && f > rango.hasta) return false;
+      }
+      if (!coincide_(i, campos.area, valores.area)) return false;
+      if (!coincide_(i, campos.responsable, valores.responsable)) return false;
+      if (!coincide_(i, campos.estado, valores.estado)) return false;
+      return true;
+    });
+  }
+
+  // Un filtro sin valor no filtra. Se compara como texto porque el valor
+  // vuelve del <select> siempre como texto.
+  function coincide_(item, campo, valor) {
+    if (!campo || valor === undefined || valor === null || valor === '') return true;
+    return String(item[campo] || '') === String(valor);
+  }
+
+  /**
+   * Arma las opciones de los selects a partir de los propios ítems.
+   *
+   * Se sacan de los datos y no de un catálogo para que no aparezca en el
+   * desplegable un área sin nada que mostrar: elegirla daría un reporte
+   * vacío que parece un error del sistema.
+   */
+  function opcionesDeItems(items, campos) {
+    var salida = {};
+    Object.keys(campos || {}).forEach(function (filtro) {
+      var campo = campos[filtro];
+      var vistos = {};
+      (items || []).forEach(function (i) {
+        var v = String(i[campo] || '').trim();
+        if (v) vistos[v] = true;
+      });
+      salida[filtro] = Object.keys(vistos).sort(function (a, b) {
+        return a.localeCompare(b, 'es');
+      }).map(function (v) { return { valor: v, texto: v }; });
+    });
+    return salida;
   }
 
   // ==========================================================================
@@ -10596,6 +10731,9 @@ var Iconos = (function () {
     pintarFiltros: pintarFiltros,
     leerFiltros: leerFiltros,
     alAplicarFiltros: alAplicarFiltros,
+    rangoDePeriodo: rangoDePeriodo,
+    filtrarItems: filtrarItems,
+    opcionesDeItems: opcionesDeItems,
     kpis: kpis,
     tabla: tabla,
     ranking: ranking,
@@ -14391,6 +14529,9 @@ var Iconos = (function () {
 
   var itemGerenciaActivo_ = 'tablero';
   var reporteGerAbierto_ = null;
+  // Los filtros se aplican en el CLIENTE, sobre los ítems que el panel ya
+  // trajo: cambiar un select no vuelve a pedirle nada al servidor.
+  var filtrosReporteGer_ = {};
 
   // v13.0: la navegacion vive en el sidebar.
   function pintarNavGerencia_() {
@@ -14406,7 +14547,7 @@ var Iconos = (function () {
     itemGerenciaActivo_ = id;
     // Salir de Reportes cierra el reporte abierto: volver debe mostrar el
     // catálogo y no el último que se miró.
-    if (id !== 'reportes') reporteGerAbierto_ = null;
+    if (id !== 'reportes') { reporteGerAbierto_ = null; filtrosReporteGer_ = {}; }
     pintarNavGerencia_();
     if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id);
 
@@ -14424,21 +14565,48 @@ var Iconos = (function () {
   }
 
   // --- Centro de reportes ----------------------------------------------------
+  //
+  // SOBRE QUE FECHA CORTA EL PERIODO (y por que se dice en la etiqueta).
+  //
+  // La tentacion era cortar los reportes de cumplimiento por fecha_terminada
+  // -- "las entregas de este trimestre". Se descarto: dejaria fuera todo lo
+  // que sigue abierto, y la columna "Abiertos" de esos mismos reportes
+  // quedaria siempre en cero. El reporte se seguiria dibujando, diciendo
+  // otra cosa, sin ningun aviso.
+  //
+  // Se corta por COHORTE: los items que ENTRARON en el periodo. Asi las
+  // cuatro columnas (total, entregados, a tiempo, abiertos) siguen
+  // significando lo que dicen. Y como "Periodo" a secas no deja claro cual
+  // de las dos fechas es, la etiqueta lo escribe.
+  var CAMPOS_FILTRO_GER = { area: 'area_nombre', responsable: 'desarrollador_nombre' };
+  var ETIQUETA_COHORTE = 'Ítems creados en';
+
   var REPORTES_GERENCIA = [
     { grupo: 'Cumplimiento', icono: 'escudo', reportes: [
       { id: 'ger-area', nombre: 'Cumplimiento por área', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
         desc: 'Qué áreas entregan dentro de la fecha comprometida y cuáles no.',
-        fuente: 'getPanelGerencia', filtros: [] },
+        fuente: 'getPanelGerencia',
+        // Sin 'area': el reporte YA desagrega por área. Un select de área
+        // aquí dejaría una tabla de una sola fila.
+        filtros: ['periodo', 'responsable'], etiquetaPeriodo: ETIQUETA_COHORTE,
+        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_GER },
       { id: 'ger-responsable', nombre: 'Cumplimiento por responsable', tipo: 'RANKING', estado: 'LISTO',
         desc: 'Entregas a tiempo por cada responsable, sobre lo que ya cerró.',
-        fuente: 'getPanelGerencia', filtros: [] },
+        fuente: 'getPanelGerencia',
+        filtros: ['periodo', 'area'], etiquetaPeriodo: ETIQUETA_COHORTE,
+        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_GER },
       { id: 'ger-resbalon', nombre: 'Resbalón de compromisos', tipo: 'DETALLE', estado: 'LISTO',
         desc: 'Ítems que movieron su fecha comprometida, y cuántas veces se reabrieron.',
-        fuente: 'getPanelGerencia', filtros: [] }
+        fuente: 'getPanelGerencia',
+        filtros: ['periodo', 'area', 'responsable'], etiquetaPeriodo: ETIQUETA_COHORTE,
+        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_GER }
     ] },
     { grupo: 'Evolución', icono: 'grafico', reportes: [
       { id: 'ger-throughput', nombre: 'Entrada vs salida por mes', tipo: 'TENDENCIA', estado: 'LISTO',
         desc: 'Cuánto entra y cuánto se cierra cada mes: dice si la cola crece o baja.',
+        // Sin filtros: no sale de los ítems, sino de la serie de seis meses
+        // que ya viene calculada del servidor. Un selector de período aquí
+        // prometería recortar una serie que el cliente no puede recortar.
         fuente: 'getPanelGerencia', filtros: [] },
       { id: 'ger-tendencia', nombre: 'Tendencia y ciclo por etapa', tipo: 'TENDENCIA', estado: 'LISTO',
         desc: 'Los gráficos de seis meses y dónde se va el tiempo.',
@@ -14453,6 +14621,11 @@ var Iconos = (function () {
     { grupo: 'Comparación', icono: 'lista', reportes: [
       { id: 'ger-comparativo', nombre: 'Período actual vs anterior', tipo: 'COMPARACION', estado: 'LISTO',
         desc: 'Cómo cambiaron los indicadores respecto de la ventana anterior.',
+        // Sin filtros de cliente A PROPOSITO: su ventana la resuelve el
+        // SERVIDOR (getPanelGerencia acepta desde/hasta). Filtrar aquí los
+        // ítems no movería estos números ni un decimal, y el selector
+        // mentiría. Cambiar la ventana es otro trabajo: pide volver a
+        // llamar al panel.
         fuente: 'getPanelGerencia', filtros: [] }
     ] }
   ];
@@ -14485,7 +14658,7 @@ var Iconos = (function () {
     SigsoReportes.pintarCatalogo({
       contenedor: cont,
       modulo: 'gerencia',
-      onAbrir: function (id) { reporteGerAbierto_ = id; renderReportesGerencia_(); },
+      onAbrir: function (id) { reporteGerAbierto_ = id; filtrosReporteGer_ = {}; renderReportesGerencia_(); },
       onIrASeccion: function (vista) { irAVistaGerencia_(vista); }
     });
   }
@@ -14493,7 +14666,14 @@ var Iconos = (function () {
   function pintarReporteGerencia_(cont) {
     var r = SigsoReportes.buscarReporte('gerencia', reporteGerAbierto_);
     if (!r) { reporteGerAbierto_ = null; renderReportesGerencia_(); return; }
-    var items = panelActual.items || [];
+    var todos = panelActual.items || [];
+    // Las opciones salen de TODOS los ítems, no de los ya filtrados: si se
+    // sacaran de los filtrados, elegir un área haría desaparecer del
+    // desplegable a las demás y no habría forma de volver.
+    var opcionesFiltro = SigsoReportes.opcionesDeItems(todos, r.campos || {});
+    var items = SigsoReportes.filtrarItems(todos, filtrosReporteGer_, {
+      campoFecha: r.campoFecha, campos: r.campos
+    });
     var cuerpo = '';
     // v12.4: la agregacion de cumplimiento y la de entrada/salida viven en el
     // motor. Jefatura las usa igual, y asi la REGLA de que se cuenta no puede
@@ -14524,14 +14704,24 @@ var Iconos = (function () {
         modulo: 'Gerencia — Panel de dirección',
         codigo: 'SIGSO-REP-GER-' + String(r.id).replace(/^[a-z]+-/, '').toUpperCase(),
         generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || '',
-        filtros: filtrosDelPanel_
+        // El documento declara los DOS cortes: el de la barra del panel
+        // (que se aplicó en el servidor) y el del propio reporte. Un
+        // reporte que no dice todo lo que dejó fuera no sirve como
+        // evidencia.
+        filtros: filtrosDelPanel_.concat(
+          SigsoReportes.filtrosParaCabecera(r, opcionesFiltro, filtrosReporteGer_))
       }) +
+      SigsoReportes.pintarFiltros(r, opcionesFiltro, filtrosReporteGer_) +
       cuerpo +
       SigsoReportes.pieDocumento();
 
     SigsoReportes.wireAcciones(cont, {
       nombreArchivo: 'sigso-gerencia-' + r.id,
-      onVolver: function () { reporteGerAbierto_ = null; renderReportesGerencia_(); }
+      onVolver: function () { reporteGerAbierto_ = null; filtrosReporteGer_ = {}; renderReportesGerencia_(); }
+    });
+    SigsoReportes.alAplicarFiltros(cont, function (valores) {
+      filtrosReporteGer_ = valores;
+      pintarReporteGerencia_(cont);
     });
   }
 
@@ -14991,6 +15181,8 @@ var Iconos = (function () {
 
   var itemJefaturaActivo_ = 'tablero';
   var reporteJefAbierto_ = null;
+  // Se aplican en el CLIENTE, sobre los ítems que el panel ya trajo.
+  var filtrosReporteJef_ = {};
   var panelJefatura_ = null;
 
   // v13.0: la navegacion vive en el sidebar.
@@ -15005,7 +15197,7 @@ var Iconos = (function () {
 
   function irAVistaJefatura_(id) {
     itemJefaturaActivo_ = id;
-    if (id !== 'reportes') reporteJefAbierto_ = null;
+    if (id !== 'reportes') { reporteJefAbierto_ = null; filtrosReporteJef_ = {}; }
     pintarNavJefatura_();
     if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id);
 
@@ -15024,27 +15216,48 @@ var Iconos = (function () {
   // Jefatura NO tiene area_nombre ni re_compromisos/reaperturas en sus items
   // (Gerencia sí). Los reportes que dependen de eso se declaran PENDIENTE con
   // el motivo, en vez de omitirse en silencio.
+  // El corte por período es el MISMO que en Gerencia (los ítems que
+  // ENTRARON en el período, no los que se entregaron): si el jefe y
+  // Gerencia cortaran distinto, verían números distintos del mismo equipo.
+  // El motivo largo está en gerencia.js, junto al catálogo.
+  // Solo responsable: Jefatura no trae area_nombre en sus ítems, y mapear
+  // el hueco de "estado" a otra cosa (módulo, por ejemplo) daría un select
+  // etiquetado Estado que filtra por algo distinto.
+  var CAMPOS_FILTRO_JEF = { responsable: 'desarrollador_nombre' };
+  var ETIQUETA_COHORTE_JEF = 'Ítems creados en';
+
   var REPORTES_JEFATURA = [
     { grupo: 'Cumplimiento', icono: 'escudo', reportes: [
       { id: 'jef-responsable', nombre: 'Cumplimiento por persona', tipo: 'RANKING', estado: 'LISTO',
         desc: 'Entregas a tiempo de cada integrante, sobre lo que ya cerró.',
-        fuente: 'getPanelJefatura', filtros: [] },
+        fuente: 'getPanelJefatura',
+        // Sin 'responsable': el reporte YA desagrega por persona.
+        filtros: ['periodo'], etiquetaPeriodo: ETIQUETA_COHORTE_JEF,
+        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_JEF },
       { id: 'jef-modulo', nombre: 'Cumplimiento por módulo', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
         desc: 'Qué módulos del sistema concentran los atrasos del equipo.',
-        fuente: 'getPanelJefatura', filtros: [] },
+        fuente: 'getPanelJefatura',
+        filtros: ['periodo', 'responsable'], etiquetaPeriodo: ETIQUETA_COHORTE_JEF,
+        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_JEF },
       { id: 'jef-tipo', nombre: 'Cumplimiento por tipo', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
         desc: 'Si el atraso se concentra en errores, mejoras o alguna otra clase.',
-        fuente: 'getPanelJefatura', filtros: [] },
+        fuente: 'getPanelJefatura',
+        filtros: ['periodo', 'responsable'], etiquetaPeriodo: ETIQUETA_COHORTE_JEF,
+        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_JEF },
       // v12.5: dejo de estar pendiente -- Jefatura.getPanel ya expone
       // re_compromisos, reaperturas y fecha_original, reusando los mismos
       // ayudantes que Gerencia (no se reimplemento el criterio).
       { id: 'jef-resbalon', nombre: 'Resbalón de compromisos', tipo: 'DETALLE', estado: 'LISTO',
         desc: 'Ítems de tu equipo que movieron su fecha comprometida, y cuántas veces se reabrieron.',
-        fuente: 'getPanelJefatura', filtros: [] }
+        fuente: 'getPanelJefatura',
+        filtros: ['periodo', 'responsable'], etiquetaPeriodo: ETIQUETA_COHORTE_JEF,
+        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_JEF }
     ] },
     { grupo: 'Evolución', icono: 'grafico', reportes: [
       { id: 'jef-throughput', nombre: 'Entrada vs salida por mes', tipo: 'TENDENCIA', estado: 'LISTO',
         desc: 'Cuánto entra y cuánto cierra tu equipo cada mes.',
+        // Sin filtros: sale de la serie ya calculada en el servidor, no de
+        // los ítems. Un selector aquí prometería recortar lo que no puede.
         fuente: 'getPanelJefatura', filtros: [] },
       { id: 'jef-carga', nombre: 'Carga por módulo y tipo', tipo: 'RANKING', estado: 'LISTO',
         desc: 'Qué se repite en tu equipo.',
@@ -15080,7 +15293,7 @@ var Iconos = (function () {
     SigsoReportes.pintarCatalogo({
       contenedor: cont,
       modulo: 'jefatura',
-      onAbrir: function (id) { reporteJefAbierto_ = id; renderReportesJefatura_(); },
+      onAbrir: function (id) { reporteJefAbierto_ = id; filtrosReporteJef_ = {}; renderReportesJefatura_(); },
       onIrASeccion: function (vista) { irAVistaJefatura_(vista); }
     });
   }
@@ -15088,7 +15301,14 @@ var Iconos = (function () {
   function pintarReporteJefatura_(cont) {
     var r = SigsoReportes.buscarReporte('jefatura', reporteJefAbierto_);
     if (!r) { reporteJefAbierto_ = null; renderReportesJefatura_(); return; }
-    var items = panelJefatura_.items || [];
+    var todos = panelJefatura_.items || [];
+    // Las opciones salen de TODOS los ítems: si salieran de los ya
+    // filtrados, elegir a una persona borraría del desplegable a las demás
+    // y no habría forma de volver.
+    var opcionesFiltro = SigsoReportes.opcionesDeItems(todos, r.campos || {});
+    var items = SigsoReportes.filtrarItems(todos, filtrosReporteJef_, {
+      campoFecha: r.campoFecha, campos: r.campos
+    });
     var cuerpo = '';
     if (r.id === 'jef-responsable') {
       cuerpo = SigsoReportes.cuerpoCumplimientoPor(items, {
@@ -15121,14 +15341,22 @@ var Iconos = (function () {
         subtitulo: r.desc,
         modulo: 'Jefatura — Panel de equipo',
         codigo: 'SIGSO-REP-JEF-' + String(r.id).replace(/^[a-z]+-/, '').toUpperCase(),
-        generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || ''
+        generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || '',
+        // El documento declara el corte aplicado: un reporte que no dice
+        // qué dejó fuera no sirve como evidencia.
+        filtros: SigsoReportes.filtrosParaCabecera(r, opcionesFiltro, filtrosReporteJef_)
       }) +
+      SigsoReportes.pintarFiltros(r, opcionesFiltro, filtrosReporteJef_) +
       cuerpo +
       SigsoReportes.pieDocumento();
 
     SigsoReportes.wireAcciones(cont, {
       nombreArchivo: 'sigso-jefatura-' + r.id,
-      onVolver: function () { reporteJefAbierto_ = null; renderReportesJefatura_(); }
+      onVolver: function () { reporteJefAbierto_ = null; filtrosReporteJef_ = {}; renderReportesJefatura_(); }
+    });
+    SigsoReportes.alAplicarFiltros(cont, function (valores) {
+      filtrosReporteJef_ = valores;
+      pintarReporteJefatura_(cont);
     });
   }
 
@@ -16875,6 +17103,9 @@ var Iconos = (function () {
   // servidor. Se guardan a nivel de modulo para sobrevivir un refrescar_()
   // (auto-refresco al volver a la pestaña) sin resetearse solos.
   var filtroEstadoPortafolio_ = '';
+  // Filtros del reporte abierto. Se aplican en el CLIENTE, sobre los
+  // proyectos que el portafolio ya trajo.
+  var filtrosReportePy_ = {};
   var filtroSaludPortafolio_ = '';
   var proyectosPortafolioSinFiltrarSalud_ = [];
   // v9.4 (Fase 3): resumen ejecutivo del portafolio -- KPIs agregados + carga
@@ -22898,7 +23129,7 @@ var Iconos = (function () {
 
   function irAVistaProyectos_(id) {
     vistaProyectos_ = id;
-    if (id !== 'reportes') reportePyAbierto_ = null;
+    if (id !== 'reportes') { reportePyAbierto_ = null; filtrosReportePy_ = {}; }
     if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id);
     if (id === 'reportes') renderReportesProyectos_();
     else if (id === 'mi-trabajo') cargarMiTrabajoProyectos_();
@@ -22907,27 +23138,53 @@ var Iconos = (function () {
   }
 
   // --- Centro de reportes ----------------------------------------------------
+  //
+  // EL PERIODO NO CORTA POR LO MISMO EN TODOS. La unidad aquí es el
+  // PROYECTO, no el ítem, así que la fecha que interesa depende de la
+  // pregunta: casi todos miran cuándo EMPEZÓ el proyecto, pero "Plazos"
+  // habla de la fecha OBJETIVO y cortarlo por la de inicio daría un
+  // selector que no responde lo que el reporte pregunta. Cada reporte
+  // declara su campo, y la etiqueta lo dice en pantalla.
+  //
+  // No se ofrece filtro de ESTADO ni de SALUD: la barra del portafolio ya
+  // los tiene, y dos filtros de lo mismo en la misma pantalla se
+  // contradicen sin que nadie sepa cuál manda.
+  var CAMPOS_FILTRO_PY = { responsable: 'lider_email' };
+
   var REPORTES_PROYECTOS = [
     { grupo: 'Estado del portafolio', icono: 'escudo', reportes: [
       { id: 'py-salud', nombre: 'Salud del portafolio', tipo: 'ESTADO', estado: 'LISTO',
         desc: 'Cuántos proyectos están normales, en riesgo o críticos, y por qué.',
-        fuente: 'listarProyectos', filtros: [] },
+        fuente: 'listarProyectos',
+        filtros: ['periodo', 'responsable'], etiquetaPeriodo: 'Proyectos iniciados en',
+        campoFecha: 'fecha_inicio', campos: CAMPOS_FILTRO_PY },
       { id: 'py-avance', nombre: 'Avance por proyecto', tipo: 'RANKING', estado: 'LISTO',
         desc: 'Porcentaje de avance de cada proyecto, del más adelantado al más atrasado.',
-        fuente: 'listarProyectos', filtros: [] },
+        fuente: 'listarProyectos',
+        filtros: ['periodo', 'responsable'], etiquetaPeriodo: 'Proyectos iniciados en',
+        campoFecha: 'fecha_inicio', campos: CAMPOS_FILTRO_PY },
       { id: 'py-plazos', nombre: 'Plazos', tipo: 'DETALLE', estado: 'LISTO',
         desc: 'Proyectos con fecha objetivo vencida o próxima a vencer.',
-        fuente: 'listarProyectos', filtros: [] }
+        // Corta por la fecha OBJETIVO: es de lo que habla el reporte.
+        fuente: 'listarProyectos',
+        filtros: ['periodo', 'responsable'], etiquetaPeriodo: 'Con fecha objetivo en',
+        campoFecha: 'fecha_objetivo', campos: CAMPOS_FILTRO_PY }
     ] },
     { grupo: 'Personas', icono: 'persona', reportes: [
       { id: 'py-lider', nombre: 'Carga por líder', tipo: 'RANKING', estado: 'LISTO',
         desc: 'Cuántos proyectos lidera cada persona y cuántos de ellos no están sanos.',
-        fuente: 'listarProyectos', filtros: [] },
+        // Sin 'responsable': el reporte YA desagrega por líder. Elegir uno
+        // dejaría un ranking de una sola fila.
+        fuente: 'listarProyectos',
+        filtros: ['periodo'], etiquetaPeriodo: 'Proyectos iniciados en',
+        campoFecha: 'fecha_inicio', campos: CAMPOS_FILTRO_PY },
       // v12.5: deja de estar pendiente -- listarProyectos ahora calcula
       // cumplimiento_tareas por proyecto, con la MISMA regla del motor.
       { id: 'py-cumplimiento', nombre: 'Cumplimiento de tareas', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
         desc: 'Tareas entregadas dentro de su fecha comprometida, proyecto por proyecto.',
-        fuente: 'listarProyectos', filtros: [] }
+        fuente: 'listarProyectos',
+        filtros: ['periodo', 'responsable'], etiquetaPeriodo: 'Proyectos iniciados en',
+        campoFecha: 'fecha_inicio', campos: CAMPOS_FILTRO_PY }
     ] }
   ];
 
@@ -22971,7 +23228,7 @@ var Iconos = (function () {
     SigsoReportes.pintarCatalogo({
       contenedor: cont,
       modulo: 'proyectos',
-      onAbrir: function (id) { reportePyAbierto_ = id; renderReportesProyectos_(); },
+      onAbrir: function (id) { reportePyAbierto_ = id; filtrosReportePy_ = {}; renderReportesProyectos_(); },
       onIrASeccion: function (vista) { irAVistaProyectos_(vista); }
     });
   }
@@ -22988,7 +23245,13 @@ var Iconos = (function () {
   function pintarReporteProyectos_(cont) {
     var r = SigsoReportes.buscarReporte('proyectos', reportePyAbierto_);
     if (!r) { reportePyAbierto_ = null; renderReportesProyectos_(); return; }
-    var ps = proyectosPortafolioSinFiltrarSalud_ || [];
+    var todos = proyectosPortafolioSinFiltrarSalud_ || [];
+    // Las opciones salen de TODOS los proyectos: si salieran de los ya
+    // filtrados, elegir un líder borraría a los demás del desplegable.
+    var opcionesFiltro = SigsoReportes.opcionesDeItems(todos, r.campos || {});
+    var ps = SigsoReportes.filtrarItems(todos, filtrosReportePy_, {
+      campoFecha: r.campoFecha, campos: r.campos
+    });
     var cuerpo = '';
     if (r.id === 'py-salud') cuerpo = cuerpoSaludPortafolio_(ps);
     else if (r.id === 'py-avance') cuerpo = cuerpoAvance_(ps);
@@ -23004,14 +23267,22 @@ var Iconos = (function () {
         modulo: 'Proyectos — Portafolio',
         codigo: 'SIGSO-REP-PY-' + String(r.id).replace(/^[a-z]+-/, '').toUpperCase(),
         generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || '',
-        filtros: filtrosDelReporte_()
+        // Los DOS cortes: el de la barra del portafolio y el del reporte. Un
+        // documento que no dice todo lo que dejo fuera no sirve como evidencia.
+        filtros: filtrosDelReporte_().concat(
+          SigsoReportes.filtrosParaCabecera(r, opcionesFiltro, filtrosReportePy_))
       }) +
+      SigsoReportes.pintarFiltros(r, opcionesFiltro, filtrosReportePy_) +
       cuerpo +
       SigsoReportes.pieDocumento();
 
     SigsoReportes.wireAcciones(cont, {
       nombreArchivo: 'sigso-proyectos-' + r.id,
-      onVolver: function () { reportePyAbierto_ = null; renderReportesProyectos_(); }
+      onVolver: function () { reportePyAbierto_ = null; filtrosReportePy_ = {}; renderReportesProyectos_(); }
+    });
+    SigsoReportes.alAplicarFiltros(cont, function (valores) {
+      filtrosReportePy_ = valores;
+      pintarReporteProyectos_(cont);
     });
   }
 

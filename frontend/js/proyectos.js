@@ -201,6 +201,9 @@
   // servidor. Se guardan a nivel de modulo para sobrevivir un refrescar_()
   // (auto-refresco al volver a la pestaña) sin resetearse solos.
   var filtroEstadoPortafolio_ = '';
+  // Filtros del reporte abierto. Se aplican en el CLIENTE, sobre los
+  // proyectos que el portafolio ya trajo.
+  var filtrosReportePy_ = {};
   var filtroSaludPortafolio_ = '';
   var proyectosPortafolioSinFiltrarSalud_ = [];
   // v9.4 (Fase 3): resumen ejecutivo del portafolio -- KPIs agregados + carga
@@ -6224,7 +6227,7 @@
 
   function irAVistaProyectos_(id) {
     vistaProyectos_ = id;
-    if (id !== 'reportes') reportePyAbierto_ = null;
+    if (id !== 'reportes') { reportePyAbierto_ = null; filtrosReportePy_ = {}; }
     if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id);
     if (id === 'reportes') renderReportesProyectos_();
     else if (id === 'mi-trabajo') cargarMiTrabajoProyectos_();
@@ -6233,27 +6236,53 @@
   }
 
   // --- Centro de reportes ----------------------------------------------------
+  //
+  // EL PERIODO NO CORTA POR LO MISMO EN TODOS. La unidad aquí es el
+  // PROYECTO, no el ítem, así que la fecha que interesa depende de la
+  // pregunta: casi todos miran cuándo EMPEZÓ el proyecto, pero "Plazos"
+  // habla de la fecha OBJETIVO y cortarlo por la de inicio daría un
+  // selector que no responde lo que el reporte pregunta. Cada reporte
+  // declara su campo, y la etiqueta lo dice en pantalla.
+  //
+  // No se ofrece filtro de ESTADO ni de SALUD: la barra del portafolio ya
+  // los tiene, y dos filtros de lo mismo en la misma pantalla se
+  // contradicen sin que nadie sepa cuál manda.
+  var CAMPOS_FILTRO_PY = { responsable: 'lider_email' };
+
   var REPORTES_PROYECTOS = [
     { grupo: 'Estado del portafolio', icono: 'escudo', reportes: [
       { id: 'py-salud', nombre: 'Salud del portafolio', tipo: 'ESTADO', estado: 'LISTO',
         desc: 'Cuántos proyectos están normales, en riesgo o críticos, y por qué.',
-        fuente: 'listarProyectos', filtros: [] },
+        fuente: 'listarProyectos',
+        filtros: ['periodo', 'responsable'], etiquetaPeriodo: 'Proyectos iniciados en',
+        campoFecha: 'fecha_inicio', campos: CAMPOS_FILTRO_PY },
       { id: 'py-avance', nombre: 'Avance por proyecto', tipo: 'RANKING', estado: 'LISTO',
         desc: 'Porcentaje de avance de cada proyecto, del más adelantado al más atrasado.',
-        fuente: 'listarProyectos', filtros: [] },
+        fuente: 'listarProyectos',
+        filtros: ['periodo', 'responsable'], etiquetaPeriodo: 'Proyectos iniciados en',
+        campoFecha: 'fecha_inicio', campos: CAMPOS_FILTRO_PY },
       { id: 'py-plazos', nombre: 'Plazos', tipo: 'DETALLE', estado: 'LISTO',
         desc: 'Proyectos con fecha objetivo vencida o próxima a vencer.',
-        fuente: 'listarProyectos', filtros: [] }
+        // Corta por la fecha OBJETIVO: es de lo que habla el reporte.
+        fuente: 'listarProyectos',
+        filtros: ['periodo', 'responsable'], etiquetaPeriodo: 'Con fecha objetivo en',
+        campoFecha: 'fecha_objetivo', campos: CAMPOS_FILTRO_PY }
     ] },
     { grupo: 'Personas', icono: 'persona', reportes: [
       { id: 'py-lider', nombre: 'Carga por líder', tipo: 'RANKING', estado: 'LISTO',
         desc: 'Cuántos proyectos lidera cada persona y cuántos de ellos no están sanos.',
-        fuente: 'listarProyectos', filtros: [] },
+        // Sin 'responsable': el reporte YA desagrega por líder. Elegir uno
+        // dejaría un ranking de una sola fila.
+        fuente: 'listarProyectos',
+        filtros: ['periodo'], etiquetaPeriodo: 'Proyectos iniciados en',
+        campoFecha: 'fecha_inicio', campos: CAMPOS_FILTRO_PY },
       // v12.5: deja de estar pendiente -- listarProyectos ahora calcula
       // cumplimiento_tareas por proyecto, con la MISMA regla del motor.
       { id: 'py-cumplimiento', nombre: 'Cumplimiento de tareas', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
         desc: 'Tareas entregadas dentro de su fecha comprometida, proyecto por proyecto.',
-        fuente: 'listarProyectos', filtros: [] }
+        fuente: 'listarProyectos',
+        filtros: ['periodo', 'responsable'], etiquetaPeriodo: 'Proyectos iniciados en',
+        campoFecha: 'fecha_inicio', campos: CAMPOS_FILTRO_PY }
     ] }
   ];
 
@@ -6297,7 +6326,7 @@
     SigsoReportes.pintarCatalogo({
       contenedor: cont,
       modulo: 'proyectos',
-      onAbrir: function (id) { reportePyAbierto_ = id; renderReportesProyectos_(); },
+      onAbrir: function (id) { reportePyAbierto_ = id; filtrosReportePy_ = {}; renderReportesProyectos_(); },
       onIrASeccion: function (vista) { irAVistaProyectos_(vista); }
     });
   }
@@ -6314,7 +6343,13 @@
   function pintarReporteProyectos_(cont) {
     var r = SigsoReportes.buscarReporte('proyectos', reportePyAbierto_);
     if (!r) { reportePyAbierto_ = null; renderReportesProyectos_(); return; }
-    var ps = proyectosPortafolioSinFiltrarSalud_ || [];
+    var todos = proyectosPortafolioSinFiltrarSalud_ || [];
+    // Las opciones salen de TODOS los proyectos: si salieran de los ya
+    // filtrados, elegir un líder borraría a los demás del desplegable.
+    var opcionesFiltro = SigsoReportes.opcionesDeItems(todos, r.campos || {});
+    var ps = SigsoReportes.filtrarItems(todos, filtrosReportePy_, {
+      campoFecha: r.campoFecha, campos: r.campos
+    });
     var cuerpo = '';
     if (r.id === 'py-salud') cuerpo = cuerpoSaludPortafolio_(ps);
     else if (r.id === 'py-avance') cuerpo = cuerpoAvance_(ps);
@@ -6330,14 +6365,22 @@
         modulo: 'Proyectos — Portafolio',
         codigo: 'SIGSO-REP-PY-' + String(r.id).replace(/^[a-z]+-/, '').toUpperCase(),
         generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || '',
-        filtros: filtrosDelReporte_()
+        // Los DOS cortes: el de la barra del portafolio y el del reporte. Un
+        // documento que no dice todo lo que dejo fuera no sirve como evidencia.
+        filtros: filtrosDelReporte_().concat(
+          SigsoReportes.filtrosParaCabecera(r, opcionesFiltro, filtrosReportePy_))
       }) +
+      SigsoReportes.pintarFiltros(r, opcionesFiltro, filtrosReportePy_) +
       cuerpo +
       SigsoReportes.pieDocumento();
 
     SigsoReportes.wireAcciones(cont, {
       nombreArchivo: 'sigso-proyectos-' + r.id,
-      onVolver: function () { reportePyAbierto_ = null; renderReportesProyectos_(); }
+      onVolver: function () { reportePyAbierto_ = null; filtrosReportePy_ = {}; renderReportesProyectos_(); }
+    });
+    SigsoReportes.alAplicarFiltros(cont, function (valores) {
+      filtrosReportePy_ = valores;
+      pintarReporteProyectos_(cont);
     });
   }
 

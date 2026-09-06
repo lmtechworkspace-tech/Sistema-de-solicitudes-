@@ -369,6 +369,8 @@
 
   var itemJefaturaActivo_ = 'tablero';
   var reporteJefAbierto_ = null;
+  // Se aplican en el CLIENTE, sobre los ítems que el panel ya trajo.
+  var filtrosReporteJef_ = {};
   var panelJefatura_ = null;
 
   // v13.0: la navegacion vive en el sidebar.
@@ -383,7 +385,7 @@
 
   function irAVistaJefatura_(id) {
     itemJefaturaActivo_ = id;
-    if (id !== 'reportes') reporteJefAbierto_ = null;
+    if (id !== 'reportes') { reporteJefAbierto_ = null; filtrosReporteJef_ = {}; }
     pintarNavJefatura_();
     if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id);
 
@@ -402,27 +404,48 @@
   // Jefatura NO tiene area_nombre ni re_compromisos/reaperturas en sus items
   // (Gerencia sí). Los reportes que dependen de eso se declaran PENDIENTE con
   // el motivo, en vez de omitirse en silencio.
+  // El corte por período es el MISMO que en Gerencia (los ítems que
+  // ENTRARON en el período, no los que se entregaron): si el jefe y
+  // Gerencia cortaran distinto, verían números distintos del mismo equipo.
+  // El motivo largo está en gerencia.js, junto al catálogo.
+  // Solo responsable: Jefatura no trae area_nombre en sus ítems, y mapear
+  // el hueco de "estado" a otra cosa (módulo, por ejemplo) daría un select
+  // etiquetado Estado que filtra por algo distinto.
+  var CAMPOS_FILTRO_JEF = { responsable: 'desarrollador_nombre' };
+  var ETIQUETA_COHORTE_JEF = 'Ítems creados en';
+
   var REPORTES_JEFATURA = [
     { grupo: 'Cumplimiento', icono: 'escudo', reportes: [
       { id: 'jef-responsable', nombre: 'Cumplimiento por persona', tipo: 'RANKING', estado: 'LISTO',
         desc: 'Entregas a tiempo de cada integrante, sobre lo que ya cerró.',
-        fuente: 'getPanelJefatura', filtros: [] },
+        fuente: 'getPanelJefatura',
+        // Sin 'responsable': el reporte YA desagrega por persona.
+        filtros: ['periodo'], etiquetaPeriodo: ETIQUETA_COHORTE_JEF,
+        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_JEF },
       { id: 'jef-modulo', nombre: 'Cumplimiento por módulo', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
         desc: 'Qué módulos del sistema concentran los atrasos del equipo.',
-        fuente: 'getPanelJefatura', filtros: [] },
+        fuente: 'getPanelJefatura',
+        filtros: ['periodo', 'responsable'], etiquetaPeriodo: ETIQUETA_COHORTE_JEF,
+        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_JEF },
       { id: 'jef-tipo', nombre: 'Cumplimiento por tipo', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
         desc: 'Si el atraso se concentra en errores, mejoras o alguna otra clase.',
-        fuente: 'getPanelJefatura', filtros: [] },
+        fuente: 'getPanelJefatura',
+        filtros: ['periodo', 'responsable'], etiquetaPeriodo: ETIQUETA_COHORTE_JEF,
+        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_JEF },
       // v12.5: dejo de estar pendiente -- Jefatura.getPanel ya expone
       // re_compromisos, reaperturas y fecha_original, reusando los mismos
       // ayudantes que Gerencia (no se reimplemento el criterio).
       { id: 'jef-resbalon', nombre: 'Resbalón de compromisos', tipo: 'DETALLE', estado: 'LISTO',
         desc: 'Ítems de tu equipo que movieron su fecha comprometida, y cuántas veces se reabrieron.',
-        fuente: 'getPanelJefatura', filtros: [] }
+        fuente: 'getPanelJefatura',
+        filtros: ['periodo', 'responsable'], etiquetaPeriodo: ETIQUETA_COHORTE_JEF,
+        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_JEF }
     ] },
     { grupo: 'Evolución', icono: 'grafico', reportes: [
       { id: 'jef-throughput', nombre: 'Entrada vs salida por mes', tipo: 'TENDENCIA', estado: 'LISTO',
         desc: 'Cuánto entra y cuánto cierra tu equipo cada mes.',
+        // Sin filtros: sale de la serie ya calculada en el servidor, no de
+        // los ítems. Un selector aquí prometería recortar lo que no puede.
         fuente: 'getPanelJefatura', filtros: [] },
       { id: 'jef-carga', nombre: 'Carga por módulo y tipo', tipo: 'RANKING', estado: 'LISTO',
         desc: 'Qué se repite en tu equipo.',
@@ -458,7 +481,7 @@
     SigsoReportes.pintarCatalogo({
       contenedor: cont,
       modulo: 'jefatura',
-      onAbrir: function (id) { reporteJefAbierto_ = id; renderReportesJefatura_(); },
+      onAbrir: function (id) { reporteJefAbierto_ = id; filtrosReporteJef_ = {}; renderReportesJefatura_(); },
       onIrASeccion: function (vista) { irAVistaJefatura_(vista); }
     });
   }
@@ -466,7 +489,14 @@
   function pintarReporteJefatura_(cont) {
     var r = SigsoReportes.buscarReporte('jefatura', reporteJefAbierto_);
     if (!r) { reporteJefAbierto_ = null; renderReportesJefatura_(); return; }
-    var items = panelJefatura_.items || [];
+    var todos = panelJefatura_.items || [];
+    // Las opciones salen de TODOS los ítems: si salieran de los ya
+    // filtrados, elegir a una persona borraría del desplegable a las demás
+    // y no habría forma de volver.
+    var opcionesFiltro = SigsoReportes.opcionesDeItems(todos, r.campos || {});
+    var items = SigsoReportes.filtrarItems(todos, filtrosReporteJef_, {
+      campoFecha: r.campoFecha, campos: r.campos
+    });
     var cuerpo = '';
     if (r.id === 'jef-responsable') {
       cuerpo = SigsoReportes.cuerpoCumplimientoPor(items, {
@@ -499,14 +529,22 @@
         subtitulo: r.desc,
         modulo: 'Jefatura — Panel de equipo',
         codigo: 'SIGSO-REP-JEF-' + String(r.id).replace(/^[a-z]+-/, '').toUpperCase(),
-        generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || ''
+        generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || '',
+        // El documento declara el corte aplicado: un reporte que no dice
+        // qué dejó fuera no sirve como evidencia.
+        filtros: SigsoReportes.filtrosParaCabecera(r, opcionesFiltro, filtrosReporteJef_)
       }) +
+      SigsoReportes.pintarFiltros(r, opcionesFiltro, filtrosReporteJef_) +
       cuerpo +
       SigsoReportes.pieDocumento();
 
     SigsoReportes.wireAcciones(cont, {
       nombreArchivo: 'sigso-jefatura-' + r.id,
-      onVolver: function () { reporteJefAbierto_ = null; renderReportesJefatura_(); }
+      onVolver: function () { reporteJefAbierto_ = null; filtrosReporteJef_ = {}; renderReportesJefatura_(); }
+    });
+    SigsoReportes.alAplicarFiltros(cont, function (valores) {
+      filtrosReporteJef_ = valores;
+      pintarReporteJefatura_(cont);
     });
   }
 

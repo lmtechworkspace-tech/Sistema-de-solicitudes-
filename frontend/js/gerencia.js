@@ -1298,6 +1298,9 @@
 
   var itemGerenciaActivo_ = 'tablero';
   var reporteGerAbierto_ = null;
+  // Los filtros se aplican en el CLIENTE, sobre los ítems que el panel ya
+  // trajo: cambiar un select no vuelve a pedirle nada al servidor.
+  var filtrosReporteGer_ = {};
 
   // v13.0: la navegacion vive en el sidebar.
   function pintarNavGerencia_() {
@@ -1313,7 +1316,7 @@
     itemGerenciaActivo_ = id;
     // Salir de Reportes cierra el reporte abierto: volver debe mostrar el
     // catálogo y no el último que se miró.
-    if (id !== 'reportes') reporteGerAbierto_ = null;
+    if (id !== 'reportes') { reporteGerAbierto_ = null; filtrosReporteGer_ = {}; }
     pintarNavGerencia_();
     if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id);
 
@@ -1331,21 +1334,48 @@
   }
 
   // --- Centro de reportes ----------------------------------------------------
+  //
+  // SOBRE QUE FECHA CORTA EL PERIODO (y por que se dice en la etiqueta).
+  //
+  // La tentacion era cortar los reportes de cumplimiento por fecha_terminada
+  // -- "las entregas de este trimestre". Se descarto: dejaria fuera todo lo
+  // que sigue abierto, y la columna "Abiertos" de esos mismos reportes
+  // quedaria siempre en cero. El reporte se seguiria dibujando, diciendo
+  // otra cosa, sin ningun aviso.
+  //
+  // Se corta por COHORTE: los items que ENTRARON en el periodo. Asi las
+  // cuatro columnas (total, entregados, a tiempo, abiertos) siguen
+  // significando lo que dicen. Y como "Periodo" a secas no deja claro cual
+  // de las dos fechas es, la etiqueta lo escribe.
+  var CAMPOS_FILTRO_GER = { area: 'area_nombre', responsable: 'desarrollador_nombre' };
+  var ETIQUETA_COHORTE = 'Ítems creados en';
+
   var REPORTES_GERENCIA = [
     { grupo: 'Cumplimiento', icono: 'escudo', reportes: [
       { id: 'ger-area', nombre: 'Cumplimiento por área', tipo: 'CUMPLIMIENTO', estado: 'LISTO',
         desc: 'Qué áreas entregan dentro de la fecha comprometida y cuáles no.',
-        fuente: 'getPanelGerencia', filtros: [] },
+        fuente: 'getPanelGerencia',
+        // Sin 'area': el reporte YA desagrega por área. Un select de área
+        // aquí dejaría una tabla de una sola fila.
+        filtros: ['periodo', 'responsable'], etiquetaPeriodo: ETIQUETA_COHORTE,
+        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_GER },
       { id: 'ger-responsable', nombre: 'Cumplimiento por responsable', tipo: 'RANKING', estado: 'LISTO',
         desc: 'Entregas a tiempo por cada responsable, sobre lo que ya cerró.',
-        fuente: 'getPanelGerencia', filtros: [] },
+        fuente: 'getPanelGerencia',
+        filtros: ['periodo', 'area'], etiquetaPeriodo: ETIQUETA_COHORTE,
+        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_GER },
       { id: 'ger-resbalon', nombre: 'Resbalón de compromisos', tipo: 'DETALLE', estado: 'LISTO',
         desc: 'Ítems que movieron su fecha comprometida, y cuántas veces se reabrieron.',
-        fuente: 'getPanelGerencia', filtros: [] }
+        fuente: 'getPanelGerencia',
+        filtros: ['periodo', 'area', 'responsable'], etiquetaPeriodo: ETIQUETA_COHORTE,
+        campoFecha: 'fecha_creacion', campos: CAMPOS_FILTRO_GER }
     ] },
     { grupo: 'Evolución', icono: 'grafico', reportes: [
       { id: 'ger-throughput', nombre: 'Entrada vs salida por mes', tipo: 'TENDENCIA', estado: 'LISTO',
         desc: 'Cuánto entra y cuánto se cierra cada mes: dice si la cola crece o baja.',
+        // Sin filtros: no sale de los ítems, sino de la serie de seis meses
+        // que ya viene calculada del servidor. Un selector de período aquí
+        // prometería recortar una serie que el cliente no puede recortar.
         fuente: 'getPanelGerencia', filtros: [] },
       { id: 'ger-tendencia', nombre: 'Tendencia y ciclo por etapa', tipo: 'TENDENCIA', estado: 'LISTO',
         desc: 'Los gráficos de seis meses y dónde se va el tiempo.',
@@ -1360,6 +1390,11 @@
     { grupo: 'Comparación', icono: 'lista', reportes: [
       { id: 'ger-comparativo', nombre: 'Período actual vs anterior', tipo: 'COMPARACION', estado: 'LISTO',
         desc: 'Cómo cambiaron los indicadores respecto de la ventana anterior.',
+        // Sin filtros de cliente A PROPOSITO: su ventana la resuelve el
+        // SERVIDOR (getPanelGerencia acepta desde/hasta). Filtrar aquí los
+        // ítems no movería estos números ni un decimal, y el selector
+        // mentiría. Cambiar la ventana es otro trabajo: pide volver a
+        // llamar al panel.
         fuente: 'getPanelGerencia', filtros: [] }
     ] }
   ];
@@ -1392,7 +1427,7 @@
     SigsoReportes.pintarCatalogo({
       contenedor: cont,
       modulo: 'gerencia',
-      onAbrir: function (id) { reporteGerAbierto_ = id; renderReportesGerencia_(); },
+      onAbrir: function (id) { reporteGerAbierto_ = id; filtrosReporteGer_ = {}; renderReportesGerencia_(); },
       onIrASeccion: function (vista) { irAVistaGerencia_(vista); }
     });
   }
@@ -1400,7 +1435,14 @@
   function pintarReporteGerencia_(cont) {
     var r = SigsoReportes.buscarReporte('gerencia', reporteGerAbierto_);
     if (!r) { reporteGerAbierto_ = null; renderReportesGerencia_(); return; }
-    var items = panelActual.items || [];
+    var todos = panelActual.items || [];
+    // Las opciones salen de TODOS los ítems, no de los ya filtrados: si se
+    // sacaran de los filtrados, elegir un área haría desaparecer del
+    // desplegable a las demás y no habría forma de volver.
+    var opcionesFiltro = SigsoReportes.opcionesDeItems(todos, r.campos || {});
+    var items = SigsoReportes.filtrarItems(todos, filtrosReporteGer_, {
+      campoFecha: r.campoFecha, campos: r.campos
+    });
     var cuerpo = '';
     // v12.4: la agregacion de cumplimiento y la de entrada/salida viven en el
     // motor. Jefatura las usa igual, y asi la REGLA de que se cuenta no puede
@@ -1431,14 +1473,24 @@
         modulo: 'Gerencia — Panel de dirección',
         codigo: 'SIGSO-REP-GER-' + String(r.id).replace(/^[a-z]+-/, '').toUpperCase(),
         generadoPor: (window.SIGSO_USUARIO && SIGSO_USUARIO.nombre) || '',
-        filtros: filtrosDelPanel_
+        // El documento declara los DOS cortes: el de la barra del panel
+        // (que se aplicó en el servidor) y el del propio reporte. Un
+        // reporte que no dice todo lo que dejó fuera no sirve como
+        // evidencia.
+        filtros: filtrosDelPanel_.concat(
+          SigsoReportes.filtrosParaCabecera(r, opcionesFiltro, filtrosReporteGer_))
       }) +
+      SigsoReportes.pintarFiltros(r, opcionesFiltro, filtrosReporteGer_) +
       cuerpo +
       SigsoReportes.pieDocumento();
 
     SigsoReportes.wireAcciones(cont, {
       nombreArchivo: 'sigso-gerencia-' + r.id,
-      onVolver: function () { reporteGerAbierto_ = null; renderReportesGerencia_(); }
+      onVolver: function () { reporteGerAbierto_ = null; filtrosReporteGer_ = {}; renderReportesGerencia_(); }
+    });
+    SigsoReportes.alAplicarFiltros(cont, function (valores) {
+      filtrosReporteGer_ = valores;
+      pintarReporteGerencia_(cont);
     });
   }
 

@@ -9793,6 +9793,9 @@ var Iconos = (function () {
     return lista.map(function (nombre) {
       var bruto = valores[nombre];
       if (bruto === undefined || bruto === null || bruto === '') return null;
+      // 'todo' no es un corte, es la ausencia de uno: anunciarlo en la
+      // cabecera del documento seria ensuciarla con algo que no dejo nada fuera.
+      if (bruto === 'todo' && (nombre === 'periodo' || nombre === 'periodo_previo')) return null;
       // El valor guardado es el de la opción; en el documento tiene que
       // aparecer el texto que la persona vio en pantalla.
       var catalogo = opciones[nombre] || (nombre === 'periodo' || nombre === 'periodo_previo' ? PERIODOS_POR_DEFECTO : []);
@@ -9800,9 +9803,24 @@ var Iconos = (function () {
         return String(o && o.valor !== undefined ? o.valor : o) === String(bruto);
       })[0];
       var texto = elegida && elegida.texto !== undefined ? elegida.texto : bruto;
-      return { etiqueta: ETIQUETAS_FILTRO[nombre] || nombre, valor: texto };
+      return { etiqueta: etiquetaFiltro_(reporte, nombre), valor: texto };
     }).filter(Boolean);
   }
+  /**
+   * El nombre visible de un filtro, con la afinacion que el reporte pida.
+   *
+   * Existe por "Período": segun el reporte, el mismo select corta por una
+   * fecha distinta (cuando ENTRO el item, cuando se ENTREGO). Un select que
+   * dice solo "Período" deja a quien lo usa adivinando cual de las dos, y
+   * dos personas leyendo el mismo numero pueden entender cosas distintas.
+   * Asi que el reporte que corta por algo concreto lo escribe:
+   * `etiquetaPeriodo: "Ítems creados en"`.
+   */
+  function etiquetaFiltro_(reporte, nombre) {
+    if (nombre === 'periodo' && reporte && reporte.etiquetaPeriodo) return reporte.etiquetaPeriodo;
+    return ETIQUETAS_FILTRO[nombre] || nombre;
+  }
+
   function pintarFiltros(reporte, opciones, valores) {
     var lista = reporte.filtros || (TIPOS[reporte.tipo] || {}).filtros || [];
     if (!lista.length) return '';
@@ -9810,8 +9828,12 @@ var Iconos = (function () {
     opciones = opciones || {};
 
     var campos = lista.map(function (f) {
-      if (f === 'periodo') return select_('periodo', 'Período', opciones.periodo || PERIODOS_POR_DEFECTO, valores.periodo);
-      if (f === 'periodo_previo') return select_('periodo_previo', 'Comparar con', opciones.periodo || PERIODOS_POR_DEFECTO, valores.periodo_previo);
+      // Sin valor elegido, se marca 'todo' y NO la primera opcion. Un <select>
+      // siempre tiene algo seleccionado: si se dejara al navegador elegir, el
+      // desplegable diria "Este mes" mientras el reporte muestra todo, y quien
+      // lo lea creera que esta viendo un corte que no se aplico.
+      if (f === 'periodo') return select_('periodo', etiquetaFiltro_(reporte, 'periodo'), opciones.periodo || PERIODOS_POR_DEFECTO, valores.periodo || 'todo');
+      if (f === 'periodo_previo') return select_('periodo_previo', 'Comparar con', opciones.periodo || PERIODOS_POR_DEFECTO, valores.periodo_previo || 'todo');
       if (f === 'desde') return fecha_('desde', 'Desde', valores.desde);
       if (f === 'hasta') return fecha_('hasta', 'Hasta', valores.hasta);
       if (f === 'area') return select_('area', 'Área', opciones.area || [], valores.area, 'Todas');
@@ -9868,6 +9890,119 @@ var Iconos = (function () {
       e.preventDefault();
       fn(leerFiltros(contenedor));
     });
+  }
+
+  // ==========================================================================
+  // APLICAR LOS FILTROS
+  // ==========================================================================
+  // Esto vive AQUI y no en cada módulo por el mismo motivo que la agregación
+  // de cumplimiento: si Gerencia resolviera "este trimestre" de una forma y
+  // Jefatura de otra, un jefe y Gerencia verían números distintos del mismo
+  // equipo y nadie sabría cuál creer.
+
+  /**
+   * Traduce un período a un rango de fechas `YYYY-MM-DD`.
+   *
+   * Se trabaja con el prefijo de 10 caracteres y NO con objetos Date: los
+   * ítems traen la fecha como texto ISO, y compararlos como texto evita de
+   * raíz que un ítem del día 1 caiga en el mes anterior porque el navegador
+   * está en otro huso. Es el mismo criterio que usa el backend.
+   */
+  function rangoDePeriodo(periodo, hoyISO) {
+    var hoy = String(hoyISO || new Date().toISOString()).slice(0, 10);
+    var anio = hoy.slice(0, 4);
+    var mes = Number(hoy.slice(5, 7));
+    if (periodo === 'mes') return { desde: hoy.slice(0, 7) + '-01', hasta: finDeMes_(anio, mes) };
+    if (periodo === 'trimestre') {
+      var primerMes = Math.floor((mes - 1) / 3) * 3 + 1;
+      return {
+        desde: anio + '-' + dos_(primerMes) + '-01',
+        hasta: finDeMes_(anio, primerMes + 2)
+      };
+    }
+    if (periodo === 'anio') return { desde: anio + '-01-01', hasta: anio + '-12-31' };
+    return { desde: '', hasta: '' };   // 'todo', vacío o desconocido: sin corte
+  }
+
+  function dos_(n) { return (n < 10 ? '0' : '') + n; }
+
+  function finDeMes_(anio, mes) {
+    // Día 0 del mes siguiente = último del mes pedido, y así no hay que
+    // saberse cuáles tienen 31 ni acordarse de los bisiestos.
+    var d = new Date(Date.UTC(Number(anio), mes, 0));
+    return d.toISOString().slice(0, 10);
+  }
+
+  /**
+   * Aplica a una lista de ítems los filtros que la persona eligió.
+   *
+   * `opciones.campoFecha` dice SOBRE QUÉ FECHA corta el período. No hay un
+   * valor por defecto razonable para todos: cortar un reporte de
+   * cumplimiento por la fecha de entrega dejaría fuera todo lo que sigue
+   * abierto, y su columna "Abiertos" quedaría siempre en cero — el reporte
+   * seguiría dibujándose, diciendo otra cosa. Por eso cada reporte lo
+   * declara y la etiqueta del filtro lo dice en pantalla.
+   *
+   * Un ítem SIN esa fecha queda fuera cuando hay período elegido: no se
+   * puede afirmar que cae dentro de un rango que no tiene.
+   */
+  function filtrarItems(items, valores, opciones) {
+    items = items || [];
+    valores = valores || {};
+    opciones = opciones || {};
+    var campos = opciones.campos || {};
+
+    // Un desde/hasta explícito manda sobre el período: si la persona
+    // escribió fechas, son las suyas.
+    var rango = (valores.desde || valores.hasta)
+      ? { desde: String(valores.desde || '').slice(0, 10), hasta: String(valores.hasta || '').slice(0, 10) }
+      : rangoDePeriodo(valores.periodo, opciones.hoy);
+
+    var campoFecha = opciones.campoFecha;
+    var hayRango = !!(rango.desde || rango.hasta);
+
+    return items.filter(function (i) {
+      if (hayRango && campoFecha) {
+        var f = String(i[campoFecha] || '').slice(0, 10);
+        if (!f) return false;
+        if (rango.desde && f < rango.desde) return false;
+        if (rango.hasta && f > rango.hasta) return false;
+      }
+      if (!coincide_(i, campos.area, valores.area)) return false;
+      if (!coincide_(i, campos.responsable, valores.responsable)) return false;
+      if (!coincide_(i, campos.estado, valores.estado)) return false;
+      return true;
+    });
+  }
+
+  // Un filtro sin valor no filtra. Se compara como texto porque el valor
+  // vuelve del <select> siempre como texto.
+  function coincide_(item, campo, valor) {
+    if (!campo || valor === undefined || valor === null || valor === '') return true;
+    return String(item[campo] || '') === String(valor);
+  }
+
+  /**
+   * Arma las opciones de los selects a partir de los propios ítems.
+   *
+   * Se sacan de los datos y no de un catálogo para que no aparezca en el
+   * desplegable un área sin nada que mostrar: elegirla daría un reporte
+   * vacío que parece un error del sistema.
+   */
+  function opcionesDeItems(items, campos) {
+    var salida = {};
+    Object.keys(campos || {}).forEach(function (filtro) {
+      var campo = campos[filtro];
+      var vistos = {};
+      (items || []).forEach(function (i) {
+        var v = String(i[campo] || '').trim();
+        if (v) vistos[v] = true;
+      });
+      salida[filtro] = Object.keys(vistos).sort(function (a, b) {
+        return a.localeCompare(b, 'es');
+      }).map(function (v) { return { valor: v, texto: v }; });
+    });
+    return salida;
   }
 
   // ==========================================================================
@@ -10302,6 +10437,9 @@ var Iconos = (function () {
     pintarFiltros: pintarFiltros,
     leerFiltros: leerFiltros,
     alAplicarFiltros: alAplicarFiltros,
+    rangoDePeriodo: rangoDePeriodo,
+    filtrarItems: filtrarItems,
+    opcionesDeItems: opcionesDeItems,
     kpis: kpis,
     tabla: tabla,
     ranking: ranking,
