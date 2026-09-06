@@ -545,12 +545,6 @@ var SigsoInicio = (function () {
 
   // --- actividad reciente (se conserva, al final) ---------------------------
 
-  var ETIQUETA_ESTADO = {
-    S01: 'Ingresada', S02: 'En revisión', S03: 'En desarrollo', S04: 'En prueba',
-    S05: 'Lista para validar', S06: 'Pausada', S07: 'Bloqueada', S08: 'Rechazada',
-    S09: 'Terminada', S10: 'Validada', S11: 'Cancelada'
-  };
-
   function pintarReciente_(recientes) {
     var cont = el_('reciente-home');
     if (!cont || !recientes.length) return;
@@ -563,7 +557,7 @@ var SigsoInicio = (function () {
           '<span class="sigso-id">' + esc_(s.solicitud_id) + '</span>' +
           '<span class="plataforma-reciente__meta">' + esc_(s.empresa_id) + ' &middot; ' + esc_(s.modulo || '—') + '</span>' +
           '<span class="sigso-badge sigso-badge--' + esc_(s.prioridad_derivada) + '">' + esc_(s.prioridad_derivada) + '</span>' +
-          '<span class="plataforma-reciente__estado">' + esc_(ETIQUETA_ESTADO[s.estado_derivado] || s.estado_derivado) + '</span>' +
+          '<span class="plataforma-reciente__estado">' + esc_(formatearEstadoSigso(s.estado_derivado)) + '</span>' +
           '</button>';
       }).join('') +
       '</div>';
