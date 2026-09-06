@@ -166,3 +166,32 @@ test('el trigger del pase diario está enganchado y es el que archiva', () => {
   ctx.archivarCoberturaIsoTrigger();
   assert.equal(fotos(ctx).length, 1, 'correr el pase otro día de la misma semana no duplica');
 });
+
+test('sin la hoja, el histórico lo DICE en vez de parecer una serie vacía', () => {
+  // Los dos casos se ven igual —cero filas— y son opuestos: uno se arregla
+  // solo en unos días, el otro no se arregla nunca. archivarFoto lanza, el
+  // pase diario captura el error y lo registra, y la pantalla diría "todavía
+  // no hay fotos" para siempre sin que nadie se entere.
+  const ctx = loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'x', SIGSO_DRIVE_ROOT_FOLDER_ID: 'y' } });
+  Object.keys(ctx.COLUMNAS).forEach((h) => {
+    if (h === 'SGC_COBERTURA_HISTORICO') return;   // el Instalador no corrió
+    try { seedSheet(ctx, h, ctx.COLUMNAS[h]); } catch (e) {}
+  });
+  seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS, [
+    ['U1', 'Ada Admin', 'adm@x.cl', 'HP', 'ADM', true, '', 'sistema']
+  ]);
+
+  const r = toPlain(ctx.MatrizCobertura.listarHistorico({}, ADM));
+  assert.equal(r.hoja_lista, false, 'la pantalla necesita poder distinguir los dos vacíos');
+  assert.deepEqual(r.fotos, []);
+  assert.ok(r.actual, 'y el indicador de hoy sigue siendo correcto: eso no depende de la hoja');
+});
+
+test('con la hoja creada, hoja_lista es true aunque no haya ninguna foto', () => {
+  // La otra mitad: el primer día legítimo no puede parecer una instalación
+  // incompleta, o se mandaría a correr un Instalador que no hace falta.
+  const ctx = ctxBase();
+  const r = toPlain(ctx.MatrizCobertura.listarHistorico({}, ADM));
+  assert.equal(r.hoja_lista, true);
+  assert.deepEqual(r.fotos, []);
+});

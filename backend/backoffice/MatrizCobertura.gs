@@ -141,6 +141,12 @@ var MatrizCobertura = {
 
     return {
       puede_gestionar: gobierna,
+      // Sin esto, "la hoja no existe" y "todavia no hay fotos" se ven
+      // IGUAL: cero filas. Y son cosas distintas -- una se arregla sola en
+      // unos dias y la otra no se arregla nunca, porque el pase diario
+      // captura el error y solo lo registra. La pantalla diria "aun no hay
+      // fotos" para siempre sin que nadie se entere.
+      hoja_lista: hojaExiste_(SHEETS.SGC_COBERTURA_HISTORICO),
       fotos: fotos,
       // Lo de HOY no sale de la hoja: se calcula, para que la pantalla no
       // tenga que esperar al lunes para mostrar el estado actual.
@@ -1168,6 +1174,11 @@ function escaparHtmlPdf_(texto) {
 // Se trabaja en UTC a proposito: la clave solo tiene que ser ESTABLE y
 // ordenable, y mezclar husos haria que dos ejecuciones del mismo dia
 // pudieran caer en semanas distintas y duplicar la foto.
+// ¿Existe la hoja? Sin ella, archivarFoto lanza y el pase diario se lo come.
+function hojaExiste_(nombreHoja) {
+  try { obtenerHoja_(nombreHoja); return true; } catch (e) { return false; }
+}
+
 function lunesDeLaSemana_(fecha) {
   var d = new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate()));
   // getUTCDay(): domingo es 0. Se corre al lunes anterior; el domingo

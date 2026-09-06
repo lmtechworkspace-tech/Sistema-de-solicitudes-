@@ -32935,11 +32935,16 @@ var Iconos = (function () {
     var actual = (data && data.actual) || {};
 
     if (!fotos.length) {
-      // Un vacío que EXPLICA. Sin esto, quien entre el primer día vería una
-      // pantalla en blanco y pensaría que algo falló.
+      // DOS vacíos distintos, y confundirlos sería caro: si falta la hoja,
+      // el pase diario intenta escribirla cada día, falla, y el error se
+      // queda en el registro. La pantalla diría "aún no hay fotos" para
+      // siempre y nadie se enteraría.
+      var faltaLaHoja = (data && data.hoja_lista === false);
       return SigsoReportes.kpis([
         { etiqueta: 'Indicador interno hoy', valor: (actual.pct_listo || 0) + '%' }
       ]) +
+      (faltaLaHoja ? Componentes.alerta(
+        'Falta un paso de instalación: la hoja SGC_COBERTURA_HISTORICO no existe en la planilla, así que la foto semanal no se puede guardar. Hay que ejecutar el Instalador (proyecto SETUP) una vez. Mientras tanto el indicador de hoy es correcto, pero no se está registrando su historia.', 'error') : '') +
       Componentes.vacio('Todavía no hay ninguna foto archivada. Se guarda una por semana, de forma automática, así que la primera aparecerá dentro de pocos días. A partir de la segunda se podrá ver la evolución.');
     }
 
