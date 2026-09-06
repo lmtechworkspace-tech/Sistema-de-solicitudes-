@@ -6476,6 +6476,59 @@ button {
   }
 }
 
+/* ==========================================================================
+   BARRA DE ACCIONES DE GERENCIA (v13.1)
+   ==========================================================================
+
+   MEDIDO a 375 px: los cinco controles de la barra se apilaban en cinco
+   filas y ocupaban 341 px -- el 42% de la pantalla antes de ver un solo dato
+   del tablero.
+
+   Las tres ACCIONES (imprimir, reporte ejecutivo, enviar) se pliegan detras
+   de un <details>. Los dos selectores de vista NO: cambian lo que estas
+   mirando y se usan a cada rato, esconderlos seria pagar un toque cada vez.
+
+   En ESCRITORIO no cambia nada: se oculta el resumen y se despliega la
+   lista, asi que las tres siguen a la vista como siempre. */
+/* OJO: la regla va sobre [open] y no sobre la lista a secas. Poner un
+   display propio al contenido de un <details> ANULA el ocultado nativo del
+   navegador: medido, con .ger-acciones__lista { display:flex } los tres
+   botones se seguian pintando con el panel cerrado, 2.300 px mas abajo. */
+.ger-acciones[open] > .ger-acciones__lista {
+  display: flex; flex-wrap: wrap; gap: var(--esp-2); margin-top: var(--esp-2);
+}
+.ger-acciones__abrir {
+  cursor: pointer; list-style: none; user-select: none;
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  min-height: 2.75rem; padding: 0 1rem;
+  border: 1px solid var(--borde-fuerte); border-radius: var(--radio-sm);
+  background: var(--superficie); color: var(--texto);
+  font-size: var(--texto-sm); font-weight: 500;
+}
+.ger-acciones__abrir::-webkit-details-marker { display: none; }
+/* El triangulo se dibuja aca para que gire al abrir: el marcador nativo no
+   se puede animar ni heredar el color del texto. */
+.ger-acciones__abrir::after {
+  content: ""; width: 0; height: 0; margin-left: 0.15rem;
+  border-left: 5px solid transparent; border-right: 5px solid transparent;
+  border-top: 6px solid currentColor;
+  transition: transform var(--mov-rapido);
+}
+.ger-acciones[open] > .ger-acciones__abrir::after { transform: rotate(180deg); }
+
+@media (min-width: 641px) {
+  /* En escritorio el <details> desaparece como caja y sus hijos participan
+     directamente en la barra, igual que antes de agruparlos. */
+  .ger-acciones { display: contents; }
+  .ger-acciones > .ger-acciones__abrir { display: none; }
+  /* La LISTA tambien desaparece como caja. Con display:flex quedaba como un
+     hijo flex mas de la barra y se le asignaba ancho 0 (medido), aplastando
+     los tres botones a 111 px y dos lineas de alto. Con contents, los botones
+     vuelven a ser hijos directos de la barra: exactamente como antes de
+     agruparlos. */
+  .ger-acciones > .ger-acciones__lista { display: contents; }
+}
+
 </style>
   <style>
 /* dashboard.css — Backoffice: KPIs, graficos, tabla, detalle (§12.4/12.5). */

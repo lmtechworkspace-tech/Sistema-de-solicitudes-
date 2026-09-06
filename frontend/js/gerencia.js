@@ -356,6 +356,28 @@
     ].filter(function (f) { return f.valor; });
   }
 
+  /**
+   * El grupo "Acciones" de la barra: plegado en telefono, abierto en
+   * escritorio.
+   *
+   * Hace falta JS porque el CSS NO puede hacerlo solo. Lo comprobé: poner
+   * display:contents sobre un <details> CERRADO no muestra su contenido --
+   * el navegador lo saca del flujo igual, y los tres botones aparecían
+   * aplastados a 111 px y fuera de la barra. El atributo open es lo unico
+   * que de verdad lo despliega, y solo se puede tocar desde aqui.
+   *
+   * Se escucha el cambio de tamaño con matchMedia y no con un evento resize:
+   * dispara una vez al cruzar el umbral, en vez de en cada píxel.
+   */
+  function sincronizarAccionesGerencia_() {
+    var det = document.querySelector(".ger-acciones");
+    if (!det || typeof window.matchMedia !== "function") return;
+    var anchaEsPantalla = window.matchMedia("(min-width: 641px)");
+    var aplicar = function (mq) { det.open = mq.matches; };
+    aplicar(anchaEsPantalla);
+    if (anchaEsPantalla.addEventListener) anchaEsPantalla.addEventListener("change", aplicar);
+  }
+
   function leerFiltrosServidor_() {
     var base = {
       empresa_id: document.getElementById('ger-filtro-empresa').value,
@@ -396,6 +418,7 @@
       '<span class="sigso-esq__barra" style="width:40%;height:22px;margin:0 auto 0.5rem"></span>' +
       '<span class="sigso-esq__barra" style="width:65%;height:10px;margin:0 auto"></span></div>'
     ).join('');
+    sincronizarAccionesGerencia_();
     capturarFiltrosDelPanel_();
     return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getPanelGerencia', leerFiltrosServidor_())
       .then(function (respuesta) {

@@ -774,6 +774,15 @@
                   <option value="compacta">Compacta</option>
                 </select>
               </div>
+              <!-- v13.1: en un telefono estas tres acciones se apilaban y la
+                   barra ocupaba 341 px -- el 42% de la pantalla antes de ver
+                   un solo dato. Se agrupan detras de un <details> que SOLO se
+                   pliega en movil; en escritorio el CSS lo despliega y se ven
+                   las tres como siempre. Los dos selectores de vista quedan
+                   fuera: cambian lo que estas mirando y se usan a cada rato. -->
+              <details class="ger-acciones">
+                <summary class="ger-acciones__abrir">Acciones</summary>
+                <div class="ger-acciones__lista">
               <button type="button" class="sigso-boton--secundario" id="btn-imprimir-gerencia">Descargar / Imprimir PDF</button>
               <!-- v5.2 (§4.1, propuesta de adopcion): reporte de UNA hoja,
                    simple (numeros grandes + semaforo + 3-5 lineas), pensado
@@ -782,6 +791,8 @@
               <!-- v5.2 (§4.2): complementa el envio programado (semanal/
                    mensual) -- solo el Administrador lo ve (rol_actual). -->
               <button type="button" class="sigso-boton--secundario sigso-boton--con-icono sigso-oculto" id="btn-enviar-gerencia-ahora"><svg class="sigso-ico" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></svg> Enviar a Gerencia ahora</button>
+                </div>
+              </details>
             </div>
             <div class="sigso-solo-imprimir sigso-encabezado-reporte">
               <svg class="sigso-marca" width="34" height="34" viewBox="0 0 32 32" aria-hidden="true">
