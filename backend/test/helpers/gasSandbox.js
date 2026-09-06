@@ -86,13 +86,39 @@ function conectarInvalidacionDeCache_(context) {
  * ya cargado, escribe la fila de headers y opcionalmente filas de datos.
  * Util para dejar el "estado inicial" de Sheets que un test necesita sin
  * pasar por el instalador real.
+ *
+ * LA FILA DE ENCABEZADOS SE ESCRIBE UNA SOLA VEZ POR HOJA.
+ *
+ * Antes se anadia en CADA llamada. El patron habitual de estos tests es
+ * sembrar todas las hojas de COLUMNAS y despues sembrar con datos las dos o
+ * tres que interesan, asi que la segunda llamada dejaba una fila de
+ * encabezados haciendose pasar por dato: un usuario con el correo "email",
+ * una subsolicitud con el estado "estado".
+ *
+ * Casi siempre se caia sola -- ningun filtro por correo, fecha o estado
+ * acepta esos valores -- y por eso paso desapercibido durante 17 archivos de
+ * test. Pero cualquier lectura de hoja completa contaba una fila de mas. Se
+ * descubrio midiendo: un panel devolvia 51 items con 50 sembrados.
+ *
+ * Se comprobo que ningun test dependia de esa fila: la suite entera pasa
+ * igual con ella y sin ella.
  */
 function seedSheet(ctx, sheetName, headers, rows) {
   const ss = ctx.SpreadsheetApp.openById('fake-sheet-id');
   const sheet = ss.getSheetByName(sheetName) || ss.insertSheet(sheetName);
-  sheet.appendRow(headers);
+  if (!encabezadosYaEscritos_(sheet, headers)) sheet.appendRow(headers);
   (rows || []).forEach((row) => sheet.appendRow(row));
   return sheet;
+}
+
+// Una hoja recien creada devuelve celdas vacias, asi que no coincide y los
+// encabezados se escriben. Si alguien sembrara la misma hoja con encabezados
+// DISTINTOS, tampoco coincide y se comporta como antes: eso no es el caso
+// que este arreglo persigue y no conviene esconderlo.
+function encabezadosYaEscritos_(sheet, headers) {
+  if (!headers || !headers.length) return false;
+  const fila = sheet.getRange(1, 1, 1, headers.length).getValues()[0];
+  return headers.every((h, i) => String(fila[i]) === String(h));
 }
 
 // Orden de carga: cada archivo puede depender de globals definidos por el

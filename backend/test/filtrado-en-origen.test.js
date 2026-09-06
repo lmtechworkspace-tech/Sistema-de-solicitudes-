@@ -30,12 +30,11 @@ const { loadBackofficeProject, seedSheet, toPlain } = require('./helpers/gasSand
 const ADM = { email: 'adm@x.cl', nombre: 'Ada Admin', rol: 'ADM' };
 const JEFE = { email: 'jefe@x.cl', nombre: 'Jefa', rol: 'JEFATURA' };
 
-// seedSheet AÑADE la fila de encabezados cada vez que se la llama, así que
-// sembrar dos veces la misma hoja deja un encabezado suelto haciéndose pasar
-// por dato. Solo se nota cuando NO hay filtro de fecha (con filtro, esa fila
-// se cae sola por no tener una válida), que es justo el caso que parecía
-// funcionar. Por eso las hojas que se siembran de verdad se excluyen de la
-// pasada inicial.
+// Las hojas que se siembran con datos se dejan fuera de la pasada inicial.
+// Ya no hace falta para evitar la fila fantasma de encabezados —seedSheet la
+// escribe una sola vez desde que se arregló, ver arnes-seedsheet.test.js—
+// pero se mantiene porque hace evidente cuáles son las hojas que este archivo
+// prepara de verdad y cuáles solo necesitan existir.
 const SEMBRADAS_APARTE = ['SOLICITUDES', 'SUBSOLICITUDES', 'USUARIOS', 'JEFATURAS'];
 
 function ctxBase() {
