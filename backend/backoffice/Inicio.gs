@@ -35,6 +35,16 @@
  * divergir los permisos y el filtro del CSV. Se queda fuera: siete llamadas
  * pasan a dos, y las dos van en paralelo.
  *
+ * ── EL CONTROL DE MÓDULO HAY QUE HACERLO AQUÍ ────────────────────────────
+ * El control de módulo vive en el ROUTER (MODULO_POR_ACCION en Code.gs):
+ * dice qué acción pide qué módulo y doPost rechaza antes de llamar al
+ * handler. Esta acción no puede estar en esa tabla, porque no pide UN
+ * módulo sino uno distinto por cada bloque.
+ *
+ * Así que se comprueba bloque a bloque, LEYENDO LA MISMA TABLA. Copiar los
+ * módulos a mano sería crear una segunda verdad que diverge en cuanto
+ * alguien cambie un gate.
+ *
  * NOVEDADES tampoco. Su feed ya lo pide el badge del menú lateral al
  * arrancar, y el cliente lo memoiza con un TTL para compartirlo. Traerlo
  * aquí haría que el servidor calculara lo mismo DOS veces: una para este
@@ -56,6 +66,13 @@ var Inicio = {
     // menos superficie de cambio, menos que pueda romperse.
     function bloque(nombre, fn) {
       if (pedidos.indexOf(nombre) === -1) return;
+      // El mismo rechazo que daría el router si se pidiera la acción
+      // suelta. Sin esto, pedir un bloque era la forma de saltarse el
+      // control de módulo de su acción.
+      if (!cuentaTieneElModuloDelBloque_(nombre, contexto)) {
+        salida.bloques[nombre] = { ok: false, message: 'Tu cuenta no tiene acceso a este módulo.' };
+        return;
+      }
       try {
         var r = fn();
         // Los módulos devuelven {_forbidden} o {_validationError} en vez de
@@ -92,3 +109,35 @@ var Inicio = {
     return salida;
   }
 };
+
+/**
+ * Qué acción atiende cada bloque cuando se pide suelta.
+ *
+ * El módulo requerido NO se escribe aquí: se saca de MODULO_POR_ACCION con
+ * este nombre. Así el día que alguien cambie el gate de una acción, el
+ * bloque correspondiente cambia con ella y no hay nada que recordar.
+ */
+var ACCION_DEL_BLOQUE_INICIO = {
+  mi_trabajo: 'listarActividades',
+  calidad: 'listarDocumentosSgc',
+  bandeja: 'getDashboardData',
+  jefatura: 'getPanelJefatura',
+  pausas: 'getPausaHoyTrabajador'
+};
+
+function cuentaTieneElModuloDelBloque_(nombre, contexto) {
+  // Sin lista de módulos no hay control de módulo que aplicar: es la
+  // identidad de Google, donde el router tampoco lo aplica (su gate vive
+  // dentro de la rama del portal). Mismo criterio, no uno nuevo.
+  if (!contexto || !contexto.modulos || !contexto.modulos.length) return true;
+
+  var accion = ACCION_DEL_BLOQUE_INICIO[nombre];
+  var requerido = accion ? MODULO_POR_ACCION[accion] : null;
+  if (!requerido) return true;   // permisivo por omisión, igual que el router
+
+  var requeridos = Array.isArray(requerido) ? requerido : [requerido];
+  for (var i = 0; i < requeridos.length; i++) {
+    if (contexto.modulos.indexOf(requeridos[i]) !== -1) return true;
+  }
+  return false;
+}
