@@ -22,6 +22,12 @@ function loadConSchema() {
   seedSheet(ctx, 'HISTORIAL_ESTADOS', ctx.COLUMNAS.HISTORIAL_ESTADOS);
   seedSheet(ctx, 'CONFIG_FERIADOS', ctx.COLUMNAS.CONFIG_FERIADOS);
   seedSheet(ctx, 'COMENTARIOS', ctx.COLUMNAS.COMENTARIOS);
+  // Hasta ahora este arnes solo LEIA la bandeja y con esas hojas bastaba. Los
+  // tests de escritura de mas abajo llegan hasta el aviso del cambio, que
+  // necesita esta. Se agrega SOLO esta: probe a sembrar tambien USUARIOS y
+  // rompi dos tests de aqui mismo -- uno comprueba justamente que la bandeja
+  // aguante SIN esa hoja. El arnes compartido se toca lo minimo.
+  seedSheet(ctx, 'LOG_NOTIFICACIONES', ctx.COLUMNAS.LOG_NOTIFICACIONES);
   return ctx;
 }
 
@@ -132,4 +138,76 @@ test('Dashboard.getData (v3.0): sin la hoja USUARIOS, "responsables" queda vacio
   const ctx = loadConSchema();
   const datos = ctx.Dashboard.getData({}, { rol: 'ADM', email: 'admin@homepymes.cl' });
   assert.equal(datos.responsables.length, 0);
+});
+
+// --- cuenta del portal con bandeja: escribir SOLO lo suyo ---------------
+//
+// Code.gs normaliza una cuenta SOLICITANTE con modulo "bandeja" a rol DEV,
+// con esta frase escrita al lado: "el rol mas restringido con escritura:
+// solo su propio trabajo". No lo era. La LECTURA si estaba acotada (los
+// tests de arriba), pero las escrituras miraban solo el rol -- que ya decia
+// DEV -- asi que con el id a mano se podia mover el item de otra persona.
+// Los ids son correlativos y salen en los correos.
+
+/** Cuenta del portal normalizada a DEV (rol_origen la delata). */
+function ctxPortal(email) {
+  return { email: email || 'portal@homepymes.cl', rol: 'DEV', rol_origen: 'SOLICITANTE', via_portal: true };
+}
+/** Personal de plantilla: mismo rol, sin rol_origen. */
+function ctxPlantilla(email) {
+  return { email: email || 'portal@homepymes.cl', rol: 'DEV' };
+}
+
+function seedItemAjeno(ctx) {
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0009', desarrollador_asignado: 'ajeno@homepymes.cl' });
+  return seedSubsolicitud(ctx, { subsolicitud_id: 'SOL-2026-HP-0009-01', solicitud_id: 'SOL-2026-HP-0009', desarrollador_asignado: 'ajeno@homepymes.cl', titulo: 'Trabajo del ajeno' });
+}
+
+test('cuenta del portal: no puede tocar un item que no tiene asignado', () => {
+  const ctx = loadConSchema();
+  seedItemAjeno(ctx);
+
+  const estado = ctx.Solicitudes.actualizarEstado({ subsolicitud_id: 'SOL-2026-HP-0009-01', estado_nuevo: 'S07', comentario: 'x' }, ctxPortal());
+  const fecha = ctx.Solicitudes.comprometerFecha({ subsolicitud_id: 'SOL-2026-HP-0009-01', fecha_comprometida: '2099-01-01' }, ctxPortal());
+  const edicion = ctx.Solicitudes.editarContenidoSubsolicitud({ subsolicitud_id: 'SOL-2026-HP-0009-01', titulo: 'REESCRITO', descripcion: 'Descripcion larga suficiente para pasar la validacion de longitud.' }, ctxPortal());
+
+  assert.equal(estado._forbidden, true, 'no puede cambiar el estado de un item ajeno');
+  assert.equal(fecha._forbidden, true, 'no puede comprometer fecha en un item ajeno');
+  assert.equal(edicion._forbidden, true, 'no puede reescribir el contenido de un item ajeno');
+
+  // Lo que de verdad importa: que la fila no se haya tocado. Un forbidden
+  // que igual escribe no sirve de nada.
+  const fila = ctx.leerFilas_('SUBSOLICITUDES')[0];
+  assert.equal(fila.estado, 'S05');
+  assert.equal(fila.titulo, 'Trabajo del ajeno');
+  assert.equal(fila.fecha_comprometida, '');
+});
+
+test('cuenta del portal: SI puede con lo suyo -- el arreglo no la deja sin trabajo', () => {
+  // Contrapeso imprescindible. Un porton que cierra de mas convierte una
+  // cuenta de trabajo en una cuenta de solo lectura, y eso se notaria el
+  // primer dia de uso y no antes.
+  const ctx = loadConSchema();
+  seedSolicitud(ctx, { solicitud_id: 'SOL-2026-HP-0010', desarrollador_asignado: 'portal@homepymes.cl' });
+  seedSubsolicitud(ctx, { subsolicitud_id: 'SOL-2026-HP-0010-01', solicitud_id: 'SOL-2026-HP-0010', desarrollador_asignado: 'portal@homepymes.cl' });
+
+  const r = ctx.Solicitudes.actualizarEstado({ subsolicitud_id: 'SOL-2026-HP-0010-01', estado_nuevo: 'S07', comentario: 'avanzo lo mio' }, ctxPortal());
+
+  assert.notEqual(r._forbidden, true, 'sobre su propio item tiene que poder');
+  assert.equal(ctx.leerFilas_('SUBSOLICITUDES')[0].estado, 'S07');
+});
+
+test('el personal de plantilla NO cambia: sigue pudiendo cubrir a un companero', () => {
+  // Que un DEV o un ANA de plantilla muevan el item de otro es una decision
+  // tomada y escrita (Fase 10.1: "el rol resuelve el acceso"), y en un
+  // equipo de tres o cuatro personas que se cubren tiene sentido. El arreglo
+  // se aplica SOLO a las cuentas del portal, y este test lo fija: si alguien
+  // extiende el veto a todo DEV, se entera aqui y no en produccion.
+  const ctx = loadConSchema();
+  seedItemAjeno(ctx);
+
+  const r = ctx.Solicitudes.actualizarEstado({ subsolicitud_id: 'SOL-2026-HP-0009-01', estado_nuevo: 'S07', comentario: 'cubro a mi companero' }, ctxPlantilla());
+
+  assert.notEqual(r._forbidden, true);
+  assert.equal(ctx.leerFilas_('SUBSOLICITUDES')[0].estado, 'S07');
 });

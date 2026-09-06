@@ -966,6 +966,13 @@ function resolverContextoPortal_(token, action) {
   // trata como DEV (el rol mas restringido con escritura: solo su propio
   // trabajo) -- sin esto pasaria los checks pensados para ANA/ADM.
   var rol = cuenta.rol === 'SOLICITANTE' ? 'DEV' : cuenta.rol;
+  // El rol REAL de la cuenta, antes de normalizar. La normalizacion de arriba
+  // deja a un SOLICITANTE indistinguible de un DEV de plantilla, y de ahi
+  // salia que la frase "solo su propio trabajo" no la cumpliera nadie: las
+  // acciones de escritura de Solicitudes.gs miran `rol`, que ya decia DEV.
+  // Comprobado con una sonda: no veia el item en su bandeja y aun asi le
+  // cambiaba el estado, la fecha comprometida y hasta el titulo.
+  var rolOrigen = cuenta.rol;
 
   registrarUltimoAccesoThrottled_('c:' + cuenta.cuenta_id, function () {
     actualizarFilaPorId_(SHEETS.CUENTAS_PORTAL, 'cuenta_id', cuenta.cuenta_id, {
@@ -980,7 +987,8 @@ function resolverContextoPortal_(token, action) {
   // sin aceptar ningun identificador enviado por el navegador.
   return {
     contexto: {
-      email: emails[0] || '', rol: rol, modulos: modulos, via_portal: true,
+      email: emails[0] || '', rol: rol, rol_origen: rolOrigen,
+      modulos: modulos, via_portal: true,
       cuenta_id: cuenta.cuenta_id
     }
   };

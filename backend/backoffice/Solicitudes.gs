@@ -13,6 +13,46 @@
  * identidad Google (Session) y la hoja USUARIOS antes de llegar aqui.
  */
 
+/**
+ * Una cuenta SOLICITANTE de la plataforma a la que el Admin le dio el modulo
+ * "bandeja" se normaliza a rol DEV (Code.gs), con esta frase escrita al lado:
+ * "el rol mas restringido con escritura: SOLO SU PROPIO TRABAJO".
+ *
+ * No lo era. Medido con una sonda sobre un item asignado a otra persona:
+ *
+ *   lo VE en su bandeja           NO   (Dashboard auto-acota a los no-ADM)
+ *   actualizarEstado              escribio
+ *   comprometerFecha              escribio
+ *   editarContenidoSubsolicitud   escribio  (le cambio el titulo)
+ *   actualizarPrioridad           rechazada (esta si comprobaba el rol)
+ *
+ * Los ids son correlativos y salen en los correos, asi que el acotado de
+ * LECTURA por si solo era una cortina.
+ *
+ * Esto NO toca al personal. Que un DEV o un ANA de plantilla puedan mover el
+ * item de un companero es una decision tomada y escrita (Fase 10.1: "el rol
+ * resuelve el acceso"), y en un equipo de tres o cuatro personas que se
+ * cubren entre si tiene todo el sentido. Lo que se corrige es solo el caso en
+ * que la frase de arriba prometia una cosa y el codigo hacia otra.
+ *
+ * "Su propio trabajo" se lee de la forma que NO puede conceder de mas: el
+ * item esta asignado a esa persona. Un item sin asignar no es suyo todavia.
+ */
+function fueraDeSuPropioTrabajo_(contexto, subsolicitud, accion) {
+  if (!contexto || contexto.rol_origen !== 'SOLICITANTE') return null;
+  var suyo = normalizarEmailSolicitudes_(subsolicitud && subsolicitud.desarrollador_asignado) ===
+    normalizarEmailSolicitudes_(contexto.email);
+  if (suyo) return null;
+  return {
+    _forbidden: true,
+    message: 'Tu cuenta solo puede ' + accion + ' en los items que tiene asignados.'
+  };
+}
+
+function normalizarEmailSolicitudes_(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
 var Solicitudes = {
   actualizarEstado: function (data, contexto, opciones) {
     var opts = opciones || {};
@@ -25,6 +65,11 @@ var Solicitudes = {
     var subsolicitud = buscarSubsolicitud_(data.subsolicitud_id);
     if (!subsolicitud) {
       return errorValidacion_('subsolicitud_id', 'Subsolicitud no encontrada: ' + data.subsolicitud_id);
+    }
+    // El pase automatico del sistema no tiene dueno a quien comparar.
+    if (!opts.sistemaAutomatico) {
+      var vetoEstado = fueraDeSuPropioTrabajo_(contexto, subsolicitud, 'cambiar el estado');
+      if (vetoEstado) return vetoEstado;
     }
 
     var estadoActual = subsolicitud.estado;
@@ -225,6 +270,9 @@ var Solicitudes = {
       return errorValidacion_('subsolicitud_id', 'Subsolicitud no encontrada: ' + data.subsolicitud_id);
     }
 
+    var vetoFecha = fueraDeSuPropioTrabajo_(contexto, subsolicitud, 'comprometer fechas');
+    if (vetoFecha) return vetoFecha;
+
     var esReCompromiso = !!subsolicitud.fecha_comprometida;
     if (esReCompromiso && (!data.motivo || data.motivo.trim().length < 20)) {
       return errorValidacion_('motivo', 'Para mover una fecha ya comprometida debes indicar el motivo (minimo 20 caracteres).');
@@ -367,6 +415,9 @@ var Solicitudes = {
     if (!sub) {
       return errorValidacion_('subsolicitud_id', 'Subsolicitud no encontrada: ' + data.subsolicitud_id);
     }
+
+    var vetoEdicion = fueraDeSuPropioTrabajo_(contexto, sub, 'editar el contenido');
+    if (vetoEdicion) return vetoEdicion;
 
     var titulo = String(data.titulo || '').trim();
     var descripcion = String(data.descripcion || '').trim();
