@@ -193,3 +193,66 @@ test('la Carga de trabajo CON horas sí arma la grilla completa', () => {
   assert.match(html, />Persona</, 'con horas sí se arma la grilla');
   assert.doesNotMatch(html, /Sin horas registradas en el período/);
 });
+
+// --- 5. El "inicio del plan" no puede quedar invertido en una tarea cargada tarde ---
+//
+// Caso real: un proyecto que arrancó el 07-08 tuvo sus tareas CARGADAS en
+// SIGSO el 01-09 (comprometidas de vuelta al 28-08, antes de existir como
+// fila). fecha_creacion (01-09) quedó DESPUÉS de fecha_compromiso (28-08) --
+// el Cronograma en pantalla mostraba "Plan 01/09/2026–28/08/2026" (invertido)
+// y el PDF renunciaba a calcular "Esperado" (fin <= inicio -> null), aunque
+// el inicio real del proyecto sí permite trazar un plan coherente.
+
+test('planInicioEfectivoClave_: usa el inicio del proyecto cuando la creación quedó DESPUÉS del compromiso', () => {
+  assert.equal(planInicioEfectivoClave_('2026-09-01', '2026-08-28', '2026-08-07'), '2026-08-07');
+});
+test('planInicioEfectivoClave_: la creación manda cuando ya es coherente (<= compromiso)', () => {
+  assert.equal(planInicioEfectivoClave_('2026-08-01', '2026-08-28', '2026-08-07'), '2026-08-01');
+});
+test('planInicioEfectivoClave_: sin inicio de proyecto (o también inconsistente), cae al propio compromiso', () => {
+  assert.equal(planInicioEfectivoClave_('2026-09-01', '2026-08-28', ''), '2026-08-28');
+  assert.equal(planInicioEfectivoClave_('2026-09-01', '2026-08-28', '2026-09-15'), '2026-08-28');
+});
+test('planInicioEfectivoClave_: sin compromiso, se queda con la creación tal cual (nada que invertir)', () => {
+  assert.equal(planInicioEfectivoClave_('2026-09-01', '', '2026-08-07'), '2026-09-01');
+});
+
+function planInicioEfectivoClave_(claveCreacion, claveCompromiso, claveInicioProyecto) {
+  // Re-implementación de la función privada de Proyectos.gs para probarla
+  // por contrato (no está expuesta en el objeto público Proyectos) -- el
+  // test de integración de más abajo prueba el efecto real end-to-end.
+  if (!claveCompromiso) return claveCreacion || '';
+  if (claveCreacion && claveCreacion <= claveCompromiso) return claveCreacion;
+  if (claveInicioProyecto && claveInicioProyecto <= claveCompromiso) return claveInicioProyecto;
+  return claveCompromiso;
+}
+
+test('obtenerRendimiento: una tarea cargada tarde usa el inicio del PROYECTO como plan_inicio, no la fecha de creación', () => {
+  const ctx = loadConSchema();
+  // Proyecto que arrancó hace 20 días (la asignación real).
+  const proyecto = ctx.Proyectos.crear({ nombre: 'Con historia', fecha_inicio: diasDesdeHoy(-20), fecha_objetivo: '2026-12-31' }, CTX_LEO);
+  ctx.Proyectos.gestionarIntegrante({ proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE' }, CTX_LEO);
+  // La tarea se CREA hoy pero comprometida hacia atrás (hace 10 días) --
+  // exactamente el patrón real: creación > compromiso.
+  const t = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'Presentaciones HP', responsable_email: 'marcelo@rld.cl', fecha_compromiso: diasDesdeHoy(-10) }, CTX_LEO);
+  ctx.Actividades.confirmar({ actividad_id: t.actividad_id, fecha_compromiso: diasDesdeHoy(-10) }, CTX_MARCELO);
+
+  const rendimiento = ctx.Proyectos.obtenerRendimiento({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  const plan = rendimiento.plan_seguimiento.filter((p) => p.actividad_id === t.actividad_id)[0];
+
+  assert.equal(plan.plan_inicio, diasDesdeHoy(-20), 'el inicio del plan es el del proyecto, no la fecha de creación (hoy)');
+  assert.equal(plan.plan_fin, diasDesdeHoy(-10));
+  assert.notEqual(plan.avance_esperado_pct, null,
+    'con el inicio corregido SÍ se puede trazar un "esperado" -- antes salía null (fin <= inicio)');
+});
+
+test('obtenerRendimiento: una tarea creada en orden normal no cambia (plan_inicio sigue siendo la creación)', () => {
+  const ctx = loadConSchema();
+  const proyecto = armarProyecto(ctx);
+  const t = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'Normal', responsable_email: 'marcelo@rld.cl', fecha_compromiso: diasDesdeHoy(10) }, CTX_LEO);
+  ctx.Actividades.confirmar({ actividad_id: t.actividad_id, fecha_compromiso: diasDesdeHoy(10) }, CTX_MARCELO);
+
+  const rendimiento = ctx.Proyectos.obtenerRendimiento({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  const plan = rendimiento.plan_seguimiento.filter((p) => p.actividad_id === t.actividad_id)[0];
+  assert.equal(plan.plan_inicio, diasDesdeHoy(0), 'sin creación-tardía, el plan sigue empezando donde se creó la tarea');
+});

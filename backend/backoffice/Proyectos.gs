@@ -1319,13 +1319,24 @@ var Proyectos = {
     // (mismo criterio que calcularAvanceProyecto_/G3).
     var baseline = obtenerUltimaBaseline_(proyecto.proyecto_id);
     var ahora = new Date();
+    // v15.4: el inicio del plan es fecha_creacion salvo que la tarea se haya
+    // cargado tarde (creación después del compromiso) -- ahí se usa el
+    // inicio del proyecto en su lugar. Antes esto mostraba "Plan
+    // 01/09/2026–28/08/2026" (invertido) en pantalla y renunciaba a calcular
+    // "Esperado" en el PDF (fin <= inicio -> null) para toda tarea cargada
+    // así, aunque el verdadero inicio (el del proyecto) sí permitía trazar
+    // una curva sensata.
+    var claveInicioProyecto = proyecto.fecha_inicio ? clavePdf_(new Date(proyecto.fecha_inicio)) : '';
     var planSeguimiento = tareas.map(function (a) {
       var real = avanceRealTarea_(a);
-      var esperado = calcularAvanceEsperado_(a.fecha_creacion, a.fecha_compromiso, ahora);
+      var claveCreacion = a.fecha_creacion ? clavePdf_(new Date(a.fecha_creacion)) : '';
+      var claveCompromiso = a.fecha_compromiso ? clavePdf_(new Date(a.fecha_compromiso)) : '';
+      var planInicio = planInicioEfectivoClave_(claveCreacion, claveCompromiso, claveInicioProyecto);
+      var esperado = calcularAvanceEsperado_(planInicio, a.fecha_compromiso, ahora);
       var baseTarea = baseline && baseline.por_tarea[a.actividad_id];
       return {
         actividad_id: a.actividad_id,
-        plan_inicio: a.fecha_creacion || '',
+        plan_inicio: planInicio,
         plan_fin: a.fecha_compromiso || '',
         baseline_inicio: baseTarea ? baseTarea.fecha_inicio : '',
         baseline_fin: baseTarea ? baseTarea.fecha_fin : '',
@@ -3389,11 +3400,10 @@ function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyCl
     var terminal = (a.estado === 'TERMINADA' || a.estado === 'CANCELADA');
     var sem = a.semaforo || 'pendiente';
     var color = GANTT_SEMAFORO_SOLIDO_[sem] || '#64748B';
-    // Inicio de la barra: la creacion si es coherente (<= compromiso); si la
-    // creacion quedo DESPUES del compromiso (tarea cargada tarde), se ancla en
-    // el inicio del proyecto -- la asignacion real -- y si no, en el compromiso.
-    var barIni = (kCre && kCom && kCre <= kCom) ? kCre
-      : ((proyIni && kCom && proyIni <= kCom) ? proyIni : kCom);
+    // Inicio de la barra: mismo criterio de planInicioEfectivoClave_ (v15.4)
+    // -- la creación si es coherente; si la tarea se cargó tarde, el inicio
+    // del proyecto (la asignación real); si no, el compromiso.
+    var barIni = planInicioEfectivoClave_(kCre, kCom, proyIni);
     var barFin = kCom;
     var fueraDeRango = kCom && kCom > ultimoDia;
 
@@ -3961,6 +3971,29 @@ function filaBitacoraSalida_(b) {
     salida.responsable_nuevo = d.responsable_nuevo || '';
   }
   return salida;
+}
+
+// v15.4 ("el inicio del plan, cuando fecha_creacion no lo es"): una tarea
+// CARGADA TARDE (fecha_creacion queda DESPUÉS de su fecha_compromiso -- se
+// migró, se importó en bloque, o se creó semanas después del acuerdo real)
+// deja a fecha_creacion como un mal "inicio de plan": el plan quedaría con
+// el fin antes que el inicio. fecha_creacion NO se toca -- sigue siendo el
+// timestamp real de cuándo el sistema recibió la fila, y ESO es lo correcto
+// para diasAsignada_/diasSinActualizar_/las ventanas del digest semanal (que
+// miden "hace cuánto lo sabe SIGSO", una pregunta distinta). Este helper solo
+// decide qué fecha usar como INICIO DEL PLAN al mostrar/calcular avance
+// esperado: la creación si es coherente con el compromiso; si no, el inicio
+// del PROYECTO (la asignación real, cuando se conoce); si tampoco, el propio
+// compromiso (un plan de un solo día es mejor que uno invertido).
+// Mismo criterio que ya usaba, sin nombre propio, la barra de la Carta Gantt
+// (seccionCronogramaBarrasPdf_) -- se extrae aquí para que el Cronograma en
+// pantalla ("Plan 01/09/2026–28/08/2026", invertido y confuso) use el mismo
+// criterio, en vez de reinventarlo cada vez que aparece.
+function planInicioEfectivoClave_(claveCreacion, claveCompromiso, claveInicioProyecto) {
+  if (!claveCompromiso) return claveCreacion || '';
+  if (claveCreacion && claveCreacion <= claveCompromiso) return claveCreacion;
+  if (claveInicioProyecto && claveInicioProyecto <= claveCompromiso) return claveInicioProyecto;
+  return claveCompromiso;
 }
 
 // v11 (P1, "Esperado a hoy"): supuesto de avance LINEAL entre el inicio y el
