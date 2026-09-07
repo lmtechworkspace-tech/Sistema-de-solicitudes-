@@ -221,10 +221,11 @@ test('descargarReporte config: la Carta Gantt dibuja barras de color, no solo le
   }, CTX_LEO);
   const html = htmlDe_(res);
   assert.match(html, /Carta Gantt/);
-  // Alguna celda trae un background SÓLIDO SATURADO de barra (semáforo) -- el
-  // motor HTML->PDF rinde los tintes pálidos casi blancos, así que se usa color
-  // saturado (verde/ámbar/rojo/azul/gris/violeta).
-  assert.match(html, /background-color:#(16A34A|D97706|DC2626|2563EB|64748B|94A3B8|7C3AED)/);
+  // v15.3: el importador HTML->PDF de Apps Script no pinta NINGÚN relleno
+  // (confirmado renderizando el PDF real a píxeles) -- la barra es un borde
+  // inferior GRUESO del color semántico (verde/ámbar/rojo/azul/gris/violeta),
+  // no un background-color.
+  assert.match(html, /border-bottom:14px solid #(16A34A|D97706|DC2626|2563EB|64748B|94A3B8|7C3AED)/);
   // Y una leyenda de colores para decodificar el semáforo.
   assert.match(html, /Al día \/ terminada/);
   assert.match(html, /Atraso sin cerrar/);

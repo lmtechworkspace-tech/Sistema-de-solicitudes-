@@ -113,8 +113,10 @@ test('todas las tablas de contenido traen fila de encabezado', () => {
   ['Fecha objetivo', 'Responsable', 'Compromiso', 'Nivel'].forEach(function (titulo) {
     assert.match(html, new RegExp(titulo), 'falta el encabezado: ' + titulo);
   });
-  // El encabezado usa el navy del documento.
-  assert.match(html, /background:#14213D;color:#ffffff;font-size:9px;font-weight:bold;text-transform:uppercase/);
+  // v15.3: sin relleno (el importador HTML->PDF de Apps Script no pinta
+  // background-color, confirmado renderizando el PDF real) -- el encabezado
+  // es texto navy en negrita con un borde inferior grueso del mismo color.
+  assert.match(html, /color:#14213D;font-size:9px;font-weight:bold;text-transform:uppercase[^"]*border-bottom:2px solid #14213D/);
 });
 
 test('el nivel del riesgo y el estado del vencimiento salen como chip de color (clasificación)', () => {
@@ -128,8 +130,9 @@ test('el nivel del riesgo y el estado del vencimiento salen como chip de color (
     proyecto_id: proyecto.proyecto_id, config: { secciones: ['riesgos', 'vencimientos'] }
   }, CTX_LEO);
   const html = htmlDe_(res);
-  // Chip rojo saturado para "ALTO" y para el semáforo "Atrasada".
-  assert.match(html, /background-color:#DC2626;color:#ffffff;font-weight:bold;font-size:8px/);
+  // v15.3: sin relleno -- el chip es texto rojo en negrita con borde rojo,
+  // no una píldora blanca-sobre-rojo (esa quedaba invisible en el PDF real).
+  assert.match(html, /color:#DC2626;font-weight:bold;font-size:8px[^"]*border:1\.3px solid #DC2626/);
   assert.match(html, /Atrasada/);
 });
 
