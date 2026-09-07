@@ -817,7 +817,12 @@ test('descargarReporte: incluye rendimiento (meta/ritmo) y la bitácora reciente
   assert.match(html, /16 imágenes/);
   assert.match(html, /16\/día/); // 16 imágenes / 1 día trabajado
   assert.match(html, /Actividad reciente/);
-  assert.match(html, /Avance \(4h\)/);
+  // v14: la bitácora dejó de amontonar tipo+horas+nota en una celda. Ahora la
+  // nota va en la columna Detalle y las horas en la suya ("4 h"), con el tipo
+  // como chip aparte -- ya no existe el formato "Avance (4h)".
+  assert.match(html, /Avance del día/);
+  assert.match(html, /4 h/);
+  assert.doesNotMatch(html, /Avance \(4h\)/);
 });
 
 // --- Solicitud -> Proyecto (Fase D) ----------------------------------------

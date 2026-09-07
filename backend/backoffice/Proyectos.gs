@@ -2578,6 +2578,36 @@ function fechaCortaPdfProyecto_(valor) {
   catch (err) { return String(valor).slice(0, 10); }
 }
 
+// v14 ("reporte legible"): encabezado de columna para las tablas del PDF.
+// Antes NINGUNA tabla de contenido (hitos, riesgos, vencimientos, actividad,
+// desviaciones, salud, rendimiento) traía fila de títulos -- el lector veía
+// columnas de datos sin saber qué era cada una. Mismo navy que docSeccionOt_.
+function thNavyPdf_(texto, extra) {
+  return '<td style="padding:6px 8px;background:' + DOC.NAVY + ';color:#ffffff;font-size:9px;' +
+    'font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;border:1px solid ' + DOC.NAVY + ';' +
+    (extra || '') + '">' + escaparHtml_(texto) + '</td>';
+}
+// Cada título puede ser 'Texto' o ['Texto','estilo-extra'] (p.ej. alinear a la
+// derecha una columna numérica).
+function encabezadoPdf_(titulos) {
+  return '<thead><tr>' + titulos.map(function (t) {
+    return Array.isArray(t) ? thNavyPdf_(t[0], t[1]) : thNavyPdf_(t);
+  }).join('') + '</tr></thead>';
+}
+
+// Chip de color sólido con texto en blanco -- misma familia que el semáforo de
+// la Carta Gantt (el motor HTML->PDF rinde los tintes pálidos casi blancos, así
+// que aquí también se usa color saturado). Sirve para clasificar de un vistazo.
+function chipTonoPdf_(color, texto) {
+  return '<span style="display:inline-block;background-color:' + color + ';color:#ffffff;font-weight:bold;' +
+    'font-size:8px;padding:2px 6px;border-radius:3px;white-space:nowrap;">' + escaparHtml_(texto) + '</span>';
+}
+
+// Días de calendario entre dos claves 'YYYY-MM-DD' (b - a).
+function diasEntreClavesPdf_(a, b) {
+  return Math.round((fechaDeClavePdf_(b).getTime() - fechaDeClavePdf_(a).getTime()) / 86400000);
+}
+
 // v13 (Fase 3, "reporte ejecutivo -- prioridad máxima"): el Resumen
 // Ejecutivo narrativo. Responde en un párrafo lo que antes obligaba a leer
 // 4-5 tablas: cómo está, avance vs plan, qué está atrasado/en riesgo,
@@ -2807,18 +2837,57 @@ function redond1Pdf_(n) { return Math.round(n * 10) / 10; }
 // vuelve impracticable, y quien necesita más detalle puede pedir un rango
 // puntual desde "Configurar informe".
 var REPORTE_LIMITE_DIAS_GANTT_ = 60;
+// v14 ("reporte legible"): sin rango explícito, la ventana va DESDE la
+// asignación más antigua HASTA hoy (con un pequeño margen). Antes el borde
+// derecho era el compromiso MÁS LEJANO de cualquier tarea, así que un solo
+// compromiso a meses de distancia (p.ej. una tarea a fin de año) estiraba la
+// Carta Gantt con decenas de columnas en blanco -- y hasta páginas enteras
+// vacías. La regla nueva parte en hoy y avanza por las fechas futuras
+// mientras no aparezca un "hueco muerto" (> MAX_HUECO): así un proyecto
+// planificado a futuro SÍ muestra su plan, pero un compromiso suelto y lejano
+// no arrastra columnas sin actividad. El compromiso que quede fuera de la
+// ventana no se pierde: la Carta Gantt lo marca en la etiqueta de la tarea
+// con "vence dd-mm →" (ver seccionGanttPdf_).
+var REPORTE_MARGEN_DIAS_ = 4;      // respiro a la derecha de hoy / última fecha viva
+var REPORTE_MAX_HUECO_DIAS_ = 21;  // salto entre fechas que se considera "hueco muerto"
 function construirDiasReportePdf_(tareas, rango, hoyClave) {
   var desde, hasta;
   if (rango) {
     desde = rango.desde; hasta = rango.hasta;
   } else {
-    var claves = [hoyClave];
+    // Borde izquierdo: la asignación (creación) más antigua; si a alguna tarea
+    // le falta la creación, cae a su compromiso. Nunca después de hoy.
+    var inicios = [];
     tareas.forEach(function (a) {
-      if (a.fecha_creacion) claves.push(clavePdf_(new Date(a.fecha_creacion)));
-      if (a.fecha_compromiso) claves.push(clavePdf_(new Date(a.fecha_compromiso)));
+      var k = a.fecha_creacion ? clavePdf_(new Date(a.fecha_creacion))
+        : (a.fecha_compromiso ? clavePdf_(new Date(a.fecha_compromiso)) : null);
+      if (k) inicios.push(k);
     });
-    claves.sort();
-    desde = claves[0]; hasta = claves[claves.length - 1];
+    inicios.sort();
+    desde = inicios.length ? inicios[0] : hoyClave;
+    if (desde > hoyClave) desde = hoyClave;
+
+    // Borde derecho: parte en hoy y avanza por las fechas futuras (creación o
+    // compromiso) mientras el salto a la siguiente no supere MAX_HUECO. En el
+    // primer hueco grande se detiene -- eso deja fuera al compromiso aislado y
+    // lejano sin recortar un plan a futuro que sí es continuo.
+    var futuras = [];
+    tareas.forEach(function (a) {
+      [a.fecha_creacion, a.fecha_compromiso].forEach(function (f) {
+        if (!f) return;
+        var k = clavePdf_(new Date(f));
+        if (k > hoyClave) futuras.push(k);
+      });
+    });
+    futuras.sort();
+    hasta = hoyClave;
+    for (var i = 0; i < futuras.length; i++) {
+      if (diasEntreClavesPdf_(hasta, futuras[i]) > REPORTE_MAX_HUECO_DIAS_) break;
+      hasta = futuras[i];
+    }
+    // Margen a la derecha (el salto de 4 días no puede cruzar un hueco de >21
+    // que ya se descartó, así que no reintroduce el compromiso lejano).
+    hasta = clavePdf_(new Date(fechaDeClavePdf_(hasta).getTime() + REPORTE_MARGEN_DIAS_ * 86400000));
   }
   var dias = [], cursor = fechaDeClavePdf_(desde), fin = fechaDeClavePdf_(hasta);
   while (cursor.getTime() <= fin.getTime() && dias.length < REPORTE_LIMITE_DIAS_GANTT_) {
@@ -3033,13 +3102,15 @@ function seccionSaludPdf_(detalle) {
   var filas = (detalle.salud_desglose || []).map(function (d) {
     return '<tr>' +
       '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(SALUD_FACTOR_LABEL_PDF_[d.factor] || d.factor) + '</td>' +
-      '<td style="' + celdaValorFicha_() + '">' + d.cantidad + '</td>' +
-      '<td style="' + celdaValorFicha_() + '">-' + d.puntos + '</td>' +
+      '<td style="' + celdaValorFicha_() + 'text-align:center;">' + d.cantidad + '</td>' +
+      '<td style="' + celdaValorFicha_() + 'text-align:center;color:#B91C1C;font-weight:bold;">-' + d.puntos + '</td>' +
     '</tr>';
   }).join('');
   if (!filas) return docSeccionOt_('Salud del proyecto') + cabecera;
   return docSeccionOt_('Salud del proyecto') + cabecera +
-    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' + filas + '</table>';
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' +
+    encabezadoPdf_(['Factor que resta salud', ['Cantidad', 'text-align:center;'], ['Puntos', 'text-align:center;']]) +
+    '<tbody>' + filas + '</tbody></table>';
 }
 
 // v11 (P1, "Plan · Esperado · Real" -> aquí, en el PDF): mismo dato que ya
@@ -3058,13 +3129,15 @@ function seccionDesviacionesPdf_(rendimiento, tareas, tareasPorId) {
     return '<tr>' +
       '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(tarea ? tarea.titulo : '—') + '</td>' +
       '<td style="' + celdaValorFicha_() + '">' + fechaCortaPdfProyecto_(t.plan_fin) + '</td>' +
-      '<td style="' + celdaValorFicha_() + '">' + (t.avance_esperado_pct === null || t.avance_esperado_pct === undefined ? '—' : t.avance_esperado_pct + '%') + '</td>' +
-      '<td style="' + celdaValorFicha_() + '">' + (t.avance_real_pct === null || t.avance_real_pct === undefined ? '—' : t.avance_real_pct + '%') + '</td>' +
-      '<td style="' + celdaValorFicha_() + 'color:' + desvColor + ';font-weight:bold;">' + desvTxt + '</td>' +
+      '<td style="' + celdaValorFicha_() + 'text-align:center;">' + (t.avance_esperado_pct === null || t.avance_esperado_pct === undefined ? '—' : t.avance_esperado_pct + '%') + '</td>' +
+      '<td style="' + celdaValorFicha_() + 'text-align:center;">' + (t.avance_real_pct === null || t.avance_real_pct === undefined ? '—' : t.avance_real_pct + '%') + '</td>' +
+      '<td style="' + celdaValorFicha_() + 'text-align:center;color:' + desvColor + ';font-weight:bold;">' + desvTxt + '</td>' +
     '</tr>';
   }).join('');
   return docSeccionOt_('Plan · Esperado · Real') +
-    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' + filas + '</table>';
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' +
+    encabezadoPdf_(['Tarea', 'Plan (fin)', ['Esperado', 'text-align:center;'], ['Real', 'text-align:center;'], ['Desviación', 'text-align:center;']]) +
+    '<tbody>' + filas + '</tbody></table>';
 }
 
 // v11 ("Gantt multipágina"): la letra de cada celda tarea×día, misma
@@ -3160,9 +3233,34 @@ function ganttChipLeyendaPdf_(color, texto) {
 function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia) {
   if (!tareas.length || !dias.length) return '';
   var hoyClave = clavePdf_(new Date());
+  var ultimoDiaGlobal = dias[dias.length - 1];
+
+  // Un día "tiene contenido" si alguna tarea lo cubre con su barra planificada,
+  // su tramo de atraso, o una marca registrada ese día. Sirve para descartar
+  // páginas enteras en blanco: el rango de v14 ya viene acotado, y esto es el
+  // seguro contra un hueco interno que dejara una hoja del Gantt sin nada.
+  var diaConContenido = {};
+  tareas.forEach(function (a) {
+    var kCre = a.fecha_creacion ? clavePdf_(new Date(a.fecha_creacion)) : '';
+    var kCom = a.fecha_compromiso ? clavePdf_(new Date(a.fecha_compromiso)) : '';
+    var kIni = kCre || kCom;
+    var term = (a.estado === 'TERMINADA' || a.estado === 'CANCELADA');
+    dias.forEach(function (d) {
+      if (diaConContenido[d]) return;
+      var enPlan = kIni && kCom && d >= kIni && d <= kCom;
+      var enAtraso = !term && kCom && d > kCom && d <= hoyClave;
+      if (enPlan || enAtraso) { diaConContenido[d] = true; return; }
+      if (celdaGanttPdf_(a.actividad_id, d, kCre, registroPorTareaDia, eventosPorTareaDia).letra) diaConContenido[d] = true;
+    });
+  });
+
   var chunk = diasPorPaginaPdf_(dias.length);
   var paginas = [];
-  for (var i = 0; i < dias.length; i += chunk) paginas.push(dias.slice(i, i + chunk));
+  for (var i = 0; i < dias.length; i += chunk) {
+    var trozo = dias.slice(i, i + chunk);
+    if (trozo.some(function (d) { return diaConContenido[d]; })) paginas.push(trozo);
+  }
+  if (!paginas.length) paginas.push(dias.slice(0, chunk)); // nunca dejar la sección sin página
 
   var html = paginas.map(function (diasPagina, idx) {
     var encabezado = '<tr><td style="padding:5px 8px;width:22%;background-color:' + DOC.NAVY + ';color:#ffffff;' +
@@ -3196,8 +3294,16 @@ function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia)
         return '<td style="padding:6px 1px;text-align:center;font-size:9px;font-weight:bold;color:' + colorLetra + ';' +
           'border:1px solid ' + DOC.HAIRLINE + ';' + (bg ? 'background-color:' + bg + ';' : '') + borde + '">' + (c.letra || '') + '</td>';
       }).join('');
-      var meta = escaparHtml_(a.responsable_nombre || a.responsable_email || '—') +
-        (claveCommit ? ' · compromiso ' + fechaCortaPdfProyecto_(a.fecha_compromiso) : '');
+      // Si el compromiso cae MÁS ALLÁ de la ventana visible, no se pierde: se
+      // marca en la etiqueta con "vence dd-mm →" (la flecha dice "fuera del
+      // gráfico, a la derecha"), en gris para no competir con la barra.
+      var fueraDeRango = claveCommit && claveCommit > ultimoDiaGlobal;
+      var commitTxt = claveCommit
+        ? (fueraDeRango
+            ? ' · <span style="color:' + DOC.MUTED + ';">vence ' + fechaCortaPdfProyecto_(a.fecha_compromiso) + ' &#8594;</span>'
+            : ' · compromiso ' + fechaCortaPdfProyecto_(a.fecha_compromiso))
+        : '';
+      var meta = escaparHtml_(a.responsable_nombre || a.responsable_email || '—') + commitTxt;
       var etiqueta = '<div style="font-weight:bold;color:' + DOC.INK + ';font-size:10px;">' + escaparHtml_(a.titulo) + '</div>' +
         '<div style="font-size:8px;color:' + DOC.MUTED + ';margin-top:1px;">' + meta + '</div>';
       return '<tr><td style="padding:5px 8px;border:1px solid ' + DOC.HAIRLINE + ';vertical-align:middle;">' + etiqueta + '</td>' + celdas + '</tr>';
@@ -3236,6 +3342,21 @@ function seccionWorkloadPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaD
     if (reg) return Number(reg.horas) || 0;
     var eventos = (eventosPorTareaDia[actividadId] || {})[diaClave] || [];
     return eventos.reduce(function (s, ev) { return s + (Number(ev.horas) || 0); }, 0);
+  }
+  // v14: si NADIE registró horas en toda la ventana, el mapa de calor es una
+  // grilla en blanco -- no aporta nada. Se resume en una línea en vez de gastar
+  // una página (o varias) en celdas vacías.
+  var totalGeneral = 0;
+  orden.forEach(function (persona) {
+    porPersona[persona].forEach(function (a) {
+      dias.forEach(function (d) { totalGeneral += horasDelDia_(a.actividad_id, d); });
+    });
+  });
+  if (totalGeneral === 0) {
+    return docSeccionOt_('Carga de trabajo (horas por día y persona)') +
+      '<div style="font-size:11px;color:' + DOC.MUTED + ';margin:0 0 18px;line-height:1.5;">' +
+      'Sin horas registradas en el período. La carga por persona aparecerá aquí cuando el equipo registre horas en la bitácora del proyecto.' +
+      '</div>';
   }
   var chunk = diasPorPaginaPdf_(dias.length);
   var paginas = [];
@@ -3297,28 +3418,36 @@ function fichaProyectoPdf_(detalle) {
 function seccionHitosPdf_(hitos) {
   if (!hitos.length) return '';
   var filas = hitos.map(function (h) {
+    var color = HITO_ESTADO_COLOR_PDF_[h.estado] || DOC.MUTED;
     return '<tr>' +
       '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(h.nombre) + '</td>' +
-      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(HITO_ESTADO_LABEL_PDF_[h.estado] || h.estado) + '</td>' +
-      '<td style="' + celdaValorFicha_() + '">' + fechaCortaPdfProyecto_(h.fecha_objetivo) + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + chipTonoPdf_(color, HITO_ESTADO_LABEL_PDF_[h.estado] || h.estado) + '</td>' +
+      '<td style="' + celdaValorFicha_() + 'white-space:nowrap;">' + fechaCortaPdfProyecto_(h.fecha_objetivo) + '</td>' +
     '</tr>';
   }).join('');
   return docSeccionOt_('Hitos') +
-    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' + filas + '</table>';
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' +
+    encabezadoPdf_(['Hito', 'Estado', 'Fecha objetivo']) +
+    '<tbody>' + filas + '</tbody></table>';
 }
 var HITO_ESTADO_LABEL_PDF_ = { PENDIENTE: 'Pendiente', EN_CURSO: 'En curso', COMPLETADO: 'Completado', CANCELADO: 'Cancelado' };
+var HITO_ESTADO_COLOR_PDF_ = { PENDIENTE: '#64748B', EN_CURSO: '#2563EB', COMPLETADO: '#16A34A', CANCELADO: '#94A3B8' };
 
+var RIESGO_NIVEL_COLOR_PDF_ = { ALTO: '#DC2626', MEDIO: '#D97706', BAJO: '#16A34A' };
 function seccionRiesgosPdf_(riesgos) {
   var abiertos = riesgos.filter(function (r) { return r.estado !== 'CERRADO'; });
   if (!abiertos.length) return '';
   var filas = abiertos.map(function (r) {
+    var color = RIESGO_NIVEL_COLOR_PDF_[String(r.nivel || '').toUpperCase()] || DOC.MUTED;
     return '<tr>' +
       '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(r.descripcion) + '</td>' +
-      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(r.nivel) + '</td>' +
+      '<td style="' + celdaValorFicha_() + 'white-space:nowrap;">' + chipTonoPdf_(color, r.nivel) + '</td>' +
     '</tr>';
   }).join('');
   return docSeccionOt_('Riesgos abiertos') +
-    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' + filas + '</table>';
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' +
+    encabezadoPdf_(['Riesgo', 'Nivel']) +
+    '<tbody>' + filas + '</tbody></table>';
 }
 
 // Top 8: las que mas urgen primero (mismo orden de prioridad de semaforo
@@ -3336,15 +3465,24 @@ function seccionVencimientosPdf_(tareas) {
     .slice(0, 8);
   if (!pendientes.length) return '';
   var filas = pendientes.map(function (a) {
+    var sem = a.semaforo || 'pendiente';
+    var color = GANTT_SEMAFORO_SOLIDO_[sem] || DOC.MUTED;
     return '<tr>' +
       '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(a.titulo) + '</td>' +
+      '<td style="' + celdaValorFicha_() + 'white-space:nowrap;">' + chipTonoPdf_(color, SEMAFORO_LABEL_PDF_[sem] || sem) + '</td>' +
       '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(a.responsable_nombre || a.responsable_email || '—') + '</td>' +
-      '<td style="' + celdaValorFicha_() + '">' + fechaCortaPdfProyecto_(a.fecha_compromiso) + '</td>' +
+      '<td style="' + celdaValorFicha_() + 'white-space:nowrap;">' + fechaCortaPdfProyecto_(a.fecha_compromiso) + '</td>' +
     '</tr>';
   }).join('');
   return docSeccionOt_('Próximos vencimientos') +
-    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';font-size:12px;">' + filas + '</table>';
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';font-size:12px;">' +
+    encabezadoPdf_(['Tarea', 'Estado', 'Responsable', 'Compromiso']) +
+    '<tbody>' + filas + '</tbody></table>';
 }
+var SEMAFORO_LABEL_PDF_ = {
+  atrasada: 'Atrasada', riesgo: 'En riesgo', pendiente: 'Pendiente',
+  bloqueada: 'Bloqueada', 'al-dia': 'Al día', terminada: 'Terminada', revision: 'En revisión'
+};
 
 // v10 (Fase G4, "valor y salida ejecutiva"): "el rendimiento" del reporte
 // -- mismo cálculo que ya usa la pestaña Cronograma > Dedicación (Fase G3),
@@ -3378,7 +3516,9 @@ function seccionRendimientoPdf_(rendimiento) {
     '</tr>';
   }).join('');
   return seccion +
-    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' + filasTarea + '</table>';
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' +
+    encabezadoPdf_(['Tarea', 'Meta', 'Ritmo']) +
+    '<tbody>' + filasTarea + '</tbody></table>';
 }
 
 // v10 (Fase G4): "la carta" del reporte -- un registro cronológico de la
@@ -3397,24 +3537,52 @@ var REGISTRO_DIA_ESTADO_LABEL_PDF_ = {
   bloqueado: 'Bloqueado', pausado: 'En pausa', finalizado: 'Finalizado',
   entregado: 'Entregado', revision: 'En revisión', esperando_tercero: 'Esperando a un tercero'
 };
+// v14 ("reporte legible"): color de cada tipo de movimiento para el chip que
+// lo clasifica. Misma familia que el semáforo de la Carta Gantt -- entregas en
+// verde, bloqueos en rojo, revisiones en ámbar, asignación en violeta, etc.,
+// de modo que la columna "Tipo" se pueda barrer de un vistazo.
+var BITACORA_TIPO_TONO_PDF_ = {
+  CREADA: '#7C3AED', CHECKIN_AVANCE: '#2563EB', CHECKIN_SIN_CAMBIO: '#64748B',
+  DESBLOQUEO: '#16A34A', BLOQUEO: '#DC2626', ENTREGA: '#16A34A',
+  VALIDACION: '#D97706', REGISTRO_DIA: '#2563EB'
+};
+var REGISTRO_DIA_TONO_PDF_ = {
+  asignado: '#7C3AED', planificado: '#2563EB', en_proceso: '#2563EB',
+  bloqueado: '#DC2626', pausado: '#64748B', finalizado: '#16A34A',
+  entregado: '#16A34A', revision: '#D97706', esperando_tercero: '#64748B'
+};
+// v14: la "Actividad reciente" dejaba TODO en una sola columna sin encabezado
+// ("Avance (2h): la nota") -- se leía como un volcado. Ahora son columnas
+// reales con títulos, un chip de color que clasifica el tipo de movimiento, y
+// las horas en su propia columna. Mismo dato de listarBitacora, solo mejor
+// presentado.
 function seccionBitacoraPdf_(bitacora, tareasPorId) {
   if (!bitacora.length) return '';
   var filas = bitacora.map(function (b) {
     var tarea = tareasPorId[b.actividad_id];
+    var esReg = (b.tipo === 'REGISTRO_DIA');
     // v11 (P0): las filas ya vienen normalizadas por filaBitacoraSalida_
     // (listarBitacora), así que un REGISTRO_DIA trae estado_dia/horas directos.
-    var etiqueta = (b.tipo === 'REGISTRO_DIA')
+    var etiqueta = esReg
       ? (REGISTRO_DIA_ESTADO_LABEL_PDF_[b.estado_dia] || 'Registro del día')
       : (BITACORA_TIPO_LABEL_PDF_[b.tipo] || b.tipo);
+    var tono = esReg
+      ? (REGISTRO_DIA_TONO_PDF_[b.estado_dia] || DOC.MUTED)
+      : (BITACORA_TIPO_TONO_PDF_[b.tipo] || DOC.MUTED);
+    var guion = '<span style="color:' + DOC.FAINT + ';">—</span>';
     return '<tr>' +
-      '<td style="' + celdaValorFicha_() + '">' + fechaCortaPdfProyecto_(b.timestamp) + '</td>' +
+      '<td style="' + celdaValorFicha_() + 'white-space:nowrap;">' + fechaCortaPdfProyecto_(b.timestamp) + '</td>' +
       '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(tarea ? tarea.titulo : '—') + '</td>' +
-      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(etiqueta) + (b.horas ? ' (' + b.horas + 'h)' : '') +
-        (b.nota ? ': ' + escaparHtml_(b.nota) : '') + '</td>' +
+      '<td style="' + celdaValorFicha_() + 'white-space:nowrap;">' + chipTonoPdf_(tono, etiqueta) + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + (b.nota ? escaparHtml_(b.nota) : guion) + '</td>' +
+      '<td style="' + celdaValorFicha_() + 'text-align:right;white-space:nowrap;">' +
+        (b.horas ? redond1Pdf_(Number(b.horas)) + ' h' : guion) + '</td>' +
     '</tr>';
   }).join('');
   return docSeccionOt_('Actividad reciente') +
-    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';font-size:12px;">' + filas + '</table>';
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';font-size:12px;">' +
+    encabezadoPdf_(['Fecha', 'Tarea', 'Tipo', 'Detalle', ['Horas', 'text-align:right;']]) +
+    '<tbody>' + filas + '</tbody></table>';
 }
 
 // --- estados y prioridades ---------------------------------------------
