@@ -2953,8 +2953,16 @@
       // print de la carta). El title del span da el contexto sin sumar texto
       // fijo al toolbar (un <button> sin title propio hereda el del ancestro).
       (esProyecto
-        ? '<span title="Genera el PDF ejecutivo del proyecto: portada, indicadores, Carta Gantt, riesgos y más. Respeta el filtro de persona/estado.">' +
-            Componentes.boton({ texto: 'Descargar reporte (PDF)', variante: 'secundario', clase: 'js-py-ded-imprimir', tipo: 'button', icono: 'descargar' }) +
+        // v15.5: el texto del botón dice qué va a bajar -- "del período" si
+        // hay un rango puntual elegido arriba (Semana/2 semanas/Mes), "de
+        // todo el proyecto" si el selector está en "Todo el proyecto". Antes
+        // decía siempre lo mismo aunque el PDF ignorara el rango elegido.
+        ? '<span title="' + (esTodo
+              ? 'Genera el PDF ejecutivo con TODO el proyecto: portada, indicadores, Carta Gantt completa, riesgos y más.'
+              : 'Genera el PDF ejecutivo acotado al período de arriba (' + desdeTxt + ' – ' + hastaTxt + '): Carta Gantt, riesgos y más, solo de esas fechas.') +
+            '. Respeta el filtro de persona/estado.">' +
+            Componentes.boton({ texto: esTodo ? 'Descargar reporte de todo el proyecto (PDF)' : 'Descargar reporte del período (PDF)',
+              variante: 'secundario', clase: 'js-py-ded-imprimir', tipo: 'button', icono: 'descargar' }) +
           '</span>'
         : '<span title="Consejo: en el diálogo de impresión, desactiva la opción Encabezados y pies de página para un PDF más limpio.">' +
             Componentes.boton({ texto: 'Descargar / Imprimir', variante: 'secundario', clase: 'js-py-ded-imprimir', tipo: 'button', icono: 'descargar' }) +
@@ -2987,10 +2995,36 @@
     'portada', 'ficha', 'kpis', 'salud', 'desviaciones', 'gantt',
     'workload', 'hitos', 'riesgos', 'vencimientos', 'bitacora', 'leyenda'
   ];
+  // v15.5 ("el período que ves es el período que bajas"): el selector de
+  // rango de la carta (Semana / 2 semanas / Mes / Todo el proyecto) era
+  // puramente cosmético para la pantalla -- el PDF nunca se enteraba de qué
+  // ventana tenías elegida, y cada sección del backend calculaba la suya por
+  // su cuenta. Con "Todo el proyecto" en pantalla mostrando
+  // "07/08/2026–30/12/2026", el PDF podía seguir mostrando otra ventana --
+  // justo la confusión que se reportó.
+  //   - Semana / 2 semanas / Mes -> se manda `config.rango`: el PDF muestra
+  //     EXACTAMENTE ese período ("reporte por período").
+  //   - Todo el proyecto -> no se manda rango: cada sección usa su propio
+  //     cálculo de rango completo (ya anclado al inicio del proyecto donde
+  //     corresponde -- ver planInicioEfectivoClave_/rangoBarrasPdf_ en el
+  //     backend), que es "reporte de todo el proyecto".
+  function rangoDescargaActual_() {
+    if (dedRango_ === 'todo') return null;
+    var n = DED_RANGO_DIAS[dedRango_] || 14;
+    var ancla = dedicacionAncla_ || new Date();
+    var hasta = new Date(ancla.getFullYear(), ancla.getMonth(), ancla.getDate());
+    var desde = new Date(hasta.getFullYear(), hasta.getMonth(), hasta.getDate() - (n - 1));
+    return {
+      desde: claveDia_(desde.getFullYear(), desde.getMonth(), desde.getDate()),
+      hasta: claveDia_(hasta.getFullYear(), hasta.getMonth(), hasta.getDate())
+    };
+  }
   function descargarReporteCronograma_(btn, detalle) {
     var config = { secciones: CRONOGRAMA_REPORTE_SECCIONES_ };
     if (dedFiltroPersona_) config.personas = [dedFiltroPersona_];
     if (dedFiltroEstado_) config.estado = dedFiltroEstado_;
+    var rangoActual = rangoDescargaActual_();
+    if (rangoActual) config.rango = rangoActual;
     var textoOriginal = btn.textContent;
     btn.disabled = true;
     btn.innerHTML = '<span class="sigso-spinner"></span>Generando…';

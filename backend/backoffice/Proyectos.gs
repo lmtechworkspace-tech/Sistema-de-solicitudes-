@@ -2986,8 +2986,23 @@ function docChromeProyectoPdf_(meta, contenidoHtml, paginaCss) {
     '<div style="border-top:1px solid ' + DOC.HAIRLINE + ';margin-top:22px;padding-top:10px;font-size:10px;color:' + DOC.FAINT + ';line-height:1.5;">' +
     'SIGSO · Sistema de Gestión de Solicitudes · Documento generado automáticamente el ' + escaparHtml_(emitida) + '.<br>' +
     '<strong style="color:' + DOC.MUTED + ';">Confidencial — uso interno.</strong> Contiene datos de acceso y de la operación; no lo redistribuyas fuera del equipo autorizado.' +
+    enlaceSitioPiePdf_() +
     '</div>' +
     '</div></body></html>';
+}
+
+// v15.5: enlace a la página pública al pie del reporte -- NUNCA un enlace con
+// token de sesión (esto se descarga, se imprime, se reenvía; un token
+// incrustado sería una credencial filtrada). Mismo patrón defensivo que
+// enlaceMagicoPausas_: sin SIGSO_SITIO_PUBLICO configurado en Script
+// Properties, el pie simplemente no lleva enlace -- el documento sigue
+// generándose igual, nunca se cae por esto.
+function enlaceSitioPiePdf_() {
+  var sitio = getConfig_().sitioPublico;
+  if (!sitio) return '';
+  var separador = sitio.slice(-1) === '/' ? '' : '/';
+  var url = sitio + separador + 'landing.html';
+  return '<br><a href="' + escaparHtml_(url) + '" target="_blank" style="color:' + DOC.NAVY + ';">' + escaparHtml_(url) + '</a>';
 }
 
 // Arma el HTML completo del reporte configurado: filtra tareas por persona/
@@ -3444,8 +3459,15 @@ function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyCl
     ganttChipLeyendaPdf_('#64748B', 'Pendiente') +
     ganttChipLeyendaPdf_(GANTT_ATRASO_SOLIDO_, 'Atraso sin cerrar')
   );
+  // v15.5: la leyenda pasa a ser un bloque con marco propio y la palabra
+  // "Leyenda" delante -- sin relleno de color, un chip de solo borde se
+  // puede confundir con una nota al pie si no se rotula. Antes era un simple
+  // <div> sin encabezado.
   return docSeccionOt_('Carta Gantt') +
-    '<div style="margin:0 0 8px;">' + leyenda + '</div>' +
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 10px;"><tr><td style="padding:7px 9px;">' +
+      '<span style="font-size:9px;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;color:' + DOC.NAVY + ';margin-right:8px;">Leyenda</span>' +
+      leyenda +
+    '</td></tr></table>' +
     '<div style="font-size:9px;color:' + DOC.MUTED + ';margin:0 0 8px;line-height:1.5;">' +
       'Cada barra va del inicio de la tarea a su fecha comprometida, coloreada según su estado. El tramo rojo oscuro es el atraso sin cerrar (del compromiso a hoy); la columna azul es la semana actual; &#9670; marca un hito.' +
     '</div>' +
@@ -3557,7 +3579,10 @@ function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia)
     ganttChipLeyendaPdf_('#64748B', 'Pendiente / pausa')
   );
   return docSeccionOt_('Ejecución día a día') +
-    '<div style="margin:0 0 8px;">' + leyendaColores + '</div>' +
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 10px;"><tr><td style="padding:7px 9px;">' +
+      '<span style="font-size:9px;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;color:' + DOC.NAVY + ';margin-right:8px;">Leyenda</span>' +
+      leyendaColores +
+    '</td></tr></table>' +
     '<div style="font-size:9px;color:' + DOC.MUTED + ';margin:0 0 8px;line-height:1.5;">' +
       'Detalle del registro diario: cada celda con letra es lo que se registró ese día (ver Leyenda de letras abajo); ' +
       'el tramo rojo oscuro marca el atraso sin cerrar. La vista de conjunto está arriba, en la Carta Gantt.' +

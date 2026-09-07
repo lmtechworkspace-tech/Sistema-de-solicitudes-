@@ -256,3 +256,62 @@ test('obtenerRendimiento: una tarea creada en orden normal no cambia (plan_inici
   const plan = rendimiento.plan_seguimiento.filter((p) => p.actividad_id === t.actividad_id)[0];
   assert.equal(plan.plan_inicio, diasDesdeHoy(0), 'sin creación-tardía, el plan sigue empezando donde se creó la tarea');
 });
+
+// --- 6. Leyenda rotulada en Carta Gantt / Ejecución día a día ---------------
+// La leyenda ya existía (chips de color con borde), pero sin ningún título
+// que la identifique como tal -- fácil de pasar por alto en un diseño sin
+// relleno. Se le agrega la palabra "Leyenda" delante, en las dos secciones
+// que la usan.
+
+test('la Carta Gantt y la Ejecución día a día rotulan su leyenda con la palabra "Leyenda"', () => {
+  const ctx = loadConSchema();
+  const proyecto = armarProyecto(ctx);
+  const t = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'Con registro', responsable_email: 'marcelo@rld.cl', fecha_compromiso: diasDesdeHoy(4) }, CTX_LEO);
+  ctx.Actividades.confirmar({ actividad_id: t.actividad_id, fecha_compromiso: diasDesdeHoy(4) }, CTX_MARCELO);
+  ctx.Proyectos.guardarRegistroDia({
+    proyecto_id: proyecto.proyecto_id, actividad_id: t.actividad_id, dia: diasDesdeHoy(0), estado_dia: 'en_proceso', horas: 2
+  }, CTX_MARCELO);
+
+  const res = ctx.Proyectos.descargarReporte({ proyecto_id: proyecto.proyecto_id, config: { secciones: ['gantt'] } }, CTX_LEO);
+  const html = htmlDe_(res);
+  const ocurrencias = (html.match(/>Leyenda</g) || []).length;
+  assert.ok(ocurrencias >= 2, 'debe rotularse tanto en la Carta Gantt como en Ejecución día a día (encontradas: ' + ocurrencias + ')');
+});
+
+// --- 7. Enlace a la página pública al pie del reporte -----------------------
+// Nunca un enlace con token de sesión (el PDF se descarga, se imprime, se
+// reenvía) -- solo la URL pública, y solo si SIGSO_SITIO_PUBLICO está
+// configurado (mismo patrón defensivo que enlaceMagicoPausas_ en Pausas.gs).
+
+function loadConSitioPublico() {
+  const ctx = loadBackofficeProject({ scriptProperties: {
+    SIGSO_SHEET_ID: 'fake-sheet-id', SIGSO_DRIVE_ROOT_FOLDER_ID: 'fake-drive-root',
+    SIGSO_SITIO_PUBLICO: 'https://ejemplo.github.io/sigso'
+  } });
+  ['PROYECTOS', 'PROYECTO_INTEGRANTES', 'PROYECTO_HITOS', 'PROYECTO_EVENTOS',
+    'PROYECTO_ENTREGABLES', 'PROYECTO_RIESGOS', 'PROYECTO_PLANTILLAS',
+    'PROYECTO_PLANTILLA_HITOS', 'SOLICITUDES', 'ACTIVIDADES', 'ACTIVIDADES_BITACORA',
+    'JEFATURAS', 'LOG_NOTIFICACIONES', 'CONFIG_FERIADOS', 'NOTIFICACIONES_APP', 'CAT_AREAS']
+    .forEach((h) => seedSheet(ctx, h, ctx.COLUMNAS[h]));
+  seedSheet(ctx, 'USUARIOS', ctx.COLUMNAS.USUARIOS, [['U1', 'Leo Lider', 'leo@rld.cl', 'RLD', 'DEV', true, '', 'sistema']]);
+  return ctx;
+}
+
+test('con SIGSO_SITIO_PUBLICO configurado, el PDF cierra con un enlace a la página pública', () => {
+  const ctx = loadConSitioPublico();
+  const proyecto = ctx.Proyectos.crear({ nombre: 'Con sitio', fecha_inicio: '2026-08-01', fecha_objetivo: '2026-12-31' }, CTX_LEO);
+  const res = ctx.Proyectos.descargarReporte({ proyecto_id: proyecto.proyecto_id, config: { secciones: ['ficha'] } }, CTX_LEO);
+  const html = htmlDe_(res);
+  assert.match(html, /<a href="https:\/\/ejemplo\.github\.io\/sigso\/landing\.html" target="_blank"/,
+    'debe enlazar a landing.html, abriendo en pestaña nueva');
+  assert.doesNotMatch(html, /token=/, 'jamás un enlace con token de sesión en un documento que se descarga/reenvía');
+});
+
+test('sin SIGSO_SITIO_PUBLICO configurado, el PDF se genera igual, sin enlace roto', () => {
+  const ctx = loadConSchema(); // sin la propiedad SIGSO_SITIO_PUBLICO
+  const proyecto = armarProyecto(ctx);
+  const res = ctx.Proyectos.descargarReporte({ proyecto_id: proyecto.proyecto_id, config: { secciones: ['ficha'] } }, CTX_LEO);
+  const html = htmlDe_(res);
+  assert.match(html, /Confidencial/, 'el documento se genera igual');
+  assert.doesNotMatch(html, /<a href="https:\/\//, 'sin sitio configurado, no hay enlace que mostrar (ni uno roto)');
+});
