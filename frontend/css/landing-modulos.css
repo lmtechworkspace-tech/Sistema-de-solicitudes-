@@ -1,0 +1,486 @@
+/* landing-modulos.css — el acto "el sistema completo" de la landing.
+
+   POR QUE EXISTE
+   La landing contaba UNA cosa (el ciclo de una solicitud) y el sistema hoy
+   son doce modulos. Contar solo el primero deja la pagina describiendo un
+   producto que ya no es el que existe.
+
+   COMO SE CUENTA
+   No con doce tarjetas bonitas. Cada modulo se muestra con una MINIATURA de
+   lo que de verdad hace -- el mismo criterio del hero: "el detalle que hace
+   la landing distinta no es un efecto, es que muestra con un dato lo que el
+   sistema hace". Las miniaturas son diagramas propios, no capturas: una
+   captura envejece con cada cambio de la interfaz y ademas se ve mal en
+   telefono.
+
+   AISLADA IGUAL QUE EL RESTO DE LA LANDING: usa las variables --l-* que
+   define landing.css y no toca ninguna del producto. */
+
+/* === Seccion ============================================================ */
+
+.l-sistema {
+  padding: clamp(5rem, 12vh, 9rem) 1.5rem clamp(4rem, 9vh, 7rem);
+  background: var(--l-navy-hondo);
+  /* Un respiro de luz arriba: separa este acto del relato sin una linea
+     dura, que sobre navy siempre se ve como un corte. */
+  background-image: radial-gradient(120% 60% at 50% 0%, rgba(42, 95, 214, 0.16), transparent 60%);
+}
+
+.l-sistema__interior {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.l-sistema__titulo {
+  font-family: var(--l-display);
+  font-weight: 700;
+  font-size: clamp(2rem, 5.2vw, 3.4rem);
+  line-height: 1.06;
+  letter-spacing: -0.02em;
+  margin: 0.6rem 0 0;
+  text-wrap: balance;
+}
+
+.l-sistema__titulo span { color: var(--l-tinta-3); }
+
+.l-sistema__bajada {
+  max-width: 54ch;
+  margin: 1.1rem 0 0;
+  font-size: clamp(1rem, 2.2vw, 1.1rem);
+  line-height: 1.65;
+  color: var(--l-tinta-2);
+}
+
+/* === Consola ============================================================
+   Dos columnas: el indice de modulos y la pantalla. En telefono se apilan y
+   la pantalla va PRIMERO en lectura visual solo cuando hay JS -- sin JS no
+   hay pantalla y el indice es todo el contenido. */
+
+.l-consola {
+  margin-top: clamp(2.5rem, 6vh, 4rem);
+  display: grid;
+  gap: clamp(1.25rem, 3vw, 2.25rem);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .l-consola { grid-template-columns: minmax(0, 340px) minmax(0, 1fr); }
+  /* La pantalla acompana el scroll dentro de la seccion: el indice es largo
+     y sin esto habria que subir para ver lo que se acaba de elegir. */
+  .l-consola__pantalla--fija { position: sticky; top: 2rem; }
+  /* Alto minimo del cuerpo: las doce vistas miden entre 298 y 388 px, y sin
+     esto la pantalla pega un salto de casi 100 px cada vez que cambia sola.
+     Con la pantalla fija ese salto arrastra la vista y se lee como un
+     temblor. En telefono NO se aplica: ahi la pantalla no es fija y el
+     minimo solo dejaria un hueco vacio bajo las vistas cortas. */
+  .l-pantalla__cuerpo { min-height: 390px; }
+}
+
+/* === Indice de modulos ================================================== */
+
+.l-grupo + .l-grupo { margin-top: 1.6rem; }
+
+.l-grupo__nombre {
+  margin: 0 0 0.55rem;
+  font-family: var(--l-cuerpo);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--l-tinta-3);
+}
+
+.l-modulos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+/* El item base (sin JS) es texto legible: nombre + que hace. */
+.l-modulo {
+  display: block;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.l-modulo__nombre {
+  display: block;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--l-tinta);
+}
+
+.l-modulo__que {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.83rem;
+  line-height: 1.5;
+  color: var(--l-tinta-3);
+}
+
+/* --- Con JS: el item se vuelve pulsable ------------------------------- */
+
+.l-js .l-modulo {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  position: relative;
+  padding-left: 1.1rem;
+  transition:
+    background-color 0.32s var(--l-ease),
+    border-color 0.32s var(--l-ease),
+    transform 0.32s var(--l-ease);
+}
+
+/* El riel de la izquierda: marca cual esta activo sin mover el texto. */
+.l-js .l-modulo::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 2px;
+  height: 0;
+  transform: translateY(-50%);
+  background: var(--l-accion-claro);
+  border-radius: 2px;
+  transition: height 0.36s var(--l-ease);
+}
+
+.l-js .l-modulo:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.l-js .l-modulo[aria-selected='true'] {
+  background: rgba(42, 95, 214, 0.16);
+  border-color: rgba(109, 149, 240, 0.45);
+}
+
+.l-js .l-modulo[aria-selected='true']::before { height: calc(100% - 1.1rem); }
+
+.l-js .l-modulo[aria-selected='true'] .l-modulo__que { color: var(--l-tinta-2); }
+
+/* === Pantalla =========================================================== */
+
+.l-pantalla {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(36, 52, 79, 0.55), rgba(11, 21, 38, 0.55));
+  overflow: hidden;
+  min-height: 340px;
+  display: flex;
+  flex-direction: column;
+}
+
+.l-pantalla__barra {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.l-pantalla__punto {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--l-accion-claro);
+  flex: none;
+}
+
+.l-pantalla__nombre {
+  font-weight: 600;
+  font-size: 0.9rem;
+  letter-spacing: 0.01em;
+}
+
+/* Anillo de la reproduccion automatica. Es informacion, no adorno: dice
+   cuanto falta para que cambie solo, asi el movimiento no sorprende. */
+.l-pantalla__anillo {
+  margin-left: auto;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  transform: rotate(-90deg);
+}
+
+.l-pantalla__anillo circle {
+  fill: none;
+  stroke-width: 2;
+  cx: 8px;
+  cy: 8px;
+  r: 6px;
+}
+
+.l-pantalla__anillo .pista { stroke: rgba(255, 255, 255, 0.16); }
+
+.l-pantalla__anillo .avance {
+  stroke: var(--l-accion-claro);
+  stroke-dasharray: 37.7;
+  stroke-dashoffset: 37.7;
+  stroke-linecap: round;
+}
+
+.l-pantalla__cuerpo {
+  padding: clamp(1.1rem, 3vw, 1.7rem);
+  flex: 1;
+}
+
+.l-pantalla__frase {
+  margin: 0 0 1.1rem;
+  font-size: 0.98rem;
+  line-height: 1.6;
+  color: var(--l-tinta-2);
+  max-width: 52ch;
+}
+
+.l-pantalla__frase strong { color: var(--l-tinta); font-weight: 600; }
+
+/* La entrada de cada vista. La hace el JS quitando la clase en el frame
+   siguiente; asi cada cambio de modulo se siente como algo que LLEGA, que es
+   el mismo gesto del resto de la pagina. */
+.l-pantalla__vista { opacity: 1; transform: none; transition: opacity 0.34s var(--l-ease), transform 0.34s var(--l-ease); }
+.l-pantalla__vista--entra { opacity: 0; transform: translateY(10px); }
+
+/* Los hijos entran escalonados: da la sensacion de que la pantalla se
+   "arma", no de que aparece una imagen entera de golpe. */
+.l-pantalla__vista > * { animation: l-mod-entra 0.44s var(--l-ease) both; }
+.l-pantalla__vista > *:nth-child(2) { animation-delay: 0.05s; }
+.l-pantalla__vista > *:nth-child(3) { animation-delay: 0.1s; }
+.l-pantalla__vista > *:nth-child(4) { animation-delay: 0.15s; }
+
+@keyframes l-mod-entra {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* === Primitivas de las miniaturas ======================================
+   Piezas compartidas por las doce vistas. Que sean pocas y reutilizadas es
+   lo que evita que esta seccion se convierta en doce disenos distintos. */
+
+.l-mini { display: grid; gap: 0.55rem; }
+
+.l-fila {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 0.86rem;
+}
+
+.l-fila__id {
+  font-family: var(--l-mono);
+  font-size: 0.72rem;
+  color: var(--l-tinta-3);
+  flex: none;
+}
+
+.l-fila__texto {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.l-chip {
+  flex: none;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.l-chip[data-tono='ok'] { background: rgba(34, 160, 106, 0.22); color: #7BE0AF; }
+.l-chip[data-tono='curso'] { background: rgba(42, 95, 214, 0.28); color: #A9C2FA; }
+.l-chip[data-tono='espera'] { background: rgba(217, 152, 27, 0.22); color: #F2C979; }
+.l-chip[data-tono='riesgo'] { background: rgba(214, 69, 69, 0.22); color: #F49B9B; }
+.l-chip[data-tono='neutro'] { background: rgba(255, 255, 255, 0.1); color: var(--l-tinta-2); }
+
+/* Banda de indicadores: la forma en que gerencia y jefatura resumen. */
+.l-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
+
+.l-kpi {
+  padding: 0.75rem 0.7rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.l-kpi__valor {
+  display: block;
+  font-family: var(--l-display);
+  font-weight: 700;
+  font-size: 1.5rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.l-kpi__nombre {
+  display: block;
+  margin-top: 0.3rem;
+  font-size: 0.72rem;
+  color: var(--l-tinta-3);
+  line-height: 1.35;
+}
+
+.l-kpi[data-tono='ok'] .l-kpi__valor { color: #7BE0AF; }
+.l-kpi[data-tono='espera'] .l-kpi__valor { color: #F2C979; }
+.l-kpi[data-tono='riesgo'] .l-kpi__valor { color: #F49B9B; }
+
+/* Barra de proporcion, con el relleno animado desde cero. */
+.l-barra {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.l-barra__relleno {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--l-accion-claro);
+  width: var(--p, 0%);
+  animation: l-mod-barra 0.9s var(--l-ease) both;
+}
+
+.l-barra__relleno[data-tono='ok'] { background: #34C285; }
+.l-barra__relleno[data-tono='riesgo'] { background: #E86A6A; }
+
+@keyframes l-mod-barra { from { width: 0; } }
+
+/* Etiqueta al pie de una miniatura: el dato que la hace verdad. */
+.l-mini__nota {
+  margin: 0.9rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--l-tinta-3);
+}
+
+/* --- Piezas propias de un par de vistas ------------------------------- */
+
+/* Pasos del formulario (Nueva solicitud). */
+.l-pasos { display: flex; align-items: center; gap: 0.5rem; }
+
+.l-paso {
+  flex: 1;
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--l-tinta-3);
+}
+
+.l-paso__linea { height: 3px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); }
+.l-paso[data-hecho='si'] { color: var(--l-tinta-2); }
+.l-paso[data-hecho='si'] .l-paso__linea { background: var(--l-accion-claro); animation: l-mod-barra 0.7s var(--l-ease) both; }
+
+/* Gantt en miniatura (Proyectos). La barra critica es solida y las demas
+   apagadas -- el mismo criterio que el modulo real. */
+.l-gantt { display: grid; gap: 0.4rem; }
+
+.l-gantt__fila { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 0.6rem; align-items: center; font-size: 0.76rem; }
+
+.l-gantt__nombre { color: var(--l-tinta-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.l-gantt__pista { position: relative; height: 14px; border-radius: 4px; background: rgba(255, 255, 255, 0.05); }
+
+.l-gantt__barra {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: var(--desde, 0%);
+  width: var(--ancho, 20%);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.22);
+  transform-origin: left center;
+  animation: l-mod-gantt 0.6s var(--l-ease) both;
+}
+
+.l-gantt__barra[data-critica='si'] { background: var(--l-accion-claro); }
+
+@keyframes l-mod-gantt { from { transform: scaleX(0); opacity: 0; } }
+
+/* Caritas del clima emocional (Pausas). */
+.l-animos { display: flex; gap: 0.4rem; }
+
+.l-animo {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  gap: 0.3rem;
+  padding: 0.6rem 0.3rem;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 1.1rem;
+}
+
+.l-animo span { font-size: 0.68rem; color: var(--l-tinta-3); }
+.l-animo[data-elegido='si'] { background: rgba(42, 95, 214, 0.22); border-color: rgba(109, 149, 240, 0.5); }
+
+/* Rejilla de clausulas ISO (Calidad). */
+.l-clausulas { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 0.35rem; }
+
+.l-clausula {
+  padding: 0.45rem 0.3rem;
+  border-radius: 7px;
+  text-align: center;
+  font-family: var(--l-mono);
+  font-size: 0.72rem;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--l-tinta-3);
+  border: 1px solid transparent;
+  animation: l-mod-entra 0.4s var(--l-ease) both;
+}
+
+.l-clausula[data-cob='total'] { background: rgba(34, 160, 106, 0.22); color: #7BE0AF; border-color: rgba(52, 194, 133, 0.35); }
+.l-clausula[data-cob='parcial'] { background: rgba(217, 152, 27, 0.2); color: #F2C979; border-color: rgba(242, 201, 121, 0.3); }
+
+/* === Pie del acto ======================================================= */
+
+.l-sistema__pie {
+  margin: clamp(2rem, 5vh, 3rem) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  font-size: 0.9rem;
+  color: var(--l-tinta-3);
+}
+
+.l-sistema__pie strong { color: var(--l-tinta); font-weight: 600; }
+
+/* === Movimiento reducido ===============================================
+   Todo se entrega ya resuelto: sin entradas, sin barras que crecen y sin
+   reproduccion automatica (esa la apaga el JS mirando la misma consulta). */
+@media (prefers-reduced-motion: reduce) {
+  .l-pantalla__vista,
+  .l-pantalla__vista > *,
+  .l-barra__relleno,
+  .l-paso__linea,
+  .l-gantt__barra,
+  .l-clausula {
+    animation: none !important;
+    transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .l-pantalla__vista--entra { opacity: 1; transform: none; }
+}

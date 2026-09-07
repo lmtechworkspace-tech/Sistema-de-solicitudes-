@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="css/landing.css">
   <link rel="stylesheet" href="css/landing-relato.css">
+  <link rel="stylesheet" href="css/landing-modulos.css">
 
   <!-- Marca que hay JavaScript ANTES del primer pintado.
        El CSS solo esconde el estado inicial de la entrada cuando existe esta
@@ -182,6 +183,135 @@
       </div>
     </div>
 
+    <!-- ===== El sistema completo =========================================
+         La pagina contaba UNA cosa (el ciclo de una solicitud) y el sistema
+         hoy son doce modulos. Los nombres y las descripciones son los mismos
+         que estan en el producto (MODULOS_SHELL en plataforma.js): si un
+         modulo cambia de nombre, este texto tiene que cambiar con el.
+
+         La lista va escrita aqui a proposito. landing-modulos.js la convierte
+         en un explorador, pero sin JavaScript los doce se leen igual. -->
+    <section class="l-sistema" id="sistema" data-consola aria-labelledby="sistema-titulo">
+      <div class="l-sistema__interior">
+
+        <p class="l-eyebrow">Lo que ya está en operación</p>
+        <h2 class="l-sistema__titulo" id="sistema-titulo">
+          Una solicitud fue el principio.
+          <span>Hoy son doce módulos.</span>
+        </h2>
+        <p class="l-sistema__bajada">
+          Todos comparten la misma sesión, las mismas reglas de plazo y el
+          mismo registro que no se borra. No son doce sistemas que se hablan
+          entre sí: es uno solo, con doce puertas.
+        </p>
+
+        <div class="l-consola">
+
+          <div class="l-consola__indice">
+
+            <div class="l-grupo">
+              <h3 class="l-grupo__nombre">Pedir y seguir</h3>
+              <ul class="l-modulos">
+                <li><div class="l-modulo" data-modulo="nueva_solicitud">
+                  <span class="l-modulo__nombre">Nueva solicitud</span>
+                  <span class="l-modulo__que">Ingresa un pedido al equipo</span>
+                </div></li>
+                <li><div class="l-modulo" data-modulo="mis_solicitudes">
+                  <span class="l-modulo__nombre">Mis solicitudes</span>
+                  <span class="l-modulo__que">El estado de todo lo tuyo, de todos tus correos</span>
+                </div></li>
+              </ul>
+            </div>
+
+            <div class="l-grupo">
+              <h3 class="l-grupo__nombre">Hacer el trabajo</h3>
+              <ul class="l-modulos">
+                <li><div class="l-modulo" data-modulo="bandeja">
+                  <span class="l-modulo__nombre">Bandeja de trabajo</span>
+                  <span class="l-modulo__que">Solicitudes del equipo: estados, fechas, derivaciones</span>
+                </div></li>
+                <li><div class="l-modulo" data-modulo="mi_trabajo">
+                  <span class="l-modulo__nombre">Mi trabajo</span>
+                  <span class="l-modulo__que">Tus compromisos, con un check-in de un clic</span>
+                </div></li>
+                <li><div class="l-modulo" data-modulo="proyectos">
+                  <span class="l-modulo__nombre">Proyectos</span>
+                  <span class="l-modulo__que">Portafolio, equipo y sala de trabajo de tus proyectos</span>
+                </div></li>
+              </ul>
+            </div>
+
+            <div class="l-grupo">
+              <h3 class="l-grupo__nombre">Dirigir</h3>
+              <ul class="l-modulos">
+                <li><div class="l-modulo" data-modulo="gerencia">
+                  <span class="l-modulo__nombre">Panel de gerencia</span>
+                  <span class="l-modulo__que">KPIs, semáforo de cumplimiento y seguimiento</span>
+                </div></li>
+                <li><div class="l-modulo" data-modulo="jefatura">
+                  <span class="l-modulo__nombre">Mi departamento</span>
+                  <span class="l-modulo__que">Qué pasó hoy con tu equipo: KPIs, seguimiento y validaciones</span>
+                </div></li>
+                <li><div class="l-modulo" data-modulo="administracion">
+                  <span class="l-modulo__nombre">Administración</span>
+                  <span class="l-modulo__que">Catálogos, usuarios y cuentas de la plataforma</span>
+                </div></li>
+              </ul>
+            </div>
+
+            <div class="l-grupo">
+              <h3 class="l-grupo__nombre">Cuidar y cumplir</h3>
+              <ul class="l-modulos">
+                <li><div class="l-modulo" data-modulo="pausas">
+                  <span class="l-modulo__nombre">Pausas activas</span>
+                  <span class="l-modulo__que">Registra tu participación en la pausa de hoy</span>
+                </div></li>
+                <li><div class="l-modulo" data-modulo="pausas_coordinacion">
+                  <span class="l-modulo__nombre">Coordinación de pausas</span>
+                  <span class="l-modulo__que">Opera la pausa del día y ve el cumplimiento</span>
+                </div></li>
+                <li><div class="l-modulo" data-modulo="novedades">
+                  <span class="l-modulo__nombre">Novedades</span>
+                  <span class="l-modulo__que">Leyes, avisos y novedades de todas las áreas</span>
+                </div></li>
+                <li><div class="l-modulo" data-modulo="calidad">
+                  <span class="l-modulo__nombre">Calidad</span>
+                  <span class="l-modulo__que">Documentación, procesos, personas, control y mejora del SGC</span>
+                </div></li>
+              </ul>
+            </div>
+
+          </div>
+
+          <!-- La pantalla solo tiene sentido con JS: es la miniatura del
+               modulo elegido. Por eso nace vacia y la rellena el script. -->
+          <div class="l-consola__pantalla l-consola__pantalla--fija">
+            <div class="l-pantalla" data-pantalla-marco>
+              <div class="l-pantalla__barra">
+                <span class="l-pantalla__punto" aria-hidden="true"></span>
+                <span class="l-pantalla__nombre" data-pantalla-nombre></span>
+                <svg class="l-pantalla__anillo" viewBox="0 0 16 16" aria-hidden="true">
+                  <circle class="pista"></circle>
+                  <circle class="avance" data-anillo></circle>
+                </svg>
+              </div>
+              <!-- aria-live: quien navega con lector de pantalla tiene que
+                   enterarse de que el panel cambio al elegir otro modulo. -->
+              <div class="l-pantalla__cuerpo" data-pantalla aria-live="polite"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <p class="l-sistema__pie">
+          <strong>Doce módulos, una sola sesión.</strong>
+          Cada cuenta ve solo los suyos, y esa decisión la toma el servidor en
+          cada llamada — no la pantalla.
+        </p>
+
+      </div>
+    </section>
+
     <!-- ===== Cierre ===================================================== -->
     <section class="l-cierre" aria-labelledby="cierre">
       <div class="l-cierre__interior">
@@ -203,5 +333,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
   <script src="js/landing.js" defer></script>
   <script src="js/landing-relato.js" defer></script>
+  <script src="js/landing-modulos.js" defer></script>
 </body>
 </html>
