@@ -734,6 +734,11 @@ var Pausas = {
   },
 
   // ---- Alertas (Fase P4): recordatorio + resumen diario --------------------
+  // v13 (auditoria): los tres avisos que hablan de la HORA de la pausa se
+  // deduplican por horario, no solo por pausa_id. Antes la clave era el
+  // pausa_id a secas y, al reprogramar, el aviso de la hora nueva caia dentro
+  // de la ventana de 12h del aviso de la hora VIEJA y se descartaba en
+  // silencio. La pausa es la misma; el horario del que se avisa, no.
   // Las disparan triggers; devuelven un resumen de lo enviado. Idempotentes:
   // el recordatorio pasa la pausa a Recordatorio_enviado (no reenvia) y el
   // resumen se deduplica por (pausa, destinatario) en LOG_NOTIFICACIONES.
@@ -780,7 +785,7 @@ var Pausas = {
         var texto = 'Hoy tienes tu pausa activa a las ' + (pausa.hora_programada || '') + '. ' +
           (enlace ? 'Registra tu participación aquí: ' + enlace
                   : 'Registra tu participación en la plataforma (módulo Pausas activas).');
-        var r = enviarCorreo_(pausa.pausa_id, correo, 'PAUSA_RECORDATORIO', asunto, texto, 720, { htmlBody: cuerpoHtml });
+        var r = enviarCorreo_(claveAvisoHorarioPausa_(pausa), correo, 'PAUSA_RECORDATORIO', asunto, texto, 720, { htmlBody: cuerpoHtml });
         if (r.enviado) enviados++;
       });
       // v7.1 (notificaciones vivas): espejo del correo -- toast/modal en
@@ -837,7 +842,7 @@ var Pausas = {
             (enlace ? botonCorreoPausas_(enlace, 'Registrar mi participación') : ''));
           var texto = 'Tu pausa activa de hoy es ahora mismo.' +
             (enlace ? ' Registra tu participación aquí: ' + enlace : ' Registra tu participación en la plataforma.');
-          var r = enviarCorreo_(pausa.pausa_id + ':ultima_llamada', correo, 'PAUSA_ULTIMA_LLAMADA', asunto, texto, 720, { htmlBody: cuerpoHtml });
+          var r = enviarCorreo_(claveAvisoHorarioPausa_(pausa, 'ultima_llamada'), correo, 'PAUSA_ULTIMA_LLAMADA', asunto, texto, 720, { htmlBody: cuerpoHtml });
           if (r.enviado) ultimaLlamada++;
         });
         // v7.1 (notificaciones vivas): esta es la mas critica de las tres
@@ -866,7 +871,7 @@ var Pausas = {
             (enlace ? botonCorreoPausas_(enlace, 'Iniciar la pausa') : ''));
           var texto = 'Ya llegó la hora de la pausa activa de ' + pausa.empresa_id + '. ' +
             (enlace ? 'Inícala aquí: ' + enlace : 'Inícala desde Coordinación de pausas.');
-          var r = enviarCorreo_(pausa.pausa_id + ':aviso_coordinador', correo, 'PAUSA_AVISO_COORDINADOR', asuntoCoord, texto, 720, { htmlBody: cuerpoHtml });
+          var r = enviarCorreo_(claveAvisoHorarioPausa_(pausa, 'aviso_coordinador'), correo, 'PAUSA_AVISO_COORDINADOR', asuntoCoord, texto, 720, { htmlBody: cuerpoHtml });
           if (r.enviado) avisoCoordinadora++;
         });
         encolarNotificacionAppLote_(destCoord.map(function (correo) {
@@ -1215,6 +1220,14 @@ function crearPausaManual_(data, contexto) {
   return fila;
 }
 
+// Clave de deduplicacion de los avisos que anuncian una HORA concreta.
+// Incluye fecha + hora justamente para que reprogramar genere una clave
+// nueva: el aviso viejo hablaba de otro horario y no debe tapar al nuevo.
+function claveAvisoHorarioPausa_(pausa, sufijo) {
+  return pausa.pausa_id + '|' + claveFechaPausa_(pausa.fecha) + ' ' +
+    String(pausa.hora_programada || '') + (sufijo ? ':' + sufijo : '');
+}
+
 function reprogramarPausa_(data, contexto) {
   if (!data.pausa_id) {
     return errorValidacion_('pausa_id', 'Falta indicar la pausa a reprogramar.');
@@ -1242,10 +1255,22 @@ function reprogramarPausa_(data, contexto) {
   if (Object.keys(cambios).length === 0) {
     return errorValidacion_('fecha', 'Indica al menos la nueva fecha o la nueva hora.');
   }
-  // Reprogramar reactiva una pausa suspendida (vuelve a Programada).
-  if (pausa.estado === ESTADOS_PAUSA.SUSPENDIDA) {
+  // Reprogramar deja la pausa lista para volver a avisarse desde cero.
+  //  - Reactiva una pausa suspendida (vuelve a Programada).
+  //  - v13 (auditoria): tambien vuelve a Programada una que ya tenia el
+  //    recordatorio enviado. El job de recordatorios SOLO mira las
+  //    Programadas, asi que sin esto la pausa quedaba clavada en
+  //    Recordatorio_enviado y de la hora NUEVA no se enteraba nadie: se movia
+  //    la pausa y el aviso que habia salido era el de la hora vieja.
+  //  - Por lo mismo se limpian los flags de los avisos de la hora (ultima
+  //    llamada, coordinadora, escalada): todos hablaban del horario anterior.
+  if (pausa.estado === ESTADOS_PAUSA.SUSPENDIDA ||
+    pausa.estado === ESTADOS_PAUSA.RECORDATORIO_ENVIADO) {
     cambios.estado = ESTADOS_PAUSA.PROGRAMADA;
   }
+  cambios.ultima_llamada_enviada = false;
+  cambios.aviso_coordinador_enviado = false;
+  cambios.escalada_admin_enviada = false;
   actualizarFilaPorId_(SHEETS.PAUSAS_PROGRAMADAS, 'pausa_id', data.pausa_id, cambios);
   registrarLogPausas_(data.pausa_id, contexto, 'pausa_reprogramada',
     (cambios.fecha || pausa.fecha) + ' ' + (cambios.hora_programada || pausa.hora_programada));
