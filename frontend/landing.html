@@ -4,10 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SIGSO — Control y Gestión Empresarial</title>
-  <!-- Sin nombre de empresa, aqui ni en ninguna parte de esta pagina: es la
-       pieza con la que se muestra el producto a terceros y atarla a una
-       empresa la vuelve el sistema interno "de alguien". Los ejemplos usan
-       el codigo EJ y nombres genericos por lo mismo. -->
+  <!-- Ninguna empresa da nombre a esta pagina: es la pieza con la que se
+       muestra el producto a terceros, y atarla a una empresa la vuelve el
+       sistema interno "de alguien". Los ejemplos usan el codigo EJ y nombres
+       genericos por lo mismo.
+       LA UNICA EXCEPCION es la seccion "Quien lo usa", donde una empresa
+       aparece como REFERENCIA. Es lo contrario de firmar la pagina con
+       ella: ahi suma, porque prueba que el sistema esta en produccion. -->
   <meta name="description" content="SIGSO registra cada compromiso y conserva el original cuando una fecha se mueve. Sistema de control y gestión para equipos que trabajan con plazos comprometidos.">
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -311,6 +314,57 @@
           <strong>Doce módulos, una sola sesión.</strong>
           Cada cuenta ve solo los suyos, y esa decisión la toma el servidor en
           cada llamada — no la pantalla.
+        </p>
+
+      </div>
+    </section>
+
+    <!-- ===== Quien lo usa ================================================
+         UNICO lugar de la pagina donde aparece el nombre de una empresa, y
+         aparece como REFERENCIA, no como duena: la diferencia entre "el
+         sistema interno de alguien" y "un producto que alguien ya usa".
+
+         Para sumar otra empresa se copia una <li class="l-usan__ficha">: la
+         rejilla ya acomoda dos y tres sin tocar el CSS. -->
+    <section class="l-usan" aria-labelledby="usan-titulo">
+      <div class="l-usan__interior">
+
+        <p class="l-eyebrow">Quién lo usa</p>
+        <h2 class="l-usan__titulo" id="usan-titulo">
+          No es una maqueta.
+          <span>Está en producción.</span>
+        </h2>
+        <p class="l-usan__bajada">
+          Todo lo que se ve en esta página existe y está funcionando hoy: los
+          doce módulos, el registro que no se borra y los correos que salen
+          solos cuando un plazo se acerca.
+        </p>
+
+        <ul class="l-usan__lista">
+          <li class="l-usan__ficha">
+            <p class="l-usan__nombre">HomePymes</p>
+            <p class="l-usan__que">
+              Opera con SIGSO el ciclo completo de sus solicitudes internas,
+              sus proyectos, las pausas activas de sus equipos y el sistema
+              de gestión de calidad con el que trabaja su certificación
+              ISO&nbsp;9001.
+            </p>
+            <ul class="l-usan__modulos">
+              <li>Solicitudes</li>
+              <li>Proyectos</li>
+              <li>Pausas activas</li>
+              <li>Calidad</li>
+              <li>Novedades</li>
+            </ul>
+            <p class="l-usan__desde">En producción desde 2026</p>
+          </li>
+        </ul>
+
+        <p class="l-usan__nota">
+          <strong>Una instalación puede llevar varias empresas.</strong>
+          Cada una con su propia numeración correlativa, sus catálogos, sus
+          áreas y su gente — separadas de verdad, no por un filtro de
+          pantalla. Sumar una no obliga a montar el sistema otra vez.
         </p>
 
       </div>

@@ -23,12 +23,15 @@
  * estados que existen, clausulas ISO que estan en el modulo), para que lo
  * que se muestra sea honesto sin exponer nada.
  *
- * SIN NOMBRE DE NINGUNA EMPRESA
- * Ni aqui ni en el resto de la landing. La pagina se usa para mostrar el
- * producto a terceros, y nombrar una empresa lo convierte en "el sistema
- * interno de alguien" en vez de un producto. Por eso los ids de ejemplo
- * usan el codigo EJ y no el de una empresa real, y los nombres de persona
- * son genericos. Si se agrega una vista nueva, mantener la regla.
+ * SIN NOMBRE DE NINGUNA EMPRESA EN LAS MINIATURAS
+ * La pagina se usa para mostrar el producto a terceros, y firmarla con una
+ * empresa lo convierte en "el sistema interno de alguien" en vez de un
+ * producto. Por eso los ids de ejemplo usan el codigo EJ y no el de una
+ * empresa real, y los nombres de persona son genericos. Si se agrega una
+ * vista nueva, mantener la regla.
+ *
+ * (La landing SI nombra empresas en un sitio: la seccion "Quien lo usa",
+ * donde aparecen como referencia. Eso es otra cosa y esta en landing.html.)
  */
 (function () {
   'use strict';
