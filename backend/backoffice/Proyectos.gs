@@ -2930,6 +2930,49 @@ function construirDiasReportePdf_(tareas, rango, hoyClave) {
     // que ya se descartó, así que no reintroduce el compromiso lejano).
     hasta = clavePdf_(new Date(fechaDeClavePdf_(hasta).getTime() + REPORTE_MARGEN_DIAS_ * 86400000));
   }
+  return diasEntreClavesArrayPdf_(desde, hasta);
+}
+
+// v15.7 ("el día a día, desde el día uno"): a diferencia de
+// construirDiasReportePdf_ (que alimenta el mini-Gantt semanal -- un plan
+// HACIA ADELANTE, por eso avanza el borde derecho más allá de hoy),
+// "Ejecución día a día" y "Carga de trabajo" son un REGISTRO de lo que
+// pasó: nunca deberían mostrar un día que no ha ocurrido, y sí deberían
+// arrancar en el inicio real del proyecto -- aunque esos primeros días no
+// tengan ningún registro todavía. Ese hueco ES información: cuánto pasó
+// entre que el proyecto arrancó y que alguien empezó a registrar de
+// verdad. Pedido explícito del usuario tras ver que la sección arrancaba
+// en la fecha de carga de las tareas (01-09) y no en el inicio real del
+// proyecto (07-08).
+//   - desde: lo más temprano entre el inicio del proyecto, la asignación
+//     más antigua y el compromiso más antiguo -- nunca después de hoy (un
+//     proyecto que arranca en el futuro no tiene historia todavía).
+//   - hasta: hoy, sin excepción ni margen.
+function construirDiasHistoriaPdf_(tareas, fechaInicioProyecto, hoyClave) {
+  var claves = [];
+  if (fechaInicioProyecto) claves.push(clavePdf_(new Date(fechaInicioProyecto)));
+  tareas.forEach(function (a) {
+    if (a.fecha_creacion) claves.push(clavePdf_(new Date(a.fecha_creacion)));
+    if (a.fecha_compromiso) claves.push(clavePdf_(new Date(a.fecha_compromiso)));
+  });
+  claves = claves.filter(function (k) { return k <= hoyClave; }).sort();
+  var desde = claves.length ? claves[0] : hoyClave;
+  // Si el tramo desde el inicio hasta hoy supera el tope (proyecto activo
+  // hace mucho), el recorte tiene que comerse el extremo VIEJO, no el
+  // reciente -- "termina hoy" es la promesa de esta sección, y un historial
+  // que se corta antes de llegar a hoy sería justo lo contrario de lo que
+  // se pidió. Se acerca "desde" lo necesario para que el tramo quepa en el
+  // tope, en vez de dejar que el bucle de abajo trunque desde el principio.
+  if (diasEntreClavesPdf_(desde, hoyClave) >= REPORTE_LIMITE_DIAS_GANTT_) {
+    desde = clavePdf_(new Date(fechaDeClavePdf_(hoyClave).getTime() - (REPORTE_LIMITE_DIAS_GANTT_ - 1) * 86400000));
+  }
+  return diasEntreClavesArrayPdf_(desde, hoyClave);
+}
+
+// Compartido por construirDiasReportePdf_/construirDiasHistoriaPdf_: la
+// lista de claves 'YYYY-MM-DD' entre dos fechas, con el mismo tope que
+// evita un PDF impracticable.
+function diasEntreClavesArrayPdf_(desde, hasta) {
   var dias = [], cursor = fechaDeClavePdf_(desde), fin = fechaDeClavePdf_(hasta);
   while (cursor.getTime() <= fin.getTime() && dias.length < REPORTE_LIMITE_DIAS_GANTT_) {
     dias.push(clavePdf_(cursor));
@@ -3038,7 +3081,14 @@ function construirHtmlReporteConfigurado_(detalle, todasTareas, rendimiento, tar
 
   var necesitaDias = incluye('gantt') || incluye('workload');
   var hoyClave = clavePdf_(new Date());
-  var dias = necesitaDias ? construirDiasReportePdf_(tareasFiltradas, config.rango, hoyClave) : [];
+  // v15.7: "Ejecución día a día"/"Carga de trabajo" son un registro -- sin un
+  // período explícito, arrancan en el inicio real del proyecto (no en
+  // cuándo se cargaron las tareas) y terminan hoy, nunca antes ni después.
+  // Con un rango explícito, ese rango manda igual que siempre.
+  var dias = necesitaDias
+    ? (config.rango ? construirDiasReportePdf_(tareasFiltradas, config.rango, hoyClave)
+                     : construirDiasHistoriaPdf_(tareasFiltradas, detalle.proyecto.fecha_inicio, hoyClave))
+    : [];
   // v13 (Fase 3): las semanas del mini-Gantt son independientes del día×día
   // de 'gantt'/'workload' -- misma fuente (fechas de tareasFiltradas) pero
   // agrupada distinto, y sin costo si no se pidió.
@@ -3084,7 +3134,7 @@ function construirHtmlReporteConfigurado_(detalle, todasTareas, rendimiento, tar
     // hay registro diario que mostrar -- si no, sale casi vacía y estorba.
     partes.push(seccionCronogramaBarrasPdf_(tareasFiltradas, detalle.hitos || [], detalle.proyecto.fecha_inicio, config.rango, hoyClave));
     if (hayRegistroDiario_(registroPorTareaDia)) {
-      partes.push(seccionGanttPdf_(tareasFiltradas, dias, registroPorTareaDia, eventosPorTareaDia));
+      partes.push(seccionGanttPdf_(tareasFiltradas, dias, registroPorTareaDia, eventosPorTareaDia, detalle.proyecto.fecha_inicio));
     }
   }
   if (incluye('workload')) partes.push(seccionWorkloadPdf_(tareasFiltradas, dias, registroPorTareaDia, eventosPorTareaDia));
@@ -3502,20 +3552,27 @@ function hayRegistroDiario_(registroPorTareaDia) {
   });
 }
 
-function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia) {
+function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia, proyectoInicio) {
   if (!tareas.length || !dias.length) return '';
   var hoyClave = clavePdf_(new Date());
   var ultimoDiaGlobal = dias[dias.length - 1];
+  var proyIni = proyectoInicio ? clavePdf_(new Date(proyectoInicio)) : '';
 
   // Un día "tiene contenido" si alguna tarea lo cubre con su barra planificada,
   // su tramo de atraso, o una marca registrada ese día. Sirve para descartar
   // páginas enteras en blanco: el rango de v14 ya viene acotado, y esto es el
   // seguro contra un hueco interno que dejara una hoja del Gantt sin nada.
+  // v15.7: el inicio del plan usa planInicioEfectivoClave_ (mismo criterio
+  // que la Carta Gantt de barras) -- sin esto, una tarea cargada tarde
+  // (creación después del compromiso) nunca marcaba "enPlan" en NINGÚN día
+  // (el rango quedaba invertido), así que los días desde el inicio real del
+  // proyecto hasta la carga de las tareas aparecían sin contenido y esta
+  // función los descartaba enteros -- justo lo que se pidió ver.
   var diaConContenido = {};
   tareas.forEach(function (a) {
     var kCre = a.fecha_creacion ? clavePdf_(new Date(a.fecha_creacion)) : '';
     var kCom = a.fecha_compromiso ? clavePdf_(new Date(a.fecha_compromiso)) : '';
-    var kIni = kCre || kCom;
+    var kIni = planInicioEfectivoClave_(kCre, kCom, proyIni);
     var term = (a.estado === 'TERMINADA' || a.estado === 'CANCELADA');
     dias.forEach(function (d) {
       if (diaConContenido[d]) return;
@@ -3547,7 +3604,7 @@ function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia)
     var filas = tareas.map(function (a) {
       var claveCreacion = a.fecha_creacion ? clavePdf_(new Date(a.fecha_creacion)) : '';
       var claveCommit = a.fecha_compromiso ? clavePdf_(new Date(a.fecha_compromiso)) : '';
-      var claveInicioPlan = claveCreacion || claveCommit;
+      var claveInicioPlan = planInicioEfectivoClave_(claveCreacion, claveCommit, proyIni);
       var sem = a.semaforo || 'al-dia';
       var bgBarra = GANTT_SEMAFORO_SOLIDO_[sem] || '#64748B';
       var terminal = (a.estado === 'TERMINADA' || a.estado === 'CANCELADA');

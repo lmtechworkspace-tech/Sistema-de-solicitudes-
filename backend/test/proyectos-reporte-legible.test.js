@@ -358,3 +358,80 @@ test('paginaCssParaDias_ jamás produce A4 -- el piso es A3', () => {
     assert.doesNotMatch(html, /size: A4/, totalDias + ' días no debe mapear a A4');
   }
 });
+
+// --- 9. "Ejecución día a día" arranca en el inicio REAL del proyecto -------
+// Pedido explícito del usuario: la sección debe mostrar el registro diario
+// "desde el día que se hizo la primera acción" (el inicio del proyecto)
+// "hasta hoy" -- no desde la fecha en que las tareas se cargaron a SIGSO.
+// Caso real: proyecto iniciado 07-08, tareas cargadas 01-09 y comprometidas
+// hacia atrás al 28-08 (creación > compromiso -- la misma "carga tardía" ya
+// corregida en la Carta Gantt y en el chip "Plan" de pantalla).
+
+test('Ejecución día a día arranca en el inicio del proyecto (no en cuándo se cargaron las tareas) y termina HOY, nunca en el futuro', () => {
+  const ctx = loadConSchema();
+  const inicio = diasDesdeHoy(-31); // "07-08" del caso real, relativo a hoy
+  const proyecto = ctx.Proyectos.crear({ nombre: 'Con historia real', fecha_inicio: inicio, fecha_objetivo: '2026-12-31' }, CTX_LEO);
+  ctx.Proyectos.gestionarIntegrante({ proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE' }, CTX_LEO);
+  // Cargada "hoy" (como en el sandbox toda tarea nueva), comprometida al
+  // pasado -- exactamente el patrón de carga tardía.
+  const t = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'Presentaciones HP', responsable_email: 'marcelo@rld.cl', fecha_compromiso: diasDesdeHoy(-6) }, CTX_LEO);
+  ctx.Actividades.confirmar({ actividad_id: t.actividad_id, fecha_compromiso: diasDesdeHoy(-6) }, CTX_MARCELO);
+  // hayRegistroDiario_ exige al menos un REGISTRO_DIA real para no
+  // descartar la sección entera (v14: "sin eso, la grilla sale casi vacía
+  // y solo estorba") -- este es justo el caso del usuario: SÍ hay registro.
+  ctx.Proyectos.guardarRegistroDia({
+    proyecto_id: proyecto.proyecto_id, actividad_id: t.actividad_id, dia: diasDesdeHoy(0), estado_dia: 'finalizado', horas: 2
+  }, CTX_MARCELO);
+  // Una tarea con compromiso en el futuro NO debe estirar "hasta" más allá de hoy.
+  const futura = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'Publicaciones de Meta', responsable_email: 'marcelo@rld.cl', fecha_compromiso: diasDesdeHoy(90) }, CTX_LEO);
+  ctx.Actividades.confirmar({ actividad_id: futura.actividad_id, fecha_compromiso: diasDesdeHoy(90) }, CTX_MARCELO);
+
+  const res = ctx.Proyectos.descargarReporte({ proyecto_id: proyecto.proyecto_id, config: { secciones: ['gantt'] } }, CTX_LEO);
+  const html = htmlDe_(res);
+  assert.match(html, /Ejecución día a día/, 'la sección no debe descartarse como "sin contenido"');
+  // La columna del inicio del proyecto (hace 31 días) tiene que aparecer.
+  assert.match(html, new RegExp(cortaDe(inicio).replace('/', '\\/')),
+    'debe arrancar en el inicio real del proyecto, no en la fecha de creación de la tarea (hoy)');
+  // Y NO debe llegar hasta el compromiso lejano en el futuro (eso es plan, no historia).
+  assert.doesNotMatch(html, new RegExp(cortaDe(diasDesdeHoy(90)).replace('/', '\\/')),
+    'un registro de lo que pasó no puede tener columnas de un día que no ha ocurrido');
+});
+
+test('con un período explícito ("reporte por período"), Ejecución día a día respeta ESE rango, no el inicio del proyecto', () => {
+  const ctx = loadConSchema();
+  const proyecto = ctx.Proyectos.crear({ nombre: 'Con rango', fecha_inicio: diasDesdeHoy(-60), fecha_objetivo: '2026-12-31' }, CTX_LEO);
+  ctx.Proyectos.gestionarIntegrante({ proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE' }, CTX_LEO);
+  ctx.Proyectos.guardarRegistroDia({
+    proyecto_id: proyecto.proyecto_id,
+    actividad_id: ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'T', responsable_email: 'marcelo@rld.cl', fecha_compromiso: diasDesdeHoy(-2) }, CTX_LEO).actividad_id,
+    dia: diasDesdeHoy(-2), estado_dia: 'finalizado', horas: 2
+  }, CTX_MARCELO);
+
+  const res = ctx.Proyectos.descargarReporte({
+    proyecto_id: proyecto.proyecto_id,
+    config: { secciones: ['gantt'], rango: { desde: diasDesdeHoy(-3), hasta: diasDesdeHoy(-1) } }
+  }, CTX_LEO);
+  const html = htmlDe_(res);
+  // El rango explícito manda: el inicio del proyecto (hace 60 días) NO debe aparecer.
+  assert.doesNotMatch(html, new RegExp(cortaDe(diasDesdeHoy(-60)).replace('/', '\\/')));
+  assert.match(html, new RegExp(cortaDe(diasDesdeHoy(-3)).replace('/', '\\/')));
+});
+
+test('un proyecto activo hace MÁS de 60 días recorta el extremo VIEJO, pero siempre llega a HOY', () => {
+  // "Termina hoy" es la promesa de esta sección -- si el tope tuviera que
+  // elegir qué sacrificar, no puede ser el día de hoy (dejaría la sección
+  // sin lo más reciente, justo lo contrario de lo que se pidió).
+  const ctx = loadConSchema();
+  const inicio = diasDesdeHoy(-200);
+  const proyecto = ctx.Proyectos.crear({ nombre: 'Muy largo', fecha_inicio: inicio, fecha_objetivo: '2026-12-31' }, CTX_LEO);
+  ctx.Proyectos.gestionarIntegrante({ proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE' }, CTX_LEO);
+  const t = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'T', responsable_email: 'marcelo@rld.cl', fecha_compromiso: diasDesdeHoy(-190) }, CTX_LEO);
+  ctx.Actividades.confirmar({ actividad_id: t.actividad_id, fecha_compromiso: diasDesdeHoy(-190) }, CTX_MARCELO);
+  ctx.Proyectos.guardarRegistroDia({ proyecto_id: proyecto.proyecto_id, actividad_id: t.actividad_id, dia: diasDesdeHoy(0), estado_dia: 'en_proceso', horas: 1 }, CTX_MARCELO);
+
+  const res = ctx.Proyectos.descargarReporte({ proyecto_id: proyecto.proyecto_id, config: { secciones: ['gantt'] } }, CTX_LEO);
+  const html = htmlDe_(res);
+  assert.match(html, /Ejecución día a día/);
+  assert.match(html, new RegExp(cortaDe(diasDesdeHoy(0)).replace('/', '\\/')), 'debe llegar a HOY sin importar el tope');
+  assert.doesNotMatch(html, new RegExp(cortaDe(inicio).replace('/', '\\/')), 'el inicio de hace 200 días queda fuera -- se recorta el extremo viejo, no el reciente');
+});
