@@ -3571,11 +3571,31 @@
       '</div>';
     }).join('');
 
+    // v15.4 (backend) + aquí en el frontend: una tarea CARGADA TARDE (la fila
+    // se creó en SIGSO después de su propia fecha comprometida -- se migró, se
+    // importó en bloque, o se tecleó semanas después del acuerdo real) deja a
+    // fecha_creacion como mal INICIO DE BARRA: la barra saldría con el fin
+    // antes que el inicio (ancho negativo, clamp a un filo de 4px pegado al
+    // fin, exactamente el sliver invisible que se reportó). Mismo criterio que
+    // planInicioEfectivoClave_ del backend, reimplementado aquí porque esta
+    // vista arma la barra en el navegador -- fecha_creacion NO se toca en
+    // ningún lado, solo se decide qué fecha usar como punto de partida VISUAL.
+    function inicioBarraEfectivo_(a) {
+      if (a.fecha_creacion && a.fecha_compromiso) {
+        var kCreacion = claveDeIso_(a.fecha_creacion);
+        var kCompromiso = claveDeIso_(a.fecha_compromiso);
+        if (kCreacion <= kCompromiso) return a.fecha_creacion;
+        if (p.fecha_inicio && claveDeIso_(p.fecha_inicio) <= kCompromiso) return p.fecha_inicio;
+        return a.fecha_compromiso;
+      }
+      return a.fecha_creacion || p.fecha_inicio || a.fecha_compromiso;
+    }
+
     // Una fila del Gantt. Se extrae para que la vista plana y la agrupada
     // pinten EXACTAMENTE lo mismo: son dos ordenamientos del mismo dibujo, no
     // dos dibujos.
     function filaTareaGantt_(a) {
-      var inicioPx = offsetPx_(a.fecha_creacion || p.fecha_inicio || a.fecha_compromiso);
+      var inicioPx = offsetPx_(inicioBarraEfectivo_(a));
       var finPx = offsetPx_(a.fecha_compromiso);
       var anchoBarra = Math.max(finPx - inicioPx, 4);
       var codigo = a.semaforo || 'al-dia';
