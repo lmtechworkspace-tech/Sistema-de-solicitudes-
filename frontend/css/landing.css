@@ -1,0 +1,390 @@
+/* landing.css — SIGSO, pagina de presentacion.
+   Concepto: "La promesa que no se borra" (aprobado 2026-09-06).
+
+   AISLADA A PROPOSITO. No importa tokens.css ni main.css y no redefine
+   ninguna de sus variables: esta pagina es nueva y no debe poder afectar a
+   nada que este en operacion. Los valores de marca se REPITEN aqui (navy
+   #14213D, azul de accion #2A5FD6, Inter) en vez de heredarse, porque
+   heredar significaria que un cambio en la landing puede llegar al producto.
+   Si la marca cambia, se cambian los dos sitios -- es el precio, y es barato.
+
+   El navy PROFUNDO del hero (#0B1526) solo existe aqui. El producto no lo
+   usa: es el registro que le da a la landing una voz propia sin salirse de
+   la identidad. */
+
+:root {
+  --l-navy-hondo: #0B1526;
+  --l-navy: #14213D;
+  --l-navy-2: #24344F;
+  --l-accion: #2A5FD6;
+  --l-accion-claro: #6D95F0;
+
+  --l-tinta: #FFFFFF;
+  /* Texto secundario sobre navy. Medido: 8.9:1 contra #0B1526 -- muy por
+     encima del 4.5 de AA. El texto de apoyo no se gana atenuandolo hasta
+     que cueste leerlo. */
+  --l-tinta-2: #C3CDDF;
+  --l-tinta-3: #8A97B0;
+
+  --l-fondo-claro: #F8FAFC;
+  --l-texto: #0F172A;
+
+  --l-display: 'Archivo', 'Inter', system-ui, -apple-system, sans-serif;
+  --l-cuerpo: 'Inter', system-ui, -apple-system, sans-serif;
+  --l-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+
+  /* Un solo easing en toda la pagina: entra rapido y frena largo. Es la
+     sensacion de algo que LLEGA Y SE ASIENTA, que es de lo que va el
+     concepto. Se hereda del producto (tokens.css --mov-entrada). */
+  --l-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--l-cuerpo);
+  color: var(--l-tinta);
+  background: var(--l-navy-hondo);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Foco visible SIEMPRE, y con un color que se ve sobre navy y sobre claro. */
+:focus-visible {
+  outline: 2px solid var(--l-accion-claro);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.l-oculto-visual {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* === Cabecera ========================================================== */
+
+.l-cab {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem clamp(1.25rem, 5vw, 4rem);
+}
+
+.l-marca {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  font-family: var(--l-display);
+  font-weight: 700;
+  font-size: 1.125rem;
+  letter-spacing: -0.02em;
+  color: var(--l-tinta);
+  text-decoration: none;
+}
+
+.l-marca__sub {
+  font-family: var(--l-cuerpo);
+  font-weight: 400;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--l-tinta-3);
+}
+
+.l-entrar {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.75rem;
+  padding: 0.6rem 1.15rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--l-tinta);
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.04);
+  transition: background 150ms ease-out, border-color 150ms ease-out;
+  /* Un boton de accion no se parte en dos lineas: o cabe entero o se acorta
+     el texto (ver .l-entrar__resto). Medido a 279 px de ancho, "Entrar a la
+     plataforma" ocupaba TRES lineas y quedaba mas alto que el logo. */
+  white-space: nowrap;
+}
+.l-entrar:hover { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.32); }
+
+/* === Hero ============================================================== */
+
+.l-hero {
+  position: relative;
+  min-height: calc(100svh - 5.5rem);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(2rem, 6vh, 5rem) clamp(1.25rem, 5vw, 4rem) 2rem;
+  overflow: hidden;
+}
+
+/* Profundidad con UN color, que es lo que se decidio en vez de meter otro:
+   un halo frio arriba a la izquierda y el navy hondo cayendo al fondo. */
+.l-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(90ch 60ch at 18% -10%, rgba(42, 95, 214, 0.28), transparent 60%),
+    linear-gradient(180deg, #101E36 0%, var(--l-navy-hondo) 55%);
+  z-index: 0;
+}
+
+/* Grano: rompe la planitud del degradado sin pedir la vista. Va en un
+   pseudo-elemento propio para poder apagarlo entero si molestara. */
+.l-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.035;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.l-hero__interior {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.l-eyebrow {
+  margin: 0 0 1.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--l-tinta-3);
+}
+
+.l-titular {
+  margin: 0;
+  font-family: var(--l-display);
+  font-weight: 600;
+  font-size: clamp(2.5rem, 7.5vw, 5.25rem);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+  max-width: 16ch;
+}
+
+/* La segunda linea del titular es la que carga el concepto: se separa del
+   resto bajandole el peso, no subiendoselo. */
+.l-titular__eco {
+  display: block;
+  color: var(--l-tinta-3);
+}
+
+.l-bajada {
+  margin: 1.75rem 0 0;
+  max-width: 54ch;
+  font-size: clamp(1rem, 1.6vw, 1.125rem);
+  line-height: 1.65;
+  color: var(--l-tinta-2);
+}
+
+/* === La pieza firma: el compromiso y su huella ========================= */
+
+.l-compromiso {
+  margin: clamp(2.5rem, 7vh, 4.5rem) 0 0;
+  padding: 1.5rem clamp(1.25rem, 3vw, 2rem) 1.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  max-width: 760px;
+}
+
+.l-compromiso__cab {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.9rem;
+  margin-bottom: 1.75rem;
+}
+
+.l-compromiso__id {
+  font-family: var(--l-mono);
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+  color: var(--l-accion-claro);
+}
+
+.l-compromiso__titulo {
+  font-size: 0.9375rem;
+  color: var(--l-tinta-2);
+}
+
+/* El eje. Todo lo demas se posiciona encima con translateX en %, para que
+   la animacion sea solo transform (nada de left/width: eso serian
+   recalculos de layout en cada cuadro). */
+.l-eje {
+  position: relative;
+  height: 74px;
+}
+
+.l-eje__linea {
+  position: absolute;
+  left: 0; right: 0; top: 26px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.l-marca-fecha {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  will-change: transform;
+}
+
+.l-marca-fecha__tallo {
+  position: absolute;
+  left: 0;
+  top: 14px;
+  width: 1px;
+  height: 24px;
+}
+
+.l-marca-fecha__texto {
+  position: absolute;
+  top: 44px;
+  left: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-family: var(--l-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8125rem;
+}
+
+/* La HUELLA: la fecha que se prometio primero. Trazo discontinuo y apagado
+   -- sigue ahi, pero no compite con la vigente. */
+.l-marca-fecha--huella .l-marca-fecha__tallo {
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--l-accion-claro) 0 3px,
+    transparent 3px 6px
+  );
+  opacity: 0.55;
+}
+.l-marca-fecha--huella .l-marca-fecha__texto { color: var(--l-tinta-3); }
+
+/* La VIGENTE. */
+.l-marca-fecha--viva .l-marca-fecha__tallo { background: var(--l-accion); }
+.l-marca-fecha--viva .l-marca-fecha__texto { color: var(--l-tinta); font-weight: 500; }
+
+.l-marca-fecha--viva .l-marca-fecha__punto {
+  position: absolute;
+  left: -4px;
+  top: 22px;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--l-accion);
+  box-shadow: 0 0 0 4px rgba(42, 95, 214, 0.22);
+}
+
+/* El tramo entre la promesa original y la vigente: el desvio, dibujado. */
+.l-desvio {
+  position: absolute;
+  top: 26px;
+  height: 1px;
+  background: var(--l-accion);
+  opacity: 0.45;
+  transform-origin: left center;
+  will-change: transform;
+}
+
+.l-compromiso__pie {
+  margin: 1.5rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--l-tinta-2);
+}
+.l-compromiso__pie strong { color: var(--l-tinta); font-weight: 600; }
+
+/* === Aviso de scroll =================================================== */
+
+.l-scroll {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 1120px;
+  margin: clamp(2rem, 5vh, 3.5rem) auto 0;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--l-tinta-3);
+}
+
+.l-scroll__linea {
+  display: block;
+  width: 56px;
+  height: 1px;
+  background: currentColor;
+  transform-origin: left center;
+}
+
+/* === Entrada ===========================================================
+   Con transform y opacity unicamente. El estado inicial lo pone JS (clase
+   en <html>) y no el CSS, para que sin JavaScript la pagina se vea ENTERA
+   y quieta en vez de quedarse invisible esperando una animacion que no va
+   a llegar. */
+
+.l-anim .l-sube { opacity: 0; transform: translateY(18px); }
+
+.l-anim.l-lista .l-sube {
+  opacity: 1;
+  transform: none;
+  transition: opacity 700ms var(--l-ease), transform 700ms var(--l-ease);
+}
+.l-anim.l-lista .l-sube:nth-child(1) { transition-delay: 60ms; }
+.l-anim.l-lista .l-sube:nth-child(2) { transition-delay: 140ms; }
+.l-anim.l-lista .l-sube:nth-child(3) { transition-delay: 220ms; }
+.l-anim.l-lista .l-sube:nth-child(4) { transition-delay: 320ms; }
+
+/* === Movimiento reducido ===============================================
+   No es "quitar la animacion": es entregar el mismo mensaje ya resuelto.
+   La huella y el desvio se dibujan en su sitio final; lo unico que se
+   pierde es el gesto. */
+@media (prefers-reduced-motion: reduce) {
+  .l-anim .l-sube,
+  .l-anim.l-lista .l-sube {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .l-marca-fecha, .l-desvio, .l-scroll__linea { transition: none !important; }
+}
+
+/* === Responsive ========================================================
+   El eje necesita ancho para que las dos fechas no se pisen. Bajo cierto
+   punto se apila: la huella arriba, la vigente abajo. Es la misma
+   informacion, contada en vertical. */
+@media (max-width: 560px) {
+  .l-cab { padding: 1rem 1.25rem; }
+  .l-marca__sub { display: none; }
+  /* El destino se entiende igual con "Entrar": el contexto es la propia
+     landing de SIGSO. Se recorta el texto, no se rompe el boton. */
+  .l-entrar__resto { display: none; }
+  .l-compromiso { padding: 1.25rem 1rem 1.5rem; }
+  .l-eje { height: 96px; }
+  .l-marca-fecha__texto { font-size: 0.75rem; }
+}

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SIGSO — Control y Gestión Empresarial</title>
+  <meta name="description" content="SIGSO registra cada compromiso y conserva el original cuando una fecha se mueve. Sistema interno de control y gestión de HomePymes.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="css/landing.css">
+</head>
+<body>
+
+  <header class="l-cab">
+    <a class="l-marca" href="landing.html">
+      SIGSO
+      <span class="l-marca__sub">Control y Gestión Empresarial</span>
+    </a>
+    <a class="l-entrar" href="plataforma.html">Entrar<span class="l-entrar__resto"> a la plataforma</span></a>
+  </header>
+
+  <main>
+    <section class="l-hero" aria-labelledby="titular">
+      <div class="l-hero__interior">
+
+        <p class="l-eyebrow l-sube">HomePymes · Departamento de Control</p>
+
+        <h1 class="l-titular l-sube" id="titular">
+          La promesa que
+          <span class="l-titular__eco">no se borra.</span>
+        </h1>
+
+        <p class="l-bajada l-sube">
+          Cuando una fecha comprometida se mueve, casi todos los sistemas la
+          reemplazan. SIGSO guarda la original y la deja a la vista. Porque una
+          fecha que se corrige sola no es un plazo: es un plazo que nadie
+          recuerda haber prometido.
+        </p>
+
+        <!-- La pieza firma. El detalle que hace la landing distinta no es un
+             efecto: es que muestra, con un dato, lo que el sistema hace. -->
+        <figure class="l-compromiso l-sube" aria-labelledby="compromiso-desc">
+          <figcaption class="l-compromiso__cab">
+            <span class="l-compromiso__id">SOL-2026-HP-0042</span>
+            <span class="l-compromiso__titulo">Migración del módulo de facturación</span>
+          </figcaption>
+
+          <!-- El eje es decorativo para quien usa lector de pantalla: la
+               informacion completa va abajo en texto, no en la imagen. -->
+          <div class="l-eje" id="eje" aria-hidden="true">
+            <span class="l-eje__linea"></span>
+
+            <span class="l-desvio" id="desvio"></span>
+
+            <span class="l-marca-fecha l-marca-fecha--huella" id="huella">
+              <span class="l-marca-fecha__tallo"></span>
+              <span class="l-marca-fecha__texto">12 sep</span>
+            </span>
+
+            <span class="l-marca-fecha l-marca-fecha--viva" id="viva">
+              <span class="l-marca-fecha__tallo"></span>
+              <span class="l-marca-fecha__punto"></span>
+              <span class="l-marca-fecha__texto">19 sep</span>
+            </span>
+          </div>
+
+          <p class="l-compromiso__pie" id="compromiso-desc">
+            Se comprometió para el <strong>12 de septiembre</strong> y se movió al
+            <strong>19</strong>. Cinco días hábiles de desvío, con su motivo
+            registrado. <strong>La fecha original sigue ahí</strong>, y seguirá
+            estando cuando alguien pregunte.
+          </p>
+        </figure>
+
+      </div>
+
+      <p class="l-scroll l-sube" aria-hidden="true">
+        <span class="l-scroll__linea"></span>
+        Sigue bajando
+      </p>
+    </section>
+  </main>
+
+  <script src="js/landing.js"></script>
+</body>
+</html>
