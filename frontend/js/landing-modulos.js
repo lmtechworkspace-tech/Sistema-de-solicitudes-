@@ -22,6 +22,13 @@
  * Son ejemplos con la FORMA de los datos verdaderos (ids correlativos,
  * estados que existen, clausulas ISO que estan en el modulo), para que lo
  * que se muestra sea honesto sin exponer nada.
+ *
+ * SIN NOMBRE DE NINGUNA EMPRESA
+ * Ni aqui ni en el resto de la landing. La pagina se usa para mostrar el
+ * producto a terceros, y nombrar una empresa lo convierte en "el sistema
+ * interno de alguien" en vez de un producto. Por eso los ids de ejemplo
+ * usan el codigo EJ y no el de una empresa real, y los nombres de persona
+ * son genericos. Si se agrega una vista nueva, mantener la regla.
  */
 (function () {
   'use strict';
@@ -108,7 +115,7 @@
         '<span class="l-paso"><i class="l-paso__linea"></i>3 · Revisar y enviar</span>' +
         '</div>' +
         '<div class="l-mini">' +
-        fila('', 'Empresa · HomePymes', 'neutro', 'listo') +
+        fila('', 'Empresa · seleccionada', 'neutro', 'listo') +
         fila('', 'Ítem 01 · Migrar el catálogo', 'neutro', 'listo') +
         fila('', 'Ítem 02 · Ajustar el folio', 'curso', 'escribiendo') +
         '</div>' +
@@ -124,9 +131,9 @@
         kpi('1', 'con fecha vencida', 'riesgo') +
         '</div>' +
         '<div class="l-mini">' +
-        fila('SOL-2026-HP-0042', 'Migración del módulo de facturación', 'curso', 'En desarrollo') +
-        fila('SOL-2026-HP-0039', 'Acceso al portal de proveedores', 'espera', 'Terminada') +
-        fila('SOL-2026-HP-0031', 'Cambio de folio en boletas', 'ok', 'Cerrada') +
+        fila('SOL-2026-EJ-0042', 'Migración del módulo de facturación', 'curso', 'En desarrollo') +
+        fila('SOL-2026-EJ-0039', 'Acceso al portal de proveedores', 'espera', 'Terminada') +
+        fila('SOL-2026-EJ-0031', 'Cambio de folio en boletas', 'ok', 'Cerrada') +
         '</div>' +
         nota('El bloque de arriba responde la única pregunta que se hace de verdad: ¿hay algo esperándome a mí?')
     },
