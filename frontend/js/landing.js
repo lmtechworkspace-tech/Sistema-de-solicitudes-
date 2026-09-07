@@ -38,9 +38,8 @@
   var viva = document.getElementById('viva');
   var desvio = document.getElementById('desvio');
 
-  // Se marca que hay JS ANTES de pintar, para que el estado inicial de la
-  // entrada no llegue a verse como un salto.
-  raiz.classList.add('l-anim');
+  // La clase l-anim ya la puso un script en linea del <head>: tiene que
+  // estar ANTES del primer pintado o el hero parpadea. Aqui solo se usa.
 
   var quietos = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 

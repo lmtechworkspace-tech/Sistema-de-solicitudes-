@@ -10,6 +10,15 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Inter:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="css/landing.css">
+  <link rel="stylesheet" href="css/landing-relato.css">
+
+  <!-- Marca que hay JavaScript ANTES del primer pintado.
+       El CSS solo esconde el estado inicial de la entrada cuando existe esta
+       clase. Si se pusiera desde landing.js (que va con defer), el hero se
+       veria un instante y DESPUES se ocultaria para animarse: un parpadeo.
+       Y si no hay JS, la clase no se pone y la pagina se ve entera y quieta,
+       que es justo lo que debe pasar. -->
+  <script>document.documentElement.className += ' l-anim';</script>
 </head>
 <body>
 
@@ -81,8 +90,118 @@
         Sigue bajando
       </p>
     </section>
+
+    <!-- ===== Relato ======================================================
+         El riel de estados es el eje de la pagina. Son los estados REALES
+         del sistema (utils.js, SIGSO_ESTADOS_LABEL), no una secuencia
+         inventada para la landing. -->
+    <div class="l-relato">
+
+      <nav class="l-riel" aria-label="Recorrido de una solicitud">
+        <ol class="l-riel__lista">
+          <li class="l-riel__paso" data-paso="S02">Recibida</li>
+          <li class="l-riel__paso" data-paso="S04">Aprobada</li>
+          <li class="l-riel__paso" data-paso="S05">En desarrollo</li>
+          <li class="l-riel__paso" data-paso="S08">Terminada</li>
+          <li class="l-riel__paso" data-paso="S09">Cerrada</li>
+        </ol>
+      </nav>
+
+      <div class="l-actos">
+
+        <!-- Acto 2: los dos relojes -->
+        <section class="l-acto" data-acto="S05" aria-labelledby="acto-relojes">
+          <p class="l-acto__numero">01</p>
+          <h2 class="l-acto__titulo" id="acto-relojes">El reloj no se detiene:<br>cambia de manos.</h2>
+          <p class="l-acto__texto">
+            Cuando el trabajo se marca como terminado, el plazo de quien lo
+            ejecutó se cierra y empieza a correr el de quien tiene que
+            validarlo. La responsabilidad no se queda en un solo lado del
+            escritorio.
+          </p>
+
+          <div class="l-relojes" aria-hidden="true">
+            <div class="l-reloj" data-reloj="ejecuta">
+              <span class="l-reloj__etiqueta">Quien ejecuta</span>
+              <span class="l-reloj__barra"><i class="l-reloj__relleno"></i></span>
+            </div>
+            <div class="l-reloj" data-reloj="valida">
+              <span class="l-reloj__etiqueta">Quien valida</span>
+              <span class="l-reloj__barra"><i class="l-reloj__relleno"></i></span>
+            </div>
+          </div>
+          <p class="l-acto__nota">
+            Es una clasificación calculada, no un estado más: sale de comparar
+            la fecha comprometida con la de término, sobre horas hábiles.
+          </p>
+        </section>
+
+        <!-- Acto 3: la solicitud se divide -->
+        <section class="l-acto" data-acto="S04" aria-labelledby="acto-items">
+          <p class="l-acto__numero">02</p>
+          <h2 class="l-acto__titulo" id="acto-items">Una solicitud no es<br>una sola cosa.</h2>
+          <p class="l-acto__texto">
+            Se divide en ítems, y cada uno lleva su propio estado, su propia
+            prioridad y su propio plazo. El estado de la solicitud completa
+            nunca se escribe a mano: se recalcula a partir de los suyos.
+          </p>
+
+          <div class="l-division" aria-hidden="true">
+            <div class="l-division__padre">SOL-2026-HP-0042</div>
+            <ul class="l-division__hijos">
+              <li class="l-division__hijo"><span>01</span> Migrar el catálogo<em data-estado="ok">Cerrada</em></li>
+              <li class="l-division__hijo"><span>02</span> Ajustar el folio<em data-estado="curso">En desarrollo</em></li>
+              <li class="l-division__hijo"><span>03</span> Validar con el cliente<em data-estado="espera">Terminada</em></li>
+            </ul>
+          </div>
+        </section>
+
+        <!-- Acto 4: el pago del concepto -->
+        <section class="l-acto l-acto--rastro" data-acto="S09" aria-labelledby="acto-rastro">
+          <p class="l-acto__numero">03</p>
+          <h2 class="l-acto__titulo" id="acto-rastro">Al final, están todas.</h2>
+          <p class="l-acto__texto">
+            Cada vez que una fecha se movió, la anterior se quedó. No hay que
+            reconstruir nada ni preguntarle a nadie: el historial es el
+            registro, y estaba ahí desde el primer día.
+          </p>
+
+          <div class="l-rastro" aria-hidden="true">
+            <span class="l-rastro__eje"></span>
+            <span class="l-rastro__huella" style="--p: 12%"><em>05 ago</em></span>
+            <span class="l-rastro__huella" style="--p: 31%"><em>19 ago</em></span>
+            <span class="l-rastro__huella" style="--p: 48%"><em>02 sep</em></span>
+            <span class="l-rastro__huella" style="--p: 66%"><em>12 sep</em></span>
+            <span class="l-rastro__viva" style="--p: 84%"><em>19 sep</em></span>
+          </div>
+          <p class="l-acto__nota">
+            Cuatro promesas antes de la que se cumplió. Ninguna se borró.
+          </p>
+        </section>
+
+      </div>
+    </div>
+
+    <!-- ===== Cierre ===================================================== -->
+    <section class="l-cierre" aria-labelledby="cierre">
+      <div class="l-cierre__interior">
+        <h2 class="l-cierre__titulo" id="cierre">
+          Un sistema de control no existe para culpar a nadie.<br>
+          <span>Existe para que nadie tenga que acordarse.</span>
+        </h2>
+        <a class="l-cta" href="plataforma.html">Entrar a la plataforma</a>
+        <p class="l-cierre__pie">
+          SIGSO · HomePymes — Departamento de Control ·
+          <a href="index.html">Ingresar una solicitud</a> ·
+          <a href="estado.html">Consultar el estado</a>
+        </p>
+      </div>
+    </section>
   </main>
 
-  <script src="js/landing.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js" defer></script>
+  <script src="js/landing.js" defer></script>
+  <script src="js/landing-relato.js" defer></script>
 </body>
 </html>

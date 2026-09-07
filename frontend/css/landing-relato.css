@@ -1,0 +1,375 @@
+/* landing-relato.css — el tramo narrativo de la landing (todo lo que va
+   despues del hero). Depende de las variables de landing.css, que se carga
+   antes; no define ninguna propia.
+
+   Separado del hero a proposito: son dos piezas con vidas distintas. El hero
+   se calibra al detalle y cambia poco; el relato crece por actos. */
+
+/* === Riel de estados ===================================================
+   Usa position: sticky, NO el pin de ScrollTrigger. Sticky es nativo, no
+   toca el scroll de nadie y no se descoloca si un acto cambia de alto;
+   ScrollTrigger se limita a decir que paso esta activo. Un pin habria hecho
+   el mismo trabajo con mas piezas que se pueden romper. */
+
+.l-relato {
+  position: relative;
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: clamp(2rem, 6vw, 5rem);
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: clamp(4rem, 12vh, 9rem) clamp(1.25rem, 5vw, 4rem);
+}
+
+.l-riel {
+  position: sticky;
+  top: 40vh;
+  align-self: start;
+  height: 0; /* guia, no columna con peso: no debe empujar el layout */
+}
+
+.l-riel__lista {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.l-riel__paso {
+  position: relative;
+  padding-left: 1.5rem;
+  font-size: 0.8125rem;
+  letter-spacing: 0.02em;
+  color: var(--l-tinta-3);
+  opacity: 0.5;
+  transition: opacity 350ms var(--l-ease), color 350ms var(--l-ease);
+}
+
+.l-riel__paso::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.45em;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  transition: transform 350ms var(--l-ease), background 350ms var(--l-ease);
+}
+
+.l-riel__paso--activo { opacity: 1; color: var(--l-tinta); }
+.l-riel__paso--activo::before { background: var(--l-accion); transform: scale(1.6); }
+
+/* === Actos ============================================================= */
+
+.l-actos { display: flex; flex-direction: column; gap: clamp(6rem, 22vh, 14rem); }
+
+.l-acto__numero {
+  margin: 0 0 1rem;
+  font-family: var(--l-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  color: var(--l-accion-claro);
+}
+
+.l-acto__titulo {
+  margin: 0 0 1.25rem;
+  font-family: var(--l-display);
+  font-weight: 600;
+  font-size: clamp(1.75rem, 4vw, 2.75rem);
+  line-height: 1.12;
+  letter-spacing: -0.025em;
+  color: var(--l-tinta);
+  text-wrap: balance;
+}
+
+.l-acto__texto {
+  margin: 0;
+  max-width: 52ch;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--l-tinta-2);
+}
+
+.l-acto__nota {
+  margin: 1.25rem 0 0;
+  max-width: 52ch;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--l-tinta-3);
+}
+
+/* === Los dos relojes =================================================== */
+
+.l-relojes {
+  margin: 2.5rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  max-width: 460px;
+}
+
+.l-reloj__etiqueta {
+  display: block;
+  margin-bottom: 0.45rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--l-tinta-3);
+}
+
+.l-reloj__barra {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.l-reloj__relleno {
+  display: block;
+  height: 100%;
+  width: 100%;
+  border-radius: 2px;
+  background: var(--l-accion);
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+}
+
+/* El de quien valida se enciende cuando el otro se para. Ese relevo es todo
+   el argumento del acto, asi que va en otro tono para que se distingan. */
+.l-reloj[data-reloj="valida"] .l-reloj__relleno { background: var(--l-accion-claro); }
+
+/* === La solicitud se divide ============================================ */
+
+.l-division { margin: 2.5rem 0 0; max-width: 520px; }
+
+.l-division__padre {
+  display: inline-block;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  font-family: var(--l-mono);
+  font-size: 0.8125rem;
+  color: var(--l-tinta);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.l-division__hijos {
+  margin: 0.9rem 0 0;
+  padding: 0 0 0 1.25rem;
+  list-style: none;
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.l-division__hijo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: var(--l-tinta-2);
+  background: rgba(255, 255, 255, 0.02);
+  will-change: transform, opacity;
+}
+
+.l-division__hijo span {
+  font-family: var(--l-mono);
+  font-size: 0.75rem;
+  color: var(--l-tinta-3);
+}
+
+.l-division__hijo em {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* Mismo criterio que el producto: el color dice el estado, y solo se usa
+   en estados. Contraste medido sobre el fondo del acto, no supuesto. */
+.l-division__hijo em[data-estado="ok"]     { background: rgba(46, 160, 103, 0.18); color: #7FD3A6; }
+.l-division__hijo em[data-estado="curso"]  { background: rgba(42, 95, 214, 0.24);  color: #90B0F5; }
+.l-division__hijo em[data-estado="espera"] { background: rgba(214, 158, 42, 0.18); color: #E5BE72; }
+
+/* === El rastro: el pago del concepto =================================== */
+
+.l-rastro {
+  position: relative;
+  margin: 3rem 0 0;
+  height: 92px;
+  max-width: 620px;
+}
+
+.l-rastro__eje {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 34px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.l-rastro__huella,
+.l-rastro__viva {
+  position: absolute;
+  top: 20px;
+  left: var(--p);
+  width: 1px;
+  height: 28px;
+  will-change: transform, opacity;
+}
+
+.l-rastro__huella {
+  background: repeating-linear-gradient(to bottom, var(--l-accion-claro) 0 3px, transparent 3px 6px);
+  opacity: 0.5;
+}
+.l-rastro__viva { background: var(--l-accion); }
+
+.l-rastro__huella em,
+.l-rastro__viva em {
+  position: absolute;
+  top: 36px;
+  left: 0;
+  transform: translateX(-50%);
+  font-style: normal;
+  font-family: var(--l-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.l-rastro__huella em { color: var(--l-tinta-3); }
+.l-rastro__viva em { color: var(--l-tinta); font-weight: 500; }
+
+.l-rastro__viva::after {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 24px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--l-accion);
+  box-shadow: 0 0 0 4px rgba(42, 95, 214, 0.22);
+}
+
+/* === Cierre ============================================================ */
+
+.l-cierre {
+  padding: clamp(5rem, 16vh, 10rem) clamp(1.25rem, 5vw, 4rem) clamp(3rem, 8vh, 5rem);
+  background: linear-gradient(180deg, var(--l-navy-hondo) 0%, #101E36 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.l-cierre__interior { max-width: 1120px; margin: 0 auto; }
+
+.l-cierre__titulo {
+  margin: 0 0 2.5rem;
+  font-family: var(--l-display);
+  font-weight: 600;
+  font-size: clamp(1.5rem, 3.6vw, 2.5rem);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  max-width: 26ch;
+  text-wrap: balance;
+}
+.l-cierre__titulo span { color: var(--l-tinta-3); }
+
+.l-cta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 3rem;
+  padding: 0.85rem 1.6rem;
+  border-radius: 7px;
+  background: var(--l-accion);
+  color: #FFFFFF;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 150ms ease-out, transform 150ms ease-out;
+}
+.l-cta:hover { background: #1E4DB8; transform: translateY(-1px); }
+
+.l-cierre__pie {
+  margin: 3rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.8;
+  color: var(--l-tinta-3);
+}
+.l-cierre__pie a { color: var(--l-tinta-2); }
+
+/* === Entrada de los actos ==============================================
+   Igual que el hero: el estado inicial SOLO existe si hay JS (clase l-anim
+   puesta en el <head>). Sin JavaScript no se esconde nada. */
+.l-anim .l-acto__numero,
+.l-anim .l-acto__titulo,
+.l-anim .l-acto__texto,
+.l-anim .l-acto__nota,
+.l-anim .l-relojes,
+.l-anim .l-division,
+.l-anim .l-rastro {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+/* === Movimiento reducido: el relato se entrega ya resuelto ============= */
+@media (prefers-reduced-motion: reduce) {
+  .l-anim .l-acto__numero,
+  .l-anim .l-acto__titulo,
+  .l-anim .l-acto__texto,
+  .l-anim .l-acto__nota,
+  .l-anim .l-relojes,
+  .l-anim .l-division,
+  .l-anim .l-rastro {
+    opacity: 1;
+    transform: none;
+  }
+  .l-reloj__relleno { transform: scaleX(1); }
+  .l-riel__paso { opacity: 1; }
+}
+
+/* === Responsive ======================================================== */
+@media (max-width: 860px) {
+  /* El riel deja de ser columna y pasa a ser una tira arriba: en un telefono
+     una guia lateral se come el ancho que necesita el texto. */
+  .l-relato { grid-template-columns: minmax(0, 1fr); }
+  .l-riel { position: static; height: auto; margin-bottom: 3rem; }
+  .l-riel__lista { flex-direction: row; flex-wrap: wrap; gap: 0.5rem 1.1rem; }
+  .l-actos { gap: clamp(4.5rem, 14vh, 8rem); }
+}
+
+/* Cinco fechas sobre un eje estrecho se pisan: medido a 349 px, "19 ago" y
+   "02 sep" se solapaban hasta leerse "ago02 sep". Bajar el tamano de letra
+   no alcanzaba.
+   Se escalonan en DOS alturas, alternando. Se conservan las cinco -- que
+   son el argumento del acto -- en vez de esconder ninguna. El eje crece
+   para dejarles sitio.
+   Los hijos de .l-rastro son: 1 el eje, 2-5 las huellas, 6 la vigente; de
+   ahi el nth-child. El :not() excluye al eje, que tambien es impar: sin el
+   aparecia una marca suelta pegada al borde izquierdo. */
+@media (max-width: 700px) {
+  .l-rastro { height: 128px; }
+  .l-rastro__huella em,
+  .l-rastro__viva em { font-size: 0.6875rem; }
+  .l-rastro > :nth-child(odd):not(.l-rastro__eje) em { top: 54px; }
+  .l-rastro > :nth-child(odd):not(.l-rastro__eje)::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 28px;
+    width: 1px;
+    height: 18px;
+    background: currentColor;
+    opacity: 0.35;
+  }
+}
