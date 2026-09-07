@@ -504,13 +504,20 @@
   color: var(--l-tinta-2);
 }
 
+/* Una columna o tres, nunca dos: con tres empresas, un auto-fit deja la
+   tercera ficha sola en una fila a media pantalla y se lee como si faltara
+   algo. El dia que sean cuatro, auto-fit vuelve a ser lo correcto. */
 .l-usan__lista {
   list-style: none;
   margin: clamp(2rem, 5vh, 3rem) 0 0;
   padding: 0;
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 760px) {
+  .l-usan__lista { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 .l-usan__ficha {
@@ -535,30 +542,29 @@
   color: var(--l-tinta-2);
 }
 
-.l-usan__modulos {
-  list-style: none;
-  margin: 1rem 0 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
-
-.l-usan__modulos li {
-  font-size: 0.72rem;
-  font-weight: 500;
-  padding: 0.24rem 0.55rem;
-  border-radius: 999px;
-  background: rgba(42, 95, 214, 0.2);
-  color: #A9C2FA;
-}
-
 .l-usan__desde {
   margin: 1rem 0 0;
   padding-top: 0.9rem;
   border-top: 1px solid rgba(255, 255, 255, 0.09);
   font-size: 0.78rem;
   color: var(--l-tinta-3);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* La serie correlativa de cada empresa. Es el detalle que PRUEBA lo que
+   dice el parrafo de abajo: no es que se filtre por empresa, es que cada
+   una numera su propio trabajo desde el uno. */
+.l-usan__serie {
+  font-family: var(--l-mono);
+  font-size: 0.72rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--l-tinta-2);
+  white-space: nowrap;
 }
 
 /* La nota de multiempresa: es capacidad del producto, no relleno. */
