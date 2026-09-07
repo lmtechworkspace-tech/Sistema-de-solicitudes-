@@ -2550,13 +2550,26 @@ function generarXlsxProyecto_(proyecto, hojas) {
 // --- reporte PDF: construccion del HTML (Fase D, propuesta 11) -----------
 
 var PROYECTOS_SALUD_LABEL_PDF = { normal: 'Normal', riesgo: 'En riesgo', critico: 'Crítico' };
+// v15.2 ("el color de verdad se pinta"): el importador HTML->Docs que usa
+// Apps Script para generar el PDF IGNORA `background-color` por CSS, tanto en
+// <td> como en <span> -- confirmado visualmente abriendo el PDF real: la
+// Carta Gantt, los chips y hasta el logo del encabezado salían SIN relleno,
+// pese a que los BORDES de color y el texto de color SÍ se pintan bien. El
+// escape conocido de ese importador es el atributo HTML LEGADO `bgcolor`
+// (Docs sí lo respeta, es lo que usaba la web de los 2000). Un <span> no
+// admite `bgcolor` -- por eso todo chip que antes era <span> pasa a ser una
+// tabla de una sola celda. `bgAttrPdf_` agrega el atributo junto al estilo
+// (el estilo se deja igual, por si algún motor SÍ lo respeta).
+function bgAttrPdf_(hex) { return ' bgcolor="' + hex + '"'; }
+
 // v12.1 ("color sobretodo"): color sólido por salud, para chips legibles en
 // el PDF (el motor rinde los tintes pálidos casi blancos -> se usa saturado).
 var PROYECTOS_SALUD_COLOR_PDF = { normal: '#16A34A', riesgo: '#D97706', critico: '#DC2626' };
 function saludChipPdf_(salud, texto) {
   var color = PROYECTOS_SALUD_COLOR_PDF[salud] || DOC.MUTED;
-  return '<span style="display:inline-block;background-color:' + color + ';color:#ffffff;font-weight:bold;' +
-    'font-size:11px;padding:2px 9px;border-radius:3px;">' + escaparHtml_(texto) + '</span>';
+  return '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;display:inline-block;"><tr>' +
+    '<td' + bgAttrPdf_(color) + ' style="background-color:' + color + ';color:#ffffff;font-weight:bold;' +
+    'font-size:11px;padding:2px 9px;border-radius:3px;">' + escaparHtml_(texto) + '</td></tr></table>';
 }
 // Color de una desviación en puntos porcentuales: rojo si va por debajo del
 // plan, verde si está a la par o por encima.
@@ -2583,7 +2596,7 @@ function fechaCortaPdfProyecto_(valor) {
 // desviaciones, salud, rendimiento) traía fila de títulos -- el lector veía
 // columnas de datos sin saber qué era cada una. Mismo navy que docSeccionOt_.
 function thNavyPdf_(texto, extra) {
-  return '<td style="padding:6px 8px;background:' + DOC.NAVY + ';color:#ffffff;font-size:9px;' +
+  return '<td' + bgAttrPdf_(DOC.NAVY) + ' style="padding:6px 8px;background:' + DOC.NAVY + ';color:#ffffff;font-size:9px;' +
     'font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;border:1px solid ' + DOC.NAVY + ';' +
     (extra || '') + '">' + escaparHtml_(texto) + '</td>';
 }
@@ -2599,8 +2612,9 @@ function encabezadoPdf_(titulos) {
 // la Carta Gantt (el motor HTML->PDF rinde los tintes pálidos casi blancos, así
 // que aquí también se usa color saturado). Sirve para clasificar de un vistazo.
 function chipTonoPdf_(color, texto) {
-  return '<span style="display:inline-block;background-color:' + color + ';color:#ffffff;font-weight:bold;' +
-    'font-size:8px;padding:2px 6px;border-radius:3px;white-space:nowrap;">' + escaparHtml_(texto) + '</span>';
+  return '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;display:inline-block;"><tr>' +
+    '<td' + bgAttrPdf_(color) + ' style="background-color:' + color + ';color:#ffffff;font-weight:bold;' +
+    'font-size:8px;padding:2px 6px;border-radius:3px;white-space:nowrap;">' + escaparHtml_(texto) + '</td></tr></table>';
 }
 
 // Días de calendario entre dos claves 'YYYY-MM-DD' (b - a).
@@ -2670,8 +2684,8 @@ function seccionNarrativaPdf_(detalle) {
   return docSeccionOt_('Resumen ejecutivo') +
     '<p style="font-size:12px;line-height:1.6;color:' + DOC.INK_SOFT + ';margin:0 0 10px;">' + frases.join(' ') + '</p>' +
     '<table style="border-collapse:collapse;margin:0 0 18px;width:100%;"><tr>' +
-      '<td style="width:3px;background:' + DOC.NAVY + ';"></td>' +
-      '<td style="background:' + DOC.PANEL + ';padding:8px 12px;font-size:12px;color:' + DOC.INK + ';">' +
+      '<td' + bgAttrPdf_(DOC.NAVY) + ' style="width:3px;background:' + DOC.NAVY + ';">&nbsp;</td>' +
+      '<td' + bgAttrPdf_(DOC.PANEL) + ' style="background:' + DOC.PANEL + ';padding:8px 12px;font-size:12px;color:' + DOC.INK + ';">' +
         '<b>Decisión sugerida para gerencia:</b> ' + escaparHtml_(decision) +
       '</td>' +
     '</tr></table>';
@@ -2738,18 +2752,23 @@ function seccionMiniGanttSemanalPdf_(tareas, hitos, rendimiento, semanas) {
     if (!tareasSemana.length && !hitosSemana.length) return '';
 
     var extra = tareasSemana.length - MINI_GANTT_TOPE_TAREAS_;
-    var chips = tareasSemana.slice(0, MINI_GANTT_TOPE_TAREAS_).map(function (a) {
+    // v15.2: los chips van en celdas de UNA fila de tabla (no <span> con
+    // background-color, que el importador HTML->Docs ignora) para que sigan
+    // en línea unos con otros -- un chip por <table> propio se vería bien
+    // solo, pero en fila se apilaría uno debajo del otro.
+    var celdasChip = tareasSemana.slice(0, MINI_GANTT_TOPE_TAREAS_).map(function (a) {
       var color = GANTT_SEMAFORO_SOLIDO_[a.semaforo] || '#64748B';
       var plan = planPorTarea[a.actividad_id];
       var flechaDesv = (plan && plan.desviacion_pp !== null && plan.desviacion_pp !== undefined)
         ? (plan.desviacion_pp < 0 ? ' &#9660;' : ' &#9650;') : '';
       var criticaTag = a.es_critica ? ' &#9733;' : '';
       var titulo = a.titulo.length > 30 ? a.titulo.slice(0, 29) + '…' : a.titulo;
-      return '<span style="display:inline-block;background-color:' + color + ';color:#ffffff;font-size:9px;' +
-        'font-weight:bold;padding:3px 7px;border-radius:3px;margin:2px 4px 2px 0;white-space:nowrap;">' +
-        escaparHtml_(titulo) + criticaTag + flechaDesv + '</span>';
+      return '<td' + bgAttrPdf_(color) + ' style="background-color:' + color + ';color:#ffffff;font-size:9px;' +
+        'font-weight:bold;padding:3px 7px;border-radius:3px;white-space:nowrap;">' +
+        escaparHtml_(titulo) + criticaTag + flechaDesv + '</td><td style="width:4px;"></td>';
     }).join('');
-    var masTxt = extra > 0 ? '<span style="font-size:9px;color:' + DOC.MUTED + ';">+' + extra + ' más</span>' : '';
+    if (extra > 0) celdasChip += '<td style="font-size:9px;color:' + DOC.MUTED + ';white-space:nowrap;">+' + extra + ' más</td>';
+    var chips = celdasChip ? '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>' + celdasChip + '</tr></table>' : '';
     var hitosTxt = hitosSemana.length
       ? '<div style="margin-top:5px;font-size:10px;color:' + DOC.NAVY + ';font-weight:bold;">&#9670; ' +
           escaparHtml_(hitosSemana.map(function (h) { return h.nombre; }).join(' · ')) + '</div>'
@@ -2757,7 +2776,7 @@ function seccionMiniGanttSemanalPdf_(tareas, hitos, rendimiento, semanas) {
     return '<div style="border:1px solid ' + DOC.HAIRLINE + ';border-radius:4px;padding:8px 10px;margin-bottom:7px;">' +
       '<div style="font-size:10px;font-weight:bold;color:' + DOC.MUTED + ';text-transform:uppercase;letter-spacing:0.3px;margin-bottom:5px;">' +
         'Semana del ' + fechaCortaPdfProyecto_(sem.desde) + ' al ' + fechaCortaPdfProyecto_(sem.hasta) + '</div>' +
-      '<div>' + chips + masTxt + '</div>' + hitosTxt +
+      chips + hitosTxt +
     '</div>';
   }).join('');
   if (!bloques) return '';
@@ -2926,7 +2945,7 @@ function docChromeProyectoPdf_(meta, contenidoHtml, paginaCss) {
     '<table width="100%" style="border-collapse:collapse;"><tr>' +
     '<td style="vertical-align:middle;">' +
     '<table style="border-collapse:collapse;"><tr>' +
-    '<td style="background:' + DOC.NAVY + ';color:#ffffff;font-family:' + DOC.SERIF + ';font-weight:bold;font-size:18px;' +
+    '<td' + bgAttrPdf_(DOC.NAVY) + ' style="background:' + DOC.NAVY + ';color:#ffffff;font-family:' + DOC.SERIF + ';font-weight:bold;font-size:18px;' +
     'width:30px;height:30px;text-align:center;vertical-align:middle;border-radius:5px;">S</td>' +
     '<td style="padding-left:10px;vertical-align:middle;">' +
     '<div style="font-size:17px;font-weight:bold;letter-spacing:2px;color:' + DOC.INK + ';">SIGSO</div>' +
@@ -3073,7 +3092,7 @@ function seccionPortadaPdf_(detalle) {
 // rendimiento (Fase G3): cero cálculo nuevo, solo presentación.
 function kpiTarjetaPdf_(valor, etiqueta, tono) {
   var color = tono === 'alerta' ? '#B91C1C' : (tono === 'ok' ? '#15803D' : DOC.INK);
-  return '<td style="width:16.6%;border:1px solid ' + DOC.HAIRLINE + ';background:' + DOC.PANEL + ';' +
+  return '<td' + bgAttrPdf_(DOC.PANEL) + ' style="width:16.6%;border:1px solid ' + DOC.HAIRLINE + ';background:' + DOC.PANEL + ';' +
       'padding:9px 6px;text-align:center;vertical-align:middle;">' +
     '<div style="font-size:21px;font-weight:bold;font-family:' + DOC.SERIF + ';color:' + color + ';line-height:1.05;">' +
       escaparHtml_(String(valor)) + '</div>' +
@@ -3239,9 +3258,15 @@ function ganttColorMarcaPdf_(letra) {
 function ganttDiaCortoPdf_(clave) { var p = String(clave).split('-'); return p[2] + '/' + p[1]; }
 
 // Chip de color para la leyenda del semáforo de la Carta Gantt.
+// v15.2: devuelve una CELDA (no <span>) -- background-color en <span> no se
+// pinta en el PDF real. El llamador concatena varias en una sola fila de
+// tabla (filaLeyendaPdf_) para que sigan una al lado de otra.
 function ganttChipLeyendaPdf_(color, texto) {
-  return '<span style="display:inline-block;background-color:' + color + ';color:#ffffff;font-weight:bold;' +
-    'font-size:8px;padding:2px 7px;border-radius:3px;margin-right:5px;">' + escaparHtml_(texto) + '</span>';
+  return '<td' + bgAttrPdf_(color) + ' style="background-color:' + color + ';color:#ffffff;font-weight:bold;' +
+    'font-size:8px;padding:2px 7px;border-radius:3px;white-space:nowrap;">' + escaparHtml_(texto) + '</td><td style="width:5px;"></td>';
+}
+function filaLeyendaPdf_(celdas) {
+  return '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;"><tr>' + celdas + '</tr></table>';
 }
 
 // --- v15: Carta Gantt de BARRAS (por semana) --------------------------------
@@ -3317,15 +3342,16 @@ function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyCl
   var hoyBorde = 'border-left:2px solid #2563EB;';
 
   // Encabezado: fila de meses + fila de semanas (inicio de semana dd/mm).
-  var filaMeses = '<tr><td rowspan="2" style="padding:5px 8px;' + anchoLabel + 'background-color:' + DOC.NAVY + ';color:#ffffff;' +
+  var filaMeses = '<tr><td rowspan="2"' + bgAttrPdf_(DOC.NAVY) + ' style="padding:5px 8px;' + anchoLabel + 'background-color:' + DOC.NAVY + ';color:#ffffff;' +
       'font-size:9px;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;border:1px solid ' + DOC.NAVY + ';vertical-align:bottom;">Tarea</td>' +
     bandas.map(function (b) {
-      return '<td colspan="' + b.span + '" style="padding:3px 2px;text-align:center;font-size:8px;font-weight:bold;text-transform:uppercase;' +
+      return '<td colspan="' + b.span + '"' + bgAttrPdf_(DOC.NAVY) + ' style="padding:3px 2px;text-align:center;font-size:8px;font-weight:bold;text-transform:uppercase;' +
         'letter-spacing:0.3px;border:1px solid ' + DOC.NAVY + ';background-color:' + DOC.NAVY + ';color:#ffffff;">' + mesBandaPdf_(b.mes) + '</td>';
     }).join('') + '</tr>';
   var filaSemanas = '<tr>' + semanas.map(function (s, i) {
-    return '<td style="padding:3px 1px;text-align:center;font-size:7px;font-weight:bold;border:1px solid ' + DOC.NAVY + ';' +
-      'background-color:' + (semanaDeHoy[i] ? '#2563EB' : '#24344F') + ';color:#ffffff;">' + ganttDiaCortoPdf_(s.desde) + '</td>';
+    var colSem = semanaDeHoy[i] ? '#2563EB' : '#24344F';
+    return '<td' + bgAttrPdf_(colSem) + ' style="padding:3px 1px;text-align:center;font-size:7px;font-weight:bold;border:1px solid ' + DOC.NAVY + ';' +
+      'background-color:' + colSem + ';color:#ffffff;">' + ganttDiaCortoPdf_(s.desde) + '</td>';
   }).join('') + '</tr>';
 
   // Fila de hitos (rombo en la semana de su fecha objetivo).
@@ -3359,11 +3385,12 @@ function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyCl
       var onBar = barIni && barFin && s.hasta >= barIni && s.desde <= barFin;
       var onAtraso = !terminal && kCom && !onBar && s.hasta > kCom && s.desde <= hoyClave;
       var bg = onBar ? color : (onAtraso ? GANTT_ATRASO_SOLIDO_ : '');
-      // CLAVE: el motor HTML->PDF de Apps Script NO pinta el fondo de un <td>
-      // VACÍO -- por eso las barras salían invisibles. Con &nbsp; de contenido
-      // (mismo patrón EXACTO que las celdas con letra, que sí se veían) el td
-      // pinta su fondo. El padding le da la altura de la barra.
-      return '<td style="padding:7px 1px;' + bordeCelda + (bg ? 'background-color:' + bg + ';' : '') +
+      // v15.2: el fondo por CSS de un <td> NO se pinta en el PDF real (el
+      // importador HTML->Docs de Apps Script lo ignora) -- hace falta el
+      // atributo `bgcolor`, el escape legado que Docs sí respeta. El &nbsp;
+      // de contenido es un segundo resguardo (un <td> vacío puede no
+      // "existir" para el renderer aunque tenga bgcolor).
+      return '<td' + (bg ? bgAttrPdf_(bg) : '') + ' style="padding:7px 1px;' + bordeCelda + (bg ? 'background-color:' + bg + ';' : '') +
         (semanaDeHoy[i] ? hoyBorde : '') + '">' + (bg ? '&nbsp;' : '') + '</td>';
     }).join('');
 
@@ -3378,14 +3405,15 @@ function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyCl
     return '<tr><td style="padding:5px 8px;' + anchoLabel + bordeCelda + 'vertical-align:middle;">' + etiqueta + '</td>' + celdas + '</tr>';
   }).join('');
 
-  var leyenda =
+  var leyenda = filaLeyendaPdf_(
     ganttChipLeyendaPdf_('#16A34A', 'Al día / terminada') +
     ganttChipLeyendaPdf_('#D97706', 'En riesgo') +
     ganttChipLeyendaPdf_('#DC2626', 'Atrasada') +
     ganttChipLeyendaPdf_('#2563EB', 'Bloqueada / hoy') +
     ganttChipLeyendaPdf_('#7C3AED', 'En revisión') +
     ganttChipLeyendaPdf_('#64748B', 'Pendiente') +
-    ganttChipLeyendaPdf_(GANTT_ATRASO_SOLIDO_, 'Atraso sin cerrar');
+    ganttChipLeyendaPdf_(GANTT_ATRASO_SOLIDO_, 'Atraso sin cerrar')
+  );
   return docSeccionOt_('Carta Gantt') +
     '<div style="margin:0 0 8px;">' + leyenda + '</div>' +
     '<div style="font-size:9px;color:' + DOC.MUTED + ';margin:0 0 8px;line-height:1.5;">' +
@@ -3436,12 +3464,13 @@ function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia)
   if (!paginas.length) paginas.push(dias.slice(0, chunk)); // nunca dejar la sección sin página
 
   var html = paginas.map(function (diasPagina, idx) {
-    var encabezado = '<tr><td style="padding:5px 8px;width:22%;background-color:' + DOC.NAVY + ';color:#ffffff;' +
+    var encabezado = '<tr><td' + bgAttrPdf_(DOC.NAVY) + ' style="padding:5px 8px;width:22%;background-color:' + DOC.NAVY + ';color:#ffffff;' +
         'font-size:9px;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;border:1px solid ' + DOC.NAVY + ';">Tarea</td>' +
       diasPagina.map(function (d) {
         var esHoy = d === hoyClave;
-        return '<td style="padding:4px 1px;text-align:center;font-size:8px;line-height:1.15;font-weight:bold;' +
-          'border:1px solid ' + DOC.NAVY + ';background-color:' + (esHoy ? '#2563EB' : DOC.NAVY) + ';color:#ffffff;">' +
+        var colDia = esHoy ? '#2563EB' : DOC.NAVY;
+        return '<td' + bgAttrPdf_(colDia) + ' style="padding:4px 1px;text-align:center;font-size:8px;line-height:1.15;font-weight:bold;' +
+          'border:1px solid ' + DOC.NAVY + ';background-color:' + colDia + ';color:#ffffff;">' +
           ganttDiaCortoPdf_(d) + '</td>';
       }).join('') + '</tr>';
     var filas = tareas.map(function (a) {
@@ -3468,7 +3497,7 @@ function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia)
         // motor no pinta el fondo de un <td> vacío, así que sin esto las
         // celdas de barra sin marca salían invisibles.
         var contenido = c.letra || (bg ? '&nbsp;' : '');
-        return '<td style="padding:6px 1px;text-align:center;font-size:9px;font-weight:bold;color:' + colorLetra + ';' +
+        return '<td' + (bg ? bgAttrPdf_(bg) : '') + ' style="padding:6px 1px;text-align:center;font-size:9px;font-weight:bold;color:' + colorLetra + ';' +
           'border:1px solid ' + DOC.HAIRLINE + ';' + (bg ? 'background-color:' + bg + ';' : '') + borde + '">' + contenido + '</td>';
       }).join('');
       // Si el compromiso cae MÁS ALLÁ de la ventana visible, no se pierde: se
@@ -3488,12 +3517,13 @@ function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia)
     return '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 14px;table-layout:fixed;' +
       (idx > 0 ? 'page-break-before:always;' : '') + '"><thead>' + encabezado + '</thead><tbody>' + filas + '</tbody></table>';
   }).join('');
-  var leyendaColores =
+  var leyendaColores = filaLeyendaPdf_(
     ganttChipLeyendaPdf_('#16A34A', 'Al día / entregado') +
     ganttChipLeyendaPdf_('#D97706', 'En riesgo / revisión') +
     ganttChipLeyendaPdf_('#DC2626', 'Atrasada / bloqueada') +
     ganttChipLeyendaPdf_('#2563EB', 'En proceso / hoy') +
-    ganttChipLeyendaPdf_('#64748B', 'Pendiente / pausa');
+    ganttChipLeyendaPdf_('#64748B', 'Pendiente / pausa')
+  );
   return docSeccionOt_('Ejecución día a día') +
     '<div style="margin:0 0 8px;">' + leyendaColores + '</div>' +
     '<div style="font-size:9px;color:' + DOC.MUTED + ';margin:0 0 8px;line-height:1.5;">' +
@@ -3546,7 +3576,7 @@ function seccionWorkloadPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaD
       var celdas = diasPagina.map(function (d) {
         var total = porPersona[persona].reduce(function (s, a) { return s + horasDelDia_(a.actividad_id, d); }, 0);
         var sobrecarga = total > CUMPLIMIENTO_HORAS_JORNADA;
-        return '<td style="' + celdaValorFicha_() + 'width:auto;text-align:center;' +
+        return '<td' + (sobrecarga ? bgAttrPdf_('#FEE2E2') : '') + ' style="' + celdaValorFicha_() + 'width:auto;text-align:center;' +
           (sobrecarga ? 'background:#FEE2E2;font-weight:bold;color:#B91C1C;' : '') + '">' + (total ? redond1Pdf_(total) : '') + '</td>';
       }).join('');
       return '<tr><td style="' + celdaValorFicha_() + 'width:auto;">' + escaparHtml_(persona) + '</td>' + celdas + '</tr>';
