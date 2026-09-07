@@ -143,7 +143,7 @@ test('descargarReporte config: personas filtra qué tareas entran a vencimientos
   assert.doesNotMatch(html, /Tarea de Cami/);
 });
 
-test('descargarReporte config: Gantt/Workload agregan @page landscape; sin ellos, no', () => {
+test('descargarReporte config: Gantt/Workload agregan @page apaisado (ancho > alto); sin ellos, no', () => {
   const ctx = loadConSchema();
   const { proyecto, tarea } = armarProyectoConTarea(ctx);
   // AYER es anterior a fecha_creacion (la tarea se creó "hoy" en este test) --
@@ -160,7 +160,11 @@ test('descargarReporte config: Gantt/Workload agregan @page landscape; sin ellos
   }, CTX_LEO);
   const htmlGantt = htmlDe_(conGantt);
   assert.match(htmlGantt, /@page/);
-  assert.match(htmlGantt, /landscape/);
+  // v15.6: la palabra `landscape` se abandonó -- @page {size:A4 landscape}
+  // no invierte ancho/alto en el motor real (confirmado renderizando dos
+  // reportes a píxeles). Ahora el ancho y el alto van explícitos en mm, sin
+  // ninguna palabra de orientación que el motor pueda malinterpretar.
+  assert.match(htmlGantt, /@page \{ size: 420mm 297mm;/, 'A3 explícito (420x297mm), nunca A4 ni la palabra landscape');
   assert.match(htmlGantt, /Carta Gantt/);
   assert.match(htmlGantt, /Carga de trabajo/);
   // El registro del día (P0) manda: la celda debe traer la marca de

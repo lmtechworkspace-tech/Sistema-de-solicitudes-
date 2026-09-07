@@ -2945,9 +2945,26 @@ function construirDiasReportePdf_(tareas, rango, hoyClave) {
 // más abajo): cada página del PDF trae exactamente las columnas que le caben
 // a su tamaño. No hay forma de probar la geometría real en el sandbox de
 // tests (no tiene motor de PDF) -- se verifica leyendo el HTML generado.
+// v15.6: `@page { size: A4 landscape }` NO invierte ancho y alto en el motor
+// real -- confirmado renderizando DOS reportes reales a píxeles. Uno mapeó a
+// 'A3 landscape' y salió apaisado, el documento ENTERO (hasta la portada,
+// que no pide horizontal) -- prueba de que la regla @page es del documento
+// completo, no por sección, y que "A3 landscape" sí funciona. El otro (un
+// proyecto de ~17 semanas, 47 tareas) mapeó a 'A4 landscape' y salió
+// VERTICAL de punta a punta -- 19 páginas, la Carta Gantt entera apretada
+// en un ancho de retrato, prácticamente ilegible.
+// El arreglo va en dos capas, cada una suficiente por sí sola:
+//   1. El piso sube a A3 -- 'A4' deja de usarse para cualquier tabla que
+//      necesite horizontal (ya evita el caso confirmado).
+//   2. Se abandona la palabra clave `landscape` por completo: en vez de
+//      pedir un tamaño con nombre y confiar en que el motor invierta sus
+//      medidas, se declaran el ancho y el alto explícitos (el ancho ya
+//      puesto primero) -- no hay orientación que interpretar mal porque no
+//      hay ninguna palabra de orientación en la regla.
+var TAMANOS_APAISADOS_MM_ = { A3: '420mm 297mm', A2: '594mm 420mm' };
 function paginaCssParaDias_(totalDias) {
-  var tamano = totalDias <= 18 ? 'A4' : (totalDias <= 30 ? 'A3' : 'A2');
-  return '@page { size: ' + tamano + ' landscape; margin: 1.2cm; }';
+  var tamano = totalDias <= 30 ? 'A3' : 'A2';
+  return '@page { size: ' + TAMANOS_APAISADOS_MM_[tamano] + '; margin: 1.2cm; }';
 }
 
 // Mismo chrome visual que docChromeOt_ (OrdenTrabajo.gs), pero con su propio
@@ -3258,8 +3275,10 @@ function celdaGanttPdf_(actividadId, diaClave, claveCreacion, registroPorTareaDi
 // Días por página según el tamaño que va a usar paginaCssParaDias_ (mismos
 // cortes) -- así cada página del Gantt/Workload trae justo las columnas que
 // le caben a su tamaño de papel, sin adivinar por separado en dos lugares.
+// Mismos niveles que paginaCssParaDias_ (nunca A4 -- ver el comentario ahí):
+// cuántas columnas de día le caben a cada tamaño de página.
 function diasPorPaginaPdf_(totalDias) {
-  return totalDias <= 18 ? 18 : (totalDias <= 30 ? 30 : 45);
+  return totalDias <= 30 ? 30 : 45;
 }
 
 // v12 ("reporte PDF potenciado"): la Carta Gantt deja de ser una grilla de

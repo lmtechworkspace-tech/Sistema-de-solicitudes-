@@ -315,3 +315,46 @@ test('sin SIGSO_SITIO_PUBLICO configurado, el PDF se genera igual, sin enlace ro
   assert.match(html, /Confidencial/, 'el documento se genera igual');
   assert.doesNotMatch(html, /<a href="https:\/\//, 'sin sitio configurado, no hay enlace que mostrar (ni uno roto)');
 });
+
+// --- 8. Un proyecto de muchas semanas nunca cae en A4 ------------------------
+// Caso real reportado: un proyecto de ~17 semanas y 47 tareas generó un PDF
+// de 19 páginas, TODO en vertical (hasta la portada) -- @page {size:A4
+// landscape} no invierte ancho/alto en el motor real. A3/A2 sí lo hacen, así
+// que A4 deja de usarse para cualquier tabla que necesite horizontal, y la
+// palabra `landscape` se reemplaza por el ancho/alto explícitos en mm.
+
+test('17 semanas de plan (el caso reportado) usa A3 explícito, nunca A4 ni la palabra landscape', () => {
+  const ctx = loadConSchema();
+  const proyecto = ctx.Proyectos.crear({ nombre: 'Largo', fecha_inicio: '2026-09-04', fecha_objetivo: '2026-12-31' }, CTX_LEO);
+  ctx.Proyectos.gestionarIntegrante({ proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE' }, CTX_LEO);
+  // ~17 semanas de tareas semanales, para reproducir la forma del proyecto real.
+  for (let i = 0; i < 17; i++) {
+    const compromiso = new Date(2026, 8, 4 + i * 7).toISOString().slice(0, 10);
+    const t = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'Tarea semana ' + i, responsable_email: 'marcelo@rld.cl', fecha_compromiso: compromiso }, CTX_LEO);
+    ctx.Actividades.confirmar({ actividad_id: t.actividad_id, fecha_compromiso: compromiso }, CTX_MARCELO);
+  }
+
+  const res = ctx.Proyectos.descargarReporte({ proyecto_id: proyecto.proyecto_id, config: { secciones: ['gantt'] } }, CTX_LEO);
+  const html = htmlDe_(res);
+  assert.doesNotMatch(html, /size: A4/, 'A4 nunca debe usarse para una tabla que necesita horizontal');
+  assert.doesNotMatch(html, /landscape/, 'sin la palabra landscape en ningún lado: solo ancho/alto explícitos');
+  assert.match(html, /@page \{ size: (420mm 297mm|594mm 420mm);/, 'A3 o A2 explícito, según el tamaño real');
+});
+
+test('paginaCssParaDias_ jamás produce A4 -- el piso es A3', () => {
+  // Contrato aislado: para cualquier cantidad de columnas, nunca A4.
+  const ctx = loadConSchema();
+  for (const totalDias of [1, 5, 18, 19, 30, 31, 60, 100]) {
+    // No hay acceso directo a la función privada desde el objeto público
+    // Proyectos -- se prueba end-to-end vía un rango explícito de ese ancho.
+    const proyecto = ctx.Proyectos.crear({ nombre: 'P' + totalDias, fecha_inicio: '2026-01-01', fecha_objetivo: '2026-12-31' }, CTX_LEO);
+    const t = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'T', responsable_email: 'leo@rld.cl', fecha_compromiso: '2026-01-01' }, CTX_LEO);
+    const desde = '2026-01-01';
+    const hasta = new Date(new Date(desde).getTime() + (totalDias - 1) * 86400000).toISOString().slice(0, 10);
+    const res = ctx.Proyectos.descargarReporte({
+      proyecto_id: proyecto.proyecto_id, config: { secciones: ['gantt', 'workload'], rango: { desde, hasta } }
+    }, CTX_LEO);
+    const html = htmlDe_(res);
+    assert.doesNotMatch(html, /size: A4/, totalDias + ' días no debe mapear a A4');
+  }
+});
