@@ -3359,7 +3359,12 @@ function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyCl
       var onBar = barIni && barFin && s.hasta >= barIni && s.desde <= barFin;
       var onAtraso = !terminal && kCom && !onBar && s.hasta > kCom && s.desde <= hoyClave;
       var bg = onBar ? color : (onAtraso ? GANTT_ATRASO_SOLIDO_ : '');
-      return '<td style="padding:7px 1px;' + bordeCelda + (bg ? 'background-color:' + bg + ';' : '') + (semanaDeHoy[i] ? hoyBorde : '') + '"></td>';
+      // CLAVE: el motor HTML->PDF de Apps Script NO pinta el fondo de un <td>
+      // VACÍO -- por eso las barras salían invisibles. Con &nbsp; de contenido
+      // (mismo patrón EXACTO que las celdas con letra, que sí se veían) el td
+      // pinta su fondo. El padding le da la altura de la barra.
+      return '<td style="padding:7px 1px;' + bordeCelda + (bg ? 'background-color:' + bg + ';' : '') +
+        (semanaDeHoy[i] ? hoyBorde : '') + '">' + (bg ? '&nbsp;' : '') + '</td>';
     }).join('');
 
     var commitTxt = kCom
@@ -3459,8 +3464,12 @@ function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia)
         else if (enAtraso) bg = GANTT_ATRASO_SOLIDO_;
         var colorLetra = bg ? '#ffffff' : DOC.INK_SOFT;
         var borde = esHoy ? 'border-left:2px solid #2563EB;' : '';
+        // Contenido &nbsp; cuando hay color pero no letra (barra/atraso): el
+        // motor no pinta el fondo de un <td> vacío, así que sin esto las
+        // celdas de barra sin marca salían invisibles.
+        var contenido = c.letra || (bg ? '&nbsp;' : '');
         return '<td style="padding:6px 1px;text-align:center;font-size:9px;font-weight:bold;color:' + colorLetra + ';' +
-          'border:1px solid ' + DOC.HAIRLINE + ';' + (bg ? 'background-color:' + bg + ';' : '') + borde + '">' + (c.letra || '') + '</td>';
+          'border:1px solid ' + DOC.HAIRLINE + ';' + (bg ? 'background-color:' + bg + ';' : '') + borde + '">' + contenido + '</td>';
       }).join('');
       // Si el compromiso cae MÁS ALLÁ de la ventana visible, no se pierde: se
       // marca en la etiqueta con "vence dd-mm →" (la flecha dice "fuera del
