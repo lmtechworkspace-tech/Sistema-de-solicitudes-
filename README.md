@@ -97,6 +97,15 @@ Editar temporalmente en `frontend/js/config.js`: `INTAKE_URL` →
 `analista@homepymes.cl` / `dev@homepymes.cl` para otros roles). Revertir
 antes de commitear.
 
+## Página de presentación (landing)
+
+`frontend/landing.html` es una página pública **aparte de la aplicación**: no
+toca el formulario, la plataforma ni el contrato con Apps Script, y no hace
+ninguna llamada al backend. Se despliega sola con el push a `main`.
+
+Concepto, librerías, cómo probarla y qué queda pendiente:
+[documentacion/SIGSO-v15.1-landing.md](documentacion/SIGSO-v15.1-landing.md).
+
 ## Requisitos invariantes
 
 Presupuesto $0 · Solo Google Workspace + GitHub · Hosting GitHub Pages ·
