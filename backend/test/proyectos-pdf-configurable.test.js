@@ -209,12 +209,11 @@ test('descargarReporte config: la sección KPIs trae la banda de indicadores eje
   assert.match(html, /Hitos atrasados/);
 });
 
-test('descargarReporte config: el Gantt dibuja barras (fondo de color en el período planificado), no solo letras', () => {
+test('descargarReporte config: la Carta Gantt dibuja barras de color, no solo letras', () => {
   const ctx = loadConSchema();
   const { proyecto, tarea } = armarProyectoConTarea(ctx);
-  // Rango que cubre desde antes de la creación hasta la fecha comprometida:
-  // la barra planificada (creación -> compromiso) debe pintar celdas con
-  // color de fondo aunque no haya ninguna marca registrada.
+  // v15: 'gantt' ahora es la carta de BARRAS por semana. La barra de la tarea
+  // (inicio -> compromiso) debe pintar celdas con color de fondo.
   const hoy = new Date().toISOString().slice(0, 10);
   const res = ctx.Proyectos.descargarReporte({
     proyecto_id: proyecto.proyecto_id,
@@ -222,12 +221,13 @@ test('descargarReporte config: el Gantt dibuja barras (fondo de color en el per�
   }, CTX_LEO);
   const html = htmlDe_(res);
   assert.match(html, /Carta Gantt/);
-  // v12.1: alguna celda del Gantt trae un background SÓLIDO SATURADO de barra
-  // (semáforo) -- el motor HTML->PDF rinde los tintes pálidos casi blancos, así
-  // que las barras usan color saturado (verde/ámbar/rojo/azul/gris/violeta).
+  // Alguna celda trae un background SÓLIDO SATURADO de barra (semáforo) -- el
+  // motor HTML->PDF rinde los tintes pálidos casi blancos, así que se usa color
+  // saturado (verde/ámbar/rojo/azul/gris/violeta).
   assert.match(html, /background-color:#(16A34A|D97706|DC2626|2563EB|64748B|94A3B8|7C3AED)/);
   // Y una leyenda de colores para decodificar el semáforo.
-  assert.match(html, /Al día \/ entregado/);
+  assert.match(html, /Al día \/ terminada/);
+  assert.match(html, /Atraso sin cerrar/);
 });
 
 test('descargarReporte config: la bitácora, con Gantt activo, se acota al mismo rango (no "últimas 30")', () => {

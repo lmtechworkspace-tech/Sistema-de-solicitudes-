@@ -3005,7 +3005,15 @@ function construirHtmlReporteConfigurado_(detalle, todasTareas, rendimiento, tar
   if (incluye('vencimientos')) partes.push(seccionVencimientosPdf_(tareasFiltradas));
   if (incluye('rendimiento')) partes.push(seccionRendimientoPdf_(rendimiento));
   if (incluye('desviaciones')) partes.push(seccionDesviacionesPdf_(rendimiento, tareasFiltradas, tareasPorId));
-  if (incluye('gantt')) partes.push(seccionGanttPdf_(tareasFiltradas, dias, registroPorTareaDia, eventosPorTareaDia));
+  if (incluye('gantt')) {
+    // v15: la carta de BARRAS por semana es el cronograma principal (se lee de
+    // un vistazo). La grilla de letras día a día solo se agrega si de verdad
+    // hay registro diario que mostrar -- si no, sale casi vacía y estorba.
+    partes.push(seccionCronogramaBarrasPdf_(tareasFiltradas, detalle.hitos || [], detalle.proyecto.fecha_inicio, config.rango, hoyClave));
+    if (hayRegistroDiario_(registroPorTareaDia)) {
+      partes.push(seccionGanttPdf_(tareasFiltradas, dias, registroPorTareaDia, eventosPorTareaDia));
+    }
+  }
   if (incluye('workload')) partes.push(seccionWorkloadPdf_(tareasFiltradas, dias, registroPorTareaDia, eventosPorTareaDia));
   if (incluye('bitacora')) {
     // v11: "la bitácora del día es la fuente, no una captura" -- si hay un
@@ -3028,7 +3036,13 @@ function construirHtmlReporteConfigurado_(detalle, todasTareas, rendimiento, tar
   if (incluye('leyenda')) partes.push(seccionLeyendaPdf_());
 
   var p = detalle.proyecto;
-  var paginaCss = necesitaDias ? paginaCssParaDias_(dias.length) : '';
+  // Tamano de pagina: la mayor cantidad de columnas entre la grilla de dias
+  // (Gantt de letras / Workload) y las semanas de la carta de barras.
+  var columnas = dias.length;
+  if (incluye('gantt')) {
+    columnas = Math.max(columnas, semanasBarrasPdf_(tareasFiltradas, detalle.hitos || [], detalle.proyecto.fecha_inicio, config.rango, hoyClave).length);
+  }
+  var paginaCss = (necesitaDias || incluye('gantt')) ? paginaCssParaDias_(columnas) : '';
   return docChromeProyectoPdf_({ tipoDoc: 'Reporte de proyecto', referencia: p.codigo || p.nombre }, partes.join(''), paginaCss);
 }
 
@@ -3230,6 +3244,160 @@ function ganttChipLeyendaPdf_(color, texto) {
     'font-size:8px;padding:2px 7px;border-radius:3px;margin-right:5px;">' + escaparHtml_(texto) + '</span>';
 }
 
+// --- v15: Carta Gantt de BARRAS (por semana) --------------------------------
+// La grilla de letras dia x dia es un registro de EJECUCION: solo se ve bien
+// cuando hay marca casi todos los dias. En un proyecto de plan (tareas con
+// fecha comprometida pero poco registro diario) sale casi vacia. Esta carta
+// dibuja, en cambio, una BARRA continua por tarea sobre una escala de SEMANAS
+// (con bandas de mes), coloreada por su semaforo -- la vista que se lee de un
+// vistazo, igual que la del Cronograma en pantalla. Sigue siendo una tabla de
+// celdas de color solido (el motor HTML->PDF de Apps Script no soporta barras
+// posicionadas ni gradientes).
+var MESES_CORTOS_PDF_ = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function mesBandaPdf_(mesClave) { // 'YYYY-MM' -> 'ago 2026'
+  var p = String(mesClave).split('-');
+  return MESES_CORTOS_PDF_[Number(p[1]) - 1] + ' ' + p[0];
+}
+// Semanas lunes->domingo que cubren [desde..hasta].
+var REPORTE_TOPE_SEMANAS_ = 27; // ~6 meses; mas que eso deja de caber legible
+function construirSemanasBarrasPdf_(desdeClave, hastaClave, tope) {
+  var cur = fechaDeClavePdf_(desdeClave);
+  var dow = cur.getUTCDay();                 // 0=domingo .. 6=sabado
+  cur = new Date(cur.getTime() - (dow === 0 ? 6 : dow - 1) * 86400000); // retroceder al lunes
+  var fin = fechaDeClavePdf_(hastaClave);
+  var semanas = [];
+  while (cur.getTime() <= fin.getTime() && semanas.length < (tope || REPORTE_TOPE_SEMANAS_)) {
+    var ini = clavePdf_(cur);
+    semanas.push({ desde: ini, hasta: clavePdf_(new Date(cur.getTime() + 6 * 86400000)), mes: ini.slice(0, 7) });
+    cur = new Date(cur.getTime() + 7 * 86400000);
+  }
+  return semanas;
+}
+
+// Linea de tiempo de la carta de barras: arranca en el INICIO del proyecto (la
+// asignacion real), no en fecha_creacion -- que a veces la estampa el sistema
+// al cargar la tarea y no refleja cuando empezo el trabajo. Se comparte entre
+// la seccion y el calculo de tamano de pagina para no duplicar el criterio.
+function rangoBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyClave) {
+  if (rango) return { desde: rango.desde, hasta: rango.hasta };
+  var desdeCand = [], hastaCand = [hoyClave];
+  if (proyectoInicio) desdeCand.push(clavePdf_(new Date(proyectoInicio)));
+  (tareas || []).forEach(function (a) {
+    if (a.fecha_creacion) desdeCand.push(clavePdf_(new Date(a.fecha_creacion)));
+    if (a.fecha_compromiso) { desdeCand.push(clavePdf_(new Date(a.fecha_compromiso))); hastaCand.push(clavePdf_(new Date(a.fecha_compromiso))); }
+  });
+  (hitos || []).forEach(function (h) {
+    if (h.fecha_objetivo) { var k = clavePdf_(new Date(h.fecha_objetivo)); desdeCand.push(k); hastaCand.push(k); }
+  });
+  desdeCand.sort(); hastaCand.sort();
+  return { desde: desdeCand[0] || hoyClave, hasta: hastaCand[hastaCand.length - 1] || hoyClave };
+}
+function semanasBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyClave) {
+  var r = rangoBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyClave);
+  return construirSemanasBarrasPdf_(r.desde, r.hasta, REPORTE_TOPE_SEMANAS_);
+}
+
+function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyClave) {
+  if (!tareas.length) return '';
+  var semanas = semanasBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyClave);
+  if (!semanas.length) return '';
+  var proyIni = proyectoInicio ? clavePdf_(new Date(proyectoInicio)) : '';
+  var ultimoDia = semanas[semanas.length - 1].hasta;
+
+  // Bandas de mes (colspan por cantidad de semanas del mes).
+  var bandas = [];
+  semanas.forEach(function (s) {
+    var last = bandas[bandas.length - 1];
+    if (last && last.mes === s.mes) last.span++; else bandas.push({ mes: s.mes, span: 1 });
+  });
+  var semanaDeHoy = semanas.map(function (s) { return hoyClave >= s.desde && hoyClave <= s.hasta; });
+
+  var anchoLabel = 'width:24%;';
+  var bordeCelda = 'border:1px solid #EEF2F7;';
+  var hoyBorde = 'border-left:2px solid #2563EB;';
+
+  // Encabezado: fila de meses + fila de semanas (inicio de semana dd/mm).
+  var filaMeses = '<tr><td rowspan="2" style="padding:5px 8px;' + anchoLabel + 'background-color:' + DOC.NAVY + ';color:#ffffff;' +
+      'font-size:9px;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;border:1px solid ' + DOC.NAVY + ';vertical-align:bottom;">Tarea</td>' +
+    bandas.map(function (b) {
+      return '<td colspan="' + b.span + '" style="padding:3px 2px;text-align:center;font-size:8px;font-weight:bold;text-transform:uppercase;' +
+        'letter-spacing:0.3px;border:1px solid ' + DOC.NAVY + ';background-color:' + DOC.NAVY + ';color:#ffffff;">' + mesBandaPdf_(b.mes) + '</td>';
+    }).join('') + '</tr>';
+  var filaSemanas = '<tr>' + semanas.map(function (s, i) {
+    return '<td style="padding:3px 1px;text-align:center;font-size:7px;font-weight:bold;border:1px solid ' + DOC.NAVY + ';' +
+      'background-color:' + (semanaDeHoy[i] ? '#2563EB' : '#24344F') + ';color:#ffffff;">' + ganttDiaCortoPdf_(s.desde) + '</td>';
+  }).join('') + '</tr>';
+
+  // Fila de hitos (rombo en la semana de su fecha objetivo).
+  var hitosVivos = (hitos || []).filter(function (h) { return h.fecha_objetivo; });
+  var filaHitos = '';
+  if (hitosVivos.length) {
+    filaHitos = '<tr><td style="padding:4px 8px;' + anchoLabel + bordeCelda + 'font-size:8px;color:' + DOC.NAVY + ';font-weight:bold;">&#9670; Hitos</td>' +
+      semanas.map(function (s, i) {
+        var enSemana = hitosVivos.filter(function (h) { var k = clavePdf_(new Date(h.fecha_objetivo)); return k >= s.desde && k <= s.hasta; });
+        var cont = enSemana.length ? '<span style="color:' + DOC.NAVY + ';font-size:10px;">&#9670;</span>' : '';
+        return '<td style="padding:4px 1px;text-align:center;' + bordeCelda + (semanaDeHoy[i] ? hoyBorde : '') + '">' + cont + '</td>';
+      }).join('') + '</tr>';
+  }
+
+  // Filas de tareas: una barra continua semControl -> compromiso.
+  var filas = tareas.map(function (a) {
+    var kCre = a.fecha_creacion ? clavePdf_(new Date(a.fecha_creacion)) : '';
+    var kCom = a.fecha_compromiso ? clavePdf_(new Date(a.fecha_compromiso)) : '';
+    var terminal = (a.estado === 'TERMINADA' || a.estado === 'CANCELADA');
+    var sem = a.semaforo || 'pendiente';
+    var color = GANTT_SEMAFORO_SOLIDO_[sem] || '#64748B';
+    // Inicio de la barra: la creacion si es coherente (<= compromiso); si la
+    // creacion quedo DESPUES del compromiso (tarea cargada tarde), se ancla en
+    // el inicio del proyecto -- la asignacion real -- y si no, en el compromiso.
+    var barIni = (kCre && kCom && kCre <= kCom) ? kCre
+      : ((proyIni && kCom && proyIni <= kCom) ? proyIni : kCom);
+    var barFin = kCom;
+    var fueraDeRango = kCom && kCom > ultimoDia;
+
+    var celdas = semanas.map(function (s, i) {
+      var onBar = barIni && barFin && s.hasta >= barIni && s.desde <= barFin;
+      var onAtraso = !terminal && kCom && !onBar && s.hasta > kCom && s.desde <= hoyClave;
+      var bg = onBar ? color : (onAtraso ? GANTT_ATRASO_SOLIDO_ : '');
+      return '<td style="padding:7px 1px;' + bordeCelda + (bg ? 'background-color:' + bg + ';' : '') + (semanaDeHoy[i] ? hoyBorde : '') + '"></td>';
+    }).join('');
+
+    var commitTxt = kCom
+      ? (fueraDeRango
+          ? ' &middot; <span style="color:' + DOC.MUTED + ';">vence ' + fechaCortaPdfProyecto_(a.fecha_compromiso) + '</span>'
+          : ' &middot; compromiso ' + fechaCortaPdfProyecto_(a.fecha_compromiso))
+      : ' &middot; <span style="color:' + DOC.FAINT + ';">sin fecha comprometida</span>';
+    var etiqueta = '<div style="font-weight:bold;color:' + DOC.INK + ';font-size:10px;">' + escaparHtml_(a.titulo) + '</div>' +
+      '<div style="font-size:8px;color:' + DOC.MUTED + ';margin-top:1px;">' +
+        escaparHtml_(a.responsable_nombre || a.responsable_email || '—') + commitTxt + '</div>';
+    return '<tr><td style="padding:5px 8px;' + anchoLabel + bordeCelda + 'vertical-align:middle;">' + etiqueta + '</td>' + celdas + '</tr>';
+  }).join('');
+
+  var leyenda =
+    ganttChipLeyendaPdf_('#16A34A', 'Al día / terminada') +
+    ganttChipLeyendaPdf_('#D97706', 'En riesgo') +
+    ganttChipLeyendaPdf_('#DC2626', 'Atrasada') +
+    ganttChipLeyendaPdf_('#2563EB', 'Bloqueada / hoy') +
+    ganttChipLeyendaPdf_('#7C3AED', 'En revisión') +
+    ganttChipLeyendaPdf_('#64748B', 'Pendiente') +
+    ganttChipLeyendaPdf_(GANTT_ATRASO_SOLIDO_, 'Atraso sin cerrar');
+  return docSeccionOt_('Carta Gantt') +
+    '<div style="margin:0 0 8px;">' + leyenda + '</div>' +
+    '<div style="font-size:9px;color:' + DOC.MUTED + ';margin:0 0 8px;line-height:1.5;">' +
+      'Cada barra va del inicio de la tarea a su fecha comprometida, coloreada según su estado. El tramo rojo oscuro es el atraso sin cerrar (del compromiso a hoy); la columna azul es la semana actual; &#9670; marca un hito.' +
+    '</div>' +
+    '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 14px;table-layout:fixed;">' +
+    '<thead>' + filaMeses + filaSemanas + '</thead><tbody>' + filaHitos + filas + '</tbody></table>';
+}
+
+// ¿Hay registro DIARIO real (estado del día) que justifique además la grilla
+// de ejecución día a día? Sin eso, esa grilla sale casi vacía y solo estorba.
+function hayRegistroDiario_(registroPorTareaDia) {
+  return Object.keys(registroPorTareaDia || {}).some(function (id) {
+    return Object.keys(registroPorTareaDia[id] || {}).length > 0;
+  });
+}
+
 function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia) {
   if (!tareas.length || !dias.length) return '';
   var hoyClave = clavePdf_(new Date());
@@ -3317,11 +3485,11 @@ function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia)
     ganttChipLeyendaPdf_('#DC2626', 'Atrasada / bloqueada') +
     ganttChipLeyendaPdf_('#2563EB', 'En proceso / hoy') +
     ganttChipLeyendaPdf_('#64748B', 'Pendiente / pausa');
-  return docSeccionOt_('Carta Gantt') +
+  return docSeccionOt_('Ejecución día a día') +
     '<div style="margin:0 0 8px;">' + leyendaColores + '</div>' +
     '<div style="font-size:9px;color:' + DOC.MUTED + ';margin:0 0 8px;line-height:1.5;">' +
-      'Cada barra es el período planificado de la tarea (de su creación a la fecha comprometida), coloreada según su estado. ' +
-      'Cada celda con letra es lo registrado ese día (ver Leyenda de letras abajo); el tramo rojo oscuro marca el atraso sin cerrar.' +
+      'Detalle del registro diario: cada celda con letra es lo que se registró ese día (ver Leyenda de letras abajo); ' +
+      'el tramo rojo oscuro marca el atraso sin cerrar. La vista de conjunto está arriba, en la Carta Gantt.' +
     '</div>' + html;
 }
 

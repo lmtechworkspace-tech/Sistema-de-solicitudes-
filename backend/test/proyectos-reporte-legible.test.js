@@ -46,49 +46,52 @@ function armarProyecto(ctx) {
   return proyecto;
 }
 
-// --- 1. El rango del Gantt no lo arrastra un compromiso lejano y aislado ----
+// --- 1. La Carta Gantt es de BARRAS por semana, anclada en el inicio real ---
 
-test('la ventana del Gantt llega hasta ~hoy y NO hasta un compromiso a meses de distancia', () => {
+const MESES_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+function bandaMesDe(iso) { return MESES_ES[Number(iso.slice(5, 7)) - 1] + ' ' + iso.slice(0, 4); }
+
+test('la Carta Gantt arranca en el INICIO del proyecto, no en la fecha de creación auto-estampada', () => {
   const ctx = loadConSchema();
-  const proyecto = armarProyecto(ctx);
-  // La mayoría vence pronto; una sola tarea vence en ~100 días (el outlier que
-  // antes estiraba el gráfico con decenas de columnas en blanco). Se confirman
-  // para que la fecha comprometida sea firme (RN-710: asignar a otro la deja
-  // como propuesta hasta que el responsable la confirma).
-  const cercana = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'Cercana', responsable_email: 'marcelo@rld.cl', fecha_compromiso: diasDesdeHoy(3) }, CTX_LEO);
-  ctx.Actividades.confirmar({ actividad_id: cercana.actividad_id, fecha_compromiso: diasDesdeHoy(3) }, CTX_MARCELO);
-  const lejana = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'Lejana', responsable_email: 'marcelo@rld.cl', fecha_compromiso: diasDesdeHoy(100) }, CTX_LEO);
+  // El proyecto empezó hace 40 días; las tareas se "crean" hoy en el sandbox
+  // (igual que en producción, donde el sistema estampa la creación al cargarlas
+  // tarde). La carta debe reflejar el inicio REAL, no ese "hoy".
+  const inicio = diasDesdeHoy(-40);
+  const proyecto = ctx.Proyectos.crear({ nombre: 'Con historia', fecha_inicio: inicio, fecha_objetivo: '2026-12-31' }, CTX_LEO);
+  ctx.Proyectos.gestionarIntegrante({ proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE' }, CTX_LEO);
+  const t = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'Tarea', responsable_email: 'marcelo@rld.cl', fecha_compromiso: diasDesdeHoy(3) }, CTX_LEO);
+  ctx.Actividades.confirmar({ actividad_id: t.actividad_id, fecha_compromiso: diasDesdeHoy(3) }, CTX_MARCELO);
+
+  const res = ctx.Proyectos.descargarReporte({ proyecto_id: proyecto.proyecto_id, config: { secciones: ['gantt'] } }, CTX_LEO);
+  const html = htmlDe_(res);
+  assert.match(html, /Carta Gantt/);
+  // La banda de mes del INICIO del proyecto (hace 40 días) tiene que aparecer:
+  // prueba que la línea de tiempo arranca ahí y no en la creación de hoy.
+  assert.match(html, new RegExp(bandaMesDe(inicio)),
+    'la carta debe arrancar en el mes del inicio del proyecto, no en la creación');
+  // Sin registro diario, la grilla de letras día a día NO se agrega (antes salía
+  // casi vacía y estorbaba).
+  assert.doesNotMatch(html, /Ejecución día a día/);
+});
+
+test('un compromiso lejano aparece como barra en la grilla semanal, sin arrastrar columnas diarias', () => {
+  const ctx = loadConSchema();
+  const inicio = diasDesdeHoy(-10);
+  const proyecto = ctx.Proyectos.crear({ nombre: 'Con lejana', fecha_inicio: inicio, fecha_objetivo: '2026-12-31' }, CTX_LEO);
+  ctx.Proyectos.gestionarIntegrante({ proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE' }, CTX_LEO);
+  const lejana = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'Publicaciones a fin de año', responsable_email: 'marcelo@rld.cl', fecha_compromiso: diasDesdeHoy(100) }, CTX_LEO);
   ctx.Actividades.confirmar({ actividad_id: lejana.actividad_id, fecha_compromiso: diasDesdeHoy(100) }, CTX_MARCELO);
 
   const res = ctx.Proyectos.descargarReporte({ proyecto_id: proyecto.proyecto_id, config: { secciones: ['gantt'] } }, CTX_LEO);
   const html = htmlDe_(res);
-
-  // El día del compromiso lejano (100 días) NO puede aparecer como columna.
-  assert.doesNotMatch(html, new RegExp('>' + cortaDe(diasDesdeHoy(100)).replace('/', '\\/') + '<'),
-    'un compromiso a 100 días no debe estirar el Gantt con columnas vacías');
-  // Pero el compromiso cercano (3 días) sí entra en la ventana.
-  assert.match(html, new RegExp(cortaDe(diasDesdeHoy(3)).replace('/', '\\/')),
-    'lo que vence pronto sí está en el gráfico');
-  // Y la tarea lejana no se pierde: se marca "vence dd-mm →" en su etiqueta.
-  assert.match(html, /vence [0-3][0-9]-[0-1][0-9]-\d{4} &#8594;/,
-    'el compromiso fuera de rango se marca con flecha, no se descarta');
-  assert.ok(lejana.actividad_id);
-});
-
-test('un proyecto planificado A FUTURO sí muestra su plan (la ventana no se corta en hoy)', () => {
-  const ctx = loadConSchema();
-  const proyecto = armarProyecto(ctx);
-  // Todo arranca hoy y vence de forma continua en las próximas 2-3 semanas:
-  // no hay "hueco muerto", así que la ventana debe llegar hasta esos días.
-  const e1 = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'Etapa 1', responsable_email: 'marcelo@rld.cl', fecha_compromiso: diasDesdeHoy(6) }, CTX_LEO);
-  ctx.Actividades.confirmar({ actividad_id: e1.actividad_id, fecha_compromiso: diasDesdeHoy(6) }, CTX_MARCELO);
-  const e2 = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'Etapa 2', responsable_email: 'marcelo@rld.cl', fecha_compromiso: diasDesdeHoy(13) }, CTX_LEO);
-  ctx.Actividades.confirmar({ actividad_id: e2.actividad_id, fecha_compromiso: diasDesdeHoy(13) }, CTX_MARCELO);
-
-  const res = ctx.Proyectos.descargarReporte({ proyecto_id: proyecto.proyecto_id, config: { secciones: ['gantt'] } }, CTX_LEO);
-  const html = htmlDe_(res);
-  assert.match(html, new RegExp(cortaDe(diasDesdeHoy(13)).replace('/', '\\/')),
-    'un plan continuo a futuro se muestra completo, no se corta en hoy');
+  // La tarea lejana está presente (no se pierde).
+  assert.match(html, /Publicaciones a fin de año/);
+  // La banda del mes del compromiso lejano aparece -> la barra llega hasta allá.
+  assert.match(html, new RegExp(bandaMesDe(diasDesdeHoy(100))));
+  // Es semanal, no diaria: el número de columnas de semana es acotado (<=27),
+  // no ~110 columnas de día. Se cuenta el encabezado de semanas (font 7px).
+  const cols = (html.match(/font-size:7px/g) || []).length;
+  assert.ok(cols > 0 && cols <= 27, 'la carta es semanal y acotada (' + cols + ' columnas)');
 });
 
 // --- 2. Encabezados en todas las tablas -------------------------------------
