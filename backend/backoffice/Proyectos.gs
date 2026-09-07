@@ -936,8 +936,18 @@ var Proyectos = {
     // v11 (P2, "dependencias con impacto"): quién depende de quién, en un
     // solo mapa reusado por calcularImpactoDependencia_ para cada tarea (en
     // vez de reconstruirlo N veces dentro del .map de abajo).
+    //
+    // v13 (auditoría): se EXCLUYEN los dependientes en estado terminal. El
+    // chip promete "si esto se atrasa, ¿a qué afecta?" -- una tarea que ya
+    // está TERMINADA o CANCELADA no puede verse afectada por nada, y
+    // contarla inflaba el número que el líder usa para priorizar. Excluirla
+    // aquí corta además su rama entera del BFS, que es lo correcto: si B ya
+    // terminó, C (que dependía de B) tampoco sigue esperando a A por esa vía.
     var dependientesDirectosPorId_ = {};
-    tareas.forEach(function (a) { if (a.depende_de) (dependientesDirectosPorId_[a.depende_de] = dependientesDirectosPorId_[a.depende_de] || []).push(a); });
+    tareas.forEach(function (a) {
+      if (!a.depende_de || esTareaTerminalProyecto_(a)) return;
+      (dependientesDirectosPorId_[a.depende_de] = dependientesDirectosPorId_[a.depende_de] || []).push(a);
+    });
     // v11 (P2, "subtareas con rollup"): hijas por padre, para calcular el
     // avance del padre on-read (nunca se guarda -- así nunca desincroniza).
     var hijasPorPadre_ = {};
@@ -3588,6 +3598,13 @@ function avanceRealTarea_(a) {
 // nada los crea -- depende_de es de solo lectura para el usuario) con un set
 // de visitados; sin eso, un ciclo dejaría este BFS dando vueltas para
 // siempre en vez de simplemente fallar la validación en otro lado.
+// v13 (auditoría): "terminal" = el trabajo ya no está en juego. Una tarea
+// así no puede atrasarse ni ser afectada por el atraso de otra, así que no
+// participa del impacto de dependencia ni puede marcarse como ruta crítica.
+function esTareaTerminalProyecto_(a) {
+  return !!a && (a.estado === 'TERMINADA' || a.estado === 'CANCELADA');
+}
+
 function calcularImpactoDependencia_(actividadId, dependientesDirectosPorId_) {
   var vistos = {};
   var cola = (dependientesDirectosPorId_[actividadId] || []).slice();
@@ -3622,16 +3639,26 @@ function calcularImpactoDependencia_(actividadId, dependientesDirectosPorId_) {
 // Si el proyecto no tiene NINGUNA dependencia definida, `disponible:false` y
 // el frontend invita a definirlas en vez de resaltar la tarea más larga
 // (que sería un dato engañoso). Guarda de ciclos igual que el impacto.
+//
+// v13 (auditoría): una tarea CANCELADA queda FUERA de la red -- no es
+// trabajo que vaya a ocurrir, así que no puede definir la duración del
+// proyecto (antes, una cancelada con fecha lejana se marcaba crítica y
+// arrastraba a su predecesora con ella: el Gantt resaltaba como "la cadena
+// que determina la duración" una cadena con trabajo que ya no se hará).
+// Una TERMINADA sí permanece en la red -- su duración ya ocurrió y sostiene
+// la cadena -- pero nunca se marca crítica: no puede atrasar nada, que es
+// justo lo que el toggle promete señalar.
 function calcularRutaCritica_(tareas) {
   function dur(t) {
     if (!t || !t.fecha_creacion || !t.fecha_compromiso) return 1;
     var d = (new Date(t.fecha_compromiso) - new Date(t.fecha_creacion)) / 86400000;
     return d > 1 ? d : 1;
   }
+  var vivas = (tareas || []).filter(function (t) { return t.estado !== 'CANCELADA'; });
   var porId = {};
-  tareas.forEach(function (t) { porId[t.actividad_id] = t; });
+  vivas.forEach(function (t) { porId[t.actividad_id] = t; });
   var sucesores = {}, tienePred = {}, hayDependencias = false;
-  tareas.forEach(function (t) {
+  vivas.forEach(function (t) {
     if (t.depende_de && porId[t.depende_de]) {
       (sucesores[t.depende_de] = sucesores[t.depende_de] || []).push(t.actividad_id);
       tienePred[t.actividad_id] = true;
@@ -3653,11 +3680,11 @@ function calcularRutaCritica_(tareas) {
     delete pila[id];
     return EF[id];
   }
-  tareas.forEach(function (t) { calcEF(t.actividad_id); });
+  vivas.forEach(function (t) { calcEF(t.actividad_id); });
 
   // Fin del proyecto = mayor fin-temprano ENTRE las tareas de la red.
   var finProyecto = 0;
-  tareas.forEach(function (t) {
+  vivas.forEach(function (t) {
     if ((tienePred[t.actividad_id] || sucesores[t.actividad_id]) && EF[t.actividad_id] > finProyecto) {
       finProyecto = EF[t.actividad_id];
     }
@@ -3683,14 +3710,16 @@ function calcularRutaCritica_(tareas) {
     delete pila[id];
     return LF[id];
   }
-  tareas.forEach(function (t) { calcLF(t.actividad_id); });
+  vivas.forEach(function (t) { calcLF(t.actividad_id); });
 
   var porTarea = {};
-  tareas.forEach(function (t) {
+  vivas.forEach(function (t) {
     var id = t.actividad_id;
     if (!(tienePred[id] || sucesores[id])) { porTarea[id] = { en_red: false, es_critica: false, holgura_dias: null }; return; }
     var holgura = Math.round((LS[id] - ES[id]) * 10) / 10;
-    porTarea[id] = { en_red: true, es_critica: holgura <= 0.5, holgura_dias: holgura };
+    // Una TERMINADA sostiene la cadena (su duración ya ocurrió) pero no
+    // puede atrasar nada: se informa su holgura, nunca se marca crítica.
+    porTarea[id] = { en_red: true, es_critica: holgura <= 0.5 && !esTareaTerminalProyecto_(t), holgura_dias: holgura };
   });
   return { disponible: true, porTarea: porTarea };
 }

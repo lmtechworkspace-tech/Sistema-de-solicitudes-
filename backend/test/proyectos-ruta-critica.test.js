@@ -76,6 +76,53 @@ test('sin ninguna dependencia: nada es crítico y la holgura es null (no disponi
   assert.equal(porId(tareas, y.actividad_id).holgura_dias, null);
 });
 
+// --- auditoría v13: el trabajo terminal no está en juego -------------------
+
+test('AUDITORÍA: una tarea CANCELADA queda fuera de la red -- no es crítica ni arrastra a su predecesora', () => {
+  const ctx = loadConSchema();
+  const proyecto = armarProyecto(ctx);
+  const a = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'A', responsable_email: 'leo@rld.cl', fecha_compromiso: diasDesdeHoy(5) }, CTX_LEO);
+  const b = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'B larga', responsable_email: 'leo@rld.cl',
+    fecha_compromiso: diasDesdeHoy(60), depende_de: a.actividad_id
+  }, CTX_LEO);
+  ctx.Actividades.cancelar({ actividad_id: b.actividad_id, motivo: 'ya no se hace' }, CTX_LEO);
+
+  const tareas = ctx.Proyectos.listarTareas({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  assert.equal(porId(tareas, b.actividad_id).es_critica, false, 'una cancelada nunca define la duración del proyecto');
+  assert.equal(porId(tareas, b.actividad_id).holgura_dias, null, 'una cancelada no participa de la red');
+  assert.equal(porId(tareas, a.actividad_id).impacto_dependientes, 0, 'atrasar A ya no puede afectar a una cancelada');
+});
+
+test('AUDITORÍA: una tarea TERMINADA no se marca crítica ni cuenta como impacto (no puede atrasarse ni ser afectada)', () => {
+  const ctx = loadConSchema();
+  const proyecto = armarProyecto(ctx);
+  const a = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'A', responsable_email: 'leo@rld.cl', fecha_compromiso: diasDesdeHoy(5) }, CTX_LEO);
+  const b = ctx.Proyectos.crearTarea({
+    proyecto_id: proyecto.proyecto_id, titulo: 'B', responsable_email: 'leo@rld.cl',
+    fecha_compromiso: diasDesdeHoy(20), depende_de: a.actividad_id
+  }, CTX_LEO);
+  ctx.Actividades.checkin({ actividad_id: b.actividad_id, tipo: 'listo' }, CTX_LEO);
+
+  const tareas = ctx.Proyectos.listarTareas({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  assert.equal(porId(tareas, b.actividad_id).es_critica, false, 'lo ya terminado no puede atrasar el proyecto');
+  assert.equal(porId(tareas, a.actividad_id).impacto_dependientes, 0, 'un dependiente terminado no es "afectable"');
+});
+
+test('AUDITORÍA: la cadena viva sigue midiéndose igual aunque haya una cancelada colgando', () => {
+  const ctx = loadConSchema();
+  const proyecto = armarProyecto(ctx);
+  const a = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'A', responsable_email: 'leo@rld.cl', fecha_compromiso: diasDesdeHoy(10) }, CTX_LEO);
+  const b = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'B viva', responsable_email: 'leo@rld.cl', fecha_compromiso: diasDesdeHoy(30), depende_de: a.actividad_id }, CTX_LEO);
+  const c = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'C cancelada', responsable_email: 'leo@rld.cl', fecha_compromiso: diasDesdeHoy(90), depende_de: a.actividad_id }, CTX_LEO);
+  ctx.Actividades.cancelar({ actividad_id: c.actividad_id, motivo: 'descartada' }, CTX_LEO);
+
+  const tareas = ctx.Proyectos.listarTareas({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
+  assert.equal(porId(tareas, a.actividad_id).es_critica, true, 'A sigue alimentando la rama viva');
+  assert.equal(porId(tareas, b.actividad_id).es_critica, true, 'la rama viva es ahora la más larga');
+  assert.equal(porId(tareas, a.actividad_id).impacto_dependientes, 1, 'solo B cuenta como afectable');
+});
+
 test('tarea aislada dentro de un proyecto con dependencias: nunca es crítica (no arrastra a nadie)', () => {
   const ctx = loadConSchema();
   const proyecto = armarProyecto(ctx);

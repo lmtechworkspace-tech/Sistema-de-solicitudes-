@@ -135,6 +135,10 @@ a {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  /* v13: la marca pasó a ser un <a> hacia landing.html -- hereda color y no
+     se subraya, para que siga leyéndose como marca y no como enlace suelto. */
+  text-decoration: none;
+  color: inherit;
 }
 
 .sigso-header__titulo {
