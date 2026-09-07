@@ -424,6 +424,10 @@ a {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  /* v13: la marca pasó a ser un <a> hacia landing.html -- hereda color y no
+     se subraya, para que siga leyéndose como marca y no como enlace suelto. */
+  text-decoration: none;
+  color: inherit;
 }
 
 .sigso-header__titulo {
@@ -8332,13 +8336,20 @@ function renderHeaderSigso(paginaActiva) {
 
   contenedor.innerHTML =
     '<div class="sigso-header__interior">' +
-    '<div class="sigso-header__marca">' +
+    // v13: la marca lleva a la pagina de presentacion (landing.html). Antes
+    // no era un enlace y la landing quedaba inalcanzable: existia publicada
+    // pero NINGUNA pagina apuntaba a ella. Va en la marca y no como un item
+    // mas del nav a proposito -- el nav son destinos de TRABAJO (solicitar,
+    // consultar, backoffice) y sumarle una pagina de presentacion los
+    // diluiria; "el logo lleva a la portada" es la convencion que la gente
+    // ya trae aprendida.
+    '<a class="sigso-header__marca" href="' + sitioPublico + 'landing.html">' +
     MARCA_SIGSO_SVG +
     '<div>' +
     '<p class="sigso-header__titulo">SIGSO</p>' +
     '<p class="sigso-header__subtitulo">Control y Gesti&oacute;n Empresarial</p>' +
     '</div>' +
-    '</div>' +
+    '</a>' +
     '<nav class="sigso-nav">' + enlaces + '</nav>' +
     // v6.4: hueco para la identidad del usuario (avatar + menu "Mi perfil").
     // Queda VACIO en index.html y estado.html, que son publicas y no tienen
