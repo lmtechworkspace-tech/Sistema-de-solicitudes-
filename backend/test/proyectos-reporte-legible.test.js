@@ -412,8 +412,14 @@ test('Ejecución día a día arranca en el inicio del proyecto (no en cuándo se
   // La columna del inicio del proyecto (hace 31 días) tiene que aparecer.
   assert.match(html, new RegExp(cortaDe(inicio).replace('/', '\\/')),
     'debe arrancar en el inicio real del proyecto, no en la fecha de creación de la tarea (hoy)');
-  // Y NO debe llegar hasta el compromiso lejano en el futuro (eso es plan, no historia).
-  assert.doesNotMatch(html, new RegExp(cortaDe(diasDesdeHoy(90)).replace('/', '\\/')),
+  // Y NO debe llegar hasta el compromiso lejano en el futuro (eso es plan, no
+  // historia). La verificación se acota a la sección "Ejecución día a día":
+  // la Carta Gantt de BARRAS (que va arriba, es plan) sí muestra el compromiso
+  // futuro a propósito, y según el día la semana de ese compromiso puede caer
+  // en una columna cuyo lunes coincide con esa fecha corta -- no es lo que
+  // esta prueba controla.
+  var seccionDiaADia = html.slice(html.indexOf('Ejecución día a día'));
+  assert.doesNotMatch(seccionDiaADia, new RegExp(cortaDe(diasDesdeHoy(90)).replace('/', '\\/')),
     'un registro de lo que pasó no puede tener columnas de un día que no ha ocurrido');
 });
 

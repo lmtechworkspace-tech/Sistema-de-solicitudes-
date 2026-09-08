@@ -56,7 +56,14 @@
     // Respeta donde esta el usuario: el auto-refresco de fondo no debe
     // sacarlo del documento o la ficha que esta mirando (misma leccion que
     // proyectos.js aprendio en v9.0b).
-    refrescar: render_,
+    // v16.5: ademas, un refresco de fondo (volver a la pestana) NO debe
+    // repintar la pantalla si nada cambio -- eso reseteaba el scroll y hacia
+    // "saltar" la pagina "al minimo movimiento". Se marca el refresco para que
+    // los cargadores revaliden en silencio y solo repinten ante un cambio real.
+    refrescar: function () {
+      refrescoDeFondo_ = true;
+      try { render_(); } finally { refrescoDeFondo_ = false; }
+    },
     // v13.0: el arbol del sidebar llama aca cuando eligen una seccion.
     irAItem: function (itemId) {
       var p = window.SigsoNav ? SigsoNav.partes(itemId) : { seccion: itemId, argumento: '' };
@@ -460,19 +467,39 @@
     var cont = panelSgc_();
     if (!cont) return;
     var enCache = cacheListadoSgc_[opts.clave];
-    if (enCache) opts.aplicar(cont, enCache);
+    // v16.5: ¿esta carga es un refresco de fondo (volver a la pestaña)? Se
+    // captura ahora porque el flag global se apaga en cuanto render_ retorna,
+    // antes de que llegue la respuesta asíncrona.
+    var esRefresco = refrescoDeFondo_ && !!enCache;
+
+    function pintar(data, preservarScroll) {
+      var y = preservarScroll ? window.scrollY : 0;
+      opts.aplicar(cont, data);
+      if (preservarScroll) window.scrollTo(0, y);
+    }
+
+    // En una NAVEGACIÓN con caché se pinta al instante (stale-while-revalidate).
+    // En un REFRESCO de fondo NO se repinta desde caché: lo que hay en pantalla
+    // ya es esa lista, y repintarla resetearía el scroll sin que nada cambie.
+    if (esRefresco) { /* revalidar en silencio, sin tocar el DOM todavía */ }
+    else if (enCache) pintar(enCache, false);
     // v16.0: esqueleto en vez de un spinner centrado. El spinner deja la
     // pantalla en blanco y al llegar los datos el contenido "salta"; el
     // esqueleto mantiene la forma de la lista, así el cambio es un relleno y
     // no un salto. Se anuncia por aria-busy para quien usa lector.
     else cont.innerHTML = esqueletoListaSgc_(opts.spinner);
+
     api_(opts.accion, opts.datos || {}).then(function (respuesta) {
       if (!opts.sigo()) return;
       if (!respuesta || !respuesta.ok) {
         if (!enCache) opts.error(cont, (respuesta && respuesta.message) || null);
         return;
       }
-      opts.aplicar(cont, respuesta.data);
+      // Si la revalidación trae exactamente lo mismo que ya está en caché (el
+      // caso normal al volver a la pestaña), no se repinta: se evita el
+      // parpadeo y el salto de scroll "al mínimo movimiento".
+      if (enCache && JSON.stringify(respuesta.data) === JSON.stringify(enCache)) return;
+      pintar(respuesta.data, esRefresco);
     }).catch(function () {
       if (!enCache && opts.sigo()) opts.error(cont, null);
     });
@@ -502,6 +529,10 @@
   };
   var TIPOS = ['DOC', 'PRO', 'INS', 'FO', 'EXTERNO'];
 
+  // v16.5: verdadero solo mientras corre un refresco de fondo (volver a la
+  // pestaña). Lo leen los cargadores para revalidar en silencio en vez de
+  // repintar desde caché y resetear el scroll.
+  var refrescoDeFondo_ = false;
   var seccionActiva_ = 'inicio';
   // v10.0 "Accesos SGC": mapa de secciones que la persona puede abrir. Llega
   // del backend en listarDocumentos; hasta entonces null (barraSecciones_ lo
@@ -772,6 +803,11 @@
             (puedeGestionar_ && d.proxima_revision
               ? '<span>Revisar ' + fechaCorta_(d.proxima_revision) + '</span>' : '') +
             (puedeGestionar_ ? '<span>' + Componentes.escaparHtml(VISIBILIDAD_ETIQUETA[d.visibilidad] || d.visibilidad) + '</span>' : '') +
+            // v16.5: señal de que el documento trae enlaces de consulta online
+            // (se ven al abrirlo). Ayuda a saber, sin entrar, cuáles se pueden
+            // mirar en línea sin descargar el archivo grande.
+            (d.enlaces_n ? '<span class="sgc-doc__enlaces">' + Iconos.svg('empresa', { tam: 12 }) + ' ' +
+              d.enlaces_n + (d.enlaces_n === 1 ? ' enlace' : ' enlaces') + '</span>' : '') +
           '</span>' +
         '</span>' +
       '</button>';
@@ -799,20 +835,34 @@
 
   // --- detalle del documento ------------------------------------------------
 
+  // v16.5: caché del último detalle por documento, para que un refresco de
+  // fondo (volver a la pestaña) no muestre el spinner ni repinte si nada
+  // cambió -- ese repintado reseteaba el scroll del documento abierto "al
+  // mínimo movimiento", que es justo donde el usuario suele estar leyendo.
+  var cacheDetalleDoc_ = {};
   function abrirDocumento_(id) {
     documentoActivoId_ = id;
     var cont = panelSgc_();
     if (!cont) return;
-    cont.innerHTML = Componentes.cargando('Cargando documento...');
+    var esRefresco = refrescoDeFondo_ && !!cacheDetalleDoc_[id];
+    if (!esRefresco) cont.innerHTML = Componentes.cargando('Cargando documento...');
     api_('getDocumentoSgc', { documento_id: id }).then(function (respuesta) {
+      // Una respuesta que llega tarde (ya navegó a otro documento/sección) no
+      // debe pisar la pantalla nueva.
+      if (documentoActivoId_ !== id) return;
       if (!respuesta || !respuesta.ok) {
-        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo abrir el documento.', 'error');
+        if (!esRefresco) cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo abrir el documento.', 'error');
         return;
       }
+      var firma = JSON.stringify(respuesta.data);
+      if (esRefresco && cacheDetalleDoc_[id] === firma) return; // sin cambios: no repintar
+      cacheDetalleDoc_[id] = firma;
       puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      var y = esRefresco ? window.scrollY : 0;
       pintarDetalle_(cont, respuesta.data);
+      if (esRefresco) window.scrollTo(0, y);
     }).catch(function () {
-      cont.innerHTML = Componentes.alerta('No se pudo conectar para abrir el documento.', 'error');
+      if (!esRefresco && documentoActivoId_ === id) cont.innerHTML = Componentes.alerta('No se pudo conectar para abrir el documento.', 'error');
     });
   }
 
@@ -865,6 +915,31 @@
       (d.revisado_por ? campoFicha_('Revisado por', d.revisado_por) : '') +
       (d.aprobado_por ? campoFicha_('Aprobado por', d.aprobado_por) : '') +
       '</dl>';
+
+    // v16.5: enlaces de consulta online. El backend ya sólo deja pasar
+    // http/https; acá se vuelve a filtrar por seguridad antes de pintar el
+    // <a>. Se abren en otra pestaña (rel="noopener" para no exponer el
+    // opener) -- son un acceso cómodo a los archivos grandes, no reemplazan al
+    // archivo controlado que se descarga arriba.
+    var enlacesSeguros = (d.enlaces || []).filter(function (e) {
+      return e && /^https?:\/\//i.test(e.url || '');
+    });
+    var bloqueEnlaces = '';
+    if (enlacesSeguros.length) {
+      bloqueEnlaces = '<h3 class="sgc-sub">Enlaces</h3>' +
+        '<ul class="sgc-enlaces">' +
+        enlacesSeguros.map(function (e) {
+          var texto = e.titulo || e.url;
+          return '<li class="sgc-enlace">' +
+            '<span class="sgc-enlace__icono">' + Iconos.svg('empresa', { tam: 15 }) + '</span>' +
+            '<a class="sgc-enlace__link" href="' + Componentes.escaparHtml(e.url) + '" ' +
+              'target="_blank" rel="noopener noreferrer">' +
+              Componentes.escaparHtml(texto) +
+            '</a>' +
+          '</li>';
+        }).join('') +
+        '</ul>';
+    }
 
     // v10.0 Fase 6b: que clausulas ISO sustenta este documento como
     // evidencia (matriz de cobertura). Se etiqueta aca, en la ficha, porque
@@ -951,6 +1026,7 @@
         acciones +
         ficha +
         (d.archivo_nombre ? '<p class="sigso-ayuda">Archivo adjunto: ' + Componentes.escaparHtml(d.archivo_nombre) + '</p>' : '') +
+        bloqueEnlaces +
         '<div class="js-sgc-cumplimiento-panel"></div>' +
         bloqueClausulas +
         versiones +
@@ -1114,6 +1190,16 @@
         Componentes.campoTexto({ id: 'sgc-revisado', label: 'Revisado por', valor: d.revisado_por }) +
         Componentes.campoTexto({ id: 'sgc-aprobado', label: 'Aprobado por', valor: d.aprobado_por }) +
       '</div>' +
+      // v16.5: enlaces de consulta online. Para archivos grandes (un Excel de
+      // servicios a clientes de varios MB) es más cómodo verlos en su visor de
+      // Drive/web que descargarlos. No reemplazan al archivo controlado.
+      Componentes.campoTextarea({
+        id: 'sgc-enlaces', label: 'Enlaces de consulta (uno por línea)',
+        valor: (d.enlaces || []).map(function (e) {
+          return e && e.titulo ? (e.titulo + ' | ' + e.url) : (e && e.url ? e.url : '');
+        }).filter(Boolean).join('\n'),
+        ayuda: 'Para consultar en línea archivos grandes sin descargarlos. Formato: «Título | https://…» o solo la URL. Se abren en otra pestaña.'
+      }) +
       // v10.0 Fase 1b: por defecto SÍ exige confirmación -- es lo que
       // convierte "lo publiqué" en evidencia de que la gente lo conoce.
       '<label class="sigso-campo-check"><input type="checkbox" id="sgc-requiere-acuse"' +
@@ -1138,6 +1224,20 @@
     var el = document.getElementById('sgc-destinatarios');
     if (!el) return [];
     return el.value.split(/[\n,;]+/).map(function (x) { return x.trim(); }).filter(Boolean);
+  }
+
+  // v16.5: lee el textarea de enlaces. Cada línea es «Título | URL» o solo la
+  // URL. El backend vuelve a validar (solo http/https), esto es comodidad.
+  function leerEnlaces_() {
+    var el = document.getElementById('sgc-enlaces');
+    if (!el) return [];
+    return el.value.split(/\n+/).map(function (linea) {
+      linea = linea.trim();
+      if (!linea) return null;
+      var i = linea.indexOf('|');
+      if (i !== -1) return { titulo: linea.slice(0, i).trim(), url: linea.slice(i + 1).trim() };
+      return { titulo: '', url: linea };
+    }).filter(Boolean);
   }
 
   function abrirFormularioNuevo_() {
@@ -1213,6 +1313,7 @@
           area_id: document.getElementById('sgc-area').value,
           visibilidad: document.getElementById('sgc-visibilidad').value,
           destinatarios: leerDestinatarios_(),
+          enlaces: leerEnlaces_(),
           version_vigente: document.getElementById('sgc-version').value,
           fecha_vigencia: document.getElementById('sgc-vigencia').value,
           elaborado_por: document.getElementById('sgc-elaborado').value,
@@ -1359,6 +1460,7 @@
           area_id: document.getElementById('sgc-area').value,
           visibilidad: document.getElementById('sgc-visibilidad').value,
           destinatarios: leerDestinatarios_(),
+          enlaces: leerEnlaces_(),
           fecha_vigencia: document.getElementById('sgc-vigencia-ed').value,
           elaborado_por: document.getElementById('sgc-elaborado').value,
           revisado_por: document.getElementById('sgc-revisado').value,
@@ -1608,20 +1710,31 @@
 
   // --- ficha de la persona ---------------------------------------------------
 
+  // v16.5: mismo criterio que abrirDocumento_ -- un refresco de fondo no debe
+  // parpadear ni resetear el scroll (ni la pestaña activa) de la ficha abierta
+  // si el dato no cambió.
+  var cacheFichaPersona_ = {};
   function abrirPersona_(id) {
     personaActivaId_ = id;
     var cont = panelSgc_();
     if (!cont) return;
-    cont.innerHTML = Componentes.cargando('Cargando ficha...');
+    var esRefresco = refrescoDeFondo_ && !!cacheFichaPersona_[id];
+    if (!esRefresco) cont.innerHTML = Componentes.cargando('Cargando ficha...');
     api_('getFichaPersonaSgc', { persona_id: id }).then(function (respuesta) {
+      if (personaActivaId_ !== id) return;
       if (!respuesta || !respuesta.ok) {
-        cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo abrir la ficha.', 'error');
+        if (!esRefresco) cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo abrir la ficha.', 'error');
         return;
       }
+      var firma = JSON.stringify(respuesta.data);
+      if (esRefresco && cacheFichaPersona_[id] === firma) return;
+      cacheFichaPersona_[id] = firma;
       puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      var y = esRefresco ? window.scrollY : 0;
       pintarFicha_(cont, respuesta.data);
+      if (esRefresco) window.scrollTo(0, y);
     }).catch(function () {
-      cont.innerHTML = Componentes.alerta('No se pudo conectar para abrir la ficha.', 'error');
+      if (!esRefresco && personaActivaId_ === id) cont.innerHTML = Componentes.alerta('No se pudo conectar para abrir la ficha.', 'error');
     });
   }
 

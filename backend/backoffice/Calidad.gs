@@ -133,7 +133,10 @@ var Calidad = {
           fecha_limite_acuse: d.fecha_limite_acuse || '',
           debo_acusar: !!pendientesMios[d.documento_id],
           dias_para_acuse: d.fecha_limite_acuse ? diasHastaSgc_(d.fecha_limite_acuse, ahora) : null,
-          clausulas_iso: parsearClausulasIsoSgc_(d.clausulas_iso)
+          clausulas_iso: parsearClausulasIsoSgc_(d.clausulas_iso),
+          // v16.5: solo el CONTEO en el listado (una señal "tiene enlaces"),
+          // los enlaces completos viajan en getDocumento -- no se infla la lista.
+          enlaces_n: parsearEnlacesSgc_(d.enlaces).length
         };
       }).sort(function (a, b) {
         return String(a.codigo || '').localeCompare(String(b.codigo || ''));
@@ -164,7 +167,11 @@ var Calidad = {
     })[0];
 
     return {
-      documento: Object.assign({}, doc, { clausulas_iso: parsearClausulasIsoSgc_(doc.clausulas_iso) }),
+      documento: Object.assign({}, doc, {
+        clausulas_iso: parsearClausulasIsoSgc_(doc.clausulas_iso),
+        // v16.5: enlaces de consulta online ya validados (solo http/https).
+        enlaces: parsearEnlacesSgc_(doc.enlaces)
+      }),
       puede_gestionar: gobierna,
       catalogo_clausulas: CLAUSULAS_ISO9001,
       debo_acusar: debeAcusar,
@@ -314,7 +321,9 @@ var Calidad = {
       // v11.0 Fase 5: solo tienen sentido en un documento externo; en uno
       // interno quedan vacios y no estorban.
       emisor: String(data.emisor || '').trim(),
-      clase_externa: String(data.clase_externa || '').trim()
+      clase_externa: String(data.clase_externa || '').trim(),
+      // v16.5: enlaces de consulta online (Drive/web). JSON validado.
+      enlaces: JSON.stringify(enlacesValidosSgc_(data.enlaces))
     };
     agregarFila_(SHEETS.SGC_DOCUMENTOS, documento);
 
@@ -395,6 +404,11 @@ var Calidad = {
     if (data.fecha_limite_acuse !== undefined) cambios.fecha_limite_acuse = data.fecha_limite_acuse || '';
     if (data.clausulas_iso !== undefined) {
       cambios.clausulas_iso = JSON.stringify(clausulasIsoValidas_(data.clausulas_iso));
+    }
+    // v16.5: enlaces de consulta online. Editables como cualquier metadato
+    // (no son evidencia versionada como el archivo controlado).
+    if (data.enlaces !== undefined) {
+      cambios.enlaces = JSON.stringify(enlacesValidosSgc_(data.enlaces));
     }
 
     // v10.0: adjuntar (o corregir) el archivo de la version que YA rige, sin
@@ -1057,6 +1071,34 @@ function parsearClausulasIsoSgc_(valor) {
   try {
     var lista = JSON.parse(valor);
     return Array.isArray(lista) ? lista : [];
+  } catch (err) { return []; }
+}
+
+// v16.5: enlaces del documento. Se aceptan SOLO http/https -- un enlace
+// javascript:/data: seria un vector de inyeccion cuando el front lo pinte como
+// <a>. Cada enlace es {titulo, url}; sin titulo se usa el propio dominio como
+// texto. Se limita a 20 para que un pegado accidental no infle la fila.
+function enlacesValidosSgc_(valor) {
+  var lista = Array.isArray(valor) ? valor : [];
+  var vistos = {};
+  var limpios = [];
+  lista.forEach(function (e) {
+    if (!e) return;
+    var url = String((typeof e === 'string' ? e : e.url) || '').trim();
+    if (!/^https?:\/\/\S+$/i.test(url)) return;   // solo http/https
+    if (vistos[url]) return;
+    vistos[url] = true;
+    var titulo = String((typeof e === 'string' ? '' : e.titulo) || '').trim();
+    limpios.push({ titulo: titulo.slice(0, 120), url: url.slice(0, 2000) });
+  });
+  return limpios.slice(0, 20);
+}
+
+function parsearEnlacesSgc_(valor) {
+  if (!valor) return [];
+  try {
+    var lista = JSON.parse(valor);
+    return enlacesValidosSgc_(lista);
   } catch (err) { return []; }
 }
 

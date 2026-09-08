@@ -569,7 +569,11 @@ var COLUMNAS = {
     //   su distribucion, que es exactamente lo que pide la clausula.
     // clase_externa: Norma / Decreto / Ley / Codigo, tal como los
     //   clasifica la hoja "Externos" del FO-PRO-01-01.
-    'emisor', 'clase_externa'
+    'emisor', 'clase_externa',
+    // v16.5: enlaces del documento (Drive/web) para consultar online los
+    // archivos grandes. JSON de [{titulo, url}], solo http/https. Ver la nota
+    // completa en backend/backoffice/Constantes.gs.
+    'enlaces'
   ],
   SGC_DOC_VERSIONES: [
     'version_id', 'documento_id', 'version', 'cambios',

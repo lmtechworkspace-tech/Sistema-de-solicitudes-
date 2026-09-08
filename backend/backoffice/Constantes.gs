@@ -701,7 +701,13 @@ var COLUMNAS = {
     //   su distribucion, que es exactamente lo que pide la clausula.
     // clase_externa: Norma / Decreto / Ley / Codigo, tal como los
     //   clasifica la hoja "Externos" del FO-PRO-01-01.
-    'emisor', 'clase_externa'
+    'emisor', 'clase_externa',
+    // v16.5: enlaces del documento (Drive/SharePoint/web) para consultar
+    // ONLINE los archivos grandes -- un Excel de servicios a clientes de
+    // muchos MB se ve mejor en su visor que descargandolo. NO reemplaza al
+    // archivo controlado (sigue siendo la version oficial): es un acceso
+    // complementario. JSON de [{titulo, url}], solo http/https.
+    'enlaces'
   ],
   // Append-only: una fila por version subida. La vigente tambien queda
   // aqui (vigente=true), asi el historial es completo y auditable sin

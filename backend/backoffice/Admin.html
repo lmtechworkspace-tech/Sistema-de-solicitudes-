@@ -4964,6 +4964,21 @@ button {
 .sgc-porques { margin: 0 0 var(--esp-3); padding-left: var(--esp-5); color: var(--texto-2); }
 .sgc-porques li { margin-bottom: 2px; }
 
+/* v16.5: enlaces de consulta online del documento. Lista de accesos, cada uno
+   una fila clicable con su ícono; se abren en otra pestaña. */
+.sgc-enlaces { list-style: none; margin: 0 0 var(--esp-3); padding: 0; display: flex; flex-direction: column; gap: var(--esp-1); }
+.sgc-enlace { display: flex; align-items: center; gap: var(--esp-2); }
+.sgc-enlace__icono { display: inline-flex; color: var(--texto-3); flex: 0 0 auto; }
+.sgc-enlace__link {
+  color: var(--primario); text-decoration: none; font-weight: 500;
+  overflow-wrap: anywhere; border-radius: var(--radio-sm); padding: 2px 4px; margin: -2px -4px;
+}
+.sgc-enlace__link:hover { text-decoration: underline; }
+.sgc-enlace__link:focus-visible { outline: 2px solid var(--primario); outline-offset: 1px; }
+/* Señal "tiene enlaces" en la fila del listado. */
+.sgc-doc__enlaces { display: inline-flex; align-items: center; gap: 3px; color: var(--primario); }
+.sgc-doc__enlaces svg { flex: 0 0 auto; }
+
 /* v10.0 Fase 3b: auditoría interna. Reusa .sgc-etapa (el ciclo se pinta
    igual que el de una no conformidad) y agrega lo propio de la lista de
    verificación. */
