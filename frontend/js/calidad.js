@@ -425,13 +425,18 @@
 
   function api_(accion, datos) {
     return llamarApi(urlBackoffice_(), accion, datos || {}).then(function (respuesta) {
-      // Cualquier acción que no sea de lectura pudo cambiar un listado: se
-      // invalida toda la caché para que la próxima carga traiga lo
-      // actualizado. Las lecturas empiezan por listar/get/descargar/
-      // buscar/exportar; todo lo demás (guardar, registrar, actualizar,
-      // desvincular, quitar, cerrar, programar...) escribe.
+      // Cualquier acción que no sea de lectura pudo cambiar un listado o un
+      // detalle: se invalidan TODAS las cachés (listado + reabrir documento/
+      // persona) para que la próxima carga traiga lo actualizado. Las
+      // lecturas empiezan por listar/get/descargar/buscar/export; todo lo
+      // demás (guardar, registrar, actualizar, desvincular, quitar, cerrar,
+      // programar...) escribe. v16.6: sin esto, guardar una edición y volver
+      // a abrir ESE MISMO documento/persona mostraría un instante los datos
+      // viejos (la caché de reabrir pinta antes de revalidar).
       if (respuesta && respuesta.ok && !/^(listar|get|descargar|buscar|export)/i.test(accion)) {
         cacheListadoSgc_ = {};
+        cacheDetalleDoc_ = {};
+        cacheFichaPersona_ = {};
       }
       return respuesta;
     });
@@ -835,34 +840,49 @@
 
   // --- detalle del documento ------------------------------------------------
 
-  // v16.5: caché del último detalle por documento, para que un refresco de
-  // fondo (volver a la pestaña) no muestre el spinner ni repinte si nada
-  // cambió -- ese repintado reseteaba el scroll del documento abierto "al
-  // mínimo movimiento", que es justo donde el usuario suele estar leyendo.
+  // v16.5/v16.6: caché del último detalle por documento -- guarda el DATO
+  // completo (no solo una firma) para que REABRIR un documento ya visto en
+  // esta sesión pinte al instante, igual que ya hace el listado
+  // (stale-while-revalidate), en vez de mostrar el spinner y repetir el viaje
+  // completo. También cubre el refresco de fondo (volver a la pestaña): sin
+  // esto, ese repintado reseteaba el scroll "al mínimo movimiento". Se
+  // invalida SOLA tras cualquier acción que escriba (ver api_), para no
+  // mostrar nunca una edición propia como si no hubiera pasado.
   var cacheDetalleDoc_ = {};
   function abrirDocumento_(id) {
     documentoActivoId_ = id;
     var cont = panelSgc_();
     if (!cont) return;
-    var esRefresco = refrescoDeFondo_ && !!cacheDetalleDoc_[id];
-    if (!esRefresco) cont.innerHTML = Componentes.cargando('Cargando documento...');
+    var enCache = cacheDetalleDoc_[id];
+    // Un refresco de fondo (pestaña que recupera el foco) no debe mover el
+    // scroll de donde el usuario está leyendo; ABRIR sí arranca arriba,
+    // sea la apertura nueva o desde caché -- es un gesto de navegación.
+    var preservarScroll = refrescoDeFondo_;
+
+    if (enCache) {
+      puedeGestionar_ = enCache.puede_gestionar === true;
+      pintarDetalle_(cont, enCache);
+    } else {
+      cont.innerHTML = Componentes.cargando('Cargando documento...');
+    }
+    if (!preservarScroll) window.scrollTo(0, 0);
+    var scrollAntes = window.scrollY;
+
     api_('getDocumentoSgc', { documento_id: id }).then(function (respuesta) {
       // Una respuesta que llega tarde (ya navegó a otro documento/sección) no
       // debe pisar la pantalla nueva.
       if (documentoActivoId_ !== id) return;
       if (!respuesta || !respuesta.ok) {
-        if (!esRefresco) cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo abrir el documento.', 'error');
+        if (!enCache) cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo abrir el documento.', 'error');
         return;
       }
-      var firma = JSON.stringify(respuesta.data);
-      if (esRefresco && cacheDetalleDoc_[id] === firma) return; // sin cambios: no repintar
-      cacheDetalleDoc_[id] = firma;
+      if (enCache && JSON.stringify(respuesta.data) === JSON.stringify(enCache)) return; // sin cambios: no repintar
+      cacheDetalleDoc_[id] = respuesta.data;
       puedeGestionar_ = respuesta.data.puede_gestionar === true;
-      var y = esRefresco ? window.scrollY : 0;
       pintarDetalle_(cont, respuesta.data);
-      if (esRefresco) window.scrollTo(0, y);
+      if (preservarScroll) window.scrollTo(0, scrollAntes);
     }).catch(function () {
-      if (!esRefresco && documentoActivoId_ === id) cont.innerHTML = Componentes.alerta('No se pudo conectar para abrir el documento.', 'error');
+      if (!enCache && documentoActivoId_ === id) cont.innerHTML = Componentes.alerta('No se pudo conectar para abrir el documento.', 'error');
     });
   }
 
@@ -1710,31 +1730,42 @@
 
   // --- ficha de la persona ---------------------------------------------------
 
-  // v16.5: mismo criterio que abrirDocumento_ -- un refresco de fondo no debe
-  // parpadear ni resetear el scroll (ni la pestaña activa) de la ficha abierta
-  // si el dato no cambió.
+  // v16.5/v16.6: mismo criterio que abrirDocumento_ -- la caché guarda el dato
+  // completo de la ficha (las 5 pestañas viajan en UN solo payload de
+  // getFichaPersonaSgc, así que cachear la ficha cachea las pestañas enteras).
+  // REABRIR una persona ya vista en esta sesión (o cambiar de pestaña y
+  // volver a esa persona desde el listado) pinta al instante y revalida en
+  // segundo plano; un refresco de fondo además preserva el scroll.
   var cacheFichaPersona_ = {};
   function abrirPersona_(id) {
     personaActivaId_ = id;
     var cont = panelSgc_();
     if (!cont) return;
-    var esRefresco = refrescoDeFondo_ && !!cacheFichaPersona_[id];
-    if (!esRefresco) cont.innerHTML = Componentes.cargando('Cargando ficha...');
+    var enCache = cacheFichaPersona_[id];
+    var preservarScroll = refrescoDeFondo_;
+
+    if (enCache) {
+      puedeGestionar_ = enCache.puede_gestionar === true;
+      pintarFicha_(cont, enCache);
+    } else {
+      cont.innerHTML = Componentes.cargando('Cargando ficha...');
+    }
+    if (!preservarScroll) window.scrollTo(0, 0);
+    var scrollAntes = window.scrollY;
+
     api_('getFichaPersonaSgc', { persona_id: id }).then(function (respuesta) {
       if (personaActivaId_ !== id) return;
       if (!respuesta || !respuesta.ok) {
-        if (!esRefresco) cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo abrir la ficha.', 'error');
+        if (!enCache) cont.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo abrir la ficha.', 'error');
         return;
       }
-      var firma = JSON.stringify(respuesta.data);
-      if (esRefresco && cacheFichaPersona_[id] === firma) return;
-      cacheFichaPersona_[id] = firma;
+      if (enCache && JSON.stringify(respuesta.data) === JSON.stringify(enCache)) return;
+      cacheFichaPersona_[id] = respuesta.data;
       puedeGestionar_ = respuesta.data.puede_gestionar === true;
-      var y = esRefresco ? window.scrollY : 0;
       pintarFicha_(cont, respuesta.data);
-      if (esRefresco) window.scrollTo(0, y);
+      if (preservarScroll) window.scrollTo(0, scrollAntes);
     }).catch(function () {
-      if (!esRefresco && personaActivaId_ === id) cont.innerHTML = Componentes.alerta('No se pudo conectar para abrir la ficha.', 'error');
+      if (!enCache && personaActivaId_ === id) cont.innerHTML = Componentes.alerta('No se pudo conectar para abrir la ficha.', 'error');
     });
   }
 
