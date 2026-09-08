@@ -3124,7 +3124,23 @@ function construirHtmlReporteConfigurado_(detalle, todasTareas, rendimiento, tar
   if (incluye('salud')) partes.push(seccionSaludPdf_(detalle));
   if (incluye('mini_gantt')) partes.push(seccionMiniGanttSemanalPdf_(tareasFiltradas, detalle.hitos || [], rendimiento, semanas));
   if (incluye('hitos')) partes.push(seccionHitosPdf_(detalle.hitos || []));
-  if (incluye('riesgos')) partes.push(seccionRiesgosPdf_(detalle.riesgos || []));
+  if (incluye('riesgos')) {
+    // Nombre del responsable del riesgo: primero desde los nombres ya
+    // resueltos de las tareas (en producción los puebla SigsoPerfil), luego
+    // desde los integrantes (soportando ambos nombres de campo). Si nada
+    // resuelve, la sección muestra el email -- nunca queda vacío.
+    var nombresPorEmail = {};
+    (todasTareas || []).forEach(function (a) {
+      var e = normalizarEmailProyecto_(a.responsable_email || '');
+      if (e && a.responsable_nombre) nombresPorEmail[e] = a.responsable_nombre;
+    });
+    (detalle.integrantes || []).forEach(function (m) {
+      var e = normalizarEmailProyecto_((m && (m.usuario_email || m.email)) || '');
+      var n = m && (m.usuario_nombre || m.nombre);
+      if (e && n && !nombresPorEmail[e]) nombresPorEmail[e] = n;
+    });
+    partes.push(seccionRiesgosPdf_(detalle.riesgos || [], nombresPorEmail));
+  }
   if (incluye('vencimientos')) partes.push(seccionVencimientosPdf_(tareasFiltradas));
   if (incluye('rendimiento')) partes.push(seccionRendimientoPdf_(rendimiento));
   if (incluye('desviaciones')) partes.push(seccionDesviacionesPdf_(rendimiento, tareasFiltradas, tareasPorId));
@@ -3266,14 +3282,38 @@ function seccionSaludPdf_(detalle) {
     '<tbody>' + filas + '</tbody></table>';
 }
 
+// v15.10 (D2): mini-barra de desviación -- una banda cuyo LARGO es la magnitud
+// (pp) y su color el signo (roja si va debajo del plan, verde si va adelante).
+// El motor no pinta rellenos, así que la barra es una celda con borde inferior
+// grueso y ancho proporcional (mismo truco que la Carta Gantt). Deja "leer la
+// magnitud sin comparar números".
+function miniBarraDesviacionPdf_(pp) {
+  if (pp === null || pp === undefined || pp === 0) return '';
+  var color = colorDesviacionPdf_(pp);
+  var ancho = Math.min(64, Math.max(4, Math.round(Math.abs(pp) * 1.4)));
+  return '<table cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:2px auto 0;"><tr>' +
+    '<td style="width:' + ancho + 'px;border-bottom:4px solid ' + color + ';font-size:1px;line-height:1px;">&nbsp;</td>' +
+    '</tr></table>';
+}
+
 // v11 (P1, "Plan · Esperado · Real" -> aquí, en el PDF): mismo dato que ya
 // muestra la carta en pantalla bajo el título de cada tarea, en tabla.
+// v15.10 (D2): ordenada por desviación (lo más atrasado arriba) -- antes iban
+// en orden natural y con 40+ filas las peores quedaban mezcladas entre las que
+// van bien, justo la columna que hay que encontrar.
 function seccionDesviacionesPdf_(rendimiento, tareas, tareasPorId) {
   var plan = (rendimiento && rendimiento.plan_seguimiento) || [];
   var idsFiltrados = {};
   tareas.forEach(function (a) { idsFiltrados[a.actividad_id] = true; });
   var filasPlan = plan.filter(function (t) { return idsFiltrados[t.actividad_id] && t.plan_fin; });
   if (!filasPlan.length) return '';
+  filasPlan.sort(function (a, b) {
+    var na = (a.desviacion_pp === null || a.desviacion_pp === undefined) ? 1 : 0;
+    var nb = (b.desviacion_pp === null || b.desviacion_pp === undefined) ? 1 : 0;
+    if (na !== nb) return na - nb;            // primero las que tienen dato
+    if (na) return 0;                          // ambas sin dato: se mantienen
+    return a.desviacion_pp - b.desviacion_pp;  // más negativo (más atrasado) arriba
+  });
   var filas = filasPlan.map(function (t) {
     var tarea = tareasPorId[t.actividad_id];
     var tieneDesv = !(t.desviacion_pp === null || t.desviacion_pp === undefined);
@@ -3284,7 +3324,7 @@ function seccionDesviacionesPdf_(rendimiento, tareas, tareasPorId) {
       '<td style="' + celdaValorFicha_() + '">' + fechaCortaPdfProyecto_(t.plan_fin) + '</td>' +
       '<td style="' + celdaValorFicha_() + 'text-align:center;">' + (t.avance_esperado_pct === null || t.avance_esperado_pct === undefined ? '—' : t.avance_esperado_pct + '%') + '</td>' +
       '<td style="' + celdaValorFicha_() + 'text-align:center;">' + (t.avance_real_pct === null || t.avance_real_pct === undefined ? '—' : t.avance_real_pct + '%') + '</td>' +
-      '<td style="' + celdaValorFicha_() + 'text-align:center;color:' + desvColor + ';font-weight:bold;">' + desvTxt + '</td>' +
+      '<td style="' + celdaValorFicha_() + 'text-align:center;color:' + desvColor + ';font-weight:bold;">' + desvTxt + miniBarraDesviacionPdf_(t.desviacion_pp) + '</td>' +
     '</tr>';
   }).join('');
   return docSeccionOt_('Plan · Esperado · Real') +
@@ -3877,19 +3917,29 @@ var HITO_ESTADO_LABEL_PDF_ = { PENDIENTE: 'Pendiente', EN_CURSO: 'En curso', COM
 var HITO_ESTADO_COLOR_PDF_ = { PENDIENTE: '#64748B', EN_CURSO: '#2563EB', COMPLETADO: '#16A34A', CANCELADO: '#94A3B8' };
 
 var RIESGO_NIVEL_COLOR_PDF_ = { ALTO: '#DC2626', MEDIO: '#D97706', BAJO: '#16A34A' };
-function seccionRiesgosPdf_(riesgos) {
+// v15.10 (D4): la tabla traía solo descripción y nivel -- un riesgo sin
+// responsable ni mitigación es "una alarma sin plan", y esos campos ya existen
+// en el sistema (PROYECTO_RIESGOS.responsable_email / .mitigacion). Se suman
+// como columnas: la tabla pasa de inventario a plan de acción. `nombresPorEmail`
+// resuelve el nombre del responsable desde los integrantes (email si no está).
+function seccionRiesgosPdf_(riesgos, nombresPorEmail) {
   var abiertos = riesgos.filter(function (r) { return r.estado !== 'CERRADO'; });
   if (!abiertos.length) return '';
+  var mapa = nombresPorEmail || {};
   var filas = abiertos.map(function (r) {
     var color = RIESGO_NIVEL_COLOR_PDF_[String(r.nivel || '').toUpperCase()] || DOC.MUTED;
+    var email = normalizarEmailProyecto_(r.responsable_email || '');
+    var resp = r.responsable_email ? (mapa[email] || r.responsable_email) : '—';
     return '<tr>' +
       '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(r.descripcion) + '</td>' +
       '<td style="' + celdaValorFicha_() + 'white-space:nowrap;">' + chipTonoPdf_(color, r.nivel) + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(resp) + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + (r.mitigacion ? escaparHtml_(r.mitigacion) : '<span style="color:' + DOC.FAINT + ';">Sin plan de mitigación</span>') + '</td>' +
     '</tr>';
   }).join('');
   return docSeccionOt_('Riesgos abiertos') +
     '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' +
-    encabezadoPdf_(['Riesgo', 'Nivel']) +
+    encabezadoPdf_(['Riesgo', 'Nivel', 'Responsable', 'Mitigación']) +
     '<tbody>' + filas + '</tbody></table>';
 }
 
@@ -3897,16 +3947,18 @@ function seccionRiesgosPdf_(riesgos) {
 // que listarMisTareas), no todas -- un reporte de una pagina no es un
 // volcado completo de la base de datos.
 var VENCIMIENTOS_PDF_ORDEN_ = { atrasada: 0, riesgo: 1, pendiente: 2, bloqueada: 3, 'al-dia': 4, revision: 5 };
+var VENCIMIENTOS_PDF_TOPE_ = 8;
 function seccionVencimientosPdf_(tareas) {
-  var pendientes = tareas.filter(function (a) { return a.estado !== 'TERMINADA' && a.estado !== 'CANCELADA'; })
+  var pendientesTodas = tareas.filter(function (a) { return a.estado !== 'TERMINADA' && a.estado !== 'CANCELADA'; })
     .sort(function (a, b) {
       var oa = VENCIMIENTOS_PDF_ORDEN_[a.semaforo] === undefined ? 9 : VENCIMIENTOS_PDF_ORDEN_[a.semaforo];
       var ob = VENCIMIENTOS_PDF_ORDEN_[b.semaforo] === undefined ? 9 : VENCIMIENTOS_PDF_ORDEN_[b.semaforo];
       if (oa !== ob) return oa - ob;
       return new Date(a.fecha_compromiso || '9999-12-31') - new Date(b.fecha_compromiso || '9999-12-31');
-    })
-    .slice(0, 8);
-  if (!pendientes.length) return '';
+    });
+  if (!pendientesTodas.length) return '';
+  var pendientes = pendientesTodas.slice(0, VENCIMIENTOS_PDF_TOPE_);
+  var restantes = pendientesTodas.length - pendientes.length;
   var filas = pendientes.map(function (a) {
     var sem = a.semaforo || 'pendiente';
     var color = GANTT_SEMAFORO_SOLIDO_[sem] || DOC.MUTED;
@@ -3917,10 +3969,21 @@ function seccionVencimientosPdf_(tareas) {
       '<td style="' + celdaValorFicha_() + 'white-space:nowrap;">' + fechaCortaPdfProyecto_(a.fecha_compromiso) + '</td>' +
     '</tr>';
   }).join('');
-  return docSeccionOt_('Próximos vencimientos') +
+  // v15.10 (D3): con 40+ tareas, listar solo 8 sin avisar se lee como "solo
+  // quedan 8 pendientes" (falso). El encabezado dice el total y, si la lista se
+  // recortó, una fila-pie discreta suma "+N vencimientos más" (mismo recurso
+  // que ya usa el plan semanal).
+  var subtitulo = '<div style="font-size:10px;color:' + DOC.MUTED + ';margin:0 0 6px;">' +
+    pendientesTodas.length + (pendientesTodas.length === 1 ? ' tarea pendiente en total' : ' tareas pendientes en total') +
+    (restantes > 0 ? ' &middot; se listan las ' + pendientes.length + ' más urgentes' : '') + '</div>';
+  var pie = restantes > 0
+    ? '<tr><td colspan="4" style="' + celdaValorFicha_() + 'text-align:center;color:' + DOC.MUTED + ';font-style:italic;">+ ' +
+        restantes + (restantes === 1 ? ' vencimiento más' : ' vencimientos más') + '</td></tr>'
+    : '';
+  return docSeccionOt_('Próximos vencimientos') + subtitulo +
     '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';font-size:12px;">' +
     encabezadoPdf_(['Tarea', 'Estado', 'Responsable', 'Compromiso']) +
-    '<tbody>' + filas + '</tbody></table>';
+    '<tbody>' + filas + pie + '</tbody></table>';
 }
 var SEMAFORO_LABEL_PDF_ = {
   atrasada: 'Atrasada', riesgo: 'En riesgo', pendiente: 'Pendiente',
