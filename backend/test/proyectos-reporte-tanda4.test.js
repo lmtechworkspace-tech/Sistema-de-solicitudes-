@@ -89,6 +89,37 @@ test('A4: con varios responsables, cada tarea sigue mostrando el suyo', () => {
   assert.match(gantt, /leo@rld\.cl/);
 });
 
+// --- B2: línea de estado en la portada ---------------------------------------
+
+test('B2: la portada trae una línea de estado (avance / desvío / vencidas)', () => {
+  const ctx = loadConSchema();
+  const proyecto = ctx.Proyectos.crear({ nombre: 'Con estado', fecha_inicio: diasDesdeHoy(-20), fecha_objetivo: '2026-12-31' }, CTX_LEO);
+  // Una tarea vencida sin avance para que la línea tenga las tres piezas.
+  ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'Vencida', responsable_email: 'leo@rld.cl', fecha_compromiso: diasDesdeHoy(-3) }, CTX_LEO);
+
+  const res = ctx.Proyectos.descargarReporte({ proyecto_id: proyecto.proyecto_id, config: { secciones: ['portada'] } }, CTX_LEO);
+  const html = htmlDe_(res);
+  assert.match(html, /% avanzado/, 'la línea de estado dice el avance');
+  assert.match(html, /tarea(s)? vencida(s)?/, 'y las tareas vencidas');
+});
+
+// --- C4: primer registro real señalado --------------------------------------
+
+test('C4: "Ejecución día a día" avisa a cuántos días del inicio ocurrió el primer registro', () => {
+  const ctx = loadConSchema();
+  const proyecto = ctx.Proyectos.crear({ nombre: 'Con hueco', fecha_inicio: diasDesdeHoy(-15), fecha_objetivo: '2026-12-31' }, CTX_LEO);
+  ctx.Proyectos.gestionarIntegrante({ proyecto_id: proyecto.proyecto_id, usuario_email: 'marcela@rld.cl', rol_proyecto: 'INTEGRANTE' }, CTX_LEO);
+  const t = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'Con registro', responsable_email: 'marcela@rld.cl', fecha_compromiso: diasDesdeHoy(5) }, CTX_LEO);
+  ctx.Actividades.confirmar({ actividad_id: t.actividad_id, fecha_compromiso: diasDesdeHoy(5) }, CTX_MARCELA);
+  // Registro real recién hoy: el proyecto arrancó hace 15 días.
+  ctx.Proyectos.guardarRegistroDia({ proyecto_id: proyecto.proyecto_id, actividad_id: t.actividad_id, dia: diasDesdeHoy(0), estado_dia: 'en_proceso', horas: 4 }, CTX_MARCELA);
+
+  const res = ctx.Proyectos.descargarReporte({ proyecto_id: proyecto.proyecto_id, config: { secciones: ['gantt'] } }, CTX_LEO);
+  const html = htmlDe_(res);
+  assert.match(html, /Primer registro real:/, 'señala el primer registro real');
+  assert.match(html, /d[ií]as después del inicio del proyecto/, 'y a cuántos días del inicio ocurrió');
+});
+
 // --- C2: marca fantasma de línea base ---------------------------------------
 
 test('C2: si el plan se movió respecto a la línea base, la Carta Gantt dibuja el ◇ original', () => {

@@ -3239,14 +3239,35 @@ function indiceContenidoPdf_(seccionesIncluidas) {
     '</tr></table>' +
   '</div>';
 }
+// v15.11 (B2): línea de estado bajo el título de la portada -- antes la primera
+// hoja era título + chip + 3 datos, y no decía CÓMO va el proyecto. Arma
+// "45% avanzado · 38 pp bajo lo esperado · 4 tareas vencidas" con las mismas
+// señales que ya usa la banda de KPIs (avance/esperado/vencidas), omitiendo el
+// dato que no exista -- nunca inventa.
+function lineaEstadoPortadaPdf_(detalle) {
+  var partes = [];
+  var av = detalle.avance_pct, esp = detalle.avance_esperado_pct;
+  if (av !== null && av !== undefined) partes.push(av + '% avanzado');
+  if (av !== null && av !== undefined && esp !== null && esp !== undefined) {
+    var d = Math.round((av - esp) * 10) / 10;
+    if (d < 0) partes.push((-d) + ' pp bajo lo esperado');
+    else if (d > 0) partes.push('+' + d + ' pp sobre lo esperado');
+    else partes.push('en línea con lo esperado');
+  }
+  var venc = (detalle.requiere_atencion || {}).tareas_vencidas || 0;
+  if (venc > 0) partes.push(venc + (venc === 1 ? ' tarea vencida' : ' tareas vencidas'));
+  if (!partes.length) return '';
+  return '<div style="font-size:12px;color:' + DOC.MUTED + ';margin-bottom:24px;">' + escaparHtml_(partes.join('  ·  ')) + '</div>';
+}
 function seccionPortadaPdf_(detalle, seccionesIncluidas) {
   var p = detalle.proyecto;
   var scoreTxt = detalle.salud_penalizacion ? ' · ' + detalle.salud_penalizacion + ' pts en contra' : '';
   return '<div style="padding:60px 0 40px;text-align:center;page-break-after:always;">' +
     '<div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:' + DOC.MUTED + ';margin-bottom:10px;">Reporte ejecutivo de proyecto</div>' +
     '<div style="font-size:26px;font-weight:bold;font-family:' + DOC.SERIF + ';color:' + DOC.INK + ';margin-bottom:14px;">' + escaparHtml_(p.nombre) + '</div>' +
-    '<div style="margin-bottom:24px;">' +
+    '<div style="margin-bottom:14px;">' +
       saludChipPdf_(detalle.salud, (PROYECTOS_SALUD_LABEL_PDF[detalle.salud] || detalle.salud) + scoreTxt) + '</div>' +
+    lineaEstadoPortadaPdf_(detalle) +
     '<table style="margin:0 auto;border-collapse:collapse;font-size:12px;">' +
       '<tr><td style="' + celdaLabelFicha_() + '">Código</td><td style="' + celdaValorFicha_() + '">' + escaparHtml_(p.codigo || '—') + '</td></tr>' +
       '<tr><td style="' + celdaLabelFicha_() + '">Líder</td><td style="' + celdaValorFicha_() + '">' + escaparHtml_(p.lider_email || '—') + '</td></tr>' +
@@ -3843,6 +3864,25 @@ function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia,
     ganttChipLeyendaPdf_('#64748B', 'Pendiente / pausa') +
     (hayCriticas ? ganttChipLeyendaPdf_(DOC.NAVY, '▲ Ruta crítica') : '')
   );
+  // v15.11 (C4): el hueco entre "el proyecto empezó" y "se registró la primera
+  // acción" es información (cuánto tardó en arrancar el registro), pero pasaba
+  // desapercibido. Se busca el PRIMER día con un registro REAL -- una entrada de
+  // registroPorTareaDia o eventosPorTareaDia, no la "A" derivada del día de
+  // creación -- y se dice a cuántos días del inicio del proyecto ocurrió.
+  var diasConRegistro = [];
+  [registroPorTareaDia, eventosPorTareaDia].forEach(function (mapa) {
+    Object.keys(mapa || {}).forEach(function (id) {
+      Object.keys(mapa[id] || {}).forEach(function (d) { if (d) diasConRegistro.push(d); });
+    });
+  });
+  diasConRegistro.sort();
+  var primerRegistro = diasConRegistro[0] || '';
+  var notaPrimerRegistro = '';
+  if (primerRegistro && proyIni && primerRegistro > proyIni) {
+    var n = diasEntreClavesPdf_(proyIni, primerRegistro);
+    notaPrimerRegistro = ' <b style="color:' + DOC.INK + ';">Primer registro real: ' + fechaCortaPdfProyecto_(primerRegistro) +
+      '</b> (' + n + (n === 1 ? ' día' : ' días') + ' después del inicio del proyecto).';
+  }
   return docSeccionOt_('Ejecución día a día') +
     '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 10px;"><tr><td style="padding:7px 9px;">' +
       '<span style="font-size:9px;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;color:' + DOC.NAVY + ';margin-right:8px;">Leyenda</span>' +
@@ -3850,7 +3890,7 @@ function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia,
     '</td></tr></table>' +
     '<div style="font-size:9px;color:' + DOC.MUTED + ';margin:0 0 8px;line-height:1.5;">' +
       'Detalle del registro diario: cada celda con letra es lo que se registró ese día (ver Leyenda de letras abajo); ' +
-      'el tramo rojo oscuro marca el atraso sin cerrar. La vista de conjunto está arriba, en la Carta Gantt.' +
+      'el tramo rojo oscuro marca el atraso sin cerrar. La vista de conjunto está arriba, en la Carta Gantt.' + notaPrimerRegistro +
     '</div>' + html;
 }
 
