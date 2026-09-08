@@ -3500,6 +3500,14 @@ function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyCl
     var terminal = (a.estado === 'TERMINADA' || a.estado === 'CANCELADA');
     var sem = a.semaforo || 'pendiente';
     var color = GANTT_SEMAFORO_SOLIDO_[sem] || '#64748B';
+    // v15.9 (C1): la ruta crítica ya la calcula el sistema (es_critica) pero el
+    // PDF no la usaba -- todas las barras se veían igual de importantes. Una
+    // tarea crítica se marca con un ▲ antes del título y su barra gana un
+    // CONTORNO superior navy (un relleno distinto no lo pintaría el motor; un
+    // borde de color sí). El navy es independiente del semáforo (verde/rojo/...)
+    // para no confundir "está en la ruta crítica" con "va bien/mal".
+    var critica = !!a.es_critica;
+    var contornoBarra = critica ? ('border-top:2px solid ' + DOC.NAVY + ';') : 'border-top:1px solid #EEF2F7;';
     // Inicio de la barra: mismo criterio de planInicioEfectivoClave_ (v15.4)
     // -- la creación si es coherente; si la tarea se cargó tarde, el inicio
     // del proyecto (la asignación real); si no, el compromiso.
@@ -3518,7 +3526,7 @@ function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyCl
       // borde ocupe prácticamente toda la altura de la celda.
       if (bg) {
         return '<td style="padding:0;height:0;line-height:1px;font-size:1px;' +
-          'border-left:1px solid #EEF2F7;border-right:1px solid #EEF2F7;border-top:1px solid #EEF2F7;' +
+          'border-left:1px solid #EEF2F7;border-right:1px solid #EEF2F7;' + contornoBarra +
           'border-bottom:' + BARRA_GROSOR_PX_ + 'px solid ' + bg + ';' + (semanaDeHoy[i] ? hoyBorde : '') + '">&nbsp;</td>';
       }
       return '<td style="padding:7px 1px;' + bordeCelda + (semanaDeHoy[i] ? hoyBorde : '') + '"></td>';
@@ -3529,11 +3537,14 @@ function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyCl
           ? ' &middot; <span style="color:' + DOC.MUTED + ';">vence ' + fechaCortaPdfProyecto_(a.fecha_compromiso) + '</span>'
           : ' &middot; compromiso ' + fechaCortaPdfProyecto_(a.fecha_compromiso))
       : ' &middot; <span style="color:' + DOC.FAINT + ';">sin fecha comprometida</span>';
-    var etiqueta = '<div style="font-weight:bold;color:' + DOC.INK + ';font-size:10px;">' + escaparHtml_(a.titulo) + '</div>' +
+    var marcaCritica = critica ? '<span style="color:' + DOC.NAVY + ';font-weight:bold;" title="Ruta crítica">&#9650;</span> ' : '';
+    var etiqueta = '<div style="font-weight:bold;color:' + DOC.INK + ';font-size:10px;">' + marcaCritica + escaparHtml_(a.titulo) + '</div>' +
       '<div style="font-size:8px;color:' + DOC.MUTED + ';margin-top:1px;">' +
         escaparHtml_(a.responsable_nombre || a.responsable_email || '—') + commitTxt + '</div>';
     return '<tr><td style="padding:5px 8px;' + anchoLabel + bordeCelda + 'vertical-align:middle;">' + etiqueta + '</td>' + celdas + '</tr>';
   }).join('');
+
+  var nCriticas = tareas.filter(function (a) { return a.es_critica; }).length;
 
   var leyenda = filaLeyendaPdf_(
     ganttChipLeyendaPdf_('#16A34A', 'Al día / terminada') +
@@ -3542,8 +3553,16 @@ function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyCl
     ganttChipLeyendaPdf_('#2563EB', 'Bloqueada / hoy') +
     ganttChipLeyendaPdf_('#7C3AED', 'En revisión') +
     ganttChipLeyendaPdf_('#64748B', 'Pendiente') +
-    ganttChipLeyendaPdf_(GANTT_ATRASO_SOLIDO_, 'Atraso sin cerrar')
+    ganttChipLeyendaPdf_(GANTT_ATRASO_SOLIDO_, 'Atraso sin cerrar') +
+    (nCriticas ? ganttChipLeyendaPdf_(DOC.NAVY, '▲ Ruta crítica') : '')
   );
+  // v15.9 (C1): cuando hay ruta crítica, una nota bajo la descripción dice
+  // cuántas tareas la forman y por qué mirarlas -- el dato ya existía, solo no
+  // se comunicaba en el reporte.
+  var notaCritica = nCriticas
+    ? ' <b style="color:' + DOC.NAVY + ';">&#9650; ' + nCriticas + (nCriticas === 1 ? ' tarea en la ruta crítica' : ' tareas en la ruta crítica') +
+        '</b>: si una se atrasa, atrasa la fecha de término del proyecto entero.'
+    : '';
   // v15.5: la leyenda pasa a ser un bloque con marco propio y la palabra
   // "Leyenda" delante -- sin relleno de color, un chip de solo borde se
   // puede confundir con una nota al pie si no se rotula. Antes era un simple
@@ -3554,7 +3573,7 @@ function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyCl
       leyenda +
     '</td></tr></table>' +
     '<div style="font-size:9px;color:' + DOC.MUTED + ';margin:0 0 8px;line-height:1.5;">' +
-      'Cada barra va del inicio de la tarea a su fecha comprometida, coloreada según su estado. El tramo rojo oscuro es el atraso sin cerrar (del compromiso a hoy); la columna azul es la semana actual; &#9670; marca un hito.' +
+      'Cada barra va del inicio de la tarea a su fecha comprometida, coloreada según su estado. El tramo rojo oscuro es el atraso sin cerrar (del compromiso a hoy); la columna azul es la semana actual; &#9670; marca un hito.' + notaCritica +
     '</div>' +
     '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 14px;table-layout:fixed;">' +
     '<thead>' + filaMeses + filaSemanas + '</thead><tbody>' + filaHitos + filas + '</tbody></table>';
@@ -3656,19 +3675,22 @@ function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia,
             : ' · compromiso ' + fechaCortaPdfProyecto_(a.fecha_compromiso))
         : '';
       var meta = escaparHtml_(a.responsable_nombre || a.responsable_email || '—') + commitTxt;
-      var etiqueta = '<div style="font-weight:bold;color:' + DOC.INK + ';font-size:10px;">' + escaparHtml_(a.titulo) + '</div>' +
+      var marcaCritica = a.es_critica ? '<span style="color:' + DOC.NAVY + ';font-weight:bold;" title="Ruta crítica">&#9650;</span> ' : '';
+      var etiqueta = '<div style="font-weight:bold;color:' + DOC.INK + ';font-size:10px;">' + marcaCritica + escaparHtml_(a.titulo) + '</div>' +
         '<div style="font-size:8px;color:' + DOC.MUTED + ';margin-top:1px;">' + meta + '</div>';
       return '<tr><td style="padding:5px 8px;border:1px solid ' + DOC.HAIRLINE + ';vertical-align:middle;">' + etiqueta + '</td>' + celdas + '</tr>';
     }).join('');
     return '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 14px;table-layout:fixed;' +
       (idx > 0 ? 'page-break-before:always;' : '') + '"><thead>' + encabezado + '</thead><tbody>' + filas + '</tbody></table>';
   }).join('');
+  var hayCriticas = tareas.some(function (a) { return a.es_critica; });
   var leyendaColores = filaLeyendaPdf_(
     ganttChipLeyendaPdf_('#16A34A', 'Al día / entregado') +
     ganttChipLeyendaPdf_('#D97706', 'En riesgo / revisión') +
     ganttChipLeyendaPdf_('#DC2626', 'Atrasada / bloqueada') +
     ganttChipLeyendaPdf_('#2563EB', 'En proceso / hoy') +
-    ganttChipLeyendaPdf_('#64748B', 'Pendiente / pausa')
+    ganttChipLeyendaPdf_('#64748B', 'Pendiente / pausa') +
+    (hayCriticas ? ganttChipLeyendaPdf_(DOC.NAVY, '▲ Ruta crítica') : '')
   );
   return docSeccionOt_('Ejecución día a día') +
     '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 10px;"><tr><td style="padding:7px 9px;">' +
@@ -3685,6 +3707,25 @@ function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia,
 // día que ya muestra "Por persona" en pantalla, en tabla, con la misma
 // jornada de referencia (CUMPLIMIENTO_HORAS_JORNADA, Cumplimiento.gs) para
 // marcar sobrecarga.
+// v15.9 (D1): en un proyecto de meses la grilla por DÍA son decenas de
+// columnas casi vacías (mucho espacio, poca señal). Cuando la ventana pasa de
+// ~3 semanas, las columnas se agregan por SEMANA (lunes-domingo). Cada columna
+// lleva su rango de días para sumar las horas de ese tramo.
+var WORKLOAD_DIAS_PARA_SEMANA_ = 21;
+function construirColumnasSemanaWorkload_(dias) {
+  var cols = [], porInicio = {};
+  dias.forEach(function (d) {
+    var f = fechaDeClavePdf_(d);
+    var dow = f.getUTCDay();                          // 0=domingo .. 6=sabado
+    var lunes = new Date(f.getTime() - (dow === 0 ? 6 : dow - 1) * 86400000);
+    var ini = clavePdf_(lunes);
+    if (!porInicio[ini]) { porInicio[ini] = { clave: ini, label: 'sem ' + ganttDiaCortoPdf_(ini), dias: [] }; cols.push(porInicio[ini]); }
+    porInicio[ini].dias.push(d);
+  });
+  cols.sort(function (a, b) { return a.clave < b.clave ? -1 : 1; });
+  return cols;
+}
+
 function seccionWorkloadPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia) {
   if (!tareas.length || !dias.length) return '';
   var porPersona = {}, orden = [];
@@ -3698,6 +3739,11 @@ function seccionWorkloadPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaD
     if (reg) return Number(reg.horas) || 0;
     var eventos = (eventosPorTareaDia[actividadId] || {})[diaClave] || [];
     return eventos.reduce(function (s, ev) { return s + (Number(ev.horas) || 0); }, 0);
+  }
+  function horasCol_(persona, col) {
+    return porPersona[persona].reduce(function (s, a) {
+      return s + col.dias.reduce(function (t, d) { return t + horasDelDia_(a.actividad_id, d); }, 0);
+    }, 0);
   }
   // v14: si NADIE registró horas en toda la ventana, el mapa de calor es una
   // grilla en blanco -- no aporta nada. Se resume en una línea en vez de gastar
@@ -3714,26 +3760,67 @@ function seccionWorkloadPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaD
       'Sin horas registradas en el período. La carga por persona aparecerá aquí cuando el equipo registre horas en la bitácora del proyecto.' +
       '</div>';
   }
-  var chunk = diasPorPaginaPdf_(dias.length);
-  var paginas = [];
-  for (var i = 0; i < dias.length; i += chunk) paginas.push(dias.slice(i, i + chunk));
 
-  var html = paginas.map(function (diasPagina, idx) {
+  var agrupaSemana = dias.length > WORKLOAD_DIAS_PARA_SEMANA_;
+  var columnas = agrupaSemana
+    ? construirColumnasSemanaWorkload_(dias)
+    : dias.map(function (d) { return { clave: d, label: fechaCortaPdfProyecto_(d), dias: [d] }; });
+  // La sobrecarga se mide contra la jornada de la unidad de columna: la diaria
+  // (CUMPLIMIENTO_HORAS_JORNADA) para la vista por día, y una jornada semanal
+  // de referencia (x5 días hábiles) para la vista por semana.
+  var jornada = CUMPLIMIENTO_HORAS_JORNADA;
+  var topeColumna = agrupaSemana ? jornada * 5 : jornada;
+
+  // Total por persona (toda la ventana) + si tuvo alguna columna sobrecargada.
+  var totalPersona = {}, sobrecargadaPersona = {};
+  orden.forEach(function (persona) {
+    var tot = 0, sob = false;
+    columnas.forEach(function (col) { var h = horasCol_(persona, col); tot += h; if (h > topeColumna) sob = true; });
+    totalPersona[persona] = tot; sobrecargadaPersona[persona] = sob;
+  });
+
+  var chunk = agrupaSemana ? 24 : diasPorPaginaPdf_(dias.length);
+  var paginas = [];
+  for (var i = 0; i < columnas.length; i += chunk) paginas.push(columnas.slice(i, i + chunk));
+
+  var html = paginas.map(function (colsPagina, idx) {
     var encabezado = '<tr><td style="' + celdaLabelFicha_() + 'width:auto;">Persona</td>' +
-      diasPagina.map(function (d) { return '<td style="' + celdaLabelFicha_() + 'width:auto;text-align:center;">' + fechaCortaPdfProyecto_(d) + '</td>'; }).join('') + '</tr>';
+      colsPagina.map(function (c) { return '<td style="' + celdaLabelFicha_() + 'width:auto;text-align:center;">' + escaparHtml_(c.label) + '</td>'; }).join('') +
+      '<td style="' + celdaLabelFicha_() + 'width:auto;text-align:center;">Total</td></tr>';
     var filas = orden.map(function (persona) {
-      var celdas = diasPagina.map(function (d) {
-        var total = porPersona[persona].reduce(function (s, a) { return s + horasDelDia_(a.actividad_id, d); }, 0);
-        var sobrecarga = total > CUMPLIMIENTO_HORAS_JORNADA;
+      var celdas = colsPagina.map(function (col) {
+        var total = horasCol_(persona, col);
+        var sobrecarga = total > topeColumna;
         return '<td style="' + celdaValorFicha_() + 'width:auto;text-align:center;' +
           (sobrecarga ? 'font-weight:bold;color:#B91C1C;border:1.3px solid #B91C1C;' : '') + '">' + (total ? redond1Pdf_(total) : '') + '</td>';
       }).join('');
-      return '<tr><td style="' + celdaValorFicha_() + 'width:auto;">' + escaparHtml_(persona) + '</td>' + celdas + '</tr>';
+      var tp = totalPersona[persona];
+      var celdaTotal = '<td style="' + celdaValorFicha_() + 'width:auto;text-align:center;font-weight:bold;' +
+        (sobrecargadaPersona[persona] ? 'color:#B91C1C;border:1.3px solid #B91C1C;' : 'color:' + DOC.NAVY + ';') + '">' + (tp ? redond1Pdf_(tp) : '') + '</td>';
+      return '<tr><td style="' + celdaValorFicha_() + 'width:auto;">' + escaparHtml_(persona) + '</td>' + celdas + celdaTotal + '</tr>';
     }).join('');
-    return '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:10px;' +
-      (idx > 0 ? 'page-break-before:always;' : '') + '">' + encabezado + filas + '</table>';
+    // Fila-pie: total por columna + gran total de la página.
+    var pieCeldas = colsPagina.map(function (col) {
+      var t = orden.reduce(function (s, persona) { return s + horasCol_(persona, col); }, 0);
+      return '<td style="' + celdaValorFicha_() + 'width:auto;text-align:center;font-weight:bold;color:' + DOC.NAVY + ';border-top:2px solid ' + DOC.NAVY + ';">' + (t ? redond1Pdf_(t) : '') + '</td>';
+    }).join('');
+    var granTotal = orden.reduce(function (s, persona) {
+      return s + colsPagina.reduce(function (t, col) { return t + horasCol_(persona, col); }, 0);
+    }, 0);
+    var pie = '<tr><td style="' + celdaLabelFicha_() + 'width:auto;border-top:2px solid ' + DOC.NAVY + ';">Total</td>' + pieCeldas +
+      '<td style="' + celdaValorFicha_() + 'width:auto;text-align:center;font-weight:bold;color:' + DOC.NAVY + ';border-top:2px solid ' + DOC.NAVY + ';">' + (granTotal ? redond1Pdf_(granTotal) : '') + '</td></tr>';
+    return '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 8px;font-size:10px;' +
+      (idx > 0 ? 'page-break-before:always;' : '') + '">' + encabezado + filas + pie + '</table>';
   }).join('');
-  return docSeccionOt_('Carga de trabajo (horas por día y persona)') + html;
+
+  var titulo = agrupaSemana ? 'Carga de trabajo (horas por semana y persona)' : 'Carga de trabajo (horas por día y persona)';
+  var nota = '<div style="font-size:9px;color:' + DOC.MUTED + ';margin:0 0 18px;line-height:1.5;">' +
+    (agrupaSemana ? 'Agrupado por semana (lunes a domingo) por tratarse de un período largo. ' : '') +
+    'Cada número son las horas registradas; una celda con borde rojo supera la ' +
+    (agrupaSemana ? 'jornada semanal de referencia (' + redond1Pdf_(topeColumna) + ' h). ' : 'jornada diaria (' + redond1Pdf_(topeColumna) + ' h). ') +
+    'La columna Total suma toda la ventana por persona.' +
+    '</div>';
+  return docSeccionOt_(titulo) + html + nota;
 }
 
 function seccionLeyendaPdf_() {
