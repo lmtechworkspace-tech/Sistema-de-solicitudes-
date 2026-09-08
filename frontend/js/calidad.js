@@ -435,6 +435,7 @@
       // viejos (la caché de reabrir pinta antes de revalidar).
       if (respuesta && respuesta.ok && !/^(listar|get|descargar|buscar|export)/i.test(accion)) {
         cacheListadoSgc_ = {};
+        cacheListadoSgcFiltros_ = {};
         cacheDetalleDoc_ = {};
         cacheFichaPersona_ = {};
       }
@@ -468,10 +469,22 @@
     '</div>';
   }
 
+  // v16.7: la caché de listados es SENSIBLE A LOS FILTROS. Antes `clave`
+  // (p.ej. 'documentos') era fija sin importar tipo/estado/búsqueda o
+  // área/incluir_desvinculados activos -- así que cambiar un filtro (o
+  // limpiarlo) pintaba al instante la lista del filtro ANTERIOR (bug real:
+  // un vistazo mal filtrado antes de que la respuesta correcta lo corrigiera).
+  // Se guarda además la "firma" de los filtros con los que se llenó esa
+  // caché; si los de esta llamada no coinciden, se trata como si no hubiera
+  // caché (esqueleto, no un flash de datos de otro filtro).
+  var cacheListadoSgcFiltros_ = {};
+
   function cargarListadoSgc_(opts) {
     var cont = panelSgc_();
     if (!cont) return;
-    var enCache = cacheListadoSgc_[opts.clave];
+    var firmaFiltros = JSON.stringify(opts.datos || {});
+    var filtrosCoinciden = cacheListadoSgcFiltros_[opts.clave] === firmaFiltros;
+    var enCache = filtrosCoinciden ? cacheListadoSgc_[opts.clave] : null;
     // v16.5: ¿esta carga es un refresco de fondo (volver a la pestaña)? Se
     // captura ahora porque el flag global se apaga en cuanto render_ retorna,
     // antes de que llegue la respuesta asíncrona.
@@ -479,6 +492,7 @@
 
     function pintar(data, preservarScroll) {
       var y = preservarScroll ? window.scrollY : 0;
+      cacheListadoSgcFiltros_[opts.clave] = firmaFiltros;
       opts.aplicar(cont, data);
       if (preservarScroll) window.scrollTo(0, y);
     }
@@ -2221,7 +2235,7 @@
       if (nueva) nueva.addEventListener('click', function () { abrirFormularioCapacitacion_(null); });
       cont.querySelectorAll('.js-sgc-realizar').forEach(function (btn) {
         btn.addEventListener('click', function () {
-          abrirFormularioRealizacion_(btn.getAttribute('data-idx'));
+          abrirFormularioRealizacion_(btn.getAttribute('data-idx'), btn);
         });
       });
       cont.querySelectorAll('.js-sgc-eficacia').forEach(function (btn) {
@@ -2334,9 +2348,23 @@
   }
 
   // Registrar realización: se elige quién asistió de la lista de personal.
-  function abrirFormularioRealizacion_(capacitacionId) {
+  // v16.7 (bug encontrado en auditoría): entre el clic y que apareciera el
+  // modal no había NINGUNA señal -- se pedía el listado de personas y el
+  // modal recién se armaba cuando llegaba la respuesta; en una conexión lenta
+  // se leía como que el botón no hacía nada. Ahora el botón que abrió esto
+  // pasa a "Cargando..." mientras se resuelve.
+  function abrirFormularioRealizacion_(capacitacionId, btnOrigen) {
+    var etiquetaOrigen = btnOrigen ? btnOrigen.textContent : '';
+    if (btnOrigen) { btnOrigen.disabled = true; btnOrigen.textContent = 'Cargando...'; }
     api_('listarPersonasSgc', {}).then(function (r) {
-      var personas = (r && r.ok) ? (r.data.personas || []) : [];
+      if (btnOrigen) { btnOrigen.disabled = false; btnOrigen.textContent = etiquetaOrigen; }
+      // Si la petición falló (no solo "sin personal"), no abrir un modal que
+      // miente diciendo "no hay personal registrado" -- avisar el error real.
+      if (!r || !r.ok) {
+        Componentes.aviso({ texto: (r && r.message) || 'No se pudo cargar el personal.', tipo: 'error' });
+        return;
+      }
+      var personas = r.data.personas || [];
       var fondo = document.createElement('div');
       fondo.className = 'sigso-modal-fondo';
       fondo.innerHTML =
@@ -2379,6 +2407,11 @@
           cargarCapacitaciones_();
         });
       });
+    }).catch(function () {
+      // Sin esto, un fallo de red dejaba el botón bloqueado en "Cargando..."
+      // para siempre y el modal nunca aparecía -- sin ningún aviso.
+      if (btnOrigen) { btnOrigen.disabled = false; btnOrigen.textContent = etiquetaOrigen; }
+      Componentes.aviso({ texto: 'No se pudo conectar para cargar el personal.', tipo: 'error' });
     });
   }
 
