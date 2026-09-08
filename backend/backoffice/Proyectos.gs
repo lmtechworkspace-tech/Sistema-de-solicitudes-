@@ -3194,9 +3194,9 @@ function seccionPortadaPdf_(detalle) {
 // pintan en rojo SOLO cuando su valor es > 0 -- un cero no debe gritar.
 // Mismos números que la pestaña Resumen (requiere_atencion) y el
 // rendimiento (Fase G3): cero cálculo nuevo, solo presentación.
-function kpiTarjetaPdf_(valor, etiqueta, tono) {
+function kpiTarjetaPdf_(valor, etiqueta, tono, ancho) {
   var color = tono === 'alerta' ? '#B91C1C' : (tono === 'ok' ? '#15803D' : DOC.INK);
-  return '<td style="width:16.6%;border:1px solid ' + DOC.HAIRLINE + ';' +
+  return '<td style="width:' + (ancho || '16.6%') + ';border:1px solid ' + DOC.HAIRLINE + ';' +
       'padding:9px 6px;text-align:center;vertical-align:middle;">' +
     '<div style="font-size:21px;font-weight:bold;font-family:' + DOC.SERIF + ';color:' + color + ';line-height:1.05;">' +
       escaparHtml_(String(valor)) + '</div>' +
@@ -3208,16 +3208,32 @@ function bandaKpisPdf_(detalle, rendimiento) {
   var at = detalle.requiere_atencion || {};
   var c = (rendimiento && rendimiento.cumplimiento_tareas) || {};
   var horas = (rendimiento && rendimiento.horas_totales_proyecto) || 0;
-  var tarjetas = [
-    kpiTarjetaPdf_(detalle.avance_pct === null || detalle.avance_pct === undefined ? '—' : detalle.avance_pct + '%', 'Avance'),
-    kpiTarjetaPdf_(c.entregadas ? c.a_tiempo + '/' + c.entregadas : '—', 'Entregas a tiempo'),
-    kpiTarjetaPdf_(horas ? redond1Pdf_(horas) + 'h' : '—', 'Horas registradas'),
-    kpiTarjetaPdf_(at.tareas_vencidas || 0, 'Tareas vencidas', (at.tareas_vencidas > 0 ? 'alerta' : '')),
-    kpiTarjetaPdf_(at.tareas_bloqueadas || 0, 'Bloqueadas', (at.tareas_bloqueadas > 0 ? 'alerta' : '')),
-    kpiTarjetaPdf_(at.hitos_atrasados || 0, 'Hitos atrasados', (at.hitos_atrasados > 0 ? 'alerta' : ''))
+  // v15.8 (B1): tarjeta "Avance vs esperado". El avance suelto (45%) no dice
+  // nada sin el "¿cuánto debería ir?" -- la desviación plan vs real es el
+  // primer número que mira gerencia. Mismo cálculo que el Resumen ejecutivo
+  // y la tabla Plan·Esperado·Real (avance real − avance esperado a nivel de
+  // proyecto, ambos ya en `detalle`), aquí en tarjeta y de primero.
+  var avance = detalle.avance_pct;
+  var esperado = detalle.avance_esperado_pct;
+  var hayDesv = (avance !== null && avance !== undefined && esperado !== null && esperado !== undefined);
+  var desv = hayDesv ? Math.round((avance - esperado) * 10) / 10 : null;
+  var desvValor = hayDesv ? ((desv >= 0 ? '+' : '') + desv + ' pp') : '—';
+  var desvEtiqueta = hayDesv ? ('Avance vs esperado (' + esperado + '%)') : 'Avance vs esperado';
+  var desvTono = hayDesv ? (desv < 0 ? 'alerta' : 'ok') : '';
+
+  var specs = [
+    [avance === null || avance === undefined ? '—' : avance + '%', 'Avance real', ''],
+    [desvValor, desvEtiqueta, desvTono],
+    [c.entregadas ? c.a_tiempo + '/' + c.entregadas : '—', 'Entregas a tiempo', ''],
+    [horas ? redond1Pdf_(horas) + 'h' : '—', 'Horas registradas', ''],
+    [at.tareas_vencidas || 0, 'Tareas vencidas', (at.tareas_vencidas > 0 ? 'alerta' : '')],
+    [at.tareas_bloqueadas || 0, 'Bloqueadas', (at.tareas_bloqueadas > 0 ? 'alerta' : '')],
+    [at.hitos_atrasados || 0, 'Hitos atrasados', (at.hitos_atrasados > 0 ? 'alerta' : '')]
   ];
+  var ancho = redond1Pdf_(100 / specs.length) + '%';
+  var tarjetas = specs.map(function (s) { return kpiTarjetaPdf_(s[0], s[1], s[2], ancho); });
   return docSeccionOt_('Indicadores clave') +
-    '<table width="100%" style="border-collapse:collapse;margin:0 0 18px;"><tr>' + tarjetas.join('') + '</tr></table>';
+    '<table width="100%" style="border-collapse:collapse;margin:0 0 18px;table-layout:fixed;"><tr>' + tarjetas.join('') + '</tr></table>';
 }
 
 // v11 (P1, "score de salud ponderado" -> aquí, en el PDF): el mismo score/

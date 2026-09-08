@@ -20465,14 +20465,20 @@ var Iconos = (function () {
   // v12 ("reporte PDF potenciado"): el botón del Cronograma de un proyecto
   // genera el PDF ejecutivo REAL del backend (Proyectos.descargarReporte con
   // config), el mismo motor de "Configurar informe" del Resumen, pero con un
-  // set de secciones profesional por defecto (portada, KPIs, salud,
-  // desviaciones, Carta Gantt de barras, workload, hitos, riesgos,
+  // set de secciones profesional por defecto (portada, resumen ejecutivo,
+  // KPIs, salud, desviaciones, Carta Gantt de barras, workload, hitos, riesgos,
   // vencimientos, bitácora, leyenda). Respeta el filtro de persona/estado que
   // el usuario tenga puesto en la carta -- así el PDF cuenta lo que está
   // mirando, no un genérico. Llega en base64 y se baja como .pdf de verdad
   // (descargarBase64Proyecto_), sin diálogo de impresión ni clon de pantalla.
+  // v15.8 (A1): 'narrativa' (Resumen ejecutivo) entra al set por defecto,
+  // primero -- responde "cómo va, qué está mal, qué hacer" en un párrafo,
+  // antes de cualquier tabla. Antes solo aparecía si el usuario entraba a
+  // "Configurar informe", así que el botón que casi todos aprietan caía
+  // directo a los números. El orden final lo fija REPORTE_SECCIONES_
+  // DISPONIBLES_ en el backend (narrativa va tras la portada igual).
   var CRONOGRAMA_REPORTE_SECCIONES_ = [
-    'portada', 'ficha', 'kpis', 'salud', 'desviaciones', 'gantt',
+    'portada', 'narrativa', 'ficha', 'kpis', 'salud', 'desviaciones', 'gantt',
     'workload', 'hitos', 'riesgos', 'vencimientos', 'bitacora', 'leyenda'
   ];
   // v15.5 ("el período que ves es el período que bajas"): el selector de

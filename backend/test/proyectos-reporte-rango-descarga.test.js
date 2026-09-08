@@ -75,3 +75,18 @@ test('"mes" manda los 30 días terminados en el ancla', () => {
   const r = rangoDescargaActual_('mes', new Date(2026, 8, 7));
   assert.deepEqual(r, { desde: '2026-08-09', hasta: '2026-09-07' });
 });
+
+// --- A1: el reporte por defecto incluye el Resumen ejecutivo ---------------
+// El botón "Descargar reporte" arma un set fijo (CRONOGRAMA_REPORTE_SECCIONES_).
+// Antes NO incluía 'narrativa', así que el resumen que responde "cómo va / qué
+// está mal / qué hacer" solo aparecía entrando a "Configurar informe".
+
+test('A1: el set por defecto del botón "Descargar reporte" incluye la narrativa, de primero', () => {
+  const m = JS.match(/CRONOGRAMA_REPORTE_SECCIONES_ = \[([\s\S]*?)\]/);
+  assert.ok(m, 'no se encontró CRONOGRAMA_REPORTE_SECCIONES_');
+  const set = m[1];
+  assert.match(set, /'narrativa'/, 'el resumen ejecutivo debe estar en el set por defecto');
+  // Va antes que las tablas de detalle (después de portada).
+  assert.ok(set.indexOf("'narrativa'") < set.indexOf("'gantt'"), 'la narrativa va antes de la Carta Gantt');
+  assert.ok(set.indexOf("'portada'") < set.indexOf("'narrativa'"), 'la narrativa va tras la portada');
+});

@@ -37,7 +37,17 @@ const CTX_LEO = { email: 'leo@rld.cl', nombre: 'Leo Lider', rol: 'DEV' };
 const CTX_MARCELO = { email: 'marcelo@rld.cl', nombre: 'Marcelo Integrante', rol: 'DEV' };
 
 function htmlDe_(res) { return Buffer.from(res.pdf_base64, 'base64').toString('utf8'); }
-function diasDesdeHoy(n) { return new Date(Date.now() + n * 86400000).toISOString().slice(0, 10); }
+// "Hoy" en el calendario de America/Santiago -- el MISMO que usa el backend
+// para validar "no se registra un día futuro" (guardarRegistroDia). Con el
+// UTC crudo, de noche en Chile el test siembra "mañana" (UTC ya es el día
+// siguiente) y el registro se rechaza: la sección sale vacía y varias
+// aserciones fallan solo por la hora a la que corre la suite. Anclar en
+// Santiago lo vuelve estable a cualquier hora.
+function diasDesdeHoy(n) {
+  var hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date());
+  var p = hoy.split('-').map(Number);
+  return new Date(Date.UTC(p[0], p[1] - 1, p[2]) + n * 86400000).toISOString().slice(0, 10);
+}
 function cortaDe(iso) { return iso.slice(8, 10) + '/' + iso.slice(5, 7); }
 
 function armarProyecto(ctx) {
@@ -254,7 +264,11 @@ test('obtenerRendimiento: una tarea creada en orden normal no cambia (plan_inici
 
   const rendimiento = ctx.Proyectos.obtenerRendimiento({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
   const plan = rendimiento.plan_seguimiento.filter((p) => p.actividad_id === t.actividad_id)[0];
-  assert.equal(plan.plan_inicio, diasDesdeHoy(0), 'sin creación-tardía, el plan sigue empezando donde se creó la tarea');
+  // plan_inicio sale de fecha_creacion, que el backend estampa con
+  // toISOString() (UTC) -- aquí el día correcto es el UTC de la creación, no
+  // el de Santiago (por eso NO se usa diasDesdeHoy, que va anclado a Santiago).
+  const creacionUtc = new Date().toISOString().slice(0, 10);
+  assert.equal(plan.plan_inicio, creacionUtc, 'sin creación-tardía, el plan sigue empezando donde se creó la tarea');
 });
 
 // --- 6. Leyenda rotulada en Carta Gantt / Ejecución día a día ---------------
@@ -434,4 +448,35 @@ test('un proyecto activo hace MÁS de 60 días recorta el extremo VIEJO, pero si
   assert.match(html, /Ejecución día a día/);
   assert.match(html, new RegExp(cortaDe(diasDesdeHoy(0)).replace('/', '\\/')), 'debe llegar a HOY sin importar el tope');
   assert.doesNotMatch(html, new RegExp(cortaDe(inicio).replace('/', '\\/')), 'el inicio de hace 200 días queda fuera -- se recorta el extremo viejo, no el reciente');
+});
+
+// --- 10 (B1). "Avance vs esperado" en la banda de indicadores --------------
+// El avance suelto no dice nada sin el "¿cuánto debería ir?". La banda suma
+// una tarjeta con la desviación en puntos, en rojo si va debajo del plan.
+
+test('B1: la banda de KPIs trae "Avance vs esperado" con la desviación en puntos', () => {
+  const ctx = loadConSchema();
+  // Proyecto arrancado hace 40 días con una tarea confirmada NO terminada:
+  // el avance real (0%) queda debajo del esperado lineal -> desviación negativa.
+  const proyecto = ctx.Proyectos.crear({ nombre: 'Bajo plan', fecha_inicio: diasDesdeHoy(-40), fecha_objetivo: diasDesdeHoy(40) }, CTX_LEO);
+  ctx.Proyectos.gestionarIntegrante({ proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE' }, CTX_LEO);
+  const t = ctx.Proyectos.crearTarea({ proyecto_id: proyecto.proyecto_id, titulo: 'T', responsable_email: 'marcelo@rld.cl', fecha_compromiso: diasDesdeHoy(10) }, CTX_LEO);
+  ctx.Actividades.confirmar({ actividad_id: t.actividad_id, fecha_compromiso: diasDesdeHoy(10) }, CTX_MARCELO);
+
+  const res = ctx.Proyectos.descargarReporte({ proyecto_id: proyecto.proyecto_id, config: { secciones: ['kpis'] } }, CTX_LEO);
+  const html = htmlDe_(res);
+  assert.match(html, /Avance vs esperado \(\d/, 'la etiqueta lleva el esperado entre paréntesis');
+  assert.match(html, /-\d+(\.\d+)? pp/, 'muestra la desviación en puntos');
+  // Debajo del plan -> el número va en el rojo de alerta (#B91C1C).
+  assert.match(html, /color:#B91C1C[^>]*>[^<]*-\d+(\.\d+)? pp/, 'la desviación negativa se pinta en rojo');
+});
+
+test('B1: sin esperado calculable, la tarjeta no inventa un número', () => {
+  const ctx = loadConSchema();
+  // Un proyecto sin fecha de inicio no permite trazar el esperado -> "—".
+  const proyecto = ctx.Proyectos.crear({ nombre: 'Sin curva', fecha_inicio: diasDesdeHoy(0), fecha_objetivo: diasDesdeHoy(0) }, CTX_LEO);
+  const res = ctx.Proyectos.descargarReporte({ proyecto_id: proyecto.proyecto_id, config: { secciones: ['kpis'] } }, CTX_LEO);
+  const html = htmlDe_(res);
+  assert.match(html, /Avance vs esperado/, 'la tarjeta existe igual');
+  assert.doesNotMatch(html, /\d pp/, 'sin curva no se muestra una desviación inventada');
 });

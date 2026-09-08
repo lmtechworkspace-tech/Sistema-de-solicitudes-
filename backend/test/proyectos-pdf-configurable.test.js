@@ -211,6 +211,9 @@ test('descargarReporte config: la sección KPIs trae la banda de indicadores eje
   assert.match(html, /Avance/);
   assert.match(html, /Entregas a tiempo/);
   assert.match(html, /Hitos atrasados/);
+  // v15.8 (B1): la banda incluye la tarjeta "Avance vs esperado" -- el número
+  // de decisión que antes solo vivía en la narrativa y en una tabla más abajo.
+  assert.match(html, /Avance vs esperado/);
 });
 
 test('descargarReporte config: la Carta Gantt dibuja barras de color, no solo letras', () => {
