@@ -90,3 +90,16 @@ test('A1: el set por defecto del botón "Descargar reporte" incluye la narrativa
   assert.ok(set.indexOf("'narrativa'") < set.indexOf("'gantt'"), 'la narrativa va antes de la Carta Gantt');
   assert.ok(set.indexOf("'portada'") < set.indexOf("'narrativa'"), 'la narrativa va tras la portada');
 });
+
+// --- A3: la casilla de "Configurar informe" describe la Carta Gantt actual ---
+// Antes decía "Carta Gantt (día × tarea)", pero la opción 'gantt' hoy genera la
+// carta de BARRAS por semana (+ la ejecución día a día si hay registro). La
+// etiqueta desactualizada confundía sobre qué se va a incluir.
+
+test('A3: la casilla de la Carta Gantt ya no se describe como "día × tarea"', () => {
+  assert.doesNotMatch(JS, /Carta Gantt \(d[ií]a × tarea\)/, 'la etiqueta vieja quedó obsoleta');
+  const i = JS.indexOf("valor: 'gantt'");
+  assert.ok(i > -1, 'debe existir la casilla de la sección gantt');
+  const linea = JS.slice(i, JS.indexOf('}', i));
+  assert.match(linea, /barras por semana/, 'la etiqueta describe la carta de barras real');
+});

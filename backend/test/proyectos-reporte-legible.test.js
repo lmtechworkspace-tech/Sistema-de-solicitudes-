@@ -161,10 +161,16 @@ test('la Actividad reciente trae columnas con título, chip de tipo y horas apar
   const res = ctx.Proyectos.descargarReporte({ proyecto_id: proyecto.proyecto_id, config: { secciones: ['bitacora'] } }, CTX_LEO);
   const html = htmlDe_(res);
   assert.match(html, /Actividad reciente/);
-  // Encabezados de columna reales.
-  ['Fecha', 'Tarea', 'Tipo', 'Detalle', 'Horas'].forEach(function (t2) {
+  // v15.11 (D5): la Fecha ya NO es una columna por fila -- pasó a ser una
+  // fila-cabecera por día. Los encabezados de columna quedan en Tarea/Tipo/
+  // Detalle/Horas, y el día aparece una vez como cabecera.
+  ['Tarea', 'Tipo', 'Detalle', 'Horas'].forEach(function (t2) {
     assert.match(html, new RegExp('>' + t2 + '<'), 'falta el encabezado de Actividad: ' + t2);
   });
+  assert.doesNotMatch(html, />Fecha</, 'la Fecha ya no es columna, es cabecera de día');
+  const hoyIso = diasDesdeHoy(0);
+  const hoyCorto = hoyIso.slice(8, 10) + '-' + hoyIso.slice(5, 7) + '-' + hoyIso.slice(0, 4);
+  assert.match(html, new RegExp(hoyCorto), 'el día aparece como cabecera de su bloque');
   // La nota va en su columna (Detalle), y las horas en la suya ("3 h"), no
   // amontonadas como "En proceso (3h): Avancé...".
   assert.match(html, /Avancé el borrador/);

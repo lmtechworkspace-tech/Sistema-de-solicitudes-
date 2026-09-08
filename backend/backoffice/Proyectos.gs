@@ -2841,6 +2841,14 @@ var REPORTE_SECCIONES_DISPONIBLES_ = [
   'portada', 'narrativa', 'ficha', 'kpis', 'salud', 'mini_gantt', 'hitos', 'riesgos',
   'vencimientos', 'rendimiento', 'desviaciones', 'gantt', 'workload', 'bitacora', 'leyenda'
 ];
+// v15.11 (A2): etiqueta legible de cada sección, para el índice de la portada.
+var REPORTE_SECCION_LABEL_ = {
+  narrativa: 'Resumen ejecutivo', ficha: 'Ficha del proyecto', kpis: 'Indicadores clave',
+  salud: 'Salud del proyecto', mini_gantt: 'Plan por semana', hitos: 'Hitos',
+  riesgos: 'Riesgos abiertos', vencimientos: 'Próximos vencimientos', rendimiento: 'Rendimiento',
+  desviaciones: 'Plan · Esperado · Real', gantt: 'Carta Gantt', workload: 'Carga de trabajo',
+  bitacora: 'Actividad reciente', leyenda: 'Leyenda'
+};
 
 // Valida/normaliza la config que llega del frontend. null = "no hay config"
 // (el caller usa el camino clásico); nunca deja pasar un array/rango con
@@ -3116,8 +3124,19 @@ function construirHtmlReporteConfigurado_(detalle, todasTareas, rendimiento, tar
     });
   }
 
+  // v15.11 (A4): si TODAS las tareas del reporte tienen el mismo responsable,
+  // repetir su correo bajo cada una es ruido que empuja el título y gasta
+  // ancho. Se detecta el caso y se dice una sola vez (arriba de la Carta
+  // Gantt); con varios responsables, cada fila lo sigue mostrando.
+  var respSet = {}, respNombre = '';
+  tareasFiltradas.forEach(function (a) {
+    var e = normalizarEmailProyecto_(a.responsable_email || '');
+    if (e) { respSet[e] = a.responsable_nombre || a.responsable_email; respNombre = respSet[e]; }
+  });
+  var unicoResponsable = Object.keys(respSet).length === 1 ? respNombre : '';
+
   var partes = [];
-  if (incluye('portada')) partes.push(seccionPortadaPdf_(detalle));
+  if (incluye('portada')) partes.push(seccionPortadaPdf_(detalle, config.secciones));
   if (incluye('narrativa')) partes.push(seccionNarrativaPdf_(detalle));
   if (incluye('ficha')) partes.push(fichaProyectoPdf_(detalle));
   if (incluye('kpis')) partes.push(bandaKpisPdf_(detalle, rendimiento));
@@ -3145,12 +3164,18 @@ function construirHtmlReporteConfigurado_(detalle, todasTareas, rendimiento, tar
   if (incluye('rendimiento')) partes.push(seccionRendimientoPdf_(rendimiento));
   if (incluye('desviaciones')) partes.push(seccionDesviacionesPdf_(rendimiento, tareasFiltradas, tareasPorId));
   if (incluye('gantt')) {
+    // v15.11 (C2): mapa actividad_id -> fin de la línea base (si se congeló
+    // una) para dibujar la marca fantasma del compromiso original.
+    var baselinePorId = {};
+    ((rendimiento && rendimiento.plan_seguimiento) || []).forEach(function (t) {
+      if (t.baseline_fin) baselinePorId[t.actividad_id] = t.baseline_fin;
+    });
     // v15: la carta de BARRAS por semana es el cronograma principal (se lee de
     // un vistazo). La grilla de letras día a día solo se agrega si de verdad
     // hay registro diario que mostrar -- si no, sale casi vacía y estorba.
-    partes.push(seccionCronogramaBarrasPdf_(tareasFiltradas, detalle.hitos || [], detalle.proyecto.fecha_inicio, config.rango, hoyClave));
+    partes.push(seccionCronogramaBarrasPdf_(tareasFiltradas, detalle.hitos || [], detalle.proyecto.fecha_inicio, config.rango, hoyClave, baselinePorId, unicoResponsable));
     if (hayRegistroDiario_(registroPorTareaDia)) {
-      partes.push(seccionGanttPdf_(tareasFiltradas, dias, registroPorTareaDia, eventosPorTareaDia, detalle.proyecto.fecha_inicio));
+      partes.push(seccionGanttPdf_(tareasFiltradas, dias, registroPorTareaDia, eventosPorTareaDia, detalle.proyecto.fecha_inicio, unicoResponsable));
     }
   }
   if (incluye('workload')) partes.push(seccionWorkloadPdf_(tareasFiltradas, dias, registroPorTareaDia, eventosPorTareaDia));
@@ -3187,7 +3212,34 @@ function construirHtmlReporteConfigurado_(detalle, todasTareas, rendimiento, tar
 
 // --- portada / salud detallada / desviaciones / Gantt / workload / leyenda
 
-function seccionPortadaPdf_(detalle) {
+// v15.11 (A2): índice de contenido en la mitad inferior de la portada (que
+// estaba casi vacía) -- un PDF de 15+ páginas era "para hojear, no para
+// consultar". Lista las secciones incluidas, en dos columnas. NOTA: el motor
+// HTML→PDF de Apps Script (Google Docs) no expone el número de página de cada
+// sección (no hay contadores de página que podamos leer al armar el HTML), así
+// que el índice numera las secciones en orden, sin pág. -- orienta "qué trae y
+// en qué orden" sin prometer un número que no podemos calcular.
+function indiceContenidoPdf_(seccionesIncluidas) {
+  var items = (seccionesIncluidas || []).filter(function (s) { return REPORTE_SECCION_LABEL_[s]; });
+  if (items.length < 3) return ''; // para 1-2 secciones un índice no aporta
+  var mitad = Math.ceil(items.length / 2);
+  function celdaLista(desde, hasta, base) {
+    var filas = items.slice(desde, hasta).map(function (s, i) {
+      return '<tr>' +
+        '<td style="padding:3px 8px;text-align:right;color:' + DOC.MUTED + ';font-size:11px;width:22px;vertical-align:top;">' + (base + i + 1) + '</td>' +
+        '<td style="padding:3px 8px;color:' + DOC.INK + ';font-size:11px;">' + escaparHtml_(REPORTE_SECCION_LABEL_[s]) + '</td>' +
+      '</tr>';
+    }).join('');
+    return '<td style="vertical-align:top;padding:0 18px;"><table style="border-collapse:collapse;">' + filas + '</table></td>';
+  }
+  return '<div style="margin:40px auto 0;max-width:520px;">' +
+    '<div style="font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;color:' + DOC.NAVY + ';border-bottom:1px solid ' + DOC.HAIRLINE + ';padding-bottom:5px;margin-bottom:8px;">Contenido</div>' +
+    '<table style="margin:0 auto;border-collapse:collapse;"><tr>' +
+      celdaLista(0, mitad, 0) + celdaLista(mitad, items.length, mitad) +
+    '</tr></table>' +
+  '</div>';
+}
+function seccionPortadaPdf_(detalle, seccionesIncluidas) {
   var p = detalle.proyecto;
   var scoreTxt = detalle.salud_penalizacion ? ' · ' + detalle.salud_penalizacion + ' pts en contra' : '';
   return '<div style="padding:60px 0 40px;text-align:center;page-break-after:always;">' +
@@ -3200,6 +3252,7 @@ function seccionPortadaPdf_(detalle) {
       '<tr><td style="' + celdaLabelFicha_() + '">Líder</td><td style="' + celdaValorFicha_() + '">' + escaparHtml_(p.lider_email || '—') + '</td></tr>' +
       '<tr><td style="' + celdaLabelFicha_() + '">Período</td><td style="' + celdaValorFicha_() + '">' + fechaCortaPdfProyecto_(p.fecha_inicio) + ' – ' + fechaCortaPdfProyecto_(p.fecha_objetivo) + '</td></tr>' +
     '</table>' +
+    indiceContenidoPdf_(seccionesIncluidas) +
     '</div>';
 }
 
@@ -3484,12 +3537,14 @@ function semanasBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyClave) {
   return construirSemanasBarrasPdf_(r.desde, r.hasta, REPORTE_TOPE_SEMANAS_);
 }
 
-function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyClave) {
+function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyClave, baselinePorId, unicoResponsable) {
   if (!tareas.length) return '';
+  baselinePorId = baselinePorId || {};
   var semanas = semanasBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyClave);
   if (!semanas.length) return '';
   var proyIni = proyectoInicio ? clavePdf_(new Date(proyectoInicio)) : '';
   var ultimoDia = semanas[semanas.length - 1].hasta;
+  var hayBaseline = false; // se prende si alguna tarea dibuja su fantasma
 
   // Bandas de mes (colspan por cantidad de semanas del mes).
   var bandas = [];
@@ -3533,8 +3588,8 @@ function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyCl
       }).join('') + '</tr>';
   }
 
-  // Filas de tareas: una barra continua semControl -> compromiso.
-  var filas = tareas.map(function (a) {
+  // Fila de una tarea: una barra continua inicio -> compromiso.
+  function filaTarea(a) {
     var kCre = a.fecha_creacion ? clavePdf_(new Date(a.fecha_creacion)) : '';
     var kCom = a.fecha_compromiso ? clavePdf_(new Date(a.fecha_compromiso)) : '';
     var terminal = (a.estado === 'TERMINADA' || a.estado === 'CANCELADA');
@@ -3554,11 +3609,25 @@ function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyCl
     var barIni = planInicioEfectivoClave_(kCre, kCom, proyIni);
     var barFin = kCom;
     var fueraDeRango = kCom && kCom > ultimoDia;
+    // v15.11 (C2): compromiso ORIGINAL (línea base) -- se dibuja su marca
+    // fantasma solo si difiere del compromiso vigente (señal de que el plan se
+    // movió). Sin línea base, o si no se movió, no se dibuja nada.
+    var kBase = baselinePorId[a.actividad_id] ? clavePdf_(new Date(baselinePorId[a.actividad_id])) : '';
+    var mostrarBase = kBase && kBase !== kCom;
+    if (mostrarBase) hayBaseline = true;
 
     var celdas = semanas.map(function (s, i) {
       var onBar = barIni && barFin && s.hasta >= barIni && s.desde <= barFin;
       var onAtraso = !terminal && kCom && !onBar && s.hasta > kCom && s.desde <= hoyClave;
       var bg = onBar ? color : (onAtraso ? GANTT_ATRASO_SOLIDO_ : '');
+      var esBase = mostrarBase && s.desde <= kBase && s.hasta >= kBase;
+      // v15.11 (C2): tick hueco gris ◇ en la semana del compromiso original.
+      if (esBase) {
+        return '<td style="padding:1px 1px 0;text-align:center;font-size:9px;' +
+          'border-left:1px solid #EEF2F7;border-right:1px solid #EEF2F7;' + contornoBarra +
+          (bg ? 'border-bottom:' + BARRA_GROSOR_PX_ + 'px solid ' + bg + ';' : 'border-bottom:1px solid #EEF2F7;') +
+          (semanaDeHoy[i] ? hoyBorde : '') + '"><span style="color:' + DOC.MUTED + ';">&#9671;</span></td>';
+      }
       // v15.3: ni `background-color` ni `bgcolor` pintan relleno en el PDF
       // real (confirmado renderizando el PDF real a píxeles) -- solo BORDES
       // de color se pintan. La "barra" pasa a ser un borde inferior GRUESO
@@ -3578,11 +3647,42 @@ function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyCl
           : ' &middot; compromiso ' + fechaCortaPdfProyecto_(a.fecha_compromiso))
       : ' &middot; <span style="color:' + DOC.FAINT + ';">sin fecha comprometida</span>';
     var marcaCritica = critica ? '<span style="color:' + DOC.NAVY + ';font-weight:bold;" title="Ruta crítica">&#9650;</span> ' : '';
+    // v15.11 (A4): con un solo responsable en todo el reporte, no se repite su
+    // correo bajo cada tarea (se dice una vez arriba) -- la segunda línea queda
+    // para el compromiso, no para un dato idéntico fila tras fila.
+    var metaResp = unicoResponsable ? '' : (escaparHtml_(a.responsable_nombre || a.responsable_email || '—') + ' ');
     var etiqueta = '<div style="font-weight:bold;color:' + DOC.INK + ';font-size:10px;">' + marcaCritica + escaparHtml_(a.titulo) + '</div>' +
       '<div style="font-size:8px;color:' + DOC.MUTED + ';margin-top:1px;">' +
-        escaparHtml_(a.responsable_nombre || a.responsable_email || '—') + commitTxt + '</div>';
+        metaResp + (unicoResponsable ? commitTxt.replace(/^ &middot; /, '') : commitTxt) + '</div>';
     return '<tr><td style="padding:5px 8px;' + anchoLabel + bordeCelda + 'vertical-align:middle;">' + etiqueta + '</td>' + celdas + '</tr>';
-  }).join('');
+  }
+
+  // v15.11 (C3): en un proyecto largo, 40+ tareas planas son un muro. Si hay
+  // hitos, se agrupan bajo una fila-cabecera por hito (◆ + nombre), con las
+  // tareas sin hito al final. Rompe el muro en bloques legibles (las fases del
+  // proyecto). Sin hitos, se listan planas como siempre.
+  var anchoCol = semanas.length + 1;
+  function cabeceraGrupo(nombre) {
+    return '<tr><td colspan="' + anchoCol + '" style="padding:5px 8px;color:' + DOC.NAVY + ';font-size:9px;' +
+      'font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;border:1px solid ' + DOC.HAIRLINE + ';' +
+      'border-bottom:2px solid ' + DOC.NAVY + ';">&#9670; ' + escaparHtml_(nombre) + '</td></tr>';
+  }
+  var hitosConId = (hitos || []).filter(function (h) { return h.hito_id; });
+  var agrupaHito = hitosConId.length && tareas.some(function (a) { return a.hito_id; });
+  var cuerpo;
+  if (agrupaHito) {
+    var partesGrupo = [];
+    hitosConId.forEach(function (h) {
+      var tHito = tareas.filter(function (a) { return a.hito_id === h.hito_id; });
+      if (tHito.length) partesGrupo.push(cabeceraGrupo(h.nombre) + tHito.map(filaTarea).join(''));
+    });
+    var idsHito = {}; hitosConId.forEach(function (h) { idsHito[h.hito_id] = true; });
+    var sinHito = tareas.filter(function (a) { return !a.hito_id || !idsHito[a.hito_id]; });
+    if (sinHito.length) partesGrupo.push(cabeceraGrupo('Sin hito') + sinHito.map(filaTarea).join(''));
+    cuerpo = partesGrupo.join('');
+  } else {
+    cuerpo = tareas.map(filaTarea).join('');
+  }
 
   var nCriticas = tareas.filter(function (a) { return a.es_critica; }).length;
 
@@ -3594,7 +3694,8 @@ function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyCl
     ganttChipLeyendaPdf_('#7C3AED', 'En revisión') +
     ganttChipLeyendaPdf_('#64748B', 'Pendiente') +
     ganttChipLeyendaPdf_(GANTT_ATRASO_SOLIDO_, 'Atraso sin cerrar') +
-    (nCriticas ? ganttChipLeyendaPdf_(DOC.NAVY, '▲ Ruta crítica') : '')
+    (nCriticas ? ganttChipLeyendaPdf_(DOC.NAVY, '▲ Ruta crítica') : '') +
+    (hayBaseline ? ganttChipLeyendaPdf_(DOC.MUTED, '◇ Compromiso original') : '')
   );
   // v15.9 (C1): cuando hay ruta crítica, una nota bajo la descripción dice
   // cuántas tareas la forman y por qué mirarlas -- el dato ya existía, solo no
@@ -3602,6 +3703,12 @@ function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyCl
   var notaCritica = nCriticas
     ? ' <b style="color:' + DOC.NAVY + ';">&#9650; ' + nCriticas + (nCriticas === 1 ? ' tarea en la ruta crítica' : ' tareas en la ruta crítica') +
         '</b>: si una se atrasa, atrasa la fecha de término del proyecto entero.'
+    : '';
+  var notaBaseline = hayBaseline ? ' El ◇ gris marca el compromiso original (línea base): si la barra lo pasa, el plan se movió.' : '';
+  // v15.11 (A4): con un solo responsable, se dice una vez aquí en vez de bajo
+  // cada tarea.
+  var notaResponsable = unicoResponsable
+    ? '<div style="font-size:9px;color:' + DOC.MUTED + ';margin:0 0 8px;">Responsable de todas las tareas: <b style="color:' + DOC.INK + ';">' + escaparHtml_(unicoResponsable) + '</b></div>'
     : '';
   // v15.5: la leyenda pasa a ser un bloque con marco propio y la palabra
   // "Leyenda" delante -- sin relleno de color, un chip de solo borde se
@@ -3613,10 +3720,10 @@ function seccionCronogramaBarrasPdf_(tareas, hitos, proyectoInicio, rango, hoyCl
       leyenda +
     '</td></tr></table>' +
     '<div style="font-size:9px;color:' + DOC.MUTED + ';margin:0 0 8px;line-height:1.5;">' +
-      'Cada barra va del inicio de la tarea a su fecha comprometida, coloreada según su estado. El tramo rojo oscuro es el atraso sin cerrar (del compromiso a hoy); la columna azul es la semana actual; &#9670; marca un hito.' + notaCritica +
-    '</div>' +
+      'Cada barra va del inicio de la tarea a su fecha comprometida, coloreada según su estado. El tramo rojo oscuro es el atraso sin cerrar (del compromiso a hoy); la columna azul es la semana actual; &#9670; marca un hito.' + notaCritica + notaBaseline +
+    '</div>' + notaResponsable +
     '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 14px;table-layout:fixed;">' +
-    '<thead>' + filaMeses + filaSemanas + '</thead><tbody>' + filaHitos + filas + '</tbody></table>';
+    '<thead>' + filaMeses + filaSemanas + '</thead><tbody>' + filaHitos + cuerpo + '</tbody></table>';
 }
 
 // ¿Hay registro DIARIO real (estado del día) que justifique además la grilla
@@ -3627,7 +3734,7 @@ function hayRegistroDiario_(registroPorTareaDia) {
   });
 }
 
-function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia, proyectoInicio) {
+function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia, proyectoInicio, unicoResponsable) {
   if (!tareas.length || !dias.length) return '';
   var hoyClave = clavePdf_(new Date());
   var ultimoDiaGlobal = dias[dias.length - 1];
@@ -3714,7 +3821,11 @@ function seccionGanttPdf_(tareas, dias, registroPorTareaDia, eventosPorTareaDia,
             ? ' · <span style="color:' + DOC.MUTED + ';">vence ' + fechaCortaPdfProyecto_(a.fecha_compromiso) + ' &#8594;</span>'
             : ' · compromiso ' + fechaCortaPdfProyecto_(a.fecha_compromiso))
         : '';
-      var meta = escaparHtml_(a.responsable_nombre || a.responsable_email || '—') + commitTxt;
+      // v15.11 (A4): con un solo responsable en el reporte, no se repite bajo
+      // cada tarea (se dice una vez arriba de la Carta Gantt).
+      var meta = unicoResponsable
+        ? commitTxt.replace(/^ · /, '')
+        : (escaparHtml_(a.responsable_nombre || a.responsable_email || '—') + commitTxt);
       var marcaCritica = a.es_critica ? '<span style="color:' + DOC.NAVY + ';font-weight:bold;" title="Ruta crítica">&#9650;</span> ' : '';
       var etiqueta = '<div style="font-weight:bold;color:' + DOC.INK + ';font-size:10px;">' + marcaCritica + escaparHtml_(a.titulo) + '</div>' +
         '<div style="font-size:8px;color:' + DOC.MUTED + ';margin-top:1px;">' + meta + '</div>';
@@ -3898,19 +4009,48 @@ function fichaProyectoPdf_(detalle) {
   return '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 6px;font-size:12px;">' + cuerpoFilas + '</table>' + motivos;
 }
 
+// v15.11 (D6): "cuándo" relativo de un hito -- un vencido y uno futuro se veían
+// igual salvo por la fecha, que había que interpretar. Devuelve el texto y si
+// está vencido (para pintarlo). Un hito COMPLETADO/CANCELADO ya no corre contra
+// el reloj.
+function cuandoHitoPdf_(fechaObjetivo, estado, hoyClave) {
+  if (estado === 'COMPLETADO') return { texto: 'Completado', vencido: false };
+  if (estado === 'CANCELADO') return { texto: '—', vencido: false };
+  if (!fechaObjetivo) return { texto: '—', vencido: false };
+  var k = clavePdf_(new Date(fechaObjetivo));
+  var d = diasEntreClavesPdf_(hoyClave, k); // objetivo - hoy
+  if (d < 0) return { texto: 'venció hace ' + (-d) + ' d', vencido: true };
+  if (d === 0) return { texto: 'hoy', vencido: false };
+  if (d === 1) return { texto: 'en 1 d', vencido: false };
+  return { texto: 'en ' + d + ' d', vencido: false };
+}
 function seccionHitosPdf_(hitos) {
   if (!hitos.length) return '';
-  var filas = hitos.map(function (h) {
+  var hoyClave = clavePdf_(new Date());
+  // v15.11 (D6): ordenar por fecha objetivo (los sin fecha al final) -- antes
+  // iban en su orden natural y el estado temporal no saltaba a la vista.
+  var ordenados = hitos.slice().sort(function (a, b) {
+    var ka = a.fecha_objetivo ? clavePdf_(new Date(a.fecha_objetivo)) : '9999-99-99';
+    var kb = b.fecha_objetivo ? clavePdf_(new Date(b.fecha_objetivo)) : '9999-99-99';
+    return ka < kb ? -1 : (ka > kb ? 1 : 0);
+  });
+  var filas = ordenados.map(function (h) {
     var color = HITO_ESTADO_COLOR_PDF_[h.estado] || DOC.MUTED;
+    var cuando = cuandoHitoPdf_(h.fecha_objetivo, h.estado, hoyClave);
+    // Un hito vencido lleva un ◆ rojo antes del nombre, para distinguirlo de un
+    // barrido rápido (el motor no pinta fondos; el rombo de color sí).
+    var marca = cuando.vencido ? '<span style="color:#DC2626;font-weight:bold;">&#9670;</span> ' : '';
+    var cuandoColor = cuando.vencido ? '#DC2626' : DOC.MUTED;
     return '<tr>' +
-      '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(h.nombre) + '</td>' +
+      '<td style="' + celdaValorFicha_() + '">' + marca + escaparHtml_(h.nombre) + '</td>' +
       '<td style="' + celdaValorFicha_() + '">' + chipTonoPdf_(color, HITO_ESTADO_LABEL_PDF_[h.estado] || h.estado) + '</td>' +
       '<td style="' + celdaValorFicha_() + 'white-space:nowrap;">' + fechaCortaPdfProyecto_(h.fecha_objetivo) + '</td>' +
+      '<td style="' + celdaValorFicha_() + 'white-space:nowrap;color:' + cuandoColor + (cuando.vencido ? ';font-weight:bold;' : ';') + '">' + escaparHtml_(cuando.texto) + '</td>' +
     '</tr>';
   }).join('');
   return docSeccionOt_('Hitos') +
     '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';margin:0 0 18px;font-size:12px;">' +
-    encabezadoPdf_(['Hito', 'Estado', 'Fecha objetivo']) +
+    encabezadoPdf_(['Hito', 'Estado', 'Fecha objetivo', 'Cuándo']) +
     '<tbody>' + filas + '</tbody></table>';
 }
 var HITO_ESTADO_LABEL_PDF_ = { PENDIENTE: 'Pendiente', EN_CURSO: 'En curso', COMPLETADO: 'Completado', CANCELADO: 'Cancelado' };
@@ -4062,9 +4202,29 @@ var REGISTRO_DIA_TONO_PDF_ = {
 // reales con títulos, un chip de color que clasifica el tipo de movimiento, y
 // las horas en su propia columna. Mismo dato de listarBitacora, solo mejor
 // presentado.
+// v15.11 (D5): la clave de día de una fila de bitácora -- un REGISTRO_DIA trae
+// su `dia` explícito; el resto se ubica por su timestamp.
+function diaClaveBitacoraPdf_(b) {
+  if (b.tipo === 'REGISTRO_DIA' && b.dia) return b.dia;
+  return b.timestamp ? clavePdf_(new Date(b.timestamp)) : '';
+}
 function seccionBitacoraPdf_(bitacora, tareasPorId) {
   if (!bitacora.length) return '';
-  var filas = bitacora.map(function (b) {
+  var guion = '<span style="color:' + DOC.FAINT + ';">—</span>';
+  // v15.11 (D5): agrupar por día -- con muchos registros la fecha se repetía
+  // fila tras fila y costaba ver "qué pasó tal día". Una fila-cabecera por
+  // fecha (navy, borde inferior) y la columna Fecha desaparece de cada fila:
+  // se lee como una bitácora de jornadas, no como una lista plana. El orden
+  // que ya trae `bitacora` se respeta; solo se intercalan las cabeceras.
+  var partes = [], diaActual = null;
+  bitacora.forEach(function (b) {
+    var dia = diaClaveBitacoraPdf_(b);
+    if (dia !== diaActual) {
+      diaActual = dia;
+      partes.push('<tr><td colspan="4" style="padding:6px 8px;color:' + DOC.NAVY + ';font-size:9px;' +
+        'font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;border:1px solid ' + DOC.HAIRLINE + ';' +
+        'border-bottom:2px solid ' + DOC.NAVY + ';">' + (dia ? fechaCortaPdfProyecto_(dia) : 'Sin fecha') + '</td></tr>');
+    }
     var tarea = tareasPorId[b.actividad_id];
     var esReg = (b.tipo === 'REGISTRO_DIA');
     // v11 (P0): las filas ya vienen normalizadas por filaBitacoraSalida_
@@ -4075,20 +4235,18 @@ function seccionBitacoraPdf_(bitacora, tareasPorId) {
     var tono = esReg
       ? (REGISTRO_DIA_TONO_PDF_[b.estado_dia] || DOC.MUTED)
       : (BITACORA_TIPO_TONO_PDF_[b.tipo] || DOC.MUTED);
-    var guion = '<span style="color:' + DOC.FAINT + ';">—</span>';
-    return '<tr>' +
-      '<td style="' + celdaValorFicha_() + 'white-space:nowrap;">' + fechaCortaPdfProyecto_(b.timestamp) + '</td>' +
+    partes.push('<tr>' +
       '<td style="' + celdaValorFicha_() + '">' + escaparHtml_(tarea ? tarea.titulo : '—') + '</td>' +
       '<td style="' + celdaValorFicha_() + 'white-space:nowrap;">' + chipTonoPdf_(tono, etiqueta) + '</td>' +
       '<td style="' + celdaValorFicha_() + '">' + (b.nota ? escaparHtml_(b.nota) : guion) + '</td>' +
       '<td style="' + celdaValorFicha_() + 'text-align:right;white-space:nowrap;">' +
         (b.horas ? redond1Pdf_(Number(b.horas)) + ' h' : guion) + '</td>' +
-    '</tr>';
-  }).join('');
+    '</tr>');
+  });
   return docSeccionOt_('Actividad reciente') +
     '<table width="100%" style="border-collapse:collapse;border:1px solid ' + DOC.HAIRLINE + ';font-size:12px;">' +
-    encabezadoPdf_(['Fecha', 'Tarea', 'Tipo', 'Detalle', ['Horas', 'text-align:right;']]) +
-    '<tbody>' + filas + '</tbody></table>';
+    encabezadoPdf_(['Tarea', 'Tipo', 'Detalle', ['Horas', 'text-align:right;']]) +
+    '<tbody>' + partes.join('') + '</tbody></table>';
 }
 
 // --- estados y prioridades ---------------------------------------------
