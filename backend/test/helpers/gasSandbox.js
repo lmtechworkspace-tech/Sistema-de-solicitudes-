@@ -194,6 +194,10 @@ const BACKOFFICE_FILES_EN_ORDEN = [
   // cargar despues. Usa tambien encolarNotificacionApp_ (Notificaciones.gs)
   // y obtenerFeriados_ (Dashboard.gs), ambos ya cargados arriba.
   'Proyectos.gs',
+  // v16.8: exportacion de la Carta Gantt a .xlsx (OOXML a mano con
+  // Utilities.zip). La accion vive en Proyectos.gs y llama estos helpers en
+  // tiempo de ejecucion, asi que basta con cargarlo despues.
+  'ExcelGantt.gs',
   // v10.0 (Modulo SGC ISO 9001, Fase 1): repositorio documental controlado.
   // Usa obtenerCarpetaCalidad_ (DriveRepo.gs) y agregarFila_/leerFilasSeguro_
   // (SheetsRepo.gs), ambos ya cargados arriba.

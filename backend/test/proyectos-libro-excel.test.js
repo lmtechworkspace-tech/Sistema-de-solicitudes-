@@ -1,17 +1,16 @@
 'use strict';
 
 /**
- * R-01: el proyecto exportado a hoja de cálculo.
+ * v16.8: el proyecto exportado a .xlsx con la Carta Gantt VISUAL.
  *
- * Se prueba `armarLibroProyecto_`, que es PURA (arma las filas y no toca Drive
- * ni la red). Es donde puede haber errores de verdad: una columna que cambió
- * de nombre, un dato mal mapeado, un id crudo escapándose a una celda.
- *
- * La producción del .xlsx queda deliberadamente fuera: la hace el exportador
- * de Google a partir de una hoja temporal, y aquí no hay forma de abrir el
- * binario para comprobar que salió bien. Testear un mock de eso daría
- * confianza falsa; lo que sí se puede afirmar es que los DATOS que se le
- * entregan son los correctos.
+ * A diferencia de la versión anterior (una Hoja temporal de Drive que Google
+ * exportaba), ahora el .xlsx se arma como OOXML a mano con Utilities.zip
+ * (ExcelGantt.gs): sin Hoja temporal, sin permiso de Drive nuevo, sin UrlFetch.
+ * Eso lo vuelve VERIFICABLE acá: el mock de Utilities.zip arma un ZIP "stored"
+ * (sin comprimir), así que el XML de cada parte viaja como texto plano dentro
+ * del binario y se puede aseverar sobre su contenido. (La verificación fuerte
+ * de que Excel lo abre con las barras de color se hizo aparte con un round-trip
+ * por SheetJS; acá se fija que el contenido correcto está en el archivo.)
  */
 
 const test = require('node:test');
@@ -43,215 +42,112 @@ function armarEscenario(ctx) {
     responsable_email: 'leo@rld.cl', tamano: 'L', fecha_compromiso: '2026-05-20'
   }, ADM));
   ctx.Proyectos.editarTarea({ proyecto_id: p.proyecto_id, actividad_id: t2.actividad_id, depende_de: t1.actividad_id }, ADM);
-  ctx.Proyectos.gestionarRiesgo({
-    proyecto_id: p.proyecto_id, accion: 'crear', descripcion: 'El proveedor no entrega a tiempo',
-    probabilidad: 'ALTA', impacto: 'ALTA', mitigacion: 'Contrato con multa'
-  }, ADM);
+  // Confirmar fija la fecha_compromiso (RN-710: una tarea asignada queda
+  // "pendiente de confirmar" hasta que el responsable la acepta) -- sin eso no
+  // tiene barra que dibujar en la Carta Gantt.
+  const LEO = { email: 'leo@rld.cl', nombre: 'Leo', rol: 'DEV' };
+  ctx.Actividades.confirmar({ actividad_id: t1.actividad_id, fecha_compromiso: '2026-03-15' }, LEO);
+  ctx.Actividades.confirmar({ actividad_id: t2.actividad_id, fecha_compromiso: '2026-05-20' }, LEO);
   return { p, hito, t1, t2 };
 }
 
-function hojaLlamada(hojas, nombre) {
-  return hojas.filter((h) => h.nombre === nombre)[0];
-}
+function bufDe(r) { return Buffer.from(r.xlsx_base64, 'base64'); }
 
-test('el libro trae una hoja por bloque del proyecto', () => {
+// --- primitivas OOXML -------------------------------------------------------
+
+test('colLetraXlsx_: índice de columna a letra(s)', () => {
   const ctx = ctxConSchema();
-  const { p } = armarEscenario(ctx);
-  const detalle = toPlain(ctx.Proyectos.getDetalle({ proyecto_id: p.proyecto_id }, ADM));
-  const tareas = toPlain(ctx.Proyectos.listarTareas({ proyecto_id: p.proyecto_id }, ADM));
-  const hojas = toPlain(ctx.armarLibroProyecto_(detalle, tareas, []));
-
-  assert.deepEqual(
-    hojas.map((h) => h.nombre),
-    ['Resumen', 'Tareas', 'Hitos', 'Riesgos', 'Entregables', 'Equipo', 'Bitácora']
-  );
-  // Toda hoja arranca con su encabezado, incluso si no tiene datos: un archivo
-  // con una pestaña vacía sin títulos no se entiende.
-  hojas.forEach((h) => {
-    assert.ok(h.filas.length >= 1, 'la hoja ' + h.nombre + ' no trae ni encabezado');
-    assert.ok(h.filas[0].every((c) => String(c).length), 'encabezado incompleto en ' + h.nombre);
-  });
+  assert.equal(ctx.colLetraXlsx_(1), 'A');
+  assert.equal(ctx.colLetraXlsx_(26), 'Z');
+  assert.equal(ctx.colLetraXlsx_(27), 'AA');
+  assert.equal(ctx.colLetraXlsx_(52), 'AZ');
 });
 
-test('las tareas salen con el TÍTULO de su hito y de su dependencia, no con ids', () => {
+test('celdaXmlXlsx_: string, número, celda vacía con estilo (barra)', () => {
   const ctx = ctxConSchema();
-  const { p } = armarEscenario(ctx);
-  const detalle = toPlain(ctx.Proyectos.getDetalle({ proyecto_id: p.proyecto_id }, ADM));
-  const tareas = toPlain(ctx.Proyectos.listarTareas({ proyecto_id: p.proyecto_id }, ADM));
-  const hojas = toPlain(ctx.armarLibroProyecto_(detalle, tareas, []));
-
-  const hoja = hojaLlamada(hojas, 'Tareas');
-  const cab = hoja.filas[0];
-  const iHito = cab.indexOf('Hito');
-  const iDep = cab.indexOf('Depende de');
-  const filas = hoja.filas.slice(1);
-
-  const levantar = filas.filter((f) => f[0] === 'Levantar requerimientos')[0];
-  const migrar = filas.filter((f) => f[0] === 'Migrar datos')[0];
-  assert.ok(levantar && migrar, 'faltan tareas en la hoja');
-
-  assert.equal(levantar[iHito], 'Puesta en marcha', 'debe verse el nombre del hito');
-  assert.equal(migrar[iDep], 'Levantar requerimientos',
-    'la dependencia debe salir por su título: un id crudo no le dice nada a quien abre el archivo');
-
-  // Y ningún id se cuela como valor de celda.
-  filas.forEach((f) => f.forEach((c) => {
-    assert.doesNotMatch(String(c), /^test-uuid-/, 'se filtró un id a una celda: ' + c);
-  }));
+  // string -> inlineStr
+  assert.match(ctx.celdaXmlXlsx_('A1', 'hola'), /t="inlineStr"[\s\S]*hola/);
+  // número -> <v>
+  assert.match(ctx.celdaXmlXlsx_('B1', { v: 5, t: 'n' }), /<v>5<\/v>/);
+  // vacía con estilo -> celda auto-cerrada con s= (así se pintan las barras)
+  assert.equal(ctx.celdaXmlXlsx_('C1', { s: 6 }), '<c r="C1" s="6"/>');
+  // null -> sin celda
+  assert.equal(ctx.celdaXmlXlsx_('D1', null), '');
+  // escapa XML
+  assert.match(ctx.celdaXmlXlsx_('E1', 'a & b < c'), /a &amp; b &lt; c/);
 });
 
-test('el resumen usa la misma cifra de salud que la pantalla (puntos en contra)', () => {
+test('construirXlsx_ produce un ZIP (firma PK) con las partes OOXML esperadas', () => {
   const ctx = ctxConSchema();
-  const { p } = armarEscenario(ctx);
-  const detalle = toPlain(ctx.Proyectos.getDetalle({ proyecto_id: p.proyecto_id }, ADM));
-  const hojas = toPlain(ctx.armarLibroProyecto_(detalle, [], []));
-
-  const resumen = hojaLlamada(hojas, 'Resumen');
-  const claves = resumen.filas.map((f) => f[0]);
-  assert.ok(claves.indexOf('Puntos en contra') !== -1,
-    'debe traer la penalización, la misma cifra que muestra el pill desde P-02');
-  assert.equal(claves.indexOf('Score'), -1, 'no debe reaparecer la nota sobre 100 que P-02 quitó');
-  assert.ok(claves.indexOf('Proyecto') !== -1 && claves.indexOf('Emitido') !== -1);
+  const blob = ctx.construirXlsx_([{ nombre: 'Uno', filas: [['x']] }, { nombre: 'Dos', filas: [['y']] }], 'prueba');
+  const buf = Buffer.from(blob.getBytes().map((b) => (b < 0 ? b + 256 : b)));
+  assert.equal(buf[0], 0x50); assert.equal(buf[1], 0x4b);   // "PK"
+  const txt = buf.toString('utf8');
+  ['[Content_Types].xml', 'xl/workbook.xml', 'xl/styles.xml', 'xl/worksheets/sheet1.xml', 'xl/worksheets/sheet2.xml']
+    .forEach((parte) => assert.ok(txt.includes(parte), 'falta la parte ' + parte));
+  assert.ok(txt.includes('<sheet name="Uno"') && txt.includes('<sheet name="Dos"'), 'faltan los nombres de hoja');
 });
 
-test('un proyecto vacío produce un libro con todas las hojas y solo encabezados', () => {
-  const ctx = ctxConSchema();
-  const p = toPlain(ctx.Proyectos.crear({
-    nombre: 'Recién creado', lider_email: 'leo@rld.cl',
-    fecha_inicio: '2026-01-01', fecha_objetivo: '2026-12-01'
-  }, ADM));
-  const detalle = toPlain(ctx.Proyectos.getDetalle({ proyecto_id: p.proyecto_id }, ADM));
-  const hojas = toPlain(ctx.armarLibroProyecto_(detalle, [], []));
+// --- el libro del proyecto --------------------------------------------------
 
-  assert.equal(hojas.length, 7);
-  assert.equal(hojaLlamada(hojas, 'Tareas').filas.length, 1, 'solo el encabezado');
-  assert.equal(hojaLlamada(hojas, 'Riesgos').filas.length, 1);
-  // El resumen SÍ tiene contenido: la ficha del proyecto existe aunque no
-  // haya nada dentro todavía.
-  assert.ok(hojaLlamada(hojas, 'Resumen').filas.length > 5);
-});
-
-test('todas las filas de una hoja tienen el ancho de su encabezado', () => {
-  // Si una fila trae más o menos celdas que el encabezado, la exportación
-  // escribe columnas corridas y el archivo miente sin avisar.
+test('descargarLibro devuelve un .xlsx con las 6 hojas del proyecto', () => {
   const ctx = ctxConSchema();
   const { p } = armarEscenario(ctx);
-  const detalle = toPlain(ctx.Proyectos.getDetalle({ proyecto_id: p.proyecto_id }, ADM));
-  const tareas = toPlain(ctx.Proyectos.listarTareas({ proyecto_id: p.proyecto_id }, ADM));
-  const hojas = toPlain(ctx.armarLibroProyecto_(detalle, tareas, []));
-
-  hojas.forEach((h) => {
-    const ancho = h.filas[0].length;
-    h.filas.forEach((fila, i) => {
-      assert.equal(fila.length, ancho,
-        'la hoja "' + h.nombre + '" tiene la fila ' + i + ' con ' + fila.length + ' celdas y su encabezado con ' + ancho);
-    });
-  });
-});
-
-/**
- * generarXlsxProyecto_ crea una hoja de cálculo TEMPORAL en el Drive de quien
- * descarga y la exporta. El archivo tiene que desaparecer siempre: si no, cada
- * descarga fallida deja basura en el Drive de una persona que ni se entera.
- *
- * No se prueba el .xlsx en sí -- lo produce el exportador de Google y aquí no
- * hay forma de abrir el binario. Se prueba la parte que SÍ es nuestra: que las
- * hojas se armen con su nombre y que el temporal se limpie pase lo que pase.
- */
-function conStubsDeDrive(ctx, opciones) {
-  const estado = { creadas: [], escrituras: [], borrados: [], respuesta: opciones.respuesta };
-  // Se CONSERVA el SpreadsheetApp original y solo se le agrega create/flush:
-  // reemplazarlo entero dejaba las lecturas de hoja dependiendo de que el
-  // cache de ejecucion estuviera caliente, y un test que pasa por suerte no
-  // prueba nada.
-  ctx.SpreadsheetApp = Object.assign({}, ctx.SpreadsheetApp, {
-    flush() {},
-    create(nombre) {
-      estado.creadas.push(nombre);
-      const hojas = [];
-      const nuevaHoja = () => {
-        const h = {
-          _nombre: '', _valores: null,
-          setName(n) { h._nombre = n; return h; },
-          getRange(f, c, nf, nc) {
-            return {
-              setValues(v) { estado.escrituras.push({ hoja: h._nombre, filas: v.length, cols: nc }); return this; },
-              setFontWeight() { return this; }
-            };
-          },
-          setFrozenRows() { return h; }
-        };
-        hojas.push(h);
-        return h;
-      };
-      nuevaHoja();   // la que Google crea por defecto
-      return {
-        getId: () => 'temp-id-1',
-        getSheets: () => hojas,
-        insertSheet: nuevaHoja
-      };
-    },
-  });
-  ctx.UrlFetchApp = {
-    fetch() {
-      if (opciones.lanzar) throw new Error('red caida');
-      return {
-        getResponseCode: () => estado.respuesta,
-        getBlob: () => ({ getBytes: () => [80, 75, 3, 4] })   // firma PK de un zip
-      };
-    }
-  };
-  ctx.ScriptApp = { getOAuthToken: () => 'token-falso' };
-  ctx.DriveApp = Object.assign({}, ctx.DriveApp, {
-    getFileById(id) { return { setTrashed(v) { estado.borrados.push({ id, v }); } }; }
-  });
-  return estado;
-}
-
-test('el libro se arma con una hoja por bloque y el temporal se borra', () => {
-  const ctx = ctxConSchema();
-  const { p } = armarEscenario(ctx);
-  const estado = conStubsDeDrive(ctx, { respuesta: 200 });
-
   const r = toPlain(ctx.Proyectos.descargarLibro({ proyecto_id: p.proyecto_id }, ADM));
-
   assert.ok(r.xlsx_base64, 'debe devolver el archivo en base64');
   assert.match(r.filename, /\.xlsx$/);
-  assert.equal(estado.creadas.length, 1, 'una sola hoja temporal');
-  assert.equal(estado.escrituras.length, 7, 'una escritura por lote, por hoja');
-  assert.deepEqual(
-    estado.escrituras.map((e) => e.hoja),
-    ['Resumen', 'Tareas', 'Hitos', 'Riesgos', 'Entregables', 'Equipo', 'Bitácora']
-  );
-  assert.deepEqual(estado.borrados, [{ id: 'temp-id-1', v: true }], 'el temporal debe quedar en la papelera');
+  const txt = bufDe(r).toString('utf8');
+  ['Resumen', 'Carta Gantt', 'Tareas', 'Hitos', 'Dependencias'].forEach((n) => {
+    assert.ok(txt.includes('<sheet name="' + n + '"'), 'falta la hoja ' + n);
+  });
 });
 
-test('si la exportación devuelve error, el temporal se borra igual', () => {
+test('la Carta Gantt trae las tareas bajo su hito y celdas-barra con estilo de color', () => {
   const ctx = ctxConSchema();
   const { p } = armarEscenario(ctx);
-  const estado = conStubsDeDrive(ctx, { respuesta: 500 });
+  const txt = bufDe(toPlain(ctx.Proyectos.descargarLibro({ proyecto_id: p.proyecto_id }, ADM))).toString('utf8');
+  // El nombre del hito y los títulos de tarea están en el libro.
+  assert.ok(txt.includes('Puesta en marcha'), 'falta el nombre del hito');
+  assert.ok(txt.includes('Levantar requerimientos') && txt.includes('Migrar datos'), 'faltan tareas');
+  // Hay al menos una celda-barra: celda vacía con un estilo de relleno de barra
+  // (4=verde .. 10=atraso). En la carta se pintan como <c r=".." s="N"/>.
+  assert.match(txt, /<c r="[A-Z]+\d+" s="([4-9]|10)"\/>/, 'no hay ninguna celda-barra pintada');
+  // El rombo del hito en el calendario.
+  assert.ok(txt.indexOf('◆') !== -1, 'falta el ◆ del hito en la línea de tiempo');
+});
 
+test('la Dependencia sale por TÍTULO del padre, no por su id', () => {
+  const ctx = ctxConSchema();
+  const { p, t1 } = armarEscenario(ctx);
+  const txt = bufDe(toPlain(ctx.Proyectos.descargarLibro({ proyecto_id: p.proyecto_id }, ADM))).toString('utf8');
+  // Aislar la hoja de Dependencias (la única con la columna "Depende de").
+  const i = txt.indexOf('Depende de');
+  assert.ok(i !== -1, 'falta la hoja/columna de dependencias');
+  const hojaDep = txt.slice(i, i + 600);
+  // "Migrar datos" depende de "Levantar requerimientos": se muestra el TÍTULO
+  // del padre, nunca su actividad_id crudo (que a quien abre el archivo no le
+  // dice nada).
+  assert.ok(hojaDep.includes('Levantar requerimientos'), 'la dependencia debe salir por el título del padre');
+  assert.ok(hojaDep.indexOf(t1.actividad_id) === -1, 'el id del padre no debe escaparse a la celda de dependencia');
+});
+
+test('un proyecto recién creado (sin tareas) igual produce un .xlsx válido', () => {
+  const ctx = ctxConSchema();
+  const p = toPlain(ctx.Proyectos.crear({
+    nombre: 'Recién creado', lider_email: 'leo@rld.cl', fecha_inicio: '2026-01-01', fecha_objetivo: '2026-12-01'
+  }, ADM));
   const r = toPlain(ctx.Proyectos.descargarLibro({ proyecto_id: p.proyecto_id }, ADM));
-
-  assert.ok(r._validationError, 'debe avisar del fallo, no devolver un archivo vacío');
-  assert.deepEqual(estado.borrados, [{ id: 'temp-id-1', v: true }],
-    'un export fallido NO puede dejar la hoja temporal en el Drive de la persona');
+  const buf = bufDe(r);
+  assert.equal(buf[0], 0x50); assert.equal(buf[1], 0x4b);
+  const txt = buf.toString('utf8');
+  // Sin dependencias, esa hoja no aparece (no se inventa una tabla vacía).
+  assert.ok(txt.includes('<sheet name="Resumen"') && txt.includes('<sheet name="Carta Gantt"'));
+  assert.ok(!txt.includes('<sheet name="Dependencias"'), 'sin dependencias no debe haber hoja de dependencias');
 });
 
-test('si la red se cae a mitad de camino, el temporal se borra igual', () => {
+test('un ajeno no puede descargar el libro (mismo gate que el PDF)', () => {
   const ctx = ctxConSchema();
   const { p } = armarEscenario(ctx);
-  const estado = conStubsDeDrive(ctx, { respuesta: 200, lanzar: true });
-
-  assert.throws(() => ctx.Proyectos.descargarLibro({ proyecto_id: p.proyecto_id }, ADM));
-  assert.deepEqual(estado.borrados, [{ id: 'temp-id-1', v: true }],
-    'el finally tiene que correr aunque la excepción suba');
-});
-
-test('un ajeno no puede descargar el libro', () => {
-  const ctx = ctxConSchema();
-  const { p } = armarEscenario(ctx);
-  conStubsDeDrive(ctx, { respuesta: 200 });
   const r = toPlain(ctx.Proyectos.descargarLibro({ proyecto_id: p.proyecto_id }, { email: 'ajeno@x.cl', rol: 'DEV' }));
   assert.ok(r._forbidden, 'mismo gate de lectura que el PDF');
 });

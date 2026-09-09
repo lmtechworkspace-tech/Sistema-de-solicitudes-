@@ -165,8 +165,67 @@ function createUtilitiesMock() {
         }
       };
       return blob;
+    },
+    // Utilities.zip(blobs, opt_name) -> Blob del ZIP. Usado por la exportacion
+    // a .xlsx (un .xlsx ES un ZIP de XML). El Apps Script real deflata; este
+    // mock arma un ZIP "stored" (sin comprimir) VALIDO -- suficiente para que
+    // SheetJS/Excel lo lean en el round-trip de los tests. Solo es el mock:
+    // en produccion corre el Utilities.zip real de Google.
+    zip(blobs, nombreZip) {
+      const entradas = (blobs || []).map((b) => {
+        const bytes = b.getBytes();
+        // getBytes puede venir con signo (-128..127): normalizar a 0..255.
+        const buf = Buffer.from(bytes.map((x) => (x < 0 ? x + 256 : x)));
+        return { nombre: b.getName ? b.getName() : '', datos: buf };
+      });
+      const partesLocales = [];
+      const partesCentral = [];
+      let offset = 0;
+      const crcTabla = _tablaCrc32_();
+      function u16(n) { const x = Buffer.alloc(2); x.writeUInt16LE(n >>> 0, 0); return x; }
+      function u32(n) { const x = Buffer.alloc(4); x.writeUInt32LE(n >>> 0, 0); return x; }
+      entradas.forEach((e) => {
+        const nombreBuf = Buffer.from(e.nombre, 'utf8');
+        const crc = _crc32_(e.datos, crcTabla);
+        const localHeader = Buffer.concat([
+          u32(0x04034b50), u16(20), u16(0), u16(0), u16(0), u16(0),
+          u32(crc), u32(e.datos.length), u32(e.datos.length),
+          u16(nombreBuf.length), u16(0)
+        ]);
+        partesLocales.push(localHeader, nombreBuf, e.datos);
+        const centralHeader = Buffer.concat([
+          u32(0x02014b50), u16(20), u16(20), u16(0), u16(0), u16(0), u16(0),
+          u32(crc), u32(e.datos.length), u32(e.datos.length),
+          u16(nombreBuf.length), u16(0), u16(0), u16(0), u16(0), u32(0), u32(offset)
+        ]);
+        partesCentral.push(centralHeader, nombreBuf);
+        offset += localHeader.length + nombreBuf.length + e.datos.length;
+      });
+      const central = Buffer.concat(partesCentral);
+      const localTotal = Buffer.concat(partesLocales);
+      const fin = Buffer.concat([
+        u32(0x06054b50), u16(0), u16(0), u16(entradas.length), u16(entradas.length),
+        u32(central.length), u32(localTotal.length), u16(0)
+      ]);
+      const zipBuf = Buffer.concat([localTotal, central, fin]);
+      return this.newBlob(zipBuf, 'application/zip', nombreZip || 'archivo.zip');
     }
   };
+}
+
+function _tablaCrc32_() {
+  const tabla = [];
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    tabla[n] = c >>> 0;
+  }
+  return tabla;
+}
+function _crc32_(buf, tabla) {
+  let crc = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) crc = (crc >>> 8) ^ tabla[(crc ^ buf[i]) & 0xff];
+  return (crc ^ 0xffffffff) >>> 0;
 }
 
 function createDriveAppMock() {
