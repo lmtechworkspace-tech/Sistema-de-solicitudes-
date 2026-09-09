@@ -4683,6 +4683,38 @@ button {
 .sigso-py-plan-chip--dev.is-favor { background: var(--ok-suave); color: var(--ok); }
 .sigso-py-plan-chip--dev.is-contra { background: var(--critico-suave); color: var(--critico); }
 
+/* v16.9: panel lateral de tarea -- clic en una barra del Gantt abre el
+   detalle SIN salir de la Carta Gantt. Mismo lenguaje visual que el drawer
+   de Administración (panel deslizante desde la derecha), pero SIN telón que
+   oscurezca -- el punto es seguir viendo el cronograma detrás mientras se lee
+   el detalle. El telón es solo un área invisible para cerrar con un clic
+   afuera. */
+.sigso-py-panel-tarea { position: fixed; inset: 0; z-index: 60; }
+.sigso-py-panel-tarea__telon { position: absolute; inset: 0; background: transparent; }
+.sigso-py-panel-tarea__cuerpo {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 24rem; max-width: 92vw;
+  background: var(--superficie); border-left: 1px solid var(--borde); box-shadow: var(--sombra-2);
+  display: flex; flex-direction: column; animation: sigso-py-panel-entrada var(--mov-entrada) ease-out;
+}
+@keyframes sigso-py-panel-entrada { from { transform: translateX(100%); } to { transform: translateX(0); } }
+.sigso-py-panel-tarea__cab {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: var(--esp-3);
+  padding: var(--esp-4) var(--esp-5); border-bottom: 1px solid var(--borde); flex: none;
+}
+.sigso-py-panel-tarea__cab h2 { margin: 0 0 var(--esp-2); font-size: var(--texto-lg); }
+.sigso-py-panel-tarea__cerrar {
+  flex: none; background: transparent; border: none; padding: 0.35rem; border-radius: var(--radio-sm);
+  cursor: pointer; color: var(--texto-2); font-size: 1.3rem; line-height: 1; display: grid; place-items: center;
+}
+.sigso-py-panel-tarea__cerrar:hover { background: var(--superficie-2); color: var(--texto); }
+.sigso-py-panel-tarea__contenido { padding: var(--esp-5); overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: var(--esp-3); }
+.sigso-py-panel-tarea__meta { display: flex; flex-wrap: wrap; gap: var(--esp-2); font-size: var(--texto-sm); color: var(--texto-2); }
+.sigso-py-panel-tarea__critica { display: flex; align-items: center; gap: 0.35rem; color: var(--critico); font-weight: 600; font-size: var(--texto-sm); }
+.sigso-py-panel-tarea__acciones { display: flex; flex-wrap: wrap; gap: var(--esp-2); }
+@media (max-width: 480px) {
+  .sigso-py-panel-tarea__cuerpo { width: 100vw; max-width: 100vw; }
+}
+
 /* v11 (P1): fila de workload por persona (agrupar) -- total diario propio +
    marca de sobrecarga cuando supera la jornada. */
 .sigso-py-ded-celda--sobrecarga { box-shadow: inset 0 0 0 2px var(--critico); }

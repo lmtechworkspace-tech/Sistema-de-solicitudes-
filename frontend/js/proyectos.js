@@ -213,6 +213,9 @@
   var resumenPortafolioActual_ = null;
 
   function cargarPortafolio_() {
+    // v16.9: el panel lateral de tarea vive fuera de este árbol (en <body>);
+    // volver al portafolio tiene que cerrarlo, o quedaría flotando encima.
+    if (ganttPanelActivoId_) cerrarPanelTareaGantt_();
     proyectoActivoId_ = null;
     datosDetalleActual_ = null;
     fijarAnchoCarta_(false); // el portafolio vuelve al ancho normal
@@ -691,6 +694,9 @@
   var datosDetalleActual_ = null;
 
   function abrirProyecto_(id) {
+    // v16.9: idem cargarPortafolio_ -- cambiar de proyecto no pasa por
+    // cambiarPestana_, así que el cierre del panel se repite acá.
+    if (ganttPanelActivoId_) cerrarPanelTareaGantt_();
     proyectoActivoId_ = id;
     pestanaActiva_ = 'resumen';
     // La sub-vista del Cronograma tambien vuelve a su inicio. Sin esto
@@ -705,6 +711,12 @@
   // Cambia de pestana SIN red: repinta con lo que ya se cargo. Si por algun
   // motivo no hay nada en cache todavia (carga interrumpida), cae a pedirlo.
   function cambiarPestana_(id) {
+    // v16.9: el panel lateral vive fuera del árbol de esta pestaña (montado
+    // en <body> para sobrevivir a un repintado del Gantt por zoom/filtro,
+    // ver más abajo) -- así que SÍ hay que cerrarlo a mano al salir de
+    // Cronograma, o quedaría flotando sobre Tareas, Hitos, etc. Cronograma
+    // repinta con este MISMO id (zoom/agrupar/filtro), así que no cerrarlo ahí.
+    if (id !== 'cronograma' && ganttPanelActivoId_) cerrarPanelTareaGantt_();
     pestanaActiva_ = id;
     var cont = panelProyectos_();
     if (!cont || !datosDetalleActual_) { refrescarDetalle_(); return; }
@@ -3384,6 +3396,22 @@
   var planMinTimeActual_ = 0;
   var planPxDiaActual_ = 0;
 
+  // v16.9 ("panel lateral de tarea"): hacer clic en una barra del Gantt abre
+  // el detalle completo SIN salir de la Carta Gantt -- antes había que ir a
+  // la pestaña Tareas para ver responsable/avance/dependencias/etc. de una
+  // tarea que ya se está mirando en el cronograma.
+  // ganttPanelActivoId_: id de la tarea mostrada en el panel, o null (cerrado).
+  // ganttPanelCtx_: { tareas, ctxEdicion, rendimiento, detalle, proyectoId } --
+  //   fijado por pintarCronogramaPlan_ en cada pintado, igual que
+  //   cartaTareasActual_. Es lo que el panel necesita para decidir permisos
+  //   y mostrar Plan/Esperado/Real sin volver a pedirle nada al servidor.
+  // ganttPanelEl_: el nodo del panel, montado aparte del árbol del Gantt (en
+  // <body>) para que un repintado de la Carta (zoom, agrupar, filtrar) no lo
+  // destruya -- así cambiar de vista con el panel abierto no lo cierra solo.
+  var ganttPanelActivoId_ = null;
+  var ganttPanelCtx_ = null;
+  var ganttPanelEl_ = null;
+
   // v11 (P2, "drag & drop de fechas"): estado de arrastre del handle de
   // resize -- ÚNICO módulo, con los listeners de mousemove/mouseup
   // registrados UNA SOLA VEZ (fuera de cualquier repintado) para no acumular
@@ -3391,6 +3419,8 @@
   // mousedown SÍ se re-wirean en cada repintado (viven en nodos que se
   // recrean, mueren con ellos -- sin fuga).
   var ganttArrastre_ = null;
+  // v16.9: ver el comentario dentro del handler de mouseup, abajo.
+  var ganttClicSuprimido_ = false;
   document.addEventListener('mousemove', function (ev) {
     if (!ganttArrastre_) return;
     var delta = ev.clientX - ganttArrastre_.xInicial;
@@ -3406,6 +3436,14 @@
     document.body.style.removeProperty('user-select');
     g.barra.classList.remove('sigso-py-gantt-barra--arrastrando');
     if (g.anchoActual === g.anchoInicial) return; // no se movió -- un clic no abre el modal
+    // v16.9: soltar tras un arrastre real dispara, además del mouseup, un
+    // 'click' nativo sobre la barra (el navegador no distingue "hubo
+    // movimiento" para eso) -- sin este freno, ese click abriría también el
+    // panel lateral justo encima del modal de reprogramar que se abre abajo.
+    // Se limpia en un setTimeout(0): el click ya disparó (sincrónico, mismo
+    // gesto) para cuando el timeout corre.
+    ganttClicSuprimido_ = true;
+    setTimeout(function () { ganttClicSuprimido_ = false; }, 0);
     var diasDesdeInicio = Math.round((g.izquierdaPx + g.anchoActual) / g.pxDia);
     var nuevaFecha = new Date(g.minTime + diasDesdeInicio * 86400000);
     var tarea = tareaPorIdEnCarta_(g.actId);
@@ -3523,6 +3561,121 @@
     });
   }
 
+  // Un clic en la barra abre el panel lateral; el handle de resize (hijo de
+  // la barra) y un arrastre real ya se filtran por ganttClicSuprimido_/el
+  // propio target del resize (que no tiene [data-act] con esta clase, así
+  // que un clic exacto sobre el handle SÍ abre el panel si no hubo arrastre
+  // -- comportamiento razonable, no hay nada que perder).
+  function wireClicBarraGantt_(cont) {
+    var body = cont.querySelector(".sigso-py-gantt-body");
+    if (!body) return;
+    body.querySelectorAll(".sigso-py-gantt-barra[data-act]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (ganttClicSuprimido_) return;
+        abrirPanelTareaGantt_(b.getAttribute("data-act"));
+      });
+    });
+  }
+
+  // --- panel lateral de tarea (v16.9) -----------------------------------
+
+  function cerrarPanelTareaGantt_() {
+    ganttPanelActivoId_ = null;
+    if (ganttPanelEl_ && ganttPanelEl_.parentNode) ganttPanelEl_.parentNode.removeChild(ganttPanelEl_);
+    ganttPanelEl_ = null;
+    document.removeEventListener("keydown", ganttPanelEsc_);
+  }
+  function ganttPanelEsc_(ev) { if (ev.key === "Escape") cerrarPanelTareaGantt_(); }
+
+  function abrirPanelTareaGantt_(actividadId) {
+    ganttPanelActivoId_ = actividadId;
+    if (!ganttPanelEl_) {
+      ganttPanelEl_ = document.createElement("div");
+      ganttPanelEl_.className = "sigso-py-panel-tarea";
+      document.body.appendChild(ganttPanelEl_);
+      document.addEventListener("keydown", ganttPanelEsc_);
+    }
+    pintarPanelTareaGantt_();
+  }
+
+  // Construye el contenido del panel a partir de datos YA CARGADOS
+  // (ganttPanelCtx_): nunca pide nada nuevo al servidor con solo abrirlo.
+  // Reusa los mismos bloques que ya arma la pestaña Tareas (metaChipHtml_,
+  // colaboradoresChipHtml_, rollupSubtareasHtml_, impactoDependenciaHtml_,
+  // accionesCheckinTarea_) y la carta de Dedicación (planLineaHtml_) -- el
+  // panel no inventa presentación nueva, muestra lo mismo que el resto del
+  // módulo ya sabe mostrar, solo que sin salir del Gantt.
+  function pintarPanelTareaGantt_() {
+    var ctx = ganttPanelCtx_;
+    var a = ctx ? (ctx.tareas || []).filter(function (t) { return t.actividad_id === ganttPanelActivoId_; })[0] : null;
+    if (!a) { cerrarPanelTareaGantt_(); return; } // la tarea ya no existe en el proyecto (se borró, u otro proyecto)
+    var ctxEdicion = ctx.ctxEdicion || {};
+    var miEmail = ctxEdicion.miEmail;
+    var esMia = !!miEmail && normalizarEmail_(a.responsable_email) === normalizarEmail_(miEmail);
+    var puedeEditar = typeof ctxEdicion.puedeEditarTarea === "function" && ctxEdicion.puedeEditarTarea(a);
+    var plan = ((ctx.rendimiento && ctx.rendimiento.plan_seguimiento) || [])
+      .filter(function (t) { return t.actividad_id === a.actividad_id; })[0];
+
+    var meta = '<div class="sigso-py-panel-tarea__meta">' +
+      '<span>' + (esMia ? '<b>Tú</b>' : Componentes.escaparHtml(a.responsable_nombre || a.responsable_email || '—')) + '</span>' +
+      '<span>Prioridad ' + Componentes.escaparHtml(a.prioridad || '—') + '</span>' +
+      (a.fecha_compromiso ? '<span>Vence ' + fechaCorta_(a.fecha_compromiso) + '</span>' : '') +
+      (a.avance_pct !== '' && a.avance_pct !== undefined && a.avance_pct !== null ? '<span>' + a.avance_pct + '% avance</span>' : '') +
+      metaChipHtml_(a) + colaboradoresChipHtml_(a) +
+    '</div>';
+    var critico = a.es_critica
+      ? '<div class="sigso-py-panel-tarea__critica">' + Iconos.svg('alerta', { tam: 14 }) + ' En la ruta crítica' +
+          (a.holgura_dias !== null && a.holgura_dias !== undefined ? ' · holgura ' + a.holgura_dias + ' día(s)' : '') + '</div>'
+      : '';
+    var bloqueo = a.estado === 'BLOQUEADA'
+      ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('pausado', { tam: 14 }) + ' ' + Componentes.escaparHtml(a.bloqueo_motivo || '') + '</div>' : '';
+    var depAtrasada = a.dependencia_comprometida
+      ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('alerta', { tam: 14 }) + ' Depende de "' + Componentes.escaparHtml(a.dependencia_titulo) + '", que está atrasada.</div>'
+      : '';
+
+    function alExitoAccion_() { cerrarPanelTareaGantt_(); refrescarDetalle_(); }
+
+    var acciones = '';
+    if (puedeEditar) {
+      acciones += '<div class="sigso-py-panel-tarea__acciones">' +
+        Componentes.boton({ texto: 'Reprogramar', variante: 'secundario', clase: 'js-py-panel-reprogramar', tipo: 'button' }) +
+        Componentes.boton({ texto: 'Editar tarea', variante: 'secundario', clase: 'js-py-panel-editar', tipo: 'button' }) +
+      '</div>';
+    }
+    var checkin = accionesCheckinTarea_(a, esMia);
+
+    ganttPanelEl_.innerHTML =
+      '<div class="sigso-py-panel-tarea__telon js-py-panel-cerrar"></div>' +
+      '<aside class="sigso-py-panel-tarea__cuerpo" role="dialog" aria-modal="true" aria-label="Detalle de la tarea">' +
+        '<div class="sigso-py-panel-tarea__cab">' +
+          '<div>' +
+            '<h2>' + Componentes.escaparHtml(a.titulo) + '</h2>' +
+            '<span class="sigso-badge sigso-mt-badge--' + a.semaforo + '">' + Componentes.escaparHtml(a.semaforo_etiqueta || a.semaforo) + '</span>' +
+          '</div>' +
+          '<button type="button" class="sigso-py-panel-tarea__cerrar js-py-panel-cerrar" aria-label="Cerrar el detalle">×</button>' +
+        '</div>' +
+        '<div class="sigso-py-panel-tarea__contenido">' +
+          meta + planLineaHtml_(plan) + critico + bloqueo + depAtrasada +
+          rollupSubtareasHtml_(a) + impactoDependenciaHtml_(a) +
+          acciones + checkin +
+        '</div>' +
+      '</aside>';
+
+    ganttPanelEl_.querySelectorAll('.js-py-panel-cerrar').forEach(function (el) {
+      el.addEventListener('click', cerrarPanelTareaGantt_);
+    });
+    var btnRepro = ganttPanelEl_.querySelector('.js-py-panel-reprogramar');
+    if (btnRepro) btnRepro.addEventListener('click', function () {
+      abrirReprogramarTarea_(ctxEdicion.proyectoId, a, alExitoAccion_);
+    });
+    var btnEditar = ganttPanelEl_.querySelector('.js-py-panel-editar');
+    if (btnEditar) btnEditar.addEventListener('click', function () {
+      cerrarPanelTareaGantt_();
+      abrirFormularioEditarTarea_(a, ctx.detalle, ctx.tareas);
+    });
+    wireCheckin_(ganttPanelEl_, alExitoAccion_);
+  }
+
   // Cablea los handles de resize de la vista Plan actual -- se llama en cada
   // repintado (los nodos son nuevos, los listeners viejos mueren con ellos).
   function wireGanttResize_(cont, pxDia, minTime, alExito) {
@@ -3568,6 +3721,14 @@
     // es esta?" al soltar el arrastre (tareaPorIdEnCarta_) -- se fija acá
     // también, por si Plan se abre ANTES que Dedicación en esta sesión.
     cartaTareasActual_ = tareas;
+    // v16.9 (panel lateral): contexto fresco para el panel en CADA pintado
+    // (zoom, agrupar, filtrar). `tareas` es SIN filtrar por hito a propósito
+    // -- si el panel ya está abierto y el usuario cambia el filtro de hito,
+    // la tarea que estaba mirando sigue mostrándose (solo deja de dibujarse
+    // su barra); el panel solo se cierra si la tarea deja de existir de
+    // verdad (se borró, o se cambió de proyecto).
+    ganttPanelCtx_ = { detalle: detalle, tareas: tareas, ctxEdicion: ctxEdicion, rendimiento: rendimiento };
+    if (ganttPanelActivoId_) pintarPanelTareaGantt_();
 
     // v13 (Fase 1, "ruta crítica"): el toggle solo tiene sentido si hay al
     // menos una dependencia definida -- si no, resaltar "la tarea más larga"
@@ -4663,6 +4824,7 @@
     // las barras -- se miden posiciones reales, no calculadas.
     dibujarConectoresGantt_(cont);
     wireResaltadoDeps_(cont);
+    wireClicBarraGantt_(cont);
 
     var agruparBtn = cont.querySelector(".js-py-gantt-agrupar");
     if (agruparBtn) {
@@ -6407,6 +6569,11 @@
   }
 
   function irAVistaProyectos_(id) {
+    // v16.9: punto único de navegación DENTRO de Proyectos (reportes, mi
+    // trabajo, calendario, portafolio) -- el panel lateral de tarea vive en
+    // <body>, así que cualquier salida de la vista de un proyecto lo cierra
+    // acá, sin tener que repetirlo en cada destino.
+    if (ganttPanelActivoId_) cerrarPanelTareaGantt_();
     vistaProyectos_ = id;
     if (id !== 'reportes') { reportePyAbierto_ = null; filtrosReportePy_ = {}; }
     if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id);
