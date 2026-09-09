@@ -17716,6 +17716,32 @@ var Iconos = (function () {
     setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
   }
 
+  // v16.9: mismo botón "Descargar Excel" en dos lugares (Resumen y, ahora,
+  // el propio Cronograma > Plan -- así lo pedía el mockup original: el
+  // "[↓ Descargar]" vive junto a Expandir/Contraer todo, no solo en Resumen).
+  // Se extrae el click UNA vez para no duplicar el manejo de spinner/error.
+  function wireDescargarXlsxBtn_(btn, proyectoId) {
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var txt = btn.textContent;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="sigso-spinner"></span>Generando…';
+      api_('descargarLibroProyecto', { proyecto_id: proyectoId }).then(function (r) {
+        if (!r || !r.ok) {
+          Componentes.aviso({ texto: (r && r.message) || 'No se pudo generar el archivo.', tipo: 'error' });
+          return;
+        }
+        descargarBase64Proyecto_(r.data.xlsx_base64, r.data.filename || 'Proyecto.xlsx',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      }).catch(function () {
+        Componentes.aviso({ texto: 'No se pudo conectar con el servidor.', tipo: 'error' });
+      }).finally(function () {
+        btn.disabled = false;
+        btn.textContent = txt;
+      });
+    });
+  }
+
   // v11 (P3, "exportación CSV"): 100% cliente -- los datos ya están cargados
   // (analítica/tareas), así que no hace falta un viaje al servidor solo para
   // armar el archivo. BOM UTF-8 al inicio para que Excel abra los acentos
@@ -21592,9 +21618,14 @@ var Iconos = (function () {
         claseCampo: 'sigso-py-ded-ctrl', claseInput: 'js-py-gantt-filtro-hito', opciones: opsHito
       });
     }
+    // v16.9: "[↓ Descargar]" en el propio Cronograma -- el mockup original
+    // lo pedía acá, junto a Expandir/Contraer todo, no solo en la pestaña
+    // Resumen. Mismo endpoint (descargarLibroProyecto), mismo botón
+    // reutilizado (wireDescargarXlsxBtn_).
+    var descargarXlsxBtn = Componentes.boton({ texto: 'Descargar Excel', variante: 'secundario', clase: 'js-py-gantt-descargar-xlsx', tipo: 'button' });
     var controles = '<div class="sigso-py-ded-controles">' + zoomBtns +
       Componentes.boton({ texto: 'Hoy', variante: 'sutil', clase: 'js-py-gantt-hoy', tipo: 'button' }) +
-      rutaCriticaBtn + dependenciasBtn + agruparBtn + filtroHitoSelect + expandirTodoBtn +
+      rutaCriticaBtn + dependenciasBtn + agruparBtn + filtroHitoSelect + expandirTodoBtn + descargarXlsxBtn +
       '<span class="sigso-ayuda">Hitos (◆) y tareas con fecha comprometida, de ' +
         (p.fecha_inicio ? fechaCorta_(p.fecha_inicio) : '—') + ' a ' + (p.fecha_objetivo ? fechaCorta_(p.fecha_objetivo) : '—') +
         (puedeEditar ? '. Arrastra el borde derecho de una barra para reprogramarla.' : '') +
@@ -22091,27 +22122,10 @@ var Iconos = (function () {
     // (detalle.js) -- pide el PDF en base64, lo pasa a Blob y dispara la
     // descarga. Sin ese paso no hay forma de bajar un binario que llega por
     // fetch/google.script.run como texto.
-    var descargarXlsx = cont.querySelector('.js-py-descargar-xlsx');
-    if (descargarXlsx) {
-      descargarXlsx.addEventListener('click', function () {
-        var txt = descargarXlsx.textContent;
-        descargarXlsx.disabled = true;
-        descargarXlsx.innerHTML = '<span class="sigso-spinner"></span>Generando…';
-        api_('descargarLibroProyecto', { proyecto_id: detalle.proyecto.proyecto_id }).then(function (r) {
-          if (!r || !r.ok) {
-            Componentes.aviso({ texto: (r && r.message) || 'No se pudo generar el archivo.', tipo: 'error' });
-            return;
-          }
-          descargarBase64Proyecto_(r.data.xlsx_base64, r.data.filename || 'Proyecto.xlsx',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        }).catch(function () {
-          Componentes.aviso({ texto: 'No se pudo conectar con el servidor.', tipo: 'error' });
-        }).finally(function () {
-          descargarXlsx.disabled = false;
-          descargarXlsx.textContent = txt;
-        });
-      });
-    }
+    wireDescargarXlsxBtn_(cont.querySelector('.js-py-descargar-xlsx'), detalle.proyecto.proyecto_id);
+    // v16.9: el mismo botón, ahora también en Cronograma > Plan (el mockup
+    // original lo ponía junto a Expandir/Contraer todo, no solo en Resumen).
+    wireDescargarXlsxBtn_(cont.querySelector('.js-py-gantt-descargar-xlsx'), detalle.proyecto.proyecto_id);
     var descargarPdf = cont.querySelector('.js-py-descargar-pdf');
     if (descargarPdf) {
       descargarPdf.addEventListener('click', function () {
