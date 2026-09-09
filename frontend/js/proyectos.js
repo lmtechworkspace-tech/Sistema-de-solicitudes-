@@ -3734,7 +3734,7 @@
         return new Date(x.fecha_objetivo) - new Date(y.fecha_objetivo);
       }).forEach(function (h) {
         var suyas = (porHito_[h.hito_id] || []).sort(porCompromiso_);
-        trozos.push(filaGrupoGantt_(h, suyas.length));
+        trozos.push(filaGrupoGantt_(h, suyas));
         if (gruposPlegados_[h.hito_id]) return;   // plegado: se dibuja la cabecera y nada mas
         trozos.push(suyas.map(filaTareaGantt_).join(''));
       });
@@ -3742,20 +3742,69 @@
       if (sinHito_.length) {
         // "Sin hito" NO se pliega: si no cuelgan de ningun hito, esconderlas
         // seria esconder trabajo que a nadie se le asigno un objetivo.
-        trozos.push(filaGrupoGantt_(null, sinHito_.length));
-        trozos.push(sinHito_.sort(porCompromiso_).map(filaTareaGantt_).join(''));
+        trozos.push(filaGrupoGantt_(null, sinHito_.sort(porCompromiso_)));
+        trozos.push(sinHito_.map(filaTareaGantt_).join(''));
       }
       filasTareas = trozos.join('');
     }
 
     // La cabecera de un grupo. Reusa la fila del Gantt para que la columna de
     // etiquetas y la pista de fechas sigan alineadas con el resto.
-    function filaGrupoGantt_(hito, cuantas) {
+    // v16.8: la cabecera pasa de "N tarea(s) · objetivo" a un RESUMEN del hito
+    // -- X/Y completadas, % de avance (el que ya calcula el backend por hito),
+    // estado, rango real de fechas de sus tareas, y aviso si hay atrasadas --
+    // con una barra de progreso. Recibe las tareas del grupo (no solo el
+    // conteo) para calcular lo que el backend no trae por hito (completadas,
+    // atrasadas, rango). Convierte el título de agrupación en una fila-resumen,
+    // que es lo que hace que la carta se lea como una herramienta de gestión.
+    function filaGrupoGantt_(hito, suyas) {
+      suyas = suyas || [];
       var id = hito ? hito.hito_id : '';
       var plegado = hito ? !!gruposPlegados_[id] : false;
       var nombre = hito ? hito.nombre : 'Sin hito';
-      var meta = cuantas + ' tarea(s)' + (hito && hito.fecha_objetivo
-        ? ' · objetivo ' + fechaCorta_(hito.fecha_objetivo) : '');
+      var total = suyas.length;
+      var completadas = suyas.filter(function (a) { return a.estado === 'TERMINADA'; }).length;
+      var atrasadas = suyas.filter(function (a) { return a.semaforo === 'atrasada'; }).length;
+      // % del hito: el backend ya lo calcula (calcularAvanceProyecto_ sobre sus
+      // tareas). Sin ese dato (grupo "Sin hito"), se promedia acá con el mismo
+      // criterio: TERMINADA=100, NO_INICIADA=0, resto su avance_pct o 0.
+      var pct;
+      if (hito && hito.avance_pct !== null && hito.avance_pct !== undefined) {
+        pct = Math.round(hito.avance_pct);
+      } else if (total) {
+        var suma = suyas.reduce(function (s, a) {
+          if (a.estado === 'TERMINADA') return s + 100;
+          if (a.estado === 'NO_INICIADA') return s;
+          return s + (Number(a.avance_pct) || 0);
+        }, 0);
+        pct = Math.round(suma / total);
+      } else { pct = 0; }
+      // Estado: el del hito, salvo que esté vencido sin cerrar (se marca).
+      var vencido = hito && hito.estado !== 'COMPLETADO' && hito.estado !== 'CANCELADO' &&
+        hito.fecha_objetivo && new Date(hito.fecha_objetivo) < ahora;
+      var estadoLabel = hito ? (vencido ? 'Atrasado' : (HITO_ESTADO_ETIQUETA[hito.estado] || hito.estado)) : '';
+      var estadoTono = !hito ? '' :
+        (hito.estado === 'COMPLETADO' ? 'ok' :
+         (hito.estado === 'CANCELADO' ? 'neutro' :
+          (vencido ? 'alerta' : (hito.estado === 'EN_CURSO' ? 'info' : 'neutro'))));
+      // Rango real: de la primera barra a la última fecha comprometida.
+      var rangoTxt = '';
+      if (total) {
+        var minIni = null, maxFin = null;
+        suyas.forEach(function (a) {
+          var ini = new Date(inicioBarraEfectivo_(a)).getTime();
+          var fin = new Date(a.fecha_compromiso).getTime();
+          if (minIni === null || ini < minIni) minIni = ini;
+          if (maxFin === null || fin > maxFin) maxFin = fin;
+        });
+        rangoTxt = fechaCorta_(new Date(minIni)) + ' → ' + fechaCorta_(new Date(maxFin));
+      }
+
+      var partesMeta = [completadas + '/' + total + ' tareas', pct + '%'];
+      if (estadoLabel) partesMeta.push('<span class="sigso-py-gantt-grupo__estado sigso-py-gantt-grupo__estado--' + estadoTono + '">' + Componentes.escaparHtml(estadoLabel) + '</span>');
+      if (rangoTxt) partesMeta.push(Componentes.escaparHtml(rangoTxt));
+      if (atrasadas > 0) partesMeta.push('<span class="sigso-py-gantt-grupo__alerta">⚠ ' + atrasadas + ' atrasada' + (atrasadas === 1 ? '' : 's') + '</span>');
+
       var chevron = hito
         ? '<button type="button" class="sigso-py-gantt-grupo__toggle js-py-gantt-grupo" data-hito="' +
             Componentes.escaparHtml(id) + '" aria-expanded="' + (plegado ? 'false' : 'true') + '" ' +
@@ -3763,15 +3812,18 @@
             (plegado ? '▸' : '▾') + '</button>'
         : '<span class="sigso-py-gantt-grupo__toggle" aria-hidden="true">•</span>';
       var hitoPx = (hito && hito.fecha_objetivo) ? offsetPx_(hito.fecha_objetivo) : null;
+      var codigoHito = hito ? (CRONOGRAMA_HITO_ESTADO_CODIGO[hito.estado] || (vencido ? 'atrasada' : 'al-dia')) : 'al-dia';
       return '<div class="sigso-py-gantt-fila sigso-py-gantt-fila--grupo">' +
         '<div class="sigso-py-gantt-etiqueta">' +
           '<div class="sigso-py-gantt-etiqueta__titulo">' + chevron +
+            (hito ? Iconos.svg('diana', { tam: 12 }) : '') +
             '<span>' + Componentes.escaparHtml(nombre) + '</span></div>' +
-          '<div class="sigso-py-gantt-etiqueta__meta">' + Componentes.escaparHtml(meta) + '</div>' +
+          '<div class="sigso-py-gantt-etiqueta__meta sigso-py-gantt-grupo__meta">' + partesMeta.join(' · ') + '</div>' +
+          '<div class="sigso-py-gantt-grupo__prog" title="' + pct + '% de avance"><div class="sigso-py-gantt-grupo__prog-fill" style="width:' + pct + '%"></div></div>' +
         '</div>' +
         '<div class="sigso-py-gantt-track" style="width:' + anchoTotal + 'px">' +
           (hitoPx !== null
-            ? '<div class="sigso-py-cron-hito sigso-py-cron-hito--al-dia" style="left:' + hitoPx + 'px"></div>' : '') +
+            ? '<div class="sigso-py-cron-hito sigso-py-cron-hito--' + codigoHito + '" style="left:' + hitoPx + 'px" title="Objetivo ' + Componentes.escaparHtml(fechaCorta_(hito.fecha_objetivo)) + '"></div>' : '') +
         '</div>' +
       '</div>';
     }
@@ -3791,9 +3843,16 @@
     var agruparBtn = hitos.length
       ? Componentes.boton({ texto: (agruparPorHito_ ? '✓ Por hito' : 'Por hito'), variante: agruparPorHito_ ? undefined : 'sutil', clase: 'js-py-gantt-agrupar', tipo: 'button' })
       : '';
+    // v16.8: expandir/contraer todos los hitos de una -- con 40+ tareas en
+    // muchos hitos, plegarlos uno por uno es tedioso. Solo tienen sentido en
+    // modo agrupado.
+    var expandirTodoBtn = (hitos.length && agruparPorHito_)
+      ? Componentes.boton({ texto: 'Expandir todo', variante: 'sutil', clase: 'js-py-gantt-expandir-todo', tipo: 'button' }) +
+        Componentes.boton({ texto: 'Contraer todo', variante: 'sutil', clase: 'js-py-gantt-contraer-todo', tipo: 'button' })
+      : '';
     var controles = '<div class="sigso-py-ded-controles">' + zoomBtns +
       Componentes.boton({ texto: 'Hoy', variante: 'sutil', clase: 'js-py-gantt-hoy', tipo: 'button' }) +
-      rutaCriticaBtn + dependenciasBtn + agruparBtn +
+      rutaCriticaBtn + dependenciasBtn + agruparBtn + expandirTodoBtn +
       '<span class="sigso-ayuda">Hitos (◆) y tareas con fecha comprometida, de ' +
         (p.fecha_inicio ? fechaCorta_(p.fecha_inicio) : '—') + ' a ' + (p.fecha_objetivo ? fechaCorta_(p.fecha_objetivo) : '—') +
         (puedeEditar ? '. Arrastra el borde derecho de una barra para reprogramarla.' : '') +
@@ -4577,6 +4636,25 @@
     if (agruparBtn) {
       agruparBtn.addEventListener("click", function () {
         agruparPorHito_ = !agruparPorHito_;
+        cambiarPestana_('cronograma');
+      });
+    }
+
+    // v16.8: expandir/contraer todos los hitos. Contraer = plegar cada hito
+    // con fecha objetivo (los mismos que dibujan cabecera). Expandir = vaciar
+    // el registro de plegados. "Sin hito" nunca se pliega (no está acá).
+    var expandirTodoBtn = cont.querySelector(".js-py-gantt-expandir-todo");
+    if (expandirTodoBtn) {
+      expandirTodoBtn.addEventListener("click", function () {
+        gruposPlegados_ = {};
+        cambiarPestana_('cronograma');
+      });
+    }
+    var contraerTodoBtn = cont.querySelector(".js-py-gantt-contraer-todo");
+    if (contraerTodoBtn) {
+      contraerTodoBtn.addEventListener("click", function () {
+        (datosDetalleActual_ && datosDetalleActual_.detalle && datosDetalleActual_.detalle.hitos || [])
+          .forEach(function (h) { if (h.fecha_objetivo) gruposPlegados_[h.hito_id] = true; });
         cambiarPestana_('cronograma');
       });
     }

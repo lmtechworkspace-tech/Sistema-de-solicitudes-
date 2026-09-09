@@ -4256,6 +4256,24 @@ button {
 .sigso-py-gantt-grupo__toggle:hover, .sigso-py-gantt-grupo__toggle:focus-visible {
   background: var(--superficie); color: var(--texto);
 }
+/* v16.8: cabecera de hito enriquecida -- resumen (X/Y, %, estado, rango,
+   alerta) + barra de progreso. La meta del grupo SÍ puede envolver (es un
+   resumen, no una fila mas), a diferencia de la meta de una tarea. */
+.sigso-py-gantt-grupo__meta { white-space: normal; flex-wrap: wrap; row-gap: 1px; }
+.sigso-py-gantt-grupo__estado {
+  font-weight: 600; padding: 0 0.3rem; border-radius: var(--radio-sm);
+  border: 1px solid currentColor; line-height: 1.4;
+}
+.sigso-py-gantt-grupo__estado--ok { color: var(--ok); }
+.sigso-py-gantt-grupo__estado--info { color: var(--primario); }
+.sigso-py-gantt-grupo__estado--alerta { color: var(--critico); }
+.sigso-py-gantt-grupo__estado--neutro { color: var(--texto-3); }
+.sigso-py-gantt-grupo__alerta { color: var(--critico); font-weight: 600; }
+.sigso-py-gantt-grupo__prog {
+  height: 4px; border-radius: 999px; background: var(--superficie); overflow: hidden;
+  margin-top: 3px; max-width: 200px;
+}
+.sigso-py-gantt-grupo__prog-fill { height: 100%; background: var(--primario); border-radius: 999px; }
 
 .sigso-py-gantt-fila--regla { position: sticky; top: 0; z-index: 3; background: var(--superficie); border-bottom: 1px solid var(--borde-fuerte); }
 .sigso-py-gantt-etiqueta {
