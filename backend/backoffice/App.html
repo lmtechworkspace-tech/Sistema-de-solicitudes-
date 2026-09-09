@@ -20886,6 +20886,10 @@ var Iconos = (function () {
   // Agrupada responde otra cosa -- "de que se compone el proyecto" -- y esa
   // se elige, no se impone.
   var agruparPorHito_ = false;
+  // v16.8: filtro por hito en la vista Plan. '' = todos; un hito_id = solo ese
+  // hito; '__sinhito__' = solo las tareas sin hito. Sobrevive al repintado
+  // como el resto del estado del Plan.
+  var filtroHitoPlan_ = '';
   // Que grupos estan plegados, por hito_id. Sobrevive al repintado (zoom,
   // cambio de sub-vista) porque plegar y que se despliegue solo al mover el
   // zoom seria pelearse con la herramienta.
@@ -21056,11 +21060,26 @@ var Iconos = (function () {
 
   function pintarCronogramaPlan_(detalle, tareas, ctxEdicion, rendimiento) {
     var p = detalle.proyecto;
-    var hitos = (detalle.hitos || []).filter(function (h) { return h.fecha_objetivo; });
+    var hitosTodos = (detalle.hitos || []).filter(function (h) { return h.fecha_objetivo; });
+    var hitos = hitosTodos;
     var tareasConFecha = tareas.filter(function (a) { return a.fecha_compromiso; });
 
     if (hitos.length === 0 && tareasConFecha.length === 0) {
       return Componentes.vacio({ texto: 'Todavía no hay hitos ni tareas con fecha para mostrar en el cronograma.' });
+    }
+
+    // v16.8: filtro por hito -- acota tareas E hitos a la selección. Si el hito
+    // elegido ya no existe (se borró), se ignora el filtro en vez de mostrar
+    // una pantalla vacía sin explicación.
+    var idsHitoExisten_ = {};
+    hitosTodos.forEach(function (h) { idsHitoExisten_[h.hito_id] = true; });
+    if (filtroHitoPlan_ && filtroHitoPlan_ !== '__sinhito__' && !idsHitoExisten_[filtroHitoPlan_]) filtroHitoPlan_ = '';
+    if (filtroHitoPlan_ === '__sinhito__') {
+      hitos = [];
+      tareasConFecha = tareasConFecha.filter(function (a) { return !a.hito_id || !idsHitoExisten_[a.hito_id]; });
+    } else if (filtroHitoPlan_) {
+      hitos = hitosTodos.filter(function (h) { return h.hito_id === filtroHitoPlan_; });
+      tareasConFecha = tareasConFecha.filter(function (a) { return a.hito_id === filtroHitoPlan_; });
     }
     // v11 (P2): mismo mecanismo que Dedicación usa para resolver "¿qué tarea
     // es esta?" al soltar el arrastre (tareaPorIdEnCarta_) -- se fija acá
@@ -21367,9 +21386,22 @@ var Iconos = (function () {
       ? Componentes.boton({ texto: 'Expandir todo', variante: 'sutil', clase: 'js-py-gantt-expandir-todo', tipo: 'button' }) +
         Componentes.boton({ texto: 'Contraer todo', variante: 'sutil', clase: 'js-py-gantt-contraer-todo', tipo: 'button' })
       : '';
+    // v16.8: filtro por hito -- solo si hay al menos un hito. Muestra "Sin hito"
+    // como opción únicamente cuando existen tareas sin hito, para no ofrecer un
+    // filtro que dejaría la pantalla vacía.
+    var haySinHito = tareas.some(function (a) { return a.fecha_compromiso && (!a.hito_id || !idsHitoExisten_[a.hito_id]); });
+    var filtroHitoSelect = '';
+    if (hitosTodos.length) {
+      var opsHito = hitosTodos.map(function (h) { return { valor: h.hito_id, texto: h.nombre }; });
+      if (haySinHito) opsHito.push({ valor: '__sinhito__', texto: 'Sin hito' });
+      filtroHitoSelect = Componentes.campoSelect({
+        id: 'py-gantt-filtro-hito', valor: filtroHitoPlan_, placeholder: 'Todos los hitos',
+        claseCampo: 'sigso-py-ded-ctrl', claseInput: 'js-py-gantt-filtro-hito', opciones: opsHito
+      });
+    }
     var controles = '<div class="sigso-py-ded-controles">' + zoomBtns +
       Componentes.boton({ texto: 'Hoy', variante: 'sutil', clase: 'js-py-gantt-hoy', tipo: 'button' }) +
-      rutaCriticaBtn + dependenciasBtn + agruparBtn + expandirTodoBtn +
+      rutaCriticaBtn + dependenciasBtn + agruparBtn + filtroHitoSelect + expandirTodoBtn +
       '<span class="sigso-ayuda">Hitos (◆) y tareas con fecha comprometida, de ' +
         (p.fecha_inicio ? fechaCorta_(p.fecha_inicio) : '—') + ' a ' + (p.fecha_objetivo ? fechaCorta_(p.fecha_objetivo) : '—') +
         (puedeEditar ? '. Arrastra el borde derecho de una barra para reprogramarla.' : '') +
@@ -22172,6 +22204,15 @@ var Iconos = (function () {
       contraerTodoBtn.addEventListener("click", function () {
         (datosDetalleActual_ && datosDetalleActual_.detalle && datosDetalleActual_.detalle.hitos || [])
           .forEach(function (h) { if (h.fecha_objetivo) gruposPlegados_[h.hito_id] = true; });
+        cambiarPestana_('cronograma');
+      });
+    }
+
+    // v16.8: filtro por hito -- repinta desde caché (sin red), como el resto.
+    var filtroHitoSel = cont.querySelector(".js-py-gantt-filtro-hito");
+    if (filtroHitoSel) {
+      filtroHitoSel.addEventListener("change", function () {
+        filtroHitoPlan_ = this.value;
         cambiarPestana_('cronograma');
       });
     }
