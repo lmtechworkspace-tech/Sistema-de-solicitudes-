@@ -31,5 +31,17 @@ window.SIGSO_CONFIG = Object.freeze({
   // token, no Google). '' = aun no creada: la bandeja del shell avisara que
   // falta desplegarla. Ver DEPLOY v33-p3.
   BACKOFFICE_TOKEN_URL: 'https://script.google.com/macros/s/AKfycby5tv_3V1wHnN0DlIH5DkW2XhsdmKbmGfYhXyaBMSiUh5B4A7a5WGWB2ydMqNeglLEqQA/exec',
+  // Reparto de carga (sep-2026). Apps Script SERIALIZA las ejecuciones de una
+  // misma cuenta de Google: con varias personas usando la plataforma a la
+  // vez, la implementacion "por token" -- que corre toda como una sola
+  // cuenta -- encola las llamadas y la que queda atras se pasa del timeout.
+  //
+  // Aqui van URLs /exec ADICIONALES del MISMO proyecto Backoffice, publicadas
+  // cada una desde OTRA cuenta de Google (todas "ejecutar como yo / acceso:
+  // cualquiera"). api.js reparte a cada usuario entre esta lista + la de
+  // arriba, de forma estable (el mismo usuario cae siempre en la misma), asi
+  // que N cuentas = N carriles en paralelo. Vacio [] = sin reparto (una sola
+  // cuenta, como hasta ahora). Ver documentacion/SIGSO-v16-reparto-carga.md.
+  BACKOFFICE_TOKEN_URLS: [],
   TIMEZONE: 'America/Santiago'
 });

@@ -120,13 +120,13 @@ if (typeof window !== 'undefined') {
     },
     csv: function () {
       var filas = window.SigsoPerf.dump();
-      var cab = 'fecha,accion,round_trip_ms,server_ms,io_ms,io_ops,overhead_ms,intento,ok,puente';
+      var cab = 'fecha,accion,round_trip_ms,server_ms,io_ms,io_ops,overhead_ms,intento,ok,puente,despliegue';
       var cuerpo = filas.map(function (r) {
         var overhead = (r.rt != null && r.s != null) ? (r.rt - r.s) : '';
         return [
           new Date(r.t).toISOString(), r.a, r.rt, (r.s == null ? '' : r.s),
           (r.io == null ? '' : r.io), (r.ops == null ? '' : r.ops),
-          overhead, r.i, (r.ok ? 1 : 0), (r.br ? 1 : 0)
+          overhead, r.i, (r.ok ? 1 : 0), (r.br ? 1 : 0), (r.d == null ? '' : r.d)
         ].join(',');
       });
       return [cab].concat(cuerpo).join('\n');
@@ -183,6 +183,41 @@ var TIMEOUT_FETCH_MS = 35000;
 
 function esperar_(ms) {
   return new Promise(function (resolve) { setTimeout(resolve, ms); });
+}
+
+// === Reparto de carga entre despliegues por token (sep-2026) ============
+//
+// Apps Script serializa las ejecuciones de una MISMA cuenta de Google. La
+// implementacion "por token" corre toda como una sola cuenta, asi que con
+// varias personas a la vez las llamadas hacen cola. La solucion $0: publicar
+// el mismo proyecto Backoffice como varias implementaciones, cada una desde
+// otra cuenta, y repartir el trafico entre ellas -- N cuentas, N carriles.
+//
+// El reparto es ESTABLE por usuario (hash del token de sesion): el mismo
+// usuario cae siempre en la misma implementacion, para que el cache
+// persistente de esa cuenta (CacheService) le siga sirviendo caliente y los
+// logs de una sesion no se dispersen. En un REINTENTO se rota a la siguiente
+// -- asi una implementacion caida se sortea en el segundo intento en vez de
+// romper a ese usuario.
+
+/** [primaria, ...extras] sin vacios ni duplicados. Nunca vacio. */
+function construirPoolToken_(cfg) {
+  var base = cfg.BACKOFFICE_TOKEN_URL || cfg.BACKOFFICE_URL;
+  var extra = Array.isArray(cfg.BACKOFFICE_TOKEN_URLS) ? cfg.BACKOFFICE_TOKEN_URLS : [];
+  var pool = [base].concat(extra).filter(function (u, i, arr) {
+    return u && arr.indexOf(u) === i;
+  });
+  return pool.length ? pool : [cfg.BACKOFFICE_URL];
+}
+
+/** Elige de forma estable por token; en el reintento `intento` rota +1. */
+function elegirUrlToken_(pool, token, intento) {
+  if (pool.length <= 1) return pool[0];
+  var h = 0;
+  var s = String(token || '');
+  for (var i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) | 0; }
+  var base = Math.abs(h) % pool.length;
+  return pool[(base + (intento - 1)) % pool.length];
 }
 
 // Un unico intento contra el Web App, por el transporte que corresponda.
@@ -247,10 +282,14 @@ async function llamarApi(url, action, data) {
   const cfg = window.SIGSO_CONFIG || {};
   let tokenPortal = null;
   try { tokenPortal = localStorage.getItem('sigso_portal_token'); } catch (err) { /* sin storage */ }
-  if (tokenPortal && url === cfg.BACKOFFICE_URL) {
-    if (cfg.BACKOFFICE_TOKEN_URL) {
-      url = cfg.BACKOFFICE_TOKEN_URL;
-    }
+
+  // Backoffice por token: se reparte entre los despliegues del pool. La URL
+  // efectiva se elige DENTRO del bucle, para que un reintento pueda rotar a
+  // otro despliegue si el primero fallo.
+  const esBackofficePorToken = !!(tokenPortal && url === cfg.BACKOFFICE_URL && cfg.BACKOFFICE_TOKEN_URL);
+  let poolToken = null;
+  if (esBackofficePorToken) {
+    poolToken = construirPoolToken_(cfg);
     data = Object.assign({}, data, { portal_token: tokenPortal });
   }
 
@@ -261,15 +300,17 @@ async function llamarApi(url, action, data) {
   const maxIntentos = esAccionDeLectura_(action) ? MAX_INTENTOS_LECTURA : 1;
   let ultimoError;
   for (let intento = 1; intento <= maxIntentos; intento++) {
+    const urlEfectiva = esBackofficePorToken ? elegirUrlToken_(poolToken, tokenPortal, intento) : url;
+    const despliegueIdx = esBackofficePorToken ? poolToken.indexOf(urlEfectiva) : null;
     const inicio = performance.now();
     try {
-      const resultado = await ejecutarLlamada_(url, action, data);
+      const resultado = await ejecutarLlamada_(urlEfectiva, action, data);
       const rt = Math.round(performance.now() - inicio);
       const t = (resultado && typeof resultado === 'object') ? resultado._timing : null;
       perfRegistrar_({
         t: Date.now(), a: action, rt: rt,
         s: t ? t.server_ms : null, io: t ? t.io_ms : null, ops: t ? t.io_ops : null,
-        i: intento, ok: true, br: porPuente
+        i: intento, ok: true, br: porPuente, d: despliegueIdx
       });
       if (medir) {
         console.info('[SIGSO][timing] ' + action + ' ' + rt + 'ms' +
@@ -282,7 +323,7 @@ async function llamarApi(url, action, data) {
       perfRegistrar_({
         t: Date.now(), a: action, rt: rt,
         s: null, io: null, ops: null,
-        i: intento, ok: false, br: porPuente
+        i: intento, ok: false, br: porPuente, d: despliegueIdx
       });
       if (medir) {
         console.info('[SIGSO][timing] ' + action + ' ' + rt + 'ms (fallo, intento ' + intento + ')');
