@@ -32,6 +32,25 @@ var ACCIONES_REINTENTABLES = {
 };
 var MAX_INTENTOS_LECTURA = 3;
 
+// v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,
+// se reintenta CUALQUIER acción cuyo nombre empiece por un verbo de LECTURA.
+// Motivo: en producción, la implementación "por token" del Backoffice corre
+// como una sola cuenta (la dueña), y Apps Script serializa las peticiones de
+// una misma cuenta. Una mañana con varias personas usando Calidad/Proyectos a
+// la vez encola las llamadas; la que queda atrás (o un arranque en frío) puede
+// pasarse de los 35 s y abortaba mostrando "El servidor tardó demasiado en
+// responder", sin volver a intentar -- aunque un segundo intento 1-2 s después
+// entra con el contenedor ya caliente y la cola drenada. Estas acciones son de
+// SOLO LECTURA (idempotentes): reintentarlas NO puede duplicar ninguna
+// escritura. Los verbos de escritura (crear/guardar/registrar/actualizar/
+// sembrar/marcar/checkin...) NO empiezan por estos prefijos, así que siguen a
+// un único intento. Es la misma convención de lectura que usa calidad.js
+// (api_) para decidir qué caché invalidar.
+var PREFIJOS_LECTURA = /^(listar|get|obtener|resumen|consultar|buscar|previsualizar|sugerir|export|descargar)/i;
+function esAccionDeLectura_(action) {
+  return !!action && (ACCIONES_REINTENTABLES[action] || PREFIJOS_LECTURA.test(action));
+}
+
 // F1 (rediseño "Mis solicitudes", medicion de rendimiento): la auditoria F0
 // midio lecturas/filas del lado del servidor (sandbox), pero NO pudo medir
 // milisegundos reales de produccion -- eso necesita la sesion real del
@@ -130,7 +149,7 @@ async function llamarApi(url, action, data) {
   }
 
   const medir = medicionTimingActiva_();
-  const maxIntentos = ACCIONES_REINTENTABLES[action] ? MAX_INTENTOS_LECTURA : 1;
+  const maxIntentos = esAccionDeLectura_(action) ? MAX_INTENTOS_LECTURA : 1;
   let ultimoError;
   for (let intento = 1; intento <= maxIntentos; intento++) {
     const inicio = medir ? performance.now() : 0;
