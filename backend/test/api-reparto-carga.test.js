@@ -143,17 +143,32 @@ test('end-to-end: una lectura que falla dos veces rota y termina en la 3a URL', 
   llamadas.forEach((l) => assert.ok(l.body.indexOf('tok-abc') !== -1));
 });
 
-test('end-to-end: una ESCRITURA no reintenta ni rota (un solo despliegue, un intento)', async () => {
+test('end-to-end: una ESCRITURA no rota -- va SIEMPRE a la cuenta primaria', async () => {
   const cfg = {
     BACKOFFICE_URL: URL_BASE, BACKOFFICE_TOKEN_URL: URL_TOKEN,
     BACKOFFICE_TOKEN_URLS: [URL_TOK2, URL_TOK3]
   };
+  const okFetch = function () {
+    return { text: () => Promise.resolve(JSON.stringify({ ok: true, data: {} })) };
+  };
+  // Se prueban varios tokens: una lectura los reparte, una escritura NO.
+  for (const tok of ['tok-a', 'tok-b', 'tok-c', 'tok-d', 'tok-e']) {
+    const { sandbox, llamadas } = cargarApi(cfg, tok, okFetch);
+    await sandbox.llamarApi(URL_BASE, 'actualizarEstado', { x: 1 });
+    assert.equal(llamadas.length, 1, 'escritura: un solo intento');
+    assert.equal(llamadas[0].url, URL_TOKEN,
+      'la escritura de ' + tok + ' tiene que ir a la primaria (poolToken[0]), no a otra cuenta -- ' +
+      'el correo se manda en el request y debe salir siempre de la misma');
+  }
+});
+
+test('end-to-end: una escritura que falla NO reintenta (podria duplicarse)', async () => {
+  const cfg = { BACKOFFICE_URL: URL_BASE, BACKOFFICE_TOKEN_URL: URL_TOKEN, BACKOFFICE_TOKEN_URLS: [URL_TOK2] };
   const { sandbox, llamadas } = cargarApi(cfg, 'tok-abc', function () {
     return Promise.reject(new Error('transporte caido'));
   });
-
   await assert.rejects(sandbox.llamarApi(URL_BASE, 'actualizarEstado', { x: 1 }));
-  assert.equal(llamadas.length, 1, 'una escritura va a UN intento: reintentarla podria duplicarla');
+  assert.equal(llamadas.length, 1);
 });
 
 test('sin token de portal: la URL no se toca (intake / login Google)', async () => {

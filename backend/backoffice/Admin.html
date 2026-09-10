@@ -8506,10 +8506,20 @@ async function llamarApi(url, action, data) {
   // La muestra rodante (SigsoPerf) va SIEMPRE: es silenciosa y performance.now
   // es gratis. `medir` solo controla el console.info ruidoso de siempre.
   const porPuente = !!(typeof google !== 'undefined' && google.script && google.script.run);
-  const maxIntentos = esAccionDeLectura_(action) ? MAX_INTENTOS_LECTURA : 1;
+  const esLectura = esAccionDeLectura_(action);
+  const maxIntentos = esLectura ? MAX_INTENTOS_LECTURA : 1;
   let ultimoError;
   for (let intento = 1; intento <= maxIntentos; intento++) {
-    const urlEfectiva = esBackofficePorToken ? elegirUrlToken_(poolToken, tokenPortal, intento) : url;
+    // Solo las LECTURAS se reparten entre despliegues. Las escrituras van
+    // SIEMPRE a la cuenta primaria (poolToken[0]) por dos motivos:
+    //  · enviarCorreo_ manda en el mismo request -> si una escritura corriera
+    //    en otra cuenta, el correo saldria desde SU Gmail (remitente distinto
+    //    cada vez). Con las escrituras fijas, todo el correo sale de una sola.
+    //  · las escrituras son una fraccion del trafico; lo que se atascaba y
+    //    hay que paralelizar son las lecturas.
+    const urlEfectiva = !esBackofficePorToken
+      ? url
+      : (esLectura ? elegirUrlToken_(poolToken, tokenPortal, intento) : poolToken[0]);
     const despliegueIdx = esBackofficePorToken ? poolToken.indexOf(urlEfectiva) : null;
     const inicio = performance.now();
     try {
