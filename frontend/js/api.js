@@ -68,6 +68,112 @@ function medicionTimingActiva_() {
   catch (err) { return false; }
 }
 
+// === Muestra rodante de rendimiento (sep-2026) ==========================
+//
+// POR QUE. "SIGSO va lento" tiene dos causas que se arreglan distinto: el
+// acceso al dato (Sheets) o la cola de ejecucion de la cuenta del token.
+// Decidir una migracion grande sin datos seria a ciegas. Esto guarda, EN
+// SILENCIO, las ultimas ~400 llamadas de ESTE navegador con su desglose, y
+// no cambia nada de lo que se ve. Tras una semana de uso normal:
+//
+//   SigsoPerf.resumen()   imprime una tabla por accion (medianas)
+//   SigsoPerf.csv()       vuelca todo para analizar fuera
+//   SigsoPerf.limpiar()   borra la muestra
+//
+// Cada registro:
+//   t    momento de la llamada (Date.now)
+//   a    accion
+//   rt   round-trip real medido en el navegador (ms)
+//   s    server_ms que reporto el backend (Perf.gs), o null
+//   io   de ese server_ms, cuanto fue viajes a Sheets
+//   ops  cuantos viajes a Sheets (lec + esc)
+//   i    numero de intento (1..3 en lecturas)
+//   ok   si la vuelta resolvio sin excepcion
+//   br   true si fue por el puente google.script.run (app/admin.html),
+//        false si fue fetch por token (plataforma.html) -- son colas distintas
+//
+// overhead = rt - s  ->  red + cola + arranque en frio. Si ese numero crece
+// en las horas de mas gente, la cola es el problema y cambiar de base de
+// datos no lo tocaria.
+var SIGSO_PERF_LLAVE = 'sigso_perf_log';
+var SIGSO_PERF_TOPE = 400;
+
+function perfRegistrar_(registro) {
+  try {
+    var crudo = localStorage.getItem(SIGSO_PERF_LLAVE);
+    var lista = crudo ? JSON.parse(crudo) : [];
+    if (!Array.isArray(lista)) lista = [];
+    lista.push(registro);
+    if (lista.length > SIGSO_PERF_TOPE) lista = lista.slice(lista.length - SIGSO_PERF_TOPE);
+    localStorage.setItem(SIGSO_PERF_LLAVE, JSON.stringify(lista));
+  } catch (err) { /* sin storage / cuota llena: se pierde la muestra, no pasa nada */ }
+}
+
+if (typeof window !== 'undefined') {
+  window.SigsoPerf = {
+    dump: function () {
+      try { return JSON.parse(localStorage.getItem(SIGSO_PERF_LLAVE) || '[]'); }
+      catch (err) { return []; }
+    },
+    limpiar: function () {
+      try { localStorage.removeItem(SIGSO_PERF_LLAVE); } catch (err) {}
+    },
+    csv: function () {
+      var filas = window.SigsoPerf.dump();
+      var cab = 'fecha,accion,round_trip_ms,server_ms,io_ms,io_ops,overhead_ms,intento,ok,puente';
+      var cuerpo = filas.map(function (r) {
+        var overhead = (r.rt != null && r.s != null) ? (r.rt - r.s) : '';
+        return [
+          new Date(r.t).toISOString(), r.a, r.rt, (r.s == null ? '' : r.s),
+          (r.io == null ? '' : r.io), (r.ops == null ? '' : r.ops),
+          overhead, r.i, (r.ok ? 1 : 0), (r.br ? 1 : 0)
+        ].join(',');
+      });
+      return [cab].concat(cuerpo).join('\n');
+    },
+    resumen: function () {
+      var filas = window.SigsoPerf.dump();
+      if (!filas.length) { console.info('[SigsoPerf] sin muestras todavia'); return; }
+      var mediana = function (arr) {
+        var xs = arr.filter(function (n) { return typeof n === 'number'; }).sort(function (a, b) { return a - b; });
+        if (!xs.length) return null;
+        var m = Math.floor(xs.length / 2);
+        return xs.length % 2 ? xs[m] : Math.round((xs[m - 1] + xs[m]) / 2);
+      };
+      var porAccion = {};
+      filas.forEach(function (r) {
+        var g = porAccion[r.a] || (porAccion[r.a] = { rt: [], s: [], io: [], over: [], n: 0, fallos: 0 });
+        g.n++;
+        if (!r.ok) g.fallos++;
+        if (typeof r.rt === 'number') g.rt.push(r.rt);
+        if (typeof r.s === 'number') g.s.push(r.s);
+        if (typeof r.io === 'number') g.io.push(r.io);
+        if (typeof r.rt === 'number' && typeof r.s === 'number') g.over.push(r.rt - r.s);
+      });
+      var tabla = Object.keys(porAccion).sort().map(function (a) {
+        var g = porAccion[a];
+        return {
+          accion: a, llamadas: g.n, fallos: g.fallos,
+          'round_trip (med)': mediana(g.rt),
+          'server (med)': mediana(g.s),
+          'io Sheets (med)': mediana(g.io),
+          'overhead=cola+red (med)': mediana(g.over)
+        };
+      });
+      console.info('[SigsoPerf] ' + filas.length + ' muestras · ' +
+        new Date(filas[0].t).toLocaleString() + ' → ' + new Date(filas[filas.length - 1].t).toLocaleString());
+      if (console.table) console.table(tabla); else console.info(JSON.stringify(tabla, null, 2));
+      var todoOver = mediana(filas.map(function (r) {
+        return (typeof r.rt === 'number' && typeof r.s === 'number') ? r.rt - r.s : null;
+      }));
+      var todoIo = mediana(filas.map(function (r) { return r.io; }));
+      console.info('[SigsoPerf] Global: overhead (cola+red) mediana ' + todoOver +
+        ' ms  ·  io Sheets mediana ' + todoIo + ' ms. ' +
+        'Si el overhead domina y sube en horas de mas gente -> es la cola, no la base de datos.');
+    }
+  };
+}
+
 // Techo de espera por intento. Sin esto, un Web App que se cuelga o que
 // quedo con un deploy roto deja el fetch PENDIENTE PARA SIEMPRE, y el modulo
 // gira sin fin sin avisar nada (el sintoma "no cargan los datos"). Apps
@@ -149,21 +255,37 @@ async function llamarApi(url, action, data) {
   }
 
   const medir = medicionTimingActiva_();
+  // La muestra rodante (SigsoPerf) va SIEMPRE: es silenciosa y performance.now
+  // es gratis. `medir` solo controla el console.info ruidoso de siempre.
+  const porPuente = !!(typeof google !== 'undefined' && google.script && google.script.run);
   const maxIntentos = esAccionDeLectura_(action) ? MAX_INTENTOS_LECTURA : 1;
   let ultimoError;
   for (let intento = 1; intento <= maxIntentos; intento++) {
-    const inicio = medir ? performance.now() : 0;
+    const inicio = performance.now();
     try {
       const resultado = await ejecutarLlamada_(url, action, data);
+      const rt = Math.round(performance.now() - inicio);
+      const t = (resultado && typeof resultado === 'object') ? resultado._timing : null;
+      perfRegistrar_({
+        t: Date.now(), a: action, rt: rt,
+        s: t ? t.server_ms : null, io: t ? t.io_ms : null, ops: t ? t.io_ops : null,
+        i: intento, ok: true, br: porPuente
+      });
       if (medir) {
-        const ms = Math.round(performance.now() - inicio);
-        console.info('[SIGSO][timing] ' + action + ' ' + ms + 'ms' + (intento > 1 ? ' (intento ' + intento + ')' : ''));
+        console.info('[SIGSO][timing] ' + action + ' ' + rt + 'ms' +
+          (t ? (' (server ' + t.server_ms + 'ms, io ' + t.io_ms + 'ms/' + t.io_ops + ')') : '') +
+          (intento > 1 ? ' (intento ' + intento + ')' : ''));
       }
       return resultado;
     } catch (err) {
+      const rt = Math.round(performance.now() - inicio);
+      perfRegistrar_({
+        t: Date.now(), a: action, rt: rt,
+        s: null, io: null, ops: null,
+        i: intento, ok: false, br: porPuente
+      });
       if (medir) {
-        const ms = Math.round(performance.now() - inicio);
-        console.info('[SIGSO][timing] ' + action + ' ' + ms + 'ms (fallo, intento ' + intento + ')');
+        console.info('[SIGSO][timing] ' + action + ' ' + rt + 'ms (fallo, intento ' + intento + ')');
       }
       ultimoError = err;
       if (intento < maxIntentos) {

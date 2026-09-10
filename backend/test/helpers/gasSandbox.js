@@ -152,6 +152,9 @@ function loadIntakeProject(options) {
 const BACKOFFICE_FILES_EN_ORDEN = [
   'Config.gs',
   'Constantes.gs',
+  // Medicion de rendimiento (Perf.gs): define perfMedirIO_/perfSnapshot_, que
+  // SheetsRepo y Code.gs usan de forma tolerante. Carga antes que SheetsRepo.
+  'Perf.gs',
   'SheetsRepo.gs',
   'Utils.gs',
   'Cumplimiento.gs',

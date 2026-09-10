@@ -16,6 +16,14 @@
 
 var _spreadsheetMemo_ = null;
 
+// Envoltorio de medicion de I/O. Perf.gs (archivo aparte, OPCIONAL) define
+// perfMedirIO_; si no esta en el proyecto -- p.ej. porque no se creo al pegar
+// el paquete -- esto es un paso directo sin coste. SheetsRepo es el archivo
+// mas critico del backend y no debe caerse por falta de uno de diagnostico.
+function medirIoRepo_(tipo, fn) {
+  return (typeof perfMedirIO_ === 'function') ? perfMedirIO_(tipo, fn) : fn();
+}
+
 // v6.9 (rendimiento): cache de lectura POR EJECUCION. En Apps Script cada
 // getRange().getValues() es un round-trip real (~50-200 ms); el patron
 // "leerFilas_ dentro de un bucle" (que existia en varios modulos) hacia
@@ -85,7 +93,10 @@ function tocarHojaSgc_(nombreHoja) {
 
 function obtenerSpreadsheet_() {
   if (!_spreadsheetMemo_) {
-    _spreadsheetMemo_ = SpreadsheetApp.openById(getConfig_().sheetId);
+    // openById es de las operaciones mas lentas de Apps Script; se mide (Perf.gs).
+    _spreadsheetMemo_ = medirIoRepo_('lectura', function () {
+      return SpreadsheetApp.openById(getConfig_().sheetId);
+    });
   }
   return _spreadsheetMemo_;
 }
@@ -116,7 +127,9 @@ function leerHojaConEncabezados_(nombreHoja) {
     cacheado = (ultimaCol < 1)
       ? { hoja: hoja, encabezados: [], valores: [] }
       : (function () {
-          var valores = hoja.getRange(1, 1, Math.max(ultimaFila, 1), ultimaCol).getValues();
+          var valores = medirIoRepo_('lectura', function () {
+            return hoja.getRange(1, 1, Math.max(ultimaFila, 1), ultimaCol).getValues();
+          });
           return {
             hoja: hoja,
             encabezados: valores[0].map(function (h) { return String(h).trim(); }),
@@ -177,7 +190,7 @@ function agregarFila_(nombreHoja, objetoFila) {
   var fila = columnas.map(function (col) {
     return (col && objetoFila[col] !== undefined) ? objetoFila[col] : '';
   });
-  datos.hoja.appendRow(fila);
+  medirIoRepo_('escritura', function () { datos.hoja.appendRow(fila); });
   fijarCacheHoja_(nombreHoja, datos.hoja, datos.encabezados, datos.valores, [fila]); // v7.4b: sin releer
   tocarHojaSgc_(nombreHoja);
   return objetoFila;
@@ -202,7 +215,9 @@ function agregarFilas_(nombreHoja, objetosFila) {
       return (col && obj[col] !== undefined) ? obj[col] : '';
     });
   });
-  datos.hoja.getRange(datos.hoja.getLastRow() + 1, 1, matriz.length, columnas.length).setValues(matriz);
+  medirIoRepo_('escritura', function () {
+    datos.hoja.getRange(datos.hoja.getLastRow() + 1, 1, matriz.length, columnas.length).setValues(matriz);
+  });
   fijarCacheHoja_(nombreHoja, datos.hoja, datos.encabezados, datos.valores, matriz); // v7.4b: sin releer
   tocarHojaSgc_(nombreHoja);
   return objetosFila;
@@ -218,7 +233,9 @@ function reescribirFila_(datos, indiceFilaValores, cambios) {
   var filaNueva = datos.encabezados.map(function (col, idx) {
     return (col && objetoActualizado[col] !== undefined) ? objetoActualizado[col] : filaActual[idx];
   });
-  datos.hoja.getRange(indiceFilaValores + 1, 1, 1, datos.encabezados.length).setValues([filaNueva]);
+  medirIoRepo_('escritura', function () {
+    datos.hoja.getRange(indiceFilaValores + 1, 1, 1, datos.encabezados.length).setValues([filaNueva]);
+  });
   invalidarCacheHoja_(datos.hoja.getName()); // v6.9
   tocarHojaSgc_(datos.hoja.getName());
   return objetoActualizado;

@@ -804,6 +804,7 @@ function doGet(e) {
 
 function doPost(e) {
   try {
+    perfMarcarInicio_(); // medicion de rendimiento (Perf.gs); primera linea
     // v3.3 P3: el body se parsea ANTES de resolver identidad, porque el
     // token de la plataforma viaja en el body (portal_token). El contrato de
     // transporte no cambia (POST text/plain, sin headers custom, §4.1).
@@ -843,6 +844,7 @@ function mensajeError_(err) {
 // el valor de retorno directamente.
 function ejecutarAccionBackoffice(action, data) {
   try {
+    perfMarcarInicio_(); // Perf.gs -- el otro punto de entrada real
     var resuelto = resolverIdentidadYRol_();
     if (resuelto.error) {
       return resuelto.error;
@@ -2189,6 +2191,14 @@ function parseRequestBody_(e) {
 }
 
 function jsonResponse_(payload) {
+  // Medicion de rendimiento (Perf.gs): se pega el resumen en la respuesta,
+  // pero SOLO si venimos de un punto de entrada real (perfSnapshot_ devuelve
+  // null cuando un test llama a un handler sin pasar por doPost). El frontend
+  // no mira este campo para pintar nada.
+  if (payload && typeof payload === 'object' && typeof perfSnapshot_ === 'function') {
+    var _t = perfSnapshot_();
+    if (_t) payload._timing = _t;
+  }
   return ContentService
     .createTextOutput(JSON.stringify(payload))
     .setMimeType(ContentService.MimeType.JSON);
