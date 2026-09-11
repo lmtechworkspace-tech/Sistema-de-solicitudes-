@@ -42,6 +42,11 @@ window.SIGSO_CONFIG = Object.freeze({
   // arriba, de forma estable (el mismo usuario cae siempre en la misma), asi
   // que N cuentas = N carriles en paralelo. Vacio [] = sin reparto (una sola
   // cuenta, como hasta ahora). Ver documentacion/SIGSO-v16-reparto-carga.md.
-  BACKOFFICE_TOKEN_URLS: [],
+  // cuenta-2: rulaclombardi1@gmail.com · cuenta-3: firentialombardi719@gmail.com
+  // (11-sep-2026, verificadas: ambas responden {"ok":true,...} sin login).
+  BACKOFFICE_TOKEN_URLS: [
+    'https://script.google.com/macros/s/AKfycby-9c_Rgoq1bJUawjqaT918Gr2SqUGDP303yzwmFAclaAbln2JhC8JUq61aSL7Rut6FqQ/exec',
+    'https://script.google.com/macros/s/AKfycbxMNMXu5_DIXheRYRW5YlmnGkqpQBxt40hc0lfh5BNA_PDtWr9XRvoIW08cYiIFdLCofA/exec'
+  ],
   TIMEZONE: 'America/Santiago'
 });

@@ -459,7 +459,17 @@ test('un proyecto activo hace MÁS de 60 días recorta el extremo VIEJO, pero si
   const html = htmlDe_(res);
   assert.match(html, /Ejecución día a día/);
   assert.match(html, new RegExp(cortaDe(diasDesdeHoy(0)).replace('/', '\\/')), 'debe llegar a HOY sin importar el tope');
-  assert.doesNotMatch(html, new RegExp(cortaDe(inicio).replace('/', '\\/')), 'el inicio de hace 200 días queda fuera -- se recorta el extremo viejo, no el reciente');
+  // Acotado a "Ejecución día a día", igual que el test hermano de arriba (el
+  // del compromiso futuro): la Carta Gantt de BARRAS (que va antes, es plan)
+  // muestra a propósito el tramo completo desde el inicio real del proyecto,
+  // sin recortar -- con un proyecto de 200 días, su fila de semanas SIEMPRE
+  // va a tener una columna cuyo lunes cae cerca de `inicio`, y según el día
+  // en que se corra el test puede coincidir exacto con `cortaDe(inicio)`. Eso
+  // no es lo que esta prueba controla; lo que prueba es el recorte de la
+  // sección de HISTORIA, no el rango del plan.
+  var seccionDiaADia = html.slice(html.indexOf('Ejecución día a día'));
+  assert.doesNotMatch(seccionDiaADia, new RegExp(cortaDe(inicio).replace('/', '\\/')),
+    'el inicio de hace 200 días queda fuera de la HISTORIA -- se recorta el extremo viejo, no el reciente');
 });
 
 // --- 10 (B1). "Avance vs esperado" en la banda de indicadores --------------
