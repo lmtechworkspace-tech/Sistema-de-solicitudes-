@@ -33,9 +33,27 @@ const intervaloColaCorreo = setInterval(() => {
 }, INTERVALO_COLA_CORREO_MS);
 intervaloColaCorreo.unref();
 
+// Equivalente de enviarDigestJefaturaTrigger (backend/backoffice/Triggers.gs,
+// diario a las 18:00 America/Santiago). Sin cron en Node: se revisa en el
+// mismo grano de 5 min si la hora local cayo en la ventana [18:00, 18:05) --
+// como el proceso corre con TZ=America/Santiago (ver systemd), getHours()
+// ya da la hora de Chile directo. Llamar de mas dentro de esa ventana no
+// duplica nada: el dedup diario de enviarDigestJefatura (evento con
+// claveDia_) ya lo hace idempotente.
+const intervaloDigestJefatura = setInterval(() => {
+  const ahora = new Date();
+  if (ahora.getHours() === 18 && ahora.getMinutes() < 5) {
+    Notificaciones.enviarDigestJefatura(db).catch((err) => {
+      console.error('error enviando el digest de Jefatura:', err);
+    });
+  }
+}, INTERVALO_COLA_CORREO_MS);
+intervaloDigestJefatura.unref();
+
 // Apagado ordenado cuando systemd manda SIGTERM (en cada despliegue/restart).
 process.on('SIGTERM', () => {
   console.log('SIGTERM recibido, cerrando servidor...');
   clearInterval(intervaloColaCorreo);
+  clearInterval(intervaloDigestJefatura);
   server.close(() => process.exit(0));
 });

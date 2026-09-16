@@ -2,10 +2,10 @@
 
 /**
  * notificaciones.js — puerto de backend/intake/Notificaciones.gs +
- * backend/backoffice/Notificaciones.gs (solo el nucleo de envio real /
- * cola de reintentos / dedup / plantilla HTML branded; el digest de
- * Jefatura y las alertas de patron quedan para cuando se porten los
- * modulos que las disparan).
+ * backend/backoffice/Notificaciones.gs (el nucleo de envio real / cola de
+ * reintentos / dedup / plantilla HTML branded, mas el digest diario de
+ * Jefatura; las alertas de patron y los demas digests -- Actividades,
+ * Proyectos -- quedan para cuando se porten los modulos que los disparan).
  *
  * Envio real via Resend (backend/logica/resend.js), HTTP puro con fetch
  * nativo, sin SDK.
@@ -37,8 +37,14 @@ const { agregarFila_, leerFilas_, actualizarFilaPorId_ } = require('../db/sqlite
 const { COLUMNAS } = require('../db/schema');
 const { EMAIL_DESARROLLO } = require('./constantesSolicitudes');
 const Resend = require('./resend');
+const { claveDia_ } = require('./utils');
+const Jefatura = require('./jefatura');
 
 const VENTANA_DEDUP_MINUTOS = 30;
+// v4.2: "SLA vencido"/digests diarios notifican como mucho 1 vez/dia -- se
+// aproxima con una ventana deslizante de 24h (mas simple que anclar al dia
+// calendario de Chile, y cumple igual la intencion de no saturar de correos).
+const VENTANA_DEDUP_DIARIA_MINUTOS = 24 * 60;
 const MAX_REINTENTOS_CORREO = 3;
 const REMITENTE_POR_DEFECTO = 'SIGSO — Control y Gestión Empresarial <notificaciones@ctrly.cl>';
 
@@ -48,7 +54,10 @@ function remitente_() {
 
 // RN-026: solo cuenta como "ya notificado" lo que de verdad se envio
 // (ENVIADO) -- una fila PENDIENTE_REINTENTO no debe bloquear el reintento.
-function yaNotificadoRecientemente_(db, solicitudId, evento, destinatario) {
+// ventanaMinutos es inyectable (igual que en backend/backoffice/Notificaciones.gs):
+// los digests diarios usan una ventana de 24h en vez de los 30 min por defecto.
+function yaNotificadoRecientemente_(db, solicitudId, evento, destinatario, ventanaMinutos) {
+  const ventana = ventanaMinutos || VENTANA_DEDUP_MINUTOS;
   const ahora = Date.now();
   return leerFilas_(db, 'LOG_NOTIFICACIONES', COLUMNAS.LOG_NOTIFICACIONES).some((fila) => {
     if (
@@ -58,7 +67,7 @@ function yaNotificadoRecientemente_(db, solicitudId, evento, destinatario) {
       return false;
     }
     const minutosTranscurridos = (ahora - new Date(fila.timestamp).getTime()) / 60000;
-    return minutosTranscurridos < VENTANA_DEDUP_MINUTOS;
+    return minutosTranscurridos < ventana;
   });
 }
 
@@ -142,9 +151,9 @@ function registrar_(db, { solicitudId, destinatario, evento, resultado, reintent
 // intenta un envio real de inmediato; si Resend responde bien, ENVIADO; si
 // falla (cuota, dominio, o la API key todavia no esta configurada),
 // PENDIENTE_REINTENTO, para que procesarColaCorreo lo reintente despues.
-async function enviarCorreo_(db, { solicitudId, destinatario, evento, asunto, cuerpo, cc }) {
+async function enviarCorreo_(db, { solicitudId, destinatario, evento, asunto, cuerpo, cc, ventanaMinutos }) {
   if (!destinatario) return { enviado: false, motivo: 'sin_destinatario' };
-  if (yaNotificadoRecientemente_(db, solicitudId, evento, destinatario)) {
+  if (yaNotificadoRecientemente_(db, solicitudId, evento, destinatario, ventanaMinutos)) {
     return { enviado: false, motivo: 'deduplicado' };
   }
   try {
@@ -359,6 +368,61 @@ async function notificarRespuestaSolicitante(db, solicitud, subsolicitudId, text
   return resultados;
 }
 
+// v4.2 (§4): formatea la lista compacta de items (hoy.nuevas/cerradas/...
+// de Jefatura.getPanel) para el cuerpo de texto plano del digest.
+function listarItems_(items) {
+  return items.map((i) => '- ' + i.solicitud_id + '-' + i.numero_item + ' — ' + i.titulo +
+    ' (' + i.solicitante_nombre + ', ' + i.semaforo + ')').join('\n');
+}
+
+// v4.2 (§4, "al finalizar el dia poder ver que ocurrio en su departamento"):
+// un correo por jefe activo, con el mismo resumen "hoy" que ya ve en su
+// panel (Jefatura.getPanel, ya portado). No manda nada si el jefe no tiene
+// equipo o si hoy no paso nada de relevancia -- un digest siempre vacio
+// entrena a la gente a ignorarlo. Sin Triggers.gs en Node, quien la dispara
+// es server/index.js (una vez al dia, ~18:00 America/Santiago); el dedup
+// diario (VENTANA_DEDUP_DIARIA_MINUTOS + claveDia_ en el evento) hace que
+// llamarla de mas no reenvie nada.
+async function enviarDigestJefatura(db) {
+  const jefes = {};
+  leerFilas_(db, 'JEFATURAS', COLUMNAS.JEFATURAS).forEach((j) => {
+    const activo = j.activo === true || j.activo === 'TRUE' || j.activo === 1;
+    if (activo) jefes[j.jefe_email] = true;
+  });
+
+  const resultados = [];
+  for (const jefeEmail of Object.keys(jefes)) {
+    const panel = Jefatura.getPanel(db, {}, { email: jefeEmail, rol: 'JEFATURA' });
+    const r = panel.hoy.resumen;
+    const huboAlgo = r.nuevas > 0 || r.avanzaron > 0 || r.cerradas > 0 || r.en_riesgo > 0 || r.requieren_accion > 0;
+    if (!huboAlgo) {
+      resultados.push({ jefe: jefeEmail, enviado: false, motivo: 'sin_novedades' });
+      continue;
+    }
+    const asunto = 'SIGSO — Hoy en tu departamento (' + r.nuevas + ' nuevas, ' + r.cerradas + ' cerradas)';
+    const cuerpo =
+      'Resumen del día en tu departamento:\n\n' +
+      '- Nuevas solicitudes: ' + r.nuevas + '\n' +
+      '- Avanzaron de estado: ' + r.avanzaron + '\n' +
+      '- Se cerraron: ' + r.cerradas + '\n' +
+      '- En riesgo o vencidas: ' + r.en_riesgo + '\n' +
+      '- Esperan validación de tu equipo: ' + r.requieren_accion + '\n\n' +
+      (panel.hoy.nuevas.length ? 'NUEVAS\n' + listarItems_(panel.hoy.nuevas) + '\n\n' : '') +
+      (panel.hoy.cerradas.length ? 'CERRADAS HOY\n' + listarItems_(panel.hoy.cerradas) + '\n\n' : '') +
+      (panel.hoy.en_riesgo_o_vencidas.length ? 'EN RIESGO O VENCIDAS\n' + listarItems_(panel.hoy.en_riesgo_o_vencidas) + '\n\n' : '') +
+      (panel.hoy.requieren_accion.length ? 'ESPERANDO VALIDACIÓN DE TU EQUIPO\n' + listarItems_(panel.hoy.requieren_accion) + '\n\n' : '') +
+      'Puedes ver el detalle completo en tu Panel de Jefatura.' +
+      pieCorreo_();
+    const claveEvento = 'DIGEST_JEFATURA:' + claveDia_(new Date(), 'America/Santiago');
+    const resultado = await enviarCorreo_(db, {
+      solicitudId: 'DIGEST_JEFATURA', destinatario: jefeEmail, evento: claveEvento, asunto, cuerpo,
+      ventanaMinutos: VENTANA_DEDUP_DIARIA_MINUTOS
+    });
+    resultados.push(Object.assign({ jefe: jefeEmail }, resultado));
+  }
+  return resultados;
+}
+
 // A-12: reintenta filas PENDIENTE_REINTENTO (fallo transitorio de Resend, o
 // RESEND_API_KEY todavia sin configurar), hasta MAX_REINTENTOS_CORREO veces.
 async function procesarColaCorreo(db) {
@@ -406,7 +470,7 @@ function listarLogs(db, data, contexto) {
 module.exports = {
   enviarAcuseRecibo, enviarAvisoDesarrollo, avisarAtencionDirectaRegistrada,
   notificarCambioEstado, avisarCompromisoFecha, notificarDerivacion, enviarCodigoAcceso,
-  notificarValidacionSolicitante, notificarRespuestaSolicitante,
+  notificarValidacionSolicitante, notificarRespuestaSolicitante, enviarDigestJefatura,
   procesarColaCorreo, listarLogs,
   MAX_REINTENTOS_CORREO
 };

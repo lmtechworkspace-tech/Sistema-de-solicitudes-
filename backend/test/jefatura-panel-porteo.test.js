@@ -2,10 +2,10 @@
 
 /**
  * Prueba de portabilidad: los escenarios de Jefatura.getPanel de backend/
- * test/jefatura.test.js, corridos contra jefatura.js. No se porta
- * Notificaciones.enviarDigestJefatura (correo diario, depende de Resend, no
- * conectado) ni el test de Dashboard.getData con rol JEFATURA (ya cubierto
- * en dashboard-porteo.test.js).
+ * test/jefatura.test.js, corridos contra jefatura.js. No se porta el test de
+ * Dashboard.getData con rol JEFATURA (ya cubierto en dashboard-porteo.test.js).
+ * Notificaciones.enviarDigestJefatura se porta aparte, en
+ * notificaciones-digest-jefatura-porteo.test.js.
  */
 
 const test = require('node:test');
