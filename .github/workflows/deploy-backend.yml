@@ -11,6 +11,7 @@ on:
     paths:
       - "backend/server/**"
       - "backend/db/**"
+      - "backend/logica/**"
       - "package.json"
       - ".github/workflows/deploy-backend.yml"
   workflow_dispatch:
@@ -55,6 +56,8 @@ jobs:
             backend/server/ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/backend/server/"
           rsync -az --delete -e "ssh -i ~/.ssh/deploy" \
             backend/db/ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/backend/db/"
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy" \
+            backend/logica/ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/backend/logica/"
           scp -i ~/.ssh/deploy package.json \
             "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/package.json"
 
