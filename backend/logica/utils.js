@@ -153,6 +153,7 @@ function horasHabilesEntre(inicio, fin, opciones) {
 
 module.exports = {
   horasHabilesEntre,
+  claveDia_,
   // Expuestos para los tests de memoizacion (mismo motivo que en el .gs).
   formateadorOffset_, formateadorDia_, offsetMinutos_, instanteLocal_
 };

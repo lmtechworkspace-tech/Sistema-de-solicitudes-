@@ -30,6 +30,7 @@ const {
 const Notificaciones = require('./notificaciones');
 const Cumplimiento = require('./cumplimiento');
 const Jefatura = require('./jefatura');
+const { obtenerResponsablesActivos_ } = require('./dashboard');
 
 function normalizarEmail_(email) {
   return String(email || '').trim().toLowerCase();
@@ -428,19 +429,6 @@ function editarContenidoSubsolicitud(db, data, contexto) {
   } catch (errTraza_) { /* la correccion ya quedo guardada */ }
 
   return { ok: true, cambios: cambios.length };
-}
-
-// Personas que pueden tener una bandeja propia (Gestor/Analista o Gestor
-// tecnico, activos) -- destino posible del selector "Derivar". Portado
-// desde Dashboard.gs (obtenerResponsablesActivos_, no portado entero
-// todavia) porque getDetalle es el unico que lo necesita por ahora.
-function obtenerResponsablesActivos_(db) {
-  let filas;
-  try { filas = leerFilas_(db, 'USUARIOS', COLUMNAS.USUARIOS); } catch (err) { return []; }
-  return filas.filter((u) => {
-    const activo = u.activo === true || u.activo === 'TRUE' || u.activo === 1;
-    return activo && (u.rol === 'DEV' || u.rol === 'ANA');
-  });
 }
 
 // v6.0 (fix de horas) en el .gs original: Sheets coacciona una celda de
