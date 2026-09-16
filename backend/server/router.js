@@ -30,6 +30,7 @@ const CuentasPortal = require('../logica/cuentasPortal');
 const Sesiones = require('../logica/sesiones');
 const Solicitudes = require('../logica/solicitudes');
 const SolicitudesBO = require('../logica/solicitudesBackoffice');
+const Jefatura = require('../logica/jefatura');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -58,7 +59,12 @@ const ACCIONES = {
   actualizarEstado: (db, data, contexto) => SolicitudesBO.actualizarEstado(db, data, contexto),
   actualizarPrioridad: (db, data, contexto) => SolicitudesBO.actualizarPrioridad(db, data, contexto),
   comprometerFecha: (db, data, contexto) => SolicitudesBO.comprometerFecha(db, data, contexto),
-  derivarSolicitud: (db, data, contexto) => SolicitudesBO.derivarSolicitud(db, data, contexto)
+  derivarSolicitud: (db, data, contexto) => SolicitudesBO.derivarSolicitud(db, data, contexto),
+  editarContenidoSubsolicitud: (db, data, contexto) => SolicitudesBO.editarContenidoSubsolicitud(db, data, contexto),
+  getSolicitudDetalle: (db, data, contexto) => SolicitudesBO.getDetalle(db, data.solicitud_id, contexto),
+
+  listarJefaturas: (db, data, contexto) => Jefatura.listar(db, data, contexto),
+  gestionarJefatura: (db, data, contexto) => Jefatura.gestionar(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

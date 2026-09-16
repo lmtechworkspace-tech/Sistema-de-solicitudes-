@@ -4,15 +4,16 @@
  * solicitudesBackoffice.js — puerto de backend/backoffice/Solicitudes.gs
  * (maquina de estados y prioridad, §8/§7.2): actualizarEstado,
  * actualizarPrioridad (+asignarResponsables_), comprometerFecha,
- * derivarSolicitud (+planificarDerivacion_/aplicarDerivacion_).
+ * derivarSolicitud (+planificarDerivacion_/aplicarDerivacion_),
+ * editarContenidoSubsolicitud, getDetalle.
  *
- * NO incluidos en este porteo (documentado, no fingido):
- *  - editarContenidoSubsolicitud: queda para un proximo turno.
- *  - getDetalle: depende de Sla.gs, Cumplimiento.gs y Jefatura.gs (ninguno
- *    portado todavia) -- es la vista de lectura completa, un modulo aparte.
+ * NO incluido en este porteo (documentado, no fingido):
  *  - El correo HTML branded + adjunto PDF de la Orden de Trabajo en
  *    derivarSolicitud: depende de Documentos.gs (generacion de PDF), no
  *    portado. notificarDerivacion aqui es texto simple.
+ *  - getDetalle no incluye el ambito de Jefatura para el panel completo
+ *    (eso es Jefatura.getPanel, tampoco portado) -- solo el GUARDIA que
+ *    decide si un JEFATURA puede abrir ESTA solicitud puntual.
  *
  * `contexto` = { email, rol, rol_origen } -- rol_origen (agregado al portar
  * Auth, ver server/router.js) es lo que permite fueraDeSuPropioTrabajo_
@@ -27,6 +28,8 @@ const {
   ESTADOS, ESTADOS_CERRADOS, ORDEN_ESTADOS, ESTADOS_EXCLUIDOS_DERIVACION, ORDEN_PRIORIDAD
 } = require('./constantesSolicitudes');
 const Notificaciones = require('./notificaciones');
+const Cumplimiento = require('./cumplimiento');
+const Jefatura = require('./jefatura');
 
 function normalizarEmail_(email) {
   return String(email || '').trim().toLowerCase();
@@ -386,7 +389,171 @@ function derivarSolicitud(db, data, contexto) {
   };
 }
 
+function editarContenidoSubsolicitud(db, data, contexto) {
+  const rol = contexto ? contexto.rol : '';
+  if (rol === 'GERENCIA' || rol === 'JEFATURA') {
+    return errorForbidden('El rol ' + rol + ' es de solo lectura: no puede editar el contenido.');
+  }
+  if (!data || !data.subsolicitud_id) return errorValidacion('subsolicitud_id', 'Falta la subsolicitud a editar.');
+  const sub = buscarSubsolicitud_(db, data.subsolicitud_id);
+  if (!sub) return errorValidacion('subsolicitud_id', 'Subsolicitud no encontrada: ' + data.subsolicitud_id);
+
+  const veto = fueraDeSuPropioTrabajo_(contexto, sub, 'editar el contenido');
+  if (veto) return veto;
+
+  const titulo = String(data.titulo || '').trim();
+  const descripcion = String(data.descripcion || '').trim();
+  if (titulo.length < 3) return errorValidacion('titulo', 'El titulo es muy corto.');
+  if (descripcion.length < 5) return errorValidacion('descripcion', 'La descripcion es muy corta.');
+  const contextoTxt = String(data.contexto || '').trim();
+  const resultado = String(data.resultado_esperado || '').trim();
+
+  const cambios = [];
+  if (titulo !== String(sub.titulo || '')) cambios.push('Título: "' + String(sub.titulo || '') + '" → "' + titulo + '"');
+  if (descripcion !== String(sub.descripcion || '')) cambios.push('Descripción actualizada');
+  if (contextoTxt !== String(sub.contexto || '')) cambios.push('Contexto actualizado');
+  if (resultado !== String(sub.resultado_esperado || '')) cambios.push('Resultado esperado actualizado');
+  if (!cambios.length) return { ok: true, cambios: 0 };
+
+  actualizarFilaPorId_(db, 'SUBSOLICITUDES', 'subsolicitud_id', data.subsolicitud_id, {
+    titulo: titulo, descripcion: descripcion, contexto: contextoTxt, resultado_esperado: resultado
+  });
+
+  try {
+    agregarFila_(db, 'COMENTARIOS', {
+      comentario_id: crypto.randomUUID(), solicitud_id: sub.solicitud_id, subsolicitud_id: data.subsolicitud_id,
+      usuario: (contexto && contexto.email) || '', texto: 'Corrigió el contenido del ítem. ' + cambios.join('. ') + '.',
+      es_interno: true, timestamp: new Date().toISOString()
+    });
+  } catch (errTraza_) { /* la correccion ya quedo guardada */ }
+
+  return { ok: true, cambios: cambios.length };
+}
+
+// Personas que pueden tener una bandeja propia (Gestor/Analista o Gestor
+// tecnico, activos) -- destino posible del selector "Derivar". Portado
+// desde Dashboard.gs (obtenerResponsablesActivos_, no portado entero
+// todavia) porque getDetalle es el unico que lo necesita por ahora.
+function obtenerResponsablesActivos_(db) {
+  let filas;
+  try { filas = leerFilas_(db, 'USUARIOS', COLUMNAS.USUARIOS); } catch (err) { return []; }
+  return filas.filter((u) => {
+    const activo = u.activo === true || u.activo === 'TRUE' || u.activo === 1;
+    return activo && (u.rol === 'DEV' || u.rol === 'ANA');
+  });
+}
+
+// v6.0 (fix de horas) en el .gs original: Sheets coacciona una celda de
+// fecha-hora a Date al leerla con getValues(), y serializarla a JSON sacaba
+// la hora en UTC (corrida). fechaHoraCelda_ recuperaba el "AAAA-MM-DDTHH:mm"
+// LOCAL para ese caso.
+//
+// En este puerto el bug de origen NO EXISTE: sqliteRepo_ nunca coacciona
+// nada -- guarda y devuelve exactamente el string que se le paso. Si algo
+// escribe un objeto Date real (no deberia pasar: todo el codigo de este
+// proyecto siempre pasa ISO strings), ya sale mal ANTES de llegar aqui --
+// agregarFila_/actualizarFilaPorId_ lo serializan con JSON.stringify(Date),
+// que usa toISOString() (UTC), en el momento de ESCRIBIR, no de leer. Esta
+// funcion se mantiene solo por fidelidad con el .gs y como defensa barata
+// si algun dia llega un string ya en otro formato; no repara el caso Date
+// (ese hay que evitarlo en el origen: no pasar objetos Date a agregarFila_).
+function fechaHoraCelda_(valor) {
+  if (valor === null || valor === undefined || valor === '') return '';
+  if (Object.prototype.toString.call(valor) === '[object Date]') {
+    if (isNaN(valor.getTime())) return '';
+    const d2 = (n) => (n < 10 ? '0' + n : '' + n);
+    return valor.getFullYear() + '-' + d2(valor.getMonth() + 1) + '-' + d2(valor.getDate()) +
+      'T' + d2(valor.getHours()) + ':' + d2(valor.getMinutes());
+  }
+  return String(valor);
+}
+
+/**
+ * Detalle completo de una solicitud (RF-018). El JEFATURA solo puede abrir
+ * el detalle de una solicitud de SU equipo (v4.2) -- sin este guardia,
+ * pediria cualquier solicitud_id y la veria igual.
+ */
+function getDetalle(db, solicitudId, contexto) {
+  if (!solicitudId) return errorValidacion('solicitud_id', 'Falta indicar el numero de solicitud.');
+  const solicitud = buscarSolicitudPorId_(db, solicitudId);
+  if (!solicitud) return errorValidacion('solicitud_id', 'No existe una solicitud con ese numero.');
+
+  if (contexto && contexto.rol === 'JEFATURA') {
+    const equipoJefe = Jefatura.obtenerEquipoJefe_(db, contexto.email);
+    const equipoJefeSet = {};
+    equipoJefe.forEach((email) => { equipoJefeSet[email] = true; });
+    const subsolicitudesParaGuardia = obtenerSubsolicitudesDeSolicitud_(db, solicitudId);
+    if (!Jefatura.esDelEquipoJefaturaSolicitud_(solicitud, subsolicitudesParaGuardia, equipoJefeSet)) {
+      return errorForbidden('Esa solicitud no pertenece a tu equipo.');
+    }
+  }
+
+  // El semaforo de cumplimiento (v2.1 §6) se calcula aqui, no se guarda.
+  let feriadosDetalle = [];
+  try { feriadosDetalle = Cumplimiento.obtenerFeriados(db); } catch (err) { /* sin CONFIG_FERIADOS se mide sin excluir feriados */ }
+
+  const subsolicitudes = obtenerSubsolicitudesDeSolicitud_(db, solicitudId).map((sub) => {
+    const medicionSla = Cumplimiento.medir(sub, { feriados: feriadosDetalle });
+    const copia = Object.assign({}, sub, {
+      cumplimiento: Cumplimiento.clasificar(sub),
+      situacion_sla: medicionSla ? medicionSla.situacion : null,
+      sla_restante_horas: medicionSla ? Math.round(medicionSla.restantes_horas * 10) / 10 : null
+    });
+    copia.fecha_comprometida = fechaHoraCelda_(sub.fecha_comprometida);
+    copia.fecha_propuesta = fechaHoraCelda_(sub.fecha_propuesta);
+    return copia;
+  });
+
+  // Fase 10.1: cualquier estado es un destino valido -- el selector ofrece
+  // los 11 estados menos el actual, marcando cuales piden comentario.
+  const rolActual = contexto ? contexto.rol : '';
+  const esSoloLectura = rolActual === 'GERENCIA' || rolActual === 'JEFATURA';
+  const transicionesPorSubsolicitud = {};
+  subsolicitudes.forEach((sub) => {
+    transicionesPorSubsolicitud[sub.subsolicitud_id] = esSoloLectura ? [] : Object.keys(ESTADOS)
+      // RN-201: "Cerrada" no se ofrece al gestor salvo consulta tecnica.
+      .filter((estado) => {
+        if (estado === sub.estado) return false;
+        if (estado === ESTADOS.S09 && !esConsultaTecnica_(sub)) return false;
+        return true;
+      })
+      .map((estado) => ({ estado: estado, comentario_obligatorio: comentarioObligatorioParaCambio_(sub.estado, estado) }));
+  });
+
+  const historialEstados = leerFilas_(db, 'HISTORIAL_ESTADOS', COLUMNAS.HISTORIAL_ESTADOS)
+    .filter((h) => h.solicitud_id === solicitudId)
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const historialPrioridad = leerFilas_(db, 'HISTORIAL_PRIORIDAD', COLUMNAS.HISTORIAL_PRIORIDAD)
+    .filter((h) => h.solicitud_id === solicitudId)
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const historialCompromiso = leerFilas_(db, 'HISTORIAL_COMPROMISO', COLUMNAS.HISTORIAL_COMPROMISO)
+    .filter((h) => h.solicitud_id === solicitudId)
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  let historialAsignacion = [];
+  try {
+    historialAsignacion = leerFilas_(db, 'HISTORIAL_ASIGNACION', COLUMNAS.HISTORIAL_ASIGNACION)
+      .filter((h) => h.solicitud_id === solicitudId)
+      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  } catch (err) { historialAsignacion = []; }
+  const comentarios = leerFilas_(db, 'COMENTARIOS', COLUMNAS.COMENTARIOS)
+    .filter((c) => c.solicitud_id === solicitudId)
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const archivos = leerFilas_(db, 'ARCHIVOS', COLUMNAS.ARCHIVOS)
+    .filter((a) => a.solicitud_id === solicitudId)
+    .sort((a, b) => new Date(a.fecha_subida) - new Date(b.fecha_subida));
+
+  return {
+    solicitud: solicitud, subsolicitudes: subsolicitudes, historial_estados: historialEstados,
+    historial_prioridad: historialPrioridad, historial_compromiso: historialCompromiso,
+    historial_asignacion: historialAsignacion, comentarios: comentarios, archivos: archivos,
+    rol_actual: rolActual,
+    responsables: esSoloLectura ? [] : obtenerResponsablesActivos_(db),
+    transiciones_por_subsolicitud: transicionesPorSubsolicitud
+  };
+}
+
 module.exports = {
   actualizarEstado, actualizarPrioridad, comprometerFecha, derivarSolicitud,
+  editarContenidoSubsolicitud, getDetalle,
   recalcularEstadoDerivado_, calcularEstadoDerivado_
 };

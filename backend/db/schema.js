@@ -82,7 +82,17 @@ const COLUMNAS = {
     'historial_id', 'subsolicitud_id', 'solicitud_id',
     'responsable_anterior', 'responsable_nuevo', 'motivo', 'usuario', 'timestamp'
   ],
-  CONFIG_FERIADOS: ['fecha', 'nombre', 'anio']
+  CONFIG_FERIADOS: ['fecha', 'nombre', 'anio'],
+  ARCHIVOS: [
+    'archivo_id', 'solicitud_id', 'subsolicitud_id',
+    'nombre_original', 'url', 'tipo_mime', 'tamano_bytes', 'fecha_subida'
+  ],
+  USUARIOS: [
+    'usuario_id', 'nombre', 'email', 'empresa_id', 'rol',
+    'activo', 'ultimo_acceso', 'creado_por'
+  ],
+  JEFATURAS: ['jefatura_id', 'jefe_email', 'subordinado_email', 'activo'],
+  COMENTARIOS: ['comentario_id', 'solicitud_id', 'subsolicitud_id', 'usuario', 'texto', 'es_interno', 'timestamp']
 };
 
 function asegurarEsquema(db) {
