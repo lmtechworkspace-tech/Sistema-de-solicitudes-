@@ -68,6 +68,19 @@ const COLUMNAS = {
   LOG_NOTIFICACIONES: [
     'log_id', 'timestamp', 'solicitud_id', 'canal',
     'destinatario', 'evento', 'resultado', 'reintentos', 'asunto', 'cuerpo'
+  ],
+  // Backoffice de Solicitudes (actualizarPrioridad/comprometerFecha/derivarSolicitud).
+  HISTORIAL_PRIORIDAD: [
+    'historial_id', 'subsolicitud_id', 'solicitud_id',
+    'prioridad_anterior', 'prioridad_nueva', 'justificacion', 'usuario', 'timestamp'
+  ],
+  HISTORIAL_COMPROMISO: [
+    'historial_id', 'subsolicitud_id', 'solicitud_id',
+    'fecha_anterior', 'fecha_nueva', 'motivo', 'usuario', 'timestamp'
+  ],
+  HISTORIAL_ASIGNACION: [
+    'historial_id', 'subsolicitud_id', 'solicitud_id',
+    'responsable_anterior', 'responsable_nuevo', 'motivo', 'usuario', 'timestamp'
   ]
 };
 

@@ -20,7 +20,8 @@
  */
 
 const crypto = require('node:crypto');
-const { agregarFila_ } = require('../db/sqliteRepo');
+const { agregarFila_, leerFilas_ } = require('../db/sqliteRepo');
+const { COLUMNAS } = require('../db/schema');
 const { EMAIL_DESARROLLO } = require('./constantesSolicitudes');
 
 function registrar(db, { solicitudId, destinatario, evento, asunto, cuerpo }) {
@@ -98,4 +99,54 @@ function avisarAtencionDirectaRegistrada(db, solicitud, atencion, destinatario) 
   return registrar(db, { solicitudId: solicitud.solicitud_id, destinatario: email, evento: 'ATENCION_DIRECTA', asunto, cuerpo });
 }
 
-module.exports = { enviarAcuseRecibo, enviarAvisoDesarrollo, avisarAtencionDirectaRegistrada };
+// --- Backoffice (backend/backoffice/Notificaciones.gs) --------------------
+// Version simplificada a proposito: el .gs compone HTML branded + adjunta
+// la Orden de Trabajo en PDF (derivarSolicitud) -- ninguna de las dos cosas
+// esta portada todavia (generacion de PDF es su propio modulo, Documentos.gs,
+// no tocado). Aqui se deja la MISMA cola/contrato que enviarAcuseRecibo
+// (para que Resend, cuando se porte, procese todo desde un solo lugar), con
+// texto simple en vez del HTML branded.
+
+// Mismo signature que el .gs: resuelve la solicitud (y su solicitante_email)
+// por su cuenta, el llamador (actualizarEstado) no necesita saber a quien.
+function notificarCambioEstado(db, solicitudId, subsolicitudId, estadoAnterior, estadoNuevo) {
+  const solicitud = leerFilas_(db, 'SOLICITUDES', COLUMNAS.SOLICITUDES).find((s) => s.solicitud_id === solicitudId);
+  if (!solicitud) return { enviado: false, motivo: 'solicitud_no_encontrada' };
+  if (!solicitud.solicitante_email) return { enviado: false, motivo: 'sin_destinatario' };
+  const asunto = 'SIGSO — Actualización de su solicitud ' + solicitudId;
+  const cuerpo =
+    'Estimado/a ' + (solicitud.solicitante_nombre || '') + ':\n\n' +
+    'Le informamos que su solicitud ha registrado un cambio de estado en el sistema.\n\n' +
+    'DETALLE\n- N° de solicitud: ' + solicitudId + '\n- Estado anterior: ' + estadoAnterior +
+    '\n- Estado nuevo: ' + estadoNuevo + '\n\n' +
+    'Puede revisar el detalle completo en la página de Consultar Estado del sistema.';
+  return registrar(db, { solicitudId, destinatario: solicitud.solicitante_email, evento: 'CAMBIO_ESTADO', asunto, cuerpo });
+}
+
+function avisarCompromisoFecha(db, solicitud, subsolicitud, fechaComprometida) {
+  if (!solicitud.solicitante_email) return { enviado: false, motivo: 'sin_destinatario' };
+  const asunto = 'SIGSO — Fecha comprometida para su solicitud ' + solicitud.solicitud_id;
+  const cuerpo =
+    'Estimado/a ' + (solicitud.solicitante_nombre || '') + ':\n\n' +
+    'Le informamos que el equipo responsable ha comprometido una fecha de entrega para el siguiente ítem de su solicitud:\n\n' +
+    'DETALLE\n- Ítem: ' + subsolicitud.subsolicitud_id + ' — ' + subsolicitud.titulo +
+    '\n- Solicitud: ' + solicitud.solicitud_id +
+    '\n- Fecha comprometida de entrega: ' + String(fechaComprometida).replace('T', ' ') + '\n\n' +
+    'Le avisaremos cuando el trabajo esté terminado para su validación.';
+  return registrar(db, { solicitudId: solicitud.solicitud_id, destinatario: solicitud.solicitante_email, evento: 'COMPROMISO_FECHA', asunto, cuerpo });
+}
+
+// derivadas: array de { solicitud_id, ... } ya escritas (aplicarDerivacion_).
+// Un solo correo agrupado al nuevo responsable, no uno por solicitud.
+function notificarDerivacion(db, derivadas, responsableNuevo, motivo, usuario) {
+  if (!responsableNuevo || !derivadas.length) return { enviado: false, motivo: 'sin_destinatario' };
+  const ids = derivadas.map((d) => d.solicitud_id);
+  const asunto = 'SIGSO - Se ha derivado trabajo a tu bandeja (' + ids.length + (ids.length === 1 ? ' solicitud' : ' solicitudes') + ')';
+  const cuerpo = 'Se ha derivado a tu bandeja: ' + ids.join(', ') + '.\nMotivo: ' + motivo + '\nDerivado por: ' + usuario;
+  return registrar(db, { solicitudId: ids[0], destinatario: responsableNuevo, evento: 'DERIVACION', asunto, cuerpo });
+}
+
+module.exports = {
+  enviarAcuseRecibo, enviarAvisoDesarrollo, avisarAtencionDirectaRegistrada,
+  notificarCambioEstado, avisarCompromisoFecha, notificarDerivacion
+};
