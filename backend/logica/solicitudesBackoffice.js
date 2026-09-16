@@ -543,5 +543,6 @@ function getDetalle(db, solicitudId, contexto) {
 module.exports = {
   actualizarEstado, actualizarPrioridad, comprometerFecha, derivarSolicitud,
   editarContenidoSubsolicitud, getDetalle,
-  recalcularEstadoDerivado_, calcularEstadoDerivado_
+  recalcularEstadoDerivado_, calcularEstadoDerivado_,
+  buscarSolicitudPorId_, buscarSubsolicitud_, fechaHoraCelda_
 };

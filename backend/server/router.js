@@ -30,6 +30,7 @@ const CuentasPortal = require('../logica/cuentasPortal');
 const Sesiones = require('../logica/sesiones');
 const Solicitudes = require('../logica/solicitudes');
 const SolicitudesBO = require('../logica/solicitudesBackoffice');
+const SolicitudesPublico = require('../logica/solicitudesPublico');
 const Jefatura = require('../logica/jefatura');
 const Dashboard = require('../logica/dashboard');
 const Gerencia = require('../logica/gerencia');
@@ -43,7 +44,10 @@ const Notificaciones = require('../logica/notificaciones');
 // es el formulario de ingreso (backend/intake), que cualquier persona sin
 // cuenta puede enviar -- igual que en Apps Script, donde Intake es un
 // proyecto separado sin gate de identidad.
-const ACCIONES_PUBLICAS = new Set(['portalLogin', 'portalLogout', 'portalSesion', 'portalCambiarPassword', 'crearSolicitud']);
+const ACCIONES_PUBLICAS = new Set([
+  'portalLogin', 'portalLogout', 'portalSesion', 'portalCambiarPassword', 'crearSolicitud',
+  'consultarEstado', 'solicitarCodigoAcceso', 'misSolicitudes'
+]);
 
 const ACCIONES = {
   portalLogin: (db, data) => Portal.login(db, data),
@@ -58,6 +62,10 @@ const ACCIONES = {
   listarCatalogo: (db, data, contexto) => Catalogos.listar(db, data, contexto),
 
   crearSolicitud: (db, data) => Solicitudes.crearSolicitud(db, data),
+
+  consultarEstado: (db, data) => SolicitudesPublico.estadoPublico(db, data.solicitud_id, data.email),
+  solicitarCodigoAcceso: (db, data) => SolicitudesPublico.solicitarCodigoAcceso(db, data),
+  misSolicitudes: (db, data) => SolicitudesPublico.misSolicitudes(db, data),
 
   actualizarEstado: (db, data, contexto) => SolicitudesBO.actualizarEstado(db, data, contexto),
   actualizarPrioridad: (db, data, contexto) => SolicitudesBO.actualizarPrioridad(db, data, contexto),

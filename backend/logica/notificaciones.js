@@ -284,6 +284,23 @@ async function notificarDerivacion(db, derivadas, responsableNuevo, motivo, usua
   return enviarCorreo_(db, { solicitudId: ids[0], destinatario: responsableNuevo, evento: 'DERIVACION', asunto, cuerpo });
 }
 
+// v3.0 (Fase 3, "Mis solicitudes", §4): codigo de un solo uso para ver la
+// lista de solicitudes propias. El evento incluye el codigo (no solo el
+// correo) para que dos pedidos seguidos del mismo correo no deduplique el
+// segundo -- cada codigo es distinto, cada uno debe llegar.
+async function enviarCodigoAcceso(db, email, codigo) {
+  const asunto = 'SIGSO — Código de acceso a Mis solicitudes: ' + codigo;
+  const cuerpo =
+    'Estimado/a:\n\n' +
+    'Ha solicitado acceder a la vista "Mis solicitudes" del sistema SIGSO. ' +
+    'Su código de verificación es:\n\n' +
+    '    ' + codigo + '\n\n' +
+    'El código es válido por 10 minutos y de un solo uso. Si usted no lo ' +
+    'solicitó, puede ignorar este correo con tranquilidad.' +
+    pieCorreo_();
+  return enviarCorreo_(db, { solicitudId: email, destinatario: email, evento: 'CODIGO_ACCESO:' + codigo, asunto, cuerpo });
+}
+
 // A-12: reintenta filas PENDIENTE_REINTENTO (fallo transitorio de Resend, o
 // RESEND_API_KEY todavia sin configurar), hasta MAX_REINTENTOS_CORREO veces.
 async function procesarColaCorreo(db) {
@@ -330,7 +347,7 @@ function listarLogs(db, data, contexto) {
 
 module.exports = {
   enviarAcuseRecibo, enviarAvisoDesarrollo, avisarAtencionDirectaRegistrada,
-  notificarCambioEstado, avisarCompromisoFecha, notificarDerivacion,
+  notificarCambioEstado, avisarCompromisoFecha, notificarDerivacion, enviarCodigoAcceso,
   procesarColaCorreo, listarLogs,
   MAX_REINTENTOS_CORREO
 };
