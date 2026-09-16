@@ -28,13 +28,17 @@ const Catalogos = require('../logica/catalogos');
 const Portal = require('../logica/portal');
 const CuentasPortal = require('../logica/cuentasPortal');
 const Sesiones = require('../logica/sesiones');
+const Solicitudes = require('../logica/solicitudes');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
 // forbidden si no sirve (portalLogout/portalSesion/portalCambiarPassword) --
 // mismo contrato que Portal.gs, que las expone como self-service, no como
-// acciones gateadas por rol.
-const ACCIONES_PUBLICAS = new Set(['portalLogin', 'portalLogout', 'portalSesion', 'portalCambiarPassword']);
+// acciones gateadas por rol. crearSolicitud tambien es publica a proposito:
+// es el formulario de ingreso (backend/intake), que cualquier persona sin
+// cuenta puede enviar -- igual que en Apps Script, donde Intake es un
+// proyecto separado sin gate de identidad.
+const ACCIONES_PUBLICAS = new Set(['portalLogin', 'portalLogout', 'portalSesion', 'portalCambiarPassword', 'crearSolicitud']);
 
 const ACCIONES = {
   portalLogin: (db, data) => Portal.login(db, data),
@@ -46,7 +50,9 @@ const ACCIONES = {
   gestionarCuentaPortal: (db, data, contexto) => CuentasPortal.gestionar(db, data, contexto),
 
   guardarCatalogo: (db, data, contexto) => Catalogos.guardar(db, data, contexto),
-  listarCatalogo: (db, data, contexto) => Catalogos.listar(db, data, contexto)
+  listarCatalogo: (db, data, contexto) => Catalogos.listar(db, data, contexto),
+
+  crearSolicitud: (db, data) => Solicitudes.crearSolicitud(db, data)
 };
 
 function responderResultado_(resultado) {

@@ -27,7 +27,48 @@ const COLUMNAS = {
     'empresa_id', 'activo', 'debe_cambiar_password',
     'ultimo_acceso', 'creado_por'
   ],
-  SESIONES_PORTAL: ['token', 'cuenta_id', 'expira', 'creada']
+  SESIONES_PORTAL: ['token', 'cuenta_id', 'expira', 'creada'],
+
+  // Nucleo del helpdesk (backend/intake/Solicitudes.gs: crearSolicitud).
+  SOLICITUDES: [
+    'solicitud_id', 'empresa_id', 'empresa_nombre', 'plataforma', 'plataforma_nombre',
+    'modulo', 'modulo_nombre', 'tipo', 'tipo_nombre',
+    'solicitante_nombre', 'solicitante_cargo', 'solicitante_email',
+    'es_cliente', 'empresa_cliente', 'cliente_mandante', 'cliente_obra',
+    'contacto_cliente', 'correo_cliente', 'telefono_cliente', 'urgencia_cliente',
+    'estado_derivado', 'prioridad_derivada', 'orden_atencion',
+    'analista_asignado', 'desarrollador_asignado',
+    'doc_estado', 'doc_reintentos', 'url_doc', 'url_pdf',
+    'version_documento', 'url_pdf_historial',
+    'dedup_hash', 'estimacion_total_horas', 'horas_reales',
+    'observaciones_generales',
+    'resumen_whatsapp', 'fecha_creacion', 'creado_por',
+    'cc', 'rut_cliente', 'codigo_cliente', 'atencion_directa', 'proyecto_id'
+  ],
+  SUBSOLICITUDES: [
+    'subsolicitud_id', 'solicitud_id', 'numero_item', 'titulo', 'descripcion',
+    'contexto', 'resultado_esperado',
+    'impacto', 'prioridad', 'estado',
+    'url_modulo', 'usuario_prueba', 'ref_credencial', 'centro_costos',
+    'url_video', 'observaciones',
+    'sla_objetivo_horas', 'estimacion_horas', 'horas_reales', 'fecha_creacion',
+    'desarrollador_asignado', 'urls_adicionales',
+    'tipo', 'tipo_nombre', 'modulo', 'modulo_nombre',
+    'frecuencia', 'personas_afectadas', 'imagen_descripciones',
+    'fecha_propuesta', 'fecha_comprometida', 'fecha_terminada', 'comprometida_por',
+    'area', 'area_nombre',
+    'atencion_resuelto_por', 'atencion_fecha_resolucion', 'atencion_detalle'
+  ],
+  HISTORIAL_ESTADOS: [
+    'historial_id', 'solicitud_id', 'subsolicitud_id',
+    'estado_anterior', 'estado_nuevo', 'usuario', 'comentario', 'timestamp'
+  ],
+  COUNTERS: ['empresa_id', 'anio', 'ultimo_numero'],
+  CONFIG_SLA: ['prioridad', 'sla_horas'],
+  LOG_NOTIFICACIONES: [
+    'log_id', 'timestamp', 'solicitud_id', 'canal',
+    'destinatario', 'evento', 'resultado', 'reintentos', 'asunto', 'cuerpo'
+  ]
 };
 
 function asegurarEsquema(db) {

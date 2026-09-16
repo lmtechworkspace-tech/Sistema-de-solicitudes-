@@ -115,15 +115,19 @@ function agregarFilas_(db, nombreHoja, objetosFila) {
   return objetosFila;
 }
 
-function actualizarFilaPorId_(db, nombreHoja, columnaId, valorId, cambios) {
+/**
+ * Actualiza la PRIMERA fila que cumpla `predicado(objetoFila)`. Generaliza
+ * actualizarFilaPorId_ (igualdad de una columna) a cualquier criterio --
+ * hace falta para tablas con llave compuesta (ej. COUNTERS: empresa_id+anio,
+ * ver logica/correlativo.js), donde no existe una sola columna id.
+ */
+function actualizarFilaPorFiltro_(db, nombreHoja, predicado, cambios) {
   const encabezados = encabezadosReales_(db, nombreHoja);
-  if (encabezados.indexOf(columnaId) === -1) return null;
-
   const filasSql = db.prepare('SELECT rowid AS _rowid, * FROM ' + tabla_(nombreHoja)).all();
   for (const f of filasSql) {
-    if (String(JSON.parse(f[columnaId])) !== String(valorId)) continue;
-
     const objetoActual = mapearFila_(f, encabezados, []);
+    if (!predicado(objetoActual)) continue;
+
     const objetoActualizado = Object.assign({}, objetoActual, cambios);
     const sets = encabezados.map((col) => col_(col) + ' = ?');
     const valores = encabezados.map((col) => JSON.stringify(objetoActualizado[col]));
@@ -132,6 +136,12 @@ function actualizarFilaPorId_(db, nombreHoja, columnaId, valorId, cambios) {
     return objetoActualizado;
   }
   return null;
+}
+
+function actualizarFilaPorId_(db, nombreHoja, columnaId, valorId, cambios) {
+  const encabezados = encabezadosReales_(db, nombreHoja);
+  if (encabezados.indexOf(columnaId) === -1) return null;
+  return actualizarFilaPorFiltro_(db, nombreHoja, (obj) => String(obj[columnaId]) === String(valorId), cambios);
 }
 
 function eliminarFilasPorId_(db, nombreHoja, columnaId, valorId) {
@@ -184,6 +194,7 @@ module.exports = {
   agregarFila_,
   agregarFilas_,
   actualizarFilaPorId_,
+  actualizarFilaPorFiltro_,
   eliminarFilasPorId_,
   diagnosticarEsquema_
 };
