@@ -22,6 +22,13 @@ concurrency:
 jobs:
   probar-y-desplegar:
     runs-on: ubuntu-latest
+    # SIGSO es un sistema chileno: toda su logica de fechas (jornada 09-18,
+    # feriados, "hoy"/"dia futuro", cambio de hora) vive en America/Santiago.
+    # CI corre por defecto en UTC, donde durante la ventana nocturna el "hoy"
+    # local y el de Santiago difieren y algunos tests fallan. Dev, CI y el VPS
+    # de produccion corren todos en la zona del negocio para que coincidan.
+    env:
+      TZ: America/Santiago
     steps:
       - name: Descargar el repositorio
         uses: actions/checkout@v4
