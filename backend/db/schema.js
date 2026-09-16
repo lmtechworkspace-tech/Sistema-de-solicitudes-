@@ -81,7 +81,8 @@ const COLUMNAS = {
   HISTORIAL_ASIGNACION: [
     'historial_id', 'subsolicitud_id', 'solicitud_id',
     'responsable_anterior', 'responsable_nuevo', 'motivo', 'usuario', 'timestamp'
-  ]
+  ],
+  CONFIG_FERIADOS: ['fecha', 'nombre', 'anio']
 };
 
 function asegurarEsquema(db) {
