@@ -17,7 +17,17 @@ const COLUMNAS = {
   CAT_MODULOS: ['modulo_id', 'nombre', 'plataforma_id', 'modulo_padre_id', 'activo'],
   CAT_TIPOS: ['tipo_id', 'nombre', 'prioridad_default', 'activo', 'es_urgente'],
   CAT_AREAS: ['area_id', 'nombre', 'responsable_email', 'activo'],
-  CONFIG_NOTIFICACIONES: ['notif_id', 'evento', 'rol_destinatario', 'emails_extra', 'activo']
+  CONFIG_NOTIFICACIONES: ['notif_id', 'evento', 'rol_destinatario', 'emails_extra', 'activo'],
+  // v3.3 (§2.4): cuentas e identidad de la plataforma (Portal.gs/
+  // CuentasPortal.gs). hash_password nunca guarda la clave en claro --
+  // ver backend/logica/passwordHash.js sobre el cambio de algoritmo.
+  CUENTAS_PORTAL: [
+    'cuenta_id', 'usuario', 'nombre', 'cargo',
+    'hash_password', 'salt', 'emails', 'rol', 'modulos',
+    'empresa_id', 'activo', 'debe_cambiar_password',
+    'ultimo_acceso', 'creado_por'
+  ],
+  SESIONES_PORTAL: ['token', 'cuenta_id', 'expira', 'creada']
 };
 
 function asegurarEsquema(db) {

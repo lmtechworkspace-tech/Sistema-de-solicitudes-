@@ -74,12 +74,13 @@ async function manejar(req, res, db) {
   }
 
   // Equivalente del doPost de Apps Script: un solo endpoint, la accion viaja
-  // en el cuerpo. `contexto` todavia viaja explicito en el cuerpo -- lo
-  // resolvera la sesion real cuando se porte Auth.gs (ver router.js).
+  // en el cuerpo. La identidad se resuelve server-side a partir de
+  // data.portal_token (ver router.js) -- el cliente nunca declara su propio
+  // rol.
   if (req.method === 'POST' && ruta === '/v1/accion') {
     if (!db) return responderJson(res, 500, { ok: false, error: 'Servidor sin base de datos configurada' });
     const cuerpo = await leerCuerpo_(req);
-    const { status, body } = ejecutarAccion(db, cuerpo.action, cuerpo.data, cuerpo.contexto);
+    const { status, body } = ejecutarAccion(db, cuerpo.action, cuerpo.data);
     return responderJson(res, status, body);
   }
 
