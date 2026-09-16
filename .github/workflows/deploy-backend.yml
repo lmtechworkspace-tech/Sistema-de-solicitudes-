@@ -1,0 +1,60 @@
+name: Desplegar backend en el VPS
+
+# Reemplaza el pegado manual del codigo en Apps Script: al hacer push a main
+# con cambios del backend Node, se corren TODOS los tests y, solo si pasan, se
+# sincroniza el codigo al VPS y se reinicia el servicio. Mismo modelo que el
+# frontend (que ya se auto-publica en Pages), ahora tambien para el backend.
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "backend/server/**"
+      - "backend/db/**"
+      - "package.json"
+      - ".github/workflows/deploy-backend.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: "deploy-backend"
+  cancel-in-progress: false
+
+jobs:
+  probar-y-desplegar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      # Puerta de seguridad: si UN solo test falla, el despliegue no ocurre.
+      - name: Correr toda la bateria de tests
+        run: node --test backend/test/*.test.js
+
+      - name: Preparar la llave SSH de despliegue
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          ssh-keyscan -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Sincronizar el codigo al VPS
+        run: |
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy" \
+            backend/server/ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/backend/server/"
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy" \
+            backend/db/ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/backend/db/"
+          scp -i ~/.ssh/deploy package.json \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/package.json"
+
+      - name: Reiniciar el servicio y verificar que responde
+        run: |
+          ssh -i ~/.ssh/deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" '
+            sudo systemctl restart sigso-api &&
+            sleep 2 &&
+            curl -fsS http://127.0.0.1:3000/v1/estado
+          '
