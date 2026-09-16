@@ -32,6 +32,7 @@ const Solicitudes = require('../logica/solicitudes');
 const SolicitudesBO = require('../logica/solicitudesBackoffice');
 const Jefatura = require('../logica/jefatura');
 const Dashboard = require('../logica/dashboard');
+const Gerencia = require('../logica/gerencia');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -68,7 +69,9 @@ const ACCIONES = {
   gestionarJefatura: (db, data, contexto) => Jefatura.gestionar(db, data, contexto),
 
   getDashboardData: (db, data, contexto) => Dashboard.getData(db, data, contexto),
-  getPautaTrabajo: (db, data, contexto) => Dashboard.getPautaDesarrollador(db, data, contexto)
+  getPautaTrabajo: (db, data, contexto) => Dashboard.getPautaDesarrollador(db, data, contexto),
+
+  getPanelGerencia: (db, data, contexto) => Gerencia.getPanel(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

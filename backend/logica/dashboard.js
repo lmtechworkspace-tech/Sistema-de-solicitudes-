@@ -391,4 +391,10 @@ function getPautaDesarrollador(db, data, contexto) {
   return { desarrollador: desarrollador, items: items };
 }
 
-module.exports = { getData, getPautaDesarrollador, obtenerResponsablesActivos_, RECIENTES_LIMITE };
+module.exports = {
+  getData, getPautaDesarrollador, obtenerResponsablesActivos_, RECIENTES_LIMITE,
+  // Reutilizadas por gerencia.js (mismo criterio que el .gs: Gerencia.getPanel
+  // reusa coincideFiltros_/esAtencionDirecta_ de Dashboard.gs en vez de
+  // reimplementarlas -- todo vive en el mismo scope global en Apps Script).
+  coincideFiltros_, esAtencionDirecta_
+};
