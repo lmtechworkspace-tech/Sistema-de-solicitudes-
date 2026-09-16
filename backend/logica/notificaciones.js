@@ -3,8 +3,8 @@
 /**
  * notificaciones.js — puerto de backend/intake/Notificaciones.gs +
  * backend/backoffice/Notificaciones.gs (el nucleo de envio real / cola de
- * reintentos / dedup / plantilla HTML branded, mas el digest diario de
- * Jefatura; las alertas de patron y los demas digests -- Actividades,
+ * reintentos / dedup / plantilla HTML branded, el digest diario de
+ * Jefatura y las alertas de patron; los demas digests -- Actividades,
  * Proyectos -- quedan para cuando se porten los modulos que los disparan).
  *
  * Envio real via Resend (backend/logica/resend.js), HTTP puro con fetch
@@ -39,6 +39,7 @@ const { EMAIL_DESARROLLO } = require('./constantesSolicitudes');
 const Resend = require('./resend');
 const { claveDia_ } = require('./utils');
 const Jefatura = require('./jefatura');
+const Dashboard = require('./dashboard');
 
 const VENTANA_DEDUP_MINUTOS = 30;
 // v4.2: "SLA vencido"/digests diarios notifican como mucho 1 vez/dia -- se
@@ -423,6 +424,66 @@ async function enviarDigestJefatura(db) {
   return resultados;
 }
 
+// P7 (v2.0, Sprint 3): avisa a Gerencia/Admin cuando un (modulo, tipo)
+// supera el umbral de patron (Dashboard.calcularAlertasPatron_, ya
+// portado). No usa un solicitud_id real (es un aviso agregado, no de una
+// solicitud puntual) -- el "solicitud_id" del log es un tag descriptivo.
+async function notificarPatron(db, alerta) {
+  const destinatarios = leerFilas_(db, 'USUARIOS', COLUMNAS.USUARIOS)
+    .filter((u) => {
+      const activo = u.activo === true || u.activo === 'TRUE' || u.activo === 1;
+      return activo && (u.rol === 'GERENCIA' || u.rol === 'ADM');
+    })
+    .map((u) => u.email);
+  const asunto = 'SIGSO - Patron detectado: ' + alerta.modulo + ' / ' + alerta.tipo;
+  const cuerpo =
+    'El modulo "' + alerta.modulo + '" acumula ' + alerta.cantidad + ' reportes de tipo "' + alerta.tipo +
+    '" en los ultimos ' + Dashboard.PATRON_VENTANA_DIAS + ' dias, de ' + alerta.solicitantes_distintos +
+    ' solicitantes distintos.\n\nPosible causa raiz -- no lo trates como casos aislados.';
+  const resultados = [];
+  for (const email of destinatarios) {
+    resultados.push(await enviarCorreo_(db, {
+      solicitudId: 'PATRON:' + alerta.modulo + ':' + alerta.tipo, destinatario: email,
+      evento: 'ALERTA_PATRON:' + alerta.modulo + ':' + alerta.tipo, asunto, cuerpo
+    }));
+  }
+  return resultados;
+}
+
+// P7: recorre las alertas de patron vigentes (Dashboard.calcularAlertasPatron_,
+// mismo umbral que se muestra en el Dashboard) y avisa por correo las que no
+// se hayan avisado ya HOY (dedup via LOG_SISTEMA, contexto ALERTA_PATRON,
+// ref = modulo||tipo) -- evita mandar el mismo aviso cada dia mientras el
+// patron siga activo sin que nadie lo resuelva. Equivalente de
+// Triggers.detectarPatrones; disparada por server/index.js (09:00
+// America/Santiago, mismo horario que el .gs).
+async function detectarPatrones(db) {
+  const hoy = claveDia_(new Date(), 'America/Santiago');
+  const yaAvisadosHoy = {};
+  leerFilas_(db, 'LOG_SISTEMA', COLUMNAS.LOG_SISTEMA).forEach((log) => {
+    if (log.contexto === 'ALERTA_PATRON' && claveDia_(new Date(log.timestamp), 'America/Santiago') === hoy) {
+      yaAvisadosHoy[log.ref] = true;
+    }
+  });
+
+  const avisados = [];
+  for (const alerta of Dashboard.calcularAlertasPatron_(db)) {
+    const clave = alerta.modulo + '||' + alerta.tipo;
+    if (yaAvisadosHoy[clave]) continue;
+    await notificarPatron(db, alerta);
+    agregarFila_(db, 'LOG_SISTEMA', {
+      log_id: crypto.randomUUID(),
+      timestamp: new Date().toISOString(),
+      contexto: 'ALERTA_PATRON',
+      mensaje: alerta.modulo + ' acumula ' + alerta.cantidad + ' reportes de tipo ' + alerta.tipo +
+        ' (' + alerta.solicitantes_distintos + ' solicitantes distintos) en los ultimos ' + Dashboard.PATRON_VENTANA_DIAS + ' dias.',
+      ref: clave
+    });
+    avisados.push(clave);
+  }
+  return { avisados: avisados.length, patrones: avisados };
+}
+
 // A-12: reintenta filas PENDIENTE_REINTENTO (fallo transitorio de Resend, o
 // RESEND_API_KEY todavia sin configurar), hasta MAX_REINTENTOS_CORREO veces.
 async function procesarColaCorreo(db) {
@@ -471,6 +532,7 @@ module.exports = {
   enviarAcuseRecibo, enviarAvisoDesarrollo, avisarAtencionDirectaRegistrada,
   notificarCambioEstado, avisarCompromisoFecha, notificarDerivacion, enviarCodigoAcceso,
   notificarValidacionSolicitante, notificarRespuestaSolicitante, enviarDigestJefatura,
+  notificarPatron, detectarPatrones,
   procesarColaCorreo, listarLogs,
   MAX_REINTENTOS_CORREO
 };

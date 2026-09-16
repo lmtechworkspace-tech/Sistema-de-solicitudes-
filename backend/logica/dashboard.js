@@ -396,5 +396,8 @@ module.exports = {
   // Reutilizadas por gerencia.js (mismo criterio que el .gs: Gerencia.getPanel
   // reusa coincideFiltros_/esAtencionDirecta_ de Dashboard.gs en vez de
   // reimplementarlas -- todo vive en el mismo scope global en Apps Script).
-  coincideFiltros_, esAtencionDirecta_
+  coincideFiltros_, esAtencionDirecta_,
+  // Reutilizada por notificaciones.js (detectarPatrones, P7) -- mismo
+  // calculo que ya usa getData para el campo alertas_patron.
+  calcularAlertasPatron_, PATRON_VENTANA_DIAS
 };

@@ -69,6 +69,10 @@ const COLUMNAS = {
     'log_id', 'timestamp', 'solicitud_id', 'canal',
     'destinatario', 'evento', 'resultado', 'reintentos', 'asunto', 'cuerpo'
   ],
+  // P7: dedup diario de alertas de patron (Dashboard.calcularAlertasPatron_)
+  // -- distinta de LOG_NOTIFICACIONES porque el aviso no es "una solicitud",
+  // es una marca operativa (contexto/ref), mismo criterio que el .gs.
+  LOG_SISTEMA: ['log_id', 'timestamp', 'contexto', 'mensaje', 'ref'],
   // Backoffice de Solicitudes (actualizarPrioridad/comprometerFecha/derivarSolicitud).
   HISTORIAL_PRIORIDAD: [
     'historial_id', 'subsolicitud_id', 'solicitud_id',

@@ -33,27 +33,36 @@ const intervaloColaCorreo = setInterval(() => {
 }, INTERVALO_COLA_CORREO_MS);
 intervaloColaCorreo.unref();
 
-// Equivalente de enviarDigestJefaturaTrigger (backend/backoffice/Triggers.gs,
-// diario a las 18:00 America/Santiago). Sin cron en Node: se revisa en el
-// mismo grano de 5 min si la hora local cayo en la ventana [18:00, 18:05) --
-// como el proceso corre con TZ=America/Santiago (ver systemd), getHours()
-// ya da la hora de Chile directo. Llamar de mas dentro de esa ventana no
-// duplica nada: el dedup diario de enviarDigestJefatura (evento con
-// claveDia_) ya lo hace idempotente.
-const intervaloDigestJefatura = setInterval(() => {
+// Equivalentes de los triggers diarios de backend/backoffice/Triggers.gs
+// (detectarPatronesTrigger 09:00, enviarDigestJefaturaTrigger 18:00). Sin
+// cron en Node: se revisa en el mismo grano de 5 min si la hora local cayo
+// en la ventana [HH:00, HH:05) -- como el proceso corre con
+// TZ=America/Santiago (ver systemd), getHours() ya da la hora de Chile
+// directo. Llamar de mas dentro de esa ventana no duplica nada: el dedup
+// diario de cada funcion (LOG_SISTEMA para patrones, claveDia_ en el evento
+// para el digest) ya lo hace idempotente.
+function enVentanaDiaria_(ahora, hora) {
+  return ahora.getHours() === hora && ahora.getMinutes() < 5;
+}
+const intervaloTriggersDiarios = setInterval(() => {
   const ahora = new Date();
-  if (ahora.getHours() === 18 && ahora.getMinutes() < 5) {
+  if (enVentanaDiaria_(ahora, 9)) {
+    Notificaciones.detectarPatrones(db).catch((err) => {
+      console.error('error detectando patrones:', err);
+    });
+  }
+  if (enVentanaDiaria_(ahora, 18)) {
     Notificaciones.enviarDigestJefatura(db).catch((err) => {
       console.error('error enviando el digest de Jefatura:', err);
     });
   }
 }, INTERVALO_COLA_CORREO_MS);
-intervaloDigestJefatura.unref();
+intervaloTriggersDiarios.unref();
 
 // Apagado ordenado cuando systemd manda SIGTERM (en cada despliegue/restart).
 process.on('SIGTERM', () => {
   console.log('SIGTERM recibido, cerrando servidor...');
   clearInterval(intervaloColaCorreo);
-  clearInterval(intervaloDigestJefatura);
+  clearInterval(intervaloTriggersDiarios);
   server.close(() => process.exit(0));
 });
