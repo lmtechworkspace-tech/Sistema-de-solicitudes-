@@ -46,7 +46,8 @@ const Notificaciones = require('../logica/notificaciones');
 // proyecto separado sin gate de identidad.
 const ACCIONES_PUBLICAS = new Set([
   'portalLogin', 'portalLogout', 'portalSesion', 'portalCambiarPassword', 'crearSolicitud',
-  'consultarEstado', 'solicitarCodigoAcceso', 'misSolicitudes'
+  'consultarEstado', 'solicitarCodigoAcceso', 'misSolicitudes',
+  'editarSubsolicitud', 'eliminarArchivo', 'responderConsulta', 'validarCierre'
 ]);
 
 const ACCIONES = {
@@ -66,6 +67,10 @@ const ACCIONES = {
   consultarEstado: (db, data) => SolicitudesPublico.estadoPublico(db, data.solicitud_id, data.email),
   solicitarCodigoAcceso: (db, data) => SolicitudesPublico.solicitarCodigoAcceso(db, data),
   misSolicitudes: (db, data) => SolicitudesPublico.misSolicitudes(db, data),
+  editarSubsolicitud: (db, data) => SolicitudesPublico.editarSubsolicitud(db, data),
+  eliminarArchivo: (db, data) => SolicitudesPublico.eliminarArchivo(db, data),
+  responderConsulta: (db, data) => SolicitudesPublico.responderConsulta(db, data),
+  validarCierre: (db, data) => SolicitudesPublico.validarCierre(db, data),
 
   actualizarEstado: (db, data, contexto) => SolicitudesBO.actualizarEstado(db, data, contexto),
   actualizarPrioridad: (db, data, contexto) => SolicitudesBO.actualizarPrioridad(db, data, contexto),

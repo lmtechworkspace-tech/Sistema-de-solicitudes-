@@ -4,8 +4,8 @@
  * notificaciones.js — puerto de backend/intake/Notificaciones.gs +
  * backend/backoffice/Notificaciones.gs (solo el nucleo de envio real /
  * cola de reintentos / dedup / plantilla HTML branded; el digest de
- * Jefatura, las alertas de patron y las notificaciones de validacion del
- * solicitante quedan para cuando se porten los modulos que las disparan).
+ * Jefatura y las alertas de patron quedan para cuando se porten los
+ * modulos que las disparan).
  *
  * Envio real via Resend (backend/logica/resend.js), HTTP puro con fetch
  * nativo, sin SDK.
@@ -301,6 +301,64 @@ async function enviarCodigoAcceso(db, email, codigo) {
   return enviarCorreo_(db, { solicitudId: email, destinatario: email, evento: 'CODIGO_ACCESO:' + codigo, asunto, cuerpo });
 }
 
+// RN-201 (v2.0, Sprint 1): avisa al responsable del item cuando el
+// solicitante valida un item "Terminada" -- confirmando el cierre,
+// reabriendolo con un motivo, o cerrandolo directo (atencion directa desde
+// "Mis solicitudes"). Sin este aviso, el equipo no se entera hasta que
+// vuelve a mirar el panel.
+async function notificarValidacionSolicitante(db, solicitud, subsolicitud, accion, destinatario) {
+  const email = destinatario || EMAIL_DESARROLLO;
+  const esConfirmacion = accion === 'confirmar';
+  const esCierreDirecto = accion === 'cerrar_directo';
+  const asunto = 'SIGSO - ' + (esCierreDirecto
+    ? 'Cerrado por atención directa'
+    : (esConfirmacion ? 'Cierre confirmado' : 'Ítem reabierto por el solicitante')) +
+    ': ' + subsolicitud.subsolicitud_id;
+  const cuerpo =
+    'Estimado/a:\n\n' +
+    (esCierreDirecto
+      ? 'El solicitante indicó que el ítem ya fue resuelto fuera del flujo (atención directa) y lo cerró, dejando el registro correspondiente. El ítem pasa a estado Cerrada; no se requieren más acciones.'
+      : esConfirmacion
+        ? 'El solicitante confirmó que el ítem indicado quedó resuelto satisfactoriamente. El ítem pasa a estado Cerrada; no se requieren más acciones.'
+        : 'El solicitante indicó que el ítem NO quedó resuelto y lo reabrió. El ítem vuelve a estado En desarrollo; se requiere su revisión.') + '\n\n' +
+    'DETALLE\n' +
+    '- Ítem: ' + subsolicitud.subsolicitud_id + (subsolicitud.titulo ? ' — ' + subsolicitud.titulo : '') + '\n' +
+    '- Solicitud: ' + solicitud.solicitud_id + '\n' +
+    '- Solicitante: ' + (solicitud.solicitante_nombre || solicitud.solicitante_email || '') +
+    pieCorreo_();
+  return enviarCorreo_(db, {
+    solicitudId: solicitud.solicitud_id, destinatario: email,
+    evento: 'VALIDACION_SOLICITANTE:' + subsolicitud.subsolicitud_id + ':' + accion, asunto, cuerpo
+  });
+}
+
+// P5 (v2.0, Sprint 3): avisa al responsable cuando el solicitante responde
+// una pregunta ("esperando informacion", S06). destinatarios es un array
+// (uno por cada responsable distinto involucrado); si viene vacio, cae al
+// buzon por defecto EMAIL_DESARROLLO (retrocompatible).
+async function notificarRespuestaSolicitante(db, solicitud, subsolicitudId, texto, destinatarios) {
+  const emails = (destinatarios && destinatarios.length > 0) ? destinatarios : [EMAIL_DESARROLLO];
+  const asunto = 'SIGSO - Respuesta del solicitante: ' + (subsolicitudId || solicitud.solicitud_id);
+  const cuerpo =
+    'Estimado/a:\n\n' +
+    'El solicitante ha respondido a la información pendiente de la solicitud ' +
+    solicitud.solicitud_id + (subsolicitudId ? ' (ítem ' + subsolicitudId + ')' : '') + '.\n\n' +
+    'RESPUESTA DEL SOLICITANTE\n' +
+    '"' + texto + '"\n\n' +
+    'ACCIÓN REQUERIDA\n' +
+    'Ingrese al Backoffice para revisar la respuesta y continuar con la gestión ' +
+    'del ítem (sigue en estado "Esperando información" hasta que usted lo avance).' +
+    pieCorreo_();
+  const resultados = [];
+  for (const email of emails) {
+    resultados.push(await enviarCorreo_(db, {
+      solicitudId: solicitud.solicitud_id, destinatario: email,
+      evento: 'RESPUESTA_SOLICITANTE:' + (subsolicitudId || solicitud.solicitud_id), asunto, cuerpo
+    }));
+  }
+  return resultados;
+}
+
 // A-12: reintenta filas PENDIENTE_REINTENTO (fallo transitorio de Resend, o
 // RESEND_API_KEY todavia sin configurar), hasta MAX_REINTENTOS_CORREO veces.
 async function procesarColaCorreo(db) {
@@ -348,6 +406,7 @@ function listarLogs(db, data, contexto) {
 module.exports = {
   enviarAcuseRecibo, enviarAvisoDesarrollo, avisarAtencionDirectaRegistrada,
   notificarCambioEstado, avisarCompromisoFecha, notificarDerivacion, enviarCodigoAcceso,
+  notificarValidacionSolicitante, notificarRespuestaSolicitante,
   procesarColaCorreo, listarLogs,
   MAX_REINTENTOS_CORREO
 };

@@ -363,4 +363,7 @@ async function crearSolicitud(db, data) {
   return respuesta;
 }
 
-module.exports = { crearSolicitud, derivarPrioridad_, generarResumenWhatsapp_ };
+module.exports = {
+  crearSolicitud, derivarPrioridad_, generarResumenWhatsapp_,
+  normalizarAtencionDirecta_, validarAtencionDirecta_
+};
