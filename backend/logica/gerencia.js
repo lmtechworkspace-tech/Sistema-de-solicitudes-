@@ -395,4 +395,12 @@ function getPanel(db, filtros, contexto) {
   return datos;
 }
 
-module.exports = { getPanel };
+module.exports = {
+  getPanel,
+  // Reutilizadas por jefatura.js -- mismo criterio que el .gs, donde
+  // Jefatura.getPanel reusa estas funciones de Gerencia.gs en vez de
+  // reimplementarlas (para que "de quien es este item" y "cuanto tiempo
+  // lleva abierto" respondan siempre lo mismo en los dos paneles).
+  coincideFiltroItem_, mapaNombresUsuarios_, diasHabilesRedondeado_, promedio_,
+  lineaBasePorItem_, contarPorSubsolicitud_, contarReaperturasPorSubsolicitud_
+};

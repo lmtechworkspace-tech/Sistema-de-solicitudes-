@@ -71,7 +71,8 @@ const ACCIONES = {
   getDashboardData: (db, data, contexto) => Dashboard.getData(db, data, contexto),
   getPautaTrabajo: (db, data, contexto) => Dashboard.getPautaDesarrollador(db, data, contexto),
 
-  getPanelGerencia: (db, data, contexto) => Gerencia.getPanel(db, data, contexto)
+  getPanelGerencia: (db, data, contexto) => Gerencia.getPanel(db, data, contexto),
+  getPanelJefatura: (db, data, contexto) => Jefatura.getPanel(db, data, contexto)
 };
 
 function responderResultado_(resultado) {
