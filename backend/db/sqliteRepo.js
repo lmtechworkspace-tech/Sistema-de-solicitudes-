@@ -54,6 +54,19 @@ function crearTabla_(db, nombreHoja, columnas) {
   db.exec('CREATE TABLE ' + tabla_(nombreHoja) + ' (' + definicion + ')');
 }
 
+/**
+ * Equivalente al Instalador de Apps Script: crea la tabla si no existe
+ * todavia, pero NUNCA la reemplaza. A diferencia de crearTabla_ (para tests,
+ * que necesitan una hoja limpia en cada caso), esta es la que se llama al
+ * arrancar el servidor real -- borrar datos de produccion por accidente en
+ * cada reinicio seria catastrofico.
+ */
+function asegurarTabla_(db, nombreHoja, columnas) {
+  if (tablaExiste_(db, nombreHoja)) return;
+  const definicion = columnas.map((c) => col_(c) + ' TEXT').join(', ');
+  db.exec('CREATE TABLE ' + tabla_(nombreHoja) + ' (' + definicion + ')');
+}
+
 /** Equivalente de seedSheet (gasSandbox) pero para la tabla SQLite. */
 function sembrarTabla_(db, nombreHoja, columnas, filas) {
   crearTabla_(db, nombreHoja, columnas);
@@ -164,6 +177,7 @@ function diagnosticarEsquema_(db, COLUMNAS) {
 module.exports = {
   abrirDb_,
   crearTabla_,
+  asegurarTabla_,
   sembrarTabla_,
   encabezadosReales_,
   leerFilas_,

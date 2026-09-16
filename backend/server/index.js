@@ -10,9 +10,11 @@
  */
 
 const { crearServidor, VERSION_API } = require('./app');
+const { abrirDbProduccion } = require('../db');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
-const server = crearServidor();
+const db = abrirDbProduccion();
+const server = crearServidor(db);
 
 server.listen(PORT, '127.0.0.1', () => {
   console.log('SIGSO API ' + VERSION_API + ' escuchando en 127.0.0.1:' + PORT);

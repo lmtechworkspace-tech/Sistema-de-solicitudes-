@@ -16,9 +16,23 @@
  */
 
 const http = require('node:http');
+const { ejecutarAccion } = require('./router');
 
 const VERSION_API = '1.0.0-poc';
 const ARRANCADO_EN = new Date().toISOString();
+
+function leerCuerpo_(req) {
+  return new Promise((resolve, reject) => {
+    let datos = '';
+    req.on('data', (chunk) => { datos += chunk; });
+    req.on('end', () => {
+      if (!datos) return resolve({});
+      try { resolve(JSON.parse(datos)); }
+      catch (err) { reject(new Error('JSON invalido en el cuerpo de la peticion')); }
+    });
+    req.on('error', reject);
+  });
+}
 
 function responderJson(res, codigo, payload) {
   const cuerpo = JSON.stringify(payload);
@@ -35,7 +49,7 @@ function responderJson(res, codigo, payload) {
   res.end(cuerpo);
 }
 
-async function manejar(req, res) {
+async function manejar(req, res, db) {
   const url = new URL(req.url, 'http://localhost');
   const ruta = url.pathname.replace(/\/+$/, '') || '/';
 
@@ -59,12 +73,22 @@ async function manejar(req, res) {
     });
   }
 
+  // Equivalente del doPost de Apps Script: un solo endpoint, la accion viaja
+  // en el cuerpo. `contexto` todavia viaja explicito en el cuerpo -- lo
+  // resolvera la sesion real cuando se porte Auth.gs (ver router.js).
+  if (req.method === 'POST' && ruta === '/v1/accion') {
+    if (!db) return responderJson(res, 500, { ok: false, error: 'Servidor sin base de datos configurada' });
+    const cuerpo = await leerCuerpo_(req);
+    const { status, body } = ejecutarAccion(db, cuerpo.action, cuerpo.data, cuerpo.contexto);
+    return responderJson(res, status, body);
+  }
+
   return responderJson(res, 404, { ok: false, error: 'Ruta no encontrada: ' + ruta });
 }
 
-function crearServidor() {
+function crearServidor(db) {
   return http.createServer((req, res) => {
-    manejar(req, res).catch((err) => {
+    manejar(req, res, db).catch((err) => {
       console.error('error no capturado en la peticion:', err);
       if (!res.headersSent) responderJson(res, 500, { ok: false, error: 'Error interno del servidor' });
     });
