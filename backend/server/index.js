@@ -11,6 +11,7 @@
 
 const { crearServidor, VERSION_API } = require('./app');
 const { abrirDbProduccion } = require('../db');
+const Notificaciones = require('../logica/notificaciones');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
 const db = abrirDbProduccion();
@@ -20,8 +21,21 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log('SIGSO API ' + VERSION_API + ' escuchando en 127.0.0.1:' + PORT);
 });
 
+// A-12 / equivalente de procesarColaCorreoTrigger (backend/backoffice/
+// Triggers.gs, cada 5 min): no hay Triggers de Apps Script en Node, asi que
+// esta es la unica forma de que la cola de correo (PENDIENTE_REINTENTO) se
+// entregue sola sin depender de que llegue otra peticion HTTP.
+const INTERVALO_COLA_CORREO_MS = 5 * 60 * 1000;
+const intervaloColaCorreo = setInterval(() => {
+  Notificaciones.procesarColaCorreo(db).catch((err) => {
+    console.error('error procesando la cola de correo:', err);
+  });
+}, INTERVALO_COLA_CORREO_MS);
+intervaloColaCorreo.unref();
+
 // Apagado ordenado cuando systemd manda SIGTERM (en cada despliegue/restart).
 process.on('SIGTERM', () => {
   console.log('SIGTERM recibido, cerrando servidor...');
+  clearInterval(intervaloColaCorreo);
   server.close(() => process.exit(0));
 });

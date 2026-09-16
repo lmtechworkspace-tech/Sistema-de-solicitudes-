@@ -235,7 +235,7 @@ function generarResumenWhatsapp_(solicitudId, data, prioridad) {
   return lineas.join('\n');
 }
 
-function crearSolicitud(db, data) {
+async function crearSolicitud(db, data) {
   const errores = validarSolicitud_(data);
   if (errores.length > 0) {
     return { _validationError: true, message: 'La solicitud tiene datos invalidos o incompletos.', fields: errores };
@@ -328,7 +328,7 @@ function crearSolicitud(db, data) {
     timestamp: timestamp
   });
 
-  Notificaciones.enviarAcuseRecibo(db, {
+  await Notificaciones.enviarAcuseRecibo(db, {
     solicitud_id: solicitudId, solicitante_nombre: data.solicitante_nombre,
     solicitante_email: data.solicitante_email, empresa_id: data.empresa_id,
     prioridad: prioridadDerivada, total_items: data.subsolicitudes.length,
@@ -339,20 +339,20 @@ function crearSolicitud(db, data) {
   // Dos items del mismo responsable -> un solo aviso.
   if (avisoDesarrolloActivo_(db)) {
     const responsablesAvisados = {};
-    subsolicitudesGuardadas.forEach((s) => {
-      if (!s.responsable || responsablesAvisados[s.responsable]) return;
+    for (const s of subsolicitudesGuardadas) {
+      if (!s.responsable || responsablesAvisados[s.responsable]) continue;
       responsablesAvisados[s.responsable] = true;
       if (atencion) {
-        Notificaciones.avisarAtencionDirectaRegistrada(db, {
+        await Notificaciones.avisarAtencionDirectaRegistrada(db, {
           solicitud_id: solicitudId, total_items: data.subsolicitudes.length, solicitante_nombre: data.solicitante_nombre
         }, atencion, s.responsable);
-        return;
+        continue;
       }
       const motivoAviso = data.es_cliente ? 'solicitud de cliente' : (prioridadDerivada === 'P1' ? 'prioridad critica P1' : 'nueva solicitud');
-      Notificaciones.enviarAvisoDesarrollo(db, {
+      await Notificaciones.enviarAvisoDesarrollo(db, {
         solicitud_id: solicitudId, prioridad: prioridadDerivada, resumen_whatsapp: resumenWhatsapp
       }, motivoAviso, s.responsable);
-    });
+    }
   }
 
   const respuesta = { solicitud_id: solicitudId, resumen_whatsapp: resumenWhatsapp, estado: estadoInicial, atencion_directa: !!atencion };

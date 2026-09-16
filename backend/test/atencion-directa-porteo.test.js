@@ -51,18 +51,18 @@ function datos(overrides) {
   );
 }
 
-test('una solicitud normal sigue naciendo en S01 (sin regresion)', () => {
+test('una solicitud normal sigue naciendo en S01 (sin regresion)', async () => {
   const db = dbConSchema();
-  const res = Solicitudes.crearSolicitud(db, datos());
+  const res = await Solicitudes.crearSolicitud(db, datos());
 
   assert.equal(res.estado, 'S01');
   assert.equal(res.atencion_directa, false);
   assert.equal(filas(db, 'SOLICITUDES')[0].atencion_directa, false);
 });
 
-test('atencion directa nace Cerrada (S09), no en S01', () => {
+test('atencion directa nace Cerrada (S09), no en S01', async () => {
   const db = dbConSchema();
-  const res = Solicitudes.crearSolicitud(db, datos({ atencion_directa: ATENCION_OK }));
+  const res = await Solicitudes.crearSolicitud(db, datos({ atencion_directa: ATENCION_OK }));
 
   assert.equal(res.estado, 'S09');
   assert.equal(res.atencion_directa, true);
@@ -70,9 +70,9 @@ test('atencion directa nace Cerrada (S09), no en S01', () => {
   assert.equal(filas(db, 'SUBSOLICITUDES')[0].estado, 'S09');
 });
 
-test('atencion directa guarda el registro (quien, cuando, que se hizo)', () => {
+test('atencion directa guarda el registro (quien, cuando, que se hizo)', async () => {
   const db = dbConSchema();
-  Solicitudes.crearSolicitud(db, datos({ atencion_directa: ATENCION_OK }));
+  await Solicitudes.crearSolicitud(db, datos({ atencion_directa: ATENCION_OK }));
 
   const sub = filas(db, 'SUBSOLICITUDES')[0];
   assert.equal(sub.atencion_resuelto_por, 'Leo');
@@ -81,9 +81,9 @@ test('atencion directa guarda el registro (quien, cuando, que se hizo)', () => {
   assert.equal(filas(db, 'SOLICITUDES')[0].atencion_directa, true);
 });
 
-test('atencion directa deja UNA sola entrada de historial, honesta', () => {
+test('atencion directa deja UNA sola entrada de historial, honesta', async () => {
   const db = dbConSchema();
-  Solicitudes.crearSolicitud(db, datos({ atencion_directa: ATENCION_OK }));
+  await Solicitudes.crearSolicitud(db, datos({ atencion_directa: ATENCION_OK }));
 
   const historial = filas(db, 'HISTORIAL_ESTADOS');
   assert.equal(historial.length, 1);
@@ -95,43 +95,43 @@ test('atencion directa deja UNA sola entrada de historial, honesta', () => {
   assert.equal(historial[0].usuario, 'juan.perez@homepymes.cl');
 });
 
-test('los tres campos del registro son obligatorios', () => {
+test('los tres campos del registro son obligatorios', async () => {
   const casos = [
     ['sin quien', { resuelto_por: '', fecha_resolucion: '2026-01-15T10:30', detalle: 'algo que se hizo aqui' }],
     ['sin cuando', { resuelto_por: 'Leo', fecha_resolucion: '', detalle: 'algo que se hizo aqui' }],
     ['sin detalle', { resuelto_por: 'Leo', fecha_resolucion: '2026-01-15T10:30', detalle: '' }],
     ['detalle muy corto', { resuelto_por: 'Leo', fecha_resolucion: '2026-01-15T10:30', detalle: 'ok' }]
   ];
-  casos.forEach(([nombre, atencion]) => {
+  for (const [nombre, atencion] of casos) {
     const db = dbConSchema();
-    const res = Solicitudes.crearSolicitud(db, datos({ atencion_directa: atencion }));
+    const res = await Solicitudes.crearSolicitud(db, datos({ atencion_directa: atencion }));
     assert.equal(res._validationError, true, nombre + ' deberia fallar');
     assert.equal(filas(db, 'SOLICITUDES').length, 0, nombre + ': no debe crear nada');
-  });
+  }
 });
 
-test('activar atencion directa sin llenar los campos no crea nada', () => {
+test('activar atencion directa sin llenar los campos no crea nada', async () => {
   const db = dbConSchema();
-  const res = Solicitudes.crearSolicitud(db, datos({ atencion_directa: true }));
+  const res = await Solicitudes.crearSolicitud(db, datos({ atencion_directa: true }));
 
   assert.equal(res._validationError, true);
   assert.equal(filas(db, 'SOLICITUDES').length, 0);
 });
 
-test('la fecha de resolucion no puede ser futura ni invalida', () => {
+test('la fecha de resolucion no puede ser futura ni invalida', async () => {
   const futura = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
-  [futura, 'no es una fecha'].forEach((fecha) => {
+  for (const fecha of [futura, 'no es una fecha']) {
     const db = dbConSchema();
-    const res = Solicitudes.crearSolicitud(db, datos({
+    const res = await Solicitudes.crearSolicitud(db, datos({
       atencion_directa: Object.assign({}, ATENCION_OK, { fecha_resolucion: fecha })
     }));
     assert.equal(res._validationError, true, fecha + ' deberia fallar');
-  });
+  }
 });
 
-test('atencion_directa desactivada se trata como solicitud normal', () => {
+test('atencion_directa desactivada se trata como solicitud normal', async () => {
   const db = dbConSchema();
-  const res = Solicitudes.crearSolicitud(db, datos({
+  const res = await Solicitudes.crearSolicitud(db, datos({
     atencion_directa: { activo: false, resuelto_por: '', fecha_resolucion: '', detalle: '' }
   }));
 
@@ -139,27 +139,27 @@ test('atencion_directa desactivada se trata como solicitud normal', () => {
   assert.equal(res.atencion_directa, false);
 });
 
-test('no se manda el aviso de "solicitud nueva"; va un acuse de registro', () => {
+test('no se manda el aviso de "solicitud nueva"; va un acuse de registro', async () => {
   const db = dbConSchema();
-  Solicitudes.crearSolicitud(db, datos({ atencion_directa: ATENCION_OK }));
+  await Solicitudes.crearSolicitud(db, datos({ atencion_directa: ATENCION_OK }));
 
   const eventos = filas(db, 'LOG_NOTIFICACIONES').map((l) => l.evento);
   assert.equal(eventos.indexOf('AVISO_DESARROLLO'), -1, 'no debe avisar "solicitud nueva"');
   assert.ok(eventos.indexOf('ATENCION_DIRECTA') !== -1, 'debe mandar el acuse');
 });
 
-test('una solicitud normal SI manda el aviso de desarrollo (sin regresion)', () => {
+test('una solicitud normal SI manda el aviso de desarrollo (sin regresion)', async () => {
   const db = dbConSchema();
-  Solicitudes.crearSolicitud(db, datos());
+  await Solicitudes.crearSolicitud(db, datos());
 
   const eventos = filas(db, 'LOG_NOTIFICACIONES').map((l) => l.evento);
   assert.ok(eventos.indexOf('AVISO_DESARROLLO') !== -1);
   assert.equal(eventos.indexOf('ATENCION_DIRECTA'), -1);
 });
 
-test('el acuse al solicitante dice que queda cerrada, no que sera revisada', () => {
+test('el acuse al solicitante dice que queda cerrada, no que sera revisada', async () => {
   const db = dbConSchema();
-  Solicitudes.crearSolicitud(db, datos({ atencion_directa: ATENCION_OK }));
+  await Solicitudes.crearSolicitud(db, datos({ atencion_directa: ATENCION_OK }));
 
   const acuse = filas(db, 'LOG_NOTIFICACIONES').find((n) => n.evento === 'ACUSE_RECIBO');
   assert.ok(acuse, 'debe existir el acuse');

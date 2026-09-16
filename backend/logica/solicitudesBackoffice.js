@@ -257,7 +257,7 @@ function actualizarPrioridad(db, data, contexto) {
   };
 }
 
-function comprometerFecha(db, data, contexto) {
+async function comprometerFecha(db, data, contexto) {
   if (contexto.rol === 'GERENCIA') {
     return errorForbidden('El rol Gerencia es de solo lectura: no puede comprometer fechas.');
   }
@@ -293,7 +293,7 @@ function comprometerFecha(db, data, contexto) {
   // v2.1 (Fase D): avisa al solicitante -- "maneja expectativas, sin pedir su aprobacion".
   const solicitudParaAviso = buscarSolicitudPorId_(db, subsolicitud.solicitud_id);
   if (solicitudParaAviso) {
-    Notificaciones.avisarCompromisoFecha(db, solicitudParaAviso, Object.assign({}, subsolicitud, { fecha_comprometida: data.fecha_comprometida }), data.fecha_comprometida);
+    await Notificaciones.avisarCompromisoFecha(db, solicitudParaAviso, Object.assign({}, subsolicitud, { fecha_comprometida: data.fecha_comprometida }), data.fecha_comprometida);
   }
 
   return {
@@ -355,7 +355,7 @@ function aplicarDerivacion_(db, plan, responsableNuevo, motivo, contexto, timest
   };
 }
 
-function derivarSolicitud(db, data, contexto) {
+async function derivarSolicitud(db, data, contexto) {
   if (contexto.rol === 'GERENCIA') return errorForbidden('Gerencia tiene acceso de solo lectura.');
   if (!data.responsable_nuevo) return errorValidacion('responsable_nuevo', 'Indica a quien se deriva.');
 
@@ -382,7 +382,7 @@ function derivarSolicitud(db, data, contexto) {
   const derivadas = planes.map((plan) => aplicarDerivacion_(db, plan, data.responsable_nuevo, motivo, contexto, timestamp));
 
   // El aviso va agrupado: derivar 40 solicitudes no debe producir 40 correos.
-  Notificaciones.notificarDerivacion(db, derivadas, data.responsable_nuevo, motivo, contexto.email);
+  await Notificaciones.notificarDerivacion(db, derivadas, data.responsable_nuevo, motivo, contexto.email);
 
   return {
     responsable_nuevo: data.responsable_nuevo, motivo: motivo,

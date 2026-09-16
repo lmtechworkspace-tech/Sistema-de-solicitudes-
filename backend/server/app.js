@@ -80,7 +80,7 @@ async function manejar(req, res, db) {
   if (req.method === 'POST' && ruta === '/v1/accion') {
     if (!db) return responderJson(res, 500, { ok: false, error: 'Servidor sin base de datos configurada' });
     const cuerpo = await leerCuerpo_(req);
-    const { status, body } = ejecutarAccion(db, cuerpo.action, cuerpo.data);
+    const { status, body } = await ejecutarAccion(db, cuerpo.action, cuerpo.data);
     return responderJson(res, status, body);
   }
 

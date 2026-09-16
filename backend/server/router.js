@@ -33,6 +33,7 @@ const SolicitudesBO = require('../logica/solicitudesBackoffice');
 const Jefatura = require('../logica/jefatura');
 const Dashboard = require('../logica/dashboard');
 const Gerencia = require('../logica/gerencia');
+const Notificaciones = require('../logica/notificaciones');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -72,7 +73,9 @@ const ACCIONES = {
   getPautaTrabajo: (db, data, contexto) => Dashboard.getPautaDesarrollador(db, data, contexto),
 
   getPanelGerencia: (db, data, contexto) => Gerencia.getPanel(db, data, contexto),
-  getPanelJefatura: (db, data, contexto) => Jefatura.getPanel(db, data, contexto)
+  getPanelJefatura: (db, data, contexto) => Jefatura.getPanel(db, data, contexto),
+
+  listarLogsNotificaciones: (db, data, contexto) => Notificaciones.listarLogs(db, data, contexto)
 };
 
 function responderResultado_(resultado) {
@@ -108,7 +111,12 @@ function resolverContextoPortal_(db, token) {
   };
 }
 
-function ejecutarAccion(db, action, data) {
+// async: la mayoria de las acciones son sincronas (SQLite es sincrono) y
+// siguen resolviendo en el mismo tick; `await` sobre un valor no-Promise no
+// cambia su comportamiento. Las que si envian correo de verdad ahora (ver
+// notificaciones.js) devuelven una Promise, y este await es lo que permite
+// que app.js espere el resultado real antes de responder.
+async function ejecutarAccion(db, action, data) {
   data = data || {};
   const fn = ACCIONES[action];
   if (!fn) {
@@ -116,14 +124,14 @@ function ejecutarAccion(db, action, data) {
   }
 
   if (ACCIONES_PUBLICAS.has(action)) {
-    return responderResultado_(fn(db, data));
+    return responderResultado_(await fn(db, data));
   }
 
   const contexto = resolverContextoPortal_(db, data.portal_token);
   if (!contexto) {
     return { status: 403, body: { ok: false, error: 'forbidden', message: 'Sesión inválida o expirada. Ingresa de nuevo.' } };
   }
-  return responderResultado_(fn(db, data, contexto));
+  return responderResultado_(await fn(db, data, contexto));
 }
 
 module.exports = { ejecutarAccion, ACCIONES, resolverContextoPortal_ };

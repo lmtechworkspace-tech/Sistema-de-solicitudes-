@@ -44,11 +44,11 @@ function seedSolicitud(db, solicitudId, responsable, cantidadItems) {
 
 function historial(db) { return filas(db, 'HISTORIAL_ASIGNACION'); }
 
-test('derivar una solicitud completa mueve todos sus items y la cabecera', () => {
+test('derivar una solicitud completa mueve todos sus items y la cabecera', async () => {
   const db = dbConSchema();
   seedSolicitud(db, 'SOL-2026-HP-0001', LUIS, 2);
 
-  const res = SolicitudesBO.derivarSolicitud(db,
+  const res = await SolicitudesBO.derivarSolicitud(db,
     { solicitud_id: 'SOL-2026-HP-0001', responsable_nuevo: LEO, motivo: 'corresponde a Leo, fin de la fase de pruebas' },
     { email: ANALISTA, rol: 'ANA' }
   );
@@ -60,11 +60,11 @@ test('derivar una solicitud completa mueve todos sus items y la cabecera', () =>
   assert.equal(filas(db, 'SOLICITUDES')[0].desarrollador_asignado, LEO);
 });
 
-test('derivar deja registro en HISTORIAL_ASIGNACION con el anterior, el nuevo y el motivo', () => {
+test('derivar deja registro en HISTORIAL_ASIGNACION con el anterior, el nuevo y el motivo', async () => {
   const db = dbConSchema();
   seedSolicitud(db, 'SOL-2026-HP-0001', LUIS, 1);
 
-  SolicitudesBO.derivarSolicitud(db,
+  await SolicitudesBO.derivarSolicitud(db,
     { solicitud_id: 'SOL-2026-HP-0001', responsable_nuevo: LEO, motivo: 'corresponde a Leo, fin de la fase de pruebas' },
     { email: ANALISTA, rol: 'ANA' }
   );
@@ -79,11 +79,11 @@ test('derivar deja registro en HISTORIAL_ASIGNACION con el anterior, el nuevo y 
   assert.equal(filasHist[0].subsolicitud_id, '');
 });
 
-test('derivar un item puntual no toca a los hermanos ni la cabecera', () => {
+test('derivar un item puntual no toca a los hermanos ni la cabecera', async () => {
   const db = dbConSchema();
   seedSolicitud(db, 'SOL-2026-HP-0001', LUIS, 2);
 
-  SolicitudesBO.derivarSolicitud(db, {
+  await SolicitudesBO.derivarSolicitud(db, {
     solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
     responsable_nuevo: LEO, motivo: 'este item es de base de datos'
   }, { email: ANALISTA, rol: 'ANA' });
@@ -95,11 +95,11 @@ test('derivar un item puntual no toca a los hermanos ni la cabecera', () => {
   assert.equal(historial(db)[0].subsolicitud_id, 'SOL-2026-HP-0001-01');
 });
 
-test('el motivo es obligatorio (minimo 10 caracteres)', () => {
+test('el motivo es obligatorio (minimo 10 caracteres)', async () => {
   const db = dbConSchema();
   seedSolicitud(db, 'SOL-2026-HP-0001', LUIS, 1);
 
-  const res = SolicitudesBO.derivarSolicitud(db,
+  const res = await SolicitudesBO.derivarSolicitud(db,
     { solicitud_id: 'SOL-2026-HP-0001', responsable_nuevo: LEO, motivo: 'porque' },
     { email: ANALISTA, rol: 'ANA' }
   );
@@ -109,11 +109,11 @@ test('el motivo es obligatorio (minimo 10 caracteres)', () => {
   assert.equal(filas(db, 'SUBSOLICITUDES')[0].desarrollador_asignado, LUIS);
 });
 
-test('un DEV puede derivar lo suyo', () => {
+test('un DEV puede derivar lo suyo', async () => {
   const db = dbConSchema();
   seedSolicitud(db, 'SOL-2026-HP-0001', LUIS, 1);
 
-  const res = SolicitudesBO.derivarSolicitud(db,
+  const res = await SolicitudesBO.derivarSolicitud(db,
     { solicitud_id: 'SOL-2026-HP-0001', responsable_nuevo: LEO, motivo: 'me voy de vacaciones la proxima semana' },
     { email: LUIS, rol: 'DEV' }
   );
@@ -122,11 +122,11 @@ test('un DEV puede derivar lo suyo', () => {
   assert.equal(filas(db, 'SUBSOLICITUDES')[0].desarrollador_asignado, LEO);
 });
 
-test('un DEV NO puede derivar trabajo ajeno', () => {
+test('un DEV NO puede derivar trabajo ajeno', async () => {
   const db = dbConSchema();
   seedSolicitud(db, 'SOL-2026-HP-0001', LEO, 1);
 
-  const res = SolicitudesBO.derivarSolicitud(db,
+  const res = await SolicitudesBO.derivarSolicitud(db,
     { solicitud_id: 'SOL-2026-HP-0001', responsable_nuevo: LUIS, motivo: 'me la quiero llevar a mi bandeja' },
     { email: LUIS, rol: 'DEV' }
   );
@@ -136,11 +136,11 @@ test('un DEV NO puede derivar trabajo ajeno', () => {
   assert.equal(filas(db, 'SUBSOLICITUDES')[0].desarrollador_asignado, LEO);
 });
 
-test('Gerencia es de solo lectura: no puede derivar', () => {
+test('Gerencia es de solo lectura: no puede derivar', async () => {
   const db = dbConSchema();
   seedSolicitud(db, 'SOL-2026-HP-0001', LUIS, 1);
 
-  const res = SolicitudesBO.derivarSolicitud(db,
+  const res = await SolicitudesBO.derivarSolicitud(db,
     { solicitud_id: 'SOL-2026-HP-0001', responsable_nuevo: LEO, motivo: 'deberia estar con Leo' },
     { email: 'gerencia@homepymes.cl', rol: 'GERENCIA' }
   );
@@ -149,13 +149,13 @@ test('Gerencia es de solo lectura: no puede derivar', () => {
   assert.equal(historial(db).length, 0);
 });
 
-test('la derivacion en lote escribe una fila de historial por solicitud', () => {
+test('la derivacion en lote escribe una fila de historial por solicitud', async () => {
   const db = dbConSchema();
   seedSolicitud(db, 'SOL-2026-HP-0001', LUIS, 1);
   seedSolicitud(db, 'SOL-2026-HP-0002', LUIS, 1);
   seedSolicitud(db, 'SOL-2026-HP-0003', LUIS, 1);
 
-  const res = SolicitudesBO.derivarSolicitud(db, {
+  const res = await SolicitudesBO.derivarSolicitud(db, {
     solicitud_ids: ['SOL-2026-HP-0001', 'SOL-2026-HP-0002', 'SOL-2026-HP-0003'],
     responsable_nuevo: LEO, motivo: 'traspaso de la bandeja de pruebas a Leo'
   }, { email: ANALISTA, rol: 'ANA' });
@@ -165,11 +165,11 @@ test('la derivacion en lote escribe una fila de historial por solicitud', () => 
   filas(db, 'SUBSOLICITUDES').forEach((s) => assert.equal(s.desarrollador_asignado, LEO));
 });
 
-test('un id invalido aborta el lote completo sin dejar nada a medias', () => {
+test('un id invalido aborta el lote completo sin dejar nada a medias', async () => {
   const db = dbConSchema();
   seedSolicitud(db, 'SOL-2026-HP-0001', LUIS, 1);
 
-  const res = SolicitudesBO.derivarSolicitud(db, {
+  const res = await SolicitudesBO.derivarSolicitud(db, {
     solicitud_ids: ['SOL-2026-HP-0001', 'SOL-2026-HP-9999'],
     responsable_nuevo: LEO, motivo: 'traspaso de la bandeja de pruebas a Leo'
   }, { email: ANALISTA, rol: 'ANA' });
@@ -181,11 +181,11 @@ test('un id invalido aborta el lote completo sin dejar nada a medias', () => {
   assert.equal(filas(db, 'SOLICITUDES')[0].desarrollador_asignado, LUIS);
 });
 
-test('el lote es por solicitud completa, no acepta subsolicitud_id', () => {
+test('el lote es por solicitud completa, no acepta subsolicitud_id', async () => {
   const db = dbConSchema();
   seedSolicitud(db, 'SOL-2026-HP-0001', LUIS, 1);
 
-  const res = SolicitudesBO.derivarSolicitud(db, {
+  const res = await SolicitudesBO.derivarSolicitud(db, {
     solicitud_ids: ['SOL-2026-HP-0001'], subsolicitud_id: 'SOL-2026-HP-0001-01',
     responsable_nuevo: LEO, motivo: 'traspaso de la bandeja de pruebas'
   }, { email: ANALISTA, rol: 'ANA' });

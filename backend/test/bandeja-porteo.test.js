@@ -127,12 +127,12 @@ function seedItemAjeno(db) {
   return seedSubsolicitud(db, { subsolicitud_id: 'SOL-2026-HP-0009-01', solicitud_id: 'SOL-2026-HP-0009', desarrollador_asignado: 'ajeno@homepymes.cl', titulo: 'Trabajo del ajeno' });
 }
 
-test('cuenta del portal: no puede tocar un item que no tiene asignado', () => {
+test('cuenta del portal: no puede tocar un item que no tiene asignado', async () => {
   const db = dbConSchema();
   seedItemAjeno(db);
 
   const estado = SolicitudesBO.actualizarEstado(db, { subsolicitud_id: 'SOL-2026-HP-0009-01', estado_nuevo: 'S07', comentario: 'x' }, ctxPortal());
-  const fecha = SolicitudesBO.comprometerFecha(db, { subsolicitud_id: 'SOL-2026-HP-0009-01', fecha_comprometida: '2099-01-01' }, ctxPortal());
+  const fecha = await SolicitudesBO.comprometerFecha(db, { subsolicitud_id: 'SOL-2026-HP-0009-01', fecha_comprometida: '2099-01-01' }, ctxPortal());
   const edicion = SolicitudesBO.editarContenidoSubsolicitud(db, { subsolicitud_id: 'SOL-2026-HP-0009-01', titulo: 'REESCRITO', descripcion: 'Descripcion larga suficiente para pasar la validacion de longitud.' }, ctxPortal());
 
   assert.equal(estado._forbidden, true, 'no puede cambiar el estado de un item ajeno');

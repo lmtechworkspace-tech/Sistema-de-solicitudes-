@@ -44,9 +44,9 @@ function datosValidos(overrides) {
   );
 }
 
-test('crearSolicitud escribe SOLICITUDES, SUBSOLICITUDES e HISTORIAL_ESTADOS y responde S01', () => {
+test('crearSolicitud escribe SOLICITUDES, SUBSOLICITUDES e HISTORIAL_ESTADOS y responde S01', async () => {
   const db = dbConSchema();
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos());
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos());
 
   assert.match(resultado.solicitud_id, /^SOL-\d{4}-HP-0001$/);
   assert.equal(resultado.estado, 'S01');
@@ -69,9 +69,9 @@ test('crearSolicitud escribe SOLICITUDES, SUBSOLICITUDES e HISTORIAL_ESTADOS y r
   assert.equal(historial[0].estado_nuevo, 'S01');
 });
 
-test('crearSolicitud rechaza datos incompletos (RN-002) con error de validacion', () => {
+test('crearSolicitud rechaza datos incompletos (RN-002) con error de validacion', async () => {
   const db = dbConSchema();
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos({
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos({
     empresa_id: '',
     subsolicitudes: [{ titulo: 'x', descripcion: 'y', impacto: 'SISTEMA_CAIDO', modulo: 'Facturacion', tipo: '' }]
   }));
@@ -82,9 +82,9 @@ test('crearSolicitud rechaza datos incompletos (RN-002) con error de validacion'
   assert.ok(campos.includes('subsolicitudes[0].tipo'));
 });
 
-test('crearSolicitud exige tipo y modulo por item (RN-002, Fase 10)', () => {
+test('crearSolicitud exige tipo y modulo por item (RN-002, Fase 10)', async () => {
   const db = dbConSchema();
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos({
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos({
     subsolicitudes: [{ titulo: 'x', descripcion: 'y', impacto: 'SISTEMA_CAIDO' }]
   }));
 
@@ -94,17 +94,17 @@ test('crearSolicitud exige tipo y modulo por item (RN-002, Fase 10)', () => {
   assert.ok(campos.includes('subsolicitudes[0].modulo'));
 });
 
-test('crearSolicitud exige al menos una subsolicitud con titulo y descripcion (RN-004)', () => {
+test('crearSolicitud exige al menos una subsolicitud con titulo y descripcion (RN-004)', async () => {
   const db = dbConSchema();
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos({ subsolicitudes: [] }));
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos({ subsolicitudes: [] }));
 
   assert.equal(resultado._validationError, true);
   assert.ok(resultado.fields.some((f) => f.campo === 'subsolicitudes'));
 });
 
-test('crearSolicitud exige datos de cliente cuando es_cliente=true (RN-005)', () => {
+test('crearSolicitud exige datos de cliente cuando es_cliente=true (RN-005)', async () => {
   const db = dbConSchema();
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos({ es_cliente: true }));
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos({ es_cliente: true }));
 
   assert.equal(resultado._validationError, true);
   const campos = resultado.fields.map((f) => f.campo);
@@ -113,10 +113,10 @@ test('crearSolicitud exige datos de cliente cuando es_cliente=true (RN-005)', ()
   assert.ok(campos.includes('correo_cliente'));
 });
 
-test('crearSolicitud detecta un duplicado abierto sin bloquear la creacion (RF-F06)', () => {
+test('crearSolicitud detecta un duplicado abierto sin bloquear la creacion (RF-F06)', async () => {
   const db = dbConSchema();
-  const primero = Solicitudes.crearSolicitud(db, datosValidos());
-  const segundo = Solicitudes.crearSolicitud(db, datosValidos());
+  const primero = await Solicitudes.crearSolicitud(db, datosValidos());
+  const segundo = await Solicitudes.crearSolicitud(db, datosValidos());
 
   assert.ok(!primero.posible_duplicado);
   assert.equal(segundo.posible_duplicado.solicitud_id, primero.solicitud_id);
@@ -143,11 +143,11 @@ test('derivarPrioridad_ (P2): con esUrgente=true, nunca baja de P2 -- pero un im
   assert.equal(Solicitudes.derivarPrioridad_('PLANIFICADO', false), 'P5');
 });
 
-test('crearSolicitud (P2): un tipo con es_urgente=true en CAT_TIPOS sube la prioridad a P2 aunque el impacto sea bajo', () => {
+test('crearSolicitud (P2): un tipo con es_urgente=true en CAT_TIPOS sube la prioridad a P2 aunque el impacto sea bajo', async () => {
   const db = dbConSchema();
   seed(db, 'CAT_TIPOS', [['ERR', 'Error / Bug', 'P2', true, true], ['MEJ', 'Mejora', 'P3', true, false]]);
 
-  Solicitudes.crearSolicitud(db, datosValidos({
+  await Solicitudes.crearSolicitud(db, datosValidos({
     subsolicitudes: [{ titulo: 'Idea nueva', descripcion: 'seria bueno tener esto', impacto: 'PLANIFICADO', modulo: 'Facturacion', tipo: 'ERR' }]
   }));
 
@@ -155,41 +155,41 @@ test('crearSolicitud (P2): un tipo con es_urgente=true en CAT_TIPOS sube la prio
   assert.equal(filas(db, 'SOLICITUDES')[0].prioridad_derivada, 'P2');
 });
 
-test('crearSolicitud (P2): un tipo con es_urgente=false NO sube la prioridad -- sigue derivandose solo del impacto', () => {
+test('crearSolicitud (P2): un tipo con es_urgente=false NO sube la prioridad -- sigue derivandose solo del impacto', async () => {
   const db = dbConSchema();
   seed(db, 'CAT_TIPOS', [['MEJ', 'Mejora', 'P3', true, false]]);
 
-  Solicitudes.crearSolicitud(db, datosValidos({
+  await Solicitudes.crearSolicitud(db, datosValidos({
     subsolicitudes: [{ titulo: 'Idea nueva', descripcion: 'seria bueno tener esto', impacto: 'PLANIFICADO', modulo: 'Facturacion', tipo: 'MEJ' }]
   }));
 
   assert.equal(filas(db, 'SUBSOLICITUDES')[0].prioridad, 'P5');
 });
 
-test('crearSolicitud (P12) NO avisa a Leo si AVISO_LEO esta desactivado, aunque sea P1', () => {
+test('crearSolicitud (P12) NO avisa a Leo si AVISO_LEO esta desactivado, aunque sea P1', async () => {
   const db = dbConSchema();
   seed(db, 'CONFIG_NOTIFICACIONES', [['AVISO_LEO', 'AVISO_DESARROLLO', '', '', false]]);
 
-  Solicitudes.crearSolicitud(db, datosValidos());
+  await Solicitudes.crearSolicitud(db, datosValidos());
 
   const avisos = filas(db, 'LOG_NOTIFICACIONES').filter((n) => n.evento === 'AVISO_DESARROLLO');
   assert.equal(avisos.length, 0);
 });
 
-test('crearSolicitud (P12) SI avisa a Leo si no existe el registro AVISO_LEO (compatibilidad hacia atras)', () => {
+test('crearSolicitud (P12) SI avisa a Leo si no existe el registro AVISO_LEO (compatibilidad hacia atras)', async () => {
   const db = dbConSchema();
 
-  Solicitudes.crearSolicitud(db, datosValidos());
+  await Solicitudes.crearSolicitud(db, datosValidos());
 
   const avisos = filas(db, 'LOG_NOTIFICACIONES').filter((n) => n.evento === 'AVISO_DESARROLLO');
   assert.equal(avisos.length, 1);
 });
 
-test('crearSolicitud (P2): toda solicitud de cliente sube a P2 aunque el tipo no sea urgente (RN-005/P4 formalizado)', () => {
+test('crearSolicitud (P2): toda solicitud de cliente sube a P2 aunque el tipo no sea urgente (RN-005/P4 formalizado)', async () => {
   const db = dbConSchema();
   seed(db, 'CAT_TIPOS', [['MEJ', 'Mejora', 'P3', true, false]]);
 
-  Solicitudes.crearSolicitud(db, datosValidos({
+  await Solicitudes.crearSolicitud(db, datosValidos({
     es_cliente: true, empresa_cliente: 'Constructora X', contacto_cliente: 'Ana', correo_cliente: 'ana@constructorax.cl',
     subsolicitudes: [{ titulo: 'Idea nueva', descripcion: 'pedido de cliente', impacto: 'PLANIFICADO', modulo: 'Facturacion', tipo: 'MEJ' }]
   }));
@@ -197,9 +197,9 @@ test('crearSolicitud (P2): toda solicitud de cliente sube a P2 aunque el tipo no
   assert.equal(filas(db, 'SUBSOLICITUDES')[0].prioridad, 'P2');
 });
 
-test('la prioridad_derivada del padre es la mas critica entre sus subsolicitudes', () => {
+test('la prioridad_derivada del padre es la mas critica entre sus subsolicitudes', async () => {
   const db = dbConSchema();
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos({
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos({
     subsolicitudes: [
       { titulo: 'Item menor', descripcion: 'algo parcial', impacto: 'PARCIAL_CON_WORKAROUND', modulo: 'Facturacion', tipo: 'ERR' },
       { titulo: 'Item critico', descripcion: 'todo caido', impacto: 'SISTEMA_CAIDO', modulo: 'Facturacion', tipo: 'ERR' }
@@ -210,17 +210,17 @@ test('la prioridad_derivada del padre es la mas critica entre sus subsolicitudes
   assert.equal(filas(db, 'SOLICITUDES')[0].prioridad_derivada, 'P1');
 });
 
-test('crearSolicitud exige el cargo del solicitante (RF-001, v1.0)', () => {
+test('crearSolicitud exige el cargo del solicitante (RF-001, v1.0)', async () => {
   const db = dbConSchema();
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos({ solicitante_cargo: '' }));
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos({ solicitante_cargo: '' }));
 
   assert.equal(resultado._validationError, true);
   assert.ok(resultado.fields.some((f) => f.campo === 'solicitante_cargo'));
 });
 
-test('crearSolicitud guarda los campos ampliados de v1.0 (cargo, cliente, subsolicitud)', () => {
+test('crearSolicitud guarda los campos ampliados de v1.0 (cargo, cliente, subsolicitud)', async () => {
   const db = dbConSchema();
-  Solicitudes.crearSolicitud(db, datosValidos({
+  await Solicitudes.crearSolicitud(db, datosValidos({
     es_cliente: true,
     empresa_cliente: 'Cliente SA', cliente_mandante: 'Mandante SA', cliente_obra: 'Obra Norte',
     contacto_cliente: 'Pedro', correo_cliente: 'pedro@cliente.cl', telefono_cliente: '+56911111111',
@@ -253,9 +253,9 @@ test('crearSolicitud guarda los campos ampliados de v1.0 (cargo, cliente, subsol
   assert.equal(subsolicitud.estimacion_horas, 8);
 });
 
-test('crearSolicitud guarda rut_cliente y codigo_cliente del cliente elegido en el buscador (Idea 1)', () => {
+test('crearSolicitud guarda rut_cliente y codigo_cliente del cliente elegido en el buscador (Idea 1)', async () => {
   const db = dbConSchema();
-  Solicitudes.crearSolicitud(db, datosValidos({
+  await Solicitudes.crearSolicitud(db, datosValidos({
     es_cliente: true,
     empresa_cliente: 'Alfacorp SpA', contacto_cliente: 'Manuel Alfaro',
     correo_cliente: 'contacto.alfacorp1@gmail.com', telefono_cliente: '955309287',
@@ -267,17 +267,17 @@ test('crearSolicitud guarda rut_cliente y codigo_cliente del cliente elegido en 
   assert.equal(solicitud.codigo_cliente, 'HP-013-1');
 });
 
-test('crearSolicitud deja rut_cliente/codigo_cliente vacios en solicitud interna (sin cliente)', () => {
+test('crearSolicitud deja rut_cliente/codigo_cliente vacios en solicitud interna (sin cliente)', async () => {
   const db = dbConSchema();
-  Solicitudes.crearSolicitud(db, datosValidos({}));
+  await Solicitudes.crearSolicitud(db, datosValidos({}));
   const solicitud = filas(db, 'SOLICITUDES')[0];
   assert.equal(solicitud.rut_cliente, '');
   assert.equal(solicitud.codigo_cliente, '');
 });
 
-test('crearSolicitud guarda cc y urls_adicionales (Fase 9, hallazgo de datos reales)', () => {
+test('crearSolicitud guarda cc y urls_adicionales (Fase 9, hallazgo de datos reales)', async () => {
   const db = dbConSchema();
-  Solicitudes.crearSolicitud(db, datosValidos({
+  await Solicitudes.crearSolicitud(db, datosValidos({
     cc: 'copia@empresa.cl',
     subsolicitudes: [{
       titulo: 'Titulo', descripcion: 'Desc', impacto: 'PLANIFICADO',
@@ -301,7 +301,7 @@ test('crearSolicitud guarda cc y urls_adicionales (Fase 9, hallazgo de datos rea
   ]);
 });
 
-test('crearSolicitud guarda tipo/modulo por item, frecuencia/personas_afectadas e imagen_descripciones (Fase 10)', () => {
+test('crearSolicitud guarda tipo/modulo por item, frecuencia/personas_afectadas e imagen_descripciones (Fase 10)', async () => {
   const db = dbConSchema();
   seed(db, 'CAT_TIPOS', [['ERR', 'Error / Bug', 'P2', true], ['MEJ', 'Mejora', 'P3', true]]);
   seed(db, 'CAT_MODULOS', [
@@ -309,7 +309,7 @@ test('crearSolicitud guarda tipo/modulo por item, frecuencia/personas_afectadas 
     ['Reportes', 'Reportes', 'ERP', '', true]
   ]);
 
-  Solicitudes.crearSolicitud(db, datosValidos({
+  await Solicitudes.crearSolicitud(db, datosValidos({
     subsolicitudes: [
       {
         titulo: 'Item 1', descripcion: 'Desc 1', impacto: 'SISTEMA_CAIDO', modulo: 'Facturacion', tipo: 'ERR',
@@ -344,25 +344,25 @@ test('crearSolicitud guarda tipo/modulo por item, frecuencia/personas_afectadas 
   assert.equal(solicitud.tipo_nombre, 'Error / Bug');
 });
 
-test('crearSolicitud rechaza un cc con formato de correo invalido', () => {
+test('crearSolicitud rechaza un cc con formato de correo invalido', async () => {
   const db = dbConSchema();
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos({ cc: 'no-es-un-correo' }));
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos({ cc: 'no-es-un-correo' }));
 
   assert.equal(resultado._validationError, true);
   assert.ok(resultado.fields.some((f) => f.campo === 'cc'));
 });
 
-test('crearSolicitud (v2.1) exige fecha+hora propuesta cuando el impacto deriva P1', () => {
+test('crearSolicitud (v2.1) exige fecha+hora propuesta cuando el impacto deriva P1', async () => {
   const db = dbConSchema();
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos({ fecha_propuesta: '' }));
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos({ fecha_propuesta: '' }));
 
   assert.equal(resultado._validationError, true);
   assert.ok(resultado.fields.some((f) => f.campo === 'fecha_propuesta'));
 });
 
-test('crearSolicitud (v2.1) exige fecha+hora propuesta cuando es_cliente=true, aunque el impacto no sea P1', () => {
+test('crearSolicitud (v2.1) exige fecha+hora propuesta cuando es_cliente=true, aunque el impacto no sea P1', async () => {
   const db = dbConSchema();
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos({
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos({
     es_cliente: true, empresa_cliente: 'Constructora X', contacto_cliente: 'Ana', correo_cliente: 'ana@constructorax.cl',
     fecha_propuesta: '',
     subsolicitudes: [{ titulo: 'x', descripcion: 'y', impacto: 'PLANIFICADO', modulo: 'Facturacion', tipo: 'ERR' }]
@@ -372,17 +372,17 @@ test('crearSolicitud (v2.1) exige fecha+hora propuesta cuando es_cliente=true, a
   assert.ok(resultado.fields.some((f) => f.campo === 'fecha_propuesta'));
 });
 
-test('crearSolicitud (v2.1) rechaza fecha propuesta SIN hora cuando se requiere (cliente/P1)', () => {
+test('crearSolicitud (v2.1) rechaza fecha propuesta SIN hora cuando se requiere (cliente/P1)', async () => {
   const db = dbConSchema();
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos({ fecha_propuesta: '2026-08-01' }));
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos({ fecha_propuesta: '2026-08-01' }));
 
   assert.equal(resultado._validationError, true);
   assert.ok(resultado.fields.some((f) => f.campo === 'fecha_propuesta'));
 });
 
-test('crearSolicitud (v2.1) NO exige fecha propuesta cuando no es cliente ni P1 (es opcional)', () => {
+test('crearSolicitud (v2.1) NO exige fecha propuesta cuando no es cliente ni P1 (es opcional)', async () => {
   const db = dbConSchema();
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos({
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos({
     fecha_propuesta: '',
     subsolicitudes: [{ titulo: 'x', descripcion: 'y', impacto: 'PLANIFICADO', modulo: 'Facturacion', tipo: 'ERR' }]
   }));
@@ -390,9 +390,9 @@ test('crearSolicitud (v2.1) NO exige fecha propuesta cuando no es cliente ni P1 
   assert.equal(resultado._validationError, undefined);
 });
 
-test('crearSolicitud (v2.1) acepta solo fecha (sin hora) cuando la propuesta es opcional', () => {
+test('crearSolicitud (v2.1) acepta solo fecha (sin hora) cuando la propuesta es opcional', async () => {
   const db = dbConSchema();
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos({
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos({
     fecha_propuesta: '2026-08-01',
     subsolicitudes: [{ titulo: 'x', descripcion: 'y', impacto: 'PLANIFICADO', modulo: 'Facturacion', tipo: 'ERR' }]
   }));
@@ -401,9 +401,9 @@ test('crearSolicitud (v2.1) acepta solo fecha (sin hora) cuando la propuesta es 
   assert.equal(filas(db, 'SUBSOLICITUDES')[0].fecha_propuesta, '2026-08-01');
 });
 
-test('crearSolicitud (v2.1) replica fecha_propuesta en cada item y deja fecha_comprometida/fecha_terminada/comprometida_por vacias', () => {
+test('crearSolicitud (v2.1) replica fecha_propuesta en cada item y deja fecha_comprometida/fecha_terminada/comprometida_por vacias', async () => {
   const db = dbConSchema();
-  Solicitudes.crearSolicitud(db, datosValidos({
+  await Solicitudes.crearSolicitud(db, datosValidos({
     subsolicitudes: [
       { titulo: 'Item 1', descripcion: 'Desc 1', impacto: 'SISTEMA_CAIDO', modulo: 'Facturacion', tipo: 'ERR' },
       { titulo: 'Item 2', descripcion: 'Desc 2', impacto: 'PLANIFICADO', modulo: 'Facturacion', tipo: 'ERR' }
@@ -420,9 +420,9 @@ test('crearSolicitud (v2.1) replica fecha_propuesta en cada item y deja fecha_co
   });
 });
 
-test('generarResumenWhatsapp_ sigue el formato de RF-015 con un solo item', () => {
+test('generarResumenWhatsapp_ sigue el formato de RF-015 con un solo item', async () => {
   const db = dbConSchema();
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos());
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos());
 
   const lineas = resultado.resumen_whatsapp.split('\n');
   assert.match(lineas[0], /^📋 SOLICITUD N° SOL-/);
@@ -432,14 +432,14 @@ test('generarResumenWhatsapp_ sigue el formato de RF-015 con un solo item', () =
   assert.equal(lineas[6], '📝 Resumen: La pantalla queda en blanco');
 });
 
-test('crearSolicitud guarda los nombres desnormalizados de los catalogos (§13.2 v1.0)', () => {
+test('crearSolicitud guarda los nombres desnormalizados de los catalogos (§13.2 v1.0)', async () => {
   const db = dbConSchema();
   seed(db, 'CAT_EMPRESAS', [['HP', 'HomePymes', '', true]]);
   seed(db, 'CAT_PLATAFORMAS', [['ERP', 'Sistema ERP', 'HP', '', true]]);
   seed(db, 'CAT_MODULOS', [['Facturacion', 'Facturacion Electronica', 'ERP', '', true]]);
   seed(db, 'CAT_TIPOS', [['ERR', 'Error / Bug', 'P2', true]]);
 
-  Solicitudes.crearSolicitud(db, datosValidos());
+  await Solicitudes.crearSolicitud(db, datosValidos());
 
   const solicitud = filas(db, 'SOLICITUDES')[0];
   assert.equal(solicitud.empresa_nombre, 'HomePymes');
@@ -448,23 +448,23 @@ test('crearSolicitud guarda los nombres desnormalizados de los catalogos (§13.2
   assert.equal(solicitud.tipo_nombre, 'Error / Bug');
 });
 
-test('crearSolicitud no falla si los catalogos aun no existen (nombre desnormalizado queda vacio)', () => {
+test('crearSolicitud no falla si los catalogos aun no existen (nombre desnormalizado queda vacio)', async () => {
   const db = abrirDb_();
   // A proposito NO se siembran CAT_* -- solo lo minimo que crearSolicitud necesita.
   ['SOLICITUDES', 'SUBSOLICITUDES', 'HISTORIAL_ESTADOS', 'COUNTERS', 'LOG_NOTIFICACIONES', 'CONFIG_NOTIFICACIONES'].forEach((h) =>
     sembrarTabla_(db, h, COLUMNAS[h], []));
   sembrarTabla_(db, 'CONFIG_SLA', COLUMNAS.CONFIG_SLA, [['P1', 2]]);
 
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos());
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos());
 
   assert.ok(resultado.solicitud_id);
   const solicitud = filas(db, 'SOLICITUDES')[0];
   assert.equal(solicitud.empresa_nombre, '');
 });
 
-test('generarResumenWhatsapp_ indica la cantidad de items en vez de listarlos (RF-F07)', () => {
+test('generarResumenWhatsapp_ indica la cantidad de items en vez de listarlos (RF-F07)', async () => {
   const db = dbConSchema();
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos({
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos({
     subsolicitudes: [
       { titulo: 'Item 1', descripcion: 'Desc 1', impacto: 'PARCIAL_CON_WORKAROUND', modulo: 'Facturacion', tipo: 'ERR' },
       { titulo: 'Item 2', descripcion: 'Desc 2', impacto: 'PARCIAL_CON_WORKAROUND', modulo: 'Facturacion', tipo: 'ERR' }
@@ -474,9 +474,9 @@ test('generarResumenWhatsapp_ indica la cantidad de items en vez de listarlos (R
   assert.ok(resultado.resumen_whatsapp.includes('📝 Resumen: 2 items — ver detalle en correo'));
 });
 
-test('crearSolicitud (v3.0): sin plataforma asociada NO exige plataforma ni modulo', () => {
+test('crearSolicitud (v3.0): sin plataforma asociada NO exige plataforma ni modulo', async () => {
   const db = dbConSchema();
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos({
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos({
     asociada_plataforma: false, plataforma: '', fecha_propuesta: '',
     subsolicitudes: [{ titulo: 'Pedido administrativo', descripcion: 'Necesito acceso a la carpeta X', impacto: 'PLANIFICADO', tipo: 'CON' }]
   }));
@@ -490,9 +490,9 @@ test('crearSolicitud (v3.0): sin plataforma asociada NO exige plataforma ni modu
   assert.equal(sub.tipo, 'CON');
 });
 
-test('crearSolicitud (v3.0): sin plataforma, el resumen WhatsApp omite Sistema/Modulo', () => {
+test('crearSolicitud (v3.0): sin plataforma, el resumen WhatsApp omite Sistema/Modulo', async () => {
   const db = dbConSchema();
-  const resultado = Solicitudes.crearSolicitud(db, datosValidos({
+  const resultado = await Solicitudes.crearSolicitud(db, datosValidos({
     asociada_plataforma: false, plataforma: '', fecha_propuesta: '',
     subsolicitudes: [{ titulo: 'Pedido', descripcion: 'Algo no técnico', impacto: 'PLANIFICADO', tipo: 'CON' }]
   }));
@@ -502,13 +502,13 @@ test('crearSolicitud (v3.0): sin plataforma, el resumen WhatsApp omite Sistema/M
   assert.ok(resultado.resumen_whatsapp.indexOf('🏢 Empresa: HP') !== -1);
 });
 
-test('crearSolicitud (v3.0): CON plataforma (o sin la bandera) SIGUE exigiendo plataforma y modulo', () => {
+test('crearSolicitud (v3.0): CON plataforma (o sin la bandera) SIGUE exigiendo plataforma y modulo', async () => {
   const db = dbConSchema();
-  const sinPlataforma = Solicitudes.crearSolicitud(db, datosValidos({ plataforma: '' }));
+  const sinPlataforma = await Solicitudes.crearSolicitud(db, datosValidos({ plataforma: '' }));
   assert.equal(sinPlataforma._validationError, true);
   assert.ok(sinPlataforma.fields.some((f) => f.campo === 'plataforma'));
 
-  const sinModulo = Solicitudes.crearSolicitud(db, datosValidos({
+  const sinModulo = await Solicitudes.crearSolicitud(db, datosValidos({
     asociada_plataforma: true,
     subsolicitudes: [{ titulo: 'x', descripcion: 'y', impacto: 'PLANIFICADO', tipo: 'ERR' }]
   }));

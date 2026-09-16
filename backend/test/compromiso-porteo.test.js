@@ -51,11 +51,11 @@ function seedSolicitud(db, overrides) {
 const DEV = { email: 'dev@homepymes.cl', rol: 'DEV' };
 const GERENCIA = { email: 'gerencia@homepymes.cl', rol: 'GERENCIA' };
 
-test('comprometerFecha (v2.1): el desarrollador fija la fecha comprometida por primera vez, sin exigir motivo', () => {
+test('comprometerFecha (v2.1): el desarrollador fija la fecha comprometida por primera vez, sin exigir motivo', async () => {
   const db = dbConSchema();
   seedSolicitud(db); seedSubsolicitud(db);
 
-  const resultado = SolicitudesBO.comprometerFecha(db,
+  const resultado = await SolicitudesBO.comprometerFecha(db,
     { subsolicitud_id: 'SOL-2026-HP-0001-01', fecha_comprometida: '2026-08-05T18:00' }, DEV
   );
 
@@ -69,17 +69,17 @@ test('comprometerFecha (v2.1): el desarrollador fija la fecha comprometida por p
   assert.equal(filas(db, 'HISTORIAL_COMPROMISO').length, 0);
 });
 
-test('comprometerFecha (v2.1): re-comprometer exige motivo (>=20 caracteres) y queda en HISTORIAL_COMPROMISO', () => {
+test('comprometerFecha (v2.1): re-comprometer exige motivo (>=20 caracteres) y queda en HISTORIAL_COMPROMISO', async () => {
   const db = dbConSchema();
   seedSolicitud(db); seedSubsolicitud(db, { fecha_comprometida: '2026-08-05T18:00', comprometida_por: 'dev@homepymes.cl' });
 
-  const sinMotivo = SolicitudesBO.comprometerFecha(db,
+  const sinMotivo = await SolicitudesBO.comprometerFecha(db,
     { subsolicitud_id: 'SOL-2026-HP-0001-01', fecha_comprometida: '2026-08-10T18:00' }, DEV
   );
   assert.equal(sinMotivo._validationError, true);
   assert.ok(sinMotivo.fields.some((f) => f.campo === 'motivo'));
 
-  const resultado = SolicitudesBO.comprometerFecha(db, {
+  const resultado = await SolicitudesBO.comprometerFecha(db, {
     subsolicitud_id: 'SOL-2026-HP-0001-01', fecha_comprometida: '2026-08-10T18:00', motivo: 'El cliente amplio el alcance del item'
   }, DEV);
   assert.equal(resultado.re_compromiso, true);
@@ -92,27 +92,27 @@ test('comprometerFecha (v2.1): re-comprometer exige motivo (>=20 caracteres) y q
   assert.equal(historial[0].usuario, 'dev@homepymes.cl');
 });
 
-test('comprometerFecha (v2.1): Gerencia es de solo lectura, no puede comprometer fechas', () => {
+test('comprometerFecha (v2.1): Gerencia es de solo lectura, no puede comprometer fechas', async () => {
   const db = dbConSchema();
   seedSolicitud(db); seedSubsolicitud(db);
 
-  const resultado = SolicitudesBO.comprometerFecha(db,
+  const resultado = await SolicitudesBO.comprometerFecha(db,
     { subsolicitud_id: 'SOL-2026-HP-0001-01', fecha_comprometida: '2026-08-05T18:00' }, GERENCIA
   );
   assert.equal(resultado._forbidden, true);
   assert.equal(filas(db, 'SUBSOLICITUDES')[0].fecha_comprometida, '');
 });
 
-test('comprometerFecha (v2.1): rechaza una fecha invalida o un item inexistente', () => {
+test('comprometerFecha (v2.1): rechaza una fecha invalida o un item inexistente', async () => {
   const db = dbConSchema();
   seedSolicitud(db); seedSubsolicitud(db);
 
-  const fechaInvalida = SolicitudesBO.comprometerFecha(db,
+  const fechaInvalida = await SolicitudesBO.comprometerFecha(db,
     { subsolicitud_id: 'SOL-2026-HP-0001-01', fecha_comprometida: 'no-es-una-fecha' }, DEV
   );
   assert.equal(fechaInvalida._validationError, true);
 
-  const itemInexistente = SolicitudesBO.comprometerFecha(db,
+  const itemInexistente = await SolicitudesBO.comprometerFecha(db,
     { subsolicitud_id: 'NO-EXISTE', fecha_comprometida: '2026-08-05T18:00' }, DEV
   );
   assert.equal(itemInexistente._validationError, true);
