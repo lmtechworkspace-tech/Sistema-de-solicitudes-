@@ -12,6 +12,7 @@
 const { crearServidor, VERSION_API } = require('./app');
 const { abrirDbProduccion } = require('../db');
 const Notificaciones = require('../logica/notificaciones');
+const Novedades = require('../logica/novedades');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
 const db = abrirDbProduccion();
@@ -54,6 +55,14 @@ const intervaloTriggersDiarios = setInterval(() => {
   if (enVentanaDiaria_(ahora, 18)) {
     Notificaciones.enviarDigestJefatura(db).catch((err) => {
       console.error('error enviando el digest de Jefatura:', err);
+    });
+  }
+  // Recordatorio diario de novedades pendientes de acuse (09:00 America/
+  // Santiago). Dedup por evento+dia (NOVEDAD_RECORDATORIO:fecha), igual que
+  // los otros: llamarlo de mas dentro de la ventana no duplica correos.
+  if (enVentanaDiaria_(ahora, 9)) {
+    Novedades.recordatorioPendientes(db).catch((err) => {
+      console.error('error enviando el recordatorio de novedades:', err);
     });
   }
 }, INTERVALO_COLA_CORREO_MS);

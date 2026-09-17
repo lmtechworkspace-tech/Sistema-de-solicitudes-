@@ -528,11 +528,21 @@ function listarLogs(db, data, contexto) {
     .slice(0, limite);
 }
 
+// Envio de correo generico para otros modulos (Novedades, etc.): mismo
+// transporte/dedup/cola que el resto, sin componer un texto especifico
+// aqui. El HTML branded lo genera htmlAutoDesdeTexto_ a partir del cuerpo
+// de texto plano -- se prefiere sobre portar el HTML hecho a mano de cada
+// correo del .gs (mismo criterio de "no re-portar cada plantilla": el
+// correo sale igual de branded, generado desde el texto).
+function enviarCorreoModulo(db, opciones) {
+  return enviarCorreo_(db, opciones);
+}
+
 module.exports = {
   enviarAcuseRecibo, enviarAvisoDesarrollo, avisarAtencionDirectaRegistrada,
   notificarCambioEstado, avisarCompromisoFecha, notificarDerivacion, enviarCodigoAcceso,
   notificarValidacionSolicitante, notificarRespuestaSolicitante, enviarDigestJefatura,
-  notificarPatron, detectarPatrones,
+  notificarPatron, detectarPatrones, enviarCorreoModulo,
   procesarColaCorreo, listarLogs,
   MAX_REINTENTOS_CORREO
 };

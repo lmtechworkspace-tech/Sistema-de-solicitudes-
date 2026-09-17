@@ -96,7 +96,34 @@ const COLUMNAS = {
     'activo', 'ultimo_acceso', 'creado_por'
   ],
   JEFATURAS: ['jefatura_id', 'jefe_email', 'subordinado_email', 'activo'],
-  COMENTARIOS: ['comentario_id', 'solicitud_id', 'subsolicitud_id', 'usuario', 'texto', 'es_interno', 'timestamp']
+  COMENTARIOS: ['comentario_id', 'solicitud_id', 'subsolicitud_id', 'usuario', 'texto', 'es_interno', 'timestamp'],
+
+  // Modulo Novedades (v6.5-v6.9). Mismas columnas que en
+  // backend/backoffice/Constantes.gs. El area de una novedad es ETIQUETA, no
+  // audiencia (ver Novedades.gs); la audiencia real vive en audiencia_tipo +
+  // NOVEDADES_AUDIENCIA. El adjunto (archivo_id/nombre/mime) queda para
+  // cuando exista almacenamiento de archivos (R2) -- por ahora no se acepta.
+  NOVEDADES: [
+    'novedad_id', 'tipo', 'titulo', 'resumen', 'cuerpo',
+    'area_id', 'area_nombre', 'autor_email', 'autor_nombre',
+    'requiere_acuse', 'fecha_vigencia',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'estado', 'fecha_creacion', 'aprobador_email', 'aprobador_nombre',
+    'fecha_aprobacion', 'motivo_devolucion',
+    'audiencia_tipo', 'fecha_limite_acuse', 'fecha_publicacion', 'activa'
+  ],
+  NOVEDADES_LECTURAS: ['lectura_id', 'novedad_id', 'usuario_email', 'leido_en'],
+  NOVEDADES_HISTORIAL: ['historial_id', 'novedad_id', 'evento', 'autor_email', 'autor_nombre', 'comentario', 'timestamp'],
+  NOVEDADES_AUDIENCIA: ['audiencia_id', 'novedad_id', 'destinatario_email'],
+
+  // Notificaciones "vivas" (v7.1): espejo en pantalla de lo que ya se manda
+  // por correo. Solo el lado de ENCOLADO se porta con Novedades (para no
+  // romper su publicacion); el lado de lectura/marcar-leida es su propio
+  // modulo, pendiente.
+  NOTIFICACIONES_APP: [
+    'notif_id', 'destinatario_email', 'tipo', 'titulo', 'mensaje',
+    'modulo_id', 'texto_accion', 'leida', 'creada_en', 'expira_en'
+  ]
 };
 
 function asegurarEsquema(db) {

@@ -35,6 +35,7 @@ const Jefatura = require('../logica/jefatura');
 const Dashboard = require('../logica/dashboard');
 const Gerencia = require('../logica/gerencia');
 const Notificaciones = require('../logica/notificaciones');
+const Novedades = require('../logica/novedades');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -90,7 +91,25 @@ const ACCIONES = {
   getPanelGerencia: (db, data, contexto) => Gerencia.getPanel(db, data, contexto),
   getPanelJefatura: (db, data, contexto) => Jefatura.getPanel(db, data, contexto),
 
-  listarLogsNotificaciones: (db, data, contexto) => Notificaciones.listarLogs(db, data, contexto)
+  listarLogsNotificaciones: (db, data, contexto) => Notificaciones.listarLogs(db, data, contexto),
+
+  // Modulo Novedades (mismos nombres de accion que BACKOFFICE_ACTIONS en el .gs).
+  listarAreasPublicablesNovedad: (db, data, contexto) => Novedades.listarAreasPublicables(db, data, contexto),
+  getFeedNovedades: (db, data, contexto) => Novedades.getFeed(db, data, contexto),
+  getDetalleNovedad: (db, data, contexto) => Novedades.getDetalle(db, data, contexto),
+  getHistorialNovedad: (db, data, contexto) => Novedades.getHistorial(db, data, contexto),
+  publicarNovedad: (db, data, contexto) => Novedades.publicar(db, data, contexto),
+  aprobarNovedad: (db, data, contexto) => Novedades.aprobar(db, data, contexto),
+  devolverNovedad: (db, data, contexto) => Novedades.devolver(db, data, contexto),
+  rechazarNovedad: (db, data, contexto) => Novedades.rechazar(db, data, contexto),
+  reenviarNovedad: (db, data, contexto) => Novedades.reenviar(db, data, contexto),
+  listarPendientesAprobacionNovedad: (db, data, contexto) => Novedades.listarPendientesAprobacion(db, data, contexto),
+  misPendientesNovedad: (db, data, contexto) => Novedades.misPendientes(db, data, contexto),
+  despublicarNovedad: (db, data, contexto) => Novedades.despublicar(db, data, contexto),
+  marcarLeidaNovedad: (db, data, contexto) => Novedades.marcarLeida(db, data, contexto),
+  descargarAdjuntoNovedad: (db, data, contexto) => Novedades.descargarAdjunto(db, data, contexto),
+  getLectoresNovedad: (db, data, contexto) => Novedades.getLectores(db, data, contexto),
+  getPanelCumplimientoNovedad: (db, data, contexto) => Novedades.getPanelCumplimiento(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

@@ -45,6 +45,18 @@ function obtenerEquipoJefe_(db, jefeEmail) {
     .filter((email, i, todos) => email && todos.indexOf(email) === i);
 }
 
+// Inverso de obtenerEquipoJefe_: el jefe ACTIVO de un subordinado (o '' si
+// no tiene). Lo usa Novedades.gs (aprobacion controlada por la jefatura del
+// autor); mismo criterio de igualdad exacta que obtenerEquipoJefe_.
+function jefeDeSubordinado_(db, subordinadoEmail) {
+  if (!subordinadoEmail) return '';
+  const fila = leerFilasSeguro_(db, 'JEFATURAS').find((j) => {
+    const activo = j.activo === true || j.activo === 'TRUE' || j.activo === 1;
+    return activo && j.subordinado_email === subordinadoEmail;
+  });
+  return fila ? fila.jefe_email : '';
+}
+
 /**
  * Una solicitud/subsolicitud es "de mi equipo" si el SOLICITANTE o el
  * RESOLUTOR (del item puntual, o el de la cabecera como respaldo) esta en
@@ -331,4 +343,4 @@ function getPanel(db, filtros, contexto) {
   };
 }
 
-module.exports = { listar, gestionar, getPanel, obtenerEquipoJefe_, esDelEquipoJefatura_, esDelEquipoJefaturaSolicitud_ };
+module.exports = { listar, gestionar, getPanel, obtenerEquipoJefe_, jefeDeSubordinado_, esDelEquipoJefatura_, esDelEquipoJefaturaSolicitud_ };
