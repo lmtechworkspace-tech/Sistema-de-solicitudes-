@@ -36,10 +36,32 @@ var MAX_INTENTOS_LECTURA = 3;
 // verificadas contra api.ctrly.cl (ver backend/server/router.js -- misma
 // lista, ACCIONES). Se enrutan aqui SIN importar que url haya pasado el
 // llamador (INTAKE_URL o BACKOFFICE_URL): el enrutamiento es por nombre de
-// accion, no por pagina, asi que ninguna pagina necesita cambios. Todo lo
-// que NO esta en esta lista (Proyectos/Actividades/SGC/Pausas/Novedades)
-// sigue yendo exactamente a donde iba siempre.
+// accion, no por pagina, asi que ninguna pagina necesita cambios.
+//
+// IMPORTANTE (lo que se olvidó actualizar en los primeros módulos portados,
+// hasta que se detectó en producción): cada vez que se porta un módulo
+// nuevo en backend/logica/ y se conecta en router.js, hay que agregar sus
+// acciones AQUÍ TAMBIÉN -- si no, el backend nuevo queda desplegado y
+// probado por curl pero el sitio real jamás lo llama. Que la accion exista
+// en router.js NO significa que el frontend ya la use.
+//
+// Excluidas a propósito (siguen en Apps Script hasta que exista R2): toda
+// acción que sube o baja un archivo real (adjuntos, PDF, libro Excel,
+// centro documental) -- en Node esas devuelven un error de "almacenamiento
+// no configurado" en vez de servir el archivo real que Apps Script sí sirve
+// hoy. Cortarlas ahora sería una regresión, no una mejora. Lista completa:
+// publicarNovedad, descargarAdjuntoNovedad, crearDocumentoSgc,
+// nuevaVersionDocumentoSgc, actualizarDocumentoSgc, descargarDocumentoSgc,
+// guardarDescriptorSgc, actualizarDescriptorSgc, descargarDescriptorSgc,
+// guardarDocumentoPersonaSgc, descargarDocumentoPersonaSgc,
+// descargarReporteCumplimientoPausasPdf, descargarReporteGerenciaPausasPdf,
+// subirAdjuntoProyecto, descargarAdjuntoProyecto, gestionarDocumentoProyecto,
+// subirVersionDocumentoProyecto, marcarVersionVigenteProyecto,
+// listarVersionesDocumentoProyecto, descargarVersionDocumentoProyecto,
+// descargarDocumentoProyecto, descargarReporteProyecto, descargarLibroProyecto,
+// descargarReporteActividadesPdf, descargarActaReunionPdf.
 var ACCIONES_PORTADAS_NODE = {
+  // --- Núcleo (Auth/Portal, Catálogos, Solicitudes, Dashboard/Gerencia/Jefatura) ---
   portalLogin: true, portalLogout: true, portalSesion: true, portalCambiarPassword: true,
   listarCuentasPortal: true, gestionarCuentaPortal: true,
   guardarCatalogo: true, listarCatalogo: true, getCatalogos: true,
@@ -51,7 +73,60 @@ var ACCIONES_PORTADAS_NODE = {
   listarJefaturas: true, gestionarJefatura: true,
   getDashboardData: true, getPautaTrabajo: true,
   getPanelGerencia: true, getPanelJefatura: true,
-  listarLogsNotificaciones: true
+  listarLogsNotificaciones: true,
+
+  // --- Novedades (16 acciones portadas; adjunto/descarga siguen en Apps Script) ---
+  listarAreasPublicablesNovedad: true, getFeedNovedades: true, getDetalleNovedad: true,
+  getHistorialNovedad: true, aprobarNovedad: true, devolverNovedad: true, rechazarNovedad: true,
+  reenviarNovedad: true, listarPendientesAprobacionNovedad: true, misPendientesNovedad: true,
+  despublicarNovedad: true, marcarLeidaNovedad: true, getLectoresNovedad: true,
+  getPanelCumplimientoNovedad: true,
+
+  // --- Pausas activas (20 de 22; los PDF de reporte siguen en Apps Script) ---
+  listarPausasConfig: true, guardarPausasConfig: true,
+  listarPausasCoordinadores: true, gestionarPausasCoordinador: true,
+  listarPausasTrabajadores: true, gestionarPausasTrabajador: true,
+  sembrarRosterPausas: true, asignarModuloPausasRoster: true,
+  listarPausasProgramadas: true, programarPausasDelDia: true, gestionarPausaProgramada: true,
+  getPausaHoyTrabajador: true, registrarAsistenciaPausa: true,
+  getPanelCoordinadorPausas: true, gestionarPausaCoordinador: true, registrarAsistenciaGrupalPausas: true,
+  getReporteCumplimientoPausas: true, listarRosterCoordinadorPausas: true,
+  getHistorialTrabajadorPausas: true, getReporteGerenciaPausas: true,
+
+  // --- Actividades / Gestión Operacional (14 de 16; los PDF siguen en Apps Script) ---
+  listarActividades: true, getDetalleActividad: true, crearActividad: true, confirmarActividad: true,
+  checkinActividad: true, validarActividad: true, cancelarActividad: true, reprogramarActividad: true,
+  panelEquipoActividades: true, reasignarActividad: true, pedirActualizacionActividad: true,
+  getPanelGerenciaActividades: true, generarReporteActividades: true,
+
+  // --- Proyectos (36 de 48; centro documental/adjuntos/PDF/libro siguen en Apps Script) ---
+  listarProyectos: true, listarMisTareasProyectos: true, listarMiBitacoraProyectos: true,
+  listarCalendarioProyectos: true, guardarProyectoComoPlantilla: true, listarPlantillasProyecto: true,
+  marcarSalaVisitadaProyecto: true,
+  gestionarReunionProyecto: true, agregarAcuerdoReunionProyecto: true, eliminarAcuerdoReunionProyecto: true,
+  convertirAcuerdoEnTareaProyecto: true, listarReunionesProyecto: true,
+  gestionarDecisionProyecto: true, listarDecisionesProyecto: true,
+  getDetalleProyecto: true, getDetalleCompletoProyecto: true, crearProyecto: true, actualizarProyecto: true,
+  gestionarIntegranteProyecto: true, gestionarHitoProyecto: true,
+  crearTareaProyecto: true, editarTareaProyecto: true, listarTareasProyecto: true, listarBitacoraProyecto: true,
+  guardarRegistroDiaProyecto: true, eliminarRegistroDiaProyecto: true,
+  obtenerRendimientoProyecto: true, congelarBaselineProyecto: true, reprogramarTareaProyecto: true,
+  obtenerAnaliticaProyecto: true, obtenerWorkloadPortafolioProyectos: true,
+  listarSalaProyecto: true, publicarEnSalaProyecto: true, convertirEventoEnTareaProyecto: true,
+  gestionarEntregableProyecto: true, revisarEntregableProyecto: true, gestionarRiesgoProyecto: true,
+  getResumenPortafolioProyectos: true,
+
+  // --- SGC ISO 9001: Documentos (11 de 15; carga/descarga de archivo sigue en Apps Script) ---
+  listarDocumentosSgc: true, getDocumentoSgc: true, sembrarDocumentosExternosSgc: true,
+  acusarDocumentoSgc: true, getCumplimientoDocumentoSgc: true,
+  listarRolesSgc: true, gestionarRolSgc: true, listarAccesosSgc: true, previsualizarAccesoSgc: true,
+  getMatrizDistribucionSgc: true, getDocumentosConfidencialesSgc: true,
+
+  // --- SGC ISO 9001: Personas (11 de 16; descriptor/documento con archivo siguen en Apps Script) ---
+  listarPersonasSgc: true, getFichaPersonaSgc: true, guardarPersonaSgc: true, desvincularPersonaSgc: true,
+  quitarPersonaAlcanceSgc: true, registrarInduccionSgc: true,
+  registrarEvaluacionSgc: true, listarCapacitacionesSgc: true, guardarCapacitacionSgc: true,
+  registrarRealizacionCapacitacionSgc: true, registrarEficaciaCapacitacionSgc: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,
