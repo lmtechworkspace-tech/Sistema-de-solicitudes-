@@ -41,6 +41,7 @@ const Actividades = require('../logica/actividades');
 const Proyectos = require('../logica/proyectos');
 const Calidad = require('../logica/calidadSgc');
 const Personas = require('../logica/personasSgc');
+const NoConformidades = require('../logica/noConformidadesSgc');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -260,7 +261,21 @@ const ACCIONES = {
   listarCapacitacionesSgc: (db, data, contexto) => Personas.listarCapacitaciones(db, data, contexto),
   guardarCapacitacionSgc: (db, data, contexto) => Personas.guardarCapacitacion(db, data, contexto),
   registrarRealizacionCapacitacionSgc: (db, data, contexto) => Personas.registrarRealizacion(db, data, contexto),
-  registrarEficaciaCapacitacionSgc: (db, data, contexto) => Personas.registrarEficaciaAsistente(db, data, contexto)
+  registrarEficaciaCapacitacionSgc: (db, data, contexto) => Personas.registrarEficaciaAsistente(db, data, contexto),
+
+  // SGC ISO 9001 Fase 3a (PRO-06): no conformidades y acciones correctivas
+  // -- el motor de mejora, lo que la auditoria de certificacion revisa con
+  // mas profundidad (§10.2). Sin archivos: se corta al frontend en el mismo
+  // incremento (ver frontend/js/api.js ACCIONES_PORTADAS_NODE).
+  listarNcSgc: (db, data, contexto) => NoConformidades.listar(db, data, contexto),
+  getDetalleNcSgc: (db, data, contexto) => NoConformidades.getDetalle(db, data, contexto),
+  crearNcSgc: (db, data, contexto) => NoConformidades.crear(db, data, contexto),
+  registrarCorreccionNcSgc: (db, data, contexto) => NoConformidades.registrarCorreccion(db, data, contexto),
+  registrarCausaNcSgc: (db, data, contexto) => NoConformidades.registrarCausa(db, data, contexto),
+  registrarAccionNcSgc: (db, data, contexto) => NoConformidades.registrarAccion(db, data, contexto),
+  cerrarEtapaNcSgc: (db, data, contexto) => NoConformidades.cerrarEtapa(db, data, contexto),
+  verificarEficaciaNcSgc: (db, data, contexto) => NoConformidades.verificarEficacia(db, data, contexto),
+  anularNcSgc: (db, data, contexto) => NoConformidades.anular(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

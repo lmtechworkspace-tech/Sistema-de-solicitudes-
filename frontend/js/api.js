@@ -126,7 +126,12 @@ var ACCIONES_PORTADAS_NODE = {
   listarPersonasSgc: true, getFichaPersonaSgc: true, guardarPersonaSgc: true, desvincularPersonaSgc: true,
   quitarPersonaAlcanceSgc: true, registrarInduccionSgc: true,
   registrarEvaluacionSgc: true, listarCapacitacionesSgc: true, guardarCapacitacionSgc: true,
-  registrarRealizacionCapacitacionSgc: true, registrarEficaciaCapacitacionSgc: true
+  registrarRealizacionCapacitacionSgc: true, registrarEficaciaCapacitacionSgc: true,
+
+  // --- SGC ISO 9001: No conformidades (9 de 9; PRO-06, sin archivos: se corta completo) ---
+  listarNcSgc: true, getDetalleNcSgc: true, crearNcSgc: true,
+  registrarCorreccionNcSgc: true, registrarCausaNcSgc: true, registrarAccionNcSgc: true,
+  cerrarEtapaNcSgc: true, verificarEficaciaNcSgc: true, anularNcSgc: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,

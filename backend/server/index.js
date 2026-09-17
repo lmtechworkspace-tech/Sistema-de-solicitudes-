@@ -17,6 +17,7 @@ const Pausas = require('../logica/pausas');
 const Actividades = require('../logica/actividades');
 const Calidad = require('../logica/calidadSgc');
 const Personas = require('../logica/personasSgc');
+const NoConformidades = require('../logica/noConformidadesSgc');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
 const db = abrirDbProduccion();
@@ -90,6 +91,11 @@ const intervaloTriggersDiarios = setInterval(() => {
     // real (semanal/semestral) la decide el dedup por clave de evento.
     Personas.recordatorioCompetencias(db).catch((err) => {
       console.error('error enviando el recordatorio de competencias del SGC:', err);
+    });
+    // SGC Fase 3a (PRO-06): no conformidades con plazo vencido -- escala a
+    // Direccion desde el dia 5. Dedup diario via enviarCorreoModulo.
+    NoConformidades.recordatorioVencidas(db).catch((err) => {
+      console.error('error enviando el recordatorio de no conformidades vencidas:', err);
     });
   }
   // Pausas: programar las del dia (06:00), resumen de fin de dia (20:00),

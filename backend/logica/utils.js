@@ -151,9 +151,37 @@ function horasHabilesEntre(inicio, fin, opciones) {
   return resultado < 0 ? 0 : resultado;
 }
 
+// Puerto de sumarDiasHabilesSgc_ (backend/backoffice/NoConformidades.gs) --
+// generico, no especifico de NC: lo necesitan varios modulos del SGC
+// (NoConformidades/Auditorias/Quejas/RevisionDireccion, PRO-06/03/07/05
+// hablan todos de plazos en DIAS HABILES, no horas). Se centraliza aca para
+// que el primero que lo necesito no lo duplique en los que vienen.
+// Devuelve el FIN de ese dia habil (23:59:59 UTC) para que "vence hoy" no
+// se lea como vencido a las 00:01.
+function sumarDiasHabiles_(desde, dias, opciones) {
+  const inicio = aFecha_(desde);
+  if (isNaN(inicio.getTime())) return '';
+  const opts = opciones || {};
+  const tz = opts.timezone || 'America/Santiago';
+  const feriadosSet = {};
+  (opts.feriados || []).forEach((f) => { feriadosSet[typeof f === 'string' ? f.slice(0, 10) : claveDia_(aFecha_(f), tz)] = true; });
+
+  let clave = claveDia_(inicio, tz);
+  let restantes = dias;
+  let guarda = 0;
+  while (restantes > 0 && guarda < 1000) {
+    clave = siguienteDiaClave_(clave);
+    if (esDiaHabil_(clave, feriadosSet)) restantes--;
+    guarda++;
+  }
+  const partes = clave.split('-').map(Number);
+  return new Date(Date.UTC(partes[0], partes[1] - 1, partes[2], 23, 59, 59)).toISOString();
+}
+
 module.exports = {
   horasHabilesEntre,
   claveDia_,
+  sumarDiasHabiles_, esDiaHabil_, siguienteDiaClave_, diaSemanaClave_,
   // Expuestos para los tests de memoizacion (mismo motivo que en el .gs).
   formateadorOffset_, formateadorDia_, offsetMinutos_, instanteLocal_
 };
