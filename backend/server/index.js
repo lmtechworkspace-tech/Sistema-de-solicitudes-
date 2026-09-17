@@ -15,6 +15,7 @@ const Notificaciones = require('../logica/notificaciones');
 const Novedades = require('../logica/novedades');
 const Pausas = require('../logica/pausas');
 const Actividades = require('../logica/actividades');
+const Calidad = require('../logica/calidadSgc');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
 const db = abrirDbProduccion();
@@ -77,6 +78,11 @@ const intervaloTriggersDiarios = setInterval(() => {
     // por (evento+dia) via ventana de 24h -> idempotente si se revisa de mas.
     Actividades.enviarAlertasActividades(db).catch((err) => {
       console.error('error enviando alertas de actividades:', err);
+    });
+    // SGC: recordatorio diario de acuses pendientes + revisiones a 12 meses
+    // (PRO-01), mismo pase de las 09:00. Dedup via enviarCorreoModulo.
+    Calidad.recordatorioPendientes(db).catch((err) => {
+      console.error('error enviando el recordatorio del SGC:', err);
     });
   }
   // Pausas: programar las del dia (06:00), resumen de fin de dia (20:00),

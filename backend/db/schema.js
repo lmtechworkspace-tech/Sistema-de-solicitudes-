@@ -243,7 +243,36 @@ const COLUMNAS = {
   PROYECTO_DECISIONES: [
     'decision_id', 'proyecto_id', 'descripcion', 'contexto', 'impacto',
     'responsable_email', 'fecha_decision', 'creado_por', 'fecha_creacion', 'activo'
-  ]
+  ],
+
+  // Modulo SGC ISO 9001 (v10.0+). El monstruo de la migracion: ~123 acciones
+  // sobre 32 hojas, portado por fases (mismo orden que Calidad.gs/Code.gs).
+  // Incremento 1 (Fase 1 + Fase 1b): repositorio documental controlado +
+  // roles/accesos del SGC. Mismas columnas que backend/backoffice/Constantes.gs.
+  SGC_DOCUMENTOS: [
+    'documento_id', 'codigo', 'nombre', 'descripcion', 'tipo', 'area_id',
+    'version_vigente', 'estado', 'visibilidad',
+    'fecha_vigencia', 'proxima_revision',
+    'elaborado_por', 'revisado_por', 'aprobado_por',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'creado_por', 'fecha_creacion', 'activa',
+    'requiere_acuse', 'fecha_limite_acuse',
+    'clausulas_iso', 'emisor', 'clase_externa', 'enlaces'
+  ],
+  SGC_DOC_VERSIONES: [
+    'version_id', 'documento_id', 'version', 'cambios',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'subido_por', 'fecha', 'vigente'
+  ],
+  SGC_DOC_DESTINATARIOS: ['destinatario_id', 'documento_id', 'usuario_email'],
+  // rol_sgc: ENCARGADO_SGC | DIRECCION | GERENCIA_ADM | JEFATURA_AREA |
+  // ENC_ADMIN | OPERATIVO | AUDITOR_EXTERNO. Gate FINO del modulo, vive
+  // DENTRO del SGC -- nunca toca los roles globales de SIGSO.
+  SGC_ROLES: [
+    'rol_id', 'usuario_email', 'rol_sgc', 'area_id',
+    'vigencia_hasta', 'activo', 'fecha_creacion'
+  ],
+  SGC_DOC_ACUSES: ['acuse_id', 'documento_id', 'version', 'usuario_email', 'acusado_en']
 };
 
 function asegurarEsquema(db) {

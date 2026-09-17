@@ -39,6 +39,7 @@ const Novedades = require('../logica/novedades');
 const Pausas = require('../logica/pausas');
 const Actividades = require('../logica/actividades');
 const Proyectos = require('../logica/proyectos');
+const Calidad = require('../logica/calidadSgc');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -216,7 +217,28 @@ const ACCIONES = {
   descargarVersionDocumentoProyecto: () => ({ _validationError: true, message: 'El centro documental aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
   descargarDocumentoProyecto: () => ({ _validationError: true, message: 'El centro documental aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
   descargarReporteProyecto: () => ({ _validationError: true, message: 'La descarga en PDF del proyecto aun no esta disponible en el nuevo backend (falta el motor de PDF).' }),
-  descargarLibroProyecto: () => ({ _validationError: true, message: 'La descarga del libro Excel del proyecto aun no esta disponible en el nuevo backend.' })
+  descargarLibroProyecto: () => ({ _validationError: true, message: 'La descarga del libro Excel del proyecto aun no esta disponible en el nuevo backend.' }),
+
+  // Modulo SGC ISO 9001 (v10.0+, incremento 1: Fase 1 + Fase 1b -- repositorio
+  // documental controlado + roles/accesos del SGC + acuse de recibo). Primer
+  // incremento del modulo mas grande de la migracion (~123 acciones / 32
+  // hojas), portado por fases igual que el propio Calidad.gs. La subida y
+  // descarga de archivos quedan gateadas dentro de la propia logica (R2).
+  listarDocumentosSgc: (db, data, contexto) => Calidad.listarDocumentos(db, data, contexto),
+  getDocumentoSgc: (db, data, contexto) => Calidad.getDocumento(db, data, contexto),
+  sembrarDocumentosExternosSgc: (db, data, contexto) => Calidad.sembrarDocumentosExternos(db, data, contexto),
+  crearDocumentoSgc: (db, data, contexto) => Calidad.crearDocumento(db, data, contexto),
+  nuevaVersionDocumentoSgc: (db, data, contexto) => Calidad.nuevaVersion(db, data, contexto),
+  actualizarDocumentoSgc: (db, data, contexto) => Calidad.actualizarDocumento(db, data, contexto),
+  descargarDocumentoSgc: (db, data, contexto) => Calidad.descargarDocumento(db, data, contexto),
+  acusarDocumentoSgc: (db, data, contexto) => Calidad.acusarDocumento(db, data, contexto),
+  getCumplimientoDocumentoSgc: (db, data, contexto) => Calidad.getCumplimiento(db, data, contexto),
+  listarRolesSgc: (db, data, contexto) => Calidad.listarRoles(db, data, contexto),
+  gestionarRolSgc: (db, data, contexto) => Calidad.gestionarRol(db, data, contexto),
+  listarAccesosSgc: (db, data, contexto) => Calidad.listarAccesos(db, data, contexto),
+  previsualizarAccesoSgc: (db, data, contexto) => Calidad.previsualizarAcceso(db, data, contexto),
+  getMatrizDistribucionSgc: (db, data, contexto) => Calidad.getMatrizDistribucion(db, data, contexto),
+  getDocumentosConfidencialesSgc: (db, data, contexto) => Calidad.getDocumentosConfidenciales(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

@@ -76,9 +76,19 @@ function rolEnProyecto_(db, proyectoId, contexto) {
   } catch (err) { /* Proyectos aun no portado */ }
   return null;
 }
-// gobiernaSgc_/rolSgc_ viven en Calidad (aun no portado) -- mismo criterio:
-// sin el modulo SGC, este cuarto circulo no habilita nada.
-function gobiernaSgc_(/* db, contexto */) { return false; }
+// gobiernaSgc_ vive en calidadSgc.js (SGC, portado desde este incremento) --
+// mismo criterio de acoplamiento perezoso que rolEnProyecto_: si el modulo
+// no cargara por algun motivo, este cuarto circulo simplemente no habilita
+// nada (solo restringe), nunca revienta la creacion de la actividad.
+function gobiernaSgc_(db, contexto) {
+  try {
+    const Calidad = require('./calidadSgc');
+    if (Calidad && typeof Calidad.gobiernaSgc_ === 'function') {
+      return Calidad.gobiernaSgc_(db, contexto);
+    }
+  } catch (err) { /* SGC aun no cargado */ }
+  return false;
+}
 
 // --- lectura + alcance (RN-707) --------------------------------------------
 function alcanceActividades_(db, contexto) {
