@@ -42,6 +42,7 @@ const Proyectos = require('../logica/proyectos');
 const Calidad = require('../logica/calidadSgc');
 const Personas = require('../logica/personasSgc');
 const NoConformidades = require('../logica/noConformidadesSgc');
+const Auditorias = require('../logica/auditoriasSgc');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -275,7 +276,22 @@ const ACCIONES = {
   registrarAccionNcSgc: (db, data, contexto) => NoConformidades.registrarAccion(db, data, contexto),
   cerrarEtapaNcSgc: (db, data, contexto) => NoConformidades.cerrarEtapa(db, data, contexto),
   verificarEficaciaNcSgc: (db, data, contexto) => NoConformidades.verificarEficacia(db, data, contexto),
-  anularNcSgc: (db, data, contexto) => NoConformidades.anular(db, data, contexto)
+  anularNcSgc: (db, data, contexto) => NoConformidades.anular(db, data, contexto),
+
+  // SGC ISO 9001 Fase 3b (PRO-03, §9.2): auditoría interna -- la otra mitad
+  // del motor de mejora. Sin archivos: se corta al frontend en el mismo
+  // incremento.
+  listarAuditoriasSgc: (db, data, contexto) => Auditorias.listar(db, data, contexto),
+  getDetalleAuditoriaSgc: (db, data, contexto) => Auditorias.getDetalle(db, data, contexto),
+  programarAuditoriaSgc: (db, data, contexto) => Auditorias.programar(db, data, contexto),
+  planificarAuditoriaSgc: (db, data, contexto) => Auditorias.planificar(db, data, contexto),
+  registrarHallazgoSgc: (db, data, contexto) => Auditorias.registrarHallazgo(db, data, contexto),
+  eliminarHallazgoSgc: (db, data, contexto) => Auditorias.eliminarHallazgo(db, data, contexto),
+  cerrarEjecucionAuditoriaSgc: (db, data, contexto) => Auditorias.cerrarEjecucion(db, data, contexto),
+  emitirInformeAuditoriaSgc: (db, data, contexto) => Auditorias.emitirInforme(db, data, contexto),
+  convertirHallazgoEnNcSgc: (db, data, contexto) => Auditorias.convertirHallazgoEnNc(db, data, contexto),
+  cerrarAuditoriaSgc: (db, data, contexto) => Auditorias.cerrar(db, data, contexto),
+  anularAuditoriaSgc: (db, data, contexto) => Auditorias.anular(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

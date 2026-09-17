@@ -18,6 +18,7 @@ const Actividades = require('../logica/actividades');
 const Calidad = require('../logica/calidadSgc');
 const Personas = require('../logica/personasSgc');
 const NoConformidades = require('../logica/noConformidadesSgc');
+const Auditorias = require('../logica/auditoriasSgc');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
 const db = abrirDbProduccion();
@@ -96,6 +97,12 @@ const intervaloTriggersDiarios = setInterval(() => {
     // Direccion desde el dia 5. Dedup diario via enviarCorreoModulo.
     NoConformidades.recordatorioVencidas(db).catch((err) => {
       console.error('error enviando el recordatorio de no conformidades vencidas:', err);
+    });
+    // SGC Fase 3b (PRO-03): informes de auditoría fuera de plazo, NC sin
+    // redactar, auditorías próximas y procesos sin auditar en 12 meses.
+    // Cadencia real (diaria/semanal) la decide el dedup de cada aviso.
+    Auditorias.recordatorioPendientes(db).catch((err) => {
+      console.error('error enviando el recordatorio de auditorías del SGC:', err);
     });
   }
   // Pausas: programar las del dia (06:00), resumen de fin de dia (20:00),

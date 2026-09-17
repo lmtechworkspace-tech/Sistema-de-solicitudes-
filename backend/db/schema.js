@@ -342,6 +342,23 @@ const COLUMNAS = {
     'accion_plazo', 'accion_fecha_cierre',
     'eficacia_plazo', 'eficacia_fecha', 'eficacia_resultado', 'eficacia_observaciones',
     'fecha_cierre', 'cerrada_por', 'fecha_creacion', 'activa'
+  ],
+
+  // SGC Fase 3b (PRO-03, ISO 9001 §9.2): auditoría interna. La lista de
+  // verificación y los hallazgos son la MISMA tabla (SGC_AUD_HALLAZGOS) --
+  // una cláusula CONFORME también se guarda, es evidencia de que se revisó.
+  SGC_AUDITORIAS: [
+    'auditoria_id', 'correlativo', 'anio', 'area_id', 'proceso', 'clausulas',
+    'auditor_email', 'coauditores', 'auditados', 'objetivo', 'alcance', 'criterios',
+    'fecha_programada', 'fecha_plan', 'fecha_ejecucion',
+    'estado',
+    'informe_plazo', 'informe_fecha', 'informe_conclusion', 'personas_entrevistadas',
+    'fecha_cierre', 'cerrada_por', 'creada_por', 'fecha_creacion', 'activa'
+  ],
+  SGC_AUD_HALLAZGOS: [
+    'hallazgo_id', 'auditoria_id', 'clausula', 'aspecto_verificado',
+    'evidencia', 'resultado', 'descripcion', 'nc_id',
+    'registrado_por', 'fecha_registro', 'activo'
   ]
 };
 

@@ -131,7 +131,13 @@ var ACCIONES_PORTADAS_NODE = {
   // --- SGC ISO 9001: No conformidades (9 de 9; PRO-06, sin archivos: se corta completo) ---
   listarNcSgc: true, getDetalleNcSgc: true, crearNcSgc: true,
   registrarCorreccionNcSgc: true, registrarCausaNcSgc: true, registrarAccionNcSgc: true,
-  cerrarEtapaNcSgc: true, verificarEficaciaNcSgc: true, anularNcSgc: true
+  cerrarEtapaNcSgc: true, verificarEficaciaNcSgc: true, anularNcSgc: true,
+
+  // --- SGC ISO 9001: Auditoría interna (11 de 11; PRO-03, sin archivos: se corta completo) ---
+  listarAuditoriasSgc: true, getDetalleAuditoriaSgc: true, programarAuditoriaSgc: true,
+  planificarAuditoriaSgc: true, registrarHallazgoSgc: true, eliminarHallazgoSgc: true,
+  cerrarEjecucionAuditoriaSgc: true, emitirInformeAuditoriaSgc: true, convertirHallazgoEnNcSgc: true,
+  cerrarAuditoriaSgc: true, anularAuditoriaSgc: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,
