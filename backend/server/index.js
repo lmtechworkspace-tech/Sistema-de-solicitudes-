@@ -13,6 +13,7 @@ const { crearServidor, VERSION_API } = require('./app');
 const { abrirDbProduccion } = require('../db');
 const Notificaciones = require('../logica/notificaciones');
 const Novedades = require('../logica/novedades');
+const Pausas = require('../logica/pausas');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
 const db = abrirDbProduccion();
@@ -31,6 +32,12 @@ const intervaloColaCorreo = setInterval(() => {
   Notificaciones.procesarColaCorreo(db).catch((err) => {
     console.error('error procesando la cola de correo:', err);
   });
+  // Pausas: los tres avisos por horario se evaluan en cada tick de 5 min --
+  // deciden solos si toca segun la hora local de la pausa (mismo grano que
+  // los triggers de 5 min del .gs). Idempotentes (flags por pausa / dedup).
+  Pausas.enviarRecordatorios(db).catch((err) => { console.error('error en recordatorios de pausas:', err); });
+  Pausas.enviarSegundosAvisos(db).catch((err) => { console.error('error en segundos avisos de pausas:', err); });
+  Pausas.escalarPausasSinIniciar(db).catch((err) => { console.error('error escalando pausas:', err); });
 }, INTERVALO_COLA_CORREO_MS);
 intervaloColaCorreo.unref();
 
@@ -64,6 +71,24 @@ const intervaloTriggersDiarios = setInterval(() => {
     Novedades.recordatorioPendientes(db).catch((err) => {
       console.error('error enviando el recordatorio de novedades:', err);
     });
+  }
+  // Pausas: programar las del dia (06:00), resumen de fin de dia (20:00),
+  // cierre automatico nocturno (23:00). Reporte periodico: semanal los lunes
+  // 08:00, mensual el dia 1 a las 08:00. Todos idempotentes/dedup por dia.
+  if (enVentanaDiaria_(ahora, 6)) {
+    try { Pausas.programarDelDia(db, new Date(), { email: 'sistema' }); } catch (err) { console.error('error programando pausas del dia:', err); }
+  }
+  if (enVentanaDiaria_(ahora, 20)) {
+    Pausas.enviarResumenDiario(db).catch((err) => { console.error('error en resumen diario de pausas:', err); });
+  }
+  if (enVentanaDiaria_(ahora, 23)) {
+    try { Pausas.cerrarPausasAbiertas(db); } catch (err) { console.error('error cerrando pausas del dia:', err); }
+  }
+  if (enVentanaDiaria_(ahora, 8) && ahora.getDay() === 1) {
+    Pausas.enviarReportePeriodico(db, 'semanal').catch((err) => { console.error('error en reporte semanal de pausas:', err); });
+  }
+  if (enVentanaDiaria_(ahora, 8) && ahora.getDate() === 1) {
+    Pausas.enviarReportePeriodico(db, 'mensual').catch((err) => { console.error('error en reporte mensual de pausas:', err); });
   }
 }, INTERVALO_COLA_CORREO_MS);
 intervaloTriggersDiarios.unref();

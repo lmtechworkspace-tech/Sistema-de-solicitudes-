@@ -36,6 +36,7 @@ const Dashboard = require('../logica/dashboard');
 const Gerencia = require('../logica/gerencia');
 const Notificaciones = require('../logica/notificaciones');
 const Novedades = require('../logica/novedades');
+const Pausas = require('../logica/pausas');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -109,7 +110,31 @@ const ACCIONES = {
   marcarLeidaNovedad: (db, data, contexto) => Novedades.marcarLeida(db, data, contexto),
   descargarAdjuntoNovedad: (db, data, contexto) => Novedades.descargarAdjunto(db, data, contexto),
   getLectoresNovedad: (db, data, contexto) => Novedades.getLectores(db, data, contexto),
-  getPanelCumplimientoNovedad: (db, data, contexto) => Novedades.getPanelCumplimiento(db, data, contexto)
+  getPanelCumplimientoNovedad: (db, data, contexto) => Novedades.getPanelCumplimiento(db, data, contexto),
+
+  // Modulo Pausas activas (mismos nombres de accion que BACKOFFICE_ACTIONS).
+  listarPausasConfig: (db, data, contexto) => Pausas.listarConfig(db, data, contexto),
+  guardarPausasConfig: (db, data, contexto) => Pausas.guardarConfig(db, data, contexto),
+  listarPausasCoordinadores: (db, data, contexto) => Pausas.listarCoordinadores(db, data, contexto),
+  gestionarPausasCoordinador: (db, data, contexto) => Pausas.gestionarCoordinador(db, data, contexto),
+  listarPausasTrabajadores: (db, data, contexto) => Pausas.listarTrabajadores(db, data, contexto),
+  gestionarPausasTrabajador: (db, data, contexto) => Pausas.gestionarTrabajador(db, data, contexto),
+  sembrarRosterPausas: (db, data, contexto) => Pausas.sembrarRosterDesdeCuentas(db, data, contexto),
+  asignarModuloPausasRoster: (db, data, contexto) => Pausas.asignarModuloPausasRoster(db, data, contexto),
+  listarPausasProgramadas: (db, data, contexto) => Pausas.listarProgramadas(db, data, contexto),
+  programarPausasDelDia: (db, data, contexto) => Pausas.programarDelDiaAdmin(db, data, contexto),
+  gestionarPausaProgramada: (db, data, contexto) => Pausas.gestionarPausaProgramada(db, data, contexto),
+  getPausaHoyTrabajador: (db, data, contexto) => Pausas.getPausaHoyTrabajador(db, data, contexto),
+  registrarAsistenciaPausa: (db, data, contexto) => Pausas.registrarAsistencia(db, data, contexto),
+  getPanelCoordinadorPausas: (db, data, contexto) => Pausas.getPanelCoordinador(db, data, contexto),
+  gestionarPausaCoordinador: (db, data, contexto) => Pausas.gestionarPausaCoordinador(db, data, contexto),
+  registrarAsistenciaGrupalPausas: (db, data, contexto) => Pausas.registrarAsistenciaGrupal(db, data, contexto),
+  getReporteCumplimientoPausas: (db, data, contexto) => Pausas.getReporteCumplimiento(db, data, contexto),
+  descargarReporteCumplimientoPausasPdf: (db, data, contexto) => Pausas.descargarReporteCumplimientoPdf(db, data, contexto),
+  listarRosterCoordinadorPausas: (db, data, contexto) => Pausas.listarRosterCoordinador(db, data, contexto),
+  getHistorialTrabajadorPausas: (db, data, contexto) => Pausas.getHistorialTrabajador(db, data, contexto),
+  getReporteGerenciaPausas: (db, data, contexto) => Pausas.getReporteGerencia(db, data, contexto),
+  descargarReporteGerenciaPausasPdf: (db, data, contexto) => Pausas.descargarReporteGerenciaPdf(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

@@ -123,7 +123,30 @@ const COLUMNAS = {
   NOTIFICACIONES_APP: [
     'notif_id', 'destinatario_email', 'tipo', 'titulo', 'mensaje',
     'modulo_id', 'texto_accion', 'leida', 'creada_en', 'expira_en'
-  ]
+  ],
+
+  // Modulo Pausas activas (v6.0). Mismas columnas que en
+  // backend/backoffice/Constantes.gs.
+  PAUSAS_CONFIG: [
+    'empresa_id', 'hora_habitual', 'dias_semana', 'duracion_min',
+    'min_anticipacion', 'umbral_verde', 'umbral_amarillo', 'activo'
+  ],
+  PAUSAS_COORDINADORES: ['coord_id', 'empresa_id', 'nombre', 'email', 'tipo', 'activo'],
+  PAUSAS_TRABAJADORES: [
+    'trabajador_id', 'empresa_id', 'nombre', 'email', 'area', 'cargo',
+    'activo', 'fecha_ingreso'
+  ],
+  PAUSAS_PROGRAMADAS: [
+    'pausa_id', 'empresa_id', 'fecha', 'hora_programada', 'hora_inicio_real',
+    'hora_fin', 'coordinador_email', 'estado', 'duracion_min', 'observaciones',
+    'ultima_llamada_enviada', 'aviso_coordinador_enviado', 'evidencia_url',
+    'escalada_admin_enviada'
+  ],
+  PAUSAS_ASISTENCIA: [
+    'registro_id', 'pausa_id', 'trabajador_id', 'email', 'fecha_hora_registro',
+    'estado', 'motivo', 'comentario', 'confirmacion', 'origen', 'animo'
+  ],
+  PAUSAS_LOG: ['log_id', 'timestamp', 'pausa_id', 'usuario', 'accion', 'detalle']
 };
 
 function asegurarEsquema(db) {
