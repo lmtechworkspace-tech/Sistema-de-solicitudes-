@@ -40,6 +40,7 @@ const Pausas = require('../logica/pausas');
 const Actividades = require('../logica/actividades');
 const Proyectos = require('../logica/proyectos');
 const Calidad = require('../logica/calidadSgc');
+const Personas = require('../logica/personasSgc');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -238,7 +239,28 @@ const ACCIONES = {
   listarAccesosSgc: (db, data, contexto) => Calidad.listarAccesos(db, data, contexto),
   previsualizarAccesoSgc: (db, data, contexto) => Calidad.previsualizarAcceso(db, data, contexto),
   getMatrizDistribucionSgc: (db, data, contexto) => Calidad.getMatrizDistribucion(db, data, contexto),
-  getDocumentosConfidencialesSgc: (db, data, contexto) => Calidad.getDocumentosConfidenciales(db, data, contexto)
+  getDocumentosConfidencialesSgc: (db, data, contexto) => Calidad.getDocumentosConfidenciales(db, data, contexto),
+
+  // SGC ISO 9001 Fase 2a + 2b (PRO-02): la ficha del trabajador -- datos,
+  // descriptor de cargo, carpeta digital, induccion y monitoreo de
+  // competencias (evaluaciones + capacitaciones). Archivos gateados dentro
+  // de la propia logica (R2), mismo criterio que el incremento 1.
+  listarPersonasSgc: (db, data, contexto) => Personas.listar(db, data, contexto),
+  getFichaPersonaSgc: (db, data, contexto) => Personas.getFicha(db, data, contexto),
+  guardarPersonaSgc: (db, data, contexto) => Personas.guardarPersona(db, data, contexto),
+  desvincularPersonaSgc: (db, data, contexto) => Personas.desvincular(db, data, contexto),
+  quitarPersonaAlcanceSgc: (db, data, contexto) => Personas.quitarDelAlcance(db, data, contexto),
+  guardarDescriptorSgc: (db, data, contexto) => Personas.guardarDescriptor(db, data, contexto),
+  actualizarDescriptorSgc: (db, data, contexto) => Personas.actualizarDescriptor(db, data, contexto),
+  descargarDescriptorSgc: (db, data, contexto) => Personas.descargarDescriptor(db, data, contexto),
+  guardarDocumentoPersonaSgc: (db, data, contexto) => Personas.guardarDocumento(db, data, contexto),
+  descargarDocumentoPersonaSgc: (db, data, contexto) => Personas.descargarDocumento(db, data, contexto),
+  registrarInduccionSgc: (db, data, contexto) => Personas.registrarInduccion(db, data, contexto),
+  registrarEvaluacionSgc: (db, data, contexto) => Personas.registrarEvaluacion(db, data, contexto),
+  listarCapacitacionesSgc: (db, data, contexto) => Personas.listarCapacitaciones(db, data, contexto),
+  guardarCapacitacionSgc: (db, data, contexto) => Personas.guardarCapacitacion(db, data, contexto),
+  registrarRealizacionCapacitacionSgc: (db, data, contexto) => Personas.registrarRealizacion(db, data, contexto),
+  registrarEficaciaCapacitacionSgc: (db, data, contexto) => Personas.registrarEficaciaAsistente(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

@@ -16,6 +16,7 @@ const Novedades = require('../logica/novedades');
 const Pausas = require('../logica/pausas');
 const Actividades = require('../logica/actividades');
 const Calidad = require('../logica/calidadSgc');
+const Personas = require('../logica/personasSgc');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
 const db = abrirDbProduccion();
@@ -83,6 +84,12 @@ const intervaloTriggersDiarios = setInterval(() => {
     // (PRO-01), mismo pase de las 09:00. Dedup via enviarCorreoModulo.
     Calidad.recordatorioPendientes(db).catch((err) => {
       console.error('error enviando el recordatorio del SGC:', err);
+    });
+    // SGC Fase 2b: evaluaciones de competencia por vencer/vencidas, horas de
+    // formacion bajo meta y eficacia de capacitacion pendiente. Cadencia
+    // real (semanal/semestral) la decide el dedup por clave de evento.
+    Personas.recordatorioCompetencias(db).catch((err) => {
+      console.error('error enviando el recordatorio de competencias del SGC:', err);
     });
   }
   // Pausas: programar las del dia (06:00), resumen de fin de dia (20:00),

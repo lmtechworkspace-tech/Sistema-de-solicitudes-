@@ -272,7 +272,58 @@ const COLUMNAS = {
     'rol_id', 'usuario_email', 'rol_sgc', 'area_id',
     'vigencia_hasta', 'activo', 'fecha_creacion'
   ],
-  SGC_DOC_ACUSES: ['acuse_id', 'documento_id', 'version', 'usuario_email', 'acusado_en']
+  SGC_DOC_ACUSES: ['acuse_id', 'documento_id', 'version', 'usuario_email', 'acusado_en'],
+
+  // SGC Fase 2a/2b (PRO-02): la ficha del trabajador. NO se toca USUARIOS
+  // (autenticacion, la usa todo SIGSO) -- vive en su propia hoja, enlazada
+  // por correo, mismo criterio que SGC_ROLES.
+  SGC_PERSONAS: [
+    'persona_id', 'usuario_email', 'nombre', 'rut', 'cargo', 'tipo',
+    'area_id', 'jefatura_email', 'subrogante_email',
+    'fecha_ingreso', 'estado', 'fecha_desvinculacion',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+  // Descriptor de cargo (FO-PRO-02-01), versionado -- cada actualizacion
+  // crea una fila nueva y la anterior queda vigente=false.
+  SGC_DESCRIPTORES: [
+    'descriptor_id', 'persona_id', 'version', 'objetivo', 'funciones',
+    'responsabilidades', 'habilidades',
+    'items_responsabilidades', 'items_habilidades',
+    'nivel_educacional', 'formacion_tecnica', 'experiencia',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'vigente', 'creado_por', 'fecha'
+  ],
+  // Carpeta digital de la persona (CV, titulo, contrato, certificados...).
+  SGC_PERSONA_DOCUMENTOS: [
+    'doc_id', 'persona_id', 'tipo', 'nombre',
+    'archivo_id', 'archivo_nombre', 'archivo_mime',
+    'subido_por', 'fecha', 'activa'
+  ],
+  // Registro de induccion (FO-PRO-02-02): los 5 items del SGC, una fila por
+  // item y persona.
+  SGC_INDUCCIONES: [
+    'induccion_id', 'persona_id', 'item', 'fecha', 'relator_email',
+    'estado', 'observaciones'
+  ],
+  // Monitoreo de competencias (FO-PRO-02-04, Fase 2b).
+  SGC_EVALUACIONES: [
+    'evaluacion_id', 'persona_id', 'descriptor_id', 'fecha', 'evaluador_email',
+    'respuestas_responsabilidades', 'respuestas_habilidades',
+    'promedio_responsabilidades', 'promedio_habilidades',
+    'requiere_capacitacion', 'observaciones', 'recomendado_por',
+    'proxima_evaluacion'
+  ],
+  // Programa anual (FO-PRO-02-03) + registro de lo realizado (FO-PRO-02-05)
+  // en UNA sola hoja: nace PROGRAMADA y pasa a REALIZADA.
+  SGC_CAPACITACIONES: [
+    'capacitacion_id', 'nombre', 'descripcion', 'horas',
+    'fecha_programada', 'fecha_realizada', 'relator', 'estado',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+  SGC_CAPACITACION_ASISTENTES: [
+    'asistencia_id', 'capacitacion_id', 'persona_id', 'asistio', 'fecha',
+    'eficacia_fecha', 'eficacia_resultado', 'eficacia_observaciones'
+  ]
 };
 
 function asegurarEsquema(db) {
