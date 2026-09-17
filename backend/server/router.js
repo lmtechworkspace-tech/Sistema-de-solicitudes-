@@ -32,6 +32,7 @@ const Solicitudes = require('../logica/solicitudes');
 const SolicitudesBO = require('../logica/solicitudesBackoffice');
 const SolicitudesPublico = require('../logica/solicitudesPublico');
 const Migracion = require('../logica/migracion');
+const Bootstrap = require('../logica/bootstrap');
 const Jefatura = require('../logica/jefatura');
 const Dashboard = require('../logica/dashboard');
 const Gerencia = require('../logica/gerencia');
@@ -48,7 +49,10 @@ const Notificaciones = require('../logica/notificaciones');
 const ACCIONES_PUBLICAS = new Set([
   'portalLogin', 'portalLogout', 'portalSesion', 'portalCambiarPassword', 'crearSolicitud',
   'consultarEstado', 'solicitarCodigoAcceso', 'misSolicitudes',
-  'editarSubsolicitud', 'eliminarArchivo', 'responderConsulta', 'validarCierre'
+  'editarSubsolicitud', 'eliminarArchivo', 'responderConsulta', 'validarCierre',
+  // TEMPORAL (bootstrap.js): sin sesion ADM que la proteja a proposito --
+  // la protege el secreto de servidor (MIGRACION_BOOTSTRAP_SECRET).
+  'bootstrapAdmin'
 ]);
 
 const ACCIONES = {
@@ -92,7 +96,9 @@ const ACCIONES = {
   listarLogsNotificaciones: (db, data, contexto) => Notificaciones.listarLogs(db, data, contexto),
 
   // TEMPORAL (migracion.js): importar datos reales desde la planilla vieja.
-  importarDatosMigracion: (db, data, contexto) => Migracion.importarTabla(db, data, contexto)
+  importarDatosMigracion: (db, data, contexto) => Migracion.importarTabla(db, data, contexto),
+  // TEMPORAL (bootstrap.js): crear/resetear la cuenta ADM para poder arrancar la migracion.
+  bootstrapAdmin: (db, data) => Bootstrap.bootstrapAdmin(db, data)
 };
 
 function responderResultado_(resultado) {
