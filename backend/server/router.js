@@ -196,16 +196,17 @@ const ACCIONES = {
   gestionarRiesgoProyecto: (db, data, contexto) => Proyectos.gestionarRiesgo(db, data, contexto),
   getResumenPortafolioProyectos: (db, data, contexto) => Proyectos.getResumenPortafolio(db, contexto),
 
-  // Cronograma avanzado (v11 Reingenieria Cronograma) y centro documental
-  // (v13 Fase 4, R2) + PDF/libro: incremento 2, pendiente. Gateadas con error
-  // claro, mismo criterio que los PDF de Actividades/Pausas.
-  guardarRegistroDiaProyecto: () => ({ _validationError: true, message: 'El registro diario de la Carta Gantt aun no esta disponible en el nuevo backend.' }),
-  eliminarRegistroDiaProyecto: () => ({ _validationError: true, message: 'El registro diario de la Carta Gantt aun no esta disponible en el nuevo backend.' }),
-  obtenerRendimientoProyecto: () => ({ _validationError: true, message: 'El calculo de rendimiento del proyecto aun no esta disponible en el nuevo backend.' }),
-  congelarBaselineProyecto: () => ({ _validationError: true, message: 'Congelar la linea base aun no esta disponible en el nuevo backend.' }),
-  reprogramarTareaProyecto: () => ({ _validationError: true, message: 'La reprogramacion con motivo del Cronograma aun no esta disponible en el nuevo backend.' }),
-  obtenerAnaliticaProyecto: () => ({ _validationError: true, message: 'La analitica avanzada del proyecto aun no esta disponible en el nuevo backend.' }),
-  obtenerWorkloadPortafolioProyectos: () => ({ _validationError: true, message: 'El workload cruzado del portafolio aun no esta disponible en el nuevo backend.' }),
+  // Cronograma avanzado (v11 Reingenieria Cronograma): incremento 2.
+  guardarRegistroDiaProyecto: (db, data, contexto) => Proyectos.guardarRegistroDia(db, data, contexto),
+  eliminarRegistroDiaProyecto: (db, data, contexto) => Proyectos.eliminarRegistroDia(db, data, contexto),
+  obtenerRendimientoProyecto: (db, data, contexto) => Proyectos.obtenerRendimiento(db, data, contexto),
+  congelarBaselineProyecto: (db, data, contexto) => Proyectos.congelarBaseline(db, data, contexto),
+  reprogramarTareaProyecto: (db, data, contexto) => Proyectos.reprogramarTarea(db, data, contexto),
+  obtenerAnaliticaProyecto: (db, data, contexto) => Proyectos.obtenerAnalitica(db, data, contexto),
+  obtenerWorkloadPortafolioProyectos: (db, data, contexto) => Proyectos.obtenerWorkloadPortafolio(db, data, contexto),
+
+  // Centro documental (v13 Fase 4, R2) + PDF/libro: siguen gateados, mismo
+  // criterio que los PDF de Actividades/Pausas.
   subirAdjuntoProyecto: () => ({ _validationError: true, message: 'La subida de archivos aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
   descargarAdjuntoProyecto: () => ({ _validationError: true, message: 'La descarga de archivos aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
   gestionarDocumentoProyecto: () => ({ _validationError: true, message: 'El centro documental aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),

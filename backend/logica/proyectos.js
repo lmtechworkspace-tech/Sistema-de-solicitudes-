@@ -1,13 +1,18 @@
 'use strict';
 
 /**
- * proyectos.js — puerto de backend/backoffice/Proyectos.gs (incremento 1:
- * MVP + Sala + reuniones/decisiones + entregables/riesgos + plantillas +
- * portafolio -- todo lo que NO depende de R2 (adjuntos/documentos, gateados,
- * ver el final de este archivo) ni del motor de PDF/Cronograma avanzado
- * (guardarRegistroDia/obtenerRendimiento/obtenerAnalitica/
- * obtenerWorkloadPortafolio/congelarBaseline/reprogramarTarea, v11
- * Reingenieria Cronograma -- queda para el incremento 2).
+ * proyectos.js — puerto de backend/backoffice/Proyectos.gs.
+ * Incremento 1: MVP + Sala + reuniones/decisiones + entregables/riesgos +
+ * plantillas + portafolio.
+ * Incremento 2 (v11 Reingenieria Cronograma): registro diario de la Carta
+ * Gantt (guardarRegistroDia/eliminarRegistroDia), Plan/Esperado/Real +
+ * baseline (obtenerRendimiento/congelarBaseline), analitica avanzada
+ * (obtenerAnalitica), workload cruzado del portafolio
+ * (obtenerWorkloadPortafolio) y reprogramar con motivo desde el Cronograma
+ * (reprogramarTarea, delega en Actividades.reprogramar).
+ * Lo que sigue gateado (centro documental v13 Fase 4 + adjuntos + PDF/libro
+ * Excel, todo bloqueado por R2 o por el motor de PDF) esta al final de este
+ * archivo y en router.js, mismo criterio que Pausas/Actividades.
  *
  * Decision central de la propuesta (§0): las TAREAS de un proyecto NO son
  * una entidad nueva -- son ACTIVIDADES (actividades.js, motor de Gestion
@@ -1269,6 +1274,351 @@ function getResumenPortafolio(db, contexto) {
   };
 }
 
+// ===========================================================================
+// Incremento 2 (v11 Reingenieria Cronograma): registro diario, Plan/Esperado/
+// Real + baseline, analitica avanzada, workload cruzado, reprogramar.
+// ===========================================================================
+
+// v11 (P0): los 9 estados-del-dia del registro diario -- el estado del DIA
+// (que paso ese dia en esa tarea), distinto del estado de la tarea completa.
+// SIGSO no es vigilancia: "sin registro" no es un estado, es la AUSENCIA de
+// fila; no existe un "no_trabajo".
+const REGISTRO_DIA_ESTADOS_ = [
+  'asignado', 'planificado', 'en_proceso', 'bloqueado', 'pausado',
+  'finalizado', 'entregado', 'revision', 'esperando_tercero'
+];
+
+// Mismo criterio que clavePdf_ del .gs (UTC, no zona horaria de negocio):
+// usado sobre fechas ya-ISO de ACTIVIDADES (fecha_creacion/fecha_compromiso),
+// no sobre "el dia de hoy" (eso usa Utils.claveDia_ con TZ Chile, ver abajo).
+function claveFecha_(valor) {
+  if (!valor) return '';
+  const f = new Date(valor);
+  return isNaN(f.getTime()) ? '' : f.toISOString().slice(0, 10);
+}
+
+function redond1Analitica_(n) { return Math.round(n * 10) / 10; }
+
+// v11 (P3): suma la duracion de cada intervalo [apertura, cierre],
+// emparejando cronologicamente. Un intervalo que sigue abierto (aun
+// bloqueada/en revision ahora mismo) cuenta hasta AHORA.
+function sumarIntervalosBitacora_(eventos, tiposApertura, tiposCierre, ahora) {
+  const ordenados = eventos.slice().sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  let totalMs = 0, abiertoDesde = null;
+  ordenados.forEach((ev) => {
+    if (tiposApertura.indexOf(ev.tipo) !== -1 && abiertoDesde === null) {
+      abiertoDesde = new Date(ev.timestamp);
+    } else if (tiposCierre.indexOf(ev.tipo) !== -1 && abiertoDesde !== null) {
+      totalMs += new Date(ev.timestamp).getTime() - abiertoDesde.getTime();
+      abiertoDesde = null;
+    }
+  });
+  if (abiertoDesde !== null) totalMs += ahora.getTime() - abiertoDesde.getTime();
+  return totalMs / 86400000;
+}
+
+const CYCLE_TIME_TIPOS_TRABAJO_ = ['CHECKIN_AVANCE', 'CHECKIN_SIN_CAMBIO', 'DESBLOQUEO'];
+const CYCLE_TIME_ESTADOS_DIA_INTENCION_ = ['asignado', 'planificado'];
+function calcularLeadTimeDias_(a) {
+  if (!a.fecha_creacion || !a.fecha_terminada) return null;
+  return redond1Analitica_((new Date(a.fecha_terminada) - new Date(a.fecha_creacion)) / 86400000);
+}
+function calcularCycleTimeDias_(a, eventos) {
+  if (!a.fecha_terminada) return null;
+  let primeraSenal = null;
+  eventos.forEach((b) => {
+    let esTrabajo = CYCLE_TIME_TIPOS_TRABAJO_.indexOf(b.tipo) !== -1;
+    if (!esTrabajo && b.tipo === 'REGISTRO_DIA') {
+      const d = datosDeBitacora_(b);
+      esTrabajo = CYCLE_TIME_ESTADOS_DIA_INTENCION_.indexOf(d.estado_dia) === -1;
+    }
+    if (!esTrabajo) return;
+    const t = new Date(b.timestamp);
+    if (isNaN(t.getTime())) return;
+    if (primeraSenal === null || t < primeraSenal) primeraSenal = t;
+  });
+  if (primeraSenal === null) return null;
+  return redond1Analitica_((new Date(a.fecha_terminada) - primeraSenal) / 86400000);
+}
+// Reexpone el parseo de 'datos' de una fila de bitacora (mismo criterio que
+// filaBitacoraSalida_, que ya lo hace inline) -- lo necesita calcularCycleTimeDias_.
+function datosDeBitacora_(fila) {
+  if (!fila || !fila.datos) return {};
+  try { const d = JSON.parse(fila.datos); return (d && typeof d === 'object') ? d : {}; }
+  catch (e) { return {}; }
+}
+
+function guardarRegistroDia(db, data, contexto) {
+  data = data || {};
+  const proyecto = buscarProyecto_(db, data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+  const actividad = leerSeguro_(db, 'ACTIVIDADES').find((a) => a.actividad_id === data.actividad_id && a.proyecto_id === proyecto.proyecto_id);
+  if (!actividad) return errorValidacion_('actividad_id', 'Tarea no encontrada en este proyecto.');
+  const email = normalizarEmail_(contexto && contexto.email);
+  if (!Actividades.trabajaLaActividad_(actividad, email) && !puedeGestionarProyecto_(db, proyecto, contexto)) {
+    return { _forbidden: true, message: 'Solo quien trabaja la tarea o el líder del proyecto puede registrar el día.' };
+  }
+
+  const dia = String(data.dia || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) return errorValidacion_('dia', 'El día debe tener formato AAAA-MM-DD.');
+  const hoyClave = Utils.claveDia_(new Date(), 'America/Santiago');
+  if (dia > hoyClave) return errorValidacion_('dia', 'No se puede registrar un día futuro.');
+
+  const estadoDia = String(data.estado_dia || '').trim();
+  if (REGISTRO_DIA_ESTADOS_.indexOf(estadoDia) === -1) return errorValidacion_('estado_dia', 'Estado del día no válido.');
+
+  let horas;
+  if (data.horas !== undefined && data.horas !== null && data.horas !== '') {
+    horas = Number(data.horas);
+    if (isNaN(horas) || horas < 0 || horas > 24) return errorValidacion_('horas', 'Las horas deben ser un número entre 0 y 24.');
+  }
+
+  const bloqueoMotivo = String(data.bloqueo_motivo || '').trim();
+  if (estadoDia === 'bloqueado' && !bloqueoMotivo) return errorValidacion_('bloqueo_motivo', 'Un día bloqueado necesita un motivo.');
+
+  let tramos = [];
+  if (Array.isArray(data.tramos)) {
+    tramos = data.tramos.map((t) => ({
+      desde: String((t && t.desde) || '').slice(0, 5),
+      hasta: String((t && t.hasta) || '').slice(0, 5),
+      nota: String((t && t.nota) || '').slice(0, 200)
+    })).filter((t) => t.desde || t.hasta || t.nota);
+  }
+
+  const nota = String(data.nota || '').slice(0, 2000);
+  const ahora = new Date().toISOString();
+
+  const existente = leerSeguro_(db, 'ACTIVIDADES_BITACORA').find((b) => {
+    if (b.tipo !== 'REGISTRO_DIA' || b.actividad_id !== actividad.actividad_id) return false;
+    return datosDeBitacora_(b).dia === dia;
+  });
+
+  const datos = {
+    dia, estado_dia: estadoDia, horas: (horas !== undefined) ? horas : '', bloqueo_motivo: bloqueoMotivo, tramos,
+    creado_por: email, creado_en: (existente ? (datosDeBitacora_(existente).creado_en || ahora) : ahora),
+    editado_por: email, editado_en: ahora, ediciones: []
+  };
+  const timestampDia = dia + 'T13:00:00.000Z';
+
+  if (existente) {
+    const previo = datosDeBitacora_(existente);
+    const edicionesPrevias = Array.isArray(previo.ediciones) ? previo.ediciones : [];
+    edicionesPrevias.push({
+      estado_dia: previo.estado_dia || '', horas: (previo.horas !== undefined) ? previo.horas : '',
+      nota: existente.nota || '', bloqueo_motivo: previo.bloqueo_motivo || '',
+      editado_por: previo.editado_por || previo.creado_por || '', editado_en: previo.editado_en || previo.creado_en || existente.timestamp || ''
+    });
+    datos.ediciones = edicionesPrevias.slice(-50);
+    actualizarFilaPorId_(db, 'ACTIVIDADES_BITACORA', 'bitacora_id', existente.bitacora_id, {
+      nota, avance_pct: '', confianza: '', datos: JSON.stringify(datos),
+      autor_nombre: (contexto && contexto.nombre) || existente.autor_nombre || '', timestamp: timestampDia
+    });
+  } else {
+    agregarFila_(db, 'ACTIVIDADES_BITACORA', {
+      bitacora_id: uuid_(), actividad_id: actividad.actividad_id, tipo: 'REGISTRO_DIA',
+      autor_email: (contexto && contexto.email) || '', autor_nombre: (contexto && contexto.nombre) || '',
+      nota, avance_pct: '', confianza: '', datos: JSON.stringify(datos), timestamp: timestampDia
+    });
+  }
+
+  actualizarFilaPorId_(db, 'ACTIVIDADES', 'actividad_id', actividad.actividad_id, { ultima_actualizacion: ahora });
+  return { ok: true, dia, estado_dia: estadoDia, editado: !!existente };
+}
+
+function eliminarRegistroDia(db, data, contexto) {
+  data = data || {};
+  const proyecto = buscarProyecto_(db, data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+  const actividad = leerSeguro_(db, 'ACTIVIDADES').find((a) => a.actividad_id === data.actividad_id && a.proyecto_id === proyecto.proyecto_id);
+  if (!actividad) return errorValidacion_('actividad_id', 'Tarea no encontrada en este proyecto.');
+  const email = normalizarEmail_(contexto && contexto.email);
+  if (!Actividades.trabajaLaActividad_(actividad, email) && !puedeGestionarProyecto_(db, proyecto, contexto)) {
+    return { _forbidden: true, message: 'Solo quien trabaja la tarea o el líder del proyecto puede eliminar el registro.' };
+  }
+  const dia = String(data.dia || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) return errorValidacion_('dia', 'El día debe tener formato AAAA-MM-DD.');
+  const existente = leerSeguro_(db, 'ACTIVIDADES_BITACORA').find((b) => b.tipo === 'REGISTRO_DIA' && b.actividad_id === actividad.actividad_id && datosDeBitacora_(b).dia === dia);
+  if (!existente) return errorValidacion_('dia', 'No hay un registro para ese día.');
+  eliminarFilasPorId_(db, 'ACTIVIDADES_BITACORA', 'bitacora_id', existente.bitacora_id);
+  actualizarFilaPorId_(db, 'ACTIVIDADES', 'actividad_id', actividad.actividad_id, { ultima_actualizacion: new Date().toISOString() });
+  return { ok: true, dia, eliminado: true };
+}
+
+function obtenerRendimiento(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+  const tareas = leerSeguro_(db, 'ACTIVIDADES').filter((a) => esVerdadero_(a.activa) && a.proyecto_id === proyecto.proyecto_id);
+  const idsTarea = {};
+  tareas.forEach((a) => { idsTarea[a.actividad_id] = true; });
+
+  const horasPorTarea = {}, diasPorTarea = {};
+  leerSeguro_(db, 'ACTIVIDADES_BITACORA').forEach((b) => {
+    if (!idsTarea[b.actividad_id]) return;
+    const horas = Number(datosDeBitacora_(b).horas) || 0;
+    if (horas) horasPorTarea[b.actividad_id] = (horasPorTarea[b.actividad_id] || 0) + horas;
+    const f = new Date(b.timestamp);
+    if (isNaN(f.getTime())) return;
+    const clave = f.toISOString().slice(0, 10);
+    (diasPorTarea[b.actividad_id] = diasPorTarea[b.actividad_id] || {})[clave] = true;
+  });
+
+  const porTarea = tareas.filter((a) => a.meta_cantidad).map((a) => {
+    const horas = horasPorTarea[a.actividad_id] || 0;
+    const dias = Object.keys(diasPorTarea[a.actividad_id] || {}).length;
+    const terminada = a.estado === 'TERMINADA';
+    return {
+      actividad_id: a.actividad_id, titulo: a.titulo, estado: a.estado,
+      meta_cantidad: a.meta_cantidad, meta_unidad: a.meta_unidad,
+      horas_totales: horas ? Math.round(horas * 10) / 10 : '',
+      dias_trabajados: dias,
+      unidades_por_dia: (terminada && dias > 0) ? Math.round((a.meta_cantidad / dias) * 10) / 10 : '',
+      horas_por_unidad: (terminada && horas > 0) ? Math.round((horas / a.meta_cantidad) * 100) / 100 : ''
+    };
+  });
+
+  const conRitmo = porTarea.filter((t) => t.unidades_por_dia !== '');
+  const horasTotalesProyecto = Object.keys(horasPorTarea).reduce((s, k) => s + horasPorTarea[k], 0);
+
+  const baseline = obtenerUltimaBaseline_(db, proyecto.proyecto_id);
+  const ahora = new Date();
+  const claveInicioProyecto = proyecto.fecha_inicio ? claveFecha_(proyecto.fecha_inicio) : '';
+  const planSeguimiento = tareas.map((a) => {
+    const real = avanceRealTarea_(a);
+    const claveCreacion = claveFecha_(a.fecha_creacion);
+    const claveCompromiso = claveFecha_(a.fecha_compromiso);
+    const planInicio = planInicioEfectivoClave_(claveCreacion, claveCompromiso, claveInicioProyecto);
+    const esperado = calcularAvanceEsperado_(planInicio, a.fecha_compromiso, ahora);
+    const baseTarea = baseline && baseline.por_tarea[a.actividad_id];
+    return {
+      actividad_id: a.actividad_id, plan_inicio: planInicio, plan_fin: a.fecha_compromiso || '',
+      baseline_inicio: baseTarea ? baseTarea.fecha_inicio : '', baseline_fin: baseTarea ? baseTarea.fecha_fin : '',
+      avance_real_pct: real, avance_esperado_pct: esperado,
+      desviacion_pp: (real !== null && esperado !== null) ? Math.round((real - esperado) * 10) / 10 : null,
+      spi: (real !== null && esperado > 0) ? Math.round((real / esperado) * 100) / 100 : null
+    };
+  });
+
+  return {
+    por_tarea: porTarea,
+    promedio_unidades_dia: conRitmo.length ? Math.round((conRitmo.reduce((s, t) => s + t.unidades_por_dia, 0) / conRitmo.length) * 10) / 10 : null,
+    horas_totales_proyecto: horasTotalesProyecto ? Math.round(horasTotalesProyecto * 10) / 10 : 0,
+    tareas_sin_avance: tareas.filter((a) => a.estado === 'NO_INICIADA').length,
+    cumplimiento_tareas: calcularCumplimientoTareasProyecto_(tareas),
+    plan_seguimiento: planSeguimiento,
+    baseline: baseline ? { timestamp: baseline.timestamp, autor_nombre: baseline.autor_nombre } : null
+  };
+}
+// v15.4: el inicio de plan efectivo -- fecha_creacion si es coherente con el
+// compromiso; si no, el inicio del proyecto; si tampoco, el propio compromiso.
+function planInicioEfectivoClave_(claveCreacion, claveCompromiso, claveInicioProyecto) {
+  if (!claveCompromiso) return claveCreacion || '';
+  if (claveCreacion && claveCreacion <= claveCompromiso) return claveCreacion;
+  if (claveInicioProyecto && claveInicioProyecto <= claveCompromiso) return claveInicioProyecto;
+  return claveCompromiso;
+}
+// v11 (P1): la baseline vigente es el evento BASELINE mas reciente. Un
+// .reverse() antes del sort (estable) resuelve empates a favor del ULTIMO
+// congelado, no del primero -- dos congelamientos en la misma ejecucion
+// pueden empatar al milisegundo.
+function obtenerUltimaBaseline_(db, proyectoId) {
+  const eventos = leerSeguro_(db, 'PROYECTO_EVENTOS').filter((e) => e.proyecto_id === proyectoId && e.tipo === 'BASELINE')
+    .reverse().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  if (!eventos.length) return null;
+  const evento = eventos[0];
+  let datos;
+  try { datos = JSON.parse(evento.cuerpo); } catch (e) { datos = null; }
+  if (!datos || !Array.isArray(datos.tareas)) return null;
+  const porTarea = {};
+  datos.tareas.forEach((t) => { porTarea[t.actividad_id] = { fecha_inicio: t.fecha_inicio || '', fecha_fin: t.fecha_fin || '' }; });
+  return { timestamp: evento.timestamp, autor_nombre: evento.autor_nombre || evento.autor_email, por_tarea: porTarea };
+}
+
+function obtenerAnalitica(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+  const tareas = leerSeguro_(db, 'ACTIVIDADES').filter((a) => esVerdadero_(a.activa) && a.proyecto_id === proyecto.proyecto_id);
+  const idsTarea = {};
+  tareas.forEach((a) => { idsTarea[a.actividad_id] = true; });
+  const bitacoraPorTarea = {};
+  leerSeguro_(db, 'ACTIVIDADES_BITACORA').forEach((b) => {
+    if (!idsTarea[b.actividad_id]) return;
+    (bitacoraPorTarea[b.actividad_id] = bitacoraPorTarea[b.actividad_id] || []).push(b);
+  });
+
+  const ahora = new Date();
+  const porTarea = tareas.map((a) => {
+    const eventos = bitacoraPorTarea[a.actividad_id] || [];
+    return {
+      actividad_id: a.actividad_id, titulo: a.titulo,
+      lead_time_dias: calcularLeadTimeDias_(a),
+      cycle_time_dias: calcularCycleTimeDias_(a, eventos),
+      tiempo_bloqueo_dias: redond1Analitica_(sumarIntervalosBitacora_(eventos, ['BLOQUEO'], ['DESBLOQUEO', 'ENTREGA'], ahora)),
+      tiempo_revision_dias: a.requiere_validacion ? redond1Analitica_(sumarIntervalosBitacora_(eventos, ['ENTREGA'], ['VALIDACION'], ahora)) : 0
+    };
+  });
+
+  function promedioDe_(campo) {
+    const valores = porTarea.map((t) => t[campo]).filter((v) => v !== null && v !== undefined);
+    if (!valores.length) return null;
+    return redond1Analitica_(valores.reduce((s, v) => s + v, 0) / valores.length);
+  }
+  function sumaDe_(campo) { return redond1Analitica_(porTarea.reduce((s, t) => s + (t[campo] || 0), 0)); }
+  const spiValores = tareas.map((a) => {
+    const real = avanceRealTarea_(a);
+    const esperado = calcularAvanceEsperado_(a.fecha_creacion, a.fecha_compromiso, ahora);
+    return (real !== null && esperado > 0) ? real / esperado : null;
+  }).filter((v) => v !== null);
+
+  return {
+    por_tarea: porTarea,
+    lead_time_promedio_dias: promedioDe_('lead_time_dias'),
+    cycle_time_promedio_dias: promedioDe_('cycle_time_dias'),
+    tiempo_bloqueo_total_dias: sumaDe_('tiempo_bloqueo_dias'),
+    tiempo_revision_total_dias: sumaDe_('tiempo_revision_dias'),
+    spi_promedio: spiValores.length ? Math.round((spiValores.reduce((s, v) => s + v, 0) / spiValores.length) * 100) / 100 : null
+  };
+}
+
+function obtenerWorkloadPortafolio(db, data, contexto) {
+  const proyectosVisibles = listar(db, {}, contexto).filter((p) => p.estado !== 'CERRADO' && p.estado !== 'CANCELADO');
+  const nombrePorProyecto = {}, idsProyecto = {};
+  proyectosVisibles.forEach((p) => { nombrePorProyecto[p.proyecto_id] = p.nombre; idsProyecto[p.proyecto_id] = true; });
+  const tareas = leerSeguro_(db, 'ACTIVIDADES').filter((a) => esVerdadero_(a.activa) && a.proyecto_id && idsProyecto[a.proyecto_id])
+    .map((a) => ({
+      actividad_id: a.actividad_id, titulo: a.titulo, estado: a.estado, semaforo: Actividades.semaforoActividad_(a).codigo,
+      responsable_email: a.responsable_email, responsable_nombre: a.responsable_nombre,
+      proyecto_id: a.proyecto_id, proyecto_nombre: nombrePorProyecto[a.proyecto_id] || ''
+    }));
+  const idsTarea = {};
+  tareas.forEach((a) => { idsTarea[a.actividad_id] = true; });
+  const bitacora = leerSeguro_(db, 'ACTIVIDADES_BITACORA').filter((b) => idsTarea[b.actividad_id]).map(filaBitacoraSalida_);
+  return { proyectos: proyectosVisibles.map((p) => ({ proyecto_id: p.proyecto_id, nombre: p.nombre })), tareas, bitacora };
+}
+
+function congelarBaseline(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeGestionarProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'Solo el líder del proyecto (o ADM) puede congelar la línea base.' };
+  const tareas = leerSeguro_(db, 'ACTIVIDADES').filter((a) => esVerdadero_(a.activa) && a.proyecto_id === proyecto.proyecto_id);
+  const snapshot = tareas.map((a) => ({ actividad_id: a.actividad_id, titulo: a.titulo, fecha_inicio: a.fecha_creacion || '', fecha_fin: a.fecha_compromiso || '' }));
+  const evento = registrarEventoProyecto_(db, proyecto.proyecto_id, 'BASELINE', contexto,
+    'Línea base congelada (' + snapshot.length + ' tarea[s])', '', '', JSON.stringify({ tareas: snapshot }));
+  return { ok: true, evento_id: evento.evento_id, timestamp: evento.timestamp, total_tareas: snapshot.length };
+}
+
+function reprogramarTarea(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+  const actividad = leerSeguro_(db, 'ACTIVIDADES').find((a) => a.actividad_id === data.actividad_id && a.proyecto_id === proyecto.proyecto_id);
+  if (!actividad) return errorValidacion_('actividad_id', 'Tarea no encontrada en este proyecto.');
+  return Actividades.reprogramar(db, data, contexto);
+}
+
 module.exports = {
   listar, listarMisTareas, listarCalendario, getDetalle, getDetalleCompleto, marcarSalaVisitada,
   crear, guardarComoPlantilla, listarPlantillas, actualizar, gestionarIntegrante, gestionarHito,
@@ -1277,9 +1627,12 @@ module.exports = {
   gestionarReunion, agregarAcuerdoReunion, eliminarAcuerdoReunion, convertirAcuerdoEnTarea, listarReuniones,
   gestionarDecision, listarDecisiones,
   gestionarEntregable, revisarEntregable, gestionarRiesgo, getResumenPortafolio,
+  // Incremento 2 (v11 Reingenieria Cronograma).
+  guardarRegistroDia, eliminarRegistroDia, obtenerRendimiento, obtenerAnalitica,
+  obtenerWorkloadPortafolio, congelarBaseline, reprogramarTarea,
   // Exportadas: rolEnProyecto_ es el gate que actividades.js consulta para
-  // el acoplamiento (RN-709); el resto queda disponible para el incremento 2
-  // (cronograma avanzado) y para tests, nunca duplicadas.
+  // el acoplamiento (RN-709); el resto queda disponible para tests, nunca
+  // duplicadas.
   rolEnProyecto_, puedeVerProyecto_, puedeGestionarProyecto_, buscarProyecto_,
   calcularSaludProyecto_, calcularAvanceProyecto_, calcularCumplimientoTareasProyecto_,
   calcularRutaCritica_, calcularImpactoDependencia_, avanceRealTarea_, esTareaTerminalProyecto_
