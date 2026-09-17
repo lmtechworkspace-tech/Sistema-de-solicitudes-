@@ -146,7 +146,29 @@ const COLUMNAS = {
     'registro_id', 'pausa_id', 'trabajador_id', 'email', 'fecha_hora_registro',
     'estado', 'motivo', 'comentario', 'confirmacion', 'origen', 'animo'
   ],
-  PAUSAS_LOG: ['log_id', 'timestamp', 'pausa_id', 'usuario', 'accion', 'detalle']
+  PAUSAS_LOG: ['log_id', 'timestamp', 'pausa_id', 'usuario', 'accion', 'detalle'],
+
+  // Modulo Actividades / Gestion Operacional (v7.0). Mismas columnas que en
+  // backend/backoffice/Constantes.gs. Las columnas de proyecto (proyecto_id/
+  // hito_id/depende_de/tarea_padre_id) y de SGC (sgc_origen_*) son aditivas:
+  // una actividad suelta de "Mi trabajo" las deja vacias y se comporta igual.
+  ACTIVIDADES: [
+    'actividad_id', 'titulo', 'descripcion', 'origen', 'solicitud_id',
+    'responsable_email', 'responsable_nombre', 'supervisor_email',
+    'area_id', 'cliente_id', 'proyecto', 'prioridad', 'estado', 'tamano',
+    'fecha_propuesta', 'fecha_compromiso', 'confirmada_en', 'requiere_validacion',
+    'recurrencia', 'recurrencia_origen_id', 'fecha_inicio_plan', 'fecha_terminada',
+    'confianza', 'avance_pct', 'bloqueo_motivo', 'bloqueo_responsable_email',
+    'bloqueo_desde', 'ultima_actualizacion', 'reprogramaciones',
+    'fecha_creacion', 'creado_por', 'activa',
+    'proyecto_id', 'hito_id', 'depende_de',
+    'sgc_origen_tipo', 'sgc_origen_id',
+    'meta_cantidad', 'meta_unidad', 'colaboradores_emails', 'tarea_padre_id'
+  ],
+  ACTIVIDADES_BITACORA: [
+    'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',
+    'nota', 'avance_pct', 'confianza', 'datos', 'timestamp'
+  ]
 };
 
 function asegurarEsquema(db) {

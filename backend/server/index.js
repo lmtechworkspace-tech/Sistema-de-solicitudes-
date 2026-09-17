@@ -14,6 +14,7 @@ const { abrirDbProduccion } = require('../db');
 const Notificaciones = require('../logica/notificaciones');
 const Novedades = require('../logica/novedades');
 const Pausas = require('../logica/pausas');
+const Actividades = require('../logica/actividades');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
 const db = abrirDbProduccion();
@@ -70,6 +71,12 @@ const intervaloTriggersDiarios = setInterval(() => {
   if (enVentanaDiaria_(ahora, 9)) {
     Novedades.recordatorioPendientes(db).catch((err) => {
       console.error('error enviando el recordatorio de novedades:', err);
+    });
+    // Actividades: digest diario de alertas por persona (§4.6), mismo pase de
+    // las 09:00 que el resto (presupuesto de triggers en 0 en el .gs). Dedup
+    // por (evento+dia) via ventana de 24h -> idempotente si se revisa de mas.
+    Actividades.enviarAlertasActividades(db).catch((err) => {
+      console.error('error enviando alertas de actividades:', err);
     });
   }
   // Pausas: programar las del dia (06:00), resumen de fin de dia (20:00),

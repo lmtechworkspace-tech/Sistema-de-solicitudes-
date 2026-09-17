@@ -402,5 +402,9 @@ module.exports = {
   // reimplementarlas (para que "de quien es este item" y "cuanto tiempo
   // lleva abierto" respondan siempre lo mismo en los dos paneles).
   coincideFiltroItem_, mapaNombresUsuarios_, diasHabilesRedondeado_, promedio_,
-  lineaBasePorItem_, contarPorSubsolicitud_, contarReaperturasPorSubsolicitud_
+  lineaBasePorItem_, contarPorSubsolicitud_, contarReaperturasPorSubsolicitud_,
+  // Reutilizadas por actividades.js (Panel de Gerencia y motores de reporte
+  // de Actividades), mismo criterio que el .gs: la aritmetica de ventana de
+  // periodo y "dentro de rango" es generica, no especifica de Solicitudes.
+  resolverVentanaPeriodo_, dentroDeRango_
 };

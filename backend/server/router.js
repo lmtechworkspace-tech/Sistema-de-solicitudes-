@@ -37,6 +37,7 @@ const Gerencia = require('../logica/gerencia');
 const Notificaciones = require('../logica/notificaciones');
 const Novedades = require('../logica/novedades');
 const Pausas = require('../logica/pausas');
+const Actividades = require('../logica/actividades');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -134,7 +135,28 @@ const ACCIONES = {
   listarRosterCoordinadorPausas: (db, data, contexto) => Pausas.listarRosterCoordinador(db, data, contexto),
   getHistorialTrabajadorPausas: (db, data, contexto) => Pausas.getHistorialTrabajador(db, data, contexto),
   getReporteGerenciaPausas: (db, data, contexto) => Pausas.getReporteGerencia(db, data, contexto),
-  descargarReporteGerenciaPausasPdf: (db, data, contexto) => Pausas.descargarReporteGerenciaPdf(db, data, contexto)
+  descargarReporteGerenciaPausasPdf: (db, data, contexto) => Pausas.descargarReporteGerenciaPdf(db, data, contexto),
+
+  // Modulo Actividades / Gestion Operacional (v7.0). Motor base sobre el que
+  // Proyectos.crearTarea/listarTareas son wrappers (Proyectos aun no portado).
+  listarActividades: (db, data, contexto) => Actividades.listar(db, data, contexto),
+  getDetalleActividad: (db, data, contexto) => Actividades.obtenerDetalle(db, data, contexto),
+  crearActividad: (db, data, contexto) => Actividades.crear(db, data, contexto),
+  confirmarActividad: (db, data, contexto) => Actividades.confirmar(db, data, contexto),
+  checkinActividad: (db, data, contexto) => Actividades.checkin(db, data, contexto),
+  validarActividad: (db, data, contexto) => Actividades.validar(db, data, contexto),
+  cancelarActividad: (db, data, contexto) => Actividades.cancelar(db, data, contexto),
+  reprogramarActividad: (db, data, contexto) => Actividades.reprogramar(db, data, contexto),
+  panelEquipoActividades: (db, data, contexto) => Actividades.panelEquipo(db, data, contexto),
+  reasignarActividad: (db, data, contexto) => Actividades.reasignar(db, data, contexto),
+  pedirActualizacionActividad: (db, data, contexto) => Actividades.pedirActualizacion(db, data, contexto),
+  getPanelGerenciaActividades: (db, data, contexto) => Actividades.getPanelGerencia(db, data, contexto),
+  generarReporteActividades: (db, data, contexto) => Actividades.generarReporte(db, data, contexto),
+  // PDF del reporte y del acta: el .gs los genera con el motor de Apps Script;
+  // en Node hace falta una libreria de PDF (su propio mini-proyecto), igual
+  // que los PDF de Pausas -- bloqueados hasta entonces, con error claro.
+  descargarReporteActividadesPdf: () => ({ _validationError: true, message: 'La descarga en PDF del reporte de actividades aun no esta disponible en el nuevo backend (falta el motor de PDF).' }),
+  descargarActaReunionPdf: () => ({ _validationError: true, message: 'La descarga en PDF del acta de reunion aun no esta disponible en el nuevo backend (falta el motor de PDF).' })
 };
 
 function responderResultado_(resultado) {
