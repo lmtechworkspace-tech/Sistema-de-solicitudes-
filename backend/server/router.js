@@ -35,6 +35,7 @@ const Jefatura = require('../logica/jefatura');
 const Dashboard = require('../logica/dashboard');
 const Gerencia = require('../logica/gerencia');
 const Notificaciones = require('../logica/notificaciones');
+const Bootstrap = require('../logica/bootstrap');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -48,7 +49,10 @@ const ACCIONES_PUBLICAS = new Set([
   'portalLogin', 'portalLogout', 'portalSesion', 'portalCambiarPassword', 'crearSolicitud',
   'consultarEstado', 'solicitarCodigoAcceso', 'misSolicitudes',
   'editarSubsolicitud', 'eliminarArchivo', 'responderConsulta', 'validarCierre',
-  'getCatalogos'
+  'getCatalogos',
+  // TEMPORAL (bootstrap.js): sin sesion ADM que la proteja a proposito --
+  // la protege el secreto de servidor (MIGRACION_BOOTSTRAP_SECRET).
+  'bootstrapAdmin'
 ]);
 
 const ACCIONES = {
@@ -90,7 +94,10 @@ const ACCIONES = {
   getPanelGerencia: (db, data, contexto) => Gerencia.getPanel(db, data, contexto),
   getPanelJefatura: (db, data, contexto) => Jefatura.getPanel(db, data, contexto),
 
-  listarLogsNotificaciones: (db, data, contexto) => Notificaciones.listarLogs(db, data, contexto)
+  listarLogsNotificaciones: (db, data, contexto) => Notificaciones.listarLogs(db, data, contexto),
+
+  // TEMPORAL (bootstrap.js): crear/resetear la cuenta ADM para poder arrancar la migracion.
+  bootstrapAdmin: (db, data) => Bootstrap.bootstrapAdmin(db, data)
 };
 
 function responderResultado_(resultado) {
