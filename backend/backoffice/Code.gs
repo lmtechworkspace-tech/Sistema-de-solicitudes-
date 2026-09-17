@@ -161,6 +161,8 @@ var BACKOFFICE_ACTIONS = {
   listarPermisosNotificacionesSO: handleListarPermisosNotificacionesSO_,
   // H-04: que version del backend esta pegada y si la planilla esta al dia.
   getEstadoSistema: handleGetEstadoSistema_,
+  // TEMPORAL (Migracion.gs): exportar datos reales para el corte a Node/SQLite.
+  exportarDatosMigracion: handleExportarDatosMigracion_,
   // v7.5 (canales de alerta): que categorias mandan correo -- ambas ADM-only.
   listarCanalesAlerta: handleListarCanalesAlerta_,
   guardarCanalAlerta: handleGuardarCanalAlerta_,
@@ -456,6 +458,7 @@ var MODULO_POR_ACCION = {
   listarCatalogo: 'administracion',
   listarPermisosNotificacionesSO: 'administracion',
   getEstadoSistema: 'administracion',
+  exportarDatosMigracion: 'administracion',
   listarCanalesAlerta: 'administracion',
   guardarCanalAlerta: 'administracion',
   getDirectorioAlerta: 'administracion',
@@ -1058,6 +1061,10 @@ function handleGetEstadoSistema_(data, contexto) {
     version_backend: VERSION_SIGSO,
     esquema: diagnosticarEsquema_()
   });
+}
+
+function handleExportarDatosMigracion_(data, contexto) {
+  return responderResultado_(exportarDatosMigracion_(data, contexto));
 }
 
 function handleListarCanalesAlerta_(data, contexto) {
