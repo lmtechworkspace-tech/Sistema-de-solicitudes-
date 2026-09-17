@@ -31,6 +31,7 @@ const Sesiones = require('../logica/sesiones');
 const Solicitudes = require('../logica/solicitudes');
 const SolicitudesBO = require('../logica/solicitudesBackoffice');
 const SolicitudesPublico = require('../logica/solicitudesPublico');
+const Migracion = require('../logica/migracion');
 const Jefatura = require('../logica/jefatura');
 const Dashboard = require('../logica/dashboard');
 const Gerencia = require('../logica/gerencia');
@@ -88,7 +89,10 @@ const ACCIONES = {
   getPanelGerencia: (db, data, contexto) => Gerencia.getPanel(db, data, contexto),
   getPanelJefatura: (db, data, contexto) => Jefatura.getPanel(db, data, contexto),
 
-  listarLogsNotificaciones: (db, data, contexto) => Notificaciones.listarLogs(db, data, contexto)
+  listarLogsNotificaciones: (db, data, contexto) => Notificaciones.listarLogs(db, data, contexto),
+
+  // TEMPORAL (migracion.js): importar datos reales desde la planilla vieja.
+  importarDatosMigracion: (db, data, contexto) => Migracion.importarTabla(db, data, contexto)
 };
 
 function responderResultado_(resultado) {
