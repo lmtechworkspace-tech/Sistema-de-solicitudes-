@@ -47,7 +47,8 @@ const Notificaciones = require('../logica/notificaciones');
 const ACCIONES_PUBLICAS = new Set([
   'portalLogin', 'portalLogout', 'portalSesion', 'portalCambiarPassword', 'crearSolicitud',
   'consultarEstado', 'solicitarCodigoAcceso', 'misSolicitudes',
-  'editarSubsolicitud', 'eliminarArchivo', 'responderConsulta', 'validarCierre'
+  'editarSubsolicitud', 'eliminarArchivo', 'responderConsulta', 'validarCierre',
+  'getCatalogos'
 ]);
 
 const ACCIONES = {
@@ -63,6 +64,7 @@ const ACCIONES = {
   listarCatalogo: (db, data, contexto) => Catalogos.listar(db, data, contexto),
 
   crearSolicitud: (db, data) => Solicitudes.crearSolicitud(db, data),
+  getCatalogos: (db) => Catalogos.getCatalogosPublicos(db),
 
   consultarEstado: (db, data) => SolicitudesPublico.estadoPublico(db, data.solicitud_id, data.email),
   solicitarCodigoAcceso: (db, data) => SolicitudesPublico.solicitarCodigoAcceso(db, data),

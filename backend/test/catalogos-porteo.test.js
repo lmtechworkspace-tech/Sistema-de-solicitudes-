@@ -196,3 +196,40 @@ test('Catalogos.listar rechaza tipo desconocido y rol sin permiso', () => {
   assert.equal(Catalogos.listar(db, { tipo: 'INVALIDO' }, { rol: 'ADM' })._validationError, true);
   assert.equal(Catalogos.listar(db, { tipo: 'EMPRESA' }, { rol: 'ANA' })._forbidden, true);
 });
+
+// --- Catalogos.getCatalogosPublicos (puerto de Catalogos.getAll, Intake) ---
+// El catalogo que ve el formulario publico de nueva solicitud: solo activos,
+// sin auth, distinto de listar() (Backoffice, todo incluido inactivos).
+
+test('getCatalogosPublicos devuelve solo entradas activas de cada catalogo', () => {
+  const db = dbConSchema();
+  const { agregarFila_ } = require('../db/sqliteRepo');
+  agregarFila_(db, 'CAT_EMPRESAS', { empresa_id: 'HP', nombre: 'HomePymes', logo: '', activo: true });
+  agregarFila_(db, 'CAT_EMPRESAS', { empresa_id: 'OLD', nombre: 'Empresa dada de baja', logo: '', activo: false });
+  agregarFila_(db, 'CAT_PLATAFORMAS', { plataforma_id: 'ERP', nombre: 'ERP', empresa_id: 'HP', url_base: '', activo: true });
+  agregarFila_(db, 'CAT_MODULOS', { modulo_id: 'FACT', nombre: 'Facturacion', plataforma_id: 'ERP', modulo_padre_id: '', activo: true });
+  agregarFila_(db, 'CAT_MODULOS', { modulo_id: 'LEGACY', nombre: 'Modulo viejo', plataforma_id: 'ERP', modulo_padre_id: '', activo: false });
+  agregarFila_(db, 'CAT_TIPOS', { tipo_id: 'ERR', nombre: 'Error', prioridad_default: 'P2', activo: true, es_urgente: false });
+  agregarFila_(db, 'CAT_TIPOS', { tipo_id: 'MOD', nombre: 'Modificacion', prioridad_default: 'P3', activo: true, es_urgente: false });
+
+  const catalogos = Catalogos.getCatalogosPublicos(db);
+
+  assert.equal(catalogos.empresas.length, 1);
+  assert.equal(catalogos.empresas[0].empresa_id, 'HP');
+  assert.equal(catalogos.plataformas.length, 1);
+  assert.equal(catalogos.modulos.length, 1);
+  assert.equal(catalogos.modulos[0].modulo_id, 'FACT');
+  assert.equal(catalogos.tipos.length, 2);
+});
+
+test('getCatalogosPublicos proyecta CAT_AREAS a {area_id, nombre} -- el responsable_email nunca viaja al navegador publico', () => {
+  const db = dbConSchema();
+  const { agregarFila_ } = require('../db/sqliteRepo');
+  agregarFila_(db, 'CAT_AREAS', { area_id: 'AREA_1', nombre: 'Soporte', responsable_email: 'soporte@rld.cl', activo: true });
+  agregarFila_(db, 'CAT_AREAS', { area_id: 'AREA_2', nombre: 'De baja', responsable_email: 'x@x.cl', activo: false });
+
+  const catalogos = Catalogos.getCatalogosPublicos(db);
+
+  assert.deepEqual(catalogos.areas, [{ area_id: 'AREA_1', nombre: 'Soporte' }]);
+  assert.equal(JSON.stringify(catalogos.areas).indexOf('soporte@rld.cl'), -1);
+});

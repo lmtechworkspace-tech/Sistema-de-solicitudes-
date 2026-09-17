@@ -71,4 +71,34 @@ function listar(db, data, contexto) {
   return leerFilas_(db, config.hoja, COLUMNAS[config.hoja]);
 }
 
-module.exports = { CATALOGOS_CONFIG, guardar, listar };
+// Puerto de backend/intake/Catalogos.gs (Catalogos.getAll): el catalogo
+// PUBLICO que ve el formulario de nueva solicitud -- solo activos, sin auth,
+// y con CAT_AREAS proyectada a {area_id, nombre} (el responsable_email
+// nunca viaja al navegador publico; se resuelve server-side en
+// crearSolicitud, ver solicitudes.js). No se porta CacheService (300s TTL):
+// SQLite local no tiene el costo de red que esa cache evitaba en Sheets.
+function activo_(valor) {
+  return valor === true || valor === 'TRUE' || valor === 1;
+}
+
+function filtrarActivos_(filas) {
+  return filas.filter((f) => activo_(f.activo));
+}
+
+function proyectarAreasPublicas_(db) {
+  let filas;
+  try { filas = leerFilas_(db, 'CAT_AREAS', COLUMNAS.CAT_AREAS); } catch (err) { return []; }
+  return filtrarActivos_(filas).map((a) => ({ area_id: a.area_id, nombre: a.nombre }));
+}
+
+function getCatalogosPublicos(db) {
+  return {
+    empresas: filtrarActivos_(leerFilas_(db, 'CAT_EMPRESAS', COLUMNAS.CAT_EMPRESAS)),
+    plataformas: filtrarActivos_(leerFilas_(db, 'CAT_PLATAFORMAS', COLUMNAS.CAT_PLATAFORMAS)),
+    modulos: filtrarActivos_(leerFilas_(db, 'CAT_MODULOS', COLUMNAS.CAT_MODULOS)),
+    tipos: filtrarActivos_(leerFilas_(db, 'CAT_TIPOS', COLUMNAS.CAT_TIPOS)),
+    areas: proyectarAreasPublicas_(db)
+  };
+}
+
+module.exports = { CATALOGOS_CONFIG, guardar, listar, getCatalogosPublicos };
