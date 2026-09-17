@@ -38,6 +38,7 @@ const Notificaciones = require('../logica/notificaciones');
 const Novedades = require('../logica/novedades');
 const Pausas = require('../logica/pausas');
 const Actividades = require('../logica/actividades');
+const Proyectos = require('../logica/proyectos');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -156,7 +157,65 @@ const ACCIONES = {
   // en Node hace falta una libreria de PDF (su propio mini-proyecto), igual
   // que los PDF de Pausas -- bloqueados hasta entonces, con error claro.
   descargarReporteActividadesPdf: () => ({ _validationError: true, message: 'La descarga en PDF del reporte de actividades aun no esta disponible en el nuevo backend (falta el motor de PDF).' }),
-  descargarActaReunionPdf: () => ({ _validationError: true, message: 'La descarga en PDF del acta de reunion aun no esta disponible en el nuevo backend (falta el motor de PDF).' })
+  descargarActaReunionPdf: () => ({ _validationError: true, message: 'La descarga en PDF del acta de reunion aun no esta disponible en el nuevo backend (falta el motor de PDF).' }),
+
+  // Modulo Proyectos (v9.0+, incremento 1: MVP + Sala + reuniones/decisiones
+  // + entregables/riesgos + plantillas + portafolio). Las TAREAS de un
+  // proyecto son ACTIVIDADES -- crearTareaProyecto/listarTareasProyecto son
+  // wrappers finos sobre Actividades (el resto del ciclo de vida de la tarea
+  // sigue usando las acciones de Actividades ya conectadas arriba).
+  listarProyectos: (db, data, contexto) => Proyectos.listar(db, data, contexto),
+  listarMisTareasProyectos: (db, data, contexto) => Proyectos.listarMisTareas(db, data, contexto),
+  listarMiBitacoraProyectos: (db, data, contexto) => Proyectos.listarMiBitacora(db, data, contexto),
+  listarCalendarioProyectos: (db, data, contexto) => Proyectos.listarCalendario(db, data, contexto),
+  guardarProyectoComoPlantilla: (db, data, contexto) => Proyectos.guardarComoPlantilla(db, data, contexto),
+  listarPlantillasProyecto: (db, data, contexto) => Proyectos.listarPlantillas(db, data, contexto),
+  marcarSalaVisitadaProyecto: (db, data, contexto) => Proyectos.marcarSalaVisitada(db, data, contexto),
+  gestionarReunionProyecto: (db, data, contexto) => Proyectos.gestionarReunion(db, data, contexto),
+  agregarAcuerdoReunionProyecto: (db, data, contexto) => Proyectos.agregarAcuerdoReunion(db, data, contexto),
+  eliminarAcuerdoReunionProyecto: (db, data, contexto) => Proyectos.eliminarAcuerdoReunion(db, data, contexto),
+  convertirAcuerdoEnTareaProyecto: (db, data, contexto) => Proyectos.convertirAcuerdoEnTarea(db, data, contexto),
+  listarReunionesProyecto: (db, data, contexto) => Proyectos.listarReuniones(db, data, contexto),
+  gestionarDecisionProyecto: (db, data, contexto) => Proyectos.gestionarDecision(db, data, contexto),
+  listarDecisionesProyecto: (db, data, contexto) => Proyectos.listarDecisiones(db, data, contexto),
+  getDetalleProyecto: (db, data, contexto) => Proyectos.getDetalle(db, data, contexto),
+  getDetalleCompletoProyecto: (db, data, contexto) => Proyectos.getDetalleCompleto(db, data, contexto),
+  crearProyecto: (db, data, contexto) => Proyectos.crear(db, data, contexto),
+  actualizarProyecto: (db, data, contexto) => Proyectos.actualizar(db, data, contexto),
+  gestionarIntegranteProyecto: (db, data, contexto) => Proyectos.gestionarIntegrante(db, data, contexto),
+  gestionarHitoProyecto: (db, data, contexto) => Proyectos.gestionarHito(db, data, contexto),
+  crearTareaProyecto: (db, data, contexto) => Proyectos.crearTarea(db, data, contexto),
+  editarTareaProyecto: (db, data, contexto) => Proyectos.editarTarea(db, data, contexto),
+  listarTareasProyecto: (db, data, contexto) => Proyectos.listarTareas(db, data, contexto),
+  listarBitacoraProyecto: (db, data, contexto) => Proyectos.listarBitacora(db, data, contexto),
+  listarSalaProyecto: (db, data, contexto) => Proyectos.listarSala(db, data, contexto),
+  publicarEnSalaProyecto: (db, data, contexto) => Proyectos.publicarEnSala(db, data, contexto),
+  convertirEventoEnTareaProyecto: (db, data, contexto) => Proyectos.convertirEventoEnTarea(db, data, contexto),
+  gestionarEntregableProyecto: (db, data, contexto) => Proyectos.gestionarEntregable(db, data, contexto),
+  revisarEntregableProyecto: (db, data, contexto) => Proyectos.revisarEntregable(db, data, contexto),
+  gestionarRiesgoProyecto: (db, data, contexto) => Proyectos.gestionarRiesgo(db, data, contexto),
+  getResumenPortafolioProyectos: (db, data, contexto) => Proyectos.getResumenPortafolio(db, contexto),
+
+  // Cronograma avanzado (v11 Reingenieria Cronograma) y centro documental
+  // (v13 Fase 4, R2) + PDF/libro: incremento 2, pendiente. Gateadas con error
+  // claro, mismo criterio que los PDF de Actividades/Pausas.
+  guardarRegistroDiaProyecto: () => ({ _validationError: true, message: 'El registro diario de la Carta Gantt aun no esta disponible en el nuevo backend.' }),
+  eliminarRegistroDiaProyecto: () => ({ _validationError: true, message: 'El registro diario de la Carta Gantt aun no esta disponible en el nuevo backend.' }),
+  obtenerRendimientoProyecto: () => ({ _validationError: true, message: 'El calculo de rendimiento del proyecto aun no esta disponible en el nuevo backend.' }),
+  congelarBaselineProyecto: () => ({ _validationError: true, message: 'Congelar la linea base aun no esta disponible en el nuevo backend.' }),
+  reprogramarTareaProyecto: () => ({ _validationError: true, message: 'La reprogramacion con motivo del Cronograma aun no esta disponible en el nuevo backend.' }),
+  obtenerAnaliticaProyecto: () => ({ _validationError: true, message: 'La analitica avanzada del proyecto aun no esta disponible en el nuevo backend.' }),
+  obtenerWorkloadPortafolioProyectos: () => ({ _validationError: true, message: 'El workload cruzado del portafolio aun no esta disponible en el nuevo backend.' }),
+  subirAdjuntoProyecto: () => ({ _validationError: true, message: 'La subida de archivos aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
+  descargarAdjuntoProyecto: () => ({ _validationError: true, message: 'La descarga de archivos aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
+  gestionarDocumentoProyecto: () => ({ _validationError: true, message: 'El centro documental aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
+  subirVersionDocumentoProyecto: () => ({ _validationError: true, message: 'El centro documental aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
+  marcarVersionVigenteProyecto: () => ({ _validationError: true, message: 'El centro documental aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
+  listarVersionesDocumentoProyecto: () => ({ _validationError: true, message: 'El centro documental aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
+  descargarVersionDocumentoProyecto: () => ({ _validationError: true, message: 'El centro documental aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
+  descargarDocumentoProyecto: () => ({ _validationError: true, message: 'El centro documental aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
+  descargarReporteProyecto: () => ({ _validationError: true, message: 'La descarga en PDF del proyecto aun no esta disponible en el nuevo backend (falta el motor de PDF).' }),
+  descargarLibroProyecto: () => ({ _validationError: true, message: 'La descarga del libro Excel del proyecto aun no esta disponible en el nuevo backend.' })
 };
 
 function responderResultado_(resultado) {

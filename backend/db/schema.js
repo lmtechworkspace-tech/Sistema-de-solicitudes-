@@ -168,6 +168,81 @@ const COLUMNAS = {
   ACTIVIDADES_BITACORA: [
     'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',
     'nota', 'avance_pct', 'confianza', 'datos', 'timestamp'
+  ],
+
+  // Modulo Proyectos (v9.0+). Mismas columnas que en backend/backoffice/
+  // Constantes.gs. Las TAREAS de un proyecto no son una entidad nueva -- son
+  // ACTIVIDADES (ver proyecto_id/hito_id/depende_de/tarea_padre_id ahi
+  // arriba); estas tablas son la capa contenedora + sala de trabajo encima.
+  PROYECTOS: [
+    'proyecto_id', 'codigo', 'nombre', 'descripcion', 'objetivo',
+    'resultado_esperado', 'lider_email', 'area_id', 'cliente_id',
+    'categoria', 'prioridad', 'estado',
+    'fecha_inicio', 'fecha_objetivo', 'fecha_cierre_real',
+    'salud_override', 'salud_override_motivo',
+    'ultima_actualizacion', 'creado_por', 'fecha_creacion', 'activa',
+    'solicitud_origen_id'
+  ],
+  // rol_proyecto: LIDER | INTEGRANTE | COLABORADOR | OBSERVADOR -- la
+  // membresia es el gate FINO del modulo (mismo patron que JEFATURAS).
+  PROYECTO_INTEGRANTES: [
+    'integrante_id', 'proyecto_id', 'usuario_email', 'usuario_nombre',
+    'rol_proyecto', 'responsabilidad', 'activo', 'agregado_por', 'fecha_creacion',
+    'ultima_visita_sala'
+  ],
+  PROYECTO_HITOS: [
+    'hito_id', 'proyecto_id', 'nombre', 'descripcion', 'fecha_objetivo',
+    'estado', 'orden', 'fecha_creacion'
+  ],
+  // La sala: feed append-only tipado (ACTUALIZACION/COMENTARIO/DECISION/
+  // REUNION/BLOQUEO/SOLICITUD_LIDER/CAMBIO_ESTADO).
+  PROYECTO_EVENTOS: [
+    'evento_id', 'proyecto_id', 'tipo', 'autor_email', 'autor_nombre',
+    'titulo', 'cuerpo', 'ref_tipo', 'ref_id', 'menciones', 'timestamp'
+  ],
+  PROYECTO_ENTREGABLES: [
+    'entregable_id', 'proyecto_id', 'hito_id', 'nombre', 'descripcion',
+    'responsable_email', 'fecha_comprometida', 'estado', 'url_evidencia',
+    'fecha_entrega_real', 'revisado_por', 'resultado_revision',
+    'observaciones', 'fecha_creacion'
+  ],
+  // nivel se DERIVA de probabilidad x impacto (calcularNivelRiesgo_), nunca
+  // se pide a mano.
+  PROYECTO_RIESGOS: [
+    'riesgo_id', 'proyecto_id', 'descripcion', 'probabilidad', 'impacto',
+    'nivel', 'responsable_email', 'mitigacion', 'estado', 'fecha_creacion'
+  ],
+  PROYECTO_PLANTILLAS: [
+    'plantilla_id', 'nombre', 'descripcion', 'creado_por', 'fecha_creacion', 'activa'
+  ],
+  PROYECTO_PLANTILLA_HITOS: [
+    'plantilla_hito_id', 'plantilla_id', 'nombre', 'descripcion', 'orden'
+  ],
+  // v13 Fase 4 (centro documental) -- pendiente de portar (bloqueado por R2,
+  // igual criterio que subirArchivo de Solicitudes/adjuntos de Novedades).
+  // Se declara la tabla ahora (no destructivo agregarla despues tampoco)
+  // para que el esquema quede completo de una vez.
+  PROYECTO_DOCUMENTOS: [
+    'documento_id', 'proyecto_id', 'nombre', 'categoria', 'descripcion',
+    'ref_tipo', 'ref_id',
+    'version_vigente', 'archivo_id', 'archivo_nombre', 'archivo_mime', 'tamano_bytes',
+    'creado_por', 'fecha_creacion', 'activo'
+  ],
+  PROYECTO_DOC_VERSIONES: [
+    'version_id', 'documento_id', 'version', 'comentario',
+    'archivo_id', 'archivo_nombre', 'archivo_mime', 'tamano_bytes',
+    'subido_por', 'fecha', 'vigente'
+  ],
+  PROYECTO_REUNIONES: [
+    'reunion_id', 'proyecto_id', 'titulo', 'fecha', 'participantes',
+    'objetivo', 'minuta', 'creado_por', 'fecha_creacion'
+  ],
+  PROYECTO_REUNION_ACUERDOS: [
+    'acuerdo_id', 'reunion_id', 'texto', 'ref_tipo', 'ref_id', 'orden'
+  ],
+  PROYECTO_DECISIONES: [
+    'decision_id', 'proyecto_id', 'descripcion', 'contexto', 'impacto',
+    'responsable_email', 'fecha_decision', 'creado_por', 'fecha_creacion', 'activo'
   ]
 };
 
