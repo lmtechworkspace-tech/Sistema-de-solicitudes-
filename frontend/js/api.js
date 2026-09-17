@@ -32,6 +32,28 @@ var ACCIONES_REINTENTABLES = {
 };
 var MAX_INTENTOS_LECTURA = 3;
 
+// Migracion a Node/SQLite (sep-2026): estas acciones ya estan portadas y
+// verificadas contra api.ctrly.cl (ver backend/server/router.js -- misma
+// lista, ACCIONES). Se enrutan aqui SIN importar que url haya pasado el
+// llamador (INTAKE_URL o BACKOFFICE_URL): el enrutamiento es por nombre de
+// accion, no por pagina, asi que ninguna pagina necesita cambios. Todo lo
+// que NO esta en esta lista (Proyectos/Actividades/SGC/Pausas/Novedades)
+// sigue yendo exactamente a donde iba siempre.
+var ACCIONES_PORTADAS_NODE = {
+  portalLogin: true, portalLogout: true, portalSesion: true, portalCambiarPassword: true,
+  listarCuentasPortal: true, gestionarCuentaPortal: true,
+  guardarCatalogo: true, listarCatalogo: true, getCatalogos: true,
+  crearSolicitud: true,
+  consultarEstado: true, solicitarCodigoAcceso: true, misSolicitudes: true,
+  editarSubsolicitud: true, eliminarArchivo: true, responderConsulta: true, validarCierre: true,
+  actualizarEstado: true, actualizarPrioridad: true, comprometerFecha: true, derivarSolicitud: true,
+  editarContenidoSubsolicitud: true, getSolicitudDetalle: true,
+  listarJefaturas: true, gestionarJefatura: true,
+  getDashboardData: true, getPautaTrabajo: true,
+  getPanelGerencia: true, getPanelJefatura: true,
+  listarLogsNotificaciones: true
+};
+
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,
 // se reintenta CUALQUIER acción cuyo nombre empiece por un verbo de LECTURA.
 // Motivo: en producción, la implementación "por token" del Backoffice corre
@@ -283,10 +305,21 @@ async function llamarApi(url, action, data) {
   let tokenPortal = null;
   try { tokenPortal = localStorage.getItem('sigso_portal_token'); } catch (err) { /* sin storage */ }
 
-  // Backoffice por token: se reparte entre los despliegues del pool. La URL
-  // efectiva se elige DENTRO del bucle, para que un reintento pueda rotar a
-  // otro despliegue si el primero fallo.
-  const esBackofficePorToken = !!(tokenPortal && url === cfg.BACKOFFICE_URL && cfg.BACKOFFICE_TOKEN_URL);
+  // Migracion a Node/SQLite: esta accion ya esta portada -- va directo a
+  // api.ctrly.cl sin importar que url haya pasado el llamador, y sin pool de
+  // reparto de carga (Node no serializa por cuenta como Apps Script, no hace
+  // falta repartir).
+  const esAccionNode = !!(ACCIONES_PORTADAS_NODE[action] && cfg.NODE_API_URL);
+  if (esAccionNode) {
+    url = cfg.NODE_API_URL;
+    if (tokenPortal) data = Object.assign({}, data, { portal_token: tokenPortal });
+  }
+
+  // Backoffice por token (solo para lo que NO esta portado todavia): se
+  // reparte entre los despliegues del pool. La URL efectiva se elige DENTRO
+  // del bucle, para que un reintento pueda rotar a otro despliegue si el
+  // primero fallo.
+  const esBackofficePorToken = !esAccionNode && !!(tokenPortal && url === cfg.BACKOFFICE_URL && cfg.BACKOFFICE_TOKEN_URL);
   let poolToken = null;
   if (esBackofficePorToken) {
     poolToken = construirPoolToken_(cfg);
@@ -308,9 +341,11 @@ async function llamarApi(url, action, data) {
     //    cada vez). Con las escrituras fijas, todo el correo sale de una sola.
     //  · las escrituras son una fraccion del trafico; lo que se atascaba y
     //    hay que paralelizar son las lecturas.
-    const urlEfectiva = !esBackofficePorToken
+    const urlEfectiva = esAccionNode
       ? url
-      : (esLectura ? elegirUrlToken_(poolToken, tokenPortal, intento) : poolToken[0]);
+      : (!esBackofficePorToken
+        ? url
+        : (esLectura ? elegirUrlToken_(poolToken, tokenPortal, intento) : poolToken[0]));
     const despliegueIdx = esBackofficePorToken ? poolToken.indexOf(urlEfectiva) : null;
     const inicio = performance.now();
     try {
