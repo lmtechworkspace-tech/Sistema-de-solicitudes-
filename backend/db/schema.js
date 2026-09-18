@@ -478,6 +478,26 @@ const COLUMNAS = {
   SGC_EXCLUSIONES: [
     'exclusion_id', 'alcance_id', 'clausula', 'clausula_padre', 'titulo',
     'justificacion', 'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // v11.0 Fase 2: contexto de la organización (§4.1). Los 24 factores del
+  // DOC-02 "Análisis FODA". origen se deriva del tipo (fortaleza/debilidad
+  // son internas, oportunidad/amenaza externas) pero se persiste.
+  SGC_CONTEXTO: [
+    'factor_id', 'tipo', 'origen', 'numero', 'descripcion',
+    'estado', 'observaciones',
+    'fecha_identificacion', 'fecha_ultima_revision', 'revisado_por',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+  // Partes interesadas (§4.2). Las columnas siguen al DOC-04 v02 y no a
+  // una plantilla genérica: son las SEIS que el documento real tiene.
+  SGC_PARTES_INTERESADAS: [
+    'parte_id', 'nombre', 'categoria',
+    'necesidades', 'expectativa', 'efecto_sgc',
+    'impacto', 'influencia',
+    'metodo_seguimiento', 'frecuencia_seguimiento', 'responsable_email',
+    'estado', 'fecha_ultima_revision', 'revisado_por',
+    'creado_por', 'fecha_creacion', 'activa'
   ]
 };
 

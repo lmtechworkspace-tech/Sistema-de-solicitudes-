@@ -18,17 +18,18 @@
  *    "fuera del alcance de SIGSO hoy". Cada cláusula sin evidencia trae una
  *    nota que dice POR QUÉ.
  *
- * PENDIENTE EXPLÍCITO, NO FINGIDO: cinco evaluadores (4.1, 4.2, 4.4,
- * 6.1, 8.1/8.5/8.6/8.7, 9.1) siguen dependiendo de módulos v11 todavía no
- * portados a Node (Contexto, Riesgos, Procesos, Indicadores, Prestaciones).
- * 4.3 (Alcance) YA es real desde que se portó esa fase (ver alcanceSgc.js).
- * El propio `.gs` resuelve los que faltan con `typeof X === 'function' ?
- * X() : []` para tolerar que el módulo no esté cargado -- acá se replica
- * igual con los stubs de la sección siguiente: mientras esas fases no se
- * porten, estos evaluadores degradan a FALTANTE/PARCIAL según corresponda
- * (nunca inventan datos). Reemplazar cada stub por un require real cuando
- * se porte su fase v11 correspondiente (TODO en cada uno) -- mismo patrón
- * ya aplicado a Alcance en este incremento.
+ * PENDIENTE EXPLÍCITO, NO FINGIDO: tres evaluadores (4.4, 6.1,
+ * 8.1/8.5/8.6/8.7, 9.1) siguen dependiendo de módulos v11 todavía no
+ * portados a Node (Riesgos, Procesos, Indicadores, Prestaciones). 4.3
+ * (Alcance) y 4.1/4.2 (Contexto) YA son reales desde que se portaron esas
+ * fases (ver alcanceSgc.js, contextoSgc.js). El propio `.gs` resuelve los
+ * que faltan con `typeof X === 'function' ? X() : []` para tolerar que el
+ * módulo no esté cargado -- acá se replica igual con los stubs de la
+ * sección siguiente: mientras esas fases no se porten, estos evaluadores
+ * degradan a FALTANTE/PARCIAL según corresponda (nunca inventan datos).
+ * Reemplazar cada stub por un require real cuando se porte su fase v11
+ * correspondiente (TODO en cada uno) -- mismo patrón ya aplicado a Alcance
+ * y Contexto en este y el incremento anterior.
  */
 
 const crypto = require('node:crypto');
@@ -37,6 +38,7 @@ const { COLUMNAS } = require('../db/schema');
 const Calidad = require('./calidadSgc');
 const { CLAUSULAS_ISO9001 } = require('./sgcCatalogo');
 const Alcance = require('./alcanceSgc');
+const Contexto = require('./contextoSgc');
 
 const UMBRAL_COBERTURA_COMPLETO = 0.8;
 const NORMA_SGC_POR_DEFECTO = { codigo: 'ISO 9001', version: '2015' };
@@ -72,8 +74,9 @@ function hojaExiste_(db, hoja) { try { leer_(db, hoja); return true; } catch (er
 // 4.3/exclusiones ya NO son stub: Alcance (v11 Fase 1) esta portado.
 const alcanceVigente_ = Alcance.alcanceVigente_;
 const exclusionesVigentesPorClausula_ = Alcance.exclusionesVigentesPorClausula_;
-function factoresContextoActivos_(db) { return []; } // TODO v11 Fase 2 (Contexto)
-function partesInteresadasActivas_(db) { return []; } // TODO v11 Fase 2 (Contexto)
+// 4.1/4.2 ya NO son stub: Contexto (v11 Fase 2) esta portado.
+const factoresContextoActivos_ = Contexto.factoresContextoActivos_;
+const partesInteresadasActivas_ = Contexto.partesInteresadasActivas_;
 function riesgosActivos_(db) { return []; } // TODO v11 Fase 3 (Riesgos)
 function procesosActivos_(db) { return []; } // TODO v11 Fase 4 (Procesos)
 function pasosActivos_(db) { return []; } // TODO v11 Fase 4 (Procesos)
@@ -154,25 +157,81 @@ function evaluarAlcanceDeclarado_(db) {
     evidencia: ev
   };
 }
+// v11.0 Fase 2 (§4.1). El contexto se mide por dos cosas distintas: la
+// norma pide DETERMINAR las cuestiones internas y externas, y además
+// hacerles SEGUIMIENTO Y REVISIÓN. Un FODA completo pero sin revisar en
+// dos años no cumple §4.1.
 function evaluarContextoOrganizacion_(db) {
   const factores = factoresContextoActivos_(db);
+  const partes = partesInteresadasActivas_(db);
   const porDocs = evaluarPorDocumentos_(db, '4.1');
+
+  if (!factores.length) {
+    return {
+      estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
+      resumen: 'El análisis de contexto no está cargado en el sistema.',
+      nota: 'Carga el análisis FODA en la sección Contexto.' +
+        (porDocs.evidencia.length ? ' Hay documentos etiquetados para 4.1, pero un archivo adjunto no permite demostrar el seguimiento periódico que pide la cláusula.' : ''),
+      evidencia: porDocs.evidencia
+    };
+  }
+
+  const resumen = Contexto.resumenContexto_(factores, partes);
+  const ev = factores.slice(0, 12).map((f) => ({
+    tipo: 'Factor de contexto (' + f.tipo + ')',
+    descripcion: String(f.tipo || '').slice(0, 1) + f.numero + ' — ' + f.descripcion,
+    fecha: f.fecha_ultima_revision || f.fecha_identificacion, responsable: f.revisado_por || f.creado_por
+  }));
+  porDocs.evidencia.forEach((e) => ev.push(e));
+
+  const falta = [];
+  // Los cuatro cuadrantes: un FODA al que le falta un cuadrante entero no
+  // es un análisis de contexto completo.
+  ['FORTALEZA', 'OPORTUNIDAD', 'DEBILIDAD', 'AMENAZA'].forEach((t) => { if (!resumen.por_tipo[t]) falta.push('no hay ningún factor del tipo ' + t.toLowerCase()); });
+  if (resumen.revision_vencida) falta.push('la última revisión tiene ' + resumen.meses_desde_revision + ' meses y la frecuencia definida es de ' + Contexto.MESES_REVISION_CONTEXTO);
+
   return {
-    estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
-    resumen: 'El análisis de contexto no está cargado en el sistema.',
-    nota: 'Carga el análisis FODA en la sección Contexto.' +
-      (porDocs.evidencia.length ? ' Hay documentos etiquetados para 4.1, pero un archivo adjunto no permite demostrar el seguimiento periódico que pide la cláusula.' : ''),
-    evidencia: porDocs.evidencia
+    estado: falta.length ? 'PARCIAL' : 'COMPLETO',
+    resumen: resumen.total_factores + ' factores de contexto identificados' + (resumen.ultima_revision ? ', revisados al ' + resumen.ultima_revision : '') + '.',
+    nota: falta.length ? 'Para cerrar 4.1: ' + falta.join('; ') + '.' : '',
+    evidencia: ev
   };
 }
+// v11.0 Fase 2 (§4.2). Misma lógica: determinar las partes y sus
+// requisitos, y hacerles seguimiento. Una fila con nombre y nada más no es
+// haber determinado sus requisitos.
 function evaluarPartesInteresadas_(db) {
   const partes = partesInteresadasActivas_(db);
+  const factores = factoresContextoActivos_(db);
   const porDocs = evaluarPorDocumentos_(db, '4.2');
+
+  if (!partes.length) {
+    return {
+      estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
+      resumen: 'Las partes interesadas no están cargadas en el sistema.',
+      nota: 'Carga la matriz de partes interesadas en la sección Contexto.',
+      evidencia: porDocs.evidencia
+    };
+  }
+
+  const ev = partes.map((p) => ({
+    tipo: 'Parte interesada', descripcion: p.nombre + ' — impacto ' + (p.impacto || '—') + ', influencia ' + (p.influencia || '—'),
+    fecha: p.fecha_ultima_revision || p.fecha_creacion, responsable: p.responsable_email || p.revisado_por || p.creado_por
+  }));
+  porDocs.evidencia.forEach((e) => ev.push(e));
+
+  const sinRequisitos = partes.filter((p) => !String(p.necesidades || '').trim());
+  const resumen = Contexto.resumenContexto_(factores, partes);
+
+  const falta = [];
+  if (sinRequisitos.length) falta.push(sinRequisitos.length + ' parte(s) sin necesidades o requisitos determinados');
+  if (resumen.revision_vencida) falta.push('la última revisión tiene ' + resumen.meses_desde_revision + ' meses y la frecuencia definida es de ' + Contexto.MESES_REVISION_CONTEXTO);
+
   return {
-    estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
-    resumen: 'Las partes interesadas no están cargadas en el sistema.',
-    nota: 'Carga la matriz de partes interesadas en la sección Contexto.',
-    evidencia: porDocs.evidencia
+    estado: falta.length ? 'PARCIAL' : 'COMPLETO',
+    resumen: partes.length + ' partes interesadas determinadas, con sus necesidades y expectativas.',
+    nota: falta.length ? 'Para cerrar 4.2: ' + falta.join('; ') + '.' : '',
+    evidencia: ev
   };
 }
 function evaluarRiesgosOportunidades_(db) {

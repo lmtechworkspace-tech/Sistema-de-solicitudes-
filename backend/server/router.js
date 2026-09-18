@@ -49,6 +49,7 @@ const RevisionDireccion = require('../logica/revisionDireccionSgc');
 const Objetivos = require('../logica/objetivosSgc');
 const MatrizCobertura = require('../logica/matrizCoberturaSgc');
 const Alcance = require('../logica/alcanceSgc');
+const Contexto = require('../logica/contextoSgc');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -360,7 +361,18 @@ const ACCIONES = {
   guardarAlcanceSgc: (db, data, contexto) => Alcance.guardar(db, data, contexto),
   nuevaVersionAlcanceSgc: (db, data, contexto) => Alcance.nuevaVersion(db, data, contexto),
   guardarExclusionSgc: (db, data, contexto) => Alcance.guardarExclusion(db, data, contexto),
-  anularExclusionSgc: (db, data, contexto) => Alcance.anularExclusion(db, data, contexto)
+  anularExclusionSgc: (db, data, contexto) => Alcance.anularExclusion(db, data, contexto),
+
+  // SGC ISO 9001 v11.0 Fase 2 (§4.1 contexto + §4.2 partes interesadas).
+  // Sin archivos: se corta al frontend en el mismo incremento.
+  obtenerContextoSgc: (db, data, contexto) => Contexto.obtener(db, data, contexto),
+  sembrarFodaSgc: (db, data, contexto) => Contexto.sembrarFoda(db, data, contexto),
+  guardarFactorContextoSgc: (db, data, contexto) => Contexto.guardarFactor(db, data, contexto),
+  anularFactorContextoSgc: (db, data, contexto) => Contexto.anularFactor(db, data, contexto),
+  registrarRevisionContextoSgc: (db, data, contexto) => Contexto.registrarRevision(db, data, contexto),
+  sembrarPartesSgc: (db, data, contexto) => Contexto.sembrarPartes(db, data, contexto),
+  guardarParteInteresadaSgc: (db, data, contexto) => Contexto.guardarParte(db, data, contexto),
+  anularParteInteresadaSgc: (db, data, contexto) => Contexto.anularParte(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

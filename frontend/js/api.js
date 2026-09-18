@@ -165,7 +165,11 @@ var ACCIONES_PORTADAS_NODE = {
 
   // --- SGC ISO 9001: Alcance y exclusiones (5 de 5; v11.0 Fase 1, sin archivos: se corta completo) ---
   obtenerAlcanceSgc: true, guardarAlcanceSgc: true, nuevaVersionAlcanceSgc: true,
-  guardarExclusionSgc: true, anularExclusionSgc: true
+  guardarExclusionSgc: true, anularExclusionSgc: true,
+
+  // --- SGC ISO 9001: Contexto y partes interesadas (8 de 8; v11.0 Fase 2, sin archivos: se corta completo) ---
+  obtenerContextoSgc: true, sembrarFodaSgc: true, guardarFactorContextoSgc: true, anularFactorContextoSgc: true,
+  registrarRevisionContextoSgc: true, sembrarPartesSgc: true, guardarParteInteresadaSgc: true, anularParteInteresadaSgc: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,
