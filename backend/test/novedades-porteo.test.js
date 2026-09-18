@@ -6,11 +6,12 @@
  *
  * Adaptaciones documentadas respecto del .gs:
  *  - Los 6 tests de ADJUNTO (subir PDF, rechazar no-PDF, rechazar >10MB,
- *    descargar) se consolidan: el adjunto esta bloqueado hasta que exista
- *    almacenamiento de archivos (R2). Se prueba que publicar con adjunto y
- *    descargarAdjunto devuelven el error R2-bloqueado, y que los guardias de
- *    seguridad de descargarAdjunto (no filtrar a quien no puede ver la
- *    novedad) SIGUEN corriendo antes de ese mensaje.
+ *    descargar, permisos) se portan 1:1 desde 2026-09-18 (R2 activo,
+ *    Novedades fue el primer módulo desgateado) -- antes de eso estaban
+ *    consolidados en un solo test que probaba el mensaje de "R2 bloqueado".
+ *    `Drive` (carpeta privada) se reemplaza por `Almacenamiento` (R2),
+ *    mockeado con un Map en memoria (`conMockAlmacenamiento_`) que se
+ *    comporta como un bucket real.
  *  - Los correos se verifican via el mock de Resend (destinatarios/texto), no
  *    via GmailApp._enviados.
  */
@@ -21,6 +22,12 @@ const { abrirDb_, sembrarTabla_, agregarFila_, leerFilas_, actualizarFilaPorId_ 
 const { COLUMNAS } = require('../db/schema');
 const Novedades = require('../logica/novedades');
 const Resend = require('../logica/resend');
+const Almacenamiento = require('../logica/almacenamiento');
+
+// PDF minimo real (firma valida) y un PNG (para probar el rechazo por tipo).
+const PDF_MINIMO = '%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>';
+const PNG_1X1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+function b64(texto) { return Buffer.from(texto, 'binary').toString('base64'); }
 
 function dbBase() {
   const db = abrirDb_();
@@ -84,6 +91,24 @@ function conMock(t) {
 }
 function destinatarios(mock) { return mock.mock.calls.map((c) => c.arguments[0].to[0]); }
 
+// --- adjuntos: mock de Almacenamiento (R2), un Map en memoria que se
+// comporta como un bucket real -- lo que se sube con subirArchivo_ es lo
+// que se lee de vuelta con descargarArchivo_, así los tests de "el
+// contenido descargado es el mismo que se subió" prueban algo real, no un
+// stub ciego. ---------------------------------------------------------------
+function conMockAlmacenamiento_(t) {
+  const bucket = new Map();
+  t.mock.method(Almacenamiento, 'subirArchivo_', async (clave, contenidoBase64, contentType) => {
+    bucket.set(clave, { contenidoBase64, contentType });
+    return { ok: true, clave, tamano: Buffer.byteLength(contenidoBase64, 'base64') };
+  });
+  t.mock.method(Almacenamiento, 'descargarArchivo_', async (clave) => {
+    const obj = bucket.get(clave);
+    if (!obj) return { ok: false, message: 'El archivo no existe.' };
+    return { ok: true, contenido_base64: obj.contenidoBase64, content_type: obj.contentType };
+  });
+}
+
 // --- 1-6: publicar, permisos por area --------------------------------------
 
 test('1. el responsable de un area puede publicar en SU area', async (t) => {
@@ -146,15 +171,42 @@ test('6. requiere_acuse por defecto es true', async (t) => {
   assert.equal(filas(db, 'NOVEDADES')[0].requiere_acuse, true);
 });
 
-// --- 7-9: adjunto (R2-bloqueado, adaptado) ----------------------------------
+// --- 7-9: adjunto por firma binaria (R2 activo) -----------------------------
 
-test('7-9. publicar con adjunto queda bloqueado hasta configurar almacenamiento (R2), sin crear la fila', async (t) => {
+test('7. adjunto PDF valido (firma %PDF) se sube correctamente', async (t) => {
   conMock(t);
+  conMockAlmacenamiento_(t);
   const db = dbBase(); seedArea(db);
-  const res = await Novedades.publicar(db, publicarBase_({ contenido_base64: 'JVBERi0x', nombre_archivo: 'ley.pdf' }), ctxResponsable());
+  const res = await Novedades.publicar(db, publicarBase_({
+    contenido_base64: b64(PDF_MINIMO), nombre_archivo: 'ley.pdf'
+  }), ctxResponsable());
+  assert.ok(res.novedad_id);
+  const fila = filas(db, 'NOVEDADES')[0];
+  assert.ok(fila.archivo_id);
+  assert.equal(fila.archivo_nombre, 'ley.pdf');
+  assert.equal(fila.archivo_mime, 'application/pdf');
+});
+
+test('8. SEGURIDAD: rechaza un adjunto que no es PDF real, aunque se llame .pdf', async (t) => {
+  conMock(t);
+  conMockAlmacenamiento_(t);
+  const db = dbBase(); seedArea(db);
+  const res = await Novedades.publicar(db, publicarBase_({
+    contenido_base64: PNG_1X1, nombre_archivo: 'no-es-pdf.pdf'
+  }), ctxResponsable());
   assert.equal(res._validationError, true);
-  assert.match(res.message, /adjuntos/i);
-  assert.equal(filas(db, 'NOVEDADES').length, 0, 'no queda una fila a medias');
+  assert.equal(filas(db, 'NOVEDADES').length, 0);
+});
+
+test('9. rechaza un adjunto mayor a 10 MB', async (t) => {
+  conMock(t);
+  conMockAlmacenamiento_(t);
+  const db = dbBase(); seedArea(db);
+  const grande = Buffer.concat([Buffer.from(PDF_MINIMO), Buffer.alloc(10 * 1024 * 1024 + 10)]).toString('base64');
+  const res = await Novedades.publicar(db, publicarBase_({
+    contenido_base64: grande, nombre_archivo: 'grande.pdf'
+  }), ctxResponsable());
+  assert.equal(res._validationError, true);
 });
 
 // --- 10-13: feed, area como etiqueta ----------------------------------------
@@ -258,28 +310,60 @@ test('18. despublicar: solo el autor o ADM', async (t) => {
   assert.equal(Novedades.despublicar(db, { novedad_id: pub.novedad_id }, ctxAdm()).activa, false);
 });
 
-test('19. descargarAdjunto: guardia de acceso SIGUE corriendo antes del bloqueo R2 (no filtra)', async (t) => {
+test('19. descargarAdjunto devuelve el contenido base64 del original', async (t) => {
   conMock(t);
-  const db = dbBase(); seedAudiencia(db); seedArea(db);
-  // Novedad con audiencia acotada a Juan, con archivo_id sembrado directo
-  // (publicar no acepta adjuntos todavia). Leo no esta en la audiencia.
-  agregarFila_(db, 'NOVEDADES', {
-    novedad_id: 'N1', tipo: 'AVISO', titulo: 'Con adjunto', resumen: 'r', cuerpo: '',
-    area_id: 'RRHH', area_nombre: 'Recursos Humanos', autor_email: 'vanessa@rld.cl', autor_nombre: 'vanessa@rld.cl',
-    requiere_acuse: true, fecha_vigencia: '', archivo_id: 'FILE-1', archivo_nombre: 'ley.pdf', archivo_mime: 'application/pdf',
-    estado: 'PUBLICADA', fecha_creacion: new Date().toISOString(), aprobador_email: '', aprobador_nombre: '',
-    fecha_aprobacion: '', motivo_devolucion: '', audiencia_tipo: 'SELECCION', fecha_limite_acuse: '',
-    fecha_publicacion: new Date().toISOString(), activa: true
-  });
-  agregarFila_(db, 'NOVEDADES_AUDIENCIA', { audiencia_id: 'A1', novedad_id: 'N1', destinatario_email: 'juan@homepymes.cl' });
+  conMockAlmacenamiento_(t);
+  const db = dbBase(); seedArea(db);
+  await Novedades.publicar(db, publicarBase_({
+    contenido_base64: b64(PDF_MINIMO), nombre_archivo: 'ley.pdf'
+  }), ctxResponsable());
+  const id = filas(db, 'NOVEDADES')[0].novedad_id;
 
-  const ajeno = Novedades.descargarAdjunto(db, { novedad_id: 'N1' }, ctxCualquiera('leo@rld.cl'));
-  assert.equal(ajeno._forbidden, true, 'quien no está en la audiencia no pasa el guardia');
-  assert.equal(ajeno.contenido_base64, undefined);
-  // El destinatario legitimo pasa el guardia, pero cae en el bloqueo R2 (no hay backend de archivos).
-  const propio = Novedades.descargarAdjunto(db, { novedad_id: 'N1' }, ctxCualquiera('juan@homepymes.cl'));
-  assert.equal(propio._validationError, true);
-  assert.match(propio.message, /adjuntos/i);
+  const res = await Novedades.descargarAdjunto(db, { novedad_id: id }, ctxCualquiera());
+  assert.equal(res.nombre_archivo, 'ley.pdf');
+  assert.equal(Buffer.from(res.contenido_base64, 'base64').toString('binary'), PDF_MINIMO);
+});
+
+// El adjunto es parte de la novedad y se protege igual que el detalle. Antes
+// bastaba con conocer el id para bajarse el archivo de una novedad que no se
+// podia ni abrir -- incluida una todavia en revision.
+
+test('19b. SEGURIDAD: no se descarga el adjunto de una novedad fuera de la audiencia', async (t) => {
+  conMock(t);
+  conMockAlmacenamiento_(t);
+  const db = dbBase(); seedAudiencia(db); seedArea(db);
+  await Novedades.publicar(db, publicarBase_({
+    contenido_base64: b64(PDF_MINIMO), nombre_archivo: 'ley.pdf',
+    audiencia_tipo: 'SELECCION', destinatarios: ['juan@homepymes.cl']
+  }), ctxResponsable());
+  const id = filas(db, 'NOVEDADES')[0].novedad_id;
+
+  const ajeno = await Novedades.descargarAdjunto(db, { novedad_id: id }, ctxCualquiera('leo@rld.cl'));
+  assert.equal(ajeno._forbidden, true, 'quien no está en la audiencia no baja el archivo');
+  assert.equal(ajeno.contenido_base64, undefined, 'y no se filtra el contenido');
+
+  // El destinatario legítimo sí puede.
+  const propio = await Novedades.descargarAdjunto(db, { novedad_id: id }, ctxCualquiera('juan@homepymes.cl'));
+  assert.equal(propio.nombre_archivo, 'ley.pdf');
+});
+
+test('19c. SEGURIDAD: no se descarga el adjunto de una novedad que todavía está en revisión', async (t) => {
+  conMock(t);
+  conMockAlmacenamiento_(t);
+  const db = dbBase(); seedAudiencia(db); seedArea(db);
+  // Carril CONTROLADO: queda EN_REVISION, sin publicar.
+  await Novedades.publicar(db, publicarBase_({
+    tipo: 'LEY', titulo: 'Nueva ley laboral', contenido_base64: b64(PDF_MINIMO), nombre_archivo: 'ley.pdf'
+  }), ctxResponsable());
+  const fila = filas(db, 'NOVEDADES')[0];
+  assert.notEqual(fila.estado, 'PUBLICADA', 'precondición: la novedad no está publicada');
+
+  const tercero = await Novedades.descargarAdjunto(db, { novedad_id: fila.novedad_id }, ctxCualquiera('leo@rld.cl'));
+  assert.equal(tercero._forbidden, true, 'un borrador no se filtra por la vía del adjunto');
+
+  // Quien la redactó sí puede seguir viendo su propio archivo.
+  const autor = await Novedades.descargarAdjunto(db, { novedad_id: fila.novedad_id }, ctxResponsable());
+  assert.equal(autor.nombre_archivo, 'ley.pdf');
 });
 
 test('20. listarAreasPublicables: ADM ve todas, el responsable solo la suya', async (t) => {

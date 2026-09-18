@@ -45,12 +45,16 @@ var MAX_INTENTOS_LECTURA = 3;
 // probado por curl pero el sitio real jamás lo llama. Que la accion exista
 // en router.js NO significa que el frontend ya la use.
 //
-// Excluidas a propósito (siguen en Apps Script hasta que exista R2): toda
-// acción que sube o baja un archivo real (adjuntos, PDF, libro Excel,
-// centro documental) -- en Node esas devuelven un error de "almacenamiento
-// no configurado" en vez de servir el archivo real que Apps Script sí sirve
-// hoy. Cortarlas ahora sería una regresión, no una mejora. Lista completa:
-// publicarNovedad, descargarAdjuntoNovedad, crearDocumentoSgc,
+// Excluidas a propósito (siguen en Apps Script hasta que exista R2, o hasta
+// que su módulo se desgatee -- Cloudflare R2 ya está activo desde
+// 2026-09-18, ver almacenamiento.js; Novedades fue el primer módulo
+// desgateado, publicarNovedad/descargarAdjuntoNovedad ya están arriba en el
+// mapa): toda acción que sube o baja un archivo real (adjuntos, PDF, libro
+// Excel, centro documental) que TODAVÍA no se reescribió para usar
+// almacenamiento.js -- en Node esas siguen devolviendo un error de
+// "almacenamiento no configurado" en vez de servir el archivo real que Apps
+// Script sí sirve hoy. Cortarlas ahora sería una regresión, no una mejora.
+// Lista de lo que sigue pendiente: crearDocumentoSgc,
 // nuevaVersionDocumentoSgc, actualizarDocumentoSgc, descargarDocumentoSgc,
 // guardarDescriptorSgc, actualizarDescriptorSgc, descargarDescriptorSgc,
 // guardarDocumentoPersonaSgc, descargarDocumentoPersonaSgc,
@@ -76,12 +80,12 @@ var ACCIONES_PORTADAS_NODE = {
   getPanelGerencia: true, getPanelJefatura: true,
   listarLogsNotificaciones: true,
 
-  // --- Novedades (16 acciones portadas; adjunto/descarga siguen en Apps Script) ---
+  // --- Novedades (16 de 16; adjunto/descarga desgateadas de R2 el 2026-09-18) ---
   listarAreasPublicablesNovedad: true, getFeedNovedades: true, getDetalleNovedad: true,
   getHistorialNovedad: true, aprobarNovedad: true, devolverNovedad: true, rechazarNovedad: true,
   reenviarNovedad: true, listarPendientesAprobacionNovedad: true, misPendientesNovedad: true,
   despublicarNovedad: true, marcarLeidaNovedad: true, getLectoresNovedad: true,
-  getPanelCumplimientoNovedad: true,
+  getPanelCumplimientoNovedad: true, publicarNovedad: true, descargarAdjuntoNovedad: true,
 
   // --- Pausas activas (20 de 22; los PDF de reporte siguen en Apps Script) ---
   listarPausasConfig: true, guardarPausasConfig: true,

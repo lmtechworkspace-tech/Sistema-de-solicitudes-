@@ -13,10 +13,11 @@
  *    Apps Script esas variables se reinician por ejecucion; en un server Node
  *    persistirian entre requests y quedarian viejas. Se lee fresco cada vez
  *    (SQLite local es barato) -- mismo criterio que no portar CacheService.
- *  - El ADJUNTO PDF (publicar con contenido_base64, descargarAdjunto) NO se
- *    porta todavia: depende de almacenamiento de archivos (R2 en Cloudflare,
- *    pendiente). publicar con adjunto devuelve un error claro; descargarAdjunto
- *    tambien. Todo lo demas del modulo funciona sin adjunto.
+ *  - El ADJUNTO PDF (publicar con contenido_base64, descargarAdjunto) usa
+ *    almacenamiento.js (Cloudflare R2, activo desde 2026-09-18): mismas
+ *    reglas que el .gs (solo PDF por firma binaria %PDF, 10 MB maximo), el
+ *    "Drive privado" del original se reemplaza por un objeto privado en R2
+ *    bajo la clave `novedades/<novedad_id>/<nombre_archivo>`.
  *  - Correos: se usa Notificaciones.enviarCorreoModulo (mismo transporte/dedup/
  *    cola que el resto). El HTML branded lo genera el transporte a partir del
  *    texto plano, en vez de portar el HTML hecho a mano de cada correo.
@@ -32,6 +33,16 @@ const { obtenerEquipoJefe_, jefeDeSubordinado_ } = require('./jefatura');
 const { parsearListaPortal } = require('./portal');
 const Notificaciones = require('./notificaciones');
 const NotificacionesApp = require('./notificacionesApp');
+const Almacenamiento = require('./almacenamiento');
+
+// Mismos limites que el .gs: 10 MB, y solo PDF -- validado por FIRMA
+// BINARIA (%PDF), no por la extension del nombre de archivo (un .pdf
+// renombrado desde un .png no pasa).
+const MAX_ADJUNTO_BYTES = 10 * 1024 * 1024;
+const FIRMA_PDF = Buffer.from('%PDF');
+function esPdf_(buffer) {
+  return buffer.length >= FIRMA_PDF.length && buffer.subarray(0, FIRMA_PDF.length).equals(FIRMA_PDF);
+}
 
 const TIPOS = {
   LEY: { etiqueta: 'Ley / Normativa', color: 'critico', carril: 'CONTROLADO' },
@@ -482,21 +493,37 @@ async function publicar(db, data, contexto) {
     fechaLimite = validacionFecha;
   }
 
-  // Adjunto PDF: bloqueado hasta que exista almacenamiento de archivos (R2).
+  const novedadId = crypto.randomUUID();
+  let archivo = { archivo_id: '', archivo_nombre: '', archivo_mime: '' };
   if (data.contenido_base64) {
-    return errorValidacion('contenido_base64',
-      'Los adjuntos todavía no están disponibles en el nuevo sistema (falta configurar el almacenamiento de archivos). Publica la novedad sin adjunto por ahora.');
+    if (!data.nombre_archivo) return errorValidacion('nombre_archivo', 'Falta el nombre del archivo adjunto.');
+    let bytes;
+    try {
+      bytes = Buffer.from(data.contenido_base64, 'base64');
+    } catch (err) {
+      return errorValidacion('contenido_base64', 'El adjunto no es base64 valido.');
+    }
+    if (bytes.length > MAX_ADJUNTO_BYTES) {
+      return errorValidacion('contenido_base64',
+        'El adjunto supera el tamano maximo (' + Math.round(MAX_ADJUNTO_BYTES / (1024 * 1024)) + ' MB).');
+    }
+    if (!esPdf_(bytes)) return errorValidacion('contenido_base64', 'El adjunto debe ser un PDF.');
+
+    const clave = 'novedades/' + novedadId + '/' + data.nombre_archivo;
+    const subida = await Almacenamiento.subirArchivo_(clave, data.contenido_base64, 'application/pdf');
+    if (!subida.ok) return errorValidacion('contenido_base64', subida.message);
+    archivo = { archivo_id: clave, archivo_nombre: data.nombre_archivo, archivo_mime: 'application/pdf' };
   }
 
   const ahora = new Date().toISOString();
   const novedad = {
-    novedad_id: crypto.randomUUID(),
+    novedad_id: novedadId,
     tipo: data.tipo, titulo: String(data.titulo).trim(), resumen: String(data.resumen).trim(),
     cuerpo: data.cuerpo || '', area_id: areaId, area_nombre: nombreArea_(db, areaId),
     autor_email: contexto.email, autor_nombre: data.autor_nombre || contexto.email,
     requiere_acuse: data.requiere_acuse === false ? false : true,
     fecha_vigencia: data.fecha_vigencia || '',
-    archivo_id: '', archivo_nombre: '', archivo_mime: '',
+    archivo_id: archivo.archivo_id, archivo_nombre: archivo.archivo_nombre, archivo_mime: archivo.archivo_mime,
     estado: esLibre ? ESTADOS.PUBLICADA : ESTADOS.EN_REVISION,
     fecha_creacion: ahora, aprobador_email: '', aprobador_nombre: '', fecha_aprobacion: '', motivo_devolucion: '',
     audiencia_tipo: esLibre ? audiencia.tipo : '',
@@ -662,13 +689,27 @@ function marcarLeida(db, data, contexto) {
 }
 
 // Adjunto: bloqueado hasta que exista almacenamiento de archivos (R2).
-function descargarAdjunto(db, data, contexto) {
+/**
+ * Adjunto en base64 para descargar: el original en R2 es privado, así que
+ * se sirve por esta acción en vez de exponer una URL pública.
+ */
+async function descargarAdjunto(db, data, contexto) {
   if (!data || !data.novedad_id) return errorValidacion('novedad_id', 'Falta indicar la novedad.');
   const n = buscarNovedad_(db, data.novedad_id);
   if (!n) return errorValidacion('novedad_id', 'No existe esa novedad.');
+  // El adjunto es parte de la novedad: se protege con el MISMO criterio que
+  // getDetalle. Sin esto, quien no puede ni abrirla igual podría bajarse el
+  // archivo sabiendo el id -- incluida una que todavía está en revisión.
   if (!puedeVerDetalle_(db, n, contexto)) return errorForbidden('No tienes acceso a esta novedad.');
-  return errorValidacion('novedad_id',
-    'Los adjuntos todavía no están disponibles en el nuevo sistema (falta configurar el almacenamiento de archivos).');
+  if (!n.archivo_id) return errorValidacion('novedad_id', 'Esta novedad no tiene adjunto.');
+
+  const descarga = await Almacenamiento.descargarArchivo_(n.archivo_id);
+  if (!descarga.ok) return errorValidacion('novedad_id', descarga.message);
+  return {
+    contenido_base64: descarga.contenido_base64,
+    nombre_archivo: n.archivo_nombre || '',
+    mime: n.archivo_mime || 'application/pdf'
+  };
 }
 
 function getLectores(db, data, contexto) {
