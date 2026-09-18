@@ -22,6 +22,7 @@ const Auditorias = require('../logica/auditoriasSgc');
 const Quejas = require('../logica/quejasSgc');
 const Proveedores = require('../logica/proveedoresSgc');
 const RevisionDireccion = require('../logica/revisionDireccionSgc');
+const Objetivos = require('../logica/objetivosSgc');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
 const db = abrirDbProduccion();
@@ -121,6 +122,11 @@ const intervaloTriggersDiarios = setInterval(() => {
     // reunión) y frecuencia vencida (12 meses sin una revisión cerrada).
     RevisionDireccion.recordatorioPendientes(db).catch((err) => {
       console.error('error enviando el recordatorio de revisión por la dirección del SGC:', err);
+    });
+    // SGC Fase 6a (DOC-07, §9.1.1): períodos ya cerrados sin su lectura de
+    // objetivo registrada.
+    Objetivos.alertarLecturasPendientes(db).catch((err) => {
+      console.error('error enviando el recordatorio de objetivos de calidad del SGC:', err);
     });
   }
   // Pausas: programar las del dia (06:00), resumen de fin de dia (20:00),

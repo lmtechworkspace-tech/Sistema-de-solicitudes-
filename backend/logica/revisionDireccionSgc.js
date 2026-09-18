@@ -18,12 +18,10 @@
  * del campo Observaciones, editable. El sistema aporta el DATO, la
  * conclusión la escribe quien preside.
  *
- * PENDIENTE EXPLÍCITO, NO FINGIDO: el item 8 (grado de logro de los
- * objetivos de calidad, DOC-07) depende del tablero de Objetivos -- Fase 6a
- * del SGC, todavía no portada a Node en este incremento. Se declara
- * `auto: false, pendiente_fase: 'Fase 6a'` (no se inventa un resumen).
- * Cuando se porte Objetivos, este archivo debe pasar el item 8 a
- * `auto: true` y llamar a su `resumenParaRevision`, igual que hace el .gs.
+ * El item 8 (grado de logro de los objetivos de calidad, DOC-07) se resuelve
+ * con Objetivos.resumenParaRevision -- hasta el incremento de Fase 6a
+ * quedaba declarado `pendiente_fase` porque ese módulo no existía aún en
+ * Node; ahora que existe, este archivo ya lo llama, igual que hace el .gs.
  *
  * LOS ACUERDOS SON ACTIVIDADES (crearTareaSgc_, compartido con
  * NoConformidades): un acuerdo de directorio que vive solo dentro del acta
@@ -38,6 +36,7 @@ const { leerFilas_, agregarFila_, actualizarFilaPorId_ } = require('../db/sqlite
 const { COLUMNAS } = require('../db/schema');
 const Calidad = require('./calidadSgc');
 const { crearTareaSgc_, tareaResumen_ } = require('./noConformidadesSgc');
+const Objetivos = require('./objetivosSgc');
 const Utils = require('./utils');
 const Cumplimiento = require('./cumplimiento');
 const Notificaciones = require('./notificaciones');
@@ -54,8 +53,7 @@ const ENTRADAS_REVISION = [
   { numero: 5, titulo: 'Las oportunidades de mejora', auto: false },
   { numero: 6, titulo: 'La información sobre el desempeño y la eficacia del sistema de gestión de la calidad', auto: false },
   { numero: 7, titulo: 'La satisfacción del cliente y la retroalimentación de las partes interesadas pertinentes', auto: true },
-  // Se prellenará cuando se porte el tablero de Objetivos (DOC-07, Fase 6a).
-  { numero: 8, titulo: 'El grado en que se han logrado los objetivos de la calidad', auto: false, pendiente_fase: 'Fase 6a' },
+  { numero: 8, titulo: 'El grado en que se han logrado los objetivos de la calidad', auto: true },
   { numero: 9, titulo: 'El desempeño de los procesos y conformidad de los productos y servicios', auto: false },
   { numero: 10, titulo: 'Las no conformidades y acciones correctivas', auto: true },
   { numero: 11, titulo: 'Los resultados de seguimiento y medición', auto: false },
@@ -244,8 +242,8 @@ function resumenAutomaticoRevision_(db, revision) {
         : 'Todavía no hay seguimientos cerrados que midan conformidad.')
     : 'En ' + anio + ' no se recibieron quejas, felicitaciones ni consultas por el canal formal.';
 
-  // Item 8 -- pendiente hasta que se porte el tablero de Objetivos (Fase 6a).
-  // No se calcula aca a propósito (ver nota de cabecera del archivo).
+  // Item 8 -- grado de logro de los objetivos de calidad (Fase 6a).
+  resumen[8] = Objetivos.resumenParaRevision(db, anio);
 
   // Item 10 -- no conformidades y acciones correctivas.
   const ncs = leerSeguro_(db, 'SGC_NC').filter((n) => esVerdadero_(n.activa) && enPeriodo(n.fecha_deteccion || n.fecha_creacion));

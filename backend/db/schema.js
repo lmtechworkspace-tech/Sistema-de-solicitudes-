@@ -419,6 +419,31 @@ const COLUMNAS = {
     'acuerdo_id', 'revision_id', 'tipo', 'observaciones',
     'responsable_email', 'plazo', 'actividad_id',
     'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // SGC Fase 6a (DOC-07, §6.2): objetivos de calidad. UNA fila = un
+  // objetivo EN UN AÑO (clave anio+numero) -- DOC-07 es un documento vivo y
+  // la meta/responsable/frecuencia se ajustan de un año a otro; guardar por
+  // año conserva contra qué meta se midió cada período. NO es un catálogo
+  // en código (a diferencia de las 13 entradas de la revisión o las 28
+  // cláusulas ISO, que las define la norma): estos los define la empresa.
+  SGC_OBJETIVOS: [
+    'objetivo_id', 'anio', 'numero',
+    'objetivo_general', 'objetivo_especifico', 'indicador',
+    'meta_texto', 'meta_operador', 'meta_valor', 'unidad',
+    'acciones', 'frecuencia', 'frecuencia_texto',
+    'responsable_texto', 'responsable_email',
+    'fuente', 'calculo',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+  // Una fila = "en tal período, el indicador dio tanto". `cumple` se
+  // PERSISTE (comparado contra la meta vigente al momento de medir, no
+  // recalculado si la meta cambia después).
+  SGC_INDICADOR_LECTURAS: [
+    'lectura_id', 'objetivo_id', 'indicador_id', 'anio', 'periodo',
+    'valor', 'numerador', 'denominador',
+    'cumple', 'origen', 'detalle', 'observaciones',
+    'registrado_por', 'fecha_registro', 'activa'
   ]
 };
 

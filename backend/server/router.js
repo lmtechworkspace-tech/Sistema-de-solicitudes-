@@ -46,6 +46,7 @@ const Auditorias = require('../logica/auditoriasSgc');
 const Quejas = require('../logica/quejasSgc');
 const Proveedores = require('../logica/proveedoresSgc');
 const RevisionDireccion = require('../logica/revisionDireccionSgc');
+const Objetivos = require('../logica/objetivosSgc');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -330,7 +331,17 @@ const ACCIONES = {
   registrarActaRevisionSgc: (db, data, contexto) => RevisionDireccion.registrarActa(db, data, contexto),
   registrarAcuerdoRevisionSgc: (db, data, contexto) => RevisionDireccion.registrarAcuerdo(db, data, contexto),
   cerrarRevisionSgc: (db, data, contexto) => RevisionDireccion.cerrar(db, data, contexto),
-  anularRevisionSgc: (db, data, contexto) => RevisionDireccion.anular(db, data, contexto)
+  anularRevisionSgc: (db, data, contexto) => RevisionDireccion.anular(db, data, contexto),
+
+  // SGC ISO 9001 Fase 6a (DOC-07, §6.2): objetivos de calidad. Sin
+  // archivos: se corta al frontend en el mismo incremento.
+  listarObjetivosSgc: (db, data, contexto) => Objetivos.listar(db, data, contexto),
+  getDetalleObjetivoSgc: (db, data, contexto) => Objetivos.getDetalle(db, data, contexto),
+  sembrarAnioObjetivosSgc: (db, data, contexto) => Objetivos.sembrarAnio(db, data, contexto),
+  guardarObjetivoSgc: (db, data, contexto) => Objetivos.guardar(db, data, contexto),
+  sugerirLecturaObjetivoSgc: (db, data, contexto) => Objetivos.sugerirLectura(db, data, contexto),
+  registrarLecturaObjetivoSgc: (db, data, contexto) => Objetivos.registrarLectura(db, data, contexto),
+  anularLecturaObjetivoSgc: (db, data, contexto) => Objetivos.anularLectura(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

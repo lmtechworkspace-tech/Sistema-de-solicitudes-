@@ -3,13 +3,9 @@
 /**
  * Prueba de portabilidad: SGC ISO 9001 Fase 5b (PRO-05, revisión por la
  * dirección) -- mismos escenarios de revision-direccion.test.js, corridos
- * contra backend/logica/revisionDireccionSgc.js.
- *
- * Adaptación (Objetivos/Fase 6a no portada aún, ver cabecera del módulo):
- * el catálogo de entradas declara el ítem 8 como `pendiente_fase: 'Fase 6a'`
- * en vez de `auto: true` -- el `.gs` original ya integra el tablero de
- * Objetivos (Fase 6a, portada en Apps Script antes que este incremento de
- * Node); aquí se prueba el estado real y explícitamente pendiente.
+ * contra backend/logica/revisionDireccionSgc.js. Objetivos (Fase 6a) ya
+ * está portado, así que el ítem 8 del catálogo se prueba resuelto (auto),
+ * igual que el `.gs` original.
  */
 
 const test = require('node:test');
@@ -23,6 +19,7 @@ const Resend = require('../logica/resend');
 const TABLAS = [
   'SGC_REVISIONES', 'SGC_REVISION_ACUERDOS', 'SGC_ROLES', 'SGC_NC', 'SGC_AUDITORIAS',
   'SGC_AUD_HALLAZGOS', 'SGC_QUEJAS', 'SGC_PROVEEDORES', 'SGC_PROVEEDOR_EVALUACIONES',
+  'SGC_OBJETIVOS', 'SGC_INDICADOR_LECTURAS', 'SGC_PERSONAS', 'SGC_CAPACITACIONES', 'SGC_CAPACITACION_ASISTENTES',
   'ACTIVIDADES', 'ACTIVIDADES_BITACORA', 'LOG_SISTEMA', 'LOG_NOTIFICACIONES',
   'NOTIFICACIONES_APP', 'CONFIG_NOTIFICACIONES', 'CONFIG_FERIADOS', 'JEFATURAS'
 ];
@@ -245,7 +242,7 @@ test('resumen automático: sin datos lo dice explícitamente, no deja el tema en
   assert.match(resumen[13], /No hay proveedores externos registrados/i);
 });
 
-test('el catálogo declara qué entradas resuelve el sistema (item 8 pendiente de Fase 6a, Objetivos aún no portado)', () => {
+test('el catálogo declara qué entradas resuelve el sistema (item 8 ya resuelto por Objetivos, Fase 6a)', () => {
   const db = db_();
   sembrarRoles(db);
   const r = programar(db);
@@ -253,11 +250,22 @@ test('el catálogo declara qué entradas resuelve el sistema (item 8 pendiente d
 
   assert.equal(detalle.catalogo_entradas.length, 13);
   const auto = detalle.catalogo_entradas.filter((e) => e.auto).map((e) => e.numero);
-  assert.deepEqual(auto, [1, 7, 10, 12, 13]);
+  assert.deepEqual(auto, [1, 7, 8, 10, 12, 13]);
 
   const objetivos = detalle.catalogo_entradas.find((e) => e.numero === 8);
-  assert.equal(objetivos.auto, false);
-  assert.equal(objetivos.pendiente_fase, 'Fase 6a');
+  assert.equal(objetivos.pendiente_fase, undefined);
+});
+
+test('resumen automático: el item 8 trae el grado de logro de los objetivos de calidad', () => {
+  const db = db_();
+  sembrarRoles(db);
+  const Objetivos = require('../logica/objetivosSgc');
+  const anio = new Date('2026-11-20T00:00:00.000Z').getFullYear();
+  Objetivos.sembrarAnio(db, { anio }, CTX_ENCARGADO);
+
+  const r = programar(db);
+  const resumen = RevisionDireccion.getResumenAutomatico(db, { revision_id: r.revision_id }, CTX_ENCARGADO).resumen;
+  assert.match(resumen[8], /6 objetivos de calidad/);
 });
 
 // --- el acta ----------------------------------------------------------------

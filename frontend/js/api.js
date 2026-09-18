@@ -152,7 +152,12 @@ var ACCIONES_PORTADAS_NODE = {
   // --- SGC ISO 9001: Revisión por la dirección (9 de 9; PRO-05, sin archivos: se corta completo) ---
   listarRevisionesSgc: true, getDetalleRevisionSgc: true, programarRevisionSgc: true,
   convocarRevisionSgc: true, getResumenRevisionSgc: true, registrarActaRevisionSgc: true,
-  registrarAcuerdoRevisionSgc: true, cerrarRevisionSgc: true, anularRevisionSgc: true
+  registrarAcuerdoRevisionSgc: true, cerrarRevisionSgc: true, anularRevisionSgc: true,
+
+  // --- SGC ISO 9001: Objetivos de calidad (7 de 7; DOC-07, sin archivos: se corta completo) ---
+  listarObjetivosSgc: true, getDetalleObjetivoSgc: true, sembrarAnioObjetivosSgc: true,
+  guardarObjetivoSgc: true, sugerirLecturaObjetivoSgc: true, registrarLecturaObjetivoSgc: true,
+  anularLecturaObjetivoSgc: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,

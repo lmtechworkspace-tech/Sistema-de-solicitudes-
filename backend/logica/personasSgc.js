@@ -666,6 +666,7 @@ module.exports = {
   guardarDocumento, descargarDocumento, registrarInduccion,
   registrarEvaluacion, listarCapacitaciones, guardarCapacitacion, registrarRealizacion, registrarEficaciaAsistente,
   recordatorioCompetencias,
-  // Expuestas para tests / futuros incrementos del SGC.
-  puedeVerPersona_, esJefaturaDe_
+  // Expuestas para tests / futuros incrementos del SGC. horasFormacionPorPersonaSgc_
+  // la reusa Objetivos (Fase 6a, objetivo 4: horas de formación).
+  puedeVerPersona_, esJefaturaDe_, horasFormacionPorPersonaSgc_
 };
