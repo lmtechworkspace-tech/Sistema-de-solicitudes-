@@ -44,6 +44,7 @@ const Personas = require('../logica/personasSgc');
 const NoConformidades = require('../logica/noConformidadesSgc');
 const Auditorias = require('../logica/auditoriasSgc');
 const Quejas = require('../logica/quejasSgc');
+const Proveedores = require('../logica/proveedoresSgc');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -307,7 +308,15 @@ const ACCIONES = {
   convertirQuejaEnNcSgc: (db, data, contexto) => Quejas.convertirEnNc(db, data, contexto),
   registrarNotificacionQuejaSgc: (db, data, contexto) => Quejas.registrarNotificacion(db, data, contexto),
   registrarSeguimientoQuejaSgc: (db, data, contexto) => Quejas.registrarSeguimiento(db, data, contexto),
-  anularQuejaSgc: (db, data, contexto) => Quejas.anular(db, data, contexto)
+  anularQuejaSgc: (db, data, contexto) => Quejas.anular(db, data, contexto),
+
+  // SGC ISO 9001 Fase 5a (PRO-04, §8.4): proveedores externos. Sin archivos:
+  // se corta al frontend en el mismo incremento.
+  listarProveedoresSgc: (db, data, contexto) => Proveedores.listar(db, data, contexto),
+  getDetalleProveedorSgc: (db, data, contexto) => Proveedores.getDetalle(db, data, contexto),
+  guardarProveedorSgc: (db, data, contexto) => Proveedores.guardar(db, data, contexto),
+  evaluarProveedorSgc: (db, data, contexto) => Proveedores.evaluar(db, data, contexto),
+  desactivarProveedorSgc: (db, data, contexto) => Proveedores.desactivar(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

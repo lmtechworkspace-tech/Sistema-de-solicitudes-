@@ -20,6 +20,7 @@ const Personas = require('../logica/personasSgc');
 const NoConformidades = require('../logica/noConformidadesSgc');
 const Auditorias = require('../logica/auditoriasSgc');
 const Quejas = require('../logica/quejasSgc');
+const Proveedores = require('../logica/proveedoresSgc');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
 const db = abrirDbProduccion();
@@ -109,6 +110,11 @@ const intervaloTriggersDiarios = setInterval(() => {
     // días corridos, no hábiles). Dedup diario via enviarCorreoModulo.
     Quejas.recordatorioPendientes(db).catch((err) => {
       console.error('error enviando el recordatorio de quejas del SGC:', err);
+    });
+    // SGC Fase 5a (PRO-04): proveedores con evaluación anual vencida (o
+    // nunca evaluados) y proveedores reprobados. Dedup diario.
+    Proveedores.recordatorioPendientes(db).catch((err) => {
+      console.error('error enviando el recordatorio de proveedores del SGC:', err);
     });
   }
   // Pausas: programar las del dia (06:00), resumen de fin de dia (20:00),

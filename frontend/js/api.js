@@ -143,7 +143,11 @@ var ACCIONES_PORTADAS_NODE = {
   listarQuejasSgc: true, getDetalleQuejaSgc: true, registrarRecepcionQuejaSgc: true,
   registrarInvestigacionQuejaSgc: true, registrarResultadoQuejaSgc: true, registrarResolucionQuejaSgc: true,
   convertirQuejaEnNcSgc: true, registrarNotificacionQuejaSgc: true, registrarSeguimientoQuejaSgc: true,
-  anularQuejaSgc: true
+  anularQuejaSgc: true,
+
+  // --- SGC ISO 9001: Proveedores (5 de 5; PRO-04, sin archivos: se corta completo) ---
+  listarProveedoresSgc: true, getDetalleProveedorSgc: true, guardarProveedorSgc: true,
+  evaluarProveedorSgc: true, desactivarProveedorSgc: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,

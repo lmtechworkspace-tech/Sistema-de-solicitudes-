@@ -375,6 +375,28 @@ const COLUMNAS = {
     'seguimiento_plazo', 'fecha_seguimiento', 'cliente_conforme',
     'estado',
     'fecha_cierre', 'cerrada_por', 'fecha_creacion', 'activa'
+  ],
+
+  // SGC Fase 5a (PRO-04, §8.4): proveedores externos. El listado maestro
+  // (FO-PRO-04-01) guarda desnormalizada la ultima_* evaluación para poder
+  // listar sin recorrer todas las evaluaciones. es_unico distingue al
+  // proveedor que no se puede reemplazar (PRO-04 §6.2): reprobado, no se
+  // desecha, se le pide una reunión de mejora.
+  SGC_PROVEEDORES: [
+    'proveedor_id', 'nombre', 'rut', 'producto_servicio',
+    'direccion', 'telefono', 'email', 'nombre_contacto',
+    'es_unico', 'estado',
+    'ultima_evaluacion_fecha', 'ultima_evaluacion_promedio', 'ultima_evaluacion_resultado',
+    'proxima_evaluacion',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+  // FO-PRO-04-02. Los seis criterios de PRO-04 §6.2 van en columnas fijas
+  // (lista cerrada de a) a f)), no en JSON.
+  SGC_PROVEEDOR_EVALUACIONES: [
+    'evaluacion_id', 'proveedor_id', 'fecha', 'orden_compra',
+    'calidad', 'plazo_entrega', 'costos', 'tiempo_respuesta', 'precio', 'postventa',
+    'promedio', 'resultado', 'aprobado',
+    'observaciones', 'evaluador_email', 'proxima_evaluacion'
   ]
 };
 
