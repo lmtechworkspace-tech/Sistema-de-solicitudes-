@@ -38,6 +38,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: "npm"
+
+      # Antes de aws4fetch (activacion de R2) el proyecto tenia CERO
+      # dependencias, asi que este paso no hacia falta. Sin el, un modulo
+      # que haga require() de un paquete real revienta en CI (no hay
+      # node_modules en un checkout limpio) y, si igual pasara, el VPS
+      # tampoco lo tendria -- mismo tipo de trampa que backend/logica/
+      # cuando se agrego como carpeta nueva al workflow (ver memoria).
+      - name: Instalar dependencias
+        run: npm ci
 
       # Puerta de seguridad: si UN solo test falla, el despliegue no ocurre.
       - name: Correr toda la bateria de tests
@@ -58,8 +68,14 @@ jobs:
             backend/db/ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/backend/db/"
           rsync -az --delete -e "ssh -i ~/.ssh/deploy" \
             backend/logica/ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/backend/logica/"
-          scp -i ~/.ssh/deploy package.json \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/package.json"
+          scp -i ~/.ssh/deploy package.json package-lock.json \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/"
+          # node_modules ya instalado y probado en este mismo job (npm ci
+          # de arriba) se sincroniza tal cual -- el VPS nunca corre npm
+          # install por su cuenta, ni depende de tener salida a internet en
+          # el momento del despliegue.
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy" \
+            node_modules/ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/node_modules/"
 
       - name: Reiniciar el servicio y verificar que responde
         run: |
