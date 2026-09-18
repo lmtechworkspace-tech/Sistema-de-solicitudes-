@@ -566,15 +566,139 @@ estar desincronizados si hubo un push sin terminar el deploy).
 
 ---
 
+## 10.1 Detalles operativos que cuestan una hora de tropiezos si no se saben
+
+Todo esto se aprendió tropezando durante la migración. Está acá para que
+la cuenta nueva no lo repita.
+
+**El contrato HTTP real de `/v1/accion`** — los campos son `action` y
+`data`, **en inglés**. Mandar `accion`/`datos` (que es como se llaman en
+todo el código en español) devuelve `"Acción desconocida: undefined"`
+para CUALQUIER acción, incluso una válida: parece un problema de deploy
+y no lo es. Se confirma leyendo `backend/server/app.js`.
+
+```bash
+curl -sS -X POST https://api.ctrly.cl/v1/accion \
+  -H "Content-Type: application/json" \
+  -d '{"action":"listarProyectos","data":{}}'
+```
+
+**Qué prueba y qué NO prueba ese curl**: el guardia de sesión corre
+ANTES del dispatcher de acciones. Entonces: acción inexistente → `404`
+"Acción desconocida"; acción existente sin sesión → `403` "Sesión
+inválida". Ese contraste 404 vs 403 es la señal de que el deploy llegó.
+Pero **una acción gateada (stub) y una implementada de verdad responden
+EXACTAMENTE igual** sin sesión — el curl anónimo no las distingue. Para
+eso, o se mira el código, o se usa una sesión real.
+
+**Zona horaria**: dev, CI y VPS corren en `America/Santiago`. Toda la
+lógica de fechas (jornada 09-18, feriados, "hoy", DST) lo asume. En UTC
+fallan 2 tests de `proyectos-registro-dia.test.js` en la ventana
+nocturna. El workflow fija `TZ: America/Santiago`. **Si algún día un test
+falla solo en CI y no en local, sospechar primero la zona horaria.**
+
+**El repo tiene DOS familias de tests y `npm test` corre las dos:**
+- `backend/test/<modulo>.test.js` → prueban el código **Apps Script**
+  (`backend/backoffice/*.gs`) contra el sandbox `helpers/gasSandbox.js`.
+  Son la fuente de verdad de las reglas de negocio. **No se tocan al
+  portar** — siguen verdes porque el `.gs` sigue existiendo.
+- `backend/test/<modulo>-porteo.test.js` → prueban el puerto Node
+  (`backend/logica/*.js`). Son los que se escriben al portar, copiando
+  los escenarios del test `.gs` hermano y adaptándolos a
+  `(db, data, contexto)`.
+
+Las dos familias son independientes: cambiar `backend/logica/*` no puede
+romper un test `.gs`, y viceversa. Lo que SÍ puede romper es otro test
+`-porteo` (ver la viñeta de `async` en §5).
+
+**Dependencias y deploy**: el proyecto tuvo cero dependencias hasta
+`aws4fetch`. Por eso el workflow no instalaba nada — se le agregó
+`npm ci` en CI y un `rsync` de `node_modules/` al VPS (el VPS **nunca**
+corre `npm install` por su cuenta). **Si se agrega una dependencia
+nueva, verificar que siga sincronizándose**, y probar en limpio con
+`rm -rf node_modules && npm ci && npm test` antes de pushear.
+
+**Gotcha de `aws4fetch` al mockear**: internamente llama
+`fetch(await this.sign(input, init))` — es decir, **un solo argumento,
+un objeto `Request`**, no `(url, init)`. Un mock que espere dos
+argumentos falla de forma confusa. Además el cliente se construye con
+`retries: 0` a propósito (el default son 10 con backoff exponencial: un
+solo test de error simulado tardaba ~24s).
+
+**Base de datos de producción**: `/opt/sigso/data/sigso.db` (SQLite,
+`node:sqlite`). El servicio la abre en exclusiva mientras corre, así que
+no se puede editar el archivo por fuera con el servicio arriba — por eso
+las migraciones de datos reales se hicieron por HTTP con una herramienta
+temporal (`bootstrapAdmin` + `importarDatosMigracion`), usada una vez y
+revertida del repo (commits `f3373e1`/`cf4f9f8` para `CAT_CLIENTES`).
+Si hay que migrar otra tabla real, ese es el patrón a repetir.
+
+**El export completo de producción** (84 hojas, foto del 2026-09-18 con
+datos reales de SGC/Proyectos/Actividades/Pausas) está en
+`C:\Users\luis1\Downloads\SIGSO - Base de Datos (6).xlsx` en el equipo
+del usuario. Solo se migró `CAT_CLIENTES` de ahí, a propósito. Si se
+necesita refrescar otra tabla, la fuente está ahí (pedirle el archivo al
+usuario si la cuenta nueva corre en otra máquina).
+
+**Cómo revertir un deploy malo**: `git revert <commit> && git push` —
+el workflow redespliega solo. No hay que tocar el VPS a mano. (Se usó de
+verdad para revertir la herramienta de migración.)
+
+**Script extra**: `npm run build:backoffice-html` regenera el HTML del
+backoffice Apps Script. Solo se usa si se toca el mundo `.gs`.
+
+**Windows / Git Bash**: pasar rutas de Windows dentro de `node -e` por
+Git Bash rompe (los backslashes se mezclan y arman rutas inválidas). La
+solución usada siempre: escribir un archivo `.js` de verdad en el
+scratchpad e invocarlo con barras normales
+(`node "C:/Users/.../script.js"`).
+
+---
+
+## 10.2 RIESGO ABIERTO: la base de producción no tiene respaldo
+
+**Verificado en el VPS el 2026-09-18**: no hay ningún cron ni systemd
+timer que respalde `/opt/sigso/data/sigso.db` (el único timer presente es
+`dpkg-db-backup`, que respalda la base de paquetes de Debian y no tiene
+nada que ver). No hay crontab de usuario. No hay copias del `.db` en el
+servidor.
+
+Ese archivo (~700 KB hoy) contiene **datos reales irrecuperables**: las
+284 filas de `CAT_CLIENTES` migradas, las cuentas de portal del personal
+con sus hashes, las solicitudes migradas y todo lo que se haya escrito
+desde entonces. Si el disco falla o el archivo se corrompe, no hay de
+dónde volver — salvo que el usuario tenga activados los backups de
+Hetzner a nivel de VPS (servicio pago aparte, **no verificado**).
+
+**Esto no está resuelto y no se resolvió en esta sesión a propósito**
+(montar infraestructura nueva no se hace sin que el usuario lo decida).
+Es probablemente lo más importante que queda pendiente fuera del trabajo
+de migración en sí. Una solución mínima razonable: un systemd timer
+diario que haga `sqlite3 /opt/sigso/data/sigso.db ".backup /opt/sigso/backups/sigso-$(date +\%F).db"`
+con retención de ~14 días, y —mejor aún— que empuje esa copia a R2 (el
+bucket ya existe y las credenciales ya están en el servicio).
+
+---
+
 ## 11. Nota sobre memoria y continuidad
 
 La sesión anterior mantenía notas de memoria persistente en
-`C:\Users\luis1\.claude\projects\...\memory\sigso-ecosistema-nuevo.md`
-(y archivos relacionados) — son mucho más detalladas que este documento
-(incluyen el razonamiento completo de cada decisión de diseño, línea por
-línea). Si la cuenta nueva corre en la **misma máquina** y tiene acceso a
-ese filesystem, vale la pena leerlas para contexto adicional. Si no,
-**este documento es autosuficiente** para continuar: el propio código
+`C:\Users\luis1\.claude\projects\C--Users-luis1-OneDrive-Desktop-SIGSO\memory\sigso-ecosistema-nuevo.md`
+(~560 líneas) — **son bastante más detalladas que este documento**:
+incluyen el razonamiento completo de cada módulo portado, los bugs
+encontrados y por qué, y las decisiones descartadas con su motivo.
+
+**Esos archivos viven en el disco, no en la nube de la cuenta.** Si la
+cuenta nueva corre en la misma máquina y el mismo usuario de Windows,
+el directorio sigue ahí aunque la sesión sea de otra cuenta de Claude —
+vale mucho la pena pedirle a la sesión nueva que lo lea explícitamente
+(no lo va a cargar solo si su memoria está vacía):
+
+> «Lee `C:\Users\luis1\.claude\projects\C--Users-luis1-OneDrive-Desktop-SIGSO\memory\sigso-ecosistema-nuevo.md`
+> y `documentacion/HANDOFF-MIGRACION-NODE.md`, y seguimos desde ahí.»
+
+Si la cuenta nueva corre en otra máquina, **este documento es
+autosuficiente** para continuar: el propio código
 (comentarios de cabecera de cada `*Sgc.js`, mensajes de commit) tiene la
 misma información que la memoria, porque esa fue siempre la fuente
 primaria — la memoria era un resumen derivado, nunca al revés.
