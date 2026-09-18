@@ -221,16 +221,17 @@ const ACCIONES = {
   obtenerAnaliticaProyecto: (db, data, contexto) => Proyectos.obtenerAnalitica(db, data, contexto),
   obtenerWorkloadPortafolioProyectos: (db, data, contexto) => Proyectos.obtenerWorkloadPortafolio(db, data, contexto),
 
-  // Centro documental (v13 Fase 4, R2) + PDF/libro: siguen gateados, mismo
-  // criterio que los PDF de Actividades/Pausas.
-  subirAdjuntoProyecto: () => ({ _validationError: true, message: 'La subida de archivos aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
-  descargarAdjuntoProyecto: () => ({ _validationError: true, message: 'La descarga de archivos aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
-  gestionarDocumentoProyecto: () => ({ _validationError: true, message: 'El centro documental aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
-  subirVersionDocumentoProyecto: () => ({ _validationError: true, message: 'El centro documental aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
-  marcarVersionVigenteProyecto: () => ({ _validationError: true, message: 'El centro documental aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
-  listarVersionesDocumentoProyecto: () => ({ _validationError: true, message: 'El centro documental aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
-  descargarVersionDocumentoProyecto: () => ({ _validationError: true, message: 'El centro documental aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
-  descargarDocumentoProyecto: () => ({ _validationError: true, message: 'El centro documental aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).' }),
+  // Centro documental (v13 Fase 4) + adjuntos de Sala: usan R2 desde
+  // 2026-09-18 (almacenamiento.js). El PDF/libro Excel siguen gateados,
+  // mismo criterio que los PDF de Actividades/Pausas.
+  subirAdjuntoProyecto: (db, data, contexto) => Proyectos.subirAdjunto(db, data, contexto),
+  descargarAdjuntoProyecto: (db, data, contexto) => Proyectos.descargarAdjunto(db, data, contexto),
+  gestionarDocumentoProyecto: (db, data, contexto) => Proyectos.gestionarDocumento(db, data, contexto),
+  subirVersionDocumentoProyecto: (db, data, contexto) => Proyectos.subirVersionDocumento(db, data, contexto),
+  marcarVersionVigenteProyecto: (db, data, contexto) => Proyectos.marcarVersionVigente(db, data, contexto),
+  listarVersionesDocumentoProyecto: (db, data, contexto) => Proyectos.listarVersionesDocumento(db, data, contexto),
+  descargarVersionDocumentoProyecto: (db, data, contexto) => Proyectos.descargarVersionDocumento(db, data, contexto),
+  descargarDocumentoProyecto: (db, data, contexto) => Proyectos.descargarDocumentoProyecto(db, data, contexto),
   descargarReporteProyecto: () => ({ _validationError: true, message: 'La descarga en PDF del proyecto aun no esta disponible en el nuevo backend (falta el motor de PDF).' }),
   descargarLibroProyecto: () => ({ _validationError: true, message: 'La descarga del libro Excel del proyecto aun no esta disponible en el nuevo backend.' }),
 

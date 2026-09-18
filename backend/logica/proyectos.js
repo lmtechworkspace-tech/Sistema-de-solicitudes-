@@ -10,9 +10,11 @@
  * (obtenerAnalitica), workload cruzado del portafolio
  * (obtenerWorkloadPortafolio) y reprogramar con motivo desde el Cronograma
  * (reprogramarTarea, delega en Actividades.reprogramar).
- * Lo que sigue gateado (centro documental v13 Fase 4 + adjuntos + PDF/libro
- * Excel, todo bloqueado por R2 o por el motor de PDF) esta al final de este
- * archivo y en router.js, mismo criterio que Pausas/Actividades.
+ * Centro documental + adjuntos de Sala (v10 Fase D / v13 Fase 4) usan R2
+ * de verdad desde 2026-09-18 (almacenamiento.js). Lo que sigue gateado
+ * (PDF de reporte/acta y libro Excel, bloqueados por el motor de PDF) esta
+ * al final de este archivo y en router.js, mismo criterio que Pausas/
+ * Actividades.
  *
  * Decision central de la propuesta (§0): las TAREAS de un proyecto NO son
  * una entidad nueva -- son ACTIVIDADES (actividades.js, motor de Gestion
@@ -37,6 +39,42 @@ const Utils = require('./utils');
 const Cumplimiento = require('./cumplimiento');
 const Actividades = require('./actividades');
 const NotificacionesApp = require('./notificacionesApp');
+const Calidad = require('./calidadSgc');
+const Almacenamiento = require('./almacenamiento');
+
+// v10 (Fase D, "adjuntos por proyecto"): mismo tope que Calidad.gs/Novedades.gs.
+const MAX_ADJUNTO_PROYECTO_BYTES = 10 * 1024 * 1024;
+
+// Mismas firmas binarias que Perfiles.gs (detectarMimeImagen_) -- esa
+// funcion vive dentro de su propio modulo y no es global, asi que se
+// copia aca en vez de exportarla solo para este uso.
+const FIRMAS_IMAGEN_PROYECTO_ = [
+  { mime: 'image/jpeg', firma: [0xFF, 0xD8, 0xFF] },
+  { mime: 'image/png', firma: [0x89, 0x50, 0x4E, 0x47] }
+];
+function esWebpProyecto_(bytes) {
+  if (!bytes || bytes.length < 12) return false;
+  const riff = [0x52, 0x49, 0x46, 0x46], webp = [0x57, 0x45, 0x42, 0x50];
+  for (let i = 0; i < 4; i++) {
+    if (bytes[i] !== riff[i]) return false;
+    if (bytes[8 + i] !== webp[i]) return false;
+  }
+  return true;
+}
+function detectarMimeImagenProyecto_(bytes) {
+  if (!bytes || !bytes.length) return null;
+  for (const candidato of FIRMAS_IMAGEN_PROYECTO_) {
+    if (bytes.length >= candidato.firma.length && bytes.subarray(0, candidato.firma.length).equals(Buffer.from(candidato.firma))) {
+      return candidato.mime;
+    }
+  }
+  return esWebpProyecto_(bytes) ? 'image/webp' : null;
+}
+
+// v13 (Fase 4, "centro documental"): categorías fijas -- un enum chico y
+// genérico (a diferencia del `tipo` de SGC, que sigue una taxonomía ISO)
+// que cubre lo que de verdad varía entre documentos de un proyecto interno.
+const PROYECTO_DOC_CATEGORIAS_ = ['REQUISITOS', 'DISEÑO', 'CONTRATO', 'ACTA', 'APROBACION', 'ENTREGABLE', 'OTRO'];
 
 const ORDEN_PRIORIDAD = ['P1', 'P2', 'P3', 'P4'];
 const PRIORIDAD_POR_DEFECTO = 'P3';
@@ -410,6 +448,70 @@ function filaBitacoraSalida_(b) {
 }
 function buscarReunionProyecto_(db, reunionId) { return leerSeguro_(db, 'PROYECTO_REUNIONES').find((r) => r.reunion_id === reunionId) || null; }
 function buscarDecisionProyecto_(db, decisionId) { return leerSeguro_(db, 'PROYECTO_DECISIONES').find((d) => d.decision_id === decisionId) || null; }
+function buscarDocumentoProyecto_(db, documentoId) { return leerSeguro_(db, 'PROYECTO_DOCUMENTOS').find((d) => d.documento_id === documentoId) || null; }
+
+// Valida y sube el binario a R2 -- MISMA validación que subirAdjunto
+// (tamaño, firma binaria real, nunca la extensión ni el mime del
+// navegador), reusada aquí para no duplicar la regla de seguridad en dos
+// lugares. A diferencia de Calidad.subirArchivoSgc_ (solo PDF/Office),
+// esta también acepta imágenes -- por eso no se reusa completa, solo el
+// detector de firma (Calidad.mimeArchivoSgc_).
+async function subirArchivoDocumentoProyecto_(proyectoId, data, subcarpeta) {
+  if (!data.nombre_archivo) return errorValidacion_('nombre_archivo', 'Falta el nombre del archivo.');
+  let bytes;
+  try {
+    bytes = Buffer.from(data.contenido_base64, 'base64');
+  } catch (err) {
+    return errorValidacion_('contenido_base64', 'El archivo no es base64 válido.');
+  }
+  if (!bytes.length) return errorValidacion_('contenido_base64', 'El archivo está vacío.');
+  if (bytes.length > MAX_ADJUNTO_PROYECTO_BYTES) {
+    return errorValidacion_('contenido_base64', 'El archivo supera el tamaño máximo (' + Math.round(MAX_ADJUNTO_PROYECTO_BYTES / (1024 * 1024)) + ' MB).');
+  }
+  const mime = Calidad.mimeArchivoSgc_(bytes, data.nombre_archivo) || detectarMimeImagenProyecto_(bytes);
+  if (!mime) return errorValidacion_('contenido_base64', 'Formato no admitido. Se aceptan PDF, Word, Excel, PowerPoint, JPG, PNG o WebP.');
+
+  const clave = 'proyectos/' + proyectoId + '/' + subcarpeta + '/' + uuid_() + '/' + data.nombre_archivo;
+  const subida = await Almacenamiento.subirArchivo_(clave, data.contenido_base64, mime);
+  if (!subida.ok) return errorValidacion_('contenido_base64', subida.message);
+  return { archivo_id: clave, archivo_nombre: data.nombre_archivo, archivo_mime: mime, tamano_bytes: bytes.length };
+}
+
+// vN autoincremental por documento -- un documento de proyecto no necesita
+// el código de versión formal que SGC exige para auditoría externa (v01,
+// v02...); alcanza con un entero simple que nunca colisiona.
+function siguienteVersionDocumentoProyecto_(db, documentoId) {
+  let max = 0;
+  leerSeguro_(db, 'PROYECTO_DOC_VERSIONES').forEach((v) => {
+    if (v.documento_id !== documentoId) return;
+    const n = Number(String(v.version || '').replace(/[^0-9]/g, ''));
+    if (n > max) max = n;
+  });
+  return 'v' + (max + 1);
+}
+
+// Registra la nueva versión (append-only, nunca se borra) y sincroniza la
+// copia denormalizada en PROYECTO_DOCUMENTOS -- mismo patrón que
+// registrarVersionSgc_/nuevaVersion en calidadSgc.js.
+function registrarVersionDocumentoProyecto_(db, documentoId, version, comentario, archivo, contexto) {
+  leerSeguro_(db, 'PROYECTO_DOC_VERSIONES').forEach((v) => {
+    if (v.documento_id === documentoId && esVerdadero_(v.vigente)) {
+      actualizarFilaPorId_(db, 'PROYECTO_DOC_VERSIONES', 'version_id', v.version_id, { vigente: false });
+    }
+  });
+  const fila = {
+    version_id: uuid_(), documento_id: documentoId, version, comentario: comentario || '',
+    archivo_id: archivo.archivo_id, archivo_nombre: archivo.archivo_nombre, archivo_mime: archivo.archivo_mime,
+    tamano_bytes: archivo.tamano_bytes || 0, subido_por: (contexto && contexto.email) || '',
+    fecha: new Date().toISOString(), vigente: true
+  };
+  agregarFila_(db, 'PROYECTO_DOC_VERSIONES', fila);
+  actualizarFilaPorId_(db, 'PROYECTO_DOCUMENTOS', 'documento_id', documentoId, {
+    version_vigente: version, archivo_id: archivo.archivo_id, archivo_nombre: archivo.archivo_nombre,
+    archivo_mime: archivo.archivo_mime, tamano_bytes: archivo.tamano_bytes || 0
+  });
+  return fila;
+}
 
 // ===========================================================================
 // API publica
@@ -1619,6 +1721,212 @@ function reprogramarTarea(db, data, contexto) {
   return Actividades.reprogramar(db, data, contexto);
 }
 
+// --- Adjuntos de la Sala (v10 Fase D): una zona de archivos por proyecto,
+// "enlazable desde la sala" -- en vez de una hoja nueva solo para metadata
+// de archivos, el adjunto ES un evento mas de la Sala (tipo ARCHIVO,
+// ref_id = clave del archivo en R2): aparece en el feed como cualquier
+// otra novedad, con su autor y su fecha, sin duplicar "quien publico que y
+// cuando" en dos tablas distintas. Mismo circulo que puede crear tareas
+// (LIDER/INTEGRANTE/COLABORADOR o ADM).
+async function subirAdjunto(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  const rol = rolEnProyecto_(db, proyecto.proyecto_id, contexto);
+  if (!(contexto.rol === 'ADM' || rol === 'LIDER' || rol === 'INTEGRANTE' || rol === 'COLABORADOR')) {
+    return { _forbidden: true, message: 'No puedes subir archivos a este proyecto.' };
+  }
+  const archivo = await subirArchivoDocumentoProyecto_(proyecto.proyecto_id, data, 'adjuntos');
+  if (archivo._validationError) return archivo;
+  return registrarEventoProyecto_(db, proyecto.proyecto_id, 'ARCHIVO', contexto,
+    data.nombre_archivo, 'ARCHIVO', archivo.archivo_id, data.comentario || '');
+}
+
+// Sirve el archivo por backend (nunca la clave de R2 directo): re-valida
+// el acceso al proyecto en cada descarga, mismo criterio que
+// Novedades.descargarAdjunto/Calidad.descargarDocumento.
+async function descargarAdjunto(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+  const evento = leerSeguro_(db, 'PROYECTO_EVENTOS').find((e) => e.evento_id === data.evento_id && e.proyecto_id === proyecto.proyecto_id && e.tipo === 'ARCHIVO');
+  if (!evento) return errorValidacion_('evento_id', 'Archivo no encontrado.');
+  const descarga = await Almacenamiento.descargarArchivo_(evento.ref_id);
+  if (!descarga.ok) return errorValidacion_('evento_id', descarga.message);
+  return { contenido_base64: descarga.contenido_base64, nombre_archivo: evento.titulo, mime: descarga.content_type };
+}
+
+// --- Documentos (Fase 4, "centro documental"): repositorio FORMAL, con
+// categoría, versionado real e historial -- distinto del adjunto suelto de
+// la Sala (subirAdjunto/descargarAdjunto, arriba), que sigue existiendo
+// igual para el archivo rápido de conversación. Mismo patrón ya probado en
+// calidadSgc.js (PROYECTO_DOCUMENTOS/PROYECTO_DOC_VERSIONES, documento
+// controlado), sin los campos propios de esa norma (clausulas, acuse,
+// área) -- un documento de proyecto no necesita ese formalismo, solo
+// trazabilidad.
+async function gestionarDocumento(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  const rol = rolEnProyecto_(db, proyecto.proyecto_id, contexto);
+  const puedeGestionar = contexto.rol === 'ADM' || rol === 'LIDER' || rol === 'INTEGRANTE' || rol === 'COLABORADOR';
+  if (!puedeGestionar) return { _forbidden: true, message: 'No puedes gestionar documentos en este proyecto.' };
+
+  if (data.accion === 'eliminar') {
+    if (!data.documento_id) return errorValidacion_('documento_id', 'Falta indicar el documento.');
+    const paraEliminar = buscarDocumentoProyecto_(db, data.documento_id);
+    if (!paraEliminar || paraEliminar.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('documento_id', 'Documento no encontrado.');
+    // Soft-delete (igual criterio que el resto del módulo: nunca se pierde
+    // historial). Las versiones en PROYECTO_DOC_VERSIONES y los archivos en
+    // R2 quedan intactos -- si algún día se necesita, sigue ahí.
+    return actualizarFilaPorId_(db, 'PROYECTO_DOCUMENTOS', 'documento_id', data.documento_id, { activo: false });
+  }
+
+  // Referencia opcional a una tarea, hito, reunión o decisión -- RN-709 de
+  // siempre: debe ser del MISMO proyecto (nunca un enlace cruzado a otro).
+  let refTipo = '', refId = '';
+  if (data.ref_tipo === 'ACTIVIDAD' && data.ref_id) {
+    const tareaRef = leerSeguro_(db, 'ACTIVIDADES').find((a) => a.actividad_id === data.ref_id);
+    if (!tareaRef || tareaRef.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('ref_id', 'La tarea indicada no pertenece a este proyecto.');
+    refTipo = 'ACTIVIDAD'; refId = data.ref_id;
+  } else if (data.ref_tipo === 'HITO' && data.ref_id) {
+    const hitoRef = leerSeguro_(db, 'PROYECTO_HITOS').find((h) => h.hito_id === data.ref_id);
+    if (!hitoRef || hitoRef.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('ref_id', 'El hito indicado no pertenece a este proyecto.');
+    refTipo = 'HITO'; refId = data.ref_id;
+  } else if (data.ref_tipo === 'REUNION' && data.ref_id) {
+    const reunionRef = buscarReunionProyecto_(db, data.ref_id);
+    if (!reunionRef || reunionRef.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('ref_id', 'La reunión indicada no pertenece a este proyecto.');
+    refTipo = 'REUNION'; refId = data.ref_id;
+  } else if (data.ref_tipo === 'DECISION' && data.ref_id) {
+    const decisionRef = buscarDecisionProyecto_(db, data.ref_id);
+    if (!decisionRef || decisionRef.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('ref_id', 'La decisión indicada no pertenece a este proyecto.');
+    refTipo = 'DECISION'; refId = data.ref_id;
+  }
+
+  if (data.documento_id) {
+    // Editar METADATA (nombre/categoría/descripción/referencia) -- nunca el
+    // archivo desde aquí, eso es subirVersionDocumento (deja traza propia).
+    const actual = buscarDocumentoProyecto_(db, data.documento_id);
+    if (!actual || actual.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('documento_id', 'Documento no encontrado.');
+    const cambios = { ref_tipo: refTipo, ref_id: refId };
+    if (data.nombre !== undefined) {
+      const nombreEdit = String(data.nombre || '').trim();
+      if (!nombreEdit) return errorValidacion_('nombre', 'El nombre del documento es obligatorio.');
+      cambios.nombre = nombreEdit;
+    }
+    if (data.categoria !== undefined) cambios.categoria = PROYECTO_DOC_CATEGORIAS_.indexOf(data.categoria) !== -1 ? data.categoria : 'OTRO';
+    if (data.descripcion !== undefined) cambios.descripcion = data.descripcion || '';
+    return actualizarFilaPorId_(db, 'PROYECTO_DOCUMENTOS', 'documento_id', data.documento_id, cambios);
+  }
+
+  // Crear: exige nombre + primer archivo -- un documento sin ninguna
+  // versión no tiene sentido en un repositorio (a diferencia del adjunto
+  // suelto de la Sala, este SIEMPRE nace versionado).
+  const nombre = String(data.nombre || '').trim();
+  if (!nombre) return errorValidacion_('nombre', 'El nombre del documento es obligatorio.');
+  if (!data.contenido_base64) return errorValidacion_('contenido_base64', 'Adjunta el archivo del documento.');
+  const archivo = await subirArchivoDocumentoProyecto_(proyecto.proyecto_id, data, 'documentos');
+  if (archivo._validationError) return archivo;
+
+  const documentoId = uuid_();
+  const categoria = PROYECTO_DOC_CATEGORIAS_.indexOf(data.categoria) !== -1 ? data.categoria : 'OTRO';
+  const version = 'v1';
+  const doc = {
+    documento_id: documentoId, proyecto_id: proyecto.proyecto_id, nombre, categoria, descripcion: data.descripcion || '',
+    ref_tipo: refTipo, ref_id: refId, version_vigente: version,
+    archivo_id: archivo.archivo_id, archivo_nombre: archivo.archivo_nombre, archivo_mime: archivo.archivo_mime, tamano_bytes: archivo.tamano_bytes,
+    creado_por: contexto.email || '', fecha_creacion: new Date().toISOString(), activo: true
+  };
+  agregarFila_(db, 'PROYECTO_DOCUMENTOS', doc);
+  registrarVersionDocumentoProyecto_(db, documentoId, version, data.comentario || 'Carga inicial', archivo, contexto);
+  registrarEventoProyecto_(db, proyecto.proyecto_id, 'ARCHIVO', contexto, 'Documento: ' + nombre, 'DOCUMENTO', documentoId, '');
+  return buscarDocumentoProyecto_(db, documentoId);
+}
+
+// Sube una nueva versión de un documento EXISTENTE -- la anterior deja de
+// ser vigente pero se conserva completa (nunca se borra, es el historial
+// auditable "qué versión regía en qué fecha").
+async function subirVersionDocumento(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  const rol = rolEnProyecto_(db, proyecto.proyecto_id, contexto);
+  if (!(contexto.rol === 'ADM' || rol === 'LIDER' || rol === 'INTEGRANTE' || rol === 'COLABORADOR')) {
+    return { _forbidden: true, message: 'No puedes subir versiones en este proyecto.' };
+  }
+  const doc = buscarDocumentoProyecto_(db, data.documento_id);
+  if (!doc || doc.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('documento_id', 'Documento no encontrado.');
+  if (!data.contenido_base64) return errorValidacion_('contenido_base64', 'Adjunta el archivo de la nueva versión.');
+  const archivo = await subirArchivoDocumentoProyecto_(proyecto.proyecto_id, data, 'documentos');
+  if (archivo._validationError) return archivo;
+  const version = siguienteVersionDocumentoProyecto_(db, doc.documento_id);
+  registrarVersionDocumentoProyecto_(db, doc.documento_id, version, data.comentario || '', archivo, contexto);
+  registrarEventoProyecto_(db, proyecto.proyecto_id, 'ARCHIVO', contexto, 'Nueva versión (' + version + '): ' + doc.nombre, 'DOCUMENTO', doc.documento_id, '');
+  return buscarDocumentoProyecto_(db, doc.documento_id);
+}
+
+// "Marcar vigente" (rollback): vuelve a poner una versión ANTERIOR como la
+// vigente, sin borrar la que hoy lo es -- para cuando una versión nueva
+// resultó ser un error. Exclusivo de quien gestiona el proyecto (no
+// cualquier colaborador, a diferencia de subir una versión nueva).
+function marcarVersionVigente(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeGestionarProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'Solo el líder del proyecto o un administrador pueden cambiar la versión vigente.' };
+  const doc = buscarDocumentoProyecto_(db, data.documento_id);
+  if (!doc || doc.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('documento_id', 'Documento no encontrado.');
+  const version = leerSeguro_(db, 'PROYECTO_DOC_VERSIONES').find((v) => v.version_id === data.version_id && v.documento_id === doc.documento_id);
+  if (!version) return errorValidacion_('version_id', 'Versión no encontrada.');
+  leerSeguro_(db, 'PROYECTO_DOC_VERSIONES').forEach((v) => {
+    if (v.documento_id === doc.documento_id) actualizarFilaPorId_(db, 'PROYECTO_DOC_VERSIONES', 'version_id', v.version_id, { vigente: v.version_id === version.version_id });
+  });
+  actualizarFilaPorId_(db, 'PROYECTO_DOCUMENTOS', 'documento_id', doc.documento_id, {
+    version_vigente: version.version, archivo_id: version.archivo_id, archivo_nombre: version.archivo_nombre,
+    archivo_mime: version.archivo_mime, tamano_bytes: version.tamano_bytes || 0
+  });
+  registrarEventoProyecto_(db, proyecto.proyecto_id, 'ARCHIVO', contexto, 'Vigente cambiada a ' + version.version + ': ' + doc.nombre, 'DOCUMENTO', doc.documento_id, '');
+  return buscarDocumentoProyecto_(db, doc.documento_id);
+}
+
+// Historial completo de un documento -- pedido LAZY (solo cuando alguien
+// abre "Ver historial"), igual criterio que la bitácora del Cronograma.
+function listarVersionesDocumento(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+  const doc = buscarDocumentoProyecto_(db, data.documento_id);
+  if (!doc || doc.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('documento_id', 'Documento no encontrado.');
+  return leerSeguro_(db, 'PROYECTO_DOC_VERSIONES').filter((v) => v.documento_id === doc.documento_id)
+    .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+}
+
+// Sirve una versión puntual (no necesariamente la vigente) -- re-valida el
+// acceso al proyecto en cada descarga, mismo criterio que descargarAdjunto.
+async function descargarVersionDocumento(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+  const version = leerSeguro_(db, 'PROYECTO_DOC_VERSIONES').find((v) => v.version_id === data.version_id);
+  if (!version) return errorValidacion_('version_id', 'Versión no encontrada.');
+  const doc = buscarDocumentoProyecto_(db, version.documento_id);
+  if (!doc || doc.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('version_id', 'Versión no encontrada en este proyecto.');
+  const descarga = await Almacenamiento.descargarArchivo_(version.archivo_id);
+  if (!descarga.ok) return errorValidacion_('version_id', descarga.message);
+  return { contenido_base64: descarga.contenido_base64, nombre_archivo: version.archivo_nombre, mime: descarga.content_type };
+}
+
+// Descarga directa de la versión VIGENTE de un documento -- usa el
+// archivo_id ya denormalizado en PROYECTO_DOCUMENTOS, sin tener que
+// resolver primero el version_id (eso es lo que hace posible el botón
+// "Descargar" de la lista, sin un viaje extra a listarVersionesDocumento).
+async function descargarDocumentoProyecto(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+  const doc = buscarDocumentoProyecto_(db, data.documento_id);
+  if (!doc || doc.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('documento_id', 'Documento no encontrado.');
+  const descarga = await Almacenamiento.descargarArchivo_(doc.archivo_id);
+  if (!descarga.ok) return errorValidacion_('documento_id', descarga.message);
+  return { contenido_base64: descarga.contenido_base64, nombre_archivo: doc.archivo_nombre, mime: descarga.content_type };
+}
+
 module.exports = {
   listar, listarMisTareas, listarCalendario, getDetalle, getDetalleCompleto, marcarSalaVisitada,
   crear, guardarComoPlantilla, listarPlantillas, actualizar, gestionarIntegrante, gestionarHito,
@@ -1630,6 +1938,9 @@ module.exports = {
   // Incremento 2 (v11 Reingenieria Cronograma).
   guardarRegistroDia, eliminarRegistroDia, obtenerRendimiento, obtenerAnalitica,
   obtenerWorkloadPortafolio, congelarBaseline, reprogramarTarea,
+  // Centro documental + adjuntos de Sala (R2, desgateado 2026-09-18).
+  subirAdjunto, descargarAdjunto, gestionarDocumento, subirVersionDocumento,
+  marcarVersionVigente, listarVersionesDocumento, descargarVersionDocumento, descargarDocumentoProyecto,
   // Exportadas: rolEnProyecto_ es el gate que actividades.js consulta para
   // el acoplamiento (RN-709); el resto queda disponible para tests, nunca
   // duplicadas.

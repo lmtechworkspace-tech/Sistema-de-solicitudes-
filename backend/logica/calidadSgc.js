@@ -869,5 +869,11 @@ module.exports = {
   // scope); en Node, personasSgc.js la importa de acá en vez de
   // duplicarla -- mismos límites/firmas/errores para cualquier archivo
   // del SGC, sin importar qué módulo lo sube.
-  subirArchivoSgc_
+  subirArchivoSgc_,
+  // mimeArchivoSgc_: el detector de firma binaria (PDF/Office) que
+  // proyectos.js reusa para su propio subirArchivoDocumentoProyecto_
+  // (que ADEMÁS acepta imágenes, algo que subirArchivoSgc_ no cubre --
+  // por eso Proyectos no puede reusar la función completa, solo el
+  // detector).
+  mimeArchivoSgc_
 };

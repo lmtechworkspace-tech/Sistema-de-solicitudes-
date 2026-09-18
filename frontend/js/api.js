@@ -55,10 +55,7 @@ var MAX_INTENTOS_LECTURA = 3;
 // Script sí sirve hoy. Cortarlas ahora sería una regresión, no una mejora.
 // Lista de lo que sigue pendiente:
 // descargarReporteCumplimientoPausasPdf, descargarReporteGerenciaPausasPdf,
-// subirAdjuntoProyecto, descargarAdjuntoProyecto, gestionarDocumentoProyecto,
-// subirVersionDocumentoProyecto, marcarVersionVigenteProyecto,
-// listarVersionesDocumentoProyecto, descargarVersionDocumentoProyecto,
-// descargarDocumentoProyecto, descargarReporteProyecto, descargarLibroProyecto,
+// descargarReporteProyecto, descargarLibroProyecto,
 // descargarReporteActividadesPdf, descargarActaReunionPdf,
 // descargarEvidenciaClausulaSgc.
 var ACCIONES_PORTADAS_NODE = {
@@ -100,7 +97,7 @@ var ACCIONES_PORTADAS_NODE = {
   panelEquipoActividades: true, reasignarActividad: true, pedirActualizacionActividad: true,
   getPanelGerenciaActividades: true, generarReporteActividades: true,
 
-  // --- Proyectos (36 de 48; centro documental/adjuntos/PDF/libro siguen en Apps Script) ---
+  // --- Proyectos (44 de 48; PDF de reporte/acta y libro Excel siguen en Apps Script) ---
   listarProyectos: true, listarMisTareasProyectos: true, listarMiBitacoraProyectos: true,
   listarCalendarioProyectos: true, guardarProyectoComoPlantilla: true, listarPlantillasProyecto: true,
   marcarSalaVisitadaProyecto: true,
@@ -116,6 +113,11 @@ var ACCIONES_PORTADAS_NODE = {
   listarSalaProyecto: true, publicarEnSalaProyecto: true, convertirEventoEnTareaProyecto: true,
   gestionarEntregableProyecto: true, revisarEntregableProyecto: true, gestionarRiesgoProyecto: true,
   getResumenPortafolioProyectos: true,
+  // Centro documental + adjuntos de Sala (R2, desgateado 2026-09-18).
+  subirAdjuntoProyecto: true, descargarAdjuntoProyecto: true, gestionarDocumentoProyecto: true,
+  subirVersionDocumentoProyecto: true, marcarVersionVigenteProyecto: true,
+  listarVersionesDocumentoProyecto: true, descargarVersionDocumentoProyecto: true,
+  descargarDocumentoProyecto: true,
 
   // --- SGC ISO 9001: Documentos (15 de 15; carga/descarga desgateadas de R2 el 2026-09-18) ---
   listarDocumentosSgc: true, getDocumentoSgc: true, sembrarDocumentosExternosSgc: true,
