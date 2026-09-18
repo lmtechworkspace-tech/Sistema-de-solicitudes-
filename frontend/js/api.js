@@ -173,7 +173,11 @@ var ACCIONES_PORTADAS_NODE = {
 
   // --- SGC ISO 9001: Riesgos y oportunidades (6 de 6; v11.0 Fase 3, sin archivos: se corta completo) ---
   listarRiesgosSgc: true, sembrarRiesgosSgc: true, guardarRiesgoSgc: true,
-  asignarAccionRiesgoSgc: true, registrarRevisionRiesgosSgc: true, anularRiesgoSgc: true
+  asignarAccionRiesgoSgc: true, registrarRevisionRiesgosSgc: true, anularRiesgoSgc: true,
+
+  // --- SGC ISO 9001: Procesos (6 de 6; v11.0 Fase 4, sin archivos: se corta completo) ---
+  listarProcesosSgc: true, getDetalleProcesoSgc: true, sembrarMapaProcesosSgc: true,
+  guardarProcesoSgc: true, anularProcesoSgc: true, registrarRevisionProcesosSgc: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,

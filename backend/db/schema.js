@@ -516,6 +516,31 @@ const COLUMNAS = {
     'estado', 'observaciones', 'proceso_id',
     'fecha_identificacion', 'fecha_ultima_revision', 'revisado_por',
     'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // v11.0 Fase 4 (§4.4): procesos del SGC. Dos niveles en una sola tabla:
+  // MAPA (los 14 del DOC-03, proceso_id = codigo) y SERVICIO (los ~40 de
+  // los DOC-10 a DOC-13, colgando via proceso_padre_id).
+  SGC_PROCESOS: [
+    'proceso_id', 'codigo', 'nombre', 'tipo', 'nivel',
+    'proceso_padre_id', 'area',
+    'objetivo', 'alcance', 'responsable_email',
+    'entradas', 'actividades', 'salidas',
+    'clientes', 'proveedores', 'recursos',
+    'documentos', 'clausulas_iso',
+    'estado', 'observaciones',
+    'fecha_ultima_revision', 'revisado_por',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // Un paso por fila, con las cinco columnas que traen los DOC-10 a DOC-13:
+  // responsable, input, actividades, evidencias y output. Se respeta esa
+  // estructura tal cual en vez de normalizarla, porque es el formato que la
+  // empresa ya aprobó y con el que trabaja cada área.
+  SGC_PROCESO_PASOS: [
+    'paso_id', 'proceso_id', 'numero', 'nombre',
+    'responsable', 'input', 'actividades', 'evidencias', 'output',
+    'observaciones', 'creado_por', 'fecha_creacion', 'activa'
   ]
 };
 

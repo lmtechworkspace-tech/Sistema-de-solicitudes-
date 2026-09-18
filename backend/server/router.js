@@ -51,6 +51,7 @@ const MatrizCobertura = require('../logica/matrizCoberturaSgc');
 const Alcance = require('../logica/alcanceSgc');
 const Contexto = require('../logica/contextoSgc');
 const Riesgos = require('../logica/riesgosSgc');
+const Procesos = require('../logica/procesosSgc');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -382,7 +383,15 @@ const ACCIONES = {
   guardarRiesgoSgc: (db, data, contexto) => Riesgos.guardar(db, data, contexto),
   asignarAccionRiesgoSgc: (db, data, contexto) => Riesgos.asignarAccion(db, data, contexto),
   registrarRevisionRiesgosSgc: (db, data, contexto) => Riesgos.registrarRevision(db, data, contexto),
-  anularRiesgoSgc: (db, data, contexto) => Riesgos.anular(db, data, contexto)
+  anularRiesgoSgc: (db, data, contexto) => Riesgos.anular(db, data, contexto),
+
+  // v11.0 Fase 4 (§4.4): procesos del SGC.
+  listarProcesosSgc: (db, data, contexto) => Procesos.listar(db, data, contexto),
+  getDetalleProcesoSgc: (db, data, contexto) => Procesos.getDetalle(db, data, contexto),
+  sembrarMapaProcesosSgc: (db, data, contexto) => Procesos.sembrarMapa(db, data, contexto),
+  guardarProcesoSgc: (db, data, contexto) => Procesos.guardar(db, data, contexto),
+  anularProcesoSgc: (db, data, contexto) => Procesos.anular(db, data, contexto),
+  registrarRevisionProcesosSgc: (db, data, contexto) => Procesos.registrarRevision(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

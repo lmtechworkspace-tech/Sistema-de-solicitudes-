@@ -18,18 +18,24 @@
  *    "fuera del alcance de SIGSO hoy". Cada cláusula sin evidencia trae una
  *    nota que dice POR QUÉ.
  *
- * PENDIENTE EXPLÍCITO, NO FINGIDO: dos evaluadores (4.4, 8.1/8.5/8.6/8.7,
- * 9.1) siguen dependiendo de módulos v11 todavía no portados a Node
- * (Procesos, Indicadores, Prestaciones). 4.3 (Alcance), 4.1/4.2 (Contexto)
- * y 6.1 (Riesgos) YA son reales desde que se portaron esas fases (ver
- * alcanceSgc.js, contextoSgc.js, riesgosSgc.js). El propio `.gs` resuelve
+ * PENDIENTE EXPLÍCITO, NO FINGIDO: un evaluador (9.1) sigue dependiendo de
+ * un módulo v11 todavía no portado a Node (Indicadores). 4.3 (Alcance),
+ * 4.1/4.2 (Contexto), 6.1 (Riesgos) y 4.4/8.1/8.5/8.6 (Procesos) YA son
+ * reales desde que se portaron esas fases (ver alcanceSgc.js,
+ * contextoSgc.js, riesgosSgc.js, procesosSgc.js). El propio `.gs` resuelve
  * los que faltan con `typeof X === 'function' ? X() : []` para tolerar
- * que el módulo no esté cargado -- acá se replica igual con los stubs de
- * la sección siguiente: mientras esas fases no se porten, estos
- * evaluadores degradan a FALTANTE/PARCIAL según corresponda (nunca
- * inventan datos). Reemplazar cada stub por un require real cuando se
- * porte su fase v11 correspondiente (TODO en cada uno) -- mismo patrón ya
- * aplicado a Alcance, Contexto y Riesgos en los incrementos anteriores.
+ * que el módulo no esté cargado -- acá se replica igual con el stub de
+ * la sección siguiente: mientras esa fase no se porte, ese evaluador
+ * degrada a FALTANTE/PARCIAL según corresponda (nunca inventa datos).
+ * Reemplazar el stub por un require real cuando se porte su fase v11
+ * correspondiente (TODO) -- mismo patrón ya aplicado a Alcance, Contexto,
+ * Riesgos y Procesos en los incrementos anteriores.
+ *
+ * evaluarPrestaciones_ (§8.1/§8.5/§8.6) también sube a su lógica completa
+ * en este incremento: no depende de Procesos estar portado, depende de
+ * SGC_PRESTACIONES (Fase 8, no portada) -- leerSeguro_ tolera la tabla
+ * ausente y el evaluador degrada solo hasta esa hoja, igual que
+ * evaluarSalidasNoConformes_ (§8.7) ya hacía desde antes.
  */
 
 const crypto = require('node:crypto');
@@ -40,6 +46,7 @@ const { CLAUSULAS_ISO9001 } = require('./sgcCatalogo');
 const Alcance = require('./alcanceSgc');
 const Contexto = require('./contextoSgc');
 const Riesgos = require('./riesgosSgc');
+const Procesos = require('./procesosSgc');
 
 const UMBRAL_COBERTURA_COMPLETO = 0.8;
 const NORMA_SGC_POR_DEFECTO = { codigo: 'ISO 9001', version: '2015' };
@@ -79,8 +86,9 @@ const exclusionesVigentesPorClausula_ = Alcance.exclusionesVigentesPorClausula_;
 const factoresContextoActivos_ = Contexto.factoresContextoActivos_;
 const partesInteresadasActivas_ = Contexto.partesInteresadasActivas_;
 // riesgosActivos_ ya NO es stub: se usa Riesgos.riesgosActivos_ directo (v11 Fase 3 portada).
-function procesosActivos_(db) { return []; } // TODO v11 Fase 4 (Procesos)
-function pasosActivos_(db) { return []; } // TODO v11 Fase 4 (Procesos)
+// 4.4 y 8.1/8.5/8.6 ya NO son stub: Procesos (v11 Fase 4) esta portado.
+const procesosActivos_ = Procesos.procesosActivos_;
+const pasosActivos_ = Procesos.pasosActivos_;
 function indicadoresActivos_(db) { return []; } // TODO v11 Fase 6 (Indicadores)
 
 // --- evaluadores por clausula -------------------------------------------------
@@ -287,22 +295,147 @@ function evaluarRiesgosOportunidades_(db) {
 function evaluarProcesosSgc_(db) {
   const filas = procesosActivos_(db);
   const porDocs = evaluarPorDocumentos_(db, '4.4');
+
+  if (!filas.length) {
+    return {
+      estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
+      resumen: 'El mapa de procesos no está cargado en el sistema.',
+      nota: 'Carga el mapa en la sección Procesos. ' +
+        (porDocs.evidencia.length
+          ? 'Hay documentos etiquetados para 4.4, pero un diagrama adjunto no permite decir quién responde por cada proceso ni si sigue vigente.'
+          : ''),
+      evidencia: porDocs.evidencia
+    };
+  }
+
+  const pasos = pasosActivos_(db);
+  const lista = filas.map((p) => Procesos.formatearProceso_(p, 0, 0));
+  const resumen = Procesos.resumenProcesos_(lista, pasos);
+
+  const ev = lista.filter((p) => p.nivel === 'MAPA').map((p) => ({
+    tipo: 'Proceso ' + (p.tipo_etiqueta || '').toLowerCase(),
+    descripcion: p.codigo + ' — ' + p.nombre + (p.responsable_email ? '' : ' (sin responsable)'),
+    fecha: p.fecha_ultima_revision,
+    responsable: p.responsable_email || p.revisado_por
+  }));
+  porDocs.evidencia.forEach((e) => ev.push(e));
+
+  const falta = [];
+  ['ESTRATEGICO', 'OPERATIVO', 'APOYO'].forEach((t) => {
+    if (!resumen.por_tipo[t]) falta.push('no hay procesos del tipo ' + (Procesos.ETIQUETA_TIPO_PROCESO[t] || t).toLowerCase());
+  });
+  if (resumen.sin_responsable) falta.push(resumen.sin_responsable + ' proceso(s) del mapa sin responsable asignado');
+  if (resumen.sin_objetivo) falta.push(resumen.sin_objetivo + ' proceso(s) del mapa sin objetivo definido');
+  if (resumen.revision_vencida) {
+    falta.push('la última revisión tiene ' + resumen.meses_desde_revision +
+      ' meses y la frecuencia definida es de ' + Procesos.MESES_REVISION_PROCESOS);
+  }
+
   return {
-    estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
-    resumen: 'El mapa de procesos no está cargado en el sistema.',
-    nota: 'Carga el mapa en la sección Procesos.' +
-      (porDocs.evidencia.length ? ' Hay documentos etiquetados para 4.4, pero un diagrama adjunto no permite decir quién responde por cada proceso ni si sigue vigente.' : ''),
-    evidencia: porDocs.evidencia
+    estado: falta.length ? 'PARCIAL' : 'COMPLETO',
+    resumen: resumen.total_mapa + ' procesos en el mapa' +
+      (resumen.total_servicios ? ', ' + resumen.total_servicios + ' procesos de servicio con ' +
+        resumen.total_pasos + ' pasos' : '') + '.',
+    nota: falta.length ? 'Para cerrar 4.4: ' + falta.join('; ') + '.' : '',
+    evidencia: ev
   };
 }
+// v11.0 Fase 8. §8.1, §8.5 y §8.6 se quedan en PARCIAL con la nota "falta
+// la ejecución" hasta que haya prestaciones registradas -- con la tabla
+// SGC_PRESTACIONES aún sin portar (leerSeguro_ tolera su ausencia), hoy
+// siempre se cae en la rama "sin prestaciones" de abajo.
+//
+// Sigue habiendo una diferencia entre las tres, y se respeta:
+//   §8.1  planificar y controlar la operación -> procesos definidos +
+//         prestaciones que demuestren que se ejecutan
+//   §8.5  prestar bajo condiciones controladas -> quién prestó y con qué
+//         evidencia
+//   §8.6  LIBERAR -> quién autorizó la entrega y cuándo. Es la única de las
+//         tres que la cláusula ata a una persona, textual.
 function evaluarPrestaciones_(db, codigo) {
   const servicios = procesosActivos_(db).filter((p) => p.nivel === 'SERVICIO');
+  const prestaciones = leerSeguro_(db, 'SGC_PRESTACIONES').filter(esActivo_);
   const porDocs = evaluarPorDocumentos_(db, codigo);
+
+  if (!servicios.length) {
+    return {
+      estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
+      resumen: 'Los procesos de servicio no están cargados.',
+      nota: 'Carga los procesos de servicio (DOC-10 a DOC-13) en la sección Procesos: sin ellos no hay qué registrar.',
+      evidencia: porDocs.evidencia
+    };
+  }
+  // Un proceso de servicio sin pasos no tiene definido cómo se presta, y
+  // §8.5.1 a) pide información documentada que defina las características
+  // del servicio. Se calcula ANTES del retorno temprano: la falta existe
+  // igual aunque todavía no haya ninguna prestación registrada.
+  const pasos = pasosActivos_(db);
+  const conPasos = {};
+  pasos.forEach((x) => { conPasos[x.proceso_id] = true; });
+  const sinPasos = servicios.filter((p) => !conPasos[p.proceso_id]);
+
+  if (!prestaciones.length) {
+    return {
+      estado: 'PARCIAL',
+      resumen: servicios.length + ' procesos de servicio definidos, sin ninguna prestación registrada.',
+      nota: (sinPasos.length ? sinPasos.length + ' proceso(s) de servicio sin pasos definidos. ' : '') +
+        'La definición está, pero tener escrito cómo se presta un servicio no demuestra que se haya prestado. ' +
+        'Registra las prestaciones en la sección Servicios.',
+      evidencia: porDocs.evidencia
+    };
+  }
+
+  const liberadas = prestaciones.filter((p) => p.estado === 'LIBERADO');
+  const noConformes = prestaciones.filter((p) => p.estado === 'NO_CONFORME');
+  const pendientes = prestaciones.filter((p) => p.estado === 'PRESTADO');
+  const sinEvidencia = prestaciones.filter((p) => !String(p.evidencia || '').trim());
+  const autoliberadas = liberadas.filter((p) => normalizarEmail_(p.liberado_por) === normalizarEmail_(p.responsable_email));
+
+  const ev = prestaciones.slice(-15).map((p) => ({
+    tipo: p.estado === 'LIBERADO' ? 'Servicio liberado' : (p.estado === 'NO_CONFORME' ? 'Salida no conforme' : 'Servicio prestado'),
+    descripcion: p.proceso_codigo + ' → ' + p.cliente_nombre + (p.periodo ? ' (' + p.periodo + ')' : ''),
+    fecha: p.fecha_liberacion || p.fecha_prestacion,
+    responsable: p.liberado_por || p.responsable_email
+  }));
+  porDocs.evidencia.forEach((e) => ev.push(e));
+
+  const falta = [];
+  if (codigo === '8.6') {
+    // La liberación es lo único que mide esta cláusula.
+    if (pendientes.length) falta.push(pendientes.length + ' prestación(es) entregadas sin liberación registrada');
+    if (autoliberadas.length) {
+      falta.push(autoliberadas.length + ' liberación(es) autorizadas por la misma persona que prestó el servicio ' +
+        '(el DOC-01 dice que libera la jefatura del área)');
+    }
+    return {
+      estado: falta.length ? 'PARCIAL' : 'COMPLETO',
+      // El denominador excluye las no conformes: §8.7 dice justamente que
+      // NO se entregan, así que contarlas como pendientes de liberar haría
+      // que el número contradiga al veredicto ("0 de 1" junto a COMPLETO).
+      resumen: liberadas.length + ' de ' + (prestaciones.length - noConformes.length) +
+        ' prestaciones liberables con autorización trazada' +
+        (noConformes.length ? ' (' + noConformes.length + ' no conforme(s), que no se liberan)' : '') + '.',
+      nota: falta.length ? 'Para cerrar 8.6: ' + falta.join('; ') + '.' : '',
+      evidencia: ev
+    };
+  }
+
+  if (sinEvidencia.length) falta.push(sinEvidencia.length + ' prestación(es) sin evidencia adjunta o referenciada');
+  if (sinPasos.length) falta.push(sinPasos.length + ' proceso(s) de servicio sin pasos definidos');
+  // Cuántos procesos de servicio nunca se registraron: un catálogo de 40
+  // procesos con prestaciones en 3 no demuestra que la operación esté
+  // controlada.
+  const conRegistro = {};
+  prestaciones.forEach((p) => { conRegistro[p.proceso_id] = true; });
+  const sinNinguna = servicios.filter((p) => !conRegistro[p.proceso_id]);
+  if (sinNinguna.length) falta.push(sinNinguna.length + ' de ' + servicios.length + ' procesos de servicio sin ninguna prestación registrada');
+
   return {
-    estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
-    resumen: 'Los procesos de servicio no están cargados.',
-    nota: 'Carga los procesos de servicio (DOC-10 a DOC-13) en la sección Procesos: sin ellos no hay qué registrar.',
-    evidencia: porDocs.evidencia
+    estado: falta.length ? 'PARCIAL' : 'COMPLETO',
+    resumen: prestaciones.length + ' prestaciones registradas sobre ' + servicios.length +
+      ' procesos de servicio' + (noConformes.length ? '; ' + noConformes.length + ' salida(s) no conforme(s)' : '') + '.',
+    nota: falta.length ? 'Para cerrar ' + codigo + ': ' + falta.join('; ') + '.' : '',
+    evidencia: ev
   };
 }
 // v11.0 Fase 8 (§8.7): §10.2 es "algo salió mal en el sistema", §8.7 es "una
