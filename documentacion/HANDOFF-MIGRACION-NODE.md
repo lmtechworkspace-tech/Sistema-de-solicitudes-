@@ -6,7 +6,9 @@
 > nueva no la va a tener disponible). Todo lo que necesitas para seguir
 > trabajando sin fricción está acá o es derivable del propio repositorio.
 >
-> Última actualización: 2026-09-18, tras el commit `8a709a1`.
+> Última actualización: 2026-09-18, tras el commit `5879005`
+> (4 módulos desgateados de R2; queda **una** acción de archivo pendiente:
+> la evidencia fotográfica de Pausas — ver §8.1).
 
 ---
 
@@ -61,6 +63,61 @@ correspondiente y portando su lógica y sus tests, no diseñando desde cero.
 pedir**: la llave SSH del VPS, contraseñas, ni tocar Cloudflare/DNS/Caddy
 directamente — todo eso ya está resuelto y estable, y el flujo entero es
 `git push`.
+
+---
+
+## 2.1 Credenciales: inventario completo y qué necesita realmente la cuenta nueva
+
+**Respuesta corta: la cuenta nueva NO necesita ninguna credencial para
+continuar el trabajo.** No es una restricción de seguridad arbitraria —
+es cómo está diseñado el sistema: los secretos ya están **instalados en su
+destino final** (GitHub Actions y el VPS), y el flujo de trabajo entero
+(portar → testear → commit → push → deploy → verificar) no vuelve a
+tocarlos nunca.
+
+Este es el inventario completo de secretos del ecosistema, dónde vive cada
+uno y quién lo consume. **Ninguno de estos valores se escribe acá a
+propósito**: este documento vive en un repositorio Git — escribir un
+secreto acá lo publicaría de forma permanente en el historial (mucho peor
+que cualquier exposición en una conversación, que es efímera y privada).
+
+| Secreto | Dónde vive hoy | Quién lo consume | ¿La cuenta nueva lo necesita? |
+|---|---|---|---|
+| `VPS_SSH_KEY` (llave privada de `sigso_deploy_ci`) | GitHub Actions Secrets del repo | El workflow de deploy, en cada push | **No.** Ya configurado; el deploy es automático |
+| `VPS_HOST` (`2.29.39.143`) | GitHub Actions Secrets | Workflow de deploy | **No** (y además no es secreto: está acá arriba en §2) |
+| `VPS_USER` (`sigso`) | GitHub Actions Secrets | Workflow de deploy | **No** (ídem) |
+| `RESEND_API_KEY` | VPS: `/etc/systemd/system/sigso-api.service.d/resend.conf` | El servicio `sigso-api` en runtime | **No.** Ya inyectado por systemd |
+| `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` / `R2_BUCKET` / `R2_ENDPOINT` | VPS: `/etc/systemd/system/sigso-api.service.d/r2.conf` | El servicio `sigso-api` en runtime (`almacenamiento.js`) | **No.** Ya inyectado por systemd |
+| Llave SSH personal `~/.ssh/sigso_vps` | El equipo del usuario (Windows, `C:\Users\luis1\.ssh\`) | Acceso admin manual al VPS | **Solo** si hay que agregar un secreto NUEVO al VPS. Si la cuenta nueva corre en la misma máquina, ya la tiene |
+| Credenciales de Cloudflare / Resend / Hetzner (paneles web) | Cuentas del usuario | El usuario, manualmente | **No.** Nada del trabajo normal requiere entrar a esos paneles |
+| Contraseñas de cuentas de portal reales (staff) | Base de datos del VPS (hash scrypt) | Los usuarios reales | **No**, y no se deben pedir |
+
+**Si en algún momento SÍ hace falta agregar un secreto nuevo al VPS**
+(único caso real que ocurrió: activar R2), el procedimiento es el de la
+"excepción" descrita justo abajo — y el valor lo provee el usuario en ese
+momento, no queda escrito en ningún archivo del repo.
+
+**Regla de oro heredada de un incidente real de esta sesión**: nunca
+`cat`/mostrar el contenido de un archivo de secretos del VPS, ni siquiera
+"solo para ver el formato". `ls -la` alcanza para confirmar permisos y
+existencia. Para confirmar que una variable está viva sin verla:
+`sudo systemctl show sigso-api -p Environment --value` capturado en una
+variable de shell y evaluado dentro de un `node -e` que imprima solo
+booleanos/conteos, nunca el valor.
+
+**Deuda de seguridad pendiente (heredada, el usuario ya la conoce)**: el
+valor real de `RESEND_API_KEY` quedó expuesto una vez en la transcripción
+de la conversación del 2026-09-18 por un `sudo cat` innecesario. El
+usuario decidió **explícitamente no rotarla por ahora**. No hace falta
+actuar sobre esto salvo que el usuario lo pida; si lo pide, el
+procedimiento es: generar una key nueva en el panel de Resend, reemplazar
+`resend.conf` en el VPS con el patrón de abajo, reiniciar el servicio, y
+recién ahí revocar la vieja. Lo mismo aplica al token de R2 (su valor
+también se vio una vez, en una captura de pantalla que el usuario
+compartió; decidió continuar igual porque solo él tiene acceso a esa
+cuenta).
+
+---
 
 **Excepción real que sí ocurrió (2026-09-18)**: activar R2 y migrar
 `CAT_CLIENTES` sí requirió acceso directo al VPS — configurar variables
@@ -138,18 +195,53 @@ GitHub Pages → debe traer las keys nuevas en `ACCIONES_PORTADAS_NODE`.
   `backend/logica/almacenamiento.js` (`disponible_()`,
   `subirArchivo_(clave, base64, contentType)`, `descargarArchivo_(clave)`,
   `eliminarArchivo_(clave)`, vía `aws4fetch` — primera dependencia real
-  del proyecto, antes tenía cero). **Lo que sigue faltando NO es activar
-  R2 (ya está), es desgatear cada acción gateada una por una**: hoy
-  ninguna de las ~35 acciones que suben/bajan archivos usa
-  `almacenamiento.js` todavía — cada una sigue devolviendo el mismo stub
-  `_validationError` de antes ("no está disponible... falta configurar
-  el almacenamiento"). Para desgatear una acción: reemplazar ese stub por
-  una llamada real a `Almacenamiento.subirArchivo_`/`descargarArchivo_`,
-  definir la convención de `clave` para ese módulo (ej.
-  `novedades/<novedad_id>/<archivo_id>.pdf`), y cortarla a
-  `ACCIONES_PORTADAS_NODE` en el mismo commit (regla de siempre, §4).
-  Las acciones que generan PDF siguen bloqueadas aparte — ver el punto
-  del motor de PDF más abajo, R2 no resuelve eso.
+  del proyecto, antes tenía cero). **Y ya está casi exprimido
+  (2026-09-18, commits `a7fe506`/`77b74d4`/`cd4e6ed`/`5879005`)**: los 4
+  módulos grandes con acciones de archivo (Novedades, SGC Documentos, SGC
+  Personas, Proyectos centro documental + adjuntos de Sala) usan R2 de
+  verdad. **Queda exactamente UNA acción de archivo gateada en todo el
+  sistema**: la evidencia fotográfica de Pausas
+  (`pausas.js`, `finalizar` con `evidencia_base64`) — trabajo chico, es el
+  candidato obvio si se quiere cerrar R2 del todo. Todo lo demás que sigue
+  gateado depende del **motor de PDF**, que es un problema distinto (§8.3)
+  — R2 no lo resuelve.
+- **Convenciones de clave R2 ya establecidas** (respetarlas si se agrega
+  un módulo nuevo con archivos): `novedades/<novedad_id>/<nombre>`,
+  `sgc/documentos/<codigo>/<uuid>/<nombre>`,
+  `proyectos/<proyecto_id>/<adjuntos|documentos>/<uuid>/<nombre>`.
+  **La regla dura: si el archivo puede tener MÁS DE UNA versión a lo largo
+  de su vida, la clave DEBE llevar un `uuid_()` fresco por subida.** R2 no
+  tiene versionado propio (a diferencia de Drive, que siempre creaba un
+  file-id nuevo): sin el uuid, subir "v2" con el mismo nombre de archivo
+  pisa silenciosamente los bytes de "v1" en el bucket, y se pierde la
+  trazabilidad de "qué versión regía en qué fecha" que ISO exige. Esto ya
+  está aplicado en SGC Documentos y en Proyectos.
+- **Validación de archivos por FIRMA BINARIA, nunca por extensión** (un
+  `.png` renombrado a `.pdf` se rechaza), tope 10 MB. El detector vive en
+  `calidadSgc.js`: `mimeArchivoSgc_(bytes, nombre)` (PDF/DOCX/XLSX/PPTX
+  vía cabecera ZIP, DOC/XLS legado vía cabecera OLE) y el wrapper completo
+  `subirArchivoSgc_(data, codigo)` (valida + sube). `personasSgc.js`
+  importa el **wrapper completo** (sus reglas son idénticas a las de
+  Documentos); `proyectos.js` importa **solo el detector** y escribe su
+  propio wrapper, porque además acepta imágenes
+  (`detectarMimeImagenProyecto_`: JPEG/PNG/WebP por firma). Nunca
+  reimplementar esta validación en un módulo nuevo — importar la que
+  corresponda.
+- **Los tests NUNCA pegan a R2 real.** El patrón establecido en los 4
+  módulos es `conMockAlmacenamiento_(t)`: un `Map` en memoria que se
+  comporta como un bucket (lo que se sube es lo que se lee de vuelta), vía
+  `t.mock.method(Almacenamiento, 'subirArchivo_'|'descargarArchivo_', ...)`.
+  Copiarlo de `backend/test/proyectos-fase4-documentos-porteo.test.js` o
+  de `calidad-sgc-porteo.test.js`.
+- **Convertir una función a `async` rompe a quien la llamaba sin `await`.**
+  Pasó de verdad (commit `77b74d4`): dos archivos de test HERMANOS
+  (`matriz-cobertura-sgc-porteo.test.js`, `tablero-sgc-porteo.test.js`)
+  sembraban datos con `Calidad.crearDocumento(...)` sin `await`; al
+  volverse `async`, leían `documento_id` de una Promise (`undefined`) y
+  fallaban con un error que no apuntaba a la causa. **Por eso el paso
+  "correr la suite COMPLETA, no solo el archivo editado" (§6, paso 9) no
+  es opcional** — grepear también por llamadas a la función que se volvió
+  async en el resto del repo.
 - **Nunca duplicar un helper compartido.** Antes de escribir una función
   que ya podría existir en otro módulo SGC ya portado, revisa
   `backend/logica/calidadSgc.js` (permisos: `gobiernaSgc_`, `rolSgc_`,
@@ -236,13 +328,18 @@ al pie de la letra salvo que el usuario pida explícitamente otra cosa.
    (`enVentanaDiaria_(ahora, 9)` para el pase de las 09:00).
 8. **Wirear `frontend/js/api.js`**: agregar las mismas acciones a
    `ACCIONES_PORTADAS_NODE` **en el mismo commit** (paso obligatorio, ver
-   §4) — excepto las que tocan archivos, que se documentan como
-   excluidas en el comentario de cabecera.
-9. **Correr la suite completa**: `npm test` debe dar 0 fallas.
+   §4). Si alguna queda excluida (hoy solo las de PDF/Excel), sacarla
+   también de la lista de "excluidas a propósito" del comentario de
+   cabecera de ese archivo, que se mantiene al día incremento a
+   incremento.
+9. **Correr la suite completa**: `npm test` debe dar 0 fallas. **La suite
+   COMPLETA, no solo el archivo editado** — ver §5, última viñeta: una
+   función que pasa a `async` rompe a cualquier test hermano que la
+   llamaba sin `await`, y eso solo aparece corriendo todo.
 10. **Commit** con mensaje descriptivo (qué se portó, la decisión de
     diseño central del módulo, qué queda pendiente si algo queda
-    pendiente) y `Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>`
-    al final.
+    pendiente) y la línea `Co-Authored-By: Claude <modelo> <noreply@anthropic.com>`
+    al final, con el modelo que esté corriendo en esa sesión.
 11. **`git push origin main`**.
 12. **Poll del deploy**: comparar `arrancado_en` de
     `curl -sS https://api.ctrly.cl/v1/estado` antes y después del push,
@@ -267,11 +364,22 @@ producción de punta a punta, igual que se hizo en cada módulo anterior.
 
 **Fuente de verdad real**: `frontend/js/api.js`, objeto
 `ACCIONES_PORTADAS_NODE` (línea ~64). Este resumen es un mapa de lectura
-rápida, no reemplaza revisar ese archivo. Números concretos al
-2026-09-18: de 262 acciones totales en `Code.gs`, **241 ya están en el
-backend Node y 228 cortadas al frontend real**. Quedan 35 acciones sin
-portar y 13 ya portadas en el backend pero sin cortar al frontend (todas
-del SGC, gateadas por archivo — ver §8.1).
+rápida, no reemplaza revisar ese archivo. **Números medidos al 2026-09-18
+(commit `5879005`), no estimados**: `router.js` tiene **254 acciones** y
+`ACCIONES_PORTADAS_NODE` tiene **247 cortadas al frontend real**. De esas
+254, solo **5 siguen siendo stubs** en `router.js`, y las 5 son de PDF/
+Excel (`descargarReporteActividadesPdf`, `descargarActaReunionPdf`,
+`descargarReporteProyecto`, `descargarLibroProyecto`,
+`descargarEvidenciaClausulaSgc`); hay 2 más gateadas dentro de
+`pausas.js` (los reportes PDF de cumplimiento y gerencia) y 1 de archivo
+(la evidencia fotográfica de Pausas).
+
+Para recontar esto en cualquier momento sin confiar en este documento:
+
+```bash
+node -e "const f=require('fs');const b=f.readFileSync('frontend/js/api.js','utf8').split('var ACCIONES_PORTADAS_NODE = {')[1].split('\n};')[0];console.log('frontend:',new Set([...b.matchAll(/([a-zA-Z0-9_]+)\s*:\s*true/g)].map(m=>m[1])).size)"
+grep -c "_validationError: true" backend/server/router.js   # stubs que quedan
+```
 
 ### Núcleo (portado antes de este tramo de sesiones)
 Auth/Portal, Catálogos, Solicitudes (ciclo completo S02-S09), Dashboard,
@@ -279,13 +387,17 @@ Panel Gerencia, Panel Jefatura, notificaciones vivas, digest de
 Jefatura, alertas de patrón (P7).
 
 ### Módulos operacionales
-- **Novedades** — 16 acciones (adjunto/descarga gateadas, ver §8.1).
-- **Pausas activas** — 20 de 22 (los 2 PDF de reporte gateados).
+- **Novedades** — **16 de 16** (adjunto PDF desgateado de R2 el
+  2026-09-18, commit `a7fe506`).
+- **Pausas activas** — 20 de 22 (los 2 PDF de reporte gateados; además la
+  evidencia fotográfica de `finalizar` sigue gateada por R2 — es la única
+  que queda, ver §8.1).
 - **Actividades** (motor base v7.0) — 14 de 16 (los 2 PDF gateados).
-- **Proyectos** — 36 de 48 (centro documental/adjuntos/PDF/libro Excel
-  gateados, 10 acciones). Incremento 1 (31 acciones) + incremento 2
-  (cronograma avanzado: registro diario, baseline, rendimiento,
-  analítica, workload).
+- **Proyectos** — **44 de 48** (incremento 1: 31 acciones; incremento 2:
+  cronograma avanzado; incremento 3, commit `5879005`: centro documental
+  v13 Fase 4 + adjuntos de Sala v10 Fase D, 8 acciones escritas desde
+  cero — nunca habían existido en Node, `router.js` las tenía como stub
+  inline). Las 4 que faltan son PDF/libro Excel.
 
 ### SGC ISO 9001 — PLAN v11.0 COMPLETO (las 8 fases, cerrado 2026-09-18)
 El bloque más grande de la migración, ~123 acciones totales en el `.gs`.
@@ -296,8 +408,8 @@ datos reales.
 
 | Fase | Módulo `.gs` | Módulo Node | Acciones cortadas | Commit |
 |---|---|---|---|---|
-| 1 | Documentos | `calidadSgc.js` | 11 de 15 (archivo, gateado) | `6ffc25d` |
-| 2a+2b | Personas | `personasSgc.js` | 11 de 16 (archivo, gateado) | `29f4f08` |
+| 1 | Documentos | `calidadSgc.js` | **15 de 15** (R2 desgateado `77b74d4`) | `6ffc25d` |
+| 2a+2b | Personas | `personasSgc.js` | **16 de 16** (R2 desgateado `cd4e6ed`) | `29f4f08` |
 | 3a | No conformidades (PRO-06) | `noConformidadesSgc.js` | 9 de 9 | `4a1b302` |
 | 3b | Auditoría interna (PRO-03) | `auditoriasSgc.js` | 11 de 11 | `5f80a60` |
 | 4 | Quejas (PRO-07) | `quejasSgc.js` | 10 de 10 | `949e980` |
@@ -336,34 +448,31 @@ desgatear las ~35 acciones que lo necesitan, una por una (§8.1).
 
 ## 8. Qué falta
 
-### 8.1 Acciones ya escritas del lado de negocio, solo gateadas por archivo/PDF
-Con R2 activo, estas ya NO están bloqueadas por infraestructura — solo
-falta escribir el código de cada acción para que use
-`backend/logica/almacenamiento.js` en vez del stub, y cortarla al
-frontend. Las de PDF siguen bloqueadas aparte (no hay motor de PDF):
+### 8.1 Lo que sigue gateado (lista completa y verificada al commit `5879005`)
 
-- **Proyectos** (10): centro documental completo (subir/descargar/
-  versionar documento de proyecto), adjunto de tarea, reporte PDF, acta
-  de reunión PDF, libro Excel del proyecto.
-- **SGC** (13, ya en `router.js` pero sin cortar al frontend —
-  `actualizarDescriptorSgc`, `actualizarDocumentoSgc`,
-  `crearDocumentoSgc`, `descargarAdjuntoNovedad`, `descargarDescriptorSgc`,
-  `descargarDocumentoPersonaSgc`, `descargarDocumentoSgc`,
-  `descargarReporteCumplimientoPausasPdf`,
-  `descargarReporteGerenciaPausasPdf`, `guardarDescriptorSgc`,
-  `guardarDocumentoPersonaSgc`, `nuevaVersionDocumentoSgc`,
-  `publicarNovedad`).
-- **Novedades** (2): adjunto PDF, publicar con adjunto.
-- **Actividades** (2): reporte PDF, acta de reunión PDF.
-- **Pausas** (2): los dos reportes PDF (cumplimiento y gerencia).
+**Bloqueado por R2 — queda UNA sola, y es chica:**
+- **Pausas, evidencia fotográfica**: `backend/logica/pausas.js:834`,
+  dentro de `finalizar` — `data.evidencia_base64` devuelve el stub
+  "falta configurar el almacenamiento". Es lo único de archivo que queda
+  en todo el sistema. Para cerrarlo: mismo patrón de siempre (§5), clave
+  sugerida `pausas/<pausa_id>/<uuid>/<nombre>`, validando por firma de
+  IMAGEN (reusar `detectarMimeImagenProyecto_` de `proyectos.js`
+  exportándolo, no reimplementarlo), y el test con
+  `conMockAlmacenamiento_(t)`. Ojo: `finalizar` pasaría a `async` →
+  grepear quién la llama sin `await` antes de commitear (§5, última
+  viñeta).
+
+**Bloqueado por el motor de PDF/Excel (7 acciones + 1 módulo):**
+- 5 stubs inline en `router.js`: `descargarReporteActividadesPdf`,
+  `descargarActaReunionPdf` (líneas ~175-176),
+  `descargarReporteProyecto`, `descargarLibroProyecto` (~235-236),
+  `descargarEvidenciaClausulaSgc` (~362).
+- 2 dentro de `pausas.js` (~919-927): `descargarReporteCumplimientoPdf`,
+  `descargarReporteGerenciaPdf`.
 - **`OrdenTrabajo.gs`** (464 líneas, módulo completo sin portar): genera
   el PDF de la orden de trabajo que se manda al derivar una solicitud.
 
-**Patrón para desgatear una acción de archivo (no-PDF)**: reemplazar el
-stub `_validationError` por `Almacenamiento.subirArchivo_`/
-`descargarArchivo_`/`eliminarArchivo_` (ver firma en §5), definir la
-convención de `clave` de ese módulo, correr los tests, cortar a
-`ACCIONES_PORTADAS_NODE` en el mismo commit.
+Nada de esto se destraba con R2 — necesitan §8.3.
 
 ### 8.2 Módulos/lógica sin portar, NO bloqueados por archivos
 Trabajo puro de lógica, se puede hacer en cualquier momento:
@@ -408,31 +517,36 @@ instalado ni decidido en firme todavía — evaluarlo antes de comprometerse.
 
 ---
 
-## 9. Punto exacto donde quedó la sesión (2026-09-18, tras `8a709a1`)
+## 9. Punto exacto donde quedó la sesión (2026-09-18, tras `5879005`)
 
-No hay un "siguiente paso" único prescrito — quedaron dos hilos abiertos
-a elección del usuario:
+**Estado: todo commiteado, pusheado, desplegado y verificado. No hay
+trabajo a medias ni archivos sin terminar.** La suite completa da
+**2538/2538 verdes**. El último incremento (Proyectos centro documental)
+se desplegó y se confirmó por avance de `arrancado_en` (16:41→20:54Z).
 
-1. **Empezar el motor de PDF en Node** (§8.3) — no depende de nada
-   externo, se puede arrancar ya. Evaluar `pdfkit` primero (instalar,
-   generar un PDF de prueba simple, confirmar que el tamaño/rendimiento
-   es aceptable en el VPS) antes de comprometerse a portar una acción
-   real con él.
-2. **Empezar a desgatear las acciones de R2** (§8.1) — módulo por
-   módulo, el mismo patrón de siempre. Buen candidato para arrancar:
-   Novedades (solo 2 acciones, módulo ya aislado, sin acoplamiento con
-   otros).
+Lo último que se hizo, en orden: desgatear Novedades (`a7fe506`) → SGC
+Documentos (`77b74d4`) → SGC Personas (`cd4e6ed`) → escribir desde cero
+el centro documental + adjuntos de Sala de Proyectos (`5879005`).
 
-Si la cuenta que retoma no tiene esa respuesta a mano, preguntarle al
-usuario cuál de los dos prefiere antes de escribir código — no asumir.
+**Tres caminos abiertos, a elección del usuario** (preguntarle si no lo
+dijo, no asumir):
 
-**Nota de seguridad para quien retome**: durante la activación de R2 en
-esta sesión, el valor real de `RESEND_API_KEY` quedó expuesto una vez en
-la transcripción de la conversación (por un `sudo cat` innecesario sobre
-el archivo de secretos del VPS — nunca repetir ese comando, alcanza con
-`ls -la` para ver permisos/existencia). El usuario decidió explícitamente
-NO rotarla por ahora. No es necesario actuar sobre esto salvo que el
-usuario lo pida.
+1. **Motor de PDF en Node** (§8.3) — el que más destraba: 7 acciones +
+   `OrdenTrabajo.gs` completo. No depende de nada externo. Evaluar
+   `pdfkit` primero (instalar, generar un PDF simple, confirmar
+   tamaño/rendimiento en un VPS de 2 vCPU) antes de comprometerse.
+2. **Cerrar R2 del todo** (§8.1) — queda solo la evidencia fotográfica
+   de Pausas. Es el trabajo más chico de los tres, una sola acción.
+3. **Lógica sin bloquear** (§8.2) — 8 ítems, ninguno depende de
+   infraestructura: lado de lectura de notificaciones in-app,
+   `Comentarios.gs`, `Inicio.gs`, `Perfiles.gs`, gestión de usuarios de
+   `Auth.gs`, canales de alerta, disparadores manuales, panel de
+   diagnóstico.
+
+**Sobre la atribución en commits**: los commits de esta sesión llevan
+`Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>`. La cuenta
+nueva debe usar la línea que corresponda al modelo con el que corra
+(p. ej. `Claude Opus 5`), no copiar esta literalmente.
 
 ---
 

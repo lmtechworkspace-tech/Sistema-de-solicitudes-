@@ -688,7 +688,6 @@ function marcarLeida(db, data, contexto) {
   return { leida: true };
 }
 
-// Adjunto: bloqueado hasta que exista almacenamiento de archivos (R2).
 /**
  * Adjunto en base64 para descargar: el original en R2 es privado, así que
  * se sirve por esta acción en vez de exponer una URL pública.
