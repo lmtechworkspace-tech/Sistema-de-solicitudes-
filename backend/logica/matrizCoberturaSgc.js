@@ -18,21 +18,15 @@
  *    "fuera del alcance de SIGSO hoy". Cada cláusula sin evidencia trae una
  *    nota que dice POR QUÉ.
  *
- * YA NO QUEDAN STUBS: 4.3 (Alcance), 4.1/4.2 (Contexto), 6.1 (Riesgos),
- * 4.4/8.1/8.5/8.6 (Procesos) y 9.1 (Indicadores) son reales desde que se
- * portaron esas fases v11 (ver alcanceSgc.js, contextoSgc.js,
- * riesgosSgc.js, procesosSgc.js, indicadoresSgc.js). El propio `.gs`
- * resolvía los que faltaban con `typeof X === 'function' ? X() : []` para
- * tolerar que el módulo no estuviera cargado -- ese patrón sigue vivo en
- * `leerSeguro_` para las hojas de fases aún sin portar (ver
- * evaluarPrestaciones_ más abajo), aunque ya no queda ningún evaluador
- * degradado por falta de un `require`.
- *
- * evaluarPrestaciones_ (§8.1/§8.5/§8.6) sube a su lógica completa desde el
- * incremento de Procesos: no depende de Procesos estar portado, depende de
- * SGC_PRESTACIONES (Fase 8, no portada) -- leerSeguro_ tolera la tabla
- * ausente y el evaluador degrada solo hasta esa hoja, igual que
- * evaluarSalidasNoConformes_ (§8.7) ya hacía desde antes.
+ * YA NO QUEDAN STUBS: las 8 fases v11 (Alcance §4.3, Contexto §4.1/§4.2,
+ * Riesgos §6.1, Procesos §4.4, Documentos externos §7.5.3.2, Indicadores
+ * §9.1, Prestaciones §8.1/§8.5/§8.6/§8.7, Tablero) son reales desde que se
+ * portaron (ver alcanceSgc.js, contextoSgc.js, riesgosSgc.js,
+ * procesosSgc.js, indicadoresSgc.js, prestacionesSgc.js, tableroSgc.js).
+ * El propio `.gs` resolvía los que faltaban con
+ * `typeof X === 'function' ? X() : []` para tolerar que el módulo no
+ * estuviera cargado -- ese patrón queda documentado aquí por si se agrega
+ * un nuevo evaluador en el futuro, pero hoy no degrada ninguno.
  */
 
 const crypto = require('node:crypto');
@@ -440,14 +434,50 @@ function evaluarPrestaciones_(db, codigo) {
 // v11.0 Fase 8 (§8.7): §10.2 es "algo salió mal en el sistema", §8.7 es "una
 // salida concreta no cumplió y no se entregó así" -- miden cosas distintas.
 // Sin SGC_PRESTACIONES (Fase 8, no portada) se apoya en NC mientras tanto.
+// v11.0 Fase 8 (§8.7). Antes esta cláusula reusaba la evaluación de no
+// conformidades, que mide otra cosa: §10.2 es "algo salió mal en el
+// sistema", §8.7 es "una salida concreta no cumplió y no se entregó así".
+//
+// Lo que la cláusula pide es que las salidas no conformes se IDENTIFIQUEN y
+// se CONTROLEN. Sin ninguna registrada no se puede afirmar que se controlan
+// -- pero tampoco que no existan: la nota lo dice en vez de dar por buena
+// una ausencia.
 function evaluarSalidasNoConformes_(db) {
   const prestaciones = leerSeguro_(db, 'SGC_PRESTACIONES').filter(esActivo_);
+  const noConformes = prestaciones.filter((p) => p.estado === 'NO_CONFORME');
   const nc = evaluarNoConformidades_(db);
+
+  if (!prestaciones.length) {
+    return {
+      estado: nc.estado === 'FALTANTE' ? 'FALTANTE' : 'PARCIAL',
+      resumen: 'Sin registro de servicios prestados no hay dónde identificar una salida no conforme.',
+      nota: 'Registra las prestaciones en la sección Servicios. Mientras tanto, la evidencia disponible son las no conformidades del sistema (§10.2), que miden algo distinto.',
+      evidencia: nc.evidencia
+    };
+  }
+
+  const tratadas = noConformes.filter((p) => !!p.nc_id);
+  const ev = noConformes.slice(-10).map((p) => ({
+    tipo: 'Salida no conforme',
+    descripcion: p.proceso_codigo + ' → ' + p.cliente_nombre + ': ' + String(p.observaciones || '').slice(0, 90),
+    fecha: p.fecha_prestacion,
+    responsable: p.responsable_email
+  }));
+  nc.evidencia.forEach((e) => ev.push(e));
+
+  const falta = [];
+  if (noConformes.length && tratadas.length < noConformes.length) {
+    falta.push((noConformes.length - tratadas.length) + ' salida(s) no conforme(s) sin no conformidad abierta');
+  }
+
   return {
-    estado: nc.estado === 'FALTANTE' ? 'FALTANTE' : 'PARCIAL',
-    resumen: 'Sin registro de servicios prestados no hay dónde identificar una salida no conforme.',
-    nota: 'Registra las prestaciones en la sección Servicios. Mientras tanto, la evidencia disponible son las no conformidades del sistema (§10.2), que miden algo distinto.',
-    evidencia: nc.evidencia
+    estado: falta.length ? 'PARCIAL' : 'COMPLETO',
+    resumen: prestaciones.length + ' prestaciones controladas, ' + noConformes.length +
+      ' identificada(s) como no conforme(s)' + (tratadas.length ? ' y ' + tratadas.length + ' con NC abierta' : '') + '.',
+    nota: falta.length ? 'Para cerrar 8.7: ' + falta.join('; ') + '.'
+      : (noConformes.length ? '' : 'No se ha identificado ninguna salida no conforme. El control existe y está en uso; ' +
+        'que no haya hallazgos es un resultado, no una omisión.'),
+    evidencia: ev
   };
 }
 

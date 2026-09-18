@@ -54,6 +54,7 @@ const Riesgos = require('../logica/riesgosSgc');
 const Procesos = require('../logica/procesosSgc');
 const Indicadores = require('../logica/indicadoresSgc');
 const Tablero = require('../logica/tableroSgc');
+const Prestaciones = require('../logica/prestacionesSgc');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -403,7 +404,15 @@ const ACCIONES = {
   anularLecturaIndicadorSgc: (db, data, contexto) => Indicadores.anularLectura(db, data, contexto),
 
   // v11.0 Fase 7: tablero del SGC.
-  resumenTableroSgc: (db, data, contexto) => Tablero.resumen(db, data, contexto)
+  resumenTableroSgc: (db, data, contexto) => Tablero.resumen(db, data, contexto),
+
+  // v11.0 Fase 8 (§8.1/§8.5/§8.6/§8.7): evidencia de servicios prestados.
+  listarPrestacionesSgc: (db, data, contexto) => Prestaciones.listar(db, data, contexto),
+  registrarPrestacionSgc: (db, data, contexto) => Prestaciones.registrar(db, data, contexto),
+  liberarPrestacionSgc: (db, data, contexto) => Prestaciones.liberar(db, data, contexto),
+  marcarNoConformePrestacionSgc: (db, data, contexto) => Prestaciones.marcarNoConforme(db, data, contexto),
+  abrirNcPrestacionSgc: (db, data, contexto) => Prestaciones.abrirNoConformidad(db, data, contexto),
+  anularPrestacionSgc: (db, data, contexto) => Prestaciones.anular(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

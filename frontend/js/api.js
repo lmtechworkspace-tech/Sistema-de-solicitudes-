@@ -184,7 +184,11 @@ var ACCIONES_PORTADAS_NODE = {
   registrarLecturaIndicadorSgc: true, anularLecturaIndicadorSgc: true,
 
   // --- SGC ISO 9001: Tablero (1 de 1; v11.0 Fase 7, sin archivos: se corta completo) ---
-  resumenTableroSgc: true
+  resumenTableroSgc: true,
+
+  // --- SGC ISO 9001: Prestaciones (6 de 6; v11.0 Fase 8, sin archivos: se corta completo) ---
+  listarPrestacionesSgc: true, registrarPrestacionSgc: true, liberarPrestacionSgc: true,
+  marcarNoConformePrestacionSgc: true, abrirNcPrestacionSgc: true, anularPrestacionSgc: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,

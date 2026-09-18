@@ -17,6 +17,14 @@ const COLUMNAS = {
   CAT_MODULOS: ['modulo_id', 'nombre', 'plataforma_id', 'modulo_padre_id', 'activo'],
   CAT_TIPOS: ['tipo_id', 'nombre', 'prioridad_default', 'activo', 'es_urgente'],
   CAT_AREAS: ['area_id', 'nombre', 'responsable_email', 'activo'],
+  // Cartera de clientes, existe en SIGSO desde la v1.0. No migrada aún al
+  // VPS (ver memoria: 284 filas reales pendientes) -- prestacionesSgc.js
+  // (v11 Fase 8) es el primer módulo Node que la consume.
+  CAT_CLIENTES: [
+    'cliente_id', 'razon_social', 'rut', 'codigo_cliente', 'contacto',
+    'correo', 'telefono', 'representante_legal', 'direccion',
+    'estado', 'bloqueo', 'activo'
+  ],
   CONFIG_NOTIFICACIONES: ['notif_id', 'evento', 'rol_destinatario', 'emails_extra', 'activo'],
   // v3.3 (§2.4): cuentas e identidad de la plataforma (Portal.gs/
   // CuentasPortal.gs). hash_password nunca guarda la clave en claro --
@@ -556,6 +564,23 @@ const COLUMNAS = {
     'paso_id', 'proceso_id', 'numero', 'nombre',
     'responsable', 'input', 'actividades', 'evidencias', 'output',
     'observaciones', 'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // v11.0 Fase 8 (§8.1/§8.5/§8.6/§8.7): evidencia de servicios prestados.
+  // Una fila = UNA prestación registrada -- nada se pre-genera (con 50
+  // clientes x 40 procesos, una matriz completa serían 24.000 filas/año
+  // casi todas vacías). `periodo` es opcional: un servicio puntual no
+  // tiene uno. `cliente_id` apunta a CAT_CLIENTES, desnormalizando el
+  // nombre igual que SOLICITUDES.
+  SGC_PRESTACIONES: [
+    'prestacion_id',
+    'cliente_id', 'cliente_nombre',
+    'proceso_id', 'proceso_codigo', 'proceso_nombre',
+    'periodo', 'fecha_prestacion', 'responsable_email',
+    'estado', 'evidencia',
+    'liberado_por', 'fecha_liberacion',
+    'nc_id', 'observaciones',
+    'creado_por', 'fecha_creacion', 'activa'
   ]
 };
 
