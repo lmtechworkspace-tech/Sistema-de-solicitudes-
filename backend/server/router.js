@@ -53,6 +53,7 @@ const Contexto = require('../logica/contextoSgc');
 const Riesgos = require('../logica/riesgosSgc');
 const Procesos = require('../logica/procesosSgc');
 const Indicadores = require('../logica/indicadoresSgc');
+const Tablero = require('../logica/tableroSgc');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -399,7 +400,10 @@ const ACCIONES = {
   guardarIndicadorSgc: (db, data, contexto) => Indicadores.guardar(db, data, contexto),
   anularIndicadorSgc: (db, data, contexto) => Indicadores.anular(db, data, contexto),
   registrarLecturaIndicadorSgc: (db, data, contexto) => Indicadores.registrarLectura(db, data, contexto),
-  anularLecturaIndicadorSgc: (db, data, contexto) => Indicadores.anularLectura(db, data, contexto)
+  anularLecturaIndicadorSgc: (db, data, contexto) => Indicadores.anularLectura(db, data, contexto),
+
+  // v11.0 Fase 7: tablero del SGC.
+  resumenTableroSgc: (db, data, contexto) => Tablero.resumen(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

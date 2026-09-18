@@ -797,5 +797,9 @@ module.exports = {
   gobiernaSgc_, rolSgc_, esAdminSgc_, veTodoSgc_, areaSgc_, CLAUSULAS_ISO9001,
   // parsearClausulasIso_: la usa MatrizCobertura (Fase 6b) para leer qué
   // documentos respaldan cada cláusula ISO.
-  parsearClausulasIso_
+  parsearClausulasIso_,
+  // seccionesVisiblesSgc_: la usa Tablero (Fase 7), primera pantalla del
+  // módulo, para pintar la barra de navegación sin adivinar qué puede
+  // abrir cada quien.
+  seccionesVisiblesSgc_
 };
