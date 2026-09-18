@@ -55,6 +55,8 @@ const Procesos = require('../logica/procesosSgc');
 const Indicadores = require('../logica/indicadoresSgc');
 const Tablero = require('../logica/tableroSgc');
 const Prestaciones = require('../logica/prestacionesSgc');
+const Migracion = require('../logica/migracion');
+const Bootstrap = require('../logica/bootstrap');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -68,7 +70,10 @@ const ACCIONES_PUBLICAS = new Set([
   'portalLogin', 'portalLogout', 'portalSesion', 'portalCambiarPassword', 'crearSolicitud',
   'consultarEstado', 'solicitarCodigoAcceso', 'misSolicitudes',
   'editarSubsolicitud', 'eliminarArchivo', 'responderConsulta', 'validarCierre',
-  'getCatalogos'
+  'getCatalogos',
+  // TEMPORAL (bootstrap.js): sin sesion ADM que la proteja a proposito --
+  // la protege el secreto de servidor (MIGRACION_BOOTSTRAP_SECRET).
+  'bootstrapAdmin'
 ]);
 
 const ACCIONES = {
@@ -412,7 +417,12 @@ const ACCIONES = {
   liberarPrestacionSgc: (db, data, contexto) => Prestaciones.liberar(db, data, contexto),
   marcarNoConformePrestacionSgc: (db, data, contexto) => Prestaciones.marcarNoConforme(db, data, contexto),
   abrirNcPrestacionSgc: (db, data, contexto) => Prestaciones.abrirNoConformidad(db, data, contexto),
-  anularPrestacionSgc: (db, data, contexto) => Prestaciones.anular(db, data, contexto)
+  anularPrestacionSgc: (db, data, contexto) => Prestaciones.anular(db, data, contexto),
+
+  // TEMPORAL (migracion.js): importar CAT_CLIENTES desde la planilla real.
+  importarDatosMigracion: (db, data, contexto) => Migracion.importarTabla(db, data, contexto),
+  // TEMPORAL (bootstrap.js): crear/resetear la cuenta ADM para poder arrancar la migracion.
+  bootstrapAdmin: (db, data) => Bootstrap.bootstrapAdmin(db, data)
 };
 
 function responderResultado_(resultado) {
