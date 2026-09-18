@@ -169,7 +169,11 @@ var ACCIONES_PORTADAS_NODE = {
 
   // --- SGC ISO 9001: Contexto y partes interesadas (8 de 8; v11.0 Fase 2, sin archivos: se corta completo) ---
   obtenerContextoSgc: true, sembrarFodaSgc: true, guardarFactorContextoSgc: true, anularFactorContextoSgc: true,
-  registrarRevisionContextoSgc: true, sembrarPartesSgc: true, guardarParteInteresadaSgc: true, anularParteInteresadaSgc: true
+  registrarRevisionContextoSgc: true, sembrarPartesSgc: true, guardarParteInteresadaSgc: true, anularParteInteresadaSgc: true,
+
+  // --- SGC ISO 9001: Riesgos y oportunidades (6 de 6; v11.0 Fase 3, sin archivos: se corta completo) ---
+  listarRiesgosSgc: true, sembrarRiesgosSgc: true, guardarRiesgoSgc: true,
+  asignarAccionRiesgoSgc: true, registrarRevisionRiesgosSgc: true, anularRiesgoSgc: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,

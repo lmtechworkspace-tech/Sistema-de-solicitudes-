@@ -216,7 +216,7 @@ test('una cláusula sin módulo propio SÍ cuenta el documento etiquetado', () =
   assert.match(c63.nota, /no tiene un módulo propio/i);
 });
 
-test('6.1 (riesgos, v11 Fase 3 pendiente) degrada igual que las cláusulas sin módulo: FALTANTE o PARCIAL según documentos', () => {
+test('6.1 (riesgos): sin la matriz cargada, degrada a FALTANTE o PARCIAL según haya documentos etiquetados', () => {
   const db = db_();
   sembrarRoles(db);
   assert.equal(clausula(db, '6.1').estado, 'FALTANTE');

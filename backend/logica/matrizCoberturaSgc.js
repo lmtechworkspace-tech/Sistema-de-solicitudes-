@@ -18,18 +18,18 @@
  *    "fuera del alcance de SIGSO hoy". Cada cláusula sin evidencia trae una
  *    nota que dice POR QUÉ.
  *
- * PENDIENTE EXPLÍCITO, NO FINGIDO: tres evaluadores (4.4, 6.1,
- * 8.1/8.5/8.6/8.7, 9.1) siguen dependiendo de módulos v11 todavía no
- * portados a Node (Riesgos, Procesos, Indicadores, Prestaciones). 4.3
- * (Alcance) y 4.1/4.2 (Contexto) YA son reales desde que se portaron esas
- * fases (ver alcanceSgc.js, contextoSgc.js). El propio `.gs` resuelve los
- * que faltan con `typeof X === 'function' ? X() : []` para tolerar que el
- * módulo no esté cargado -- acá se replica igual con los stubs de la
- * sección siguiente: mientras esas fases no se porten, estos evaluadores
- * degradan a FALTANTE/PARCIAL según corresponda (nunca inventan datos).
- * Reemplazar cada stub por un require real cuando se porte su fase v11
- * correspondiente (TODO en cada uno) -- mismo patrón ya aplicado a Alcance
- * y Contexto en este y el incremento anterior.
+ * PENDIENTE EXPLÍCITO, NO FINGIDO: dos evaluadores (4.4, 8.1/8.5/8.6/8.7,
+ * 9.1) siguen dependiendo de módulos v11 todavía no portados a Node
+ * (Procesos, Indicadores, Prestaciones). 4.3 (Alcance), 4.1/4.2 (Contexto)
+ * y 6.1 (Riesgos) YA son reales desde que se portaron esas fases (ver
+ * alcanceSgc.js, contextoSgc.js, riesgosSgc.js). El propio `.gs` resuelve
+ * los que faltan con `typeof X === 'function' ? X() : []` para tolerar
+ * que el módulo no esté cargado -- acá se replica igual con los stubs de
+ * la sección siguiente: mientras esas fases no se porten, estos
+ * evaluadores degradan a FALTANTE/PARCIAL según corresponda (nunca
+ * inventan datos). Reemplazar cada stub por un require real cuando se
+ * porte su fase v11 correspondiente (TODO en cada uno) -- mismo patrón ya
+ * aplicado a Alcance, Contexto y Riesgos en los incrementos anteriores.
  */
 
 const crypto = require('node:crypto');
@@ -39,6 +39,7 @@ const Calidad = require('./calidadSgc');
 const { CLAUSULAS_ISO9001 } = require('./sgcCatalogo');
 const Alcance = require('./alcanceSgc');
 const Contexto = require('./contextoSgc');
+const Riesgos = require('./riesgosSgc');
 
 const UMBRAL_COBERTURA_COMPLETO = 0.8;
 const NORMA_SGC_POR_DEFECTO = { codigo: 'ISO 9001', version: '2015' };
@@ -77,7 +78,7 @@ const exclusionesVigentesPorClausula_ = Alcance.exclusionesVigentesPorClausula_;
 // 4.1/4.2 ya NO son stub: Contexto (v11 Fase 2) esta portado.
 const factoresContextoActivos_ = Contexto.factoresContextoActivos_;
 const partesInteresadasActivas_ = Contexto.partesInteresadasActivas_;
-function riesgosActivos_(db) { return []; } // TODO v11 Fase 3 (Riesgos)
+// riesgosActivos_ ya NO es stub: se usa Riesgos.riesgosActivos_ directo (v11 Fase 3 portada).
 function procesosActivos_(db) { return []; } // TODO v11 Fase 4 (Procesos)
 function pasosActivos_(db) { return []; } // TODO v11 Fase 4 (Procesos)
 function indicadoresActivos_(db) { return []; } // TODO v11 Fase 6 (Indicadores)
@@ -234,15 +235,53 @@ function evaluarPartesInteresadas_(db) {
     evidencia: ev
   };
 }
+// v11.0 Fase 3 (§6.1). La cláusula no pide tener una matriz: pide
+// DETERMINAR los riesgos y oportunidades, PLANIFICAR acciones e
+// integrarlas en los procesos. Se revisan cuatro cosas, y la nota dice
+// cuál falta.
 function evaluarRiesgosOportunidades_(db) {
-  const filas = riesgosActivos_(db);
+  const filas = Riesgos.riesgosActivos_(db);
   const porDocs = evaluarPorDocumentos_(db, '6.1');
+
+  if (!filas.length) {
+    return {
+      estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
+      resumen: 'La matriz de riesgos y oportunidades no está cargada en el sistema.',
+      nota: 'Carga la matriz en la sección Riesgos.' +
+        (porDocs.evidencia.length ? ' Hay documentos etiquetados para 6.1, pero un archivo adjunto no demuestra que las acciones se hayan asignado ni revalorado.' : ''),
+      evidencia: porDocs.evidencia
+    };
+  }
+
+  const factores = Contexto.factoresContextoActivos_(db);
+  const porFactor = {};
+  factores.forEach((f) => { porFactor[f.factor_id] = String(f.tipo || '').slice(0, 1) + f.numero + ' — ' + f.descripcion; });
+  const lista = filas.map((r) => Riesgos.formatearRiesgo_(r, porFactor[r.factor_contexto_id] || '', null));
+  const resumen = Riesgos.resumenRiesgos_(lista);
+
+  const ev = lista.slice(0, 15).map((r) => {
+    const val = r.inherente ? r.inherente.banda + ' (' + r.inherente.magnitud + ')' : 'sin valorar';
+    return {
+      tipo: r.clase === 'OPORTUNIDAD' ? 'Oportunidad' : 'Riesgo',
+      descripcion: r.codigo + ' — ' + r.factor + ': ' + val + (r.residual ? ' → ' + r.residual.banda + ' (' + r.residual.magnitud + ')' : ''),
+      fecha: r.fecha_ultima_revision || r.fecha_identificacion, responsable: r.responsable_email || r.revisado_por
+    };
+  });
+  porDocs.evidencia.forEach((e) => ev.push(e));
+
+  const falta = [];
+  if (!resumen.total_riesgos) falta.push('no hay riesgos identificados');
+  if (!resumen.total_oportunidades) falta.push('no hay oportunidades identificadas');
+  if (resumen.sin_tratar) falta.push(resumen.sin_tratar + ' riesgo(s) alto o crítico sin revaloración tras los controles');
+  if (resumen.sin_accion) falta.push(resumen.sin_accion + ' riesgo(s) sin acción definida');
+  if (!resumen.con_actividad) falta.push('ninguna acción está asignada como actividad a un responsable');
+  if (resumen.revision_vencida) falta.push('la última revisión tiene ' + resumen.meses_desde_revision + ' meses y la frecuencia definida es de ' + Riesgos.MESES_REVISION_RIESGOS);
+
   return {
-    estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
-    resumen: 'La matriz de riesgos y oportunidades no está cargada en el sistema.',
-    nota: 'Carga la matriz en la sección Riesgos.' +
-      (porDocs.evidencia.length ? ' Hay documentos etiquetados para 6.1, pero un archivo adjunto no demuestra que las acciones se hayan asignado ni revalorado.' : ''),
-    evidencia: porDocs.evidencia
+    estado: falta.length ? 'PARCIAL' : 'COMPLETO',
+    resumen: resumen.total_riesgos + ' riesgos y ' + resumen.total_oportunidades + ' oportunidades determinados; ' + resumen.con_actividad + ' con acción asignada.',
+    nota: falta.length ? 'Para cerrar 6.1: ' + falta.join('; ') + '.' : '',
+    evidencia: ev
   };
 }
 function evaluarProcesosSgc_(db) {

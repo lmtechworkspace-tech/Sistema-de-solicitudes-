@@ -498,6 +498,24 @@ const COLUMNAS = {
     'metodo_seguimiento', 'frecuencia_seguimiento', 'responsable_email',
     'estado', 'fecha_ultima_revision', 'revisado_por',
     'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // v11.0 Fase 3: riesgos y oportunidades (§6.1). La magnitud y su banda
+  // NO se guardan, se CALCULAN a partir de probabilidad/impacto -- el DOC-08
+  // original trae 7 de 32 valoraciones que no coinciden con su propia tabla
+  // de criterios, y calculándolas deja de ser posible que discrepen.
+  // proceso_id queda listo para cuando se porte Procesos (v11 Fase 4).
+  SGC_RIESGOS: [
+    'riesgo_id', 'clase', 'codigo',
+    'relacion_actividad', 'factor', 'descripcion',
+    'analisis_causa', 'procedencia', 'origen', 'factor_contexto_id',
+    'probabilidad', 'impacto',
+    'accion', 'fecha_implementacion', 'medidas_control',
+    'responsable_email', 'accion_actividad_id',
+    'probabilidad_residual', 'impacto_residual',
+    'estado', 'observaciones', 'proceso_id',
+    'fecha_identificacion', 'fecha_ultima_revision', 'revisado_por',
+    'creado_por', 'fecha_creacion', 'activa'
   ]
 };
 

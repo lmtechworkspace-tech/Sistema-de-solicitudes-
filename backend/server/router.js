@@ -50,6 +50,7 @@ const Objetivos = require('../logica/objetivosSgc');
 const MatrizCobertura = require('../logica/matrizCoberturaSgc');
 const Alcance = require('../logica/alcanceSgc');
 const Contexto = require('../logica/contextoSgc');
+const Riesgos = require('../logica/riesgosSgc');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -372,7 +373,16 @@ const ACCIONES = {
   registrarRevisionContextoSgc: (db, data, contexto) => Contexto.registrarRevision(db, data, contexto),
   sembrarPartesSgc: (db, data, contexto) => Contexto.sembrarPartes(db, data, contexto),
   guardarParteInteresadaSgc: (db, data, contexto) => Contexto.guardarParte(db, data, contexto),
-  anularParteInteresadaSgc: (db, data, contexto) => Contexto.anularParte(db, data, contexto)
+  anularParteInteresadaSgc: (db, data, contexto) => Contexto.anularParte(db, data, contexto),
+
+  // SGC ISO 9001 v11.0 Fase 3 (§6.1 riesgos y oportunidades). Sin
+  // archivos: se corta al frontend en el mismo incremento.
+  listarRiesgosSgc: (db, data, contexto) => Riesgos.listar(db, data, contexto),
+  sembrarRiesgosSgc: (db, data, contexto) => Riesgos.sembrarDesdeDoc08(db, data, contexto),
+  guardarRiesgoSgc: (db, data, contexto) => Riesgos.guardar(db, data, contexto),
+  asignarAccionRiesgoSgc: (db, data, contexto) => Riesgos.asignarAccion(db, data, contexto),
+  registrarRevisionRiesgosSgc: (db, data, contexto) => Riesgos.registrarRevision(db, data, contexto),
+  anularRiesgoSgc: (db, data, contexto) => Riesgos.anular(db, data, contexto)
 };
 
 function responderResultado_(resultado) {
