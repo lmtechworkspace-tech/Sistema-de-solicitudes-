@@ -137,7 +137,13 @@ var ACCIONES_PORTADAS_NODE = {
   listarAuditoriasSgc: true, getDetalleAuditoriaSgc: true, programarAuditoriaSgc: true,
   planificarAuditoriaSgc: true, registrarHallazgoSgc: true, eliminarHallazgoSgc: true,
   cerrarEjecucionAuditoriaSgc: true, emitirInformeAuditoriaSgc: true, convertirHallazgoEnNcSgc: true,
-  cerrarAuditoriaSgc: true, anularAuditoriaSgc: true
+  cerrarAuditoriaSgc: true, anularAuditoriaSgc: true,
+
+  // --- SGC ISO 9001: Quejas (10 de 10; PRO-07, sin archivos: se corta completo) ---
+  listarQuejasSgc: true, getDetalleQuejaSgc: true, registrarRecepcionQuejaSgc: true,
+  registrarInvestigacionQuejaSgc: true, registrarResultadoQuejaSgc: true, registrarResolucionQuejaSgc: true,
+  convertirQuejaEnNcSgc: true, registrarNotificacionQuejaSgc: true, registrarSeguimientoQuejaSgc: true,
+  anularQuejaSgc: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,

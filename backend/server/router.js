@@ -43,6 +43,7 @@ const Calidad = require('../logica/calidadSgc');
 const Personas = require('../logica/personasSgc');
 const NoConformidades = require('../logica/noConformidadesSgc');
 const Auditorias = require('../logica/auditoriasSgc');
+const Quejas = require('../logica/quejasSgc');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -291,7 +292,22 @@ const ACCIONES = {
   emitirInformeAuditoriaSgc: (db, data, contexto) => Auditorias.emitirInforme(db, data, contexto),
   convertirHallazgoEnNcSgc: (db, data, contexto) => Auditorias.convertirHallazgoEnNc(db, data, contexto),
   cerrarAuditoriaSgc: (db, data, contexto) => Auditorias.cerrar(db, data, contexto),
-  anularAuditoriaSgc: (db, data, contexto) => Auditorias.anular(db, data, contexto)
+  anularAuditoriaSgc: (db, data, contexto) => Auditorias.anular(db, data, contexto),
+
+  // SGC ISO 9001 Fase 4 (PRO-07): quejas, felicitaciones y consultas. Solo
+  // las Partes 2-5 del FO-PRO-07-01 (gestión interna); la Parte 1 (registro
+  // público, Intake) no está portada. Sin archivos: se corta al frontend en
+  // el mismo incremento.
+  listarQuejasSgc: (db, data, contexto) => Quejas.listar(db, data, contexto),
+  getDetalleQuejaSgc: (db, data, contexto) => Quejas.getDetalle(db, data, contexto),
+  registrarRecepcionQuejaSgc: (db, data, contexto) => Quejas.registrarRecepcion(db, data, contexto),
+  registrarInvestigacionQuejaSgc: (db, data, contexto) => Quejas.registrarInvestigacion(db, data, contexto),
+  registrarResultadoQuejaSgc: (db, data, contexto) => Quejas.registrarResultado(db, data, contexto),
+  registrarResolucionQuejaSgc: (db, data, contexto) => Quejas.registrarResolucion(db, data, contexto),
+  convertirQuejaEnNcSgc: (db, data, contexto) => Quejas.convertirEnNc(db, data, contexto),
+  registrarNotificacionQuejaSgc: (db, data, contexto) => Quejas.registrarNotificacion(db, data, contexto),
+  registrarSeguimientoQuejaSgc: (db, data, contexto) => Quejas.registrarSeguimiento(db, data, contexto),
+  anularQuejaSgc: (db, data, contexto) => Quejas.anular(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

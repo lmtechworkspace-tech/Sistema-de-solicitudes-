@@ -19,6 +19,7 @@ const Calidad = require('../logica/calidadSgc');
 const Personas = require('../logica/personasSgc');
 const NoConformidades = require('../logica/noConformidadesSgc');
 const Auditorias = require('../logica/auditoriasSgc');
+const Quejas = require('../logica/quejasSgc');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
 const db = abrirDbProduccion();
@@ -103,6 +104,11 @@ const intervaloTriggersDiarios = setInterval(() => {
     // Cadencia real (diaria/semanal) la decide el dedup de cada aviso.
     Auditorias.recordatorioPendientes(db).catch((err) => {
       console.error('error enviando el recordatorio de auditorías del SGC:', err);
+    });
+    // SGC Fase 4 (PRO-07): resolución y seguimiento de quejas vencidos (30
+    // días corridos, no hábiles). Dedup diario via enviarCorreoModulo.
+    Quejas.recordatorioPendientes(db).catch((err) => {
+      console.error('error enviando el recordatorio de quejas del SGC:', err);
     });
   }
   // Pausas: programar las del dia (06:00), resumen de fin de dia (20:00),
