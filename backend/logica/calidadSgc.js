@@ -794,5 +794,8 @@ module.exports = {
   // acoplamiento con el SGC (RN-709, sgc_origen_tipo); el resto queda
   // disponible para los proximos incrementos del SGC (Personas, NC,
   // Auditorias...) y para tests, nunca duplicadas.
-  gobiernaSgc_, rolSgc_, esAdminSgc_, veTodoSgc_, areaSgc_, CLAUSULAS_ISO9001
+  gobiernaSgc_, rolSgc_, esAdminSgc_, veTodoSgc_, areaSgc_, CLAUSULAS_ISO9001,
+  // parsearClausulasIso_: la usa MatrizCobertura (Fase 6b) para leer qué
+  // documentos respaldan cada cláusula ISO.
+  parsearClausulasIso_
 };

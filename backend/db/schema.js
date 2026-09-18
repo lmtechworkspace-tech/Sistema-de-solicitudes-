@@ -444,6 +444,19 @@ const COLUMNAS = {
     'valor', 'numerador', 'denominador',
     'cumple', 'origen', 'detalle', 'observaciones',
     'registrado_por', 'fecha_registro', 'activa'
+  ],
+
+  // SGC Fase 6b (matriz de cobertura ISO + "modo auditoría"). La foto
+  // semanal (v12.8): UNA fila por semana (clave = el LUNES, no un número de
+  // semana ISO, que trae sus propios bordes). Idempotente -- el pase diario
+  // corre todos los días pero solo escribe si esa semana todavía no tiene
+  // la suya. cap_4..cap_10 son fijos porque los capítulos de la ISO 9001 lo
+  // son.
+  SGC_COBERTURA_HISTORICO: [
+    'cobertura_id', 'periodo', 'fecha',
+    'pct_listo', 'aplicables', 'no_aplica', 'completo', 'parcial', 'faltante',
+    'cap_4', 'cap_5', 'cap_6', 'cap_7', 'cap_8', 'cap_9', 'cap_10',
+    'origen'
   ]
 };
 

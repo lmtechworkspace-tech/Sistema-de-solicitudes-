@@ -59,7 +59,8 @@ var MAX_INTENTOS_LECTURA = 3;
 // subirVersionDocumentoProyecto, marcarVersionVigenteProyecto,
 // listarVersionesDocumentoProyecto, descargarVersionDocumentoProyecto,
 // descargarDocumentoProyecto, descargarReporteProyecto, descargarLibroProyecto,
-// descargarReporteActividadesPdf, descargarActaReunionPdf.
+// descargarReporteActividadesPdf, descargarActaReunionPdf,
+// descargarEvidenciaClausulaSgc.
 var ACCIONES_PORTADAS_NODE = {
   // --- Núcleo (Auth/Portal, Catálogos, Solicitudes, Dashboard/Gerencia/Jefatura) ---
   portalLogin: true, portalLogout: true, portalSesion: true, portalCambiarPassword: true,
@@ -157,7 +158,10 @@ var ACCIONES_PORTADAS_NODE = {
   // --- SGC ISO 9001: Objetivos de calidad (7 de 7; DOC-07, sin archivos: se corta completo) ---
   listarObjetivosSgc: true, getDetalleObjetivoSgc: true, sembrarAnioObjetivosSgc: true,
   guardarObjetivoSgc: true, sugerirLecturaObjetivoSgc: true, registrarLecturaObjetivoSgc: true,
-  anularLecturaObjetivoSgc: true
+  anularLecturaObjetivoSgc: true,
+
+  // --- SGC ISO 9001: Matriz de cobertura ISO (3 de 4; descargarEvidenciaClausulaSgc sigue en Apps Script, PDF) ---
+  listarMatrizCoberturaSgc: true, getDetalleClausulaCoberturaSgc: true, listarCoberturaHistoricoSgc: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,

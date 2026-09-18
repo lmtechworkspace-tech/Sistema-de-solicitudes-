@@ -47,6 +47,7 @@ const Quejas = require('../logica/quejasSgc');
 const Proveedores = require('../logica/proveedoresSgc');
 const RevisionDireccion = require('../logica/revisionDireccionSgc');
 const Objetivos = require('../logica/objetivosSgc');
+const MatrizCobertura = require('../logica/matrizCoberturaSgc');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -341,7 +342,16 @@ const ACCIONES = {
   guardarObjetivoSgc: (db, data, contexto) => Objetivos.guardar(db, data, contexto),
   sugerirLecturaObjetivoSgc: (db, data, contexto) => Objetivos.sugerirLectura(db, data, contexto),
   registrarLecturaObjetivoSgc: (db, data, contexto) => Objetivos.registrarLectura(db, data, contexto),
-  anularLecturaObjetivoSgc: (db, data, contexto) => Objetivos.anularLectura(db, data, contexto)
+  anularLecturaObjetivoSgc: (db, data, contexto) => Objetivos.anularLectura(db, data, contexto),
+
+  // SGC ISO 9001 Fase 6b: matriz de cobertura ISO + "modo auditoría". Sin
+  // archivos (salvo la descarga de evidencia en PDF, gateada hasta que
+  // exista un motor de PDF): se corta el resto al frontend en el mismo
+  // incremento.
+  listarMatrizCoberturaSgc: (db, data, contexto) => MatrizCobertura.listar(db, data, contexto),
+  getDetalleClausulaCoberturaSgc: (db, data, contexto) => MatrizCobertura.getDetalle(db, data, contexto),
+  listarCoberturaHistoricoSgc: (db, data, contexto) => MatrizCobertura.listarHistorico(db, data, contexto),
+  descargarEvidenciaClausulaSgc: () => ({ _validationError: true, message: 'La descarga en PDF de la evidencia de auditoría aun no esta disponible en el nuevo backend (falta el motor de PDF).' })
 };
 
 function responderResultado_(resultado) {

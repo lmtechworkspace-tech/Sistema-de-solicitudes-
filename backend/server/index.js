@@ -23,6 +23,7 @@ const Quejas = require('../logica/quejasSgc');
 const Proveedores = require('../logica/proveedoresSgc');
 const RevisionDireccion = require('../logica/revisionDireccionSgc');
 const Objetivos = require('../logica/objetivosSgc');
+const MatrizCobertura = require('../logica/matrizCoberturaSgc');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
 const db = abrirDbProduccion();
@@ -128,6 +129,10 @@ const intervaloTriggersDiarios = setInterval(() => {
     Objetivos.alertarLecturasPendientes(db).catch((err) => {
       console.error('error enviando el recordatorio de objetivos de calidad del SGC:', err);
     });
+    // SGC Fase 6b: foto semanal de la matriz de cobertura ISO. Corre todos
+    // los días pero solo ESCRIBE una vez por semana (archivarFoto es
+    // idempotente): sin esto la serie histórica no existiría nunca.
+    try { MatrizCobertura.archivarFoto(db); } catch (err) { console.error('error archivando la foto de cobertura ISO:', err); }
   }
   // Pausas: programar las del dia (06:00), resumen de fin de dia (20:00),
   // cierre automatico nocturno (23:00). Reporte periodico: semanal los lunes
