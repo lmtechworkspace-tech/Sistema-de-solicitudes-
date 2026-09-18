@@ -178,10 +178,44 @@ function sumarDiasHabiles_(desde, dias, opciones) {
   return new Date(Date.UTC(partes[0], partes[1] - 1, partes[2], 23, 59, 59)).toISOString();
 }
 
+// Espejo exacto de siguienteDiaClave_: aritmetica UTC pura y toISOString,
+// NO claveDia_ -- volver a formatear con zona horaria aca descontaria un
+// dia extra en husos al oeste de UTC (la clave es una etiqueta de dia, no
+// un instante que haya que reinterpretar).
+function anteriorDiaClave_(claveDia) {
+  const partes = claveDia.split('-').map(Number);
+  const anterior = new Date(Date.UTC(partes[0], partes[1] - 1, partes[2] - 1));
+  return anterior.toISOString().slice(0, 10);
+}
+
+// Puerto de restarDiasHabilesSgc_ (backend/backoffice/RevisionDireccion.gs)
+// -- inverso de sumarDiasHabiles_, hace falta para plazos que se cuentan
+// hacia ATRAS desde una fecha (ej. "avisar 10 dias habiles ANTES de la
+// reunion", PRO-05 §6). Devuelve el INICIO de ese dia habil (00:00:00 UTC).
+function restarDiasHabiles_(desde, dias, opciones) {
+  const inicio = aFecha_(desde);
+  if (isNaN(inicio.getTime())) return '';
+  const opts = opciones || {};
+  const tz = opts.timezone || 'America/Santiago';
+  const feriadosSet = {};
+  (opts.feriados || []).forEach((f) => { feriadosSet[typeof f === 'string' ? f.slice(0, 10) : claveDia_(aFecha_(f), tz)] = true; });
+
+  let clave = claveDia_(inicio, tz);
+  let restantes = dias;
+  let guarda = 0;
+  while (restantes > 0 && guarda < 1000) {
+    clave = anteriorDiaClave_(clave);
+    if (esDiaHabil_(clave, feriadosSet)) restantes--;
+    guarda++;
+  }
+  const partes = clave.split('-').map(Number);
+  return new Date(Date.UTC(partes[0], partes[1] - 1, partes[2], 0, 0, 0)).toISOString();
+}
+
 module.exports = {
   horasHabilesEntre,
   claveDia_,
-  sumarDiasHabiles_, esDiaHabil_, siguienteDiaClave_, diaSemanaClave_,
+  sumarDiasHabiles_, restarDiasHabiles_, esDiaHabil_, siguienteDiaClave_, anteriorDiaClave_, diaSemanaClave_,
   // Expuestos para los tests de memoizacion (mismo motivo que en el .gs).
   formateadorOffset_, formateadorDia_, offsetMinutos_, instanteLocal_
 };

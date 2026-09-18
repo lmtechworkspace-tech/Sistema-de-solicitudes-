@@ -45,6 +45,7 @@ const NoConformidades = require('../logica/noConformidadesSgc');
 const Auditorias = require('../logica/auditoriasSgc');
 const Quejas = require('../logica/quejasSgc');
 const Proveedores = require('../logica/proveedoresSgc');
+const RevisionDireccion = require('../logica/revisionDireccionSgc');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -316,7 +317,20 @@ const ACCIONES = {
   getDetalleProveedorSgc: (db, data, contexto) => Proveedores.getDetalle(db, data, contexto),
   guardarProveedorSgc: (db, data, contexto) => Proveedores.guardar(db, data, contexto),
   evaluarProveedorSgc: (db, data, contexto) => Proveedores.evaluar(db, data, contexto),
-  desactivarProveedorSgc: (db, data, contexto) => Proveedores.desactivar(db, data, contexto)
+  desactivarProveedorSgc: (db, data, contexto) => Proveedores.desactivar(db, data, contexto),
+
+  // SGC ISO 9001 Fase 5b (PRO-05, §9.3): revisión por la dirección. Sin
+  // archivos: se corta al frontend en el mismo incremento. Item 8 del
+  // catálogo (objetivos de calidad) queda pendiente hasta portar Fase 6a.
+  listarRevisionesSgc: (db, data, contexto) => RevisionDireccion.listar(db, data, contexto),
+  getDetalleRevisionSgc: (db, data, contexto) => RevisionDireccion.getDetalle(db, data, contexto),
+  programarRevisionSgc: (db, data, contexto) => RevisionDireccion.programar(db, data, contexto),
+  convocarRevisionSgc: (db, data, contexto) => RevisionDireccion.convocar(db, data, contexto),
+  getResumenRevisionSgc: (db, data, contexto) => RevisionDireccion.getResumenAutomatico(db, data, contexto),
+  registrarActaRevisionSgc: (db, data, contexto) => RevisionDireccion.registrarActa(db, data, contexto),
+  registrarAcuerdoRevisionSgc: (db, data, contexto) => RevisionDireccion.registrarAcuerdo(db, data, contexto),
+  cerrarRevisionSgc: (db, data, contexto) => RevisionDireccion.cerrar(db, data, contexto),
+  anularRevisionSgc: (db, data, contexto) => RevisionDireccion.anular(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

@@ -394,5 +394,9 @@ async function recordatorioVencidas(db) {
 
 module.exports = {
   listar, getDetalle, crear, registrarCorreccion, registrarCausa, registrarAccion,
-  cerrarEtapa, verificarEficacia, anular, recordatorioVencidas
+  cerrarEtapa, verificarEficacia, anular, recordatorioVencidas,
+  // Compartido: RevisionDireccion (Fase 5b) y futuros módulos del SGC crean
+  // sus propias tareas ("Mi trabajo") con el mismo wrapper sobre
+  // Actividades.crear, nunca reimplementado.
+  crearTareaSgc_, tareaResumen_
 };

@@ -147,7 +147,12 @@ var ACCIONES_PORTADAS_NODE = {
 
   // --- SGC ISO 9001: Proveedores (5 de 5; PRO-04, sin archivos: se corta completo) ---
   listarProveedoresSgc: true, getDetalleProveedorSgc: true, guardarProveedorSgc: true,
-  evaluarProveedorSgc: true, desactivarProveedorSgc: true
+  evaluarProveedorSgc: true, desactivarProveedorSgc: true,
+
+  // --- SGC ISO 9001: Revisión por la dirección (9 de 9; PRO-05, sin archivos: se corta completo) ---
+  listarRevisionesSgc: true, getDetalleRevisionSgc: true, programarRevisionSgc: true,
+  convocarRevisionSgc: true, getResumenRevisionSgc: true, registrarActaRevisionSgc: true,
+  registrarAcuerdoRevisionSgc: true, cerrarRevisionSgc: true, anularRevisionSgc: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,

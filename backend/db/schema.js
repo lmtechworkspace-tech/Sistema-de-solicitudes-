@@ -397,6 +397,28 @@ const COLUMNAS = {
     'calidad', 'plazo_entrega', 'costos', 'tiempo_respuesta', 'precio', 'postventa',
     'promedio', 'resultado', 'aprobado',
     'observaciones', 'evaluador_email', 'proxima_evaluacion'
+  ],
+
+  // SGC Fase 5b (PRO-05, §9.3): revisión por la dirección. Una fila = un
+  // FO-PRO-05-01 completo, mismo criterio que SGC_NC/SGC_AUDITORIAS/
+  // SGC_QUEJAS. Las 13 entradas de §9.3.2 van como JSON [{item,
+  // observaciones}]: son fijas y viven en el código (ENTRADAS_REVISION), no
+  // en esta hoja -- la norma las enumera, no las define la organización.
+  SGC_REVISIONES: [
+    'revision_id', 'correlativo', 'anio',
+    'fecha_programada', 'aviso_plazo', 'fecha_convocatoria', 'fecha_reunion',
+    'asistentes', 'entradas', 'conclusiones', 'anexos',
+    'director_email', 'responsable_calidad_email',
+    'estado', 'fecha_cierre', 'cerrada_por',
+    'creada_por', 'fecha_creacion', 'activa'
+  ],
+  // Los acuerdos de la tabla 3 del FO-PRO-05-01. Fila propia (no JSON dentro
+  // de la revisión) porque cada uno se convierte en una ACTIVIDAD real y
+  // necesita enlazar actividad_id.
+  SGC_REVISION_ACUERDOS: [
+    'acuerdo_id', 'revision_id', 'tipo', 'observaciones',
+    'responsable_email', 'plazo', 'actividad_id',
+    'creado_por', 'fecha_creacion', 'activa'
   ]
 };
 
