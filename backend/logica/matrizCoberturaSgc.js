@@ -18,21 +18,18 @@
  *    "fuera del alcance de SIGSO hoy". Cada cláusula sin evidencia trae una
  *    nota que dice POR QUÉ.
  *
- * PENDIENTE EXPLÍCITO, NO FINGIDO: un evaluador (9.1) sigue dependiendo de
- * un módulo v11 todavía no portado a Node (Indicadores). 4.3 (Alcance),
- * 4.1/4.2 (Contexto), 6.1 (Riesgos) y 4.4/8.1/8.5/8.6 (Procesos) YA son
- * reales desde que se portaron esas fases (ver alcanceSgc.js,
- * contextoSgc.js, riesgosSgc.js, procesosSgc.js). El propio `.gs` resuelve
- * los que faltan con `typeof X === 'function' ? X() : []` para tolerar
- * que el módulo no esté cargado -- acá se replica igual con el stub de
- * la sección siguiente: mientras esa fase no se porte, ese evaluador
- * degrada a FALTANTE/PARCIAL según corresponda (nunca inventa datos).
- * Reemplazar el stub por un require real cuando se porte su fase v11
- * correspondiente (TODO) -- mismo patrón ya aplicado a Alcance, Contexto,
- * Riesgos y Procesos en los incrementos anteriores.
+ * YA NO QUEDAN STUBS: 4.3 (Alcance), 4.1/4.2 (Contexto), 6.1 (Riesgos),
+ * 4.4/8.1/8.5/8.6 (Procesos) y 9.1 (Indicadores) son reales desde que se
+ * portaron esas fases v11 (ver alcanceSgc.js, contextoSgc.js,
+ * riesgosSgc.js, procesosSgc.js, indicadoresSgc.js). El propio `.gs`
+ * resolvía los que faltaban con `typeof X === 'function' ? X() : []` para
+ * tolerar que el módulo no estuviera cargado -- ese patrón sigue vivo en
+ * `leerSeguro_` para las hojas de fases aún sin portar (ver
+ * evaluarPrestaciones_ más abajo), aunque ya no queda ningún evaluador
+ * degradado por falta de un `require`.
  *
- * evaluarPrestaciones_ (§8.1/§8.5/§8.6) también sube a su lógica completa
- * en este incremento: no depende de Procesos estar portado, depende de
+ * evaluarPrestaciones_ (§8.1/§8.5/§8.6) sube a su lógica completa desde el
+ * incremento de Procesos: no depende de Procesos estar portado, depende de
  * SGC_PRESTACIONES (Fase 8, no portada) -- leerSeguro_ tolera la tabla
  * ausente y el evaluador degrada solo hasta esa hoja, igual que
  * evaluarSalidasNoConformes_ (§8.7) ya hacía desde antes.
@@ -47,6 +44,7 @@ const Alcance = require('./alcanceSgc');
 const Contexto = require('./contextoSgc');
 const Riesgos = require('./riesgosSgc');
 const Procesos = require('./procesosSgc');
+const Indicadores = require('./indicadoresSgc');
 
 const UMBRAL_COBERTURA_COMPLETO = 0.8;
 const NORMA_SGC_POR_DEFECTO = { codigo: 'ISO 9001', version: '2015' };
@@ -89,7 +87,8 @@ const partesInteresadasActivas_ = Contexto.partesInteresadasActivas_;
 // 4.4 y 8.1/8.5/8.6 ya NO son stub: Procesos (v11 Fase 4) esta portado.
 const procesosActivos_ = Procesos.procesosActivos_;
 const pasosActivos_ = Procesos.pasosActivos_;
-function indicadoresActivos_(db) { return []; } // TODO v11 Fase 6 (Indicadores)
+// indicadoresActivos_ ya NO es stub: Indicadores (v11 Fase 6) esta portado.
+const indicadoresActivos_ = Indicadores.indicadoresActivos_;
 
 // --- evaluadores por clausula -------------------------------------------------
 // Cada evaluador devuelve {estado, resumen, nota, evidencia:[{tipo,

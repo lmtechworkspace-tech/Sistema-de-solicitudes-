@@ -177,7 +177,11 @@ var ACCIONES_PORTADAS_NODE = {
 
   // --- SGC ISO 9001: Procesos (6 de 6; v11.0 Fase 4, sin archivos: se corta completo) ---
   listarProcesosSgc: true, getDetalleProcesoSgc: true, sembrarMapaProcesosSgc: true,
-  guardarProcesoSgc: true, anularProcesoSgc: true, registrarRevisionProcesosSgc: true
+  guardarProcesoSgc: true, anularProcesoSgc: true, registrarRevisionProcesosSgc: true,
+
+  // --- SGC ISO 9001: Indicadores de proceso (5 de 5; v11.0 Fase 6, sin archivos: se corta completo) ---
+  listarIndicadoresSgc: true, guardarIndicadorSgc: true, anularIndicadorSgc: true,
+  registrarLecturaIndicadorSgc: true, anularLecturaIndicadorSgc: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,

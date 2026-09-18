@@ -554,5 +554,11 @@ module.exports = {
   listar, getDetalle, sembrarAnio, guardar, sugerirLectura, registrarLectura, anularLectura,
   alertarLecturasPendientes,
   // Consumido por revisionDireccionSgc.js (Fase 5b, ítem 8 del acta).
-  resumenParaRevision
+  resumenParaRevision,
+  // Catálogos y helpers de evaluación/periodos consumidos por
+  // indicadoresSgc.js (v11 Fase 6, §9.1.1): un indicador de proceso comparte
+  // el mismo modelo meta/tolerancia/frecuencia que un objetivo, y nunca se
+  // duplica.
+  FRECUENCIAS_OBJETIVO, OPERADORES_META, UNIDADES_INDICADOR, FUENTES_INDICADOR,
+  periodosDelAnio_, etiquetaPeriodo_, cumpleMeta_, operadorValido_, frecuenciaValida_, unidadValida_
 };

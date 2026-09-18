@@ -52,6 +52,7 @@ const Alcance = require('../logica/alcanceSgc');
 const Contexto = require('../logica/contextoSgc');
 const Riesgos = require('../logica/riesgosSgc');
 const Procesos = require('../logica/procesosSgc');
+const Indicadores = require('../logica/indicadoresSgc');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -391,7 +392,14 @@ const ACCIONES = {
   sembrarMapaProcesosSgc: (db, data, contexto) => Procesos.sembrarMapa(db, data, contexto),
   guardarProcesoSgc: (db, data, contexto) => Procesos.guardar(db, data, contexto),
   anularProcesoSgc: (db, data, contexto) => Procesos.anular(db, data, contexto),
-  registrarRevisionProcesosSgc: (db, data, contexto) => Procesos.registrarRevision(db, data, contexto)
+  registrarRevisionProcesosSgc: (db, data, contexto) => Procesos.registrarRevision(db, data, contexto),
+
+  // v11.0 Fase 6 (§9.1.1): indicadores de proceso.
+  listarIndicadoresSgc: (db, data, contexto) => Indicadores.listar(db, data, contexto),
+  guardarIndicadorSgc: (db, data, contexto) => Indicadores.guardar(db, data, contexto),
+  anularIndicadorSgc: (db, data, contexto) => Indicadores.anular(db, data, contexto),
+  registrarLecturaIndicadorSgc: (db, data, contexto) => Indicadores.registrarLectura(db, data, contexto),
+  anularLecturaIndicadorSgc: (db, data, contexto) => Indicadores.anularLectura(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

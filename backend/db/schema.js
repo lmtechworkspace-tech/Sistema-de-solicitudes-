@@ -446,6 +446,21 @@ const COLUMNAS = {
     'registrado_por', 'fecha_registro', 'activa'
   ],
 
+  // v11.0 Fase 6 (§9.1.1): indicadores de PROCESO, hoja aparte de
+  // SGC_OBJETIVOS (los objetivos se guardan por año; un indicador de
+  // proceso vive mientras viva el proceso). Sus lecturas comparten
+  // SGC_INDICADOR_LECTURAS vía `indicador_id`, dejando `objetivo_id` vacío
+  // para no colarse en el tablero de objetivos.
+  SGC_INDICADORES: [
+    'indicador_id', 'codigo', 'nombre', 'descripcion',
+    'proceso_id', 'objetivo_id', 'area',
+    'formula', 'fuente', 'unidad',
+    'meta_operador', 'meta_valor', 'meta_texto', 'tolerancia_valor',
+    'frecuencia', 'responsable_email',
+    'estado', 'observaciones',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+
   // SGC Fase 6b (matriz de cobertura ISO + "modo auditoría"). La foto
   // semanal (v12.8): UNA fila por semana (clave = el LUNES, no un número de
   // semana ISO, que trae sus propios bordes). Idempotente -- el pase diario
