@@ -863,5 +863,11 @@ module.exports = {
   // seccionesVisiblesSgc_: la usa Tablero (Fase 7), primera pantalla del
   // módulo, para pintar la barra de navegación sin adivinar qué puede
   // abrir cada quien.
-  seccionesVisiblesSgc_
+  seccionesVisiblesSgc_,
+  // subirArchivoSgc_: en el .gs es una función GLOBAL compartida por todo
+  // el proyecto Apps Script (Calidad.gs y Personas.gs viven en el mismo
+  // scope); en Node, personasSgc.js la importa de acá en vez de
+  // duplicarla -- mismos límites/firmas/errores para cualquier archivo
+  // del SGC, sin importar qué módulo lo sube.
+  subirArchivoSgc_
 };

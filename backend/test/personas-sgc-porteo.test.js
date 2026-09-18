@@ -4,19 +4,13 @@
  * Prueba de portabilidad: SGC ISO 9001 Fase 2a + 2b (PRO-02) -- escenarios
  * de personas-sgc.test.js, corridos contra backend/logica/personasSgc.js.
  *
- * Adaptaciones (R2 no configurado, mismo criterio que el resto del SGC):
- *  - guardarDocumento SIEMPRE exige contenido_base64 en el .gs -> queda
- *    efectivamente bloqueada hasta que exista R2; se prueba que la
- *    validacion de tipo se sigue aplicando ANTES del archivo, y que el
- *    intento con archivo cae en el gate.
- *  - descargarDescriptor/descargarDocumento: se siembra directo en la base
- *    un descriptor/documento CON archivo_id (sin pasar por el upload
- *    bloqueado) para probar que el orden de guardias (forbidden/validacion
- *    antes que el gate de R2) se mantiene intacto.
- *  - actualizarDescriptor "reemplaza el archivo de la MISMA fila": el v01
- *    inicial se crea SIN archivo (eso si funciona); actualizar CON archivo
- *    cae en el gate, confirmando que la guardia de permiso/objetivo corre
- *    antes.
+ * Los archivos (descriptor de cargo, documentos del personal) usan R2 de
+ * verdad desde 2026-09-18 (mismo incremento que desgateó SGC Documentos):
+ * `descriptorConItems()`/`guardarDescriptor` vuelven a adjuntar (u ofrecer
+ * adjuntar) un PDF real, igual que el `.gs` original, y las 5 funciones de
+ * archivo (guardarDescriptor/actualizarDescriptor/descargarDescriptor/
+ * guardarDocumento/descargarDocumento) son ahora `async`. El mock de
+ * Almacenamiento vive por-test vía `conMockAlmacenamiento_(t)`.
  */
 
 const test = require('node:test');
@@ -26,6 +20,7 @@ const { COLUMNAS } = require('../db/schema');
 const Calidad = require('../logica/calidadSgc');
 const Personas = require('../logica/personasSgc');
 const Resend = require('../logica/resend');
+const Almacenamiento = require('../logica/almacenamiento');
 
 const TABLAS = [
   'SGC_PERSONAS', 'SGC_DESCRIPTORES', 'SGC_PERSONA_DOCUMENTOS', 'SGC_INDUCCIONES', 'SGC_ROLES',
@@ -47,6 +42,22 @@ const CTX_ADM = { email: 'admin@homepymes.cl', nombre: 'Admin', rol: 'ADM' };
 const CTX_GERENCIA = { email: 'gerencia@homepymes.cl', nombre: 'Gerencia', rol: 'GERENCIA' };
 const PDF_B64 = Buffer.from('%PDF-1.4 descriptor').toString('base64');
 
+// Mock de Almacenamiento (R2): un Map en memoria que se comporta como un
+// bucket real -- lo subido es lo que se lee de vuelta. Mismo criterio que
+// novedades-sgc-porteo.test.js / calidad-sgc-porteo.test.js.
+function conMockAlmacenamiento_(t) {
+  const bucket = new Map();
+  t.mock.method(Almacenamiento, 'subirArchivo_', async (clave, contenidoBase64, contentType) => {
+    bucket.set(clave, { contenidoBase64, contentType });
+    return { ok: true, clave, tamano: Buffer.byteLength(contenidoBase64, 'base64') };
+  });
+  t.mock.method(Almacenamiento, 'descargarArchivo_', async (clave) => {
+    const obj = bucket.get(clave);
+    if (!obj) return { ok: false, message: 'El archivo no existe.' };
+    return { ok: true, contenido_base64: obj.contenidoBase64, content_type: obj.contentType };
+  });
+}
+
 function sembrar(db) {
   Calidad.gestionarRol(db, { usuario_email: 'sgc@homepymes.cl', rol_sgc: 'ENCARGADO_SGC' }, CTX_ADM);
   Calidad.gestionarRol(db, { usuario_email: 'jefa@homepymes.cl', rol_sgc: 'JEFATURA_AREA', area_id: 'PREVENCION' }, CTX_ADM);
@@ -56,7 +67,7 @@ function sembrar(db) {
   const pedro = Personas.guardarPersona(db, { usuario_email: 'pedro@homepymes.cl', nombre: 'Pedro Soto', rut: '22.222.222-2', cargo: 'Analista Contable', tipo: 'INT', area_id: 'CONTABILIDAD', fecha_ingreso: '2024-05-01' }, CTX_ENCARGADO);
   return { ana, pedro };
 }
-function descriptorConItems(db, personaId, overrides) {
+async function descriptorConItems(db, personaId, overrides) {
   return Personas.guardarDescriptor(db, Object.assign({
     persona_id: personaId, version: 'v01', objetivo: 'Objetivo del cargo.',
     items_responsabilidades: ['Cumple plazos', 'Aplica el SGC', 'Reporta desviaciones'],
@@ -122,8 +133,9 @@ test('guardarPersona: un duplicado rechazado no bloquea la siguiente creacion', 
   assert.notEqual(nueva.persona_id, ana.persona_id);
 });
 
-test('una persona puede tener DOS fichas (dos cargos) con el MISMO correo, cada una con su propio descriptor', () => {
+test('una persona puede tener DOS fichas (dos cargos) con el MISMO correo, cada una con su propio descriptor', async (t) => {
   const db = db_();
+  conMockAlmacenamiento_(t);
   const { ana } = sembrar(db);
   const anaExterna = Personas.guardarPersona(db, { nombre: 'Ana Perez', usuario_email: 'ana@homepymes.cl', cargo: 'Prevencionista (servicios a clientes)', tipo: 'EXT', area_id: 'PREVENCION' }, CTX_ENCARGADO);
   assert.equal(anaExterna._validationError, undefined);
@@ -131,8 +143,8 @@ test('una persona puede tener DOS fichas (dos cargos) con el MISMO correo, cada 
   const propias = Personas.listar(db, {}, CTX_ANA).personas;
   assert.equal(propias.length, 2);
 
-  Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01', objetivo: 'Objetivo del cargo interno.' }, CTX_ENCARGADO);
-  Personas.guardarDescriptor(db, { persona_id: anaExterna.persona_id, version: 'v01', objetivo: 'Objetivo del cargo externo (clientes).' }, CTX_ENCARGADO);
+  await Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01', objetivo: 'Objetivo del cargo interno.' }, CTX_ENCARGADO);
+  await Personas.guardarDescriptor(db, { persona_id: anaExterna.persona_id, version: 'v01', objetivo: 'Objetivo del cargo externo (clientes).' }, CTX_ENCARGADO);
   assert.equal(Personas.getFicha(db, { persona_id: ana.persona_id }, CTX_ENCARGADO).descriptor_vigente.objetivo, 'Objetivo del cargo interno.');
   assert.equal(Personas.getFicha(db, { persona_id: anaExterna.persona_id }, CTX_ENCARGADO).descriptor_vigente.objetivo, 'Objetivo del cargo externo (clientes).');
 });
@@ -194,11 +206,12 @@ test('quitarDelAlcance: solo quien gobierna; incluir_fuera_alcance solo lo puede
 
 // ===== descriptor de cargo ====================================================
 
-test('descriptor: se versiona -- el anterior deja de ser vigente pero se conserva', () => {
+test('descriptor: se versiona -- el anterior deja de ser vigente pero se conserva', async (t) => {
   const db = db_();
+  conMockAlmacenamiento_(t);
   const { ana } = sembrar(db);
-  Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01', objetivo: 'Asesorar en prevencion.', funciones: 'Visitas a terreno.', nivel_educacional: 'Tecnico' }, CTX_ENCARGADO);
-  Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v02', objetivo: 'Asesorar y capacitar en prevencion.', funciones: 'Visitas a terreno y capacitaciones.' }, CTX_ENCARGADO);
+  await Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01', objetivo: 'Asesorar en prevencion.', funciones: 'Visitas a terreno.', nivel_educacional: 'Tecnico' }, CTX_ENCARGADO);
+  await Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v02', objetivo: 'Asesorar y capacitar en prevencion.', funciones: 'Visitas a terreno y capacitaciones.' }, CTX_ENCARGADO);
   const todos = filas(db, 'SGC_DESCRIPTORES').filter((d) => d.persona_id === ana.persona_id);
   assert.equal(todos.length, 2);
   const vigentes = todos.filter((d) => d.vigente === true || d.vigente === 'TRUE');
@@ -207,18 +220,20 @@ test('descriptor: se versiona -- el anterior deja de ser vigente pero se conserv
   assert.equal(Personas.getFicha(db, { persona_id: ana.persona_id }, CTX_ENCARGADO).descriptor_vigente.version, 'v02');
 });
 
-test('descriptor: exige version y objetivo, y solo lo edita quien gobierna el SGC', () => {
+test('descriptor: exige version y objetivo, y solo lo edita quien gobierna el SGC', async (t) => {
   const db = db_();
+  conMockAlmacenamiento_(t);
   const { ana } = sembrar(db);
-  assert.equal(Personas.guardarDescriptor(db, { persona_id: ana.persona_id, objetivo: 'X' }, CTX_ENCARGADO)._validationError, true);
-  assert.equal(Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01' }, CTX_ENCARGADO)._validationError, true);
-  assert.equal(Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01', objetivo: 'X' }, CTX_ANA)._forbidden, true);
+  assert.equal((await Personas.guardarDescriptor(db, { persona_id: ana.persona_id, objetivo: 'X' }, CTX_ENCARGADO))._validationError, true);
+  assert.equal((await Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01' }, CTX_ENCARGADO))._validationError, true);
+  assert.equal((await Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01', objetivo: 'X' }, CTX_ANA))._forbidden, true);
 });
 
-test('el listado avisa quien no tiene descriptor todavia', () => {
+test('el listado avisa quien no tiene descriptor todavia', async (t) => {
   const db = db_();
+  conMockAlmacenamiento_(t);
   const { ana } = sembrar(db);
-  Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01', objetivo: 'X' }, CTX_ENCARGADO);
+  await Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01', objetivo: 'X' }, CTX_ENCARGADO);
   const lista = Personas.listar(db, {}, CTX_ENCARGADO).personas;
   const fAna = lista.find((p) => p.usuario_email === 'ana@homepymes.cl');
   const fPedro = lista.find((p) => p.usuario_email === 'pedro@homepymes.cl');
@@ -227,74 +242,84 @@ test('el listado avisa quien no tiene descriptor todavia', () => {
   assert.equal(fPedro.tiene_descriptor, false);
 });
 
-test('actualizarDescriptor: corrige la version vigente SIN versionar (misma fila)', () => {
+test('actualizarDescriptor: corrige la version vigente SIN versionar (misma fila)', async (t) => {
   const db = db_();
+  conMockAlmacenamiento_(t);
   const { ana } = sembrar(db);
-  const v01 = Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01', objetivo: 'Asesorar en prevencion.', items_responsabilidades: ['Cumple plazos'] }, CTX_ENCARGADO);
-  Personas.actualizarDescriptor(db, { persona_id: ana.persona_id, descriptor_id: v01.descriptor_id, objetivo: 'Asesorar (corregido).', items_responsabilidades: ['Cumple plazos'] }, CTX_ENCARGADO);
+  const v01 = await Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01', objetivo: 'Asesorar en prevencion de riesgos.', items_responsabilidades: ['Cumple plazos'] }, CTX_ENCARGADO);
+  await Personas.actualizarDescriptor(db, { persona_id: ana.persona_id, descriptor_id: v01.descriptor_id, objetivo: 'Asesorar en prevención de riesgos laborales (corregido).', items_responsabilidades: ['Cumple plazos'] }, CTX_ENCARGADO);
+  const todos = filas(db, 'SGC_DESCRIPTORES').filter((d) => d.persona_id === ana.persona_id);
+  assert.equal(todos.length, 1, 'editar NO crea una fila nueva');
+  assert.equal(todos[0].version, 'v01', 'la version no se toca al editar');
+  assert.equal(todos[0].objetivo, 'Asesorar en prevención de riesgos laborales (corregido).');
+  assert.equal(Personas.getFicha(db, { persona_id: ana.persona_id }, CTX_ENCARGADO).descriptor_vigente.objetivo, 'Asesorar en prevención de riesgos laborales (corregido).');
+});
+
+test('actualizarDescriptor: exige objetivo, solo gobierna lo edita, y no toca un descriptor ya archivado', async (t) => {
+  const db = db_();
+  conMockAlmacenamiento_(t);
+  const { ana } = sembrar(db);
+  const v01 = await Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01', objetivo: 'X' }, CTX_ENCARGADO);
+  assert.equal((await Personas.actualizarDescriptor(db, { persona_id: ana.persona_id, descriptor_id: v01.descriptor_id, objetivo: '' }, CTX_ENCARGADO))._validationError, true);
+  assert.equal((await Personas.actualizarDescriptor(db, { persona_id: ana.persona_id, descriptor_id: v01.descriptor_id, objetivo: 'Y' }, CTX_ANA))._forbidden, true, 'el propio trabajador no edita su descriptor');
+  // Se archiva v01 al crear v02 -- ahora v01 ya no es la vigente.
+  await Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v02', objetivo: 'Z' }, CTX_ENCARGADO);
+  assert.equal((await Personas.actualizarDescriptor(db, { persona_id: ana.persona_id, descriptor_id: v01.descriptor_id, objetivo: 'Y' }, CTX_ENCARGADO))._validationError, true, 'no se puede editar una version ya archivada');
+});
+
+test('actualizarDescriptor: si llega un archivo nuevo, reemplaza el de la MISMA fila', async (t) => {
+  const db = db_();
+  conMockAlmacenamiento_(t);
+  const { ana } = sembrar(db);
+  const v01 = await Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01', objetivo: 'X', nombre_archivo: 'original.pdf', contenido_base64: PDF_B64 }, CTX_ENCARGADO);
+  await Personas.actualizarDescriptor(db, { persona_id: ana.persona_id, descriptor_id: v01.descriptor_id, objetivo: 'X', nombre_archivo: 'corregido.pdf', contenido_base64: PDF_B64 }, CTX_ENCARGADO);
   const todos = filas(db, 'SGC_DESCRIPTORES').filter((d) => d.persona_id === ana.persona_id);
   assert.equal(todos.length, 1);
-  assert.equal(todos[0].version, 'v01');
-  assert.equal(todos[0].objetivo, 'Asesorar (corregido).');
-  assert.equal(Personas.getFicha(db, { persona_id: ana.persona_id }, CTX_ENCARGADO).descriptor_vigente.objetivo, 'Asesorar (corregido).');
+  assert.equal(todos[0].archivo_nombre, 'corregido.pdf');
 });
 
-test('actualizarDescriptor: exige objetivo, solo gobierna lo edita, y no toca un descriptor ya archivado', () => {
+test('descargarDescriptor: mismo permiso que ver la ficha, y exige que haya archivo', async (t) => {
   const db = db_();
-  const { ana } = sembrar(db);
-  const v01 = Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01', objetivo: 'X' }, CTX_ENCARGADO);
-  assert.equal(Personas.actualizarDescriptor(db, { persona_id: ana.persona_id, descriptor_id: v01.descriptor_id, objetivo: '' }, CTX_ENCARGADO)._validationError, true);
-  assert.equal(Personas.actualizarDescriptor(db, { persona_id: ana.persona_id, descriptor_id: v01.descriptor_id, objetivo: 'Y' }, CTX_ANA)._forbidden, true);
-  Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v02', objetivo: 'Z' }, CTX_ENCARGADO);
-  assert.equal(Personas.actualizarDescriptor(db, { persona_id: ana.persona_id, descriptor_id: v01.descriptor_id, objetivo: 'Y' }, CTX_ENCARGADO)._validationError, true);
-});
-
-test('actualizarDescriptor con archivo cae en el gate de R2 (guardia de permiso/objetivo corre antes)', () => {
-  const db = db_();
-  const { ana } = sembrar(db);
-  const v01 = Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01', objetivo: 'X' }, CTX_ENCARGADO); // sin archivo
-  assert.equal(v01.archivo_id, '');
-  const conArchivo = Personas.actualizarDescriptor(db, { persona_id: ana.persona_id, descriptor_id: v01.descriptor_id, objetivo: 'X', nombre_archivo: 'v2.pdf', contenido_base64: PDF_B64 }, CTX_ENCARGADO);
-  assert.equal(conArchivo._validationError, true);
-  assert.match(conArchivo.message, /almacenamiento/i);
-});
-
-test('descargarDescriptor: mismo permiso que ver la ficha; exige que haya archivo; gateado por R2', () => {
-  const db = db_();
+  conMockAlmacenamiento_(t);
   const { ana, pedro } = sembrar(db);
-  const v01 = Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01', objetivo: 'X' }, CTX_ENCARGADO);
-  // Se siembra el archivo_id directo (sin pasar por el upload bloqueado)
-  // para probar el gate de descarga, no el de subida.
-  agregarFila_(db, 'SGC_DESCRIPTORES', { descriptor_id: 'D-CONARCHIVO', persona_id: ana.persona_id, version: 'v02', objetivo: 'Y', funciones: '', responsabilidades: '', habilidades: '', items_responsabilidades: '[]', items_habilidades: '[]', nivel_educacional: '', formacion_tecnica: '', experiencia: '', archivo_id: 'drive-x', archivo_nombre: 'd.pdf', archivo_mime: 'application/pdf', vigente: false, creado_por: '', fecha: new Date().toISOString() });
+  const v01 = await Personas.guardarDescriptor(db, { persona_id: ana.persona_id, version: 'v01', objetivo: 'X', nombre_archivo: 'descriptor.pdf', contenido_base64: PDF_B64 }, CTX_ENCARGADO);
 
-  const comoAna = Personas.descargarDescriptor(db, { persona_id: ana.persona_id, descriptor_id: 'D-CONARCHIVO' }, CTX_ANA);
-  assert.equal(comoAna._validationError, true);
-  assert.match(comoAna.message, /almacenamiento/i);
-  assert.equal(Personas.descargarDescriptor(db, { persona_id: ana.persona_id, descriptor_id: 'D-CONARCHIVO' }, CTX_PEDRO)._forbidden, true, 'Pedro no ve la ficha de Ana');
-  assert.equal(Personas.descargarDescriptor(db, { persona_id: pedro.persona_id, descriptor_id: v01.descriptor_id }, CTX_PEDRO)._validationError, true, 'sin archivo adjunto (y descriptor de otra persona)');
+  const propio = await Personas.descargarDescriptor(db, { persona_id: ana.persona_id, descriptor_id: v01.descriptor_id }, CTX_ANA);
+  assert.ok(propio.contenido_base64, 'Ana puede bajar el suyo');
+  assert.equal(Buffer.from(propio.contenido_base64, 'base64').toString(), '%PDF-1.4 descriptor');
+
+  assert.equal((await Personas.descargarDescriptor(db, { persona_id: ana.persona_id, descriptor_id: v01.descriptor_id }, CTX_PEDRO))._forbidden, true, 'Pedro no ve la ficha de Ana');
+
+  const sinArchivo = await Personas.guardarDescriptor(db, { persona_id: pedro.persona_id, version: 'v01', objetivo: 'X' }, CTX_ENCARGADO);
+  assert.equal((await Personas.descargarDescriptor(db, { persona_id: pedro.persona_id, descriptor_id: sinArchivo.descriptor_id }, CTX_PEDRO))._validationError, true, 'sin archivo adjunto, no hay que descargar');
 });
 
 // ===== documentos del personal ================================================
 
-test('guardarDocumento: valida tipo antes del archivo; con archivo valido cae en el gate de R2', () => {
+test('documentos del personal: se cargan validados y solo los ve quien ve la ficha', async (t) => {
   const db = db_();
+  conMockAlmacenamiento_(t);
   const { ana } = sembrar(db);
-  assert.equal(Personas.guardarDocumento(db, { persona_id: ana.persona_id, tipo: 'INVENTADO', nombre_archivo: 'x.pdf', contenido_base64: PDF_B64 }, CTX_ENCARGADO)._validationError, true);
-  const conArchivo = Personas.guardarDocumento(db, { persona_id: ana.persona_id, tipo: 'CV', nombre_archivo: 'cv.pdf', contenido_base64: PDF_B64 }, CTX_ENCARGADO);
-  assert.equal(conArchivo._validationError, true);
-  assert.match(conArchivo.message, /almacenamiento/i);
-  assert.equal(Personas.guardarDocumento(db, { persona_id: ana.persona_id, tipo: 'CV', nombre_archivo: 'cv.pdf', contenido_base64: PDF_B64 }, CTX_ANA)._forbidden, true, 'la guardia de permiso corre antes que la de archivo');
+
+  const doc = await Personas.guardarDocumento(db, { persona_id: ana.persona_id, tipo: 'CV', nombre: 'CV Ana', nombre_archivo: 'cv.pdf', contenido_base64: PDF_B64 }, CTX_ENCARGADO);
+  assert.ok(doc.archivo_id);
+
+  assert.equal((await Personas.guardarDocumento(db, { persona_id: ana.persona_id, tipo: 'INVENTADO', nombre_archivo: 'x.pdf', contenido_base64: PDF_B64 }, CTX_ENCARGADO))._validationError, true);
+
+  // Pedro no ve la ficha de Ana -> tampoco puede bajar su CV.
+  assert.equal((await Personas.descargarDocumento(db, { persona_id: ana.persona_id, doc_id: doc.doc_id }, CTX_PEDRO))._forbidden, true);
+
+  // Ana si puede bajar el suyo.
+  const propio = await Personas.descargarDocumento(db, { persona_id: ana.persona_id, doc_id: doc.doc_id }, CTX_ANA);
+  assert.ok(propio.contenido_base64);
+  assert.equal(Buffer.from(propio.contenido_base64, 'base64').toString(), '%PDF-1.4 descriptor');
 });
 
-test('documentos del personal: solo los ve quien ve la ficha (permiso antes del gate de R2)', () => {
+test('guardarDocumento: valida el permiso ANTES que el tipo/archivo', async (t) => {
   const db = db_();
+  conMockAlmacenamiento_(t);
   const { ana } = sembrar(db);
-  // Sembrado directo (el upload esta bloqueado): un documento YA cargado.
-  agregarFila_(db, 'SGC_PERSONA_DOCUMENTOS', { doc_id: 'DOC-CV', persona_id: ana.persona_id, tipo: 'CV', nombre: 'CV Ana', archivo_id: 'drive-y', archivo_nombre: 'cv.pdf', archivo_mime: 'application/pdf', subido_por: CTX_ENCARGADO.email, fecha: new Date().toISOString(), activa: true });
-  assert.equal(Personas.descargarDocumento(db, { persona_id: ana.persona_id, doc_id: 'DOC-CV' }, CTX_PEDRO)._forbidden, true);
-  const comoAna = Personas.descargarDocumento(db, { persona_id: ana.persona_id, doc_id: 'DOC-CV' }, CTX_ANA);
-  assert.equal(comoAna._validationError, true);
-  assert.match(comoAna.message, /almacenamiento/i);
+  assert.equal((await Personas.guardarDocumento(db, { persona_id: ana.persona_id, tipo: 'CV', nombre_archivo: 'cv.pdf', contenido_base64: PDF_B64 }, CTX_ANA))._forbidden, true, 'la guardia de permiso corre antes que la de archivo');
 });
 
 // ===== induccion ==============================================================
@@ -322,10 +347,11 @@ test('no se puede evaluar sin un descriptor de cargo con items cargados', () => 
   assert.match(r.message, /descriptor/i);
 });
 
-test('evaluacion: los promedios se derivan de los puntajes del descriptor; agenda proxima a 12 meses', () => {
+test('evaluacion: los promedios se derivan de los puntajes del descriptor; agenda proxima a 12 meses', async (t) => {
   const db = db_();
+  conMockAlmacenamiento_(t);
   const { ana } = sembrar(db);
-  descriptorConItems(db, ana.persona_id);
+  await descriptorConItems(db, ana.persona_id);
   const e = Personas.registrarEvaluacion(db, { persona_id: ana.persona_id, respuestas_responsabilidades: respuestas(4, 3), respuestas_habilidades: respuestas(4, 2) }, CTX_JEFA);
   assert.equal(e.promedio_responsabilidades, 4);
   assert.equal(e.promedio_habilidades, 4);
@@ -333,10 +359,11 @@ test('evaluacion: los promedios se derivan de los puntajes del descriptor; agend
   assert.equal(new Date(e.proxima_evaluacion).getFullYear() - new Date(e.fecha).getFullYear(), 1);
 });
 
-test('evaluacion: promedio bajo 3 en CUALQUIERA de los dos bloques marca necesidad de capacitacion y avisa al Encargado', () => {
+test('evaluacion: promedio bajo 3 en CUALQUIERA de los dos bloques marca necesidad de capacitacion y avisa al Encargado', async (t) => {
   const db = db_();
+  conMockAlmacenamiento_(t);
   const { ana } = sembrar(db);
-  descriptorConItems(db, ana.persona_id);
+  await descriptorConItems(db, ana.persona_id);
   const mixta = Personas.registrarEvaluacion(db, { persona_id: ana.persona_id, respuestas_responsabilidades: respuestas(4, 3), respuestas_habilidades: respuestas(2, 2) }, CTX_JEFA);
   assert.equal(mixta.promedio_responsabilidades, 4);
   assert.equal(mixta.promedio_habilidades, 2);
@@ -345,20 +372,22 @@ test('evaluacion: promedio bajo 3 en CUALQUIERA de los dos bloques marca necesid
   assert.ok(notifs.length >= 1);
 });
 
-test('evaluacion: exige calificar TODOS los items del descriptor, entre 1 y 4', () => {
+test('evaluacion: exige calificar TODOS los items del descriptor, entre 1 y 4', async (t) => {
   const db = db_();
+  conMockAlmacenamiento_(t);
   const { ana } = sembrar(db);
-  descriptorConItems(db, ana.persona_id);
+  await descriptorConItems(db, ana.persona_id);
   assert.equal(Personas.registrarEvaluacion(db, { persona_id: ana.persona_id, respuestas_responsabilidades: respuestas(3, 3) }, CTX_JEFA)._validationError, true);
   assert.equal(Personas.registrarEvaluacion(db, { persona_id: ana.persona_id, respuestas_responsabilidades: respuestas(5, 3), respuestas_habilidades: respuestas(3, 2) }, CTX_JEFA)._validationError, true);
   assert.equal(Personas.registrarEvaluacion(db, { persona_id: ana.persona_id, respuestas_responsabilidades: respuestas(0, 3), respuestas_habilidades: respuestas(3, 2) }, CTX_JEFA)._validationError, true);
 });
 
-test('evaluacion: la hace la jefatura directa o el Encargado SGC, y nadie se evalua a si mismo', () => {
+test('evaluacion: la hace la jefatura directa o el Encargado SGC, y nadie se evalua a si mismo', async (t) => {
   const db = db_();
+  conMockAlmacenamiento_(t);
   const { ana, pedro } = sembrar(db);
-  descriptorConItems(db, ana.persona_id);
-  descriptorConItems(db, pedro.persona_id);
+  await descriptorConItems(db, ana.persona_id);
+  await descriptorConItems(db, pedro.persona_id);
   const datosAna = { persona_id: ana.persona_id, respuestas_responsabilidades: respuestas(3, 3), respuestas_habilidades: respuestas(3, 2) };
   const datosPedro = { persona_id: pedro.persona_id, respuestas_responsabilidades: respuestas(3, 3), respuestas_habilidades: respuestas(3, 2) };
   assert.equal(Personas.registrarEvaluacion(db, datosAna, CTX_PEDRO)._forbidden, true);
@@ -367,10 +396,11 @@ test('evaluacion: la hace la jefatura directa o el Encargado SGC, y nadie se eva
   assert.ok(Personas.registrarEvaluacion(db, datosPedro, CTX_ENCARGADO).evaluacion_id);
 });
 
-test('la ficha trae el historial de evaluaciones y marca si esta vencida', () => {
+test('la ficha trae el historial de evaluaciones y marca si esta vencida', async (t) => {
   const db = db_();
+  conMockAlmacenamiento_(t);
   const { ana } = sembrar(db);
-  descriptorConItems(db, ana.persona_id);
+  await descriptorConItems(db, ana.persona_id);
   Personas.registrarEvaluacion(db, { persona_id: ana.persona_id, fecha: '2020-01-01T00:00:00.000Z', respuestas_responsabilidades: respuestas(3, 3), respuestas_habilidades: respuestas(3, 2) }, CTX_JEFA);
   const ficha = Personas.getFicha(db, { persona_id: ana.persona_id }, CTX_ENCARGADO);
   assert.equal(ficha.evaluaciones.length, 1);
@@ -469,10 +499,11 @@ test('aviso: quien nunca fue evaluado aparece como pendiente; no se repite en la
 
 test('aviso: una persona recien evaluada deja de aparecer', async (t) => {
   conMockCorreo(t);
+  conMockAlmacenamiento_(t);
   const db = db_();
   const { ana, pedro } = sembrar(db);
-  descriptorConItems(db, ana.persona_id);
-  descriptorConItems(db, pedro.persona_id);
+  await descriptorConItems(db, ana.persona_id);
+  await descriptorConItems(db, pedro.persona_id);
   const datos = { respuestas_responsabilidades: respuestas(4, 3), respuestas_habilidades: respuestas(4, 2) };
   Personas.registrarEvaluacion(db, Object.assign({ persona_id: ana.persona_id }, datos), CTX_JEFA);
   Personas.registrarEvaluacion(db, Object.assign({ persona_id: pedro.persona_id }, datos), CTX_ENCARGADO);

@@ -54,8 +54,6 @@ var MAX_INTENTOS_LECTURA = 3;
 // "almacenamiento no configurado" en vez de servir el archivo real que Apps
 // Script sí sirve hoy. Cortarlas ahora sería una regresión, no una mejora.
 // Lista de lo que sigue pendiente:
-// guardarDescriptorSgc, actualizarDescriptorSgc, descargarDescriptorSgc,
-// guardarDocumentoPersonaSgc, descargarDocumentoPersonaSgc,
 // descargarReporteCumplimientoPausasPdf, descargarReporteGerenciaPausasPdf,
 // subirAdjuntoProyecto, descargarAdjuntoProyecto, gestionarDocumentoProyecto,
 // subirVersionDocumentoProyecto, marcarVersionVigenteProyecto,
@@ -126,11 +124,13 @@ var ACCIONES_PORTADAS_NODE = {
   getMatrizDistribucionSgc: true, getDocumentosConfidencialesSgc: true,
   crearDocumentoSgc: true, nuevaVersionDocumentoSgc: true, actualizarDocumentoSgc: true, descargarDocumentoSgc: true,
 
-  // --- SGC ISO 9001: Personas (11 de 16; descriptor/documento con archivo siguen en Apps Script) ---
+  // --- SGC ISO 9001: Personas (16 de 16; descriptor/documento desgateados de R2 el 2026-09-18) ---
   listarPersonasSgc: true, getFichaPersonaSgc: true, guardarPersonaSgc: true, desvincularPersonaSgc: true,
   quitarPersonaAlcanceSgc: true, registrarInduccionSgc: true,
   registrarEvaluacionSgc: true, listarCapacitacionesSgc: true, guardarCapacitacionSgc: true,
   registrarRealizacionCapacitacionSgc: true, registrarEficaciaCapacitacionSgc: true,
+  guardarDescriptorSgc: true, actualizarDescriptorSgc: true, descargarDescriptorSgc: true,
+  guardarDocumentoPersonaSgc: true, descargarDocumentoPersonaSgc: true,
 
   // --- SGC ISO 9001: No conformidades (9 de 9; PRO-06, sin archivos: se corta completo) ---
   listarNcSgc: true, getDetalleNcSgc: true, crearNcSgc: true,

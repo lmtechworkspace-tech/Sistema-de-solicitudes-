@@ -21,8 +21,10 @@
  * operativo ve UNICAMENTE su(s) propia(s) ficha(s); la jefatura ve la suya y
  * la de su equipo; quien gobierna el SGC (o tiene lectura total) ve todas.
  *
- * Archivos (descriptor, documentos de la persona) bloqueados por R2, mismo
- * criterio que calidadSgc.js.
+ * Archivos (descriptor, documentos de la persona) usan R2 desde
+ * 2026-09-18, vía `Calidad.subirArchivoSgc_` -- mismo helper compartido
+ * que usa calidadSgc.js (en el `.gs` es una función global del mismo
+ * proyecto Apps Script; en Node se importa en vez de duplicarse).
  */
 
 const crypto = require('node:crypto');
@@ -32,6 +34,7 @@ const Calidad = require('./calidadSgc');
 const Jefatura = require('./jefatura');
 const Notificaciones = require('./notificaciones');
 const NotificacionesApp = require('./notificacionesApp');
+const Almacenamiento = require('./almacenamiento');
 
 const ITEMS_INDUCCION_SGC = ['Organigrama', 'Política de Calidad', 'Objetivos de Calidad', 'Descriptor de cargo', 'Inducción ISO 9001'];
 const TIPOS_DOC_PERSONA_SGC = ['CV', 'TITULO', 'ISO9001', 'CONTRATO', 'CERTIFICADO', 'OTRO'];
@@ -62,11 +65,6 @@ function inicioSemanaUTC_(fecha) {
   const offsetLunes = (diaSemana + 6) % 7;
   return new Date(Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate() - offsetLunes));
 }
-// Bloqueado por R2, mismo criterio que calidadSgc.js.
-function subirArchivoSgc_() {
-  return errorValidacion_('contenido_base64', 'La carga de archivos del SGC aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).');
-}
-
 // --- permisos ----------------------------------------------------------------
 function puedeVerPersona_(db, persona, contexto, rol, gobierna) {
   if (!contexto) return false;
@@ -297,7 +295,7 @@ function quitarDelAlcance(db, data, contexto) {
   return quitada;
 }
 
-function guardarDescriptor(db, data, contexto) {
+async function guardarDescriptor(db, data, contexto) {
   if (!Calidad.gobiernaSgc_(db, contexto)) return { _forbidden: true, message: 'Solo el Encargado SGC o un administrador pueden editar descriptores.' };
   const persona = buscarPersonaSgc_(db, data.persona_id);
   if (!persona) return errorValidacion_('persona_id', 'Persona no encontrada.');
@@ -310,7 +308,7 @@ function guardarDescriptor(db, data, contexto) {
 
   let archivo = { archivo_id: '', archivo_nombre: '', archivo_mime: '' };
   if (data.contenido_base64) {
-    const subido = subirArchivoSgc_(data, 'DESCRIPTOR-' + (persona.rut || persona.nombre));
+    const subido = await Calidad.subirArchivoSgc_(data, 'DESCRIPTOR-' + (persona.rut || persona.nombre));
     if (subido._validationError) return subido;
     archivo = subido;
   }
@@ -332,7 +330,7 @@ function guardarDescriptor(db, data, contexto) {
   return descriptor;
 }
 
-function actualizarDescriptor(db, data, contexto) {
+async function actualizarDescriptor(db, data, contexto) {
   if (!Calidad.gobiernaSgc_(db, contexto)) return { _forbidden: true, message: 'Solo el Encargado SGC o un administrador pueden editar descriptores.' };
   const persona = buscarPersonaSgc_(db, data.persona_id);
   if (!persona) return errorValidacion_('persona_id', 'Persona no encontrada.');
@@ -347,7 +345,7 @@ function actualizarDescriptor(db, data, contexto) {
     nivel_educacional: data.nivel_educacional || '', formacion_tecnica: data.formacion_tecnica || '', experiencia: data.experiencia || ''
   };
   if (data.contenido_base64) {
-    const subido = subirArchivoSgc_(data, 'DESCRIPTOR-' + (persona.rut || persona.nombre));
+    const subido = await Calidad.subirArchivoSgc_(data, 'DESCRIPTOR-' + (persona.rut || persona.nombre));
     if (subido._validationError) return subido;
     cambios.archivo_id = subido.archivo_id; cambios.archivo_nombre = subido.archivo_nombre; cambios.archivo_mime = subido.archivo_mime;
   }
@@ -356,7 +354,7 @@ function actualizarDescriptor(db, data, contexto) {
   return { descriptor_id: desc.descriptor_id };
 }
 
-function descargarDescriptor(db, data, contexto) {
+async function descargarDescriptor(db, data, contexto) {
   const persona = buscarPersonaSgc_(db, data.persona_id);
   if (!persona) return errorValidacion_('persona_id', 'Persona no encontrada.');
   const rol = Calidad.rolSgc_(db, contexto);
@@ -364,10 +362,18 @@ function descargarDescriptor(db, data, contexto) {
   const desc = leerSeguro_(db, 'SGC_DESCRIPTORES').find((d) => d.descriptor_id === data.descriptor_id && d.persona_id === persona.persona_id);
   if (!desc) return errorValidacion_('descriptor_id', 'Descriptor no encontrado.');
   if (!desc.archivo_id) return errorValidacion_('descriptor_id', 'Este descriptor no tiene archivo adjunto.');
-  return errorValidacion_('descriptor_id', 'La descarga de archivos del SGC aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).');
+
+  const descarga = await Almacenamiento.descargarArchivo_(desc.archivo_id);
+  if (!descarga.ok) return errorValidacion_('descriptor_id', descarga.message);
+  registrarLogSgc_(db, 'SGC_DESCRIPTOR_DESCARGADO', persona.nombre + ' ' + desc.version, contexto);
+  return {
+    contenido_base64: descarga.contenido_base64,
+    nombre_archivo: desc.archivo_nombre || '',
+    mime: desc.archivo_mime || 'application/octet-stream'
+  };
 }
 
-function guardarDocumento(db, data, contexto) {
+async function guardarDocumento(db, data, contexto) {
   const persona = buscarPersonaSgc_(db, data.persona_id);
   if (!persona) return errorValidacion_('persona_id', 'Persona no encontrada.');
   if (!Calidad.gobiernaSgc_(db, contexto)) return { _forbidden: true, message: 'Solo el Encargado SGC o un administrador pueden cargar documentos del personal.' };
@@ -377,7 +383,7 @@ function guardarDocumento(db, data, contexto) {
   }
   if (TIPOS_DOC_PERSONA_SGC.indexOf(data.tipo) === -1) return errorValidacion_('tipo', 'Tipo de documento inválido.');
   if (!data.contenido_base64) return errorValidacion_('contenido_base64', 'Adjunta el archivo.');
-  const archivo = subirArchivoSgc_(data, 'PERSONAL');
+  const archivo = await Calidad.subirArchivoSgc_(data, 'PERSONAL');
   if (archivo._validationError) return archivo;
 
   const doc = {
@@ -390,14 +396,22 @@ function guardarDocumento(db, data, contexto) {
   return doc;
 }
 
-function descargarDocumento(db, data, contexto) {
+async function descargarDocumento(db, data, contexto) {
   const persona = buscarPersonaSgc_(db, data.persona_id);
   if (!persona) return errorValidacion_('persona_id', 'Persona no encontrada.');
   const rol = Calidad.rolSgc_(db, contexto);
   if (!puedeVerPersona_(db, persona, contexto, rol, Calidad.gobiernaSgc_(db, contexto))) return { _forbidden: true, message: 'No tienes acceso a esta ficha.' };
   const doc = leerSeguro_(db, 'SGC_PERSONA_DOCUMENTOS').find((d) => d.doc_id === data.doc_id && d.persona_id === persona.persona_id && esActivo_(d));
   if (!doc) return errorValidacion_('doc_id', 'Documento no encontrado.');
-  return errorValidacion_('doc_id', 'La descarga de archivos del SGC aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).');
+
+  const descarga = await Almacenamiento.descargarArchivo_(doc.archivo_id);
+  if (!descarga.ok) return errorValidacion_('doc_id', descarga.message);
+  registrarLogSgc_(db, 'SGC_PERSONA_DOC_DESCARGADO', persona.nombre + ' ' + doc.tipo, contexto);
+  return {
+    contenido_base64: descarga.contenido_base64,
+    nombre_archivo: doc.archivo_nombre || '',
+    mime: doc.archivo_mime || 'application/octet-stream'
+  };
 }
 
 function registrarInduccion(db, data, contexto) {
