@@ -166,17 +166,17 @@ test('7.3 llega a COMPLETO cerrando la inducción por donde la cierra el sistema
 
 // --- las clausulas de documento NUNCA se adivinan -----------------------------
 
-test('5.2 (política) queda FALTANTE aunque existan documentos, hasta que se etiqueten', () => {
+test('5.2 (política) queda FALTANTE aunque existan documentos, hasta que se etiqueten', async () => {
   const db = db_();
   sembrarRoles(db);
 
-  const doc = Calidad.crearDocumento(db, { codigo: 'DOC-01', nombre: 'Manual de Calidad', tipo: 'DOC', visibilidad: 'TODOS' }, CTX_ENCARGADO);
+  const doc = await Calidad.crearDocumento(db, { codigo: 'DOC-01', nombre: 'Manual de Calidad', tipo: 'DOC', visibilidad: 'TODOS' }, CTX_ENCARGADO);
   assert.equal(clausula(db, '5.2').estado, 'FALTANTE');
 
   const detalleSinEtiquetar = MatrizCobertura.getDetalle(db, { codigo: '5.2' }, CTX_ENCARGADO);
   assert.match(detalleSinEtiquetar.nota, /etiqueta el documento/i);
 
-  Calidad.actualizarDocumento(db, { documento_id: doc.documento_id, clausulas_iso: ['5.2'] }, CTX_ENCARGADO);
+  await Calidad.actualizarDocumento(db, { documento_id: doc.documento_id, clausulas_iso: ['5.2'] }, CTX_ENCARGADO);
 
   assert.equal(clausula(db, '5.2').estado, 'COMPLETO');
   const detalle = MatrizCobertura.getDetalle(db, { codigo: '5.2' }, CTX_ENCARGADO);
@@ -184,10 +184,10 @@ test('5.2 (política) queda FALTANTE aunque existan documentos, hasta que se eti
   assert.match(detalle.evidencia[0].descripcion, /DOC-01/);
 });
 
-test('un código de cláusula inventado se descarta al guardar, no se acepta', () => {
+test('un código de cláusula inventado se descarta al guardar, no se acepta', async () => {
   const db = db_();
   sembrarRoles(db);
-  const doc = Calidad.crearDocumento(db, { codigo: 'DOC-02', nombre: 'Otro documento', tipo: 'DOC', visibilidad: 'TODOS', clausulas_iso: ['5.2', '99.9', ''] }, CTX_ENCARGADO);
+  const doc = await Calidad.crearDocumento(db, { codigo: 'DOC-02', nombre: 'Otro documento', tipo: 'DOC', visibilidad: 'TODOS', clausulas_iso: ['5.2', '99.9', ''] }, CTX_ENCARGADO);
   const detalle = Calidad.getDocumento(db, { documento_id: doc.documento_id }, CTX_ENCARGADO);
   assert.deepEqual(detalle.documento.clausulas_iso, ['5.2']);
 });
@@ -200,14 +200,14 @@ test('una cláusula sin ningún módulo que la cubra explica por qué, no queda 
   assert.match(c63.nota, /no tiene un módulo propio/i);
 });
 
-test('una cláusula sin módulo propio SÍ cuenta el documento etiquetado', () => {
+test('una cláusula sin módulo propio SÍ cuenta el documento etiquetado', async () => {
   const db = db_();
   sembrarRoles(db);
 
-  const doc = Calidad.crearDocumento(db, { codigo: 'DOC-01', nombre: 'Manual de Calidad', tipo: 'DOC', visibilidad: 'TODOS' }, CTX_ENCARGADO);
+  const doc = await Calidad.crearDocumento(db, { codigo: 'DOC-01', nombre: 'Manual de Calidad', tipo: 'DOC', visibilidad: 'TODOS' }, CTX_ENCARGADO);
   assert.equal(clausula(db, '6.3').estado, 'FALTANTE');
 
-  Calidad.actualizarDocumento(db, { documento_id: doc.documento_id, clausulas_iso: ['6.3'] }, CTX_ENCARGADO);
+  await Calidad.actualizarDocumento(db, { documento_id: doc.documento_id, clausulas_iso: ['6.3'] }, CTX_ENCARGADO);
 
   const c63 = MatrizCobertura.getDetalle(db, { codigo: '6.3' }, CTX_ENCARGADO);
   assert.equal(c63.estado, 'PARCIAL');
@@ -216,13 +216,13 @@ test('una cláusula sin módulo propio SÍ cuenta el documento etiquetado', () =
   assert.match(c63.nota, /no tiene un módulo propio/i);
 });
 
-test('6.1 (riesgos): sin la matriz cargada, degrada a FALTANTE o PARCIAL según haya documentos etiquetados', () => {
+test('6.1 (riesgos): sin la matriz cargada, degrada a FALTANTE o PARCIAL según haya documentos etiquetados', async () => {
   const db = db_();
   sembrarRoles(db);
   assert.equal(clausula(db, '6.1').estado, 'FALTANTE');
 
-  const doc = Calidad.crearDocumento(db, { codigo: 'DOC-01', nombre: 'Matriz de riesgos', tipo: 'DOC', visibilidad: 'TODOS' }, CTX_ENCARGADO);
-  Calidad.actualizarDocumento(db, { documento_id: doc.documento_id, clausulas_iso: ['6.1'] }, CTX_ENCARGADO);
+  const doc = await Calidad.crearDocumento(db, { codigo: 'DOC-01', nombre: 'Matriz de riesgos', tipo: 'DOC', visibilidad: 'TODOS' }, CTX_ENCARGADO);
+  await Calidad.actualizarDocumento(db, { documento_id: doc.documento_id, clausulas_iso: ['6.1'] }, CTX_ENCARGADO);
   assert.equal(clausula(db, '6.1').estado, 'PARCIAL');
 });
 

@@ -45,17 +45,15 @@ var MAX_INTENTOS_LECTURA = 3;
 // probado por curl pero el sitio real jamás lo llama. Que la accion exista
 // en router.js NO significa que el frontend ya la use.
 //
-// Excluidas a propósito (siguen en Apps Script hasta que exista R2, o hasta
-// que su módulo se desgatee -- Cloudflare R2 ya está activo desde
-// 2026-09-18, ver almacenamiento.js; Novedades fue el primer módulo
-// desgateado, publicarNovedad/descargarAdjuntoNovedad ya están arriba en el
-// mapa): toda acción que sube o baja un archivo real (adjuntos, PDF, libro
-// Excel, centro documental) que TODAVÍA no se reescribió para usar
+// Excluidas a propósito (siguen en Apps Script hasta que su módulo se
+// desgatee -- Cloudflare R2 ya está activo desde 2026-09-18, ver
+// almacenamiento.js; Novedades y SGC Documentos ya están desgateados,
+// sus acciones de archivo ya están arriba/abajo en el mapa): toda acción
+// que sube o baja un archivo real que TODAVÍA no se reescribió para usar
 // almacenamiento.js -- en Node esas siguen devolviendo un error de
 // "almacenamiento no configurado" en vez de servir el archivo real que Apps
 // Script sí sirve hoy. Cortarlas ahora sería una regresión, no una mejora.
-// Lista de lo que sigue pendiente: crearDocumentoSgc,
-// nuevaVersionDocumentoSgc, actualizarDocumentoSgc, descargarDocumentoSgc,
+// Lista de lo que sigue pendiente:
 // guardarDescriptorSgc, actualizarDescriptorSgc, descargarDescriptorSgc,
 // guardarDocumentoPersonaSgc, descargarDocumentoPersonaSgc,
 // descargarReporteCumplimientoPausasPdf, descargarReporteGerenciaPausasPdf,
@@ -121,11 +119,12 @@ var ACCIONES_PORTADAS_NODE = {
   gestionarEntregableProyecto: true, revisarEntregableProyecto: true, gestionarRiesgoProyecto: true,
   getResumenPortafolioProyectos: true,
 
-  // --- SGC ISO 9001: Documentos (11 de 15; carga/descarga de archivo sigue en Apps Script) ---
+  // --- SGC ISO 9001: Documentos (15 de 15; carga/descarga desgateadas de R2 el 2026-09-18) ---
   listarDocumentosSgc: true, getDocumentoSgc: true, sembrarDocumentosExternosSgc: true,
   acusarDocumentoSgc: true, getCumplimientoDocumentoSgc: true,
   listarRolesSgc: true, gestionarRolSgc: true, listarAccesosSgc: true, previsualizarAccesoSgc: true,
   getMatrizDistribucionSgc: true, getDocumentosConfidencialesSgc: true,
+  crearDocumentoSgc: true, nuevaVersionDocumentoSgc: true, actualizarDocumentoSgc: true, descargarDocumentoSgc: true,
 
   // --- SGC ISO 9001: Personas (11 de 16; descriptor/documento con archivo siguen en Apps Script) ---
   listarPersonasSgc: true, getFichaPersonaSgc: true, guardarPersonaSgc: true, desvincularPersonaSgc: true,

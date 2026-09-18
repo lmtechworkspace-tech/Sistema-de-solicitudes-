@@ -15,10 +15,13 @@
  * el SGC. Nadie del personal debe toparse por accidente con una version que
  * ya no rige (PRO-01 §4.3).
  *
- * Archivos: bloqueados por R2, mismo criterio que Novedades/Pausas/Proyectos.
- * subirArchivoSgc_/descargarDocumento devuelven un error de validacion claro
- * en vez de tocar Drive -- toda la logica de negocio (permisos, versionado,
- * acuse, roles) queda completa y probada, lista para cuando exista R2.
+ * Archivos: desde 2026-09-18 usan almacenamiento.js (Cloudflare R2), mismo
+ * criterio que Novedades (primer módulo desgateado). subirArchivoSgc_ sube
+ * el archivo bajo una clave única por subida (codigo + uuid, nunca
+ * reutilizada -- una versión anterior no se puede pisar sin querer, ISO
+ * exige poder demostrar qué versión regía en qué fecha) y descargarDocumento
+ * lo sirve real. Toda la lógica de negocio (permisos, versionado, acuse,
+ * roles) ya estaba completa y probada, solo esperaba almacenamiento real.
  */
 
 const crypto = require('node:crypto');
@@ -30,6 +33,7 @@ const Portal = require('./portal');
 const Jefatura = require('./jefatura');
 const Notificaciones = require('./notificaciones');
 const NotificacionesApp = require('./notificacionesApp');
+const Almacenamiento = require('./almacenamiento');
 
 const TIPOS_DOC_SGC = ['DOC', 'PRO', 'INS', 'FO', 'EXTERNO'];
 const VISIBILIDAD_SGC = ['TODOS', 'AREA', 'SELECCION'];
@@ -235,11 +239,57 @@ function diasHasta_(fecha, ahora) {
   return Math.round((f - (ahora || new Date())) / 86400000);
 }
 
-// Bloqueado por R2: el archivo real no se puede subir todavia. Error claro
-// en vez de intentar tocar un almacenamiento que no existe, mismo criterio
-// que Novedades/Pausas/Proyectos.
-function subirArchivoSgc_() {
-  return errorValidacion_('contenido_base64', 'La carga de archivos del SGC aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).');
+// Firmas de archivo aceptadas: PDF, DOCX/XLSX/PPTX (ZIP) y DOC/XLS legado
+// (OLE). Se valida por BYTES, no por la extensión del nombre -- la escribe
+// el usuario y se puede equivocar (o mentir).
+const MAX_ARCHIVO_SGC_BYTES = 10 * 1024 * 1024;
+const FIRMA_PDF_SGC = Buffer.from([0x25, 0x50, 0x44, 0x46]);
+const FIRMA_ZIP_SGC = Buffer.from([0x50, 0x4B, 0x03, 0x04]);
+const FIRMA_OLE_SGC = Buffer.from([0xD0, 0xCF, 0x11, 0xE0]);
+function coincideFirmaSgc_(bytes, firma) {
+  return bytes.length >= firma.length && bytes.subarray(0, firma.length).equals(firma);
+}
+// El tipo real lo decide la FIRMA del archivo; la extensión solo desempata
+// entre docx/xlsx/pptx (y doc/xls legado), que comparten firma contenedora.
+function mimeArchivoSgc_(bytes, nombre) {
+  const ext = String(nombre || '').toLowerCase().split('.').pop();
+  if (coincideFirmaSgc_(bytes, FIRMA_PDF_SGC)) return 'application/pdf';
+  if (coincideFirmaSgc_(bytes, FIRMA_ZIP_SGC)) {
+    if (ext === 'docx') return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    if (ext === 'xlsx') return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    if (ext === 'pptx') return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    return '';
+  }
+  if (coincideFirmaSgc_(bytes, FIRMA_OLE_SGC)) {
+    if (ext === 'doc') return 'application/msword';
+    if (ext === 'xls') return 'application/vnd.ms-excel';
+    return '';
+  }
+  return '';
+}
+
+async function subirArchivoSgc_(data, codigo) {
+  if (!data.nombre_archivo) return errorValidacion_('nombre_archivo', 'Falta el nombre del archivo.');
+  let bytes;
+  try {
+    bytes = Buffer.from(data.contenido_base64, 'base64');
+  } catch (err) {
+    return errorValidacion_('contenido_base64', 'El archivo no es base64 válido.');
+  }
+  if (!bytes.length) return errorValidacion_('contenido_base64', 'El archivo está vacío.');
+  if (bytes.length > MAX_ARCHIVO_SGC_BYTES) {
+    return errorValidacion_('contenido_base64', 'El archivo supera el tamaño máximo (' + Math.round(MAX_ARCHIVO_SGC_BYTES / (1024 * 1024)) + ' MB).');
+  }
+  const mime = mimeArchivoSgc_(bytes, data.nombre_archivo);
+  if (!mime) return errorValidacion_('contenido_base64', 'Formato no admitido. Se aceptan PDF, Word (.docx/.doc) y Excel (.xlsx/.xls).');
+
+  // Clave única por subida (nunca el mismo código+nombre dos veces): una
+  // versión anterior sigue siendo recuperable por su propio archivo_id
+  // aunque se suba una nueva con el mismo nombre de archivo.
+  const clave = 'sgc/documentos/' + (codigo || 'sin-codigo') + '/' + uuid_() + '/' + data.nombre_archivo;
+  const subida = await Almacenamiento.subirArchivo_(clave, data.contenido_base64, mime);
+  if (!subida.ok) return errorValidacion_('contenido_base64', subida.message);
+  return { archivo_id: clave, archivo_nombre: data.nombre_archivo, archivo_mime: mime };
 }
 
 function registrarVersionSgc_(db, documentoId, version, cambios, archivo, contexto, vigente) {
@@ -398,7 +448,7 @@ function sembrarDocumentosExternos(db, data, contexto) {
   };
 }
 
-function crearDocumento(db, data, contexto) {
+async function crearDocumento(db, data, contexto) {
   if (!gobiernaSgc_(db, contexto)) return { _forbidden: true, message: 'Solo el Encargado SGC o un administrador pueden cargar documentos.' };
   const codigo = String(data.codigo || '').trim().toUpperCase();
   if (!codigo) return errorValidacion_('codigo', 'El código del documento es obligatorio.');
@@ -411,7 +461,7 @@ function crearDocumento(db, data, contexto) {
 
   let archivo = { archivo_id: '', archivo_nombre: '', archivo_mime: '' };
   if (data.contenido_base64) {
-    const subido = subirArchivoSgc_(data, codigo);
+    const subido = await subirArchivoSgc_(data, codigo);
     if (subido._validationError) return subido;
     archivo = subido;
   }
@@ -438,7 +488,7 @@ function crearDocumento(db, data, contexto) {
   return documento;
 }
 
-function nuevaVersion(db, data, contexto) {
+async function nuevaVersion(db, data, contexto) {
   const doc = buscarDocumentoSgc_(db, data.documento_id);
   if (!doc) return errorValidacion_('documento_id', 'Documento no encontrado.');
   if (!gobiernaSgc_(db, contexto)) return { _forbidden: true, message: 'Solo el Encargado SGC o un administrador pueden subir una nueva versión.' };
@@ -446,7 +496,7 @@ function nuevaVersion(db, data, contexto) {
   if (!version) return errorValidacion_('version', 'Indica el número de la nueva versión (ej. v02).');
   if (version === doc.version_vigente) return errorValidacion_('version', 'Esa ya es la versión vigente.');
   if (!data.contenido_base64) return errorValidacion_('contenido_base64', 'Adjunta el archivo de la nueva versión.');
-  const archivo = subirArchivoSgc_(data, doc.codigo);
+  const archivo = await subirArchivoSgc_(data, doc.codigo);
   if (archivo._validationError) return archivo;
 
   leerSeguro_(db, 'SGC_DOC_VERSIONES').forEach((v) => {
@@ -462,7 +512,7 @@ function nuevaVersion(db, data, contexto) {
   return actualizado;
 }
 
-function actualizarDocumento(db, data, contexto) {
+async function actualizarDocumento(db, data, contexto) {
   const doc = buscarDocumentoSgc_(db, data.documento_id);
   if (!doc) return errorValidacion_('documento_id', 'Documento no encontrado.');
   if (!gobiernaSgc_(db, contexto)) return { _forbidden: true, message: 'Solo el Encargado SGC o un administrador pueden editar documentos.' };
@@ -491,7 +541,7 @@ function actualizarDocumento(db, data, contexto) {
     if (yaConfirmada) {
       return errorValidacion_('contenido_base64', 'Alguien ya confirmó la versión ' + doc.version_vigente + ': su archivo es evidencia y no se reemplaza. Sube una versión nueva para dejar el cambio trazado.');
     }
-    const archivoNuevo = subirArchivoSgc_(data, doc.codigo);
+    const archivoNuevo = await subirArchivoSgc_(data, doc.codigo);
     if (archivoNuevo._validationError) return archivoNuevo;
     cambios.archivo_id = archivoNuevo.archivo_id;
     cambios.archivo_nombre = archivoNuevo.archivo_nombre;
@@ -516,7 +566,7 @@ function sincronizarArchivoVersionSgc_(db, doc, archivo, contexto) {
   });
 }
 
-function descargarDocumento(db, data, contexto) {
+async function descargarDocumento(db, data, contexto) {
   const doc = buscarDocumentoSgc_(db, data.documento_id);
   if (!doc) return errorValidacion_('documento_id', 'Documento no encontrado.');
   const rol = rolSgc_(db, contexto);
@@ -525,16 +575,28 @@ function descargarDocumento(db, data, contexto) {
   if (!puedeVerDocumento_(db, doc, contexto, rol, areaSgc_(db, contexto), gobierna, destinatarios)) {
     return { _forbidden: true, message: 'No tienes acceso a este documento.' };
   }
-  let archivoId = doc.archivo_id;
+  // Se puede pedir una versión histórica concreta (solo quien gobierna el
+  // SGC: para el personal, la versión anterior ya no rige).
+  let archivoId = doc.archivo_id, nombre = doc.archivo_nombre, mime = doc.archivo_mime;
   if (data.version_id) {
     if (!gobierna) return { _forbidden: true, message: 'Solo el Encargado SGC puede descargar versiones anteriores.' };
     const v = leerSeguro_(db, 'SGC_DOC_VERSIONES').find((x) => x.version_id === data.version_id && x.documento_id === doc.documento_id);
     if (!v) return errorValidacion_('version_id', 'Versión no encontrada.');
-    archivoId = v.archivo_id;
+    archivoId = v.archivo_id; nombre = v.archivo_nombre; mime = v.archivo_mime;
   }
   if (!archivoId) return errorValidacion_('documento_id', 'Este documento no tiene archivo cargado.');
-  // Bloqueado por R2: no hay forma de servir bytes reales todavia.
-  return errorValidacion_('documento_id', 'La descarga de archivos del SGC aun no esta disponible en el nuevo backend (falta configurar el almacenamiento).');
+
+  const descarga = await Almacenamiento.descargarArchivo_(archivoId);
+  if (!descarga.ok) return errorValidacion_('documento_id', descarga.message);
+  // §15.2 de la especificación pide log de descargas. Se registra la
+  // DESCARGA (no cada visualización): es lo que el auditor pregunta, y
+  // loguear cada lectura haría explotar LOG_SISTEMA.
+  registrarLogSgc_(db, 'SGC_DOC_DESCARGADO', doc.codigo + ' ' + (nombre || ''), contexto);
+  return {
+    contenido_base64: descarga.contenido_base64,
+    nombre_archivo: nombre || '',
+    mime: mime || 'application/octet-stream'
+  };
 }
 
 async function acusarDocumento(db, data, contexto) {

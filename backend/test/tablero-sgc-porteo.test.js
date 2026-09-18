@@ -150,10 +150,10 @@ test('una NC cerrada no genera alerta aunque tenga plazos viejos', () => {
   assert.equal(alertaPorTitulo(t, /No conformidades/i), undefined);
 });
 
-test('un documento con la revisión vencida es crítico; uno próximo, medio', () => {
+test('un documento con la revisión vencida es crítico; uno próximo, medio', async () => {
   const db = crear();
-  Calidad.crearDocumento(db, { codigo: 'PRO-01', nombre: 'Viejo', tipo: 'PRO', visibilidad: 'TODOS' }, ENC);
-  Calidad.crearDocumento(db, { codigo: 'PRO-02', nombre: 'Por vencer', tipo: 'PRO', visibilidad: 'TODOS' }, ENC);
+  await Calidad.crearDocumento(db, { codigo: 'PRO-01', nombre: 'Viejo', tipo: 'PRO', visibilidad: 'TODOS' }, ENC);
+  await Calidad.crearDocumento(db, { codigo: 'PRO-02', nombre: 'Por vencer', tipo: 'PRO', visibilidad: 'TODOS' }, ENC);
   const docs = filas(db, 'SGC_DOCUMENTOS');
   actualizarFilaPorId_(db, 'SGC_DOCUMENTOS', 'documento_id', docs[0].documento_id, { proxima_revision: diasDesdeHoy(-1) });
   actualizarFilaPorId_(db, 'SGC_DOCUMENTOS', 'documento_id', docs[1].documento_id, { proxima_revision: diasDesdeHoy(20) });
