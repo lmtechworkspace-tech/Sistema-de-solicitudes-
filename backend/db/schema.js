@@ -457,6 +457,27 @@ const COLUMNAS = {
     'pct_listo', 'aplicables', 'no_aplica', 'completo', 'parcial', 'faltante',
     'cap_4', 'cap_5', 'cap_6', 'cap_7', 'cap_8', 'cap_9', 'cap_10',
     'origen'
+  ],
+
+  // v11.0 Fase 1: alcance del SGC y exclusiones (§4.3). Cada versión del
+  // alcance es su propia fila (VIGENTE/REEMPLAZADO, nunca se sobreescribe)
+  // para poder responder "contra qué alcance regía tal fecha".
+  SGC_ALCANCE: [
+    'alcance_id', 'version', 'estado',
+    'razon_social', 'nombre_fantasia', 'rut',
+    'declaracion', 'areas', 'ubicaciones',
+    'norma_codigo', 'norma_version',
+    'documento_id', 'observaciones',
+    'vigente_desde', 'reemplazado_por',
+    'creado_por', 'fecha_creacion', 'activa'
+  ],
+  // Una exclusión por fila (no JSON dentro del alcance): cada una es un
+  // registro auditable por sí mismo, y la matriz de cobertura las consulta
+  // POR CLAUSULA. clausula_padre se deriva al guardar (granularidad del
+  // catálogo de la matriz, ej. '7.1.5.2' -> '7.1').
+  SGC_EXCLUSIONES: [
+    'exclusion_id', 'alcance_id', 'clausula', 'clausula_padre', 'titulo',
+    'justificacion', 'creado_por', 'fecha_creacion', 'activa'
   ]
 };
 

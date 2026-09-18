@@ -48,6 +48,7 @@ const Proveedores = require('../logica/proveedoresSgc');
 const RevisionDireccion = require('../logica/revisionDireccionSgc');
 const Objetivos = require('../logica/objetivosSgc');
 const MatrizCobertura = require('../logica/matrizCoberturaSgc');
+const Alcance = require('../logica/alcanceSgc');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -351,7 +352,15 @@ const ACCIONES = {
   listarMatrizCoberturaSgc: (db, data, contexto) => MatrizCobertura.listar(db, data, contexto),
   getDetalleClausulaCoberturaSgc: (db, data, contexto) => MatrizCobertura.getDetalle(db, data, contexto),
   listarCoberturaHistoricoSgc: (db, data, contexto) => MatrizCobertura.listarHistorico(db, data, contexto),
-  descargarEvidenciaClausulaSgc: () => ({ _validationError: true, message: 'La descarga en PDF de la evidencia de auditoría aun no esta disponible en el nuevo backend (falta el motor de PDF).' })
+  descargarEvidenciaClausulaSgc: () => ({ _validationError: true, message: 'La descarga en PDF de la evidencia de auditoría aun no esta disponible en el nuevo backend (falta el motor de PDF).' }),
+
+  // SGC ISO 9001 v11.0 Fase 1 (§4.3): alcance del SGC y exclusiones. Sin
+  // archivos: se corta al frontend en el mismo incremento.
+  obtenerAlcanceSgc: (db, data, contexto) => Alcance.obtener(db, data, contexto),
+  guardarAlcanceSgc: (db, data, contexto) => Alcance.guardar(db, data, contexto),
+  nuevaVersionAlcanceSgc: (db, data, contexto) => Alcance.nuevaVersion(db, data, contexto),
+  guardarExclusionSgc: (db, data, contexto) => Alcance.guardarExclusion(db, data, contexto),
+  anularExclusionSgc: (db, data, contexto) => Alcance.anularExclusion(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

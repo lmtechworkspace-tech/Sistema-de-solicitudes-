@@ -18,16 +18,17 @@
  *    "fuera del alcance de SIGSO hoy". Cada cláusula sin evidencia trae una
  *    nota que dice POR QUÉ.
  *
- * PENDIENTE EXPLÍCITO, NO FINGIDO: seis evaluadores (4.1, 4.2, 4.3, 4.4,
- * 6.1, 8.1/8.5/8.6/8.7, 9.1) dependen de módulos v11 todavía no portados a
- * Node (Alcance, Contexto, Riesgos, Procesos, Indicadores, Prestaciones).
- * El propio `.gs` los resuelve con `typeof X === 'function' ? X() : []`
- * para tolerar que el módulo no esté cargado -- acá se replica igual con
- * los stubs de la sección siguiente: mientras esas fases no se porten,
- * estos evaluadores degradan a FALTANTE/PARCIAL según corresponda (nunca
- * inventan datos), exactamente como se comportaba el propio `.gs` antes de
- * que existieran esos módulos. Reemplazar cada stub por un require real
- * cuando se porte su fase v11 correspondiente (TODO en cada uno).
+ * PENDIENTE EXPLÍCITO, NO FINGIDO: cinco evaluadores (4.1, 4.2, 4.4,
+ * 6.1, 8.1/8.5/8.6/8.7, 9.1) siguen dependiendo de módulos v11 todavía no
+ * portados a Node (Contexto, Riesgos, Procesos, Indicadores, Prestaciones).
+ * 4.3 (Alcance) YA es real desde que se portó esa fase (ver alcanceSgc.js).
+ * El propio `.gs` resuelve los que faltan con `typeof X === 'function' ?
+ * X() : []` para tolerar que el módulo no esté cargado -- acá se replica
+ * igual con los stubs de la sección siguiente: mientras esas fases no se
+ * porten, estos evaluadores degradan a FALTANTE/PARCIAL según corresponda
+ * (nunca inventan datos). Reemplazar cada stub por un require real cuando
+ * se porte su fase v11 correspondiente (TODO en cada uno) -- mismo patrón
+ * ya aplicado a Alcance en este incremento.
  */
 
 const crypto = require('node:crypto');
@@ -35,6 +36,7 @@ const { leerFilas_, agregarFila_ } = require('../db/sqliteRepo');
 const { COLUMNAS } = require('../db/schema');
 const Calidad = require('./calidadSgc');
 const { CLAUSULAS_ISO9001 } = require('./sgcCatalogo');
+const Alcance = require('./alcanceSgc');
 
 const UMBRAL_COBERTURA_COMPLETO = 0.8;
 const NORMA_SGC_POR_DEFECTO = { codigo: 'ISO 9001', version: '2015' };
@@ -67,8 +69,9 @@ function leerSeguro_(db, hoja) { try { return leer_(db, hoja); } catch (err) { r
 function hojaExiste_(db, hoja) { try { leer_(db, hoja); return true; } catch (err) { return false; } }
 
 // --- dependencias de fases v11 aun no portadas (ver nota de cabecera) -------
-function alcanceVigente_(db) { return null; } // TODO v11 Fase 1 (Alcance)
-function exclusionesVigentesPorClausula_(db) { return {}; } // TODO v11 Fase 1 (Alcance)
+// 4.3/exclusiones ya NO son stub: Alcance (v11 Fase 1) esta portado.
+const alcanceVigente_ = Alcance.alcanceVigente_;
+const exclusionesVigentesPorClausula_ = Alcance.exclusionesVigentesPorClausula_;
 function factoresContextoActivos_(db) { return []; } // TODO v11 Fase 2 (Contexto)
 function partesInteresadasActivas_(db) { return []; } // TODO v11 Fase 2 (Contexto)
 function riesgosActivos_(db) { return []; } // TODO v11 Fase 3 (Riesgos)
@@ -115,18 +118,40 @@ function evaluarClausulaSinModulo_(db, codigo) {
   };
 }
 
-// v11.0 Fase 1 (§4.3): el alcance vigente aún no existe en Node (ver
-// stub alcanceVigente_). Degrada a FALTANTE/PARCIAL según haya o no
-// documentos etiquetados, sin inventar una declaración de alcance.
+// v11.0 Fase 1 (§4.3): la norma pide tres cosas y se revisan por separado,
+// para que la nota diga cuál falta y no un genérico "incompleto".
 function evaluarAlcanceDeclarado_(db) {
   const vigente = alcanceVigente_(db);
   const porDocs = evaluarPorDocumentos_(db, '4.3');
+
+  if (!vigente) {
+    return {
+      estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
+      resumen: 'El alcance del SGC no está declarado en el sistema.',
+      nota: 'Declara el alcance en la sección Alcance: qué servicios cubre, en qué ubicaciones y qué cláusulas se excluyen con su justificación. ' +
+        (porDocs.evidencia.length ? 'Hay documentos etiquetados para 4.3, pero un documento adjunto no responde por sí solo qué se excluyó.' : ''),
+      evidencia: porDocs.evidencia
+    };
+  }
+
+  const exclusiones = Alcance.exclusionesDe_(db, vigente.alcance_id);
+  const ev = [{ tipo: 'Alcance declarado', descripcion: 'v' + vigente.version + ' — ' + String(vigente.declaracion || '').slice(0, 160), fecha: vigente.vigente_desde || vigente.fecha_creacion, responsable: vigente.creado_por }];
+  exclusiones.forEach((e) => ev.push({ tipo: 'Exclusión declarada', descripcion: e.clausula + (e.titulo ? ' — ' + e.titulo : '') + ': ' + e.justificacion, fecha: e.fecha_creacion, responsable: e.creado_por }));
+  porDocs.evidencia.forEach((e) => ev.push(e));
+
+  const falta = [];
+  if (!Alcance.listaDesdeJson_(vigente.areas).length) falta.push('no hay áreas declaradas');
+  if (!String(vigente.declaracion || '').trim()) falta.push('falta la declaración de alcance');
+  // Una exclusion sin justificacion no es una exclusion valida para §4.3.
+  const sinJustificar = exclusiones.filter((e) => !String(e.justificacion || '').trim());
+  if (sinJustificar.length) falta.push(sinJustificar.length + ' exclusión(es) sin justificación');
+  if (!porDocs.evidencia.length) falta.push('ningún documento etiquetado como respaldo de 4.3');
+
   return {
-    estado: porDocs.evidencia.length ? 'PARCIAL' : 'FALTANTE',
-    resumen: 'El alcance del SGC no está declarado en el sistema.',
-    nota: 'Declara el alcance en la sección Alcance: qué servicios cubre, en qué ubicaciones y qué cláusulas se excluyen con su justificación.' +
-      (porDocs.evidencia.length ? ' Hay documentos etiquetados para 4.3, pero un documento adjunto no responde por sí solo qué se excluyó.' : ''),
-    evidencia: porDocs.evidencia
+    estado: falta.length ? 'PARCIAL' : 'COMPLETO',
+    resumen: 'Alcance v' + vigente.version + ' declarado, con ' + exclusiones.length + ' exclusión(es).',
+    nota: falta.length ? 'Para cerrar 4.3: ' + falta.join('; ') + '.' : '',
+    evidencia: ev
   };
 }
 function evaluarContextoOrganizacion_(db) {

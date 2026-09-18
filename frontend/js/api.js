@@ -161,7 +161,11 @@ var ACCIONES_PORTADAS_NODE = {
   anularLecturaObjetivoSgc: true,
 
   // --- SGC ISO 9001: Matriz de cobertura ISO (3 de 4; descargarEvidenciaClausulaSgc sigue en Apps Script, PDF) ---
-  listarMatrizCoberturaSgc: true, getDetalleClausulaCoberturaSgc: true, listarCoberturaHistoricoSgc: true
+  listarMatrizCoberturaSgc: true, getDetalleClausulaCoberturaSgc: true, listarCoberturaHistoricoSgc: true,
+
+  // --- SGC ISO 9001: Alcance y exclusiones (5 de 5; v11.0 Fase 1, sin archivos: se corta completo) ---
+  obtenerAlcanceSgc: true, guardarAlcanceSgc: true, nuevaVersionAlcanceSgc: true,
+  guardarExclusionSgc: true, anularExclusionSgc: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,
