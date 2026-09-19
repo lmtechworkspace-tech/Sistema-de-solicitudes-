@@ -127,9 +127,15 @@
       { id: 'MODULO', nombre: 'Módulos' },
       { id: 'TIPO', nombre: 'Tipos de solicitud' }
     ] },
+    // v13.2 (Arquitectura de Accesos, 2026-09-19): "Cuentas plataforma"
+    // primero -- es el sistema de identidad vigente (CUENTAS_PORTAL, todo
+    // en Node). "Usuarios" (identidad de Google, legada) queda segundo y
+    // con su propio aviso en pantalla (ver renderUsuarios_) hasta que se
+    // retire del todo -- Fase 4 de la migración, pendiente de una sola
+    // cuenta real.
     { id: 'accesos', nombre: 'Accesos', icono: 'llave', items: [
-      { id: 'USUARIOS', nombre: 'Usuarios' },
-      { id: 'CUENTAS_PORTAL', nombre: 'Cuentas plataforma' }
+      { id: 'CUENTAS_PORTAL', nombre: 'Cuentas plataforma' },
+      { id: 'USUARIOS', nombre: 'Usuarios (legado)' }
     ] },
     { id: 'comunicaciones', nombre: 'Comunicaciones', icono: 'campana', items: [
       { id: 'NOTIFICACION', nombre: 'Notificaciones' },
@@ -316,6 +322,8 @@
       }
       contenedor.innerHTML =
         cabeceraAdmin_(USUARIOS_UI.titulo) +
+        '<p class="sigso-ayuda">Identidad legada (sesión de Google) -- se está reemplazando por "Cuentas ' +
+        'plataforma". Para dar de alta a alguien nuevo, usa esa pantalla en vez de esta.</p>' +
         Componentes.tarjeta(renderTabla_(USUARIOS_UI.campos, respuesta.data));
 
       var wireForm = function () {
@@ -351,9 +359,11 @@
     { valor: 'GERENCIA', texto: 'Gerencia' },
     // v4.2: "Gerencia acotado" al equipo del jefe (ver pestaña "Jefaturas").
     { valor: 'JEFATURA', texto: 'Jefatura' },
-    // v6.0: prevencionista (Amarlla, Camila, reemplazo) -- opera pausas y ve
-    // reportes. La plantilla de modulos incluye pausas + pausas_coordinacion.
-    { valor: 'COORDINADOR', texto: 'Coordinadora de pausas' },
+    // Rol COORDINADOR retirado 2026-09-19 ("Arquitectura de Accesos"):
+    // nunca fue un permiso real -- quien coordina una pausa se da de alta
+    // en el roster de Pausas activas (pestaña "Operación"), no eligiendo
+    // un rol acá. Para esa persona, usa el rol que sí describe su trabajo
+    // (ej. Desarrollador) y agrégala al roster por separado.
     { valor: 'ADM', texto: 'Administrador' }
   ];
   var MODULOS_PORTAL = [

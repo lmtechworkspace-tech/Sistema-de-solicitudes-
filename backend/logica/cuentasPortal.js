@@ -18,13 +18,22 @@ const { parsearListaPortal, normalizarUsuario } = require('./portal');
 
 // Plantilla de modulos por rol (§2.3). Solo aplica al CREAR la cuenta (o al
 // resetear modulos): despues manda la lista por cuenta.
+//
+// NO hay un rol COORDINADOR (retirado 2026-09-19, documento "Arquitectura
+// de Accesos"): nunca fue un gate real -- el acceso real a coordinar la
+// pausa de una empresa lo decide el roster PAUSAS_COORDINADORES (por
+// email, en pausas.js), no este mapa. El rol solo prellenaba modulos, que
+// hoy tampoco se aplica server-side (ver router.js) -- mantenerlo sugeria
+// una proteccion que nunca existio. Para dar de alta a quien coordina una
+// pausa: crear su cuenta con el rol que corresponda (DEV/ANA/...) y
+// agregarla al roster de Pausas por separado, que es el paso que de
+// verdad importa.
 const MODULOS_POR_ROL = {
   SOLICITANTE: ['nueva_solicitud', 'mis_solicitudes', 'mi_trabajo'],
   DEV: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo'],
   ANA: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo'],
   GERENCIA: ['nueva_solicitud', 'mis_solicitudes', 'gerencia', 'mi_trabajo'],
   JEFATURA: ['nueva_solicitud', 'mis_solicitudes', 'jefatura', 'mi_trabajo'],
-  COORDINADOR: ['nueva_solicitud', 'mis_solicitudes', 'pausas', 'pausas_coordinacion', 'mi_trabajo'],
   ADM: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos', 'calidad']
 };
 

@@ -1056,3 +1056,42 @@ a propósito (esa parte queda pausada, ver decisión 1).
   idempotente, nunca pisa una asignación ya hecha). Mutation-test manual
   del guard "nunca pisa una asignación ya hecha" confirmado. Suite
   completa: 2666/2666 verdes.
+
+### 13.2 Ordenar el panel de Administración — PARCIAL (2026-09-19)
+
+Segundo incremento del orden acordado (§13, punto 4). Alcance recortado a
+propósito: fusionar del todo `USUARIOS`/`CUENTAS_PORTAL` en una sola
+pantalla sigue bloqueado por Fase 4 (§8.4) — falta crear la cuenta de
+portal de Valentina Caballero, la única cuenta real de `USUARIOS` sin su
+equivalente en `CUENTAS_PORTAL` (verificado por SSH de solo lectura: 20 de
+22 ya cruzan). Retirar esa pantalla antes de eso dejaría a esa persona sin
+forma de administrarse. Lo que SÍ se resolvió, sin ese bloqueo:
+
+- **Rol `COORDINADOR` retirado** (`backend/logica/cuentasPortal.js`,
+  `frontend/js/admin.js`) — nunca fue un permiso real (confirmado en la
+  investigación previa: ningún archivo del backend lo comprobaba jamás;
+  el gate real de coordinar una pausa siempre fue el roster
+  `PAUSAS_COORDINADORES`, por email). Verificado por SSH que ninguna
+  cuenta real de producción lo usaba antes de retirarlo. Crear una cuenta
+  con `rol: 'COORDINADOR'` ahora devuelve `_validationError` ("Rol
+  invalido").
+- **"Cuentas plataforma" pasa primero, "Usuarios" queda como "(legado)"**
+  en el árbol de navegación de Administración (`ARQUITECTURA_ADMIN`) —
+  refleja cuál es el sistema vigente sin quitar acceso al que sigue
+  activo.
+- **Aviso explícito en la pantalla de Usuarios** (mismo patrón
+  `sigso-ayuda` que ya usaba Cuentas plataforma): "Identidad legada
+  (sesión de Google) -- se está reemplazando por 'Cuentas plataforma'.
+  Para dar de alta a alguien nuevo, usa esa pantalla en vez de esta."
+- **Investigación previa (agente Explore) dejó mapeado para cuando se
+  saque el bloqueo**: `renderUsuarios_` y `renderCuentasPortal_` son
+  implementaciones paralelas casi sin compartir código (tabla, formulario,
+  precarga y guardado propios en cada una — solo comparten
+  `cabeceraAdmin_`/`abrirDrawerAdmin_`/`mostrarErrorAdmin_`), y el
+  renderer de navegación realmente usado en producción
+  (`SigsoNav.renderArbol`, `navegacion.js`) no muestra el campo
+  `descripcion` de un grupo — solo lo hace `SigsoNav.render`, que no se
+  llama desde ningún lado. Fusionar las dos pantallas de verdad es
+  trabajo de su propio incremento, no algo que quepa en este.
+- 1 prueba nueva (`cuentas-portal-porteo.test.js`): crear una cuenta con
+  `rol: 'COORDINADOR'` es rechazada. Suite completa: 2667/2667 verdes.

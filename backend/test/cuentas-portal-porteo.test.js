@@ -29,6 +29,16 @@ test('el CRUD de cuentas es solo para ADM', () => {
   });
 });
 
+test('el rol COORDINADOR ya no existe (retirado 2026-09-19: nunca fue un permiso real)', () => {
+  const db = dbConSchema();
+  const res = CuentasPortal.gestionar(db, {
+    operacion: 'crear', usuario: 'nueva', nombre: 'Nueva', emails: 'nueva@x.cl', rol: 'COORDINADOR'
+  }, ADMIN);
+  assert.equal(res._validationError, true);
+  assert.match(res.message, /Rol invalido/i);
+  assert.equal(CuentasPortal.MODULOS_POR_ROL.COORDINADOR, undefined);
+});
+
 test('crear cuenta aplica la plantilla de modulos del rol y no repite usuarios', () => {
   const db = dbConSchema();
   const dev = CuentasPortal.gestionar(db, {
