@@ -9,10 +9,23 @@
  * empezando por Catalogos.
  */
 
-const { asegurarTabla_ } = require('./sqliteRepo');
+const { asegurarTabla_, asegurarColumnas_, leerFilas_, agregarFila_, actualizarFilaPorId_ } = require('./sqliteRepo');
+
+// Fase "Organización invisible" (documento "Arquitectura de Accesos",
+// 2026-09-19, decisiones 1 y 4 del rediseño de accesos): el límite real
+// entre distintos clientes que compren SIGSO. Este incremento SOLO prepara
+// el terreno -- una tabla nueva + una columna nueva en CUENTAS_PORTAL/
+// CAT_EMPRESAS, con UNA fila que agrupa todo lo que ya existe hoy. Cero
+// cambio de comportamiento: nada filtra por esto todavía (esa parte,
+// "enforcement real de organización", queda deliberadamente en pausa hasta
+// que exista un cliente real -- decisión 1 del documento).
+const ORGANIZACION_POR_DEFECTO_ID = 'org-homepymes-ays';
 
 const COLUMNAS = {
-  CAT_EMPRESAS: ['empresa_id', 'nombre', 'logo', 'activo'],
+  // 'organizacion_id' es nuevo (ver nota arriba) -- toda fila existente lo
+  // recibe automáticamente vía asegurarOrganizacionPorDefecto_.
+  CAT_EMPRESAS: ['empresa_id', 'nombre', 'logo', 'activo', 'organizacion_id'],
+  ORGANIZACIONES: ['organizacion_id', 'nombre', 'activo', 'creado_en'],
   CAT_PLATAFORMAS: ['plataforma_id', 'nombre', 'empresa_id', 'url_base', 'activo'],
   CAT_MODULOS: ['modulo_id', 'nombre', 'plataforma_id', 'modulo_padre_id', 'activo'],
   CAT_TIPOS: ['tipo_id', 'nombre', 'prioridad_default', 'activo', 'es_urgente'],
@@ -38,7 +51,9 @@ const COLUMNAS = {
     'cuenta_id', 'usuario', 'nombre', 'cargo',
     'hash_password', 'salt', 'emails', 'rol', 'modulos',
     'empresa_id', 'activo', 'debe_cambiar_password',
-    'ultimo_acceso', 'creado_por'
+    'ultimo_acceso', 'creado_por',
+    // organizacion_id: ver la nota "Organización invisible" arriba.
+    'organizacion_id'
   ],
   SESIONES_PORTAL: ['token', 'cuenta_id', 'expira', 'creada'],
 
@@ -589,8 +604,41 @@ const COLUMNAS = {
   ]
 };
 
-function asegurarEsquema(db) {
-  Object.keys(COLUMNAS).forEach((hoja) => asegurarTabla_(db, hoja, COLUMNAS[hoja]));
+// Crea la organización por defecto si todavía no existe ninguna, y le
+// asigna organizacion_id a cualquier fila de CUENTAS_PORTAL/CAT_EMPRESAS
+// que todavía no lo tenga (columna recién agregada, o cuenta creada antes
+// de este incremento). Nunca pisa un organizacion_id ya asignado -- sigue
+// siendo seguro de correr en un mundo con más de una organización más
+// adelante, porque solo toca filas realmente sin asignar.
+//
+// USUARIOS (identidad legada de Google) NO recibe organizacion_id a
+// propósito: ya está decidido retirarla (Fase 4 de la migración a Node) --
+// sumarle capacidad nueva a una tabla que se va a borrar sería trabajo
+// perdido.
+function asegurarOrganizacionPorDefecto_(db) {
+  const organizaciones = leerFilas_(db, 'ORGANIZACIONES', COLUMNAS.ORGANIZACIONES);
+  if (!organizaciones.some((o) => o.organizacion_id === ORGANIZACION_POR_DEFECTO_ID)) {
+    agregarFila_(db, 'ORGANIZACIONES', {
+      organizacion_id: ORGANIZACION_POR_DEFECTO_ID,
+      nombre: 'HomePymes / Asesorías Integrales AyS SpA',
+      activo: true,
+      creado_en: new Date().toISOString()
+    });
+  }
+
+  [['CUENTAS_PORTAL', 'cuenta_id'], ['CAT_EMPRESAS', 'empresa_id']].forEach(([hoja, idCampo]) => {
+    leerFilas_(db, hoja, COLUMNAS[hoja])
+      .filter((fila) => !fila.organizacion_id)
+      .forEach((fila) => actualizarFilaPorId_(db, hoja, idCampo, fila[idCampo], { organizacion_id: ORGANIZACION_POR_DEFECTO_ID }));
+  });
 }
 
-module.exports = { COLUMNAS, asegurarEsquema };
+function asegurarEsquema(db) {
+  Object.keys(COLUMNAS).forEach((hoja) => {
+    asegurarTabla_(db, hoja, COLUMNAS[hoja]);
+    asegurarColumnas_(db, hoja, COLUMNAS[hoja]);
+  });
+  asegurarOrganizacionPorDefecto_(db);
+}
+
+module.exports = { COLUMNAS, asegurarEsquema, ORGANIZACION_POR_DEFECTO_ID };

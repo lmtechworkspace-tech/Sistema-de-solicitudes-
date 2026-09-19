@@ -67,6 +67,29 @@ function asegurarTabla_(db, nombreHoja, columnas) {
   db.exec('CREATE TABLE ' + tabla_(nombreHoja) + ' (' + definicion + ')');
 }
 
+/**
+ * Agrega a una tabla YA EXISTENTE las columnas de `columnas` que todavía no
+ * tiene (ALTER TABLE ... ADD COLUMN) -- complementa a asegurarTabla_, que
+ * solo crea tablas nuevas y nunca migra una existente (hasta ahora no había
+ * forma de sumarle un campo a una tabla real con datos sin hacerlo a mano;
+ * era justamente lo que diagnosticarEsquema_ solo podía señalar, nunca
+ * arreglar solo). Nunca destructivo: ALTER TABLE ADD COLUMN en SQLite no
+ * toca ninguna fila ni columna existente. El DEFAULT `'""'` (el texto JSON
+ * de la cadena vacía) hace que las filas viejas lean '' para el campo
+ * nuevo -- mismo valor que ya devuelve mapearFila_ para una columna que la
+ * tabla real no tiene, para que el comportamiento no cambie según si la
+ * columna ya existía o se acaba de agregar.
+ */
+function asegurarColumnas_(db, nombreHoja, columnas) {
+  if (!tablaExiste_(db, nombreHoja)) return;
+  const reales = encabezadosReales_(db, nombreHoja);
+  columnas.forEach((c) => {
+    if (reales.indexOf(c) === -1) {
+      db.exec('ALTER TABLE ' + tabla_(nombreHoja) + ' ADD COLUMN ' + col_(c) + ' TEXT DEFAULT \'""\'');
+    }
+  });
+}
+
 /** Equivalente de seedSheet (gasSandbox) pero para la tabla SQLite. */
 function sembrarTabla_(db, nombreHoja, columnas, filas) {
   crearTabla_(db, nombreHoja, columnas);
@@ -188,6 +211,7 @@ module.exports = {
   abrirDb_,
   crearTabla_,
   asegurarTabla_,
+  asegurarColumnas_,
   sembrarTabla_,
   encabezadosReales_,
   leerFilas_,

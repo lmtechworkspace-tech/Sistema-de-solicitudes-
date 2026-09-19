@@ -969,3 +969,90 @@ VPS, SSH de solo lectura antes de asumir nada).
 Orden sugerido al usuario: 0 → 2 (rápido, mientras se decide el alcance
 real de la 1) → 1 → 3 → 4. Es una sugerencia, no una regla — confirmar
 con el usuario antes de asumir el orden si retoma la sesión sin decirlo.
+
+---
+
+## 13. Rediseño de accesos (iniciativa aparte, empezada 2026-09-19)
+
+Con la migración a Node funcionalmente completa (Fases 0-3 resueltas), el
+usuario pidió revisar el módulo de cuentas/accesos de SIGSO — "disperso"
+entre Pausas, Calidad y administración general, herencia de haberse
+construido pieza a pieza sobre Apps Script. Objetivo declarado: ordenar
+el modelo pensando en que **SIGSO se quiere vender a otras empresas** a
+futuro, no solo seguir siendo uso interno de HomePymes/AyS.
+
+**Investigación + propuesta (sin código) publicada como Artifact:**
+https://claude.ai/artifact/V4PVAqB14Feaw5skUD8MEQ — "Arquitectura de
+Accesos". Encontró **5 sistemas de permisos paralelos** que casi no se
+hablan entre sí (`CUENTAS_PORTAL.rol/modulos`, roster de
+`PAUSAS_COORDINADORES/TRABAJADORES`, `SGC_ROLES`,
+`PROYECTO_INTEGRANTES`, `JEFATURAS`). Hallazgo central:
+**`CUENTAS_PORTAL.modulos` es decorativo** — el servidor nunca lo revisa,
+solo decide qué pinta el menú (`router.js:19-24` ya lo documentaba como
+pendiente desde el día uno de la migración). El nudo detrás de "acceso
+por empresa": `empresa_id`/`CAT_EMPRESAS` hoy significa "qué empresa
+cliente atiende este ticket", NO "quién compró SIGSO" — son dos
+conceptos que había que separar sin romper que el equipo de HomePymes
+atiende a HP/RLD/GDE a la vez con la misma cuenta.
+
+**Las 4 decisiones, tomadas en conversación con el usuario (2026-09-19)**
+— detalle completo de cada una, con su razonamiento, en el Artifact y en
+la memoria `sigso-accesos-rediseno.md`:
+1. Multi-organización en un servidor compartido, o uno por cliente: **no
+   se decide el fondo todavía** — se prepara el terreno barato (ver
+   abajo) y la decisión fuerte se deja para cuando haya un cliente real.
+2. No hay una venta en curso — **es preparación a futuro**.
+3. Los sub-roles de Calidad/Proyectos **mantienen su propio vocabulario**
+   (documentados en un catálogo común, sin forzarlos a unificarse).
+4. Orden acordado: **Organización invisible → ordenar el panel de
+   Administración (fusionar `USUARIOS`/`CUENTAS_PORTAL`) → recuperar
+   contraseña → documentar el catálogo de sub-roles.** El enforcement
+   real de módulos y la prueba con una segunda organización quedan en
+   pausa hasta que la decisión 1 se resuelva con un cliente real enfrente.
+
+### 13.1 Organización invisible — RESUELTA (2026-09-19)
+
+Primer incremento del orden acordado (punto 4). Prepara el terreno sin
+ningún cambio de comportamiento — nada filtra por organización todavía,
+a propósito (esa parte queda pausada, ver decisión 1).
+
+- **Tabla `ORGANIZACIONES` nueva** (`organizacion_id, nombre, activo,
+  creado_en`) — el límite real entre distintos clientes que compren
+  SIGSO, para cuando llegue ese día.
+- **Columna `organizacion_id` nueva en `CAT_EMPRESAS` y
+  `CUENTAS_PORTAL`.** `USUARIOS` (identidad legada) NO la recibe a
+  propósito — ya está decidido retirarla (Fase 4, §8.4), sumarle
+  capacidad nueva sería trabajo perdido.
+- **Pieza técnica nueva, reutilizable más allá de este incremento:**
+  `asegurarColumnas_` (`backend/db/sqliteRepo.js`) — hasta ahora
+  `asegurarTabla_` solo creaba tablas nuevas, nunca podía agregarle una
+  columna a una tabla real con datos (`diagnosticarEsquema_` solo podía
+  *señalar* el hueco, nunca cerrarlo). Ahora sí: `ALTER TABLE ... ADD
+  COLUMN ... DEFAULT '""'` (el DEFAULT hace que las filas viejas lean
+  `''` para el campo nuevo, igual que ya devuelve `mapearFila_` para una
+  columna que la tabla no tiene — mismo comportamiento tenga la columna
+  o no). Se llama automáticamente desde `asegurarEsquema` para TODAS las
+  tablas, en cada arranque del servidor — cualquier columna nueva que se
+  agregue a `COLUMNAS` de ahora en adelante se autoaplica sola al
+  desplegar, sin intervención manual en el VPS.
+- **`asegurarOrganizacionPorDefecto_`** (`backend/db/schema.js`, corrida
+  desde `asegurarEsquema`): crea la única organización
+  (`org-homepymes-ays`, "HomePymes / Asesorías Integrales AyS SpA") si
+  no existe, y le asigna ese id a cualquier fila de
+  `CUENTAS_PORTAL`/`CAT_EMPRESAS` que todavía no tenga `organizacion_id`
+  — **nunca pisa una asignación ya hecha a mano** (filtra por
+  `!fila.organizacion_id`), propiedad que la deja segura de seguir
+  corriendo en cada arranque incluso el día en que exista una segunda
+  organización real.
+- **Todo automático, sin tocar producción a mano:** al desplegar (push →
+  CI → rsync → reinicio del servicio), el próximo arranque crea la tabla,
+  agrega las columnas y asigna la organización a las 22 cuentas/3
+  empresas reales solo. Mismo criterio "cero intervención manual en el
+  VPS" que el resto de esta migración.
+- **10 pruebas nuevas** (`backend/test/organizacion-invisible.test.js`):
+  cubren `asegurarColumnas_` (agrega sin tocar datos, idempotente, no
+  revienta si la tabla no existe) y `asegurarOrganizacionPorDefecto_`
+  (crea la organización, asigna a todo lo existente, NO toca `USUARIOS`,
+  idempotente, nunca pisa una asignación ya hecha). Mutation-test manual
+  del guard "nunca pisa una asignación ya hecha" confirmado. Suite
+  completa: 2666/2666 verdes.
