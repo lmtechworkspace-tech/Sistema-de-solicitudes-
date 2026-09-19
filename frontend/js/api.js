@@ -56,8 +56,9 @@ var MAX_INTENTOS_LECTURA = 3;
 // Lista de lo que sigue pendiente:
 // descargarReporteCumplimientoPausasPdf, descargarReporteGerenciaPausasPdf,
 // descargarReporteProyecto, descargarLibroProyecto,
-// descargarReporteActividadesPdf, descargarActaReunionPdf,
 // descargarEvidenciaClausulaSgc.
+// (descargarReporteActividadesPdf/descargarActaReunionPdf ya desgateados,
+// 2026-09-19 -- motor de PDF en Node, pdfkit.)
 var ACCIONES_PORTADAS_NODE = {
   // --- Núcleo (Auth/Portal, Catálogos, Solicitudes, Dashboard/Gerencia/Jefatura) ---
   portalLogin: true, portalLogout: true, portalSesion: true, portalCambiarPassword: true,
@@ -94,11 +95,12 @@ var ACCIONES_PORTADAS_NODE = {
   getReporteCumplimientoPausas: true, listarRosterCoordinadorPausas: true,
   getHistorialTrabajadorPausas: true, getReporteGerenciaPausas: true,
 
-  // --- Actividades / Gestión Operacional (14 de 16; los PDF siguen en Apps Script) ---
+  // --- Actividades / Gestión Operacional (16 de 16; PDF desgateados del motor pdfkit el 2026-09-19) ---
   listarActividades: true, getDetalleActividad: true, crearActividad: true, confirmarActividad: true,
   checkinActividad: true, validarActividad: true, cancelarActividad: true, reprogramarActividad: true,
   panelEquipoActividades: true, reasignarActividad: true, pedirActualizacionActividad: true,
   getPanelGerenciaActividades: true, generarReporteActividades: true,
+  descargarReporteActividadesPdf: true, descargarActaReunionPdf: true,
 
   // --- Proyectos (44 de 48; PDF de reporte/acta y libro Excel siguen en Apps Script) ---
   listarProyectos: true, listarMisTareasProyectos: true, listarMiBitacoraProyectos: true,

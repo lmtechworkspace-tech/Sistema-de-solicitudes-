@@ -254,9 +254,61 @@ function chipPrioridad(doc, x, y, prioridad) {
   return ancho;
 }
 
+// Tabla generica de columnas (reporte tabular tipo hoja de calculo):
+// encabezado en negrita con regla de 2px, filas con hairline de 1px --
+// mismo patron que construirHtmlReporteActividades_/construirHtmlEvidenciaClausula_
+// en el .gs. `columnas`: [{campo, etiqueta}]. `filas`: [{campo: valor}].
+// `formatear` (opcional) recibe (valor, campo) y devuelve el texto a mostrar.
+function tablaGenerica(doc, columnas, filas, formatear) {
+  const anchoCol = CONTENT_WIDTH / columnas.length;
+  const fmt = formatear || ((v) => (v === null || v === undefined || v === '' ? '—' : String(v)));
+
+  asegurarEspacio(doc, 20);
+  const yEnc = doc.y;
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(DOC.INK);
+  columnas.forEach((c, i) => {
+    doc.text(c.etiqueta, MARGIN + i * anchoCol, yEnc, { width: anchoCol - 6 });
+  });
+  doc.moveTo(MARGIN, yEnc + 14).lineTo(PAGE_WIDTH - MARGIN, yEnc + 14).lineWidth(1.2).strokeColor(DOC.INK).stroke();
+  doc.y = yEnc + 20;
+  doc.x = MARGIN;
+
+  if (filas.length === 0) {
+    doc.font('Helvetica').fontSize(9).fillColor(DOC.MUTED).text('Sin datos para los filtros elegidos.', MARGIN, doc.y);
+    doc.moveDown(0.5);
+    return;
+  }
+
+  filas.forEach((fila) => {
+    doc.font('Helvetica').fontSize(8);
+    const alturas = columnas.map((c) => doc.heightOfString(fmt(fila[c.campo], c.campo), { width: anchoCol - 6 }));
+    const alturaFila = Math.max.apply(null, alturas.concat([12])) + 7;
+    asegurarEspacio(doc, alturaFila);
+    const y = doc.y;
+    columnas.forEach((c, i) => {
+      doc.fillColor(DOC.INK).font('Helvetica').fontSize(8)
+        .text(fmt(fila[c.campo], c.campo), MARGIN + i * anchoCol, y, { width: anchoCol - 6 });
+    });
+    doc.moveTo(MARGIN, y + alturaFila - 2).lineTo(PAGE_WIDTH - MARGIN, y + alturaFila - 2).lineWidth(0.5).strokeColor(DOC.HAIRLINE).stroke();
+    doc.y = y + alturaFila;
+  });
+  doc.x = MARGIN;
+}
+
+// Linea "clave: valor" separadas por bullets -- resumenHtml en
+// construirHtmlReporteActividades_ (los totales arriba de la tabla).
+function lineaResumen(doc, pares) {
+  const texto = pares.map(([label, valor]) => label + ': ' + valor).join('   ·   ');
+  asegurarEspacio(doc, 16);
+  doc.font('Helvetica').fontSize(8.5).fillColor(DOC.INK_SOFT).text(texto, MARGIN, doc.y, { width: CONTENT_WIDTH });
+  doc.moveDown(0.6);
+  doc.x = MARGIN;
+}
+
 module.exports = {
   DOC, MARGIN, CONTENT_WIDTH, COLOR_PRIORIDAD,
   crearDocumento, finalizar, asegurarEspacio,
   encabezado, pie, seccion, subseccion, campoTexto, fichaTabla, tablaDatos, listaEnlaces, chipPrioridad,
+  tablaGenerica, lineaResumen,
   formatearFechaLegible_, fechaCorta_
 };

@@ -56,6 +56,7 @@ const Indicadores = require('../logica/indicadoresSgc');
 const Tablero = require('../logica/tableroSgc');
 const Prestaciones = require('../logica/prestacionesSgc');
 const OrdenTrabajo = require('../logica/ordenTrabajo');
+const ReporteActividades = require('../logica/reporteActividades');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -175,11 +176,10 @@ const ACCIONES = {
   pedirActualizacionActividad: (db, data, contexto) => Actividades.pedirActualizacion(db, data, contexto),
   getPanelGerenciaActividades: (db, data, contexto) => Actividades.getPanelGerencia(db, data, contexto),
   generarReporteActividades: (db, data, contexto) => Actividades.generarReporte(db, data, contexto),
-  // PDF del reporte y del acta: el .gs los genera con el motor de Apps Script;
-  // en Node hace falta una libreria de PDF (su propio mini-proyecto), igual
-  // que los PDF de Pausas -- bloqueados hasta entonces, con error claro.
-  descargarReporteActividadesPdf: () => ({ _validationError: true, message: 'La descarga en PDF del reporte de actividades aun no esta disponible en el nuevo backend (falta el motor de PDF).' }),
-  descargarActaReunionPdf: () => ({ _validationError: true, message: 'La descarga en PDF del acta de reunion aun no esta disponible en el nuevo backend (falta el motor de PDF).' }),
+  // §8.3 del handoff: motor de PDF (pdfkit) ya activo desde OrdenTrabajo --
+  // este es el segundo incremento, reusa el mismo helper (pdfDocumento.js).
+  descargarReporteActividadesPdf: (db, data, contexto) => ReporteActividades.descargarReporte(db, data, contexto),
+  descargarActaReunionPdf: (db, data, contexto) => ReporteActividades.descargarActa(db, data, contexto),
 
   // Modulo Proyectos (v9.0+, incremento 1: MVP + Sala + reuniones/decisiones
   // + entregables/riesgos + plantillas + portafolio). Las TAREAS de un
