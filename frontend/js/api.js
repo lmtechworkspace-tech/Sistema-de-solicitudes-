@@ -54,7 +54,7 @@ var MAX_INTENTOS_LECTURA = 3;
 // "almacenamiento no configurado" en vez de servir el archivo real que Apps
 // Script sí sirve hoy. Cortarlas ahora sería una regresión, no una mejora.
 // Lista de lo que sigue pendiente:
-// descargarReporteProyecto, descargarLibroProyecto.
+// descargarReporteProyecto.
 // (Los demas PDF del motor pdfkit ya desgateados, 2026-09-19:
 // descargarOrdenTrabajo, descargarReporteActividadesPdf,
 // descargarActaReunionPdf, descargarReporteCumplimientoPausasPdf,
@@ -76,7 +76,11 @@ var MAX_INTENTOS_LECTURA = 3;
 // boton simple sin config ya funcionarian bien en Node. Se conecta cuando
 // el dia x dia tambien este portado -- su propio incremento, ver §12 del
 // handoff.
-// descargarLibroProyecto es Excel, no PDF, motor distinto.)
+// descargarLibroProyecto (libro Excel, motor distinto al PDF) SI se agrega
+// abajo -- Fase 1b (2026-09-19): a diferencia de la Carta Gantt del PDF
+// configurable, la del Excel es la propia hoja de calculo (semana=columna,
+// barra=celda coloreada), sin coordenadas que recortar, asi que se porto
+// completa y no queda ningun caso sin servir.)
 var ACCIONES_PORTADAS_NODE = {
   // --- Núcleo (Auth/Portal, Catálogos, Solicitudes, Dashboard/Gerencia/Jefatura) ---
   portalLogin: true, portalLogout: true, portalSesion: true, portalCambiarPassword: true,
@@ -130,7 +134,7 @@ var ACCIONES_PORTADAS_NODE = {
   getPanelGerenciaActividades: true, generarReporteActividades: true,
   descargarReporteActividadesPdf: true, descargarActaReunionPdf: true,
 
-  // --- Proyectos (44 de 48; PDF de reporte/acta y libro Excel siguen en Apps Script) ---
+  // --- Proyectos (45 de 48; PDF de reporte con Cronograma sigue en Apps Script) ---
   listarProyectos: true, listarMisTareasProyectos: true, listarMiBitacoraProyectos: true,
   listarCalendarioProyectos: true, guardarProyectoComoPlantilla: true, listarPlantillasProyecto: true,
   marcarSalaVisitadaProyecto: true,
@@ -151,6 +155,10 @@ var ACCIONES_PORTADAS_NODE = {
   subirVersionDocumentoProyecto: true, marcarVersionVigenteProyecto: true,
   listarVersionesDocumentoProyecto: true, descargarVersionDocumentoProyecto: true,
   descargarDocumentoProyecto: true,
+  // Fase 1b del plan post-migracion: libro Excel (Resumen/Carta Gantt/
+  // Tareas/Hitos/Historial/Dependencias), motor OOXML a mano -- ver
+  // backend/logica/libroProyecto.js.
+  descargarLibroProyecto: true,
 
   // --- SGC ISO 9001: Documentos (15 de 15; carga/descarga desgateadas de R2 el 2026-09-18) ---
   listarDocumentosSgc: true, getDocumentoSgc: true, sembrarDocumentosExternosSgc: true,

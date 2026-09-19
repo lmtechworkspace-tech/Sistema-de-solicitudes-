@@ -61,6 +61,7 @@ const OrdenTrabajo = require('../logica/ordenTrabajo');
 const ReporteActividades = require('../logica/reporteActividades');
 const EvidenciaClausulaSgc = require('../logica/evidenciaClausulaSgc');
 const ReporteProyecto = require('../logica/reporteProyecto');
+const LibroProyecto = require('../logica/libroProyecto');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -263,9 +264,12 @@ const ACCIONES = {
   // motor pdfkit -- ver la cabecera de reporteProyecto.js para lo que
   // queda fuera de alcance a proposito (modo "Configurar informe").
   descargarReporteProyecto: (db, data, contexto) => ReporteProyecto.descargarReporte(db, data, contexto),
-  // El libro Excel es un motor distinto (hoja de calculo, no PDF) -- sigue
-  // gateado, fuera de alcance de "el motor de PDF" (§8.3).
-  descargarLibroProyecto: () => ({ _validationError: true, message: 'La descarga del libro Excel del proyecto aun no esta disponible en el nuevo backend.' }),
+  // Fase 1b: libro Excel del proyecto (Resumen/Carta Gantt/Tareas/Hitos/
+  // Historial/Dependencias) -- motor distinto al PDF, OOXML a mano igual que
+  // el .gs (ver la cabecera de libroProyecto.js). A diferencia del PDF
+  // configurable, acá SÍ se porta completo: la "grilla" de la Carta Gantt es
+  // la propia hoja de cálculo, no hay coordenadas ni paginación que dibujar.
+  descargarLibroProyecto: (db, data, contexto) => LibroProyecto.descargarLibro(db, data, contexto),
 
   // Modulo SGC ISO 9001 (v10.0+, incremento 1: Fase 1 + Fase 1b -- repositorio
   // documental controlado + roles/accesos del SGC + acuse de recibo). Primer

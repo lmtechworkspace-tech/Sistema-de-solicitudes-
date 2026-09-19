@@ -402,15 +402,17 @@ Jefatura, alertas de patrón (P7).
   — ver §8.1). Sin nada pendiente de R2 en ningún módulo del sistema.
 - **Actividades** (motor base v7.0) — **16 de 16** (los 2 PDF desgateados
   del motor pdfkit el 2026-09-19, commit `0f8f77d`).
-- **Proyectos** — **44 de 48** en `ACCIONES_PORTADAS_NODE` (el backend de
-  `descargarReporteProyecto` ya es 45/48, pero la acción no se corta al
-  frontend todavía — ver la nota grande arriba). Incremento 1: 31
-  acciones; incremento 2: cronograma avanzado; incremento 3 (`5879005`):
-  centro documental + adjuntos de Sala; incremento 4 (`f85f6f3`, motor
-  PDF): `descargarReporteProyecto` camino "de un clic". Quedan
-  `descargarLibroProyecto` (Excel) y el modo "Configurar informe" de
-  `descargarReporteProyecto` (secciones/rango/personas/Gantt), ambos
-  documentados como pendiente explícito en §8.1.
+- **Proyectos** — **45 de 48** en `ACCIONES_PORTADAS_NODE` (el backend ya
+  cubre 46/48 — `descargarReporteProyecto` también está portado, pero esa
+  acción no se corta al frontend todavía — ver la nota grande arriba).
+  Incremento 1: 31 acciones; incremento 2: cronograma avanzado;
+  incremento 3 (`5879005`): centro documental + adjuntos de Sala;
+  incremento 4 (`f85f6f3`, motor PDF): `descargarReporteProyecto` camino
+  "de un clic"; incremento 5 (Fase 1b, 2026-09-19): `descargarLibroProyecto`
+  (libro Excel completo, sin recortar alcance — ver §8.1). Queda el modo
+  "Configurar informe" de `descargarReporteProyecto`
+  (secciones/rango/personas/Gantt), documentado como pendiente explícito
+  en §8.1.
 
 ### SGC ISO 9001 — PLAN v11.0 COMPLETO (las 8 fases, cerrado 2026-09-18)
 El bloque más grande de la migración, ~123 acciones totales en el `.gs`.
@@ -500,8 +502,8 @@ desglose), avance por tarea, hitos, riesgos, vencimientos, rendimiento,
 desviaciones (Plan·Esperado·Real), bitácora — todos respetando los
 filtros de personas/estado/rango del config.
 
-**Dos cosas quedan pendientes DENTRO de Proyectos, documentadas
-explícitamente (no fingidas):**
+**Una cosa queda pendiente DENTRO de Proyectos, documentada
+explícitamente (no fingida):**
 1. **La grilla día×tarea** (`gantt`/`workload`/`leyenda`) — su propio
    incremento futuro si se necesita, ver `reporteProyecto.js`.
    **Por esto la acción `descargarReporteProyecto` TODAVÍA no está en
@@ -514,9 +516,24 @@ explícitamente (no fingidas):**
    configs" y dejar esa una en Apps Script). El botón simple y el modal
    "Configurar informe" (para quien no pide esas 3 secciones) ya
    funcionarían bien en Node.
-2. **`descargarLibroProyecto`** — sigue como stub inline en `router.js`.
-   Es Excel (hoja de cálculo), no PDF: motor distinto, fuera de alcance
-   de "el motor de PDF" a propósito. Es la Fase 1b.
+
+**`descargarLibroProyecto` (Fase 1b): RESUELTA (2026-09-19).** Libro Excel
+completo — `backend/logica/libroProyecto.js`, puerto 1:1 de
+`ExcelGantt.gs`. A diferencia de la grilla día×tarea del PDF (lienzo de
+tamaño fijo, coordenadas y paginación a calcular a mano — la razón de
+fondo por la que esa se dejó para después), la Carta Gantt del Excel usa
+la hoja de cálculo COMO la grilla: cada semana es una columna, cada barra
+es el relleno de una celda — sin lienzo ni paginación que portar, así que
+se porta el libro completo sin recortar alcance. `Utilities.zip` (Apps
+Script) se reemplaza por `backend/logica/xlsxZip.js`, un escritor de ZIP
+(DEFLATE) de ~100 líneas propias con `zlib.crc32`/`zlib.deflateRawSync`
+(Node 21+) — mismo criterio de dependencias mínimas que `aws4fetch`/
+`pdfkit`/`scrypt`, sin sumar `exceljs` ni ninguna librería nueva. Fechas:
+mismo cuidado que el resto del backend — un timestamp real se formatea
+vía `Intl` con zona `America/Santiago`; una clave ya-solo-día (`AAAA-MM-DD`,
+como `plan_inicio` de `obtenerRendimiento`) nunca se reinterpreta con una
+zona horaria, se reordena como texto (ver la cabecera de
+`libroProyecto.js` y el mismo criterio ya documentado en `utils.js`).
 
 ### 8.2 Módulos/lógica sin portar, NO bloqueados por archivos
 
@@ -809,10 +826,11 @@ VPS, SSH de solo lectura antes de asumir nada).
     propio incremento (decisión del usuario). La acción todavía no está
     conectada al frontend por el botón "Cronograma", que siempre pide
     esas 3 secciones — ver §8.1.
-  - 1b. Libro Excel (`descargarLibroProyecto`, §8.1) — motor distinto
-    (hoja de cálculo). Evaluar una librería antes de comprometerse,
-    mismo criterio de dependencias mínimas de siempre (aws4fetch,
-    pdfkit): candidato razonable `exceljs`, a confirmar.
+  - 1b. Libro Excel (`descargarLibroProyecto`, §8.1): ✅ **RESUELTA**
+    (2026-09-19) — portado completo, sin recortar alcance (la Carta
+    Gantt del Excel es la propia hoja de cálculo, no un lienzo con
+    coordenadas). Sin librería nueva: ZIP propio (`xlsxZip.js`) con
+    `zlib` de Node en vez de `exceljs`.
   - 1c (nueva, no estaba en el plan original). La grilla día×tarea
     (`gantt`/`workload`/`leyenda`) — ~540 líneas, paginación
     multipágina, colores por celda, conectores. Necesaria para conectar
