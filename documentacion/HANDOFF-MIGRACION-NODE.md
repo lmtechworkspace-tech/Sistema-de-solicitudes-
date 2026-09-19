@@ -620,14 +620,73 @@ el commit `247ea00`. Lo único que queda relacionado es el modo
 "Configurar informe" de Proyectos (§8.1, punto 1) — no bloqueado por
 infraestructura, es tamaño de tarea.
 
-### 8.4 Cierre final
-- Migrar cualquier dato real adicional que dependa de los módulos del
-  §8.2 (igual que se hizo con Solicitudes y con `CAT_CLIENTES`).
-- Decidir el modelo de auth del staff legado (`Auth.gs`/`USUARIOS`,
-  Google OAuth) vs. seguir todo por el portal — sigue abierto, ver §11
-  del documento de memoria si existe acceso a él.
-- Una vez cerrado todo lo anterior, apagar Apps Script por completo —
-  solo ahí se deja de pagar la infraestructura duplicada.
+### 8.4 Cierre final (Fase 4)
+
+**Migrar datos reales adicionales: CERRADO, no hacía falta (2026-09-19).**
+Verificado por SSH de solo lectura contra `/opt/sigso/data/sigso.db` en
+producción (`node:sqlite` en modo `readOnly`, sin escribir nada):
+
+```
+USUARIOS: 22   CUENTAS_PORTAL: 22   SOLICITUDES: 41   SUBSOLICITUDES: 56
+CAT_CLIENTES: 284   ARCHIVOS: 47   COMENTARIOS: 21        (datos reales)
+
+ACTIVIDADES: 0   PROYECTOS: 0   PAUSAS_*: 0   NOVEDADES: 0   SGC_*: 0
+```
+
+Lo que ya se migró (Solicitudes, cuentas, catálogos) tiene datos reales de
+producción de verdad (nombres, emails, hashes de contraseña reales —
+verificado con una muestra). Los módulos portados en Fase 3
+(Actividades/Proyectos/Pausas/Novedades/SGC) están en cero. **Preguntado
+al usuario, no asumido**: confirmó que esos módulos NO tenían uso real en
+Apps Script que haya que traer — arrancan limpios en Node. Nada que
+migrar acá.
+
+**Modelo de auth del staff legado: DECIDIDO (2026-09-19) — todo por el
+portal.** El staff deja de identificarse por sesión de Google
+(`Auth.gs`/`USUARIOS`) y pasa a usar `CUENTAS_PORTAL` (ya 100% en Node),
+igual que el resto de las cuentas. `auth.js`/`USUARIOS` quedan como algo
+histórico a retirar más adelante, no algo que mantener en paralelo a
+propósito.
+
+**Por qué esta decisión importa más de lo que parece, hallazgo de esta
+sesión:** `admin.html`/`app.html` (páginas Google-identidad) se sirven
+por Apps Script y llaman con `google.script.run` — un puente que
+**arquitectónicamente solo puede invocar funciones de Apps Script**,
+nunca un servidor externo como Node. Cualquier acción portada a Node NO
+puede servir a esas dos páginas tal como están.
+
+**Pero la buena noticia (verificada leyendo el código, no asumida):**
+`plataforma.html` — la página real de entrada (`landing.html` enlaza
+"Entrar a la plataforma" directo a ella) — YA es 100% fetch/portal
+(Node-capable) y YA integra `admin.js` dentro de su propio shell (la
+nota P4 en `plataforma.js` lo dice explícito: "administracion tambien
+vive dentro del shell... sin necesitar abrir admin.html de cero"). Es
+decir, el panel de administración de cuentas (`gestionarCuentaPortal`/
+`listarCuentasPortal`, ya en Node desde el inicio de la migración, y
+ahora también `gestionarUsuario`/`listarUsuarios`) YA es alcanzable
+íntegramente desde el portal — `admin.html`/`app.html` parecen ser
+páginas más viejas, probablemente ya redundantes con `plataforma.html`
+para quien tiene cuenta de portal.
+
+**Verificación hecha (2026-09-19, SSH de solo lectura, cruce por email
+entre `USUARIOS` y `CUENTAS_PORTAL.emails`): de 22 cuentas Google, 20 YA
+tienen su cuenta de portal equivalente.** Quedan 2 sin cruzar:
+- `Lu` (sin email, rol GERENCIA, **inactiva**) — registro viejo/de
+  prueba, no bloquea nada.
+- **`Valentina Caballero <vcaballero@impulsapartners.cl>`, rol DEV,
+  ACTIVA — la única cuenta real sin equivalente de portal.**
+
+**Lo único que falta antes de poder apagar Apps Script, para la próxima
+sesión (o para el usuario, ahora mismo):**
+1. Crear la cuenta de portal de Valentina Caballero (`gestionarCuentaPortal`)
+   — no se hizo en esta sesión: es una escritura real sobre cuentas de
+   staff de producción (acceso/contraseña), se hace con el usuario
+   presente, no de oficio.
+2. Confirmar que no hay más funciones de `admin.html`/`app.html` sin
+   equivalente en el portal, más allá del panel de cuentas ya verificado.
+3. Recién con eso, apagar Apps Script por completo — es la única acción
+   de esta fase difícil de revertir, así que se hace con el usuario
+   presente y confirmando, nunca de oficio.
 
 ---
 
@@ -897,10 +956,15 @@ VPS, SSH de solo lectura antes de asumir nada).
     `suspenderInactivos` portada como lógica, no como acción) y
     `Perfiles.gs` (`getMiPerfil` de solo lectura; foto de perfil
     diferida a su propio incremento, decisión del usuario, ver §8.2).
-- **Fase 4 — Cierre final** (§8.4): migrar cualquier dato real adicional
-  que dependa de los módulos de la Fase 3 (mismo patrón que
-  `CAT_CLIENTES`); decidir el modelo de auth del staff legado; apagar
-  Apps Script por completo.
+- **Fase 4 — Cierre final** (§8.4): 🟡 **PARCIAL** (2026-09-19) — de sus 3
+  puntos, 2 quedaron decididos (no había datos reales que migrar; auth
+  del staff será todo por el portal) y 1 sigue abierto: apagar Apps
+  Script. Buena noticia verificada leyendo el código: `plataforma.html`
+  (la entrada real, enlazada desde `landing.html`) ya integra el panel de
+  administración (`admin.js`) dentro de su propio shell portal/Node, así
+  que no hace falta construir nada nuevo — falta CONFIRMAR que no queden
+  cuentas de staff (Google) sin su cuenta de portal equivalente antes de
+  apagar. Ver el detalle completo en §8.4.
 
 Orden sugerido al usuario: 0 → 2 (rápido, mientras se decide el alcance
 real de la 1) → 1 → 3 → 4. Es una sugerencia, no una regla — confirmar
