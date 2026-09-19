@@ -56,6 +56,13 @@ const COLUMNAS = {
     'organizacion_id'
   ],
   SESIONES_PORTAL: ['token', 'cuenta_id', 'expira', 'creada'],
+  // Fase "Recuperar contraseña" (documento "Arquitectura de Accesos",
+  // 2026-09-19, punto 3 del orden acordado): no existía ningún flujo de
+  // "olvidé mi contraseña" en SIGSO -- solo reseteo manual por un Admin
+  // (cuentasPortal.js). token_hash guarda el SHA-256 del token, nunca el
+  // token en claro (ver backend/logica/recuperarPassword.js) -- una lectura
+  // de esta tabla no alcanza para usar un enlace de recuperación ajeno.
+  RESETS_PASSWORD: ['reset_id', 'cuenta_id', 'token_hash', 'creado_en', 'expira', 'usado'],
 
   // Nucleo del helpdesk (backend/intake/Solicitudes.gs: crearSolicitud).
   SOLICITUDES: [

@@ -402,6 +402,24 @@ async function enviarCodigoAcceso(db, email, codigo) {
   return enviarCorreo_(db, { solicitudId: email, destinatario: email, evento: 'CODIGO_ACCESO:' + codigo, asunto, cuerpo });
 }
 
+// Fase "Recuperar contraseña" (documento "Arquitectura de Accesos",
+// 2026-09-19): enlace de un solo uso para restablecer la contraseña.
+// resetId (único por solicitud) entra en `evento` para que RN-026 (dedup
+// de 30 min) nunca colapse dos pedidos de recuperación distintos y
+// legítimos -- el límite que de verdad aplica a este flujo es el propio
+// de recuperarPassword.js (persistido en RESETS_PASSWORD), no este dedup
+// general.
+async function enviarCorreoRecuperacion(db, destinatario, resetId, enlace, minutosVigencia) {
+  const asunto = 'SIGSO — Restablecer tu contraseña';
+  const cuerpo =
+    'Solicitaste restablecer tu contraseña en SIGSO.\n\n' +
+    'Para elegir una nueva, entra a este enlace (válido por ' + minutosVigencia + ' minutos, de un solo uso):\n\n' +
+    '    ' + enlace + '\n\n' +
+    'Si no fuiste tú quien lo solicitó, puedes ignorar este correo con tranquilidad: tu contraseña actual sigue funcionando.' +
+    pieCorreo_();
+  return enviarCorreo_(db, { solicitudId: destinatario, destinatario, evento: 'RESET_PASSWORD:' + resetId, asunto, cuerpo });
+}
+
 // RN-201 (v2.0, Sprint 1): avisa al responsable del item cuando el
 // solicitante valida un item "Terminada" -- confirmando el cierre,
 // reabriendolo con un motivo, o cerrandolo directo (atencion directa desde
@@ -822,6 +840,7 @@ async function enviarReporteGerenciaAhora(db, data, contexto) {
 module.exports = {
   enviarAcuseRecibo, enviarAvisoDesarrollo, avisarAtencionDirectaRegistrada,
   notificarCambioEstado, avisarCompromisoFecha, notificarDerivacion, enviarCodigoAcceso,
+  enviarCorreoRecuperacion,
   notificarValidacionSolicitante, notificarRespuestaSolicitante, enviarDigestJefatura,
   notificarPatron, detectarPatrones, enviarCorreoModulo,
   procesarColaCorreo, listarLogs,

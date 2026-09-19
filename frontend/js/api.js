@@ -87,6 +87,8 @@ var MAX_INTENTOS_LECTURA = 3;
 var ACCIONES_PORTADAS_NODE = {
   // --- Núcleo (Auth/Portal, Catálogos, Solicitudes, Dashboard/Gerencia/Jefatura) ---
   portalLogin: true, portalLogout: true, portalSesion: true, portalCambiarPassword: true,
+  // Fase "Recuperar contraseña" (Arquitectura de Accesos, 2026-09-19).
+  portalSolicitarRecuperacion: true, portalRestablecerPassword: true,
   listarCuentasPortal: true, gestionarCuentaPortal: true,
   guardarCatalogo: true, listarCatalogo: true, getCatalogos: true,
   crearSolicitud: true,

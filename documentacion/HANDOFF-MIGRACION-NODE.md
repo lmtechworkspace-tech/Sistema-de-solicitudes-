@@ -1095,3 +1095,65 @@ forma de administrarse. Lo que SÍ se resolvió, sin ese bloqueo:
   trabajo de su propio incremento, no algo que quepa en este.
 - 1 prueba nueva (`cuentas-portal-porteo.test.js`): crear una cuenta con
   `rol: 'COORDINADOR'` es rechazada. Suite completa: 2667/2667 verdes.
+
+### 13.3 Recuperar contraseña — RESUELTA (2026-09-19)
+
+Tercer incremento del orden acordado (§13, punto 4). No existía ningún
+flujo de "olvidé mi contraseña" en SIGSO -- confirmado por búsqueda
+exhaustiva en la investigación previa (§ documento "Arquitectura de
+Accesos", §06): solo reseteo manual por un Admin
+(`cuentasPortal.resetearPassword`/`asignarPassword`, que sigue existiendo
+igual). Este incremento agrega el camino de autoservicio, backend +
+frontend completos.
+
+**Backend, `backend/logica/recuperarPassword.js` (nuevo)**:
+- `solicitarRecuperacion(db, {identificador})`: responde **siempre el
+  mismo mensaje**, exista o no la cuenta, esté activa o no, esté o no
+  bloqueada por el límite -- mismo criterio anti-enumeración que
+  `portal.login`. Busca por `usuario` O por cualquiera de los `emails` de
+  la cuenta.
+- **El token nunca se guarda en claro**: se guarda su SHA-256
+  (`RESETS_PASSWORD.token_hash`, `passwordHash.hashToken` nuevo) -- hash
+  RÁPIDO a propósito, distinto de `hashPassword` (scrypt, LENTO): un token
+  (UUID v4) es de alta entropía, no una contraseña de baja entropía que
+  alguien eligió; hashearlo lento solo gastaría CPU sin sumar seguridad.
+- **Límite de envíos PERSISTIDO en la base de datos** (tabla
+  `RESETS_PASSWORD` misma), no en memoria como el freno de login
+  (`sesiones.js`, documentado ahí mismo como "no se comparte entre
+  procesos"): 3 solicitudes por cuenta por hora. Motivo concreto: cada
+  solicitud real dispara un correo por Resend, que en el plan gratuito da
+  **100/día para TODO SIGSO** -- un límite en memoria no protegería esa
+  cuota compartida si el proceso se reinicia.
+- `restablecerPassword(db, {token, password_nueva})`: token de un solo
+  uso (`usado`), vence a los 45 minutos, exige 8+ caracteres, y **cierra
+  TODAS las sesiones activas de la cuenta** (`Sesiones.
+  revocarSesionesDeCuenta`, nueva) -- si alguien más tenía una sesión
+  abierta con la clave vieja, queda fuera.
+- `Notificaciones.enviarCorreoRecuperacion` (nueva, exportada, mismo
+  patrón que `enviarCodigoAcceso`): compone y envía el correo real por
+  Resend. El `evento` incluye el `resetId` (único por solicitud) para que
+  RN-026 (dedup de 30 min) nunca colapse dos pedidos legítimos distintos
+  -- el límite que de verdad aplica es el propio de
+  `recuperarPassword.js`, persistido.
+- Acciones públicas nuevas (sin sesión, es justamente el problema que
+  resuelven): `portalSolicitarRecuperacion`, `portalRestablecerPassword`.
+- **13 pruebas nuevas** (`backend/test/recuperar-password.test.js`):
+  anti-enumeración, búsqueda por usuario y por correo, cuenta inactiva,
+  límite persistido (5 pedidos seguidos → solo 3 correos), token nunca en
+  claro, token de un solo uso, token vencido, token inventado, contraseña
+  corta, cierre de todas las sesiones. Mutation-test manual de los dos
+  guardas críticos (reuso de token, límite de envíos) confirmado. Suite
+  completa: 2680/2680 verdes.
+
+**Frontend, `frontend/plataforma.html` + `frontend/js/plataforma.js`**
+(solo la plataforma -- `admin.html`/`app.html`, identidad Google, no
+tienen login de usuario/clave, coherente con la decisión "todo por el
+portal" de la Fase 4):
+- Dos vistas nuevas (`vista-recuperar`, `vista-restablecer`), mismo
+  patrón visual que `vista-login`/`vista-cambiar-clave` ya existentes.
+- Enlace "¿Olvidaste tu contraseña?" en el login.
+- `?reset=<token>` en la URL (viene del correo) entra directo a elegir
+  contraseña nueva, sin tocar ninguna sesión existente -- mismo criterio
+  de privacidad que el enlace mágico ya existente (`?token=`): se limpia
+  de la URL enseguida.
+- Wireado en `ACCIONES_PORTADAS_NODE`.

@@ -112,6 +112,21 @@
     document.getElementById('form-login').addEventListener('submit', manejarLogin_);
     document.getElementById('form-cambiar-clave').addEventListener('submit', manejarCambioClave_);
     document.getElementById('btn-logout').addEventListener('click', manejarLogout_);
+    // Fase "Recuperar contraseña" (Arquitectura de Accesos, 2026-09-19).
+    document.getElementById('form-recuperar').addEventListener('submit', manejarSolicitarRecuperacion_);
+    document.getElementById('form-restablecer').addEventListener('submit', manejarRestablecer_);
+    document.getElementById('link-olvide-clave').addEventListener('click', function (e) {
+      e.preventDefault();
+      mostrarVista_('vista-recuperar');
+    });
+    document.getElementById('link-volver-login').addEventListener('click', function (e) {
+      e.preventDefault();
+      mostrarVista_('vista-login');
+    });
+    document.getElementById('link-volver-login-restablecer').addEventListener('click', function (e) {
+      e.preventDefault();
+      mostrarVista_('vista-login');
+    });
     wireMenuUsuario_();
     wireMiPerfil_();
     wireVerContrasena_();
@@ -121,6 +136,22 @@
     wireTour_();
 
     wireAutorefresco_();
+
+    // Fase "Recuperar contraseña" (Arquitectura de Accesos, 2026-09-19):
+    // "?reset=" en la URL viene del correo de recuperación -- va directo a
+    // elegir contraseña nueva, sin tocar ninguna sesión existente ni
+    // intentar restaurarla. Mismo criterio de privacidad que el enlace
+    // mágico: se limpia de la URL enseguida.
+    var tokenRestablecer_ = null;
+    try {
+      tokenRestablecer_ = new URLSearchParams(window.location.search).get('reset');
+    } catch (err) { /* navegador viejo sin URLSearchParams */ }
+    if (tokenRestablecer_) {
+      document.getElementById('form-restablecer').setAttribute('data-token', tokenRestablecer_);
+      window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+      mostrarVista_('vista-restablecer');
+      return;
+    }
 
     // v5.2 (Fase C, propuesta de adopcion): "enlace magico" -- un token en
     // la URL (generado por el Admin, CuentasPortal.generarEnlaceMagico_)
@@ -275,6 +306,63 @@
     }).finally(function () {
       boton.disabled = false;
     });
+  }
+
+  // Fase "Recuperar contraseña" (Arquitectura de Accesos, 2026-09-19).
+  // La respuesta del servidor es SIEMPRE la misma (anti-enumeración, ver
+  // recuperarPassword.js) -- este formulario no distingue "cuenta
+  // encontrada" de "no existe", solo confirma que el pedido se hizo.
+  function manejarSolicitarRecuperacion_(evento) {
+    evento.preventDefault();
+    var boton = document.getElementById('btn-recuperar');
+    var salida = document.getElementById('resultado-recuperar');
+    var identificador = document.getElementById('campo-recuperar-identificador').value;
+    boton.disabled = true;
+    salida.innerHTML = '';
+    llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'portalSolicitarRecuperacion', { identificador: identificador })
+      .then(function (respuesta) {
+        salida.innerHTML = Componentes.alerta(
+          (respuesta.data && respuesta.data.message) || respuesta.message || 'Si el usuario o correo existe, te llegará un enlace.',
+          'exito'
+        );
+        document.getElementById('campo-recuperar-identificador').value = '';
+      }).catch(function () {
+        salida.innerHTML = Componentes.alerta('No se pudo conectar con el servidor. Intenta nuevamente.', 'error');
+      }).finally(function () {
+        boton.disabled = false;
+      });
+  }
+
+  function manejarRestablecer_(evento) {
+    evento.preventDefault();
+    var salida = document.getElementById('resultado-restablecer');
+    var nueva = document.getElementById('campo-restablecer-nueva').value;
+    if (nueva.length < 8) {
+      salida.innerHTML = Componentes.alerta('La contraseña nueva debe tener al menos 8 caracteres.', 'error');
+      return;
+    }
+    if (nueva !== document.getElementById('campo-restablecer-repetir').value) {
+      salida.innerHTML = Componentes.alerta('Las contraseñas nuevas no coinciden.', 'error');
+      return;
+    }
+    var boton = document.getElementById('btn-restablecer');
+    var token = document.getElementById('form-restablecer').getAttribute('data-token');
+    boton.disabled = true;
+    llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'portalRestablecerPassword', { token: token, password_nueva: nueva })
+      .then(function (respuesta) {
+        if (!respuesta.ok) {
+          salida.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo restablecer la contraseña.', 'error');
+          return;
+        }
+        salida.innerHTML = Componentes.alerta('Contraseña actualizada. Ya puedes ingresar con ella.', 'exito');
+        document.getElementById('campo-restablecer-nueva').value = '';
+        document.getElementById('campo-restablecer-repetir').value = '';
+        setTimeout(function () { mostrarVista_('vista-login'); }, 1800);
+      }).catch(function () {
+        salida.innerHTML = Componentes.alerta('No se pudo conectar con el servidor. Intenta nuevamente.', 'error');
+      }).finally(function () {
+        boton.disabled = false;
+      });
   }
 
   function manejarLogout_() {
@@ -1515,7 +1603,7 @@
   // --- helpers -----------------------------------------------------------
 
   function mostrarVista_(id) {
-    ['vista-login', 'vista-cambiar-clave', 'vista-cargando', 'vista-shell'].forEach(function (vista) {
+    ['vista-login', 'vista-recuperar', 'vista-restablecer', 'vista-cambiar-clave', 'vista-cargando', 'vista-shell'].forEach(function (vista) {
       var el = document.getElementById(vista);
       if (el) el.classList.toggle('sigso-oculto', vista !== id);
     });

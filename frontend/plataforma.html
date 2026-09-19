@@ -72,9 +72,74 @@
         <button type="submit" class="sigso-boton" id="btn-login">Ingresar</button>
         <div id="resultado-login"></div>
         <p class="sigso-ayuda plataforma-login__pie">
-          &iquest;No tienes cuenta o la olvidaste? P&iacute;dela al administrador del sistema.<br />
+          <a href="#" id="link-olvide-clave">&iquest;Olvidaste tu contrase&ntilde;a?</a><br />
+          &iquest;No tienes cuenta? P&iacute;dela al administrador del sistema.<br />
           Tambi&eacute;n puedes <a href="index.html">ingresar una solicitud sin cuenta</a> o
           <a href="estado.html">consultar por n&uacute;mero</a>.
+        </p>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ Vista: pedir enlace de recuperación ============ -->
+  <!-- Fase "Recuperar contraseña" (Arquitectura de Accesos, 2026-09-19): no
+       existía ningún autoservicio, solo reseteo manual por un Admin. -->
+  <div id="vista-recuperar" class="plataforma-auth sigso-oculto">
+    <aside class="plataforma-auth__marca">
+      <div class="plataforma-auth__marca-contenido">
+        <svg class="sigso-marca" width="40" height="40" viewBox="0 0 32 32" aria-hidden="true">
+          <rect width="32" height="32" rx="8" fill="#fff"></rect>
+          <text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#14213D" text-anchor="middle">S</text>
+        </svg>
+        <h1>SIGSO</h1>
+        <p>Control y Gesti&oacute;n Empresarial</p>
+      </div>
+    </aside>
+    <div class="plataforma-auth__formulario">
+      <form id="form-recuperar" class="plataforma-auth__form" novalidate>
+        <h2>Recuperar contrase&ntilde;a</h2>
+        <p class="sigso-ayuda">Ingresa tu usuario o correo. Si existe una cuenta, te enviaremos un enlace para elegir una contrase&ntilde;a nueva.</p>
+        <div class="sigso-campo">
+          <label for="campo-recuperar-identificador">Usuario o correo</label>
+          <input type="text" id="campo-recuperar-identificador" autocomplete="username" required />
+        </div>
+        <button type="submit" class="sigso-boton" id="btn-recuperar">Enviar enlace</button>
+        <div id="resultado-recuperar"></div>
+        <p class="sigso-ayuda plataforma-login__pie">
+          <a href="#" id="link-volver-login">Volver a ingresar</a>
+        </p>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ Vista: elegir contraseña nueva (desde el enlace del correo) ============ -->
+  <div id="vista-restablecer" class="plataforma-auth sigso-oculto">
+    <aside class="plataforma-auth__marca">
+      <div class="plataforma-auth__marca-contenido">
+        <svg class="sigso-marca" width="40" height="40" viewBox="0 0 32 32" aria-hidden="true">
+          <rect width="32" height="32" rx="8" fill="#fff"></rect>
+          <text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#14213D" text-anchor="middle">S</text>
+        </svg>
+        <h1>SIGSO</h1>
+        <p>Control y Gesti&oacute;n Empresarial</p>
+      </div>
+    </aside>
+    <div class="plataforma-auth__formulario">
+      <form id="form-restablecer" class="plataforma-auth__form" novalidate>
+        <h2>Elige tu contrase&ntilde;a nueva</h2>
+        <p class="sigso-ayuda">El enlace es de un solo uso y vence a los 45 minutos.</p>
+        <div class="sigso-campo">
+          <label for="campo-restablecer-nueva">Contrase&ntilde;a nueva</label>
+          <input type="password" id="campo-restablecer-nueva" autocomplete="new-password" required />
+        </div>
+        <div class="sigso-campo">
+          <label for="campo-restablecer-repetir">Repite la contrase&ntilde;a nueva</label>
+          <input type="password" id="campo-restablecer-repetir" autocomplete="new-password" required />
+        </div>
+        <button type="submit" class="sigso-boton" id="btn-restablecer">Guardar contrase&ntilde;a</button>
+        <div id="resultado-restablecer"></div>
+        <p class="sigso-ayuda plataforma-login__pie">
+          <a href="#" id="link-volver-login-restablecer">Volver a ingresar</a>
         </p>
       </form>
     </div>

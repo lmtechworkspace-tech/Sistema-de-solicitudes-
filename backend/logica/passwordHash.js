@@ -45,6 +45,17 @@ function generarToken() {
   return crypto.randomUUID();
 }
 
+// Hash RAPIDO (SHA-256), a proposito distinto de hashPassword (scrypt,
+// LENTO): scrypt existe para defender un secreto de BAJA entropia que
+// alguien eligio (una contrasena humana, adivinable por fuerza bruta).
+// Un token de recuperacion (generarToken, UUID v4) es de ALTA entropia,
+// nadie lo adivina -- hashearlo lento solo gastaria CPU sin sumar
+// seguridad real. Se guarda el hash, nunca el token en claro: una lectura
+// de la tabla de recuperacion no alcanza para usar un enlace ajeno.
+function hashToken(token) {
+  return crypto.createHash('sha256').update(String(token)).digest('hex');
+}
+
 // 10 caracteres legibles (sin 0/O/1/l/I que se confunden al dictarla por
 // telefono o WhatsApp) -- identico al criterio del .gs original.
 const ABECEDARIO_CLAVE = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -57,4 +68,4 @@ function generarClaveTemporal() {
   return clave;
 }
 
-module.exports = { generarSalt, hashPassword, coincide, generarToken, generarClaveTemporal };
+module.exports = { generarSalt, hashPassword, coincide, generarToken, generarClaveTemporal, hashToken };

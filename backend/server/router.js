@@ -66,6 +66,7 @@ const NotificacionesApp = require('../logica/notificacionesApp');
 const Inicio = require('../logica/inicio');
 const Auth = require('../logica/auth');
 const Perfiles = require('../logica/perfiles');
+const RecuperarPassword = require('../logica/recuperarPassword');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -79,7 +80,12 @@ const ACCIONES_PUBLICAS = new Set([
   'portalLogin', 'portalLogout', 'portalSesion', 'portalCambiarPassword', 'crearSolicitud',
   'consultarEstado', 'solicitarCodigoAcceso', 'misSolicitudes',
   'editarSubsolicitud', 'eliminarArchivo', 'responderConsulta', 'validarCierre',
-  'getCatalogos'
+  'getCatalogos',
+  // Fase "Recuperar contraseña" (Arquitectura de Accesos, 2026-09-19):
+  // quien la pide todavía no tiene sesión -- es justamente el problema
+  // que resuelven. Anti-enumeración adentro de recuperarPassword.js, no
+  // acá (mismo criterio que portalLogin).
+  'portalSolicitarRecuperacion', 'portalRestablecerPassword'
 ]);
 
 const ACCIONES = {
@@ -87,6 +93,8 @@ const ACCIONES = {
   portalLogout: (db, data) => Portal.logout(db, data),
   portalSesion: (db, data) => Portal.sesion(db, data),
   portalCambiarPassword: (db, data) => Portal.cambiarPassword(db, data),
+  portalSolicitarRecuperacion: (db, data) => RecuperarPassword.solicitarRecuperacion(db, data),
+  portalRestablecerPassword: (db, data) => RecuperarPassword.restablecerPassword(db, data),
 
   listarCuentasPortal: (db, data, contexto) => CuentasPortal.listar(db, data, contexto),
   gestionarCuentaPortal: (db, data, contexto) => CuentasPortal.gestionar(db, data, contexto),

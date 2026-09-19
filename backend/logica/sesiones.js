@@ -92,6 +92,17 @@ function revocarSesion(db, token) {
   actualizarFilaPorId_(db, 'SESIONES_PORTAL', 'token', token, { expira: new Date(0).toISOString() });
 }
 
+// Usado por recuperarPassword.js: al restablecer la contraseña, cierra
+// TODAS las sesiones activas de esa cuenta -- si alguien más (o el propio
+// dueño en otro dispositivo) tenía una sesión abierta con la clave vieja,
+// queda fuera. Mismo mecanismo que revocarSesion (vencer el token en vez
+// de borrar la fila), aplicado a cada sesión de la cuenta.
+function revocarSesionesDeCuenta(db, cuentaId) {
+  leerFilas_(db, 'SESIONES_PORTAL', COLUMNAS.SESIONES_PORTAL)
+    .filter((s) => s.cuenta_id === cuentaId)
+    .forEach((s) => revocarSesion(db, s.token));
+}
+
 /** Equivalente de purgarSesionesExpiradas_ (Triggers.gs, pase diario). */
 function purgarExpiradas(db) {
   const ahora = Date.now();
@@ -105,6 +116,6 @@ function purgarExpiradas(db) {
 
 module.exports = {
   loginBloqueado, registrarIntentoFallido, limpiarIntentos,
-  crearSesion, crearEnlaceMagico, resolverCuentaPorToken, revocarSesion, purgarExpiradas,
-  esCuentaActiva
+  crearSesion, crearEnlaceMagico, resolverCuentaPorToken, revocarSesion, revocarSesionesDeCuenta,
+  purgarExpiradas, esCuentaActiva
 };
