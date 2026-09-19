@@ -59,16 +59,23 @@ var MAX_INTENTOS_LECTURA = 3;
 // descargarOrdenTrabajo, descargarReporteActividadesPdf,
 // descargarActaReunionPdf, descargarReporteCumplimientoPausasPdf,
 // descargarReporteGerenciaPausasPdf, descargarEvidenciaClausulaSgc.
-// descargarReporteProyecto AUN NO se agrega aqui, aunque backend/logica/
-// reporteProyecto.js YA existe y esta probado (camino "de un clic", sin
-// config): el enrutamiento es por NOMBRE de accion, no por payload -- y 2
-// de los 3 sitios del frontend que llaman a esta accion (el modal
-// "Configurar informe" y el reporte de Cronograma en proyectos.js) SIEMPRE
-// mandan `data.config`, que Node todavia no soporta (devuelve un
-// _validationError claro, ver reporteProyecto.js). Agregar esta accion
-// aqui HOY cortaria tambien esos dos flujos configurados -- que hoy
-// funcionan completos en Apps Script -- a un error. Se agrega recien
-// cuando el modo configurable tambien este portado.
+// descargarReporteProyecto AUN NO se agrega aqui (actualizado 2026-09-19,
+// Fase 1a del plan post-migracion): backend/logica/reporteProyecto.js YA
+// soporta el camino "de un clic" Y la mayor parte del modo "Configurar
+// informe" (portada, narrativa, ficha, kpis, salud, avance por tarea,
+// hitos, riesgos, vencimientos, rendimiento, desviaciones, bitacora, con
+// los filtros de personas/estado/rango) -- solo quedan sin portar 3
+// secciones de grilla dia x tarea (`gantt`, `workload`, `leyenda`), que
+// devuelven un _validationError claro si se piden.
+// El enrutamiento es por NOMBRE de accion, no por payload: de los 3
+// sitios del frontend que llaman a esta accion, el reporte de
+// "Cronograma" (proyectos.js, CRONOGRAMA_REPORTE_SECCIONES_) SIEMPRE pide
+// gantt+workload+leyenda -- conectar la accion hoy dejaria ESE boton
+// puntual siempre fallando (hoy funciona completo en Apps Script). El
+// modal "Configurar informe" (el usuario elige secciones libremente) y el
+// boton simple sin config ya funcionarian bien en Node. Se conecta cuando
+// el dia x dia tambien este portado -- su propio incremento, ver §12 del
+// handoff.
 // descargarLibroProyecto es Excel, no PDF, motor distinto.)
 var ACCIONES_PORTADAS_NODE = {
   // --- Núcleo (Auth/Portal, Catálogos, Solicitudes, Dashboard/Gerencia/Jefatura) ---

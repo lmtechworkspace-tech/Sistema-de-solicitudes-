@@ -1,26 +1,32 @@
 'use strict';
 
 /**
- * reporteProyecto.js — puerto del camino "de un clic" (sin configurar) de
- * Proyectos.descargarReporte en backend/backoffice/Proyectos.gs
- * (construirHtmlReporteProyecto_): ficha, resumen ejecutivo, avance por
- * tarea, hitos, riesgos abiertos, próximos vencimientos, rendimiento y
- * bitácora reciente. Reusa Proyectos.getDetalle/listarTareas/
- * obtenerRendimiento/listarBitacora -- misma lógica de datos que ya usa la
- * pantalla, este módulo solo la dibuja.
+ * reporteProyecto.js — puerto de Proyectos.descargarReporte en
+ * backend/backoffice/Proyectos.gs: cubre los DOS caminos del .gs --
+ * "de un clic" (construirHtmlReporteProyecto_, sin config: ficha, resumen
+ * ejecutivo, avance por tarea, hitos, riesgos abiertos, próximos
+ * vencimientos, rendimiento y bitácora reciente) y el modo "Configurar
+ * informe" (construirHtmlReporteConfigurado_, con `data.config`: secciones
+ * a elección + filtro de personas/estado/rango). Reusa Proyectos.getDetalle/
+ * listarTareas/obtenerRendimiento/listarBitacora -- misma lógica de datos
+ * que ya usa la pantalla, este módulo solo la dibuja.
  *
- * FUERA DE ALCANCE A PROPÓSITO (v11 "PDF ejecutivo configurable" del .gs:
- * secciones a elección, rango de fechas, filtro por persona, Carta Gantt
- * día a día multipágina, Workload, Desviaciones Plan/Esperado/Real): es
- * una función mucho más grande que el resto de los reportes de este motor
- * junta -- queda para su propio incremento si se necesita. Lo que SÍ cubre
- * este módulo es el botón "Descargar PDF" de siempre, sin abrir
- * "Configurar informe".
+ * FUERA DE ALCANCE A PROPÓSITO, documentado (nunca fingido): las 3
+ * secciones de grilla día×tarea del modo configurable (`gantt` -- Carta
+ * Gantt de barras + grilla de letras día a día --, `workload`, y su
+ * leyenda de símbolos `leyenda`, que solo tiene sentido junto a esas dos).
+ * Son ~540 de las ~1395 líneas del feature en el .gs: paginación
+ * multipágina, colores por celda, conectores -- decisión explícita del
+ * usuario de dejarlas para su propio incremento en vez de forzarlas ahora.
+ * Si el config las pide, `descargarReporte` devuelve un _validationError
+ * claro, nunca un PDF a medias.
  *
- * "Avance por tarea" reemplaza la Carta Gantt semanal del .gs (grilla de
- * chips por semana) por una lista de barras de progreso por tarea --
- * decisión de diseño explícita: mismo contenido (qué tan avanzada va cada
- * tarea, comparado con el plan), forma más simple de dibujar con pdfkit.
+ * "Avance por tarea" (sección `mini_gantt` del config) reemplaza la Carta
+ * Gantt semanal del .gs (grilla de chips por semana) por una lista de
+ * barras de progreso por tarea -- decisión de diseño explícita: mismo
+ * contenido (qué tan avanzada va cada tarea, comparado con el plan), forma
+ * más simple de dibujar con pdfkit. Mismo criterio ya usado en el camino
+ * "de un clic".
  */
 
 const Proyectos = require('./proyectos');
@@ -32,6 +38,7 @@ const ESTADO_PROYECTO_LABEL = {
   EN_REVISION: 'En revisión', CERRADO: 'Cerrado', CANCELADO: 'Cancelado'
 };
 const SALUD_LABEL = { normal: 'Normal', riesgo: 'En riesgo', critico: 'Crítico' };
+const SALUD_COLOR = { normal: '#16A34A', riesgo: '#D97706', critico: '#DC2626' };
 const SEMAFORO_LABEL = {
   atrasada: 'Atrasada', riesgo: 'En riesgo', pendiente: 'Pendiente',
   bloqueada: 'Bloqueada', 'al-dia': 'Al día', terminada: 'Terminada', revision: 'En revisión'
@@ -45,6 +52,52 @@ const BITACORA_TIPO_LABEL = {
 const VENCIMIENTOS_ORDEN = { atrasada: 0, riesgo: 1, pendiente: 2, bloqueada: 3, 'al-dia': 4, revision: 5 };
 const VENCIMIENTOS_TOPE = 8;
 const AVANCE_TOPE = 15;
+
+// Mismo catálogo que REPORTE_SECCIONES_DISPONIBLES_ (Proyectos.gs), menos
+// gantt/workload/leyenda (ver la nota de alcance en la cabecera).
+const SECCIONES_DISPONIBLES = [
+  'portada', 'narrativa', 'ficha', 'kpis', 'salud', 'mini_gantt', 'hitos',
+  'riesgos', 'vencimientos', 'rendimiento', 'desviaciones', 'bitacora',
+  // Reconocidas (para no romper una config vieja) pero no soportadas.
+  'gantt', 'workload', 'leyenda'
+];
+const SECCIONES_NO_SOPORTADAS = ['gantt', 'workload', 'leyenda'];
+const REPORTE_SECCION_LABEL = {
+  narrativa: 'Resumen ejecutivo', ficha: 'Ficha del proyecto', kpis: 'Indicadores clave',
+  salud: 'Salud del proyecto', mini_gantt: 'Avance por tarea', hitos: 'Hitos',
+  riesgos: 'Riesgos abiertos', vencimientos: 'Próximos vencimientos', rendimiento: 'Rendimiento',
+  desviaciones: 'Plan · Esperado · Real', bitacora: 'Actividad reciente'
+};
+
+// Puerto de normalizarConfigReporte_: nunca deja pasar una config con forma
+// inesperada, cae a valores seguros. null = "no hay config" (camino clásico).
+function normalizarConfig_(config) {
+  if (!config) return null;
+  let secciones = Array.isArray(config.secciones) ? config.secciones.filter((s) => SECCIONES_DISPONIBLES.indexOf(s) !== -1) : [];
+  if (!secciones.length) secciones = ['ficha'];
+  const personas = Array.isArray(config.personas)
+    ? config.personas.map((e) => String(e || '').trim().toLowerCase()).filter(Boolean)
+    : [];
+  const estado = ['abiertas', 'atrasadas'].indexOf(config.estado) !== -1 ? config.estado : '';
+  let rango = null;
+  if (config.rango && /^\d{4}-\d{2}-\d{2}$/.test(config.rango.desde || '') &&
+      /^\d{4}-\d{2}-\d{2}$/.test(config.rango.hasta || '') && config.rango.desde <= config.rango.hasta) {
+    rango = { desde: config.rango.desde, hasta: config.rango.hasta };
+  }
+  return { secciones, personas, estado, rango };
+}
+
+function filtrarTareas_(tareas, config) {
+  return tareas.filter((a) => {
+    if (config.personas.length) {
+      const email = String(a.responsable_email || '').trim().toLowerCase();
+      if (config.personas.indexOf(email) === -1) return false;
+    }
+    if (config.estado === 'abiertas' && (a.estado === 'TERMINADA' || a.estado === 'CANCELADA')) return false;
+    if (config.estado === 'atrasadas' && a.semaforo !== 'atrasada') return false;
+    return true;
+  });
+}
 
 function fechaCorta_(valor) {
   if (!valor) return '—';
@@ -256,27 +309,8 @@ function dibujarBitacora_(doc, bitacora) {
   );
 }
 
-async function descargarReporte(db, data, contexto) {
-  // El modo "Configurar informe" (secciones a elección, rango, personas,
-  // Gantt/Workload/Desviaciones) no esta portado -- ver la cabecera del
-  // archivo. Servir el reporte de siempre cuando el usuario pidio uno
-  // configurado seria fingir que se cumplio su pedido; mejor un error claro.
-  if (data && data.config) {
-    return errorValidacion('config', 'El informe configurable (secciones a elección, rango, Carta Gantt) todavía no está disponible en el nuevo backend. Descarga el reporte estándar por ahora.');
-  }
-  const detalle = Proyectos.getDetalle(db, data, contexto);
-  if (detalle && (detalle._validationError || detalle._forbidden)) return detalle;
-  const tareas = Proyectos.listarTareas(db, data, contexto);
-  const rendimiento = Proyectos.obtenerRendimiento(db, data, contexto);
-  const bitacora = Proyectos.listarBitacora(db, data, contexto).slice(-15).reverse();
-
-  const nombresPorEmail = {};
-  (detalle.integrantes || []).forEach((i) => { nombresPorEmail[i.usuario_email] = i.usuario_nombre || i.usuario_email; });
-
+function dibujarFicha_(doc, detalle) {
   const p = detalle.proyecto;
-  const doc = PdfDoc.crearDocumento();
-  PdfDoc.encabezado(doc, { tipoDoc: 'Reporte de proyecto', referencia: p.codigo || p.nombre });
-
   PdfDoc.seccion(doc, 'Ficha del proyecto');
   PdfDoc.fichaTabla(doc, [
     ['Líder', p.lider_email || '—', 'Estado', ESTADO_PROYECTO_LABEL[p.estado] || p.estado],
@@ -287,7 +321,176 @@ async function descargarReporte(db, data, contexto) {
     doc.font('Helvetica').fontSize(8).fillColor(PdfDoc.DOC.MUTED).text(detalle.salud_motivos.join(' · '), PdfDoc.MARGIN, doc.y, { width: PdfDoc.CONTENT_WIDTH });
     doc.moveDown(0.4);
   }
+}
 
+// Puerto de seccionPortadaPdf_/lineaEstadoPortadaPdf_/indiceContenidoPdf_,
+// simplificado a alineación izquierda (el resto del documento tampoco
+// centra nada -- consistencia visual > replicar el centrado del .gs).
+function dibujarPortada_(doc, detalle, seccionesIncluidas) {
+  const p = detalle.proyecto;
+  doc.font('Helvetica').fontSize(9).fillColor(PdfDoc.DOC.MUTED).text('REPORTE EJECUTIVO DE PROYECTO', PdfDoc.MARGIN, doc.y, { characterSpacing: 1.2 });
+  doc.moveDown(0.4);
+  doc.font('Helvetica-Bold').fontSize(20).fillColor(PdfDoc.DOC.INK).text(p.nombre, PdfDoc.MARGIN, doc.y, { width: PdfDoc.CONTENT_WIDTH });
+  doc.moveDown(0.5);
+  const scoreTxt = detalle.salud_penalizacion ? ' · ' + detalle.salud_penalizacion + ' pts en contra' : '';
+  PdfDoc.chip(doc, (SALUD_LABEL[detalle.salud] || detalle.salud) + scoreTxt, SALUD_COLOR[detalle.salud] || PdfDoc.DOC.MUTED);
+  doc.moveDown(0.3);
+
+  const partes = [];
+  if (detalle.avance_pct != null) partes.push(detalle.avance_pct + '% avanzado');
+  if (detalle.avance_pct != null && detalle.avance_esperado_pct != null) {
+    const d = Math.round((detalle.avance_pct - detalle.avance_esperado_pct) * 10) / 10;
+    partes.push(d < 0 ? (-d) + ' pp bajo lo esperado' : (d > 0 ? '+' + d + ' pp sobre lo esperado' : 'en línea con lo esperado'));
+  }
+  const venc = (detalle.requiere_atencion || {}).tareas_vencidas || 0;
+  if (venc > 0) partes.push(venc + (venc === 1 ? ' tarea vencida' : ' tareas vencidas'));
+  if (partes.length) {
+    doc.font('Helvetica').fontSize(9).fillColor(PdfDoc.DOC.MUTED).text(partes.join('  ·  '), PdfDoc.MARGIN, doc.y, { width: PdfDoc.CONTENT_WIDTH });
+    doc.moveDown(0.5);
+  }
+
+  PdfDoc.fichaTabla(doc, [
+    ['Código', p.codigo || '—', 'Estado', ESTADO_PROYECTO_LABEL[p.estado] || p.estado],
+    ['Líder', p.lider_email || '—', 'Período', fechaCorta_(p.fecha_inicio) + ' – ' + fechaCorta_(p.fecha_objetivo)]
+  ]);
+
+  const items = (seccionesIncluidas || []).filter((s) => REPORTE_SECCION_LABEL[s]);
+  if (items.length >= 3) {
+    doc.moveDown(0.5);
+    PdfDoc.subseccion(doc, 'Contenido');
+    items.forEach((s, i) => {
+      PdfDoc.asegurarEspacio(doc, 14);
+      doc.font('Helvetica').fontSize(8.5).fillColor(PdfDoc.DOC.INK).text((i + 1) + '. ' + REPORTE_SECCION_LABEL[s], PdfDoc.MARGIN, doc.y);
+      doc.moveDown(0.15);
+    });
+  }
+  doc.addPage();
+}
+
+// Puerto de bandaKpisPdf_/kpiTarjetaPdf_: fila de tarjetas con el numero
+// grande y su etiqueta. Mismos numeros que Resumen/rendimiento -- cero
+// calculo nuevo, solo presentacion. Los KPIs alarmantes (>0) se pintan en
+// rojo; la desviacion vs esperado, rojo si va atras, verde si va al dia o
+// adelante.
+function dibujarKpis_(doc, detalle, rendimiento) {
+  const at = detalle.requiere_atencion || {};
+  const c = (rendimiento && rendimiento.cumplimiento_tareas) || {};
+  const horas = (rendimiento && rendimiento.horas_totales_proyecto) || 0;
+  const avance = detalle.avance_pct;
+  const esperado = detalle.avance_esperado_pct;
+  const hayDesv = avance != null && esperado != null;
+  const desv = hayDesv ? Math.round((avance - esperado) * 10) / 10 : null;
+  const desvValor = hayDesv ? ((desv >= 0 ? '+' : '') + desv + ' pp') : '—';
+  const desvEtiqueta = hayDesv ? ('Avance vs esperado (' + esperado + '%)') : 'Avance vs esperado';
+
+  const specs = [
+    [avance == null ? '—' : avance + '%', 'Avance real', ''],
+    [desvValor, desvEtiqueta, hayDesv ? (desv < 0 ? 'alerta' : 'ok') : ''],
+    [c.entregadas ? c.a_tiempo + '/' + c.entregadas : '—', 'Entregas a tiempo', ''],
+    [horas ? (Math.round(horas * 10) / 10) + 'h' : '—', 'Horas registradas', ''],
+    [at.tareas_vencidas || 0, 'Tareas vencidas', at.tareas_vencidas > 0 ? 'alerta' : ''],
+    [at.tareas_bloqueadas || 0, 'Bloqueadas', at.tareas_bloqueadas > 0 ? 'alerta' : ''],
+    [at.hitos_atrasados || 0, 'Hitos atrasados', at.hitos_atrasados > 0 ? 'alerta' : '']
+  ];
+
+  PdfDoc.seccion(doc, 'Indicadores clave');
+  const anchoCol = PdfDoc.CONTENT_WIDTH / specs.length;
+  PdfDoc.asegurarEspacio(doc, 48);
+  const y = doc.y;
+  specs.forEach((s, i) => {
+    const x = PdfDoc.MARGIN + i * anchoCol;
+    const color = s[2] === 'alerta' ? '#B91C1C' : (s[2] === 'ok' ? '#15803D' : PdfDoc.DOC.INK);
+    doc.rect(x, y, anchoCol, 44).lineWidth(0.5).strokeColor(PdfDoc.DOC.HAIRLINE).stroke();
+    doc.font('Helvetica-Bold').fontSize(13).fillColor(color).text(String(s[0]), x + 1, y + 8, { width: anchoCol - 2, align: 'center' });
+    doc.font('Helvetica').fontSize(6).fillColor(PdfDoc.DOC.MUTED).text(String(s[1]).toUpperCase(), x + 2, y + 28, { width: anchoCol - 4, align: 'center' });
+  });
+  doc.y = y + 48;
+  doc.x = PdfDoc.MARGIN;
+  doc.moveDown(0.3);
+}
+
+const SALUD_FACTOR_LABEL = {
+  hito_vencido: 'Hito(s) vencido(s)', tarea_critica_atrasada: 'Tarea(s) crítica(s) atrasada(s)',
+  tarea_atrasada: 'Tarea(s) atrasada(s)', bloqueo_estancado: 'Bloqueo(s) estancado(s)',
+  tarea_bloqueada: 'Tarea(s) bloqueada(s)', sin_actualizar: 'Tarea(s) sin actualizar',
+  entregable_vencido: 'Entregable(s) vencido(s)', entregable_observado: 'Entregable(s) observado(s)'
+};
+function dibujarSalud_(doc, detalle) {
+  PdfDoc.seccion(doc, 'Salud del proyecto');
+  const scoreTxt = detalle.salud_penalizacion == null ? 'Fijado manualmente'
+    : (detalle.salud_penalizacion === 0 ? 'Sin factores en contra' : detalle.salud_penalizacion + ' puntos en contra');
+  PdfDoc.chip(doc, (SALUD_LABEL[detalle.salud] || detalle.salud) + ' · ' + scoreTxt, SALUD_COLOR[detalle.salud] || PdfDoc.DOC.MUTED);
+  doc.moveDown(0.2);
+  const desglose = detalle.salud_desglose || [];
+  if (!desglose.length) return;
+  PdfDoc.tablaGenerica(doc,
+    [{ campo: 'factor', etiqueta: 'Factor que resta salud' }, { campo: 'cantidad', etiqueta: 'Cantidad' }, { campo: 'puntos', etiqueta: 'Puntos' }],
+    desglose.map((d) => ({ factor: SALUD_FACTOR_LABEL[d.factor] || d.factor, cantidad: d.cantidad, puntos: '-' + d.puntos }))
+  );
+  doc.moveDown(0.3);
+}
+
+// Puerto de seccionDesviacionesPdf_: mismos datos que la tabla Plan ·
+// Esperado · Real en pantalla, ordenada por desviación (más atrasado
+// arriba). Sin la mini-barra de color por fila del .gs -- tablaGenerica no
+// pinta por celda; el signo +/- de la desviación ya comunica lo mismo.
+function dibujarDesviaciones_(doc, rendimiento, tareasFiltradas, tareasPorId) {
+  const plan = (rendimiento && rendimiento.plan_seguimiento) || [];
+  const idsFiltrados = {};
+  tareasFiltradas.forEach((a) => { idsFiltrados[a.actividad_id] = true; });
+  const filasPlan = plan.filter((t) => idsFiltrados[t.actividad_id] && t.plan_fin);
+  if (!filasPlan.length) return;
+  filasPlan.sort((a, b) => {
+    const na = (a.desviacion_pp == null) ? 1 : 0;
+    const nb = (b.desviacion_pp == null) ? 1 : 0;
+    if (na !== nb) return na - nb;
+    if (na) return 0;
+    return a.desviacion_pp - b.desviacion_pp;
+  });
+  PdfDoc.seccion(doc, 'Plan · Esperado · Real');
+  PdfDoc.tablaGenerica(doc,
+    [{ campo: 'tarea', etiqueta: 'Tarea' }, { campo: 'plan', etiqueta: 'Plan (fin)' }, { campo: 'esperado', etiqueta: 'Esperado' },
+      { campo: 'real', etiqueta: 'Real' }, { campo: 'desviacion', etiqueta: 'Desviación' }],
+    filasPlan.map((t) => {
+      const tarea = tareasPorId[t.actividad_id];
+      const tieneDesv = t.desviacion_pp != null;
+      return {
+        tarea: tarea ? tarea.titulo : '—', plan: fechaCorta_(t.plan_fin),
+        esperado: t.avance_esperado_pct == null ? '—' : t.avance_esperado_pct + '%',
+        real: t.avance_real_pct == null ? '—' : t.avance_real_pct + '%',
+        desviacion: tieneDesv ? ((t.desviacion_pp >= 0 ? '+' : '') + t.desviacion_pp + 'pp') : '—'
+      };
+    })
+  );
+  doc.moveDown(0.3);
+}
+
+// Puerto del recorte de bitácora dentro de construirHtmlReporteConfigurado_:
+// con rango (explícito), TODO lo que pasó en esa ventana; sin rango, las
+// últimas 30 (el doble que el reporte clásico -- este SÍ es a medida).
+async function bitacoraConfigurada_(db, data, contexto, tareasFiltradas, config) {
+  const idsFiltrados = {};
+  tareasFiltradas.forEach((a) => { idsFiltrados[a.actividad_id] = true; });
+  const completa = Proyectos.listarBitacora(db, data, contexto).filter((b) => idsFiltrados[b.actividad_id]);
+  if (config.rango) {
+    return completa
+      .filter((b) => {
+        const k = (b.tipo === 'REGISTRO_DIA' && b.dia) ? b.dia : (b.timestamp ? String(b.timestamp).slice(0, 10) : '');
+        return k >= config.rango.desde && k <= config.rango.hasta;
+      })
+      .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  }
+  return completa.slice(-30).reverse();
+}
+
+async function descargarReporteEstandar_(db, data, contexto, detalle, tareas, rendimiento, nombresPorEmail) {
+  const p = detalle.proyecto;
+  const bitacora = Proyectos.listarBitacora(db, data, contexto).slice(-15).reverse();
+
+  const doc = PdfDoc.crearDocumento();
+  PdfDoc.encabezado(doc, { tipoDoc: 'Reporte de proyecto', referencia: p.codigo || p.nombre });
+
+  dibujarFicha_(doc, detalle);
   dibujarNarrativa_(doc, detalle);
   dibujarAvancePorTarea_(doc, tareas, rendimiento);
   dibujarHitos_(doc, detalle.hitos || []);
@@ -301,4 +504,55 @@ async function descargarReporte(db, data, contexto) {
   return { pdf_base64: buffer.toString('base64'), filename: 'Reporte - ' + p.nombre + '.pdf' };
 }
 
-module.exports = { descargarReporte };
+async function descargarReporteConfigurado_(db, data, contexto, detalle, tareas, rendimiento, nombresPorEmail, config) {
+  const tareasFiltradas = filtrarTareas_(tareas, config);
+  const tareasPorId = {};
+  tareas.forEach((a) => { tareasPorId[a.actividad_id] = a; });
+  const incluye = (s) => config.secciones.indexOf(s) !== -1;
+
+  const p = detalle.proyecto;
+  const doc = PdfDoc.crearDocumento();
+  PdfDoc.encabezado(doc, { tipoDoc: 'Reporte de proyecto', referencia: p.codigo || p.nombre });
+
+  if (incluye('portada')) dibujarPortada_(doc, detalle, config.secciones);
+  if (incluye('narrativa')) dibujarNarrativa_(doc, detalle);
+  if (incluye('ficha')) dibujarFicha_(doc, detalle);
+  if (incluye('kpis')) dibujarKpis_(doc, detalle, rendimiento);
+  if (incluye('salud')) dibujarSalud_(doc, detalle);
+  if (incluye('mini_gantt')) dibujarAvancePorTarea_(doc, tareasFiltradas, rendimiento);
+  if (incluye('hitos')) dibujarHitos_(doc, detalle.hitos || []);
+  if (incluye('riesgos')) dibujarRiesgos_(doc, detalle.riesgos || [], nombresPorEmail);
+  if (incluye('vencimientos')) dibujarVencimientos_(doc, tareasFiltradas);
+  if (incluye('rendimiento')) dibujarRendimiento_(doc, rendimiento);
+  if (incluye('desviaciones')) dibujarDesviaciones_(doc, rendimiento, tareasFiltradas, tareasPorId);
+  if (incluye('bitacora')) dibujarBitacora_(doc, await bitacoraConfigurada_(db, data, contexto, tareasFiltradas, config));
+
+  PdfDoc.pie(doc);
+  const buffer = await PdfDoc.finalizar(doc);
+  return { pdf_base64: buffer.toString('base64'), filename: 'Reporte - ' + p.nombre + '.pdf' };
+}
+
+async function descargarReporte(db, data, contexto) {
+  const detalle = Proyectos.getDetalle(db, data, contexto);
+  if (detalle && (detalle._validationError || detalle._forbidden)) return detalle;
+  const tareas = Proyectos.listarTareas(db, data, contexto);
+  const rendimiento = Proyectos.obtenerRendimiento(db, data, contexto);
+
+  const nombresPorEmail = {};
+  (detalle.integrantes || []).forEach((i) => { nombresPorEmail[i.usuario_email] = i.usuario_nombre || i.usuario_email; });
+
+  if (data && data.config) {
+    const config = normalizarConfig_(data.config);
+    const noSoportada = config.secciones.find((s) => SECCIONES_NO_SOPORTADAS.indexOf(s) !== -1);
+    if (noSoportada) {
+      return errorValidacion('config',
+        'La sección "' + (noSoportada === 'leyenda' ? 'Leyenda' : (REPORTE_SECCION_LABEL[noSoportada] || noSoportada)) +
+        '" (Carta Gantt/Workload día a día) todavía no está disponible en el nuevo backend. Quita esa sección de tu informe, o descarga el reporte estándar.');
+    }
+    return descargarReporteConfigurado_(db, data, contexto, detalle, tareas, rendimiento, nombresPorEmail, config);
+  }
+
+  return descargarReporteEstandar_(db, data, contexto, detalle, tareas, rendimiento, nombresPorEmail);
+}
+
+module.exports = { descargarReporte, normalizarConfig_, filtrarTareas_ };

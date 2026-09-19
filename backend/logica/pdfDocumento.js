@@ -254,6 +254,21 @@ function chipPrioridad(doc, x, y, prioridad) {
   return ancho;
 }
 
+// Chip de borde generico (chipBordePdf_ en Proyectos.gs): texto + borde de
+// un color arbitrario, sin relleno -- para salud, estados, o lo que haga
+// falta mas alla de la prioridad. Se dibuja en el flujo normal (no
+// posicion absoluta como chipPrioridad), avanza doc.y.
+function chip(doc, texto, color) {
+  asegurarEspacio(doc, 18);
+  const y = doc.y;
+  doc.font('Helvetica-Bold').fontSize(9);
+  const ancho = doc.widthOfString(texto) + 12;
+  doc.roundedRect(MARGIN, y, ancho, 16, 3).lineWidth(1).strokeColor(color).stroke();
+  doc.fillColor(color).text(texto, MARGIN + 6, y + 4, { width: ancho - 12, lineBreak: false });
+  doc.y = y + 20;
+  doc.x = MARGIN;
+}
+
 // Tabla generica de columnas (reporte tabular tipo hoja de calculo):
 // encabezado en negrita con regla de 2px, filas con hairline de 1px --
 // mismo patron que construirHtmlReporteActividades_/construirHtmlEvidenciaClausula_
@@ -326,7 +341,7 @@ function barraHorizontal(doc, etiqueta, pct, sufijo) {
 module.exports = {
   DOC, MARGIN, CONTENT_WIDTH, COLOR_PRIORIDAD,
   crearDocumento, finalizar, asegurarEspacio,
-  encabezado, pie, seccion, subseccion, campoTexto, fichaTabla, tablaDatos, listaEnlaces, chipPrioridad,
+  encabezado, pie, seccion, subseccion, campoTexto, fichaTabla, tablaDatos, listaEnlaces, chipPrioridad, chip,
   tablaGenerica, lineaResumen, barraHorizontal,
   formatearFechaLegible_, fechaCorta_
 };
