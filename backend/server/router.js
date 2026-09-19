@@ -55,6 +55,7 @@ const Procesos = require('../logica/procesosSgc');
 const Indicadores = require('../logica/indicadoresSgc');
 const Tablero = require('../logica/tableroSgc');
 const Prestaciones = require('../logica/prestacionesSgc');
+const OrdenTrabajo = require('../logica/ordenTrabajo');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -100,6 +101,11 @@ const ACCIONES = {
   derivarSolicitud: (db, data, contexto) => SolicitudesBO.derivarSolicitud(db, data, contexto),
   editarContenidoSubsolicitud: (db, data, contexto) => SolicitudesBO.editarContenidoSubsolicitud(db, data, contexto),
   getSolicitudDetalle: (db, data, contexto) => SolicitudesBO.getDetalle(db, data.solicitud_id, contexto),
+  // §8.3 del handoff de migracion: motor de PDF en Node (pdfkit), primer
+  // modulo completo (antes stub inline, ver git blame). descargar() es
+  // async (genera el PDF con pdfkit) -- ejecutarAccion ya espera con
+  // await cualquier accion que devuelva una Promise.
+  descargarOrdenTrabajo: (db, data, contexto) => OrdenTrabajo.descargar(db, data, contexto),
 
   listarJefaturas: (db, data, contexto) => Jefatura.listar(db, data, contexto),
   gestionarJefatura: (db, data, contexto) => Jefatura.gestionar(db, data, contexto),

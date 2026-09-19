@@ -68,6 +68,9 @@ var ACCIONES_PORTADAS_NODE = {
   editarSubsolicitud: true, eliminarArchivo: true, responderConsulta: true, validarCierre: true,
   actualizarEstado: true, actualizarPrioridad: true, comprometerFecha: true, derivarSolicitud: true,
   editarContenidoSubsolicitud: true, getSolicitudDetalle: true,
+  // §8.3 del handoff: primer PDF servido por el motor de Node (pdfkit),
+  // OrdenTrabajo.gs completo (antes sin portar, ni siquiera stub).
+  descargarOrdenTrabajo: true,
   listarJefaturas: true, gestionarJefatura: true,
   getDashboardData: true, getPautaTrabajo: true,
   getPanelGerencia: true, getPanelJefatura: true,
