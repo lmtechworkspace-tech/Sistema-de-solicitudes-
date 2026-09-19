@@ -19,7 +19,7 @@ function directorioPersonalActivo_(db) {
   const personas = {};
   leerFilas_(db, 'USUARIOS', COLUMNAS.USUARIOS).forEach((u) => {
     if (!esVerdadero_(u.activo) || !u.email) return;
-    personas[String(u.email).toLowerCase()] = { email: u.email, nombre: u.nombre || u.email, empresa_id: u.empresa_id || '' };
+    personas[String(u.email).toLowerCase()] = { email: u.email, nombre: u.nombre || u.email, empresa_id: u.empresa_id || '', origen: 'Backoffice (Google)' };
   });
   leerFilas_(db, 'CUENTAS_PORTAL', COLUMNAS.CUENTAS_PORTAL).forEach((c) => {
     if (!esVerdadero_(c.activo)) return;
@@ -27,7 +27,7 @@ function directorioPersonalActivo_(db) {
       const correo = String(email || '').trim();
       if (!correo) return;
       const clave = correo.toLowerCase();
-      if (!personas[clave]) personas[clave] = { email: correo, nombre: c.nombre || correo, empresa_id: c.empresa_id || '' };
+      if (!personas[clave]) personas[clave] = { email: correo, nombre: c.nombre || correo, empresa_id: c.empresa_id || '', origen: 'Plataforma (portal)' };
     });
   });
   return Object.values(personas);

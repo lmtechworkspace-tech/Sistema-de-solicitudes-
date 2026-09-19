@@ -94,6 +94,7 @@ var ACCIONES_PORTADAS_NODE = {
   listarLogs: true, getEstadoSistema: true,
   listarCanalesAlerta: true, guardarCanalAlerta: true,
   getDirectorioAlerta: true, enviarAlertaManual: true, enviarReporteGerenciaAhora: true,
+  reportarPermisoNotificacionesSO: true, listarPermisosNotificacionesSO: true,
 
   // --- Novedades (16 de 16; adjunto/descarga desgateadas de R2 el 2026-09-18) ---
   listarAreasPublicablesNovedad: true, getFeedNovedades: true, getDetalleNovedad: true,

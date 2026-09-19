@@ -709,6 +709,53 @@ async function enviarAlertaManual(db, data, contexto) {
   return { ok: true, destinatarios: destinatarios.length, en_vivo: enVivo, correo: correo };
 }
 
+// v7.3 (Nivel 0, puerto Fase 3a): el cliente reporta cada vez que cambia
+// (o al cargar) el permiso de notificaciones del navegador -- best-effort,
+// nunca rompe la carga de SIGSO si algo falla.
+function reportarPermisoNotificacionesSO(db, data, contexto) {
+  const valor = String((data && data.permiso) || '').trim();
+  if (['granted', 'denied', 'default'].indexOf(valor) === -1) {
+    return { _validationError: true, message: 'Valor de permiso inválido.', fields: [{ campo: 'permiso', mensaje: 'Valor de permiso inválido.' }] };
+  }
+  try {
+    const fila = { email: contexto.email, permiso: valor, actualizado_en: new Date().toISOString() };
+    const actualizado = actualizarFilaPorId_(db, 'NOTIF_PERMISOS_SO', 'email', contexto.email, fila);
+    if (!actualizado) agregarFila_(db, 'NOTIF_PERMISOS_SO', fila);
+  } catch (err) { /* hoja no existe todavia -- no romper la carga de SIGSO */ }
+  return { ok: true };
+}
+
+// v7.3 (Nivel 0): panel de Administración -- "quién nunca aceptó el permiso
+// del navegador" (la causa más probable de "a unos les llega la alerta y a
+// otros no"). Cruza el personal ACTIVO (USUARIOS + CUENTAS_PORTAL) con lo
+// último reportado en NOTIF_PERMISOS_SO -- si nunca reportó nada, aparece
+// como 'sin_datos'. ADM-only.
+function listarPermisosNotificacionesSO(db, data, contexto) {
+  if (!contexto || contexto.rol !== 'ADM') {
+    return { _forbidden: true, message: 'Solo un Administrador puede ver el estado de las alertas.' };
+  }
+  const permisoPorEmail = {};
+  leerFilas_(db, 'NOTIF_PERMISOS_SO', COLUMNAS.NOTIF_PERMISOS_SO).forEach((p) => { permisoPorEmail[String(p.email).toLowerCase()] = p; });
+
+  const personas = DirectorioPersonal.directorioPersonalActivo_(db);
+  const lista = personas.map((persona) => {
+    const reportado = permisoPorEmail[persona.email.toLowerCase()];
+    return {
+      email: persona.email, nombre: persona.nombre, origen: persona.origen,
+      permiso: reportado ? reportado.permiso : 'sin_datos',
+      actualizado_en: reportado ? reportado.actualizado_en : ''
+    };
+  });
+  // Los que faltan activar primero (sin_datos, luego denied, luego
+  // default); granted al final -- ya estan bien, no necesitan atencion.
+  const ORDEN = { sin_datos: 0, denied: 1, default: 2, granted: 3 };
+  lista.sort((a, b) => {
+    const diff = ORDEN[a.permiso] - ORDEN[b.permiso];
+    return diff !== 0 ? diff : String(a.nombre).localeCompare(String(b.nombre));
+  });
+  return { personas: lista };
+}
+
 // v5.2 (§4.2): envio MANUAL del reporte ejecutivo a Gerencia+ADM de cada
 // empresa (puerto Fase 3a). La clave de evento usa un UUID: nunca se
 // deduplica contra el envio semanal/mensual programado (no portado) ni
@@ -782,5 +829,7 @@ module.exports = {
   listarCanalesAlerta, guardarCanalAlerta,
   // Disparadores manuales de ADM (Fase 3a).
   getDirectorioAlerta, enviarAlertaManual, enviarReporteGerenciaAhora,
+  // Permisos de notificaciones del navegador (Fase 3a).
+  reportarPermisoNotificacionesSO, listarPermisosNotificacionesSO,
   MAX_REINTENTOS_CORREO
 };

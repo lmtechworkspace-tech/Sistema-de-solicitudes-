@@ -135,6 +135,8 @@ const ACCIONES = {
   getDirectorioAlerta: (db, data, contexto) => Notificaciones.getDirectorioAlerta(db, data, contexto),
   enviarAlertaManual: (db, data, contexto) => Notificaciones.enviarAlertaManual(db, data, contexto),
   enviarReporteGerenciaAhora: (db, data, contexto) => Notificaciones.enviarReporteGerenciaAhora(db, data, contexto),
+  reportarPermisoNotificacionesSO: (db, data, contexto) => Notificaciones.reportarPermisoNotificacionesSO(db, data, contexto),
+  listarPermisosNotificacionesSO: (db, data, contexto) => Notificaciones.listarPermisosNotificacionesSO(db, data, contexto),
 
   // Modulo Novedades (mismos nombres de accion que BACKOFFICE_ACTIONS en el .gs).
   listarAreasPublicablesNovedad: (db, data, contexto) => Novedades.listarAreasPublicables(db, data, contexto),

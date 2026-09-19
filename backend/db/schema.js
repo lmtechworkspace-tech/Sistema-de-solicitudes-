@@ -26,6 +26,11 @@ const COLUMNAS = {
     'estado', 'bloqueo', 'activo'
   ],
   CONFIG_NOTIFICACIONES: ['notif_id', 'evento', 'rol_destinatario', 'emails_extra', 'activo'],
+  // v7.3 (Nivel 0, puerto Fase 3a): ultimo permiso de notificaciones del
+  // navegador que cada persona reporto (granted/denied/default), para que
+  // Administracion detecte "a quien nunca le llega la alerta en vivo
+  // porque nunca acepto el permiso".
+  NOTIF_PERMISOS_SO: ['email', 'permiso', 'actualizado_en'],
   // v3.3 (§2.4): cuentas e identidad de la plataforma (Portal.gs/
   // CuentasPortal.gs). hash_password nunca guarda la clave en claro --
   // ver backend/logica/passwordHash.js sobre el cambio de algoritmo.
