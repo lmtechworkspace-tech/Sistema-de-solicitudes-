@@ -58,6 +58,7 @@ const Prestaciones = require('../logica/prestacionesSgc');
 const OrdenTrabajo = require('../logica/ordenTrabajo');
 const ReporteActividades = require('../logica/reporteActividades');
 const EvidenciaClausulaSgc = require('../logica/evidenciaClausulaSgc');
+const ReporteProyecto = require('../logica/reporteProyecto');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -229,8 +230,7 @@ const ACCIONES = {
   obtenerWorkloadPortafolioProyectos: (db, data, contexto) => Proyectos.obtenerWorkloadPortafolio(db, data, contexto),
 
   // Centro documental (v13 Fase 4) + adjuntos de Sala: usan R2 desde
-  // 2026-09-18 (almacenamiento.js). El PDF/libro Excel siguen gateados,
-  // mismo criterio que los PDF de Actividades/Pausas.
+  // 2026-09-18 (almacenamiento.js).
   subirAdjuntoProyecto: (db, data, contexto) => Proyectos.subirAdjunto(db, data, contexto),
   descargarAdjuntoProyecto: (db, data, contexto) => Proyectos.descargarAdjunto(db, data, contexto),
   gestionarDocumentoProyecto: (db, data, contexto) => Proyectos.gestionarDocumento(db, data, contexto),
@@ -239,7 +239,12 @@ const ACCIONES = {
   listarVersionesDocumentoProyecto: (db, data, contexto) => Proyectos.listarVersionesDocumento(db, data, contexto),
   descargarVersionDocumentoProyecto: (db, data, contexto) => Proyectos.descargarVersionDocumento(db, data, contexto),
   descargarDocumentoProyecto: (db, data, contexto) => Proyectos.descargarDocumentoProyecto(db, data, contexto),
-  descargarReporteProyecto: () => ({ _validationError: true, message: 'La descarga en PDF del proyecto aun no esta disponible en el nuevo backend (falta el motor de PDF).' }),
+  // §8.3 del handoff: PDF ejecutivo del camino "de un clic" (sin config),
+  // motor pdfkit -- ver la cabecera de reporteProyecto.js para lo que
+  // queda fuera de alcance a proposito (modo "Configurar informe").
+  descargarReporteProyecto: (db, data, contexto) => ReporteProyecto.descargarReporte(db, data, contexto),
+  // El libro Excel es un motor distinto (hoja de calculo, no PDF) -- sigue
+  // gateado, fuera de alcance de "el motor de PDF" (§8.3).
   descargarLibroProyecto: () => ({ _validationError: true, message: 'La descarga del libro Excel del proyecto aun no esta disponible en el nuevo backend.' }),
 
   // Modulo SGC ISO 9001 (v10.0+, incremento 1: Fase 1 + Fase 1b -- repositorio

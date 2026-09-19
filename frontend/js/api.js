@@ -59,9 +59,17 @@ var MAX_INTENTOS_LECTURA = 3;
 // descargarOrdenTrabajo, descargarReporteActividadesPdf,
 // descargarActaReunionPdf, descargarReporteCumplimientoPausasPdf,
 // descargarReporteGerenciaPausasPdf, descargarEvidenciaClausulaSgc.
-// Queda solo descargarReporteProyecto -- PDF ejecutivo configurable con
-// Gantt, su propio incremento -- y descargarLibroProyecto, que es Excel,
-// no PDF, motor distinto.)
+// descargarReporteProyecto AUN NO se agrega aqui, aunque backend/logica/
+// reporteProyecto.js YA existe y esta probado (camino "de un clic", sin
+// config): el enrutamiento es por NOMBRE de accion, no por payload -- y 2
+// de los 3 sitios del frontend que llaman a esta accion (el modal
+// "Configurar informe" y el reporte de Cronograma en proyectos.js) SIEMPRE
+// mandan `data.config`, que Node todavia no soporta (devuelve un
+// _validationError claro, ver reporteProyecto.js). Agregar esta accion
+// aqui HOY cortaria tambien esos dos flujos configurados -- que hoy
+// funcionan completos en Apps Script -- a un error. Se agrega recien
+// cuando el modo configurable tambien este portado.
+// descargarLibroProyecto es Excel, no PDF, motor distinto.)
 var ACCIONES_PORTADAS_NODE = {
   // --- Núcleo (Auth/Portal, Catálogos, Solicitudes, Dashboard/Gerencia/Jefatura) ---
   portalLogin: true, portalLogout: true, portalSesion: true, portalCambiarPassword: true,
