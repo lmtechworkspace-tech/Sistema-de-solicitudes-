@@ -6,9 +6,13 @@
 > nueva no la va a tener disponible). Todo lo que necesitas para seguir
 > trabajando sin fricción está acá o es derivable del propio repositorio.
 >
-> Última actualización: 2026-09-18, tras el commit `5879005`
-> (4 módulos desgateados de R2; queda **una** acción de archivo pendiente:
-> la evidencia fotográfica de Pausas — ver §8.1).
+> Última actualización: 2026-09-19, tras el commit `f85f6f3`
+> (motor de PDF en Node, pdfkit — §8.3 resuelto en su alcance acordado:
+> 5 incrementos, Orden de Trabajo + reportes de Actividades/Pausas +
+> evidencia SGC + reporte de Proyecto "de un clic". Solo quedan
+> pendientes, documentados explícitamente: la evidencia fotográfica de
+> Pausas — R2, ver §8.1 — y el modo "Configurar informe" de Proyectos —
+> ver §8.1).
 
 ---
 
@@ -364,15 +368,18 @@ producción de punta a punta, igual que se hizo en cada módulo anterior.
 
 **Fuente de verdad real**: `frontend/js/api.js`, objeto
 `ACCIONES_PORTADAS_NODE` (línea ~64). Este resumen es un mapa de lectura
-rápida, no reemplaza revisar ese archivo. **Números medidos al 2026-09-18
-(commit `5879005`), no estimados**: `router.js` tiene **254 acciones** y
-`ACCIONES_PORTADAS_NODE` tiene **247 cortadas al frontend real**. De esas
-254, solo **5 siguen siendo stubs** en `router.js`, y las 5 son de PDF/
-Excel (`descargarReporteActividadesPdf`, `descargarActaReunionPdf`,
-`descargarReporteProyecto`, `descargarLibroProyecto`,
-`descargarEvidenciaClausulaSgc`); hay 2 más gateadas dentro de
-`pausas.js` (los reportes PDF de cumplimiento y gerencia) y 1 de archivo
-(la evidencia fotográfica de Pausas).
+rápida, no reemplaza revisar ese archivo. **Números medidos al 2026-09-19
+(commit `f85f6f3`), no estimados**: `ACCIONES_PORTADAS_NODE` tiene **253
+cortadas al frontend real**. Solo **1 stub** queda en `router.js`
+(`descargarLibroProyecto`, Excel — motor distinto, fuera de alcance del
+motor de PDF). El backend de `descargarReporteProyecto` (PDF de
+Proyecto, camino "de un clic") YA existe y está probado
+(`backend/logica/reporteProyecto.js`), pero **no está en
+`ACCIONES_PORTADAS_NODE` a propósito** — ver la nota grande en la
+cabecera de ese archivo del frontend: el enrutamiento es por nombre de
+acción, no por payload, y 2 de los 3 sitios que llaman a esa acción
+siempre mandan `config` (modo "Configurar informe", no portado) — cortar
+la acción ahora regresionaría esos dos flujos.
 
 Para recontar esto en cualquier momento sin confiar en este documento:
 
@@ -389,15 +396,21 @@ Jefatura, alertas de patrón (P7).
 ### Módulos operacionales
 - **Novedades** — **16 de 16** (adjunto PDF desgateado de R2 el
   2026-09-18, commit `a7fe506`).
-- **Pausas activas** — 20 de 22 (los 2 PDF de reporte gateados; además la
-  evidencia fotográfica de `finalizar` sigue gateada por R2 — es la única
-  que queda, ver §8.1).
-- **Actividades** (motor base v7.0) — 14 de 16 (los 2 PDF gateados).
-- **Proyectos** — **44 de 48** (incremento 1: 31 acciones; incremento 2:
-  cronograma avanzado; incremento 3, commit `5879005`: centro documental
-  v13 Fase 4 + adjuntos de Sala v10 Fase D, 8 acciones escritas desde
-  cero — nunca habían existido en Node, `router.js` las tenía como stub
-  inline). Las 4 que faltan son PDF/libro Excel.
+- **Pausas activas** — **22 de 22** (los 2 PDF de reporte desgateados del
+  motor pdfkit el 2026-09-19, commit `234c7e0`). Solo sigue gateada la
+  evidencia fotográfica de `finalizar` (dentro de una acción ya portada,
+  no cuenta aparte) — es lo único de R2 que queda, ver §8.1.
+- **Actividades** (motor base v7.0) — **16 de 16** (los 2 PDF desgateados
+  del motor pdfkit el 2026-09-19, commit `0f8f77d`).
+- **Proyectos** — **44 de 48** en `ACCIONES_PORTADAS_NODE` (el backend de
+  `descargarReporteProyecto` ya es 45/48, pero la acción no se corta al
+  frontend todavía — ver la nota grande arriba). Incremento 1: 31
+  acciones; incremento 2: cronograma avanzado; incremento 3 (`5879005`):
+  centro documental + adjuntos de Sala; incremento 4 (`f85f6f3`, motor
+  PDF): `descargarReporteProyecto` camino "de un clic". Quedan
+  `descargarLibroProyecto` (Excel) y el modo "Configurar informe" de
+  `descargarReporteProyecto` (secciones/rango/personas/Gantt), ambos
+  documentados como pendiente explícito en §8.1.
 
 ### SGC ISO 9001 — PLAN v11.0 COMPLETO (las 8 fases, cerrado 2026-09-18)
 El bloque más grande de la migración, ~123 acciones totales en el `.gs`.
@@ -416,7 +429,7 @@ datos reales.
 | 5a | Proveedores (PRO-04) | `proveedoresSgc.js` | 5 de 5 | `abc3d70` |
 | 5b | Revisión por la dirección (PRO-05) | `revisionDireccionSgc.js` | 9 de 9 | `e87af80` |
 | 6a | Objetivos de calidad (DOC-07) | `objetivosSgc.js` | 7 de 7 | `3f57562` |
-| 6b | Matriz de cobertura ISO | `matrizCoberturaSgc.js` | 3 de 4 (PDF, gateado) | `7691fc1` |
+| 6b | Matriz de cobertura ISO | `matrizCoberturaSgc.js` | **4 de 4** (PDF desgateado del motor pdfkit `2c8f678`) | `7691fc1` |
 | v11-F1 | Alcance y exclusiones (§4.3) | `alcanceSgc.js` | 5 de 5 | `ce8dc02` |
 | v11-F2 | Contexto y partes interesadas (§4.1/§4.2) | `contextoSgc.js` | 8 de 8 | `2f55907` |
 | v11-F3 | Riesgos y oportunidades (§6.1) | `riesgosSgc.js` | 6 de 6 | `095be4d` |
@@ -448,31 +461,51 @@ desgatear las ~35 acciones que lo necesitan, una por una (§8.1).
 
 ## 8. Qué falta
 
-### 8.1 Lo que sigue gateado (lista completa y verificada al commit `5879005`)
+### 8.1 Lo que sigue gateado (lista completa y verificada al commit `f85f6f3`)
 
 **Bloqueado por R2 — queda UNA sola, y es chica:**
-- **Pausas, evidencia fotográfica**: `backend/logica/pausas.js:834`,
-  dentro de `finalizar` — `data.evidencia_base64` devuelve el stub
-  "falta configurar el almacenamiento". Es lo único de archivo que queda
-  en todo el sistema. Para cerrarlo: mismo patrón de siempre (§5), clave
-  sugerida `pausas/<pausa_id>/<uuid>/<nombre>`, validando por firma de
-  IMAGEN (reusar `detectarMimeImagenProyecto_` de `proyectos.js`
-  exportándolo, no reimplementarlo), y el test con
+- **Pausas, evidencia fotográfica**: `backend/logica/pausas.js` (dentro
+  de `gestionarPausaCoordinador`/`finalizar`) — `data.evidencia_base64`
+  devuelve el stub "falta configurar el almacenamiento". Es lo único de
+  archivo que queda en todo el sistema. Para cerrarlo: mismo patrón de
+  siempre (§5), clave sugerida `pausas/<pausa_id>/<uuid>/<nombre>`,
+  validando por firma de IMAGEN (reusar `detectarMimeImagenProyecto_` de
+  `proyectos.js` exportándolo, no reimplementarlo), y el test con
   `conMockAlmacenamiento_(t)`. Ojo: `finalizar` pasaría a `async` →
   grepear quién la llama sin `await` antes de commitear (§5, última
   viñeta).
 
-**Bloqueado por el motor de PDF/Excel (7 acciones + 1 módulo):**
-- 5 stubs inline en `router.js`: `descargarReporteActividadesPdf`,
-  `descargarActaReunionPdf` (líneas ~175-176),
-  `descargarReporteProyecto`, `descargarLibroProyecto` (~235-236),
-  `descargarEvidenciaClausulaSgc` (~362).
-- 2 dentro de `pausas.js` (~919-927): `descargarReporteCumplimientoPdf`,
-  `descargarReporteGerenciaPdf`.
-- **`OrdenTrabajo.gs`** (464 líneas, módulo completo sin portar): genera
-  el PDF de la orden de trabajo que se manda al derivar una solicitud.
+**Motor de PDF (§8.3): resuelto en su alcance acordado.** Los 7 stubs
+originales (5 inline en `router.js` + 2 dentro de `pausas.js`) más
+`OrdenTrabajo.gs` (464 líneas, módulo completo que no existía en Node)
+están portados, testeados, mutation-testeados, verificados en vivo y
+desplegados — commits `247ea00`, `0f8f77d`, `234c7e0`, `2c8f678`,
+`f85f6f3` (2026-09-19). Motor elegido: `pdfkit` (evaluado en el propio
+incremento — ~80ms/~4KB para un documento de 2 páginas, sin navegador
+headless). Helper compartido: `backend/logica/pdfDocumento.js`
+(encabezado/chrome, fichas, secciones, tablas genéricas, chips de
+prioridad, barra horizontal) — lo reusan los 5 módulos de PDF.
 
-Nada de esto se destraba con R2 — necesitan §8.3.
+**Dos cosas quedan pendientes DENTRO de Proyectos, documentadas
+explícitamente (no fingidas):**
+1. **El modo "Configurar informe"** de `descargarReporteProyecto`
+   (secciones a elección, rango de fechas, filtro por persona, Carta
+   Gantt día a día multipágina, Workload, Desviaciones Plan/Esperado/
+   Real) — ver la cabecera de `backend/logica/reporteProyecto.js`. Es
+   sustancialmente más grande que los 5 reportes ya portados juntos. Si
+   `data.config` llega, el backend Node devuelve un `_validationError`
+   claro en vez de fingir que sirvió el informe pedido.
+   **Por esto la acción `descargarReporteProyecto` TODAVÍA no está en
+   `ACCIONES_PORTADAS_NODE`** (ver la nota grande en la cabecera de ese
+   archivo): 2 de los 3 sitios del frontend que la llaman
+   (`frontend/js/proyectos.js`) SIEMPRE mandan `config` (el modal
+   "Configurar informe" y el reporte de Cronograma) — cortar la acción
+   ahora, con el enrutamiento por nombre (no por payload), regresionaría
+   esos dos flujos (hoy funcionan completos en Apps Script) a un error.
+   Se agrega recién cuando el modo configurable también esté portado.
+2. **`descargarLibroProyecto`** — sigue como stub inline en `router.js`.
+   Es Excel (hoja de cálculo), no PDF: motor distinto, fuera de alcance
+   de "el motor de PDF" a propósito.
 
 ### 8.2 Módulos/lógica sin portar, NO bloqueados por archivos
 Trabajo puro de lógica, se puede hacer en cualquier momento:
@@ -497,14 +530,11 @@ Trabajo puro de lógica, se puede hacer en cualquier momento:
    `enviarReporteGerenciaAhora`.
 8. **Panel de diagnóstico** (2): `getEstadoSistema`, `listarLogs`.
 
-### 8.3 Motor de PDF en Node
-No elegido todavía. Bloquea reportes, actas y órdenes de trabajo en PDF
-(ver lista en §8.1). Candidato razonable dado el criterio de
-dependencias mínimas ya establecido (scrypt en vez de bcrypt, `fetch`
-nativo en vez del SDK de Resend, `aws4fetch` en vez del SDK de AWS):
-`pdfkit` (generación pura en JS, sin depender de un navegador headless
-como Puppeteer, que sería pesado para un VPS de 2 vCPU/4GB). No
-instalado ni decidido en firme todavía — evaluarlo antes de comprometerse.
+### 8.3 Motor de PDF en Node — RESUELTO (2026-09-19)
+Ver el resumen completo en §8.1. `pdfkit` elegido y en producción desde
+el commit `247ea00`. Lo único que queda relacionado es el modo
+"Configurar informe" de Proyectos (§8.1, punto 1) — no bloqueado por
+infraestructura, es tamaño de tarea.
 
 ### 8.4 Cierre final
 - Migrar cualquier dato real adicional que dependa de los módulos del
@@ -517,27 +547,40 @@ instalado ni decidido en firme todavía — evaluarlo antes de comprometerse.
 
 ---
 
-## 9. Punto exacto donde quedó la sesión (2026-09-18, tras `5879005`)
+## 9. Punto exacto donde quedó la sesión (2026-09-19, tras `f85f6f3`)
 
 **Estado: todo commiteado, pusheado, desplegado y verificado. No hay
 trabajo a medias ni archivos sin terminar.** La suite completa da
-**2538/2538 verdes**. El último incremento (Proyectos centro documental)
-se desplegó y se confirmó por avance de `arrancado_en` (16:41→20:54Z).
+**2562/2562 verdes**. Los 5 incrementos del motor de PDF se desplegaron
+y se confirmaron uno por uno por avance de `arrancado_en`, y cada acción
+nueva se verificó en vivo (curl a `/v1/accion` → `forbidden`, nunca
+"Acción desconocida"; el backend de `descargarReporteProyecto` se
+verificó igual aunque no está cortada al frontend, ver §8.1).
 
-Lo último que se hizo, en orden: desgatear Novedades (`a7fe506`) → SGC
-Documentos (`77b74d4`) → SGC Personas (`cd4e6ed`) → escribir desde cero
-el centro documental + adjuntos de Sala de Proyectos (`5879005`).
+Lo último que se hizo, en orden, en una sola sesión: motor de PDF
+(`pdfkit`, evaluado e instalado) + helper compartido `pdfDocumento.js`
+→ Orden de Trabajo completa (`247ea00`) → reporte de Actividades + acta
+(`0f8f77d`) → reportes de Pausas (`234c7e0`) → evidencia de auditoría
+SGC (`2c8f678`) → reporte de Proyecto "de un clic" (`f85f6f3`).
 
-**Tres caminos abiertos, a elección del usuario** (preguntarle si no lo
+**QA visual atrapó 3 bugs reales antes de deployar** (útil documentarlo
+para la próxima sesión que toque `pdfDocumento.js`): las fuentes
+estándar de pdfkit (Helvetica, WinAnsiEncoding) no cubren emoji ni el
+símbolo "≥" (salían como caracteres rotos, corregido en el reporte de
+Pausas); y `avanceRealTarea_` devuelve `null` (sin dato) para una tarea
+en curso sin `avance_pct` explícito, pero el reporte de Proyecto lo
+mostraba como "0%" — fingiendo un número que no existía, corregido a
+"sin dato". Ninguno de los tres se habría visto sin abrir el PDF
+generado en el navegador — correr los tests no alcanza para esto.
+
+**Dos caminos abiertos, a elección del usuario** (preguntarle si no lo
 dijo, no asumir):
 
-1. **Motor de PDF en Node** (§8.3) — el que más destraba: 7 acciones +
-   `OrdenTrabajo.gs` completo. No depende de nada externo. Evaluar
-   `pdfkit` primero (instalar, generar un PDF simple, confirmar
-   tamaño/rendimiento en un VPS de 2 vCPU) antes de comprometerse.
-2. **Cerrar R2 del todo** (§8.1) — queda solo la evidencia fotográfica
-   de Pausas. Es el trabajo más chico de los tres, una sola acción.
-3. **Lógica sin bloquear** (§8.2) — 8 ítems, ninguno depende de
+1. **Modo "Configurar informe" de Proyectos** (§8.1) — el resto del PDF
+   ejecutivo: secciones a elección, rango, personas, Carta Gantt día a
+   día multipágina, Workload, Desviaciones. Sustancialmente más grande
+   que los 5 reportes ya portados juntos.
+2. **Lógica sin bloquear** (§8.2) — 8 ítems, ninguno depende de
    infraestructura: lado de lectura de notificaciones in-app,
    `Comentarios.gs`, `Inicio.gs`, `Perfiles.gs`, gestión de usuarios de
    `Auth.gs`, canales de alerta, disparadores manuales, panel de
