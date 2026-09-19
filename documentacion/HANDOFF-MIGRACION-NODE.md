@@ -6,11 +6,12 @@
 > nueva no la va a tener disponible). Todo lo que necesitas para seguir
 > trabajando sin fricción está acá o es derivable del propio repositorio.
 >
-> Última actualización: 2026-09-19, tras el commit `5642141`
-> (Fase 2 de un plan de fases post-migración: evidencia fotográfica de
-> Pausas desgateada — R2 queda resuelto al 100%, ya no hay NINGUNA acción
-> de archivo gateada en todo el sistema, ver §8.1. Fase 0 (respaldo de la
-> base, §10.2) también resuelta. Plan de fases completo: §12).
+> Última actualización: 2026-09-19, tras el commit `c04409d`
+> (Fase 3a de un plan de fases post-migración: Comentarios, canales de
+> alerta (con el gate de correo real, antes nunca implementado),
+> disparadores manuales de ADM, panel de diagnóstico — ver §8.2. Fases 0
+> (respaldo, §10.2) y 2 (R2 al 100%, §8.1) también resueltas. Plan de
+> fases completo: §12).
 
 ---
 
@@ -367,7 +368,7 @@ producción de punta a punta, igual que se hizo en cada módulo anterior.
 **Fuente de verdad real**: `frontend/js/api.js`, objeto
 `ACCIONES_PORTADAS_NODE` (línea ~64). Este resumen es un mapa de lectura
 rápida, no reemplaza revisar ese archivo. **Números medidos al 2026-09-19
-(commit `5642141`), no estimados**: `ACCIONES_PORTADAS_NODE` tiene **254
+(commit `c04409d`), no estimados**: `ACCIONES_PORTADAS_NODE` tiene **264
 cortadas al frontend real**. Solo **1 stub** queda en `router.js`
 (`descargarLibroProyecto`, Excel — motor distinto, fuera de alcance del
 motor de PDF). El backend de `descargarReporteProyecto` (PDF de
@@ -506,27 +507,39 @@ explícitamente (no fingidas):**
    de "el motor de PDF" a propósito.
 
 ### 8.2 Módulos/lógica sin portar, NO bloqueados por archivos
-Trabajo puro de lógica, se puede hacer en cualquier momento:
+
+**Fase 3a (§12): RESUELTA (2026-09-19, commits `3df51bc` + `c04409d`).**
+De los 8 ítems originales, 4 quedaron portados en esta fase:
+- **`Comentarios.gs`** → `backend/logica/comentarios.js`.
+- **Canales de alerta / permisos de notificaciones del navegador** (4
+  acciones: `listarCanalesAlerta`, `guardarCanalAlerta`,
+  `listarPermisosNotificacionesSO`, `reportarPermisoNotificacionesSO`)
+  → `backend/logica/notificaciones.js`. Hallazgo real del porteo: el
+  gate de canales (`correoActivoParaEvento_`) NUNCA había estado
+  implementado en Node -- se agregó de verdad, conectado en los dos
+  puntos de salida de correo (`enviarCorreo_`/`encolarCorreo_`), no solo
+  el CRUD de la config (que habría sido una función fingida).
+- **Disparadores manuales de ADM** (`enviarAlertaManual`,
+  `getDirectorioAlerta`, `enviarReporteGerenciaAhora`) →
+  `backend/logica/notificaciones.js`.
+- **Panel de diagnóstico** (`getEstadoSistema` → nuevo
+  `backend/logica/sistema.js`; `listarLogs` → ya existía la lógica en
+  Node, solo estaba wireada bajo un nombre de acción que el frontend
+  nunca llamaba, mismo patrón de §4).
+
+**Quedan 3 ítems, ninguno bloqueado por infraestructura:**
 1. **Lado de lectura de notificaciones in-app** (`notificacionesApp.js`
    solo tiene `encolarLote`; falta sincronizar/marcar leída/marcar todas
    leídas).
-2. **`Comentarios.gs`** (37 líneas) — `agregarComentario`, sistema de
-   comentarios genérico.
-3. **`Inicio.gs`** (143 líneas) — `getInicio`, pantalla de inicio
+2. **`Inicio.gs`** (143 líneas) — `getInicio`, pantalla de inicio
    autenticada.
-4. **`Perfiles.gs`** (510 líneas, sin la parte de fotos que sí depende
+3. **`Perfiles.gs`** (510 líneas, sin la parte de fotos que sí depende
    de R2) — `getMiPerfil` y edición de perfil propio.
-5. **`Auth.gs`** (112 líneas) — `gestionarUsuario`/`listarUsuarios`/
+4. **`Auth.gs`** (112 líneas) — `gestionarUsuario`/`listarUsuarios`/
    `suspenderInactivos`: administración de la tabla `USUARIOS` (cuentas
    de staff). Esa tabla ya la LEEN varios módulos Node (Dashboard,
    Gerencia, Novedades, Pausas...), solo falta el panel para
    gestionarla.
-6. **Canales de alerta / permisos de notificaciones del navegador** (4):
-   `guardarCanalAlerta`, `listarCanalesAlerta`,
-   `listarPermisosNotificacionesSO`, `reportarPermisoNotificacionesSO`.
-7. **Disparadores manuales de ADM** (2): `enviarAlertaManual`,
-   `enviarReporteGerenciaAhora`.
-8. **Panel de diagnóstico** (2): `getEstadoSistema`, `listarLogs`.
 
 ### 8.3 Motor de PDF en Node — RESUELTO (2026-09-19)
 Ver el resumen completo en §8.1. `pdfkit` elegido y en producción desde
@@ -791,8 +804,10 @@ VPS, SSH de solo lectura antes de asumir nada).
   `5642141`) — ver §8.1. La evidencia fotográfica de Pausas, última
   acción de archivo gateada en todo el sistema, ya sube a R2 de verdad.
 - **Fase 3 — Lógica sin portar, sin bloqueos de infraestructura** (§8.2):
-  - 3a (rápidos): `Comentarios.gs`, canales de alerta, disparadores
-    manuales de ADM, panel de diagnóstico.
+  - 3a (rápidos): ✅ **RESUELTA** (2026-09-19, `3df51bc`+`c04409d`) —
+    `Comentarios.gs`, canales de alerta (las 4 acciones, incluido el
+    gate real de correo), disparadores manuales de ADM, panel de
+    diagnóstico.
   - 3b (medianos): notificaciones in-app (falta sincronizar/marcar
     leída), `Inicio.gs`.
   - 3c (sensible, toca permisos): `Perfiles.gs`, `Auth.gs` (gestión de
