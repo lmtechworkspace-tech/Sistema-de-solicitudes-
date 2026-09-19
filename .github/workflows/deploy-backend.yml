@@ -12,6 +12,7 @@ on:
       - "backend/server/**"
       - "backend/db/**"
       - "backend/logica/**"
+      - "backend/scripts/**"
       - "package.json"
       - ".github/workflows/deploy-backend.yml"
   workflow_dispatch:
@@ -68,6 +69,8 @@ jobs:
             backend/db/ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/backend/db/"
           rsync -az --delete -e "ssh -i ~/.ssh/deploy" \
             backend/logica/ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/backend/logica/"
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy" \
+            backend/scripts/ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/backend/scripts/"
           scp -i ~/.ssh/deploy package.json package-lock.json \
             "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/"
           # node_modules ya instalado y probado en este mismo job (npm ci
