@@ -582,14 +582,37 @@ De los 8 ítems originales, 4 quedaron portados en esta fase:
   verdad, se traiga también `inicio-modulos.test.js` como prueba de no
   regresión.
 
-**Quedan 2 ítems, Fase 3c, "sensible, toca permisos":**
-1. **`Perfiles.gs`** (510 líneas, sin la parte de fotos que sí depende
-   de R2) — `getMiPerfil` y edición de perfil propio.
-2. **`Auth.gs`** (112 líneas) — `gestionarUsuario`/`listarUsuarios`/
-   `suspenderInactivos`: administración de la tabla `USUARIOS` (cuentas
-   de staff). Esa tabla ya la LEEN varios módulos Node (Dashboard,
-   Gerencia, Novedades, Pausas...), solo falta el panel para
-   gestionarla.
+**Fase 3c (§12): RESUELTA (2026-09-19).** Los 2 ítems, "sensible, toca
+permisos":
+1. **`Auth.gs`** (112 líneas) → nuevo `backend/logica/auth.js`:
+   `gestionarUsuario`/`listarUsuarios` (administración de `USUARIOS`,
+   cuentas de staff), con **RN-030 portada íntegra** (no puede quedar una
+   empresa con menos de 2 Administradores activos — se valida antes de
+   desactivar o de bajarle el rol a un Admin) y RN-031 (un usuario, una
+   empresa). `suspenderInactivos` (A-11/RN-029, suspende cuentas con
+   +90 días sin acceso) se portó como LÓGICA reutilizable, no como acción
+   de router: en el `.gs` es solo-trigger (nunca la llama un cliente,
+   corre semanalmente); exponerla sería abrir una superficie que el `.gs`
+   nunca tuvo. Queda lista para cuando exista un mecanismo de cron en el
+   VPS (mismo criterio que `backend/scripts/backup-db.js`).
+2. **`Perfiles.gs`** (510 líneas) → nuevo `backend/logica/perfiles.js`:
+   **solo `getMiPerfil`** (perfil propio de solo lectura: nombre/email/
+   cargo/rol/empresa). La foto de perfil (`guardarFotoPerfil`/
+   `eliminarFotoPerfil`/`getFotosPerfil` — validación por firma binaria +
+   cache, ~480 de las 510 líneas) quedó fuera **por decisión explícita del
+   usuario** (preguntado, no asumido): aunque R2 ya está resuelto (Fase 2)
+   y técnicamente podría reemplazar a Drive, portarla exige además una
+   tabla `PERFILES` nueva en SQLite (sumarla al Instalador/deploy del
+   VPS) y la lógica de cache — alcance de su propio incremento, no un
+   cierre rápido de Fase 3c. `tiene_foto`/`foto_thumb` en `getMiPerfil`
+   devuelven honestamente `false`/`''` (nadie subió una foto porque la
+   acción no existe, no se finge un dato).
+
+**Ambas comparten la misma decisión ya tomada en Fase 3b (`inicio.js`):**
+el gate `MODULO_POR_ACCION: 'administracion'` que el `.gs` exige para
+`gestionarUsuario`/`listarUsuarios` NO se porta — `MODULO_POR_ACCION`
+sigue sin existir en Node en ningún lado. La protección real de esas dos
+acciones (`contexto.rol !== 'ADM'`) sí se porta íntegra.
 
 ### 8.3 Motor de PDF en Node — RESUELTO (2026-09-19)
 Ver el resumen completo en §8.1. `pdfkit` elegido y en producción desde
@@ -869,8 +892,11 @@ VPS, SSH de solo lectura antes de asumir nada).
     notificaciones in-app (sincronizar/marcarLeida/marcarTodasLeidas) e
     `Inicio.gs` (`getInicio`, un viaje). Gate de módulo por bloque NO
     portado a propósito, ver §8.2.
-  - 3c (sensible, toca permisos): `Perfiles.gs`, `Auth.gs` (gestión de
-    cuentas de staff).
+  - 3c (sensible, toca permisos): ✅ **RESUELTA** (2026-09-19) —
+    `Auth.gs` (`gestionarUsuario`/`listarUsuarios`, RN-030 íntegra;
+    `suspenderInactivos` portada como lógica, no como acción) y
+    `Perfiles.gs` (`getMiPerfil` de solo lectura; foto de perfil
+    diferida a su propio incremento, decisión del usuario, ver §8.2).
 - **Fase 4 — Cierre final** (§8.4): migrar cualquier dato real adicional
   que dependa de los módulos de la Fase 3 (mismo patrón que
   `CAT_CLIENTES`); decidir el modelo de auth del staff legado; apagar

@@ -54,7 +54,10 @@ var MAX_INTENTOS_LECTURA = 3;
 // "almacenamiento no configurado" en vez de servir el archivo real que Apps
 // Script sí sirve hoy. Cortarlas ahora sería una regresión, no una mejora.
 // Lista de lo que sigue pendiente:
-// descargarReporteProyecto.
+// descargarReporteProyecto, guardarFotoPerfil, eliminarFotoPerfil,
+// getFotosPerfil (foto de perfil -- Fase 3c la dejó fuera a propósito,
+// ver backend/logica/perfiles.js; getMiPerfil, de solo lectura, SÍ está
+// arriba en el mapa).
 // (Los demas PDF del motor pdfkit ya desgateados, 2026-09-19:
 // descargarOrdenTrabajo, descargarReporteActividadesPdf,
 // descargarActaReunionPdf, descargarReporteCumplimientoPausasPdf,
@@ -242,7 +245,13 @@ var ACCIONES_PORTADAS_NODE = {
   // MODULO_POR_ACCION -- ver backend/logica/inicio.js y notificacionesApp.js
   // para el porque, y por que no es una regresion respecto de Node hoy.
   sincronizarNotificacionesApp: true, marcarNotificacionAppLeida: true,
-  marcarTodasNotificacionesAppLeidas: true, getInicio: true
+  marcarTodasNotificacionesAppLeidas: true, getInicio: true,
+
+  // --- Fase 3c del plan post-migracion (2026-09-19): cuentas de staff
+  // (USUARIOS, RN-030) y perfil propio de solo lectura. La foto de perfil
+  // (guardarFotoPerfil/eliminarFotoPerfil/getFotosPerfil) sigue en Apps
+  // Script -- decision consciente, ver backend/logica/perfiles.js.
+  gestionarUsuario: true, listarUsuarios: true, getMiPerfil: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,

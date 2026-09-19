@@ -64,6 +64,8 @@ const ReporteProyecto = require('../logica/reporteProyecto');
 const LibroProyecto = require('../logica/libroProyecto');
 const NotificacionesApp = require('../logica/notificacionesApp');
 const Inicio = require('../logica/inicio');
+const Auth = require('../logica/auth');
+const Perfiles = require('../logica/perfiles');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -149,6 +151,13 @@ const ACCIONES = {
   // Fase 3b: un solo viaje para la pantalla de Inicio (M-02) -- ver la
   // cabecera de inicio.js para el gate de modulo que NO se porta a proposito.
   getInicio: (db, data, contexto) => Inicio.getResumen(db, data, contexto),
+
+  // Fase 3c del plan post-migracion: gestion de cuentas de staff (USUARIOS,
+  // RN-030) y perfil propio de solo lectura -- ver auth.js/perfiles.js para
+  // lo que queda fuera (foto de perfil, suspenderInactivos como cron).
+  gestionarUsuario: (db, data, contexto) => Auth.gestionarUsuario(db, data, contexto),
+  listarUsuarios: (db, data, contexto) => Auth.listarUsuarios(db, data, contexto),
+  getMiPerfil: (db, data, contexto) => Perfiles.getMiPerfil(db, data, contexto),
 
   // Modulo Novedades (mismos nombres de accion que BACKOFFICE_ACTIONS en el .gs).
   listarAreasPublicablesNovedad: (db, data, contexto) => Novedades.listarAreasPublicables(db, data, contexto),
