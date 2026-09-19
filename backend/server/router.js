@@ -35,6 +35,8 @@ const Jefatura = require('../logica/jefatura');
 const Dashboard = require('../logica/dashboard');
 const Gerencia = require('../logica/gerencia');
 const Notificaciones = require('../logica/notificaciones');
+const Sistema = require('../logica/sistema');
+const Comentarios = require('../logica/comentarios');
 const Novedades = require('../logica/novedades');
 const Pausas = require('../logica/pausas');
 const Actividades = require('../logica/actividades');
@@ -120,6 +122,19 @@ const ACCIONES = {
   getPanelJefatura: (db, data, contexto) => Jefatura.getPanel(db, data, contexto),
 
   listarLogsNotificaciones: (db, data, contexto) => Notificaciones.listarLogs(db, data, contexto),
+  // Fase 3a del plan post-migracion: mismo Notificaciones.listarLogs de
+  // arriba, pero bajo el nombre de accion REAL que llama el frontend
+  // (admin.js) -- listarLogsNotificaciones nunca estuvo conectado al
+  // sitio real (§4 del handoff: que exista en router.js no significa que
+  // el frontend la use).
+  listarLogs: (db, data, contexto) => Notificaciones.listarLogs(db, data, contexto),
+  getEstadoSistema: (db, data, contexto) => Sistema.getEstadoSistema(db, data, contexto),
+  agregarComentario: (db, data, contexto) => Comentarios.agregarComentario(db, data, contexto),
+  listarCanalesAlerta: (db, data, contexto) => Notificaciones.listarCanalesAlerta(db, data, contexto),
+  guardarCanalAlerta: (db, data, contexto) => Notificaciones.guardarCanalAlerta(db, data, contexto),
+  getDirectorioAlerta: (db, data, contexto) => Notificaciones.getDirectorioAlerta(db, data, contexto),
+  enviarAlertaManual: (db, data, contexto) => Notificaciones.enviarAlertaManual(db, data, contexto),
+  enviarReporteGerenciaAhora: (db, data, contexto) => Notificaciones.enviarReporteGerenciaAhora(db, data, contexto),
 
   // Modulo Novedades (mismos nombres de accion que BACKOFFICE_ACTIONS en el .gs).
   listarAreasPublicablesNovedad: (db, data, contexto) => Novedades.listarAreasPublicables(db, data, contexto),

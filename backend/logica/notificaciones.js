@@ -40,6 +40,9 @@ const Resend = require('./resend');
 const { claveDia_ } = require('./utils');
 const Jefatura = require('./jefatura');
 const Dashboard = require('./dashboard');
+const Gerencia = require('./gerencia');
+const DirectorioPersonal = require('./directorioPersonal');
+const NotificacionesApp = require('./notificacionesApp');
 
 const VENTANA_DEDUP_MINUTOS = 30;
 // v4.2: "SLA vencido"/digests diarios notifican como mucho 1 vez/dia -- se
@@ -57,6 +60,86 @@ function remitente_() {
 // (ENVIADO) -- una fila PENDIENTE_REINTENTO no debe bloquear el reintento.
 // ventanaMinutos es inyectable (igual que en backend/backoffice/Notificaciones.gs):
 // los digests diarios usan una ventana de 24h en vez de los 30 min por defecto.
+// v7.5 (canales de alerta configurables desde Admin, puerto Fase 3a):
+// agrupa los eventos de correo en categorias que el Admin puede apagar/
+// encender sin tocar codigo. Los avisos al SOLICITANTE EXTERNO (compromiso
+// de fecha, recordatorio de validacion, cambio de estado, acuse) NO estan
+// en ninguna categoria a proposito -- esa gente nunca tiene SIGSO abierto,
+// el correo es su UNICO canal, nunca se bloquean (categoriaDeEvento_ ->
+// null -> siempre se envia). Mismo catalogo que Notificaciones.gs.
+const CANALES_ALERTA = [
+  { clave: 'PAUSAS', nombre: 'Pausas activas', tiene_en_vivo: true,
+    descripcion: 'Recordatorio, "¡es ahora!" y avisos de coordinación de las pausas.',
+    prefijos: ['PAUSA'] },
+  { clave: 'ACTIVIDADES', nombre: 'Mi trabajo / Actividades', tiene_en_vivo: true,
+    descripcion: 'Pedidos de actualización y el resumen diario de tus actividades.',
+    prefijos: ['PEDIR_ACTUALIZACION_ACTIVIDAD', 'ALERTAS_ACTIVIDADES'] },
+  { clave: 'NOVEDADES', nombre: 'Novedades', tiene_en_vivo: true,
+    descripcion: 'Avisos y logros publicados, novedades por aprobar y recordatorios de acuse.',
+    prefijos: ['NOVEDAD'] },
+  { clave: 'SOLICITUDES', nombre: 'Solicitudes (equipo)', tiene_en_vivo: false,
+    descripcion: 'Derivaciones a tu bandeja y avisos de documento listo. Hoy solo por correo.',
+    prefijos: ['DERIVACION', 'DOC_LISTO', 'FALLO_DOCUMENTO'] },
+  { clave: 'SLA', nombre: 'SLA y vencimientos (equipo)', tiene_en_vivo: false,
+    descripcion: 'SLA próximo o vencido, fecha comprometida en riesgo y alertas de patrón. Hoy solo por correo.',
+    prefijos: ['SLA_PROXIMO', 'SLA_VENCIDO', 'FECHA_EN_RIESGO', 'ALERTA_PATRON'] },
+  { clave: 'REPORTES', nombre: 'Reportes', tiene_en_vivo: false,
+    descripcion: 'Reporte ejecutivo, resumen semanal/mensual y digest de jefatura. Hoy solo por correo.',
+    prefijos: ['RESUMEN_SEMANAL', 'REPORTE_MENSUAL', 'REPORTE_EJECUTIVO', 'DIGEST_JEFATURA'] }
+];
+
+function categoriaDeEvento_(evento) {
+  const ev = String(evento || '');
+  const encontrado = CANALES_ALERTA.find((c) => c.prefijos.some((p) => ev.indexOf(p) === 0));
+  return encontrado ? encontrado.clave : null;
+}
+
+// Lee CONFIG_NOTIFICACIONES.activo del registro CANAL_CORREO_<clave>. Sin
+// registro (o sin hoja) = ENCENDIDO -- el registro se crea recien cuando
+// el Admin apaga uno por primera vez.
+function canalCorreoActivo_(db, clave) {
+  let filas;
+  try { filas = leerFilas_(db, 'CONFIG_NOTIFICACIONES', COLUMNAS.CONFIG_NOTIFICACIONES); } catch (err) { return true; }
+  const fila = filas.find((f) => f.notif_id === 'CANAL_CORREO_' + clave);
+  if (!fila) return true;
+  const v = fila.activo;
+  return !(v === false || v === 'FALSE' || v === 0 || v === '0');
+}
+
+function correoActivoParaEvento_(db, evento) {
+  const clave = categoriaDeEvento_(evento);
+  if (!clave) return true;
+  return canalCorreoActivo_(db, clave);
+}
+
+function listarCanalesAlerta(db, data, contexto) {
+  if (!contexto || contexto.rol !== 'ADM') {
+    return { _forbidden: true, message: 'Solo un Administrador puede configurar los canales de alerta.' };
+  }
+  return {
+    canales: CANALES_ALERTA.map((c) => ({
+      clave: c.clave, nombre: c.nombre, descripcion: c.descripcion,
+      tiene_en_vivo: c.tiene_en_vivo, correo_activo: canalCorreoActivo_(db, c.clave)
+    }))
+  };
+}
+
+function guardarCanalAlerta(db, data, contexto) {
+  if (!contexto || contexto.rol !== 'ADM') {
+    return { _forbidden: true, message: 'Solo un Administrador puede configurar los canales de alerta.' };
+  }
+  const clave = data && data.clave;
+  const conocido = CANALES_ALERTA.some((c) => c.clave === clave);
+  if (!conocido) return { _validationError: true, message: 'Canal de alerta desconocido.', fields: [{ campo: 'clave', mensaje: 'Canal de alerta desconocido.' }] };
+  const valor = (data.activo === true || data.activo === 'true' || data.activo === 1 || data.activo === '1');
+  const notifId = 'CANAL_CORREO_' + clave;
+  const actualizado = actualizarFilaPorId_(db, 'CONFIG_NOTIFICACIONES', 'notif_id', notifId, { activo: valor });
+  if (!actualizado) {
+    agregarFila_(db, 'CONFIG_NOTIFICACIONES', { notif_id: notifId, evento: 'Canal de correo: ' + clave, rol_destinatario: '', emails_extra: '', activo: valor });
+  }
+  return { ok: true, clave, correo_activo: valor };
+}
+
 function yaNotificadoRecientemente_(db, solicitudId, evento, destinatario, ventanaMinutos) {
   const ventana = ventanaMinutos || VENTANA_DEDUP_MINUTOS;
   const ahora = Date.now();
@@ -154,6 +237,11 @@ function registrar_(db, { solicitudId, destinatario, evento, resultado, reintent
 // PENDIENTE_REINTENTO, para que procesarColaCorreo lo reintente despues.
 async function enviarCorreo_(db, { solicitudId, destinatario, evento, asunto, cuerpo, cc, ventanaMinutos }) {
   if (!destinatario) return { enviado: false, motivo: 'sin_destinatario' };
+  // v7.5: si el Admin apago el correo de la categoria de este evento, no se
+  // manda (la alerta en vivo, si la hay, es una cola aparte y no se toca).
+  if (!correoActivoParaEvento_(db, evento)) {
+    return { enviado: false, motivo: 'canal_desactivado' };
+  }
   if (yaNotificadoRecientemente_(db, solicitudId, evento, destinatario, ventanaMinutos)) {
     return { enviado: false, motivo: 'deduplicado' };
   }
@@ -180,6 +268,9 @@ async function enviarCorreo_(db, { solicitudId, destinatario, evento, asunto, cu
 // despues.
 function encolarCorreo_(db, { solicitudId, destinatario, evento, asunto, cuerpo }) {
   if (!destinatario) return { enviado: false, motivo: 'sin_destinatario' };
+  if (!correoActivoParaEvento_(db, evento)) {
+    return { enviado: false, motivo: 'canal_desactivado' };
+  }
   if (yaNotificadoRecientemente_(db, solicitudId, evento, destinatario)) {
     return { enviado: false, motivo: 'deduplicado' };
   }
@@ -538,11 +629,158 @@ function enviarCorreoModulo(db, opciones) {
   return enviarCorreo_(db, opciones);
 }
 
+// v7.5 Fase 2 (puerto Fase 3a): "Enviar alerta" desde Administracion -- un
+// megafono manual del Admin a quien elija, por alerta EN VIVO y/o CORREO.
+// Distinto de Novedades (feed durable con acuse y aprobacion): esto es
+// inmediato y directo. Los canales los elige el Admin en CADA envio, asi
+// que NO lo limitan los interruptores de "Canales de alerta" (evento
+// ALERTA_ADMIN:<uuid> no matchea ninguna categoria -> nunca se bloquea).
+
+// Datos para poblar los selectores del formulario "Enviar alerta". ADM-only.
+function getDirectorioAlerta(db, data, contexto) {
+  if (!contexto || contexto.rol !== 'ADM') {
+    return { _forbidden: true, message: 'Solo un Administrador puede enviar alertas.' };
+  }
+  const personas = DirectorioPersonal.directorioPersonalActivo_(db);
+  const empresas = {};
+  personas.forEach((p) => { if (p.empresa_id) empresas[p.empresa_id] = true; });
+  return {
+    personas: personas.slice().sort((a, b) => String(a.nombre).localeCompare(String(b.nombre))),
+    empresas: Object.keys(empresas).sort()
+  };
+}
+
+// audiencia_tipo: 'TODOS' | 'EMPRESA' | 'SELECCION'.
+async function enviarAlertaManual(db, data, contexto) {
+  if (!contexto || contexto.rol !== 'ADM') {
+    return { _forbidden: true, message: 'Solo un Administrador puede enviar alertas.' };
+  }
+  data = data || {};
+  const titulo = String(data.titulo || '').trim();
+  const mensaje = String(data.mensaje || '').trim();
+  if (titulo.length < 3) return { _validationError: true, message: 'Escribe un título (mínimo 3 caracteres).', fields: [{ campo: 'titulo', mensaje: 'Escribe un título (mínimo 3 caracteres).' }] };
+  if (mensaje.length < 3) return { _validationError: true, message: 'Escribe el mensaje de la alerta.', fields: [{ campo: 'mensaje', mensaje: 'Escribe el mensaje de la alerta.' }] };
+  const porCorreo = data.por_correo !== false;
+  const porEnVivo = data.por_en_vivo !== false;
+  if (!porCorreo && !porEnVivo) return { _validationError: true, message: 'Elige al menos un canal (en vivo o correo).', fields: [{ campo: 'canales', mensaje: 'Elige al menos un canal (en vivo o correo).' }] };
+
+  const todos = DirectorioPersonal.directorioPersonalActivo_(db);
+  const tipo = data.audiencia_tipo || 'TODOS';
+  let destinatarios;
+  if (tipo === 'EMPRESA') {
+    const emp = String(data.empresa_id || '');
+    destinatarios = todos.filter((p) => p.empresa_id === emp);
+  } else if (tipo === 'SELECCION') {
+    const elegidos = {};
+    (Array.isArray(data.destinatarios) ? data.destinatarios : []).forEach((e) => { elegidos[String(e).toLowerCase()] = true; });
+    destinatarios = todos.filter((p) => elegidos[p.email.toLowerCase()]);
+  } else {
+    destinatarios = todos;
+  }
+  if (!destinatarios.length) return { _validationError: true, message: 'No hay destinatarios para esa audiencia.', fields: [{ campo: 'audiencia', mensaje: 'No hay destinatarios para esa audiencia.' }] };
+
+  // UUID en el evento: nunca se deduplica contra otro envio ni contra los
+  // interruptores de canales (ALERTA_ADMIN no tiene categoria).
+  const evento = 'ALERTA_ADMIN:' + crypto.randomUUID();
+  let enVivo = 0, correo = 0;
+
+  if (porEnVivo) {
+    const r = NotificacionesApp.encolarLote(db, destinatarios.map((p) => ({
+      destinatario: p.email, tipo: 'ALERTA_ADMIN', titulo, mensaje, modulo_id: '', texto_accion: '', vidaHoras: 72
+    })));
+    enVivo = (r && r.encolado) || 0;
+  }
+  if (porCorreo) {
+    for (const p of destinatarios) {
+      const res = await enviarCorreo_(db, { solicitudId: 'ALERTA_ADMIN', destinatario: p.email, evento, asunto: 'SIGSO — ' + titulo, cuerpo: mensaje });
+      if (res.enviado) correo++;
+    }
+  }
+
+  try {
+    agregarFila_(db, 'LOG_SISTEMA', {
+      log_id: crypto.randomUUID(), timestamp: new Date().toISOString(), contexto: 'ALERTA_ADMIN',
+      mensaje: contexto.email + ' → ' + destinatarios.length + ' persona(s) [' +
+        (porEnVivo ? 'en vivo' : '') + (porEnVivo && porCorreo ? '+' : '') + (porCorreo ? 'correo' : '') + ']: ' + titulo,
+      ref: evento
+    });
+  } catch (err) { /* trazabilidad best-effort */ }
+
+  return { ok: true, destinatarios: destinatarios.length, en_vivo: enVivo, correo: correo };
+}
+
+// v5.2 (§4.2): envio MANUAL del reporte ejecutivo a Gerencia+ADM de cada
+// empresa (puerto Fase 3a). La clave de evento usa un UUID: nunca se
+// deduplica contra el envio semanal/mensual programado (no portado) ni
+// contra un envio manual anterior del mismo día -- si el Admin lo pide,
+// sale sí o sí.
+function formatearCuerpoEjecutivo_(panel) {
+  const kpis = panel.kpis || {};
+  const items = panel.items || [];
+  const atrasadas = items.filter((i) => i.cumplimiento && i.cumplimiento.codigo === 'ATRASADA_DESARROLLADOR').length;
+  const enRiesgo = items.filter((i) => i.cumplimiento && i.cumplimiento.codigo === 'EN_RIESGO').length;
+
+  const semaforo = atrasadas > 0
+    ? '🔴 Hay solicitudes atrasadas que necesitan atención'
+    : (enRiesgo > 0 ? '🟡 Al día, pero hay ítems cerca de vencer' : '🟢 Todo al día');
+
+  const cumplimientoTxt = (kpis.pct_cumplimiento_desarrollador === null || kpis.pct_cumplimiento_desarrollador === undefined)
+    ? '—' : kpis.pct_cumplimiento_desarrollador + '%';
+
+  const lineas = [
+    (kpis.atrasadas_activas || 0) + ' solicitud(es) ya pasaron su fecha comprometida y siguen sin entregarse.',
+    (kpis.esperando_validacion || 0) + ' ítem(s) están listos y esperan que el solicitante confirme que quedaron bien.',
+    (kpis.sin_comprometer || 0) + ' solicitud(es) todavía no tienen fecha comprometida por el equipo.'
+  ];
+  if (cumplimientoTxt !== '—') lineas.push('De lo entregado, el ' + cumplimientoTxt + ' se entregó a tiempo.');
+
+  return 'Reporte ejecutivo SIGSO\n\n' +
+    semaforo + '\n\n' +
+    'Cumplimiento: ' + cumplimientoTxt + '\n' +
+    'Atrasadas: ' + (kpis.atrasadas_activas || 0) + '\n' +
+    'Por validar: ' + (kpis.esperando_validacion || 0) + '\n\n' +
+    'Qué necesita tu atención:\n' +
+    lineas.map((l) => '- ' + l).join('\n');
+}
+
+function obtenerEmailsPorRol_(db, empresaId, roles) {
+  return leerFilas_(db, 'USUARIOS', COLUMNAS.USUARIOS)
+    .filter((u) => {
+      const activo = u.activo === true || u.activo === 'TRUE' || u.activo === 1;
+      return activo && u.empresa_id === empresaId && roles.indexOf(u.rol) !== -1;
+    })
+    .map((u) => u.email);
+}
+
+async function enviarReporteGerenciaAhora(db, data, contexto) {
+  if (!contexto || contexto.rol !== 'ADM') {
+    return { _forbidden: true, message: 'Solo un Administrador puede enviar el reporte a Gerencia.' };
+  }
+  const empresas = {};
+  leerFilas_(db, 'USUARIOS', COLUMNAS.USUARIOS).forEach((u) => { empresas[u.empresa_id] = true; });
+
+  const resultados = [];
+  for (const empresaId of Object.keys(empresas)) {
+    const panel = Gerencia.getPanel(db, { empresa_id: empresaId }, { rol: 'ADM', email: '' });
+    const asunto = 'SIGSO — Reporte ejecutivo (' + empresaId + ')';
+    const cuerpo = formatearCuerpoEjecutivo_(panel) + '\n\nEnviado a pedido desde el Panel de Gerencia.' + pieCorreo_();
+    const claveEvento = 'REPORTE_EJECUTIVO_MANUAL:' + empresaId + ':' + crypto.randomUUID();
+    for (const email of obtenerEmailsPorRol_(db, empresaId, ['GERENCIA', 'ADM'])) {
+      resultados.push(await enviarCorreo_(db, { solicitudId: 'REPORTE:' + empresaId, destinatario: email, evento: claveEvento, asunto, cuerpo }));
+    }
+  }
+  return { enviados: resultados.filter((r) => r.enviado).length, total: resultados.length };
+}
+
 module.exports = {
   enviarAcuseRecibo, enviarAvisoDesarrollo, avisarAtencionDirectaRegistrada,
   notificarCambioEstado, avisarCompromisoFecha, notificarDerivacion, enviarCodigoAcceso,
   notificarValidacionSolicitante, notificarRespuestaSolicitante, enviarDigestJefatura,
   notificarPatron, detectarPatrones, enviarCorreoModulo,
   procesarColaCorreo, listarLogs,
+  // Canales de alerta (Fase 3a).
+  listarCanalesAlerta, guardarCanalAlerta,
+  // Disparadores manuales de ADM (Fase 3a).
+  getDirectorioAlerta, enviarAlertaManual, enviarReporteGerenciaAhora,
   MAX_REINTENTOS_CORREO
 };

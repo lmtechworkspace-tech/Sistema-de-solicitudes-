@@ -17,8 +17,11 @@
 
 const http = require('node:http');
 const { ejecutarAccion } = require('./router');
+const { VERSION_BACKEND } = require('../logica/sistema');
 
-const VERSION_API = '1.0.0-poc';
+// Unica fuente de verdad: backend/logica/sistema.js (que tambien la usa
+// para getEstadoSistema, el panel de diagnostico de Administracion).
+const VERSION_API = VERSION_BACKEND;
 const ARRANCADO_EN = new Date().toISOString();
 
 function leerCuerpo_(req) {
