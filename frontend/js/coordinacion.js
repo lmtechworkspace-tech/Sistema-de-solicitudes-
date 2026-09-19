@@ -137,7 +137,12 @@
       '<div id="coord-resultado-' + p.pausa_id + '"></div>' +
       listas +
       (TERMINALES.indexOf(p.estado) !== -1 && p.observaciones ? '<p class="sigso-ayuda">Observaciones: ' + Componentes.escaparHtml(p.observaciones) + '</p>' : '') +
-      (p.evidencia_url ? '<p class="sigso-ayuda">Evidencia: <a href="' + Componentes.escaparHtml(p.evidencia_url) + '" target="_blank" rel="noopener">ver foto</a></p>' : ''));
+      // v-next (Fase 2, R2): evidencia_url ahora guarda la CLAVE de R2, no
+      // una URL publica -- el archivo se proxea por el backend (mismo
+      // criterio que descargarAdjuntoNovedad), nunca un href directo.
+      (p.evidencia_url ? '<p class="sigso-ayuda">Evidencia: ' +
+        Componentes.boton({ texto: 'Ver foto', variante: 'secundario', accion: 'ver_evidencia', idx: p.pausa_id, clase: 'sigso-pausa-btn' }) +
+        '</p>' : ''));
   }
 
   function bloqueLista_(titulo, items, conMotivo) {
@@ -172,6 +177,8 @@
           });
         } else if (accion === 'pasar_lista') {
           abrirModalPasarLista_(id);
+        } else if (accion === 'ver_evidencia') {
+          verEvidenciaPausa_(id, btn);
         }
       });
     });
@@ -306,6 +313,23 @@
       fondo.addEventListener('click', function (ev) { if (ev.target === fondo) cerrar(null); });
       document.addEventListener('keydown', alTeclado);
       document.body.appendChild(fondo);
+    });
+  }
+
+  // v-next (Fase 2, R2): muestra la evidencia inline (data URI) en vez de
+  // window.open() -- un popup abierto despues de un await puede bloquearse
+  // en varios navegadores; escribir en el propio div de resultado no tiene
+  // ese riesgo y ya es el patron que usa operar_ para todo lo demas.
+  function verEvidenciaPausa_(pausaId, btn) {
+    var destino = document.getElementById('coord-resultado-' + pausaId);
+    if (destino) destino.innerHTML = Componentes.cargando('Cargando evidencia…');
+    api('descargarEvidenciaPausa', { pausa_id: pausaId }).then(function (r) {
+      if (!destino) return;
+      if (!r.ok) { destino.innerHTML = Componentes.alerta(r.message || 'No se pudo cargar la evidencia.', 'error'); return; }
+      destino.innerHTML = '<img src="data:' + Componentes.escaparHtml(r.data.mime) + ';base64,' + r.data.contenido_base64 +
+        '" alt="Evidencia de la pausa" style="max-width:100%;border-radius:8px;margin-top:0.5rem;">';
+    }).catch(function (e) {
+      if (destino) destino.innerHTML = Componentes.alerta((e && e.message) || 'Error de conexión.', 'error');
     });
   }
 

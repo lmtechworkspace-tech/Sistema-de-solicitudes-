@@ -95,7 +95,7 @@ var ACCIONES_PORTADAS_NODE = {
   despublicarNovedad: true, marcarLeidaNovedad: true, getLectoresNovedad: true,
   getPanelCumplimientoNovedad: true, publicarNovedad: true, descargarAdjuntoNovedad: true,
 
-  // --- Pausas activas (22 de 22; PDF desgateados del motor pdfkit el 2026-09-19 -- solo queda la evidencia fotográfica gateada por R2, dentro de gestionarPausaCoordinador/finalizar) ---
+  // --- Pausas activas (22 de 22; PDF desgateados 2026-09-19 (motor pdfkit); evidencia fotográfica desgateada 2026-09-19 (Fase 2, R2) -- módulo 100% en Node ---
   listarPausasConfig: true, guardarPausasConfig: true,
   listarPausasCoordinadores: true, gestionarPausasCoordinador: true,
   listarPausasTrabajadores: true, gestionarPausasTrabajador: true,
@@ -103,6 +103,7 @@ var ACCIONES_PORTADAS_NODE = {
   listarPausasProgramadas: true, programarPausasDelDia: true, gestionarPausaProgramada: true,
   getPausaHoyTrabajador: true, registrarAsistenciaPausa: true,
   getPanelCoordinadorPausas: true, gestionarPausaCoordinador: true, registrarAsistenciaGrupalPausas: true,
+  descargarEvidenciaPausa: true,
   getReporteCumplimientoPausas: true, listarRosterCoordinadorPausas: true,
   getHistorialTrabajadorPausas: true, getReporteGerenciaPausas: true,
   descargarReporteCumplimientoPausasPdf: true, descargarReporteGerenciaPausasPdf: true,

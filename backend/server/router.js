@@ -155,6 +155,9 @@ const ACCIONES = {
   registrarAsistenciaPausa: (db, data, contexto) => Pausas.registrarAsistencia(db, data, contexto),
   getPanelCoordinadorPausas: (db, data, contexto) => Pausas.getPanelCoordinador(db, data, contexto),
   gestionarPausaCoordinador: (db, data, contexto) => Pausas.gestionarPausaCoordinador(db, data, contexto),
+  // Fase 2 del plan post-migracion (§10.2/§12 del handoff): evidencia
+  // fotografica de Pausas, ultima accion de archivo gateada por R2.
+  descargarEvidenciaPausa: (db, data, contexto) => Pausas.descargarEvidenciaPausa(db, data, contexto),
   registrarAsistenciaGrupalPausas: (db, data, contexto) => Pausas.registrarAsistenciaGrupal(db, data, contexto),
   getReporteCumplimientoPausas: (db, data, contexto) => Pausas.getReporteCumplimiento(db, data, contexto),
   descargarReporteCumplimientoPausasPdf: (db, data, contexto) => Pausas.descargarReporteCumplimientoPdf(db, data, contexto),

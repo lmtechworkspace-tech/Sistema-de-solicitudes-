@@ -5,9 +5,8 @@
  * pausas*.test.js, consolidados y corridos contra backend/logica/pausas.js.
  *
  * Adaptaciones documentadas respecto del .gs:
- *  - EVIDENCIA (foto al finalizar) y PDF descargables: bloqueados por R2. Se
- *    prueba que devuelven el error R2/PDF, y que finalizar SIN evidencia
- *    funciona igual.
+ *  - EVIDENCIA (foto al finalizar): portada (Fase 2, 2026-09-19) -- sube a
+ *    R2 vía almacenamiento.js (mockeado, nunca pega a R2 real).
  *  - ENLACE MAGICO en los correos: no portado -> los correos salen igual, sin
  *    el boton. No se testea el enlace.
  *  - "hora como celda Date": en SQLite la hora se guarda como string, no hay
@@ -22,7 +21,28 @@ const { abrirDb_, sembrarTabla_, agregarFila_, leerFilas_, actualizarFilaPorId_ 
 const { COLUMNAS } = require('../db/schema');
 const Pausas = require('../logica/pausas');
 const Resend = require('../logica/resend');
+const Almacenamiento = require('../logica/almacenamiento');
 const { claveDia_ } = require('../logica/utils');
+
+// Mock de Almacenamiento (R2): un Map en memoria que se comporta como un
+// bucket real -- lo subido es lo que se lee de vuelta. Nunca pega a la red.
+function conMockAlmacenamiento_(t) {
+  const bucket = new Map();
+  t.mock.method(Almacenamiento, 'subirArchivo_', async (clave, contenidoBase64, contentType) => {
+    bucket.set(clave, { contenidoBase64, contentType });
+    return { ok: true, clave, tamano: Buffer.byteLength(contenidoBase64, 'base64') };
+  });
+  t.mock.method(Almacenamiento, 'descargarArchivo_', async (clave) => {
+    const obj = bucket.get(clave);
+    if (!obj) return { ok: false, message: 'El archivo no existe.' };
+    return { ok: true, contenido_base64: obj.contenidoBase64, content_type: obj.contentType };
+  });
+  return bucket;
+}
+
+// PNG 1x1 real (firma valida) -- la .gs test usaba 'AAAA', que ya no pasa
+// la validacion por firma de imagen (a proposito: ahora SI se valida).
+const PNG_1X1_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
 
 const ADMIN = { rol: 'ADM', email: 'admin@homepymes.cl' };
 const DEV = { rol: 'DEV', email: 'dev@homepymes.cl' };
@@ -258,11 +278,11 @@ test('registrarAsistencia guarda animo 1..5 valido y lo deja vacio si no', () =>
   assert.equal(filas(db, 'PAUSAS_ASISTENCIA')[0].animo, '');
 });
 
-test('no se puede registrar si la pausa ya no es registrable (Realizada)', () => {
+test('no se puede registrar si la pausa ya no es registrable (Realizada)', async () => {
   const db = dbBase();
   const p = seedRosterYPausaHoy(db);
-  Pausas.gestionarPausaCoordinador(db, { operacion: 'iniciar', pausa_id: p.pausa_id }, ADMIN);
-  Pausas.gestionarPausaCoordinador(db, { operacion: 'finalizar', pausa_id: p.pausa_id }, ADMIN);
+  await Pausas.gestionarPausaCoordinador(db, { operacion: 'iniciar', pausa_id: p.pausa_id }, ADMIN);
+  await Pausas.gestionarPausaCoordinador(db, { operacion: 'finalizar', pausa_id: p.pausa_id }, ADMIN);
   assert.equal(Pausas.registrarAsistencia(db, { estado: 'participo', confirmacion: true }, CTX_JUAN)._validationError, true);
 });
 
@@ -294,38 +314,98 @@ test('getPanelCoordinador trae la pausa de hoy con participacion en vivo; sin_em
   assert.equal(Pausas.getPanelCoordinador(db, {}, { rol: 'DEV', email: 'nadie@x.cl' }).sin_empresa, true);
 });
 
-test('iniciar -> En_curso con hora/coordinador; finalizar -> Realizada; no se finaliza una Programada', () => {
+test('iniciar -> En_curso con hora/coordinador; finalizar -> Realizada; no se finaliza una Programada', async () => {
   const db = dbBase();
   const p = seedRosterYPausaHoy(db);
   seedCoord(db);
-  assert.equal(Pausas.gestionarPausaCoordinador(db, { operacion: 'finalizar', pausa_id: p.pausa_id }, CTX_COORD)._validationError, true);
-  const ini = Pausas.gestionarPausaCoordinador(db, { operacion: 'iniciar', pausa_id: p.pausa_id }, CTX_COORD);
+  assert.equal((await Pausas.gestionarPausaCoordinador(db, { operacion: 'finalizar', pausa_id: p.pausa_id }, CTX_COORD))._validationError, true);
+  const ini = await Pausas.gestionarPausaCoordinador(db, { operacion: 'iniciar', pausa_id: p.pausa_id }, CTX_COORD);
   assert.equal(ini.estado, 'En_curso');
   assert.ok(ini.hora_inicio_real);
-  const fin = Pausas.gestionarPausaCoordinador(db, { operacion: 'finalizar', pausa_id: p.pausa_id, observaciones: 'ok' }, CTX_COORD);
+  const fin = await Pausas.gestionarPausaCoordinador(db, { operacion: 'finalizar', pausa_id: p.pausa_id, observaciones: 'ok' }, CTX_COORD);
   assert.equal(fin.estado, 'Realizada');
   assert.ok(fin.hora_fin);
 });
 
-test('finalizar con evidencia queda bloqueado por R2; sin evidencia funciona', () => {
+test('finalizar sin evidencia funciona igual que siempre (la foto es opcional)', async () => {
   const db = dbBase();
   const p = seedRosterYPausaHoy(db);
-  Pausas.gestionarPausaCoordinador(db, { operacion: 'iniciar', pausa_id: p.pausa_id }, ADMIN);
-  const conFoto = Pausas.gestionarPausaCoordinador(db, { operacion: 'finalizar', pausa_id: p.pausa_id, evidencia_base64: 'AAAA' }, ADMIN);
-  assert.equal(conFoto._validationError, true);
-  assert.match(conFoto.message, /evidencia/i);
-  // la pausa NO se finalizo (sigue En_curso), se puede finalizar sin foto
-  const fin = Pausas.gestionarPausaCoordinador(db, { operacion: 'finalizar', pausa_id: p.pausa_id }, ADMIN);
+  await Pausas.gestionarPausaCoordinador(db, { operacion: 'iniciar', pausa_id: p.pausa_id }, ADMIN);
+  const fin = await Pausas.gestionarPausaCoordinador(db, { operacion: 'finalizar', pausa_id: p.pausa_id }, ADMIN);
+  assert.equal(fin.estado, 'Realizada');
+  assert.equal(fin.evidencia_url, '');
+});
+
+test('finalizar con una imagen valida la sube a R2 y guarda la clave; se puede descargar de vuelta', async (t) => {
+  const db = dbBase();
+  const p = seedRosterYPausaHoy(db);
+  conMockAlmacenamiento_(t);
+  await Pausas.gestionarPausaCoordinador(db, { operacion: 'iniciar', pausa_id: p.pausa_id }, ADMIN);
+
+  const fin = await Pausas.gestionarPausaCoordinador(db, {
+    operacion: 'finalizar', pausa_id: p.pausa_id, evidencia_nombre: 'charla.png', evidencia_base64: PNG_1X1_B64
+  }, ADMIN);
+
+  assert.equal(fin.estado, 'Realizada');
+  assert.match(fin.evidencia_url, new RegExp('^pausas/' + p.pausa_id + '/[0-9a-f-]+/charla\\.png$'));
+
+  const descarga = await Pausas.descargarEvidenciaPausa(db, { pausa_id: p.pausa_id }, ADMIN);
+  assert.ok(!descarga._validationError, JSON.stringify(descarga));
+  assert.equal(descarga.nombre_archivo, 'charla.png');
+  assert.equal(descarga.mime, 'image/png');
+  assert.equal(Buffer.from(descarga.contenido_base64, 'base64').toString('base64'), PNG_1X1_B64);
+});
+
+test('finalizar rechaza un archivo que no es una imagen valida (nunca bloquea por falta de motor -- eso ya no existe)', async (t) => {
+  const db = dbBase();
+  const p = seedRosterYPausaHoy(db);
+  conMockAlmacenamiento_(t);
+  await Pausas.gestionarPausaCoordinador(db, { operacion: 'iniciar', pausa_id: p.pausa_id }, ADMIN);
+
+  const conBasura = await Pausas.gestionarPausaCoordinador(db, {
+    operacion: 'finalizar', pausa_id: p.pausa_id, evidencia_base64: Buffer.from('esto no es una imagen').toString('base64')
+  }, ADMIN);
+  assert.equal(conBasura._validationError, true);
+  assert.match(conBasura.message, /imagen/i);
+  // la pausa NO se finalizo (sigue En_curso) -- un archivo invalido bloquea.
+  const fin = await Pausas.gestionarPausaCoordinador(db, { operacion: 'finalizar', pausa_id: p.pausa_id }, ADMIN);
   assert.equal(fin.estado, 'Realizada');
 });
 
-test('no_realizada exige motivo; coordinador de otra empresa no opera; ADM opera cualquiera', () => {
+test('finalizar con evidencia: si R2 falla, la pausa se cierra igual sin evidencia (no bloquea por infraestructura)', async (t) => {
+  const db = dbBase();
+  const p = seedRosterYPausaHoy(db);
+  t.mock.method(Almacenamiento, 'subirArchivo_', async () => ({ ok: false, message: 'R2 no configurado.' }));
+  await Pausas.gestionarPausaCoordinador(db, { operacion: 'iniciar', pausa_id: p.pausa_id }, ADMIN);
+
+  const fin = await Pausas.gestionarPausaCoordinador(db, {
+    operacion: 'finalizar', pausa_id: p.pausa_id, evidencia_base64: PNG_1X1_B64
+  }, ADMIN);
+
+  assert.equal(fin.estado, 'Realizada');
+  assert.equal(fin.evidencia_url, '');
+});
+
+test('descargarEvidenciaPausa: sin evidencia adjunta, o sin coordinar la empresa, devuelve error', async (t) => {
+  const db = dbBase();
+  const p = seedRosterYPausaHoy(db);
+  conMockAlmacenamiento_(t);
+
+  assert.equal((await Pausas.descargarEvidenciaPausa(db, { pausa_id: p.pausa_id }, ADMIN))._validationError, true);
+
+  await Pausas.gestionarPausaCoordinador(db, { operacion: 'iniciar', pausa_id: p.pausa_id }, ADMIN);
+  await Pausas.gestionarPausaCoordinador(db, { operacion: 'finalizar', pausa_id: p.pausa_id, evidencia_base64: PNG_1X1_B64 }, ADMIN);
+
+  assert.equal((await Pausas.descargarEvidenciaPausa(db, { pausa_id: p.pausa_id }, { rol: 'DEV', email: 'nadie@x.cl' }))._forbidden, true);
+});
+
+test('no_realizada exige motivo; coordinador de otra empresa no opera; ADM opera cualquiera', async () => {
   const db = dbBase();
   const p = seedRosterYPausaHoy(db);
   seedCoord(db);
-  assert.equal(Pausas.gestionarPausaCoordinador(db, { operacion: 'no_realizada', pausa_id: p.pausa_id }, CTX_COORD)._validationError, true);
-  assert.equal(Pausas.gestionarPausaCoordinador(db, { operacion: 'iniciar', pausa_id: p.pausa_id }, { rol: 'DEV', email: 'otra@x.cl' })._forbidden, true);
-  const nr = Pausas.gestionarPausaCoordinador(db, { operacion: 'no_realizada', pausa_id: p.pausa_id, motivo: 'nadie vino' }, ADMIN);
+  assert.equal((await Pausas.gestionarPausaCoordinador(db, { operacion: 'no_realizada', pausa_id: p.pausa_id }, CTX_COORD))._validationError, true);
+  assert.equal((await Pausas.gestionarPausaCoordinador(db, { operacion: 'iniciar', pausa_id: p.pausa_id }, { rol: 'DEV', email: 'otra@x.cl' }))._forbidden, true);
+  const nr = await Pausas.gestionarPausaCoordinador(db, { operacion: 'no_realizada', pausa_id: p.pausa_id, motivo: 'nadie vino' }, ADMIN);
   assert.equal(nr.estado, 'No_realizada');
 });
 

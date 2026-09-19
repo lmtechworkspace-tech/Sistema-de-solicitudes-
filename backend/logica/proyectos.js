@@ -50,7 +50,12 @@ const MAX_ADJUNTO_PROYECTO_BYTES = 10 * 1024 * 1024;
 // copia aca en vez de exportarla solo para este uso.
 const FIRMAS_IMAGEN_PROYECTO_ = [
   { mime: 'image/jpeg', firma: [0xFF, 0xD8, 0xFF] },
-  { mime: 'image/png', firma: [0x89, 0x50, 0x4E, 0x47] }
+  { mime: 'image/png', firma: [0x89, 0x50, 0x4E, 0x47] },
+  // GIF sumado al desgatear la evidencia fotografica de Pausas (Fase 2 del
+  // plan post-migracion): el .gs de Pausas la soportaba (FIRMAS_IMAGEN_PAUSAS)
+  // y no habia motivo para perder esa capacidad solo por reusar este
+  // detector compartido en vez de reimplementar uno local.
+  { mime: 'image/gif', firma: [0x47, 0x49, 0x46, 0x38] }
 ];
 function esWebpProyecto_(bytes) {
   if (!bytes || bytes.length < 12) return false;
@@ -1946,5 +1951,7 @@ module.exports = {
   // duplicadas.
   rolEnProyecto_, puedeVerProyecto_, puedeGestionarProyecto_, buscarProyecto_,
   calcularSaludProyecto_, calcularAvanceProyecto_, calcularCumplimientoTareasProyecto_,
-  calcularRutaCritica_, calcularImpactoDependencia_, avanceRealTarea_, esTareaTerminalProyecto_
+  calcularRutaCritica_, calcularImpactoDependencia_, avanceRealTarea_, esTareaTerminalProyecto_,
+  // Fase 2 (evidencia fotografica de Pausas): reusado, no reimplementado.
+  detectarMimeImagenProyecto_
 };

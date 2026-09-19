@@ -13,10 +13,13 @@
  * escalada a admin, resumen diario, reporte periodico) via triggers.
  *
  * Diferencias deliberadas, documentadas:
- *  - EVIDENCIA de la charla (foto) sigue sin portar: depende de
- *    almacenamiento de archivos (R2 -- ya activo para otros módulos, pero
- *    la clave de este archivo puntual queda para su propio incremento, ver
- *    §8.1 del handoff). `finalizar` con evidencia devuelve un error claro.
+ *  - EVIDENCIA de la charla (foto): portada (Fase 2 del plan post-migración,
+ *    2026-09-19) -- sube a R2 (clave `pausas/<pausa_id>/<uuid>/<nombre>`),
+ *    valida por firma de imagen (JPEG/PNG/GIF, reusa
+ *    `detectarMimeImagenProyecto_` de proyectos.js, nunca reimplementado) y
+ *    tope de 5 MB. Mismo criterio del `.gs`: un archivo inválido bloquea
+ *    `finalizar` (_validationError); un fallo de infraestructura (R2 caído)
+ *    NO lo bloquea -- la pausa se cierra igual, sin evidencia adjunta.
  *  - Los PDF descargables (reporte de cumplimiento / gerencia) SÍ están
  *    portados (motor pdfkit, ver pdfDocumento.js) -- reusan calcularReporte_,
  *    la misma función de datos que ya usaba el reporte en pantalla.
@@ -38,6 +41,8 @@ const { parsearListaPortal } = require('./portal');
 const Notificaciones = require('./notificaciones');
 const NotificacionesApp = require('./notificacionesApp');
 const PdfDoc = require('./pdfDocumento');
+const Almacenamiento = require('./almacenamiento');
+const { detectarMimeImagenProyecto_ } = require('./proyectos');
 
 const TZ = 'America/Santiago';
 const PAUSAS_TIPOS_COORDINADOR = ['titular', 'reemplazo'];
@@ -822,7 +827,31 @@ function getPanelCoordinador(db, data, contexto) {
     }));
   return { empresas: empresas, pausas: pausas };
 }
-function gestionarPausaCoordinador(db, data, contexto) {
+const LIMITE_EVIDENCIA_PAUSA_BYTES = 5 * 1024 * 1024;
+
+// Evidencia (foto) de la charla: opcional, solo imagenes (JPEG/PNG/GIF,
+// por firma de bytes -- nunca por extension), tope 5 MB. Devuelve
+// { clave } si se subio, un _validationError si el archivo en si es
+// invalido (bloquea finalizar), o null si el archivo era valido pero la
+// subida a R2 fallo (infraestructura -- no bloquea finalizar, mismo
+// criterio que el .gs: "no bloquea el finalizar: la pausa se cierra
+// igual, sin evidencia").
+async function subirEvidenciaPausa_(pausa, nombreArchivo, base64) {
+  const bytes = Buffer.from(base64, 'base64');
+  if (!bytes.length) return errorValidacion('evidencia_base64', 'El contenido de la evidencia no es base64 válido.');
+  if (bytes.length > LIMITE_EVIDENCIA_PAUSA_BYTES) {
+    return errorValidacion('evidencia_base64', 'La evidencia supera el tamaño máximo permitido (5 MB).');
+  }
+  const mime = detectarMimeImagenProyecto_(bytes);
+  if (!mime) return errorValidacion('evidencia_base64', 'La evidencia debe ser una imagen (JPG, PNG o GIF).');
+
+  const clave = 'pausas/' + pausa.pausa_id + '/' + crypto.randomUUID() + '/' + (String(nombreArchivo || 'evidencia.jpg').trim() || 'evidencia.jpg');
+  const resultado = await Almacenamiento.subirArchivo_(clave, base64, mime);
+  if (!resultado.ok) return null;
+  return { clave };
+}
+
+async function gestionarPausaCoordinador(db, data, contexto) {
   const pausa = buscarPausa_(db, data.pausa_id);
   if (!pausa) return errorValidacion('pausa_id', 'Pausa no encontrada.');
   const g = guardaCoordinador_(db, contexto, pausa); if (g) return g;
@@ -830,16 +859,16 @@ function gestionarPausaCoordinador(db, data, contexto) {
     case 'iniciar':
       return transicionar_(db, pausa, ESTADOS_PAUSA.EN_CURSO, contexto, { hora_inicio_real: new Date().toISOString(), coordinador_email: contexto.email });
     case 'finalizar': {
-      // Evidencia (foto): bloqueada hasta que exista almacenamiento (R2). Si
-      // el coordinador intenta adjuntarla, se avisa claro -- puede finalizar
-      // sin ella (es opcional).
-      if (data.evidencia_base64) {
-        return errorValidacion('evidencia_base64', 'La evidencia (foto) todavía no está disponible en el nuevo sistema (falta configurar el almacenamiento de archivos). Finaliza la pausa sin adjuntar la foto por ahora.');
-      }
-      return transicionar_(db, pausa, ESTADOS_PAUSA.REALIZADA, contexto, {
+      const cambios = {
         hora_fin: new Date().toISOString(), coordinador_email: pausa.coordinador_email || contexto.email,
         observaciones: data.observaciones ? String(data.observaciones).trim() : pausa.observaciones
-      });
+      };
+      if (data.evidencia_base64) {
+        const evidencia = await subirEvidenciaPausa_(pausa, data.evidencia_nombre, data.evidencia_base64);
+        if (evidencia && evidencia._validationError) return evidencia;
+        if (evidencia) cambios.evidencia_url = evidencia.clave;
+      }
+      return transicionar_(db, pausa, ESTADOS_PAUSA.REALIZADA, contexto, cambios);
     }
     case 'no_realizada': {
       const motivo = String(data.motivo || '').trim();
@@ -848,6 +877,25 @@ function gestionarPausaCoordinador(db, data, contexto) {
     }
     default: return errorValidacion('operacion', 'Operacion invalida: ' + data.operacion);
   }
+}
+
+// descargarEvidenciaPausa({ pausa_id }, contexto) -> { contenido_base64,
+// nombre_archivo, mime }. Mismo patron que descargarAdjuntoNovedad: el
+// archivo nunca se expone como URL directa de R2 (no es publica), se
+// proxea a traves del backend. El nombre y el mime se derivan de la
+// clave guardada (ultimo segmento de la ruta) y de la firma de los bytes
+// descargados -- evita agregar columnas nuevas a PAUSAS_PROGRAMADAS solo
+// para guardar lo que ya viaja en la propia clave.
+async function descargarEvidenciaPausa(db, data, contexto) {
+  const pausa = buscarPausa_(db, data && data.pausa_id);
+  if (!pausa) return errorValidacion('pausa_id', 'Pausa no encontrada.');
+  const g = guardaCoordinador_(db, contexto, pausa); if (g) return g;
+  if (!pausa.evidencia_url) return errorValidacion('pausa_id', 'Esta pausa no tiene evidencia adjunta.');
+
+  const descarga = await Almacenamiento.descargarArchivo_(pausa.evidencia_url);
+  if (!descarga.ok) return errorValidacion('pausa_id', descarga.message);
+  const nombre = pausa.evidencia_url.split('/').pop() || 'evidencia.jpg';
+  return { contenido_base64: descarga.contenido_base64, nombre_archivo: nombre, mime: descarga.content_type };
 }
 function getReporteCumplimiento(db, data, contexto) {
   const empresas = empresasQueCoordina_(db, contexto);
@@ -1161,7 +1209,7 @@ module.exports = {
   listarTrabajadores, gestionarTrabajador, sembrarRosterDesdeCuentas, asignarModuloPausasRoster,
   listarProgramadas, programarDelDiaAdmin, gestionarPausaProgramada,
   getPausaHoyTrabajador, registrarAsistencia, registrarAsistenciaGrupal,
-  getPanelCoordinador, gestionarPausaCoordinador, getReporteCumplimiento,
+  getPanelCoordinador, gestionarPausaCoordinador, descargarEvidenciaPausa, getReporteCumplimiento,
   listarRosterCoordinador, getHistorialTrabajador,
   getReporteGerencia, descargarReporteCumplimientoPdf, descargarReporteGerenciaPdf,
   // triggers (background)
