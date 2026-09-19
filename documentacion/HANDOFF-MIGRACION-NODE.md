@@ -6,12 +6,11 @@
 > nueva no la va a tener disponible). Todo lo que necesitas para seguir
 > trabajando sin fricción está acá o es derivable del propio repositorio.
 >
-> Última actualización: 2026-09-19, tras el commit `8e2c9ee`
-> (Fase 0 de un plan de fases post-migración: respaldo diario de la base
-> de producción, ver §10.2 — resuelve el riesgo abierto más importante
-> que quedaba fuera del trabajo de migración en sí. Antes de eso, el
-> motor de PDF en Node quedó resuelto en su alcance acordado — §8.3, 5
-> incrementos. Plan de fases completo: §12).
+> Última actualización: 2026-09-19, tras el commit `5642141`
+> (Fase 2 de un plan de fases post-migración: evidencia fotográfica de
+> Pausas desgateada — R2 queda resuelto al 100%, ya no hay NINGUNA acción
+> de archivo gateada en todo el sistema, ver §8.1. Fase 0 (respaldo de la
+> base, §10.2) también resuelta. Plan de fases completo: §12).
 
 ---
 
@@ -368,7 +367,7 @@ producción de punta a punta, igual que se hizo en cada módulo anterior.
 **Fuente de verdad real**: `frontend/js/api.js`, objeto
 `ACCIONES_PORTADAS_NODE` (línea ~64). Este resumen es un mapa de lectura
 rápida, no reemplaza revisar ese archivo. **Números medidos al 2026-09-19
-(commit `f85f6f3`), no estimados**: `ACCIONES_PORTADAS_NODE` tiene **253
+(commit `5642141`), no estimados**: `ACCIONES_PORTADAS_NODE` tiene **254
 cortadas al frontend real**. Solo **1 stub** queda en `router.js`
 (`descargarLibroProyecto`, Excel — motor distinto, fuera de alcance del
 motor de PDF). El backend de `descargarReporteProyecto` (PDF de
@@ -395,10 +394,10 @@ Jefatura, alertas de patrón (P7).
 ### Módulos operacionales
 - **Novedades** — **16 de 16** (adjunto PDF desgateado de R2 el
   2026-09-18, commit `a7fe506`).
-- **Pausas activas** — **22 de 22** (los 2 PDF de reporte desgateados del
-  motor pdfkit el 2026-09-19, commit `234c7e0`). Solo sigue gateada la
-  evidencia fotográfica de `finalizar` (dentro de una acción ya portada,
-  no cuenta aparte) — es lo único de R2 que queda, ver §8.1.
+- **Pausas activas** — **22 de 22, módulo 100% en Node.** PDF de reporte
+  desgateados del motor pdfkit el 2026-09-19 (`234c7e0`); evidencia
+  fotográfica de `finalizar` desgateada el 2026-09-19 (`5642141`, Fase 2
+  — ver §8.1). Sin nada pendiente de R2 en ningún módulo del sistema.
 - **Actividades** (motor base v7.0) — **16 de 16** (los 2 PDF desgateados
   del motor pdfkit el 2026-09-19, commit `0f8f77d`).
 - **Proyectos** — **44 de 48** en `ACCIONES_PORTADAS_NODE` (el backend de
@@ -462,17 +461,17 @@ desgatear las ~35 acciones que lo necesitan, una por una (§8.1).
 
 ### 8.1 Lo que sigue gateado (lista completa y verificada al commit `f85f6f3`)
 
-**Bloqueado por R2 — queda UNA sola, y es chica:**
-- **Pausas, evidencia fotográfica**: `backend/logica/pausas.js` (dentro
-  de `gestionarPausaCoordinador`/`finalizar`) — `data.evidencia_base64`
-  devuelve el stub "falta configurar el almacenamiento". Es lo único de
-  archivo que queda en todo el sistema. Para cerrarlo: mismo patrón de
-  siempre (§5), clave sugerida `pausas/<pausa_id>/<uuid>/<nombre>`,
-  validando por firma de IMAGEN (reusar `detectarMimeImagenProyecto_` de
-  `proyectos.js` exportándolo, no reimplementarlo), y el test con
-  `conMockAlmacenamiento_(t)`. Ojo: `finalizar` pasaría a `async` →
-  grepear quién la llama sin `await` antes de commitear (§5, última
-  viñeta).
+**R2: RESUELTO AL 100% (2026-09-19, commit `5642141`, Fase 2 del plan
+post-migración, §12).** Ya no queda NINGUNA acción de archivo gateada en
+todo el sistema. La última era la evidencia fotográfica de Pausas
+(`gestionarPausaCoordinador`/`finalizar`) — ahora sube de verdad a R2,
+clave `pausas/<pausa_id>/<uuid>/<nombre>`, valida por firma de imagen
+(`detectarMimeImagenProyecto_` de `proyectos.js`, al que se le sumó GIF
+para no perder esa capacidad del `.gs` al reusarlo). Nueva acción
+`descargarEvidenciaPausa` (mismo patrón que `descargarAdjuntoNovedad`:
+el archivo se proxea por el backend, nunca una URL directa de R2).
+`gestionarPausaCoordinador` pasó a `async` — se actualizaron los 8
+escenarios de `pausas-porteo.test.js` que la llamaban sin `await`.
 
 **Motor de PDF (§8.3): resuelto en su alcance acordado.** Los 7 stubs
 originales (5 inline en `router.js` + 2 dentro de `pausas.js`) más
@@ -788,9 +787,9 @@ VPS, SSH de solo lectura antes de asumir nada).
     (hoja de cálculo). Evaluar una librería antes de comprometerse,
     mismo criterio de dependencias mínimas de siempre (aws4fetch,
     pdfkit): candidato razonable `exceljs`, a confirmar.
-- **Fase 2 — Cerrar R2 del todo.** La evidencia fotográfica de Pausas
-  (§8.1) — última acción de archivo gateada en todo el sistema. Chica,
-  mismo patrón ya usado 4 veces (clave, firma de imagen, mock en tests).
+- **Fase 2 — Cerrar R2 del todo.** ✅ **RESUELTA** (2026-09-19, commit
+  `5642141`) — ver §8.1. La evidencia fotográfica de Pausas, última
+  acción de archivo gateada en todo el sistema, ya sube a R2 de verdad.
 - **Fase 3 — Lógica sin portar, sin bloqueos de infraestructura** (§8.2):
   - 3a (rápidos): `Comentarios.gs`, canales de alerta, disparadores
     manuales de ADM, panel de diagnóstico.
