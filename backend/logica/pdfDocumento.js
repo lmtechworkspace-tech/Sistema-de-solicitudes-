@@ -305,10 +305,28 @@ function lineaResumen(doc, pares) {
   doc.x = MARGIN;
 }
 
+// Barra horizontal (distribucion / clima emocional): etiqueta a la
+// izquierda, barra proporcional, cantidad+% a la derecha -- mismo patron
+// que bloqueClimaEmocionalPausas_ (Pausas.gs).
+const BARRA_ANCHO_PX = 140;
+function barraHorizontal(doc, etiqueta, pct, sufijo) {
+  const altura = 16;
+  asegurarEspacio(doc, altura);
+  const y = doc.y;
+  doc.font('Helvetica').fontSize(8.5).fillColor(DOC.INK).text(etiqueta, MARGIN, y + 2, { width: 90 });
+  const barX = MARGIN + 95;
+  doc.rect(barX, y + 2, BARRA_ANCHO_PX, 10).lineWidth(0.5).strokeColor(DOC.HAIRLINE).stroke();
+  const anchoLleno = pct <= 0 ? 0 : Math.max(2, Math.round((BARRA_ANCHO_PX * pct) / 100));
+  if (anchoLleno) doc.rect(barX, y + 2, anchoLleno, 10).fill(DOC.NAVY);
+  doc.font('Helvetica').fontSize(8).fillColor(DOC.INK_SOFT).text(sufijo, barX + BARRA_ANCHO_PX + 10, y + 2, { width: 90 });
+  doc.y = y + altura;
+  doc.x = MARGIN;
+}
+
 module.exports = {
   DOC, MARGIN, CONTENT_WIDTH, COLOR_PRIORIDAD,
   crearDocumento, finalizar, asegurarEspacio,
   encabezado, pie, seccion, subseccion, campoTexto, fichaTabla, tablaDatos, listaEnlaces, chipPrioridad,
-  tablaGenerica, lineaResumen,
+  tablaGenerica, lineaResumen, barraHorizontal,
   formatearFechaLegible_, fechaCorta_
 };

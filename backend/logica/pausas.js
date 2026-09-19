@@ -13,11 +13,13 @@
  * escalada a admin, resumen diario, reporte periodico) via triggers.
  *
  * Diferencias deliberadas, documentadas:
- *  - EVIDENCIA de la charla (foto) y los PDF descargables (reporte de
- *    cumplimiento / gerencia) NO se portan: dependen de almacenamiento de
- *    archivos (R2, pendiente) y de un motor HTML->PDF. `finalizar` con
- *    evidencia y las dos acciones de PDF devuelven un error claro. El reporte
- *    en DATOS (getReporteCumplimiento/getReporteGerencia) si funciona.
+ *  - EVIDENCIA de la charla (foto) sigue sin portar: depende de
+ *    almacenamiento de archivos (R2 -- ya activo para otros módulos, pero
+ *    la clave de este archivo puntual queda para su propio incremento, ver
+ *    §8.1 del handoff). `finalizar` con evidencia devuelve un error claro.
+ *  - Los PDF descargables (reporte de cumplimiento / gerencia) SÍ están
+ *    portados (motor pdfkit, ver pdfDocumento.js) -- reusan calcularReporte_,
+ *    la misma función de datos que ya usaba el reporte en pantalla.
  *  - El ENLACE MAGICO personal de los correos (entrar directo al modulo sin
  *    clave) todavia no se porta -- los correos salen igual, con el texto
  *    "entra a la plataforma" en vez del boton. enlaceMagicoPausas_ devuelve
@@ -35,6 +37,7 @@ const { claveDia_ } = require('./utils');
 const { parsearListaPortal } = require('./portal');
 const Notificaciones = require('./notificaciones');
 const NotificacionesApp = require('./notificacionesApp');
+const PdfDoc = require('./pdfDocumento');
 
 const TZ = 'America/Santiago';
 const PAUSAS_TIPOS_COORDINADOR = ['titular', 'reemplazo'];
@@ -916,15 +919,101 @@ function getReporteGerencia(db, data, contexto) {
   if (data && data.empresa_id) empresas = empresas.filter((e) => String(e) === String(data.empresa_id));
   return calcularReporte_(db, empresas, data && data.desde, data && data.hasta);
 }
-function descargarReporteCumplimientoPdf(db, data, contexto) {
+// Etiqueta de la micro-encuesta de bienestar -- mismo orden 1..5 que
+// ANIMO_ETIQUETA_PAUSAS_ en Pausas.gs. Sin el emoji que llevaba el .gs: las
+// fuentes estandar de pdfkit (Helvetica, WinAnsiEncoding) no cubren el
+// rango Unicode de los emoji -- salian como caracteres rotos. La etiqueta
+// de texto ya alcanzaba por si sola (el propio .gs la agregaba "porque el
+// conversor HTML->PDF de Apps Script no garantiza fuentes de emoji a
+// color" -- aca directamente no hay fuente que las cubra).
+const ANIMO_ETIQUETA_ = ['Muy mal', 'Mal', 'Regular', 'Bien', 'Muy bien'];
+
+function nombresEmpresasReporte_(pausas) {
+  const ids = {};
+  (pausas || []).forEach((p) => { ids[String(p.empresa_id)] = true; });
+  return Object.keys(ids).join(', ');
+}
+
+// Dibuja el PDF del reporte de pausas (mismos bloques que
+// construirHtmlReportePausas_ en Pausas.gs: ficha, clima emocional con
+// detalle por persona, motivos, participación por área, rachas de equipo).
+// Reusa pdfDocumento.js -- mismo helper que Orden de Trabajo / Actividades.
+async function armarPdfReportePausas_(reporte, titulo) {
+  const doc = PdfDoc.crearDocumento();
+  const k = reporte.kpis;
+  PdfDoc.encabezado(doc, { tipoDoc: titulo, referencia: reporte.periodo.desde + ' a ' + reporte.periodo.hasta, etiquetaReferencia: 'Periodo: ' });
+
+  PdfDoc.seccion(doc, 'Resumen del período');
+  PdfDoc.fichaTabla(doc, [
+    ['Empresa(s)', nombresEmpresasReporte_(reporte.pausas) || '—', 'Pausas en el período', String(reporte.pausas.length)],
+    ['Cumplimiento', k.pct_cumplimiento == null ? '—' : k.pct_cumplimiento + '%', 'Realizadas', String(k.realizadas)],
+    ['No realizadas', String(k.no_realizadas), 'Canceladas', String(k.canceladas)],
+    ['Participaciones', String(k.participaciones), 'Justificaciones', String(k.justificaciones)]
+  ]);
+
+  PdfDoc.seccion(doc, 'Clima emocional (autorreportado, opcional)');
+  const clima = reporte.clima_emocional || { respuestas: 0, distribucion: [], detalle: [] };
+  if (!clima.respuestas) {
+    doc.font('Helvetica').fontSize(9).fillColor(PdfDoc.DOC.MUTED).text('Nadie dejó esta respuesta opcional en el período.', PdfDoc.MARGIN, doc.y);
+    doc.moveDown(0.6);
+  } else {
+    clima.distribucion.forEach((d, i) => PdfDoc.barraHorizontal(doc, ANIMO_ETIQUETA_[i], d.pct, d.cantidad + ' · ' + d.pct + '%'));
+    doc.moveDown(0.15);
+    doc.font('Helvetica').fontSize(7.5).fillColor(PdfDoc.DOC.FAINT).text(
+      'Autorreportado y opcional — ' + clima.respuestas + (clima.respuestas === 1 ? ' participación incluyó' : ' participaciones incluyeron') +
+      ' esta respuesta' + (k.animo_promedio == null ? '' : ' · promedio ' + k.animo_promedio + '/5') + '.',
+      PdfDoc.MARGIN, doc.y, { width: PdfDoc.CONTENT_WIDTH }
+    );
+    doc.moveDown(0.5);
+    if (clima.detalle && clima.detalle.length) {
+      PdfDoc.subseccion(doc, 'Detalle por persona');
+      PdfDoc.tablaGenerica(doc,
+        [{ campo: 'fecha', etiqueta: 'Fecha' }, { campo: 'nombre', etiqueta: 'Nombre' }, { campo: 'area', etiqueta: 'Área' },
+          { campo: 'empresa_id', etiqueta: 'Empresa' }, { campo: 'respuesta', etiqueta: 'Respuesta' }],
+        clima.detalle.map((d) => ({ fecha: d.fecha, nombre: d.nombre, area: d.area, empresa_id: d.empresa_id, respuesta: ANIMO_ETIQUETA_[d.valor - 1] }))
+      );
+      doc.moveDown(0.4);
+    }
+  }
+
+  PdfDoc.seccion(doc, 'Motivos de inasistencia');
+  PdfDoc.tablaGenerica(doc, [{ campo: 'motivo', etiqueta: 'Motivo' }, { campo: 'cantidad', etiqueta: 'Cantidad' }], reporte.motivos);
+  doc.moveDown(0.3);
+
+  PdfDoc.seccion(doc, 'Participación por área');
+  PdfDoc.tablaGenerica(doc, [{ campo: 'area', etiqueta: 'Área' }, { campo: 'participaciones', etiqueta: 'Participaciones' }], reporte.por_area);
+  doc.moveDown(0.3);
+
+  PdfDoc.seccion(doc, 'Racha de equipo por área');
+  doc.font('Helvetica').fontSize(7.5).fillColor(PdfDoc.DOC.MUTED).text(
+    'Pausas consecutivas donde el área alcanzó su umbral de participación configurado. Es una racha de EQUIPO: nunca identifica ni ordena personas.',
+    PdfDoc.MARGIN, doc.y, { width: PdfDoc.CONTENT_WIDTH }
+  );
+  doc.moveDown(0.3);
+  PdfDoc.tablaGenerica(doc,
+    [{ campo: 'area', etiqueta: 'Área' }, { campo: 'roster', etiqueta: 'Personas' }, { campo: 'racha_actual', etiqueta: 'Racha actual' },
+      { campo: 'racha_maxima', etiqueta: 'Racha máxima' }, { campo: 'umbral', etiqueta: 'Umbral' }],
+    reporte.rachas_area.map((r) => ({ area: r.area, roster: r.roster, racha_actual: r.racha_actual, racha_maxima: r.racha_maxima, umbral: '>= ' + r.umbral_pct + '%' }))
+  );
+
+  PdfDoc.pie(doc);
+  const buffer = await PdfDoc.finalizar(doc);
+  const filename = 'SIGSO-reporte-pausas-' + reporte.periodo.desde + '_a_' + reporte.periodo.hasta + '.pdf';
+  return { pdf_base64: buffer.toString('base64'), filename };
+}
+
+async function descargarReporteCumplimientoPdf(db, data, contexto) {
   const empresas = empresasQueCoordina_(db, contexto);
   if (empresas.length === 0) return errorValidacion('empresa_id', 'No coordinas ninguna empresa con pausas activas.');
-  return errorValidacion('pdf', 'La descarga en PDF todavía no está disponible en el nuevo sistema (falta el generador de PDF). Usa el reporte en pantalla por ahora.');
+  const reporte = calcularReporte_(db, empresas, data && data.desde, data && data.hasta);
+  return armarPdfReportePausas_(reporte, 'Reporte de pausas activas');
 }
-function descargarReporteGerenciaPdf(db, data, contexto) {
-  const empresas = empresasVisiblesGerencia_(db, contexto);
+async function descargarReporteGerenciaPdf(db, data, contexto) {
+  let empresas = empresasVisiblesGerencia_(db, contexto);
+  if (data && data.empresa_id) empresas = empresas.filter((e) => String(e) === String(data.empresa_id));
   if (empresas.length === 0) return errorValidacion('empresa_id', 'No hay pausas activas configuradas.');
-  return errorValidacion('pdf', 'La descarga en PDF todavía no está disponible en el nuevo sistema (falta el generador de PDF). Usa el reporte en pantalla por ahora.');
+  const reporte = calcularReporte_(db, empresas, data && data.desde, data && data.hasta);
+  return armarPdfReportePausas_(reporte, 'Reporte de pausas activas');
 }
 
 // ==== triggers de correo (background) =====================================

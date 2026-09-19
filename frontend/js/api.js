@@ -54,11 +54,10 @@ var MAX_INTENTOS_LECTURA = 3;
 // "almacenamiento no configurado" en vez de servir el archivo real que Apps
 // Script sí sirve hoy. Cortarlas ahora sería una regresión, no una mejora.
 // Lista de lo que sigue pendiente:
-// descargarReporteCumplimientoPausasPdf, descargarReporteGerenciaPausasPdf,
-// descargarReporteProyecto, descargarLibroProyecto,
-// descargarEvidenciaClausulaSgc.
-// (descargarReporteActividadesPdf/descargarActaReunionPdf ya desgateados,
-// 2026-09-19 -- motor de PDF en Node, pdfkit.)
+// descargarReporteProyecto, descargarLibroProyecto, descargarEvidenciaClausulaSgc.
+// (descargarReporteActividadesPdf/descargarActaReunionPdf/
+// descargarReporteCumplimientoPausasPdf/descargarReporteGerenciaPausasPdf ya
+// desgateados, 2026-09-19 -- motor de PDF en Node, pdfkit.)
 var ACCIONES_PORTADAS_NODE = {
   // --- Núcleo (Auth/Portal, Catálogos, Solicitudes, Dashboard/Gerencia/Jefatura) ---
   portalLogin: true, portalLogout: true, portalSesion: true, portalCambiarPassword: true,
@@ -84,7 +83,7 @@ var ACCIONES_PORTADAS_NODE = {
   despublicarNovedad: true, marcarLeidaNovedad: true, getLectoresNovedad: true,
   getPanelCumplimientoNovedad: true, publicarNovedad: true, descargarAdjuntoNovedad: true,
 
-  // --- Pausas activas (20 de 22; los PDF de reporte siguen en Apps Script) ---
+  // --- Pausas activas (22 de 22; PDF desgateados del motor pdfkit el 2026-09-19 -- solo queda la evidencia fotográfica gateada por R2, dentro de gestionarPausaCoordinador/finalizar) ---
   listarPausasConfig: true, guardarPausasConfig: true,
   listarPausasCoordinadores: true, gestionarPausasCoordinador: true,
   listarPausasTrabajadores: true, gestionarPausasTrabajador: true,
@@ -94,6 +93,7 @@ var ACCIONES_PORTADAS_NODE = {
   getPanelCoordinadorPausas: true, gestionarPausaCoordinador: true, registrarAsistenciaGrupalPausas: true,
   getReporteCumplimientoPausas: true, listarRosterCoordinadorPausas: true,
   getHistorialTrabajadorPausas: true, getReporteGerenciaPausas: true,
+  descargarReporteCumplimientoPausasPdf: true, descargarReporteGerenciaPausasPdf: true,
 
   // --- Actividades / Gestión Operacional (16 de 16; PDF desgateados del motor pdfkit el 2026-09-19) ---
   listarActividades: true, getDetalleActividad: true, crearActividad: true, confirmarActividad: true,

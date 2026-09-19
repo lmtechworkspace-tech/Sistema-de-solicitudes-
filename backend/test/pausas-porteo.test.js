@@ -398,13 +398,27 @@ test('getReporteGerencia agrega TODAS las empresas; filtra por empresa; no expon
   assert.equal(Pausas.getReporteGerencia(db, {}, DEV).sin_datos, true);
 });
 
-test('descargar PDF (cumplimiento y gerencia) queda bloqueado por R2, tras validar el acceso', () => {
+// Actualizado 2026-09-19: el motor de PDF (pdfkit) ya esta activo (ver
+// pdfDocumento.js) -- con acceso valido, ambas acciones devuelven un PDF
+// real en base64, no el _validationError de "falta el generador de PDF"
+// que tenian antes. El guardia de acceso (sin coordinar ninguna empresa)
+// sigue igual, es logica de permisos, no del motor de PDF.
+test('descargar PDF (cumplimiento y gerencia): con acceso valido genera un PDF real; sin acceso, bloquea antes de intentarlo', async () => {
   const db = dbBase();
   seedConfig(db); seedCoord(db);
-  assert.equal(Pausas.descargarReporteCumplimientoPdf(db, {}, CTX_COORD)._validationError, true);
-  assert.equal(Pausas.descargarReporteGerenciaPdf(db, {}, GERENCIA)._validationError, true);
-  // sin acceso, el mensaje es el de acceso (no el de PDF)
-  assert.equal(Pausas.descargarReporteCumplimientoPdf(db, {}, { rol: 'DEV', email: 'nadie@x.cl' })._validationError, true);
+
+  const coord = await Pausas.descargarReporteCumplimientoPdf(db, {}, CTX_COORD);
+  assert.ok(!coord._validationError, JSON.stringify(coord));
+  assert.ok(coord.pdf_base64 && coord.pdf_base64.length > 0);
+  assert.equal(Buffer.from(coord.pdf_base64, 'base64').slice(0, 4).toString('ascii'), '%PDF');
+
+  const ger = await Pausas.descargarReporteGerenciaPdf(db, {}, GERENCIA);
+  assert.ok(!ger._validationError, JSON.stringify(ger));
+  assert.equal(Buffer.from(ger.pdf_base64, 'base64').slice(0, 4).toString('ascii'), '%PDF');
+
+  // sin acceso, el guardia de permisos bloquea antes de intentar generar nada
+  const sinAcceso = await Pausas.descargarReporteCumplimientoPdf(db, {}, { rol: 'DEV', email: 'nadie@x.cl' });
+  assert.equal(sinAcceso._validationError, true);
 });
 
 test('calcularRachasPorArea premia al EQUIPO y una No_realizada no corta la racha', () => {
