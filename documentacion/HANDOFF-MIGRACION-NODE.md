@@ -1006,9 +1006,10 @@ la memoria `sigso-accesos-rediseno.md`:
    (documentados en un catálogo común, sin forzarlos a unificarse).
 4. Orden acordado: **Organización invisible → ordenar el panel de
    Administración (fusionar `USUARIOS`/`CUENTAS_PORTAL`) → recuperar
-   contraseña → documentar el catálogo de sub-roles.** El enforcement
-   real de módulos y la prueba con una segunda organización quedan en
-   pausa hasta que la decisión 1 se resuelva con un cliente real enfrente.
+   contraseña → documentar el catálogo de sub-roles.** ✅ **Los 4 puntos
+   resueltos (2026-09-19)** — ver §13.1-§13.4. El enforcement real de
+   módulos y la prueba con una segunda organización quedan en pausa hasta
+   que la decisión 1 se resuelva con un cliente real enfrente.
 
 ### 13.1 Organización invisible — RESUELTA (2026-09-19)
 
@@ -1157,3 +1158,28 @@ portal" de la Fase 4):
   de privacidad que el enlace mágico ya existente (`?token=`): se limpia
   de la URL enseguida.
 - Wireado en `ACCIONES_PORTADAS_NODE`.
+
+### 13.4 Documentar el catálogo de sub-roles — RESUELTA (2026-09-19)
+
+Cuarto y último incremento del orden acordado (§13, punto 4). Puro
+trabajo de documentación, sin código. Nuevo:
+[`documentacion/CATALOGO-ACCESOS.md`](CATALOGO-ACCESOS.md) — referencia
+VIVA (no un registro cronológico como este handoff), los 4 sistemas de
+membresía fina (Pausas/Calidad/Proyectos/Jefatura) descritos con la
+MISMA forma (tabla, qué controla, valores propios, clave de membresía,
+por qué es su propia tabla, quién administra, si el enforcement es real,
+dónde se edita) — decisión 3 del documento de arquitectura: se mantienen
+con su vocabulario propio, solo se documentan de forma comparable.
+
+Incluye, como hallazgo honesto (no un pendiente escondido): las
+pantallas de Calidad y Proyectos para gestionar sus propios accesos NO
+viven en el panel de Administración, sino dentro de cada módulo — es la
+parte más literal de la queja original ("los accesos están dispersos").
+No se movieron en este incremento (cambiaría la navegación propia de
+cada módulo); queda anotado como decisión pendiente explícita, no
+fingida.
+
+Con esto, las 4 fases del orden acordado del rediseño de accesos quedan
+resueltas. Sigue abierta, a propósito, la decisión 1 (multi-organización
+compartida vs. servidor por cliente) — se retoma cuando exista un
+cliente real.
