@@ -54,10 +54,14 @@ var MAX_INTENTOS_LECTURA = 3;
 // "almacenamiento no configurado" en vez de servir el archivo real que Apps
 // Script sí sirve hoy. Cortarlas ahora sería una regresión, no una mejora.
 // Lista de lo que sigue pendiente:
-// descargarReporteProyecto, descargarLibroProyecto, descargarEvidenciaClausulaSgc.
-// (descargarReporteActividadesPdf/descargarActaReunionPdf/
-// descargarReporteCumplimientoPausasPdf/descargarReporteGerenciaPausasPdf ya
-// desgateados, 2026-09-19 -- motor de PDF en Node, pdfkit.)
+// descargarReporteProyecto, descargarLibroProyecto.
+// (Los demas PDF del motor pdfkit ya desgateados, 2026-09-19:
+// descargarOrdenTrabajo, descargarReporteActividadesPdf,
+// descargarActaReunionPdf, descargarReporteCumplimientoPausasPdf,
+// descargarReporteGerenciaPausasPdf, descargarEvidenciaClausulaSgc.
+// Queda solo descargarReporteProyecto -- PDF ejecutivo configurable con
+// Gantt, su propio incremento -- y descargarLibroProyecto, que es Excel,
+// no PDF, motor distinto.)
 var ACCIONES_PORTADAS_NODE = {
   // --- Núcleo (Auth/Portal, Catálogos, Solicitudes, Dashboard/Gerencia/Jefatura) ---
   portalLogin: true, portalLogout: true, portalSesion: true, portalCambiarPassword: true,
@@ -170,8 +174,9 @@ var ACCIONES_PORTADAS_NODE = {
   guardarObjetivoSgc: true, sugerirLecturaObjetivoSgc: true, registrarLecturaObjetivoSgc: true,
   anularLecturaObjetivoSgc: true,
 
-  // --- SGC ISO 9001: Matriz de cobertura ISO (3 de 4; descargarEvidenciaClausulaSgc sigue en Apps Script, PDF) ---
+  // --- SGC ISO 9001: Matriz de cobertura ISO (4 de 4; PDF desgateado del motor pdfkit el 2026-09-19) ---
   listarMatrizCoberturaSgc: true, getDetalleClausulaCoberturaSgc: true, listarCoberturaHistoricoSgc: true,
+  descargarEvidenciaClausulaSgc: true,
 
   // --- SGC ISO 9001: Alcance y exclusiones (5 de 5; v11.0 Fase 1, sin archivos: se corta completo) ---
   obtenerAlcanceSgc: true, guardarAlcanceSgc: true, nuevaVersionAlcanceSgc: true,

@@ -57,6 +57,7 @@ const Tablero = require('../logica/tableroSgc');
 const Prestaciones = require('../logica/prestacionesSgc');
 const OrdenTrabajo = require('../logica/ordenTrabajo');
 const ReporteActividades = require('../logica/reporteActividades');
+const EvidenciaClausulaSgc = require('../logica/evidenciaClausulaSgc');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -358,14 +359,13 @@ const ACCIONES = {
   registrarLecturaObjetivoSgc: (db, data, contexto) => Objetivos.registrarLectura(db, data, contexto),
   anularLecturaObjetivoSgc: (db, data, contexto) => Objetivos.anularLectura(db, data, contexto),
 
-  // SGC ISO 9001 Fase 6b: matriz de cobertura ISO + "modo auditoría". Sin
-  // archivos (salvo la descarga de evidencia en PDF, gateada hasta que
-  // exista un motor de PDF): se corta el resto al frontend en el mismo
-  // incremento.
+  // SGC ISO 9001 Fase 6b: matriz de cobertura ISO + "modo auditoría".
+  // §8.3 del handoff: el PDF de evidencia ya usa el motor pdfkit -- el mas
+  // simple de los 4 incrementos (sin fichas ni items, solo titulo+tabla).
   listarMatrizCoberturaSgc: (db, data, contexto) => MatrizCobertura.listar(db, data, contexto),
   getDetalleClausulaCoberturaSgc: (db, data, contexto) => MatrizCobertura.getDetalle(db, data, contexto),
   listarCoberturaHistoricoSgc: (db, data, contexto) => MatrizCobertura.listarHistorico(db, data, contexto),
-  descargarEvidenciaClausulaSgc: () => ({ _validationError: true, message: 'La descarga en PDF de la evidencia de auditoría aun no esta disponible en el nuevo backend (falta el motor de PDF).' }),
+  descargarEvidenciaClausulaSgc: (db, data, contexto) => EvidenciaClausulaSgc.descargarEvidencia(db, data, contexto),
 
   // SGC ISO 9001 v11.0 Fase 1 (§4.3): alcance del SGC y exclusiones. Sin
   // archivos: se corta al frontend en el mismo incremento.
