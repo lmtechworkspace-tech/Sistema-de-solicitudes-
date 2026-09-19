@@ -6,12 +6,13 @@
 > nueva no la va a tener disponible). Todo lo que necesitas para seguir
 > trabajando sin fricción está acá o es derivable del propio repositorio.
 >
-> Última actualización: 2026-09-19, tras el commit `c04409d`
-> (Fase 3a de un plan de fases post-migración: Comentarios, canales de
-> alerta (con el gate de correo real, antes nunca implementado),
-> disparadores manuales de ADM, panel de diagnóstico — ver §8.2. Fases 0
-> (respaldo, §10.2) y 2 (R2 al 100%, §8.1) también resueltas. Plan de
-> fases completo: §12).
+> Última actualización: 2026-09-19, tras el commit `1eac8f4`
+> (Fase 1a de un plan de fases post-migración: modo "Configurar informe"
+> de Proyectos, casi completo -- todo excepto la grilla día×tarea
+> (gantt/workload/leyenda), dejada a su propio incremento por decisión
+> explícita del usuario. Ver §8.1. Fases 0 (respaldo, §10.2), 2 (R2 al
+> 100%, §8.1) y 3a (Comentarios/canales de alerta/disparadores/
+> diagnóstico, §8.2) también resueltas. Plan de fases completo: §12).
 
 ---
 
@@ -485,26 +486,37 @@ headless). Helper compartido: `backend/logica/pdfDocumento.js`
 (encabezado/chrome, fichas, secciones, tablas genéricas, chips de
 prioridad, barra horizontal) — lo reusan los 5 módulos de PDF.
 
+**Fase 1a (§12): CASI RESUELTA (2026-09-19, commit `1eac8f4`).** El modo
+"Configurar informe" de `descargarReporteProyecto` está portado excepto
+las 3 secciones de grilla día×tarea (`gantt`, `workload`, `leyenda`,
+~540 de las ~1395 líneas del feature original) — decisión explícita del
+usuario (preguntado, no asumido) dado el riesgo/tamaño de portar
+paginación multipágina + colores por celda + conectores con fidelidad
+completa. Si el config las pide, el backend devuelve un
+`_validationError` explícito con el nombre de la sección, nunca un PDF a
+medias. Todo lo demás SÍ está portado y probado: portada (con índice de
+contenido), narrativa, ficha, kpis (banda de tarjetas), salud (chip +
+desglose), avance por tarea, hitos, riesgos, vencimientos, rendimiento,
+desviaciones (Plan·Esperado·Real), bitácora — todos respetando los
+filtros de personas/estado/rango del config.
+
 **Dos cosas quedan pendientes DENTRO de Proyectos, documentadas
 explícitamente (no fingidas):**
-1. **El modo "Configurar informe"** de `descargarReporteProyecto`
-   (secciones a elección, rango de fechas, filtro por persona, Carta
-   Gantt día a día multipágina, Workload, Desviaciones Plan/Esperado/
-   Real) — ver la cabecera de `backend/logica/reporteProyecto.js`. Es
-   sustancialmente más grande que los 5 reportes ya portados juntos. Si
-   `data.config` llega, el backend Node devuelve un `_validationError`
-   claro en vez de fingir que sirvió el informe pedido.
+1. **La grilla día×tarea** (`gantt`/`workload`/`leyenda`) — su propio
+   incremento futuro si se necesita, ver `reporteProyecto.js`.
    **Por esto la acción `descargarReporteProyecto` TODAVÍA no está en
-   `ACCIONES_PORTADAS_NODE`** (ver la nota grande en la cabecera de ese
-   archivo): 2 de los 3 sitios del frontend que la llaman
-   (`frontend/js/proyectos.js`) SIEMPRE mandan `config` (el modal
-   "Configurar informe" y el reporte de Cronograma) — cortar la acción
-   ahora, con el enrutamiento por nombre (no por payload), regresionaría
-   esos dos flujos (hoy funcionan completos en Apps Script) a un error.
-   Se agrega recién cuando el modo configurable también esté portado.
+   `ACCIONES_PORTADAS_NODE`** (ver la nota grande en la cabecera de
+   `frontend/js/api.js`): el reporte de "Cronograma"
+   (`frontend/js/proyectos.js`, `CRONOGRAMA_REPORTE_SECCIONES_`) SIEMPRE
+   pide `gantt`+`workload`+`leyenda` — conectar la acción hoy dejaría
+   ESE botón puntual siempre fallando (con el enrutamiento por nombre de
+   acción, no por payload, no se puede cortar "la mayoría de las
+   configs" y dejar esa una en Apps Script). El botón simple y el modal
+   "Configurar informe" (para quien no pide esas 3 secciones) ya
+   funcionarían bien en Node.
 2. **`descargarLibroProyecto`** — sigue como stub inline en `router.js`.
    Es Excel (hoja de cálculo), no PDF: motor distinto, fuera de alcance
-   de "el motor de PDF" a propósito.
+   de "el motor de PDF" a propósito. Es la Fase 1b.
 
 ### 8.2 Módulos/lógica sin portar, NO bloqueados por archivos
 
@@ -791,15 +803,21 @@ VPS, SSH de solo lectura antes de asumir nada).
   el único riesgo de pérdida total de datos, independiente de cualquier
   otra prioridad de migración.
 - **Fase 1 — Cerrar Proyectos al 100%.**
-  - 1a. Modo "Configurar informe" (§8.1): secciones a elección, rango,
-    personas, Carta Gantt día a día multipágina, Workload, Desviaciones
-    Plan/Esperado/Real. Más grande que los 5 reportes del motor de PDF
-    juntos — candidato a su propia sub-secuencia de incrementos, igual
-    que se hizo con el motor de PDF.
+  - 1a. Modo "Configurar informe" (§8.1): ✅ **CASI RESUELTA**
+    (2026-09-19, commit `1eac8f4`) — todo portado excepto la grilla
+    día×tarea (`gantt`/`workload`/`leyenda`), dejada a propósito para su
+    propio incremento (decisión del usuario). La acción todavía no está
+    conectada al frontend por el botón "Cronograma", que siempre pide
+    esas 3 secciones — ver §8.1.
   - 1b. Libro Excel (`descargarLibroProyecto`, §8.1) — motor distinto
     (hoja de cálculo). Evaluar una librería antes de comprometerse,
     mismo criterio de dependencias mínimas de siempre (aws4fetch,
     pdfkit): candidato razonable `exceljs`, a confirmar.
+  - 1c (nueva, no estaba en el plan original). La grilla día×tarea
+    (`gantt`/`workload`/`leyenda`) — ~540 líneas, paginación
+    multipágina, colores por celda, conectores. Necesaria para conectar
+    `descargarReporteProyecto` al frontend real (el botón "Cronograma"
+    depende de ella).
 - **Fase 2 — Cerrar R2 del todo.** ✅ **RESUELTA** (2026-09-19, commit
   `5642141`) — ver §8.1. La evidencia fotográfica de Pausas, última
   acción de archivo gateada en todo el sistema, ya sube a R2 de verdad.
