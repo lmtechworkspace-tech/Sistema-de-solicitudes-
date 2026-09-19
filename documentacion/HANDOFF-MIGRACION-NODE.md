@@ -6,13 +6,12 @@
 > nueva no la va a tener disponible). Todo lo que necesitas para seguir
 > trabajando sin fricción está acá o es derivable del propio repositorio.
 >
-> Última actualización: 2026-09-19, tras el commit `f85f6f3`
-> (motor de PDF en Node, pdfkit — §8.3 resuelto en su alcance acordado:
-> 5 incrementos, Orden de Trabajo + reportes de Actividades/Pausas +
-> evidencia SGC + reporte de Proyecto "de un clic". Solo quedan
-> pendientes, documentados explícitamente: la evidencia fotográfica de
-> Pausas — R2, ver §8.1 — y el modo "Configurar informe" de Proyectos —
-> ver §8.1).
+> Última actualización: 2026-09-19, tras el commit `8e2c9ee`
+> (Fase 0 de un plan de fases post-migración: respaldo diario de la base
+> de producción, ver §10.2 — resuelve el riesgo abierto más importante
+> que quedaba fuera del trabajo de migración en sí. Antes de eso, el
+> motor de PDF en Node quedó resuelto en su alcance acordado — §8.3, 5
+> incrementos. Plan de fases completo: §12).
 
 ---
 
@@ -698,28 +697,40 @@ scratchpad e invocarlo con barras normales
 
 ---
 
-## 10.2 RIESGO ABIERTO: la base de producción no tiene respaldo
+## 10.2 RESUELTO (2026-09-19, commit `8e2c9ee`): respaldo diario de la base
 
-**Verificado en el VPS el 2026-09-18**: no hay ningún cron ni systemd
-timer que respalde `/opt/sigso/data/sigso.db` (el único timer presente es
-`dpkg-db-backup`, que respalda la base de paquetes de Debian y no tiene
-nada que ver). No hay crontab de usuario. No hay copias del `.db` en el
-servidor.
+**Era el riesgo más importante fuera del trabajo de migración en sí —
+verificado por SSH el 2026-09-18: cero respaldo, ni timer ni crontab.
+Cerrado como Fase 0 de un plan de fases post-migración, antes de seguir
+con cualquier otro trabajo.**
 
-Ese archivo (~700 KB hoy) contiene **datos reales irrecuperables**: las
-284 filas de `CAT_CLIENTES` migradas, las cuentas de portal del personal
-con sus hashes, las solicitudes migradas y todo lo que se haya escrito
-desde entonces. Si el disco falla o el archivo se corrompe, no hay de
-dónde volver — salvo que el usuario tenga activados los backups de
-Hetzner a nivel de VPS (servicio pago aparte, **no verificado**).
+Solución:
+- `backend/scripts/backup-db.js` — usa `VACUUM INTO` (SQLite 3.27+, vía
+  `node:sqlite`, sin depender del binario `sqlite3` que no está
+  instalado en el VPS) para una foto consistente de la base con el
+  servicio corriendo. Retención local de 14 días (poda automática cada
+  corrida) + sube la copia del día a R2 (bucket ya existente, clave
+  `backups/sigso-<fecha>.db`). Testeado (`backend/test/backup-db.test.js`,
+  nunca pega a R2 real — mock `conMockAlmacenamiento_`).
+- `sigso-backup.service` + `sigso-backup.timer` (systemd, creados a mano
+  por SSH el 2026-09-19 — no son código, no se despliegan por git,
+  mismo criterio que el resto de la config del VPS): corre todos los
+  días a las 03:30 hora Chile, `Persistent=true` (si el VPS estuvo
+  apagado a esa hora, corre apenas vuelve). El drop-in de credenciales
+  R2 (`sigso-backup.service.d/r2.conf`) es una copia server-side del
+  mismo `r2.conf` que ya usa `sigso-api` — nunca se leyó ni se escribió
+  el valor del secreto desde esta sesión, solo `sudo cp` de un archivo a
+  otro.
+- **Verificado en producción de punta a punta** el 2026-09-19: corrida
+  manual (`systemctl start sigso-backup.service`) escribió
+  `/opt/sigso/backups/sigso-2026-09-18.db` (700416 bytes, mismo tamaño
+  que la base real) y lo subió a R2; se confirmó bajándolo de vuelta
+  (`ok:true, bytes:700416`) con una unidad systemd temporal que se borró
+  después de verificar.
 
-**Esto no está resuelto y no se resolvió en esta sesión a propósito**
-(montar infraestructura nueva no se hace sin que el usuario lo decida).
-Es probablemente lo más importante que queda pendiente fuera del trabajo
-de migración en sí. Una solución mínima razonable: un systemd timer
-diario que haga `sqlite3 /opt/sigso/data/sigso.db ".backup /opt/sigso/backups/sigso-$(date +\%F).db"`
-con retención de ~14 días, y —mejor aún— que empuje esa copia a R2 (el
-bucket ya existe y las credenciales ya están en el servicio).
+Pendiente, no urgente: R2 no se poda (crece ~700KB/día, ~21MB/mes —
+irrelevante en el corto plazo; si algún día importa, agregar un `list`
+a `almacenamiento.js` y podar por prefijo `backups/`).
 
 ---
 
@@ -752,3 +763,46 @@ el material más denso está en:
   central del módulo que introduce).
 - Los comentarios de cabecera de cada archivo en `backend/logica/*Sgc.js`.
 - Este documento.
+
+---
+
+## 12. Plan de fases post-migración (definido 2026-09-19)
+
+Con el motor de PDF (§8.3) resuelto, se organizó lo que queda en fases,
+para trabajar ordenado en vez de saltar entre módulos. Verificado contra
+el código real al commit `8e2c9ee` (no contra este mismo documento — el
+método: `npm test`, releer router.js/api.js, y para infraestructura del
+VPS, SSH de solo lectura antes de asumir nada).
+
+- **Fase 0 — Respaldo de la base de producción.** ✅ **RESUELTA**
+  (2026-09-19, commit `8e2c9ee`) — ver §10.2. Se hizo primero porque era
+  el único riesgo de pérdida total de datos, independiente de cualquier
+  otra prioridad de migración.
+- **Fase 1 — Cerrar Proyectos al 100%.**
+  - 1a. Modo "Configurar informe" (§8.1): secciones a elección, rango,
+    personas, Carta Gantt día a día multipágina, Workload, Desviaciones
+    Plan/Esperado/Real. Más grande que los 5 reportes del motor de PDF
+    juntos — candidato a su propia sub-secuencia de incrementos, igual
+    que se hizo con el motor de PDF.
+  - 1b. Libro Excel (`descargarLibroProyecto`, §8.1) — motor distinto
+    (hoja de cálculo). Evaluar una librería antes de comprometerse,
+    mismo criterio de dependencias mínimas de siempre (aws4fetch,
+    pdfkit): candidato razonable `exceljs`, a confirmar.
+- **Fase 2 — Cerrar R2 del todo.** La evidencia fotográfica de Pausas
+  (§8.1) — última acción de archivo gateada en todo el sistema. Chica,
+  mismo patrón ya usado 4 veces (clave, firma de imagen, mock en tests).
+- **Fase 3 — Lógica sin portar, sin bloqueos de infraestructura** (§8.2):
+  - 3a (rápidos): `Comentarios.gs`, canales de alerta, disparadores
+    manuales de ADM, panel de diagnóstico.
+  - 3b (medianos): notificaciones in-app (falta sincronizar/marcar
+    leída), `Inicio.gs`.
+  - 3c (sensible, toca permisos): `Perfiles.gs`, `Auth.gs` (gestión de
+    cuentas de staff).
+- **Fase 4 — Cierre final** (§8.4): migrar cualquier dato real adicional
+  que dependa de los módulos de la Fase 3 (mismo patrón que
+  `CAT_CLIENTES`); decidir el modelo de auth del staff legado; apagar
+  Apps Script por completo.
+
+Orden sugerido al usuario: 0 → 2 (rápido, mientras se decide el alcance
+real de la 1) → 1 → 3 → 4. Es una sugerencia, no una regla — confirmar
+con el usuario antes de asumir el orden si retoma la sesión sin decirlo.
