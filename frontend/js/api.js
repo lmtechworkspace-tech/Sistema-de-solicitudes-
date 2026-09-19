@@ -235,7 +235,14 @@ var ACCIONES_PORTADAS_NODE = {
 
   // --- SGC ISO 9001: Prestaciones (6 de 6; v11.0 Fase 8, sin archivos: se corta completo) ---
   listarPrestacionesSgc: true, registrarPrestacionSgc: true, liberarPrestacionSgc: true,
-  marcarNoConformePrestacionSgc: true, abrirNcPrestacionSgc: true, anularPrestacionSgc: true
+  marcarNoConformePrestacionSgc: true, abrirNcPrestacionSgc: true, anularPrestacionSgc: true,
+
+  // --- Fase 3b del plan post-migracion (2026-09-19): notificaciones "en
+  // vivo" (lado de lectura) e Inicio (M-02, un viaje). Sin gate de
+  // MODULO_POR_ACCION -- ver backend/logica/inicio.js y notificacionesApp.js
+  // para el porque, y por que no es una regresion respecto de Node hoy.
+  sincronizarNotificacionesApp: true, marcarNotificacionAppLeida: true,
+  marcarTodasNotificacionesAppLeidas: true, getInicio: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,

@@ -62,6 +62,8 @@ const ReporteActividades = require('../logica/reporteActividades');
 const EvidenciaClausulaSgc = require('../logica/evidenciaClausulaSgc');
 const ReporteProyecto = require('../logica/reporteProyecto');
 const LibroProyecto = require('../logica/libroProyecto');
+const NotificacionesApp = require('../logica/notificacionesApp');
+const Inicio = require('../logica/inicio');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -138,6 +140,15 @@ const ACCIONES = {
   enviarReporteGerenciaAhora: (db, data, contexto) => Notificaciones.enviarReporteGerenciaAhora(db, data, contexto),
   reportarPermisoNotificacionesSO: (db, data, contexto) => Notificaciones.reportarPermisoNotificacionesSO(db, data, contexto),
   listarPermisosNotificacionesSO: (db, data, contexto) => Notificaciones.listarPermisosNotificacionesSO(db, data, contexto),
+  // Fase 3b del plan post-migracion: lado de lectura de notificaciones "en
+  // vivo" (polling del cliente) -- sin gate de MODULO_POR_ACCION en el .gs
+  // tampoco, ver la cabecera de notificacionesApp.js.
+  sincronizarNotificacionesApp: (db, data, contexto) => NotificacionesApp.sincronizar(db, data, contexto),
+  marcarNotificacionAppLeida: (db, data, contexto) => NotificacionesApp.marcarLeida(db, data, contexto),
+  marcarTodasNotificacionesAppLeidas: (db, data, contexto) => NotificacionesApp.marcarTodasLeidas(db, data, contexto),
+  // Fase 3b: un solo viaje para la pantalla de Inicio (M-02) -- ver la
+  // cabecera de inicio.js para el gate de modulo que NO se porta a proposito.
+  getInicio: (db, data, contexto) => Inicio.getResumen(db, data, contexto),
 
   // Modulo Novedades (mismos nombres de accion que BACKOFFICE_ACTIONS en el .gs).
   listarAreasPublicablesNovedad: (db, data, contexto) => Novedades.listarAreasPublicables(db, data, contexto),

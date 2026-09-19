@@ -556,15 +556,36 @@ De los 8 ítems originales, 4 quedaron portados en esta fase:
   Node, solo estaba wireada bajo un nombre de acción que el frontend
   nunca llamaba, mismo patrón de §4).
 
-**Quedan 3 ítems, ninguno bloqueado por infraestructura:**
-1. **Lado de lectura de notificaciones in-app** (`notificacionesApp.js`
-   solo tiene `encolarLote`; falta sincronizar/marcar leída/marcar todas
-   leídas).
-2. **`Inicio.gs`** (143 líneas) — `getInicio`, pantalla de inicio
-   autenticada.
-3. **`Perfiles.gs`** (510 líneas, sin la parte de fotos que sí depende
+**Fase 3b (§12): RESUELTA (2026-09-19).** Los 2 ítems medianos:
+- **Lado de lectura de notificaciones in-app** →
+  `backend/logica/notificacionesApp.js` (antes solo `encolarLote`):
+  `sincronizar` (polling del cliente), `marcarLeida`, `marcarTodasLeidas`.
+  Portados con los mismos cuidados que el .gs ya documentaba: v9.0e
+  (normalizar el correo SIEMPRE, en ambos sentidos, o "marcar todas" deja
+  de persistir por mayúsculas/espacios) y v9.0g (`leida` puede volver
+  como booleano real, no solo el string `'TRUE'`).
+- **`Inicio.gs`** (143 líneas) → nuevo `backend/logica/inicio.js`:
+  `getInicio`, un solo viaje para la pantalla de Inicio (5 bloques:
+  mi_trabajo/calidad/bandeja/jefatura/pausas), cada uno delegando en la
+  MISMA función Node de su acción suelta. **Gate de módulo por bloque NO
+  portado, a propósito (preguntado al usuario, no asumido):** el .gs tiene
+  `cuentaTieneElModuloDelBloque_`/`MODULO_POR_ACCION`, que en su momento
+  arregló un agujero real (`inicio-modulos.test.js`/
+  `acciones-con-porton.test.js`: pedir un bloque devolvía datos que la
+  acción suelta le negaba a una cuenta de portal sin ese módulo).
+  `MODULO_POR_ACCION` sigue sin existir en Node en NINGÚN lado (ver la
+  nota ya escrita en `router.js`) — hoy ninguna acción de Node filtra por
+  `contexto.modulos`, solo por rol, así que un bloque de `getInicio` no
+  obtiene nada que su acción suelta no entregara ya en Node: no hay
+  asimetría nueva que introducir. Queda documentado en la cabecera de
+  `inicio.js` para que, el día que `MODULO_POR_ACCION` se porte de
+  verdad, se traiga también `inicio-modulos.test.js` como prueba de no
+  regresión.
+
+**Quedan 2 ítems, Fase 3c, "sensible, toca permisos":**
+1. **`Perfiles.gs`** (510 líneas, sin la parte de fotos que sí depende
    de R2) — `getMiPerfil` y edición de perfil propio.
-4. **`Auth.gs`** (112 líneas) — `gestionarUsuario`/`listarUsuarios`/
+2. **`Auth.gs`** (112 líneas) — `gestionarUsuario`/`listarUsuarios`/
    `suspenderInactivos`: administración de la tabla `USUARIOS` (cuentas
    de staff). Esa tabla ya la LEEN varios módulos Node (Dashboard,
    Gerencia, Novedades, Pausas...), solo falta el panel para
@@ -844,8 +865,10 @@ VPS, SSH de solo lectura antes de asumir nada).
     `Comentarios.gs`, canales de alerta (las 4 acciones, incluido el
     gate real de correo), disparadores manuales de ADM, panel de
     diagnóstico.
-  - 3b (medianos): notificaciones in-app (falta sincronizar/marcar
-    leída), `Inicio.gs`.
+  - 3b (medianos): ✅ **RESUELTA** (2026-09-19) — lado de lectura de
+    notificaciones in-app (sincronizar/marcarLeida/marcarTodasLeidas) e
+    `Inicio.gs` (`getInicio`, un viaje). Gate de módulo por bloque NO
+    portado a propósito, ver §8.2.
   - 3c (sensible, toca permisos): `Perfiles.gs`, `Auth.gs` (gestión de
     cuentas de staff).
 - **Fase 4 — Cierre final** (§8.4): migrar cualquier dato real adicional
