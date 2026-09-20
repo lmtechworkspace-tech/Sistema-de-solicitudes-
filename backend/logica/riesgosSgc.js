@@ -359,6 +359,16 @@ async function asignarAccion(db, data, contexto) {
 
   if (!tarea || !tarea.actividad_id) return { ok: false, message: (tarea && tarea.message) || 'No se pudo crear la actividad.' };
 
+  // Releer justo antes de escribir: el await de arriba (crear la Actividad)
+  // le dio tiempo a otra peticion sobre el MISMO riesgo de correr completa
+  // y ganar. Sin este chequeo, la escritura de abajo pisaria en silencio
+  // esa asignacion concurrente -- dejando ademas la Actividad recien creada
+  // aqui huerfana (existe, pero ningun riesgo la referencia).
+  const rFresco = riesgosActivos_(db).find((x) => x.riesgo_id === r.riesgo_id);
+  if (!rFresco || rFresco.accion_actividad_id) {
+    return { ok: false, message: 'Este registro ya tiene una actividad asignada (se asignó mientras se procesaba tu solicitud).' };
+  }
+
   actualizarFilaPorId_(db, 'SGC_RIESGOS', 'riesgo_id', r.riesgo_id, { accion_actividad_id: tarea.actividad_id, responsable_email: responsable, estado: 'TRATADO' });
   registrarLogSgc_(db, 'SGC_RIESGO_ACCION_ASIGNADA', r.codigo + ' → actividad para ' + responsable, contexto);
   return { ok: true, actividad_id: tarea.actividad_id, message: 'Acción asignada a ' + responsable + '.' };

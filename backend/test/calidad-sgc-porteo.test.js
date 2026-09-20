@@ -134,6 +134,34 @@ test('archivos: rechaza uno mayor a 10 MB', async (t) => {
   assert.equal(res._validationError, true);
 });
 
+// Condicion de carrera confirmada por la auditoria de modulos (2026-09):
+// el chequeo de codigo unico corria ANTES del await de subida real a R2;
+// dos crearDocumento con el mismo codigo, casi simultaneos, pasaban ambos
+// el chequeo (ninguno habia insertado todavia) y terminaban duplicando el
+// codigo. Se simula la concurrencia haciendo que el mock de subida a R2
+// dispare la segunda creacion mientras la primera "esta en vuelo".
+test('SEGURIDAD: crearDocumento no permite que dos documentos terminen con el mismo codigo', async (t) => {
+  const db = db_();
+  sembrarRoles(db);
+
+  let primeraLlamada = true;
+  t.mock.method(Almacenamiento, 'subirArchivo_', async (clave, contenidoBase64, contentType) => {
+    if (primeraLlamada) {
+      primeraLlamada = false;
+      const concurrente = await crearDoc(db, { nombre: 'Ganó la carrera' });
+      assert.ok(concurrente.documento_id, 'la creacion concurrente debe tener exito');
+    }
+    return { ok: true, clave, tamano: Buffer.byteLength(contenidoBase64, 'base64') };
+  });
+
+  const primera = await crearDoc(db, { nombre: 'Perdió la carrera' });
+  assert.equal(primera._validationError, true, 'la primera creacion debe rechazarse: el codigo ya quedo tomado por la concurrente');
+
+  const conEseCodigo = filas(db, 'SGC_DOCUMENTOS').filter((d) => d.codigo === 'DOC-01' && d.activa);
+  assert.equal(conEseCodigo.length, 1, 'no debe quedar mas de un documento activo con el mismo codigo');
+  assert.equal(conEseCodigo[0].nombre, 'Ganó la carrera');
+});
+
 // --- adjuntar el archivo a la version que ya rige --------------------------
 // Un documento puede existir sin archivo: así entra la carga inicial del
 // listado maestro (se pega la metadata primero y el PDF se sube después).
@@ -259,6 +287,41 @@ test('nuevaVersion: la anterior se archiva (no se borra) y la vigente pasa a ser
   assert.equal((await Calidad.nuevaVersion(db, {
     documento_id: doc.documento_id, version: 'v02', nombre_archivo: 'x.pdf', contenido_base64: PDF_B64
   }, CTX_ENCARGADO))._validationError, true);
+});
+
+// Misma condicion de carrera que crearDocumento, aplicada a nuevaVersion:
+// sin el chequeo posterior al await, dos "nuevaVersion" concurrentes con
+// el mismo numero de version podian dejar DOS filas vigente:true del
+// mismo documento a la vez.
+test('SEGURIDAD: nuevaVersion no permite que dos versiones concurrentes queden ambas vigentes', async (t) => {
+  const db = db_();
+  sembrarRoles(db);
+  conMockAlmacenamiento_(t);
+  const doc = await crearDoc(db);
+
+  let primeraLlamada = true;
+  t.mock.method(Almacenamiento, 'subirArchivo_', async (clave, contenidoBase64, contentType) => {
+    const resultado = { ok: true, clave, tamano: Buffer.byteLength(contenidoBase64, 'base64') };
+    if (primeraLlamada) {
+      primeraLlamada = false;
+      const concurrente = await Calidad.nuevaVersion(db, {
+        documento_id: doc.documento_id, version: 'v02', cambios: 'Ganó la carrera',
+        nombre_archivo: 'v2-concurrente.pdf', contenido_base64: PDF_B64
+      }, CTX_ENCARGADO);
+      assert.equal(concurrente.version_vigente, 'v02', 'la version concurrente debe tener exito');
+    }
+    return resultado;
+  });
+
+  const primera = await Calidad.nuevaVersion(db, {
+    documento_id: doc.documento_id, version: 'v02', cambios: 'Perdió la carrera',
+    nombre_archivo: 'v2-original.pdf', contenido_base64: PDF_B64
+  }, CTX_ENCARGADO);
+  assert.equal(primera._validationError, true, 'la primera nuevaVersion debe rechazarse: v02 ya quedo vigente por la concurrente');
+
+  const versiones = filas(db, 'SGC_DOC_VERSIONES').filter((v) => v.documento_id === doc.documento_id);
+  const vigentes = versiones.filter((v) => v.vigente === true || v.vigente === 'TRUE');
+  assert.equal(vigentes.length, 1, 'nunca debe haber mas de una version vigente a la vez');
 });
 
 test('proxima_revision se calcula a 12 meses de la vigencia (PRO-01), no se pide a mano', async (t) => {

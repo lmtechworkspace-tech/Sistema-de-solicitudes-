@@ -868,7 +868,12 @@ async function gestionarPausaCoordinador(db, data, contexto) {
         if (evidencia && evidencia._validationError) return evidencia;
         if (evidencia) cambios.evidencia_url = evidencia.clave;
       }
-      return transicionar_(db, pausa, ESTADOS_PAUSA.REALIZADA, contexto, cambios);
+      // Releer justo antes de escribir: si hubo evidencia, el await de
+      // arriba (subida real a R2) le dio tiempo a otra peticion sobre la
+      // MISMA pausa de correr completa y ganar -- transicionar_ tiene que
+      // validar contra el estado ACTUAL de la base, no contra el snapshot
+      // de `pausa` que se leyo antes del await.
+      return transicionar_(db, buscarPausa_(db, pausa.pausa_id) || pausa, ESTADOS_PAUSA.REALIZADA, contexto, cambios);
     }
     case 'no_realizada': {
       const motivo = String(data.motivo || '').trim();

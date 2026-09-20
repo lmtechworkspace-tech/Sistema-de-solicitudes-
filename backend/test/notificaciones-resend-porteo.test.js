@@ -98,6 +98,37 @@ test('el mismo evento para la misma solicitud se deduplica dentro de 30 minutos 
   assert.equal(mock.mock.callCount(), 1, 'no debe reenviar el correo');
 });
 
+// Condicion de carrera confirmada por la auditoria de modulos (2026-09):
+// el chequeo de dedup (RN-026) corria ANTES del await real a Resend; dos
+// llamadas casi simultaneas para el MISMO evento/solicitud/destinatario
+// pasaban ambas el chequeo (ninguna habia registrado nada todavia) y
+// terminaban mandando el correo dos veces. Se simula la concurrencia
+// haciendo que el mock de Resend dispare la segunda llamada mientras la
+// primera "esta en vuelo".
+test('SEGURIDAD: dos envios casi simultaneos del MISMO evento no duplican el correo (RN-026 bajo concurrencia)', async (t) => {
+  conApiKey(t);
+  const db = dbConSchema();
+  const datos = { solicitud_id: 'SOL-2026-HP-0009', solicitante_nombre: 'Juan', solicitante_email: 'juan@x.cl', resumen_whatsapp: 'r' };
+
+  let primeraLlamada = true;
+  const mock = t.mock.method(Resend, 'enviarCorreoResend_', async () => {
+    if (primeraLlamada) {
+      primeraLlamada = false;
+      const concurrente = await Notificaciones.enviarAcuseRecibo(db, datos);
+      assert.equal(concurrente.enviado, false, 'la llamada concurrente debe deduplicarse, no reenviar');
+      assert.equal(concurrente.motivo, 'deduplicado');
+    }
+    return { id: 'fake-resend-id' };
+  });
+
+  const primera = await Notificaciones.enviarAcuseRecibo(db, datos);
+  assert.equal(primera.enviado, true);
+
+  assert.equal(mock.mock.callCount(), 1, 'Resend solo debe haberse llamado UNA vez en total');
+  const enviados = leerFilas_(db, 'LOG_NOTIFICACIONES', COLUMNAS.LOG_NOTIFICACIONES).filter((f) => f.resultado === 'ENVIADO');
+  assert.equal(enviados.length, 1, 'solo debe quedar UN registro ENVIADO para este evento/solicitud/destinatario');
+});
+
 test('enviarAvisoDesarrollo avisa al buzon de desarrollo (Leo) con el motivo', async (t) => {
   conApiKey(t);
   const mock = mockEnvioOk(t);

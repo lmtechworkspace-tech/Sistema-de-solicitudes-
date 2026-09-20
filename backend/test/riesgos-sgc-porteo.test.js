@@ -16,6 +16,7 @@ const Calidad = require('../logica/calidadSgc');
 const Contexto = require('../logica/contextoSgc');
 const Riesgos = require('../logica/riesgosSgc');
 const MatrizCobertura = require('../logica/matrizCoberturaSgc');
+const Actividades = require('../logica/actividades');
 
 const TABLAS = [
   'SGC_RIESGOS', 'SGC_CONTEXTO', 'SGC_PARTES_INTERESADAS', 'SGC_ALCANCE', 'SGC_EXCLUSIONES',
@@ -195,6 +196,43 @@ test('no se asigna dos veces ni sin responsable o fecha', async () => {
 
   await Riesgos.asignarAccion(db, { riesgo_id: r3.riesgo_id, responsable_email: 'a@b.cl', fecha_compromiso: '2026-09-30' }, ENC);
   assert.match((await Riesgos.asignarAccion(db, { riesgo_id: r3.riesgo_id, responsable_email: 'c@d.cl', fecha_compromiso: '2026-10-30' }, ENC)).message, /ya tiene una actividad/i);
+});
+
+// Condicion de carrera confirmada por la auditoria de modulos (2026-09):
+// asignarAccion validaba "todavia sin actividad" ANTES del await que crea
+// la Actividad, y escribia con ese snapshot viejo. Si otra asignacion sobre
+// el MISMO riesgo terminaba completa durante ese await, la escritura final
+// la pisaba en silencio, dejando ademas la Actividad recien creada aqui
+// huerfana (sin ningun riesgo que la referencie). Se simula la
+// concurrencia mockeando Actividades.crear (el unico punto real de I/O en
+// la cadena) para que dispare esa segunda asignacion mientras "esta en vuelo".
+test('SEGURIDAD: asignarAccion no pisa una asignacion concurrente sobre el mismo riesgo', async (t) => {
+  const db = db_();
+  sembrarRoles(db);
+  Riesgos.sembrarDesdeDoc08(db, {}, ENC);
+  const r3 = Riesgos.listar(db, {}, ENC).riesgos.find((x) => x.codigo === 'R3');
+
+  const crearOriginal = Actividades.crear.bind(Actividades);
+  let primeraLlamada = true;
+  t.mock.method(Actividades, 'crear', async (dbArg, data, contexto) => {
+    if (primeraLlamada) {
+      primeraLlamada = false;
+      // Simula una segunda asignacion que termina COMPLETA mientras la
+      // primera todavia esta "creando su actividad".
+      await Riesgos.asignarAccion(db, {
+        riesgo_id: r3.riesgo_id, responsable_email: 'segunda@homepymes.cl', fecha_compromiso: '2026-11-01'
+      }, ENC);
+    }
+    return crearOriginal(dbArg, data, contexto);
+  });
+
+  const primera = await Riesgos.asignarAccion(db, {
+    riesgo_id: r3.riesgo_id, responsable_email: 'primera@homepymes.cl', fecha_compromiso: '2026-09-30'
+  }, ENC);
+  assert.equal(primera.ok, false, 'la primera asignacion debe rechazarse: el riesgo ya quedo asignado por la concurrente');
+
+  const riesgoFinal = filas(db, 'SGC_RIESGOS').find((x) => x.riesgo_id === r3.riesgo_id);
+  assert.equal(riesgoFinal.responsable_email, 'segunda@homepymes.cl', 'la asignacion concurrente NO debe perderse');
 });
 
 // --- 5. Validaciones ---------------------------------------------------------

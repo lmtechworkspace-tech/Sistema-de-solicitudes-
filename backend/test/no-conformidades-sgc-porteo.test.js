@@ -109,6 +109,57 @@ test('el detalle de la NC refleja el estado REAL de la actividad, no una copia',
   assert.equal(detalle.resumen.correccion_terminada, true);
 });
 
+// Condicion de carrera confirmada por la auditoria de modulos (2026-09):
+// registrarCorreccion/registrarAccion validaban "todavia sin actividad"
+// ANTES del await que crea la Actividad, y escribian con ese snapshot
+// viejo. Se simula la concurrencia mockeando Actividades.crear (el unico
+// punto real de I/O en la cadena) para que dispare una segunda llamada
+// mientras la primera "esta en vuelo".
+test('SEGURIDAD: registrarCorreccion no pisa una correccion concurrente sobre la misma NC', async (t) => {
+  const db = db_();
+  sembrar(db);
+  const nc = crearNc(db);
+
+  const crearOriginal = Actividades.crear.bind(Actividades);
+  let primeraLlamada = true;
+  t.mock.method(Actividades, 'crear', async (dbArg, data, contexto) => {
+    if (primeraLlamada) {
+      primeraLlamada = false;
+      await NoConformidades.registrarCorreccion(db, { nc_id: nc.nc_id, descripcion: 'Correccion concurrente.' }, CTX_SGC);
+    }
+    return crearOriginal(dbArg, data, contexto);
+  });
+
+  const primera = await NoConformidades.registrarCorreccion(db, { nc_id: nc.nc_id, descripcion: 'Correccion original.' }, CTX_SGC);
+  assert.equal(primera._validationError, true, 'la primera correccion debe rechazarse: la NC ya quedo con correccion asignada por la concurrente');
+
+  const ncFinal = filas(db, 'SGC_NC').find((x) => x.nc_id === nc.nc_id);
+  assert.equal(ncFinal.correccion_descripcion, 'Correccion concurrente.', 'la correccion concurrente NO debe perderse');
+});
+
+test('SEGURIDAD: registrarAccion no pisa una accion correctiva concurrente sobre la misma NC', async (t) => {
+  const db = db_();
+  sembrar(db);
+  const nc = crearNc(db);
+  NoConformidades.registrarCausa(db, { nc_id: nc.nc_id, porque_1: 'X', causa_raiz: 'Falta control de plazos.' }, CTX_SGC);
+
+  const crearOriginal = Actividades.crear.bind(Actividades);
+  let primeraLlamada = true;
+  t.mock.method(Actividades, 'crear', async (dbArg, data, contexto) => {
+    if (primeraLlamada) {
+      primeraLlamada = false;
+      await NoConformidades.registrarAccion(db, { nc_id: nc.nc_id, descripcion: 'Accion concurrente.' }, CTX_SGC);
+    }
+    return crearOriginal(dbArg, data, contexto);
+  });
+
+  const primera = await NoConformidades.registrarAccion(db, { nc_id: nc.nc_id, descripcion: 'Accion original.' }, CTX_SGC);
+  assert.equal(primera._validationError, true, 'la primera accion debe rechazarse: la NC ya quedo con accion asignada por la concurrente');
+
+  const ncFinal = filas(db, 'SGC_NC').find((x) => x.nc_id === nc.nc_id);
+  assert.equal(ncFinal.accion_descripcion, 'Accion concurrente.', 'la accion concurrente NO debe perderse');
+});
+
 // --- el orden del ciclo ----------------------------------------------------
 
 test('sin causa raiz no se puede definir la accion correctiva', async () => {

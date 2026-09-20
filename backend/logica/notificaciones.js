@@ -140,13 +140,18 @@ function guardarCanalAlerta(db, data, contexto) {
   return { ok: true, clave, correo_activo: valor };
 }
 
+// 'ENVIANDO' cuenta como "ya notificado reciente" a proposito (ver
+// enviarCorreo_): es la reserva sincrona que evita que dos llamadas casi
+// simultaneas pasen ambas este chequeo antes de que ninguna haya
+// terminado de enviar.
 function yaNotificadoRecientemente_(db, solicitudId, evento, destinatario, ventanaMinutos) {
   const ventana = ventanaMinutos || VENTANA_DEDUP_MINUTOS;
   const ahora = Date.now();
   return leerFilas_(db, 'LOG_NOTIFICACIONES', COLUMNAS.LOG_NOTIFICACIONES).some((fila) => {
     if (
       fila.solicitud_id !== solicitudId || fila.evento !== evento ||
-      fila.destinatario !== destinatario || fila.resultado !== 'ENVIADO'
+      fila.destinatario !== destinatario ||
+      (fila.resultado !== 'ENVIADO' && fila.resultado !== 'ENVIANDO')
     ) {
       return false;
     }
@@ -216,9 +221,9 @@ function htmlAutoDesdeTexto_(asunto, textoPlano) {
   return plantillaCorreoHtml_(titulo, cuerpoHtml);
 }
 
-function registrar_(db, { solicitudId, destinatario, evento, resultado, reintentos, asunto, cuerpo }) {
+function registrar_(db, { solicitudId, destinatario, evento, resultado, reintentos, asunto, cuerpo }, logId) {
   agregarFila_(db, 'LOG_NOTIFICACIONES', {
-    log_id: crypto.randomUUID(),
+    log_id: logId || crypto.randomUUID(),
     timestamp: new Date().toISOString(),
     solicitud_id: solicitudId,
     canal: 'EMAIL',
@@ -245,6 +250,15 @@ async function enviarCorreo_(db, { solicitudId, destinatario, evento, asunto, cu
   if (yaNotificadoRecientemente_(db, solicitudId, evento, destinatario, ventanaMinutos)) {
     return { enviado: false, motivo: 'deduplicado' };
   }
+  // Reserva el slot ANTES del await real a Resend -- sin esto, dos
+  // llamadas casi simultaneas (doble clic, dos requests) pasan ambas el
+  // chequeo de arriba (ninguna habia registrado nada todavia) y ambas
+  // terminan mandando el correo, rompiendo la deduplicacion (RN-026) que
+  // este mismo archivo documenta. Como esta escritura es sincrona (sin
+  // await de por medio), node:sqlite la hace atomica de verdad: la
+  // segunda llamada SI encuentra la reserva de la primera.
+  const logId = crypto.randomUUID();
+  registrar_(db, { solicitudId, destinatario, evento, resultado: 'ENVIANDO', reintentos: 0, asunto, cuerpo }, logId);
   try {
     await Resend.enviarCorreoResend_({
       from: remitente_(),
@@ -254,10 +268,10 @@ async function enviarCorreo_(db, { solicitudId, destinatario, evento, asunto, cu
       html: htmlAutoDesdeTexto_(asunto, cuerpo),
       text: cuerpo
     });
-    registrar_(db, { solicitudId, destinatario, evento, resultado: 'ENVIADO', reintentos: 0, asunto, cuerpo });
+    actualizarFilaPorId_(db, 'LOG_NOTIFICACIONES', 'log_id', logId, { resultado: 'ENVIADO' });
     return { enviado: true };
   } catch (err) {
-    registrar_(db, { solicitudId, destinatario, evento, resultado: 'PENDIENTE_REINTENTO', reintentos: 1, asunto, cuerpo });
+    actualizarFilaPorId_(db, 'LOG_NOTIFICACIONES', 'log_id', logId, { resultado: 'PENDIENTE_REINTENTO', reintentos: 1 });
     return { enviado: false, motivo: 'error_envio' };
   }
 }

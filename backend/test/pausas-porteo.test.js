@@ -386,6 +386,40 @@ test('finalizar con evidencia: si R2 falla, la pausa se cierra igual sin evidenc
   assert.equal(fin.evidencia_url, '');
 });
 
+// Condicion de carrera confirmada por la auditoria de modulos (2026-09):
+// finalizar validaba la transicion contra el snapshot de `pausa` leido
+// ANTES del await a R2. Si otra peticion sobre la MISMA pausa (ej. un
+// no_realizada) terminaba completa durante ese await, finalizar la pisaba
+// en silencio con datos viejos. Se simula la concurrencia haciendo que el
+// mock de subida a R2 dispare esa segunda peticion mientras el await de la
+// primera esta "pendiente".
+test('SEGURIDAD: finalizar no pisa una transicion concurrente que ocurrio durante el await a R2', async (t) => {
+  const db = dbBase();
+  const p = seedRosterYPausaHoy(db);
+  await Pausas.gestionarPausaCoordinador(db, { operacion: 'iniciar', pausa_id: p.pausa_id }, ADMIN);
+
+  t.mock.method(Almacenamiento, 'subirArchivo_', async (clave, contenidoBase64, contentType) => {
+    // Simula una segunda peticion (ej. un Admin marcando "no realizada")
+    // que corre y termina COMPLETA mientras la subida a R2 de la primera
+    // sigue "en vuelo".
+    await Pausas.gestionarPausaCoordinador(db, {
+      operacion: 'no_realizada', pausa_id: p.pausa_id, motivo: 'Se cancelo la actividad.'
+    }, ADMIN);
+    return { ok: true, clave, tamano: Buffer.byteLength(contenidoBase64, 'base64') };
+  });
+
+  const fin = await Pausas.gestionarPausaCoordinador(db, {
+    operacion: 'finalizar', pausa_id: p.pausa_id, evidencia_nombre: 'charla.png', evidencia_base64: PNG_1X1_B64
+  }, ADMIN);
+
+  // No_realizada no tiene transiciones salientes (TRANSICIONES_PAUSA) --
+  // finalizar, releyendo el estado fresco, tiene que rechazar la
+  // transicion en vez de pisarla.
+  assert.equal(fin._validationError, true, 'finalizar debe rechazarse: la pausa ya no esta En_curso');
+  const pausaFinal = filas(db, 'PAUSAS_PROGRAMADAS').find((x) => x.pausa_id === p.pausa_id);
+  assert.equal(pausaFinal.estado, 'No_realizada', 'la transicion concurrente NO debe perderse');
+});
+
 test('descargarEvidenciaPausa: sin evidencia adjunta, o sin coordinar la empresa, devuelve error', async (t) => {
   const db = dbBase();
   const p = seedRosterYPausaHoy(db);

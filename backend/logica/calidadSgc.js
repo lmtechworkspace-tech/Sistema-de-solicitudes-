@@ -464,6 +464,13 @@ async function crearDocumento(db, data, contexto) {
     const subido = await subirArchivoSgc_(data, codigo);
     if (subido._validationError) return subido;
     archivo = subido;
+    // Releer justo antes de escribir: el await de arriba (subida real a
+    // R2) le dio tiempo a otra peticion con el MISMO codigo de correr
+    // completa y ganar. Sin este chequeo, dos documentos podian quedar con
+    // el mismo codigo -- la unicidad que este mismo chequeo intenta
+    // garantizar, pero solo si se valida DESPUES del await tambien.
+    const yaExisteFresco = leerSeguro_(db, 'SGC_DOCUMENTOS').find((d) => esActivo_(d) && String(d.codigo || '').toUpperCase() === codigo);
+    if (yaExisteFresco) return errorValidacion_('codigo', 'Ya existe un documento con el código ' + codigo + '.');
   }
 
   const ahora = new Date();
@@ -498,6 +505,14 @@ async function nuevaVersion(db, data, contexto) {
   if (!data.contenido_base64) return errorValidacion_('contenido_base64', 'Adjunta el archivo de la nueva versión.');
   const archivo = await subirArchivoSgc_(data, doc.codigo);
   if (archivo._validationError) return archivo;
+
+  // Releer justo antes de escribir: el await de arriba (subida real a R2)
+  // le dio tiempo a otra peticion de nuevaVersion sobre el MISMO documento
+  // de correr completa y ganar. Sin este chequeo, dos versiones podian
+  // quedar marcadas vigente:true a la vez.
+  const docFresco = buscarDocumentoSgc_(db, doc.documento_id);
+  if (!docFresco) return errorValidacion_('documento_id', 'Documento no encontrado.');
+  if (version === docFresco.version_vigente) return errorValidacion_('version', 'Esa ya es la versión vigente (se publicó otra versión mientras se procesaba tu solicitud).');
 
   leerSeguro_(db, 'SGC_DOC_VERSIONES').forEach((v) => {
     if (v.documento_id === doc.documento_id && esVerdadero_(v.vigente)) actualizarFilaPorId_(db, 'SGC_DOC_VERSIONES', 'version_id', v.version_id, { vigente: false });

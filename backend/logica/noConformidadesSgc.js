@@ -228,6 +228,15 @@ async function registrarCorreccion(db, data, contexto) {
   }, contexto);
   if (tarea && (tarea._validationError || tarea._forbidden)) return tarea;
 
+  // Releer justo antes de escribir: el await de arriba le dio tiempo a
+  // otra peticion sobre la MISMA NC de correr completa y ganar. Sin este
+  // chequeo, la escritura de abajo pisaria en silencio esa corrección
+  // concurrente -- dejando ademas la Actividad recien creada aqui huerfana.
+  const ncFresca = buscarNc_(db, nc.nc_id);
+  if (!ncFresca || ncFresca.correccion_actividad_id) {
+    return errorValidacion_('nc_id', 'Esta no conformidad ya tiene una corrección asignada (se asignó mientras se procesaba tu solicitud).');
+  }
+
   const actualizada = actualizarFilaPorId_(db, 'SGC_NC', 'nc_id', nc.nc_id, {
     correccion_descripcion: descripcion, correccion_actividad_id: tarea.actividad_id, correccion_plazo: plazo, estado: 'EN_CORRECCION'
   });
@@ -268,6 +277,12 @@ async function registrarAccion(db, data, contexto) {
     responsable_email: responsable, fecha_compromiso: plazo, area_id: nc.area_id, origen_tipo: 'NC_ACCION', origen_id: nc.nc_id
   }, contexto);
   if (tarea && (tarea._validationError || tarea._forbidden)) return tarea;
+
+  // Mismo chequeo que registrarCorreccion, ver comentario ahi.
+  const ncFresca = buscarNc_(db, nc.nc_id);
+  if (!ncFresca || ncFresca.accion_actividad_id) {
+    return errorValidacion_('nc_id', 'Esta no conformidad ya tiene una acción correctiva asignada (se asignó mientras se procesaba tu solicitud).');
+  }
 
   const actualizada = actualizarFilaPorId_(db, 'SGC_NC', 'nc_id', nc.nc_id, {
     accion_descripcion: descripcion, accion_actividad_id: tarea.actividad_id, accion_plazo: plazo, estado: 'EN_ACCION'
