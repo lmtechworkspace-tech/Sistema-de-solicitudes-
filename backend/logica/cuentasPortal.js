@@ -47,6 +47,23 @@ function buscarCuenta(db, cuentaId) {
   return leerCuentas(db).find((c) => c.cuenta_id === cuentaId) || null;
 }
 
+function esActivaCuenta_(c) {
+  return c.activo === true || c.activo === 'TRUE' || c.activo === 1;
+}
+
+// RN-030 (misma regla que auth.js sobre USUARIOS, portada acá porque
+// CUENTAS_PORTAL -- no USUARIOS -- es la tabla que de verdad gatea el
+// login hoy): no puede quedar una empresa con menos de 2 Administradores
+// activos. Se valida antes de desactivar, degradar de rol o eliminar un
+// Admin.
+function quedariaSinRolAdmin_(db, cuenta) {
+  const otrosAdminsActivos = leerCuentas(db).filter((c) =>
+    c.cuenta_id !== cuenta.cuenta_id && c.empresa_id === cuenta.empresa_id &&
+    c.rol === 'ADM' && esActivaCuenta_(c)
+  );
+  return otrosAdminsActivos.length < 1;
+}
+
 function normalizarEmails(emails) {
   const lista = Array.isArray(emails) ? emails : String(emails || '').split(/[,;\n]/);
   const vistos = {};
@@ -164,6 +181,9 @@ function actualizar(db, data) {
   if (data.empresa_id !== undefined) cambios.empresa_id = data.empresa_id;
   if (data.rol !== undefined) {
     if (!MODULOS_POR_ROL[data.rol]) return errorValidacion('rol', 'Rol invalido: ' + data.rol);
+    if (cuenta.rol === 'ADM' && data.rol !== 'ADM' && quedariaSinRolAdmin_(db, cuenta)) {
+      return errorValidacion('rol', 'No se puede aplicar: quedaria menos de 2 Administradores activos en ' + cuenta.empresa_id + ' (RN-030).');
+    }
     cambios.rol = data.rol;
   }
   if (data.emails !== undefined) {
@@ -196,6 +216,10 @@ function resetearPassword(db, data) {
 function activar(db, data) {
   const cuenta = buscarCuenta(db, data.cuenta_id);
   if (!cuenta) return errorValidacion('cuenta_id', 'Cuenta no encontrada.');
+  const vaAQuedarInactiva = data.activo === false;
+  if (vaAQuedarInactiva && cuenta.rol === 'ADM' && quedariaSinRolAdmin_(db, cuenta)) {
+    return errorValidacion('activo', 'No se puede desactivar: quedaria menos de 2 Administradores activos en ' + cuenta.empresa_id + ' (RN-030).');
+  }
   actualizarFilaPorId_(db, 'CUENTAS_PORTAL', 'cuenta_id', data.cuenta_id, { activo: data.activo !== false });
   return { cuenta_id: data.cuenta_id, activo: data.activo !== false };
 }
@@ -230,6 +254,9 @@ function asignarPassword(db, data) {
 function eliminar(db, data) {
   const cuenta = buscarCuenta(db, data.cuenta_id);
   if (!cuenta) return errorValidacion('cuenta_id', 'Cuenta no encontrada.');
+  if (cuenta.rol === 'ADM' && quedariaSinRolAdmin_(db, cuenta)) {
+    return errorValidacion('cuenta_id', 'No se puede eliminar: quedaria menos de 2 Administradores activos en ' + cuenta.empresa_id + ' (RN-030).');
+  }
   eliminarFilasPorId_(db, 'CUENTAS_PORTAL', 'cuenta_id', data.cuenta_id);
   eliminarFilasPorId_(db, 'SESIONES_PORTAL', 'cuenta_id', data.cuenta_id);
   return { cuenta_id: data.cuenta_id, usuario: cuenta.usuario, eliminada: true };

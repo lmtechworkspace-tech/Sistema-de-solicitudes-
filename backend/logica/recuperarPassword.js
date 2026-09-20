@@ -69,7 +69,27 @@ function urlRecuperacion_(token) {
   return base + '?reset=' + encodeURIComponent(token);
 }
 
+// Piso de tiempo de respuesta: sin esto, una identificador que no existe (o
+// una cuenta inactiva/con limite excedido) responde casi al instante,
+// mientras una cuenta real espera el envio real por Resend (await) antes de
+// responder -- el MENSAJE es identico a proposito (ver cabecera del
+// archivo), pero el TIEMPO delataria igual que cuenta existe. Se pareja el
+// tiempo total, no el trabajo: no tiene sentido enviar un correo de mentira.
+const RESPUESTA_MINIMA_MS = 400;
+
+function esperar_(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function solicitarRecuperacion(db, data) {
+  const inicio = Date.now();
+  const resultado = await solicitarRecuperacionInterna_(db, data);
+  const faltante = RESPUESTA_MINIMA_MS - (Date.now() - inicio);
+  if (faltante > 0) await esperar_(faltante);
+  return resultado;
+}
+
+async function solicitarRecuperacionInterna_(db, data) {
   const identificador = normalizarIdentificador_(data && data.identificador);
   if (!identificador) return RESPUESTA_GENERICA;
 

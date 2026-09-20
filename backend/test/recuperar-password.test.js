@@ -58,6 +58,26 @@ test('solicitarRecuperacion: responde IGUAL si la cuenta existe o no (anti-enume
   assert.deepEqual(conCuenta, sinCuenta);
 });
 
+test('solicitarRecuperacion: el TIEMPO de respuesta tampoco delata si la cuenta existe', async (t) => {
+  conApiKey(t);
+  mockEnvioOk(t);
+  const db = dbConSchema();
+  crearCuenta(db);
+
+  const antesConCuenta = Date.now();
+  await RecuperarPassword.solicitarRecuperacion(db, { identificador: 'leo' });
+  const msConCuenta = Date.now() - antesConCuenta;
+
+  const antesSinCuenta = Date.now();
+  await RecuperarPassword.solicitarRecuperacion(db, { identificador: 'fantasma-timing' });
+  const msSinCuenta = Date.now() - antesSinCuenta;
+
+  // Sin el piso de tiempo, "sin cuenta" responde casi al instante (no hay
+  // await a Resend) mientras "con cuenta" espera el envio real -- ambos
+  // deberian tardar aprox. lo mismo (el piso configurado).
+  assert.ok(msSinCuenta >= 350, 'sin cuenta deberia tardar tambien, no responder al instante: ' + msSinCuenta + 'ms');
+});
+
 test('solicitarRecuperacion: identificador vacío responde igual, no revienta', async () => {
   const db = dbConSchema();
   const r = await RecuperarPassword.solicitarRecuperacion(db, {});

@@ -174,6 +174,10 @@ function buscarEntregable_(db, entregableId) {
   if (!entregableId) return null;
   return leerSeguro_(db, 'PROYECTO_ENTREGABLES').find((e) => e.entregable_id === entregableId) || null;
 }
+function buscarHito_(db, hitoId) {
+  if (!hitoId) return null;
+  return leerSeguro_(db, 'PROYECTO_HITOS').find((h) => h.hito_id === hitoId) || null;
+}
 function buscarRiesgo_(db, riesgoId) {
   if (!riesgoId) return null;
   return leerSeguro_(db, 'PROYECTO_RIESGOS').find((r) => r.riesgo_id === riesgoId) || null;
@@ -857,11 +861,21 @@ function gestionarHito(db, data, contexto) {
 
   if (data.accion === 'eliminar') {
     if (!data.hito_id) return errorValidacion_('hito_id', 'Falta indicar el hito.');
+    // El permiso de arriba se valido contra data.proyecto_id: sin este
+    // chequeo, un LIDER de SU proyecto podia eliminar el hito de OTRO
+    // proyecto con solo conocer su UUID. crearTarea (linea 888-891) ya
+    // exige esta misma pertenencia cuando el hito_id llega como
+    // referencia externa -- el CRUD de hitos no se protegia con la misma
+    // regla que el mismo le exige a sus consumidores.
+    const hitoAEliminar = buscarHito_(db, data.hito_id);
+    if (!hitoAEliminar || hitoAEliminar.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('hito_id', 'Hito no encontrado.');
     const tareasDelHito = leerSeguro_(db, 'ACTIVIDADES').filter((a) => a.hito_id === data.hito_id);
     if (tareasDelHito.length > 0) return errorValidacion_('hito_id', 'Este hito tiene tareas asociadas; muévelas antes de eliminarlo.');
     return eliminarFilaHito_(db, data.hito_id);
   }
   if (data.hito_id) {
+    const hitoAEditar = buscarHito_(db, data.hito_id);
+    if (!hitoAEditar || hitoAEditar.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('hito_id', 'Hito no encontrado.');
     const cambios = {};
     ['nombre', 'descripcion', 'fecha_objetivo', 'estado', 'orden'].forEach((campo) => { if (data[campo] !== undefined) cambios[campo] = data[campo]; });
     return actualizarFilaPorId_(db, 'PROYECTO_HITOS', 'hito_id', data.hito_id, cambios);
@@ -1241,7 +1255,14 @@ function gestionarEntregable(db, data, contexto) {
   if (data.accion === 'eliminar') {
     if (!data.entregable_id) return errorValidacion_('entregable_id', 'Falta indicar el entregable.');
     const paraEliminar = buscarEntregable_(db, data.entregable_id);
-    if (paraEliminar && paraEliminar.estado !== 'PENDIENTE') return errorValidacion_('entregable_id', 'Solo se puede eliminar un entregable que aun no se ha marcado como entregado.');
+    // Dos bugs corregidos aca: (1) sin comprobar pertenencia, cualquier
+    // integrante de este proyecto podia cancelar un entregable de OTRO
+    // proyecto con solo su UUID (mismo patron que hitos/riesgos arriba);
+    // (2) el "if (paraEliminar && ...)" original dejaba pasar un
+    // entregable INEXISTENTE derecho al actualizarFilaPorId_ final -- el
+    // `&&` cortocircuitaba cuando paraEliminar era null, sin error.
+    if (!paraEliminar || paraEliminar.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('entregable_id', 'Entregable no encontrado.');
+    if (paraEliminar.estado !== 'PENDIENTE') return errorValidacion_('entregable_id', 'Solo se puede eliminar un entregable que aun no se ha marcado como entregado.');
     return actualizarFilaPorId_(db, 'PROYECTO_ENTREGABLES', 'entregable_id', data.entregable_id, { estado: 'CANCELADO' });
   }
 
@@ -1260,6 +1281,8 @@ function gestionarEntregable(db, data, contexto) {
   }
 
   if (data.entregable_id) {
+    const paraEditar = buscarEntregable_(db, data.entregable_id);
+    if (!paraEditar || paraEditar.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('entregable_id', 'Entregable no encontrado.');
     const cambios = {};
     ['nombre', 'descripcion', 'hito_id', 'responsable_email', 'fecha_comprometida'].forEach((campo) => { if (data[campo] !== undefined) cambios[campo] = data[campo]; });
     return actualizarFilaPorId_(db, 'PROYECTO_ENTREGABLES', 'entregable_id', data.entregable_id, cambios);
@@ -1312,6 +1335,13 @@ function gestionarRiesgo(db, data, contexto) {
 
   if (data.accion === 'eliminar') {
     if (!data.riesgo_id) return errorValidacion_('riesgo_id', 'Falta indicar el riesgo.');
+    // Sin este chequeo, cualquier integrante de CUALQUIER proyecto podia
+    // cerrar el riesgo de OTRO proyecto con solo su UUID: el permiso de
+    // arriba solo exige pertenecer al proyecto de data.proyecto_id, no al
+    // proyecto DUEÑO del riesgo. La rama 'materializar' (abajo) ya hace
+    // este mismo chequeo -- mismo criterio aca.
+    const riesgoAEliminar = buscarRiesgo_(db, data.riesgo_id);
+    if (!riesgoAEliminar || riesgoAEliminar.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('riesgo_id', 'Riesgo no encontrado.');
     return actualizarFilaPorId_(db, 'PROYECTO_RIESGOS', 'riesgo_id', data.riesgo_id, { estado: 'CERRADO' });
   }
   if (data.accion === 'materializar') {
@@ -1325,7 +1355,7 @@ function gestionarRiesgo(db, data, contexto) {
   }
   if (data.riesgo_id) {
     const actual = buscarRiesgo_(db, data.riesgo_id);
-    if (!actual) return errorValidacion_('riesgo_id', 'Riesgo no encontrado.');
+    if (!actual || actual.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('riesgo_id', 'Riesgo no encontrado.');
     const cambios = {};
     ['descripcion', 'responsable_email', 'mitigacion'].forEach((campo) => { if (data[campo] !== undefined) cambios[campo] = data[campo]; });
     if (data.probabilidad !== undefined) cambios.probabilidad = data.probabilidad;

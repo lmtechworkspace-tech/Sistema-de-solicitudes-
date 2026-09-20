@@ -38,6 +38,14 @@ function buscarCuentaPorUsuario(db, usuario) {
     .find((c) => normalizarUsuario(c.usuario) === usuario) || null;
 }
 
+// Relleno para cuando el usuario no existe: sin esto, Hash.coincide (scrypt,
+// deliberadamente costoso) solo se calcula si la cuenta existe -- el tiempo
+// de respuesta delataria qué usuarios existen aunque el MENSAJE de error sea
+// igual a proposito (ver cabecera del archivo). Se calcula una sola vez al
+// cargar el modulo, no en cada login.
+const SALT_RELLENO_LOGIN = 'relleno-anti-timing-no-es-una-cuenta-real';
+const HASH_RELLENO_LOGIN = Hash.hashPassword('relleno-sin-significado', SALT_RELLENO_LOGIN);
+
 // Perfil que viaja al navegador: SOLO lo que el shell necesita. Nunca el
 // hash ni la sal.
 function perfilPublico(cuenta) {
@@ -54,27 +62,34 @@ function perfilPublico(cuenta) {
   };
 }
 
-function login(db, data) {
+function login(db, data, ip) {
   const usuario = normalizarUsuario(data.usuario);
   const password = String(data.password || '');
   if (!usuario || !password) {
     return errorValidacion('usuario', 'Indica tu usuario y contrasena.');
   }
 
-  if (Sesiones.loginBloqueado(usuario)) {
+  if (Sesiones.loginBloqueado(usuario, ip)) {
     return errorForbidden('Demasiados intentos fallidos. Espera 10 minutos e intenta de nuevo.');
   }
 
   const cuenta = buscarCuentaPorUsuario(db, usuario);
-  const hashCorrecto = cuenta && Sesiones.esCuentaActiva(cuenta) &&
-    Hash.coincide(password, cuenta.salt, cuenta.hash_password);
+  // Hash.coincide corre SIEMPRE, exista o no la cuenta -- de lo contrario el
+  // costo del scrypt (solo pagado cuando hay cuenta real) delataria por
+  // tiempo lo que RN-030/el mensaje generico ya se cuidan de no delatar.
+  const passwordCoincide = Hash.coincide(
+    password,
+    cuenta ? cuenta.salt : SALT_RELLENO_LOGIN,
+    cuenta ? cuenta.hash_password : HASH_RELLENO_LOGIN
+  );
+  const hashCorrecto = cuenta && Sesiones.esCuentaActiva(cuenta) && passwordCoincide;
 
   if (!hashCorrecto) {
-    Sesiones.registrarIntentoFallido(usuario);
+    Sesiones.registrarIntentoFallido(usuario, ip);
     return errorForbidden('Usuario o contrasena incorrectos.');
   }
 
-  Sesiones.limpiarIntentos(usuario);
+  Sesiones.limpiarIntentos(usuario, ip);
   const token = Sesiones.crearSesion(db, cuenta.cuenta_id);
   actualizarFilaPorId_(db, 'CUENTAS_PORTAL', 'cuenta_id', cuenta.cuenta_id, {
     ultimo_acceso: new Date().toISOString()

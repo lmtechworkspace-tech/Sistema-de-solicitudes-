@@ -89,7 +89,7 @@ const ACCIONES_PUBLICAS = new Set([
 ]);
 
 const ACCIONES = {
-  portalLogin: (db, data) => Portal.login(db, data),
+  portalLogin: (db, data, meta) => Portal.login(db, data, meta && meta.ip),
   portalLogout: (db, data) => Portal.logout(db, data),
   portalSesion: (db, data) => Portal.sesion(db, data),
   portalCambiarPassword: (db, data) => Portal.cambiarPassword(db, data),
@@ -517,15 +517,16 @@ function resolverContextoPortal_(db, token) {
 // cambia su comportamiento. Las que si envian correo de verdad ahora (ver
 // notificaciones.js) devuelven una Promise, y este await es lo que permite
 // que app.js espere el resultado real antes de responder.
-async function ejecutarAccion(db, action, data) {
+async function ejecutarAccion(db, action, data, meta) {
   data = data || {};
+  meta = meta || {};
   const fn = ACCIONES[action];
   if (!fn) {
     return { status: 404, body: { ok: false, error: 'Acción desconocida: ' + action } };
   }
 
   if (ACCIONES_PUBLICAS.has(action)) {
-    return responderResultado_(await fn(db, data));
+    return responderResultado_(await fn(db, data, meta));
   }
 
   const contexto = resolverContextoPortal_(db, data.portal_token);

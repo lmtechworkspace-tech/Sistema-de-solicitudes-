@@ -135,3 +135,80 @@ test('operacion invalida responde error de validacion', () => {
   const res = CuentasPortal.gestionar(db, { operacion: 'volar' }, ADMIN);
   assert.equal(res._validationError, true);
 });
+
+// RN-030: no puede quedar una empresa con menos de 2 Administradores
+// activos. Ya se validaba sobre USUARIOS (auth.js, tabla legada); acá se
+// porta a CUENTAS_PORTAL, la tabla que de verdad gatea el login hoy.
+test('RN-030: no se puede eliminar al unico Admin activo de una empresa', () => {
+  const db = dbConSchema();
+  const admin1 = CuentasPortal.gestionar(db, {
+    operacion: 'crear', usuario: 'admin1', nombre: 'Admin Uno', emails: 'a1@x.cl', rol: 'ADM', empresa_id: 'EMP-1'
+  }, ADMIN);
+
+  const rechazado = CuentasPortal.gestionar(db, { operacion: 'eliminar', cuenta_id: admin1.cuenta_id }, ADMIN);
+  assert.equal(rechazado._validationError, true);
+  assert.match(rechazado.message, /RN-030/);
+  assert.equal(CuentasPortal.listar(db, {}, ADMIN).cuentas.length, 1, 'la cuenta sigue ahi');
+});
+
+test('RN-030: eliminar SI se permite cuando queda otro Admin activo en la misma empresa', () => {
+  const db = dbConSchema();
+  const admin1 = CuentasPortal.gestionar(db, {
+    operacion: 'crear', usuario: 'admin1', nombre: 'Admin Uno', emails: 'a1@x.cl', rol: 'ADM', empresa_id: 'EMP-1'
+  }, ADMIN);
+  CuentasPortal.gestionar(db, {
+    operacion: 'crear', usuario: 'admin2', nombre: 'Admin Dos', emails: 'a2@x.cl', rol: 'ADM', empresa_id: 'EMP-1'
+  }, ADMIN);
+
+  const ok = CuentasPortal.gestionar(db, { operacion: 'eliminar', cuenta_id: admin1.cuenta_id }, ADMIN);
+  assert.equal(ok.eliminada, true);
+});
+
+test('RN-030: no se puede desactivar ni degradar de rol al unico Admin activo', () => {
+  const db = dbConSchema();
+  const admin1 = CuentasPortal.gestionar(db, {
+    operacion: 'crear', usuario: 'admin1', nombre: 'Admin Uno', emails: 'a1@x.cl', rol: 'ADM', empresa_id: 'EMP-1'
+  }, ADMIN);
+
+  const desactivar = CuentasPortal.gestionar(db, {
+    operacion: 'activar', cuenta_id: admin1.cuenta_id, activo: false
+  }, ADMIN);
+  assert.equal(desactivar._validationError, true);
+  assert.match(desactivar.message, /RN-030/);
+
+  const degradar = CuentasPortal.gestionar(db, {
+    operacion: 'actualizar', cuenta_id: admin1.cuenta_id, rol: 'DEV'
+  }, ADMIN);
+  assert.equal(degradar._validationError, true);
+  assert.match(degradar.message, /RN-030/);
+
+  const cuenta = CuentasPortal.listar(db, {}, ADMIN).cuentas[0];
+  assert.equal(cuenta.activo, true, 'sigue activa');
+  assert.equal(cuenta.rol, 'ADM', 'sigue ADM');
+});
+
+test('RN-030: no cuenta Admins de OTRA empresa para decidir si se puede eliminar/desactivar', () => {
+  const db = dbConSchema();
+  const admin1 = CuentasPortal.gestionar(db, {
+    operacion: 'crear', usuario: 'admin1', nombre: 'Admin Uno', emails: 'a1@x.cl', rol: 'ADM', empresa_id: 'EMP-1'
+  }, ADMIN);
+  CuentasPortal.gestionar(db, {
+    operacion: 'crear', usuario: 'admin2', nombre: 'Admin Dos', emails: 'a2@x.cl', rol: 'ADM', empresa_id: 'EMP-2'
+  }, ADMIN);
+
+  const rechazado = CuentasPortal.gestionar(db, { operacion: 'eliminar', cuenta_id: admin1.cuenta_id }, ADMIN);
+  assert.equal(rechazado._validationError, true, 'un Admin de otra empresa no cuenta');
+});
+
+test('RN-030: eliminar/desactivar/degradar un rol distinto de ADM nunca dispara la regla', () => {
+  const db = dbConSchema();
+  const dev = CuentasPortal.gestionar(db, {
+    operacion: 'crear', usuario: 'dev1', nombre: 'Dev Uno', emails: 'd1@x.cl', rol: 'DEV', empresa_id: 'EMP-1'
+  }, ADMIN);
+
+  const desactivar = CuentasPortal.gestionar(db, { operacion: 'activar', cuenta_id: dev.cuenta_id, activo: false }, ADMIN);
+  assert.equal(desactivar._validationError, undefined);
+
+  const eliminar = CuentasPortal.gestionar(db, { operacion: 'eliminar', cuenta_id: dev.cuenta_id }, ADMIN);
+  assert.equal(eliminar.eliminada, true);
+});

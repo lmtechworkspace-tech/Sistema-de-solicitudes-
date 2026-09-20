@@ -407,6 +407,92 @@ test('gestionarHito: crea; no se puede eliminar un hito con tareas', () => {
   assert.equal(detalle.hitos[0].total_tareas, 1);
 });
 
+// Bugs de pertenencia confirmados por la auditoria de modulos (2026-09): el
+// permiso se validaba contra data.proyecto_id, pero la mutacion real
+// (editar/eliminar) buscaba la entidad SOLO por su propio ID, sin comprobar
+// que perteneciera a ESE proyecto -- un LIDER de su propio proyecto podia
+// tocar el hito/riesgo/entregable de un proyecto ajeno con solo su UUID.
+test('SEGURIDAD: gestionarHito no permite editar/eliminar el hito de OTRO proyecto', () => {
+  const db = db_();
+  const proyectoA = crearProyectoBase(db, { nombre: 'Proyecto A' });
+  const proyectoB = crearProyectoBase(db, { nombre: 'Proyecto B' });
+  const hitoB = Proyectos.gestionarHito(db, { proyecto_id: proyectoB.proyecto_id, nombre: 'Hito de B' }, CTX_LEO);
+
+  const editoAjeno = Proyectos.gestionarHito(db, {
+    proyecto_id: proyectoA.proyecto_id, hito_id: hitoB.hito_id, nombre: 'MODIFICADO'
+  }, CTX_LEO);
+  assert.equal(editoAjeno._validationError, true, 'editar un hito de otro proyecto debe rechazarse');
+
+  const elimAjeno = Proyectos.gestionarHito(db, {
+    proyecto_id: proyectoA.proyecto_id, accion: 'eliminar', hito_id: hitoB.hito_id
+  }, CTX_LEO);
+  assert.equal(elimAjeno._validationError, true, 'eliminar un hito de otro proyecto debe rechazarse');
+
+  const hitoBTrasElAtaque = filas(db, 'PROYECTO_HITOS').find((h) => h.hito_id === hitoB.hito_id);
+  assert.equal(hitoBTrasElAtaque.nombre, 'Hito de B', 'el hito de B no cambio');
+  assert.equal(hitoBTrasElAtaque.estado, 'PENDIENTE', 'el hito de B no se cancelo');
+});
+
+test('SEGURIDAD: gestionarRiesgo no permite editar/cerrar/materializar el riesgo de OTRO proyecto', () => {
+  const db = db_();
+  const proyectoA = crearProyectoBase(db, { nombre: 'Proyecto A' });
+  const proyectoB = crearProyectoBase(db, { nombre: 'Proyecto B' });
+  const riesgoB = Proyectos.gestionarRiesgo(db, {
+    proyecto_id: proyectoB.proyecto_id, descripcion: 'Riesgo de B', probabilidad: 'ALTA', impacto: 'ALTA'
+  }, CTX_LEO);
+
+  const editoAjeno = Proyectos.gestionarRiesgo(db, {
+    proyecto_id: proyectoA.proyecto_id, riesgo_id: riesgoB.riesgo_id, descripcion: 'MODIFICADO'
+  }, CTX_LEO);
+  assert.equal(editoAjeno._validationError, true, 'editar el riesgo de otro proyecto debe rechazarse');
+
+  const elimAjeno = Proyectos.gestionarRiesgo(db, {
+    proyecto_id: proyectoA.proyecto_id, accion: 'eliminar', riesgo_id: riesgoB.riesgo_id
+  }, CTX_LEO);
+  assert.equal(elimAjeno._validationError, true, 'cerrar el riesgo de otro proyecto debe rechazarse');
+
+  const matAjeno = Proyectos.gestionarRiesgo(db, {
+    proyecto_id: proyectoA.proyecto_id, accion: 'materializar', riesgo_id: riesgoB.riesgo_id
+  }, CTX_LEO);
+  assert.equal(matAjeno._validationError, true, 'materializar el riesgo de otro proyecto debe rechazarse');
+
+  const riesgoBTrasElAtaque = filas(db, 'PROYECTO_RIESGOS').find((r) => r.riesgo_id === riesgoB.riesgo_id);
+  assert.equal(riesgoBTrasElAtaque.descripcion, 'Riesgo de B');
+  assert.equal(riesgoBTrasElAtaque.estado, 'ABIERTO');
+});
+
+test('SEGURIDAD: gestionarEntregable no permite editar/eliminar el entregable de OTRO proyecto', () => {
+  const db = db_();
+  const proyectoA = crearProyectoBase(db, { nombre: 'Proyecto A' });
+  const proyectoB = crearProyectoBase(db, { nombre: 'Proyecto B' });
+  const entregableB = Proyectos.gestionarEntregable(db, {
+    proyecto_id: proyectoB.proyecto_id, nombre: 'Entregable de B', responsable_email: 'leo@rld.cl', fecha_comprometida: '2026-09-01'
+  }, CTX_LEO);
+
+  const editoAjeno = Proyectos.gestionarEntregable(db, {
+    proyecto_id: proyectoA.proyecto_id, entregable_id: entregableB.entregable_id, nombre: 'MODIFICADO'
+  }, CTX_LEO);
+  assert.equal(editoAjeno._validationError, true, 'editar el entregable de otro proyecto debe rechazarse');
+
+  const elimAjeno = Proyectos.gestionarEntregable(db, {
+    proyecto_id: proyectoA.proyecto_id, accion: 'eliminar', entregable_id: entregableB.entregable_id
+  }, CTX_LEO);
+  assert.equal(elimAjeno._validationError, true, 'eliminar el entregable de otro proyecto debe rechazarse');
+
+  const entregableBTrasElAtaque = filas(db, 'PROYECTO_ENTREGABLES').find((e) => e.entregable_id === entregableB.entregable_id);
+  assert.equal(entregableBTrasElAtaque.nombre, 'Entregable de B');
+  assert.equal(entregableBTrasElAtaque.estado, 'PENDIENTE');
+});
+
+test('gestionarEntregable: eliminar un entregable_id inexistente responde error, no cae al UPDATE silencioso', () => {
+  const db = db_();
+  const proyecto = crearProyectoBase(db);
+  const res = Proyectos.gestionarEntregable(db, {
+    proyecto_id: proyecto.proyecto_id, accion: 'eliminar', entregable_id: 'no-existe'
+  }, CTX_LEO);
+  assert.equal(res._validationError, true);
+});
+
 // ===== la sala ===============================================================
 
 test('publicarEnSala: comentario visible; SOLICITUD_LIDER solo la publica el lider; notifica al equipo', () => {

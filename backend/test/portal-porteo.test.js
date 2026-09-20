@@ -66,6 +66,40 @@ test('login con clave incorrecta o usuario inexistente: mismo mensaje (no filtra
   assert.equal(malaClave.message, noExiste.message);
 });
 
+// Anti-enumeración por TIEMPO, no solo por mensaje: antes de esta prueba,
+// Hash.coincide (scrypt) solo se calculaba si la cuenta existia -- un
+// usuario inexistente respondia casi al instante, delatando por tiempo lo
+// que el mensaje identico (prueba de arriba) ya escondia. Se corre cada
+// camino varias veces y se compara el promedio: no deberia haber una
+// diferencia de orden de magnitud entre "cuenta no existe" y "cuenta existe,
+// clave mala" (ambos deben pagar el costo de scrypt).
+test('login: el TIEMPO de respuesta tampoco delata si la cuenta existe', () => {
+  const db = dbConSchema();
+  crearCuenta(db, 'cpena-timing');
+
+  function medir(usuario) {
+    const antes = process.hrtime.bigint();
+    Portal.login(db, { usuario, password: 'lo-que-sea-nunca-coincide' });
+    return Number(process.hrtime.bigint() - antes) / 1e6;
+  }
+
+  const REPETICIONES = 15;
+  let totalExistente = 0;
+  let totalInexistente = 0;
+  for (let i = 0; i < REPETICIONES; i++) {
+    totalExistente += medir('cpena-timing');
+    totalInexistente += medir('fantasma-timing-' + i); // usuario distinto: no dispara el bloqueo por intentos
+  }
+  const promedioExistente = totalExistente / REPETICIONES;
+  const promedioInexistente = totalInexistente / REPETICIONES;
+
+  // No deberian diferir en mas de 5x -- sin el fix, cuenta inexistente
+  // corria en microsegundos y cuenta existente pagaba scrypt completo
+  // (decenas de ms), una diferencia de dos ordenes de magnitud.
+  const razon = Math.max(promedioExistente, promedioInexistente) / Math.max(1, Math.min(promedioExistente, promedioInexistente));
+  assert.ok(razon < 5, 'la razon de tiempos deberia ser chica; existente=' + promedioExistente.toFixed(2) + 'ms inexistente=' + promedioInexistente.toFixed(2) + 'ms razon=' + razon.toFixed(2));
+});
+
 test('5 intentos fallidos bloquean el login 10 minutos, incluso con la clave correcta', () => {
   const db = dbConSchema();
   const creada = crearCuenta(db, 'cpena-bloqueo');
@@ -76,6 +110,26 @@ test('5 intentos fallidos bloquean el login 10 minutos, incluso con la clave cor
   const bloqueado = Portal.login(db, { usuario: 'cpena-bloqueo', password: creada.password_temporal });
   assert.equal(bloqueado._forbidden, true);
   assert.match(bloqueado.message, /Demasiados intentos/);
+});
+
+// El bloqueo se indexa por (usuario, IP): sin esto, un atacante sin ninguna
+// credencial podia mandar 5 intentos fallidos con el usuario de otra
+// persona y dejarla bloqueada 10 minutos, aunque el atacante nunca haya
+// tenido acceso a esa cuenta.
+test('el bloqueo por intentos fallidos es por IP: un atacante no puede bloquear a la victima desde SU propia IP', () => {
+  const db = dbConSchema();
+  const creada = crearCuenta(db, 'cpena-ip-victima');
+
+  // El atacante, desde su propia IP, intenta adivinar la clave 5 veces.
+  for (let i = 0; i < 5; i++) {
+    Portal.login(db, { usuario: 'cpena-ip-victima', password: 'adivinando-' + i }, '203.0.113.9');
+  }
+  const atacanteBloqueado = Portal.login(db, { usuario: 'cpena-ip-victima', password: 'otra-mas' }, '203.0.113.9');
+  assert.equal(atacanteBloqueado._forbidden, true, 'el atacante si queda bloqueado en SU IP');
+
+  // La victima, desde SU propia IP (distinta), entra normal con su clave real.
+  const victima = Portal.login(db, { usuario: 'cpena-ip-victima', password: creada.password_temporal }, '198.51.100.42');
+  assert.ok(victima.token, 'la victima no hereda el bloqueo que genero el atacante desde otra IP');
 });
 
 test('un login exitoso limpia el contador de intentos', () => {

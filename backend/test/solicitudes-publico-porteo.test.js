@@ -205,6 +205,38 @@ test('estadoPublico SI expone el comentario del historial cuando lo escribio el 
   assert.equal(historial[0].comentario, 'Todavia falta el reporte de exportacion');
 });
 
+// Fuga de privacidad confirmada por la auditoria de modulos (2026-09):
+// historialPublico_ comparaba h.usuario tambien contra
+// solicitud.solicitante_email (el empleado que presento la solicitud), no
+// solo contra quien esta mirando ahora mismo -- un cliente externo
+// (es_cliente, entra por correo_cliente) podia ver un comentario interno
+// del EMPLEADO etiquetado como si fuera un comentario propio ("tu").
+test('estadoPublico NUNCA etiqueta como "tu" el comentario del empleado cuando quien mira es el cliente externo', () => {
+  const db = dbConSchema();
+  seedSolicitud(db, {
+    es_cliente: true, correo_cliente: 'cliente@empresa.cl', solicitante_email: 'juan@homepymes.cl'
+  });
+  seedSubsolicitud(db, { estado: 'S08' });
+  // El evento lo escribio el EMPLEADO (solicitante_email), con un
+  // comentario que podria ser interno.
+  agregarFila_(db, 'HISTORIAL_ESTADOS', {
+    historial_id: 'h1', solicitud_id: 'SOL-2026-HP-0001', subsolicitud_id: 'SOL-2026-HP-0001-01',
+    estado_anterior: 'S08', estado_nuevo: 'S05', usuario: 'juan@homepymes.cl',
+    comentario: 'nota interna: revisar con el cliente antes de prometer fecha',
+    timestamp: '2026-01-04T00:00:00.000Z'
+  });
+
+  // El CLIENTE mira su propio historial (correo_cliente, no solicitante_email).
+  const historial = SolicitudesPublico.estadoPublico(db, 'SOL-2026-HP-0001', 'cliente@empresa.cl').historial;
+  assert.equal(historial[0].actor, 'equipo', 'el evento del empleado NO es "tu" para el cliente');
+  assert.equal(historial[0].comentario, '', 'el comentario del empleado no se expone al cliente');
+
+  // El propio EMPLEADO, mirando su solicitud, SI ve su comentario como suyo.
+  const historialEmpleado = SolicitudesPublico.estadoPublico(db, 'SOL-2026-HP-0001', 'juan@homepymes.cl').historial;
+  assert.equal(historialEmpleado[0].actor, 'tu');
+  assert.equal(historialEmpleado[0].comentario, 'nota interna: revisar con el cliente antes de prometer fecha');
+});
+
 test('estadoPublico compara el correo sin distinguir mayusculas/espacios', () => {
   const db = dbConSchema();
   seedSolicitud(db);

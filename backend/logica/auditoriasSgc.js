@@ -390,7 +390,13 @@ function registrarHallazgo(db, data, contexto) {
 
   if (data.hallazgo_id) {
     const previo = buscarHallazgo_(db, data.hallazgo_id);
-    if (!previo) return errorValidacion_('hallazgo_id', 'Hallazgo no encontrado.');
+    // El permiso se valido contra data.auditoria_id (linea 369-371), pero
+    // eso no basta: sin este chequeo, un auditor de SU auditoria A podia
+    // mandar auditoria_id:A (para pasar el permiso) junto con el
+    // hallazgo_id de la auditoria B, de la que no es auditor, y editarlo.
+    // eliminarHallazgo (abajo) ya evita esto derivando la auditoria DESDE
+    // el hallazgo, nunca desde data -- mismo criterio aca.
+    if (!previo || previo.auditoria_id !== aud.auditoria_id) return errorValidacion_('hallazgo_id', 'Hallazgo no encontrado.');
     if (previo.nc_id && campos.resultado !== previo.resultado) {
       return errorValidacion_('resultado', 'Este hallazgo ya generó la no conformidad; su resultado no se puede cambiar.');
     }

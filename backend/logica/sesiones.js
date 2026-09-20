@@ -19,6 +19,15 @@
  * mas de un proceso detras de un balanceador, este contador dejaria de ser
  * compartido entre ellos y habria que moverlo a la base de datos; documentado
  * aqui para no olvidarlo si ese dia llega.
+ *
+ * El contador se indexa por (usuario, IP), no solo por usuario: si fuera
+ * solo por usuario, cualquiera -- sin ninguna credencial -- podria bloquear
+ * a otra persona 10 minutos con solo mandar 5 intentos fallidos con SU
+ * nombre de usuario (que ademas es predecible: 3-30 caracteres, sin
+ * confirmacion de que exista). Con la IP de por medio, quien bloquea una
+ * cuenta tiene que estar realmente intentando entrar desde su propia
+ * conexion -- la victima, entrando desde su IP real, no hereda el bloqueo
+ * que generó un atacante desde la suya.
  */
 
 const { agregarFila_, actualizarFilaPorId_, leerFilas_ } = require('../db/sqliteRepo');
@@ -30,30 +39,36 @@ const HORAS_ENLACE_MAGICO = 24 * 30;
 const MAX_INTENTOS_LOGIN = 5;
 const BLOQUEO_LOGIN_MS = 600 * 1000;
 
-// usuario (normalizado) -> { intentos, bloqueadoHasta }. Vive mientras viva
-// el proceso -- ver la nota de arriba sobre por que eso es aceptable hoy.
+// "usuario|ip" -> { intentos, bloqueadoHasta }. Vive mientras viva el
+// proceso -- ver la nota de arriba sobre por que eso es aceptable hoy.
 const intentosLogin = new Map();
 
-function loginBloqueado(usuario) {
-  const registro = intentosLogin.get(usuario);
+function claveIntento_(usuario, ip) {
+  return usuario + '|' + (ip || '');
+}
+
+function loginBloqueado(usuario, ip) {
+  const clave = claveIntento_(usuario, ip);
+  const registro = intentosLogin.get(clave);
   if (!registro) return false;
   if (registro.intentos < MAX_INTENTOS_LOGIN) return false;
   if (Date.now() > registro.bloqueadoHasta) {
-    intentosLogin.delete(usuario);
+    intentosLogin.delete(clave);
     return false;
   }
   return true;
 }
 
-function registrarIntentoFallido(usuario) {
-  const registro = intentosLogin.get(usuario) || { intentos: 0, bloqueadoHasta: 0 };
+function registrarIntentoFallido(usuario, ip) {
+  const clave = claveIntento_(usuario, ip);
+  const registro = intentosLogin.get(clave) || { intentos: 0, bloqueadoHasta: 0 };
   registro.intentos += 1;
   registro.bloqueadoHasta = Date.now() + BLOQUEO_LOGIN_MS;
-  intentosLogin.set(usuario, registro);
+  intentosLogin.set(clave, registro);
 }
 
-function limpiarIntentos(usuario) {
-  intentosLogin.delete(usuario);
+function limpiarIntentos(usuario, ip) {
+  intentosLogin.delete(claveIntento_(usuario, ip));
 }
 
 function crearSesion(db, cuentaId, horas) {

@@ -37,6 +37,17 @@ function leerCuerpo_(req) {
   });
 }
 
+// index.js escucha SOLO en 127.0.0.1, siempre detras de Caddy (ver su propia
+// cabecera) -- el proceso nunca recibe una conexion directa de internet, asi
+// que X-Forwarded-For (que Caddy si fija) es confiable acá. Sin esto, la
+// unica IP que Node ve es siempre 127.0.0.1 (la de Caddy), inutil para
+// distinguir un cliente de otro.
+function ipCliente_(req) {
+  const xff = req.headers['x-forwarded-for'];
+  if (xff) return String(xff).split(',')[0].trim();
+  return req.socket && req.socket.remoteAddress || '';
+}
+
 function responderJson(res, codigo, payload) {
   const cuerpo = JSON.stringify(payload);
   res.writeHead(codigo, {
@@ -83,7 +94,7 @@ async function manejar(req, res, db) {
   if (req.method === 'POST' && ruta === '/v1/accion') {
     if (!db) return responderJson(res, 500, { ok: false, error: 'Servidor sin base de datos configurada' });
     const cuerpo = await leerCuerpo_(req);
-    const { status, body } = await ejecutarAccion(db, cuerpo.action, cuerpo.data);
+    const { status, body } = await ejecutarAccion(db, cuerpo.action, cuerpo.data, { ip: ipCliente_(req) });
     return responderJson(res, status, body);
   }
 

@@ -113,9 +113,15 @@ function historialPublico_(db, solicitudId, solicitud, email) {
 
   return eventos
     .map((h) => {
-      const esSolicitante = compararEmail_(h.usuario, email) ||
-        compararEmail_(h.usuario, solicitud.solicitante_email) ||
-        (!!solicitud.es_cliente && compararEmail_(h.usuario, solicitud.correo_cliente));
+      // Comparar SOLO contra `email` (quien esta mirando ahora mismo, ya
+      // validado por estadoPublico contra solicitante_email/correo_cliente
+      // antes de llegar aca) -- no contra los campos guardados en la
+      // solicitud. Comparar contra `solicitud.solicitante_email` directo
+      // era el bug: si un EMPLEADO interno escribio un evento y el cliente
+      // externo (es_cliente, entra por correo_cliente) mira el historial,
+      // `h.usuario === solicitud.solicitante_email` daba true igual --
+      // exponiendole al cliente un comentario interno etiquetado como "tu".
+      const esSolicitante = compararEmail_(h.usuario, email);
       const actor = h.usuario === 'sistema' ? 'sistema' : (esSolicitante ? 'tu' : 'equipo');
       return {
         subsolicitud_id: h.subsolicitud_id || '',

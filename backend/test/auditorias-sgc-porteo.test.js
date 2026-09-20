@@ -359,6 +359,45 @@ test('un tercero no registra hallazgos en una auditoria ajena', () => {
   assert.equal(r._forbidden, true);
 });
 
+// Bypass confirmado por la auditoria de modulos (2026-09): el permiso se
+// validaba contra data.auditoria_id, pero la edicion buscaba el hallazgo
+// SOLO por data.hallazgo_id -- un auditor de SU auditoria podia mandar SU
+// auditoria_id (para pasar el permiso) junto con el hallazgo_id de OTRA
+// auditoria de la que no es auditor, y editarlo.
+test('SEGURIDAD: un auditor no puede editar el hallazgo de una auditoria ajena mandando su PROPIA auditoria_id', () => {
+  const db = db_();
+  sembrar(db);
+
+  const audA = programar(db, { area_id: 'RRHH', auditor_email: 'auditor@homepymes.cl' });
+  planificar(db, audA);
+  const hallazgoA = verificar(db, audA); // registrado por CTX_AUDITOR, auditor de audA
+
+  const audB = programar(db, {
+    area_id: 'CONTABILIDAD', auditor_email: 'coauditor@homepymes.cl', clausulas: ['7.5']
+  });
+  Auditorias.planificar(db, {
+    auditoria_id: audB.auditoria_id, objetivo: 'Verificar EPP.', alcance: 'Registros 2026.',
+    criterios: 'ISO 9001:2015.', auditados: ['auditado@homepymes.cl'], fecha_ejecucion: '2026-09-16T12:00:00.000Z'
+  }, CTX_SGC);
+  const hallazgoB = Auditorias.registrarHallazgo(db, {
+    auditoria_id: audB.auditoria_id, clausula: '7.5', aspecto_verificado: 'EPP entregado.',
+    evidencia: 'Registros revisados.', resultado: 'CONFORME'
+  }, { email: 'coauditor@homepymes.cl', nombre: 'Coauditor', rol: 'DEV' });
+
+  // CTX_AUDITOR es auditor de audA, NO de audB -- manda auditoria_id de SU
+  // auditoria (pasa el permiso) pero el hallazgo_id es el de audB.
+  const ataque = Auditorias.registrarHallazgo(db, {
+    auditoria_id: audA.auditoria_id, hallazgo_id: hallazgoB.hallazgo_id,
+    clausula: '7.5', aspecto_verificado: 'MODIFICADO POR UN TERCERO', resultado: 'NO_CONFORMIDAD',
+    descripcion: 'intento de edicion cruzada'
+  }, CTX_AUDITOR);
+  assert.equal(ataque._validationError, true, 'debe rechazarse: el hallazgo no pertenece a audA');
+
+  const hallazgoBTrasElAtaque = filas(db, 'SGC_AUD_HALLAZGOS').find((h) => h.hallazgo_id === hallazgoB.hallazgo_id);
+  assert.equal(hallazgoBTrasElAtaque.aspecto_verificado, 'EPP entregado.', 'el hallazgo de audB no cambio');
+  assert.equal(hallazgoBTrasElAtaque.resultado, 'CONFORME', 'el resultado de audB no cambio');
+});
+
 test('el auditado ve la auditoria de su area, el ajeno no', () => {
   const db = db_();
   sembrar(db);
