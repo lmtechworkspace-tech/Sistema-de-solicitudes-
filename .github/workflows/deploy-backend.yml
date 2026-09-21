@@ -15,6 +15,15 @@ on:
       - "backend/scripts/**"
       - "package.json"
       - ".github/workflows/deploy-backend.yml"
+  # A proposito, backend/test/** NO esta en la lista: rsync (mas abajo)
+  # nunca sincroniza tests al VPS, asi que un cambio solo-de-test no
+  # necesita reiniciar el servicio. Trampa real (2026-09-21): si un push
+  # de backend/logica/** falla la bateria de tests por algo AJENO al
+  # cambio (ej. un fixture de fecha hardcodeada que vencio), y el arreglo
+  # solo toca backend/test/**, ese arreglo NO retrigger-ea el pipeline por
+  # su cuenta -- el commit de logica se queda sin desplegar hasta el
+  # proximo push que SI toque un path de la lista, o un workflow_dispatch
+  # manual. Quedo documentado aqui para no repetir la busqueda.
   workflow_dispatch:
 
 concurrency:
