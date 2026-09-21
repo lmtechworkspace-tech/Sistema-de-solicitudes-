@@ -1427,8 +1427,6 @@
           version: document.getElementById('sgc-v-version').value,
           fecha_vigencia: document.getElementById('sgc-v-vigencia').value,
           cambios: document.getElementById('sgc-v-cambios').value,
-          emisor: document.getElementById('sgc-emisor').value,
-          clase_externa: document.getElementById('sgc-clase-externa').value,
           nombre_archivo: archivo ? archivo.name : '',
           contenido_base64: base64
         });
