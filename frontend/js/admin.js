@@ -157,6 +157,21 @@
     ] }
   ];
 
+  // Panel de datos crudo (2026-09-21, pedido directo del super admin): grupo
+  // APARTE de ARQUITECTURA_ADMIN, para que solo aparezca cuando
+  // window.SIGSO_USUARIO.super_admin === true (ver plataforma.js#renderIdentidad_
+  // y backend/logica/portal.js#perfilPublico -- el gate real vive en el
+  // servidor, esto solo decide si se PINTA el boton).
+  var GRUPO_SUPER_ADMIN = { id: 'super_admin', nombre: 'Datos (avanzado)', icono: 'llave', items: [
+    { id: 'PANEL_SUPER_ADMIN', nombre: 'Panel de datos' }
+  ] };
+  function esCuentaSuperAdmin_() {
+    return !!(window.SIGSO_USUARIO && window.SIGSO_USUARIO.super_admin === true);
+  }
+  function arquitecturaAdminActiva_() {
+    return esCuentaSuperAdmin_() ? ARQUITECTURA_ADMIN.concat([GRUPO_SUPER_ADMIN]) : ARQUITECTURA_ADMIN;
+  }
+
   window.SigsoAdmin = {
     abrir: function () {
       // v12.1: si la URL pedia una seccion (#/administracion/USUARIOS) se abre
@@ -164,7 +179,7 @@
       // URL escrita a mano no puede inventar una seccion.
       var pedida = (window.SigsoShell && SigsoShell.tomarItemDeRuta)
         ? SigsoShell.tomarItemDeRuta() : '';
-      irASeccionAdmin_(existeSeccionAdmin_(pedida) ? pedida : ARQUITECTURA_ADMIN[0].items[0].id);
+      irASeccionAdmin_(existeSeccionAdmin_(pedida) ? pedida : arquitecturaAdminActiva_()[0].items[0].id);
     },
     // v13.0: el arbol del sidebar entra por aca.
     irAItem: function (itemId) { irASeccionAdmin_(itemId); }
@@ -174,7 +189,7 @@
 
   function existeSeccionAdmin_(id) {
     if (!id) return false;
-    return ARQUITECTURA_ADMIN.some(function (sub) {
+    return arquitecturaAdminActiva_().some(function (sub) {
       return sub.items.some(function (it) { return it.id === id; });
     });
   }
@@ -185,7 +200,7 @@
     if (!window.SigsoNav) return;
     SigsoNav.registrar('administracion', {
       nombre: 'Administración',
-      submodulos: ARQUITECTURA_ADMIN
+      submodulos: arquitecturaAdminActiva_()
     });
     if (window.SigsoShell && SigsoShell.refrescarArbol) SigsoShell.refrescarArbol();
   }
@@ -207,6 +222,7 @@
     else if (tipo === 'NOTIF_PERMISOS') renderPermisosNotif_();
     else if (tipo === 'CANALES_ALERTA') renderCanalesAlerta_();
     else if (tipo === 'ENVIAR_ALERTA') renderEnviarAlerta_();
+    else if (tipo === 'PANEL_SUPER_ADMIN') renderPanelSuperAdmin_();
     else renderCatalogo_(tipo);
   }
 
@@ -311,6 +327,172 @@
         });
       });
     }).catch(mostrarErrorAdmin_);
+  }
+
+  // ==========================================================================
+  // Panel de datos crudo (2026-09-21) — exclusivo de la cuenta super_admin.
+  // Deliberadamente generico: opera sobre CUALQUIER tabla que el backend
+  // exponga (superAdminListarTablas), sin conocer sus columnas de antemano
+  // -- por eso NO reusa renderTabla_/renderFormulario_ (esas dependen de un
+  // `campos` fijo por pantalla, definido a mano por tabla). Cada campo se
+  // edita como texto: el valor se manda tal cual si es texto plano, o se
+  // interpreta como JSON si el super admin escribe algo que parsea como tal
+  // (numero, true/false, null, un arreglo, "una string con comillas") --
+  // mismo criterio que ya usa sqliteRepo.js para guardar cada celda.
+  var tablaSuperAdminActiva_ = '';
+  var filasSuperAdminActivas_ = [];
+
+  function valorParaInput_(valor) {
+    return typeof valor === 'string' ? valor : JSON.stringify(valor === undefined ? '' : valor);
+  }
+  function valorDesdeInput_(texto) {
+    try { return JSON.parse(texto); } catch (err) { return texto; }
+  }
+
+  function renderPanelSuperAdmin_() {
+    var contenedor = document.getElementById('admin-contenido');
+    contenedor.innerHTML = Componentes.alerta(
+      'Este panel edita la base de datos DIRECTO, sin ninguna de las validaciones normales de SIGSO. ' +
+      'Cada cambio y cada eliminación quedan en el registro del sistema. Úsalo solo para corregir errores puntuales.',
+      'advertencia'
+    );
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'superAdminListarTablas', {}).then(function (respuesta) {
+      if (!respuesta.ok) {
+        contenedor.innerHTML += Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
+        return;
+      }
+      var filas = respuesta.data.tablas.map(function (t) {
+        return '<tr data-tabla="' + Componentes.escaparHtml(t.nombre) + '">' +
+          '<td>' + Componentes.escaparHtml(t.nombre) + '</td>' +
+          '<td>' + t.filas + '</td></tr>';
+      }).join('');
+      contenedor.innerHTML += Componentes.tarjeta(
+        '<table class="sigso-tabla"><thead><tr><th>Tabla</th><th>Filas</th></tr></thead><tbody>' + filas + '</tbody></table>'
+      );
+      contenedor.querySelectorAll('[data-tabla]').forEach(function (tr) {
+        tr.addEventListener('click', function () { renderPanelSuperAdminTabla_(tr.getAttribute('data-tabla')); });
+      });
+    }).catch(mostrarErrorAdmin_);
+  }
+
+  function renderPanelSuperAdminTabla_(tabla) {
+    var contenedor = document.getElementById('admin-contenido');
+    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'superAdminListarFilas', { tabla: tabla }).then(function (respuesta) {
+      if (!respuesta.ok) {
+        contenedor.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cargar.', 'error');
+        return;
+      }
+      tablaSuperAdminActiva_ = tabla;
+      filasSuperAdminActivas_ = respuesta.data.filas;
+      var columnas = respuesta.data.columnas;
+      var encabezados = columnas.map(function (c) { return '<th>' + Componentes.escaparHtml(c) + '</th>'; }).join('');
+      var cuerpo = filasSuperAdminActivas_.map(function (fila, indice) {
+        var celdas = columnas.map(function (c) {
+          var texto = valorParaInput_(fila[c]);
+          return '<td class="sigso-super-admin-celda">' + Componentes.escaparHtml(texto.length > 60 ? texto.slice(0, 60) + '…' : texto) + '</td>';
+        }).join('');
+        return '<tr data-fila="' + indice + '">' + celdas + '</tr>';
+      }).join('');
+      contenedor.innerHTML =
+        '<div class="sigso-admin-cab"><h2>' + Componentes.escaparHtml(tabla) + ' (' + filasSuperAdminActivas_.length + ')</h2>' +
+        Componentes.boton({ texto: '← Volver', variante: 'sutil', id: 'btn-super-admin-volver' }) +
+        Componentes.boton({ texto: 'Nueva fila', id: 'btn-super-admin-nueva' }) +
+        '</div>' +
+        Componentes.tarjeta('<div class="sigso-tabla-scroll"><table class="sigso-tabla"><thead><tr>' + encabezados + '</tr></thead><tbody>' + cuerpo + '</tbody></table></div>');
+
+      document.getElementById('btn-super-admin-volver').addEventListener('click', renderPanelSuperAdmin_);
+      document.getElementById('btn-super-admin-nueva').addEventListener('click', function () {
+        abrirFormularioSuperAdmin_(tabla, columnas, null);
+      });
+      contenedor.querySelectorAll('[data-fila]').forEach(function (tr) {
+        tr.addEventListener('click', function () {
+          var fila = filasSuperAdminActivas_[Number(tr.getAttribute('data-fila'))];
+          if (fila) abrirFormularioSuperAdmin_(tabla, columnas, fila);
+        });
+      });
+    }).catch(mostrarErrorAdmin_);
+  }
+
+  function abrirFormularioSuperAdmin_(tabla, columnas, registro) {
+    var esNueva = !registro;
+    var html = '<form id="form-super-admin" class="sigso-card"><div class="sigso-admin-form">' +
+      columnas.map(function (c) {
+        return Componentes.campoTextarea({
+          dataCampo: c, label: c, valor: esNueva ? '' : valorParaInput_(registro[c]),
+          ayuda: 'Texto plano, o JSON (numero, true/false, ["a","b"], etc.)'
+        });
+      }).join('') +
+      '</div>' +
+      Componentes.boton({ tipo: 'submit', texto: esNueva ? 'Crear fila' : 'Guardar cambios' }) +
+      (esNueva ? '' : Componentes.boton({ texto: 'Eliminar esta fila', variante: 'peligro', id: 'btn-super-admin-eliminar' })) +
+      '<div id="resultado-admin"></div></form>';
+
+    abrirDrawerAdmin_((esNueva ? 'Nueva fila — ' : 'Editar fila — ') + tabla, html, function () {
+      document.getElementById('form-super-admin').addEventListener('submit', function (evento) {
+        evento.preventDefault();
+        guardarFilaSuperAdmin_(tabla, columnas, esNueva ? null : registro);
+      });
+      var btnEliminar = document.getElementById('btn-super-admin-eliminar');
+      if (btnEliminar) {
+        btnEliminar.addEventListener('click', function () { eliminarFilaSuperAdmin_(tabla, columnas, registro); });
+      }
+    });
+  }
+
+  function leerFormularioSuperAdmin_(columnas) {
+    var registro = {};
+    columnas.forEach(function (c) {
+      var input = document.querySelector('#form-super-admin [data-campo="' + c + '"]');
+      registro[c] = valorDesdeInput_(input.value);
+    });
+    return registro;
+  }
+
+  // El primer campo de columnas (convencion de este backend: siempre el id
+  // de la fila, ver COLUMNAS en schema.js) es el que identifica la fila a
+  // editar/eliminar -- nunca cambia aunque el super admin lo edite en el
+  // mismo formulario (se manda el valor ORIGINAL como id_valor).
+  function guardarFilaSuperAdmin_(tabla, columnas, registroOriginal) {
+    var idCampo = columnas[0];
+    var valores = leerFormularioSuperAdmin_(columnas);
+    var accion = registroOriginal
+      ? llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'superAdminActualizarFila', {
+          tabla: tabla, id_campo: idCampo, id_valor: registroOriginal[idCampo], cambios: valores
+        })
+      : llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'superAdminAgregarFila', { tabla: tabla, fila: valores });
+
+    accion.then(function (respuesta) {
+      if (respuesta.ok) {
+        cerrarDrawerAdmin_();
+        renderPanelSuperAdminTabla_(tabla);
+        return;
+      }
+      document.getElementById('resultado-admin').innerHTML = Componentes.alerta(respuesta.message || 'Error al guardar.', 'error');
+    });
+  }
+
+  function eliminarFilaSuperAdmin_(tabla, columnas, registro) {
+    var idCampo = columnas[0];
+    var idValor = String(registro[idCampo]);
+    Componentes.prompt({
+      titulo: 'Eliminar fila de ' + tabla,
+      mensaje: 'Esto borra la fila sin ninguna validación de negocio y no se puede deshacer. ' +
+        'Para confirmar, escribe el valor de "' + idCampo + '": ' + idValor,
+      placeholder: idValor,
+      confirmar: 'Eliminar', tipo: 'text',
+      validar: function (valor) { return valor === idValor ? null : 'Escribe exactamente el valor mostrado.'; }
+    }).then(function (confirmado) {
+      if (!confirmado) return;
+      llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'superAdminEliminarFila', { tabla: tabla, id_campo: idCampo, id_valor: registro[idCampo] })
+        .then(function (respuesta) {
+          if (respuesta.ok) {
+            cerrarDrawerAdmin_();
+            renderPanelSuperAdminTabla_(tabla);
+            return;
+          }
+          document.getElementById('resultado-admin').innerHTML = Componentes.alerta(respuesta.message || 'Error al eliminar.', 'error');
+        });
+    });
   }
 
   function renderUsuarios_() {
@@ -1856,7 +2038,7 @@
   if (window.SigsoNav) {
     SigsoNav.registrar('administracion', {
       nombre: 'Administración',
-      submodulos: ARQUITECTURA_ADMIN
+      submodulos: arquitecturaAdminActiva_()
     });
   }
 })();

@@ -289,6 +289,60 @@ test('nuevaVersion: la anterior se archiva (no se borra) y la vigente pasa a ser
   }, CTX_ENCARGADO))._validationError, true);
 });
 
+// reemplazarArchivoVersionVigente: caso creado por la migracion de datos del
+// Sheets viejo (2026-09-21) -- se cargo la INFO de los documentos pero nunca
+// los archivos, y subir uno con nuevaVersion crearia una version falsa
+// (v02) para un documento que sigue siendo v01. Gate mas estricto que
+// gobiernaSgc_: ni ENCARGADO_SGC ni un ADM cualquiera pueden usarlo, solo
+// contexto.super_admin === true.
+test('reemplazarArchivoVersionVigente: solo super_admin; pisa el archivo de la MISMA version, no crea una nueva', async (t) => {
+  const db = db_();
+  sembrarRoles(db);
+  conMockAlmacenamiento_(t);
+  const doc = await crearDoc(db);
+  const versionOriginal = filas(db, 'SGC_DOC_VERSIONES').find((v) => v.documento_id === doc.documento_id);
+
+  const CTX_SUPER_ADMIN = { email: 'lmendoza@homepymes.cl', nombre: 'Luis', rol: 'ADM', super_admin: true };
+
+  // Ni ENCARGADO_SGC ni un ADM comun (sin la bandera) pueden usarlo.
+  const rechazoEncargado = await Calidad.reemplazarArchivoVersionVigente(db, {
+    documento_id: doc.documento_id, nombre_archivo: 'real.pdf', contenido_base64: PDF_B64
+  }, CTX_ENCARGADO);
+  assert.ok(rechazoEncargado._forbidden);
+  const rechazoAdm = await Calidad.reemplazarArchivoVersionVigente(db, {
+    documento_id: doc.documento_id, nombre_archivo: 'real.pdf', contenido_base64: PDF_B64
+  }, { email: 'admin@homepymes.cl', rol: 'ADM' });
+  assert.ok(rechazoAdm._forbidden);
+
+  const actualizado = await Calidad.reemplazarArchivoVersionVigente(db, {
+    documento_id: doc.documento_id, nombre_archivo: 'real.pdf', contenido_base64: PDF_B64
+  }, CTX_SUPER_ADMIN);
+  assert.equal(actualizado.version_vigente, 'v01', 'la version NO cambia');
+  assert.equal(actualizado.archivo_nombre, 'real.pdf');
+
+  const versiones = filas(db, 'SGC_DOC_VERSIONES').filter((v) => v.documento_id === doc.documento_id);
+  assert.equal(versiones.length, 1, 'no se crea una fila nueva en SGC_DOC_VERSIONES');
+  assert.equal(versiones[0].version_id, versionOriginal.version_id, 'se edita la MISMA fila, no una nueva');
+  assert.equal(versiones[0].version, 'v01');
+  assert.equal(versiones[0].archivo_nombre, 'real.pdf');
+  assert.notEqual(versiones[0].archivo_id, versionOriginal.archivo_id, 'el archivo en R2 si cambio');
+});
+
+test('reemplazarArchivoVersionVigente: exige documento_id valido y archivo adjunto', async (t) => {
+  const db = db_();
+  sembrarRoles(db);
+  conMockAlmacenamiento_(t);
+  const CTX_SUPER_ADMIN = { email: 'lmendoza@homepymes.cl', rol: 'ADM', super_admin: true };
+  assert.equal((await Calidad.reemplazarArchivoVersionVigente(db, {
+    documento_id: 'no-existe', nombre_archivo: 'x.pdf', contenido_base64: PDF_B64
+  }, CTX_SUPER_ADMIN))._validationError, true);
+
+  const doc = await crearDoc(db);
+  assert.equal((await Calidad.reemplazarArchivoVersionVigente(db, {
+    documento_id: doc.documento_id
+  }, CTX_SUPER_ADMIN))._validationError, true);
+});
+
 // Misma condicion de carrera que crearDocumento, aplicada a nuevaVersion:
 // sin el chequeo posterior al await, dos "nuevaVersion" concurrentes con
 // el mismo numero de version podian dejar DOS filas vigente:true del

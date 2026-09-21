@@ -401,7 +401,7 @@ function getDocumento(db, data, contexto) {
 
   return {
     documento: Object.assign({}, doc, { clausulas_iso: parsearClausulasIso_(doc.clausulas_iso), enlaces: parsearEnlaces_(doc.enlaces) }),
-    puede_gestionar: gobierna, catalogo_clausulas: CLAUSULAS_ISO9001,
+    puede_gestionar: gobierna, puede_reemplazar_archivo: contexto.super_admin === true, catalogo_clausulas: CLAUSULAS_ISO9001,
     debo_acusar: debeAcusar, mi_acuse: miAcuse ? miAcuse.acusado_en : '',
     versiones,
     destinatarios: doc.visibilidad === 'SELECCION'
@@ -524,6 +524,41 @@ async function nuevaVersion(db, data, contexto) {
     archivo_id: archivo.archivo_id, archivo_nombre: archivo.archivo_nombre, archivo_mime: archivo.archivo_mime, estado: 'VIGENTE'
   });
   registrarLogSgc_(db, 'SGC_DOC_NUEVA_VERSION', doc.codigo + ' → ' + version, contexto);
+  return actualizado;
+}
+
+// Reemplazar el ARCHIVO de la version vigente sin crear una version nueva
+// (pedido directo del super admin, 2026-09-21): la migracion del Sheets
+// viejo cargo toda la info de SGC_DOCUMENTOS/SGC_DOC_VERSIONES pero nunca
+// los PDF/Word reales (no estaban en el export). Subir esos archivos ahora
+// via nuevaVersion() crearia versiones falsas (v02, v03...) para documentos
+// que en realidad siguen siendo v01 -- exactamente lo que el usuario pidio
+// evitar. Por eso este gate es MAS estricto que gobiernaSgc_ (que permite
+// ENCARGADO_SGC ademas de ADM): solo la cuenta super_admin puede pisar el
+// archivo de una version ya publicada, porque es la unica operacion del
+// modulo que reescribe evidencia historica en vez de agregarla.
+async function reemplazarArchivoVersionVigente(db, data, contexto) {
+  if (!contexto || contexto.super_admin !== true) {
+    return { _forbidden: true, message: 'Solo la cuenta de super administrador puede reemplazar el archivo de la versión vigente sin crear una versión nueva.' };
+  }
+  const doc = buscarDocumentoSgc_(db, data.documento_id);
+  if (!doc) return errorValidacion_('documento_id', 'Documento no encontrado.');
+  if (!data.contenido_base64) return errorValidacion_('contenido_base64', 'Adjunta el archivo a cargar.');
+  const versionVigente = leerSeguro_(db, 'SGC_DOC_VERSIONES')
+    .find((v) => v.documento_id === doc.documento_id && esVerdadero_(v.vigente));
+  if (!versionVigente) return errorValidacion_('documento_id', 'Este documento no tiene una versión vigente registrada en SGC_DOC_VERSIONES.');
+
+  const archivo = await subirArchivoSgc_(data, doc.codigo);
+  if (archivo._validationError) return archivo;
+
+  actualizarFilaPorId_(db, 'SGC_DOC_VERSIONES', 'version_id', versionVigente.version_id, {
+    archivo_id: archivo.archivo_id, archivo_nombre: archivo.archivo_nombre, archivo_mime: archivo.archivo_mime,
+    subido_por: contexto.email || '', fecha: new Date().toISOString()
+  });
+  const actualizado = actualizarFilaPorId_(db, 'SGC_DOCUMENTOS', 'documento_id', doc.documento_id, {
+    archivo_id: archivo.archivo_id, archivo_nombre: archivo.archivo_nombre, archivo_mime: archivo.archivo_mime
+  });
+  registrarLogSgc_(db, 'SGC_DOC_ARCHIVO_REEMPLAZADO', doc.codigo + ' — archivo de la versión ' + versionVigente.version + ' reemplazado (misma versión, no se creó una nueva)', contexto);
   return actualizado;
 }
 
@@ -864,6 +899,7 @@ async function recordatorioPendientes(db) {
 
 module.exports = {
   listarDocumentos, getDocumento, sembrarDocumentosExternos, crearDocumento, nuevaVersion,
+  reemplazarArchivoVersionVigente,
   actualizarDocumento, descargarDocumento, acusarDocumento, getCumplimiento,
   listarRoles, gestionarRol, listarAccesos, previsualizarAcceso, getMatrizDistribucion, getDocumentosConfidenciales,
   recordatorioPendientes,

@@ -567,6 +567,9 @@
   var objetivoActivoId_ = null;
   var pestanaFicha_ = 'datos';
   var puedeGestionar_ = false;
+  // Solo super_admin (ver puede_reemplazar_archivo en calidadSgc.js#getDocumento):
+  // reemplazar el archivo de la version vigente sin crear una version nueva.
+  var puedeReemplazarArchivo_ = false;
   var filtroTipo_ = '';
   var filtroEstado_ = '';
   var filtroBusqueda_ = '';
@@ -875,6 +878,7 @@
 
     if (enCache) {
       puedeGestionar_ = enCache.puede_gestionar === true;
+      puedeReemplazarArchivo_ = enCache.puede_reemplazar_archivo === true;
       pintarDetalle_(cont, enCache);
     } else {
       cont.innerHTML = Componentes.cargando('Cargando documento...');
@@ -893,6 +897,7 @@
       if (enCache && JSON.stringify(respuesta.data) === JSON.stringify(enCache)) return; // sin cambios: no repintar
       cacheDetalleDoc_[id] = respuesta.data;
       puedeGestionar_ = respuesta.data.puede_gestionar === true;
+      puedeReemplazarArchivo_ = respuesta.data.puede_reemplazar_archivo === true;
       pintarDetalle_(cont, respuesta.data);
       if (preservarScroll) window.scrollTo(0, scrollAntes);
     }).catch(function () {
@@ -912,6 +917,10 @@
         ? Componentes.boton({ texto: 'Ver', variante: 'secundario', clase: 'js-sgc-ver' }) : '') +
       (d.archivo_id ? Componentes.boton({ texto: 'Descargar', icono: 'descargar', clase: 'js-sgc-descargar' }) : '') +
       (puedeGestionar_ ? Componentes.boton({ texto: 'Nueva versión', variante: 'secundario', clase: 'js-sgc-version' }) : '') +
+      // Solo super_admin: pisa el archivo de la version vigente SIN crear una
+      // version nueva -- pensado para cargar los PDF que la migracion del
+      // Sheets viejo no trajo (solo trajo la info, no los archivos).
+      (puedeReemplazarArchivo_ ? Componentes.boton({ texto: 'Reemplazar archivo', variante: 'secundario', clase: 'js-sgc-reemplazar-archivo' }) : '') +
       (puedeGestionar_ ? Componentes.boton({ texto: 'Editar', variante: 'secundario', clase: 'js-sgc-editar' }) : '') +
       (puedeGestionar_ ? Componentes.boton({ texto: 'Ver quién confirmó', variante: 'secundario', clase: 'js-sgc-cumplimiento' }) : '') +
       (puedeGestionar_ && !obsoleto ? Componentes.boton({ texto: 'Marcar obsoleto', variante: 'peligro', clase: 'js-sgc-obsoleto' }) : '') +
@@ -1084,6 +1093,9 @@
 
     var btnVersion = cont.querySelector('.js-sgc-version');
     if (btnVersion) btnVersion.addEventListener('click', function () { abrirFormularioVersion_(d); });
+
+    var btnReemplazarArchivo = cont.querySelector('.js-sgc-reemplazar-archivo');
+    if (btnReemplazarArchivo) btnReemplazarArchivo.addEventListener('click', function () { abrirFormularioReemplazoArchivo_(d); });
 
     var btnEditar = cont.querySelector('.js-sgc-editar');
     if (btnEditar) btnEditar.addEventListener('click', function () { abrirFormularioEditar_(d, data.destinatarios || []); });
@@ -1430,6 +1442,58 @@
         abrirDocumento_(d.documento_id);
       }).catch(function (err) {
         boton.disabled = false; boton.textContent = 'Subir versión';
+        Componentes.aviso({ texto: mensajeErrorSubidaSgc_(err), tipo: 'error' });
+      });
+    });
+  }
+
+  // Solo super_admin: pisa el archivo de la version VIGENTE sin crear una
+  // version nueva (backend/logica/calidadSgc.js#reemplazarArchivoVersionVigente).
+  // A proposito mas simple que abrirFormularioVersion_: no pide numero de
+  // version ni fecha de vigencia porque NADA de eso cambia, solo el archivo.
+  function abrirFormularioReemplazoArchivo_(d) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Reemplazar archivo de ' + Componentes.escaparHtml(d.codigo) + '</h3>' +
+        '<p class="sigso-ayuda">Esto NO crea una versión nueva: la versión sigue siendo ' +
+          Componentes.escaparHtml(d.version_vigente) + ', solo cambia el archivo adjunto. ' +
+          'Pensado para cargar los archivos que la migración de datos no trajo.</p>' +
+        '<form id="form-sgc-reemplazo">' +
+          '<div class="sigso-campo">' +
+            '<label for="sgc-reemplazo-archivo">Archivo</label>' +
+            '<input type="file" id="sgc-reemplazo-archivo" accept=".pdf,.doc,.docx,.xls,.xlsx" required>' +
+          '</div>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Reemplazar', tipo: 'submit', clase: 'js-sgc-guardar' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-sgc-reemplazo').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var archivo = document.getElementById('sgc-reemplazo-archivo').files[0];
+      if (!archivo) return;
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true; boton.textContent = 'Subiendo...';
+
+      leerArchivoBase64Sgc_(archivo).then(function (base64) {
+        return api_('reemplazarArchivoVersionVigenteSgc', {
+          documento_id: d.documento_id, nombre_archivo: archivo.name, contenido_base64: base64
+        });
+      }).then(function (respuesta) {
+        boton.disabled = false; boton.textContent = 'Reemplazar';
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo reemplazar el archivo.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        abrirDocumento_(d.documento_id);
+      }).catch(function (err) {
+        boton.disabled = false; boton.textContent = 'Reemplazar';
         Componentes.aviso({ texto: mensajeErrorSubidaSgc_(err), tipo: 'error' });
       });
     });

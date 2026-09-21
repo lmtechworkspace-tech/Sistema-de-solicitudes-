@@ -53,7 +53,15 @@ const COLUMNAS = {
     'empresa_id', 'activo', 'debe_cambiar_password',
     'ultimo_acceso', 'creado_por',
     // organizacion_id: ver la nota "Organización invisible" arriba.
-    'organizacion_id'
+    'organizacion_id',
+    // super_admin: bandera aparte de `rol` a propósito (2026-09-21, pedido
+    // directo del dueño de la cuenta). NUNCA es un campo que crear/actualizar
+    // acepten desde `data` (cuentasPortal.js arma `cambios`/el insert campo
+    // por campo, nunca por spread) -- la única forma de encenderla es una
+    // escritura directa a la fila, fuera de cualquier acción del API. Así,
+    // ningún Admin (ni siquiera otro ADM) puede otorgársela a otra cuenta
+    // por accidente ni a propósito vía la UI de gestión de cuentas.
+    'super_admin'
   ],
   SESIONES_PORTAL: ['token', 'cuenta_id', 'expira', 'creada'],
   // Fase "Recuperar contraseña" (documento "Arquitectura de Accesos",

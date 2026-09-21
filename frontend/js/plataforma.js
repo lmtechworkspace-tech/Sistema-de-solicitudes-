@@ -695,7 +695,11 @@
     window.SIGSO_USUARIO = {
       nombre: cuenta.nombre,
       rol: cuenta.rol,
-      email: (cuenta.emails || [])[0] || ''
+      email: (cuenta.emails || [])[0] || '',
+      // super_admin: viaja en cuenta.super_admin desde el backend (ver
+      // portal.js#perfilPublico). Solo decide si se MUESTRA la UI del panel
+      // de datos crudo -- el gate real vive en el servidor.
+      super_admin: cuenta.super_admin === true
     };
     document.getElementById('nav-nombre-usuario').textContent = cuenta.nombre;
     document.getElementById('nav-rol-usuario').textContent =

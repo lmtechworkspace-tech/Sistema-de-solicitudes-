@@ -58,7 +58,11 @@ function perfilPublico(cuenta) {
     rol: cuenta.rol,
     modulos: parsearListaPortal(cuenta.modulos),
     empresa_id: cuenta.empresa_id,
-    debe_cambiar_password: cuenta.debe_cambiar_password === true || cuenta.debe_cambiar_password === 'TRUE' || cuenta.debe_cambiar_password === 1
+    debe_cambiar_password: cuenta.debe_cambiar_password === true || cuenta.debe_cambiar_password === 'TRUE' || cuenta.debe_cambiar_password === 1,
+    // Ver la nota de 'super_admin' en schema.js: viaja al frontend solo para
+    // decidir si mostrar la UI (el gate real vive en el servidor, en cada
+    // acción protegida -- ver resolverContextoPortal_ en router.js).
+    super_admin: cuenta.super_admin === true || cuenta.super_admin === 'TRUE' || cuenta.super_admin === 1
   };
 }
 

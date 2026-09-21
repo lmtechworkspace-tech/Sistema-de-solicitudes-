@@ -171,6 +171,8 @@ var ACCIONES_PORTADAS_NODE = {
   listarRolesSgc: true, gestionarRolSgc: true, listarAccesosSgc: true, previsualizarAccesoSgc: true,
   getMatrizDistribucionSgc: true, getDocumentosConfidencialesSgc: true,
   crearDocumentoSgc: true, nuevaVersionDocumentoSgc: true, actualizarDocumentoSgc: true, descargarDocumentoSgc: true,
+  // Solo super_admin (backend/logica/calidadSgc.js#reemplazarArchivoVersionVigente).
+  reemplazarArchivoVersionVigenteSgc: true,
 
   // --- SGC ISO 9001: Personas (16 de 16; descriptor/documento desgateados de R2 el 2026-09-18) ---
   listarPersonasSgc: true, getFichaPersonaSgc: true, guardarPersonaSgc: true, desvincularPersonaSgc: true,
@@ -253,7 +255,12 @@ var ACCIONES_PORTADAS_NODE = {
   // (USUARIOS, RN-030) y perfil propio de solo lectura. La foto de perfil
   // (guardarFotoPerfil/eliminarFotoPerfil/getFotosPerfil) sigue en Apps
   // Script -- decision consciente, ver backend/logica/perfiles.js.
-  gestionarUsuario: true, listarUsuarios: true, getMiPerfil: true
+  gestionarUsuario: true, listarUsuarios: true, getMiPerfil: true,
+
+  // --- Panel de datos crudo, exclusivo de la cuenta super_admin (2026-09-21;
+  // backend/logica/superAdminPanel.js) ---
+  superAdminListarTablas: true, superAdminListarFilas: true, superAdminAgregarFila: true,
+  superAdminActualizarFila: true, superAdminEliminarFila: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,

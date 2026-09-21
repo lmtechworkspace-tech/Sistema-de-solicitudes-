@@ -67,6 +67,7 @@ const Inicio = require('../logica/inicio');
 const Auth = require('../logica/auth');
 const Perfiles = require('../logica/perfiles');
 const RecuperarPassword = require('../logica/recuperarPassword');
+const SuperAdminPanel = require('../logica/superAdminPanel');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -309,6 +310,9 @@ const ACCIONES = {
   sembrarDocumentosExternosSgc: (db, data, contexto) => Calidad.sembrarDocumentosExternos(db, data, contexto),
   crearDocumentoSgc: (db, data, contexto) => Calidad.crearDocumento(db, data, contexto),
   nuevaVersionDocumentoSgc: (db, data, contexto) => Calidad.nuevaVersion(db, data, contexto),
+  // Solo super_admin (ver la cabecera de la función en calidadSgc.js):
+  // reemplaza el archivo de la versión VIGENTE sin crear una versión nueva.
+  reemplazarArchivoVersionVigenteSgc: (db, data, contexto) => Calidad.reemplazarArchivoVersionVigente(db, data, contexto),
   actualizarDocumentoSgc: (db, data, contexto) => Calidad.actualizarDocumento(db, data, contexto),
   descargarDocumentoSgc: (db, data, contexto) => Calidad.descargarDocumento(db, data, contexto),
   acusarDocumentoSgc: (db, data, contexto) => Calidad.acusarDocumento(db, data, contexto),
@@ -476,7 +480,17 @@ const ACCIONES = {
   liberarPrestacionSgc: (db, data, contexto) => Prestaciones.liberar(db, data, contexto),
   marcarNoConformePrestacionSgc: (db, data, contexto) => Prestaciones.marcarNoConforme(db, data, contexto),
   abrirNcPrestacionSgc: (db, data, contexto) => Prestaciones.abrirNoConformidad(db, data, contexto),
-  anularPrestacionSgc: (db, data, contexto) => Prestaciones.anular(db, data, contexto)
+  anularPrestacionSgc: (db, data, contexto) => Prestaciones.anular(db, data, contexto),
+
+  // Panel de datos crudo, exclusivo de la cuenta super_admin (ver la
+  // cabecera de superAdminPanel.js). Cada accion revalida el gate adentro
+  // de la propia funcion -- el mapa de aqui abajo no es la unica linea de
+  // defensa.
+  superAdminListarTablas: (db, data, contexto) => SuperAdminPanel.listarTablas(db, data, contexto),
+  superAdminListarFilas: (db, data, contexto) => SuperAdminPanel.listarFilasTabla(db, data, contexto),
+  superAdminAgregarFila: (db, data, contexto) => SuperAdminPanel.agregarFilaTabla(db, data, contexto),
+  superAdminActualizarFila: (db, data, contexto) => SuperAdminPanel.actualizarFilaTabla(db, data, contexto),
+  superAdminEliminarFila: (db, data, contexto) => SuperAdminPanel.eliminarFilaTabla(db, data, contexto)
 };
 
 function responderResultado_(resultado) {
@@ -508,7 +522,11 @@ function resolverContextoPortal_(db, token) {
     modulos: modulos,
     via_portal: true,
     cuenta_id: cuenta.cuenta_id,
-    empresa_id: cuenta.empresa_id
+    empresa_id: cuenta.empresa_id,
+    // super_admin: se resuelve fresco de CUENTAS_PORTAL en cada request,
+    // igual que el resto de contexto -- nunca del token ni de algo mandado
+    // por el cliente (ver la nota de seguridad arriba de esta función).
+    super_admin: cuenta.super_admin === true || cuenta.super_admin === 'TRUE' || cuenta.super_admin === 1
   };
 }
 
