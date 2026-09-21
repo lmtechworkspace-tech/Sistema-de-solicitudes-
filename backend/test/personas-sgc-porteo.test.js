@@ -343,6 +343,48 @@ test('guardarDocumento: valida el permiso ANTES que el tipo/archivo', async (t) 
   assert.equal((await Personas.guardarDocumento(db, { persona_id: ana.persona_id, tipo: 'CV', nombre_archivo: 'cv.pdf', contenido_base64: PDF_B64 }, CTX_ANA))._forbidden, true, 'la guardia de permiso corre antes que la de archivo');
 });
 
+// reemplazarArchivoDocumento: mismo caso que reemplazarArchivoVersionVigente
+// en calidadSgc.js -- la migracion del Sheets viejo cargo la carpeta digital
+// (nombre/tipo/fecha) sin los PDF reales. Gate mas estricto que
+// gobiernaSgc_: solo contexto.super_admin === true.
+test('reemplazarArchivoDocumento: solo super_admin; pisa el archivo del MISMO doc_id, no crea uno nuevo', async (t) => {
+  const db = db_();
+  conMockAlmacenamiento_(t);
+  const { ana } = sembrar(db);
+  const doc = await Personas.guardarDocumento(db, { persona_id: ana.persona_id, tipo: 'CV', nombre: 'CV Ana', nombre_archivo: 'cv.pdf', contenido_base64: PDF_B64 }, CTX_ENCARGADO);
+
+  const CTX_SUPER_ADMIN = { email: 'lmendoza@homepymes.cl', rol: 'ADM', super_admin: true };
+
+  // Ni el Encargado SGC ni un ADM comun (sin la bandera) pueden usarlo.
+  const rechazoEncargado = await Personas.reemplazarArchivoDocumento(db, { persona_id: ana.persona_id, doc_id: doc.doc_id, nombre_archivo: 'real.pdf', contenido_base64: PDF_B64 }, CTX_ENCARGADO);
+  assert.ok(rechazoEncargado._forbidden);
+  const rechazoAdm = await Personas.reemplazarArchivoDocumento(db, { persona_id: ana.persona_id, doc_id: doc.doc_id, nombre_archivo: 'real.pdf', contenido_base64: PDF_B64 }, { email: 'admin@homepymes.cl', rol: 'ADM' });
+  assert.ok(rechazoAdm._forbidden);
+
+  const actualizado = await Personas.reemplazarArchivoDocumento(db, { persona_id: ana.persona_id, doc_id: doc.doc_id, nombre_archivo: 'real.pdf', contenido_base64: PDF_B64 }, CTX_SUPER_ADMIN);
+  assert.equal(actualizado.nombre, 'CV Ana', 'el nombre/tipo original no cambia');
+  assert.equal(actualizado.tipo, 'CV');
+  assert.equal(actualizado.archivo_nombre, 'real.pdf');
+
+  const documentos = filas(db, 'SGC_PERSONA_DOCUMENTOS').filter((d) => d.persona_id === ana.persona_id);
+  assert.equal(documentos.length, 1, 'no se crea una fila nueva');
+  assert.equal(documentos[0].doc_id, doc.doc_id, 'se edita el MISMO doc_id');
+  assert.notEqual(documentos[0].archivo_id, doc.archivo_id, 'el archivo en R2 si cambio');
+});
+
+test('reemplazarArchivoDocumento: exige doc_id valido (de esa persona) y archivo adjunto', async (t) => {
+  const db = db_();
+  conMockAlmacenamiento_(t);
+  const { ana, pedro } = sembrar(db);
+  const doc = await Personas.guardarDocumento(db, { persona_id: ana.persona_id, tipo: 'CV', nombre_archivo: 'cv.pdf', contenido_base64: PDF_B64 }, CTX_ENCARGADO);
+  const CTX_SUPER_ADMIN = { email: 'lmendoza@homepymes.cl', rol: 'ADM', super_admin: true };
+
+  assert.equal((await Personas.reemplazarArchivoDocumento(db, { persona_id: ana.persona_id, doc_id: 'no-existe', nombre_archivo: 'x.pdf', contenido_base64: PDF_B64 }, CTX_SUPER_ADMIN))._validationError, true);
+  // El doc_id existe, pero es de OTRA persona.
+  assert.equal((await Personas.reemplazarArchivoDocumento(db, { persona_id: pedro.persona_id, doc_id: doc.doc_id, nombre_archivo: 'x.pdf', contenido_base64: PDF_B64 }, CTX_SUPER_ADMIN))._validationError, true);
+  assert.equal((await Personas.reemplazarArchivoDocumento(db, { persona_id: ana.persona_id, doc_id: doc.doc_id }, CTX_SUPER_ADMIN))._validationError, true);
+});
+
 // ===== induccion ==============================================================
 
 test('induccion: la completa el Encargado SGC o la jefatura directa, no el propio trabajador', () => {

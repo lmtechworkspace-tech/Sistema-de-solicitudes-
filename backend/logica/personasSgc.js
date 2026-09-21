@@ -210,7 +210,7 @@ function getFicha(db, data, contexto) {
   const descriptorVigente = descriptores.find((d) => esVerdadero_(d.vigente)) || null;
 
   return {
-    persona, puede_gestionar: gobierna,
+    persona, puede_gestionar: gobierna, puede_reemplazar_archivo: contexto.super_admin === true,
     puede_gestionar_induccion: gobierna || esJefaturaDe_(db, persona, contexto),
     puede_evaluar: (gobierna || esJefaturaDe_(db, persona, contexto)) &&
       !(normalizarEmail_(persona.usuario_email) === normalizarEmail_(contexto.email) && !gobierna),
@@ -400,6 +400,36 @@ async function guardarDocumento(db, data, contexto) {
   agregarFila_(db, 'SGC_PERSONA_DOCUMENTOS', doc);
   registrarLogSgc_(db, 'SGC_PERSONA_DOC', persona.nombre + ' ' + data.tipo, contexto);
   return doc;
+}
+
+// Reemplazar el ARCHIVO de un documento de la persona ya existente, sin
+// crear una fila nueva (pedido directo del super admin, 2026-09-21): la
+// migracion del Sheets viejo cargo la carpeta digital (nombre/tipo/fecha)
+// pero no los PDF reales. Subirlo de nuevo via guardarDocumento() crearia
+// un documento DUPLICADO (misma persona, mismo tipo) en vez de completar el
+// que ya existe. Mismo criterio y mismo gate que
+// calidadSgc.js#reemplazarArchivoVersionVigente: solo super_admin, mas
+// estricto que gobiernaSgc_ (que alcanza para Encargado SGC/ADM en el resto
+// del modulo), porque pisa evidencia ya publicada en vez de agregarla.
+async function reemplazarArchivoDocumento(db, data, contexto) {
+  if (!contexto || contexto.super_admin !== true) {
+    return { _forbidden: true, message: 'Solo la cuenta de super administrador puede reemplazar el archivo de un documento existente.' };
+  }
+  const persona = buscarPersonaSgc_(db, data.persona_id);
+  if (!persona) return errorValidacion_('persona_id', 'Persona no encontrada.');
+  const doc = leerSeguro_(db, 'SGC_PERSONA_DOCUMENTOS').find((d) => d.doc_id === data.doc_id && d.persona_id === persona.persona_id && esActivo_(d));
+  if (!doc) return errorValidacion_('doc_id', 'Documento no encontrado.');
+  if (!data.contenido_base64) return errorValidacion_('contenido_base64', 'Adjunta el archivo a cargar.');
+
+  const archivo = await Calidad.subirArchivoSgc_(data, 'PERSONAL');
+  if (archivo._validationError) return archivo;
+
+  const actualizado = actualizarFilaPorId_(db, 'SGC_PERSONA_DOCUMENTOS', 'doc_id', doc.doc_id, {
+    archivo_id: archivo.archivo_id, archivo_nombre: archivo.archivo_nombre, archivo_mime: archivo.archivo_mime,
+    subido_por: contexto.email || '', fecha: new Date().toISOString()
+  });
+  registrarLogSgc_(db, 'SGC_PERSONA_DOC_ARCHIVO_REEMPLAZADO', persona.nombre + ' ' + doc.tipo + ' (' + doc.nombre + ')', contexto);
+  return actualizado;
 }
 
 async function descargarDocumento(db, data, contexto) {
@@ -683,7 +713,7 @@ async function recordatorioCompetencias(db) {
 module.exports = {
   listar, getFicha, guardarPersona, desvincular, quitarDelAlcance,
   guardarDescriptor, actualizarDescriptor, descargarDescriptor,
-  guardarDocumento, descargarDocumento, registrarInduccion,
+  guardarDocumento, descargarDocumento, reemplazarArchivoDocumento, registrarInduccion,
   registrarEvaluacion, listarCapacitaciones, guardarCapacitacion, registrarRealizacion, registrarEficaciaAsistente,
   recordatorioCompetencias,
   // Expuestas para tests / futuros incrementos del SGC. horasFormacionPorPersonaSgc_

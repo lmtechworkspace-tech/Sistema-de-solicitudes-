@@ -2094,6 +2094,10 @@
             ? Componentes.boton({ texto: 'Ver', variante: 'secundario', clase: 'js-sgc-ver-doc', idx: x.doc_id })
             : '') +
           Componentes.boton({ texto: 'Descargar', icono: 'descargar', variante: 'sutil', clase: 'js-sgc-bajar-doc', idx: x.doc_id }) +
+          // Solo super_admin: pisa el archivo de este documento sin crear
+          // uno nuevo -- pensado para cargar los archivos que la migracion
+          // de datos no trajo (ver puede_reemplazar_archivo en personasSgc.js).
+          (data.puede_reemplazar_archivo ? Componentes.boton({ texto: 'Reemplazar archivo', variante: 'sutil', clase: 'js-sgc-reemplazar-doc', idx: x.doc_id }) : '') +
           (puedeGestionar_ ? Componentes.boton({ texto: 'Quitar', variante: 'sutil', clase: 'js-sgc-quitar-doc', idx: x.doc_id }) : '') +
         '</div>' +
       '</div>';
@@ -2632,6 +2636,13 @@
       });
     });
 
+    cont.querySelectorAll('.js-sgc-reemplazar-doc').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var doc = (data.documentos || []).find(function (x) { return x.doc_id === btn.getAttribute('data-idx'); });
+        if (doc) abrirFormularioReemplazoDocPersona_(p, doc);
+      });
+    });
+
     cont.querySelectorAll('.js-sgc-induccion').forEach(function (btn) {
       btn.addEventListener('click', function () {
         api_('registrarInduccionSgc', {
@@ -2897,6 +2908,58 @@
         abrirPersona_(p.persona_id);
       }).catch(function (err) {
         boton.disabled = false; boton.textContent = 'Cargar';
+        Componentes.aviso({ texto: mensajeErrorSubidaSgc_(err), tipo: 'error' });
+      });
+    });
+  }
+
+  // Solo super_admin: pisa el archivo de un documento de la persona SIN
+  // crear uno nuevo (backend/logica/personasSgc.js#reemplazarArchivoDocumento).
+  // A proposito mas simple que abrirFormularioDocPersona_: no pide tipo ni
+  // nombre porque nada de eso cambia, solo el archivo.
+  function abrirFormularioReemplazoDocPersona_(p, doc) {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Reemplazar archivo — ' + Componentes.escaparHtml(doc.nombre || doc.archivo_nombre) + '</h3>' +
+        '<p class="sigso-ayuda">Esto NO crea un documento nuevo: sigue siendo el mismo (' +
+          Componentes.escaparHtml(TIPO_DOC_PERSONA_ETIQUETA[doc.tipo] || doc.tipo) + '), solo cambia el archivo adjunto. ' +
+          'Pensado para cargar los archivos que la migración de datos no trajo.</p>' +
+        '<form id="form-sgc-reemplazo-doc-persona">' +
+          '<div class="sigso-campo">' +
+            '<label for="sgc-rdp-archivo">Archivo</label>' +
+            '<input type="file" id="sgc-rdp-archivo" accept=".pdf,.doc,.docx,.xls,.xlsx" required>' +
+          '</div>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-sgc-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Reemplazar', tipo: 'submit', clase: 'js-sgc-guardar' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+
+    document.getElementById('form-sgc-reemplazo-doc-persona').addEventListener('submit', function (evento) {
+      evento.preventDefault();
+      var archivo = document.getElementById('sgc-rdp-archivo').files[0];
+      if (!archivo) return;
+      var boton = fondo.querySelector('.js-sgc-guardar');
+      boton.disabled = true; boton.textContent = 'Subiendo...';
+
+      leerArchivoBase64Sgc_(archivo).then(function (base64) {
+        return api_('reemplazarArchivoDocumentoPersonaSgc', {
+          persona_id: p.persona_id, doc_id: doc.doc_id, nombre_archivo: archivo.name, contenido_base64: base64
+        });
+      }).then(function (respuesta) {
+        boton.disabled = false; boton.textContent = 'Reemplazar';
+        if (!respuesta || !respuesta.ok) {
+          Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo reemplazar el archivo.', tipo: 'error' });
+          return;
+        }
+        cerrar();
+        abrirPersona_(p.persona_id);
+      }).catch(function (err) {
+        boton.disabled = false; boton.textContent = 'Reemplazar';
         Componentes.aviso({ texto: mensajeErrorSubidaSgc_(err), tipo: 'error' });
       });
     });

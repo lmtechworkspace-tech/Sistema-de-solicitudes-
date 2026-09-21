@@ -181,6 +181,8 @@ var ACCIONES_PORTADAS_NODE = {
   registrarRealizacionCapacitacionSgc: true, registrarEficaciaCapacitacionSgc: true,
   guardarDescriptorSgc: true, actualizarDescriptorSgc: true, descargarDescriptorSgc: true,
   guardarDocumentoPersonaSgc: true, descargarDocumentoPersonaSgc: true,
+  // Solo super_admin (backend/logica/personasSgc.js#reemplazarArchivoDocumento).
+  reemplazarArchivoDocumentoPersonaSgc: true,
 
   // --- SGC ISO 9001: No conformidades (9 de 9; PRO-06, sin archivos: se corta completo) ---
   listarNcSgc: true, getDetalleNcSgc: true, crearNcSgc: true,

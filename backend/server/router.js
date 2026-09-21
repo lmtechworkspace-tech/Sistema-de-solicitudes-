@@ -337,6 +337,9 @@ const ACCIONES = {
   actualizarDescriptorSgc: (db, data, contexto) => Personas.actualizarDescriptor(db, data, contexto),
   descargarDescriptorSgc: (db, data, contexto) => Personas.descargarDescriptor(db, data, contexto),
   guardarDocumentoPersonaSgc: (db, data, contexto) => Personas.guardarDocumento(db, data, contexto),
+  // Solo super_admin (ver la cabecera de la función en personasSgc.js):
+  // reemplaza el archivo de un documento de la persona ya existente.
+  reemplazarArchivoDocumentoPersonaSgc: (db, data, contexto) => Personas.reemplazarArchivoDocumento(db, data, contexto),
   descargarDocumentoPersonaSgc: (db, data, contexto) => Personas.descargarDocumento(db, data, contexto),
   registrarInduccionSgc: (db, data, contexto) => Personas.registrarInduccion(db, data, contexto),
   registrarEvaluacionSgc: (db, data, contexto) => Personas.registrarEvaluacion(db, data, contexto),
