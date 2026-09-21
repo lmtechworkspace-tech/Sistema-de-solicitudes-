@@ -38,6 +38,11 @@ const AYER = fmtDia_(new Date(Date.now() - 24 * 3600 * 1000));
 const HOY = fmtDia_(new Date());
 const MANANA = fmtDia_(new Date(Date.now() + 2 * 24 * 3600 * 1000));
 function haceDias_(n) { return new Date(Date.now() - n * 24 * 3600 * 1000).toISOString(); }
+// Fecha comprometida que NO vence, en formato AAAA-MM-DD (no hardcodear una
+// fecha absoluta: con el tiempo real avanzando, una fecha fija queda en el
+// pasado y "salud: normal" deja de serlo -- mismo criterio que AYER/HOY/
+// MANANA de arriba).
+function fechaFuturaP1_(dias) { return fmtDia_(new Date(Date.now() + (dias || 30) * 24 * 3600 * 1000)); }
 
 function armarProyectoConTarea(db, opciones) {
   opciones = opciones || {};
@@ -150,7 +155,7 @@ test('eliminarRegistroDia: valida existencia y permisos', () => {
 function armarProyectoP1(db, overridesTarea) {
   const proyecto = Proyectos.crear(db, { nombre: 'Migración ERP', fecha_inicio: '2026-08-01', fecha_objetivo: '2026-12-01' }, CTX_LEO);
   Proyectos.gestionarIntegrante(db, { proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE' }, CTX_LEO);
-  const fechaCompromiso = (overridesTarea && 'fecha_compromiso' in overridesTarea) ? overridesTarea.fecha_compromiso : '2026-09-20';
+  const fechaCompromiso = (overridesTarea && 'fecha_compromiso' in overridesTarea) ? overridesTarea.fecha_compromiso : fechaFuturaP1_();
   const tarea = Proyectos.crearTarea(db, Object.assign({ proyecto_id: proyecto.proyecto_id, titulo: 'Levantar requerimientos', responsable_email: 'marcelo@rld.cl', fecha_compromiso: fechaCompromiso }, overridesTarea || {}), CTX_LEO);
   if (fechaCompromiso) {
     Actividades.confirmar(db, { actividad_id: tarea.actividad_id, fecha_compromiso: fechaCompromiso }, CTX_MARCELO);
@@ -170,7 +175,7 @@ test('congelarBaseline: exclusivo lider/ADM; guarda evento BASELINE con la foto 
   assert.equal(eventos.length, 1);
   const snapshot = JSON.parse(eventos[0].cuerpo);
   assert.equal(snapshot.tareas[0].actividad_id, tarea.actividad_id);
-  assert.equal(snapshot.tareas[0].fecha_fin, '2026-09-20');
+  assert.equal(snapshot.tareas[0].fecha_fin, fechaFuturaP1_());
 });
 
 test('congelarBaseline: la mas reciente es la vigente; re-congelar no borra la anterior', () => {
@@ -252,7 +257,7 @@ test('reprogramarTarea: delega en Actividades.reprogramar; el lider puede; un aj
   const ok = Proyectos.reprogramarTarea(db, { proyecto_id: proyecto.proyecto_id, actividad_id: tarea.actividad_id, fecha_compromiso: '2026-10-01', motivo: 'Cliente pidió más tiempo' }, CTX_LEO);
   assert.equal(ok.fecha_compromiso, '2026-10-01');
   const evento = Proyectos.listarBitacora(db, { proyecto_id: proyecto.proyecto_id }, CTX_LEO).find((b) => b.tipo === 'REPROGRAMACION');
-  assert.equal(evento.fecha_anterior, '2026-09-20');
+  assert.equal(evento.fecha_anterior, fechaFuturaP1_());
   assert.equal(evento.fecha_nueva, '2026-10-01');
 
   const otroProyecto = Proyectos.crear(db, { nombre: 'Otro', fecha_inicio: '2026-08-01', fecha_objetivo: '2026-12-01' }, CTX_LEO);

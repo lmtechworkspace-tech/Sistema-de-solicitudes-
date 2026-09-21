@@ -32,6 +32,11 @@ const CTX_LEO = { email: 'leo@rld.cl', nombre: 'Leo Lider', rol: 'DEV' };
 const CTX_MARCELO = { email: 'marcelo@rld.cl', nombre: 'Marcelo Integrante', rol: 'DEV' };
 const CTX_OTRO = { email: 'otro@rld.cl', nombre: 'Otro Ajeno', rol: 'DEV' };
 
+// Fecha comprometida que NO vence, en formato AAAA-MM-DD: no hardcodear una
+// fecha absoluta, que con el tiempo real avanzando queda en el pasado y
+// "salud: normal" deja de serlo.
+function fechaFuturaP1_(dias) { return new Date(Date.now() + (dias || 30) * 24 * 3600 * 1000).toISOString().slice(0, 10); }
+
 // Nota RN-710: como quien crea (Leo) no es el responsable (Marcelo), la
 // fecha nace "propuesta" hasta que Marcelo la confirma -- si no,
 // fecha_compromiso queda vacío y los tests de Plan/Esperado/Real o
@@ -44,7 +49,7 @@ function armarProyectoConTarea(ctx, overridesTarea) {
   ctx.Proyectos.gestionarIntegrante({
     proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE'
   }, CTX_LEO);
-  const fechaCompromiso = (overridesTarea && 'fecha_compromiso' in overridesTarea) ? overridesTarea.fecha_compromiso : '2026-09-20';
+  const fechaCompromiso = (overridesTarea && 'fecha_compromiso' in overridesTarea) ? overridesTarea.fecha_compromiso : fechaFuturaP1_();
   const tarea = ctx.Proyectos.crearTarea(Object.assign({
     proyecto_id: proyecto.proyecto_id, titulo: 'Levantar requerimientos',
     responsable_email: 'marcelo@rld.cl', fecha_compromiso: fechaCompromiso
@@ -71,7 +76,7 @@ test('congelarBaseline: exclusivo del líder/ADM; guarda un evento BASELINE con 
   assert.equal(eventos.length, 1);
   const snapshot = JSON.parse(eventos[0].cuerpo);
   assert.equal(snapshot.tareas[0].actividad_id, tarea.actividad_id);
-  assert.equal(snapshot.tareas[0].fecha_fin, '2026-09-20');
+  assert.equal(snapshot.tareas[0].fecha_fin, fechaFuturaP1_());
 });
 
 test('congelarBaseline: la más reciente es la vigente en obtenerRendimiento; re-congelar no borra la anterior de PROYECTO_EVENTOS', () => {
@@ -194,7 +199,7 @@ test('reprogramarTarea: delega en Actividades.reprogramar; el líder del proyect
   const bitacora = ctx.Proyectos.listarBitacora({ proyecto_id: proyecto.proyecto_id }, CTX_LEO);
   const evento = bitacora.filter((b) => b.tipo === 'REPROGRAMACION')[0];
   assert.ok(evento, 'el evento de reprogramación aparece en la bitácora del proyecto');
-  assert.equal(evento.fecha_anterior, '2026-09-20');
+  assert.equal(evento.fecha_anterior, fechaFuturaP1_());
   assert.equal(evento.fecha_nueva, '2026-10-01');
   assert.equal(evento.nota, 'Cliente pidió más tiempo');
 });
