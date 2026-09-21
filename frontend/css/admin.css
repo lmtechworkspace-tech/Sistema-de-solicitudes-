@@ -163,3 +163,35 @@
     max-width: 100vw;
   }
 }
+
+/* Panel de super admin (2026-09-21): a diferencia del resto de las tablas
+   del sitio (pocas columnas, .sigso-tabla ya les queda bien), aca cualquier
+   tabla real del esquema puede traer 20-40+ columnas (ej. ACTIVIDADES,
+   SOLICITUDES). Con overflow-wrap:anywhere (dashboard.css) cada columna se
+   apretaba a unos pocos pixeles y el texto se partia letra por letra --
+   ilegible. La solucion es la de siempre para tablas anchas: que la tabla
+   NO se achique (nowrap + un ancho minimo por celda) y que el SCROLL sea
+   horizontal, dentro de un contenedor acotado, en vez de vertical letra a
+   letra.
+*/
+.sigso-tabla-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.sigso-tabla-scroll .sigso-tabla {
+  width: auto;
+  min-width: 100%;
+}
+/* Especificidad a proposito: .sigso-tabla td (dashboard.css) ya es
+   0-1-1 (overflow-wrap:anywhere) -- .sigso-super-admin-celda sola (0-1-0)
+   perdia contra esa regla. .sigso-tabla-scroll .sigso-tabla td/th (0-2-1)
+   la gana de verdad. */
+.sigso-tabla-scroll .sigso-tabla th,
+.sigso-tabla-scroll .sigso-tabla td {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  min-width: 8ch;
+  max-width: 32ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
