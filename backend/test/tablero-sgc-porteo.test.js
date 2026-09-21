@@ -94,6 +94,28 @@ test('una cláusula excluida sale del denominador de su capítulo', () => {
   assert.equal(despues.total, antes.total, 'sigue en el catálogo, solo sale del cálculo');
 });
 
+// Bug confirmado por la auditoria de modulos (2026-09): la comparacion
+// usaba `x.email` cuando la columna real de SGC_DOC_DESTINATARIOS es
+// `usuario_email` -- siempre undefined, asi que TODO destinatario de un
+// documento vencido contaba como "no confirmo" en la alerta CRITICA/ALTA
+// del tablero, aunque de verdad hubiera confirmado.
+test('acusesVencidos: a quien SI confirmo la lectura no se le cuenta como vencido', async () => {
+  const db = crear();
+  const doc = await Calidad.crearDocumento(db, {
+    codigo: 'FO-PRO-02-99', nombre: 'Formulario de prueba', tipo: 'FO', visibilidad: 'SELECCION',
+    destinatarios: ['operativo@homepymes.cl'], requiere_acuse: true, fecha_limite_acuse: diasDesdeHoy(-2)
+  }, ENC);
+  assert.ok(!doc._validationError, JSON.stringify(doc));
+
+  const antes = alertaPorTitulo(Tablero.resumen(db, {}, ENC), /Confirmaciones de lectura fuera de plazo/);
+  assert.equal(antes.total, 1, 'sin confirmar, cuenta como vencido');
+
+  await Calidad.acusarDocumento(db, { documento_id: doc.documento_id }, OPERATIVO);
+
+  const despues = alertaPorTitulo(Tablero.resumen(db, {}, ENC), /Confirmaciones de lectura fuera de plazo/);
+  assert.equal(despues, undefined, 'ya confirmo: la alerta no debe seguir contando este documento (total 0 -> ni se emite)');
+});
+
 // --- 2. Alertas accionables --------------------------------------------------
 
 test('un sistema vacío avisa de lo que falta, y cada alerta sabe a dónde lleva', () => {

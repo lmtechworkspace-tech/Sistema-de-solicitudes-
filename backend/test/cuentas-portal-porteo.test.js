@@ -76,6 +76,35 @@ test('actualizar permite modulos por persona, distintos de la plantilla del rol'
   assert.equal(invalido._validationError, true);
 });
 
+// Bug confirmado por la auditoria de modulos (2026-09): la identidad de
+// sesion sale siempre de emails[0] (router.js), pero actualizar() permitia
+// reordenar los correos libremente sin restriccion -- si el PRIMER correo
+// cambiaba, cualquier notificacion ya encolada con el emails[0] VIEJO
+// quedaba huerfana para siempre (nunca coincidia con el emails[0] NUEVO
+// que usa sincronizar/marcarLeida).
+test('actualizar: reordenar los emails (cambia el primero) migra las notificaciones pendientes, no las huerfana', () => {
+  const db = dbConSchema();
+  const { agregarFila_, leerFilas_ } = require('../db/sqliteRepo');
+  const creada = CuentasPortal.gestionar(db, {
+    operacion: 'crear', usuario: 'cpena', nombre: 'Camila', emails: 'viejo@rld.cl, secundario@rld.cl'
+  }, ADMIN);
+
+  agregarFila_(db, 'NOTIFICACIONES_APP', {
+    notif_id: 'NOTIF-1', destinatario_email: 'viejo@rld.cl', tipo: 'PROYECTO_ENTREGABLE',
+    titulo: 'Pendiente', mensaje: 'x', modulo_id: 'proyectos', texto_accion: '', leida: false,
+    creada_en: new Date().toISOString(), expira_en: ''
+  });
+
+  // El Admin corrige un typo y pone el correo nuevo PRIMERO -- el correo
+  // "viejo" sigue existiendo en la lista, solo cambia el orden.
+  CuentasPortal.gestionar(db, {
+    operacion: 'actualizar', cuenta_id: creada.cuenta_id, emails: ['nuevo@rld.cl', 'viejo@rld.cl', 'secundario@rld.cl']
+  }, ADMIN);
+
+  const notif = leerFilas_(db, 'NOTIFICACIONES_APP', COLUMNAS.NOTIFICACIONES_APP)[0];
+  assert.equal(notif.destinatario_email, 'nuevo@rld.cl', 'la notificacion pendiente debe migrar al nuevo emails[0], no quedar huerfana');
+});
+
 test('resetear password genera clave nueva de un solo anuncio y vuelve a exigir cambio', () => {
   const db = dbConSchema();
   const creada = CuentasPortal.gestionar(db, {

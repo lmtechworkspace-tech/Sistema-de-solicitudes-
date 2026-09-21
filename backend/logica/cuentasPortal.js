@@ -189,6 +189,19 @@ function actualizar(db, data) {
   if (data.emails !== undefined) {
     const emails = normalizarEmails(data.emails);
     if (emails.length === 0) return errorValidacion('emails', 'La cuenta debe conservar al menos un correo.');
+    // La identidad de sesion (contexto.email, ver router.js) sale siempre
+    // de emails[0]. Si el Admin reordena los correos y el PRIMERO cambia,
+    // cualquier notificacion ya encolada con el emails[0] VIEJO quedaba
+    // huerfana para siempre: sincronizar/marcarLeida (notificacionesApp.js)
+    // la buscan por el emails[0] NUEVO, que nunca coincide con lo que se
+    // encolo. Se migran las pendientes al nuevo emails[0].
+    const emailViejo = parsearListaPortal(cuenta.emails)[0] || '';
+    const emailNuevo = emails[0];
+    if (emailViejo && emailNuevo && emailViejo !== emailNuevo) {
+      leerFilas_(db, 'NOTIFICACIONES_APP', COLUMNAS.NOTIFICACIONES_APP)
+        .filter((n) => n.destinatario_email === emailViejo)
+        .forEach((n) => actualizarFilaPorId_(db, 'NOTIFICACIONES_APP', 'notif_id', n.notif_id, { destinatario_email: emailNuevo }));
+    }
     cambios.emails = JSON.stringify(emails);
   }
   if (data.modulos !== undefined) {

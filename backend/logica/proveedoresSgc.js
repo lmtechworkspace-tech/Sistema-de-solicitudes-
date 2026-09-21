@@ -211,19 +211,22 @@ function guardar(db, data, contexto) {
     nombre_contacto: String(data.nombre_contacto || '').trim(), es_unico: data.es_unico === true
   };
 
+  // El RUT identifica al proveedor: repetirlo parte el historial de
+  // evaluaciones en dos fichas y arruina el seguimiento de 12 meses. Antes
+  // este chequeo solo corria al CREAR -- editar un proveedor para dejarlo
+  // con el RUT de otro ya existente no se validaba nunca.
+  if (campos.rut) {
+    const duplicado = leerSeguro_(db, 'SGC_PROVEEDORES').find((p) =>
+      esActivo_(p) && String(p.rut || '').trim() === campos.rut && p.proveedor_id !== data.proveedor_id);
+    if (duplicado) return errorValidacion_('rut', 'Ya existe un proveedor con el RUT ' + campos.rut + ' (' + duplicado.nombre + ').');
+  }
+
   if (data.proveedor_id) {
     const existente = buscarProveedor_(db, data.proveedor_id);
     if (!existente) return errorValidacion_('proveedor_id', 'Proveedor no encontrado.');
     const actualizado = actualizarFilaPorId_(db, 'SGC_PROVEEDORES', 'proveedor_id', existente.proveedor_id, campos);
     registrarLogSgc_(db, 'SGC_PROVEEDOR_EDITADO', nombre, contexto);
     return actualizado;
-  }
-
-  // El RUT identifica al proveedor: repetirlo parte el historial de
-  // evaluaciones en dos fichas y arruina el seguimiento de 12 meses.
-  if (campos.rut) {
-    const duplicado = leerSeguro_(db, 'SGC_PROVEEDORES').find((p) => esActivo_(p) && String(p.rut || '').trim() === campos.rut);
-    if (duplicado) return errorValidacion_('rut', 'Ya existe un proveedor con el RUT ' + campos.rut + ' (' + duplicado.nombre + ').');
   }
 
   const proveedor = Object.assign({

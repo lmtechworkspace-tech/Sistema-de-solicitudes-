@@ -265,8 +265,13 @@ function crearSiguienteRecurrencia_(db, actividadCerrada) {
 // ===========================================================================
 function listar(db, filtros, contexto) {
   const alcance = alcanceActividades_(db, contexto);
+  // alcanceActividades_ solo mira responsable_email -- un colaborador podia
+  // hacer check-in y ver el detalle de una actividad (trabajaLaActividad_
+  // lo reconoce en obtenerDetalle/checkin) pero nunca la veia en "Mi
+  // trabajo", salvo que alguien le pasara el enlace directo.
+  const miEmail = normalizarEmail_(contexto && contexto.email);
   let filas = leerSeguro_(db, 'ACTIVIDADES').filter((a) =>
-    esVerdadero_(a.activa) && (alcance.todas || alcance.emails[normalizarEmail_(a.responsable_email)]));
+    esVerdadero_(a.activa) && (alcance.todas || alcance.emails[normalizarEmail_(a.responsable_email)] || colaboradoresDeActividad_(a).indexOf(miEmail) !== -1));
   if (filtros && filtros.estado) filas = filas.filter((a) => a.estado === filtros.estado);
   if (filtros && filtros.responsable_email) {
     const email = normalizarEmail_(filtros.responsable_email);
@@ -338,7 +343,24 @@ function crear(db, data, contexto) {
   const fecha = data.fecha_compromiso || data.fecha_propuesta;
   if (!fecha) return errorValidacion_('fecha_compromiso', 'La fecha de compromiso es obligatoria.');
 
-  let supervisorEmail = normalizarEmail_(data.supervisor_email) || normalizarEmail_(Jefatura.jefeDeSubordinado_(db, responsableEmail));
+  // Quien crea la actividad no puede simplemente NOMBRAR a un tercero
+  // arbitrario como supervisor (eso le da poder permanente de validar/
+  // cancelar/reprogramar/pedir actualizacion sobre la actividad de otra
+  // persona, sin ninguna relacion real): solo se acepta data.supervisor_email
+  // si corresponde a una fuente legitima -- el jefe real segun JEFATURAS,
+  // el LIDER del proyecto (si la tarea es de un proyecto), o la propia
+  // persona que crea la actividad. Cualquier otro valor se ignora y cae al
+  // mismo default de siempre (el jefe real, o quien la crea).
+  const jefeReal = normalizarEmail_(Jefatura.jefeDeSubordinado_(db, responsableEmail));
+  const supervisorPropuesto = normalizarEmail_(data.supervisor_email);
+  let supervisorEmail = '';
+  if (supervisorPropuesto) {
+    const esJefeReal = supervisorPropuesto === jefeReal;
+    const esQuienCrea = supervisorPropuesto === normalizarEmail_(contexto.email);
+    const esLiderDelProyecto = !!data.proyecto_id && rolEnProyecto_(db, data.proyecto_id, { email: supervisorPropuesto }) === 'LIDER';
+    if (esJefeReal || esQuienCrea || esLiderDelProyecto) supervisorEmail = supervisorPropuesto;
+  }
+  if (!supervisorEmail) supervisorEmail = jefeReal;
   if (!supervisorEmail) supervisorEmail = normalizarEmail_(contexto.email);
 
   const ahora = new Date();
@@ -1039,5 +1061,5 @@ module.exports = {
   // Exportadas para que Proyectos.js (wrappers de tarea) y sus tests reusen
   // el mismo motor y los mismos helpers, nunca duplicados.
   ACTIVIDADES_ESTADOS, esEstadoTerminal_, semaforoActividad_, normalizarEmail_,
-  colaboradoresDeActividad_, trabajaLaActividad_, buscarActividad_
+  colaboradoresDeActividad_, trabajaLaActividad_, buscarActividad_, registrarEventoActividad_
 };

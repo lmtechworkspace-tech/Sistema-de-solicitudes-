@@ -954,6 +954,25 @@ function editarTarea(db, data, contexto) {
     if (padre.tarea_padre_id) return errorValidacion_('tarea_padre_id', 'Esa tarea ya es una subtarea -- no se puede anidar un tercer nivel.');
     if (data.tarea_padre_id === data.actividad_id) return errorValidacion_('tarea_padre_id', 'Una tarea no puede ser padre de sí misma.');
   }
+  // Reasignar una tarea de proyecto tenia menos rigor que Actividades.
+  // reasignar (actividad suelta): no validaba que el nuevo responsable
+  // fuera integrante del proyecto (un email que no encontraba en
+  // PROYECTO_INTEGRANTES igual se guardaba, solo se omitia el nombre), y
+  // no tocaba estado/confirmada_en/bloqueo_*/confianza/avance_pct -- la
+  // tarea podia quedar EN_CURSO con la confirmacion de la persona
+  // ANTERIOR, como si el nuevo responsable ya hubiera aceptado un
+  // compromiso que nunca vio. No se porta el motivo/chequeo de JEFATURA de
+  // reasignar (no aplican al contexto de un proyecto, donde la autoridad
+  // real es el lider), pero si la consistencia de estado y la traza.
+  const seReasigna = data.responsable_email !== undefined &&
+    normalizarEmail_(data.responsable_email) !== normalizarEmail_(actividad.responsable_email);
+  let nuevoRespIntegrante = null;
+  if (seReasigna) {
+    nuevoRespIntegrante = leerSeguro_(db, 'PROYECTO_INTEGRANTES').find((i) =>
+      i.proyecto_id === proyecto.proyecto_id && esVerdadero_(i.activo) && normalizarEmail_(i.usuario_email) === normalizarEmail_(data.responsable_email));
+    if (!nuevoRespIntegrante) return errorValidacion_('responsable_email', 'El nuevo responsable debe ser integrante activo de este proyecto.');
+  }
+
   const cambios = {};
   const camposPermitidos = ['titulo', 'descripcion', 'responsable_email', 'fecha_compromiso', 'prioridad', 'hito_id', 'depende_de', 'tarea_padre_id', 'meta_cantidad', 'meta_unidad'];
   camposPermitidos.forEach((campo) => { if (data[campo] !== undefined) cambios[campo] = data[campo]; });
@@ -965,12 +984,24 @@ function editarTarea(db, data, contexto) {
     const responsable = normalizarEmail_(data.responsable_email || actividad.responsable_email);
     cambios.colaboradores_emails = JSON.stringify((Array.isArray(lista) ? lista : []).filter((correo) => miembros[normalizarEmail_(correo)] && normalizarEmail_(correo) !== responsable));
   }
-  if (data.responsable_email && data.responsable_email !== actividad.responsable_email) {
-    const nuevoResp = leerSeguro_(db, 'PROYECTO_INTEGRANTES').find((i) => i.proyecto_id === proyecto.proyecto_id && normalizarEmail_(i.usuario_email) === normalizarEmail_(data.responsable_email));
-    if (nuevoResp) cambios.responsable_nombre = nuevoResp.usuario_nombre || '';
+  if (seReasigna) {
+    cambios.responsable_nombre = nuevoRespIntegrante.usuario_nombre || '';
+    cambios.estado = Actividades.ACTIVIDADES_ESTADOS.NO_INICIADA;
+    cambios.fecha_propuesta = data.fecha_compromiso !== undefined ? data.fecha_compromiso : (actividad.fecha_compromiso || actividad.fecha_propuesta);
+    cambios.fecha_compromiso = '';
+    cambios.confirmada_en = '';
+    cambios.bloqueo_motivo = '';
+    cambios.bloqueo_responsable_email = '';
+    cambios.bloqueo_desde = '';
+    cambios.confianza = 'VERDE';
+    cambios.avance_pct = '';
   }
   cambios.ultima_actualizacion = new Date().toISOString();
   const actualizado = actualizarFilaPorId_(db, 'ACTIVIDADES', 'actividad_id', actividad.actividad_id, cambios);
+  if (seReasigna) {
+    Actividades.registrarEventoActividad_(db, actividad.actividad_id, 'REASIGNACION', contexto, 'Reasignada desde el proyecto',
+      { responsable_anterior: actividad.responsable_email, responsable_nuevo: normalizarEmail_(data.responsable_email) });
+  }
   registrarEventoProyecto_(db, proyecto.proyecto_id, 'ACTUALIZACION', contexto, 'Tarea editada: ' + (cambios.titulo || actividad.titulo), 'ACTIVIDAD', actividad.actividad_id, '');
   return actualizado;
 }

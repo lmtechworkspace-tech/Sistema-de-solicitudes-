@@ -223,7 +223,17 @@ function validarFechaLimiteEntrante_(data, tipo, requiereAcuse) {
     }
     return { fecha: '' };
   }
-  const d = new Date(fecha);
+  // Estricto AAAA-MM-DD (mismo criterio que pausas.js/proyectos.js para
+  // fechas-sin-hora): antes se aceptaba cualquier string que new Date()
+  // supiera parsear, incluida una fecha con hora/zona -- diasParaVencer_
+  // concatena 'T00:00:00' a mano asumiendo este formato exacto, asi que
+  // un valor distinto producia NaN dias-para-vencer y el item caia
+  // silenciosamente en "al dia" aunque estuviera vencido. El input real
+  // del frontend (<input type="date">) siempre manda este formato.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return { error: errorValidacion('fecha_limite_acuse', 'Fecha límite inválida: usa el formato AAAA-MM-DD.') };
+  }
+  const d = new Date(fecha + 'T00:00:00');
   if (isNaN(d.getTime())) {
     return { error: errorValidacion('fecha_limite_acuse', 'Fecha límite inválida.') };
   }
@@ -267,7 +277,12 @@ function puedeAprobar_(db, contexto, autorEmail) {
 }
 
 function puedeVerDetalle_(db, novedad, contexto) {
-  if (novedad.estado === ESTADOS.PUBLICADA) return enAudiencia_(db, novedad, contexto);
+  // `activa` tambien tiene que estar prendida: despublicar (linea ~670)
+  // solo apaga `activa`, nunca toca `estado` -- sin este chequeo,
+  // getDetalle/marcarLeida/descargarAdjunto seguian funcionando para la
+  // audiencia original despues de "retirar" una novedad, aunque el feed
+  // y el panel de cumplimiento ya la ocultaran.
+  if (novedad.estado === ESTADOS.PUBLICADA && esVerdadero_(novedad.activa)) return enAudiencia_(db, novedad, contexto);
   return esAutorONoAutor_(novedad, contexto) || puedeAprobar_(db, contexto, novedad.autor_email);
 }
 

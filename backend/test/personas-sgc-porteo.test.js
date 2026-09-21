@@ -133,6 +133,27 @@ test('guardarPersona: un duplicado rechazado no bloquea la siguiente creacion', 
   assert.notEqual(nueva.persona_id, ana.persona_id);
 });
 
+// Bug confirmado por la auditoria de modulos (2026-09): el chequeo de
+// correo+cargo duplicado solo corria al CREAR -- editar una ficha para
+// dejarla con el mismo correo+cargo de OTRA ficha activa no se validaba.
+test('guardarPersona: el correo+cargo tampoco se puede duplicar AL EDITAR (no solo al crear)', () => {
+  const db = db_();
+  const { ana, pedro } = sembrar(db);
+
+  // Intenta dejar a pedro con el mismo correo+cargo que ana.
+  const editado = Personas.guardarPersona(db, {
+    persona_id: pedro.persona_id, nombre: pedro.nombre, usuario_email: 'ana@homepymes.cl', cargo: 'Prevencionista', tipo: 'INT'
+  }, CTX_ENCARGADO);
+  assert.equal(editado._validationError, true, 'editar hacia un correo+cargo ya usado por otra ficha debe rechazarse');
+
+  // Editar la ficha propia SIN chocar (mismo correo+cargo que ya tenia) sigue funcionando.
+  const propio = Personas.guardarPersona(db, {
+    persona_id: ana.persona_id, nombre: 'Ana Actualizada', usuario_email: 'ana@homepymes.cl', cargo: 'Prevencionista', tipo: 'EXT'
+  }, CTX_ENCARGADO);
+  assert.equal(propio._validationError, undefined, JSON.stringify(propio));
+  assert.equal(propio.nombre, 'Ana Actualizada');
+});
+
 test('una persona puede tener DOS fichas (dos cargos) con el MISMO correo, cada una con su propio descriptor', async (t) => {
   const db = db_();
   conMockAlmacenamiento_(t);

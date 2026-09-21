@@ -277,6 +277,64 @@ test('editarTarea: quien trabaja la tarea puede editar aunque no gestione el pro
   assert.equal(Proyectos.editarTarea(db, { proyecto_id: proyecto.proyecto_id, actividad_id: tarea.actividad_id, titulo: 'x' }, CTX_OTRO)._forbidden, true);
 });
 
+// Bug confirmado por la auditoria de modulos (2026-09): editarTarea (la
+// reasignacion real de una tarea de proyecto) tenia mucha menos rigor que
+// Actividades.reasignar (actividad suelta) -- no validaba que el nuevo
+// responsable fuera integrante del proyecto, y no tocaba estado/
+// confirmada_en/bloqueo_*/confianza/avance_pct: la tarea podia quedar
+// EN_CURSO con la confirmacion de la persona ANTERIOR, como si el nuevo
+// responsable ya hubiera aceptado un compromiso que nunca vio.
+test('editarTarea: reasignar a alguien que NO es integrante del proyecto se rechaza', () => {
+  const db = db_();
+  const proyecto = armarProyectoConMarcelo(db);
+  const tarea = Proyectos.crearTarea(db, { proyecto_id: proyecto.proyecto_id, titulo: 'T', responsable_email: 'marcelo@rld.cl', fecha_compromiso: '2026-08-20' }, CTX_LEO);
+  const r = Proyectos.editarTarea(db, {
+    proyecto_id: proyecto.proyecto_id, actividad_id: tarea.actividad_id, responsable_email: 'ajeno-total@rld.cl'
+  }, CTX_LEO);
+  assert.equal(r._validationError, true, 'reasignar a alguien fuera del proyecto debe rechazarse');
+});
+
+test('editarTarea: reasignar a un integrante SI resetea estado/confirmacion/avance y deja traza en la bitacora', () => {
+  const db = db_();
+  const proyecto = armarProyectoConMarcelo(db);
+  Proyectos.gestionarIntegrante(db, { proyecto_id: proyecto.proyecto_id, usuario_email: 'otro@rld.cl', rol_proyecto: 'COLABORADOR' }, CTX_LEO);
+  const tarea = Proyectos.crearTarea(db, { proyecto_id: proyecto.proyecto_id, titulo: 'T', responsable_email: 'marcelo@rld.cl', fecha_compromiso: '2026-08-20' }, CTX_LEO);
+  Actividades.confirmar(db, { actividad_id: tarea.actividad_id, fecha_compromiso: '2026-08-20' }, CTX_MARCELO);
+  Actividades.checkin(db, { actividad_id: tarea.actividad_id, tipo: 'avance', avance_pct: 60 }, CTX_MARCELO);
+  const antes = filas(db, 'ACTIVIDADES').find((a) => a.actividad_id === tarea.actividad_id);
+  assert.equal(antes.estado, 'EN_CURSO');
+  assert.equal(antes.avance_pct, 60);
+  assert.ok(antes.confirmada_en, 'debe tener confirmada_en antes de reasignar');
+
+  const reasignada = Proyectos.editarTarea(db, {
+    proyecto_id: proyecto.proyecto_id, actividad_id: tarea.actividad_id, responsable_email: 'otro@rld.cl'
+  }, CTX_LEO);
+  assert.equal(reasignada._validationError, undefined, JSON.stringify(reasignada));
+  assert.equal(reasignada.responsable_email, 'otro@rld.cl');
+  assert.equal(reasignada.estado, 'NO_INICIADA', 'el nuevo responsable no hereda el EN_CURSO de otra persona');
+  assert.equal(reasignada.confirmada_en, '', 'el nuevo responsable no hereda una confirmacion que nunca dio');
+  assert.equal(reasignada.avance_pct, '', 'el nuevo responsable no hereda el avance de otra persona');
+  assert.equal(reasignada.fecha_compromiso, '', 'vuelve a fecha_propuesta hasta que el nuevo responsable confirme');
+
+  const bitacora = filas(db, 'ACTIVIDADES_BITACORA').filter((b) => b.actividad_id === tarea.actividad_id);
+  assert.ok(bitacora.some((b) => b.tipo === 'REASIGNACION'), 'la reasignacion desde el proyecto tiene que quedar en la bitacora, igual que Actividades.reasignar');
+});
+
+test('editarTarea: editar sin tocar responsable_email NO resetea estado/avance (solo metadata)', () => {
+  const db = db_();
+  const proyecto = armarProyectoConMarcelo(db);
+  const tarea = Proyectos.crearTarea(db, { proyecto_id: proyecto.proyecto_id, titulo: 'T', responsable_email: 'marcelo@rld.cl', fecha_compromiso: '2026-08-20' }, CTX_LEO);
+  Actividades.confirmar(db, { actividad_id: tarea.actividad_id, fecha_compromiso: '2026-08-20' }, CTX_MARCELO);
+  Actividades.checkin(db, { actividad_id: tarea.actividad_id, tipo: 'avance', avance_pct: 60 }, CTX_MARCELO);
+
+  const editado = Proyectos.editarTarea(db, {
+    proyecto_id: proyecto.proyecto_id, actividad_id: tarea.actividad_id, descripcion: 'Nueva descripcion'
+  }, CTX_LEO);
+  assert.equal(editado.descripcion, 'Nueva descripcion');
+  assert.equal(editado.estado, 'EN_CURSO', 'una edicion que no toca responsable_email no debe resetear el estado');
+  assert.equal(editado.avance_pct, 60);
+});
+
 test('crearTarea: depende_de debe ser del MISMO proyecto', () => {
   const db = db_();
   const proyectoA = crearProyectoBase(db, { nombre: 'A' });

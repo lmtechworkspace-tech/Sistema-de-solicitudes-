@@ -313,7 +313,21 @@ function calcularCarga_(items) {
 function calcularPanelGerencia_(db, filtrosBase) {
   const feriados = Cumplimiento.obtenerFeriados(db);
 
-  const solicitudes = leerFilas_(db, 'SOLICITUDES', COLUMNAS.SOLICITUDES).filter((s) => coincideFiltros_(s, filtrosBase, {}));
+  // Se lee una sola vez, antes del filtro de SOLICITUDES: coincideFiltros_
+  // necesita titulosPorSolicitud para que el filtro `busqueda` tambien
+  // encuentre por titulo de item -- antes se llamaba con 3 argumentos en
+  // vez de 4 (el 4to caia al default [] de dashboard.js), asi que ese
+  // filtro nunca encontraba nada por titulo aqui, aunque el mismo filtro
+  // en el Dashboard si funcionaba. Reusar `todasSubsolicitudes` mas abajo
+  // (linea ~334) evita ademas leer la tabla dos veces.
+  const todasSubsolicitudes = leerFilas_(db, 'SUBSOLICITUDES', COLUMNAS.SUBSOLICITUDES);
+  const titulosPorSolicitud = {};
+  todasSubsolicitudes.forEach((sub) => {
+    if (!titulosPorSolicitud[sub.solicitud_id]) titulosPorSolicitud[sub.solicitud_id] = [];
+    if (sub.titulo) titulosPorSolicitud[sub.solicitud_id].push(sub.titulo);
+  });
+
+  const solicitudes = leerFilas_(db, 'SOLICITUDES', COLUMNAS.SOLICITUDES).filter((s) => coincideFiltros_(s, filtrosBase, {}, titulosPorSolicitud));
   const solicitudPorId = {};
   solicitudes.forEach((s) => { solicitudPorId[s.solicitud_id] = s; });
 
@@ -331,7 +345,7 @@ function calcularPanelGerencia_(db, filtrosBase) {
   // comprometida, medirlas inflaria SIN_COMPROMISO sin nada que corregir.
   const atencionesDirectas = solicitudes.filter(esAtencionDirecta_).length;
 
-  const items = leerFilas_(db, 'SUBSOLICITUDES', COLUMNAS.SUBSOLICITUDES)
+  const items = todasSubsolicitudes
     .filter((sub) => {
       const solicitud = solicitudPorId[sub.solicitud_id];
       return solicitud && !esAtencionDirecta_(solicitud) && coincideFiltroItem_(sub, solicitud, filtrosBase);

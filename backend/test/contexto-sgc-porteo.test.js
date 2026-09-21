@@ -163,6 +163,26 @@ test('un factor nuevo sigue la numeración de su cuadrante, no la global', () =>
   assert.equal(creado2.codigo, 'A5');
 });
 
+// Bug confirmado por la auditoria de modulos (2026-09): la numeracion se
+// calculaba solo sobre factores ACTIVOS -- anular el factor con el numero
+// mas alto de un tipo y crear uno nuevo del mismo tipo podia reasignarle
+// el mismo "codigo" (ej. D8) a un factor con una descripcion distinta.
+test('el numero de un factor anulado NO se reutiliza para un factor nuevo del mismo tipo', () => {
+  const db = db_();
+  sembrarRoles(db);
+  Contexto.sembrarFoda(db, {}, ENC);
+
+  const nuevo = Contexto.guardarFactor(db, { tipo: 'DEBILIDAD', descripcion: 'Factor nuevo D8.' }, ENC);
+  const d8 = Contexto.obtener(db, {}, ENC).factores.find((f) => f.factor_id === nuevo.factor_id);
+  assert.equal(d8.codigo, 'D8');
+
+  Contexto.anularFactor(db, { factor_id: nuevo.factor_id }, ENC);
+
+  const otroNuevo = Contexto.guardarFactor(db, { tipo: 'DEBILIDAD', descripcion: 'Otro factor, no deberia ser D8 de nuevo.' }, ENC);
+  const d9 = Contexto.obtener(db, {}, ENC).factores.find((f) => f.factor_id === otroNuevo.factor_id);
+  assert.equal(d9.codigo, 'D9', 'debe seguir la numeracion, no reutilizar D8');
+});
+
 test('un factor superado se conserva y deja de contar', () => {
   const db = db_();
   sembrarRoles(db);

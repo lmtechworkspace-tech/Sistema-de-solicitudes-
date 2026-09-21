@@ -97,8 +97,14 @@ function indicadoresActivos_(db) {
 }
 
 function siguienteCodigoIndicador_(db) {
+  // Sobre TODOS los indicadores, no solo los activos -- a diferencia de
+  // los correlativos de NC/auditorias/revisiones (que cuentan todas las
+  // filas del año sin filtrar por activo), este solo miraba activos: anular
+  // IND-005 y crear uno nuevo podia reasignarle el mismo codigo a un
+  // indicador distinto, mala trazabilidad para un sistema ISO donde el
+  // codigo es la referencia documental.
   let max = 0;
-  indicadoresActivos_(db).forEach((i) => {
+  leerSeguro_(db, 'SGC_INDICADORES').forEach((i) => {
     const m = String(i.codigo || '').match(/^IND-(\d+)$/);
     if (!m) return;
     const n = parseInt(m[1], 10);

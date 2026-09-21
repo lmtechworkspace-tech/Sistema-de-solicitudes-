@@ -67,6 +67,29 @@ function fechaComprometidaFutura_(diasDesdeHoy) {
   return d.getFullYear() + '-' + mm + '-' + dd + 'T18:00';
 }
 
+// Bug confirmado por la auditoria de modulos (2026-09): coincideFiltros_
+// se llamaba aqui con 3 argumentos en vez de 4 (faltaba
+// titulosPorSolicitud) -- el filtro `busqueda` nunca encontraba
+// coincidencias por titulo de item en el Panel de Gerencia, aunque el
+// mismo filtro en el Dashboard si funciona.
+test('Gerencia.getPanel: el filtro busqueda SI encuentra por titulo de item (igual que en el Dashboard)', () => {
+  const db = dbConSchema();
+  seedSolicitud(db, { solicitud_id: 'SOL-2026-HP-0001' });
+  seedSubsolicitud(db, {
+    subsolicitud_id: 'SOL-2026-HP-0001-01', solicitud_id: 'SOL-2026-HP-0001',
+    titulo: 'No cargan las facturas de exportacion'
+  });
+  seedSolicitud(db, { solicitud_id: 'SOL-2026-HP-0002' });
+  seedSubsolicitud(db, {
+    subsolicitud_id: 'SOL-2026-HP-0002-01', solicitud_id: 'SOL-2026-HP-0002',
+    titulo: 'El reporte de ventas sale vacio'
+  });
+
+  const panel = Gerencia.getPanel(db, { busqueda: 'exportacion' }, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+  assert.equal(panel.items.length, 1, 'debe encontrar el item por su titulo, no solo por campos de la solicitud');
+  assert.equal(panel.items[0].solicitud_id, 'SOL-2026-HP-0001');
+});
+
 test('Gerencia.getPanel (v2.1): agrupa items con su semaforo de cumplimiento', () => {
   const db = dbConSchema();
   seedSolicitud(db);

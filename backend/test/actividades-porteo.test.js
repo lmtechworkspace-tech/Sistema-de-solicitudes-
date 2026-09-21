@@ -63,6 +63,39 @@ test('crear (PROPIA): el propio responsable confirma en el mismo acto', () => {
   assert.equal(a.supervisor_email, 'barbara@rld.cl'); // jefe por JEFATURAS
 });
 
+// Bug confirmado por la auditoria de modulos (2026-09): supervisor_email se
+// aceptaba tal cual si venia en el pedido, sin validar contra JEFATURAS --
+// quien crea una actividad para otra persona podia otorgarle a un TERCERO
+// arbitrario (sin relacion real con el responsable) poder permanente de
+// validar/cancelar/reprogramar/pedir actualizacion sobre ella.
+test('crear: un supervisor_email de un TERCERO sin relacion real se ignora, no se acepta tal cual', () => {
+  const db = db_();
+  // barbara crea para marcelo, pero intenta nombrar a "otro-jefe@rld.cl"
+  // (el jefe de OTRO empleado, sin ninguna relacion con marcelo) como
+  // supervisor de la actividad de marcelo.
+  const a = A.crear(db, {
+    titulo: 'Cierre', responsable_email: 'marcelo@rld.cl', fecha_propuesta: '2026-09-30', supervisor_email: 'otro-jefe@rld.cl'
+  }, CTX_BARBARA);
+  assert.equal(a.supervisor_email, 'barbara@rld.cl', 'debe caer al jefe REAL de marcelo (JEFATURAS), no aceptar el tercero propuesto');
+});
+
+test('crear: SI se acepta supervisor_email cuando es el jefe real, o quien crea la actividad', () => {
+  const db = db_();
+  // El jefe real explicito coincide con lo que ya se derivaria solo -- ok.
+  const conJefeReal = A.crear(db, {
+    titulo: 'A', responsable_email: 'marcelo@rld.cl', fecha_propuesta: '2026-09-30', supervisor_email: 'barbara@rld.cl'
+  }, CTX_BARBARA);
+  assert.equal(conJefeReal.supervisor_email, 'barbara@rld.cl');
+
+  // Quien crea la actividad puede nombrarse a si mismo supervisor aunque
+  // no sea el jefe segun JEFATURAS (caso legitimo: alguien fuera de la
+  // linea de mando decide supervisar personalmente una tarea que asigna).
+  const conQuienCrea = A.crear(db, {
+    titulo: 'B', responsable_email: 'marcelo@rld.cl', fecha_propuesta: '2026-09-30', supervisor_email: 'admin@rld.cl'
+  }, CTX_ADM);
+  assert.equal(conQuienCrea.supervisor_email, 'admin@rld.cl');
+});
+
 test('crear (ASIGNADA por el supervisor): queda pendiente de confirmar (RN-710)', () => {
   const db = db_();
   const a = A.crear(db, { titulo: 'Cierre', responsable_email: 'marcelo@rld.cl', fecha_propuesta: '2026-09-30' }, CTX_BARBARA);
@@ -188,6 +221,22 @@ test('checkin (RN-702 ampliada): un colaborador puede; un ajeno no; y el colabor
   assert.equal(A.checkin(db, { actividad_id: a.actividad_id, tipo: 'sin_cambio' }, { email: 'colab@rld.cl', rol: 'DEV' }).estado, 'EN_CURSO');
   assert.equal(A.checkin(db, { actividad_id: a.actividad_id, tipo: 'sin_cambio' }, { email: 'ajeno@rld.cl', rol: 'DEV' })._forbidden, true);
   assert.ok(A.obtenerDetalle(db, { actividad_id: a.actividad_id }, { email: 'colab@rld.cl', rol: 'DEV' }).actividad);
+});
+
+// Bug confirmado por la auditoria de modulos (2026-09): alcanceActividades_
+// (usada por listar(), la base de "Mi trabajo") solo miraba
+// responsable_email -- un colaborador podia hacer check-in y ver el
+// detalle (confirmado en el test de arriba) pero la actividad nunca le
+// aparecia en su propia lista, salvo que alguien le pasara el enlace directo.
+test('listar (Mi trabajo): un colaborador SI ve la actividad en su propia lista, no solo quien es responsable', () => {
+  const db = db_();
+  const a = A.crear(db, { titulo: 'Con colaborador', fecha_compromiso: '2026-09-30', colaboradores_emails: ['colab@rld.cl'] }, CTX_MARCELO);
+
+  const listaColaborador = A.listar(db, {}, { email: 'colab@rld.cl', rol: 'DEV' });
+  assert.ok(listaColaborador.some((x) => x.actividad_id === a.actividad_id), 'la actividad debe aparecer en la lista del colaborador');
+
+  const listaAjeno = A.listar(db, {}, { email: 'ajeno@rld.cl', rol: 'DEV' });
+  assert.equal(listaAjeno.some((x) => x.actividad_id === a.actividad_id), false, 'alguien sin relacion no debe verla');
 });
 
 // ===== validar ==============================================================

@@ -234,20 +234,26 @@ function guardarPersona(db, data, contexto) {
   if (!email) return errorValidacion_('usuario_email', 'El correo es obligatorio: es lo que enlaza la ficha con su cuenta.');
   if (['INT', 'EXT'].indexOf(data.tipo) === -1) return errorValidacion_('tipo', 'Indica si la persona es interna (INT) o externa (EXT).');
 
+  // v14.0: solo se bloquea el duplicado EXACTO (mismo correo, mismo cargo).
+  // node:sqlite es sincrono y Node es de un solo hilo para JS: leer+crear no
+  // puede intercalarse entre dos peticiones, misma garantia que el
+  // LockService del .gs le daba a Apps Script (ahi si hay paralelismo real)
+  // -- ver la misma nota en correlativo.js. Antes este chequeo solo corria
+  // al CREAR -- editar una ficha para dejarla con el mismo correo+cargo de
+  // OTRA ficha activa no se validaba nunca.
   if (data.persona_id) {
     const existente = buscarPersonaSgc_(db, data.persona_id);
     if (!existente) return errorValidacion_('persona_id', 'Persona no encontrada.');
+    const cargoEfectivo = String((data.cargo !== undefined ? data.cargo : existente.cargo) || '').trim().toLowerCase();
+    const yaExiste = leerSeguro_(db, 'SGC_PERSONAS').find((p) =>
+      esActivo_(p) && p.persona_id !== data.persona_id && normalizarEmail_(p.usuario_email) === email && String(p.cargo || '').trim().toLowerCase() === cargoEfectivo);
+    if (yaExiste) return errorValidacion_('cargo', 'Ya existe otra ficha con ese cargo para ' + email + '. Si es un cargo distinto (ej. interno/externo), escribe un Cargo que lo diferencie.');
     const cambios = {};
     ['nombre', 'rut', 'cargo', 'tipo', 'area_id', 'jefatura_email', 'subrogante_email', 'fecha_ingreso'].forEach((campo) => { if (data[campo] !== undefined) cambios[campo] = data[campo]; });
     if (data.usuario_email !== undefined) cambios.usuario_email = email;
     return actualizarFilaPorId_(db, 'SGC_PERSONAS', 'persona_id', existente.persona_id, cambios);
   }
 
-  // v14.0: solo se bloquea el duplicado EXACTO (mismo correo, mismo cargo).
-  // node:sqlite es sincrono y Node es de un solo hilo para JS: leer+crear no
-  // puede intercalarse entre dos peticiones, misma garantia que el
-  // LockService del .gs le daba a Apps Script (ahi si hay paralelismo real)
-  // -- ver la misma nota en correlativo.js.
   const cargoNuevo = String(data.cargo || '').trim().toLowerCase();
   const yaExiste = leerSeguro_(db, 'SGC_PERSONAS').find((p) => esActivo_(p) && normalizarEmail_(p.usuario_email) === email && String(p.cargo || '').trim().toLowerCase() === cargoNuevo);
   if (yaExiste) return errorValidacion_('cargo', 'Ya existe una ficha con ese cargo para ' + email + '. Si es un cargo distinto (ej. interno/externo), escribe un Cargo que lo diferencie.');

@@ -443,7 +443,16 @@ test('listar: Gerencia puede leer la revisión (la ejecuta la Dirección) pero n
   assert.equal(RevisionDireccion.listar(db, {}, CTX_OPERATIVO)._forbidden, true);
 });
 
-test('anular: exige motivo y saca la revisión del listado sin borrarla', () => {
+// Bug confirmado por la auditoria de modulos (2026-09): anular() era la
+// UNICA de las 4 implementaciones del modulo (auditorias/NC/quejas/
+// revision) que ademas de estado:'ANULADA' apagaba `activa` -- como
+// buscarRevision_/listar() filtran por esActivo_, una revision anulada asi
+// desaparecia por completo (ni listar() ni getDetalle la encontraban
+// nunca mas), justo lo contrario del principio de trazabilidad ISO que
+// calidadSgc.js declara explicitamente ("un documento OBSOLETO no se
+// borra"). Las otras 3 SI siguen mostrando el registro anulado -- ahora
+// esta tambien.
+test('anular: exige motivo, NUNCA borra, y la revision SIGUE apareciendo (estado ANULADA), igual que auditorias/NC/quejas', () => {
   const db = db_();
   sembrarRoles(db);
   const r = programar(db);
@@ -451,6 +460,11 @@ test('anular: exige motivo y saca la revisión del listado sin borrarla', () => 
   assert.equal(RevisionDireccion.anular(db, { revision_id: r.revision_id, motivo: 'no' }, CTX_ENCARGADO)._validationError, true);
   RevisionDireccion.anular(db, { revision_id: r.revision_id, motivo: 'Se reprograma para el próximo año.' }, CTX_ENCARGADO);
 
-  assert.equal(RevisionDireccion.listar(db, {}, CTX_ENCARGADO).revisiones.length, 0);
-  assert.equal(filas(db, 'SGC_REVISIONES').length, 1);
+  const listado = RevisionDireccion.listar(db, {}, CTX_ENCARGADO).revisiones;
+  assert.equal(listado.length, 1, 'la revision anulada debe seguir apareciendo en el listado');
+  assert.equal(listado[0].estado, 'ANULADA');
+  assert.equal(filas(db, 'SGC_REVISIONES').length, 1, 'nunca se borra la fila');
+
+  const detalle = RevisionDireccion.getDetalle(db, { revision_id: r.revision_id }, CTX_ENCARGADO);
+  assert.equal(detalle._validationError, undefined, 'getDetalle tiene que seguir encontrandola tambien');
 });

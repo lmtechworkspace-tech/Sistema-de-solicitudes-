@@ -129,7 +129,11 @@ function cuerpoTablero_(db) {
     const limite = String(d.fecha_limite_acuse || '').slice(0, 10);
     if (!limite || limite >= hoyClave) return;
     destinatarios.filter((x) => x.documento_id === d.documento_id).forEach((x) => {
-      if (!acusadoPor[d.documento_id + '|' + d.version_vigente + '|' + normalizarEmail_(x.email)]) acusesVencidos++;
+      // SGC_DOC_DESTINATARIOS.usuario_email, no .email (typo confirmado por
+      // la auditoria de modulos): con .email siempre undefined, la clave
+      // nunca coincidia con acusadoPor y TODO destinatario de un documento
+      // vencido contaba como "no confirmo", aunque si lo hubiera hecho.
+      if (!acusadoPor[d.documento_id + '|' + d.version_vigente + '|' + normalizarEmail_(x.usuario_email)]) acusesVencidos++;
     });
   });
   alerta(SEVERIDAD_ALERTA.ALTA, 'Confirmaciones de lectura fuera de plazo',

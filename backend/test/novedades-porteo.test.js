@@ -310,6 +310,29 @@ test('18. despublicar: solo el autor o ADM', async (t) => {
   assert.equal(Novedades.despublicar(db, { novedad_id: pub.novedad_id }, ctxAdm()).activa, false);
 });
 
+// Bug confirmado por la auditoria de modulos (2026-09): despublicar solo
+// apagaba `activa`, nunca `estado` -- getDetalle/marcarLeida seguian
+// funcionando para la audiencia original despues de "retirar" la novedad,
+// aunque el feed ya no la mostrara.
+test('18b. despublicar SI revoca el acceso al detalle/marcarLeida para la audiencia original (no solo la esconde del feed)', async (t) => {
+  conMock(t);
+  const db = dbBase(); seedAudiencia(db); seedArea(db);
+  const pub = await Novedades.publicar(db, publicarBase_({ audiencia_tipo: 'SELECCION', destinatarios: ['leo@rld.cl'] }), ctxResponsable());
+  const CTX_LEO = { email: 'leo@rld.cl', rol: 'DEV' };
+
+  // Antes de despublicar: Leo (audiencia) puede ver el detalle y marcar leida.
+  assert.equal(Novedades.getDetalle(db, { novedad_id: pub.novedad_id }, CTX_LEO)._forbidden, undefined);
+
+  Novedades.despublicar(db, { novedad_id: pub.novedad_id }, ctxResponsable());
+
+  // Despues: Leo ya NO debe poder ver el detalle ni marcar leida.
+  assert.equal(Novedades.getDetalle(db, { novedad_id: pub.novedad_id }, CTX_LEO)._forbidden, true, 'getDetalle debe bloquear a la audiencia tras despublicar');
+  assert.equal(Novedades.marcarLeida(db, { novedad_id: pub.novedad_id }, CTX_LEO)._forbidden, true, 'marcarLeida debe bloquear a la audiencia tras despublicar');
+
+  // El autor SI sigue viendola (para poder auditar/republicar lo que retiro).
+  assert.equal(Novedades.getDetalle(db, { novedad_id: pub.novedad_id }, ctxResponsable())._forbidden, undefined);
+});
+
 test('19. descargarAdjunto devuelve el contenido base64 del original', async (t) => {
   conMock(t);
   conMockAlmacenamiento_(t);
@@ -772,6 +795,27 @@ test('55. getDetalle expone fecha_limite_acuse y dias_para_vencer', async (t) =>
   const detalle = Novedades.getDetalle(db, { novedad_id: pub.novedad_id }, ctxAdm());
   assert.equal(detalle.fecha_limite_acuse, fechaLimiteValida_(5));
   assert.equal(detalle.dias_para_vencer, 5);
+});
+
+// Bug confirmado por la auditoria de modulos (2026-09): antes se aceptaba
+// cualquier string que new Date() supiera parsear (incluida una fecha CON
+// hora/zona), pero diasParaVencer_ concatena 'T00:00:00' a mano asumiendo
+// AAAA-MM-DD estricto -- una fecha con hora producia NaN dias-para-vencer,
+// y el item caia silenciosamente en "al dia" aunque estuviera vencido.
+test('55b. una fecha limite con hora/zona (no AAAA-MM-DD estricto) se rechaza al aprobar, no produce NaN silencioso', async (t) => {
+  conMock(t);
+  const db = dbBase(); seedAudiencia(db); seedJefatura(db); seedArea(db);
+  const pub = await Novedades.publicar(db, publicarBase_({ tipo: 'LEY' }), ctxResponsable());
+
+  const conHora = await Novedades.aprobar(db, {
+    novedad_id: pub.novedad_id, fecha_limite_acuse: fechaLimiteValida_(5) + 'T00:00:00.000Z'
+  }, ctxJefa());
+  assert.equal(conHora._validationError, true, 'una fecha con hora/zona debe rechazarse explicitamente, no colarse');
+
+  const ok = await Novedades.aprobar(db, { novedad_id: pub.novedad_id, fecha_limite_acuse: fechaLimiteValida_(5) }, ctxJefa());
+  assert.equal(ok._validationError, undefined);
+  const detalle = Novedades.getDetalle(db, { novedad_id: pub.novedad_id }, ctxAdm());
+  assert.equal(detalle.dias_para_vencer, 5, 'con formato correcto, dias_para_vencer nunca debe ser NaN');
 });
 
 test('56. getPanelCumplimiento: solo ADM', async (t) => {

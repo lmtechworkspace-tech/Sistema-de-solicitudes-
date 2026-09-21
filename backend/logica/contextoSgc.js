@@ -115,7 +115,12 @@ function partesInteresadasActivas_(db) {
   return leerSeguro_(db, 'SGC_PARTES_INTERESADAS').filter((p) => esVerdadero_(p.activa));
 }
 function siguienteNumeroFactor_(db, tipo) {
-  const delTipo = factoresContextoActivos_(db).filter((f) => f.tipo === tipo);
+  // Sobre TODOS los factores del tipo, no solo los activos: anularFactor
+  // (abajo) solo pone activa:false, nunca "libera" el numero -- si se
+  // calculara solo sobre activos, anular el factor con el numero mas alto
+  // y crear uno nuevo del mismo tipo podia repetir el mismo "codigo"
+  // (ej. F7) para dos factores distintos, ambiguo en cualquier cita o PDF.
+  const delTipo = leerSeguro_(db, 'SGC_CONTEXTO').filter((f) => f.tipo === tipo);
   let max = 0;
   delTipo.forEach((f) => { const n = parseInt(f.numero, 10); if (isFinite(n) && n > max) max = n; });
   return max + 1;

@@ -71,6 +71,24 @@ test('guardar: el RUT no se repite -- duplicarlo partiria el historial en dos fi
   assert.equal(dup._validationError, true);
 });
 
+// Bug confirmado por la auditoria de modulos (2026-09): el chequeo de RUT
+// duplicado solo corria al CREAR -- editar un proveedor para dejarlo con
+// el RUT de OTRO proveedor activo no se validaba nunca.
+test('guardar: el RUT tampoco se puede repetir AL EDITAR (no solo al crear)', () => {
+  const db = db_();
+  sembrarRoles(db);
+  const a = crearProveedor(db, { rut: '76.111.111-1' });
+  crearProveedor(db, { nombre: 'Segundo proveedor', rut: '77.222.222-2' });
+
+  const editado = Proveedores.guardar(db, { proveedor_id: a.proveedor_id, nombre: a.nombre, producto_servicio: a.producto_servicio, rut: '77.222.222-2' }, CTX_ENCARGADO);
+  assert.equal(editado._validationError, true, 'editar hacia un RUT ya usado por otro proveedor debe rechazarse');
+
+  // Editarse a si mismo con el MISMO rut que ya tenia sigue funcionando.
+  const mismoRut = Proveedores.guardar(db, { proveedor_id: a.proveedor_id, nombre: 'Nombre actualizado', producto_servicio: a.producto_servicio, rut: '76.111.111-1' }, CTX_ENCARGADO);
+  assert.equal(mismoRut._validationError, undefined);
+  assert.equal(mismoRut.nombre, 'Nombre actualizado');
+});
+
 test('guardar: solo el Encargado SGC (o ADM) mantiene el listado', () => {
   const db = db_();
   sembrarRoles(db);

@@ -486,7 +486,14 @@ function anular(db, data, contexto) {
   const motivo = String(data.motivo || '').trim();
   if (motivo.length < 10) return errorValidacion_('motivo', 'Explica por qué se anula (mínimo 10 caracteres).');
 
-  const actualizada = actualizarFilaPorId_(db, 'SGC_REVISIONES', 'revision_id', revision.revision_id, { estado: 'ANULADA', activa: false });
+  // Solo estado, NUNCA activa:false -- a diferencia de auditoriasSgc/
+  // noConformidadesSgc/quejasSgc (que anulan sin tocar activa), esta era la
+  // unica de las 4 que apagaba `activa`. Como buscarRevision_/listar()
+  // filtran por esActivo_, una revision anulada asi desaparecia por
+  // completo (getDetalle/convocar/etc. respondian "no encontrada" para
+  // siempre) -- justo lo contrario del principio de trazabilidad ISO que
+  // el propio calidadSgc.js declara ("un documento OBSOLETO no se borra").
+  const actualizada = actualizarFilaPorId_(db, 'SGC_REVISIONES', 'revision_id', revision.revision_id, { estado: 'ANULADA' });
   registrarLogSgc_(db, 'SGC_REVISION_ANULADA', revision.correlativo + ' — ' + motivo, contexto);
   return actualizada;
 }

@@ -262,6 +262,25 @@ test('el código correlativo se asigna solo', () => {
   assert.ok(segundo.ok);
 });
 
+// Bug confirmado por la auditoria de modulos (2026-09): el correlativo se
+// calculaba solo sobre indicadores ACTIVOS -- anular IND-02 y crear uno
+// nuevo podia reasignarle el mismo codigo a un indicador distinto, a
+// diferencia de NC/Auditorias/Revisiones, que cuentan TODAS las filas
+// (sin filtrar por activo) y nunca reutilizan su correlativo.
+test('el código de un indicador anulado NO se reutiliza para un indicador nuevo', () => {
+  const db = crear();
+  const primero = crearIndicador(db);
+  const segundo = crearIndicador(db, { nombre: 'Otro' });
+  assert.equal(segundo.indicador_id !== undefined || segundo.ok, true, JSON.stringify(segundo));
+
+  const idSegundo = Indicadores.listar(db, {}, ENC).indicadores.find((x) => x.nombre === 'Otro').indicador_id;
+  Indicadores.anular(db, { indicador_id: idSegundo, motivo: 'Ya no aplica.' }, ENC);
+
+  const tercero = crearIndicador(db, { nombre: 'Tercero' });
+  const codigoTercero = Indicadores.listar(db, {}, ENC).indicadores.find((x) => x.nombre === 'Tercero').codigo;
+  assert.equal(codigoTercero, 'IND-03', 'debe seguir la numeracion, no reutilizar IND-02');
+});
+
 test('solo el Encargado define y mide', () => {
   const db = crear();
   assert.equal(Indicadores.guardar(db, { nombre: 'X', formula: 'f', meta_operador: 'MAYOR_IGUAL', meta_valor: 1, frecuencia: 'ANUAL' }, OPERATIVO)._forbidden, true);
