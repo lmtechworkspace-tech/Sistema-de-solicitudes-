@@ -2038,7 +2038,7 @@
             '<h3 class="sgc-seccion__titulo">Cómo se evalúa este cargo</h3>' +
             '<p class="sgc-seccion__ayuda">Los puntos que se califican en cada evaluación de desempeño</p>' +
           '</div>' +
-          itemsDescriptorHtml_('Responsabilidades a evaluar', d.items_responsabilidades) +
+          itemsDescriptorHtml_('Funciones a evaluar', d.items_responsabilidades) +
           itemsDescriptorHtml_('Habilidades a evaluar', d.items_habilidades) +
         '</div>'
       : '';
@@ -2155,7 +2155,7 @@
       var bajo = e.requiere_capacitacion === true || e.requiere_capacitacion === 'TRUE';
       return '<div class="sgc-version">' +
         '<div class="sgc-doc__top">' +
-          '<span class="sgc-doc__codigo">Resp. ' + e.promedio_responsabilidades + ' · Hab. ' + e.promedio_habilidades + '</span>' +
+          '<span class="sgc-doc__codigo">Func. ' + e.promedio_responsabilidades + ' · Hab. ' + e.promedio_habilidades + '</span>' +
           (bajo ? Componentes.badge('Requiere capacitación', 'alerta') : Componentes.badge('Conforme', 'ok')) +
           '<span class="sigso-ayuda">' + fechaCorta_(e.fecha) + '</span>' +
         '</div>' +
@@ -2180,7 +2180,7 @@
   function abrirFormularioEvaluacion_(p, itemsResp, itemsHab, escala) {
     if (!itemsResp.length || !itemsHab.length) {
       Componentes.aviso({
-        texto: 'Esta persona no tiene un descriptor de cargo con responsabilidades y habilidades cargadas como lista.',
+        texto: 'Esta persona no tiene un descriptor de cargo con funciones y habilidades cargadas como lista.',
         detalle: 'Completa esa parte del descriptor antes de evaluar.', tipo: 'error'
       });
       return;
@@ -2205,8 +2205,8 @@
         '<h3 class="sigso-modal__titulo">Evaluación de competencias — ' + Componentes.escaparHtml(p.nombre) + '</h3>' +
         '<p class="sigso-ayuda">El promedio de cada bloque y la necesidad de capacitación los calcula el sistema.</p>' +
         '<form id="form-sgc-evaluacion">' +
-          bloque('2.- Principales responsabilidades', 'Según el descriptor de cargo vigente.', itemsResp, 'r') +
-          bloque('3.- Responsabilidades secundarias / habilidades', '', itemsHab, 'h') +
+          bloque('2.- Principales funciones', 'Según el descriptor de cargo vigente.', itemsResp, 'r') +
+          bloque('3.- Habilidades', '', itemsHab, 'h') +
           Componentes.campoTextarea({ id: 'sgc-ev-obs', label: 'Observaciones' }) +
           Componentes.campoTexto({
             id: 'sgc-ev-recomendado', label: '¿Quién recomienda capacitación, si aplica? (opcional)'
@@ -2774,7 +2774,7 @@
           Componentes.campoTextarea({ id: 'sgc-de-responsabilidades', label: 'Responsabilidades (texto, tal como está en el documento)', valor: modoEditar ? vigente.responsabilidades : '' }) +
           Componentes.campoTextarea({ id: 'sgc-de-habilidades', label: 'Habilidades requeridas (texto, tal como está en el documento)', valor: modoEditar ? vigente.habilidades : '' }) +
           Componentes.campoTextarea({
-            id: 'sgc-de-items-resp', label: 'Responsabilidades a evaluar (una por línea)',
+            id: 'sgc-de-items-resp', label: 'Funciones a evaluar (una por línea)',
             valor: (vigente && vigente.items_responsabilidades ? vigente.items_responsabilidades.join('\n') : ''),
             ayuda: 'La evaluación de competencias (FO-PRO-02-04) califica cada una por separado.'
           }) +

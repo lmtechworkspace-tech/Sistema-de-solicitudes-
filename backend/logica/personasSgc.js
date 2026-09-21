@@ -482,7 +482,7 @@ function registrarEvaluacion(db, data, contexto) {
   if (!descriptor) return errorValidacion_('persona_id', 'Esta persona no tiene un descriptor de cargo vigente. Complétalo primero: la evaluación califica según su descriptor.');
   const itemsResp = parsearItemsDescriptor_(descriptor.items_responsabilidades);
   const itemsHab = parsearItemsDescriptor_(descriptor.items_habilidades);
-  if (!itemsResp.length || !itemsHab.length) return errorValidacion_('persona_id', 'El descriptor de cargo vigente no tiene responsabilidades y habilidades cargadas como lista. Complétalo antes de evaluar.');
+  if (!itemsResp.length || !itemsHab.length) return errorValidacion_('persona_id', 'El descriptor de cargo vigente no tiene funciones y habilidades cargadas como lista. Complétalo antes de evaluar.');
 
   const puntuadosResp = puntuarItemsEvaluacion_(itemsResp, data.respuestas_responsabilidades);
   if (puntuadosResp._validationError) return puntuadosResp;
