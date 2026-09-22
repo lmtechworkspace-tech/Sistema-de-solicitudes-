@@ -2798,6 +2798,40 @@
 }
 .sigso-perfil__nota svg { flex: none; margin-top: 0.1rem; opacity: 0.8; }
 
+/* --- Seccion "Seguridad" (cambiar contrasena) ---------------------------
+   Va DEBAJO de .sigso-perfil (hermano, no hijo del grid foto+datos): una
+   fila propia de ancho completo, no una columna mas que competir por el
+   espacio angosto de la derecha. */
+.sigso-perfil__seccion {
+  margin: var(--esp-5) 0 0;
+  padding-top: var(--esp-4);
+  border-top: 1px solid var(--borde);
+}
+.sigso-perfil__seccion-cab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--esp-3);
+}
+.sigso-perfil__seccion-titulo {
+  margin: 0;
+  font: var(--t-body);
+  font-weight: 600;
+  color: var(--texto);
+}
+.sigso-perfil__form-clave {
+  display: flex;
+  flex-direction: column;
+  gap: var(--esp-3);
+  max-width: 320px;
+  margin-top: var(--esp-4);
+}
+.sigso-perfil__form-clave-acciones {
+  display: flex;
+  gap: var(--esp-2);
+  justify-content: flex-end;
+}
+
 /* Destructivo pero secundario: color critico sobre fondo transparente. Un
    boton relleno rojo pesaria igual o mas que "Cambiar foto", que es la
    accion que la gente viene a hacer aqui. */

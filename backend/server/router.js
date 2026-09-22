@@ -163,11 +163,15 @@ const ACCIONES = {
   getInicio: (db, data, contexto) => Inicio.getResumen(db, data, contexto),
 
   // Fase 3c del plan post-migracion: gestion de cuentas de staff (USUARIOS,
-  // RN-030) y perfil propio de solo lectura -- ver auth.js/perfiles.js para
-  // lo que queda fuera (foto de perfil, suspenderInactivos como cron).
+  // RN-030) y perfil propio -- ver auth.js/perfiles.js. suspenderInactivos
+  // como cron queda fuera (no aplica a un servidor Node siempre encendido).
   gestionarUsuario: (db, data, contexto) => Auth.gestionarUsuario(db, data, contexto),
   listarUsuarios: (db, data, contexto) => Auth.listarUsuarios(db, data, contexto),
   getMiPerfil: (db, data, contexto) => Perfiles.getMiPerfil(db, data, contexto),
+  // Foto de perfil (portada a Node+R2 2026-09-22, ver perfiles.js).
+  guardarFotoPerfil: (db, data, contexto) => Perfiles.guardarFoto(db, data, contexto),
+  eliminarFotoPerfil: (db, data, contexto) => Perfiles.eliminarFoto(db, data, contexto),
+  getFotosPerfil: (db, data, contexto) => Perfiles.getFotosDe(db, data, contexto),
 
   // Modulo Novedades (mismos nombres de accion que BACKOFFICE_ACTIONS en el .gs).
   listarAreasPublicablesNovedad: (db, data, contexto) => Novedades.listarAreasPublicables(db, data, contexto),

@@ -311,6 +311,12 @@
             campo_('Correo', perfil.email) +
             (perfil.cargo ? campo_('Cargo', perfil.cargo) : '') +
             campo_('Empresa', perfil.empresa_nombre || perfil.empresa_id) +
+            // Último acceso: solo existe para cuentas del portal (login por
+            // usuario/clave) -- una identidad GOOGLE (legado) no lo registra
+            // en ningún lado, ver perfiles.js#datosIdentidad_.
+            (perfil.origen === 'PORTAL'
+              ? campo_('Último acceso', perfil.ultimo_acceso ? fechaHora_(perfil.ultimo_acceso) : 'Nunca entró')
+              : '') +
           '</dl>' +
           '<p class="sigso-perfil__nota">' +
             Iconos.svg('candado', { tam: 13 }) +
@@ -319,7 +325,13 @@
           '</p>' +
         '</div>' +
       '</div>' +
+      // Cambiar contraseña: solo aplica a cuentas del portal -- una sesión
+      // GOOGLE no tiene contraseña de SIGSO que cambiar (su clave es la de
+      // su cuenta Google).
+      (perfil.origen === 'PORTAL' ? seccionClaveHtml_() : '') +
       '<input type="file" accept="image/jpeg,image/png,image/webp" class="sigso-oculto js-archivo">';
+
+    if (perfil.origen === 'PORTAL') wireSeccionClave_(cuerpo);
 
     var inputArchivo = cuerpo.querySelector('.js-archivo');
 
@@ -382,6 +394,101 @@
   function campo_(etiqueta, valor) {
     return '<dt>' + Componentes.escaparHtml(etiqueta) + '</dt>' +
       '<dd>' + Componentes.escaparHtml(valor || '—') + '</dd>';
+  }
+
+  function fechaHora_(iso) {
+    if (!iso) return '';
+    var f = new Date(iso);
+    if (isNaN(f.getTime())) return '';
+    return f.toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  // --- Cambiar contraseña (solo cuentas de portal) -------------------------
+
+  function seccionClaveHtml_() {
+    return '<div class="sigso-perfil__seccion">' +
+      '<div class="sigso-perfil__seccion-cab">' +
+        '<h4 class="sigso-perfil__seccion-titulo">Seguridad</h4>' +
+        Componentes.boton({ texto: 'Cambiar contraseña', variante: 'sutil', clase: 'js-clave-abrir' }) +
+      '</div>' +
+      '<form class="sigso-perfil__form-clave sigso-oculto js-form-clave">' +
+        Componentes.campoTexto({ id: 'perfil-clave-actual', label: 'Contraseña actual', tipo: 'password', valor: '', requerido: true }) +
+        Componentes.campoTexto({ id: 'perfil-clave-nueva', label: 'Contraseña nueva', tipo: 'password', valor: '', requerido: true, ayuda: 'Mínimo 8 caracteres, distinta de la actual.' }) +
+        Componentes.campoTexto({ id: 'perfil-clave-repetir', label: 'Repite la contraseña nueva', tipo: 'password', valor: '', requerido: true }) +
+        '<div class="js-clave-resultado"></div>' +
+        '<div class="sigso-perfil__form-clave-acciones">' +
+          Componentes.boton({ texto: 'Cancelar', variante: 'sutil', tipo: 'button', clase: 'js-clave-cancelar' }) +
+          Componentes.boton({ texto: 'Guardar contraseña nueva', tipo: 'submit', clase: 'js-clave-guardar' }) +
+        '</div>' +
+      '</form>' +
+    '</div>';
+  }
+
+  function wireSeccionClave_(cuerpo) {
+    var form = cuerpo.querySelector('.js-form-clave');
+    var salida = cuerpo.querySelector('.js-clave-resultado');
+
+    function alternar_(mostrar) {
+      form.classList.toggle('sigso-oculto', !mostrar);
+      if (mostrar) cuerpo.querySelector('#perfil-clave-actual').focus();
+    }
+    function limpiar_() {
+      form.reset();
+      salida.innerHTML = '';
+    }
+
+    cuerpo.querySelector('.js-clave-abrir').addEventListener('click', function () { alternar_(true); });
+    cuerpo.querySelector('.js-clave-cancelar').addEventListener('click', function () {
+      limpiar_();
+      alternar_(false);
+    });
+
+    form.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var actual = cuerpo.querySelector('#perfil-clave-actual').value;
+      var nueva = cuerpo.querySelector('#perfil-clave-nueva').value;
+      var repetir = cuerpo.querySelector('#perfil-clave-repetir').value;
+
+      if (nueva.length < 8) {
+        salida.innerHTML = Componentes.alerta('La contraseña nueva debe tener al menos 8 caracteres.', 'error');
+        return;
+      }
+      if (nueva !== repetir) {
+        salida.innerHTML = Componentes.alerta('Las contraseñas nuevas no coinciden.', 'error');
+        return;
+      }
+
+      var boton = cuerpo.querySelector('.js-clave-guardar');
+      var cancelar = cuerpo.querySelector('.js-clave-cancelar');
+      boton.disabled = true;
+      cancelar.disabled = true;
+      salida.innerHTML = '';
+      var textoOriginal = boton.innerHTML;
+      boton.innerHTML = '<span class="sigso-spinner"></span>Guardando...';
+
+      var token = null;
+      try { token = localStorage.getItem('sigso_portal_token'); } catch (err) { /* sin storage */ }
+
+      api_('portalCambiarPassword', { token: token, password_actual: actual, password_nueva: nueva })
+        .then(function (respuesta) {
+          boton.disabled = false;
+          cancelar.disabled = false;
+          boton.innerHTML = textoOriginal;
+          if (!respuesta || !respuesta.ok) {
+            salida.innerHTML = Componentes.alerta((respuesta && respuesta.message) || 'No se pudo cambiar la contraseña.', 'error');
+            return;
+          }
+          limpiar_();
+          alternar_(false);
+          Componentes.aviso({ texto: 'Contraseña actualizada.', tipo: 'exito' });
+        })
+        .catch(function () {
+          boton.disabled = false;
+          cancelar.disabled = false;
+          boton.innerHTML = textoOriginal;
+          salida.innerHTML = Componentes.alerta('No se pudo conectar para cambiar la contraseña.', 'error');
+        });
+    });
   }
 
   function renderRecorte_(cuerpo, perfil, archivo, imagen) {

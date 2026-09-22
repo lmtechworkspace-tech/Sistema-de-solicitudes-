@@ -3,10 +3,9 @@
 /**
  * Prueba de portabilidad: Perfiles.getMiPerfil (Perfiles.gs), corrida
  * contra perfiles.js. Escenarios adaptados de backend/test/perfiles.test.js
- * (el .gs, vía gasSandbox) -- solo los que aplican al perfil de solo
- * lectura; los de foto (guardarFoto/eliminarFoto/getFotosDe) no aplican,
- * ver la cabecera de perfiles.js para por qué quedan fuera de este
- * incremento.
+ * (el .gs, vía gasSandbox) -- solo los del perfil de solo lectura; los de
+ * foto (guardarFoto/eliminarFoto/getFotosDe, portados 2026-09-22) están en
+ * perfiles-foto.test.js.
  */
 
 const test = require('node:test');

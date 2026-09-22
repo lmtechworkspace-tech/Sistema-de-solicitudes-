@@ -106,6 +106,23 @@ const COLUMNAS = {
   // token en claro (ver backend/logica/recuperarPassword.js) -- una lectura
   // de esta tabla no alcanza para usar un enlace de recuperación ajeno.
   RESETS_PASSWORD: ['reset_id', 'cuenta_id', 'token_hash', 'creado_en', 'expira', 'usado'],
+  // Foto de perfil (v6.4 originalmente en Apps Script/Sheets, portada a
+  // Node+R2 2026-09-22 -- ver perfiles.js). Llave compuesta identidad_tipo+
+  // identidad_clave (PORTAL: cuenta_id: GOOGLE: correo normalizado) porque
+  // "quién soy" tiene dos poblaciones distintas, igual que en Perfiles.gs
+  // (ver identidadDe_ en perfiles.js) -- no hay una sola columna id natural.
+  // thumb_base64 viaja INLINE (igual que en Sheets: ~10-14k caracteres, cabe
+  // holgado en una celda) para que pintar un avatar nunca dispare una
+  // llamada aparte a R2 -- getMiPerfil/getFotosPerfil arman con thumb_mime
+  // el mismo data URI ("data:<mime>;base64,...") que ya esperaba el
+  // frontend en la era Sheets, directo al <img src>. original_clave/
+  // original_mime son SOLO del archivo sin recortar en R2: existen nada
+  // más para la validación por firma binaria y una futura revisión manual;
+  // ninguna pantalla lo vuelve a pedir.
+  PERFILES: [
+    'perfil_id', 'identidad_tipo', 'identidad_clave',
+    'thumb_base64', 'thumb_mime', 'original_clave', 'original_mime', 'actualizado_en'
+  ],
 
   // Nucleo del helpdesk (backend/intake/Solicitudes.gs: crearSolicitud).
   SOLICITUDES: [
