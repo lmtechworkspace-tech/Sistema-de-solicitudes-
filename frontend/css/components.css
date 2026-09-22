@@ -257,6 +257,16 @@
   scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
 }
+/* Auditoría UX 2026-09-22 (Fase A): Proyectos tiene 11 pestañas y a anchos de
+   laptop (≤~1440px) la última quedaba parcialmente cortada tras el scroll
+   (medido: ~24px de desborde a 1366px, solo "Equipo"). En pantallas amplias
+   apretamos un poco el espaciado de ESTA barra (no el componente global) para
+   que las 11 quepan sin recorte; en móvil/tablet sigue el scroll de siempre.
+   No se toca el padding global de .sigso-tab (lo comparten estado/admin/SGC). */
+@media (min-width: 992px) {
+  .sigso-tabs { gap: 0.25rem; }
+  .sigso-tabs > .sigso-tab { padding-left: 0.65rem; padding-right: 0.65rem; }
+}
 
 /* Pestañas subrayadas. Dos nombres conviven en el código para EL MISMO
    componente: ".sigso-tabs__boton" (estado.html, admin, dashboard) tenía
@@ -3256,7 +3266,20 @@
 
 .sigso-py-card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--esp-2); }
 .sigso-py-card__nombre { font-weight: 600; color: var(--texto); }
-.sigso-py-card__desc { margin: 0; font-size: var(--texto-sm); color: var(--texto-2); }
+/* Auditoría UX 2026-09-22 (Fase A): la descripción dominaba la tarjeta (hasta
+   ~6 líneas), empujando lo accionable (avance/atrasos/vence) hacia abajo. Se
+   acota a 2 líneas con elipsis -- el detalle completo está al abrir el proyecto.
+   line-clamp: soportado en todos los navegadores modernos. */
+.sigso-py-card__desc {
+  margin: 0;
+  font-size: var(--texto-sm);
+  color: var(--texto-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 
 .sigso-py-card__barra {
   height: 6px; border-radius: var(--radio-full); background: var(--superficie-2); overflow: hidden;
