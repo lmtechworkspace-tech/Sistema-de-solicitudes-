@@ -203,7 +203,7 @@ test('getDetalle: requiere_atencion mantiene contadores + items accionables; vac
   Proyectos.crearTarea(db, { proyecto_id: proyecto.proyecto_id, titulo: 'Actualizar wiki', responsable_email: 'leo@rld.cl', fecha_compromiso: diasDesdeHoy(-2), prioridad: 'P4' }, CTX_LEO);
   const bloqueada = Proyectos.crearTarea(db, { proyecto_id: proyecto.proyecto_id, titulo: 'Integrar API', responsable_email: 'leo@rld.cl', fecha_compromiso: diasDesdeHoy(10) }, CTX_LEO);
   Actividades.checkin(db, { actividad_id: bloqueada.actividad_id, tipo: 'bloqueo', bloqueo_motivo: 'Esperando credenciales' }, CTX_LEO);
-  Proyectos.gestionarHito(db, { proyecto_id: proyecto.proyecto_id, nombre: 'Kickoff', fecha_objetivo: diasDesdeHoy(-5) }, CTX_LEO);
+  const hitoK = Proyectos.gestionarHito(db, { proyecto_id: proyecto.proyecto_id, nombre: 'Kickoff', fecha_objetivo: diasDesdeHoy(-5) }, CTX_LEO);
   Proyectos.gestionarRiesgo(db, { proyecto_id: proyecto.proyecto_id, descripcion: 'El proveedor puede fallar', probabilidad: 'ALTA', impacto: 'ALTA' }, CTX_LEO);
   Proyectos.gestionarRiesgo(db, { proyecto_id: proyecto.proyecto_id, descripcion: 'Riesgo menor', probabilidad: 'BAJA', impacto: 'BAJA' }, CTX_LEO);
 
@@ -215,6 +215,11 @@ test('getDetalle: requiere_atencion mantiene contadores + items accionables; vac
   assert.equal(at.riesgos_altos, 1);
   assert.deepEqual(at.items.map((i) => i.tipo).sort(), ['hito_atrasado', 'riesgo_alto', 'tarea_bloqueada', 'tarea_critica_atrasada', 'tarea_vencida']);
   assert.equal(at.items.filter((i) => i.titulo === 'Firmar contrato').length, 1);
+  // Fase B (auditoría UX): cada ítem lleva el id de su entidad, para que el
+  // frontend enfoque la fila al hacer clic (no solo abrir la pestaña).
+  assert.ok(at.items.every((i) => !!i.id), 'todo ítem accionable lleva su id');
+  assert.equal(at.items.find((i) => i.tipo === 'tarea_bloqueada').id, bloqueada.actividad_id);
+  assert.equal(at.items.find((i) => i.tipo === 'hito_atrasado').id, hitoK.hito_id);
 
   const sano = crearProyectoBase(db, { nombre: 'Sano', fecha_inicio: diasDesdeHoy(-5), fecha_objetivo: diasDesdeHoy(30) });
   Proyectos.crearTarea(db, { proyecto_id: sano.proyecto_id, titulo: 'Todo a tiempo', responsable_email: 'leo@rld.cl', fecha_compromiso: diasDesdeHoy(15) }, CTX_LEO);

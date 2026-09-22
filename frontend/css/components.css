@@ -3425,6 +3425,21 @@
 .sigso-py-atencion-item__tit { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
 .sigso-py-atencion-item__meta { color: var(--texto-3); font-size: var(--texto-sm); white-space: nowrap; }
 
+/* Auditoría UX 2026-09-22 (Fase B): destello al llevar el foco a la fila de un
+   ítem tras hacer clic en "Atención requerida" (ver enfocarFilaProyecto_). Se
+   anima background-color (funciona en <div> y en <tr> vía sus <td>), no
+   box-shadow (que en filas de tabla no siempre pinta). Respeta
+   prefers-reduced-motion. */
+@keyframes sigso-py-foco-pulse {
+  0% { background-color: var(--primario-suave); }
+  100% { background-color: transparent; }
+}
+.sigso-py-foco { animation: sigso-py-foco-pulse 2.2s ease-out; border-radius: var(--radio-sm); }
+.sigso-py-foco td { animation: sigso-py-foco-pulse 2.2s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .sigso-py-foco, .sigso-py-foco td { animation: none; outline: 2px solid var(--primario); }
+}
+
 .sigso-py-acciones { display: flex; gap: var(--esp-2); margin-top: var(--esp-4); flex-wrap: wrap; }
 
 .sigso-py-form-fila { display: flex; gap: var(--esp-3); flex-wrap: wrap; }

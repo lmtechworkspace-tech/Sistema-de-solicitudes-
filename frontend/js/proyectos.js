@@ -1219,7 +1219,7 @@
         Iconos.svg('check', { tam: 16 }) + '<span>Nada requiere atención ahora mismo.</span></div>';
     } else {
       var filas = items.map(function (it) {
-        return '<button type="button" class="sigso-py-atencion-item js-py-atencion-item" data-tab="' + Componentes.escaparHtml(it.tab) + '">' +
+        return '<button type="button" class="sigso-py-atencion-item js-py-atencion-item" data-tab="' + Componentes.escaparHtml(it.tab) + '" data-foco="' + Componentes.escaparHtml(it.id || '') + '">' +
           Iconos.svg(ATENCION_ITEM_ICONO_[it.tipo] || 'alerta', { tam: 15 }) +
           '<span class="sigso-py-atencion-item__tit">' + Componentes.escaparHtml(it.titulo) + '</span>' +
           '<span class="sigso-py-atencion-item__meta">' + Componentes.escaparHtml(it.meta || '') + '</span>' +
@@ -1937,7 +1937,7 @@
       var sub = a.es_subtarea ? '<span class="sigso-py-tabla-sub" title="Subtarea">↳</span> ' : '';
       var vence = a.fecha_compromiso ? fechaCorta_(a.fecha_compromiso) : '—';
       var avance = (a.avance_pct === '' || a.avance_pct === undefined || a.avance_pct === null) ? '—' : a.avance_pct + '%';
-      return '<tr>' +
+      return '<tr data-py-foco="' + a.actividad_id + '">' +
         '<td data-label="Tarea">' + sub + Componentes.escaparHtml(a.titulo) + '</td>' +
         '<td data-label="Responsable">' + (esMia ? '<b>Tú</b>' : Componentes.escaparHtml(nombrePersona_(a.responsable_email, a.responsable_nombre))) + '</td>' +
         '<td data-label="Estado"><span class="sigso-badge sigso-mt-badge--' + a.semaforo + '">' + Componentes.escaparHtml(a.semaforo_etiqueta || '') + '</span></td>' +
@@ -2003,7 +2003,7 @@
     var filas = ordenarConSubtareas_(tareas).map(function (a) {
       var esMia = !!miEmail && normalizarEmail_(a.responsable_email) === miEmail;
       var puedeEditar = puedeGestionar || trabajoLaTarea_(a, miEmail);
-      return '<div class="sigso-py-tarea' + (esMia ? ' sigso-py-tarea--mia' : '') + (a.es_subtarea ? ' sigso-py-tarea--subtarea' : '') + '">' +
+      return '<div class="sigso-py-tarea' + (esMia ? ' sigso-py-tarea--mia' : '') + (a.es_subtarea ? ' sigso-py-tarea--subtarea' : '') + '" data-py-foco="' + a.actividad_id + '">' +
         (a.es_subtarea ? '<div class="sigso-py-subtarea-de">↳ Subtarea de "' + Componentes.escaparHtml(a.padre_titulo || '') + '"</div>' : '') +
         '<div class="sigso-py-tarea__top">' +
           '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(a.titulo) + '</span>' +
@@ -2225,7 +2225,7 @@
       } else {
         tareasHtml = '<p class="sigso-ayuda">Sin tareas asociadas todavía.</p>';
       }
-      return '<div class="sigso-py-hito' + (vencido ? ' sigso-py-hito--vencido' : '') + '">' +
+      return '<div class="sigso-py-hito' + (vencido ? ' sigso-py-hito--vencido' : '') + '" data-py-foco="' + h.hito_id + '">' +
         '<div class="sigso-py-hito__top">' +
           '<span class="sigso-py-hito__nombre">' + Componentes.escaparHtml(h.nombre) + '</span>' +
           Componentes.badge(HITO_ESTADO_ETIQUETA[h.estado] || h.estado, 'neutro') +
@@ -4636,7 +4636,7 @@
 
     var filas = riesgos.map(function (r) {
       var puedeEditar = puedeGestionar && r.estado !== 'CERRADO';
-      return '<div class="sigso-py-riesgo sigso-py-riesgo--' + (r.nivel || '').toLowerCase() + '">' +
+      return '<div class="sigso-py-riesgo sigso-py-riesgo--' + (r.nivel || '').toLowerCase() + '" data-py-foco="' + r.riesgo_id + '">' +
         '<div class="sigso-py-tarea__top">' +
           '<span class="sigso-py-tarea__titulo">' + Componentes.escaparHtml(r.descripcion) + '</span>' +
           Componentes.badge('Riesgo ' + (RIESGO_NIVEL_ETIQUETA[r.nivel] || r.nivel), riesgoBadgeVariante_(r.nivel)) +
@@ -4691,7 +4691,13 @@
     cont.querySelectorAll('.js-py-atencion-item').forEach(function (btn) {
       btn.addEventListener('click', function () {
         var tab = btn.getAttribute('data-tab');
-        if (tab) cambiarPestana_(tab);
+        var foco = btn.getAttribute('data-foco');
+        if (!tab) return;
+        cambiarPestana_(tab);
+        // Fase B: además de abrir la pestaña, llevar el foco a la fila del
+        // ítem (§9 del brief). cambiarPestana_ repinta desde cache de forma
+        // síncrona para tareas/hitos/riesgos, así que la fila ya existe.
+        if (foco) enfocarFilaProyecto_(foco);
       });
     });
 
@@ -6714,6 +6720,25 @@
     var raiz = document.getElementById('proyectos-contenido');
     var seccion = raiz && raiz.parentElement;
     if (seccion) seccion.classList.toggle('sigso-py-sin-cabecera-modulo', !!ocultar);
+  }
+
+  // Auditoría UX 2026-09-22 (Fase B): tras navegar desde "Atención requerida"
+  // a la pestaña de un ítem, lleva el foco a SU fila (scroll + destello). Las
+  // filas se marcan con data-py-foco="<id>" (tareas lista/tabla, hitos,
+  // riesgos). Degradación elegante: si la fila no está (otra vista, filtro),
+  // no hace nada -- la pestaña ya se abrió igual.
+  function enfocarFilaProyecto_(id) {
+    if (!id) return;
+    var cont = panelProyectos_();
+    if (!cont) return;
+    var sel = (window.CSS && CSS.escape) ? CSS.escape(String(id)) : String(id).replace(/"/g, '\\"');
+    var el = cont.querySelector('[data-py-foco="' + sel + '"]');
+    if (!el) return;
+    el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el.classList.remove('sigso-py-foco');
+    void el.offsetWidth; // reinicia la animación si ya la tenía
+    el.classList.add('sigso-py-foco');
+    setTimeout(function () { el.classList.remove('sigso-py-foco'); }, 2200);
   }
 
   function panelProyectos_() {

@@ -311,15 +311,19 @@ function calcularRequiereAtencion_(tareas, hitos, integrantes, riesgos) {
   const criticasAtrasadas = vencidas.filter((a) => ['P1', 'P2'].indexOf(a.prioridad) !== -1);
   const riesgosAltos = (riesgos || []).filter((r) => r.nivel === 'ALTA' && r.estado === 'ABIERTO');
 
+  // `id` (aditivo, auditoría UX 2026-09-22 Fase B): el id de la entidad
+  // (actividad/hito/riesgo) para que el frontend, al hacer clic en el ítem, no
+  // solo abra la pestaña sino que lleve el foco a ESA fila (§9 del brief:
+  // indicador → contexto → acción, no solo → pestaña).
   const items = [];
-  criticasAtrasadas.forEach((a) => items.push({ tipo: 'tarea_critica_atrasada', tab: 'tareas', titulo: a.titulo, meta: 'Prioridad ' + a.prioridad + ' · vencida' }));
-  bloqueadas.forEach((a) => items.push({ tipo: 'tarea_bloqueada', tab: 'tareas', titulo: a.titulo, meta: a.bloqueo_motivo || 'Bloqueada' }));
+  criticasAtrasadas.forEach((a) => items.push({ tipo: 'tarea_critica_atrasada', tab: 'tareas', id: a.actividad_id, titulo: a.titulo, meta: 'Prioridad ' + a.prioridad + ' · vencida' }));
+  bloqueadas.forEach((a) => items.push({ tipo: 'tarea_bloqueada', tab: 'tareas', id: a.actividad_id, titulo: a.titulo, meta: a.bloqueo_motivo || 'Bloqueada' }));
   vencidas.forEach((a) => {
     if (['P1', 'P2'].indexOf(a.prioridad) !== -1) return;
-    items.push({ tipo: 'tarea_vencida', tab: 'tareas', titulo: a.titulo, meta: 'Venció ' + fechaCorta_(a.fecha_compromiso) });
+    items.push({ tipo: 'tarea_vencida', tab: 'tareas', id: a.actividad_id, titulo: a.titulo, meta: 'Venció ' + fechaCorta_(a.fecha_compromiso) });
   });
-  hitosAtrasados.forEach((h) => items.push({ tipo: 'hito_atrasado', tab: 'hitos', titulo: h.nombre, meta: 'Vencía ' + fechaCorta_(h.fecha_objetivo) }));
-  riesgosAltos.forEach((r) => items.push({ tipo: 'riesgo_alto', tab: 'riesgos', titulo: r.descripcion, meta: 'Riesgo alto · abierto' }));
+  hitosAtrasados.forEach((h) => items.push({ tipo: 'hito_atrasado', tab: 'hitos', id: h.hito_id, titulo: h.nombre, meta: 'Vencía ' + fechaCorta_(h.fecha_objetivo) }));
+  riesgosAltos.forEach((r) => items.push({ tipo: 'riesgo_alto', tab: 'riesgos', id: r.riesgo_id, titulo: r.descripcion, meta: 'Riesgo alto · abierto' }));
 
   return {
     tareas_vencidas: vencidas.length, tareas_bloqueadas: bloqueadas.length, hitos_atrasados: hitosAtrasados.length,
