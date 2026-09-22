@@ -262,7 +262,11 @@ var ACCIONES_PORTADAS_NODE = {
   // --- Panel de datos crudo, exclusivo de la cuenta super_admin (2026-09-21;
   // backend/logica/superAdminPanel.js) ---
   superAdminListarTablas: true, superAdminListarFilas: true, superAdminAgregarFila: true,
-  superAdminActualizarFila: true, superAdminEliminarFila: true
+  superAdminActualizarFila: true, superAdminEliminarFila: true,
+
+  // --- Directorio de Personas, Fase 1 (2026-09-22; backend/logica/
+  // directorioPersonas.js). Solo lectura; ninguna pantalla las llama todavía. ---
+  buscarDirectorioPersonas: true, listarDirectorioPersonas: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,

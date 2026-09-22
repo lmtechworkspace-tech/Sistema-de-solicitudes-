@@ -764,8 +764,12 @@ test('52. aprobar Ley/Dictamen con fecha en el pasado: error', async (t) => {
   conMock(t);
   const db = dbBase(); seedAudiencia(db); seedJefatura(db); seedArea(db);
   const pub = await Novedades.publicar(db, publicarBase_({ tipo: 'LEY' }), ctxResponsable());
-  const ayer = new Date(); ayer.setDate(ayer.getDate() - 1);
-  assert.equal((await Novedades.aprobar(db, { novedad_id: pub.novedad_id, fecha_limite_acuse: ayer.toISOString().slice(0, 10) }, ctxJefa()))._validationError, true);
+  // "Ayer" con componentes LOCALES (fechaLimiteValida_), NO ayer.toISOString()
+  // -- toISOString() convierte a UTC y, en la ventana nocturna de Chile (la
+  // zona de dev/CI/VPS), la fecha UTC de "ayer" ya es HOY local, así que la
+  // validación "no anterior a hoy" (que compara en local) la aceptaba y el
+  // test fallaba solo según la hora del día. Bug del test, no de la validación.
+  assert.equal((await Novedades.aprobar(db, { novedad_id: pub.novedad_id, fecha_limite_acuse: fechaLimiteValida_(-1) }, ctxJefa()))._validationError, true);
 });
 
 test('53. aprobar Procedimiento sin fecha limite: opcional, se aprueba igual', async (t) => {
@@ -780,8 +784,8 @@ test('53. aprobar Procedimiento sin fecha limite: opcional, se aprueba igual', a
 test('54. publicar LIBRE: fecha limite opcional, se valida si se manda', async (t) => {
   conMock(t);
   const db = dbBase(); seedAudiencia(db); seedJefatura(db); seedArea(db);
-  const ayer = new Date(); ayer.setDate(ayer.getDate() - 1);
-  assert.equal((await Novedades.publicar(db, publicarBase_({ fecha_limite_acuse: ayer.toISOString().slice(0, 10) }), ctxResponsable()))._validationError, true);
+  // "Ayer" en local (ver la nota del test 52 sobre por qué no toISOString()).
+  assert.equal((await Novedades.publicar(db, publicarBase_({ fecha_limite_acuse: fechaLimiteValida_(-1) }), ctxResponsable()))._validationError, true);
   const ok = await Novedades.publicar(db, publicarBase_({ fecha_limite_acuse: fechaLimiteValida_() }), ctxResponsable());
   assert.equal(ok.estado, 'PUBLICADA');
   assert.equal(filas(db, 'NOVEDADES')[0].fecha_limite_acuse, fechaLimiteValida_());
@@ -831,8 +835,9 @@ test('57. getPanelCumplimiento: semaforo y conteos', async (t) => {
   const db = dbBase(); seedAudiencia(db); seedJefatura(db); seedArea(db);
   const vencida = await Novedades.publicar(db, publicarBase_({ tipo: 'LEY', titulo: 'Vencida' }), ctxResponsable());
   await Novedades.aprobar(db, { novedad_id: vencida.novedad_id, fecha_limite_acuse: fechaLimiteValida_(1) }, ctxJefa());
-  const pasado = new Date(); pasado.setDate(pasado.getDate() - 3);
-  actualizarFilaPorId_(db, 'NOVEDADES', 'novedad_id', vencida.novedad_id, { fecha_limite_acuse: pasado.toISOString().slice(0, 10) });
+  // Se escribe directo una fecha ya vencida (3 días atrás), en local para no
+  // depender de UTC (ver la nota del test 52).
+  actualizarFilaPorId_(db, 'NOVEDADES', 'novedad_id', vencida.novedad_id, { fecha_limite_acuse: fechaLimiteValida_(-3) });
 
   const cumplida = await Novedades.publicar(db, publicarBase_({ tipo: 'DICTAMEN', titulo: 'Cumplida' }), ctxResponsable());
   await Novedades.aprobar(db, { novedad_id: cumplida.novedad_id, fecha_limite_acuse: fechaLimiteValida_(10) }, ctxJefa());

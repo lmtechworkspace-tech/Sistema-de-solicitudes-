@@ -9,6 +9,7 @@
  * empezando por Catalogos.
  */
 
+const crypto = require('node:crypto');
 const { asegurarTabla_, asegurarColumnas_, leerFilas_, agregarFila_, actualizarFilaPorId_ } = require('./sqliteRepo');
 
 // Fase "Organización invisible" (documento "Arquitectura de Accesos",
@@ -26,6 +27,40 @@ const COLUMNAS = {
   // recibe automáticamente vía asegurarOrganizacionPorDefecto_.
   CAT_EMPRESAS: ['empresa_id', 'nombre', 'logo', 'activo', 'organizacion_id'],
   ORGANIZACIONES: ['organizacion_id', 'nombre', 'activo', 'creado_en'],
+
+  // Directorio de Personas (Fase 1, 2026-09-22): el registro CANÓNICO de
+  // "quién es cada persona", pensado para vender SIGSO a otras empresas. Hoy
+  // una persona no existe como entidad -- está implícita en ~40 columnas
+  // `*_email` sueltas, y la misma persona aparece fragmentada en
+  // CUENTAS_PORTAL (login), SGC_PERSONAS (una fila POR CARGO, con RUT) y
+  // referencias por correo, sin un ID que las una. Esta tabla las unifica.
+  //
+  // Decisiones (pedido del dueño, 2026-09-21): el RUT es la LLAVE NATURAL de
+  // identidad (único, no cambia, no se olvida como un correo); el correo pasa
+  // a ser un atributo secundario (útil para login/notificaciones, no la
+  // identidad). `organizacion_id` es el límite entre clientes (multi-tenant).
+  //
+  // FASE 1 A PROPÓSITO NO CAMBIA NADA VISIBLE: esta tabla se siembra sola al
+  // arrancar (asegurarDirectorioPersonas_) desde CUENTAS_PORTAL + SGC_PERSONAS
+  // y da un servicio de resolución (correo->persona) y búsqueda (por RUT/
+  // nombre/cargo). El correo sigue siendo la llave de almacenamiento en las
+  // ~40 FKs existentes -- reemplazarlas por persona_id es una fase POSTERIOR,
+  // en pausa (misma disciplina que el enforcement multi-tenant).
+  //
+  //   persona_id      ID interno estable (la identidad real, nunca cambia).
+  //                   Distinto del persona_id de SGC_PERSONAS (que es por cargo).
+  //   emails          lista JSON: una persona puede tener varios correos.
+  //   cargo_principal el cargo que se muestra por defecto (una persona puede
+  //                   tener más de uno en SGC; acá va el principal, para pintar
+  //                   "Nombre — Cargo").
+  //   tiene_cuenta    true si tiene login en CUENTAS_PORTAL (vs. colaborador
+  //                   externo que solo se asigna a trabajos, sin cuenta).
+  //   origen          de qué fuente se sembró (CUENTAS_PORTAL / SGC_PERSONAS).
+  DIRECTORIO_PERSONAS: [
+    'persona_id', 'organizacion_id', 'nombre', 'rut', 'emails',
+    'cargo_principal', 'empresa_id', 'tiene_cuenta', 'activa',
+    'origen', 'creado_en', 'actualizado_en'
+  ],
   CAT_PLATAFORMAS: ['plataforma_id', 'nombre', 'empresa_id', 'url_base', 'activo'],
   CAT_MODULOS: ['modulo_id', 'nombre', 'plataforma_id', 'modulo_padre_id', 'activo'],
   CAT_TIPOS: ['tipo_id', 'nombre', 'prioridad_default', 'activo', 'es_urgente'],
@@ -648,12 +683,114 @@ function asegurarOrganizacionPorDefecto_(db) {
   });
 }
 
+// Siembra el Directorio de Personas (ver la nota de la tabla arriba) desde
+// las dos fuentes que hoy tienen datos de personas: CUENTAS_PORTAL (login,
+// la identidad de acá en adelante) y SGC_PERSONAS (que trae el RUT y el
+// cargo real). Idempotente y NO destructiva: solo inserta a quien todavía
+// no está representado (por RUT o por alguno de sus correos) y nunca pisa
+// una fila ya existente -- así corre segura en cada arranque, y una fila
+// enriquecida a mano en una fase futura no se sobrescribe.
+//
+// Regla de deduplicación (RUT = llave natural, decisión del dueño): dos
+// filas con el mismo RUT son la MISMA persona (esto colapsa el caso real de
+// una persona con dos cargos en SGC_PERSONAS en UNA sola entrada del
+// directorio). Sin RUT, se deduplica por correo normalizado.
+//
+// USUARIOS (identidad legada de Google) NO se usa como fuente a propósito:
+// ya está decidido retirarla; todo el personal real vive en CUENTAS_PORTAL/
+// SGC_PERSONAS. Una persona referenciada solo por un correo que no está en
+// ninguna de las dos simplemente no se resuelve (el llamador muestra el
+// correo crudo) -- degradación elegante, no un error.
+function normalizarRutDir_(rut) {
+  return String(rut || '').replace(/[.\-\s]/g, '').toUpperCase();
+}
+function normalizarEmailDir_(email) {
+  return String(email || '').trim().toLowerCase();
+}
+function esVerdaderoDir_(v) { return v === true || v === 'TRUE' || v === 1; }
+function parsearListaDir_(valor) {
+  if (Array.isArray(valor)) return valor;
+  if (!valor) return [];
+  try { const l = JSON.parse(valor); return Array.isArray(l) ? l : []; } catch (err) { return []; }
+}
+
+function asegurarDirectorioPersonas_(db) {
+  const existentes = leerFilas_(db, 'DIRECTORIO_PERSONAS', COLUMNAS.DIRECTORIO_PERSONAS);
+  const rutsVistos = new Set();
+  const emailsVistos = new Set();
+  existentes.forEach((p) => {
+    const r = normalizarRutDir_(p.rut);
+    if (r) rutsVistos.add(r);
+    parsearListaDir_(p.emails).forEach((e) => { const n = normalizarEmailDir_(e); if (n) emailsVistos.add(n); });
+  });
+
+  // Índice correo->RUT desde SGC_PERSONAS, para enriquecer las cuentas con su
+  // RUT real (CUENTAS_PORTAL no guarda RUT).
+  const sgc = leerFilas_(db, 'SGC_PERSONAS', COLUMNAS.SGC_PERSONAS);
+  const rutPorEmailSgc = {};
+  sgc.forEach((s) => {
+    const email = normalizarEmailDir_(s.usuario_email);
+    if (email && s.rut && !rutPorEmailSgc[email]) rutPorEmailSgc[email] = s.rut;
+  });
+
+  const ahora = new Date().toISOString();
+  function insertar_(fila) {
+    agregarFila_(db, 'DIRECTORIO_PERSONAS', Object.assign({
+      persona_id: crypto.randomUUID(), organizacion_id: ORGANIZACION_POR_DEFECTO_ID,
+      nombre: '', rut: '', emails: '[]', cargo_principal: '', empresa_id: '',
+      tiene_cuenta: false, activa: true, origen: '', creado_en: ahora, actualizado_en: ahora
+    }, fila));
+    const r = normalizarRutDir_(fila.rut);
+    if (r) rutsVistos.add(r);
+    parsearListaDir_(fila.emails).forEach((e) => { const n = normalizarEmailDir_(e); if (n) emailsVistos.add(n); });
+  }
+
+  // 1) Cuentas con login: una persona por cuenta (identidad de acá en
+  //    adelante). Se enriquece con el RUT de SGC_PERSONAS si alguno de sus
+  //    correos hace match. Se siembran activas E inactivas para que los
+  //    registros históricos (evaluaciones viejas, etc.) también resuelvan.
+  leerFilas_(db, 'CUENTAS_PORTAL', COLUMNAS.CUENTAS_PORTAL).forEach((c) => {
+    const emails = parsearListaDir_(c.emails);
+    const normalizados = emails.map(normalizarEmailDir_).filter(Boolean);
+    if (!normalizados.length) return;
+    if (normalizados.some((e) => emailsVistos.has(e))) return;
+    let rut = '';
+    for (const e of normalizados) { if (rutPorEmailSgc[e]) { rut = rutPorEmailSgc[e]; break; } }
+    if (rut && rutsVistos.has(normalizarRutDir_(rut))) return;
+    insertar_({
+      organizacion_id: c.organizacion_id || ORGANIZACION_POR_DEFECTO_ID,
+      nombre: c.nombre || normalizados[0], rut: rut || '',
+      emails: JSON.stringify(emails), cargo_principal: c.cargo || '',
+      empresa_id: c.empresa_id || '', tiene_cuenta: true,
+      activa: esVerdaderoDir_(c.activo), origen: 'CUENTAS_PORTAL'
+    });
+  });
+
+  // 2) Personas del SGC SIN cuenta de login (colaboradores externos, etc.):
+  //    una por RUT (colapsa el multi-cargo). Si ya se representó por correo
+  //    en el paso 1, se omite.
+  sgc.forEach((s) => {
+    const email = normalizarEmailDir_(s.usuario_email);
+    const rut = normalizarRutDir_(s.rut);
+    if (email && emailsVistos.has(email)) return;
+    if (rut && rutsVistos.has(rut)) return;
+    if (!email && !rut) return;
+    insertar_({
+      nombre: s.nombre || email, rut: s.rut || '',
+      emails: email ? JSON.stringify([s.usuario_email]) : '[]',
+      cargo_principal: s.cargo || '', empresa_id: '', tiene_cuenta: false,
+      activa: esVerdaderoDir_(s.activa), origen: 'SGC_PERSONAS'
+    });
+  });
+}
+
 function asegurarEsquema(db) {
   Object.keys(COLUMNAS).forEach((hoja) => {
     asegurarTabla_(db, hoja, COLUMNAS[hoja]);
     asegurarColumnas_(db, hoja, COLUMNAS[hoja]);
   });
   asegurarOrganizacionPorDefecto_(db);
+  asegurarDirectorioPersonas_(db);
 }
 
 module.exports = { COLUMNAS, asegurarEsquema, ORGANIZACION_POR_DEFECTO_ID };

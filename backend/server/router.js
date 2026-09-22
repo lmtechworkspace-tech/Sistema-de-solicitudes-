@@ -68,6 +68,7 @@ const Auth = require('../logica/auth');
 const Perfiles = require('../logica/perfiles');
 const RecuperarPassword = require('../logica/recuperarPassword');
 const SuperAdminPanel = require('../logica/superAdminPanel');
+const DirectorioPersonas = require('../logica/directorioPersonas');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -493,7 +494,15 @@ const ACCIONES = {
   superAdminListarFilas: (db, data, contexto) => SuperAdminPanel.listarFilasTabla(db, data, contexto),
   superAdminAgregarFila: (db, data, contexto) => SuperAdminPanel.agregarFilaTabla(db, data, contexto),
   superAdminActualizarFila: (db, data, contexto) => SuperAdminPanel.actualizarFilaTabla(db, data, contexto),
-  superAdminEliminarFila: (db, data, contexto) => SuperAdminPanel.eliminarFilaTabla(db, data, contexto)
+  superAdminEliminarFila: (db, data, contexto) => SuperAdminPanel.eliminarFilaTabla(db, data, contexto),
+
+  // Directorio de Personas (Fase 1, 2026-09-22): solo lectura. buscar =
+  // para el futuro selector "asignar a alguien" (por RUT/nombre/cargo);
+  // listar = volcado ADM. Ninguna pantalla existente las llama todavía
+  // (Fase 1 no cambia nada visible) -- se conectan aquí para poder
+  // verificarlas y para las fases que vienen.
+  buscarDirectorioPersonas: (db, data, contexto) => DirectorioPersonas.buscarPersonas(db, data, contexto),
+  listarDirectorioPersonas: (db, data, contexto) => DirectorioPersonas.listar(db, data, contexto)
 };
 
 function responderResultado_(resultado) {
@@ -526,6 +535,12 @@ function resolverContextoPortal_(db, token) {
     via_portal: true,
     cuenta_id: cuenta.cuenta_id,
     empresa_id: cuenta.empresa_id,
+    // organizacion_id: el límite entre clientes (multi-tenant, "Organización
+    // invisible"). Hoy hay una sola organización, así que acotar por él no
+    // cambia nada observable -- pero el Directorio de Personas (y cualquier
+    // consulta org-scoped futura) ya lo tiene disponible desde el día uno,
+    // resuelto fresco de la cuenta en cada request.
+    organizacion_id: cuenta.organizacion_id || '',
     // super_admin: se resuelve fresco de CUENTAS_PORTAL en cada request,
     // igual que el resto de contexto -- nunca del token ni de algo mandado
     // por el cliente (ver la nota de seguridad arriba de esta función).
