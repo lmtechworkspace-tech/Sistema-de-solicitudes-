@@ -502,7 +502,10 @@ const ACCIONES = {
   // (Fase 1 no cambia nada visible) -- se conectan aquí para poder
   // verificarlas y para las fases que vienen.
   buscarDirectorioPersonas: (db, data, contexto) => DirectorioPersonas.buscarPersonas(db, data, contexto),
-  listarDirectorioPersonas: (db, data, contexto) => DirectorioPersonas.listar(db, data, contexto)
+  listarDirectorioPersonas: (db, data, contexto) => DirectorioPersonas.listar(db, data, contexto),
+  // Fase 2 (2026-09-22): resolución masiva correo->{nombre,cargo,etiqueta},
+  // la que usa la capa de visualización compartida (frontend/js/directorio.js).
+  resolverDirectorioPersonas: (db, data, contexto) => DirectorioPersonas.resolverPersonas(db, data, contexto)
 };
 
 function responderResultado_(resultado) {

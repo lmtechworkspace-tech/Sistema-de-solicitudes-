@@ -127,6 +127,24 @@ test('resolverVarios: resuelve muchos correos de una sola pasada', () => {
   assert.equal(mapa['nadie@x.cl'], undefined);
 });
 
+test('resolverPersonas (acción HTTP): resuelve una lista de correos de una sola llamada; exige sesión', () => {
+  const db = dbSembrada(
+    [{ cuenta_id: 'c-1', usuario: 'a', nombre: 'Ana', cargo: 'X', emails: '["a@x.cl"]', rol: 'DEV', empresa_id: 'HP', activo: true },
+     { cuenta_id: 'c-2', usuario: 'b', nombre: 'Beto', cargo: 'Y', emails: '["b@x.cl"]', rol: 'DEV', empresa_id: 'HP', activo: true }],
+    []
+  );
+  const res = Directorio.resolverPersonas(db, { emails: ['a@x.cl', 'nadie@x.cl'] }, CTX_DEV);
+  assert.equal(res.personas['a@x.cl'].etiqueta, 'Ana — X');
+  assert.equal(res.personas['nadie@x.cl'], undefined);
+  assert.ok(Directorio.resolverPersonas(db, { emails: ['a@x.cl'] }, null)._forbidden, 'sin sesión, forbidden');
+});
+
+test('resolverPersonas: sin lista de correos, o con basura, no revienta', () => {
+  const db = dbSembrada([], []);
+  assert.deepEqual(Directorio.resolverPersonas(db, {}, CTX_DEV).personas, {});
+  assert.deepEqual(Directorio.resolverPersonas(db, { emails: 'no-es-un-arreglo' }, CTX_DEV).personas, {});
+});
+
 test('buscarPersonas: encuentra por nombre, por cargo y por RUT; exige sesión', () => {
   const db = dbSembrada(
     [{ cuenta_id: 'c-1', usuario: 'cpena', nombre: 'Camila Peña', cargo: 'Encargada de Prevención', emails: '["cpena@grupohb.cl"]', rol: 'DEV', empresa_id: 'HP', activo: true }],

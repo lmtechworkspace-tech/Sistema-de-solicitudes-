@@ -1838,8 +1838,19 @@
       if (enCache && JSON.stringify(respuesta.data) === JSON.stringify(enCache)) return;
       cacheFichaPersona_[id] = respuesta.data;
       puedeGestionar_ = respuesta.data.puede_gestionar === true;
-      pintarFicha_(cont, respuesta.data);
-      if (preservarScroll) window.scrollTo(0, scrollAntes);
+      // Fase 2 (Directorio de Personas): resuelve nombre/cargo de jefatura,
+      // subrogante y evaluadores ANTES de pintar -- así la primera pintada ya
+      // sale con nombres (no correo -> repintado que "parpadea" a nombre).
+      var d = respuesta.data;
+      var correos = SigsoDirectorio.juntarCorreos(
+        d.persona && d.persona.jefatura_email, d.persona && d.persona.subrogante_email,
+        (d.evaluaciones || []).map(function (e) { return e.evaluador_email; })
+      );
+      SigsoDirectorio.resolver(correos).then(function () {
+        if (personaActivaId_ !== id) return;
+        pintarFicha_(cont, respuesta.data);
+        if (preservarScroll) window.scrollTo(0, scrollAntes);
+      });
     }).catch(function () {
       if (!enCache && personaActivaId_ === id) cont.innerHTML = Componentes.alerta('No se pudo conectar para abrir la ficha.', 'error');
     });
@@ -1949,8 +1960,8 @@
         '<dl class="sgc-ficha">' +
           campoFicha_('Correo', p.usuario_email) +
           campoFicha_('RUT', p.rut) +
-          campoFicha_('Jefatura directa', p.jefatura_email) +
-          campoFicha_('Subrogante', p.subrogante_email) +
+          campoFicha_('Jefatura directa', SigsoDirectorio.etiqueta(p.jefatura_email)) +
+          campoFicha_('Subrogante', SigsoDirectorio.etiqueta(p.subrogante_email)) +
         '</dl>' +
       '</div>' +
     '</div>' + acciones;
@@ -2159,7 +2170,7 @@
           (bajo ? Componentes.badge('Requiere capacitación', 'alerta') : Componentes.badge('Conforme', 'ok')) +
           '<span class="sigso-ayuda">' + fechaCorta_(e.fecha) + '</span>' +
         '</div>' +
-        '<p class="sigso-ayuda">Evaluó: ' + Componentes.escaparHtml(e.evaluador_email) +
+        '<p class="sigso-ayuda">Evaluó: ' + SigsoDirectorio.html(e.evaluador_email) +
           (e.proxima_evaluacion ? ' · próxima ' + fechaCorta_(e.proxima_evaluacion) : '') + '</p>' +
         (e.observaciones ? '<p>' + Componentes.escaparHtml(e.observaciones) + '</p>' : '') +
         (e.recomendado_por ? '<p class="sigso-ayuda">Recomienda capacitación: ' + Componentes.escaparHtml(e.recomendado_por) + '</p>' : '') +
@@ -4787,7 +4798,11 @@
         return;
       }
       puedeGestionar_ = respuesta.data.puede_gestionar === true;
-      pintarFichaProveedor_(cont, respuesta.data);
+      var correos = SigsoDirectorio.juntarCorreos((respuesta.data.evaluaciones || []).map(function (e) { return e.evaluador_email; }));
+      SigsoDirectorio.resolver(correos).then(function () {
+        if (proveedorActivoId_ !== id) return;
+        pintarFichaProveedor_(cont, respuesta.data);
+      });
     }).catch(function () {
       cont.innerHTML = Componentes.alerta('No se pudo conectar.', 'error');
     });
@@ -4826,7 +4841,7 @@
             }).join('') + '</ul>' +
             (e.orden_compra ? '<p class="sigso-ayuda">Orden de compra: ' + Componentes.escaparHtml(e.orden_compra) + '</p>' : '') +
             (e.observaciones ? '<p>' + Componentes.escaparHtml(e.observaciones) + '</p>' : '') +
-            '<p class="sigso-ayuda">Evaluó ' + Componentes.escaparHtml(e.evaluador_email || '') +
+            '<p class="sigso-ayuda">Evaluó ' + SigsoDirectorio.html(e.evaluador_email) +
               (e.proxima_evaluacion ? ' · próxima: ' + fechaCorta_(e.proxima_evaluacion) : '') + '</p>' +
           '</div>';
         }).join('')

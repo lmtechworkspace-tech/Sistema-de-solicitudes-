@@ -764,6 +764,26 @@
     }
   }
 
+  // Fase 2 (Directorio de Personas): junta TODOS los correos que las
+  // pestañas de este proyecto van a pintar (tareas+colaboradores, hitos,
+  // entregables, riesgos, decisiones, integrantes) para resolverlos de una
+  // sola vez -- ver nombrePersona_.
+  function correosDetalle_(detalle, tareas, decisiones) {
+    detalle = detalle || {};
+    var colaboradores = [];
+    (tareas || []).forEach(function (a) {
+      (a.colaboradores || []).forEach(function (c) { colaboradores.push(c.email); });
+    });
+    return SigsoDirectorio.juntarCorreos(
+      (tareas || []).map(function (a) { return a.responsable_email; }),
+      colaboradores,
+      (detalle.integrantes || []).map(function (i) { return i.usuario_email; }),
+      (detalle.entregables || []).map(function (e) { return e.responsable_email; }),
+      (detalle.riesgos || []).map(function (r) { return r.responsable_email; }),
+      (decisiones || []).map(function (d) { return d.responsable_email; })
+    );
+  }
+
   // v12.4 ("nada de recargar la página ante un cambio"): refrescar el detalle
   // tiene DOS modos:
   //  - PRIMERA apertura (no hay datosDetalleActual_): se muestra "Cargando
@@ -832,6 +852,22 @@
             miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento);
           var nuevo = cont.querySelector('.sigso-py-ded-scroll');
           if (nuevo) { nuevo.scrollLeft = sx; nuevo.scrollTop = sy; }
+          // Fase 2 (Directorio de Personas): la pintada de arriba NO espera a
+          // la red (mismo criterio "sin parpadeo" del refresco suave) -- si
+          // aparece algún correo nuevo sin resolver, se repinta UNA vez más
+          // cuando llegue, preservando igual el scroll.
+          var correosSuave = correosDetalle_(datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.decisiones);
+          SigsoDirectorio.resolver(correosSuave).then(function () {
+            if (idAlPedir !== proyectoActivoId_ || !datosDetalleActual_) return;
+            var contAhora = panelProyectos_();
+            if (!contAhora) return;
+            var previoR = contAhora.querySelector('.sigso-py-ded-scroll');
+            var sxR = previoR ? previoR.scrollLeft : 0, syR = previoR ? previoR.scrollTop : 0;
+            pintarDetalle_(contAhora, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala,
+              miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento);
+            var nuevoR = contAhora.querySelector('.sigso-py-ded-scroll');
+            if (nuevoR) { nuevoR.scrollLeft = sxR; nuevoR.scrollTop = syR; }
+          });
         } else {
           pintarDetalleCargado_(cont, r.data.detalle, r.data.tareas || [], r.data.sala || [], miEmail);
         }
@@ -873,10 +909,17 @@
     // bitacora/rendimiento = undefined => "aún no cargados" (los trae
     // cargarDatosCronograma_ la primera vez que se abre el Cronograma).
     datosDetalleActual_ = { detalle: detalle, tareas: tareas, sala: sala, bitacora: undefined, rendimiento: undefined, miEmail: miEmail };
-    pintarDetalle_(cont, detalle, tareas, sala, miEmail, undefined, undefined);
-    if (pestanaActiva_ === 'cronograma') cargarDatosCronograma_(cont);
-    else if (pestanaActiva_ === 'reuniones') cargarReuniones_(cont);
-    else if (pestanaActiva_ === 'decisiones') cargarDecisiones_(cont);
+    // Fase 2 (Directorio de Personas): esta es la PRIMERA pintada del
+    // proyecto (todavía se ve "Cargando proyecto..."), así que se espera a
+    // resolver los nombres antes de pintar -- no hay nada que "parpadee".
+    var idAlPedir = proyectoActivoId_;
+    SigsoDirectorio.resolver(correosDetalle_(detalle, tareas)).then(function () {
+      if (idAlPedir !== proyectoActivoId_) return;
+      pintarDetalle_(cont, detalle, tareas, sala, miEmail, undefined, undefined);
+      if (pestanaActiva_ === 'cronograma') cargarDatosCronograma_(cont);
+      else if (pestanaActiva_ === 'reuniones') cargarReuniones_(cont);
+      else if (pestanaActiva_ === 'decisiones') cargarDecisiones_(cont);
+    });
   }
 
   // v10 (auditoría G): carga perezosa de la bitácora + el rendimiento (lo
@@ -939,10 +982,12 @@
     apiSeguro_('listarDecisionesProyecto', { proyecto_id: proyectoActivoId_ }).then(function (r) {
       if (!datosDetalleActual_ || idAlPedir !== proyectoActivoId_) return;
       datosDetalleActual_.decisiones = (r && r.ok) ? r.data : [];
-      if (pestanaActiva_ === 'decisiones') {
+      var correos = SigsoDirectorio.juntarCorreos(datosDetalleActual_.decisiones.map(function (d) { return d.responsable_email; }));
+      SigsoDirectorio.resolver(correos).then(function () {
+        if (!datosDetalleActual_ || idAlPedir !== proyectoActivoId_ || pestanaActiva_ !== 'decisiones') return;
         pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala,
           datosDetalleActual_.miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento);
-      }
+      });
     });
   }
 
@@ -1736,6 +1781,16 @@
     });
   }
 
+  // Fase 2 (Directorio de Personas): "Nombre — Cargo" si ya se resolvió (ver
+  // refrescarDetalle_, que dispara la resolución al abrir/refrescar el
+  // proyecto); si no, cae al nombre local que ya trae el dato (integrante,
+  // responsable_nombre) y, a falta de eso, al correo crudo -- nunca se
+  // bloquea una pintada esperando la red.
+  function nombrePersona_(email, nombreLocal) {
+    var p = SigsoDirectorio.persona(email);
+    return p ? p.etiqueta : (nombreLocal || email);
+  }
+
   // --- Tareas --------------------------------------------------------------
 
   // v10 (Fase A, propuesta 01 "check-in sin salir del proyecto"): las
@@ -1879,7 +1934,7 @@
           (puedeEditar ? '<button type="button" class="sigso-btn--icono js-py-editar-tarea" data-idx="' + a.actividad_id + '" title="Editar tarea">' + Iconos.svg('editar', { tam: 16 }) + '</button>' : '') +
         '</div>' +
         '<div class="sigso-py-tarea__meta">' +
-          '<span>' + (esMia ? '<b>Tú</b>' : Componentes.escaparHtml(a.responsable_nombre || a.responsable_email)) + '</span>' +
+          '<span>' + (esMia ? '<b>Tú</b>' : Componentes.escaparHtml(nombrePersona_(a.responsable_email, a.responsable_nombre))) + '</span>' +
           '<span>Prioridad ' + a.prioridad + '</span>' +
           (a.fecha_compromiso ? '<span>Vence ' + fechaCorta_(a.fecha_compromiso) + '</span>' : '') +
           (a.avance_pct !== '' && a.avance_pct !== undefined && a.avance_pct !== null ? '<span>' + a.avance_pct + '% avance</span>' : '') +
@@ -1956,7 +2011,7 @@
       '</div>' +
       (a.es_subtarea ? '<div class="sigso-py-subtarea-de">↳ ' + Componentes.escaparHtml(a.padre_titulo || '') + '</div>' : '') +
       '<div class="sigso-py-tarea__meta">' +
-        '<span>' + (esMia ? '<b>Tú</b>' : Componentes.escaparHtml(a.responsable_nombre || a.responsable_email)) + '</span>' +
+        '<span>' + (esMia ? '<b>Tú</b>' : Componentes.escaparHtml(nombrePersona_(a.responsable_email, a.responsable_nombre))) + '</span>' +
         (a.fecha_compromiso ? '<span>Vence ' + fechaCorta_(a.fecha_compromiso) + '</span>' : '') +
         colaboradoresChipHtml_(a) +
       '</div>' +
@@ -2078,7 +2133,7 @@
       var tareasHtml = '';
       if (lista.length) {
         var items = lista.map(function (a) {
-          var resp = a.responsable_nombre || a.responsable_email || '';
+          var resp = nombrePersona_(a.responsable_email, a.responsable_nombre) || '';
           var av = (a.avance_pct === null || a.avance_pct === undefined || a.avance_pct === '') ? '' : ' · ' + a.avance_pct + '%';
           return '<li class="sigso-py-hito-tarea">' +
             '<span class="sigso-badge sigso-mt-badge--' + (a.semaforo || 'al-dia') + '">' + Componentes.escaparHtml(a.semaforo_etiqueta || '') + '</span>' +
@@ -4182,7 +4237,7 @@
         '</div>' +
         (e.descripcion ? '<p>' + Componentes.escaparHtml(e.descripcion) + '</p>' : '') +
         '<div class="sigso-py-tarea__meta">' +
-          '<span>' + Componentes.escaparHtml(integrantesPorEmail[normalizarEmail_(e.responsable_email)] || e.responsable_email) + '</span>' +
+          '<span>' + Componentes.escaparHtml(nombrePersona_(e.responsable_email, integrantesPorEmail[normalizarEmail_(e.responsable_email)])) + '</span>' +
           '<span>Vence ' + fechaCorta_(e.fecha_comprometida) + '</span>' +
         '</div>' +
         (e.estado === 'OBSERVADO' && e.observaciones ? '<div class="sigso-mt-bloqueo">' + Iconos.svg('pausado', { tam: 14 }) + ' ' + Componentes.escaparHtml(e.observaciones) + '</div>' : '') +
@@ -4469,7 +4524,7 @@
         (d.contexto ? '<p><b>Contexto:</b> ' + Componentes.escaparHtml(d.contexto) + '</p>' : '') +
         (d.impacto ? '<p><b>Impacto:</b> ' + Componentes.escaparHtml(d.impacto) + '</p>' : '') +
         '<div class="sigso-py-tarea__meta">' +
-          '<span>Responsable: ' + Componentes.escaparHtml(integrantesPorEmail[normalizarEmail_(d.responsable_email)] || d.responsable_email) + '</span>' +
+          '<span>Responsable: ' + Componentes.escaparHtml(nombrePersona_(d.responsable_email, integrantesPorEmail[normalizarEmail_(d.responsable_email)])) + '</span>' +
         '</div>' +
         (puedeCrear
           ? '<div class="sigso-py-hito__acciones">' +
@@ -4512,7 +4567,7 @@
         '<div class="sigso-py-tarea__meta">' +
           '<span>Probabilidad ' + (RIESGO_NIVEL_ETIQUETA[r.probabilidad] || r.probabilidad) + '</span>' +
           '<span>Impacto ' + (RIESGO_NIVEL_ETIQUETA[r.impacto] || r.impacto) + '</span>' +
-          '<span>' + Componentes.escaparHtml(integrantesPorEmail[normalizarEmail_(r.responsable_email)] || r.responsable_email) + '</span>' +
+          '<span>' + Componentes.escaparHtml(nombrePersona_(r.responsable_email, integrantesPorEmail[normalizarEmail_(r.responsable_email)])) + '</span>' +
           '<span>' + Componentes.badge(RIESGO_ESTADO_ETIQUETA[r.estado] || r.estado, r.estado === 'MATERIALIZADO' ? 'critico' : 'neutro') + '</span>' +
         '</div>' +
         (r.mitigacion ? '<p class="sigso-ayuda"><b>Mitigación:</b> ' + Componentes.escaparHtml(r.mitigacion) + '</p>' : '') +

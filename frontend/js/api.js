@@ -264,9 +264,10 @@ var ACCIONES_PORTADAS_NODE = {
   superAdminListarTablas: true, superAdminListarFilas: true, superAdminAgregarFila: true,
   superAdminActualizarFila: true, superAdminEliminarFila: true,
 
-  // --- Directorio de Personas, Fase 1 (2026-09-22; backend/logica/
-  // directorioPersonas.js). Solo lectura; ninguna pantalla las llama todavía. ---
-  buscarDirectorioPersonas: true, listarDirectorioPersonas: true
+  // --- Directorio de Personas (2026-09-22; backend/logica/directorioPersonas.js) ---
+  buscarDirectorioPersonas: true, listarDirectorioPersonas: true,
+  // Fase 2: resolución masiva para la capa de visualización (frontend/js/directorio.js).
+  resolverDirectorioPersonas: true
 };
 
 // v3.4 (resiliencia audita, sep-2026): además del mapa explícito de arriba,

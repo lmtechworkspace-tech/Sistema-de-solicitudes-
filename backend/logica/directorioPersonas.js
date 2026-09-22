@@ -105,8 +105,24 @@ function resolverVarios(db, emails) {
   return mapa;
 }
 
-// --- API HTTP (Fase 1: solo lectura, para verificar y para las fases que
-// vienen; ninguna pantalla existente las llama todavía) ---
+// --- API HTTP ---
+
+// Fase 2 (2026-09-22): resolución masiva para la CAPA DE VISUALIZACIÓN --
+// una pantalla junta todos los correos que va a pintar (responsable_email,
+// supervisor_email, evaluador_email...) y los resuelve de UNA sola llamada,
+// en vez de una por persona. Cualquier sesión válida puede llamarla (es
+// lectura de "cómo se llama y qué cargo tiene alguien", no un dato sensible
+// -- mismo criterio que ya usan el resto de las pantallas para mostrar
+// nombres). No hace falta acotar por organización acá: resolverVarios ya
+// solo encuentra lo que está en el directorio, y el correo que se pregunta
+// lo eligió la propia pantalla que ya tenía permiso para verlo.
+function resolverPersonas(db, data, contexto) {
+  if (!contexto || !contexto.email) return errorForbidden('Necesitas una sesión válida.');
+  const emails = Array.isArray(data && data.emails) ? data.emails : [];
+  return { personas: resolverVarios(db, emails) };
+}
+
+// --- (Fase 1: solo lectura, para verificar y para las fases que vienen) ---
 
 // Búsqueda para el futuro selector "asignar a alguien". Coincide por RUT,
 // nombre, cargo o correo. Acotada a la organización de quien pregunta
@@ -149,5 +165,5 @@ function listar(db, data, contexto) {
 
 module.exports = {
   resolverPorEmail, resolverPorRut, resolverVarios,
-  buscarPersonas, listar
+  buscarPersonas, listar, resolverPersonas
 };
