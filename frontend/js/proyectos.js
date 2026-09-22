@@ -245,6 +245,7 @@
     proyectoActivoId_ = null;
     datosDetalleActual_ = null;
     fijarAnchoCarta_(false); // el portafolio vuelve al ancho normal
+    fijarCabeceraModulo_(false); // y recupera la cabecera de módulo (Fase A)
     var cont = panelProyectos_();
     if (!cont) return;
     cont.innerHTML = esqueletoPortafolio_();
@@ -264,7 +265,17 @@
       proyectosPortafolioSinFiltrarSalud_ = rProyectos.data || [];
       portafolioCargado_ = true;
       resumenPortafolioActual_ = (rResumen && rResumen.ok) ? rResumen.data : null;
-      pintarPortafolio_(cont, proyectosPortafolioSinFiltrarSalud_);
+      // Fase A (auditoría UX): resolver "Nombre — Cargo" (Directorio) para
+      // líderes y carga por persona ANTES de pintar -- consistencia con las
+      // listas de tareas, que ya lo hacían. resolver() nunca rechaza.
+      var correosPortafolio = SigsoDirectorio.juntarCorreos(
+        proyectosPortafolioSinFiltrarSalud_.map(function (p) { return p.lider_email; }),
+        ((resumenPortafolioActual_ && resumenPortafolioActual_.carga_por_persona) || []).map(function (c) { return c.email; })
+      );
+      SigsoDirectorio.resolver(correosPortafolio).then(function () {
+        if (proyectoActivoId_) return; // el usuario ya abrió un proyecto
+        pintarPortafolio_(cont, proyectosPortafolioSinFiltrarSalud_);
+      });
     });
   }
 
@@ -322,7 +333,7 @@
     var maxCarga = Math.max(1, (resumen.carga_por_persona || []).reduce(function (m, c) { return Math.max(m, c.carga_ponderada); }, 1));
     var carga = (resumen.carga_por_persona || []).slice(0, 8).map(function (c) {
       return '<div class="sigso-py-carga-fila">' +
-        '<span class="sigso-py-carga-nombre">' + Componentes.escaparHtml(c.nombre) + '</span>' +
+        '<span class="sigso-py-carga-nombre">' + Componentes.escaparHtml(nombrePersona_(c.email, c.nombre)) + '</span>' +
         '<span class="sigso-py-carga-barra"><span style="width:' + Math.round((c.carga_ponderada / maxCarga) * 100) + '%"></span></span>' +
         '<span class="sigso-ayuda">' + c.total_tareas + ' tarea(s)</span>' +
       '</div>';
@@ -515,7 +526,7 @@
     if (agruparPorLider_) {
       wrap.innerHTML = agruparProyectosPorLider_(proyectos).map(function (g) {
         return '<div class="sigso-py-grupo">' +
-          '<h3 class="sigso-py-grupo__titulo">' + Componentes.escaparHtml(g.lider) +
+          '<h3 class="sigso-py-grupo__titulo">' + Componentes.escaparHtml(nombrePersona_(g.lider, g.lider)) +
             ' <span class="sigso-py-grupo__cuenta">' + g.proyectos.length + '</span></h3>' +
           '<div class="sigso-py-grid">' + g.proyectos.map(tarjetaProyecto_).join('') + '</div>' +
         '</div>';
@@ -1048,6 +1059,7 @@
   function pintarDetalle_(cont, detalle, tareas, sala, miEmail, bitacora, rendimiento) {
     // v12.3: el Cronograma va a ancho completo; las demás pestañas, angostas.
     fijarAnchoCarta_(pestanaActiva_ === 'cronograma');
+    fijarCabeceraModulo_(true); // dentro de un proyecto, sin cabecera de módulo (Fase A)
     var p = detalle.proyecto;
     // v9.2: la capacidad de gestion la resuelve el backend (puede_gestionar:
     // LIDER del proyecto o ADM). Fallback a rol_actual==='LIDER' para que el
@@ -1254,7 +1266,7 @@
       atencionHtml +
       (p.descripcion ? '<p>' + Componentes.escaparHtml(p.descripcion) + '</p>' : '') +
       (p.objetivo ? '<p><b>Objetivo:</b> ' + Componentes.escaparHtml(p.objetivo) + '</p>' : '') +
-      '<p class="sigso-ayuda">Líder: ' + Componentes.escaparHtml(p.lider_email) +
+      '<p class="sigso-ayuda">Líder: ' + Componentes.escaparHtml(nombrePersona_(p.lider_email, p.lider_nombre)) +
         ' · Del ' + fechaCorta_(p.fecha_inicio) + ' al ' + fechaCorta_(p.fecha_objetivo) + '</p>' +
       origenSolicitud +
       acciones;
@@ -6611,6 +6623,20 @@
     if (caja) caja.classList.toggle('sigso-py-ancho-total', !!activo);
   }
 
+  // Auditoría UX 2026-09-22 (Fase A): dentro de un proyecto, la cabecera
+  // GENÉRICA del módulo ("Proyectos" + "Portafolio, equipo y sala…") es ruido
+  // que desperdicia el tope de la pantalla y compite con el nombre real del
+  // proyecto. Se oculta al abrir un proyecto y se restaura en las vistas de
+  // nivel módulo (portafolio/mi-trabajo/calendario/reportes). Toca la <section>
+  // que envuelve #proyectos-contenido (existe igual en plataforma.html y
+  // app.html); el CSS oculta solo su <h1> y su <p class="sigso-ayuda">, nunca
+  // el botón "Volver al dashboard" de app.html.
+  function fijarCabeceraModulo_(ocultar) {
+    var raiz = document.getElementById('proyectos-contenido');
+    var seccion = raiz && raiz.parentElement;
+    if (seccion) seccion.classList.toggle('sigso-py-sin-cabecera-modulo', !!ocultar);
+  }
+
   function panelProyectos_() {
     var raiz = document.getElementById('proyectos-contenido');
     if (!raiz) return null;
@@ -6644,6 +6670,7 @@
     // acá, sin tener que repetirlo en cada destino.
     if (ganttPanelActivoId_) cerrarPanelTareaGantt_();
     vistaProyectos_ = id;
+    fijarCabeceraModulo_(false); // vistas de nivel módulo SÍ muestran la cabecera (Fase A)
     if (id !== 'reportes') { reportePyAbierto_ = null; filtrosReportePy_ = {}; }
     if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id);
     if (id === 'reportes') renderReportesProyectos_();

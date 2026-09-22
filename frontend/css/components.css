@@ -1362,6 +1362,17 @@
    con !important. Es la única forma de soltar el ancho sin tocar el shell. */
 .sigso-contenido.sigso-py-ancho-total { max-width: 100% !important; width: 100% !important; }
 
+/* Auditoría UX 2026-09-22 (Fase A): dentro de un proyecto se oculta la
+   cabecera genérica del módulo ("Proyectos" + su descripción) -- ver
+   fijarCabeceraModulo_ en proyectos.js. En plataforma.html el shell la envuelve
+   en <header class="sigso-modulo-cab"> (hija directa de la <section>); en
+   app.html es un <h1>/<p class="sigso-ayuda"> sueltos. Se cubren ambos, siempre
+   como hijos DIRECTOS de la sección del módulo, así que el botón "Volver al
+   dashboard" de app.html (que no es ninguno de esos) no se toca. */
+.sigso-py-sin-cabecera-modulo > .sigso-modulo-cab,
+.sigso-py-sin-cabecera-modulo > h1,
+.sigso-py-sin-cabecera-modulo > p.sigso-ayuda { display: none; }
+
 /* ============ v4.0 Frentes 2 y 3: identidad y navegacion ============ */
 
 /* Contador de pendientes en el nav: la informacion que antes obligaba a
