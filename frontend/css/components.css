@@ -3490,6 +3490,17 @@
 }
 .sigso-py-vista-toggle > * { flex-shrink: 0; }
 
+/* Auditoría UX 2026-09-22 (Fase B): vista TABLA de tareas -- reusa el
+   componente ordenable de Gerencia (.sigso-tabla-tablero, con flechas de orden
+   y tarjetas en móvil). Solo hacen falta el scroll horizontal y unos detalles:
+   las filas NO son clickeables (a diferencia de Gerencia), así que se quita el
+   cursor de mano; la acción es el lápiz de la última columna. */
+.sigso-py-tabla-scroll { overflow-x: auto; scrollbar-width: thin; -webkit-overflow-scrolling: touch; }
+.sigso-py-tabla tbody tr { cursor: default; }
+.sigso-py-tabla tbody tr:hover { cursor: default; }
+.sigso-py-tabla-sub { color: var(--texto-3); font-weight: 700; }
+.sigso-py-tabla-acc { text-align: right; white-space: nowrap; }
+
 /* v10 (Fase B): tablero Kanban de tareas. Columnas de ancho minimo fijo
    dentro de un contenedor flex -- en desktop reparten el espacio disponible
    (flex-grow), en mobile se desbordan y quedan scrolleables horizontalmente

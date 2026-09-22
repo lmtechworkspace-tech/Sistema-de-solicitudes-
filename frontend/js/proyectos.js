@@ -1868,11 +1868,18 @@
   // otra, por eso vive como un simple flag de modulo (mismo patron que
   // pestanaActiva_), no algo que se pida de nuevo al servidor.
   var vistaTareas_ = 'lista';
+  // Auditoría UX 2026-09-22 (Fase B): vista TABLA densa y ordenable para las
+  // listas largas (un proyecto real tiene 47 tareas -- la pila de tarjetas es
+  // un scroll plano). 'natural' = el orden de siempre (con subtareas bajo su
+  // padre); al tocar una cabecera se ordena plano por esa columna. Reusa el
+  // componente de tabla ordenable de Gerencia (.sigso-tabla-tablero).
+  var ordenTareasTabla_ = { campo: 'natural', direccion: 'asc' };
 
   function pintarTareas_(tareas, detalle, puedeGestionar, miEmail) {
     var puedeCrear = puedeAportar_(detalle);
     var toggle = '<div class="sigso-py-vista-toggle">' +
         Componentes.boton({ texto: 'Lista', variante: vistaTareas_ === 'lista' ? undefined : 'sutil', clase: 'js-py-tareas-vista', idx: 'lista' }) +
+        Componentes.boton({ texto: 'Tabla', variante: vistaTareas_ === 'tabla' ? undefined : 'sutil', clase: 'js-py-tareas-vista', idx: 'tabla' }) +
         Componentes.boton({ texto: 'Tablero', variante: vistaTareas_ === 'tablero' ? undefined : 'sutil', clase: 'js-py-tareas-vista', idx: 'tablero' }) +
       '</div>';
     var acciones = '<div class="sigso-py-cabecera">' +
@@ -1887,9 +1894,67 @@
       return acciones + Componentes.vacio({ texto: 'Todavía no hay tareas en este proyecto.' });
     }
 
-    return acciones + (vistaTareas_ === 'tablero'
-      ? pintarTareasTablero_(tareas, miEmail, puedeGestionar)
-      : pintarTareasLista_(tareas, miEmail, puedeGestionar));
+    if (vistaTareas_ === 'tablero') return acciones + pintarTareasTablero_(tareas, miEmail, puedeGestionar);
+    if (vistaTareas_ === 'tabla') return acciones + pintarTareasTabla_(tareas, miEmail, puedeGestionar);
+    return acciones + pintarTareasLista_(tareas, miEmail, puedeGestionar);
+  }
+
+  // --- Vista TABLA (Fase B) --------------------------------------------------
+  var TAREA_SEMAFORO_ORDEN_ = { atrasada: 0, bloqueada: 1, riesgo: 2, 'al-dia': 3, revision: 4, terminada: 5, cancelada: 6 };
+  function valorOrdenTareaTabla_(a, campo) {
+    switch (campo) {
+      case 'titulo': return (a.titulo || '').toLowerCase();
+      case 'responsable': return nombrePersona_(a.responsable_email, a.responsable_nombre).toLowerCase();
+      case 'estado': {
+        var s = TAREA_SEMAFORO_ORDEN_[a.semaforo];
+        return s === undefined ? 9 : s; // por urgencia (atrasada primero), no alfabético
+      }
+      case 'prioridad': return a.prioridad || 'P9';       // P1..P5 ordenan como texto
+      case 'vence': return a.fecha_compromiso || '9999-12-31'; // sin fecha, al final
+      case 'avance': return Number(a.avance_pct) || 0;
+      default: return 0;
+    }
+  }
+  function ordenarTareasTabla_(tareas) {
+    if (ordenTareasTabla_.campo === 'natural') return ordenarConSubtareas_(tareas);
+    var dir = ordenTareasTabla_.direccion === 'desc' ? -1 : 1;
+    return tareas.slice().sort(function (a, b) {
+      var va = valorOrdenTareaTabla_(a, ordenTareasTabla_.campo);
+      var vb = valorOrdenTareaTabla_(b, ordenTareasTabla_.campo);
+      if (va < vb) return -1 * dir;
+      if (va > vb) return 1 * dir;
+      return 0;
+    });
+  }
+  function thOrdenTarea_(campo, texto) {
+    var activo = ordenTareasTabla_.campo === campo ? ' data-orden-activo="' + ordenTareasTabla_.direccion + '"' : '';
+    return '<th data-orden="' + campo + '"' + activo + '>' + Componentes.escaparHtml(texto) + '</th>';
+  }
+  function pintarTareasTabla_(tareas, miEmail, puedeGestionar) {
+    var filas = ordenarTareasTabla_(tareas).map(function (a) {
+      var esMia = !!miEmail && normalizarEmail_(a.responsable_email) === miEmail;
+      var puedeEditar = puedeGestionar || trabajoLaTarea_(a, miEmail);
+      var sub = a.es_subtarea ? '<span class="sigso-py-tabla-sub" title="Subtarea">↳</span> ' : '';
+      var vence = a.fecha_compromiso ? fechaCorta_(a.fecha_compromiso) : '—';
+      var avance = (a.avance_pct === '' || a.avance_pct === undefined || a.avance_pct === null) ? '—' : a.avance_pct + '%';
+      return '<tr>' +
+        '<td data-label="Tarea">' + sub + Componentes.escaparHtml(a.titulo) + '</td>' +
+        '<td data-label="Responsable">' + (esMia ? '<b>Tú</b>' : Componentes.escaparHtml(nombrePersona_(a.responsable_email, a.responsable_nombre))) + '</td>' +
+        '<td data-label="Estado"><span class="sigso-badge sigso-mt-badge--' + a.semaforo + '">' + Componentes.escaparHtml(a.semaforo_etiqueta || '') + '</span></td>' +
+        '<td data-label="Prioridad">' + Componentes.escaparHtml(a.prioridad || '—') + '</td>' +
+        '<td data-label="Vence">' + vence + '</td>' +
+        '<td data-label="Avance">' + avance + '</td>' +
+        '<td data-label="" class="sigso-py-tabla-acc">' +
+          (puedeEditar ? '<button type="button" class="sigso-btn--icono js-py-editar-tarea" data-idx="' + a.actividad_id + '" title="Editar tarea">' + Iconos.svg('editar', { tam: 16 }) + '</button>' : '') +
+        '</td>' +
+      '</tr>';
+    }).join('');
+    return '<div class="sigso-py-tabla-scroll"><table class="sigso-tabla-tablero sigso-py-tabla"><thead><tr>' +
+        thOrdenTarea_('titulo', 'Tarea') + thOrdenTarea_('responsable', 'Responsable') +
+        thOrdenTarea_('estado', 'Estado') + thOrdenTarea_('prioridad', 'Prioridad') +
+        thOrdenTarea_('vence', 'Vence') + thOrdenTarea_('avance', 'Avance') +
+        '<th></th>' +
+      '</tr></thead><tbody>' + filas + '</tbody></table></div>';
   }
 
   // v11 (P2, "subtareas con rollup"): reordena para que cada subtarea
@@ -4803,6 +4868,20 @@
     cont.querySelectorAll('.js-py-tareas-vista').forEach(function (btn) {
       btn.addEventListener('click', function () {
         vistaTareas_ = btn.getAttribute('data-idx');
+        cambiarPestana_('tareas');
+      });
+    });
+    // Fase B: orden de la vista Tabla al tocar una cabecera (repinta desde
+    // cache, sin red -- mismo patrón que el toggle de vista).
+    cont.querySelectorAll('.sigso-py-tabla th[data-orden]').forEach(function (th) {
+      th.addEventListener('click', function () {
+        var campo = th.getAttribute('data-orden');
+        if (ordenTareasTabla_.campo === campo) {
+          ordenTareasTabla_.direccion = ordenTareasTabla_.direccion === 'asc' ? 'desc' : 'asc';
+        } else {
+          ordenTareasTabla_.campo = campo;
+          ordenTareasTabla_.direccion = 'asc';
+        }
         cambiarPestana_('tareas');
       });
     });
