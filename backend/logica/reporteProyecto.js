@@ -179,6 +179,7 @@ function dibujarAvancePorTarea_(doc, tareas, rendimiento) {
 
   PdfDoc.seccion(doc, 'Avance por tarea');
   const mostrar = activas.slice(0, AVANCE_TOPE);
+  const anchoTexto = PdfDoc.CONTENT_WIDTH - 140;
   mostrar.forEach((a) => {
     const plan = avancePorTarea[a.actividad_id];
     // avanceRealTarea_ devuelve null cuando la tarea no tiene un avance_pct
@@ -186,18 +187,27 @@ function dibujarAvancePorTarea_(doc, tareas, rendimiento) {
     // de avance". Mostrarlo como 0% seria fingir un numero que no existe.
     const pctReal = plan ? plan.avance_real_pct : null;
     const pct = pctReal == null ? 0 : pctReal;
-    PdfDoc.asegurarEspacio(doc, 26);
+    // Alto real de la fila (titulo -- puede envolver a 2+ lineas -- +
+    // subtitulo + la barra) reservado de una sola vez ANTES de dibujar
+    // nada: si se reserva de a poco (como antes, un 26 fijo) la fila
+    // puede partirse a mitad de pagina -- el titulo queda en una pagina y
+    // la barra, huerfana, en la siguiente (el asegurarEspacio interno de
+    // barraHorizontal encuentra que ya no hay espacio y corta ahi). Medir
+    // heightOfString con la MISMA fuente/tamaño del titulo, nunca con la
+    // que haya quedado activa despues de dibujar otra cosa.
+    const alturaTitulo = doc.font('Helvetica-Bold').fontSize(8.5).heightOfString(a.titulo, { width: anchoTexto });
+    PdfDoc.asegurarEspacio(doc, alturaTitulo + 36);
     const y = doc.y;
-    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(PdfDoc.DOC.INK).text(a.titulo, PdfDoc.MARGIN, y, { width: PdfDoc.CONTENT_WIDTH - 140 });
+    doc.font('Helvetica-Bold').fontSize(8.5).fillColor(PdfDoc.DOC.INK).text(a.titulo, PdfDoc.MARGIN, y, { width: anchoTexto });
     doc.font('Helvetica').fontSize(7.5).fillColor(PdfDoc.DOC.MUTED)
       .text((a.responsable_nombre || a.responsable_email || 'Sin asignar') + ' · ' + (SEMAFORO_LABEL[a.semaforo] || a.semaforo || '—') +
-        ' · vence ' + fechaCorta_(a.fecha_compromiso), PdfDoc.MARGIN, y + 12, { width: PdfDoc.CONTENT_WIDTH - 140 });
+        ' · vence ' + fechaCorta_(a.fecha_compromiso), PdfDoc.MARGIN, y + alturaTitulo + 2, { width: anchoTexto });
+    // Posicion fija (no la que haya dejado el ultimo .text()): la barra
+    // siempre debajo del titulo+subtitulo, nunca depende de cuanto haya
+    // avanzado doc.y con la fuente de turno.
+    doc.y = y + alturaTitulo + 14;
+    doc.x = PdfDoc.MARGIN;
     PdfDoc.barraHorizontal(doc, '', pct, pctReal == null ? 'sin dato' : pct + '%');
-    // barraHorizontal ya avanzo doc.y una fila; nos aseguramos que quede
-    // debajo de las dos lineas de texto de arriba (altura variable si el
-    // titulo envuelve a 2 lineas).
-    const alturaTexto = doc.heightOfString(a.titulo, { width: PdfDoc.CONTENT_WIDTH - 140 });
-    if (doc.y < y + alturaTexto + 14) doc.y = y + alturaTexto + 14;
     doc.moveDown(0.35);
     doc.x = PdfDoc.MARGIN;
   });

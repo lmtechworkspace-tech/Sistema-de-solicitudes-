@@ -23,7 +23,26 @@
  * (smoke test: ~80ms / ~4KB para un documento de 2 páginas).
  */
 
+const path = require('node:path');
 const PDFDocument = require('pdfkit');
+
+// DejaVu Sans (Bitstream Vera + Arev, licencia permisiva -- ver
+// assets/fonts/LICENSE-DejaVuFonts.txt) registrada BAJO LOS NOMBRES
+// ESTANDAR 'Helvetica'/'Helvetica-Bold': pdfkit resuelve un .font(nombre)
+// contra las fuentes registradas ANTES que contra sus 14 fuentes base, asi
+// que todo el motor (este archivo y los 5 que dibujan PDF sobre el mismo
+// `doc` -- ordenTrabajo/pausas/reporteActividades/reporteProyecto/
+// evidenciaClausulaSgc) sigue escribiendo .font('Helvetica') tal cual y
+// automaticamente pasa a usar una fuente con soporte Unicode real, sin
+// tocar ninguno de esos ~70 sitios. La Helvetica estandar de pdfkit
+// (WinAnsiEncoding) no tiene flechas/rombos/etc. -- por eso un caracter
+// asi salia como texto basura (hallazgo de la validacion visual de la
+// Etapa 10 del refactor de Planificacion).
+const FUENTES_DIR_ = path.join(__dirname, 'assets', 'fonts');
+function registrarFuentesUnicode_(doc) {
+  doc.registerFont('Helvetica', path.join(FUENTES_DIR_, 'DejaVuSans.ttf'));
+  doc.registerFont('Helvetica-Bold', path.join(FUENTES_DIR_, 'DejaVuSans-Bold.ttf'));
+}
 
 const DOC = {
   INK: '#1F2937',
@@ -63,7 +82,17 @@ function fechaCorta_(valor) {
 }
 
 function crearDocumento() {
-  const doc = new PDFDocument({ size: 'A4', margin: MARGIN, bufferPages: true, autoFirstPage: true });
+  // font: false -- pdfkit inicializa 'Helvetica' como fuente por defecto
+  // DENTRO del constructor, antes de que este código alcance a llamar
+  // registerFont, y cachea esa fuente estándar bajo la clave 'Helvetica'
+  // en _fontFamilies; registrarFuentesUnicode_ nunca llega a pisar esa
+  // caché (solo agrega la ruta a _registeredFonts), así que .font('Helvetica')
+  // seguía resolviendo silenciosamente a la Helvetica estándar de pdfkit
+  // -- la fuente Unicode quedaba registrada pero jamás se usaba. Con
+  // font: false el constructor no la inicializa y la caché queda vacía
+  // hasta que se resuelve por primera vez, ya con la fuente registrada.
+  const doc = new PDFDocument({ size: 'A4', margin: MARGIN, bufferPages: true, autoFirstPage: true, font: false });
+  registrarFuentesUnicode_(doc);
   doc.font('Helvetica');
   return doc;
 }
