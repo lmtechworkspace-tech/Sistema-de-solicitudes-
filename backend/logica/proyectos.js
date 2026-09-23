@@ -349,6 +349,89 @@ function calcularAvanceEsperado_(fechaInicio, fechaFin, ahora) {
   return Math.round(Math.max(0, Math.min(100, pct)) * 10) / 10;
 }
 
+// ============================================================================
+// Refactor "Planificación" (2026-09-23): funciones de cálculo CENTRALIZADAS
+// -- plataforma, Excel y (cuando se porte) PDF consumen estas mismas
+// funciones, nunca reimplementan la fórmula por su cuenta (evita el bug
+// clásico de "la Gantt dice una cosa, el Excel otra"). Todas devuelven null
+// cuando falta el dato de entrada -- nunca inventan una fecha ni un número.
+// ============================================================================
+
+// "En riesgo" es parametrizable a propósito (no un número mágico suelto en
+// medio del cálculo): una tarea entra en riesgo si le quedan pocos días
+// hábiles de calendario para el compromiso Y el avance real ya viene por
+// debajo del esperado en más de este margen.
+const ESTADO_PLAZO_UMBRAL_DIAS_RIESGO_ = 2;
+const ESTADO_PLAZO_DEFICIT_AVANCE_RIESGO_PP_ = 15;
+
+function calcularDuracionDias_(inicio, fin) {
+  if (!inicio || !fin) return null;
+  const ini = new Date(inicio), f = new Date(fin);
+  if (isNaN(ini.getTime()) || isNaN(f.getTime())) return null;
+  return Math.round((f.getTime() - ini.getTime()) / 86400000);
+}
+
+// desviacionDias: negativo = terminó antes, 0 = a tiempo, positivo = atraso.
+// Solo tiene sentido con AMBAS fechas -- una tarea sin fecha real todavía no
+// tiene desviación de plazo, tiene ESTADO de plazo (calcularEstadoPlazo_).
+function calcularDesviacionPlazoDias_(fechaFinPlan, fechaFinReal) {
+  if (!fechaFinPlan || !fechaFinReal) return null;
+  return calcularDuracionDias_(fechaFinPlan, fechaFinReal);
+}
+
+// desviacionAvance: positivo = por delante de lo esperado, negativo = por
+// debajo. Eje totalmente separado de la desviación de PLAZO -- una tarea
+// puede ir atrasada en fecha y aun así con más avance del esperado (o viceversa).
+function calcularDesviacionAvancePp_(avanceEsperadoPct, avanceRealPct) {
+  if (avanceEsperadoPct === null || avanceEsperadoPct === undefined) return null;
+  if (avanceRealPct === null || avanceRealPct === undefined) return null;
+  return Math.round((avanceRealPct - avanceEsperadoPct) * 10) / 10;
+}
+
+// estado_plazo: ATRASADA/EN_RIESGO/EN_PLAZO/COMPLETADA/SIN_FECHA. Deliberadamente
+// NO reemplaza a Actividades.semaforoActividad_ (ese sigue siendo el semáforo
+// general de "Mi trabajo"/Jefatura/Novedades, con muchos llamadores fuera de
+// Proyectos) -- este es el estado de plazo ESPECÍFICO de la comparación
+// plan-vs-real que pide el módulo de Planificación, con el matiz de "en
+// riesgo" (fecha cerca + avance por debajo) que el semáforo general no calcula.
+function calcularEstadoPlazo_(tarea, avanceEsperadoPct, avanceRealPct) {
+  if (tarea.fecha_terminada) return 'COMPLETADA';
+  if (!tarea.fecha_compromiso) return 'SIN_FECHA';
+  const hoy = new Date();
+  const finPlan = new Date(tarea.fecha_compromiso);
+  const diasParaVencer = Math.round((finPlan.getTime() - hoy.getTime()) / 86400000);
+  if (diasParaVencer < 0) return 'ATRASADA';
+  const desviacionAvance = calcularDesviacionAvancePp_(avanceEsperadoPct, avanceRealPct);
+  if (diasParaVencer <= ESTADO_PLAZO_UMBRAL_DIAS_RIESGO_ &&
+      desviacionAvance !== null && desviacionAvance < -ESTADO_PLAZO_DEFICIT_AVANCE_RIESGO_PP_) {
+    return 'EN_RIESGO';
+  }
+  return 'EN_PLAZO';
+}
+
+// fecha_inicio_real: NO es una columna nueva en ACTIVIDADES -- se DERIVA del
+// primer día de la bitácora en que la tarea tuvo trabajo real (no solo
+// "asignada"/"planificada", que son intención, no ejecución). Mismo criterio
+// que ya usa la Carta de Dedicación (REGISTRO_DIA manda sobre lo derivado del
+// check-in). Sin ningún registro real: null -- el llamador muestra "No
+// registrado", nunca inventa una fecha.
+const ESTADOS_DIA_TRABAJO_REAL_ = ['en_proceso', 'bloqueado', 'pausado', 'finalizado', 'entregado', 'revision', 'esperando_tercero'];
+function calcularFechaInicioReal_(actividadId, bitacoraDelProyecto) {
+  const registros = (bitacoraDelProyecto || [])
+    .filter((b) => b.actividad_id === actividadId && b.tipo === 'REGISTRO_DIA')
+    .map(datosDeBitacora_)
+    .filter((d) => d.dia && ESTADOS_DIA_TRABAJO_REAL_.indexOf(d.estado_dia) !== -1)
+    .sort((a, b) => a.dia < b.dia ? -1 : (a.dia > b.dia ? 1 : 0));
+  if (registros.length) return registros[0].dia;
+  // Sin REGISTRO_DIA (proyectos viejos, o tarea sin check-in diario todavía):
+  // el primer evento de bitácora que no sea solo "creación" es la mejor
+  // aproximación disponible -- sigue siendo un dato real, no inventado.
+  const primerEvento = (bitacoraDelProyecto || [])
+    .filter((b) => b.actividad_id === actividadId && b.tipo !== 'REGISTRO_DIA' && b.tipo !== 'CREACION')
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))[0];
+  return primerEvento ? claveFecha_(primerEvento.timestamp) : null;
+}
+
 function calcularResumenVisitaProyecto_(db, proyecto, contexto, integrantes, tareas) {
   const miIntegrante = integrantes.find((i) => normalizarEmail_(i.usuario_email) === normalizarEmail_(contexto && contexto.email));
   if (!miIntegrante || !miIntegrante.ultima_visita_sala) return null;
@@ -1880,9 +1963,9 @@ function obtenerRendimiento(db, data, contexto) {
   const idsTarea = {};
   tareas.forEach((a) => { idsTarea[a.actividad_id] = true; });
 
+  const bitacoraProyecto = leerSeguro_(db, 'ACTIVIDADES_BITACORA').filter((b) => idsTarea[b.actividad_id]);
   const horasPorTarea = {}, diasPorTarea = {};
-  leerSeguro_(db, 'ACTIVIDADES_BITACORA').forEach((b) => {
-    if (!idsTarea[b.actividad_id]) return;
+  bitacoraProyecto.forEach((b) => {
     const horas = Number(datosDeBitacora_(b).horas) || 0;
     if (horas) horasPorTarea[b.actividad_id] = (horasPorTarea[b.actividad_id] || 0) + horas;
     const f = new Date(b.timestamp);
@@ -1918,12 +2001,19 @@ function obtenerRendimiento(db, data, contexto) {
     const planInicio = planInicioEfectivoClave_(claveCreacion, claveCompromiso, claveInicioProyecto);
     const esperado = calcularAvanceEsperado_(planInicio, a.fecha_compromiso, ahora);
     const baseTarea = baseline && baseline.por_tarea[a.actividad_id];
+    // Refactor "Planificación" (2026-09-23): plazo (días) es un eje aparte de
+    // avance (pp) -- ver los comentarios de cada función centralizada.
+    const fechaInicioReal = calcularFechaInicioReal_(a.actividad_id, bitacoraProyecto);
+    const desviacionDias = calcularDesviacionPlazoDias_(a.fecha_compromiso, a.fecha_terminada);
     return {
       actividad_id: a.actividad_id, plan_inicio: planInicio, plan_fin: a.fecha_compromiso || '',
       baseline_inicio: baseTarea ? baseTarea.fecha_inicio : '', baseline_fin: baseTarea ? baseTarea.fecha_fin : '',
       avance_real_pct: real, avance_esperado_pct: esperado,
-      desviacion_pp: (real !== null && esperado !== null) ? Math.round((real - esperado) * 10) / 10 : null,
-      spi: (real !== null && esperado > 0) ? Math.round((real / esperado) * 100) / 100 : null
+      desviacion_pp: calcularDesviacionAvancePp_(esperado, real),
+      spi: (real !== null && esperado > 0) ? Math.round((real / esperado) * 100) / 100 : null,
+      fecha_inicio_real: fechaInicioReal, fecha_fin_real: a.fecha_terminada || '',
+      desviacion_dias: desviacionDias,
+      estado_plazo: calcularEstadoPlazo_(a, esperado, real)
     };
   });
 
@@ -2265,6 +2355,12 @@ module.exports = {
   gestionarEstadoPago, listarEstadosPago,
   // Fase H item 3 (Camino B): RDI -- tipo de Solicitud, acotado al proyecto.
   crearRdi, listarRdi,
+  // Refactor "Planificación" (2026-09-23): funciones de cálculo centralizadas
+  // -- exportadas para poder probarlas como unidades puras (§41/§45 del
+  // encargo), sin tener que fabricar todo el ciclo de vida de una tarea
+  // (entregar→validar) solo para fijar una fecha_terminada exacta de prueba.
+  calcularDuracionDias_, calcularDesviacionPlazoDias_, calcularDesviacionAvancePp_,
+  calcularEstadoPlazo_, calcularFechaInicioReal_,
   // Incremento 2 (v11 Reingenieria Cronograma).
   guardarRegistroDia, eliminarRegistroDia, obtenerRendimiento, obtenerAnalitica,
   obtenerWorkloadPortafolio, congelarBaseline, reprogramarTarea,

@@ -794,7 +794,14 @@
     if (id === 'cronograma') { cargarDatosCronograma_(cont); }
     else if (id === 'reuniones') { cargarReuniones_(cont); }
     else if (id === 'decisiones') { cargarDecisiones_(cont); }
-    else { pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala, datosDetalleActual_.miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento); }
+    else {
+      // Red de seguridad del spinner eterno (mismo criterio que Analítica en
+      // Cronograma): si se reentra a Tareas con la sub-vista ya en 'tabla',
+      // hay que pedir rendimiento aquí -- el click del toggle no se dispara
+      // porque la vista no cambió.
+      if (id === 'tareas' && vistaTareas_ === 'tabla') pedirRendimientoProyecto_(cont);
+      pintarDetalle_(cont, datosDetalleActual_.detalle, datosDetalleActual_.tareas, datosDetalleActual_.sala, datosDetalleActual_.miEmail, datosDetalleActual_.bitacora, datosDetalleActual_.rendimiento);
+    }
     // v10 (Fase D, propuesta 09): marca "vi la Sala" a ahora -- de fondo, sin
     // bloquear el repintado ni volver a pedir el detalle. El resumen que se
     // acaba de mostrar usa la marca de tiempo ANTERIOR (ya estaba en cache);
@@ -991,6 +998,26 @@
     });
   }
 
+  // Refactor "Planificación" (2026-09-23): la vista Tabla (bajo Tareas) usa
+  // plan/real/desviación, que vive en `rendimiento` -- lo mismo que ya carga
+  // Cronograma. Si el usuario entra a Tabla ANTES de abrir Cronograma en esta
+  // visita, este pedido lo trae aparte (más liviano: sin bitácora, que Tabla
+  // no necesita). Si Cronograma ya lo cargó, no vuelve a pedir nada.
+  var rendimientoEnVuelo_ = null;
+  function pedirRendimientoProyecto_(cont) {
+    if (!datosDetalleActual_) return;
+    if (datosDetalleActual_.rendimiento !== undefined) return;
+    if (rendimientoEnVuelo_ === proyectoActivoId_) return;
+    rendimientoEnVuelo_ = proyectoActivoId_;
+    var idAlPedir = proyectoActivoId_;
+    apiSeguro_('obtenerRendimientoProyecto', { proyecto_id: proyectoActivoId_ }).then(function (r) {
+      if (rendimientoEnVuelo_ === idAlPedir) rendimientoEnVuelo_ = null;
+      if (!datosDetalleActual_ || idAlPedir !== proyectoActivoId_) return;
+      datosDetalleActual_.rendimiento = (r && r.ok) ? r.data : null;
+      if (pestanaActiva_ === 'tareas' && vistaTareas_ === 'tabla') cambiarPestana_('tareas');
+    });
+  }
+
   // v13 (Fase 5): mismo patrón lazy que cronograma, para dos pestañas chicas
   // que casi nadie abre en cada visita al proyecto.
   function cargarReuniones_(cont) {
@@ -1139,7 +1166,7 @@
     var cuerpo = '';
     if (pestanaActiva_ === 'resumen') cuerpo = pintarResumen_(detalle, tareas, puedeGestionar);
     else if (pestanaActiva_ === 'sala') cuerpo = pintarSala_(sala, detalle);
-    else if (pestanaActiva_ === 'tareas') cuerpo = pintarTareas_(tareas, detalle, puedeGestionar, miEmail);
+    else if (pestanaActiva_ === 'tareas') cuerpo = pintarTareas_(tareas, detalle, puedeGestionar, miEmail, rendimiento);
     else if (pestanaActiva_ === 'hitos') cuerpo = pintarHitos_(detalle, puedeGestionar, tareas);
     else if (pestanaActiva_ === 'cronograma') {
       // v10 (auditoría G): bitacora === undefined => todavía cargando (lazy).
@@ -1904,7 +1931,7 @@
   // componente de tabla ordenable de Gerencia (.sigso-tabla-tablero).
   var ordenTareasTabla_ = { campo: 'natural', direccion: 'asc' };
 
-  function pintarTareas_(tareas, detalle, puedeGestionar, miEmail) {
+  function pintarTareas_(tareas, detalle, puedeGestionar, miEmail, rendimiento) {
     var puedeCrear = puedeAportar_(detalle);
     var toggle = '<div class="sigso-py-vista-toggle">' +
         Componentes.boton({ texto: 'Lista', variante: vistaTareas_ === 'lista' ? undefined : 'sutil', clase: 'js-py-tareas-vista', idx: 'lista' }) +
@@ -1924,7 +1951,7 @@
     }
 
     if (vistaTareas_ === 'tablero') return acciones + pintarTareasTablero_(tareas, miEmail, puedeGestionar);
-    if (vistaTareas_ === 'tabla') return acciones + pintarTareasTabla_(tareas, miEmail, puedeGestionar);
+    if (vistaTareas_ === 'tabla') return acciones + pintarTareasTabla_(tareas, miEmail, puedeGestionar, detalle, rendimiento);
     return acciones + pintarTareasLista_(tareas, miEmail, puedeGestionar);
   }
 
@@ -1959,29 +1986,76 @@
     var activo = ordenTareasTabla_.campo === campo ? ' data-orden-activo="' + ordenTareasTabla_.direccion + '"' : '';
     return '<th data-orden="' + campo + '"' + activo + '>' + Componentes.escaparHtml(texto) + '</th>';
   }
-  function pintarTareasTabla_(tareas, miEmail, puedeGestionar) {
+  var ESTADO_PLAZO_BADGE_ = { ATRASADA: 'critico', EN_RIESGO: 'alerta', EN_PLAZO: 'ok', COMPLETADA: 'neutro', SIN_FECHA: 'neutro' };
+  var ESTADO_PLAZO_LABEL_ = { ATRASADA: 'Atrasada', EN_RIESGO: 'En riesgo', EN_PLAZO: 'En plazo', COMPLETADA: 'Completada', SIN_FECHA: 'Sin fecha' };
+  function cargoPersona_(email) {
+    var p = SigsoDirectorio.persona(email);
+    return (p && p.cargo) || '—';
+  }
+  // Refactor "Planificación" (2026-09-23): la Tabla suma las columnas
+  // plan/real/desviación que pedía el encargo -- toman los mismos números que
+  // ya calcula el backend para Plan/Dedicación (obtenerRendimiento,
+  // plan_seguimiento), nunca un cálculo aparte (§42: plataforma/Excel/PDF
+  // deben coincidir siempre). `rendimiento` llega undefined mientras se pide
+  // de fondo (lazy, igual que en Cronograma) -- esas columnas muestran "…" y
+  // la tabla se repinta sola cuando llega, sin bloquear lo que ya hay.
+  function pintarTareasTabla_(tareas, miEmail, puedeGestionar, detalle, rendimiento) {
+    var cargando = rendimiento === undefined;
+    var planPorId = {};
+    ((rendimiento && rendimiento.plan_seguimiento) || []).forEach(function (t) { planPorId[t.actividad_id] = t; });
+    var hitosPorId = {};
+    ((detalle && detalle.hitos) || []).forEach(function (h) { hitosPorId[h.hito_id] = h.nombre; });
+
     var filas = ordenarTareasTabla_(tareas).map(function (a) {
       var esMia = !!miEmail && normalizarEmail_(a.responsable_email) === miEmail;
       var puedeEditar = puedeGestionar || trabajoLaTarea_(a, miEmail);
       var sub = a.es_subtarea ? '<span class="sigso-py-tabla-sub" title="Subtarea">↳</span> ' : '';
       var vence = a.fecha_compromiso ? fechaCorta_(a.fecha_compromiso) : '—';
-      var avance = (a.avance_pct === '' || a.avance_pct === undefined || a.avance_pct === null) ? '—' : a.avance_pct + '%';
+      var plan = planPorId[a.actividad_id];
+      // Avance real: mismo valor DERIVADO que ya usa la desviación (avance_pct
+      // crudo, o 100/0 según estado si no se registró un número) -- no el
+      // campo a.avance_pct pelado, que en la mayoría de las tareas viene
+      // vacío aunque la tarea esté Terminada (ver avanceRealTarea_ backend).
+      var avanceReal = (plan && plan.avance_real_pct !== null && plan.avance_real_pct !== undefined) ? plan.avance_real_pct
+        : ((a.avance_pct === '' || a.avance_pct === undefined || a.avance_pct === null) ? null : Number(a.avance_pct));
+      var avance = (avanceReal === null) ? '—' : avanceReal + '%';
+      var celdaCargando = '<span class="sigso-ayuda">…</span>';
+      var inicioPlan = cargando ? celdaCargando : (plan && plan.plan_inicio ? fechaCorta_(plan.plan_inicio) : '—');
+      var inicioReal = cargando ? celdaCargando : (plan && plan.fecha_inicio_real ? fechaCorta_(plan.fecha_inicio_real) : 'No registrado');
+      var finReal = cargando ? celdaCargando : (plan && plan.fecha_fin_real ? fechaCorta_(plan.fecha_fin_real) : 'No registrado');
+      var avanceEsperado = cargando ? celdaCargando : (plan && plan.avance_esperado_pct !== null && plan && plan.avance_esperado_pct !== undefined ? plan.avance_esperado_pct + '%' : '—');
+      var desviacionAvance = cargando ? celdaCargando : (plan && plan.desviacion_pp !== null && plan && plan.desviacion_pp !== undefined
+        ? (plan.desviacion_pp > 0 ? '+' + plan.desviacion_pp : plan.desviacion_pp) + 'pp' : '—');
+      var desviacionPlazo = cargando ? celdaCargando : (plan && plan.desviacion_dias !== null && plan && plan.desviacion_dias !== undefined
+        ? (plan.desviacion_dias > 0 ? '+' + plan.desviacion_dias : plan.desviacion_dias) + ' d' : '—');
+      var estadoPlazo = cargando ? celdaCargando : (plan && plan.estado_plazo
+        ? Componentes.badge(ESTADO_PLAZO_LABEL_[plan.estado_plazo] || plan.estado_plazo, ESTADO_PLAZO_BADGE_[plan.estado_plazo] || 'neutro') : '—');
       return '<tr data-py-foco="' + a.actividad_id + '">' +
         '<td data-label="Tarea">' + sub + Componentes.escaparHtml(a.titulo) + '</td>' +
+        '<td data-label="Hito">' + Componentes.escaparHtml(hitosPorId[a.hito_id] || '—') + '</td>' +
         '<td data-label="Responsable">' + (esMia ? '<b>Tú</b>' : Componentes.escaparHtml(nombrePersona_(a.responsable_email, a.responsable_nombre))) + '</td>' +
+        '<td data-label="Cargo">' + Componentes.escaparHtml(cargoPersona_(a.responsable_email)) + '</td>' +
         '<td data-label="Estado"><span class="sigso-badge sigso-mt-badge--' + a.semaforo + '">' + Componentes.escaparHtml(a.semaforo_etiqueta || '') + '</span></td>' +
         '<td data-label="Prioridad">' + Componentes.escaparHtml(a.prioridad || '—') + '</td>' +
-        '<td data-label="Vence">' + vence + '</td>' +
-        '<td data-label="Avance">' + avance + '</td>' +
+        '<td data-label="Inicio plan">' + inicioPlan + '</td>' +
+        '<td data-label="Fin plan">' + vence + '</td>' +
+        '<td data-label="Inicio real">' + inicioReal + '</td>' +
+        '<td data-label="Fin real">' + finReal + '</td>' +
+        '<td data-label="Avance esperado">' + avanceEsperado + '</td>' +
+        '<td data-label="Avance real">' + avance + '</td>' +
+        '<td data-label="Desv. avance">' + desviacionAvance + '</td>' +
+        '<td data-label="Desv. plazo">' + desviacionPlazo + '</td>' +
+        '<td data-label="Cumplimiento">' + estadoPlazo + '</td>' +
         '<td data-label="" class="sigso-py-tabla-acc">' +
           (puedeEditar ? '<button type="button" class="sigso-btn--icono js-py-editar-tarea" data-idx="' + a.actividad_id + '" title="Editar tarea">' + Iconos.svg('editar', { tam: 16 }) + '</button>' : '') +
         '</td>' +
       '</tr>';
     }).join('');
     return '<div class="sigso-py-tabla-scroll"><table class="sigso-tabla-tablero sigso-py-tabla"><thead><tr>' +
-        thOrdenTarea_('titulo', 'Tarea') + thOrdenTarea_('responsable', 'Responsable') +
+        thOrdenTarea_('titulo', 'Tarea') + '<th>Hito</th>' + thOrdenTarea_('responsable', 'Responsable') + '<th>Cargo</th>' +
         thOrdenTarea_('estado', 'Estado') + thOrdenTarea_('prioridad', 'Prioridad') +
-        thOrdenTarea_('vence', 'Vence') + thOrdenTarea_('avance', 'Avance') +
+        '<th>Inicio plan</th>' + thOrdenTarea_('vence', 'Fin plan') + '<th>Inicio real</th>' + '<th>Fin real</th>' +
+        '<th>Avance esperado</th>' + thOrdenTarea_('avance', 'Avance real') + '<th>Desv. avance</th>' + '<th>Desv. plazo</th>' + '<th>Cumplimiento</th>' +
         '<th></th>' +
       '</tr></thead><tbody>' + filas + '</tbody></table></div>';
   }
@@ -5384,6 +5458,7 @@
     cont.querySelectorAll('.js-py-tareas-vista').forEach(function (btn) {
       btn.addEventListener('click', function () {
         vistaTareas_ = btn.getAttribute('data-idx');
+        if (vistaTareas_ === 'tabla') pedirRendimientoProyecto_(cont);
         cambiarPestana_('tareas');
       });
     });
