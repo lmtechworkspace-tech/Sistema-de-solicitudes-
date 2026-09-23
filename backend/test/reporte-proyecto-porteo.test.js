@@ -42,14 +42,52 @@ function pdfValido_(base64) {
   return Buffer.from(base64, 'base64').slice(0, 4).toString('ascii') === '%PDF';
 }
 
-test('descargarReporte: config con gantt/workload/leyenda devuelve _validationError explicito, no un PDF a medias', async () => {
+test('descargarReporte: config con gantt/workload/leyenda genera un PDF valido (Etapa 9)', async () => {
   const db = db_();
   const proyecto = crearProyectoBase(db);
+  Proyectos.gestionarIntegrante(db, { proyecto_id: proyecto.proyecto_id, usuario_email: 'marcelo@rld.cl', rol_proyecto: 'INTEGRANTE' }, CTX_LEO);
+  const t1 = Proyectos.crearTarea(db, {
+    proyecto_id: proyecto.proyecto_id, titulo: 'Levantar requisitos', responsable_email: 'marcelo@rld.cl',
+    fecha_compromiso: '2026-09-01', prioridad: 'P1'
+  }, CTX_LEO);
+  Actividades.confirmar(db, { actividad_id: t1.actividad_id }, CTX_MARCELO);
+  Proyectos.crearTarea(db, {
+    proyecto_id: proyecto.proyecto_id, titulo: 'Configurar ambiente', responsable_email: 'marcelo@rld.cl',
+    fecha_compromiso: '2026-08-20', prioridad: 'P2'
+  }, CTX_LEO);
+  Proyectos.gestionarHito(db, { proyecto_id: proyecto.proyecto_id, nombre: 'Kickoff', fecha_objetivo: '2026-08-05' }, CTX_LEO);
+
   for (const seccion of ['gantt', 'workload', 'leyenda']) {
     const res = await Reporte.descargarReporte(db, { proyecto_id: proyecto.proyecto_id, config: { secciones: ['ficha', seccion] } }, CTX_LEO);
-    assert.equal(res._validationError, true, seccion + ' deberia rechazarse');
-    assert.match(res.message, /todavía no está disponible/i);
+    assert.ok(!res._validationError, seccion + ': ' + JSON.stringify(res));
+    assert.ok(pdfValido_(res.pdf_base64), seccion + ' deberia producir un PDF valido');
   }
+
+  const conLasTres = await Reporte.descargarReporte(db, {
+    proyecto_id: proyecto.proyecto_id, config: { secciones: ['portada', 'gantt', 'workload', 'leyenda'] }
+  }, CTX_LEO);
+  assert.ok(!conLasTres._validationError, JSON.stringify(conLasTres));
+  assert.ok(pdfValido_(conLasTres.pdf_base64));
+});
+
+test('descargarReporte: gantt/workload sin tareas ni hitos no revientan (seccion vacia, PDF sigue valido)', async () => {
+  const db = db_();
+  const proyecto = crearProyectoBase(db);
+  const res = await Reporte.descargarReporte(db, {
+    proyecto_id: proyecto.proyecto_id, config: { secciones: ['ficha', 'gantt', 'workload', 'leyenda'] }
+  }, CTX_LEO);
+  assert.ok(!res._validationError, JSON.stringify(res));
+  assert.ok(pdfValido_(res.pdf_base64));
+});
+
+test('descargarReporte: leyenda sola (sin gantt ni workload) no dibuja nada, pero el PDF sigue siendo valido', async () => {
+  const db = db_();
+  const proyecto = proyectoConfigurable_(db);
+  const res = await Reporte.descargarReporte(db, {
+    proyecto_id: proyecto.proyecto_id, config: { secciones: ['ficha', 'leyenda'] }
+  }, CTX_LEO);
+  assert.ok(!res._validationError, JSON.stringify(res));
+  assert.ok(pdfValido_(res.pdf_base64));
 });
 
 test('descargarReporte: proyecto inexistente devuelve _validationError (nunca dibuja un PDF)', async () => {

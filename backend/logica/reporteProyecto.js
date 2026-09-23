@@ -11,15 +11,13 @@
  * listarTareas/obtenerRendimiento/listarBitacora -- misma lógica de datos
  * que ya usa la pantalla, este módulo solo la dibuja.
  *
- * FUERA DE ALCANCE A PROPÓSITO, documentado (nunca fingido): las 3
- * secciones de grilla día×tarea del modo configurable (`gantt` -- Carta
- * Gantt de barras + grilla de letras día a día --, `workload`, y su
- * leyenda de símbolos `leyenda`, que solo tiene sentido junto a esas dos).
- * Son ~540 de las ~1395 líneas del feature en el .gs: paginación
- * multipágina, colores por celda, conectores -- decisión explícita del
- * usuario de dejarlas para su propio incremento en vez de forzarlas ahora.
- * Si el config las pide, `descargarReporte` devuelve un _validationError
- * claro, nunca un PDF a medias.
+ * `gantt`/`workload`/`leyenda` (Etapa 9 de la refactorización de
+ * Planificación): NO reproducen la grilla día×letra del .gs (paginación
+ * multipágina celda a celda) sino una Carta Gantt ejecutiva -- una página
+ * apaisada propia con una fila por hito/tarea y una barra de color por
+ * semana, más carga de trabajo (tareas activas por responsable) y su
+ * leyenda -- mismo criterio de simplificación ya aplicado en `mini_gantt`
+ * (contenido equivalente, forma más simple de dibujar con pdfkit).
  *
  * "Avance por tarea" (sección `mini_gantt` del config) reemplaza la Carta
  * Gantt semanal del .gs (grilla de chips por semana) por una lista de
@@ -53,18 +51,19 @@ const VENCIMIENTOS_ORDEN = { atrasada: 0, riesgo: 1, pendiente: 2, bloqueada: 3,
 const VENCIMIENTOS_TOPE = 8;
 const AVANCE_TOPE = 15;
 
-// Mismo catálogo que REPORTE_SECCIONES_DISPONIBLES_ (Proyectos.gs), menos
-// gantt/workload/leyenda (ver la nota de alcance en la cabecera).
+// Mismo catálogo que REPORTE_SECCIONES_DISPONIBLES_ (Proyectos.gs).
 const SECCIONES_DISPONIBLES = [
-  'portada', 'narrativa', 'ficha', 'kpis', 'salud', 'mini_gantt', 'hitos',
-  'riesgos', 'vencimientos', 'rendimiento', 'desviaciones', 'bitacora',
-  // Reconocidas (para no romper una config vieja) pero no soportadas.
-  'gantt', 'workload', 'leyenda'
+  'portada', 'narrativa', 'ficha', 'kpis', 'salud', 'mini_gantt', 'gantt', 'workload', 'leyenda',
+  'hitos', 'riesgos', 'vencimientos', 'rendimiento', 'desviaciones', 'bitacora'
 ];
-const SECCIONES_NO_SOPORTADAS = ['gantt', 'workload', 'leyenda'];
+// Ninguna sección sin soportar por ahora -- se deja el arreglo (en vez de
+// borrarlo) porque descargarReporte lo usa como el único punto de control
+// si algún día se vuelve a acotar el alcance de una sección nueva.
+const SECCIONES_NO_SOPORTADAS = [];
 const REPORTE_SECCION_LABEL = {
   narrativa: 'Resumen ejecutivo', ficha: 'Ficha del proyecto', kpis: 'Indicadores clave',
-  salud: 'Salud del proyecto', mini_gantt: 'Avance por tarea', hitos: 'Hitos',
+  salud: 'Salud del proyecto', mini_gantt: 'Avance por tarea', gantt: 'Carta Gantt ejecutiva',
+  workload: 'Carga de trabajo', leyenda: 'Leyenda', hitos: 'Hitos',
   riesgos: 'Riesgos abiertos', vencimientos: 'Próximos vencimientos', rendimiento: 'Rendimiento',
   desviaciones: 'Plan · Esperado · Real', bitacora: 'Actividad reciente'
 };
@@ -309,6 +308,241 @@ function dibujarBitacora_(doc, bitacora) {
   );
 }
 
+// --- Carta Gantt ejecutiva / Carga de trabajo / Leyenda --------------------
+// Puerto de construirSemanasBarrasPdf_/rangoBarrasPdf_/seccionCronogramaBarrasPdf_
+// (Proyectos.gs): NO reproduce la grilla día×letra completa del .gs (esa es
+// la parte "fuera de alcance" documentada arriba), sino la Carta Gantt
+// ejecutiva -- una fila por hito/tarea, una barra de color por semana que
+// toca, línea de HOY -- en una página propia APAISADA (más ancho que el
+// resto del informe, que es retrato) porque una grilla semanal no entra en
+// el ancho de una A4 vertical. Mismo criterio semáforo que
+// hojaCartaGanttXlsx_ (libroProyecto.js): reutiliza los mismos 6 colores,
+// no los reinventa.
+const GANTT_TOPE_SEMANAS = 20; // menos que las 27 del Excel: una pagina apaisada tiene bastante menos ancho que una hoja de calculo que hace scroll
+const GANTT_COLOR = {
+  'al-dia': '#16A34A', terminada: '#16A34A', riesgo: '#D97706', atrasada: '#DC2626',
+  bloqueada: '#2563EB', revision: '#7C3AED', pendiente: '#64748B'
+};
+const GANTT_COLOR_ATRASO = '#B91C1C';
+const GANTT_LEYENDA = [
+  ['Al día / terminada', GANTT_COLOR['al-dia']], ['En riesgo', GANTT_COLOR.riesgo],
+  ['Atrasada', GANTT_COLOR.atrasada], ['Bloqueada', GANTT_COLOR.bloqueada],
+  ['En revisión', GANTT_COLOR.revision], ['Pendiente', GANTT_COLOR.pendiente],
+  ['Semana vencida sin cerrar', GANTT_COLOR_ATRASO]
+];
+
+function claveDia_(valor) {
+  if (!valor) return null;
+  const f = new Date(valor);
+  if (isNaN(f.getTime())) return null;
+  return f.toISOString().slice(0, 10);
+}
+function sumarDiasClave_(clave, n) {
+  const p = clave.split('-').map(Number);
+  return new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)).toISOString().slice(0, 10);
+}
+function lunesDeClave_(clave) {
+  const dow = new Date(clave + 'T00:00:00Z').getUTCDay();
+  return sumarDiasClave_(clave, dow === 0 ? -6 : -(dow - 1));
+}
+// Semanas lunes-a-domingo entre dos claves, topadas -- mismo criterio que
+// REPORTE_TOPE_SEMANAS_ del .gs (evitar un documento de decenas de paginas).
+function semanasGantt_(claveMin, claveMax, tope) {
+  const semanas = [];
+  let cur = lunesDeClave_(claveMin);
+  while (cur <= claveMax && semanas.length < tope) {
+    semanas.push({ inicio: cur, fin: sumarDiasClave_(cur, 6), etiqueta: cur.slice(8, 10) + '/' + cur.slice(5, 7) });
+    cur = sumarDiasClave_(cur, 7);
+  }
+  return semanas;
+}
+// Igual que duracionDiasTarea_ (proyectos.js): si falta fecha_creacion, la
+// barra arranca en el inicio del proyecto (o en la fecha de compromiso, a
+// falta de ambas) -- nunca se inventa una fecha de inicio que no existe.
+function inicioBarraGantt_(a, proyIniClave) {
+  const creClave = claveDia_(a.fecha_creacion);
+  const finClave = claveDia_(a.fecha_compromiso);
+  if (creClave && finClave && creClave <= finClave) return creClave;
+  if (proyIniClave && finClave && proyIniClave <= finClave) return proyIniClave;
+  return creClave || proyIniClave || finClave;
+}
+
+function dibujarGanttEjecutivo_(doc, detalle, tareas, hitos) {
+  const p = detalle.proyecto;
+  const tareasConFecha = tareas.filter((a) => a.fecha_compromiso);
+  if (!tareasConFecha.length && !hitos.length) return;
+
+  const hoyClave = new Date().toISOString().slice(0, 10);
+  const proyIniClave = claveDia_(p.fecha_inicio);
+  const claves = [hoyClave];
+  if (proyIniClave) claves.push(proyIniClave);
+  hitos.forEach((h) => { const c = claveDia_(h.fecha_objetivo); if (c) claves.push(c); });
+  tareasConFecha.forEach((a) => {
+    claves.push(inicioBarraGantt_(a, proyIniClave));
+    claves.push(claveDia_(a.fecha_compromiso));
+  });
+  const clavesValidas = claves.filter(Boolean);
+  const claveMin = clavesValidas.reduce((m, c) => (m === null || c < m ? c : m), null);
+  const claveMax = clavesValidas.reduce((m, c) => (m === null || c > m ? c : m), null);
+  const semanas = semanasGantt_(claveMin, claveMax, GANTT_TOPE_SEMANAS);
+  if (!semanas.length) return;
+
+  // Página propia apaisada: doc.page.width/height ya reflejan la nueva
+  // orientación desde este punto (asegurarEspacio/seccion de PdfDoc leen
+  // esos valores dinámicamente, no una constante de ancho fijo).
+  doc.addPage({ size: 'A4', layout: 'landscape', margin: PdfDoc.MARGIN });
+  const anchoContenido = doc.page.width - PdfDoc.MARGIN * 2;
+  PdfDoc.seccion(doc, 'Carta Gantt ejecutiva');
+  if (tareasConFecha.length > 0 && clavesValidas.length && semanas[semanas.length - 1].fin < claveMax) {
+    doc.font('Helvetica').fontSize(7).fillColor(PdfDoc.DOC.FAINT)
+      .text('Se muestran las primeras ' + GANTT_TOPE_SEMANAS + ' semanas del proyecto.', PdfDoc.MARGIN, doc.y);
+    doc.moveDown(0.3);
+  }
+
+  const anchoLabel = 170;
+  const anchoSemana = (anchoContenido - anchoLabel) / semanas.length;
+  const alturaFila = 12;
+
+  function encabezadoSemanas_() {
+    asegurarEspacioApaisado_(doc, alturaFila + 4);
+    const y = doc.y;
+    doc.font('Helvetica-Bold').fontSize(6);
+    semanas.forEach((s, i) => {
+      const x = PdfDoc.MARGIN + anchoLabel + i * anchoSemana;
+      if (s.inicio <= hoyClave && s.fin >= hoyClave) doc.rect(x, y, anchoSemana, alturaFila).fill('#EEF2F7');
+      doc.fillColor(PdfDoc.DOC.MUTED).text(s.etiqueta, x, y + 2, { width: anchoSemana, align: 'center' });
+    });
+    doc.y = y + alturaFila + 2;
+    doc.moveTo(PdfDoc.MARGIN, doc.y).lineTo(PdfDoc.MARGIN + anchoContenido, doc.y).lineWidth(1).strokeColor(PdfDoc.DOC.INK).stroke();
+    doc.y += 3;
+    doc.x = PdfDoc.MARGIN;
+  }
+  encabezadoSemanas_();
+
+  const porHito = {};
+  const sinHito = [];
+  tareasConFecha.forEach((a) => {
+    if (a.hito_id && hitos.some((h) => h.hito_id === a.hito_id)) (porHito[a.hito_id] = porHito[a.hito_id] || []).push(a);
+    else sinHito.push(a);
+  });
+  const porCompromiso_ = (a, b) => new Date(a.fecha_compromiso) - new Date(b.fecha_compromiso);
+  const hitosOrdenados = hitos.slice().sort((a, b) => new Date(a.fecha_objetivo || '9999-12-31') - new Date(b.fecha_objetivo || '9999-12-31'));
+
+  function filaHito_(h) {
+    asegurarEspacioApaisado_(doc, alturaFila, encabezadoSemanas_);
+    const y = doc.y;
+    doc.font('Helvetica-Bold').fontSize(7.5).fillColor(PdfDoc.DOC.INK).text(h.nombre, PdfDoc.MARGIN, y, { width: anchoLabel - 4, ellipsis: true });
+    const objClave = claveDia_(h.fecha_objetivo);
+    if (objClave) {
+      semanas.forEach((s, i) => {
+        if (objClave >= s.inicio && objClave <= s.fin) {
+          doc.fillColor(PdfDoc.DOC.NAVY).fontSize(8)
+            .text('◆', PdfDoc.MARGIN + anchoLabel + i * anchoSemana + anchoSemana / 2 - 3, y);
+        }
+      });
+    }
+    doc.y = y + alturaFila;
+    doc.x = PdfDoc.MARGIN;
+  }
+  function filaTarea_(a) {
+    asegurarEspacioApaisado_(doc, alturaFila, encabezadoSemanas_);
+    const y = doc.y;
+    doc.font('Helvetica').fontSize(6.5).fillColor(PdfDoc.DOC.INK_SOFT).text(a.titulo, PdfDoc.MARGIN + 4, y, { width: anchoLabel - 8, ellipsis: true });
+    const barIni = inicioBarraGantt_(a, proyIniClave);
+    const fin = claveDia_(a.fecha_compromiso);
+    const terminal = a.estado === 'TERMINADA' || a.estado === 'CANCELADA';
+    const color = GANTT_COLOR[a.semaforo] || GANTT_COLOR.pendiente;
+    semanas.forEach((s, i) => {
+      const x = PdfDoc.MARGIN + anchoLabel + i * anchoSemana;
+      if (barIni && fin && s.fin >= barIni && s.inicio <= fin) {
+        doc.rect(x + 0.5, y + 1, anchoSemana - 1, alturaFila - 3).fill(color);
+      } else if (!terminal && fin && s.inicio > fin && s.inicio <= hoyClave) {
+        doc.rect(x + 0.5, y + 1, anchoSemana - 1, alturaFila - 3).fill(GANTT_COLOR_ATRASO);
+      }
+    });
+    doc.y = y + alturaFila;
+    doc.x = PdfDoc.MARGIN;
+  }
+
+  hitosOrdenados.forEach((h) => {
+    filaHito_(h);
+    (porHito[h.hito_id] || []).sort(porCompromiso_).forEach(filaTarea_);
+  });
+  if (sinHito.length) {
+    asegurarEspacioApaisado_(doc, alturaFila, encabezadoSemanas_);
+    doc.font('Helvetica-Bold').fontSize(7.5).fillColor(PdfDoc.DOC.MUTED).text('Sin hito', PdfDoc.MARGIN, doc.y);
+    doc.y += alturaFila;
+    doc.x = PdfDoc.MARGIN;
+    sinHito.sort(porCompromiso_).forEach(filaTarea_);
+  }
+
+  // Vuelve a retrato para lo que siga (workload/leyenda/bitácora...): sin
+  // opciones, addPage usa las mismas que crearDocumento (A4 retrato) -- el
+  // resto de las funciones de dibujo asumen PdfDoc.CONTENT_WIDTH (ancho
+  // fijo de A4 retrato), no el ancho de la página apaisada.
+  doc.addPage();
+  doc.x = PdfDoc.MARGIN;
+}
+
+// asegurarEspacio de PdfDoc no sirve tal cual aquí: si toca página nueva,
+// esta también debe salir apaisada (addPage sin opciones vuelve a retrato)
+// y hay que repetir el encabezado de semanas -- por eso esta variante local.
+function asegurarEspacioApaisado_(doc, altura, repintarEncabezado) {
+  const limite = doc.page.height - doc.page.margins.bottom;
+  if (doc.y + altura > limite) {
+    doc.addPage({ size: 'A4', layout: 'landscape', margin: PdfDoc.MARGIN });
+    doc.x = PdfDoc.MARGIN;
+    if (repintarEncabezado) repintarEncabezado();
+  }
+}
+
+// Carga de trabajo: cantidad de tareas activas por responsable (no horas --
+// la bitácora de horas es opcional y por tarea, no da una cifra fiable de
+// "carga" comparable entre personas; el conteo de tareas activas sí lo es).
+// Misma barra horizontal que ya usa dibujarAvancePorTarea_/Pausas.gs.
+function dibujarCargaTrabajo_(doc, tareas, nombresPorEmail) {
+  const activas = tareas.filter((a) => a.estado !== 'TERMINADA' && a.estado !== 'CANCELADA');
+  if (!activas.length) return;
+  const porPersona = {};
+  activas.forEach((a) => {
+    const key = a.responsable_email || '(sin asignar)';
+    if (!porPersona[key]) porPersona[key] = { nombre: nombresPorEmail[key] || a.responsable_nombre || key, total: 0, atrasadas: 0 };
+    porPersona[key].total++;
+    if (a.semaforo === 'atrasada') porPersona[key].atrasadas++;
+  });
+  const claves = Object.keys(porPersona);
+  const maxTotal = Math.max.apply(null, claves.map((k) => porPersona[k].total));
+
+  PdfDoc.seccion(doc, 'Carga de trabajo');
+  doc.font('Helvetica').fontSize(7.5).fillColor(PdfDoc.DOC.FAINT).text('Tareas activas por responsable (no cerradas).', PdfDoc.MARGIN, doc.y);
+  doc.moveDown(0.3);
+  claves.sort((x, y) => porPersona[y].total - porPersona[x].total).forEach((key) => {
+    const r = porPersona[key];
+    const pct = maxTotal ? Math.round((r.total / maxTotal) * 100) : 0;
+    PdfDoc.barraHorizontal(doc, r.nombre, pct, r.total + (r.total === 1 ? ' tarea' : ' tareas') + (r.atrasadas ? ' · ' + r.atrasadas + ' atr.' : ''));
+  });
+  doc.moveDown(0.3);
+}
+
+function dibujarLeyendaGantt_(doc) {
+  PdfDoc.seccion(doc, 'Leyenda');
+  let x = PdfDoc.MARGIN;
+  let y = doc.y;
+  const filaAltura = 20;
+  GANTT_LEYENDA.forEach(([etiqueta, color]) => {
+    doc.font('Helvetica').fontSize(8);
+    const ancho = 14 + doc.widthOfString(etiqueta) + 16;
+    if (x + ancho > PdfDoc.MARGIN + PdfDoc.CONTENT_WIDTH) { x = PdfDoc.MARGIN; y += filaAltura; }
+    PdfDoc.asegurarEspacio(doc, filaAltura);
+    doc.rect(x, y + 3, 10, 10).fill(color);
+    doc.fillColor(PdfDoc.DOC.INK_SOFT).text(etiqueta, x + 14, y + 3, { lineBreak: false });
+    x += ancho;
+  });
+  doc.y = y + filaAltura;
+  doc.x = PdfDoc.MARGIN;
+  doc.moveDown(0.2);
+}
+
 function dibujarFicha_(doc, detalle) {
   const p = detalle.proyecto;
   PdfDoc.seccion(doc, 'Ficha del proyecto');
@@ -520,6 +754,9 @@ async function descargarReporteConfigurado_(db, data, contexto, detalle, tareas,
   if (incluye('kpis')) dibujarKpis_(doc, detalle, rendimiento);
   if (incluye('salud')) dibujarSalud_(doc, detalle);
   if (incluye('mini_gantt')) dibujarAvancePorTarea_(doc, tareasFiltradas, rendimiento);
+  if (incluye('gantt')) dibujarGanttEjecutivo_(doc, detalle, tareasFiltradas, detalle.hitos || []);
+  if (incluye('workload')) dibujarCargaTrabajo_(doc, tareasFiltradas, nombresPorEmail);
+  if (incluye('leyenda') && (incluye('gantt') || incluye('workload'))) dibujarLeyendaGantt_(doc);
   if (incluye('hitos')) dibujarHitos_(doc, detalle.hitos || []);
   if (incluye('riesgos')) dibujarRiesgos_(doc, detalle.riesgos || [], nombresPorEmail);
   if (incluye('vencimientos')) dibujarVencimientos_(doc, tareasFiltradas);

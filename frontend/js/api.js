@@ -54,29 +54,17 @@ var MAX_INTENTOS_LECTURA = 3;
 // "almacenamiento no configurado" en vez de servir el archivo real que Apps
 // Script sí sirve hoy. Cortarlas ahora sería una regresión, no una mejora.
 // Lista de lo que sigue pendiente:
-// descargarReporteProyecto (foto de perfil ya portada 2026-09-22, ver
-// backend/logica/perfiles.js).
 // (Los demas PDF del motor pdfkit ya desgateados, 2026-09-19:
 // descargarOrdenTrabajo, descargarReporteActividadesPdf,
 // descargarActaReunionPdf, descargarReporteCumplimientoPausasPdf,
 // descargarReporteGerenciaPausasPdf, descargarEvidenciaClausulaSgc.
-// descargarReporteProyecto AUN NO se agrega aqui (actualizado 2026-09-19,
-// Fase 1a del plan post-migracion): backend/logica/reporteProyecto.js YA
-// soporta el camino "de un clic" Y la mayor parte del modo "Configurar
-// informe" (portada, narrativa, ficha, kpis, salud, avance por tarea,
-// hitos, riesgos, vencimientos, rendimiento, desviaciones, bitacora, con
-// los filtros de personas/estado/rango) -- solo quedan sin portar 3
-// secciones de grilla dia x tarea (`gantt`, `workload`, `leyenda`), que
-// devuelven un _validationError claro si se piden.
-// El enrutamiento es por NOMBRE de accion, no por payload: de los 3
-// sitios del frontend que llaman a esta accion, el reporte de
-// "Cronograma" (proyectos.js, CRONOGRAMA_REPORTE_SECCIONES_) SIEMPRE pide
-// gantt+workload+leyenda -- conectar la accion hoy dejaria ESE boton
-// puntual siempre fallando (hoy funciona completo en Apps Script). El
-// modal "Configurar informe" (el usuario elige secciones libremente) y el
-// boton simple sin config ya funcionarian bien en Node. Se conecta cuando
-// el dia x dia tambien este portado -- su propio incremento, ver §12 del
-// handoff.
+// descargarReporteProyecto SI se agrega abajo (Etapa 9 del refactor de
+// Planificación, 2026-09-23): backend/logica/reporteProyecto.js ya cubre
+// las 3 secciones que faltaban (`gantt` -- Carta Gantt ejecutiva en página
+// apaisada --, `workload`, `leyenda`), así que los 3 sitios del frontend
+// que llaman a esta accion (reporte "de un clic", "Configurar informe", y
+// el reporte de "Cronograma" que SIEMPRE pide gantt+workload+leyenda,
+// CRONOGRAMA_REPORTE_SECCIONES_ en proyectos.js) quedan servidos por Node.
 // descargarLibroProyecto (libro Excel, motor distinto al PDF) SI se agrega
 // abajo -- Fase 1b (2026-09-19): a diferencia de la Carta Gantt del PDF
 // configurable, la del Excel es la propia hoja de calculo (semana=columna,
@@ -137,7 +125,7 @@ var ACCIONES_PORTADAS_NODE = {
   getPanelGerenciaActividades: true, generarReporteActividades: true,
   descargarReporteActividadesPdf: true, descargarActaReunionPdf: true,
 
-  // --- Proyectos (51 de 54; PDF de reporte con Cronograma sigue en Apps Script) ---
+  // --- Proyectos (52 de 54) ---
   listarProyectos: true, listarMisTareasProyectos: true, listarMiBitacoraProyectos: true,
   listarCalendarioProyectos: true, guardarProyectoComoPlantilla: true, listarPlantillasProyecto: true,
   marcarSalaVisitadaProyecto: true,
@@ -168,6 +156,10 @@ var ACCIONES_PORTADAS_NODE = {
   // Tareas/Hitos/Historial/Dependencias), motor OOXML a mano -- ver
   // backend/logica/libroProyecto.js.
   descargarLibroProyecto: true,
+  // Etapa 9 (refactor de Planificación, 2026-09-23): PDF ejecutivo
+  // (clásico + "Configurar informe"), Carta Gantt/Workload/Leyenda
+  // incluidas -- ver backend/logica/reporteProyecto.js.
+  descargarReporteProyecto: true,
 
   // --- SGC ISO 9001: Documentos (15 de 15; carga/descarga desgateadas de R2 el 2026-09-18) ---
   listarDocumentosSgc: true, getDocumentoSgc: true, sembrarDocumentosExternosSgc: true,
