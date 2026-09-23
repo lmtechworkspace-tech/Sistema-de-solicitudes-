@@ -4047,6 +4047,9 @@
   background: var(--superficie-2); color: var(--texto-2); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 .sigso-py-plan-chip--base { background: var(--alerta-suave); color: var(--alerta); }
+/* Refactor "Planificación" Etapa 4: fechas ejecutadas (reales) -- mismo tono
+   "primario" que ya usa la curva de Avance físico (.sigso-py-avance-linea--real). */
+.sigso-py-plan-chip--real { background: var(--primario-suave); color: var(--primario); }
 .sigso-py-plan-chip--dev { font-weight: 700; }
 .sigso-py-plan-chip--dev.is-favor { background: var(--ok-suave); color: var(--ok); }
 .sigso-py-plan-chip--dev.is-contra { background: var(--critico-suave); color: var(--critico); }
@@ -4079,6 +4082,13 @@
 .sigso-py-panel-tarea__meta { display: flex; flex-wrap: wrap; gap: var(--esp-2); font-size: var(--texto-sm); color: var(--texto-2); }
 .sigso-py-panel-tarea__critica { display: flex; align-items: center; gap: 0.35rem; color: var(--critico); font-weight: 600; font-size: var(--texto-sm); }
 .sigso-py-panel-tarea__acciones { display: flex; flex-wrap: wrap; gap: var(--esp-2); }
+/* Refactor "Planificación" Etapa 4 (§14): sección Historial del panel --
+   mismas filas que la vista Historial completa, solo más compactas
+   (padding menor, sin el borde extra de una lista que ya vive en su propio
+   contenedor con scroll). */
+.sigso-py-panel-tarea__historial { border-top: 1px solid var(--borde); padding-top: var(--esp-3); }
+.sigso-py-panel-tarea__historial h3 { margin: 0 0 var(--esp-2); font-size: var(--texto-sm); text-transform: uppercase; letter-spacing: 0.03em; color: var(--texto-3); }
+.sigso-py-hist-fila--mini { padding: var(--esp-1) 0; font-size: var(--texto-sm); }
 @media (max-width: 480px) {
   .sigso-py-panel-tarea__cuerpo { width: 100vw; max-width: 100vw; }
 }

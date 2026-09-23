@@ -2419,7 +2419,7 @@
         Componentes.boton({ texto: 'RDI', variante: vistaCronograma_ === 'rdi' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'rdi' }) +
       '</div>';
     var cuerpo;
-    if (vistaCronograma_ === 'plan') cuerpo = pintarCronogramaPlan_(detalle, tareas, ctxEdicion, rendimiento);
+    if (vistaCronograma_ === 'plan') cuerpo = pintarCronogramaPlan_(detalle, tareas, ctxEdicion, rendimiento, bitacora);
     else if (vistaCronograma_ === 'tabla') cuerpo = pintarTareasTabla_(tareas, ctxEdicion.miEmail, ctxEdicion.puedeGestionar, detalle, rendimiento);
     else if (vistaCronograma_ === 'historial') cuerpo = pintarHistorialProyecto_(tareas, bitacora || []);
     else if (vistaCronograma_ === 'workload') cuerpo = pintarWorkloadProyecto_(detalle, tareas, bitacora || []);
@@ -3292,6 +3292,15 @@
     if (plan.baseline_fin && plan.baseline_fin !== plan.plan_fin) {
       chips.push('<span class="sigso-py-plan-chip sigso-py-plan-chip--base">Base ' + fechaCorta_(plan.baseline_fin) + '</span>');
     }
+    // Refactor "Planificación" Etapa 4: fechas EJECUTADAS (reales) -- solo
+    // si hay al menos un dato; nunca "No registrado" acá (eso es para la
+    // Tabla, que sí necesita ocupar la columna), el chip simplemente no
+    // aparece si no hay nada que mostrar todavía.
+    if (plan.fecha_inicio_real || plan.fecha_fin_real) {
+      chips.push('<span class="sigso-py-plan-chip sigso-py-plan-chip--real">Ejecutado ' +
+        (plan.fecha_inicio_real ? fechaCorta_(plan.fecha_inicio_real) : '—') + '–' +
+        (plan.fecha_fin_real ? fechaCorta_(plan.fecha_fin_real) : '—') + '</span>');
+    }
     if (plan.avance_esperado_pct !== null && plan.avance_esperado_pct !== undefined) {
       chips.push('<span class="sigso-py-plan-chip">Esp ' + redond1_(plan.avance_esperado_pct) + '%</span>');
     }
@@ -3303,6 +3312,14 @@
       chips.push('<span class="sigso-py-plan-chip sigso-py-plan-chip--dev ' + (aFavor ? 'is-favor' : 'is-contra') + '">' +
         (aFavor ? '+' : '') + redond1_(plan.desviacion_pp) + 'pp</span>');
     }
+    // Desviación de PLAZO en días -- eje aparte de la desviación de avance
+    // (§9 del encargo: nunca se confunden en un solo número).
+    if (plan.desviacion_dias !== null && plan.desviacion_dias !== undefined) {
+      var aTiempo = plan.desviacion_dias <= 0;
+      chips.push('<span class="sigso-py-plan-chip sigso-py-plan-chip--dev ' + (aTiempo ? 'is-favor' : 'is-contra') + '">' +
+        (plan.desviacion_dias > 0 ? '+' : '') + plan.desviacion_dias + ' d</span>');
+    }
+    if (plan.estado_plazo) chips.push(Componentes.badge(ESTADO_PLAZO_LABEL_[plan.estado_plazo] || plan.estado_plazo, ESTADO_PLAZO_BADGE_[plan.estado_plazo] || 'neutro'));
     return '<span class="sigso-py-ded-plan">' + chips.join('') + '</span>';
   }
 
@@ -4122,11 +4139,16 @@
   // de .sigso-py-gantt-body, no de un track) calce con el eje de los días:
   // su `left` es relativo al body COMPLETO, que arranca en la etiqueta.
   var PLAN_ETIQUETA_ANCHO_PX_ = 240;
+  // Refactor "Planificación" Etapa 4 (2026-09-23): se agrega "Día" (más fino
+  // que Semana) -- el encargo pide exactamente Día/Semana/Mes/Trimestre. El
+  // resto de los niveles (Quincena) ya existía y aporta valor real entre
+  // Semana y Mes, así que se conserva (no eliminar funcionalidad existente).
   var PLAN_ZOOM_NIVELES_ = [
     { id: 'trimestre', pxDia: 4, etiqueta: 'Trimestre' },
     { id: 'mes', pxDia: 10, etiqueta: 'Mes' },
     { id: 'quincena', pxDia: 20, etiqueta: 'Quincena' },
-    { id: 'semana', pxDia: 40, etiqueta: 'Semana' }
+    { id: 'semana', pxDia: 40, etiqueta: 'Semana' },
+    { id: 'dia', pxDia: 80, etiqueta: 'Día' }
   ];
   var planZoomIdx_ = 1; // 'mes' por defecto
   // v13 (Fase 1): resaltar la ruta crítica en el Gantt (flag de presentación,
@@ -4377,8 +4399,14 @@
     var plan = ((ctx.rendimiento && ctx.rendimiento.plan_seguimiento) || [])
       .filter(function (t) { return t.actividad_id === a.actividad_id; })[0];
 
+    // Refactor "Planificación" Etapa 4 (§14 del encargo): Nombre — Cargo
+    // como identificador principal (ya lo resuelve nombrePersona_/Directorio
+    // en todo el módulo), correo como dato secundario en el tooltip -- nunca
+    // el correo pelado como texto visible.
     var meta = '<div class="sigso-py-panel-tarea__meta">' +
-      '<span>' + (esMia ? '<b>Tú</b>' : Componentes.escaparHtml(a.responsable_nombre || a.responsable_email || '—')) + '</span>' +
+      '<span title="' + Componentes.escaparHtml(a.responsable_email || '') + '">' +
+        (esMia ? '<b>Tú</b>' : Componentes.escaparHtml(nombrePersona_(a.responsable_email, a.responsable_nombre))) +
+      '</span>' +
       '<span>Prioridad ' + Componentes.escaparHtml(a.prioridad || '—') + '</span>' +
       (a.fecha_compromiso ? '<span>Vence ' + fechaCorta_(a.fecha_compromiso) + '</span>' : '') +
       (a.avance_pct !== '' && a.avance_pct !== undefined && a.avance_pct !== null ? '<span>' + a.avance_pct + '% avance</span>' : '') +
@@ -4405,6 +4433,29 @@
     }
     var checkin = accionesCheckinTarea_(a, esMia);
 
+    // Refactor "Planificación" Etapa 4 (§14 del encargo, sección HISTORIAL):
+    // los últimos eventos de ESTA tarea, reusando historialFraseHtml_/
+    // HISTORIAL_ICONO_ tal cual (la misma presentación que ya usa la vista
+    // Historial completa) -- sin pedir nada nuevo al servidor, la bitácora
+    // del proyecto ya viaja con Cronograma.
+    var eventosTarea = ((ctx.bitacora || []).filter(function (b) { return b.actividad_id === a.actividad_id; }))
+      .sort(function (x, y) { return new Date(y.timestamp) - new Date(x.timestamp); })
+      .slice(0, 5);
+    var historialMini = eventosTarea.length
+      ? '<div class="sigso-py-panel-tarea__historial">' +
+          '<h3>Historial</h3>' +
+          eventosTarea.map(function (b) {
+            return '<div class="sigso-py-hist-fila sigso-py-hist-fila--mini">' +
+              '<span class="sigso-py-hist-icono">' + (HISTORIAL_ICONO_[b.tipo] || '•') + '</span>' +
+              '<div class="sigso-py-hist-cuerpo">' +
+                '<div class="sigso-py-hist-frase">' + historialFraseHtml_(b, a.titulo) + '</div>' +
+                '<div class="sigso-py-hist-cuando">' + fechaHora_(b.timestamp) + '</div>' +
+              '</div>' +
+            '</div>';
+          }).join('') +
+        '</div>'
+      : '';
+
     ganttPanelEl_.innerHTML =
       '<div class="sigso-py-panel-tarea__telon js-py-panel-cerrar"></div>' +
       '<aside class="sigso-py-panel-tarea__cuerpo" role="dialog" aria-modal="true" aria-label="Detalle de la tarea">' +
@@ -4418,7 +4469,7 @@
         '<div class="sigso-py-panel-tarea__contenido">' +
           meta + planLineaHtml_(plan) + critico + bloqueo + depAtrasada +
           rollupSubtareasHtml_(a) + impactoDependenciaHtml_(a) +
-          acciones + checkin +
+          acciones + checkin + historialMini +
         '</div>' +
       '</aside>';
 
@@ -4455,7 +4506,7 @@
     });
   }
 
-  function pintarCronogramaPlan_(detalle, tareas, ctxEdicion, rendimiento) {
+  function pintarCronogramaPlan_(detalle, tareas, ctxEdicion, rendimiento, bitacora) {
     var p = detalle.proyecto;
     var hitosTodos = (detalle.hitos || []).filter(function (h) { return h.fecha_objetivo; });
     var hitos = hitosTodos;
@@ -4488,7 +4539,7 @@
     // la tarea que estaba mirando sigue mostrándose (solo deja de dibujarse
     // su barra); el panel solo se cierra si la tarea deja de existir de
     // verdad (se borró, o se cambió de proyecto).
-    ganttPanelCtx_ = { detalle: detalle, tareas: tareas, ctxEdicion: ctxEdicion, rendimiento: rendimiento };
+    ganttPanelCtx_ = { detalle: detalle, tareas: tareas, ctxEdicion: ctxEdicion, rendimiento: rendimiento, bitacora: bitacora };
     if (ganttPanelActivoId_) pintarPanelTareaGantt_();
 
     // v13 (Fase 1, "ruta crítica"): el toggle solo tiene sentido si hay al
