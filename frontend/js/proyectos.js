@@ -2321,6 +2321,10 @@
         // Fase H item 2 (Camino B, "avance financiero"): estados de pago --
         // mismo patrón lazy que Avance/Analítica.
         Componentes.boton({ texto: 'Financiero', variante: vistaCronograma_ === 'financiero' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'financiero' }) +
+        // Fase H item 3 (Camino B, "RDI"): tipo de Solicitud acotado al
+        // proyecto -- mismo patrón lazy, vive aquí (y no como pestaña propia)
+        // para no reabrir el desborde de pestañas que Fase A ya midió y cerró.
+        Componentes.boton({ texto: 'RDI', variante: vistaCronograma_ === 'rdi' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'rdi' }) +
       '</div>';
     var cuerpo;
     if (vistaCronograma_ === 'plan') cuerpo = pintarCronogramaPlan_(detalle, tareas, ctxEdicion, rendimiento);
@@ -2329,6 +2333,7 @@
     else if (vistaCronograma_ === 'analitica') cuerpo = pintarAnaliticaProyecto_(datosDetalleActual_ && datosDetalleActual_.analitica, tareas);
     else if (vistaCronograma_ === 'avance') cuerpo = pintarAvanceProyecto_(datosDetalleActual_ && datosDetalleActual_.controlAvance, ctxEdicion.puedeGestionar);
     else if (vistaCronograma_ === 'financiero') cuerpo = pintarFinancieroProyecto_(datosDetalleActual_ && datosDetalleActual_.estadosPago, ctxEdicion.puedeGestionar);
+    else if (vistaCronograma_ === 'rdi') cuerpo = pintarRdiProyecto_(datosDetalleActual_ && datosDetalleActual_.rdis);
     else cuerpo = pintarCronogramaDedicacion_(detalle, tareas, bitacora || [], rendimiento, ctxEdicion);
     return toggle + cuerpo;
   }
@@ -2603,6 +2608,28 @@
     if (!datosDetalleActual_) return;
     cambiarPestana_('cronograma');
     pedirEstadosPagoProyecto_();
+  }
+
+  // Fase H item 3 (Camino B, "RDI"): mismo patrón exacto que Avance/
+  // Financiero -- caché en datosDetalleActual_.rdis.
+  var rdiEnVuelo_ = null;
+  function pedirRdiProyecto_() {
+    if (!datosDetalleActual_) return;
+    if (datosDetalleActual_.rdis !== undefined) return;
+    if (rdiEnVuelo_ === proyectoActivoId_) return;
+    rdiEnVuelo_ = proyectoActivoId_;
+    var idAlPedir = proyectoActivoId_;
+    apiSeguro_('listarRdiProyecto', { proyecto_id: proyectoActivoId_ }).then(function (r) {
+      if (rdiEnVuelo_ === idAlPedir) rdiEnVuelo_ = null;
+      if (!datosDetalleActual_ || idAlPedir !== proyectoActivoId_) return;
+      datosDetalleActual_.rdis = (r && r.ok) ? r.data.rdis : null;
+      if (pestanaActiva_ === 'cronograma' && vistaCronograma_ === 'rdi') cambiarPestana_('cronograma');
+    });
+  }
+  function cargarRdiProyecto_(cont) {
+    if (!datosDetalleActual_) return;
+    cambiarPestana_('cronograma');
+    pedirRdiProyecto_();
   }
 
   // v11 (P3, "SPI conceptual" en pantalla): tooltips explican qué es cada
@@ -2997,6 +3024,77 @@
         });
       });
     }
+  }
+
+  // Fase H item 3 (Camino B, "RDI"): un RDI ES una Solicitud (tipo='RDI'),
+  // así que su ciclo de vida (S01..S09, asignación, respuesta) se sigue
+  // gestionando en la bandeja de Solicitudes de siempre -- esta vista es
+  // solo la LECTURA acotada al proyecto (crear + ver estado), sin duplicar
+  // ese flujo. Por eso no hay editar/eliminar aquí, a diferencia de Avance/
+  // Financiero: no es un dato propio de Proyectos, es un espejo de otro
+  // módulo.
+  function pintarRdiProyecto_(rdis) {
+    if (rdis === undefined) return Componentes.cargando('Cargando RDI...');
+    if (rdis === null) return Componentes.vacio({ texto: 'No se pudieron cargar los RDI.' });
+    var acciones = '<div class="sigso-py-cabecera">' + Componentes.boton({ texto: '+ Nuevo RDI', clase: 'js-py-rdi-nuevo' }) + '</div>';
+    if (!rdis.length) {
+      return acciones + Componentes.vacio({
+        texto: 'Todavía no hay RDI en este proyecto.',
+        detalle: 'Un RDI es una pregunta formal a alguien fuera del equipo -- se enruta y se responde igual que cualquier solicitud, con seguimiento en la bandeja.'
+      });
+    }
+    var filas = rdis.map(function (r) {
+      return '<tr>' +
+        '<td data-label="Título">' + Componentes.escaparHtml(r.titulo) + '</td>' +
+        '<td data-label="Estado">' + Componentes.badgeEstado(r.estado) + '</td>' +
+        '<td data-label="Prioridad">' + Componentes.badgePrioridad(r.prioridad) + '</td>' +
+        '<td data-label="Solicitante">' + Componentes.escaparHtml(r.solicitante_nombre) + '</td>' +
+        '<td data-label="Creado">' + fechaCorta_(r.fecha_creacion) + '</td>' +
+        '<td data-label="Vencimiento">' + (r.fecha_vencimiento ? fechaCorta_(r.fecha_vencimiento) : '—') + '</td>' +
+        '<td data-label="">' + (r.url_pdf ? '<a href="' + Componentes.escaparHtml(r.url_pdf) + '" target="_blank" rel="noopener">PDF</a>' : '—') + '</td>' +
+      '</tr>';
+    }).join('');
+    return acciones +
+      '<p class="sigso-ayuda">El seguimiento y la respuesta de cada RDI se hacen en la bandeja de Solicitudes -- acá se ve el estado, no se gestiona.</p>' +
+      '<div class="sigso-py-ded-scroll"><table class="sigso-tabla-tablero sigso-py-avance-tabla"><thead><tr>' +
+        '<th>Título</th><th>Estado</th><th>Prioridad</th><th>Solicitante</th><th>Creado</th><th>Vencimiento</th><th>PDF</th>' +
+      '</tr></thead><tbody>' + filas + '</tbody></table></div>';
+  }
+
+  function abrirFormularioRdi_() {
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">Nuevo RDI</h3>' +
+        '<p class="sigso-modal__mensaje">Un Requerimiento de Información es una pregunta formal a alguien fuera del equipo del proyecto. Se crea como una solicitud normal, con seguimiento en la bandeja.</p>' +
+        '<form id="form-py-rdi">' +
+          Componentes.campoTexto({ id: 'py-rdi-titulo', label: 'Título', requerido: true, placeholder: '¿Qué necesitas que te confirmen?' }) +
+          Componentes.campoTextarea({ id: 'py-rdi-descripcion', label: 'Descripción', requerido: true }) +
+          '<div class="sigso-py-form-fila">' +
+            Componentes.campoTexto({ id: 'py-rdi-centro-costo', label: 'Centro de costo (opcional)' }) +
+            Componentes.campoTexto({ id: 'py-rdi-vencimiento', label: 'Vencimiento (opcional)', tipo: 'date' }) +
+          '</div>' +
+          '<div class="sigso-modal__acciones">' +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: 'Crear RDI', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    fondo.querySelector('#form-py-rdi').addEventListener('submit', function (evento) {
+      enviarModal_(evento, 'crearRdiProyecto', {
+        proyecto_id: proyectoActivoId_,
+        titulo: document.getElementById('py-rdi-titulo').value,
+        descripcion: document.getElementById('py-rdi-descripcion').value,
+        centro_costo: document.getElementById('py-rdi-centro-costo').value,
+        fecha_vencimiento: document.getElementById('py-rdi-vencimiento').value
+      }, function () {
+        cerrar();
+        datosDetalleActual_.rdis = undefined;
+        cargarRdiProyecto_();
+      });
+    });
   }
 
   // v11 (Reingeniería Cronograma, P0): el ESTADO DEL DÍA explícito -- lo que
@@ -5311,12 +5409,13 @@
     cont.querySelectorAll('.js-py-cron-vista').forEach(function (btn) {
       btn.addEventListener('click', function () {
         vistaCronograma_ = btn.getAttribute('data-idx');
-        // v11 (P3) / Fase H: "Analítica"/"Avance"/"Financiero" son las únicas
-        // subvistas con endpoint propio -- las demás repintan directo desde
-        // caché (cambiarPestana_).
+        // v11 (P3) / Fase H: "Analítica"/"Avance"/"Financiero"/"RDI" son las
+        // únicas subvistas con endpoint propio -- las demás repintan directo
+        // desde caché (cambiarPestana_).
         if (vistaCronograma_ === 'analitica') cargarAnaliticaProyecto_(cont);
         else if (vistaCronograma_ === 'avance') cargarControlAvanceProyecto_(cont);
         else if (vistaCronograma_ === 'financiero') cargarEstadosPagoProyecto_(cont);
+        else if (vistaCronograma_ === 'rdi') cargarRdiProyecto_(cont);
         else cambiarPestana_('cronograma');
       });
     });
@@ -5367,6 +5466,8 @@
         if (estadoPago) abrirFormularioEstadoPago_(estadoPago);
       });
     });
+    var rdiNuevoBtn = cont.querySelector('.js-py-rdi-nuevo');
+    if (rdiNuevoBtn) rdiNuevoBtn.addEventListener('click', abrirFormularioRdi_);
     wireCartaControles_(cont, function () { cambiarPestana_('cronograma'); }, (datosDetalleActual_ && datosDetalleActual_.detalle) || null,
       // v12.2 ("llenar rápido, sin recarga"): actualización OPTIMISTA -- se
       // mergea el registro ya guardado en la bitácora en caché y se repinta al

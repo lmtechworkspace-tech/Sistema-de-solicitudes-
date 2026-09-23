@@ -280,6 +280,9 @@ const ACCIONES = {
   // Fase H item 2 (Camino B): avance financiero -- estados de pago.
   gestionarEstadoPagoProyecto: (db, data, contexto) => Proyectos.gestionarEstadoPago(db, data, contexto),
   listarEstadosPagoProyecto: (db, data, contexto) => Proyectos.listarEstadosPago(db, data, contexto),
+  // Fase H item 3 (Camino B): RDI -- tipo de Solicitud, acotado al proyecto.
+  crearRdiProyecto: (db, data, contexto) => Proyectos.crearRdi(db, data, contexto),
+  listarRdiProyecto: (db, data, contexto) => Proyectos.listarRdi(db, data, contexto),
 
   // Cronograma avanzado (v11 Reingenieria Cronograma): incremento 2.
   guardarRegistroDiaProyecto: (db, data, contexto) => Proyectos.guardarRegistroDia(db, data, contexto),

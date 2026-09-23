@@ -137,7 +137,7 @@ var ACCIONES_PORTADAS_NODE = {
   getPanelGerenciaActividades: true, generarReporteActividades: true,
   descargarReporteActividadesPdf: true, descargarActaReunionPdf: true,
 
-  // --- Proyectos (49 de 52; PDF de reporte con Cronograma sigue en Apps Script) ---
+  // --- Proyectos (51 de 54; PDF de reporte con Cronograma sigue en Apps Script) ---
   listarProyectos: true, listarMisTareasProyectos: true, listarMiBitacoraProyectos: true,
   listarCalendarioProyectos: true, guardarProyectoComoPlantilla: true, listarPlantillasProyecto: true,
   marcarSalaVisitadaProyecto: true,
@@ -157,6 +157,8 @@ var ACCIONES_PORTADAS_NODE = {
   gestionarControlAvanceProyecto: true, listarControlAvanceProyecto: true,
   // Fase H item 2 (Camino B, "avance financiero"): estados de pago.
   gestionarEstadoPagoProyecto: true, listarEstadosPagoProyecto: true,
+  // Fase H item 3 (Camino B, "RDI"): tipo de Solicitud, acotado al proyecto.
+  crearRdiProyecto: true, listarRdiProyecto: true,
   // Centro documental + adjuntos de Sala (R2, desgateado 2026-09-18).
   subirAdjuntoProyecto: true, descargarAdjuntoProyecto: true, gestionarDocumentoProyecto: true,
   subirVersionDocumentoProyecto: true, marcarVersionVigenteProyecto: true,

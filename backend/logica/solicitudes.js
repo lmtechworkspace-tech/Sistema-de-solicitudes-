@@ -312,7 +312,14 @@ async function crearSolicitud(db, data) {
     observaciones_generales: data.observaciones_generales || '', resumen_whatsapp: resumenWhatsapp,
     fecha_creacion: timestamp, creado_por: data.solicitante_email, cc: data.cc || '',
     rut_cliente: data.rut_cliente || '', codigo_cliente: data.codigo_cliente || '',
-    atencion_directa: !!atencion
+    atencion_directa: !!atencion,
+    // Fase H item 3 (Camino B, 2026-09-23): opcional -- cuando la solicitud
+    // nace DENTRO de un proyecto (ej. un RDI creado desde Proyectos), este
+    // es el único lugar donde se guarda ese vínculo. No confundir con el
+    // uso histórico de esta misma columna en proyectos.js (una solicitud
+    // que se CONVIRTIÓ en proyecto): ambos casos conviven en la misma
+    // columna porque nunca se consultan sin filtrar también por `tipo`.
+    proyecto_id: data.proyecto_id || ''
   });
 
   // UNA sola entrada de historial, honesta -- en atencion directa NO se

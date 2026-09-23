@@ -41,6 +41,11 @@ const Actividades = require('./actividades');
 const NotificacionesApp = require('./notificacionesApp');
 const Calidad = require('./calidadSgc');
 const Almacenamiento = require('./almacenamiento');
+// Fase H item 3 (Camino B): RDI reusa el módulo Solicitudes tal cual (triage/
+// SLA/notificaciones/PDF) y el Directorio para resolver nombre/cargo del
+// solicitante sin pedírselo a mano (ya está autenticado).
+const Solicitudes = require('./solicitudes');
+const DirectorioPersonas = require('./directorioPersonas');
 
 // v10 (Fase D, "adjuntos por proyecto"): mismo tope que Calidad.gs/Novedades.gs.
 const MAX_ADJUNTO_PROYECTO_BYTES = 10 * 1024 * 1024;
@@ -1574,6 +1579,90 @@ function gestionarEstadoPago(db, data, contexto) {
   return nuevo;
 }
 
+// Fase H item 3 (Camino B, 2026-09-23, ver documentacion/SIGSO-Proyectos-2.0-
+// auditoria-y-propuesta.md §13/§16/§18): RDI (Requerimiento de Información)
+// modelado como TIPO dentro de Solicitudes -- reusa toda la maquinaria ya
+// construida (triage, SLA, prioridad automática, notificación al responsable
+// del área, PDF por solicitud) en vez de reimplementar un flujo de estados
+// propio. Un RDI ES una Solicitud con tipo='RDI' y proyecto_id=este
+// proyecto; Proyectos solo aporta crear/leer con la lente del proyecto --
+// el ciclo de vida (S01..S09) lo sigue manejando Solicitudes tal cual.
+const RDI_TIPO_ID_ = 'RDI';
+
+// Se crea sola, la primera vez que alguien levanta un RDI -- ningún paso
+// manual de instalación (mismo criterio "aditivo, sin migración" del resto
+// de Fase H). Si ya existe (uso normal), no hace nada.
+function asegurarCatalogoRdi_(db) {
+  const tipos = leerSeguro_(db, 'CAT_TIPOS');
+  if (tipos.some((t) => t.tipo_id === RDI_TIPO_ID_)) return;
+  agregarFila_(db, 'CAT_TIPOS', {
+    tipo_id: RDI_TIPO_ID_, nombre: 'RDI — Requerimiento de información',
+    prioridad_default: '', activo: true, es_urgente: false
+  });
+}
+
+async function crearRdi(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  // Cualquier integrante puede levantar un RDI -- es una pregunta formal,
+  // no una decisión de gestión (distinto del gateo de avance físico/
+  // financiero, que sí exige gestionar el proyecto).
+  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+
+  const titulo = String(data.titulo || '').trim();
+  if (!titulo) return errorValidacion_('titulo', 'El título es obligatorio.');
+  const descripcion = String(data.descripcion || '').trim();
+  if (!descripcion) return errorValidacion_('descripcion', 'La descripción es obligatoria.');
+
+  asegurarCatalogoRdi_(db);
+
+  // El solicitante se resuelve del Directorio (identidad canónica), no se le
+  // pide a mano -- ya está autenticado. Si no está en el Directorio todavía
+  // (degradación elegante, mismo criterio que el resto de Proyectos/
+  // Calidad), se usa el correo y un cargo genérico en vez de bloquear.
+  const persona = DirectorioPersonas.resolverPorEmail(db, contexto.email);
+  const solicitanteNombre = (persona && persona.nombre) || contexto.email || '';
+  const solicitanteCargo = (persona && persona.cargo) || 'Integrante del proyecto';
+
+  const resultado = await Solicitudes.crearSolicitud(db, {
+    empresa_id: contexto.empresa_id || '', asociada_plataforma: false,
+    solicitante_nombre: solicitanteNombre, solicitante_cargo: solicitanteCargo,
+    solicitante_email: contexto.email || '',
+    proyecto_id: proyecto.proyecto_id,
+    fecha_propuesta: data.fecha_vencimiento || '',
+    subsolicitudes: [{
+      titulo, descripcion, tipo: RDI_TIPO_ID_,
+      centro_costos: data.centro_costo || proyecto.centro_costo || ''
+    }]
+  });
+  if (resultado && resultado._validationError) return resultado;
+  registrarEventoProyecto_(db, proyecto.proyecto_id, 'ACTUALIZACION', contexto, 'RDI creado: "' + titulo + '"', '', '', '');
+  return resultado;
+}
+
+function listarRdi(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+
+  const subsolicitudes = leerSeguro_(db, 'SUBSOLICITUDES');
+  const rdis = leerSeguro_(db, 'SOLICITUDES')
+    .filter((s) => s.proyecto_id === proyecto.proyecto_id && s.tipo === RDI_TIPO_ID_)
+    .sort((a, b) => new Date(b.fecha_creacion) - new Date(a.fecha_creacion))
+    .map((s) => {
+      const item = subsolicitudes.find((ss) => ss.solicitud_id === s.solicitud_id) || {};
+      return {
+        solicitud_id: s.solicitud_id, titulo: item.titulo || '', descripcion: item.descripcion || '',
+        estado: s.estado_derivado, prioridad: s.prioridad_derivada,
+        solicitante_nombre: s.solicitante_nombre, solicitante_email: s.solicitante_email,
+        responsable: item.desarrollador_asignado || '', centro_costos: item.centro_costos || '',
+        fecha_creacion: s.fecha_creacion, fecha_vencimiento: item.fecha_propuesta || '',
+        url_pdf: s.url_pdf || ''
+      };
+    });
+  return { rdis };
+}
+
 function getResumenPortafolio(db, contexto) {
   const proyectos = listar(db, {}, contexto);
   const activos = proyectos.filter((p) => p.estado !== 'CERRADO' && p.estado !== 'CANCELADO');
@@ -2170,6 +2259,8 @@ module.exports = {
   gestionarControlAvance, listarControlAvance,
   // Fase H item 2 (Camino B): avance financiero -- estados de pago.
   gestionarEstadoPago, listarEstadosPago,
+  // Fase H item 3 (Camino B): RDI -- tipo de Solicitud, acotado al proyecto.
+  crearRdi, listarRdi,
   // Incremento 2 (v11 Reingenieria Cronograma).
   guardarRegistroDia, eliminarRegistroDia, obtenerRendimiento, obtenerAnalitica,
   obtenerWorkloadPortafolio, congelarBaseline, reprogramarTarea,
