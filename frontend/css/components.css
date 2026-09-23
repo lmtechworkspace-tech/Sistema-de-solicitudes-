@@ -3400,6 +3400,13 @@
    angostos para que quepan más por fila sin scroll horizontal. */
 .sigso-py-kpis--resumen { grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); }
 
+/* v16 ("Planificación con aspecto de dashboard"): las 6 tarjetas de
+   Planificación ahora llevan icono en fila (Componentes.kpi con icono/tono),
+   necesitan más ancho mínimo que las demás bandas de KPI del módulo -- se
+   sobreescribe solo para esta banda, no para las demás (.sigso-py-kpis a
+   secas sigue igual en Registro diario/Financiero/Resumen). */
+.sigso-py-planificacion-kpis { grid-template-columns: repeat(auto-fit, minmax(11.5rem, 15rem)); }
+
 .sigso-py-proximo-hito {
   display: flex; align-items: center; gap: var(--esp-2); margin-bottom: var(--esp-4);
   padding: var(--esp-3); background: var(--superficie-2); border-radius: var(--radio-sm);
@@ -3636,7 +3643,7 @@
 .sigso-py-gantt-grupo__estado--info { color: var(--primario); }
 .sigso-py-gantt-grupo__estado--alerta { color: var(--critico); }
 .sigso-py-gantt-grupo__estado--neutro { color: var(--texto-3); }
-.sigso-py-gantt-grupo__alerta { color: var(--critico); font-weight: 600; }
+.sigso-py-gantt-grupo__alerta { color: var(--critico); font-weight: 600; display: inline-flex; align-items: center; gap: 0.2rem; }
 .sigso-py-gantt-grupo__prog {
   height: 4px; border-radius: 999px; background: var(--superficie); overflow: hidden;
   margin-top: 3px; max-width: 200px;
@@ -3675,7 +3682,7 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .sigso-py-gantt-etiqueta__punto { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; }
-.sigso-py-gantt-track { position: relative; height: 2.9rem; flex: 0 0 auto; }
+.sigso-py-gantt-track { position: relative; height: 3.3rem; flex: 0 0 auto; }
 
 /* Linea base congelada: riel fino DEBAJO de la barra real.
 
@@ -3744,7 +3751,7 @@
   background: var(--primario); color: #fff; font-size: 0.6rem; font-weight: 700; line-height: 1;
   padding: 2px 5px; border-radius: 0 0 var(--radio-sm) var(--radio-sm); letter-spacing: 0.02em;
 }
-.sigso-py-cron-barra { position: absolute; top: 22%; height: 56%; border-radius: var(--radio-sm); min-width: 3px; display: flex; align-items: center; overflow: hidden; box-shadow: inset 0 0 0 1px color-mix(in srgb, black 8%, transparent); }
+.sigso-py-cron-barra { position: absolute; top: 18%; height: 64%; border-radius: var(--radio-md); min-width: 3px; display: flex; align-items: center; overflow: hidden; box-shadow: inset 0 0 0 1px color-mix(in srgb, black 8%, transparent); }
 /* v12: relleno de avance dentro de la barra (una capa más oscura del mismo
    color) + fecha comprometida al final de la barra. */
 .sigso-py-cron-barra__fill { position: absolute; top: 0; left: 0; bottom: 0; background: color-mix(in srgb, black 22%, transparent); border-radius: inherit; }
@@ -3762,8 +3769,8 @@
   background: repeating-linear-gradient(45deg, var(--critico), var(--critico) 4px, color-mix(in srgb, var(--critico), black 25%) 4px, color-mix(in srgb, var(--critico), black 25%) 8px);
 }
 .sigso-py-cron-hito {
-  position: absolute; top: 50%; width: 12px; height: 12px; transform: translate(-50%, -50%) rotate(45deg);
-  border-radius: 2px; background: var(--ok);
+  position: absolute; top: 50%; width: 14px; height: 14px; transform: translate(-50%, -50%) rotate(45deg);
+  border-radius: 3px; background: var(--ok);
 }
 .sigso-py-cron-hito--atrasada { background: var(--critico); }
 .sigso-py-cron-hito--terminada { background: var(--texto-3); }
@@ -3777,7 +3784,7 @@
 .sigso-py-gantt-barra--editable { padding-right: 6px; }
 .sigso-py-gantt-resize {
   position: absolute; top: 0; right: 0; bottom: 0; width: 6px; cursor: ew-resize;
-  background: color-mix(in srgb, currentColor 35%, transparent); border-radius: 0 var(--radio-sm) var(--radio-sm) 0;
+  background: color-mix(in srgb, currentColor 35%, transparent); border-radius: 0 var(--radio-md) var(--radio-md) 0;
   opacity: 0; transition: opacity 0.1s;
 }
 .sigso-py-gantt-barra--editable:hover .sigso-py-gantt-resize,
@@ -3799,13 +3806,67 @@
   color: #fff; background: var(--critico); vertical-align: middle;
 }
 
+/* v16 ("Planificación con aspecto de dashboard"): leyenda de colores bajo
+   el Gantt -- reusa las mismas clases de color de las barras (arriba) para
+   el punto, así que si algún día cambia un color acá cambia solo. */
+.sigso-py-gantt-leyenda {
+  display: flex; flex-wrap: wrap; gap: var(--esp-4);
+  padding: var(--esp-3) var(--esp-2) 0; font-size: var(--texto-xs); color: var(--texto-2);
+}
+.sigso-py-gantt-leyenda__item { display: inline-flex; align-items: center; gap: 0.35rem; }
+.sigso-py-gantt-leyenda__punto {
+  width: 10px; height: 10px; border-radius: 3px; flex: 0 0 auto; display: inline-block;
+}
+.sigso-py-gantt-leyenda__punto--hito {
+  background: var(--ok); border-radius: 2px; transform: rotate(45deg); width: 8px; height: 8px;
+}
+.sigso-py-gantt-leyenda__punto--hoy { width: 2px; height: 12px; border-radius: 0; background: var(--primario); }
+
+/* v16 ("Planificación con aspecto de dashboard"): franja resumen bajo el
+   Gantt (Carga de trabajo + adelanto de Tabla), cada una en su tarjeta. */
+.sigso-py-resumen-widgets {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--esp-3);
+  margin-top: var(--esp-4);
+}
+.sigso-py-resumen-card {
+  background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio-md);
+  box-shadow: var(--sombra-1); padding: var(--esp-4);
+}
+.sigso-py-resumen-card__cab {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--esp-2);
+  margin-bottom: var(--esp-3);
+}
+.sigso-py-resumen-card__cab h3 { margin: 0; font-size: var(--texto-sm); color: var(--texto); }
+.sigso-py-resumen-carga-fila {
+  display: flex; align-items: center; gap: var(--esp-2); padding: 0.3rem 0; font-size: var(--texto-sm);
+}
+.sigso-py-resumen-carga-nombre { flex: 0 0 9rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--texto); }
+.sigso-py-resumen-carga-barra { flex: 1 1 auto; height: 8px; border-radius: 999px; background: var(--superficie-2); overflow: hidden; }
+.sigso-py-resumen-carga-barra__fill { height: 100%; border-radius: inherit; background: var(--primario); }
+.sigso-py-resumen-carga-num { flex: 0 0 auto; font-weight: 600; color: var(--texto-2); font-variant-numeric: tabular-nums; }
+.sigso-py-resumen-tabla-fila {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--esp-2);
+  padding: 0.4rem 0; border-top: 1px solid var(--borde); font-size: var(--texto-sm);
+}
+.sigso-py-resumen-tabla-fila:first-child { border-top: none; }
+.sigso-py-resumen-tabla-titulo {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--texto);
+}
+
 /* v10 (Fase E, "Carta Gantt de Dedicación"): grilla tarea x dia, leida de
    ACTIVIDADES_BITACORA (el check-in de siempre) -- ningun estado se marca a
    mano. Misma paleta semantica que el resto del modulo (--ok/--alerta/
    --critico/--info), sin colores nuevos; "asignada" es la unica marca sin
    equivalente previo, por eso usa el acento primario en vez de semaforo. */
-/* Barra de controles de la carta (rango, nav, filtros, imprimir). */
-.sigso-py-ded-controles { display: flex; align-items: center; gap: var(--esp-2); margin-bottom: var(--esp-3); flex-wrap: wrap; }
+/* Barra de controles de la carta (rango, nav, filtros, imprimir). v16:
+   aspecto de tarjeta (antes era una fila plana pegada al contenido) -- se
+   usa tanto en Cronograma como en Registro diario, así que mejora las dos
+   vistas a la vez. */
+.sigso-py-ded-controles {
+  display: flex; align-items: center; gap: var(--esp-2); margin-bottom: var(--esp-3); flex-wrap: wrap;
+  background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio-md);
+  box-shadow: var(--sombra-1); padding: var(--esp-3);
+}
 .sigso-py-ded-controles .sigso-py-ded-ctrl { margin: 0; }
 .sigso-py-ded-controles .sigso-py-ded-ctrl select { min-width: 8.5rem; }
 .sigso-py-ded-controles .sigso-boton { flex: 0 0 auto; }
@@ -3821,7 +3882,7 @@
 .sigso-py-ded-baseline { display: flex; align-items: center; gap: var(--esp-2); }
 /* v11 (P1): botón 📅 de reprogramar, inline junto al título de la tarea --
    discreto hasta el hover/foco (no compite con el texto). */
-.sigso-py-ded-reprogramar { border: none; background: none; cursor: pointer; padding: 0 2px; font-size: 0.8rem; opacity: 0.55; border-radius: var(--radio-sm); line-height: 1; }
+.sigso-py-ded-reprogramar { border: none; background: none; cursor: pointer; padding: 0 2px; font-size: 0.8rem; opacity: 0.55; border-radius: var(--radio-sm); line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
 .sigso-py-ded-reprogramar:hover, .sigso-py-ded-reprogramar:focus-visible { opacity: 1; background: var(--superficie-2); }
 
 .sigso-py-ded-nav { display: flex; align-items: center; gap: var(--esp-3); margin-bottom: var(--esp-3); flex-wrap: wrap; }
@@ -4056,12 +4117,17 @@
 
 /* v16.9: panel lateral de tarea -- clic en una barra del Gantt abre el
    detalle SIN salir de la Carta Gantt. Mismo lenguaje visual que el drawer
-   de Administración (panel deslizante desde la derecha), pero SIN telón que
-   oscurezca -- el punto es seguir viendo el cronograma detrás mientras se lee
-   el detalle. El telón es solo un área invisible para cerrar con un clic
-   afuera. */
+   de Administración (panel deslizante desde la derecha). El telón sigue
+   siendo el área para cerrar con un clic afuera; v16 le agrega un tinte MUY
+   sutil (no un negro opaco) -- suficiente para dar profundidad y foco al
+   panel, sin perder el punto original de poder seguir viendo el cronograma
+   detrás mientras se lee el detalle. */
 .sigso-py-panel-tarea { position: fixed; inset: 0; z-index: 60; }
-.sigso-py-panel-tarea__telon { position: absolute; inset: 0; background: transparent; }
+.sigso-py-panel-tarea__telon {
+  position: absolute; inset: 0; background: color-mix(in srgb, var(--texto) 22%, transparent);
+  animation: sigso-py-panel-telon-entrada var(--mov-entrada) ease-out;
+}
+@keyframes sigso-py-panel-telon-entrada { from { opacity: 0; } to { opacity: 1; } }
 .sigso-py-panel-tarea__cuerpo {
   position: absolute; top: 0; right: 0; bottom: 0; width: 24rem; max-width: 92vw;
   background: var(--superficie); border-left: 1px solid var(--borde); box-shadow: var(--sombra-2);

@@ -53,6 +53,42 @@ button.sigso-kpi {
   box-shadow: 0 0 0 2px var(--primario) inset;
 }
 
+/* v16 ("Planificación con aspecto de dashboard"): variante opt-in con
+   círculo de color a la izquierda -- Componentes.kpi() la activa solo
+   cuando el llamador pasa icono/tono, así que Inicio/Gerencia (que no lo
+   hacen) no se ven afectados. Reusa los pares de tokens semánticos que ya
+   existen (--ok/--ok-suave, etc.), ningún color nuevo. */
+.sigso-kpi--icono {
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: var(--esp-3);
+}
+
+.sigso-kpi__icono {
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radio-full);
+  display: grid;
+  place-items: center;
+}
+
+.sigso-kpi__icono--ok { background: var(--ok-suave); color: var(--ok); }
+.sigso-kpi__icono--alerta { background: var(--alerta-suave); color: var(--alerta); }
+.sigso-kpi__icono--critico { background: var(--critico-suave); color: var(--critico); }
+.sigso-kpi__icono--info { background: var(--info-suave); color: var(--info); }
+.sigso-kpi__icono--primario { background: var(--primario-suave); color: var(--primario); }
+
+.sigso-kpi__texto {
+  min-width: 0;
+}
+
+.sigso-kpi--icono .sigso-kpi__valor {
+  font-size: var(--texto-xl);
+  line-height: 1.2;
+}
+
 /* UI-5 (§4): "Requieren tu accion" -- primera cosa que ve Leo, antes de los
    KPIs decorativos. Mismo estilo de tarjeta que el resto, sin nada especial
    que lo distinga como "otro tipo de bloque" (ya lo distingue el orden y el

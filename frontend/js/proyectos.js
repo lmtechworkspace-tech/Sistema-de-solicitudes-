@@ -2505,12 +2505,12 @@
     var pctCumplimiento = entregadas.length ? Math.round((aTiempo.length / entregadas.length) * 100) : null;
 
     return '<div class="sigso-py-kpis sigso-py-planificacion-kpis">' +
-      Componentes.kpi({ etiqueta: 'Tareas', valor: total }) +
-      Componentes.kpi({ etiqueta: 'Completadas', valor: completadas }) +
-      Componentes.kpi({ etiqueta: 'En curso', valor: enCurso }) +
-      Componentes.kpi({ etiqueta: 'Atrasadas', valor: atrasadas, alerta: atrasadas > 0 }) +
-      Componentes.kpi({ etiqueta: 'En riesgo', valor: enRiesgo, alerta: enRiesgo > 0 }) +
-      Componentes.kpi({ etiqueta: 'Cumplimiento de plazos', valor: pctCumplimiento === null ? '—' : pctCumplimiento + '%' }) +
+      Componentes.kpi({ etiqueta: 'Tareas', valor: total, icono: 'capas', tono: 'primario' }) +
+      Componentes.kpi({ etiqueta: 'Completadas', valor: completadas, icono: 'check', tono: 'ok' }) +
+      Componentes.kpi({ etiqueta: 'En curso', valor: enCurso, icono: 'reloj', tono: 'info' }) +
+      Componentes.kpi({ etiqueta: 'Atrasadas', valor: atrasadas, alerta: atrasadas > 0, icono: 'alerta', tono: 'critico' }) +
+      Componentes.kpi({ etiqueta: 'En riesgo', valor: enRiesgo, alerta: enRiesgo > 0, icono: 'rayo', tono: 'alerta' }) +
+      Componentes.kpi({ etiqueta: 'Cumplimiento de plazos', valor: pctCumplimiento === null ? '—' : pctCumplimiento + '%', icono: 'diana', tono: 'ok' }) +
     '</div>';
   }
 
@@ -2569,10 +2569,15 @@
   // "Fulano registró el día 30/08 como Finalizado (5h)". Es SOLO lectura y
   // SOLO presentación: cero cálculo nuevo, mismos datos que ya trae
   // Dedicación (listarBitacoraProyecto), interpretados con más detalle.
+  // v16: iconos SVG (Iconos.svg), no emoji -- mismo criterio que el resto
+  // del sistema desde v4.0 (un emoji lo dibuja el SO, cambia de forma/color
+  // entre Windows/Mac/Android y no hereda el color del texto).
   var HISTORIAL_ICONO_ = {
-    CREADA: '＋', CHECKIN_AVANCE: '↗', CHECKIN_SIN_CAMBIO: '·', DESBLOQUEO: '🔓',
-    BLOQUEO: '🔒', ENTREGA: '✓', VALIDACION: '👁', REPROGRAMACION: '📅',
-    REASIGNACION: '👤', REGISTRO_DIA: '🗓'
+    CREADA: Iconos.svg('nueva', { tam: 12 }), CHECKIN_AVANCE: Iconos.svg('tendencia', { tam: 12 }),
+    CHECKIN_SIN_CAMBIO: '·', DESBLOQUEO: Iconos.svg('llave', { tam: 12 }),
+    BLOQUEO: Iconos.svg('candado', { tam: 12 }), ENTREGA: Iconos.svg('check', { tam: 12 }),
+    VALIDACION: Iconos.svg('ojo', { tam: 12 }), REPROGRAMACION: Iconos.svg('calendario', { tam: 12 }),
+    REASIGNACION: Iconos.svg('persona', { tam: 12 }), REGISTRO_DIA: Iconos.svg('documento', { tam: 12 })
   };
   function historialFraseHtml_(b, tituloTarea) {
     var quien = '<strong>' + Componentes.escaparHtml(b.autor_nombre || 'Alguien') + '</strong>';
@@ -4165,7 +4170,7 @@
       // confirmada -- RN-710 -- no hay nada que reprogramar todavía).
       var proyIdFila = (ctxEdicion && ctxEdicion.proyectoId) || a.proyecto_id || '';
       var reprogramarBtn = (editableTarea && a.fecha_compromiso)
-        ? '<button type="button" class="sigso-py-ded-reprogramar js-py-ded-reprogramar" data-proy="' + Componentes.escaparHtml(proyIdFila) + '" data-act="' + Componentes.escaparHtml(a.actividad_id) + '" title="Reprogramar fecha de compromiso">📅</button>'
+        ? '<button type="button" class="sigso-py-ded-reprogramar js-py-ded-reprogramar" data-proy="' + Componentes.escaparHtml(proyIdFila) + '" data-act="' + Componentes.escaparHtml(a.actividad_id) + '" title="Reprogramar fecha de compromiso">' + Iconos.svg('calendario', { tam: 12 }) + '</button>'
         : '';
 
       // v12.3 ("rediseño"): riel de color por semáforo a la izquierda de la
@@ -4817,7 +4822,7 @@
             (editable
               ? '<button type="button" class="sigso-py-ded-reprogramar js-py-ded-reprogramar sigso-py-gantt-reprog"' +
                 ' data-proy="' + Componentes.escaparHtml(proyId) + '" data-act="' + Componentes.escaparHtml(a.actividad_id) + '"' +
-                ' title="Reprogramar ' + Componentes.escaparHtml(a.titulo) + '">📅</button>'
+                ' title="Reprogramar ' + Componentes.escaparHtml(a.titulo) + '">' + Iconos.svg('calendario', { tam: 12 }) + '</button>'
               : '') +
           '</div>' +
           '<div class="sigso-py-gantt-etiqueta__meta">' + meta + '</div>' +
@@ -4927,7 +4932,7 @@
       var partesMeta = [completadas + '/' + total + ' tareas', pct + '%'];
       if (estadoLabel) partesMeta.push('<span class="sigso-py-gantt-grupo__estado sigso-py-gantt-grupo__estado--' + estadoTono + '">' + Componentes.escaparHtml(estadoLabel) + '</span>');
       if (rangoTxt) partesMeta.push(Componentes.escaparHtml(rangoTxt));
-      if (atrasadas > 0) partesMeta.push('<span class="sigso-py-gantt-grupo__alerta">⚠ ' + atrasadas + ' atrasada' + (atrasadas === 1 ? '' : 's') + '</span>');
+      if (atrasadas > 0) partesMeta.push('<span class="sigso-py-gantt-grupo__alerta">' + Iconos.svg('alerta', { tam: 11 }) + ' ' + atrasadas + ' atrasada' + (atrasadas === 1 ? '' : 's') + '</span>');
 
       var chevron = hito
         ? '<button type="button" class="sigso-py-gantt-grupo__toggle js-py-gantt-grupo" data-hito="' +
@@ -5017,7 +5022,80 @@
           '<div class="sigso-py-gantt-hoy" style="left:' + (PLAN_ETIQUETA_ANCHO_PX_ + hoyPx) + 'px" title="Hoy"></div>' +
           '<div class="sigso-py-gantt-hoy-pill" style="left:' + (PLAN_ETIQUETA_ANCHO_PX_ + hoyPx) + 'px">HOY</div>' +
         '</div>' +
+      '</div>' +
+      ganttLeyendaHtml_() +
+      pintarResumenPlanificacionHtml_(tareas);
+  }
+
+  // v16 ("Planificación con aspecto de dashboard"): franja resumen bajo el
+  // Gantt -- carga de trabajo (conteo de tareas activas por persona, mismo
+  // criterio simplificado que ya usa el PDF ejecutivo, dibujarCargaTrabajo_
+  // en reporteProyecto.js) y un adelanto de la Tabla, cada uno con "Ver
+  // todas" hacia su pestaña completa. NO reemplaza las pestañas Dedicación/
+  // Tabla (que tienen filtros y detalle propio) -- es solo un vistazo.
+  function pintarResumenPlanificacionHtml_(tareas) {
+    var activas = tareas.filter(function (a) { return a.estado !== 'TERMINADA' && a.estado !== 'CANCELADA'; });
+
+    var porPersona = {};
+    activas.forEach(function (a) {
+      var clave = a.responsable_nombre || a.responsable_email || 'Sin asignar';
+      porPersona[clave] = (porPersona[clave] || 0) + 1;
+    });
+    var nombres = Object.keys(porPersona).sort(function (x, y) { return porPersona[y] - porPersona[x]; });
+    var maxCarga = nombres.length ? porPersona[nombres[0]] : 0;
+    var filasCarga = nombres.slice(0, 4).map(function (nombre) {
+      var n = porPersona[nombre];
+      var pct = maxCarga ? Math.round((n / maxCarga) * 100) : 0;
+      return '<div class="sigso-py-resumen-carga-fila">' +
+        '<span class="sigso-py-resumen-carga-nombre">' + Componentes.escaparHtml(nombre) + '</span>' +
+        '<div class="sigso-py-resumen-carga-barra"><div class="sigso-py-resumen-carga-barra__fill" style="width:' + pct + '%"></div></div>' +
+        '<span class="sigso-py-resumen-carga-num">' + n + '</span>' +
       '</div>';
+    }).join('');
+
+    var ordenadas = activas.slice().sort(function (a, b) {
+      return new Date(a.fecha_compromiso || '9999-12-31') - new Date(b.fecha_compromiso || '9999-12-31');
+    });
+    var filasTabla = ordenadas.slice(0, 5).map(function (a) {
+      return '<div class="sigso-py-resumen-tabla-fila">' +
+        '<span class="sigso-py-resumen-tabla-titulo">' + Componentes.escaparHtml(a.titulo) + '</span>' +
+        '<span class="sigso-badge sigso-mt-badge--' + (a.semaforo || 'al-dia') + '">' + Componentes.escaparHtml(a.semaforo_etiqueta || '') + '</span>' +
+      '</div>';
+    }).join('');
+
+    return '<div class="sigso-py-resumen-widgets">' +
+      '<div class="sigso-py-resumen-card">' +
+        '<div class="sigso-py-resumen-card__cab"><h3>Carga de trabajo</h3>' +
+          Componentes.boton({ texto: 'Ver todas', variante: 'sutil', clase: 'js-py-cron-vista', idx: 'workload' }) +
+        '</div>' +
+        (filasCarga || '<p class="sigso-ayuda">Sin tareas activas asignadas.</p>') +
+      '</div>' +
+      '<div class="sigso-py-resumen-card">' +
+        '<div class="sigso-py-resumen-card__cab"><h3>Tabla de tareas</h3>' +
+          Componentes.boton({ texto: 'Ver todas', variante: 'sutil', clase: 'js-py-cron-vista', idx: 'tabla' }) +
+        '</div>' +
+        (filasTabla || '<p class="sigso-ayuda">Sin tareas activas.</p>') +
+      '</div>' +
+    '</div>';
+  }
+
+  // v16 ("Planificación con aspecto de dashboard"): leyenda de colores bajo
+  // el Gantt -- mismos 6 tonos que ya usan las barras (.sigso-py-cron-barra--*),
+  // ningún color nuevo, solo una referencia visual que hoy no existía.
+  function ganttLeyendaHtml_() {
+    var items = [
+      ['al-dia', 'Al día'], ['riesgo', 'En riesgo'], ['atrasada', 'Atrasada'],
+      ['bloqueada', 'Bloqueada'], ['revision', 'En revisión'], ['pendiente', 'Pendiente']
+    ];
+    return '<div class="sigso-py-gantt-leyenda">' +
+      items.map(function (it) {
+        return '<span class="sigso-py-gantt-leyenda__item">' +
+          '<i class="sigso-py-gantt-leyenda__punto sigso-py-cron-barra--' + it[0] + '"></i>' + it[1] +
+        '</span>';
+      }).join('') +
+      '<span class="sigso-py-gantt-leyenda__item"><i class="sigso-py-gantt-leyenda__punto sigso-py-gantt-leyenda__punto--hito"></i>Hito</span>' +
+      '<span class="sigso-py-gantt-leyenda__item"><i class="sigso-py-gantt-leyenda__punto sigso-py-gantt-leyenda__punto--hoy"></i>Hoy</span>' +
+    '</div>';
   }
 
   // v12: capa de fondo de la vista Plan -- bandas de fin de semana + líneas

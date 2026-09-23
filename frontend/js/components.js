@@ -365,13 +365,29 @@
     kpi: function (opts) {
       opts = opts || {};
       var tag = opts.filtro ? 'button' : 'div';
-      var clases = 'sigso-kpi' + (opts.alerta ? ' sigso-kpi--alerta' : '') + (opts.filtro ? ' sigso-kpi--clicable' : '') + (opts.activo ? ' sigso-kpi--activo' : '');
+      // opts.icono/opts.tono (v16, Planificación): variante opt-in con un
+      // círculo de color a la izquierda -- sin esas opciones se ve IGUAL
+      // que siempre, así que Inicio/Gerencia (que llaman kpi() sin ellas)
+      // no se ven afectados.
+      var conIcono = !!opts.icono;
+      var tono = opts.tono || 'primario';
+      var clases = 'sigso-kpi' + (opts.alerta ? ' sigso-kpi--alerta' : '') + (opts.filtro ? ' sigso-kpi--clicable' : '') +
+        (opts.activo ? ' sigso-kpi--activo' : '') + (conIcono ? ' sigso-kpi--icono' : '');
+      var textoHtml = '<div class="sigso-kpi__valor">' + escaparHtml(opts.valor === undefined ? '—' : opts.valor) + '</div>' +
+        '<div class="sigso-kpi__etiqueta">' + escaparHtml(opts.etiqueta) + '</div>';
+      // Sin icono: misma estructura de siempre (valor/etiqueta como hijos
+      // directos), byte a byte -- CERO cambio de DOM para quien no pasa
+      // icono/tono (Inicio, Gerencia). Con icono: círculo + un wrapper de
+      // texto, para poder alinearlos en fila con flexbox.
+      var cuerpoHtml = conIcono
+        ? '<div class="sigso-kpi__icono sigso-kpi__icono--' + tono + '">' + Iconos.svg(opts.icono, { tam: 18 }) + '</div>' +
+          '<div class="sigso-kpi__texto">' + textoHtml + '</div>'
+        : textoHtml;
       return '<' + tag + ' class="' + clases + '"' +
         (tag === 'button' ? ' type="button" data-filtro-kpi="' + escaparHtml(opts.filtro) + '"' : '') +
         (opts.id ? ' id="' + opts.id + '"' : '') +
         (opts.titulo ? ' title="' + escaparHtml(opts.titulo) + '"' : '') + '>' +
-        '<div class="sigso-kpi__valor">' + escaparHtml(opts.valor === undefined ? '—' : opts.valor) + '</div>' +
-        '<div class="sigso-kpi__etiqueta">' + escaparHtml(opts.etiqueta) + '</div>' +
+        cuerpoHtml +
         '</' + tag + '>';
     },
 
