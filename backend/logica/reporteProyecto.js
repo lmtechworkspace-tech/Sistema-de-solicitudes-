@@ -331,6 +331,15 @@ const GANTT_LEYENDA = [
   ['Semana vencida sin cerrar', GANTT_COLOR_ATRASO]
 ];
 
+// Rombo relleno para marcar un hito en la semana correspondiente -- se
+// dibuja como path, no como el caracter '◆' (U+25C6): la fuente estandar
+// Helvetica/WinAnsiEncoding de pdfkit no lo tiene y lo muestra como
+// caracteres basura (hallazgo de la validacion visual de Etapa 10).
+function marcadorHito_(doc, cx, cy, color) {
+  const r = 3.5;
+  doc.moveTo(cx, cy - r).lineTo(cx + r, cy).lineTo(cx, cy + r).lineTo(cx - r, cy).closePath().fill(color);
+}
+
 function claveDia_(valor) {
   if (!valor) return null;
   const f = new Date(valor);
@@ -431,13 +440,13 @@ function dibujarGanttEjecutivo_(doc, detalle, tareas, hitos) {
   function filaHito_(h) {
     asegurarEspacioApaisado_(doc, alturaFila, encabezadoSemanas_);
     const y = doc.y;
-    doc.font('Helvetica-Bold').fontSize(7.5).fillColor(PdfDoc.DOC.INK).text(h.nombre, PdfDoc.MARGIN, y, { width: anchoLabel - 4, ellipsis: true });
+    doc.font('Helvetica-Bold').fontSize(7.5).fillColor(PdfDoc.DOC.INK)
+      .text(h.nombre, PdfDoc.MARGIN, y, { width: anchoLabel - 4, height: alturaFila, ellipsis: true });
     const objClave = claveDia_(h.fecha_objetivo);
     if (objClave) {
       semanas.forEach((s, i) => {
         if (objClave >= s.inicio && objClave <= s.fin) {
-          doc.fillColor(PdfDoc.DOC.NAVY).fontSize(8)
-            .text('◆', PdfDoc.MARGIN + anchoLabel + i * anchoSemana + anchoSemana / 2 - 3, y);
+          marcadorHito_(doc, PdfDoc.MARGIN + anchoLabel + i * anchoSemana + anchoSemana / 2, y + alturaFila / 2, PdfDoc.DOC.NAVY);
         }
       });
     }
@@ -447,7 +456,8 @@ function dibujarGanttEjecutivo_(doc, detalle, tareas, hitos) {
   function filaTarea_(a) {
     asegurarEspacioApaisado_(doc, alturaFila, encabezadoSemanas_);
     const y = doc.y;
-    doc.font('Helvetica').fontSize(6.5).fillColor(PdfDoc.DOC.INK_SOFT).text(a.titulo, PdfDoc.MARGIN + 4, y, { width: anchoLabel - 8, ellipsis: true });
+    doc.font('Helvetica').fontSize(6.5).fillColor(PdfDoc.DOC.INK_SOFT)
+      .text(a.titulo, PdfDoc.MARGIN + 4, y, { width: anchoLabel - 8, height: alturaFila, ellipsis: true });
     const barIni = inicioBarraGantt_(a, proyIniClave);
     const fin = claveDia_(a.fecha_compromiso);
     const terminal = a.estado === 'TERMINADA' || a.estado === 'CANCELADA';

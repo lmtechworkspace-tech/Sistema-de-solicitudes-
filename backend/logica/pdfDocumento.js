@@ -328,12 +328,15 @@ function barraHorizontal(doc, etiqueta, pct, sufijo) {
   const altura = 16;
   asegurarEspacio(doc, altura);
   const y = doc.y;
-  doc.font('Helvetica').fontSize(8.5).fillColor(DOC.INK).text(etiqueta, MARGIN, y + 2, { width: 90 });
+  // height+ellipsis: una etiqueta larga (ej. un nombre completo de
+  // Directorio de Personas) debe truncarse a una linea, nunca envolver y
+  // pisar la fila de abajo -- esta columna es angosta a proposito.
+  doc.font('Helvetica').fontSize(8.5).fillColor(DOC.INK).text(etiqueta, MARGIN, y + 2, { width: 90, height: 11, ellipsis: true });
   const barX = MARGIN + 95;
   doc.rect(barX, y + 2, BARRA_ANCHO_PX, 10).lineWidth(0.5).strokeColor(DOC.HAIRLINE).stroke();
   const anchoLleno = pct <= 0 ? 0 : Math.max(2, Math.round((BARRA_ANCHO_PX * pct) / 100));
   if (anchoLleno) doc.rect(barX, y + 2, anchoLleno, 10).fill(DOC.NAVY);
-  doc.font('Helvetica').fontSize(8).fillColor(DOC.INK_SOFT).text(sufijo, barX + BARRA_ANCHO_PX + 10, y + 2, { width: 90 });
+  doc.font('Helvetica').fontSize(8).fillColor(DOC.INK_SOFT).text(sufijo, barX + BARRA_ANCHO_PX + 10, y + 2, { width: 90, height: 11, ellipsis: true });
   doc.y = y + altura;
   doc.x = MARGIN;
 }
