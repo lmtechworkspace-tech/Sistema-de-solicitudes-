@@ -135,3 +135,64 @@ test('descargarLibro: la Historial trae la bitácora (registro del día con hora
   const hojaHist = hojaTexto_(res, 'xl/worksheets/sheet5.xml');
   assert.ok(hojaHist.includes('Avanzando bien'), 'falta la nota de la bitácora');
 });
+
+// --- Refactor "Planificación" Etapa 8 (§28/§30 del encargo) ----------------
+// Todas estas pruebas usan textoDelLibro_ (el ZIP completo concatenado) en
+// vez de apuntar a un sheetN.xml fijo: Control de Plazos y Responsables van
+// AL FINAL a propósito (ver el comentario en libroProyecto.js), así que su
+// índice real depende de si el escenario tiene Historial/Dependencias --
+// buscar en el texto completo es la forma robusta de probarlas sin acoplar
+// el test a ese índice.
+
+test('descargarLibro: Control de Plazos y Responsables van SIEMPRE al final, sin correr el índice de las hojas de siempre', () => {
+  const db = db_();
+  const { p } = armarEscenario(db);
+  const res = Libro.descargarLibro(db, { proyecto_id: p.proyecto_id }, CTX_LEO);
+  const txt = textoDelLibro_(res);
+  ['Resumen', 'Carta Gantt', 'Tareas', 'Hitos', 'Dependencias', 'Control de Plazos', 'Responsables'].forEach((n) => {
+    assert.ok(txt.includes('<sheet name="' + n + '"'), 'falta la hoja ' + n);
+  });
+  // Dependencias sigue siendo sheet6.xml (no se corrió) -- misma aserción
+  // que el test de arriba de "sale por título del padre", repetida acá
+  // como red de seguridad de que Etapa 8 no le movió el piso.
+  const hojaDep = hojaTexto_(res, 'xl/worksheets/sheet6.xml');
+  assert.ok(hojaDep.includes('Depende de'), 'Dependencias debe seguir siendo sheet6.xml tras agregar las hojas nuevas');
+});
+
+// En armarEscenario (2 tareas, ambas con fecha_compromiso vieja respecto al
+// reloj real, Historial + Dependencias presentes), el orden de hojas queda
+// fijo y verificado empíricamente: Control de Plazos = sheet7.xml,
+// Responsables = sheet8.xml.
+test('descargarLibro: Control de Plazos trae Inicio real y Fin real correctos -- fecha real si se registró, "No registrado" si no, nunca inventada', () => {
+  const db = db_();
+  const { p } = armarEscenario(db);
+  const res = Libro.descargarLibro(db, { proyecto_id: p.proyecto_id }, CTX_LEO);
+  const hojaPlazos = hojaTexto_(res, 'xl/worksheets/sheet7.xml');
+  assert.ok(hojaPlazos.includes('Levantar requerimientos') && hojaPlazos.includes('Migrar datos'), 'faltan las tareas');
+  assert.ok(hojaPlazos.includes('No registrado'), 'ninguna tarea del escenario terminó -- Fin real debe decir "No registrado", no una fecha inventada');
+  // Duracion plan (dias) = Proyectos.calcularDuracionDias_(plan_inicio, plan_fin),
+  // mismo numero que ya usa la plataforma -- Levantar requerimientos:
+  // 15/01/2026 a 15/03/2026 = 59 dias.
+  assert.ok(hojaPlazos.includes('<v>59</v>'), 'la duracion plan en dias debe salir del mismo calculo centralizado (59 dias)');
+});
+
+test('descargarLibro: Control de Plazos colorea el estado "Atrasada" con el mismo fill rojo (estilo 6) que ya usa la Carta Gantt', () => {
+  const db = db_();
+  const { p } = armarEscenario(db); // fecha_compromiso 2026, muy anterior al reloj real (2026-09-23) -- ambas quedan Atrasadas
+  const res = Libro.descargarLibro(db, { proyecto_id: p.proyecto_id }, CTX_LEO);
+  const hojaPlazos = hojaTexto_(res, 'xl/worksheets/sheet7.xml');
+  assert.match(hojaPlazos, /s="6" t="inlineStr"><is><t xml:space="preserve">Atrasada<\/t>/, 'la celda de estado "Atrasada" debe llevar el fill rojo (estilo 6), igual que las barras de atraso de la Carta Gantt');
+});
+
+test('descargarLibro: Responsables agrupa por persona y suma total/completadas/en curso/atrasadas/carga relativa', () => {
+  const db = db_();
+  const { p } = armarEscenario(db); // 2 tareas, ambas de leo@rld.cl, ninguna terminada, ambas atrasadas
+  const res = Libro.descargarLibro(db, { proyecto_id: p.proyecto_id }, CTX_LEO);
+  const hojaResp = hojaTexto_(res, 'xl/worksheets/sheet8.xml');
+  assert.ok(hojaResp.includes('leo@rld.cl'), 'falta el responsable');
+  assert.ok(hojaResp.includes('<c r="B2"><v>2</v></c>'), 'Total tareas debe ser 2');
+  assert.ok(hojaResp.includes('<c r="C2"><v>0</v></c>'), 'Completadas debe ser 0 (ninguna terminada en el escenario)');
+  assert.ok(hojaResp.includes('<c r="D2"><v>2</v></c>'), 'En curso debe ser 2');
+  assert.ok(hojaResp.includes('<c r="E2"><v>2</v></c>'), 'Atrasadas debe ser 2 (fecha_compromiso muy en el pasado)');
+  assert.ok(hojaResp.includes('100%'), 'Carga relativa del único responsable del proyecto debe ser 100%');
+});

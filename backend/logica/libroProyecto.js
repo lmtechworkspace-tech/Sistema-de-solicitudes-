@@ -259,6 +259,14 @@ function xlsxGanttProyecto_(detalle, tareas, rendimiento, bitacora) {
   ];
   if (bitacora && bitacora.length) hojas.push(hojaHistorialXlsx_(bitacora, tareasPorId));
   if (tareas.some((t) => t.depende_de)) hojas.push(hojaDependenciasXlsx_(tareas, tareasPorId));
+  // Refactor "Planificación" Etapa 8 (§28/§30 del encargo): dos hojas
+  // nuevas, AL FINAL a propósito -- así las hojas de siempre (Resumen/Carta
+  // Gantt/Tareas/Hitos/Historial/Dependencias) conservan el mismo índice de
+  // archivo que ya usan los tests existentes (sheet5.xml/sheet6.xml), en vez
+  // de correrse por insertar en el medio. Mismos números que ya calcula
+  // obtenerRendimiento (planPorId, Etapa 2) -- nunca una fórmula aparte.
+  hojas.push(hojaControlPlazosXlsx_(tareas, planPorId));
+  hojas.push(hojaResponsablesXlsx_(tareas));
 
   return construirXlsx_(hojas);
 }
@@ -396,6 +404,88 @@ function hojaTareasXlsx_(tareas, hitos, planPorId) {
     nombre: 'Tareas',
     cols: [{ min: 1, max: 1, ancho: 14 }, { min: 2, max: 2, ancho: 22 }, { min: 3, max: 3, ancho: 34 },
       { min: 4, max: 4, ancho: 22 }, { min: 5, max: 5, ancho: 14 }, { min: 6, max: 7, ancho: 12 }, { min: 8, max: 11, ancho: 12 }],
+    filas, congelar: { filas: 1 }
+  };
+}
+
+// Refactor "Planificación" Etapa 8 (§28 del encargo): plan vs real por
+// tarea, con la columna Estado coloreada -- mismos fills que ya usa la
+// Carta Gantt para el semáforo (BARRA.atrasada/riesgo/al-dia), reusados tal
+// cual en vez de definir estilos nuevos. Sin fórmulas condicionales nativas
+// de Excel (este motor no las escribe): el color se decide en Node al
+// armar la fila, igual criterio que las barras de la Carta Gantt de más
+// arriba ("celdas coloreadas de la hoja, no dibujo pixel a pixel").
+const ESTADO_PLAZO_ESTILO_XLSX_ = {
+  ATRASADA: XLSX_EST.BARRA.atrasada, EN_RIESGO: XLSX_EST.BARRA.riesgo, EN_PLAZO: XLSX_EST.BARRA['al-dia']
+};
+const ESTADO_PLAZO_LABEL_XLSX_ = {
+  ATRASADA: 'Atrasada', EN_RIESGO: 'En riesgo', EN_PLAZO: 'En plazo', COMPLETADA: 'Completada', SIN_FECHA: 'Sin fecha'
+};
+function hojaControlPlazosXlsx_(tareas, planPorId) {
+  const H = XLSX_EST.HEADER;
+  const enc = ['Tarea', 'Responsable', 'Inicio plan', 'Fin plan', 'Inicio real', 'Fin real',
+    'Duracion plan (d)', 'Duracion real (d)', 'Desviacion (d)', 'Estado'].map((t) => ({ v: t, s: H }));
+  const filas = [enc];
+  tareas.forEach((a) => {
+    const plan = planPorId[a.actividad_id] || {};
+    const duracionPlan = Proyectos.calcularDuracionDias_(plan.plan_inicio, plan.plan_fin);
+    const duracionReal = Proyectos.calcularDuracionDias_(plan.fecha_inicio_real, plan.fecha_fin_real);
+    const estilo = ESTADO_PLAZO_ESTILO_XLSX_[plan.estado_plazo];
+    filas.push([
+      a.titulo || '',
+      a.responsable_nombre || a.responsable_email || '',
+      fechaXlsx_(plan.plan_inicio),
+      fechaXlsx_(plan.plan_fin),
+      plan.fecha_inicio_real ? fechaXlsx_(plan.fecha_inicio_real) : 'No registrado',
+      plan.fecha_fin_real ? fechaXlsx_(plan.fecha_fin_real) : 'No registrado',
+      duracionPlan === null ? '' : { v: duracionPlan, t: 'n' },
+      duracionReal === null ? '' : { v: duracionReal, t: 'n' },
+      (plan.desviacion_dias === null || plan.desviacion_dias === undefined) ? '' : { v: plan.desviacion_dias, t: 'n' },
+      { v: ESTADO_PLAZO_LABEL_XLSX_[plan.estado_plazo] || plan.estado_plazo || '', s: estilo }
+    ]);
+  });
+  return {
+    nombre: 'Control de Plazos',
+    cols: [{ min: 1, max: 1, ancho: 34 }, { min: 2, max: 2, ancho: 22 }, { min: 3, max: 6, ancho: 13 },
+      { min: 7, max: 9, ancho: 15 }, { min: 10, max: 10, ancho: 13 }],
+    filas, congelar: { filas: 1 }
+  };
+}
+
+// Refactor "Planificación" Etapa 8 (§30 del encargo): carga por
+// responsable -- mismo criterio de conteo que Actividades.semaforoActividad_
+// (semaforo === 'atrasada') y que el estado de la tarea, ningún cálculo
+// nuevo.
+function hojaResponsablesXlsx_(tareas) {
+  const H = XLSX_EST.HEADER;
+  const porResponsable = {};
+  tareas.forEach((a) => {
+    const clave = a.responsable_email || '(sin asignar)';
+    if (!porResponsable[clave]) {
+      porResponsable[clave] = { nombre: a.responsable_nombre || a.responsable_email || '(sin asignar)', total: 0, completadas: 0, enCurso: 0, atrasadas: 0 };
+    }
+    const r = porResponsable[clave];
+    r.total++;
+    if (a.estado === 'TERMINADA') r.completadas++;
+    else if (a.estado !== 'CANCELADA') r.enCurso++;
+    if (a.semaforo === 'atrasada') r.atrasadas++;
+  });
+  const totalGeneral = tareas.length || 1;
+  const enc = ['Responsable', 'Total tareas', 'Completadas', 'En curso', 'Atrasadas', 'Carga relativa'].map((t) => ({ v: t, s: H }));
+  const filas = [enc];
+  Object.keys(porResponsable)
+    .sort((x, y) => porResponsable[y].total - porResponsable[x].total)
+    .forEach((clave) => {
+      const r = porResponsable[clave];
+      filas.push([
+        r.nombre,
+        { v: r.total, t: 'n' }, { v: r.completadas, t: 'n' }, { v: r.enCurso, t: 'n' }, { v: r.atrasadas, t: 'n' },
+        Math.round((r.total / totalGeneral) * 1000) / 10 + '%'
+      ]);
+    });
+  return {
+    nombre: 'Responsables',
+    cols: [{ min: 1, max: 1, ancho: 28 }, { min: 2, max: 6, ancho: 14 }],
     filas, congelar: { filas: 1 }
   };
 }
