@@ -2314,12 +2314,17 @@
         // endpoint propio (obtenerAnaliticaProyecto), distinto de
         // bitácora/rendimiento que ya cargaron las demás.
         Componentes.boton({ texto: 'Analítica', variante: vistaCronograma_ === 'analitica' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'analitica' }) +
+        // Fase H (Camino B, "avance físico"): la curva S de control manual --
+        // mismo patrón lazy que Analítica (pide su propio endpoint, no viene
+        // en el detalle base).
+        Componentes.boton({ texto: 'Avance', variante: vistaCronograma_ === 'avance' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'avance' }) +
       '</div>';
     var cuerpo;
     if (vistaCronograma_ === 'plan') cuerpo = pintarCronogramaPlan_(detalle, tareas, ctxEdicion, rendimiento);
     else if (vistaCronograma_ === 'historial') cuerpo = pintarHistorialProyecto_(tareas, bitacora || []);
     else if (vistaCronograma_ === 'workload') cuerpo = pintarWorkloadProyecto_(detalle, tareas, bitacora || []);
     else if (vistaCronograma_ === 'analitica') cuerpo = pintarAnaliticaProyecto_(datosDetalleActual_ && datosDetalleActual_.analitica, tareas);
+    else if (vistaCronograma_ === 'avance') cuerpo = pintarAvanceProyecto_(datosDetalleActual_ && datosDetalleActual_.controlAvance, ctxEdicion.puedeGestionar);
     else cuerpo = pintarCronogramaDedicacion_(detalle, tareas, bitacora || [], rendimiento, ctxEdicion);
     return toggle + cuerpo;
   }
@@ -2551,6 +2556,29 @@
     pedirAnaliticaProyecto_();
   }
 
+  // Fase H (Camino B, "avance físico"): mismo patrón exacto que Analítica --
+  // separar pedir de repintar, caché en datosDetalleActual_.controlAvance,
+  // guarda contra dobles pedidos y contra que el usuario ya se haya movido.
+  var controlAvanceEnVuelo_ = null;
+  function pedirControlAvanceProyecto_() {
+    if (!datosDetalleActual_) return;
+    if (datosDetalleActual_.controlAvance !== undefined) return;
+    if (controlAvanceEnVuelo_ === proyectoActivoId_) return;
+    controlAvanceEnVuelo_ = proyectoActivoId_;
+    var idAlPedir = proyectoActivoId_;
+    apiSeguro_('listarControlAvanceProyecto', { proyecto_id: proyectoActivoId_ }).then(function (r) {
+      if (controlAvanceEnVuelo_ === idAlPedir) controlAvanceEnVuelo_ = null;
+      if (!datosDetalleActual_ || idAlPedir !== proyectoActivoId_) return;
+      datosDetalleActual_.controlAvance = (r && r.ok) ? r.data.puntos : null;
+      if (pestanaActiva_ === 'cronograma' && vistaCronograma_ === 'avance') cambiarPestana_('cronograma');
+    });
+  }
+  function cargarControlAvanceProyecto_(cont) {
+    if (!datosDetalleActual_) return;
+    cambiarPestana_('cronograma');
+    pedirControlAvanceProyecto_();
+  }
+
   // v11 (P3, "SPI conceptual" en pantalla): tooltips explican qué es cada
   // métrica en una frase -- "explicable, no una metodología completa" aplica
   // también a cómo se presenta, no solo a cómo se calcula.
@@ -2614,6 +2642,157 @@
         '<thead><tr><th>Tarea</th><th>Lead time</th><th>Cycle time</th><th>Bloqueo</th><th>Revisión</th></tr></thead>' +
         '<tbody>' + filas + '</tbody>' +
       '</table></div>';
+  }
+
+  // Fase H (Camino B, "avance físico"): curva S de control manual --
+  // % proyectado vs % real por fecha, declarado a mano (no derivado de las
+  // tareas). puedeGestionar controla el CTA de registrar y las acciones por
+  // fila; la lectura es visible a cualquier integrante (ver listarControlAvance).
+  function pintarAvanceProyecto_(puntos, puedeGestionar) {
+    if (puntos === undefined) return Componentes.cargando('Cargando avance físico...');
+    if (puntos === null) return Componentes.vacio({ texto: 'No se pudo cargar el avance físico.' });
+    var acciones = puedeGestionar
+      ? '<div class="sigso-py-cabecera">' + Componentes.boton({ texto: '+ Registrar punto de control', clase: 'js-py-avance-nuevo' }) + '</div>'
+      : '';
+    if (!puntos.length) {
+      return acciones + Componentes.vacio({
+        texto: 'Todavía no hay puntos de control.',
+        detalle: puedeGestionar
+          ? 'Registra el % proyectado y el % real cada vez que revises el avance físico del proyecto.'
+          : 'Quien gestiona el proyecto todavía no registró ningún punto de control.'
+      });
+    }
+    var ultimo = puntos[puntos.length - 1];
+    var ultimoConReal = puntos.slice().reverse().find(function (p) {
+      return p.pct_real !== '' && p.pct_real !== null && p.pct_real !== undefined;
+    });
+    var desvio = ultimoConReal ? (Number(ultimoConReal.pct_proyectado) - Number(ultimoConReal.pct_real)) : null;
+    var desvioTexto = desvio === null ? '—' : (desvio > 0 ? '+' + desvio.toFixed(1) + 'pp' : desvio.toFixed(1) + 'pp');
+    var kpis = '<div class="sigso-py-kpis">' +
+      Componentes.kpi({ etiqueta: 'Último control', valor: fechaCorta_(ultimo.fecha) }) +
+      Componentes.kpi({ etiqueta: '% Proyectado', valor: ultimo.pct_proyectado + '%' }) +
+      Componentes.kpi({ etiqueta: '% Real', valor: ultimoConReal ? ultimoConReal.pct_real + '%' : '—' }) +
+      Componentes.kpi({
+        etiqueta: 'Desvío', valor: desvioTexto, alerta: desvio !== null && desvio > 0,
+        titulo: 'Proyectado menos real del último punto con dato real. Positivo = atrasado.'
+      }) +
+    '</div>';
+    var curva = svgAvanceFisico_(puntos);
+    var filas = puntos.slice().reverse().map(function (p) {
+      var conReal = p.pct_real !== '' && p.pct_real !== null && p.pct_real !== undefined;
+      var d = conReal ? (Number(p.pct_proyectado) - Number(p.pct_real)) : null;
+      return '<tr>' +
+        '<td data-label="Fecha">' + fechaCorta_(p.fecha) + '</td>' +
+        '<td data-label="Proyectado">' + p.pct_proyectado + '%</td>' +
+        '<td data-label="Real">' + (conReal ? p.pct_real + '%' : '—') + '</td>' +
+        '<td data-label="Desvío">' + (d === null ? '—' : (d > 0 ? Componentes.badge('Retraso ' + d.toFixed(1) + 'pp', 'critico') : Componentes.badge('Al día', 'ok'))) + '</td>' +
+        '<td data-label="Nota">' + Componentes.escaparHtml(p.nota || '') + '</td>' +
+        (puedeGestionar
+          ? '<td data-label="" class="sigso-py-tabla-acc">' + Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-py-avance-editar', idx: p.control_id }) + '</td>'
+          : '') +
+      '</tr>';
+    }).join('');
+    return acciones + curva +
+      '<div class="sigso-py-ded-scroll"><table class="sigso-tabla-tablero sigso-py-avance-tabla"><thead><tr>' +
+        '<th>Fecha</th><th>Proyectado</th><th>Real</th><th>Desvío</th><th>Nota</th>' + (puedeGestionar ? '<th></th>' : '') +
+      '</tr></thead><tbody>' + filas + '</tbody></table></div>' +
+      kpis;
+  }
+
+  // Dos series (proyectado siempre, real solo en los puntos que lo tienen)
+  // sobre el mismo viewBox/escala que SigsoReportes.tendencia -- reusa sus
+  // clases de eje/tick, agrega las propias para las dos lineas y puntos.
+  function svgAvanceFisico_(puntos) {
+    var an = 640, al = 200, m = { i: 40, d: 12, s: 16, b: 16 };
+    var ax = an - m.i - m.d, ay = al - m.s - m.b;
+    var n = puntos.length;
+    var x = function (i) { return m.i + (n === 1 ? ax / 2 : (i / (n - 1)) * ax); };
+    var y = function (v) { return m.s + ay - (Math.max(0, Math.min(100, v)) / 100) * ay; };
+    var lineaProy = puntos.map(function (p, i) {
+      return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(Number(p.pct_proyectado) || 0).toFixed(1);
+    }).join(' ');
+    var idxPorId = {}; puntos.forEach(function (p, i) { idxPorId[p.control_id] = i; });
+    var conReal = puntos.filter(function (p) { return p.pct_real !== '' && p.pct_real !== null && p.pct_real !== undefined; });
+    var lineaReal = conReal.map(function (p, i) {
+      return (i ? 'L' : 'M') + x(idxPorId[p.control_id]).toFixed(1) + ' ' + y(Number(p.pct_real)).toFixed(1);
+    }).join(' ');
+    return '<figure class="sigso-py-avance-curva">' +
+      '<svg viewBox="0 0 ' + an + ' ' + al + '" role="img" aria-label="Curva de avance físico: proyectado vs real">' +
+        '<line x1="' + m.i + '" y1="' + m.s + '" x2="' + m.i + '" y2="' + (m.s + ay) + '" class="sigso-rep-eje"/>' +
+        '<line x1="' + m.i + '" y1="' + (m.s + ay) + '" x2="' + (an - m.d) + '" y2="' + (m.s + ay) + '" class="sigso-rep-eje"/>' +
+        '<text x="' + (m.i - 6) + '" y="' + (m.s + 4) + '" class="sigso-rep-tick" text-anchor="end">100%</text>' +
+        '<text x="' + (m.i - 6) + '" y="' + (m.s + ay) + '" class="sigso-rep-tick" text-anchor="end">0%</text>' +
+        '<path d="' + lineaProy + '" class="sigso-py-avance-linea sigso-py-avance-linea--proy"/>' +
+        (lineaReal ? '<path d="' + lineaReal + '" class="sigso-py-avance-linea sigso-py-avance-linea--real"/>' : '') +
+        puntos.map(function (p, i) {
+          return '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(Number(p.pct_proyectado) || 0).toFixed(1) + '" r="3" class="sigso-py-avance-punto sigso-py-avance-punto--proy"/>';
+        }).join('') +
+        conReal.map(function (p) {
+          return '<circle cx="' + x(idxPorId[p.control_id]).toFixed(1) + '" cy="' + y(Number(p.pct_real)).toFixed(1) + '" r="3" class="sigso-py-avance-punto sigso-py-avance-punto--real"/>';
+        }).join('') +
+      '</svg>' +
+      '<figcaption class="sigso-py-avance-leyenda">' +
+        '<span class="sigso-py-avance-leg sigso-py-avance-leg--proy">Proyectado</span>' +
+        '<span class="sigso-py-avance-leg sigso-py-avance-leg--real">Real</span>' +
+      '</figcaption>' +
+    '</figure>';
+  }
+
+  // Modal de registrar/editar un punto de control -- upsert por fecha en el
+  // backend (reeditar la misma fecha actualiza, no duplica), asi que "nuevo"
+  // y "editar" comparten formulario; solo cambia si se prellena.
+  function abrirFormularioControlAvance_(punto) {
+    var esEdicion = !!punto;
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">' + (esEdicion ? 'Editar punto de control' : 'Nuevo punto de control') + '</h3>' +
+        '<form id="form-py-avance">' +
+          Componentes.campoTexto({ id: 'py-av-fecha', label: 'Fecha', tipo: 'date', valor: esEdicion ? fechaISOCorta_(punto.fecha) : fechaISOCorta_(new Date().toISOString()), requerido: true }) +
+          Componentes.campoTexto({ id: 'py-av-proyectado', label: '% Proyectado', tipo: 'number', valor: esEdicion ? punto.pct_proyectado : '', requerido: true }) +
+          Componentes.campoTexto({ id: 'py-av-real', label: '% Real (opcional)', tipo: 'number', valor: esEdicion ? punto.pct_real : '' }) +
+          Componentes.campoTextarea({ id: 'py-av-nota', label: 'Nota (opcional)', valor: esEdicion ? punto.nota : '' }) +
+          '<div class="sigso-modal__acciones">' +
+            (esEdicion ? Componentes.boton({ texto: 'Eliminar', variante: 'peligro', clase: 'js-py-avance-eliminar', tipo: 'button' }) : '') +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: esEdicion ? 'Guardar' : 'Registrar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    fondo.querySelector('#form-py-avance').addEventListener('submit', function (evento) {
+      enviarModal_(evento, 'gestionarControlAvanceProyecto', {
+        proyecto_id: proyectoActivoId_,
+        fecha: document.getElementById('py-av-fecha').value,
+        pct_proyectado: document.getElementById('py-av-proyectado').value,
+        pct_real: document.getElementById('py-av-real').value,
+        nota: document.getElementById('py-av-nota').value
+      }, function () {
+        cerrar();
+        datosDetalleActual_.controlAvance = undefined;
+        cargarControlAvanceProyecto_();
+      });
+    });
+    var btnEliminar = fondo.querySelector('.js-py-avance-eliminar');
+    if (btnEliminar) {
+      btnEliminar.addEventListener('click', function () {
+        Componentes.confirmar({ titulo: 'Eliminar punto de control', mensaje: '¿Confirmas eliminar este punto de control del ' + fechaCorta_(punto.fecha) + '?', peligro: true }).then(function (ok) {
+          if (!ok) return;
+          api_('gestionarControlAvanceProyecto', {
+            proyecto_id: proyectoActivoId_, accion: 'eliminar', control_id: punto.control_id
+          }).then(function (respuesta) {
+            if (!respuesta || !respuesta.ok) {
+              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo eliminar el punto de control.', tipo: 'error' });
+              return;
+            }
+            cerrar();
+            datosDetalleActual_.controlAvance = undefined;
+            cargarControlAvanceProyecto_();
+          });
+        });
+      });
+    }
   }
 
   // v11 (Reingeniería Cronograma, P0): el ESTADO DEL DÍA explícito -- lo que
@@ -4928,9 +5107,11 @@
     cont.querySelectorAll('.js-py-cron-vista').forEach(function (btn) {
       btn.addEventListener('click', function () {
         vistaCronograma_ = btn.getAttribute('data-idx');
-        // v11 (P3): "Analítica" es la única subvista con endpoint propio --
-        // las demás repintan directo desde caché (cambiarPestana_).
+        // v11 (P3) / Fase H: "Analítica" y "Avance" son las únicas subvistas
+        // con endpoint propio -- las demás repintan directo desde caché
+        // (cambiarPestana_).
         if (vistaCronograma_ === 'analitica') cargarAnaliticaProyecto_(cont);
+        else if (vistaCronograma_ === 'avance') cargarControlAvanceProyecto_(cont);
         else cambiarPestana_('cronograma');
       });
     });
@@ -4963,6 +5144,15 @@
         descargarCsv_('Analitica - ' + nombreProyecto + '.csv', filas);
       });
     }
+    var avanceNuevoBtn = cont.querySelector('.js-py-avance-nuevo');
+    if (avanceNuevoBtn) avanceNuevoBtn.addEventListener('click', function () { abrirFormularioControlAvance_(null); });
+    cont.querySelectorAll('.js-py-avance-editar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var puntos = (datosDetalleActual_ && datosDetalleActual_.controlAvance) || [];
+        var punto = puntos.find(function (p) { return p.control_id === btn.getAttribute('data-idx'); });
+        if (punto) abrirFormularioControlAvance_(punto);
+      });
+    });
     wireCartaControles_(cont, function () { cambiarPestana_('cronograma'); }, (datosDetalleActual_ && datosDetalleActual_.detalle) || null,
       // v12.2 ("llenar rápido, sin recarga"): actualización OPTIMISTA -- se
       // mergea el registro ya guardado en la bitácora en caché y se repinta al

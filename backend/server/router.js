@@ -274,6 +274,9 @@ const ACCIONES = {
   revisarEntregableProyecto: (db, data, contexto) => Proyectos.revisarEntregable(db, data, contexto),
   gestionarRiesgoProyecto: (db, data, contexto) => Proyectos.gestionarRiesgo(db, data, contexto),
   getResumenPortafolioProyectos: (db, data, contexto) => Proyectos.getResumenPortafolio(db, contexto),
+  // Fase H (Camino B): avance físico -- curva S de control manual.
+  gestionarControlAvanceProyecto: (db, data, contexto) => Proyectos.gestionarControlAvance(db, data, contexto),
+  listarControlAvanceProyecto: (db, data, contexto) => Proyectos.listarControlAvance(db, data, contexto),
 
   // Cronograma avanzado (v11 Reingenieria Cronograma): incremento 2.
   guardarRegistroDiaProyecto: (db, data, contexto) => Proyectos.guardarRegistroDia(db, data, contexto),

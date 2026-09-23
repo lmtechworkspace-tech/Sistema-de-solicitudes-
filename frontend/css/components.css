@@ -5133,6 +5133,26 @@
 .sigso-rep-meta-txt { fill: var(--alerta); font-size: 10px; font-family: var(--fuente); }
 .sigso-rep-tendencia__pie { font: var(--t-small); color: var(--texto-3); margin-top: var(--esp-2); }
 
+/* --- Avance físico (Fase H, Camino B: curva S de control manual) ---------- */
+/* Mismo viewBox/eje/tick que Tendencia (.sigso-rep-eje/.sigso-rep-tick,
+   reusados tal cual) -- esto solo agrega las DOS series propias. */
+.sigso-py-avance-curva { margin: 0 0 var(--esp-4); }
+.sigso-py-avance-curva svg { width: 100%; height: auto; display: block; }
+.sigso-py-avance-linea { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.sigso-py-avance-linea--proy { stroke: var(--texto-3); stroke-dasharray: 5 4; }
+.sigso-py-avance-linea--real { stroke: var(--primario); }
+.sigso-py-avance-punto--proy { fill: var(--texto-3); }
+.sigso-py-avance-punto--real { fill: var(--primario); }
+.sigso-py-avance-leyenda { display: flex; gap: var(--esp-4); font: var(--t-small); color: var(--texto-3); margin-top: var(--esp-2); }
+.sigso-py-avance-leg { position: relative; padding-left: var(--esp-3); }
+.sigso-py-avance-leg::before {
+  content: ''; position: absolute; left: 0; top: 50%;
+  width: 10px; height: 2px; transform: translateY(-50%);
+}
+.sigso-py-avance-leg--proy::before { background: var(--texto-3); }
+.sigso-py-avance-leg--real::before { background: var(--primario); }
+.sigso-py-avance-tabla { margin-top: var(--esp-4); }
+
 /* --- Comparación ---------------------------------------------------------- */
 /* El signo va ESCRITO además del color: el estado no puede depender sólo del
    color (§20 del encargo, y WCAG 1.4.1). */

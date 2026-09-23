@@ -137,7 +137,7 @@ var ACCIONES_PORTADAS_NODE = {
   getPanelGerenciaActividades: true, generarReporteActividades: true,
   descargarReporteActividadesPdf: true, descargarActaReunionPdf: true,
 
-  // --- Proyectos (45 de 48; PDF de reporte con Cronograma sigue en Apps Script) ---
+  // --- Proyectos (47 de 50; PDF de reporte con Cronograma sigue en Apps Script) ---
   listarProyectos: true, listarMisTareasProyectos: true, listarMiBitacoraProyectos: true,
   listarCalendarioProyectos: true, guardarProyectoComoPlantilla: true, listarPlantillasProyecto: true,
   marcarSalaVisitadaProyecto: true,
@@ -153,6 +153,8 @@ var ACCIONES_PORTADAS_NODE = {
   listarSalaProyecto: true, publicarEnSalaProyecto: true, convertirEventoEnTareaProyecto: true,
   gestionarEntregableProyecto: true, revisarEntregableProyecto: true, gestionarRiesgoProyecto: true,
   getResumenPortafolioProyectos: true,
+  // Fase H (Camino B, "avance físico"): curva S de control manual.
+  gestionarControlAvanceProyecto: true, listarControlAvanceProyecto: true,
   // Centro documental + adjuntos de Sala (R2, desgateado 2026-09-18).
   subirAdjuntoProyecto: true, descargarAdjuntoProyecto: true, gestionarDocumentoProyecto: true,
   subirVersionDocumentoProyecto: true, marcarVersionVigenteProyecto: true,

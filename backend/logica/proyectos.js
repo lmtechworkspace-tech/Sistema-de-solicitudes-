@@ -1413,6 +1413,75 @@ function gestionarRiesgo(db, data, contexto) {
   return riesgo;
 }
 
+// --- Fase H (Camino B): avance físico -- curva S de control -----------------
+//
+// Puntos de control MANUALES (% proyectado / % real por fecha), a nivel de
+// PROYECTO -- independientes del avance derivado de las tareas
+// (avance_pct/avance_esperado_pct, que YA existen). Es lo que un líder
+// reporta semanalmente sin tener que desglosar tarea por tarea, igual que la
+// "curva S" de control físico que cualquier PM de obra/proyecto lleva a mano
+// (la referencia ITO la llama "Avance Simple"). Gateado igual que el
+// baseline (congelarBaseline): solo quien gestiona el proyecto -- es una
+// declaración de gestión, no un dato operativo de cualquier integrante.
+function buscarControlAvance_(db, controlId) {
+  if (!controlId) return null;
+  return leerSeguro_(db, 'PROYECTO_CONTROL_AVANCE').find((c) => c.control_id === controlId) || null;
+}
+
+function listarControlAvance(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+  const puntos = leerSeguro_(db, 'PROYECTO_CONTROL_AVANCE')
+    .filter((c) => c.proyecto_id === proyecto.proyecto_id)
+    .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+  return { puntos };
+}
+
+function gestionarControlAvance(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeGestionarProyecto_(db, proyecto, contexto)) {
+    return { _forbidden: true, message: 'Solo quien gestiona el proyecto puede registrar el avance físico.' };
+  }
+
+  if (data.accion === 'eliminar') {
+    if (!data.control_id) return errorValidacion_('control_id', 'Falta indicar el punto de control.');
+    const actual = buscarControlAvance_(db, data.control_id);
+    if (!actual || actual.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('control_id', 'Punto de control no encontrado.');
+    eliminarFilasPorId_(db, 'PROYECTO_CONTROL_AVANCE', 'control_id', data.control_id);
+    return { eliminado: true };
+  }
+
+  const fecha = String(data.fecha || '').trim();
+  if (!fecha || isNaN(new Date(fecha).getTime())) return errorValidacion_('fecha', 'La fecha de control es obligatoria.');
+  const pctProyectado = Number(data.pct_proyectado);
+  if (data.pct_proyectado === undefined || data.pct_proyectado === '' || isNaN(pctProyectado) || pctProyectado < 0 || pctProyectado > 100) {
+    return errorValidacion_('pct_proyectado', 'El porcentaje proyectado debe ser un número entre 0 y 100.');
+  }
+  let pctReal = '';
+  if (data.pct_real !== undefined && data.pct_real !== null && data.pct_real !== '') {
+    pctReal = Number(data.pct_real);
+    if (isNaN(pctReal) || pctReal < 0 || pctReal > 100) return errorValidacion_('pct_real', 'El porcentaje real debe ser un número entre 0 y 100.');
+  }
+  const nota = String(data.nota || '').trim();
+  const cambios = { pct_proyectado: pctProyectado, pct_real: pctReal, nota, registrado_por: (contexto && contexto.email) || '' };
+
+  // UPSERT por (proyecto_id, fecha): una fecha, un punto -- reeditar el mismo
+  // día actualiza en vez de duplicar (mismo criterio que el registro del día
+  // de Dedicación).
+  const existente = leerSeguro_(db, 'PROYECTO_CONTROL_AVANCE')
+    .find((c) => c.proyecto_id === proyecto.proyecto_id && claveFecha_(c.fecha) === claveFecha_(fecha));
+  if (existente) return actualizarFilaPorId_(db, 'PROYECTO_CONTROL_AVANCE', 'control_id', existente.control_id, cambios);
+
+  const nuevo = Object.assign(
+    { control_id: uuid_(), proyecto_id: proyecto.proyecto_id, fecha, fecha_creacion: new Date().toISOString() },
+    cambios
+  );
+  agregarFila_(db, 'PROYECTO_CONTROL_AVANCE', nuevo);
+  return nuevo;
+}
+
 function getResumenPortafolio(db, contexto) {
   const proyectos = listar(db, {}, contexto);
   const activos = proyectos.filter((p) => p.estado !== 'CERRADO' && p.estado !== 'CANCELADO');
@@ -2005,6 +2074,8 @@ module.exports = {
   gestionarReunion, agregarAcuerdoReunion, eliminarAcuerdoReunion, convertirAcuerdoEnTarea, listarReuniones,
   gestionarDecision, listarDecisiones,
   gestionarEntregable, revisarEntregable, gestionarRiesgo, getResumenPortafolio,
+  // Fase H (Camino B): avance físico -- curva S de control manual.
+  gestionarControlAvance, listarControlAvance,
   // Incremento 2 (v11 Reingenieria Cronograma).
   guardarRegistroDia, eliminarRegistroDia, obtenerRendimiento, obtenerAnalitica,
   obtenerWorkloadPortafolio, congelarBaseline, reprogramarTarea,

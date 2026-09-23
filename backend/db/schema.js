@@ -307,6 +307,17 @@ const COLUMNAS = {
     'riesgo_id', 'proyecto_id', 'descripcion', 'probabilidad', 'impacto',
     'nivel', 'responsable_email', 'mitigacion', 'estado', 'fecha_creacion'
   ],
+  // Fase H (Camino B, 2026-09-22, ver documentacion/SIGSO-Proyectos-2.0-
+  // auditoria-y-propuesta.md §13): la curva S de avance FÍSICO -- un punto de
+  // control manual por fecha (% proyectado vs % real, independiente del
+  // detalle de tareas). Distinto de avance_esperado_pct/avance_pct (que se
+  // DERIVAN de las tareas): esto es lo que un líder/gerente DECLARA a mano,
+  // igual que la referencia ITO ("Avance Simple"). pct_real es opcional (una
+  // fecha futura puede tener solo lo proyectado, sin lo real todavía).
+  PROYECTO_CONTROL_AVANCE: [
+    'control_id', 'proyecto_id', 'fecha', 'pct_proyectado', 'pct_real',
+    'nota', 'registrado_por', 'fecha_creacion'
+  ],
   PROYECTO_PLANTILLAS: [
     'plantilla_id', 'nombre', 'descripcion', 'creado_por', 'fecha_creacion', 'activa'
   ],
