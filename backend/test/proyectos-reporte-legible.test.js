@@ -60,6 +60,23 @@ function armarProyecto(ctx) {
 
 const MESES_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 function bandaMesDe(iso) { return MESES_ES[Number(iso.slice(5, 7)) - 1] + ' ' + iso.slice(0, 4); }
+// La banda de mes de la carta la etiqueta semanasBarrasPdf_ con el mes del
+// LUNES de esa semana (construirSemanasBarrasPdf_: "mes: ini.slice(0, 7)"),
+// no con el mes del día exacto del compromiso -- una semana que arranca en
+// diciembre y termina en enero queda etiquetada "dic". Como diasDesdeHoy(100)
+// es relativo al reloj real, con el tiempo puede caer justo en esa semana
+// frontera (le pasó a esta prueba el 2026-09-23): sin este ajuste, la
+// aserción exige la banda de un mes que la carta -- correctamente, según su
+// propio criterio -- no dibuja para esa fecha. Replicar el mismo criterio
+// (mes del lunes de la semana) hace la prueba estable para cualquier "hoy",
+// en vez de depender de que el offset de 100 días no aterrice en esa semana
+// límite.
+function lunesDeSemanaDe_(iso) {
+  var f = new Date(iso + 'T00:00:00Z');
+  var dow = f.getUTCDay();
+  var delta = dow === 0 ? 6 : dow - 1;
+  return new Date(f.getTime() - delta * 86400000).toISOString().slice(0, 10);
+}
 
 test('la Carta Gantt arranca en el INICIO del proyecto, no en la fecha de creación auto-estampada', () => {
   const ctx = loadConSchema();
@@ -97,7 +114,7 @@ test('un compromiso lejano aparece como barra en la grilla semanal, sin arrastra
   // La tarea lejana está presente (no se pierde).
   assert.match(html, /Publicaciones a fin de año/);
   // La banda del mes del compromiso lejano aparece -> la barra llega hasta allá.
-  assert.match(html, new RegExp(bandaMesDe(diasDesdeHoy(100))));
+  assert.match(html, new RegExp(bandaMesDe(lunesDeSemanaDe_(diasDesdeHoy(100)))));
   // Es semanal, no diaria: el número de columnas de semana es acotado (<=27),
   // no ~110 columnas de día. Se cuenta el encabezado de semanas (font 7px).
   const cols = (html.match(/font-size:7px/g) || []).length;
