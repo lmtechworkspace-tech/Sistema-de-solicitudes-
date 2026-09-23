@@ -276,7 +276,12 @@ const COLUMNAS = {
     'fecha_inicio', 'fecha_objetivo', 'fecha_cierre_real',
     'salud_override', 'salud_override_motivo',
     'ultima_actualizacion', 'creado_por', 'fecha_creacion', 'activa',
-    'solicitud_origen_id'
+    'solicitud_origen_id',
+    // Fase H item 2 (Camino B, 2026-09-23, ver documentacion/SIGSO-Proyectos-
+    // 2.0-auditoria-y-propuesta.md §13): dimension financiera, opcional --
+    // un proyecto sin presupuesto simplemente no muestra la pestaña
+    // Financiero con datos.
+    'centro_costo', 'presupuesto_monto', 'presupuesto_moneda'
   ],
   // rol_proyecto: LIDER | INTEGRANTE | COLABORADOR | OBSERVADOR -- la
   // membresia es el gate FINO del modulo (mismo patron que JEFATURAS).
@@ -317,6 +322,16 @@ const COLUMNAS = {
   PROYECTO_CONTROL_AVANCE: [
     'control_id', 'proyecto_id', 'fecha', 'pct_proyectado', 'pct_real',
     'nota', 'registrado_por', 'fecha_creacion'
+  ],
+  // Fase H item 2 (Camino B, 2026-09-23): estados/hitos de pago -- la
+  // dimension financiera que SIGSO nunca tuvo. estado: proyectado |
+  // facturado | pagado. monto_real/fecha_real solo tienen sentido cuando
+  // estado ya avanzo de "proyectado" (no se fuerza en el backend: un lider
+  // puede registrar el monto real antes de marcar el estado).
+  PROYECTO_ESTADOS_PAGO: [
+    'estado_pago_id', 'proyecto_id', 'nombre', 'fecha_proyectada',
+    'monto_proyectado', 'fecha_real', 'monto_real', 'estado', 'orden',
+    'registrado_por', 'fecha_creacion'
   ],
   PROYECTO_PLANTILLAS: [
     'plantilla_id', 'nombre', 'descripcion', 'creado_por', 'fecha_creacion', 'activa'

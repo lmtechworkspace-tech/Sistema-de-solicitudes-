@@ -2318,6 +2318,9 @@
         // mismo patrón lazy que Analítica (pide su propio endpoint, no viene
         // en el detalle base).
         Componentes.boton({ texto: 'Avance', variante: vistaCronograma_ === 'avance' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'avance' }) +
+        // Fase H item 2 (Camino B, "avance financiero"): estados de pago --
+        // mismo patrón lazy que Avance/Analítica.
+        Componentes.boton({ texto: 'Financiero', variante: vistaCronograma_ === 'financiero' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'financiero' }) +
       '</div>';
     var cuerpo;
     if (vistaCronograma_ === 'plan') cuerpo = pintarCronogramaPlan_(detalle, tareas, ctxEdicion, rendimiento);
@@ -2325,6 +2328,7 @@
     else if (vistaCronograma_ === 'workload') cuerpo = pintarWorkloadProyecto_(detalle, tareas, bitacora || []);
     else if (vistaCronograma_ === 'analitica') cuerpo = pintarAnaliticaProyecto_(datosDetalleActual_ && datosDetalleActual_.analitica, tareas);
     else if (vistaCronograma_ === 'avance') cuerpo = pintarAvanceProyecto_(datosDetalleActual_ && datosDetalleActual_.controlAvance, ctxEdicion.puedeGestionar);
+    else if (vistaCronograma_ === 'financiero') cuerpo = pintarFinancieroProyecto_(datosDetalleActual_ && datosDetalleActual_.estadosPago, ctxEdicion.puedeGestionar);
     else cuerpo = pintarCronogramaDedicacion_(detalle, tareas, bitacora || [], rendimiento, ctxEdicion);
     return toggle + cuerpo;
   }
@@ -2579,6 +2583,28 @@
     pedirControlAvanceProyecto_();
   }
 
+  // Fase H item 2 (Camino B, "avance financiero"): mismo patrón exacto que
+  // Avance físico -- caché en datosDetalleActual_.estadosPago.
+  var estadosPagoEnVuelo_ = null;
+  function pedirEstadosPagoProyecto_() {
+    if (!datosDetalleActual_) return;
+    if (datosDetalleActual_.estadosPago !== undefined) return;
+    if (estadosPagoEnVuelo_ === proyectoActivoId_) return;
+    estadosPagoEnVuelo_ = proyectoActivoId_;
+    var idAlPedir = proyectoActivoId_;
+    apiSeguro_('listarEstadosPagoProyecto', { proyecto_id: proyectoActivoId_ }).then(function (r) {
+      if (estadosPagoEnVuelo_ === idAlPedir) estadosPagoEnVuelo_ = null;
+      if (!datosDetalleActual_ || idAlPedir !== proyectoActivoId_) return;
+      datosDetalleActual_.estadosPago = (r && r.ok) ? r.data : null;
+      if (pestanaActiva_ === 'cronograma' && vistaCronograma_ === 'financiero') cambiarPestana_('cronograma');
+    });
+  }
+  function cargarEstadosPagoProyecto_(cont) {
+    if (!datosDetalleActual_) return;
+    cambiarPestana_('cronograma');
+    pedirEstadosPagoProyecto_();
+  }
+
   // v11 (P3, "SPI conceptual" en pantalla): tooltips explican qué es cada
   // métrica en una frase -- "explicable, no una metodología completa" aplica
   // también a cómo se presenta, no solo a cómo se calcula.
@@ -2789,6 +2815,184 @@
             cerrar();
             datosDetalleActual_.controlAvance = undefined;
             cargarControlAvanceProyecto_();
+          });
+        });
+      });
+    }
+  }
+
+  // Fase H item 2 (Camino B, "avance financiero"): estados de pago. Misma
+  // dimensión monetaria que la referencia ITO ("Avance Financiero"), pero
+  // domain-neutral -- cualquier proyecto con presupuesto/facturación, no
+  // solo obra. moneda: 'CLP' | 'UF'.
+  function formatoMonto_(monto, moneda) {
+    if (monto === '' || monto === null || monto === undefined) return '—';
+    var n = Number(monto);
+    if (isNaN(n)) return '—';
+    if (moneda === 'UF') return n.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' UF';
+    return '$' + Math.round(n).toLocaleString('es-CL');
+  }
+
+  var ESTADO_PAGO_BADGE_ = { proyectado: 'neutro', facturado: 'info', pagado: 'ok' };
+  var ESTADO_PAGO_LABEL_ = { proyectado: 'Proyectado', facturado: 'Facturado', pagado: 'Pagado' };
+
+  function pintarFinancieroProyecto_(estadosPago, puedeGestionar) {
+    if (estadosPago === undefined) return Componentes.cargando('Cargando avance financiero...');
+    if (estadosPago === null) return Componentes.vacio({ texto: 'No se pudo cargar el avance financiero.' });
+    var moneda = estadosPago.presupuesto_moneda || 'CLP';
+    var estados = estadosPago.estados || [];
+    var acciones = puedeGestionar
+      ? '<div class="sigso-py-cabecera">' + Componentes.boton({ texto: '+ Registrar estado de pago', clase: 'js-py-fin-nuevo' }) + '</div>'
+      : '';
+    if (!estados.length) {
+      return acciones + Componentes.vacio({
+        texto: 'Todavía no hay estados de pago.',
+        detalle: puedeGestionar
+          ? 'Registra los hitos de pago (anticipo, avance, entrega final) con su monto proyectado.'
+          : 'Quien gestiona el proyecto todavía no registró estados de pago.'
+      });
+    }
+    var hoy = new Date();
+    var proyectadoAFecha = estados.filter(function (e) { return new Date(e.fecha_proyectada) <= hoy; })
+      .reduce(function (s, e) { return s + (Number(e.monto_proyectado) || 0); }, 0);
+    var real = estados.filter(function (e) { return e.monto_real !== '' && e.monto_real !== null && e.monto_real !== undefined; })
+      .reduce(function (s, e) { return s + (Number(e.monto_real) || 0); }, 0);
+    var diferencia = real - proyectadoAFecha;
+    var kpis = '<div class="sigso-py-kpis">' +
+      Componentes.kpi({ etiqueta: 'Presupuesto', valor: estadosPago.presupuesto_monto ? formatoMonto_(estadosPago.presupuesto_monto, moneda) : '—' }) +
+      Componentes.kpi({ etiqueta: 'Proyectado a la fecha', valor: formatoMonto_(proyectadoAFecha, moneda) }) +
+      Componentes.kpi({ etiqueta: 'Real (facturado/pagado)', valor: formatoMonto_(real, moneda) }) +
+      Componentes.kpi({
+        etiqueta: 'Diferencia', valor: (diferencia > 0 ? '+' : '') + formatoMonto_(diferencia, moneda), alerta: diferencia > 0,
+        titulo: 'Real menos proyectado a la fecha. Positivo = se ha facturado/pagado más de lo proyectado a hoy.'
+      }) +
+    '</div>';
+    var curva = svgFinanciero_(estados);
+    var filas = estados.map(function (e) {
+      return '<tr>' +
+        '<td data-label="Nombre">' + Componentes.escaparHtml(e.nombre) + '</td>' +
+        '<td data-label="Fecha proyectada">' + fechaCorta_(e.fecha_proyectada) + '</td>' +
+        '<td data-label="Monto proyectado">' + formatoMonto_(e.monto_proyectado, moneda) + '</td>' +
+        '<td data-label="Fecha real">' + (e.fecha_real ? fechaCorta_(e.fecha_real) : '—') + '</td>' +
+        '<td data-label="Monto real">' + formatoMonto_(e.monto_real, moneda) + '</td>' +
+        '<td data-label="Estado">' + Componentes.badge(ESTADO_PAGO_LABEL_[e.estado] || e.estado, ESTADO_PAGO_BADGE_[e.estado] || 'neutro') + '</td>' +
+        (puedeGestionar
+          ? '<td data-label="" class="sigso-py-tabla-acc">' + Componentes.boton({ texto: 'Editar', variante: 'sutil', clase: 'js-py-fin-editar', idx: e.estado_pago_id }) + '</td>'
+          : '') +
+      '</tr>';
+    }).join('');
+    return acciones + curva +
+      '<div class="sigso-py-ded-scroll"><table class="sigso-tabla-tablero sigso-py-avance-tabla"><thead><tr>' +
+        '<th>Nombre</th><th>Fecha proyectada</th><th>Monto proyectado</th><th>Fecha real</th><th>Monto real</th><th>Estado</th>' + (puedeGestionar ? '<th></th>' : '') +
+      '</tr></thead><tbody>' + filas + '</tbody></table></div>' +
+      kpis;
+  }
+
+  // Curva de acumulados (no 0-100% como Avance físico): suma corriente del
+  // monto proyectado por hito, contra la suma corriente del monto real (solo
+  // en los hitos que ya lo tienen). Reusa las clases CSS de Avance físico
+  // (.sigso-py-avance-*) -- misma forma visual, otra unidad.
+  function svgFinanciero_(estados) {
+    var an = 640, al = 200, m = { i: 56, d: 12, s: 16, b: 16 };
+    var ax = an - m.i - m.d, ay = al - m.s - m.b;
+    var n = estados.length;
+    var x = function (i) { return m.i + (n === 1 ? ax / 2 : (i / (n - 1)) * ax); };
+    var acumProy = 0;
+    var puntosProy = estados.map(function (e) { acumProy += Number(e.monto_proyectado) || 0; return acumProy; });
+    var acumReal = 0;
+    var puntosReal = [];
+    estados.forEach(function (e, i) {
+      if (e.monto_real !== '' && e.monto_real !== null && e.monto_real !== undefined) {
+        acumReal += Number(e.monto_real) || 0;
+        puntosReal.push({ i: i, v: acumReal });
+      }
+    });
+    var maxVal = Math.max(acumProy, acumReal, 1);
+    var y = function (v) { return m.s + ay - (Math.max(0, v) / maxVal) * ay; };
+    var lineaProy = puntosProy.map(function (v, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); }).join(' ');
+    var lineaReal = puntosReal.map(function (p, idx) { return (idx ? 'L' : 'M') + x(p.i).toFixed(1) + ' ' + y(p.v).toFixed(1); }).join(' ');
+    var fmtEje_ = function (v) { return v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : Math.round(v).toLocaleString('es-CL'); };
+    return '<figure class="sigso-py-avance-curva">' +
+      '<svg viewBox="0 0 ' + an + ' ' + al + '" role="img" aria-label="Curva financiera: acumulado proyectado vs real">' +
+        '<line x1="' + m.i + '" y1="' + m.s + '" x2="' + m.i + '" y2="' + (m.s + ay) + '" class="sigso-rep-eje"/>' +
+        '<line x1="' + m.i + '" y1="' + (m.s + ay) + '" x2="' + (an - m.d) + '" y2="' + (m.s + ay) + '" class="sigso-rep-eje"/>' +
+        '<text x="' + (m.i - 6) + '" y="' + (m.s + 4) + '" class="sigso-rep-tick" text-anchor="end">' + fmtEje_(maxVal) + '</text>' +
+        '<text x="' + (m.i - 6) + '" y="' + (m.s + ay) + '" class="sigso-rep-tick" text-anchor="end">0</text>' +
+        '<path d="' + lineaProy + '" class="sigso-py-avance-linea sigso-py-avance-linea--proy"/>' +
+        (lineaReal ? '<path d="' + lineaReal + '" class="sigso-py-avance-linea sigso-py-avance-linea--real"/>' : '') +
+        puntosProy.map(function (v, i) { return '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(v).toFixed(1) + '" r="3" class="sigso-py-avance-punto sigso-py-avance-punto--proy"/>'; }).join('') +
+        puntosReal.map(function (p) { return '<circle cx="' + x(p.i).toFixed(1) + '" cy="' + y(p.v).toFixed(1) + '" r="3" class="sigso-py-avance-punto sigso-py-avance-punto--real"/>'; }).join('') +
+      '</svg>' +
+      '<figcaption class="sigso-py-avance-leyenda">' +
+        '<span class="sigso-py-avance-leg sigso-py-avance-leg--proy">Proyectado acumulado</span>' +
+        '<span class="sigso-py-avance-leg sigso-py-avance-leg--real">Real acumulado</span>' +
+      '</figcaption>' +
+    '</figure>';
+  }
+
+  // Modal registrar/editar un estado de pago -- CRUD normal (no upsert como
+  // Avance físico: acá cada hito de pago tiene NOMBRE propio, no vive uno
+  // por fecha).
+  function abrirFormularioEstadoPago_(estadoPago) {
+    var esEdicion = !!estadoPago;
+    var fondo = document.createElement('div');
+    fondo.className = 'sigso-modal-fondo';
+    fondo.innerHTML =
+      '<div class="sigso-modal" role="dialog" aria-modal="true">' +
+        '<h3 class="sigso-modal__titulo">' + (esEdicion ? 'Editar estado de pago' : 'Nuevo estado de pago') + '</h3>' +
+        '<form id="form-py-fin">' +
+          Componentes.campoTexto({ id: 'py-fin-nombre', label: 'Nombre', valor: esEdicion ? estadoPago.nombre : '', requerido: true, placeholder: 'Anticipo, Avance 50%, Entrega final...' }) +
+          '<div class="sigso-py-form-fila">' +
+            Componentes.campoTexto({ id: 'py-fin-fecha-proy', label: 'Fecha proyectada', tipo: 'date', valor: esEdicion ? fechaISOCorta_(estadoPago.fecha_proyectada) : '', requerido: true }) +
+            Componentes.campoTexto({ id: 'py-fin-monto-proy', label: 'Monto proyectado', tipo: 'number', valor: esEdicion ? estadoPago.monto_proyectado : '', requerido: true }) +
+          '</div>' +
+          Componentes.campoSelect({
+            id: 'py-fin-estado', label: 'Estado', valor: esEdicion ? estadoPago.estado : 'proyectado', placeholder: false,
+            opciones: [{ valor: 'proyectado', texto: 'Proyectado' }, { valor: 'facturado', texto: 'Facturado' }, { valor: 'pagado', texto: 'Pagado' }]
+          }) +
+          '<div class="sigso-py-form-fila">' +
+            Componentes.campoTexto({ id: 'py-fin-fecha-real', label: 'Fecha real (opcional)', tipo: 'date', valor: esEdicion ? fechaISOCorta_(estadoPago.fecha_real) : '' }) +
+            Componentes.campoTexto({ id: 'py-fin-monto-real', label: 'Monto real (opcional)', tipo: 'number', valor: esEdicion ? estadoPago.monto_real : '' }) +
+          '</div>' +
+          '<div class="sigso-modal__acciones">' +
+            (esEdicion ? Componentes.boton({ texto: 'Eliminar', variante: 'peligro', clase: 'js-py-fin-eliminar', tipo: 'button' }) : '') +
+            Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
+            Componentes.boton({ texto: esEdicion ? 'Guardar' : 'Registrar', tipo: 'submit' }) +
+          '</div>' +
+        '</form>' +
+      '</div>';
+    var cerrar = montarModal_(fondo);
+    fondo.querySelector('#form-py-fin').addEventListener('submit', function (evento) {
+      enviarModal_(evento, 'gestionarEstadoPagoProyecto', {
+        proyecto_id: proyectoActivoId_,
+        estado_pago_id: esEdicion ? estadoPago.estado_pago_id : undefined,
+        nombre: document.getElementById('py-fin-nombre').value,
+        fecha_proyectada: document.getElementById('py-fin-fecha-proy').value,
+        monto_proyectado: document.getElementById('py-fin-monto-proy').value,
+        estado: document.getElementById('py-fin-estado').value,
+        fecha_real: document.getElementById('py-fin-fecha-real').value,
+        monto_real: document.getElementById('py-fin-monto-real').value
+      }, function () {
+        cerrar();
+        datosDetalleActual_.estadosPago = undefined;
+        cargarEstadosPagoProyecto_();
+      });
+    });
+    var btnEliminar = fondo.querySelector('.js-py-fin-eliminar');
+    if (btnEliminar) {
+      btnEliminar.addEventListener('click', function () {
+        Componentes.confirmar({ titulo: 'Eliminar estado de pago', mensaje: '¿Confirmas eliminar el estado de pago "' + estadoPago.nombre + '"?', peligro: true }).then(function (ok) {
+          if (!ok) return;
+          api_('gestionarEstadoPagoProyecto', {
+            proyecto_id: proyectoActivoId_, accion: 'eliminar', estado_pago_id: estadoPago.estado_pago_id
+          }).then(function (respuesta) {
+            if (!respuesta || !respuesta.ok) {
+              Componentes.aviso({ texto: (respuesta && respuesta.message) || 'No se pudo eliminar el estado de pago.', tipo: 'error' });
+              return;
+            }
+            cerrar();
+            datosDetalleActual_.estadosPago = undefined;
+            cargarEstadosPagoProyecto_();
           });
         });
       });
@@ -5107,11 +5311,12 @@
     cont.querySelectorAll('.js-py-cron-vista').forEach(function (btn) {
       btn.addEventListener('click', function () {
         vistaCronograma_ = btn.getAttribute('data-idx');
-        // v11 (P3) / Fase H: "Analítica" y "Avance" son las únicas subvistas
-        // con endpoint propio -- las demás repintan directo desde caché
-        // (cambiarPestana_).
+        // v11 (P3) / Fase H: "Analítica"/"Avance"/"Financiero" son las únicas
+        // subvistas con endpoint propio -- las demás repintan directo desde
+        // caché (cambiarPestana_).
         if (vistaCronograma_ === 'analitica') cargarAnaliticaProyecto_(cont);
         else if (vistaCronograma_ === 'avance') cargarControlAvanceProyecto_(cont);
+        else if (vistaCronograma_ === 'financiero') cargarEstadosPagoProyecto_(cont);
         else cambiarPestana_('cronograma');
       });
     });
@@ -5151,6 +5356,15 @@
         var puntos = (datosDetalleActual_ && datosDetalleActual_.controlAvance) || [];
         var punto = puntos.find(function (p) { return p.control_id === btn.getAttribute('data-idx'); });
         if (punto) abrirFormularioControlAvance_(punto);
+      });
+    });
+    var finNuevoBtn = cont.querySelector('.js-py-fin-nuevo');
+    if (finNuevoBtn) finNuevoBtn.addEventListener('click', function () { abrirFormularioEstadoPago_(null); });
+    cont.querySelectorAll('.js-py-fin-editar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var estados = (datosDetalleActual_ && datosDetalleActual_.estadosPago && datosDetalleActual_.estadosPago.estados) || [];
+        var estadoPago = estados.find(function (e) { return e.estado_pago_id === btn.getAttribute('data-idx'); });
+        if (estadoPago) abrirFormularioEstadoPago_(estadoPago);
       });
     });
     wireCartaControles_(cont, function () { cambiarPestana_('cronograma'); }, (datosDetalleActual_ && datosDetalleActual_.detalle) || null,
@@ -5598,6 +5812,19 @@
               })
             }) +
           '</div>' +
+          // Fase H item 2 (Camino B, "avance financiero"): dimensión
+          // financiera opcional del proyecto -- sin esto la pestaña
+          // Financiero no tiene con qué mostrar el KPI "Presupuesto".
+          '<div class="sigso-py-form-fila">' +
+            Componentes.campoTexto({ id: 'py-ed-centro-costo', label: 'Centro de costo (opcional)', valor: p.centro_costo }) +
+          '</div>' +
+          '<div class="sigso-py-form-fila">' +
+            Componentes.campoTexto({ id: 'py-ed-presupuesto-monto', label: 'Presupuesto (opcional)', tipo: 'number', valor: p.presupuesto_monto }) +
+            Componentes.campoSelect({
+              id: 'py-ed-presupuesto-moneda', label: 'Moneda', valor: p.presupuesto_moneda || 'CLP', placeholder: false,
+              opciones: [{ valor: 'CLP', texto: 'CLP' }, { valor: 'UF', texto: 'UF' }]
+            }) +
+          '</div>' +
           '<div class="sigso-modal__acciones">' +
             Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-py-cancelar', tipo: 'button' }) +
             Componentes.boton({ texto: 'Guardar', tipo: 'submit' }) +
@@ -5606,6 +5833,7 @@
       '</div>';
     var cerrar = montarModal_(fondo);
     document.getElementById('form-py-editar').addEventListener('submit', function (evento) {
+      var montoPresupuesto = document.getElementById('py-ed-presupuesto-monto').value;
       enviarModal_(evento, 'actualizarProyecto', {
         proyecto_id: p.proyecto_id,
         nombre: document.getElementById('py-ed-nombre').value,
@@ -5614,7 +5842,10 @@
         fecha_inicio: document.getElementById('py-ed-fecha-inicio').value,
         fecha_objetivo: document.getElementById('py-ed-fecha-objetivo').value,
         prioridad: document.getElementById('py-ed-prioridad').value,
-        estado: document.getElementById('py-ed-estado').value
+        estado: document.getElementById('py-ed-estado').value,
+        centro_costo: document.getElementById('py-ed-centro-costo').value,
+        presupuesto_monto: montoPresupuesto,
+        presupuesto_moneda: montoPresupuesto === '' ? '' : document.getElementById('py-ed-presupuesto-moneda').value
       }, function () { cerrar(); refrescarDetalle_(); });
     });
   }

@@ -277,6 +277,9 @@ const ACCIONES = {
   // Fase H (Camino B): avance físico -- curva S de control manual.
   gestionarControlAvanceProyecto: (db, data, contexto) => Proyectos.gestionarControlAvance(db, data, contexto),
   listarControlAvanceProyecto: (db, data, contexto) => Proyectos.listarControlAvance(db, data, contexto),
+  // Fase H item 2 (Camino B): avance financiero -- estados de pago.
+  gestionarEstadoPagoProyecto: (db, data, contexto) => Proyectos.gestionarEstadoPago(db, data, contexto),
+  listarEstadosPagoProyecto: (db, data, contexto) => Proyectos.listarEstadosPago(db, data, contexto),
 
   // Cronograma avanzado (v11 Reingenieria Cronograma): incremento 2.
   guardarRegistroDiaProyecto: (db, data, contexto) => Proyectos.guardarRegistroDia(db, data, contexto),

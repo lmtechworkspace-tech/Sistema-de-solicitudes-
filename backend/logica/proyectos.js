@@ -89,6 +89,10 @@ const PROYECTOS_ESTADOS = {
   EN_REVISION: 'EN_REVISION', CERRADO: 'CERRADO', CANCELADO: 'CANCELADO'
 };
 
+// Fase H item 2 (Camino B, 2026-09-23): dimension financiera.
+const MONEDAS_PROYECTO_ = ['CLP', 'UF'];
+const ESTADOS_PAGO_ = ['proyectado', 'facturado', 'pagado'];
+
 // v11 (P1, "score de salud explicable y ponderado"): pesos documentados que
 // restan de 100, uno por cada senal objetiva que ya alimenta el semaforo.
 const SALUD_PESOS_ = {
@@ -793,10 +797,22 @@ function actualizar(db, data, contexto) {
   const proyecto = buscarProyecto_(db, data.proyecto_id);
   if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
   if (!puedeGestionarProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'Solo el líder del proyecto o un administrador pueden editarlo.' };
-  const camposEditables = ['nombre', 'descripcion', 'objetivo', 'resultado_esperado', 'area_id', 'cliente_id', 'categoria', 'fecha_inicio', 'fecha_objetivo', 'codigo'];
+  const camposEditables = ['nombre', 'descripcion', 'objetivo', 'resultado_esperado', 'area_id', 'cliente_id', 'categoria', 'fecha_inicio', 'fecha_objetivo', 'codigo', 'centro_costo'];
   const cambios = { ultima_actualizacion: new Date().toISOString() };
   camposEditables.forEach((campo) => { if (data[campo] !== undefined) cambios[campo] = data[campo]; });
   if (data.prioridad && ORDEN_PRIORIDAD.indexOf(data.prioridad) !== -1) cambios.prioridad = data.prioridad;
+
+  // Fase H item 2: presupuesto opcional -- si viene monto, la moneda es
+  // obligatoria (y viceversa), para no guardar un numero sin unidad.
+  if (data.presupuesto_monto !== undefined || data.presupuesto_moneda !== undefined) {
+    const monto = data.presupuesto_monto === '' || data.presupuesto_monto === undefined ? '' : Number(data.presupuesto_monto);
+    const moneda = String(data.presupuesto_moneda || '').trim();
+    if (monto !== '' && (isNaN(monto) || monto < 0)) return errorValidacion_('presupuesto_monto', 'El presupuesto debe ser un número positivo.');
+    if (monto !== '' && !moneda) return errorValidacion_('presupuesto_moneda', 'Indica la moneda del presupuesto (CLP o UF).');
+    if (moneda && MONEDAS_PROYECTO_.indexOf(moneda) === -1) return errorValidacion_('presupuesto_moneda', 'Moneda inválida.');
+    cambios.presupuesto_monto = monto;
+    cambios.presupuesto_moneda = monto === '' ? '' : moneda;
+  }
 
   const errFechasAct = errorFechasProyecto_(
     data.fecha_inicio !== undefined ? data.fecha_inicio : proyecto.fecha_inicio,
@@ -1482,6 +1498,82 @@ function gestionarControlAvance(db, data, contexto) {
   return nuevo;
 }
 
+// Fase H item 2 (Camino B, 2026-09-23, ver documentacion/SIGSO-Proyectos-2.0-
+// auditoria-y-propuesta.md §13/§18): estados/hitos de pago -- la dimension
+// financiera que SIGSO nunca tuvo (monto proyectado vs monto real, por hito
+// nombrado, no por fecha como el avance físico). Mismo gateo que
+// gestionarControlAvance: solo quien gestiona el proyecto escribe.
+function buscarEstadoPago_(db, estadoPagoId) {
+  if (!estadoPagoId) return null;
+  return leerSeguro_(db, 'PROYECTO_ESTADOS_PAGO').find((e) => e.estado_pago_id === estadoPagoId) || null;
+}
+
+function listarEstadosPago(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+  const estados = leerSeguro_(db, 'PROYECTO_ESTADOS_PAGO')
+    .filter((e) => e.proyecto_id === proyecto.proyecto_id)
+    .sort((a, b) => (Number(a.orden) || 0) - (Number(b.orden) || 0) || new Date(a.fecha_proyectada) - new Date(b.fecha_proyectada));
+  return { estados, presupuesto_monto: proyecto.presupuesto_monto || '', presupuesto_moneda: proyecto.presupuesto_moneda || '' };
+}
+
+function gestionarEstadoPago(db, data, contexto) {
+  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeGestionarProyecto_(db, proyecto, contexto)) {
+    return { _forbidden: true, message: 'Solo quien gestiona el proyecto puede registrar estados de pago.' };
+  }
+
+  if (data.accion === 'eliminar') {
+    if (!data.estado_pago_id) return errorValidacion_('estado_pago_id', 'Falta indicar el estado de pago.');
+    const actual = buscarEstadoPago_(db, data.estado_pago_id);
+    if (!actual || actual.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('estado_pago_id', 'Estado de pago no encontrado.');
+    eliminarFilasPorId_(db, 'PROYECTO_ESTADOS_PAGO', 'estado_pago_id', data.estado_pago_id);
+    return { eliminado: true };
+  }
+
+  const nombre = String(data.nombre || '').trim();
+  if (!nombre) return errorValidacion_('nombre', 'El nombre del estado de pago es obligatorio.');
+  const fechaProyectada = String(data.fecha_proyectada || '').trim();
+  if (!fechaProyectada || isNaN(new Date(fechaProyectada).getTime())) return errorValidacion_('fecha_proyectada', 'La fecha proyectada es obligatoria.');
+  const montoProyectado = Number(data.monto_proyectado);
+  if (data.monto_proyectado === undefined || data.monto_proyectado === '' || isNaN(montoProyectado) || montoProyectado < 0) {
+    return errorValidacion_('monto_proyectado', 'El monto proyectado debe ser un número positivo.');
+  }
+  let fechaReal = '';
+  if (data.fecha_real !== undefined && data.fecha_real !== null && data.fecha_real !== '') {
+    fechaReal = String(data.fecha_real).trim();
+    if (isNaN(new Date(fechaReal).getTime())) return errorValidacion_('fecha_real', 'Fecha real inválida.');
+  }
+  let montoReal = '';
+  if (data.monto_real !== undefined && data.monto_real !== null && data.monto_real !== '') {
+    montoReal = Number(data.monto_real);
+    if (isNaN(montoReal) || montoReal < 0) return errorValidacion_('monto_real', 'El monto real debe ser un número positivo.');
+  }
+  const estado = data.estado && ESTADOS_PAGO_.indexOf(data.estado) !== -1 ? data.estado : 'proyectado';
+
+  const cambios = {
+    nombre, fecha_proyectada: fechaProyectada, monto_proyectado: montoProyectado,
+    fecha_real: fechaReal, monto_real: montoReal, estado, registrado_por: (contexto && contexto.email) || ''
+  };
+
+  if (data.estado_pago_id) {
+    const existente = buscarEstadoPago_(db, data.estado_pago_id);
+    if (!existente || existente.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('estado_pago_id', 'Estado de pago no encontrado.');
+    return actualizarFilaPorId_(db, 'PROYECTO_ESTADOS_PAGO', 'estado_pago_id', existente.estado_pago_id, cambios);
+  }
+
+  const existentes = leerSeguro_(db, 'PROYECTO_ESTADOS_PAGO').filter((e) => e.proyecto_id === proyecto.proyecto_id);
+  const ordenMax = existentes.reduce((max, e) => Math.max(max, Number(e.orden) || 0), -1);
+  const nuevo = Object.assign(
+    { estado_pago_id: uuid_(), proyecto_id: proyecto.proyecto_id, orden: ordenMax + 1, fecha_creacion: new Date().toISOString() },
+    cambios
+  );
+  agregarFila_(db, 'PROYECTO_ESTADOS_PAGO', nuevo);
+  return nuevo;
+}
+
 function getResumenPortafolio(db, contexto) {
   const proyectos = listar(db, {}, contexto);
   const activos = proyectos.filter((p) => p.estado !== 'CERRADO' && p.estado !== 'CANCELADO');
@@ -2076,6 +2168,8 @@ module.exports = {
   gestionarEntregable, revisarEntregable, gestionarRiesgo, getResumenPortafolio,
   // Fase H (Camino B): avance físico -- curva S de control manual.
   gestionarControlAvance, listarControlAvance,
+  // Fase H item 2 (Camino B): avance financiero -- estados de pago.
+  gestionarEstadoPago, listarEstadosPago,
   // Incremento 2 (v11 Reingenieria Cronograma).
   guardarRegistroDia, eliminarRegistroDia, obtenerRendimiento, obtenerAnalitica,
   obtenerWorkloadPortafolio, congelarBaseline, reprogramarTarea,
