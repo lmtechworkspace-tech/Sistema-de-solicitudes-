@@ -104,6 +104,16 @@ test('crearRdi: proyecto_id inexistente devuelve error de validación', async ()
   assert.equal(r._validationError, true);
 });
 
+test('crearRdi: una cuenta sin empresa_id recibe un error claro (no el genérico de Solicitudes)', async () => {
+  const db = db_();
+  const proyecto = crearProyectoBase(db);
+  const ctxSinEmpresa = { email: 'leo@rld.cl', nombre: 'Leo Lider', rol: 'DEV', empresa_id: '' };
+  const r = await Proyectos.crearRdi(db, { proyecto_id: proyecto.proyecto_id, titulo: 'X', descripcion: 'Y' }, ctxSinEmpresa);
+  assert.equal(r._validationError, true);
+  assert.match(r.message, /empresa/i);
+  assert.equal(filas(db, 'SOLICITUDES').length, 0);
+});
+
 test('crearRdi: el catálogo CAT_TIPOS["RDI"] se autocrea una sola vez', async () => {
   const db = db_();
   const proyecto = crearProyectoBase(db);

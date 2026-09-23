@@ -1613,6 +1613,10 @@ async function crearRdi(db, data, contexto) {
   if (!titulo) return errorValidacion_('titulo', 'El título es obligatorio.');
   const descripcion = String(data.descripcion || '').trim();
   if (!descripcion) return errorValidacion_('descripcion', 'La descripción es obligatoria.');
+  // Solicitudes.crearSolicitud tambien exige empresa_id, pero ese error
+  // saldria sin contexto (una cuenta sin empresa_id es un problema de la
+  // CUENTA, no del formulario de RDI que la persona acaba de llenar bien).
+  if (!contexto.empresa_id) return errorValidacion_('empresa_id', 'Tu cuenta no tiene una empresa asociada; contacta a un administrador.');
 
   asegurarCatalogoRdi_(db);
 
