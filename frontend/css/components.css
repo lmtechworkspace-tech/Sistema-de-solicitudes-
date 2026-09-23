@@ -3505,6 +3505,14 @@
 }
 .sigso-py-vista-toggle > * { flex-shrink: 0; }
 
+/* Refactor "Planificación" (2026-09-23): Cronograma/Dedicación/Tabla son las
+   3 vistas PRIMARIAS del encargo -- las demás (Registro diario/Historial/
+   Analítica/Avance/Financiero/RDI) siguen ahí intactas, pero un paso atrás
+   visualmente (más chicas, sin negrita en el texto de ayuda), para que la
+   jerarquía sea clara sin ocultar nada (§2/§48 del encargo). */
+.sigso-py-planificacion-subtitulo { margin: 0 0 var(--esp-2); }
+.sigso-py-vista-toggle--secundario .sigso-boton { font-size: var(--texto-sm); padding: var(--esp-1) var(--esp-2); }
+
 /* Auditoría UX 2026-09-22 (Fase B): vista TABLA de tareas -- reusa el
    componente ordenable de Gerencia (.sigso-tabla-tablero, con flechas de orden
    y tarjetas en móvil). Solo hacen falta el scroll horizontal y unos detalles:

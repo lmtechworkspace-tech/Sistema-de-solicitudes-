@@ -768,8 +768,10 @@
     // La sub-vista del Cronograma tambien vuelve a su inicio. Sin esto
     // sobrevivia al cambio de proyecto mientras sus datos NO: abrir otro
     // proyecto con la vista en 'analitica' dejaba un spinner permanente,
-    // porque nadie pedia una analitica que ya se creia en curso.
-    vistaCronograma_ = 'dedicacion';
+    // porque nadie pedia una analitica que ya se creia en curso. Refactor
+    // "Planificación": el inicio es 'plan' (Cronograma/Gantt), no el
+    // registro diario -- mismo criterio que el valor inicial de la variable.
+    vistaCronograma_ = 'plan';
     datosDetalleActual_ = null;
     refrescarDetalle_();
   }
@@ -1128,7 +1130,7 @@
       { id: 'sala', texto: 'Sala' },
       { id: 'tareas', texto: 'Tareas' },
       { id: 'hitos', texto: 'Hitos' },
-      { id: 'cronograma', texto: 'Cronograma' },
+      { id: 'cronograma', texto: 'Planificación' },
       { id: 'entregables', texto: 'Entregables' },
       { id: 'documentos', texto: 'Documentos' },
       { id: 'reuniones', texto: 'Reuniones' },
@@ -2355,33 +2357,49 @@
     return acciones + '<div class="sigso-py-lista">' + filas + sinHitoHtml + '</div>';
   }
 
-  // --- Cronograma: Plan vs. Dedicación (v10, Fases C y E) -------------------
+  // --- Planificación: Cronograma / Dedicación / Tabla (v10 → refactor 2026-09-23) --
   //
-  // Dos lentes sobre la MISMA pestaña: "Plan" (Fase C, ya existía) muestra
-  // la ventana comprometida de cada tarea -- lo que el cronograma de
-  // siempre dice. "Dedicación" (Fase E, propuesta "Carta Gantt de
-  // Dedicación") muestra, día por día, en qué se ocupó el recurso de
-  // verdad -- releyendo la MISMA bitácora de check-ins que "Mi trabajo" ya
-  // escribe, sin marcar nada a mano. La diferencia entre las dos vistas es
-  // literalmente la propuesta.
-  var vistaCronograma_ = 'dedicacion';
+  // Refactor "Planificación" (Etapa 3, adaptado a la arquitectura real -- ver
+  // memoria sigso-planificacion-refactor): el encargo pide 3 vistas primarias
+  // -- Cronograma (Gantt plan-vs-real), Dedicación (carga por persona) y
+  // Tabla (operacional) -- con el resto de las sub-vistas (que ya existían y
+  // aportan valor real) disponibles pero en segundo plano, no compitiendo por
+  // atención. Dos decisiones de nomenclatura, hechas a propósito:
+  //  1. "Plan" pasa a llamarse "Cronograma" (coincide con el encargo) y es
+  //     ahora la vista de aterrizaje por defecto -- un Gantt es lo que
+  //     cualquier herramienta de seguimiento muestra primero, no un registro
+  //     diario.
+  //  2. "Workload" pasa a llamarse "Dedicación" -- es LITERALMENTE lo que el
+  //     encargo describe como "Dedicación" (carga de trabajo por persona).
+  //     La vista que ANTES se llamaba "Dedicación" (registro diario editable
+  //     por tarea, con horas) se renombra a "Registro diario" para no
+  //     colisionar -- sigue intacta, célula por célula, con sus reglas de
+  //     negocio (RN-703/RN-710); el nombre viejo confundía "carga de
+  //     trabajo" con "bitácora diaria de una tarea", que son cosas distintas
+  //     (ver el hallazgo de la auditoría: Dedicación captura HORAS reales,
+  //     nunca se colapsó en conteo de tareas).
+  // "Tabla" reusa pintarTareasTabla_ tal cual (la misma función que ya sirve
+  // a la pestaña Tareas) -- una vista, dos puertas de entrada, no una
+  // segunda implementación (§51 del encargo).
+  var vistaCronograma_ = 'plan';
 
   function pintarCronograma_(detalle, tareas, bitacora, rendimiento, ctxEdicion) {
-    var toggle = '<div class="sigso-py-vista-toggle" style="margin-bottom:var(--esp-3);">' +
-        Componentes.boton({ texto: 'Dedicación', variante: vistaCronograma_ === 'dedicacion' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'dedicacion' }) +
-        Componentes.boton({ texto: 'Plan', variante: vistaCronograma_ === 'plan' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'plan' }) +
-        // v11 (P1, "historial visible"): 3ra vista -- un feed cronológico de
-        // TODO lo que pasó en el proyecto (reprogramaciones, check-ins,
-        // registros del día, entregas...), sin red nueva: reusa la MISMA
-        // bitácora que ya cargó Dedicación.
+    // Refactor "Planificación": la pestaña ya se llama "Planificación" en el
+    // tab bar (PESTANAS) -- esta línea es el subtítulo que pedía el encargo,
+    // vive acá (no en la cabecera compartida) para no tocar el resto de
+    // pestañas.
+    var subtitulo = '<p class="sigso-ayuda sigso-py-planificacion-subtitulo">Planifica, controla y compara la ejecución de tus actividades.</p>';
+    var toggle = subtitulo + '<div class="sigso-py-vista-toggle sigso-py-vista-toggle--principal" style="margin-bottom:var(--esp-2);">' +
+        Componentes.boton({ texto: 'Cronograma', variante: vistaCronograma_ === 'plan' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'plan' }) +
+        Componentes.boton({ texto: 'Dedicación', variante: vistaCronograma_ === 'workload' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'workload' }) +
+        Componentes.boton({ texto: 'Tabla', variante: vistaCronograma_ === 'tabla' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'tabla' }) +
+      '</div>' +
+      '<div class="sigso-py-vista-toggle sigso-py-vista-toggle--secundario" style="margin-bottom:var(--esp-3);">' +
+        Componentes.boton({ texto: 'Registro diario', variante: vistaCronograma_ === 'dedicacion' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'dedicacion' }) +
+        // v11 (P1, "historial visible"): un feed cronológico de TODO lo que
+        // pasó en el proyecto (reprogramaciones, check-ins, registros del
+        // día, entregas...), sin red nueva: reusa la MISMA bitácora.
         Componentes.boton({ texto: 'Historial', variante: vistaCronograma_ === 'historial' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'historial' }) +
-        // v11 (P2, "vistas Workload y Actividad"): Workload como vista
-        // propia (antes solo vivía como un checkbox "Por persona" dentro de
-        // Dedicación) -- el foco acá es SOLO la carga por persona, sin las
-        // marcas de tarea que ensucian la lectura de "quién está sobrecargado".
-        // "Actividad" YA es Historial (arriba): un feed de qué pasó, no hace
-        // falta una vista más para lo mismo.
-        Componentes.boton({ texto: 'Workload', variante: vistaCronograma_ === 'workload' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'workload' }) +
         // v11 (P3, "analítica avanzada"): lead/cycle time, tiempo en
         // bloqueo/revisión, SPI -- se carga aparte (lazy, al elegir esta
         // vista) porque es la única subvista de Cronograma que pide un
@@ -2402,6 +2420,7 @@
       '</div>';
     var cuerpo;
     if (vistaCronograma_ === 'plan') cuerpo = pintarCronogramaPlan_(detalle, tareas, ctxEdicion, rendimiento);
+    else if (vistaCronograma_ === 'tabla') cuerpo = pintarTareasTabla_(tareas, ctxEdicion.miEmail, ctxEdicion.puedeGestionar, detalle, rendimiento);
     else if (vistaCronograma_ === 'historial') cuerpo = pintarHistorialProyecto_(tareas, bitacora || []);
     else if (vistaCronograma_ === 'workload') cuerpo = pintarWorkloadProyecto_(detalle, tareas, bitacora || []);
     else if (vistaCronograma_ === 'analitica') cuerpo = pintarAnaliticaProyecto_(datosDetalleActual_ && datosDetalleActual_.analitica, tareas);
@@ -5463,7 +5482,10 @@
       });
     });
     // Fase B: orden de la vista Tabla al tocar una cabecera (repinta desde
-    // cache, sin red -- mismo patrón que el toggle de vista).
+    // cache, sin red -- mismo patrón que el toggle de vista). Refactor
+    // "Planificación": la Tabla ahora también se puede ver DESDE Cronograma
+    // (mismo componente, dos puertas de entrada) -- repinta la pestaña que
+    // esté activa en ESE momento, no siempre 'tareas' a fuego.
     cont.querySelectorAll('.sigso-py-tabla th[data-orden]').forEach(function (th) {
       th.addEventListener('click', function () {
         var campo = th.getAttribute('data-orden');
@@ -5473,7 +5495,7 @@
           ordenTareasTabla_.campo = campo;
           ordenTareasTabla_.direccion = 'asc';
         }
-        cambiarPestana_('tareas');
+        cambiarPestana_(pestanaActiva_);
       });
     });
     wireKanbanDragDrop_(cont, refrescarDetalle_);
