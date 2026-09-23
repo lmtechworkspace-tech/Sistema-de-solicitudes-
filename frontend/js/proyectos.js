@@ -1932,6 +1932,13 @@
   // padre); al tocar una cabecera se ordena plano por esa columna. Reusa el
   // componente de tabla ordenable de Gerencia (.sigso-tabla-tablero).
   var ordenTareasTabla_ = { campo: 'natural', direccion: 'asc' };
+  // Refactor "Planificación" Etapa 5 (§19-23 del encargo): filtros propios
+  // de Tabla -- mismo patrón que dedFiltroPersona_/dedFiltroEstado_ (flags
+  // de módulo, se repinta desde caché, nunca se piden de nuevo al servidor).
+  var tablaBusqueda_ = '';
+  var tablaFiltroResponsable_ = '';
+  var tablaFiltroHito_ = '';
+  var tablaFiltroCumplimiento_ = ''; // '' | ATRASADA | EN_RIESGO | EN_PLAZO | COMPLETADA | SIN_FECHA
 
   function pintarTareas_(tareas, detalle, puedeGestionar, miEmail, rendimiento) {
     var puedeCrear = puedeAportar_(detalle);
@@ -2018,6 +2025,11 @@
   // deben coincidir siempre). `rendimiento` llega undefined mientras se pide
   // de fondo (lazy, igual que en Cronograma) -- esas columnas muestran "…" y
   // la tabla se repinta sola cuando llega, sin bloquear lo que ya hay.
+  var CUMPLIMIENTO_OPCIONES_ = [
+    { valor: 'ATRASADA', texto: 'Atrasada' }, { valor: 'EN_RIESGO', texto: 'En riesgo' },
+    { valor: 'EN_PLAZO', texto: 'En plazo' }, { valor: 'COMPLETADA', texto: 'Completada' },
+    { valor: 'SIN_FECHA', texto: 'Sin fecha' }
+  ];
   function pintarTareasTabla_(tareas, miEmail, puedeGestionar, detalle, rendimiento) {
     var cargando = rendimiento === undefined;
     var planPorId = {};
@@ -2025,7 +2037,62 @@
     var hitosPorId = {};
     ((detalle && detalle.hitos) || []).forEach(function (h) { hitosPorId[h.hito_id] = h.nombre; });
 
-    var filas = ordenarTareasTabla_(tareas, planPorId).map(function (a) {
+    // --- Filtros (Etapa 5, §19-23 del encargo) ----------------------------
+    var nombrePorResponsable_ = {};
+    tareas.forEach(function (a) {
+      var email = normalizarEmail_(a.responsable_email);
+      if (email && !nombrePorResponsable_[email]) nombrePorResponsable_[email] = nombrePersona_(a.responsable_email, a.responsable_nombre);
+    });
+    var opcionesResponsable = Object.keys(nombrePorResponsable_).map(function (email) {
+      return { valor: email, texto: nombrePorResponsable_[email] };
+    }).sort(function (x, y) { return x.texto.localeCompare(y.texto); });
+    var opcionesHito = ((detalle && detalle.hitos) || []).map(function (h) { return { valor: h.hito_id, texto: h.nombre }; });
+
+    var busquedaNorm = tablaBusqueda_.trim().toLowerCase();
+    var tareasFiltradas = tareas.filter(function (a) {
+      if (busquedaNorm && (a.titulo || '').toLowerCase().indexOf(busquedaNorm) === -1) return false;
+      if (tablaFiltroResponsable_ && normalizarEmail_(a.responsable_email) !== tablaFiltroResponsable_) return false;
+      if (tablaFiltroHito_ && a.hito_id !== tablaFiltroHito_) return false;
+      // El filtro de Cumplimiento depende de plan_seguimiento -- si todavía
+      // no llegó (cargando), no se aplica (nunca se oculta una tarea por un
+      // dato que aún no se pidió).
+      if (tablaFiltroCumplimiento_ && !cargando) {
+        var p = planPorId[a.actividad_id];
+        if (!p || p.estado_plazo !== tablaFiltroCumplimiento_) return false;
+      }
+      return true;
+    });
+
+    var filtrosBar = '<div class="sigso-py-filtros">' +
+      Componentes.campoTexto({ id: 'py-tabla-buscar', label: false, tipo: 'search', valor: tablaBusqueda_, placeholder: 'Buscar tarea...', claseCampo: 'sigso-py-filtros__buscar' }) +
+      Componentes.campoSelect({ id: 'py-tabla-responsable', label: false, valor: tablaFiltroResponsable_, placeholder: 'Todos los responsables', opciones: opcionesResponsable }) +
+      (opcionesHito.length ? Componentes.campoSelect({ id: 'py-tabla-hito', label: false, valor: tablaFiltroHito_, placeholder: 'Todos los hitos', opciones: opcionesHito }) : '') +
+      Componentes.campoSelect({ id: 'py-tabla-cumplimiento', label: false, valor: tablaFiltroCumplimiento_, placeholder: 'Todo cumplimiento', opciones: CUMPLIMIENTO_OPCIONES_ }) +
+    '</div>';
+
+    var chipsDatos = [];
+    if (tablaBusqueda_.trim()) chipsDatos.push({ tipo: 'buscar', texto: '"' + tablaBusqueda_.trim() + '"' });
+    if (tablaFiltroResponsable_) chipsDatos.push({ tipo: 'responsable', texto: nombrePorResponsable_[tablaFiltroResponsable_] || tablaFiltroResponsable_ });
+    if (tablaFiltroHito_) chipsDatos.push({ tipo: 'hito', texto: hitosPorId[tablaFiltroHito_] || tablaFiltroHito_ });
+    if (tablaFiltroCumplimiento_) chipsDatos.push({ tipo: 'cumplimiento', texto: ESTADO_PLAZO_LABEL_[tablaFiltroCumplimiento_] || tablaFiltroCumplimiento_ });
+    // Mismas clases que ya usa la bandeja de Solicitudes (dashboard.js) para
+    // "filtros activos" -- reuso visual, no una segunda implementación.
+    var chipsHtml = chipsDatos.length
+      ? '<div class="sigso-chips-filtros">' +
+          chipsDatos.map(function (c) {
+            return '<button type="button" class="sigso-chip-filtro js-py-tabla-chip-quitar" data-tipo="' + c.tipo + '" ' +
+              'aria-label="Quitar filtro ' + Componentes.escaparHtml(c.texto) + '" title="Quitar filtro">' +
+              Componentes.escaparHtml(c.texto) + '<span class="sigso-chip-filtro__x" aria-hidden="true">×</span></button>';
+          }).join('') +
+          '<button type="button" class="sigso-chips-filtros__limpiar js-py-tabla-limpiar-filtros">Limpiar filtros</button>' +
+        '</div>'
+      : '';
+
+    if (!tareasFiltradas.length) {
+      return filtrosBar + chipsHtml + Componentes.vacio({ texto: 'Ninguna tarea coincide con los filtros.' });
+    }
+
+    var filas = ordenarTareasTabla_(tareasFiltradas, planPorId).map(function (a) {
       var esMia = !!miEmail && normalizarEmail_(a.responsable_email) === miEmail;
       var puedeEditar = puedeGestionar || trabajoLaTarea_(a, miEmail);
       var sub = a.es_subtarea ? '<span class="sigso-py-tabla-sub" title="Subtarea">↳</span> ' : '';
@@ -2070,7 +2137,8 @@
         '</td>' +
       '</tr>';
     }).join('');
-    return '<div class="sigso-py-tabla-scroll"><table class="sigso-tabla-tablero sigso-py-tabla"><thead><tr>' +
+    return filtrosBar + chipsHtml +
+      '<div class="sigso-py-tabla-scroll"><table class="sigso-tabla-tablero sigso-py-tabla"><thead><tr>' +
         thOrdenTarea_('titulo', 'Tarea') + '<th>Hito</th>' + thOrdenTarea_('responsable', 'Responsable') + '<th>Cargo</th>' +
         thOrdenTarea_('estado', 'Estado') + thOrdenTarea_('prioridad', 'Prioridad') +
         thOrdenTarea_('inicioPlan', 'Inicio plan') + thOrdenTarea_('vence', 'Fin plan') + thOrdenTarea_('inicioReal', 'Inicio real') + thOrdenTarea_('finReal', 'Fin real') +
@@ -5565,6 +5633,43 @@
         }
         cambiarPestana_(pestanaActiva_);
       });
+    });
+    // Refactor "Planificación" Etapa 5: filtros de Tabla -- mismo criterio
+    // que el orden de arriba (repinta la pestaña que esté activa, Tabla se
+    // ve desde Tareas y desde Planificación). El buscador usa el mismo
+    // debounce que ya usa el buscador del portafolio.
+    var tablaBuscar = cont.querySelector('#py-tabla-buscar');
+    if (tablaBuscar) {
+      var temporizadorBusquedaTabla_ = null;
+      tablaBuscar.addEventListener('input', function () {
+        var valor = this.value;
+        if (temporizadorBusquedaTabla_) clearTimeout(temporizadorBusquedaTabla_);
+        temporizadorBusquedaTabla_ = setTimeout(function () {
+          tablaBusqueda_ = valor;
+          cambiarPestana_(pestanaActiva_);
+        }, TEMPORIZADOR_BUSQUEDA_PORTAFOLIO_MS);
+      });
+    }
+    var tablaResp = cont.querySelector('#py-tabla-responsable');
+    if (tablaResp) tablaResp.addEventListener('change', function () { tablaFiltroResponsable_ = this.value; cambiarPestana_(pestanaActiva_); });
+    var tablaHito = cont.querySelector('#py-tabla-hito');
+    if (tablaHito) tablaHito.addEventListener('change', function () { tablaFiltroHito_ = this.value; cambiarPestana_(pestanaActiva_); });
+    var tablaCump = cont.querySelector('#py-tabla-cumplimiento');
+    if (tablaCump) tablaCump.addEventListener('change', function () { tablaFiltroCumplimiento_ = this.value; cambiarPestana_(pestanaActiva_); });
+    cont.querySelectorAll('.js-py-tabla-chip-quitar').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var tipo = btn.getAttribute('data-tipo');
+        if (tipo === 'buscar') tablaBusqueda_ = '';
+        else if (tipo === 'responsable') tablaFiltroResponsable_ = '';
+        else if (tipo === 'hito') tablaFiltroHito_ = '';
+        else if (tipo === 'cumplimiento') tablaFiltroCumplimiento_ = '';
+        cambiarPestana_(pestanaActiva_);
+      });
+    });
+    var tablaLimpiar = cont.querySelector('.js-py-tabla-limpiar-filtros');
+    if (tablaLimpiar) tablaLimpiar.addEventListener('click', function () {
+      tablaBusqueda_ = ''; tablaFiltroResponsable_ = ''; tablaFiltroHito_ = ''; tablaFiltroCumplimiento_ = '';
+      cambiarPestana_(pestanaActiva_);
     });
     wireKanbanDragDrop_(cont, refrescarDetalle_);
 
