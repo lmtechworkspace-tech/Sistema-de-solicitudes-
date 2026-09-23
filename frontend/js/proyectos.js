@@ -2030,6 +2030,26 @@
     { valor: 'EN_PLAZO', texto: 'En plazo' }, { valor: 'COMPLETADA', texto: 'Completada' },
     { valor: 'SIN_FECHA', texto: 'Sin fecha' }
   ];
+  // Refactor "Planificación" Etapa 7: los filtros de Tabla (Etapa 5) son del
+  // MÓDULO, no solo de esa vista -- el dashboard KPI de arriba (§3 del
+  // encargo, "los KPI deben reaccionar a los filtros") usa esta MISMA
+  // función para no duplicar el criterio de qué tarea queda dentro/fuera.
+  function tareasFiltradasPlanificacion_(tareas, planPorId, cargando) {
+    var busquedaNorm = tablaBusqueda_.trim().toLowerCase();
+    return tareas.filter(function (a) {
+      if (busquedaNorm && (a.titulo || '').toLowerCase().indexOf(busquedaNorm) === -1) return false;
+      if (tablaFiltroResponsable_ && normalizarEmail_(a.responsable_email) !== tablaFiltroResponsable_) return false;
+      if (tablaFiltroHito_ && a.hito_id !== tablaFiltroHito_) return false;
+      // El filtro de Cumplimiento depende de plan_seguimiento -- si todavía
+      // no llegó (cargando), no se aplica (nunca se oculta una tarea por un
+      // dato que aún no se pidió).
+      if (tablaFiltroCumplimiento_ && !cargando) {
+        var p = planPorId[a.actividad_id];
+        if (!p || p.estado_plazo !== tablaFiltroCumplimiento_) return false;
+      }
+      return true;
+    });
+  }
   function pintarTareasTabla_(tareas, miEmail, puedeGestionar, detalle, rendimiento) {
     var cargando = rendimiento === undefined;
     var planPorId = {};
@@ -2048,20 +2068,7 @@
     }).sort(function (x, y) { return x.texto.localeCompare(y.texto); });
     var opcionesHito = ((detalle && detalle.hitos) || []).map(function (h) { return { valor: h.hito_id, texto: h.nombre }; });
 
-    var busquedaNorm = tablaBusqueda_.trim().toLowerCase();
-    var tareasFiltradas = tareas.filter(function (a) {
-      if (busquedaNorm && (a.titulo || '').toLowerCase().indexOf(busquedaNorm) === -1) return false;
-      if (tablaFiltroResponsable_ && normalizarEmail_(a.responsable_email) !== tablaFiltroResponsable_) return false;
-      if (tablaFiltroHito_ && a.hito_id !== tablaFiltroHito_) return false;
-      // El filtro de Cumplimiento depende de plan_seguimiento -- si todavía
-      // no llegó (cargando), no se aplica (nunca se oculta una tarea por un
-      // dato que aún no se pidió).
-      if (tablaFiltroCumplimiento_ && !cargando) {
-        var p = planPorId[a.actividad_id];
-        if (!p || p.estado_plazo !== tablaFiltroCumplimiento_) return false;
-      }
-      return true;
-    });
+    var tareasFiltradas = tareasFiltradasPlanificacion_(tareas, planPorId, cargando);
 
     var filtrosBar = '<div class="sigso-py-filtros">' +
       Componentes.campoTexto({ id: 'py-tabla-buscar', label: false, tipo: 'search', valor: tablaBusqueda_, placeholder: 'Buscar tarea...', claseCampo: 'sigso-py-filtros__buscar' }) +
@@ -2468,12 +2475,52 @@
   // segunda implementación (§51 del encargo).
   var vistaCronograma_ = 'plan';
 
+  // Refactor "Planificación" Etapa 7 (§3 del encargo): dashboard KPI arriba
+  // de las 3 vistas primarias -- Tareas/Completadas/En curso/Atrasadas/
+  // En riesgo/Cumplimiento de plazos. Reacciona a los filtros de Tabla
+  // (Etapa 5, `tareasFiltradasPlanificacion_`) aunque la vista activa sea
+  // Cronograma o Dedicación -- los filtros son del módulo, no de una vista
+  // suelta. `tareas` que llega acá ya es solo activas (el backend nunca
+  // manda inactivas al detalle), así que no hace falta filtrar por eso.
+  function pintarPlanificacionKpis_(tareas, rendimiento) {
+    var cargando = rendimiento === undefined;
+    var planPorId = {};
+    ((rendimiento && rendimiento.plan_seguimiento) || []).forEach(function (t) { planPorId[t.actividad_id] = t; });
+    var filtradas = tareasFiltradasPlanificacion_(tareas, planPorId, cargando);
+
+    var total = filtradas.length;
+    var completadas = 0, atrasadas = 0, enRiesgo = 0, enCurso = 0;
+    filtradas.forEach(function (a) {
+      if (a.estado === 'TERMINADA') { completadas++; return; }
+      if (a.estado === 'CANCELADA') return; // no cuenta como "en curso" ni como problema
+      var estadoPlazo = (planPorId[a.actividad_id] || {}).estado_plazo;
+      if (estadoPlazo === 'ATRASADA') atrasadas++;
+      else if (estadoPlazo === 'EN_RIESGO') enRiesgo++;
+      else enCurso++;
+    });
+    // Cumplimiento de plazos: mismo criterio que calcularCumplimientoTareasProyecto_
+    // del backend (entregadas a tiempo / entregadas) -- ninguna fórmula aparte.
+    var entregadas = filtradas.filter(function (a) { return a.fecha_terminada && a.fecha_compromiso; });
+    var aTiempo = entregadas.filter(function (a) { return new Date(a.fecha_terminada) <= new Date(a.fecha_compromiso); });
+    var pctCumplimiento = entregadas.length ? Math.round((aTiempo.length / entregadas.length) * 100) : null;
+
+    return '<div class="sigso-py-kpis sigso-py-planificacion-kpis">' +
+      Componentes.kpi({ etiqueta: 'Tareas', valor: total }) +
+      Componentes.kpi({ etiqueta: 'Completadas', valor: completadas }) +
+      Componentes.kpi({ etiqueta: 'En curso', valor: enCurso }) +
+      Componentes.kpi({ etiqueta: 'Atrasadas', valor: atrasadas, alerta: atrasadas > 0 }) +
+      Componentes.kpi({ etiqueta: 'En riesgo', valor: enRiesgo, alerta: enRiesgo > 0 }) +
+      Componentes.kpi({ etiqueta: 'Cumplimiento de plazos', valor: pctCumplimiento === null ? '—' : pctCumplimiento + '%' }) +
+    '</div>';
+  }
+
   function pintarCronograma_(detalle, tareas, bitacora, rendimiento, ctxEdicion) {
     // Refactor "Planificación": la pestaña ya se llama "Planificación" en el
     // tab bar (PESTANAS) -- esta línea es el subtítulo que pedía el encargo,
     // vive acá (no en la cabecera compartida) para no tocar el resto de
-    // pestañas.
-    var subtitulo = '<p class="sigso-ayuda sigso-py-planificacion-subtitulo">Planifica, controla y compara la ejecución de tus actividades.</p>';
+    // pestañas. El dashboard KPI (Etapa 7) va justo debajo, antes del toggle.
+    var subtitulo = '<p class="sigso-ayuda sigso-py-planificacion-subtitulo">Planifica, controla y compara la ejecución de tus actividades.</p>' +
+      pintarPlanificacionKpis_(tareas, rendimiento);
     var toggle = subtitulo + '<div class="sigso-py-vista-toggle sigso-py-vista-toggle--principal" style="margin-bottom:var(--esp-2);">' +
         Componentes.boton({ texto: 'Cronograma', variante: vistaCronograma_ === 'plan' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'plan' }) +
         Componentes.boton({ texto: 'Dedicación', variante: vistaCronograma_ === 'workload' ? undefined : 'sutil', clase: 'js-py-cron-vista', idx: 'workload' }) +
