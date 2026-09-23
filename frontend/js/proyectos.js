@@ -1959,7 +1959,13 @@
 
   // --- Vista TABLA (Fase B) --------------------------------------------------
   var TAREA_SEMAFORO_ORDEN_ = { atrasada: 0, bloqueada: 1, riesgo: 2, 'al-dia': 3, revision: 4, terminada: 5, cancelada: 6 };
-  function valorOrdenTareaTabla_(a, campo) {
+  // Refactor "Planificación" Etapa 6: ordenar también por las columnas
+  // nuevas de Tabla (plan/real/desviación) -- `planPorId` es opcional
+  // (undefined mientras `rendimiento` no llegó todavía); esos campos caen
+  // al final del orden en vez de romper, igual criterio que "vence" sin
+  // fecha.
+  function valorOrdenTareaTabla_(a, campo, planPorId) {
+    var plan = planPorId && planPorId[a.actividad_id];
     switch (campo) {
       case 'titulo': return (a.titulo || '').toLowerCase();
       case 'responsable': return nombrePersona_(a.responsable_email, a.responsable_nombre).toLowerCase();
@@ -1970,15 +1976,26 @@
       case 'prioridad': return a.prioridad || 'P9';       // P1..P5 ordenan como texto
       case 'vence': return a.fecha_compromiso || '9999-12-31'; // sin fecha, al final
       case 'avance': return Number(a.avance_pct) || 0;
+      case 'inicioPlan': return (plan && plan.plan_inicio) || '9999-12-31';
+      case 'inicioReal': return (plan && plan.fecha_inicio_real) || '9999-12-31';
+      case 'finReal': return (plan && plan.fecha_fin_real) || '9999-12-31';
+      case 'avanceEsperado': return (plan && plan.avance_esperado_pct !== null && plan.avance_esperado_pct !== undefined) ? plan.avance_esperado_pct : -1;
+      case 'desvAvance': return (plan && plan.desviacion_pp !== null && plan.desviacion_pp !== undefined) ? plan.desviacion_pp : -9999;
+      case 'desvPlazo': return (plan && plan.desviacion_dias !== null && plan.desviacion_dias !== undefined) ? plan.desviacion_dias : -9999;
+      case 'cumplimiento': {
+        var ORDEN_ESTADO_PLAZO_ = { ATRASADA: 0, EN_RIESGO: 1, EN_PLAZO: 2, COMPLETADA: 3, SIN_FECHA: 4 };
+        var o = plan && ORDEN_ESTADO_PLAZO_[plan.estado_plazo];
+        return o === undefined ? 9 : o;
+      }
       default: return 0;
     }
   }
-  function ordenarTareasTabla_(tareas) {
+  function ordenarTareasTabla_(tareas, planPorId) {
     if (ordenTareasTabla_.campo === 'natural') return ordenarConSubtareas_(tareas);
     var dir = ordenTareasTabla_.direccion === 'desc' ? -1 : 1;
     return tareas.slice().sort(function (a, b) {
-      var va = valorOrdenTareaTabla_(a, ordenTareasTabla_.campo);
-      var vb = valorOrdenTareaTabla_(b, ordenTareasTabla_.campo);
+      var va = valorOrdenTareaTabla_(a, ordenTareasTabla_.campo, planPorId);
+      var vb = valorOrdenTareaTabla_(b, ordenTareasTabla_.campo, planPorId);
       if (va < vb) return -1 * dir;
       if (va > vb) return 1 * dir;
       return 0;
@@ -2008,7 +2025,7 @@
     var hitosPorId = {};
     ((detalle && detalle.hitos) || []).forEach(function (h) { hitosPorId[h.hito_id] = h.nombre; });
 
-    var filas = ordenarTareasTabla_(tareas).map(function (a) {
+    var filas = ordenarTareasTabla_(tareas, planPorId).map(function (a) {
       var esMia = !!miEmail && normalizarEmail_(a.responsable_email) === miEmail;
       var puedeEditar = puedeGestionar || trabajoLaTarea_(a, miEmail);
       var sub = a.es_subtarea ? '<span class="sigso-py-tabla-sub" title="Subtarea">↳</span> ' : '';
@@ -2056,8 +2073,8 @@
     return '<div class="sigso-py-tabla-scroll"><table class="sigso-tabla-tablero sigso-py-tabla"><thead><tr>' +
         thOrdenTarea_('titulo', 'Tarea') + '<th>Hito</th>' + thOrdenTarea_('responsable', 'Responsable') + '<th>Cargo</th>' +
         thOrdenTarea_('estado', 'Estado') + thOrdenTarea_('prioridad', 'Prioridad') +
-        '<th>Inicio plan</th>' + thOrdenTarea_('vence', 'Fin plan') + '<th>Inicio real</th>' + '<th>Fin real</th>' +
-        '<th>Avance esperado</th>' + thOrdenTarea_('avance', 'Avance real') + '<th>Desv. avance</th>' + '<th>Desv. plazo</th>' + '<th>Cumplimiento</th>' +
+        thOrdenTarea_('inicioPlan', 'Inicio plan') + thOrdenTarea_('vence', 'Fin plan') + thOrdenTarea_('inicioReal', 'Inicio real') + thOrdenTarea_('finReal', 'Fin real') +
+        thOrdenTarea_('avanceEsperado', 'Avance esperado') + thOrdenTarea_('avance', 'Avance real') + thOrdenTarea_('desvAvance', 'Desv. avance') + thOrdenTarea_('desvPlazo', 'Desv. plazo') + thOrdenTarea_('cumplimiento', 'Cumplimiento') +
         '<th></th>' +
       '</tr></thead><tbody>' + filas + '</tbody></table></div>';
   }
