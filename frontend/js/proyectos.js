@@ -78,11 +78,15 @@
   // Sin penalización no se muestra nada: "Normal" ya lo dice todo, y un
   // "· 0" solo agrega ruido. null es la corrección manual (salud_override):
   // ahí no se calculó ningún número y no se finge uno.
+  // Auditoría UX 2026-09-22: "· 100 pts" se leía como un puntaje donde MÁS es
+  // mejor (al revés: es la penalización, más = peor) -- confuso sin pasar el
+  // mouse por el tooltip. El signo "−" delante lo deja autoexplicativo de un
+  // vistazo, sin depender solo del title.
   function saludScoreHtml_(penalizacion) {
     if (penalizacion === null || penalizacion === undefined || penalizacion === 0) return '';
     return '<span class="sigso-py-salud-score" title="' + penalizacion +
-      ' puntos en contra, sumando los factores que arrastran al proyecto. Cuantos más, peor.">· ' +
-      penalizacion + ' pts</span>';
+      ' puntos en contra, sumando los factores que arrastran al proyecto. Cuantos más, peor.">· −' +
+      penalizacion + '</span>';
   }
   var ESTADO_PROYECTO_ETIQUETA = {
     PLANIFICACION: 'Planificación', ACTIVO: 'Activo', EN_PAUSA: 'En pausa',
@@ -323,10 +327,22 @@
   // real; un conteo plano de tareas no lo distingue (§L.3 de la propuesta).
   function pintarResumenEjecutivo_(resumen) {
     if (!resumen || !resumen.total_proyectos) return '';
+    // Auditoría UX 2026-09-22 (Fase E, "indicador → contexto → acción"):
+    // Críticos/En riesgo ya tienen un filtro EXACTO en el propio portafolio
+    // (filtroSaludPortafolio_) -- se reusa tal cual (mismo componente/patrón
+    // que ya usa el dashboard de Solicitudes, Componentes.kpi({filtro:...})),
+    // en vez de solo mostrar el número. Los otros 3 KPIs no tienen un filtro
+    // equivalente hoy (no se inventa uno para no prometer algo que no filtra).
     var kpis = [
       Componentes.kpi({ etiqueta: 'Proyectos activos', valor: resumen.total_proyectos }),
-      Componentes.kpi({ etiqueta: 'Críticos', valor: (resumen.por_salud && resumen.por_salud.critico) || 0, alerta: true }),
-      Componentes.kpi({ etiqueta: 'En riesgo', valor: (resumen.por_salud && resumen.por_salud.riesgo) || 0 }),
+      Componentes.kpi({
+        etiqueta: 'Críticos', valor: (resumen.por_salud && resumen.por_salud.critico) || 0, alerta: true,
+        filtro: 'critico', activo: filtroSaludPortafolio_ === 'critico', titulo: 'Clic para filtrar el portafolio'
+      }),
+      Componentes.kpi({
+        etiqueta: 'En riesgo', valor: (resumen.por_salud && resumen.por_salud.riesgo) || 0,
+        filtro: 'riesgo', activo: filtroSaludPortafolio_ === 'riesgo', titulo: 'Clic para filtrar el portafolio'
+      }),
       Componentes.kpi({ etiqueta: 'Vencen en 14 días', valor: resumen.proximos_a_cerrar || 0 }),
       Componentes.kpi({ etiqueta: 'Sin novedad 7+ días', valor: resumen.sin_actualizacion_reciente || 0 })
     ].join('');
@@ -609,6 +625,19 @@
     cont.querySelector('#py-filtro-salud').addEventListener('change', function () {
       filtroSaludPortafolio_ = this.value;
       pintarGridPortafolio_();
+    });
+    // Auditoría UX 2026-09-22 (Fase E): los KPIs "Críticos"/"En riesgo" del
+    // resumen ejecutivo son el MISMO filtro que el <select> de salud de
+    // arriba -- clic = togglear filtroSaludPortafolio_. A diferencia del
+    // <select> (que solo repinta la grilla), acá se repinta TODO el
+    // portafolio: así el KPI activo, el select y "Limpiar filtros" quedan
+    // sincronizados entre sí (un solo clic, no vale la pena optimizar).
+    cont.querySelectorAll('[data-filtro-kpi]').forEach(function (boton) {
+      boton.addEventListener('click', function () {
+        var filtro = boton.getAttribute('data-filtro-kpi');
+        filtroSaludPortafolio_ = filtroSaludPortafolio_ === filtro ? '' : filtro;
+        pintarPortafolio_(cont, proyectosPortafolioSinFiltrarSalud_);
+      });
     });
     cont.querySelector('#py-orden').addEventListener('change', function () {
       ordenPortafolio_ = this.value;
