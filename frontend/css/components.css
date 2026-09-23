@@ -4772,6 +4772,15 @@
 .sigso-py-colab-opcional summary { cursor: pointer; font-size: var(--texto-sm); color: var(--primario); user-select: none; }
 .sigso-py-colab-opcional[open] summary { margin-bottom: var(--esp-2); }
 .sigso-py-colab-opcional .sigso-campo-check { padding: 2px 0; }
+
+/* Quick-add (auditoría UX 2026-09-22, Fase B): "Más detalles" agrupa todo lo
+   secundario del alta de tarea bajo un solo disclosure -- esenciales arriba. */
+.sigso-py-mas-detalles { margin: var(--esp-3) 0; border-top: 1px solid var(--borde); padding-top: var(--esp-2); }
+.sigso-py-mas-detalles summary { cursor: pointer; font-size: var(--texto-sm); font-weight: 500; color: var(--primario); user-select: none; }
+.sigso-py-mas-detalles[open] summary { margin-bottom: var(--esp-3); }
+.sigso-py-colab-bloque { margin: var(--esp-2) 0; }
+.sigso-py-colab-bloque .sigso-campo-check { padding: 2px 0; }
+
 .sigso-py-colab-chip {
   display: inline-flex; align-items: center; gap: 0.25rem;
   color: var(--info); background: var(--info-suave);

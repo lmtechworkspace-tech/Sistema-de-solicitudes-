@@ -5419,12 +5419,13 @@
       '<div class="sigso-modal" role="dialog" aria-modal="true">' +
         '<h3 class="sigso-modal__titulo">Nueva tarea</h3>' +
         '<form id="form-py-tarea">' +
+          // Quick-add (auditoría UX 2026-09-22, Fase B): lo ESENCIAL arriba y
+          // visible (crear rápido con título + responsable + fecha + prioridad);
+          // todo lo demás plegado en "Más detalles". Los ids de campo no
+          // cambian, así que el submit sigue igual. Ningún campo `requerido`
+          // vive dentro del <details> (un required oculto no es enfocable).
           Componentes.campoTexto({ id: 'py-t-titulo', label: 'Título', requerido: true }) +
-          Componentes.campoTextarea({ id: 'py-t-descripcion', label: 'Descripción' }) +
           Componentes.campoSelect({ id: 'py-t-responsable', label: 'Responsable', opciones: opcionesIntegrantes, requerido: true }) +
-          (opcionesHitos.length ? Componentes.campoSelect({ id: 'py-t-hito', label: 'Hito (opcional)', opciones: opcionesHitos }) : '') +
-          (opcionesDependencia.length ? Componentes.campoSelect({ id: 'py-t-depende', label: 'Depende de (opcional)', opciones: opcionesDependencia }) : '') +
-          (opcionesPadre.length ? Componentes.campoSelect({ id: 'py-t-padre', label: 'Tarea padre (opcional, la convierte en subtarea)', opciones: opcionesPadre }) : '') +
           '<div class="sigso-py-form-fila">' +
             Componentes.campoTexto({ id: 'py-t-fecha', label: 'Fecha comprometida', tipo: 'date', requerido: true }) +
             Componentes.campoSelect({
@@ -5432,31 +5433,26 @@
               opciones: [{ valor: 'P1', texto: 'P1' }, { valor: 'P2', texto: 'P2' }, { valor: 'P3', texto: 'P3' }, { valor: 'P4', texto: 'P4' }, { valor: 'P5', texto: 'P5' }]
             }) +
           '</div>' +
-          // v10 (Fase G2, "el dia se justifica mejor"): meta cuantificable
-          // OPCIONAL (ej. 16 "imágenes") -- habilita el rendimiento por
-          // unidad de la Fase G3. Plegada para no ensuciar el alta rapida
-          // de siempre cuando no aplica (mismo criterio que las menciones
-          // de la Sala, ver .sigso-py-menciones).
-          // v10 (multi-asignación): colaboradores OPCIONALES además del
-          // responsable único. Plegado, mismo patrón que la meta y las
-          // menciones de la Sala. El responsable es el dueño; los
-          // colaboradores también pueden hacer check-in y ven la tarea en
-          // "Mi trabajo".
-          (opcionesIntegrantes.length
-            ? '<details class="sigso-py-colab-opcional">' +
-                '<summary>Colaboradores (opcional)</summary>' +
-                '<p class="sigso-ayuda">Además del responsable. También podrán hacer check-in y verán la tarea en "Mi trabajo".</p>' +
-                opcionesIntegrantes.map(function (o) {
-                  return '<label class="sigso-campo-check"><input type="checkbox" class="js-py-colab" value="' +
-                    Componentes.escaparHtml(o.valor) + '"> ' + Componentes.escaparHtml(o.texto) + '</label>';
-                }).join('') +
-              '</details>'
-            : '') +
-          '<details class="sigso-py-meta-opcional">' +
-            '<summary>Meta cuantificable (opcional)</summary>' +
+          '<details class="sigso-py-mas-detalles">' +
+            '<summary>Más detalles (opcional)</summary>' +
+            Componentes.campoTextarea({ id: 'py-t-descripcion', label: 'Descripción' }) +
+            (opcionesHitos.length ? Componentes.campoSelect({ id: 'py-t-hito', label: 'Hito', opciones: opcionesHitos }) : '') +
+            (opcionesDependencia.length ? Componentes.campoSelect({ id: 'py-t-depende', label: 'Depende de', opciones: opcionesDependencia }) : '') +
+            (opcionesPadre.length ? Componentes.campoSelect({ id: 'py-t-padre', label: 'Tarea padre (la convierte en subtarea)', opciones: opcionesPadre }) : '') +
+            // Multi-asignación (v10): colaboradores además del responsable único.
+            (opcionesIntegrantes.length
+              ? '<div class="sigso-py-colab-bloque">' +
+                  '<p class="sigso-ayuda">Colaboradores: además del responsable, también podrán hacer check-in y verán la tarea en "Mi trabajo".</p>' +
+                  opcionesIntegrantes.map(function (o) {
+                    return '<label class="sigso-campo-check"><input type="checkbox" class="js-py-colab" value="' +
+                      Componentes.escaparHtml(o.valor) + '"> ' + Componentes.escaparHtml(o.texto) + '</label>';
+                  }).join('') +
+                '</div>'
+              : '') +
+            // Meta cuantificable (v10 Fase G2): habilita el rendimiento por unidad.
             '<div class="sigso-py-form-fila">' +
-              Componentes.campoTexto({ id: 'py-t-meta-cantidad', label: 'Cantidad', tipo: 'number', placeholder: 'Ej: 16' }) +
-              Componentes.campoTexto({ id: 'py-t-meta-unidad', label: 'Unidad', placeholder: 'Ej: imágenes' }) +
+              Componentes.campoTexto({ id: 'py-t-meta-cantidad', label: 'Meta: cantidad', tipo: 'number', placeholder: 'Ej: 16' }) +
+              Componentes.campoTexto({ id: 'py-t-meta-unidad', label: 'Meta: unidad', placeholder: 'Ej: imágenes' }) +
             '</div>' +
           '</details>' +
           '<div class="sigso-modal__acciones">' +
