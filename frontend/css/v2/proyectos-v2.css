@@ -301,6 +301,182 @@
 .sx2-py-dia-item { cursor: pointer; border-radius: var(--sx-radio-sm); }
 .sx2-py-dia-item:hover strong.sx2-cortar { color: var(--sx-primario); }
 
+/* --- Archivos: documentos ------------------------------------------------------ */
+.sx2-py-zona-docs { position: relative; }
+.sx2-py-zona-docs__telon {
+  position: absolute; inset: 0; z-index: 3; border-radius: inherit;
+  display: none; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  background: color-mix(in srgb, var(--sx-primario) 10%, var(--sx-superficie));
+  border: 2px dashed var(--sx-primario); color: var(--sx-primario);
+  font: 600 0.9375rem/1.3 var(--fuente);
+}
+.sx2-py-zona-docs--arrastre .sx2-py-zona-docs__telon { display: flex; animation: sx2-aparece var(--sx-dur) var(--sx-curva) both; }
+.sx2-py-herramientas-docs { display: flex; flex-wrap: wrap; gap: var(--sx-e-3); align-items: center; margin-bottom: var(--sx-e-4); }
+.sx2-py-herramientas-docs .sx2-buscar { flex: 0 1 260px; }
+.sx2-py-docs { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: var(--sx-e-3); }
+.sx2-py-doc {
+  position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  padding: var(--sx-e-4); border: 1px solid var(--sx-borde-suave); border-radius: var(--sx-radio-lg);
+  background: var(--sx-superficie); cursor: pointer;
+  transition: border-color var(--sx-dur) var(--sx-curva), box-shadow var(--sx-dur) var(--sx-curva), transform var(--sx-dur) var(--sx-curva);
+}
+.sx2-py-doc:hover { border-color: var(--sx-borde-fuerte); box-shadow: var(--sx-sombra-2); transform: translateY(-2px); }
+.sx2-py-doc:focus-visible { outline: none; box-shadow: var(--sx-anillo-foco); }
+.sx2-py-doc__top { display: flex; align-items: flex-start; justify-content: space-between; }
+.sx2-py-doc__tipo {
+  position: relative; width: 42px; height: 48px; flex: none;
+  display: grid; place-items: center; border-radius: 8px 14px 8px 8px;
+  background: var(--sx-tono-suave); color: var(--sx-tono);
+}
+.sx2-py-doc__tipo b {
+  position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%);
+  padding: 1px 5px; border-radius: 4px; background: var(--sx-tono); color: #fff;
+  font: 700 0.5625rem/1.3 var(--fuente); letter-spacing: 0.04em;
+}
+.sx2-py-doc__tipo--grande { width: 56px; height: 64px; }
+.sx2-py-doc__rapido { opacity: 0; transition: opacity var(--sx-dur) var(--sx-curva); }
+.sx2-py-doc:hover .sx2-py-doc__rapido, .sx2-py-doc:focus-within .sx2-py-doc__rapido { opacity: 1; }
+@media (hover: none) { .sx2-py-doc__rapido { opacity: 1; } }
+.sx2-py-doc__nombre {
+  margin-top: 4px; font: 600 0.875rem/1.35 var(--fuente); color: var(--sx-texto);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.sx2-py-doc__version {
+  display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px;
+  background: var(--sx-superficie-2); color: var(--sx-texto-2); font: 600 0.6875rem/1 var(--fuente);
+}
+.sx2-py-doc__meta { font: var(--sx-t-micro); color: var(--sx-texto-3); }
+.sx2-py-ref {
+  display: inline-flex; align-items: center; gap: 5px; max-width: 100%; align-self: flex-start;
+  height: 24px; padding: 0 8px; border: 1px solid var(--sx-borde-suave); border-radius: 999px;
+  background: var(--sx-superficie-2); color: var(--sx-texto-2); font: 500 0.75rem/1 var(--fuente); cursor: pointer;
+  transition: color var(--sx-dur) var(--sx-curva), border-color var(--sx-dur) var(--sx-curva);
+}
+.sx2-py-ref:hover { color: var(--sx-primario); border-color: var(--sx-primario); }
+
+/* Zona para soltar un archivo (formularios) */
+.sx2-py-soltar {
+  position: relative; display: flex; align-items: center; gap: var(--sx-e-3);
+  padding: var(--sx-e-5) var(--sx-e-4); border: 2px dashed var(--sx-borde); border-radius: var(--sx-radio-lg);
+  background: var(--sx-superficie-2); cursor: pointer;
+  transition: border-color var(--sx-dur) var(--sx-curva), background var(--sx-dur) var(--sx-curva);
+}
+.sx2-py-soltar:hover, .sx2-py-soltar--encima { border-color: var(--sx-primario); background: color-mix(in srgb, var(--sx-primario) 6%, var(--sx-superficie)); }
+.sx2-py-soltar:focus-within { box-shadow: var(--sx-anillo-foco); }
+.sx2-py-soltar--lleno { border-style: solid; border-color: var(--sx-ok); background: color-mix(in srgb, var(--sx-ok) 6%, var(--sx-superficie)); }
+.sx2-py-soltar__ico { width: 44px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--sx-superficie); color: var(--sx-primario); box-shadow: var(--sx-sombra-1); }
+.sx2-py-soltar--lleno .sx2-py-soltar__ico { color: var(--sx-ok); }
+.sx2-py-soltar__txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.sx2-py-soltar__txt strong { color: var(--sx-texto); overflow: hidden; text-overflow: ellipsis; }
+.sx2-py-soltar__txt small { color: var(--sx-texto-3); font-size: 0.75rem; }
+
+/* Versiones (drawer de documento) */
+.sx2-py-versiones { list-style: none; margin: 0; padding: 0; position: relative; }
+.sx2-py-versiones::before { content: ''; position: absolute; left: 5px; top: 10px; bottom: 10px; width: 2px; background: var(--sx-borde-suave); }
+.sx2-py-version { position: relative; display: flex; gap: var(--sx-e-3); align-items: flex-start; padding: 8px 0; font: var(--sx-t-chico); }
+.sx2-py-version__punto { position: relative; z-index: 1; width: 12px; height: 12px; margin-top: 4px; flex: none; border-radius: 50%; background: var(--sx-superficie); border: 2px solid var(--sx-borde-fuerte); }
+.sx2-py-version--vigente .sx2-py-version__punto { background: var(--sx-ok); border-color: var(--sx-ok); box-shadow: 0 0 0 3px var(--sx-ok-suave); }
+
+/* --- Archivos: entregables ------------------------------------------------------ */
+.sx2-py-entregables { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.sx2-py-entregable {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: var(--sx-e-3) var(--sx-e-4); border-radius: var(--sx-radio);
+  border: 1px solid var(--sx-borde-suave); border-left: 3px solid var(--sx-tono, var(--sx-borde));
+  background: var(--sx-superficie);
+}
+.sx2-py-entregable__nombre { font: 600 0.875rem/1.35 var(--fuente); color: var(--sx-texto); }
+.sx2-py-entregable__desc { margin: 0; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.sx2-py-entregable__meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font: var(--sx-t-micro); color: var(--sx-texto-2); }
+.sx2-py-entregable__meta > span:last-child { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; }
+
+/* --- Seguimiento: hitos (línea de tiempo) -------------------------------------- */
+.sx2-py-hitos-linea { list-style: none; margin: 0; padding: 0; position: relative; display: flex; flex-direction: column; gap: var(--sx-e-4); }
+.sx2-py-hitos-linea::before { content: ''; position: absolute; left: 13px; top: 20px; bottom: 20px; width: 2px; background: linear-gradient(var(--sx-hito), var(--sx-borde)); opacity: 0.5; }
+.sx2-py-hito { position: relative; padding-left: 44px; }
+.sx2-py-hito__nodo {
+  position: absolute; left: 4px; top: 18px; z-index: 1; width: 20px; height: 20px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff;
+  background: var(--sx-superficie); border: 3px solid var(--sx-tono);
+  box-shadow: 0 0 0 4px var(--sx-fondo);
+}
+.sx2-tono-ok > .sx2-py-hito__nodo { background: var(--sx-ok); }
+.sx2-tono-critico > .sx2-py-hito__nodo { animation: sx2-pulso 2s var(--sx-curva) infinite; }
+.sx2-py-hito__card { display: flex; flex-direction: column; gap: var(--sx-e-3); border-left: 3px solid var(--sx-tono); }
+.sx2-py-hito__nombre { font: var(--sx-t-h2); color: var(--sx-texto); }
+.sx2-py-hito__desc { margin: 0; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.sx2-py-hito__tareas { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 4px 12px; }
+.sx2-py-hito__tarea {
+  width: 100%; display: flex; align-items: center; gap: 8px; min-width: 0;
+  padding: 6px 8px; border: 0; border-radius: var(--sx-radio-sm); background: none; text-align: left;
+  font: var(--sx-t-chico); color: var(--sx-texto); cursor: pointer;
+}
+.sx2-py-hito__tarea:hover { background: var(--sx-superficie-hover); color: var(--sx-primario); }
+.sx2-py-hito__tarea .sx2-cortar { flex: 1; }
+.sx2-py-punto { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--sx-tono); }
+
+/* --- Seguimiento: matriz de riesgos ------------------------------------------- */
+.sx2-py-matriz { display: grid; grid-template-columns: 22px minmax(0, 1fr); grid-template-rows: auto auto; gap: 6px 8px; }
+.sx2-py-matriz__titulo-y { grid-row: 1; writing-mode: vertical-rl; transform: rotate(180deg); text-align: center; font: var(--sx-t-etiqueta); text-transform: uppercase; letter-spacing: 0.06em; color: var(--sx-texto-3); }
+.sx2-py-matriz__titulo-x { grid-column: 2; text-align: center; font: var(--sx-t-etiqueta); text-transform: uppercase; letter-spacing: 0.06em; color: var(--sx-texto-3); }
+.sx2-py-matriz__rejilla { display: grid; grid-template-columns: 48px repeat(3, minmax(0, 1fr)); gap: 6px; }
+.sx2-py-matriz__eje-y { display: flex; align-items: center; justify-content: flex-end; font: var(--sx-t-micro); color: var(--sx-texto-2); }
+.sx2-py-matriz__eje-x { text-align: center; font: var(--sx-t-micro); color: var(--sx-texto-2); }
+.sx2-py-matriz__celda {
+  aspect-ratio: 1.25; min-height: 58px; border: 0; border-radius: var(--sx-radio);
+  display: grid; place-items: center; cursor: pointer;
+  background: color-mix(in srgb, var(--sx-tono) 12%, var(--sx-superficie));
+  transition: transform var(--sx-dur) var(--sx-curva), box-shadow var(--sx-dur) var(--sx-curva), background var(--sx-dur) var(--sx-curva);
+}
+.sx2-py-matriz__celda--con { background: color-mix(in srgb, var(--sx-tono) 26%, var(--sx-superficie)); }
+.sx2-py-matriz__celda:hover { transform: scale(1.04); box-shadow: var(--sx-sombra-2); }
+.sx2-py-matriz__celda[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--sx-tono); }
+.sx2-py-matriz__celda b {
+  min-width: 32px; height: 32px; padding: 0 8px; border-radius: 999px; display: grid; place-items: center;
+  background: var(--sx-tono); color: #fff; font: 700 0.9375rem/1 var(--fuente);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--sx-tono) 40%, transparent);
+  animation: sx2-escala var(--sx-dur-lenta) var(--sx-curva) both;
+}
+.sx2-py-riesgo {
+  display: flex; flex-direction: column; gap: 8px; padding: var(--sx-e-3) var(--sx-e-4);
+  border: 1px solid var(--sx-borde-suave); border-left: 3px solid var(--sx-tono); border-radius: var(--sx-radio);
+}
+.sx2-py-riesgo__desc { font: 600 0.875rem/1.4 var(--fuente); color: var(--sx-texto); }
+.sx2-py-riesgo__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; font: var(--sx-t-micro); color: var(--sx-texto-2); }
+.sx2-py-riesgo__mitigacion { margin: 0; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+
+/* --- Seguimiento: reuniones y decisiones ------------------------------------ */
+.sx2-py-fecha-bloque {
+  width: 52px; flex: none; padding: 6px 0; border-radius: var(--sx-radio);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: var(--sx-primario-suave); color: var(--sx-primario); font: 700 0.625rem/1 var(--fuente); letter-spacing: 0.08em;
+}
+.sx2-py-fecha-bloque b { font: 700 1.375rem/1 var(--fuente); letter-spacing: 0; }
+.sx2-py-reunion { display: flex; flex-direction: column; gap: var(--sx-e-4); }
+.sx2-py-reunion__titulo { font: var(--sx-t-h2); color: var(--sx-texto); }
+.sx2-py-reunion__txt { margin: 0; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.sx2-py-reunion__minuta summary { cursor: pointer; font: 600 0.8125rem/1.4 var(--fuente); color: var(--sx-primario); }
+.sx2-py-reunion__minuta p { margin: 8px 0 0; white-space: pre-wrap; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.sx2-py-participante { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px 0 3px; border-radius: 999px; background: var(--sx-superficie-2); font: 500 0.75rem/1 var(--fuente); color: var(--sx-texto-2); }
+.sx2-py-acuerdos { display: flex; flex-direction: column; gap: 8px; padding-top: var(--sx-e-3); border-top: 1px solid var(--sx-borde-suave); }
+.sx2-py-acuerdos ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.sx2-py-acuerdo { display: flex; align-items: center; gap: 10px; padding: 4px 0; font: var(--sx-t-chico); color: var(--sx-texto); }
+.sx2-py-acuerdo__check { width: 18px; height: 18px; flex: none; display: grid; place-items: center; border-radius: 5px; border: 2px solid var(--sx-borde-fuerte); color: #fff; }
+.sx2-py-acuerdo--hecho .sx2-py-acuerdo__check { background: var(--sx-ok); border-color: var(--sx-ok); }
+.sx2-py-acuerdo__txt { flex: 1; min-width: 0; }
+.sx2-py-acuerdo--hecho .sx2-py-acuerdo__txt { color: var(--sx-texto-2); }
+.sx2-py-decisiones { display: flex; flex-direction: column; }
+.sx2-py-decision { display: flex; flex-direction: column; gap: 6px; padding: var(--sx-e-3) 0; border-bottom: 1px solid var(--sx-borde-suave); font: var(--sx-t-chico); color: var(--sx-texto); }
+.sx2-py-decision:last-child { border-bottom: 0; }
+.sx2-py-decision p { margin: 0; color: var(--sx-texto-2); }
+
+/* --- Seguimiento: avance y costos ------------------------------------------- */
+.sx2-py-mini-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sx-e-2); margin-bottom: var(--sx-e-4); }
+.sx2-py-mini-kpis > span { display: flex; flex-direction: column; gap: 2px; padding: var(--sx-e-2) var(--sx-e-3); border-radius: var(--sx-radio); background: var(--sx-superficie-2); }
+.sx2-py-mini-kpis small { font: var(--sx-t-micro); color: var(--sx-texto-3); }
+.sx2-py-mini-kpis b { font: 700 1.125rem/1.2 var(--fuente); color: inherit; }
+.sx2-py-mini-kpis > span:not([class]) b { color: var(--sx-texto); }
+
 /* --- Formularios en drawer --------------------------------------------------- */
 .sx2-form { display: flex; flex-direction: column; gap: var(--sx-e-4); }
 .sx2-campo { display: flex; flex-direction: column; gap: 6px; }

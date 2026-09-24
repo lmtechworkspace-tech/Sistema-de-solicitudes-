@@ -262,7 +262,7 @@ var UIv2 = (function () {
         if (cerrado) return;
         cerrado = true;
         document.removeEventListener('keydown', onKey);
-        if (drawerAbierto_ === api) drawerAbierto_ = null;
+        if (drawerAbierto_ === api) { drawerAbierto_ = null; document.body.classList.remove('sx2-con-drawer'); }
         function quitar() { if (el.parentNode) el.parentNode.removeChild(el); if (o.alCerrar) o.alCerrar(); }
         if (inmediato || reducirMovimiento()) { quitar(); }
         else {
@@ -275,13 +275,53 @@ var UIv2 = (function () {
     el.addEventListener('click', function (ev) { if (ev.target.closest('.js-sx2-drawer-cerrar')) api.cerrar(); });
     document.addEventListener('keydown', onKey);
     drawerAbierto_ = api;
+    // Los botones flotantes del shell (campana, interruptor) tapan el pie del drawer.
+    document.body.classList.add('sx2-con-drawer');
     animar(el);
     var primero = el.querySelector('.sx2-drawer__panel button, .sx2-drawer__panel [tabindex]');
     if (primero) primero.focus();
     return api;
   }
 
+  // Diálogo de confirmación centrado (reemplaza window.confirm y el modal v1).
+  // o: { titulo, texto, boton, peligro }. Devuelve Promise<boolean>.
+  function confirmar(o) {
+    o = o || {};
+    return new Promise(function (resolver) {
+      var el = document.createElement('div');
+      el.className = 'sx2 sx2-dialogo';
+      el.innerHTML =
+        '<div class="sx2-drawer__telon js-sx2-dlg-no"></div>' +
+        '<div class="sx2-dialogo__caja" role="alertdialog" aria-modal="true" aria-label="' + esc(o.titulo) + '">' +
+          '<span class="sx2-dialogo__ico' + tono(o.peligro ? 'critico' : 'primario') + '">' + ico(o.peligro ? 'alerta' : 'info', 20) + '</span>' +
+          '<h2 class="sx2-dialogo__titulo">' + esc(o.titulo) + '</h2>' +
+          (o.texto ? '<p class="sx2-dialogo__texto">' + esc(o.texto) + '</p>' : '') +
+          '<div class="sx2-dialogo__acciones">' +
+            boton({ texto: 'Cancelar', clase: 'js-sx2-dlg-no' }) +
+            boton({ texto: o.boton || 'Confirmar', variante: o.peligro ? 'peligro' : 'primario', clase: 'js-sx2-dlg-si' }) +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(el);
+      var previo = document.activeElement;
+      function fin(v) {
+        document.removeEventListener('keydown', onKey, true);
+        if (el.parentNode) el.parentNode.removeChild(el);
+        if (previo && previo.focus) { try { previo.focus(); } catch (e) { /* ya no existe */ } }
+        resolver(v);
+      }
+      // En captura: que Escape cierre el diálogo y no el drawer de abajo.
+      function onKey(ev) { if (ev.key === 'Escape') { ev.stopPropagation(); fin(false); } }
+      el.addEventListener('click', function (ev) {
+        if (ev.target.closest('.js-sx2-dlg-si')) fin(true);
+        else if (ev.target.closest('.js-sx2-dlg-no')) fin(false);
+      });
+      document.addEventListener('keydown', onKey, true);
+      el.querySelector('.js-sx2-dlg-si').focus();
+    });
+  }
+
   return {
+    confirmar: confirmar,
     esc: esc, ico: ico, datos: datos,
     iniciales: iniciales, avatar: avatar, avatares: avatares, persona: persona, precargarFotos: precargarFotos,
     kpi: kpi, barra: barra, anillo: anillo, badge: badge, chip: chip, boton: boton, segmento: segmento,

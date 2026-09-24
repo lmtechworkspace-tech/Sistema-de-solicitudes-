@@ -174,6 +174,10 @@
 .sx2-boton--secundario:hover { border-color: var(--sx-borde-fuerte); background: var(--sx-superficie-hover); }
 .sx2-boton--fantasma { background: transparent; color: var(--sx-texto-2); }
 .sx2-boton--fantasma:hover { background: var(--sx-superficie-2); color: var(--sx-texto); }
+.sx2-boton--peligro { background: var(--sx-critico); color: #fff; }
+.sx2-boton--peligro:hover { background: color-mix(in srgb, var(--sx-critico) 85%, #000); }
+.sx2-boton--texto-peligro { background: transparent; color: var(--sx-critico); }
+.sx2-boton--texto-peligro:hover { background: var(--sx-critico-suave); }
 .sx2-boton--sm { height: 32px; padding: 0 var(--sx-e-3); font-size: 0.8125rem; border-radius: var(--sx-radio-sm); }
 .sx2-boton--icono { width: 38px; padding: 0; }
 .sx2-boton--icono.sx2-boton--sm { width: 32px; }
@@ -267,8 +271,26 @@
 .sx2-delta--mal { color: var(--sx-critico); font-weight: 600; }
 .sx2-delta--bien { color: var(--sx-ok); font-weight: 600; }
 
+/* Diálogo de confirmación (sobre el drawer) --------------------------------- */
+.sx2-dialogo { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: var(--sx-e-4); }
+.sx2-dialogo__caja {
+  position: relative; width: min(420px, 100%);
+  background: var(--sx-superficie); border-radius: var(--sx-radio-lg); box-shadow: var(--sx-sombra-3);
+  padding: var(--sx-e-6); display: flex; flex-direction: column; gap: var(--sx-e-3);
+  animation: sx2-escala var(--sx-dur-lenta) var(--sx-curva) both;
+}
+.sx2-dialogo__ico {
+  width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--sx-tono-suave); color: var(--sx-tono);
+}
+.sx2-dialogo__titulo { margin: 0; font: var(--sx-t-h2); color: var(--sx-texto); }
+.sx2-dialogo__texto { margin: 0; font: var(--sx-t-cuerpo); color: var(--sx-texto-2); }
+.sx2-dialogo__acciones { display: flex; justify-content: flex-end; gap: var(--sx-e-2); margin-top: var(--sx-e-2); }
+
 /* Drawer (panel lateral) ------------------------------------------------------ */
 .sx2-drawer { position: fixed; inset: 0; z-index: 70; }
+body.sx2-con-drawer #sigso-notif-campana,
+body.sx2-con-drawer #py2-interruptor { visibility: hidden; }
 .sx2-drawer__telon {
   position: absolute; inset: 0;
   background: color-mix(in srgb, #0F172A 28%, transparent);

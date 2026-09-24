@@ -218,7 +218,7 @@
         '<span class="sx2-py-hitos__marca"></span>' +
         '<span class="sx2-py-hitos__txt"><strong>' + U.esc(h.nombre) + '</strong>' +
           '<span class="sx2-tenue">' + PY.fecha(h.fecha_objetivo, true) + (h.total_tareas ? ' · ' + h.total_tareas + ' tareas' : '') + '</span></span>' +
-        (h.avance_pct !== null && h.avance_pct !== undefined ? '<span class="sx2-py-hitos__pct">' + h.avance_pct + '%</span>' : '') +
+        (h.avance_pct !== null && h.avance_pct !== undefined ? '<span class="sx2-py-hitos__pct">' + Math.round(Number(h.avance_pct)) + '%</span>' : '') +
       '</li>';
     }).join('') + '</ol>';
   }

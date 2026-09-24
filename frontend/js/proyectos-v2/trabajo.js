@@ -223,7 +223,8 @@
       PY.filtroTrabajo = null;
     }
     if (PY.modoTrabajo) { f.modo = PY.modoTrabajo; PY.modoTrabajo = null; }
-    if (PY.responsableTrabajo) { f.responsable = PY.responsableTrabajo; PY.responsableTrabajo = null; }
+    if (PY.responsableTrabajo) { f.responsable = PY.responsableTrabajo; f.hito = ''; PY.responsableTrabajo = null; }
+    if (PY.hitoTrabajo) { f.hito = PY.hitoTrabajo; f.responsable = ''; PY.hitoTrabajo = null; }
     var plan = PY.planPorId(ctx);
     var tareas = filtrar(ctx, plan, false);
     var cuerpo;

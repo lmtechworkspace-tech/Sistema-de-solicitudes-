@@ -121,6 +121,124 @@
 
   function aviso(texto, tipo) { if (window.Componentes && Componentes.aviso) Componentes.aviso({ texto: texto, tipo: tipo || 'info' }); }
 
+  // Quién puede APORTAR al proyecto (documentos, entregables, riesgos,
+  // reuniones, decisiones): espejo de puedeAportar_ de v1, que a su vez es la
+  // regla del backend (ADM/líder, o cualquier miembro que no sea observador).
+  function puedeAportar(detalle) {
+    if (!detalle) return false;
+    if (detalle.puede_gestionar === true) return true;
+    return !!detalle.rol_actual && detalle.rol_actual !== 'OBSERVADOR';
+  }
+
+  // Datos que no vienen en el detalle (reuniones, decisiones, avance, pagos,
+  // RDI, analítica): se piden la primera vez que una vista los necesita y
+  // quedan en estado.datos.extra. undefined = cargando · null = falló.
+  function extra(clave, accion, extraer) {
+    var d = estado.datos;
+    if (!d) return undefined;
+    d.extra = d.extra || {};
+    d.enVuelo = d.enVuelo || {};
+    if (Object.prototype.hasOwnProperty.call(d.extra, clave)) return d.extra[clave];
+    if (!d.enVuelo[clave]) {
+      d.enVuelo[clave] = true;
+      api_(accion, { proyecto_id: estado.proyectoId }).then(function (r) {
+        if (estado.datos !== d) return; // se cambió de proyecto o se recargó
+        d.enVuelo[clave] = false;
+        d.extra[clave] = (r && r.ok) ? (extraer ? extraer(r.data) : r.data) : null;
+        if (estado.vista === 'proyecto') pintar({ sinAnimacion: true });
+      });
+    }
+    return undefined;
+  }
+  function invalidarExtra(clave) {
+    var d = estado.datos;
+    if (d && d.extra) delete d.extra[clave];
+    pintar({ sinAnimacion: true });
+  }
+
+  // Formulario en drawer, el patrón de todas las altas/ediciones de v2.
+  // o: { titulo, subtitulo, campos (html), boton, accion | enviar(datos),
+  //      preparar(datos, form) -> datos | 'mensaje de error' | Promise,
+  //      eliminar: { texto, titulo, mensaje, enviar() }, aviso, listo(r), alMontar(form, d) }
+  // Por defecto, al guardar bien recarga el proyecto.
+  function formulario(o) {
+    var d = U.drawer({
+      titulo: o.titulo,
+      subtitulo: o.subtitulo,
+      cuerpo: '<form class="sx2-form js-py2-form" novalidate>' + o.campos +
+        '<p class="sx2-campo__error js-py2-form-error" role="alert" hidden></p></form>',
+      pie: (o.eliminar ? U.boton({ texto: o.eliminar.texto || 'Eliminar', icono: 'basura', variante: 'texto-peligro', clase: 'js-py2-form-eliminar' }) : '') +
+        '<span style="flex:1"></span>' +
+        U.boton({ texto: 'Cancelar', clase: 'js-sx2-drawer-cerrar' }) +
+        U.boton({ texto: o.boton || 'Guardar', icono: 'check', variante: 'primario', clase: 'js-py2-form-ok' })
+    });
+    var form = d.el.querySelector('.js-py2-form');
+    var err = d.el.querySelector('.js-py2-form-error');
+    var ok = d.el.querySelector('.js-py2-form-ok');
+    var textoOk = ok.innerHTML;
+    function error(m) { err.textContent = m; err.hidden = false; }
+    function ocupado(si) { ok.disabled = si; ok.innerHTML = si ? 'Guardando…' : textoOk; }
+    function terminar(r) {
+      ocupado(false);
+      if (!r || !r.ok) { error((r && r.message) || 'No se pudo guardar.'); return; }
+      d.cerrar();
+      if (o.aviso) aviso(o.aviso, 'exito');
+      if (o.listo) o.listo(r); else recargarProyecto();
+    }
+    function enviar(ev) {
+      if (ev) ev.preventDefault();
+      if (ok.disabled) return;
+      err.hidden = true;
+      var datos = { proyecto_id: estado.proyectoId };
+      new FormData(form).forEach(function (v, k) { if (typeof v === 'string') datos[k] = v.trim(); });
+      ocupado(true);
+      Promise.resolve(o.preparar ? o.preparar(datos, form) : datos).then(function (listos) {
+        if (typeof listos === 'string') { ocupado(false); error(listos); return; }
+        return (o.enviar ? o.enviar(listos) : api_(o.accion, listos)).then(terminar);
+      }, function (e) { ocupado(false); error((e && e.message) || 'No se pudo preparar el envío.'); });
+    }
+    form.addEventListener('submit', enviar);
+    ok.addEventListener('click', enviar);
+    var elim = d.el.querySelector('.js-py2-form-eliminar');
+    if (elim) {
+      elim.addEventListener('click', function () {
+        U.confirmar({ titulo: o.eliminar.titulo || '¿Eliminar?', texto: o.eliminar.mensaje, boton: o.eliminar.texto || 'Eliminar', peligro: true }).then(function (si) {
+          if (!si) return;
+          elim.disabled = true;
+          o.eliminar.enviar().then(function (r) { elim.disabled = false; terminar(r); });
+        });
+      });
+    }
+    if (o.alMontar) o.alMontar(form, d);
+    var primero = form.querySelector('input:not([type=hidden]):not([type=file]), textarea, select');
+    if (primero) primero.focus();
+    return d;
+  }
+
+  // Confirmar + llamar + avisar + recargar: las acciones de un clic.
+  // o: { titulo, texto, boton, peligro, accion, datos, aviso, listo(r) }
+  function accionConfirmada(o) {
+    return U.confirmar(o).then(function (si) {
+      if (!si) return false;
+      return api_(o.accion, Object.assign({ proyecto_id: estado.proyectoId }, o.datos || {})).then(function (r) {
+        if (!r || !r.ok) { aviso((r && r.message) || 'No se pudo completar la acción.', 'error'); return false; }
+        if (o.aviso) aviso(o.aviso, 'exito');
+        if (o.listo) o.listo(r); else recargarProyecto();
+        return true;
+      });
+    });
+  }
+
+  // Lee un File como base64 (sin el prefijo data:...;base64,).
+  function leerBase64(archivo) {
+    return new Promise(function (resolver, rechazar) {
+      var lector = new FileReader();
+      lector.onload = function () { resolver(String(lector.result).slice(String(lector.result).indexOf(',') + 1)); };
+      lector.onerror = function () { rechazar(new Error('No se pudo leer el archivo.')); };
+      lector.readAsDataURL(archivo);
+    });
+  }
+
   // --- Montaje ------------------------------------------------------------------
   function montarRaiz() {
     var c = contenedor();
@@ -285,7 +403,13 @@
     var sec = PYv2.secciones[estado.seccion];
     var cuerpo = sec ? sec.pintar(c) : seccionPendiente_();
     var avance = d.detalle.avance_pct;
-    var contadores = { trabajo: d.tareas.filter(function (a) { return a.estado !== 'TERMINADA' && a.estado !== 'CANCELADA'; }).length, equipo: (d.detalle.integrantes || []).length };
+    var contadores = {
+      trabajo: d.tareas.filter(function (a) { return a.estado !== 'TERMINADA' && a.estado !== 'CANCELADA'; }).length,
+      equipo: (d.detalle.integrantes || []).length,
+      archivos: (d.detalle.documentos || []).length + (d.detalle.entregables || []).length,
+      // Riesgos vivos: lo que en Seguimiento pide atención.
+      seguimiento: (d.detalle.riesgos || []).filter(function (r) { return r.estado !== 'CERRADO'; }).length
+    };
 
     return '<div class="sx2-pagina">' +
       '<header class="sx2-cabecera sx2-entra">' +
@@ -423,6 +547,12 @@
   PY.abrirProyecto = abrirProyecto;
   PY.recargarProyecto = recargarProyecto;
   PY.cargarPortafolio = cargarPortafolio;
+  PY.puedeAportar = puedeAportar;
+  PY.extra = extra;
+  PY.invalidarExtra = invalidarExtra;
+  PY.formulario = formulario;
+  PY.accionConfirmada = accionConfirmada;
+  PY.leerBase64 = leerBase64;
 
   window.SigsoProyectosV2 = {
     cargar: cargar,

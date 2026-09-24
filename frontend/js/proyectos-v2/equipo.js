@@ -192,7 +192,7 @@
       '<div class="sx2-py-personas">' + tarjetas + '</div>' +
       '<div class="sx2-grid sx2-grid--estira">' +
         '<div class="sx2-col-8">' + U.card({ titulo: 'Dedicación día a día', icono: 'calendario', sub: 'últimos ' + DIAS_VENTANA + ' días · clic en un día para ver el detalle', i: 3, cuerpo: mapaCalor(gente, h) }) + '</div>' +
-        '<div class="sx2-col-4">' + U.card({ titulo: 'Horas del equipo por día', icono: 'grafico', i: 4,
+        '<div class="sx2-col-4 sx2-col--apila">' + U.card({ titulo: 'Horas del equipo por día', icono: 'grafico', i: 4,
           cuerpo: totalHoras ? '<div class="sx2-py-grafico sx2-py-grafico--alto"><canvas id="py2-grafico-horas" role="img" aria-label="Horas registradas por día y persona"></canvas></div>' : U.vacio({ icono: 'grafico', texto: 'Sin horas en el período.' }) }) + '</div>' +
       '</div>';
   }
@@ -292,11 +292,10 @@
   }
 
   function quitar(ctx, id, nombre) {
-    if (!window.confirm('¿Quitar a ' + nombre + ' del equipo? Sus tareas no se borran.')) return;
-    PY.api('gestionarIntegranteProyecto', { proyecto_id: ctx.proyecto.proyecto_id, accion: 'quitar', integrante_id: id }).then(function (r) {
-      if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo quitar.', 'error'); return; }
-      PY.aviso(nombre + ' ya no está en el equipo.', 'exito');
-      PY.recargarProyecto();
+    PY.accionConfirmada({
+      titulo: '¿Quitar a ' + nombre + ' del equipo?', texto: 'Sus tareas no se borran.', boton: 'Quitar', peligro: true,
+      accion: 'gestionarIntegranteProyecto', datos: { accion: 'quitar', integrante_id: id },
+      aviso: nombre + ' ya no está en el equipo.'
     });
   }
 

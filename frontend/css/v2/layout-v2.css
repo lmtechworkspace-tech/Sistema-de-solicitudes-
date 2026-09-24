@@ -150,8 +150,11 @@
 @media (max-width: 1100px) {
   .sx2-col-3, .sx2-col-4, .sx2-col-5 { grid-column: span 6; }
   .sx2-col-7, .sx2-col-8, .sx2-col-9 { grid-column: span 12; }
+  /* Columna lateral de un par (8+4, 7+5): abajo, a lo ancho, en vez de media fila vacía. */
+  .sx2-grid > .sx2-col--apila { grid-column: span 12; }
   .sx2-con-subnav { grid-template-columns: minmax(0, 1fr); }
-  .sx2-subnav { position: static; flex-direction: row; overflow-x: auto; }
+  .sx2-subnav { position: static; flex-direction: row; overflow-x: auto; scrollbar-width: thin; padding-bottom: 2px; }
+  .sx2-subnav__item { flex: none; white-space: nowrap; }
 }
 @media (max-width: 720px) {
   .sx2-pagina { padding-top: var(--sx-e-4); }
