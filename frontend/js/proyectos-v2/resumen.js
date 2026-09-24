@@ -248,8 +248,9 @@
         '<div class="sx2-col-4">' + U.card({ titulo: 'Avance del proyecto', icono: 'dona', i: 2, cuerpo: avance(ctx) }) + '</div>' +
         '<div class="sx2-col-7">' + U.card({ titulo: 'Próximas tareas', icono: 'tareas', i: 3, sinRelleno: true, accion: { texto: 'Ver todas', clase: 'js-py2-ir', datos: { seccion: 'trabajo', modo: 'tabla' } }, cuerpo: proximas(ctx) }) + '</div>' +
         '<div class="sx2-col-5">' + U.card({ titulo: 'Carga del equipo', icono: 'equipo', i: 4, sinRelleno: true, accion: { texto: 'Ver equipo', clase: 'js-py2-ir', datos: { seccion: 'equipo' } }, cuerpo: equipo(ctx) }) + '</div>' +
-        '<div class="sx2-col-8">' + U.card({ titulo: 'Actividad reciente', icono: 'actividad', i: 5, cuerpo: feedHtml(feed(ctx, 8)) }) + '</div>' +
-        '<div class="sx2-col-4">' + U.card({ titulo: 'Hitos', icono: 'bandera', i: 5, accion: { texto: 'Ver seguimiento', clase: 'js-py2-ir', datos: { seccion: 'seguimiento' } }, cuerpo: hitosLinea(ctx) }) + '</div>' +
+        '<div class="sx2-col-8">' + U.card({ titulo: 'Actividad reciente', icono: 'actividad', i: 5, accion: { texto: 'Abrir la sala', clase: 'js-py2-sala' }, cuerpo: feedHtml(feed(ctx, 8)) }) + '</div>' +
+        '<div class="sx2-col-4 sx2-apilado">' + U.card({ titulo: 'Hitos', icono: 'bandera', i: 5, accion: { texto: 'Ver seguimiento', clase: 'js-py2-ir', datos: { seccion: 'seguimiento' } }, cuerpo: hitosLinea(ctx) }) +
+          (PY.sobreProyecto ? U.card({ titulo: 'Sobre el proyecto', icono: 'info', i: 6, cuerpo: PY.sobreProyecto(ctx) }) : '') + '</div>' +
       '</div>' +
       alertas(ctx, m);
   }

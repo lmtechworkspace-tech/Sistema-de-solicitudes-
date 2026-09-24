@@ -728,7 +728,7 @@ function listarCalendario(db, data, contexto) {
     if (!esVerdadero_(a.activa) || !a.fecha_compromiso || !proyectosPorId[a.proyecto_id]) return;
     const s = Actividades.semaforoActividad_(a);
     items.push({
-      tipo: 'tarea', fecha: a.fecha_compromiso, titulo: a.titulo, responsable_email: a.responsable_email,
+      tipo: 'tarea', actividad_id: a.actividad_id, fecha: a.fecha_compromiso, titulo: a.titulo, responsable_email: a.responsable_email,
       semaforo: s.codigo, semaforo_etiqueta: s.etiqueta, proyecto_id: a.proyecto_id, proyecto_nombre: proyectosPorId[a.proyecto_id].nombre
     });
   });

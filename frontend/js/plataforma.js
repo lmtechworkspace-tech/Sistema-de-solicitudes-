@@ -1368,27 +1368,27 @@
   // <main> se adapta al modulo en vez de ser fijo.
   var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad'];
 
-  // Proyectos v2 (beta, solo ADM): el shell decide qué implementación pinta
-  // el módulo -- v1 (proyectos.js) o v2 (proyectos-v2/*.js) -- según la
-  // preferencia del usuario (SigsoProyectosV2.activo, en localStorage). Los
-  // tres puntos donde el shell llama a Proyectos pasan por moduloProyectos_.
+  // Proyectos v2 (F8: versión por defecto para todos los roles): el shell
+  // decide qué implementación pinta el módulo -- v2 (proyectos-v2/*.js) o la
+  // clásica (proyectos.js) -- según la preferencia del usuario
+  // (SigsoProyectosV2.activo: v2 salvo que haya elegido volver a la clásica).
+  // Los tres puntos donde el shell llama a Proyectos pasan por moduloProyectos_.
   function usaProyectosV2_() {
-    return !!(window.SigsoProyectosV2 && sesion && sesion.cuenta && sesion.cuenta.rol === 'ADM' &&
-      window.SigsoProyectosV2.activo());
+    return !!(window.SigsoProyectosV2 && window.SigsoProyectosV2.activo());
   }
   function moduloProyectos_() {
     return usaProyectosV2_() ? window.SigsoProyectosV2 : window.SigsoProyectos;
   }
-  // Pantalla completa para v2 + interruptor flotante "Probar la nueva
-  // versión / Volver a la clásica" (solo ADM, solo dentro de Proyectos).
+  // Pantalla completa para v2 + interruptor flotante "Volver a la versión
+  // clásica / Usar la nueva versión" (todos los roles, solo en Proyectos). La
+  // clásica queda un ciclo como respaldo y después se retira.
   function actualizarProyectosV2_(id) {
     var enPy = id === 'proyectos';
     var v2 = enPy && usaProyectosV2_();
     var main = document.querySelector('#vista-shell .sigso-contenido');
     if (main) main.classList.toggle('plataforma-contenido--total', v2);
     var pill = document.getElementById('py2-interruptor');
-    var esAdm = sesion && sesion.cuenta && sesion.cuenta.rol === 'ADM';
-    if (!enPy || !esAdm || !window.SigsoProyectosV2) { if (pill) pill.remove(); return; }
+    if (!enPy || !window.SigsoProyectosV2) { if (pill) pill.remove(); return; }
     if (!pill) {
       pill = document.createElement('button');
       pill.type = 'button';
@@ -1398,7 +1398,7 @@
     }
     pill.className = 'sx2-py-interruptor' + (v2 ? ' sx2-py-interruptor--clasica' : '');
     pill.innerHTML = Iconos.svg(v2 ? 'izquierda' : 'destello', { tam: 16 }) +
-      (v2 ? 'Volver a la versión clásica' : 'Probar la nueva versión (beta)');
+      (v2 ? 'Volver a la versión clásica' : 'Usar la nueva versión');
   }
   document.addEventListener('sigso:proyectos-version', function (ev) {
     if (moduloActivo_ !== 'proyectos') return;

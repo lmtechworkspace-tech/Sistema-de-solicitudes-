@@ -184,7 +184,10 @@
   // --- Panel ------------------------------------------------------------------------
   function abrirTarea(id, opts) {
     opts = opts || {};
-    var ctx = PY.ctx();
+    // opts.ctx: datos de OTRO proyecto (Mi trabajo abre tareas de varios);
+    // opts.alGuardar: qué refrescar después (por defecto, el proyecto abierto).
+    var ctx = opts.ctx || PY.ctx();
+    var alGuardar = opts.alGuardar || PY.recargarProyecto;
     var a = buscar(ctx, id);
     if (!a) return;
     var pestana = 'detalle';
@@ -265,7 +268,7 @@
         if (!r || !r.ok) { error((r && r.message) || 'No se pudo guardar.'); return; }
         d.cerrar();
         PY.aviso(accion === 'listo' ? '¡Tarea terminada!' : 'Tarea actualizada.', 'exito');
-        PY.recargarProyecto();
+        alGuardar();
       });
     }
 
@@ -294,7 +297,7 @@
         if (!r || !r.ok) throw r;
         d.cerrar();
         PY.aviso('Cambios guardados.', 'exito');
-        PY.recargarProyecto();
+        alGuardar();
       }).catch(function (r) {
         btn.disabled = false;
         error((r && r.message) || 'No se pudieron guardar los cambios.');
@@ -343,5 +346,26 @@
     return d;
   }
 
+  // Abre el panel de una tarea de CUALQUIER proyecto sin salir de la vista
+  // actual (Mi trabajo, Calendario): carga ese proyecto por detrás.
+  function abrirTareaDeProyecto(proyectoId, actividadId, opts) {
+    opts = opts || {};
+    var datos = { proyecto_id: proyectoId };
+    PY.aviso('Abriendo la tarea…');
+    return Promise.all([
+      PY.api('getDetalleCompletoProyecto', datos),
+      PY.api('listarBitacoraProyecto', datos),
+      PY.cargarMiPerfil()
+    ]).then(function (r) {
+      if (!r[0] || !r[0].ok) { PY.aviso((r[0] && r[0].message) || 'No se pudo abrir la tarea.', 'error'); return null; }
+      var ctx = {
+        detalle: r[0].data.detalle, proyecto: r[0].data.detalle.proyecto, tareas: r[0].data.tareas || [],
+        sala: r[0].data.sala || [], bitacora: (r[1] && r[1].ok) ? (r[1].data || []) : [], rendimiento: null
+      };
+      return abrirTarea(actividadId, Object.assign({}, opts, { ctx: ctx }));
+    });
+  }
+
   PY.abrirTarea = abrirTarea;
+  PY.abrirTareaDeProyecto = abrirTareaDeProyecto;
 })();

@@ -66,11 +66,12 @@
 
   // Quién soy (para permisos de presentación: "¿trabajo esta tarea?"). El
   // backend sigue siendo la autoridad; esto solo decide qué botones mostrar.
-  var miPerfil_ = null, miEmail_ = '';
+  var miPerfil_ = null, miEmail_ = '', miNombre_ = '';
   function cargarMiPerfil() {
     if (!miPerfil_) {
       miPerfil_ = api_('getMiPerfil', {}).then(function (r) {
         miEmail_ = (r && r.ok && r.data && r.data.email) ? String(r.data.email).trim().toLowerCase() : '';
+        miNombre_ = (r && r.ok && r.data && r.data.nombre) ? String(r.data.nombre) : '';
         return miEmail_;
       });
     }
@@ -177,7 +178,7 @@
     var ok = d.el.querySelector('.js-py2-form-ok');
     var textoOk = ok.innerHTML;
     function error(m) { err.textContent = m; err.hidden = false; }
-    function ocupado(si) { ok.disabled = si; ok.innerHTML = si ? 'Guardando…' : textoOk; }
+    function ocupado(si) { ok.disabled = si; ok.innerHTML = si ? (o.ocupado || 'Guardando…') : textoOk; }
     function terminar(r) {
       ocupado(false);
       if (!r || !r.ok) { error((r && r.message) || 'No se pudo guardar.'); return; }
@@ -291,6 +292,37 @@
     return correos;
   }
 
+  // --- Vistas de módulo (Mi trabajo, Calendario) ------------------------------
+  // Cada una vive en su archivo y se registra en PYv2.vistas[id] con:
+  //   cargar() -> Promise(datos) · pintar(datos) -> html · alMontar(raiz, datos)
+  //   correos(datos) -> [emails] (opcional, para nombres y fotos)
+  function abrirVista(id, opciones) {
+    var v = PYv2.vistas[id];
+    if (!v) { cargarPortafolio(); return; }
+    opciones = opciones || {};
+    var c = montarRaiz();
+    if (!c) return;
+    var misma = estado.vista === id && estado.vistaDatos;
+    estado.vista = id;
+    estado.proyectoId = null;
+    estado.datos = null;
+    var turno = ++estado.turno;
+    if (!opciones.silencioso || !misma) {
+      estado.vistaDatos = null;
+      c.innerHTML = '<div class="sx2-pagina">' + U.esqueleto('kpis', 5) + U.esqueleto('tabla', 6) + '</div>';
+      window.scrollTo(0, 0);
+    }
+    Promise.all([v.cargar(), cargarMiPerfil()]).then(function (r) {
+      if (turno !== estado.turno) return;
+      estado.vistaDatos = r[0];
+      pintar(misma && opciones.silencioso ? { sinAnimacion: true } : undefined);
+      resolverPersonasYFotos(v.correos ? v.correos(r[0]) : [], turno);
+    });
+  }
+  function recargarVista() {
+    if (PYv2.vistas[estado.vista]) abrirVista(estado.vista, { silencioso: true });
+  }
+
   // --- Proyecto -----------------------------------------------------------------
   function abrirProyecto(id, opciones) {
     opciones = opciones || {};
@@ -326,6 +358,8 @@
         rendimiento: (r[2] && r[2].ok) ? r[2].data : null
       };
       pintar();
+      // Quien tenga un panel abierto sobre estos datos (la Sala) se refresca.
+      document.dispatchEvent(new CustomEvent('py2:datos', { detail: { proyectoId: id } }));
       resolverPersonasYFotos(juntarCorreosProyecto(), turno);
     });
   }
@@ -375,6 +409,11 @@
       if (!estado.portafolio) return;
       c.innerHTML = PYv2.pintarPortafolio(estado.portafolio);
       if (PYv2.alMontarPortafolio) PYv2.alMontarPortafolio(c, estado.portafolio);
+    } else if (PYv2.vistas[estado.vista]) {
+      if (!estado.vistaDatos) return;
+      var v = PYv2.vistas[estado.vista];
+      c.innerHTML = '<div class="sx2-pagina">' + v.pintar(estado.vistaDatos) + '</div>';
+      if (v.alMontar) v.alMontar(c.firstChild, estado.vistaDatos);
     } else {
       if (!estado.datos) return;
       c.innerHTML = pintarProyecto_();
@@ -427,6 +466,7 @@
           '</div>' +
         '</div>' +
         '<div class="sx2-cabecera__acciones">' +
+          (PYv2.accionesCabecera ? PYv2.accionesCabecera(c) : '') +
           U.boton({ texto: 'Excel', icono: 'tabla', clase: 'js-py2-excel' }) +
           U.boton({ texto: 'PDF', icono: 'documento', clase: 'js-py2-pdf' }) +
         '</div>' +
@@ -479,6 +519,7 @@
     c.addEventListener('click', function (ev) {
       if (!c.classList.contains('sx2')) return; // v1 está pintando: no es nuestro
       var t = ev.target;
+      if (PYv2.clicAcciones && PYv2.clicAcciones(t, ev)) return;
       if (t.closest('.js-py2-portafolio')) { cargarPortafolio(); return; }
       var s = t.closest('.js-py2-seccion');
       if (s) { irSeccion(s.getAttribute('data-id')); return; }
@@ -486,7 +527,7 @@
       if (t.closest('.js-py2-pdf')) { descargar('descargarReporteProyecto', 'pdf'); return; }
       if (t.closest('.js-py2-clasica')) { usarVersion(false); return; }
       var abrir = t.closest('[data-py2-proyecto]');
-      if (abrir) { abrirProyecto(abrir.getAttribute('data-py2-proyecto')); return; }
+      if (abrir) { abrirProyecto(abrir.getAttribute('data-py2-proyecto'), { seccion: abrir.getAttribute('data-seccion') || undefined }); return; }
     });
     c.addEventListener('keydown', function (ev) {
       if (!c.classList.contains('sx2')) return;
@@ -498,25 +539,40 @@
   }
 
   // --- Preferencia v1/v2 -------------------------------------------------------
-  function activo() { try { return localStorage.getItem(CLAVE_PREF) === '1'; } catch (e) { return false; } }
+  // v2 es la versión por defecto (F8): solo quien eligió volver a la clásica
+  // ('0') sigue en v1. Sin storage (modo privado), v2.
+  function activo() { try { return localStorage.getItem(CLAVE_PREF) !== '0'; } catch (e) { return true; } }
   function usarVersion(v2) {
-    try { localStorage.setItem(CLAVE_PREF, v2 ? '1' : '0'); } catch (e) { /* sin storage: queda en v1 */ }
+    try { localStorage.setItem(CLAVE_PREF, v2 ? '1' : '0'); } catch (e) { /* sin storage: no se recuerda */ }
     document.dispatchEvent(new CustomEvent('sigso:proyectos-version', { detail: { v2: !!v2 } }));
   }
 
   // --- API pública (misma forma que window.SigsoProyectos de v1) ---------------
-  function cargar() { engancharUnaVez(); cargarPortafolio(); }
+  // La vista puede venir de la URL (#/proyectos/mi-trabajo): mismo contrato que
+  // v1, solo se aceptan los ítems que existen en el árbol del módulo.
+  var ITEMS_VALIDOS = { portafolio: true, 'mi-trabajo': true, calendario: true, reportes: true };
+  function cargar() {
+    engancharUnaVez();
+    var pedida = (window.SigsoShell && SigsoShell.tomarItemDeRuta) ? SigsoShell.tomarItemDeRuta() : '';
+    if (pedida && ITEMS_VALIDOS[pedida] && pedida !== 'portafolio') { irAItem(pedida); return; }
+    cargarPortafolio();
+  }
   function refrescar() {
     engancharUnaVez();
     if (estado.vista === 'proyecto' && estado.proyectoId) abrirProyecto(estado.proyectoId, { silencioso: true });
+    else if (PYv2.vistas[estado.vista]) recargarVista();
     else cargarPortafolio(true);
   }
-  // Ítems del árbol del sidebar. v2 cubre el portafolio; Mi trabajo,
-  // Calendario y Reportes siguen en v1 hasta F8 (el shell sigue en "v2",
-  // así que al volver a Portafolio se retoma v2).
+  // Ítems del árbol del sidebar. Portafolio, Mi trabajo y Calendario son v2;
+  // Reportes usa el motor compartido de SIGSO (SigsoReportes, el mismo de los
+  // demás módulos), así que se delega a v1 -- el shell sigue en "v2" y al
+  // volver a otro ítem se retoma v2.
+  var ITEM_VISTA = { 'mi-trabajo': 'mitrabajo', calendario: 'calendario' };
   function irAItem(id) {
     engancharUnaVez();
+    if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id || 'portafolio');
     if (!id || id === 'portafolio') { cargarPortafolio(); return; }
+    if (ITEM_VISTA[id] && PYv2.vistas[ITEM_VISTA[id]]) { abrirVista(ITEM_VISTA[id]); return; }
     desmontar();
     estado.vista = 'externa';
     if (window.SigsoProyectos && SigsoProyectos.irAItem) SigsoProyectos.irAItem(id);
@@ -525,6 +581,7 @@
   window.PYv2 = window.PYv2 || {};
   var PY = window.PYv2;
   PY.secciones = PY.secciones || {};
+  PY.vistas = PY.vistas || {};
   PY.SECCIONES = SECCIONES;
   PY.seccionExiste = function (id) { return SECCIONES.some(function (s) { return s.id === id; }); };
   PY.TONO_SEMAFORO = TONO_SEMAFORO;
@@ -540,13 +597,17 @@
   PY.api = api_;
   PY.descargarBase64 = descargarBase64;
   PY.miEmail = function () { return miEmail_; };
+  PY.miNombre = function () { return miNombre_; };
   PY.estado = function () { return estado; };
   PY.ctx = ctx;
   PY.pintar = pintar;
   PY.irSeccion = irSeccion;
   PY.abrirProyecto = abrirProyecto;
   PY.recargarProyecto = recargarProyecto;
+  PY.abrirVista = abrirVista;
+  PY.recargarVista = recargarVista;
   PY.cargarPortafolio = cargarPortafolio;
+  PY.cargarMiPerfil = cargarMiPerfil;
   PY.puedeAportar = puedeAportar;
   PY.extra = extra;
   PY.invalidarExtra = invalidarExtra;

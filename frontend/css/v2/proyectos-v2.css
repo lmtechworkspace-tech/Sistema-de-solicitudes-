@@ -10,6 +10,10 @@
   width: 100% !important;
   padding: 0 !important;
 }
+/* Vistas que v2 delega al motor clásico (Reportes): recuperan su margen. */
+.plataforma-contenido--total #modulo-proyectos:not(.sigso-py-sin-cabecera-modulo) {
+  padding: var(--esp-5, 24px) clamp(16px, 3vw, 40px);
+}
 
 /* --- Portafolio -------------------------------------------------------------- */
 .sx2-py-tarjetas {
@@ -476,6 +480,119 @@
 .sx2-py-mini-kpis small { font: var(--sx-t-micro); color: var(--sx-texto-3); }
 .sx2-py-mini-kpis b { font: 700 1.125rem/1.2 var(--fuente); color: inherit; }
 .sx2-py-mini-kpis > span:not([class]) b { color: var(--sx-texto); }
+
+/* --- Mi trabajo ----------------------------------------------------------- */
+.sx2-py-mt-ico { width: 26px; height: 26px; flex: none; display: inline-grid; place-items: center; border-radius: 8px; background: var(--sx-tono-suave); color: var(--sx-tono); }
+.sx2-py-mt-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.sx2-py-mt-fila {
+  display: flex; align-items: center; gap: var(--sx-e-3);
+  padding: var(--sx-e-3) var(--sx-e-2); border-bottom: 1px solid var(--sx-borde-suave);
+  border-radius: var(--sx-radio-sm); cursor: pointer;
+  transition: background var(--sx-dur-rapida) var(--sx-curva);
+}
+.sx2-py-mt-fila:last-child { border-bottom: 0; }
+.sx2-py-mt-fila:hover { background: var(--sx-superficie-hover); }
+.sx2-py-mt-fila:focus-visible { outline: none; box-shadow: var(--sx-anillo-foco); }
+.sx2-py-mt-fila > .sx2-py-punto { width: 10px; height: 10px; box-shadow: 0 0 0 4px var(--sx-tono-suave); }
+.sx2-py-mt-fila strong.sx2-cortar { font: 600 0.9rem/1.35 var(--fuente); color: var(--sx-texto); }
+.sx2-py-mt-cuando { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; width: 150px; font: 500 0.8125rem/1.2 var(--fuente); color: var(--sx-texto-2); }
+.sx2-py-mt-avance { display: flex; align-items: center; gap: 6px; width: 100%; }
+.sx2-py-mt-avance .sx2-barra { flex: 1; }
+.sx2-py-mt-avance small { font: var(--sx-t-micro); color: var(--sx-texto-3); min-width: 30px; text-align: right; }
+.sx2-py-mt-bloqueo { display: inline-flex; align-items: center; gap: 5px; font: var(--sx-t-micro); color: var(--sx-hito); }
+.sx2-py-mt-proys { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.sx2-py-mt-proy {
+  width: 100%; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px;
+  border: 0; border-radius: var(--sx-radio-sm); background: none; text-align: left; cursor: pointer;
+  font: var(--sx-t-chico); color: var(--sx-texto);
+}
+.sx2-py-mt-proy:hover { background: var(--sx-superficie-hover); }
+.sx2-py-mt-totales { border-top: 1px dashed var(--sx-borde); padding-top: 6px; margin-top: 2px; }
+@media (max-width: 720px) {
+  .sx2-py-mt-fila { flex-wrap: wrap; }
+  .sx2-py-mt-cuando { width: auto; flex: 1; align-items: flex-start; }
+}
+
+/* --- Calendario ------------------------------------------------------------- */
+.sx2-py-cal-nav { align-items: center; }
+.sx2-py-cal-nav__mes { min-width: 150px; text-align: center; font: var(--sx-t-h2); color: var(--sx-texto); }
+.sx2-py-cal { overflow: hidden; }
+.sx2-py-cal__cab { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-bottom: 1px solid var(--sx-borde-suave); }
+.sx2-py-cal__cab span { padding: 10px 12px; font: var(--sx-t-etiqueta); text-transform: uppercase; letter-spacing: 0.06em; color: var(--sx-texto-3); }
+.sx2-py-cal__rejilla { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.sx2-py-cal-celda {
+  position: relative; min-height: 118px; min-width: 0; padding: 6px 6px 8px;
+  display: flex; flex-direction: column; gap: 4px;
+  border-right: 1px solid var(--sx-borde-suave); border-bottom: 1px solid var(--sx-borde-suave);
+  cursor: pointer; transition: background var(--sx-dur-rapida) var(--sx-curva);
+}
+.sx2-py-cal-celda:nth-child(7n) { border-right: 0; }
+.sx2-py-cal-celda:hover { background: var(--sx-superficie-hover); }
+.sx2-py-cal-celda--finde { background: color-mix(in srgb, var(--sx-superficie-2) 55%, transparent); }
+.sx2-py-cal-celda--fuera .sx2-py-cal-celda__num { color: var(--sx-texto-3); opacity: 0.55; }
+.sx2-py-cal-celda--fuera .sx2-py-cal-celda__items { opacity: 0.55; }
+.sx2-py-cal-celda--sel { background: var(--sx-primario-suave); box-shadow: inset 0 0 0 2px var(--sx-primario); }
+.sx2-py-cal-celda__num {
+  align-self: flex-start; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 999px;
+  display: inline-grid; place-items: center; font: 600 0.8125rem/1 var(--fuente); color: var(--sx-texto-2);
+}
+.sx2-py-cal-celda--hoy .sx2-py-cal-celda__num { background: var(--sx-primario); color: #fff; box-shadow: 0 4px 10px color-mix(in srgb, var(--sx-primario) 35%, transparent); }
+.sx2-py-cal-celda__items { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.sx2-py-cal-pill {
+  display: flex; align-items: center; gap: 5px; min-width: 0; width: 100%;
+  height: 22px; padding: 0 7px; border: 0; border-left: 3px solid var(--sx-tono); border-radius: 5px;
+  background: var(--sx-tono-suave); color: var(--sx-texto);
+  font: 500 0.72rem/1 var(--fuente); text-align: left; cursor: pointer;
+  transition: transform var(--sx-dur-rapida) var(--sx-curva), box-shadow var(--sx-dur-rapida) var(--sx-curva);
+}
+.sx2-py-cal-pill .sigso-ico { color: var(--sx-tono); flex: none; }
+.sx2-py-cal-pill:hover { transform: translateX(2px); box-shadow: var(--sx-sombra-1); }
+.sx2-py-cal-mas { font: 600 0.7rem/1.2 var(--fuente); color: var(--sx-primario); padding-left: 4px; }
+.sx2-py-cal-puntos { display: none; gap: 3px; }
+.sx2-py-cal-puntos i, .sx2-py-cal-ley { width: 8px; height: 8px; border-radius: 50%; background: var(--sx-tono); display: inline-block; }
+.sx2-py-cal-agenda { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.sx2-py-cal-agenda__item {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px;
+  border: 0; border-radius: var(--sx-radio-sm); background: none; text-align: left; cursor: pointer; font: var(--sx-t-chico); color: var(--sx-texto);
+}
+.sx2-py-cal-agenda__item:hover { background: var(--sx-superficie-hover); }
+.sx2-py-cal-agenda__ico { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 9px; background: var(--sx-tono-suave); color: var(--sx-tono); }
+@media (max-width: 720px) {
+  .sx2-py-cal-celda { min-height: 58px; padding: 4px; align-items: center; }
+  .sx2-py-cal-celda__items { display: none; }
+  .sx2-py-cal-puntos { display: flex; }
+  .sx2-py-cal__cab span { padding: 8px 2px; text-align: center; }
+  .sx2-py-cal-nav__mes { min-width: 0; }
+}
+
+/* --- Acciones del proyecto: menú "Más", Sala, "Sobre el proyecto" ------------- */
+.sx2-menu-ancla { position: relative; }
+.sx2-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; min-width: 250px;
+  padding: 6px; border: 1px solid var(--sx-borde-suave); border-radius: var(--sx-radio-lg);
+  background: var(--sx-superficie); box-shadow: var(--sx-sombra-3);
+  display: flex; flex-direction: column; gap: 2px;
+  animation: sx2-escala var(--sx-dur) var(--sx-curva) both; transform-origin: top right;
+}
+.sx2-menu__item {
+  display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+  border: 0; border-radius: var(--sx-radio-sm); background: none; text-align: left; cursor: pointer;
+  font: 500 0.875rem/1.2 var(--fuente); color: var(--sx-texto);
+}
+.sx2-menu__item:hover, .sx2-menu__item:focus-visible { outline: none; background: var(--sx-superficie-hover); }
+.sx2-menu__item small { display: block; margin-top: 2px; font: var(--sx-t-micro); color: var(--sx-texto-3); }
+.sx2-menu__item--peligro { color: var(--sx-critico); }
+.sx2-menu__sep { height: 1px; margin: 4px 6px; background: var(--sx-borde-suave); }
+.sx2-py-sala-form { display: flex; flex-direction: column; gap: var(--sx-e-3); padding: var(--sx-e-4); border-radius: var(--sx-radio-lg); background: var(--sx-superficie-2); }
+.sx2-py-sala-form textarea { min-height: 84px; resize: vertical; background: var(--sx-superficie); }
+.sx2-py-mencion { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px 0 3px; border: 1px solid var(--sx-borde); border-radius: 999px; background: var(--sx-superficie); font: 500 0.75rem/1 var(--fuente); color: var(--sx-texto-2); cursor: pointer; }
+.sx2-py-mencion[aria-pressed="true"] { border-color: var(--sx-primario); background: var(--sx-primario-suave); color: var(--sx-primario); }
+.sx2-py-sala-ev { display: flex; gap: 10px; padding: var(--sx-e-3) 0; border-bottom: 1px solid var(--sx-borde-suave); }
+.sx2-py-sala-ev:last-child { border-bottom: 0; }
+.sx2-py-sala-ev__cuerpo { margin: 4px 0 0; font: var(--sx-t-chico); color: var(--sx-texto); white-space: pre-wrap; overflow-wrap: anywhere; }
+.sx2-py-visita { display: flex; gap: 10px; align-items: flex-start; padding: var(--sx-e-3) var(--sx-e-4); border-radius: var(--sx-radio); background: var(--sx-primario-suave); color: var(--sx-texto); font: var(--sx-t-chico); }
+.sx2-py-sobre p { margin: 0 0 10px; font: var(--sx-t-chico); color: var(--sx-texto-2); overflow-wrap: anywhere; }
+.sx2-py-sobre p b { color: var(--sx-texto); }
 
 /* --- Formularios en drawer --------------------------------------------------- */
 .sx2-form { display: flex; flex-direction: column; gap: var(--sx-e-4); }
