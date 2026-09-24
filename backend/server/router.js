@@ -131,6 +131,7 @@ const ACCIONES = {
   gestionarJefatura: (db, data, contexto) => Jefatura.gestionar(db, data, contexto),
 
   getDashboardData: (db, data, contexto) => Dashboard.getData(db, data, contexto),
+  getColaSolicitudes: (db, data, contexto) => Dashboard.getCola(db, data, contexto),
   getPautaTrabajo: (db, data, contexto) => Dashboard.getPautaDesarrollador(db, data, contexto),
 
   getPanelGerencia: (db, data, contexto) => Gerencia.getPanel(db, data, contexto),

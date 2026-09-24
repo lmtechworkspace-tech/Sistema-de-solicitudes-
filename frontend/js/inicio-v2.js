@@ -104,8 +104,9 @@
     if (tiene('jefatura')) bloques.push('jefatura');
     if (tiene('pausas')) bloques.push('pausas');
 
-    // Se pinta apenas llega lo principal (getInicio); Mis solicitudes (Apps
-    // Script, lento) y Novedades completan después. Mientras falte alguna, el
+    // Se pinta apenas llega lo principal (getInicio); Mis solicitudes y
+    // Novedades (llamadas aparte) completan después: ninguna fuente sola frena
+    // la pantalla. Mientras falte alguna, el
     // estado dice qué se está revisando y nunca "Todo al día".
     var parcial = { base: null, solicitudes: undefined, novedades: undefined };
     var esperaSolicitudes = tiene('mis_solicitudes');

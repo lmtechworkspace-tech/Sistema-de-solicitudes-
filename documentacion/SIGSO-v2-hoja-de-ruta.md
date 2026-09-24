@@ -200,13 +200,107 @@ panorama de Gerencia se diseña con el módulo 4.
 - El Inicio **no se recargaba al volver** desde otro módulo: tras confirmar
   una fecha en Mi trabajo, el Inicio seguía pidiéndola (también en la
   clásica). Corregido en el shell para ambas versiones.
-- Una fuente lenta (Mis solicitudes, todavía en Apps Script) no debe frenar
-  la pantalla: v2 pinta con lo principal y completa después; mientras
-  revisa, el estado dice "Revisando…" y nunca "Todo al día".
+- Una fuente lenta no debe frenar la pantalla: v2 pinta con lo principal
+  (getInicio) y completa Mis solicitudes y Novedades después; mientras
+  revisa, el estado dice "Revisando…" y nunca "Todo al día". (Corrección:
+  al implementarlo se dijo que Mis solicitudes seguía en Apps Script; es
+  falso,  ya corre en Node.)
 - Una fecha **por confirmar** no cuenta como atrasada (aún no es un
   compromiso): Inicio y Mi trabajo usan ahora el mismo criterio y muestran
   los mismos números.
 
 ---
 
-## Módulo 3 — Solicitudes: pendiente de análisis
+## Módulo 3 — Solicitudes: análisis
+
+Tres pantallas sobre los mismos datos: **Nueva solicitud** (formulario de 3
+pasos, `formulario.js`), **Mis solicitudes** (`estado.js`, con KPIs,
+pestañas, corrección e historial ya rediseñados en sep-2026) y la
+**Bandeja** del equipo (`dashboard.js` + `detalle.js`). Ojo: `formulario.js`
+y `estado.js` también sirven las páginas **públicas** para clientes
+(`index.html`, `estado.html`). Todo corre ya en Node.
+
+### Lo que muestran los datos (sandbox)
+- **37 de 57 ítems abiertos; 28 nunca salieron de "Nueva"** (S01), la
+  mayoría con 64–77 días. **36 de 37 fuera de SLA**, 33 sin fecha
+  comprometida. Solo 10 ítems se terminaron alguna vez.
+- 41 de 57 ítems quedaron en **P4** (prioridad por defecto, SLA 5 días).
+- **39 ítems asignados a una sola persona** — que tiene **0 tareas en Mi
+  trabajo**: su trabajo vive solo en la Bandeja.
+- 41 de 42 solicitudes se crearon desde la plataforma; 1 desde el
+  formulario público. Una solicitud tiene 0 ítems (dato anómalo).
+
+### Problemas encontrados
+1. **KPI "Sin asignar" falso**: dice 24, pero 23 de esas solicitudes tienen
+   todos sus ítems asignados (se asigna por ítem y el KPI lee un campo de la
+   solicitud que nadie actualiza). Real: 1 (ver hallazgos de 3A). La fila
+   además ofrece "Asignar".
+2. **La cola no se trabaja**: la Bandeja es una lista larga (42 filas,
+   ~3.400 px) donde triar un ítem (recibir, asignar, priorizar, fechar)
+   exige entrar al detalle; no hay una vista para ponerse al día con lo
+   atrasado.
+3. **La unidad de trabajo es el ítem, la lista muestra solicitudes**: el
+   estado de la solicitud es el de su ítem menos avanzado (regla §8.2), así
+   que "Nueva" puede esconder un ítem "Esperando información".
+4. **Lo asignado no llega a Mi trabajo** (ni al Inicio de quien lo trabaja).
+5. Diseño antiguo en Bandeja y detalle (página aparte, no panel).
+
+### Propuesta (en sub-fases, empezando por la Bandeja)
+- **3A Bandeja v2 + detalle en panel lateral**: cola por **ítem** (agrupable
+  por solicitud), KPIs correctos y clicables, acciones en la fila
+  (recibir, asignar, prioridad, fecha comprometida) y en lote, vista
+  **"Ponerse al día"** (lo más viejo / fuera de SLA primero), detalle en
+  panel con pestañas (Ficha · Ítems · Actividad) y las acciones de siempre.
+- **3B Mi trabajo e Inicio**: los ítems asignados a mí aparecen junto a mis
+  tareas (con su propio botón de acción, que abre el detalle).
+- **3C Mis solicitudes v2** y **3D Nueva solicitud v2** dentro de la
+  plataforma; las páginas públicas para clientes no se tocan en este
+  módulo.
+
+### Decisiones del dueño (2026-09-24)
+- Empezar por **Bandeja + detalle** (3A).
+- La unidad de la cola es **el ítem, agrupable por solicitud**.
+- Los ítems asignados **sí** aparecen en Mi trabajo e Inicio (3B).
+- Las páginas públicas (`index.html`, `estado.html`) **no se tocan** en este
+  módulo; 3C y 3D son solo dentro de la plataforma.
+
+### 3A Bandeja v2 — ESTADO: HECHO
+- Backend: `getColaSolicitudes` (`Dashboard.getCola`): ítems con su
+  responsable (propio o heredado de la solicitud), SLA, días sin movimiento,
+  fecha comprometida y KPIs contados **sobre ítems**. Mismo alcance por rol
+  que la clásica (ADM todo o "bandeja de" una persona; el resto lo suyo; DEV
+  además los huérfanos en trabajo; Gerencia/Jefatura solo lectura).
+- KPI clásico "Sin asignar" corregido (se asigna por ítem) y la fila clásica
+  muestra al responsable de los ítems cuando la cabecera está vacía.
+- Frontend: `js/bandeja-v2.js` + `css/v2/bandeja-v2.css`, montado en
+  `#bandeja-v2` dentro de `#modulo-bandeja` (`MODULOS_V2.bandeja`; se
+  desmonta al ir a Gerencia/Jefatura, que comparten la sección y siguen
+  clásicas hasta el Módulo 4).
+  - 6 KPIs clicables (Abiertos · Por revisar · Fuera de plazo · Sin fecha ·
+    Sin asignar · Por validar), búsqueda, empresa, prioridad, 5 órdenes,
+    agrupar por solicitud, ver cerrados, CSV, Pauta PDF (ADM con persona).
+  - **"Ponerse al día"**: aparece si hay 3+ ítems sin triar de más de 2
+    semanas; filtra "Por revisar" del más antiguo al más nuevo.
+  - "Recibir" en un clic en la fila; **lote**: recibir, asignar (con motivo),
+    prioridad (justificación ≥ 20), fecha comprometida (motivo si ya tenía),
+    estado (comentario cuando corresponde). Ítem por ítem contra el backend;
+    al final dice cuántos quedaron y cuáles no y por qué.
+  - Detalle en panel lateral ancho: Ítems (acciones por ítem: estado con las
+    transiciones que permite el backend, fecha, prioridad, asignar,
+    corregir contenido) · Ficha · Actividad (historiales unificados +
+    comentario/nota interna) · Archivos; pie con Orden de trabajo y
+    Convertir en proyecto.
+  - Análisis: abiertos por estado, antigüedad, carga por responsable,
+    prioridad (Chart.js).
+
+### Hallazgos al implementar 3A
+- **El "Sin asignar" real sí era 1**: `SOL-2026-GDE-0005` tiene como
+  responsable el texto de plantilla **`[CORREO_LEO]`** (no es un correo: no
+  le llega a nadie) y sus 4 ítems no tienen responsable propio. El backend
+  ahora trata un responsable que no es correo como "sin asignar".
+- Esa misma solicitud es una **fila reconstruida a mano con columnas
+  corridas**: `fecha_creacion` vacía (la fecha quedó en
+  `observaciones_generales`, la nota en `estimacion_total_horas`), y el
+  solicitante tiene `[CORREO_LUIS]` / `[CARGO_LUIS]` → **Luis Mendoza no
+  recibe ningún aviso de su solicitud**. Corregir en producción (pendiente
+  de autorización del dueño; no se tocó).

@@ -1,0 +1,128 @@
+/* bandeja-v2.css — Bandeja de trabajo v2 (SIGSO v2, Módulo 3A). Prefijo .bj2-*.
+ * Reusa tokens/layout/componentes-v2 y algunas piezas de proyectos-v2.css
+ * (herramientas, gráficos, sala). */
+
+/* La clásica comparte #modulo-bandeja (con Gerencia y Jefatura): mientras la
+   v2 está montada, solo se ve su contenedor. */
+#modulo-bandeja.bandeja-v2-activa > :not(#bandeja-v2) { display: none !important; }
+
+/* Banner "Ponerse al día" */
+.bj2-rezago {
+  display: flex; align-items: center; gap: var(--sx-e-4); flex-wrap: wrap;
+  padding: var(--sx-e-4) var(--sx-e-5); border-radius: var(--sx-radio-lg);
+  background: var(--sx-alerta-suave); border: 1px solid color-mix(in srgb, var(--sx-alerta) 30%, transparent);
+}
+.bj2-rezago__ico { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 12px; background: var(--sx-superficie); color: var(--sx-alerta); }
+
+/* Lista de ítems */
+.bj2-lista { list-style: none; margin: 0; padding: 0; }
+.bj2-lista__cab {
+  display: flex; align-items: center; gap: var(--sx-e-3); padding: var(--sx-e-3) var(--sx-e-4);
+  border-bottom: 1px solid var(--sx-borde-suave); font: var(--sx-t-chico);
+}
+.bj2-fila {
+  display: grid; align-items: center; gap: var(--sx-e-3);
+  grid-template-columns: 22px 34px minmax(0, 1fr) 190px 180px 118px auto;
+  padding: 10px var(--sx-e-4); border-bottom: 1px solid var(--sx-borde-suave);
+  border-left: 3px solid transparent; cursor: pointer;
+  transition: background var(--sx-dur-rapida) var(--sx-curva);
+}
+.bj2-fila:last-child { border-bottom: 0; }
+.bj2-fila:hover { background: var(--sx-superficie-2); }
+.bj2-fila:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: -2px; }
+.bj2-fila.sx2-tono-critico { border-left-color: var(--sx-critico); }
+.bj2-fila.sx2-tono-alerta { border-left-color: var(--sx-alerta); }
+.bj2-fila--sel { background: var(--sx-primario-suave); }
+.bj2-fila--sel:hover { background: color-mix(in srgb, var(--sx-primario-suave) 80%, var(--sx-superficie-2)); }
+.bj2-check { display: grid; place-items: center; width: 22px; height: 22px; cursor: pointer; }
+.bj2-check input { width: 16px; height: 16px; accent-color: var(--sx-primario); cursor: pointer; margin: 0; }
+.bj2-prio {
+  display: grid; place-items: center; height: 24px; border-radius: 7px;
+  font: 700 0.6875rem/1 var(--fuente); background: var(--sx-tono-suave); color: var(--sx-tono);
+}
+.bj2-fila__cuerpo { gap: 3px; min-width: 0; }
+.bj2-fila__cuerpo strong { font: 600 0.875rem/1.3 var(--fuente); color: var(--sx-texto); }
+.bj2-fila__meta { gap: 8px; flex-wrap: nowrap; min-width: 0; font: var(--sx-t-chico); color: var(--sx-texto-3); }
+.bj2-fila__meta > * { flex: none; }
+.bj2-fila__meta > .sx2-cortar { flex: 0 1 auto; min-width: 0; }
+.bj2-id { font: 600 0.75rem/1 var(--fuente-mono, ui-monospace, monospace); color: var(--sx-texto-2); }
+.bj2-fila__estado { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.bj2-fila__quien { display: flex; align-items: center; gap: 8px; min-width: 0; font: var(--sx-t-chico); color: var(--sx-texto); }
+.bj2-fila__quien small { font-size: 0.6875rem; }
+.bj2-sin { display: inline-flex; align-items: center; gap: 4px; color: var(--sx-alerta); font-weight: 600; }
+.bj2-fila__fecha { display: flex; flex-direction: column; gap: 2px; font: var(--sx-t-chico); color: var(--sx-texto); }
+.bj2-fila__fecha small { font-size: 0.6875rem; }
+.bj2-fila__acc { display: flex; align-items: center; gap: 4px; justify-content: flex-end; }
+
+/* Agrupado por solicitud */
+.bj2-lista--grupos > .bj2-grupo { border-bottom: 1px solid var(--sx-borde); }
+.bj2-lista--grupos > .bj2-grupo:last-child { border-bottom: 0; }
+.bj2-grupo__cab {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px var(--sx-e-4);
+  background: var(--sx-superficie-2); border: 0; cursor: pointer; text-align: left;
+  font: var(--sx-t-chico); color: var(--sx-texto);
+}
+.bj2-grupo__cab:hover { color: var(--sx-primario); }
+.bj2-grupo .bj2-fila { padding-left: calc(var(--sx-e-4) + 8px); }
+
+/* Barra de acciones en lote (flota abajo, sobre la lista) */
+.bj2-lote {
+  position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 60;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center;
+  max-width: calc(100vw - 32px); padding: 10px 14px; border-radius: 16px;
+  background: var(--sx-superficie); box-shadow: var(--sx-sombra-3); border: 1px solid var(--sx-borde);
+  font: var(--sx-t-chico); color: var(--sx-texto);
+  animation: sx2-sube var(--sx-dur) var(--sx-curva) both;
+}
+.bj2-lote strong { margin-right: 4px; }
+/* El interruptor flotante de versión no debe tapar la barra de lote. */
+body:has(.bj2-lote) #py2-interruptor { display: none; }
+
+/* Detalle en panel lateral ancho */
+.bj2-drawer { --sx-drawer-ancho: min(760px, 100vw); }
+.bj2-drawer .sx2-drawer__titulo { font-size: 1.125rem; line-height: 1.35; }
+.bj2-det-sub { gap: 8px; flex-wrap: wrap; }
+.bj2-tabs { margin-top: calc(-1 * var(--sx-e-2)); }
+.bj2-item {
+  display: flex; flex-direction: column; gap: 8px; padding: var(--sx-e-4);
+  border: 1px solid var(--sx-borde-suave); border-radius: var(--sx-radio-lg);
+}
+.bj2-item--foco { border-color: color-mix(in srgb, var(--sx-primario) 45%, transparent); box-shadow: 0 0 0 3px var(--sx-primario-suave); }
+.bj2-item__acc { padding-top: 4px; }
+.bj2-item__form {
+  padding: var(--sx-e-4); border-radius: var(--sx-radio); background: var(--sx-superficie-2);
+  animation: sx2-sube var(--sx-dur) var(--sx-curva) both;
+}
+.bj2-item__form textarea { min-height: 72px; resize: vertical; background: var(--sx-superficie); }
+.bj2-item__form .sx2-input, .bj2-item__form .sx2-select { background: var(--sx-superficie); }
+.bj2-mas { font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.bj2-mas summary { cursor: pointer; color: var(--sx-primario); font-weight: 600; }
+.bj2-mas p { margin: 6px 0 0; white-space: pre-wrap; }
+.bj2-act-ico { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 6px; background: var(--sx-tono-suave); color: var(--sx-tono); }
+.bj2-archivos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.bj2-archivo {
+  display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--sx-radio);
+  border: 1px solid var(--sx-borde-suave); color: var(--sx-texto); text-decoration: none;
+}
+.bj2-archivo:hover { border-color: var(--sx-primario); color: var(--sx-primario); }
+.bj2-archivo__ico { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--sx-tono-suave); color: var(--sx-tono); }
+
+/* Anchos intermedios: se pliegan columnas */
+@media (max-width: 1280px) {
+  .bj2-fila { grid-template-columns: 22px 34px minmax(0, 1fr) 170px 150px auto; }
+  .bj2-fila__fecha { display: none; }
+}
+@media (max-width: 900px) {
+  .bj2-fila { grid-template-columns: 22px 34px minmax(0, 1fr) auto; row-gap: 6px; }
+  .bj2-fila__estado { grid-column: 3; flex-direction: row; flex-wrap: wrap; }
+  .bj2-fila__quien { grid-column: 3; }
+  .bj2-fila__acc { grid-column: 4; grid-row: 1; }
+  .bj2-fila__meta { flex-wrap: wrap; row-gap: 4px; }
+  .bj2-fila__meta > .sx2-cortar { flex-basis: 100%; }
+  .bj2-lote { bottom: 12px; }
+}
+
+/* Seis KPIs: una fila en escritorio, 3+3 en medianos (nunca 5+1). */
+#bandeja-v2 .sx2-fila-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+@media (max-width: 1280px) { #bandeja-v2 .sx2-fila-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 600px) { #bandeja-v2 .sx2-fila-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

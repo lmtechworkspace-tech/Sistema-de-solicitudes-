@@ -304,8 +304,8 @@ function calcularKpis_(db, filtros) {
     return {
       solicitud_id: s.solicitud_id, empresa_id: s.empresa_id, plataforma: s.plataforma,
       modulo: s.modulo, estado_derivado: s.estado_derivado, prioridad_derivada: s.prioridad_derivada,
-      fecha_creacion: s.fecha_creacion, asignado_a: s.desarrollador_asignado || '',
-      asignado_nombre: s.desarrollador_asignado ? (nombrePorEmail[s.desarrollador_asignado] || s.desarrollador_asignado) : '',
+      fecha_creacion: s.fecha_creacion, asignado_a: asignadoDeSolicitud_(s, itemsDeEstaSolicitud),
+      asignado_nombre: nombreAsignado_(asignadoDeSolicitud_(s, itemsDeEstaSolicitud), nombrePorEmail),
       titulo_item: itemsDeEstaSolicitud.length ? itemsDeEstaSolicitud[0].titulo : '',
       fecha_comprometida: itemsDeEstaSolicitud.length === 1 ? (itemsDeEstaSolicitud[0].fecha_comprometida || '') : '',
       dias_sin_movimiento: Math.floor((Date.now() - new Date(ultimoMovimiento).getTime()) / (24 * 3600 * 1000)),
@@ -325,7 +325,11 @@ function calcularKpis_(db, filtros) {
       sla_vencido: subsolicitudes.filter((sub) => { const m = medicionPorSub[sub.subsolicitud_id]; return !!m && m.situacion === 'FUERA_DE_PLAZO'; }).length,
       en_riesgo: subsolicitudes.filter((sub) => { const m = medicionPorSub[sub.subsolicitud_id]; return !!m && m.situacion === 'EN_RIESGO'; }).length,
       del_dia: solicitudes.filter((s) => Utils.claveDia_(new Date(s.fecha_creacion), 'America/Santiago') === hoy).length,
-      sin_asignar: abiertas.filter((s) => !s.desarrollador_asignado).length,
+      // Se asigna POR ÍTEM: una solicitud está sin asignar solo si tiene algún
+      // ítem abierto sin responsable propio ni de la solicitud (SIGSO v2, M3:
+      // antes contaba el campo de la solicitud, que nadie actualiza al asignar
+      // ítems, y marcaba 24 cuando la realidad era 1).
+      sin_asignar: abiertas.filter((s) => solicitudSinAsignar_(s, itemsPorSolicitud[s.solicitud_id] || [])).length,
       atenciones_directas: solicitudes.filter(esAtencionDirecta_).length
     },
     por_empresa: agruparYContar_(solicitudes, 'empresa_id'),
@@ -343,6 +347,28 @@ function calcularKpis_(db, filtros) {
     total_solicitudes: recientesTodas.length,
     recientes_truncado: recientesTodas.length > RECIENTES_LIMITE
   };
+}
+
+// Responsable de una solicitud para mostrar en la lista: el de la cabecera
+// o, si no hay, el de sus ítems (se asigna por ítem).
+// Un responsable que no es un correo (p. ej. el texto de plantilla
+// "[CORREO_LEO]" que quedó en producción) no le llega a nadie: cuenta como
+// sin asignar.
+function responsableValido_(v) {
+  const t = String(v || '').trim();
+  return /^[^\s@[\]]+@[^\s@]+\.[^\s@]+$/.test(t) ? t : '';
+}
+function asignadoDeSolicitud_(solicitud, items) {
+  if (responsableValido_(solicitud.desarrollador_asignado)) return responsableValido_(solicitud.desarrollador_asignado);
+  const asignados = items.map((i) => responsableValido_(i.desarrollador_asignado)).filter(Boolean);
+  return asignados.length ? asignados[0] : '';
+}
+function nombreAsignado_(email, nombrePorEmail) { return email ? (nombrePorEmail[email] || email) : ''; }
+function solicitudSinAsignar_(solicitud, items) {
+  if (responsableValido_(solicitud.desarrollador_asignado)) return false;
+  const abiertos = items.filter((i) => ESTADOS_CERRADOS.indexOf(i.estado) === -1 && i.estado !== ESTADOS.S08);
+  if (!abiertos.length) return false;
+  return abiertos.some((i) => !responsableValido_(i.desarrollador_asignado));
 }
 
 function getData(db, filtros, contexto) {
@@ -391,8 +417,93 @@ function getPautaDesarrollador(db, data, contexto) {
   return { desarrollador: desarrollador, items: items };
 }
 
+// SIGSO v2, Módulo 3A — cola de la Bandeja POR ÍTEM (la unidad que se asigna
+// y se trabaja). Mismo alcance por rol que getData, llevado al ítem:
+//  - ADM ve todo (o la bandeja de una persona con verBandeja);
+//  - el resto ve los ítems asignados a sí (al ítem o, si el ítem no tiene
+//    responsable propio, a su solicitud) y, solo DEV, los huérfanos activos
+//    en estados de trabajo -- el mismo respaldo que la bandeja clásica.
+// Los KPIs se cuentan sobre ítems: no dependen de campos de cabecera.
+const ESTADOS_POR_REVISAR = [ESTADOS.S01, ESTADOS.S02];
+function getCola(db, filtros, contexto) {
+  filtros = filtros || {};
+  const rol = contexto ? contexto.rol : '';
+  const email = String((contexto && contexto.email) || '').toLowerCase();
+  const verBandeja = rol === 'ADM' ? String(filtros.verBandeja || '').toLowerCase() : email;
+  const feriados = Cumplimiento.obtenerFeriados(db);
+  const solicitudes = {};
+  leerFilas_(db, 'SOLICITUDES', COLUMNAS.SOLICITUDES).forEach((s) => { solicitudes[s.solicitud_id] = s; });
+  const todas = leerFilas_(db, 'SUBSOLICITUDES', COLUMNAS.SUBSOLICITUDES).filter((i) => solicitudes[i.solicitud_id]);
+  const itemsPorSolicitud = {};
+  todas.forEach((i) => { (itemsPorSolicitud[i.solicitud_id] = itemsPorSolicitud[i.solicitud_id] || []).push(i); });
+  const historial = leerFilas_(db, 'HISTORIAL_ESTADOS', COLUMNAS.HISTORIAL_ESTADOS);
+  const comentariosPublicos = leerFilas_(db, 'COMENTARIOS', COLUMNAS.COMENTARIOS).filter((c) => !c.es_interno);
+  const nombrePorEmail = {};
+  leerFilasSeguro_(db, 'USUARIOS').forEach((u) => { nombrePorEmail[String(u.email || '').toLowerCase()] = u.nombre || u.email; });
+  const ultimoMovimiento = {};
+  historial.forEach((h) => {
+    const k = h.subsolicitud_id || h.solicitud_id;
+    if (!ultimoMovimiento[k] || new Date(h.timestamp) > new Date(ultimoMovimiento[k])) ultimoMovimiento[k] = h.timestamp;
+  });
+
+  const visibles = todas.filter((i) => {
+    const s = solicitudes[i.solicitud_id];
+    const asignado = (responsableValido_(i.desarrollador_asignado) || responsableValido_(s.desarrollador_asignado)).toLowerCase();
+    if (!verBandeja) return true; // ADM sin acotar
+    if (asignado === verBandeja) return true;
+    return rol === 'DEV' && !filtros.verBandeja && !asignado && ESTADOS_TRABAJO_DEV.indexOf(i.estado) !== -1;
+  });
+
+  const hoy = Utils.claveDia_(new Date(), 'America/Santiago');
+  const items = visibles.map((i) => {
+    const s = solicitudes[i.solicitud_id];
+    const medicion = Cumplimiento.medir(i, { feriados: feriados });
+    const propio = responsableValido_(i.desarrollador_asignado).toLowerCase();
+    const asignado = propio || responsableValido_(s.desarrollador_asignado).toLowerCase();
+    const mov = ultimoMovimiento[i.subsolicitud_id] || ultimoMovimiento[i.solicitud_id] || i.fecha_creacion || s.fecha_creacion;
+    return {
+      subsolicitud_id: i.subsolicitud_id, solicitud_id: i.solicitud_id, numero_item: i.numero_item,
+      cantidad_items: (itemsPorSolicitud[i.solicitud_id] || []).length,
+      titulo: i.titulo, tipo: i.tipo, tipo_nombre: i.tipo_nombre, modulo_nombre: i.modulo_nombre || s.modulo_nombre || '',
+      estado: i.estado, prioridad: i.prioridad, estado_solicitud: s.estado_derivado,
+      asignado: asignado, asignado_nombre: asignado ? (nombrePorEmail[asignado] || asignado) : '', asignado_heredado: !propio && !!asignado,
+      fecha_creacion: i.fecha_creacion || s.fecha_creacion, fecha_comprometida: i.fecha_comprometida || '',
+      fecha_propuesta: i.fecha_propuesta || '',
+      dias_sin_movimiento: Math.floor((Date.now() - new Date(mov).getTime()) / 86400000),
+      situacion_sla: medicion ? medicion.situacion : null,
+      sla_restante_horas: medicion ? Math.round(medicion.restantes_horas * 10) / 10 : null,
+      respuesta_pendiente: respuestaPendienteLectura_(i, historial, comentariosPublicos),
+      empresa_id: s.empresa_id, empresa_nombre: s.empresa_nombre || s.empresa_id, plataforma_nombre: s.plataforma_nombre || s.plataforma || '',
+      solicitante_nombre: s.solicitante_nombre || '', solicitante_email: s.solicitante_email || '',
+      es_cliente: s.es_cliente === true || s.es_cliente === 'TRUE', empresa_cliente: s.empresa_cliente || ''
+    };
+  });
+
+  const abiertos = items.filter((i) => ESTADOS_CERRADOS.indexOf(i.estado) === -1 && i.estado !== ESTADOS.S08);
+  const soloLectura = rol === 'GERENCIA' || rol === 'JEFATURA';
+  return {
+    items: items,
+    resumen: {
+      abiertos: abiertos.length,
+      por_revisar: abiertos.filter((i) => ESTADOS_POR_REVISAR.indexOf(i.estado) !== -1).length,
+      sin_asignar: abiertos.filter((i) => !i.asignado).length,
+      fuera_de_plazo: abiertos.filter((i) => i.situacion_sla === 'FUERA_DE_PLAZO').length,
+      en_riesgo: abiertos.filter((i) => i.situacion_sla === 'EN_RIESGO').length,
+      sin_fecha: abiertos.filter((i) => !i.fecha_comprometida).length,
+      esperando_info: abiertos.filter((i) => i.estado === ESTADOS.S06).length,
+      criticos: abiertos.filter((i) => i.prioridad === 'P1').length,
+      por_validar: items.filter((i) => i.estado === ESTADOS.S08).length,
+      ingresados_hoy: items.filter((i) => Utils.claveDia_(new Date(i.fecha_creacion), 'America/Santiago') === hoy).length
+    },
+    rol_actual: rol,
+    solo_lectura: soloLectura,
+    ver_bandeja: rol === 'ADM' ? (filtros.verBandeja || '') : email,
+    responsables: soloLectura ? [] : obtenerResponsablesActivos_(db)
+  };
+}
+
 module.exports = {
-  getData, getPautaDesarrollador, obtenerResponsablesActivos_, RECIENTES_LIMITE,
+  getData, getPautaDesarrollador, getCola, obtenerResponsablesActivos_, RECIENTES_LIMITE,
   // Reutilizadas por gerencia.js (mismo criterio que el .gs: Gerencia.getPanel
   // reusa coincideFiltros_/esAtencionDirecta_ de Dashboard.gs en vez de
   // reimplementarlas -- todo vive en el mismo scope global en Apps Script).

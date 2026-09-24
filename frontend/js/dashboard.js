@@ -4,7 +4,9 @@
 (function () {
   var graficos = {};
 
-  window.SigsoDashboard = { cargar: cargarDashboard_, inicializarFiltros: inicializarFiltros_ };
+  // imprimirPauta: la Bandeja v2 (bandeja-v2.js) reusa la MISMA pauta
+  // imprimible en vez de duplicarla.
+  window.SigsoDashboard = { cargar: cargarDashboard_, inicializarFiltros: inicializarFiltros_, imprimirPauta: imprimirPauta_ };
 
   // --- v6.2 (F2/F4): contexto de la bandeja ------------------------------
   //
@@ -248,30 +250,33 @@
     boton.addEventListener('click', function () {
       var desarrollador = document.getElementById('filtro-bandeja').value;
       if (!desarrollador) return;
-      boton.disabled = true;
-      var textoOriginal = boton.textContent;
-      boton.textContent = 'Generando…';
-      llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getPautaTrabajo', { desarrollador: desarrollador })
-        .then(function (respuesta) {
-          if (!respuesta.ok) {
-            Componentes.aviso({ texto: respuesta.message || 'No se pudo generar la pauta.', tipo: 'error' });
-            return;
-          }
-          renderPautaImprimir_(respuesta.data);
-          document.body.classList.add('sigso-modo-pauta');
-          window.print();
-        })
-        .catch(function () {
-          Componentes.aviso({ texto: 'No se pudo conectar con el servidor. Intenta nuevamente.', tipo: 'error' });
-        })
-        .finally(function () {
-          boton.disabled = false;
-          boton.textContent = textoOriginal;
-        });
+      imprimirPauta_(desarrollador, boton);
     });
     window.addEventListener('afterprint', function () {
       document.body.classList.remove('sigso-modo-pauta');
     });
+  }
+
+  function imprimirPauta_(desarrollador, boton) {
+    if (boton) boton.disabled = true;
+    var textoOriginal = boton ? boton.textContent : '';
+    if (boton) boton.textContent = 'Generando…';
+    return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'getPautaTrabajo', { desarrollador: desarrollador })
+      .then(function (respuesta) {
+        if (!respuesta.ok) {
+          Componentes.aviso({ texto: respuesta.message || 'No se pudo generar la pauta.', tipo: 'error' });
+          return;
+        }
+        renderPautaImprimir_(respuesta.data);
+        document.body.classList.add('sigso-modo-pauta');
+        window.print();
+      })
+      .catch(function () {
+        Componentes.aviso({ texto: 'No se pudo conectar con el servidor. Intenta nuevamente.', tipo: 'error' });
+      })
+      .finally(function () {
+        if (boton) { boton.disabled = false; boton.textContent = textoOriginal; }
+      });
   }
 
   function actualizarVisibilidadPauta_() {

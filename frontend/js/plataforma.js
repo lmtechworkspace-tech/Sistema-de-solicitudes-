@@ -514,7 +514,8 @@
         if (window.SigsoMisSolicitudes) window.SigsoMisSolicitudes.cargarConToken(sesion.token);
         break;
       case 'bandeja':
-        if (window.SigsoDashboard) window.SigsoDashboard.cargar();
+        var modBj = moduloImpl_('bandeja');
+        if (modBj) { if (modBj.refrescar) modBj.refrescar(); else modBj.cargar(); }
         break;
       case 'gerencia':
         if (window.SigsoGerencia) window.SigsoGerencia.cargar();
@@ -1386,7 +1387,14 @@
     proyectos: { v2: function () { return window.SigsoProyectosV2; }, v1: function () { return window.SigsoProyectos; } },
     mi_trabajo: { v2: function () { return window.SigsoMiTrabajoV2; }, v1: function () { return window.SigsoActividades; } },
     // Inicio no es un módulo con cargar(): se pinta con render(ctx) desde renderHome_.
-    home: { v2: function () { return window.SigsoInicioV2; }, v1: function () { return window.SigsoInicio; } }
+    home: { v2: function () { return window.SigsoInicioV2; }, v1: function () { return window.SigsoInicio; } },
+    // Bandeja comparte #modulo-bandeja con Gerencia y Jefatura (clásicas hasta
+    // el Módulo 4): la v2 se monta encima y se desmonta al ir a ellas.
+    bandeja: { v2: function () { return window.SigsoBandejaV2; }, v1: function () { return BANDEJA_CLASICA_; } }
+  };
+  var BANDEJA_CLASICA_ = {
+    cargar: function () { abrirBandeja_('dashboard'); },
+    refrescar: function () { if (window.SigsoDashboard) window.SigsoDashboard.cargar(); }
   };
   function usaV2_(id) {
     var m = MODULOS_V2[id], o = m && m.v2();
@@ -1501,8 +1509,9 @@
       autocompletarFormulario_();
     }
     if (id === 'bandeja') {
-      abrirBandeja_('dashboard');
+      moduloImpl_('bandeja').cargar();
     }
+    if ((id === 'gerencia' || id === 'jefatura') && window.SigsoBandejaV2) window.SigsoBandejaV2.desmontar();
     if (id === 'gerencia') {
       abrirBandeja_('gerencia');
     }
