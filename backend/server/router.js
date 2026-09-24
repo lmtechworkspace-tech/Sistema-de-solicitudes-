@@ -209,6 +209,7 @@ const ACCIONES = {
   programarPausasDelDia: (db, data, contexto) => Pausas.programarDelDiaAdmin(db, data, contexto),
   gestionarPausaProgramada: (db, data, contexto) => Pausas.gestionarPausaProgramada(db, data, contexto),
   getPausaHoyTrabajador: (db, data, contexto) => Pausas.getPausaHoyTrabajador(db, data, contexto),
+  iniciarPausaParticipante: (db, data, contexto) => Pausas.iniciarPausaParticipante(db, { }, contexto),
   registrarAsistenciaPausa: (db, data, contexto) => Pausas.registrarAsistencia(db, data, contexto),
   getPanelCoordinadorPausas: (db, data, contexto) => Pausas.getPanelCoordinador(db, data, contexto),
   gestionarPausaCoordinador: (db, data, contexto) => Pausas.gestionarPausaCoordinador(db, data, contexto),

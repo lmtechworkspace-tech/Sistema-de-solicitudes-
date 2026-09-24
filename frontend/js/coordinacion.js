@@ -69,6 +69,11 @@
       });
       if (window.SigsoShell && SigsoShell.refrescarArbol) SigsoShell.refrescarArbol();
     }
+    // SIGSO v2 (Módulo 5A): con la versión nueva, "Hoy" es coordinacion-v2.js;
+    // Historial y Cumplimiento siguen aquí.
+    var v2 = window.SigsoCoordinacionV2 && SigsoCoordinacionV2.activo();
+    if (subtab === 'hoy' && v2) { SigsoCoordinacionV2.mostrar(); return; }
+    if (window.SigsoCoordinacionV2) SigsoCoordinacionV2.desmontar();
     if (subtab === 'hoy') cargarHoy_();
     else if (subtab === 'reportes') cargarReportes_();
     else cargarHistorial_();

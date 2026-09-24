@@ -1400,8 +1400,11 @@
     // panel (tablero, actividades, pausas, reportes) es el mismo gerencia.js.
     gerencia: { v2: function () { return window.SigsoGerenciaV2; }, v1: function () { return GERENCIA_CLASICA_; } },
     // Módulo 4B: la v2 agrega "Mi equipo" (personas); el resto es jefatura.js.
-    jefatura: { v2: function () { return window.SigsoJefaturaV2; }, v1: function () { return JEFATURA_CLASICA_; } }
+    jefatura: { v2: function () { return window.SigsoJefaturaV2; }, v1: function () { return JEFATURA_CLASICA_; } },
+    // Módulo 5A: "Hoy" v2 (coordinacion-v2.js); Historial y Cumplimiento siguen en coordinacion.js.
+    pausas_coordinacion: { v2: function () { return window.SigsoCoordinacionV2; }, v1: function () { return COORDINACION_CLASICA_; } }
   };
+  var COORDINACION_CLASICA_ = { cargar: function () { if (window.SigsoCoordinacion) window.SigsoCoordinacion.irAItem('hoy'); } };
   var JEFATURA_CLASICA_ = { cargar: function () { if (window.SigsoJefatura) window.SigsoJefatura.irAItem('tablero'); } };
   var GERENCIA_CLASICA_ = { cargar: function () { if (window.SigsoGerencia) window.SigsoGerencia.irAItem('tablero'); } };
   var NUEVA_SOLICITUD_CLASICA_ = { cargar: function () { /* el formulario ya está en el DOM */ } };

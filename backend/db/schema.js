@@ -235,7 +235,10 @@ const COLUMNAS = {
     'pausa_id', 'empresa_id', 'fecha', 'hora_programada', 'hora_inicio_real',
     'hora_fin', 'coordinador_email', 'estado', 'duracion_min', 'observaciones',
     'ultima_llamada_enviada', 'aviso_coordinador_enviado', 'evidencia_url',
-    'escalada_admin_enviada'
+    'escalada_admin_enviada',
+    // SIGSO v2 (Módulo 5A): quién la inició -- la coordinación o, si no llegó,
+    // una persona de la lista (iniciarPausaParticipante).
+    'iniciada_por'
   ],
   PAUSAS_ASISTENCIA: [
     'registro_id', 'pausa_id', 'trabajador_id', 'email', 'fecha_hora_registro',

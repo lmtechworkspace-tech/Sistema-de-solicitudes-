@@ -112,7 +112,7 @@ var ACCIONES_PORTADAS_NODE = {
   listarPausasTrabajadores: true, gestionarPausasTrabajador: true,
   sembrarRosterPausas: true, asignarModuloPausasRoster: true,
   listarPausasProgramadas: true, programarPausasDelDia: true, gestionarPausaProgramada: true,
-  getPausaHoyTrabajador: true, registrarAsistenciaPausa: true,
+  getPausaHoyTrabajador: true, iniciarPausaParticipante: true, registrarAsistenciaPausa: true,
   getPanelCoordinadorPausas: true, gestionarPausaCoordinador: true, registrarAsistenciaGrupalPausas: true,
   descargarEvidenciaPausa: true,
   getReporteCumplimientoPausas: true, listarRosterCoordinadorPausas: true,

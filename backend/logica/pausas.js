@@ -729,6 +729,46 @@ function cancelarPausa_(db, data, contexto) {
 }
 
 // ==== registro del trabajador =============================================
+// SIGSO v2, Módulo 5A (decisión del dueño, 2026-09-24): si a la hora
+// programada + TOLERANCIA la coordinación no inició la pausa, cualquier
+// persona de la lista de esa empresa puede iniciarla; queda registrado
+// quién (iniciada_por). En septiembre el programa se cayó 10 días hábiles
+// porque 29 de 31 pausas dependían de una sola coordinadora.
+const TOLERANCIA_INICIO_PARTICIPANTE_MIN = 5;
+function enRoster_(db, email) {
+  const correo = normEmail_(email);
+  return leerSeguro_(db, 'PAUSAS_TRABAJADORES').find((t) => esVerdadero_(t.activo) && normEmail_(t.email) === correo) || null;
+}
+function minutoDesdeElQuePuedeIniciar_(pausa) {
+  const prog = horaAMinutos_(pausa.hora_programada);
+  return prog === null ? null : prog + TOLERANCIA_INICIO_PARTICIPANTE_MIN;
+}
+function puedeIniciarParticipante_(pausa, ahoraMin) {
+  if (!pausa || (pausa.estado !== ESTADOS_PAUSA.PROGRAMADA && pausa.estado !== ESTADOS_PAUSA.RECORDATORIO_ENVIADO)) return false;
+  const desde = minutoDesdeElQuePuedeIniciar_(pausa);
+  return desde !== null && ahoraMin >= desde;
+}
+function minutosAHora_(min) { return String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0'); }
+function iniciarPausaParticipante(db, data, contexto) {
+  const email = contexto && contexto.email;
+  if (!email) return errorForbidden('No fue posible identificar tu cuenta.');
+  const trab = enRoster_(db, email);
+  if (!trab) return errorForbidden('Solo las personas de la lista de pausas pueden iniciarla.');
+  const pausa = pausaDeHoyEmpresa_(db, trab.empresa_id);
+  if (!pausa) return errorValidacion('pausa', 'No hay una pausa programada para hoy.');
+  if (pausa.estado === ESTADOS_PAUSA.EN_CURSO) return errorValidacion('pausa', 'La pausa ya está en curso.');
+  const ahoraMin = (data && data.ahoraMin !== undefined) ? Number(data.ahoraMin) : minutosDelDia_();
+  if (!puedeIniciarParticipante_(pausa, ahoraMin)) {
+    const desde = minutoDesdeElQuePuedeIniciar_(pausa);
+    return errorValidacion('pausa', desde !== null && ahoraMin < desde
+      ? 'La coordinación tiene hasta las ' + minutosAHora_(desde) + ' para iniciarla; después puedes hacerlo tú.'
+      : 'La pausa de hoy ya no se puede iniciar (estado: ' + pausa.estado + ').');
+  }
+  const r = transicionar_(db, pausa, ESTADOS_PAUSA.EN_CURSO, contexto, { hora_inicio_real: new Date().toISOString(), iniciada_por: normEmail_(email) });
+  if (r && !r._validationError) registrarLog_(db, pausa.pausa_id, contexto, 'pausa_iniciada_por_participante', email);
+  return r;
+}
+
 function getPausaHoyTrabajador(db, data, contexto) {
   const email = contexto && contexto.email;
   if (!email) return errorForbidden('No fue posible identificar tu cuenta.');
@@ -740,8 +780,13 @@ function getPausaHoyTrabajador(db, data, contexto) {
   const miRegistro = buscarRegistro_(db, pausa.pausa_id, email);
   return {
     empresa_id: trab.empresa_id, nombre: trab.nombre || '',
-    pausa: { pausa_id: pausa.pausa_id, fecha: claveFecha_(pausa.fecha), hora_programada: pausa.hora_programada || '', duracion_min: pausa.duracion_min || '', estado: pausa.estado },
+    pausa: { pausa_id: pausa.pausa_id, fecha: claveFecha_(pausa.fecha), hora_programada: pausa.hora_programada || '', duracion_min: pausa.duracion_min || '', estado: pausa.estado,
+      hora_inicio_real: pausa.hora_inicio_real || '', iniciada_por: pausa.iniciada_por || pausa.coordinador_email || '' },
     registrable: registrable,
+    // Módulo 5A: ¿puede iniciarla esta persona? (está en la lista y pasó la tolerancia)
+    en_lista: !!enRoster_(db, email),
+    puede_iniciar: !!enRoster_(db, email) && puedeIniciarParticipante_(pausa, minutosDelDia_()),
+    iniciar_desde: minutoDesdeElQuePuedeIniciar_(pausa) === null ? '' : minutosAHora_(minutoDesdeElQuePuedeIniciar_(pausa)),
     mi_registro: miRegistro ? { estado: miRegistro.estado, motivo: miRegistro.motivo || '', comentario: miRegistro.comentario || '', fecha_hora_registro: miRegistro.fecha_hora_registro } : null
   };
 }
@@ -823,9 +868,82 @@ function getPanelCoordinador(db, data, contexto) {
       pausa_id: p.pausa_id, empresa_id: p.empresa_id, fecha: claveFecha_(p.fecha),
       hora_programada: p.hora_programada || '', hora_inicio_real: p.hora_inicio_real || '', hora_fin: p.hora_fin || '',
       estado: p.estado, duracion_min: p.duracion_min || '', observaciones: p.observaciones || '', evidencia_url: p.evidencia_url || '',
+      iniciada_por: p.iniciada_por || (p.hora_inicio_real ? p.coordinador_email : '') || '',
       participacion: participacionDePausa_(db, p.pausa_id, p.empresa_id)
     }));
-  return { empresas: empresas, pausas: pausas };
+  return Object.assign({ empresas: empresas, pausas: pausas }, contextoCoordinacion_(db, empresas));
+}
+
+// SIGSO v2, Módulo 5A: lo que la coordinación necesita ver además de hoy.
+//  - ultimos_dias: las últimas 20 pausas (estado, participación, atraso al
+//    iniciar, quién la inició) -- hace visible una caída como la de sept.;
+//  - quien_inicia: en 60 días, cuántas inició cada persona -- la dependencia
+//    de una sola coordinadora;
+//  - animo_alertas: quién marcó "Mal" o "Muy mal" en los últimos 14 días
+//    (decisión del dueño: señal con nombre, SOLO en Coordinación, sin correos).
+function contextoCoordinacion_(db, empresas) {
+  const hoy = claveDia_(new Date(), TZ);
+  const hace = (dias) => claveDia_(new Date(Date.now() - dias * 24 * 3600 * 1000), TZ);
+  const roster = leerSeguro_(db, 'PAUSAS_TRABAJADORES').filter((t) => esVerdadero_(t.activo) && empresas.indexOf(String(t.empresa_id)) !== -1);
+  const nombrePorCorreo = {};
+  roster.forEach((t) => { nombrePorCorreo[normEmail_(t.email)] = t.nombre || t.email; });
+  leerSeguro_(db, 'PAUSAS_COORDINADORES').forEach((c) => { if (c.email && !nombrePorCorreo[normEmail_(c.email)]) nombrePorCorreo[normEmail_(c.email)] = c.nombre || c.email; });
+  const asistencia = leerSeguro_(db, 'PAUSAS_ASISTENCIA');
+  const porPausa = {};
+  asistencia.forEach((r) => { (porPausa[String(r.pausa_id)] = porPausa[String(r.pausa_id)] || []).push(r); });
+  const deEmpresas = leerProgramadas_(db).filter((p) => empresas.indexOf(String(p.empresa_id)) !== -1);
+
+  const RESUELTAS = [ESTADOS_PAUSA.REALIZADA, ESTADOS_PAUSA.CERRADA, ESTADOS_PAUSA.NO_REALIZADA];
+  const ultimos = deEmpresas.filter((p) => claveFecha_(p.fecha) < hoy && RESUELTAS.indexOf(p.estado) !== -1)
+    .sort((a, b) => claveFecha_(a.fecha) < claveFecha_(b.fecha) ? 1 : -1)
+    .slice(0, 20)
+    .map((p) => {
+      const regs = porPausa[String(p.pausa_id)] || [];
+      const rosterEmpresa = roster.filter((t) => String(t.empresa_id) === String(p.empresa_id)).length;
+      const participaron = regs.filter((r) => r.estado === 'participo').length;
+      let minutosTarde = null;
+      if (p.hora_inicio_real) {
+        const prog = horaAMinutos_(p.hora_programada);
+        const real = horaAMinutos_(new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(p.hora_inicio_real)));
+        if (prog !== null && real !== null) minutosTarde = real - prog;
+      }
+      const quien = p.iniciada_por || (p.hora_inicio_real ? p.coordinador_email : '') || '';
+      return {
+        fecha: claveFecha_(p.fecha), empresa_id: p.empresa_id, estado: p.estado,
+        pct_participacion: rosterEmpresa ? Math.round(participaron * 1000 / rosterEmpresa) / 10 : null,
+        participaron: participaron, minutos_tarde: minutosTarde,
+        iniciada_por: quien, iniciada_por_nombre: quien ? (nombrePorCorreo[normEmail_(quien)] || quien) : '',
+        observaciones: p.observaciones || ''
+      };
+    }).reverse();
+
+  const desde60 = hace(60);
+  const quien = {};
+  deEmpresas.filter((p) => claveFecha_(p.fecha) >= desde60 && p.hora_inicio_real).forEach((p) => {
+    const k = normEmail_(p.iniciada_por || p.coordinador_email || '') || 'sin_registro';
+    quien[k] = (quien[k] || 0) + 1;
+  });
+  const quienInicia = Object.keys(quien).map((k) => ({ email: k === 'sin_registro' ? '' : k, nombre: k === 'sin_registro' ? 'Sin registro' : (nombrePorCorreo[k] || k), cantidad: quien[k] }))
+    .sort((a, b) => b.cantidad - a.cantidad);
+
+  const desde14 = hace(14);
+  const pausasRecientes = {};
+  deEmpresas.forEach((p) => { if (claveFecha_(p.fecha) >= desde14) pausasRecientes[String(p.pausa_id)] = claveFecha_(p.fecha); });
+  const animoPorPersona = {};
+  asistencia.forEach((r) => {
+    const fecha = pausasRecientes[String(r.pausa_id)];
+    const valor = Number(r.animo);
+    if (!fecha || !(valor >= 1 && valor <= 5)) return;
+    const k = normEmail_(r.email);
+    (animoPorPersona[k] = animoPorPersona[k] || []).push({ fecha: fecha, valor: valor });
+  });
+  const animoAlertas = Object.keys(animoPorPersona).map((k) => {
+    const vals = animoPorPersona[k].sort((a, b) => a.fecha < b.fecha ? -1 : 1);
+    const bajos = vals.filter((v) => v.valor <= 2);
+    return { email: k, nombre: nombrePorCorreo[k] || k, bajos: bajos.length, respuestas: vals.length, ultimo: vals[vals.length - 1], valores: vals.slice(-5) };
+  }).filter((x) => x.bajos > 0).sort((a, b) => b.bajos - a.bajos);
+
+  return { ultimos_dias: ultimos, quien_inicia: quienInicia, animo_alertas: animoAlertas, tolerancia_inicio_min: TOLERANCIA_INICIO_PARTICIPANTE_MIN };
 }
 const LIMITE_EVIDENCIA_PAUSA_BYTES = 5 * 1024 * 1024;
 
@@ -857,7 +975,7 @@ async function gestionarPausaCoordinador(db, data, contexto) {
   const g = guardaCoordinador_(db, contexto, pausa); if (g) return g;
   switch (data.operacion) {
     case 'iniciar':
-      return transicionar_(db, pausa, ESTADOS_PAUSA.EN_CURSO, contexto, { hora_inicio_real: new Date().toISOString(), coordinador_email: contexto.email });
+      return transicionar_(db, pausa, ESTADOS_PAUSA.EN_CURSO, contexto, { hora_inicio_real: new Date().toISOString(), coordinador_email: contexto.email, iniciada_por: contexto.email });
     case 'finalizar': {
       const cambios = {
         hora_fin: new Date().toISOString(), coordinador_email: pausa.coordinador_email || contexto.email,
@@ -1213,7 +1331,7 @@ module.exports = {
   listarConfig, guardarConfig, listarCoordinadores, gestionarCoordinador,
   listarTrabajadores, gestionarTrabajador, sembrarRosterDesdeCuentas, asignarModuloPausasRoster,
   listarProgramadas, programarDelDiaAdmin, gestionarPausaProgramada,
-  getPausaHoyTrabajador, registrarAsistencia, registrarAsistenciaGrupal,
+  getPausaHoyTrabajador, registrarAsistencia, registrarAsistenciaGrupal, iniciarPausaParticipante,
   getPanelCoordinador, gestionarPausaCoordinador, descargarEvidenciaPausa, getReporteCumplimiento,
   listarRosterCoordinador, getHistorialTrabajador,
   getReporteGerencia, descargarReporteCumplimientoPdf, descargarReporteGerenciaPdf,

@@ -1,0 +1,53 @@
+/* coordinacion-v2.css — Coordinación de pausas "Hoy" (SIGSO v2, Módulo 5A).
+ * Prefijo .co2-*. Reusa tokens/layout/componentes-v2. */
+
+/* Mientras la v2 está montada, solo se ve ella dentro de la sección. */
+#modulo-pausas_coordinacion.coord-v2-activa > :not(#coordinacion-v2) { display: none !important; }
+
+.co2-hoy { display: flex; flex-direction: column; gap: var(--sx-e-4); }
+.co2-hoy__cab { display: flex; align-items: center; gap: var(--sx-e-4); }
+.co2-momento { font: 700 1.125rem/1.3 var(--fuente); color: var(--sx-tono); }
+.co2-acciones { display: flex; flex-wrap: wrap; gap: var(--sx-e-2); }
+.co2-listas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sx-e-3); }
+.co2-lista { padding: 10px 12px; border-radius: var(--sx-radio); background: var(--sx-superficie-2); min-width: 0; }
+.co2-lista h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font: var(--sx-t-etiqueta); text-transform: uppercase; letter-spacing: .05em; color: var(--sx-tono); }
+.co2-lista h3 span { padding: 0 6px; border-radius: 999px; background: var(--sx-tono-suave); }
+.co2-lista ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.co2-lista li { display: flex; align-items: center; gap: 6px; min-width: 0; font: var(--sx-t-chico); color: var(--sx-texto); flex-wrap: wrap; }
+.co2-lista li small { flex-basis: 100%; padding-left: 28px; font-size: .6875rem; }
+.co2-lista p { margin: 0; font: var(--sx-t-chico); }
+.co2-evidencia img { max-width: 100%; border-radius: var(--sx-radio); }
+
+/* Últimos días */
+.co2-alerta { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; padding: 8px 12px; border-radius: var(--sx-radio); background: var(--sx-tono-suave); color: var(--sx-tono); font: 600 .8125rem/1.3 var(--fuente); }
+.co2-dias { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(18px, 1fr); gap: 5px; height: 90px; align-items: end; }
+.co2-dia { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; cursor: default; }
+.co2-dia i { display: block; width: 100%; max-width: 26px; border-radius: 5px 5px 2px 2px; background: var(--sx-tono); opacity: .85; }
+.co2-dia.sx2-tono-critico i { opacity: .35; }
+.co2-dia b { font: 600 .625rem/1 var(--fuente); color: var(--sx-texto-3); }
+
+/* Quién inicia */
+.co2-quien { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.co2-quien li { display: grid; grid-template-columns: auto minmax(0, 140px) 1fr 28px; align-items: center; gap: 8px; font: var(--sx-t-chico); }
+.co2-quien li:not(:has(.sx2-avatar)) { grid-template-columns: minmax(0, 168px) 1fr 28px; }
+.co2-quien__barra { height: 8px; border-radius: 999px; background: var(--sx-superficie-2); overflow: hidden; }
+.co2-quien__barra i { display: block; height: 100%; background: var(--sx-primario); border-radius: 999px; }
+.co2-quien b { text-align: right; }
+.co2-nota { display: flex; gap: 8px; margin: 12px 0 0; padding: 10px 12px; border-radius: var(--sx-radio); background: var(--sx-info-suave); font: var(--sx-t-chico); color: var(--sx-texto); }
+.co2-nota .sigso-ico { flex: none; color: var(--sx-info); margin-top: 2px; }
+
+/* Ánimo */
+.co2-animo { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.co2-animo li { display: flex; align-items: center; gap: 10px; }
+.co2-animo__puntos { display: flex; gap: 4px; flex: none; }
+.co2-animo__puntos i { width: 10px; height: 10px; border-radius: 50%; background: var(--sx-tono); }
+
+/* Pasar lista (en el panel lateral) */
+.co2-pasar { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.co2-pasar li { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.co2-pasar .sx2-select { max-width: 240px; }
+
+@media (max-width: 760px) {
+  .co2-listas { grid-template-columns: 1fr; }
+  .co2-hoy__cab { align-items: flex-start; }
+}

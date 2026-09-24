@@ -474,3 +474,65 @@ Decisiones del dueño (2026-09-24):
 - Hallazgo al implementar: **casi nadie registra horas** (Ignacio Valdivia:
   2 registros con horas en total). El panel lo dice en vez de mostrar un 0
   silencioso.
+
+---
+
+## Módulo 5 — Pausas activas + Coordinación: análisis
+
+### Qué hacen hoy
+- **Pausas activas** (`pausas.js`, 205 líneas): el trabajador ve la pausa de
+  hoy y declara "Participé" (con declaración y ánimo 1–5 opcional) o "No pude"
+  (con motivo). Nada más: no ve su historial.
+- **Coordinación** (`coordinacion.js`, 556 líneas): Hoy (iniciar / finalizar /
+  no realizada, participación en vivo, pasar lista) · Historial por
+  trabajador · Reportes de cumplimiento. Backend `pausas.js` (1.223 líneas):
+  programación diaria automática, recordatorios, aviso al coordinador y
+  escalamiento al administrador.
+
+### Lo que muestran los datos (sandbox: 27-jul → 21-sep, 1 empresa, 7 personas)
+- **El programa se cayó en septiembre**: 20 pausas realizadas en agosto, 5 en
+  septiembre; **10 días hábiles sin pausa** entre el 7 y el 21. Todos esos
+  días el sistema mandó recordatorio, aviso al coordinador y **escalamiento al
+  administrador**, y las tres coordinadoras entraron a SIGSO esos días. Los
+  avisos no bastan.
+- **Depende de una sola persona**: 29 de 31 pausas las inició Amarlla; la
+  otra titular (Camila) y la reemplazante (Marisol) **nunca iniciaron una**.
+- **Se inicia tarde**: la mitad empieza 7+ minutos tarde; varias 16–48 min y
+  dos 4 horas después de la hora.
+- **Se declara de memoria**: la mitad declara 16+ minutos después de
+  iniciada, el 10 % más de 46 min después.
+- Participación por persona (sobre 30 realizadas): Vanessa 26, Francisca 24,
+  Bárbara 22, Marisol 19, Lisseth 14; Luis Mendoza y Valentina están en la
+  lista y casi nunca declaran (2 y 1).
+- Motivo más frecuente de no participar: **"En reunión" (10)**, luego "Otro"
+  (7) y "Atendiendo un cliente" (6): la hora (12:00) choca con el trabajo.
+- **Ánimo**: se contestó en 40 de 153 participaciones y **16 de esas 40 son
+  "Muy mal"** (5 personas distintas). Nadie ve ni sigue esa señal hoy.
+- Las pausas no realizadas no registran motivo; el 21-sep hay **dos pausas
+  programadas el mismo día** (dato duplicado).
+
+### Decisiones del dueño (2026-09-24)
+- **Cualquiera puede iniciar la pausa** si la coordinación no llega: desde la
+  hora + 5 min, cualquier persona de la lista puede iniciarla; queda
+  registrado quién (`iniciada_por`).
+- **Ánimo como señal en Coordinación**: con nombre, solo para la
+  coordinación, sin correos.
+- **Trabajador**: declarar desde el Inicio en un toque + su historial.
+- Orden: **5A Coordinación**, después **5B Pausas del trabajador + Inicio**.
+
+### 5A Coordinación de pausas "Hoy" — ESTADO: HECHO
+- Backend (`logica/pausas.js`): columna nueva `iniciada_por` en
+  PAUSAS_PROGRAMADAS (la coordinación al iniciar y el participante);
+  `iniciarPausaParticipante` (solo personas de la lista, solo pasada la
+  tolerancia de 5 min, solo si está Programada/Recordatorio enviado);
+  `getPausaHoyTrabajador` suma `en_lista`, `puede_iniciar`, `iniciar_desde`;
+  `getPanelCoordinador` suma `ultimos_dias` (20 pausas resueltas con
+  participación, atraso y quién la inició), `quien_inicia` (60 días) y
+  `animo_alertas` (Mal/Muy mal en 14 días, por persona).
+- Frontend: `js/coordinacion-v2.js` + `css/v2/coordinacion-v2.css`
+  (`MODULOS_V2.pausas_coordinacion`): la pausa de hoy dice si va tarde y quién
+  la inició, con iniciar / finalizar (observaciones + foto) / no realizada /
+  pasar lista (con motivo por persona) / ver evidencia; franja de las últimas
+  20 pausas (avisa si las últimas no se realizaron); "Quién inicia" (avisa la
+  dependencia ≥ 70 %); "Ánimo: para acercarse". Historial por trabajador y
+  Cumplimiento siguen en coordinacion.js.
