@@ -74,7 +74,9 @@
       PY.api('listarMisTareasProyectos', { incluir_personales: true }),
       PY.api('listarMiBitacoraProyectos', { incluir_personales: true }),
       PY.api('listarProyectos', {}),
-      PY.cargarMiPerfil()
+      PY.cargarMiPerfil(),
+      // Módulo 3B: los ítems de solicitudes a mi cargo (abiertos).
+      PY.api('getColaSolicitudes', { solo_mios: true })
     ]).then(function (r) {
       var d = (r[0] && r[0].ok && r[0].data) || { tareas: [], entregables: [] };
       var yo = PY.miEmail();
@@ -90,6 +92,8 @@
       return {
         tareas: d.tareas || [], entregables: d.entregables || [], proyectos: proyectos,
         bitacora: (r[1] && r[1].ok) ? (r[1].data || []) : [],
+        solicitudes: (r[4] && r[4].ok && r[4].data && r[4].data.items) || [],
+        errorSolicitudes: !(r[4] && r[4].ok),
         error: !(r[0] && r[0].ok) ? ((r[0] && r[0].message) || 'No se pudo cargar tu trabajo.') : ''
       };
     });
@@ -157,6 +161,33 @@
     '</section>';
   }
 
+  var MAX_SOL = 6;
+  function tarjetaSolicitudes(d, i, todas) {
+    var B = window.SigsoBandejaV2;
+    if (!B) return '';
+    if (d.errorSolicitudes) {
+      return '<section class="sx2-card sx2-py-mt-sol sx2-entra" style="--i:' + i + '">' + U.vacio({ icono: 'alerta', titulo: 'No se pudieron revisar tus solicitudes', texto: 'Tus tareas sí están al día en esta pantalla. Actualiza para reintentar.' }) + '</section>';
+    }
+    if (!d.solicitudes.length) return '';
+    var lista = B.ordenarMios(d.solicitudes);
+    var r = B.resumenMios(lista);
+    var visibles = todas ? lista : lista.slice(0, MAX_SOL);
+    var partes = [];
+    if (r.fuera) partes.push(r.fuera + ' fuera de plazo');
+    if (r.recibir) partes.push(r.recibir + ' por recibir');
+    if (r.respondieron) partes.push(r.respondieron + (r.respondieron === 1 ? ' con respuesta nueva' : ' con respuestas nuevas'));
+    if (r.sinFecha) partes.push(r.sinFecha + ' sin fecha comprometida');
+    var bandeja = window.SigsoShell && SigsoShell.tieneModulo && SigsoShell.tieneModulo('bandeja');
+    return '<section class="sx2-card sx2-py-mt-sol sx2-entra" style="--i:' + i + '">' +
+      '<div class="sx2-card__cab"><h2 class="sx2-card__titulo"><span class="sx2-py-mt-ico sx2-tono-hito">' + U.ico('bandeja', 15) + '</span>Solicitudes a tu cargo' +
+        ' <span class="sx2-card__sub">' + lista.length + '</span></h2>' +
+        (bandeja ? U.boton({ texto: 'Abrir la Bandeja', icono: 'derecha', sm: true, variante: 'fantasma', clase: 'js-py2m-bandeja' }) : '') + '</div>' +
+      (partes.length ? '<p class="sx2-tenue" style="margin:0 0 8px;font-size:.8125rem">' + U.esc(partes.join(' · ')) + '</p>' : '') +
+      '<ul class="sx2-py-mt-lista">' + visibles.map(B.filaMia).join('') + '</ul>' +
+      (lista.length > visibles.length ? '<div style="text-align:center;padding-top:8px">' + U.boton({ texto: 'Ver las ' + lista.length, icono: 'abajo', sm: true, variante: 'fantasma', clase: 'js-py2m-todas-sol' }) + '</div>' : '') +
+    '</section>';
+  }
+
   function filtrar(d) {
     return d.tareas.filter(abierta).filter(function (a) {
       if (f.proyecto && grupoDe(a) !== f.proyecto) return false;
@@ -172,15 +203,19 @@
     var soloGrupo = f.filtro === 'atrasadas' ? 'atrasadas' : (f.filtro === 'semana' ? 'semana' : '');
     var confirmar = f.filtro === 'confirmar';
     var cuerpo;
-    if (!d.tareas.filter(abierta).length) {
+    if (f.filtro === 'solicitudes') {
+      cuerpo = tarjetaSolicitudes(d, 2, true) || U.card({ cuerpo: U.vacio({ icono: 'check', texto: 'No tienes solicitudes a tu cargo.' }) });
+    } else if (!d.tareas.filter(abierta).length) {
       cuerpo = U.card({ cuerpo: U.vacio({ icono: 'check', titulo: 'No tienes tareas abiertas',
-        texto: 'Cuando te asignen una tarea aparecerá aquí. También puedes anotar un compromiso propio con "Nueva tarea".' }) });
+        texto: 'Cuando te asignen una tarea aparecerá aquí. También puedes anotar un compromiso propio con "Nueva tarea".' }) }) +
+        (!f.proyecto && !f.filtro ? tarjetaSolicitudes(d, 3) : '');
     } else if (confirmar) {
       cuerpo = tarjetaGrupo('Esperan que confirmes la fecha', 'calendario', 'primario', lista, 2, 'Nada por confirmar.');
     } else {
       cuerpo = (!soloGrupo ? tarjetaGrupo('Esperan que confirmes la fecha', 'check', 'info', g.confirmar, 2) : '') +
         ((!soloGrupo || soloGrupo === 'atrasadas') ? tarjetaGrupo('Atrasadas', 'alerta', 'critico', g.atrasadas, 2, soloGrupo ? 'Nada atrasado. ¡Bien!' : '') : '') +
         ((!soloGrupo || soloGrupo === 'semana') ? tarjetaGrupo('Esta semana', 'calendario', 'primario', g.semana, 3, soloGrupo ? 'Nada vence en los próximos 7 días.' : '') : '') +
+        (!f.filtro && !f.proyecto ? tarjetaSolicitudes(d, 4) : '') +
         (!soloGrupo ? tarjetaGrupo('Más adelante', 'reloj', 'info', g.despues, 4) + tarjetaGrupo('Sin fecha', 'estado', 'neutro', g.sinFecha, 5) : '');
     }
 
@@ -284,7 +319,7 @@
     var diasConReg = porDia.filter(function (v) { return v > 0; }).length;
     var r1 = function (v) { return Math.round(v * 10) / 10; };
 
-    var kpis = '<div class="sx2-fila-kpis">' +
+    var kpis = '<div class="sx2-fila-kpis' + (nSol ? ' sx2-fila-kpis--6' : '') + '">' +
       U.kpi({ i: 0, icono: 'reloj', tono: 'primario', etiqueta: 'Últimos 7 días', valor: r1(semana), sufijo: ' h',
         tendencia: anterior ? { texto: (semana >= anterior ? '+' : '') + r1(semana - anterior) + ' h vs semana anterior', tono: semana >= anterior ? 'ok' : 'alerta', icono: semana >= anterior ? 'tendencia' : 'tendenciaBaja' } : null }) +
       U.kpi({ i: 1, icono: 'calendario', tono: 'info', etiqueta: '14 días', valor: r1(total), sufijo: ' h', unidad: diasConReg + (diasConReg === 1 ? ' día con registro' : ' días con registro') }) +
@@ -342,6 +377,8 @@
         (nProy ? ' en ' + nProy + (nProy === 1 ? ' proyecto' : ' proyectos') : '') +
         (nPers ? (nProy ? ' y ' : ': ') + nPers + (nPers === 1 ? ' personal' : ' personales') : '') +
         (g.atrasadas.length ? ' · ' + g.atrasadas.length + ' atrasada' + (g.atrasadas.length === 1 ? '' : 's') : '') + '.';
+    var nSol = (d.solicitudes || []).length;
+    if (nSol) resumen = (abiertas.length ? resumen.replace(/\.$/, '') + ' · ' : 'Sin tareas abiertas · ') + nSol + (nSol === 1 ? ' ítem de solicitud' : ' ítems de solicitudes') + ' a tu cargo.';
 
     var cabecera = '<header class="sx2-cabecera sx2-entra">' +
       '<div class="sx2-flex" style="gap:16px;align-items:center;min-width:0">' + U.avatar(yo, 'xl') +
@@ -367,6 +404,7 @@
       (confirmar
         ? U.kpi({ i: 4, icono: 'check', tono: 'info', etiqueta: 'Por confirmar', valor: confirmar, unidad: 'fechas propuestas', filtro: 'confirmar', activo: f.filtro === 'confirmar' })
         : U.kpi({ i: 4, icono: 'bandera', tono: 'ok', etiqueta: 'Entregables', valor: d.entregables.length, unidad: 'pendientes' })) +
+      (nSol ? U.kpi({ i: 5, icono: 'bandeja', tono: 'hito', etiqueta: 'Solicitudes', valor: nSol, unidad: 'ítems a tu cargo', filtro: 'solicitudes', activo: f.filtro === 'solicitudes' }) : '') +
     '</div>';
     var ids = Object.keys(frentes);
     var chips = ids.length > 1 ? '<div class="sx2-chips sx2-entra" style="--i:1">' + U.chip({ texto: 'Todo', activo: !f.proyecto, clase: 'js-py2m-proy', datos: { id: '' } }) +
@@ -517,6 +555,8 @@
       if (t.closest('.js-py2m-nueva')) { abrirNueva(d, false); return; }
       if (t.closest('.js-py2m-emergente')) { abrirNueva(d, true); return; }
       if ((b = t.closest('.sx2-kpi[data-filtro]'))) { var k = b.getAttribute('data-filtro'); f.filtro = (k === 'todas' || f.filtro === k) ? '' : k; host_.pintar({ sinAnimacion: true }); return; }
+      if (t.closest('.js-py2m-bandeja')) { if (window.SigsoShell) SigsoShell.irAModulo('bandeja'); return; }
+      if (t.closest('.js-py2m-todas-sol')) { f.filtro = 'solicitudes'; host_.pintar({ sinAnimacion: true }); window.scrollTo(0, 0); return; }
       if ((b = t.closest('.js-py2m-proy'))) { var id = b.getAttribute('data-id'); f.proyecto = f.proyecto === id ? '' : id; host_.pintar({ sinAnimacion: true }); return; }
       if ((b = t.closest('[data-py2-proyecto]'))) {
         ev.stopPropagation();
@@ -545,6 +585,13 @@
     var calor = raiz.querySelector('.sx2-py-calor');
     if (calor) calor.scrollLeft = calor.scrollWidth;
   }
+
+  // Módulo 3B: si cambió una solicitud (desde su panel o una fila), se
+  // recarga la vista si está mostrando la tarjeta de solicitudes.
+  document.addEventListener('sigso:solicitudes-cambio', function () {
+    var t = document.querySelector('.sx2-py-mt-sol');
+    if (t && t.offsetParent !== null) host_.recargar();
+  });
 
   // El Inicio v2 usa el MISMO cálculo de horas (misma regla, mismos números).
   PY.calcularHoras = horas;

@@ -34,6 +34,7 @@
     mi_trabajo: { titulo: 'Mi trabajo', icono: 'tareas', tono: 'primario' },
     calidad: { titulo: 'Calidad', icono: 'escudoCheck', tono: 'ok' },
     solicitudes: { titulo: 'Mis solicitudes', icono: 'lista', tono: 'info' },
+    a_cargo: { titulo: 'Solicitudes a tu cargo', icono: 'bandeja', tono: 'hito' },
     equipo: { titulo: 'Mi equipo', icono: 'equipo', tono: 'hito' },
     novedades: { titulo: 'Novedades', icono: 'campana', tono: 'alerta' }
   };
@@ -96,7 +97,8 @@
     if (!c) return;
     if (!datos_) c.innerHTML = '<div class="sx2-pagina">' + cabecera(null) + U.esqueleto('kpis', 5) + U.esqueleto('tarjetas', 3) + '</div>';
 
-    var bloques = ['mis_tareas', 'mi_bitacora'];
+    // mis_items (Módulo 3B): ítems de solicitudes asignados a mí, siempre.
+    var bloques = ['mis_tareas', 'mi_bitacora', 'mis_items'];
     if (tiene('proyectos')) bloques.push('proyectos');
     if (tiene('calidad')) bloques.push('calidad');
     var bandejaOk = tiene('bandeja') && (!ctx_.backofficeDisponible || ctx_.backofficeDisponible());
@@ -137,11 +139,13 @@
       var bloque = function (n) { return b ? (b[n] || { ok: false }) : { ok: false }; };
       var d = {
         fallas: [], cargando: [],
-        tareas: [], bitacora: [], proyectos: null, calidad: null, bandeja: null, jefatura: null, pausa: null,
+        tareas: [], bitacora: [], misItems: [], proyectos: null, calidad: null, bandeja: null, jefatura: null, pausa: null,
         solicitudes: null, novedades: null
       };
       var mt = bloque('mis_tareas');
       if (mt.ok) d.tareas = mt.data.tareas || []; else d.fallas.push('Mi trabajo');
+      var mi = bloque('mis_items');
+      if (mi.ok) d.misItems = (mi.data && mi.data.items) || []; else d.fallas.push('Solicitudes a tu cargo');
       var bi = bloque('mi_bitacora');
       if (bi.ok) d.bitacora = bi.data || [];
       if (tiene('proyectos')) { var p = bloque('proyectos'); if (p.ok) d.proyectos = p.data || []; else d.fallas.push('Proyectos'); }
@@ -223,6 +227,19 @@
       if (t.confirmar.length && top.indexOf(t.confirmar[0]) === -1 && top.length === TOP) top[TOP - 1] = t.confirmar[0];
       gs.push({ id: 'mi_trabajo', resumen: partes.join(' · '), urgentes: t.atrasadas.length + t.pronto.length,
         total: t.atrasadas.length + t.pronto.length + t.confirmar.length + t.bloqueadas.length, top: top, ir: 'mi_trabajo', cta: 'Ver todo' });
+    }
+    var B = window.SigsoBandejaV2;
+    if (B && d.misItems.length) {
+      var r = B.resumenMios(d.misItems);
+      if (r.atencion) {
+        var ps = [];
+        if (r.fuera) ps.push(r.fuera + ' fuera de plazo');
+        if (r.recibir) ps.push(r.recibir + ' por recibir');
+        if (r.respondieron) ps.push(r.respondieron + (r.respondieron === 1 ? ' con respuesta nueva' : ' con respuestas nuevas'));
+        if (r.sinFecha) ps.push(r.sinFecha + ' sin fecha comprometida');
+        gs.push({ id: 'a_cargo', resumen: ps.join(' · '), urgentes: r.fuera, total: r.atencion,
+          items: B.ordenarMios(d.misItems).slice(0, TOP), ir: tiene('bandeja') ? 'bandeja' : 'mi_trabajo', cta: 'Ver todo' });
+      }
     }
     var acuse = d.calidad ? (d.calidad.pendientes_de_acuse || 0) : 0;
     if (acuse) gs.push({ id: 'calidad', resumen: acuse + (acuse === 1 ? ' documento del SGC espera' : ' documentos del SGC esperan') + ' tu confirmación de lectura', total: acuse, ir: 'calidad', cta: 'Revisar' });
@@ -312,9 +329,10 @@
           '<span class="inicio2-grupo__ico sx2-tono-' + o.tono + '">' + U.ico(o.icono, 18) + '</span>' +
           '<span class="sx2-apilado" style="gap:2px;min-width:0;flex:1"><strong>' + U.esc(o.titulo) + '</strong>' +
             '<span class="sx2-tenue" style="font-size:.8125rem">' + U.esc(g.resumen) + '</span></span>' +
-          (g.id !== 'mi_trabajo' || puedeIrAMiTrabajo() ? U.boton({ texto: g.cta, sm: true, clase: 'js-in2-ir', datos: { ir: g.ir } }) : '') +
+          (g.ir !== 'mi_trabajo' || puedeIrAMiTrabajo() ? U.boton({ texto: g.cta, sm: true, clase: 'js-in2-ir', datos: { ir: g.ir } }) : '') +
         '</div>' +
         (g.top && g.top.length ? '<ul class="sx2-py-mt-lista inicio2-grupo__top">' + g.top.map(filaTarea).join('') + '</ul>' : '') +
+        (g.items && g.items.length ? '<ul class="sx2-py-mt-lista inicio2-grupo__top">' + g.items.map(window.SigsoBandejaV2.filaMia).join('') + '</ul>' : '') +
       '</div>';
     }).join('') + '</div>' });
   }
@@ -431,14 +449,22 @@
     var h7 = semanaPrev.slice(-7).reduce(function (s, v) { return s + v; }, 0);
     var hAnt = semanaPrev.slice(0, 7).reduce(function (s, v) { return s + v; }, 0);
 
-    var kpis = d.tareas.length ? '<div class="sx2-fila-kpis">' +
+    var nItems = d.misItems.length, rItems = nItems && window.SigsoBandejaV2 ? SigsoBandejaV2.resumenMios(d.misItems) : null;
+    var kpiItems = rItems ? U.kpi({ i: 5, icono: 'bandeja', tono: rItems.fuera ? 'critico' : 'hito', etiqueta: 'Solicitudes a tu cargo', valor: nItems,
+      unidad: rItems.fuera ? rItems.fuera + ' fuera de plazo' : 'ítems abiertos', filtro: tiene('bandeja') ? 'bandeja' : (puedeIrAMiTrabajo() ? 'mi_trabajo' : null) }) : '';
+    var kpis = d.tareas.length ? '<div class="sx2-fila-kpis' + (kpiItems ? ' sx2-fila-kpis--6' : '') + '">' +
       U.kpi({ i: 0, icono: 'tareas', tono: 'primario', etiqueta: 'Mis tareas abiertas', valor: t.abiertas.length, unidad: 'en todo SIGSO', filtro: puedeIrAMiTrabajo() ? 'mi_trabajo' : null }) +
       U.kpi({ i: 1, icono: 'alerta', tono: t.atrasadas.length ? 'critico' : 'neutro', etiqueta: 'Atrasadas', valor: t.atrasadas.length, unidad: 'atender primero' }) +
       U.kpi({ i: 2, icono: 'calendario', tono: 'alerta', etiqueta: 'Vencen en 7 días', valor: t.semana, unidad: 'incluye hoy y mañana' }) +
       U.kpi({ i: 3, icono: 'check', tono: t.confirmar.length ? 'info' : 'neutro', etiqueta: 'Por confirmar', valor: t.confirmar.length, unidad: 'fechas propuestas' }) +
       U.kpi({ i: 4, icono: 'reloj', tono: 'ok', etiqueta: 'Horas esta semana', valor: Math.round(h7 * 10) / 10, sufijo: ' h',
         tendencia: hAnt ? { texto: (h7 >= hAnt ? '+' : '') + (Math.round((h7 - hAnt) * 10) / 10) + ' h vs anterior', tono: h7 >= hAnt ? 'ok' : 'alerta', icono: h7 >= hAnt ? 'tendencia' : 'tendenciaBaja' } : null }) +
-    '</div>' : '';
+      kpiItems +
+    '</div>' : (kpiItems ? '<div class="sx2-fila-kpis">' + kpiItems +
+      U.kpi({ i: 1, icono: 'alerta', tono: rItems.fuera ? 'critico' : 'neutro', etiqueta: 'Fuera de plazo', valor: rItems.fuera, unidad: 'pasaron su SLA' }) +
+      U.kpi({ i: 2, icono: 'calendario', tono: rItems.sinFecha ? 'alerta' : 'neutro', etiqueta: 'Sin fecha comprometida', valor: rItems.sinFecha, unidad: 'nadie se comprometió' }) +
+      U.kpi({ i: 3, icono: 'check', tono: rItems.recibir ? 'info' : 'neutro', etiqueta: 'Por recibir', valor: rItems.recibir, unidad: 'nuevos para ti' }) +
+    '</div>' : '');
 
     var semana = tarjetaSemana(d, hoy), miDia = tarjetaMiDia(t), proyectos = tarjetaProyectos(d);
     c.innerHTML = '<div class="sx2-pagina">' + cabecera(estado(d, gs)) + kpis +
@@ -490,6 +516,7 @@
     if ((b = t.closest('[data-in2-tarea]'))) { abrirTarea(tarea(b.getAttribute('data-in2-tarea'))); return; }
     if ((b = t.closest('[data-in2-proyecto]'))) { abrirProyecto(b.getAttribute('data-in2-proyecto')); return; }
     if ((b = t.closest('.sx2-kpi[data-filtro="mi_trabajo"]'))) { irAMiTrabajo(); return; }
+    if ((b = t.closest('.sx2-kpi[data-filtro="bandeja"]'))) { ctx_.irAModulo('bandeja'); return; }
     if ((b = t.closest('.js-in2-ir'))) {
       var ir = b.getAttribute('data-ir');
       if (ir === 'mi_trabajo') irAMiTrabajo(); else ctx_.irAModulo(ir);
@@ -497,6 +524,12 @@
   });
   document.addEventListener('keydown', function (ev) {
     if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('#inicio-v2 [data-in2-tarea]')) { ev.preventDefault(); ev.target.click(); }
+  });
+
+  // Módulo 3B: un cambio en una solicitud (panel lateral o fila) repinta el Inicio.
+  document.addEventListener('sigso:solicitudes-cambio', function () {
+    var c = document.getElementById('inicio-v2');
+    if (c && c.offsetParent !== null) recargar();
   });
 
   function activo() { try { return localStorage.getItem(CLAVE_PREF) !== '0'; } catch (e) { return true; } }

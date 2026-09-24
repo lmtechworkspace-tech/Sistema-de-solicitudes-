@@ -113,6 +113,11 @@
   gap: var(--sx-e-4);
 }
 
+/* Seis KPIs: una fila en escritorio, 3+3 en medianos (nunca 5+1). */
+.sx2-fila-kpis--6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+@media (max-width: 1280px) { .sx2-fila-kpis--6 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .sx2-fila-kpis--6 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 /* Contenido + panel lateral fijo (p. ej. Gantt + detalle de tarea). */
 .sx2-dividida {
   display: grid;

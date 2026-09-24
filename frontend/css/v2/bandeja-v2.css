@@ -122,7 +122,3 @@ body:has(.bj2-lote) #py2-interruptor { display: none; }
   .bj2-lote { bottom: 12px; }
 }
 
-/* Seis KPIs: una fila en escritorio, 3+3 en medianos (nunca 5+1). */
-#bandeja-v2 .sx2-fila-kpis { grid-template-columns: repeat(6, minmax(0, 1fr)); }
-@media (max-width: 1280px) { #bandeja-v2 .sx2-fila-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 600px) { #bandeja-v2 .sx2-fila-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

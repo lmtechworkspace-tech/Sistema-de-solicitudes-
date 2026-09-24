@@ -424,12 +424,16 @@ function getPautaDesarrollador(db, data, contexto) {
 //    responsable propio, a su solicitud) y, solo DEV, los huérfanos activos
 //    en estados de trabajo -- el mismo respaldo que la bandeja clásica.
 // Los KPIs se cuentan sobre ítems: no dependen de campos de cabecera.
+// Módulo 3B: `solo_mios` (cualquier rol) = solo los ítems ABIERTOS asignados
+// a quien pregunta, sin huérfanos ni lista de responsables -- lo que Mi
+// trabajo e Inicio muestran como "Solicitudes a tu cargo".
 const ESTADOS_POR_REVISAR = [ESTADOS.S01, ESTADOS.S02];
 function getCola(db, filtros, contexto) {
   filtros = filtros || {};
   const rol = contexto ? contexto.rol : '';
   const email = String((contexto && contexto.email) || '').toLowerCase();
-  const verBandeja = rol === 'ADM' ? String(filtros.verBandeja || '').toLowerCase() : email;
+  const soloMios = filtros.solo_mios === true || filtros.solo_mios === 'true';
+  const verBandeja = (rol === 'ADM' && !soloMios) ? String(filtros.verBandeja || '').toLowerCase() : email;
   const feriados = Cumplimiento.obtenerFeriados(db);
   const solicitudes = {};
   leerFilas_(db, 'SOLICITUDES', COLUMNAS.SOLICITUDES).forEach((s) => { solicitudes[s.solicitud_id] = s; });
@@ -449,6 +453,7 @@ function getCola(db, filtros, contexto) {
   const visibles = todas.filter((i) => {
     const s = solicitudes[i.solicitud_id];
     const asignado = (responsableValido_(i.desarrollador_asignado) || responsableValido_(s.desarrollador_asignado)).toLowerCase();
+    if (soloMios) return !!email && asignado === email && ESTADOS_CERRADOS.indexOf(i.estado) === -1 && i.estado !== ESTADOS.S08;
     if (!verBandeja) return true; // ADM sin acotar
     if (asignado === verBandeja) return true;
     return rol === 'DEV' && !filtros.verBandeja && !asignado && ESTADOS_TRABAJO_DEV.indexOf(i.estado) !== -1;
@@ -498,7 +503,7 @@ function getCola(db, filtros, contexto) {
     rol_actual: rol,
     solo_lectura: soloLectura,
     ver_bandeja: rol === 'ADM' ? (filtros.verBandeja || '') : email,
-    responsables: soloLectura ? [] : obtenerResponsablesActivos_(db)
+    responsables: (soloLectura || soloMios) ? [] : obtenerResponsablesActivos_(db)
   };
 }
 

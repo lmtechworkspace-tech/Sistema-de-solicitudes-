@@ -61,6 +61,13 @@
   function abierto(i) { return CERRADOS.indexOf(i.estado) === -1 && i.estado !== 'S08'; }
   function fechaCorta(v) { return v ? PY.fecha(v, true) : ''; }
 
+  // Algo cambió en una solicitud (desde la cola, el detalle o una fila de Mi
+  // trabajo/Inicio): se refresca la cola si está montada y se avisa al resto.
+  function avisarCambio() {
+    if (document.getElementById('bandeja-v2')) cargar(true);
+    document.dispatchEvent(new CustomEvent('sigso:solicitudes-cambio'));
+  }
+
   // --- Montaje ----------------------------------------------------------------------
   function seccion() { return document.getElementById('modulo-bandeja'); }
   function contenedor() {
@@ -170,7 +177,7 @@
 
   function kpis() {
     var r = datos_.resumen || {};
-    return '<div class="sx2-fila-kpis">' + KPIS.filter(function (k) { return k.id !== 'todos'; }).map(function (k, i) {
+    return '<div class="sx2-fila-kpis sx2-fila-kpis--6">' + KPIS.filter(function (k) { return k.id !== 'todos'; }).map(function (k, i) {
       var v = r[k.id] || 0;
       return U.kpi({ i: i, icono: k.icono, tono: v || k.id === 'abiertos' ? k.tono : 'neutro', etiqueta: k.etiqueta, valor: v, unidad: k.unidad, filtro: k.id, activo: f.kpi === k.id });
     }).join('') + '</div>';
@@ -405,7 +412,7 @@
       sel_ = {};
       if (fallas.length) PY.aviso(hechos + ' listos · ' + fallas.length + ' no se pudieron: ' + fallas.slice(0, 3).join(' | ') + (fallas.length > 3 ? '…' : ''), 'error');
       else PY.aviso(titulo + ': ' + hechos + (hechos === 1 ? ' ítem listo.' : ' ítems listos.'), 'exito');
-      cargar(true);
+      avisarCambio();
     });
   }
 
@@ -646,7 +653,7 @@
         abiertoAcc[id] = '';
         PY.aviso('Listo.', 'exito');
         cargarDetalle();
-        cargar(true);
+        avisarCambio();
       });
     }
 
@@ -764,7 +771,7 @@
       api('actualizarEstado', { subsolicitud_id: b.getAttribute('data-id'), estado_nuevo: 'S02', comentario: '' }).then(function (r) {
         if (!r || !r.ok) { b.disabled = false; PY.aviso((r && r.message) || 'No se pudo recibir.', 'error'); return; }
         PY.aviso('Recibido: el solicitante ve que el equipo ya lo tiene.', 'exito');
-        cargar(true);
+        avisarCambio();
       });
       return;
     }
@@ -805,6 +812,82 @@
     if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('#bandeja-v2 [data-bj2-item]')) { ev.preventDefault(); ev.target.click(); }
   });
 
+  // =========================================================================
+  // Módulo 3B — "Solicitudes a tu cargo" en Mi trabajo e Inicio. Mismo
+  // formato de fila que las tareas (.sx2-py-mt-fila); el clic abre el MISMO
+  // detalle en panel lateral, sin importar desde dónde.
+  // =========================================================================
+  function ordenarMios(items) {
+    var peso = function (i) {
+      if (i.respuesta_pendiente) return 0;           // el solicitante contestó: te toca
+      if (i.situacion_sla === 'FUERA_DE_PLAZO') return 1;
+      if (i.estado === 'S01') return 2;              // aún no lo recibes
+      if (i.situacion_sla === 'EN_RIESGO') return 3;
+      return 4;
+    };
+    return items.slice().sort(function (a, b) {
+      return (peso(a) - peso(b)) || (PRIORIDADES.indexOf(a.prioridad) - PRIORIDADES.indexOf(b.prioridad)) ||
+        (new Date(a.fecha_creacion) - new Date(b.fecha_creacion));
+    });
+  }
+  function resumenMios(items) {
+    var r = { total: items.length, fuera: 0, recibir: 0, respondieron: 0, sinFecha: 0, atencion: 0 };
+    items.forEach(function (i) {
+      var fuera = i.situacion_sla === 'FUERA_DE_PLAZO';
+      if (fuera) r.fuera++;
+      if (i.estado === 'S01') r.recibir++;
+      if (i.respuesta_pendiente) r.respondieron++;
+      if (!i.fecha_comprometida) r.sinFecha++;
+      if (fuera || i.estado === 'S01' || i.respuesta_pendiente || !i.fecha_comprometida) r.atencion++;
+    });
+    return r;
+  }
+  function filaMia(i, n) {
+    var hoy = PY.hoyClave();
+    var tono = i.situacion_sla === 'FUERA_DE_PLAZO' ? 'critico' : (i.situacion_sla === 'EN_RIESGO' ? 'alerta' : (i.respuesta_pendiente ? 'info' : 'primario'));
+    var fc = i.fecha_comprometida ? String(i.fecha_comprometida).slice(0, 10) : '';
+    var vencida = fc && fc < hoy;
+    return '<li class="sx2-py-mt-fila sx2-tono-' + tono + ' sx2-entra" style="--i:' + Math.min((n || 0) + 2, 12) + '" data-bj2-mio="' + U.esc(i.subsolicitud_id) + '" data-sol="' + U.esc(i.solicitud_id) + '" tabindex="0">' +
+      '<span class="sx2-py-punto"></span>' +
+      '<span class="sx2-apilado" style="gap:4px;min-width:0;flex:1">' +
+        '<strong class="sx2-cortar">' + U.esc(i.titulo || '(sin título)') + '</strong>' +
+        '<span class="sx2-flex" style="gap:6px;flex-wrap:wrap">' +
+          '<span class="sx2-py-ref sx2-py-ref--sol" title="' + U.esc((i.empresa_nombre || '') + (i.solicitante_nombre ? ' · ' + i.solicitante_nombre : '')) + '">' + U.ico('bandeja', 12) +
+            '<span class="sx2-cortar">' + U.esc(i.solicitud_id) + (i.cantidad_items > 1 ? ' · ítem ' + i.numero_item + '/' + i.cantidad_items : '') + '</span></span>' +
+          U.badge(estadoTxt(i.estado), tonoEstado(i.estado)) +
+          (i.situacion_sla === 'FUERA_DE_PLAZO' ? U.badge('Fuera de plazo', 'critico') : (i.situacion_sla === 'EN_RIESGO' ? U.badge('En riesgo', 'alerta') : '')) +
+          (i.prioridad === 'P1' || i.prioridad === 'P2' ? U.badge(i.prioridad, tonoPrioridad(i.prioridad), true) : '') +
+          (i.respuesta_pendiente ? U.badge('El solicitante respondió', 'info', true) : '') +
+        '</span>' +
+      '</span>' +
+      '<span class="sx2-py-mt-cuando' + (vencida ? ' sx2-delta--mal' : '') + '">' +
+        (fc ? (vencida ? 'Comprometida para el ' : 'Comprometida: ') + PY.fecha(fc) : 'Sin fecha comprometida') +
+        '<small class="sx2-tenue">' + (i.dias_sin_movimiento ? i.dias_sin_movimiento + ' d sin movimiento' : 'Movido hoy') + '</small></span>' +
+      (i.estado === 'S01'
+        ? U.boton({ texto: 'Recibir', icono: 'check', sm: true, variante: 'primario', clase: 'js-bj2m-recibir', datos: { id: i.subsolicitud_id } })
+        : U.boton({ texto: 'Abrir', icono: 'derecha', sm: true, variante: 'primario', clase: 'js-bj2m-abrir' })) +
+    '</li>';
+  }
+  // Las filas viven fuera de #bandeja-v2 (Mi trabajo, Inicio): un solo manejador.
+  document.addEventListener('click', function (ev) {
+    var t = ev.target, b;
+    if (!t.closest || t.closest('#bandeja-v2')) return;
+    if ((b = t.closest('.js-bj2m-recibir'))) {
+      ev.stopPropagation();
+      b.disabled = true;
+      api('actualizarEstado', { subsolicitud_id: b.getAttribute('data-id'), estado_nuevo: 'S02', comentario: '' }).then(function (r) {
+        if (!r || !r.ok) { b.disabled = false; PY.aviso((r && r.message) || 'No se pudo recibir.', 'error'); return; }
+        PY.aviso('Recibido: el solicitante ve que ya lo tienes.', 'exito');
+        avisarCambio();
+      });
+      return;
+    }
+    if ((b = t.closest('[data-bj2-mio]'))) { ev.stopPropagation(); abrirDetalle(b.getAttribute('data-sol'), b.getAttribute('data-bj2-mio')); }
+  }, true);
+  document.addEventListener('keydown', function (ev) {
+    if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('[data-bj2-mio]')) { ev.preventDefault(); ev.target.click(); }
+  });
+
   function activo() { try { return localStorage.getItem(CLAVE_PREF) !== '0'; } catch (e) { return true; } }
   function usarVersion(v2) {
     try { localStorage.setItem(CLAVE_PREF, v2 ? '1' : '0'); } catch (e) { /* sin storage: no se recuerda */ }
@@ -815,6 +898,7 @@
     cargar: function () { cargar(false); },
     refrescar: function () { cargar(true); },
     abrirSolicitud: function (id, subId) { return abrirDetalle(id, subId); },
+    ordenarMios: ordenarMios, resumenMios: resumenMios, filaMia: filaMia,
     activo: activo, usarVersion: usarVersion, desmontar: desmontar
   };
 })();

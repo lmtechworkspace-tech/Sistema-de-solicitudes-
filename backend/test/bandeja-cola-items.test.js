@@ -95,3 +95,25 @@ test('Un responsable que no es correo (texto de plantilla) cuenta como sin asign
   assert.equal(r.items[0].asignado, '');
   assert.equal(Dashboard.getData(db, {}, ADM).resumen.sin_asignar, 1);
 });
+
+// Módulo 3B: "Solicitudes a tu cargo" en Mi trabajo e Inicio.
+test('solo_mios: solo lo ABIERTO asignado a mí (propio o heredado), sin huérfanos, para cualquier rol', () => {
+  const db = db_();
+  sol(db, 'SOL-1', '', [{ estado: 'S01', desarrollador_asignado: 'dev@x.cl' }, { estado: 'S05', desarrollador_asignado: 'otro@x.cl' }]);
+  sol(db, 'SOL-2', 'dev@x.cl', [{ estado: 'S02' }, { estado: 'S08' }, { estado: 'S09' }]);
+  sol(db, 'SOL-3', '', [{ estado: 'S05' }]); // huérfano en trabajo: la bandeja DEV lo muestra, "a tu cargo" no
+  const ids = (ctx) => Dashboard.getCola(db, { solo_mios: true }, ctx).items.map((i) => i.subsolicitud_id).sort();
+  assert.deepEqual(ids(DEV), ['SOL-1-01', 'SOL-2-01']);
+  assert.deepEqual(ids({ rol: 'ADM', email: 'dev@x.cl' }), ['SOL-1-01', 'SOL-2-01'], 'ADM: lo suyo, no toda la bandeja');
+  assert.deepEqual(ids(ADM), []);
+  assert.deepEqual(Dashboard.getCola(db, { solo_mios: true }, DEV).responsables, []);
+});
+
+test('getInicio entrega el bloque mis_items (sin depender del módulo Bandeja)', () => {
+  const Inicio = require('../logica/inicio');
+  const db = db_();
+  sol(db, 'SOL-1', '', [{ estado: 'S03', desarrollador_asignado: 'dev@x.cl' }]);
+  const r = Inicio.getResumen(db, { bloques: ['mis_items'] }, Object.assign({ modulos: [] }, DEV));
+  assert.equal(r.bloques.mis_items.ok, true);
+  assert.deepEqual(r.bloques.mis_items.data.items.map((i) => i.subsolicitud_id), ['SOL-1-01']);
+});

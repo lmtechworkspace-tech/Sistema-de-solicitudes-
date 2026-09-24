@@ -304,3 +304,25 @@ y `estado.js` también sirven las páginas **públicas** para clientes
   solicitante tiene `[CORREO_LUIS]` / `[CARGO_LUIS]` → **Luis Mendoza no
   recibe ningún aviso de su solicitud**. Corregir en producción (pendiente
   de autorización del dueño; no se tocó).
+
+### 3B Solicitudes a tu cargo en Mi trabajo e Inicio — ESTADO: HECHO
+- Backend: `getColaSolicitudes { solo_mios: true }` (cualquier rol) devuelve
+  solo los ítems **abiertos** asignados a quien pregunta (propios o
+  heredados de la solicitud), sin huérfanos ni lista de responsables.
+  `getInicio` suma el bloque `mis_items` (no depende del módulo Bandeja).
+- Una sola fila para ambos lados (`SigsoBandejaV2.filaMia`, mismo formato
+  que una tarea): N° de solicitud e ítem, estado, "Fuera de plazo", P1/P2,
+  "El solicitante respondió", fecha comprometida y días sin movimiento;
+  botón **Recibir** si es nuevo, si no **Abrir** (el mismo panel lateral de
+  la Bandeja). Orden: respondió → fuera de plazo → por recibir → prioridad →
+  antigüedad.
+- **Mi trabajo**: KPI "Solicitudes" (filtra), tarjeta "Solicitudes a tu
+  cargo" (6 primeras + "Ver las N", enlace a la Bandeja) y la cuenta en el
+  resumen de la cabecera.
+- **Inicio**: grupo "Solicitudes a tu cargo" en *Requiere tu atención* (top
+  3; cuenta como pendiente lo fuera de plazo, por recibir, con respuesta
+  nueva o sin fecha comprometida; "urgente" = fuera de plazo) y KPI propio.
+  Quien no tiene tareas pero sí solicitudes ve KPIs de sus solicitudes.
+- Un cambio hecho desde el panel o una fila emite `sigso:solicitudes-cambio`
+  y Bandeja, Mi trabajo e Inicio se refrescan solos.
+- Fila de 6 KPIs generalizada: `.sx2-fila-kpis--6` (layout-v2.css).

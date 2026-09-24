@@ -76,6 +76,9 @@ function getResumen(db, data, contexto) {
   bloque('mis_tareas', () => Proyectos.listarMisTareas(db, { incluir_personales: true }, contexto));
   bloque('mi_bitacora', () => Proyectos.listarMiBitacora(db, { incluir_personales: true }, contexto));
   bloque('proyectos', () => Proyectos.listar(db, {}, contexto));
+  // Módulo 3B: los ítems de solicitudes asignados a mí (abiertos), aunque no
+  // tenga el módulo Bandeja -- es mi trabajo igual que una tarea.
+  bloque('mis_items', () => Dashboard.getCola(db, { solo_mios: true }, contexto));
 
   return salida;
 }

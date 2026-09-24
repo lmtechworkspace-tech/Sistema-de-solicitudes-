@@ -510,6 +510,10 @@
 .sx2-py-mt-totales { border-top: 1px dashed var(--sx-borde); padding-top: 6px; margin-top: 2px; }
 .sx2-py-ref--personal { cursor: default; background: var(--sx-hito-suave); border-color: transparent; color: var(--sx-hito); }
 .sx2-py-ref--personal:hover { color: var(--sx-hito); border-color: transparent; }
+/* Módulo 3B: ítem de una solicitud a tu cargo (Mi trabajo, Inicio). */
+.sx2-py-ref--sol { cursor: inherit; background: var(--sx-info-suave); border-color: transparent; color: var(--sx-info); font-family: var(--fuente-mono, ui-monospace, monospace); }
+.sx2-py-ref--sol:hover { color: var(--sx-info); border-color: transparent; }
+.sx2-py-mt-cuando small { font-size: .6875rem; font-weight: 400; }
 .sx2-py-mt-hechas > summary {
   display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none;
   font: var(--sx-t-h2); color: var(--sx-texto-2);
