@@ -26,6 +26,7 @@
     invalidarFeed: function () { invalidarFeedCompartido_(); },
     abrirPublicar: function () { abrirFormularioPublicar_(); },
     puedePublicar: function () { return puedePublicar_; },
+    abrirReenviar: function (n) { abrirFormularioReenviar_(n); },
     pintarTarjetaHome: pintarTarjetaHome_,
     // v14.0 (nuevo Inicio): el bloque "Requiere tu atencion" necesita el
     // conteo de pendientes. Pasa por feedSinFiltro_, que comparte UNA
@@ -634,8 +635,11 @@
 
     var checklist = directorio_.length
       ? directorio_.map(function (p) {
+          // Módulo 6B: quien no tiene cuenta activa no podrá confirmar la lectura.
           return '<label class="sigso-campo-check"><input type="checkbox" class="js-' + prefix + '-destinatario" value="' +
-            Componentes.escaparHtml(p.email) + '"> ' + Componentes.escaparHtml(p.nombre) + '</label>';
+            Componentes.escaparHtml(p.email) + '"> ' + Componentes.escaparHtml(p.nombre) +
+            (p.sin_cuenta ? ' <span class="sigso-ayuda-inline">— sin cuenta en SIGSO: no podrá confirmar</span>'
+              : (p.nunca_entro ? ' <span class="sigso-ayuda-inline">— nunca ha entrado a SIGSO</span>' : '')) + '</label>';
         }).join('')
       : '<p class="sigso-ayuda">No hay personas con credenciales activas para elegir.</p>';
 
@@ -1022,6 +1026,8 @@
           '<div class="sigso-campo"><label>Resumen (1-2 líneas)</label><textarea id="nr-resumen" rows="2" maxlength="240" required>' + Componentes.escaparHtml(n.resumen) + '</textarea></div>' +
           '<div class="sigso-campo"><label>Detalle completo</label><textarea id="nr-cuerpo" rows="6">' + Componentes.escaparHtml(n.cuerpo || '') + '</textarea></div>' +
           '<div class="sigso-campo"><label>Entra en vigencia (opcional)</label><input type="date" id="nr-vigencia" value="' + Componentes.escaparHtml(n.fecha_vigencia || '') + '"></div>' +
+          '<div class="sigso-campo"><label>Fuente oficial (enlace' + (['LEY', 'DICTAMEN'].indexOf(n.tipo) !== -1 ? ') — obligatoria' : ', opcional)') + '</label>' +
+            '<input type="url" id="nr-fuente" placeholder="https://www.bcn.cl/…" value="' + Componentes.escaparHtml(n.fuente_url || '') + '"' + (['LEY', 'DICTAMEN'].indexOf(n.tipo) !== -1 ? ' required' : '') + '></div>' +
           '<div class="sigso-modal__acciones">' +
             Componentes.boton({ texto: 'Cancelar', variante: 'sutil', clase: 'js-cancelar-reenviar', tipo: 'button' }) +
             Componentes.boton({ texto: 'Reenviar a revisión', tipo: 'submit' }) +
@@ -1051,6 +1057,7 @@
         titulo: document.getElementById('nr-titulo').value,
         resumen: document.getElementById('nr-resumen').value,
         cuerpo: document.getElementById('nr-cuerpo').value,
+        fuente_url: document.getElementById('nr-fuente').value.trim(),
         fecha_vigencia: document.getElementById('nr-vigencia').value
       }).then(function (respuesta) {
         if (!respuesta || !respuesta.ok) {
@@ -1062,6 +1069,8 @@
         Componentes.aviso({ texto: 'Novedad reenviada a revisión.', tipo: 'exito' });
         cerrar();
         recargarVistaActual_();
+        // SIGSO v2 (Módulo 6B): el Inicio deja de mostrarla como devuelta.
+        document.dispatchEvent(new CustomEvent('sigso:novedad-leida'));
       }).catch(function () {
         Componentes.aviso({ texto: 'No se pudo conectar.', tipo: 'error' });
         botonSubmit.disabled = false;
@@ -1095,6 +1104,9 @@
           '<div class="sigso-campo"><label>Título</label><input type="text" id="np-titulo" maxlength="140" required></div>' +
           '<div class="sigso-campo"><label>Resumen (1-2 líneas)</label><textarea id="np-resumen" rows="2" maxlength="240" required></textarea></div>' +
           '<div class="sigso-campo"><label>Detalle completo</label><textarea id="np-cuerpo" rows="6"></textarea></div>' +
+          // SIGSO v2 (Módulo 6B): enlace a la fuente oficial (obligatorio en Ley y Dictamen).
+          '<div class="sigso-campo" id="np-fuente-campo"><label id="np-fuente-label">Fuente oficial (enlace)</label><input type="url" id="np-fuente" placeholder="https://www.bcn.cl/…">' +
+            '<p class="sigso-ayuda">De dónde sale la información. Quien aprueba lo revisa ahí.</p></div>' +
           '<div class="sigso-campo"><label>Entra en vigencia (opcional)</label><input type="date" id="np-vigencia"></div>' +
           '<div class="sigso-campo" id="np-fecha-limite-campo"><label>Fecha límite para dar acuse (opcional)</label><input type="date" id="np-fecha-limite"></div>' +
           '<div class="sigso-campo"><label>Adjunto PDF (opcional)</label><input type="file" id="np-archivo" accept="application/pdf"></div>' +
@@ -1144,6 +1156,9 @@
       // valor sin que nadie pueda verlo ni corregirlo.
       if (esControlado || !exigeAcuse) document.getElementById('np-fecha-limite').value = '';
       botonSubmitRef.textContent = esControlado ? 'Enviar a revisión' : 'Publicar';
+      var exigeFuente = ['LEY', 'DICTAMEN'].indexOf(selectTipo.value) !== -1;
+      document.getElementById('np-fuente-label').textContent = exigeFuente ? 'Fuente oficial (enlace) — obligatoria' : 'Fuente oficial (enlace, opcional)';
+      document.getElementById('np-fuente').required = exigeFuente;
     }
     selectTipo.addEventListener('change', actualizarAvisoCarril_);
     document.getElementById('np-requiere-acuse').addEventListener('change', actualizarAvisoCarril_);
@@ -1168,6 +1183,7 @@
           resumen: document.getElementById('np-resumen').value,
           cuerpo: document.getElementById('np-cuerpo').value,
           fecha_vigencia: document.getElementById('np-vigencia').value,
+          fuente_url: document.getElementById('np-fuente').value.trim(),
           fecha_limite_acuse: esControlado ? '' : document.getElementById('np-fecha-limite').value,
           requiere_acuse: document.getElementById('np-requiere-acuse').checked,
           contenido_base64: contenidoBase64,

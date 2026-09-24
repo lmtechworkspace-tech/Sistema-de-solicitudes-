@@ -76,7 +76,9 @@ function fechaLimiteValida_(diasDesdeHoy) {
 function publicarBase_(overrides) {
   return Object.assign({
     tipo: 'AVISO', titulo: 'Recordatorio de horario de verano',
-    resumen: 'A partir del lunes el horario de salida cambia a las 17:00.', area_id: 'RRHH'
+    resumen: 'A partir del lunes el horario de salida cambia a las 17:00.', area_id: 'RRHH',
+    // Módulo 6B: Ley y Dictamen exigen fuente; se incluye una válida por defecto.
+    fuente_url: 'https://www.bcn.cl/leychile/navegar?idNorma=1'
   }, overrides);
 }
 
@@ -970,4 +972,33 @@ test('6A. dias_para_vencer funciona con fecha límite ISO con hora', async (t) =
   assert.ok(n.dias_para_vencer < 0, 'vencida');
   const panel = Novedades.getPanelCumplimiento(db, {}, { rol: 'ADM', email: 'admin@x.cl' });
   assert.equal(panel.items.find((i) => i.novedad_id === pub.novedad_id).estado_cumplimiento, 'VENCIDA');
+});
+
+// SIGSO v2 (Módulo 6B): fuente oficial en Ley y Dictamen.
+test('6B. Ley sin fuente o con fuente que no es enlace se rechaza; Aviso no la exige', async (t) => {
+  conMock(t);
+  const db = dbBase(); seedAudiencia(db); seedJefatura(db); seedArea(db);
+  const sin = await Novedades.publicar(db, publicarBase_({ tipo: 'LEY', fuente_url: '' }), ctxResponsable());
+  assert.ok(sin._validationError);
+  assert.match(sin.message, /fuente/i);
+  const mala = await Novedades.publicar(db, publicarBase_({ tipo: 'LEY', fuente_url: 'bcn.cl' }), ctxResponsable());
+  assert.ok(mala._validationError);
+  const ok = await Novedades.publicar(db, publicarBase_({ tipo: 'LEY' }), ctxResponsable());
+  assert.equal(ok.estado, 'EN_REVISION');
+  assert.equal(filas(db, 'NOVEDADES').find((n) => n.novedad_id === ok.novedad_id).fuente_url, 'https://www.bcn.cl/leychile/navegar?idNorma=1');
+  const aviso = await Novedades.publicar(db, publicarBase_({ tipo: 'AVISO', fuente_url: '' }), ctxResponsable());
+  assert.equal(aviso.estado, 'PUBLICADA');
+});
+
+test('6B. reenviar una Ley devuelta puede corregir la fuente; no se puede dejar vacía', async (t) => {
+  conMock(t);
+  const db = dbBase(); seedAudiencia(db); seedJefatura(db); seedArea(db);
+  const pub = await Novedades.publicar(db, publicarBase_({ tipo: 'LEY' }), ctxResponsable());
+  const { actualizarFilaPorId_ } = require('../db/sqliteRepo');
+  actualizarFilaPorId_(db, 'NOVEDADES', 'novedad_id', pub.novedad_id, { estado: 'DEVUELTA', motivo_devolucion: 'Falta el link' });
+  const vacia = await Novedades.reenviar(db, { novedad_id: pub.novedad_id, fuente_url: '' }, ctxResponsable());
+  assert.ok(vacia._validationError);
+  const r = await Novedades.reenviar(db, { novedad_id: pub.novedad_id, fuente_url: 'https://www.diariooficial.interior.gob.cl/x' }, ctxResponsable());
+  assert.equal(r.estado, 'EN_REVISION');
+  assert.equal(filas(db, 'NOVEDADES')[0].fuente_url, 'https://www.diariooficial.interior.gob.cl/x');
 });

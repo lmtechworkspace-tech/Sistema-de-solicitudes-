@@ -56,8 +56,11 @@
         (n.area_nombre ? U.badge(n.area_nombre, 'neutro', true) : '') +
         '<span class="sx2-tenue" style="font-size:.8125rem">' + U.esc(PY.persona(n.autor_email, n.autor_nombre).nombre + ' · ' + PY.fecha(n.fecha_publicacion, true)) + '</span></span>');
       var p = plazo(n);
+      var devuelta = n.estado === 'DEVUELTA' && n.es_autor;
       var cuerpo =
-        (n.requiere_acuse ? '<p class="nv2-acuse sx2-tono-' + (n.leida ? 'ok' : p.tono) + '">' + U.ico(n.leida ? 'check' : 'reloj', 15) +
+        (devuelta ? '<div class="nv2-acuse sx2-tono-alerta" style="flex-direction:column;align-items:flex-start"><span>' + U.ico('editar', 15) + ' Te la devolvieron para corregir.</span>' +
+          '<span style="font-weight:400;color:var(--sx-texto)">Motivo: ' + U.esc(n.motivo_devolucion || '—') + '</span></div>' : '') +
+        (n.requiere_acuse && n.estado === 'PUBLICADA' ? '<p class="nv2-acuse sx2-tono-' + (n.leida ? 'ok' : p.tono) + '">' + U.ico(n.leida ? 'check' : 'reloj', 15) +
           (n.leida ? 'Ya confirmaste que la leíste.' : 'Requiere que confirmes la lectura · ' + p.txt + '.') + '</p>' : '') +
         (n.resumen ? '<p class="nv2-resumen">' + U.esc(n.resumen) + '</p>' : '') +
         (n.cuerpo ? '<div class="nv2-cuerpo">' + U.esc(n.cuerpo) + '</div>' : '') +
@@ -67,7 +70,9 @@
           '<span class="sx2-apilado" style="gap:2px;flex:1;min-width:0"><strong class="sx2-cortar">' + U.esc(n.archivo_nombre || 'Adjunto') + '</strong><span class="sx2-tenue" style="font-size:.75rem">Descargar</span></span>' + U.ico('descargar', 14) + '</button>' : '') +
         (lectores ? bloqueLectores(lectores) : '');
       d.cuerpo(cuerpo);
-      d.el.querySelector('.sx2-drawer__pie').innerHTML = (n.requiere_acuse && !n.leida
+      d.el.querySelector('.sx2-drawer__pie').innerHTML = (devuelta && window.SigsoNovedades && SigsoNovedades.abrirReenviar
+        ? U.boton({ texto: 'Corregir y reenviar', icono: 'editar', variante: 'primario', clase: 'js-nv2-reenviar' }) : '') +
+        (n.requiere_acuse && !n.leida && n.estado === 'PUBLICADA'
         ? U.boton({ texto: 'Confirmo que la leí', icono: 'check', variante: 'primario', clase: 'js-nv2-confirmar' })
         : '') + U.boton({ texto: 'Cerrar', clase: 'js-sx2-drawer-cerrar' });
     }
@@ -115,6 +120,7 @@
         });
         return;
       }
+      if (ev.target.closest('.js-nv2-reenviar')) { d.cerrar(true); SigsoNovedades.abrirReenviar(n); return; }
       if ((b = ev.target.closest('.js-nv2-adjunto'))) {
         b.disabled = true;
         api('descargarAdjuntoNovedad', { novedad_id: id }).then(function (r) {

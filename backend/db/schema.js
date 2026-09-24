@@ -205,7 +205,9 @@ const COLUMNAS = {
     'archivo_id', 'archivo_nombre', 'archivo_mime',
     'estado', 'fecha_creacion', 'aprobador_email', 'aprobador_nombre',
     'fecha_aprobacion', 'motivo_devolucion',
-    'audiencia_tipo', 'fecha_limite_acuse', 'fecha_publicacion', 'activa'
+    'audiencia_tipo', 'fecha_limite_acuse', 'fecha_publicacion', 'activa',
+    // SIGSO v2 (Módulo 6B): enlace a la fuente oficial (obligatorio en Ley y Dictamen).
+    'fuente_url'
   ],
   NOVEDADES_LECTURAS: ['lectura_id', 'novedad_id', 'usuario_email', 'leido_en'],
   NOVEDADES_HISTORIAL: ['historial_id', 'novedad_id', 'evento', 'autor_email', 'autor_nombre', 'comentario', 'timestamp'],

@@ -608,3 +608,17 @@ de acuse). Audiencia: todos, mi equipo o personas seleccionadas.
   (leyeron / faltan / sin cuenta). El Inicio lista las pendientes y abre el
   mismo panel. Publicar, Por aprobar, Mis envíos y Cumplimiento siguen en
   novedades.js hasta 6B.
+
+### 6B Novedades: publicación — ESTADO: HECHO
+- Backend: columna `fuente_url` en NOVEDADES; **Ley y Dictamen exigen el
+  enlace a la fuente oficial** (http/https) al publicar y al reenviar;
+  `getFeed`/`getDetalle`/Mis envíos la devuelven. El directorio para elegir
+  audiencia marca `sin_cuenta` y `nunca_entro`. `getInicio` suma el bloque
+  `novedades_devueltas` (lo que me devolvieron para corregir).
+- Frontend: los formularios de Publicar y Corregir y reenviar (novedades.js)
+  tienen "Fuente oficial (enlace)", obligatoria en Ley/Dictamen; al elegir
+  personas se avisa "sin cuenta en SIGSO: no podrá confirmar" / "nunca ha
+  entrado". El **Inicio** muestra "Tus publicaciones devueltas" con el motivo;
+  el panel de lectura v2 muestra el motivo y "Corregir y reenviar".
+- Probado en sandbox: la Ley 21.822 de Amarlla (devuelta el 3-ago pidiendo
+  el link) se corrigió con la fuente desde el Inicio y volvió a revisión.

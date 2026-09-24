@@ -359,7 +359,7 @@ function resumenNovedad_(n) {
     titulo: n.titulo, resumen: n.resumen, area_nombre: n.area_nombre,
     autor_email: n.autor_email, autor_nombre: n.autor_nombre, estado: n.estado,
     motivo_devolucion: n.motivo_devolucion || '', fecha_creacion: n.fecha_creacion,
-    audiencia_tipo: n.audiencia_tipo || ''
+    audiencia_tipo: n.audiencia_tipo || '', fuente_url: n.fuente_url || ''
   };
 }
 
@@ -417,7 +417,10 @@ function listarAreasPublicables(db, data, contexto) {
   const equipoEmails = obtenerEquipoJefe_(db, contexto.email).map(normalizarEmail_);
   const equipoSet = {};
   equipoEmails.forEach((e) => { equipoSet[e] = true; });
-  const directorio = audienciaNovedades_(db);
+  const cuentas = estadoCuentas_(db);
+  const directorio = audienciaNovedades_(db).map((p) => Object.assign({}, p, {
+    sin_cuenta: !cuentas[p.email], nunca_entro: !!(cuentas[p.email] && cuentas[p.email].nunca_entro)
+  }));
   return {
     areas: areasPublicables_(db, contexto).map((a) => ({ area_id: a.area_id, nombre: a.nombre })),
     puede_general: contexto.rol === 'ADM',
@@ -486,7 +489,8 @@ function getDetalle(db, data, contexto) {
     es_autor: normalizarEmail_(n.autor_email) === correo,
     audiencia: audienciaResumen_(db, n),
     fecha_limite_acuse: n.fecha_limite_acuse || '',
-    dias_para_vencer: n.fecha_limite_acuse ? diasParaVencer_(n.fecha_limite_acuse) : null
+    dias_para_vencer: n.fecha_limite_acuse ? diasParaVencer_(n.fecha_limite_acuse) : null,
+    fuente_url: n.fuente_url || ''
   };
 }
 
@@ -501,6 +505,16 @@ function getHistorial(db, data, contexto) {
 }
 
 // --- publicacion / flujo editorial ----------------------------------------
+function validarFuente_(valor, tipo) {
+  const url = String(valor || '').trim();
+  if (url && !/^https?:\/\/[^\s]+\.[^\s]+/i.test(url)) {
+    return { error: errorValidacion('fuente_url', 'La fuente debe ser un enlace que empiece con http:// o https://.') };
+  }
+  if (!url && TIPOS_EXIGEN_PLAZO[tipo]) {
+    return { error: errorValidacion('fuente_url', 'Ley y Dictamen necesitan el enlace a la fuente oficial (p. ej. bcn.cl o diariooficial.interior.gob.cl).') };
+  }
+  return { url: url };
+}
 async function publicar(db, data, contexto) {
   data = data || {};
   if (!TIPOS[data.tipo]) return errorValidacion('tipo', 'Tipo de novedad invalido.');
@@ -520,6 +534,12 @@ async function publicar(db, data, contexto) {
     return errorValidacion('requiere_acuse',
       'Ley y Dictamen exigen acuse de lectura: son los que llevan un plazo legal que hay que poder demostrar.');
   }
+
+  // SIGSO v2 (Módulo 6B): Ley y Dictamen llevan el enlace a su fuente oficial.
+  // Ninguna Ley llegó a publicarse: se devolvían pidiendo "el link de donde
+  // sacaste esto" y el formulario no tenía dónde ponerlo.
+  const fuente = validarFuente_(data.fuente_url, data.tipo);
+  if (fuente.error) return fuente.error;
 
   let audiencia = { tipo: 'TODOS', destinatarios: [] };
   let fechaLimite = { fecha: '' };
@@ -568,7 +588,8 @@ async function publicar(db, data, contexto) {
     audiencia_tipo: esLibre ? audiencia.tipo : '',
     fecha_limite_acuse: esLibre ? fechaLimite.fecha : '',
     fecha_publicacion: esLibre ? ahora : '',
-    activa: esLibre
+    activa: esLibre,
+    fuente_url: fuente.url
   };
 
   agregarFila_(db, 'NOVEDADES', novedad);
@@ -668,6 +689,9 @@ async function reenviar(db, data, contexto) {
   if (data.resumen && String(data.resumen).trim()) cambios.resumen = String(data.resumen).trim();
   if (data.cuerpo !== undefined) cambios.cuerpo = data.cuerpo || '';
   if (data.fecha_vigencia !== undefined) cambios.fecha_vigencia = data.fecha_vigencia || '';
+  const fuenteReenvio = validarFuente_(data.fuente_url !== undefined ? data.fuente_url : n.fuente_url, n.tipo);
+  if (fuenteReenvio.error) return fuenteReenvio.error;
+  cambios.fuente_url = fuenteReenvio.url;
 
   actualizarFilaPorId_(db, 'NOVEDADES', 'novedad_id', n.novedad_id, cambios);
   registrarHistorial_(db, n.novedad_id, 'ENVIADA_REVISION', contexto, 'Reenviada tras corrección.');

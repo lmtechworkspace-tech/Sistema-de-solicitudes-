@@ -36,7 +36,8 @@
     solicitudes: { titulo: 'Mis solicitudes', icono: 'lista', tono: 'info' },
     a_cargo: { titulo: 'Solicitudes a tu cargo', icono: 'bandeja', tono: 'hito' },
     equipo: { titulo: 'Mi equipo', icono: 'equipo', tono: 'hito' },
-    novedades: { titulo: 'Novedades', icono: 'campana', tono: 'alerta' }
+    novedades: { titulo: 'Novedades', icono: 'campana', tono: 'alerta' },
+    novedades_dev: { titulo: 'Tus publicaciones devueltas', icono: 'editar', tono: 'alerta' }
   };
 
   function tiene(m) { return (ctx_.modulos || []).indexOf(m) !== -1; }
@@ -105,6 +106,7 @@
     if (bandejaOk) bloques.push('bandeja');
     if (tiene('jefatura')) bloques.push('jefatura');
     if (tiene('pausas')) bloques.push('pausas');
+    bloques.push('novedades_devueltas'); // Novedades es módulo base: todos lo tienen
 
     // Se pinta apenas llega lo principal (getInicio); Mis solicitudes y
     // Novedades (llamadas aparte) completan después: ninguna fuente sola frena
@@ -153,6 +155,7 @@
       if (bandejaOk) { var bj = bloque('bandeja'); if (bj.ok) d.bandeja = bj.data || {}; else d.fallas.push('Bandeja'); }
       if (tiene('jefatura')) { var j = bloque('jefatura'); if (j.ok) d.jefatura = j.data || {}; else d.fallas.push('Mi departamento'); }
       if (tiene('pausas')) { var pa = bloque('pausas'); if (pa.ok) d.pausa = pa.data || {}; }
+      var nd = bloque('novedades_devueltas'); if (nd.ok) d.novedadesDevueltas = nd.data || [];
       if (d.bandeja) {
         if (ctx_.pintarBadge) ctx_.pintarBadge('bandeja', (d.bandeja.resumen || {}).sla_vencido);
         if (ctx_.onRecientes) ctx_.onRecientes(d.bandeja.recientes || []);
@@ -247,6 +250,18 @@
     if (validar) gs.push({ id: 'solicitudes', resumen: validar + (validar === 1 ? ' ítem espera' : ' ítems esperan') + ' tu validación', total: validar, ir: 'mis_solicitudes', cta: 'Validar' });
     var decidir = d.jefatura ? ((d.jefatura.resumen || {}).requieren_accion || 0) : 0;
     if (decidir) gs.push({ id: 'equipo', resumen: decidir + (decidir === 1 ? ' ítem de tu equipo requiere' : ' ítems de tu equipo requieren') + ' una decisión tuya', total: decidir, ir: 'jefatura', cta: 'Revisar' });
+    // Módulo 6B: lo que me devolvieron para corregir.
+    var dev = d.novedadesDevueltas || [];
+    if (dev.length) {
+      gs.push({ id: 'novedades_dev', resumen: dev.length + (dev.length === 1 ? ' publicación tuya fue devuelta' : ' publicaciones tuyas fueron devueltas') + ' para corregir',
+        total: dev.length, ir: 'novedades', cta: 'Mis envíos',
+        filas: dev.slice(0, TOP).map(function (n) {
+          return '<li class="sx2-py-mt-fila sx2-tono-alerta" data-nv2-inicio="' + U.esc(n.novedad_id) + '" tabindex="0"><span class="sx2-py-punto"></span>' +
+            '<span class="sx2-apilado" style="gap:4px;min-width:0;flex:1"><strong class="sx2-cortar">' + U.esc(n.titulo) + '</strong>' +
+            '<span class="sx2-tenue" style="font-size:.75rem">Motivo: ' + U.esc(n.motivo_devolucion || '—') + '</span></span>' +
+            U.boton({ texto: 'Corregir', icono: 'editar', sm: true, variante: 'primario' }) + '</li>';
+        }).join('') });
+    }
     var nov = d.novedades;
     if (nov && nov.pendientes) {
       gs.push({ id: 'novedades', resumen: nov.destacada ? '"' + nov.destacada.titulo + '" requiere tu acuse' + (nov.pendientes > 1 ? ' · ' + nov.pendientes + ' sin leer' : '') : nov.pendientes + (nov.pendientes === 1 ? ' novedad sin leer' : ' novedades sin leer'),

@@ -43,6 +43,7 @@ const Calidad = require('./calidadSgc');
 const Dashboard = require('./dashboard');
 const Jefatura = require('./jefatura');
 const Pausas = require('./pausas');
+const Novedades = require('./novedades');
 const Proyectos = require('./proyectos');
 
 function getResumen(db, data, contexto) {
@@ -68,6 +69,8 @@ function getResumen(db, data, contexto) {
   bloque('bandeja', () => Dashboard.getData(db, {}, contexto));
   bloque('jefatura', () => Jefatura.getPanel(db, {}, contexto));
   bloque('pausas', () => Pausas.getPausaHoyTrabajador(db, {}, contexto));
+  // Módulo 6B: lo que me devolvieron para corregir (novedades).
+  bloque('novedades_devueltas', () => Novedades.misPendientes(db, {}, contexto).envios.filter((n) => n.estado === 'DEVUELTA'));
   // Inicio v2 (SIGSO v2, módulo 2): la MISMA fuente que Mi trabajo -- tareas
   // de proyecto + compromisos personales que trabajo (responsable o
   // colaborador) -- para que los números del Inicio y de Mi trabajo
