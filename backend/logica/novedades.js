@@ -194,10 +194,29 @@ function validarAudienciaEntrante_(db, data, contexto) {
   return { tipo: tipo, destinatarios: destinatarios };
 }
 
+// SIGSO v2, Módulo 6A: el directorio junta USUARIOS (del Backoffice viejo)
+// y CUENTAS_PORTAL, pero hoy solo se entra con cuenta del portal. Quien no
+// tiene cuenta activa NO puede acusar nunca; quien tiene cuenta y jamás
+// entró, tampoco en la práctica. Se marcan para que el cumplimiento no los
+// cuente como incumplimiento y el recordatorio no les escriba.
+function estadoCuentas_(db) {
+  const m = {};
+  leerSeguro_(db, 'CUENTAS_PORTAL').forEach((c) => {
+    if (!esVerdadero_(c.activo)) return;
+    parsearListaPortal(c.emails).forEach((raw) => {
+      const email = normalizarEmail_(raw);
+      if (email) m[email] = { nunca_entro: !c.ultimo_acceso };
+    });
+  });
+  return m;
+}
+
 // La audiencia REAL: interseccion entre lo declarado y quien tiene
 // credenciales activas hoy.
 function personasAudiencia_(db, novedad) {
-  const todos = audienciaNovedades_(db);
+  const cuentas = estadoCuentas_(db);
+  const marcar = (p) => Object.assign({}, p, { sin_cuenta: !cuentas[p.email], nunca_entro: !!(cuentas[p.email] && cuentas[p.email].nunca_entro) });
+  const todos = audienciaNovedades_(db).map(marcar);
   const destinatarios = resolverAudiencia_(db, novedad);
   if (destinatarios === null) return todos;
   const set = {};
@@ -245,12 +264,17 @@ function validarFechaLimiteEntrante_(data, tipo, requiereAcuse) {
   return { fecha: fecha };
 }
 
+// SIGSO v2 (Módulo 6A): la fecha límite se guarda como "AAAA-MM-DD" o como
+// ISO con hora ("2026-08-15T00:00:00.000Z"). Antes se le concatenaba otra
+// "T00:00:00" -> fecha inválida -> null: el plazo NUNCA se calculaba y el
+// panel de cumplimiento mostraba como "al día" avisos ya vencidos. Se compara
+// por día calendario de Chile.
 function diasParaVencer_(fechaLimite) {
-  const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
-  const limite = new Date(fechaLimite + 'T00:00:00');
-  limite.setHours(0, 0, 0, 0);
-  return Math.round((limite.getTime() - hoy.getTime()) / 86400000);
+  const clave = String(fechaLimite || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(clave)) return null;
+  const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date());
+  const aUtc = (k) => Date.UTC(Number(k.slice(0, 4)), Number(k.slice(5, 7)) - 1, Number(k.slice(8, 10)));
+  return Math.round((aUtc(clave) - aUtc(hoy)) / 86400000);
 }
 
 function areasPublicables_(db, contexto) {
@@ -743,12 +767,16 @@ function getLectores(db, data, contexto) {
     if (leidoPorEmail[persona.email]) {
       leyeron.push({ email: persona.email, nombre: persona.nombre, leido_en: leidoPorEmail[persona.email] });
     } else {
-      pendientes.push({ email: persona.email, nombre: persona.nombre });
+      pendientes.push({ email: persona.email, nombre: persona.nombre, sin_cuenta: persona.sin_cuenta, nunca_entro: persona.nunca_entro });
     }
   });
   leyeron.sort((a, b) => new Date(a.leido_en) - new Date(b.leido_en));
   pendientes.sort((a, b) => String(a.nombre).localeCompare(String(b.nombre)));
-  return { leyeron: leyeron, pendientes: pendientes, total_audiencia: leyeron.length + pendientes.length };
+  return {
+    leyeron: leyeron, pendientes: pendientes, total_audiencia: leyeron.length + pendientes.length,
+    // Módulo 6A: de los pendientes, cuántos no pueden acusar (sin cuenta activa).
+    pendientes_sin_cuenta: pendientes.filter((p) => p.sin_cuenta).length
+  };
 }
 
 function getPanelCumplimiento(db, data, contexto) {
@@ -763,7 +791,11 @@ function getPanelCumplimiento(db, data, contexto) {
   });
   const items = conPlazo.map((n) => {
     const tipoInfo = TIPOS[n.tipo] || { etiqueta: n.tipo, color: 'info' };
-    const audiencia = personasAudiencia_(db, n);
+    // Módulo 6A: quien no tiene cuenta activa no puede acusar -- se informa
+    // aparte y no cuenta como incumplimiento.
+    const todaLaAudiencia = personasAudiencia_(db, n);
+    const sinCuenta = todaLaAudiencia.filter((p) => p.sin_cuenta && !(leidoPor[n.novedad_id] && leidoPor[n.novedad_id][p.email])).length;
+    const audiencia = todaLaAudiencia.filter((p) => !p.sin_cuenta || (leidoPor[n.novedad_id] && leidoPor[n.novedad_id][p.email]));
     const confirmados = audiencia.filter((p) => leidoPor[n.novedad_id] && leidoPor[n.novedad_id][p.email]).length;
     const pendientes = audiencia.length - confirmados;
     const dias = diasParaVencer_(n.fecha_limite_acuse);
@@ -771,7 +803,8 @@ function getPanelCumplimiento(db, data, contexto) {
     return {
       novedad_id: n.novedad_id, tipo: n.tipo, tipo_etiqueta: tipoInfo.etiqueta, tipo_color: tipoInfo.color,
       titulo: n.titulo, fecha_limite_acuse: n.fecha_limite_acuse, dias_para_vencer: dias,
-      estado_cumplimiento: estado, total_audiencia: audiencia.length, confirmados: confirmados, pendientes: pendientes
+      estado_cumplimiento: estado, total_audiencia: audiencia.length, confirmados: confirmados, pendientes: pendientes,
+      sin_cuenta: sinCuenta
     };
   }).sort((a, b) => a.dias_para_vencer - b.dias_para_vencer);
   return { items: items };
@@ -806,7 +839,9 @@ async function recordatorioPendientes(db) {
   };
 
   let enviados = 0;
-  for (const persona of audienciaNovedades_(db)) {
+  // Módulo 6A: sin cuenta activa no puede entrar a acusar -- no se le escribe.
+  const cuentas = estadoCuentas_(db);
+  for (const persona of audienciaNovedades_(db).filter((p) => cuentas[p.email])) {
     const pendientes = activasConAcuse.filter((n) => {
       const set = audienciaPorNovedad[n.novedad_id];
       return normalizarEmail_(n.autor_email) !== persona.email &&

@@ -22,6 +22,10 @@
     },
     cargar: cargarNovedades_,
     actualizarBadge: actualizarBadgeStandalone_,
+    // SIGSO v2 (Módulo 6A): tras un acuse hecho desde novedades-v2.js.
+    invalidarFeed: function () { invalidarFeedCompartido_(); },
+    abrirPublicar: function () { abrirFormularioPublicar_(); },
+    puedePublicar: function () { return puedePublicar_; },
     pintarTarjetaHome: pintarTarjetaHome_,
     // v14.0 (nuevo Inicio): el bloque "Requiere tu atencion" necesita el
     // conteo de pendientes. Pasa por feedSinFiltro_, que comparte UNA
@@ -29,13 +33,16 @@
     // encima de las que ya hacen el badge y la tarjeta del Home.
     resumenPendientes: function () {
       return feedSinFiltro_().then(function (respuesta) {
-        if (!respuesta || !respuesta.ok) return { pendientes: 0, destacada: null };
+        if (!respuesta || !respuesta.ok) return { pendientes: 0, destacada: null, lista: [] };
         var recientes = respuesta.data.recientes || [];
+        var lista = recientes.filter(function (n) { return n.requiere_acuse && !n.leida; });
         return {
           pendientes: respuesta.data.resumen.pendientes || 0,
-          destacada: recientes.filter(function (n) { return n.requiere_acuse && !n.leida; })[0] || null
+          destacada: lista[0] || null,
+          // SIGSO v2, Módulo 6A: el Inicio las lista para leer y acusar ahí mismo.
+          lista: lista
         };
-      }).catch(function () { return { pendientes: 0, destacada: null }; });
+      }).catch(function () { return { pendientes: 0, destacada: null, lista: [] }; });
     }
   };
 
@@ -366,11 +373,11 @@
       }
       renderChipsTipo_(document.getElementById('novedades-chips-tipo'));
       renderTabs_();
-      cargarFeed_();
+      cargarFeedOV2_();
     }).catch(function () {
       renderChipsTipo_(document.getElementById('novedades-chips-tipo'));
       renderTabs_();
-      cargarFeed_();
+      cargarFeedOV2_();
     });
   }
 
@@ -431,9 +438,19 @@
     }
   }
 
+  // SIGSO v2 (Módulo 6A): "Publicadas" v2 (novedades-v2.js) cuando está activa.
+  function feedV2Activo_() { return !!(window.SigsoNovedadesV2 && SigsoNovedadesV2.activo()); }
+  function cargarFeedOV2_() {
+    if (vista_ === 'feed' && feedV2Activo_()) { SigsoNovedadesV2.mostrar(); return; }
+    if (window.SigsoNovedadesV2) SigsoNovedadesV2.desmontar();
+    if (vista_ === 'feed') cargarFeed_(); else cambiarVista_();
+  }
+
   function cambiarVista_() {
     var cont = document.getElementById('novedades-contenido');
     if (!cont) return;
+    if (vista_ === 'feed' && feedV2Activo_()) { renderTabs_(); SigsoNovedadesV2.mostrar(); return; }
+    if (window.SigsoNovedadesV2) SigsoNovedadesV2.desmontar();
     renderTabs_();
     document.getElementById('novedades-chips-tipo').classList.toggle('sigso-oculto', vista_ !== 'feed');
     document.getElementById('btn-publicar-novedad').classList.toggle('sigso-oculto', vista_ !== 'feed' || !puedePublicar_);

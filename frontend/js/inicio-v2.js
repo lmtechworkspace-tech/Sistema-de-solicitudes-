@@ -250,7 +250,9 @@
     var nov = d.novedades;
     if (nov && nov.pendientes) {
       gs.push({ id: 'novedades', resumen: nov.destacada ? '"' + nov.destacada.titulo + '" requiere tu acuse' + (nov.pendientes > 1 ? ' · ' + nov.pendientes + ' sin leer' : '') : nov.pendientes + (nov.pendientes === 1 ? ' novedad sin leer' : ' novedades sin leer'),
-        total: nov.pendientes, ir: 'novedades', cta: 'Leer' });
+        total: nov.pendientes, ir: 'novedades', cta: 'Ver todas',
+        // Módulo 6A: leer y confirmar desde aquí (panel de novedades-v2.js).
+        filas: window.SigsoNovedadesV2 && nov.lista ? SigsoNovedadesV2.filasInicio(nov.lista.slice(0, TOP)) : '' });
     }
     return gs;
   }
@@ -333,6 +335,7 @@
         '</div>' +
         (g.top && g.top.length ? '<ul class="sx2-py-mt-lista inicio2-grupo__top">' + g.top.map(filaTarea).join('') + '</ul>' : '') +
         (g.items && g.items.length ? '<ul class="sx2-py-mt-lista inicio2-grupo__top">' + g.items.map(window.SigsoBandejaV2.filaMia).join('') + '</ul>' : '') +
+        (g.filas ? '<ul class="sx2-py-mt-lista inicio2-grupo__top">' + g.filas + '</ul>' : '') +
       '</div>';
     }).join('') + '</div>' });
   }
@@ -532,6 +535,10 @@
   });
 
   // Módulo 3B: un cambio en una solicitud (panel lateral o fila) repinta el Inicio.
+  document.addEventListener('sigso:novedad-leida', function () {
+    var c = document.getElementById('inicio-v2');
+    if (c && c.offsetParent !== null) recargar();
+  });
   document.addEventListener('sigso:pausa-cambio', function () {
     var c = document.getElementById('inicio-v2');
     if (c && c.offsetParent !== null) recargar();

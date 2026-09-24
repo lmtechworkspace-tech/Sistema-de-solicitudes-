@@ -1,0 +1,35 @@
+/* novedades-v2.css — Novedades "Publicadas" + lectura (SIGSO v2, Módulo 6A).
+ * Prefijo .nv2-*. El panel de lectura también se abre desde el Inicio. */
+
+#modulo-novedades.novedades-v2-activa > :not(#novedades-v2) { display: none !important; }
+
+.nv2-toca { border-color: color-mix(in srgb, var(--sx-alerta) 35%, var(--sx-borde-suave)); }
+.nv2-lista { list-style: none; margin: 0; padding: 0; }
+.nv2-fila {
+  display: flex; align-items: center; gap: var(--sx-e-4); padding: 14px var(--sx-e-5);
+  border-bottom: 1px solid var(--sx-borde-suave); border-left: 3px solid transparent; cursor: pointer;
+  transition: background var(--sx-dur-rapida) var(--sx-curva);
+}
+.nv2-toca .nv2-fila { padding-left: 0; padding-right: 0; border-left: 0; }
+.nv2-fila:last-child { border-bottom: 0; }
+.nv2-fila:hover { background: var(--sx-superficie-2); }
+.nv2-fila:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: -2px; }
+.nv2-fila--pendiente { border-left-color: var(--sx-alerta); }
+.nv2-fila strong { font: 600 .9375rem/1.3 var(--fuente); color: var(--sx-texto); }
+.nv2-fila__resumen { font: var(--sx-t-chico); color: var(--sx-texto-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.nv2-fila__estado { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
+
+/* Panel de lectura */
+.nv2-drawer .sx2-drawer__titulo { font-size: 1.1875rem; line-height: 1.35; }
+.nv2-acuse { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 14px; border-radius: var(--sx-radio); background: var(--sx-tono-suave); color: var(--sx-tono); font: 600 .8125rem/1.35 var(--fuente); }
+.nv2-resumen { margin: 0; font: 600 .9375rem/1.5 var(--fuente); color: var(--sx-texto); }
+.nv2-cuerpo { font: 400 .9375rem/1.65 var(--fuente); color: var(--sx-texto); white-space: pre-wrap; overflow-wrap: anywhere; }
+.nv2-fuente { display: flex; align-items: center; gap: 6px; margin: 0; font: var(--sx-t-chico); }
+.nv2-gente { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.nv2-gente li { display: flex; align-items: center; gap: 6px; font: var(--sx-t-chico); color: var(--sx-texto); }
+.nv2-gente--sin li { color: var(--sx-texto-3); }
+
+@media (max-width: 700px) {
+  .nv2-fila { flex-direction: column; align-items: stretch; }
+  .nv2-fila__estado { flex-direction: row; align-items: center; justify-content: space-between; }
+}

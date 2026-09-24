@@ -552,3 +552,59 @@ Decisiones del dueño (2026-09-24):
 - **Transparencia del ánimo**: tanto la v2 como la pantalla clásica ahora
   dicen que "Mal"/"Muy mal" lo ve la coordinación. Las respuestas anteriores
   se dieron sin ese aviso (la regla vieja RN-708 era solo promedio).
+
+---
+
+## Módulo 6 — Novedades: análisis
+
+### Qué hace hoy
+`novedades.js` (1.201 líneas) + backend `novedades.js` (835): Publicadas
+(feed con acuse de lectura) · Por aprobar · Mis envíos · Cumplimiento de
+lectura. Dos tipos: **LEY** (la redacta cualquiera, pasa por aprobación de su
+jefatura) y **AVISO** (publicación directa de jefatura/ADM, con fecha límite
+de acuse). Audiencia: todos, mi equipo o personas seleccionadas.
+
+### Lo que muestran los datos (sandbox)
+- **Casi no se usa**: 7 novedades en total; la última publicada el 9-sep.
+- **Ninguna Ley llegó a publicarse**: 4 redactadas por el equipo (31-jul a
+  3-ago); 3 **devueltas** y 1 rechazada. Dos de las tres devoluciones piden
+  lo mismo — **"el link de donde sacaste la información"** — y el formulario
+  **no tiene un campo de fuente**. Ninguna devuelta se volvió a enviar: el
+  autor no tiene dónde ver que se la devolvieron (salvo el correo).
+- **Acuse de lectura a medias**: los 3 avisos publicados (todos con acuse
+  obligatorio) llegaron al 56 %, 63 % y 50 % de su audiencia. Las mismas
+  personas no acusan nunca. **Ya existe un recordatorio diario** (09:00, un
+  correo por persona con todo lo pendiente) y aun así no alcanza: el acuse se
+  hace entrando al módulo, y el recordatorio también le llega a quien no
+  tiene cuenta (no puede cumplir). _Corrección: la primera versión de este
+  análisis decía que no había recordatorio; sí lo hay._
+- **Audiencias que no pueden cumplir**: se seleccionan personas **sin cuenta
+  en SIGSO** o que nunca entraron (p. ej. vcaballero, rrhhhomepymes,
+  homepymes89): quedan como "no leyó" para siempre.
+
+### Decisiones del dueño (2026-09-24)
+- **Leyes: campo "Fuente" obligatorio + devueltas visibles** (Inicio y Mis
+  envíos del autor, con motivo y "Corregir y reenviar").
+- **Leer y acusar desde el Inicio + recordatorio**: el recordatorio diario ya
+  existía; se ajusta para no escribir a quien no puede acusar.
+- **Audiencia**: avisar al publicar quién no tiene cuenta y separarlo del
+  cumplimiento.
+- Fases: **6A lectura**, **6B publicación**.
+
+### 6A Novedades: lectura — ESTADO: HECHO
+- **Bug corregido** (existía antes de v2): `diasParaVencer_` concatenaba
+  "T00:00:00" a una fecha que ya venía en ISO con hora → fecha inválida →
+  el plazo de acuse **nunca se calculaba**; el panel de Cumplimiento
+  mostraba como "al día" avisos vencidos hace semanas y el feed no decía
+  "vence en…". Ahora compara por día calendario de Chile.
+- Backend: la audiencia marca `sin_cuenta` (no está en una cuenta activa del
+  portal — hoy solo se entra con cuenta) y `nunca_entro`; `getLectores`
+  separa `pendientes_sin_cuenta`; Cumplimiento no los cuenta como pendientes
+  (`sin_cuenta` aparte); el recordatorio diario no les escribe.
+- Frontend: `js/novedades-v2.js` + `css/v2/novedades-v2.css`
+  (`MODULOS_V2.novedades`): "Publicadas" con lo que te falta confirmar
+  arriba (por plazo), filtros por tipo y lista; **panel de lectura** con
+  cuerpo, adjunto y "Confirmo que la leí"; el autor ve "Quién la leyó"
+  (leyeron / faltan / sin cuenta). El Inicio lista las pendientes y abre el
+  mismo panel. Publicar, Por aprobar, Mis envíos y Cumplimiento siguen en
+  novedades.js hasta 6B.

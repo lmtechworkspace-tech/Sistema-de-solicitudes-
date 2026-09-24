@@ -1404,8 +1404,11 @@
     // Módulo 5A: "Hoy" v2 (coordinacion-v2.js); Historial y Cumplimiento siguen en coordinacion.js.
     pausas_coordinacion: { v2: function () { return window.SigsoCoordinacionV2; }, v1: function () { return COORDINACION_CLASICA_; } },
     // Módulo 5B: pausas del trabajador (hoy + su historial).
-    pausas: { v2: function () { return window.SigsoPausasV2; }, v1: function () { return window.SigsoPausas; } }
+    pausas: { v2: function () { return window.SigsoPausasV2; }, v1: function () { return window.SigsoPausas; } },
+    // Módulo 6A: "Publicadas" v2; el resto de Novedades sigue en novedades.js.
+    novedades: { v2: function () { return window.SigsoNovedadesV2; }, v1: function () { return NOVEDADES_CLASICA_; } }
   };
+  var NOVEDADES_CLASICA_ = { cargar: function () { if (window.SigsoNovedades) window.SigsoNovedades.irAItem('feed'); } };
   var COORDINACION_CLASICA_ = { cargar: function () { if (window.SigsoCoordinacion) window.SigsoCoordinacion.irAItem('hoy'); } };
   var JEFATURA_CLASICA_ = { cargar: function () { if (window.SigsoJefatura) window.SigsoJefatura.irAItem('tablero'); } };
   var GERENCIA_CLASICA_ = { cargar: function () { if (window.SigsoGerencia) window.SigsoGerencia.irAItem('tablero'); } };

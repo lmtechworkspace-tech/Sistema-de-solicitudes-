@@ -466,9 +466,15 @@ test('24c. publicar LIBRE no rompe si NOTIFICACIONES_APP no existe', async (t) =
   assert.equal(destinatarios(mock).length, 2);
 });
 
+// SIGSO v2 (Módulo 6A): el recordatorio solo va a quien tiene cuenta activa
+// del portal (sin cuenta no puede entrar a acusar).
+function darCuenta_(db, email) {
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-' + email, usuario: email, nombre: email, emails: JSON.stringify([email]), rol: 'DEV', modulos: JSON.stringify(['novedades']), activo: true, ultimo_acceso: new Date().toISOString(), creado_por: 'seed' });
+}
+
 test('25. recordatorioPendientes: un solo correo por persona con TODAS sus pendientes', async (t) => {
   const mock = conMock(t);
-  const db = dbBase(); seedAudiencia(db); seedArea(db);
+  const db = dbBase(); seedAudiencia(db); seedArea(db); darCuenta_(db, 'juan@homepymes.cl');
   await Novedades.publicar(db, publicarBase_({ tipo: 'AVISO', titulo: 'Aviso 1' }), ctxResponsable());
   await Novedades.publicar(db, publicarBase_({ tipo: 'LOGRO', titulo: 'Aviso 2' }), ctxResponsable());
   const res = await Novedades.recordatorioPendientes(db);
@@ -480,12 +486,20 @@ test('25. recordatorioPendientes: un solo correo por persona con TODAS sus pendi
 
 test('26. recordatorioPendientes no reenvia el mismo dia (dedup por evento+dia)', async (t) => {
   const mock = conMock(t);
-  const db = dbBase(); seedAudiencia(db); seedArea(db);
+  const db = dbBase(); seedAudiencia(db); seedArea(db); darCuenta_(db, 'juan@homepymes.cl');
   await Novedades.publicar(db, publicarBase_({ tipo: 'AVISO' }), ctxResponsable());
   await Novedades.recordatorioPendientes(db);
   assert.equal(mock.mock.callCount(), 4);
   await Novedades.recordatorioPendientes(db);
   assert.equal(mock.mock.callCount(), 4);
+});
+
+test('26b. recordatorioPendientes no le escribe a quien no tiene cuenta activa del portal (no puede acusar)', async (t) => {
+  conMock(t);
+  const db = dbBase(); seedAudiencia(db); seedArea(db);
+  await Novedades.publicar(db, publicarBase_({ tipo: 'AVISO' }), ctxResponsable());
+  const res = await Novedades.recordatorioPendientes(db);
+  assert.equal(res.enviados, 1, 'solo leo (cuenta activa); juan esta solo en USUARIOS');
 });
 
 test('27. recordatorioPendientes no molesta a quien no tiene nada pendiente', async (t) => {
@@ -922,4 +936,38 @@ test('64. una fila vieja contradictoria se puede rechazar', async (t) => {
   assert.equal(alAprobar._validationError, true);
   const alRechazar = await Novedades.rechazar(db, { novedad_id: pub.novedad_id, motivo: 'Se rehace con el acuse marcado.' }, ctxJefa());
   assert.equal(alRechazar.estado, 'RECHAZADA');
+});
+
+// SIGSO v2 (Módulo 6A): quien no tiene cuenta activa no cuenta como incumplimiento.
+test('6A. getLectores marca sin_cuenta y el cumplimiento lo separa de los pendientes', async (t) => {
+  conMock(t);
+  const db = dbBase(); seedAudiencia(db); seedArea(db);
+  const pub = await Novedades.publicar(db, publicarBase_({ tipo: 'AVISO' }), ctxResponsable());
+  const l = Novedades.getLectores(db, { novedad_id: pub.novedad_id }, ctxResponsable());
+  const juan = l.pendientes.find((p) => p.email === 'juan@homepymes.cl');
+  assert.equal(juan.sin_cuenta, true);
+  assert.equal(l.pendientes.find((p) => p.email === 'leo@rld.cl').sin_cuenta, false);
+  assert.equal(l.pendientes_sin_cuenta, l.pendientes.filter((p) => p.sin_cuenta).length);
+  const panel = Novedades.getPanelCumplimiento(db, {}, { rol: 'ADM', email: 'admin@x.cl' });
+  const item = panel.items.find((i) => i.novedad_id === pub.novedad_id);
+  if (item) {
+    assert.ok(item.sin_cuenta >= 1);
+    assert.equal(item.total_audiencia, item.confirmados + item.pendientes);
+  }
+});
+
+// SIGSO v2 (Módulo 6A): el plazo se calcula también cuando la fecha límite
+// viene guardada como ISO con hora (antes daba null y nunca vencía).
+test('6A. dias_para_vencer funciona con fecha límite ISO con hora', async (t) => {
+  conMock(t);
+  const db = dbBase(); seedAudiencia(db); seedArea(db);
+  const pub = await Novedades.publicar(db, publicarBase_({ tipo: 'AVISO' }), ctxResponsable());
+  const { actualizarFilaPorId_ } = require('../db/sqliteRepo');
+  actualizarFilaPorId_(db, 'NOVEDADES', 'novedad_id', pub.novedad_id, { fecha_limite_acuse: '2020-01-10T00:00:00.000Z' });
+  const feed = Novedades.getFeed(db, {}, ctxCualquiera('leo@rld.cl'));
+  const n = feed.recientes.find((x) => x.novedad_id === pub.novedad_id);
+  assert.equal(typeof n.dias_para_vencer, 'number');
+  assert.ok(n.dias_para_vencer < 0, 'vencida');
+  const panel = Novedades.getPanelCumplimiento(db, {}, { rol: 'ADM', email: 'admin@x.cl' });
+  assert.equal(panel.items.find((i) => i.novedad_id === pub.novedad_id).estado_cumplimiento, 'VENCIDA');
 });
