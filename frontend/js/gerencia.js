@@ -9,7 +9,10 @@
 (function () {
   window.SigsoGerencia = {
     // v13.0: el arbol del sidebar entra por aca.
-    irAItem: function (itemId) { irAVistaGerencia_(itemId); }, cargar: cargarGerencia_, inicializarFiltros: inicializarFiltrosGerencia_ };
+    irAItem: function (itemId) { irAVistaGerencia_(itemId); }, cargar: cargarGerencia_, inicializarFiltros: inicializarFiltrosGerencia_,
+    // SIGSO v2 (Módulo 4A): gerencia-v2.js lo llama al cargar para que el
+    // árbol incluya "Resumen ejecutivo".
+    registrarArbol: function () { registrarArbolGerencia_(); } };
 
   var itemsActuales = [];
   var categoriaActiva = null;
@@ -155,10 +158,15 @@
     // contra la arquitectura: una URL no puede inventar una vista.
     var pedidaGer = (window.SigsoShell && SigsoShell.tomarItemDeRuta)
       ? SigsoShell.tomarItemDeRuta() : '';
-    if (pedidaGer && ARQUITECTURA_GERENCIA.some(function (sub) {
+    if (pedidaGer && arquitecturaGerencia_().some(function (sub) {
       return sub.items.some(function (it) { return it.id === pedidaGer; });
     })) {
       itemGerenciaActivo_ = pedidaGer;
+    }
+    // SIGSO v2 (Módulo 4A): con la versión nueva, se entra por el Resumen
+    // ejecutivo; con la clásica, por el tablero de siempre.
+    if (!itemGerenciaActivo_ || (itemGerenciaActivo_ === 'resumen' && !resumenV2Activo_())) {
+      itemGerenciaActivo_ = resumenV2Activo_() ? 'resumen' : 'tablero';
     }
     pintarNavGerencia_();
     irAVistaGerencia_(itemGerenciaActivo_);
@@ -1355,7 +1363,21 @@
     reportes: 'ger-panel-reportes'
   };
 
-  var itemGerenciaActivo_ = 'tablero';
+  var itemGerenciaActivo_ = null;
+
+  // SIGSO v2 (Módulo 4A): "Resumen ejecutivo" (gerencia-v2.js) va primero
+  // cuando la versión nueva está activa; las vistas de siempre quedan como
+  // el detalle de cada bloque.
+  function resumenV2Activo_() { return !!(window.SigsoGerenciaV2 && SigsoGerenciaV2.activo()); }
+  function arquitecturaGerencia_() {
+    return resumenV2Activo_()
+      ? [{ id: 'resumen', nombre: 'Resumen', icono: 'panel', items: [{ id: 'resumen', nombre: 'Resumen ejecutivo' }] }].concat(ARQUITECTURA_GERENCIA)
+      : ARQUITECTURA_GERENCIA;
+  }
+  function registrarArbolGerencia_() {
+    if (!window.SigsoNav) return;
+    SigsoNav.registrar('gerencia', { nombre: 'Panel de gerencia', submodulos: arquitecturaGerencia_() });
+  }
   var reporteGerAbierto_ = null;
   // Los filtros se aplican en el CLIENTE, sobre los ítems que el panel ya
   // trajo: cambiar un select no vuelve a pedirle nada al servidor.
@@ -1369,10 +1391,7 @@
   // v13.0: la navegacion vive en el sidebar.
   function pintarNavGerencia_() {
     if (!window.SigsoNav) return;
-    SigsoNav.registrar('gerencia', {
-      nombre: 'Panel de gerencia',
-      submodulos: ARQUITECTURA_GERENCIA
-    });
+    registrarArbolGerencia_();
     if (window.SigsoShell && SigsoShell.refrescarArbol) SigsoShell.refrescarArbol();
   }
 
@@ -1388,6 +1407,8 @@
       var el = document.getElementById(PANEL_POR_ITEM_GER[k]);
       if (el) el.classList.toggle('sigso-oculto', k !== id);
     });
+    if (id === 'resumen' && window.SigsoGerenciaV2) { SigsoGerenciaV2.mostrar(); return; }
+    if (window.SigsoGerenciaV2) SigsoGerenciaV2.desmontar();
 
     // Chart.js no dibuja bien en un canvas que estaba con display:none; al
     // entrar a Tendencia se re-renderiza con las dimensiones ya visibles.
@@ -1657,10 +1678,5 @@
   // v13.1: registro TEMPRANO del arbol. Antes esto pasaba recien al abrir
   // el modulo, asi que el sidebar no le dibujaba el chevron ni lo dejaba
   // desplegar hasta que entrabas una vez.
-  if (window.SigsoNav) {
-    SigsoNav.registrar('gerencia', {
-      nombre: 'Panel de gerencia',
-      submodulos: ARQUITECTURA_GERENCIA
-    });
-  }
+  registrarArbolGerencia_();
 })();

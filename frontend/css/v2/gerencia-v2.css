@@ -1,0 +1,65 @@
+/* gerencia-v2.css — Resumen ejecutivo de Gerencia (SIGSO v2, Módulo 4A).
+ * Prefijo .ge2-*. Reusa tokens/layout/componentes-v2. */
+
+/* Gerencia comparte #modulo-bandeja con Bandeja y Mi departamento: mientras
+   el resumen está montado, solo se ve él. */
+#modulo-bandeja.gerencia-v2-activa > :not(#gerencia-v2) { display: none !important; }
+
+/* Requiere tu atención */
+.ge2-atencion__lista { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--sx-e-2); }
+.ge2-atencion__item {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--sx-tono) 25%, transparent); border-radius: var(--sx-radio);
+  background: var(--sx-tono-suave); color: var(--sx-texto); font: 500 0.8125rem/1.35 var(--fuente);
+  text-align: left; cursor: pointer; transition: transform var(--sx-dur-rapida) var(--sx-curva), box-shadow var(--sx-dur) var(--sx-curva);
+}
+.ge2-atencion__item > span:nth-child(2) { flex: 1; }
+.ge2-atencion__item > .sigso-ico:last-child { color: var(--sx-texto-3); }
+.ge2-atencion__item:hover { box-shadow: var(--sx-sombra-1); transform: translateY(-1px); }
+.ge2-atencion__item:focus-visible { outline: none; box-shadow: var(--sx-anillo-foco); }
+.ge2-atencion__ico { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 9px; background: var(--sx-superficie); color: var(--sx-tono); }
+
+/* Cifras con explicación (ambas medidas de atraso) */
+.ge2-cifras { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--sx-e-3); }
+.ge2-cifras--4 { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.ge2-cifra { display: flex; flex-direction: column; gap: 3px; padding: 12px; border-radius: var(--sx-radio); background: var(--sx-superficie-2); }
+.ge2-cifra__valor { font: 800 1.625rem/1 var(--fuente); color: var(--sx-tono); letter-spacing: -0.02em; }
+.ge2-cifra--titular { background: var(--sx-tono-suave); }
+.ge2-cifra--titular .ge2-cifra__valor { font-size: 2.125rem; }
+.ge2-cifra.sx2-tono-neutro .ge2-cifra__valor { color: var(--sx-texto); }
+.ge2-cifra__et { font: 600 0.8125rem/1.25 var(--fuente); color: var(--sx-texto); }
+.ge2-cifra__exp { font: 400 0.75rem/1.35 var(--fuente); color: var(--sx-texto-3); }
+.ge2-flujo { display: flex; align-items: center; gap: 6px; margin: var(--sx-e-3) 0 0; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+
+.ge2-sub { margin: var(--sx-e-4) 0 var(--sx-e-2); font: var(--sx-t-etiqueta); text-transform: uppercase; letter-spacing: 0.06em; color: var(--sx-texto-3); }
+.ge2-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ge2-fila {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 8px; border: 0; border-bottom: 1px solid var(--sx-borde-suave);
+  background: none; color: var(--sx-texto); text-align: left; cursor: pointer; border-radius: 0; font: var(--sx-t-chico);
+}
+.ge2-lista > li:last-child .ge2-fila, .ge2-lista > .ge2-fila:last-child { border-bottom: 0; }
+.ge2-fila:hover { background: var(--sx-superficie-2); }
+.ge2-fila--fija, .ge2-fila--fija:hover { cursor: default; background: none; }
+.ge2-fila strong { font-weight: 600; }
+.ge2-dias { flex: none; min-width: 40px; text-align: right; font: 700 0.8125rem/1 var(--fuente); color: var(--sx-critico); }
+
+/* Salud del portafolio */
+.ge2-salud { display: flex; height: 10px; margin: var(--sx-e-4) 0 6px; border-radius: 999px; overflow: hidden; gap: 2px; background: var(--sx-superficie-2); }
+.ge2-salud > span { background: var(--sx-tono); }
+.ge2-salud__ley { display: flex; flex-wrap: wrap; gap: 12px; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.ge2-salud__ley i { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: var(--sx-tono); }
+
+/* Personas */
+.ge2-personas { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--sx-e-3) var(--sx-e-5); }
+.ge2-personas > li { display: flex; align-items: flex-start; gap: 10px; min-width: 0; font: var(--sx-t-chico); }
+.ge2-carga { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: var(--sx-superficie-2); }
+.ge2-carga__t { background: var(--sx-primario); }
+.ge2-carga__i { background: var(--sx-hito); }
+.ge2-atraso { display: inline-flex; align-items: center; gap: 4px; color: var(--sx-critico); font-weight: 600; font-size: .75rem; }
+.ge2-ley { display: flex; gap: 14px; margin-top: var(--sx-e-3); font: var(--sx-t-chico); color: var(--sx-texto-3); }
+.ge2-ley i { display: inline-block; width: 10px; height: 8px; margin-right: 5px; border-radius: 3px; }
+
+@media (max-width: 600px) {
+  .ge2-cifras, .ge2-cifras--4 { grid-template-columns: 1fr 1fr; }
+  .ge2-cifra--titular { grid-column: 1 / -1; }
+}

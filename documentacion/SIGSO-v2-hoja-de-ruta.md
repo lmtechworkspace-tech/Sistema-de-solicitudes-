@@ -375,3 +375,79 @@ Decisiones del dueño (2026-09-24):
   impacto; la revisión muestra la columna "Cuánto afecta".
 - El formulario público (index.html) **no cambia** (se detecta por la
   ausencia de `#vista-shell`).
+
+---
+
+## Módulo 4 — Mi departamento + Panel de gerencia: análisis
+
+### Qué hacen hoy
+- **Mi departamento** (`jefatura.js`, 638 líneas): Tablero · Por persona ·
+  Actividades del equipo · Centro de reportes · Carga. El tablero y los KPIs
+  salen de `getPanelJefatura`, que mira **solo solicitudes** (ítems que el
+  equipo pidió o resuelve). Las tareas van aparte, en "Actividades del equipo"
+  (`panelEquipoActividades`), con pedir actualización y reasignar.
+- **Panel de gerencia** (`gerencia.js`, 1.666 líneas): Seguimiento (tablero,
+  línea de tiempo) · Operación (Actividades, Pausas activas) · Reportes
+  (centro, tendencia y ciclo, recurrencia, carga). Tres fuentes separadas
+  (`getPanelGerencia`, `getPanelGerenciaActividades`,
+  `getReporteGerenciaPausas`) y ninguna pantalla que junte todo.
+
+### Lo que muestran los datos (sandbox)
+- **Equipos**: 8 jefaturas configuradas, **todas de 1 persona**; 1 inactiva.
+  En 3 equipos la persona **no tiene ninguna actividad** en SIGSO
+  (prevencion3, operaciones, rrhhhomepymes): el jefe ve un panel vacío.
+- `personal@homepymes.cl` es jefe de un equipo pero **ninguna cuenta con ese
+  correo tiene el módulo** Mi departamento: la jefatura existe y nadie la ve.
+- **El trabajo real del equipo son tareas de proyecto**: 92 de 100
+  actividades son tareas de proyecto. El tablero de Mi departamento las
+  ignora: el equipo de Luis Mendoza (13 tareas) aparece con **0** en el
+  tablero.
+- **Inconsistencia de alcance**: para un jefe que además es ADM, "Actividades
+  del equipo" muestra **a toda la empresa** (80 actividades, 10 personas), no
+  a su equipo.
+- **Gerencia — el titular engaña**: "Atrasadas activas: **4**", pero 36 de 57
+  ítems **no tienen fecha comprometida** (no cuentan) y en la Bandeja 33 de 37
+  abiertos están **fuera de SLA**. El 40 % de "cumplimiento" se calcula sobre
+  un subconjunto chico.
+- Actividades: 20 % cumplidas a tiempo; carga concentrada (Valentina 54
+  actividades, la siguiente persona 20). Pausas: 45 % de cumplimiento en 30
+  días.
+- **Proyectos no están en Gerencia**: 2 de las 3 cuentas GERENCIA no tienen
+  el módulo Proyectos → no ven el portafolio, que es donde está el trabajo.
+- `soporte@rld.cl` está en **dos cuentas** (Lu Soporte — GERENCIA y Angelo
+  Tapia — DEV).
+- Rendimiento: `getPanelGerencia` 213 ms / 77 KB (bien, tras M-01/M-03).
+
+### Decisiones del dueño (2026-09-24)
+- **Mi departamento centrado en las personas**: una tarjeta por persona con
+  todo su trabajo (tareas de proyecto y personales, horas de la semana,
+  solicitudes); acciones pedir actualización / reasignar / abrir.
+- **Gerencia: resumen ejecutivo único** que junta solicitudes, proyectos
+  (solo lectura, aunque la cuenta no tenga el módulo Proyectos), tareas y
+  pausas; las vistas actuales quedan como detalle.
+- **Atraso con ambas medidas**: "Fuera de plazo (SLA)" como titular +
+  "atrasadas vs. fecha comprometida" + "sin fecha comprometida", explicadas.
+- Orden: **4A Gerencia**, después **4B Mi departamento**.
+
+### 4A Resumen ejecutivo de Gerencia — ESTADO: HECHO
+- Backend: `getResumenGerencia` (`logica/resumenGerencia.js`), solo para rol
+  ADM/GERENCIA o módulo `gerencia`. Bloques independientes (uno que falla no
+  tumba el resto), cada uno delega en la función de su vista de detalle:
+  solicitudes (`Dashboard.getCola` + `Gerencia.getPanel`: SLA, compromiso,
+  sin fecha, sin triar, flujo 30 días, abiertos > 60 días, P1 abiertos),
+  proyectos (`Proyectos.listar` con alcance Gerencia: salud, estado, avance,
+  sin tareas, los que necesitan atención), tareas (`Actividades`: abiertas,
+  atrasadas, por confirmar, % a tiempo, importantes atrasadas), personas
+  (tareas + ítems abiertos por responsable) y pausas.
+- Frontend: `js/gerencia-v2.js` + `css/v2/gerencia-v2.css`. "Resumen
+  ejecutivo" es el primer ítem de Panel de gerencia con la v2 (y la entrada
+  por defecto); tablero, línea de tiempo, actividades, pausas y reportes
+  siguen siendo gerencia.js. `MODULOS_V2.gerencia`.
+  - "Requiere tu atención": frases con destino (P1 abiertos, abiertos > 60
+    días, proyectos críticos, proyectos que no salen de Planificación,
+    tareas importantes atrasadas, concentración de carga ≥ 40 %).
+  - Un crítico abre el panel de la Bandeja (solo lectura para GERENCIA); un
+    proyecto abre el portafolio si la cuenta tiene el módulo.
+- Números de hoy (sandbox): 32 de 36 fuera de SLA vs. 4 atrasadas contra
+  compromiso y 30 sin fecha; 4 ingresaron y 1 se cerró en 30 días; 15 de 16
+  proyectos en Planificación (11 sin tareas); Valentina concentra el 43 %.
