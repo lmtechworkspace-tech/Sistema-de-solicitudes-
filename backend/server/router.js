@@ -40,6 +40,7 @@ const Comentarios = require('../logica/comentarios');
 const Novedades = require('../logica/novedades');
 const Pausas = require('../logica/pausas');
 const ResumenGerencia = require('../logica/resumenGerencia');
+const MiEquipo = require('../logica/miEquipo');
 const Actividades = require('../logica/actividades');
 const Proyectos = require('../logica/proyectos');
 const Calidad = require('../logica/calidadSgc');
@@ -137,6 +138,7 @@ const ACCIONES = {
 
   getPanelGerencia: (db, data, contexto) => Gerencia.getPanel(db, data, contexto),
   getResumenGerencia: (db, data, contexto) => ResumenGerencia.getResumen(db, data, contexto),
+  getMiEquipo: (db, data, contexto) => MiEquipo.getMiEquipo(db, data, contexto),
   getPanelJefatura: (db, data, contexto) => Jefatura.getPanel(db, data, contexto),
 
   listarLogsNotificaciones: (db, data, contexto) => Notificaciones.listarLogs(db, data, contexto),

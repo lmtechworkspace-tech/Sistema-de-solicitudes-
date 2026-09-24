@@ -14,7 +14,10 @@
   window.SigsoJefatura = {
     cargar: cargarJefatura_,
     // v13.0: el arbol del sidebar entra por aca.
-    irAItem: function (itemId) { irAVistaJefatura_(itemId); }
+    irAItem: function (itemId) { irAVistaJefatura_(itemId); },
+    // SIGSO v2 (Módulo 4B): jefatura-v2.js lo llama al cargar para que el
+    // árbol incluya "Mi equipo".
+    registrarArbol: function () { registrarArbolJefatura_(); }
   };
 
   document.addEventListener('DOMContentLoaded', function () {
@@ -28,10 +31,15 @@
     // contra la arquitectura: una URL no puede inventar una vista.
     var pedidaJef = (window.SigsoShell && SigsoShell.tomarItemDeRuta)
       ? SigsoShell.tomarItemDeRuta() : '';
-    if (pedidaJef && ARQUITECTURA_JEFATURA.some(function (sub) {
+    if (pedidaJef && arquitecturaJefatura_().some(function (sub) {
       return sub.items.some(function (it) { return it.id === pedidaJef; });
     })) {
       itemJefaturaActivo_ = pedidaJef;
+    }
+    // SIGSO v2 (Módulo 4B): con la versión nueva se entra por "Mi equipo"
+    // (las personas); con la clásica, por el tablero de solicitudes.
+    if (!itemJefaturaActivo_ || (itemJefaturaActivo_ === 'resumen' && !equipoV2Activo_())) {
+      itemJefaturaActivo_ = equipoV2Activo_() ? 'resumen' : 'tablero';
     }
     irAVistaJefatura_(itemJefaturaActivo_);
     // v5.0 F4 (§6.3): mismo esqueleto que Gerencia/Bandeja mientras se pide
@@ -395,7 +403,20 @@
     reportes: 'jef-panel-reportes'
   };
 
-  var itemJefaturaActivo_ = 'tablero';
+  var itemJefaturaActivo_ = null;
+
+  // SIGSO v2 (Módulo 4B): "Mi equipo" (jefatura-v2.js, centrado en las
+  // personas) va primero con la versión nueva; lo demás queda como detalle.
+  function equipoV2Activo_() { return !!(window.SigsoJefaturaV2 && SigsoJefaturaV2.activo()); }
+  function arquitecturaJefatura_() {
+    return equipoV2Activo_()
+      ? [{ id: 'hoy', nombre: 'Personas', icono: 'equipo', items: [{ id: 'resumen', nombre: 'Mi equipo hoy' }] }].concat(ARQUITECTURA_JEFATURA)
+      : ARQUITECTURA_JEFATURA;
+  }
+  function registrarArbolJefatura_() {
+    if (!window.SigsoNav) return;
+    SigsoNav.registrar('jefatura', { nombre: 'Mi departamento', submodulos: arquitecturaJefatura_() });
+  }
   var reporteJefAbierto_ = null;
   // Se aplican en el CLIENTE, sobre los ítems que el panel ya trajo.
   var filtrosReporteJef_ = {};
@@ -447,10 +468,7 @@
   // v13.0: la navegacion vive en el sidebar.
   function pintarNavJefatura_() {
     if (!window.SigsoNav) return;
-    SigsoNav.registrar('jefatura', {
-      nombre: 'Mi departamento',
-      submodulos: ARQUITECTURA_JEFATURA
-    });
+    registrarArbolJefatura_();
     if (window.SigsoShell && SigsoShell.refrescarArbol) SigsoShell.refrescarArbol();
   }
 
@@ -464,6 +482,8 @@
       var el = document.getElementById(PANEL_POR_ITEM_JEF[k]);
       if (el) el.classList.toggle('sigso-oculto', k !== id);
     });
+    if (id === 'resumen' && window.SigsoJefaturaV2) { SigsoJefaturaV2.mostrar(); return; }
+    if (window.SigsoJefaturaV2) SigsoJefaturaV2.desmontar();
 
     // Datos propios de Actividades.gs: se piden sólo al entrar, no en cada
     // carga del panel (mismo patrón que Pausas en Gerencia).
@@ -629,10 +649,5 @@
   // v13.1: registro TEMPRANO del arbol. Antes esto pasaba recien al abrir
   // el modulo, asi que el sidebar no le dibujaba el chevron ni lo dejaba
   // desplegar hasta que entrabas una vez.
-  if (window.SigsoNav) {
-    SigsoNav.registrar('jefatura', {
-      nombre: 'Mi departamento',
-      submodulos: ARQUITECTURA_JEFATURA
-    });
-  }
+  registrarArbolJefatura_();
 })();

@@ -25,7 +25,7 @@
 var ACCIONES_REINTENTABLES = {
   ping: true, getCatalogos: true, consultarEstado: true,
   getDashboardData: true, getPanelGerencia: true, getSolicitudDetalle: true,
-  getColaSolicitudes: true, getResumenGerencia: true,
+  getColaSolicitudes: true, getResumenGerencia: true, getMiEquipo: true,
   listarCatalogo: true, listarUsuarios: true, listarLogs: true,
   // v7.1 (notificaciones vivas): polling de solo lectura cada 2-3 min --
   // un fallo de transporte no debe silenciar el ciclo hasta el proximo tick.
@@ -89,7 +89,7 @@ var ACCIONES_PORTADAS_NODE = {
   // Fase 3a del plan post-migracion (RF-018): historial de comentarios.
   agregarComentario: true,
   listarJefaturas: true, gestionarJefatura: true,
-  getDashboardData: true, getPautaTrabajo: true, getColaSolicitudes: true, getResumenGerencia: true,
+  getDashboardData: true, getPautaTrabajo: true, getColaSolicitudes: true, getResumenGerencia: true, getMiEquipo: true,
   getPanelGerencia: true, getPanelJefatura: true,
   listarLogsNotificaciones: true,
 

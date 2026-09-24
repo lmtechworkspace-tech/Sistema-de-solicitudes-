@@ -1398,8 +1398,11 @@
     nueva_solicitud: { v2: function () { return window.SigsoNuevaSolicitudV2; }, v1: function () { return NUEVA_SOLICITUD_CLASICA_; } },
     // Módulo 4A: la v2 agrega la portada "Resumen ejecutivo"; el resto del
     // panel (tablero, actividades, pausas, reportes) es el mismo gerencia.js.
-    gerencia: { v2: function () { return window.SigsoGerenciaV2; }, v1: function () { return GERENCIA_CLASICA_; } }
+    gerencia: { v2: function () { return window.SigsoGerenciaV2; }, v1: function () { return GERENCIA_CLASICA_; } },
+    // Módulo 4B: la v2 agrega "Mi equipo" (personas); el resto es jefatura.js.
+    jefatura: { v2: function () { return window.SigsoJefaturaV2; }, v1: function () { return JEFATURA_CLASICA_; } }
   };
+  var JEFATURA_CLASICA_ = { cargar: function () { if (window.SigsoJefatura) window.SigsoJefatura.irAItem('tablero'); } };
   var GERENCIA_CLASICA_ = { cargar: function () { if (window.SigsoGerencia) window.SigsoGerencia.irAItem('tablero'); } };
   var NUEVA_SOLICITUD_CLASICA_ = { cargar: function () { /* el formulario ya está en el DOM */ } };
   var MIS_SOLICITUDES_CLASICA_ = {
@@ -1529,6 +1532,7 @@
     }
     if ((id === 'gerencia' || id === 'jefatura') && window.SigsoBandejaV2) window.SigsoBandejaV2.desmontar();
     if (id !== 'gerencia' && window.SigsoGerenciaV2) window.SigsoGerenciaV2.desmontar();
+    if (id !== 'jefatura' && window.SigsoJefaturaV2) window.SigsoJefaturaV2.desmontar();
     if (id === 'gerencia') {
       abrirBandeja_('gerencia');
     }

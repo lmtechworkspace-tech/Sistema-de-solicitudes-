@@ -451,3 +451,26 @@ Decisiones del dueño (2026-09-24):
 - Números de hoy (sandbox): 32 de 36 fuera de SLA vs. 4 atrasadas contra
   compromiso y 30 sin fecha; 4 ingresaron y 1 se cerró en 30 días; 15 de 16
   proyectos en Planificación (11 sin tareas); Valentina concentra el 43 %.
+
+### 4B Mi departamento: "Mi equipo" centrado en las personas — ESTADO: HECHO
+- Backend: `getMiEquipo` (`logica/miEquipo.js`). Solo el equipo configurado en
+  JEFATURAS para quien pregunta (también para un ADM: se corrige que
+  "Actividades del equipo" le mostrara a toda la empresa). Por persona:
+  - tareas abiertas de proyecto y personales con el semáforo de Mi trabajo,
+    ordenadas por lo que hay que mirar primero (atrasadas, bloqueadas, por
+    confirmar); terminadas en 7 días; días sin movimiento;
+  - horas que registró la persona en los últimos 7 días (y los 7 anteriores),
+    con la regla de Mi trabajo (el REGISTRO_DIA manda sobre el check-in);
+  - ítems de solicitudes a su cargo (y fuera de plazo) y lo que pidió y
+    espera validar; `sin_actividad` y `tiene_cuenta`.
+- Frontend: `js/jefatura-v2.js` + `css/v2/jefatura-v2.css`. "Mi equipo hoy"
+  es el primer ítem de Mi departamento con la v2 (entrada por defecto);
+  tablero de solicitudes, por persona, actividades y reportes siguen en
+  jefatura.js. `MODULOS_V2.jefatura`.
+  - KPIs del equipo, aviso si alguien con tareas no registró horas o no tiene
+    ninguna actividad, y una tarjeta por persona: semana de horas (barras por
+    día + comparación), solicitudes, tareas con "Pedir actualización" y
+    "Reasignar" (mismos endpoints de siempre).
+- Hallazgo al implementar: **casi nadie registra horas** (Ignacio Valdivia:
+  2 registros con horas en total). El panel lo dice en vez de mostrar un 0
+  silencioso.

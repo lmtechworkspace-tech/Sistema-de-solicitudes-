@@ -1,0 +1,40 @@
+/* jefatura-v2.css — "Mi equipo" (SIGSO v2, Módulo 4B). Prefijo .je2-*.
+ * Reusa tokens/layout/componentes-v2 y la fila de tareas (.sx2-py-*). */
+
+/* Comparte #modulo-bandeja con Bandeja y Gerencia: mientras está montada,
+   solo se ve ella. */
+#modulo-bandeja.jefatura-v2-activa > :not(#jefatura-v2) { display: none !important; }
+
+.je2-aviso {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--sx-radio);
+  background: var(--sx-info-suave); color: var(--sx-texto); font: var(--sx-t-chico);
+}
+.je2-aviso .sigso-ico { color: var(--sx-info); flex: none; }
+
+.je2-personas { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); gap: var(--sx-e-4); align-items: start; }
+.je2-persona { display: flex; flex-direction: column; gap: var(--sx-e-3); }
+.je2-persona--vacia { background: var(--sx-superficie-2); box-shadow: none; }
+.je2-persona__cab { display: flex; align-items: center; justify-content: space-between; gap: var(--sx-e-3); flex-wrap: wrap; }
+
+/* Semana: barras de horas por día + total */
+.je2-persona__semana { display: flex; align-items: center; gap: var(--sx-e-4); padding: 10px 12px; border-radius: var(--sx-radio); background: var(--sx-superficie-2); }
+.je2-horas { display: grid; grid-template-columns: repeat(7, 22px); gap: 5px; height: 56px; align-items: end; flex: none; }
+.je2-horas__dia { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; height: 100%; }
+.je2-horas__dia i { display: block; width: 100%; border-radius: 4px 4px 2px 2px; background: color-mix(in srgb, var(--sx-ok) 60%, var(--sx-superficie)); }
+.je2-horas__dia i.je2-horas__cero { background: var(--sx-borde); }
+.je2-horas__dia b { font: 600 0.625rem/1 var(--fuente); color: var(--sx-texto-3); }
+.je2-horas__dia--hoy b { color: var(--sx-primario); }
+.je2-horas__dia--hoy i:not(.je2-horas__cero) { background: var(--sx-ok); }
+.je2-horas__total { font: 800 1.25rem/1 var(--fuente); color: var(--sx-texto); }
+
+.je2-sol { display: flex; align-items: center; gap: 6px; margin: 0; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.je2-sol .sigso-ico { color: var(--sx-hito); flex: none; }
+
+/* Tareas */
+.je2-tareas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.je2-tarea { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-top: 1px solid var(--sx-borde-suave); font: var(--sx-t-chico); }
+.je2-tarea strong { font-weight: 600; color: var(--sx-texto); }
+.je2-tarea .sx2-py-punto { margin-top: 5px; }
+
+/* Cinco KPIs: una fila cuando cabe (nunca 4+1 en escritorio). */
+#jefatura-v2 .sx2-fila-kpis { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
