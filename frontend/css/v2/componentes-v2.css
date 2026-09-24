@@ -284,7 +284,7 @@
   background: var(--sx-tono-suave); color: var(--sx-tono);
 }
 .sx2-dialogo__titulo { margin: 0; font: var(--sx-t-h2); color: var(--sx-texto); }
-.sx2-dialogo__texto { margin: 0; font: var(--sx-t-cuerpo); color: var(--sx-texto-2); }
+.sx2-dialogo__texto { white-space: pre-line;  margin: 0; font: var(--sx-t-cuerpo); color: var(--sx-texto-2); }
 .sx2-dialogo__acciones { display: flex; justify-content: flex-end; gap: var(--sx-e-2); margin-top: var(--sx-e-2); }
 
 /* Drawer (panel lateral) ------------------------------------------------------ */

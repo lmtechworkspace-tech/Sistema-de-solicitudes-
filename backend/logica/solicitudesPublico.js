@@ -275,7 +275,7 @@ function misSolicitudes(db, data) {
       (!!s.es_cliente && compararEmail_(correo, s.correo_cliente)))
   );
 
-  const resumen = { total: solicitudes.length, abiertas: 0, pendientes_validar: 0, en_desarrollo: 0 };
+  const resumen = { total: solicitudes.length, abiertas: 0, pendientes_validar: 0, en_desarrollo: 0, esperan_respuesta: 0 };
 
   const lista = solicitudes.map((s) => {
     const items = todasLasSubsolicitudes.filter((i) => i.solicitud_id === s.solicitud_id);
@@ -295,6 +295,9 @@ function misSolicitudes(db, data) {
       }
     });
     resumen.pendientes_validar += pendientesValidar;
+    const esperanRespuesta = items.filter((item) => item.estado === ESTADOS.S06).length;
+    resumen.esperan_respuesta += esperanRespuesta;
+    const ordenados = items.slice().sort((a, b) => Number(a.numero_item) - Number(b.numero_item));
 
     return {
       solicitud_id: s.solicitud_id,
@@ -305,6 +308,18 @@ function misSolicitudes(db, data) {
       total_items: items.length,
       items_pendientes_validar: pendientesValidar,
       dias_esperando_max: diasEsperandoMax,
+      // SIGSO v2 (módulo 3C): la lista muestra DE QUÉ trata cada solicitud y
+      // cómo va cada ítem, sin abrirla. Solo datos que el solicitante ya ve
+      // en su detalle (título, estado, fecha comprometida).
+      titulo: ordenados.length ? ordenados[0].titulo : '',
+      items_esperan_respuesta: esperanRespuesta,
+      items: ordenados.map((item) => ({
+        subsolicitud_id: item.subsolicitud_id,
+        numero_item: item.numero_item,
+        titulo: item.titulo,
+        estado: item.estado,
+        fecha_comprometida: fechaHoraCelda_(item.fecha_comprometida)
+      })),
       // v3.3: con cuenta multi-correo, el drill-down (estadoPublico) sigue
       // validando por correo -- se indica CUAL correo de la cuenta coincide
       // con esta solicitud para que el frontend lo use en esa llamada.

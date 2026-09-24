@@ -326,3 +326,30 @@ y `estado.js` también sirven las páginas **públicas** para clientes
 - Un cambio hecho desde el panel o una fila emite `sigso:solicitudes-cambio`
   y Bandeja, Mi trabajo e Inicio se refrescan solos.
 - Fila de 6 KPIs generalizada: `.sx2-fila-kpis--6` (layout-v2.css).
+
+### 3C Mis solicitudes v2 (solo plataforma) — ESTADO: HECHO
+Datos (sandbox): 42 solicitudes de 11 solicitantes (7 con cuenta de
+plataforma, 4 solo por la página pública); la validación sí se usa (18
+ítems confirmados, 6 reabiertos); solo 6 de 42 solicitudes tienen más de un
+ítem. Problema principal de la clásica: **la lista no decía de qué trataba
+cada solicitud** (solo N°, empresa y fecha) y lo que esperaba una acción del
+solicitante quedaba escondido dentro de cada detalle.
+- Backend: `misSolicitudes` suma `titulo`, `items` (título, estado, fecha
+  comprometida) e `items_esperan_respuesta`; `resumen.esperan_respuesta`.
+- Frontend: `js/mis-solicitudes-v2.js` + `css/v2/mis-solicitudes-v2.css`
+  (`MODULOS_V2.mis_solicitudes`; estado.html y el formulario público siguen
+  con estado.js).
+  - KPIs clicables: Abiertas · Te toca a ti · Cerradas · Todas.
+  - **"Te toca a ti"**: cada ítem terminado por validar o con una pregunta
+    del equipo, con su botón (Validar / Responder).
+  - Lista con título, "+N ítems más", reparto de estados por ítem y la
+    próxima entrega comprometida.
+  - Detalle en panel lateral: hitos, aviso de acción pendiente, posición en
+    la cola de tu empresa, pestañas Ítems · Historial · Archivos; acciones:
+    responder, confirmar y cerrar, reabrir (con motivo), corregir (con
+    resumen antes → después centrado en lo que cambió, quitar adjuntos y
+    agregar imágenes) y "ya se resolvió por fuera".
+- Un cambio emite `sigso:solicitudes-cambio` (el Inicio se refresca).
+- Nota de prueba: `subirArchivo` sigue en Apps Script (Drive); no se probó
+  en el sandbox para no escribir en producción — es la misma llamada que ya
+  usa la clásica.

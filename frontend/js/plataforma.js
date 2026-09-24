@@ -511,7 +511,8 @@
         renderHome_();
         break;
       case 'mis_solicitudes':
-        if (window.SigsoMisSolicitudes) window.SigsoMisSolicitudes.cargarConToken(sesion.token);
+        var modMs = moduloImpl_('mis_solicitudes');
+        if (modMs) { if (modMs.refrescar) modMs.refrescar(); else modMs.cargar(); }
         break;
       case 'bandeja':
         var modBj = moduloImpl_('bandeja');
@@ -1390,7 +1391,16 @@
     home: { v2: function () { return window.SigsoInicioV2; }, v1: function () { return window.SigsoInicio; } },
     // Bandeja comparte #modulo-bandeja con Gerencia y Jefatura (clásicas hasta
     // el Módulo 4): la v2 se monta encima y se desmonta al ir a ellas.
-    bandeja: { v2: function () { return window.SigsoBandejaV2; }, v1: function () { return BANDEJA_CLASICA_; } }
+    bandeja: { v2: function () { return window.SigsoBandejaV2; }, v1: function () { return BANDEJA_CLASICA_; } },
+    // Solo la vista de la plataforma: estado.html (público) sigue con estado.js.
+    mis_solicitudes: { v2: function () { return window.SigsoMisSolicitudesV2; }, v1: function () { return MIS_SOLICITUDES_CLASICA_; } }
+  };
+  var MIS_SOLICITUDES_CLASICA_ = {
+    cargar: function () {
+      document.getElementById('nota-correos-cuenta').textContent =
+        'Mostrando lo asociado a: ' + (sesion.cuenta.emails || []).join(', ');
+      window.SigsoMisSolicitudes.cargarConToken(sesion.token);
+    }
   };
   var BANDEJA_CLASICA_ = {
     cargar: function () { abrirBandeja_('dashboard'); },
@@ -1501,9 +1511,7 @@
 
     if (id === 'home' && Date.now() - ultimoRenderHome_ > 3000) renderHome_();
     if (id === 'mis_solicitudes') {
-      document.getElementById('nota-correos-cuenta').textContent =
-        'Mostrando lo asociado a: ' + (sesion.cuenta.emails || []).join(', ');
-      window.SigsoMisSolicitudes.cargarConToken(sesion.token);
+      moduloImpl_('mis_solicitudes').cargar();
     }
     if (id === 'nueva_solicitud') {
       autocompletarFormulario_();

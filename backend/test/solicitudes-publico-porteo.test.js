@@ -507,3 +507,24 @@ test('misSolicitudes con token invalido es forbidden; el camino correo+codigo si
   const res = SolicitudesPublico.misSolicitudes(db, { email: 'juan@homepymes.cl', codigo: codigo });
   assert.equal(res.solicitudes.length, 1);
 });
+
+// SIGSO v2, módulo 3C: la lista de Mis solicitudes dice de qué trata cada
+// solicitud y cómo va cada ítem, sin abrirla.
+test('misSolicitudes: trae título e ítems (ordenados) y cuenta los que esperan tu respuesta', async (t) => {
+  conApiKey(t);
+  mockEnvioOk(t);
+  const db = dbConSchema();
+  seedSolicitud(db, { solicitud_id: 'SOL-2026-HP-0001' });
+  seedSubsolicitud(db, { subsolicitud_id: 'SOL-2026-HP-0001-02', solicitud_id: 'SOL-2026-HP-0001', numero_item: 2, titulo: 'Segundo', estado: 'S06' });
+  seedSubsolicitud(db, { subsolicitud_id: 'SOL-2026-HP-0001-01', solicitud_id: 'SOL-2026-HP-0001', numero_item: 1, titulo: 'Primero', estado: 'S05', fecha_comprometida: '2026-10-01' });
+
+  await SolicitudesPublico.solicitarCodigoAcceso(db, { email: 'juan@homepymes.cl' });
+  const r = SolicitudesPublico.misSolicitudes(db, { email: 'juan@homepymes.cl', codigo: ultimoCodigoEnviado(db) });
+
+  const s = r.solicitudes[0];
+  assert.equal(s.titulo, 'Primero');
+  assert.deepEqual(s.items.map((i) => [i.titulo, i.estado]), [['Primero', 'S05'], ['Segundo', 'S06']]);
+  assert.equal(s.items[0].fecha_comprometida.slice(0, 10), '2026-10-01');
+  assert.equal(s.items_esperan_respuesta, 1);
+  assert.equal(r.resumen.esperan_respuesta, 1);
+});
