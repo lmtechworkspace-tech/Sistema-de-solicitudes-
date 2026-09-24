@@ -1,0 +1,54 @@
+/* pausas-v2.css — Pausas activas del trabajador (SIGSO v2, Módulo 5B).
+ * Prefijo .pa2-*. El bloque .pa2-hoy también se usa en el Inicio. */
+
+#modulo-pausas.pausas-v2-activa > :not(#pausas-v2) { display: none !important; }
+
+.pa2-hoy { display: flex; align-items: flex-start; gap: var(--sx-e-4); }
+.pa2-hoy__ico { width: 48px; height: 48px; flex: none; display: grid; place-items: center; border-radius: 14px; background: var(--sx-tono-suave); color: var(--sx-tono); }
+.pa2-hoy strong { font: 700 1.0625rem/1.3 var(--fuente); color: var(--sx-texto); }
+.pa2-momento { font: 600 0.875rem/1.3 var(--fuente); color: var(--sx-tono); }
+.pa2-hoy--compacto .pa2-hoy__ico { width: 40px; height: 40px; border-radius: 12px; }
+.pa2-hoy--compacto strong { font-size: .9375rem; }
+.pa2-botones { display: flex; flex-wrap: wrap; gap: var(--sx-e-2); }
+.pa2-hecho, .pa2-iniciar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border-radius: var(--sx-radio);
+  background: var(--sx-tono-suave); color: var(--sx-texto); font: var(--sx-t-chico);
+}
+.pa2-hecho > span, .pa2-iniciar > span { flex: 1; min-width: 180px; }
+.pa2-hecho .sigso-ico { color: var(--sx-tono); flex: none; }
+.pa2-iniciar { --sx-tono: var(--sx-alerta); --sx-tono-suave: var(--sx-alerta-suave); }
+.pa2-iniciar .sigso-ico { color: var(--sx-alerta); flex: none; }
+
+/* Formularios (en el panel lateral) */
+.pa2-declaro { gap: 8px; align-items: flex-start; font: 500 .875rem/1.4 var(--fuente); color: var(--sx-texto); }
+.pa2-declaro input { width: 18px; height: 18px; margin-top: 1px; accent-color: var(--sx-primario); }
+.pa2-animo { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin: 6px 0; }
+.pa2-animo label { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border: 1px solid var(--sx-borde); border-radius: var(--sx-radio); cursor: pointer; }
+.pa2-animo input { position: absolute; opacity: 0; pointer-events: none; }
+.pa2-animo span { font-size: 1.5rem; line-height: 1; }
+.pa2-animo small { font-size: .6875rem; color: var(--sx-texto-3); }
+.pa2-animo label:has(input:checked) { border-color: var(--sx-primario); background: var(--sx-primario-suave); }
+.pa2-animo label:has(input:focus-visible) { box-shadow: var(--sx-anillo-foco); }
+.pa2-motivos { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.pa2-motivos label { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--sx-borde); border-radius: var(--sx-radio); cursor: pointer; font: var(--sx-t-chico); color: var(--sx-texto); }
+.pa2-motivos input { accent-color: var(--sx-primario); }
+.pa2-motivos label:has(input:checked) { border-color: var(--sx-primario); background: var(--sx-primario-suave); }
+
+/* Historial */
+.pa2-cifras { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--sx-e-3); margin-bottom: var(--sx-e-4); }
+.pa2-cifras > div { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: var(--sx-radio); background: var(--sx-superficie-2); }
+.pa2-cifras b { font: 800 1.375rem/1 var(--fuente); color: var(--sx-texto); }
+.pa2-cifras span { font: var(--sx-t-chico); color: var(--sx-texto-3); }
+.pa2-dias { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(16px, 1fr); gap: 5px; }
+.pa2-dia { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: default; }
+.pa2-dia i { display: block; width: 100%; max-width: 24px; height: 24px; border-radius: 6px; background: var(--sx-tono); }
+.pa2-dia.sx2-tono-neutro i { background: var(--sx-borde); }
+.pa2-dia--nula i { background: repeating-linear-gradient(45deg, var(--sx-superficie-2), var(--sx-superficie-2) 3px, var(--sx-borde-suave) 3px, var(--sx-borde-suave) 6px); }
+.pa2-dia b { font: 600 .625rem/1 var(--fuente); color: var(--sx-texto-3); }
+.pa2-ley { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; font: var(--sx-t-chico); color: var(--sx-texto-3); }
+.pa2-ley i { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 3px; background: var(--sx-tono); vertical-align: -1px; }
+.pa2-ley .sx2-tono-neutro i { background: var(--sx-borde); }
+.pa2-ley--nula i { background: repeating-linear-gradient(45deg, var(--sx-superficie-2), var(--sx-superficie-2) 2px, var(--sx-borde-suave) 2px, var(--sx-borde-suave) 4px); }
+
+/* Inicio: la tarjeta de la pausa de hoy */
+.inicio2-pausa { border-color: color-mix(in srgb, var(--sx-ok) 35%, var(--sx-borde-suave)); }

@@ -1402,7 +1402,9 @@
     // Módulo 4B: la v2 agrega "Mi equipo" (personas); el resto es jefatura.js.
     jefatura: { v2: function () { return window.SigsoJefaturaV2; }, v1: function () { return JEFATURA_CLASICA_; } },
     // Módulo 5A: "Hoy" v2 (coordinacion-v2.js); Historial y Cumplimiento siguen en coordinacion.js.
-    pausas_coordinacion: { v2: function () { return window.SigsoCoordinacionV2; }, v1: function () { return COORDINACION_CLASICA_; } }
+    pausas_coordinacion: { v2: function () { return window.SigsoCoordinacionV2; }, v1: function () { return COORDINACION_CLASICA_; } },
+    // Módulo 5B: pausas del trabajador (hoy + su historial).
+    pausas: { v2: function () { return window.SigsoPausasV2; }, v1: function () { return window.SigsoPausas; } }
   };
   var COORDINACION_CLASICA_ = { cargar: function () { if (window.SigsoCoordinacion) window.SigsoCoordinacion.irAItem('hoy'); } };
   var JEFATURA_CLASICA_ = { cargar: function () { if (window.SigsoJefatura) window.SigsoJefatura.irAItem('tablero'); } };
@@ -1545,8 +1547,8 @@
     if (id === 'administracion') {
       abrirAdministracion_();
     }
-    if (id === 'pausas' && window.SigsoPausas) {
-      window.SigsoPausas.cargar();
+    if (id === 'pausas' && moduloImpl_('pausas')) {
+      moduloImpl_('pausas').cargar();
     }
     if (id === 'pausas_coordinacion' && window.SigsoCoordinacion) {
       window.SigsoCoordinacion.cargar();

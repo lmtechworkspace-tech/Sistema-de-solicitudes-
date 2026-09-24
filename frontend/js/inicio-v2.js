@@ -361,8 +361,10 @@
     var max = Math.max.apply(null, porDia.concat([1]));
     var letras = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
     var cerradas = cerradasSemana(d, hoy);
+    // Módulo 5B: la pausa de hoy tiene su propia tarjeta (tarjetaPausa); aquí
+    // solo queda el aviso si la versión nueva de Pausas no está cargada.
     var p = d.pausa;
-    var pausa = (p && p.pausa && p.registrable)
+    var pausa = (!window.SigsoPausasV2 && p && p.pausa && p.registrable)
       ? '<div class="sx2-py-aviso sx2-tono-ok">' + U.ico('actividad', 16) + '<span style="flex:1">La pausa activa de hoy está disponible' + (p.pausa.hora_programada ? ' (' + U.esc(p.pausa.hora_programada) + ')' : '') + '.</span>' +
           U.boton({ texto: 'Participar', sm: true, variante: 'primario', clase: 'js-in2-ir', datos: { ir: 'pausas' } }) + '</div>'
       : '';
@@ -467,7 +469,10 @@
     '</div>' : '');
 
     var semana = tarjetaSemana(d, hoy), miDia = tarjetaMiDia(t), proyectos = tarjetaProyectos(d);
-    c.innerHTML = '<div class="sx2-pagina">' + cabecera(estado(d, gs)) + kpis +
+    // Módulo 5B: declarar la pausa de hoy en un toque, arriba de todo.
+    var tarjetaPausa = window.SigsoPausasV2 ? SigsoPausasV2.bloqueInicio(d.pausa) : '';
+    if (tarjetaPausa) tarjetaPausa = '<section class="sx2-card inicio2-pausa sx2-entra" style="--i:1">' + tarjetaPausa + '</section>';
+    c.innerHTML = '<div class="sx2-pagina">' + cabecera(estado(d, gs)) + tarjetaPausa + kpis +
       '<div class="sx2-grid sx2-grid--estira">' +
         '<div class="' + (semana ? 'sx2-col-8' : 'sx2-col-12') + '">' + tarjetaAtencion(d, gs) + '</div>' +
         (semana ? '<div class="sx2-col-4 sx2-col--apila">' + semana + '</div>' : '') +
@@ -527,6 +532,10 @@
   });
 
   // Módulo 3B: un cambio en una solicitud (panel lateral o fila) repinta el Inicio.
+  document.addEventListener('sigso:pausa-cambio', function () {
+    var c = document.getElementById('inicio-v2');
+    if (c && c.offsetParent !== null) recargar();
+  });
   document.addEventListener('sigso:solicitudes-cambio', function () {
     var c = document.getElementById('inicio-v2');
     if (c && c.offsetParent !== null) recargar();

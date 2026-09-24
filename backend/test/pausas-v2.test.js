@@ -88,3 +88,19 @@ test('getPausaHoyTrabajador dice si la persona puede iniciarla y desde qué hora
   assert.equal(r.iniciar_desde, '00:05');
   assert.equal(typeof r.puede_iniciar, 'boolean');
 });
+
+// Módulo 5B: el trabajador ve su propio historial.
+test('getMiHistorialPausas: historial propio (participación, racha); fuera de la lista responde sin_lista', () => {
+  const db = db_();
+  pausa(db, 'H1', haceDias_(3), { estado: 'Realizada' });
+  pausa(db, 'H2', haceDias_(2), { estado: 'Realizada' });
+  pausa(db, 'H3', haceDias_(1), { estado: 'No_realizada' });
+  agregarFila_(db, 'PAUSAS_ASISTENCIA', { registro_id: 'R1', pausa_id: 'H1', email: 'ana@x.cl', estado: 'no_participo', motivo: 'En reunión' });
+  agregarFila_(db, 'PAUSAS_ASISTENCIA', { registro_id: 'R2', pausa_id: 'H2', email: 'ana@x.cl', estado: 'participo' });
+  const r = Pausas.getMiHistorialPausas(db, {}, ANA);
+  assert.equal(r.resumen.participaciones, 1);
+  assert.equal(r.resumen.justificaciones, 1);
+  assert.equal(r.resumen.no_aplica, 1);
+  assert.equal(r.resumen.racha_actual, 1);
+  assert.equal(Pausas.getMiHistorialPausas(db, {}, { rol: 'DEV', email: 'otro@x.cl' }).sin_lista, true);
+});

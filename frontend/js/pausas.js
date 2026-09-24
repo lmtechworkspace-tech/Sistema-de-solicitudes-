@@ -163,6 +163,9 @@
     return '<div class="sigso-animo" data-animo-valor="">' +
       '<p class="sigso-ayuda" style="margin-bottom:6px;">¿Cómo te sientes hoy? (opcional)</p>' +
       '<div class="sigso-animo-botonera">' + botones + '</div>' +
+      // SIGSO v2 (Módulo 5A, decisión del dueño): la coordinación ve quién
+      // marca "Mal" o "Muy mal" para poder acercarse. Se dice aquí.
+      '<p class="sigso-ayuda" style="margin-top:6px;">Si marcas una de las dos primeras, la coordinación de pausas lo verá para poder acercarse a conversar.</p>' +
       '</div>';
   }
 

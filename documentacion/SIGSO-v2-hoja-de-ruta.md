@@ -536,3 +536,19 @@ Decisiones del dueño (2026-09-24):
   20 pausas (avisa si las últimas no se realizaron); "Quién inicia" (avisa la
   dependencia ≥ 70 %); "Ánimo: para acercarse". Historial por trabajador y
   Cumplimiento siguen en coordinacion.js.
+
+### 5B Pausas del trabajador + Inicio — ESTADO: HECHO
+- Backend: `getMiHistorialPausas` (60 días; mismo cálculo que "Historial por
+  trabajador" de la coordinación, extraído a `calcularHistorialTrabajador_`).
+- Frontend: `js/pausas-v2.js` + `css/v2/pausas-v2.css` (`MODULOS_V2.pausas`):
+  - la pausa de hoy con su momento (a qué hora, si va tarde, quién la
+    inició), **"Iniciar la pausa"** cuando la coordinación no llegó (5A), y
+    declarar en un toque: "Declaro que participé" (con ánimo opcional) / "No
+    pude" (motivo en un toque); "Cambiar" mientras admite registros;
+  - su historial: % de participación, racha actual y máxima, sin registrar y
+    las últimas 20 pausas.
+  - **Inicio**: la misma tarjeta, compacta, arriba de todo cuando hay algo
+    que hacer (declarar o iniciar); desaparece al registrar.
+- **Transparencia del ánimo**: tanto la v2 como la pantalla clásica ahora
+  dicen que "Mal"/"Muy mal" lo ve la coordinación. Las respuestas anteriores
+  se dieron sin ese aviso (la regla vieja RN-708 era solo promedio).

@@ -1041,7 +1041,21 @@ function getHistorialTrabajador(db, data, contexto) {
   if (!trabajador) return errorValidacion('trabajador_id', 'Trabajador no encontrado.');
   const empresas = empresasQueCoordina_(db, contexto);
   if (empresas.indexOf(String(trabajador.empresa_id)) === -1) return errorForbidden('No coordinas la empresa de este trabajador.');
+  return calcularHistorialTrabajador_(db, trabajador, data);
+}
 
+// SIGSO v2, Módulo 5B: el trabajador ve SU historial (mismo cálculo que ve
+// la coordinación en "Historial por trabajador").
+function getMiHistorialPausas(db, data, contexto) {
+  const email = contexto && contexto.email;
+  if (!email) return errorForbidden('No fue posible identificar tu cuenta.');
+  const trabajador = enRoster_(db, email);
+  if (!trabajador) return { sin_lista: true };
+  return calcularHistorialTrabajador_(db, trabajador, { desde: claveDia_(new Date(Date.now() - 60 * 24 * 3600 * 1000), TZ) });
+}
+
+function calcularHistorialTrabajador_(db, trabajador, data) {
+  data = data || {};
   const hoy = claveDia_(new Date(), TZ);
   const hastaC = /^\d{4}-\d{2}-\d{2}$/.test(String(data.hasta || '')) ? data.hasta : hoy;
   const desdeC = /^\d{4}-\d{2}-\d{2}$/.test(String(data.desde || '')) ? data.desde : claveDia_(new Date(Date.now() - 90 * 24 * 3600 * 1000), TZ);
@@ -1331,7 +1345,7 @@ module.exports = {
   listarConfig, guardarConfig, listarCoordinadores, gestionarCoordinador,
   listarTrabajadores, gestionarTrabajador, sembrarRosterDesdeCuentas, asignarModuloPausasRoster,
   listarProgramadas, programarDelDiaAdmin, gestionarPausaProgramada,
-  getPausaHoyTrabajador, registrarAsistencia, registrarAsistenciaGrupal, iniciarPausaParticipante,
+  getPausaHoyTrabajador, registrarAsistencia, registrarAsistenciaGrupal, iniciarPausaParticipante, getMiHistorialPausas,
   getPanelCoordinador, gestionarPausaCoordinador, descargarEvidenciaPausa, getReporteCumplimiento,
   listarRosterCoordinador, getHistorialTrabajador,
   getReporteGerencia, descargarReporteCumplimientoPdf, descargarReporteGerenciaPdf,
