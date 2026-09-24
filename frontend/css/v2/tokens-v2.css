@@ -1,0 +1,113 @@
+/* tokens-v2.css — sistema visual v2 de SIGSO (piloto: Proyectos v2).
+ *
+ * TODO lo v2 cuelga de la clase raíz `.sx2`: nada de este archivo (ni de
+ * layout/componentes/movimiento-v2) puede tocar una pantalla v1, porque
+ * ninguna pantalla v1 tiene esa clase. Cuando v2 se lleve al resto de SIGSO,
+ * basta con poner `.sx2` en el contenedor de ese módulo.
+ *
+ * Los colores se DERIVAN de tokens.css (--primario, --ok, --superficie...),
+ * no se copian: así el modo oscuro de siempre (media query + conmutador
+ * data-tema) sigue funcionando solo, sin un segundo juego de colores que
+ * mantener. Lo único propio de v2 son la escala (radios, sombras, tipografía,
+ * espaciado) y el movimiento.
+ */
+.sx2 {
+  /* Superficies ---------------------------------------------------------- */
+  --sx-fondo: color-mix(in srgb, var(--primario) 3%, var(--fondo-pagina));
+  --sx-superficie: var(--superficie);
+  --sx-superficie-2: var(--superficie-2);
+  --sx-superficie-hover: color-mix(in srgb, var(--primario) 4%, var(--superficie));
+  --sx-borde: var(--borde);
+  --sx-borde-suave: color-mix(in srgb, var(--borde) 55%, transparent);
+  --sx-borde-fuerte: var(--borde-fuerte);
+
+  /* Texto ------------------------------------------------------------------ */
+  --sx-texto: var(--texto);
+  --sx-texto-2: var(--texto-2);
+  --sx-texto-3: var(--texto-3);
+
+  /* Acento y estados (pares fuerte/suave, como tokens.css) ---------------- */
+  --sx-primario: var(--primario);
+  --sx-primario-intenso: var(--primario-intenso);
+  --sx-primario-suave: var(--primario-suave);
+  --sx-ok: var(--ok);
+  --sx-ok-suave: var(--ok-suave);
+  --sx-info: var(--info);
+  --sx-info-suave: var(--info-suave);
+  --sx-alerta: var(--alerta);
+  --sx-alerta-suave: var(--alerta-suave);
+  --sx-critico: var(--critico);
+  --sx-critico-suave: var(--critico-suave);
+  --sx-neutro: var(--texto-3);
+  --sx-neutro-suave: var(--superficie-2);
+  /* Hitos: violeta, como en la referencia -- el único tono sin par en
+     tokens.css; se reusa el acento de módulo de Proyectos. */
+  --sx-hito: var(--mod-proyectos);
+  --sx-hito-suave: var(--mod-proyectos-suave);
+
+  /* Radios ------------------------------------------------------------------ */
+  --sx-radio-sm: 8px;
+  --sx-radio: 12px;
+  --sx-radio-lg: 16px;
+  --sx-radio-xl: 20px;
+  --sx-radio-full: 999px;
+
+  /* Sombras: tres niveles de elevación + anillo de foco ------------------ */
+  --sx-sombra-1: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --sx-sombra-2: 0 2px 4px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.07);
+  --sx-sombra-3: 0 6px 14px rgba(15, 23, 42, 0.06), 0 22px 48px rgba(15, 23, 42, 0.14);
+  --sx-anillo-foco: 0 0 0 3px color-mix(in srgb, var(--primario) 28%, transparent);
+
+  /* Tipografía ------------------------------------------------------------- */
+  --sx-t-display: 700 1.75rem/1.2 var(--fuente);
+  --sx-t-h1: 700 1.375rem/1.25 var(--fuente);
+  --sx-t-h2: 600 1.0625rem/1.35 var(--fuente);
+  --sx-t-cuerpo: 400 0.875rem/1.5 var(--fuente);
+  --sx-t-chico: 400 0.8125rem/1.45 var(--fuente);
+  --sx-t-micro: 500 0.75rem/1.35 var(--fuente);
+  --sx-t-etiqueta: 600 0.6875rem/1.2 var(--fuente);
+  --sx-t-cifra: 700 1.75rem/1.1 var(--fuente);
+
+  /* Espaciado (base 4px) ------------------------------------------------- */
+  --sx-e-1: 4px;
+  --sx-e-2: 8px;
+  --sx-e-3: 12px;
+  --sx-e-4: 16px;
+  --sx-e-5: 20px;
+  --sx-e-6: 24px;
+  --sx-e-7: 32px;
+  --sx-e-8: 48px;
+
+  /* Movimiento --------------------------------------------------------------- */
+  --sx-dur-rapida: 120ms;
+  --sx-dur: 200ms;
+  --sx-dur-lenta: 320ms;
+  --sx-curva: cubic-bezier(0.16, 1, 0.3, 1);
+  --sx-curva-sale: cubic-bezier(0.4, 0, 1, 1);
+  --sx-escalon: 45ms; /* retardo entre elementos de una entrada escalonada */
+
+  /* Layout ------------------------------------------------------------------- */
+  --sx-margen: clamp(16px, 2.2vw, 32px);
+  --sx-drawer-ancho: min(440px, 100vw);
+
+  font: var(--sx-t-cuerpo);
+  color: var(--sx-texto);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Modo oscuro: los colores ya vienen de tokens.css; solo las sombras
+   necesitan más opacidad para leerse sobre superficies oscuras. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema="claro"]) .sx2 {
+    --sx-sombra-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --sx-sombra-2: 0 2px 6px rgba(0, 0, 0, 0.35), 0 8px 20px rgba(0, 0, 0, 0.3);
+    --sx-sombra-3: 0 8px 18px rgba(0, 0, 0, 0.4), 0 24px 56px rgba(0, 0, 0, 0.45);
+    --sx-fondo: var(--fondo-pagina);
+  }
+}
+:root[data-tema="oscuro"] .sx2 {
+  --sx-sombra-1: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --sx-sombra-2: 0 2px 6px rgba(0, 0, 0, 0.35), 0 8px 20px rgba(0, 0, 0, 0.3);
+  --sx-sombra-3: 0 8px 18px rgba(0, 0, 0, 0.4), 0 24px 56px rgba(0, 0, 0, 0.45);
+  --sx-fondo: var(--fondo-pagina);
+}

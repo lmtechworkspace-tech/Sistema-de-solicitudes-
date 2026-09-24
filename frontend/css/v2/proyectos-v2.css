@@ -1,0 +1,184 @@
+/* proyectos-v2.css — piezas propias de Proyectos v2 (lo genérico vive en
+ * tokens/layout/componentes/movimiento-v2.css y lo reusa todo SIGSO v2).
+ * Prefijo .sx2-py-*.
+ */
+
+/* Pantalla completa: el shell quita su tope de ancho mientras Proyectos v2
+   está activo (plataforma.js agrega esta clase al <main>). */
+.sigso-contenido.plataforma-contenido--total {
+  max-width: none !important;
+  width: 100% !important;
+  padding: 0 !important;
+}
+
+/* --- Portafolio -------------------------------------------------------------- */
+.sx2-py-tarjetas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--sx-e-4);
+}
+.sx2-py-tarjeta {
+  position: relative;
+  display: flex; flex-direction: column; gap: var(--sx-e-3);
+  padding-left: calc(var(--sx-e-5) + 2px);
+}
+.sx2-py-tarjeta::before {
+  content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 4px;
+  border-radius: 0 4px 4px 0; background: var(--sx-tono, var(--sx-primario));
+}
+.sx2-py-tarjeta__nombre {
+  margin: 0; font: var(--sx-t-h2); color: var(--sx-texto);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.sx2-py-tarjeta__desc {
+  margin: 0; font: var(--sx-t-chico); color: var(--sx-texto-2);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  min-height: 2.9em;
+}
+.sx2-py-tarjeta__avance { display: flex; align-items: center; gap: var(--sx-e-3); }
+.sx2-py-tarjeta__cifras { display: flex; flex-direction: column; gap: 2px; min-width: 0; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.sx2-py-tarjeta__cifras strong { font: 700 1rem/1.2 var(--fuente); color: var(--sx-texto); }
+.sx2-py-tarjeta__pie { padding-top: var(--sx-e-3); border-top: 1px solid var(--sx-borde-suave); margin-top: auto; }
+.sx2-py-tarjeta__vence { display: inline-flex; align-items: center; gap: 4px; font: var(--sx-t-micro); color: var(--sx-texto-3); }
+.sx2-py-tarjeta__vence--pronto { color: var(--sx-alerta); font-weight: 600; }
+.sx2-py-tarjeta__vence--vencido { color: var(--sx-critico); font-weight: 600; }
+
+.sx2-py-grafico { position: relative; height: 200px; }
+.sx2-py-leyenda { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font: var(--sx-t-chico); margin-top: var(--sx-e-3); }
+.sx2-py-leyenda__et { display: flex; align-items: center; gap: 8px; color: var(--sx-texto-2); }
+.sx2-py-leyenda__et::before { content: ''; width: 10px; height: 10px; border-radius: 3px; background: var(--sx-tono); }
+.sx2-py-leyenda__n { font-weight: 600; color: var(--sx-texto); text-align: right; font-variant-numeric: tabular-nums; }
+
+.sx2-py-carga { display: flex; flex-direction: column; gap: var(--sx-e-3); }
+.sx2-py-carga__fila { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px var(--sx-e-3); align-items: center; }
+.sx2-py-carga__fila .sx2-barra { grid-column: 1 / -1; }
+.sx2-py-carga__n { font: 600 0.8125rem/1 var(--fuente); color: var(--sx-texto-2); font-variant-numeric: tabular-nums; }
+
+/* --- Resumen: Gantt compacto -------------------------------------------------- */
+.sx2-py-gantt { --sx-gantt-et: 220px; position: relative; }
+.sx2-py-gantt__fila {
+  display: grid; grid-template-columns: var(--sx-gantt-et) minmax(0, 1fr); align-items: center;
+  min-height: 40px; border-bottom: 1px solid var(--sx-borde-suave); cursor: pointer;
+  transition: background var(--sx-dur-rapida) var(--sx-curva);
+}
+.sx2-py-gantt__fila:hover { background: var(--sx-superficie-hover); }
+.sx2-py-gantt__fila--cab, .sx2-py-gantt__fila--hitos { cursor: default; }
+.sx2-py-gantt__fila--cab { min-height: 28px; border-bottom-color: var(--sx-borde); }
+.sx2-py-gantt__fila--cab:hover, .sx2-py-gantt__fila--hitos:hover { background: none; }
+.sx2-py-gantt__nombre {
+  display: flex; align-items: center; gap: 8px; min-width: 0; padding-right: var(--sx-e-3);
+  font: 500 0.8125rem/1.3 var(--fuente); color: var(--sx-texto);
+}
+.sx2-py-gantt__semanas {
+  display: grid; grid-template-columns: repeat(var(--sx-semanas), 1fr);
+  font: var(--sx-t-micro); color: var(--sx-texto-3);
+}
+.sx2-py-gantt__sem { padding-left: 4px; white-space: nowrap; overflow: hidden; }
+.sx2-py-gantt__sem b { color: var(--sx-texto-2); text-transform: capitalize; }
+.sx2-py-gantt__pista {
+  position: relative; height: 40px;
+  background-image: repeating-linear-gradient(to right, var(--sx-borde-suave) 0 1px, transparent 1px calc(100% / var(--sx-semanas)));
+}
+.sx2-py-gantt__barra {
+  position: absolute; top: 11px; height: 18px; border-radius: var(--sx-radio-full); overflow: hidden;
+  background: color-mix(in srgb, var(--sx-tono) 24%, var(--sx-superficie));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sx-tono) 40%, transparent);
+  transition: box-shadow var(--sx-dur) var(--sx-curva), transform var(--sx-dur) var(--sx-curva);
+  transform-origin: left center;
+  animation: sx2-crece var(--sx-dur-lenta) var(--sx-curva) both;
+  animation-delay: calc(var(--i, 0) * var(--sx-escalon));
+}
+.sx2-py-gantt__fila:hover .sx2-py-gantt__barra {
+  box-shadow: inset 0 0 0 1px var(--sx-tono), 0 3px 10px color-mix(in srgb, var(--sx-tono) 30%, transparent);
+}
+.sx2-py-gantt__relleno { display: block; height: 100%; background: var(--sx-tono); border-radius: inherit; }
+.sx2-py-gantt__hito {
+  position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 2px;
+  background: var(--sx-tono); transform: translate(-50%, -50%) rotate(45deg);
+  box-shadow: 0 0 0 2px var(--sx-superficie);
+}
+.sx2-py-gantt__hoy {
+  position: absolute; top: 0; bottom: 0; width: 2px; pointer-events: none;
+  left: calc(var(--sx-gantt-et) + (100% - var(--sx-gantt-et)) * var(--hoy) / 100);
+  background: var(--sx-primario);
+}
+.sx2-py-gantt__hoy span {
+  position: absolute; top: -4px; left: 50%; transform: translateX(-50%);
+  padding: 3px 7px; border-radius: var(--sx-radio-full);
+  background: var(--sx-primario); color: #fff; font: 700 0.625rem/1 var(--fuente); letter-spacing: 0.04em;
+}
+@keyframes sx2-crece { from { transform: scaleX(0); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (max-width: 720px) { .sx2-py-gantt { --sx-gantt-et: 130px; } }
+
+/* --- Resumen: avance, próximo hito, motivos -------------------------------- */
+.sx2-py-avance { display: flex; align-items: center; gap: var(--sx-e-5); }
+.sx2-py-avance .sx2-anillo__txt { font-size: 1.5rem; }
+.sx2-py-proximo {
+  display: flex; align-items: center; gap: 8px; margin-top: var(--sx-e-4);
+  padding: 10px 12px; border-radius: var(--sx-radio);
+  background: var(--sx-hito-suave); font: var(--sx-t-chico); color: var(--sx-texto);
+}
+.sx2-py-proximo > .sigso-ico { color: var(--sx-hito); }
+.sx2-py-proximo .sx2-cortar { flex: 1; }
+.sx2-py-motivos { list-style: none; margin: var(--sx-e-3) 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font: var(--sx-t-micro); color: var(--sx-texto-2); }
+.sx2-py-motivos li { display: flex; gap: 6px; align-items: flex-start; }
+.sx2-py-motivos .sigso-ico { color: var(--sx-alerta); margin-top: 1px; }
+
+/* --- Resumen: actividad reciente --------------------------------------------- */
+.sx2-py-feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.sx2-py-feed__item {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--sx-e-3); align-items: start;
+  padding: 10px 0; border-bottom: 1px solid var(--sx-borde-suave);
+}
+.sx2-py-feed__item:last-child { border-bottom: 0; }
+.sx2-py-feed__item[data-py2-tarea] { cursor: pointer; }
+.sx2-py-feed__item[data-py2-tarea]:hover .sx2-py-feed__obj { color: var(--sx-primario); }
+.sx2-py-feed__av { position: relative; display: inline-flex; }
+.sx2-py-feed__tipo {
+  position: absolute; right: -5px; bottom: -5px; width: 17px; height: 17px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--sx-tono); color: #fff;
+  box-shadow: 0 0 0 2px var(--sx-superficie);
+}
+.sx2-py-feed__txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.sx2-py-feed__txt strong { color: var(--sx-texto); }
+.sx2-py-feed__obj { color: var(--sx-texto); font-weight: 500; transition: color var(--sx-dur-rapida) var(--sx-curva); }
+.sx2-py-feed__nota { color: var(--sx-texto-3); font-size: 0.78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sx2-py-feed__cuando { font: var(--sx-t-micro); color: var(--sx-texto-3); white-space: nowrap; }
+
+/* --- Resumen: línea de hitos ----------------------------------------------------- */
+.sx2-py-hitos { list-style: none; margin: 0; padding: 0; position: relative; }
+.sx2-py-hitos::before { content: ''; position: absolute; left: 6px; top: 12px; bottom: 12px; width: 2px; background: var(--sx-borde); }
+.sx2-py-hitos__item { position: relative; display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; gap: var(--sx-e-3); align-items: start; padding: 8px 0; }
+.sx2-py-hitos__marca {
+  position: relative; left: 1px; width: 12px; height: 12px; margin-top: 4px; border-radius: 2px;
+  transform: rotate(45deg); background: var(--sx-tono); box-shadow: 0 0 0 3px var(--sx-superficie);
+}
+.sx2-py-hitos__txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; font: var(--sx-t-chico); color: var(--sx-texto); }
+.sx2-py-hitos__txt .sx2-tenue { font-size: 0.75rem; }
+.sx2-py-hitos__pct { font: 600 0.8125rem/1.6 var(--fuente); color: var(--sx-tono); }
+
+/* --- Formularios en drawer --------------------------------------------------- */
+.sx2-form { display: flex; flex-direction: column; gap: var(--sx-e-4); }
+.sx2-campo { display: flex; flex-direction: column; gap: 6px; }
+.sx2-campo__et { font: 600 0.8125rem/1.3 var(--fuente); color: var(--sx-texto); }
+.sx2-campo textarea.sx2-input { height: auto; min-height: 84px; padding-top: 10px; resize: vertical; }
+.sx2-campo__ayuda { font: var(--sx-t-micro); color: var(--sx-texto-3); }
+.sx2-campo__error { font: var(--sx-t-micro); color: var(--sx-critico); }
+.sx2-form__fila { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sx-e-3); }
+@media (max-width: 560px) { .sx2-form__fila { grid-template-columns: 1fr; } }
+
+/* --- Interruptor v1/v2 (lo pinta el shell) ---------------------------------- */
+.sx2-py-interruptor {
+  position: fixed; right: 92px; bottom: 26px; z-index: 55;
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 38px; padding: 0 16px 0 12px;
+  border-radius: 999px; border: 0; cursor: pointer;
+  font: 600 0.8125rem/1 var(--fuente);
+  color: #fff;
+  background: linear-gradient(135deg, var(--primario), var(--mod-proyectos));
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--mod-proyectos) 40%, transparent);
+  transition: transform 150ms ease-out, box-shadow 150ms ease-out;
+}
+.sx2-py-interruptor:hover { transform: translateY(-2px); box-shadow: 0 10px 26px color-mix(in srgb, var(--mod-proyectos) 50%, transparent); }
+.sx2-py-interruptor--clasica { background: var(--superficie); color: var(--texto); box-shadow: 0 4px 16px rgba(15, 23, 42, 0.16); border: 1px solid var(--borde); }
+@media (max-width: 720px) { .sx2-py-interruptor { right: 84px; bottom: 20px; } }

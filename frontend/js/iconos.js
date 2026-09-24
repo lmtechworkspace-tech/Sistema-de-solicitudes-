@@ -98,7 +98,22 @@ var Iconos = (function () {
     campanaOff: '<path d="M8.7 3.9A6 6 0 0 1 18 8c0 2.6.5 4.4 1.2 5.7"/><path d="M17 17H4s3-2 3-9c0-.5 0-1 .1-1.4"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/><path d="M2 2l20 20"/>', // Notificaciones silenciadas
     // "Bloqueado / en pausa" -- reemplaza el simbolo ⏸ (que en Windows sale
     // como emoji azul). Barras rellenas para que se lea a tamano chico.
-    pausado: '<rect x="7" y="5" width="3.4" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="13.6" y="5" width="3.4" height="14" rx="1" fill="currentColor" stroke="none"/>'
+    pausado: '<rect x="7" y="5" width="3.4" height="14" rx="1" fill="currentColor" stroke="none"/><rect x="13.6" y="5" width="3.4" height="14" rx="1" fill="currentColor" stroke="none"/>',
+
+    // v2 (Proyectos v2, sistema visual .sx2): navegación por secciones,
+    // modos de vista y gráficos. Mismo trazo/caja que el resto.
+    bandera: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/>', // Hito
+    carpeta: '<path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>', // Archivos
+    kanban: '<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="10" y="4" width="5" height="10" rx="1.5"/><rect x="17" y="4" width="4" height="13" rx="1.5"/>',
+    tabla: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M3 15h18M9 10v10"/>',
+    gantt: '<path d="M3 3v18"/><path d="M7 7h8M10 12h9M7 17h6"/>',
+    exportar: '<path d="M4 14v5a2 2 0 002 2h12a2 2 0 002-2v-5"/><path d="M12 3v12M7 8l5-5 5 5"/>',
+    dinero: '<path d="M12 2v20"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/>', // Costos
+    rejilla: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+    panel: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>', // Resumen
+    tendenciaBaja: '<path d="M3 7l6 6 4-4 8 8"/><path d="M17 17h4v-4"/>',
+    dona: '<path d="M21.2 15.9A10 10 0 118 2.8"/><path d="M22 12A10 10 0 0012 2v10z"/>',
+    destello: '<path d="M12 3l1.8 4.9L19 9.7l-4.9 1.8L12 16.4l-1.8-4.9L5 9.7l4.9-1.8z"/><path d="M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2-2.2-.8 2.2-.8z"/>' // "Nueva versión"
   };
 
   /**

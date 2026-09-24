@@ -20,6 +20,13 @@
        su CSS. -->
   <link rel="stylesheet" href="css/dashboard.css" />
   <link rel="stylesheet" href="css/admin.css" />
+  <!-- Sistema visual v2 (clase raíz .sx2, piloto Proyectos v2): no afecta a
+       ninguna pantalla v1, todo cuelga de .sx2. -->
+  <link rel="stylesheet" href="css/v2/tokens-v2.css" />
+  <link rel="stylesheet" href="css/v2/layout-v2.css" />
+  <link rel="stylesheet" href="css/v2/componentes-v2.css" />
+  <link rel="stylesheet" href="css/v2/movimiento-v2.css" />
+  <link rel="stylesheet" href="css/v2/proyectos-v2.css" />
   <!-- P3: graficos del dashboard de la bandeja (mismo CDN que app.html). -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
@@ -1087,6 +1094,13 @@
   <!-- v9.0: modulo "Proyectos". Antes de plataforma.js, que lo invoca desde
        mostrarModulo_. -->
   <script src="js/proyectos.js"></script>
+  <!-- Proyectos v2 (beta, solo ADM): convive con proyectos.js en el mismo
+       contenedor; plataforma.js elige cuál pinta. ui-v2.js es la capa de
+       componentes v2 que después usará el resto de SIGSO. -->
+  <script src="js/ui-v2.js"></script>
+  <script src="js/proyectos-v2/nucleo.js"></script>
+  <script src="js/proyectos-v2/portafolio.js"></script>
+  <script src="js/proyectos-v2/resumen.js"></script>
   <!-- v15.1: calidad.js (102 KB, el archivo mas grande del frontend) NO se
        carga aqui. Lo pide carga-diferida.js en cuanto el navegador queda
        ocioso, con lo que sale del camino critico del arranque sin que nadie

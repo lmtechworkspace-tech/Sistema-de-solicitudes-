@@ -370,6 +370,7 @@
     olvidarSesion_();
     sesion = { token: null, cuenta: null };
     autocompletadoHecho = false;
+    actualizarProyectosV2_(null); // quita el interruptor flotante de v2
     mostrarVista_('vista-login');
   }
 
@@ -528,9 +529,10 @@
         // v9.0b: 'refrescar' (no 'cargar') -- si el usuario tiene un
         // proyecto abierto, lo mantiene ahi en vez de devolverlo al
         // portafolio en cada refresco de fondo (ver proyectos.js).
-        if (window.SigsoProyectos) {
-          if (window.SigsoProyectos.refrescar) window.SigsoProyectos.refrescar();
-          else window.SigsoProyectos.cargar();
+        var modPy = moduloProyectos_();
+        if (modPy) {
+          if (modPy.refrescar) modPy.refrescar();
+          else modPy.cargar();
         }
         break;
       case 'calidad':
@@ -1241,7 +1243,7 @@
     administracion: function (id) { return window.SigsoAdmin && window.SigsoAdmin.irAItem && window.SigsoAdmin.irAItem(id); },
     gerencia: function (id) { return window.SigsoGerencia && window.SigsoGerencia.irAItem && window.SigsoGerencia.irAItem(id); },
     jefatura: function (id) { return window.SigsoJefatura && window.SigsoJefatura.irAItem && window.SigsoJefatura.irAItem(id); },
-    proyectos: function (id) { return window.SigsoProyectos && window.SigsoProyectos.irAItem && window.SigsoProyectos.irAItem(id); },
+    proyectos: function (id) { var m = moduloProyectos_(); return m && m.irAItem && m.irAItem(id); },
     novedades: function (id) { return window.SigsoNovedades && window.SigsoNovedades.irAItem && window.SigsoNovedades.irAItem(id); },
     pausas_coordinacion: function (id) { return window.SigsoCoordinacion && window.SigsoCoordinacion.irAItem && window.SigsoCoordinacion.irAItem(id); }
   };
@@ -1366,6 +1368,47 @@
   // <main> se adapta al modulo en vez de ser fijo.
   var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad'];
 
+  // Proyectos v2 (beta, solo ADM): el shell decide qué implementación pinta
+  // el módulo -- v1 (proyectos.js) o v2 (proyectos-v2/*.js) -- según la
+  // preferencia del usuario (SigsoProyectosV2.activo, en localStorage). Los
+  // tres puntos donde el shell llama a Proyectos pasan por moduloProyectos_.
+  function usaProyectosV2_() {
+    return !!(window.SigsoProyectosV2 && sesion && sesion.cuenta && sesion.cuenta.rol === 'ADM' &&
+      window.SigsoProyectosV2.activo());
+  }
+  function moduloProyectos_() {
+    return usaProyectosV2_() ? window.SigsoProyectosV2 : window.SigsoProyectos;
+  }
+  // Pantalla completa para v2 + interruptor flotante "Probar la nueva
+  // versión / Volver a la clásica" (solo ADM, solo dentro de Proyectos).
+  function actualizarProyectosV2_(id) {
+    var enPy = id === 'proyectos';
+    var v2 = enPy && usaProyectosV2_();
+    var main = document.querySelector('#vista-shell .sigso-contenido');
+    if (main) main.classList.toggle('plataforma-contenido--total', v2);
+    var pill = document.getElementById('py2-interruptor');
+    var esAdm = sesion && sesion.cuenta && sesion.cuenta.rol === 'ADM';
+    if (!enPy || !esAdm || !window.SigsoProyectosV2) { if (pill) pill.remove(); return; }
+    if (!pill) {
+      pill = document.createElement('button');
+      pill.type = 'button';
+      pill.id = 'py2-interruptor';
+      pill.addEventListener('click', function () { window.SigsoProyectosV2.usarVersion(!usaProyectosV2_()); });
+      document.body.appendChild(pill);
+    }
+    pill.className = 'sx2-py-interruptor' + (v2 ? ' sx2-py-interruptor--clasica' : '');
+    pill.innerHTML = Iconos.svg(v2 ? 'izquierda' : 'destello', { tam: 16 }) +
+      (v2 ? 'Volver a la versión clásica' : 'Probar la nueva versión (beta)');
+  }
+  document.addEventListener('sigso:proyectos-version', function (ev) {
+    if (moduloActivo_ !== 'proyectos') return;
+    if (!(ev.detail && ev.detail.v2) && window.SigsoProyectosV2) window.SigsoProyectosV2.desmontar();
+    actualizarProyectosV2_('proyectos');
+    var m = moduloProyectos_();
+    if (m) m.cargar();
+    window.scrollTo(0, 0);
+  });
+
   // v5.1: modulo activo + cuando se cargaron por ultima vez sus datos, para
   // el auto-refresco al volver a la pestana (sin recargar la pagina).
   var moduloActivo_ = null;
@@ -1452,9 +1495,10 @@
     if (id === 'mi_trabajo' && window.SigsoActividades) {
       window.SigsoActividades.cargar();
     }
-    if (id === 'proyectos' && window.SigsoProyectos) {
-      window.SigsoProyectos.cargar();
+    if (id === 'proyectos' && moduloProyectos_()) {
+      moduloProyectos_().cargar();
     }
+    actualizarProyectosV2_(id);
     if (id === 'calidad') {
       abrirCalidad_();
     }

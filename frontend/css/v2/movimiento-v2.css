@@ -1,0 +1,64 @@
+/* movimiento-v2.css — animaciones del sistema v2.
+ *
+ * Criterio: el movimiento explica (de dónde viene un panel, qué cambió), no
+ * decora. Todo usa las mismas duraciones/curva de tokens-v2.css, y todo se
+ * apaga con prefers-reduced-motion (al final del archivo).
+ *
+ * Entrada escalonada: cada elemento con .sx2-entra define --i (0, 1, 2...)
+ * inline; el retardo es --i × --sx-escalon. Así una fila de KPIs o una lista
+ * aparece en cascada sin JS de animación.
+ */
+@keyframes sx2-sube {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes sx2-escala {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes sx2-aparece {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes sx2-desliza-izq {
+  from { transform: translateX(100%); }
+  to   { transform: none; }
+}
+@keyframes sx2-brillo {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+@keyframes sx2-pulso {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--sx-tono, var(--sx-primario)) 45%, transparent); }
+  50%      { box-shadow: 0 0 0 6px transparent; }
+}
+
+.sx2-entra {
+  animation: sx2-sube var(--sx-dur-lenta) var(--sx-curva) both;
+  animation-delay: calc(var(--i, 0) * var(--sx-escalon));
+}
+.sx2-entra-escala {
+  animation: sx2-escala var(--sx-dur-lenta) var(--sx-curva) both;
+  animation-delay: calc(var(--i, 0) * var(--sx-escalon));
+}
+.sx2-cambio-seccion { animation: sx2-aparece var(--sx-dur) var(--sx-curva) both; }
+
+/* Drawer: el telón aparece, el panel entra desde la derecha. Al cerrar, el
+   JS agrega --saliendo y espera el fin de la animación antes de quitarlo. */
+.sx2-drawer__telon { animation: sx2-aparece var(--sx-dur) var(--sx-curva) both; }
+.sx2-drawer__panel { animation: sx2-desliza-izq var(--sx-dur-lenta) var(--sx-curva) both; }
+.sx2-drawer--saliendo .sx2-drawer__telon { animation: sx2-aparece var(--sx-dur) var(--sx-curva-sale) reverse both; }
+.sx2-drawer--saliendo .sx2-drawer__panel { animation: sx2-desliza-izq var(--sx-dur) var(--sx-curva-sale) reverse both; }
+
+/* Punto "en vivo" (p. ej. alerta activa). */
+.sx2-pulso { animation: sx2-pulso 2s ease-in-out infinite; border-radius: 50%; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sx2 *, .sx2 *::before, .sx2 *::after,
+  .sx2-drawer, .sx2-drawer * {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}
