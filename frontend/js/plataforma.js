@@ -1393,8 +1393,11 @@
     // el Módulo 4): la v2 se monta encima y se desmonta al ir a ellas.
     bandeja: { v2: function () { return window.SigsoBandejaV2; }, v1: function () { return BANDEJA_CLASICA_; } },
     // Solo la vista de la plataforma: estado.html (público) sigue con estado.js.
-    mis_solicitudes: { v2: function () { return window.SigsoMisSolicitudesV2; }, v1: function () { return MIS_SOLICITUDES_CLASICA_; } }
+    mis_solicitudes: { v2: function () { return window.SigsoMisSolicitudesV2; }, v1: function () { return MIS_SOLICITUDES_CLASICA_; } },
+    // Piel v2 sobre el mismo formulario.js (la clásica es "sin piel").
+    nueva_solicitud: { v2: function () { return window.SigsoNuevaSolicitudV2; }, v1: function () { return NUEVA_SOLICITUD_CLASICA_; } }
   };
+  var NUEVA_SOLICITUD_CLASICA_ = { cargar: function () { /* el formulario ya está en el DOM */ } };
   var MIS_SOLICITUDES_CLASICA_ = {
     cargar: function () {
       document.getElementById('nota-correos-cuenta').textContent =
@@ -1514,6 +1517,7 @@
       moduloImpl_('mis_solicitudes').cargar();
     }
     if (id === 'nueva_solicitud') {
+      moduloImpl_('nueva_solicitud').cargar();
       autocompletarFormulario_();
     }
     if (id === 'bandeja') {

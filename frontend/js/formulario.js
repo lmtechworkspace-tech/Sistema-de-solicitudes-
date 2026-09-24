@@ -41,6 +41,37 @@
   // reproducen nada existente.
   var TIPOS_CON_ACCESO = ['ERR', 'MOD', 'MEJ', 'DES', 'MIG'];
 
+  // SIGSO v2, módulo 3D (decisión del dueño, 2026-09-24): DENTRO de la
+  // plataforma la gravedad se pide en un toque y es obligatoria. Antes el
+  // impacto solo estaba en el modo Completo y se informó en 6 de 57 ítems:
+  // la prioridad caía a P4 por defecto (40 de 57) y el SLA no distinguía lo
+  // urgente. Cada opción es un valor de impacto que YA existe (el backend
+  // deriva la prioridad con MAPA_IMPACTO_PRIORIDAD, sin cambios). El
+  // formulario público (index.html) no cambia.
+  var GRAVEDAD = [
+    { valor: 'BLOQUEO_OPERATIVO', texto: 'No puedo trabajar', ayuda: 'Algo se detuvo y no hay cómo seguir', p: 'P1' },
+    { valor: 'DEGRADACION_IMPORTANTE', texto: 'Me afecta mucho', ayuda: 'Funciona, pero mal o muy lento', p: 'P2' },
+    { valor: 'PARCIAL_CON_WORKAROUND', texto: 'Tengo cómo seguir', ayuda: 'Hay una forma de rodearlo mientras tanto', p: 'P3' },
+    { valor: 'PLANIFICADO', texto: 'Puede esperar', ayuda: 'Una mejora o algo para más adelante', p: 'P5' }
+  ];
+  // Impactos P1 del modo Completo que la pregunta corta agrupa en "No puedo trabajar".
+  var IMPACTOS_BLOQUEO = ['BLOQUEO_OPERATIVO', 'SISTEMA_CAIDO', 'PERDIDA_DATOS'];
+  function enPlataforma_() { return !!document.getElementById('vista-shell'); }
+  function gravedadDe_(impacto) {
+    if (IMPACTOS_BLOQUEO.indexOf(impacto) !== -1) return GRAVEDAD[0];
+    return GRAVEDAD.filter(function (g) { return g.valor === impacto; })[0] || null;
+  }
+  function renderChipsGravedad_(item, idx) {
+    var actual = gravedadDe_(item.impacto);
+    return '<div class="sigso-campo"><label>¿Cuánto te afecta? *</label>' +
+      '<div class="sigso-chips sigso-chips--gravedad">' + GRAVEDAD.map(function (g) {
+        var activo = actual === g ? ' sigso-chip--activo' : '';
+        return '<button type="button" class="sigso-chip sigso-chip--gravedad' + activo + '" data-accion="elegir-gravedad" data-idx="' + idx + '" data-impacto="' + g.valor + '" title="' + Componentes.escaparHtml(g.ayuda) + '">' +
+          '<strong>' + Componentes.escaparHtml(g.texto) + '</strong><small>' + Componentes.escaparHtml(g.ayuda) + '</small></button>';
+      }).join('') + '</div>' +
+      '<p class="sigso-ayuda">Define la prioridad y el plazo de respuesta. Sé honesto: si todo es urgente, nada lo es.</p></div>';
+  }
+
   var estado = {
     paso: 'contexto',
     // P1 (v2.0, Sprint 1): 'rapido' muestra solo tipo/modulo/titulo/que pasa
@@ -206,12 +237,14 @@
   function irAPaso3_() {
     var faltantes = estado.subsolicitudes.some(function (item) {
       var faltaModulo = estado.asociadaPlataforma && !moduloSeleccionadoFinalItem_(item);
-      return !item.titulo.trim() || !item.descripcion.trim() || !item.tipo || faltaModulo;
+      var faltaGravedad = enPlataforma_() && !item.impacto;
+      return !item.titulo.trim() || !item.descripcion.trim() || !item.tipo || faltaModulo || faltaGravedad;
     });
     if (faltantes) {
       var mensaje = estado.asociadaPlataforma
         ? 'Completa título, descripción, tipo y módulo de todos los items antes de continuar.'
         : 'Completa título, descripción y tipo de todos los items antes de continuar.';
+      if (enPlataforma_()) mensaje = mensaje.replace('tipo', 'tipo, cuánto te afecta');
       document.getElementById('alerta-paso2').innerHTML = Componentes.alerta(mensaje, 'error');
       return;
     }
@@ -616,6 +649,7 @@
 
     var basico =
       '<div class="sigso-campo"><label>Tipo de trabajo</label>' + renderChipsTipo_(item, idx) + '</div>' +
+      (enPlataforma_() ? renderChipsGravedad_(item, idx) : '') +
       renderCascadaModuloItem_(item, idx) +
       Componentes.campoTexto({ dataCampo: 'titulo', idx: idx, valor: item.titulo, requerido: true, label: 'Título corto' }) +
       Componentes.campoTextarea({ dataCampo: 'descripcion', idx: idx, valor: item.descripcion, requerido: true, label: completo ? '¿Qué pasa hoy?' : '¿Qué pasa?', ayuda: 'Describe el problema o lo que necesitas.' });
@@ -628,7 +662,7 @@
       basico +
       Componentes.campoTextarea({ dataCampo: 'resultado_esperado', idx: idx, valor: item.resultado_esperado, label: '¿Qué debería pasar?' }) +
       Componentes.campoTextarea({ dataCampo: 'contexto', idx: idx, valor: item.contexto, label: 'Contexto (opcional)', ayuda: 'Antecedentes de cómo se llegó a esto.' }) +
-      Componentes.campoSelect({ dataCampo: 'impacto', idx: idx, valor: item.impacto, label: 'Impacto', opciones: opcionesImpacto_(), placeholder: 'No especificado' }) +
+      (enPlataforma_() ? '' : Componentes.campoSelect({ dataCampo: 'impacto', idx: idx, valor: item.impacto, label: 'Impacto', opciones: opcionesImpacto_(), placeholder: 'No especificado' })) +
       (mostrarAcceso ? renderBloqueAcceso_(item, idx) : '') +
       '<div class="sigso-campo"><label>¿Con qué frecuencia pasa?</label>' + renderChipsFrecuencia_(item, idx) + '</div>' +
       Componentes.campoTexto({ dataCampo: 'personas_afectadas', idx: idx, valor: item.personas_afectadas, tipo: 'number', label: '¿A cuántas personas afecta? (opcional)' }) +
@@ -779,6 +813,14 @@
         if (campo === 'submodulo') { item.item = ''; item.subitem = ''; }
         if (campo === 'item') { item.subitem = ''; }
         renderSubsolicitudes_();
+      });
+    });
+
+    cuerpo.querySelectorAll('[data-accion="elegir-gravedad"]').forEach(function (el) {
+      el.addEventListener('click', function () {
+        estado.subsolicitudes[idx].impacto = el.getAttribute('data-impacto');
+        renderSubsolicitudes_();
+        guardarBorrador_();
       });
     });
 
@@ -997,6 +1039,7 @@
         '<td>' + (idx + 1) + '</td>' +
         '<td>' + Componentes.escaparHtml(etiquetaTipo_(item.tipo)) + '</td>' +
         '<td>' + Componentes.escaparHtml(item.titulo) + '</td>' +
+        (enPlataforma_() ? '<td>' + Componentes.escaparHtml((gravedadDe_(item.impacto) || { texto: '—' }).texto) + '</td>' : '') +
         '<td>' + (partes.length ? partes.join(', ') : 'Sin evidencia') + '</td>' +
         '</tr>';
     }).join('');
@@ -1014,7 +1057,7 @@
     document.getElementById('contenedor-revision').innerHTML =
       '<p>Empresa: ' + Componentes.escaparHtml(document.getElementById('campo-empresa').selectedOptions[0].textContent) + '</p>' +
       '<p>Solicitante: ' + Componentes.escaparHtml(document.getElementById('campo-solicitante-nombre').value) + '</p>' +
-      '<table class="sigso-revision-tabla"><thead><tr><th>#</th><th>Tipo</th><th>Título</th><th>Evidencia</th></tr></thead>' +
+      '<table class="sigso-revision-tabla"><thead><tr><th>#</th><th>Tipo</th><th>Título</th>' + (enPlataforma_() ? '<th>Cuánto afecta</th>' : '') + '<th>Evidencia</th></tr></thead>' +
       '<tbody>' + filas + '</tbody></table>' +
       avisoEvidencia + avisoCc;
   }

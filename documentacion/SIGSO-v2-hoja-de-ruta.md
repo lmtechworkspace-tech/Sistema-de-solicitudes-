@@ -353,3 +353,25 @@ solicitante quedaba escondido dentro de cada detalle.
 - Nota de prueba: `subirArchivo` sigue en Apps Script (Drive); no se probó
   en el sandbox para no escribir en producción — es la misma llamada que ya
   usa la clásica.
+
+### 3D Nueva solicitud v2 (solo plataforma) — ESTADO: HECHO
+Datos (sandbox, 57 ítems): el **impacto se informó en 6 de 57** (el modo
+Rápido no lo pedía), así que la prioridad cayó al valor por defecto **P4 en
+40 de 57** y el SLA no distinguía lo urgente. 43 de 57 ítems traen adjuntos
+y 53 de 57 fecha propuesta: esas partes del formulario sí se usan.
+
+Decisiones del dueño (2026-09-24):
+- **Piel v2 sobre la lógica actual** (no reescritura): formulario.js sigue
+  siendo el mismo; `js/nueva-solicitud-v2.js` solo pone/quita `sx2 ns2` en
+  la sección y `css/v2/nueva-solicitud-v2.css` le da el diseño v2 (stepper
+  en pastillas, tarjeta centrada de 920 px, campos, chips, acordeón,
+  dropzone, tabla de revisión). `MODULOS_V2.nueva_solicitud`.
+- **Gravedad en un toque, obligatoria dentro de la plataforma** (en v2 y
+  en la clásica, porque es un dato): "No puedo trabajar" (BLOQUEO_OPERATIVO
+  → P1) · "Me afecta mucho" (DEGRADACION_IMPORTANTE → P2) · "Tengo cómo
+  seguir" (PARCIAL_CON_WORKAROUND → P3) · "Puede esperar" (PLANIFICADO →
+  P5). Son valores de impacto que ya existían: el backend no cambia
+  (MAPA_IMPACTO_PRIORIDAD). En el modo Completo reemplaza al select de
+  impacto; la revisión muestra la columna "Cuánto afecta".
+- El formulario público (index.html) **no cambia** (se detecta por la
+  ausencia de `#vista-shell`).
