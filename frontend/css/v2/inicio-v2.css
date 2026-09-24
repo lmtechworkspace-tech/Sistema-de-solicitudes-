@@ -1,0 +1,64 @@
+/* inicio-v2.css — Inicio v2 (SIGSO v2, módulo 2). Prefijo .inicio2-*.
+ * Reusa todo lo genérico de tokens/layout/componentes-v2 y las filas de tarea
+ * de Mi trabajo (.sx2-py-mt-*, en proyectos-v2.css). */
+
+/* La versión clásica comparte la sección: mientras v2 está activa, solo se ve
+   su contenedor. */
+#modulo-home.inicio-v2-activo > :not(#inicio-v2) { display: none !important; }
+
+.inicio2-estado {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 40px;
+  padding: 6px 8px 6px 14px; border-radius: 999px;
+  background: var(--sx-tono-suave); color: var(--sx-tono);
+  font: 500 0.875rem/1.3 var(--fuente);
+}
+.inicio2-estado strong { font-weight: 700; }
+.inicio2-estado > span { color: var(--sx-texto); }
+.inicio2-estado .sigso-ico { flex: none; }
+
+/* Requiere tu atención: un grupo por origen */
+.inicio2-grupos { display: flex; flex-direction: column; gap: var(--sx-e-3); }
+.inicio2-grupo { border: 1px solid var(--sx-borde-suave); border-radius: var(--sx-radio-lg); padding: var(--sx-e-3) var(--sx-e-4); }
+.inicio2-grupo__cab { display: flex; align-items: center; gap: var(--sx-e-3); }
+.inicio2-grupo__ico { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 12px; background: var(--sx-tono-suave); color: var(--sx-tono); }
+.inicio2-grupo__top { margin-top: var(--sx-e-2); padding-top: var(--sx-e-2); border-top: 1px solid var(--sx-borde-suave); }
+
+/* Tu semana */
+.inicio2-semana { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sx-e-3); margin: var(--sx-e-3) 0; }
+.inicio2-semana > div { display: flex; flex-direction: column; gap: 2px; padding: var(--sx-e-3); border-radius: var(--sx-radio); background: var(--sx-superficie-2); }
+.inicio2-grande { font: 700 1.5rem/1.1 var(--fuente); color: var(--sx-texto); }
+.inicio2-barras { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; height: 96px; align-items: end; }
+.inicio2-barra { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; }
+.inicio2-barra i {
+  display: block; width: 100%; max-width: 28px; border-radius: 6px 6px 3px 3px;
+  background: color-mix(in srgb, var(--sx-primario) 55%, var(--sx-superficie));
+  transform-origin: bottom; animation: inicio2-sube var(--sx-dur-lenta) var(--sx-curva) both;
+}
+.inicio2-barra--hoy i { background: var(--sx-primario); }
+.inicio2-barra b { font: 600 0.6875rem/1 var(--fuente); color: var(--sx-texto-3); }
+.inicio2-barra--hoy b { color: var(--sx-primario); }
+
+/* Mis proyectos */
+.inicio2-proyectos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.inicio2-proyecto {
+  width: 100%; display: flex; align-items: center; gap: var(--sx-e-3); padding: 8px;
+  border: 0; border-radius: var(--sx-radio); background: none; text-align: left; cursor: pointer;
+  font: var(--sx-t-chico); color: var(--sx-texto);
+  transition: background var(--sx-dur-rapida) var(--sx-curva);
+}
+.inicio2-proyecto:hover { background: var(--sx-superficie-hover); }
+.inicio2-proyecto:focus-visible { outline: none; box-shadow: var(--sx-anillo-foco); }
+.inicio2-proyecto > .sigso-ico { color: var(--sx-texto-3); flex: none; }
+
+/* Paneles por rol: mini KPIs */
+.inicio2-mini { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sx-e-2); }
+.inicio2-mini__item { display: flex; flex-direction: column; gap: 4px; padding: var(--sx-e-3); border-radius: var(--sx-radio); background: var(--sx-tono-suave); }
+.inicio2-mini__item b { font: 700 1.5rem/1 var(--fuente); color: var(--sx-tono); }
+.inicio2-mini__item small { font: var(--sx-t-micro); color: var(--sx-texto-2); }
+
+@media (max-width: 720px) {
+  .inicio2-mini { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .inicio2-estado { border-radius: var(--sx-radio); }
+}
+@keyframes inicio2-sube { from { transform: scaleY(0); } to { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .inicio2-barra i { animation: none; } }

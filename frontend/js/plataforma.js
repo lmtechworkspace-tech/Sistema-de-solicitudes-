@@ -1303,9 +1303,16 @@
     if (sub && sub.classList && sub.classList.contains('sigso-ayuda')) texto.appendChild(sub);
   }
 
+  // Inicio se pinta al entrar y, desde SIGSO v2 (módulo 2), también cada vez
+  // que se vuelve a él: antes mostraba los números del momento del login
+  // hasta el siguiente auto-refresco (volvías de confirmar una fecha en Mi
+  // trabajo y el Inicio seguía pidiéndotela).
+  var ultimoRenderHome_ = 0;
   function renderHome_() {
-    if (window.SigsoInicio) {
-      SigsoInicio.render({
+    ultimoRenderHome_ = Date.now();
+    var inicio = moduloImpl_('home');
+    if (inicio) {
+      inicio.render({
         cuenta: sesion.cuenta,
         token: sesion.token,
         modulos: modulosDeLaCuenta_(),
@@ -1377,7 +1384,9 @@
   // módulo = una línea más aquí.
   var MODULOS_V2 = {
     proyectos: { v2: function () { return window.SigsoProyectosV2; }, v1: function () { return window.SigsoProyectos; } },
-    mi_trabajo: { v2: function () { return window.SigsoMiTrabajoV2; }, v1: function () { return window.SigsoActividades; } }
+    mi_trabajo: { v2: function () { return window.SigsoMiTrabajoV2; }, v1: function () { return window.SigsoActividades; } },
+    // Inicio no es un módulo con cargar(): se pinta con render(ctx) desde renderHome_.
+    home: { v2: function () { return window.SigsoInicioV2; }, v1: function () { return window.SigsoInicio; } }
   };
   function usaV2_(id) {
     var m = MODULOS_V2[id], o = m && m.v2();
@@ -1420,6 +1429,7 @@
     var o = MODULOS_V2[modulo] && MODULOS_V2[modulo].v2();
     if (!v2 && o && o.desmontar) o.desmontar();
     actualizarModuloV2_(modulo);
+    if (modulo === 'home') { renderHome_(); window.scrollTo(0, 0); return; }
     var m = moduloImpl_(modulo);
     if (m) m.cargar();
     window.scrollTo(0, 0);
@@ -1481,6 +1491,7 @@
     itemActivoDelModulo_ = itemPendienteDeRuta_ || '';
     renderNav_();
 
+    if (id === 'home' && Date.now() - ultimoRenderHome_ > 3000) renderHome_();
     if (id === 'mis_solicitudes') {
       document.getElementById('nota-correos-cuenta').textContent =
         'Mostrando lo asociado a: ' + (sesion.cuenta.emails || []).join(', ');

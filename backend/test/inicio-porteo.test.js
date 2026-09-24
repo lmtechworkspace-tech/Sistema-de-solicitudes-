@@ -127,3 +127,20 @@ test('getInicio: mi_trabajo se pide con el correo de quien mira, no con el de ot
     Actividades.listar = original;
   }
 });
+
+// --- Inicio v2 (SIGSO v2, módulo 2): misma fuente que Mi trabajo -----------
+const Proyectos = require('../logica/proyectos');
+
+test('getInicio v2: mis_tareas incluye compromisos personales y lo que colaboro, sin exigir el módulo Mi trabajo', () => {
+  const db = db_();
+  const DEV = { email: 'dev@x.cl', nombre: 'Dev Uno', rol: 'DEV', modulos: ['nueva_solicitud'] };
+  const compromiso = Actividades.crear(db, { titulo: 'Informe mensual', fecha_compromiso: '2026-12-15', origen: 'PROPIA' }, DEV);
+  const r = Inicio.getResumen(db, { bloques: ['mis_tareas', 'mi_bitacora', 'proyectos'] }, DEV);
+  assert.equal(r.bloques.mis_tareas.ok, true, JSON.stringify(r.bloques.mis_tareas));
+  const ids = r.bloques.mis_tareas.data.tareas.map((t) => t.actividad_id);
+  assert.ok(ids.indexOf(compromiso.actividad_id) !== -1, 'el compromiso personal debe venir');
+  assert.equal(r.bloques.mi_bitacora.ok, true);
+  assert.equal(r.bloques.proyectos.ok, true);
+  // Misma respuesta que la acción suelta de Mi trabajo.
+  assert.deepEqual(r.bloques.mis_tareas.data, Proyectos.listarMisTareas(db, { incluir_personales: true }, DEV));
+});

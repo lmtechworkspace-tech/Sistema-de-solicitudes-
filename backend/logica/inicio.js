@@ -43,6 +43,7 @@ const Calidad = require('./calidadSgc');
 const Dashboard = require('./dashboard');
 const Jefatura = require('./jefatura');
 const Pausas = require('./pausas');
+const Proyectos = require('./proyectos');
 
 function getResumen(db, data, contexto) {
   const pedidos = (data && Array.isArray(data.bloques)) ? data.bloques : [];
@@ -67,6 +68,14 @@ function getResumen(db, data, contexto) {
   bloque('bandeja', () => Dashboard.getData(db, {}, contexto));
   bloque('jefatura', () => Jefatura.getPanel(db, {}, contexto));
   bloque('pausas', () => Pausas.getPausaHoyTrabajador(db, {}, contexto));
+  // Inicio v2 (SIGSO v2, módulo 2): la MISMA fuente que Mi trabajo -- tareas
+  // de proyecto + compromisos personales que trabajo (responsable o
+  // colaborador) -- para que los números del Inicio y de Mi trabajo
+  // coincidan. No depende de tener el módulo Mi trabajo: si tienes tareas
+  // asignadas, las ves (decisión 2026-09-24).
+  bloque('mis_tareas', () => Proyectos.listarMisTareas(db, { incluir_personales: true }, contexto));
+  bloque('mi_bitacora', () => Proyectos.listarMiBitacora(db, { incluir_personales: true }, contexto));
+  bloque('proyectos', () => Proyectos.listar(db, {}, contexto));
 
   return salida;
 }

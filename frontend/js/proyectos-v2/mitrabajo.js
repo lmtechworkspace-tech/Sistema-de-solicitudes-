@@ -97,11 +97,14 @@
 
   // --- Lista ------------------------------------------------------------------------
   function grupos(tareas, hoy) {
-    var g = { atrasadas: [], semana: [], despues: [], sinFecha: [] };
+    // Una fecha por confirmar todavía no es un compromiso: va a su propio
+    // grupo y no cuenta como atrasada (mismo criterio que el Inicio).
+    var g = { confirmar: [], atrasadas: [], semana: [], despues: [], sinFecha: [] };
     tareas.forEach(function (a) {
       var dd = diffDias(clave(a.fecha_compromiso || a.fecha_propuesta), hoy);
       a._dd = dd;
-      if (a.semaforo === 'atrasada' || (dd !== null && dd < 0)) g.atrasadas.push(a);
+      if (porConfirmar(a)) g.confirmar.push(a);
+      else if (a.semaforo === 'atrasada' || (dd !== null && dd < 0)) g.atrasadas.push(a);
       else if (dd === null) g.sinFecha.push(a);
       else if (dd <= 7) g.semana.push(a);
       else g.despues.push(a);
@@ -175,7 +178,8 @@
     } else if (confirmar) {
       cuerpo = tarjetaGrupo('Esperan que confirmes la fecha', 'calendario', 'primario', lista, 2, 'Nada por confirmar.');
     } else {
-      cuerpo = ((!soloGrupo || soloGrupo === 'atrasadas') ? tarjetaGrupo('Atrasadas', 'alerta', 'critico', g.atrasadas, 2, soloGrupo ? 'Nada atrasado. ¡Bien!' : '') : '') +
+      cuerpo = (!soloGrupo ? tarjetaGrupo('Esperan que confirmes la fecha', 'check', 'info', g.confirmar, 2) : '') +
+        ((!soloGrupo || soloGrupo === 'atrasadas') ? tarjetaGrupo('Atrasadas', 'alerta', 'critico', g.atrasadas, 2, soloGrupo ? 'Nada atrasado. ¡Bien!' : '') : '') +
         ((!soloGrupo || soloGrupo === 'semana') ? tarjetaGrupo('Esta semana', 'calendario', 'primario', g.semana, 3, soloGrupo ? 'Nada vence en los próximos 7 días.' : '') : '') +
         (!soloGrupo ? tarjetaGrupo('Más adelante', 'reloj', 'info', g.despues, 4) + tarjetaGrupo('Sin fecha', 'estado', 'neutro', g.sinFecha, 5) : '');
     }
@@ -541,6 +545,10 @@
     var calor = raiz.querySelector('.sx2-py-calor');
     if (calor) calor.scrollLeft = calor.scrollWidth;
   }
+
+  // El Inicio v2 usa el MISMO cálculo de horas (misma regla, mismos números).
+  PY.calcularHoras = horas;
+  PY.porConfirmar = porConfirmar;
 
   PY.vistas.mitrabajo = {
     cargar: cargar, pintar: pintar, alMontar: alMontar,

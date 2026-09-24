@@ -132,4 +132,81 @@ fecha.
 
 ---
 
-## Módulo 2 — Inicio: pendiente de análisis
+## Módulo 2 — Inicio: análisis
+
+### Qué hace hoy
+Saludo + cargo + fecha; línea de estado ("Tienes N cosas…" / "Todo al día");
+"Requiere tu atención" (una fila por pendiente de Mi trabajo, Calidad,
+Solicitudes, Mi equipo, Novedades); "Mi trabajo hoy" (5 compromisos con
+"Sin cambios"/"Confirmar" de un clic); KPIs de Bandeja y de Mi departamento;
+"Tu semana" (pausa del día + cerradas en 7 días); actividad reciente de
+solicitudes. Un viaje al backend (`getInicio`) + Mis solicitudes + Novedades.
+
+### Lo que muestran los datos (sandbox, 22 cuentas)
+- La persona con más carga (44 tareas) ve **12 filas sueltas** en
+  "Requiere tu atención" y luego "Mi trabajo hoy" **repite las mismas
+  tareas atrasadas**: la página mide ~1.900 px.
+- **Luis Mendoza lidera 16 proyectos** y el Inicio no dice nada de ellos:
+  Proyectos (19 cuentas) no aparece en el Inicio.
+- **2 cuentas tienen tareas asignadas pero no el módulo Mi trabajo** (una
+  de Gerencia no tiene ni Proyectos): sus tareas no se ven en ninguna parte.
+
+### Problemas encontrados
+1. **Falso "Todo al día"**: si la consulta falla (red, sesión), el Inicio
+   igual dice "Todo al día — nada pendiente de tu parte". Reproducido.
+2. **Ruido y duplicación**: una fila por tarea + las mismas tareas otra vez
+   en "Mi trabajo hoy".
+3. **"Abrir" no abre nada concreto**: lleva a la portada del módulo, no a la
+   tarea; "Confirmar" en la lista de atención navega en vez de confirmar.
+4. **Cuenta distinto que Mi trabajo**: usa solo lo que soy responsable (44)
+   y Mi trabajo cuenta también lo que colaboro (49).
+5. **Sin Proyectos** (ni salud de lo que lidero ni entregables).
+6. **Tareas invisibles** para quien no tiene el módulo Mi trabajo.
+7. Diseño antiguo, angosto; saludo con la hora del navegador (no Chile).
+
+### Propuesta
+- Inicio v2 a pantalla completa: cabecera con foto, estado honesto (si una
+  fuente falla, se dice cuál: "No pudimos revisar Calidad").
+- **"Requiere tu atención" agrupado por origen** con sus conteos
+  (ej. Mi trabajo: 9 atrasadas · 6 por confirmar) y las 3 más urgentes con
+  **acción directa** (abrir la tarea en el panel, confirmar ahí mismo).
+- **"Mi día"** (reemplaza "Mi trabajo hoy"): las próximas tareas, sin repetir
+  las que ya están en atención, con "Actualizar" en el panel único.
+- **"Mis proyectos"**: salud de los que lidero o integro (críticos primero).
+- Paneles por rol (Bandeja, Mi departamento) con KPIs v2 clicables.
+- "Tu semana": pausa del día + horas registradas + tareas cerradas.
+- Misma fuente que Mi trabajo (`listarMisTareas` con personales, vía
+  `getInicio`), así los números coinciden.
+
+### Decisiones del dueño (2026-09-24)
+Atención agrupada + 3 más urgentes · bloque "Mis proyectos" · mostrar las
+tareas en Inicio aunque la cuenta no tenga el módulo Mi trabajo · el
+panorama de Gerencia se diseña con el módulo 4.
+
+### ESTADO: HECHO
+- Backend: `getInicio` suma los bloques `mis_tareas`, `mi_bitacora` y
+  `proyectos` (misma fuente que Mi trabajo). Test nuevo.
+- `js/inicio-v2.js` + `css/v2/inicio-v2.css`: cabecera con foto y estado
+  honesto (con "Reintentar"), KPIs personales, atención agrupada con acción
+  directa (Actualizar en el panel, Confirmar ahí mismo; si hay fechas por
+  confirmar, una ocupa el tercer lugar), Tu semana (pausa + horas de 7 días
+  + cerradas), Mi día (sin repetir lo de atención), Mis proyectos (críticos
+  primero, abre el proyecto), paneles de Bandeja y Mi departamento,
+  actividad reciente.
+- Shell: `home` entra a `MODULOS_V2`; el Inicio ahora **se recarga al
+  volver a él** (antes mostraba los números del login).
+
+### Hallazgos al implementar
+- El Inicio **no se recargaba al volver** desde otro módulo: tras confirmar
+  una fecha en Mi trabajo, el Inicio seguía pidiéndola (también en la
+  clásica). Corregido en el shell para ambas versiones.
+- Una fuente lenta (Mis solicitudes, todavía en Apps Script) no debe frenar
+  la pantalla: v2 pinta con lo principal y completa después; mientras
+  revisa, el estado dice "Revisando…" y nunca "Todo al día".
+- Una fecha **por confirmar** no cuenta como atrasada (aún no es un
+  compromiso): Inicio y Mi trabajo usan ahora el mismo criterio y muestran
+  los mismos números.
+
+---
+
+## Módulo 3 — Solicitudes: pendiente de análisis
