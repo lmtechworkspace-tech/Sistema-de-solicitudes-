@@ -77,7 +77,11 @@
 
     s += seccion('Datos', '<dl class="sx2-dato">' +
       '<dt>Estado</dt><dd>' + U.badge(a.semaforo_etiqueta || a.estado, PY.tonoTarea(a)) + '</dd>' +
-      '<dt>Hito</dt><dd>' + (hito ? U.esc(hito.nombre) : '—') + '</dd>' +
+      (ctx.proyecto
+        ? '<dt>Hito</dt><dd>' + (hito ? U.esc(hito.nombre) : '—') + '</dd>'
+        : '<dt>Tipo</dt><dd>Compromiso personal' + (a.origen === 'EMERGENTE' ? ' · no planificado' : '') + '</dd>' +
+          (a.proyecto ? '<dt>Etiqueta</dt><dd>' + U.esc(a.proyecto) + '</dd>' : '') +
+          (a.recurrencia && a.recurrencia !== 'NINGUNA' ? '<dt>Se repite</dt><dd>' + (a.recurrencia === 'SEMANAL' ? 'Cada semana' : 'Cada mes') + '</dd>' : '')) +
       '<dt>Prioridad</dt><dd>' + U.esc(PRIORIDAD[a.prioridad] || a.prioridad || '—') + '</dd>' +
       (a.dependencia_titulo ? '<dt>Depende de</dt><dd>' + U.esc(a.dependencia_titulo) + '</dd>' : '') +
       (a.impacto_dependientes ? '<dt>Bloquea a</dt><dd>' + a.impacto_dependientes + (a.impacto_dependientes === 1 ? ' tarea' : ' tareas') + '</dd>' : '') +
@@ -194,7 +198,10 @@
     var modo = opts.actualizar ? 'actualizar' : 'ver';
     var puedeGestionar = !!(ctx.detalle && ctx.detalle.puede_gestionar);
     var puedeActualizar = trabajaLa(a) || puedeGestionar;
-    var puedeEditar = trabajaLa(a) || puedeGestionar;
+    // Compromiso personal (sin proyecto): no hay edición de proyecto; se
+    // reprograma o cancela con las acciones del módulo Actividades.
+    var personal = !ctx.proyecto;
+    var puedeEditar = !personal && (trabajaLa(a) || puedeGestionar);
 
     var d = U.drawer({
       titulo: a.titulo,
@@ -202,7 +209,7 @@
         (a.prioridad ? U.badge(a.prioridad, a.prioridad === 'P1' ? 'critico' : (a.prioridad === 'P2' ? 'alerta' : 'neutro'), true) : '') +
         (a.es_critica ? U.badge('Ruta crítica', 'critico', true) : '') + '</span>',
       cabeceraExtra: '<div class="sx2-tabs js-py2p-tabs" role="tablist">' +
-        [['detalle', 'Detalle'], ['historial', 'Historial'], ['archivos', 'Archivos']].map(function (t) {
+        [['detalle', 'Detalle'], ['historial', 'Historial']].concat(personal ? [] : [['archivos', 'Archivos']]).map(function (t) {
           return '<button type="button" class="sx2-tabs__op" role="tab" data-tab="' + t[0] + '" aria-selected="' + (t[0] === pestana ? 'true' : 'false') + '">' + t[1] + '</button>';
         }).join('') + '</div>',
       cuerpo: '',
@@ -215,7 +222,9 @@
       modo = 'ver';
       tabs.hidden = false;
       d.cuerpo(pestana === 'historial' ? historial(ctx, a) : (pestana === 'archivos' ? archivos(ctx, a) : detalle(ctx, a)));
+      var abierta = !PY.esTerminal(a);
       pie.innerHTML =
+        (personal && abierta && trabajaLa(a) ? U.boton({ texto: 'Reprogramar', icono: 'calendario', clase: 'js-py2p-reprogramar' }) + U.boton({ soloIcono: true, icono: 'basura', variante: 'fantasma', titulo: 'Cancelar tarea', clase: 'js-py2p-cancelar' }) : '') +
         (puedeEditar ? U.boton({ texto: 'Editar', icono: 'editar', clase: 'js-py2p-editar' }) : '') +
         (puedeActualizar ? U.boton({ texto: 'Actualizar tarea', icono: 'tendencia', variante: 'primario', clase: 'js-py2p-actualizar' }) : '');
       pie.hidden = !pie.innerHTML;
@@ -254,7 +263,7 @@
       var form = d.el.querySelector('.js-py2p-form-act');
       var sel = d.el.querySelector('.js-py2p-accion[aria-pressed="true"]');
       var accion = sel ? sel.getAttribute('data-accion') : '';
-      var datos = { proyecto_id: ctx.proyecto.proyecto_id, actividad_id: a.actividad_id, accion: accion,
+      var datos = { proyecto_id: ctx.proyecto ? ctx.proyecto.proyecto_id : '', actividad_id: a.actividad_id, accion: accion,
         dia: form.dia.value, horas: form.horas.value, nota: form.nota.value.trim() };
       if (accion === 'avance') datos.avance_pct = form.avance_pct.value;
       if (accion === 'bloqueo') {
@@ -314,6 +323,8 @@
         return;
       }
       if (t.closest('.js-py2p-actualizar')) { pintarActualizar(); return; }
+      if (t.closest('.js-py2p-reprogramar')) { abrirReprogramarPersonal(a, alGuardar); return; }
+      if (t.closest('.js-py2p-cancelar')) { abrirCancelarPersonal(a, alGuardar); return; }
       if (t.closest('.js-py2p-editar')) { pintarEditar(); return; }
       if (t.closest('.js-py2p-volver')) { pintarVer(); return; }
       var ac = t.closest('.js-py2p-accion');
@@ -346,6 +357,63 @@
     return d;
   }
 
+  // --- Compromisos personales -------------------------------------------------------
+  function abrirReprogramarPersonal(a, alGuardar) {
+    PY.formulario({
+      titulo: 'Reprogramar', boton: 'Reprogramar',
+      subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">' + U.esc(a.titulo) + (a.fecha_compromiso ? ' · hoy vence el ' + PY.fecha(a.fecha_compromiso, true) : '') + '</span>',
+      campos: PY.campo('Nueva fecha', '<input class="sx2-input" type="date" name="fecha_compromiso" value="' + (a.fecha_compromiso ? String(a.fecha_compromiso).slice(0, 10) : '') + '">') +
+        PY.campo('Motivo', '<textarea class="sx2-input" name="motivo" maxlength="500" placeholder="Toda reprogramación queda registrada con su motivo."></textarea>'),
+      preparar: function (d) {
+        if (!d.fecha_compromiso) return 'Indica la nueva fecha.';
+        if (!d.motivo) return 'Indica el motivo.';
+        return { actividad_id: a.actividad_id, fecha_compromiso: d.fecha_compromiso, motivo: d.motivo };
+      },
+      accion: 'reprogramarActividad', aviso: 'Tarea reprogramada.', listo: function () { alGuardar(); }
+    });
+  }
+  function abrirCancelarPersonal(a, alGuardar) {
+    PY.formulario({
+      titulo: 'Cancelar tarea', boton: 'Cancelar tarea',
+      subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">' + U.esc(a.titulo) + '</span>',
+      campos: PY.campo('Motivo', '<textarea class="sx2-input" name="motivo" maxlength="500" placeholder="Por qué ya no se hará"></textarea>'),
+      preparar: function (d) { return d.motivo ? { actividad_id: a.actividad_id, motivo: d.motivo } : 'Indica el motivo.'; },
+      accion: 'cancelarActividad', aviso: 'Tarea cancelada.', listo: function () { alGuardar(); }
+    });
+  }
+
+  // Misma forma que Proyectos.filaBitacoraSalida_ (backend): getDetalleActividad
+  // devuelve las filas crudas, con los datos del día dentro de 'datos'.
+  function bitacoraSalida(b) {
+    var d = {};
+    try { d = b.datos ? JSON.parse(b.datos) : {}; } catch (e) { d = {}; }
+    var s = { actividad_id: b.actividad_id, tipo: b.tipo, nota: b.nota, horas: d.horas, timestamp: b.timestamp, autor_nombre: b.autor_nombre || b.autor_email, autor_email: b.autor_email };
+    if (b.tipo === 'REGISTRO_DIA') { s.dia = d.dia || ''; s.estado_dia = d.estado_dia || ''; s.editado_en = d.editado_en || ''; }
+    if (b.tipo === 'REPROGRAMACION') { s.fecha_anterior = d.fecha_anterior || ''; s.fecha_nueva = d.fecha_nueva || ''; }
+    return s;
+  }
+  function colaboradores(v) {
+    var lista = v;
+    if (typeof v === 'string') { try { lista = JSON.parse(v || '[]'); } catch (e) { lista = []; } }
+    return (Array.isArray(lista) ? lista : []).map(function (c) { return typeof c === 'string' ? { email: c } : c; });
+  }
+
+  // Abre el panel de un compromiso PERSONAL (sin proyecto). opts.base: la fila
+  // de Mi trabajo (trae el semáforo calculado por el backend).
+  function abrirTareaPersonal(actividadId, opts) {
+    opts = opts || {};
+    return Promise.all([PY.api('getDetalleActividad', { actividad_id: actividadId }), PY.cargarMiPerfil()]).then(function (r) {
+      if (!r[0] || !r[0].ok) { PY.aviso((r[0] && r[0].message) || 'No se pudo abrir la tarea.', 'error'); return null; }
+      var act = Object.assign({}, r[0].data.actividad, opts.base ? { semaforo: opts.base.semaforo, semaforo_etiqueta: opts.base.semaforo_etiqueta } : {});
+      act.colaboradores = colaboradores(act.colaboradores);
+      var ctx = {
+        detalle: { integrantes: [], hitos: [], documentos: [], puede_gestionar: false }, proyecto: null,
+        tareas: [act], sala: [], bitacora: (r[0].data.bitacora || []).map(bitacoraSalida), rendimiento: null
+      };
+      return abrirTarea(actividadId, Object.assign({}, opts, { ctx: ctx }));
+    });
+  }
+
   // Abre el panel de una tarea de CUALQUIER proyecto sin salir de la vista
   // actual (Mi trabajo, Calendario): carga ese proyecto por detrás.
   function abrirTareaDeProyecto(proyectoId, actividadId, opts) {
@@ -368,4 +436,5 @@
 
   PY.abrirTarea = abrirTarea;
   PY.abrirTareaDeProyecto = abrirTareaDeProyecto;
+  PY.abrirTareaPersonal = abrirTareaPersonal;
 })();

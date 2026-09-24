@@ -66,12 +66,13 @@
 
   // Quién soy (para permisos de presentación: "¿trabajo esta tarea?"). El
   // backend sigue siendo la autoridad; esto solo decide qué botones mostrar.
-  var miPerfil_ = null, miEmail_ = '', miNombre_ = '';
+  var miPerfil_ = null, miEmail_ = '', miNombre_ = '', miRol_ = '';
   function cargarMiPerfil() {
     if (!miPerfil_) {
       miPerfil_ = api_('getMiPerfil', {}).then(function (r) {
         miEmail_ = (r && r.ok && r.data && r.data.email) ? String(r.data.email).trim().toLowerCase() : '';
         miNombre_ = (r && r.ok && r.data && r.data.nombre) ? String(r.data.nombre) : '';
+        miRol_ = (r && r.ok && r.data && r.data.rol) ? String(r.data.rol) : '';
         return miEmail_;
       });
     }
@@ -572,6 +573,13 @@
     engancharUnaVez();
     if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id || 'portafolio');
     if (!id || id === 'portafolio') { cargarPortafolio(); return; }
+    // Un solo Mi trabajo para todo SIGSO: quien tiene el módulo va allá; quien
+    // no (solo Proyectos), lo ve aquí mismo.
+    if (id === 'mi-trabajo' && window.SigsoShell && SigsoShell.tieneModulo('mi_trabajo') &&
+        window.SigsoMiTrabajoV2 && SigsoMiTrabajoV2.activo()) {
+      SigsoShell.irAModulo('mi_trabajo');
+      return;
+    }
     if (ITEM_VISTA[id] && PYv2.vistas[ITEM_VISTA[id]]) { abrirVista(ITEM_VISTA[id]); return; }
     desmontar();
     estado.vista = 'externa';
@@ -598,6 +606,7 @@
   PY.descargarBase64 = descargarBase64;
   PY.miEmail = function () { return miEmail_; };
   PY.miNombre = function () { return miNombre_; };
+  PY.miRol = function () { return miRol_; };
   PY.estado = function () { return estado; };
   PY.ctx = ctx;
   PY.pintar = pintar;

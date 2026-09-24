@@ -370,7 +370,7 @@
     olvidarSesion_();
     sesion = { token: null, cuenta: null };
     autocompletadoHecho = false;
-    actualizarProyectosV2_(null); // quita el interruptor flotante de v2
+    actualizarModuloV2_(null); // quita el interruptor flotante de v2
     mostrarVista_('vista-login');
   }
 
@@ -523,7 +523,8 @@
         if (window.SigsoJefatura) window.SigsoJefatura.cargar();
         break;
       case 'mi_trabajo':
-        if (window.SigsoActividades) window.SigsoActividades.cargar();
+        var modMt = moduloImpl_('mi_trabajo');
+        if (modMt) { if (modMt.refrescar) modMt.refrescar(); else modMt.cargar(); }
         break;
       case 'proyectos':
         // v9.0b: 'refrescar' (no 'cargar') -- si el usuario tiene un
@@ -1368,46 +1369,63 @@
   // <main> se adapta al modulo en vez de ser fijo.
   var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad'];
 
-  // Proyectos v2 (F8: versión por defecto para todos los roles): el shell
-  // decide qué implementación pinta el módulo -- v2 (proyectos-v2/*.js) o la
-  // clásica (proyectos.js) -- según la preferencia del usuario
-  // (SigsoProyectosV2.activo: v2 salvo que haya elegido volver a la clásica).
-  // Los tres puntos donde el shell llama a Proyectos pasan por moduloProyectos_.
-  function usaProyectosV2_() {
-    return !!(window.SigsoProyectosV2 && window.SigsoProyectosV2.activo());
+  // SIGSO v2 (documentacion/SIGSO-v2-hoja-de-ruta.md): los módulos pasan a
+  // la versión nueva de a uno. Para cada módulo migrado el shell decide qué
+  // implementación pinta -- la v2 o la clásica -- según la preferencia de la
+  // persona (obj.activo(): v2 salvo que haya elegido volver a la clásica). La
+  // clásica queda un ciclo como respaldo y después se retira. Migrar otro
+  // módulo = una línea más aquí.
+  var MODULOS_V2 = {
+    proyectos: { v2: function () { return window.SigsoProyectosV2; }, v1: function () { return window.SigsoProyectos; } },
+    mi_trabajo: { v2: function () { return window.SigsoMiTrabajoV2; }, v1: function () { return window.SigsoActividades; } }
+  };
+  function usaV2_(id) {
+    var m = MODULOS_V2[id], o = m && m.v2();
+    return !!(o && o.activo());
   }
-  function moduloProyectos_() {
-    return usaProyectosV2_() ? window.SigsoProyectosV2 : window.SigsoProyectos;
+  function moduloImpl_(id) {
+    var m = MODULOS_V2[id];
+    if (!m) return null;
+    return usaV2_(id) ? m.v2() : m.v1();
   }
+  function usaProyectosV2_() { return usaV2_('proyectos'); }
+  function moduloProyectos_() { return moduloImpl_('proyectos'); }
   // Pantalla completa para v2 + interruptor flotante "Volver a la versión
-  // clásica / Usar la nueva versión" (todos los roles, solo en Proyectos). La
-  // clásica queda un ciclo como respaldo y después se retira.
-  function actualizarProyectosV2_(id) {
-    var enPy = id === 'proyectos';
-    var v2 = enPy && usaProyectosV2_();
+  // clásica / Usar la nueva versión" (todos los roles, solo en módulos con v2).
+  function actualizarModuloV2_(id) {
+    var migrado = !!(id && MODULOS_V2[id] && MODULOS_V2[id].v2());
+    var v2 = migrado && usaV2_(id);
     var main = document.querySelector('#vista-shell .sigso-contenido');
     if (main) main.classList.toggle('plataforma-contenido--total', v2);
     var pill = document.getElementById('py2-interruptor');
-    if (!enPy || !window.SigsoProyectosV2) { if (pill) pill.remove(); return; }
+    if (!migrado) { if (pill) pill.remove(); return; }
     if (!pill) {
       pill = document.createElement('button');
       pill.type = 'button';
       pill.id = 'py2-interruptor';
-      pill.addEventListener('click', function () { window.SigsoProyectosV2.usarVersion(!usaProyectosV2_()); });
+      pill.addEventListener('click', function () {
+        var mod = pill.getAttribute('data-modulo');
+        var o = MODULOS_V2[mod] && MODULOS_V2[mod].v2();
+        if (o) o.usarVersion(!usaV2_(mod));
+      });
       document.body.appendChild(pill);
     }
+    pill.setAttribute('data-modulo', id);
     pill.className = 'sx2-py-interruptor' + (v2 ? ' sx2-py-interruptor--clasica' : '');
     pill.innerHTML = Iconos.svg(v2 ? 'izquierda' : 'destello', { tam: 16 }) +
       (v2 ? 'Volver a la versión clásica' : 'Usar la nueva versión');
   }
-  document.addEventListener('sigso:proyectos-version', function (ev) {
-    if (moduloActivo_ !== 'proyectos') return;
-    if (!(ev.detail && ev.detail.v2) && window.SigsoProyectosV2) window.SigsoProyectosV2.desmontar();
-    actualizarProyectosV2_('proyectos');
-    var m = moduloProyectos_();
+  function alCambiarVersion_(modulo, v2) {
+    if (moduloActivo_ !== modulo) return;
+    var o = MODULOS_V2[modulo] && MODULOS_V2[modulo].v2();
+    if (!v2 && o && o.desmontar) o.desmontar();
+    actualizarModuloV2_(modulo);
+    var m = moduloImpl_(modulo);
     if (m) m.cargar();
     window.scrollTo(0, 0);
-  });
+  }
+  document.addEventListener('sigso:proyectos-version', function (ev) { alCambiarVersion_('proyectos', !!(ev.detail && ev.detail.v2)); });
+  document.addEventListener('sigso:v2-version', function (ev) { if (ev.detail) alCambiarVersion_(ev.detail.modulo, !!ev.detail.v2); });
 
   // v5.1: modulo activo + cuando se cargaron por ultima vez sus datos, para
   // el auto-refresco al volver a la pestana (sin recargar la pagina).
@@ -1492,13 +1510,13 @@
     if (id === 'novedades' && window.SigsoNovedades) {
       window.SigsoNovedades.cargar();
     }
-    if (id === 'mi_trabajo' && window.SigsoActividades) {
-      window.SigsoActividades.cargar();
+    if (id === 'mi_trabajo' && moduloImpl_('mi_trabajo')) {
+      moduloImpl_('mi_trabajo').cargar();
     }
     if (id === 'proyectos' && moduloProyectos_()) {
       moduloProyectos_().cargar();
     }
-    actualizarProyectosV2_(id);
+    actualizarModuloV2_(id);
     if (id === 'calidad') {
       abrirCalidad_();
     }

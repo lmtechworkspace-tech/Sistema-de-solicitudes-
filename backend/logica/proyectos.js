@@ -680,7 +680,15 @@ function listarMisTareas(db, data, contexto) {
     return Actividades.trabajaLaActividad_(a, email);
   }
 
-  const tareas = leerSeguro_(db, 'ACTIVIDADES').filter((a) => esVerdadero_(a.activa) && a.proyecto_id && esMiaOColaboroYVisible(a))
+  // Mi trabajo v2 (un solo Mi trabajo para todo SIGSO): con incluir_personales
+  // se suman los compromisos SIN proyecto que trabajo (responsable o
+  // colaborador). Sin el flag, igual que siempre: solo tareas de proyecto.
+  const incluirPersonales = !!(data && data.incluir_personales);
+  const tareas = leerSeguro_(db, 'ACTIVIDADES').filter((a) => {
+    if (!esVerdadero_(a.activa)) return false;
+    if (a.proyecto_id) return esMiaOColaboroYVisible(a);
+    return incluirPersonales && Actividades.trabajaLaActividad_(a, email);
+  })
     .map((a) => {
       const s = Actividades.semaforoActividad_(a);
       const proyecto = proyectosPorId[a.proyecto_id];
@@ -690,7 +698,9 @@ function listarMisTareas(db, data, contexto) {
         avance_pct: a.avance_pct, bloqueo_motivo: a.bloqueo_motivo,
         fecha_propuesta: a.fecha_propuesta, confirmada_en: a.confirmada_en,
         semaforo: s.codigo, semaforo_etiqueta: s.etiqueta,
-        proyecto_id: a.proyecto_id, proyecto_nombre: proyecto ? proyecto.nombre : '(proyecto eliminado)',
+        proyecto_id: a.proyecto_id || '', proyecto_nombre: a.proyecto_id ? (proyecto ? proyecto.nombre : '(proyecto eliminado)') : '',
+        personal: !a.proyecto_id, proyecto_texto: a.proyecto_id ? '' : (a.proyecto || ''),
+        origen: a.origen, recurrencia: a.recurrencia, supervisor_email: a.supervisor_email,
         meta_cantidad: a.meta_cantidad, meta_unidad: a.meta_unidad,
         soy_responsable: normalizarEmail_(a.responsable_email) === email
       };
@@ -1173,9 +1183,10 @@ function listarMiBitacora(db, data, contexto) {
   const esAdmGerencia = contexto.rol === 'ADM' || contexto.rol === 'GERENCIA';
   const idsTarea = {};
   leerSeguro_(db, 'ACTIVIDADES').forEach((a) => {
-    if (!esVerdadero_(a.activa) || !a.proyecto_id) return;
+    if (!esVerdadero_(a.activa)) return;
+    if (!a.proyecto_id && !(data && data.incluir_personales)) return;
     if (!Actividades.trabajaLaActividad_(a, email)) return;
-    if (!esAdmGerencia && !misProyectos[a.proyecto_id]) return;
+    if (a.proyecto_id && !esAdmGerencia && !misProyectos[a.proyecto_id]) return;
     idsTarea[a.actividad_id] = true;
   });
   return leerSeguro_(db, 'ACTIVIDADES_BITACORA').filter((b) => idsTarea[b.actividad_id]).map(filaBitacoraSalida_).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
@@ -1857,16 +1868,43 @@ function datosDeBitacora_(fila) {
   catch (e) { return {}; }
 }
 
+// Mi trabajo v2 (2026-09-24): el registro del día y "Actualizar tarea" sirven
+// también para los compromisos PERSONALES (actividades sin proyecto), no solo
+// para tareas de proyecto. Resuelve la tarea y quién la puede gestionar:
+//  - con proyecto_id: la tarea de ESE proyecto; gestiona quien gestiona el
+//    proyecto (líder/ADM), igual que siempre;
+//  - sin proyecto_id: si la actividad es de un proyecto, se usa el suyo; si
+//    no, es un compromiso personal y rigen los permisos de Actividades
+//    (verla; gestiona quien la supervisa o ADM).
+// Devuelve { actividad, proyecto (o null), gestiona } o { error }.
+function resolverTareaRegistro_(db, data, contexto) {
+  let proyectoId = String(data.proyecto_id || '').trim();
+  if (!proyectoId) {
+    const act = Actividades.buscarActividad_(db, data.actividad_id);
+    if (!act || !esVerdadero_(act.activa)) return { error: errorValidacion_('actividad_id', 'Tarea no encontrada.') };
+    if (act.proyecto_id) proyectoId = act.proyecto_id;
+    else {
+      if (!Actividades.puedeVerActividad_(db, act, contexto)) return { error: { _forbidden: true, message: 'No tienes acceso a esta tarea.' } };
+      return { actividad: act, proyecto: null, gestiona: Actividades.puedeSupervisar_(act, contexto) };
+    }
+  }
+  const proyecto = buscarProyecto_(db, proyectoId);
+  if (!proyecto) return { error: errorValidacion_('proyecto_id', 'Proyecto no encontrado.') };
+  if (!puedeVerProyecto_(db, proyecto, contexto)) return { error: { _forbidden: true, message: 'No tienes acceso a este proyecto.' } };
+  const actividad = leerSeguro_(db, 'ACTIVIDADES').find((a) => a.actividad_id === data.actividad_id && a.proyecto_id === proyecto.proyecto_id);
+  if (!actividad) return { error: errorValidacion_('actividad_id', 'Tarea no encontrada en este proyecto.') };
+  return { actividad, proyecto, gestiona: puedeGestionarProyecto_(db, proyecto, contexto) };
+}
+function quienGestiona_(proyecto) { return proyecto ? 'el líder del proyecto' : 'quien la supervisa'; }
+
 function guardarRegistroDia(db, data, contexto) {
   data = data || {};
-  const proyecto = buscarProyecto_(db, data.proyecto_id);
-  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
-  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
-  const actividad = leerSeguro_(db, 'ACTIVIDADES').find((a) => a.actividad_id === data.actividad_id && a.proyecto_id === proyecto.proyecto_id);
-  if (!actividad) return errorValidacion_('actividad_id', 'Tarea no encontrada en este proyecto.');
+  const r = resolverTareaRegistro_(db, data, contexto);
+  if (r.error) return r.error;
+  const actividad = r.actividad;
   const email = normalizarEmail_(contexto && contexto.email);
-  if (!Actividades.trabajaLaActividad_(actividad, email) && !puedeGestionarProyecto_(db, proyecto, contexto)) {
-    return { _forbidden: true, message: 'Solo quien trabaja la tarea o el líder del proyecto puede registrar el día.' };
+  if (!Actividades.trabajaLaActividad_(actividad, email) && !r.gestiona) {
+    return { _forbidden: true, message: 'Solo quien trabaja la tarea o ' + quienGestiona_(r.proyecto) + ' puede registrar el día.' };
   }
 
   const dia = String(data.dia || '').trim();
@@ -1937,14 +1975,12 @@ function guardarRegistroDia(db, data, contexto) {
 
 function eliminarRegistroDia(db, data, contexto) {
   data = data || {};
-  const proyecto = buscarProyecto_(db, data.proyecto_id);
-  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
-  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
-  const actividad = leerSeguro_(db, 'ACTIVIDADES').find((a) => a.actividad_id === data.actividad_id && a.proyecto_id === proyecto.proyecto_id);
-  if (!actividad) return errorValidacion_('actividad_id', 'Tarea no encontrada en este proyecto.');
+  const r = resolverTareaRegistro_(db, data, contexto);
+  if (r.error) return r.error;
+  const actividad = r.actividad;
   const email = normalizarEmail_(contexto && contexto.email);
-  if (!Actividades.trabajaLaActividad_(actividad, email) && !puedeGestionarProyecto_(db, proyecto, contexto)) {
-    return { _forbidden: true, message: 'Solo quien trabaja la tarea o el líder del proyecto puede eliminar el registro.' };
+  if (!Actividades.trabajaLaActividad_(actividad, email) && !r.gestiona) {
+    return { _forbidden: true, message: 'Solo quien trabaja la tarea o ' + quienGestiona_(r.proyecto) + ' puede eliminar el registro.' };
   }
   const dia = String(data.dia || '').trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) return errorValidacion_('dia', 'El día debe tener formato AAAA-MM-DD.');
@@ -1970,11 +2006,9 @@ const ESTADO_DIA_POR_ACCION_ = { avance: 'en_proceso', sin_cambio: 'en_proceso',
 
 function actualizarTarea(db, data, contexto) {
   data = data || {};
-  const proyecto = buscarProyecto_(db, data.proyecto_id);
-  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
-  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
-  const actividad = leerSeguro_(db, 'ACTIVIDADES').find((a) => a.actividad_id === data.actividad_id && a.proyecto_id === proyecto.proyecto_id);
-  if (!actividad) return errorValidacion_('actividad_id', 'Tarea no encontrada en este proyecto.');
+  const resuelta = resolverTareaRegistro_(db, data, contexto);
+  if (resuelta.error) return resuelta.error;
+  const actividad = resuelta.actividad, proyecto = resuelta.proyecto;
 
   const accion = String(data.accion || '').trim();
   if (accion && ACCIONES_ACTUALIZAR_TAREA_.indexOf(accion) === -1) return errorValidacion_('accion', 'Acción no válida.');
@@ -1986,8 +2020,8 @@ function actualizarTarea(db, data, contexto) {
 
   const email = normalizarEmail_(contexto && contexto.email);
   const trabaja = Actividades.trabajaLaActividad_(actividad, email);
-  if (!trabaja && !puedeGestionarProyecto_(db, proyecto, contexto)) {
-    return { _forbidden: true, message: 'Solo quien trabaja la tarea o el líder del proyecto puede actualizarla.' };
+  if (!trabaja && !resuelta.gestiona) {
+    return { _forbidden: true, message: 'Solo quien trabaja la tarea o ' + quienGestiona_(proyecto) + ' puede actualizarla.' };
   }
   if (accion && !trabaja) return { _forbidden: true, message: 'Solo el responsable o un colaborador pueden cambiar el avance o el estado de la tarea.' };
   if (accion && Actividades.esEstadoTerminal_(actividad.estado)) return errorValidacion_('actividad_id', 'Esta tarea ya está cerrada.');
@@ -2033,7 +2067,7 @@ function actualizarTarea(db, data, contexto) {
       if (tarea && (tarea._validationError || tarea._forbidden)) { db.exec('ROLLBACK'); return tarea; }
     }
     const registro = guardarRegistroDia(db, {
-      proyecto_id: proyecto.proyecto_id, actividad_id: actividad.actividad_id, dia: dia, estado_dia: estadoDia,
+      proyecto_id: proyecto ? proyecto.proyecto_id : '', actividad_id: actividad.actividad_id, dia: dia, estado_dia: estadoDia,
       horas: tieneHoras ? Number(data.horas) : (previo.horas !== undefined ? previo.horas : ''),
       // Con acción, la nota ya quedó en el check-in: el registro del día
       // conserva la suya para no duplicar el mismo texto en el historial.

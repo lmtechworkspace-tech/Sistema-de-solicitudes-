@@ -1061,5 +1061,8 @@ module.exports = {
   // Exportadas para que Proyectos.js (wrappers de tarea) y sus tests reusen
   // el mismo motor y los mismos helpers, nunca duplicados.
   ACTIVIDADES_ESTADOS, esEstadoTerminal_, semaforoActividad_, normalizarEmail_,
-  colaboradoresDeActividad_, trabajaLaActividad_, buscarActividad_, registrarEventoActividad_
+  colaboradoresDeActividad_, trabajaLaActividad_, buscarActividad_, registrarEventoActividad_,
+  // Mi trabajo v2: el registro del día de un compromiso SIN proyecto usa los
+  // permisos de este módulo (ver Proyectos.resolverTareaRegistro_).
+  puedeVerActividad_, puedeSupervisar_, puedeGestionar_
 };

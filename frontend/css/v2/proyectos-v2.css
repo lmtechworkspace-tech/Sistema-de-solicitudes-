@@ -508,6 +508,15 @@
 }
 .sx2-py-mt-proy:hover { background: var(--sx-superficie-hover); }
 .sx2-py-mt-totales { border-top: 1px dashed var(--sx-borde); padding-top: 6px; margin-top: 2px; }
+.sx2-py-ref--personal { cursor: default; background: var(--sx-hito-suave); border-color: transparent; color: var(--sx-hito); }
+.sx2-py-ref--personal:hover { color: var(--sx-hito); border-color: transparent; }
+.sx2-py-mt-hechas > summary {
+  display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none;
+  font: var(--sx-t-h2); color: var(--sx-texto-2);
+}
+.sx2-py-mt-hechas > summary::-webkit-details-marker { display: none; }
+.sx2-py-mt-hechas > summary .sigso-ico { color: var(--sx-ok); }
+.sx2-py-mt-hechas[open] > summary { margin-bottom: var(--sx-e-3); color: var(--sx-texto); }
 @media (max-width: 720px) {
   .sx2-py-mt-fila { flex-wrap: wrap; }
   .sx2-py-mt-cuando { width: auto; flex: 1; align-items: flex-start; }

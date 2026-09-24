@@ -154,3 +154,58 @@ test('una tarea cerrada no acepta más cambios de avance', () => {
   Proyectos.actualizarTarea(db, Object.assign({ accion: 'listo' }, base), CTX_MARCELO);
   assert.equal(Proyectos.actualizarTarea(db, Object.assign({ accion: 'avance', avance_pct: 50 }, base), CTX_MARCELO)._validationError, true);
 });
+
+// --- Mi trabajo v2: compromisos personales (actividades SIN proyecto) ---------
+const Actividades = require('../logica/actividades');
+const CTX_ADM = { email: 'adm@rld.cl', nombre: 'Admin', rol: 'ADM' };
+
+function armarPersonal() {
+  const base = armar();
+  const compromiso = Actividades.crear(base.db, { titulo: 'Preparar informe mensual', fecha_compromiso: '2026-12-15', origen: 'PROPIA' }, CTX_MARCELO);
+  assert.ok(compromiso && compromiso.actividad_id, JSON.stringify(compromiso));
+  return Object.assign(base, { compromiso });
+}
+
+test('compromiso personal: "Actualizar tarea" sin proyecto registra avance y horas (horas solo en el registro del día)', () => {
+  const { db, compromiso } = armarPersonal();
+  const r = Proyectos.actualizarTarea(db, { actividad_id: compromiso.actividad_id, accion: 'avance', avance_pct: 50, horas: 1.5 }, CTX_MARCELO);
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(tareaActual(db, compromiso.actividad_id).estado, 'EN_CURSO');
+  const filas = filasBitacora(db, compromiso.actividad_id);
+  const dia = filas.find((b) => b.tipo === 'REGISTRO_DIA');
+  assert.ok(dia, 'debe quedar el registro del día');
+  assert.equal(Number(JSON.parse(dia.datos).horas), 1.5);
+  assert.equal(JSON.parse(filas.find((b) => b.tipo === 'CHECKIN_AVANCE').datos || '{}').horas, undefined);
+});
+
+test('compromiso personal: un ajeno no puede; ADM (supervisa) registra el día pero no cambia el avance', () => {
+  const { db, compromiso } = armarPersonal();
+  const ajeno = Proyectos.actualizarTarea(db, { actividad_id: compromiso.actividad_id, horas: 1 }, CTX_OTRO);
+  assert.equal(ajeno._forbidden, true);
+  const adm = Proyectos.actualizarTarea(db, { actividad_id: compromiso.actividad_id, horas: 2 }, CTX_ADM);
+  assert.equal(adm.ok, true, JSON.stringify(adm));
+  const admAvance = Proyectos.actualizarTarea(db, { actividad_id: compromiso.actividad_id, accion: 'avance', avance_pct: 10 }, CTX_ADM);
+  assert.equal(admAvance._forbidden, true);
+});
+
+test('sin proyecto_id, una tarea DE proyecto usa su propio proyecto y sus permisos', () => {
+  const { db, tarea } = armar();
+  const r = Proyectos.actualizarTarea(db, { actividad_id: tarea.actividad_id, horas: 1 }, CTX_MARCELO);
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(Proyectos.actualizarTarea(db, { actividad_id: tarea.actividad_id, horas: 1 }, CTX_OTRO)._forbidden, true);
+});
+
+test('listarMisTareas: los compromisos personales solo aparecen con incluir_personales', () => {
+  const { db, compromiso, tarea } = armarPersonal();
+  const sinFlag = Proyectos.listarMisTareas(db, {}, CTX_MARCELO).tareas.map((t) => t.actividad_id);
+  assert.ok(sinFlag.indexOf(tarea.actividad_id) !== -1);
+  assert.equal(sinFlag.indexOf(compromiso.actividad_id), -1);
+  const conFlag = Proyectos.listarMisTareas(db, { incluir_personales: true }, CTX_MARCELO).tareas;
+  const personal = conFlag.find((t) => t.actividad_id === compromiso.actividad_id);
+  assert.ok(personal, 'el compromiso debe aparecer');
+  assert.equal(personal.personal, true);
+  assert.equal(personal.proyecto_id, '');
+  // Siempre personal: el ADM no ve el compromiso de otro en SU Mi trabajo.
+  const delAdm = Proyectos.listarMisTareas(db, { incluir_personales: true }, CTX_ADM).tareas;
+  assert.equal(delAdm.filter((t) => t.actividad_id === compromiso.actividad_id).length, 0);
+});
