@@ -69,6 +69,11 @@
 
     var personas = {};
     ctx.tareas.forEach(function (a) { if (a.responsable_email) personas[a.responsable_email.toLowerCase()] = PY.persona(a.responsable_email, a.responsable_nombre).nombre; });
+    // Integrantes sin tareas también: se llega aquí desde su tarjeta en Equipo.
+    (ctx.detalle.integrantes || []).forEach(function (i) {
+      var e = String(i.usuario_email || '').toLowerCase();
+      if (e && !personas[e]) personas[e] = PY.persona(e, i.usuario_nombre).nombre;
+    });
     var hitos = (ctx.detalle.hitos || []);
 
     return '<div class="sx2-card sx2-py-herramientas sx2-entra">' +
@@ -218,6 +223,7 @@
       PY.filtroTrabajo = null;
     }
     if (PY.modoTrabajo) { f.modo = PY.modoTrabajo; PY.modoTrabajo = null; }
+    if (PY.responsableTrabajo) { f.responsable = PY.responsableTrabajo; PY.responsableTrabajo = null; }
     var plan = PY.planPorId(ctx);
     var tareas = filtrar(ctx, plan, false);
     var cuerpo;

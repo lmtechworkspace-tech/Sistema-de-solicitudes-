@@ -112,6 +112,23 @@
   }
 
   // --- Formularios ------------------------------------------------------------------
+  // Lo ya registrado para esa tarea ese día: el formulario lo muestra para
+  // corregirlo en vez de empezar en blanco.
+  function registroDe(ctx, id, dia) {
+    var r = null;
+    (ctx.bitacora || []).forEach(function (b) {
+      if (b.tipo === 'REGISTRO_DIA' && b.actividad_id === id && b.dia === dia) r = b;
+    });
+    return r;
+  }
+  function rellenarDia(form, ctx, a) {
+    var r = registroDe(ctx, a.actividad_id, form.querySelector('[name="dia"]').value);
+    form.querySelector('[name="horas"]').value = r && Number(r.horas) ? Number(r.horas) : '';
+    form.querySelector('[name="nota"]').value = r ? (r.nota || '') : '';
+    var aviso = form.querySelector('.js-py2p-ya');
+    aviso.hidden = !r;
+  }
+
   function formActualizar(ctx, a, opts) {
     var puedeAvance = trabajaLa(a) && !PY.esTerminal(a);
     var hoy = PY.hoyClave();
@@ -135,6 +152,7 @@
         PY.campo('Día', '<input class="sx2-input" type="date" name="dia" value="' + (opts.dia || hoy) + '" max="' + hoy + '">') +
         PY.campo('Horas trabajadas ese día', '<input class="sx2-input" type="number" name="horas" min="0" max="24" step="0.5" placeholder="Opcional">') +
       '</div>' +
+      '<p class="sx2-campo__ayuda js-py2p-ya" hidden>Ese día ya tiene un registro: lo que cambies aquí lo corrige.</p>' +
       PY.campo('Nota', '<textarea class="sx2-input" name="nota" maxlength="2000" placeholder="Qué hiciste, qué falta, algo que el equipo deba saber…"></textarea>') +
       '<p class="sx2-campo__error js-py2p-error" hidden></p>' +
     '</form>';
@@ -208,6 +226,9 @@
         U.boton({ texto: 'Guardar', icono: 'check', variante: 'primario', clase: 'js-py2p-guardar-act' });
       var rango = d.el.querySelector('.sx2-py-rango');
       if (rango) rango.addEventListener('input', function () { d.el.querySelector('.js-py2p-avance-txt').textContent = rango.value + '%'; });
+      var form = d.el.querySelector('.js-py2p-form-act');
+      rellenarDia(form, ctx, a);
+      form.querySelector('[name="dia"]').addEventListener('change', function () { rellenarDia(form, ctx, a); });
     }
     function pintarEditar() {
       modo = 'editar';
