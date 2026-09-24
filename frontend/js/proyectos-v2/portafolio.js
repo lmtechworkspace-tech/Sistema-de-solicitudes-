@@ -243,7 +243,7 @@
 
   // --- Nuevo proyecto (drawer) ----------------------------------------------------
   function abrirNuevoProyecto() {
-    var hoy = new Date().toISOString().slice(0, 10);
+    var hoy = PY.hoyClave();
     var d = U.drawer({
       titulo: 'Nuevo proyecto',
       subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">Después podrás sumar equipo, hitos y tareas.</span>',

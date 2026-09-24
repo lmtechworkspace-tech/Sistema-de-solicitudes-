@@ -64,12 +64,37 @@
   }
   function contenedor() { return document.getElementById('proyectos-contenido'); }
 
+  // Quién soy (para permisos de presentación: "¿trabajo esta tarea?"). El
+  // backend sigue siendo la autoridad; esto solo decide qué botones mostrar.
+  var miPerfil_ = null, miEmail_ = '';
+  function cargarMiPerfil() {
+    if (!miPerfil_) {
+      miPerfil_ = api_('getMiPerfil', {}).then(function (r) {
+        miEmail_ = (r && r.ok && r.data && r.data.email) ? String(r.data.email).trim().toLowerCase() : '';
+        return miEmail_;
+      });
+    }
+    return miPerfil_;
+  }
+
   function fecha(valor, conAnio) {
     if (!valor) return '—';
     var d = new Date(valor);
     if (isNaN(d.getTime())) return '—';
     var dd = String(d.getUTCDate()).padStart(2, '0'), mm = String(d.getUTCMonth() + 1).padStart(2, '0');
     return dd + '/' + mm + (conAnio ? '/' + d.getUTCFullYear() : '');
+  }
+  // "Hoy" en la zona del negocio (America/Santiago), AAAA-MM-DD. NUNCA
+  // toISOString().slice(0,10): eso es la fecha UTC, que en Chile ya es
+  // "mañana" desde las 20-21 h, y el backend (que usa la zona de Chile)
+  // lo rechaza como día futuro.
+  function hoyClave() {
+    try {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: (window.SIGSO_CONFIG || {}).TIMEZONE || 'America/Santiago' }).format(new Date());
+    } catch (e) {
+      var d = new Date();
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
   }
   function diasHasta(valor) {
     if (!valor) return null;
@@ -164,9 +189,10 @@
     }
     var data = { proyecto_id: id };
     Promise.all([
-      api_('getDetalleCompletoProyecto', data).catch(function () { return null; }),
-      api_('listarBitacoraProyecto', data).catch(function () { return null; }),
-      api_('obtenerRendimientoProyecto', data).catch(function () { return null; })
+      api_('getDetalleCompletoProyecto', data),
+      api_('listarBitacoraProyecto', data),
+      api_('obtenerRendimientoProyecto', data),
+      cargarMiPerfil()
     ]).then(function (r) {
       if (turno !== estado.turno) return;
       if (!r[0] || !r[0].ok) {
@@ -241,6 +267,14 @@
     if (opts.sinAnimacion) {
       c.querySelectorAll('.sx2-entra, .sx2-entra-escala').forEach(function (el) { el.style.animation = 'none'; });
       window.scrollTo(0, y);
+    } else if (opts.soloCuerpo) {
+      // Cambio de sección: la cabecera ya estaba en pantalla, no se re-anima.
+      c.querySelectorAll('.sx2-entra, .sx2-entra-escala, [data-sx-arco]').forEach(function (el) {
+        if (el.closest('.js-py2-cuerpo')) return;
+        el.style.animation = 'none';
+        el.style.transition = 'none';
+      });
+      window.scrollTo(0, y);
     }
     U.animar(c);
   }
@@ -295,7 +329,7 @@
   function irSeccion(id) {
     if (!PYv2.seccionExiste(id)) return;
     estado.seccion = id;
-    pintar();
+    pintar({ soloCuerpo: true });
     var nav = contenedor() && contenedor().querySelector('.sx2-nav');
     if (nav) nav.scrollIntoView({ block: 'nearest', behavior: U.reducirMovimiento() ? 'auto' : 'smooth' });
   }
@@ -374,11 +408,14 @@
   PY.ETIQUETA_SALUD = ETIQUETA_SALUD;
   PY.ETIQUETA_ESTADO_PROYECTO = ETIQUETA_ESTADO_PROYECTO;
   PY.fecha = fecha;
+  PY.hoyClave = hoyClave;
   PY.diasHasta = diasHasta;
   PY.persona = persona;
   PY.tonoTarea = tonoTarea;
   PY.aviso = aviso;
   PY.api = api_;
+  PY.descargarBase64 = descargarBase64;
+  PY.miEmail = function () { return miEmail_; };
   PY.estado = function () { return estado; };
   PY.ctx = ctx;
   PY.pintar = pintar;

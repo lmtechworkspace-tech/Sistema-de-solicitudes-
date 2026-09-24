@@ -108,6 +108,35 @@
   background: var(--sx-primario); color: #fff; font: 700 0.625rem/1 var(--fuente); letter-spacing: 0.04em;
 }
 @keyframes sx2-crece { from { transform: scaleX(0); opacity: 0; } to { transform: none; opacity: 1; } }
+.sx2-py-gantt__nombre { align-self: stretch; }
+.sx2-py-gantt__sem--mes { border-left: 1px solid var(--sx-borde); }
+.sx2-py-gantt__critica { display: inline-flex; color: var(--sx-critico); flex: none; }
+
+/* Gantt completo: grilla más ancha que la tarjeta, scroll horizontal y la
+   columna de nombres fija a la izquierda. */
+.sx2-py-gantt-scroll { position: relative; }
+.sx2-py-gantt-scroll--zoom { overflow-x: auto; scrollbar-width: thin; }
+.sx2-py-gantt-scroll--zoom .sx2-py-gantt__nombre {
+  position: sticky; left: 0; z-index: 2; background: var(--sx-superficie);
+}
+.sx2-py-gantt-scroll--zoom .sx2-py-gantt__fila:hover .sx2-py-gantt__nombre { background: var(--sx-superficie-hover); }
+.sx2-py-gantt-scroll--zoom .sx2-py-gantt__hoy { z-index: 1; }
+
+/* Filas de grupo (hito) con plegado. */
+.sx2-py-gantt__fila--grupo { background: var(--sx-superficie-2); cursor: default; }
+.sx2-py-gantt__fila--grupo:hover { background: var(--sx-superficie-2); }
+.sx2-py-gantt__fila--grupo .sx2-py-gantt__nombre { background: var(--sx-superficie-2) !important; font-weight: 600; }
+.sx2-py-gantt__fila--grupo .sigso-ico { color: var(--sx-hito); }
+.sx2-py-gantt__plegar {
+  border: 0; background: none; padding: 2px; border-radius: 6px; cursor: pointer;
+  color: var(--sx-texto-2); display: inline-grid; place-items: center; flex: none;
+}
+.sx2-py-gantt__plegar .sigso-ico { color: var(--sx-texto-2); }
+.sx2-py-gantt__plegar:hover { background: var(--sx-superficie); }
+.sx2-py-gantt__n {
+  margin-left: auto; flex: none; padding: 1px 7px; border-radius: var(--sx-radio-full);
+  background: var(--sx-superficie); font: var(--sx-t-etiqueta); color: var(--sx-texto-3); line-height: 1.5;
+}
 @media (max-width: 720px) { .sx2-py-gantt { --sx-gantt-et: 130px; } }
 
 /* --- Resumen: avance, próximo hito, motivos -------------------------------- */
@@ -156,6 +185,64 @@
 .sx2-py-hitos__txt { display: flex; flex-direction: column; gap: 2px; min-width: 0; font: var(--sx-t-chico); color: var(--sx-texto); }
 .sx2-py-hitos__txt .sx2-tenue { font-size: 0.75rem; }
 .sx2-py-hitos__pct { font: 600 0.8125rem/1.6 var(--fuente); color: var(--sx-tono); }
+
+/* --- Trabajo ------------------------------------------------------------------------ */
+.sx2-py-herramientas { display: flex; flex-direction: column; gap: var(--sx-e-3); padding: var(--sx-e-4); }
+.sx2-py-celda-tarea { max-width: 320px; }
+.sx2-py-celda-tarea strong, .sx2-py-celda-tarea .sx2-tenue { display: block; }
+.sx2-py-celda-tarea .sx2-tenue { font-size: 0.75rem; margin-top: 2px; }
+.sx2-py-celda-tarea .sigso-ico { vertical-align: -1px; margin-right: 3px; }
+.sx2-py-tabla-trabajo th.js-py2t-orden:hover { color: var(--sx-texto); }
+
+.sx2-py-kanban {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(250px, 1fr);
+  gap: var(--sx-e-4); overflow-x: auto; padding-bottom: var(--sx-e-2); align-items: start;
+}
+.sx2-py-kanban__col {
+  background: var(--sx-superficie-2); border-radius: var(--sx-radio-lg);
+  padding: var(--sx-e-3); display: flex; flex-direction: column; gap: var(--sx-e-3);
+  min-height: 160px;
+}
+.sx2-py-kanban__cab { display: flex; align-items: center; gap: 8px; font: 600 0.875rem/1.3 var(--fuente); color: var(--sx-texto); padding: 2px 4px; }
+.sx2-py-kanban__punto { width: 9px; height: 9px; border-radius: 50%; background: var(--sx-tono); }
+.sx2-py-kanban__lista { display: flex; flex-direction: column; gap: var(--sx-e-2); }
+.sx2-py-kanban__vacia { margin: 0; padding: var(--sx-e-5) 0; text-align: center; font: var(--sx-t-chico); color: var(--sx-texto-3); }
+.sx2-py-kcard {
+  background: var(--sx-superficie); border: 1px solid var(--sx-borde-suave); border-radius: var(--sx-radio);
+  padding: var(--sx-e-3); display: flex; flex-direction: column; gap: 10px; cursor: pointer;
+  box-shadow: var(--sx-sombra-1);
+  transition: transform var(--sx-dur) var(--sx-curva), box-shadow var(--sx-dur) var(--sx-curva);
+}
+.sx2-py-kcard:hover { transform: translateY(-2px); box-shadow: var(--sx-sombra-2); }
+.sx2-py-kcard:focus-visible { outline: none; box-shadow: var(--sx-anillo-foco); }
+.sx2-py-kcard__titulo { margin: 0; font: 600 0.875rem/1.35 var(--fuente); color: var(--sx-texto); }
+.sx2-py-kcard__hito { display: inline-flex; align-items: center; gap: 4px; font: var(--sx-t-micro); color: var(--sx-hito); }
+.sx2-py-kcard__fecha { display: inline-flex; align-items: center; gap: 4px; font: var(--sx-t-micro); color: var(--sx-texto-3); }
+.sx2-py-kcard__fecha--vencida { color: var(--sx-critico); font-weight: 600; }
+
+.sx2-py-leyenda-gantt {
+  display: flex; flex-wrap: wrap; gap: var(--sx-e-4); margin-top: var(--sx-e-4); padding-top: var(--sx-e-3);
+  border-top: 1px solid var(--sx-borde-suave); font: var(--sx-t-micro); color: var(--sx-texto-2);
+}
+.sx2-py-leyenda-gantt span { display: inline-flex; align-items: center; gap: 6px; }
+.sx2-py-leyenda-gantt i { width: 18px; height: 8px; border-radius: 999px; background: var(--sx-tono); display: inline-block; }
+.sx2-py-leyenda-gantt i.sx2-py-leyenda-gantt__hito { width: 9px; height: 9px; border-radius: 2px; transform: rotate(45deg); }
+.sx2-py-leyenda-gantt i.sx2-py-leyenda-gantt__hoy { width: 2px; height: 12px; border-radius: 0; background: var(--sx-primario); }
+
+/* --- Panel de tarea ---------------------------------------------------------------- */
+.sx2-py-aviso {
+  display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: var(--sx-radio);
+  background: var(--sx-tono-suave); color: var(--sx-texto); font: var(--sx-t-chico);
+}
+.sx2-py-aviso > .sigso-ico { color: var(--sx-tono); margin-top: 1px; flex: none; }
+.sx2-py-desv { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sx-e-2); }
+.sx2-py-desv__caja {
+  display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: var(--sx-radio);
+  background: var(--sx-tono-suave); font: var(--sx-t-micro); color: var(--sx-texto-2);
+}
+.sx2-py-desv__caja strong { font: 700 1.05rem/1.2 var(--fuente); color: var(--sx-tono); }
+.sx2-py-descripcion { margin: 0; font: var(--sx-t-chico); color: var(--sx-texto-2); white-space: pre-wrap; }
+.sx2-py-rango { width: 100%; accent-color: var(--sx-primario); height: 28px; cursor: pointer; }
 
 /* --- Formularios en drawer --------------------------------------------------- */
 .sx2-form { display: flex; flex-direction: column; gap: var(--sx-e-4); }

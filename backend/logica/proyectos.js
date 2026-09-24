@@ -1955,6 +1955,101 @@ function eliminarRegistroDia(db, data, contexto) {
   return { ok: true, dia, eliminado: true };
 }
 
+// Proyectos v2 ("Actualizar tarea" unificado): UNA acción reemplaza las dos
+// puertas de v1 -- el check-in (estado/avance de la TAREA) y el Registro
+// diario (qué pasó ESE DÍA en la tarea). Compone las dos funciones de
+// siempre (Actividades.checkin + guardarRegistroDia), sin reglas nuevas:
+//  - las horas van SOLO al REGISTRO_DIA, nunca también al check-in, para que
+//    Dedicación/reportes no las cuenten dos veces;
+//  - si el día ya tenía registro, lo que no se envía (horas, nota) se
+//    conserva: reportar avance sin horas no borra las horas ya cargadas;
+//  - todo se valida ANTES de escribir y corre en una transacción: o quedan
+//    las dos escrituras o ninguna.
+const ACCIONES_ACTUALIZAR_TAREA_ = ['avance', 'sin_cambio', 'bloqueo', 'desbloqueo', 'listo'];
+const ESTADO_DIA_POR_ACCION_ = { avance: 'en_proceso', sin_cambio: 'en_proceso', bloqueo: 'bloqueado', desbloqueo: 'en_proceso' };
+
+function actualizarTarea(db, data, contexto) {
+  data = data || {};
+  const proyecto = buscarProyecto_(db, data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
+  const actividad = leerSeguro_(db, 'ACTIVIDADES').find((a) => a.actividad_id === data.actividad_id && a.proyecto_id === proyecto.proyecto_id);
+  if (!actividad) return errorValidacion_('actividad_id', 'Tarea no encontrada en este proyecto.');
+
+  const accion = String(data.accion || '').trim();
+  if (accion && ACCIONES_ACTUALIZAR_TAREA_.indexOf(accion) === -1) return errorValidacion_('accion', 'Acción no válida.');
+  const tieneHoras = data.horas !== undefined && data.horas !== null && data.horas !== '';
+  const estadoDiaPedido = String(data.estado_dia || '').trim();
+  if (!accion && !tieneHoras && !estadoDiaPedido) {
+    return errorValidacion_('accion', 'No hay nada que actualizar: indica el avance, las horas o cómo fue el día.');
+  }
+
+  const email = normalizarEmail_(contexto && contexto.email);
+  const trabaja = Actividades.trabajaLaActividad_(actividad, email);
+  if (!trabaja && !puedeGestionarProyecto_(db, proyecto, contexto)) {
+    return { _forbidden: true, message: 'Solo quien trabaja la tarea o el líder del proyecto puede actualizarla.' };
+  }
+  if (accion && !trabaja) return { _forbidden: true, message: 'Solo el responsable o un colaborador pueden cambiar el avance o el estado de la tarea.' };
+  if (accion && Actividades.esEstadoTerminal_(actividad.estado)) return errorValidacion_('actividad_id', 'Esta tarea ya está cerrada.');
+  const motivo = String(data.bloqueo_motivo || '').trim();
+  if ((accion === 'bloqueo' || estadoDiaPedido === 'bloqueado') && !motivo) return errorValidacion_('bloqueo_motivo', 'Indica el motivo del bloqueo.');
+  if (accion === 'desbloqueo' && actividad.estado !== Actividades.ACTIVIDADES_ESTADOS.BLOQUEADA) return errorValidacion_('accion', 'La tarea no está bloqueada.');
+  const conAvance = data.avance_pct !== undefined && data.avance_pct !== null && data.avance_pct !== '';
+  if (conAvance) {
+    const n = Number(data.avance_pct);
+    if (isNaN(n) || n < 0 || n > 100) return errorValidacion_('avance_pct', 'El avance debe ser un número entre 0 y 100.');
+  }
+  if (tieneHoras) {
+    const h = Number(data.horas);
+    if (isNaN(h) || h < 0 || h > 24) return errorValidacion_('horas', 'Las horas deben ser un número entre 0 y 24.');
+  }
+  const dia = String(data.dia || Utils.claveDia_(new Date(), 'America/Santiago')).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dia)) return errorValidacion_('dia', 'El día debe tener formato AAAA-MM-DD.');
+  if (dia > Utils.claveDia_(new Date(), 'America/Santiago')) return errorValidacion_('dia', 'No se puede registrar un día futuro.');
+
+  let estadoDia = estadoDiaPedido;
+  if (!estadoDia && accion) {
+    estadoDia = accion === 'listo'
+      ? (esVerdadero_(actividad.requiere_validacion) ? 'revision' : 'finalizado')
+      : ESTADO_DIA_POR_ACCION_[accion];
+  }
+  if (!estadoDia) estadoDia = 'en_proceso';
+  if (REGISTRO_DIA_ESTADOS_.indexOf(estadoDia) === -1) return errorValidacion_('estado_dia', 'Estado del día no válido.');
+
+  const registroPrevio = leerSeguro_(db, 'ACTIVIDADES_BITACORA').find((b) =>
+    b.tipo === 'REGISTRO_DIA' && b.actividad_id === actividad.actividad_id && datosDeBitacora_(b).dia === dia);
+  const previo = registroPrevio ? datosDeBitacora_(registroPrevio) : {};
+  const nota = String(data.nota || '').trim();
+
+  db.exec('BEGIN');
+  try {
+    let tarea = actividad;
+    if (accion) {
+      tarea = Actividades.checkin(db, {
+        actividad_id: actividad.actividad_id, tipo: accion,
+        avance_pct: conAvance ? Number(data.avance_pct) : undefined,
+        nota: nota, bloqueo_motivo: motivo
+      }, contexto);
+      if (tarea && (tarea._validationError || tarea._forbidden)) { db.exec('ROLLBACK'); return tarea; }
+    }
+    const registro = guardarRegistroDia(db, {
+      proyecto_id: proyecto.proyecto_id, actividad_id: actividad.actividad_id, dia: dia, estado_dia: estadoDia,
+      horas: tieneHoras ? Number(data.horas) : (previo.horas !== undefined ? previo.horas : ''),
+      // Con acción, la nota ya quedó en el check-in: el registro del día
+      // conserva la suya para no duplicar el mismo texto en el historial.
+      nota: accion ? (registroPrevio ? registroPrevio.nota || '' : '') : (nota || (registroPrevio ? registroPrevio.nota || '' : '')),
+      bloqueo_motivo: estadoDia === 'bloqueado' ? motivo : '',
+      tramos: Array.isArray(previo.tramos) ? previo.tramos : []
+    }, contexto);
+    if (registro && (registro._validationError || registro._forbidden)) { db.exec('ROLLBACK'); return registro; }
+    db.exec('COMMIT');
+    return { ok: true, actividad: tarea, registro: registro };
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
 function obtenerRendimiento(db, data, contexto) {
   const proyecto = buscarProyecto_(db, data && data.proyecto_id);
   if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
@@ -2362,7 +2457,7 @@ module.exports = {
   calcularDuracionDias_, calcularDesviacionPlazoDias_, calcularDesviacionAvancePp_,
   calcularEstadoPlazo_, calcularFechaInicioReal_,
   // Incremento 2 (v11 Reingenieria Cronograma).
-  guardarRegistroDia, eliminarRegistroDia, obtenerRendimiento, obtenerAnalitica,
+  guardarRegistroDia, eliminarRegistroDia, actualizarTarea, obtenerRendimiento, obtenerAnalitica,
   obtenerWorkloadPortafolio, congelarBaseline, reprogramarTarea,
   // Centro documental + adjuntos de Sala (R2, desgateado 2026-09-18).
   subirAdjunto, descargarAdjunto, gestionarDocumento, subirVersionDocumento,

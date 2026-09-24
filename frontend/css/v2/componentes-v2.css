@@ -6,6 +6,10 @@
  * su propio `--ok/--alerta/...` por variante. Resultado: agregar un estado
  * nuevo es UNA clase, no una por componente.
  */
+/* Un display:flex/grid de componente le gana al [hidden] del navegador:
+   sin esto, ocultar con el atributo hidden no funciona dentro de .sx2. */
+.sx2 [hidden] { display: none !important; }
+
 .sx2-tono-primario { --sx-tono: var(--sx-primario); --sx-tono-suave: var(--sx-primario-suave); }
 .sx2-tono-ok       { --sx-tono: var(--sx-ok);       --sx-tono-suave: var(--sx-ok-suave); }
 .sx2-tono-info     { --sx-tono: var(--sx-info);     --sx-tono-suave: var(--sx-info-suave); }

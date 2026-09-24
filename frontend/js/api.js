@@ -136,6 +136,8 @@ var ACCIONES_PORTADAS_NODE = {
   gestionarIntegranteProyecto: true, gestionarHitoProyecto: true,
   crearTareaProyecto: true, editarTareaProyecto: true, listarTareasProyecto: true, listarBitacoraProyecto: true,
   guardarRegistroDiaProyecto: true, eliminarRegistroDiaProyecto: true,
+  // Proyectos v2: "Actualizar tarea" unificado (check-in + registro del día).
+  actualizarTareaProyecto: true,
   obtenerRendimientoProyecto: true, congelarBaselineProyecto: true, reprogramarTareaProyecto: true,
   obtenerAnaliticaProyecto: true, obtenerWorkloadPortafolioProyectos: true,
   listarSalaProyecto: true, publicarEnSalaProyecto: true, convertirEventoEnTareaProyecto: true,

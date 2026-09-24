@@ -287,6 +287,8 @@ const ACCIONES = {
   // Cronograma avanzado (v11 Reingenieria Cronograma): incremento 2.
   guardarRegistroDiaProyecto: (db, data, contexto) => Proyectos.guardarRegistroDia(db, data, contexto),
   eliminarRegistroDiaProyecto: (db, data, contexto) => Proyectos.eliminarRegistroDia(db, data, contexto),
+  // Proyectos v2: check-in + registro del día en UNA acción (ver actualizarTarea).
+  actualizarTareaProyecto: (db, data, contexto) => Proyectos.actualizarTarea(db, data, contexto),
   obtenerRendimientoProyecto: (db, data, contexto) => Proyectos.obtenerRendimiento(db, data, contexto),
   congelarBaselineProyecto: (db, data, contexto) => Proyectos.congelarBaseline(db, data, contexto),
   reprogramarTareaProyecto: (db, data, contexto) => Proyectos.reprogramarTarea(db, data, contexto),

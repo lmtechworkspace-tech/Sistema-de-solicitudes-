@@ -96,7 +96,9 @@
       if (b.tipo === 'REPROGRAMACION' && b.fecha_nueva) extra = ' · ' + PY.fecha(b.fecha_anterior) + ' → ' + PY.fecha(b.fecha_nueva);
       if (b.horas) extra += ' · ' + b.horas + ' h';
       return {
-        ts: (b.tipo === 'REGISTRO_DIA' && b.dia) ? b.dia + 'T13:00:00Z' : b.timestamp, def: def,
+        // El REGISTRO_DIA guarda su timestamp fijo a mediodía del día que
+        // describe; para "cuándo pasó" se usa cuándo se cargó/editó.
+        ts: (b.tipo === 'REGISTRO_DIA') ? (b.editado_en || (b.dia ? b.dia + 'T13:00:00Z' : b.timestamp)) : b.timestamp, def: def,
         autor: PY.persona(b.autor_email, b.autor_nombre), objeto: titulos[b.actividad_id] || '', extra: extra,
         nota: b.nota, actividadId: b.actividad_id
       };
@@ -124,84 +126,8 @@
     }).join('') + '</ul>';
   }
 
-  // --- Gantt compacto -----------------------------------------------------------
-  function lunes(d) {
-    var x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-    var dow = x.getUTCDay();
-    return new Date(x.getTime() - ((dow + 6) % 7) * DIA);
-  }
-  var MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-
-  function gantt(ctx) {
-    var plan = planPorId(ctx);
-    var hoy = new Date();
-    var desde = lunes(new Date(hoy.getTime() - 14 * DIA));
-    var SEMANAS = 12;
-    var hasta = new Date(desde.getTime() + SEMANAS * 7 * DIA);
-    var rango = hasta - desde;
-    function pos(t) { return Math.max(0, Math.min(100, (t - desde) / rango * 100)); }
-
-    var filas = ctx.tareas.filter(function (a) { return a.fecha_compromiso && a.estado !== 'CANCELADA'; }).map(function (a) {
-      var p = plan[a.actividad_id] || {};
-      var fin = new Date(p.plan_fin || a.fecha_compromiso);
-      var ini = new Date(p.plan_inicio || a.fecha_creacion || (fin.getTime() - 7 * DIA));
-      if (ini > fin) ini = new Date(fin.getTime() - DIA);
-      return { a: a, p: p, ini: ini, fin: fin };
-    }).filter(function (f) { return f.fin >= desde && f.ini <= hasta; })
-      .sort(function (x, y) {
-        var tx = esTerminal(x.a) ? 1 : 0, ty = esTerminal(y.a) ? 1 : 0;
-        return (tx - ty) || (x.fin - y.fin);
-      });
-    var mostradas = filas.slice(0, 10);
-
-    var cab = '';
-    for (var s = 0; s < SEMANAS; s++) {
-      var d = new Date(desde.getTime() + s * 7 * DIA);
-      var esMes = s === 0 || d.getUTCDate() <= 7;
-      cab += '<span class="sx2-py-gantt__sem">' + (esMes ? '<b>' + MESES[d.getUTCMonth()] + '</b> ' : '') + d.getUTCDate() + '</span>';
-    }
-    var hitos = ((ctx.detalle && ctx.detalle.hitos) || []).filter(function (h) {
-      if (!h.fecha_objetivo) return false;
-      var t = new Date(h.fecha_objetivo);
-      return t >= desde && t <= hasta;
-    });
-
-    var cuerpo = mostradas.map(function (f, i) {
-      var tono = PY.tonoTarea(f.a);
-      var izq = pos(f.ini), der = pos(f.fin.getTime() + DIA);
-      var ancho = Math.max(1.2, der - izq);
-      var avance = f.p.avance_real_pct !== undefined && f.p.avance_real_pct !== null ? f.p.avance_real_pct : (f.a.estado === 'TERMINADA' ? 100 : 0);
-      var resp = PY.persona(f.a.responsable_email, f.a.responsable_nombre);
-      return '<div class="sx2-py-gantt__fila sx2-entra" style="--i:' + i + '" data-py2-tarea="' + U.esc(f.a.actividad_id) + '">' +
-        '<span class="sx2-py-gantt__nombre">' + U.avatar(resp, 'xs') + '<span class="sx2-cortar" title="' + U.esc(f.a.titulo) + '">' + U.esc(f.a.titulo) + '</span></span>' +
-        '<span class="sx2-py-gantt__pista">' +
-          '<span class="sx2-py-gantt__barra sx2-tono-' + tono + '" style="left:' + izq.toFixed(2) + '%;width:' + ancho.toFixed(2) + '%"' +
-            ' title="' + U.esc(f.a.titulo + ' · ' + PY.fecha(f.ini) + ' → ' + PY.fecha(f.fin) + ' · ' + (f.a.semaforo_etiqueta || '')) + '">' +
-            '<span class="sx2-py-gantt__relleno" style="width:' + Math.max(0, Math.min(100, avance)) + '%"></span>' +
-          '</span>' +
-        '</span>' +
-      '</div>';
-    }).join('');
-
-    var hitosFila = hitos.length
-      ? '<div class="sx2-py-gantt__fila sx2-py-gantt__fila--hitos"><span class="sx2-py-gantt__nombre sx2-tenue">' + U.ico('bandera', 14) + 'Hitos</span><span class="sx2-py-gantt__pista">' +
-          hitos.map(function (h) {
-            var tono = h.estado === 'COMPLETADO' ? 'ok' : (new Date(h.fecha_objetivo) < hoy ? 'critico' : 'hito');
-            return '<span class="sx2-py-gantt__hito sx2-tono-' + tono + '" style="left:' + pos(new Date(h.fecha_objetivo).getTime()).toFixed(2) + '%" title="' + U.esc(h.nombre + ' · ' + PY.fecha(h.fecha_objetivo)) + '"></span>';
-          }).join('') + '</span></div>'
-      : '';
-
-    var hoyPct = pos(hoy.getTime());
-    if (!mostradas.length && !hitos.length) {
-      return U.vacio({ icono: 'gantt', titulo: 'Nada planificado en estas semanas', texto: 'Las tareas con fecha comprometida aparecen aquí.' });
-    }
-    return '<div class="sx2-py-gantt" style="--sx-semanas:' + SEMANAS + '">' +
-      '<div class="sx2-py-gantt__fila sx2-py-gantt__fila--cab"><span></span><span class="sx2-py-gantt__semanas">' + cab + '</span></div>' +
-      hitosFila + cuerpo +
-      '<span class="sx2-py-gantt__hoy" style="--hoy:' + hoyPct.toFixed(2) + '"><span>HOY</span></span>' +
-    '</div>' +
-    (filas.length > mostradas.length ? '<p class="sx2-tenue" style="margin:12px 0 0;font-size:.8125rem">+ ' + (filas.length - mostradas.length) + ' tareas más en estas semanas.</p>' : '');
-  }
+  // El Gantt (adelanto de 12 semanas) lo pinta gantt.js: un solo renderizador
+  // para el Resumen y para Trabajo.
 
   // --- Tarjetas --------------------------------------------------------------------
   function kpis(ctx, m) {
@@ -209,7 +135,7 @@
     return '<div class="sx2-fila-kpis">' +
       U.kpi({ i: 0, icono: 'capas', tono: 'primario', etiqueta: 'Total de tareas', valor: m.total, unidad: 'tareas', filtro: 'todas' }) +
       U.kpi({ i: 1, icono: 'check', tono: 'ok', etiqueta: 'Completadas', valor: m.completadas, unidad: 'tareas', tendencia: { texto: pct(m.completadas), tono: 'ok' }, filtro: 'completadas' }) +
-      U.kpi({ i: 2, icono: 'estado', tono: 'info', etiqueta: 'En curso', valor: m.enCurso, unidad: 'tareas', tendencia: { texto: pct(m.enCurso), tono: 'info' }, filtro: 'en-curso' }) +
+      U.kpi({ i: 2, icono: 'estado', tono: 'info', etiqueta: 'En plazo', valor: m.enCurso, unidad: 'tareas', tendencia: { texto: pct(m.enCurso), tono: 'info' }, filtro: 'en-curso' }) +
       U.kpi({ i: 3, icono: 'alerta', tono: 'critico', etiqueta: 'Atrasadas', valor: m.atrasadas, unidad: m.atrasadas === 1 ? 'tarea' : 'tareas', tendencia: { texto: pct(m.atrasadas), tono: 'critico' }, filtro: 'atrasadas' }) +
       U.kpi({ i: 4, icono: 'rayo', tono: 'alerta', etiqueta: 'En riesgo', valor: m.enRiesgo, unidad: m.enRiesgo === 1 ? 'tarea' : 'tareas', tendencia: { texto: pct(m.enRiesgo), tono: 'alerta' }, filtro: 'en-riesgo' }) +
       U.kpi({ i: 5, icono: 'diana', tono: m.cumplimiento === null ? 'neutro' : (m.cumplimiento >= 80 ? 'ok' : (m.cumplimiento >= 50 ? 'alerta' : 'critico')), etiqueta: 'Cumplimiento de plazos',
@@ -318,7 +244,7 @@
     var m = metricas(ctx);
     return kpis(ctx, m) +
       '<div class="sx2-grid sx2-grid--estira">' +
-        '<div class="sx2-col-8">' + U.card({ titulo: 'Cronograma', icono: 'gantt', sub: '12 semanas', i: 1, accion: { texto: 'Ver Gantt completo', clase: 'js-py2-ir', datos: { seccion: 'trabajo', modo: 'gantt' } }, cuerpo: gantt(ctx) }) + '</div>' +
+        '<div class="sx2-col-8">' + U.card({ titulo: 'Cronograma', icono: 'gantt', sub: '12 semanas', i: 1, accion: { texto: 'Ver Gantt completo', clase: 'js-py2-ir', datos: { seccion: 'trabajo', modo: 'gantt' } }, cuerpo: PY.gantt(ctx, { semanas: 12, limite: 10 }) }) + '</div>' +
         '<div class="sx2-col-4">' + U.card({ titulo: 'Avance del proyecto', icono: 'dona', i: 2, cuerpo: avance(ctx) }) + '</div>' +
         '<div class="sx2-col-7">' + U.card({ titulo: 'Próximas tareas', icono: 'tareas', i: 3, sinRelleno: true, accion: { texto: 'Ver todas', clase: 'js-py2-ir', datos: { seccion: 'trabajo', modo: 'tabla' } }, cuerpo: proximas(ctx) }) + '</div>' +
         '<div class="sx2-col-5">' + U.card({ titulo: 'Carga del equipo', icono: 'equipo', i: 4, sinRelleno: true, accion: { texto: 'Ver equipo', clase: 'js-py2-ir', datos: { seccion: 'equipo' } }, cuerpo: equipo(ctx) }) + '</div>' +
