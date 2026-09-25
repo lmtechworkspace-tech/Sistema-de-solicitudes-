@@ -980,3 +980,86 @@ marco del shell.
 **MÓDULO 9 COMPLETO** (9A `66d86c5`, 9B). Con esto se termina el orden
 acordado (módulos 1–9). Pendiente de la hoja de ruta: retirar las
 versiones clásicas tras un ciclo.
+
+---
+
+## Plan para retirar las versiones clásicas (propuesta, 2026-09-25)
+
+### Dónde estamos
+- Los 9 módulos tienen v2 **predeterminada desde el 24–25 de septiembre**
+  (Proyectos también desde el 24, F8). Ningún módulo cumplió todavía "un
+  ciclo".
+- La clásica sigue viva detrás de "Usar la versión clásica de este módulo"
+  (menú de usuario). La preferencia se guarda **solo en el navegador**: hoy
+  no sabemos quién la usa ni por qué.
+- `app.html` (acceso con Google / Apps Script) carga los módulos clásicos
+  `dashboard.js`, `detalle.js`, `gerencia.js`, `jefatura.js`,
+  `novedades.js`, `actividades.js`, `proyectos.js` y `calidad.js`. Su
+  retiro depende de apagar Apps Script (falta la cuenta de portal de
+  Valentina Caballero).
+- La v2 **todavía usa** piezas clásicas: formularios de Calidad
+  (`SigsoCalidad.formulario/abrirFicha/ver…`), de Novedades
+  (`abrirPublicar/abrirReenviar…`), `SigsoDashboard.imprimirPauta`,
+  `SigsoProyectos.abrirFormularioDesdeSolicitud` y los `irAItem`/árboles de
+  Gerencia, Mi departamento, Coordinación y Administración.
+
+### Tres niveles de "retirar"
+1. **Quitar el interruptor** del módulo: la v2 queda como única vista de lo
+   migrado. Cambio chico, se revierte con un `git revert`.
+2. **Borrar las pantallas clásicas reemplazadas** dentro de archivos que
+   siguen vivos (porque tienen secciones no migradas o formularios que la
+   v2 reutiliza).
+3. **Borrar archivos clásicos enteros** (y su CSS). Bloqueado por
+   `app.html` y por las funciones compartidas de arriba.
+
+### Criterio para retirar un módulo
+- ≥ 3 semanas como predeterminada;
+- nadie usó la clásica en la última semana, o quienes la usaron dijeron qué
+  les faltaba y se resolvió;
+- sin errores abiertos del módulo v2;
+- checklist de paridad (todo lo que hacía la clásica tiene equivalente).
+
+### Fase 0 — medir antes de retirar (≈ 1 día)
+- Registrar en el servidor cada cambio de versión (quién, módulo, cuándo) y
+  una pregunta opcional al volver a la clásica: "¿Qué te faltó en la nueva?".
+- En Administración → Salud: "Quién usa versiones clásicas".
+- En la clásica, un aviso: "Esta versión se retira el <fecha>".
+
+### Inventario por módulo
+| Módulo | Clásica | Retiro posible | Bloqueo |
+|---|---|---|---|
+| Inicio | `inicio.js` (570 líneas) | Nivel 3 | ninguno (app.html no lo carga) |
+| Pausas (trabajador) | `pausas.js` (208) | Nivel 3 | ninguno |
+| Mi trabajo | `actividades.js` (333) | Nivel 1 ahora, 3 después | app.html |
+| Mis solicitudes | vista en plataforma de `estado.js` | Nivel 1–2 | `estado.js` se queda (estado.html público) |
+| Nueva solicitud | sin piel v2 | Nivel 1 | `formulario.js` se queda (index.html público) |
+| Proyectos | `proyectos.js` (8.041) + 476 reglas `.sigso-py-*` | Nivel 1 ahora, 3 después | app.html + 2 funciones usadas por la v2 |
+| Bandeja | `dashboard.js` + `detalle.js` (2.512) | Nivel 1–2, 3 después | app.html + `imprimirPauta` |
+| Gerencia / Mi depto | portada clásica de `gerencia.js` / `jefatura.js` | Nivel 1–2 | resto de secciones siguen |
+| Coordinación | "Hoy" de `coordinacion.js` | Nivel 2 | historial/cumplimiento siguen |
+| Novedades | feed de `novedades.js` | Nivel 2 | publicar/aprobar/mis envíos siguen |
+| Administración | Cuentas de `admin.js` | Nivel 2 | resto de Administración sigue |
+| Calidad | Inicio, lista/detalle de Documentos y lista de Personas de `calidad.js` (9.952) | Nivel 2 | formularios y demás secciones siguen |
+
+### Tandas propuestas (fechas con ciclo de 3 semanas)
+- **Tanda 1 — 15 oct**: Inicio, Pausas del trabajador, Mis solicitudes,
+  Nueva solicitud, Mi trabajo y Proyectos (niveles 1–3 según la tabla).
+- **Tanda 2 — 22 oct**: Bandeja, Gerencia, Mi departamento, Coordinación,
+  Novedades, Administración (niveles 1–2).
+- **Tanda 3 — 29 oct**: Calidad (nivel 2), después de que el encargado
+  cierre las pendientes de datos (aprobaciones, normas, inducciones).
+- **Tanda 4 — cuando se apague Apps Script**: nivel 3 de lo bloqueado por
+  `app.html`; antes, mover las funciones compartidas a la v2.
+
+### Cómo se retira cada módulo
+1. Revisar la medición de la Fase 0 y el checklist de paridad.
+2. Avisar al equipo con una Novedad una semana antes.
+3. Quitar el interruptor (entrada de `MODULOS_V2`) y la preferencia guardada.
+4. Borrar el código del nivel que corresponda, buscando referencias antes.
+5. Tests completos + verificación en sandbox (escritorio y celular).
+6. Un commit por módulo (se revierte solo ese si algo falla).
+7. Mirar 48 h los errores y los comentarios.
+
+### Qué no se toca
+`index.html` (formulario público), `estado.html`, `app.html` hasta decidir
+Apps Script, y los formularios clásicos que la v2 reutiliza.
