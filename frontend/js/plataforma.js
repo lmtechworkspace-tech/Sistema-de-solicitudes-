@@ -20,53 +20,52 @@
   // revalida en segundo plano (stale-while-revalidate).
   var LLAVE_CUENTA = 'sigso_portal_cuenta';
 
-  // Catalogo de modulos del shell. `interno: true` = vive en esta pagina;
-  // si no, es un enlace externo (transicion P2 -> P3/P4).
+  // Catálogo de módulos del shell: todos viven en esta página.
   // v4.0: `icono` pasa de emoji a clave de iconos.js -- el emoji lo dibujaba
   // el sistema operativo (distinto en Windows/Mac/Android y sin heredar el
   // color del texto).
   var MODULOS_SHELL = {
-    nueva_solicitud: { icono: 'nueva', nombre: 'Nueva solicitud', descripcion: 'Ingresa un pedido al equipo', interno: true },
-    mis_solicitudes: { icono: 'lista', nombre: 'Mis solicitudes', descripcion: 'El estado de todo lo tuyo, de todos tus correos', interno: true },
+    nueva_solicitud: { icono: 'nueva', nombre: 'Nueva solicitud', descripcion: 'Ingresa un pedido al equipo' },
+    mis_solicitudes: { icono: 'lista', nombre: 'Mis solicitudes', descripcion: 'El estado de todo lo tuyo, de todos tus correos' },
     // P3: bandeja y gerencia viven DENTRO del shell (dashboard.js/detalle.js/
     // gerencia.js orquestados aqui, con el token de la sesion via api.js).
-    bandeja: { icono: 'bandeja', nombre: 'Bandeja de trabajo', descripcion: 'Solicitudes del equipo: estados, fechas, derivaciones', interno: true },
+    bandeja: { icono: 'bandeja', nombre: 'Bandeja de trabajo', descripcion: 'Solicitudes del equipo: estados, fechas, derivaciones' },
     // v14.0 (piel nueva): icono propio por modulo -- antes gerencia/jefatura/
     // coordinacion compartian 'grafico' y no se distinguian en el sidebar.
-    gerencia: { icono: 'tendencia', nombre: 'Panel de gerencia', descripcion: 'KPIs, semáforo de cumplimiento y seguimiento', interno: true },
+    gerencia: { icono: 'tendencia', nombre: 'Panel de gerencia', descripcion: 'KPIs, semáforo de cumplimiento y seguimiento' },
     // v4.2: "Gerencia acotado" al equipo del jefe (JEFATURAS, por correo) --
     // ver documentacion/SIGSO-v4.2-propuestas-modulo-jefatura.md.
-    jefatura: { icono: 'equipo', nombre: 'Mi departamento', descripcion: 'Qué pasó hoy con tu equipo: KPIs, seguimiento y validaciones pendientes', interno: true },
+    jefatura: { icono: 'equipo', nombre: 'Mi departamento', descripcion: 'Qué pasó hoy con tu equipo: KPIs, seguimiento y validaciones pendientes' },
     // P4: administracion tambien vive dentro del shell (admin.js con el
     // token de la sesion; el backend exige el modulo en cada accion).
-    administracion: { icono: 'ajustes', nombre: 'Administración', descripcion: 'Catálogos, usuarios y cuentas de la plataforma', interno: true },
+    administracion: { icono: 'ajustes', nombre: 'Administración', descripcion: 'Catálogos, usuarios y cuentas de la plataforma' },
     // v6.0 Fase P2: el trabajador registra su participacion en la pausa activa
     // del dia (pausas.js). Cero friccion, pensado para el enlace magico.
-    pausas: { icono: 'actividad', nombre: 'Pausas activas', descripcion: 'Registra tu participación en la pausa de hoy', interno: true },
+    pausas: { icono: 'actividad', nombre: 'Pausas activas', descripcion: 'Registra tu participación en la pausa de hoy' },
     // v6.0 Fase P3: la coordinadora (prevencionista) opera la pausa del dia y
     // ve sus reportes de cumplimiento (coordinacion.js).
-    pausas_coordinacion: { icono: 'portapapeles', nombre: 'Coordinación de pausas', descripcion: 'Opera la pausa del día y ve el cumplimiento', interno: true },
+    pausas_coordinacion: { icono: 'portapapeles', nombre: 'Coordinación de pausas', descripcion: 'Opera la pausa del día y ve el cumplimiento' },
     // v6.5: Novedades es un modulo CORE, no asignable por cuenta (ver
     // modulosDeLaCuenta_) -- igual que "Mi perfil", disponible para
     // cualquiera con sesion, sin que un Admin tenga que activarlo cuenta por
     // cuenta.
-    novedades: { icono: 'campana', nombre: 'Novedades', descripcion: 'Leyes, avisos y novedades de todas las áreas', interno: true },
+    novedades: { icono: 'campana', nombre: 'Novedades', descripcion: 'Leyes, avisos y novedades de todas las áreas' },
     // v7.0 (Fase 2, modulo de Gestion Operacional): compromisos con
     // check-in de 1 clic (documentacion/SIGSO-v7.0-propuesta-modulo-
     // gestion-operacional.md §4.4/§5.1). No es core como 'novedades' --
     // depende de que la cuenta lo tenga en CUENTAS_PORTAL.modulos.
-    mi_trabajo: { icono: 'tareas', nombre: 'Mi trabajo', descripcion: 'Tus compromisos, con un check-in de un clic', interno: true },
+    mi_trabajo: { icono: 'tareas', nombre: 'Mi trabajo', descripcion: 'Tus compromisos, con un check-in de un clic' },
     // v9.0 (documentacion/SIGSO-v9.0-propuesta-modulo-gestion-proyectos.md):
     // portafolio + sala de trabajo de proyectos internos. No es core --
     // depende de que la cuenta lo tenga en CUENTAS_PORTAL.modulos, igual
     // que 'mi_trabajo'.
-    proyectos: { icono: 'capas', nombre: 'Proyectos', descripcion: 'Portafolio, equipo y sala de trabajo de tus proyectos', interno: true },
+    proyectos: { icono: 'capas', nombre: 'Proyectos', descripcion: 'Portafolio, equipo y sala de trabajo de tus proyectos' },
     // v10.0 (documentacion/SIGSO-v10.0-propuesta-modulo-sgc-iso9001.md):
     // repositorio documental del Sistema de Gestion de Calidad. Cada
     // persona ve SOLO los documentos que le corresponden -- el filtrado lo
     // hace el backend (Calidad.gs), no el shell. No es core: depende de que
     // la cuenta tenga 'calidad' en CUENTAS_PORTAL.modulos.
-    calidad: { icono: 'escudoCheck', nombre: 'Calidad', descripcion: 'Documentación, procesos, personas, control y mejora del SGC', interno: true }
+    calidad: { icono: 'escudoCheck', nombre: 'Calidad', descripcion: 'Documentación, procesos, personas, control y mejora del SGC' }
   };
 
   // v4.0 Frente 3: cada modulo tiene su propio acento -- antes todo el shell
@@ -966,7 +965,7 @@
   // ver (el mismo predicado `visible` que obedece el sidebar).
   function pantallasDeLaCuenta_() {
     var lista = [{ modulo: 'home', item: '', nombre: 'Inicio', ruta: '', icono: 'inicio' }];
-    modulosDeLaCuenta_().filter(function (id) { return MODULOS_SHELL[id].interno; }).forEach(function (id) {
+    modulosDeLaCuenta_().forEach(function (id) {
       var def = MODULOS_SHELL[id];
       lista.push({ modulo: id, item: '', nombre: def.nombre, ruta: '', icono: def.icono });
       var reg = window.SigsoNav && SigsoNav.obtener(id);
@@ -1159,10 +1158,6 @@
     return propios;
   }
 
-  function urlExterna_(def) {
-    return (window.SIGSO_CONFIG && window.SIGSO_CONFIG[def.urlConfig]) || '';
-  }
-
   // v13.0: el nav del sidebar deja de ser una lista plana de módulos y pasa a
   // ser el ÁRBOL de navegación de SIGSO (SigsoNav.renderArbol). Cada módulo
   // que haya registrado su arquitectura se despliega aquí, en la barra azul;
@@ -1219,16 +1214,8 @@
     var modulos = [{ id: 'home', nombre: 'Inicio', icono: 'inicio' }]
       .concat(modulosDeLaCuenta_().map(function (id) {
         var def = MODULOS_SHELL[id];
-        var url = def.interno ? '' : urlExterna_(def);
-        return {
-          id: id,
-          nombre: def.nombre,
-          icono: def.icono,
-          acento: acentoInline_(id),
-          esEnlace: !def.interno,
-          href: url
-        };
-      }).filter(function (m) { return m.esEnlace ? !!m.href : true; }));
+        return { id: id, nombre: def.nombre, icono: def.icono, acento: acentoInline_(id) };
+      }));
 
     SigsoNav.renderArbol({
       contenedor: nav,

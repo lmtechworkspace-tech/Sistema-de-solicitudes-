@@ -1508,3 +1508,16 @@ los usa): quedaban cinco clásicos cargados. `detalle.js`, `estado.js` y
   `formulario.css`: son la base compartida con las páginas públicas
   (index/estado) y app.html (colores, marco, `Componentes`, formulario de
   solicitud); todo lo visible de la plataforma lo define el sistema v2.
+
+### R13c Módulos "externos" — ESTADO: HECHO
+- Todos los módulos viven dentro de la plataforma: se retira la bandera
+  `interno` y la rama de "módulo externo" (enlace a otra página,
+  `urlExterna_`) que quedaba de la transición P2→P3/P4. Verificado: el
+  sidebar no tiene ningún enlace fuera de la plataforma.
+
+**Con R13 termina la hoja de ruta R1–R13: la plataforma es 100 % v2** —
+no carga ningún script de módulo clásico ni dashboard.css/admin.css, no
+tiene markup clásico, no llama a Apps Script y ningún módulo redirige a
+app.html/admin.html. Lo único que sigue existiendo del mundo clásico es
+**app.html** (acceso con Google / Apps Script), que queda fuera a propósito:
+apagarlo exige antes crear la cuenta de portal de Valentina Caballero.
