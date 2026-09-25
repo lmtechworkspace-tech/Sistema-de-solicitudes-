@@ -1495,3 +1495,16 @@ los usa): quedaban cinco clásicos cargados. `detalle.js`, `estado.js` y
   decisión 3D) y `ui-components.js` (cabecera de las páginas públicas).
 - Sandbox: 12 módulos + Novedades con su v2, detalle de la Bandeja, Inicio
   idéntico; 0 errores.
+
+### R13b Hojas de estilo clásicas — ESTADO: HECHO
+- Método empírico en el sandbox: estilos computados de cada elemento visible
+  en los 13 módulos + pantallas emergentes (paso 2 de Nueva solicitud,
+  detalle de la Bandeja, Mi perfil, buscador, aviso), con y sin las hojas;
+  con control positivo (sin `bandeja-v2.css` cambian 688 elementos; sin
+  `nueva-solicitud-v2.css`, 78 en el paso 2).
+- `dashboard.css` y `admin.css`: **0 diferencias** → la plataforma deja de
+  cargarlas (quedan para app.html/admin.html).
+- Se quedan a propósito `tokens.css`, `main.css`, `components.css` y
+  `formulario.css`: son la base compartida con las páginas públicas
+  (index/estado) y app.html (colores, marco, `Componentes`, formulario de
+  solicitud); todo lo visible de la plataforma lo define el sistema v2.
