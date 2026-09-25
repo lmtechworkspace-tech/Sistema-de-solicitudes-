@@ -348,10 +348,16 @@
     // 8B: Documentos (calidad-documentos-v2.js).
     mostrarDocumentos: function (o) { if (window.SigsoCalidadDocsV2) SigsoCalidadDocsV2.mostrar(o); },
     refrescarDocumentos: function () { if (window.SigsoCalidadDocsV2 && ocupa('documentos')) SigsoCalidadDocsV2.refrescar(); },
+    // 8C: Personas (calidad-personas-v2.js).
+    mostrarPersonas: function () { if (window.SigsoCalidadPersonasV2) SigsoCalidadPersonasV2.mostrar(); },
     // Lo compartido con calidad-documentos-v2.js.
     util: { api: api, TIPO: TIPO, plazo: plazo, fechaChile: fechaChile, diasHasta: diasHasta, contenedor: contenedor, ocupa: ocupa, desmontar: desmontar },
     cargar: function () { if (window.SigsoCalidad) SigsoCalidad.recargar(); },
-    refrescar: function () { if (ocupa('documentos')) { if (window.SigsoCalidadDocsV2) SigsoCalidadDocsV2.refrescar(); } else cargar(true); },
+    refrescar: function () {
+      if (ocupa('documentos')) { if (window.SigsoCalidadDocsV2) SigsoCalidadDocsV2.refrescar(); }
+      else if (ocupa('personas')) { if (window.SigsoCalidadPersonasV2) SigsoCalidadPersonasV2.refrescar(); }
+      else cargar(true);
+    },
     abrirDocumento: abrirDocumento,
     filasInicio: filasInicio,
     activo: activo, usarVersion: usarVersion, desmontar: desmontar

@@ -88,7 +88,15 @@
     ver: function (documentoId, versionId) { verDocumentoSgc_(documentoId, versionId); },
     // Repinta la sección actual: el interruptor clásica/nueva no saca a la
     // persona de donde está (antes volvía siempre al Inicio).
-    recargar: function () { render_(); }
+    recargar: function () { render_(); },
+    // 8C: desde Personas v2 se abre la ficha completa clásica.
+    abrirFicha: function (personaId, sinListado) {
+      if (window.SigsoCalidadV2) window.SigsoCalidadV2.desmontar();
+      fichaSinListado_ = !!sinListado;
+      personaActivaId_ = personaId;
+      abrirPersona_(personaId);
+    },
+    formularioPersona: function () { abrirFormularioPersona_(null); }
   };
 
   // v13.0: la arquitectura se REGISTRA para que el sidebar la dibuje. El
@@ -145,6 +153,13 @@
       pintarNavSgc_();
       v2.mostrarDocumentos({ tipo: filtroTipo_, abrir: documentoActivoId_ });
       documentoActivoId_ = null;
+      return;
+    }
+    // 8C: la LISTA de Personas va por la v2 (calidad-personas-v2.js); la ficha
+    // completa (descriptor, carpeta, evaluación) sigue siendo la clásica.
+    if (personasV2_() && seccionActiva_ === 'personas' && !personaActivaId_) {
+      pintarNavSgc_();
+      v2.mostrarPersonas();
       return;
     }
     if (v2) v2.desmontar();
@@ -1701,7 +1716,21 @@
   var incluirDesvinculados_ = false;
   var incluirFueraAlcance_ = false;
 
+  // 8C: ¿la lista de Personas va por la v2?
+  function personasV2_() {
+    var v2 = window.SigsoCalidadV2;
+    return !!(v2 && v2.activo() && window.SigsoCalidadPersonasV2);
+  }
+
   function cargarPersonas_() {
+    // "← Personal" y los formularios de la ficha terminan acá: con la v2
+    // activa vuelven a la lista v2.
+    if (personasV2_() && seccionActiva_ === 'personas') {
+      personaActivaId_ = null;
+      pintarNavSgc_();
+      window.SigsoCalidadV2.mostrarPersonas();
+      return;
+    }
     personaActivaId_ = null;
     var filtros = {};
     if (filtroPersonasArea_) filtros.area_id = filtroPersonasArea_;

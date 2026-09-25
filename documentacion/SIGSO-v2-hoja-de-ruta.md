@@ -843,3 +843,67 @@ cobertura ISO · Operación: servicios, proveedores · Reportes · Accesos).
   el sandbox (sin almacenamiento R2); el error llega bien a la pantalla.
 - Arreglo transversal: `.sx2-flex > .sx2-barra` ocupa el espacio (la barra
   de "Quién la leyó" de Novedades también medía 0).
+
+### 8C Personas — análisis (sandbox, 16 personas activas)
+- **Qué hace hoy** (calidad.js): lista de fichas y una ficha con 5 partes
+  (datos, descriptor de cargo, carpeta de documentos, inducción,
+  competencias); Capacitaciones aparte. La inducción se marca **de a un ítem
+  y siempre con fecha de hoy** ("Marcar completada"): no sirve para dejar
+  registro de inducciones hechas en el pasado, que es el caso real.
+- **Inducción: 100 ítems, los 100 PENDIENTES** (5 ítems × 20 fichas; 80 de
+  las 16 activas). Nadie la registró nunca.
+- **Evaluaciones: 16, una por persona.** 13 vienen de la importación **sin
+  fecha y sin próxima evaluación**; **14 dicen "requiere capacitación" y 12
+  de ellas tienen promedio ≥ 3** (la regla del sistema es < 3; p. ej. 3,5/4
+  → "requiere"). Con la regla, solo 2 la requieren (2,75).
+- Capacitaciones: 2 (1 programada, 1 realizada con 1 asistente) → la meta
+  de 5 h/año de formación la cumple casi nadie.
+- Descriptores de cargo: todos tienen uno vigente (16 con funciones como
+  lista, evaluables). Carpeta: 48 documentos en 12 personas.
+- Datos desparejos: áreas con dos nombres (ADMINISTRACION y "Administración
+  y Finanzas", PREVENCION y "Dept. Prevención de Riesgos"); la jefatura de
+  Rogelio aparece con dos correos (ralvarez@grupohb.cl y
+  alvarez.roge@gmail.com); 4 correos con dos fichas (una por cargo, a
+  propósito).
+
+#### Decisiones del dueño para 8C (2026-09-24)
+- Fecha de las inducciones registradas en lote: **la que se indique, por
+  defecto la fecha de ingreso** de cada persona (o una fecha común); nunca
+  futura.
+- Evaluaciones importadas: **mostrar "requiere capacitación" según la regla
+  (promedio < 3) y avisar**; no se tocan los datos.
+- Alcance: **lista + panel + "Inducciones" en lote**; descriptor, carpeta y
+  evaluación se siguen editando en la ficha completa.
+- Registran: **Encargado SGC (todos) y cada jefatura (su equipo)**.
+
+### 8C Personas v2 — ESTADO: HECHO
+- Backend `logica/personasPanelSgc.js`:
+  - `getPanelPersonasSgc`: sobre `Personas.listar` (mismos permisos), la
+    inducción ítem por ítem, la última evaluación con "requiere
+    capacitación" calculado por la regla y `difiere_de_regla`, evaluación
+    sin fecha/vencida, carpeta, horas de formación del año, si puede
+    registrar su inducción y un resumen; también `secciones_visibles` para
+    el árbol.
+  - `registrarInduccionesEnLoteSgc`: personas × ítems con fecha (no futura,
+    guardada a mediodía UTC para que el día no se corra); cada ítem pasa por
+    `Personas.registrarInduccion`; crea la fila del ítem si la ficha no la
+    tenía.
+  - `Personas.registrarInduccion` (uno a uno) ahora también rechaza fechas
+    futuras.
+- Frontend `js/calidad-personas-v2.js` (cargado con el shell):
+  - Lista con KPIs clicables (inducción completa, sin evaluación o sin
+    fecha, requiere capacitación, formación ≥ 5 h), aviso de evaluaciones
+    importadas que no calzan con la regla, buscador, barra de inducción x/5.
+  - Panel de la persona: datos, inducción con casillas + fecha (por defecto
+    el ingreso) + "Marcar todos" + "Deshacer" por ítem, competencias, y
+    "Abrir ficha completa" (la clásica; "← Personal" vuelve a la v2).
+  - Pestaña "Inducciones": matriz personas × 5 ítems (clic en un nombre =
+    fila, en un ítem = columna), fecha por ingreso o común, "solo con
+    pendientes"; la jefatura ve solo a su equipo.
+  - Quien solo se ve a sí mismo sigue entrando directo a su ficha.
+- Sandbox: 36 ítems registrados (5 en un panel, 31 en un lote) → 80 → 45
+  pendientes; deshacer probado; fecha futura bloqueada; Bárbara (jefatura)
+  registra solo a sus 6; Amarlla (operativa) entra a su ficha.
+
+**MÓDULO 8 COMPLETO** (8A `4df9abe`, 8B `fae83d8`, 8C). Siguiente: Módulo 9,
+marco del shell.

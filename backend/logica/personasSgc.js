@@ -462,6 +462,14 @@ function registrarInduccion(db, data, contexto) {
   if (!fila) return errorValidacion_('induccion_id', 'Ítem de inducción no encontrado.');
 
   const completada = data.estado !== 'PENDIENTE';
+  // SIGSO v2 (8C): se registran inducciones hechas en el pasado; una fecha
+  // futura sería un registro de algo que no pasó.
+  if (completada && data.fecha) {
+    const k = String(data.fecha).slice(0, 10);
+    const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date());
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(k) || isNaN(new Date(data.fecha).getTime())) return errorValidacion_('fecha', 'Fecha de inducción inválida.');
+    if (k > hoy) return errorValidacion_('fecha', 'La fecha de la inducción no puede ser futura.');
+  }
   return actualizarFilaPorId_(db, 'SGC_INDUCCIONES', 'induccion_id', data.induccion_id, {
     estado: completada ? 'COMPLETADA' : 'PENDIENTE',
     fecha: completada ? (data.fecha || new Date().toISOString()) : '',

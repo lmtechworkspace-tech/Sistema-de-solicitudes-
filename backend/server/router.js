@@ -44,6 +44,7 @@ const MiEquipo = require('../logica/miEquipo');
 const SaludConfig = require('../logica/saludConfig');
 const CaminoSgc = require('../logica/caminoSgc');
 const ControlDocumentalSgc = require('../logica/controlDocumentalSgc');
+const PersonasPanelSgc = require('../logica/personasPanelSgc');
 const Actividades = require('../logica/actividades');
 const Proyectos = require('../logica/proyectos');
 const Calidad = require('../logica/calidadSgc');
@@ -149,6 +150,9 @@ const ACCIONES = {
   // SIGSO v2, Módulo 8B: control documental y arreglos en lote.
   getControlDocumentalSgc: (db, data, contexto) => ControlDocumentalSgc.getControl(db, data, contexto),
   actualizarDocumentosEnLoteSgc: (db, data, contexto) => ControlDocumentalSgc.actualizarEnLote(db, data, contexto),
+  // SIGSO v2, Módulo 8C: Personas v2 e inducciones en lote.
+  getPanelPersonasSgc: (db, data, contexto) => PersonasPanelSgc.getPanel(db, data, contexto),
+  registrarInduccionesEnLoteSgc: (db, data, contexto) => PersonasPanelSgc.registrarEnLote(db, data, contexto),
   getPanelJefatura: (db, data, contexto) => Jefatura.getPanel(db, data, contexto),
 
   listarLogsNotificaciones: (db, data, contexto) => Notificaciones.listarLogs(db, data, contexto),
