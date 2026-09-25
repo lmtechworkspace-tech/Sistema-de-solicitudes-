@@ -1477,3 +1477,21 @@ los usa): quedaban cinco clásicos cargados. `detalle.js`, `estado.js` y
   y del mismo, solicitud reciente, existente y desconocida, "?", menú,
   "/" en la Bandeja, Esc; tour de 5 pasos sin tapar el sidebar; los 12
   módulos + Novedades sin errores.
+
+### R13a Markup y compuertas clásicas sin uso — ESTADO: HECHO
+- Inventario automático (cada id de plataforma.html contra los 52 scripts
+  que la plataforma carga + CSS v2) y su inverso (cada getElementById de
+  esos scripts contra el HTML): quedaron sin uso el tablero clásico entero
+  dentro de la Bandeja (`vista-dashboard`, `vista-detalle`,
+  `vista-gerencia`, `vista-jefatura`), los contenedores y encabezados
+  clásicos de Inicio, Mis solicitudes, Novedades, Mi trabajo, Proyectos,
+  Calidad, Pausas, Coordinación y Administración (incluido su drawer).
+  Estaban ocultos por las reglas `*-v2-activa`: quitarlos no cambia nada
+  visible. plataforma.html: 1.135 → ~640 líneas (−26 KB).
+- plataforma.js: fuera la carga diferida de calidad.js (Calidad v2 se carga
+  siempre) y la compuerta "Backoffice por token" de Apps Script en
+  Administración/Inicio (`backofficeDisponible_`), con su aviso obsoleto.
+- Se conservan a propósito: el markup de Nueva solicitud (formulario.js,
+  decisión 3D) y `ui-components.js` (cabecera de las páginas públicas).
+- Sandbox: 12 módulos + Novedades con su v2, detalle de la Bandeja, Inicio
+  idéntico; 0 errores.

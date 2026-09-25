@@ -1345,7 +1345,6 @@
         modulos: modulosDeLaCuenta_(),
         irAModulo: function (id) { mostrarModulo_(id); },
         pintarBadge: pintarBadge_,
-        backofficeDisponible: backofficeDisponible_,
         // El command palette reusa los recientes ya cargados por el Inicio,
         // sin pedirle nada nuevo al backend (v5.0 F4 §6.1).
         onRecientes: function (recientes) { ultimosRecientes_ = recientes || []; }
@@ -1575,58 +1574,15 @@
     window.scrollTo(0, 0);
   }
 
-  // Calidad es el unico modulo que se carga aparte (carga-diferida.js: 102 KB
-  // de los 438 del frontend). Casi siempre ya llego por la precarga ociosa y
-  // esto resuelve en el mismo tic; el camino lento solo se ve si alguien abre
-  // Calidad en los primeros segundos, o si la precarga fallo.
+  // Calidad y Administración son v2 y se cargan con la página (sin la
+  // carga diferida de calidad.js ni la compuerta del Backoffice por token de
+  // Apps Script: todo lo que la plataforma llama ya corre en Node).
   function abrirCalidad_() {
-    if (window.SigsoCalidad) { window.SigsoCalidad.cargar(); return; }
-    if (!window.SigsoCarga) return; // pagina sin carga diferida (app.html)
-
-    var contenedor = document.getElementById('calidad-contenido');
-    if (contenedor) contenedor.innerHTML = Componentes.cargando('Cargando Calidad...');
-
-    window.SigsoCarga.pedir('calidad').then(function () {
-      // El usuario pudo irse a otro modulo mientras bajaba: pintar aqui le
-      // cambiaria la pantalla debajo de las manos.
-      if (moduloActivo_ !== 'calidad') return;
-      if (!window.SigsoCalidad) {
-        if (contenedor) {
-          contenedor.innerHTML = Componentes.alerta(
-            'No se pudo cargar el módulo Calidad. Revisa tu conexión y vuelve a entrar.', 'error');
-        }
-        return;
-      }
-      // El arbol del sidebar se repinta porque Calidad acaba de registrar sus
-      // submodulos al cargar: sin esto se quedaria sin su rama desplegada.
-      renderNav_();
-      window.SigsoCalidad.cargar();
-    });
+    if (window.SigsoCalidad) window.SigsoCalidad.cargar();
   }
 
-  // P4: Administracion usa las mismas acciones del Backoffice por token, asi
-  // que comparte el requisito de la implementacion por token con la bandeja.
   function abrirAdministracion_() {
-    if (!backofficeDisponible_()) {
-      document.getElementById('admin-contenido').innerHTML = Componentes.alerta(
-        'La administración por token aún no está desplegada (falta la implementación ' +
-        '"por token" del Backoffice y su URL en config.js — ver el paquete de deploy v3.3 P3). ' +
-        'Mientras tanto puedes usar el panel con tu cuenta Google.', 'aviso');
-      return;
-    }
-    // Cada apertura re-entra por la primera pestaña (mismo comportamiento
-    // que abrir admin.html de cero); el binding del menu ya lo hizo admin.js.
-    window.SigsoAdmin.abrir();
-  }
-
-  // --- P3: el Backoffice por token (lo consulta admin.js) --------
-
-  // En produccion, las llamadas por token necesitan la SEGUNDA
-  // implementacion del Web App (BACKOFFICE_TOKEN_URL). En local, el
-  // dev-server (localhost) acepta el token directo.
-  function backofficeDisponible_() {
-    var cfg = window.SIGSO_CONFIG || {};
-    return !!cfg.BACKOFFICE_TOKEN_URL || /localhost/.test(cfg.BACKOFFICE_URL || '');
+    if (window.SigsoAdmin) window.SigsoAdmin.abrir();
   }
 
   // La gracia de tener cuenta: el formulario deja de pedirte quien eres.
