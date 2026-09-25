@@ -162,6 +162,12 @@
       v2.mostrarPersonas();
       return;
     }
+    // R8: Seguimiento y mejora (NC, quejas, auditorías, revisión) es 100 % v2.
+    if (window.SigsoCalidadMejoraV2 && SigsoCalidadMejoraV2.vistas.indexOf(seccionActiva_) !== -1) {
+      pintarNavSgc_();
+      SigsoCalidadMejoraV2.mostrar(seccionActiva_);
+      return;
+    }
     if (v2) v2.desmontar();
     if (seccionActiva_ === 'personas') {
       if (personaActivaId_) abrirPersona_(personaActivaId_); else cargarPersonas_();

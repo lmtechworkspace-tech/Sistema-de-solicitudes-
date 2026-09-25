@@ -1252,3 +1252,36 @@ retirar las versiones clásicas" de arriba (ya no hay ciclo de respaldo).
 - Sandbox (admin + super admin): 16 pantallas, guardar configuración de
   pausas y un tipo, validaciones de alta, canal on/off, reporte de cuentas
   sin uso, panel de datos; teléfono sin scroll horizontal. Suite 2893 OK.
+
+### R8 Calidad — plan en tres tandas
+`calidad.js` (clásico) son ~10.000 líneas y 17 secciones. Se retira por
+grupos del árbol; `calidad.js` enruta cada grupo ya migrado a su archivo v2
+y deja de cargarse en la última tanda.
+- **R8a Seguimiento y mejora** (NC, Quejas, Auditorías, Revisión) — HECHO.
+- **R8b Personas** (ficha completa y Capacitaciones) y **Medición**
+  (Indicadores, Objetivos).
+- **R9 El sistema** (Alcance, Contexto, Procesos, Riesgos, Cobertura) y
+  **Operación** (Servicios, Proveedores).
+- **R10** Reportes, Accesos, formularios de Documentos; fin de `calidad.js`.
+
+### R8a Seguimiento y mejora 100 % v2 — ESTADO: HECHO
+- `calidad-mejora-v2.js`: las cuatro secciones con lista v2 (KPIs, chips
+  Abiertas/Todas o año, buscador, filas con estado, plazo y responsable con
+  foto) y ficha en panel lateral ancho con las etapas numeradas: hechas en
+  verde, la actual resaltada y en cada una solo la acción que corresponde.
+  - **No conformidades**: registrar → corrección (tarea en Mi trabajo) →
+    5 por qué + causa raíz → acción correctiva → eficacia (no eficaz reabre
+    y avisa "vuelta 2 del ciclo"); anular con motivo.
+  - **Quejas**: recepción → investigador (de otra área) → resultado →
+    resolución (o levantar NC) → notificación → seguimiento; enlace al
+    formulario público.
+  - **Auditorías**: programar (cláusulas marcables) → plan → lista de
+    verificación con preguntas sugeridas por cláusula → terminar → informe
+    → levantar NC por hallazgo → cerrar.
+  - **Revisión por la dirección**: aviso de vigencia, convocar, acta con
+    los 13 temas y "Traer datos del sistema" (no pisa lo escrito), acuerdos
+    que crean tareas, cerrar/anular.
+- Validaciones antes de enviar (correos, largos mínimos, cláusula elegida,
+  hallazgo obligatorio si no es conforme, fechas no pasadas donde aplica).
+- Sandbox (admin): los cuatro ciclos completos de punta a punta, incluida
+  NC no eficaz y NC desde hallazgo; teléfono sin scroll horizontal.
