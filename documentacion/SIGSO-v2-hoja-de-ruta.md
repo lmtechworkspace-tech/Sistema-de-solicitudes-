@@ -1215,3 +1215,40 @@ retirar las versiones clásicas" de arriba (ya no hay ciclo de respaldo).
 - Sandbox (admin): 9 vistas, filtros de servidor y de pantalla, orden,
   agrupación, recurrencia → tablero, reportes con filtro, los 3 PDF
   generados, teléfono sin scroll horizontal. Suite: 2893 OK.
+
+### R7 Administración 100 % v2 — ESTADO: HECHO
+- `admin-vistas-v2.js`: todas las pantallas que faltaban, en el mismo
+  contenedor que Salud y Cuentas (admin-v2.js):
+  - **Catálogos** (Empresas, Plataformas, Áreas, Módulos, Tipos,
+    Notificaciones) y **Usuarios (legado)**: lista con búsqueda y chips
+    Activos/Inactivos/Todos, alta y edición en panel lateral. Donde antes se
+    tipeaba un código ahora hay listas (empresa de la plataforma, plataforma
+    y módulo padre del módulo, rol, prioridad sugerida) y los correos se
+    autocompletan con las cuentas. Se valida código duplicado, espacios y
+    correo antes de enviar. Módulos (648 filas) se filtra por plataforma y se
+    muestra como jerarquía (hijo bajo su padre); tope de 300 filas visibles.
+    Las reglas de canal de correo abren "Canales de alerta" en vez de
+    editarse a mano. Usuarios (legado) avisa que es del acceso antiguo y
+    manda a Cuentas plataforma.
+  - **Jefaturas**: tarjetas por jefe con sus personas a cargo (foto,
+    activar/desactivar, eliminar), KPIs y búsqueda.
+  - **Pausas activas**: Configuración (tarjeta por empresa: hora, días,
+    duración, umbrales; formulario con días marcables), QR de registro con
+    copiar enlace, Coordinadoras, Trabajadores (buscar, sembrar desde
+    cuentas, dar módulo a todos) y Programadas (pendientes/todas,
+    reprogramar, cancelar, programar hoy, pausa manual).
+  - **Alertas en vivo** (4 KPIs filtrables), **Canales de alerta**
+    (interruptores; apagar una alerta que solo existe por correo pide
+    confirmación), **Enviar alerta** (mensaje + a quién: todos, empresa o
+    personas con buscador; confirma cuántos la reciben).
+  - **Centro de reportes** (motor v2) y **Registro de envíos** (filtros por
+    resultado, enlace a la solicitud). "Cuentas sin uso" pasó de "requiere
+    desarrollo" a LISTO: las cuentas ya guardan su último acceso.
+  - **Panel de datos** (solo super admin): tablas con buscador, filas,
+    edición en panel ancho y borrado con confirmación escrita.
+- Define `window.SigsoAdmin`; la plataforma **no carga `admin.js`** (queda
+  para admin.html/app.html). Salud y Cuentas no pintan si la vista activa es
+  otra.
+- Sandbox (admin + super admin): 16 pantallas, guardar configuración de
+  pausas y un tipo, validaciones de alta, canal on/off, reporte de cuentas
+  sin uso, panel de datos; teléfono sin scroll horizontal. Suite 2893 OK.

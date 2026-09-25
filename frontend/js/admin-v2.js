@@ -6,7 +6,7 @@
  * Administración miran por separado (cuentas, jefaturas, pausas, directorio
  * legado, datos) y, para los casos simples, ofrece un arreglo que se
  * confirma antes de aplicarse (decisión del dueño). Backend getSaludConfig /
- * arreglarSaludConfig. Las demás pantallas siguen en admin.js.
+ * arreglarSaludConfig. Las demás pantallas viven en admin-vistas-v2.js (R7).
  */
 (function () {
   'use strict';
@@ -20,6 +20,9 @@
   var SEV = { critico: ['Crítico', 'critico', 'alerta'], alerta: ['Revisar', 'alerta', 'info'], info: ['Aviso', 'info', 'info'] };
   var datos_ = null, turno_ = 0, vista_ = '';
 
+  // Las demás pantallas (admin-vistas-v2.js) comparten el contenedor: una
+  // respuesta que llega tarde no debe pintar encima de otra.
+  function activa(id) { return !window.SigsoAdmin || !SigsoAdmin.vista || SigsoAdmin.vista() === id; }
   function api(accion, datos) {
     return llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, accion, datos || {}).catch(function (e) {
       return { ok: false, message: (e && e.message) || 'No se pudo conectar.' };
@@ -57,7 +60,7 @@
     var t = ++turno_;
     if (!silencioso || !datos_) c.innerHTML = '<div class="sx2-pagina">' + cabecera() + U.esqueleto('kpis', 4) + U.esqueleto('tabla', 6) + '</div>';
     api('getSaludConfig', {}).then(function (r) {
-      if (t !== turno_) return;
+      if (t !== turno_ || !activa('SALUD')) return;
       if (!r || !r.ok) {
         c.innerHTML = '<div class="sx2-pagina">' + cabecera() + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo revisar la configuración',
           texto: (r && r.message) || 'Inténtalo de nuevo.', accion: U.boton({ texto: 'Reintentar', icono: 'tendencia', clase: 'js-ad2-recargar' }) }) }) + '</div>';
@@ -95,7 +98,7 @@
       }).join('') + '</ul></section>';
   }
   function pintar(silencioso) {
-    if (vista_ !== 'salud') return;
+    if (vista_ !== 'salud' || !activa('SALUD')) return;
     var c = contenedor();
     if (!c || !datos_) return;
     var d = datos_, r = d.resumen, y = window.scrollY;
@@ -202,7 +205,7 @@
     var t = ++turnoC_;
     if (!silencioso || !cuentas_) c.innerHTML = '<div class="sx2-pagina">' + cabeceraCuentas() + U.esqueleto('kpis', 4) + U.esqueleto('tabla', 8) + '</div>';
     Promise.all([api('listarCuentasPortal', {}), api('getSaludConfig', {})]).then(function (r) {
-      if (t !== turnoC_) return;
+      if (t !== turnoC_ || !activa('CUENTAS_PORTAL')) return;
       if (!r[0] || !r[0].ok) {
         c.innerHTML = '<div class="sx2-pagina">' + cabeceraCuentas() + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudieron cargar las cuentas', texto: (r[0] && r[0].message) || 'Inténtalo de nuevo.' }) }) + '</div>';
         return;
@@ -238,7 +241,7 @@
       U.ico('derecha', 16) + '</li>';
   }
   function pintarCuentas(silencioso) {
-    if (vista_ !== 'cuentas') return;
+    if (vista_ !== 'cuentas' || !activa('CUENTAS_PORTAL')) return;
     var c = contenedor();
     if (!c || !cuentas_) return;
     var y = window.scrollY;
