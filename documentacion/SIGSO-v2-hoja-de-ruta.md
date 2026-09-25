@@ -1412,3 +1412,26 @@ los usa): quedaban cinco clásicos cargados. `detalle.js`, `estado.js` y
   teléfono sin scroll horizontal. Con Apps Script bloqueado en el sandbox,
   la única llamada que todavía va allá es `ping` (comprobación de versión
   del marco, "falta pegar el backend") → se retira en R12.
+
+### R12a Acceso (ingresar, recuperar, restablecer, cambio de clave) — ESTADO: HECHO
+- Las cuatro vistas de acceso pasan a componentes v2 reales (`sx2-campo`,
+  `sx2-input`, `sx2-boton`) con su hoja propia `css/v2/acceso-v2.css`; ya no
+  dependen del CSS clásico (`plataforma-auth`, `sigso-campo`, `sigso-boton`).
+  Un solo panel de marca (`#acceso`) para las cuatro — antes se duplicaba en
+  cada vista. Mensajes con tono v2 (`mensajeAcceso_`, por textContent),
+  "ver contraseña" con clases v2, foco al primer campo al mostrar cada vista.
+- En celular la marca se compacta a una franja: el formulario queda a la
+  vista (antes quedaba entero bajo el pliegue).
+- Las vistas raíz se alternan con el atributo `hidden` (idioma v2), no con
+  `sigso-oculto`.
+- Se retiró la comprobación de versión contra Apps Script (`ping`, aviso
+  "falta pegar el backend" y el número de versión fijo del sidebar): era lo
+  único que la plataforma todavía llamaba en Apps Script.
+- Arreglo de paso: los avisos vivos se abrían ENCIMA del cambio de clave
+  obligatorio (había token pero no shell). Ahora cuentan recién dentro del
+  shell, y el shell dispara `sigso:shell-listo` para sincronizar al entrar.
+- Backend: mensajes de acceso con ñ ("contraseña") en `portal.js`.
+- Sandbox: login con error, recuperar, volver, ver contraseña, enlace de
+  restablecer (token fuera de la URL, validaciones, enlace inválido), cambio
+  obligatorio sin avisos encima tras 15 s, sesión restaurada con avisos al
+  instante; escritorio, celular y modo oscuro.

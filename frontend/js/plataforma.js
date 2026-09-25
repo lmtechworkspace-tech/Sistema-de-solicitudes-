@@ -244,7 +244,7 @@
         // Si cambio algo relevante desde la cache, re-render sin recargar.
         if (JSON.stringify(cuenta) !== JSON.stringify(sesion.cuenta)) {
           sesion.cuenta = cuenta;
-          if (!document.getElementById('vista-shell').classList.contains('sigso-oculto')) {
+          if (!document.getElementById('vista-shell').hidden) {
             renderIdentidad_();
             renderNav_();
           }
@@ -260,21 +260,21 @@
     var boton = document.getElementById('btn-login');
     var salida = document.getElementById('resultado-login');
     boton.disabled = true;
-    salida.innerHTML = '';
+    mensajeAcceso_(salida, '');
 
     llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'portalLogin', {
       usuario: document.getElementById('campo-login-usuario').value,
       password: document.getElementById('campo-login-password').value
     }).then(function (respuesta) {
       if (!respuesta.ok) {
-        salida.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo ingresar.', 'error');
+        mensajeAcceso_(salida, respuesta.message || 'No se pudo ingresar.', 'error');
         return;
       }
       document.getElementById('campo-login-password').value = '';
       guardarSesionLocal_(respuesta.data.token, respuesta.data.cuenta);
       iniciarSesion_(respuesta.data.token, respuesta.data.cuenta);
     }).catch(function () {
-      salida.innerHTML = Componentes.alerta('No se pudo conectar con el servidor. Intenta nuevamente.', 'error');
+      mensajeAcceso_(salida, 'No se pudo conectar con el servidor. Intenta nuevamente.', 'error');
     }).finally(function () {
       boton.disabled = false;
     });
@@ -285,7 +285,7 @@
     var salida = document.getElementById('resultado-cambiar-clave');
     var nueva = document.getElementById('campo-clave-nueva').value;
     if (nueva !== document.getElementById('campo-clave-repetir').value) {
-      salida.innerHTML = Componentes.alerta('Las contraseñas nuevas no coinciden.', 'error');
+      mensajeAcceso_(salida, 'Las contraseñas nuevas no coinciden.', 'error');
       return;
     }
     var boton = document.getElementById('btn-cambiar-clave');
@@ -296,14 +296,14 @@
       password_nueva: nueva
     }).then(function (respuesta) {
       if (!respuesta.ok) {
-        salida.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo cambiar la contraseña.', 'error');
+        mensajeAcceso_(salida, respuesta.message || 'No se pudo cambiar la contraseña.', 'error');
         return;
       }
       sesion.cuenta.debe_cambiar_password = false;
       guardarSesionLocal_(sesion.token, sesion.cuenta);
       entrarAlShell_();
     }).catch(function () {
-      salida.innerHTML = Componentes.alerta('No se pudo conectar con el servidor. Intenta nuevamente.', 'error');
+      mensajeAcceso_(salida, 'No se pudo conectar con el servidor. Intenta nuevamente.', 'error');
     }).finally(function () {
       boton.disabled = false;
     });
@@ -319,16 +319,15 @@
     var salida = document.getElementById('resultado-recuperar');
     var identificador = document.getElementById('campo-recuperar-identificador').value;
     boton.disabled = true;
-    salida.innerHTML = '';
+    mensajeAcceso_(salida, '');
     llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'portalSolicitarRecuperacion', { identificador: identificador })
       .then(function (respuesta) {
-        salida.innerHTML = Componentes.alerta(
+        mensajeAcceso_(salida,
           (respuesta.data && respuesta.data.message) || respuesta.message || 'Si el usuario o correo existe, te llegará un enlace.',
-          'exito'
-        );
+          'exito');
         document.getElementById('campo-recuperar-identificador').value = '';
       }).catch(function () {
-        salida.innerHTML = Componentes.alerta('No se pudo conectar con el servidor. Intenta nuevamente.', 'error');
+        mensajeAcceso_(salida, 'No se pudo conectar con el servidor. Intenta nuevamente.', 'error');
       }).finally(function () {
         boton.disabled = false;
       });
@@ -339,11 +338,11 @@
     var salida = document.getElementById('resultado-restablecer');
     var nueva = document.getElementById('campo-restablecer-nueva').value;
     if (nueva.length < 8) {
-      salida.innerHTML = Componentes.alerta('La contraseña nueva debe tener al menos 8 caracteres.', 'error');
+      mensajeAcceso_(salida, 'La contraseña nueva debe tener al menos 8 caracteres.', 'error');
       return;
     }
     if (nueva !== document.getElementById('campo-restablecer-repetir').value) {
-      salida.innerHTML = Componentes.alerta('Las contraseñas nuevas no coinciden.', 'error');
+      mensajeAcceso_(salida, 'Las contraseñas nuevas no coinciden.', 'error');
       return;
     }
     var boton = document.getElementById('btn-restablecer');
@@ -352,15 +351,15 @@
     llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'portalRestablecerPassword', { token: token, password_nueva: nueva })
       .then(function (respuesta) {
         if (!respuesta.ok) {
-          salida.innerHTML = Componentes.alerta(respuesta.message || 'No se pudo restablecer la contraseña.', 'error');
+          mensajeAcceso_(salida, respuesta.message || 'No se pudo restablecer la contraseña.', 'error');
           return;
         }
-        salida.innerHTML = Componentes.alerta('Contraseña actualizada. Ya puedes ingresar con ella.', 'exito');
+        mensajeAcceso_(salida, 'Contraseña actualizada. Ya puedes ingresar con ella.', 'exito');
         document.getElementById('campo-restablecer-nueva').value = '';
         document.getElementById('campo-restablecer-repetir').value = '';
         setTimeout(function () { mostrarVista_('vista-login'); }, 1800);
       }).catch(function () {
-        salida.innerHTML = Componentes.alerta('No se pudo conectar con el servidor. Intenta nuevamente.', 'error');
+        mensajeAcceso_(salida, 'No se pudo conectar con el servidor. Intenta nuevamente.', 'error');
       }).finally(function () {
         boton.disabled = false;
       });
@@ -397,6 +396,8 @@
 
   function entrarAlShell_() {
     mostrarVista_('vista-shell');
+    // Los avisos vivos esperan a este momento (nunca sobre el acceso).
+    document.dispatchEvent(new CustomEvent('sigso:shell-listo'));
     renderIdentidad_();
     // v6.4: la foto propia se pide DESPUES de pintar la identidad, para que
     // el header aparezca de inmediato con las iniciales y la foto lo
@@ -404,8 +405,6 @@
     cargarFotoPropia_();
     renderNav_();
     renderHome_();
-    // H-04: qué versión del backend está respondiendo de verdad.
-    comprobarVersionBackend_();
     // v6.0 (Pausas P4.1): si el enlace magico pedia un modulo puntual (p.ej.
     // el recordatorio de pausas) y la cuenta SI lo tiene, se abre directo ese
     // modulo -- si no, se ignora en silencio y entra a Home como siempre. Se
@@ -494,7 +493,7 @@
 
   function refrescarModuloActivoSiCorresponde_() {
     if (!sesion.token || !moduloActivo_) return;
-    if (document.getElementById('vista-shell').classList.contains('sigso-oculto')) return;
+    if (document.getElementById('vista-shell').hidden) return;
     // v9.0b: nunca interrumpir un formulario abierto (modal) con un
     // refresco de fondo -- si el usuario esta a mitad de "Nueva tarea" en
     // Proyectos (u otro modal similar) y llega este refresco, un re-render
@@ -649,47 +648,6 @@
 
   // v4.0: avatar de iniciales + rol visible. Antes solo se veia el nombre
   // suelto junto a un boton de salir, y el rol no aparecia en ningun lado.
-  /**
-   * H-04: pregunta al backend qué versión está corriendo y la deja visible.
-   *
-   * El frontend se publica solo con cada push; el backend se pega a mano en
-   * Apps Script. Por eso la versión del frontend es siempre la buena: si el
-   * backend responde otra, es que falta pegarlo. Antes no había forma de
-   * notarlo — la planilla llegó a quedar dos fases atrás y solo se supo
-   * cuando unos datos entraron corridos de columna.
-   *
-   * El aviso es solo para Admin: al resto no le sirve de nada enterarse de
-   * algo que no puede resolver. Y si la consulta falla, no pasa nada: es
-   * información de apoyo, no puede romper la entrada al sistema.
-   */
-  function comprobarVersionBackend_() {
-    var el = document.getElementById('sigso-version');
-    if (!el) return;
-    var esperada = (window.SIGSO_CONFIG || {}).VERSION || '';
-
-    llamarApi(window.SIGSO_CONFIG.BACKOFFICE_URL, 'ping', {}).then(function (respuesta) {
-      if (!respuesta || !respuesta.ok || !respuesta.data) return;
-      var backend = respuesta.data.version || '';
-      if (!backend) return;
-
-      el.hidden = false;
-      var desfasado = esperada && backend !== esperada;
-      var esAdmin = sesion && sesion.cuenta && sesion.cuenta.rol === 'ADM';
-
-      if (desfasado && esAdmin) {
-        el.classList.add('plataforma-sidebar__version--alerta');
-        el.textContent = 'Backend ' + backend + ' — falta pegar ' + esperada;
-        el.title = 'El backend de Apps Script quedó atrás respecto de esta versión del sitio. ' +
-          'Pega los archivos del último paquete y vuelve a publicar la implementación.';
-      } else {
-        el.textContent = 'v' + backend;
-        el.title = desfasado
-          ? 'Backend ' + backend + ' · sitio ' + esperada
-          : 'Versión desplegada';
-      }
-    }).catch(function () { /* sin versión: no es motivo para molestar a nadie */ });
-  }
-
   function renderIdentidad_() {
     var cuenta = sesion.cuenta;
     // v13.6: quien esta usando la plataforma, publicado para los modulos.
@@ -1342,13 +1300,13 @@
   function wireVerContrasena_() {
     document.querySelectorAll('input[type="password"]').forEach(function (input) {
       var envoltura = document.createElement('div');
-      envoltura.className = 'sigso-campo-clave';
+      envoltura.className = 'sx2-clave';
       input.parentNode.insertBefore(envoltura, input);
       envoltura.appendChild(input);
 
       var boton = document.createElement('button');
       boton.type = 'button';
-      boton.className = 'sigso-ver-clave';
+      boton.className = 'sx2-clave__ver';
       boton.setAttribute('aria-label', 'Mostrar contraseña');
       boton.innerHTML = Iconos.svg('ojo', { tam: 16 });
       envoltura.appendChild(boton);
@@ -1630,11 +1588,30 @@
 
   // --- helpers -----------------------------------------------------------
 
+  // Las cuatro vistas de acceso comparten #acceso (un solo panel de marca):
+  // se ve #acceso solo cuando la vista pedida es una de ellas.
+  var VISTAS_ACCESO_ = ['vista-login', 'vista-recuperar', 'vista-restablecer', 'vista-cambiar-clave'];
   function mostrarVista_(id) {
-    ['vista-login', 'vista-recuperar', 'vista-restablecer', 'vista-cambiar-clave', 'vista-cargando', 'vista-shell'].forEach(function (vista) {
+    VISTAS_ACCESO_.concat(['vista-cargando', 'vista-shell']).forEach(function (vista) {
       var el = document.getElementById(vista);
-      if (el) el.classList.toggle('sigso-oculto', vista !== id);
+      if (el) el.hidden = vista !== id;
     });
+    var acceso = document.getElementById('acceso');
+    var esAcceso = VISTAS_ACCESO_.indexOf(id) !== -1;
+    if (acceso) acceso.hidden = !esAcceso;
+    if (esAcceso) {
+      var primero = document.querySelector('#' + id + ' input:not([type=hidden])');
+      if (primero) primero.focus();
+    }
+  }
+
+  // Mensaje de un formulario de acceso: '' lo oculta. Por textContent (el
+  // texto puede venir del servidor).
+  function mensajeAcceso_(el, texto, tipo) {
+    if (!el) return;
+    el.textContent = texto || '';
+    el.className = 'sx2-acceso__msg sx2-tono-' + (tipo === 'exito' ? 'ok' : 'critico');
+    el.hidden = !texto;
   }
 
   function guardarSesionLocal_(token, cuenta) {

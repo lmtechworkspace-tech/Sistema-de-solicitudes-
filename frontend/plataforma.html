@@ -40,6 +40,7 @@
   <link rel="stylesheet" href="css/v2/admin-v2.css" />
   <link rel="stylesheet" href="css/v2/calidad-v2.css" />
   <link rel="stylesheet" href="css/v2/shell-v2.css" />
+  <link rel="stylesheet" href="css/v2/acceso-v2.css" />
   <link rel="stylesheet" href="css/v2/reportes-v2.css" />
   <!-- P3: graficos del dashboard de la bandeja (mismo CDN que app.html). -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
@@ -53,173 +54,125 @@
        mismo criterio que las 3 copias del esquema: los .js son los MISMOS
        archivos, sin bifurcar). -->
 
-  <!-- ============ Vista: login ============ -->
-  <!-- v5.0 F3 (§5.7): split-screen -- panel de marca a la izquierda (indigo,
-       patron geometrico via CSS, nunca foto de stock) + formulario a la
-       derecha. El panel de marca se duplica en la vista de cambio de clave
-       (mismo criterio de duplicacion deliberada del proyecto) para no
-       depender de JS extra al alternar entre ambas vistas. -->
-  <!-- v5.1: oculto por defecto -- plataforma.js decide que vista mostrar al
-       cargar (login / restaurando sesion / shell). Asi no parpadea el
-       formulario de login al recargar una sesion activa. -->
-  <div id="vista-login" class="plataforma-auth sigso-oculto">
-    <aside class="plataforma-auth__marca">
-      <div class="plataforma-auth__marca-contenido">
-        <svg class="sigso-marca" width="40" height="40" viewBox="0 0 32 32" aria-hidden="true">
-          <rect width="32" height="32" rx="8" fill="#fff"></rect>
-          <text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#14213D" text-anchor="middle">S</text>
-        </svg>
-        <h1>SIGSO</h1>
-        <p>Control y Gesti&oacute;n Empresarial</p>
-        <ul class="plataforma-auth__marca-lista" aria-hidden="true">
+  <!-- ============ Acceso (v2): ingresar, recuperar, restablecer, cambio de clave ============ -->
+  <!-- Un solo panel de marca para las cuatro vistas (antes se duplicaba en
+       cada una). plataforma.js muestra una vista a la vez con el atributo
+       hidden y oculta #acceso entero cuando entra al shell. En celular la
+       marca se compacta para que el formulario quede a la vista. -->
+  <div id="acceso" class="sx2-acceso" hidden>
+    <aside class="sx2-acceso__marca">
+      <div class="sx2-acceso__marca-txt">
+        <span class="sx2-acceso__logo" aria-hidden="true">S</span>
+        <div>
+          <h1>SIGSO</h1>
+          <p class="sx2-acceso__bajada">Control y Gesti&oacute;n Empresarial</p>
+        </div>
+        <ul class="sx2-acceso__puntos" aria-hidden="true">
           <li>Solicitudes y control de avance</li>
           <li>Reportes y KPIs para gerencia</li>
           <li>Trazabilidad de principio a fin</li>
         </ul>
-        <p class="plataforma-auth__marca-pie">Controla. Analiza. Decide.</p>
+        <p class="sx2-acceso__lema">Controla. Analiza. Decide.</p>
       </div>
     </aside>
-    <div class="plataforma-auth__formulario">
-      <form id="form-login" class="plataforma-auth__form" novalidate>
-        <h2>Ingresar</h2>
-        <p class="sigso-ayuda">Usa tu cuenta de la plataforma para continuar.</p>
-        <div class="sigso-campo">
-          <label for="campo-login-usuario">Usuario</label>
-          <input type="text" id="campo-login-usuario" autocomplete="username" required />
-        </div>
-        <div class="sigso-campo">
-          <label for="campo-login-password">Contrase&ntilde;a</label>
-          <input type="password" id="campo-login-password" autocomplete="current-password" required />
-        </div>
-        <button type="submit" class="sigso-boton" id="btn-login">Ingresar</button>
-        <div id="resultado-login"></div>
-        <p class="sigso-ayuda plataforma-login__pie">
-          <a href="#" id="link-olvide-clave">&iquest;Olvidaste tu contrase&ntilde;a?</a><br />
-          &iquest;No tienes cuenta? P&iacute;dela al administrador del sistema.<br />
+
+    <main class="sx2-acceso__panel">
+      <section id="vista-login" class="sx2-acceso__caja" hidden>
+        <form id="form-login" class="sx2-form" novalidate>
+          <header class="sx2-acceso__cab">
+            <h2>Ingresar</h2>
+            <p>Usa tu cuenta de la plataforma para continuar.</p>
+          </header>
+          <div class="sx2-campo">
+            <label class="sx2-campo__et" for="campo-login-usuario">Usuario</label>
+            <input class="sx2-input" type="text" id="campo-login-usuario" autocomplete="username" required />
+          </div>
+          <div class="sx2-campo">
+            <label class="sx2-campo__et" for="campo-login-password">Contrase&ntilde;a</label>
+            <input class="sx2-input" type="password" id="campo-login-password" autocomplete="current-password" required />
+          </div>
+          <div id="resultado-login" class="sx2-acceso__msg" role="alert" hidden></div>
+          <button type="submit" class="sx2-boton sx2-boton--primario sx2-acceso__enviar" id="btn-login">Ingresar</button>
+          <p class="sx2-acceso__alt"><a href="#" id="link-olvide-clave">&iquest;Olvidaste tu contrase&ntilde;a?</a></p>
+        </form>
+        <p class="sx2-acceso__pie">
+          &iquest;No tienes cuenta? P&iacute;dela al administrador del sistema.
           Tambi&eacute;n puedes <a href="index.html">ingresar una solicitud sin cuenta</a> o
           <a href="estado.html">consultar por n&uacute;mero</a>.
         </p>
-      </form>
-    </div>
+      </section>
+
+      <!-- Recuperar contraseña (Arquitectura de Accesos, 2026-09-19). -->
+      <section id="vista-recuperar" class="sx2-acceso__caja" hidden>
+        <form id="form-recuperar" class="sx2-form" novalidate>
+          <header class="sx2-acceso__cab">
+            <h2>Recuperar contrase&ntilde;a</h2>
+            <p>Ingresa tu usuario o correo. Si existe una cuenta, te enviaremos un enlace para elegir una contrase&ntilde;a nueva.</p>
+          </header>
+          <div class="sx2-campo">
+            <label class="sx2-campo__et" for="campo-recuperar-identificador">Usuario o correo</label>
+            <input class="sx2-input" type="text" id="campo-recuperar-identificador" autocomplete="username" required />
+          </div>
+          <div id="resultado-recuperar" class="sx2-acceso__msg" role="alert" hidden></div>
+          <button type="submit" class="sx2-boton sx2-boton--primario sx2-acceso__enviar" id="btn-recuperar">Enviar enlace</button>
+          <p class="sx2-acceso__alt"><a href="#" id="link-volver-login">Volver a ingresar</a></p>
+        </form>
+      </section>
+
+      <!-- Elegir contraseña nueva (llega desde el enlace del correo, ?reset=). -->
+      <section id="vista-restablecer" class="sx2-acceso__caja" hidden>
+        <form id="form-restablecer" class="sx2-form" novalidate>
+          <header class="sx2-acceso__cab">
+            <h2>Elige tu contrase&ntilde;a nueva</h2>
+            <p>El enlace es de un solo uso y vence a los 45 minutos.</p>
+          </header>
+          <div class="sx2-campo">
+            <label class="sx2-campo__et" for="campo-restablecer-nueva">Contrase&ntilde;a nueva</label>
+            <input class="sx2-input" type="password" id="campo-restablecer-nueva" autocomplete="new-password" required />
+            <span class="sx2-campo__ayuda">M&iacute;nimo 8 caracteres.</span>
+          </div>
+          <div class="sx2-campo">
+            <label class="sx2-campo__et" for="campo-restablecer-repetir">Repite la contrase&ntilde;a nueva</label>
+            <input class="sx2-input" type="password" id="campo-restablecer-repetir" autocomplete="new-password" required />
+          </div>
+          <div id="resultado-restablecer" class="sx2-acceso__msg" role="alert" hidden></div>
+          <button type="submit" class="sx2-boton sx2-boton--primario sx2-acceso__enviar" id="btn-restablecer">Guardar contrase&ntilde;a</button>
+          <p class="sx2-acceso__alt"><a href="#" id="link-volver-login-restablecer">Volver a ingresar</a></p>
+        </form>
+      </section>
+
+      <!-- Cambio de clave obligatorio (cuenta con clave temporal). -->
+      <section id="vista-cambiar-clave" class="sx2-acceso__caja" hidden>
+        <form id="form-cambiar-clave" class="sx2-form" novalidate>
+          <header class="sx2-acceso__cab">
+            <h2>Elige tu contrase&ntilde;a</h2>
+            <p>Recibiste una clave temporal: por seguridad, define ahora una propia.</p>
+          </header>
+          <div class="sx2-campo">
+            <label class="sx2-campo__et" for="campo-clave-actual">Contrase&ntilde;a temporal</label>
+            <input class="sx2-input" type="password" id="campo-clave-actual" autocomplete="current-password" required />
+          </div>
+          <div class="sx2-campo">
+            <label class="sx2-campo__et" for="campo-clave-nueva">Contrase&ntilde;a nueva</label>
+            <input class="sx2-input" type="password" id="campo-clave-nueva" autocomplete="new-password" required />
+            <span class="sx2-campo__ayuda">M&iacute;nimo 8 caracteres, distinta de la temporal.</span>
+          </div>
+          <div class="sx2-campo">
+            <label class="sx2-campo__et" for="campo-clave-repetir">Repite la contrase&ntilde;a nueva</label>
+            <input class="sx2-input" type="password" id="campo-clave-repetir" autocomplete="new-password" required />
+          </div>
+          <div id="resultado-cambiar-clave" class="sx2-acceso__msg" role="alert" hidden></div>
+          <button type="submit" class="sx2-boton sx2-boton--primario sx2-acceso__enviar" id="btn-cambiar-clave">Guardar y entrar</button>
+        </form>
+      </section>
+    </main>
   </div>
 
-  <!-- ============ Vista: pedir enlace de recuperación ============ -->
-  <!-- Fase "Recuperar contraseña" (Arquitectura de Accesos, 2026-09-19): no
-       existía ningún autoservicio, solo reseteo manual por un Admin. -->
-  <div id="vista-recuperar" class="plataforma-auth sigso-oculto">
-    <aside class="plataforma-auth__marca">
-      <div class="plataforma-auth__marca-contenido">
-        <svg class="sigso-marca" width="40" height="40" viewBox="0 0 32 32" aria-hidden="true">
-          <rect width="32" height="32" rx="8" fill="#fff"></rect>
-          <text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#14213D" text-anchor="middle">S</text>
-        </svg>
-        <h1>SIGSO</h1>
-        <p>Control y Gesti&oacute;n Empresarial</p>
-      </div>
-    </aside>
-    <div class="plataforma-auth__formulario">
-      <form id="form-recuperar" class="plataforma-auth__form" novalidate>
-        <h2>Recuperar contrase&ntilde;a</h2>
-        <p class="sigso-ayuda">Ingresa tu usuario o correo. Si existe una cuenta, te enviaremos un enlace para elegir una contrase&ntilde;a nueva.</p>
-        <div class="sigso-campo">
-          <label for="campo-recuperar-identificador">Usuario o correo</label>
-          <input type="text" id="campo-recuperar-identificador" autocomplete="username" required />
-        </div>
-        <button type="submit" class="sigso-boton" id="btn-recuperar">Enviar enlace</button>
-        <div id="resultado-recuperar"></div>
-        <p class="sigso-ayuda plataforma-login__pie">
-          <a href="#" id="link-volver-login">Volver a ingresar</a>
-        </p>
-      </form>
-    </div>
-  </div>
-
-  <!-- ============ Vista: elegir contraseña nueva (desde el enlace del correo) ============ -->
-  <div id="vista-restablecer" class="plataforma-auth sigso-oculto">
-    <aside class="plataforma-auth__marca">
-      <div class="plataforma-auth__marca-contenido">
-        <svg class="sigso-marca" width="40" height="40" viewBox="0 0 32 32" aria-hidden="true">
-          <rect width="32" height="32" rx="8" fill="#fff"></rect>
-          <text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#14213D" text-anchor="middle">S</text>
-        </svg>
-        <h1>SIGSO</h1>
-        <p>Control y Gesti&oacute;n Empresarial</p>
-      </div>
-    </aside>
-    <div class="plataforma-auth__formulario">
-      <form id="form-restablecer" class="plataforma-auth__form" novalidate>
-        <h2>Elige tu contrase&ntilde;a nueva</h2>
-        <p class="sigso-ayuda">El enlace es de un solo uso y vence a los 45 minutos.</p>
-        <div class="sigso-campo">
-          <label for="campo-restablecer-nueva">Contrase&ntilde;a nueva</label>
-          <input type="password" id="campo-restablecer-nueva" autocomplete="new-password" required />
-        </div>
-        <div class="sigso-campo">
-          <label for="campo-restablecer-repetir">Repite la contrase&ntilde;a nueva</label>
-          <input type="password" id="campo-restablecer-repetir" autocomplete="new-password" required />
-        </div>
-        <button type="submit" class="sigso-boton" id="btn-restablecer">Guardar contrase&ntilde;a</button>
-        <div id="resultado-restablecer"></div>
-        <p class="sigso-ayuda plataforma-login__pie">
-          <a href="#" id="link-volver-login-restablecer">Volver a ingresar</a>
-        </p>
-      </form>
-    </div>
-  </div>
-
-  <!-- ============ Vista: cambio de clave obligatorio ============ -->
-  <div id="vista-cambiar-clave" class="plataforma-auth sigso-oculto">
-    <aside class="plataforma-auth__marca">
-      <div class="plataforma-auth__marca-contenido">
-        <svg class="sigso-marca" width="40" height="40" viewBox="0 0 32 32" aria-hidden="true">
-          <rect width="32" height="32" rx="8" fill="#fff"></rect>
-          <text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#14213D" text-anchor="middle">S</text>
-        </svg>
-        <h1>SIGSO</h1>
-        <p>Control y Gesti&oacute;n Empresarial</p>
-        <ul class="plataforma-auth__marca-lista" aria-hidden="true">
-          <li>Solicitudes y control de avance</li>
-          <li>Reportes y KPIs para gerencia</li>
-          <li>Trazabilidad de principio a fin</li>
-        </ul>
-        <p class="plataforma-auth__marca-pie">Controla. Analiza. Decide.</p>
-      </div>
-    </aside>
-    <div class="plataforma-auth__formulario">
-      <form id="form-cambiar-clave" class="plataforma-auth__form" novalidate>
-        <h2>Elige tu contrase&ntilde;a</h2>
-        <p class="sigso-ayuda">Recibiste una clave temporal: por seguridad, define ahora una propia
-          (m&iacute;nimo 8 caracteres, distinta de la del correo).</p>
-        <div class="sigso-campo">
-          <label for="campo-clave-actual">Contrase&ntilde;a temporal</label>
-          <input type="password" id="campo-clave-actual" autocomplete="current-password" required />
-        </div>
-        <div class="sigso-campo">
-          <label for="campo-clave-nueva">Contrase&ntilde;a nueva</label>
-          <input type="password" id="campo-clave-nueva" autocomplete="new-password" required />
-        </div>
-        <div class="sigso-campo">
-          <label for="campo-clave-repetir">Repite la contrase&ntilde;a nueva</label>
-          <input type="password" id="campo-clave-repetir" autocomplete="new-password" required />
-        </div>
-        <button type="submit" class="sigso-boton" id="btn-cambiar-clave">Guardar y entrar</button>
-        <div id="resultado-cambiar-clave"></div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ============ Vista: restaurando sesion ============ -->
-  <!-- v5.1: splash mientras se valida el token guardado (solo cuando no hay
-       cuenta cacheada). Evita el parpadeo del formulario de login al
-       recargar. Con cuenta cacheada, se entra al shell de inmediato. -->
-  <div id="vista-cargando" class="plataforma-cargando sigso-oculto">
-    <div class="plataforma-cargando__contenido">
-      <svg class="sigso-marca" width="36" height="36" viewBox="0 0 32 32" aria-hidden="true">
-        <rect width="32" height="32" rx="8" fill="#14213D"></rect>
-        <text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">S</text>
-      </svg>
-      <p><span class="sigso-spinner"></span> Restaurando tu sesi&oacute;n&hellip;</p>
-    </div>
+  <!-- Restaurando sesión: solo cuando no hay cuenta en caché (evita el
+       parpadeo del formulario al recargar). -->
+  <div id="vista-cargando" class="sx2-acceso-cargando" role="status" hidden>
+    <span class="sx2-acceso__logo" aria-hidden="true">S</span>
+    <p>Restaurando tu sesi&oacute;n&hellip;</p>
   </div>
 
   <!-- ============ Shell: sidebar + modulos ============ -->
@@ -227,7 +180,7 @@
        espacio a 4-5 modulos) pasa a un sidebar vertical colapsable, patron
        estandar de herramienta seria (Linear/Notion/Stripe). En movil el
        sidebar es un drawer que se abre con el boton hamburguesa. -->
-  <div id="vista-shell" class="sigso-oculto plataforma-shell">
+  <div id="vista-shell" class="plataforma-shell" hidden>
     <aside class="plataforma-sidebar" id="plataforma-sidebar">
       <div class="plataforma-sidebar__cab">
         <div class="plataforma-header__marca">
@@ -260,7 +213,6 @@
              poder decirla cuando algo falla ("¿qué versión tienes?"). Si el
              backend quedó atrás, esto se convierte en un aviso -- solo para
              Admin, que es quien puede resolverlo. -->
-        <p class="plataforma-sidebar__version" id="sigso-version" hidden></p>
         <button type="button" class="plataforma-sidebar__tema" id="btn-tema" aria-label="Cambiar a modo oscuro">
           <span id="ico-tema"></span><span class="plataforma-sidebar__txt">Modo oscuro</span>
         </button>

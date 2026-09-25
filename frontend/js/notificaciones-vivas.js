@@ -87,6 +87,11 @@
   // elemento no existe, es app.html (Backoffice Google): siempre hay sesion.
   function haySesion_() {
     if (!document.getElementById('vista-login')) return true;
+    // En la plataforma cuenta recién DENTRO del shell: con token pero en el
+    // cambio de clave obligatorio, un aviso modal tapaba el formulario. Al
+    // entrar al shell, la vigilancia de abajo sincroniza sola.
+    var shell = document.getElementById('vista-shell');
+    if (shell && shell.hidden) return false;
     try { return !!localStorage.getItem('sigso_portal_token'); } catch (err) { return false; }
   }
 
@@ -748,6 +753,10 @@
     //  - online: cuando la red vuelve tras una suspension del equipo.
     window.addEventListener('pageshow', sincronizar_);
     window.addEventListener('online', sincronizar_);
+
+    // Portal: al entrar al shell (login, cambio de clave o sesión restaurada)
+    // se sincroniza de inmediato, sin esperar a la vigilancia.
+    document.addEventListener('sigso:shell-listo', function () { sincronizar_(true); });
 
     // Portal: la sesion aparece DESPUES del login sin recargar la pagina.
     // Vigilancia local barata (sin red): al detectar que ya hay sesion,

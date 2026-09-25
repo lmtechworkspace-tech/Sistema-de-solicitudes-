@@ -70,7 +70,7 @@ function login(db, data, ip) {
   const usuario = normalizarUsuario(data.usuario);
   const password = String(data.password || '');
   if (!usuario || !password) {
-    return errorValidacion('usuario', 'Indica tu usuario y contrasena.');
+    return errorValidacion('usuario', 'Indica tu usuario y contraseña.');
   }
 
   if (Sesiones.loginBloqueado(usuario, ip)) {
@@ -90,7 +90,7 @@ function login(db, data, ip) {
 
   if (!hashCorrecto) {
     Sesiones.registrarIntentoFallido(usuario, ip);
-    return errorForbidden('Usuario o contrasena incorrectos.');
+    return errorForbidden('Usuario o contraseña incorrectos.');
   }
 
   Sesiones.limpiarIntentos(usuario, ip);
@@ -117,14 +117,14 @@ function cambiarPassword(db, data) {
   const cuenta = Sesiones.resolverCuentaPorToken(db, data.token);
   if (!cuenta) return errorForbidden('Sesion invalida o expirada. Ingresa de nuevo.');
   if (!Hash.coincide(String(data.password_actual || ''), cuenta.salt, cuenta.hash_password)) {
-    return errorForbidden('La contrasena actual no es correcta.');
+    return errorForbidden('La contraseña actual no es correcta.');
   }
   const nueva = String(data.password_nueva || '');
   if (nueva.length < 8) {
-    return errorValidacion('password_nueva', 'La contrasena nueva debe tener al menos 8 caracteres.');
+    return errorValidacion('password_nueva', 'La contraseña nueva debe tener al menos 8 caracteres.');
   }
   if (nueva === String(data.password_actual)) {
-    return errorValidacion('password_nueva', 'La contrasena nueva debe ser distinta de la actual.');
+    return errorValidacion('password_nueva', 'La contraseña nueva debe ser distinta de la actual.');
   }
 
   const salt = Hash.generarSalt();
