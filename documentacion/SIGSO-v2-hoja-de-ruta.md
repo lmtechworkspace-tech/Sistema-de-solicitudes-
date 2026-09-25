@@ -1144,3 +1144,16 @@ retirar las versiones clásicas" de arriba (ya no hay ciclo de respaldo).
 - Sandbox: 4 vistas con datos; aprobada la Ley 21.822 pendiente (validó
   fecha obligatoria); publicado y retirado un aviso de prueba; Inicio y
   contador del sidebar siguen funcionando.
+
+### R4 Coordinación de pausas 100 % v2 — ESTADO: HECHO
+- `coordinacion-vistas-v2.js`: **Historial por trabajador** (lista con
+  buscador; ficha con participación, rachas, justificaciones, sin registro,
+  franja de las últimas 30 pausas y tabla) y **Cumplimiento** (KPIs con
+  semáforo, clima emocional con detalle por persona plegable, motivos,
+  participación y rachas por área, descarga del PDF).
+- Define `window.SigsoCoordinacion` (cargar, irAItem, vista) y el árbol; la
+  plataforma ya **no carga `coordinacion.js`** (queda solo para app.html).
+- "Hoy" (`coordinacion-v2.js`) no pinta si la vista activa es otra
+  (comparten `#coordinacion-v2`).
+- Sandbox (Amarlla): historial de 8 personas, buscador, cumplimiento con 6
+  KPIs y 4 tarjetas, PDF generado, cambios rápidos Hoy↔Historial sin cruces.

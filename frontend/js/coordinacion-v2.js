@@ -42,6 +42,10 @@
     return ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'][d.getDay()] + ' ' + clave.slice(8, 10) + '/' + clave.slice(5, 7);
   }
 
+  // #coordinacion-v2 lo comparten Hoy (aquí) e Historial/Cumplimiento
+  // (coordinacion-vistas-v2.js): una respuesta tardía de Hoy no pinta encima.
+  function esHoy() { return !window.SigsoCoordinacion || !SigsoCoordinacion.vista || SigsoCoordinacion.vista() === 'hoy'; }
+
   // --- Montaje ----------------------------------------------------------------------
   function seccion() { return document.getElementById('modulo-pausas_coordinacion'); }
   function contenedor() {
@@ -70,7 +74,7 @@
     var t = ++turno_;
     if (!silencioso || !datos_) c.innerHTML = '<div class="sx2-pagina">' + cabecera(null) + U.esqueleto('tarjetas', 3) + '</div>';
     Promise.all([api('getPanelCoordinadorPausas', {}), PY.cargarMiPerfil()]).then(function (r) {
-      if (t !== turno_) return;
+      if (t !== turno_ || !esHoy()) return;
       if (!r[0] || !r[0].ok) {
         c.innerHTML = '<div class="sx2-pagina">' + cabecera(null) + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo cargar la coordinación',
           texto: (r[0] && r[0].message) || 'Inténtalo de nuevo.', accion: U.boton({ texto: 'Reintentar', icono: 'tendencia', clase: 'js-co2-recargar' }) }) }) + '</div>';
@@ -190,6 +194,7 @@
   }
 
   function pintar(silencioso) {
+    if (!esHoy()) return;
     var c = contenedor();
     if (!c || !datos_) return;
     var d = datos_, y = window.scrollY;
@@ -293,7 +298,7 @@
 
   document.addEventListener('click', function (ev) {
     var raiz = document.getElementById('coordinacion-v2');
-    if (!raiz || !raiz.contains(ev.target)) return;
+    if (!raiz || !raiz.contains(ev.target) || !esHoy()) return;
     var t = ev.target, b;
     if (t.closest('.js-co2-recargar')) { cargar(!!datos_); return; }
     if (!datos_) return;
