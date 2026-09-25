@@ -1,0 +1,52 @@
+/* Mi perfil (v2) — drawer de perfil-v2.js: identidad con foto, datos de la
+   cuenta, seguridad y recorte de foto. */
+
+.pf2 { display: flex; flex-direction: column; gap: var(--sx-e-5); }
+
+/* Identidad */
+.pf2-id { display: flex; align-items: center; gap: var(--sx-e-4); }
+.pf2-foto .sx2-avatar { --sx-av: 88px; font-size: 1.75rem; }
+.pf2-id__txt { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.pf2-id__nombre { margin: 0; font: var(--sx-t-h2); color: var(--sx-texto); overflow-wrap: anywhere; }
+.pf2-id__acciones { display: flex; flex-wrap: wrap; gap: var(--sx-e-2); margin-top: 4px; }
+.pf2-peligro { color: var(--sx-critico); }
+.pf2-peligro:hover { background: var(--sx-critico-suave); color: var(--sx-critico); }
+
+/* Secciones */
+.pf2-seccion { display: flex; flex-direction: column; gap: var(--sx-e-3); padding-top: var(--sx-e-4); border-top: 1px solid var(--sx-borde-suave); }
+.pf2-seccion__cab { display: flex; align-items: center; justify-content: space-between; gap: var(--sx-e-3); }
+.pf2-seccion__tit { margin: 0; font: var(--sx-t-etiqueta); letter-spacing: 0.04em; text-transform: uppercase; color: var(--sx-texto-3); }
+
+.pf2-datos { margin: 0; display: grid; gap: var(--sx-e-3); }
+.pf2-dato { display: grid; grid-template-columns: 8.5rem minmax(0, 1fr); gap: var(--sx-e-3); align-items: baseline; }
+.pf2-dato dt { font: var(--sx-t-chico); color: var(--sx-texto-3); }
+.pf2-dato dd { margin: 0; font: var(--sx-t-cuerpo); color: var(--sx-texto); overflow-wrap: anywhere; }
+.pf2-nota { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 10px 12px; border-radius: var(--sx-radio); background: var(--sx-superficie-2); font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.pf2-nota .sigso-ico { flex: none; margin-top: 2px; color: var(--sx-texto-3); }
+
+/* Cambiar contraseña */
+.pf2-clave__acciones { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: var(--sx-e-2); }
+
+/* Recorte: el área visible es un círculo, igual a como se verá la foto. */
+.pf2-recorte { display: flex; flex-direction: column; align-items: center; gap: var(--sx-e-4); }
+.pf2-recorte > p { margin: 0; text-align: center; font: var(--sx-t-chico); }
+.pf2-recorte__lienzo {
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none; /* sin esto, en celular el gesto hace scroll y no mueve la foto */
+  background: var(--sx-superficie-2);
+  box-shadow: 0 0 0 4px var(--sx-superficie), 0 0 0 5px var(--sx-borde);
+}
+.pf2-recorte__lienzo:active { cursor: grabbing; }
+.pf2-recorte__lienzo canvas { width: 100%; height: 100%; display: block; }
+.pf2-recorte__zoom { display: flex; align-items: center; gap: var(--sx-e-2); width: 260px; color: var(--sx-texto-3); }
+.pf2-recorte__zoom input { flex: 1; accent-color: var(--sx-primario); }
+.pf2-recorte .pf2-clave__acciones { align-self: stretch; }
+
+@media (max-width: 480px) {
+  .pf2-id { flex-direction: column; align-items: flex-start; }
+  .pf2-dato { grid-template-columns: 1fr; gap: 2px; }
+}

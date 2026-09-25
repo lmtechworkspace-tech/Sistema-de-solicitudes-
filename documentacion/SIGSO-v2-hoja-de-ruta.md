@@ -1435,3 +1435,21 @@ los usa): quedaban cinco clásicos cargados. `detalle.js`, `estado.js` y
   restablecer (token fuera de la URL, validaciones, enlace inválido), cambio
   obligatorio sin avisos encima tras 15 s, sesión restaurada con avisos al
   instante; escritorio, celular y modo oscuro.
+
+### R12b Mi perfil — ESTADO: HECHO
+- `perfil-v2.js` reemplaza a `perfil.js` en la plataforma (perfil.js queda
+  solo para app.html/admin.html) con el mismo `window.SigsoPerfil`: el
+  servicio de fotos (`fotoDe`, `precargarFotos`, caché en sessionStorage) que
+  leen todos los avatares v2 sigue igual.
+- "Mi perfil" pasa de modal clásico a drawer v2 (`css/v2/perfil-v2.css`):
+  identidad con foto grande y rol, datos de la cuenta, nota de quién los
+  administra, y Seguridad con el cambio de contraseña en línea (solo cuentas
+  del portal). Subir/cambiar foto con el recortador circular (arrastrar +
+  zoom + rueda), eliminar con el diálogo v2 de peligro. Al cambiar la foto
+  se actualizan el panel, el caché y el menú de usuario
+  (`sigso:perfil-actualizado`).
+- Sandbox: panel, validaciones y error del servidor en la contraseña,
+  recorte con miniatura JPEG válida, error de almacenamiento mostrado con
+  el botón habilitado (el sandbox no tiene R2), éxito y eliminación
+  (simulados en la respuesta) con foto en el menú, Escape, celular sin
+  desbordes.
