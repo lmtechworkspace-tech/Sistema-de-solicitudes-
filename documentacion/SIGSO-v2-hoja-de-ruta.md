@@ -1169,3 +1169,18 @@ retirar las versiones clásicas" de arriba (ya no hay ciclo de respaldo).
   Administración, Calidad y Proyectos: todos los reportes pasan a v2 de una.
 - La plataforma carga `reportes-v2.js` (y `ui-v2.js` antes, del que
   depende); `reportes.js` queda solo para app.html.
+
+### R5 Mi departamento 100 % v2 — ESTADO: HECHO
+- `jefatura-vistas-v2.js`: **Solicitudes del equipo** (5 KPIs, 2 filtrables;
+  "Hoy en tu equipo" por categoría; buscador; filtros rápidos; tabla con
+  estado, prioridad, cumplimiento y días; cada fila abre el panel lateral de
+  la Bandeja v2), **Por persona**, **Actividades del equipo** (KPIs,
+  semáforo, pedir actualización y reasignar en formularios v2 —el reasignar
+  ofrece a las personas del equipo—), **Reportes** (motor v2) y **Carga**.
+- Árbol nuevo: Personas (Mi equipo hoy) · Mi equipo (Solicitudes, Por
+  persona, Actividades) · Reportes (Centro, Carga).
+- Define `window.SigsoJefatura`; el shell abre Mi departamento directo en la
+  v2 (ya no pasa por `abrirBandeja_`) y la plataforma **no carga
+  `jefatura.js`** (queda para app.html). "Mi equipo hoy" no pinta si la
+  vista activa es otra.
+- Sandbox (Bárbara): 6 vistas, abrir solicitud, reporte y formulario OK.

@@ -1522,7 +1522,8 @@
       abrirBandeja_('gerencia');
     }
     if (id === 'jefatura') {
-      abrirBandeja_('jefatura');
+      // R5: Mi departamento es 100 % v2 (jefatura-vistas-v2.js).
+      if (window.SigsoJefatura) window.SigsoJefatura.cargar();
     }
     if (id === 'administracion') {
       abrirAdministracion_();

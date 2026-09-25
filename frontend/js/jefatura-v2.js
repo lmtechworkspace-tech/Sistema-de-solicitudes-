@@ -25,6 +25,10 @@
   }
   function r1(v) { return Math.round(v * 10) / 10; }
 
+  // #jefatura-v2 lo comparten "Mi equipo hoy" (aquí) y las demás vistas
+  // (jefatura-vistas-v2.js): una respuesta tardía de aquí no pinta encima.
+  function esResumen() { return !window.SigsoJefatura || !SigsoJefatura.vista || SigsoJefatura.vista() === 'resumen'; }
+
   // --- Montaje ----------------------------------------------------------------------
   function seccion() { return document.getElementById('modulo-bandeja'); }
   function contenedor() {
@@ -53,7 +57,7 @@
     var t = ++turno_;
     if (!silencioso || !datos_) c.innerHTML = '<div class="sx2-pagina">' + cabecera(null) + U.esqueleto('kpis', 5) + U.esqueleto('tarjetas', 2) + '</div>';
     Promise.all([api('getMiEquipo', {}), PY.cargarMiPerfil()]).then(function (r) {
-      if (t !== turno_) return;
+      if (t !== turno_ || !esResumen()) return;
       if (!r[0] || !r[0].ok) {
         c.innerHTML = '<div class="sx2-pagina">' + cabecera(null) + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo cargar tu equipo',
           texto: (r[0] && r[0].message) || 'Inténtalo de nuevo.', accion: U.boton({ texto: 'Reintentar', icono: 'tendencia', clase: 'js-je2-recargar' }) }) }) + '</div>';
@@ -157,6 +161,7 @@
   }
 
   function pintar(silencioso) {
+    if (!esResumen()) return;
     var c = contenedor();
     if (!c || !datos_) return;
     var y = window.scrollY, d = datos_;
@@ -212,7 +217,7 @@
 
   document.addEventListener('click', function (ev) {
     var raiz = document.getElementById('jefatura-v2');
-    if (!raiz || !raiz.contains(ev.target)) return;
+    if (!raiz || !raiz.contains(ev.target) || !esResumen()) return;
     var t = ev.target, b;
     if (t.closest('.js-je2-recargar')) { cargar(!!datos_); return; }
     if (!datos_) return;
