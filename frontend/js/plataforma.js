@@ -1023,7 +1023,7 @@
     document.addEventListener('keydown', function (evento) {
       var paletaAbierta = !document.getElementById('paleta-comandos').classList.contains('sigso-oculto');
       var atajosAbiertos = !document.getElementById('panel-atajos').classList.contains('sigso-oculto');
-      var conSesion = !document.getElementById('vista-shell').classList.contains('sigso-oculto');
+      var conSesion = !document.getElementById('vista-shell').hidden;
       if (!conSesion) return; // login/cambio de clave: sin paleta ni atajos
 
       // Ctrl/Cmd+K abre la paleta desde cualquier parte, incluso con foco
