@@ -48,9 +48,10 @@
   // id de módulo -> archivo. Deliberadamente corto: cada entrada aquí es un
   // módulo que hay que auditar como se auditó Calidad (¿lo usa alguien sin
   // abrirlo?), no una lista que se amplía por costumbre.
-  var ARCHIVOS = {
-    calidad: 'js/calidad.js'
-  };
+  // R10 (SIGSO v2): Calidad ya no se difiere -- la plataforma carga sus
+  // archivos v2 (calidad-nucleo-v2.js y hermanos) y calidad.js queda solo
+  // para app.html. El mecanismo se conserva para el próximo módulo pesado.
+  var ARCHIVOS = {};
 
   // id -> Promise. Sirve de candado: dos peticiones simultáneas (la precarga
   // ociosa y un clic impaciente) comparten la MISMA descarga en vez de

@@ -342,3 +342,19 @@
 .op2-promedio { margin: 8px 0; padding: 10px 12px; border-radius: var(--sx-radio); background: var(--sx-superficie-2); font: 700 1rem/1.3 var(--fuente); color: var(--sx-texto-2); }
 .op2-promedio--bien { background: var(--sx-ok-suave); color: var(--sx-ok); }
 .op2-promedio--mal { background: var(--sx-critico-suave); color: var(--sx-critico); }
+
+/* ===== R10: Reportes y Accesos (calidad-admin-v2.js). Prefijo .ca2-* ===== */
+.ca2-roles { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ca2-roles li { display: flex; gap: 10px; align-items: flex-start; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.ca2-roles li .sx2-badge { flex: none; }
+.ca2-cuentas { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: var(--sx-e-3); }
+.ca2-cuenta { display: flex; align-items: flex-start; gap: 10px; border-left: 4px solid var(--sx-tono, var(--sx-borde)); }
+.ca2-cuenta__acc { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+.ca2-matriz-wrap { max-height: 70vh; }
+.ca2-matriz th span { display: inline-block; writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font-family: var(--fuente-mono, ui-monospace, monospace); }
+.ca2-matriz tbody th { position: sticky; left: 0; background: var(--sx-superficie); text-align: left; white-space: nowrap; z-index: 1; }
+.ca2-celda { text-align: center; font-weight: 700; color: var(--sx-tono); background: color-mix(in srgb, var(--sx-tono) 10%, transparent); }
+i.ca2-celda { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 5px; font-style: normal; margin-right: 6px; }
+.ca2-dest { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ca2-dest li { display: flex; align-items: center; gap: 8px; font: var(--sx-t-chico); color: var(--sx-texto); }
+@media (max-width: 700px) { .ca2-cuentas { grid-template-columns: 1fr; } .ca2-cuenta { flex-wrap: wrap; } .ca2-cuenta__acc { flex-direction: row; flex-wrap: wrap; align-items: center; } }

@@ -1351,3 +1351,35 @@ y deja de cargarse en la última tanda.
   factor y parte editados, proceso abierto y editado, riesgo editado y acción
   asignada, PDF de evidencia, proveedor evaluado, prestación registrada →
   liberada → no conforme → NC → anulada); teléfono sin scroll horizontal.
+
+### R10 Reportes, Accesos, formularios de Documentos y fin de calidad.js — ESTADO: HECHO
+- `calidad-admin-v2.js`:
+  - **Centro de reportes del SGC** sobre el motor v2 (cumplimiento general,
+    ranking de capítulos, estado documental, por cláusula con filtro de
+    estado, tendencia de un indicador con selector, evolución de la
+    cobertura); los que viven en otra pantalla llevan a ella y los que no
+    tienen dato dicen qué falta. La ruta `reportes:<id>` abre el reporte
+    directo.
+  - **Accesos**: KPIs filtrables (con rol, sin rol, por vencer, sin cuenta),
+    búsqueda y filtro por rol, tarjetas con foto y nivel (gobierno / lectura
+    / acotado), asignar/cambiar rol con su descripción (la fecha de
+    vencimiento solo aparece para auditor externo), quitar, "¿Qué ve?" en
+    panel lateral, matriz de distribución con leyenda y columna fija, y
+    documentos confidenciales.
+  - **Formularios de Documentos** (cargar, nueva versión, editar, cláusulas
+    ISO, reemplazar archivo): correos autorizados solo visibles con
+    "Personas específicas", validación de correos y enlaces, versión distinta
+    de la vigente, externos sin archivo; al guardar, la lista y el panel del
+    documento se refrescan solos.
+- `calidad-nucleo-v2.js` reemplaza a `calidad.js` en la plataforma: define
+  `window.SigsoCalidad` (misma API: cargar, irAItem, usarSecciones,
+  formulario, ver, abrirFicha, formularioPersona…), el árbol con sus
+  permisos (secciones_visibles del backend, "Mi ficha" para el personal
+  operativo) y el ruteo de las 19 secciones a sus archivos v2.
+- `carga-diferida.js` ya no difiere Calidad; **la plataforma no carga
+  `calidad.js`** (queda solo para app.html). Con esto Calidad es 100 % v2.
+- Sandbox (admin y personal operativo): las 19 secciones abren en v2 sin
+  calidad.js, reportes con ruta propia, rol guardado, "¿Qué ve?", matriz de
+  22 × 44, documento externo cargado, editado y etiquetado con cláusulas;
+  el operativo ve Inicio · Documentos · Mi ficha · El sistema y su ficha se
+  abre sola; teléfono sin scroll horizontal.
