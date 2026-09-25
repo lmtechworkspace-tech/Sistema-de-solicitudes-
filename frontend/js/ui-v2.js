@@ -320,7 +320,70 @@ var UIv2 = (function () {
     });
   }
 
+  // --- Formularios (SIGSO v2, R3) ---------------------------------------------
+  // Campo con etiqueta: control es HTML (input/select/textarea con clase sx2-input).
+  function campo(etiqueta, control, ayuda) {
+    return '<label class="sx2-campo"><span class="sx2-campo__et">' + esc(etiqueta) + '</span>' + control +
+      (ayuda ? '<span class="sx2-campo__ayuda">' + esc(ayuda) + '</span>' : '') + '</label>';
+  }
+  // Formulario en drawer, el patrón de todas las altas/ediciones v2 fuera de
+  // Proyectos (que tiene el suyo, atado al proyecto abierto).
+  // o: { titulo, subtitulo, campos (html), boton, ocupado, enviar(datos, form) -> Promise<{ok,...}>,
+  //      preparar(datos, form) -> datos | 'error' | Promise, aviso, listo(r), alMontar(form, d), ancho }
+  function formulario(o) {
+    var d = drawer({
+      titulo: o.titulo,
+      subtitulo: o.subtitulo,
+      cuerpo: '<form class="sx2-form js-sx2-form" novalidate>' + o.campos +
+        '<p class="sx2-campo__error js-sx2-form-error" role="alert" hidden></p></form>',
+      pie: '<span style="flex:1"></span>' + boton({ texto: 'Cancelar', clase: 'js-sx2-drawer-cerrar' }) +
+        boton({ texto: o.boton || 'Guardar', icono: 'check', variante: 'primario', clase: 'js-sx2-form-ok' })
+    });
+    if (o.ancho) d.el.classList.add('sx2-drawer--ancho');
+    var form = d.el.querySelector('.js-sx2-form');
+    var err = d.el.querySelector('.js-sx2-form-error');
+    var ok = d.el.querySelector('.js-sx2-form-ok');
+    var textoOk = ok.innerHTML;
+    function error(m) { err.textContent = m; err.hidden = false; err.scrollIntoView({ block: 'nearest' }); }
+    function ocupado(si) { ok.disabled = si; ok.innerHTML = si ? esc(o.ocupado || 'Guardando…') : textoOk; }
+    function terminar(r) {
+      ocupado(false);
+      if (!r || !r.ok) { error((r && r.message) || 'No se pudo guardar.'); return; }
+      d.cerrar();
+      if (o.aviso && window.Componentes && Componentes.aviso) Componentes.aviso({ texto: typeof o.aviso === 'function' ? o.aviso(r) : o.aviso, tipo: 'exito' });
+      if (o.listo) o.listo(r);
+    }
+    function enviar(ev) {
+      if (ev) ev.preventDefault();
+      if (ok.disabled) return;
+      err.hidden = true;
+      var datos = {};
+      new FormData(form).forEach(function (v, k) { if (typeof v === 'string') datos[k] = v.trim(); });
+      ocupado(true);
+      Promise.resolve(o.preparar ? o.preparar(datos, form) : datos).then(function (listos) {
+        if (typeof listos === 'string') { ocupado(false); error(listos); return; }
+        return Promise.resolve(o.enviar(listos, form)).then(terminar, function (e) { terminar({ ok: false, message: (e && e.message) || 'No se pudo conectar.' }); });
+      }, function (e) { ocupado(false); error((e && e.message) || 'No se pudo preparar el envío.'); });
+    }
+    form.addEventListener('submit', enviar);
+    ok.addEventListener('click', enviar);
+    if (o.alMontar) o.alMontar(form, d);
+    var primero = form.querySelector('input:not([type=hidden]):not([type=file]):not([type=checkbox]):not([type=radio]), textarea, select');
+    if (primero) primero.focus();
+    return d;
+  }
+  // Lee un File como base64 (sin el prefijo data:...;base64,).
+  function leerBase64(archivo) {
+    return new Promise(function (resolver, rechazar) {
+      var lector = new FileReader();
+      lector.onload = function () { resolver(String(lector.result).slice(String(lector.result).indexOf(',') + 1)); };
+      lector.onerror = function () { rechazar(new Error('No se pudo leer el archivo.')); };
+      lector.readAsDataURL(archivo);
+    });
+  }
+
   return {
+    campo: campo, formulario: formulario, leerBase64: leerBase64,
     confirmar: confirmar,
     esc: esc, ico: ico, datos: datos,
     iniciales: iniciales, avatar: avatar, avatares: avatares, persona: persona, precargarFotos: precargarFotos,

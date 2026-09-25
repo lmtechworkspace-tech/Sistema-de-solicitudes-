@@ -392,3 +392,4 @@ body.sx2-con-drawer #py2-interruptor { visibility: hidden; }
 .sx2-tenue { color: var(--sx-texto-3); }
 .sx2-cortar { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .sx2-oculto-visual { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sx2-drawer--ancho .sx2-drawer__panel { width: min(720px, 100vw); }

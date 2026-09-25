@@ -33,3 +33,15 @@
   .nv2-fila { flex-direction: column; align-items: stretch; }
   .nv2-fila__estado { flex-direction: row; align-items: center; justify-content: space-between; }
 }
+
+/* R3: gestión (aprobar, mis envíos, cumplimiento, publicar) */
+.nv2-motivo { font: var(--sx-t-chico); color: var(--sx-critico); }
+.nv2-check { display: inline-flex; align-items: center; gap: 8px; font: 500 .875rem/1.3 var(--fuente); color: var(--sx-texto); cursor: pointer; }
+.nv2-check input { width: 18px; height: 18px; accent-color: var(--sx-primario); }
+.nv2-personas { display: flex; flex-direction: column; gap: 8px; }
+.nv2-personas__lista { display: flex; flex-direction: column; max-height: 260px; overflow-y: auto; border: 1px solid var(--sx-borde-suave); border-radius: var(--sx-radio); }
+.nv2-persona { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--sx-borde-suave); font: 500 .8125rem/1.3 var(--fuente); color: var(--sx-texto); cursor: pointer; }
+.nv2-persona:first-child { border-top: 0; }
+.nv2-persona:hover { background: var(--sx-superficie-2); }
+.nv2-persona input { width: 16px; height: 16px; flex: none; accent-color: var(--sx-primario); }
+.nv2-persona .sx2-cortar { flex: 1; }

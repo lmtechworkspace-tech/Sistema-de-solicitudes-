@@ -1126,3 +1126,21 @@ retirar las versiones clásicas" de arriba (ya no hay ciclo de respaldo).
   estética v2. Usa `:where(.sx2)` para no ganarle a los CSS de módulos v2.
 - Margen de página para las secciones que aún pintan HTML clásico dentro de
   módulos a ancho total (antes quedaban pegadas al sidebar).
+
+### R3 Novedades 100 % v2 — ESTADO: HECHO
+- `novedades-v2.js` es el módulo completo: Publicadas, **Por aprobar**,
+  **Mis envíos** y **Cumplimiento de lectura** (KPIs vencidas / por vencer /
+  al día / cumplidas y barra de confirmación por novedad).
+- Panel lateral único: leer y confirmar, quién la leyó, **aprobar** (fecha
+  límite obligatoria en ley/dictamen y a quién llega, con buscador de
+  personas), **devolver/rechazar** con motivo, **retirar**, **corregir y
+  reenviar**. **Publicar** en panel lateral ancho (el carril controlado
+  oculta audiencia y plazo y cambia el botón a "Enviar a revisión").
+- `UIv2.formulario`, `UIv2.campo` y `UIv2.leerBase64`: el formulario v2
+  genérico (el de Proyectos queda atado al proyecto) que usarán los demás.
+- `plataforma.html` ya **no carga `novedades.js`**; la v2 define también
+  `window.SigsoNovedades` (cargar, irAItem, actualizarBadge,
+  resumenPendientes). `novedades.js` queda solo para `app.html`.
+- Sandbox: 4 vistas con datos; aprobada la Ley 21.822 pendiente (validó
+  fecha obligatoria); publicado y retirado un aviso de prueba; Inicio y
+  contador del sidebar siguen funcionando.
