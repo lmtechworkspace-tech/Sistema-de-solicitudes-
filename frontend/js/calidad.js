@@ -178,6 +178,18 @@
       SigsoCalidadFichaV2.mostrarCapacitaciones();
       return;
     }
+    // R9: Operación (servicios prestados y proveedores) en v2.
+    if (window.SigsoCalidadOperacionV2 && SigsoCalidadOperacionV2.vistas.indexOf(seccionActiva_) !== -1) {
+      pintarNavSgc_();
+      SigsoCalidadOperacionV2.mostrar(seccionActiva_);
+      return;
+    }
+    // R9: El sistema (alcance, contexto, procesos, riesgos, cobertura) en v2.
+    if (window.SigsoCalidadSistemaV2 && SigsoCalidadSistemaV2.vistas.indexOf(seccionActiva_) !== -1) {
+      pintarNavSgc_();
+      SigsoCalidadSistemaV2.mostrar(seccionActiva_);
+      return;
+    }
     // R8b: Medición (objetivos e indicadores) en v2.
     if (window.SigsoCalidadMedicionV2 && SigsoCalidadMedicionV2.vistas.indexOf(seccionActiva_) !== -1) {
       pintarNavSgc_();

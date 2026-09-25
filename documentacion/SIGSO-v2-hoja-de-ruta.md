@@ -1317,3 +1317,37 @@ y deja de cargarse en la última tanda.
   medido dos veces, objetivo medido; teléfono sin scroll horizontal. La
   subida de archivos no se pudo probar en el sandbox (sin almacenamiento
   configurado); el error se muestra con su mensaje real.
+
+### R9 El sistema y Operación 100 % v2 — ESTADO: HECHO
+- `calidad-sistema-v2.js`:
+  - **Alcance**: declaración con áreas en chips y ubicaciones, tarjeta de
+    organización, versiones anteriores y exclusiones (completa/parcial) con
+    corregir y retirar; declarar desde la propuesta del DOC-01 (ofrece
+    declarar sus exclusiones), corregir o publicar versión nueva con motivo;
+    al declarar una exclusión, el título se completa desde el catálogo.
+  - **Contexto**: FODA en cuadrantes (internos/externos) con editar y quitar
+    por factor, partes interesadas en tarjetas con impacto e influencia;
+    cargar desde DOC-02/DOC-04 y registrar la revisión.
+  - **Mapa de procesos**: entradas → procesos estratégicos, operativos y de
+    apoyo → salidas; ficha lateral con bloques, procesos de servicio
+    navegables, pasos y riesgos del proceso; agregar/editar (un proceso de
+    servicio exige proceso padre) y registrar revisión.
+  - **Riesgos y oportunidades**: mapa de calor probabilidad × impacto con
+    las mismas bandas que calcula el backend (en oportunidades se lee al
+    revés), valoración inherente y tras controles, magnitud en vivo en el
+    formulario, la revaloración exige los dos valores, asignar la acción a
+    Mi trabajo, quitar y registrar revisión.
+  - **Cobertura ISO**: anillo de "listos (estimado)", KPIs filtrables por
+    estado, cláusulas agrupadas por capítulo (4 a 10) y ficha con la
+    evidencia y el PDF por cláusula.
+- `calidad-operacion-v2.js`:
+  - **Servicios prestados**: filtros (período elegido de una lista, cliente,
+    proceso, estado), registrar, liberar (avisa si autoriza quien prestó),
+    marcar no conforme, abrir NC y anular.
+  - **Proveedores**: KPIs filtrables, búsqueda, ficha lateral con
+    evaluaciones y barras por criterio, evaluar con promedio en vivo
+    ("aprobaría/reprobaría" según el corte), editar y dar de baja.
+- Sandbox (admin): recorridos completos (exclusión declarada y retirada,
+  factor y parte editados, proceso abierto y editado, riesgo editado y acción
+  asignada, PDF de evidencia, proveedor evaluado, prestación registrada →
+  liberada → no conforme → NC → anulada); teléfono sin scroll horizontal.

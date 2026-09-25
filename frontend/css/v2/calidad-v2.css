@@ -283,3 +283,62 @@
   .md2-ind { flex-direction: column; align-items: stretch; }
   .md2-ind__der { align-items: flex-start; }
 }
+
+/* ===== R9: El sistema (calidad-sistema-v2.js). Prefijo .si2-* ===== */
+.si2-declaracion { margin: 0; font: 400 1rem/1.6 var(--fuente); color: var(--sx-texto); white-space: pre-line; }
+.si2-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.si2-chip { padding: 4px 10px; border-radius: 999px; background: var(--sx-primario-suave); color: var(--sx-primario); font: 600 .8125rem/1.3 var(--fuente); }
+.si2-ubic { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font: var(--sx-t-chico); color: var(--sx-texto); }
+.si2-ubic li { display: flex; gap: 6px; align-items: flex-start; }
+.si2-ubic .sigso-ico { flex: none; margin-top: 2px; color: var(--sx-texto-3); }
+/* FODA */
+.si2-foda { display: grid; grid-template-columns: 90px 1fr 1fr; gap: var(--sx-e-3); align-items: stretch; }
+.si2-foda__eje { display: grid; place-items: center; writing-mode: vertical-rl; transform: rotate(180deg); font: var(--sx-t-etiqueta); text-transform: uppercase; letter-spacing: .08em; color: var(--sx-texto-3); background: var(--sx-superficie-2); border-radius: var(--sx-radio); }
+.si2-cuad { border-top: 4px solid var(--sx-tono); }
+.si2-cuad__tit { display: flex; align-items: baseline; gap: 8px; margin: 0 0 8px; font: 700 1rem/1.3 var(--fuente); color: var(--sx-tono); }
+.si2-factores { list-style: none; margin: 0; padding: 0; }
+.si2-factores li { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-top: 1px solid var(--sx-borde-suave); font: var(--sx-t-chico); color: var(--sx-texto); }
+.si2-acc { display: inline-flex; flex: none; gap: 2px; opacity: .55; transition: opacity var(--sx-dur-rapida) var(--sx-curva); }
+.si2-factores li:hover .si2-acc, .si2-acc:focus-within { opacity: 1; }
+.si2-partes { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: var(--sx-e-4); }
+.si2-parte { display: flex; flex-direction: column; gap: 10px; }
+/* Mapa de procesos */
+.si2-mapa { display: grid; grid-template-columns: 170px 1fr 170px; gap: var(--sx-e-3); align-items: stretch; }
+.si2-borde { display: flex; flex-direction: column; gap: 8px; padding: var(--sx-e-4); border-radius: var(--sx-radio-lg); background: var(--sx-info-suave); color: var(--sx-texto); font: var(--sx-t-chico); }
+.si2-borde--salida { background: var(--sx-ok-suave); }
+.si2-borde__tit { display: flex; align-items: center; gap: 6px; font: 700 .8125rem/1.3 var(--fuente); }
+.si2-cols { display: flex; flex-direction: column; gap: var(--sx-e-3); min-width: 0; }
+.si2-col { padding: var(--sx-e-3); border-radius: var(--sx-radio-lg); background: var(--sx-tono-suave); display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.si2-col__tit { grid-column: 1 / -1; display: flex; align-items: baseline; gap: 8px; margin: 0 0 2px; font: 700 .875rem/1.3 var(--fuente); color: var(--sx-tono); }
+.si2-proc { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 12px; border: 1px solid var(--sx-borde-suave); border-radius: var(--sx-radio); background: var(--sx-superficie); text-align: left; cursor: pointer; font: inherit; color: var(--sx-texto); transition: box-shadow var(--sx-dur-rapida) var(--sx-curva), transform var(--sx-dur-rapida) var(--sx-curva); }
+.si2-proc:hover { box-shadow: var(--sx-sombra-1); transform: translateY(-1px); }
+.si2-proc:focus-visible { outline: none; box-shadow: var(--sx-anillo-foco); }
+.si2-proc strong { font: 600 .875rem/1.3 var(--fuente); }
+/* Riesgos: mapa de calor */
+.si2-calor { width: 100%; border-collapse: separate; border-spacing: 4px; font: var(--sx-t-chico); }
+.si2-calor th { padding: 4px 6px; font: 600 .75rem/1.2 var(--fuente); color: var(--sx-texto-2); text-align: center; }
+.si2-calor th small { display: block; font-weight: 500; color: var(--sx-texto-3); }
+.si2-calor tbody th { text-align: right; white-space: nowrap; }
+.si2-calor__eje { font-weight: 500 !important; color: var(--sx-texto-3) !important; }
+.si2-calor td { height: 54px; min-width: 70px; border-radius: 8px; background: color-mix(in srgb, var(--sx-tono) 12%, transparent); text-align: center; vertical-align: middle; color: var(--sx-tono); }
+.si2-calor td.si2-calor--con { background: color-mix(in srgb, var(--sx-tono) 30%, transparent); }
+.si2-calor td b { display: block; font: 800 1.125rem/1 var(--fuente); }
+.si2-calor td span { display: block; font: 600 .625rem/1.2 var(--fuente-mono, ui-monospace, monospace); color: var(--sx-texto-2); }
+.si2-val { display: inline-flex; align-items: center; gap: 6px; }
+.si2-val small { font: 600 .6875rem/1 var(--fuente); text-transform: uppercase; letter-spacing: .04em; color: var(--sx-texto-3); }
+/* Cobertura */
+.si2-cob-cab { display: flex; align-items: center; gap: var(--sx-e-4); padding: var(--sx-e-4) var(--sx-e-5); border-radius: var(--sx-radio-lg); background: var(--sx-superficie); border: 1px solid var(--sx-borde-suave); }
+
+@media (max-width: 900px) {
+  .si2-mapa { grid-template-columns: 1fr; }
+  .si2-foda { grid-template-columns: 1fr; }
+  .si2-foda__eje { writing-mode: horizontal-tb; transform: none; padding: 6px; }
+}
+
+/* ===== R9: Operación (calidad-operacion-v2.js). Prefijo .op2-* ===== */
+.op2-notas { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.op2-notas li { display: grid; grid-template-columns: minmax(120px, 40%) 1fr 32px; align-items: center; gap: 10px; font: var(--sx-t-chico); color: var(--sx-texto); }
+.op2-notas b { text-align: right; font-variant-numeric: tabular-nums; }
+.op2-promedio { margin: 8px 0; padding: 10px 12px; border-radius: var(--sx-radio); background: var(--sx-superficie-2); font: 700 1rem/1.3 var(--fuente); color: var(--sx-texto-2); }
+.op2-promedio--bien { background: var(--sx-ok-suave); color: var(--sx-ok); }
+.op2-promedio--mal { background: var(--sx-critico-suave); color: var(--sx-critico); }
