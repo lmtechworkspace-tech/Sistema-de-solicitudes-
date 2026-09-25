@@ -1105,23 +1105,12 @@
   <script src="js/ui-v2.js"></script>
   <script src="js/reportes-v2.js"></script>
   <script src="js/formulario.js"></script>
-  <script src="js/estado.js"></script>
-  <script src="js/dashboard.js"></script>
-  <script src="js/detalle.js"></script>
   <!-- v6.4: panel "Mi perfil" + gestion de la foto. Antes de plataforma.js,
        que lo invoca desde el menu de usuario. -->
   <script src="js/perfil.js"></script>
-  <!-- v6.5: modulo Novedades. Antes de plataforma.js, que lo invoca desde
-       mostrarModulo_/renderHome_. -->
-  <!-- v7.0 (Fase 2): modulo "Mi trabajo". Antes de plataforma.js, que lo
-       invoca desde mostrarModulo_. -->
-  <script src="js/actividades.js"></script>
-  <!-- v9.0: modulo "Proyectos". Antes de plataforma.js, que lo invoca desde
-       mostrarModulo_. -->
-  <script src="js/proyectos.js"></script>
-  <!-- Proyectos v2 (beta, solo ADM): convive con proyectos.js en el mismo
-       contenedor; plataforma.js elige cuál pinta. ui-v2.js es la capa de
-       componentes v2 que después usará el resto de SIGSO. -->
+  <!-- Proyectos (v2): el núcleo registra el árbol del sidebar al cargar. Los
+       clásicos (proyectos.js, dashboard.js, detalle.js, actividades.js,
+       estado.js) ya no se cargan aquí: quedan solo para app.html. -->
   <script src="js/proyectos-v2/nucleo.js"></script>
   <script src="js/proyectos-v2/portafolio.js"></script>
   <script src="js/proyectos-v2/resumen.js"></script>
@@ -1134,6 +1123,7 @@
   <script src="js/proyectos-v2/proyecto-acciones.js"></script>
   <script src="js/proyectos-v2/mitrabajo.js"></script>
   <script src="js/proyectos-v2/calendario.js"></script>
+  <script src="js/proyectos-v2/reportes.js"></script>
   <!-- v15.1: calidad.js (102 KB, el archivo mas grande del frontend) NO se
        carga aqui. Lo pide carga-diferida.js en cuanto el navegador queda
        ocioso, con lo que sale del camino critico del arranque sin que nadie

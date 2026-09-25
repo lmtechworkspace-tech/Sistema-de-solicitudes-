@@ -559,11 +559,9 @@
     else if (PYv2.vistas[estado.vista]) recargarVista();
     else cargarPortafolio(true);
   }
-  // Ítems del árbol del sidebar. Portafolio, Mi trabajo y Calendario son v2;
-  // Reportes usa el motor compartido de SIGSO (SigsoReportes, el mismo de los
-  // demás módulos), así que se delega a v1 -- el shell sigue en "v2" y al
-  // volver a otro ítem se retoma v2.
-  var ITEM_VISTA = { 'mi-trabajo': 'mitrabajo', calendario: 'calendario' };
+  // Ítems del árbol del sidebar: los cuatro son vistas v2 (Reportes usa el motor
+  // compartido SigsoReportes, igual que los demás módulos).
+  var ITEM_VISTA = { 'mi-trabajo': 'mitrabajo', calendario: 'calendario', reportes: 'reportes' };
   function irAItem(id) {
     engancharUnaVez();
     if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(id || 'portafolio');
@@ -575,10 +573,10 @@
       SigsoShell.irAModulo('mi_trabajo');
       return;
     }
-    if (ITEM_VISTA[id] && PYv2.vistas[ITEM_VISTA[id]]) { abrirVista(ITEM_VISTA[id]); return; }
-    desmontar();
-    estado.vista = 'externa';
-    if (window.SigsoProyectos && SigsoProyectos.irAItem) SigsoProyectos.irAItem(id);
+    var vista = ITEM_VISTA[id] && PYv2.vistas[ITEM_VISTA[id]];
+    if (!vista) { cargarPortafolio(); return; }
+    if (vista.reiniciar) vista.reiniciar();
+    abrirVista(ITEM_VISTA[id]);
   }
 
   window.PYv2 = window.PYv2 || {};
@@ -625,6 +623,22 @@
     irAItem: irAItem,
     activo: activo,
     usarVersion: usarVersion,
-    desmontar: desmontar
+    desmontar: desmontar,
+    // Bandeja → "Convertir en proyecto" ({nombre, descripcion, solicitud_id}).
+    // portafolio.js carga después que este archivo: se resuelve al llamar.
+    abrirFormularioDesdeSolicitud: function (prellenado) {
+      if (PY.abrirNuevoProyecto) PY.abrirNuevoProyecto(prellenado);
+    }
   };
+
+  // Árbol del módulo en el sidebar. Se registra al cargar (no al abrir el
+  // módulo): si no, el sidebar no dibuja el chevron hasta la primera visita.
+  var ARQUITECTURA = [
+    { id: 'mi-trabajo', nombre: 'Mi trabajo', icono: 'persona', plano: true, items: [{ id: 'mi-trabajo', nombre: 'Mi trabajo en proyectos' }] },
+    { id: 'portafolio', nombre: 'Portafolio', icono: 'caja', plano: true, items: [{ id: 'portafolio', nombre: 'Portafolio' }] },
+    { id: 'calendario', nombre: 'Calendario', icono: 'calendario', plano: true, items: [{ id: 'calendario', nombre: 'Calendario' }] },
+    { id: 'reportes', nombre: 'Reportes', icono: 'grafico', plano: true, descripcion: 'Estado y avance del portafolio',
+      items: [{ id: 'reportes', nombre: 'Centro de reportes' }] }
+  ];
+  if (window.SigsoNav) SigsoNav.registrar('proyectos', { nombre: 'Proyectos', submodulos: ARQUITECTURA });
 })();

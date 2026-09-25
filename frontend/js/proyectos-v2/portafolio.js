@@ -242,11 +242,17 @@
   });
 
   // --- Nuevo proyecto (drawer) ----------------------------------------------------
-  function abrirNuevoProyecto() {
+  // `prellenado` ({nombre, descripcion, solicitud_id}) llega desde la Bandeja
+  // ("Convertir en proyecto"): el backend vincula la solicitud al proyecto.
+  function abrirNuevoProyecto(prellenado) {
+    prellenado = prellenado || {};
+    var desdeSolicitud = !!prellenado.solicitud_id;
     var hoy = PY.hoyClave();
     var d = U.drawer({
-      titulo: 'Nuevo proyecto',
-      subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">Después podrás sumar equipo, hitos y tareas.</span>',
+      titulo: desdeSolicitud ? 'Convertir en proyecto' : 'Nuevo proyecto',
+      subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">' +
+        (desdeSolicitud ? 'Queda vinculado a la solicitud ' + U.esc(prellenado.solicitud_id) + '.'
+          : 'Después podrás sumar equipo, hitos y tareas.') + '</span>',
       cuerpo:
         '<form class="sx2-form js-py2-form-nuevo" novalidate>' +
           campo('Nombre', '<input class="sx2-input" name="nombre" required maxlength="120" placeholder="Ej.: Estandarización del área comercial">') +
@@ -277,6 +283,10 @@
     });
 
     var form = d.el.querySelector('.js-py2-form-nuevo');
+    // Por DOM y no por string: el título viene de una solicitud (formulario
+    // público) y U.esc no escapa comillas dentro de un atributo.
+    if (prellenado.nombre) form.nombre.value = String(prellenado.nombre).slice(0, 120);
+    if (prellenado.descripcion) form.descripcion.value = String(prellenado.descripcion).slice(0, 1000);
     var btn = d.el.querySelector('.js-py2-crear');
     var err = d.el.querySelector('.js-py2-error');
     function enviar(ev) {
@@ -287,6 +297,7 @@
       if (!datos.nombre || !datos.fecha_inicio || !datos.fecha_objetivo) {
         err.textContent = 'Completa nombre, inicio y fecha objetivo.'; err.hidden = false; return;
       }
+      if (desdeSolicitud) datos.solicitud_id = prellenado.solicitud_id;
       btn.disabled = true;
       PY.api('crearProyecto', datos).then(function (r) {
         btn.disabled = false;
@@ -294,6 +305,13 @@
         d.cerrar();
         PY.aviso('Proyecto creado.', 'exito');
         var id = r.data && (r.data.proyecto_id || (r.data.proyecto && r.data.proyecto.proyecto_id));
+        if (desdeSolicitud) {
+          // La solicitud ahora tiene proyecto_id: la Bandeja/Inicio se refrescan.
+          document.dispatchEvent(new CustomEvent('sigso:solicitudes-cambio'));
+          // Desde otro módulo se lleva a Proyectos (si la cuenta lo tiene).
+          if (window.SigsoShell && SigsoShell.tieneModulo && !SigsoShell.tieneModulo('proyectos')) return;
+          if (window.SigsoShell && SigsoShell.irAModulo) SigsoShell.irAModulo('proyectos');
+        }
         if (id) PY.abrirProyecto(id); else PY.cargarPortafolio();
       });
     }
@@ -306,6 +324,7 @@
       (ayuda ? '<span class="sx2-campo__ayuda">' + U.esc(ayuda) + '</span>' : '') + '</label>';
   }
 
+  PY.abrirNuevoProyecto = abrirNuevoProyecto;
   PY.cabeceraPortafolio = cabeceraPortafolio;
   PY.pintarPortafolio = pintarPortafolio;
   PY.alMontarPortafolio = alMontarPortafolio;

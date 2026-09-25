@@ -168,7 +168,7 @@
       '<div class="sx2-cabecera__acciones">' + (esAdm ? quien : '') +
         U.segmento([{ id: 'cola', texto: 'Cola', icono: 'lista' }, { id: 'analisis', texto: 'Análisis', icono: 'grafico' }], f.vista, 'js-bj2-vista') +
         U.boton({ soloIcono: true, icono: 'descargar', titulo: 'Exportar CSV', clase: 'js-bj2-csv' }) +
-        (esAdm && f.verBandeja && window.SigsoDashboard && SigsoDashboard.imprimirPauta ? U.boton({ texto: 'Pauta (PDF)', icono: 'documento', clase: 'js-bj2-pauta' }) : '') +
+        (esAdm && f.verBandeja ? U.boton({ texto: 'Pauta (PDF)', icono: 'documento', clase: 'js-bj2-pauta' }) : '') +
         U.boton({ soloIcono: true, icono: 'tendencia', titulo: 'Actualizar', clase: 'js-bj2-reintentar' }) +
       '</div>' +
     '</header>';
@@ -396,6 +396,49 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
   }
 
+  // --- Pauta de trabajo (una persona, para imprimir o guardar en PDF) -----------
+  // El documento no está en pantalla: se arma en un contenedor hijo directo de
+  // <body> y, solo mientras se imprime, body.bj2-modo-pauta oculta todo lo demás.
+  function pautaHtml(p) {
+    var items = p.items || [];
+    var fila = function (it) {
+      var ctx = [];
+      if (it.url_modulo) ctx.push('URL: ' + it.url_modulo);
+      if (it.usuario_prueba) ctx.push('Usuario de prueba: ' + it.usuario_prueba);
+      if (it.ref_credencial) ctx.push('Credencial: ' + it.ref_credencial);
+      return '<article class="bj2-pauta__item">' +
+        '<h3>' + U.esc(it.solicitud_id) + '-' + U.esc(it.numero_item) + ' — ' + U.esc(it.titulo) + '</h3>' +
+        '<p class="bj2-pauta__meta">' + U.badge(it.prioridad || '—', tonoPrioridad(it.prioridad)) + ' ' +
+          U.esc(it.fecha_comprometida ? 'Comprometida: ' + String(it.fecha_comprometida).replace('T', ' ').slice(0, 16) : 'Sin fecha comprometida') + '</p>' +
+        (it.descripcion ? '<p>' + U.esc(it.descripcion) + '</p>' : '') +
+        (it.resultado_esperado ? '<p><strong>Resultado esperado:</strong> ' + U.esc(it.resultado_esperado) + '</p>' : '') +
+        (ctx.length ? '<p class="bj2-pauta__ctx">' + U.esc(ctx.join(' · ')) + '</p>' : '') +
+      '</article>';
+    };
+    return '<header class="bj2-pauta__cab"><span class="bj2-pauta__marca" aria-hidden="true">S</span><div>' +
+        '<h1>Pauta de trabajo — ' + U.esc(PY.persona(p.desarrollador).nombre || p.desarrollador) + '</h1>' +
+        '<p>' + items.length + ' pendiente(s) · Generada el ' + U.esc(new Date().toLocaleString('es-CL')) + '</p></div></header>' +
+      (items.map(fila).join('') || '<p>Sin pendientes.</p>') +
+      '<p class="bj2-pauta__pie">Para cerrar cada una: responde «LISTO &lt;N° de solicitud&gt;» por WhatsApp, o márcala Terminada en el sistema si ya tienes acceso.</p>';
+  }
+  function imprimirPauta(desarrollador, boton) {
+    boton.disabled = true;
+    api('getPautaTrabajo', { desarrollador: desarrollador }).then(function (r) {
+      boton.disabled = false;
+      if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo generar la pauta.', 'error'); return; }
+      var cont = document.getElementById('bj2-pauta');
+      if (!cont) { cont = document.createElement('div'); cont.id = 'bj2-pauta'; document.body.appendChild(cont); }
+      cont.innerHTML = pautaHtml(r.data || {});
+      document.body.classList.add('bj2-modo-pauta');
+      window.addEventListener('afterprint', function fin() {
+        document.body.classList.remove('bj2-modo-pauta');
+        cont.innerHTML = '';
+        window.removeEventListener('afterprint', fin);
+      });
+      window.print();
+    });
+  }
+
   // Ejecuta una acción ítem por ítem (el backend valida cada uno), muestra el
   // avance y al final resume qué no se pudo y por qué.
   function ejecutarLote(lista, accion, titulo) {
@@ -532,7 +575,7 @@
       d.cuerpo(tabsHtml + cuerpo);
       var pie = d.el.querySelector('.sx2-drawer__pie');
       pie.innerHTML = U.boton({ texto: 'Orden de trabajo', icono: 'documento', clase: 'js-bj2-ot' }) +
-        (window.SigsoProyectos && SigsoProyectos.abrirFormularioDesdeSolicitud && !soloLectura() ? U.boton({ texto: 'Convertir en proyecto', icono: 'capas', clase: 'js-bj2-proyecto' }) : '') +
+        (window.SigsoProyectosV2 && !s.proyecto_id && !soloLectura() ? U.boton({ texto: 'Convertir en proyecto', icono: 'capas', clase: 'js-bj2-proyecto' }) : '') +
         '<span style="flex:1"></span>' + U.boton({ texto: 'Cerrar', clase: 'js-sx2-drawer-cerrar' });
     }
 
@@ -714,7 +757,7 @@
       if (t.closest('.js-bj2-proyecto')) {
         var s = detalle.solicitud, p = (detalle.subsolicitudes || [])[0];
         d.cerrar(true);
-        SigsoProyectos.abrirFormularioDesdeSolicitud({
+        SigsoProyectosV2.abrirFormularioDesdeSolicitud({
           nombre: (p && p.titulo) || ('Proyecto desde la solicitud ' + s.solicitud_id),
           descripcion: (s.solicitante_nombre ? 'Solicitante original: ' + s.solicitante_nombre + (s.solicitante_email ? ' <' + s.solicitante_email + '>' : '') + '. ' : '') + ((p && p.descripcion) || ''),
           solicitud_id: s.solicitud_id
@@ -759,7 +802,7 @@
     if (t.closest('.js-bj2-rezago')) { f.kpi = 'por_revisar'; f.orden = 'antiguedad'; f.texto = ''; mostrar_ = POR_PAGINA; pintar(true); var l = raiz.querySelector('.bj2-lista'); if (l) l.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
     if (t.closest('.js-bj2-mas')) { mostrar_ += POR_PAGINA; pintar(true); return; }
     if (t.closest('.js-bj2-csv')) { exportarCsv(); return; }
-    if ((b = t.closest('.js-bj2-pauta'))) { SigsoDashboard.imprimirPauta(f.verBandeja, b); return; }
+    if ((b = t.closest('.js-bj2-pauta'))) { imprimirPauta(f.verBandeja, b); return; }
     if (t.closest('.js-bj2-limpiar')) { sel_ = {}; actualizarSeleccion(); return; }
     if ((b = t.closest('.js-bj2-lote'))) { lote(b.getAttribute('data-accion')); return; }
     if ((b = t.closest('.js-bj2-abrir-sol'))) { abrirDetalle(b.getAttribute('data-sol')); return; }

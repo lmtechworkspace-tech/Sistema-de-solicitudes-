@@ -1383,3 +1383,32 @@ y deja de cargarse en la última tanda.
   22 × 44, documento externo cargado, editado y etiquetado con cláusulas;
   el operativo ve Inicio · Documentos · Mi ficha · El sistema y su ficha se
   abre sola; teléfono sin scroll horizontal.
+
+### R11 Restos de la Bandeja y de Proyectos — ESTADO: HECHO
+Inventario previo (qué globales define cada script de la plataforma y quién
+los usa): quedaban cinco clásicos cargados. `detalle.js`, `estado.js` y
+`actividades.js` ya no los usaba nadie; `dashboard.js` solo por la Pauta y
+`proyectos.js` por tres cosas, una de ellas oculta.
+- **Proyectos · Reportes** (`proyectos-v2/reportes.js`): los cinco reportes
+  del portafolio (salud, avance, plazos, carga por líder, cumplimiento de
+  tareas) como vista v2 sobre el motor compartido; "Carga por líder" muestra
+  el nombre de la persona en vez del correo. Entrar desde el árbol abre el
+  catálogo; un refresco de fondo conserva el reporte que se está leyendo.
+- **Árbol del sidebar de Proyectos**: lo registraba `proyectos.js` al
+  cargar (efecto oculto: sin él, Proyectos quedaba sin Mi trabajo /
+  Portafolio / Calendario / Reportes). Ahora lo registra `nucleo.js`.
+- **Convertir en proyecto** (Bandeja): usa el formulario v2 de nuevo
+  proyecto con nombre y descripción precargados de la solicitud; al crear,
+  lleva al proyecto y avisa a Bandeja/Inicio. El botón ya no aparece si la
+  solicitud ya se convirtió (el backend lo rechazaba igual).
+- **Pauta de trabajo (PDF)** (Bandeja): documento v2 de impresión en
+  `#bj2-pauta`; solo mientras se imprime `body.bj2-modo-pauta` oculta el
+  resto.
+- **La plataforma ya no carga** `dashboard.js`, `detalle.js`, `estado.js`,
+  `actividades.js` ni `proyectos.js` (quedan solo para app.html).
+- Sandbox (admin): los 5 reportes con datos reales, pauta de 3 personas,
+  conversión de una solicitud de punta a punta (solicitud vinculada, botón
+  oculto después), los 12 módulos + Novedades sin errores de consola,
+  teléfono sin scroll horizontal. Con Apps Script bloqueado en el sandbox,
+  la única llamada que todavía va allá es `ping` (comprobación de versión
+  del marco, "falta pegar el backend") → se retira en R12.

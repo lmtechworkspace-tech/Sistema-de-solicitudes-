@@ -122,3 +122,26 @@ body:has(.bj2-lote) #py2-interruptor { display: none; }
   .bj2-lote { bottom: 12px; }
 }
 
+
+/* Pauta de trabajo: documento solo de impresión (bandeja-v2.js, imprimirPauta).
+   Vive en #bj2-pauta, hijo directo de <body>; mientras se imprime,
+   body.bj2-modo-pauta deja visible solo ese documento. */
+#bj2-pauta { display: none; }
+@media print {
+  body.bj2-modo-pauta > :not(#bj2-pauta) { display: none !important; }
+  body.bj2-modo-pauta { background: #fff !important; }
+  body.bj2-modo-pauta #bj2-pauta { display: block !important; color: #111; font-size: 10.5pt; }
+  .bj2-pauta__cab { display: flex; align-items: center; gap: 12px; padding-bottom: 8pt; margin-bottom: 10pt; border-bottom: 1.5pt solid #14213d; }
+  .bj2-pauta__cab h1 { margin: 0; font-size: 15pt; }
+  .bj2-pauta__cab p { margin: 2pt 0 0; color: #555; font-size: 9pt; }
+  .bj2-pauta__marca { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 7px;
+    background: #14213d; color: #fff; font-weight: 700; font-size: 17px;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .bj2-pauta__item { padding: 8pt 0; border-bottom: 0.5pt solid #bbb; page-break-inside: avoid; }
+  .bj2-pauta__item h3 { margin: 0 0 3pt; font-size: 11.5pt; }
+  .bj2-pauta__item p { margin: 3pt 0; }
+  .bj2-pauta__meta { color: #444; font-size: 9pt; }
+  .bj2-pauta__meta .sx2-badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .bj2-pauta__ctx { color: #555; font-size: 9pt; }
+  .bj2-pauta__pie { margin-top: 12pt; color: #555; font-size: 9pt; }
+}
