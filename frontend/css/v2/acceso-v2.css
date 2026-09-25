@@ -1,21 +1,27 @@
 /* Acceso (v2): ingresar, recuperar, restablecer, cambio de clave obligatorio
    y "restaurando sesión" (plataforma.html #acceso / #vista-cargando).
    Solo tokens v2 (y el navy de marca de tokens.css, que ya trae su versión
-   oscura): la pantalla funciona igual en modo claro y oscuro. */
+   oscura): funciona igual en modo claro y oscuro. Todo el movimiento es CSS
+   (cero JS, mismo criterio que la landing) y se apaga con "reducir
+   movimiento". Lo llamativo vive en UN lugar, el panel de marca; el
+   formulario es sobrio a propósito. */
+
+@property --ac2-p { syntax: '<number>'; inherits: true; initial-value: 0; }
 
 .sx2-acceso {
   min-height: 100vh;
   min-height: 100dvh;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
   background: var(--sx-fondo);
   font-family: var(--fuente);
 }
 
-/* --- Panel de marca ------------------------------------------------------- */
+/* --- Panel de marca: aurora + trama de puntos + escena ------------------------ */
 .sx2-acceso__marca {
   position: relative;
   overflow: hidden;
+  isolation: isolate;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -23,16 +29,40 @@
   color: #fff;
   background: linear-gradient(160deg, var(--marca), var(--marca-2));
 }
+/* Trama de puntos que se desvanece hacia los bordes. */
 .sx2-acceso__marca::before {
   content: '';
   position: absolute;
   inset: -15%;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.14) 1.5px, transparent 1.5px);
-  background-size: 28px 28px;
+  z-index: -1;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.16) 1.4px, transparent 1.6px);
+  background-size: 26px 26px;
   transform: rotate(-9deg);
+  -webkit-mask-image: radial-gradient(ellipse 60% 55% at 50% 50%, #000 30%, transparent 78%);
+  mask-image: radial-gradient(ellipse 60% 55% at 50% 50%, #000 30%, transparent 78%);
   pointer-events: none;
 }
-.sx2-acceso__marca-txt { position: relative; max-width: 22rem; display: flex; flex-direction: column; gap: var(--sx-e-4); }
+/* Aurora en los azules de la marca, a la deriva muy lenta. */
+.sx2-acceso__marca::after {
+  content: '';
+  position: absolute;
+  inset: -30%;
+  z-index: -2;
+  background:
+    radial-gradient(36% 30% at 26% 28%, rgba(59, 130, 246, 0.42), transparent 70%),
+    radial-gradient(30% 26% at 76% 72%, rgba(56, 189, 248, 0.24), transparent 70%),
+    radial-gradient(26% 22% at 70% 20%, rgba(37, 99, 235, 0.22), transparent 70%);
+  filter: blur(8px);
+  animation: ac2-aurora 26s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes ac2-aurora {
+  0%   { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  50%  { transform: translate3d(4%, -3%, 0) rotate(8deg) scale(1.06); }
+  100% { transform: translate3d(-3%, 4%, 0) rotate(-6deg) scale(1); }
+}
+
+.sx2-acceso__marca-txt { position: relative; width: 100%; max-width: 27rem; display: flex; flex-direction: column; gap: var(--sx-e-4); }
 .sx2-acceso__logo {
   display: inline-grid;
   place-items: center;
@@ -43,49 +73,196 @@
   background: #fff;
   color: var(--marca);
   font: 700 1.375rem/1 var(--fuente);
+  box-shadow: 0 8px 24px rgba(8, 15, 35, 0.35), 0 0 0 6px rgba(255, 255, 255, 0.06);
 }
-.sx2-acceso__marca h1 { margin: 0; font: 700 2rem/1.15 var(--fuente); letter-spacing: -0.02em; color: #fff; }
-.sx2-acceso__bajada { margin: 4px 0 0; font: var(--sx-t-cuerpo); color: rgba(255, 255, 255, 0.84); }
-.sx2-acceso__puntos { list-style: none; margin: var(--sx-e-2) 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.sx2-acceso__puntos li { position: relative; padding-left: 20px; font: var(--sx-t-chico); color: rgba(255, 255, 255, 0.8); }
-.sx2-acceso__puntos li::before {
+.sx2-acceso__marca h1 {
+  margin: 0;
+  font: 700 2.25rem/1.1 var(--fuente);
+  letter-spacing: -0.03em;
+  background: linear-gradient(92deg, #fff 40%, #bcd4ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.sx2-acceso__bajada { margin: 6px 0 0; font: var(--sx-t-cuerpo); color: rgba(255, 255, 255, 0.82); }
+.sx2-acceso__lema {
+  margin: 0;
+  padding-top: var(--sx-e-4);
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  font: 500 0.875rem/1.4 var(--fuente);
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* --- La escena: tarjetas de vidrio que flotan ------------------------------------- */
+.ac2-escena {
+  position: relative;
+  height: 290px;
+  margin: var(--sx-e-3) 0 var(--sx-e-2);
+  perspective: 1100px;
+}
+.ac2-tarjeta, .ac2-traza {
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.05));
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: 0 18px 40px rgba(4, 10, 28, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  border-radius: 16px;
+  color: #fff;
+}
+.ac2-tarjeta { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.ac2-tit { font: 600 0.6875rem/1 var(--fuente); letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.66); }
+
+/* Entrada (una vez) + flotación (siempre), cada tarjeta a su ritmo. */
+.ac2-lista  { left: 0; top: 40px; width: 240px; animation: ac2-entra .9s .15s both cubic-bezier(.2, .8, .2, 1), ac2-flota 7s 1.1s ease-in-out infinite; }
+.ac2-barras { right: 0; top: 0; width: 180px; animation: ac2-entra .9s .3s both cubic-bezier(.2, .8, .2, 1), ac2-flota 8.5s 1.3s ease-in-out infinite reverse; }
+.ac2-kpi    { right: 14px; bottom: 0; width: 214px; flex-direction: row; align-items: center; gap: 12px; animation: ac2-entra .9s .45s both cubic-bezier(.2, .8, .2, 1), ac2-flota 6.5s 1.5s ease-in-out infinite; }
+@keyframes ac2-entra { from { opacity: 0; transform: translateY(26px) rotateX(18deg) scale(.96); } to { opacity: 1; transform: none; } }
+@keyframes ac2-flota { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-9px); } }
+
+/* Control de avance: filas con estado. */
+.ac2-fila { display: flex; align-items: center; gap: 10px; opacity: 0; animation: ac2-aparece .5s both; }
+.ac2-fila:nth-of-type(2) { animation-delay: .75s; }
+.ac2-fila:nth-of-type(3) { animation-delay: .9s; }
+.ac2-fila:nth-of-type(4) { animation-delay: 1.05s; }
+@keyframes ac2-aparece { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+.ac2-fila em { flex: 1; height: 7px; border-radius: 99px; background: linear-gradient(90deg, rgba(255, 255, 255, 0.34) var(--w), rgba(255, 255, 255, 0.1) var(--w)); }
+.ac2-punto { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ac2-c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ac2-c) 28%, transparent); }
+.ac2-chip { flex: none; padding: 3px 8px; border-radius: 99px; font: 600 0.625rem/1.2 var(--fuente); color: var(--ac2-c); background: color-mix(in srgb, var(--ac2-c) 20%, transparent); }
+.ac2-ok     { --ac2-c: #4ade80; }
+.ac2-info   { --ac2-c: #7cb4ff; }
+.ac2-alerta { --ac2-c: #fbbf24; }
+
+/* Reportes: barras que crecen. */
+.ac2-graf { height: 74px; display: flex; align-items: flex-end; gap: 7px; }
+.ac2-graf i {
+  flex: 1;
+  height: var(--h);
+  border-radius: 5px 5px 2px 2px;
+  background: linear-gradient(180deg, #8fc1ff, rgba(96, 165, 250, 0.35));
+  transform-origin: bottom;
+  animation: ac2-crece .8s both cubic-bezier(.2, .8, .2, 1);
+}
+.ac2-graf i:last-child { background: linear-gradient(180deg, #ffffff, #8fc1ff); box-shadow: 0 0 16px rgba(143, 193, 255, 0.55); }
+.ac2-graf i:nth-child(1) { animation-delay: .55s; }
+.ac2-graf i:nth-child(2) { animation-delay: .62s; }
+.ac2-graf i:nth-child(3) { animation-delay: .69s; }
+.ac2-graf i:nth-child(4) { animation-delay: .76s; }
+.ac2-graf i:nth-child(5) { animation-delay: .83s; }
+.ac2-graf i:nth-child(6) { animation-delay: .90s; }
+.ac2-graf i:nth-child(7) { animation-delay: .97s; }
+@keyframes ac2-crece { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+/* KPI: anillo que se llena hasta 94 (propiedad animable --ac2-p). */
+.ac2-anillo {
+  --ac2-p: 94;
+  flex: none;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(#8fc1ff calc(var(--ac2-p) * 1%), rgba(255, 255, 255, 0.14) 0);
+  -webkit-mask: radial-gradient(circle, transparent 57%, #000 58%);
+  mask: radial-gradient(circle, transparent 57%, #000 58%);
+  animation: ac2-llena 1.6s .8s both cubic-bezier(.2, .8, .2, 1);
+}
+@keyframes ac2-llena { from { --ac2-p: 0; } to { --ac2-p: 94; } }
+/* La cifra va en el texto: el anillo está enmascarado y la ocultaría. */
+.ac2-kpi__txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ac2-kpi__txt strong { font: 700 1.375rem/1 var(--fuente); letter-spacing: -0.02em; }
+.ac2-kpi__txt em { font: 600 0.75rem/1.2 var(--fuente); font-style: normal; color: rgba(255, 255, 255, 0.88); }
+.ac2-kpi__txt small { font: 0.6875rem/1.3 var(--fuente); color: rgba(255, 255, 255, 0.6); }
+
+/* Trazabilidad: un aviso que llega y queda. */
+.ac2-traza {
+  left: 10px;
+  bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px 7px 9px;
+  border-radius: 99px;
+  font: 500 0.6875rem/1 var(--fuente);
+  color: rgba(255, 255, 255, 0.88);
+  animation: ac2-llega .7s 1.4s both cubic-bezier(.2, .8, .2, 1), ac2-flota 9s 2.1s ease-in-out infinite;
+}
+.ac2-traza i {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #4ade80 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.5 8.3l2.2 2.2 4.8-5' fill='none' stroke='%230b2a18' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat;
+  box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.18);
+}
+@keyframes ac2-llega { from { opacity: 0; transform: translateY(-10px) scale(.9); } to { opacity: 1; transform: none; } }
+
+/* --- Formulario (sobrio) --------------------------------------------------------- */
+.sx2-acceso__panel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sx-e-7) var(--sx-e-5);
+  background:
+    radial-gradient(38% 34% at 88% 8%, var(--sx-primario-suave), transparent 72%),
+    radial-gradient(30% 28% at 6% 96%, var(--sx-primario-suave), transparent 72%);
+}
+.sx2-acceso__caja { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: var(--sx-e-5); }
+.sx2-acceso__cab h2 { margin: 0 0 6px; font: var(--sx-t-h1); letter-spacing: -0.02em; color: var(--sx-texto); }
+.sx2-acceso__cab p { margin: 0; font: var(--sx-t-cuerpo); color: var(--sx-texto-2); }
+
+/* Entrada escalonada cada vez que se muestra una vista (hidden -> visible). */
+.sx2-acceso__caja .sx2-form > *,
+.sx2-acceso__caja > .sx2-acceso__pie { animation: ac2-sube .5s both cubic-bezier(.2, .8, .2, 1); }
+.sx2-acceso__caja .sx2-form > :nth-child(2) { animation-delay: .05s; }
+.sx2-acceso__caja .sx2-form > :nth-child(3) { animation-delay: .10s; }
+.sx2-acceso__caja .sx2-form > :nth-child(4) { animation-delay: .15s; }
+.sx2-acceso__caja .sx2-form > :nth-child(5) { animation-delay: .20s; }
+.sx2-acceso__caja .sx2-form > :nth-child(6) { animation-delay: .25s; }
+.sx2-acceso__caja .sx2-form > :nth-child(n+7),
+.sx2-acceso__caja > .sx2-acceso__pie { animation-delay: .30s; }
+@keyframes ac2-sube { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+.sx2-acceso .sx2-input { transition: border-color .2s, box-shadow .2s, background-color .2s; }
+
+.sx2-acceso__enviar { position: relative; overflow: hidden; width: 100%; height: 46px; justify-content: center; font-size: .9375rem; }
+/* Brillo que recorre el botón al pasar el mouse. */
+.sx2-acceso__enviar::after {
   content: '';
   position: absolute;
-  left: 0;
-  top: 0.5em;
-  width: 7px;
-  height: 7px;
-  border-radius: var(--sx-radio-full);
-  background: var(--sx-primario);
+  inset: 0;
+  background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.28) 50%, transparent 65%);
+  transform: translateX(-120%);
+  pointer-events: none;
 }
-.sx2-acceso__lema {
-  margin: var(--sx-e-2) 0 0;
-  padding-top: var(--sx-e-4);
-  border-top: 1px solid rgba(255, 255, 255, 0.2);
-  font: var(--sx-t-chico);
-  letter-spacing: 0.01em;
-  color: rgba(255, 255, 255, 0.72);
-}
+.sx2-acceso__enviar:hover:not(:disabled)::after { transform: translateX(120%); transition: transform .8s cubic-bezier(.2, .8, .2, 1); }
+.sx2-acceso__enviar:disabled { cursor: progress; }
 
-/* --- Formulario -------------------------------------------------------------- */
-.sx2-acceso__panel { display: flex; align-items: center; justify-content: center; padding: var(--sx-e-7) var(--sx-e-5); }
-.sx2-acceso__caja { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: var(--sx-e-5); }
-.sx2-acceso__cab h2 { margin: 0 0 6px; font: var(--sx-t-h1); color: var(--sx-texto); }
-.sx2-acceso__cab p { margin: 0; font: var(--sx-t-cuerpo); color: var(--sx-texto-2); }
-.sx2-acceso__enviar { width: 100%; height: 44px; justify-content: center; }
 .sx2-acceso__alt { margin: 0; text-align: center; font: var(--sx-t-chico); }
 .sx2-acceso__pie { margin: 0; padding-top: var(--sx-e-4); border-top: 1px solid var(--sx-borde-suave); font: var(--sx-t-chico); line-height: 1.55; color: var(--sx-texto-3); }
-.sx2-acceso a { color: var(--sx-primario); font-weight: 500; text-decoration: none; }
-.sx2-acceso a:hover { text-decoration: underline; }
+.sx2-acceso a { color: var(--sx-primario); font-weight: 500; text-decoration: none; background-image: linear-gradient(currentColor, currentColor); background-size: 0 1px; background-position: 0 100%; background-repeat: no-repeat; transition: background-size .25s; }
+.sx2-acceso a:hover { background-size: 100% 1px; }
 .sx2-acceso a:focus-visible { outline: none; box-shadow: var(--sx-anillo-foco); border-radius: 4px; }
 
-/* Mensaje del formulario (error / confirmación): el tono viene de .sx2-tono-*. */
+/* Mensaje del formulario (error / confirmación): el tono viene de .sx2-tono-*.
+   Un error se anuncia con una sacudida corta. */
 .sx2-acceso__msg {
   padding: 10px 12px;
   border-radius: var(--sx-radio);
   font: var(--sx-t-chico);
   color: var(--sx-tono, var(--sx-texto));
   background: var(--sx-tono-suave, var(--sx-superficie-2));
+  border: 1px solid color-mix(in srgb, var(--sx-tono, transparent) 22%, transparent);
+  animation: ac2-sube .3s both;
+}
+.sx2-acceso__msg.sx2-tono-critico { animation: ac2-sacude .42s both; }
+@keyframes ac2-sacude {
+  0%, 100% { transform: none; }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
 }
 
 /* --- Ver contraseña (plataforma.js wireVerContrasena_) ----------------------- */
@@ -123,10 +300,12 @@
   font: var(--sx-t-chico);
 }
 .sx2-acceso-cargando p { margin: 0; }
-.sx2-acceso-cargando .sx2-acceso__logo { background: var(--marca); color: #fff; animation: sx2-acceso-late 1.4s ease-in-out infinite; }
+.sx2-acceso-cargando .sx2-acceso__logo { background: var(--marca); color: #fff; box-shadow: none; animation: sx2-acceso-late 1.4s ease-in-out infinite; }
 @keyframes sx2-acceso-late { 50% { transform: scale(0.9); opacity: 0.7; } }
-@media (prefers-reduced-motion: reduce) {
-  .sx2-acceso-cargando .sx2-acceso__logo { animation: none; }
+
+/* --- Pantallas bajas: sin escena, para no empujar nada fuera de la vista -------- */
+@media (min-width: 861px) and (max-height: 700px) {
+  .ac2-escena { display: none; }
 }
 
 /* --- Celular: la marca se compacta para que el formulario quede a la vista --- */
@@ -136,6 +315,15 @@
   .sx2-acceso__marca-txt { flex-direction: row; align-items: center; gap: var(--sx-e-3); max-width: none; }
   .sx2-acceso__marca h1 { font-size: 1.375rem; }
   .sx2-acceso__bajada { margin: 0; font: var(--sx-t-chico); }
-  .sx2-acceso__puntos, .sx2-acceso__lema { display: none; }
+  .ac2-escena, .sx2-acceso__lema { display: none; }
   .sx2-acceso__panel { align-items: flex-start; padding: var(--sx-e-6) var(--sx-e-5); }
+}
+
+/* --- Reducir movimiento: todo quieto y en su estado final --------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .sx2-acceso__marca::after,
+  .ac2-tarjeta, .ac2-traza, .ac2-fila, .ac2-graf i, .ac2-anillo,
+  .sx2-acceso__caja .sx2-form > *, .sx2-acceso__caja > .sx2-acceso__pie,
+  .sx2-acceso__msg, .sx2-acceso-cargando .sx2-acceso__logo { animation: none !important; opacity: 1; }
+  .sx2-acceso__enviar::after { display: none; }
 }
