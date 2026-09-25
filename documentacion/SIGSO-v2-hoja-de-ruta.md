@@ -1157,3 +1157,15 @@ retirar las versiones clásicas" de arriba (ya no hay ciclo de respaldo).
   (comparten `#coordinacion-v2`).
 - Sandbox (Amarlla): historial de 8 personas, buscador, cumplimiento con 6
   KPIs y 4 tarjetas, PDF generado, cambios rápidos Hoy↔Historial sin cruces.
+
+### R4b Motor de reportes v2 — ESTADO: HECHO
+- `reportes-v2.js`: misma API y mismas reglas que `reportes.js` (catálogo,
+  filtros, rango de período, cumplimiento solo sobre lo entregado con fecha,
+  resbalón, documento, CSV con BOM), con salida v2: catálogo en tarjetas con
+  anillo de disponibles, filtros v2, KPIs `UIv2.kpi`, tablas `sx2-tabla`,
+  ranking con barras de color por umbral, tendencia SVG con rejilla, área y
+  punto final destacado, cabecera de documento v2 e impresión A4.
+- Se adelantó a R5-R11 porque lo usan Gerencia, Mi departamento,
+  Administración, Calidad y Proyectos: todos los reportes pasan a v2 de una.
+- La plataforma carga `reportes-v2.js` (y `ui-v2.js` antes, del que
+  depende); `reportes.js` queda solo para app.html.

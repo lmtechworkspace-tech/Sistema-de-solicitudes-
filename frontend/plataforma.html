@@ -40,6 +40,7 @@
   <link rel="stylesheet" href="css/v2/admin-v2.css" />
   <link rel="stylesheet" href="css/v2/calidad-v2.css" />
   <link rel="stylesheet" href="css/v2/shell-v2.css" />
+  <link rel="stylesheet" href="css/v2/reportes-v2.css" />
   <!-- P3: graficos del dashboard de la bandeja (mismo CDN que app.html). -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
@@ -1100,7 +1101,9 @@
   <script src="js/navegacion.js"></script>
   <!-- v12.2: motor de reportes (catalogo, filtros, exportacion y piezas
        visuales) compartido por todos los modulos. -->
-  <script src="js/reportes.js"></script>
+  <!-- SIGSO v2: UIv2 va temprano (lo usa el motor de reportes v2). -->
+  <script src="js/ui-v2.js"></script>
+  <script src="js/reportes-v2.js"></script>
   <script src="js/formulario.js"></script>
   <script src="js/estado.js"></script>
   <script src="js/dashboard.js"></script>
@@ -1122,7 +1125,6 @@
   <!-- Proyectos v2 (beta, solo ADM): convive con proyectos.js en el mismo
        contenedor; plataforma.js elige cuál pinta. ui-v2.js es la capa de
        componentes v2 que después usará el resto de SIGSO. -->
-  <script src="js/ui-v2.js"></script>
   <script src="js/proyectos-v2/nucleo.js"></script>
   <script src="js/proyectos-v2/portafolio.js"></script>
   <script src="js/proyectos-v2/resumen.js"></script>

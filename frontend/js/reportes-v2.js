@@ -1,0 +1,465 @@
+/**
+ * reportes-v2.js — motor de reportes de SIGSO con salida v2 (R4b del retiro
+ * de la versión clásica; ver documentacion/SIGSO-v2-hoja-de-ruta.md).
+ *
+ * MISMA API y MISMAS REGLAS que reportes.js (registrar, catálogo, filtros,
+ * rango de período, cumplimiento, resbalón, documento, CSV): solo cambia el
+ * HTML que produce, que ahora usa los componentes v2 (tarjetas, KPIs, tablas
+ * sx2, barras, tendencia con área). La plataforma carga este archivo; el
+ * clásico reportes.js queda solo para app.html.
+ *
+ * Reglas heredadas (no cambian):
+ *  1. Un reporte declara de qué dato real sale; si falta, dice qué le falta.
+ *  2. Solo se muestran los filtros que aplican a cada reporte.
+ *  3. No decide permisos: el backend manda.
+ *  4. El cumplimiento se mide SOLO sobre lo entregado con fecha comprometida;
+ *     sin entregas es "sin entregas", nunca 0 %.
+ */
+(function () {
+  'use strict';
+
+  var U = window.UIv2;
+  var TIPOS = {
+    ESTADO: { etiqueta: 'Estado', filtros: ['periodo', 'area', 'responsable', 'estado'] },
+    CUMPLIMIENTO: { etiqueta: 'Cumplimiento', filtros: ['periodo', 'area', 'responsable'] },
+    TENDENCIA: { etiqueta: 'Tendencia', filtros: ['desde', 'hasta', 'area'] },
+    COMPARACION: { etiqueta: 'Comparación', filtros: ['periodo', 'periodo_previo', 'area'] },
+    RANKING: { etiqueta: 'Ranking', filtros: ['periodo', 'dimension'] },
+    DETALLE: { etiqueta: 'Detalle', filtros: ['periodo', 'area', 'responsable', 'estado'] }
+  };
+  var ICONO_TIPO = { ESTADO: 'estado', CUMPLIMIENTO: 'diana', TENDENCIA: 'tendencia', COMPARACION: 'grafico', RANKING: 'lista', DETALLE: 'tabla' };
+  var ETIQUETA_ESTADO = { LISTO: 'Disponible', SIN_DATOS: 'Sin datos aún', PENDIENTE: 'Requiere desarrollo' };
+  var TONO_ESTADO = { LISTO: 'ok', SIN_DATOS: 'alerta', PENDIENTE: 'neutro' };
+  var registro_ = {};
+
+  function esc_(t) { return U.esc(t == null ? '' : t); }
+  function vacio_(texto) { return '<div class="rp2-vacio">' + U.vacio({ icono: 'grafico', titulo: '', texto: texto }) + '</div>'; }
+
+  function registrar(moduloId, definicion) { registro_[moduloId] = definicion; }
+  function obtener(moduloId) { return registro_[moduloId] || null; }
+  function buscarReporte(moduloId, reporteId) {
+    var def = obtener(moduloId), hallado = null;
+    if (!def) return null;
+    (def.grupos || []).forEach(function (g) { (g.reportes || []).forEach(function (r) { if (r.id === reporteId) hallado = r; }); });
+    return hallado;
+  }
+
+  // --- Catálogo -----------------------------------------------------------------------
+  function pintarCatalogo(opts) {
+    var cont = opts.contenedor;
+    var def = obtener(opts.modulo);
+    if (!cont || !def) return;
+    var visible = function (r) { return typeof opts.visible !== 'function' || opts.visible(r) !== false; };
+    var listos = 0, total = 0;
+    (def.grupos || []).forEach(function (g) { (g.reportes || []).forEach(function (r) { if (!visible(r)) return; total++; if (r.estado === 'LISTO') listos++; }); });
+    cont.innerHTML = (opts.encabezado || '') +
+      '<div class="rp2">' +
+        '<div class="rp2-intro sx2-entra">' +
+          '<div class="sx2-apilado" style="gap:4px"><h2 class="rp2-intro__tit">' + esc_(def.titulo || 'Centro de reportes') + '</h2>' +
+          '<span class="sx2-tenue" style="font-size:.875rem">' + listos + ' de ' + total + ' reportes se arman hoy con datos reales; el resto dice qué le falta.</span></div>' +
+          '<span class="rp2-intro__n">' + U.anillo(total ? listos * 100 / total : 0, { tam: 54, grosor: 6, tono: 'primario', texto: listos + '/' + total }) + '</span>' +
+        '</div>' +
+        (def.nota ? '<p class="rp2-nota sx2-entra">' + U.ico('info', 15) + '<span>' + esc_(def.nota) + '</span></p>' : '') +
+        (def.grupos || []).map(function (g, gi) {
+          var reportes = (g.reportes || []).filter(visible);
+          if (!reportes.length) return '';
+          return '<section class="rp2-grupo sx2-entra" style="--i:' + (gi + 2) + '">' +
+            '<h3 class="rp2-grupo__tit">' + (g.icono ? U.ico(g.icono, 16) : '') + '<span>' + esc_(g.grupo) + '</span><span class="rp2-grupo__n">' + reportes.length + '</span></h3>' +
+            '<div class="rp2-lista">' + reportes.map(tarjeta_).join('') + '</div></section>';
+        }).join('') +
+      '</div>';
+    cont.querySelectorAll('[data-reporte]').forEach(function (card) {
+      function abrir() {
+        var id = card.getAttribute('data-reporte');
+        var seccion = card.getAttribute('data-seccion');
+        if (seccion && typeof opts.onIrASeccion === 'function') { opts.onIrASeccion(seccion); return; }
+        if (typeof opts.onAbrir === 'function') opts.onAbrir(id);
+      }
+      card.addEventListener('click', abrir);
+      card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); } });
+    });
+    U.animar(cont);
+  }
+  function tarjeta_(r) {
+    var activa = r.estado === 'LISTO';
+    var tipo = TIPOS[r.tipo];
+    return '<article class="rp2-card' + (activa ? ' rp2-card--activa' : '') + '"' +
+        (activa ? ' tabindex="0" role="button" data-reporte="' + esc_(r.id) + '" data-seccion="' + esc_(r.seccion || '') + '"' : '') + '>' +
+      '<div class="rp2-card__cab"><span class="rp2-card__ico">' + U.ico(ICONO_TIPO[r.tipo] || 'grafico', 16) + '</span>' +
+        '<strong>' + esc_(r.nombre) + '</strong>' + U.badge(ETIQUETA_ESTADO[r.estado] || r.estado, TONO_ESTADO[r.estado] || 'neutro') + '</div>' +
+      '<p class="rp2-card__desc">' + esc_(r.desc) + '</p>' +
+      '<div class="rp2-card__pie">' + (tipo ? '<span class="rp2-card__tipo">' + esc_(tipo.etiqueta) + '</span>' : '') +
+        (r.falta ? '<span class="rp2-card__falta">Falta: ' + esc_(r.falta) + '</span>' : (activa ? '<span class="rp2-card__abrir">Abrir' + U.ico('derecha', 14) + '</span>' : '')) + '</div>' +
+    '</article>';
+  }
+
+  // --- Filtros ------------------------------------------------------------------------
+  var ETIQUETAS_FILTRO = {
+    periodo: 'Período', periodo_previo: 'Comparado con', desde: 'Desde', hasta: 'Hasta',
+    area: 'Área', responsable: 'Responsable', estado: 'Estado', dimension: 'Agrupado por', proceso: 'Proceso'
+  };
+  var PERIODOS_POR_DEFECTO = [
+    { valor: 'mes', texto: 'Este mes' }, { valor: 'trimestre', texto: 'Este trimestre' },
+    { valor: 'anio', texto: 'Este año' }, { valor: 'todo', texto: 'Todo' }
+  ];
+  function etiquetaFiltro_(reporte, nombre) {
+    if (nombre === 'periodo' && reporte && reporte.etiquetaPeriodo) return reporte.etiquetaPeriodo;
+    return ETIQUETAS_FILTRO[nombre] || nombre;
+  }
+  function filtrosParaCabecera(reporte, opciones, valores) {
+    valores = valores || {};
+    opciones = opciones || {};
+    var lista = (reporte && (reporte.filtros || (TIPOS[reporte.tipo] || {}).filtros)) || [];
+    return lista.map(function (nombre) {
+      var bruto = valores[nombre];
+      if (bruto === undefined || bruto === null || bruto === '') return null;
+      if (bruto === 'todo' && (nombre === 'periodo' || nombre === 'periodo_previo')) return null;
+      var catalogo = opciones[nombre] || (nombre === 'periodo' || nombre === 'periodo_previo' ? PERIODOS_POR_DEFECTO : []);
+      var elegida = (catalogo || []).filter(function (o) { return String(o && o.valor !== undefined ? o.valor : o) === String(bruto); })[0];
+      return { etiqueta: etiquetaFiltro_(reporte, nombre), valor: elegida && elegida.texto !== undefined ? elegida.texto : bruto };
+    }).filter(Boolean);
+  }
+  function pintarFiltros(reporte, opciones, valores) {
+    var lista = reporte.filtros || (TIPOS[reporte.tipo] || {}).filtros || [];
+    if (!lista.length) return '';
+    valores = valores || {};
+    opciones = opciones || {};
+    var campos = lista.map(function (f) {
+      if (f === 'periodo') return select_('periodo', etiquetaFiltro_(reporte, 'periodo'), opciones.periodo || PERIODOS_POR_DEFECTO, valores.periodo || 'todo');
+      if (f === 'periodo_previo') return select_('periodo_previo', 'Comparar con', opciones.periodo || PERIODOS_POR_DEFECTO, valores.periodo_previo || 'todo');
+      if (f === 'desde') return fecha_('desde', 'Desde', valores.desde);
+      if (f === 'hasta') return fecha_('hasta', 'Hasta', valores.hasta);
+      if (f === 'area') return select_('area', 'Área', opciones.area || [], valores.area, 'Todas');
+      if (f === 'responsable') return select_('responsable', 'Responsable', opciones.responsable || [], valores.responsable, 'Todos');
+      if (f === 'estado') return select_('estado', 'Estado', opciones.estado || [], valores.estado, 'Todos');
+      if (f === 'dimension') return select_('dimension', 'Agrupar por', opciones.dimension || [], valores.dimension);
+      if (f === 'proceso') return select_('proceso', 'Proceso', opciones.proceso || [], valores.proceso, 'Todos');
+      return '';
+    }).filter(Boolean).join('');
+    return '<form class="rp2-filtros" id="rep-filtros">' + campos +
+      U.boton({ texto: 'Aplicar', icono: 'filtro', variante: 'primario', tipo: 'submit' }) + '</form>';
+  }
+  function select_(nombre, etiqueta, opciones, valor, textoVacio) {
+    var opts = (textoVacio ? '<option value="">' + esc_(textoVacio) + '</option>' : '') +
+      (opciones || []).map(function (o) {
+        var v = o.valor !== undefined ? o.valor : o, t = o.texto !== undefined ? o.texto : o;
+        return '<option value="' + esc_(v) + '"' + (String(v) === String(valor || '') ? ' selected' : '') + '>' + esc_(t) + '</option>';
+      }).join('');
+    return '<label class="rp2-filtro"><span>' + esc_(etiqueta) + '</span><select class="sx2-select" name="' + esc_(nombre) + '">' + opts + '</select></label>';
+  }
+  function fecha_(nombre, etiqueta, valor) {
+    return '<label class="rp2-filtro"><span>' + esc_(etiqueta) + '</span><input type="date" class="sx2-input" name="' + esc_(nombre) + '" value="' + esc_(valor || '') + '"></label>';
+  }
+  function leerFiltros(contenedor) {
+    var form = contenedor.querySelector('#rep-filtros');
+    if (!form) return {};
+    var out = {};
+    Array.prototype.forEach.call(form.elements, function (el) { if (el.name) out[el.name] = el.value; });
+    return out;
+  }
+  function alAplicarFiltros(contenedor, fn) {
+    var form = contenedor.querySelector('#rep-filtros');
+    if (!form) return;
+    form.addEventListener('submit', function (e) { e.preventDefault(); fn(leerFiltros(contenedor)); });
+  }
+
+  // --- Aplicar filtros (misma lógica que reportes.js) ------------------------------------------
+  function dos_(n) { return (n < 10 ? '0' : '') + n; }
+  function finDeMes_(anio, mes) { return new Date(Date.UTC(Number(anio), mes, 0)).toISOString().slice(0, 10); }
+  function rangoDePeriodo(periodo, hoyISO) {
+    var hoy = String(hoyISO || new Date().toISOString()).slice(0, 10);
+    var anio = hoy.slice(0, 4), mes = Number(hoy.slice(5, 7));
+    if (periodo === 'mes') return { desde: hoy.slice(0, 7) + '-01', hasta: finDeMes_(anio, mes) };
+    if (periodo === 'trimestre') {
+      var primerMes = Math.floor((mes - 1) / 3) * 3 + 1;
+      return { desde: anio + '-' + dos_(primerMes) + '-01', hasta: finDeMes_(anio, primerMes + 2) };
+    }
+    if (periodo === 'anio') return { desde: anio + '-01-01', hasta: anio + '-12-31' };
+    return { desde: '', hasta: '' };
+  }
+  function campoValor_(campo) { return (campo && campo.valor) || campo; }
+  function campoTexto_(campo) { return (campo && campo.texto) || campoValor_(campo); }
+  function coincide_(item, campo, valor) {
+    if (!campo || valor === undefined || valor === null || valor === '') return true;
+    return String(item[campoValor_(campo)] || '') === String(valor);
+  }
+  function filtrarItems(items, valores, opciones) {
+    items = items || []; valores = valores || {}; opciones = opciones || {};
+    var campos = opciones.campos || {};
+    var rango = (valores.desde || valores.hasta)
+      ? { desde: String(valores.desde || '').slice(0, 10), hasta: String(valores.hasta || '').slice(0, 10) }
+      : rangoDePeriodo(valores.periodo, opciones.hoy);
+    var campoFecha = opciones.campoFecha, hayRango = !!(rango.desde || rango.hasta);
+    return items.filter(function (i) {
+      if (hayRango && campoFecha) {
+        var f = String(i[campoFecha] || '').slice(0, 10);
+        if (!f) return false;
+        if (rango.desde && f < rango.desde) return false;
+        if (rango.hasta && f > rango.hasta) return false;
+      }
+      return coincide_(i, campos.area, valores.area) && coincide_(i, campos.responsable, valores.responsable) && coincide_(i, campos.estado, valores.estado);
+    });
+  }
+  function opcionesDeItems(items, campos) {
+    var salida = {};
+    Object.keys(campos || {}).forEach(function (filtro) {
+      var cValor = campoValor_(campos[filtro]), cTexto = campoTexto_(campos[filtro]), textoPorValor = {};
+      (items || []).forEach(function (i) {
+        var v = String(i[cValor] || '').trim();
+        if (v && textoPorValor[v] === undefined) textoPorValor[v] = String(i[cTexto] || '').trim() || v;
+      });
+      salida[filtro] = Object.keys(textoPorValor).map(function (v) { return { valor: v, texto: textoPorValor[v] }; })
+        .sort(function (a, b) { return a.texto.localeCompare(b.texto, 'es'); });
+    });
+    return salida;
+  }
+
+  // --- Piezas visuales v2 ---------------------------------------------------------------
+  // kpis: [{ etiqueta, valor, alerta, titulo, variante }] (formato de Componentes.kpi)
+  function kpis(lista) {
+    if (!lista || !lista.length) return '';
+    return '<div class="sx2-fila-kpis rp2-kpis">' + lista.map(function (k, i) {
+      var tono = k.alerta ? 'critico' : (k.variante === 'P1' ? 'critico' : (k.variante === 'P4' ? 'ok' : (k.variante === 'P3' ? 'alerta' : 'primario')));
+      return U.kpi({ i: i, etiqueta: k.etiqueta, valor: k.valor, tono: tono, titulo: k.titulo });
+    }).join('') + '</div>';
+  }
+  function tabla(columnas, filas, opts) {
+    opts = opts || {};
+    if (!filas || !filas.length) return vacio_(opts.vacio || 'No hay datos para este corte.');
+    return '<div class="sx2-tabla-wrap rp2-tabla"><table class="sx2-tabla" id="' + esc_(opts.id || 'rep-tabla') + '"><thead><tr>' +
+      columnas.map(function (c) { return '<th' + (c.alinear === 'derecha' ? ' class="sx2-num"' : '') + '>' + esc_(c.titulo) + '</th>'; }).join('') +
+      '</tr></thead><tbody>' + filas.map(function (f) {
+        return '<tr>' + columnas.map(function (c) {
+          var v = f[c.campo];
+          return '<td' + (c.alinear === 'derecha' ? ' class="sx2-num"' : '') + '>' + (c.html ? (v == null ? '' : v) : esc_(v == null ? '' : v)) + '</td>';
+        }).join('') + '</tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+  function ranking(filas, opts) {
+    opts = opts || {};
+    if (!filas || !filas.length) return vacio_(opts.vacio || 'No hay datos para este ranking.');
+    var max = filas.reduce(function (m, f) { return Math.max(m, Number(f.valor) || 0); }, 0) || 1;
+    return '<ol class="rp2-ranking">' + filas.map(function (f, i) {
+      var pct = Math.round((Number(f.valor) || 0) / max * 100);
+      return '<li><span class="rp2-ranking__pos">' + (i + 1) + '</span><span class="rp2-ranking__etq" title="' + esc_(f.etiqueta) + '">' + esc_(f.etiqueta) + '</span>' +
+        U.barra(pct, f.tono || 'primario') + '<strong class="rp2-ranking__val">' + esc_(f.texto !== undefined ? f.texto : f.valor) + '</strong></li>';
+    }).join('') + '</ol>';
+  }
+  var nTendencia_ = 0;
+  function tendencia(puntos, opts) {
+    opts = opts || {};
+    if (!puntos || puntos.length < 2) return vacio_(opts.vacio || 'Hacen falta al menos dos períodos medidos para dibujar una tendencia.');
+    var an = 640, al = 200, m = { i: 40, d: 16, s: 18, b: 30 };
+    var valores = puntos.map(function (p) { return Number(p.valor) || 0; });
+    var max = Math.max.apply(null, valores), min = Math.min(0, Math.min.apply(null, valores));
+    if (opts.meta !== undefined && opts.meta !== null && opts.meta !== '') max = Math.max(max, Number(opts.meta));
+    if (max === min) max = min + 1;
+    var ax = an - m.i - m.d, ay = al - m.s - m.b;
+    var x = function (i) { return m.i + (i / (puntos.length - 1)) * ax; };
+    var y = function (v) { return m.s + ay - ((v - min) / (max - min)) * ay; };
+    var linea = puntos.map(function (p, i) { return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(Number(p.valor) || 0).toFixed(1); }).join(' ');
+    var area = linea + ' L' + x(puntos.length - 1).toFixed(1) + ' ' + (m.s + ay) + ' L' + x(0).toFixed(1) + ' ' + (m.s + ay) + ' Z';
+    var id = 'rp2g' + (++nTendencia_);
+    var grid = [0, 0.5, 1].map(function (f) {
+      var v = min + (max - min) * f, yy = y(v).toFixed(1);
+      return '<line x1="' + m.i + '" y1="' + yy + '" x2="' + (an - m.d) + '" y2="' + yy + '" class="rp2-g-rejilla"/>' +
+        '<text x="' + (m.i - 8) + '" y="' + (Number(yy) + 4) + '" class="rp2-g-tick" text-anchor="end">' + esc_(Math.round(v * 10) / 10) + '</text>';
+    }).join('');
+    var meta = opts.meta !== undefined && opts.meta !== null && opts.meta !== ''
+      ? '<line x1="' + m.i + '" y1="' + y(Number(opts.meta)).toFixed(1) + '" x2="' + (an - m.d) + '" y2="' + y(Number(opts.meta)).toFixed(1) + '" class="rp2-g-meta"/>' +
+        '<text x="' + (an - m.d) + '" y="' + (y(Number(opts.meta)) - 5).toFixed(1) + '" class="rp2-g-meta-txt" text-anchor="end">meta ' + esc_(opts.meta) + '</text>' : '';
+    var salto = Math.ceil(puntos.length / 8);
+    var ult = puntos.length - 1;
+    return '<figure class="rp2-tendencia"><svg viewBox="0 0 ' + an + ' ' + al + '" role="img" aria-label="' + esc_(opts.titulo || 'Serie temporal') + '">' +
+      '<defs><linearGradient id="' + id + '" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" class="rp2-g-stop1"/><stop offset="100%" class="rp2-g-stop2"/></linearGradient></defs>' +
+      grid + meta +
+      '<path d="' + area + '" fill="url(#' + id + ')"/>' +
+      '<path d="' + linea + '" class="rp2-g-linea" fill="none"/>' +
+      puntos.map(function (p, i) {
+        return '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(Number(p.valor) || 0).toFixed(1) + '" r="' + (i === ult ? 5 : 3) + '" class="rp2-g-punto' + (i === ult ? ' rp2-g-punto--fin' : '') + '"><title>' + esc_(p.etiqueta) + ': ' + esc_(p.valor) + '</title></circle>';
+      }).join('') +
+      puntos.map(function (p, i) {
+        if (i % salto !== 0 && i !== ult) return '';
+        return '<text x="' + x(i).toFixed(1) + '" y="' + (al - 8) + '" class="rp2-g-tick" text-anchor="middle">' + esc_(p.etiqueta) + '</text>';
+      }).join('') +
+      '</svg><figcaption class="rp2-tendencia__pie">' + puntos.map(function (p) { return esc_(p.etiqueta) + ': ' + esc_(p.valor); }).join(' · ') + '</figcaption></figure>';
+  }
+  function comparacion(filas, opts) {
+    opts = opts || {};
+    if (!filas || !filas.length) return vacio_(opts.vacio || 'No hay datos para comparar.');
+    return '<div class="sx2-tabla-wrap rp2-tabla"><table class="sx2-tabla"><thead><tr><th>' + esc_(opts.dimension || 'Concepto') + '</th>' +
+      '<th class="sx2-num">' + esc_(opts.etiquetaPrevio || 'Período anterior') + '</th><th class="sx2-num">' + esc_(opts.etiquetaActual || 'Período actual') + '</th><th class="sx2-num">Variación</th></tr></thead><tbody>' +
+      filas.map(function (f) {
+        var a = Number(f.previo) || 0, b = Number(f.actual) || 0, d = b - a;
+        var bueno = opts.menosEsMejor ? d < 0 : d > 0;
+        var tono = d === 0 ? 'neutro' : (bueno ? 'ok' : 'critico');
+        return '<tr><td>' + esc_(f.etiqueta) + '</td><td class="sx2-num">' + esc_(a) + '</td><td class="sx2-num">' + esc_(b) + '</td>' +
+          '<td class="sx2-num">' + U.badge((d > 0 ? '+' : (d < 0 ? '−' : '=')) + ' ' + Math.abs(d), tono, true) + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  // --- Cumplimiento (misma regla que reportes.js) ---------------------------------------------
+  function agruparCumplimiento(items, campo, etiquetaVacia) {
+    var grupos = {};
+    (items || []).forEach(function (i) {
+      var k = i[campo] || etiquetaVacia || '(sin dato)';
+      if (!grupos[k]) grupos[k] = { total: 0, entregados: 0, aTiempo: 0, abiertos: 0 };
+      grupos[k].total++;
+      if (i.fecha_terminada && i.fecha_comprometida) {
+        grupos[k].entregados++;
+        if (new Date(i.fecha_terminada) <= new Date(i.fecha_comprometida)) grupos[k].aTiempo++;
+      } else if (!i.fecha_terminada) grupos[k].abiertos++;
+    });
+    return Object.keys(grupos).map(function (k) {
+      var g = grupos[k];
+      return { etiqueta: k, total: g.total, entregados: g.entregados, aTiempo: g.aTiempo, abiertos: g.abiertos, pct: g.entregados ? Math.round(g.aTiempo / g.entregados * 100) : null };
+    }).sort(function (a, b) {
+      if (a.pct === null && b.pct === null) return b.total - a.total;
+      if (a.pct === null) return 1;
+      if (b.pct === null) return -1;
+      return b.pct - a.pct;
+    });
+  }
+  function tablaCumplimiento(filas, etiquetaDimension) {
+    return tabla([
+      { campo: 'etiqueta', titulo: etiquetaDimension }, { campo: 'total', titulo: 'Ítems', alinear: 'derecha' },
+      { campo: 'abiertos', titulo: 'Abiertos', alinear: 'derecha' }, { campo: 'entregados', titulo: 'Entregados', alinear: 'derecha' },
+      { campo: 'aTiempo', titulo: 'A tiempo', alinear: 'derecha' }, { campo: 'pctHtml', titulo: 'Cumplimiento', alinear: 'derecha', html: true }
+    ], filas.map(function (f) {
+      var o = {};
+      Object.keys(f).forEach(function (k) { o[k] = f[k]; });
+      o.pctHtml = f.pct === null ? '<span class="sx2-tenue">sin entregas</span>' : U.badge(f.pct + '%', f.pct >= 90 ? 'ok' : (f.pct >= 70 ? 'alerta' : 'critico'), true);
+      return o;
+    }), { vacio: 'No hay ítems en este corte.' });
+  }
+  function sub_(t) { return '<h3 class="rp2-sub">' + esc_(t) + '</h3>'; }
+  function cuerpoCumplimientoPor(items, opts) {
+    opts = opts || {};
+    var filas = agruparCumplimiento(items, opts.campo, opts.etiquetaVacia);
+    var medibles = filas.filter(function (f) { return f.pct !== null; });
+    return kpis([
+      { etiqueta: opts.etiquetaTotal || (opts.dimension + 's'), valor: filas.length },
+      { etiqueta: 'Ítems considerados', valor: (items || []).length },
+      { etiqueta: 'Ya medibles', valor: medibles.length, titulo: 'Solo se puede medir cumplimiento donde hay entregas con fecha comprometida.' }
+    ]) +
+    sub_('Cumplimiento') +
+    ranking(medibles.map(function (f) { return { etiqueta: f.etiqueta, valor: f.pct, texto: f.pct + '%', tono: f.pct >= 90 ? 'ok' : (f.pct >= 70 ? 'alerta' : 'critico') }; }),
+      { vacio: 'Todavía no hay entregas con fecha comprometida: no hay cumplimiento que medir.' }) +
+    sub_('Detalle') + tablaCumplimiento(filas, opts.dimension || 'Grupo');
+  }
+  function cuerpoEntradaSalida(serie) {
+    serie = serie || [];
+    if (!serie.length) return vacio_('Sin datos de los últimos meses.');
+    var entraron = serie.reduce(function (s, t) { return s + (Number(t.creadas) || 0); }, 0);
+    var cerradas = serie.reduce(function (s, t) { return s + (Number(t.cerradas) || 0); }, 0);
+    var saldo = entraron - cerradas;
+    return kpis([
+      { etiqueta: 'Entraron', valor: entraron }, { etiqueta: 'Se cerraron', valor: cerradas },
+      { etiqueta: 'Saldo de la cola', valor: (saldo > 0 ? '+' : '') + saldo, alerta: saldo > 0, titulo: 'Positivo = entra más de lo que sale: la cola crece.' }
+    ]) +
+    '<div class="rp2-dos">' +
+      '<div>' + sub_('Entradas por mes') + tendencia(serie.map(function (t) { return { etiqueta: t.etiqueta, valor: t.creadas }; }), { titulo: 'Creadas por mes' }) + '</div>' +
+      '<div>' + sub_('Cierres por mes') + tendencia(serie.map(function (t) { return { etiqueta: t.etiqueta, valor: t.cerradas }; }), { titulo: 'Cerradas por mes' }) + '</div>' +
+    '</div>' +
+    sub_('Detalle') + tabla([{ campo: 'etiqueta', titulo: 'Mes' }, { campo: 'creadas', titulo: 'Entraron', alinear: 'derecha' }, { campo: 'cerradas', titulo: 'Se cerraron', alinear: 'derecha' }], serie);
+  }
+  function cuerpoResbalon(items, opts) {
+    opts = opts || {};
+    items = items || [];
+    var movidos = items.filter(function (i) { return Number(i.re_compromisos) > 0 || Number(i.reaperturas) > 0; })
+      .sort(function (a, b) { return (Number(b.re_compromisos) + Number(b.reaperturas)) - (Number(a.re_compromisos) + Number(a.reaperturas)); });
+    var totalRe = items.reduce(function (s, i) { return s + (Number(i.re_compromisos) || 0); }, 0);
+    var totalReab = items.reduce(function (s, i) { return s + (Number(i.reaperturas) || 0); }, 0);
+    var columnas = [{ campo: 'titulo', titulo: 'Ítem' }].concat(opts.columnasExtra || []).concat([
+      { campo: 'desarrollador_nombre', titulo: 'Responsable' }, { campo: 're_compromisos', titulo: 'Movió fecha', alinear: 'derecha' },
+      { campo: 'reaperturas', titulo: 'Reaperturas', alinear: 'derecha' }, { campo: 'fecha_original', titulo: 'Fecha original' },
+      { campo: 'fecha_comprometida', titulo: 'Fecha vigente' }
+    ]);
+    return kpis([
+      { etiqueta: 'Ítems que movieron fecha', valor: items.filter(function (i) { return Number(i.re_compromisos) > 0; }).length },
+      { etiqueta: 'Re-compromisos', valor: totalRe },
+      { etiqueta: 'Reaperturas', valor: totalReab, alerta: totalReab > 0, titulo: 'Un ítem que se cerró y volvió a abrirse: el % de cumplimiento no lo captura.' }
+    ]) + tabla(columnas, movidos, { vacio: 'Ningún ítem movió su fecha ni se reabrió. Nada que revisar.' });
+  }
+
+  // --- Documento -----------------------------------------------------------------------
+  function cabeceraDocumento(opts) {
+    opts = opts || {};
+    var cuando;
+    try { cuando = new Date().toLocaleString('es-CL', { dateStyle: 'long', timeStyle: 'short' }); } catch (e) { cuando = new Date().toISOString().slice(0, 16).replace('T', ' '); }
+    var filtros = (opts.filtros || []).filter(function (f) { return f && f.valor; });
+    var meta = [];
+    if (opts.modulo) meta.push(['Módulo', opts.modulo]);
+    if (opts.periodo) meta.push(['Período', opts.periodo]);
+    if (opts.generadoPor) meta.push(['Generado por', opts.generadoPor]);
+    filtros.forEach(function (f) { meta.push([f.etiqueta, f.valor]); });
+    return '<header class="rp2-doc sx2-entra">' +
+      '<div class="rp2-doc__cab"><span class="rp2-doc__marca"><span class="rp2-doc__logo">S</span><span class="sx2-apilado" style="gap:0"><strong>SIGSO</strong>' +
+        '<span class="sx2-tenue" style="font-size:.75rem">' + esc_(opts.organizacion || 'Asesorías Integrales AyS SpA') + '</span></span></span>' +
+        '<span class="rp2-doc__ref">' + (opts.codigo ? '<span>' + esc_(opts.codigo) + '</span>' : '') + '<span>' + esc_(cuando) + '</span></span></div>' +
+      '<h1 class="rp2-doc__tit">' + esc_(opts.titulo || 'Reporte') + '</h1>' +
+      (opts.subtitulo ? '<p class="rp2-doc__sub">' + esc_(opts.subtitulo) + '</p>' : '') +
+      (meta.length ? '<dl class="rp2-doc__meta">' + meta.map(function (m) { return '<div><dt>' + esc_(m[0]) + '</dt><dd>' + esc_(m[1]) + '</dd></div>'; }).join('') + '</dl>' : '') +
+    '</header>';
+  }
+  function pieDocumento(nota) {
+    return '<footer class="rp2-doc-pie">' + esc_(nota || 'Documento generado por SIGSO a partir de los datos vigentes al momento de su emisión.') + '</footer>';
+  }
+
+  // --- Acciones y exportación -------------------------------------------------------------
+  function barraAcciones(opts) {
+    opts = opts || {};
+    return '<div class="rp2-acciones">' +
+      (opts.volver !== false ? U.boton({ texto: 'Centro de reportes', icono: 'izquierda', variante: 'fantasma', clase: 'js-rep-volver' }) : '') +
+      '<span style="flex:1"></span>' +
+      U.boton({ texto: 'Exportar CSV', icono: 'exportar', clase: 'js-rep-csv' }) +
+      U.boton({ texto: 'Imprimir o guardar PDF', icono: 'descargar', clase: 'js-rep-imprimir' }) +
+    '</div>';
+  }
+  function wireAcciones(contenedor, opts) {
+    opts = opts || {};
+    contenedor.querySelectorAll('.js-rep-volver').forEach(function (b) { b.addEventListener('click', function () { if (opts.onVolver) opts.onVolver(); }); });
+    contenedor.querySelectorAll('.js-rep-csv').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var t = contenedor.querySelector('table');
+        if (!t) { window.Componentes.aviso({ texto: 'Este reporte no tiene una tabla que exportar.', tipo: 'aviso' }); return; }
+        descargarCsv_(t, opts.nombreArchivo || 'sigso-reporte');
+      });
+    });
+    contenedor.querySelectorAll('.js-rep-imprimir').forEach(function (b) { b.addEventListener('click', function () { window.print(); }); });
+    U.animar(contenedor);
+  }
+  function descargarCsv_(tabla, nombre) {
+    var filas = [];
+    Array.prototype.forEach.call(tabla.querySelectorAll('tr'), function (tr) {
+      var celdas = Array.prototype.map.call(tr.querySelectorAll('th,td'), function (c) { return String(c.innerText || '').trim(); });
+      if (celdas.length) filas.push(celdas);
+    });
+    descargarCsvDeFilas(filas, nombre);
+  }
+  function descargarCsvDeFilas(filas, nombre) {
+    var lineas = (filas || []).map(function (fila) {
+      return fila.map(function (celda) { return '"' + String(celda == null ? '' : celda).replace(/"/g, '""') + '"'; }).join(',');
+    });
+    // BOM (U+FEFF) para que Excel en Windows abra bien los acentos.
+    var blob = new Blob(['﻿' + lineas.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = nombre + '-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  }
+
+  window.SigsoReportes = {
+    TIPOS: TIPOS, registrar: registrar, obtener: obtener, buscarReporte: buscarReporte,
+    pintarCatalogo: pintarCatalogo, pintarFiltros: pintarFiltros, leerFiltros: leerFiltros, alAplicarFiltros: alAplicarFiltros,
+    rangoDePeriodo: rangoDePeriodo, filtrarItems: filtrarItems, opcionesDeItems: opcionesDeItems,
+    kpis: kpis, tabla: tabla, ranking: ranking, tendencia: tendencia, comparacion: comparacion,
+    agruparCumplimiento: agruparCumplimiento, tablaCumplimiento: tablaCumplimiento,
+    cuerpoCumplimientoPor: cuerpoCumplimientoPor, cuerpoEntradaSalida: cuerpoEntradaSalida, cuerpoResbalon: cuerpoResbalon,
+    cabeceraDocumento: cabeceraDocumento, filtrosParaCabecera: filtrosParaCabecera, pieDocumento: pieDocumento,
+    barraAcciones: barraAcciones, wireAcciones: wireAcciones, descargarCsvDeFilas: descargarCsvDeFilas
+  };
+})();
