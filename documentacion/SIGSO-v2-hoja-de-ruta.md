@@ -1184,3 +1184,34 @@ retirar las versiones clásicas" de arriba (ya no hay ciclo de respaldo).
   `jefatura.js`** (queda para app.html). "Mi equipo hoy" no pinta si la
   vista activa es otra.
 - Sandbox (Bárbara): 6 vistas, abrir solicitud, reporte y formulario OK.
+
+### R6 Panel de gerencia 100 % v2 — ESTADO: HECHO
+- `gerencia-vistas-v2.js`: **Tablero de seguimiento** (5 KPIs con variación
+  vs. la ventana anterior, 3 filtrables; semáforo de 7 categorías en chips;
+  filtros de empresa, responsable y solicitante —las opciones salen de los
+  datos, ya no de una lista fija HP/RLD—; buscador por número, título,
+  tipo, módulo o persona; agrupar por 7 campos; orden por cualquier
+  columna; "Esperando que el solicitante valide"; imprimir con cabecera de
+  documento; "Enviar a Gerencia ahora" con confirmación, solo ADM), **Línea
+  de tiempo** (creación → comprometida, hoy, atraso rayado, fecha original
+  si hubo re-compromiso, marcas de mes), **Actividades** (5 KPIs, mapa de
+  calor área × semana, críticas con foto, los 3 reportes en tabla/CSV/PDF
+  con fechas y correos legibles, acta de reunión), **Pausas activas**
+  (KPIs, tendencia semanal apilada, clima con detalle, motivos, áreas, PDF y
+  CSV), **Centro de reportes** (motor v2; los filtros del panel también van
+  al reporte), **Tendencia y ciclo**, **Recurrencia** (un clic filtra el
+  tablero) y **Carga**.
+- Cada ítem se abre en el panel lateral de la Bandeja v2 (antes llevaba al
+  detalle clásico); "Atenciones directas" pasó de KPI a la línea de conteo
+  (no es un indicador: queda fuera del semáforo por definición).
+- Resumen ejecutivo: gana "Imprimir" (reemplaza el "Reporte ejecutivo
+  simple" clásico) y no pinta si la vista activa es otra.
+- Define `window.SigsoGerencia`; el shell abre Gerencia directo en la v2 y
+  la plataforma **no carga `gerencia.js`** (queda para app.html). Con eso
+  `abrirBandeja_`/`mostrarVistaBandeja_` quedaron sin uso y se quitaron de
+  `plataforma.js`.
+- Marco: el fondo del área de trabajo es el de las páginas v2 (una página
+  corta dejaba una franja de otro tono).
+- Sandbox (admin): 9 vistas, filtros de servidor y de pantalla, orden,
+  agrupación, recurrencia → tablero, reportes con filtro, los 3 PDF
+  generados, teléfono sin scroll horizontal. Suite: 2893 OK.

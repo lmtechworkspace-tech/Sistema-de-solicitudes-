@@ -1,6 +1,10 @@
 /* shell-v2.css — marco de la plataforma (SIGSO v2, Módulo 9). Prefijos
    .shell-* (marco) y .nt2-* (panel de notificaciones). */
 
+/* R6: el fondo del área de trabajo es el mismo de las páginas v2; si no, una
+   página corta dejaba una franja de otro tono bajo su contenido. */
+body.sx2, body.sx2 .plataforma-shell { background: var(--sx-fondo); }
+
 /* ===== 9A: campana en el marco ============================================ */
 .shell-campana {
   position: relative; flex: none; display: inline-grid; place-items: center;

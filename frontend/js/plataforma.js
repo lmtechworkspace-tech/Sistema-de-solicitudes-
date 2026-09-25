@@ -1519,7 +1519,8 @@
     if (id !== 'gerencia' && window.SigsoGerenciaV2) window.SigsoGerenciaV2.desmontar();
     if (id !== 'jefatura' && window.SigsoJefaturaV2) window.SigsoJefaturaV2.desmontar();
     if (id === 'gerencia') {
-      abrirBandeja_('gerencia');
+      // R6: el Panel de gerencia es 100 % v2 (gerencia-v2.js + gerencia-vistas-v2.js).
+      if (window.SigsoGerencia) window.SigsoGerencia.cargar();
     }
     if (id === 'jefatura') {
       // R5: Mi departamento es 100 % v2 (jefatura-vistas-v2.js).
@@ -1594,9 +1595,7 @@
     window.SigsoAdmin.abrir();
   }
 
-  // --- P3: orquestacion de la bandeja (el rol que cumplia app.js) --------
-
-  var bandejaLista = false;
+  // --- P3: el Backoffice por token (lo consulta admin.js) --------
 
   // En produccion, las llamadas por token necesitan la SEGUNDA
   // implementacion del Web App (BACKOFFICE_TOKEN_URL). En local, el
@@ -1604,70 +1603,6 @@
   function backofficeDisponible_() {
     var cfg = window.SIGSO_CONFIG || {};
     return !!cfg.BACKOFFICE_TOKEN_URL || /localhost/.test(cfg.BACKOFFICE_URL || '');
-  }
-
-  function abrirBandeja_(vista) {
-    var aviso = document.getElementById('aviso-bandeja-sin-deploy');
-    if (!backofficeDisponible_()) {
-      aviso.innerHTML = Componentes.alerta(
-        'La bandeja por token aún no está desplegada (falta la implementación ' +
-        '"por token" del Backoffice y su URL en config.js — ver el paquete de deploy v3.3 P3). ' +
-        'Mientras tanto puedes usar el Backoffice con tu cuenta Google.', 'aviso');
-      mostrarVistaBandeja_(null);
-      return;
-    }
-    aviso.innerHTML = '';
-
-    if (!bandejaLista) {
-      bandejaLista = true;
-      SigsoDashboard.inicializarFiltros();
-      // Puente que dashboard.js/detalle.js ya usan para navegar entre
-      // vistas (mismo contrato que definia app.js).
-      window.SigsoApp = {
-        mostrarDetalle: function (solicitudId) {
-          mostrarVistaBandeja_('vista-detalle');
-          SigsoDetalle.cargar(solicitudId);
-        },
-        mostrarDashboard: function () {
-          mostrarVistaBandeja_('vista-dashboard');
-          SigsoDashboard.cargar();
-        }
-      };
-      document.getElementById('btn-actualizar-dashboard').addEventListener('click', function () {
-        SigsoDashboard.cargar();
-      });
-      document.getElementById('btn-volver-dashboard').addEventListener('click', window.SigsoApp.mostrarDashboard);
-      document.getElementById('btn-ver-gerencia').addEventListener('click', function () {
-        abrirBandeja_('gerencia');
-      });
-      document.getElementById('btn-volver-dashboard-gerencia').addEventListener('click', window.SigsoApp.mostrarDashboard);
-      document.getElementById('btn-actualizar-gerencia').addEventListener('click', function () {
-        SigsoGerencia.cargar();
-      });
-      // v4.2: Jefatura ("Mi departamento") -- mismo patron que Gerencia.
-      document.getElementById('btn-volver-dashboard-jefatura').addEventListener('click', window.SigsoApp.mostrarDashboard);
-      document.getElementById('btn-actualizar-jefatura').addEventListener('click', function () {
-        SigsoJefatura.cargar();
-      });
-    }
-
-    if (vista === 'gerencia') {
-      mostrarVistaBandeja_('vista-gerencia');
-      SigsoGerencia.inicializarFiltros();
-      SigsoGerencia.cargar();
-    } else if (vista === 'jefatura') {
-      mostrarVistaBandeja_('vista-jefatura');
-      SigsoJefatura.cargar();
-    } else {
-      mostrarVistaBandeja_('vista-dashboard');
-      SigsoDashboard.cargar();
-    }
-  }
-
-  function mostrarVistaBandeja_(id) {
-    ['vista-dashboard', 'vista-detalle', 'vista-gerencia', 'vista-jefatura'].forEach(function (vista) {
-      document.getElementById(vista).classList.toggle('sigso-oculto', vista !== id);
-    });
   }
 
   // La gracia de tener cuenta: el formulario deja de pedirte quien eres.

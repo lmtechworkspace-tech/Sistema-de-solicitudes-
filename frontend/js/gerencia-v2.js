@@ -5,7 +5,7 @@
  * Una portada que junta solicitudes, proyectos, tareas, personas y pausas
  * (backend getResumenGerencia). Es el primer ítem de "Panel de gerencia";
  * las vistas que ya existían (tablero, línea de tiempo, actividades,
- * pausas, reportes) siguen igual y son el detalle de cada bloque.
+ * pausas, reportes) viven en gerencia-vistas-v2.js y son el detalle de cada bloque.
  *
  * El atraso se muestra con AMBAS medidas (decisión del dueño): "Fuera de
  * plazo (SLA)" como titular y, al lado, "atrasadas vs. fecha comprometida" y
@@ -27,6 +27,9 @@
   function tiene(m) { return !!(window.SigsoShell && SigsoShell.tieneModulo && SigsoShell.tieneModulo(m)); }
   function pct(n, d) { return d ? Math.round(n * 100 / d) : 0; }
   function irDetalle(item) { if (window.SigsoGerencia) SigsoGerencia.irAItem(item); }
+  // Las demás vistas (gerencia-vistas-v2.js) comparten el contenedor: una
+  // respuesta que llega tarde no debe pintar encima de otra vista.
+  function esResumen() { return !window.SigsoGerencia || !SigsoGerencia.vista || SigsoGerencia.vista() === 'resumen'; }
 
   // --- Montaje ----------------------------------------------------------------------
   function seccion() { return document.getElementById('modulo-bandeja'); }
@@ -56,7 +59,7 @@
     var t = ++turno_;
     if (!silencioso || !datos_) c.innerHTML = '<div class="sx2-pagina">' + cabecera(null) + U.esqueleto('kpis', 4) + U.esqueleto('tarjetas', 3) + '</div>';
     Promise.all([api('getResumenGerencia', {}), PY.cargarMiPerfil()]).then(function (r) {
-      if (t !== turno_) return;
+      if (t !== turno_ || !esResumen()) return;
       if (!r[0] || !r[0].ok) {
         c.innerHTML = '<div class="sx2-pagina">' + cabecera(null) + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo cargar el resumen',
           texto: (r[0] && r[0].message) || 'Inténtalo de nuevo.', accion: U.boton({ texto: 'Reintentar', icono: 'tendencia', clase: 'js-ge2-recargar' }) }) }) + '</div>';
@@ -68,7 +71,7 @@
       if (datos_.personas.ok) correos = datos_.personas.data.map(function (p) { return p.email; });
       if (datos_.proyectos.ok) correos = correos.concat(datos_.proyectos.data.atencion.map(function (p) { return p.lider_email; }));
       Promise.all([window.SigsoDirectorio ? SigsoDirectorio.resolver(correos) : Promise.resolve(), U.precargarFotos(correos)])
-        .then(function () { if (t === turno_) pintar(true); });
+        .then(function () { if (t === turno_ && esResumen()) pintar(true); });
     });
   }
 
@@ -78,7 +81,7 @@
     return '<header class="sx2-cabecera sx2-entra">' +
       '<div class="sx2-cabecera__txt"><span class="sx2-cabecera__migas">Panel de gerencia</span><h1>Resumen ejecutivo</h1>' +
         '<span class="sx2-tenue" style="font-size:.875rem">Toda la organización' + (hora ? ' · actualizado a las ' + hora : '') + '.</span></div>' +
-      '<div class="sx2-cabecera__acciones">' + U.boton({ soloIcono: true, icono: 'tendencia', titulo: 'Actualizar', clase: 'js-ge2-recargar' }) + '</div>' +
+      '<div class="sx2-cabecera__acciones">' + (d ? U.boton({ texto: 'Imprimir', icono: 'descargar', variante: 'fantasma', clase: 'js-ge2-imprimir', titulo: 'Imprimir o guardar como PDF' }) : '') + U.boton({ soloIcono: true, icono: 'tendencia', titulo: 'Actualizar', clase: 'js-ge2-recargar' }) + '</div>' +
     '</header>';
   }
 
@@ -214,6 +217,7 @@
   }
 
   function pintar(silencioso) {
+    if (!esResumen()) return;
     var c = contenedor();
     if (!c || !datos_) return;
     var y = window.scrollY, d = datos_;
@@ -240,9 +244,10 @@
   }
   document.addEventListener('click', function (ev) {
     var raiz = document.getElementById('gerencia-v2');
-    if (!raiz || !raiz.contains(ev.target)) return;
+    if (!raiz || !raiz.contains(ev.target) || !esResumen()) return;
     var t = ev.target, b;
     if (t.closest('.js-ge2-recargar')) { cargar(!!datos_); return; }
+    if (t.closest('.js-ge2-imprimir')) { window.print(); return; }
     if ((b = t.closest('.js-ge2-ir, [data-ge2-ir]'))) { irDetalle(b.getAttribute('data-ir') || b.getAttribute('data-ge2-ir')); return; }
     if (t.closest('.js-ge2-portafolio') || t.closest('[data-ge2-proyectos]')) { abrirProyecto(''); return; }
     if ((b = t.closest('[data-ge2-proyecto]'))) { abrirProyecto(b.getAttribute('data-ge2-proyecto')); return; }
@@ -255,7 +260,7 @@
   function usarVersion() { /* sin versión clásica */ }
 
   window.SigsoGerenciaV2 = {
-    // Lo llama gerencia.js al entrar al ítem "Resumen ejecutivo".
+    // Lo llama gerencia-vistas-v2.js al entrar al ítem "Resumen ejecutivo".
     mostrar: function () { cargar(!!datos_ && !!document.getElementById('gerencia-v2')); },
     // Lo llama el shell al cambiar de versión: entra (o sale) del resumen.
     cargar: function () { if (window.SigsoGerencia) SigsoGerencia.irAItem('resumen'); },
