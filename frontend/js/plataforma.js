@@ -551,23 +551,21 @@
     }
   }
 
-  // v5.0 F4 (§6.5): tour de bienvenida -- solo la primera sesion (por
-  // cuenta), generico entre roles (senala el chrome del shell, no datos).
-  // En movil el sidebar es un drawer oculto por defecto -- posicionar el
-  // tour ahi suma complejidad sin aportar mucho, asi que se omite y queda
-  // pendiente para la primera sesion en escritorio.
+  // Tour de bienvenida: solo la primera sesión (por navegador), en escritorio.
+  // Señala el marco, no datos, así sirve para cualquier rol. En celular el
+  // sidebar es un cajón oculto: se deja para la primera sesión en escritorio.
   var LLAVE_TOUR = 'sigso_tour_visto';
   var TOUR_PASOS = [
     { selector: '.plataforma-sidebar__cab .plataforma-header__marca', titulo: 'Bienvenido a SIGSO',
       texto: 'Este es tu panel: desde aquí llegas a todo lo que tu cuenta puede ver.' },
     { selector: '#nav-modulos', titulo: 'Tus módulos',
-      texto: 'La lista se arma según tu cuenta. Un clic te lleva de uno a otro sin recargar la página.' },
-    { selector: '#btn-tema', titulo: 'Modo oscuro',
-      texto: 'Si prefieres trabajar en oscuro, actívalo aquí — se recuerda para la próxima vez.' },
-    { selector: null, titulo: 'Busca y salta rápido',
-      texto: 'Presiona Ctrl+K (Cmd+K en Mac) en cualquier momento para buscar una pantalla o una solicitud por número.' },
-    { selector: '.plataforma-usuario', titulo: 'Tu cuenta',
-      texto: 'Aquí ves tu rol y cierras sesión cuando termines.' }
+      texto: 'La lista se arma según tu cuenta. Los módulos con flecha se despliegan en sus secciones.' },
+    { selector: '#btn-shell-buscar', titulo: 'Busca y salta rápido',
+      texto: 'Encuentra una pantalla o una solicitud por su número. También con Ctrl+K (Cmd+K en Mac) desde cualquier parte.' },
+    { selector: '.plataforma-sidebar__cab .js-shell-campana', titulo: 'Tus avisos',
+      texto: 'Lo que requiere tu atención llega aquí: asignaciones, novedades por leer y cambios en tus solicitudes.' },
+    { selector: '#btn-menu-usuario', titulo: 'Tu cuenta',
+      texto: 'Tu perfil y foto, los atajos de teclado y cerrar sesión. El modo oscuro está justo arriba.' }
   ];
   var tourPasoActual_ = 0;
 
@@ -580,12 +578,14 @@
   }
 
   function limpiarResaltadoTour_() {
-    var actual = document.querySelector('.sigso-tour-resaltado');
-    if (actual) actual.classList.remove('sigso-tour-resaltado');
+    var actual = document.querySelector('.sx2-tour-foco');
+    if (actual) actual.classList.remove('sx2-tour-foco');
   }
 
-  function posicionarTour_(el, elemento) {
-    var tour = document.getElementById('tour-bienvenida');
+  // Lo que está en el sidebar se explica a su derecha (nunca encima): la
+  // flecha apunta a la altura del elemento señalado.
+  function posicionarTour_(tour, elemento) {
+    tour.classList.toggle('sx2-tour--flecha', !!elemento);
     if (!elemento) {
       tour.style.top = '45%';
       tour.style.left = '50%';
@@ -593,57 +593,63 @@
       return;
     }
     var rect = elemento.getBoundingClientRect();
-    var top = Math.min(Math.max(rect.top, 12), window.innerHeight - 220);
-    tour.style.top = top + 'px';
-    tour.style.left = (rect.right + 16) + 'px';
+    var sidebar = elemento.closest('.plataforma-sidebar');
+    var izquierda = (sidebar ? sidebar.getBoundingClientRect().right : rect.right) + 16;
+    var alto = tour.offsetHeight || 200;
+    var centro = rect.top + Math.min(rect.height, 64) / 2;
+    var arriba = Math.min(Math.max(centro - 28, 12), window.innerHeight - alto - 12);
+    tour.style.top = arriba + 'px';
+    tour.style.left = izquierda + 'px';
     tour.style.transform = 'none';
+    tour.style.setProperty('--sx-tour-flecha', Math.max(16, Math.min(centro - arriba, alto - 16)) + 'px');
   }
 
   function mostrarPasoTour_() {
     limpiarResaltadoTour_();
     var paso = TOUR_PASOS[tourPasoActual_];
     var elemento = paso.selector ? document.querySelector(paso.selector) : null;
-    // Si el elemento de este paso no existe para esta cuenta (ej. modulo
-    // sin bandeja), se salta al siguiente en vez de apuntar a la nada.
-    if (paso.selector && !elemento) {
+    // Si el elemento de este paso no está a la vista para esta cuenta (p. ej.
+    // la campana antes de tener avisos), se salta en vez de apuntar a la nada.
+    if (paso.selector && !(elemento && elemento.getClientRects().length)) {
       if (tourPasoActual_ < TOUR_PASOS.length - 1) { tourPasoActual_++; mostrarPasoTour_(); }
       else cerrarTour_();
       return;
     }
-    if (elemento) elemento.classList.add('sigso-tour-resaltado');
+    if (elemento) elemento.classList.add('sx2-tour-foco');
 
-    document.getElementById('tour-paso-contador').textContent =
-      'Paso ' + (tourPasoActual_ + 1) + ' de ' + TOUR_PASOS.length;
+    document.getElementById('tour-paso-contador').textContent = 'Paso ' + (tourPasoActual_ + 1) + ' de ' + TOUR_PASOS.length;
     document.getElementById('tour-titulo').textContent = paso.titulo;
     document.getElementById('tour-texto').textContent = paso.texto;
-    document.getElementById('btn-tour-atras').classList.toggle('sigso-oculto', tourPasoActual_ === 0);
-    document.getElementById('btn-tour-siguiente').textContent =
-      tourPasoActual_ === TOUR_PASOS.length - 1 ? 'Listo' : 'Siguiente';
+    document.getElementById('btn-tour-atras').hidden = tourPasoActual_ === 0;
+    var siguiente = document.getElementById('btn-tour-siguiente');
+    siguiente.textContent = tourPasoActual_ === TOUR_PASOS.length - 1 ? 'Listo' : 'Siguiente';
 
     var tour = document.getElementById('tour-bienvenida');
-    tour.classList.remove('sigso-oculto');
+    tour.hidden = false;
     posicionarTour_(tour, elemento);
+    siguiente.focus();
   }
+
+  function tourAbierto_() { return !document.getElementById('tour-bienvenida').hidden; }
 
   function cerrarTour_() {
     limpiarResaltadoTour_();
-    document.getElementById('tour-bienvenida').classList.add('sigso-oculto');
+    document.getElementById('tour-bienvenida').hidden = true;
     try { localStorage.setItem(LLAVE_TOUR, '1'); } catch (err) { /* sin storage */ }
   }
 
   function wireTour_() {
     var btnSiguiente = document.getElementById('btn-tour-siguiente');
-    var btnAtras = document.getElementById('btn-tour-atras');
-    var btnSaltar = document.getElementById('btn-tour-saltar');
     if (!btnSiguiente) return;
     btnSiguiente.addEventListener('click', function () {
       if (tourPasoActual_ < TOUR_PASOS.length - 1) { tourPasoActual_++; mostrarPasoTour_(); }
       else cerrarTour_();
     });
-    btnAtras.addEventListener('click', function () {
+    document.getElementById('btn-tour-atras').addEventListener('click', function () {
       if (tourPasoActual_ > 0) { tourPasoActual_--; mostrarPasoTour_(); }
     });
-    btnSaltar.addEventListener('click', cerrarTour_);
+    document.getElementById('btn-tour-saltar').addEventListener('click', cerrarTour_);
+    window.addEventListener('resize', function () { if (tourAbierto_()) mostrarPasoTour_(); });
   }
 
   // v4.0: avatar de iniciales + rol visible. Antes solo se veia el nombre
@@ -877,23 +883,28 @@
     });
   }
 
-  // v5.0 F4 (§6.1): command palette -- indice en memoria (modulos de la
-  // cuenta + recientes ya cargados), sin backend nuevo. Enter ejecuta el
-  // resultado resaltado; flechas mueven la seleccion; Esc cierra.
+  // Buscar y saltar (Ctrl+K): pantallas de la cuenta (los módulos y las
+  // secciones de sus árboles, con el mismo permiso que usa el sidebar) y
+  // solicitudes recientes. Índice en memoria, sin backend. Enter abre lo
+  // resaltado; flechas mueven; Esc cierra.
   var paletaSeleccion_ = 0;
+  var PATRON_SOLICITUD_ = /^sol-\d{4}-[a-z]+-\d+$/i;
+
+  function paletaAbierta_() { return !document.getElementById('paleta-comandos').hidden; }
+  function itemsPaleta_() { return [].slice.call(document.querySelectorAll('#paleta-resultados .sx2-paleta__item')); }
 
   function wirePaleta_() {
-    var telon = document.getElementById('paleta-telon');
     var input = document.getElementById('paleta-input');
-    if (!telon || !input) return;
-    document.getElementById('ico-paleta-buscar').innerHTML = Iconos.svg('lupa', { tam: 16 });
-    telon.addEventListener('click', cerrarPaleta_);
+    var resultados = document.getElementById('paleta-resultados');
+    if (!input || !resultados) return;
+    document.getElementById('ico-paleta-buscar').innerHTML = Iconos.svg('lupa', { tam: 18 });
+    document.getElementById('paleta-telon').addEventListener('click', cerrarPaleta_);
     input.addEventListener('input', function () {
       paletaSeleccion_ = 0;
       renderResultadosPaleta_(input.value);
     });
     input.addEventListener('keydown', function (evento) {
-      var items = [].slice.call(document.querySelectorAll('.sigso-paleta__item'));
+      var items = itemsPaleta_();
       if (evento.key === 'ArrowDown') {
         evento.preventDefault();
         paletaSeleccion_ = Math.min(paletaSeleccion_ + 1, items.length - 1);
@@ -907,18 +918,35 @@
         if (items[paletaSeleccion_]) items[paletaSeleccion_].click();
       }
     });
+    resultados.addEventListener('mousemove', function (evento) {
+      var item = evento.target.closest('.sx2-paleta__item');
+      var items = itemsPaleta_();
+      var i = items.indexOf(item);
+      if (i !== -1 && i !== paletaSeleccion_) { paletaSeleccion_ = i; marcarSeleccionPaleta_(items, true); }
+    });
+    resultados.addEventListener('click', function (evento) {
+      var boton = evento.target.closest('.sx2-paleta__item');
+      if (!boton) return;
+      cerrarPaleta_();
+      var accion = boton.getAttribute('data-accion');
+      if (accion === 'ir') mostrarModulo_(boton.getAttribute('data-modulo'));
+      else if (accion === 'item') irAItemArbol_(boton.getAttribute('data-modulo'), boton.getAttribute('data-item'));
+      else if (accion === 'solicitud') abrirSolicitudDesdePaleta_(boton.getAttribute('data-id'));
+    });
   }
 
-  function marcarSeleccionPaleta_(items) {
+  function marcarSeleccionPaleta_(items, sinDesplazar) {
     items.forEach(function (el, idx) {
-      el.classList.toggle('sigso-paleta__item--activo', idx === paletaSeleccion_);
+      var sel = idx === paletaSeleccion_;
+      el.classList.toggle('sx2-paleta__item--activo', sel);
+      el.setAttribute('aria-selected', sel ? 'true' : 'false');
     });
-    if (items[paletaSeleccion_]) items[paletaSeleccion_].scrollIntoView({ block: 'nearest' });
+    if (!sinDesplazar && items[paletaSeleccion_]) items[paletaSeleccion_].scrollIntoView({ block: 'nearest' });
   }
 
   function abrirPaleta_() {
-    document.getElementById('paleta-telon').classList.remove('sigso-oculto');
-    document.getElementById('paleta-comandos').classList.remove('sigso-oculto');
+    cerrarAtajos_();
+    document.getElementById('paleta-comandos').hidden = false;
     var input = document.getElementById('paleta-input');
     input.value = '';
     paletaSeleccion_ = 0;
@@ -927,81 +955,111 @@
   }
 
   function cerrarPaleta_() {
-    document.getElementById('paleta-telon').classList.add('sigso-oculto');
-    document.getElementById('paleta-comandos').classList.add('sigso-oculto');
+    document.getElementById('paleta-comandos').hidden = true;
   }
 
   function normalizar_(texto) {
-    return String(texto || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+    return String(texto || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+
+  // Módulos de la cuenta + las secciones de sus árboles que la cuenta puede
+  // ver (el mismo predicado `visible` que obedece el sidebar).
+  function pantallasDeLaCuenta_() {
+    var lista = [{ modulo: 'home', item: '', nombre: 'Inicio', ruta: '', icono: 'inicio' }];
+    modulosDeLaCuenta_().filter(function (id) { return MODULOS_SHELL[id].interno; }).forEach(function (id) {
+      var def = MODULOS_SHELL[id];
+      lista.push({ modulo: id, item: '', nombre: def.nombre, ruta: '', icono: def.icono });
+      var reg = window.SigsoNav && SigsoNav.obtener(id);
+      if (!reg || !reg.submodulos) return;
+      reg.submodulos.forEach(function (sub) {
+        (sub.items || []).forEach(function (it) {
+          var llave = it.permiso || SigsoNav.partes(it.id).seccion;
+          if (typeof reg.visible === 'function' && reg.visible(llave, it) === false) return;
+          lista.push({
+            modulo: id, item: it.id, nombre: it.nombre,
+            ruta: sub.plano || sub.nombre === it.nombre ? def.nombre : def.nombre + ' › ' + sub.nombre,
+            icono: sub.icono || def.icono
+          });
+        });
+      });
+    });
+    return lista;
+  }
+
+  function itemPaletaHtml_(o) {
+    return '<button type="button" class="sx2-paleta__item" role="option" aria-selected="false" data-accion="' + o.accion + '"' +
+        ' data-modulo="' + UIv2.esc(o.modulo || '') + '" data-item="' + UIv2.esc(o.item || '') + '" data-id="' + UIv2.esc(o.id || '') + '">' +
+      '<span class="sx2-paleta__ico">' + Iconos.svg(o.icono || 'caja', { tam: 16 }) + '</span>' +
+      '<span class="sx2-paleta__txt"><strong>' + UIv2.esc(o.titulo) + '</strong>' +
+        (o.detalle ? '<span>' + UIv2.esc(o.detalle) + '</span>' : '') + '</span>' +
+    '</button>';
   }
 
   function renderResultadosPaleta_(texto) {
-    var q = normalizar_(texto);
+    var crudo = String(texto || '').trim();
+    var q = normalizar_(crudo);
     var cont = document.getElementById('paleta-resultados');
     var html = '';
 
-    var navegacion = [{ id: 'home', nombre: 'Inicio', icono: 'inicio' }]
-      .concat(modulosDeLaCuenta_().filter(function (id) { return MODULOS_SHELL[id].interno; })
-        .map(function (id) { return { id: id, nombre: MODULOS_SHELL[id].nombre, icono: MODULOS_SHELL[id].icono }; }))
-      .filter(function (item) { return !q || normalizar_(item.nombre).indexOf(q) !== -1; });
-
-    if (navegacion.length) {
-      html += '<div class="sigso-paleta__grupo">Ir a</div>' + navegacion.map(function (item) {
-        return '<button type="button" class="sigso-paleta__item" data-accion="ir" data-modulo="' + item.id + '">' +
-          Iconos.svg(item.icono, { tam: 16 }) + '<strong>' + Componentes.escaparHtml(item.nombre) + '</strong></button>';
+    // Sin texto: los módulos. Con texto: módulos y secciones que coinciden,
+    // ordenadas por dónde coincide (el nombre pesa más que el grupo en que
+    // vive: "report" trae todos los "Centro de reportes" antes que cada
+    // pantalla suelta del grupo Reportes).
+    var relevancia = function (p) {
+      var n = normalizar_(p.nombre);
+      if (n.indexOf(q) === 0) return 0;
+      if (n.split(/\s+/).some(function (w) { return w.indexOf(q) === 0; })) return 1;
+      return n.indexOf(q) !== -1 ? 2 : 3;
+    };
+    var pantallas = pantallasDeLaCuenta_().filter(function (p) {
+      return q ? normalizar_(p.nombre + ' ' + p.ruta).indexOf(q) !== -1 : !p.item;
+    });
+    if (q) {
+      pantallas.sort(function (a, b) { return relevancia(a) - relevancia(b); });
+      pantallas = pantallas.slice(0, 8);
+    }
+    if (pantallas.length) {
+      html += '<div class="sx2-paleta__grupo">Ir a</div>' + pantallas.map(function (p) {
+        return itemPaletaHtml_({ accion: p.item ? 'item' : 'ir', modulo: p.modulo, item: p.item, icono: p.icono, titulo: p.nombre, detalle: p.ruta });
       }).join('');
     }
 
-    var solicitudes = q && modulosDeLaCuenta_().indexOf('bandeja') !== -1
+    var conBandeja = modulosDeLaCuenta_().indexOf('bandeja') !== -1;
+    var solicitudes = q && conBandeja
       ? ultimosRecientes_.filter(function (s) {
           return normalizar_(s.solicitud_id).indexOf(q) !== -1 ||
             normalizar_(s.empresa_id).indexOf(q) !== -1 ||
             normalizar_(s.modulo).indexOf(q) !== -1;
-        }).slice(0, 6)
+        }).slice(0, 6).map(function (s) {
+          return { id: s.solicitud_id, detalle: [s.empresa_id, s.modulo].filter(Boolean).join(' · ') };
+        })
       : [];
-
+    // Un N° completo que no está entre las recientes igual se puede abrir: la
+    // Bandeja pide su detalle y el backend decide si la cuenta puede verla.
+    if (conBandeja && PATRON_SOLICITUD_.test(crudo) &&
+        !solicitudes.some(function (s) { return normalizar_(s.id) === q; })) {
+      solicitudes.unshift({ id: crudo.toUpperCase(), detalle: 'Abrir esta solicitud' });
+    }
     if (solicitudes.length) {
-      html += '<div class="sigso-paleta__grupo">Solicitudes</div>' + solicitudes.map(function (s) {
-        return '<button type="button" class="sigso-paleta__item" data-accion="solicitud" data-id="' + Componentes.escaparHtml(s.solicitud_id) + '">' +
-          Iconos.svg('caja', { tam: 16 }) +
-          '<strong>' + Componentes.escaparHtml(s.solicitud_id) + '</strong>' +
-          '<span>' + Componentes.escaparHtml(s.empresa_id) + ' · ' + Componentes.escaparHtml(s.modulo || '—') + '</span>' +
-          '</button>';
+      html += '<div class="sx2-paleta__grupo">Solicitudes</div>' + solicitudes.map(function (s) {
+        return itemPaletaHtml_({ accion: 'solicitud', id: s.id, icono: 'documento', titulo: s.id, detalle: s.detalle });
       }).join('');
     }
 
-    if (!navegacion.length && !solicitudes.length) {
-      html = '<div class="sigso-paleta__vacio">Nada coincide con "' + Componentes.escaparHtml(texto) + '".</div>';
+    if (!html) {
+      html = '<div class="sx2-paleta__vacio">Nada coincide con «' + UIv2.esc(crudo) + '».</div>';
     }
-
     cont.innerHTML = html;
-    cont.querySelectorAll('[data-accion="ir"]').forEach(function (boton) {
-      boton.addEventListener('click', function () {
-        cerrarPaleta_();
-        mostrarModulo_(boton.getAttribute('data-modulo'));
-      });
-    });
-    cont.querySelectorAll('[data-accion="solicitud"]').forEach(function (boton) {
-      boton.addEventListener('click', function () {
-        var id = boton.getAttribute('data-id');
-        cerrarPaleta_();
-        mostrarModulo_('bandeja');
-        // La bandeja ya tiene su propio buscador (dashboard.js): se reusa
-        // en vez de duplicar la logica de filtrado aqui.
-        setTimeout(function () {
-          var buscador = document.getElementById('buscar-recientes');
-          if (buscador) {
-            buscador.value = id;
-            buscador.dispatchEvent(new Event('input', { bubbles: true }));
-          }
-        }, 50);
-      });
-    });
-    marcarSeleccionPaleta_([].slice.call(cont.querySelectorAll('.sigso-paleta__item')));
+    marcarSeleccionPaleta_(itemsPaleta_());
   }
 
-  // v5.0 F4 (§6.2): atajos de teclado -- se ignoran mientras el foco esta
-  // en un campo de texto (para no interceptar mientras se escribe).
+  function abrirSolicitudDesdePaleta_(id) {
+    mostrarModulo_('bandeja');
+    if (window.SigsoBandejaV2 && SigsoBandejaV2.abrirSolicitud) SigsoBandejaV2.abrirSolicitud(id);
+  }
+
+  // Atajos de teclado: los de una letra se ignoran mientras el foco está en
+  // un campo de texto (para no interceptar mientras se escribe).
   var esperandoG_ = false;
   var temporizadorG_ = null;
 
@@ -1013,34 +1071,38 @@
 
   function wireAtajos_() {
     var btnCerrarAtajos = document.getElementById('btn-cerrar-atajos');
-    var telonAtajos = document.getElementById('atajos-telon');
     if (btnCerrarAtajos) {
       document.getElementById('ico-cerrar-atajos').innerHTML = Iconos.svg('equis', { tam: 16 });
       btnCerrarAtajos.addEventListener('click', cerrarAtajos_);
+      document.getElementById('atajos-telon').addEventListener('click', cerrarAtajos_);
     }
-    if (telonAtajos) telonAtajos.addEventListener('click', cerrarAtajos_);
+    var desdeMenu = document.getElementById('btn-menu-atajos');
+    if (desdeMenu) {
+      document.getElementById('ico-atajos').innerHTML = Iconos.svg('info', { tam: 15 });
+      desdeMenu.addEventListener('click', function () {
+        document.getElementById('menu-usuario').classList.add('sigso-oculto');
+        document.getElementById('btn-menu-usuario').setAttribute('aria-expanded', 'false');
+        abrirAtajos_();
+      });
+    }
 
     document.addEventListener('keydown', function (evento) {
-      var paletaAbierta = !document.getElementById('paleta-comandos').classList.contains('sigso-oculto');
-      var atajosAbiertos = !document.getElementById('panel-atajos').classList.contains('sigso-oculto');
-      var conSesion = !document.getElementById('vista-shell').hidden;
-      if (!conSesion) return; // login/cambio de clave: sin paleta ni atajos
+      if (document.getElementById('vista-shell').hidden) return; // acceso: sin buscador ni atajos
 
-      // Ctrl/Cmd+K abre la paleta desde cualquier parte, incluso con foco
-      // en un campo de texto (es la convencion de la industria).
+      // Ctrl/Cmd+K abre el buscador desde cualquier parte, incluso con foco
+      // en un campo de texto (es la convención de la industria).
       if ((evento.ctrlKey || evento.metaKey) && evento.key.toLowerCase() === 'k') {
         evento.preventDefault();
         abrirPaleta_();
         return;
       }
-      var tourAbierto = !document.getElementById('tour-bienvenida').classList.contains('sigso-oculto');
       if (evento.key === 'Escape') {
-        if (paletaAbierta) cerrarPaleta_();
-        else if (atajosAbiertos) cerrarAtajos_();
-        else if (tourAbierto) cerrarTour_();
+        if (paletaAbierta_()) cerrarPaleta_();
+        else if (atajosAbiertos_()) cerrarAtajos_();
+        else if (tourAbierto_()) cerrarTour_();
         return;
       }
-      if (paletaAbierta || atajosAbiertos || tourAbierto) return;
+      if (paletaAbierta_() || atajosAbiertos_() || tourAbierto_()) return;
       if (enCampoDeTexto_(evento.target)) return;
       if (evento.ctrlKey || evento.metaKey || evento.altKey) return;
 
@@ -1063,8 +1125,8 @@
           mostrarModulo_('bandeja');
         }
       } else if (evento.key === '/') {
-        var buscador = document.getElementById('buscar-recientes');
-        if (buscador && buscador.offsetParent !== null) {
+        var buscador = document.querySelector('#modulo-bandeja .js-bj2-buscar');
+        if (buscador && buscador.getClientRects().length) {
           evento.preventDefault();
           buscador.focus();
         }
@@ -1072,14 +1134,16 @@
     });
   }
 
+  function atajosAbiertos_() { return !document.getElementById('panel-atajos').hidden; }
+
   function abrirAtajos_() {
-    document.getElementById('atajos-telon').classList.remove('sigso-oculto');
-    document.getElementById('panel-atajos').classList.remove('sigso-oculto');
+    cerrarPaleta_();
+    document.getElementById('panel-atajos').hidden = false;
+    document.getElementById('btn-cerrar-atajos').focus();
   }
 
   function cerrarAtajos_() {
-    document.getElementById('atajos-telon').classList.add('sigso-oculto');
-    document.getElementById('panel-atajos').classList.add('sigso-oculto');
+    document.getElementById('panel-atajos').hidden = true;
   }
 
   function modulosDeLaCuenta_() {
@@ -1181,16 +1245,7 @@
         }
         mostrarModulo_(id);
       },
-      onItem: function (moduloId, itemId) {
-        // Si la hoja es de OTRO módulo, primero hay que abrirlo: el módulo
-        // consume la ruta al montarse (tomarItemDeRuta).
-        if (moduloId !== moduloActivo_) {
-          itemPendienteDeRuta_ = itemId;
-          mostrarModulo_(moduloId);
-          return;
-        }
-        irAItemDelModuloActivo_(moduloId, itemId);
-      }
+      onItem: irAItemArbol_
     });
 
     // Los contadores los rellena actualizarContadores_ sobre [data-badge].
@@ -1209,6 +1264,17 @@
     novedades: function (id) { return window.SigsoNovedades && window.SigsoNovedades.irAItem && window.SigsoNovedades.irAItem(id); },
     pausas_coordinacion: function (id) { return window.SigsoCoordinacion && window.SigsoCoordinacion.irAItem && window.SigsoCoordinacion.irAItem(id); }
   };
+
+  // Ir a una sección de un árbol (sidebar y buscador). Si es de OTRO módulo,
+  // primero se abre: el módulo consume la ruta al montarse (tomarItemDeRuta).
+  function irAItemArbol_(moduloId, itemId) {
+    if (moduloId !== moduloActivo_) {
+      itemPendienteDeRuta_ = itemId;
+      mostrarModulo_(moduloId);
+      return;
+    }
+    irAItemDelModuloActivo_(moduloId, itemId);
+  }
 
   function irAItemDelModuloActivo_(moduloId, itemId) {
     var ir = IR_A_ITEM_POR_MODULO[moduloId];

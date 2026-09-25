@@ -1453,3 +1453,27 @@ los usa): quedaban cinco clásicos cargados. `detalle.js`, `estado.js` y
   el botón habilitado (el sandbox no tiene R2), éxito y eliminación
   (simulados en la respuesta) con foto en el menú, Escape, celular sin
   desbordes.
+
+### R12c Buscador (Ctrl+K), hoja de atajos y tour — ESTADO: HECHO
+- **Buscador**: diálogo v2 que ahora encuentra también las SECCIONES de
+  cada módulo (árboles del sidebar, con el mismo permiso `visible`), no solo
+  los módulos; orden por relevancia (nombre que empieza > palabra que
+  empieza > contiene > solo en la ruta). Solicitudes: las recientes del
+  Inicio y un N° completo aunque no esté entre ellas. Arreglo: elegir una
+  solicitud intentaba rellenar `#buscar-recientes` del tablero clásico (ya
+  no existía); ahora abre su detalle en la Bandeja v2.
+- El árbol del sidebar y el buscador navegan por el mismo camino
+  (`irAItemArbol_`).
+- **Atajos**: hoja v2, también desde el menú de usuario (antes solo con
+  "?"). Arreglo: "/" enfocaba el buscador del tablero clásico; ahora el de
+  la Bandeja v2.
+- **Tour**: tarjeta v2 con flecha, siempre a la derecha del sidebar (antes
+  tapaba el propio sidebar), anillo v2 en lo señalado, pasos actualizados
+  al marco v2 (Buscar, campana de avisos, menú de cuenta); salta los pasos
+  cuyo elemento no está a la vista.
+- Corrección previa (`d73350d`): tras R12a los atajos quedaban activos en
+  el login (preguntaban por `sigso-oculto` en el shell).
+- Sandbox: búsquedas con y sin tildes, navegación a sección de otro módulo
+  y del mismo, solicitud reciente, existente y desconocida, "?", menú,
+  "/" en la Bandeja, Esc; tour de 5 pasos sin tapar el sidebar; los 12
+  módulos + Novedades sin errores.

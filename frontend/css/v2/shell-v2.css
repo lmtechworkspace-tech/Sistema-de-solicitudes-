@@ -98,3 +98,75 @@ body.sx2, body.sx2 .plataforma-shell { background: var(--sx-fondo); }
 @media (max-width: 600px) {
   .sx2-fila-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sx-e-3); }
 }
+
+/* --- R12c: Buscar y saltar (Ctrl+K) y hoja de atajos --------------------------
+   Mismo diálogo para ambos: telón + caja centrada arriba (como un buscador),
+   por encima de drawers (70) y diálogos (80). */
+.sx2-paleta { position: fixed; inset: 0; z-index: 90; display: flex; justify-content: center; align-items: flex-start; padding: 12vh var(--sx-e-4) var(--sx-e-4); }
+.sx2-paleta__telon { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(2px); animation: sx2-aparece var(--sx-dur-rapida) var(--sx-curva); }
+.sx2-paleta__caja {
+  position: relative; width: 100%; max-width: 600px; max-height: 70vh; display: flex; flex-direction: column;
+  border-radius: var(--sx-radio-xl); background: var(--sx-superficie); box-shadow: var(--sx-sombra-3); overflow: hidden;
+  animation: sx2-escala var(--sx-dur) var(--sx-curva-sale);
+}
+.sx2-paleta__buscador { display: flex; align-items: center; gap: var(--sx-e-3); padding: 14px 16px; border-bottom: 1px solid var(--sx-borde-suave); color: var(--sx-texto-3); cursor: text; }
+.sx2-paleta__buscador input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font: 500 1rem/1.4 var(--fuente); color: var(--sx-texto); }
+.sx2-paleta__buscador input::placeholder { color: var(--sx-texto-3); }
+.sx2-paleta kbd, .sx2-atajos kbd {
+  display: inline-block; min-width: 22px; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--sx-borde); border-bottom-width: 2px;
+  background: var(--sx-superficie-2); font: 600 .6875rem/1.3 var(--fuente); color: var(--sx-texto-2); text-align: center;
+}
+.sx2-paleta__resultados { overflow-y: auto; padding: 6px; }
+.sx2-paleta__grupo { padding: 10px 10px 4px; font: var(--sx-t-etiqueta); letter-spacing: .04em; text-transform: uppercase; color: var(--sx-texto-3); }
+.sx2-paleta__item {
+  width: 100%; display: flex; align-items: center; gap: var(--sx-e-3); padding: 8px 10px; border: 0; border-radius: var(--sx-radio);
+  background: transparent; text-align: left; cursor: pointer; color: var(--sx-texto); font-family: var(--fuente);
+}
+.sx2-paleta__item--activo { background: var(--sx-primario-suave); }
+.sx2-paleta__item:focus-visible { outline: none; box-shadow: var(--sx-anillo-foco); }
+.sx2-paleta__ico { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--sx-radio-sm); background: var(--sx-superficie-2); color: var(--sx-texto-2); }
+.sx2-paleta__item--activo .sx2-paleta__ico { background: var(--sx-superficie); color: var(--sx-primario); }
+.sx2-paleta__txt { min-width: 0; display: flex; flex-direction: column; }
+.sx2-paleta__txt strong { font: 600 .875rem/1.3 var(--fuente); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sx2-paleta__txt span { font: var(--sx-t-micro); color: var(--sx-texto-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sx2-paleta__vacio { padding: 28px 16px; text-align: center; font: var(--sx-t-chico); color: var(--sx-texto-3); }
+.sx2-paleta__pie { margin: 0; padding: 10px 16px; border-top: 1px solid var(--sx-borde-suave); font: var(--sx-t-micro); color: var(--sx-texto-3); }
+.sx2-paleta__pie kbd { min-width: 0; padding: 0 5px; margin-right: 2px; }
+
+.sx2-atajos { max-width: 480px; }
+.sx2-atajos__cab { display: flex; align-items: center; justify-content: space-between; padding: 14px 12px 6px 18px; }
+.sx2-atajos__cab h2 { margin: 0; font: var(--sx-t-h2); color: var(--sx-texto); }
+.sx2-atajos__lista { margin: 0; padding: 6px 18px 12px; display: flex; flex-direction: column; }
+.sx2-atajos__lista > div { display: flex; align-items: center; justify-content: space-between; gap: var(--sx-e-4); padding: 10px 0; border-bottom: 1px solid var(--sx-borde-suave); }
+.sx2-atajos__lista > div:last-child { border-bottom: 0; }
+.sx2-atajos__lista dt { flex: none; display: flex; align-items: center; gap: 4px; font: var(--sx-t-micro); color: var(--sx-texto-3); }
+.sx2-atajos__lista dd { margin: 0; text-align: right; font: var(--sx-t-chico); color: var(--sx-texto); }
+
+/* --- R12c: tour de bienvenida --------------------------------------------------- */
+.sx2-tour {
+  position: fixed; z-index: 60; width: 300px; padding: 16px 16px 14px; border-radius: var(--sx-radio-lg);
+  background: var(--sx-superficie); border: 1px solid var(--sx-borde-suave); box-shadow: var(--sx-sombra-3);
+  animation: sx2-escala var(--sx-dur) var(--sx-curva-sale);
+}
+/* Flecha hacia la izquierda, a la altura del elemento señalado. */
+.sx2-tour--flecha::before {
+  content: ''; position: absolute; left: -7px; top: var(--sx-tour-flecha, 28px); width: 12px; height: 12px; margin-top: -6px;
+  background: var(--sx-superficie); border-left: 1px solid var(--sx-borde-suave); border-bottom: 1px solid var(--sx-borde-suave);
+  transform: rotate(45deg);
+}
+.sx2-tour__paso { margin: 0 0 4px; font: var(--sx-t-etiqueta); letter-spacing: .04em; text-transform: uppercase; color: var(--sx-primario); }
+.sx2-tour__titulo { margin: 0 0 6px; font: 600 1rem/1.3 var(--fuente); color: var(--sx-texto); }
+.sx2-tour__texto { margin: 0; font: var(--sx-t-chico); line-height: 1.5; color: var(--sx-texto-2); }
+.sx2-tour__pie { display: flex; align-items: center; justify-content: space-between; gap: var(--sx-e-2); margin-top: 14px; }
+.sx2-tour__nav { display: flex; gap: var(--sx-e-2); }
+/* Anillo sobre lo que se está explicando (sin oscurecer la pantalla). */
+.sx2-tour-foco { position: relative; z-index: 1; border-radius: 10px; box-shadow: 0 0 0 3px var(--sx-primario), 0 0 0 7px color-mix(in srgb, var(--sx-primario) 30%, transparent) !important; transition: box-shadow var(--sx-dur) var(--sx-curva); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sx2-paleta__telon, .sx2-paleta__caja, .sx2-tour { animation: none; }
+}
+@media (max-width: 600px) {
+  .sx2-paleta { padding-top: var(--sx-e-4); }
+  .sx2-paleta__caja { max-height: calc(100dvh - 2 * var(--sx-e-4)); }
+  .sx2-paleta__pie { display: none; }
+}

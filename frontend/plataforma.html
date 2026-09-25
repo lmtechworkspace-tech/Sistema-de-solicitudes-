@@ -209,11 +209,6 @@
       <nav class="plataforma-sidebar__nav" id="nav-modulos"></nav>
 
       <div class="plataforma-sidebar__pie">
-        <!-- H-04: version del backend que esta REALMENTE respondiendo. Sirve
-             para dos cosas: saber que hay desplegado sin abrir Apps Script, y
-             poder decirla cuando algo falla ("¿qué versión tienes?"). Si el
-             backend quedó atrás, esto se convierte en un aviso -- solo para
-             Admin, que es quien puede resolverlo. -->
         <button type="button" class="plataforma-sidebar__tema" id="btn-tema" aria-label="Cambiar a modo oscuro">
           <span id="ico-tema"></span><span class="plataforma-sidebar__txt">Modo oscuro</span>
         </button>
@@ -235,6 +230,9 @@
             <button type="button" class="plataforma-menu__item" id="btn-mi-perfil" role="menuitem">
               <span id="ico-perfil"></span> Mi perfil
             </button>
+            <button type="button" class="plataforma-menu__item" id="btn-menu-atajos" role="menuitem">
+              <span id="ico-atajos"></span> Atajos de teclado
+            </button>
             <button type="button" class="plataforma-menu__item" id="btn-logout" role="menuitem">
               <span id="ico-salir"></span> Cerrar sesi&oacute;n
             </button>
@@ -249,49 +247,52 @@
          La llena plataforma.js (pintarBarraInferior_). -->
     <nav class="shell-barra" id="shell-barra" aria-label="Navegación rápida"></nav>
 
-    <!-- v5.0 F4 (§6.1/6.2): command palette (Ctrl+K) -- buscar y saltar sin
-         soltar el teclado. Indice en memoria (modulos de la cuenta +
-         recientes ya cargados), sin backend nuevo. -->
-    <div class="sigso-paleta__telon sigso-oculto" id="paleta-telon"></div>
-    <div class="sigso-paleta sigso-oculto" id="paleta-comandos" role="dialog" aria-modal="true" aria-label="Buscar y saltar">
-      <div class="sigso-paleta__buscador">
-        <span id="ico-paleta-buscar"></span>
-        <input type="text" id="paleta-input" placeholder="Buscar una pantalla o una solicitud (Nº, empresa, módulo)…" autocomplete="off" />
-        <kbd>Esc</kbd>
+    <!-- Buscar y saltar (Ctrl+K): pantallas de la cuenta (módulos y secciones
+         del árbol) y solicitudes recientes. Índice en memoria, sin backend. -->
+    <div class="sx2-paleta" id="paleta-comandos" role="dialog" aria-modal="true" aria-label="Buscar y saltar" hidden>
+      <div class="sx2-paleta__telon" id="paleta-telon"></div>
+      <div class="sx2-paleta__caja">
+        <label class="sx2-paleta__buscador">
+          <span id="ico-paleta-buscar" aria-hidden="true"></span>
+          <input type="text" id="paleta-input" placeholder="Busca una pantalla o una solicitud (N°, empresa, módulo)…" autocomplete="off" aria-controls="paleta-resultados" />
+          <kbd>Esc</kbd>
+        </label>
+        <div class="sx2-paleta__resultados" id="paleta-resultados" role="listbox"></div>
+        <p class="sx2-paleta__pie"><kbd>↑</kbd><kbd>↓</kbd> moverse · <kbd>Enter</kbd> abrir · <kbd>?</kbd> atajos</p>
       </div>
-      <div class="sigso-paleta__resultados" id="paleta-resultados"></div>
     </div>
 
-    <!-- v5.0 F4 (§6.2): hoja de atajos (?) -- referencia rapida, no un tour. -->
-    <div class="sigso-paleta__telon sigso-oculto" id="atajos-telon"></div>
-    <div class="sigso-atajos sigso-oculto" id="panel-atajos" role="dialog" aria-modal="true" aria-label="Atajos de teclado">
-      <div class="sigso-drawer__cab">
-        <h2>Atajos de teclado</h2>
-        <button type="button" class="sigso-drawer__cerrar" id="btn-cerrar-atajos" aria-label="Cerrar"><span id="ico-cerrar-atajos"></span></button>
+    <!-- Hoja de atajos (tecla ?, o desde el menú de usuario). -->
+    <div class="sx2-paleta" id="panel-atajos" role="dialog" aria-modal="true" aria-labelledby="atajos-titulo" hidden>
+      <div class="sx2-paleta__telon" id="atajos-telon"></div>
+      <div class="sx2-paleta__caja sx2-atajos">
+        <div class="sx2-atajos__cab">
+          <h2 id="atajos-titulo">Atajos de teclado</h2>
+          <button type="button" class="sx2-boton sx2-boton--fantasma sx2-boton--icono" id="btn-cerrar-atajos" aria-label="Cerrar"><span id="ico-cerrar-atajos"></span></button>
+        </div>
+        <dl class="sx2-atajos__lista">
+          <div><dt><kbd>Ctrl</kbd><kbd>K</kbd></dt><dd>Buscar y saltar a una pantalla o solicitud</dd></div>
+          <div><dt><kbd>N</kbd></dt><dd>Nueva solicitud</dd></div>
+          <div><dt><kbd>G</kbd> luego <kbd>B</kbd></dt><dd>Ir a la Bandeja de trabajo</dd></div>
+          <div><dt><kbd>/</kbd></dt><dd>Buscar dentro de la Bandeja</dd></div>
+          <div><dt><kbd>Esc</kbd></dt><dd>Cerrar lo que esté abierto</dd></div>
+          <div><dt><kbd>?</kbd></dt><dd>Esta hoja de atajos</dd></div>
+        </dl>
+        <p class="sx2-paleta__pie">Los atajos de una letra no actúan mientras escribes en un campo.</p>
       </div>
-      <ul class="sigso-atajos__lista">
-        <li><kbd>Ctrl</kbd> + <kbd>K</kbd><span>Buscar y saltar</span></li>
-        <li><kbd>N</kbd><span>Nueva solicitud</span></li>
-        <li><kbd>G</kbd> luego <kbd>B</kbd><span>Ir a Bandeja de trabajo</span></li>
-        <li><kbd>/</kbd><span>Foco en el buscador de la bandeja</span></li>
-        <li><kbd>Esc</kbd><span>Cerrar lo que esté abierto</span></li>
-        <li><kbd>?</kbd><span>Esta hoja de atajos</span></li>
-      </ul>
     </div>
 
-    <!-- v5.0 F4 (§6.5): tour de bienvenida -- solo la primera sesion,
-         guardado en localStorage. Sin dimming de pantalla completa (evita
-         complejidad de mascara/z-index): un anillo en el elemento senalado
-         alcanza para orientar sin tapar nada. -->
-    <div class="sigso-tour sigso-oculto" id="tour-bienvenida" role="dialog" aria-modal="false" aria-label="Tour de bienvenida">
-      <p class="sigso-tour__paso" id="tour-paso-contador"></p>
-      <h3 id="tour-titulo"></h3>
-      <p id="tour-texto"></p>
-      <div class="sigso-tour__pie">
-        <button type="button" class="sigso-boton--secundario" id="btn-tour-saltar">Saltar</button>
-        <div class="sigso-tour__nav">
-          <button type="button" class="sigso-boton--secundario" id="btn-tour-atras">Atrás</button>
-          <button type="button" class="sigso-boton" id="btn-tour-siguiente">Siguiente</button>
+    <!-- Tour de bienvenida: solo la primera sesión en escritorio (localStorage).
+         Sin oscurecer la pantalla: un anillo en el elemento señalado. -->
+    <div class="sx2-tour" id="tour-bienvenida" role="dialog" aria-modal="false" aria-labelledby="tour-titulo" hidden>
+      <p class="sx2-tour__paso" id="tour-paso-contador"></p>
+      <h3 class="sx2-tour__titulo" id="tour-titulo"></h3>
+      <p class="sx2-tour__texto" id="tour-texto"></p>
+      <div class="sx2-tour__pie">
+        <button type="button" class="sx2-boton sx2-boton--fantasma sx2-boton--sm" id="btn-tour-saltar">Saltar</button>
+        <div class="sx2-tour__nav">
+          <button type="button" class="sx2-boton sx2-boton--secundario sx2-boton--sm" id="btn-tour-atras">Atrás</button>
+          <button type="button" class="sx2-boton sx2-boton--primario sx2-boton--sm" id="btn-tour-siguiente">Siguiente</button>
         </div>
       </div>
     </div>
