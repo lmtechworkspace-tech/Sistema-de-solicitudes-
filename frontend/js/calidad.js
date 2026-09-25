@@ -91,12 +91,17 @@
     recargar: function () { render_(); },
     // 8C: desde Personas v2 se abre la ficha completa clásica.
     abrirFicha: function (personaId, sinListado) {
-      if (window.SigsoCalidadV2) window.SigsoCalidadV2.desmontar();
       fichaSinListado_ = !!sinListado;
       personaActivaId_ = personaId;
+      // R8b: la ficha es v2 (calidad-ficha-v2.js).
+      if (window.SigsoCalidadFichaV2) { SigsoCalidadFichaV2.abrir(personaId, !!sinListado); return; }
+      if (window.SigsoCalidadV2) window.SigsoCalidadV2.desmontar();
       abrirPersona_(personaId);
     },
-    formularioPersona: function () { abrirFormularioPersona_(null); }
+    formularioPersona: function () {
+      if (window.SigsoCalidadFichaV2) { SigsoCalidadFichaV2.nueva(); return; }
+      abrirFormularioPersona_(null);
+    }
   };
 
   // v13.0: la arquitectura se REGISTRA para que el sidebar la dibuje. El
@@ -160,6 +165,23 @@
     if (personasV2_() && seccionActiva_ === 'personas' && !personaActivaId_) {
       pintarNavSgc_();
       v2.mostrarPersonas();
+      return;
+    }
+    // R8b: ficha de la persona y Capacitaciones en v2.
+    if (window.SigsoCalidadFichaV2 && seccionActiva_ === 'personas' && personaActivaId_) {
+      pintarNavSgc_();
+      SigsoCalidadFichaV2.abrir(personaActivaId_, fichaSinListado_);
+      return;
+    }
+    if (window.SigsoCalidadFichaV2 && seccionActiva_ === 'capacitaciones') {
+      pintarNavSgc_();
+      SigsoCalidadFichaV2.mostrarCapacitaciones();
+      return;
+    }
+    // R8b: Medición (objetivos e indicadores) en v2.
+    if (window.SigsoCalidadMedicionV2 && SigsoCalidadMedicionV2.vistas.indexOf(seccionActiva_) !== -1) {
+      pintarNavSgc_();
+      SigsoCalidadMedicionV2.mostrar(seccionActiva_);
       return;
     }
     // R8: Seguimiento y mejora (NC, quejas, auditorías, revisión) es 100 % v2.

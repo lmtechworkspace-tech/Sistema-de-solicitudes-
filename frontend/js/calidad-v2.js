@@ -61,6 +61,36 @@
     return Math.round((Date.parse(k + 'T12:00:00Z') - Date.parse(PY.hoyClave() + 'T12:00:00Z')) / 86400000);
   }
 
+  // --- Archivos del SGC (R8b): ver un PDF en pestaña nueva / descargar ----------------
+  // Mismo criterio que calidad.js: la pestaña se abre DENTRO del clic (si no, el
+  // navegador la bloquea) y el archivo nunca tiene URL fija: cada vez se pide al
+  // backend, que revalida el permiso.
+  function blobUrl(b64, mime) {
+    var bytes = atob(b64), arr = new Uint8Array(bytes.length);
+    for (var i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    return URL.createObjectURL(new Blob([arr], { type: mime || 'application/octet-stream' }));
+  }
+  function verArchivo(accion, datos) {
+    var ventana = window.open('', '_blank');
+    api(accion, datos).then(function (r) {
+      if (!r || !r.ok) { if (ventana) ventana.close(); PY.aviso((r && r.message) || 'No se pudo abrir el archivo.', 'error'); return; }
+      if (!ventana) { PY.aviso('El navegador bloqueó la pestaña nueva. Permite ventanas emergentes para SIGSO.', 'error'); return; }
+      var url = blobUrl(r.data.contenido_base64, r.data.mime);
+      ventana.location = url;
+      setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    });
+  }
+  function descargarArchivo(accion, datos) {
+    return api(accion, datos).then(function (r) {
+      if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo descargar.', 'error'); return; }
+      PY.descargarBase64(r.data.contenido_base64, r.data.nombre_archivo || 'documento', r.data.mime);
+    });
+  }
+  function errorSubida(err) {
+    var msg = err && err.message ? String(err.message) : '';
+    return msg && !/^(failed to fetch|networkerror|load failed|typeerror)/i.test(msg) ? msg : 'No se pudo leer o subir el archivo. Revisa tu conexión e inténtalo de nuevo.';
+  }
+
   // Filas para el Inicio de SIGSO (documentos por confirmar).
   function filasInicio(docs) {
     return (docs || []).map(function (x) {
@@ -348,7 +378,8 @@
     // 8C: Personas (calidad-personas-v2.js).
     mostrarPersonas: function () { if (window.SigsoCalidadPersonasV2) SigsoCalidadPersonasV2.mostrar(); },
     // Lo compartido con calidad-documentos-v2.js.
-    util: { api: api, TIPO: TIPO, plazo: plazo, fechaChile: fechaChile, diasHasta: diasHasta, contenedor: contenedor, ocupa: ocupa, desmontar: desmontar },
+    util: { api: api, TIPO: TIPO, plazo: plazo, fechaChile: fechaChile, diasHasta: diasHasta, contenedor: contenedor, ocupa: ocupa, desmontar: desmontar,
+      verArchivo: verArchivo, descargarArchivo: descargarArchivo, errorSubida: errorSubida },
     cargar: function () { if (window.SigsoCalidad) SigsoCalidad.recargar(); },
     refrescar: function () {
       if (ocupa('documentos')) { if (window.SigsoCalidadDocsV2) SigsoCalidadDocsV2.refrescar(); }

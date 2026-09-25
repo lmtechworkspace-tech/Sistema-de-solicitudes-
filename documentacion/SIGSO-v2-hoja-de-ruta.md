@@ -1285,3 +1285,35 @@ y deja de cargarse en la última tanda.
   hallazgo obligatorio si no es conforme, fechas no pasadas donde aplica).
 - Sandbox (admin): los cuatro ciclos completos de punta a punta, incluida
   NC no eficaz y NC desde hallazgo; teléfono sin scroll horizontal.
+
+### R8b Personas (ficha y Capacitaciones) y Medición 100 % v2 — ESTADO: HECHO
+- `calidad-ficha-v2.js`:
+  - **Ficha de la persona**: cabecera con foto, cargo y alertas (inducción
+    x/5, descriptor, evaluación, horas del año) y cinco pestañas: Datos
+    (editar, desvincular/reactivar, quitar del alcance), Descriptor (versión
+    vigente, ver/descargar archivo, criterios de evaluación, versiones
+    archivadas; nueva versión o corrección con archivo), Documentos (cargar,
+    ver PDF, descargar, reemplazar archivo, quitar), Inducción (registrar
+    cada ítem con fecha —por defecto la de ingreso, nunca futura— y relator)
+    y Competencias (anillo de horas contra la meta; evaluación con la escala
+    en botones 1-4 por ítem del descriptor e historial).
+  - **Capacitaciones**: KPIs, tarjetas por curso (programada/realizada,
+    asistentes con su eficacia), horas de formación por persona en barras
+    contra la meta, programar, registrar realización con buscador de
+    asistentes y evaluar eficacia (obligatorio justificar si no fue eficaz).
+- `calidad-medicion-v2.js`:
+  - **Objetivos de calidad**: tablero del año en tarjetas (última medición,
+    meta, fuente, pendientes), abrir año, ficha lateral con serie y tabla de
+    períodos, medir (con "Traer datos del sistema" y % calculado), anular
+    medición con motivo, editar objetivo.
+  - **Indicadores**: KPIs filtrables por veredicto, lista con fórmula, meta
+    y tolerancia, proceso/objetivo/responsable y mini serie de mediciones;
+    medir eligiendo año y período según la frecuencia (antes se escribía
+    "2026-M03" a mano), definir, editar, quitar.
+- `calidad-v2.js` (util): ver PDF en pestaña nueva, descargar y mensajes de
+  subida, compartidos por todas las pantallas de Calidad v2.
+- Sandbox (admin): ficha completa (evaluación, edición, corrección de
+  descriptor), capacitación programada y realizada, indicador definido y
+  medido dos veces, objetivo medido; teléfono sin scroll horizontal. La
+  subida de archivos no se pudo probar en el sandbox (sin almacenamiento
+  configurado); el error se muestra con su mensaje real.
