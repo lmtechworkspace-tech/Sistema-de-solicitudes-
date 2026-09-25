@@ -42,6 +42,7 @@ const Pausas = require('../logica/pausas');
 const ResumenGerencia = require('../logica/resumenGerencia');
 const MiEquipo = require('../logica/miEquipo');
 const SaludConfig = require('../logica/saludConfig');
+const CaminoSgc = require('../logica/caminoSgc');
 const Actividades = require('../logica/actividades');
 const Proyectos = require('../logica/proyectos');
 const Calidad = require('../logica/calidadSgc');
@@ -142,6 +143,8 @@ const ACCIONES = {
   getMiEquipo: (db, data, contexto) => MiEquipo.getMiEquipo(db, data, contexto),
   getSaludConfig: (db, data, contexto) => SaludConfig.getSalud(db, data, contexto),
   arreglarSaludConfig: (db, data, contexto) => SaludConfig.arreglar(db, data, contexto),
+  getCaminoCertificacionSgc: (db, data, contexto) => CaminoSgc.getCamino(db, data, contexto),
+  aplicarEtiquetasSgc: (db, data, contexto) => CaminoSgc.aplicarEtiquetas(db, data, contexto),
   getPanelJefatura: (db, data, contexto) => Jefatura.getPanel(db, data, contexto),
 
   listarLogsNotificaciones: (db, data, contexto) => Notificaciones.listarLogs(db, data, contexto),

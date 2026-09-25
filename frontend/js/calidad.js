@@ -68,7 +68,13 @@
     irAItem: function (itemId) {
       var p = window.SigsoNav ? SigsoNav.partes(itemId) : { seccion: itemId, argumento: '' };
       irASeccion_(p.seccion === 'tablero' ? 'inicio' : p.seccion, p.argumento);
-    }
+    },
+    // v2 (8A): tras etiquetar documentos desde el Inicio, los listados en
+    // caché (Documentos, Cobertura) ya no son los vigentes.
+    invalidar: function () { cacheListadoSgc_ = {}; },
+    // El Inicio v2 trae secciones_visibles (listarDocumentosSgc): con eso el
+    // árbol se poda igual que cuando el Inicio clásico las recibía.
+    usarSecciones: function (sv) { if (sv) { seccionesVisibles_ = sv; pintarNavSgc_(); } }
   };
 
   // v13.0: la arquitectura se REGISTRA para que el sidebar la dibuje. El
@@ -111,6 +117,15 @@
   }
 
   function render_() {
+    // SIGSO v2, Módulo 8A: el Inicio es "Camino a la certificación"
+    // (calidad-v2.js) salvo que la persona haya vuelto a la versión clásica.
+    var v2 = window.SigsoCalidadV2;
+    if (v2 && v2.activo() && (seccionActiva_ === 'inicio' || seccionActiva_ === 'tablero')) {
+      pintarNavSgc_();
+      v2.mostrarInicio();
+      return;
+    }
+    if (v2) v2.desmontar();
     if (seccionActiva_ === 'personas') {
       if (personaActivaId_) abrirPersona_(personaActivaId_); else cargarPersonas_();
     } else if (seccionActiva_ === 'capacitaciones') {

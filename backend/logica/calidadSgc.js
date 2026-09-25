@@ -232,11 +232,21 @@ function esRevisionVencida_(proximaRevision, ahora) {
   const f = new Date(proximaRevision);
   return !isNaN(f.getTime()) && f < (ahora || new Date());
 }
+// Días de calendario en Chile entre hoy y la fecha (SIGSO v2, 8A). Antes
+// restaba instantes UTC: un plazo "2026-09-23" consultado el 24 a las 22:00
+// de Chile (25 en UTC) daba "venció hace 2 días" en vez de 1.
+function claveDiaChile_(d) { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(d); }
 function diasHasta_(fecha, ahora) {
   if (!fecha) return null;
-  const f = new Date(fecha);
-  if (isNaN(f.getTime())) return null;
-  return Math.round((f - (ahora || new Date())) / 86400000);
+  let clave = String(fecha).slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(clave)) {
+    const f = new Date(fecha);
+    if (isNaN(f.getTime())) return null;
+    clave = claveDiaChile_(f);
+  }
+  const hoy = claveDiaChile_(ahora || new Date());
+  const aUtc = (k) => Date.UTC(Number(k.slice(0, 4)), Number(k.slice(5, 7)) - 1, Number(k.slice(8, 10)));
+  return Math.round((aUtc(clave) - aUtc(hoy)) / 86400000);
 }
 
 // Firmas de archivo aceptadas: PDF, DOCX/XLSX/PPTX (ZIP) y DOC/XLS legado
@@ -911,6 +921,9 @@ module.exports = {
   // parsearClausulasIso_: la usa MatrizCobertura (Fase 6b) para leer qué
   // documentos respaldan cada cláusula ISO.
   parsearClausulasIso_,
+  // audienciaDocumentoSgc_: la usa CaminoSgc (SIGSO v2, 8A) para el
+  // cumplimiento de acuses de todos los documentos en un solo viaje.
+  audienciaDocumentoSgc_,
   // seccionesVisiblesSgc_: la usa Tablero (Fase 7), primera pantalla del
   // módulo, para pintar la barra de navegación sin adivinar qué puede
   // abrir cada quien.

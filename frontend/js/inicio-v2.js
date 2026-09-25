@@ -245,7 +245,12 @@
       }
     }
     var acuse = d.calidad ? (d.calidad.pendientes_de_acuse || 0) : 0;
-    if (acuse) gs.push({ id: 'calidad', resumen: acuse + (acuse === 1 ? ' documento del SGC espera' : ' documentos del SGC esperan') + ' tu confirmación de lectura', total: acuse, ir: 'calidad', cta: 'Revisar' });
+    if (acuse) {
+      // Módulo 8A: leer y confirmar desde aquí (panel de calidad-v2.js).
+      var porConfirmar = (d.calidad.documentos || []).filter(function (x) { return x.debo_acusar; });
+      gs.push({ id: 'calidad', resumen: acuse + (acuse === 1 ? ' documento del SGC espera' : ' documentos del SGC esperan') + ' tu confirmación de lectura', total: acuse, ir: 'calidad', cta: 'Ver en Calidad',
+        filas: window.SigsoCalidadV2 ? SigsoCalidadV2.filasInicio(porConfirmar.slice(0, TOP)) : '' });
+    }
     var validar = d.solicitudes ? ((d.solicitudes.resumen || {}).pendientes_validar || 0) : 0;
     if (validar) gs.push({ id: 'solicitudes', resumen: validar + (validar === 1 ? ' ítem espera' : ' ítems esperan') + ' tu validación', total: validar, ir: 'mis_solicitudes', cta: 'Validar' });
     var decidir = d.jefatura ? ((d.jefatura.resumen || {}).requieren_accion || 0) : 0;
@@ -551,6 +556,10 @@
 
   // Módulo 3B: un cambio en una solicitud (panel lateral o fila) repinta el Inicio.
   document.addEventListener('sigso:novedad-leida', function () {
+    var c = document.getElementById('inicio-v2');
+    if (c && c.offsetParent !== null) recargar();
+  });
+  document.addEventListener('sigso:sgc-acuse', function () {
     var c = document.getElementById('inicio-v2');
     if (c && c.offsetParent !== null) recargar();
   });

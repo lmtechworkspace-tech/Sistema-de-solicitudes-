@@ -1408,8 +1408,11 @@
     // Módulo 6A: "Publicadas" v2; el resto de Novedades sigue en novedades.js.
     novedades: { v2: function () { return window.SigsoNovedadesV2; }, v1: function () { return NOVEDADES_CLASICA_; } },
     // Módulo 7A: "Salud de la configuración"; el resto de Administración es admin.js.
-    administracion: { v2: function () { return window.SigsoAdminV2; }, v1: function () { return ADMIN_CLASICA_; } }
+    administracion: { v2: function () { return window.SigsoAdminV2; }, v1: function () { return ADMIN_CLASICA_; } },
+    // Módulo 8A: Inicio 'Camino a la certificación'; el resto de Calidad es calidad.js.
+    calidad: { v2: function () { return window.SigsoCalidadV2; }, v1: function () { return CALIDAD_CLASICA_; } }
   };
+  var CALIDAD_CLASICA_ = { cargar: function () { if (window.SigsoCalidad) window.SigsoCalidad.irAItem('inicio'); } };
   var ADMIN_CLASICA_ = { cargar: function () { if (window.SigsoAdmin) window.SigsoAdmin.irAItem('CUENTAS_PORTAL'); } };
   var NOVEDADES_CLASICA_ = { cargar: function () { if (window.SigsoNovedades) window.SigsoNovedades.irAItem('feed'); } };
   var COORDINACION_CLASICA_ = { cargar: function () { if (window.SigsoCoordinacion) window.SigsoCoordinacion.irAItem('hoy'); } };

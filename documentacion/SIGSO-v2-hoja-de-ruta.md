@@ -697,3 +697,83 @@ de Administración que nadie veía:
     (nombre, cargo, correos, rol, empresa) y módulos como chips. Crear cuenta
     muestra la clave temporal una sola vez.
 - Las demás pantallas de Administración siguen en admin.js.
+
+---
+
+## Módulo 8 — Calidad (SGC ISO 9001): análisis
+
+### Qué hace hoy
+El módulo más grande de SIGSO: `calidad.js` 9.872 líneas, ~20 secciones en
+7 grupos (Inicio · Documentos · Personas/Capacitaciones · Seguimiento y
+mejora: NC, quejas, auditorías, revisión por la dirección · Medición:
+indicadores, objetivos · El sistema: alcance, contexto, procesos, riesgos,
+cobertura ISO · Operación: servicios, proveedores · Reportes · Accesos).
+13 cuentas tienen el módulo.
+
+### Lo que muestran los datos (sandbox)
+- **Uso muy desparejo**: Documentos (44 documentos reales, 42 versiones, 48
+  acuses) y Personas (20 fichas, 16 evaluaciones, 49 documentos de ficha)
+  se usan; **No conformidades, Auditorías, Quejas e Indicadores están en 0**
+  (tampoco hay acuerdos de revisión por la dirección).
+- **Cobertura ISO hoy: 5 cláusulas completas, 8 parciales y 15 faltantes de
+  28.** Faltan, entre otras, 5.1–5.3 (liderazgo, política, roles), 6.2
+  objetivos, 7.1, 7.3, 9.1 seguimiento y medición, **9.2 auditoría interna**
+  (la del 24-ago se ensayó pero nunca se registró), 10.2 no conformidades.
+  El histórico semanal pasó de 34 % (7-sep) a 0–4 % (14 y 21-sep).
+- **Acuse de documentos a medias**: la **Política de Calidad** la
+  confirmaron 6 de 16 personas; los Organigramas 6/16 (plazo vencido el
+  10-sep); "Misión y Visión" 0/16 (plazo vencido el 23-sep).
+- **Inducciones: 100 registradas, las 100 "pendientes"** (0 realizadas).
+- **154 filas vacías** en SGC_DOCUMENTOS (sin código ni nombre, inactivas):
+  basura de la importación desde Excel.
+- **Por verificar en producción**: la memoria del proyecto dice que al pasar
+  a Node "SGC_* no se migró"; el sandbox tiene los datos por un script de
+  migración aparte. Conviene confirmar que producción tenga lo mismo.
+
+### Decisiones del dueño (2026-09-24)
+- **Alcance**: Inicio + Documentos + Personas en v2 (8A Inicio "camino a la
+  certificación", 8B Documentos, 8C Personas). Las demás secciones siguen
+  igual; el Inicio las guía con un "Ir a".
+- **Certificación**: guía con el **próximo paso por cláusula** (no solo el %).
+- **Acuses**: confirmar documentos **desde el Inicio de SIGSO** (como
+  Novedades); el encargado ve quién falta por documento.
+- **Inducciones**: se hacen pero no se registran → 8C permite marcarlas
+  realizadas por persona y en lote; jefatura/encargado ven las pendientes.
+
+### 8A Inicio de Calidad "Camino a la certificación" — ESTADO: HECHO
+- Backend `logica/caminoSgc.js`:
+  - `getCaminoCertificacionSgc`: sobre la matriz de cobertura, cada cláusula
+    trae su **próximo paso** y la sección que lo resuelve; resumen por
+    capítulo (4-10); **cumplimiento de acuse de todos los documentos en un
+    viaje** (quién falta, separando a quien no tiene cuenta activa); y
+    **sugerencias de etiquetas ISO** por el nombre del documento.
+  - Lo ve quien supervisa el SGC (misma llave que el tablero clásico:
+    Encargado, ADM, Dirección, Gerencia); etiquetar es solo de quien lo
+    gobierna.
+  - `efecto_sugerencias`: el efecto REAL de confirmar todas las sugerencias
+    (se aplican dentro de una transacción que siempre se revierte). En el
+    sandbox: **32 % → 45 %, mejoran 4.3, 5.1, 5.2, 5.3 y 8.2**. Hallazgo que
+    lo motivó: ninguno de los 38 documentos vigentes tenía cláusulas
+    etiquetadas, así que la cobertura contaba como faltante lo que existe.
+  - `aplicarEtiquetasSgc`: suma (no reemplaza) las cláusulas elegidas, vía
+    `Calidad.actualizarDocumento` (mismas reglas y permisos).
+- **Fix de bug previo** (`calidadSgc.diasHasta_`): restaba instantes UTC; un
+  plazo "23-sep" consultado el 24 a las 22:00 de Chile decía "venció hace 2
+  días". Ahora cuenta días de calendario de Chile (mismo arreglo que
+  Novedades en 6A). Afecta también a los recordatorios y la revisión anual.
+- Frontend `js/calidad-v2.js` (+ `css/v2/calidad-v2.css`), cargado con el
+  shell (calidad.js es diferido y el Inicio de SIGSO lo necesita):
+  - Anillo "listo para certificar", capítulos como filtro, **Próximos pasos**
+    (faltantes primero) con "Ir a <sección>", **Sube tu cobertura en un
+    clic** (chips por cláusula que se pueden quitar, confirmación) y
+    **Confirmaciones de lectura** (barra por documento; panel con quién falta,
+    "nunca entró" y sin cuenta).
+  - Quien no supervisa ve "lo tuyo": documentos por confirmar y atajos.
+  - Panel de lectura y acuse (`SigsoCalidadV2.abrirDocumento`): descargar,
+    "Confirmo que lo leí"; el **Inicio de SIGSO** lista los documentos por
+    confirmar y abre el mismo panel (evento `sigso:sgc-acuse`).
+  - calidad.js: la sección 'inicio' se delega a la v2 si está activa;
+    `MODULOS_V2.calidad` para el interruptor.
+- Arreglo transversal de `componentes-v2.css`: `.sx2-barra` y su relleno son
+  `<span>`; sin `display:block` el ancho del relleno se ignoraba cuando el
+  padre no los volvía bloque (barras vacías).

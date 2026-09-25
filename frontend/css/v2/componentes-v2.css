@@ -96,13 +96,15 @@
 }
 
 /* Barra de progreso ----------------------------------------------------- */
+/* display: block en ambos: son <span>; inline, el ancho del relleno se
+   ignoraba cuando el padre no los volvía bloque (flex/grid). */
 .sx2-barra {
-  height: 6px; border-radius: var(--sx-radio-full);
+  display: block; height: 6px; border-radius: var(--sx-radio-full);
   background: var(--sx-superficie-2); overflow: hidden;
 }
 .sx2-barra--gruesa { height: 8px; }
 .sx2-barra__relleno {
-  height: 100%; width: 0; border-radius: inherit;
+  display: block; height: 100%; width: 0; border-radius: inherit;
   background: var(--sx-tono, var(--sx-primario));
   transition: width 700ms var(--sx-curva);
 }
