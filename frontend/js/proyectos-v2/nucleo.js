@@ -22,7 +22,6 @@
   'use strict';
 
   var U = UIv2;
-  var CLAVE_PREF = 'sigso_proyectos_v2';
 
   var SECCIONES = [
     { id: 'resumen', texto: 'Resumen', icono: 'panel' },
@@ -485,9 +484,8 @@
 
   function seccionPendiente_() {
     return U.card({ cuerpo: U.vacio({
-      icono: 'destello', titulo: 'Esta sección está en construcción',
-      texto: 'Mientras tanto puedes hacer esto en la versión clásica del módulo.',
-      accion: U.boton({ texto: 'Abrir versión clásica', icono: 'izquierda', clase: 'js-py2-clasica' })
+      icono: 'alerta', titulo: 'Esta sección no está disponible',
+      texto: 'Vuelve al resumen del proyecto o recarga la página.'
     }) });
   }
 
@@ -526,7 +524,6 @@
       if (s) { irSeccion(s.getAttribute('data-id')); return; }
       if (t.closest('.js-py2-excel')) { descargar('descargarLibroProyecto', 'xlsx'); return; }
       if (t.closest('.js-py2-pdf')) { descargar('descargarReporteProyecto', 'pdf'); return; }
-      if (t.closest('.js-py2-clasica')) { usarVersion(false); return; }
       var abrir = t.closest('[data-py2-proyecto]');
       if (abrir) { abrirProyecto(abrir.getAttribute('data-py2-proyecto'), { seccion: abrir.getAttribute('data-seccion') || undefined }); return; }
     });
@@ -542,11 +539,9 @@
   // --- Preferencia v1/v2 -------------------------------------------------------
   // v2 es la versión por defecto (F8): solo quien eligió volver a la clásica
   // ('0') sigue en v1. Sin storage (modo privado), v2.
-  function activo() { try { return localStorage.getItem(CLAVE_PREF) !== '0'; } catch (e) { return true; } }
-  function usarVersion(v2) {
-    try { localStorage.setItem(CLAVE_PREF, v2 ? '1' : '0'); } catch (e) { /* sin storage: no se recuerda */ }
-    document.dispatchEvent(new CustomEvent('sigso:proyectos-version', { detail: { v2: !!v2 } }));
-  }
+  // 2026-09-25: la versión clásica se retiró; la v2 es la única.
+  function activo() { return true; }
+  function usarVersion() { /* sin versión clásica */ }
 
   // --- API pública (misma forma que window.SigsoProyectos de v1) ---------------
   // La vista puede venir de la URL (#/proyectos/mi-trabajo): mismo contrato que

@@ -24,7 +24,6 @@
 
   var PY = window.PYv2;
   var U = UIv2;
-  var CLAVE_PREF = 'sigso_bandeja_v2';
   var POR_PAGINA = 60;
   var CERRADOS = ['S09', 'S10', 'S11'];
   var PRIORIDADES = ['P1', 'P2', 'P3', 'P4', 'P5'];
@@ -888,11 +887,9 @@
     if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('[data-bj2-mio]')) { ev.preventDefault(); ev.target.click(); }
   });
 
-  function activo() { try { return localStorage.getItem(CLAVE_PREF) !== '0'; } catch (e) { return true; } }
-  function usarVersion(v2) {
-    try { localStorage.setItem(CLAVE_PREF, v2 ? '1' : '0'); } catch (e) { /* sin storage: no se recuerda */ }
-    document.dispatchEvent(new CustomEvent('sigso:v2-version', { detail: { modulo: 'bandeja', v2: !!v2 } }));
-  }
+  // 2026-09-25: la versión clásica se retiró; la v2 es la única.
+  function activo() { return true; }
+  function usarVersion() { /* sin versión clásica */ }
 
   window.SigsoBandejaV2 = {
     cargar: function () { cargar(false); },

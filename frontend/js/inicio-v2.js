@@ -24,7 +24,6 @@
 
   var PY = window.PYv2;
   var U = UIv2;
-  var CLAVE_PREF = 'sigso_inicio_v2';
   var ctx_ = null;
   var datos_ = null;     // última respuesta, para repintar sin volver a pedir
   var generacion_ = 0;
@@ -572,11 +571,9 @@
     if (c && c.offsetParent !== null) recargar();
   });
 
-  function activo() { try { return localStorage.getItem(CLAVE_PREF) !== '0'; } catch (e) { return true; } }
-  function usarVersion(v2) {
-    try { localStorage.setItem(CLAVE_PREF, v2 ? '1' : '0'); } catch (e) { /* sin storage: no se recuerda */ }
-    document.dispatchEvent(new CustomEvent('sigso:v2-version', { detail: { modulo: 'home', v2: !!v2 } }));
-  }
+  // 2026-09-25: la versión clásica se retiró; la v2 es la única.
+  function activo() { return true; }
+  function usarVersion() { /* sin versión clásica */ }
 
   window.SigsoInicioV2 = { render: render, activo: activo, usarVersion: usarVersion, desmontar: desmontar };
 })();

@@ -16,7 +16,6 @@
 
   var PY = window.PYv2;
   var U = UIv2;
-  var CLAVE_PREF = 'sigso_gerencia_v2';
   var datos_ = null, turno_ = 0;
 
   function api(accion, datos) {
@@ -251,11 +250,9 @@
     if ((b = t.closest('[data-ge2-sol]')) && window.SigsoBandejaV2) SigsoBandejaV2.abrirSolicitud(b.getAttribute('data-ge2-sol'), b.getAttribute('data-ge2-item'));
   });
 
-  function activo() { try { return localStorage.getItem(CLAVE_PREF) !== '0'; } catch (e) { return true; } }
-  function usarVersion(v2) {
-    try { localStorage.setItem(CLAVE_PREF, v2 ? '1' : '0'); } catch (e) { /* sin storage: no se recuerda */ }
-    document.dispatchEvent(new CustomEvent('sigso:v2-version', { detail: { modulo: 'gerencia', v2: !!v2 } }));
-  }
+  // 2026-09-25: la versión clásica se retiró; la v2 es la única.
+  function activo() { return true; }
+  function usarVersion() { /* sin versión clásica */ }
 
   window.SigsoGerenciaV2 = {
     // Lo llama gerencia.js al entrar al ítem "Resumen ejecutivo".

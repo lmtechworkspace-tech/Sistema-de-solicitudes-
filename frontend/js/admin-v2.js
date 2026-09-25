@@ -13,7 +13,6 @@
 
   var PY = window.PYv2;
   var U = UIv2;
-  var CLAVE_PREF = 'sigso_admin_v2';
   var PANTALLA = {
     CUENTAS_PORTAL: 'Cuentas plataforma', USUARIOS: 'Usuarios (legado)', JEFATURAS: 'Jefaturas',
     PAUSAS: 'Pausas activas', AREA: 'Áreas / responsables'
@@ -416,11 +415,9 @@
     if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('#admin-v2 [data-ad2-cuenta]')) { ev.preventDefault(); ev.target.click(); }
   });
 
-  function activo() { try { return localStorage.getItem(CLAVE_PREF) !== '0'; } catch (e) { return true; } }
-  function usarVersion(v2) {
-    try { localStorage.setItem(CLAVE_PREF, v2 ? '1' : '0'); } catch (e) { /* sin storage: no se recuerda */ }
-    document.dispatchEvent(new CustomEvent('sigso:v2-version', { detail: { modulo: 'administracion', v2: !!v2 } }));
-  }
+  // 2026-09-25: la versión clásica se retiró; la v2 es la única.
+  function activo() { return true; }
+  function usarVersion() { /* sin versión clásica */ }
 
   window.SigsoAdminV2 = {
     mostrarSalud: function () { cargarSalud(!!datos_ && !!document.getElementById('admin-v2')); },

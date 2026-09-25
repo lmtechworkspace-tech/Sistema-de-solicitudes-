@@ -1379,110 +1379,36 @@
   // <main> se adapta al modulo en vez de ser fijo.
   var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad'];
 
-  // SIGSO v2 (documentacion/SIGSO-v2-hoja-de-ruta.md): los módulos pasan a
-  // la versión nueva de a uno. Para cada módulo migrado el shell decide qué
-  // implementación pinta -- la v2 o la clásica -- según la preferencia de la
-  // persona (obj.activo(): v2 salvo que haya elegido volver a la clásica). La
-  // clásica queda un ciclo como respaldo y después se retira. Migrar otro
-  // módulo = una línea más aquí.
+  // SIGSO v2 (documentacion/SIGSO-v2-hoja-de-ruta.md). Desde el 2026-09-25 la
+  // versión clásica está retirada: cada módulo tiene UNA implementación, la v2.
   var MODULOS_V2 = {
-    proyectos: { v2: function () { return window.SigsoProyectosV2; }, v1: function () { return window.SigsoProyectos; } },
-    mi_trabajo: { v2: function () { return window.SigsoMiTrabajoV2; }, v1: function () { return window.SigsoActividades; } },
+    proyectos: function () { return window.SigsoProyectosV2; },
+    mi_trabajo: function () { return window.SigsoMiTrabajoV2; },
     // Inicio no es un módulo con cargar(): se pinta con render(ctx) desde renderHome_.
-    home: { v2: function () { return window.SigsoInicioV2; }, v1: function () { return window.SigsoInicio; } },
-    // Bandeja comparte #modulo-bandeja con Gerencia y Jefatura (clásicas hasta
-    // el Módulo 4): la v2 se monta encima y se desmonta al ir a ellas.
-    bandeja: { v2: function () { return window.SigsoBandejaV2; }, v1: function () { return BANDEJA_CLASICA_; } },
-    // Solo la vista de la plataforma: estado.html (público) sigue con estado.js.
-    mis_solicitudes: { v2: function () { return window.SigsoMisSolicitudesV2; }, v1: function () { return MIS_SOLICITUDES_CLASICA_; } },
-    // Piel v2 sobre el mismo formulario.js (la clásica es "sin piel").
-    nueva_solicitud: { v2: function () { return window.SigsoNuevaSolicitudV2; }, v1: function () { return NUEVA_SOLICITUD_CLASICA_; } },
-    // Módulo 4A: la v2 agrega la portada "Resumen ejecutivo"; el resto del
-    // panel (tablero, actividades, pausas, reportes) es el mismo gerencia.js.
-    gerencia: { v2: function () { return window.SigsoGerenciaV2; }, v1: function () { return GERENCIA_CLASICA_; } },
-    // Módulo 4B: la v2 agrega "Mi equipo" (personas); el resto es jefatura.js.
-    jefatura: { v2: function () { return window.SigsoJefaturaV2; }, v1: function () { return JEFATURA_CLASICA_; } },
-    // Módulo 5A: "Hoy" v2 (coordinacion-v2.js); Historial y Cumplimiento siguen en coordinacion.js.
-    pausas_coordinacion: { v2: function () { return window.SigsoCoordinacionV2; }, v1: function () { return COORDINACION_CLASICA_; } },
-    // Módulo 5B: pausas del trabajador (hoy + su historial).
-    pausas: { v2: function () { return window.SigsoPausasV2; }, v1: function () { return window.SigsoPausas; } },
-    // Módulo 6A: "Publicadas" v2; el resto de Novedades sigue en novedades.js.
-    novedades: { v2: function () { return window.SigsoNovedadesV2; }, v1: function () { return NOVEDADES_CLASICA_; } },
-    // Módulo 7A: "Salud de la configuración"; el resto de Administración es admin.js.
-    administracion: { v2: function () { return window.SigsoAdminV2; }, v1: function () { return ADMIN_CLASICA_; } },
-    // Módulo 8A: Inicio 'Camino a la certificación'; el resto de Calidad es calidad.js.
-    calidad: { v2: function () { return window.SigsoCalidadV2; }, v1: function () { return CALIDAD_CLASICA_; } }
+    home: function () { return window.SigsoInicioV2; },
+    bandeja: function () { return window.SigsoBandejaV2; },
+    mis_solicitudes: function () { return window.SigsoMisSolicitudesV2; },
+    nueva_solicitud: function () { return window.SigsoNuevaSolicitudV2; },
+    gerencia: function () { return window.SigsoGerenciaV2; },
+    jefatura: function () { return window.SigsoJefaturaV2; },
+    pausas_coordinacion: function () { return window.SigsoCoordinacionV2; },
+    pausas: function () { return window.SigsoPausasV2; },
+    novedades: function () { return window.SigsoNovedadesV2; },
+    administracion: function () { return window.SigsoAdminV2; },
+    calidad: function () { return window.SigsoCalidadV2; }
   };
-  var CALIDAD_CLASICA_ = { cargar: function () { if (window.SigsoCalidad) window.SigsoCalidad.recargar(); } };
-  var ADMIN_CLASICA_ = { cargar: function () { if (window.SigsoAdmin) window.SigsoAdmin.irAItem('CUENTAS_PORTAL'); } };
-  var NOVEDADES_CLASICA_ = { cargar: function () { if (window.SigsoNovedades) window.SigsoNovedades.irAItem('feed'); } };
-  var COORDINACION_CLASICA_ = { cargar: function () { if (window.SigsoCoordinacion) window.SigsoCoordinacion.irAItem('hoy'); } };
-  var JEFATURA_CLASICA_ = { cargar: function () { if (window.SigsoJefatura) window.SigsoJefatura.irAItem('tablero'); } };
-  var GERENCIA_CLASICA_ = { cargar: function () { if (window.SigsoGerencia) window.SigsoGerencia.irAItem('tablero'); } };
-  var NUEVA_SOLICITUD_CLASICA_ = { cargar: function () { /* el formulario ya está en el DOM */ } };
-  var MIS_SOLICITUDES_CLASICA_ = {
-    cargar: function () {
-      document.getElementById('nota-correos-cuenta').textContent =
-        'Mostrando lo asociado a: ' + (sesion.cuenta.emails || []).join(', ');
-      window.SigsoMisSolicitudes.cargarConToken(sesion.token);
-    }
-  };
-  var BANDEJA_CLASICA_ = {
-    cargar: function () { abrirBandeja_('dashboard'); },
-    refrescar: function () { if (window.SigsoDashboard) window.SigsoDashboard.cargar(); }
-  };
-  function usaV2_(id) {
-    var m = MODULOS_V2[id], o = m && m.v2();
-    return !!(o && o.activo());
-  }
-  function moduloImpl_(id) {
-    var m = MODULOS_V2[id];
-    if (!m) return null;
-    return usaV2_(id) ? m.v2() : m.v1();
-  }
-  function usaProyectosV2_() { return usaV2_('proyectos'); }
+  function usaV2_(id) { return !!(MODULOS_V2[id] && MODULOS_V2[id]()); }
+  function moduloImpl_(id) { return MODULOS_V2[id] ? MODULOS_V2[id]() : null; }
   function moduloProyectos_() { return moduloImpl_('proyectos'); }
-  // Pantalla completa para v2 + interruptor "versión clásica / nueva" del
-  // módulo actual (todos los roles, solo en módulos con v2). SIGSO v2, Módulo
-  // 9A: vive en el menú de usuario (#py2-interruptor); antes era una píldora
-  // flotante que tapaba contenido en todos los módulos.
+  // Pantalla completa para los módulos v2.
   function actualizarModuloV2_(id) {
-    var migrado = !!(id && MODULOS_V2[id] && MODULOS_V2[id].v2());
-    var v2 = migrado && usaV2_(id);
     var main = document.querySelector('#vista-shell .sigso-contenido');
-    if (main) main.classList.toggle('plataforma-contenido--total', v2);
-    var item = document.getElementById('py2-interruptor');
-    if (!item) return;
-    if (!item.getAttribute('data-listo')) {
-      item.setAttribute('data-listo', '1');
-      item.addEventListener('click', function () {
-        var menu = document.getElementById('menu-usuario');
-        if (menu) menu.classList.add('sigso-oculto');
-        var btn = document.getElementById('btn-menu-usuario');
-        if (btn) btn.setAttribute('aria-expanded', 'false');
-        var mod = item.getAttribute('data-modulo');
-        var o = MODULOS_V2[mod] && MODULOS_V2[mod].v2();
-        if (o) o.usarVersion(!usaV2_(mod));
-      });
-    }
-    item.hidden = !migrado;
-    if (!migrado) return;
-    item.setAttribute('data-modulo', id);
-    item.innerHTML = Iconos.svg(v2 ? 'izquierda' : 'destello', { tam: 16 }) + ' ' +
-      (v2 ? 'Usar la versión clásica de este módulo' : 'Usar la nueva versión de este módulo');
+    if (main) main.classList.toggle('plataforma-contenido--total', usaV2_(id));
   }
-  function alCambiarVersion_(modulo, v2) {
-    if (moduloActivo_ !== modulo) return;
-    var o = MODULOS_V2[modulo] && MODULOS_V2[modulo].v2();
-    if (!v2 && o && o.desmontar) o.desmontar();
-    actualizarModuloV2_(modulo);
-    if (modulo === 'home') { renderHome_(); window.scrollTo(0, 0); return; }
-    var m = moduloImpl_(modulo);
-    if (m) m.cargar();
-    window.scrollTo(0, 0);
-  }
-  document.addEventListener('sigso:proyectos-version', function (ev) { alCambiarVersion_('proyectos', !!(ev.detail && ev.detail.v2)); });
-  document.addEventListener('sigso:v2-version', function (ev) { if (ev.detail) alCambiarVersion_(ev.detail.modulo, !!ev.detail.v2); });
+  // Quien había elegido la clásica tenía la preferencia guardada: se limpia.
+  try {
+    Object.keys(localStorage).forEach(function (k) { if (/^sigso_[a-z_]+_v2$/.test(k)) localStorage.removeItem(k); });
+  } catch (e) { /* sin storage */ }
 
   // v5.1: modulo activo + cuando se cargaron por ultima vez sus datos, para
   // el auto-refresco al volver a la pestana (sin recargar la pagina).

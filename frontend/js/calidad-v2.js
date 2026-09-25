@@ -21,7 +21,6 @@
 
   var PY = window.PYv2;
   var U = UIv2;
-  var CLAVE_PREF = 'sigso_calidad_v2';
   var TIPO = { DOC: 'Documento maestro', PRO: 'Procedimiento', INS: 'Instructivo', FO: 'Formulario', EXTERNO: 'Documento externo' };
   var SECCION = {
     documentos: 'Documentos', personas: 'Personas', auditorias: 'Auditorías', revision: 'Revisión por la dirección',
@@ -336,11 +335,9 @@
     if (c && c.offsetParent !== null && ocupa('inicio')) cargar(true);
   });
 
-  function activo() { try { return localStorage.getItem(CLAVE_PREF) !== '0'; } catch (e) { return true; } }
-  function usarVersion(v2) {
-    try { localStorage.setItem(CLAVE_PREF, v2 ? '1' : '0'); } catch (e) { /* sin storage: no se recuerda */ }
-    document.dispatchEvent(new CustomEvent('sigso:v2-version', { detail: { modulo: 'calidad', v2: !!v2 } }));
-  }
+  // 2026-09-25: la versión clásica se retiró; la v2 es la única.
+  function activo() { return true; }
+  function usarVersion() { /* sin versión clásica */ }
 
   window.SigsoCalidadV2 = {
     // calidad.js llama aquí cuando la sección activa es 'inicio'.

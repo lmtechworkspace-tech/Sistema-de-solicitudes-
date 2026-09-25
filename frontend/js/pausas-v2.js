@@ -17,7 +17,6 @@
 
   var PY = window.PYv2;
   var U = UIv2;
-  var CLAVE_PREF = 'sigso_pausas_v2';
   var MOTIVOS = ['En terreno / fuera de la oficina', 'En reunión', 'Atendiendo un cliente', 'Licencia / permiso', 'Problema de salud', 'No me enteré a tiempo', 'Otro'];
   var ANIMO = [['😞', 'Muy mal'], ['🙁', 'Mal'], ['😐', 'Regular'], ['🙂', 'Bien'], ['😄', 'Muy bien']];
   var datos_ = null, historial_ = null, turno_ = 0;
@@ -220,11 +219,9 @@
     if (c && c.offsetParent !== null) cargar(true);
   });
 
-  function activo() { try { return localStorage.getItem(CLAVE_PREF) !== '0'; } catch (e) { return true; } }
-  function usarVersion(v2) {
-    try { localStorage.setItem(CLAVE_PREF, v2 ? '1' : '0'); } catch (e) { /* sin storage: no se recuerda */ }
-    document.dispatchEvent(new CustomEvent('sigso:v2-version', { detail: { modulo: 'pausas', v2: !!v2 } }));
-  }
+  // 2026-09-25: la versión clásica se retiró; la v2 es la única.
+  function activo() { return true; }
+  function usarVersion() { /* sin versión clásica */ }
 
   window.SigsoPausasV2 = {
     cargar: function () { cargar(false); },

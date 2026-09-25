@@ -1063,3 +1063,66 @@ versiones clásicas tras un ciclo.
 ### Qué no se toca
 `index.html` (formulario público), `estado.html`, `app.html` hasta decidir
 Apps Script, y los formularios clásicos que la v2 reutiliza.
+
+---
+
+## Decisión del dueño (2026-09-25): todo v2 y fin de la versión clásica
+
+Tras revisar la plataforma, el dueño pide que **todo** quede con la estética y
+la operación v2 y que la versión clásica **desaparezca por completo** (sin
+interruptor), con la versión actual 100 % funcional. Reemplaza al "Plan para
+retirar las versiones clásicas" de arriba (ya no hay ciclo de respaldo).
+
+### Inventario de apartados que seguían clásicos (plataforma.html)
+- **Gerencia** (8): Tablero de seguimiento, Línea de tiempo, Actividades,
+  Pausas activas, Centro de reportes, Tendencia y ciclo, Recurrencia, Carga.
+- **Mi departamento** (5): Tablero, Por persona, Actividades del equipo,
+  Centro de reportes, Carga por módulo y tipo.
+- **Coordinación de pausas** (2): Historial por trabajador, Cumplimiento.
+- **Novedades** (3 + modales): Por aprobar, Mis envíos, Cumplimiento de
+  lectura; Publicar, Reenviar y Aprobar/Devolver.
+- **Administración** (14): Empresas, Plataformas, Áreas, Jefaturas, Módulos,
+  Tipos, Usuarios (legado), Notificaciones, Alertas en vivo, Canales de
+  alerta, Enviar alerta, Pausas activas, Centro de reportes, Panel de datos.
+- **Calidad** (17 + formularios): ficha completa de la persona (5
+  pestañas), Capacitaciones, No conformidades, Quejas, Auditorías, Revisión
+  por la dirección, Indicadores, Objetivos, Alcance, Contexto, Procesos,
+  Riesgos, Cobertura ISO, Servicios, Proveedores, Reportes, Accesos; y los
+  formularios de Documentos (cargar, editar, nueva versión, cláusulas).
+- **Marco**: inicio de sesión y recuperar clave, Mi perfil, buscador
+  (Ctrl+K), hoja de atajos y tour.
+- Compartido: el motor de reportes (`reportes.js`) y los modales y campos
+  de `Componentes` que usan todas las pantallas anteriores.
+
+### Orden de trabajo
+- **R1** retirar el interruptor y las pantallas clásicas ya reemplazadas.
+- **R2** base visual v2 para todo lo compartido (cabecera de módulo,
+  botones, campos, tablas, tarjetas, avisos, pestañas y modales), para que
+  ninguna pantalla quede con la estética antigua mientras se rehace.
+- **R3–R11** rehacer la operación de cada módulo en v2: Novedades,
+  Coordinación, Mi departamento, Gerencia, Administración, Calidad (ficha y
+  capacitaciones; seguimiento; medición, sistema y operación; reportes y
+  accesos), motor de reportes.
+- **R12** marco: inicio de sesión, perfil, buscador, atajos.
+- **R13** limpieza del código clásico que quede sin uso.
+- `app.html` (acceso con Google / Apps Script) queda fuera: apagarlo exige
+  crear la cuenta de portal de Valentina Caballero; se trata aparte.
+
+### R1 Retiro del interruptor — ESTADO: HECHO
+- Todos los módulos v2: `activo()` fijo en `true`, `usarVersion()` sin
+  efecto; sin preferencia `sigso_*_v2` (el shell borra las que había).
+- `plataforma.js`: `MODULOS_V2` solo con la implementación v2; fuera
+  `alCambiarVersion_` y los objetos `*_CLASICA_`.
+- Fuera del menú de usuario el ítem de versión; Proyectos ya no ofrece
+  "Abrir versión clásica".
+- `plataforma.html` deja de cargar `inicio.js` y `pausas.js` (clásicos sin uso).
+
+### R2 Base visual v2 para lo compartido — ESTADO: HECHO
+- `<body class="sx2">`: los tokens v2 existen en toda la plataforma (también
+  en modales).
+- `css/v2/puente-v2.css`: cabecera de módulo, tarjetas, avisos, botones,
+  campos, tablas (`.sigso-tabla`, `.sigso-tabla-tablero`), pestañas
+  (control segmentado), KPIs, badges, modales y avisos flotantes con la
+  estética v2. Usa `:where(.sx2)` para no ganarle a los CSS de módulos v2.
+- Margen de página para las secciones que aún pintan HTML clásico dentro de
+  módulos a ancho total (antes quedaban pegadas al sidebar).

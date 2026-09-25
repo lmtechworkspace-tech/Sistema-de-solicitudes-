@@ -26,6 +26,7 @@
   <link rel="stylesheet" href="css/v2/layout-v2.css" />
   <link rel="stylesheet" href="css/v2/componentes-v2.css" />
   <link rel="stylesheet" href="css/v2/movimiento-v2.css" />
+  <link rel="stylesheet" href="css/v2/puente-v2.css" />
   <link rel="stylesheet" href="css/v2/proyectos-v2.css" />
   <link rel="stylesheet" href="css/v2/inicio-v2.css" />
   <link rel="stylesheet" href="css/v2/bandeja-v2.css" />
@@ -42,7 +43,8 @@
   <!-- P3: graficos del dashboard de la bandeja (mismo CDN que app.html). -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
-<body>
+<!-- SIGSO v2 (R2): .sx2 en body = tokens v2 en toda la plataforma (css/v2/puente-v2.css). -->
+<body class="sx2">
   <!-- v3.3 (SIGSO-v3.3-propuesta-plataforma-modular.md): una sola puerta.
        Login con usuario+contrasena -> inicio personal -> modulos segun la
        cuenta. Los modulos "nueva_solicitud" y "mis_solicitudes" REUTILIZAN
@@ -275,9 +277,6 @@
           </button>
           <div class="plataforma-menu sigso-oculto" id="menu-usuario" role="menu">
             <div class="plataforma-menu__cab" id="menu-correos"></div>
-            <!-- Módulo 9A: el interruptor "versión clásica / nueva" del módulo
-                 actual (antes una píldora flotante). Lo maneja plataforma.js. -->
-            <button type="button" class="plataforma-menu__item" id="py2-interruptor" role="menuitem" hidden></button>
             <!-- v6.4: "Mi perfil" abre el panel de perfil/foto (perfil.js). -->
             <button type="button" class="plataforma-menu__item" id="btn-mi-perfil" role="menuitem">
               <span id="ico-perfil"></span> Mi perfil
@@ -1109,7 +1108,6 @@
   <script src="js/gerencia.js"></script>
   <script src="js/jefatura.js"></script>
   <script src="js/admin.js"></script>
-  <script src="js/pausas.js"></script>
   <script src="js/coordinacion.js"></script>
   <!-- v6.4: panel "Mi perfil" + gestion de la foto. Antes de plataforma.js,
        que lo invoca desde el menu de usuario. -->
@@ -1150,7 +1148,6 @@
   <script src="js/notificaciones-vivas.js"></script>
   <!-- v14.0: el Inicio. Va ANTES de plataforma.js, que es quien lo invoca
        (renderHome_) pasandole la sesion y la navegacion. -->
-  <script src="js/inicio.js"></script>
   <script src="js/inicio-v2.js"></script>
   <!-- SIGSO v2, Módulo 3A: Bandeja por ítem (usa PYv2, va después de proyectos-v2/*). -->
   <script src="js/bandeja-v2.js"></script>
