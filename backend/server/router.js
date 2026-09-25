@@ -41,6 +41,7 @@ const Novedades = require('../logica/novedades');
 const Pausas = require('../logica/pausas');
 const ResumenGerencia = require('../logica/resumenGerencia');
 const MiEquipo = require('../logica/miEquipo');
+const SaludConfig = require('../logica/saludConfig');
 const Actividades = require('../logica/actividades');
 const Proyectos = require('../logica/proyectos');
 const Calidad = require('../logica/calidadSgc');
@@ -139,6 +140,8 @@ const ACCIONES = {
   getPanelGerencia: (db, data, contexto) => Gerencia.getPanel(db, data, contexto),
   getResumenGerencia: (db, data, contexto) => ResumenGerencia.getResumen(db, data, contexto),
   getMiEquipo: (db, data, contexto) => MiEquipo.getMiEquipo(db, data, contexto),
+  getSaludConfig: (db, data, contexto) => SaludConfig.getSalud(db, data, contexto),
+  arreglarSaludConfig: (db, data, contexto) => SaludConfig.arreglar(db, data, contexto),
   getPanelJefatura: (db, data, contexto) => Jefatura.getPanel(db, data, contexto),
 
   listarLogsNotificaciones: (db, data, contexto) => Notificaciones.listarLogs(db, data, contexto),

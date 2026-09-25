@@ -168,8 +168,13 @@
   function esCuentaSuperAdmin_() {
     return !!(window.SIGSO_USUARIO && window.SIGSO_USUARIO.super_admin === true);
   }
+  // SIGSO v2 (Módulo 7A): "Salud de la configuración" (admin-v2.js) va
+  // primero con la versión nueva.
+  var GRUPO_SALUD_V2 = { id: 'salud', nombre: 'Salud', icono: 'escudo', items: [{ id: 'SALUD', nombre: 'Salud de la configuración' }] };
+  function adminV2Activo_() { return !!(window.SigsoAdminV2 && SigsoAdminV2.activo()); }
   function arquitecturaAdminActiva_() {
-    return esCuentaSuperAdmin_() ? ARQUITECTURA_ADMIN.concat([GRUPO_SUPER_ADMIN]) : ARQUITECTURA_ADMIN;
+    var base = adminV2Activo_() ? [GRUPO_SALUD_V2].concat(ARQUITECTURA_ADMIN) : ARQUITECTURA_ADMIN;
+    return esCuentaSuperAdmin_() ? base.concat([GRUPO_SUPER_ADMIN]) : base;
   }
 
   window.SigsoAdmin = {
@@ -182,7 +187,11 @@
       irASeccionAdmin_(existeSeccionAdmin_(pedida) ? pedida : arquitecturaAdminActiva_()[0].items[0].id);
     },
     // v13.0: el arbol del sidebar entra por aca.
-    irAItem: function (itemId) { irASeccionAdmin_(itemId); }
+    irAItem: function (itemId) { irASeccionAdmin_(itemId); },
+    // SIGSO v2 (Módulo 7A): admin-v2.js lo llama al cargar para sumar "Salud".
+    registrarArbol: function () {
+      if (window.SigsoNav) SigsoNav.registrar('administracion', { nombre: 'Administración', submodulos: arquitecturaAdminActiva_() });
+    }
   };
 
   var seccionAdminActiva_ = '';
@@ -213,6 +222,8 @@
     pintarNavAdmin_();
     cerrarDrawerAdmin_();
     if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(tipo);
+    if (tipo === 'SALUD' && window.SigsoAdminV2) { SigsoAdminV2.mostrarSalud(); return; }
+    if (window.SigsoAdminV2) SigsoAdminV2.desmontar();
     if (tipo === 'USUARIOS') renderUsuarios_();
     else if (tipo === 'CUENTAS_PORTAL') renderCuentasPortal_();
     else if (tipo === 'REPORTES') renderReportes_();

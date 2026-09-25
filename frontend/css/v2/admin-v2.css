@@ -1,0 +1,20 @@
+/* admin-v2.css — Administración v2 (SIGSO v2, Módulo 7). Prefijo .ad2-*. */
+
+#modulo-administracion.admin-v2-activa > :not(#admin-v2) { display: none !important; }
+
+.ad2-grupo { margin: var(--sx-e-3) 0 0; font: var(--sx-t-etiqueta); text-transform: uppercase; letter-spacing: .06em; color: var(--sx-texto-3); }
+.ad2-check { border-left: 4px solid var(--sx-tono); display: flex; flex-direction: column; gap: var(--sx-e-3); }
+.ad2-check__cab { display: flex; align-items: flex-start; gap: var(--sx-e-3); }
+.ad2-check__ico { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: 10px; background: var(--sx-tono-suave); color: var(--sx-tono); }
+.ad2-check__cab strong { font: 700 .9375rem/1.3 var(--fuente); color: var(--sx-texto); }
+.ad2-casos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ad2-casos li { display: flex; align-items: center; gap: var(--sx-e-3); padding: 8px 0; border-top: 1px solid var(--sx-borde-suave); font: var(--sx-t-chico); color: var(--sx-texto); }
+.ad2-casos li > .sx2-cortar { flex: 1; min-width: 0; }
+.ad2-casos__acc { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; flex: none; }
+.ad2-clave { font: 700 1.125rem/1.2 var(--fuente-mono, ui-monospace, monospace); padding: 4px 8px; border-radius: 6px; background: var(--sx-superficie-2); letter-spacing: .04em; }
+
+@media (max-width: 760px) {
+  .ad2-casos li { flex-direction: column; align-items: stretch; }
+  .ad2-casos__acc { justify-content: flex-start; }
+  .ad2-check__cab { flex-wrap: wrap; }
+}

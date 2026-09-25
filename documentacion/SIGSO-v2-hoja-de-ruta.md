@@ -622,3 +622,62 @@ de acuse). Audiencia: todos, mi equipo o personas seleccionadas.
   el panel de lectura v2 muestra el motivo y "Corregir y reenviar".
 - Probado en sandbox: la Ley 21.822 de Amarlla (devuelta el 3-ago pidiendo
   el link) se corrigió con la fuente desde el Inicio y volvió a revisión.
+
+---
+
+## Módulo 7 — Administración: análisis
+
+### Qué hace hoy
+`admin.js` (2.044 líneas), solo para ADM (2 cuentas): 15 pantallas en 6
+grupos — Organización (empresas, plataformas, áreas, jefaturas), Catálogos
+(módulos, tipos), Accesos (cuentas plataforma, usuarios legado),
+Comunicaciones (notificaciones, alertas en vivo, canales, enviar alerta),
+Operación (pausas) y Reportes; más el Panel de datos del super admin. Cada
+pantalla es un CRUD aislado: **nada le dice al administrador qué está mal
+configurado**, y la configuración de una cosa depende de otra (una jefatura
+necesita que el jefe tenga cuenta Y el módulo; la lista de pausas necesita
+cuenta Y módulo…).
+
+### Lo que muestran los datos (sandbox, 20 cuentas activas)
+Todo lo que fui encontrando módulo a módulo era, en el fondo, configuración
+de Administración que nadie veía:
+- **12 de 20 cuentas activas siguen con clave temporal** ("debe cambiar la
+  clave"): Lisseth, Francisca, Vanessa, Marisol, Leo, Hernán, Felipe, …
+  6 cuentas no entran hace más de 30 días y 2 nunca entraron.
+- **Jefaturas mal armadas**: el jefe de una (comercial@grupohb.cl) no tiene
+  cuenta activa y su subordinada tampoco; Vanessa (personal@homepymes.cl) es
+  jefa pero no tiene el módulo Mi departamento.
+- **Pausas**: 4 cuentas tienen el módulo Pausas pero no están en la lista de
+  su empresa (Camila, Amarlla, Scarlett, Luis Homepymes) — ven "no estás en
+  la lista".
+- **Directorio legado**: una persona está activa en USUARIOS (el sistema
+  viejo de Google) sin cuenta del portal (Valentina, vcaballero): aparece en
+  audiencias y equipos pero no puede entrar.
+- **Datos de plantilla** en producción: SOL-2026-GDE-0005 con responsable
+  "[CORREO_LEO]" y solicitante "[CORREO_LUIS]".
+- _Actualización_: el correo `soporte@rld.cl` ya no está repetido entre
+  cuentas **activas** (la de Angelo está desactivada).
+
+### Decisiones del dueño (2026-09-24)
+- **Salud + Cuentas v2**: 7A portada "Salud de la configuración"; 7B "Cuentas
+  plataforma" rediseñada; el resto de las pantallas queda como está.
+- **Arreglo en un clic con confirmación** para los casos simples; los que
+  requieren criterio llevan a su pantalla.
+- **Claves temporales**: se muestran y se puede generar una nueva desde ahí.
+
+### 7A Salud de la configuración — ESTADO: HECHO
+- Backend: `logica/saludConfig.js` — `getSaludConfig` (solo ADM) revisa
+  cuentas (clave temporal, sin entrar > 30 días, correo repetido, legado sin
+  cuenta), jefaturas (jefe sin cuenta, jefe sin módulo, subordinado sin
+  cuenta, módulo sin equipo), pausas (en la lista sin cuenta / sin módulo,
+  módulo sin estar en la lista, coordinador sin módulo) y datos (plantillas
+  "[CORREO_…]" en solicitudes, áreas sin responsable).
+  `arreglarSaludConfig` aplica dar/quitar módulo, agregar a la lista de
+  pausas y generar clave temporal **pasando por las mismas funciones de
+  Administración** (CuentasPortal.gestionar, Pausas.gestionarTrabajador).
+- Frontend: `js/admin-v2.js` + `css/v2/admin-v2.css`
+  (`MODULOS_V2.administracion`): "Salud" es el primer ítem de Administración
+  con la v2; cada problema con su explicación, "Ir a…" y sus arreglos (con
+  confirmación; la clave nueva se muestra una sola vez con "Copiar").
+- Sandbox: 22 casos (2 críticos: la jefatura de comercial@grupohb.cl sin
+  jefe activo y SOL-2026-GDE-0005 con datos de plantilla); 17 con arreglo.

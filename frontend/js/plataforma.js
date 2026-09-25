@@ -1406,8 +1406,11 @@
     // Módulo 5B: pausas del trabajador (hoy + su historial).
     pausas: { v2: function () { return window.SigsoPausasV2; }, v1: function () { return window.SigsoPausas; } },
     // Módulo 6A: "Publicadas" v2; el resto de Novedades sigue en novedades.js.
-    novedades: { v2: function () { return window.SigsoNovedadesV2; }, v1: function () { return NOVEDADES_CLASICA_; } }
+    novedades: { v2: function () { return window.SigsoNovedadesV2; }, v1: function () { return NOVEDADES_CLASICA_; } },
+    // Módulo 7A: "Salud de la configuración"; el resto de Administración es admin.js.
+    administracion: { v2: function () { return window.SigsoAdminV2; }, v1: function () { return ADMIN_CLASICA_; } }
   };
+  var ADMIN_CLASICA_ = { cargar: function () { if (window.SigsoAdmin) window.SigsoAdmin.irAItem('CUENTAS_PORTAL'); } };
   var NOVEDADES_CLASICA_ = { cargar: function () { if (window.SigsoNovedades) window.SigsoNovedades.irAItem('feed'); } };
   var COORDINACION_CLASICA_ = { cargar: function () { if (window.SigsoCoordinacion) window.SigsoCoordinacion.irAItem('hoy'); } };
   var JEFATURA_CLASICA_ = { cargar: function () { if (window.SigsoJefatura) window.SigsoJefatura.irAItem('tablero'); } };
