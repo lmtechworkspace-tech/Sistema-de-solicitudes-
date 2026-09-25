@@ -193,3 +193,16 @@ de corte visibles, y el mismo sistema visual v2 en pantalla y en papel.
 
 Cada etapa se verifica en el sandbox con datos reales (como R1–R13) antes de
 publicar.
+
+---
+
+## 7. Decisiones del dueño (2026-09-25)
+
+1. **Orden**: lo crítico va segundo — En una línea · Lo que requiere
+   decisión · Panorama · Detalle.
+2. **Motor PDF**: HTML + CSS con Chromium en el servidor (mismo diseño v2
+   que la pantalla). `pdfkit` queda mientras se migran los documentos.
+3. **Excel**: generador `.xlsx` compartido; reemplaza todos los CSV (hoja
+   Resumen + hoja Datos con filtros, colores de estado y barras en celda).
+4. **Piloto**: Solicitudes (una sola definición para Gerencia y Mi
+   departamento, con alcance).
