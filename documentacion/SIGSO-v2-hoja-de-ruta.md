@@ -681,3 +681,19 @@ de Administración que nadie veía:
   confirmación; la clave nueva se muestra una sola vez con "Copiar").
 - Sandbox: 22 casos (2 críticos: la jefatura de comercial@grupohb.cl sin
   jefe activo y SOL-2026-GDE-0005 con datos de plantilla); 17 con arreglo.
+
+### 7B Cuentas de la plataforma v2 — ESTADO: HECHO
+- Frontend (sin backend nuevo: `listarCuentasPortal` / `gestionarCuentaPortal`
+  de siempre + `getSaludConfig` para cruzar problemas): en `admin-v2.js`,
+  "Cuentas plataforma" con la v2 activa.
+  - KPIs: activas, entraron esta semana, con clave temporal, con problemas
+    (según la Salud). Filtros: activas · clave temporal · sin entrar 30+ días
+    · con problemas · desactivadas; búsqueda y rol.
+  - Cada persona: rol, cuántos módulos, estado de acceso ("entró hace 9
+    días", "nunca entró", "clave temporal") y sus problemas.
+  - Panel lateral: lo que la Salud detectó de esa cuenta; acceso (usuario,
+    estado, último acceso) con generar clave temporal, asignar clave, cambiar
+    usuario, activar/desactivar y eliminar (sugiere desactivar); datos
+    (nombre, cargo, correos, rol, empresa) y módulos como chips. Crear cuenta
+    muestra la clave temporal una sola vez.
+- Las demás pantallas de Administración siguen en admin.js.

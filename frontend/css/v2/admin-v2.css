@@ -18,3 +18,28 @@
   .ad2-casos__acc { justify-content: flex-start; }
   .ad2-check__cab { flex-wrap: wrap; }
 }
+
+/* 7B: Cuentas de la plataforma */
+.ad2-cuentas { list-style: none; margin: 0; padding: 0; }
+.ad2-cuenta {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) 150px 210px 110px 16px; align-items: center; gap: var(--sx-e-3);
+  padding: 12px var(--sx-e-5); border-bottom: 1px solid var(--sx-borde-suave); cursor: pointer; color: var(--sx-texto-3);
+  transition: background var(--sx-dur-rapida) var(--sx-curva);
+}
+.ad2-cuenta:last-child { border-bottom: 0; }
+.ad2-cuenta:hover { background: var(--sx-superficie-2); }
+.ad2-cuenta:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: -2px; }
+.ad2-cuenta strong { font: 600 .9375rem/1.3 var(--fuente); color: var(--sx-texto); }
+.ad2-cuenta--off { opacity: .6; }
+.ad2-cuenta__rol, .ad2-cuenta__estado { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.ad2-cuenta__rol small { font-size: .6875rem; }
+.ad2-cuenta__prob { display: flex; justify-content: flex-end; }
+
+@media (max-width: 1100px) {
+  .ad2-cuenta { grid-template-columns: auto minmax(0, 1fr) auto 16px; }
+  .ad2-cuenta__rol, .ad2-cuenta__prob { display: none; }
+}
+@media (max-width: 600px) {
+  .ad2-cuenta { grid-template-columns: auto minmax(0, 1fr) 16px; }
+  .ad2-cuenta__estado { grid-column: 2; flex-direction: row; flex-wrap: wrap; }
+}

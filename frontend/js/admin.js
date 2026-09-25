@@ -223,6 +223,7 @@
     cerrarDrawerAdmin_();
     if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(tipo);
     if (tipo === 'SALUD' && window.SigsoAdminV2) { SigsoAdminV2.mostrarSalud(); return; }
+    if (tipo === 'CUENTAS_PORTAL' && adminV2Activo_()) { SigsoAdminV2.mostrarCuentas(); return; }
     if (window.SigsoAdminV2) SigsoAdminV2.desmontar();
     if (tipo === 'USUARIOS') renderUsuarios_();
     else if (tipo === 'CUENTAS_PORTAL') renderCuentasPortal_();
