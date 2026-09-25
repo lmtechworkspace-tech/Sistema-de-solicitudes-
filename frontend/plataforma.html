@@ -243,6 +243,12 @@
         </button>
       </div>
 
+      <!-- SIGSO v2, Módulo 9B: "Buscar y saltar" (Ctrl+K) existía pero no tenía
+           ningún botón visible. -->
+      <button type="button" class="shell-buscar" id="btn-shell-buscar" aria-label="Buscar (Ctrl+K)">
+        <span id="ico-shell-buscar"></span><span class="plataforma-sidebar__txt shell-buscar__txt">Buscar</span><kbd class="plataforma-sidebar__txt">Ctrl K</kbd>
+      </button>
+
       <nav class="plataforma-sidebar__nav" id="nav-modulos"></nav>
 
       <div class="plataforma-sidebar__pie">
@@ -285,6 +291,10 @@
     </aside>
 
     <div class="plataforma-sidebar__telon sigso-oculto" id="telon-sidebar"></div>
+
+    <!-- Módulo 9B: en celular, los 4 destinos más usados a mano con el pulgar.
+         La llena plataforma.js (pintarBarraInferior_). -->
+    <nav class="shell-barra" id="shell-barra" aria-label="Navegación rápida"></nav>
 
     <!-- v5.0 F4 (§6.1/6.2): command palette (Ctrl+K) -- buscar y saltar sin
          soltar el teclado. Indice en memoria (modulos de la cuenta +

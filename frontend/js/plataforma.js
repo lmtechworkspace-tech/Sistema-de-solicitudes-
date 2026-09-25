@@ -133,6 +133,7 @@
     wirePaleta_();
     wireAtajos_();
     wireSidebar_();
+    wireShellV2_();
     wireTour_();
 
     wireAutorefresco_();
@@ -1504,8 +1505,48 @@
     return v;
   }
 
+  // SIGSO v2, Módulo 9B: botón "Buscar" del sidebar y barra inferior del
+  // celular (Inicio · Mi trabajo · Buscar · Menú).
+  function wireShellV2_() {
+    var btn = document.getElementById('btn-shell-buscar');
+    if (btn) {
+      document.getElementById('ico-shell-buscar').innerHTML = Iconos.svg('lupa', { tam: 16 });
+      if (/Mac|iPhone|iPad/.test(navigator.platform || '')) {
+        var k = btn.querySelector('kbd');
+        if (k) k.textContent = '⌘K';
+      }
+      btn.addEventListener('click', abrirPaleta_);
+    }
+    var barra = document.getElementById('shell-barra');
+    if (barra) {
+      barra.addEventListener('click', function (ev) {
+        var b = ev.target.closest('[data-barra]');
+        if (!b) return;
+        var dest = b.getAttribute('data-barra');
+        if (dest === 'buscar') { abrirPaleta_(); return; }
+        if (dest === 'menu') { var h = document.getElementById('btn-abrir-sidebar'); if (h) h.click(); return; }
+        if (puedeAbrirModulo_(dest)) mostrarModulo_(dest);
+      });
+    }
+  }
+  // El segundo destino es "Mi trabajo" si la cuenta lo tiene; si no, sus solicitudes.
+  function pintarBarraInferior_(activo) {
+    var barra = document.getElementById('shell-barra');
+    if (!barra) return;
+    var segundo = puedeAbrirModulo_('mi_trabajo') ? { id: 'mi_trabajo', texto: 'Mi trabajo', icono: 'tareas' }
+      : { id: 'mis_solicitudes', texto: 'Solicitudes', icono: 'lista' };
+    var items = [{ id: 'home', texto: 'Inicio', icono: 'inicio' }, segundo,
+      { id: 'buscar', texto: 'Buscar', icono: 'lupa' }, { id: 'menu', texto: 'Menú', icono: 'menu' }];
+    barra.innerHTML = items.map(function (it) {
+      var on = it.id === activo;
+      return '<button type="button" class="shell-barra__item' + (on ? ' shell-barra__item--activo' : '') + '" data-barra="' + it.id + '"' +
+        (on ? ' aria-current="page"' : '') + '>' + Iconos.svg(it.icono, { tam: 20 }) + '<span>' + it.texto + '</span></button>';
+    }).join('');
+  }
+
   function mostrarModulo_(id) {
     moduloActivo_ = id;
+    pintarBarraInferior_(id);
     ultimaCargaModulo_[id] = Date.now();
     // v12.1: la URL refleja donde estas. replaceState (reemplazar=true) para
     // que abrir un modulo no meta un paso extra en el historial: el paso lo

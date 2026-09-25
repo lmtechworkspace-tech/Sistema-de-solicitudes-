@@ -965,3 +965,18 @@ marco del shell.
   la hamburguesa es clicable; Valentina ve sus 3 avisos, "Marcar leída" e
   "Ir" funcionan; sidebar colapsado con campana; interruptor en el menú en
   ambos sentidos.
+
+### 9B Sidebar v2, Buscar y celular — ESTADO: HECHO
+- Sidebar: sigue oscuro (la marca), con tipografía, espaciado, radios e
+  indicador de ítem activo al estilo v2 (`#vista-shell` en shell-v2.css,
+  sin tocar app.html).
+- Botón **"Buscar · Ctrl K"** bajo la marca: abre la búsqueda (existía solo
+  por teclado). En Mac muestra ⌘K. Colapsado queda solo la lupa.
+- **Barra inferior en celular** (≤ 900 px): Inicio · Mi trabajo (o
+  Solicitudes si la cuenta no tiene Mi trabajo) · Buscar · Menú; marca el
+  destino activo; el contenido deja espacio para que no la tape.
+- **KPIs de a dos en celular** (≤ 600 px) en todos los módulos v2.
+
+**MÓDULO 9 COMPLETO** (9A `66d86c5`, 9B). Con esto se termina el orden
+acordado (módulos 1–9). Pendiente de la hoja de ruta: retirar las
+versiones clásicas tras un ciclo.
