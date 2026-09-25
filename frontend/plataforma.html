@@ -38,6 +38,7 @@
   <link rel="stylesheet" href="css/v2/novedades-v2.css" />
   <link rel="stylesheet" href="css/v2/admin-v2.css" />
   <link rel="stylesheet" href="css/v2/calidad-v2.css" />
+  <link rel="stylesheet" href="css/v2/shell-v2.css" />
   <!-- P3: graficos del dashboard de la bandeja (mismo CDN que app.html). -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
@@ -233,6 +234,9 @@
           </svg>
           <span class="plataforma-sidebar__txt-marca">SIGSO</span>
         </div>
+        <!-- SIGSO v2, Módulo 9A: la campana vive en el marco (antes flotaba
+             abajo a la derecha tapando contenido). La llena notificaciones-vivas.js. -->
+        <button type="button" class="shell-campana js-shell-campana" hidden aria-label="Notificaciones"></button>
         <button type="button" class="plataforma-sidebar__colapsar" id="btn-colapsar-sidebar"
                 aria-label="Colapsar menú" aria-expanded="true">
           <span id="ico-colapsar"></span>
@@ -265,6 +269,9 @@
           </button>
           <div class="plataforma-menu sigso-oculto" id="menu-usuario" role="menu">
             <div class="plataforma-menu__cab" id="menu-correos"></div>
+            <!-- Módulo 9A: el interruptor "versión clásica / nueva" del módulo
+                 actual (antes una píldora flotante). Lo maneja plataforma.js. -->
+            <button type="button" class="plataforma-menu__item" id="py2-interruptor" role="menuitem" hidden></button>
             <!-- v6.4: "Mi perfil" abre el panel de perfil/foto (perfil.js). -->
             <button type="button" class="plataforma-menu__item" id="btn-mi-perfil" role="menuitem">
               <span id="ico-perfil"></span> Mi perfil
@@ -338,6 +345,7 @@
           </svg>
           SIGSO
         </div>
+        <button type="button" class="shell-campana shell-campana--topbar js-shell-campana" hidden aria-label="Notificaciones"></button>
       </div>
 
     <main class="sigso-contenido">

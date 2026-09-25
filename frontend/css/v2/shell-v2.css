@@ -1,0 +1,45 @@
+/* shell-v2.css — marco de la plataforma (SIGSO v2, Módulo 9). Prefijos
+   .shell-* (marco) y .nt2-* (panel de notificaciones). */
+
+/* ===== 9A: campana en el marco ============================================ */
+.shell-campana {
+  position: relative; flex: none; display: inline-grid; place-items: center;
+  width: 36px; height: 36px; border: 0; border-radius: 10px; cursor: pointer;
+  background: transparent; color: rgba(255, 255, 255, 0.78);
+  transition: background var(--mov-normal, .15s), color var(--mov-normal, .15s);
+}
+.shell-campana:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.shell-campana:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.shell-campana[hidden], .plataforma-menu__item[hidden] { display: none !important; }
+.shell-campana--hay { color: #fff; }
+.shell-campana__n {
+  position: absolute; top: 1px; right: 0; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  background: var(--alerta, #E5484D); color: #fff; font: 700 11px/18px var(--fuente, Arial, sans-serif); text-align: center;
+  box-shadow: 0 0 0 2px var(--marca, #14213D);
+}
+/* En la barra superior del celular el fondo es claro. */
+.shell-campana--topbar { margin-left: auto; color: var(--texto-2, #475569); }
+.shell-campana--topbar:hover { background: var(--superficie-2, #F1F5F9); color: var(--texto, #0F172A); }
+.shell-campana--topbar.shell-campana--hay { color: var(--texto, #0F172A); }
+.shell-campana--topbar .shell-campana__n { box-shadow: 0 0 0 2px var(--superficie, #fff); }
+
+/* Sidebar colapsado (68 px): la campana va sobre el botón de expandir. */
+.plataforma-sidebar--colapsado .plataforma-sidebar__cab { flex-direction: column; gap: 6px; }
+
+/* ===== 9A: panel de notificaciones (drawer v2) ============================ */
+.nt2-permiso { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; background: var(--sx-tono-suave); border-left: 4px solid var(--sx-tono); font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.nt2-permiso strong, .nt2-permiso summary { display: inline-flex; align-items: center; gap: 6px; font: 600 .875rem/1.3 var(--fuente); color: var(--sx-tono); }
+.nt2-permiso summary { cursor: pointer; list-style: none; }
+.nt2-permiso summary::-webkit-details-marker { display: none; }
+.nt2-permiso p, .nt2-permiso ol { margin: 0; }
+.nt2-permiso ol { padding-left: 1.2rem; display: flex; flex-direction: column; gap: 4px; }
+.nt2-permiso .sx2-boton { align-self: flex-start; }
+.nt2-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.nt2-fila { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid var(--sx-borde-suave); }
+.nt2-fila:first-child { border-top: 0; }
+.nt2-fila__ico { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: var(--sx-superficie-2); color: var(--sx-texto-2); }
+.nt2-fila__cab { display: flex; justify-content: space-between; gap: 8px; }
+.nt2-fila__cab strong { font: 600 .875rem/1.3 var(--fuente); color: var(--sx-texto); }
+.nt2-fila__cab .sx2-tenue { flex: none; font-size: .75rem; }
+.nt2-fila__msg { font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.nt2-fila__acc { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }

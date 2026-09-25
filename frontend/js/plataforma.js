@@ -1441,30 +1441,34 @@
   }
   function usaProyectosV2_() { return usaV2_('proyectos'); }
   function moduloProyectos_() { return moduloImpl_('proyectos'); }
-  // Pantalla completa para v2 + interruptor flotante "Volver a la versión
-  // clásica / Usar la nueva versión" (todos los roles, solo en módulos con v2).
+  // Pantalla completa para v2 + interruptor "versión clásica / nueva" del
+  // módulo actual (todos los roles, solo en módulos con v2). SIGSO v2, Módulo
+  // 9A: vive en el menú de usuario (#py2-interruptor); antes era una píldora
+  // flotante que tapaba contenido en todos los módulos.
   function actualizarModuloV2_(id) {
     var migrado = !!(id && MODULOS_V2[id] && MODULOS_V2[id].v2());
     var v2 = migrado && usaV2_(id);
     var main = document.querySelector('#vista-shell .sigso-contenido');
     if (main) main.classList.toggle('plataforma-contenido--total', v2);
-    var pill = document.getElementById('py2-interruptor');
-    if (!migrado) { if (pill) pill.remove(); return; }
-    if (!pill) {
-      pill = document.createElement('button');
-      pill.type = 'button';
-      pill.id = 'py2-interruptor';
-      pill.addEventListener('click', function () {
-        var mod = pill.getAttribute('data-modulo');
+    var item = document.getElementById('py2-interruptor');
+    if (!item) return;
+    if (!item.getAttribute('data-listo')) {
+      item.setAttribute('data-listo', '1');
+      item.addEventListener('click', function () {
+        var menu = document.getElementById('menu-usuario');
+        if (menu) menu.classList.add('sigso-oculto');
+        var btn = document.getElementById('btn-menu-usuario');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+        var mod = item.getAttribute('data-modulo');
         var o = MODULOS_V2[mod] && MODULOS_V2[mod].v2();
         if (o) o.usarVersion(!usaV2_(mod));
       });
-      document.body.appendChild(pill);
     }
-    pill.setAttribute('data-modulo', id);
-    pill.className = 'sx2-py-interruptor' + (v2 ? ' sx2-py-interruptor--clasica' : '');
-    pill.innerHTML = Iconos.svg(v2 ? 'izquierda' : 'destello', { tam: 16 }) +
-      (v2 ? 'Volver a la versión clásica' : 'Usar la nueva versión');
+    item.hidden = !migrado;
+    if (!migrado) return;
+    item.setAttribute('data-modulo', id);
+    item.innerHTML = Iconos.svg(v2 ? 'izquierda' : 'destello', { tam: 16 }) + ' ' +
+      (v2 ? 'Usar la versión clásica de este módulo' : 'Usar la nueva versión de este módulo');
   }
   function alCambiarVersion_(modulo, v2) {
     if (moduloActivo_ !== modulo) return;

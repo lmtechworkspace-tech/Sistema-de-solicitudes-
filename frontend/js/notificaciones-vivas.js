@@ -67,6 +67,7 @@
     pendientes: [],        // todas las no-leidas (para la campana).
     anunciados: {},        // notif_id -> true, ya anunciados en ESTA carga.
     panelAbierto: false,
+    drawer: null,          // 9A: panel lateral v2 abierto (modo marco).
     sesionActiva: false,
     audioCtx: null,
     audioListo: false,
@@ -253,8 +254,20 @@
     if (banner) banner.style.display = 'none';
   }
 
+  // SIGSO v2, Módulo 9A: en la plataforma (hay huecos .js-shell-campana en el
+  // marco) la campana vive en el sidebar/barra superior y el panel es un panel
+  // lateral v2. app.html (sin huecos) sigue con la campana flotante y el aviso.
+  function modoMarco_() { return !!document.querySelector('.js-shell-campana') && !!window.UIv2; }
+
   function asegurarBannerPermiso_() {
     if (typeof Notification === 'undefined') return;
+    // 9A: el aviso fijo arriba tapaba el saludo y, en celular, el botón del
+    // menú. En el marco, el permiso se explica dentro del panel de avisos.
+    if (modoMarco_()) {
+      var viejo = document.getElementById('sigso-notif-banner');
+      if (viejo) viejo.remove();
+      return;
+    }
     if (Notification.permission === 'granted') {
       var existente = document.getElementById('sigso-notif-banner');
       if (existente) existente.style.display = 'none';
@@ -410,6 +423,15 @@
   var ICONO_CAMPANA = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>';
 
   function asegurarCampana_() {
+    if (modoMarco_()) {
+      document.querySelectorAll('.js-shell-campana').forEach(function (b) {
+        if (b.getAttribute('data-listo')) return;
+        b.setAttribute('data-listo', '1');
+        b.innerHTML = Iconos.svg('campana', { tam: 18 }) + '<span class="shell-campana__n" hidden></span>';
+        b.addEventListener('click', function (ev) { ev.stopPropagation(); togglePanel_(); });
+      });
+      return;
+    }
     if (document.getElementById('sigso-notif-campana')) return;
 
     var boton = document.createElement('button');
@@ -449,17 +471,20 @@
   function togglePanel_() { estado.panelAbierto ? cerrarPanel_() : abrirPanel_(); }
   function abrirPanel_() {
     asegurarCampana_();
+    if (modoMarco_()) { abrirPanelV2_(); return; }
     estado.panelAbierto = true;
     document.getElementById('sigso-notif-panel').style.display = 'flex';
     renderCampana_();
   }
   function cerrarPanel_() {
+    if (estado.drawer) { estado.drawer.cerrar(); return; }
     estado.panelAbierto = false;
     var p = document.getElementById('sigso-notif-panel');
     if (p) p.style.display = 'none';
   }
 
   function renderCampana_() {
+    if (modoMarco_()) { renderCampanaMarco_(); return; }
     var boton = document.getElementById('sigso-notif-campana');
     if (!boton) return;
     boton.style.display = estado.sesionActiva ? 'inline-flex' : 'none';
@@ -520,6 +545,95 @@
     panel.querySelectorAll('.js-notif-item-leida').forEach(function (b) {
       b.addEventListener('click', function () { marcarLeida_(b.getAttribute('data-id')); });
     });
+  }
+
+  // ---- 9A: campana del marco + panel lateral v2 ------------------------
+
+  var ICONO_MODULO = {
+    pausas: 'actividad', pausas_coordinacion: 'actividad', proyectos: 'carpeta', calidad: 'escudoCheck',
+    novedades: 'campana', bandeja: 'bandeja', mi_trabajo: 'tareas', jefatura: 'equipo', gerencia: 'grafico'
+  };
+
+  function renderCampanaMarco_() {
+    var n = estado.pendientes.length;
+    document.querySelectorAll('.js-shell-campana').forEach(function (b) {
+      b.hidden = !estado.sesionActiva;
+      b.setAttribute('aria-label', n ? 'Notificaciones: ' + n + ' sin leer' : 'Notificaciones');
+      b.classList.toggle('shell-campana--hay', !!n);
+      var badge = b.querySelector('.shell-campana__n');
+      if (badge) { badge.textContent = n > 99 ? '99+' : String(n); badge.hidden = !n; }
+    });
+    if (estado.drawer) pintarPanelV2_();
+  }
+
+  function abrirPanelV2_() {
+    if (estado.drawer) return;
+    var U = window.UIv2;
+    estado.panelAbierto = true;
+    estado.drawer = U.drawer({
+      titulo: 'Notificaciones', subtitulo: '<span class="sx2-tenue nt2-sub" style="font-size:.8125rem"></span>', cuerpo: '', pie: ' ',
+      alCerrar: function () { estado.drawer = null; estado.panelAbierto = false; }
+    });
+    estado.drawer.el.classList.add('nt2-drawer');
+    estado.drawer.el.addEventListener('click', function (ev) {
+      var b, t = ev.target;
+      if ((b = t.closest('.js-nt2-ir'))) {
+        var id = b.getAttribute('data-id'), mod = b.getAttribute('data-mod');
+        marcarLeida_(id);
+        cerrarPanel_();
+        irAModulo_(mod);
+        return;
+      }
+      if ((b = t.closest('.js-nt2-leida'))) { marcarLeida_(b.getAttribute('data-id')); return; }
+      if (t.closest('.js-nt2-todas')) { marcarTodas_(); return; }
+      if (t.closest('.js-nt2-sonido')) { setSonido_(!sonidoActivo_()); pintarPanelV2_(); return; }
+      if (t.closest('.js-nt2-activar')) {
+        try {
+          Notification.requestPermission().then(function (r) { reportarPermiso_(r); pintarPanelV2_(); });
+        } catch (e) { /* navegador sin API */ }
+      }
+    });
+    pintarPanelV2_();
+  }
+
+  function bloquePermisoV2_(U) {
+    if (typeof Notification === 'undefined' || Notification.permission === 'granted') return '';
+    if (Notification.permission === 'denied') {
+      return '<details class="nt2-permiso sx2-tono-alerta"><summary>' + U.ico('campanaOff', 15) + 'Las alertas del navegador están bloqueadas</summary>' +
+        '<p>Sin ellas no ves los avisos cuando SIGSO está en otra pestaña. Para activarlas:</p>' +
+        '<ol><li>Haz clic en el candado (o el ícono de información) junto a la dirección de la página.</li>' +
+        '<li>En <strong>Notificaciones</strong>, elige <strong>Permitir</strong>.</li><li>Recarga la página.</li></ol>' +
+        '<p>Mientras tanto, los avisos igual llegan aquí y a tu correo.</p></details>';
+    }
+    return '<div class="nt2-permiso sx2-tono-primario"><strong>' + U.ico('campana', 15) + 'Recibe los avisos aunque estés en otra pestaña</strong>' +
+      '<p>Derivaciones, vencimientos y pausas te llegan como alerta del computador.</p>' +
+      U.boton({ texto: 'Activar alertas del navegador', sm: true, variante: 'primario', clase: 'js-nt2-activar' }) + '</div>';
+  }
+
+  function pintarPanelV2_() {
+    var d = estado.drawer;
+    if (!d) return;
+    var U = window.UIv2;
+    var n = estado.pendientes.length;
+    var sub = d.el.querySelector('.nt2-sub');
+    if (sub) sub.textContent = n ? n + ' sin leer' : 'Nada pendiente';
+    var lista = n ? '<ul class="nt2-lista">' + estado.pendientes.map(function (x) {
+      return '<li class="nt2-fila"><span class="nt2-fila__ico">' + U.ico(ICONO_MODULO[x.modulo_id] || 'campana', 16) + '</span>' +
+        '<span class="sx2-apilado" style="gap:2px;min-width:0;flex:1">' +
+          '<span class="nt2-fila__cab"><strong>' + U.esc(x.titulo || 'Aviso') + '</strong><span class="sx2-tenue">' + U.esc(relativo_(x.creada_en)) + '</span></span>' +
+          (x.mensaje ? '<span class="nt2-fila__msg">' + U.esc(x.mensaje) + '</span>' : '') +
+          '<span class="nt2-fila__acc">' +
+            (x.modulo_id ? U.boton({ texto: x.texto_accion || 'Ver', sm: true, variante: 'primario', clase: 'js-nt2-ir', datos: { id: x.notif_id, mod: x.modulo_id } }) : '') +
+            U.boton({ texto: 'Marcar leída', sm: true, variante: 'fantasma', clase: 'js-nt2-leida', datos: { id: x.notif_id } }) +
+          '</span></span></li>';
+    }).join('') + '</ul>'
+      : U.vacio({ icono: 'check', titulo: 'Estás al día', texto: 'Aquí aparecen los avisos de SIGSO: derivaciones, vencimientos, pausas y documentos por confirmar.' });
+    d.cuerpo(bloquePermisoV2_(U) + lista);
+    var mudo = !sonidoActivo_();
+    d.el.querySelector('.sx2-drawer__pie').innerHTML =
+      (n ? U.boton({ texto: 'Marcar todas como leídas', icono: 'check', variante: 'primario', clase: 'js-nt2-todas' }) : '') +
+      U.boton({ texto: mudo ? 'Activar sonido' : 'Silenciar sonido', icono: mudo ? 'campana' : 'campanaOff', clase: 'js-nt2-sonido' }) +
+      U.boton({ texto: 'Cerrar', clase: 'js-sx2-drawer-cerrar' });
   }
 
   // ---- procesamiento del poll -----------------------------------------

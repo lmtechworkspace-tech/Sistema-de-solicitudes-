@@ -907,3 +907,61 @@ cobertura ISO · Operación: servicios, proveedores · Reportes · Accesos).
 
 **MÓDULO 8 COMPLETO** (8A `4df9abe`, 8B `fae83d8`, 8C). Siguiente: Módulo 9,
 marco del shell.
+
+---
+
+## Módulo 9 — Marco del shell: análisis
+
+### Qué hay hoy
+- **Sidebar** (v1, azul marino): marca, colapsar, árbol de módulos, pie con
+  versión, modo oscuro y menú de usuario (perfil, cerrar sesión). En celular
+  el sidebar es un cajón que se abre desde una barra superior (hamburguesa +
+  marca). No hay barra superior en escritorio.
+- **Buscar y saltar** (Ctrl+K) y hoja de atajos (?): existen, pero no hay
+  ningún botón visible que los abra.
+- **Notificaciones**: campana **flotante** abajo a la derecha (52 px) con su
+  panel, y un **aviso azul fijo arriba** cuando el navegador bloquea las
+  alertas; el aviso vuelve en cada sesión.
+- **Interruptor v2** "Volver a la versión clásica": píldora flotante abajo al
+  centro, en todos los módulos migrados.
+
+### Lo que muestran los datos (sandbox, 20 cuentas activas)
+- **Alertas del navegador: 8 cuentas "bloqueadas", 0 "permitidas"** (las
+  otras 12 nunca respondieron). Las alertas del sistema operativo no le
+  llegan a nadie; el aviso azul se le muestra a todos en cada sesión.
+- **Notificaciones dentro de SIGSO: 52, solo 1 marcada leída.** La campana
+  flotante no está funcionando como canal.
+- Módulos por cuenta: de 3 a 11 (mediana 7).
+- Visual: el aviso azul **tapa el saludo del Inicio** en escritorio y **tapa
+  la hamburguesa en celular** (no se puede abrir el menú sin cerrarlo). La
+  campana y la píldora flotantes **tapan contenido** abajo a la derecha
+  (p. ej. "Todo mi trabajo"). En celular los KPI v2 van de a uno por fila:
+  el Inicio ocupa 5 pantallas de tarjetas antes de lo importante.
+
+### Decisiones del dueño (2026-09-25)
+- Notificaciones: **campana en el marco** (sidebar y barra superior del
+  celular) con panel lateral v2; el permiso del navegador se explica
+  **dentro del panel**, sin tapar la pantalla.
+- Interruptor clásica/nueva: **al menú de usuario**.
+- Celular: **barra inferior con 4 destinos** (Inicio, Mi trabajo, Buscar,
+  Menú) y KPIs de a dos.
+- Sidebar: **oscuro, afinado al estilo v2**, con botón "Buscar (Ctrl+K)".
+- Orden: 9A avisos + interruptor → 9B sidebar, buscar y celular.
+
+### 9A Campana en el marco + interruptor al menú — ESTADO: HECHO
+- `notificaciones-vivas.js`: en la plataforma (`modoMarco_`: hay huecos
+  `.js-shell-campana` y UIv2) la campana va en el encabezado del sidebar y
+  en la barra superior del celular, con contador; el panel es un drawer v2
+  (avisos con "Ir"/"Marcar leída", "Marcar todas", sonido) y el permiso del
+  navegador se explica arriba del panel (activar si está en "preguntar";
+  pasos si está bloqueado). Ya no se crea el aviso azul fijo ni la campana
+  flotante. `app.html` (sin huecos) queda como estaba.
+- `plataforma.js`: el interruptor es el ítem `#py2-interruptor` del menú de
+  usuario ("Usar la versión clásica / nueva de este módulo"), visible solo
+  en módulos migrados.
+- `css/v2/shell-v2.css` (nuevo) y `.sx2-drawer__pie` con `flex-wrap` (el
+  pie de los paneles con 3+ botones se salía del panel).
+- Verificado en sandbox: saludo del Inicio ya no queda tapado; en celular
+  la hamburguesa es clicable; Valentina ve sus 3 avisos, "Marcar leída" e
+  "Ir" funcionan; sidebar colapsado con campana; interruptor en el menú en
+  ambos sentidos.

@@ -313,8 +313,9 @@ body.sx2-con-drawer #py2-interruptor { visibility: hidden; }
 .sx2-drawer__fila-titulo { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--sx-e-3); }
 .sx2-drawer__titulo { margin: 0; font: var(--sx-t-h1); color: var(--sx-texto); }
 .sx2-drawer__cuerpo { flex: 1; overflow-y: auto; padding: var(--sx-e-5); display: flex; flex-direction: column; gap: var(--sx-e-5); }
-.sx2-drawer__pie { padding: var(--sx-e-4) var(--sx-e-5); border-top: 1px solid var(--sx-borde-suave); display: flex; gap: var(--sx-e-2); }
-.sx2-drawer__pie .sx2-boton { flex: 1; }
+/* flex-wrap: con 3+ botones (Documentos llega a 5) el pie se salía del panel. */
+.sx2-drawer__pie { padding: var(--sx-e-4) var(--sx-e-5); border-top: 1px solid var(--sx-borde-suave); display: flex; flex-wrap: wrap; gap: var(--sx-e-2); }
+.sx2-drawer__pie .sx2-boton { flex: 1 1 auto; }
 .sx2-seccion-drawer { display: flex; flex-direction: column; gap: var(--sx-e-2); }
 .sx2-seccion-drawer__titulo { font: var(--sx-t-etiqueta); text-transform: uppercase; letter-spacing: 0.06em; color: var(--sx-texto-3); margin: 0; }
 .sx2-dato { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: var(--sx-e-2); font: var(--sx-t-chico); }
