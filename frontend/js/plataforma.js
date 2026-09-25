@@ -1412,7 +1412,7 @@
     // Módulo 8A: Inicio 'Camino a la certificación'; el resto de Calidad es calidad.js.
     calidad: { v2: function () { return window.SigsoCalidadV2; }, v1: function () { return CALIDAD_CLASICA_; } }
   };
-  var CALIDAD_CLASICA_ = { cargar: function () { if (window.SigsoCalidad) window.SigsoCalidad.irAItem('inicio'); } };
+  var CALIDAD_CLASICA_ = { cargar: function () { if (window.SigsoCalidad) window.SigsoCalidad.recargar(); } };
   var ADMIN_CLASICA_ = { cargar: function () { if (window.SigsoAdmin) window.SigsoAdmin.irAItem('CUENTAS_PORTAL'); } };
   var NOVEDADES_CLASICA_ = { cargar: function () { if (window.SigsoNovedades) window.SigsoNovedades.irAItem('feed'); } };
   var COORDINACION_CLASICA_ = { cargar: function () { if (window.SigsoCoordinacion) window.SigsoCoordinacion.irAItem('hoy'); } };

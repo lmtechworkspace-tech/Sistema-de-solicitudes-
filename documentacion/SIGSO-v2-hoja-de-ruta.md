@@ -777,3 +777,69 @@ cobertura ISO · Operación: servicios, proveedores · Reportes · Accesos).
 - Arreglo transversal de `componentes-v2.css`: `.sx2-barra` y su relleno son
   `<span>`; sin `display:block` el ancho del relleno se ignoraba cuando el
   padre no los volvía bloque (barras vacías).
+
+### 8B Documentos — análisis (sandbox, 44 documentos activos)
+- **Qué hace hoy** (calidad.js): buscador, segmentos por tipo, filtro
+  "solo por confirmar", detalle en página aparte con ver/descargar, acuse,
+  nueva versión, editar, etiquetar cláusulas, "quién confirmó" (lista de
+  correos), obsoleto/vigente, historial de versiones. Funciona bien para
+  CONSULTAR; lo que falta es el CONTROL documental que pide la norma.
+- **27 de 44 no tienen archivo controlado**: todos los procedimientos y
+  formularios se abren por un enlace a Google Docs **editable**
+  (`/edit?usp=sharing`). La norma (7.5.3) pide que la versión vigente esté
+  protegida de cambios no intencionados; un enlace editable no lo garantiza.
+  PRO-10 y FO-PRO-10-01 no tienen ni archivo ni enlace.
+- **43 de 44 sin "Revisado por" ni "Aprobado por"** (7.5.2 exige evidencia
+  de revisión y aprobación). Solo uno dice "Rogelio Álvarez".
+- **Las 6 normas externas (ISO 9001, ISO 19011, DS 44, Ley 16.744, DS 594,
+  Código del Trabajo) están marcadas OBSOLETO** → el personal no las ve.
+  Parece un error de la importación: siguen vigentes.
+- Solo **9 documentos exigen acuse**, todos con plazo; los acuses se juntan
+  en septiembre (47 de 49).
+- Todos los documentos tienen visibilidad "Todos" y próxima revisión
+  2027: la revisión anual no aprieta todavía.
+- Descargas registradas: 8, todas de una cuenta de administración → el
+  personal no descarga; si abre, lo hace por el enlace (no queda registro).
+- 154 filas vacías en SGC_DOCUMENTOS (basura de importación, inactivas).
+
+#### Decisiones del dueño para 8B (2026-09-24)
+- Revisión y aprobación: **completar en lote** (la ficha marca "Falta
+  aprobación" mientras tanto).
+- Enlaces de Google Docs: **aceptar el enlace, avisar "Sin copia
+  controlada" y pedir el PDF** desde el panel; el personal no nota cambios.
+- Normas externas obsoletas: **botón "Volver a vigente" en lote** para el
+  encargado (no se tocan datos de producción por fuera).
+- Diseño: **lista + panel lateral + pestaña "Control documental"**.
+
+### 8B Documentos v2 — ESTADO: HECHO
+- Backend:
+  - `calidadSgc.alertasControlSgc_` (una sola fuente): `sin_aprobacion`
+    (vigente interno sin revisado/aprobado), `sin_copia` (vigente interno
+    sin archivo), `externo_fuera` (norma externa obsoleta), `revision`
+    (revisión anual vencida o a ≤ 60 días). `listarDocumentosSgc` y
+    `getDocumentoSgc` las exponen en `control` solo a quien gobierna.
+  - Columna nueva `SGC_DOCUMENTOS.fecha_aprobacion`: se registra al poner
+    "Aprobado por" (también desde el formulario clásico).
+  - `logica/controlDocumentalSgc.js`: `getControlDocumentalSgc` (grupos,
+    totales y los nombres ya usados como firmantes, para sugerirlos) y
+    `actualizarDocumentosEnLoteSgc` (solo revisado/aprobado/elaborado/
+    fecha/estado; cada cambio pasa por `Calidad.actualizarDocumento`).
+- Frontend `js/calidad-documentos-v2.js` (cargado con el shell):
+  - Lista con buscador instantáneo (sin tildes), tipos con recuento,
+    "por confirmar", estado (gestión) y "con pendientes de control".
+  - Panel del documento: acuse, alertas de control con su arreglo en el
+    mismo lugar (registrar aprobación, subir PDF, volver a vigente, aviso de
+    revisión anual), ver/descargar, enlaces (marca "Editable" al gestor),
+    ficha con fecha de aprobación, cláusulas, quién falta por confirmar con
+    nombres, historial de versiones. Es el mismo panel que abre el Inicio.
+  - Control documental: KPIs + registrar revisión y aprobación en lote
+    (marcar/desmarcar), lista sin copia controlada con "Abrir"/"Subir PDF",
+    normas externas → "Volver a vigente" en lote, revisión anual.
+  - Cargar, editar, nueva versión y cláusulas reutilizan los formularios
+    clásicos (`SigsoCalidad.formulario`); al guardar vuelven a la v2.
+  - El interruptor clásica/nueva ya no saca de la sección actual.
+- Sandbox: 35 documentos aprobados en un lote (quedó 1, el desmarcado) y las
+  6 normas externas vueltas a vigente. La subida de PDF no se pudo probar en
+  el sandbox (sin almacenamiento R2); el error llega bien a la pantalla.
+- Arreglo transversal: `.sx2-flex > .sx2-barra` ocupa el espacio (la barra
+  de "Quién la leyó" de Novedades también medía 0).

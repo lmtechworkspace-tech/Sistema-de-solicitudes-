@@ -103,6 +103,9 @@
   background: var(--sx-superficie-2); overflow: hidden;
 }
 .sx2-barra--gruesa { height: 8px; }
+/* Dentro de una fila flex (barra + "6 de 13") la barra ocupa lo que sobra;
+   sin esto medía 0 (Novedades "Quién la leyó", acuses de Calidad). */
+.sx2-flex > .sx2-barra { flex: 1; min-width: 40px; }
 .sx2-barra__relleno {
   display: block; height: 100%; width: 0; border-radius: inherit;
   background: var(--sx-tono, var(--sx-primario));

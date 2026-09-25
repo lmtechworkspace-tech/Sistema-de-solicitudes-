@@ -8,12 +8,13 @@
  *    se pueden confirmar en un clic y quién falta por confirmar cada
  *    documento (backend getCaminoCertificacionSgc / aplicarEtiquetasSgc).
  *  - El resto ve "lo tuyo": los documentos que debe confirmar.
- *  - El panel de lectura y acuse (abrirDocumento) es el mismo desde el
- *    Inicio de SIGSO (decisión: confirmar desde el Inicio, como Novedades).
+ *  - El panel del documento (lectura, acuse y gestión) vive en
+ *    calidad-documentos-v2.js (8B) y es el mismo desde el Inicio de SIGSO
+ *    (decisión: confirmar desde el Inicio, como Novedades).
  *
  * Se carga con el shell (no con calidad.js, que es diferido): el Inicio de
- * SIGSO lo necesita aunque nadie haya abierto Calidad. Las demás secciones
- * siguen en calidad.js (8B Documentos y 8C Personas las rehacen).
+ * SIGSO lo necesita aunque nadie haya abierto Calidad. Documentos (8B) está
+ * en calidad-documentos-v2.js; las demás secciones siguen en calidad.js.
  */
 (function () {
   'use strict';
@@ -45,77 +46,15 @@
     return { txt: 'Quedan ' + dias + ' días', tono: 'info' };
   }
 
-  // --- Panel de lectura y acuse (módulo e Inicio de SIGSO) ---------------------------
-  function abrirDocumento(id) {
-    var d = U.drawer({ titulo: 'Documento', subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">Cargando…</span>', cuerpo: U.esqueleto('tabla', 5), pie: ' ' });
-    d.el.classList.add('bj2-drawer', 'cq2-drawer');
-    var x = null;
+  // --- Panel del documento: vive en calidad-documentos-v2.js (8B: lectura + gestión) ---
+  function abrirDocumento(id) { return window.SigsoCalidadDocsV2 ? SigsoCalidadDocsV2.abrir(id) : null; }
 
-    function pintar() {
-      var doc = x.documento;
-      d.el.querySelector('.sx2-drawer__titulo').textContent = doc.nombre;
-      var cab = d.el.querySelector('.sx2-drawer__fila-titulo .sx2-apilado');
-      cab.querySelectorAll('.sx2-tenue, .bj2-det-sub').forEach(function (e) { e.remove(); });
-      cab.insertAdjacentHTML('beforeend', '<span class="bj2-det-sub sx2-flex">' + U.badge(TIPO[doc.tipo] || doc.tipo, 'info') +
-        '<span class="sx2-tenue" style="font-size:.8125rem">' + U.esc(doc.codigo + (doc.version_vigente ? ' · ' + doc.version_vigente : '')) + '</span></span>');
-      var p = plazo(doc.fecha_limite_acuse ? diasHasta(doc.fecha_limite_acuse) : null);
-      var cuerpo =
-        (x.debo_acusar ? '<p class="nv2-acuse sx2-tono-' + p.tono + '">' + U.ico('reloj', 15) + 'Te piden confirmar que lo leíste' + (doc.fecha_limite_acuse ? ' · ' + p.txt : '') + '.</p>'
-          : (x.mi_acuse ? '<p class="nv2-acuse sx2-tono-ok">' + U.ico('check', 15) + 'Confirmaste la lectura el ' + U.esc(fechaChile(x.mi_acuse)) + '.</p>' : '')) +
-        (doc.descripcion ? '<p class="nv2-resumen">' + U.esc(doc.descripcion) + '</p>' : '') +
-        (doc.archivo_id || doc.archivo_nombre ? '<button type="button" class="bj2-archivo js-cq2-descargar" style="width:100%;text-align:left;background:none">' +
-          '<span class="bj2-archivo__ico sx2-tono-info">' + U.ico('documento', 18) + '</span>' +
-          '<span class="sx2-apilado" style="gap:2px;flex:1;min-width:0"><strong class="sx2-cortar">' + U.esc(doc.archivo_nombre || 'Archivo') + '</strong><span class="sx2-tenue" style="font-size:.75rem">Descargar y leer</span></span>' + U.ico('descargar', 14) + '</button>'
-          : '<p class="sx2-tenue" style="margin:0">Este documento aún no tiene archivo cargado.</p>') +
-        '<dl class="cq2-ficha">' +
-          fila('Vigente desde', doc.fecha_vigencia ? PY.fecha(doc.fecha_vigencia, true) : '') +
-          fila('Próxima revisión', doc.proxima_revision ? PY.fecha(doc.proxima_revision, true) : '') +
-          fila('Aprobado por', doc.aprobado_por) +
-          fila('Cláusulas ISO', (doc.clausulas_iso || []).join(', ')) +
-        '</dl>';
-      d.cuerpo(cuerpo);
-      d.el.querySelector('.sx2-drawer__pie').innerHTML =
-        (x.debo_acusar ? U.boton({ texto: 'Confirmo que lo leí', icono: 'check', variante: 'primario', clase: 'js-cq2-confirmar' }) : '') +
-        U.boton({ texto: 'Cerrar', clase: 'js-sx2-drawer-cerrar' });
-    }
-    function fila(k, v) { return v ? '<dt>' + U.esc(k) + '</dt><dd>' + U.esc(v) + '</dd>' : ''; }
-
-    api('getDocumentoSgc', { documento_id: id }).then(function (r) {
-      if (!r || !r.ok) { d.cuerpo(U.vacio({ icono: 'alerta', titulo: 'No se pudo abrir', texto: (r && r.message) || 'Inténtalo de nuevo.' })); return; }
-      x = r.data;
-      pintar();
-    });
-
-    d.el.addEventListener('click', function (ev) {
-      var b;
-      if ((b = ev.target.closest('.js-cq2-confirmar'))) {
-        b.disabled = true;
-        api('acusarDocumentoSgc', { documento_id: id }).then(function (r) {
-          if (!r || !r.ok) { b.disabled = false; PY.aviso((r && r.message) || 'No se pudo registrar la confirmación.', 'error'); return; }
-          PY.aviso('Lectura confirmada. ¡Gracias!', 'exito');
-          x.debo_acusar = false;
-          x.mi_acuse = new Date().toISOString();
-          pintar();
-          avisarAcuse();
-        });
-        return;
-      }
-      if ((b = ev.target.closest('.js-cq2-descargar'))) {
-        b.disabled = true;
-        api('descargarDocumentoSgc', { documento_id: id }).then(function (r) {
-          b.disabled = false;
-          if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo descargar.', 'error'); return; }
-          PY.descargarBase64(r.data.contenido_base64, r.data.nombre_archivo || 'documento.pdf', r.data.mime || 'application/pdf');
-        });
-      }
-    });
-    return d;
-  }
   // Un instante (acusado_en) se muestra con el día de Chile, no el de UTC.
   function fechaChile(iso) {
     var d = new Date(iso);
     if (isNaN(d.getTime())) return '';
-    return new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
+    // Mismo formato que PY.fecha (dd/mm/aaaa); es-CL usa guiones.
+    return new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', year: 'numeric' }).format(d).replace(/-/g, '/');
   }
   function diasHasta(fecha) {
     var k = String(fecha || '').slice(0, 10);
@@ -137,7 +76,9 @@
 
   // --- Montaje ----------------------------------------------------------------------
   function seccion() { return document.getElementById('modulo-calidad'); }
-  function contenedor() {
+  // #calidad-v2 lo comparten el Inicio y Documentos (8B): data-vista dice quién
+  // lo ocupa, para que una respuesta tardía de una vista no pinte sobre la otra.
+  function contenedor(vista) {
     var s = seccion();
     if (!s) return null;
     var c = document.getElementById('calidad-v2');
@@ -147,9 +88,11 @@
       c.className = 'sx2';
       s.appendChild(c);
     }
+    c.setAttribute('data-vista', vista || 'inicio');
     s.classList.add('calidad-v2-activa');
     return c;
   }
+  function ocupa(vista) { var c = document.getElementById('calidad-v2'); return !!c && c.getAttribute('data-vista') === vista; }
   function desmontar() {
     var s = seccion();
     if (s) s.classList.remove('calidad-v2-activa');
@@ -158,14 +101,14 @@
   }
 
   function cargar(silencioso) {
-    var c = contenedor();
+    var c = contenedor('inicio');
     if (!c) return;
     var t = ++turno_;
     if (!silencioso || !datos_) c.innerHTML = '<div class="sx2-pagina">' + cabecera(null) + U.esqueleto('kpis', 4) + U.esqueleto('tarjetas', 3) + '</div>';
     // Quien no supervisa el SGC recibe 403 del camino: se recuerda para no
     // repetir el viaje en cada entrada (el backend decide, no se adivina el rol).
     Promise.all([sinCamino_ ? Promise.resolve(null) : api('getCaminoCertificacionSgc', {}), api('listarDocumentosSgc', {})]).then(function (r) {
-      if (t !== turno_) return;
+      if (t !== turno_ || !ocupa('inicio')) return;
       if (r[0] && r[0].error === 'forbidden') sinCamino_ = true;
       var camino = r[0] && r[0].ok ? r[0].data : null;
       var docs = r[1] && r[1].ok ? r[1].data : null;
@@ -197,7 +140,7 @@
 
   function pintar(silencioso) {
     var c = document.getElementById('calidad-v2');
-    if (!c || !datos_) return;
+    if (!c || !datos_ || !ocupa('inicio')) return;
     var y = window.scrollY;
     var cm = datos_.camino;
     var mios = datos_.docs ? (datos_.docs.documentos || []).filter(function (x) { return x.debo_acusar; }) : [];
@@ -390,7 +333,7 @@
   });
   document.addEventListener('sigso:sgc-acuse', function () {
     var c = document.getElementById('calidad-v2');
-    if (c && c.offsetParent !== null) cargar(true);
+    if (c && c.offsetParent !== null && ocupa('inicio')) cargar(true);
   });
 
   function activo() { try { return localStorage.getItem(CLAVE_PREF) !== '0'; } catch (e) { return true; } }
@@ -401,9 +344,14 @@
 
   window.SigsoCalidadV2 = {
     // calidad.js llama aquí cuando la sección activa es 'inicio'.
-    mostrarInicio: function () { cargar(!!datos_ && !!document.getElementById('calidad-v2')); },
-    cargar: function () { if (window.SigsoCalidad) SigsoCalidad.irAItem('inicio'); },
-    refrescar: function () { cargar(true); },
+    mostrarInicio: function () { cargar(!!datos_ && ocupa('inicio')); },
+    // 8B: Documentos (calidad-documentos-v2.js).
+    mostrarDocumentos: function (o) { if (window.SigsoCalidadDocsV2) SigsoCalidadDocsV2.mostrar(o); },
+    refrescarDocumentos: function () { if (window.SigsoCalidadDocsV2 && ocupa('documentos')) SigsoCalidadDocsV2.refrescar(); },
+    // Lo compartido con calidad-documentos-v2.js.
+    util: { api: api, TIPO: TIPO, plazo: plazo, fechaChile: fechaChile, diasHasta: diasHasta, contenedor: contenedor, ocupa: ocupa, desmontar: desmontar },
+    cargar: function () { if (window.SigsoCalidad) SigsoCalidad.recargar(); },
+    refrescar: function () { if (ocupa('documentos')) { if (window.SigsoCalidadDocsV2) SigsoCalidadDocsV2.refrescar(); } else cargar(true); },
     abrirDocumento: abrirDocumento,
     filasInicio: filasInicio,
     activo: activo, usarVersion: usarVersion, desmontar: desmontar

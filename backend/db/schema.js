@@ -383,7 +383,9 @@ const COLUMNAS = {
     'archivo_id', 'archivo_nombre', 'archivo_mime',
     'creado_por', 'fecha_creacion', 'activa',
     'requiere_acuse', 'fecha_limite_acuse',
-    'clausulas_iso', 'emisor', 'clase_externa', 'enlaces'
+    'clausulas_iso', 'emisor', 'clase_externa', 'enlaces',
+    // SIGSO v2 (Módulo 8B): cuándo se registró la revisión y aprobación (7.5.2).
+    'fecha_aprobacion'
   ],
   SGC_DOC_VERSIONES: [
     'version_id', 'documento_id', 'version', 'cambios',

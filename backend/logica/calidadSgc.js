@@ -335,6 +335,29 @@ function registrarLogSgc_(db, accion, detalle, contexto) {
   } catch (err) { /* trazabilidad, no el flujo principal */ }
 }
 
+// SIGSO v2 (Módulo 8B) — control documental: qué le falta a un documento
+// para que la norma lo dé por controlado. Una sola fuente para la lista, el
+// panel y la pestaña "Control documental" (controlDocumentalSgc.js).
+//   sin_aprobacion  vigente interno sin "Revisado por" o "Aprobado por" (7.5.2)
+//   sin_copia       vigente interno sin archivo controlado; se abre por un
+//                   enlace (a menudo un Google Doc editable) o por nada (7.5.3)
+//   externo_fuera   norma/ley externa marcada obsoleta (el personal no la ve)
+//   revision        revisión anual vencida o dentro de 60 días
+const DIAS_AVISO_REVISION_SGC = 60;
+function alertasControlSgc_(d, ahora) {
+  const out = [];
+  const interno = d.tipo !== 'EXTERNO';
+  const vigente = d.estado === 'VIGENTE';
+  if (vigente && interno && (!String(d.revisado_por || '').trim() || !String(d.aprobado_por || '').trim())) out.push('sin_aprobacion');
+  if (vigente && interno && !d.archivo_id) out.push('sin_copia');
+  if (!interno && d.estado === 'OBSOLETO') out.push('externo_fuera');
+  if (vigente && d.proxima_revision) {
+    const dias = diasHasta_(d.proxima_revision, ahora);
+    if (dias !== null && dias <= DIAS_AVISO_REVISION_SGC) out.push('revision');
+  }
+  return out;
+}
+
 // ===========================================================================
 // API publica
 // ===========================================================================
@@ -389,7 +412,9 @@ function listarDocumentos(db, data, contexto) {
       requiere_acuse: esVerdadero_(d.requiere_acuse), fecha_limite_acuse: d.fecha_limite_acuse || '',
       debo_acusar: !!pendientesMios[d.documento_id],
       dias_para_acuse: d.fecha_limite_acuse ? diasHasta_(d.fecha_limite_acuse, ahora) : null,
-      clausulas_iso: parsearClausulasIso_(d.clausulas_iso), enlaces_n: parsearEnlaces_(d.enlaces).length
+      clausulas_iso: parsearClausulasIso_(d.clausulas_iso), enlaces_n: parsearEnlaces_(d.enlaces).length,
+      fecha_aprobacion: d.fecha_aprobacion || '',
+      control: gobierna ? alertasControlSgc_(d, ahora) : []
     })).sort((a, b) => String(a.codigo || '').localeCompare(String(b.codigo || '')))
   };
 }
@@ -413,6 +438,7 @@ function getDocumento(db, data, contexto) {
     documento: Object.assign({}, doc, { clausulas_iso: parsearClausulasIso_(doc.clausulas_iso), enlaces: parsearEnlaces_(doc.enlaces) }),
     puede_gestionar: gobierna, puede_reemplazar_archivo: contexto.super_admin === true, catalogo_clausulas: CLAUSULAS_ISO9001,
     debo_acusar: debeAcusar, mi_acuse: miAcuse ? miAcuse.acusado_en : '',
+    control: gobierna ? alertasControlSgc_(doc) : [],
     versiones,
     destinatarios: doc.visibilidad === 'SELECCION'
       ? destinatarios.filter((x) => x.documento_id === doc.documento_id).map((x) => x.usuario_email)
@@ -578,6 +604,9 @@ async function actualizarDocumento(db, data, contexto) {
   if (!gobiernaSgc_(db, contexto)) return { _forbidden: true, message: 'Solo el Encargado SGC o un administrador pueden editar documentos.' };
   const cambios = {};
   ['nombre', 'descripcion', 'area_id', 'elaborado_por', 'revisado_por', 'aprobado_por'].forEach((campo) => { if (data[campo] !== undefined) cambios[campo] = data[campo]; });
+  // 8B: al registrar quién aprobó, queda también cuándo (7.5.2).
+  if (data.fecha_aprobacion !== undefined) cambios.fecha_aprobacion = data.fecha_aprobacion || '';
+  else if (data.aprobado_por && data.aprobado_por !== doc.aprobado_por) cambios.fecha_aprobacion = new Date().toISOString();
   if (data.tipo !== undefined) {
     if (TIPOS_DOC_SGC.indexOf(data.tipo) === -1) return errorValidacion_('tipo', 'Tipo de documento inválido.');
     cambios.tipo = data.tipo;
@@ -924,6 +953,8 @@ module.exports = {
   // audienciaDocumentoSgc_: la usa CaminoSgc (SIGSO v2, 8A) para el
   // cumplimiento de acuses de todos los documentos en un solo viaje.
   audienciaDocumentoSgc_,
+  // 8B: reglas de control documental y el conteo de días (Chile).
+  alertasControlSgc_, diasHasta_,
   // seccionesVisiblesSgc_: la usa Tablero (Fase 7), primera pantalla del
   // módulo, para pintar la barra de navegación sin adivinar qué puede
   // abrir cada quien.

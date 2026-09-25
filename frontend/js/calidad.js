@@ -74,7 +74,21 @@
     invalidar: function () { cacheListadoSgc_ = {}; },
     // El Inicio v2 trae secciones_visibles (listarDocumentosSgc): con eso el
     // árbol se poda igual que cuando el Inicio clásico las recibía.
-    usarSecciones: function (sv) { if (sv) { seccionesVisibles_ = sv; pintarNavSgc_(); } }
+    usarSecciones: function (sv) { if (sv) { seccionesVisibles_ = sv; pintarNavSgc_(); } },
+    // 8B: Documentos v2 reutiliza los formularios clásicos (mismas
+    // validaciones) y el visor de PDF. Al guardar, los formularios llaman a
+    // abrirDocumento_/cargarListado_, que con la v2 activa refrescan la v2.
+    formulario: function (nombre, d, extra) {
+      if (nombre === 'nuevo') abrirFormularioNuevo_();
+      else if (nombre === 'version') abrirFormularioVersion_(d);
+      else if (nombre === 'editar') abrirFormularioEditar_(d, extra || []);
+      else if (nombre === 'clausulas') abrirFormularioClausulasDoc_(d, extra || []);
+      else if (nombre === 'reemplazar') abrirFormularioReemplazoArchivo_(d);
+    },
+    ver: function (documentoId, versionId) { verDocumentoSgc_(documentoId, versionId); },
+    // Repinta la sección actual: el interruptor clásica/nueva no saca a la
+    // persona de donde está (antes volvía siempre al Inicio).
+    recargar: function () { render_(); }
   };
 
   // v13.0: la arquitectura se REGISTRA para que el sidebar la dibuje. El
@@ -123,6 +137,14 @@
     if (v2 && v2.activo() && (seccionActiva_ === 'inicio' || seccionActiva_ === 'tablero')) {
       pintarNavSgc_();
       v2.mostrarInicio();
+      return;
+    }
+    // 8B: Documentos v2 (calidad-documentos-v2.js). Un documento pedido por
+    // la ruta o por otra sección se abre como panel lateral encima de la lista.
+    if (docsV2_() && seccionActiva_ === 'documentos') {
+      pintarNavSgc_();
+      v2.mostrarDocumentos({ tipo: filtroTipo_, abrir: documentoActivoId_ });
+      documentoActivoId_ = null;
       return;
     }
     if (v2) v2.desmontar();
@@ -599,7 +621,16 @@
 
   // --- listado maestro (FO-PRO-01-01) --------------------------------------
 
+  // 8B: ¿Documentos va por la v2? (misma preferencia que el Inicio v2).
+  function docsV2_() {
+    var v2 = window.SigsoCalidadV2;
+    return !!(v2 && v2.activo() && window.SigsoCalidadDocsV2);
+  }
+
   function cargarListado_() {
+    // Los formularios clásicos (cargar, nueva versión, editar) terminan acá o
+    // en abrirDocumento_: con la v2 activa, refrescan la v2.
+    if (docsV2_() && seccionActiva_ === 'documentos') { window.SigsoCalidadV2.mostrarDocumentos({ tipo: filtroTipo_ }); return; }
     documentoActivoId_ = null;
     var filtros = {};
     if (filtroTipo_) filtros.tipo = filtroTipo_;
@@ -882,6 +913,11 @@
   // mostrar nunca una edición propia como si no hubiera pasado.
   var cacheDetalleDoc_ = {};
   function abrirDocumento_(id) {
+    if (docsV2_()) {
+      window.SigsoCalidadV2.abrirDocumento(id);
+      window.SigsoCalidadV2.refrescarDocumentos();
+      return;
+    }
     documentoActivoId_ = id;
     var cont = panelSgc_();
     if (!cont) return;
