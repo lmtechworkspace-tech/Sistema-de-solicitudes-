@@ -225,3 +225,32 @@ publicar.
   usa su fecha (entregas por término, entradas por creación); lo abierto se
   ordena del más grave al menos grave; sin actividad dice "Sin actividad", no
   "En control".
+- **Hallazgo 16 corregido** (`9fdab48`): el comparativo de Gerencia compara
+  sobre el conjunto sin recorte de fecha; test de regresión.
+- **R-2 (pantalla por módulo) — hecho**, un commit por módulo:
+
+  | Módulo | Reporte en 4 niveles | Commit | Notas |
+  |---|---|---|---|
+  | Proyectos | Estado del portafolio (1° del catálogo) | `5994206` | Panorama = composición (salud, plazo, avance en tramos), no un renglón por proyecto |
+  | Calidad | Estado del SGC (1° del catálogo) | `7b388ee` | Alertas del tablero en su orden (CRITICA > ALTA > MEDIA); no usa el histórico semanal (ver abajo) |
+  | Pausas | Gerencia › Pausas y Coordinación › Cumplimiento | `903d23f` | Una definición (`reporte-pausas-v2.js`), cambia el alcance |
+  | Actividades | Gerencia › Actividades | `64b8d63` | Lo crítico agrupado por persona; backend suma `responsable_email` (fuera de `columnas`) |
+  | Novedades | Novedades › Cumplimiento | `2eebe91` | Pide los lectores de cada novedad abierta para saber quién debe |
+  | Administración | Estado de la plataforma (1° del catálogo) | `b6e43d2` | Fallas agrupadas por evento |
+
+  Piezas nuevas del motor: `ranking` con `max` y `sinPosicion` (composiciones),
+  `requiereDecision` con `conservarOrden`, `columnas` con `pie`/`pieTono`,
+  lista `.rp2-agenda`.
+
+  **Hallazgos de datos al hacer R-2** (no corregidos, para decidir):
+  - Las fotos semanales de cobertura ISO dicen 29 %, 34 %, **0 %**, **4 %**
+    (semanas del 31-ago al 21-sep) mientras hoy la cobertura es 59 %: las dos
+    últimas se tomaron con la evidencia aún sin cargar tras la migración. El
+    reporte "Cobertura: cómo evoluciona" las grafica tal cual.
+  - Pausas de días pasados que quedaron abiertas (Recordatorio enviado / En
+    curso): no cuentan ni como realizadas ni como no realizadas.
+  - Los 4 reportes PENDIENTES de Calidad siguen pendientes: piden datos que el
+    sistema no guarda (cláusula↔proceso, responsable de proceso, historia de
+    la valoración de riesgos).
+
+  **Siguiente: R-3** (PDF con Chromium + HTML/CSS en el VPS).
