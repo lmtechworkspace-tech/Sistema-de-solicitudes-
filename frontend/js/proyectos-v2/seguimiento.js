@@ -627,7 +627,7 @@
       '<div class="sx2-col-5 sx2-col--apila">' + U.card({ titulo: 'Tareas más lentas', icono: 'grafico', sub: 'días, top 8', i: 2,
         cuerpo: '<div class="sx2-py-grafico sx2-py-grafico--alto"><canvas id="py2-grafico-analitica" role="img" aria-label="Tareas con mayor lead time"></canvas></div>' }) + '</div>' +
       '<div class="sx2-col-7"><section class="sx2-card sx2-entra" style="--i:3"><div class="sx2-card__cab"><h2 class="sx2-card__titulo">' + U.ico('tabla', 18) + 'Detalle por tarea <span class="sx2-card__sub">' + filas.length + '</span></h2>' +
-        U.boton({ texto: 'CSV', icono: 'descargar', sm: true, clase: 'js-py2s-an-csv' }) + '</div>' +
+        U.boton({ texto: 'Excel', icono: 'exportar', sm: true, clase: 'js-py2s-an-excel' }) + '</div>' +
         '<div class="sx2-tabla-wrap" style="max-height:420px"><table class="sx2-tabla"><thead><tr><th>Tarea</th><th class="sx2-num">Lead</th><th class="sx2-num">Cycle</th><th class="sx2-num">Bloqueo</th><th class="sx2-num">Revisión</th></tr></thead><tbody>' +
           filas.map(function (t) {
             return '<tr' + (t.actividad_id ? ' class="sx2-fila--clic" data-py2-tarea="' + U.esc(t.actividad_id) + '"' : '') + '><td>' + U.esc(t.titulo) + '</td>' +
@@ -638,16 +638,16 @@
           }).join('') + '</tbody></table></div></section></div>' +
     '</div>';
   }
-  function exportarCsv(ctx) {
+  // R-4: Excel real en vez de CSV (los días como números: se pueden promediar y ordenar).
+  function exportarExcel(ctx, b) {
     var filas = conDato(PY.extra('analitica', 'obtenerAnaliticaProyecto'));
-    var q = function (v) { return '"' + String(v === null || v === undefined ? '' : v).replace(/"/g, '""') + '"'; };
-    var csv = '﻿' + ['Tarea', 'Lead time (d)', 'Cycle time (d)', 'Bloqueo (d)', 'Revisión (d)'].map(q).join(';') + '\n' +
-      filas.map(function (t) { return [t.titulo, t.lead_time_dias, t.cycle_time_dias, t.tiempo_bloqueo_dias, t.tiempo_revision_dias].map(q).join(';'); }).join('\n');
-    var url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    var a = document.createElement('a');
-    a.href = url; a.download = 'analitica-' + (ctx.proyecto.codigo || 'proyecto') + '.csv';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    var num = function (v) { return v === null || v === undefined || v === '' ? '' : Number(v); };
+    SigsoReportes.descargarExcelDeDatos({
+      titulo: 'Analítica · ' + (ctx.proyecto.nombre || 'Proyecto'), nombreArchivo: 'sigso-analitica-' + (ctx.proyecto.codigo || ctx.proyecto.nombre || 'proyecto'),
+      meta: [['Proyecto', (ctx.proyecto.codigo ? ctx.proyecto.codigo + ' · ' : '') + (ctx.proyecto.nombre || '')]],
+      hojas: [{ nombre: 'Analítica', columnas: ['Tarea', 'Lead time (d)', 'Cycle time (d)', 'Bloqueo (d)', 'Revisión (d)'],
+        filas: filas.map(function (t) { return [t.titulo, num(t.lead_time_dias), num(t.cycle_time_dias), num(t.tiempo_bloqueo_dias), num(t.tiempo_revision_dias)]; }) }]
+    }, { boton: b });
   }
 
   // =========================================================================
@@ -834,7 +834,7 @@
       if ((b = t.closest('.js-py2s-pago-editar'))) { abrirPago(ctx, porId(ex.pagos && ex.pagos.estados, 'estado_pago_id', b.getAttribute('data-id'))); return; }
       // RDI / analítica
       if (t.closest('.js-py2s-rdi-nuevo')) { abrirRdi(); return; }
-      if (t.closest('.js-py2s-an-csv')) { exportarCsv(ctx); return; }
+      if (t.closest('.js-py2s-an-excel')) { exportarExcel(ctx, t.closest('.js-py2s-an-excel')); return; }
     });
   }
 

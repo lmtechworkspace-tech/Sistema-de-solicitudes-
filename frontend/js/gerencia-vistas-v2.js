@@ -12,9 +12,9 @@
  *  - Línea de tiempo: creación → fecha comprometida, hoy, atraso y fecha
  *    original si hubo re-compromiso.
  *  - Actividades: KPIs, mapa de calor área × semana, críticas, los 3 motores
- *    de reporte (tabla, CSV, PDF) y el acta de reunión.
+ *    de reporte (tabla, Excel, PDF) y el acta de reunión.
  *  - Pausas activas: cumplimiento de todas las empresas, clima, motivos,
- *    áreas, PDF y CSV.
+ *    áreas, PDF y Excel.
  *  - Centro de reportes (motor v2), Tendencia y ciclo, Recurrencia y Carga.
  * Mismos endpoints que antes (getPanelGerencia, enviarReporteGerenciaAhora,
  * getReporteGerenciaPausas, descargarReporteGerenciaPausasPdf,
@@ -559,6 +559,7 @@
   }
   function accionesActividades() {
     return U.boton({ texto: 'Acta de reunión', icono: 'documento', variante: 'fantasma', clase: 'js-gv2-acta', titulo: 'PDF para la reunión de seguimiento' }) +
+      U.boton({ texto: 'Descargar Excel', icono: 'exportar', variante: 'fantasma', clase: 'js-gv2-act-excel' }) +
       U.boton({ texto: 'Descargar PDF', icono: 'descargar', variante: 'primario', clase: 'js-gv2-act-pdf' });
   }
   function vistaActividades() {
@@ -590,7 +591,7 @@
         '<div class="gv2-barra">' + U.segmento(TIPOS_REPORTE_ACT, filtrosAct_.tipo, 'js-gv2-tipo-act') +
           '<span class="sx2-flex" style="gap:8px;margin-left:auto">' +
             U.boton({ texto: 'Ver', icono: 'ojo', variante: 'primario', sm: true, clase: 'js-gv2-rep-ver' }) +
-            U.boton({ texto: 'CSV', icono: 'exportar', sm: true, clase: 'js-gv2-rep-csv' }) +
+            U.boton({ texto: 'Excel', icono: 'exportar', sm: true, clase: 'js-gv2-rep-excel' }) +
             U.boton({ texto: 'PDF', icono: 'descargar', sm: true, clase: 'js-gv2-rep-pdf' }) + '</span></div>' +
         '<div class="gv2-rep-act">' + reporteActividades() + '</div>' });
   }
@@ -716,7 +717,7 @@
         r.filas.map(function (f) { return '<tr>' + r.columnas.map(function (c) { return '<td>' + U.esc(celdaAct(f[c.campo])) + '</td>'; }).join('') + '</tr>'; }).join('') + '</tbody></table></div>'
       : U.vacio({ icono: 'lupa', titulo: 'Sin datos para estos filtros', texto: '' }));
   }
-  // Fechas ISO y correos del reporte, legibles (el CSV y el PDF quedan con el dato crudo).
+  // Fechas ISO y correos del reporte, legibles (el Excel usa esta misma versión legible).
   function celdaAct(v) {
     if (nulo(v)) return '—';
     var t = String(v);
@@ -736,21 +737,35 @@
       if (c2) { c2.innerHTML = reporteActividades(); U.animar(c2); }
     });
   }
-  function csvReporteAct() {
+  // Excel de un reporte tabular (R-4, reemplaza el CSV): mismas celdas legibles que en
+  // pantalla (nombres, fechas) y la situación con su color.
+  var TONO_SEMAFORO_ACT = { Atrasada: 'critico', Bloqueada: 'critico', 'Vence hoy': 'alerta', 'Vence mañana': 'alerta', 'Por confirmar': 'info', 'En revisión': 'info', 'Al día': 'ok' };
+  function excelReporteAct(b) {
     if (!repAct_ || !repAct_.datos || !(repAct_.datos.filas || []).length) { PY.aviso('Primero genera el reporte con "Ver".', 'info'); return; }
     var r = repAct_.datos;
-    SigsoReportes.descargarCsvDeFilas([r.columnas.map(function (c) { return c.etiqueta; })].concat(r.filas.map(function (f) {
-      return r.columnas.map(function (c) { return nulo(f[c.campo]) ? '' : f[c.campo]; });
-    })), 'sigso-actividades-' + r.tipo);
+    var tipo = TIPOS_REPORTE_ACT.filter(function (x) { return x.id === r.tipo; })[0];
+    SigsoReportes.descargarExcelDeDatos({
+      titulo: 'Actividades · ' + (tipo ? tipo.texto : r.tipo), nombreArchivo: 'sigso-actividades-' + r.tipo,
+      meta: filtrosActCabecera().filter(function (f) { return f.valor; }).map(function (f) { return [f.etiqueta, f.valor]; }),
+      resumen: { kpis: Object.keys(r.resumen || {}).map(function (k) { return { etiqueta: k.replace(/_/g, ' '), valor: nulo(r.resumen[k]) ? '—' : String(r.resumen[k]) }; }) },
+      hojas: [{ nombre: tipo ? tipo.texto : 'Datos', columnas: r.columnas.map(function (c) { return c.etiqueta; }),
+        filas: r.filas.map(function (f) {
+          return r.columnas.map(function (c) {
+            var v = celdaAct(f[c.campo]);
+            return c.campo === 'semaforo' && TONO_SEMAFORO_ACT[v] ? { v: v, tono: TONO_SEMAFORO_ACT[v] } : v;
+          });
+        }) }]
+    }, { boton: b });
   }
-  // PDF de una vista en 4 niveles (R-3): la tarjeta tal como se ve, con la cabecera
-  // documental que en pantalla no lleva (la vista ya tiene su propio encabezado).
-  function pdfVista(b, titulo, subtitulo, codigo, periodo, filtros) {
+  // PDF o Excel de una vista en 4 niveles (R-3/R-4): la tarjeta tal como se ve, con la
+  // cabecera documental que en pantalla no lleva (la vista ya tiene su propio encabezado).
+  function exportarVista(formato, b, titulo, subtitulo, codigo, periodo, filtros) {
     var doc = document.querySelector('#gerencia-v2 .js-gv2-doc');
     if (!doc || !window.SigsoReportes) return;
-    SigsoReportes.descargarPdf(doc, { titulo: titulo, nombreArchivo: 'sigso-' + titulo, boton: b,
+    var o = { titulo: titulo, nombreArchivo: 'sigso-' + titulo, boton: b,
       cabecera: SigsoReportes.cabeceraDocumento({ titulo: titulo, subtitulo: subtitulo, modulo: 'Panel de gerencia', codigo: codigo,
-        periodo: periodo, generadoPor: (PY.miNombre && PY.miNombre()) || '', filtros: filtros }) });
+        periodo: periodo, generadoPor: (PY.miNombre && PY.miNombre()) || '', filtros: filtros }) };
+    if (formato === 'excel') SigsoReportes.descargarExcel(doc, o); else SigsoReportes.descargarPdf(doc, o);
   }
   function filtrosActCabecera() {
     var area = (act_ && act_.areas || []).filter(function (a) { return a.area_id === filtrosAct_.area_id; })[0];
@@ -783,7 +798,7 @@
   }
   function accionesPausas() {
     if (!pausas_ || pausas_.sin_datos) return '';
-    return U.boton({ texto: 'CSV', icono: 'exportar', variante: 'fantasma', clase: 'js-gv2-pausas-csv' }) + U.boton({ texto: 'Descargar PDF', icono: 'descargar', variante: 'primario', clase: 'js-gv2-pausas-pdf' });
+    return U.boton({ texto: 'Descargar Excel', icono: 'exportar', variante: 'fantasma', clase: 'js-gv2-pausas-excel' }) + U.boton({ texto: 'Descargar PDF', icono: 'descargar', variante: 'primario', clase: 'js-gv2-pausas-pdf' });
   }
   // Anatomía en 4 niveles: la definición es compartida con Coordinación (reporte-pausas-v2.js).
   function vistaPausas() {
@@ -792,12 +807,7 @@
     return '<p class="sx2-tenue sx2-entra" style="margin:0;font-size:.8125rem">Período: ' + U.esc(PY.fecha(d.periodo.desde, true)) + ' al ' + U.esc(PY.fecha(d.periodo.hasta, true)) + ' · todas las empresas.</p>' +
       '<div class="sx2-card sx2-entra js-gv2-doc">' + SigsoReportePausas.cuerpo(d, { multiempresa: true }) + '</div>';
   }
-  function csvPausas() {
-    var campos = ['pausa_id', 'empresa_id', 'fecha', 'hora_programada', 'estado'];
-    SigsoReportes.descargarCsvDeFilas([campos].concat((pausas_.pausas || []).map(function (p) {
-      return campos.map(function (c) { return nulo(p[c]) ? '' : p[c]; });
-    })), 'sigso-pausas');
-  }
+
 
   // --- Centro de reportes (motor v2) -----------------------------------------------------------------
   function registrarReportes() {
@@ -942,13 +952,18 @@
       return;
     }
     if (t.closest('.js-gv2-rep-ver')) { verReporteAct(); return; }
-    if (t.closest('.js-gv2-rep-csv')) { csvReporteAct(); return; }
+    if ((b = t.closest('.js-gv2-rep-excel'))) { excelReporteAct(b); return; }
     if ((b = t.closest('.js-gv2-rep-pdf'))) { pdf('descargarReporteActividadesPdf', paramsAct(true), b, 'reporte-actividades.pdf'); return; }
     if ((b = t.closest('.js-gv2-acta'))) { pdf('descargarActaReunionPdf', paramsAct(false), b, 'acta-reunion.pdf'); return; }
-    if (t.closest('.js-gv2-pausas-csv')) { csvPausas(); return; }
-    if ((b = t.closest('.js-gv2-pausas-pdf'))) { pdfVista(b, 'Pausas activas', 'Cumplimiento del programa en todas las empresas.', 'SIGSO-REP-GER-PAUSAS',
-      pausas_ && pausas_.periodo ? PY.fecha(pausas_.periodo.desde, true) + ' al ' + PY.fecha(pausas_.periodo.hasta, true) : '', []); return; }
-    if ((b = t.closest('.js-gv2-act-pdf'))) { pdfVista(b, 'Estado de las actividades', '¿Qué está atrasado o bloqueado?', 'SIGSO-REP-GER-ACTIVIDADES', '', filtrosActCabecera()); return; }
+    if ((b = t.closest('.js-gv2-pausas-pdf, .js-gv2-pausas-excel'))) {
+      exportarVista(b.classList.contains('js-gv2-pausas-excel') ? 'excel' : 'pdf', b, 'Pausas activas', 'Cumplimiento del programa en todas las empresas.', 'SIGSO-REP-GER-PAUSAS',
+        pausas_ && pausas_.periodo ? PY.fecha(pausas_.periodo.desde, true) + ' al ' + PY.fecha(pausas_.periodo.hasta, true) : '', []);
+      return;
+    }
+    if ((b = t.closest('.js-gv2-act-pdf, .js-gv2-act-excel'))) {
+      exportarVista(b.classList.contains('js-gv2-act-excel') ? 'excel' : 'pdf', b, 'Estado de las actividades', '¿Qué está atrasado o bloqueado?', 'SIGSO-REP-GER-ACTIVIDADES', '', filtrosActCabecera());
+      return;
+    }
   });
   document.addEventListener('keydown', function (ev) {
     if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('#gerencia-v2 tr.js-gv2-sol, #gerencia-v2 tr.js-gv2-rec')) { ev.preventDefault(); ev.target.click(); }

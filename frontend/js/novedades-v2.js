@@ -470,7 +470,7 @@
     return '<header class="sx2-cabecera sx2-entra"><div class="sx2-cabecera__txt"><span class="sx2-cabecera__migas">Mi espacio · Novedades</span><h1>' + U.esc(v.titulo) + '</h1>' +
       '<span class="sx2-tenue" style="font-size:.875rem">' + U.esc(v.sub) + '</span></div>' +
       '<div class="sx2-cabecera__acciones">' + U.boton({ soloIcono: true, icono: 'tendencia', titulo: 'Actualizar', clase: 'js-nv2-recargar' }) +
-        (vista_ === 'cumplimiento' && datos_.cumplimiento && (datos_.cumplimiento.items || []).length ? U.boton({ texto: 'Descargar PDF', icono: 'descargar', clase: 'js-nv2-pdf' }) : '') +
+        (vista_ === 'cumplimiento' && datos_.cumplimiento && (datos_.cumplimiento.items || []).length ? U.boton({ texto: 'Descargar Excel', icono: 'exportar', variante: 'fantasma', clase: 'js-nv2-excel' }) + U.boton({ texto: 'Descargar PDF', icono: 'descargar', clase: 'js-nv2-pdf' }) : '') +
         (puedePublicar() ? U.boton({ texto: 'Publicar', icono: 'mas', variante: 'primario', clase: 'js-nv2-publicar' }) : '') + '</div></header>';
   }
   var FUENTE = {
@@ -668,11 +668,11 @@
       R.nivel('Detalle · abre una novedad para ver quién falta', vistaCumplimientoLista(l, true), { clase: 'rp2-nivel--detalle', nota: l.length + (l.length === 1 ? ' novedad' : ' novedades') }) +
       '</div>';
   }
-  // R-3: el reporte de cumplimiento tal como se ve, impreso con Chromium en el servidor.
-  function descargarPdfCumplimiento(b) {
+  // R-3/R-4: el reporte de cumplimiento tal como se ve, en PDF (Chromium) o Excel.
+  function exportarCumplimiento(formato, b) {
     var doc = document.querySelector('#novedades-v2 .js-nv2-doc');
     if (!doc || !window.SigsoReportes) return;
-    SigsoReportes.descargarPdf(doc, { titulo: 'Cumplimiento de lectura', nombreArchivo: 'sigso-cumplimiento-lectura', boton: b,
+    SigsoReportes[formato === 'excel' ? 'descargarExcel' : 'descargarPdf'](doc, { titulo: 'Cumplimiento de lectura', nombreArchivo: 'sigso-cumplimiento-lectura', boton: b,
       cabecera: SigsoReportes.cabeceraDocumento({ titulo: 'Cumplimiento de lectura', subtitulo: '¿La gente leyó lo obligatorio?', modulo: 'Novedades',
         codigo: 'SIGSO-REP-NOV-CUMPLIMIENTO', generadoPor: (PY.miNombre && PY.miNombre()) || '' }) });
   }
@@ -704,7 +704,8 @@
     if (!raiz || !raiz.contains(t)) return;
     if (t.closest('.js-nv2-recargar')) { cargar(!!datos_[vista_]); return; }
     if (t.closest('.js-nv2-publicar')) { abrirPublicar(); return; }
-    if ((b = t.closest('.js-nv2-pdf'))) { descargarPdfCumplimiento(b); return; }
+    if ((b = t.closest('.js-nv2-pdf'))) { exportarCumplimiento('pdf', b); return; }
+    if ((b = t.closest('.js-nv2-excel'))) { exportarCumplimiento('excel', b); return; }
     if ((b = t.closest('.js-nv2-corregir'))) { reenviarPorId(b.getAttribute('data-id')); return; }
     if ((b = t.closest('.js-nv2-tipo'))) { filtro_ = b.getAttribute('data-tipo') || ''; pintar(true); return; }
     if ((b = t.closest('[data-nv2]'))) abrir(b.getAttribute('data-nv2'));

@@ -167,7 +167,7 @@
       '<div class="sx2-cabecera__txt"><span class="sx2-cabecera__migas">Solicitudes</span><h1>Bandeja de trabajo</h1>' + (esAdm ? '' : quien) + '</div>' +
       '<div class="sx2-cabecera__acciones">' + (esAdm ? quien : '') +
         U.segmento([{ id: 'cola', texto: 'Cola', icono: 'lista' }, { id: 'analisis', texto: 'Análisis', icono: 'grafico' }], f.vista, 'js-bj2-vista') +
-        U.boton({ soloIcono: true, icono: 'descargar', titulo: 'Exportar CSV', clase: 'js-bj2-csv' }) +
+        U.boton({ soloIcono: true, icono: 'exportar', titulo: 'Descargar Excel', clase: 'js-bj2-excel' }) +
         (esAdm && f.verBandeja ? U.boton({ texto: 'Pauta (PDF)', icono: 'documento', clase: 'js-bj2-pauta' }) : '') +
         U.boton({ soloIcono: true, icono: 'tendencia', titulo: 'Actualizar', clase: 'js-bj2-reintentar' }) +
       '</div>' +
@@ -384,16 +384,18 @@
   function item(id) { return datos_.items.filter(function (i) { return i.subsolicitud_id === id; })[0]; }
   function seleccionados() { return datos_.items.filter(function (i) { return sel_[i.subsolicitud_id]; }); }
 
-  function exportarCsv() {
-    var q = function (v) { return '"' + String(v === null || v === undefined ? '' : v).replace(/"/g, '""') + '"'; };
+  // R-4: Excel real en vez de CSV (fechas y días como valores, filtros, encabezado fijo).
+  var SLA_EXCEL = { FUERA_DE_PLAZO: { v: 'Fuera de plazo', tono: 'critico' }, EN_RIESGO: { v: 'En riesgo', tono: 'alerta' }, EN_PLAZO: { v: 'En plazo', tono: 'ok' } };
+  function exportarExcel(b) {
     var cols = ['Solicitud', 'Ítem', 'Título', 'Empresa', 'Tipo', 'Estado', 'Prioridad', 'Responsable', 'Fecha comprometida', 'Ingresada', 'Días sin movimiento', 'SLA', 'Solicitante'];
     var filas = filtrados().map(function (i) {
-      return [i.solicitud_id, i.numero_item, i.titulo, i.empresa_nombre, i.tipo_nombre, estadoTxt(i.estado), i.prioridad, i.asignado_nombre, fechaCorta(i.fecha_comprometida), fechaCorta(i.fecha_creacion), i.dias_sin_movimiento, i.situacion_sla || '', i.solicitante_nombre].map(q).join(';');
+      return [i.solicitud_id, String(i.numero_item == null ? '' : i.numero_item), i.titulo, i.empresa_nombre, i.tipo_nombre, estadoTxt(i.estado), i.prioridad,
+        i.asignado ? PY.persona(i.asignado, i.asignado_nombre).nombre : 'Sin asignar', i.fecha_comprometida ? PY.fecha(i.fecha_comprometida, true) : '', i.fecha_creacion ? PY.fecha(i.fecha_creacion, true) : '',
+        i.dias_sin_movimiento == null ? '' : Number(i.dias_sin_movimiento), SLA_EXCEL[i.situacion_sla] || '', i.solicitante_nombre];
     });
-    var url = URL.createObjectURL(new Blob(['﻿' + cols.map(q).join(';') + '\n' + filas.join('\n')], { type: 'text/csv;charset=utf-8' }));
-    var a = document.createElement('a'); a.href = url; a.download = 'bandeja-' + PY.hoyClave() + '.csv';
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    if (!filas.length) { PY.aviso('No hay ítems que exportar con estos filtros.', 'info'); return; }
+    SigsoReportes.descargarExcelDeDatos({ titulo: 'Bandeja de trabajo', nombreArchivo: 'sigso-bandeja',
+      meta: [['Ítems', String(filas.length)]], hojas: [{ nombre: 'Bandeja', columnas: cols, filas: filas }] }, { boton: b });
   }
 
   // --- Pauta de trabajo (una persona, para imprimir o guardar en PDF) -----------
@@ -801,7 +803,7 @@
     if (t.closest('.js-bj2-agrupar')) { f.agrupar = !f.agrupar; try { localStorage.setItem('sigso_bj2_agrupar', f.agrupar ? '1' : '0'); } catch (e) { /* sin storage */ } pintar(true); return; }
     if (t.closest('.js-bj2-rezago')) { f.kpi = 'por_revisar'; f.orden = 'antiguedad'; f.texto = ''; mostrar_ = POR_PAGINA; pintar(true); var l = raiz.querySelector('.bj2-lista'); if (l) l.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }
     if (t.closest('.js-bj2-mas')) { mostrar_ += POR_PAGINA; pintar(true); return; }
-    if (t.closest('.js-bj2-csv')) { exportarCsv(); return; }
+    if ((b = t.closest('.js-bj2-excel'))) { exportarExcel(b); return; }
     if ((b = t.closest('.js-bj2-pauta'))) { imprimirPauta(f.verBandeja, b); return; }
     if (t.closest('.js-bj2-limpiar')) { sel_ = {}; actualizarSeleccion(); return; }
     if ((b = t.closest('.js-bj2-lote'))) { lote(b.getAttribute('data-accion')); return; }

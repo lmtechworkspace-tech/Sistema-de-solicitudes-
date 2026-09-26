@@ -414,7 +414,7 @@
     return '<div class="rp2-acciones">' +
       (opts.volver !== false ? U.boton({ texto: 'Centro de reportes', icono: 'izquierda', variante: 'fantasma', clase: 'js-rep-volver' }) : '') +
       '<span style="flex:1"></span>' +
-      U.boton({ texto: 'Exportar CSV', icono: 'exportar', clase: 'js-rep-csv' }) +
+      U.boton({ texto: 'Descargar Excel', icono: 'exportar', clase: 'js-rep-excel' }) +
       U.boton({ soloIcono: true, icono: 'imprimir', titulo: 'Imprimir desde el navegador', clase: 'js-rep-imprimir' }) +
       U.boton({ texto: 'Descargar PDF', icono: 'descargar', variante: 'primario', clase: 'js-rep-pdf' }) +
     '</div>';
@@ -422,11 +422,10 @@
   function wireAcciones(contenedor, opts) {
     opts = opts || {};
     contenedor.querySelectorAll('.js-rep-volver').forEach(function (b) { b.addEventListener('click', function () { if (opts.onVolver) opts.onVolver(); }); });
-    contenedor.querySelectorAll('.js-rep-csv').forEach(function (b) {
+    contenedor.querySelectorAll('.js-rep-excel').forEach(function (b) {
       b.addEventListener('click', function () {
-        var t = contenedor.querySelector('table');
-        if (!t) { window.Componentes.aviso({ texto: 'Este reporte no tiene una tabla que exportar.', tipo: 'aviso' }); return; }
-        descargarCsv_(t, opts.nombreArchivo || 'sigso-reporte');
+        var tit = contenedor.querySelector('.rp2-doc__tit');
+        descargarExcel(contenedor, { titulo: opts.titulo || (tit ? tit.textContent : 'Reporte'), nombreArchivo: opts.nombreArchivo, boton: b });
       });
     });
     contenedor.querySelectorAll('.js-rep-imprimir').forEach(function (b) { b.addEventListener('click', function () { window.print(); }); });
@@ -572,27 +571,141 @@
     });
   }
 
-  function descargarCsv_(tabla, nombre) {
-    var filas = [];
-    Array.prototype.forEach.call(tabla.querySelectorAll('tr'), function (tr) {
-      var celdas = Array.prototype.map.call(tr.querySelectorAll('th,td'), function (c) { return String(c.innerText || '').trim(); });
-      if (celdas.length) filas.push(celdas);
-    });
-    descargarCsvDeFilas(filas, nombre);
+  // --- Excel (R-4 de la auditoría de reportes) ----------------------------------------------
+  // Reemplaza los CSV. Del reporte TAL COMO SE VE se arma una especificación — el resumen
+  // (niveles 1–2) y cada tabla, ranking, agenda o gráfico de columnas como hoja — y el
+  // servidor arma el .xlsx (backend/logica/libroExcel.js): números, porcentajes y fechas
+  // como valores, estados con su color, filtros y barras en las celdas de porcentaje.
+  // Mismo criterio que el PDF: lo plegado (<details> cerrado) no se exporta.
+  var MIME_XLSX_ = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  function textoDe_(el, sinSel) {
+    if (!el) return '';
+    var c = el.cloneNode(true);
+    if (sinSel) Array.prototype.forEach.call(c.querySelectorAll(sinSel), function (x) { x.remove(); });
+    return String(c.textContent || '').replace(/\s+/g, ' ').trim();
   }
-  function descargarCsvDeFilas(filas, nombre) {
-    var lineas = (filas || []).map(function (fila) {
-      return fila.map(function (celda) { return '"' + String(celda == null ? '' : celda).replace(/"/g, '""') + '"'; }).join(',');
+  function tonoDe_(el) {
+    var m = el && String(el.className || '').match(/sx2-tono-(ok|alerta|critico|info|neutro|primario)/);
+    return m ? m[1] : '';
+  }
+  function visible_(el, raiz) {
+    for (var e = el; e && e !== raiz; e = e.parentElement) if (e.tagName === 'DETAILS' && !e.open) return false;
+    return true;
+  }
+  // Título de la hoja: el subtítulo más cercano hacia atrás DENTRO de su nivel, o el del
+  // nivel (al llegar al nivel se corta: el subtítulo de un nivel anterior no es suyo).
+  function nombreHoja_(el, raiz) {
+    for (var e = el; e && e !== raiz; e = e.parentElement) {
+      if (e.classList && e.classList.contains('rp2-nivel')) return textoDe_(e.querySelector('.rp2-nivel__tit'), '.rp2-nivel__nota').split(' · ')[0];
+      for (var p = e.previousElementSibling; p; p = p.previousElementSibling) {
+        if (p.matches && p.matches('h3.rp2-sub')) return textoDe_(p, '.sx2-tenue');
+        var h = p.querySelector && p.querySelectorAll('h3.rp2-sub');
+        if (h && h.length) return textoDe_(h[h.length - 1], '.sx2-tenue');
+      }
+    }
+    return '';
+  }
+  function celdaExcel_(td) {
+    if (td.querySelector('.rp2-escribir')) return '';
+    var item = td.querySelector('.rp2-item');
+    if (item) {
+      var sub = textoDe_(item.querySelector('small'));
+      return textoDe_(item.querySelector('strong')) + (sub && sub !== '(sin área)' ? ' · ' + sub : '');
+    }
+    // Las acotaciones tenues ("(43 d)", "sin cerrar") son de lectura en pantalla: fuera,
+    // para que la fecha quede como fecha y el estado conserve su color.
+    var texto = textoDe_(td, '.sx2-tenue');
+    var badge = td.querySelector('.sx2-badge');
+    if (badge && textoDe_(badge) === texto) return { v: texto, tono: tonoDe_(badge) || 'neutro' };
+    return texto;
+  }
+  function hojasDe_(raiz) {
+    var hojas = [];
+    Array.prototype.forEach.call(raiz.querySelectorAll('table, ol.rp2-ranking, ul.rp2-agenda, figure.rp2-cols'), function (el) {
+      if (!visible_(el, raiz)) return;
+      var nombre = nombreHoja_(el, raiz), h;
+      if (el.tagName === 'TABLE') {
+        h = { nombre: nombre, columnas: Array.prototype.map.call(el.querySelectorAll('thead th'), function (th) { return textoDe_(th); }),
+          filas: Array.prototype.map.call(el.querySelectorAll('tbody tr'), function (tr) { return Array.prototype.map.call(tr.children, celdaExcel_); }) };
+      } else if (el.classList.contains('rp2-ranking')) {
+        // "4/9 · 44%" en columnas separadas: así el porcentaje es un número (y lleva su barra).
+        var filasR = Array.prototype.map.call(el.children, function (li) {
+          return [textoDe_(li.querySelector('.rp2-ranking__etq'))].concat(textoDe_(li.querySelector('.rp2-ranking__val')).split(' · '));
+        });
+        var anchoR = filasR.reduce(function (m, f) { return Math.max(m, f.length); }, 2);
+        h = { nombre: nombre, columnas: [nombre || 'Etiqueta', 'Valor'].concat(anchoR > 2 ? ['Detalle'] : [], anchoR > 3 ? Array(anchoR - 3).fill('') : []), filas: filasR };
+      } else if (el.classList.contains('rp2-agenda')) {
+        h = { nombre: nombre, columnas: ['Fecha', 'Qué', 'Detalle'], filas: Array.prototype.map.call(el.children, function (li) {
+          return [textoDe_(li.querySelector('time')), textoDe_(li.querySelector('strong')), textoDe_(li.querySelector('small'))]; }) };
+      } else {
+        var series = Array.prototype.map.call(el.querySelectorAll('.rp2-cols__ley span'), function (s) { return textoDe_(s); });
+        var conPie = el.classList.contains('rp2-cols--pie');
+        h = { nombre: nombre, columnas: ['Período'].concat(conPie ? ['%'] : [], series), filas: Array.prototype.map.call(el.querySelectorAll('.rp2-cols__grupo'), function (g) {
+          var et = g.querySelector('.rp2-cols__et');
+          var vals = Array.prototype.map.call(g.querySelectorAll('.rp2-cols__b'), function (b) { return (String(b.getAttribute('title') || '').match(/:\s*(-?[\d.,]+)\s*$/) || [0, ''])[1]; });
+          return [textoDe_(et, 'b')].concat(conPie ? [textoDe_(et && et.querySelector('b'))] : [], vals);
+        }) };
+      }
+      if (h.filas.length) hojas.push(h);
     });
-    // BOM (U+FEFF) para que Excel en Windows abra bien los acentos.
-    var blob = new Blob(['﻿' + lineas.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = nombre + '-' + new Date().toISOString().slice(0, 10) + '.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(a.href);
+    return hojas;
+  }
+  // Especificación del libro a partir de lo que se ve. cabecera: html de cabeceraDocumento
+  // para las vistas que no la muestran.
+  function especExcel_(raiz, opts) {
+    var cab = document.createElement('div');
+    cab.innerHTML = opts.cabecera || '';
+    var q = function (sel) { return raiz.querySelector(sel) || cab.querySelector(sel); };
+    var meta = [];
+    [cab, raiz].forEach(function (r) {
+      Array.prototype.forEach.call(r.querySelectorAll('.rp2-doc__meta > div'), function (d) { meta.push([textoDe_(d.querySelector('dt')), textoDe_(d.querySelector('dd'))]); });
+    });
+    var linea = raiz.querySelector('.rp2-linea'), resumen = null;
+    if (linea || raiz.querySelector('.rp2-alerta, .rp2-sinalertas, .rp2-kpis')) {
+      resumen = {
+        estado: linea ? (tonoDe_(linea) || 'ok') : '',
+        frase: linea ? textoDe_(linea.querySelector('.rp2-linea__frase'), '.rp2-linea__estado') : '',
+        kpis: Array.prototype.map.call(raiz.querySelectorAll('.rp2-linea .sx2-kpi, .rp2-kpis .sx2-kpi'), function (k) {
+          var cifra = k.querySelector('[data-sx-cifra]');
+          var unidad = textoDe_(k.querySelector('.sx2-kpi__unidad'));
+          return { etiqueta: textoDe_(k.querySelector('.sx2-kpi__etiqueta')),
+            valor: cifra ? cifra.getAttribute('data-sx-cifra') + (cifra.getAttribute('data-sx-sufijo') || '') : textoDe_(k.querySelector('.sx2-kpi__valor'), '.sx2-kpi__unidad'),
+            nota: [unidad, textoDe_(k.querySelector('.sx2-kpi__tendencia'))].filter(Boolean).join(' · ') };
+        }),
+        alertas: raiz.querySelector('.rp2-alerta, .rp2-sinalertas') ? Array.prototype.map.call(raiz.querySelectorAll('.rp2-alerta'), function (a) {
+          return { severidad: a.classList.contains('sx2-tono-critico') ? 'critico' : 'alerta', cantidad: textoDe_(a.querySelector('.rp2-alerta__cant')),
+            titulo: textoDe_(a.querySelector('.rp2-alerta__txt strong')), detalle: textoDe_(a.querySelector('.rp2-alerta__txt > span')),
+            dueno: textoDe_(a.querySelector('.rp2-alerta__dueno')) };
+        }) : undefined,
+        bien: Array.prototype.map.call(raiz.querySelectorAll('.rp2-bien li'), function (li) { return textoDe_(li); })
+      };
+    }
+    return { titulo: opts.titulo || textoDe_(q('.rp2-doc__tit')) || 'Reporte', subtitulo: textoDe_(q('.rp2-doc__sub')),
+      meta: meta, resumen: resumen, hojas: hojasDe_(raiz), nombre_archivo: opts.nombreArchivo || opts.titulo };
+  }
+  function pedirExcel_(espec, boton) {
+    var PY = window.PYv2;
+    if (!PY || !PY.api) return Promise.resolve(false);
+    if (boton) { boton.disabled = true; boton.setAttribute('aria-busy', 'true'); }
+    return PY.api('generarExcelReporte', espec).then(function (r) {
+      if (boton) { boton.disabled = false; boton.removeAttribute('aria-busy'); }
+      if (r && r.ok && r.data && r.data.xlsx_base64) { PY.descargarBase64(r.data.xlsx_base64, r.data.filename, MIME_XLSX_); return true; }
+      if (PY.aviso) PY.aviso((r && r.message) || 'No se pudo generar el Excel.', 'error');
+      return false;
+    });
+  }
+  // raiz: el elemento del reporte. opts: { titulo, nombreArchivo, cabecera, boton }.
+  function descargarExcel(raiz, opts) {
+    opts = opts || {};
+    return pedirExcel_(especExcel_(raiz, opts), opts.boton);
+  }
+  // Para listados que ya están en datos (bandeja, analítica…): espec = { titulo,
+  // subtitulo, meta, hojas: [{ nombre, columnas, filas }], nombreArchivo }, opts = { boton }.
+  function descargarExcelDeDatos(espec, opts) {
+    espec = Object.assign({}, espec || {});
+    espec.nombre_archivo = espec.nombreArchivo || espec.titulo;
+    delete espec.nombreArchivo;
+    return pedirExcel_(espec, (opts || {}).boton);
   }
 
   // --- Anatomía en 4 niveles (auditoría de reportes, 2026-09-25) ------------------------------
@@ -699,7 +812,8 @@
     agruparCumplimiento: agruparCumplimiento, tablaCumplimiento: tablaCumplimiento,
     cuerpoCumplimientoPor: cuerpoCumplimientoPor, cuerpoEntradaSalida: cuerpoEntradaSalida, cuerpoResbalon: cuerpoResbalon,
     cabeceraDocumento: cabeceraDocumento, filtrosParaCabecera: filtrosParaCabecera, pieDocumento: pieDocumento,
-    barraAcciones: barraAcciones, wireAcciones: wireAcciones, descargarCsvDeFilas: descargarCsvDeFilas,
+    barraAcciones: barraAcciones, wireAcciones: wireAcciones,
+    descargarExcel: descargarExcel, descargarExcelDeDatos: descargarExcelDeDatos,
     // Anatomía en 4 niveles.
     nivel: nivel, enUnaLinea: enUnaLinea, requiereDecision: requiereDecision, loQueVaBien: loQueVaBien, columnas: columnas,
     formatearNumero: fmtNum_,

@@ -198,16 +198,17 @@
     }
     // Misma definición que Gerencia (reporte-pausas-v2.js), con el alcance de sus empresas.
     c.innerHTML = '<div class="sx2-pagina">' +
-      cabecera('Cumplimiento', periodo(d.periodo), U.boton({ texto: 'Descargar PDF', icono: 'descargar', variante: 'primario', clase: 'js-cv2-pdf' })) +
+      cabecera('Cumplimiento', periodo(d.periodo), U.boton({ texto: 'Descargar Excel', icono: 'exportar', variante: 'fantasma', clase: 'js-cv2-excel' }) +
+        U.boton({ texto: 'Descargar PDF', icono: 'descargar', variante: 'primario', clase: 'js-cv2-pdf' })) +
       '<div class="sx2-card sx2-entra js-cv2-doc">' + SigsoReportePausas.cuerpo(d, { multiempresa: false }) + '</div></div>';
     asentar(c, silencioso, y);
   }
-  // R-3: la tarjeta tal como se ve, impresa con Chromium en el servidor, con la cabecera
-  // documental que en pantalla no lleva.
-  function descargarPdf(b) {
+  // R-3/R-4: la tarjeta tal como se ve, en PDF (Chromium en el servidor) o Excel, con la
+  // cabecera documental que en pantalla no lleva.
+  function exportar(formato, b) {
     var doc = document.querySelector('.js-cv2-doc'), d = reporte_;
     if (!doc || !d || !window.SigsoReportes) return;
-    SigsoReportes.descargarPdf(doc, { titulo: 'Cumplimiento de pausas activas', nombreArchivo: 'sigso-cumplimiento-pausas', boton: b,
+    SigsoReportes[formato === 'excel' ? 'descargarExcel' : 'descargarPdf'](doc, { titulo: 'Cumplimiento de pausas activas', nombreArchivo: 'sigso-cumplimiento-pausas', boton: b,
       cabecera: SigsoReportes.cabeceraDocumento({ titulo: 'Cumplimiento de pausas activas', subtitulo: '¿Se están haciendo las pausas?', modulo: 'Coordinación de pausas',
         codigo: 'SIGSO-REP-PAU-CUMPLIMIENTO', periodo: d.periodo ? PY.fecha(d.periodo.desde, true) + ' al ' + PY.fecha(d.periodo.hasta, true) : '', generadoPor: (PY.miNombre && PY.miNombre()) || '' }) });
   }
@@ -231,7 +232,8 @@
       return;
     }
     if ((b = t.closest('.js-cv2-persona'))) { cargarPersona(b.getAttribute('data-id')); return; }
-    if ((b = t.closest('.js-cv2-pdf'))) descargarPdf(b);
+    if ((b = t.closest('.js-cv2-pdf'))) exportar('pdf', b);
+    if ((b = t.closest('.js-cv2-excel'))) exportar('excel', b);
   });
   var tq_ = null;
   document.addEventListener('input', function (ev) {

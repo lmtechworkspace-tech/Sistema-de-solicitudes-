@@ -88,6 +88,8 @@ var ACCIONES_PORTADAS_NODE = {
   descargarOrdenTrabajo: true,
   // R-3 de la auditoría de reportes: PDF de cualquier reporte v2 impreso con Chromium.
   generarPdfReporte: true,
+  // R-4: Excel real de cualquier reporte (reemplaza los CSV).
+  generarExcelReporte: true,
   // Fase 3a del plan post-migracion (RF-018): historial de comentarios.
   agregarComentario: true,
   listarJefaturas: true, gestionarJefatura: true,

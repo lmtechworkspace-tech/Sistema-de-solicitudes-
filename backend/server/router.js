@@ -76,6 +76,7 @@ const RecuperarPassword = require('../logica/recuperarPassword');
 const SuperAdminPanel = require('../logica/superAdminPanel');
 const DirectorioPersonas = require('../logica/directorioPersonas');
 const ReportePdf = require('../logica/reportePdf');
+const ReporteExcel = require('../logica/reporteExcel');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -137,6 +138,9 @@ const ACCIONES = {
   // Chromium en el servidor (ver logica/reportePdf.js y logica/pdfChromium.js).
   // Cualquier sesión: solo imprime lo que esa persona ya tiene en pantalla.
   generarPdfReporte: (db, data, contexto) => ReportePdf.generarPdfReporte(db, data, contexto),
+  // R-4: Excel real (Resumen + una hoja por tabla) en vez de CSV. Cualquier sesión:
+  // exporta lo que esa persona ya tiene en pantalla (ver logica/reporteExcel.js).
+  generarExcelReporte: (db, data, contexto) => ReporteExcel.generarExcelReporte(db, data, contexto),
 
   listarJefaturas: (db, data, contexto) => Jefatura.listar(db, data, contexto),
   gestionarJefatura: (db, data, contexto) => Jefatura.gestionar(db, data, contexto),
