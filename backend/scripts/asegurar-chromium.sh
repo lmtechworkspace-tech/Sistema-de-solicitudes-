@@ -20,7 +20,7 @@ ENLACE="$DESTINO/actual"
 
 # 1. Librerías del sistema (nombres de Ubuntu 24.04+, con el sufijo t64).
 PAQUETES=(libnss3 libatk1.0-0t64 libatk-bridge2.0-0t64 libcups2t64 libxkbcommon0 libxcomposite1
-  libxdamage1 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2t64 fontconfig fonts-dejavu-core
+  libxdamage1 libxfixes3 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 libasound2t64 fontconfig fonts-dejavu-core
   unzip) # unzip: el instalador lo necesita para descomprimir (sin él falla sin avisar claro)
 FALTAN=()
 for p in "${PAQUETES[@]}"; do dpkg -s "$p" >/dev/null 2>&1 || FALTAN+=("$p"); done
