@@ -89,6 +89,16 @@ jobs:
           rsync -az --delete -e "ssh -i ~/.ssh/deploy" \
             node_modules/ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/node_modules/"
 
+      # Motor de PDF (R-3 de la auditoria de reportes): librerias del sistema +
+      # chrome-headless-shell en la version que pide puppeteer-core. Idempotente
+      # (si ya esta, termina en un segundo). No detiene el despliegue si falla:
+      # sin Chromium el resto de SIGSO funciona y el PDF cae a "Imprimir".
+      - name: Asegurar el motor de PDF (Chromium) en el VPS
+        run: |
+          ssh -i ~/.ssh/deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
+            'bash /opt/sigso/backend/scripts/asegurar-chromium.sh' \
+            || echo "::warning::No se pudo asegurar Chromium en el VPS; los PDF caen a Imprimir."
+
       - name: Reiniciar el servicio y verificar que responde
         run: |
           ssh -i ~/.ssh/deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" '

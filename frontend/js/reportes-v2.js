@@ -415,7 +415,8 @@
       (opts.volver !== false ? U.boton({ texto: 'Centro de reportes', icono: 'izquierda', variante: 'fantasma', clase: 'js-rep-volver' }) : '') +
       '<span style="flex:1"></span>' +
       U.boton({ texto: 'Exportar CSV', icono: 'exportar', clase: 'js-rep-csv' }) +
-      U.boton({ texto: 'Imprimir o guardar PDF', icono: 'descargar', clase: 'js-rep-imprimir' }) +
+      U.boton({ soloIcono: true, icono: 'imprimir', titulo: 'Imprimir desde el navegador', clase: 'js-rep-imprimir' }) +
+      U.boton({ texto: 'Descargar PDF', icono: 'descargar', variante: 'primario', clase: 'js-rep-pdf' }) +
     '</div>';
   }
   function wireAcciones(contenedor, opts) {
@@ -429,8 +430,148 @@
       });
     });
     contenedor.querySelectorAll('.js-rep-imprimir').forEach(function (b) { b.addEventListener('click', function () { window.print(); }); });
+    contenedor.querySelectorAll('.js-rep-pdf').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var tit = contenedor.querySelector('.rp2-doc__tit');
+        descargarPdf(contenedor, { titulo: opts.titulo || (tit ? tit.textContent : 'Reporte'), nombreArchivo: opts.nombreArchivo, boton: b });
+      });
+    });
     U.animar(contenedor);
   }
+  // --- PDF en el servidor (R-3 de la auditoría de reportes) ----------------------------------
+  // Se manda el reporte TAL COMO SE VE (HTML + el CSS v2 que lo pinta) y el servidor lo
+  // imprime con Chromium (backend/logica/reportePdf.js): papel idéntico a la pantalla. Si
+  // el servidor aún no tiene el motor, cae a la impresión del navegador.
+  //
+  // El CSS no se elige por archivo (frágil: la base de un ícono vive en main.css, el de
+  // una tarjeta en el CSS del módulo): se recorren TODAS las hojas de la página, en su
+  // orden, y se guardan solo las reglas que tocan al reporte o a la cadena de elementos
+  // que lo contiene. Es exactamente lo que lo pinta, y pesa una fracción del total.
+  //
+  // Se filtra el TEXTO ORIGINAL de cada hoja, no el CSSOM: Chrome no puede re-serializar
+  // un atajo con variable seguido de una propiedad larga (`font: var(--x);
+  // font-variant-numeric: …` sale como `font-size: ;`) y la regla se perdería.
+  var PSEUDO_ = /::?(before|after|placeholder|marker|selection|first-line|first-letter|backdrop|-webkit-[a-z-]+|-moz-[a-z-]+)|:(hover|focus|focus-visible|focus-within|active|visited|checked|disabled|enabled|target)/g;
+  // Bloques de primer nivel de un texto CSS: [{ pre: 'selector o @regla', cuerpo }].
+  function bloquesCss_(txt) {
+    var out = [], i = 0, n = txt.length;
+    while (i < n) {
+      var j = i, q = null;
+      while (j < n && (q || (txt[j] !== '{' && txt[j] !== ';' && txt[j] !== '}'))) {
+        if (q) { if (txt[j] === q && txt[j - 1] !== '\\') q = null; } else if (txt[j] === '"' || txt[j] === "'") q = txt[j];
+        j++;
+      }
+      if (j >= n) break;
+      if (txt[j] !== '{') { i = j + 1; continue; } // @import/@charset sueltos o llaves huérfanas
+      var k = j + 1, prof = 1; q = null;
+      while (k < n && prof) {
+        var ch = txt[k];
+        if (q) { if (ch === q && txt[k - 1] !== '\\') q = null; } else if (ch === '"' || ch === "'") q = ch; else if (ch === '{') prof++; else if (ch === '}') prof--;
+        k++;
+      }
+      out.push({ pre: txt.slice(i, j).trim(), cuerpo: txt.slice(j + 1, k - 1) });
+      i = k;
+    }
+    return out;
+  }
+  // Separa "a, :is(b, c)" en ["a", ":is(b, c)"]: solo las comas de primer nivel.
+  function partirSelector_(s) {
+    var out = [], prof = 0, ini = 0;
+    for (var i = 0; i < s.length; i++) {
+      if (s[i] === '(' || s[i] === '[') prof++; else if (s[i] === ')' || s[i] === ']') prof--;
+      else if (s[i] === ',' && !prof) { out.push(s.slice(ini, i)); ini = i + 1; }
+    }
+    out.push(s.slice(ini));
+    return out;
+  }
+  function filtrarCss_(txt, toca) {
+    return bloquesCss_(txt).map(function (b) {
+      if (b.pre.charAt(0) === '@') {
+        if (/^@(media|supports|container|layer)\b/i.test(b.pre)) { var sub = filtrarCss_(b.cuerpo, toca); return sub ? b.pre + '{' + sub + '}' : ''; }
+        if (/^@property\b/i.test(b.pre)) return b.pre + '{' + b.cuerpo + '}'; // variables animables (arcos)
+        return ''; // @font-face la pone el servidor; @keyframes no aplican en papel.
+      }
+      return partirSelector_(b.pre).some(toca) ? b.pre + '{' + b.cuerpo + '}' : '';
+    }).filter(Boolean).join('\n');
+  }
+  // Textos originales de las hojas de la página, en orden (normalmente ya en caché).
+  function textosCss_() {
+    return Promise.all(Array.prototype.map.call(document.styleSheets, function (h) {
+      if (!h.href) return Promise.resolve(h.ownerNode ? h.ownerNode.textContent || '' : '');
+      if (h.href.indexOf(location.origin) !== 0) return Promise.resolve(''); // Google Fonts: la fuente la pone el servidor
+      return fetch(h.href).then(function (r) { return r.ok ? r.text() : ''; }).catch(function () { return ''; });
+    }));
+  }
+  function cssParaPdf_(raiz, textos) {
+    function toca(sel) {
+      var s = sel.replace(PSEUDO_, '').trim() || '*';
+      try { return raiz.matches(s) || !!raiz.closest(s) || !!raiz.querySelector(s); } catch (e) { return false; }
+    }
+    return textos.map(function (t) { return filtrarCss_(String(t || '').replace(/\/\*[\s\S]*?\*\//g, ''), toca); }).filter(Boolean).join('\n');
+  }
+  // La cadena de ancestros del reporte viaja como "cascarones" (mismo tag, id y
+  // clases, sin contenido propio): así los selectores del tipo `#gerencia-v2 .x`
+  // siguen aplicando en el papel. El servidor los neutraliza (sin márgenes, rejilla
+  // ni fondo) para que no desarmen la página.
+  function cascarones_(raiz) {
+    var cadena = [];
+    for (var el = raiz.parentElement; el && el !== document.body && el !== document.documentElement; el = el.parentElement) cadena.unshift(el);
+    function abre(e) {
+      var t = e.tagName.toLowerCase();
+      if (!/^(div|section|main|article|aside|header|footer|nav|ul|ol|li)$/.test(t)) t = 'div';
+      return { abre: '<' + t + (e.id ? ' id="' + esc_(e.id) + '"' : '') + (e.className && typeof e.className === 'string' ? ' class="' + esc_(e.className) + '"' : '') + ' data-rp2-cascaron>', cierra: '</' + t + '>' };
+    }
+    var partes = cadena.map(abre);
+    return { abre: partes.map(function (p) { return p.abre; }).join(''), cierra: partes.reverse().map(function (p) { return p.cierra; }).join('') };
+  }
+  function htmlParaPdf_(raiz, cabecera) {
+    var c = raiz.cloneNode(true);
+    // Lo plegado en pantalla no se imprime (en papel no se puede desplegar); lo abierto
+    // sí. Así quien descarga decide, p. ej., si el ánimo por persona va en el documento.
+    Array.prototype.forEach.call(c.querySelectorAll('.rp2-acciones, .rp2-filtros, form, button, script, .js-no-pdf, details:not([open])'), function (el) { el.remove(); });
+    // Lo que se anima en pantalla va con su valor final (no el cuadro a medio contar).
+    Array.prototype.forEach.call(c.querySelectorAll('[data-sx-cifra]'), function (el) { el.textContent = el.getAttribute('data-sx-cifra') + (el.getAttribute('data-sx-sufijo') || ''); });
+    Array.prototype.forEach.call(c.querySelectorAll('[data-sx-pct]'), function (el) { el.style.width = el.getAttribute('data-sx-pct') + '%'; });
+    Array.prototype.forEach.call(c.querySelectorAll('[data-sx-arco]'), function (el) { el.setAttribute('stroke-dashoffset', el.getAttribute('data-sx-arco')); });
+    // El reporte mismo también va como su elemento (con sus clases), no solo su interior.
+    var cas = cascarones_(raiz);
+    c.innerHTML = (cabecera || '') + c.innerHTML;
+    return cas.abre + c.outerHTML + cas.cierra;
+  }
+  // raiz: el elemento del reporte. opts: { titulo, nombreArchivo, cabecera (html de
+  // cabeceraDocumento, si la pantalla no la tiene), horizontal, boton }.
+  function descargarPdf(raiz, opts) {
+    opts = opts || {};
+    var PY = window.PYv2;
+    if (!raiz || !PY || !PY.api) { window.print(); return Promise.resolve(false); }
+    var b = opts.boton;
+    if (b) { b.disabled = true; b.setAttribute('aria-busy', 'true'); }
+    return textosCss_().then(function (textos) {
+      // La cabecera documental se inserta un instante en la página para que sus reglas
+      // entren en la selección de CSS; se quita en el mismo tick, antes de pintar nada.
+      var temp = [];
+      if (opts.cabecera) {
+        var t = document.createElement('div');
+        t.innerHTML = opts.cabecera;
+        var ref = raiz.firstChild;
+        while (t.firstChild) { temp.push(t.firstChild); raiz.insertBefore(t.firstChild, ref); }
+      }
+      var css = cssParaPdf_(raiz, textos);
+      temp.forEach(function (n) { if (n.parentNode) n.parentNode.removeChild(n); });
+      return PY.api('generarPdfReporte', {
+        html: htmlParaPdf_(raiz, opts.cabecera), css: css, titulo: opts.titulo || 'Reporte',
+        nombre_archivo: opts.nombreArchivo || opts.titulo, horizontal: !!opts.horizontal
+      });
+    }).then(function (r) {
+      if (b) { b.disabled = false; b.removeAttribute('aria-busy'); }
+      if (r && r.ok && r.data && r.data.pdf_base64) { PY.descargarBase64(r.data.pdf_base64, r.data.filename, 'application/pdf'); return true; }
+      var sinMotor = r && r.fields && r.fields[0] && r.fields[0].campo === 'motor' && /todavía no tiene/.test(r.message || '');
+      if (PY.aviso) PY.aviso((r && r.message) || 'No se pudo generar el PDF.', sinMotor ? 'info' : 'error');
+      if (sinMotor) window.print();
+      return false;
+    });
+  }
+
   function descargarCsv_(tabla, nombre) {
     var filas = [];
     Array.prototype.forEach.call(tabla.querySelectorAll('tr'), function (tr) {
@@ -561,6 +702,7 @@
     barraAcciones: barraAcciones, wireAcciones: wireAcciones, descargarCsvDeFilas: descargarCsvDeFilas,
     // Anatomía en 4 niveles.
     nivel: nivel, enUnaLinea: enUnaLinea, requiereDecision: requiereDecision, loQueVaBien: loQueVaBien, columnas: columnas,
-    formatearNumero: fmtNum_
+    formatearNumero: fmtNum_,
+    descargarPdf: descargarPdf
   };
 })();

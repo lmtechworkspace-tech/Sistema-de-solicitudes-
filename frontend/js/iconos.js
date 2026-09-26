@@ -68,6 +68,7 @@ var Iconos = (function () {
     derecha: '<path d="M9 18l6-6-6-6"/>',
     subir: '<path d="M12 19V5M5 12l7-7 7 7"/>',
     descargar: '<path d="M12 5v14M5 12l7 7 7-7"/>',
+    imprimir: '<path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><path d="M6 14h12v7H6z"/>',
     filtro: '<path d="M22 3H2l8 9.5V19l4 2v-8.5z"/>',
 
     // v5.0 F2: chrome del shell (sidebar)

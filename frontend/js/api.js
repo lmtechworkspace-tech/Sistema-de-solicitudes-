@@ -86,6 +86,8 @@ var ACCIONES_PORTADAS_NODE = {
   // §8.3 del handoff: primer PDF servido por el motor de Node (pdfkit),
   // OrdenTrabajo.gs completo (antes sin portar, ni siquiera stub).
   descargarOrdenTrabajo: true,
+  // R-3 de la auditoría de reportes: PDF de cualquier reporte v2 impreso con Chromium.
+  generarPdfReporte: true,
   // Fase 3a del plan post-migracion (RF-018): historial de comentarios.
   agregarComentario: true,
   listarJefaturas: true, gestionarJefatura: true,

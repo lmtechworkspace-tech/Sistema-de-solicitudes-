@@ -185,6 +185,10 @@
   table { page-break-inside: auto; }
   thead { display: table-header-group; }
   tr, .rp2-ranking li, .sx2-kpi { page-break-inside: avoid; }
+  /* A4 es más angosto que la pantalla: los KPI de "En una línea" en 2 × 2 (3 + 1 se ve
+     cojo y 4 en fila corta las notas), y en papel las notas nunca se cortan. */
+  .rp2-linea__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rp2-linea__kpis .sx2-kpi__tendencia { white-space: normal; overflow: visible; }
   .rp2-tendencia svg { max-height: 70mm; }
   /* Anatomía: los niveles 1-2 juntos en la primera página; el detalle, aparte. */
   .rp2-linea, .rp2-alerta, .rp2-sinalertas, .rp2-cols { page-break-inside: avoid; }

@@ -75,6 +75,7 @@ const Perfiles = require('../logica/perfiles');
 const RecuperarPassword = require('../logica/recuperarPassword');
 const SuperAdminPanel = require('../logica/superAdminPanel');
 const DirectorioPersonas = require('../logica/directorioPersonas');
+const ReportePdf = require('../logica/reportePdf');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -132,6 +133,10 @@ const ACCIONES = {
   // async (genera el PDF con pdfkit) -- ejecutarAccion ya espera con
   // await cualquier accion que devuelva una Promise.
   descargarOrdenTrabajo: (db, data, contexto) => OrdenTrabajo.descargar(db, data, contexto),
+  // R-3 de la auditoría de reportes: el reporte v2 tal como se ve, impreso con
+  // Chromium en el servidor (ver logica/reportePdf.js y logica/pdfChromium.js).
+  // Cualquier sesión: solo imprime lo que esa persona ya tiene en pantalla.
+  generarPdfReporte: (db, data, contexto) => ReportePdf.generarPdfReporte(db, data, contexto),
 
   listarJefaturas: (db, data, contexto) => Jefatura.listar(db, data, contexto),
   gestionarJefatura: (db, data, contexto) => Jefatura.gestionar(db, data, contexto),

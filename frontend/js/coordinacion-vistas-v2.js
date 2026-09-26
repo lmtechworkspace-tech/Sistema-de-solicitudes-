@@ -198,17 +198,18 @@
     }
     // Misma definición que Gerencia (reporte-pausas-v2.js), con el alcance de sus empresas.
     c.innerHTML = '<div class="sx2-pagina">' +
-      cabecera('Cumplimiento', periodo(d.periodo), U.boton({ texto: 'Descargar PDF', icono: 'descargar', clase: 'js-cv2-pdf' })) +
-      '<div class="sx2-card sx2-entra">' + SigsoReportePausas.cuerpo(d, { multiempresa: false }) + '</div></div>';
+      cabecera('Cumplimiento', periodo(d.periodo), U.boton({ texto: 'Descargar PDF', icono: 'descargar', variante: 'primario', clase: 'js-cv2-pdf' })) +
+      '<div class="sx2-card sx2-entra js-cv2-doc">' + SigsoReportePausas.cuerpo(d, { multiempresa: false }) + '</div></div>';
     asentar(c, silencioso, y);
   }
+  // R-3: la tarjeta tal como se ve, impresa con Chromium en el servidor, con la cabecera
+  // documental que en pantalla no lleva.
   function descargarPdf(b) {
-    b.disabled = true;
-    api('descargarReporteCumplimientoPausasPdf', {}).then(function (r) {
-      b.disabled = false;
-      if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo generar el PDF.', 'error'); return; }
-      PY.descargarBase64(r.data.pdf_base64, r.data.filename || 'cumplimiento-pausas.pdf', 'application/pdf');
-    });
+    var doc = document.querySelector('.js-cv2-doc'), d = reporte_;
+    if (!doc || !d || !window.SigsoReportes) return;
+    SigsoReportes.descargarPdf(doc, { titulo: 'Cumplimiento de pausas activas', nombreArchivo: 'sigso-cumplimiento-pausas', boton: b,
+      cabecera: SigsoReportes.cabeceraDocumento({ titulo: 'Cumplimiento de pausas activas', subtitulo: '¿Se están haciendo las pausas?', modulo: 'Coordinación de pausas',
+        codigo: 'SIGSO-REP-PAU-CUMPLIMIENTO', periodo: d.periodo ? PY.fecha(d.periodo.desde, true) + ' al ' + PY.fecha(d.periodo.hasta, true) : '', generadoPor: (PY.miNombre && PY.miNombre()) || '' }) });
   }
 
   // --- Navegación ---------------------------------------------------------------------------
