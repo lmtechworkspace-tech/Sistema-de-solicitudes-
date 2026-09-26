@@ -19,8 +19,6 @@
 
   var PY = window.PYv2;
   var U = UIv2;
-  var ANIMO = ['Muy mal', 'Mal', 'Regular', 'Bien', 'Muy bien'];
-  var TONO_ANIMO = ['critico', 'alerta', 'neutro', 'info', 'ok'];
   var ESTADO_DIA = {
     participo: ['Participó', 'ok'], no_participo: ['No pudo', 'alerta'],
     sin_registro: ['Sin registro', 'critico'], no_aplica: ['Sin pausa ese día', 'neutro']
@@ -187,13 +185,6 @@
       pintarReporte(!!silencioso);
     });
   }
-  function barras(filas, tono) {
-    var max = filas.reduce(function (m, f) { return Math.max(m, f.valor); }, 0) || 1;
-    return '<ul class="cv2-barras">' + filas.map(function (f) {
-      return '<li><span class="cv2-barras__et">' + U.esc(f.etiqueta) + '</span>' + U.barra(f.valor * 100 / max, f.tono || tono) +
-        '<strong class="cv2-barras__v">' + U.esc(f.texto || String(f.valor)) + '</strong></li>';
-    }).join('') + '</ul>';
-  }
   function pintarReporte(silencioso) {
     var c = contenedor();
     var d = reporte_;
@@ -205,45 +196,10 @@
       asentar(c, silencioso, y);
       return;
     }
-    var k = d.kpis || {};
-    var pct = k.pct_cumplimiento;
-    var tono = pct == null ? 'neutro' : (pct >= 90 ? 'ok' : (pct >= 70 ? 'alerta' : 'critico'));
-    var clima = d.clima_emocional;
-    var climaHtml = clima && clima.respuestas
-      ? barras(clima.distribucion.map(function (x, i) { return { etiqueta: ANIMO[i], valor: x.cantidad, texto: x.cantidad + ' · ' + x.pct + '%', tono: TONO_ANIMO[i] }; })) +
-        '<p class="sx2-tenue" style="margin:0;font-size:.75rem">' + clima.respuestas + (clima.respuestas === 1 ? ' participación incluyó' : ' participaciones incluyeron') + ' esta respuesta (opcional).</p>' +
-        (clima.detalle && clima.detalle.length ? '<details class="cv2-detalle"><summary>Ver detalle por persona (' + clima.detalle.length + ')</summary>' +
-          '<div class="sx2-tabla-wrap"><table class="sx2-tabla"><thead><tr><th>Fecha</th><th>Persona</th><th>Área</th><th>Respuesta</th></tr></thead><tbody>' +
-          clima.detalle.map(function (x) {
-            return '<tr><td>' + U.esc(fechaCorta(x.fecha)) + '</td><td>' + U.esc(x.nombre) + '</td><td class="sx2-tenue">' + U.esc(x.area || '') + '</td><td>' + U.badge(ANIMO[x.valor - 1] || '', TONO_ANIMO[x.valor - 1] || 'neutro') + '</td></tr>';
-          }).join('') + '</tbody></table></div></details>' : '')
-      : U.vacio({ icono: 'persona', titulo: 'Sin respuestas', texto: 'Nadie dejó esta respuesta opcional en el periodo.' });
-    var motivos = (d.motivos || []).length ? barras(d.motivos.map(function (m) { return { etiqueta: m.motivo, valor: m.cantidad }; }), 'alerta')
-      : U.vacio({ icono: 'check', titulo: 'Sin justificaciones', texto: 'Nadie justificó inasistencias en el periodo.' });
-    var areas = (d.por_area || []).length ? barras(d.por_area.map(function (a) { return { etiqueta: a.area || 'Sin área', valor: a.participaciones }; }), 'primario')
-      : U.vacio({ icono: 'equipo', titulo: 'Sin participaciones', texto: '' });
-    var rachas = (d.rachas_area || []).length
-      ? '<div class="sx2-tabla-wrap"><table class="sx2-tabla"><thead><tr><th>Área</th><th class="sx2-num">Personas</th><th class="sx2-num">Racha actual</th><th class="sx2-num">Máxima</th><th class="sx2-num">Umbral</th></tr></thead><tbody>' +
-        d.rachas_area.map(function (r) {
-          return '<tr><td>' + U.esc(r.area) + '</td><td class="sx2-num">' + r.roster + '</td><td class="sx2-num"><strong>' + r.racha_actual + '</strong></td><td class="sx2-num">' + r.racha_maxima + '</td><td class="sx2-num">≥' + r.umbral_pct + '%</td></tr>';
-        }).join('') + '</tbody></table></div><p class="sx2-tenue" style="margin:0;font-size:.75rem">Pausas seguidas en que el área alcanzó su umbral. Es una racha de equipo, nunca de personas.</p>'
-      : U.vacio({ icono: 'tendencia', titulo: 'Sin datos suficientes', texto: '' });
+    // Misma definición que Gerencia (reporte-pausas-v2.js), con el alcance de sus empresas.
     c.innerHTML = '<div class="sx2-pagina">' +
       cabecera('Cumplimiento', periodo(d.periodo), U.boton({ texto: 'Descargar PDF', icono: 'descargar', clase: 'js-cv2-pdf' })) +
-      '<div class="sx2-fila-kpis">' +
-        U.kpi({ i: 0, etiqueta: 'Cumplimiento', valor: pct == null ? '—' : pct, sufijo: pct == null ? '' : '%', icono: 'diana', tono: tono, progreso: pct == null ? null : pct }) +
-        U.kpi({ i: 1, etiqueta: 'Realizadas', valor: k.realizadas || 0, icono: 'check', tono: 'ok' }) +
-        U.kpi({ i: 2, etiqueta: 'No realizadas', valor: k.no_realizadas || 0, icono: 'alerta', tono: k.no_realizadas ? 'critico' : 'neutro' }) +
-        U.kpi({ i: 3, etiqueta: 'Participaciones', valor: k.participaciones || 0, icono: 'equipo', tono: 'primario' }) +
-        U.kpi({ i: 4, etiqueta: 'Justificaciones', valor: k.justificaciones || 0, icono: 'comentario', tono: 'neutro' }) +
-        (k.animo_promedio == null ? '' : U.kpi({ i: 5, etiqueta: 'Ánimo promedio', valor: k.animo_promedio, unidad: 'de 5', icono: 'persona', tono: 'info' })) +
-      '</div>' +
-      '<div class="sx2-grid sx2-grid--estira">' +
-        '<div class="sx2-col-6">' + U.card({ titulo: 'Clima emocional', icono: 'persona', sub: 'autorreportado', i: 6, cuerpo: climaHtml }) + '</div>' +
-        '<div class="sx2-col-6">' + U.card({ titulo: 'Motivos de inasistencia', icono: 'comentario', i: 7, cuerpo: motivos }) + '</div>' +
-        '<div class="sx2-col-6">' + U.card({ titulo: 'Participación por área', icono: 'equipo', i: 8, cuerpo: areas }) + '</div>' +
-        '<div class="sx2-col-6">' + U.card({ titulo: 'Rachas de equipo por área', icono: 'tendencia', i: 9, cuerpo: rachas }) + '</div>' +
-      '</div></div>';
+      '<div class="sx2-card sx2-entra">' + SigsoReportePausas.cuerpo(d, { multiempresa: false }) + '</div></div>';
     asentar(c, silencioso, y);
   }
   function descargarPdf(b) {

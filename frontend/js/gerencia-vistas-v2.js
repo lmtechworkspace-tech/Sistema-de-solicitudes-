@@ -51,8 +51,6 @@
     { id: 'solicitante_nombre', texto: 'Solicitante' }, { id: 'empresa_id', texto: 'Empresa' }, { id: 'area_nombre', texto: 'Área' },
     { id: 'modulo_nombre', texto: 'Módulo' }, { id: 'prioridad', texto: 'Prioridad' }
   ];
-  var ANIMO = ['Muy mal', 'Mal', 'Regular', 'Bien', 'Muy bien'];
-  var TONO_ANIMO = ['critico', 'alerta', 'neutro', 'info', 'ok'];
   var TIPOS_REPORTE_ACT = [
     { id: 'estado_actual', texto: 'Estado actual' }, { id: 'cumplimiento_periodo', texto: 'Cumplimiento del período' }, { id: 'carga_capacidad', texto: 'Carga y capacidad' }
   ];
@@ -680,52 +678,12 @@
     if (!pausas_ || pausas_.sin_datos) return '';
     return U.boton({ texto: 'CSV', icono: 'exportar', variante: 'fantasma', clase: 'js-gv2-pausas-csv' }) + U.boton({ texto: 'Descargar PDF', icono: 'descargar', clase: 'js-gv2-pausas-pdf' });
   }
+  // Anatomía en 4 niveles: la definición es compartida con Coordinación (reporte-pausas-v2.js).
   function vistaPausas() {
     var d = pausas_;
     if (d.sin_datos) return U.card({ i: 1, cuerpo: U.vacio({ icono: 'reloj', titulo: 'Aún no hay pausas activas configuradas', texto: 'Se configuran en Administración → Pausas activas.' }) });
-    var k = d.kpis || {}, pct = k.pct_cumplimiento;
-    var tono = nulo(pct) ? 'neutro' : (pct >= 90 ? 'ok' : (pct >= 70 ? 'alerta' : 'critico'));
-    var clima = d.clima_emocional;
-    var climaHtml = clima && clima.respuestas
-      ? barras(clima.distribucion.map(function (x, i) { return { etiqueta: ANIMO[i], valor: x.cantidad, texto: x.cantidad + ' · ' + x.pct + '%', tono: TONO_ANIMO[i] }; })) +
-        '<p class="sx2-tenue" style="margin:0;font-size:.75rem">' + clima.respuestas + (clima.respuestas === 1 ? ' participación incluyó' : ' participaciones incluyeron') + ' esta respuesta (opcional).</p>' +
-        (clima.detalle && clima.detalle.length ? '<details class="cv2-detalle"><summary>Ver detalle por persona (' + clima.detalle.length + ')</summary>' +
-          '<div class="sx2-tabla-wrap"><table class="sx2-tabla"><thead><tr><th>Fecha</th><th>Persona</th><th>Área</th><th>Empresa</th><th>Respuesta</th></tr></thead><tbody>' +
-          clima.detalle.map(function (x) {
-            return '<tr><td>' + U.esc(PY.fecha(x.fecha, true)) + '</td><td>' + U.esc(x.nombre) + '</td><td class="sx2-tenue">' + U.esc(x.area || '') + '</td><td class="sx2-tenue">' + U.esc(x.empresa_id || '') + '</td><td>' + U.badge(ANIMO[x.valor - 1] || '', TONO_ANIMO[x.valor - 1] || 'neutro') + '</td></tr>';
-          }).join('') + '</tbody></table></div></details>' : '')
-      : U.vacio({ icono: 'persona', titulo: 'Sin respuestas', texto: 'Nadie dejó esta respuesta opcional en el periodo.' });
-    var tend = (d.tendencia || []);
-    var tendHtml = tend.length ? '<div class="gv2-meses">' + (function () {
-      var max = tend.reduce(function (m, s) { return Math.max(m, (s.realizadas || 0) + (s.no_realizadas || 0)); }, 0) || 1;
-      return tend.map(function (s) {
-        return '<div class="gv2-meses__col"><div class="gv2-meses__barras gv2-meses__barras--pila">' +
-          '<span class="gv2-meses__b gv2-meses__b--out" style="height:' + ((s.realizadas || 0) / max * 100) + '%" title="Realizadas: ' + (s.realizadas || 0) + '"></span>' +
-          '<span class="gv2-meses__b gv2-meses__b--no" style="height:' + ((s.no_realizadas || 0) / max * 100) + '%" title="No realizadas: ' + (s.no_realizadas || 0) + '"></span>' +
-          '</div><span class="gv2-meses__et">' + U.esc(s.etiqueta) + '</span><span class="gv2-meses__pct">' + (nulo(s.pct_cumplimiento) ? '—' : s.pct_cumplimiento + '%') + '</span></div>';
-      }).join('');
-    })() + '</div><div class="gv2-ley"><span><i class="gv2-meses__b--out"></i>Realizadas</span><span><i class="gv2-meses__b--no"></i>No realizadas</span><span>% = cumplimiento de la semana</span></div>'
-      : U.vacio({ icono: 'grafico', titulo: 'Sin semanas medidas', texto: '' });
-    var motivos = (d.motivos || []).length ? barras(d.motivos.map(function (m) { return { etiqueta: m.motivo, valor: m.cantidad }; }), 'alerta')
-      : U.vacio({ icono: 'check', titulo: 'Sin justificaciones', texto: 'Nadie justificó inasistencias en el periodo.' });
-    var areas = (d.por_area || []).length ? barras(d.por_area.map(function (a) { return { etiqueta: a.area || 'Sin área', valor: a.participaciones }; }), 'primario')
-      : U.vacio({ icono: 'equipo', titulo: 'Sin participaciones', texto: '' });
-    return '<p class="sx2-tenue sx2-entra" style="margin:0;font-size:.8125rem">Periodo: ' + U.esc(PY.fecha(d.periodo.desde, true)) + ' al ' + U.esc(PY.fecha(d.periodo.hasta, true)) + ' · todas las empresas.</p>' +
-      '<div class="sx2-fila-kpis">' +
-        U.kpi({ i: 0, etiqueta: 'Cumplimiento', valor: nulo(pct) ? '—' : pct, sufijo: nulo(pct) ? '' : '%', icono: 'diana', tono: tono, progreso: nulo(pct) ? null : pct }) +
-        U.kpi({ i: 1, etiqueta: 'Programadas', valor: k.programadas || 0, icono: 'calendario', tono: 'neutro' }) +
-        U.kpi({ i: 2, etiqueta: 'Realizadas', valor: k.realizadas || 0, icono: 'check', tono: 'ok' }) +
-        U.kpi({ i: 3, etiqueta: 'No realizadas', valor: k.no_realizadas || 0, icono: 'alerta', tono: k.no_realizadas ? 'critico' : 'neutro' }) +
-        U.kpi({ i: 4, etiqueta: 'Participaciones', valor: k.participaciones || 0, icono: 'equipo', tono: 'primario' }) +
-        U.kpi({ i: 5, etiqueta: 'Justificaciones', valor: k.justificaciones || 0, icono: 'comentario', tono: 'neutro' }) +
-        (nulo(k.animo_promedio) ? '' : U.kpi({ i: 6, etiqueta: 'Ánimo promedio', valor: k.animo_promedio, unidad: 'de 5', icono: 'persona', tono: 'info' })) +
-      '</div>' +
-      U.card({ titulo: 'Tendencia semanal', icono: 'grafico', i: 7, cuerpo: tendHtml }) +
-      '<div class="sx2-grid sx2-grid--estira">' +
-        '<div class="sx2-col-4">' + U.card({ titulo: 'Clima emocional', icono: 'persona', sub: 'autorreportado', i: 8, cuerpo: climaHtml }) + '</div>' +
-        '<div class="sx2-col-4">' + U.card({ titulo: 'Motivos de inasistencia', icono: 'comentario', i: 9, cuerpo: motivos }) + '</div>' +
-        '<div class="sx2-col-4">' + U.card({ titulo: 'Participación por área', icono: 'equipo', i: 10, cuerpo: areas }) + '</div>' +
-      '</div>';
+    return '<p class="sx2-tenue sx2-entra" style="margin:0;font-size:.8125rem">Período: ' + U.esc(PY.fecha(d.periodo.desde, true)) + ' al ' + U.esc(PY.fecha(d.periodo.hasta, true)) + ' · todas las empresas.</p>' +
+      '<div class="sx2-card sx2-entra">' + SigsoReportePausas.cuerpo(d, { multiempresa: true }) + '</div>';
   }
   function csvPausas() {
     var campos = ['pausa_id', 'empresa_id', 'fecha', 'hora_programada', 'estado'];

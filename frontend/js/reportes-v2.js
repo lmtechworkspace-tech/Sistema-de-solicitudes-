@@ -529,16 +529,20 @@
   }
   // Columnas agrupadas por período (p. ej. entraron vs se cerraron por mes).
   // filas: [{ etiqueta, <campo>: n }], series: [{ campo, etiqueta, tono }].
+  // f.pie (opcional): segunda línea bajo la etiqueta, p. ej. el % de la semana;
+  // f.pieTono la colorea.
   function columnas(filas, series, opts) {
     opts = opts || {};
+    var conPie = (filas || []).some(function (f) { return f.pie !== undefined && f.pie !== ''; });
     if (!filas || !filas.length) return vacio_(opts.vacio || 'Sin datos para graficar.');
     var max = filas.reduce(function (m, f) { return series.reduce(function (mm, s) { return Math.max(mm, Number(f[s.campo]) || 0); }, m); }, 0) || 1;
-    return '<figure class="rp2-cols">' +
+    return '<figure class="rp2-cols' + (conPie ? ' rp2-cols--pie' : '') + '">' +
       '<div class="rp2-cols__graf" role="img" aria-label="' + esc_(opts.titulo || 'Gráfico de columnas') + '">' + filas.map(function (f) {
         return '<div class="rp2-cols__grupo"><div class="rp2-cols__barras">' + series.map(function (s) {
           var v = Number(f[s.campo]) || 0;
           return '<span class="rp2-cols__b sx2-tono-' + (s.tono || 'primario') + '" style="height:' + Math.max(v ? 3 : 0, Math.round(v / max * 100)) + '%" title="' + esc_(s.etiqueta + ': ' + v) + '"><em>' + (v || '') + '</em></span>';
-        }).join('') + '</div><span class="rp2-cols__et">' + esc_(f.etiqueta) + '</span></div>';
+        }).join('') + '</div><span class="rp2-cols__et">' + esc_(f.etiqueta) +
+          (conPie ? '<b' + (f.pieTono ? ' class="sx2-tono-' + f.pieTono + '"' : '') + '>' + esc_(f.pie === undefined ? '' : f.pie) + '</b>' : '') + '</span></div>';
       }).join('') + '</div>' +
       '<figcaption class="rp2-cols__ley">' + series.map(function (s) {
         return '<span><i class="sx2-tono-' + (s.tono || 'primario') + '"></i>' + esc_(s.etiqueta) + '</span>';

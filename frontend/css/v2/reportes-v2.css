@@ -78,6 +78,7 @@
 
 /* --- Anatomía en 4 niveles: En una línea · Lo que requiere decisión · Panorama · Detalle --- */
 .rp2-nivel { display: flex; flex-direction: column; gap: var(--sx-e-3); margin-top: var(--sx-e-6); }
+.rp2-nivel:first-child { margin-top: 0; }
 .rp2-nivel__tit {
   display: flex; align-items: baseline; gap: 10px; margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--sx-borde-suave);
   font: 700 .75rem/1.2 var(--fuente); letter-spacing: .08em; text-transform: uppercase; color: var(--sx-texto-2);
@@ -152,6 +153,10 @@
 }
 .rp2-cols__b em { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); padding-bottom: 2px; font: 600 .6875rem/1 var(--fuente); font-style: normal; color: var(--sx-texto-2); }
 .rp2-cols__et { text-align: center; font: var(--sx-t-micro); color: var(--sx-texto-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: -22px; }
+.rp2-cols__et b { display: block; margin-top: 3px; font-weight: 700; color: var(--sx-texto-2); }
+.rp2-cols__et b[class] { color: var(--sx-tono); }
+.rp2-cols--pie .rp2-cols__et { margin-bottom: -38px; }
+.rp2-cols--pie .rp2-cols__ley { margin-top: 38px; }
 .rp2-cols__ley { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 22px; font: var(--sx-t-micro); color: var(--sx-texto-2); }
 .rp2-cols__ley span { display: inline-flex; align-items: center; gap: 6px; }
 .rp2-cols__ley i { width: 10px; height: 10px; border-radius: 3px; background: var(--sx-tono); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
