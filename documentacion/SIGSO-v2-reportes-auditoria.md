@@ -254,3 +254,31 @@ publicar.
     la valoración de riesgos).
 
   **Siguiente: R-3** (PDF con Chromium + HTML/CSS en el VPS).
+- **R-3 (PDF con Chromium) — hecho** (`d9302b5`):
+  - "Descargar PDF" manda el reporte **tal como se ve** (HTML + las reglas CSS
+    que lo pintan) y el servidor lo imprime con `chrome-headless-shell`
+    (`logica/pdfChromium.js`, acción `generarPdfReporte` en
+    `logica/reportePdf.js`). Pantalla y papel son el mismo diseño; lo que se
+    mejore en pantalla mejora el PDF solo.
+  - Seguridad: JavaScript apagado y **toda** la red bloqueada salvo `data:`
+    (probado sin la capa de limpieza: 0 pedidos salen, ni `file://` ni http),
+    más limpieza del HTML/CSS, límites bajo el 1 MB de nginx y 12 PDF/min por
+    cuenta. El pie (quién, cuándo, página X de Y) lo firma el **servidor**
+    con la sesión: un PDF manipulado desde el navegador igual queda a nombre
+    de quien lo generó.
+  - Qué entra: lo que está a la vista. Lo plegado (`<details>`) no se imprime;
+    las cifras animadas van con su valor final. En papel los KPI van 2 × 2.
+  - CSS: se lee el **texto original** de cada hoja (no el CSSOM: Chrome pierde
+    `font: var(--x)` seguido de una propiedad larga) y se filtra a lo que toca
+    al reporte y a sus ancestros (~25 KB). Los ancestros viajan como
+    "cascarones" neutralizados.
+  - Infra: `backend/scripts/asegurar-chromium.sh` (idempotente) lo corre cada
+    despliegue: librerías del sistema + la versión de Chromium que pide
+    `puppeteer-core`. Si falla no bloquea el despliegue; el PDF cae a Imprimir.
+  - Costo medido: ~1 s el primero (arranca Chromium), ~0,2 s los siguientes;
+    el navegador se cierra tras 90 s sin uso.
+  - **Sigue con pdfkit** (fuera de pantalla, sin HTML que fotografiar): Orden de
+    trabajo (adjunta al correo de derivación), reporte periódico de pausas por
+    correo, Acta de reunión, reporte de Proyecto y evidencia por cláusula.
+    Para esos hace falta armar su documento en el servidor con las mismas
+    piezas → pendiente para R-3b.

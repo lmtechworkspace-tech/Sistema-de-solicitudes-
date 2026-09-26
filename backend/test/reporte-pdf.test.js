@@ -128,3 +128,14 @@ test('motor real (si hay Chromium): PDF válido, JS apagado y cero pedidos a la 
     assert.equal(pedidos, 0, 'ningún pedido salió del documento');
   } finally { srv.close(); await Motor.cerrar(); }
 });
+
+test('rutaChrome: una CARPETA con el nombre del motor no cuenta (instalación a medias)', () => {
+  const antes = process.env.SIGSO_CHROME_PATH;
+  process.env.SIGSO_CHROME_PATH = require('node:os').tmpdir();
+  try {
+    assert.equal(Motor.rutaChrome(), null);
+    assert.equal(Motor.disponible(), false);
+  } finally {
+    if (antes === undefined) delete process.env.SIGSO_CHROME_PATH; else process.env.SIGSO_CHROME_PATH = antes;
+  }
+});

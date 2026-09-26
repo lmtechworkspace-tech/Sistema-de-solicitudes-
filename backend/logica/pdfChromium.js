@@ -15,7 +15,7 @@
  * incrustadas). El HTML llega del navegador del usuario (ver reportePdf.js):
  * con esto no puede ejecutar código ni pedir nada a la red ni al disco.
  *
- * Dónde está Chromium: SIGSO_CHROME_PATH (en el VPS lo instala
+ * Dónde está Chromium: SIGSO_CHROME_PATH o /opt/sigso/chrome/actual (en el VPS lo instala
  * backend/scripts/asegurar-chromium.sh). Sin esa variable se prueban las rutas
  * típicas de un equipo de desarrollo. Si no hay ninguno, htmlAPdf rechaza con
  * codigo 'SIN_MOTOR' y quien llama decide qué decir.
@@ -27,7 +27,7 @@ const TIMEOUT_MS = 30 * 1000;
 const MAX_COLA = 4;
 
 const CANDIDATOS_ = [
-  '/opt/sigso/chrome/chrome-headless-shell',
+  '/opt/sigso/chrome/actual',
   '/usr/bin/chromium',
   '/usr/bin/chromium-browser',
   '/usr/bin/google-chrome',
@@ -48,10 +48,14 @@ function error_(codigo, mensaje) {
   return e;
 }
 
+// Solo un ARCHIVO cuenta (sigue enlaces): una carpeta con el mismo nombre, p. ej. de
+// una instalación a medias, no es un motor.
+function esArchivo_(r) { try { return fs.statSync(r).isFile(); } catch (e) { return false; } }
+
 function rutaChrome() {
   const env = process.env.SIGSO_CHROME_PATH;
-  if (env) return fs.existsSync(env) ? env : null;
-  return CANDIDATOS_.find((r) => { try { return fs.existsSync(r); } catch (e) { return false; } }) || null;
+  if (env) return esArchivo_(env) ? env : null;
+  return CANDIDATOS_.find(esArchivo_) || null;
 }
 
 function disponible() { return !!rutaChrome(); }
