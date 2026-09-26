@@ -11,6 +11,8 @@
   transition: background var(--sx-dur-rapida) var(--sx-curva);
 }
 .nv2-toca .nv2-fila { padding-left: 0; padding-right: 0; border-left: 0; }
+/* Dentro del nivel Detalle del reporte de cumplimiento: sin sangría de tarjeta. */
+.nv2-lista--rep .nv2-fila { padding-left: 4px; padding-right: 4px; border-left: 0; }
 .nv2-fila:last-child { border-bottom: 0; }
 .nv2-fila:hover { background: var(--sx-superficie-2); }
 .nv2-fila:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: -2px; }

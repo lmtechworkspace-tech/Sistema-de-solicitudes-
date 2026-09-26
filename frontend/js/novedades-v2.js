@@ -476,7 +476,18 @@
     feed: function () { return feed(true); },
     aprobar: function () { return api('listarPendientesAprobacionNovedad', {}); },
     envios: function () { return api('misPendientesNovedad', {}); },
-    cumplimiento: function () { return api('getPanelCumplimientoNovedad', {}); }
+    // Con los lectores de cada novedad aún abierta se sabe QUIÉN debe lecturas vencidas
+    // (el panel solo trae conteos). Si una llamada falla, esa novedad queda sin personas.
+    cumplimiento: function () {
+      return api('getPanelCumplimientoNovedad', {}).then(function (r) {
+        if (!r || !r.ok) return r;
+        var abiertas = (r.data.items || []).filter(function (x) { return x.estado_cumplimiento !== 'CUMPLIDA' && x.pendientes; }).slice(0, 15);
+        return Promise.all(abiertas.map(function (x) { return api('getLectoresNovedad', { novedad_id: x.novedad_id }); })).then(function (ls) {
+          abiertas.forEach(function (x, i) { x.lectores = ls[i] && ls[i].ok ? ls[i].data : null; });
+          return r;
+        });
+      });
+    }
   };
 
   function cargar(silencioso) {
@@ -584,18 +595,82 @@
         }).join('') + '</ul></section>'
       : U.card({ i: 1, cuerpo: U.vacio({ icono: 'subir', titulo: 'No tienes envíos en trámite', texto: 'Los avisos y logros se publican de inmediato y no pasan por aquí: búscalos en Publicadas.' }) });
   }
+  // Anatomía en 4 niveles (auditoría de reportes, R-2): ¿la gente leyó lo obligatorio?
   function vistaCumplimiento(d) {
+    var R = window.SigsoReportes;
     var l = (d.items || []).slice();
     var cuenta = function (e) { return l.filter(function (x) { return x.estado_cumplimiento === e; }).length; };
     var orden = { VENCIDA: 0, POR_VENCER: 1, AL_DIA: 2, CUMPLIDA: 3 };
     l.sort(function (a, b) { return (orden[a.estado_cumplimiento] === undefined ? 9 : orden[a.estado_cumplimiento]) - (orden[b.estado_cumplimiento] === undefined ? 9 : orden[b.estado_cumplimiento]) || a.dias_para_vencer - b.dias_para_vencer; });
-    return '<div class="sx2-fila-kpis">' +
-        U.kpi({ i: 0, icono: 'alerta', tono: cuenta('VENCIDA') ? 'critico' : 'neutro', etiqueta: 'Vencidas', valor: cuenta('VENCIDA'), unidad: 'sin completar' }) +
-        U.kpi({ i: 1, icono: 'reloj', tono: cuenta('POR_VENCER') ? 'alerta' : 'neutro', etiqueta: 'Por vencer', valor: cuenta('POR_VENCER') }) +
-        U.kpi({ i: 2, icono: 'info', tono: 'info', etiqueta: 'Al día', valor: cuenta('AL_DIA') }) +
-        U.kpi({ i: 3, icono: 'check', tono: 'ok', etiqueta: 'Cumplidas', valor: cuenta('CUMPLIDA') }) +
-      '</div>' +
-      (l.length ? '<section class="sx2-card sx2-card--sin-relleno sx2-entra" style="--i:3"><ul class="nv2-lista">' + l.map(function (x, i) {
+    if (!R) return vistaCumplimientoLista(l);
+    if (!l.length) return U.card({ i: 1, cuerpo: U.vacio({ icono: 'check', titulo: 'Sin plazos activos', texto: 'Aquí aparecen las novedades que piden confirmar la lectura antes de una fecha.' }) });
+    var pedidas = l.reduce(function (s, x) { return s + (x.total_audiencia || 0); }, 0);
+    var hechas = l.reduce(function (s, x) { return s + (x.confirmados || 0); }, 0);
+    var pct = pedidas ? Math.round(hechas / pedidas * 100) : null;
+    var venc = cuenta('VENCIDA'), porVencer = cuenta('POR_VENCER');
+    var sinCuenta = l.reduce(function (s, x) { return s + (x.sin_cuenta || 0); }, 0);
+
+    // Quién debe lecturas, a partir de los lectores de cada novedad abierta.
+    var personas = {}, conLectores = l.filter(function (x) { return x.lectores; });
+    conLectores.forEach(function (x) {
+      (x.lectores.pendientes || []).forEach(function (p) {
+        var k = String(p.email || p.nombre).toLowerCase();
+        var o = personas[k] = personas[k] || { email: p.email, nombre: String(p.nombre || p.email).trim(), venc: 0, prox: 0, masVieja: 0, titulos: [], sinCuenta: p.sin_cuenta, nuncaEntro: p.nunca_entro };
+        if (x.estado_cumplimiento === 'VENCIDA') {
+          o.venc++; o.masVieja = Math.max(o.masVieja, -x.dias_para_vencer);
+          if (o.titulos.length < 2) o.titulos.push('«' + x.titulo + '»');
+        } else if (x.estado_cumplimiento === 'POR_VENCER') o.prox++;
+      });
+    });
+    var deudores = Object.keys(personas).map(function (k) { return personas[k]; }).filter(function (o) { return o.venc; });
+
+    // 1 · En una línea
+    var estado = venc ? 'critico' : (porVencer ? 'alerta' : 'ok');
+    var frase = 'De ' + l.length + (l.length === 1 ? ' novedad' : ' novedades') + ' con plazo de lectura, ' +
+      (venc ? venc + (venc === 1 ? ' venció' : ' vencieron') + ' sin que todos confirmaran' : 'ninguna está vencida') +
+      (porVencer ? ' y ' + porVencer + ' por vencer' : '') +
+      (pct === null ? '' : '; en total se confirmó el ' + pct + ' % de las lecturas pedidas (' + hechas + ' de ' + pedidas + ')') +
+      (deudores.length ? '; ' + deudores.length + (deudores.length === 1 ? ' persona debe' : ' personas deben') + ' lecturas vencidas' : '') + '.';
+    var linea = R.enUnaLinea({ estado: estado, frase: frase, kpis: [
+      { etiqueta: 'Lectura confirmada', valor: pct === null ? '—' : pct, sufijo: pct === null ? '' : '%', icono: 'check', progreso: pct,
+        tono: pct === null ? 'neutro' : (pct >= 90 ? 'ok' : (pct >= 70 ? 'alerta' : 'critico')), nota: hechas + ' de ' + pedidas + ' lecturas' },
+      { etiqueta: 'Vencidas', valor: venc, icono: 'alerta', tono: venc ? 'critico' : 'ok', nota: 'sin completar' },
+      { etiqueta: 'Por vencer', valor: porVencer, icono: 'reloj', tono: porVencer ? 'alerta' : 'ok', nota: cuenta('AL_DIA') + ' al día · ' + cuenta('CUMPLIDA') + ' cumplidas' },
+      { etiqueta: 'Personas con atraso', valor: conLectores.length ? deudores.length : '—', icono: 'persona', tono: !conLectores.length ? 'neutro' : (deudores.length ? 'critico' : 'ok'),
+        nota: conLectores.length ? 'con alguna lectura vencida' : 'sin acceso al detalle' }
+    ] });
+
+    // 2 · Lo que requiere decisión: una fila por persona con lecturas vencidas.
+    var alertas = deudores.map(function (o) {
+      return { severidad: o.venc >= 2 || o.masVieja > 14 ? 'critico' : 'alerta', cantidad: o.venc, titulo: o.nombre,
+        detalle: o.venc + (o.venc === 1 ? ' lectura vencida' : ' lecturas vencidas') + (o.masVieja ? ', la más antigua hace ' + o.masVieja + ' días' : '') +
+          (o.prox ? ' · ' + o.prox + ' por vencer' : '') + ' — ' + o.titulos.join(', '),
+        dueno: o.sinCuenta ? 'Sin cuenta en SIGSO' : (o.nuncaEntro ? 'Nunca ha entrado' : '') };
+    });
+    if (sinCuenta) alertas.push({ severidad: 'alerta', cantidad: sinCuenta, titulo: 'Destinatarios sin cuenta en SIGSO', detalle: 'No pueden confirmar la lectura hasta que se les cree la cuenta.', dueno: 'Administración' });
+    var decision = R.requiereDecision(alertas, { vacio: conLectores.length ? 'Nadie debe lecturas vencidas.' : 'No hay lecturas vencidas que asignar a personas.' });
+
+    // 3 · Panorama: lectura por novedad (la más baja arriba).
+    var panorama = '<h3 class="rp2-sub">Lectura por novedad <span class="sx2-tenue" style="font-weight:500;font-size:.8125rem">(la más baja arriba)</span></h3>' +
+      R.ranking(l.slice().sort(function (a, b) { return (a.confirmados / (a.total_audiencia || 1)) - (b.confirmados / (b.total_audiencia || 1)); }).map(function (x) {
+        var p = x.total_audiencia ? Math.round(x.confirmados * 100 / x.total_audiencia) : 0;
+        return { etiqueta: x.titulo, valor: p, texto: x.confirmados + '/' + x.total_audiencia + ' · ' + p + '%', tono: (CUMPL[x.estado_cumplimiento] || [0, 'neutro'])[1] === 'info' ? 'primario' : (CUMPL[x.estado_cumplimiento] || [0, 'neutro'])[1] };
+      }), { max: 100, sinPosicion: true });
+    var al100 = l.filter(function (x) { return x.total_audiencia && x.confirmados === x.total_audiencia; });
+    panorama += R.loQueVaBien(al100.length ? [al100.length + (al100.length === 1 ? ' novedad ya tiene' : ' novedades ya tienen') + ' la lectura de todos.'] : []);
+
+    // 4 · Detalle: la lista de siempre (se abre cada novedad para ver quién falta).
+    return '<div class="sx2-card sx2-entra" style="--i:1">' +
+      R.nivel('En una línea', linea) +
+      R.nivel('Lo que requiere decisión', decision, { nota: alertas.length ? 'por persona · la cifra es cuántas vencidas' : '' }) +
+      R.nivel('Panorama', panorama) +
+      R.nivel('Detalle · abre una novedad para ver quién falta', vistaCumplimientoLista(l, true), { clase: 'rp2-nivel--detalle', nota: l.length + (l.length === 1 ? ' novedad' : ' novedades') }) +
+      '</div>';
+  }
+  // dentro: la lista va dentro del nivel Detalle del reporte (sin tarjeta propia).
+  function vistaCumplimientoLista(l, dentro) {
+    var ul = '<ul class="nv2-lista' + (dentro ? ' nv2-lista--rep' : '') + '">';
+    return (l.length ? (dentro ? ul : '<section class="sx2-card sx2-card--sin-relleno sx2-entra" style="--i:3">' + ul) + l.map(function (x, i) {
           var e = CUMPL[x.estado_cumplimiento] || [x.estado_cumplimiento, 'neutro'];
           var pct = x.total_audiencia ? Math.round(x.confirmados * 100 / x.total_audiencia) : 0;
           var p = plazo(x);
@@ -607,7 +682,7 @@
                 '<span class="sx2-tenue" style="flex:none;font-size:.75rem">' + x.confirmados + ' de ' + x.total_audiencia + ' confirmaron' + (x.sin_cuenta ? ' · ' + x.sin_cuenta + ' sin cuenta' : '') + '</span></span>' +
             '</span>' +
             '<span class="nv2-fila__estado">' + U.badge(p.txt, p.tono) + '</span></li>';
-        }).join('') + '</ul></section>'
+        }).join('') + (dentro ? '</ul>' : '</ul></section>')
         : U.card({ i: 3, cuerpo: U.vacio({ icono: 'check', titulo: 'Sin plazos activos', texto: 'Aquí aparecen las novedades que piden confirmar la lectura antes de una fecha.' }) }));
   }
 
