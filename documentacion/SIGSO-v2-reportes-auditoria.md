@@ -277,8 +277,20 @@ publicar.
     `puppeteer-core`. Si falla no bloquea el despliegue; el PDF cae a Imprimir.
   - Costo medido: ~1 s el primero (arranca Chromium), ~0,2 s los siguientes;
     el navegador se cierra tras 90 s sin uso.
-  - **Sigue con pdfkit** (fuera de pantalla, sin HTML que fotografiar): Orden de
-    trabajo (adjunta al correo de derivación), reporte periódico de pausas por
-    correo, Acta de reunión, reporte de Proyecto y evidencia por cláusula.
-    Para esos hace falta armar su documento en el servidor con las mismas
-    piezas → pendiente para R-3b.
+- **R-3b (PDF sin pantalla) — hecho** (`f460255`, `b657df6`):
+  - `logica/documentoV2.js` ejecuta en el servidor los MISMOS archivos del
+    frontend que arman los reportes (iconos.js, ui-v2.js, reportes-v2.js) en
+    un contexto `vm` y toma el CSS de las hojas de la plataforma (orden de
+    plataforma.html) filtrado a las clases del documento. El despliegue lleva
+    esas piezas a /opt/sigso/frontend/ y un test exige que la lista coincida.
+  - **Acta de reunión**: conteos · vencido y bloqueado por responsable · para
+    planificar · hoja de Acuerdos para escribir en la reunión.
+  - **Reportes tabulares de Actividades**: resumen en tarjetas, nombres, fechas
+    y estados legibles, situación con color.
+  - **Evidencia por cláusula ISO**: estado · lo que falta · por tipo · registros.
+  - **Reporte de Proyecto (estándar)**: ¿va a llegar a tiempo? · decisión
+    sugerida + un bloque de alertas · real vs. plan por tarea e hitos · detalle.
+  - pdfkit queda como **respaldo** (sin Chromium o si el v2 falla) y para el
+    **informe configurable de Proyecto** (Carta Gantt apaisada), la **Orden de
+    trabajo** (R-5) y el **reporte periódico de pausas** (que en realidad es
+    un correo de texto, sin PDF adjunto).
