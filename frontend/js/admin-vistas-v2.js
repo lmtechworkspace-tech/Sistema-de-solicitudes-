@@ -913,6 +913,9 @@
   }
 
   var REPORTES = [
+    { grupo: 'Resumen', icono: 'diana', reportes: [
+      { id: 'plataforma', nombre: 'Estado de la plataforma', tipo: 'ESTADO', estado: 'LISTO', desc: '¿La configuración y los avisos funcionan? Envíos, esquema y cuentas en una sola lectura.', fuente: 'listarLogs', filtros: [] }
+    ] },
     { grupo: 'Notificaciones', icono: 'campana', reportes: [
       { id: 'notif-entregabilidad', nombre: 'Entregabilidad', tipo: 'CUMPLIMIENTO', estado: 'LISTO', desc: 'Cuántas notificaciones salieron bien, cuántas fallaron y cuántas siguen reintentando.', fuente: 'listarLogs', filtros: [] },
       { id: 'notif-evento', nombre: 'Fallas por evento', tipo: 'RANKING', estado: 'LISTO', desc: 'Qué eventos concentran los problemas de envío.', fuente: 'listarLogs', filtros: [] },
@@ -926,7 +929,7 @@
       { id: 'acc-inactivas', nombre: 'Cuentas sin uso', tipo: 'ESTADO', estado: 'LISTO', desc: 'Cuentas activas que nunca entraron o que llevan más de 30 días sin entrar.', fuente: 'listarCuentasPortal', filtros: [] }
     ] }
   ];
-  var ACCION_REPORTE = { 'notif-entregabilidad': 'listarLogs', 'notif-evento': 'listarLogs', 'sis-esquema': 'getEstadoSistema', 'acc-modulos': 'listarCuentasPortal', 'acc-inactivas': 'listarCuentasPortal' };
+  var ACCION_REPORTE = { 'plataforma': 'listarLogs', 'notif-entregabilidad': 'listarLogs', 'notif-evento': 'listarLogs', 'sis-esquema': 'getEstadoSistema', 'acc-modulos': 'listarCuentasPortal', 'acc-inactivas': 'listarCuentasPortal' };
   var MODULO_TXT = { nueva_solicitud: 'Nueva solicitud', mis_solicitudes: 'Mis solicitudes', bandeja: 'Bandeja de trabajo', mi_trabajo: 'Mi trabajo', proyectos: 'Proyectos',
     gerencia: 'Panel de gerencia', jefatura: 'Mi departamento', administracion: 'Administración', pausas: 'Pausas activas', pausas_coordinacion: 'Coordinación de pausas', calidad: 'Calidad (SGC)', novedades: 'Novedades' };
   var repAbierto_ = null;
@@ -950,11 +953,19 @@
     if (!r || !accion) { repAbierto_ = null; cargarReportes(); return; }
     cont.innerHTML = U.esqueleto('tabla', 5);
     var t = turno_;
-    api(accion, accion === 'listarLogs' ? { limite: 500 } : {}).then(function (resp) {
+    // El estado de la plataforma cruza envíos, esquema y cuentas; si una de las dos
+    // últimas falla, su parte del reporte lo dice.
+    var pedido = repAbierto_ !== 'plataforma' ? api(accion, accion === 'listarLogs' ? { limite: 500 } : {}) :
+      Promise.all([api('listarLogs', { limite: 500 }), api('getEstadoSistema', {}), api('listarCuentasPortal', {})]).then(function (rs) {
+        if (!rs[0] || !rs[0].ok) return rs[0];
+        return { ok: true, data: { logs: rs[0].data, sistema: rs[1] && rs[1].ok ? rs[1].data : null, cuentas: rs[2] && rs[2].ok ? rs[2].data : null } };
+      });
+    pedido.then(function (resp) {
       if (t !== turno_ || vista_ !== 'REPORTES') return;
       if (!resp || !resp.ok) { cont.innerHTML = U.vacio({ icono: 'alerta', titulo: 'No se pudo armar el reporte', texto: (resp && resp.message) || '' }); return; }
       var cuerpo = '';
-      if (r.id === 'notif-entregabilidad') cuerpo = cuerpoEntregabilidad(resp.data);
+      if (r.id === 'plataforma') cuerpo = cuerpoEstadoPlataforma(resp.data);
+      else if (r.id === 'notif-entregabilidad') cuerpo = cuerpoEntregabilidad(resp.data);
       else if (r.id === 'notif-evento') cuerpo = cuerpoFallas(resp.data);
       else if (r.id === 'sis-esquema') cuerpo = cuerpoEsquema(resp.data);
       else if (r.id === 'acc-modulos') cuerpo = cuerpoModulos(resp.data);
@@ -967,6 +978,106 @@
     });
   }
   function vacioRep(t) { return '<div class="rp2-vacio">' + U.vacio({ icono: 'grafico', titulo: '', texto: t }) + '</div>'; }
+
+  // Anatomía en 4 niveles (auditoría de reportes, R-2): ¿la configuración y los avisos funcionan?
+  function claseEnvio(res) { var t = tonoEnvio(res); return t === 'ok' ? 'ok' : (t === 'alerta' ? 'reintento' : (t === 'neutro' ? 'omitido' : 'falla')); }
+  function cuerpoEstadoPlataforma(d) {
+    var R = SigsoReportes, logs = Array.isArray(d.logs) ? d.logs : [];
+    var sis = d.sistema, cs = d.cuentas ? cuentasDe(d.cuentas) : null;
+    var n = { ok: 0, reintento: 0, omitido: 0, falla: 0 };
+    logs.forEach(function (l) { n[claseEnvio(l.resultado)]++; });
+    var intentados = n.ok + n.falla + n.reintento;
+    var tasa = intentados ? Math.round(n.ok / intentados * 100) : null;
+    var fechas = logs.map(function (l) { return String(l.timestamp || ''); }).filter(Boolean).sort();
+    var tramo = fechas.length ? fecha(fechas[0]) + ' al ' + fecha(fechas[fechas.length - 1]) : '';
+    var e = (sis && sis.esquema) || {}, probs = [];
+    Object.keys(e).forEach(function (k) { if (Array.isArray(e[k])) e[k].forEach(function (it) { probs.push({ tipo: k.replace(/_/g, ' '), detalle: typeof it === 'string' ? it : JSON.stringify(it) }); }); });
+    var dias = function (c) { return c.ultimo_acceso ? Math.floor((Date.now() - new Date(c.ultimo_acceso).getTime()) / 86400000) : null; };
+    var nunca = cs ? cs.filter(function (c) { return dias(c) === null; }) : [];
+    var viejas = cs ? cs.filter(function (c) { var x = dias(c); return x !== null && x > 30; }) : [];
+    var temporal = cs ? cs.filter(function (c) { return c.debe_cambiar_password; }) : [];
+    var semana = cs ? cs.filter(function (c) { var x = dias(c); return x !== null && x <= 7; }) : [];
+
+    // 1 · En una línea
+    var estado = probs.length || (tasa !== null && tasa < 90) ? 'critico' : (n.falla || n.reintento || nunca.length || viejas.length || temporal.length ? 'alerta' : 'ok');
+    var frase = (logs.length ? 'De los últimos ' + logs.length + ' envíos (' + tramo + '), ' + (tasa === null ? 'ninguno se intentó' : 'se entregó el ' + tasa + ' %') +
+        (n.falla ? '; ' + n.falla + (n.falla === 1 ? ' falló' : ' fallaron') : '') + (n.reintento ? ' y ' + n.reintento + ' siguen reintentando' : '') : 'No hay envíos registrados') +
+      '; ' + (!sis ? 'no se pudo leer el esquema' : (probs.length ? 'al esquema le faltan ' + probs.length + (probs.length === 1 ? ' pieza' : ' piezas') : 'el esquema está completo')) +
+      (cs ? '; ' + (nunca.length + viejas.length ? (nunca.length + viejas.length) + ' de ' + cs.length + ' cuentas activas no se usan' : 'todas las cuentas activas se usan') : '') + '.';
+    var linea = R.enUnaLinea({ estado: estado, frase: frase, kpis: [
+      { etiqueta: 'Tasa de entrega', valor: tasa === null ? '—' : tasa, sufijo: tasa === null ? '' : '%', icono: 'correo', progreso: tasa,
+        tono: tasa === null ? 'neutro' : (tasa >= 98 ? 'ok' : (tasa >= 90 ? 'alerta' : 'critico')), nota: n.ok + ' de ' + intentados + ' intentados' },
+      { etiqueta: 'Envíos con falla', valor: n.falla, icono: 'alerta', tono: n.falla ? 'critico' : 'ok', nota: n.reintento ? n.reintento + ' reintentando' : (n.omitido ? n.omitido + ' omitidos a propósito' : 'ninguno reintentando') },
+      { etiqueta: 'Cuentas sin uso', valor: cs ? nunca.length + viejas.length : '—', icono: 'persona', tono: !cs ? 'neutro' : (nunca.length + viejas.length ? 'alerta' : 'ok'),
+        nota: cs ? nunca.length + ' nunca entraron · ' + viejas.length + ' +30 días' : 'no se pudo leer' },
+      { etiqueta: 'Esquema', valor: !sis ? '—' : probs.length, icono: 'escudo', tono: !sis ? 'neutro' : (probs.length ? 'critico' : 'ok'),
+        nota: !sis ? 'no se pudo leer' : (probs.length ? 'piezas faltantes' : 'completo · v' + (sis.version_backend || '—')) }
+    ] });
+
+    // 2 · Lo que requiere decisión: fallas agrupadas por evento, esquema y cuentas.
+    var porEvento = {};
+    logs.forEach(function (l) {
+      var c = claseEnvio(l.resultado); if (c !== 'falla' && c !== 'reintento') return;
+      var k = String(l.evento || '(sin evento)').split(':')[0];
+      var o = porEvento[k] = porEvento[k] || { k: k, n: 0, rein: 0, ult: '', dest: {} };
+      if (c === 'falla') o.n++; else o.rein++;
+      if (String(l.timestamp || '') > o.ult) o.ult = String(l.timestamp || '');
+      if (l.destinatario) o.dest[l.destinatario] = true;
+    });
+    var alertas = Object.keys(porEvento).map(function (k) {
+      var o = porEvento[k], ds = Object.keys(o.dest);
+      return { severidad: o.n ? 'critico' : 'alerta', cantidad: o.n + o.rein, titulo: 'Avisos «' + k + '» que no llegaron',
+        detalle: [o.n ? o.n + (o.n === 1 ? ' fallido' : ' fallidos') : '', o.rein ? o.rein + ' reintentando' : '', 'el último ' + fecha(o.ult),
+          ds.length ? (ds.length === 1 ? 'a ' + ds[0] : 'a ' + ds.length + ' destinatarios') : ''].filter(Boolean).join(' · '), dueno: 'Notificaciones' };
+    });
+    if (probs.length) alertas.push({ severidad: 'critico', cantidad: probs.length, titulo: 'Faltan tablas o columnas en el esquema',
+      detalle: probs.slice(0, 3).map(function (p) { return p.detalle; }).join(' · '), dueno: 'Sistema' });
+    if (nunca.length) alertas.push({ severidad: 'alerta', cantidad: nunca.length, titulo: 'Cuentas activas que nunca entraron',
+      detalle: nunca.slice(0, 4).map(function (c) { return c.nombre || c.usuario; }).join(', ') + (nunca.length > 4 ? '…' : ''), dueno: 'Accesos' });
+    if (temporal.length) alertas.push({ severidad: 'alerta', cantidad: temporal.length, titulo: 'Cuentas que aún tienen la clave temporal',
+      detalle: temporal.slice(0, 4).map(function (c) { return c.nombre || c.usuario; }).join(', ') + (temporal.length > 4 ? '…' : ''), dueno: 'Accesos' });
+    if (viejas.length) alertas.push({ severidad: 'alerta', cantidad: viejas.length, titulo: 'Cuentas con más de 30 días sin entrar',
+      detalle: viejas.slice(0, 4).map(function (c) { return (c.nombre || c.usuario) + ' (' + dias(c) + ' d)'; }).join(', ') + (viejas.length > 4 ? '…' : ''), dueno: 'Accesos' });
+    var decision = R.requiereDecision(alertas, { vacio: 'Los avisos se están entregando, el esquema está completo y las cuentas se usan.' });
+
+    // 3 · Panorama: resultado de los envíos y los eventos con más envíos.
+    var totEv = {};
+    logs.forEach(function (l) { var k = String(l.evento || '(sin evento)').split(':')[0]; var o = totEv[k] = totEv[k] || { n: 0, ok: 0 }; o.n++; if (okEnvio(l.resultado)) o.ok++; });
+    var panorama = '<div class="rp2-dos">' +
+      '<div><h3 class="rp2-sub">Resultado de los envíos</h3>' + (logs.length ? R.ranking([
+        { etiqueta: 'Entregados', valor: n.ok, tono: 'ok' }, { etiqueta: 'Reintentando', valor: n.reintento, tono: 'alerta' },
+        { etiqueta: 'Fallidos', valor: n.falla, tono: 'critico' }, { etiqueta: 'Omitidos a propósito', valor: n.omitido, tono: 'neutro' }
+      ].map(function (f) { f.texto = f.valor + ' · ' + Math.round(f.valor / logs.length * 100) + '%'; return f; }), { max: logs.length, sinPosicion: true }) : vacioRep('Todavía no hay envíos registrados.')) + '</div>' +
+      '<div><h3 class="rp2-sub">Envíos por evento <span class="sx2-tenue" style="font-weight:500;font-size:.8125rem">(entregados de cada uno)</span></h3>' +
+        R.ranking(Object.keys(totEv).sort(function (a, b) { return totEv[b].n - totEv[a].n; }).slice(0, 8).map(function (k) {
+          var o = totEv[k], p = Math.round(o.ok / o.n * 100);
+          return { etiqueta: k, valor: o.n, texto: o.ok + '/' + o.n, tono: p >= 98 ? 'ok' : (p >= 90 ? 'alerta' : 'critico') };
+        }), { vacio: 'Sin envíos.' }) + '</div>' +
+    '</div>';
+    var bien = [];
+    if (sis && !probs.length) bien.push('El esquema tiene todas las tablas y columnas que el sistema espera.');
+    if (semana.length) bien.push(semana.length + (semana.length === 1 ? ' cuenta entró' : ' cuentas entraron') + ' en los últimos 7 días.');
+    panorama += R.loQueVaBien(bien);
+
+    // 4 · Detalle: envíos con problema (los 100 más recientes) y cuentas sin uso.
+    var malos = logs.filter(function (l) { var c = claseEnvio(l.resultado); return c === 'falla' || c === 'reintento'; })
+      .sort(function (a, b) { return String(b.timestamp || '').localeCompare(String(a.timestamp || '')); });
+    var detalle = '<h3 class="rp2-sub">Envíos con problema' + (malos.length > 100 ? ' <span class="sx2-tenue" style="font-weight:500;font-size:.8125rem">(los 100 más recientes de ' + malos.length + ')</span>' : '') + '</h3>' +
+      '<div class="rp2-detalle">' + R.tabla([{ campo: 'fecha', titulo: 'Fecha' }, { campo: 'evento', titulo: 'Evento' }, { campo: 'dest', titulo: 'Destinatario' }, { campo: 'res', titulo: 'Resultado', html: true }, { campo: 'rein', titulo: 'Reint.', alinear: 'derecha' }],
+        malos.slice(0, 100).map(function (l) { return { fecha: fecha(l.timestamp), evento: String(l.evento || '').split(':')[0], dest: l.destinatario || '', res: U.badge(String(l.resultado || '—').replace(/_/g, ' '), tonoEnvio(l.resultado), true), rein: l.reintentos || 0 }; }),
+        { vacio: 'Ningún envío con problemas en los últimos registros.' }) + '</div>';
+    if (cs) {
+      var sinUso = nunca.concat(viejas.sort(function (a, b) { return dias(b) - dias(a); }));
+      detalle += '<h3 class="rp2-sub">Cuentas sin uso</h3>' + '<div class="rp2-detalle">' + R.tabla([{ campo: 'nombre', titulo: 'Persona' }, { campo: 'rol', titulo: 'Rol' }, { campo: 'ultimo', titulo: 'Último acceso' }, { campo: 'temporal', titulo: 'Clave temporal' }],
+        sinUso.map(function (c) { var x = dias(c); return { nombre: c.nombre || c.usuario, rol: rolTxt(c.rol), ultimo: x === null ? 'Nunca entró' : fecha(c.ultimo_acceso) + ' (' + x + ' d)', temporal: c.debe_cambiar_password ? 'Sí' : 'No' }; }),
+        { vacio: 'Todas las cuentas activas entraron en los últimos 30 días.' }) + '</div>';
+    }
+
+    return R.nivel('En una línea', linea) +
+      R.nivel('Lo que requiere decisión', decision, { nota: alertas.length ? 'las fallas van agrupadas por evento' : '' }) +
+      R.nivel('Panorama', panorama) +
+      R.nivel('Detalle', detalle, { clase: 'rp2-nivel--detalle' });
+  }
   function cuerpoEntregabilidad(logs) {
     logs = Array.isArray(logs) ? logs : [];
     if (!logs.length) return vacioRep('Todavía no hay envíos registrados.');
