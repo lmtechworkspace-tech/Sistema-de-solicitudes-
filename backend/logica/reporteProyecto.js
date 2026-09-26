@@ -29,6 +29,7 @@
 
 const Proyectos = require('./proyectos');
 const PdfDoc = require('./pdfDocumento');
+const DocV2 = require('./documentoV2');
 const { errorValidacion } = require('./errores');
 
 const ESTADO_PROYECTO_LABEL = {
@@ -98,6 +99,12 @@ function filtrarTareas_(tareas, config) {
   });
 }
 
+// dd/mm/aaaa para el texto corrido (la fecha ISO no se lee en una frase).
+function fechaLegible_(valor) {
+  const m = String(valor || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? m[3] + '/' + m[2] + '/' + m[1] : '—';
+}
+
 function fechaCorta_(valor) {
   if (!valor) return '—';
   return String(valor).slice(0, 10);
@@ -129,10 +136,11 @@ function construirNarrativa_(detalle) {
   }
 
   const problemas = [];
-  if (at.tareas_criticas_atrasadas > 0) problemas.push(at.tareas_criticas_atrasadas + ' tarea(s) crítica(s) (P1/P2) atrasada(s)');
-  if (at.tareas_bloqueadas > 0) problemas.push(at.tareas_bloqueadas + ' tarea(s) bloqueada(s)');
-  if (at.hitos_atrasados > 0) problemas.push(at.hitos_atrasados + ' hito(s) vencido(s)');
-  if (at.riesgos_altos > 0) problemas.push(at.riesgos_altos + ' riesgo(s) alto(s) abierto(s)');
+  const pl = (n, uno, varios) => n + ' ' + (n === 1 ? uno : varios);
+  if (at.tareas_criticas_atrasadas > 0) problemas.push(pl(at.tareas_criticas_atrasadas, 'tarea crítica (P1/P2) atrasada', 'tareas críticas (P1/P2) atrasadas'));
+  if (at.tareas_bloqueadas > 0) problemas.push(pl(at.tareas_bloqueadas, 'tarea bloqueada', 'tareas bloqueadas'));
+  if (at.hitos_atrasados > 0) problemas.push(pl(at.hitos_atrasados, 'hito vencido', 'hitos vencidos'));
+  if (at.riesgos_altos > 0) problemas.push(pl(at.riesgos_altos, 'riesgo alto abierto', 'riesgos altos abiertos'));
   frases.push(problemas.length
     ? 'Requiere atención: ' + problemas.join(', ') + '.'
     : 'No hay tareas críticas atrasadas, bloqueos, hitos vencidos ni riesgos altos abiertos en este momento.');
@@ -140,12 +148,12 @@ function construirNarrativa_(detalle) {
   const hitosVivos = (detalle.hitos || [])
     .filter((h) => h.estado !== 'COMPLETADO' && h.estado !== 'CANCELADO' && h.fecha_objetivo)
     .sort((a, b) => new Date(a.fecha_objetivo) - new Date(b.fecha_objetivo));
-  if (hitosVivos[0]) frases.push('Próximo hito: ' + hitosVivos[0].nombre + ' (' + fechaCorta_(hitosVivos[0].fecha_objetivo) + ').');
+  if (hitosVivos[0]) frases.push('Próximo hito: ' + hitosVivos[0].nombre + ' (' + fechaLegible_(hitosVivos[0].fecha_objetivo) + ').');
 
   let decision;
   if (at.riesgos_altos > 0) decision = 'Revisar la mitigación de los riesgos altos abiertos.';
   else if (at.tareas_criticas_atrasadas > 0) decision = 'Priorizar destrabar las tareas críticas atrasadas.';
-  else if (at.hitos_atrasados > 0) decision = 'Replanificar el/los hito(s) vencido(s) con el equipo.';
+  else if (at.hitos_atrasados > 0) decision = at.hitos_atrasados === 1 ? 'Replanificar el hito vencido con el equipo.' : 'Replanificar los hitos vencidos con el equipo.';
   else if (desviacion != null && desviacion < -10) decision = 'Evaluar un ajuste de plan: el atraso acumulado supera 10 puntos.';
   else decision = 'Sin decisiones urgentes -- seguimiento normal.';
 
@@ -737,7 +745,146 @@ async function bitacoraConfigurada_(db, data, contexto, tareasFiltradas, config)
   return completa.slice(-30).reverse();
 }
 
+// --- Reporte estándar v2 (R-3b de la auditoría de reportes) -------------------------------
+// ¿Va a llegar a tiempo este proyecto? En una línea (salud, avance real vs lo planificado,
+// vencidos, riesgos altos) · Lo que requiere decisión (decisión sugerida + tareas
+// críticas atrasadas, bloqueos, hitos vencidos, riesgos altos, en UN solo bloque) ·
+// Panorama (avance real vs esperado por tarea, hitos en el tiempo) · Detalle (tareas
+// pendientes, riesgos, actividad reciente). Mismas piezas que la pantalla (documentoV2).
+const TONO_SEMAFORO = { atrasada: 'critico', bloqueada: 'critico', riesgo: 'alerta', pendiente: 'info', revision: 'info', 'al-dia': 'ok', terminada: 'neutro' };
+const TONO_HITO = { COMPLETADO: 'ok', EN_CURSO: 'info', PENDIENTE: 'neutro', CANCELADO: 'neutro' };
+function claveHoyChile_() {
+  try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); }
+}
+function diasEntreClaves_(a, b) {
+  const pa = String(a).slice(0, 10).split('-').map(Number), pb = String(b).slice(0, 10).split('-').map(Number);
+  return Math.round((Date.UTC(pb[0], pb[1] - 1, pb[2]) - Date.UTC(pa[0], pa[1] - 1, pa[2])) / 86400000);
+}
+
+function cuerpoProyectoV2_(detalle, tareas, rendimiento, bitacora, nombres, R, U, fecha) {
+  const at = detalle.requiere_atencion || {};
+  const hoy = claveHoyChile_();
+  const plural = (n, uno, varios) => n + ' ' + (n === 1 ? uno : varios);
+  const persona = (email, nombre) => (nombre && !/@/.test(nombre) ? String(nombre).trim() : '') || nombres[String(email || '').toLowerCase()] || email || 'Sin asignar';
+  const vivas = tareas.filter((a) => a.estado !== 'TERMINADA' && a.estado !== 'CANCELADA');
+  const alta = (a) => a.prioridad === 'P1' || a.prioridad === 'P2';
+  const atrasadas = vivas.filter((a) => a.semaforo === 'atrasada');
+  const criticas = atrasadas.filter(alta), otrasAtrasadas = atrasadas.filter((a) => !alta(a));
+  const bloqueadas = vivas.filter((a) => a.semaforo === 'bloqueada' || a.estado === 'BLOQUEADA');
+  const hitos = (detalle.hitos || []).slice().sort((a, b) => String(a.fecha_objetivo || '9').localeCompare(String(b.fecha_objetivo || '9')));
+  const hitosVencidos = hitos.filter((h) => h.estado !== 'COMPLETADO' && h.estado !== 'CANCELADO' && h.fecha_objetivo && String(h.fecha_objetivo).slice(0, 10) < hoy);
+  const riesgos = (detalle.riesgos || []).filter((r) => r.estado !== 'CERRADO');
+  const riesgosAltos = riesgos.filter((r) => r.nivel === 'ALTA' || r.nivel === 'ALTO' || r.nivel === 'CRITICO');
+  const avance = detalle.avance_pct, esperado = detalle.avance_esperado_pct;
+  const desv = avance != null && esperado != null ? Math.round((avance - esperado) * 10) / 10 : null;
+  const c = (rendimiento && rendimiento.cumplimiento_tareas) || {};
+  const n = construirNarrativa_(detalle);
+  const ejemplos = (lista, fn) => lista.slice(0, 3).map(fn).join(' · ') + (lista.length > 3 ? ' · y ' + (lista.length - 3) + ' más' : '');
+
+  // 1 · En una línea
+  const estado = detalle.salud === 'critico' ? 'critico' : (detalle.salud === 'riesgo' ? 'alerta' : 'ok');
+  const linea = R.enUnaLinea({ estado, frase: n.texto, comparaCon: esperado != null ? 'vs. lo planificado (' + esperado + ' %)' : '', kpis: [
+    { etiqueta: 'Avance real', valor: avance == null ? '—' : Math.round(avance), sufijo: avance == null ? '' : '%', icono: 'tendencia', progreso: avance,
+      tono: desv == null ? 'primario' : (desv < -10 ? 'critico' : (desv < 0 ? 'alerta' : 'ok')),
+      delta: desv == null ? undefined : desv, deltaSufijo: ' pp', nota: avance == null ? 'sin tareas para medir' : '' },
+    { etiqueta: 'Tareas vencidas', valor: at.tareas_vencidas || 0, icono: 'alerta', tono: at.tareas_vencidas ? 'critico' : 'ok',
+      nota: at.tareas_criticas_atrasadas ? at.tareas_criticas_atrasadas + ' de prioridad alta' : plural(vivas.length, 'tarea abierta', 'tareas abiertas') },
+    { etiqueta: 'Hitos vencidos', valor: hitosVencidos.length, icono: 'diana', tono: hitosVencidos.length ? 'critico' : 'ok',
+      nota: hitos.filter((h) => h.estado === 'COMPLETADO').length + ' de ' + hitos.length + ' completados' },
+    { etiqueta: 'Riesgos altos', valor: riesgosAltos.length, icono: 'escudo', tono: riesgosAltos.length ? 'critico' : 'ok', nota: plural(riesgos.length, 'riesgo abierto', 'riesgos abiertos') }
+  ] });
+
+  // 2 · Lo que requiere decisión: la decisión sugerida y un solo bloque de alertas.
+  const dias = (f) => (f ? diasEntreClaves_(f, hoy) : 0);
+  const alertas = [];
+  if (criticas.length) alertas.push({ severidad: 'critico', cantidad: criticas.length, titulo: 'Tareas P1/P2 atrasadas',
+    detalle: ejemplos(criticas.sort((a, b) => dias(b.fecha_compromiso) - dias(a.fecha_compromiso)), (a) => '«' + a.titulo + '» (' + persona(a.responsable_email, a.responsable_nombre) + ', hace ' + dias(a.fecha_compromiso) + ' d)') });
+  if (bloqueadas.length) alertas.push({ severidad: 'critico', cantidad: bloqueadas.length, titulo: 'Tareas bloqueadas',
+    detalle: ejemplos(bloqueadas, (a) => '«' + a.titulo + '»' + (a.bloqueo_motivo ? ': ' + a.bloqueo_motivo : '')) });
+  if (hitosVencidos.length) alertas.push({ severidad: 'critico', cantidad: hitosVencidos.length, titulo: 'Hitos vencidos',
+    detalle: ejemplos(hitosVencidos, (h) => h.nombre + ' (vencía ' + fecha(h.fecha_objetivo) + (h.avance_pct != null ? ', va en ' + Math.round(h.avance_pct) + ' %' : '') + ')') });
+  if (riesgosAltos.length) alertas.push({ severidad: 'critico', cantidad: riesgosAltos.length, titulo: 'Riesgos altos abiertos',
+    detalle: ejemplos(riesgosAltos, (r) => r.descripcion + (r.mitigacion ? '' : ' — sin plan de mitigación')) });
+  if (otrasAtrasadas.length) alertas.push({ severidad: 'alerta', cantidad: otrasAtrasadas.length, titulo: 'Otras tareas atrasadas',
+    detalle: ejemplos(otrasAtrasadas, (a) => '«' + a.titulo + '» (' + persona(a.responsable_email, a.responsable_nombre) + ')') });
+  const decision = '<p class="rp2-decision"><strong>Decisión sugerida</strong><span>' + U.esc(n.decision) + '</span></p>' +
+    R.requiereDecision(alertas, { conservarOrden: true, vacio: 'Sin tareas críticas atrasadas, bloqueos, hitos vencidos ni riesgos altos.' });
+
+  // 3 · Panorama: real vs esperado por tarea (lo más atrasado frente al plan arriba) e hitos.
+  const tareaPorId = {};
+  tareas.forEach((a) => { tareaPorId[a.actividad_id] = a; });
+  const conPlan = ((rendimiento && rendimiento.plan_seguimiento) || [])
+    .filter((p) => tareaPorId[p.actividad_id] && p.estado_plazo !== 'COMPLETADA' && p.avance_esperado_pct != null)
+    .sort((a, b) => (a.desviacion_pp == null ? 0 : a.desviacion_pp) - (b.desviacion_pp == null ? 0 : b.desviacion_pp)).slice(0, 12);
+  const avanceHtml = conPlan.length
+    ? R.ranking(conPlan.map((p) => ({ etiqueta: tareaPorId[p.actividad_id].titulo, valor: p.avance_real_pct || 0,
+        texto: (p.avance_real_pct == null ? '—' : Math.round(p.avance_real_pct) + '%') + ' · plan ' + Math.round(p.avance_esperado_pct) + '%',
+        tono: p.desviacion_pp == null ? 'primario' : (p.desviacion_pp < -10 ? 'critico' : (p.desviacion_pp < 0 ? 'alerta' : 'ok')) })), { max: 100, sinPosicion: true })
+    : R.ranking(vivas.slice(0, 12).map((a) => ({ etiqueta: a.titulo, valor: a.avance_pct || 0, texto: Math.round(a.avance_pct || 0) + '%' })), { max: 100, sinPosicion: true, vacio: 'Sin tareas abiertas.' });
+  const hitosHtml = hitos.length ? '<ul class="rp2-agenda">' + hitos.map((h) => {
+    const venc = hitosVencidos.indexOf(h) !== -1;
+    return '<li><time>' + U.esc(h.fecha_objetivo ? fecha(h.fecha_objetivo, true) : 'Sin fecha') + '</time><span class="rp2-item"><strong>' + U.esc(h.nombre) + '</strong><small>' +
+      U.badge(venc ? 'Vencido' : (HITO_ESTADO_LABEL[h.estado] || h.estado), venc ? 'critico' : (TONO_HITO[h.estado] || 'neutro'), true) +
+      (h.avance_pct != null && h.estado !== 'COMPLETADO' ? ' ' + U.esc(Math.round(h.avance_pct) + ' % de avance') : '') + '</small></span></li>';
+  }).join('') + '</ul>' : '';
+  const bien = [];
+  if (c.entregadas) bien.push(c.a_tiempo + ' de ' + c.entregadas + ' tareas entregadas a tiempo.');
+  const hitosOk = hitos.filter((h) => h.estado === 'COMPLETADO');
+  if (hitosOk.length) bien.push(plural(hitosOk.length, 'hito completado', 'hitos completados') + ': ' + hitosOk.slice(0, 3).map((h) => h.nombre).join(', ') + '.');
+  const panorama = '<h3 class="rp2-sub">Avance real vs. lo planificado <span class="sx2-tenue" style="font-weight:500;font-size:.8125rem">(lo más atrasado arriba)</span></h3>' +
+    avanceHtml + (hitosHtml ? '<h3 class="rp2-sub">Hitos</h3>' + hitosHtml : '') + R.loQueVaBien(bien);
+
+  // 4 · Detalle
+  const pendientes = vivas.slice().sort((a, b) => ((VENCIMIENTOS_ORDEN[a.semaforo] === undefined ? 9 : VENCIMIENTOS_ORDEN[a.semaforo]) -
+    (VENCIMIENTOS_ORDEN[b.semaforo] === undefined ? 9 : VENCIMIENTOS_ORDEN[b.semaforo])) ||
+    String(a.fecha_compromiso || '9').localeCompare(String(b.fecha_compromiso || '9')));
+  const detalleHtml =
+    '<h3 class="rp2-sub">Tareas pendientes</h3><div class="rp2-detalle">' + R.tabla([
+      { campo: 'tarea', titulo: 'Tarea', html: true }, { campo: 'resp', titulo: 'Responsable' }, { campo: 'sit', titulo: 'Situación', html: true },
+      { campo: 'vence', titulo: 'Compromiso' }, { campo: 'avance', titulo: 'Avance', alinear: 'derecha' }
+    ], pendientes.map((a) => ({
+      tarea: '<span class="rp2-item"><strong>' + U.esc(a.titulo) + '</strong>' + (a.prioridad ? '<small>' + U.esc(a.prioridad) + '</small>' : '') + '</span>',
+      resp: persona(a.responsable_email, a.responsable_nombre),
+      sit: U.badge(SEMAFORO_LABEL[a.semaforo] || a.semaforo || '—', TONO_SEMAFORO[a.semaforo] || 'neutro', true),
+      vence: a.fecha_compromiso ? fecha(a.fecha_compromiso, true) : '—', avance: a.avance_pct == null ? '—' : Math.round(a.avance_pct) + '%'
+    })), { vacio: 'No hay tareas pendientes.' }) + '</div>' +
+    (riesgos.length ? '<h3 class="rp2-sub">Riesgos abiertos</h3><div class="rp2-detalle">' + R.tabla([
+      { campo: 'riesgo', titulo: 'Riesgo' }, { campo: 'nivel', titulo: 'Nivel', html: true }, { campo: 'resp', titulo: 'Responsable' }, { campo: 'mit', titulo: 'Mitigación' }
+    ], riesgos.map((r) => ({ riesgo: r.descripcion, nivel: U.badge(r.nivel || '—', riesgosAltos.indexOf(r) !== -1 ? 'critico' : 'alerta', true),
+      resp: r.responsable_email ? persona(r.responsable_email) : '—', mit: r.mitigacion || 'Sin plan de mitigación' }))) + '</div>' : '') +
+    (bitacora.length ? '<h3 class="rp2-sub">Actividad reciente</h3><div class="rp2-detalle">' + R.tabla([
+      { campo: 'fecha', titulo: 'Fecha' }, { campo: 'tipo', titulo: 'Qué pasó' }, { campo: 'horas', titulo: 'Horas', alinear: 'derecha' }, { campo: 'nota', titulo: 'Nota' }
+    ], bitacora.map((b) => ({ fecha: fecha(b.tipo === 'REGISTRO_DIA' && b.dia ? b.dia : b.timestamp, true), tipo: BITACORA_TIPO_LABEL[b.tipo] || b.tipo,
+      horas: b.horas != null && b.horas !== '' ? String(b.horas) : '—', nota: b.nota || '—' }))) + '</div>' : '');
+
+  return R.nivel('En una línea', linea) +
+    R.nivel('Lo que requiere decisión', decision, { nota: alertas.length ? 'la cifra es cuántas' : '' }) +
+    R.nivel('Panorama', panorama) +
+    R.nivel('Detalle', detalleHtml, { clase: 'rp2-nivel--detalle', nota: plural(pendientes.length, 'tarea pendiente', 'tareas pendientes') });
+}
+
+async function descargarReporteEstandarV2_(db, data, contexto, detalle, tareas, rendimiento, nombresPorEmail) {
+  const p = detalle.proyecto;
+  const bitacora = Proyectos.listarBitacora(db, data, contexto).slice(-15).reverse();
+  const { R, U } = DocV2.piezas();
+  const nombres = Object.assign({}, DocV2.nombresPorCorreo(db));
+  Object.keys(nombresPorEmail).forEach((e) => { if (nombresPorEmail[e] && !/@/.test(nombresPorEmail[e])) nombres[e.toLowerCase()] = nombresPorEmail[e]; });
+  const lider = nombres[String(p.lider_email || '').toLowerCase()] || p.lider_email || '—';
+  return DocV2.aPdf(db, contexto, {
+    titulo: p.nombre, subtitulo: 'Reporte de proyecto · ¿va a llegar a tiempo?', modulo: 'Proyectos', codigo: p.codigo || '',
+    periodo: DocV2.fecha_(p.fecha_inicio, true) + ' al ' + DocV2.fecha_(p.fecha_objetivo, true),
+    filtros: [{ etiqueta: 'Líder', valor: lider }, { etiqueta: 'Estado', valor: ESTADO_PROYECTO_LABEL[p.estado] || p.estado }],
+    cuerpo: cuerpoProyectoV2_(detalle, tareas, rendimiento, bitacora, nombres, R, U, DocV2.fecha_),
+    nombreArchivo: 'reporte-' + p.nombre
+  });
+}
+
 async function descargarReporteEstandar_(db, data, contexto, detalle, tareas, rendimiento, nombresPorEmail) {
+  if (DocV2.disponible()) {
+    try { return await descargarReporteEstandarV2_(db, data, contexto, detalle, tareas, rendimiento, nombresPorEmail); } catch (e) {
+      console.error('[reporte proyecto] sin diseño v2, se usa pdfkit:', e && e.message);
+    }
+  }
   const p = detalle.proyecto;
   const bitacora = Proyectos.listarBitacora(db, data, contexto).slice(-15).reverse();
 
@@ -812,4 +959,4 @@ async function descargarReporte(db, data, contexto) {
   return descargarReporteEstandar_(db, data, contexto, detalle, tareas, rendimiento, nombresPorEmail);
 }
 
-module.exports = { descargarReporte, normalizarConfig_, filtrarTareas_ };
+module.exports = { descargarReporte, normalizarConfig_, filtrarTareas_, cuerpoProyectoV2_ };

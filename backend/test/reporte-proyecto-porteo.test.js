@@ -18,6 +18,9 @@ const { COLUMNAS } = require('../db/schema');
 const Proyectos = require('../logica/proyectos');
 const Actividades = require('../logica/actividades');
 const Reporte = require('../logica/reporteProyecto');
+// Este archivo prueba la versión pdfkit (RESPALDO sin Chromium y camino del informe
+// configurable); el estándar v2 se prueba en documento-v2.test.js.
+require('../logica/documentoV2').disponible = () => false;
 
 const CTX_LEO = { email: 'leo@rld.cl', nombre: 'Leo Lider', rol: 'DEV' };
 const CTX_MARCELO = { email: 'marcelo@rld.cl', nombre: 'Marcelo Integrante', rol: 'DEV' };

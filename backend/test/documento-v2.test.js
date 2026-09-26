@@ -129,3 +129,31 @@ test('el despliegue lleva al VPS cada pieza del frontend que usa documentoV2 (y 
   });
   assert.ok(wf.includes('frontend/css/ ') && wf.includes('- "frontend/css/**"'));
 });
+
+test('proyecto v2: decisión sugerida, alertas en un bloque, real vs plan y nada de "(s)"', () => {
+  const { R, U } = DocV2.piezas();
+  const ReporteProyecto = require('../logica/reporteProyecto');
+  const detalle = {
+    proyecto: { nombre: 'Migración', codigo: 'P-1', estado: 'ACTIVO' }, salud: 'critico', salud_penalizacion: 40,
+    avance_pct: 30, avance_esperado_pct: 50,
+    requiere_atencion: { tareas_vencidas: 2, tareas_criticas_atrasadas: 1, tareas_bloqueadas: 1, hitos_atrasados: 1, riesgos_altos: 1 },
+    hitos: [{ nombre: 'H1 <inicio>', fecha_objetivo: '2020-01-01T00:00:00.000Z', estado: 'PENDIENTE', avance_pct: 40 }],
+    riesgos: [{ descripcion: 'Proveedor cae', nivel: 'ALTA', estado: 'ABIERTO', responsable_email: 'ana@x.cl', mitigacion: '' }]
+  };
+  const tareas = [
+    { actividad_id: 't1', titulo: 'Crítica', prioridad: 'P1', estado: 'EN_CURSO', semaforo: 'atrasada', fecha_compromiso: '2020-01-05', responsable_email: 'ana@x.cl' },
+    { actividad_id: 't2', titulo: 'Trabada', prioridad: 'P3', estado: 'BLOQUEADA', semaforo: 'bloqueada', bloqueo_motivo: 'Sin acceso', responsable_email: 'bruno@x.cl' }
+  ];
+  const rend = { cumplimiento_tareas: { entregadas: 4, a_tiempo: 3 }, plan_seguimiento: [{ actividad_id: 't1', avance_real_pct: 10, avance_esperado_pct: 80, desviacion_pp: -70, estado_plazo: 'ATRASADA' }] };
+  const html = ReporteProyecto.cuerpoProyectoV2_(detalle, tareas, rend, [], { 'ana@x.cl': 'Ana Pérez' }, R, U, DocV2.fecha_);
+  assert.match(html, /Decisión sugerida/);
+  assert.match(html, /Revisar la mitigación de los riesgos altos abiertos/);
+  assert.match(html, /Tareas P1\/P2 atrasadas/);
+  assert.match(html, /Sin acceso/);
+  assert.match(html, /sin plan de mitigación/);
+  assert.match(html, /10% · plan 80%/);
+  assert.match(html, /−20 pp vs\. lo planificado/);
+  assert.ok(html.includes('H1 &lt;inicio&gt;'));
+  assert.ok(!/\(s\)/.test(html), 'plurales escritos, no "(s)"');
+  assert.match(html, /Ana Pérez/);
+});

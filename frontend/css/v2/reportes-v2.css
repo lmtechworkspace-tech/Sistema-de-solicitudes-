@@ -39,10 +39,15 @@
 
 .rp2-ranking { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .rp2-ranking li { display: grid; grid-template-columns: 28px minmax(120px, 30%) 1fr 64px; align-items: center; gap: 10px; }
-.rp2-ranking--comp li { grid-template-columns: minmax(120px, 34%) 1fr 72px; }
+.rp2-ranking--comp li { grid-template-columns: minmax(120px, 34%) 1fr minmax(72px, auto); }
+.rp2-ranking--comp .rp2-ranking__val { white-space: nowrap; }
 .rp2-agenda { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .rp2-agenda li { display: grid; grid-template-columns: 92px 1fr; gap: 12px; align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--sx-borde-suave); }
 .rp2-agenda li:last-child { border-bottom: 0; }
+/* Decisión sugerida (reporte de proyecto): la conclusión accionable, antes de las alertas. */
+.rp2-decision { display: flex; gap: 10px; align-items: baseline; margin: 0; padding: 10px 14px; border-radius: var(--sx-radio-sm);
+  border-left: 4px solid var(--sx-primario); background: color-mix(in srgb, var(--sx-primario) 7%, var(--sx-superficie)); font: var(--sx-t-chico); color: var(--sx-texto); }
+.rp2-decision strong { flex: none; font-weight: 700; }
 /* Acta de reunión: espacio para escribir a mano el acuerdo, la fecha y los asistentes. */
 .rp2-escribir { display: block; min-width: 90px; min-height: 26px; border-bottom: 1px solid var(--sx-borde); }
 .rp2-acta td { vertical-align: top; }
@@ -177,7 +182,7 @@
 @media (max-width: 700px) {
   .rp2-ranking li { grid-template-columns: 24px 1fr 56px; }
   .rp2-ranking li .sx2-barra { grid-column: 2 / 4; }
-  .rp2-ranking--comp li { grid-template-columns: 1fr 72px; }
+  .rp2-ranking--comp li { grid-template-columns: 1fr minmax(72px, auto); }
   .rp2-ranking--comp li .sx2-barra { grid-column: 1 / 3; }
   .rp2-filtro { min-width: 0; flex: 1 1 140px; }
 }
