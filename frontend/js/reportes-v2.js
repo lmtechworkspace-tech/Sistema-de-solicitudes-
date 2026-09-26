@@ -235,13 +235,15 @@
         }).join('') + '</tr>';
       }).join('') + '</tbody></table></div>';
   }
+  // opts.max: escala común (p. ej. el total, para leer proporciones); opts.sinPosicion:
+  // para composiciones (Crítico/En riesgo/Sano), donde un 1-2-3 sugeriría un orden.
   function ranking(filas, opts) {
     opts = opts || {};
     if (!filas || !filas.length) return vacio_(opts.vacio || 'No hay datos para este ranking.');
-    var max = filas.reduce(function (m, f) { return Math.max(m, Number(f.valor) || 0); }, 0) || 1;
-    return '<ol class="rp2-ranking">' + filas.map(function (f, i) {
+    var max = opts.max || filas.reduce(function (m, f) { return Math.max(m, Number(f.valor) || 0); }, 0) || 1;
+    return '<ol class="rp2-ranking' + (opts.sinPosicion ? ' rp2-ranking--comp' : '') + '">' + filas.map(function (f, i) {
       var pct = Math.round((Number(f.valor) || 0) / max * 100);
-      return '<li><span class="rp2-ranking__pos">' + (i + 1) + '</span><span class="rp2-ranking__etq" title="' + esc_(f.etiqueta) + '">' + esc_(f.etiqueta) + '</span>' +
+      return '<li>' + (opts.sinPosicion ? '' : '<span class="rp2-ranking__pos">' + (i + 1) + '</span>') + '<span class="rp2-ranking__etq" title="' + esc_(f.etiqueta) + '">' + esc_(f.etiqueta) + '</span>' +
         U.barra(pct, f.tono || 'primario') + '<strong class="rp2-ranking__val">' + esc_(f.texto !== undefined ? f.texto : f.valor) + '</strong></li>';
     }).join('') + '</ol>';
   }

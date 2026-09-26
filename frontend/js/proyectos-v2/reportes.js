@@ -19,6 +19,11 @@
 
   var CAMPOS = { responsable: 'lider_email' };
   var REPORTES = [
+    { grupo: 'Resumen', icono: 'diana', reportes: [
+      { id: 'py-estado', nombre: 'Estado del portafolio', tipo: 'ESTADO', estado: 'LISTO',
+        desc: 'La conclusión, los proyectos que requieren decisión, el panorama y el detalle, en una sola lectura.',
+        fuente: 'listarProyectos', filtros: ['responsable'], campos: CAMPOS }
+    ] },
     { grupo: 'Estado del portafolio', icono: 'escudo', reportes: [
       { id: 'py-salud', nombre: 'Salud del portafolio', tipo: 'ESTADO', estado: 'LISTO',
         desc: 'Cuántos proyectos están normales, en riesgo o críticos, y por qué.',
@@ -202,7 +207,128 @@
     ], filas);
   }
 
+  // --- Estado del portafolio (anatomía en 4 niveles) --------------------------------
+  var CERRADO = { CERRADO: true, CANCELADO: true };
+  var SALUD = { critico: { t: 'Crítico', tono: 'critico', o: 0 }, riesgo: { t: 'En riesgo', tono: 'alerta', o: 1 }, normal: { t: 'Normal', tono: 'ok', o: 2 } };
+  // "1 hito(s) vencido(s)" -> "1 hito vencido"; "5 tarea(s)" -> "5 tareas".
+  function motivo(m) {
+    var n = Number(String(m).match(/^\d+/));
+    return String(m).replace(/\(s\)/g, n === 1 ? '' : 's').replace(/\(es\)/g, n === 1 ? '' : 'es');
+  }
+  function hoyISO() { var d = new Date(); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function diasEntre(a, b) { return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000); }
+  function plural(n, uno, varios) { return n + ' ' + (n === 1 ? uno : varios); }
+
+  function cuerpoEstado(todos) {
+    var R = SigsoReportes, hoy = hoyISO();
+    var ps = todos.filter(function (p) { return !CERRADO[p.estado]; });
+    if (!ps.length) return R.nivel('En una línea', R.enUnaLinea({ estado: 'neutro', frase: 'No hay proyectos abiertos en este corte.' }));
+    var criticos = ps.filter(function (p) { return p.salud === 'critico'; });
+    var riesgo = ps.filter(function (p) { return p.salud === 'riesgo'; });
+    var vencidos = ps.filter(function (p) { return p.fecha_objetivo && String(p.fecha_objetivo).slice(0, 10) < hoy; });
+    var avMedio = Math.round(ps.reduce(function (s, p) { return s + (Number(p.avance_pct) || 0); }, 0) / ps.length);
+    var ent = 0, aT = 0;
+    ps.forEach(function (p) { var c = p.cumplimiento_tareas || {}; ent += c.entregadas || 0; aT += c.a_tiempo || 0; });
+    var pctT = ent ? Math.round(aT / ent * 100) : null;
+
+    // 1 · En una línea
+    var estado = criticos.length || vencidos.length ? 'critico' : (riesgo.length ? 'alerta' : 'ok');
+    var frase = 'De ' + plural(ps.length, 'proyecto abierto', 'proyectos abiertos') + ', ' +
+      (criticos.length || riesgo.length
+        ? [criticos.length ? plural(criticos.length, 'está crítico', 'están críticos') : '', riesgo.length ? plural(riesgo.length, 'en riesgo', 'en riesgo') : ''].filter(Boolean).join(' y ')
+        : 'todos están sanos') +
+      (vencidos.length ? '; ' + plural(vencidos.length, 'ya pasó su fecha objetivo', 'ya pasaron su fecha objetivo') : '') +
+      '; el avance medio es ' + avMedio + ' %' + (pctT !== null ? ' y se entregó a tiempo el ' + pctT + ' % de las tareas' : '') + '.';
+    var linea = R.enUnaLinea({ estado: estado, frase: frase, kpis: [
+      { etiqueta: 'Críticos', valor: criticos.length, icono: 'alerta', tono: criticos.length ? 'critico' : 'ok', nota: 'de ' + ps.length + ' abiertos' },
+      { etiqueta: 'En riesgo', valor: riesgo.length, icono: 'reloj', tono: riesgo.length ? 'alerta' : 'ok', nota: plural(ps.length - criticos.length - riesgo.length, 'sano', 'sanos') },
+      { etiqueta: 'Avance medio', valor: avMedio, sufijo: '%', icono: 'tendencia', tono: 'primario', progreso: avMedio, nota: 'de los abiertos' },
+      { etiqueta: 'Tareas a tiempo', valor: pctT === null ? '—' : pctT, sufijo: pctT === null ? '' : '%', icono: 'diana',
+        tono: pctT === null ? 'neutro' : (pctT >= 90 ? 'ok' : (pctT >= 70 ? 'alerta' : 'critico')), progreso: pctT,
+        nota: ent ? aT + ' de ' + ent + ' entregadas' : 'sin entregas medibles' }
+    ] });
+
+    // Del más grave al menos grave: salud del backend y, a igual salud, menor puntaje.
+    function gravedad(a, b) {
+      return ((SALUD[a.salud] || SALUD.normal).o - (SALUD[b.salud] || SALUD.normal).o) || ((a.salud_score || 0) - (b.salud_score || 0));
+    }
+    function diasVencido(p) { return vencidos.indexOf(p) === -1 ? 0 : diasEntre(String(p.fecha_objetivo).slice(0, 10), hoy); }
+
+    // 2 · Lo que requiere decisión: un renglón por proyecto no sano o vencido. Sin
+    // cifra propia (el puntaje de salud se leería como cantidad): el orden ya dice
+    // cuál es más grave, y el motor ordena de forma estable.
+    var alertas = ps.filter(function (p) { return p.salud !== 'normal' || diasVencido(p); }).sort(gravedad).map(function (p) {
+      var d = diasVencido(p);
+      return {
+        severidad: p.salud === 'critico' || d ? 'critico' : 'alerta',
+        titulo: p.nombre,
+        detalle: [d ? 'venció hace ' + plural(d, 'día', 'días') : ''].concat((p.salud_motivos || []).slice(0, 3).map(motivo)).filter(Boolean).join(' · '),
+        dueno: nombrePersona(p.lider_email)
+      };
+    });
+    var decision = R.requiereDecision(alertas, { vacio: 'Todos los proyectos abiertos están sanos y dentro de plazo.' });
+
+    // 3 · Panorama: composición del portafolio, no un renglón por proyecto (eso es
+    // el detalle). Salud, plazo y avance en tramos.
+    var en30 = new Date(); en30.setDate(en30.getDate() + 30);
+    var lim30 = en30.getFullYear() + '-' + ('0' + (en30.getMonth() + 1)).slice(-2) + '-' + ('0' + en30.getDate()).slice(-2);
+    function cuenta(fn) { return ps.filter(fn).length; }
+    function fo(p) { return p.fecha_objetivo ? String(p.fecha_objetivo).slice(0, 10) : ''; }
+    function barras(filas) {
+      return R.ranking(filas.map(function (f) {
+        return { etiqueta: f[0], valor: f[1], texto: f[1] + ' · ' + Math.round(f[1] / ps.length * 100) + '%', tono: f[2] };
+      }), { max: ps.length, sinPosicion: true });
+    }
+    var sanos = ps.length - criticos.length - riesgo.length;
+    var av = function (p) { return Number(p.avance_pct) || 0; };
+    var panorama = '<div class="rp2-dos">' +
+      '<div><h3 class="rp2-sub">Salud</h3>' + barras([
+        ['Crítico', criticos.length, 'critico'], ['En riesgo', riesgo.length, 'alerta'], ['Sano', sanos, 'ok']]) +
+      '<h3 class="rp2-sub">Plazo</h3>' + barras([
+        ['Vencido', vencidos.length, 'critico'],
+        ['Vence en 30 días', cuenta(function (p) { return fo(p) && fo(p) >= hoy && fo(p) <= lim30; }), 'alerta'],
+        ['Con holgura', cuenta(function (p) { return fo(p) > lim30; }), 'ok'],
+        ['Sin fecha objetivo', cuenta(function (p) { return !fo(p); }), 'neutro']]) + '</div>' +
+      '<div><h3 class="rp2-sub">Avance</h3>' + barras([
+        ['Sin empezar (0 %)', cuenta(function (p) { return av(p) === 0; }), 'neutro'],
+        ['Hasta la mitad', cuenta(function (p) { return av(p) > 0 && av(p) < 50; }), 'primario'],
+        ['Pasada la mitad', cuenta(function (p) { return av(p) >= 50 && av(p) < 100; }), 'primario'],
+        ['Terminado (100 %)', cuenta(function (p) { return av(p) >= 100; }), 'ok']]) + '</div>' +
+    '</div>';
+    var bien = [];
+    if (sanos) bien.push(plural(sanos, 'proyecto está sano', 'proyectos están sanos') + '.');
+    var mejor = ps.filter(function (p) { return p.cumplimiento_tareas && p.cumplimiento_tareas.entregadas >= 3 && p.cumplimiento_tareas.pct === 100; })[0];
+    if (mejor) bien.push(mejor.nombre + ' entregó a tiempo todas sus tareas (' + mejor.cumplimiento_tareas.entregadas + ').');
+    panorama += R.loQueVaBien(bien);
+
+    // 4 · Detalle. El motivo va bajo el nombre para que la tabla quepa sin
+    // desplazamiento lateral.
+    var filas = ps.slice().sort(gravedad).map(function (p) {
+      var s = SALUD[p.salud] || SALUD.normal, c = p.cumplimiento_tareas || {}, f = fo(p);
+      var sub = [p.codigo].concat((p.salud_motivos || []).slice(0, 1).map(motivo)).filter(Boolean).join(' · ');
+      return {
+        proyecto: '<span class="rp2-item"><strong>' + U.esc(p.nombre) + '</strong><small>' + U.esc(sub) + '</small></span>',
+        lider: U.esc(nombrePersona(p.lider_email) || '—'),
+        salud: U.badge(s.t, s.tono, true),
+        avance: Math.round(av(p)) + '%',
+        tareas: c.pct === null || c.pct === undefined ? '—' : c.pct + '%',
+        objetivo: f ? (f < hoy ? U.badge('Venció ' + PY.fecha(f, true), 'critico', true) : U.esc(PY.fecha(f, true))) : '—'
+      };
+    });
+    var detalle = '<div class="rp2-detalle">' + R.tabla([
+      { campo: 'proyecto', titulo: 'Proyecto', html: true }, { campo: 'lider', titulo: 'Líder', html: true },
+      { campo: 'salud', titulo: 'Salud', html: true }, { campo: 'avance', titulo: 'Avance', alinear: 'derecha' },
+      { campo: 'tareas', titulo: 'A tiempo', alinear: 'derecha' }, { campo: 'objetivo', titulo: 'Fecha objetivo', html: true }
+    ], filas) + '</div>';
+
+    return R.nivel('En una línea', linea) +
+      R.nivel('Lo que requiere decisión', decision, { nota: alertas.length ? plural(alertas.length, 'proyecto', 'proyectos') + ' · del más grave al menos grave' : '' }) +
+      R.nivel('Panorama', panorama) +
+      R.nivel('Detalle · del más grave al menos grave', detalle, { clase: 'rp2-nivel--detalle', nota: plural(ps.length, 'proyecto abierto', 'proyectos abiertos') });
+  }
+
   var CUERPOS = {
+    'py-estado': cuerpoEstado,
     'py-salud': cuerpoSalud, 'py-avance': cuerpoAvance, 'py-plazos': cuerpoPlazos,
     'py-lider': cuerpoPorLider, 'py-cumplimiento': cuerpoCumplimiento
   };
