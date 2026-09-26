@@ -499,7 +499,10 @@
   function requiereDecision(alertas, opts) {
     opts = opts || {};
     function peso(a) { return a.severidad === 'critico' ? 0 : 1; }
-    var lista = (alertas || []).filter(Boolean).slice().sort(function (a, b) {
+    // opts.conservarOrden: la fuente ya las trae priorizadas con más matices que
+    // crítico/atención (p. ej. el tablero SGC: CRITICA > ALTA > MEDIA).
+    var lista = (alertas || []).filter(Boolean).slice();
+    if (!opts.conservarOrden) lista.sort(function (a, b) {
       return (peso(a) - peso(b)) || ((b.cantidad || 0) - (a.cantidad || 0));
     });
     if (!lista.length) {

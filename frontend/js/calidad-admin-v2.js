@@ -67,6 +67,9 @@
   // Centro de reportes del SGC
   // =========================================================================================
   var REPORTES = [
+    { grupo: 'Resumen', icono: 'diana', reportes: [
+      { id: 'sgc-estado', nombre: 'Estado del SGC', tipo: 'ESTADO', estado: 'LISTO', desc: '¿Estamos listos para la certificación? La conclusión, lo que requiere decisión, el avance por capítulo y cada cláusula.', fuente: 'resumenTableroSgc', filtros: [] }
+    ] },
     { grupo: 'Cumplimiento', icono: 'escudo', reportes: [
       { id: 'cump-general', nombre: 'Cumplimiento general', tipo: 'CUMPLIMIENTO', estado: 'LISTO', desc: 'Indicador interno de gestión y su desglose por capítulo de la norma.', fuente: 'resumenTableroSgc', filtros: [] },
       { id: 'cump-clausula', nombre: 'Por cláusula', tipo: 'DETALLE', estado: 'LISTO', desc: 'Las cláusulas del catálogo con su estado y qué evidencia las sustenta.', fuente: 'listarMatrizCoberturaSgc', filtros: ['estado'] },
@@ -107,7 +110,7 @@
       { id: 'comp-periodo', nombre: 'Cobertura: cómo evoluciona', tipo: 'COMPARACION', estado: 'LISTO', desc: 'Cómo cambió el indicador interno semana a semana, y en qué capítulos.', fuente: 'listarCoberturaHistoricoSgc', filtros: [] }
     ] }
   ];
-  var ACCION_REP = { 'cump-general': 'resumenTableroSgc', 'rank-capitulo': 'resumenTableroSgc', 'doc-estado': 'resumenTableroSgc', 'cump-clausula': 'listarMatrizCoberturaSgc', 'ind-tendencia': 'listarIndicadoresSgc', 'comp-periodo': 'listarCoberturaHistoricoSgc' };
+  var ACCION_REP = { 'sgc-estado': 'resumenTableroSgc', 'cump-general': 'resumenTableroSgc', 'rank-capitulo': 'resumenTableroSgc', 'doc-estado': 'resumenTableroSgc', 'cump-clausula': 'listarMatrizCoberturaSgc', 'ind-tendencia': 'listarIndicadoresSgc', 'comp-periodo': 'listarCoberturaHistoricoSgc' };
   function registrarReportes() {
     if (!window.SigsoReportes || registrarReportes.hecho) return;
     SigsoReportes.registrar('calidad', { titulo: 'Centro de reportes del SGC', grupos: REPORTES,
@@ -131,7 +134,14 @@
     var r = SigsoReportes.buscarReporte('calidad', rep_.abierto), accion = ACCION_REP[rep_.abierto];
     if (!r || !accion) { rep_.abierto = null; mostrarReportes(); return; }
     cont.innerHTML = U.esqueleto('tabla', 5);
-    api(accion, {}).then(function (resp) {
+    // El estado del SGC cruza el tablero con la matriz de cláusulas (su detalle);
+    // si la matriz falla, el reporte sale igual y el detalle lo dice.
+    var pedido = rep_.abierto !== 'sgc-estado' ? api(accion, {}) :
+      Promise.all([api(accion, {}), api('listarMatrizCoberturaSgc', {})]).then(function (rs) {
+        if (!rs[0] || !rs[0].ok) return rs[0];
+        return { ok: true, data: { tablero: rs[0].data, matriz: rs[1] && rs[1].ok ? rs[1].data : null } };
+      });
+    pedido.then(function (resp) {
       if (t !== turno_ || vista_ !== 'reportes') return;
       if (!resp || !resp.ok) { cont.innerHTML = U.vacio({ icono: 'alerta', titulo: 'No se pudo armar el reporte', texto: (resp && resp.message) || '' }); return; }
       pintarReporte(cont, r, resp.data);
@@ -140,7 +150,8 @@
   function publicar(item) { if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(item); }
   function pintarReporte(cont, r, data) {
     var opciones = {}, cuerpo = '';
-    if (r.id === 'cump-general') cuerpo = cuerpoGeneral(data);
+    if (r.id === 'sgc-estado') cuerpo = cuerpoEstado(data);
+    else if (r.id === 'cump-general') cuerpo = cuerpoGeneral(data);
     else if (r.id === 'rank-capitulo') cuerpo = cuerpoRanking(data);
     else if (r.id === 'doc-estado') cuerpo = cuerpoDocumental(data);
     else if (r.id === 'cump-clausula') { opciones.estado = Object.keys(COB).map(function (k) { return { valor: k, texto: COB[k][0] }; }); cuerpo = cuerpoClausulas(data, rep_.filtros); }
@@ -155,6 +166,103 @@
   }
   function vacioRep(t) { return '<div class="rp2-vacio">' + U.vacio({ icono: 'grafico', titulo: '', texto: t }) + '</div>'; }
   function nota(t) { return t ? '<p class="rp2-nota">' + U.ico('info', 16) + '<span>' + txt(t) + '</span></p>' : ''; }
+  // --- Estado del SGC (anatomía en 4 niveles) ------------------------------------------------
+  // Responde "¿estamos listos para la certificación?" con lo que el sistema ya sabe:
+  // cobertura por cláusula, las alertas del tablero y los próximos compromisos. El
+  // histórico semanal NO se usa para la variación: sus fotos dependen de cuándo se
+  // cargó cada evidencia, y lo explica el reporte "Cobertura: cómo evoluciona".
+  var SECCION_REP = { nc: 'No conformidades', riesgos: 'Riesgos', personas: 'Personas', procesos: 'Procesos', contexto: 'Contexto',
+    documentos: 'Documentos', auditorias: 'Auditorías', quejas: 'Quejas', proveedores: 'Proveedores', revision: 'Revisión por la dirección',
+    objetivos: 'Objetivos', indicadores: 'Indicadores', capacitaciones: 'Capacitación', alcance: 'Alcance', servicios: 'Servicios' };
+  var ORDEN_COB = { FALTANTE: 0, PARCIAL: 1, COMPLETO: 2, NO_APLICA: 3 };
+  function plural(n, uno, varios) { return n + ' ' + (n === 1 ? uno : varios); }
+  function cuerpoEstado(data) {
+    var R = SigsoReportes, t = data.tablero || {}, m = data.matriz, s = t.salud || {}, c = t.conteos || {};
+    var d0 = new Date(), hoy = d0.getFullYear() + '-' + ('0' + (d0.getMonth() + 1)).slice(-2) + '-' + ('0' + d0.getDate()).slice(-2);
+    var res = (m && m.resumen) || {}, claus = (m && m.clausulas) || [];
+    var faltantes = claus.filter(function (x) { return x.estado === 'FALTANTE'; });
+    var parciales = claus.filter(function (x) { return x.estado === 'PARCIAL'; });
+    var pct = s.pct || 0, aplic = s.aplicables || res.aplicables || 0;
+    var criticas = (t.alertas || []).filter(function (a) { return a.severidad === 'CRITICA'; });
+    var hitos = (t.hitos || []).slice().sort(function (a, b) { return String(a.fecha).localeCompare(String(b.fecha)) || String(a.titulo).localeCompare(String(b.titulo)); });
+    var hitosVenc = hitos.filter(function (h) { return iso(h.fecha) && iso(h.fecha) < hoy; });
+    var proximo = hitos.filter(function (h) { return iso(h.fecha) >= hoy; })[0];
+
+    // 1 · En una línea
+    var estado = faltantes.length || criticas.length || hitosVenc.length || !c.auditorias_ejecutadas ? 'critico' : (parciales.length || (t.alertas || []).length ? 'alerta' : 'ok');
+    var frase = 'El indicador interno va en ' + pct + ' %' +
+      (m ? ': ' + plural(res.completo || 0, 'cláusula completa', 'cláusulas completas') + ', ' + plural(parciales.length, 'parcial', 'parciales') + ' y ' + plural(faltantes.length, 'sin evidencia', 'sin evidencia') + ' de ' + aplic : '') +
+      '; el tablero marca ' + ((t.alertas || []).length ? plural((t.alertas || []).length, 'alerta', 'alertas') + (criticas.length ? ' (' + plural(criticas.length, 'crítica', 'críticas') + ')' : '') : 'ninguna alerta') +
+      (c.nc_abiertas ? ' y ' + plural(c.nc_abiertas, 'no conformidad abierta', 'no conformidades abiertas') : '') +
+      (proximo ? '. Lo próximo: ' + proximo.titulo + ' (' + fecha(proximo.fecha) + ')' : '') + '.';
+    var linea = R.enUnaLinea({ estado: estado, frase: frase, kpis: [
+      { etiqueta: 'Indicador interno', valor: pct, sufijo: '%', icono: 'escudo', tono: pct >= 80 ? 'ok' : (pct >= 50 ? 'alerta' : 'critico'), progreso: pct,
+        nota: 'evidencia cargada, no nota oficial', titulo: s.aviso || '' },
+      { etiqueta: 'Cláusulas sin evidencia', valor: m ? faltantes.length : '—', icono: 'alerta', tono: !m ? 'neutro' : (faltantes.length ? 'critico' : 'ok'), nota: m ? plural(parciales.length, 'parcial', 'parciales') + ' más' : 'matriz no disponible' },
+      { etiqueta: 'No conformidades abiertas', valor: c.nc_abiertas || 0, icono: 'lupa', tono: c.nc_abiertas ? 'alerta' : 'ok', nota: plural(c.quejas_abiertas || 0, 'queja abierta', 'quejas abiertas') },
+      { etiqueta: 'Riesgos altos', valor: c.riesgos_altos || 0, icono: 'diana', tono: c.riesgos_altos ? 'alerta' : 'ok', nota: 'de ' + (c.riesgos || 0) + ' en la matriz' }
+    ] });
+
+    // 2 · Lo que requiere decisión: las alertas del tablero en SU orden (CRITICA >
+    // ALTA > MEDIA; en pantalla CRITICA es "Crítico" y las otras "Atención"), con
+    // las cláusulas sin evidencia y los compromisos vencidos entre las críticas.
+    // Un auditor pide primero auditoría interna (§9.2): el tablero no la marca.
+    var extra = [];
+    if (faltantes.length) extra.push({ severidad: 'critico', cantidad: faltantes.length, titulo: 'Cláusulas sin evidencia',
+      detalle: faltantes.map(function (x) { return x.codigo + ' ' + x.titulo; }).join(' · '), dueno: 'Cobertura ISO' });
+    if (hitosVenc.length) extra.push({ severidad: 'critico', cantidad: hitosVenc.length, titulo: 'Compromisos con fecha vencida',
+      detalle: hitosVenc.slice(0, 3).map(function (h) { return h.titulo + ' (' + fecha(h.fecha) + ')'; }).join(' · '), dueno: 'Calendario del SGC' });
+    if (!c.auditorias_ejecutadas) extra.push({ severidad: 'critico', titulo: 'Sin auditoría interna ejecutada',
+      detalle: '§9.2: sin una auditoría interna completa no hay ciclo que certificar.', dueno: 'Auditorías' });
+    var desdeTablero = (t.alertas || []).map(function (a) {
+      return { severidad: a.severidad === 'CRITICA' ? 'critico' : 'alerta', cantidad: a.total, titulo: a.titulo, detalle: a.detalle, dueno: SECCION_REP[a.seccion] || a.seccion };
+    });
+    var alertas = desdeTablero.filter(function (a) { return a.severidad === 'critico'; }).concat(extra, desdeTablero.filter(function (a) { return a.severidad !== 'critico'; }));
+    var decision = R.requiereDecision(alertas, { conservarOrden: true, vacio: 'Toda cláusula tiene evidencia y el tablero no marca alertas.' });
+
+    // 3 · Panorama: avance por capítulo (lo más atrasado arriba) y los próximos compromisos.
+    var caps = (s.capitulos || []).slice().sort(function (a, b) { return a.pct - b.pct; });
+    // Iguales el mismo día (p. ej. tres "Reevaluar competencias") van en una fila con ×N.
+    var prox = [];
+    hitos.filter(function (h) { return iso(h.fecha) >= hoy; }).forEach(function (h) {
+      var ult = prox[prox.length - 1];
+      if (ult && ult.fecha === h.fecha && ult.titulo === h.titulo) ult.n++; else prox.push({ fecha: h.fecha, titulo: h.titulo, seccion: h.seccion, n: 1 });
+    });
+    prox = prox.slice(0, 6);
+    var panorama = '<div class="rp2-dos">' +
+      '<div><h3 class="rp2-sub">Avance por capítulo <span class="sx2-tenue" style="font-weight:500;font-size:.8125rem">(lo más atrasado arriba)</span></h3>' +
+        R.ranking(caps.map(function (x) { return { etiqueta: x.numero + ' · ' + x.titulo, valor: x.pct, texto: x.pct + '%', tono: x.pct >= 80 ? 'ok' : (x.pct >= 50 ? 'alerta' : 'critico') }; }),
+          { max: 100, sinPosicion: true, vacio: 'Todavía no hay cláusulas evaluadas.' }) + '</div>' +
+      '<div><h3 class="rp2-sub">Próximos compromisos</h3>' +
+        (prox.length ? '<ul class="rp2-agenda">' + prox.map(function (h) {
+          return '<li><time>' + txt(fecha(h.fecha)) + '</time><span class="rp2-item"><strong>' + txt(h.titulo + (h.n > 1 ? ' (×' + h.n + ')' : '')) + '</strong>' +
+            '<small>' + txt(SECCION_REP[h.seccion] || h.seccion || '') + '</small></span></li>';
+        }).join('') + '</ul>' : vacioRep('No hay compromisos con fecha por delante.')) + '</div>' +
+    '</div>';
+    var bien = [];
+    var capsOk = caps.filter(function (x) { return x.pct >= 80; });
+    if (capsOk.length) bien.push(capsOk.map(function (x) { return 'Cap. ' + x.numero + ' ' + x.titulo; }).join(', ') + (capsOk.length === 1 ? ' va' : ' van') + ' sobre 80 %.');
+    if (c.documentos_vigentes) bien.push(plural(c.documentos_vigentes, 'documento vigente', 'documentos vigentes') + (c.quejas_abiertas ? '.' : ' y ninguna queja abierta.'));
+    panorama += R.loQueVaBien(bien) + nota(s.aviso);
+
+    // 4 · Detalle: cada cláusula, de la que falta a la completa.
+    var detalle = !m ? vacioRep('No se pudo leer la matriz de cláusulas: abre "Por cláusula" para reintentar.') :
+      '<div class="rp2-detalle">' + R.tabla([
+        { campo: 'clausula', titulo: 'Cláusula', html: true }, { campo: 'estado', titulo: 'Estado', html: true }, { campo: 'evidencia', titulo: 'Evidencias', alinear: 'derecha' }
+      ], claus.slice().sort(function (a, b) {
+        return ((ORDEN_COB[a.estado] === undefined ? 9 : ORDEN_COB[a.estado]) - (ORDEN_COB[b.estado] === undefined ? 9 : ORDEN_COB[b.estado])) ||
+          String(a.codigo).localeCompare(String(b.codigo), 'es', { numeric: true });
+      }).map(function (x) {
+        var e = COB[x.estado] || [x.estado, 'neutro'];
+        return { clausula: '<span class="rp2-item"><strong>' + txt(x.codigo + ' ' + x.titulo) + '</strong><small>' + txt(x.resumen || 'Sin evidencia registrada.') + '</small></span>',
+          estado: U.badge(e[0], e[1], true), evidencia: x.total_evidencia || 0 };
+      })) + '</div>';
+
+    return R.nivel('En una línea', linea) +
+      R.nivel('Lo que requiere decisión', decision, { nota: alertas.length ? 'la cifra es cuántos registros' : '' }) +
+      R.nivel('Panorama', panorama) +
+      R.nivel('Detalle · de la cláusula que falta a la completa', detalle, { clase: 'rp2-nivel--detalle', nota: m ? plural(claus.length, 'cláusula', 'cláusulas') : '' });
+  }
   function cuerpoGeneral(data) {
     var s = data.salud || {}, c = data.conteos || {};
     return SigsoReportes.kpis([{ etiqueta: 'Indicador interno', valor: (s.pct || 0) + '%' }, { etiqueta: 'Cláusulas aplicables', valor: s.aplicables || 0 },
