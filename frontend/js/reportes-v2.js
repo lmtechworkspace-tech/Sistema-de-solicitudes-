@@ -452,6 +452,95 @@
     URL.revokeObjectURL(a.href);
   }
 
+  // --- Anatomía en 4 niveles (auditoría de reportes, 2026-09-25) ------------------------------
+  // Todo reporte se lee igual: En una línea · Lo que requiere decisión · Panorama
+  // · Detalle. Lo crítico va SEGUNDO: la mayoría lee solo la primera página, y es
+  // lo que obliga a decidir. Ver documentacion/SIGSO-v2-reportes-auditoria.md.
+  function fmtNum_(n) {
+    try { return Number(n).toLocaleString('es-CL', { maximumFractionDigits: 1 }); } catch (e) { return String(n); }
+  }
+  function nivel(titulo, cuerpo, opts) {
+    opts = opts || {};
+    return '<section class="rp2-nivel' + (opts.clase ? ' ' + opts.clase : '') + '">' +
+      '<h2 class="rp2-nivel__tit">' + esc_(titulo) + (opts.nota ? '<span class="rp2-nivel__nota">' + esc_(opts.nota) + '</span>' : '') + '</h2>' +
+      cuerpo + '</section>';
+  }
+  var ESTADO_GENERAL_ = { ok: 'En control', alerta: 'Requiere atención', critico: 'Crítico', neutro: 'Sin actividad' };
+  // o: { estado: 'ok'|'alerta'|'critico', frase, comparaCon, kpis: [{ etiqueta, valor,
+  // sufijo, unidad, icono, tono, delta, deltaSufijo, menosEsMejor, nota, titulo, progreso }] }
+  function enUnaLinea(o) {
+    o = o || {};
+    var est = ESTADO_GENERAL_[o.estado] ? o.estado : 'ok';
+    var kp = (o.kpis || []).map(function (k, i) {
+      var t = null;
+      if (typeof k.delta === 'number' && isFinite(k.delta)) {
+        var mejora = k.delta === 0 ? null : (k.menosEsMejor ? k.delta < 0 : k.delta > 0);
+        t = {
+          texto: (k.delta > 0 ? '+' : (k.delta < 0 ? '−' : '=')) + (k.delta === 0 ? '' : fmtNum_(Math.abs(k.delta)) + (k.deltaSufijo || '')) + ' ' + (o.comparaCon || 'vs. período anterior'),
+          tono: mejora === null ? 'neutro' : (mejora ? 'ok' : 'critico'),
+          icono: k.delta === 0 ? '' : (k.delta > 0 ? 'tendencia' : 'tendenciaBaja')
+        };
+      } else if (k.nota) {
+        t = { texto: k.nota, tono: 'neutro' };
+      }
+      return U.kpi({ i: i, etiqueta: k.etiqueta, valor: k.valor, sufijo: k.sufijo, unidad: k.unidad, icono: k.icono,
+        tono: k.tono || 'neutro', titulo: k.titulo, progreso: k.progreso, tendencia: t });
+    }).join('');
+    return '<div class="rp2-linea sx2-tono-' + est + '">' +
+      '<p class="rp2-linea__frase"><span class="rp2-linea__estado">' + esc_(ESTADO_GENERAL_[est]) + '</span>' + esc_(o.frase || '') + '</p>' +
+      (kp ? '<div class="rp2-linea__kpis">' + kp + '</div>' : '') +
+    '</div>';
+  }
+  // alertas: [{ severidad: 'critico'|'alerta', titulo, detalle, cantidad, dueno }]. Se
+  // ordenan por severidad y luego por cantidad; se muestran como máximo opts.max (7).
+  // La severidad va también en texto: el color nunca es la única señal.
+  function requiereDecision(alertas, opts) {
+    opts = opts || {};
+    function peso(a) { return a.severidad === 'critico' ? 0 : 1; }
+    var lista = (alertas || []).filter(Boolean).slice().sort(function (a, b) {
+      return (peso(a) - peso(b)) || ((b.cantidad || 0) - (a.cantidad || 0));
+    });
+    if (!lista.length) {
+      return '<div class="rp2-sinalertas">' + U.ico('check', 18) + '<span><strong>Nada requiere una decisión en este corte.</strong>' +
+        (opts.vacio ? ' ' + esc_(opts.vacio) : '') + '</span></div>';
+    }
+    var max = opts.max || 7, resto = lista.length - max;
+    return '<ul class="rp2-alertas">' + lista.slice(0, max).map(function (a) {
+      var sev = a.severidad === 'critico' ? 'critico' : 'alerta';
+      return '<li class="rp2-alerta sx2-tono-' + sev + '">' +
+        '<span class="rp2-alerta__cant">' + (a.cantidad !== undefined && a.cantidad !== null ? esc_(a.cantidad) : U.ico('alerta', 16)) + '</span>' +
+        '<span class="rp2-alerta__txt"><strong>' + esc_(a.titulo) + '</strong>' + (a.detalle ? '<span>' + esc_(a.detalle) + '</span>' : '') + '</span>' +
+        (a.dueno ? '<span class="rp2-alerta__dueno">' + esc_(a.dueno) + '</span>' : '') +
+        '<span class="rp2-alerta__sev">' + (sev === 'critico' ? 'Crítico' : 'Atención') + '</span>' +
+      '</li>';
+    }).join('') + '</ul>' +
+    (resto > 0 ? '<p class="rp2-alertas__mas">Y ' + resto + ' alerta' + (resto === 1 ? '' : 's') + ' más: están en el detalle.</p>' : '');
+  }
+  // Una o dos líneas de lo que va bien: con lo bueno se decide poco, pero se reconoce.
+  function loQueVaBien(lineas) {
+    lineas = (lineas || []).filter(Boolean);
+    if (!lineas.length) return '';
+    return '<ul class="rp2-bien">' + lineas.map(function (l) { return '<li>' + U.ico('check', 14) + '<span>' + esc_(l) + '</span></li>'; }).join('') + '</ul>';
+  }
+  // Columnas agrupadas por período (p. ej. entraron vs se cerraron por mes).
+  // filas: [{ etiqueta, <campo>: n }], series: [{ campo, etiqueta, tono }].
+  function columnas(filas, series, opts) {
+    opts = opts || {};
+    if (!filas || !filas.length) return vacio_(opts.vacio || 'Sin datos para graficar.');
+    var max = filas.reduce(function (m, f) { return series.reduce(function (mm, s) { return Math.max(mm, Number(f[s.campo]) || 0); }, m); }, 0) || 1;
+    return '<figure class="rp2-cols">' +
+      '<div class="rp2-cols__graf" role="img" aria-label="' + esc_(opts.titulo || 'Gráfico de columnas') + '">' + filas.map(function (f) {
+        return '<div class="rp2-cols__grupo"><div class="rp2-cols__barras">' + series.map(function (s) {
+          var v = Number(f[s.campo]) || 0;
+          return '<span class="rp2-cols__b sx2-tono-' + (s.tono || 'primario') + '" style="height:' + Math.max(v ? 3 : 0, Math.round(v / max * 100)) + '%" title="' + esc_(s.etiqueta + ': ' + v) + '"><em>' + (v || '') + '</em></span>';
+        }).join('') + '</div><span class="rp2-cols__et">' + esc_(f.etiqueta) + '</span></div>';
+      }).join('') + '</div>' +
+      '<figcaption class="rp2-cols__ley">' + series.map(function (s) {
+        return '<span><i class="sx2-tono-' + (s.tono || 'primario') + '"></i>' + esc_(s.etiqueta) + '</span>';
+      }).join('') + '</figcaption>' +
+    '</figure>';
+  }
+
   window.SigsoReportes = {
     TIPOS: TIPOS, registrar: registrar, obtener: obtener, buscarReporte: buscarReporte,
     pintarCatalogo: pintarCatalogo, pintarFiltros: pintarFiltros, leerFiltros: leerFiltros, alAplicarFiltros: alAplicarFiltros,
@@ -460,6 +549,9 @@
     agruparCumplimiento: agruparCumplimiento, tablaCumplimiento: tablaCumplimiento,
     cuerpoCumplimientoPor: cuerpoCumplimientoPor, cuerpoEntradaSalida: cuerpoEntradaSalida, cuerpoResbalon: cuerpoResbalon,
     cabeceraDocumento: cabeceraDocumento, filtrosParaCabecera: filtrosParaCabecera, pieDocumento: pieDocumento,
-    barraAcciones: barraAcciones, wireAcciones: wireAcciones, descargarCsvDeFilas: descargarCsvDeFilas
+    barraAcciones: barraAcciones, wireAcciones: wireAcciones, descargarCsvDeFilas: descargarCsvDeFilas,
+    // Anatomía en 4 niveles.
+    nivel: nivel, enUnaLinea: enUnaLinea, requiereDecision: requiereDecision, loQueVaBien: loQueVaBien, columnas: columnas,
+    formatearNumero: fmtNum_
   };
 })();

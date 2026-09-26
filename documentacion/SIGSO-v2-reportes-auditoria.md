@@ -99,6 +99,12 @@ formato es el libro de Proyecto, armado a mano. El resto de exportaciones son
     alcance). Conviene una sola definición con alcance.
 15. **4 reportes de Calidad pendientes** desde hace tiempo, a la vista en el
     catálogo.
+16. **El comparativo "período actual vs anterior" de Gerencia da cambios falsos** cuando
+    se elige un período: el panel recorta los ítems por fecha de creación ANTES
+    de comparar, así que la ventana anterior queda vacía y la "variación" es el
+    valor actual completo (medido: con 1–25 sept, "sin comprometer" +4 cuando
+    en realidad no hay dato anterior). El piloto no hereda el error: pide los
+    ítems sin recorte de fecha y compara sobre el mismo conjunto.
 
 Lo que **sí** está bien y hay que conservar: la cabecera documental (código,
 fecha, quién lo generó, filtros aplicados), la "Decisión sugerida" del
@@ -206,3 +212,16 @@ publicar.
    Resumen + hoja Datos con filtros, colores de estado y barras en celda).
 4. **Piloto**: Solicitudes (una sola definición para Gerencia y Mi
    departamento, con alcance).
+
+
+## 8. Avance
+
+- **R-1 (piloto en pantalla) — hecho**: piezas nuevas del motor (`nivel`,
+  `enUnaLinea` con KPI y variación, `requiereDecision` con severidad y dueño,
+  `loQueVaBien`, `columnas`) y el reporte **Estado del servicio**
+  (`reporte-servicio-v2.js`), primero en el catálogo de Gerencia (por área) y
+  de Mi departamento (por módulo). El período corre hasta hoy y se compara con
+  el mismo tramo del período anterior (1–25 sept vs. 1–25 ago); cada indicador
+  usa su fecha (entregas por término, entradas por creación); lo abierto se
+  ordena del más grave al menos grave; sin actividad dice "Sin actividad", no
+  "En control".

@@ -82,7 +82,11 @@
   ];
   var CAMPOS_FILTRO = { area: 'area_nombre' };
   var COHORTE = 'Ítems creados en';
+  var SERVICIO = 'ger-servicio';
   var REPORTES = [
+    { grupo: 'Resumen', icono: 'diana', reportes: [
+      { id: SERVICIO, nombre: 'Estado del servicio', tipo: 'ESTADO', estado: 'LISTO', desc: 'La conclusión, lo que requiere decisión, el panorama y el detalle de lo abierto, en una sola lectura.', fuente: 'getPanelGerencia', filtros: ['periodo', 'area'], etiquetaPeriodo: 'Período', campos: CAMPOS_FILTRO }
+    ] },
     { grupo: 'Cumplimiento', icono: 'escudo', reportes: [
       { id: 'ger-area', nombre: 'Cumplimiento por área', tipo: 'CUMPLIMIENTO', estado: 'LISTO', desc: 'Qué áreas entregan dentro de la fecha comprometida y cuáles no.', fuente: 'getPanelGerencia', filtros: ['periodo'], etiquetaPeriodo: COHORTE, campos: CAMPOS_FILTRO },
       { id: 'ger-responsable', nombre: 'Cumplimiento por responsable', tipo: 'RANKING', estado: 'LISTO', desc: 'Entregas a tiempo por cada responsable, sobre lo que ya cerró.', fuente: 'getPanelGerencia', filtros: ['periodo', 'area'], etiquetaPeriodo: COHORTE, campos: CAMPOS_FILTRO },
@@ -743,6 +747,9 @@
   function filtrosServidorRep() {
     var f = filtrosRep_ || {}, s = Object.assign({}, filtros_);
     if (f.area) s.area = f.area;
+    // Estado del servicio mide el período y el anterior sobre el mismo conjunto:
+    // pide los ítems sin recorte de fecha y corta en el navegador.
+    if (reporteAbierto_ === SERVICIO) return s;
     var rango = SigsoReportes.rangoDePeriodo(f.periodo);
     if (f.desde || rango.desde) s.desde = f.desde || rango.desde;
     if (f.hasta || rango.hasta) s.hasta = f.hasta || rango.hasta;
@@ -800,7 +807,14 @@
     var items = panelRep_.items || [];
     var opciones = SigsoReportes.opcionesDeItems(areas_, r.campos || {});
     var cuerpo = '';
-    if (r.id === 'ger-area') cuerpo = SigsoReportes.cuerpoCumplimientoPor(items, { campo: 'area_nombre', etiquetaVacia: '(sin área)', dimension: 'Área', etiquetaTotal: 'Áreas con actividad' });
+    if (r.id === SERVICIO) {
+      // Período por defecto: este mes (sin período no hay contra qué comparar).
+      filtrosRep_ = Object.assign({ periodo: 'mes' }, filtrosRep_);
+      cuerpo = SigsoReporteServicio.cuerpo(items, {
+        periodo: filtrosRep_.periodo, tendencia: panelRep_.tendencia,
+        dimension: { campo: 'area_nombre', titulo: 'Área', vacia: '(sin área)' }
+      });
+    } else if (r.id === 'ger-area') cuerpo = SigsoReportes.cuerpoCumplimientoPor(items, { campo: 'area_nombre', etiquetaVacia: '(sin área)', dimension: 'Área', etiquetaTotal: 'Áreas con actividad' });
     else if (r.id === 'ger-responsable') cuerpo = SigsoReportes.cuerpoCumplimientoPor(items, { campo: 'desarrollador_nombre', etiquetaVacia: '(sin asignar)', dimension: 'Responsable', etiquetaTotal: 'Responsables' });
     else if (r.id === 'ger-resbalon') cuerpo = SigsoReportes.cuerpoResbalon(items, { columnasExtra: [{ campo: 'area_nombre', titulo: 'Área' }] });
     else if (r.id === 'ger-throughput') cuerpo = SigsoReportes.cuerpoEntradaSalida(panelRep_.tendencia || []);

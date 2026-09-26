@@ -43,7 +43,11 @@
     ] }
   ];
   var CAMPOS_FILTRO = { responsable: { valor: 'desarrollador_asignado', texto: 'desarrollador_nombre' } };
+  var SERVICIO = 'jef-servicio';
   var REPORTES = [
+    { grupo: 'Resumen', icono: 'diana', reportes: [
+      { id: SERVICIO, nombre: 'Estado del servicio', tipo: 'ESTADO', estado: 'LISTO', desc: 'La conclusión, lo que requiere decisión, el panorama y el detalle de lo abierto de tu equipo, en una sola lectura.', fuente: 'getPanelJefatura', filtros: ['periodo', 'responsable'], etiquetaPeriodo: 'Período', campos: CAMPOS_FILTRO }
+    ] },
     { grupo: 'Cumplimiento', icono: 'escudo', reportes: [
       { id: 'jef-responsable', nombre: 'Cumplimiento por persona', tipo: 'RANKING', estado: 'LISTO', desc: 'Entregas a tiempo de cada integrante, sobre lo que ya cerró.', fuente: 'getPanelJefatura', filtros: ['periodo'], etiquetaPeriodo: 'Ítems creados en', campos: CAMPOS_FILTRO },
       { id: 'jef-modulo', nombre: 'Cumplimiento por módulo', tipo: 'CUMPLIMIENTO', estado: 'LISTO', desc: 'Qué módulos del sistema concentran los atrasos del equipo.', fuente: 'getPanelJefatura', filtros: ['periodo', 'responsable'], etiquetaPeriodo: 'Ítems creados en', campos: CAMPOS_FILTRO },
@@ -344,6 +348,8 @@
   function filtrosServidor() {
     var f = filtrosRep_ || {}, s = {};
     if (f.responsable) s.desarrollador = f.responsable;
+    // Estado del servicio mide el período y el anterior sobre el mismo conjunto.
+    if (reporteAbierto_ === SERVICIO) return s;
     var rango = SigsoReportes.rangoDePeriodo(f.periodo);
     if (f.desde || rango.desde) s.desde = f.desde || rango.desde;
     if (f.hasta || rango.hasta) s.hasta = f.hasta || rango.hasta;
@@ -371,7 +377,7 @@
     if (!reporteAbierto_) {
       SigsoReportes.pintarCatalogo({
         contenedor: cont, modulo: 'jefatura',
-        onAbrir: function (id) { reporteAbierto_ = id; filtrosRep_ = {}; pintarReportes(); },
+        onAbrir: function (id) { reporteAbierto_ = id; filtrosRep_ = {}; cargarReportes(false); },
         onIrASeccion: function (v) { irA(v); }
       });
       return;
@@ -381,7 +387,13 @@
     var items = panelRep_.items || [];
     var opciones = SigsoReportes.opcionesDeItems(personasConocidas_, r.campos || {});
     var cuerpo = '';
-    if (r.id === 'jef-responsable') cuerpo = SigsoReportes.cuerpoCumplimientoPor(items, { campo: 'desarrollador_nombre', etiquetaVacia: '(sin asignar)', dimension: 'Persona', etiquetaTotal: 'Personas' });
+    if (r.id === SERVICIO) {
+      filtrosRep_ = Object.assign({ periodo: 'mes' }, filtrosRep_);
+      cuerpo = SigsoReporteServicio.cuerpo(items, {
+        periodo: filtrosRep_.periodo, tendencia: panelRep_.tendencia,
+        dimension: { campo: 'modulo_nombre', titulo: 'Módulo', vacia: '(sin módulo)' }
+      });
+    } else if (r.id === 'jef-responsable') cuerpo = SigsoReportes.cuerpoCumplimientoPor(items, { campo: 'desarrollador_nombre', etiquetaVacia: '(sin asignar)', dimension: 'Persona', etiquetaTotal: 'Personas' });
     else if (r.id === 'jef-modulo') cuerpo = SigsoReportes.cuerpoCumplimientoPor(items, { campo: 'modulo_nombre', etiquetaVacia: '(sin módulo)', dimension: 'Módulo', etiquetaTotal: 'Módulos' });
     else if (r.id === 'jef-tipo') cuerpo = SigsoReportes.cuerpoCumplimientoPor(items, { campo: 'tipo_nombre', etiquetaVacia: '(sin tipo)', dimension: 'Tipo', etiquetaTotal: 'Tipos' });
     else if (r.id === 'jef-throughput') cuerpo = SigsoReportes.cuerpoEntradaSalida(panelRep_.tendencia || []);
