@@ -865,6 +865,9 @@ function construirReporteActividades_(db, tipo, filtros) {
       const s = semaforoActividad_(a);
       return {
         titulo: a.titulo, responsable: a.responsable_nombre || a.responsable_email,
+        // Fuera de `columnas` (no sale en PDF ni CSV): la pantalla agrupa por
+        // persona, y el nombre solo no alcanza (unas filas traen nombre y otras correo).
+        responsable_email: a.responsable_email || '',
         area: nombresArea[a.area_id] || '(sin área)', prioridad: a.prioridad,
         estado: a.estado, semaforo: s.etiqueta, fecha_compromiso: a.fecha_compromiso || ''
       };

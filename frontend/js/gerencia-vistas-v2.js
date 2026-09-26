@@ -539,12 +539,18 @@
     if (!c) return;
     var t = ++turno_;
     if (!silencioso || !act_) pagina(c, U.esqueleto('kpis', 5) + U.esqueleto('tabla', 6));
-    api('getPanelGerenciaActividades', paramsAct(false)).then(function (r) {
+    // El panel trae KPI, calor y comparativo; el estado actual, cada actividad viva
+    // (con él se agrupa lo atrasado por persona). Mismos filtros de área y prioridad.
+    Promise.all([api('getPanelGerenciaActividades', paramsAct(false)),
+      api('generarReporteActividades', Object.assign(paramsAct(false), { tipo: 'estado_actual' }))]).then(function (rs) {
+      var r = rs[0];
       if (t !== turno_ || vista_ !== 'actividades') return;
       if (!r || !r.ok) { errorEn(c, r); return; }
       act_ = r.data;
+      act_.vivas = rs[1] && rs[1].ok ? (rs[1].data.filas || []) : null;
       pintar(!!silencioso);
-      resolverPersonas((act_.criticas || []).map(function (x) { return x.responsable_email; }), t);
+      resolverPersonas((act_.criticas || []).map(function (x) { return x.responsable_email; })
+        .concat((act_.vivas || []).map(function (x) { return x.responsable_email || x.responsable; })), t);
     });
   }
   function colorCalor(total, pct) {
@@ -566,18 +572,6 @@
       '<label class="gv2-filtro"><span>Desde</span><input type="date" class="sx2-input js-gv2-fa" data-f="desde" value="' + U.esc(filtrosAct_.desde) + '"></label>' +
       '<label class="gv2-filtro"><span>Hasta</span><input type="date" class="sx2-input js-gv2-fa" data-f="hasta" value="' + U.esc(filtrosAct_.hasta) + '"></label>' +
     '</div>';
-    var kpis = '<div class="sx2-fila-kpis">' +
-      U.kpi({ i: 0, etiqueta: 'Cumplidas a tiempo', valor: nulo(pct) ? '—' : pct, sufijo: nulo(pct) ? '' : '%', icono: 'diana', tono: nulo(pct) ? 'neutro' : (pct >= 80 ? 'ok' : (pct >= 50 ? 'alerta' : 'critico')),
-        progreso: nulo(pct) ? null : pct, tendencia: tendenciaKpi(cmp.pct_cumplidas_a_tiempo, true), titulo: 'De lo terminado en el período, % terminado dentro del compromiso.' }) +
-      U.kpi({ i: 1, etiqueta: 'Antigüedad media sin check-in', valor: k.antiguedad_media_dias || 0, unidad: 'días', icono: 'reloj', tono: k.antiguedad_media_dias > 5 ? 'alerta' : 'neutro',
-        titulo: 'Promedio de días hábiles sin check-in de las actividades activas. Si es alta, el resto del panel no es confiable.' }) +
-      U.kpi({ i: 2, etiqueta: 'Bloqueadas ahora', valor: k.bloqueadas_actual || 0, unidad: k.bloqueadas_actual ? '· ' + k.bloqueo_promedio_dias + ' d prom.' : '', icono: 'pausado', tono: k.bloqueadas_actual ? 'critico' : 'ok',
-        titulo: 'Actividades bloqueadas en este momento, con el promedio de días hábiles que llevan así.' }) +
-      U.kpi({ i: 3, etiqueta: 'Reprogramaciones prom.', valor: k.reprogramaciones_promedio || 0, icono: 'calendario', tono: k.reprogramaciones_promedio > 1 ? 'alerta' : 'neutro',
-        tendencia: tendenciaKpi(cmp.reprogramaciones_promedio, false), titulo: '1 es normal; varias indican mala estimación o alcance que crece.' }) +
-      U.kpi({ i: 4, etiqueta: 'Trabajo emergente', valor: nulo(k.pct_emergente) ? '—' : k.pct_emergente, sufijo: nulo(k.pct_emergente) ? '' : '%', icono: 'rayo', tono: k.pct_emergente > 40 ? 'alerta' : 'info',
-        tendencia: tendenciaKpi(cmp.pct_emergente, false), titulo: 'De lo creado en el período, % que entró sin planificar. Si es sistemáticamente alto, planificar es teatro.' }) +
-    '</div>';
     var hm = act_.heatmap || [], calor;
     if (!hm.length) calor = U.vacio({ icono: 'rejilla', titulo: 'Sin actividades con fecha comprometida en las últimas semanas', texto: '' });
     else {
@@ -589,28 +583,124 @@
         }).join('') + '</tbody></table></div>' +
         '<div class="gv2-ley"><span><i class="gv2-calor--ok"></i>≥ 80 %</span><span><i class="gv2-calor--alerta"></i>50–79 %</span><span><i class="gv2-calor--critico"></i>&lt; 50 %</span><span><i class="gv2-calor--vacio"></i>Sin compromisos</span></div>';
     }
-    var cr = act_.criticas || [];
-    var criticas = cr.length
-      ? '<div class="sx2-tabla-wrap"><table class="sx2-tabla"><thead><tr><th>Actividad</th><th>Responsable</th><th>Área</th><th>Prioridad</th><th>Semáforo</th><th>Vence</th></tr></thead><tbody>' +
-        cr.map(function (a) {
-          var per = PY.persona(a.responsable_email || a.responsable_nombre, a.responsable_nombre);
-          return '<tr><td class="jv2-titulo"><span class="sx2-cortar" title="' + U.esc(a.titulo) + '">' + U.esc(a.titulo) + '</span></td>' +
-            '<td><span class="sx2-flex" style="gap:6px;align-items:center">' + U.avatar(per, 'xs') + U.esc(per.nombre) + '</span></td>' +
-            '<td>' + U.esc(a.area_nombre || '') + '</td><td>' + U.badge(a.prioridad, tonoPrioridad(a.prioridad), true) + '</td>' +
-            '<td>' + U.badge(a.semaforo_etiqueta || a.semaforo || '', a.semaforo === 'atrasada' ? 'critico' : (a.semaforo === 'bloqueada' ? 'info' : 'alerta')) + '</td>' +
-            '<td>' + U.esc(a.fecha_compromiso ? PY.fecha(a.fecha_compromiso, true) : '—') + '</td></tr>';
-        }).join('') + '</tbody></table></div>'
-      : U.vacio({ icono: 'check', titulo: 'Sin actividades críticas', texto: 'Todo lo P1/P2 está al día.' });
-    return filtros + kpis +
-      U.card({ titulo: 'Cumplimiento por área × semana', icono: 'rejilla', i: 5, cuerpo: calor }) +
-      U.card({ titulo: 'Actividades críticas', icono: 'alerta', sub: 'P1/P2 atrasadas, en riesgo o bloqueadas', i: 6, sinRelleno: !!cr.length, cuerpo: criticas }) +
-      U.card({ titulo: 'Reportes de actividades', icono: 'documento', i: 7, cuerpo:
+    return filtros +
+      '<div class="sx2-card sx2-entra" style="--i:1">' + cuerpoActividades(k, cmp, pct, calor) + '</div>' +
+      U.card({ titulo: 'Reportes tabulares', icono: 'documento', sub: 'para exportar', i: 7, cuerpo:
         '<div class="gv2-barra">' + U.segmento(TIPOS_REPORTE_ACT, filtrosAct_.tipo, 'js-gv2-tipo-act') +
           '<span class="sx2-flex" style="gap:8px;margin-left:auto">' +
             U.boton({ texto: 'Ver', icono: 'ojo', variante: 'primario', sm: true, clase: 'js-gv2-rep-ver' }) +
             U.boton({ texto: 'CSV', icono: 'exportar', sm: true, clase: 'js-gv2-rep-csv' }) +
             U.boton({ texto: 'PDF', icono: 'descargar', sm: true, clase: 'js-gv2-rep-pdf' }) + '</span></div>' +
         '<div class="gv2-rep-act">' + reporteActividades() + '</div>' });
+  }
+  // Anatomía en 4 niveles (auditoría de reportes, R-2): ¿qué está atrasado o bloqueado?
+  // Lo crítico va AGRUPADO POR PERSONA: la reunión de seguimiento pregunta a quién.
+  var SITUACION_ACT = { Atrasada: ['Atrasada', 'critico', 0], Bloqueada: ['Bloqueada', 'critico', 1], 'Vence hoy': ['Vence hoy', 'alerta', 2], 'Vence mañana': ['Vence mañana', 'alerta', 3],
+    'Por confirmar': ['Por confirmar', 'info', 4], 'En revisión': ['En revisión', 'info', 5], 'Al día': ['Al día', 'ok', 6] };
+  function diasDesde_(iso) {
+    var m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return null;
+    var h = new Date(), hoy = Date.UTC(h.getFullYear(), h.getMonth(), h.getDate());
+    return Math.round((hoy - Date.UTC(+m[1], +m[2] - 1, +m[3])) / 86400000);
+  }
+  function cuerpoActividades(k, cmp, pct, calor) {
+    var R = SigsoReportes;
+    var todas = act_.vivas;
+    if (!todas) return R.nivel('En una línea', R.enUnaLinea({ estado: 'neutro', frase: 'No se pudo leer el estado de cada actividad; recarga la vista.' }));
+    var vivas = todas.filter(function (a) { return a.semaforo !== 'Terminada'; });
+    var atr = vivas.filter(function (a) { return a.semaforo === 'Atrasada'; });
+    var blo = vivas.filter(function (a) { return a.semaforo === 'Bloqueada'; });
+    var alta = function (a) { return a.prioridad === 'P1' || a.prioridad === 'P2'; };
+    // Clave = correo (unas filas traen nombre y otras correo). Si dos cuentas distintas se
+    // llaman igual, el correo va entre paréntesis para no leerlas como una persona repetida.
+    function clave(a) { return String(a.responsable_email || a.responsable || '').toLowerCase(); }
+    // Si el directorio no conoce el correo, vale el nombre que trae la propia actividad.
+    var claves = {}, nombreFila = {};
+    todas.forEach(function (a) { var kx = clave(a); claves[kx] = true; if (a.responsable && !/@/.test(a.responsable)) nombreFila[kx] = a.responsable.trim(); });
+    function nombreBase(kx) { var n = PY.persona(kx).nombre; return /@/.test(n) && nombreFila[kx] ? nombreFila[kx] : n; }
+    var porNombre = {};
+    Object.keys(claves).forEach(function (kx) { var n = kx ? nombreBase(kx) : ''; (porNombre[n] = porNombre[n] || []).push(kx); });
+    function nombre(kx) {
+      if (!kx) return '(sin responsable)';
+      var n = nombreBase(kx);
+      return (porNombre[n] || []).length > 1 && /@/.test(kx) ? n + ' (' + kx + ')' : n;
+    }
+
+    // 1 · En una línea
+    var mal = atr.length + blo.length;
+    var estado = !vivas.length ? 'neutro' : (atr.filter(alta).length || blo.length || (!nulo(pct) && pct < 50) ? 'critico' : (mal || (!nulo(pct) && pct < 80) || k.antiguedad_media_dias > 5 ? 'alerta' : 'ok'));
+    var frase = !vivas.length ? 'No hay actividades abiertas con estos filtros.' :
+      'De ' + vivas.length + ' actividades abiertas, ' + (mal ? atr.length + ' están atrasadas' + (blo.length ? ' y ' + blo.length + ' bloqueadas' : '') : 'ninguna está atrasada ni bloqueada') +
+      (atr.filter(alta).length ? ' (' + atr.filter(alta).length + ' son P1/P2)' : '') +
+      (nulo(pct) ? '' : '; de lo terminado en el período, ' + pct + ' % se cumplió a tiempo') +
+      (k.antiguedad_media_dias > 5 ? '; llevan en promedio ' + R.formatearNumero(k.antiguedad_media_dias) + ' días hábiles sin check-in, así que el panel puede estar desactualizado' : '') + '.';
+    var sinFecha = vivas.filter(function (a) { return !a.fecha_compromiso; }).length;
+    var linea = R.enUnaLinea({ estado: estado, frase: frase, comparaCon: 'vs. período anterior', kpis: [
+      { etiqueta: 'Abiertas', valor: vivas.length, icono: 'lista', tono: 'primario', nota: sinFecha ? sinFecha + ' sin fecha comprometida' : 'todas con fecha' },
+      { etiqueta: 'Atrasadas', valor: atr.length, icono: 'alerta', tono: atr.length ? 'critico' : 'ok', nota: vivas.length ? Math.round(atr.length / vivas.length * 100) + ' % de las abiertas' : '' },
+      { etiqueta: 'Bloqueadas', valor: blo.length, icono: 'pausado', tono: blo.length ? 'critico' : 'ok', nota: blo.length ? R.formatearNumero(k.bloqueo_promedio_dias || 0) + ' días hábiles en promedio' : 'ninguna' },
+      { etiqueta: 'Cumplidas a tiempo', valor: nulo(pct) ? '—' : pct, sufijo: nulo(pct) ? '' : '%', icono: 'diana', progreso: nulo(pct) ? null : pct,
+        tono: nulo(pct) ? 'neutro' : (pct >= 80 ? 'ok' : (pct >= 50 ? 'alerta' : 'critico')), delta: nulo(cmp.pct_cumplidas_a_tiempo) ? undefined : cmp.pct_cumplidas_a_tiempo, deltaSufijo: ' pp',
+        nota: 'de lo terminado en el período', titulo: 'De lo terminado en el período, % terminado dentro del compromiso.' }
+    ] });
+
+    // 2 · Lo que requiere decisión: una fila por persona con atrasos o bloqueos.
+    var porPersona = {};
+    atr.concat(blo).forEach(function (a) {
+      var kx = clave(a);
+      var p = porPersona[kx] = porPersona[kx] || { r: kx, atr: 0, blo: 0, altas: 0, masVieja: 0, ej: [] };
+      if (a.semaforo === 'Atrasada') { p.atr++; p.masVieja = Math.max(p.masVieja, diasDesde_(a.fecha_compromiso) || 0); } else p.blo++;
+      if (alta(a)) p.altas++;
+      if (p.ej.length < 2 || alta(a)) p.ej.push(a);
+    });
+    var alertas = Object.keys(porPersona).map(function (kx) {
+      var p = porPersona[kx], n = p.atr + p.blo;
+      var ej = [];
+      p.ej.sort(function (a, b) { return (alta(b) ? 1 : 0) - (alta(a) ? 1 : 0); }).forEach(function (a) { var t = '«' + a.titulo + '»'; if (ej.length < 2 && ej.indexOf(t) === -1) ej.push(t); });
+      return { severidad: p.altas || p.blo || n >= 5 || p.masVieja > 10 ? 'critico' : 'alerta', cantidad: n, titulo: nombre(p.r),
+        detalle: [p.atr ? p.atr + (p.atr === 1 ? ' atrasada' : ' atrasadas') + (p.masVieja ? ', la más antigua venció hace ' + p.masVieja + ' días' : '') : '',
+          p.blo ? p.blo + (p.blo === 1 ? ' bloqueada' : ' bloqueadas') : '', p.altas ? p.altas + ' P1/P2' : ''].filter(Boolean).join(' · ') + (ej.length ? ' — ' + ej.join(', ') : ''), };
+    });
+    if (k.antiguedad_media_dias > 5) alertas.push({ severidad: 'alerta', cantidad: Math.round(k.antiguedad_media_dias), titulo: 'Días hábiles sin check-in, en promedio',
+      detalle: 'Si nadie actualiza sus actividades, lo de arriba puede estar desfasado. Pide el check-in antes de decidir.', dueno: 'Todos los equipos' });
+    if (k.reprogramaciones_promedio > 1) alertas.push({ severidad: 'alerta', cantidad: R.formatearNumero(k.reprogramaciones_promedio), titulo: 'Reprogramaciones por actividad, en promedio',
+      detalle: '1 es normal; más indica mala estimación o alcance que crece.' });
+    var decision = R.requiereDecision(alertas, { vacio: 'Nadie tiene actividades atrasadas ni bloqueadas.' });
+
+    // 3 · Panorama: carga por persona (abiertas, con cuántas atrasadas) y cumplimiento por área × semana.
+    var carga = {};
+    vivas.forEach(function (a) { var kx = clave(a); var c = carga[kx] = carga[kx] || { r: kx, n: 0, atr: 0 }; c.n++; if (a.semaforo === 'Atrasada') c.atr++; });
+    var filasCarga = Object.keys(carga).map(function (kx) { return carga[kx]; }).sort(function (a, b) { return b.n - a.n; });
+    var panorama = '<h3 class="rp2-sub">Carga por persona <span class="sx2-tenue" style="font-weight:500;font-size:.8125rem">(abiertas · de ellas, atrasadas)</span></h3>' +
+      R.ranking(filasCarga.map(function (c) {
+        return { etiqueta: nombre(c.r), valor: c.n, texto: c.n + (c.atr ? ' · ' + c.atr + ' atr.' : ''), tono: c.atr > c.n / 2 ? 'critico' : (c.atr ? 'alerta' : 'ok') };
+      }), { vacio: 'Sin actividades abiertas.' }) +
+      '<h3 class="rp2-sub">Cumplimiento por área × semana</h3>' + calor;
+    var bien = [];
+    var alDia = filasCarga.filter(function (c) { return !c.atr && c.n >= 2; });
+    if (alDia.length) bien.push(alDia.slice(0, 4).map(function (c) { return nombre(c.r); }).join(', ') + (alDia.length === 1 ? ' tiene' : ' tienen') + ' todo al día.');
+    if (!nulo(k.pct_emergente) && k.pct_emergente <= 20) bien.push('Solo ' + R.formatearNumero(k.pct_emergente) + ' % del trabajo del período entró sin planificar.');
+    panorama += R.loQueVaBien(bien);
+
+    // 4 · Detalle: cada actividad abierta, de la más grave a la al día.
+    var filas = vivas.slice().sort(function (a, b) {
+      var sa = (SITUACION_ACT[a.semaforo] || [0, 0, 9])[2], sb = (SITUACION_ACT[b.semaforo] || [0, 0, 9])[2];
+      return (sa - sb) || ((alta(b) ? 1 : 0) - (alta(a) ? 1 : 0)) || String(a.fecha_compromiso || '9').localeCompare(String(b.fecha_compromiso || '9'));
+    }).map(function (a) {
+      var s = SITUACION_ACT[a.semaforo] || [a.semaforo || '—', 'neutro'], d = a.semaforo === 'Atrasada' ? diasDesde_(a.fecha_compromiso) : null;
+      return { actividad: '<span class="rp2-item"><strong>' + U.esc(a.titulo) + '</strong><small>' + U.esc(a.area || '') + '</small></span>',
+        resp: U.esc(nombre(clave(a))), prio: U.badge(a.prioridad || '—', tonoPrioridad(a.prioridad), true), sit: U.badge(s[0], s[1], true),
+        vence: a.fecha_compromiso ? U.esc(PY.fecha(a.fecha_compromiso, true)) + (d ? ' <span class="sx2-tenue" style="font-size:.75rem">(' + d + ' d)</span>' : '') : '—' };
+    });
+    var detalle = '<div class="rp2-detalle">' + R.tabla([
+      { campo: 'actividad', titulo: 'Actividad', html: true }, { campo: 'resp', titulo: 'Responsable', html: true }, { campo: 'prio', titulo: 'Prior.', html: true },
+      { campo: 'sit', titulo: 'Situación', html: true }, { campo: 'vence', titulo: 'Vence', html: true }
+    ], filas, { vacio: 'Sin actividades abiertas.' }) + '</div>';
+
+    return R.nivel('En una línea', linea) +
+      R.nivel('Lo que requiere decisión', decision, { nota: alertas.length ? 'por persona · la cifra es cuántas' : '' }) +
+      R.nivel('Panorama', panorama) +
+      R.nivel('Detalle · de la más grave a la al día', detalle, { clase: 'rp2-nivel--detalle', nota: vivas.length + (vivas.length === 1 ? ' actividad abierta' : ' actividades abiertas') });
   }
   function reporteActividades() {
     if (!repAct_) return '<p class="sx2-tenue" style="margin:12px 0 0;font-size:.8125rem">Elige el tipo y pulsa "Ver". Se usan los mismos filtros de arriba (área, prioridad y fechas).</p>';

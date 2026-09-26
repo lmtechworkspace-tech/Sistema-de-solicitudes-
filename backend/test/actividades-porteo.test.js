@@ -454,6 +454,9 @@ test('generarReporte: tipo invalido; estado_actual; cumplimiento_periodo; carga_
   const est = A.generarReporte(db, { tipo: 'estado_actual' }, CTX_ADM);
   assert.equal(est.filas.length, 2);
   assert.ok(est.columnas.some((c) => c.campo === 'semaforo'));
+  // La pantalla agrupa por persona con el correo; no es columna del PDF ni del CSV.
+  assert.ok(est.filas.every((f) => typeof f.responsable_email === 'string'));
+  assert.ok(!est.columnas.some((c) => c.campo === 'responsable_email'));
 
   const db2 = db_();
   const at = crearGer(db2, { titulo: 'A tiempo', fecha_compromiso: diasAtras(1) });
