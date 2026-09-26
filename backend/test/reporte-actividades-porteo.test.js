@@ -14,6 +14,9 @@ const { abrirDb_, sembrarTabla_, agregarFila_, actualizarFilaPorId_ } = require(
 const { COLUMNAS } = require('../db/schema');
 const A = require('../logica/actividades');
 const Reporte = require('../logica/reporteActividades');
+// Este archivo prueba la versión pdfkit, que sigue siendo el RESPALDO cuando no hay
+// Chromium (ver documentoV2.js); la versión v2 se prueba en documento-v2.test.js.
+require('../logica/documentoV2').disponible = () => false;
 
 const CTX_MARCELO = { email: 'marcelo@rld.cl', nombre: 'Marcelo Gonzalez', rol: 'DEV' };
 const CTX_ADM = { email: 'admin@rld.cl', nombre: 'Admin', rol: 'ADM' };

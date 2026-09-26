@@ -13,6 +13,12 @@ on:
       - "backend/db/**"
       - "backend/logica/**"
       - "backend/scripts/**"
+      # Los PDF sin pantalla se arman con estas piezas del frontend (documentoV2.js).
+      - "frontend/css/**"
+      - "frontend/js/iconos.js"
+      - "frontend/js/ui-v2.js"
+      - "frontend/js/reportes-v2.js"
+      - "frontend/plataforma.html"
       - "package.json"
       - ".github/workflows/deploy-backend.yml"
   # A proposito, backend/test/** NO esta en la lista: rsync (mas abajo)
@@ -82,6 +88,17 @@ jobs:
             backend/scripts/ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/backend/scripts/"
           scp -i ~/.ssh/deploy package.json package-lock.json \
             "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/"
+          # Piezas del frontend que el servidor ejecuta para armar los PDF sin
+          # pantalla con el mismo diseño v2 (backend/logica/documentoV2.js;
+          # test/documento-v2.test.js exige que esta lista la cubra).
+          ssh -i ~/.ssh/deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" 'mkdir -p /opt/sigso/frontend/js /opt/sigso/frontend/css'
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy" \
+            frontend/css/ "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/frontend/css/"
+          rsync -az -e "ssh -i ~/.ssh/deploy" \
+            frontend/js/iconos.js frontend/js/ui-v2.js frontend/js/reportes-v2.js \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/frontend/js/"
+          rsync -az -e "ssh -i ~/.ssh/deploy" \
+            frontend/plataforma.html "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/sigso/frontend/"
           # node_modules ya instalado y probado en este mismo job (npm ci
           # de arriba) se sincroniza tal cual -- el VPS nunca corre npm
           # install por su cuenta, ni depende de tener salida a internet en

@@ -43,6 +43,13 @@
 .rp2-agenda { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .rp2-agenda li { display: grid; grid-template-columns: 92px 1fr; gap: 12px; align-items: baseline; padding: 9px 0; border-bottom: 1px solid var(--sx-borde-suave); }
 .rp2-agenda li:last-child { border-bottom: 0; }
+/* Acta de reunión: espacio para escribir a mano el acuerdo, la fecha y los asistentes. */
+.rp2-escribir { display: block; min-width: 90px; min-height: 26px; border-bottom: 1px solid var(--sx-borde); }
+.rp2-acta td { vertical-align: top; }
+.rp2-acta td:nth-child(4) { width: 34%; }
+.rp2-acta-motivo { display: block; margin-top: 4px; font: var(--sx-t-micro); color: var(--sx-texto-2); white-space: normal; }
+.rp2-acta-firmas { display: grid; grid-template-columns: 2fr 1fr; gap: var(--sx-e-6); margin-top: var(--sx-e-6); }
+.rp2-acta-firmas small { display: block; margin-top: 4px; font: var(--sx-t-micro); color: var(--sx-texto-3); text-transform: uppercase; letter-spacing: .06em; }
 .rp2-agenda time { font: 600 .8125rem/1.35 var(--fuente); color: var(--sx-texto-2); font-variant-numeric: tabular-nums; }
 .rp2-ranking__pos { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 7px; background: var(--sx-superficie-2); font: 700 .75rem/1 var(--fuente); color: var(--sx-texto-2); }
 .rp2-ranking__etq { font: 500 .8125rem/1.3 var(--fuente); color: var(--sx-texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

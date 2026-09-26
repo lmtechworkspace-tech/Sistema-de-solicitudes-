@@ -14,6 +14,9 @@ const { abrirDb_, sembrarTabla_, agregarFila_ } = require('../db/sqliteRepo');
 const { COLUMNAS } = require('../db/schema');
 const Calidad = require('../logica/calidadSgc');
 const Evidencia = require('../logica/evidenciaClausulaSgc');
+// Este archivo prueba la versión pdfkit, que sigue siendo el RESPALDO cuando no hay
+// Chromium (ver documentoV2.js); la versión v2 se prueba en documento-v2.test.js.
+require('../logica/documentoV2').disponible = () => false;
 
 const TABLAS = [
   'SGC_DOCUMENTOS', 'SGC_DOC_VERSIONES', 'SGC_DOC_DESTINATARIOS', 'SGC_DOC_ACUSES', 'SGC_ROLES',

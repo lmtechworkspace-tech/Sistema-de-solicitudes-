@@ -965,6 +965,9 @@ function construirActaReunion_(db, filtros) {
     return {
       actividad_id: a.actividad_id, titulo: a.titulo,
       responsable: a.responsable_nombre || a.responsable_email,
+      // Para agrupar por persona en el acta v2 (el nombre solo no alcanza:
+      // unas actividades traen nombre y otras correo) y marcar lo P1/P2.
+      responsable_email: a.responsable_email || '', prioridad: a.prioridad || '',
       area: nombresArea[a.area_id] || '(sin área)', fecha_compromiso: a.fecha_compromiso || ''
     };
   }
@@ -998,6 +1001,8 @@ function construirActaReunion_(db, filtros) {
 
   return {
     generado_en: ahora.toISOString(),
+    semana: { desde: inicioSemana.toISOString(), hasta: new Date(finSemana.getTime() - 1).toISOString() },
+    area: filtros.area_id ? (nombresArea[filtros.area_id] || filtros.area_id) : '', prioridad: filtros.prioridad || '',
     vencidas: vencidas, bloqueadas: bloqueadas,
     reprogramadas_semana: reprogramadas, vence_semana_entrante: venceSemanaEntrante
   };

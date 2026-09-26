@@ -92,7 +92,10 @@ const CSS_PAPEL = [
     'width:auto!important;max-width:none!important;min-width:0!important;height:auto!important;min-height:0!important;max-height:none!important;' +
     'overflow:visible!important;background:none!important;border:0!important;box-shadow:none!important;transform:none!important;' +
     'opacity:1!important;visibility:visible!important;filter:none!important}',
-  '.rp2-pdf{padding:0}'
+  '.rp2-pdf{padding:0}',
+  // La nota final va una vez, al cierre: el pie de cada página ya lo pone Chromium
+  // (fija en cada hoja podía tapar el final de una tabla larga).
+  '.rp2-doc-pie{position:static!important;margin-top:12px}'
 ].join('\n');
 
 function componerDocumento(o) {
@@ -174,4 +177,5 @@ async function generarPdfReporte(db, data, contexto) {
   }
 }
 
-module.exports = { generarPdfReporte, sanitizarHtml, sanitizarCss, componerDocumento, piePagina, _usos: usos_ };
+module.exports = { generarPdfReporte, sanitizarHtml, sanitizarCss, componerDocumento, piePagina,
+  nombreCuenta_, fechaChile_, nombreArchivo_, _usos: usos_ };

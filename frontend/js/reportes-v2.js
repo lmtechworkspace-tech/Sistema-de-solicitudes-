@@ -703,6 +703,9 @@
     // Anatomía en 4 niveles.
     nivel: nivel, enUnaLinea: enUnaLinea, requiereDecision: requiereDecision, loQueVaBien: loQueVaBien, columnas: columnas,
     formatearNumero: fmtNum_,
-    descargarPdf: descargarPdf
+    descargarPdf: descargarPdf,
+    // Lo usa el servidor (backend/logica/documentoV2.js) para armar los PDF sin
+    // pantalla con este mismo archivo: mismo filtrado de CSS, no una copia.
+    _css: { filtrar: filtrarCss_, pseudo: PSEUDO_ }
   };
 })();
