@@ -294,3 +294,25 @@ publicar.
     **informe configurable de Proyecto** (Carta Gantt apaisada), la **Orden de
     trabajo** (R-5) y el **reporte periódico de pausas** (que en realidad es
     un correo de texto, sin PDF adjunto).
+- **R-4 (Excel real) — hecho** (`bf7776a`):
+  - Generador compartido `logica/libroExcel.js` (sin dependencias): hoja
+    **Resumen** con los niveles 1–2 (frase con estado en color, KPI, lo que
+    requiere decisión, lo que va bien) y **una hoja por tabla** con
+    encabezado, filtros, primera fila fija, anchos, números/porcentajes/fechas
+    como valores, estados con color y barras de datos en los porcentajes.
+    Texto con forma de fórmula queda como texto.
+  - Acción `generarExcelReporte`: "Generado por" desde la sesión, límites bajo
+    el 1 MB de nginx, 20/min por cuenta.
+  - El frontend arma la especificación desde lo que se ve (tablas, rankings,
+    agendas, gráficos de columnas; lo plegado no entra) o desde los datos.
+    Reemplaza los 5 CSV de v2 (catálogos, Gerencia › Actividades y Pausas,
+    Bandeja, analítica de Proyectos) y suma Excel a Gerencia › Actividades,
+    Coordinación y Novedades.
+  - Queda aparte el **libro de Proyecto** (`libroProyecto.js`, 6 hojas con
+    Carta Gantt en celdas), que ya era un Excel con formato propio.
+  - Verificación: 5 libros reales del sandbox con todas sus partes XML bien
+    formadas y leídos por un lector independiente (SheetJS). No hay Excel en
+    el equipo de desarrollo para abrirlos en Microsoft Excel mismo.
+
+  **Siguiente: R-5** (pulido: marca en los documentos, Orden de trabajo, y el
+  informe configurable de Proyecto en el diseño v2).
