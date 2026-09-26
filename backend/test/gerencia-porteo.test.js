@@ -394,6 +394,20 @@ test('Gerencia.getPanel (v4.1, G7): kpis.comparativo trae el delta vs el periodo
   assert.equal(panel.kpis.comparativo.atrasadas_activas, 2, '3 actuales - 1 anterior');
 });
 
+test('Gerencia.getPanel: con período elegido, el comparativo resta la ventana ANTERIOR (no repite el valor actual)', () => {
+  const db = dbConSchema();
+  seedSolicitud(db, { estado_derivado: 'S09' });
+  // 1 atrasada creada en agosto (ventana anterior) y 3 en septiembre (período).
+  seedSubsolicitud(db, { subsolicitud_id: 'SOL-2026-HP-0001-01', fecha_creacion: '2026-08-10T10:00:00.000Z', fecha_comprometida: '2020-01-01T18:00' });
+  ['02', '03', '04'].forEach((n, idx) => {
+    seedSubsolicitud(db, { subsolicitud_id: 'SOL-2026-HP-0001-' + n, numero_item: idx + 2, fecha_creacion: '2026-09-10T10:00:00.000Z', fecha_comprometida: '2020-01-01T18:00' });
+  });
+  const panel = Gerencia.getPanel(db, { desde: '2026-09-01', hasta: '2026-09-30' }, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
+  assert.equal(panel.items.length, 3, 'items sigue recortado al período');
+  assert.equal(panel.kpis.atrasadas_activas, 3);
+  assert.equal(panel.kpis.comparativo.atrasadas_activas, 2, '3 del período - 1 de la ventana anterior (antes daba 3)');
+});
+
 test('Gerencia.getPanel (v4.1, G7): comparativo es null (no cero) cuando falta dato en un lado', () => {
   const db = dbConSchema();
   seedSolicitud(db, { estado_derivado: 'S09' });

@@ -345,10 +345,15 @@ function calcularPanelGerencia_(db, filtrosBase) {
   // comprometida, medirlas inflaria SIN_COMPROMISO sin nada que corregir.
   const atencionesDirectas = solicitudes.filter(esAtencionDirecta_).length;
 
-  const items = todasSubsolicitudes
+  // itemsBase: TODOS los filtros menos la fecha. La ventana anterior del
+  // comparativo se mide sobre esta base: si se midiera sobre `items` (ya
+  // recortado al período), con un período elegido quedaría vacía y la
+  // "variación" sería el valor actual completo (auditoría de reportes, hallazgo 16).
+  const filtrosSinFecha = Object.assign({}, filtrosBase, { desde: '', hasta: '' });
+  const itemsBase = todasSubsolicitudes
     .filter((sub) => {
       const solicitud = solicitudPorId[sub.solicitud_id];
-      return solicitud && !esAtencionDirecta_(solicitud) && coincideFiltroItem_(sub, solicitud, filtrosBase);
+      return solicitud && !esAtencionDirecta_(solicitud) && coincideFiltroItem_(sub, solicitud, filtrosSinFecha);
     })
     .map((sub) => {
       const solicitud = solicitudPorId[sub.solicitud_id];
@@ -379,11 +384,13 @@ function calcularPanelGerencia_(db, filtrosBase) {
       };
     });
 
-  // Ventana de comparacion "periodo actual vs anterior", recortada del mismo
-  // conjunto `items` (ya filtrado) por fecha_creacion.
+  const items = itemsBase.filter((i) => fechaEnRango_(i.fecha_creacion, filtrosBase.desde, filtrosBase.hasta));
+
+  // Ventana de comparacion "periodo actual vs anterior" por fecha_creacion,
+  // ambas medidas sobre itemsBase (ver arriba).
   const ventana = resolverVentanaPeriodo_(filtrosBase);
-  const itemsVentanaActual = items.filter((i) => dentroDeRango_(i.fecha_creacion, ventana.desde, ventana.hasta));
-  const itemsVentanaAnterior = items.filter((i) => dentroDeRango_(i.fecha_creacion, ventana.desdeAnterior, ventana.hastaAnterior));
+  const itemsVentanaActual = itemsBase.filter((i) => dentroDeRango_(i.fecha_creacion, ventana.desde, ventana.hasta));
+  const itemsVentanaAnterior = itemsBase.filter((i) => dentroDeRango_(i.fecha_creacion, ventana.desdeAnterior, ventana.hastaAnterior));
 
   const kpis = calcularKpisGerencia_(items);
   kpis.comparativo = calcularComparativoKpis_(itemsVentanaActual, itemsVentanaAnterior);
