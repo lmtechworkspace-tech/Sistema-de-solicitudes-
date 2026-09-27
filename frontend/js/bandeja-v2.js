@@ -407,7 +407,8 @@
       var ctx = [];
       if (it.url_modulo) ctx.push('URL: ' + it.url_modulo);
       if (it.usuario_prueba) ctx.push('Usuario de prueba: ' + it.usuario_prueba);
-      if (it.ref_credencial) ctx.push('Credencial: ' + it.ref_credencial);
+      // Impresa, la pauta sale de SIGSO: la credencial (a veces una contraseña) nunca va.
+      if (it.ref_credencial) ctx.push('Credencial: registrada en SIGSO');
       return '<article class="bj2-pauta__item">' +
         '<h3>' + U.esc(it.solicitud_id) + '-' + U.esc(it.numero_item) + ' — ' + U.esc(it.titulo) + '</h3>' +
         '<p class="bj2-pauta__meta">' + U.badge(it.prioridad || '—', tonoPrioridad(it.prioridad)) + ' ' +

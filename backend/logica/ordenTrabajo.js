@@ -26,6 +26,7 @@ const PdfDoc = require('./pdfDocumento');
 const DocV2 = require('./documentoV2');
 
 const MAX_IMAGENES_OT = 6;
+const CREDENCIAL_OCULTA = 'Registrada en SIGSO (verla en la solicitud)';
 
 const ESTADO_LABEL_OT = {
   S01: 'Nueva', S02: 'Recibida', S03: 'En revisión', S04: 'Aprobada',
@@ -101,7 +102,10 @@ function armarItem_(sub, archivos, indice, total) {
     if (u.url) accesos.push([u.titulo || 'URL adicional', { texto: u.url, link: u.url }]);
   });
   if (sub.usuario_prueba) accesos.push(['Usuario de prueba', sub.usuario_prueba]);
-  if (sub.ref_credencial) accesos.push(['Credencial', sub.ref_credencial]);
+  // El campo pide una REFERENCIA al gestor de credenciales, pero en la práctica se escriben
+  // contraseñas. La OT es un PDF que se descarga y se reenvía: nunca lleva el valor, solo
+  // avisa que existe (quien trabaja el ítem lo ve dentro de SIGSO).
+  if (sub.ref_credencial) accesos.push(['Credencial', CREDENCIAL_OCULTA]);
 
   const detalles = [];
   if (sub.modulo_nombre) detalles.push(['Módulo', sub.modulo_nombre]);
@@ -346,4 +350,4 @@ async function descargar(db, data, contexto) {
   return { pdf_base64: buffer.toString('base64'), filename: 'OT-' + data.solicitud_id + '.pdf' };
 }
 
-module.exports = { generar, descargar, armarVista_, estadoLabel_, cuerpoOTV2_ };
+module.exports = { generar, descargar, armarVista_, estadoLabel_, cuerpoOTV2_, CREDENCIAL_OCULTA };

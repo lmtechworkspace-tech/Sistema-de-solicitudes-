@@ -180,3 +180,15 @@ test('estadoLabel_ traduce el codigo a la etiqueta legible', () => {
   assert.equal(OrdenTrabajo.estadoLabel_('S09'), 'Cerrada');
   assert.equal(OrdenTrabajo.estadoLabel_('CODIGO-RARO'), 'CODIGO-RARO');
 });
+
+test('la credencial nunca sale en la OT (a veces se escriben contraseñas): solo el aviso de que existe', () => {
+  const vista = OrdenTrabajo.armarVista_({
+    solicitud: { solicitud_id: 'SOL-1', solicitante_nombre: 'Ana' },
+    subsolicitudes: [{ subsolicitud_id: 'SOL-1-01', titulo: 'x', ref_credencial: 'Contraseña: super$ecreta', usuario_prueba: 'demo' }],
+    archivos: []
+  });
+  const accesos = vista.items[0].accesos;
+  assert.ok(!JSON.stringify(accesos).includes('super$ecreta'));
+  assert.deepEqual(accesos.find((a) => a[0] === 'Credencial'), ['Credencial', OrdenTrabajo.CREDENCIAL_OCULTA]);
+  assert.ok(accesos.find((a) => a[0] === 'Usuario de prueba'), 'el usuario de prueba sí va');
+});
