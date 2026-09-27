@@ -101,4 +101,22 @@ function getCatalogosPublicos(db) {
   };
 }
 
-module.exports = { CATALOGOS_CONFIG, guardar, listar, getCatalogosPublicos };
+// Cartera de clientes para el buscador de "Nueva solicitud" (antes
+// backend/intake/Catalogos.gs, que la entregaba SIN login a cualquiera: razón
+// social, RUT, correo y teléfono de toda la cartera). Acá exige sesión -- el
+// router la trata como acción protegida. En el formulario público sin cuenta
+// el buscador queda vacío y los datos del cliente se escriben a mano, que es
+// el camino que el formulario ya tenía para cuando la cartera no carga.
+const CAMPOS_CLIENTE_BUSCADOR = ['cliente_id', 'razon_social', 'rut', 'codigo_cliente', 'contacto',
+  'correo', 'telefono', 'representante_legal', 'direccion', 'estado', 'bloqueo'];
+function getClientes(db) {
+  let filas;
+  try { filas = leerFilas_(db, 'CAT_CLIENTES', COLUMNAS.CAT_CLIENTES); } catch (err) { return []; }
+  return filtrarActivos_(filas).map((c) => {
+    const o = {};
+    CAMPOS_CLIENTE_BUSCADOR.forEach((k) => { o[k] = c[k] == null ? '' : c[k]; });
+    return o;
+  });
+}
+
+module.exports = { CATALOGOS_CONFIG, guardar, listar, getCatalogosPublicos, getClientes };

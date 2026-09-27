@@ -29,6 +29,7 @@ const Notificaciones = require('./notificaciones');
 const Sesiones = require('./sesiones');
 const Portal = require('./portal');
 const Cache = require('./cacheEfimero');
+const ArchivosSolicitud = require('./archivosSolicitud');
 
 function errorValidacion_(campo, mensaje) {
   return { _validationError: true, message: mensaje, fields: [{ campo: campo, mensaje: mensaje }] };
@@ -399,14 +400,11 @@ function editarSubsolicitud(db, data) {
  * item todavia editable). Borra la fila de ARCHIVOS -- que es lo que hace
  * que desaparezca de la app.
  *
- * NO se porta el "mejor esfuerzo" de mandar el archivo a la papelera de
- * Drive: ese paso depende de DriveApp, y este stack todavia no tiene un
- * backend de archivos real (R2 en Cloudflare sigue pendiente, ver
- * sigso-ecosistema-nuevo.md). Cuando exista, este es el lugar donde
- * agregarlo -- hoy borrar la fila es el comportamiento honesto: es
- * exactamente lo unico que hace que el adjunto deje de aparecer en la app,
- * que era el efecto que importaba incluso en el .gs (el borrado en Drive
- * era "mejor esfuerzo", nunca bloqueaba la operacion).
+ * Desde el apagado de Apps Script (2026-09-27) los adjuntos nuevos viven en
+ * R2 (archivosSolicitud.js) y su objeto se borra tambien, como "mejor
+ * esfuerzo" -- igual que la papelera de Drive en el .gs, nunca bloquea. Los
+ * adjuntos antiguos siguen en Drive: para esos, borrar la fila es lo que hace
+ * que dejen de aparecer en la app.
  */
 function eliminarArchivo(db, data) {
   data = data || {};
@@ -435,6 +433,10 @@ function eliminarArchivo(db, data) {
   }
 
   eliminarFilasPorId_(db, 'ARCHIVOS', 'archivo_id', data.archivo_id);
+  // Mejor esfuerzo, como la papelera de Drive en el .gs: si el objeto de R2
+  // no se puede borrar, el adjunto igual deja de existir para la app (y su
+  // enlace deja de servir, porque la llave vivía en la fila borrada).
+  ArchivosSolicitud.eliminarDelAlmacen(archivo).catch(() => {});
 
   agregarFila_(db, 'COMENTARIOS', {
     comentario_id: crypto.randomUUID(), solicitud_id: data.solicitud_id, subsolicitud_id: archivo.subsolicitud_id || '',

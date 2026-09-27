@@ -18,6 +18,7 @@
 const http = require('node:http');
 const { ejecutarAccion } = require('./router');
 const { VERSION_BACKEND } = require('../logica/sistema');
+const ArchivosSolicitud = require('../logica/archivosSolicitud');
 
 // Unica fuente de verdad: backend/logica/sistema.js (que tambien la usa
 // para getEstadoSistema, el panel de diagnostico de Administracion).
@@ -96,6 +97,34 @@ async function manejar(req, res, db) {
     const cuerpo = await leerCuerpo_(req);
     const { status, body } = await ejecutarAccion(db, cuerpo.action, cuerpo.data, { ip: ipCliente_(req) });
     return responderJson(res, status, body);
+  }
+
+  // Adjuntos de solicitudes (reemplazo de los enlaces de Drive): la URL que
+  // guarda ARCHIVOS trae una llave propia por archivo -- ver
+  // logica/archivosSolicitud.js. Sin llave válida, el mismo 404 que si no
+  // existiera. El archivo se sirve aislado (sandbox + nosniff): nunca corre
+  // como página del dominio de la API.
+  const mArchivo = req.method === 'GET' && ruta.match(/^\/v1\/archivo\/([0-9a-f-]{36})$/);
+  if (mArchivo) {
+    if (!db) return responderJson(res, 500, { ok: false, error: 'Servidor sin base de datos configurada' });
+    const archivo = await ArchivosSolicitud.servirArchivo(db, mArchivo[1], url.searchParams.get('k'));
+    if (!archivo) return responderJson(res, 404, { ok: false, error: 'Archivo no encontrado' });
+    // Solo se sirven los tipos de la lista blanca de subida (imagen, PDF,
+    // Office). Imagen y PDF se abren en el navegador; Office se descarga. El
+    // `sandbox` de CSP va solo en imágenes: Chrome bloquea su visor de PDF
+    // cuando la respuesta viene con sandbox.
+    const enLinea = /^image\//.test(archivo.mime) || archivo.mime === 'application/pdf';
+    const cabeceras = {
+      'Content-Type': archivo.mime || 'application/octet-stream',
+      'Content-Length': archivo.buffer.length,
+      'Content-Disposition': (enLinea ? 'inline' : 'attachment') + "; filename*=UTF-8''" + encodeURIComponent(archivo.nombre),
+      'X-Content-Type-Options': 'nosniff',
+      'Cache-Control': 'private, max-age=3600',
+      'Referrer-Policy': 'no-referrer'
+    };
+    if (/^image\//.test(archivo.mime)) cabeceras['Content-Security-Policy'] = "sandbox; default-src 'none'";
+    res.writeHead(200, cabeceras);
+    return res.end(archivo.buffer);
   }
 
   return responderJson(res, 404, { ok: false, error: 'Ruta no encontrada: ' + ruta });

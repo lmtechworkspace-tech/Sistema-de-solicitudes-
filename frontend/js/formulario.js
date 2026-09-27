@@ -1471,7 +1471,9 @@
             solicitud_id: solicitudId,
             subsolicitud_id: tarea.subsolicitudId,
             nombre_archivo: tarea.file.name,
-            contenido_base64: base64
+            contenido_base64: base64,
+            // El servidor exige probar que la solicitud es tuya (Node, 2026-09-27).
+            email: document.getElementById('campo-solicitante-email').value.trim()
           });
         }).then(function (respuesta) {
           if (respuesta && respuesta.ok) {

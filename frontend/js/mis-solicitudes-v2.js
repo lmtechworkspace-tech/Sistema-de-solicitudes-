@@ -402,7 +402,7 @@
       return [].slice.call(files || []).reduce(function (p, file) {
         return p.then(function () {
           return leerBase64(file).then(function (b64) {
-            return intake('subirArchivo', { solicitud_id: solicitudId, subsolicitud_id: subId, nombre_archivo: file.name, contenido_base64: b64 });
+            return intake('subirArchivo', { solicitud_id: solicitudId, subsolicitud_id: subId, nombre_archivo: file.name, contenido_base64: b64, email: email });
           }).catch(function () { /* un adjunto fallido no frena los demás */ });
         });
       }, Promise.resolve());

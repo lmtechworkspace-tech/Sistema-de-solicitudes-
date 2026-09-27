@@ -781,7 +781,8 @@
         return leerArchivoBase64Estado_(file).then(function (base64) {
           return llamarApi(window.SIGSO_CONFIG.INTAKE_URL, 'subirArchivo', {
             solicitud_id: solicitudId, subsolicitud_id: subId,
-            nombre_archivo: file.name, contenido_base64: base64
+            nombre_archivo: file.name, contenido_base64: base64,
+            email: ultimaConsulta && ultimaConsulta.email
           });
         }).catch(function () { /* un adjunto fallido no bloquea los demás */ });
       });

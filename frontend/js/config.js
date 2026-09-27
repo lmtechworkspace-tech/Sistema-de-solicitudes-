@@ -1,59 +1,21 @@
 /**
- * config.js — URLs de ambos Web Apps (§2.4).
+ * config.js — a dónde habla el frontend.
  *
- * Esta URL de /exec NO es secreta: viaja al navegador en cada request: la
- * seguridad nunca depende de ocultarla (§2.4, nota GitHub Pages). Se
- * reemplaza por el ID real al desplegar cada Web App (checklist §17.2).
+ * Desde el 2026-09-27 SIGSO tiene UN solo backend: el servidor Node
+ * (api.ctrly.cl). Apps Script se apagó. INTAKE_URL y BACKOFFICE_URL se
+ * conservan con el mismo valor solo porque cientos de llamadas los pasan como
+ * primer argumento de llamarApi (que igual los ignora, ver api.js).
+ *
+ * Esta URL NO es secreta: viaja al navegador en cada request; la seguridad
+ * nunca depende de ocultarla.
  */
 window.SIGSO_CONFIG = Object.freeze({
-  // Version que este frontend ESPERA del backend. Como el frontend se publica
-  // solo con cada push y el backend se pega a mano, esta es siempre la version
-  // buena: si el backend responde otra, es que falta pegarlo. La plataforma se
-  // lo avisa al Admin, que es quien puede resolverlo.
-  // Debe coincidir con VERSION_SIGSO de los tres proyectos Apps Script; hay un
-  // test que falla si divergen.
   VERSION: '2026-09-05',
-  // Migracion a Node/SQLite (sep-2026): las acciones ya portadas (ver
-  // ACCIONES_PORTADAS_NODE en api.js) viajan aqui en vez de a INTAKE_URL/
-  // BACKOFFICE_URL, sin que cada pagina tenga que cambiar nada -- el
-  // enrutamiento es por nombre de accion, no por pagina. El resto (Proyectos/
-  // Actividades/SGC/Pausas/Novedades, todavia no portadas) sigue exactamente
-  // igual que siempre.
   NODE_API_URL: 'https://api.ctrly.cl/v1/accion',
-  INTAKE_URL: 'https://script.google.com/macros/s/AKfycbypI38IfuisU2DFMnvM9_knsbqgm8T-9rnkUUr5MbLlc5_J7BZuXhy8mZC-GtVHzEV9aA/exec',
-  BACKOFFICE_URL: 'https://script.google.com/macros/s/AKfycbzoC2IsvrwPIElUeTgIxmNxLcNsEH3SXU8TrKLM-sFntZjd8ratSv8w_1-zGo1MmdCcFg/exec',
-  // '' porque este archivo se sirve desde el sitio publico (GitHub Pages):
+  INTAKE_URL: 'https://api.ctrly.cl/v1/accion',
+  BACKOFFICE_URL: 'https://api.ctrly.cl/v1/accion',
+  // '' porque este archivo se sirve desde el sitio público (GitHub Pages):
   // los enlaces "propios" del header (index.html/estado.html) son relativos.
-  // El stub de SIGSO_CONFIG embebido en App.html/Admin.html (Fase 8) usa
-  // el valor real de este sitio, porque ahi SI es el "otro" sitio.
   SITIO_PUBLICO: '',
-  // v3.3 (plataforma): a donde apuntan los modulos del staff mientras viven
-  // en el Backoffice con login Google (P3/P4 los traeran adentro del shell).
-  // Son la misma URL /exec del Backoffice con ?page=app / ?page=admin.
-  BACKOFFICE_APP_URL: 'https://script.google.com/macros/s/AKfycbzoC2IsvrwPIElUeTgIxmNxLcNsEH3SXU8TrKLM-sFntZjd8ratSv8w_1-zGo1MmdCcFg/exec?page=app',
-  BACKOFFICE_ADMIN_URL: 'https://script.google.com/macros/s/AKfycbzoC2IsvrwPIElUeTgIxmNxLcNsEH3SXU8TrKLM-sFntZjd8ratSv8w_1-zGo1MmdCcFg/exec?page=admin',
-  // v3.3 P3: SEGUNDA implementacion del MISMO proyecto Backoffice, publicada
-  // como "Ejecutar como: yo / Acceso: cualquier persona" -- es la que
-  // reciben las llamadas por token de la plataforma (la identidad la pone el
-  // token, no Google). '' = aun no creada: la bandeja del shell avisara que
-  // falta desplegarla. Ver DEPLOY v33-p3.
-  BACKOFFICE_TOKEN_URL: 'https://script.google.com/macros/s/AKfycby5tv_3V1wHnN0DlIH5DkW2XhsdmKbmGfYhXyaBMSiUh5B4A7a5WGWB2ydMqNeglLEqQA/exec',
-  // Reparto de carga (sep-2026). Apps Script SERIALIZA las ejecuciones de una
-  // misma cuenta de Google: con varias personas usando la plataforma a la
-  // vez, la implementacion "por token" -- que corre toda como una sola
-  // cuenta -- encola las llamadas y la que queda atras se pasa del timeout.
-  //
-  // Aqui van URLs /exec ADICIONALES del MISMO proyecto Backoffice, publicadas
-  // cada una desde OTRA cuenta de Google (todas "ejecutar como yo / acceso:
-  // cualquiera"). api.js reparte a cada usuario entre esta lista + la de
-  // arriba, de forma estable (el mismo usuario cae siempre en la misma), asi
-  // que N cuentas = N carriles en paralelo. Vacio [] = sin reparto (una sola
-  // cuenta, como hasta ahora). Ver documentacion/SIGSO-v16-reparto-carga.md.
-  // cuenta-2: rulaclombardi1@gmail.com · cuenta-3: firentialombardi719@gmail.com
-  // (11-sep-2026, verificadas: ambas responden {"ok":true,...} sin login).
-  BACKOFFICE_TOKEN_URLS: [
-    'https://script.google.com/macros/s/AKfycby-9c_Rgoq1bJUawjqaT918Gr2SqUGDP303yzwmFAclaAbln2JhC8JUq61aSL7Rut6FqQ/exec',
-    'https://script.google.com/macros/s/AKfycbxMNMXu5_DIXheRYRW5YlmnGkqpQBxt40hc0lfh5BNA_PDtWr9XRvoIW08cYiIFdLCofA/exec'
-  ],
   TIMEZONE: 'America/Santiago'
 });

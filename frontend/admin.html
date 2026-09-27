@@ -3,58 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SIGSO — Administración</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27><rect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%2314213D%27/><text x=%2716%27 y=%2723%27 font-family=%27Arial,sans-serif%27 font-weight=%27700%27 font-size=%2720%27 fill=%27white%27 text-anchor=%27middle%27>S</text></svg>" />
-  <!-- v4.0: la marca declara Inter desde §12.3 pero nunca se cargaba: todos
-       veian la fuente por defecto del sistema. display=swap evita el bloqueo
-       de render. -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/tokens.css" />
-  <link rel="stylesheet" href="css/main.css" />
-  <link rel="stylesheet" href="css/components.css" />
-  <link rel="stylesheet" href="css/dashboard.css" />
-  <link rel="stylesheet" href="css/admin.css" />
+  <title>SIGSO</title>
+  <!-- El acceso antiguo (Apps Script, identidad Google) se apagó el 2026-09-27.
+       Todo SIGSO vive en plataforma.html; esta página solo redirige. -->
+  <meta http-equiv="refresh" content="0; url=plataforma.html" />
+  <script>location.replace('plataforma.html' + location.hash);</script>
 </head>
 <body>
-  <header id="sigso-header" class="sigso-header"></header>
-
-  <main class="sigso-contenido sigso-admin-layout" style="max-width: 1100px;">
-    <!-- v12.1: los 14 botones ya no van hardcodeados aca. Los pinta
-         admin.js con SigsoNav, agrupados en submodulos. Tenerlos en el
-         HTML obligaba a mantener la MISMA lista en dos archivos
-         (plataforma.html y admin.html) y a que no se salieran de sincronia. -->
-    <nav class="sigso-admin-menu sigso-nav2" id="admin-menu" aria-label="Secciones de Administración"></nav>
-
-    <section id="admin-contenido" class="sigso-admin-contenido"></section>
-  </main>
-
-  <!-- v5.0 F3b (§5.6): drawer lateral -- reemplaza el formulario arriba de
-       la tabla (obligaba a scroll constante). "Nuevo" o una fila abren el
-       mismo panel; el cuerpo lo llena admin.js segun la seccion activa. -->
-  <div class="sigso-drawer__telon sigso-oculto" id="drawer-admin-telon"></div>
-  <aside class="sigso-drawer sigso-oculto" id="drawer-admin" role="dialog" aria-modal="true" aria-labelledby="drawer-admin-titulo">
-    <div class="sigso-drawer__cab">
-      <h2 id="drawer-admin-titulo"></h2>
-      <button type="button" class="sigso-drawer__cerrar" id="btn-cerrar-drawer-admin" aria-label="Cerrar">
-        <span id="ico-cerrar-drawer-admin"></span>
-      </button>
-    </div>
-    <div class="sigso-drawer__cuerpo" id="drawer-admin-cuerpo"></div>
-  </aside>
-
-  <script src="js/config.js"></script>
-  <script src="js/api.js"></script>
-  <script src="js/ui-components.js"></script>
-  <script src="js/components.js"></script>
-  <script src="js/iconos.js"></script>
-  <script src="js/navegacion.js"></script>
-  <!-- v12.2: motor de reportes (catalogo, filtros, exportacion y piezas
-       visuales) compartido por todos los modulos. -->
-  <script src="js/reportes.js"></script>
-  <!-- v6.4: panel "Mi perfil" + identidad en el header. -->
-  <script src="js/perfil.js"></script>
-  <script src="js/admin.js"></script>
+  <p>SIGSO se mudó. <a href="plataforma.html">Entrar a SIGSO</a>.</p>
 </body>
 </html>

@@ -192,7 +192,7 @@ async function registrarRecepcion(db, data, contexto) {
   if (!procede) {
     await Notificaciones.enviarCorreoModulo(db, {
       solicitudId: 'SGC_QUEJA_NO_PROCEDE:' + queja.queja_id, destinatario: queja.email, evento: 'SGC_QUEJA_NO_PROCEDE',
-      asunto: 'HomePymes — Sobre tu mensaje ' + queja.correlativo,
+      asunto: 'SIGSO — Sobre tu mensaje ' + queja.correlativo,
       cuerpo: 'Hola ' + queja.nombre_completo + ',\n\nRevisamos tu mensaje (' + queja.correlativo + ') y no corresponde ' +
         'procesarlo como queja formal.\n\nMotivo: ' + actualizada.motivo_no_procede
     });
@@ -244,7 +244,7 @@ async function registrarResultado(db, data, contexto) {
   if (!valida) {
     await Notificaciones.enviarCorreoModulo(db, {
       solicitudId: 'SGC_QUEJA_NO_VALIDA:' + queja.queja_id, destinatario: queja.email, evento: 'SGC_QUEJA_NO_VALIDA',
-      asunto: 'HomePymes — Resultado de tu mensaje ' + queja.correlativo,
+      asunto: 'SIGSO — Resultado de tu mensaje ' + queja.correlativo,
       cuerpo: 'Hola ' + queja.nombre_completo + ',\n\nRevisamos tu mensaje (' + queja.correlativo + ') y, tras la investigación, ' +
         'no encontramos elementos que la validen.\n\n' + cambios.accion_implementada
     });
@@ -307,7 +307,7 @@ async function registrarNotificacion(db, data, contexto) {
 
   await Notificaciones.enviarCorreoModulo(db, {
     solicitudId: 'SGC_QUEJA_RESPUESTA:' + queja.queja_id, destinatario: queja.email, evento: 'SGC_QUEJA_RESPUESTA',
-    asunto: 'HomePymes — Respuesta a tu mensaje ' + queja.correlativo,
+    asunto: 'SIGSO — Respuesta a tu mensaje ' + queja.correlativo,
     cuerpo: 'Hola ' + queja.nombre_completo + ',\n\nEsto es lo que hicimos con tu mensaje (' + queja.correlativo + '):\n\n' + queja.accion_implementada
   });
   return actualizada;
@@ -348,6 +348,101 @@ function anular(db, data, contexto) {
   return anulada;
 }
 
+// --- Parte 1: formulario público (antes backend/intake/Quejas.gs) ---------------
+// Lo llena cualquier visitante SIN cuenta. Mismas validaciones y correlativo
+// que el .gs; lo que cambia es a quién se avisa: el .gs escribía a una casilla
+// fija de una empresa, acá se avisa a los Encargados SGC (SGC_ROLES) y, si no
+// hay ninguno configurado, a los Administradores -- SIGSO no queda atado a
+// ninguna empresa y el aviso nunca se pierde.
+const TIPOS_QUEJA = ['QUEJA', 'RECLAMACION', 'FELICITACION', 'CONSULTA'];
+const AREAS_QUEJA = ['RRHH', 'CONTABILIDAD', 'PREVENCION', 'MARKETING', 'ADMINISTRACION', 'OTRO'];
+const CANALES_QUEJA = ['WEB', 'CORREO', 'TELEFONO', 'ENCUESTA'];
+const ETIQUETAS_TIPO_QUEJA = { QUEJA: 'Queja', RECLAMACION: 'Reclamación', FELICITACION: 'Felicitación', CONSULTA: 'Consulta' };
+
+function siguienteCorrelativoQueja_(db, fecha) {
+  const anio = fecha.getFullYear();
+  const delAnio = leerSeguro_(db, 'SGC_QUEJAS').filter((q) => {
+    const f = new Date(q.fecha_envio);
+    return !isNaN(f.getTime()) && f.getFullYear() === anio;
+  }).length;
+  return 'Q-' + anio + '-' + ('00' + (delAnio + 1)).slice(-3);
+}
+function destinatariosNuevaQueja_(db) {
+  const encargados = encargadosSgc_(db);
+  if (encargados.length) return encargados;
+  return leerSeguro_(db, 'CUENTAS_PORTAL')
+    .filter((c) => esVerdadero_(c.activo) && c.rol === 'ADM')
+    .map((c) => {
+      // `emails` es un arreglo JSON (["a@x.cl", ...]); el primero es el principal.
+      let lista;
+      try { lista = JSON.parse(c.emails); } catch (err) { lista = String(c.emails || '').split(/[,;\s]+/); }
+      return normalizarEmail_(Array.isArray(lista) ? lista[0] : lista);
+    })
+    .filter(Boolean);
+}
+
+async function crearPublica(db, data) {
+  data = data || {};
+  const nombre = String(data.nombre_completo || '').trim();
+  if (!nombre) return errorValidacion_('nombre_completo', 'Indica tu nombre completo.');
+  const email = String(data.email || '').trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return errorValidacion_('email', 'Indica un correo electrónico válido: ahí te llegará la respuesta.');
+  }
+  if (TIPOS_QUEJA.indexOf(data.tipo) === -1) return errorValidacion_('tipo', 'Indica si es queja, reclamación, felicitación o consulta.');
+  if (AREAS_QUEJA.indexOf(data.area) === -1) return errorValidacion_('area', 'Indica a qué área o servicio se relaciona.');
+  const descripcion = String(data.descripcion || '').trim();
+  if (descripcion.length < 20) return errorValidacion_('descripcion', 'Cuéntanos con un poco más de detalle (mínimo 20 caracteres).');
+
+  const ahora = new Date();
+  const queja = {
+    queja_id: require('node:crypto').randomUUID(),
+    correlativo: siguienteCorrelativoQueja_(db, ahora),
+    nombre_completo: nombre.slice(0, 200),
+    empresa: String(data.empresa || '').trim().slice(0, 200),
+    rut: String(data.rut || '').trim().slice(0, 20),
+    email,
+    telefono: String(data.telefono || '').trim().slice(0, 40),
+    tipo: data.tipo, area: data.area,
+    descripcion: descripcion.slice(0, 5000),
+    canal: CANALES_QUEJA.indexOf(data.canal) !== -1 ? data.canal : 'WEB',
+    fecha_envio: ahora.toISOString(),
+    estado: 'RECIBIDA',
+    fecha_creacion: ahora.toISOString(),
+    activa: true
+  };
+  agregarFila_(db, 'SGC_QUEJAS', queja);
+  const etiqueta = ETIQUETAS_TIPO_QUEJA[queja.tipo] || queja.tipo;
+
+  // Los correos son "mejor esfuerzo": la queja ya quedó registrada y visible en
+  // Calidad › Quejas aunque el envío falle.
+  try {
+    await Notificaciones.enviarCorreoModulo(db, {
+      solicitudId: 'SGC_QUEJA_CONFIRMACION:' + queja.queja_id, destinatario: queja.email, evento: 'SGC_QUEJA_CONFIRMACION',
+      asunto: 'SIGSO — Recibimos tu ' + etiqueta.toLowerCase(),
+      cuerpo: 'Hola ' + queja.nombre_completo + ',\n\nRecibimos tu mensaje (' + queja.correlativo + ') y lo estamos revisando.\n\n' +
+        'Te daremos respuesta en un plazo máximo de 30 días corridos.\n\nResumen de lo que registramos:\n"' +
+        queja.descripcion.slice(0, 200) + (queja.descripcion.length > 200 ? '…' : '') + '"'
+    });
+  } catch (err) { /* ver arriba */ }
+  const aviso = 'Se recibió un nuevo mensaje por el formulario público:\n\n' +
+    'Correlativo: ' + queja.correlativo + '\nTipo: ' + etiqueta + '\nÁrea: ' + queja.area + '\n' +
+    'De: ' + queja.nombre_completo + (queja.empresa ? ' (' + queja.empresa + ')' : '') + ' — ' + queja.email + '\n\n' +
+    queja.descripcion + '\n\nEntra a SIGSO > Calidad > Quejas para registrarla.';
+  for (const destinatario of destinatariosNuevaQueja_(db)) {
+    try {
+      await Notificaciones.enviarCorreoModulo(db, {
+        solicitudId: 'SGC_QUEJA_NUEVA:' + queja.queja_id, destinatario, evento: 'SGC_QUEJA_NUEVA',
+        asunto: 'SIGSO — Nueva ' + etiqueta.toLowerCase() + ' recibida (' + queja.correlativo + ')', cuerpo: aviso
+      });
+    } catch (err) { /* ver arriba */ }
+    try { encolarAviso_(db, destinatario, 'Nueva ' + etiqueta.toLowerCase() + ' ' + queja.correlativo, queja.nombre_completo + ' · ' + queja.area); } catch (err) { /* idem */ }
+  }
+
+  // Al remitente solo le importan estos datos, no la fila completa.
+  return { queja_id: queja.queja_id, correlativo: queja.correlativo, tipo: queja.tipo, fecha_envio: queja.fecha_envio };
+}
+
 // --- avisos diarios -----------------------------------------------------------
 // Dos plazos, ambos en dias CORRIDOS (a diferencia de PRO-03/PRO-06 que usan
 // dias habiles -- PRO-07 lo especifica asi explicitamente): resolucion
@@ -384,7 +479,7 @@ async function recordatorioPendientes(db) {
 }
 
 module.exports = {
-  listar, getDetalle, registrarRecepcion, registrarInvestigacion, registrarResultado,
+  crearPublica, listar, getDetalle, registrarRecepcion, registrarInvestigacion, registrarResultado,
   registrarResolucion, convertirEnNc, registrarNotificacion, registrarSeguimiento, anular,
   recordatorioPendientes
 };

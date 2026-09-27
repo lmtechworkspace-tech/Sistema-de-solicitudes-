@@ -77,6 +77,7 @@ const SuperAdminPanel = require('../logica/superAdminPanel');
 const DirectorioPersonas = require('../logica/directorioPersonas');
 const ReportePdf = require('../logica/reportePdf');
 const ReporteExcel = require('../logica/reporteExcel');
+const ArchivosSolicitud = require('../logica/archivosSolicitud');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -91,6 +92,10 @@ const ACCIONES_PUBLICAS = new Set([
   'consultarEstado', 'solicitarCodigoAcceso', 'misSolicitudes',
   'editarSubsolicitud', 'eliminarArchivo', 'responderConsulta', 'validarCierre',
   'getCatalogos',
+  // Apagado de Apps Script (2026-09-27): lo que quedaba del Intake. subirArchivo
+  // prueba la propiedad con el correo (ver archivosSolicitud.js) y crearQuejaSgc
+  // es el formulario público de quejas, sin cuenta por diseño (PRO-07).
+  'subirArchivo', 'crearQuejaSgc',
   // Fase "Recuperar contraseña" (Arquitectura de Accesos, 2026-09-19):
   // quien la pide todavía no tiene sesión -- es justamente el problema
   // que resuelven. Anti-enumeración adentro de recuperarPassword.js, no
@@ -114,6 +119,9 @@ const ACCIONES = {
 
   crearSolicitud: (db, data) => Solicitudes.crearSolicitud(db, data),
   getCatalogos: (db) => Catalogos.getCatalogosPublicos(db),
+  getClientes: (db) => Catalogos.getClientes(db),
+  subirArchivo: (db, data) => ArchivosSolicitud.subirArchivo(db, data),
+  crearQuejaSgc: (db, data) => Quejas.crearPublica(db, data),
 
   consultarEstado: (db, data) => SolicitudesPublico.estadoPublico(db, data.solicitud_id, data.email),
   solicitarCodigoAcceso: (db, data) => SolicitudesPublico.solicitarCodigoAcceso(db, data),
