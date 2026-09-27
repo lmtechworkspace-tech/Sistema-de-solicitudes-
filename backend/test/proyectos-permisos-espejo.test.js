@@ -33,7 +33,7 @@ const path = require('node:path');
 
 const RAIZ = path.join(__dirname, '..', '..');
 const FRONT = path.join(RAIZ, 'frontend/js/proyectos.js');
-const BACK = path.join(RAIZ, 'backend/backoffice/Proyectos.gs');
+const BACK = path.join(RAIZ, 'backend/logica/proyectos.js');
 
 test('el frontend de Proyectos no repite a mano la regla de "quien puede aportar"', () => {
   const fuente = fs.readFileSync(FRONT, 'utf8');
@@ -79,7 +79,8 @@ test('el backend sigue concediendo esas acciones al ADM', () => {
     'gestionarEntregable', 'gestionarRiesgo', 'gestionarDocumento'
   ];
   const sinAdm = ACCIONES.filter((accion) => {
-    const i = fuente.indexOf('\n  ' + accion + ': function');
+    const m = fuente.match(new RegExp('\\n(async )?function ' + accion + '\\('));
+    const i = m ? m.index : -1;
     if (i === -1) return true;                       // la accion ya no existe
     const bloque = fuente.slice(i, i + 1400);
     return !/contexto\.rol === 'ADM'/.test(bloque);
@@ -91,7 +92,7 @@ test('el backend sigue concediendo esas acciones al ADM', () => {
   );
 
   // publicarEnSala usa la forma equivalente, escrita distinto.
-  const iSala = fuente.indexOf('\n  publicarEnSala: function');
+  const iSala = fuente.indexOf('\nfunction publicarEnSala(');
   assert.ok(iSala !== -1, 'publicarEnSala ya no existe');
   assert.ok(
     /contexto\.rol === 'ADM'/.test(fuente.slice(iSala, iSala + 900)),

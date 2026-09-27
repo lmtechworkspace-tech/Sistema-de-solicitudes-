@@ -27,9 +27,8 @@ const path = require('node:path');
 const RAIZ = path.join(__dirname, '..', '..');
 
 const CARPETAS = [
-  'backend/intake',
-  'backend/backoffice',
-  'backend/setup',
+  'backend/logica',
+  'backend/server',
   'frontend/js',
   'frontend/css',
   // Los propios tests entran al barrido: este control nacio de un byte nulo
@@ -74,16 +73,3 @@ test('ningun archivo de codigo trae bytes de control crudos', () => {
     'Si hace falta ese valor, se escribe como secuencia de escape.');
 });
 
-test('el centinela de "sin foto" sigue valiendo lo mismo tras escribirlo como escape', () => {
-  // Lo que se cambio fue la REPRESENTACION en el archivo, no el valor: si
-  // alguien "limpiara" el escape a otra cosa, el cache de miniaturas dejaria
-  // de reconocer las entradas ya guardadas.
-  const src = fs.readFileSync(path.join(RAIZ, 'backend/backoffice/Perfiles.gs'), 'utf8');
-  const m = src.match(/var SIN_FOTO = '([^']*)';/);
-  assert.ok(m, 'debe existir la constante SIN_FOTO');
-
-  // Se evalua el literal tal como esta escrito en el archivo.
-  const valor = eval("'" + m[1] + "'");
-  assert.equal(valor, '\u0000', 'el valor en ejecución tiene que seguir siendo el carácter nulo');
-  assert.equal(valor.length, 1);
-});

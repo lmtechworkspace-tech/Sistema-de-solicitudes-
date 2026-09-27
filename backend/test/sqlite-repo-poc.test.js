@@ -23,18 +23,11 @@ const assert = require('node:assert/strict');
 const {
   abrirDb_, sembrarTabla_, leerFilas_, agregarFila_, diagnosticarEsquema_
 } = require('../db/sqliteRepo');
-const { loadBackofficeProject } = require('./helpers/gasSandbox');
+const { COLUMNAS } = require('../db/schema');
 
-// Solo para tomar prestado el esquema real (COLUMNAS) de los tests de
-// diagnosticarEsquema_ -- no se usa nada de Sheets de este contexto.
-// COLUMNAS sale del contexto vm de gasSandbox: sus arrays son de OTRO
-// realm (otro constructor Array) que los de este archivo, y
-// assert.deepEqual falla comparando arrays cross-realm aunque el contenido
-// sea identico. JSON.parse(JSON.stringify(...)) clona todo a arrays/objetos
-// NATIVOS de este realm de una sola vez (es solo texto, sin funciones).
-const COLUMNAS_REALES = JSON.parse(JSON.stringify(
-  loadBackofficeProject({ scriptProperties: { SIGSO_SHEET_ID: 'fake-sheet-id' } }).COLUMNAS
-));
+// El esquema real (COLUMNAS) para los tests de diagnosticarEsquema_. Se clona
+// para que ningún test pueda mutar el esquema compartido.
+const COLUMNAS_REALES = JSON.parse(JSON.stringify(COLUMNAS));
 
 test('leerFilas_ mapea por nombre de encabezado aunque la hoja tenga columnas EXTRA', () => {
   const db = abrirDb_();

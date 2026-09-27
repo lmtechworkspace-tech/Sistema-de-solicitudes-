@@ -2,10 +2,9 @@
   "name": "sigso",
   "version": "0.1.0",
   "private": true,
-  "description": "SIGSO - Sistema Integral de Gestion de Solicitudes (HomePymes / RLD)",
+  "description": "SIGSO — Control y Gestión Empresarial",
   "scripts": {
-    "test": "node --test backend/test/*.test.js",
-    "build:backoffice-html": "node backend/build-backoffice-html.js"
+    "test": "node --test backend/test/*.test.js"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",
