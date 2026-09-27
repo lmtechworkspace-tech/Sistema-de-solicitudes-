@@ -73,6 +73,27 @@
   background: color-mix(in srgb, var(--sx-primario) 6%, var(--sx-superficie)); break-inside: avoid; page-break-inside: avoid; }
 .ot2-cierre h3 { margin: 0 0 6px; font: 700 .8125rem/1.3 var(--fuente); color: var(--sx-texto); }
 .ot2-cierre ol { margin: 0; padding-left: 18px; font: var(--sx-t-chico); color: var(--sx-texto); display: flex; flex-direction: column; gap: 3px; }
+/* Informe de proyecto: portada, ficha y Carta Gantt ejecutiva (backend/logica/reporteProyecto.js). */
+.rp2-portada { display: flex; flex-direction: column; gap: var(--sx-e-4); padding-top: var(--sx-e-6); }
+.rp2-portada__eyebrow { font: 700 .75rem/1.2 var(--fuente); letter-spacing: .12em; text-transform: uppercase; color: var(--sx-texto-3); }
+.rp2-portada h2 { margin: 0; font: 700 2rem/1.15 var(--fuente); letter-spacing: -.02em; color: var(--sx-texto); text-wrap: balance; }
+.rp2-portada__indice { margin: 0; padding-left: 20px; font: var(--sx-t-chico); color: var(--sx-texto-2); columns: 2; column-gap: var(--sx-e-6); }
+.rp2-ficha { max-width: 560px; }
+.rp2-gantt { width: 100%; border-collapse: collapse; table-layout: fixed; font: var(--sx-t-micro); }
+.rp2-gantt th, .rp2-gantt td { padding: 3px 1px; border-bottom: 1px solid var(--sx-borde-suave); text-align: center; vertical-align: middle; }
+.rp2-gantt thead th { font-weight: 700; color: var(--sx-texto-3); border-bottom: 1.5px solid var(--sx-texto-2); }
+.rp2-gantt .rp2-gantt__et { width: 26%; padding-right: 8px; text-align: left; font-weight: 400; }
+.rp2-gantt .rp2-gantt__et .rp2-item strong { font-size: .6875rem; font-weight: 500; }
+.rp2-gantt .rp2-gantt__et .rp2-item small { font-size: .625rem; }
+.rp2-gantt__hito th, .rp2-gantt__hito .rp2-gantt__et { font: 700 .75rem/1.3 var(--fuente); color: var(--sx-texto); background: var(--sx-superficie-2); }
+.rp2-gantt__hito td { background: var(--sx-superficie-2); }
+.rp2-gantt .rp2-gantt--hoy { background: color-mix(in srgb, var(--sx-primario) 9%, transparent); }
+.rp2-gantt__b { display: block; height: 9px; border-radius: 2px; background: var(--sx-tono, var(--sx-texto-3)); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.rp2-gantt__b--vencida { background: repeating-linear-gradient(135deg, #991b1b 0 3px, #dc2626 3px 6px); }
+.rp2-gantt__rombo { display: inline-block; width: 8px; height: 8px; transform: rotate(45deg); background: var(--sx-texto); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.rp2-gantt-leyenda { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: var(--sx-e-4) 0 0; padding: 0; list-style: none; font: var(--sx-t-micro); color: var(--sx-texto-2); }
+.rp2-gantt-leyenda li { display: inline-flex; align-items: center; gap: 6px; }
+.rp2-gantt-leyenda .rp2-gantt__b { width: 16px; }
 /* Acta de reunión: espacio para escribir a mano el acuerdo, la fecha y los asistentes. */
 .rp2-escribir { display: block; min-width: 90px; min-height: 26px; border-bottom: 1px solid var(--sx-borde); }
 .rp2-acta td { vertical-align: top; }

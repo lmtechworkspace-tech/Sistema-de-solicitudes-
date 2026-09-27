@@ -193,3 +193,26 @@ test('sanitizarHtml: los enlaces http solo sobreviven si el documento lo arma el
   assert.ok(s.includes('href="https://x.cl"'));
   assert.ok(!/javascript:/i.test(s));
 });
+
+test('informe configurable v2: solo las secciones elegidas, Gantt en página apaisada con hitos, barras y leyenda', () => {
+  const { R, U } = DocV2.piezas();
+  const RPy = require('../logica/reporteProyecto');
+  const detalle = {
+    proyecto: { nombre: 'Migración', codigo: 'P-1', estado: 'ACTIVO', fecha_inicio: '2026-09-01T00:00:00.000Z', lider_email: 'ana@x.cl' },
+    salud: 'riesgo', avance_pct: 40, avance_esperado_pct: 50, requiere_atencion: {},
+    hitos: [{ hito_id: 'h1', nombre: 'H1 <arranque>', fecha_objetivo: '2026-09-10T00:00:00.000Z', estado: 'PENDIENTE' }], riesgos: []
+  };
+  const tareas = [{ actividad_id: 't1', titulo: 'Tarea A', estado: 'EN_CURSO', semaforo: 'atrasada', hito_id: 'h1',
+    fecha_creacion: '2026-09-01T00:00:00.000Z', fecha_compromiso: '2026-09-12T00:00:00.000Z', responsable_email: 'ana@x.cl' }];
+  const config = RPy.normalizarConfig_({ secciones: ['ficha', 'gantt', 'leyenda'] });
+  const html = RPy.cuerpoConfiguradoV2_(config, detalle, tareas, {}, [], { 'ana@x.cl': 'Ana Pérez' }, R, U, DocV2.fecha_);
+  assert.match(html, /Ficha del proyecto/);
+  assert.match(html, /Carta Gantt ejecutiva/);
+  assert.ok(!/Riesgos abiertos|Actividad reciente/.test(html), 'solo lo elegido');
+  assert.match(html, /class="rp2-apaisada"/);
+  assert.match(html, /rp2-gantt__rombo/);
+  assert.match(html, /rp2-gantt__b sx2-tono-critico/, 'la tarea atrasada en rojo');
+  assert.match(html, /rp2-gantt-leyenda/);
+  assert.ok(html.includes('H1 &lt;arranque&gt;'));
+  assert.match(html, /Ana Pérez/);
+});

@@ -130,6 +130,9 @@ async function renderizar_(html, opts) {
       displayHeaderFooter: true,
       headerTemplate: '<span></span>',
       footerTemplate: opts.pie || '<span></span>',
+      // Páginas con tamaño propio en el CSS (@page con nombre, p. ej. la Carta Gantt
+      // apaisada dentro de un informe vertical).
+      preferCSSPageSize: !!opts.tamanosCss,
       timeout: TIMEOUT_MS
     });
     return Buffer.from(pdf);

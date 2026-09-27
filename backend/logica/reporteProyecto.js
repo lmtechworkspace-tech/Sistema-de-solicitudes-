@@ -761,8 +761,16 @@ function diasEntreClaves_(a, b) {
   return Math.round((Date.UTC(pb[0], pb[1] - 1, pb[2]) - Date.UTC(pa[0], pa[1] - 1, pa[2])) / 86400000);
 }
 
-function cuerpoProyectoV2_(detalle, tareas, rendimiento, bitacora, nombres, R, U, fecha) {
+// Piezas del reporte de proyecto v2: se calculan UNA vez y las usan tanto el reporte
+// estándar (4 niveles) como el informe configurable (secciones a elección). Cada pieza
+// devuelve HTML hecho con las mismas piezas de la pantalla (documentoV2.js).
+const TONO_GANTT = { 'al-dia': 'ok', terminada: 'ok', riesgo: 'alerta', atrasada: 'critico', bloqueada: 'info', revision: 'hito', pendiente: 'neutro' };
+const LEYENDA_GANTT_V2 = [['Al día / terminada', 'ok'], ['En riesgo', 'alerta'], ['Atrasada', 'critico'], ['Bloqueada', 'info'],
+  ['En revisión', 'hito'], ['Pendiente', 'neutro'], ['Semana vencida sin cerrar', 'vencida']];
+
+function piezasProyectoV2_(detalle, tareas, rendimiento, nombres, R, U, fecha) {
   const at = detalle.requiere_atencion || {};
+  const p = detalle.proyecto || {};
   const hoy = claveHoyChile_();
   const plural = (n, uno, varios) => n + ' ' + (n === 1 ? uno : varios);
   const persona = (email, nombre) => (nombre && !/@/.test(nombre) ? String(nombre).trim() : '') || nombres[String(email || '').toLowerCase()] || email || 'Sin asignar';
@@ -780,10 +788,16 @@ function cuerpoProyectoV2_(detalle, tareas, rendimiento, bitacora, nombres, R, U
   const c = (rendimiento && rendimiento.cumplimiento_tareas) || {};
   const n = construirNarrativa_(detalle);
   const ejemplos = (lista, fn) => lista.slice(0, 3).map(fn).join(' · ') + (lista.length > 3 ? ' · y ' + (lista.length - 3) + ' más' : '');
-
-  // 1 · En una línea
   const estado = detalle.salud === 'critico' ? 'critico' : (detalle.salud === 'riesgo' ? 'alerta' : 'ok');
-  const linea = R.enUnaLinea({ estado, frase: n.texto, comparaCon: esperado != null ? 'vs. lo planificado (' + esperado + ' %)' : '', kpis: [
+  const tareaPorId = {};
+  tareas.forEach((a) => { tareaPorId[a.actividad_id] = a; });
+  const plan = (rendimiento && rendimiento.plan_seguimiento) || [];
+  const tabla = (cols, filas, vacio) => '<div class="rp2-detalle">' + R.tabla(cols, filas, { vacio }) + '</div>';
+  const pendientes = vivas.slice().sort((a, b) => ((VENCIMIENTOS_ORDEN[a.semaforo] === undefined ? 9 : VENCIMIENTOS_ORDEN[a.semaforo]) -
+    (VENCIMIENTOS_ORDEN[b.semaforo] === undefined ? 9 : VENCIMIENTOS_ORDEN[b.semaforo])) ||
+    String(a.fecha_compromiso || '9').localeCompare(String(b.fecha_compromiso || '9')));
+
+  const kpisPrincipales = [
     { etiqueta: 'Avance real', valor: avance == null ? '—' : Math.round(avance), sufijo: avance == null ? '' : '%', icono: 'tendencia', progreso: avance,
       tono: desv == null ? 'primario' : (desv < -10 ? 'critico' : (desv < 0 ? 'alerta' : 'ok')),
       delta: desv == null ? undefined : desv, deltaSufijo: ' pp', nota: avance == null ? 'sin tareas para medir' : '' },
@@ -792,54 +806,55 @@ function cuerpoProyectoV2_(detalle, tareas, rendimiento, bitacora, nombres, R, U
     { etiqueta: 'Hitos vencidos', valor: hitosVencidos.length, icono: 'diana', tono: hitosVencidos.length ? 'critico' : 'ok',
       nota: hitos.filter((h) => h.estado === 'COMPLETADO').length + ' de ' + hitos.length + ' completados' },
     { etiqueta: 'Riesgos altos', valor: riesgosAltos.length, icono: 'escudo', tono: riesgosAltos.length ? 'critico' : 'ok', nota: plural(riesgos.length, 'riesgo abierto', 'riesgos abiertos') }
-  ] });
+  ];
+  const comparaCon = esperado != null ? 'vs. lo planificado (' + esperado + ' %)' : '';
 
-  // 2 · Lo que requiere decisión: la decisión sugerida y un solo bloque de alertas.
-  const dias = (f) => (f ? diasEntreClaves_(f, hoy) : 0);
-  const alertas = [];
-  if (criticas.length) alertas.push({ severidad: 'critico', cantidad: criticas.length, titulo: 'Tareas P1/P2 atrasadas',
-    detalle: ejemplos(criticas.sort((a, b) => dias(b.fecha_compromiso) - dias(a.fecha_compromiso)), (a) => '«' + a.titulo + '» (' + persona(a.responsable_email, a.responsable_nombre) + ', hace ' + dias(a.fecha_compromiso) + ' d)') });
-  if (bloqueadas.length) alertas.push({ severidad: 'critico', cantidad: bloqueadas.length, titulo: 'Tareas bloqueadas',
-    detalle: ejemplos(bloqueadas, (a) => '«' + a.titulo + '»' + (a.bloqueo_motivo ? ': ' + a.bloqueo_motivo : '')) });
-  if (hitosVencidos.length) alertas.push({ severidad: 'critico', cantidad: hitosVencidos.length, titulo: 'Hitos vencidos',
-    detalle: ejemplos(hitosVencidos, (h) => h.nombre + ' (vencía ' + fecha(h.fecha_objetivo) + (h.avance_pct != null ? ', va en ' + Math.round(h.avance_pct) + ' %' : '') + ')') });
-  if (riesgosAltos.length) alertas.push({ severidad: 'critico', cantidad: riesgosAltos.length, titulo: 'Riesgos altos abiertos',
-    detalle: ejemplos(riesgosAltos, (r) => r.descripcion + (r.mitigacion ? '' : ' — sin plan de mitigación')) });
-  if (otrasAtrasadas.length) alertas.push({ severidad: 'alerta', cantidad: otrasAtrasadas.length, titulo: 'Otras tareas atrasadas',
-    detalle: ejemplos(otrasAtrasadas, (a) => '«' + a.titulo + '» (' + persona(a.responsable_email, a.responsable_nombre) + ')') });
-  const decision = '<p class="rp2-decision"><strong>Decisión sugerida</strong><span>' + U.esc(n.decision) + '</span></p>' +
-    R.requiereDecision(alertas, { conservarOrden: true, vacio: 'Sin tareas críticas atrasadas, bloqueos, hitos vencidos ni riesgos altos.' });
-
-  // 3 · Panorama: real vs esperado por tarea (lo más atrasado frente al plan arriba) e hitos.
-  const tareaPorId = {};
-  tareas.forEach((a) => { tareaPorId[a.actividad_id] = a; });
-  const conPlan = ((rendimiento && rendimiento.plan_seguimiento) || [])
-    .filter((p) => tareaPorId[p.actividad_id] && p.estado_plazo !== 'COMPLETADA' && p.avance_esperado_pct != null)
-    .sort((a, b) => (a.desviacion_pp == null ? 0 : a.desviacion_pp) - (b.desviacion_pp == null ? 0 : b.desviacion_pp)).slice(0, 12);
-  const avanceHtml = conPlan.length
-    ? R.ranking(conPlan.map((p) => ({ etiqueta: tareaPorId[p.actividad_id].titulo, valor: p.avance_real_pct || 0,
-        texto: (p.avance_real_pct == null ? '—' : Math.round(p.avance_real_pct) + '%') + ' · plan ' + Math.round(p.avance_esperado_pct) + '%',
-        tono: p.desviacion_pp == null ? 'primario' : (p.desviacion_pp < -10 ? 'critico' : (p.desviacion_pp < 0 ? 'alerta' : 'ok')) })), { max: 100, sinPosicion: true })
-    : R.ranking(vivas.slice(0, 12).map((a) => ({ etiqueta: a.titulo, valor: a.avance_pct || 0, texto: Math.round(a.avance_pct || 0) + '%' })), { max: 100, sinPosicion: true, vacio: 'Sin tareas abiertas.' });
-  const hitosHtml = hitos.length ? '<ul class="rp2-agenda">' + hitos.map((h) => {
-    const venc = hitosVencidos.indexOf(h) !== -1;
-    return '<li><time>' + U.esc(h.fecha_objetivo ? fecha(h.fecha_objetivo, true) : 'Sin fecha') + '</time><span class="rp2-item"><strong>' + U.esc(h.nombre) + '</strong><small>' +
-      U.badge(venc ? 'Vencido' : (HITO_ESTADO_LABEL[h.estado] || h.estado), venc ? 'critico' : (TONO_HITO[h.estado] || 'neutro'), true) +
-      (h.avance_pct != null && h.estado !== 'COMPLETADO' ? ' ' + U.esc(Math.round(h.avance_pct) + ' % de avance') : '') + '</small></span></li>';
-  }).join('') + '</ul>' : '';
-  const bien = [];
-  if (c.entregadas) bien.push(c.a_tiempo + ' de ' + c.entregadas + ' tareas entregadas a tiempo.');
-  const hitosOk = hitos.filter((h) => h.estado === 'COMPLETADO');
-  if (hitosOk.length) bien.push(plural(hitosOk.length, 'hito completado', 'hitos completados') + ': ' + hitosOk.slice(0, 3).map((h) => h.nombre).join(', ') + '.');
-  const panorama = '<h3 class="rp2-sub">Avance real vs. lo planificado <span class="sx2-tenue" style="font-weight:500;font-size:.8125rem">(lo más atrasado arriba)</span></h3>' +
-    avanceHtml + (hitosHtml ? '<h3 class="rp2-sub">Hitos</h3>' + hitosHtml : '') + R.loQueVaBien(bien);
-
-  // 4 · Detalle
-  const pendientes = vivas.slice().sort((a, b) => ((VENCIMIENTOS_ORDEN[a.semaforo] === undefined ? 9 : VENCIMIENTOS_ORDEN[a.semaforo]) -
-    (VENCIMIENTOS_ORDEN[b.semaforo] === undefined ? 9 : VENCIMIENTOS_ORDEN[b.semaforo])) ||
-    String(a.fecha_compromiso || '9').localeCompare(String(b.fecha_compromiso || '9')));
-  const detalleHtml =
-    '<h3 class="rp2-sub">Tareas pendientes</h3><div class="rp2-detalle">' + R.tabla([
+  const P = {
+    plural, pendientesN: pendientes.length,
+    // La frase y los 4 KPI (nivel 1 del estándar).
+    linea: () => R.enUnaLinea({ estado, frase: n.texto, comparaCon, kpis: kpisPrincipales }),
+    // Solo la frase con su estado y la decisión sugerida (sección "Resumen ejecutivo").
+    narrativa: () => R.enUnaLinea({ estado, frase: n.texto }) + '<p class="rp2-decision"><strong>Decisión sugerida</strong><span>' + U.esc(n.decision) + '</span></p>',
+    alertas: () => {
+      const dias = (f) => (f ? diasEntreClaves_(f, hoy) : 0);
+      const lista = [];
+      if (criticas.length) lista.push({ severidad: 'critico', cantidad: criticas.length, titulo: 'Tareas P1/P2 atrasadas',
+        detalle: ejemplos(criticas.slice().sort((a, b) => dias(b.fecha_compromiso) - dias(a.fecha_compromiso)), (a) => '«' + a.titulo + '» (' + persona(a.responsable_email, a.responsable_nombre) + ', hace ' + dias(a.fecha_compromiso) + ' d)') });
+      if (bloqueadas.length) lista.push({ severidad: 'critico', cantidad: bloqueadas.length, titulo: 'Tareas bloqueadas',
+        detalle: ejemplos(bloqueadas, (a) => '«' + a.titulo + '»' + (a.bloqueo_motivo ? ': ' + a.bloqueo_motivo : '')) });
+      if (hitosVencidos.length) lista.push({ severidad: 'critico', cantidad: hitosVencidos.length, titulo: 'Hitos vencidos',
+        detalle: ejemplos(hitosVencidos, (h) => h.nombre + ' (vencía ' + fecha(h.fecha_objetivo) + (h.avance_pct != null ? ', va en ' + Math.round(h.avance_pct) + ' %' : '') + ')') });
+      if (riesgosAltos.length) lista.push({ severidad: 'critico', cantidad: riesgosAltos.length, titulo: 'Riesgos altos abiertos',
+        detalle: ejemplos(riesgosAltos, (r) => r.descripcion + (r.mitigacion ? '' : ' — sin plan de mitigación')) });
+      if (otrasAtrasadas.length) lista.push({ severidad: 'alerta', cantidad: otrasAtrasadas.length, titulo: 'Otras tareas atrasadas',
+        detalle: ejemplos(otrasAtrasadas, (a) => '«' + a.titulo + '» (' + persona(a.responsable_email, a.responsable_nombre) + ')') });
+      return lista;
+    },
+    decision: (alertas) => '<p class="rp2-decision"><strong>Decisión sugerida</strong><span>' + U.esc(n.decision) + '</span></p>' +
+      R.requiereDecision(alertas, { conservarOrden: true, vacio: 'Sin tareas críticas atrasadas, bloqueos, hitos vencidos ni riesgos altos.' }),
+    avance: () => {
+      const conPlan = plan.filter((x) => tareaPorId[x.actividad_id] && x.estado_plazo !== 'COMPLETADA' && x.avance_esperado_pct != null)
+        .sort((a, b) => (a.desviacion_pp == null ? 0 : a.desviacion_pp) - (b.desviacion_pp == null ? 0 : b.desviacion_pp)).slice(0, 12);
+      return conPlan.length
+        ? R.ranking(conPlan.map((x) => ({ etiqueta: tareaPorId[x.actividad_id].titulo, valor: x.avance_real_pct || 0,
+            texto: (x.avance_real_pct == null ? '—' : Math.round(x.avance_real_pct) + '%') + ' · plan ' + Math.round(x.avance_esperado_pct) + '%',
+            tono: x.desviacion_pp == null ? 'primario' : (x.desviacion_pp < -10 ? 'critico' : (x.desviacion_pp < 0 ? 'alerta' : 'ok')) })), { max: 100, sinPosicion: true })
+        : R.ranking(vivas.slice(0, 12).map((a) => ({ etiqueta: a.titulo, valor: a.avance_pct || 0, texto: Math.round(a.avance_pct || 0) + '%' })), { max: 100, sinPosicion: true, vacio: 'Sin tareas abiertas.' });
+    },
+    hitos: () => (hitos.length ? '<ul class="rp2-agenda">' + hitos.map((h) => {
+      const venc = hitosVencidos.indexOf(h) !== -1;
+      return '<li><time>' + U.esc(h.fecha_objetivo ? fecha(h.fecha_objetivo, true) : 'Sin fecha') + '</time><span class="rp2-item"><strong>' + U.esc(h.nombre) + '</strong><small>' +
+        U.badge(venc ? 'Vencido' : (HITO_ESTADO_LABEL[h.estado] || h.estado), venc ? 'critico' : (TONO_HITO[h.estado] || 'neutro'), true) +
+        (h.avance_pct != null && h.estado !== 'COMPLETADO' ? ' ' + U.esc(Math.round(h.avance_pct) + ' % de avance') : '') + '</small></span></li>';
+    }).join('') + '</ul>' : ''),
+    bien: () => {
+      const b = [];
+      if (c.entregadas) b.push(c.a_tiempo + ' de ' + c.entregadas + ' tareas entregadas a tiempo.');
+      const ok = hitos.filter((h) => h.estado === 'COMPLETADO');
+      if (ok.length) b.push(plural(ok.length, 'hito completado', 'hitos completados') + ': ' + ok.slice(0, 3).map((h) => h.nombre).join(', ') + '.');
+      return R.loQueVaBien(b);
+    },
+    pendientes: () => tabla([
       { campo: 'tarea', titulo: 'Tarea', html: true }, { campo: 'resp', titulo: 'Responsable' }, { campo: 'sit', titulo: 'Situación', html: true },
       { campo: 'vence', titulo: 'Compromiso' }, { campo: 'avance', titulo: 'Avance', alinear: 'derecha' }
     ], pendientes.map((a) => ({
@@ -847,20 +862,165 @@ function cuerpoProyectoV2_(detalle, tareas, rendimiento, bitacora, nombres, R, U
       resp: persona(a.responsable_email, a.responsable_nombre),
       sit: U.badge(SEMAFORO_LABEL[a.semaforo] || a.semaforo || '—', TONO_SEMAFORO[a.semaforo] || 'neutro', true),
       vence: a.fecha_compromiso ? fecha(a.fecha_compromiso, true) : '—', avance: a.avance_pct == null ? '—' : Math.round(a.avance_pct) + '%'
-    })), { vacio: 'No hay tareas pendientes.' }) + '</div>' +
-    (riesgos.length ? '<h3 class="rp2-sub">Riesgos abiertos</h3><div class="rp2-detalle">' + R.tabla([
+    })), 'No hay tareas pendientes.'),
+    riesgos: () => (riesgos.length ? tabla([
       { campo: 'riesgo', titulo: 'Riesgo' }, { campo: 'nivel', titulo: 'Nivel', html: true }, { campo: 'resp', titulo: 'Responsable' }, { campo: 'mit', titulo: 'Mitigación' }
     ], riesgos.map((r) => ({ riesgo: r.descripcion, nivel: U.badge(r.nivel || '—', riesgosAltos.indexOf(r) !== -1 ? 'critico' : 'alerta', true),
-      resp: r.responsable_email ? persona(r.responsable_email) : '—', mit: r.mitigacion || 'Sin plan de mitigación' }))) + '</div>' : '') +
-    (bitacora.length ? '<h3 class="rp2-sub">Actividad reciente</h3><div class="rp2-detalle">' + R.tabla([
+      resp: r.responsable_email ? persona(r.responsable_email) : '—', mit: r.mitigacion || 'Sin plan de mitigación' })), '') : ''),
+    bitacora: (lista) => (lista.length ? tabla([
       { campo: 'fecha', titulo: 'Fecha' }, { campo: 'tipo', titulo: 'Qué pasó' }, { campo: 'horas', titulo: 'Horas', alinear: 'derecha' }, { campo: 'nota', titulo: 'Nota' }
-    ], bitacora.map((b) => ({ fecha: fecha(b.tipo === 'REGISTRO_DIA' && b.dia ? b.dia : b.timestamp, true), tipo: BITACORA_TIPO_LABEL[b.tipo] || b.tipo,
-      horas: b.horas != null && b.horas !== '' ? String(b.horas) : '—', nota: b.nota || '—' }))) + '</div>' : '');
+    ], lista.map((b) => ({ fecha: fecha(b.tipo === 'REGISTRO_DIA' && b.dia ? b.dia : b.timestamp, true), tipo: BITACORA_TIPO_LABEL[b.tipo] || b.tipo,
+      horas: b.horas != null && b.horas !== '' ? String(b.horas) : '—', nota: b.nota || '—' })), '') : ''),
 
-  return R.nivel('En una línea', linea) +
-    R.nivel('Lo que requiere decisión', decision, { nota: alertas.length ? 'la cifra es cuántas' : '' }) +
+    // --- Solo en el informe configurable ---
+    ficha: () => '<dl class="ot2-datos rp2-ficha">' + [
+      ['Código', p.codigo || '—'], ['Líder', persona(p.lider_email)], ['Estado', ESTADO_PROYECTO_LABEL[p.estado] || p.estado || '—'],
+      ['Salud', SALUD_LABEL[detalle.salud] || detalle.salud || '—'], ['Avance', avance == null ? '—' : Math.round(avance) + '%'],
+      ['Inicio', p.fecha_inicio ? fecha(p.fecha_inicio, true) : '—'], ['Fecha objetivo', p.fecha_objetivo ? fecha(p.fecha_objetivo, true) : '—']
+    ].map((f) => '<div><dt>' + U.esc(f[0]) + '</dt><dd>' + U.esc(f[1]) + '</dd></div>').join('') + '</dl>' +
+      ((detalle.salud_motivos || []).length ? '<p class="ot2-nota">' + U.esc(detalle.salud_motivos.join(' · ')) + '</p>' : ''),
+    kpis: () => {
+      const horas = (rendimiento && rendimiento.horas_totales_proyecto) || 0;
+      const extra = [
+        { etiqueta: 'Entregas a tiempo', valor: c.entregadas ? c.a_tiempo + '/' + c.entregadas : '—', icono: 'check', tono: c.entregadas && c.a_tiempo === c.entregadas ? 'ok' : 'neutro' },
+        { etiqueta: 'Horas registradas', valor: horas ? Math.round(horas * 10) / 10 : '—', unidad: horas ? 'h' : '', icono: 'reloj', tono: 'neutro' },
+        { etiqueta: 'Bloqueadas', valor: at.tareas_bloqueadas || 0, icono: 'pausado', tono: at.tareas_bloqueadas ? 'critico' : 'ok' }
+      ];
+      return R.enUnaLinea({ estado, frase: '', comparaCon, kpis: kpisPrincipales.concat(extra) }).replace(/<p class="rp2-linea__frase">[\s\S]*?<\/p>/, '');
+    },
+    salud: () => {
+      const puntos = detalle.salud_penalizacion == null ? 'Fijada manualmente'
+        : (detalle.salud_penalizacion === 0 ? 'Sin factores en contra' : plural(detalle.salud_penalizacion, 'punto en contra', 'puntos en contra'));
+      const des = detalle.salud_desglose || [];
+      return '<p>' + U.badge(SALUD_LABEL[detalle.salud] || detalle.salud || '—', estado, true) + ' <span class="sx2-tenue">' + U.esc(puntos) + '</span></p>' +
+        (des.length ? tabla([{ campo: 'factor', titulo: 'Factor que resta salud' }, { campo: 'cantidad', titulo: 'Cantidad', alinear: 'derecha' }, { campo: 'puntos', titulo: 'Puntos', alinear: 'derecha' }],
+          des.map((d) => ({ factor: SALUD_FACTOR_LABEL[d.factor] || d.factor, cantidad: d.cantidad, puntos: '−' + d.puntos })), '') : '');
+    },
+    carga: () => {
+      const porPersona = {};
+      vivas.forEach((a) => {
+        const k = a.responsable_email || '(sin asignar)';
+        const o = porPersona[k] = porPersona[k] || { nombre: k === '(sin asignar)' ? 'Sin asignar' : persona(a.responsable_email, a.responsable_nombre), total: 0, atr: 0 };
+        o.total++;
+        if (a.semaforo === 'atrasada') o.atr++;
+      });
+      const filas = Object.keys(porPersona).map((k) => porPersona[k]).sort((a, b) => b.total - a.total);
+      return R.ranking(filas.map((o) => ({ etiqueta: o.nombre, valor: o.total, texto: plural(o.total, 'tarea', 'tareas') + (o.atr ? ' · ' + o.atr + ' atr.' : ''),
+        tono: o.atr > o.total / 2 ? 'critico' : (o.atr ? 'alerta' : 'ok') })), { vacio: 'Sin tareas activas.' });
+    },
+    rendimiento: () => {
+      const r = rendimiento || {};
+      const filas = [['Entregas a tiempo', c.entregadas ? c.a_tiempo + ' de ' + c.entregadas : '—'], ['Horas registradas', r.horas_totales_proyecto ? String(r.horas_totales_proyecto) : '—'],
+        ['Ritmo promedio', r.promedio_unidades_dia != null ? r.promedio_unidades_dia + '/día' : '—'], ['Tareas sin arrancar', String(r.tareas_sin_avance == null ? '—' : r.tareas_sin_avance)]];
+      return '<dl class="ot2-datos rp2-ficha">' + filas.map((f) => '<div><dt>' + U.esc(f[0]) + '</dt><dd>' + U.esc(f[1]) + '</dd></div>').join('') + '</dl>' +
+        ((r.por_tarea || []).length ? tabla([{ campo: 't', titulo: 'Tarea' }, { campo: 'meta', titulo: 'Meta' }, { campo: 'ritmo', titulo: 'Ritmo', alinear: 'derecha' }],
+          r.por_tarea.map((t) => ({ t: t.titulo, meta: t.meta_cantidad + (t.meta_unidad ? ' ' + t.meta_unidad : ''), ritmo: t.unidades_por_dia !== '' ? t.unidades_por_dia + '/día' : '—' })), '') : '');
+    },
+    desviaciones: () => {
+      const filas = plan.filter((x) => tareaPorId[x.actividad_id] && x.plan_fin).sort((a, b) => {
+        const na = a.desviacion_pp == null ? 1 : 0, nb = b.desviacion_pp == null ? 1 : 0;
+        return (na - nb) || (na ? 0 : a.desviacion_pp - b.desviacion_pp);
+      });
+      return tabla([{ campo: 't', titulo: 'Tarea' }, { campo: 'plan', titulo: 'Plan (fin)' }, { campo: 'esp', titulo: 'Esperado', alinear: 'derecha' },
+        { campo: 'real', titulo: 'Real', alinear: 'derecha' }, { campo: 'desv', titulo: 'Desviación', html: true, alinear: 'derecha' }],
+      filas.map((x) => ({ t: tareaPorId[x.actividad_id].titulo, plan: fecha(x.plan_fin, true),
+        esp: x.avance_esperado_pct == null ? '—' : x.avance_esperado_pct + '%', real: x.avance_real_pct == null ? '—' : x.avance_real_pct + '%',
+        desv: x.desviacion_pp == null ? '—' : U.badge((x.desviacion_pp >= 0 ? '+' : '−') + Math.abs(x.desviacion_pp) + ' pp', x.desviacion_pp < -10 ? 'critico' : (x.desviacion_pp < 0 ? 'alerta' : 'ok'), true) })),
+      'Ninguna tarea tiene plan con fecha de término.');
+    },
+    // Carta Gantt ejecutiva: hitos y tareas por semana (lunes a domingo), hasta
+    // GANTT_TOPE_SEMANAS. Mismos criterios que la versión pdfkit (inicio de la barra,
+    // semanas vencidas sin cerrar en rojo oscuro, semana de hoy resaltada).
+    gantt: () => {
+      const proyIni = claveDia_(p.fecha_inicio);
+      const conFecha = tareas.filter((a) => a.fecha_compromiso);
+      if (!conFecha.length && !hitos.length) return '<p class="ot2-nota">Sin tareas con fecha comprometida ni hitos que graficar.</p>';
+      const hoyUtc = new Date().toISOString().slice(0, 10);
+      const claves = [hoyUtc, proyIni].concat(hitos.map((h) => claveDia_(h.fecha_objetivo)))
+        .concat(...conFecha.map((a) => [inicioBarraGantt_(a, proyIni), claveDia_(a.fecha_compromiso)])).filter(Boolean);
+      const min = claves.reduce((m, x) => (x < m ? x : m)), max = claves.reduce((m, x) => (x > m ? x : m));
+      const semanas = semanasGantt_(min, max, GANTT_TOPE_SEMANAS);
+      if (!semanas.length) return '';
+      const esHoy = (s) => s.inicio <= hoyUtc && s.fin >= hoyUtc;
+      const cab = '<thead><tr><th class="rp2-gantt__et">Hito / tarea</th>' + semanas.map((s) => '<th' + (esHoy(s) ? ' class="rp2-gantt--hoy"' : '') + '>' + U.esc(s.etiqueta) + '</th>').join('') + '</tr></thead>';
+      const filaHito = (h) => {
+        const obj = claveDia_(h.fecha_objetivo);
+        return '<tr class="rp2-gantt__hito"><th class="rp2-gantt__et">' + U.esc(h.nombre) + '</th>' + semanas.map((s) =>
+          '<td' + (esHoy(s) ? ' class="rp2-gantt--hoy"' : '') + '>' + (obj && obj >= s.inicio && obj <= s.fin ? '<span class="rp2-gantt__rombo" title="' + U.esc(fecha(h.fecha_objetivo, true)) + '"></span>' : '') + '</td>').join('') + '</tr>';
+      };
+      const filaTarea = (a) => {
+        const ini = inicioBarraGantt_(a, proyIni), fin = claveDia_(a.fecha_compromiso);
+        const terminal = a.estado === 'TERMINADA' || a.estado === 'CANCELADA';
+        const tono = TONO_GANTT[a.semaforo] || 'neutro';
+        return '<tr><td class="rp2-gantt__et"><span class="rp2-item"><strong>' + U.esc(a.titulo) + '</strong><small>' + U.esc(persona(a.responsable_email, a.responsable_nombre)) + '</small></span></td>' +
+          semanas.map((s) => {
+            let barra = '';
+            if (ini && fin && s.fin >= ini && s.inicio <= fin) barra = '<span class="rp2-gantt__b sx2-tono-' + tono + '"></span>';
+            else if (!terminal && fin && s.inicio > fin && s.inicio <= hoyUtc) barra = '<span class="rp2-gantt__b rp2-gantt__b--vencida"></span>';
+            return '<td' + (esHoy(s) ? ' class="rp2-gantt--hoy"' : '') + '>' + barra + '</td>';
+          }).join('') + '</tr>';
+      };
+      const porHito = {}, sinHito = [];
+      conFecha.forEach((a) => { if (a.hito_id && hitos.some((h) => h.hito_id === a.hito_id)) (porHito[a.hito_id] = porHito[a.hito_id] || []).push(a); else sinHito.push(a); });
+      const porCompromiso = (a, b) => String(a.fecha_compromiso).localeCompare(String(b.fecha_compromiso));
+      const cuerpo = hitos.map((h) => filaHito(h) + (porHito[h.hito_id] || []).sort(porCompromiso).map(filaTarea).join('')).join('') +
+        (sinHito.length ? '<tr class="rp2-gantt__hito"><th class="rp2-gantt__et" colspan="' + (semanas.length + 1) + '">Sin hito</th></tr>' + sinHito.sort(porCompromiso).map(filaTarea).join('') : '');
+      const tope = semanas[semanas.length - 1].fin < max ? '<p class="ot2-nota">Se muestran las primeras ' + GANTT_TOPE_SEMANAS + ' semanas del proyecto.</p>' : '';
+      return tope + '<table class="rp2-gantt">' + cab + '<tbody>' + cuerpo + '</tbody></table>';
+    },
+    leyenda: () => '<ul class="rp2-gantt-leyenda">' + LEYENDA_GANTT_V2.map((l) => '<li><span class="rp2-gantt__b ' +
+      (l[1] === 'vencida' ? 'rp2-gantt__b--vencida' : 'sx2-tono-' + l[1]) + '"></span>' + U.esc(l[0]) + '</li>').join('') +
+      '<li><span class="rp2-gantt__rombo"></span>Hito</li></ul>'
+  };
+  return P;
+}
+
+function cuerpoProyectoV2_(detalle, tareas, rendimiento, bitacora, nombres, R, U, fecha) {
+  const P = piezasProyectoV2_(detalle, tareas, rendimiento, nombres, R, U, fecha);
+  const alertas = P.alertas();
+  const hitos = P.hitos();
+  const panorama = '<h3 class="rp2-sub">Avance real vs. lo planificado <span class="sx2-tenue" style="font-weight:500;font-size:.8125rem">(lo más atrasado arriba)</span></h3>' +
+    P.avance() + (hitos ? '<h3 class="rp2-sub">Hitos</h3>' + hitos : '') + P.bien();
+  const riesgos = P.riesgos(), bit = P.bitacora(bitacora);
+  const detalleHtml = '<h3 class="rp2-sub">Tareas pendientes</h3>' + P.pendientes() +
+    (riesgos ? '<h3 class="rp2-sub">Riesgos abiertos</h3>' + riesgos : '') + (bit ? '<h3 class="rp2-sub">Actividad reciente</h3>' + bit : '');
+  return R.nivel('En una línea', P.linea()) +
+    R.nivel('Lo que requiere decisión', P.decision(alertas), { nota: alertas.length ? 'la cifra es cuántas' : '' }) +
     R.nivel('Panorama', panorama) +
-    R.nivel('Detalle', detalleHtml, { clase: 'rp2-nivel--detalle', nota: plural(pendientes.length, 'tarea pendiente', 'tareas pendientes') });
+    R.nivel('Detalle', detalleHtml, { clase: 'rp2-nivel--detalle', nota: P.plural(P.pendientesN, 'tarea pendiente', 'tareas pendientes') });
+}
+
+// Informe configurable v2: las secciones que eligió la persona, en el orden de
+// siempre, cada una como un nivel con su título. La portada va sola en su página
+// y la Carta Gantt en una página apaisada propia.
+function cuerpoConfiguradoV2_(config, detalle, tareasFiltradas, rendimiento, bitacora, nombres, R, U, fecha) {
+  const P = piezasProyectoV2_(detalle, tareasFiltradas, rendimiento, nombres, R, U, fecha);
+  const p = detalle.proyecto || {};
+  const incluye = (s) => config.secciones.indexOf(s) !== -1;
+  const nivel = (s, html, opts) => (html ? R.nivel(REPORTE_SECCION_LABEL[s], html, opts) : '');
+  let h = '';
+  if (incluye('portada')) {
+    const contenido = config.secciones.filter((s) => s !== 'portada' && REPORTE_SECCION_LABEL[s]);
+    // El nombre del proyecto ya es el título de la cabecera: la portada no lo repite.
+    h += '<section class="rp2-portada"><span class="rp2-portada__eyebrow">Reporte ejecutivo de proyecto</span>' +
+      P.linea() + (contenido.length >= 3 ? '<h3 class="rp2-sub">Contenido</h3><ol class="rp2-portada__indice">' +
+        contenido.map((s) => '<li>' + U.esc(REPORTE_SECCION_LABEL[s]) + '</li>').join('') + '</ol>' : '') + '</section>';
+  }
+  if (incluye('narrativa')) h += nivel('narrativa', P.narrativa());
+  if (incluye('ficha')) h += nivel('ficha', P.ficha());
+  if (incluye('kpis')) h += nivel('kpis', P.kpis());
+  if (incluye('salud')) h += nivel('salud', P.salud());
+  if (incluye('mini_gantt')) h += nivel('mini_gantt', P.avance(), { nota: 'real vs. lo planificado · lo más atrasado arriba' });
+  if (incluye('gantt')) h += '<div class="rp2-apaisada">' + nivel('gantt', P.gantt() + (incluye('leyenda') ? P.leyenda() : '')) + '</div>';
+  if (incluye('workload')) h += nivel('workload', P.carga(), { nota: 'tareas activas por responsable' });
+  if (incluye('leyenda') && !incluye('gantt') && incluye('workload')) h += nivel('leyenda', P.leyenda());
+  if (incluye('hitos')) h += nivel('hitos', P.hitos() || '<p class="ot2-nota">Sin hitos.</p>');
+  if (incluye('riesgos')) h += nivel('riesgos', P.riesgos() || '<p class="ot2-nota">Sin riesgos abiertos.</p>');
+  if (incluye('vencimientos')) h += nivel('vencimientos', P.pendientes(), { nota: P.plural(P.pendientesN, 'tarea pendiente', 'tareas pendientes') });
+  if (incluye('rendimiento')) h += nivel('rendimiento', P.rendimiento());
+  if (incluye('desviaciones')) h += nivel('desviaciones', P.desviaciones(), { nota: 'lo más atrasado arriba' });
+  if (incluye('bitacora')) h += nivel('bitacora', P.bitacora(bitacora) || '<p class="ot2-nota">Sin actividad en el rango.</p>');
+  return h;
 }
 
 async function descargarReporteEstandarV2_(db, data, contexto, detalle, tareas, rendimiento, nombresPorEmail) {
@@ -905,7 +1065,39 @@ async function descargarReporteEstandar_(db, data, contexto, detalle, tareas, re
   return { pdf_base64: buffer.toString('base64'), filename: 'Reporte - ' + p.nombre + '.pdf' };
 }
 
+// La Carta Gantt va en una página apaisada dentro de un informe vertical: página con
+// nombre en el CSS (Chromium la respeta con preferCSSPageSize).
+const CSS_PAGINAS_PROYECTO = '@page { size: A4 portrait; } @page apaisada { size: A4 landscape; } ' +
+  '.rp2-apaisada { page: apaisada; break-before: page; } .rp2-portada { break-after: page; }';
+
+async function descargarReporteConfiguradoV2_(db, data, contexto, detalle, tareas, rendimiento, nombresPorEmail, config) {
+  const p = detalle.proyecto;
+  const tareasFiltradas = filtrarTareas_(tareas, config);
+  const bitacora = config.secciones.indexOf('bitacora') !== -1 ? await bitacoraConfigurada_(db, data, contexto, tareasFiltradas, config) : [];
+  const { R, U } = DocV2.piezas();
+  const nombres = Object.assign({}, DocV2.nombresPorCorreo(db));
+  Object.keys(nombresPorEmail).forEach((e) => { if (nombresPorEmail[e] && !/@/.test(nombresPorEmail[e])) nombres[e.toLowerCase()] = nombresPorEmail[e]; });
+  const filtros = [{ etiqueta: 'Líder', valor: nombres[String(p.lider_email || '').toLowerCase()] || p.lider_email || '—' },
+    { etiqueta: 'Estado', valor: ESTADO_PROYECTO_LABEL[p.estado] || p.estado }];
+  if (config.personas.length) filtros.push({ etiqueta: 'Personas', valor: config.personas.map((e) => nombres[e] || e).join(', ') });
+  if (config.estado) filtros.push({ etiqueta: 'Tareas', valor: config.estado === 'atrasadas' ? 'Solo atrasadas' : 'Solo abiertas' });
+  if (config.rango) filtros.push({ etiqueta: 'Actividad', valor: DocV2.fecha_(config.rango.desde, true) + ' al ' + DocV2.fecha_(config.rango.hasta, true) });
+  const r = await DocV2.aPdf(db, contexto, {
+    titulo: p.nombre, subtitulo: 'Reporte de proyecto', modulo: 'Proyectos', codigo: p.codigo || '',
+    periodo: DocV2.fecha_(p.fecha_inicio, true) + ' al ' + DocV2.fecha_(p.fecha_objetivo, true), filtros,
+    cuerpo: cuerpoConfiguradoV2_(config, detalle, tareasFiltradas, rendimiento, bitacora, nombres, R, U, DocV2.fecha_),
+    cssExtra: CSS_PAGINAS_PROYECTO, tamanosCss: true
+  });
+  // Mismo nombre que el informe de siempre ("Reporte - <proyecto>.pdf").
+  return { pdf_base64: r.pdf_base64, filename: 'Reporte - ' + p.nombre + '.pdf' };
+}
+
 async function descargarReporteConfigurado_(db, data, contexto, detalle, tareas, rendimiento, nombresPorEmail, config) {
+  if (DocV2.disponible()) {
+    try { return await descargarReporteConfiguradoV2_(db, data, contexto, detalle, tareas, rendimiento, nombresPorEmail, config); } catch (e) {
+      console.error('[informe configurable] sin diseño v2, se usa pdfkit:', e && e.message);
+    }
+  }
   const tareasFiltradas = filtrarTareas_(tareas, config);
   const tareasPorId = {};
   tareas.forEach((a) => { tareasPorId[a.actividad_id] = a; });
@@ -959,4 +1151,4 @@ async function descargarReporte(db, data, contexto) {
   return descargarReporteEstandar_(db, data, contexto, detalle, tareas, rendimiento, nombresPorEmail);
 }
 
-module.exports = { descargarReporte, normalizarConfig_, filtrarTareas_, cuerpoProyectoV2_ };
+module.exports = { descargarReporte, normalizarConfig_, filtrarTareas_, cuerpoProyectoV2_, cuerpoConfiguradoV2_ };
