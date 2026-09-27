@@ -3,6 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Abre la conexión con el servidor (Helsinki: ~3 viajes de ida y vuelta de
+       TLS) mientras se descargan los scripts, no después: la primera llamada
+       deja de pagar ese saludo. crossorigin = mismo modo que usa fetch. -->
+  <link rel="preconnect" href="https://api.ctrly.cl" crossorigin />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <title>SIGSO — Plataforma</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27><rect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%2314213D%27/><text x=%2716%27 y=%2723%27 font-family=%27Arial,sans-serif%27 font-weight=%27700%27 font-size=%2720%27 fill=%27white%27 text-anchor=%27middle%27>S</text></svg>" />
   <!-- v4.0: la marca declara Inter desde §12.3 pero nunca se cargaba: todos
@@ -39,8 +44,11 @@
   <link rel="stylesheet" href="css/v2/acceso-v2.css" />
   <link rel="stylesheet" href="css/v2/perfil-v2.css" />
   <link rel="stylesheet" href="css/v2/reportes-v2.css" />
-  <!-- Gráficos de los módulos v2 (portafolio, análisis de la Bandeja, gerencia). -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <!-- Gráficos de los módulos v2 (portafolio, análisis de la Bandeja, gerencia).
+       Versión exacta (caché de 1 año en el CDN, sin sorpresas de versión) y
+       `defer`: ya no frena el primer pintado. Cada módulo dibuja sus gráficos
+       recién cuando llegan sus datos y se protege con `if (!window.Chart)`. -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous" defer></script>
 </head>
 <!-- SIGSO v2 (R2): .sx2 en body = tokens v2 en toda la plataforma (css/v2/puente-v2.css). -->
 <body class="sx2">

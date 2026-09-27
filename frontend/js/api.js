@@ -68,10 +68,10 @@ function medicionTimingActiva_() {
 // === Muestra rodante de rendimiento (sep-2026) ==========================
 //
 // POR QUE. "SIGSO va lento" tiene dos causas que se arreglan distinto: el
-// acceso al dato (Sheets) o la cola de ejecucion de la cuenta del token.
-// Decidir una migracion grande sin datos seria a ciegas. Esto guarda, EN
-// SILENCIO, las ultimas ~400 llamadas de ESTE navegador con su desglose, y
-// no cambia nada de lo que se ve. Tras una semana de uso normal:
+// trabajo del servidor o la red (el servidor está en Helsinki: cada viaje
+// desde Chile cuesta ~0,25 s). Esto guarda, EN SILENCIO, las ultimas ~400
+// llamadas de ESTE navegador con su desglose, y no cambia nada de lo que se
+// ve. Tras una semana de uso normal:
 //
 //   SigsoPerf.resumen()   imprime una tabla por accion (medianas)
 //   SigsoPerf.csv()       vuelca todo para analizar fuera
@@ -81,15 +81,12 @@ function medicionTimingActiva_() {
 //   t    momento de la llamada (Date.now)
 //   a    accion
 //   rt   round-trip real medido en el navegador (ms)
-//   s    server_ms que reporto el backend (Perf.gs), o null
-//   io   de ese server_ms, cuanto fue viajes a Sheets
-//   ops  cuantos viajes a Sheets (lec + esc)
+//   s    ms de trabajo que reporto el servidor (cabecera X-Server-Ms), o null
+//   io/ops  campos de la era Apps Script (siempre null; se conservan por formato)
 //   i    numero de intento (1..3 en lecturas)
 //   ok   si la vuelta resolvio sin excepcion
 //
-// overhead = rt - s  ->  red + cola + arranque en frio. Si ese numero crece
-// en las horas de mas gente, la cola es el problema y cambiar de base de
-// datos no lo tocaria.
+// red = rt - s  ->  viaje de ida y vuelta + conexión.
 var SIGSO_PERF_LLAVE = 'sigso_perf_log';
 var SIGSO_PERF_TOPE = 400;
 
@@ -149,22 +146,21 @@ if (typeof window !== 'undefined') {
         var g = porAccion[a];
         return {
           accion: a, llamadas: g.n, fallos: g.fallos,
-          'round_trip (med)': mediana(g.rt),
-          'server (med)': mediana(g.s),
-          'io Sheets (med)': mediana(g.io),
-          'overhead=cola+red (med)': mediana(g.over)
+          'total ms (med)': mediana(g.rt),
+          'servidor ms (med)': mediana(g.s),
+          'red ms (med)': mediana(g.over)
         };
       });
       console.info('[SigsoPerf] ' + filas.length + ' muestras · ' +
         new Date(filas[0].t).toLocaleString() + ' → ' + new Date(filas[filas.length - 1].t).toLocaleString());
       if (console.table) console.table(tabla); else console.info(JSON.stringify(tabla, null, 2));
-      var todoOver = mediana(filas.map(function (r) {
+      var todoRed = mediana(filas.map(function (r) {
         return (typeof r.rt === 'number' && typeof r.s === 'number') ? r.rt - r.s : null;
       }));
-      var todoIo = mediana(filas.map(function (r) { return r.io; }));
-      console.info('[SigsoPerf] Global: overhead (cola+red) mediana ' + todoOver +
-        ' ms  ·  io Sheets mediana ' + todoIo + ' ms. ' +
-        'Si el overhead domina y sube en horas de mas gente -> es la cola, no la base de datos.');
+      var todoServidor = mediana(filas.map(function (r) { return r.s; }));
+      console.info('[SigsoPerf] Global: red mediana ' + todoRed + ' ms · servidor mediana ' + todoServidor + ' ms. ' +
+        'Si la red domina, lo que ayuda es acercar el servidor o hacer menos llamadas encadenadas; ' +
+        'si domina el servidor, hay que optimizar esa acción.');
     }
   };
 }
@@ -181,7 +177,12 @@ function esperar_(ms) {
 }
 
 // Un único intento contra el servidor.
+// Resultado de una llamada -> ms que reportó el servidor (cabecera X-Server-Ms).
+// WeakMap: varias llamadas corren a la vez y el número no ensucia el resultado.
+var MS_SERVIDOR_ = (typeof WeakMap !== 'undefined') ? new WeakMap() : null;
+
 function ejecutarLlamada_(url, action, data) {
+  var msServidor = null;
   // AbortController corta el fetch si el backend no responde a tiempo, y asi
   // una caida se convierte en un error claro (reintentable en lecturas) en
   // vez de un spinner infinito.
@@ -200,11 +201,15 @@ function ejecutarLlamada_(url, action, data) {
     // Script, tipico de un deploy roto o de la implementacion por token
     // exigiendo identidad de Google) de un fallo de red. Antes esto era un
     // SyntaxError cripticо; ahora es un mensaje accionable.
+    var cab = respuesta.headers && respuesta.headers.get('X-Server-Ms');
+    if (cab) msServidor = Number(cab);
     return respuesta.text();
   }).then(function (texto) {
     limpiar();
     try {
-      return JSON.parse(texto);
+      var json = JSON.parse(texto);
+      if (MS_SERVIDOR_ && msServidor != null && json && typeof json === 'object') MS_SERVIDOR_.set(json, msServidor);
+      return json;
     } catch (err) {
       throw new Error('El servidor respondió algo inesperado (posible problema de despliegue o de sesión). Reintenta o vuelve a ingresar a la plataforma.');
     }
@@ -237,8 +242,9 @@ async function llamarApi(url, action, data) {
     try {
       const resultado = await ejecutarLlamada_(destino, action, data);
       const rt = Math.round(performance.now() - inicio);
-      perfRegistrar_({ t: Date.now(), a: action, rt: rt, s: null, io: null, ops: null, i: intento, ok: true });
-      if (medir) console.info('[SIGSO][timing] ' + action + ' ' + rt + 'ms' + (intento > 1 ? ' (intento ' + intento + ')' : ''));
+      const s = (MS_SERVIDOR_ && resultado && typeof resultado === 'object' && MS_SERVIDOR_.has(resultado)) ? MS_SERVIDOR_.get(resultado) : null;
+      perfRegistrar_({ t: Date.now(), a: action, rt: rt, s: s, io: null, ops: null, i: intento, ok: true });
+      if (medir) console.info('[SIGSO][timing] ' + action + ' ' + rt + 'ms' + (s != null ? ' (servidor ' + s + 'ms)' : '') + (intento > 1 ? ' (intento ' + intento + ')' : ''));
       return resultado;
     } catch (err) {
       const rt = Math.round(performance.now() - inicio);

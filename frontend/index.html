@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Abre la conexión con el servidor (Helsinki: ~3 viajes de ida y vuelta de
+       TLS) mientras se descargan los scripts, no después: la primera llamada
+       deja de pagar ese saludo. crossorigin = mismo modo que usa fetch. -->
+  <link rel="preconnect" href="https://api.ctrly.cl" crossorigin />
   <title>SIGSO — Nueva solicitud</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27><rect width=%2732%27 height=%2732%27 rx=%278%27 fill=%27%2314213D%27/><text x=%2716%27 y=%2723%27 font-family=%27Arial,sans-serif%27 font-weight=%27700%27 font-size=%2720%27 fill=%27white%27 text-anchor=%27middle%27>S</text></svg>" />
   <!-- v4.0: la marca declara Inter desde §12.3 pero nunca se cargaba: todos

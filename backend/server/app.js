@@ -49,9 +49,9 @@ function ipCliente_(req) {
   return req.socket && req.socket.remoteAddress || '';
 }
 
-function responderJson(res, codigo, payload) {
+function responderJson(res, codigo, payload, msServidor) {
   const cuerpo = JSON.stringify(payload);
-  res.writeHead(codigo, {
+  const cabeceras = {
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(cuerpo),
     // El frontend vive en otro origen (GitHub Pages / ctrly.cl); permitir CORS
@@ -59,8 +59,14 @@ function responderJson(res, codigo, payload) {
     // dominio final este fijo.
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
-  });
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    // Medición (SigsoPerf en api.js): cuánto del tiempo de una llamada fue
+    // trabajo del servidor y cuánto red. Solo un número, sin datos.
+    'Access-Control-Expose-Headers': 'X-Server-Ms',
+    'Timing-Allow-Origin': '*'
+  };
+  if (msServidor != null) cabeceras['X-Server-Ms'] = String(msServidor);
+  res.writeHead(codigo, cabeceras);
   res.end(cuerpo);
 }
 
@@ -95,8 +101,10 @@ async function manejar(req, res, db) {
   if (req.method === 'POST' && ruta === '/v1/accion') {
     if (!db) return responderJson(res, 500, { ok: false, error: 'Servidor sin base de datos configurada' });
     const cuerpo = await leerCuerpo_(req);
+    const inicio = process.hrtime.bigint();
     const { status, body } = await ejecutarAccion(db, cuerpo.action, cuerpo.data, { ip: ipCliente_(req) });
-    return responderJson(res, status, body);
+    const ms = Math.round(Number(process.hrtime.bigint() - inicio) / 1e5) / 10;
+    return responderJson(res, status, body, ms);
   }
 
   // Adjuntos de solicitudes (reemplazo de los enlaces de Drive): la URL que
