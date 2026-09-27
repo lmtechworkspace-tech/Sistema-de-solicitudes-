@@ -314,5 +314,17 @@ publicar.
     formadas y leídos por un lector independiente (SheetJS). No hay Excel en
     el equipo de desarrollo para abrirlos en Microsoft Excel mismo.
 
-  **Siguiente: R-5** (pulido: marca en los documentos, Orden de trabajo, y el
-  informe configurable de Proyecto en el diseño v2).
+- **R-5 (pulido) — hecho** (`93262ee`, `ff48621`, `f85ce1c`):
+  - **Marca**: SIGSO es un producto independiente. Los documentos, el respaldo
+    pdfkit y los correos dicen "SIGSO · Control y Gestión Empresarial"; el
+    nombre de una organización cliente solo aparece si se configura.
+  - **Orden de trabajo** v2: tarjeta por ítem, enlaces clicables (solo en HTML
+    armado por el servidor), responsable por nombre. La **credencial ya no se
+    imprime** (OT y Pauta de trabajo): en producción se escriben contraseñas en
+    ese campo.
+  - **Informe configurable de Proyecto** v2 con **Carta Gantt en página
+    apaisada** (@page con nombre); estándar y configurable comparten piezas.
+  - Pendiente de permiso (escritura en la base de producción): corregir la fila
+    `SOL-2026-GDE-0005`, rearmada a mano con 2 columnas corridas y marcadores
+    `[CARGO_LUIS]`/`[CORREO_LUIS]`/`[CORREO_LEO]` (única de 42).
+  - Queda con su generador propio el libro Excel de Proyecto (ya tenía formato).
