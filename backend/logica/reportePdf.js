@@ -35,7 +35,11 @@ const POR_MINUTO = 12;
 const TAGS_FUERA = ['script', 'iframe', 'frame', 'frameset', 'object', 'embed', 'link', 'meta', 'base', 'form', 'input',
   'button', 'textarea', 'select', 'template', 'noscript', 'style', 'video', 'audio', 'source', 'track', 'portal'];
 
-function sanitizarHtml(html) {
+// opts.enlaces: conserva href http(s)/mailto en <a> (solo documentos que arma el propio
+// servidor, p. ej. la Orden de trabajo con la URL del módulo; nunca el HTML del cliente).
+// Un enlace no se descarga al imprimir (la red sigue bloqueada): solo queda clicable en el PDF.
+function sanitizarHtml(html, opts) {
+  opts = opts || {};
   let s = String(html || '');
   TAGS_FUERA.forEach((t) => {
     // Con contenido (<script>…</script>) y sueltos (<link …>, <input …/>).
@@ -45,6 +49,7 @@ function sanitizarHtml(html) {
   s = s.replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
   s = s.replace(/\s(href|src|xlink:href|action|formaction|srcset|poster)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, (m, attr, val) => {
     const v = val.replace(/^["']|["']$/g, '').trim().toLowerCase();
+    if (opts.enlaces && attr.toLowerCase() === 'href' && /^(https?:\/\/|mailto:)/.test(v)) return m;
     return v.startsWith('data:image/') || v.startsWith('#') ? m : '';
   });
   return s;
@@ -103,7 +108,7 @@ function componerDocumento(o) {
     '<style>' + fuentesInter_() + '</style>' +
     '<style>' + sanitizarCss(o.css) + '</style>' +
     '<style>' + CSS_PAPEL + '</style>' +
-    '</head><body class="sx2 rp2-pdf">' + sanitizarHtml(o.html) + '</body></html>';
+    '</head><body class="sx2 rp2-pdf">' + sanitizarHtml(o.html, { enlaces: !!o.enlaces }) + '</body></html>';
 }
 
 function fechaChile_(d) {

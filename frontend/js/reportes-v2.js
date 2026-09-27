@@ -397,7 +397,10 @@
     filtros.forEach(function (f) { meta.push([f.etiqueta, f.valor]); });
     return '<header class="rp2-doc sx2-entra">' +
       '<div class="rp2-doc__cab"><span class="rp2-doc__marca"><span class="rp2-doc__logo">S</span><span class="sx2-apilado" style="gap:0"><strong>SIGSO</strong>' +
-        '<span class="sx2-tenue" style="font-size:.75rem">' + esc_(opts.organizacion || 'Asesorías Integrales AyS SpA') + '</span></span></span>' +
+        // SIGSO es un producto independiente: el documento lleva su marca, nunca la de una
+        // empresa fija. Si algún día se configura el nombre de la organización cliente, va
+        // en opts.organizacion; mientras tanto, la bajada del producto.
+        '<span class="sx2-tenue" style="font-size:.75rem">' + esc_(opts.organizacion || 'Control y Gestión Empresarial') + '</span></span></span>' +
         '<span class="rp2-doc__ref">' + (opts.codigo ? '<span>' + esc_(opts.codigo) + '</span>' : '') + '<span>' + esc_(cuando) + '</span></span></div>' +
       '<h1 class="rp2-doc__tit">' + esc_(opts.titulo || 'Reporte') + '</h1>' +
       (opts.subtitulo ? '<p class="rp2-doc__sub">' + esc_(opts.subtitulo) + '</p>' : '') +

@@ -191,7 +191,7 @@ function plantillaCorreoHtml_(titulo, cuerpoHtml) {
     '<td style="width:34px;height:34px;background:#ffffff;text-align:center;vertical-align:middle;font-family:Georgia,\'Times New Roman\',serif;font-weight:bold;font-size:17px;color:#14213D;">S</td>' +
     '<td style="padding-left:12px;vertical-align:middle;">' +
     '<div style="color:#ffffff;font-family:Georgia,\'Times New Roman\',serif;font-size:19px;font-weight:bold;letter-spacing:0.3px;">SIGSO</div>' +
-    '<div style="color:#AEB8CC;font-size:11px;letter-spacing:0.3px;">Sistema de Gestión de Solicitudes</div>' +
+    '<div style="color:#AEB8CC;font-size:11px;letter-spacing:0.3px;">Control y Gestión Empresarial</div>' +
     '</td></tr></table>' +
     '</td></tr>' +
     '<tr><td style="padding:14px 28px;background:#F8FAFC;border-bottom:1px solid #E5E7EB;">' +
@@ -305,10 +305,10 @@ async function enviarAcuseRecibo(db, solicitud) {
     'Estimado/a ' + solicitud.solicitante_nombre + ':\n\n' +
     (solicitud.atencion_directa
       ? 'Confirmamos el registro de su solicitud, que ya fue resuelta mediante ' +
-        'atención directa. Queda cerrada en el Sistema de Gestión de Solicitudes ' +
-        '(SIGSO) como respaldo de lo ocurrido; no requiere ninguna acción adicional.\n\n'
+        'atención directa. Queda cerrada en SIGSO como respaldo de lo ' +
+        'ocurrido; no requiere ninguna acción adicional.\n\n'
       : 'Confirmamos la recepción de su solicitud, la cual ha sido registrada ' +
-        'correctamente en el Sistema de Gestión de Solicitudes (SIGSO) y derivada ' +
+        'correctamente en SIGSO y derivada ' +
         'al equipo responsable para su revisión.\n\n') +
     'DETALLE DE LA SOLICITUD\n' + lineasDetalle.join('\n') + '\n\n' +
     'RESUMEN\n' + solicitud.resumen_whatsapp +

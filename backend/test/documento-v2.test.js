@@ -157,3 +157,39 @@ test('proyecto v2: decisión sugerida, alertas en un bloque, real vs plan y nada
   assert.ok(!/\(s\)/.test(html), 'plurales escritos, no "(s)"');
   assert.match(html, /Ana Pérez/);
 });
+
+test('orden de trabajo v2: marca de SIGSO sin empresa fija, enlaces clicables, nombres y fechas legibles', () => {
+  const { U, R } = DocV2.piezas();
+  const OT = require('../logica/ordenTrabajo');
+  const vista = {
+    observacionesGenerales: 'Ojo <con> esto',
+    items: [{ indice: 1, total: 1, tipo: 'Error / Bug', titulo: 'Filtro <roto>', prioridad: 'P1', estadoLabel: 'Recibida',
+      campos: { descripcion: 'Línea 1\nLínea 2', contexto: '', resultadoEsperado: 'Que filtre' },
+      accesos: [['URL principal', { texto: 'https://app.x.cl/a', link: 'https://app.x.cl/a' }], ['Credencial', 'Ver bóveda']],
+      detalles: [['Responsable asignado', 'leo@x.cl'], ['Fecha comprometida', '2026-10-15'], ['Observaciones', 'Largo texto']],
+      imagenes: [{ nombre: 'captura.png', link: 'https://files.x.cl/c.png' }], documentos: [] }],
+    adjuntosGenerales: null
+  };
+  const html = OT.cuerpoOTV2_(vista, { solicitud: {}, subsolicitudes: [{ estado: 'S02' }] }, { 'leo@x.cl': 'Leonardo' }, U, DocV2.fecha_);
+  assert.ok(html.includes('<a href="https://app.x.cl/a">'));
+  assert.ok(html.includes('Filtro &lt;roto&gt;') && html.includes('Ojo &lt;con&gt; esto'));
+  assert.match(html, /Leonardo/);
+  assert.match(html, /15\/10\/2026/);
+  assert.match(html, /Referencia de credencial/);
+  assert.match(html, /Cómo cerrar esta orden/);
+  // Las observaciones van a lo ancho (como campo), no en la grilla de detalles.
+  assert.ok(html.indexOf('<h3>Observaciones</h3>') !== -1);
+  // La cabecera del documento es de SIGSO, no de una empresa fija.
+  const cab = R.cabeceraDocumento({ titulo: 'Orden de trabajo' });
+  assert.ok(!/Asesor/i.test(cab));
+  assert.match(cab, /Control y Gestión Empresarial/);
+});
+
+test('sanitizarHtml: los enlaces http solo sobreviven si el documento lo arma el servidor (opción enlaces)', () => {
+  const RP = require('../logica/reportePdf');
+  const a = '<a href="https://x.cl">x</a><a href="javascript:alert(1)">y</a>';
+  assert.ok(!RP.sanitizarHtml(a).includes('https://x.cl'), 'HTML del cliente: sin enlaces');
+  const s = RP.sanitizarHtml(a, { enlaces: true });
+  assert.ok(s.includes('href="https://x.cl"'));
+  assert.ok(!/javascript:/i.test(s));
+});

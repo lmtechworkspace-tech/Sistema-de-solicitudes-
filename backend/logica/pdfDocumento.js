@@ -130,7 +130,7 @@ function encabezado(doc, meta) {
     .text('S', MARGIN, top + 7, { width: 26, align: 'center' });
   doc.fillColor(DOC.INK).font('Helvetica-Bold').fontSize(15).text('SIGSO', MARGIN + 34, top);
   doc.fillColor(DOC.MUTED).font('Helvetica').fontSize(8)
-    .text('Sistema de Gestión de Solicitudes', MARGIN + 34, top + 16);
+    .text('Control y Gestión Empresarial', MARGIN + 34, top + 16);
 
   doc.fillColor(DOC.NAVY).font('Helvetica-Bold').fontSize(9)
     .text(String(meta.tipoDoc || '').toUpperCase(), MARGIN, top, { width: CONTENT_WIDTH, align: 'right', characterSpacing: 0.8 });
@@ -155,7 +155,7 @@ function pie(doc) {
   const y = doc.y + 10;
   doc.moveTo(MARGIN, y).lineTo(PAGE_WIDTH - MARGIN, y).lineWidth(1).strokeColor(DOC.HAIRLINE).stroke();
   doc.fillColor(DOC.FAINT).font('Helvetica').fontSize(7.5)
-    .text('SIGSO · Sistema de Gestión de Solicitudes · Documento generado automáticamente el ' +
+    .text('SIGSO · Control y Gestión Empresarial · Documento generado automáticamente el ' +
       formatearFechaLegible_(new Date()) + '.', MARGIN, y + 8, { width: CONTENT_WIDTH });
   doc.fillColor(DOC.MUTED).font('Helvetica-Bold').fontSize(7.5)
     .text('Confidencial — uso interno.', MARGIN, doc.y + 2, { continued: true })

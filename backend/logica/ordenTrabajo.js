@@ -23,6 +23,7 @@
 const SolicitudesBO = require('./solicitudesBackoffice');
 const { errorValidacion } = require('./errores');
 const PdfDoc = require('./pdfDocumento');
+const DocV2 = require('./documentoV2');
 
 const MAX_IMAGENES_OT = 6;
 
@@ -228,6 +229,76 @@ function dibujarAdjuntos_(doc, bloque) {
   doc.moveDown(0.3);
 }
 
+// --- Versión v2 (R-5 de la auditoría de reportes) -----------------------------------------
+// La OT es un documento OPERATIVO, no un reporte: sin niveles ni KPI. Cabecera con la
+// marca de SIGSO (nunca la de una empresa) y la ficha; cada ítem como una tarjeta con qué
+// pasa, dónde ejecutar y el detalle del pedido; enlaces clicables; cómo cerrarla. Mismas
+// piezas visuales que los reportes (documentoV2.js); pdfkit queda de respaldo.
+const TONO_PRIORIDAD = { P1: 'critico', P2: 'alerta', P3: 'info', P4: 'neutro', P5: 'neutro' };
+const TONO_ESTADO = { S06: 'alerta', S07: 'info', S08: 'ok', S09: 'ok', S10: 'neutro', S11: 'neutro' };
+
+function cuerpoOTV2_(vista, detalle, nombres, U, fecha) {
+  const s = detalle.solicitud || {};
+  const subs = detalle.subsolicitudes || [];
+  const persona = (v) => (v && nombres[String(v).toLowerCase()]) || v;
+  const valor = (v) => {
+    if (v && typeof v === 'object' && v.link) return '<a href="' + U.esc(v.link) + '">' + U.esc(v.texto || v.link) + '</a>';
+    if (fecha && /^\d{4}-\d{2}-\d{2}(T|$)/.test(String(v || ''))) return U.esc(fecha(v, true));
+    return U.esc(v);
+  };
+  const datos = (filas) => '<dl class="ot2-datos">' + filas.map((f) => '<div><dt>' + U.esc(f[0]) + '</dt><dd>' + valor(f[1]) + '</dd></div>').join('') + '</dl>';
+  const enlaces = (lista) => '<ul class="ot2-enlaces">' + lista.map((e) => '<li>' + valor({ texto: e.nombre, link: e.link }) + '</li>').join('') + '</ul>';
+  const campo = (titulo, texto) => (texto ? '<div class="ot2-campo"><h3>' + U.esc(titulo) + '</h3><p>' + U.esc(texto) + '</p></div>' : '');
+
+  const obs = vista.observacionesGenerales
+    ? '<div class="ot2-obs"><strong>Observaciones generales</strong><p>' + U.esc(vista.observacionesGenerales) + '</p></div>' : '';
+
+  const items = vista.items.map((it, i) => {
+    const sub = subs[i] || {};
+    // Las observaciones son texto largo: van a lo ancho, con los demás campos, no en la grilla.
+    const observaciones = (it.detalles.find((d) => d[0] === 'Observaciones') || [])[1];
+    const detalles = it.detalles.filter((d) => d[0] !== 'Observaciones').map((d) => (d[0] === 'Responsable asignado' ? [d[0], persona(d[1])] : d));
+    const accesos = it.accesos.map((a) => (a[0] === 'Credencial' ? ['Referencia de credencial', a[1]] : a));
+    const adjuntos = (it.imagenes || []).concat(it.documentos || []);
+    return '<section class="ot2-item">' +
+      '<header class="ot2-item__cab"><div><span class="ot2-item__num">Ítem ' + it.indice + ' de ' + it.total + (it.tipo ? ' · ' + U.esc(it.tipo) : '') + '</span>' +
+        '<h2>' + U.esc(it.titulo) + '</h2></div>' +
+        '<span class="ot2-item__chips">' + (it.prioridad ? U.badge(it.prioridad, TONO_PRIORIDAD[it.prioridad] || 'neutro', true) : '') +
+        U.badge(it.estadoLabel, TONO_ESTADO[sub.estado] || 'info', true) + '</span></header>' +
+      '<div class="ot2-campos">' + campo('Qué pasa', it.campos.descripcion) + campo('Contexto', it.campos.contexto) +
+        campo('Resultado esperado', it.campos.resultadoEsperado) + campo('Observaciones', observaciones) + '</div>' +
+      '<div class="ot2-dos">' +
+        (accesos.length ? '<div><h3 class="ot2-sub">Dónde ejecutar</h3>' + datos(accesos) + '</div>' : '') +
+        (detalles.length ? '<div><h3 class="ot2-sub">Detalles del pedido</h3>' + datos(detalles) + '</div>' : '') +
+      '</div>' +
+      (adjuntos.length ? '<h3 class="ot2-sub">Adjuntos</h3>' + enlaces(adjuntos) +
+        (it.imagenesOmitidas ? '<p class="ot2-nota">+' + it.imagenesOmitidas + ' captura(s) más en SIGSO.</p>' : '') : '') +
+    '</section>';
+  }).join('') || '<p class="ot2-nota">Sin ítems registrados.</p>';
+
+  const generales = vista.adjuntosGenerales
+    ? '<h3 class="ot2-sub">Adjuntos de la solicitud</h3>' + enlaces((vista.adjuntosGenerales.imagenes || []).concat(vista.adjuntosGenerales.documentos || [])) : '';
+
+  const cierre = '<div class="ot2-cierre"><h3>Cómo cerrar esta orden</h3><ol>' +
+    '<li>Ejecuta el trabajo descrito en cada ítem.</li>' +
+    '<li>Marca cada ítem como <strong>Terminada</strong> en SIGSO, o confirma su cierre por el canal acordado con tu coordinación.</li>' +
+    '<li>Adjunta evidencia del resultado (captura o enlace) cuando corresponda, para agilizar la validación.</li></ol></div>';
+
+  return obs + items + generales + cierre;
+}
+
+async function pdfV2_(db, contexto, vista, detalle) {
+  const { U } = DocV2.piezas();
+  const s = detalle.solicitud || {};
+  const filtros = [];
+  (vista.ficha || []).forEach((f) => { for (let k = 0; k < f.length; k += 2) filtros.push({ etiqueta: f[k], valor: f[k + 1] }); });
+  return DocV2.aPdf(db, contexto, {
+    titulo: 'Orden de trabajo', subtitulo: s.solicitud_id + (s.plataforma_nombre ? ' · ' + s.plataforma_nombre : ''),
+    modulo: 'Solicitudes', codigo: s.solicitud_id, filtros: filtros.filter((f) => f.valor && f.valor !== '—'),
+    cuerpo: cuerpoOTV2_(vista, detalle, DocV2.nombresPorCorreo(db), U, DocV2.fecha_), nombreArchivo: 'OT-' + s.solicitud_id, enlaces: true
+  });
+}
+
 // Detalle -> vista, o el error tal cual lo devolvio SolicitudesBO.getDetalle
 // (_validationError / _forbidden) -- comun a generar() y descargar() para no
 // duplicar el guardia de acceso (ya vive dentro de getDetalle: JEFATURA solo
@@ -259,10 +330,20 @@ async function descargar(db, data, contexto) {
   if (!data || !data.solicitud_id) {
     return errorValidacion('solicitud_id', 'Falta indicar el número de solicitud.');
   }
-  const vista = obtenerVista_(db, data.solicitud_id, contexto);
-  if (vista && (vista._validationError || vista._forbidden)) return vista;
+  const detalle = SolicitudesBO.getDetalle(db, data.solicitud_id, contexto || { rol: 'ADM', email: '' });
+  if (detalle && (detalle._validationError || detalle._forbidden)) return detalle;
+  const vista = armarVista_(detalle);
+  if (DocV2.disponible()) {
+    try {
+      const r = await pdfV2_(db, contexto || {}, vista, detalle);
+      // Mismo nombre de siempre: la OT se reconoce por su número.
+      return { pdf_base64: r.pdf_base64, filename: 'OT-' + data.solicitud_id + '.pdf' };
+    } catch (e) {
+      console.error('[orden de trabajo] sin diseño v2, se usa pdfkit:', e && e.message);
+    }
+  }
   const buffer = await dibujar_(vista);
   return { pdf_base64: buffer.toString('base64'), filename: 'OT-' + data.solicitud_id + '.pdf' };
 }
 
-module.exports = { generar, descargar, armarVista_, estadoLabel_ };
+module.exports = { generar, descargar, armarVista_, estadoLabel_, cuerpoOTV2_ };

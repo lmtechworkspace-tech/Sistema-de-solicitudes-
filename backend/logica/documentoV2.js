@@ -137,7 +137,8 @@ function nombresPorCorreo(db) {
 /**
  * Arma el documento completo y lo imprime.
  * o: { titulo, subtitulo, modulo, codigo, periodo, filtros, cuerpo (html),
- *      nombreArchivo, horizontal }. Devuelve { pdf_base64, filename }.
+ *      nombreArchivo, horizontal, enlaces (conserva <a href> http/mailto) }. Devuelve
+ *      { pdf_base64, filename }.
  */
 async function aPdf(db, contexto, o) {
   const { R } = piezas();
@@ -146,7 +147,7 @@ async function aPdf(db, contexto, o) {
     R.cabeceraDocumento({ titulo: o.titulo, subtitulo: o.subtitulo, modulo: o.modulo, codigo: o.codigo,
       periodo: o.periodo, generadoPor: generadoPor, filtros: o.filtros || [] }) +
     valoresFinales(o.cuerpo) + R.pieDocumento() + '</main>';
-  const doc = ReportePdf.componerDocumento({ titulo: o.titulo, css: cssPara(html), html });
+  const doc = ReportePdf.componerDocumento({ titulo: o.titulo, css: cssPara(html), html, enlaces: !!o.enlaces });
   const pie = ReportePdf.piePagina({ titulo: o.titulo, generadoPor: generadoPor || 'SIGSO', fecha: ReportePdf.fechaChile_(new Date()) });
   const buf = await Motor.htmlAPdf(doc, { pie, horizontal: !!o.horizontal });
   return { pdf_base64: buf.toString('base64'), filename: ReportePdf.nombreArchivo_(o.nombreArchivo || o.titulo) };
