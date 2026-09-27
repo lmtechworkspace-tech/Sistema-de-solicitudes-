@@ -58,6 +58,10 @@ function parsearListaEmails_(valor) {
   if (!valor) return [];
   try { const l = JSON.parse(valor); return Array.isArray(l) ? l : []; } catch (err) { return []; }
 }
+function esActiva_(cuenta) {
+  const v = cuenta && cuenta.activo;
+  return v === true || v === 1 || v === 'TRUE' || v === 'true' ? 1 : 0;
+}
 function soloBase64_(valor) {
   return String(valor || '').replace(/^data:[^,]+;base64,/, '');
 }
@@ -233,7 +237,14 @@ function getFotosDe(db, data, contexto) {
   correos.forEach((correoCrudo) => {
     const correo = normalizarEmail_(correoCrudo);
     if (!correo) return;
-    const cuenta = cuentas.find((c) => parsearListaEmails_(c.emails).some((e) => normalizarEmail_(e) === correo));
+    // Un mismo correo puede estar en más de una cuenta (p. ej. una cuenta
+    // antigua desactivada y la que la reemplazó). Antes se tomaba la primera
+    // fila que apareciera, y según el orden de la tabla la foto salía o no.
+    // Ahora manda la cuenta ACTIVA; a igualdad, la que tiene foto.
+    const conFoto = (c) => { const p = porIdentidad['PORTAL:' + String(c.cuenta_id)]; return !!(p && p.thumb_base64); };
+    const cuenta = cuentas
+      .filter((c) => parsearListaEmails_(c.emails).some((e) => normalizarEmail_(e) === correo))
+      .sort((a, b) => (esActiva_(b) - esActiva_(a)) || (conFoto(b) - conFoto(a)))[0];
     const fila = cuenta
       ? porIdentidad['PORTAL:' + String(cuenta.cuenta_id)]
       : porIdentidad['GOOGLE:' + correo];

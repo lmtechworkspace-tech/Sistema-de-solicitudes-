@@ -356,6 +356,21 @@ test('14. getFotosDe resuelve por correo en AMBAS poblaciones, en una llamada', 
   assert.equal(res.fotos['nadie@x.cl'], undefined, 'quien no tiene foto simplemente no aparece');
 });
 
+test('14a. correo en DOS cuentas: manda la activa (y a igualdad, la que tiene foto), no el orden de la tabla', () => {
+  const db = db_();
+  // Cuenta antigua desactivada, con foto, ANTES en la tabla; la vigente, después.
+  seedCuentaPortal(db, { cuenta_id: 'c-vieja', usuario: 'vieja', emails: JSON.stringify(['compartido@rld.cl']), activo: false });
+  seedCuentaPortal(db, { cuenta_id: 'c-nueva', usuario: 'nueva', emails: JSON.stringify(['compartido@rld.cl']) });
+  seedCuentaPortal(db, { cuenta_id: 'c-a', usuario: 'a', emails: JSON.stringify(['dos@rld.cl']) });
+  seedCuentaPortal(db, { cuenta_id: 'c-b', usuario: 'b', emails: JSON.stringify(['dos@rld.cl']) });
+  const foto = (clave, b64) => agregarFila_(db, 'PERFILES', { perfil_id: clave, identidad_tipo: 'PORTAL', identidad_clave: clave, thumb_base64: b64, thumb_mime: 'image/jpeg' });
+  foto('c-vieja', 'VIEJA'); foto('c-nueva', 'NUEVA'); foto('c-b', 'DE_B');
+
+  const res = Perfiles.getFotosDe(db, { emails: ['compartido@rld.cl', 'dos@rld.cl'] }, ctxPortal());
+  assert.equal(res.fotos['compartido@rld.cl'], 'data:image/jpeg;base64,NUEVA', 'la cuenta activa gana a la desactivada');
+  assert.equal(res.fotos['dos@rld.cl'], 'data:image/jpeg;base64,DE_B', 'entre dos activas, la que tiene foto');
+});
+
 test('14b. getFotosDe devuelve SOLO miniaturas: nada de ids, correos ni roles', async (t) => {
   const db = db_();
   conMockAlmacenamiento_(t);
