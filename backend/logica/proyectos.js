@@ -2066,7 +2066,9 @@ function actualizarTarea(db, data, contexto) {
       tarea = Actividades.checkin(db, {
         actividad_id: actividad.actividad_id, tipo: accion,
         avance_pct: conAvance ? Number(data.avance_pct) : undefined,
-        nota: nota, bloqueo_motivo: motivo
+        nota: nota, bloqueo_motivo: motivo,
+        // "Listo" registrado para un día pasado: la tarea terminó ESE día.
+        fecha_terminada: accion === 'listo' && data.dia ? dia : undefined
       }, contexto);
       if (tarea && (tarea._validationError || tarea._forbidden)) { db.exec('ROLLBACK'); return tarea; }
     }

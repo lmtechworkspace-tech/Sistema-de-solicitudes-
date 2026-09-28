@@ -501,7 +501,16 @@ function checkin(db, data, contexto) {
       break;
     case 'listo':
       cambios.estado = actividad.requiere_validacion ? ACTIVIDADES_ESTADOS.EN_REVISION : ACTIVIDADES_ESTADOS.TERMINADA;
-      if (cambios.estado === ACTIVIDADES_ESTADOS.TERMINADA) cambios.fecha_terminada = ahora.toISOString();
+      // fecha_terminada: por defecto, ahora. Si quien registra indica que la
+      // terminó un día ANTERIOR (registro atrasado, o carga de un plan que ya
+      // venía avanzado), se respeta ese día -- así "a tiempo / atrasada" mide
+      // lo que pasó y no el día en que alguien se acordó de marcarla. Nunca
+      // una fecha futura.
+      if (cambios.estado === ACTIVIDADES_ESTADOS.TERMINADA) {
+        const diaReal = String(data.fecha_terminada || '');
+        cambios.fecha_terminada = /^\d{4}-\d{2}-\d{2}$/.test(diaReal) && !isNaN(new Date(diaReal).getTime()) && diaReal <= ahora.toISOString().slice(0, 10)
+          ? diaReal : ahora.toISOString();
+      }
       eventoBitacora = 'ENTREGA';
       break;
     default:

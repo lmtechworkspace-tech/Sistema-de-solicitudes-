@@ -108,6 +108,20 @@ test('listo: la tarea termina y el día queda "finalizado"', () => {
   assert.equal(JSON.parse(dia.datos).estado_dia, 'finalizado');
 });
 
+test('listo registrado para un día PASADO: la tarea terminó ese día (no hoy); sin día, termina hoy', () => {
+  const { db, proyecto, tarea } = armar();
+  const r = Proyectos.actualizarTarea(db, { proyecto_id: proyecto.proyecto_id, actividad_id: tarea.actividad_id, accion: 'listo', dia: '2026-08-14' }, CTX_MARCELO);
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(tareaActual(db, tarea.actividad_id).fecha_terminada, '2026-08-14');
+
+  const otra = Proyectos.crearTarea(db, { proyecto_id: proyecto.proyecto_id, titulo: 'Otra', responsable_email: 'marcelo@rld.cl', fecha_compromiso: '2026-12-01' }, CTX_LEO);
+  Proyectos.actualizarTarea(db, { proyecto_id: proyecto.proyecto_id, actividad_id: otra.actividad_id, accion: 'listo' }, CTX_MARCELO);
+  assert.equal(String(tareaActual(db, otra.actividad_id).fecha_terminada).slice(0, 10), new Date().toISOString().slice(0, 10));
+  // Un día futuro sigue rechazado (no se puede "terminar mañana").
+  const tercera = Proyectos.crearTarea(db, { proyecto_id: proyecto.proyecto_id, titulo: 'Tercera', responsable_email: 'marcelo@rld.cl', fecha_compromiso: '2026-12-01' }, CTX_LEO);
+  assert.equal(Proyectos.actualizarTarea(db, { proyecto_id: proyecto.proyecto_id, actividad_id: tercera.actividad_id, accion: 'listo', dia: MANANA }, CTX_MARCELO)._validationError, true);
+});
+
 test('bloqueo sin motivo: error y NADA escrito (ni check-in, ni registro, ni cambio de estado)', () => {
   const { db, proyecto, tarea } = armar();
   const antes = filasBitacora(db, tarea.actividad_id).length;
