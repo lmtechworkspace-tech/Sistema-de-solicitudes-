@@ -12,10 +12,20 @@
   var PY = window.PYv2;
   var U = UIv2;
 
-  var f = { estado: 'todas', responsable: '', hito: '', texto: '', modo: 'tabla', zoom: 'mes', orden: { campo: 'fin', dir: 1 } };
+  var f = { estado: 'todas', responsable: '', hito: '', texto: '', modo: 'tabla', zoom: 'todo', orden: { campo: 'fin', dir: 1 } };
   try { f.modo = localStorage.getItem('sigso_py2_modo_trabajo') || 'tabla'; } catch (e) { /* sin storage */ }
 
-  var ZOOM = { semana: 110, mes: 46, trimestre: 20 };
+  // Carta Gantt (rediseño 2026-09-28): zoom de "Semana" (días) a "Todo" (el
+  // proyecto entero en el ancho disponible), densidad, dependencias y pantalla
+  // completa. Las preferencias se recuerdan en este navegador.
+  var ZOOM = { semana: 120, mes: 48, trimestre: 22, anio: 9 };
+  var ZOOMS = [{ id: 'semana', texto: 'Semana' }, { id: 'mes', texto: 'Mes' }, { id: 'trimestre', texto: 'Trimestre' }, { id: 'anio', texto: 'Año' }, { id: 'todo', texto: 'Todo' }];
+  var g = { densidad: '', deps: true, completa: false, quieto: false };
+  function leerPref(k, def) { try { var v = localStorage.getItem('sigso_py2_gantt_' + k); return v === null ? def : v; } catch (e) { return def; } }
+  function guardarPref(k, v) { try { localStorage.setItem('sigso_py2_gantt_' + k, v); } catch (e) { /* sin storage */ } }
+  f.zoom = leerPref('zoom', 'todo');
+  g.densidad = leerPref('densidad', '');
+  g.deps = leerPref('deps', '1') === '1';
   var ESTADOS = [
     { id: 'todas', texto: 'Todas', icono: 'rejilla' },
     // "En plazo" (plazo) y no "En curso" (flujo): la columna "En curso" del
@@ -191,15 +201,36 @@
   }
 
   // --- Gantt --------------------------------------------------------------------------
+  // "Todo": el ancho por semana que hace caber el proyecto entero en pantalla.
+  function pxAjustado(r) {
+    var cont = document.getElementById('proyectos-contenido');
+    var ancho = g.completa ? window.innerWidth - 56 : (((cont && cont.clientWidth) || (window.innerWidth - 300)) - 44);
+    var et = window.innerWidth >= 1200 ? 280 : (window.innerWidth <= 720 ? 130 : 220);
+    return Math.max(3, (ancho - et - 6) / r.semanas);
+  }
   function gantt(tareas, ctx) {
     var r = PY.ganttRangoProyecto(ctx);
-    return '<div class="sx2-card sx2-entra" style="--i:1">' +
-      '<div class="sx2-entre" style="margin-bottom:12px;flex-wrap:wrap">' +
-        '<span class="sx2-flex sx2-tenue" style="font-size:.8125rem">' + U.ico('bandera', 14) + 'Agrupado por hito · barra = plan, línea fina = real (roja si terminó tarde) · clic para ver el detalle</span>' +
-        '<span class="sx2-flex">' + U.segmento([{ id: 'semana', texto: 'Semana' }, { id: 'mes', texto: 'Mes' }, { id: 'trimestre', texto: 'Trimestre' }], f.zoom, 'js-py2t-zoom') +
-          U.boton({ texto: 'Hoy', icono: 'calendario', sm: true, clase: 'js-py2t-hoy' }) + '</span>' +
+    var densidad = g.densidad || (ctx.tareas.length > 40 ? 'compacta' : 'comoda');
+    var hitos = (ctx.detalle.hitos || []);
+    var todosCerrados = hitos.length && hitos.every(function (h) { return PY.gruposCerrados[h.hito_id]; });
+    // "Todo": sin ancho fijo, la línea de tiempo ocupa exactamente el ancho disponible.
+    var px = f.zoom === 'todo' ? 0 : ZOOM[f.zoom];
+    var anchoEstimado = f.zoom === 'todo' ? Math.max(300, pxAjustado(r) * r.semanas) : 0;
+    var quieto = g.quieto;
+    g.quieto = false;
+    return '<div class="sx2-card sx2-entra js-py2t-gantt-card' + (g.completa ? ' sx2-py-gantt-card--completa' : '') + '" style="--i:1">' +
+      '<div class="sx2-py-gantt-barra">' +
+        '<span class="sx2-py-gantt-barra__grupo">' + U.segmento(ZOOMS, f.zoom, 'js-py2t-zoom') +
+          U.boton({ texto: 'Hoy', icono: 'calendario', sm: true, clase: 'js-py2t-hoy', titulo: 'Ir a hoy' }) +
+          U.boton({ texto: 'Comienzo', icono: 'izquierda', sm: true, variante: 'fantasma', clase: 'js-py2t-inicio', titulo: 'Ir al comienzo del proyecto' }) + '</span>' +
+        '<span class="sx2-py-gantt-barra__grupo">' +
+          U.segmento([{ id: 'comoda', texto: 'Cómoda' }, { id: 'compacta', texto: 'Compacta' }], densidad, 'js-py2t-densidad') +
+          U.chip({ texto: 'Dependencias', icono: 'enlace', activo: g.deps, clase: 'js-py2t-deps' }) +
+          (hitos.length ? U.boton({ texto: todosCerrados ? 'Expandir hitos' : 'Contraer hitos', icono: todosCerrados ? 'abajo' : 'derecha', sm: true, variante: 'fantasma', clase: 'js-py2t-plegar-todo', datos: { abrir: todosCerrados ? '1' : '0' } }) : '') +
+          U.boton({ soloIcono: true, icono: g.completa ? 'reducir' : 'expandir', sm: true, clase: 'js-py2t-completa', titulo: g.completa ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa' }) +
+        '</span>' +
       '</div>' +
-      PY.gantt(ctx, { tareas: tareas, desde: r.desde, semanas: r.semanas, pxSemana: ZOOM[f.zoom], agrupar: true }) +
+      PY.gantt(ctx, { tareas: tareas, desde: r.desde, semanas: r.semanas, pxSemana: px, agrupar: true, densidad: densidad, dependencias: g.deps, completa: true, quieto: quieto, anchoEstimado: anchoEstimado }) +
       leyenda() +
     '</div>';
   }
@@ -208,10 +239,31 @@
       [['info', 'En curso'], ['ok', 'Terminada'], ['alerta', 'En riesgo'], ['critico', 'Atrasada'], ['hito', 'Bloqueada'], ['neutro', 'Pendiente']].map(function (x) {
         return '<span class="sx2-tono-' + x[0] + '"><i></i>' + x[1] + '</span>';
       }).join('') +
+      '<span class="sx2-py-leyenda-gantt__sep"></span>' +
+      '<span><i class="sx2-py-leyenda-gantt__real sx2-py-leyenda-gantt__real--ok"></i>Real a tiempo</span>' +
+      '<span><i class="sx2-py-leyenda-gantt__real sx2-py-leyenda-gantt__real--tarde"></i>Real con atraso</span>' +
+      '<span><i class="sx2-py-leyenda-gantt__resumen"></i>Resumen del hito</span>' +
       '<span class="sx2-tono-hito"><i class="sx2-py-leyenda-gantt__hito"></i>Hito</span>' +
       '<span><i class="sx2-py-leyenda-gantt__hoy"></i>Hoy</span>' +
+      '<span class="sx2-tenue">Arrastra para moverte · Ctrl + rueda para acercar o alejar</span>' +
     '</div>';
   }
+  var ORDEN_ZOOM = ['semana', 'mes', 'trimestre', 'anio', 'todo'];
+  // Esc sale de la pantalla completa del Gantt.
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Escape' || !g.completa || !document.querySelector('.sx2-py-gantt-card--completa')) return;
+    g.completa = false;
+    repintarGantt();
+  });
+  function cambiarZoom(id) {
+    f.zoom = id;
+    guardarPref('zoom', id);
+    g.quieto = true;
+    PY.pintar({ sinAnimacion: true });
+    var raiz = document.getElementById('proyectos-contenido');
+    if (id !== 'todo') PY.ganttCentrarEnHoy(raiz);
+  }
+  function repintarGantt() { g.quieto = true; PY.pintar({ sinAnimacion: true }); }
 
   function vacioFiltros() {
     return U.card({ cuerpo: U.vacio({ icono: 'lupa', titulo: 'Ninguna tarea coincide', texto: 'Prueba con otros filtros.',
@@ -241,7 +293,19 @@
 
   var tBusqueda_ = null;
   function alMontar(raiz, ctx) {
-    if (f.modo === 'gantt') PY.ganttCentrarEnHoy(raiz);
+    if (f.modo === 'gantt') {
+      if (f.zoom !== 'todo') PY.ganttCentrarEnHoy(raiz);
+      PY.ganttMontar(raiz);
+      var sc = raiz.querySelector('.sx2-py-gantt-scroll--completa');
+      // Ctrl (o ⌘) + rueda: acercar / alejar el zoom.
+      if (sc) sc.addEventListener('wheel', function (ev) {
+        if (!ev.ctrlKey && !ev.metaKey) return;
+        ev.preventDefault();
+        var i = ORDEN_ZOOM.indexOf(f.zoom) + (ev.deltaY > 0 ? 1 : -1);
+        if (i < 0 || i >= ORDEN_ZOOM.length) return;
+        cambiarZoom(ORDEN_ZOOM[i]);
+      }, { passive: false });
+    }
     raiz.addEventListener('click', function (ev) {
       var t = ev.target;
       var e = t.closest('.js-py2t-estado');
@@ -254,17 +318,30 @@
         return;
       }
       var z = t.closest('.js-py2t-zoom');
-      if (z) { f.zoom = z.getAttribute('data-id'); PY.pintar({ sinAnimacion: true }); PY.ganttCentrarEnHoy(document.getElementById('proyectos-contenido')); return; }
+      if (z) { cambiarZoom(z.getAttribute('data-id')); return; }
       if (t.closest('.js-py2t-hoy')) { PY.ganttCentrarEnHoy(raiz); return; }
+      if (t.closest('.js-py2t-inicio')) { PY.ganttIrAlInicio(raiz); return; }
+      var dz = t.closest('.js-py2t-densidad');
+      if (dz) { g.densidad = dz.getAttribute('data-id'); guardarPref('densidad', g.densidad); repintarGantt(); return; }
+      if (t.closest('.js-py2t-deps')) { g.deps = !g.deps; guardarPref('deps', g.deps ? '1' : '0'); repintarGantt(); return; }
+      var pt = t.closest('.js-py2t-plegar-todo');
+      if (pt) {
+        var abrir = pt.getAttribute('data-abrir') === '1';
+        (ctx.detalle.hitos || []).forEach(function (h) { PY.gruposCerrados[h.hito_id] = !abrir; });
+        PY.gruposCerrados._ = !abrir;
+        repintarGantt();
+        return;
+      }
+      if (t.closest('.js-py2t-completa')) { g.completa = !g.completa; repintarGantt(); return; }
       if (t.closest('.js-py2t-limpiar')) { f.estado = 'todas'; f.responsable = ''; f.hito = ''; f.texto = ''; PY.pintar({ sinAnimacion: true }); return; }
       if (t.closest('.js-py2t-nueva')) { abrirNuevaTarea(ctx); return; }
       var o = t.closest('.js-py2t-orden');
       if (o) { ordenarPor(o.getAttribute('data-campo')); return; }
       var pl = t.closest('.sx2-py-gantt__plegar');
       if (pl) {
-        var g = pl.closest('[data-py2-grupo]').getAttribute('data-py2-grupo');
-        PY.gruposCerrados[g] = !PY.gruposCerrados[g];
-        PY.pintar({ sinAnimacion: true });
+        var grupo = pl.closest('[data-py2-grupo]').getAttribute('data-py2-grupo');
+        PY.gruposCerrados[grupo] = !PY.gruposCerrados[grupo];
+        repintarGantt();
         return;
       }
       var tarea = t.closest('[data-py2-tarea]');
