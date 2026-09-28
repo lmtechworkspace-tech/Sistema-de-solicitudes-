@@ -728,6 +728,37 @@ test('listarMisTareas: entregables pendientes propios, sin los ya APROBADOS', ()
   assert.equal(mias.entregables[0].nombre, 'Manual');
 });
 
+test('proyecto BORRADO o DESACTIVADO: sus tareas, entregables y horas desaparecen de Mi trabajo, alertas y listados', () => {
+  const db = db_();
+  const vivo = crearProyectoBase(db, { nombre: 'Vivo' });
+  const borrado = crearProyectoBase(db, { nombre: 'Borrado' });
+  const inactivo = crearProyectoBase(db, { nombre: 'Inactivo' });
+  const tareas = [vivo, borrado, inactivo].map((p) =>
+    Proyectos.crearTarea(db, { proyecto_id: p.proyecto_id, titulo: 'Tarea ' + p.nombre, responsable_email: 'leo@rld.cl', fecha_compromiso: '2020-01-01' }, CTX_LEO));
+  [borrado, inactivo].forEach((p) => Proyectos.gestionarEntregable(db, { proyecto_id: p.proyecto_id, nombre: 'Entregable ' + p.nombre, responsable_email: 'leo@rld.cl', fecha_comprometida: '2026-09-01' }, CTX_LEO));
+  // Horas registradas en la tarea del proyecto que se va a borrar.
+  agregarFila_(db, 'ACTIVIDADES_BITACORA', { bitacora_id: 'b1', actividad_id: tareas[1].actividad_id, tipo: 'CHECKIN', timestamp: new Date().toISOString(), usuario_email: 'leo@rld.cl' });
+  // Lo que hace el panel de datos: borra la fila del proyecto y deja sus tareas.
+  const { eliminarFilasPorId_ } = require('../db/sqliteRepo');
+  eliminarFilasPorId_(db, 'PROYECTOS', 'proyecto_id', borrado.proyecto_id);
+  actualizarFilaPorId_(db, 'PROYECTOS', 'proyecto_id', inactivo.proyecto_id, { activa: false });
+
+  for (const ctx of [CTX_LEO, CTX_ADM]) {
+    const mias = Proyectos.listarMisTareas(db, { incluir_personales: true }, ctx);
+    const titulos = mias.tareas.map((t) => t.titulo);
+    if (ctx === CTX_LEO) assert.deepEqual(titulos, ['Tarea Vivo']);
+    assert.ok(!titulos.includes('Tarea Borrado') && !titulos.includes('Tarea Inactivo'), ctx.rol + ' no debe ver tareas huérfanas');
+    assert.ok(!mias.tareas.some((t) => t.proyecto_nombre === '(proyecto eliminado)'));
+    assert.equal(mias.entregables.length, 0, 'ni entregables de proyectos que ya no existen');
+  }
+  const horas = Proyectos.listarMiBitacora(db, {}, CTX_LEO).map((b) => b.actividad_id);
+  assert.ok(horas.includes(tareas[0].actividad_id), 'las horas del proyecto vivo siguen');
+  assert.ok(!horas.includes(tareas[1].actividad_id) && !horas.includes(tareas[2].actividad_id), 'Mis horas no cuenta horas de un proyecto borrado o inactivo');
+  assert.deepEqual(Actividades.listar(db, {}, CTX_ADM).map((a) => a.titulo), ['Tarea Vivo'], 'el módulo de actividades tampoco');
+  const alertas = JSON.stringify(Actividades.calcularAlertas(db));
+  assert.ok(!/Tarea Borrado|Tarea Inactivo/.test(alertas), 'no se mandan alertas por tareas huérfanas');
+});
+
 test('listarCalendario: junta hitos/tareas/entregables ordenados por fecha; ADM/GERENCIA ven todo', () => {
   const db = db_();
   const proyecto = crearProyectoBase(db);

@@ -319,7 +319,11 @@
     var diasConReg = porDia.filter(function (v) { return v > 0; }).length;
     var r1 = function (v) { return Math.round(v * 10) / 10; };
 
-    var kpis = '<div class="sx2-fila-kpis' + (nSol ? ' sx2-fila-kpis--6' : '') + '">' +
+    // Siempre 4 indicadores. (Antes leía `nSol`, que solo existe dentro de
+    // pintar(): la pestaña "Mis horas" lanzaba ReferenceError y Mi trabajo
+    // quedaba en el esqueleto de carga -- y como la pestaña se recuerda, quedaba
+    // así cada vez que la persona volvía.)
+    var kpis = '<div class="sx2-fila-kpis">' +
       U.kpi({ i: 0, icono: 'reloj', tono: 'primario', etiqueta: 'Últimos 7 días', valor: r1(semana), sufijo: ' h',
         tendencia: anterior ? { texto: (semana >= anterior ? '+' : '') + r1(semana - anterior) + ' h vs semana anterior', tono: semana >= anterior ? 'ok' : 'alerta', icono: semana >= anterior ? 'tendencia' : 'tendenciaBaja' } : null }) +
       U.kpi({ i: 1, icono: 'calendario', tono: 'info', etiqueta: '14 días', valor: r1(total), sufijo: ' h', unidad: diasConReg + (diasConReg === 1 ? ' día con registro' : ' días con registro') }) +

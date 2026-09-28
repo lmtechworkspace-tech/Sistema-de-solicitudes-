@@ -59,7 +59,8 @@ function getMiEquipo(db, data, contexto) {
   });
   const proyectos = {};
   leerSeguro_(db, 'PROYECTOS').forEach((p) => { proyectos[p.proyecto_id] = p.nombre; });
-  const actividades = leerSeguro_(db, 'ACTIVIDADES').filter((a) => verdadero_(a.activa));
+  const vigente = Actividades.filtroProyectoVigente_(db);
+  const actividades = leerSeguro_(db, 'ACTIVIDADES').filter((a) => verdadero_(a.activa) && vigente(a));
   const bitacora = leerSeguro_(db, 'ACTIVIDADES_BITACORA');
   const solicitudes = leerSeguro_(db, 'SOLICITUDES');
   const subsPorSolicitud = {};

@@ -684,8 +684,11 @@ function listarMisTareas(db, data, contexto) {
   // se suman los compromisos SIN proyecto que trabajo (responsable o
   // colaborador). Sin el flag, igual que siempre: solo tareas de proyecto.
   const incluirPersonales = !!(data && data.incluir_personales);
+  // Tareas y entregables de un proyecto borrado o desactivado no se muestran
+  // (ver Actividades.filtroProyectoVigente_).
+  const vigente = Actividades.filtroProyectoVigente_(db);
   const tareas = leerSeguro_(db, 'ACTIVIDADES').filter((a) => {
-    if (!esVerdadero_(a.activa)) return false;
+    if (!esVerdadero_(a.activa) || !vigente(a)) return false;
     if (a.proyecto_id) return esMiaOColaboroYVisible(a);
     return incluirPersonales && Actividades.trabajaLaActividad_(a, email);
   })
@@ -713,7 +716,7 @@ function listarMisTareas(db, data, contexto) {
     });
 
   const entregables = leerSeguro_(db, 'PROYECTO_ENTREGABLES')
-    .filter((e) => e.estado !== 'APROBADO' && e.estado !== 'CANCELADO' && esMiaYVisible(e.proyecto_id, e.responsable_email))
+    .filter((e) => e.estado !== 'APROBADO' && e.estado !== 'CANCELADO' && vigente(e) && esMiaYVisible(e.proyecto_id, e.responsable_email))
     .map((e) => {
       const proyecto = proyectosPorId[e.proyecto_id];
       return {
@@ -1182,8 +1185,9 @@ function listarMiBitacora(db, data, contexto) {
   proyectosDelUsuario_(db, contexto.email).forEach((id) => { misProyectos[id] = true; });
   const esAdmGerencia = contexto.rol === 'ADM' || contexto.rol === 'GERENCIA';
   const idsTarea = {};
+  const vigente = Actividades.filtroProyectoVigente_(db);
   leerSeguro_(db, 'ACTIVIDADES').forEach((a) => {
-    if (!esVerdadero_(a.activa)) return;
+    if (!esVerdadero_(a.activa) || !vigente(a)) return;
     if (!a.proyecto_id && !(data && data.incluir_personales)) return;
     if (!Actividades.trabajaLaActividad_(a, email)) return;
     if (a.proyecto_id && !esAdmGerencia && !misProyectos[a.proyecto_id]) return;

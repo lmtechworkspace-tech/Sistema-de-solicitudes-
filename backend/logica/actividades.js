@@ -59,6 +59,19 @@ function leerSeguro_(db, hoja) {
   try { return leer_(db, hoja); } catch (err) { return []; }
 }
 
+// Una tarea de proyecto solo "existe" para las personas si su proyecto existe
+// y está activo. Si el proyecto se borró (p. ej. desde el panel de datos, que
+// borra la fila pero deja sus tareas) o se desactivó, sus tareas quedaban
+// huérfanas: seguían en Mi trabajo como "(proyecto eliminado)", inflaban los
+// contadores de atrasadas, generaban alertas y al abrirlas daban "Proyecto no
+// encontrado". Las tareas sin proyecto (compromisos personales) siempre
+// cuentan. Devuelve un filtro: leer PROYECTOS una vez por llamada, no por tarea.
+function filtroProyectoVigente_(db) {
+  const vigentes = {};
+  leerSeguro_(db, 'PROYECTOS').forEach((p) => { if (esVerdadero_(p.activa)) vigentes[p.proyecto_id] = true; });
+  return (a) => !a.proyecto_id || !!vigentes[a.proyecto_id];
+}
+
 function obtenerFeriados_(db) {
   try { return Cumplimiento.obtenerFeriados(db); } catch (err) { return []; }
 }
@@ -270,8 +283,9 @@ function listar(db, filtros, contexto) {
   // lo reconoce en obtenerDetalle/checkin) pero nunca la veia en "Mi
   // trabajo", salvo que alguien le pasara el enlace directo.
   const miEmail = normalizarEmail_(contexto && contexto.email);
+  const vigente = filtroProyectoVigente_(db);
   let filas = leerSeguro_(db, 'ACTIVIDADES').filter((a) =>
-    esVerdadero_(a.activa) && (alcance.todas || alcance.emails[normalizarEmail_(a.responsable_email)] || colaboradoresDeActividad_(a).indexOf(miEmail) !== -1));
+    esVerdadero_(a.activa) && vigente(a) && (alcance.todas || alcance.emails[normalizarEmail_(a.responsable_email)] || colaboradoresDeActividad_(a).indexOf(miEmail) !== -1));
   if (filtros && filtros.estado) filas = filas.filter((a) => a.estado === filtros.estado);
   if (filtros && filtros.responsable_email) {
     const email = normalizarEmail_(filtros.responsable_email);
@@ -659,8 +673,9 @@ function calcularAlertas(db) {
     return porPersona[normalizado];
   }
 
+  const vigente = filtroProyectoVigente_(db);
   leerSeguro_(db, 'ACTIVIDADES').forEach((a) => {
-    if (!esVerdadero_(a.activa) || esEstadoTerminal_(a.estado)) return;
+    if (!esVerdadero_(a.activa) || esEstadoTerminal_(a.estado) || !vigente(a)) return;
     const pendienteConfirmar = a.fecha_propuesta && !a.confirmada_en;
 
     if (pendienteConfirmar) {
@@ -716,7 +731,8 @@ function areasPorId_(db) {
   return mapa;
 }
 function actividadesActivasNoCanceladas_(db) {
-  return leerSeguro_(db, 'ACTIVIDADES').filter((a) => esVerdadero_(a.activa) && a.estado !== ACTIVIDADES_ESTADOS.CANCELADA);
+  const vigente = filtroProyectoVigente_(db);
+  return leerSeguro_(db, 'ACTIVIDADES').filter((a) => esVerdadero_(a.activa) && a.estado !== ACTIVIDADES_ESTADOS.CANCELADA && vigente(a));
 }
 function coincideFiltroGerenciaActividad_(a, filtros) {
   if (filtros.area_id && a.area_id !== filtros.area_id) return false;
@@ -1068,7 +1084,7 @@ module.exports = {
   calcularAlertas, enviarAlertasActividades,
   // Exportadas para que Proyectos.js (wrappers de tarea) y sus tests reusen
   // el mismo motor y los mismos helpers, nunca duplicados.
-  ACTIVIDADES_ESTADOS, esEstadoTerminal_, semaforoActividad_, normalizarEmail_,
+  ACTIVIDADES_ESTADOS, esEstadoTerminal_, semaforoActividad_, normalizarEmail_, filtroProyectoVigente_,
   colaboradoresDeActividad_, trabajaLaActividad_, buscarActividad_, registrarEventoActividad_,
   // Mi trabajo v2: el registro del día de un compromiso SIN proyecto usa los
   // permisos de este módulo (ver Proyectos.resolverTareaRegistro_).
