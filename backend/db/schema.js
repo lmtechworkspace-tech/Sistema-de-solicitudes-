@@ -263,7 +263,12 @@ const COLUMNAS = {
     'fecha_creacion', 'creado_por', 'activa',
     'proyecto_id', 'hito_id', 'depende_de',
     'sgc_origen_tipo', 'sgc_origen_id',
-    'meta_cantidad', 'meta_unidad', 'colaboradores_emails', 'tarea_padre_id'
+    'meta_cantidad', 'meta_unidad', 'colaboradores_emails', 'tarea_padre_id',
+    // Control plan vs real (2026-09-28): el inicio real explícito. Si está vacío
+    // se sigue derivando de la bitácora (primer día con trabajo registrado).
+    // Plan = fecha_inicio_plan → fecha_compromiso; Real = fecha_inicio_real →
+    // fecha_terminada.
+    'fecha_inicio_real'
   ],
   ACTIVIDADES_BITACORA: [
     'bitacora_id', 'actividad_id', 'tipo', 'autor_email', 'autor_nombre',
@@ -336,7 +341,12 @@ const COLUMNAS = {
   PROYECTO_ESTADOS_PAGO: [
     'estado_pago_id', 'proyecto_id', 'nombre', 'fecha_proyectada',
     'monto_proyectado', 'fecha_real', 'monto_real', 'estado', 'orden',
-    'registrado_por', 'fecha_creacion'
+    'registrado_por', 'fecha_creacion',
+    // Costos con respaldo (2026-09-28): el documento tributario del pago
+    // (factura/boleta), su desglose y el archivo de respaldo del proyecto.
+    // fecha_real = fecha de PAGO; fecha_documento = fecha de emisión.
+    'proveedor', 'documento_numero', 'fecha_documento', 'monto_neto', 'monto_impuesto',
+    'documento_id', 'nota'
   ],
   PROYECTO_PLANTILLAS: [
     'plantilla_id', 'nombre', 'descripcion', 'creado_por', 'fecha_creacion', 'activa'

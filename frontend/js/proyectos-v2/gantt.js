@@ -80,6 +80,20 @@
       return '<span class="sx2-py-gantt__hito sx2-tono-' + tonoHito(h) + '" style="left:' + pos(new Date(h.fecha_objetivo).getTime()).toFixed(2) + '%"' +
         ' title="' + U.esc(h.nombre + ' · ' + PY.fecha(h.fecha_objetivo, true)) + '"></span>';
     }
+    // Control plan vs real: línea fina con lo que de verdad pasó (inicio real →
+    // término real, o → hoy si sigue en curso). Roja si termina después del plan.
+    function barraReal(f) {
+      var ini = f.a.fecha_inicio_real || f.p.fecha_inicio_real;
+      if (!ini) return '';
+      var finReal = f.p.fecha_fin_real || f.a.fecha_terminada;
+      var ri = new Date(String(ini).slice(0, 10)), rf = finReal ? new Date(String(finReal).slice(0, 10)) : hoy;
+      if (isNaN(ri.getTime()) || isNaN(rf.getTime())) return '';
+      if (rf < ri) rf = ri;
+      var l = pos(ri.getTime()), r = pos(rf.getTime() + DIA);
+      var tarde = rf.getTime() > f.fin.getTime() + DIA / 2;
+      return '<span class="sx2-py-gantt__real' + (tarde ? ' sx2-py-gantt__real--tarde' : '') + '" style="left:' + l.toFixed(2) + '%;width:' + Math.max(0.6, r - l).toFixed(2) + '%"' +
+        ' title="' + U.esc('Real: ' + PY.fecha(ri) + ' → ' + (finReal ? PY.fecha(rf) : 'en curso')) + '"></span>';
+    }
     function filaTarea(f, i) {
       var tono = PY.tonoTarea(f.a);
       var izq = pos(f.ini), der = pos(f.fin.getTime() + DIA);
@@ -93,6 +107,7 @@
             ' title="' + U.esc(f.a.titulo + ' · ' + PY.fecha(f.ini) + ' → ' + PY.fecha(f.fin) + ' · ' + (f.a.semaforo_etiqueta || '') + ' · ' + Math.round(avance) + '%') + '">' +
             '<span class="sx2-py-gantt__relleno" style="width:' + Math.max(0, Math.min(100, avance)) + '%"></span>' +
           '</span>' +
+          barraReal(f) +
         '</span>' +
       '</div>';
     }

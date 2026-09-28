@@ -1,12 +1,12 @@
 /**
  * proyectos-v2/seguimiento.js — sección "Seguimiento", con sub-navegación
  * lateral: Hitos · Riesgos (matriz probabilidad × impacto) · Reuniones y
- * decisiones · Avance y costos (curva S física + financiera) · RDI ·
+ * decisiones · Avance y costos (curva S física + costos con respaldo) ·
  * Analítica. Reemplaza en v1: Hitos, Riesgos, Reuniones, Decisiones,
- * Avance, Financiero, RDI y Analítica.
+ * Avance, Financiero y Analítica. (RDI retirado el 2026-09-28: 0 usos.)
  *
  * Mismas acciones, endpoints y permisos que v1. Lo que v1 carga "lazy"
- * (reuniones, decisiones, avance, pagos, RDI, analítica) se pide con
+ * (reuniones, decisiones, avance, pagos, analítica) se pide con
  * PY.extra() la primera vez que la sub-vista se abre.
  */
 (function () {
@@ -20,7 +20,6 @@
     { id: 'riesgos', texto: 'Riesgos', icono: 'escudo' },
     { id: 'reuniones', texto: 'Reuniones y decisiones', icono: 'comentario' },
     { id: 'avance', texto: 'Avance y costos', icono: 'tendencia' },
-    { id: 'rdi', texto: 'RDI', icono: 'portapapeles' },
     { id: 'analitica', texto: 'Analítica', icono: 'grafico' }
   ];
   var sub = 'hitos';
@@ -422,66 +421,123 @@
     return '$' + Math.round(n).toLocaleString('es-CL');
   }
 
-  function bloqueFisico(ctx, puntos) {
+  // --- Curva S automática (control plan vs real, 2026-09-28) -------------------------
+  // Se calcula de las propias tareas, sin que nadie tenga que declararla: cada tarea
+  // pesa por su tamaño (S 1 · M 2 · L 3 · XL 5) y en el PLAN avanza en línea recta
+  // entre su inicio y su término de plan; en lo REAL suma completa el día de su
+  // término real, y a hoy aporta además el avance parcial de las que siguen abiertas.
+  var PESO_TAMANO = { S: 1, M: 2, L: 3, XL: 5 };
+  var DIA_MS = 86400000;
+  function curvaS(ctx) {
+    var plan = PY.planPorId(ctx);
+    var items = ctx.tareas.filter(function (a) { return a.estado !== 'CANCELADA'; }).map(function (a) {
+      var p = plan[a.actividad_id] || {};
+      var fin = Date.parse(String(p.plan_fin || a.fecha_compromiso || a.fecha_propuesta || '').slice(0, 10));
+      if (isNaN(fin)) return null;
+      var ini = Date.parse(String(a.fecha_inicio_plan || p.plan_inicio || '').slice(0, 10));
+      if (isNaN(ini) || ini > fin) ini = fin;
+      var finReal = p.fecha_fin_real || a.fecha_terminada;
+      var avance = !vacioNum(p.avance_real_pct) ? Number(p.avance_real_pct) : (a.estado === 'TERMINADA' ? 100 : (Number(a.avance_pct) || 0));
+      return { w: PESO_TAMANO[a.tamano] || 2, ini: ini, fin: fin, finReal: finReal ? Date.parse(String(finReal).slice(0, 10)) : null, avance: avance, terminada: a.estado === 'TERMINADA' };
+    }).filter(Boolean);
+    if (!items.length) return null;
+    var total = items.reduce(function (s, x) { return s + x.w; }, 0);
+    var hoy = Date.parse(PY.hoyClave());
+    var min = Math.min.apply(null, items.map(function (x) { return x.ini; }));
+    var maxPlan = Math.max.apply(null, items.map(function (x) { return x.fin; }));
+    var fechas = [];
+    for (var t = PY.lunes(new Date(min)).getTime(); t <= Math.max(maxPlan, hoy); t += 7 * DIA_MS) fechas.push(t);
+    [hoy, maxPlan].forEach(function (x) { if (fechas.indexOf(x) === -1) fechas.push(x); });
+    fechas.sort(function (a, b) { return a - b; });
+    var r1 = function (v) { return Math.round(v * 10) / 10; };
+    var puntos = fechas.map(function (t) {
+      var pl = items.reduce(function (s, x) { return s + x.w * Math.max(0, Math.min(1, (t - x.ini + DIA_MS) / (x.fin - x.ini + DIA_MS))); }, 0);
+      var re = null;
+      if (t <= hoy) {
+        re = items.reduce(function (s, x) {
+          if (x.finReal !== null && x.finReal <= t) return s + x.w;
+          if (t === hoy) return s + x.w * (x.terminada ? 1 : x.avance / 100);
+          return s;
+        }, 0);
+      }
+      return { t: t, plan: r1(pl / total * 100), real: re === null ? null : r1(re / total * 100) };
+    });
+    var enHoy = puntos.filter(function (p) { return p.t === hoy; })[0];
+    return { puntos: puntos, planHoy: enHoy.plan, realHoy: enHoy.real, tareas: items.length };
+  }
+
+  function bloqueFisico(ctx, controles) {
     var g = gestiona(ctx);
-    var accion = g ? U.boton({ texto: 'Registrar control', icono: 'nueva', sm: true, clase: 'js-py2s-av-nuevo' }) : '';
-    if (!puntos.length) {
+    var accion = g ? U.boton({ texto: 'Registrar control', icono: 'nueva', sm: true, variante: 'fantasma', clase: 'js-py2s-av-nuevo', titulo: 'Punto de control declarado (opcional)' }) : '';
+    var cs = curvaS(ctx);
+    if (!cs) {
       return '<section class="sx2-card sx2-entra" style="--i:2"><div class="sx2-card__cab"><h2 class="sx2-card__titulo">' + U.ico('tendencia', 18) + 'Avance físico</h2>' + accion + '</div>' +
-        U.vacio({ icono: 'tendencia', titulo: 'Sin puntos de control', texto: g ? 'Registra el % proyectado y el % real cada vez que revises el avance.' : 'Quien gestiona el proyecto aún no registra controles.' }) + '</section>';
+        U.vacio({ icono: 'tendencia', titulo: 'Sin tareas con fechas', texto: 'La curva S se arma sola con las fechas de plan y de término real de las tareas.' }) + '</section>';
     }
-    var conReal = puntos.filter(function (p) { return !vacioNum(p.pct_real); });
-    var ultimo = conReal[conReal.length - 1];
-    var desvio = ultimo ? Number(ultimo.pct_proyectado) - Number(ultimo.pct_real) : null;
+    var desvio = r1(cs.realHoy - cs.planHoy);
+    function r1(v) { return Math.round(v * 10) / 10; }
     return '<section class="sx2-card sx2-entra" style="--i:2">' +
-      '<div class="sx2-card__cab"><h2 class="sx2-card__titulo">' + U.ico('tendencia', 18) + 'Avance físico <span class="sx2-card__sub">curva S declarada</span></h2>' + accion + '</div>' +
+      '<div class="sx2-card__cab"><h2 class="sx2-card__titulo">' + U.ico('tendencia', 18) + 'Avance físico <span class="sx2-card__sub">curva S · ' + cs.tareas + ' tareas</span></h2>' + accion + '</div>' +
       '<div class="sx2-py-mini-kpis">' +
-        '<span><small>Proyectado</small><b>' + (ultimo ? ultimo.pct_proyectado + '%' : '—') + '</b></span>' +
-        '<span><small>Real</small><b>' + (ultimo ? ultimo.pct_real + '%' : '—') + '</b></span>' +
-        '<span class="' + (desvio > 0 ? 'sx2-delta--mal' : 'sx2-delta--bien') + '"><small>Desvío</small><b>' + (desvio === null ? '—' : (desvio > 0 ? '−' + desvio.toFixed(1) : '+' + (-desvio).toFixed(1)) + ' pp') + '</b></span>' +
+        '<span><small>Plan a hoy</small><b>' + cs.planHoy + '%</b></span>' +
+        '<span><small>Real a hoy</small><b>' + cs.realHoy + '%</b></span>' +
+        '<span class="' + (desvio < 0 ? 'sx2-delta--mal' : 'sx2-delta--bien') + '"><small>Desvío</small><b>' + (desvio > 0 ? '+' : '') + desvio + ' pp</b></span>' +
       '</div>' +
-      '<div class="sx2-py-grafico sx2-py-grafico--alto"><canvas id="py2-grafico-fisico" role="img" aria-label="Curva de avance físico: proyectado versus real"></canvas></div>' +
-      '<div class="sx2-tabla-wrap" style="margin-top:12px"><table class="sx2-tabla"><thead><tr><th>Fecha</th><th class="sx2-num">Proyectado</th><th class="sx2-num">Real</th><th>Desvío</th><th>Nota</th></tr></thead><tbody>' +
-        puntos.slice().reverse().map(function (p) {
-          var d = vacioNum(p.pct_real) ? null : Number(p.pct_proyectado) - Number(p.pct_real);
+      '<div class="sx2-py-grafico sx2-py-grafico--alto"><canvas id="py2-grafico-fisico" role="img" aria-label="Curva S: avance planificado versus real, calculada de las tareas"></canvas></div>' +
+      '<p class="sx2-tenue" style="font-size:.75rem;margin:6px 0 0">Cada tarea pesa por su tamaño. El plan usa inicio y término de plan; lo real, el término real de cada tarea.</p>' +
+      (controles && controles.length ? '<h3 class="sx2-card__titulo" style="font-size:.875rem;margin:14px 0 6px">Controles declarados</h3>' +
+        '<div class="sx2-tabla-wrap"><table class="sx2-tabla"><thead><tr><th>Fecha</th><th class="sx2-num">Proyectado</th><th class="sx2-num">Real</th><th>Nota</th></tr></thead><tbody>' +
+        controles.slice().reverse().map(function (p) {
           return '<tr' + (g ? ' class="sx2-fila--clic js-py2s-av-editar" data-id="' + U.esc(p.control_id) + '" title="Editar"' : '') + '>' +
             '<td>' + PY.fecha(p.fecha, true) + '</td><td class="sx2-num">' + p.pct_proyectado + '%</td><td class="sx2-num">' + (vacioNum(p.pct_real) ? '—' : p.pct_real + '%') + '</td>' +
-            '<td>' + (d === null ? '—' : (d > 0 ? U.badge('Atraso ' + d.toFixed(1) + ' pp', 'critico') : U.badge('Al día', 'ok'))) + '</td>' +
             '<td class="sx2-tenue">' + U.esc(p.nota || '') + '</td></tr>';
-        }).join('') +
-      '</tbody></table></div>' +
+        }).join('') + '</tbody></table></div>' : '') +
     '</section>';
   }
 
+  // --- Costos con respaldo (2026-09-28) ------------------------------------------------
   function bloqueFinanciero(ctx, fin) {
     var g = gestiona(ctx);
     var moneda = fin.presupuesto_moneda || 'CLP';
     var estados = fin.estados || [];
     var accion = g ? U.boton({ texto: 'Registrar pago', icono: 'nueva', sm: true, clase: 'js-py2s-pago-nuevo' }) : '';
     if (!estados.length) {
-      return '<section class="sx2-card sx2-entra" style="--i:3"><div class="sx2-card__cab"><h2 class="sx2-card__titulo">' + U.ico('dinero', 18) + 'Avance financiero</h2>' + accion + '</div>' +
-        U.vacio({ icono: 'dinero', titulo: 'Sin estados de pago', texto: g ? 'Registra los hitos de pago (anticipo, avance, entrega final) con su monto.' : 'Quien gestiona el proyecto aún no registra estados de pago.' }) + '</section>';
+      return '<section class="sx2-card sx2-entra" style="--i:3"><div class="sx2-card__cab"><h2 class="sx2-card__titulo">' + U.ico('dinero', 18) + 'Costos</h2>' + accion + '</div>' +
+        U.vacio({ icono: 'dinero', titulo: 'Sin pagos registrados', texto: g ? 'Registra cada pago (cuota, anticipo, factura) con su documento y su comprobante.' : 'Quien gestiona el proyecto aún no registra pagos.' }) + '</section>';
     }
-    var hoy = PY.hoyClave();
-    var proyAHoy = estados.filter(function (e) { return String(e.fecha_proyectada).slice(0, 10) <= hoy; }).reduce(function (s, e) { return s + (Number(e.monto_proyectado) || 0); }, 0);
-    var real = estados.filter(function (e) { return !vacioNum(e.monto_real); }).reduce(function (s, e) { return s + (Number(e.monto_real) || 0); }, 0);
-    var presupuesto = Number(fin.presupuesto_monto) || 0;
-    var pctPres = presupuesto ? Math.round(real / presupuesto * 100) : null;
+    var r = fin.resumen || {};
+    var base = r.presupuesto || r.comprometido || 0;
+    var pctPagado = base ? Math.round(r.pagado / base * 1000) / 10 : null;
+    var fisico = vacioNum(ctx.detalle.avance_pct) ? null : Math.round(Number(ctx.detalle.avance_pct));
+    var brecha = pctPagado !== null && fisico !== null ? Math.round(pctPagado - fisico) : null;
+    var alerta = brecha !== null && brecha > 15
+      ? '<div class="sx2-py-aviso sx2-tono-alerta" style="margin-bottom:12px">' + U.ico('alerta', 16) + '<span>Se ha pagado el <strong>' + pctPagado + '%</strong> ' + (r.presupuesto ? 'del presupuesto' : 'de lo comprometido') + ' con un <strong>' + fisico + '%</strong> de avance físico: los pagos van ' + brecha + ' pp adelante del trabajo.</span></div>'
+      : '';
+    var prox = r.proximo_pago;
     return '<section class="sx2-card sx2-entra" style="--i:3">' +
-      '<div class="sx2-card__cab"><h2 class="sx2-card__titulo">' + U.ico('dinero', 18) + 'Avance financiero <span class="sx2-card__sub">' + (presupuesto ? 'presupuesto ' + monto(presupuesto, moneda) : 'sin presupuesto cargado') + '</span></h2>' + accion + '</div>' +
-      '<div class="sx2-py-mini-kpis">' +
-        '<span><small>Proyectado a hoy</small><b>' + montoCorto(proyAHoy, moneda) + '</b></span>' +
-        '<span><small>Real</small><b>' + montoCorto(real, moneda) + '</b></span>' +
-        '<span><small>Del presupuesto</small><b>' + (pctPres === null ? '—' : pctPres + '%') + '</b></span>' +
+      '<div class="sx2-card__cab"><h2 class="sx2-card__titulo">' + U.ico('dinero', 18) + 'Costos <span class="sx2-card__sub">' + (r.pagos_realizados || 0) + ' de ' + (r.pagos_totales || estados.length) + ' pagos hechos</span></h2>' + accion + '</div>' +
+      '<div class="sx2-py-costos-kpis">' +
+        '<span><small>Presupuesto</small><b>' + (r.presupuesto ? montoCorto(r.presupuesto, moneda) : '—') + '</b></span>' +
+        '<span><small>Comprometido</small><b>' + montoCorto(r.comprometido || 0, moneda) + '</b></span>' +
+        '<span><small>Pagado</small><b>' + montoCorto(r.pagado || 0, moneda) + '</b></span>' +
+        '<span><small>Por pagar</small><b>' + montoCorto(r.por_pagar || 0, moneda) + '</b></span>' +
       '</div>' +
-      (pctPres !== null ? '<div style="margin-bottom:12px">' + U.barra(Math.min(pctPres, 100), pctPres > 100 ? 'critico' : 'ok') + '</div>' : '') +
-      '<div class="sx2-py-grafico sx2-py-grafico--alto"><canvas id="py2-grafico-financiero" role="img" aria-label="Acumulado proyectado versus real"></canvas></div>' +
-      '<div class="sx2-tabla-wrap" style="margin-top:12px"><table class="sx2-tabla"><thead><tr><th>Estado de pago</th><th>Fecha</th><th class="sx2-num">Proyectado</th><th class="sx2-num">Real</th><th>Estado</th></tr></thead><tbody>' +
+      (pctPagado !== null ? '<div style="margin-bottom:6px" class="sx2-entre"><span class="sx2-tenue" style="font-size:.8125rem">Ejecutado</span><strong class="sx2-num">' + pctPagado + '%</strong></div><div style="margin-bottom:12px">' + U.barra(Math.min(pctPagado, 100), pctPagado > 100 ? 'critico' : 'ok') + '</div>' : '') +
+      alerta +
+      (prox ? '<p style="font-size:.8125rem;margin:0 0 12px">' + U.ico('calendario', 13) + ' Próximo pago: <strong>' + U.esc(String(prox.nombre).split(' · ')[0]) + '</strong> · ' + PY.fecha(prox.fecha, true) + ' · ' + monto(prox.monto, moneda) + (prox.estado === 'facturado' ? ' · ya facturado' : '') + '</p>' : '') +
+      '<div class="sx2-py-grafico sx2-py-grafico--alto"><canvas id="py2-grafico-financiero" role="img" aria-label="Costos acumulados: comprometido versus pagado"></canvas></div>' +
+      '<div class="sx2-tabla-wrap" style="margin-top:12px"><table class="sx2-tabla"><thead><tr><th>Pago</th><th>Documento</th><th>Pagado el</th><th class="sx2-num">Monto</th><th>Estado</th><th></th></tr></thead><tbody>' +
         estados.map(function (e) {
           var est = PAGO[e.estado] || { texto: e.estado, tono: 'neutro' };
+          var montoFila = e.estado === 'pagado' && !vacioNum(e.monto_real) ? e.monto_real : e.monto_proyectado;
+          var desglose = !vacioNum(e.monto_neto) ? 'Neto ' + monto(e.monto_neto, moneda) + (!vacioNum(e.monto_impuesto) ? ' + impuesto ' + monto(e.monto_impuesto, moneda) : '') : '';
           return '<tr' + (g ? ' class="sx2-fila--clic js-py2s-pago-editar" data-id="' + U.esc(e.estado_pago_id) + '" title="Editar"' : '') + '>' +
-            '<td><strong>' + U.esc(e.nombre) + '</strong></td><td>' + PY.fecha(e.fecha_real || e.fecha_proyectada, true) + '</td>' +
-            '<td class="sx2-num">' + monto(e.monto_proyectado, moneda) + '</td><td class="sx2-num">' + monto(e.monto_real, moneda) + '</td>' +
-            '<td>' + U.badge(est.texto, est.tono) + '</td></tr>';
+            '<td><strong>' + U.esc(String(e.nombre).split(' · ')[0]) + '</strong>' + (e.proveedor ? '<span class="sx2-py-doc-pago">' + U.esc(e.proveedor) + '</span>' : '') + '</td>' +
+            '<td>' + (e.documento_numero ? 'N° ' + U.esc(e.documento_numero) : '—') + (e.fecha_documento ? '<span class="sx2-py-doc-pago">' + PY.fecha(e.fecha_documento, true) + '</span>' : '') + '</td>' +
+            '<td>' + (e.fecha_real ? PY.fecha(e.fecha_real, true) : '<span class="sx2-tenue">prev. ' + PY.fecha(e.fecha_proyectada, true) + '</span>') + '</td>' +
+            '<td class="sx2-num"' + (desglose ? ' title="' + U.esc(desglose) + '"' : '') + '>' + monto(montoFila, moneda) + '</td>' +
+            '<td>' + U.badge(est.texto, est.tono) + '</td>' +
+            '<td>' + (e.documento_id ? U.boton({ soloIcono: true, icono: 'descargar', sm: true, variante: 'fantasma', titulo: 'Descargar respaldo' + (e.documento_nombre ? ': ' + e.documento_nombre : ''), clase: 'js-py2s-pago-doc', datos: { id: e.documento_id } }) : '') + '</td></tr>';
         }).join('') +
       '</tbody></table></div>' +
     '</section>';
@@ -494,16 +550,21 @@
     var real = vacioNum(det.avance_pct) ? null : Math.round(Number(det.avance_pct));
     var esperado = vacioNum(det.avance_esperado_pct) ? null : Math.round(Number(det.avance_esperado_pct));
     var diff = real !== null && esperado !== null ? real - esperado : null;
+    var r = fin && fin.resumen;
+    var base = r ? (r.presupuesto || r.comprometido) : 0;
+    var pctPagado = base ? Math.round(r.pagado / base * 100) : null;
     var kpis = '<div class="sx2-fila-kpis">' +
-      U.kpi({ i: 0, icono: 'tareas', tono: 'primario', etiqueta: 'Avance por tareas', valor: real === null ? '—' : real, sufijo: real === null ? '' : '%', unidad: 'calculado por SIGSO', progreso: real === null ? null : real }) +
+      U.kpi({ i: 0, icono: 'tareas', tono: 'primario', etiqueta: 'Avance físico', valor: real === null ? '—' : real, sufijo: real === null ? '' : '%', unidad: 'por tareas', progreso: real === null ? null : real }) +
       U.kpi({ i: 1, icono: 'calendario', tono: 'info', etiqueta: 'Esperado a hoy', valor: esperado === null ? '—' : esperado, sufijo: esperado === null ? '' : '%', unidad: 'según fechas plan' }) +
       U.kpi({ i: 2, icono: diff !== null && diff < 0 ? 'tendenciaBaja' : 'tendencia', tono: diff === null ? 'neutro' : (diff < -10 ? 'critico' : (diff < 0 ? 'alerta' : 'ok')), etiqueta: 'Diferencia',
         valor: diff === null ? '—' : (diff > 0 ? '+' : '') + Math.round(diff) + ' pp', unidad: diff === null ? 'sin datos' : (diff < 0 ? 'atrasado' : 'en línea o adelantado') }) +
-      U.kpi({ i: 3, icono: 'calendario', tono: 'neutro', etiqueta: 'Término', valor: PY.fecha(p.fecha_objetivo, true), unidad: (function () { var d = PY.diasHasta(p.fecha_objetivo); return d === null ? '' : (d < 0 ? 'vencido hace ' + (-d) + ' d' : 'quedan ' + d + ' d'); })() }) +
+      U.kpi({ i: 3, icono: 'dinero', tono: pctPagado === null ? 'neutro' : (real !== null && pctPagado - real > 15 ? 'alerta' : 'ok'), etiqueta: 'Avance financiero', valor: pctPagado === null ? '—' : pctPagado, sufijo: pctPagado === null ? '' : '%',
+        unidad: pctPagado === null ? 'sin pagos' : (r.presupuesto ? 'pagado del presupuesto' : 'pagado de lo comprometido'), progreso: pctPagado === null ? null : Math.min(100, pctPagado) }) +
+      U.kpi({ i: 4, icono: 'calendario', tono: 'neutro', etiqueta: 'Término', valor: PY.fecha(p.fecha_objetivo, true), unidad: (function () { var d = PY.diasHasta(p.fecha_objetivo); return d === null ? '' : (d < 0 ? 'vencido hace ' + (-d) + ' d' : 'quedan ' + d + ' d'); })() }) +
     '</div>';
     return kpis + '<div class="sx2-grid sx2-grid--estira">' +
-      '<div class="sx2-col-6">' + (puntos === undefined ? cargando() : (puntos === null ? fallo('El avance físico no respondió.') : bloqueFisico(ctx, puntos))) + '</div>' +
-      '<div class="sx2-col-6">' + (fin === undefined ? cargando() : (fin === null ? fallo('El avance financiero no respondió.') : bloqueFinanciero(ctx, fin))) + '</div>' +
+      '<div class="sx2-col-6">' + (puntos === undefined ? cargando() : bloqueFisico(ctx, puntos || [])) + '</div>' +
+      '<div class="sx2-col-6">' + (fin === undefined ? cargando() : (fin === null ? fallo('Los costos no respondieron.') : bloqueFinanciero(ctx, fin))) + '</div>' +
     '</div>';
   }
 
@@ -526,77 +587,61 @@
   }
 
   function abrirPago(ctx, e) {
+    var fin = PY.extra('pagos', 'listarEstadosPagoProyecto') || {};
+    var docs = fin.documentos || [];
+    var v = function (k) { return e && !vacioNum(e[k]) ? U.esc(e[k]) : ''; };
     PY.formulario({
-      titulo: e ? 'Editar estado de pago' : 'Nuevo estado de pago', boton: e ? 'Guardar' : 'Registrar',
-      campos: PY.campo('Nombre', '<input class="sx2-input" name="nombre" maxlength="120" value="' + U.esc(e ? e.nombre : '') + '" placeholder="Anticipo, Avance 50%, Entrega final…">') +
+      titulo: e ? 'Editar pago' : 'Nuevo pago', boton: e ? 'Guardar' : 'Registrar',
+      subtitulo: nota('Cada pago con su documento (factura o boleta) y su comprobante como respaldo.'),
+      campos: PY.campo('Concepto', '<input class="sx2-input" name="nombre" maxlength="120" value="' + U.esc(e ? e.nombre : '') + '" placeholder="Cuota 1/6, Anticipo, Entrega final…">') +
         '<div class="sx2-form__fila">' +
-          PY.campo('Fecha proyectada', '<input class="sx2-input" type="date" name="fecha_proyectada" value="' + fechaInput(e && e.fecha_proyectada) + '">') +
-          PY.campo('Monto proyectado', '<input class="sx2-input" type="number" min="0" step="any" name="monto_proyectado" value="' + (e ? U.esc(e.monto_proyectado) : '') + '">') +
+          PY.campo('Proveedor', '<input class="sx2-input" name="proveedor" maxlength="120" value="' + U.esc(e ? e.proveedor || '' : '') + '" placeholder="Opcional">') +
+          PY.campo('Estado', '<select class="sx2-select" name="estado">' + Object.keys(PAGO).map(function (k) {
+            return '<option value="' + k + '"' + (k === (e ? e.estado : 'proyectado') ? ' selected' : '') + '>' + PAGO[k].texto + '</option>';
+          }).join('') + '</select>') +
         '</div>' +
-        PY.campo('Estado', '<select class="sx2-select" name="estado">' + Object.keys(PAGO).map(function (k) {
-          return '<option value="' + k + '"' + (k === (e ? e.estado : 'proyectado') ? ' selected' : '') + '>' + PAGO[k].texto + '</option>';
-        }).join('') + '</select>') +
         '<div class="sx2-form__fila">' +
-          PY.campo('Fecha real', '<input class="sx2-input" type="date" name="fecha_real" value="' + fechaInput(e && e.fecha_real) + '">') +
-          PY.campo('Monto real', '<input class="sx2-input" type="number" min="0" step="any" name="monto_real" value="' + (e && !vacioNum(e.monto_real) ? U.esc(e.monto_real) : '') + '" placeholder="Opcional">') +
-        '</div>',
+          PY.campo('N° documento', '<input class="sx2-input" name="documento_numero" maxlength="40" value="' + U.esc(e ? e.documento_numero || '' : '') + '" placeholder="N° factura o boleta">') +
+          PY.campo('Fecha del documento', '<input class="sx2-input" type="date" name="fecha_documento" value="' + fechaInput(e && e.fecha_documento) + '">') +
+        '</div>' +
+        '<div class="sx2-form__fila">' +
+          PY.campo('Neto', '<input class="sx2-input js-py2s-neto" type="number" min="0" step="any" name="monto_neto" value="' + v('monto_neto') + '" placeholder="Opcional">') +
+          PY.campo('Impuesto (IVA)', '<input class="sx2-input js-py2s-iva" type="number" min="0" step="any" name="monto_impuesto" value="' + v('monto_impuesto') + '" placeholder="Opcional">') +
+        '</div>' +
+        '<div class="sx2-form__fila">' +
+          PY.campo('Monto total', '<input class="sx2-input js-py2s-total" type="number" min="0" step="any" name="monto_proyectado" value="' + v('monto_proyectado') + '">', 'Si completas neto e impuesto, se suma solo.') +
+          PY.campo('Fecha prevista', '<input class="sx2-input" type="date" name="fecha_proyectada" value="' + fechaInput(e && e.fecha_proyectada) + '">') +
+        '</div>' +
+        '<div class="sx2-form__fila">' +
+          PY.campo('Fecha de pago', '<input class="sx2-input" type="date" name="fecha_real" max="' + PY.hoyClave() + '" value="' + fechaInput(e && e.fecha_real) + '">') +
+          PY.campo('Monto pagado', '<input class="sx2-input" type="number" min="0" step="any" name="monto_real" value="' + v('monto_real') + '" placeholder="Al pagar">') +
+        '</div>' +
+        PY.campo('Respaldo', '<select class="sx2-select" name="documento_id"><option value="">Sin respaldo</option>' + docs.map(function (d) {
+          return '<option value="' + U.esc(d.documento_id) + '"' + (e && e.documento_id === d.documento_id ? ' selected' : '') + '>' + U.esc(d.nombre) + '</option>';
+        }).join('') + '</select>', docs.length ? 'Un documento ya subido en Archivos del proyecto.' : 'Sube la factura o el comprobante en Archivos para poder vincularlo.') +
+        PY.campo('Nota', '<textarea class="sx2-input" name="nota" maxlength="1000" rows="2">' + U.esc(e ? e.nota || '' : '') + '</textarea>'),
+      alMontar: function (form) {
+        var neto = form.querySelector('.js-py2s-neto'), iva = form.querySelector('.js-py2s-iva'), total = form.querySelector('.js-py2s-total');
+        function sumar() {
+          if (neto.value === '' || iva.value === '') return;
+          total.value = Math.round((Number(neto.value) + Number(iva.value)) * 100) / 100;
+        }
+        neto.addEventListener('input', sumar);
+        iva.addEventListener('input', sumar);
+      },
       preparar: function (d) {
-        if (!d.nombre) return 'El nombre es obligatorio.';
-        if (!d.fecha_proyectada) return 'Indica la fecha proyectada.';
-        if (d.monto_proyectado === '') return 'Indica el monto proyectado.';
+        if (!d.nombre) return 'El concepto es obligatorio.';
+        if (!d.fecha_proyectada) return 'Indica la fecha prevista.';
+        if (d.monto_proyectado === '') return 'Indica el monto total.';
+        if (d.estado === 'pagado' && !d.fecha_real) return 'Indica la fecha de pago.';
+        if (d.estado === 'pagado' && d.monto_real === '') d.monto_real = d.monto_proyectado;
         if (e) d.estado_pago_id = e.estado_pago_id;
         return d;
       },
-      accion: 'gestionarEstadoPagoProyecto', aviso: 'Estado de pago guardado.',
+      accion: 'gestionarEstadoPagoProyecto', aviso: 'Pago guardado.',
       listo: function () { PY.invalidarExtra('pagos'); },
       eliminar: e ? { titulo: '¿Eliminar "' + e.nombre + '"?',
         enviar: function () { return PY.api('gestionarEstadoPagoProyecto', { proyecto_id: PY.estado().proyectoId, accion: 'eliminar', estado_pago_id: e.estado_pago_id }); } } : null
-    });
-  }
-
-  // =========================================================================
-  // RDI
-  // =========================================================================
-  var RDI_TONO = { S01: 'info', S02: 'info', S03: 'primario', S04: 'primario', S05: 'primario', S06: 'alerta', S07: 'primario', S08: 'ok', S09: 'ok', S10: 'critico', S11: 'neutro' };
-  function pintarRdi(ctx) {
-    var rdis = PY.extra('rdi', 'listarRdiProyecto', function (d) { return d.rdis || []; });
-    if (rdis === undefined) return cargando();
-    if (rdis === null) return fallo('Los RDI no respondieron.');
-    var etiqueta = window.SIGSO_ESTADOS_LABEL || {};
-    var abiertos = rdis.filter(function (r) { return ['S08', 'S09', 'S10', 'S11'].indexOf(r.estado) === -1; }).length;
-    var vencidos = rdis.filter(function (r) { return ['S08', 'S09', 'S10', 'S11'].indexOf(r.estado) === -1 && r.fecha_vencimiento && String(r.fecha_vencimiento).slice(0, 10) < PY.hoyClave(); }).length;
-    return '<div class="sx2-fila-kpis">' +
-        U.kpi({ i: 0, icono: 'portapapeles', tono: 'primario', etiqueta: 'RDI', valor: rdis.length, unidad: 'en este proyecto' }) +
-        U.kpi({ i: 1, icono: 'reloj', tono: 'info', etiqueta: 'Esperando respuesta', valor: abiertos, unidad: 'abiertos' }) +
-        U.kpi({ i: 2, icono: 'alerta', tono: vencidos ? 'critico' : 'neutro', etiqueta: 'Vencidos', valor: vencidos, unidad: 'pasaron su fecha' }) +
-      '</div>' +
-      '<section class="sx2-card sx2-entra" style="--i:2">' +
-        '<div class="sx2-card__cab"><h2 class="sx2-card__titulo">' + U.ico('portapapeles', 18) + 'Requerimientos de información</h2>' +
-          U.boton({ texto: 'Nuevo RDI', icono: 'nueva', sm: true, variante: 'primario', clase: 'js-py2s-rdi-nuevo' }) + '</div>' +
-        '<div class="sx2-py-aviso sx2-tono-info" style="margin-bottom:12px">' + U.ico('info', 16) + '<span>Un RDI es una pregunta formal a alguien fuera del equipo. Se responde y se sigue en la bandeja de Solicitudes; aquí se ve su estado.</span></div>' +
-        (rdis.length ? '<div class="sx2-tabla-wrap"><table class="sx2-tabla"><thead><tr><th>Título</th><th>Estado</th><th>Solicitante</th><th>Creado</th><th>Vence</th><th></th></tr></thead><tbody>' +
-          rdis.map(function (r) {
-            return '<tr><td><strong>' + U.esc(r.titulo) + '</strong></td>' +
-              '<td>' + U.badge(etiqueta[r.estado] || r.estado, RDI_TONO[r.estado] || 'neutro') + '</td>' +
-              '<td>' + U.esc(r.solicitante_nombre || '') + '</td>' +
-              '<td>' + PY.fecha(r.fecha_creacion, true) + '</td><td>' + (r.fecha_vencimiento ? PY.fecha(r.fecha_vencimiento, true) : '—') + '</td>' +
-              '<td>' + (r.url_pdf ? '<a class="sx2-enlace" href="' + U.esc(r.url_pdf) + '" target="_blank" rel="noopener">' + U.ico('documento', 13) + 'PDF</a>' : '') + '</td></tr>';
-          }).join('') + '</tbody></table></div>'
-          : U.vacio({ icono: 'portapapeles', titulo: 'Sin RDI', texto: 'Cuando necesites una respuesta formal de alguien fuera del equipo, créala aquí.' })) +
-      '</section>';
-  }
-
-  function abrirRdi() {
-    PY.formulario({
-      titulo: 'Nuevo RDI', boton: 'Crear RDI',
-      subtitulo: nota('Se crea como una solicitud, con seguimiento en la bandeja.'),
-      campos: PY.campo('Título', '<input class="sx2-input" name="titulo" maxlength="160" placeholder="¿Qué necesitas que te confirmen?">') +
-        PY.campo('Descripción', '<textarea class="sx2-input" name="descripcion" maxlength="4000" rows="5"></textarea>') +
-        '<div class="sx2-form__fila">' + PY.campo('Centro de costo', '<input class="sx2-input" name="centro_costo" placeholder="Opcional">') +
-          PY.campo('Vencimiento', '<input class="sx2-input" type="date" name="fecha_vencimiento">') + '</div>',
-      preparar: function (d) { if (!d.titulo) return 'El título es obligatorio.'; if (!d.descripcion) return 'La descripción es obligatoria.'; return d; },
-      accion: 'crearRdiProyecto', aviso: 'RDI creado.',
-      listo: function () { PY.invalidarExtra('rdi'); }
     });
   }
 
@@ -689,17 +734,29 @@
     if (!window.Chart) return;
     var prim = color(raiz, '--sx-primario'), ok = color(raiz, '--sx-ok'), hito = color(raiz, '--sx-hito'), neutro = color(raiz, '--sx-texto-3');
     var c = raiz.querySelector('#py2-grafico-fisico');
-    var puntos = c && PY.extra('avance', 'listarControlAvanceProyecto', function (d) { return d.puntos || []; });
-    if (c && puntos && puntos.length) {
+    var cs = c && curvaS(ctx);
+    if (c && cs) {
+      var controles = PY.extra('avance', 'listarControlAvanceProyecto', function (d) { return d.puntos || []; }) || [];
       var op = opcionesBase(raiz);
       op.scales.y.max = 100;
       op.scales.y.ticks.callback = function (v) { return v + '%'; };
-      graficos_.push(new Chart(c, { type: 'line', options: op, data: {
-        labels: puntos.map(function (p) { return PY.fecha(p.fecha); }),
-        datasets: [
-          { label: 'Proyectado', data: puntos.map(function (p) { return Number(p.pct_proyectado); }), borderColor: neutro, borderDash: [6, 4], pointRadius: 3, tension: 0.35, fill: false },
-          { label: 'Real', data: puntos.map(function (p) { return vacioNum(p.pct_real) ? null : Number(p.pct_real); }), borderColor: prim, backgroundColor: conAlfa(prim, 0.13), pointRadius: 4, tension: 0.35, fill: true, spanGaps: true }
-        ] } }));
+      op.plugins.tooltip = { callbacks: { label: function (it) { return it.dataset.label + ': ' + it.parsed.y + '%'; } } };
+      // Controles declarados (si los hay): cada uno en la semana que le corresponde.
+      var declarados = cs.puntos.map(function () { return null; });
+      controles.forEach(function (k) {
+        if (vacioNum(k.pct_real)) return;
+        var t = Date.parse(String(k.fecha).slice(0, 10)), idx = 0;
+        cs.puntos.forEach(function (p, i) { if (p.t <= t) idx = i; });
+        declarados[idx] = Number(k.pct_real);
+      });
+      var datasets = [
+        { label: 'Plan', data: cs.puntos.map(function (p) { return p.plan; }), borderColor: neutro, borderDash: [6, 4], pointRadius: 0, tension: 0.25, fill: false },
+        { label: 'Real', data: cs.puntos.map(function (p) { return p.real; }), borderColor: prim, backgroundColor: conAlfa(prim, 0.13), pointRadius: 0, pointHoverRadius: 4, tension: 0.25, fill: true, spanGaps: false }
+      ];
+      if (declarados.some(function (x) { return x !== null; })) {
+        datasets.push({ label: 'Control declarado', data: declarados, borderColor: hito, backgroundColor: hito, showLine: false, pointRadius: 5, pointStyle: 'rectRot' });
+      }
+      graficos_.push(new Chart(c, { type: 'line', options: op, data: { labels: cs.puntos.map(function (p) { return PY.fecha(new Date(p.t).toISOString()); }), datasets: datasets } }));
     }
     c = raiz.querySelector('#py2-grafico-financiero');
     var fin = c && PY.extra('pagos', 'listarEstadosPagoProyecto');
@@ -708,12 +765,15 @@
       var of = opcionesBase(raiz);
       of.scales.y.ticks.callback = function (v) { return montoCorto(v, moneda); };
       of.plugins.tooltip = { callbacks: { label: function (it) { return it.dataset.label + ': ' + monto(it.parsed.y, moneda); } } };
+      var presupuesto = fin.resumen && fin.resumen.presupuesto;
+      var dsF = [
+        { label: 'Comprometido acumulado', data: fin.estados.map(function (e) { aP += Number(e.monto_proyectado) || 0; return aP; }), borderColor: neutro, borderDash: [6, 4], pointRadius: 3, tension: 0.3 },
+        { label: 'Pagado acumulado', data: fin.estados.map(function (e) { if (e.estado !== 'pagado') return null; aR += Number(vacioNum(e.monto_real) ? e.monto_proyectado : e.monto_real) || 0; return aR; }), borderColor: ok, backgroundColor: conAlfa(ok, 0.13), pointRadius: 4, tension: 0.3, fill: true, spanGaps: true }
+      ];
+      if (presupuesto) dsF.push({ label: 'Presupuesto', data: fin.estados.map(function () { return presupuesto; }), borderColor: color(raiz, '--sx-critico'), borderWidth: 1, borderDash: [2, 3], pointRadius: 0, fill: false });
       graficos_.push(new Chart(c, { type: 'line', options: of, data: {
-        labels: fin.estados.map(function (e) { return e.nombre; }),
-        datasets: [
-          { label: 'Proyectado acumulado', data: fin.estados.map(function (e) { aP += Number(e.monto_proyectado) || 0; return aP; }), borderColor: neutro, borderDash: [6, 4], pointRadius: 3, tension: 0.3 },
-          { label: 'Real acumulado', data: fin.estados.map(function (e) { if (vacioNum(e.monto_real)) return null; aR += Number(e.monto_real) || 0; return aR; }), borderColor: ok, backgroundColor: conAlfa(ok, 0.13), pointRadius: 4, tension: 0.3, fill: true, spanGaps: true }
-        ] } }));
+        labels: fin.estados.map(function (e) { return String(e.nombre).split(' · ')[0]; }),
+        datasets: dsF } }));
     }
     c = raiz.querySelector('#py2-grafico-analitica');
     var an = c && PY.extra('analitica', 'obtenerAnaliticaProyecto');
@@ -746,7 +806,7 @@
 
   function pintar(ctx) {
     if (PY.subSeguimiento) { sub = PY.subSeguimiento; PY.subSeguimiento = null; }
-    var cuerpo = { hitos: pintarHitos, riesgos: pintarRiesgos, reuniones: pintarReuniones, avance: pintarAvance, rdi: pintarRdi, analitica: pintarAnalitica }[sub] || pintarHitos;
+    var cuerpo = { hitos: pintarHitos, riesgos: pintarRiesgos, reuniones: pintarReuniones, avance: pintarAvance, analitica: pintarAnalitica }[sub] || pintarHitos;
     return '<div class="sx2-con-subnav">' +
       '<nav class="sx2-subnav sx2-entra" aria-label="Seguimiento">' + SUBS.map(function (s) {
         var n = contadorSub(ctx, s.id);
@@ -830,10 +890,18 @@
       var ex = PY.estado().datos.extra || {};
       if (t.closest('.js-py2s-av-nuevo')) { abrirControl(ctx, null); return; }
       if ((b = t.closest('.js-py2s-av-editar'))) { abrirControl(ctx, porId(ex.avance, 'control_id', b.getAttribute('data-id'))); return; }
+      if ((b = t.closest('.js-py2s-pago-doc'))) {
+        b.disabled = true;
+        PY.api('descargarDocumentoProyecto', { proyecto_id: PY.estado().proyectoId, documento_id: b.getAttribute('data-id') }).then(function (r) {
+          b.disabled = false;
+          if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo descargar el respaldo.', 'error'); return; }
+          PY.descargarBase64(r.data.contenido_base64, r.data.nombre_archivo, r.data.mime);
+        });
+        return;
+      }
       if (t.closest('.js-py2s-pago-nuevo')) { abrirPago(ctx, null); return; }
       if ((b = t.closest('.js-py2s-pago-editar'))) { abrirPago(ctx, porId(ex.pagos && ex.pagos.estados, 'estado_pago_id', b.getAttribute('data-id'))); return; }
-      // RDI / analítica
-      if (t.closest('.js-py2s-rdi-nuevo')) { abrirRdi(); return; }
+      // Analítica
       if (t.closest('.js-py2s-an-excel')) { exportarExcel(ctx, t.closest('.js-py2s-an-excel')); return; }
     });
   }

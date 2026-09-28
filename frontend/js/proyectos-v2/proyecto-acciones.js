@@ -80,7 +80,9 @@
         item('editar', 'editar', 'Editar proyecto', 'Nombre, fechas, estado y presupuesto') +
         item('plantilla', 'copiar', 'Guardar como plantilla', 'Copia los hitos para proyectos parecidos') +
         item('baseline', 'capas', 'Congelar línea base', 'Foto de las fechas de plan de hoy') +
-        (!cerrado ? '<span class="sx2-menu__sep"></span>' + item('cerrar', 'candado', 'Cerrar proyecto', 'Con un resumen del cierre', true) : '') : '');
+        '<span class="sx2-menu__sep"></span>' +
+        (!cerrado ? item('cerrar', 'candado', 'Cerrar proyecto', 'Con un resumen del cierre', true) : '') +
+        item('eliminar', 'basura', 'Eliminar proyecto', 'Deja de verse en todo SIGSO', true) : '');
     var m = document.createElement('div');
     m.className = 'sx2-menu';
     m.setAttribute('role', 'menu');
@@ -102,7 +104,7 @@
     if (mi) {
       var id = mi.getAttribute('data-py2-menu');
       cerrarMenu();
-      ({ informe: abrirInforme, editar: abrirEditar, plantilla: abrirPlantilla, baseline: congelarBaseline, cerrar: abrirCerrar })[id](PY.ctx());
+      ({ informe: abrirInforme, editar: abrirEditar, plantilla: abrirPlantilla, baseline: congelarBaseline, cerrar: abrirCerrar, eliminar: abrirEliminar })[id](PY.ctx());
       return true;
     }
     return false;
@@ -211,6 +213,28 @@
         PY.campo('Resumen del cierre', '<textarea class="sx2-input" name="motivo" rows="5" maxlength="2000" placeholder="Entregables logrados, pendientes, aprendizajes"></textarea>'),
       preparar: function (d) { if (!d.motivo) return 'Resume brevemente el cierre.'; d.estado = 'CERRADO'; return d; },
       accion: 'actualizarProyecto', aviso: 'Proyecto cerrado.'
+    });
+  }
+
+  // Eliminar: borrado lógico en el servidor (se conserva todo, deja de verse).
+  // Se confirma escribiendo el código o el nombre, para que no sea un clic al pasar.
+  function abrirEliminar(ctx) {
+    var p = ctx.proyecto;
+    var clave = p.codigo || p.nombre;
+    PY.formulario({
+      titulo: 'Eliminar proyecto', boton: 'Eliminar proyecto', ocupado: 'Eliminando…', peligro: true,
+      subtitulo: nota(p.nombre),
+      campos: '<div class="sx2-py-aviso sx2-tono-critico">' + U.ico('alerta', 16) + '<span>El proyecto, sus tareas, horas, pagos y documentos dejan de verse en todo SIGSO ' +
+          '(Mi trabajo, Inicio, reportes y alertas). No se borran de la base de datos: quedan guardados por si hubiera que recuperarlos.</span></div>' +
+        PY.campo('Confirmación', '<input class="sx2-input" name="confirmacion" autocomplete="off" spellcheck="false" placeholder="' + U.esc(clave) + '">', 'Escribe "' + clave + '" exactamente.') +
+        PY.campo('Motivo', '<textarea class="sx2-input" name="motivo" rows="3" maxlength="1000" placeholder="Por qué se elimina: duplicado, creado por error, ya no aplica…"></textarea>'),
+      preparar: function (d) {
+        if (String(d.confirmacion || '').trim().toLowerCase() !== String(clave).trim().toLowerCase()) return 'Escribe "' + clave + '" exactamente para confirmar.';
+        if (!d.motivo) return 'Indica el motivo.';
+        return d;
+      },
+      accion: 'eliminarProyecto', aviso: 'Proyecto eliminado.',
+      listo: function () { PY.cargarPortafolio(); }
     });
   }
 

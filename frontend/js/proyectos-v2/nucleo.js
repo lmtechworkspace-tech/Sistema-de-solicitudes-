@@ -132,7 +132,7 @@
   }
 
   // Datos que no vienen en el detalle (reuniones, decisiones, avance, pagos,
-  // RDI, analítica): se piden la primera vez que una vista los necesita y
+  // analítica): se piden la primera vez que una vista los necesita y
   // quedan en estado.datos.extra. undefined = cargando · null = falló.
   function extra(clave, accion, extraer) {
     var d = estado.datos;
@@ -171,7 +171,7 @@
       pie: (o.eliminar ? U.boton({ texto: o.eliminar.texto || 'Eliminar', icono: 'basura', variante: 'texto-peligro', clase: 'js-py2-form-eliminar' }) : '') +
         '<span style="flex:1"></span>' +
         U.boton({ texto: 'Cancelar', clase: 'js-sx2-drawer-cerrar' }) +
-        U.boton({ texto: o.boton || 'Guardar', icono: 'check', variante: 'primario', clase: 'js-py2-form-ok' })
+        U.boton({ texto: o.boton || 'Guardar', icono: o.peligro ? 'basura' : 'check', variante: o.peligro ? 'peligro' : 'primario', clase: 'js-py2-form-ok' })
     });
     var form = d.el.querySelector('.js-py2-form');
     var err = d.el.querySelector('.js-py2-form-error');

@@ -299,6 +299,7 @@ const ACCIONES = {
   getDetalleCompletoProyecto: (db, data, contexto) => Proyectos.getDetalleCompleto(db, data, contexto),
   crearProyecto: (db, data, contexto) => Proyectos.crear(db, data, contexto),
   actualizarProyecto: (db, data, contexto) => Proyectos.actualizar(db, data, contexto),
+  eliminarProyecto: (db, data, contexto) => Proyectos.eliminar(db, data, contexto),
   gestionarIntegranteProyecto: (db, data, contexto) => Proyectos.gestionarIntegrante(db, data, contexto),
   gestionarHitoProyecto: (db, data, contexto) => Proyectos.gestionarHito(db, data, contexto),
   crearTareaProyecto: (db, data, contexto) => Proyectos.crearTarea(db, data, contexto),
@@ -318,9 +319,6 @@ const ACCIONES = {
   // Fase H item 2 (Camino B): avance financiero -- estados de pago.
   gestionarEstadoPagoProyecto: (db, data, contexto) => Proyectos.gestionarEstadoPago(db, data, contexto),
   listarEstadosPagoProyecto: (db, data, contexto) => Proyectos.listarEstadosPago(db, data, contexto),
-  // Fase H item 3 (Camino B): RDI -- tipo de Solicitud, acotado al proyecto.
-  crearRdiProyecto: (db, data, contexto) => Proyectos.crearRdi(db, data, contexto),
-  listarRdiProyecto: (db, data, contexto) => Proyectos.listarRdi(db, data, contexto),
 
   // Cronograma avanzado (v11 Reingenieria Cronograma): incremento 2.
   guardarRegistroDiaProyecto: (db, data, contexto) => Proyectos.guardarRegistroDia(db, data, contexto),

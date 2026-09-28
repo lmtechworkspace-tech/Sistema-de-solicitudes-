@@ -57,12 +57,20 @@
       s += '<div class="sx2-py-aviso sx2-tono-critico">' + U.ico('alerta', 16) + '<span>Depende de <strong>' + U.esc(a.dependencia_titulo) + '</strong>, que está atrasada.</span></div>';
     }
 
-    s += seccion('Fechas', '<dl class="sx2-dato">' +
-      '<dt>Planificada</dt><dd>' + PY.fecha(p.plan_inicio || a.fecha_inicio_plan || a.fecha_creacion, true) + ' → ' + PY.fecha(p.plan_fin || a.fecha_compromiso, true) + '</dd>' +
-      '<dt>Real</dt><dd>' + (p.fecha_inicio_real ? PY.fecha(p.fecha_inicio_real, true) : 'Sin iniciar') + ' → ' +
-        (p.fecha_fin_real || a.fecha_terminada ? PY.fecha(p.fecha_fin_real || a.fecha_terminada, true) : (a.estado === 'NO_INICIADA' ? '—' : 'en curso')) + '</dd>' +
-      (Number(a.reprogramaciones) ? '<dt>Reprogramada</dt><dd>' + a.reprogramaciones + (Number(a.reprogramaciones) === 1 ? ' vez' : ' veces') + '</dd>' : '') +
-    '</dl>');
+    // Control plan vs real: las 4 fechas en una tabla, con el desfase en días
+    // de cada extremo (+ = después de lo planificado).
+    var iniPlan = a.fecha_inicio_plan || p.plan_inicio || a.fecha_creacion, finPlan = p.plan_fin || a.fecha_compromiso;
+    var iniReal = a.fecha_inicio_real || p.fecha_inicio_real, finReal = p.fecha_fin_real || a.fecha_terminada;
+    function desfase(real, plan) {
+      if (!real || !plan) return '<td class="sx2-num sx2-tenue">—</td>';
+      var d = Math.round((new Date(String(real).slice(0, 10)) - new Date(String(plan).slice(0, 10))) / 86400000);
+      return '<td class="sx2-num ' + (d > 0 ? 'sx2-delta--mal' : (d < 0 ? 'sx2-delta--bien' : '')) + '">' + (d === 0 ? 'en fecha' : (d > 0 ? '+' : '') + d + ' d') + '</td>';
+    }
+    s += seccion('Fechas', '<div class="sx2-tabla-wrap"><table class="sx2-tabla sx2-py-tabla-fechas"><thead><tr><th></th><th>Plan</th><th>Real</th><th class="sx2-num">Desfase</th></tr></thead><tbody>' +
+      '<tr><th scope="row">Inicio</th><td>' + PY.fecha(iniPlan, true) + '</td><td>' + (iniReal ? PY.fecha(iniReal, true) : '<span class="sx2-tenue">Sin iniciar</span>') + '</td>' + desfase(iniReal, iniPlan) + '</tr>' +
+      '<tr><th scope="row">Término</th><td>' + PY.fecha(finPlan, true) + '</td><td>' + (finReal ? PY.fecha(finReal, true) : '<span class="sx2-tenue">' + (a.estado === 'NO_INICIADA' ? '—' : 'en curso') + '</span>') + '</td>' + desfase(finReal, finPlan) + '</tr>' +
+      '</tbody></table></div>' +
+      (Number(a.reprogramaciones) ? '<p class="sx2-tenue" style="font-size:.8125rem;margin-top:6px">Reprogramada ' + a.reprogramaciones + (Number(a.reprogramaciones) === 1 ? ' vez' : ' veces') + '.</p>' : ''));
 
     s += seccion('Avance', '<div class="sx2-apilado" style="gap:10px">' +
       '<div><div class="sx2-entre"><span class="sx2-tenue">Real</span><strong>' + Math.round(real) + '%</strong></div>' + U.barra(real, PY.tonoTarea(a), true) + '</div>' +
@@ -165,6 +173,8 @@
   function formEditar(ctx, a) {
     var integrantes = (ctx.detalle.integrantes || []).map(function (i) { return PY.persona(i.usuario_email, i.usuario_nombre); });
     var comp = a.fecha_compromiso ? String(a.fecha_compromiso).slice(0, 10) : '';
+    var p0 = PY.planPorId(ctx)[a.actividad_id] || {};
+    function fInput(v) { return v ? String(v).slice(0, 10) : ''; }
     return '<form class="sx2-form js-py2p-form-edit" novalidate>' +
       PY.campo('Título', '<input class="sx2-input" name="titulo" maxlength="160" value="' + U.esc(a.titulo) + '">') +
       PY.campo('Descripción', '<textarea class="sx2-input" name="descripcion" maxlength="2000">' + U.esc(a.descripcion || '') + '</textarea>') +
@@ -178,6 +188,16 @@
         }).join('') + '</select>') +
       '</div>' +
       '<label class="sx2-campo js-py2p-motivo-reprog" hidden><span class="sx2-campo__et">Motivo de la reprogramación</span><textarea class="sx2-input" name="motivo" maxlength="500" placeholder="Toda reprogramación queda registrada con su motivo."></textarea></label>' +
+      // Control plan vs real: el término de plan es la "Fecha comprometida" de arriba.
+      '<fieldset class="sx2-py-fechas-pr"><legend>Plan y real</legend>' +
+        '<div class="sx2-form__fila">' +
+          PY.campo('Inicio plan', '<input class="sx2-input" type="date" name="fecha_inicio_plan" value="' + fInput(a.fecha_inicio_plan || p0.plan_inicio) + '">') +
+          PY.campo('Inicio real', '<input class="sx2-input" type="date" name="fecha_inicio_real" max="' + PY.hoyClave() + '" value="' + fInput(a.fecha_inicio_real || p0.fecha_inicio_real) + '">') +
+        '</div>' +
+        (PY.esTerminal(a) && a.estado === 'TERMINADA'
+          ? PY.campo('Término real', '<input class="sx2-input" type="date" name="fecha_terminada" max="' + PY.hoyClave() + '" value="' + fInput(a.fecha_terminada) + '">', 'Corrige el día en que de verdad se terminó.')
+          : '<p class="sx2-campo__ayuda">El término real se registra al marcar la tarea como terminada.</p>') +
+      '</fieldset>' +
       PY.campo('Hito', '<select class="sx2-select" name="hito_id"><option value="">Sin hito</option>' + (ctx.detalle.hitos || []).map(function (h) {
         return '<option value="' + U.esc(h.hito_id) + '"' + (h.hito_id === a.hito_id ? ' selected' : '') + '>' + U.esc(h.nombre) + '</option>';
       }).join('') + '</select>') +
@@ -295,6 +315,14 @@
       var reprog = fechaNueva && fechaOriginal && fechaNueva !== fechaOriginal;
       if (reprog && !form.motivo.value.trim()) { error('Toda reprogramación necesita un motivo.'); return; }
       if (fechaNueva && !fechaOriginal) cambios.fecha_compromiso = fechaNueva;
+      // Plan y real: solo se envía lo que la persona cambió respecto de lo mostrado.
+      var p0 = PY.planPorId(ctx)[a.actividad_id] || {};
+      var mostrado = { fecha_inicio_plan: a.fecha_inicio_plan || p0.plan_inicio, fecha_inicio_real: a.fecha_inicio_real || p0.fecha_inicio_real, fecha_terminada: a.fecha_terminada };
+      ['fecha_inicio_plan', 'fecha_inicio_real', 'fecha_terminada'].forEach(function (k) {
+        if (!form[k]) return;
+        var v = form[k].value;
+        if (v !== (mostrado[k] ? String(mostrado[k]).slice(0, 10) : '')) cambios[k] = v;
+      });
       if (!Object.keys(cambios).length && !reprog) { pintarVer(); return; }
       btn.disabled = true;
       var base = { proyecto_id: ctx.proyecto.proyecto_id, actividad_id: a.actividad_id };

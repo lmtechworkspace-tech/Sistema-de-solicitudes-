@@ -105,7 +105,7 @@
   var COLS = [
     { id: 'titulo', texto: 'Tarea' }, { id: 'resp', texto: 'Responsable' }, { id: 'estado', texto: 'Estado' },
     { id: 'prio', texto: 'Prioridad' }, { id: 'ini', texto: 'Inicio plan', num: true }, { id: 'fin', texto: 'Fin plan', num: true },
-    { id: 'real', texto: 'Fin real', num: true }, { id: 'avance', texto: 'Avance' }, { id: 'desv', texto: 'Desv. plazo', num: true }
+    { id: 'ireal', texto: 'Inicio real', num: true }, { id: 'real', texto: 'Fin real', num: true }, { id: 'avance', texto: 'Avance' }, { id: 'desv', texto: 'Desv. plazo', num: true }
   ];
   function valorOrden(a, p, campo) {
     switch (campo) {
@@ -115,6 +115,7 @@
       case 'prio': return a.prioridad || 'P9';
       case 'ini': return new Date(p.plan_inicio || a.fecha_creacion || 0).getTime();
       case 'fin': return new Date(p.plan_fin || a.fecha_compromiso || '9999-12-31').getTime();
+      case 'ireal': return new Date(a.fecha_inicio_real || p.fecha_inicio_real || '9999-12-31').getTime();
       case 'real': return new Date(p.fecha_fin_real || a.fecha_terminada || '9999-12-31').getTime();
       case 'avance': return Number(p.avance_real_pct !== undefined && p.avance_real_pct !== null ? p.avance_real_pct : (a.avance_pct || 0));
       case 'desv': return p.desviacion_dias === null || p.desviacion_dias === undefined ? -9999 : p.desviacion_dias;
@@ -147,8 +148,9 @@
         '<td>' + U.persona(PY.persona(a.responsable_email, a.responsable_nombre)) + '</td>' +
         '<td>' + U.badge(a.semaforo_etiqueta || a.estado, PY.tonoTarea(a)) + '</td>' +
         '<td>' + (a.prioridad ? U.badge(a.prioridad, PRIORIDAD_TONO[a.prioridad] || 'neutro', true) : '—') + '</td>' +
-        '<td class="sx2-num">' + PY.fecha(p.plan_inicio || a.fecha_inicio_plan || a.fecha_creacion) + '</td>' +
+        '<td class="sx2-num">' + PY.fecha(a.fecha_inicio_plan || p.plan_inicio || a.fecha_creacion) + '</td>' +
         '<td class="sx2-num">' + PY.fecha(p.plan_fin || a.fecha_compromiso) + '</td>' +
+        '<td class="sx2-num">' + PY.fecha(a.fecha_inicio_real || p.fecha_inicio_real) + '</td>' +
         '<td class="sx2-num">' + PY.fecha(p.fecha_fin_real || a.fecha_terminada) + '</td>' +
         '<td><div class="sx2-flex" style="gap:8px;min-width:110px"><span style="flex:1">' + U.barra(avance, PY.tonoTarea(a)) + '</span><span class="sx2-num" style="min-width:3.5ch">' + Math.round(avance) + '%</span></div></td>' +
         '<td class="sx2-num' + (desv > 0 ? ' sx2-delta--mal' : (desv < 0 ? ' sx2-delta--bien' : '')) + '">' + (desv === null || desv === undefined ? '—' : (desv > 0 ? '+' : '') + desv + ' d') + '</td>' +
@@ -193,7 +195,7 @@
     var r = PY.ganttRangoProyecto(ctx);
     return '<div class="sx2-card sx2-entra" style="--i:1">' +
       '<div class="sx2-entre" style="margin-bottom:12px;flex-wrap:wrap">' +
-        '<span class="sx2-flex sx2-tenue" style="font-size:.8125rem">' + U.ico('bandera', 14) + 'Agrupado por hito · clic en una barra para ver el detalle</span>' +
+        '<span class="sx2-flex sx2-tenue" style="font-size:.8125rem">' + U.ico('bandera', 14) + 'Agrupado por hito · barra = plan, línea fina = real (roja si terminó tarde) · clic para ver el detalle</span>' +
         '<span class="sx2-flex">' + U.segmento([{ id: 'semana', texto: 'Semana' }, { id: 'mes', texto: 'Mes' }, { id: 'trimestre', texto: 'Trimestre' }], f.zoom, 'js-py2t-zoom') +
           U.boton({ texto: 'Hoy', icono: 'calendario', sm: true, clase: 'js-py2t-hoy' }) + '</span>' +
       '</div>' +

@@ -41,11 +41,6 @@ const Actividades = require('./actividades');
 const NotificacionesApp = require('./notificacionesApp');
 const Calidad = require('./calidadSgc');
 const Almacenamiento = require('./almacenamiento');
-// Fase H item 3 (Camino B): RDI reusa el módulo Solicitudes tal cual (triage/
-// SLA/notificaciones/PDF) y el Directorio para resolver nombre/cargo del
-// solicitante sin pedírselo a mano (ya está autenticado).
-const Solicitudes = require('./solicitudes');
-const DirectorioPersonas = require('./directorioPersonas');
 
 // v10 (Fase D, "adjuntos por proyecto"): mismo tope que Calidad.gs/Novedades.gs.
 const MAX_ADJUNTO_PROYECTO_BYTES = 10 * 1024 * 1024;
@@ -158,9 +153,11 @@ function errorFechasProyecto_(inicio, objetivo) {
 }
 
 // --- helpers internos --------------------------------------------------
+// Solo proyectos vigentes: uno eliminado (activa=false) deja de existir para
+// todas las acciones -- ver, editar, crear tareas, subir documentos.
 function buscarProyecto_(db, proyectoId) {
   if (!proyectoId) return null;
-  return leerSeguro_(db, 'PROYECTOS').find((p) => p.proyecto_id === proyectoId) || null;
+  return leerSeguro_(db, 'PROYECTOS').find((p) => p.proyecto_id === proyectoId && esVerdadero_(p.activa)) || null;
 }
 function buscarPlantilla_(db, plantillaId) {
   if (!plantillaId) return null;
@@ -894,6 +891,39 @@ function listarPlantillas(db) {
     .sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
 
+// Eliminar proyecto (2026-09-28). Borrado LÓGICO: activa=false. Sus tareas,
+// entregables, horas y documentos quedan guardados pero dejan de verse en todo
+// SIGSO (buscarProyecto_ y Actividades.filtroProyectoVigente_), y nada se
+// pierde si hay que recuperarlo. Antes la única vía era el panel de datos, que
+// borraba la fila y dejaba tareas huérfanas. Exige escribir el código (o el
+// nombre) del proyecto y un motivo, para que no sea un clic accidental.
+function eliminar(db, data, contexto) {
+  data = data || {};
+  const proyecto = buscarProyecto_(db, data.proyecto_id);
+  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
+  if (!puedeGestionarProyecto_(db, proyecto, contexto)) {
+    return { _forbidden: true, message: 'Solo el líder del proyecto o un administrador pueden eliminarlo.' };
+  }
+  const escrito = String(data.confirmacion || '').trim().toLowerCase();
+  const validos = [proyecto.codigo, proyecto.nombre].map((v) => String(v || '').trim().toLowerCase()).filter(Boolean);
+  if (!escrito || validos.indexOf(escrito) === -1) {
+    return errorValidacion_('confirmacion', 'Para confirmar, escribe el código' + (proyecto.codigo ? ' (' + proyecto.codigo + ')' : '') + ' o el nombre exacto del proyecto.');
+  }
+  const motivo = String(data.motivo || '').trim();
+  if (!motivo) return errorValidacion_('motivo', 'Indica por qué se elimina el proyecto.');
+
+  const ahora = new Date().toISOString();
+  registrarEventoProyecto_(db, proyecto.proyecto_id, 'ACTUALIZACION', contexto, 'Proyecto eliminado', '', '', motivo);
+  actualizarFilaPorId_(db, 'PROYECTOS', 'proyecto_id', proyecto.proyecto_id, { activa: false, ultima_actualizacion: ahora });
+  try {
+    agregarFila_(db, 'LOG_SISTEMA', {
+      log_id: uuid_(), timestamp: ahora, contexto: 'PROYECTO_ELIMINADO', ref: proyecto.proyecto_id,
+      mensaje: ((contexto && contexto.email) || '') + ' eliminó "' + proyecto.nombre + '"' + (proyecto.codigo ? ' (' + proyecto.codigo + ')' : '') + ': ' + motivo
+    });
+  } catch (err) { /* trazabilidad, no bloquea */ }
+  return { eliminado: true, proyecto_id: proyecto.proyecto_id, nombre: proyecto.nombre };
+}
+
 function actualizar(db, data, contexto) {
   const proyecto = buscarProyecto_(db, data.proyecto_id);
   if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
@@ -1097,6 +1127,12 @@ function editarTarea(db, data, contexto) {
   const cambios = {};
   const camposPermitidos = ['titulo', 'descripcion', 'responsable_email', 'fecha_compromiso', 'prioridad', 'hito_id', 'depende_de', 'tarea_padre_id', 'meta_cantidad', 'meta_unidad'];
   camposPermitidos.forEach((campo) => { if (data[campo] !== undefined) cambios[campo] = data[campo]; });
+  // Control plan vs real (2026-09-28): inicio de plan, inicio real y término
+  // real editables (el término de plan sigue yendo por reprogramar, que deja
+  // traza). Las fechas reales nunca pueden ser futuras, cada inicio va antes de
+  // su término, y el término real solo existe si la tarea está terminada.
+  const errFechas = fechasPlanRealEditadas_(data, actividad, cambios);
+  if (errFechas) return errFechas;
   if (data.colaboradores_emails !== undefined) {
     const miembros = {};
     leerSeguro_(db, 'PROYECTO_INTEGRANTES').forEach((i) => { if (i.proyecto_id === proyecto.proyecto_id && esVerdadero_(i.activo)) miembros[normalizarEmail_(i.usuario_email)] = true; });
@@ -1125,6 +1161,40 @@ function editarTarea(db, data, contexto) {
   }
   registrarEventoProyecto_(db, proyecto.proyecto_id, 'ACTUALIZACION', contexto, 'Tarea editada: ' + (cambios.titulo || actividad.titulo), 'ACTIVIDAD', actividad.actividad_id, '');
   return actualizado;
+}
+
+function fechasPlanRealEditadas_(data, actividad, cambios) {
+  const hoy = Utils.claveDia_(new Date(), 'America/Santiago');
+  const leer = (campo, etiqueta) => {
+    if (data[campo] === undefined) return { valor: undefined };
+    const v = String(data[campo] || '').trim().slice(0, 10);
+    if (v && (!/^\d{4}-\d{2}-\d{2}$/.test(v) || isNaN(new Date(v).getTime()))) return { error: errorValidacion_(campo, etiqueta + ': fecha inválida.') };
+    return { valor: v };
+  };
+  const ip = leer('fecha_inicio_plan', 'Inicio de plan');
+  const ir = leer('fecha_inicio_real', 'Inicio real');
+  const fr = leer('fecha_terminada', 'Término real');
+  const err = [ip, ir, fr].find((x) => x.error);
+  if (err) return err.error;
+  const finPlan = claveFecha_(cambios.fecha_compromiso !== undefined ? cambios.fecha_compromiso : actividad.fecha_compromiso);
+  if (ip.valor !== undefined) {
+    if (ip.valor && finPlan && ip.valor > finPlan) return errorValidacion_('fecha_inicio_plan', 'El inicio de plan no puede ser posterior al término de plan.');
+    cambios.fecha_inicio_plan = ip.valor;
+  }
+  if (ir.valor !== undefined) {
+    if (ir.valor && ir.valor > hoy) return errorValidacion_('fecha_inicio_real', 'El inicio real no puede ser una fecha futura.');
+    cambios.fecha_inicio_real = ir.valor;
+  }
+  if (fr.valor !== undefined) {
+    if (actividad.estado !== Actividades.ACTIVIDADES_ESTADOS.TERMINADA) return errorValidacion_('fecha_terminada', 'El término real solo se registra en una tarea terminada.');
+    if (!fr.valor) return errorValidacion_('fecha_terminada', 'Una tarea terminada necesita su fecha de término real.');
+    if (fr.valor > hoy) return errorValidacion_('fecha_terminada', 'El término real no puede ser una fecha futura.');
+    cambios.fecha_terminada = fr.valor;
+  }
+  const inicioReal = cambios.fecha_inicio_real !== undefined ? cambios.fecha_inicio_real : claveFecha_(actividad.fecha_inicio_real);
+  const finReal = cambios.fecha_terminada !== undefined ? cambios.fecha_terminada : claveFecha_(actividad.fecha_terminada);
+  if (inicioReal && finReal && inicioReal > finReal) return errorValidacion_('fecha_inicio_real', 'El inicio real no puede ser posterior al término real.');
+  return null;
 }
 
 function listarTareas(db, data, contexto) {
@@ -1618,7 +1688,37 @@ function listarEstadosPago(db, data, contexto) {
   const estados = leerSeguro_(db, 'PROYECTO_ESTADOS_PAGO')
     .filter((e) => e.proyecto_id === proyecto.proyecto_id)
     .sort((a, b) => (Number(a.orden) || 0) - (Number(b.orden) || 0) || new Date(a.fecha_proyectada) - new Date(b.fecha_proyectada));
-  return { estados, presupuesto_monto: proyecto.presupuesto_monto || '', presupuesto_moneda: proyecto.presupuesto_moneda || '' };
+  // Respaldos: nombre del documento de cada pago, y la lista para elegir uno.
+  const documentos = leerSeguro_(db, 'PROYECTO_DOCUMENTOS').filter((d) => d.proyecto_id === proyecto.proyecto_id && esVerdadero_(d.activo))
+    .map((d) => ({ documento_id: d.documento_id, nombre: d.nombre, categoria: d.categoria }));
+  const nombreDoc = {};
+  documentos.forEach((d) => { nombreDoc[d.documento_id] = d.nombre; });
+  estados.forEach((e) => { e.documento_nombre = e.documento_id ? (nombreDoc[e.documento_id] || '') : ''; });
+  return {
+    estados, presupuesto_monto: proyecto.presupuesto_monto || '', presupuesto_moneda: proyecto.presupuesto_moneda || '',
+    resumen: resumenCostos_(estados, proyecto.presupuesto_monto), documentos
+  };
+}
+
+// Control de costos (2026-09-28): lo comprometido (todo lo planificado), lo
+// facturado, lo pagado y el saldo, con el próximo pago pendiente. "Pagado"
+// usa el monto real; lo demás, el proyectado.
+function resumenCostos_(estados, presupuestoMonto) {
+  const num = (v) => (v === '' || v === null || v === undefined || isNaN(Number(v))) ? 0 : Number(v);
+  const comprometido = estados.reduce((s, e) => s + num(e.monto_proyectado), 0);
+  const pagado = estados.filter((e) => e.estado === 'pagado').reduce((s, e) => s + num(e.monto_real !== '' ? e.monto_real : e.monto_proyectado), 0);
+  const facturadoPendiente = estados.filter((e) => e.estado === 'facturado').reduce((s, e) => s + num(e.monto_proyectado), 0);
+  const presupuesto = num(presupuestoMonto);
+  const pendientes = estados.filter((e) => e.estado !== 'pagado').sort((a, b) => new Date(a.fecha_proyectada) - new Date(b.fecha_proyectada));
+  const proximo = pendientes[0] || null;
+  return {
+    presupuesto, comprometido, pagado, facturado_por_pagar: facturadoPendiente,
+    por_pagar: Math.max(0, comprometido - pagado),
+    sin_comprometer: presupuesto ? Math.max(0, presupuesto - comprometido) : null,
+    ejecucion_pct: presupuesto ? Math.round(pagado / presupuesto * 1000) / 10 : null,
+    pagos_realizados: estados.filter((e) => e.estado === 'pagado').length, pagos_totales: estados.length,
+    proximo_pago: proximo ? { nombre: proximo.nombre, fecha: proximo.fecha_proyectada, monto: num(proximo.monto_proyectado), estado: proximo.estado } : null
+  };
 }
 
 function gestionarEstadoPago(db, data, contexto) {
@@ -1655,10 +1755,39 @@ function gestionarEstadoPago(db, data, contexto) {
     if (isNaN(montoReal) || montoReal < 0) return errorValidacion_('monto_real', 'El monto real debe ser un número positivo.');
   }
   const estado = data.estado && ESTADOS_PAGO_.indexOf(data.estado) !== -1 ? data.estado : 'proyectado';
+  // Un pago "pagado" sin fecha ni monto de pago no sirve para controlar la caja.
+  if (estado === 'pagado' && !fechaReal) return errorValidacion_('fecha_real', 'Indica la fecha en que se pagó.');
+  if (estado === 'pagado' && montoReal === '') return errorValidacion_('monto_real', 'Indica el monto pagado.');
+
+  // Costos con respaldo (2026-09-28): documento tributario, desglose y archivo.
+  const numOpcional = (campo, etiqueta) => {
+    if (data[campo] === undefined || data[campo] === null || data[campo] === '') return { v: '' };
+    const n = Number(data[campo]);
+    if (isNaN(n) || n < 0) return { e: errorValidacion_(campo, etiqueta + ' debe ser un número positivo.') };
+    return { v: n };
+  };
+  const neto = numOpcional('monto_neto', 'El neto'), impuesto = numOpcional('monto_impuesto', 'El impuesto');
+  if (neto.e) return neto.e;
+  if (impuesto.e) return impuesto.e;
+  let fechaDocumento = '';
+  if (data.fecha_documento) {
+    fechaDocumento = String(data.fecha_documento).trim().slice(0, 10);
+    if (isNaN(new Date(fechaDocumento).getTime())) return errorValidacion_('fecha_documento', 'Fecha del documento inválida.');
+  }
+  let documentoId = '';
+  if (data.documento_id) {
+    const doc = buscarDocumentoProyecto_(db, data.documento_id);
+    if (!doc || doc.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('documento_id', 'El respaldo debe ser un documento de este proyecto.');
+    documentoId = doc.documento_id;
+  }
 
   const cambios = {
     nombre, fecha_proyectada: fechaProyectada, monto_proyectado: montoProyectado,
-    fecha_real: fechaReal, monto_real: montoReal, estado, registrado_por: (contexto && contexto.email) || ''
+    fecha_real: fechaReal, monto_real: montoReal, estado, registrado_por: (contexto && contexto.email) || '',
+    proveedor: String(data.proveedor || '').trim().slice(0, 120),
+    documento_numero: String(data.documento_numero || '').trim().slice(0, 40),
+    fecha_documento: fechaDocumento, monto_neto: neto.v, monto_impuesto: impuesto.v,
+    documento_id: documentoId, nota: String(data.nota || '').trim().slice(0, 1000)
   };
 
   if (data.estado_pago_id) {
@@ -1675,94 +1804,6 @@ function gestionarEstadoPago(db, data, contexto) {
   );
   agregarFila_(db, 'PROYECTO_ESTADOS_PAGO', nuevo);
   return nuevo;
-}
-
-// Fase H item 3 (Camino B, 2026-09-23, ver documentacion/SIGSO-Proyectos-2.0-
-// auditoria-y-propuesta.md §13/§16/§18): RDI (Requerimiento de Información)
-// modelado como TIPO dentro de Solicitudes -- reusa toda la maquinaria ya
-// construida (triage, SLA, prioridad automática, notificación al responsable
-// del área, PDF por solicitud) en vez de reimplementar un flujo de estados
-// propio. Un RDI ES una Solicitud con tipo='RDI' y proyecto_id=este
-// proyecto; Proyectos solo aporta crear/leer con la lente del proyecto --
-// el ciclo de vida (S01..S09) lo sigue manejando Solicitudes tal cual.
-const RDI_TIPO_ID_ = 'RDI';
-
-// Se crea sola, la primera vez que alguien levanta un RDI -- ningún paso
-// manual de instalación (mismo criterio "aditivo, sin migración" del resto
-// de Fase H). Si ya existe (uso normal), no hace nada.
-function asegurarCatalogoRdi_(db) {
-  const tipos = leerSeguro_(db, 'CAT_TIPOS');
-  if (tipos.some((t) => t.tipo_id === RDI_TIPO_ID_)) return;
-  agregarFila_(db, 'CAT_TIPOS', {
-    tipo_id: RDI_TIPO_ID_, nombre: 'RDI — Requerimiento de información',
-    prioridad_default: '', activo: true, es_urgente: false
-  });
-}
-
-async function crearRdi(db, data, contexto) {
-  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
-  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
-  // Cualquier integrante puede levantar un RDI -- es una pregunta formal,
-  // no una decisión de gestión (distinto del gateo de avance físico/
-  // financiero, que sí exige gestionar el proyecto).
-  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
-
-  const titulo = String(data.titulo || '').trim();
-  if (!titulo) return errorValidacion_('titulo', 'El título es obligatorio.');
-  const descripcion = String(data.descripcion || '').trim();
-  if (!descripcion) return errorValidacion_('descripcion', 'La descripción es obligatoria.');
-  // Solicitudes.crearSolicitud tambien exige empresa_id, pero ese error
-  // saldria sin contexto (una cuenta sin empresa_id es un problema de la
-  // CUENTA, no del formulario de RDI que la persona acaba de llenar bien).
-  if (!contexto.empresa_id) return errorValidacion_('empresa_id', 'Tu cuenta no tiene una empresa asociada; contacta a un administrador.');
-
-  asegurarCatalogoRdi_(db);
-
-  // El solicitante se resuelve del Directorio (identidad canónica), no se le
-  // pide a mano -- ya está autenticado. Si no está en el Directorio todavía
-  // (degradación elegante, mismo criterio que el resto de Proyectos/
-  // Calidad), se usa el correo y un cargo genérico en vez de bloquear.
-  const persona = DirectorioPersonas.resolverPorEmail(db, contexto.email);
-  const solicitanteNombre = (persona && persona.nombre) || contexto.email || '';
-  const solicitanteCargo = (persona && persona.cargo) || 'Integrante del proyecto';
-
-  const resultado = await Solicitudes.crearSolicitud(db, {
-    empresa_id: contexto.empresa_id || '', asociada_plataforma: false,
-    solicitante_nombre: solicitanteNombre, solicitante_cargo: solicitanteCargo,
-    solicitante_email: contexto.email || '',
-    proyecto_id: proyecto.proyecto_id,
-    fecha_propuesta: data.fecha_vencimiento || '',
-    subsolicitudes: [{
-      titulo, descripcion, tipo: RDI_TIPO_ID_,
-      centro_costos: data.centro_costo || proyecto.centro_costo || ''
-    }]
-  });
-  if (resultado && resultado._validationError) return resultado;
-  registrarEventoProyecto_(db, proyecto.proyecto_id, 'ACTUALIZACION', contexto, 'RDI creado: "' + titulo + '"', '', '', '');
-  return resultado;
-}
-
-function listarRdi(db, data, contexto) {
-  const proyecto = buscarProyecto_(db, data && data.proyecto_id);
-  if (!proyecto) return errorValidacion_('proyecto_id', 'Proyecto no encontrado.');
-  if (!puedeVerProyecto_(db, proyecto, contexto)) return { _forbidden: true, message: 'No tienes acceso a este proyecto.' };
-
-  const subsolicitudes = leerSeguro_(db, 'SUBSOLICITUDES');
-  const rdis = leerSeguro_(db, 'SOLICITUDES')
-    .filter((s) => s.proyecto_id === proyecto.proyecto_id && s.tipo === RDI_TIPO_ID_)
-    .sort((a, b) => new Date(b.fecha_creacion) - new Date(a.fecha_creacion))
-    .map((s) => {
-      const item = subsolicitudes.find((ss) => ss.solicitud_id === s.solicitud_id) || {};
-      return {
-        solicitud_id: s.solicitud_id, titulo: item.titulo || '', descripcion: item.descripcion || '',
-        estado: s.estado_derivado, prioridad: s.prioridad_derivada,
-        solicitante_nombre: s.solicitante_nombre, solicitante_email: s.solicitante_email,
-        responsable: item.desarrollador_asignado || '', centro_costos: item.centro_costos || '',
-        fecha_creacion: s.fecha_creacion, fecha_vencimiento: item.fecha_propuesta || '',
-        url_pdf: s.url_pdf || ''
-      };
-    });
-  return { rdis };
 }
 
 function getResumenPortafolio(db, contexto) {
@@ -2068,7 +2109,8 @@ function actualizarTarea(db, data, contexto) {
         avance_pct: conAvance ? Number(data.avance_pct) : undefined,
         nota: nota, bloqueo_motivo: motivo,
         // "Listo" registrado para un día pasado: la tarea terminó ESE día.
-        fecha_terminada: accion === 'listo' && data.dia ? dia : undefined
+        fecha_terminada: accion === 'listo' && data.dia ? dia : undefined,
+        fecha_dia: dia
       }, contexto);
       if (tarea && (tarea._validationError || tarea._forbidden)) { db.exec('ROLLBACK'); return tarea; }
     }
@@ -2133,12 +2175,15 @@ function obtenerRendimiento(db, data, contexto) {
     const real = avanceRealTarea_(a);
     const claveCreacion = claveFecha_(a.fecha_creacion);
     const claveCompromiso = claveFecha_(a.fecha_compromiso);
-    const planInicio = planInicioEfectivoClave_(claveCreacion, claveCompromiso, claveInicioProyecto);
+    const planInicio = planInicioTareaClave_(a, claveCreacion, claveCompromiso, claveInicioProyecto);
     const esperado = calcularAvanceEsperado_(planInicio, a.fecha_compromiso, ahora);
     const baseTarea = baseline && baseline.por_tarea[a.actividad_id];
     // Refactor "Planificación" (2026-09-23): plazo (días) es un eje aparte de
     // avance (pp) -- ver los comentarios de cada función centralizada.
-    const fechaInicioReal = calcularFechaInicioReal_(a.actividad_id, bitacoraProyecto);
+    // Una tarea NO iniciada no tiene inicio real, aunque tenga eventos en la
+    // bitácora (editarla o asignarle una dependencia no es trabajarla).
+    const fechaInicioReal = a.fecha_inicio_real ? claveFecha_(a.fecha_inicio_real)
+      : (a.estado === Actividades.ACTIVIDADES_ESTADOS.NO_INICIADA ? null : calcularFechaInicioReal_(a.actividad_id, bitacoraProyecto));
     const desviacionDias = calcularDesviacionPlazoDias_(a.fecha_compromiso, a.fecha_terminada);
     return {
       actividad_id: a.actividad_id, plan_inicio: planInicio, plan_fin: a.fecha_compromiso || '',
@@ -2164,6 +2209,15 @@ function obtenerRendimiento(db, data, contexto) {
 }
 // v15.4: el inicio de plan efectivo -- fecha_creacion si es coherente con el
 // compromiso; si no, el inicio del proyecto; si tampoco, el propio compromiso.
+// Control plan vs real (2026-09-28): si la tarea trae su propio inicio de plan
+// (fecha_inicio_plan, coherente con el compromiso), ESE es el plan. Antes se
+// ignoraba y se usaba la fecha de creación: una tarea cargada hoy desde una
+// carta Gantt aparecía "planificada desde hoy".
+function planInicioTareaClave_(a, claveCreacion, claveCompromiso, claveInicioProyecto) {
+  const propia = a && a.fecha_inicio_plan ? claveFecha_(a.fecha_inicio_plan) : '';
+  if (propia && (!claveCompromiso || propia <= claveCompromiso)) return propia;
+  return planInicioEfectivoClave_(claveCreacion, claveCompromiso, claveInicioProyecto);
+}
 function planInicioEfectivoClave_(claveCreacion, claveCompromiso, claveInicioProyecto) {
   if (!claveCompromiso) return claveCreacion || '';
   if (claveCreacion && claveCreacion <= claveCompromiso) return claveCreacion;
@@ -2220,7 +2274,7 @@ function obtenerAnalitica(db, data, contexto) {
   function sumaDe_(campo) { return redond1Analitica_(porTarea.reduce((s, t) => s + (t[campo] || 0), 0)); }
   const spiValores = tareas.map((a) => {
     const real = avanceRealTarea_(a);
-    const esperado = calcularAvanceEsperado_(a.fecha_creacion, a.fecha_compromiso, ahora);
+    const esperado = calcularAvanceEsperado_(planInicioTareaClave_(a, claveFecha_(a.fecha_creacion), claveFecha_(a.fecha_compromiso), ''), a.fecha_compromiso, ahora);
     return (real !== null && esperado > 0) ? real / esperado : null;
   }).filter((v) => v !== null);
 
@@ -2478,7 +2532,7 @@ async function descargarDocumentoProyecto(db, data, contexto) {
 
 module.exports = {
   listar, listarMisTareas, listarCalendario, getDetalle, getDetalleCompleto, marcarSalaVisitada,
-  crear, guardarComoPlantilla, listarPlantillas, actualizar, gestionarIntegrante, gestionarHito,
+  crear, guardarComoPlantilla, listarPlantillas, actualizar, eliminar, gestionarIntegrante, gestionarHito,
   crearTarea, editarTarea, listarTareas, listarBitacora, listarMiBitacora,
   listarSala, publicarEnSala, convertirEventoEnTarea,
   gestionarReunion, agregarAcuerdoReunion, eliminarAcuerdoReunion, convertirAcuerdoEnTarea, listarReuniones,
@@ -2488,8 +2542,6 @@ module.exports = {
   gestionarControlAvance, listarControlAvance,
   // Fase H item 2 (Camino B): avance financiero -- estados de pago.
   gestionarEstadoPago, listarEstadosPago,
-  // Fase H item 3 (Camino B): RDI -- tipo de Solicitud, acotado al proyecto.
-  crearRdi, listarRdi,
   // Refactor "Planificación" (2026-09-23): funciones de cálculo centralizadas
   // -- exportadas para poder probarlas como unidades puras (§41/§45 del
   // encargo), sin tener que fabricar todo el ciclo de vida de una tarea

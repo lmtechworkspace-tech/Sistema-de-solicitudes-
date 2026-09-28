@@ -632,3 +632,20 @@
 .sx2-py-interruptor:hover { transform: translateY(-2px); box-shadow: 0 10px 26px color-mix(in srgb, var(--mod-proyectos) 50%, transparent); }
 .sx2-py-interruptor--clasica { background: var(--superficie); color: var(--texto); box-shadow: 0 4px 16px rgba(15, 23, 42, 0.16); border: 1px solid var(--borde); }
 @media (max-width: 720px) { .sx2-py-interruptor { right: 84px; bottom: 20px; } }
+
+/* Control plan vs real (2026-09-28): fechas de la tarea y su edición. */
+.sx2-py-tabla-fechas th[scope="row"] { font-weight: 600; color: var(--sx-texto-2); text-align: left; }
+.sx2-py-tabla-fechas td, .sx2-py-tabla-fechas th { padding: 6px 8px; font-size: .8125rem; }
+.sx2-py-fechas-pr { border: 1px solid var(--sx-borde-suave); border-radius: 10px; padding: 10px 12px 12px; margin: 0; display: grid; gap: 8px; }
+.sx2-py-fechas-pr legend { padding: 0 6px; font-size: .75rem; font-weight: 600; color: var(--sx-texto-2); text-transform: uppercase; letter-spacing: .04em; }
+/* Carta Gantt: barra real (fina, debajo de la de plan). */
+.sx2-py-gantt__real { position: absolute; height: 4px; bottom: 2px; border-radius: 2px; background: var(--sx-texto-2); opacity: .75; }
+.sx2-py-gantt__real--tarde { background: var(--sx-critico); opacity: .9; }
+/* Costos: saldo y alerta avance físico vs financiero. */
+.sx2-py-costos-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.sx2-py-costos-kpis span { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 8px; background: var(--sx-superficie-2, rgba(127,127,127,.06)); }
+.sx2-py-costos-kpis small { font-size: .6875rem; color: var(--sx-texto-3); text-transform: uppercase; letter-spacing: .04em; }
+.sx2-py-costos-kpis b { font-size: 1rem; font-variant-numeric: tabular-nums; }
+.sx2-py-doc-pago { font-size: .75rem; color: var(--sx-texto-3); display: block; }
+.sx2-py-tabla-fechas td.sx2-delta--mal { color: var(--sx-critico); }
+.sx2-py-tabla-fechas td.sx2-delta--bien { color: var(--sx-ok); }

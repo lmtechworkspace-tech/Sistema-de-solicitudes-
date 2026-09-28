@@ -517,6 +517,14 @@ function checkin(db, data, contexto) {
       return errorValidacion_('tipo', 'Tipo de check-in invalido: ' + tipo);
   }
 
+  // Inicio real (control plan vs real): la primera vez que se trabaja la tarea
+  // queda registrado solo. Si el registro es de un día anterior, ese día.
+  if (!actividad.fecha_inicio_real && (tipo === 'avance' || tipo === 'sin_cambio' || tipo === 'bloqueo')) {
+    const hoy = ahora.toISOString().slice(0, 10);
+    const dia = String(data.fecha_dia || '');
+    cambios.fecha_inicio_real = /^\d{4}-\d{2}-\d{2}$/.test(dia) && dia <= hoy ? dia : hoy;
+  }
+
   const actualizado = reescribirActividad_(db, actividad.actividad_id, cambios);
   registrarEventoActividad_(db, actividad.actividad_id, eventoBitacora, contexto, notaBitacora,
     { avance_pct: cambios.avance_pct, confianza: cambios.confianza, horas: horasHoy });
