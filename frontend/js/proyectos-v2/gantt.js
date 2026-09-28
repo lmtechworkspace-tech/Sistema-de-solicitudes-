@@ -222,15 +222,34 @@
     var mostrarSemanas = pxEst >= 22;
     var porDias = px >= 100;
     var meses = '', lineas = '';
+    var mostrarHoy = opts.marcarHoy !== false && hoy >= desde && hoy <= hasta;
+    var hoyPct = pos(hoy.getTime() + DIA / 2);
+    // La etiqueta "Hoy" vive en la fila de meses: si choca con el nombre de un mes,
+    // ese nombre se corre a la derecha de la etiqueta (o se acorta / se oculta).
+    var anchoTotal = px ? anchoPista : (opts.anchoEstimado || 800);
+    var hoyPx = mostrarHoy ? hoyPct / 100 * anchoTotal : null;
     var m = new Date(Date.UTC(desde.getUTCFullYear(), desde.getUTCMonth(), 1));
     var primero = true;
     while (m < hasta) {
       var sig = new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth() + 1, 1));
       var l = pos(Math.max(m.getTime(), desde.getTime())), r = pos(Math.min(sig.getTime(), hasta.getTime()));
-      var anchoMesPx = (r - l) / 100 * (px ? anchoPista : (opts.anchoEstimado || 800));
+      var anchoMesPx = (r - l) / 100 * anchoTotal;
       var nombre = anchoMesPx < 46 ? MESES[m.getUTCMonth()] : MESES_LARGOS[m.getUTCMonth()];
-      var conAnio = primero || m.getUTCMonth() === 0;
-      meses += '<span class="sx2-py-gantt__mes" style="left:' + pct(l) + ';width:' + pct(r - l) + '">' + nombre + (conAnio && anchoMesPx >= 60 ? ' <b>' + m.getUTCFullYear() + '</b>' : '') + '</span>';
+      var conAnio = (primero || m.getUTCMonth() === 0) && anchoMesPx >= 60;
+      var relleno = '';
+      if (hoyPx !== null) {
+        var ini = l / 100 * anchoTotal;
+        var largo = function (n, anio) { return n.length * 6.8 + (anio ? 34 : 0); };
+        var chipI = hoyPx - 22, chipD = hoyPx + 22;
+        if (chipI < ini + 6 + largo(nombre, conAnio) && chipD > ini + 6) {
+          var corrido = chipD - ini;
+          if (corrido + largo(nombre, conAnio) > anchoMesPx) { nombre = MESES[m.getUTCMonth()]; conAnio = false; }
+          if (corrido + largo(nombre, false) <= anchoMesPx) relleno = ';padding-left:' + Math.round(corrido) + 'px';
+          else if (chipI - ini - 6 >= largo(nombre, false)) relleno = '';
+          else nombre = '';
+        }
+      }
+      meses += '<span class="sx2-py-gantt__mes" style="left:' + pct(l) + ';width:' + pct(r - l) + relleno + '" title="' + MESES_LARGOS[m.getUTCMonth()] + ' ' + m.getUTCFullYear() + '">' + nombre + (conAnio && nombre ? ' <b>' + m.getUTCFullYear() + '</b>' : '') + '</span>';
       if (m > desde) lineas += '<span class="sx2-py-gantt__linea-mes" style="left:calc(var(--sx-gantt-et) + (100% - var(--sx-gantt-et)) * ' + pos(m.getTime()).toFixed(3) + ' / 100)"></span>';
       primero = false;
       m = sig;
@@ -250,8 +269,6 @@
         }
       }
     }
-    var mostrarHoy = opts.marcarHoy !== false && hoy >= desde && hoy <= hasta;
-    var hoyPct = pos(hoy.getTime() + DIA / 2);
     var estilo = '--sx-semanas:' + semanas + (px ? ';min-width:calc(var(--sx-gantt-et) + ' + anchoPista + 'px)' : '');
     var clases = 'sx2-py-gantt' + (compacta ? ' sx2-py-gantt--compacta' : '') + (porDias ? ' sx2-py-gantt--dias' : '') +
       (!mostrarSemanas ? ' sx2-py-gantt--sin-semanas' : '') + (opts.quieto ? ' sx2-py-gantt--quieto' : '');
