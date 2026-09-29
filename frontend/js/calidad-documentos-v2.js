@@ -345,7 +345,10 @@
     return '<header class="sx2-cabecera sx2-entra">' +
       '<div class="sx2-cabecera__txt"><span class="sx2-cabecera__migas">Calidad · ISO 9001</span><h1>Documentos</h1>' +
         '<span class="sx2-tenue" style="font-size:.875rem">Procedimientos, instructivos, formularios y las normas que aplican.</span></div>' +
-      (g && window.SigsoCalidad ? '<div class="sx2-cabecera__acciones">' + U.boton({ texto: 'Cargar documento', icono: 'mas', variante: 'primario', clase: 'js-dc2-nuevo' }) + '</div>' : '') +
+      (g && window.SigsoCalidad ? '<div class="sx2-cabecera__acciones">' +
+        // Carga masiva desde el Drive del SGC: solo la cuenta super administrador.
+        (window.SIGSO_USUARIO && window.SIGSO_USUARIO.super_admin === true && window.SigsoCalidadContenido ? U.boton({ texto: 'Cargar desde Drive', icono: 'subir', clase: 'js-dc2-carga-drive' }) : '') +
+        U.boton({ texto: 'Cargar documento', icono: 'mas', variante: 'primario', clase: 'js-dc2-nuevo' }) + '</div>' : '') +
     '</header>';
   }
 
@@ -506,6 +509,7 @@
     if ((b = t.closest('.js-dc2-tab'))) { tab_ = b.getAttribute('data-id'); pintar(true); return; }
     if (t.closest('.js-dc2-recargar')) { cargar(); return; }
     if (t.closest('.js-dc2-nuevo')) { formulario('nuevo'); return; }
+    if (t.closest('.js-dc2-carga-drive')) { SigsoCalidadContenido.cargaDrive(function () { cargar(true); }); return; }
     if ((b = t.closest('.js-dc2-tipo'))) {
       tipo_ = b.getAttribute('data-tipo') || '';
       if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(tipo_ ? 'documentos:' + tipo_ : 'documentos');

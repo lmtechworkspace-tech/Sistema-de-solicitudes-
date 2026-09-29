@@ -261,5 +261,81 @@
     return d;
   }
 
-  window.SigsoCalidadContenido = { leer: leer, editar: editar, descargarPdf: descargarPdf };
+  // --- Carga desde Drive (solo super admin) ------------------------------------------
+  // Recibe el paquete .json armado con la información del Drive del SGC,
+  // primero lo SIMULA (el servidor hace todo y lo revierte: muestra cómo
+  // quedaría la cobertura) y solo con la confirmación lo guarda.
+  var ETIQUETAS_CONTEO = {
+    documentos_actualizados: 'Documentos con enlace, cláusulas o estado al día', documentos_escritos: 'Documentos con su texto escrito en SIGSO',
+    versiones: 'Versiones nuevas registradas', factores: 'Factores de contexto nuevos', riesgos: 'Riesgos nuevos', lecturas: 'Mediciones de objetivos',
+    auditorias: 'Auditorías internas', hallazgos: 'Hallazgos de auditoría', nc: 'No conformidades', acuerdos: 'Acuerdos de revisión por la dirección',
+    tareas: 'Tareas asignadas (Mi trabajo)', inducciones: 'Ítems de inducción completados', capacitaciones: 'Capacitaciones programadas',
+    procesos_renombrados: 'Procesos con nombre corregido', procesos_nuevos: 'Procesos de servicio nuevos', procesos_con_responsable: 'Procesos con responsable asignado',
+    prestaciones: 'Servicios prestados registrados', desvinculadas: 'Personas desvinculadas'
+  };
+  var ESTADO_COB = { COMPLETO: 'completa', PARCIAL: 'parcial', FALTANTE: 'faltante', NO_APLICA: 'no aplica' };
+  function lista_(titulo, items, tono) {
+    if (!items || !items.length) return '';
+    return '<details class="dv2-carga__lista"' + (tono === 'alerta' ? ' open' : '') + '><summary>' + U.esc(titulo) + ' (' + items.length + ')</summary><ul>' +
+      items.map(function (x) { return '<li>' + U.esc(x) + '</li>'; }).join('') + '</ul></details>';
+  }
+  function resultado_(r) {
+    var a = r.cobertura_antes || {}, b = r.cobertura_despues || {};
+    var cambian = Object.keys(b.por_clausula || {}).filter(function (k) { return (a.por_clausula || {})[k] !== b.por_clausula[k]; });
+    var conteo = Object.keys(r.conteo || {}).filter(function (k) { return r.conteo[k]; });
+    return '<div class="dv2-carga__cob">' +
+        '<div><span class="dv2-carga__pct">' + (a.pct || 0) + '%</span><small>Cobertura ISO hoy</small></div>' + U.ico('derecha', 20) +
+        '<div><span class="dv2-carga__pct dv2-carga__pct--ok">' + (b.pct || 0) + '%</span><small>' + (r.simulacion ? 'Quedaría' : 'Queda') + ' en</small></div>' +
+        '<p>' + b.completo + ' cláusulas completas · ' + b.parcial + ' parciales · ' + b.faltante + ' faltantes</p></div>' +
+      (cambian.length ? '<p class="dv2-carga__nota">' + cambian.map(function (k) { return '<b>' + U.esc(k) + '</b> ' + ESTADO_COB[(a.por_clausula || {})[k]] + ' → ' + ESTADO_COB[b.por_clausula[k]]; }).join(' · ') + '</p>' : '') +
+      (conteo.length ? '<ul class="dv2-carga__conteo">' + conteo.map(function (k) { return '<li><span>' + U.esc(ETIQUETAS_CONTEO[k] || k) + '</span><b>' + r.conteo[k] + '</b></li>'; }).join('') + '</ul>'
+        : '<p class="dv2-carga__nota">No hay nada nuevo que cargar: todo ya estaba en SIGSO.</p>') +
+      lista_('Revisar', r.avisos, 'alerta') + lista_('Ya estaba (no se tocó)', r.omitidos) + lista_('Detalle de lo cargado', r.hechos);
+  }
+  function cargaDrive(alGuardar) {
+    var guardado = false;
+    var d = U.drawer({ titulo: 'Cargar información desde Drive', cuerpo: '', pie: ' ', alCerrar: function () { if (guardado && alGuardar) alGuardar(); } });
+    d.el.classList.add('dv2-drawer');
+    var paquete = null;
+    function pie(html) { d.el.querySelector('.sx2-drawer__pie').innerHTML = html + U.boton({ texto: 'Cerrar', clase: 'js-sx2-drawer-cerrar' }); }
+    function inicio(msg) {
+      d.cuerpo('<div class="dv2-aviso sx2-tono-info">' + U.ico('info', 15) + '<span>Elige el archivo del paquete (<b>.json</b>). Primero se <b>simula</b>: verás cómo quedaría el módulo sin guardar nada. Recién al confirmar se guarda.</span></div>' +
+        (msg ? '<div class="dv2-aviso sx2-tono-critico">' + U.ico('alerta', 15) + '<span>' + U.esc(msg) + '</span></div>' : '') +
+        '<label class="dv2-carga__archivo"><input type="file" accept=".json,application/json" class="js-dv2-archivo"><span>' + U.ico('subir', 18) + 'Elegir paquete .json</span></label>');
+      pie('');
+    }
+    function ejecutar(simular, boton) {
+      if (boton) boton.disabled = true;
+      d.cuerpo(U.esqueleto('tabla', 5));
+      api('importarCargaDriveSgc', { paquete: paquete, simular: simular }).then(function (r) {
+        if (!d.el.isConnected) return;
+        if (!r || !r.ok) { inicio((r && r.message) || 'No se pudo procesar el paquete.'); return; }
+        var ok = r.data;
+        if (!simular) guardado = true;
+        d.cuerpo((simular ? '<div class="dv2-aviso sx2-tono-alerta">' + U.ico('ojo', 15) + '<span><b>Simulación:</b> todavía no se guardó nada.</span></div>'
+          : '<div class="dv2-aviso sx2-tono-ok">' + U.ico('check', 15) + '<span><b>Carga guardada.</b> Ya puedes revisar cada sección del módulo.</span></div>') + resultado_(ok));
+        pie(simular ? U.boton({ texto: 'Confirmar y guardar', icono: 'check', variante: 'primario', clase: 'js-dv2-confirmar' }) : '');
+        if (!simular) PY.aviso('Carga desde Drive guardada.', 'exito');
+      });
+    }
+    d.el.addEventListener('change', function (ev) {
+      var inp = ev.target.closest('.js-dv2-archivo');
+      if (!inp || !inp.files || !inp.files[0]) return;
+      var lector = new FileReader();
+      lector.onload = function () {
+        try { paquete = JSON.parse(String(lector.result)); } catch (e) { inicio('El archivo no es un JSON válido.'); return; }
+        ejecutar(true);
+      };
+      lector.readAsText(inp.files[0], 'utf-8');
+    });
+    d.el.addEventListener('click', function (ev) {
+      var b = ev.target.closest('.js-dv2-confirmar');
+      if (!b) return;
+      U.confirmar({ titulo: 'Guardar la carga', texto: 'Se escribe en SIGSO todo lo que mostró la simulación. Se puede volver a correr sin duplicar nada.', boton: 'Guardar' }).then(function (si) { if (si) ejecutar(false, b); });
+    });
+    inicio('');
+    return d;
+  }
+
+  window.SigsoCalidadContenido = { leer: leer, editar: editar, descargarPdf: descargarPdf, cargaDrive: cargaDrive };
 })();

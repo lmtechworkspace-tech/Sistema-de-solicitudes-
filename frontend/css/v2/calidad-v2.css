@@ -380,3 +380,23 @@ i.ca2-celda { display: inline-grid; place-items: center; width: 20px; height: 20
 .dv2-publicar__fila label { display: flex; flex-direction: column; gap: 4px; font: 600 .8125rem/1.3 var(--fuente); }
 .dc2-en-sigso { color: var(--sx-ok); font-weight: 600; }
 @media (max-width: 700px) { .dv2-cc li { grid-template-columns: 1fr 1fr; } .dv2-cc li .sx2-input:nth-of-type(3) { grid-column: 1 / -1; } }
+
+/* Carga desde Drive (solo super admin): archivo, simulación y resultado. */
+.dv2-carga__archivo { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 28px 16px; border: 2px dashed var(--sx-borde); border-radius: var(--sx-radio-md, 10px); cursor: pointer; font: 600 .9375rem/1.3 var(--fuente); color: var(--sx-texto-2); }
+.dv2-carga__archivo:hover, .dv2-carga__archivo:focus-within { border-color: var(--sx-primario, #2563eb); color: var(--sx-texto); }
+.dv2-carga__archivo input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.dv2-carga__archivo span { display: inline-flex; align-items: center; gap: 8px; }
+.dv2-carga__cob { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 14px 16px; margin-bottom: 12px; border: 1px solid var(--sx-borde); border-radius: var(--sx-radio-md, 10px); background: var(--sx-superficie); }
+.dv2-carga__cob > div { display: flex; flex-direction: column; }
+.dv2-carga__cob > svg { color: var(--sx-texto-2); }
+.dv2-carga__cob small { font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.dv2-carga__cob p { flex-basis: 100%; margin: 0; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.dv2-carga__pct { font: 700 1.75rem/1.1 var(--fuente); font-variant-numeric: tabular-nums; color: var(--sx-texto); }
+.dv2-carga__pct--ok { color: var(--sx-ok); }
+.dv2-carga__nota { margin: 0 0 12px; font: var(--sx-t-chico); color: var(--sx-texto-2); line-height: 1.6; }
+.dv2-carga__conteo { list-style: none; margin: 0 0 12px; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; }
+.dv2-carga__conteo li { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--sx-borde-suave); font: var(--sx-t-chico); }
+.dv2-carga__conteo b { font-variant-numeric: tabular-nums; }
+.dv2-carga__lista { margin: 0 0 10px; border: 1px solid var(--sx-borde); border-radius: var(--sx-radio-md, 10px); padding: 8px 12px; }
+.dv2-carga__lista summary { cursor: pointer; font: 600 .8125rem/1.4 var(--fuente); }
+.dv2-carga__lista ul { margin: 8px 0 0; padding-left: 18px; font: var(--sx-t-chico); color: var(--sx-texto-2); max-height: 320px; overflow-y: auto; }
