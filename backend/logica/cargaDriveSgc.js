@@ -88,14 +88,14 @@ function exigir_(resultado, que) {
 // El Drive nombra a las personas ("Luis Mendoza", "Bárbara Álvarez"), no
 // sus correos. Se resuelve contra SGC_PERSONAS: todas las palabras del
 // nombre buscado tienen que estar en el nombre registrado.
+function personasQueCoinciden_Fila_(p, nombre) {
+  const buscadas = norm_(nombre).split(' ').filter(Boolean);
+  const propias = norm_(p.nombre).split(' ');
+  return buscadas.length > 0 && buscadas.every((t) => propias.indexOf(t) !== -1);
+}
 function personasQueCoinciden_(db, nombre, incluirDesvinculadas) {
-  const clave = norm_(nombre);
-  if (!clave) return [];
-  const buscadas = clave.split(' ');
-  return leer_(db, 'SGC_PERSONAS').filter((p) => esActivo_(p) && (incluirDesvinculadas || p.estado !== 'DESVINCULADO')).filter((p) => {
-    const propias = norm_(p.nombre).split(' ');
-    return buscadas.every((t) => propias.indexOf(t) !== -1);
-  });
+  return leer_(db, 'SGC_PERSONAS').filter((p) => esActivo_(p) && (incluirDesvinculadas || p.estado !== 'DESVINCULADO'))
+    .filter((p) => personasQueCoinciden_Fila_(p, nombre));
 }
 function resolverPersonas_(db) {
   const cache = {};
@@ -497,7 +497,13 @@ function desvincularPersonas_(ctx, lista) {
   const db = ctx.db;
   (lista || []).forEach((x) => {
     const filas = personasQueCoinciden_(db, x.persona, true);
-    if (!filas.length) { ctx.r.omitidos.push('Desvinculación: "' + x.persona + '" no figura en Personas.'); return; }
+    if (!filas.length) {
+      // Quien ya se sacó del alcance del SGC (activa = false) no cuenta para
+      // §7.2/§7.3: no hace falta desvincularlo, pero se informa distinto.
+      const fueraDeAlcance = leer_(db, 'SGC_PERSONAS').some((p) => !esActivo_(p) && personasQueCoinciden_Fila_(p, x.persona));
+      ctx.r.omitidos.push('Desvinculación: "' + x.persona + '" ' + (fueraDeAlcance ? 'ya está fuera del alcance del SGC.' : 'no figura en Personas.'));
+      return;
+    }
     filas.filter((p) => p.estado !== 'DESVINCULADO').forEach((p) => {
       actualizarFilaPorId_(db, 'SGC_PERSONAS', 'persona_id', p.persona_id, { estado: 'DESVINCULADO', fecha_desvinculacion: isoDe_(x.fecha) });
       registrarLog_(db, 'SGC_PERSONA_DESVINCULADA', p.nombre + ' (' + (x.motivo || 'carga Drive') + ')', ctx.usuario);
