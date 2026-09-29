@@ -48,6 +48,8 @@ const PersonasPanelSgc = require('../logica/personasPanelSgc');
 const Actividades = require('../logica/actividades');
 const Proyectos = require('../logica/proyectos');
 const Calidad = require('../logica/calidadSgc');
+const DocumentosVivos = require('../logica/documentosVivosSgc');
+const CargaDriveSgc = require('../logica/cargaDriveSgc');
 const Personas = require('../logica/personasSgc');
 const NoConformidades = require('../logica/noConformidadesSgc');
 const Auditorias = require('../logica/auditoriasSgc');
@@ -367,6 +369,14 @@ const ACCIONES = {
   reemplazarArchivoVersionVigenteSgc: (db, data, contexto) => Calidad.reemplazarArchivoVersionVigente(db, data, contexto),
   actualizarDocumentoSgc: (db, data, contexto) => Calidad.actualizarDocumento(db, data, contexto),
   descargarDocumentoSgc: (db, data, contexto) => Calidad.descargarDocumento(db, data, contexto),
+  // 2026-09-29: documentos escritos en SIGSO (texto + PDF con el formato de la empresa).
+  getContenidoDocumentoSgc: (db, data, contexto) => DocumentosVivos.getContenido(db, data, contexto),
+  guardarContenidoDocumentoSgc: (db, data, contexto) => DocumentosVivos.guardarContenido(db, data, contexto),
+  publicarContenidoDocumentoSgc: (db, data, contexto) => DocumentosVivos.publicarBorrador(db, data, contexto),
+  descartarBorradorDocumentoSgc: (db, data, contexto) => DocumentosVivos.descartarBorrador(db, data, contexto),
+  descargarDocumentoPdfSgc: (db, data, contexto) => DocumentosVivos.descargarPdf(db, data, contexto),
+  // Carga única del SGC desde Drive (solo super_admin; ver cargaDriveSgc.js).
+  importarCargaDriveSgc: (db, data, contexto) => CargaDriveSgc.importar(db, data, contexto),
   acusarDocumentoSgc: (db, data, contexto) => Calidad.acusarDocumento(db, data, contexto),
   getCumplimientoDocumentoSgc: (db, data, contexto) => Calidad.getCumplimiento(db, data, contexto),
   listarRolesSgc: (db, data, contexto) => Calidad.listarRoles(db, data, contexto),

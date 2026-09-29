@@ -126,9 +126,11 @@ async function renderizar_(html, opts) {
       format: 'A4',
       landscape: !!opts.horizontal,
       printBackground: true,
-      margin: { top: '12mm', bottom: '16mm', left: '12mm', right: '12mm' },
+      // Documentos del SGC: encabezado corporativo en cada página (logo, código,
+      // versión, "Página X de Y"), que necesita un margen superior propio.
+      margin: opts.margen || { top: '12mm', bottom: '16mm', left: '12mm', right: '12mm' },
       displayHeaderFooter: true,
-      headerTemplate: '<span></span>',
+      headerTemplate: opts.cabecera || '<span></span>',
       footerTemplate: opts.pie || '<span></span>',
       // Páginas con tamaño propio en el CSS (@page con nombre, p. ej. la Carta Gantt
       // apaisada dentro de un informe vertical).
@@ -144,7 +146,8 @@ async function renderizar_(html, opts) {
 
 /**
  * html: documento completo (<!doctype html>…). opts: { pie (plantilla de pie
- * de Chromium, con .pageNumber/.totalPages), horizontal }. Devuelve un Buffer.
+ * de Chromium, con .pageNumber/.totalPages), cabecera (ídem, arriba), margen
+ * ({top,bottom,left,right}), horizontal }. Devuelve un Buffer.
  * Rechaza con e.codigo = 'SIN_MOTOR' | 'OCUPADO' | 'TIMEOUT' | (otro).
  */
 function htmlAPdf(html, opts) {

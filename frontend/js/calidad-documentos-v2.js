@@ -171,8 +171,9 @@
           var ed = enlaces.some(function (e) { return editable(e.url); });
           return '<div class="dc2-alerta sx2-tono-' + t.tono + '"><strong>' + U.ico(t.ico, 15) + 'Sin copia controlada (ISO 7.5.3)</strong>' +
             '<span>' + (enlaces.length ? (ed ? 'Se abre por un enlace de Google Docs editable: cualquiera con el enlace puede cambiarlo y la versión no queda protegida.' : 'Se abre solo por un enlace externo.') : 'No tiene archivo ni enlace: nadie puede consultarlo.') +
-              ' Sube el PDF de la versión vigente; el enlace se conserva para consulta.</span>' +
-            U.boton({ texto: 'Subir PDF', icono: 'subir', sm: true, variante: 'primario', clase: 'js-dc2-subir' }) + '</div>';
+              ' Escribe su texto en SIGSO (queda como copia controlada y se descarga en PDF con el formato de la empresa) o sube el PDF de la versión vigente; el enlace se conserva para consulta.</span>' +
+            '<span class="sx2-flex" style="gap:8px;flex-wrap:wrap">' + U.boton({ texto: 'Escribir en SIGSO', icono: 'editar', sm: true, variante: 'primario', clase: 'js-dc2-escribir' }) +
+            U.boton({ texto: 'Subir PDF', icono: 'subir', sm: true, clase: 'js-dc2-subir' }) + '</span></div>';
         }
         if (a === 'externo_fuera') {
           return '<div class="dc2-alerta sx2-tono-' + t.tono + '"><strong>' + U.ico(t.ico, 15) + 'Norma externa fuera de circulación</strong>' +
@@ -186,6 +187,20 @@
     }
     function bloqueArchivo(doc, enlaces) {
       var h = '';
+      // El documento escrito en SIGSO (o armado con los datos del módulo): se lee
+      // como papel y se descarga en PDF con el formato de la empresa.
+      if (doc.tipo !== 'EXTERNO' && window.SigsoCalidadContenido) {
+        h += '<div class="dc2-archivo dv2-escrito">' +
+          '<span class="bj2-archivo__ico sx2-tono-' + (doc.escrito ? 'ok' : 'neutro') + '">' + U.ico('documento', 18) + '</span>' +
+          '<span class="sx2-apilado" style="gap:2px;flex:1;min-width:0"><strong>' + (doc.escrito ? 'Documento en SIGSO' : 'Aún sin texto en SIGSO') + '</strong>' +
+            '<span class="sx2-tenue" style="font-size:.75rem">' + (doc.escrito ? 'Léelo aquí o descárgalo en PDF con el formato de la empresa' + (doc.tiene_borrador ? ' · hay un borrador sin publicar' : '') : (x.puede_gestionar ? 'Escríbelo aquí para que SIGSO sea la copia controlada.' : 'El Encargado del SGC lo está cargando.')) + '</span></span>' +
+          (doc.escrito ? U.boton({ texto: 'Leer', icono: 'ojo', sm: true, variante: 'primario', clase: 'js-dc2-leer' }) + U.boton({ texto: 'PDF', icono: 'descargar', sm: true, clase: 'js-dc2-pdf' })
+            : (x.puede_gestionar ? U.boton({ texto: 'Escribir', icono: 'editar', sm: true, clase: 'js-dc2-escribir' }) : '')) + '</div>';
+      }
+      if (doc.enlace_drive) {
+        h += '<ul class="dc2-enlaces"><li>' + U.ico('enlace', 14) + '<a class="sx2-enlace" href="' + U.esc(doc.enlace_drive) + '" target="_blank" rel="noopener noreferrer">Abrir en Google Drive</a>' +
+          (x.puede_gestionar ? U.badge('Copia de trabajo', 'neutro', true) : '') + '</li></ul>';
+      }
       if (doc.archivo_id) {
         var pdf = doc.archivo_mime === 'application/pdf';
         h += '<div class="dc2-archivo">' +
@@ -201,7 +216,7 @@
             (editable(e.url) && x.puede_gestionar ? U.badge('Editable', 'alerta', true) : '') + '</li>';
         }).join('') + '</ul>';
       }
-      if (!h) h = '<p class="sx2-tenue" style="margin:0">Este documento aún no tiene archivo ni enlace.</p>';
+      if (!h) h = '<p class="sx2-tenue" style="margin:0">Este documento aún no tiene archivo, texto ni enlace.</p>';
       return h;
     }
     function bloqueClausulas(doc, gest) {
@@ -266,6 +281,9 @@
         });
         return;
       }
+      if (t.closest('.js-dc2-leer')) { d.cerrar(true); SigsoCalidadContenido.leer(id); return; }
+      if ((b = t.closest('.js-dc2-pdf'))) { SigsoCalidadContenido.descargarPdf(id, null, b); return; }
+      if (t.closest('.js-dc2-escribir')) { d.cerrar(true); SigsoCalidadContenido.editar(id); return; }
       if ((b = t.closest('.js-dc2-descargar'))) { descargar(null, b); return; }
       if ((b = t.closest('.js-dc2-desc-version'))) { descargar(b.getAttribute('data-version'), b); return; }
       if (t.closest('.js-dc2-ver')) { SigsoCalidad.ver(id, null); return; }
@@ -409,7 +427,7 @@
       '<span class="sx2-apilado" style="gap:4px;min-width:0;flex:1"><strong class="sx2-cortar">' + U.esc(d.nombre) + '</strong>' +
         '<span class="dc2-fila__meta"><span class="dc2-cod">' + U.esc(d.codigo) + '</span><span>' + U.esc(TIPO()[d.tipo] || d.tipo) + '</span>' +
           (version(d.version_vigente, d.tipo) ? '<span>' + U.esc(version(d.version_vigente, d.tipo)) + '</span>' : '') +
-          (d.tiene_archivo ? '' : (d.enlaces_n ? '<span>' + U.ico('enlace', 12) + ' enlace</span>' : '')) + '</span></span>' +
+          (d.escrito ? '<span class="dc2-en-sigso">' + U.ico('check', 12) + ' en SIGSO</span>' : (d.tiene_archivo ? '' : (d.enlace_drive || d.enlaces_n ? '<span>' + U.ico('enlace', 12) + ' Drive</span>' : ''))) + '</span></span>' +
       '<span class="dc2-fila__senales">' + senales + '</span>' + U.ico('derecha', 16) + '</li>';
   }
 

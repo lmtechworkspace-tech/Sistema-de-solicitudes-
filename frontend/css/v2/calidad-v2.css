@@ -358,3 +358,25 @@ i.ca2-celda { display: inline-grid; place-items: center; width: 20px; height: 20
 .ca2-dest { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .ca2-dest li { display: flex; align-items: center; gap: 8px; font: var(--sx-t-chico); color: var(--sx-texto); }
 @media (max-width: 700px) { .ca2-cuentas { grid-template-columns: 1fr; } .ca2-cuenta { flex-wrap: wrap; } .ca2-cuenta__acc { flex-direction: row; flex-wrap: wrap; align-items: center; } }
+
+/* --- Documento escrito en SIGSO (calidad-contenido-v2.js) --- */
+.dv2-drawer .sx2-drawer__panel { width: min(980px, 100vw); }
+.dv2-marco { background: #e9ecef; border-radius: var(--sx-radio-md, 10px); padding: 4px; overflow-x: auto; }
+.dv2-papel { display: block; width: 100%; min-width: 620px; height: 70vh; border: 0; background: #e9ecef; }
+.dv2-aviso { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; padding: 10px 12px; border-radius: var(--sx-radio-md, 10px); background: var(--sx-tono-suave); color: var(--sx-texto); font: var(--sx-t-chico); }
+.dv2-aviso > svg { color: var(--sx-tono); flex: none; }
+.dv2-aviso > span { flex: 1; min-width: 200px; }
+.dv2-campo { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; font: 600 .8125rem/1.3 var(--fuente); color: var(--sx-texto); }
+.dv2-ayuda { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 12px; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.dv2-secciones { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.dv2-sec { border: 1px solid var(--sx-borde); border-radius: var(--sx-radio-md, 10px); padding: 10px; display: flex; flex-direction: column; gap: 8px; background: var(--sx-superficie); }
+.dv2-sec__cab { display: flex; align-items: center; gap: 6px; }
+.dv2-sec__cab .sx2-input { flex: 1; min-width: 0; font-weight: 600; }
+.dv2-sec__n { flex: none; width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; font: 700 .75rem/1 var(--fuente); background: var(--sx-borde-suave); color: var(--sx-texto-2); }
+.dv2-texto { width: 100%; min-height: 90px; resize: vertical; font: .875rem/1.5 var(--fuente); }
+.dv2-cc { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.dv2-cc li { display: grid; grid-template-columns: 70px 130px 1fr auto; gap: 6px; align-items: center; }
+.dv2-publicar__fila { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.dv2-publicar__fila label { display: flex; flex-direction: column; gap: 4px; font: 600 .8125rem/1.3 var(--fuente); }
+.dc2-en-sigso { color: var(--sx-ok); font-weight: 600; }
+@media (max-width: 700px) { .dv2-cc li { grid-template-columns: 1fr 1fr; } .dv2-cc li .sx2-input:nth-of-type(3) { grid-column: 1 / -1; } }

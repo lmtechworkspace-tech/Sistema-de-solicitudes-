@@ -344,12 +344,28 @@ function registrarLogSgc_(db, accion, detalle, contexto) {
 //   externo_fuera   norma/ley externa marcada obsoleta (el personal no la ve)
 //   revision        revisión anual vencida o dentro de 60 días
 const DIAS_AVISO_REVISION_SGC = 60;
+// Documentos que se arman con los datos del módulo (documentosVivosSgc.js):
+// su copia controlada es la que genera SIGSO, no un archivo.
+const FUENTE_DOCUMENTO_POR_CODIGO_SGC = {
+  'DOC-02': 'FODA', 'DOC-03': 'MAPA', 'DOC-04': 'PARTES', 'DOC-07': 'OBJETIVOS', 'DOC-08': 'RIESGOS',
+  'DOC-10': 'SERVICIOS', 'DOC-11': 'SERVICIOS', 'DOC-12': 'SERVICIOS', 'DOC-13': 'SERVICIOS',
+  'FO-PRO-01-01': 'LISTADO_MAESTRO', 'FO-PRO-04-01': 'PROVEEDORES'
+};
+// ¿Tiene el documento su texto en SIGSO (o se genera desde los datos)? Si es
+// así, SIGSO es su copia controlada (7.5.3) aunque no haya archivo adjunto.
+function escritoEnSigso_(d) {
+  const fuente = String(d.contenido_fuente || '').toUpperCase();
+  if (fuente && fuente !== 'TEXTO') return true;
+  if (fuente !== 'TEXTO' && FUENTE_DOCUMENTO_POR_CODIGO_SGC[String(d.codigo || '').toUpperCase()]) return true;
+  if (!d.contenido) return false;
+  try { const c = JSON.parse(d.contenido); return !!(c && Array.isArray(c.secciones) && c.secciones.some((s) => String(s.texto || '').trim())); } catch (e) { return false; }
+}
 function alertasControlSgc_(d, ahora) {
   const out = [];
   const interno = d.tipo !== 'EXTERNO';
   const vigente = d.estado === 'VIGENTE';
   if (vigente && interno && (!String(d.revisado_por || '').trim() || !String(d.aprobado_por || '').trim())) out.push('sin_aprobacion');
-  if (vigente && interno && !d.archivo_id) out.push('sin_copia');
+  if (vigente && interno && !d.archivo_id && !escritoEnSigso_(d)) out.push('sin_copia');
   if (!interno && d.estado === 'OBSOLETO') out.push('externo_fuera');
   if (vigente && d.proxima_revision) {
     const dias = diasHasta_(d.proxima_revision, ahora);
@@ -414,6 +430,8 @@ function listarDocumentos(db, data, contexto) {
       dias_para_acuse: d.fecha_limite_acuse ? diasHasta_(d.fecha_limite_acuse, ahora) : null,
       clausulas_iso: parsearClausulasIso_(d.clausulas_iso), enlaces_n: parsearEnlaces_(d.enlaces).length,
       fecha_aprobacion: d.fecha_aprobacion || '',
+      escrito: escritoEnSigso_(d), enlace_drive: d.enlace_drive || '',
+      tiene_borrador: gobierna && !!d.contenido_borrador,
       control: gobierna ? alertasControlSgc_(d, ahora) : []
     })).sort((a, b) => String(a.codigo || '').localeCompare(String(b.codigo || '')))
   };
@@ -435,7 +453,12 @@ function getDocumento(db, data, contexto) {
   const miAcuse = acuses.find((a) => a.documento_id === doc.documento_id && a.version === doc.version_vigente && normalizarEmail_(a.usuario_email) === normalizarEmail_(contexto.email));
 
   return {
-    documento: Object.assign({}, doc, { clausulas_iso: parsearClausulasIso_(doc.clausulas_iso), enlaces: parsearEnlaces_(doc.enlaces) }),
+    // El texto no viaja en la ficha (puede ser largo): lo trae getContenidoDocumentoSgc.
+    documento: Object.assign({}, doc, {
+      clausulas_iso: parsearClausulasIso_(doc.clausulas_iso), enlaces: parsearEnlaces_(doc.enlaces),
+      contenido: undefined, contenido_borrador: undefined,
+      escrito: escritoEnSigso_(doc), tiene_borrador: gobierna && !!doc.contenido_borrador
+    }),
     puede_gestionar: gobierna, puede_reemplazar_archivo: contexto.super_admin === true, catalogo_clausulas: CLAUSULAS_ISO9001,
     debo_acusar: debeAcusar, mi_acuse: miAcuse ? miAcuse.acusado_en : '',
     control: gobierna ? alertasControlSgc_(doc) : [],
@@ -954,7 +977,7 @@ module.exports = {
   // cumplimiento de acuses de todos los documentos en un solo viaje.
   audienciaDocumentoSgc_,
   // 8B: reglas de control documental y el conteo de días (Chile).
-  alertasControlSgc_, diasHasta_,
+  alertasControlSgc_, diasHasta_, escritoEnSigso_, FUENTE_DOCUMENTO_POR_CODIGO_SGC,
   // seccionesVisiblesSgc_: la usa Tablero (Fase 7), primera pantalla del
   // módulo, para pintar la barra de navegación sin adivinar qué puede
   // abrir cada quien.

@@ -395,12 +395,20 @@ const COLUMNAS = {
     'requiere_acuse', 'fecha_limite_acuse',
     'clausulas_iso', 'emisor', 'clase_externa', 'enlaces',
     // SIGSO v2 (Módulo 8B): cuándo se registró la revisión y aprobación (7.5.2).
-    'fecha_aprobacion'
+    'fecha_aprobacion',
+    // 2026-09-29 (documentosVivosSgc.js): el documento escrito DENTRO de
+    // SIGSO. contenido = versión vigente (JSON con secciones); borrador =
+    // cambios aún no publicados; fuente = documento armado con datos del
+    // módulo (FODA, riesgos...); enlace_drive = copia de trabajo mientras
+    // el SGC se termina de mudar desde Google Drive.
+    'contenido', 'contenido_borrador', 'contenido_fuente', 'enlace_drive'
   ],
   SGC_DOC_VERSIONES: [
     'version_id', 'documento_id', 'version', 'cambios',
     'archivo_id', 'archivo_nombre', 'archivo_mime',
-    'subido_por', 'fecha', 'vigente'
+    'subido_por', 'fecha', 'vigente',
+    // Copia del texto de esa versión (trazabilidad ISO 7.5.3).
+    'contenido'
   ],
   SGC_DOC_DESTINATARIOS: ['destinatario_id', 'documento_id', 'usuario_email'],
   // rol_sgc: ENCARGADO_SGC | DIRECCION | GERENCIA_ADM | JEFATURA_AREA |
