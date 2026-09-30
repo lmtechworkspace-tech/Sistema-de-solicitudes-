@@ -742,7 +742,7 @@
   function pintarPermisos(silencioso) {
     if (vista_ !== 'NOTIF_PERMISOS' || !perm_) return;
     var n = function (k) { return perm_.filter(function (p) { return p.permiso === k; }).length; };
-    var lista = perm_.filter(function (p) { return (!permF_ || p.permiso === permF_) && (!permQ_ || coincide([p.nombre, p.email, p.origen].join(' '), permQ_)); });
+    var lista = perm_.filter(function (p) { return (!permF_ || p.permiso === permF_) && (!permQ_ || coincide([p.nombre, p.email].join(' '), permQ_)); });
     pagina(cabecera('Alertas en vivo', 'Quién tiene activadas las alertas del navegador. Si están bloqueadas, esa persona solo se entera por correo o al abrir la campana.') +
       '<div class="sx2-fila-kpis">' +
         U.kpi({ i: 0, etiqueta: 'Activas', valor: n('granted'), icono: 'check', tono: 'ok', filtro: 'granted', activo: permF_ === 'granted' }) +
@@ -751,10 +751,10 @@
         U.kpi({ i: 3, etiqueta: 'Sin datos', valor: n('sin_datos'), icono: 'info', tono: 'neutro', filtro: 'sin_datos', activo: permF_ === 'sin_datos', titulo: 'Aún no abren SIGSO desde que existe esta medición.' }) +
       '</div>' +
       '<div class="sx2-card sx2-py-herramientas sx2-entra" style="--i:4"><div class="sx2-barra-filtros">' + buscador(permQ_, 'Buscar persona…') + '</div></div>' +
-      U.card({ sinRelleno: true, i: 5, cuerpo: lista.length ? '<div class="sx2-tabla-wrap"><table class="sx2-tabla"><thead><tr><th>Persona</th><th>Origen</th><th>Estado</th><th>Actualizado</th></tr></thead><tbody>' +
+      U.card({ sinRelleno: true, i: 5, cuerpo: lista.length ? '<div class="sx2-tabla-wrap"><table class="sx2-tabla"><thead><tr><th>Persona</th><th>Estado</th><th>Actualizado</th></tr></thead><tbody>' +
         lista.map(function (p) {
           var e = PERMISO[p.permiso] || [p.permiso, 'neutro'];
-          return '<tr><td>' + persona(p.email, p.nombre) + '</td><td class="sx2-tenue">' + U.esc(p.origen || '') + '</td><td>' + U.badge(e[0], e[1]) + '</td><td>' + U.esc(p.actualizado_en ? fecha(p.actualizado_en) : '—') + '</td></tr>';
+          return '<tr><td>' + persona(p.email, p.nombre) + '</td><td>' + U.badge(e[0], e[1]) + '</td><td>' + U.esc(p.actualizado_en ? fecha(p.actualizado_en) : '—') + '</td></tr>';
         }).join('') + '</tbody></table></div>' : U.vacio({ icono: 'campana', titulo: 'Nadie con este filtro', texto: '' }) }), silencioso);
   }
 

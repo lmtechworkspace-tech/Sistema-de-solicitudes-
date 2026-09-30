@@ -18,8 +18,11 @@ const NO_ADMIN = { rol: 'SOLICITANTE', email: 'juan@hp.cl' };
 function dbConSchema() {
   const db = abrirDb_();
   Object.keys(COLUMNAS).forEach((hoja) => sembrarTabla_(db, hoja, COLUMNAS[hoja], []));
-  agregarFila_(db, 'USUARIOS', { usuario_id: 'U1', nombre: 'Admin', email: 'admin@homepymes.cl', empresa_id: 'HP', rol: 'ADM', activo: true, creado_por: 'sistema' });
-  agregarFila_(db, 'USUARIOS', { usuario_id: 'U2', nombre: 'Dev Inactivo', email: 'inactivo@homepymes.cl', empresa_id: 'HP', rol: 'DEV', activo: false, creado_por: 'sistema' });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-A', usuario: 'admin', nombre: 'Admin', hash_password: 'hash', salt: 'sal', emails: JSON.stringify(['admin@homepymes.cl']), rol: 'ADM', empresa_id: 'HP', activo: true, creado_por: 'seed' });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-I', usuario: 'inactivo', nombre: 'Dev Inactivo', hash_password: 'hash', salt: 'sal', emails: JSON.stringify(['inactivo@homepymes.cl']), rol: 'DEV', empresa_id: 'HP', activo: false, creado_por: 'seed' });
+  // Solo en USUARIOS (identidad de Google, apagada el 2026-09-27): ya no puede
+  // entrar a SIGSO, así que no cuenta como personal (ni recibe alertas).
+  agregarFila_(db, 'USUARIOS', { usuario_id: 'U9', nombre: 'Solo Google', email: 'google@homepymes.cl', empresa_id: 'HP', rol: 'DEV', activo: true, creado_por: 'seed' });
   agregarFila_(db, 'CUENTAS_PORTAL', {
     cuenta_id: 'CTA-1', usuario: 'leo', nombre: 'Leo Estay', cargo: 'Desarrollador', hash_password: 'hash', salt: 'sal',
     emails: JSON.stringify(['leo@rld.cl']), rol: 'DEV', modulos: JSON.stringify(['mi_trabajo']), empresa_id: 'RLD',
@@ -59,13 +62,14 @@ test('listarPermisosNotificacionesSO es ADM-only', () => {
   assert.equal(Notificaciones.listarPermisosNotificacionesSO(db, {}, NO_ADMIN)._forbidden, true);
 });
 
-test('listarPermisosNotificacionesSO cruza staff activo + cuentas de portal activas, marca "sin_datos" a quien nunca reportó', () => {
+test('listarPermisosNotificacionesSO lista las cuentas activas y marca "sin_datos" a quien nunca reportó', () => {
   const db = dbConSchema();
   const r = Notificaciones.listarPermisosNotificacionesSO(db, {}, ADMIN);
   const emails = r.personas.map((p) => p.email);
   assert.ok(emails.includes('admin@homepymes.cl'));
   assert.ok(emails.includes('leo@rld.cl'));
   assert.ok(!emails.includes('inactivo@homepymes.cl'));
+  assert.ok(!emails.includes('google@homepymes.cl'), 'la identidad de Google ya no entra a SIGSO');
 
   const leo = r.personas.find((p) => p.email === 'leo@rld.cl');
   assert.equal(leo.permiso, 'sin_datos');

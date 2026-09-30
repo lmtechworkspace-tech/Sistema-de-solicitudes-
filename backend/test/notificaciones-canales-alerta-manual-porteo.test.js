@@ -93,9 +93,12 @@ test('guardarCanalAlerta es ADM-only, hace upsert y rechaza una clave desconocid
 // ===== Enviar alerta manual =================================================
 
 function seedDirectorio(db) {
-  agregarFila_(db, 'USUARIOS', { usuario_id: 'U1', nombre: 'Admin', email: 'admin@homepymes.cl', empresa_id: 'HP', rol: 'ADM', activo: true, creado_por: 'seed' });
-  agregarFila_(db, 'USUARIOS', { usuario_id: 'U2', nombre: 'Ana Dev', email: 'ana@homepymes.cl', empresa_id: 'HP', rol: 'DEV', activo: true, creado_por: 'seed' });
-  agregarFila_(db, 'USUARIOS', { usuario_id: 'U3', nombre: 'Ex', email: 'ex@homepymes.cl', empresa_id: 'HP', rol: 'DEV', activo: false, creado_por: 'seed' });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-A', usuario: 'admin', nombre: 'Admin', hash_password: 'hash', salt: 'sal', emails: JSON.stringify(['admin@homepymes.cl']), rol: 'ADM', empresa_id: 'HP', activo: true, creado_por: 'seed' });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-2', usuario: 'ana', nombre: 'Ana Dev', hash_password: 'hash', salt: 'sal', emails: JSON.stringify(['ana@homepymes.cl']), rol: 'DEV', empresa_id: 'HP', activo: true, creado_por: 'seed' });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-3', usuario: 'ex', nombre: 'Ex', hash_password: 'hash', salt: 'sal', emails: JSON.stringify(['ex@homepymes.cl']), rol: 'DEV', empresa_id: 'HP', activo: false, creado_por: 'seed' });
+  // Solo en USUARIOS (identidad de Google, apagada el 2026-09-27): ya no puede
+  // entrar a SIGSO, así que no cuenta como personal (ni recibe alertas).
+  agregarFila_(db, 'USUARIOS', { usuario_id: 'U9', nombre: 'Solo Google', email: 'google@homepymes.cl', empresa_id: 'HP', rol: 'DEV', activo: true, creado_por: 'seed' });
   agregarFila_(db, 'CUENTAS_PORTAL', {
     cuenta_id: 'CTA-1', usuario: 'leo', nombre: 'Leo Estay', cargo: 'Dev', hash_password: 'hash', salt: 'sal',
     emails: JSON.stringify(['leo@rld.cl']), rol: 'DEV', modulos: JSON.stringify(['bandeja']), empresa_id: 'RLD',
@@ -115,7 +118,7 @@ test('TODOS: encola alerta en vivo y manda correo a todo el personal activo (men
   seedDirectorio(db);
   const r = await Notificaciones.enviarAlertaManual(db, Object.assign({ audiencia_tipo: 'TODOS' }, BASE_ALERTA), ADMIN);
   assert.equal(r.ok, true);
-  assert.equal(r.destinatarios, 3); // admin+ana (HP activos) + leo (portal activo); ex inactivo fuera
+  assert.equal(r.destinatarios, 3); // admin+ana (HP) + leo (RLD); ex inactivo y la cuenta solo-Google, fuera
   assert.equal(filas(db, 'NOTIFICACIONES_APP').length, 3);
   const notif = filas(db, 'NOTIFICACIONES_APP')[0];
   assert.equal(notif.tipo, 'ALERTA_ADMIN');
