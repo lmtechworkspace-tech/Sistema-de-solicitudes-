@@ -243,8 +243,15 @@
     var max = opts.max || filas.reduce(function (m, f) { return Math.max(m, Number(f.valor) || 0); }, 0) || 1;
     return '<ol class="rp2-ranking' + (opts.sinPosicion ? ' rp2-ranking--comp' : '') + '">' + filas.map(function (f, i) {
       var pct = Math.round((Number(f.valor) || 0) / max * 100);
+      // f.marca (opcional, misma escala que valor): una raya sobre la barra, p. ej. lo
+      // planificado a la fecha; así una barra vacía igual muestra cuánto faltaba.
+      var barra = U.barra(pct, f.tono || 'primario');
+      if (f.marca !== undefined && f.marca !== null && !isNaN(Number(f.marca))) {
+        var pm = Math.max(0, Math.min(100, Math.round(Number(f.marca) / max * 100)));
+        barra = '<span class="rp2-ranking__pista">' + barra + '<i class="rp2-ranking__marca" style="left:' + pm + '%"' + (f.marcaTitulo ? ' title="' + esc_(f.marcaTitulo) + '"' : '') + '></i></span>';
+      }
       return '<li>' + (opts.sinPosicion ? '' : '<span class="rp2-ranking__pos">' + (i + 1) + '</span>') + '<span class="rp2-ranking__etq" title="' + esc_(f.etiqueta) + '">' + esc_(f.etiqueta) + '</span>' +
-        U.barra(pct, f.tono || 'primario') + '<strong class="rp2-ranking__val">' + esc_(f.texto !== undefined ? f.texto : f.valor) + '</strong></li>';
+        barra + '<strong class="rp2-ranking__val">' + esc_(f.texto !== undefined ? f.texto : f.valor) + '</strong></li>';
     }).join('') + '</ol>';
   }
   var nTendencia_ = 0;

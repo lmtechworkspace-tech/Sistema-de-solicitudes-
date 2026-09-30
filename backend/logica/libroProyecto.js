@@ -27,6 +27,7 @@
  */
 
 const Proyectos = require('./proyectos');
+const ReportePdf = require('./reportePdf');
 const Utils = require('./utils');
 const { construirZip_ } = require('./xlsxZip');
 
@@ -308,7 +309,11 @@ const XLSX_ESTADO_TAREA_ = {
 };
 const XLSX_ESTADO_HITO_ = { PENDIENTE: 'Pendiente', EN_CURSO: 'En curso', COMPLETADO: 'Completado', CANCELADO: 'Cancelado' };
 
-function xlsxGanttProyecto_(detalle, tareas, rendimiento, bitacora) {
+function xlsxGanttProyecto_(detalle, tareas, rendimiento, bitacora, nombres) {
+  nombres = nombres || {};
+  // Nombre de la persona, nunca el correo crudo (auditoría E6).
+  const persona = (email, nombre) => (nombre && !/@/.test(nombre) ? String(nombre).trim() : '') || nombres[String(email || '').toLowerCase()] || email || '';
+  tareas = tareas.map((a) => Object.assign({}, a, { responsable_nombre: persona(a.responsable_email, a.responsable_nombre) }));
   const p = detalle.proyecto;
   const hitos = (detalle.hitos || []).filter((h) => h.fecha_objetivo)
     .slice().sort((a, b) => new Date(a.fecha_objetivo) - new Date(b.fecha_objetivo));
@@ -321,7 +326,7 @@ function xlsxGanttProyecto_(detalle, tareas, rendimiento, bitacora) {
     hojaTareasXlsx_(tareas, hitos, planPorId),
     hojaHitosXlsx_(hitos, tareas)
   ];
-  if (bitacora && bitacora.length) hojas.push(hojaHistorialXlsx_(bitacora, tareasPorId));
+  if (bitacora && bitacora.length) hojas.push(hojaHistorialXlsx_(bitacora, tareasPorId, persona));
   if (tareas.some((t) => t.depende_de)) hojas.push(hojaDependenciasXlsx_(tareas, tareasPorId));
   // Refactor "Planificación" Etapa 8 (§28/§30 del encargo): dos hojas
   // nuevas, AL FINAL a propósito -- así las hojas de siempre (Resumen/Carta
@@ -492,33 +497,37 @@ function hojaCartaGanttXlsx_(p, tareas, hitos, planPorId) {
   };
 }
 
+// Auditoría 2026-09-29 (E5): sin el ID interno (UUID) al comienzo, una sola
+// columna de avance (el real, el mismo de la pantalla) junto a lo esperado, y la
+// Situación con el mismo texto y color que la Carta Gantt.
 function hojaTareasXlsx_(tareas, hitos, planPorId) {
   const H = XLSX_EST.HEADER;
   const hitoNombre = {}; hitos.forEach((h) => { hitoNombre[h.hito_id] = h.nombre; });
-  const enc = ['ID', 'Hito', 'Tarea', 'Responsable', 'Estado', 'Inicio plan', 'Fin plan', 'Avance', 'Esperado', 'Real', 'Desviación (pp)']
+  const enc = ['Hito', 'Tarea', 'Responsable', 'Situación', 'Inicio plan', 'Fin plan', 'Avance', 'Esperado a hoy', 'Desviación (pp)']
     .map((t) => ({ v: t, s: H }));
   const filas = [enc];
   tareas.forEach((a) => {
     const plan = planPorId[a.actividad_id] || {};
+    const tono = TONO_SEMAFORO_XLSX_[a.semaforo] || 'neutro';
+    const real = (plan.avance_real_pct !== null && plan.avance_real_pct !== undefined) ? plan.avance_real_pct
+      : (a.estado === 'TERMINADA' ? 100 : a.avance_pct);
     filas.push([
-      a.codigo || a.actividad_id || '',
       a.hito_id ? (hitoNombre[a.hito_id] || '') : '',
       a.titulo || '',
       a.responsable_nombre || a.responsable_email || '',
-      XLSX_ESTADO_TAREA_[a.estado] || a.estado || '',
+      { v: SITUACION_XLSX_[a.semaforo] || XLSX_ESTADO_TAREA_[a.estado] || a.estado || '', s: XLSX_EST.TONO[tono][1] },
       fechaXlsx_(plan.plan_inicio || a.fecha_creacion),
       fechaXlsx_(plan.plan_fin || a.fecha_compromiso),
-      (a.avance_pct === '' || a.avance_pct === null || a.avance_pct === undefined) ? '' : { v: Number(a.avance_pct), t: 'n' },
-      (plan.avance_esperado_pct === null || plan.avance_esperado_pct === undefined) ? '' : { v: plan.avance_esperado_pct, t: 'n' },
-      (plan.avance_real_pct === null || plan.avance_real_pct === undefined) ? '' : { v: plan.avance_real_pct, t: 'n' },
+      porcentajeXlsx_(real),
+      porcentajeXlsx_(plan.avance_esperado_pct),
       (plan.desviacion_pp === null || plan.desviacion_pp === undefined) ? '' : { v: plan.desviacion_pp, t: 'n' }
     ]);
   });
   return {
     nombre: 'Tareas',
-    cols: [{ min: 1, max: 1, ancho: 14 }, { min: 2, max: 2, ancho: 22 }, { min: 3, max: 3, ancho: 34 },
-      { min: 4, max: 4, ancho: 22 }, { min: 5, max: 5, ancho: 14 }, { min: 6, max: 7, ancho: 12 }, { min: 8, max: 11, ancho: 12 }],
-    filas, congelar: { filas: 1 }, filtro: 'A1:K' + filas.length
+    cols: [{ min: 1, max: 1, ancho: 24 }, { min: 2, max: 2, ancho: 40 }, { min: 3, max: 3, ancho: 26 },
+      { min: 4, max: 4, ancho: 13 }, { min: 5, max: 6, ancho: 12 }, { min: 7, max: 9, ancho: 13 }],
+    filas, congelar: { filas: 1 }, filtro: 'A1:I' + filas.length
   };
 }
 
@@ -576,7 +585,7 @@ function hojaResponsablesXlsx_(tareas) {
   tareas.forEach((a) => {
     const clave = a.responsable_email || '(sin asignar)';
     if (!porResponsable[clave]) {
-      porResponsable[clave] = { nombre: a.responsable_nombre || a.responsable_email || '(sin asignar)', total: 0, completadas: 0, enCurso: 0, atrasadas: 0 };
+      porResponsable[clave] = { nombre: a.responsable_nombre || a.responsable_email || 'Sin asignar', total: 0, completadas: 0, enCurso: 0, atrasadas: 0 };
     }
     const r = porResponsable[clave];
     r.total++;
@@ -627,26 +636,38 @@ function hojaHitosXlsx_(hitos, tareas) {
   };
 }
 
-function hojaHistorialXlsx_(bitacora, tareasPorId) {
+// Auditoría 2026-09-29 (C5): el tipo en palabras (antes CREADA, CHECKIN_AVANCE,
+// en_proceso) y quién lo registró. Mismas etiquetas que el PDF.
+const BITACORA_TIPO_XLSX_ = {
+  CREADA: 'Asignada', CHECKIN_AVANCE: 'Avance', CHECKIN_SIN_CAMBIO: 'Sin cambios',
+  DESBLOQUEO: 'Se destrabó', BLOQUEO: 'Bloqueada', ENTREGA: 'Entregada', VALIDACION: 'Revisión',
+  REGISTRO_DIA: 'Registro del día'
+};
+const ESTADO_DIA_XLSX_ = { en_proceso: 'en proceso', bloqueado: 'bloqueado', pausado: 'pausado', finalizado: 'finalizado',
+  entregado: 'entregado', revision: 'en revisión', esperando_tercero: 'esperando a un tercero', listo: 'listo', sin_avance: 'sin avance' };
+function hojaHistorialXlsx_(bitacora, tareasPorId, persona) {
   const H = XLSX_EST.HEADER;
-  const enc = ['Fecha', 'Tarea', 'Tipo', 'Detalle', 'Horas'].map((t) => ({ v: t, s: H }));
+  const enc = ['Fecha', 'Tarea', 'Qué pasó', 'Quién', 'Nota', 'Horas'].map((t) => ({ v: t, s: H }));
   const filas = [enc];
   bitacora.slice().sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
     .forEach((b) => {
       const tarea = tareasPorId[b.actividad_id];
-      const etiqueta = (b.tipo === 'REGISTRO_DIA') ? (b.estado_dia || 'Registro del día') : (b.tipo || '');
+      let que = BITACORA_TIPO_XLSX_[b.tipo] || b.tipo || '';
+      if (b.tipo === 'REGISTRO_DIA' && b.estado_dia) que += ' (' + (ESTADO_DIA_XLSX_[b.estado_dia] || String(b.estado_dia).replace(/_/g, ' ')) + ')';
       filas.push([
         fechaXlsx_(b.dia || b.timestamp),
-        tarea ? (tarea.titulo || '') : '',
-        etiqueta,
+        tarea ? (tarea.titulo || '') : 'Tarea eliminada',
+        que,
+        persona ? persona(b.autor_email, b.autor_nombre) : (b.autor_nombre || b.autor_email || ''),
         b.nota || '',
         (b.horas === '' || b.horas === null || b.horas === undefined) ? '' : { v: Number(b.horas), t: 'n' }
       ]);
     });
   return {
     nombre: 'Historial',
-    cols: [{ min: 1, max: 1, ancho: 13 }, { min: 2, max: 2, ancho: 30 }, { min: 3, max: 3, ancho: 18 }, { min: 4, max: 4, ancho: 44 }, { min: 5, max: 5, ancho: 8 }],
-    filas, congelar: { filas: 1 }, filtro: 'A1:E' + filas.length
+    cols: [{ min: 1, max: 1, ancho: 12 }, { min: 2, max: 2, ancho: 36 }, { min: 3, max: 3, ancho: 22 }, { min: 4, max: 4, ancho: 24 },
+      { min: 5, max: 5, ancho: 44 }, { min: 6, max: 6, ancho: 8 }],
+    filas, congelar: { filas: 1 }, filtro: 'A1:F' + filas.length
   };
 }
 
@@ -677,9 +698,14 @@ function descargarLibro(db, data, contexto) {
   const bitacora = Proyectos.listarBitacora(db, data, contexto);
   const rendimiento = Proyectos.obtenerRendimiento(db, data, contexto);
 
-  const buffer = xlsxGanttProyecto_(detalle, tareas, rendimiento, bitacora);
+  const nombres = {};
+  try { Object.assign(nombres, require('./documentoV2').nombresPorCorreo(db)); } catch (e) { /* sin cuentas: quedan los correos */ }
+  (detalle.integrantes || []).forEach((i) => { if (i.usuario_nombre && !/@/.test(i.usuario_nombre)) nombres[String(i.usuario_email || '').toLowerCase()] = i.usuario_nombre; });
+  const buffer = xlsxGanttProyecto_(detalle, tareas, rendimiento, bitacora, nombres);
   const p = detalle.proyecto;
-  return { xlsx_base64: buffer.toString('base64'), filename: (p.nombre || 'Proyecto') + '.xlsx' };
+  // Mismo nombre que los PDF del proyecto (auditoría P5): sigso-proyecto-<código o nombre>-<fecha>.xlsx
+  const filename = ReportePdf.nombreArchivo_('sigso-proyecto-' + ([p.codigo, p.nombre].filter(Boolean).join('-') || 'proyecto')).replace(/\.pdf$/, '.xlsx');
+  return { xlsx_base64: buffer.toString('base64'), filename };
 }
 
 module.exports = { descargarLibro, TONO_SEMAFORO_XLSX_ };

@@ -138,7 +138,7 @@ test('descargarGantt: página apaisada, solo las tareas filtradas y los filtros 
   assert.match(recibido.cuerpo, /class="rp2-gantt-pag"/);
   assert.match(recibido.cuerpo, /sx2-py-leyenda-gantt/);
   assert.ok(recibido.filtros.some((f) => f.etiqueta === 'Estado' && f.valor === 'Atrasadas'), 'la cabecera dice qué se filtró');
-  assert.match(recibido.nombreArchivo, /^carta-gantt-/);
+  assert.match(recibido.nombreArchivo, /^sigso-carta-gantt-PRY-\d{4}-\d{3}-Estandarizaci/, 'código y nombre del proyecto (aPdf lo normaliza)');
 });
 
 // ===== Excel ========================================================================
@@ -163,5 +163,5 @@ test('Excel: la Carta Gantt usa los tonos de la pantalla, el avance dentro de la
   const wb = hoja_(r, 'xl/workbook.xml');
   assert.match(wb, /_xlnm\.Print_Titles/);
   assert.match(wb, /_xlnm\._FilterDatabase/);
-  assert.match(hoja_(r, 'xl/worksheets/sheet3.xml'), /<autoFilter ref="A1:K\d+"\/>/, 'filtro en la hoja Tareas');
+  assert.match(hoja_(r, 'xl/worksheets/sheet3.xml'), /<autoFilter ref="A1:I\d+"\/>/, 'filtro en la hoja Tareas');
 });

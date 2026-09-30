@@ -260,6 +260,20 @@ function calcularAvanceProyecto_(tareas) {
   return Math.round((terminadas.length / activas.length) * 1000) / 10;
 }
 
+// Auditoría 2026-09-29 (P6): todo proyecto nuevo sin código recibe uno
+// correlativo por año, PRY-AAAA-NNN (16 de 17 proyectos no tenían código y los
+// documentos decían "Código —"). Quien lo crea puede escribir otro; el de los
+// proyectos ya creados se completa en "Editar proyecto".
+function siguienteCodigoProyecto_(db, ahora) {
+  const anio = Utils.claveDia_(ahora || new Date(), 'America/Santiago').slice(0, 4);
+  let max = 0;
+  leerSeguro_(db, 'PROYECTOS').forEach((p) => {
+    const m = /^PRY-(\d{4})-(\d+)$/.exec(String(p.codigo || '').trim());
+    if (m && m[1] === anio) max = Math.max(max, Number(m[2]));
+  });
+  return 'PRY-' + anio + '-' + String(max + 1).padStart(3, '0');
+}
+
 function calcularSaludProyecto_(db, proyecto, tareas, hitos, entregables) {
   if (proyecto.salud_override) {
     const etiquetas = { critico: 'Crítico', riesgo: 'En riesgo', normal: 'Normal' };
@@ -853,7 +867,7 @@ function crear(db, data, contexto) {
 
   const ahora = new Date();
   const proyecto = {
-    proyecto_id: uuid_(), codigo: String(data.codigo || '').trim(), nombre, descripcion: data.descripcion || '',
+    proyecto_id: uuid_(), codigo: String(data.codigo || '').trim() || siguienteCodigoProyecto_(db, ahora), nombre, descripcion: data.descripcion || '',
     objetivo: data.objetivo || '', resultado_esperado: data.resultado_esperado || '', lider_email: liderEmail,
     area_id: data.area_id || '', cliente_id: data.cliente_id || '', categoria: data.categoria || '',
     prioridad: ORDEN_PRIORIDAD.indexOf(data.prioridad) !== -1 ? data.prioridad : PRIORIDAD_POR_DEFECTO,

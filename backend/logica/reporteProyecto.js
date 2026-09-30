@@ -30,6 +30,15 @@
 const Proyectos = require('./proyectos');
 const PdfDoc = require('./pdfDocumento');
 const DocV2 = require('./documentoV2');
+const ReportePdf = require('./reportePdf');
+
+// Nombre de archivo único para todo lo que se descarga de un proyecto
+// (auditoría P5): sigso-<qué>-<proyecto>-<aaaa-mm-dd>.pdf, en minúsculas y sin
+// tildes. Antes: "Reporte - X.pdf", "reporte-x-fecha.pdf" y "X.xlsx".
+function baseArchivoProyecto_(p) { return [p.codigo, p.nombre].filter(Boolean).join('-') || 'proyecto'; }
+function nombreArchivoProyecto_(que, p) {
+  return ReportePdf.nombreArchivo_('sigso-' + que + '-' + baseArchivoProyecto_(p));
+}
 const { errorValidacion } = require('./errores');
 
 const ESTADO_PROYECTO_LABEL = {
@@ -782,7 +791,7 @@ const TONO_GANTT = { 'al-dia': 'ok', terminada: 'ok', riesgo: 'alerta', atrasada
 const LEYENDA_GANTT_V2 = [['Al día / terminada', 'ok'], ['En riesgo', 'alerta'], ['Atrasada', 'critico'], ['Bloqueada', 'info'],
   ['En revisión', 'hito'], ['Pendiente', 'neutro'], ['Semana vencida sin cerrar', 'vencida']];
 
-function piezasProyectoV2_(detalle, tareas, rendimiento, nombres, R, U, fecha) {
+function piezasProyectoV2_(detalle, tareas, rendimiento, nombres, R, U, fecha, todasPorId) {
   const at = detalle.requiere_atencion || {};
   const p = detalle.proyecto || {};
   const hoy = claveHoyChile_();
@@ -805,7 +814,13 @@ function piezasProyectoV2_(detalle, tareas, rendimiento, nombres, R, U, fecha) {
   const estado = detalle.salud === 'critico' ? 'critico' : (detalle.salud === 'riesgo' ? 'alerta' : 'ok');
   const tareaPorId = {};
   tareas.forEach((a) => { tareaPorId[a.actividad_id] = a; });
+  const hitoPorId = {};
+  (detalle.hitos || []).forEach((h) => { hitoPorId[h.hito_id] = h; });
   const plan = (rendimiento && rendimiento.plan_seguimiento) || [];
+  // "Próximos vencimientos" = lo atrasado + lo que vence en los próximos 14 días
+  // (antes eran TODAS las pendientes: la misma lista larga salía 3 veces).
+  const en14 = sumarDiasClave_(hoy, 14);
+  const proximos = vivas.filter((a) => a.semaforo === 'atrasada' || (a.fecha_compromiso && claveDia_(a.fecha_compromiso) <= en14));
   const tabla = (cols, filas, vacio) => '<div class="rp2-detalle">' + R.tabla(cols, filas, { vacio }) + '</div>';
   const pendientes = vivas.slice().sort((a, b) => ((VENCIMIENTOS_ORDEN[a.semaforo] === undefined ? 9 : VENCIMIENTOS_ORDEN[a.semaforo]) -
     (VENCIMIENTOS_ORDEN[b.semaforo] === undefined ? 9 : VENCIMIENTOS_ORDEN[b.semaforo])) ||
@@ -823,8 +838,24 @@ function piezasProyectoV2_(detalle, tareas, rendimiento, nombres, R, U, fecha) {
   ];
   const comparaCon = esperado != null ? 'vs. lo planificado (' + esperado + ' %)' : '';
 
+  // Fila de tarea para las tablas: título en negrita y, debajo, prioridad e hito.
+  const celdaTarea = (a) => {
+    const sub = [a.prioridad, a.hito_id && hitoPorId[a.hito_id] ? hitoPorId[a.hito_id].nombre : ''].filter(Boolean).join(' · ');
+    return '<span class="rp2-item"><strong>' + U.esc(a.titulo) + '</strong>' + (sub ? '<small>' + U.esc(sub) + '</small>' : '') + '</span>';
+  };
+  const filaPendiente = (a) => ({
+    tarea: celdaTarea(a),
+    resp: persona(a.responsable_email, a.responsable_nombre),
+    sit: U.badge(SEMAFORO_LABEL[a.semaforo] || a.semaforo || '—', TONO_SEMAFORO[a.semaforo] || 'neutro', true),
+    vence: a.fecha_compromiso ? fecha(a.fecha_compromiso, true) : '—', avance: a.avance_pct == null ? '—' : Math.round(a.avance_pct) + '%'
+  });
+  const colsPendientes = [
+    { campo: 'tarea', titulo: 'Tarea', html: true }, { campo: 'resp', titulo: 'Responsable' }, { campo: 'sit', titulo: 'Situación', html: true },
+    { campo: 'vence', titulo: 'Compromiso' }, { campo: 'avance', titulo: 'Avance', alinear: 'derecha' }
+  ];
+
   const P = {
-    plural, pendientesN: pendientes.length,
+    plural, pendientesN: pendientes.length, proximosN: proximos.length,
     // La frase y los 4 KPI (nivel 1 del estándar).
     linea: () => R.enUnaLinea({ estado, frase: n.texto, comparaCon, kpis: kpisPrincipales }),
     // Solo la frase con su estado y la decisión sugerida (sección "Resumen ejecutivo").
@@ -851,6 +882,8 @@ function piezasProyectoV2_(detalle, tareas, rendimiento, nombres, R, U, fecha) {
         .sort((a, b) => (a.desviacion_pp == null ? 0 : a.desviacion_pp) - (b.desviacion_pp == null ? 0 : b.desviacion_pp)).slice(0, 12);
       return conPlan.length
         ? R.ranking(conPlan.map((x) => ({ etiqueta: tareaPorId[x.actividad_id].titulo, valor: x.avance_real_pct || 0,
+            // La raya es lo planificado a hoy: una barra vacía igual dice cuánto faltaba.
+            marca: x.avance_esperado_pct, marcaTitulo: 'Planificado a hoy: ' + Math.round(x.avance_esperado_pct) + ' %',
             texto: (x.avance_real_pct == null ? '—' : Math.round(x.avance_real_pct) + '%') + ' · plan ' + Math.round(x.avance_esperado_pct) + '%',
             tono: x.desviacion_pp == null ? 'primario' : (x.desviacion_pp < -10 ? 'critico' : (x.desviacion_pp < 0 ? 'alerta' : 'ok')) })), { max: 100, sinPosicion: true })
         : R.ranking(vivas.slice(0, 12).map((a) => ({ etiqueta: a.titulo, valor: a.avance_pct || 0, texto: Math.round(a.avance_pct || 0) + '%' })), { max: 100, sinPosicion: true, vacio: 'Sin tareas abiertas.' });
@@ -868,27 +901,31 @@ function piezasProyectoV2_(detalle, tareas, rendimiento, nombres, R, U, fecha) {
       if (ok.length) b.push(plural(ok.length, 'hito completado', 'hitos completados') + ': ' + ok.slice(0, 3).map((h) => h.nombre).join(', ') + '.');
       return R.loQueVaBien(b);
     },
-    pendientes: () => tabla([
-      { campo: 'tarea', titulo: 'Tarea', html: true }, { campo: 'resp', titulo: 'Responsable' }, { campo: 'sit', titulo: 'Situación', html: true },
-      { campo: 'vence', titulo: 'Compromiso' }, { campo: 'avance', titulo: 'Avance', alinear: 'derecha' }
-    ], pendientes.map((a) => ({
-      tarea: '<span class="rp2-item"><strong>' + U.esc(a.titulo) + '</strong>' + (a.prioridad ? '<small>' + U.esc(a.prioridad) + '</small>' : '') + '</span>',
-      resp: persona(a.responsable_email, a.responsable_nombre),
-      sit: U.badge(SEMAFORO_LABEL[a.semaforo] || a.semaforo || '—', TONO_SEMAFORO[a.semaforo] || 'neutro', true),
-      vence: a.fecha_compromiso ? fecha(a.fecha_compromiso, true) : '—', avance: a.avance_pct == null ? '—' : Math.round(a.avance_pct) + '%'
-    })), 'No hay tareas pendientes.'),
+    pendientes: () => tabla(colsPendientes, pendientes.map(filaPendiente), 'No hay tareas pendientes.'),
+    proximos: () => tabla(colsPendientes, proximos.map(filaPendiente), 'Nada atrasado ni por vencer en los próximos 14 días.'),
     riesgos: () => (riesgos.length ? tabla([
       { campo: 'riesgo', titulo: 'Riesgo' }, { campo: 'nivel', titulo: 'Nivel', html: true }, { campo: 'resp', titulo: 'Responsable' }, { campo: 'mit', titulo: 'Mitigación' }
     ], riesgos.map((r) => ({ riesgo: r.descripcion, nivel: U.badge(r.nivel || '—', riesgosAltos.indexOf(r) !== -1 ? 'critico' : 'alerta', true),
       resp: r.responsable_email ? persona(r.responsable_email) : '—', mit: r.mitigacion || 'Sin plan de mitigación' })), '') : ''),
+    // Qué pasó, EN QUÉ TAREA y QUIÉN (auditoría C5: antes "24/09 · Asignada · — · —").
     bitacora: (lista) => (lista.length ? tabla([
-      { campo: 'fecha', titulo: 'Fecha' }, { campo: 'tipo', titulo: 'Qué pasó' }, { campo: 'horas', titulo: 'Horas', alinear: 'derecha' }, { campo: 'nota', titulo: 'Nota' }
-    ], lista.map((b) => ({ fecha: fecha(b.tipo === 'REGISTRO_DIA' && b.dia ? b.dia : b.timestamp, true), tipo: BITACORA_TIPO_LABEL[b.tipo] || b.tipo,
-      horas: b.horas != null && b.horas !== '' ? numeroCl_(b.horas) : '—', nota: b.nota || '—' })), '') : ''),
+      // La tarea primero: las tablas de detalle le dan a la primera columna el ancho.
+      { campo: 'tarea', titulo: 'Tarea', html: true }, { campo: 'tipo', titulo: 'Qué pasó' }, { campo: 'fecha', titulo: 'Fecha' },
+      { campo: 'quien', titulo: 'Quién' }, { campo: 'horas', titulo: 'Horas', alinear: 'derecha' }
+    ], lista.map((b) => {
+      const t = tareaPorId[b.actividad_id] || (todasPorId && todasPorId[b.actividad_id]);
+      return {
+        fecha: fecha(b.tipo === 'REGISTRO_DIA' && b.dia ? b.dia : b.timestamp, true),
+        tarea: '<span class="rp2-item"><strong>' + U.esc(t ? t.titulo : 'Tarea eliminada') + '</strong>' + (b.nota ? '<small>' + U.esc(b.nota) + '</small>' : '') + '</span>',
+        tipo: BITACORA_TIPO_LABEL[b.tipo] || b.tipo,
+        quien: b.autor_email || b.autor_nombre ? persona(b.autor_email, b.autor_nombre) : '—',
+        horas: b.horas != null && b.horas !== '' ? numeroCl_(b.horas) : '—'
+      };
+    }), '') : ''),
 
     // --- Solo en el informe configurable ---
     ficha: () => '<dl class="ot2-datos rp2-ficha">' + [
-      ['Código', p.codigo || '—'], ['Líder', persona(p.lider_email)], ['Estado', ESTADO_PROYECTO_LABEL[p.estado] || p.estado || '—'],
+      ...(p.codigo ? [['Código', p.codigo]] : []), ['Líder', persona(p.lider_email)], ['Estado', ESTADO_PROYECTO_LABEL[p.estado] || p.estado || '—'],
       ['Salud', SALUD_LABEL[detalle.salud] || detalle.salud || '—'], ['Avance', avance == null ? '—' : Math.round(avance) + '%'],
       ['Inicio', p.fecha_inicio ? fecha(p.fecha_inicio, true) : '—'], ['Fecha objetivo', p.fecha_objetivo ? fecha(p.fecha_objetivo, true) : '—']
     ].map((f) => '<div><dt>' + U.esc(f[0]) + '</dt><dd>' + U.esc(f[1]) + '</dd></div>').join('') + '</dl>' +
@@ -930,17 +967,18 @@ function piezasProyectoV2_(detalle, tareas, rendimiento, nombres, R, U, fecha) {
         ((r.por_tarea || []).length ? tabla([{ campo: 't', titulo: 'Tarea' }, { campo: 'meta', titulo: 'Meta' }, { campo: 'ritmo', titulo: 'Ritmo', alinear: 'derecha' }],
           r.por_tarea.map((t) => ({ t: t.titulo, meta: t.meta_cantidad + (t.meta_unidad ? ' ' + t.meta_unidad : ''), ritmo: t.unidades_por_dia !== '' ? t.unidades_por_dia + '/día' : '—' })), '') : '');
     },
+    // Solo lo que va DETRÁS del plan (auditoría P2): la lista completa ya está en el
+    // detalle; lo que va al día o adelantado se cuenta en una línea.
     desviaciones: () => {
-      const filas = plan.filter((x) => tareaPorId[x.actividad_id] && x.plan_fin).sort((a, b) => {
-        const na = a.desviacion_pp == null ? 1 : 0, nb = b.desviacion_pp == null ? 1 : 0;
-        return (na - nb) || (na ? 0 : a.desviacion_pp - b.desviacion_pp);
-      });
-      return tabla([{ campo: 't', titulo: 'Tarea' }, { campo: 'plan', titulo: 'Plan (fin)' }, { campo: 'esp', titulo: 'Esperado', alinear: 'derecha' },
+      const conPlan = plan.filter((x) => tareaPorId[x.actividad_id] && x.plan_fin);
+      const filas = conPlan.filter((x) => x.desviacion_pp != null && x.desviacion_pp < 0).sort((a, b) => a.desviacion_pp - b.desviacion_pp);
+      const resto = conPlan.length - filas.length;
+      return (resto ? '<p class="ot2-nota">' + U.esc(plural(resto, 'tarea va', 'tareas van') + ' al día o adelantadas, o sin medición; no se listan.') + '</p>' : '') + tabla([{ campo: 't', titulo: 'Tarea' }, { campo: 'plan', titulo: 'Plan (fin)' }, { campo: 'esp', titulo: 'Esperado', alinear: 'derecha' },
         { campo: 'real', titulo: 'Real', alinear: 'derecha' }, { campo: 'desv', titulo: 'Desviación', html: true, alinear: 'derecha' }],
       filas.map((x) => ({ t: tareaPorId[x.actividad_id].titulo, plan: fecha(x.plan_fin, true),
         esp: x.avance_esperado_pct == null ? '—' : x.avance_esperado_pct + '%', real: x.avance_real_pct == null ? '—' : x.avance_real_pct + '%',
         desv: x.desviacion_pp == null ? '—' : U.badge((x.desviacion_pp >= 0 ? '+' : '−') + Math.abs(x.desviacion_pp) + ' pp', x.desviacion_pp < -10 ? 'critico' : (x.desviacion_pp < 0 ? 'alerta' : 'ok'), true) })),
-      'Ninguna tarea tiene plan con fecha de término.');
+      'Ninguna tarea va detrás de lo planificado.');
     },
     // Carta Gantt ejecutiva: hitos y tareas por semana (lunes a domingo), hasta
     // GANTT_TOPE_SEMANAS. Mismos criterios que la versión pdfkit (inicio de la barra,
@@ -1041,7 +1079,7 @@ function cuerpoConfiguradoV2_(config, detalle, tareasFiltradas, rendimiento, bit
   if (incluye('leyenda') && !incluye('gantt') && incluye('workload')) h += nivel('leyenda', P.leyenda());
   if (incluye('hitos')) h += nivel('hitos', P.hitos() || '<p class="ot2-nota">Sin hitos.</p>');
   if (incluye('riesgos')) h += nivel('riesgos', P.riesgos() || '<p class="ot2-nota">Sin riesgos abiertos.</p>');
-  if (incluye('vencimientos')) h += nivel('vencimientos', P.pendientes(), { nota: P.plural(P.pendientesN, 'tarea pendiente', 'tareas pendientes') });
+  if (incluye('vencimientos')) h += nivel('vencimientos', P.proximos(), { nota: 'atrasadas y las que vencen en 14 días · ' + P.plural(P.proximosN, 'tarea', 'tareas') });
   if (incluye('rendimiento')) h += nivel('rendimiento', P.rendimiento());
   if (incluye('desviaciones')) h += nivel('desviaciones', P.desviaciones(), { nota: 'lo más atrasado arriba' });
   if (incluye('bitacora')) h += nivel('bitacora', P.bitacora(bitacora) || '<p class="ot2-nota">Sin actividad en el rango.</p>');
@@ -1060,7 +1098,7 @@ async function descargarReporteEstandarV2_(db, data, contexto, detalle, tareas, 
     periodo: DocV2.fecha_(p.fecha_inicio, true) + ' al ' + DocV2.fecha_(p.fecha_objetivo, true),
     filtros: [{ etiqueta: 'Líder', valor: lider }, { etiqueta: 'Estado', valor: ESTADO_PROYECTO_LABEL[p.estado] || p.estado }],
     cuerpo: cuerpoProyectoV2_(detalle, tareas, rendimiento, bitacora, nombres, R, U, DocV2.fecha_),
-    nombreArchivo: 'reporte-' + p.nombre
+    nombreArchivo: 'sigso-proyecto-' + baseArchivoProyecto_(p)
   });
 }
 
@@ -1087,7 +1125,7 @@ async function descargarReporteEstandar_(db, data, contexto, detalle, tareas, re
 
   PdfDoc.pie(doc);
   const buffer = await PdfDoc.finalizar(doc);
-  return { pdf_base64: buffer.toString('base64'), filename: 'Reporte - ' + p.nombre + '.pdf' };
+  return { pdf_base64: buffer.toString('base64'), filename: nombreArchivoProyecto_('proyecto', p) };
 }
 
 // La Carta Gantt va en una página apaisada dentro de un informe vertical: página con
@@ -1144,8 +1182,7 @@ async function descargarReporteConfiguradoV2_(db, data, contexto, detalle, tarea
     cuerpo: cuerpoConfiguradoV2_(config, detalle, tareasFiltradas, rendimiento, bitacora, nombres, R, U, DocV2.fecha_),
     cssExtra: CSS_PAGINAS_PROYECTO + ' ' + CSS_GANTT_PAPEL, tamanosCss: true
   });
-  // Mismo nombre que el informe de siempre ("Reporte - <proyecto>.pdf").
-  return { pdf_base64: r.pdf_base64, filename: 'Reporte - ' + p.nombre + '.pdf' };
+  return { pdf_base64: r.pdf_base64, filename: nombreArchivoProyecto_('informe-proyecto', p) };
 }
 
 async function descargarReporteConfigurado_(db, data, contexto, detalle, tareas, rendimiento, nombresPorEmail, config) {
@@ -1181,7 +1218,7 @@ async function descargarReporteConfigurado_(db, data, contexto, detalle, tareas,
 
   PdfDoc.pie(doc);
   const buffer = await PdfDoc.finalizar(doc);
-  return { pdf_base64: buffer.toString('base64'), filename: 'Reporte - ' + p.nombre + '.pdf' };
+  return { pdf_base64: buffer.toString('base64'), filename: nombreArchivoProyecto_('informe-proyecto', p) };
 }
 
 async function descargarReporte(db, data, contexto) {
@@ -1240,8 +1277,8 @@ async function descargarGantt(db, data, contexto) {
     titulo: p.nombre, subtitulo: 'Carta Gantt', modulo: 'Proyectos', codigo: p.codigo || '',
     periodo: DocV2.fecha_(p.fecha_inicio, true) + ' al ' + DocV2.fecha_(p.fecha_objetivo, true), filtros,
     cuerpo, horizontal: true, cssExtra: CSS_GANTT_PAPEL,
-    nombreArchivo: 'carta-gantt-' + p.nombre
+    nombreArchivo: 'sigso-carta-gantt-' + baseArchivoProyecto_(p)
   });
 }
 
-module.exports = { descargarReporte, descargarGantt, normalizarConfig_, filtrarTareas_, cuerpoProyectoV2_, cuerpoConfiguradoV2_ };
+module.exports = { descargarReporte, descargarGantt, nombreArchivoProyecto_, normalizarConfig_, filtrarTareas_, cuerpoProyectoV2_, cuerpoConfiguradoV2_ };

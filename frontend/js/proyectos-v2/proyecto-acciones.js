@@ -118,7 +118,10 @@
     var estados = Object.keys(PY.ETIQUETA_ESTADO_PROYECTO).filter(function (e) { return e !== 'CERRADO'; });
     PY.formulario({
       titulo: 'Editar proyecto',
-      campos: PY.campo('Nombre', '<input class="sx2-input" name="nombre" maxlength="160" value="' + U.esc(p.nombre) + '">') +
+      campos: '<div class="sx2-form__fila">' +
+          PY.campo('Nombre', '<input class="sx2-input" name="nombre" maxlength="160" value="' + U.esc(p.nombre) + '">') +
+          PY.campo('Código', '<input class="sx2-input" name="codigo" maxlength="30" value="' + U.esc(p.codigo || '') + '" placeholder="Ej.: PRY-2026-001">', 'Aparece en los informes y en los nombres de archivo.') +
+        '</div>' +
         PY.campo('Descripción', '<textarea class="sx2-input" name="descripcion" maxlength="2000">' + U.esc(p.descripcion || '') + '</textarea>') +
         PY.campo('Objetivo / resultado esperado', '<textarea class="sx2-input" name="objetivo" maxlength="2000">' + U.esc(p.objetivo || '') + '</textarea>') +
         '<div class="sx2-form__fila">' +

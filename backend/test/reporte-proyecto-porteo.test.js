@@ -112,7 +112,8 @@ test('descargarReporte: proyecto recien creado (sin tareas/hitos/riesgos) genera
   const res = await Reporte.descargarReporte(db, { proyecto_id: proyecto.proyecto_id }, CTX_LEO);
   assert.ok(!res._validationError, JSON.stringify(res));
   assert.ok(pdfValido_(res.pdf_base64));
-  assert.equal(res.filename, 'Reporte - Migración ERP.pdf');
+  // Auditoría 2026-09-29 (P5/P6): nombre único sigso-<qué>-<código>-<nombre>-<fecha>.
+  assert.match(res.filename, /^sigso-proyecto-pry-\d{4}-\d{3}-migracion-erp-\d{4}-\d{2}-\d{2}\.pdf$/);
 });
 
 test('descargarReporte: proyecto con tareas (en curso y terminada), hitos y riesgos genera un PDF valido', async () => {
@@ -201,7 +202,7 @@ test('descargarReporte configurado: portada+kpis+salud+desviaciones genera un PD
   }, CTX_LEO);
   assert.ok(!res._validationError, JSON.stringify(res));
   assert.ok(pdfValido_(res.pdf_base64));
-  assert.equal(res.filename, 'Reporte - Migración ERP.pdf'); // mismo nombre que el camino clasico
+  assert.match(res.filename, /^sigso-informe-proyecto-pry-\d{4}-\d{3}-migracion-erp-\d{4}-\d{2}-\d{2}\.pdf$/);
 });
 
 test('descargarReporte configurado: config vacia cae a ["ficha"] (nunca un PDF vacio)', async () => {

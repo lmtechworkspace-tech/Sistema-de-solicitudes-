@@ -117,3 +117,14 @@ completa; PDF con diseño v2 y "En una línea" + "Lo que requiere decisión"; si
   la barra, la semana de hoy, el resumen por hito, la leyenda, filtros e impresión apaisada. Cubre P1, G7, E4
   y la parte de E3 de formato; el paso completo al generador `libroExcel.js` queda para la etapa 3.
   Pendiente: las flechas de dependencias no se dibujan en el papel (en pantalla sí).
+- **Arreglo del despliegue (`e1e320a`):** los fallos intermitentes de "Desplegar backend" (83ad545, e2de0a0,
+  306b5db) eran Chromium lento en el runner de GitHub: el Acta caía al respaldo pdfkit, que usaba otro nombre de
+  archivo. Ambos usan ahora el mismo nombre, y el test de "Descargar Gantt" ya no lanza Chromium real.
+- **Etapa 3 — Informe más corto y Excel ordenado:** "Próximos vencimientos" = atrasadas + 14 días (41 → 23
+  tareas en el proyecto de prueba); "Plan · Esperado · Real" solo lo que va detrás; marca de lo planificado
+  sobre cada barra de avance; actividad reciente con tarea y quién; nombres de archivo
+  `sigso-<qué>-<código>-<nombre>-<fecha>`; código automático `PRY-AAAA-NNN` al crear y campo Código en
+  "Editar proyecto". Excel sin ID interno, una sola columna de avance, nombres en vez de correos e historial en
+  palabras con quién lo registró. Informe completo: 15 → 13 páginas.
+  No se pasó el libro al generador `libroExcel.js`: el libro propio ya tiene tipos, filtros, tonos e impresión, y
+  la Carta Gantt coloreada no cabe en ese generador.

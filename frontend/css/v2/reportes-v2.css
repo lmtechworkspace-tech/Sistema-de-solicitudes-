@@ -103,6 +103,8 @@
 .rp2-acta-firmas small { display: block; margin-top: 4px; font: var(--sx-t-micro); color: var(--sx-texto-3); text-transform: uppercase; letter-spacing: .06em; }
 .rp2-agenda time { font: 600 .8125rem/1.35 var(--fuente); color: var(--sx-texto-2); font-variant-numeric: tabular-nums; }
 .rp2-ranking__pos { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 7px; background: var(--sx-superficie-2); font: 700 .75rem/1 var(--fuente); color: var(--sx-texto-2); }
+.rp2-ranking__pista { position: relative; display: block; }
+.rp2-ranking__marca { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--sx-texto); }
 .rp2-ranking__etq { font: 500 .8125rem/1.3 var(--fuente); color: var(--sx-texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rp2-ranking__val { text-align: right; font: 700 .8125rem/1 var(--fuente); color: var(--sx-texto); font-variant-numeric: tabular-nums; }
 
@@ -227,7 +229,8 @@
 
 @media (max-width: 700px) {
   .rp2-ranking li { grid-template-columns: 24px 1fr 56px; }
-  .rp2-ranking li .sx2-barra { grid-column: 2 / 4; }
+  .rp2-ranking li .sx2-barra, .rp2-ranking li .rp2-ranking__pista { grid-column: 2 / 4; }
+  .rp2-ranking__pista .sx2-barra { grid-column: auto; }
   .rp2-ranking--comp li { grid-template-columns: 1fr minmax(72px, auto); }
   .rp2-ranking--comp li .sx2-barra { grid-column: 1 / 3; }
   .rp2-filtro { min-width: 0; flex: 1 1 140px; }
