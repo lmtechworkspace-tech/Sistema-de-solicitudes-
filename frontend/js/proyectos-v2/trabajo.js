@@ -231,8 +231,28 @@
         '</span>' +
       '</div>' +
       PY.gantt(ctx, { tareas: tareas, desde: r.desde, semanas: r.semanas, pxSemana: px, agrupar: true, densidad: densidad, dependencias: g.deps, completa: true, quieto: quieto, anchoEstimado: anchoEstimado }) +
+      avisoPlan(ctx) +
       leyenda() +
     '</div>';
+  }
+  // Auditoría 2026-09-29 (C2/G1): lo que el Gantt NO puede dibujar bien, dicho.
+  // - Tareas abiertas sin inicio planificado de verdad: ni fecha de inicio propia
+  //   ni una tarea de la que dependan, así que su barra parte el día en que
+  //   alguien las cargó (plan_inicio_origen del backend).
+  // - Tareas sin fecha comprometida: no tienen barra y no aparecen.
+  function avisoPlan(ctx) {
+    var plan = PY.planPorId(ctx);
+    var vivas = ctx.tareas.filter(function (a) { return a.estado !== 'CANCELADA'; });
+    var sinInicio = vivas.filter(function (a) {
+      var o = (plan[a.actividad_id] || {}).plan_inicio_origen;
+      return !PY.esTerminal(a) && a.fecha_compromiso && (o === 'creacion' || o === 'proyecto' || o === 'compromiso');
+    }).length;
+    var sinFecha = vivas.filter(function (a) { return !a.fecha_compromiso && !a.fecha_propuesta; }).length;
+    if (!sinInicio && !sinFecha) return '';
+    var partes = [];
+    if (sinInicio) partes.push('<strong>' + sinInicio + (sinInicio === 1 ? ' tarea abierta no tiene' : ' tareas abiertas no tienen') + ' inicio planificado</strong>: su barra parte el día en que se cargó. Indica su inicio o de qué tarea depende para que el plan muestre la secuencia.');
+    if (sinFecha) partes.push('<strong>' + sinFecha + (sinFecha === 1 ? ' tarea no aparece' : ' tareas no aparecen') + '</strong> porque no tienen fecha comprometida.');
+    return '<p class="sx2-py-gantt-aviso" role="note">' + U.ico('info', 15) + '<span>' + partes.join(' ') + '</span></p>';
   }
   function leyenda() {
     return '<div class="sx2-py-leyenda-gantt">' +

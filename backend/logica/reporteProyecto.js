@@ -113,6 +113,10 @@ function fechaCorta_(valor) {
 // Mismas frases que seccionNarrativaPdf_ (heurística determinística sobre
 // datos ya calculados, no IA): salud, avance vs. esperado, qué requiere
 // atención, próximo hito, y una decisión sugerida.
+// Número con coma decimal (es-CL), como el resto del documento: "19,6 %".
+function numeroCl_(n) { return Number(n).toLocaleString('es-CL', { maximumFractionDigits: 1 }); }
+function pctCl_(n) { return numeroCl_(n) + ' %'; }
+
 function construirNarrativa_(detalle) {
   const at = detalle.requiere_atencion || {};
   const avance = detalle.avance_pct;
@@ -120,19 +124,21 @@ function construirNarrativa_(detalle) {
   const desviacion = (avance != null && esperado != null) ? Math.round((avance - esperado) * 10) / 10 : null;
 
   const frases = [];
-  frases.push('El proyecto está en estado ' + (SALUD_LABEL[detalle.salud] || detalle.salud) +
-    (detalle.salud_penalizacion ? ' (' + detalle.salud_penalizacion + ' puntos en contra)' : '') + '.');
+  // Sin "(N puntos en contra)": el puntaje se explica en la sección Salud.
+  frases.push('El proyecto está en estado ' + (SALUD_LABEL[detalle.salud] || detalle.salud) + '.');
 
+  // "En línea" solo si la brecha es menor a 1 punto: con −2,5 pp el KPI ya
+  // sale en rojo y la frase no puede decir lo contrario (auditoría P3).
   if (avance == null) {
     frases.push('Todavía no hay tareas activas para medir avance.');
   } else if (desviacion == null) {
-    frases.push('Avance real: ' + avance + '%.');
-  } else if (desviacion < -5) {
-    frases.push('El avance real (' + avance + '%) está ' + Math.abs(desviacion) + ' puntos por debajo de lo planificado (' + esperado + '%).');
-  } else if (desviacion > 5) {
-    frases.push('El avance real (' + avance + '%) está ' + desviacion + ' puntos por encima de lo planificado (' + esperado + '%).');
+    frases.push('Avance real: ' + pctCl_(avance) + '.');
+  } else if (desviacion <= -1) {
+    frases.push('El avance real (' + pctCl_(avance) + ') va ' + numeroCl_(Math.abs(desviacion)) + ' puntos por debajo de lo planificado (' + pctCl_(esperado) + ').');
+  } else if (desviacion >= 1) {
+    frases.push('El avance real (' + pctCl_(avance) + ') va ' + numeroCl_(desviacion) + ' puntos por encima de lo planificado (' + pctCl_(esperado) + ').');
   } else {
-    frases.push('El avance real (' + avance + '%) está en línea con lo planificado (' + esperado + '%).');
+    frases.push('El avance real (' + pctCl_(avance) + ') está en línea con lo planificado (' + pctCl_(esperado) + ').');
   }
 
   const problemas = [];
@@ -220,7 +226,7 @@ function dibujarAvancePorTarea_(doc, tareas, rendimiento) {
     doc.x = PdfDoc.MARGIN;
   });
   if (activas.length > mostrar.length) {
-    doc.font('Helvetica').fontSize(8).fillColor(PdfDoc.DOC.FAINT).text('+ ' + (activas.length - mostrar.length) + ' tarea(s) más.', PdfDoc.MARGIN, doc.y);
+    doc.font('Helvetica').fontSize(8).fillColor(PdfDoc.DOC.FAINT).text('+ ' + (activas.length - mostrar.length) + ((activas.length - mostrar.length) === 1 ? ' tarea más.' : ' tareas más.'), PdfDoc.MARGIN, doc.y);
     doc.moveDown(0.4);
   }
 }
@@ -296,7 +302,7 @@ function dibujarRendimiento_(doc, rendimiento) {
   const tieneRitmo = rendimiento.promedio_unidades_dia != null;
   PdfDoc.seccion(doc, 'Rendimiento');
   PdfDoc.fichaTabla(doc, [
-    ['Entregas a tiempo', c.entregadas ? (c.a_tiempo + ' de ' + c.entregadas) : '—', 'Horas registradas', String(rendimiento.horas_totales_proyecto || '—')],
+    ['Entregas a tiempo', c.entregadas ? (c.a_tiempo + ' de ' + c.entregadas) : '—', 'Horas registradas', rendimiento.horas_totales_proyecto ? numeroCl_(rendimiento.horas_totales_proyecto) : '—'],
     ['Ritmo promedio', tieneRitmo ? rendimiento.promedio_unidades_dia + '/día' : '—', 'Tareas sin arrancar', String(rendimiento.tareas_sin_avance)]
   ]);
   if (rendimiento.por_tarea && rendimiento.por_tarea.length) {
@@ -320,7 +326,7 @@ function dibujarBitacora_(doc, bitacora) {
     bitacora.map((b) => ({
       fecha: fechaCorta_(b.tipo === 'REGISTRO_DIA' && b.dia ? b.dia : b.timestamp),
       tipo: BITACORA_TIPO_LABEL[b.tipo] || b.tipo,
-      horas: b.horas != null ? String(b.horas) : '—',
+      horas: b.horas != null && b.horas !== '' ? numeroCl_(b.horas) : '—',
       nota: b.nota || '—'
     }))
   );
@@ -386,7 +392,12 @@ function semanasGantt_(claveMin, claveMax, tope) {
 // Igual que duracionDiasTarea_ (proyectos.js): si falta fecha_creacion, la
 // barra arranca en el inicio del proyecto (o en la fecha de compromiso, a
 // falta de ambas) -- nunca se inventa una fecha de inicio que no existe.
-function inicioBarraGantt_(a, proyIniClave) {
+//
+// Auditoría 2026-09-29 (C2): si viene el plan de obtenerRendimiento, la barra
+// arranca en SU plan_inicio (propio, por dependencia o por creación) -- el
+// mismo que dibuja la pantalla y el Excel. Sin plan, el criterio de siempre.
+function inicioBarraGantt_(a, proyIniClave, plan) {
+  if (plan && plan.plan_inicio) return String(plan.plan_inicio).slice(0, 10);
   const creClave = claveDia_(a.fecha_creacion);
   const finClave = claveDia_(a.fecha_compromiso);
   if (creClave && finClave && creClave <= finClave) return creClave;
@@ -394,18 +405,21 @@ function inicioBarraGantt_(a, proyIniClave) {
   return creClave || proyIniClave || finClave;
 }
 
-function dibujarGanttEjecutivo_(doc, detalle, tareas, hitos) {
+function dibujarGanttEjecutivo_(doc, detalle, tareas, hitos, rendimiento) {
   const p = detalle.proyecto;
   const tareasConFecha = tareas.filter((a) => a.fecha_compromiso);
   if (!tareasConFecha.length && !hitos.length) return;
+  const planPorId = {};
+  ((rendimiento && rendimiento.plan_seguimiento) || []).forEach((t) => { planPorId[t.actividad_id] = t; });
 
-  const hoyClave = new Date().toISOString().slice(0, 10);
+  // "Hoy" en Chile, no en UTC: desde las 21:00 la hora UTC ya es mañana.
+  const hoyClave = claveHoyChile_();
   const proyIniClave = claveDia_(p.fecha_inicio);
   const claves = [hoyClave];
   if (proyIniClave) claves.push(proyIniClave);
   hitos.forEach((h) => { const c = claveDia_(h.fecha_objetivo); if (c) claves.push(c); });
   tareasConFecha.forEach((a) => {
-    claves.push(inicioBarraGantt_(a, proyIniClave));
+    claves.push(inicioBarraGantt_(a, proyIniClave, planPorId[a.actividad_id]));
     claves.push(claveDia_(a.fecha_compromiso));
   });
   const clavesValidas = claves.filter(Boolean);
@@ -476,7 +490,7 @@ function dibujarGanttEjecutivo_(doc, detalle, tareas, hitos) {
     const y = doc.y;
     doc.font('Helvetica').fontSize(6.5).fillColor(PdfDoc.DOC.INK_SOFT)
       .text(a.titulo, PdfDoc.MARGIN + 4, y, { width: anchoLabel - 8, height: alturaFila, ellipsis: true });
-    const barIni = inicioBarraGantt_(a, proyIniClave);
+    const barIni = inicioBarraGantt_(a, proyIniClave, planPorId[a.actividad_id]);
     const fin = claveDia_(a.fecha_compromiso);
     const terminal = a.estado === 'TERMINADA' || a.estado === 'CANCELADA';
     const color = GANTT_COLOR[a.semaforo] || GANTT_COLOR.pendiente;
@@ -649,7 +663,7 @@ function dibujarKpis_(doc, detalle, rendimiento) {
     [avance == null ? '—' : avance + '%', 'Avance real', ''],
     [desvValor, desvEtiqueta, hayDesv ? (desv < 0 ? 'alerta' : 'ok') : ''],
     [c.entregadas ? c.a_tiempo + '/' + c.entregadas : '—', 'Entregas a tiempo', ''],
-    [horas ? (Math.round(horas * 10) / 10) + 'h' : '—', 'Horas registradas', ''],
+    [horas ? numeroCl_(horas) + ' h' : '—', 'Horas registradas', ''],
     [at.tareas_vencidas || 0, 'Tareas vencidas', at.tareas_vencidas > 0 ? 'alerta' : ''],
     [at.tareas_bloqueadas || 0, 'Bloqueadas', at.tareas_bloqueadas > 0 ? 'alerta' : ''],
     [at.hitos_atrasados || 0, 'Hitos atrasados', at.hitos_atrasados > 0 ? 'alerta' : '']
@@ -672,10 +686,10 @@ function dibujarKpis_(doc, detalle, rendimiento) {
 }
 
 const SALUD_FACTOR_LABEL = {
-  hito_vencido: 'Hito(s) vencido(s)', tarea_critica_atrasada: 'Tarea(s) crítica(s) atrasada(s)',
-  tarea_atrasada: 'Tarea(s) atrasada(s)', bloqueo_estancado: 'Bloqueo(s) estancado(s)',
-  tarea_bloqueada: 'Tarea(s) bloqueada(s)', sin_actualizar: 'Tarea(s) sin actualizar',
-  entregable_vencido: 'Entregable(s) vencido(s)', entregable_observado: 'Entregable(s) observado(s)'
+  hito_vencido: 'Hitos vencidos', tarea_critica_atrasada: 'Tareas críticas atrasadas',
+  tarea_atrasada: 'Tareas atrasadas', bloqueo_estancado: 'Bloqueos estancados',
+  tarea_bloqueada: 'Tareas bloqueadas', sin_actualizar: 'Tareas sin actualizar',
+  entregable_vencido: 'Entregables vencidos', entregable_observado: 'Entregables observados'
 };
 function dibujarSalud_(doc, detalle) {
   PdfDoc.seccion(doc, 'Salud del proyecto');
@@ -870,7 +884,7 @@ function piezasProyectoV2_(detalle, tareas, rendimiento, nombres, R, U, fecha) {
     bitacora: (lista) => (lista.length ? tabla([
       { campo: 'fecha', titulo: 'Fecha' }, { campo: 'tipo', titulo: 'Qué pasó' }, { campo: 'horas', titulo: 'Horas', alinear: 'derecha' }, { campo: 'nota', titulo: 'Nota' }
     ], lista.map((b) => ({ fecha: fecha(b.tipo === 'REGISTRO_DIA' && b.dia ? b.dia : b.timestamp, true), tipo: BITACORA_TIPO_LABEL[b.tipo] || b.tipo,
-      horas: b.horas != null && b.horas !== '' ? String(b.horas) : '—', nota: b.nota || '—' })), '') : ''),
+      horas: b.horas != null && b.horas !== '' ? numeroCl_(b.horas) : '—', nota: b.nota || '—' })), '') : ''),
 
     // --- Solo en el informe configurable ---
     ficha: () => '<dl class="ot2-datos rp2-ficha">' + [
@@ -910,7 +924,7 @@ function piezasProyectoV2_(detalle, tareas, rendimiento, nombres, R, U, fecha) {
     },
     rendimiento: () => {
       const r = rendimiento || {};
-      const filas = [['Entregas a tiempo', c.entregadas ? c.a_tiempo + ' de ' + c.entregadas : '—'], ['Horas registradas', r.horas_totales_proyecto ? String(r.horas_totales_proyecto) : '—'],
+      const filas = [['Entregas a tiempo', c.entregadas ? c.a_tiempo + ' de ' + c.entregadas : '—'], ['Horas registradas', r.horas_totales_proyecto ? numeroCl_(r.horas_totales_proyecto) : '—'],
         ['Ritmo promedio', r.promedio_unidades_dia != null ? r.promedio_unidades_dia + '/día' : '—'], ['Tareas sin arrancar', String(r.tareas_sin_avance == null ? '—' : r.tareas_sin_avance)]];
       return '<dl class="ot2-datos rp2-ficha">' + filas.map((f) => '<div><dt>' + U.esc(f[0]) + '</dt><dd>' + U.esc(f[1]) + '</dd></div>').join('') + '</dl>' +
         ((r.por_tarea || []).length ? tabla([{ campo: 't', titulo: 'Tarea' }, { campo: 'meta', titulo: 'Meta' }, { campo: 'ritmo', titulo: 'Ritmo', alinear: 'derecha' }],
@@ -935,9 +949,12 @@ function piezasProyectoV2_(detalle, tareas, rendimiento, nombres, R, U, fecha) {
       const proyIni = claveDia_(p.fecha_inicio);
       const conFecha = tareas.filter((a) => a.fecha_compromiso);
       if (!conFecha.length && !hitos.length) return '<p class="ot2-nota">Sin tareas con fecha comprometida ni hitos que graficar.</p>';
-      const hoyUtc = new Date().toISOString().slice(0, 10);
+      // "Hoy" en Chile (no en UTC) y el mismo inicio de plan que la pantalla.
+      const hoyUtc = hoy;
+      const planPorId = {};
+      ((rendimiento && rendimiento.plan_seguimiento) || []).forEach((t) => { planPorId[t.actividad_id] = t; });
       const claves = [hoyUtc, proyIni].concat(hitos.map((h) => claveDia_(h.fecha_objetivo)))
-        .concat(...conFecha.map((a) => [inicioBarraGantt_(a, proyIni), claveDia_(a.fecha_compromiso)])).filter(Boolean);
+        .concat(...conFecha.map((a) => [inicioBarraGantt_(a, proyIni, planPorId[a.actividad_id]), claveDia_(a.fecha_compromiso)])).filter(Boolean);
       const min = claves.reduce((m, x) => (x < m ? x : m)), max = claves.reduce((m, x) => (x > m ? x : m));
       const semanas = semanasGantt_(min, max, GANTT_TOPE_SEMANAS);
       if (!semanas.length) return '';
@@ -949,7 +966,7 @@ function piezasProyectoV2_(detalle, tareas, rendimiento, nombres, R, U, fecha) {
           '<td' + (esHoy(s) ? ' class="rp2-gantt--hoy"' : '') + '>' + (obj && obj >= s.inicio && obj <= s.fin ? '<span class="rp2-gantt__rombo" title="' + U.esc(fecha(h.fecha_objetivo, true)) + '"></span>' : '') + '</td>').join('') + '</tr>';
       };
       const filaTarea = (a) => {
-        const ini = inicioBarraGantt_(a, proyIni), fin = claveDia_(a.fecha_compromiso);
+        const ini = inicioBarraGantt_(a, proyIni, planPorId[a.actividad_id]), fin = claveDia_(a.fecha_compromiso);
         const terminal = a.estado === 'TERMINADA' || a.estado === 'CANCELADA';
         const tono = TONO_GANTT[a.semaforo] || 'neutro';
         return '<tr><td class="rp2-gantt__et"><span class="rp2-item"><strong>' + U.esc(a.titulo) + '</strong><small>' + U.esc(persona(a.responsable_email, a.responsable_nombre)) + '</small></span></td>' +
@@ -1113,7 +1130,7 @@ async function descargarReporteConfigurado_(db, data, contexto, detalle, tareas,
   if (incluye('kpis')) dibujarKpis_(doc, detalle, rendimiento);
   if (incluye('salud')) dibujarSalud_(doc, detalle);
   if (incluye('mini_gantt')) dibujarAvancePorTarea_(doc, tareasFiltradas, rendimiento);
-  if (incluye('gantt')) dibujarGanttEjecutivo_(doc, detalle, tareasFiltradas, detalle.hitos || []);
+  if (incluye('gantt')) dibujarGanttEjecutivo_(doc, detalle, tareasFiltradas, detalle.hitos || [], rendimiento);
   if (incluye('workload')) dibujarCargaTrabajo_(doc, tareasFiltradas, nombresPorEmail);
   if (incluye('leyenda') && (incluye('gantt') || incluye('workload'))) dibujarLeyendaGantt_(doc);
   if (incluye('hitos')) dibujarHitos_(doc, detalle.hitos || []);

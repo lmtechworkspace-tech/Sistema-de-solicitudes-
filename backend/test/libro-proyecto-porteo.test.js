@@ -194,5 +194,6 @@ test('descargarLibro: Responsables agrupa por persona y suma total/completadas/e
   assert.ok(hojaResp.includes('<c r="C2"><v>0</v></c>'), 'Completadas debe ser 0 (ninguna terminada en el escenario)');
   assert.ok(hojaResp.includes('<c r="D2"><v>2</v></c>'), 'En curso debe ser 2');
   assert.ok(hojaResp.includes('<c r="E2"><v>2</v></c>'), 'Atrasadas debe ser 2 (fecha_compromiso muy en el pasado)');
-  assert.ok(hojaResp.includes('100%'), 'Carga relativa del único responsable del proyecto debe ser 100%');
+  // Auditoría 2026-09-29 (E2): número con formato % (estilo 13), no el texto "100%".
+  assert.ok(hojaResp.includes('<c r="F2" s="13"><v>1</v></c>'), 'Carga relativa del único responsable del proyecto debe ser 100 % (1 con formato de porcentaje)');
 });

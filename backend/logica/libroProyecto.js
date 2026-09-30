@@ -16,14 +16,14 @@
  * de una celda, así que no hay coordenadas ni paginación que calcular a
  * mano -- se porta completo, sin recortar alcance.
  *
- * Fechas: se escriben como TEXTO dd/mm/aaaa (no serial de Excel), igual que
- * el .gs. Para timestamps reales (fecha_compromiso, etc.) se resuelve el
- * día de calendario vía Intl con zona horaria America/Santiago -- igual que
- * fechaCorta_ en proyectos.js. Para claves ya-solo-día (plan_inicio, que
- * viene de claveFecha_ en proyectos.js como 'AAAA-MM-DD') NUNCA se
- * reinterpreta con una zona horaria: es una etiqueta de día, no un
- * instante -- mismo criterio que utils.js (anteriorDiaClave_/
- * siguienteDiaClave_) documenta explícitamente.
+ * Fechas (auditoría 2026-09-29): se escriben como FECHA REAL de Excel
+ * (número de serie con formato dd/mm/aaaa), así se pueden ordenar y filtrar.
+ * El día se resuelve con Utils.claveDiaCampo_: un campo de fecha
+ * (fecha_compromiso, fecha_objetivo, plan_inicio…) es una etiqueta de día y
+ * se lee tal cual -- antes se llevaba la medianoche UTC a la hora de Chile y
+ * el 03/09 salía 02/09. Solo un instante real (fecha_terminada, timestamp de
+ * la bitácora) se lleva al día de calendario de America/Santiago.
+ * Porcentajes: número con formato % (no texto "19.6%").
  */
 
 const Proyectos = require('./proyectos');
@@ -48,12 +48,15 @@ const XLSX_EST = {
     pendiente: 9
   },
   BARRA_ATRASO: 10,
-  HITO_MARCA: 11
+  HITO_MARCA: 11,
+  FECHA: 12,
+  PORCENTAJE: 13
 };
 
 function stylesXmlXlsx_() {
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<numFmts count="2"><numFmt numFmtId="164" formatCode="dd/mm/yyyy"/><numFmt numFmtId="165" formatCode="0.0%"/></numFmts>' +
     '<fonts count="4">' +
       '<font><sz val="11"/><name val="Calibri"/></font>' +
       '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>' +
@@ -76,7 +79,7 @@ function stylesXmlXlsx_() {
     '</fills>' +
     '<borders count="1"><border/></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="12">' +
+    '<cellXfs count="14">' +
       '<xf xfId="0" fontId="0" fillId="0" borderId="0"/>' +
       '<xf xfId="0" fontId="1" fillId="2" borderId="0" applyFont="1" applyFill="1"><alignment vertical="center"/></xf>' +
       '<xf xfId="0" fontId="2" fillId="10" borderId="0" applyFont="1" applyFill="1"/>' +
@@ -89,6 +92,8 @@ function stylesXmlXlsx_() {
       '<xf xfId="0" fontId="0" fillId="8" borderId="0" applyFill="1"/>' +
       '<xf xfId="0" fontId="0" fillId="9" borderId="0" applyFill="1"/>' +
       '<xf xfId="0" fontId="2" fillId="0" borderId="0" applyFont="1"><alignment horizontal="center"/></xf>' +
+      '<xf xfId="0" numFmtId="164" fontId="0" fillId="0" borderId="0" applyNumberFormat="1"/>' +
+      '<xf xfId="0" numFmtId="165" fontId="0" fillId="0" borderId="0" applyNumberFormat="1"/>' +
     '</cellXfs>' +
     '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
     '</styleSheet>';
@@ -194,18 +199,23 @@ function claveDeFecha_(valor) {
   if (isNaN(f.getTime())) return null;
   return Utils.claveDia_(f, TZ);
 }
-// dd/mm/aaaa para mostrar. Si `valor` ya es una clave de solo-día
-// (AAAA-MM-DD, ej. plan_inicio de obtenerRendimiento) se reordena como
-// texto -- NUNCA se reinterpreta con new Date()+timezone, porque ya es una
-// etiqueta de día, no un instante (ver cabecera del archivo).
+// dd/mm/aaaa como TEXTO (solo para frases, ej. el período del Resumen).
+function fechaTextoXlsx_(valor) {
+  const c = Utils.claveDiaCampo_(valor, TZ);
+  return c ? c.slice(8, 10) + '/' + c.slice(5, 7) + '/' + c.slice(0, 4) : '';
+}
+// Celda de FECHA real de Excel: número de serie (días desde 1899-12-30) con
+// formato dd/mm/aaaa. Vacía si no hay fecha.
 function fechaXlsx_(valor) {
-  if (!valor) return '';
-  const s = String(valor);
-  const soloDia = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-  if (soloDia) return soloDia[3] + '/' + soloDia[2] + '/' + soloDia[1];
-  try {
-    return new Intl.DateTimeFormat('es-CL', { timeZone: TZ, day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(valor));
-  } catch (err) { return s.slice(0, 10); }
+  const c = Utils.claveDiaCampo_(valor, TZ);
+  if (!c) return '';
+  const serie = (Date.UTC(+c.slice(0, 4), +c.slice(5, 7) - 1, +c.slice(8, 10)) - Date.UTC(1899, 11, 30)) / 86400000;
+  return { v: serie, t: 'n', s: XLSX_EST.FECHA };
+}
+// Porcentaje 0-100 -> celda numérica con formato 0,0 %.
+function porcentajeXlsx_(pct) {
+  if (pct === null || pct === undefined || pct === '' || isNaN(Number(pct))) return '';
+  return { v: Math.round(Number(pct) * 10) / 1000, t: 'n', s: XLSX_EST.PORCENTAJE };
 }
 function sumarDiasClave_(clave, n) {
   const partes = clave.split('-').map(Number);
@@ -226,9 +236,12 @@ function semanasXlsx_(claveMin, claveMax, tope) {
   }
   return semanas;
 }
-function inicioBarraClave_(a, proyIniClave) {
+function inicioBarraClave_(a, proyIniClave, plan) {
+  // El inicio de plan que calcula obtenerRendimiento (propio, por dependencia
+  // o por creación): el MISMO que dibuja la Carta Gantt de la pantalla.
+  if (plan && plan.plan_inicio) return Utils.claveDiaCampo_(plan.plan_inicio, TZ);
   const cre = claveDeFecha_(a.fecha_creacion);
-  const com = claveDeFecha_(a.fecha_compromiso);
+  const com = Utils.claveDiaCampo_(a.fecha_compromiso, TZ) || null;
   if (cre !== null && com !== null) {
     if (cre <= com) return cre;
     if (proyIniClave !== null && proyIniClave <= com) return proyIniClave;
@@ -240,7 +253,7 @@ function inicioBarraClave_(a, proyIniClave) {
 // --- armado del libro del proyecto ------------------------------------------
 const XLSX_ESTADO_TAREA_ = {
   NO_INICIADA: 'Sin empezar', EN_CURSO: 'En curso', BLOQUEADA: 'Bloqueada',
-  EN_REVISION: 'En revision', TERMINADA: 'Terminada', CANCELADA: 'Cancelada'
+  EN_REVISION: 'En revisión', TERMINADA: 'Terminada', CANCELADA: 'Cancelada'
 };
 const XLSX_ESTADO_HITO_ = { PENDIENTE: 'Pendiente', EN_CURSO: 'En curso', COMPLETADO: 'Completado', CANCELADO: 'Cancelado' };
 
@@ -253,7 +266,7 @@ function xlsxGanttProyecto_(detalle, tareas, rendimiento, bitacora) {
 
   const hojas = [
     hojaResumenXlsx_(detalle, tareas, hitos),
-    hojaCartaGanttXlsx_(p, tareas, hitos),
+    hojaCartaGanttXlsx_(p, tareas, hitos, planPorId),
     hojaTareasXlsx_(tareas, hitos, planPorId),
     hojaHitosXlsx_(hitos, tareas)
   ];
@@ -284,13 +297,13 @@ function hojaResumenXlsx_(detalle, tareas, hitos) {
     nombre: 'Resumen',
     cols: [{ min: 1, max: 1, ancho: 26 }, { min: 2, max: 2, ancho: 40 }],
     filas: [
-      [{ v: 'CARTA GANTT', s: B }],
+      [{ v: 'LIBRO DEL PROYECTO', s: B }],
       [{ v: p.nombre || '', s: B }],
       [],
-      par('Codigo', p.codigo || '-'),
-      par('Periodo', fechaXlsx_(p.fecha_inicio) + ' - ' + fechaXlsx_(p.fecha_objetivo)),
-      par('Estado', (detalle.salud_etiqueta || detalle.salud || '') + ''),
-      par('Avance general', (detalle.avance_pct === null || detalle.avance_pct === undefined) ? '-' : detalle.avance_pct + '%'),
+      par('Código', p.codigo || '-'),
+      par('Período', fechaTextoXlsx_(p.fecha_inicio) + ' - ' + fechaTextoXlsx_(p.fecha_objetivo)),
+      par('Salud', (detalle.salud_etiqueta || detalle.salud || '') + ''),
+      par('Avance general', (detalle.avance_pct === null || detalle.avance_pct === undefined) ? '-' : porcentajeXlsx_(detalle.avance_pct)),
       [],
       [{ v: 'Hitos', s: T }, { v: hitos.length, t: 'n' }],
       [{ v: 'Tareas', s: T }, { v: total, t: 'n' }],
@@ -302,19 +315,20 @@ function hojaResumenXlsx_(detalle, tareas, hitos) {
   };
 }
 
-function hojaCartaGanttXlsx_(p, tareas, hitos) {
+function hojaCartaGanttXlsx_(p, tareas, hitos, planPorId) {
+  planPorId = planPorId || {};
   const H = XLSX_EST.HEADER, HITOEST = XLSX_EST.BOLD, MARCA = XLSX_EST.HITO_MARCA;
   const tareasConFecha = tareas.filter((t) => t.fecha_compromiso);
   const ahoraClave = Utils.claveDia_(new Date(), TZ);
-  const proyIniClave = p.fecha_inicio ? claveDeFecha_(p.fecha_inicio) : null;
+  const proyIniClave = p.fecha_inicio ? (Utils.claveDiaCampo_(p.fecha_inicio, TZ) || null) : null;
   const claves = [ahoraClave];
   if (proyIniClave) claves.push(proyIniClave);
-  const proyFinClave = p.fecha_objetivo ? claveDeFecha_(p.fecha_objetivo) : null;
+  const proyFinClave = p.fecha_objetivo ? (Utils.claveDiaCampo_(p.fecha_objetivo, TZ) || null) : null;
   if (proyFinClave) claves.push(proyFinClave);
-  hitos.forEach((h) => { const c = claveDeFecha_(h.fecha_objetivo); if (c) claves.push(c); });
+  hitos.forEach((h) => { const c = Utils.claveDiaCampo_(h.fecha_objetivo, TZ); if (c) claves.push(c); });
   tareasConFecha.forEach((a) => {
-    claves.push(inicioBarraClave_(a, proyIniClave));
-    const c = claveDeFecha_(a.fecha_compromiso);
+    claves.push(inicioBarraClave_(a, proyIniClave, planPorId[a.actividad_id]));
+    const c = Utils.claveDiaCampo_(a.fecha_compromiso, TZ);
     if (c) claves.push(c);
   });
   const claveMin = claves.reduce((m, c) => (m === null || c < m) ? c : m, null);
@@ -326,8 +340,8 @@ function hojaCartaGanttXlsx_(p, tareas, hitos) {
   semanas.forEach((s) => encabezado.push({ v: s.etiqueta, s: H }));
 
   function celdasBarra_(a) {
-    const barIni = inicioBarraClave_(a, proyIniClave);
-    const fin = claveDeFecha_(a.fecha_compromiso);
+    const barIni = inicioBarraClave_(a, proyIniClave, planPorId[a.actividad_id]);
+    const fin = Utils.claveDiaCampo_(a.fecha_compromiso, TZ);
     const terminal = (a.estado === 'TERMINADA' || a.estado === 'CANCELADA');
     const estiloBarra = XLSX_EST.BARRA[a.semaforo] || XLSX_EST.BARRA.pendiente;
     return semanas.map((s) => {
@@ -344,7 +358,7 @@ function hojaCartaGanttXlsx_(p, tareas, hitos) {
       a.titulo || '',
       a.responsable_nombre || a.responsable_email || '',
       XLSX_ESTADO_TAREA_[a.estado] || a.estado || '',
-      fechaXlsx_(inicioBarraClave_(a, proyIniClave)),
+      fechaXlsx_(inicioBarraClave_(a, proyIniClave, planPorId[a.actividad_id])),
       fechaXlsx_(a.fecha_compromiso)
     ];
     return base.concat(celdasBarra_(a));
@@ -355,11 +369,11 @@ function hojaCartaGanttXlsx_(p, tareas, hitos) {
     if (a.hito_id && hitos.some((h) => h.hito_id === a.hito_id)) (porHito[a.hito_id] = porHito[a.hito_id] || []).push(a);
     else sinHito.push(a);
   });
-  const porFin = (a, b) => new Date(a.fecha_compromiso) - new Date(b.fecha_compromiso);
+  const porFin = (a, b) => Utils.claveDiaCampo_(a.fecha_compromiso, TZ).localeCompare(Utils.claveDiaCampo_(b.fecha_compromiso, TZ));
 
   const filas = [encabezado];
   hitos.forEach((h) => {
-    const objClave = claveDeFecha_(h.fecha_objetivo);
+    const objClave = Utils.claveDiaCampo_(h.fecha_objetivo, TZ);
     const fila = [{ v: h.nombre, s: HITOEST }, '', '', { v: XLSX_ESTADO_HITO_[h.estado] || h.estado, s: HITOEST }, '', ''];
     semanas.forEach((s) => fila.push((objClave >= s.inicioClave && objClave <= s.finClave) ? { v: '◆', s: MARCA } : null));
     filas.push(fila);
@@ -381,7 +395,7 @@ function hojaCartaGanttXlsx_(p, tareas, hitos) {
 function hojaTareasXlsx_(tareas, hitos, planPorId) {
   const H = XLSX_EST.HEADER;
   const hitoNombre = {}; hitos.forEach((h) => { hitoNombre[h.hito_id] = h.nombre; });
-  const enc = ['ID', 'Hito', 'Tarea', 'Responsable', 'Estado', 'Inicio plan', 'Fin plan', 'Avance', 'Esperado', 'Real', 'Desviacion (pp)']
+  const enc = ['ID', 'Hito', 'Tarea', 'Responsable', 'Estado', 'Inicio plan', 'Fin plan', 'Avance', 'Esperado', 'Real', 'Desviación (pp)']
     .map((t) => ({ v: t, s: H }));
   const filas = [enc];
   tareas.forEach((a) => {
@@ -424,7 +438,7 @@ const ESTADO_PLAZO_LABEL_XLSX_ = {
 function hojaControlPlazosXlsx_(tareas, planPorId) {
   const H = XLSX_EST.HEADER;
   const enc = ['Tarea', 'Responsable', 'Inicio plan', 'Fin plan', 'Inicio real', 'Fin real',
-    'Duracion plan (d)', 'Duracion real (d)', 'Desviacion (d)', 'Estado'].map((t) => ({ v: t, s: H }));
+    'Duración plan (d)', 'Duración real (d)', 'Desviación (d)', 'Estado'].map((t) => ({ v: t, s: H }));
   const filas = [enc];
   tareas.forEach((a) => {
     const plan = planPorId[a.actividad_id] || {};
@@ -480,7 +494,7 @@ function hojaResponsablesXlsx_(tareas) {
       filas.push([
         r.nombre,
         { v: r.total, t: 'n' }, { v: r.completadas, t: 'n' }, { v: r.enCurso, t: 'n' }, { v: r.atrasadas, t: 'n' },
-        Math.round((r.total / totalGeneral) * 1000) / 10 + '%'
+        porcentajeXlsx_((r.total / totalGeneral) * 100)
       ]);
     });
   return {
@@ -520,7 +534,7 @@ function hojaHistorialXlsx_(bitacora, tareasPorId) {
   bitacora.slice().sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0))
     .forEach((b) => {
       const tarea = tareasPorId[b.actividad_id];
-      const etiqueta = (b.tipo === 'REGISTRO_DIA') ? (b.estado_dia || 'Registro del dia') : (b.tipo || '');
+      const etiqueta = (b.tipo === 'REGISTRO_DIA') ? (b.estado_dia || 'Registro del día') : (b.tipo || '');
       filas.push([
         fechaXlsx_(b.dia || b.timestamp),
         tarea ? (tarea.titulo || '') : '',

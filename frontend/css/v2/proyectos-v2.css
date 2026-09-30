@@ -320,6 +320,12 @@ body:has(.sx2-py-gantt-card--completa) .sx2-cambio-seccion { animation: none; }
 .sx2-py-kcard__fecha { display: inline-flex; align-items: center; gap: 4px; font: var(--sx-t-micro); color: var(--sx-texto-3); }
 .sx2-py-kcard__fecha--vencida { color: var(--sx-critico); font-weight: 600; }
 
+.sx2-py-gantt-aviso {
+  display: flex; gap: var(--sx-e-2); align-items: flex-start; margin: var(--sx-e-4) 0 0; padding: var(--sx-e-3) var(--sx-e-4);
+  border-radius: var(--sx-radio-sm); background: var(--sx-info-suave); color: var(--sx-texto-2); font: var(--sx-t-chico); line-height: 1.5;
+}
+.sx2-py-gantt-aviso svg { flex-shrink: 0; margin-top: 2px; color: var(--sx-info); }
+.sx2-py-gantt-aviso strong { color: var(--sx-texto); }
 .sx2-py-leyenda-gantt {
   display: flex; flex-wrap: wrap; gap: var(--sx-e-4); margin-top: var(--sx-e-4); padding-top: var(--sx-e-3);
   border-top: 1px solid var(--sx-borde-suave); font: var(--sx-t-micro); color: var(--sx-texto-2);

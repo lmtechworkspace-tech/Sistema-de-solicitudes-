@@ -63,6 +63,22 @@ function claveDia_(fecha, tz) {
   return formateadorDia_(tz).format(fecha); // en-CA formatea como YYYY-MM-DD
 }
 
+// Un campo de FECHA (compromiso, objetivo, inicio de plan) es una etiqueta de
+// día: se guarda como 'AAAA-MM-DD' o como medianoche UTC
+// ('AAAA-MM-DDT00:00:00.000Z', lo que dejan algunas cargas). Se lee TAL CUAL,
+// sin zona horaria: llevar esa medianoche UTC a la hora de Chile la corría al
+// día anterior (el 03/09 salía 02/09 en el Excel). Solo un instante real (con
+// hora) se lleva al día de calendario de `tz`.
+const RE_DIA_ETIQUETA_ = /^(\d{4}-\d{2}-\d{2})(?:$|T00:00(?::00(?:\.0+)?)?(?:Z|[+-]00:?00)?$)/;
+function claveDiaCampo_(valor, tz) {
+  if (valor === null || valor === undefined || valor === '') return '';
+  const s = valor instanceof Date ? (isNaN(valor.getTime()) ? '' : valor.toISOString()) : String(valor).trim();
+  const m = RE_DIA_ETIQUETA_.exec(s);
+  if (m) return m[1];
+  const f = new Date(s);
+  return isNaN(f.getTime()) ? '' : claveDia_(f, tz || 'America/Santiago');
+}
+
 // Convierte una hora de reloj local al instante UTC correspondiente.
 // Iteracion de punto fijo (2 pasadas) para resolver el offset incluso el
 // dia del cambio de horario de verano. Memoizado por (dia, hora, minuto,
@@ -214,7 +230,7 @@ function restarDiasHabiles_(desde, dias, opciones) {
 
 module.exports = {
   horasHabilesEntre,
-  claveDia_,
+  claveDia_, claveDiaCampo_,
   sumarDiasHabiles_, restarDiasHabiles_, esDiaHabil_, siguienteDiaClave_, anteriorDiaClave_, diaSemanaClave_,
   // Expuestos para los tests de memoizacion (mismo motivo que en el .gs).
   formateadorOffset_, formateadorDia_, offsetMinutos_, instanteLocal_

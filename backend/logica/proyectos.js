@@ -108,10 +108,13 @@ function normalizarEmail_(email) { return String(email || '').trim().toLowerCase
 function leer_(db, hoja) { return leerFilas_(db, hoja, COLUMNAS[hoja]); }
 function leerSeguro_(db, hoja) { try { return leer_(db, hoja); } catch (err) { return []; } }
 function obtenerFeriados_(db) { try { return Cumplimiento.obtenerFeriados(db); } catch (err) { return []; } }
+// Solo se usa con campos de FECHA (compromiso, objetivo): etiqueta de día,
+// se lee tal cual (Utils.claveDiaCampo_) -- llevar su medianoche UTC a la hora
+// de Chile la corría al día anterior ("Venció 20-09" siendo el 21).
 function fechaCorta_(valor) {
   if (!valor) return '—';
-  try { return new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(valor)).replace(/\//g, '-'); }
-  catch (err) { return String(valor).slice(0, 10); }
+  const c = Utils.claveDiaCampo_(valor, 'America/Santiago');
+  return c ? c.slice(8, 10) + '-' + c.slice(5, 7) + '-' + c.slice(0, 4) : String(valor).slice(0, 10);
 }
 
 // --- permisos (gate fino: membresia en PROYECTO_INTEGRANTES) ---------------
@@ -273,7 +276,9 @@ function calcularSaludProyecto_(db, proyecto, tareas, hitos, entregables) {
   const ahora = new Date();
   function anota(bucket, factor, cantidad, texto) {
     const puntos = cantidad * SALUD_PESOS_[factor];
-    bucket.push(cantidad + texto);
+    // "1 hito vencido" / "7 tareas críticas atrasadas": el plural se resuelve
+    // acá, no "(s)" crudo en la pantalla y en el PDF (auditoría P3).
+    bucket.push(cantidad + texto.replace(/\(es\)/g, cantidad === 1 ? '' : 'es').replace(/\(s\)/g, cantidad === 1 ? '' : 's'));
     desglose.push({ factor, cantidad, puntos });
   }
 
@@ -291,7 +296,24 @@ function calcularSaludProyecto_(db, proyecto, tareas, hitos, entregables) {
   if (bloqueoEstancado.length > 0) anota(motivosCriticos, 'bloqueo_estancado', bloqueoEstancado.length, ' bloqueo(s) estancado(s) (2+ días hábiles)');
   else if (bloqueadas.length > 0) anota(motivosRiesgo, 'tarea_bloqueada', bloqueadas.length, ' tarea(s) bloqueada(s)');
 
-  const sinActualizar = activas.filter((a) => a.ultima_actualizacion && Utils.horasHabilesEntre(a.ultima_actualizacion, ahora, { feriados }) / 9 >= 5);
+  // Auditoría 2026-09-29 (C3): "sin actualizar" es una tarea que DEBERÍA
+  // estar moviéndose y nadie la toca. Antes contaba todas las activas -- las
+  // terminadas y las que aún no les toca empezar también --, y un proyecto sano
+  // salía "Crítico" (46 de 51 tareas, −184 puntos). Quedan fuera: terminadas,
+  // canceladas, bloqueadas (tienen su propio factor) y no iniciadas cuyo inicio
+  // planificado todavía no llega -- o que no tienen un inicio planificado de
+  // verdad (solo la fecha en que se cargaron): no se sabe cuándo debían partir.
+  const hoyClave = Utils.claveDia_(ahora, 'America/Santiago');
+  const porIdSalud = {};
+  activas.forEach((a) => { porIdSalud[a.actividad_id] = a; });
+  const iniProySalud = proyecto.fecha_inicio ? claveFecha_(proyecto.fecha_inicio) : '';
+  const deberiaMoverse = (a) => {
+    if (['TERMINADA', 'CANCELADA', 'BLOQUEADA'].indexOf(a.estado) !== -1) return false;
+    if (a.estado !== 'NO_INICIADA') return true;
+    const ini = planInicioConOrigen_(a, claveFecha_(a.fecha_creacion), claveFecha_(a.fecha_compromiso), iniProySalud, porIdSalud);
+    return (ini.origen === 'propio' || ini.origen === 'dependencia') && ini.clave <= hoyClave;
+  };
+  const sinActualizar = activas.filter((a) => deberiaMoverse(a) && a.ultima_actualizacion && Utils.horasHabilesEntre(a.ultima_actualizacion, ahora, { feriados }) / 9 >= 5);
   if (sinActualizar.length > 0) anota(motivosRiesgo, 'sin_actualizar', sinActualizar.length, ' tarea(s) sin actualizar hace 5+ días hábiles');
 
   const entregablesVigentes = (entregables || []).filter((e) => e.estado !== 'APROBADO' && e.estado !== 'CANCELADO');
@@ -361,11 +383,14 @@ function calcularAvanceEsperado_(fechaInicio, fechaFin, ahora) {
 const ESTADO_PLAZO_UMBRAL_DIAS_RIESGO_ = 2;
 const ESTADO_PLAZO_DEFICIT_AVANCE_RIESGO_PP_ = 15;
 
+// Días de CALENDARIO entre dos fechas (auditoría 2026-09-29): antes restaba
+// instantes -- compromiso 03/09 (medianoche UTC) y término el 04/09 a las
+// 10:47 daban 1,6 días y redondeaban a 2 de atraso, siendo 1.
 function calcularDuracionDias_(inicio, fin) {
-  if (!inicio || !fin) return null;
-  const ini = new Date(inicio), f = new Date(fin);
-  if (isNaN(ini.getTime()) || isNaN(f.getTime())) return null;
-  return Math.round((f.getTime() - ini.getTime()) / 86400000);
+  const a = Utils.claveDiaCampo_(inicio, 'America/Santiago');
+  const b = Utils.claveDiaCampo_(fin, 'America/Santiago');
+  if (!a || !b) return null;
+  return Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
 }
 
 // desviacionDias: negativo = terminó antes, 0 = a tiempo, positivo = atraso.
@@ -2171,11 +2196,14 @@ function obtenerRendimiento(db, data, contexto) {
   const baseline = obtenerUltimaBaseline_(db, proyecto.proyecto_id);
   const ahora = new Date();
   const claveInicioProyecto = proyecto.fecha_inicio ? claveFecha_(proyecto.fecha_inicio) : '';
+  const tareasPorId = {};
+  tareas.forEach((a) => { tareasPorId[a.actividad_id] = a; });
   const planSeguimiento = tareas.map((a) => {
     const real = avanceRealTarea_(a);
     const claveCreacion = claveFecha_(a.fecha_creacion);
     const claveCompromiso = claveFecha_(a.fecha_compromiso);
-    const planInicio = planInicioTareaClave_(a, claveCreacion, claveCompromiso, claveInicioProyecto);
+    const inicioPlan = planInicioConOrigen_(a, claveCreacion, claveCompromiso, claveInicioProyecto, tareasPorId);
+    const planInicio = inicioPlan.clave;
     const esperado = calcularAvanceEsperado_(planInicio, a.fecha_compromiso, ahora);
     const baseTarea = baseline && baseline.por_tarea[a.actividad_id];
     // Refactor "Planificación" (2026-09-23): plazo (días) es un eje aparte de
@@ -2186,7 +2214,7 @@ function obtenerRendimiento(db, data, contexto) {
       : (a.estado === Actividades.ACTIVIDADES_ESTADOS.NO_INICIADA ? null : calcularFechaInicioReal_(a.actividad_id, bitacoraProyecto));
     const desviacionDias = calcularDesviacionPlazoDias_(a.fecha_compromiso, a.fecha_terminada);
     return {
-      actividad_id: a.actividad_id, plan_inicio: planInicio, plan_fin: a.fecha_compromiso || '',
+      actividad_id: a.actividad_id, plan_inicio: planInicio, plan_inicio_origen: inicioPlan.origen, plan_fin: a.fecha_compromiso || '',
       baseline_inicio: baseTarea ? baseTarea.fecha_inicio : '', baseline_fin: baseTarea ? baseTarea.fecha_fin : '',
       avance_real_pct: real, avance_esperado_pct: esperado,
       desviacion_pp: calcularDesviacionAvancePp_(esperado, real),
@@ -2213,10 +2241,38 @@ function obtenerRendimiento(db, data, contexto) {
 // (fecha_inicio_plan, coherente con el compromiso), ESE es el plan. Antes se
 // ignoraba y se usaba la fecha de creación: una tarea cargada hoy desde una
 // carta Gantt aparecía "planificada desde hoy".
-function planInicioTareaClave_(a, claveCreacion, claveCompromiso, claveInicioProyecto) {
+//
+// Auditoría 2026-09-29 (C2): sin inicio propio, una tarea que DEPENDE de otra
+// empieza el día hábil siguiente al término planificado de esa otra. Antes
+// caía directo a su fecha de creación: en un plan cargado de una sola vez
+// todas las tareas "empezaban" el mismo día, la carta Gantt perdía la
+// secuencia y el avance esperado se inflaba (una tarea que vence en un mes
+// aparecía con 96 % esperado). `porId` = tareas del proyecto por id.
+function planInicioTareaClave_(a, claveCreacion, claveCompromiso, claveInicioProyecto, porId) {
+  return planInicioConOrigen_(a, claveCreacion, claveCompromiso, claveInicioProyecto, porId).clave;
+}
+// Igual que planInicioTareaClave_, pero dice DE DÓNDE salió el inicio:
+// 'propio' | 'dependencia' | 'creacion' | 'proyecto' | 'compromiso'. La
+// pantalla lo usa para avisar cuántas tareas no tienen un inicio planificado
+// de verdad (solo la fecha en que alguien las cargó).
+function planInicioConOrigen_(a, claveCreacion, claveCompromiso, claveInicioProyecto, porId) {
   const propia = a && a.fecha_inicio_plan ? claveFecha_(a.fecha_inicio_plan) : '';
-  if (propia && (!claveCompromiso || propia <= claveCompromiso)) return propia;
-  return planInicioEfectivoClave_(claveCreacion, claveCompromiso, claveInicioProyecto);
+  if (propia && (!claveCompromiso || propia <= claveCompromiso)) return { clave: propia, origen: 'propio' };
+  const previa = porId && a && a.depende_de ? porId[a.depende_de] : null;
+  const finPrevia = previa ? claveFecha_(previa.fecha_compromiso) : '';
+  if (finPrevia) {
+    const desde = siguienteDiaHabilClave_(finPrevia);
+    if (!claveCompromiso || desde <= claveCompromiso) return { clave: desde, origen: 'dependencia' };
+  }
+  const clave = planInicioEfectivoClave_(claveCreacion, claveCompromiso, claveInicioProyecto);
+  const origen = !clave ? '' : (clave === claveCreacion ? 'creacion' : (clave === claveInicioProyecto ? 'proyecto' : 'compromiso'));
+  return { clave, origen };
+}
+// Día hábil (lunes a viernes) siguiente a una clave AAAA-MM-DD.
+function siguienteDiaHabilClave_(clave) {
+  let d = Utils.siguienteDiaClave_(clave);
+  while (Utils.diaSemanaClave_(d) === 0 || Utils.diaSemanaClave_(d) === 6) d = Utils.siguienteDiaClave_(d);
+  return d;
 }
 function planInicioEfectivoClave_(claveCreacion, claveCompromiso, claveInicioProyecto) {
   if (!claveCompromiso) return claveCreacion || '';
@@ -2272,9 +2328,11 @@ function obtenerAnalitica(db, data, contexto) {
     return redond1Analitica_(valores.reduce((s, v) => s + v, 0) / valores.length);
   }
   function sumaDe_(campo) { return redond1Analitica_(porTarea.reduce((s, t) => s + (t[campo] || 0), 0)); }
+  const tareasPorIdSpi = {};
+  tareas.forEach((a) => { tareasPorIdSpi[a.actividad_id] = a; });
   const spiValores = tareas.map((a) => {
     const real = avanceRealTarea_(a);
-    const esperado = calcularAvanceEsperado_(planInicioTareaClave_(a, claveFecha_(a.fecha_creacion), claveFecha_(a.fecha_compromiso), ''), a.fecha_compromiso, ahora);
+    const esperado = calcularAvanceEsperado_(planInicioTareaClave_(a, claveFecha_(a.fecha_creacion), claveFecha_(a.fecha_compromiso), '', tareasPorIdSpi), a.fecha_compromiso, ahora);
     return (real !== null && esperado > 0) ? real / esperado : null;
   }).filter((v) => v !== null);
 
