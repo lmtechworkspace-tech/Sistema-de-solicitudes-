@@ -675,13 +675,16 @@ function hojaDependenciasXlsx_(tareas, tareasPorId) {
   const H = XLSX_EST.HEADER;
   const enc = ['Tarea', 'Depende de', 'Estado de la que la bloquea'].map((t) => ({ v: t, s: H }));
   const filas = [enc];
-  tareas.filter((t) => t.depende_de).forEach((t) => {
-    const padre = tareasPorId[t.depende_de];
-    filas.push([
-      t.titulo || '',
-      padre ? (padre.titulo || '') : t.depende_de,
-      padre ? (XLSX_ESTADO_TAREA_[padre.estado] || padre.estado || '') : ''
-    ]);
+  // Una fila por cada dependencia (una tarea puede depender de varias).
+  tareas.forEach((t) => {
+    Proyectos.dependenciasDe_(t).forEach((pid) => {
+      const padre = tareasPorId[pid];
+      filas.push([
+        t.titulo || '',
+        padre ? (padre.titulo || '') : 'Tarea eliminada',
+        padre ? (XLSX_ESTADO_TAREA_[padre.estado] || padre.estado || '') : ''
+      ]);
+    });
   });
   return {
     nombre: 'Dependencias',

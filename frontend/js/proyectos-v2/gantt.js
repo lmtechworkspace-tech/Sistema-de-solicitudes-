@@ -29,7 +29,9 @@
     });
     var paths = '';
     g.querySelectorAll('.sx2-py-gantt__fila[data-dep]').forEach(function (fila) {
-      var de = fila.getAttribute('data-dep'), a = fila.getAttribute('data-py2-tarea');
+      var a = fila.getAttribute('data-py2-tarea');
+      // Una tarea puede depender de varias: una flecha por cada una.
+      fila.getAttribute('data-dep').split(/[\s,;]+/).filter(Boolean).forEach(function (de) {
       var r1 = barras[de], r2 = barras[a];
       if (!r1 || !r2) return;
       var x1 = r1.right - base.left, y1 = r1.top + r1.height / 2 - base.top;
@@ -41,6 +43,7 @@
         d = 'M' + x1 + ' ' + y1 + ' H' + (x1 + 7) + ' V' + yMedio + ' H' + (x2 - 9) + ' V' + y2 + ' H' + (x2 - 1);
       }
       paths += '<path d="' + d + '" data-de="' + U.esc(de) + '" data-a="' + U.esc(a) + '" marker-end="url(#py2-flecha)"/>';
+      });
     });
     if (!paths) return;
     var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -110,9 +113,10 @@
     g.addEventListener('mouseleave', ocultar);
     sc.addEventListener('scroll', function () { if (sobre) ocultar(); }, { passive: true });
 
-    // Arrastrar el fondo para desplazarse (sin robar el clic de una barra).
+    // El asa de una barra reprograma; el fondo desplaza (sin robar el clic de una barra).
+    g.addEventListener('mousedown', function (ev) { iniciarAsa(ev, g); });
     sc.addEventListener('mousedown', function (ev) {
-      if (ev.button !== 0 || ev.target.closest('button, a, input, .sx2-py-gantt__nombre, .sx2-py-gantt__barra')) return;
+      if (ev.button !== 0 || asa_ || ev.target.closest('button, a, input, .sx2-py-gantt__nombre, .sx2-py-gantt__barra')) return;
       arrastre_ = { sc: sc, movio: false, x0: ev.clientX, y0: ev.clientY, sl: sc.scrollLeft, st: sc.scrollTop };
       sc.classList.add('sx2-py-gantt-scroll--arrastre');
       if (sobre) ocultar();
@@ -121,6 +125,56 @@
       if (sc.__movio) { ev.stopPropagation(); ev.preventDefault(); sc.__movio = false; }
     }, true);
   }
+  // --- Reprogramar arrastrando el término (auditoría G3) ---------------------------
+  // Se arrastra el asa del extremo derecho de la barra; al soltar se abre el
+  // formulario de reprogramar con la fecha nueva y el motivo obligatorio (RN-703).
+  // La barra solo se estira como vista previa: nada cambia hasta confirmar.
+  var asa_ = null;
+  function iniciarAsa(ev, g) {
+    var asa = ev.target.closest('[data-asa]');
+    if (!asa || ev.button !== 0) return false;
+    var fila = asa.closest('[data-py2-tarea]');
+    var barra = asa.closest('.sx2-py-gantt__barra');
+    var pista = barra.parentNode;
+    var semanas = Number(g.getAttribute('data-semanas')) || 1;
+    var a = PY.ctx().tareas.filter(function (x) { return x.actividad_id === fila.getAttribute('data-py2-tarea'); })[0];
+    if (!a || !a.fecha_compromiso) return false;
+    ev.preventDefault();
+    ev.stopPropagation();
+    asa_ = { g: g, a: a, barra: barra, x0: ev.clientX, ancho0: barra.getBoundingClientRect().width,
+      pxDia: pista.getBoundingClientRect().width / (semanas * 7), fin: dia(a.fecha_compromiso), dias: 0 };
+    g.classList.add('sx2-py-gantt--arrastrando');
+    if (tip_) tip_.hidden = true;
+    return true;
+  }
+  function fechaClave(d) { return d.toISOString().slice(0, 10); }
+  window.addEventListener('mousemove', function (ev) {
+    if (!asa_) return;
+    var dias = Math.round((ev.clientX - asa_.x0) / asa_.pxDia);
+    asa_.dias = dias;
+    asa_.barra.style.width = Math.max(6, asa_.ancho0 + dias * asa_.pxDia) + 'px';
+    var nueva = new Date(asa_.fin.getTime() + dias * DIA);
+    if (tip_) {
+      tip_.innerHTML = '<strong>' + U.esc(asa_.a.titulo) + '</strong><span class="sx2-py-gantt-tip__fila">Nuevo término: <b>' + PY.fecha(fechaClave(nueva), true) + '</b> (' + (dias > 0 ? '+' : '') + dias + ' d)</span>';
+      tip_.hidden = false;
+      tip_.style.left = (ev.clientX + 14) + 'px';
+      tip_.style.top = (ev.clientY + 16) + 'px';
+    }
+  });
+  window.addEventListener('mouseup', function () {
+    if (!asa_) return;
+    var s = asa_;
+    asa_ = null;
+    s.g.classList.remove('sx2-py-gantt--arrastrando');
+    if (tip_) tip_.hidden = true;
+    var sc = s.g.closest('.sx2-py-gantt-scroll');
+    if (sc) sc.__movio = true; // que el clic de soltar no abra el panel de la tarea
+    PY.pintar({ sinAnimacion: true }); // deshace la vista previa
+    if (s.dias !== 0 && PY.abrirReprogramarProyecto) {
+      PY.abrirReprogramarProyecto(PY.ctx(), s.a, fechaClave(new Date(s.fin.getTime() + s.dias * DIA)));
+    }
+  });
+
   // Un solo par de escuchas globales para el arrastre (no se acumulan al repintar).
   var arrastre_ = null;
   window.addEventListener('mousemove', function (ev) {

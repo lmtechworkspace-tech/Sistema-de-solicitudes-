@@ -128,3 +128,13 @@ completa; PDF con diseño v2 y "En una línea" + "Lo que requiere decisión"; si
   palabras con quién lo registró. Informe completo: 15 → 13 páginas.
   No se pasó el libro al generador `libroExcel.js`: el libro propio ya tiene tipos, filtros, tonos e impresión, y
   la Carta Gantt coloreada no cabe en ese generador.
+- **Etapa 4 — Gantt operativo:** una tarea puede depender de **varias** (casillas en "Nueva tarea" y "Editar";
+  se valida mismo proyecto, que no dependa de sí misma y que no forme un ciclo). Su inicio de plan parte el día
+  hábil siguiente a la que termina más tarde. **Arrastrar el extremo de una barra** abre "Reprogramar" con la
+  fecha nueva y el motivo obligatorio (no cambia nada hasta confirmar; solo quien puede editar la tarea).
+  Interruptor **"Línea base"** (si se congeló una) que dibuja las fechas congeladas sobre cada barra, en pantalla
+  y en el PDF. **Subtareas bajo su tarea padre**, con sangría. En móvil la barra de herramientas se acomoda en
+  varias líneas y las etiquetas de las barras tienen halo para leerse sobre las flechas. La hoja Dependencias
+  del Excel trae una fila por dependencia.
+  Corrección a G6: la ruta crítica **ya se calculaba** (holgura 0), no era una marca manual; ahora usa la
+  duración de plan (inicio de plan → compromiso) y todas las dependencias.

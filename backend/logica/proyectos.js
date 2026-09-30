@@ -481,23 +481,65 @@ function calcularResumenVisitaProyecto_(db, proyecto, contexto, integrantes, tar
 }
 
 // v13 (Fase 1, "ruta crítica"): CPM clasico sobre la red de dependencias.
-function calcularRutaCritica_(tareas) {
-  function dur(t) {
-    if (!t || !t.fecha_creacion || !t.fecha_compromiso) return 1;
-    const d = (new Date(t.fecha_compromiso) - new Date(t.fecha_creacion)) / 86400000;
-    return d > 1 ? d : 1;
+// Auditoría 2026-09-29 (etapa 4, G6): una tarea puede depender de VARIAS. El
+// campo depende_de guarda los ids separados por coma (un id solo sigue siendo
+// válido: los datos de siempre no cambian).
+function dependenciasDe_(a) {
+  const vistos = {};
+  return String((a && a.depende_de) || '').split(/[\s,;]+/).map((x) => x.trim())
+    .filter((x) => x && !vistos[x] && (vistos[x] = true));
+}
+// Valida la lista de dependencias de una tarea: que existan, sean del mismo
+// proyecto, no sea ella misma ni un ciclo (A depende de B que depende de A).
+// Devuelve { valor: 'id1,id2' } o un error de validación.
+function validarDependencias_(db, proyecto, actividadId, entrada) {
+  const ids = dependenciasDe_({ depende_de: Array.isArray(entrada) ? entrada.join(',') : entrada });
+  if (!ids.length) return { valor: '' };
+  const delProyecto = {};
+  leerSeguro_(db, 'ACTIVIDADES').forEach((a) => { if (a.proyecto_id === proyecto.proyecto_id && esVerdadero_(a.activa)) delProyecto[a.actividad_id] = a; });
+  for (const id of ids) {
+    if (!delProyecto[id]) return errorValidacion_('depende_de', 'La tarea de la que depende debe ser del mismo proyecto.');
+    if (actividadId && id === actividadId) return errorValidacion_('depende_de', 'Una tarea no puede depender de sí misma.');
   }
+  if (actividadId) {
+    // ¿Alguna de las nuevas llega de vuelta a esta tarea siguiendo sus dependencias?
+    const visitado = {};
+    const pila = ids.slice();
+    while (pila.length) {
+      const id = pila.pop();
+      if (id === actividadId) return errorValidacion_('depende_de', 'Esa dependencia forma un ciclo: una de esas tareas ya depende (directa o indirectamente) de esta.');
+      if (visitado[id]) continue;
+      visitado[id] = true;
+      dependenciasDe_(delProyecto[id]).forEach((x) => pila.push(x));
+    }
+  }
+  return { valor: ids.join(',') };
+}
+
+function calcularRutaCritica_(tareas, claveInicioProyecto) {
   const vivas = (tareas || []).filter((t) => t.estado !== 'CANCELADA');
   const porId = {};
   vivas.forEach((t) => { porId[t.actividad_id] = t; });
+  // Duración de PLAN de cada tarea: de su inicio planificado (propio, tras sus
+  // dependencias o, a falta de ambos, su creación) a su compromiso. Antes era
+  // compromiso − creación: en un plan cargado de una vez todas las tareas
+  // "duraban" desde el mismo día y la holgura no decía nada.
+  function dur(t) {
+    if (!t || !t.fecha_compromiso) return 1;
+    const ini = planInicioTareaClave_(t, claveFecha_(t.fecha_creacion), claveFecha_(t.fecha_compromiso), claveInicioProyecto || '', porId);
+    if (!ini) return 1;
+    const d = (Date.parse(claveFecha_(t.fecha_compromiso)) - Date.parse(ini)) / 86400000;
+    return d > 1 ? d : 1;
+  }
   const sucesores = {}, tienePred = {};
   let hayDependencias = false;
   vivas.forEach((t) => {
-    if (t.depende_de && porId[t.depende_de]) {
-      (sucesores[t.depende_de] = sucesores[t.depende_de] || []).push(t.actividad_id);
+    dependenciasDe_(t).forEach((pid) => {
+      if (!porId[pid]) return;
+      (sucesores[pid] = sucesores[pid] || []).push(t.actividad_id);
       tienePred[t.actividad_id] = true;
       hayDependencias = true;
-    }
+    });
   });
   if (!hayDependencias) return { disponible: false, porTarea: {} };
 
@@ -508,7 +550,8 @@ function calcularRutaCritica_(tareas) {
     if (pila[id]) return (EF[id] = dur(porId[id]));
     pila[id] = true;
     const t = porId[id];
-    const es = (t.depende_de && porId[t.depende_de]) ? calcEF(t.depende_de, pila) : 0;
+    // Con varias dependencias, parte cuando termina la ÚLTIMA.
+    const es = dependenciasDe_(t).filter((pid) => porId[pid]).reduce((m, pid) => Math.max(m, calcEF(pid, pila)), 0);
     ES[id] = es; EF[id] = es + dur(t);
     delete pila[id];
     return EF[id];
@@ -1093,9 +1136,11 @@ function crearTarea(db, data, contexto) {
     const hito = leerSeguro_(db, 'PROYECTO_HITOS').find((h) => h.hito_id === data.hito_id);
     if (!hito || hito.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('hito_id', 'El hito no pertenece a este proyecto.');
   }
+  let dependenciasNuevas = '';
   if (data.depende_de) {
-    const dependencia = leerSeguro_(db, 'ACTIVIDADES').find((a) => a.actividad_id === data.depende_de);
-    if (!dependencia || dependencia.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('depende_de', 'La tarea de la que depende debe ser del mismo proyecto.');
+    const dep = validarDependencias_(db, proyecto, '', data.depende_de);
+    if (dep._validationError) return dep;
+    dependenciasNuevas = dep.valor;
   }
   if (data.tarea_padre_id) {
     const padre = leerSeguro_(db, 'ACTIVIDADES').find((a) => a.actividad_id === data.tarea_padre_id);
@@ -1103,6 +1148,7 @@ function crearTarea(db, data, contexto) {
     if (padre.tarea_padre_id) return errorValidacion_('tarea_padre_id', 'Esa tarea ya es una subtarea -- no se puede anidar un tercer nivel.');
   }
   const enriquecido = Object.assign({}, data);
+  enriquecido.depende_de = dependenciasNuevas;
   enriquecido.proyecto = proyecto.nombre;
   enriquecido.proyecto_id = proyecto.proyecto_id;
   if (data.colaboradores_emails) {
@@ -1134,9 +1180,11 @@ function editarTarea(db, data, contexto) {
     const hito = leerSeguro_(db, 'PROYECTO_HITOS').find((h) => h.hito_id === data.hito_id);
     if (!hito || hito.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('hito_id', 'El hito no pertenece a este proyecto.');
   }
-  if (data.depende_de) {
-    const dependencia = leerSeguro_(db, 'ACTIVIDADES').find((a) => a.actividad_id === data.depende_de);
-    if (!dependencia || dependencia.proyecto_id !== proyecto.proyecto_id) return errorValidacion_('depende_de', 'La tarea de la que depende debe ser del mismo proyecto.');
+  let dependenciasEditadas;
+  if (data.depende_de !== undefined) {
+    const dep = validarDependencias_(db, proyecto, actividad.actividad_id, data.depende_de);
+    if (dep._validationError) return dep;
+    dependenciasEditadas = dep.valor;
   }
   if (data.tarea_padre_id) {
     const padre = leerSeguro_(db, 'ACTIVIDADES').find((a) => a.actividad_id === data.tarea_padre_id);
@@ -1166,6 +1214,7 @@ function editarTarea(db, data, contexto) {
   const cambios = {};
   const camposPermitidos = ['titulo', 'descripcion', 'responsable_email', 'fecha_compromiso', 'prioridad', 'hito_id', 'depende_de', 'tarea_padre_id', 'meta_cantidad', 'meta_unidad'];
   camposPermitidos.forEach((campo) => { if (data[campo] !== undefined) cambios[campo] = data[campo]; });
+  if (dependenciasEditadas !== undefined) cambios.depende_de = dependenciasEditadas;
   // Control plan vs real (2026-09-28): inicio de plan, inicio real y término
   // real editables (el término de plan sigue yendo por reprogramar, que deja
   // traza). Las fechas reales nunca pueden ser futuras, cada inicio va antes de
@@ -1246,18 +1295,24 @@ function listarTareas(db, data, contexto) {
   const nombrePorEmail = {};
   leerSeguro_(db, 'PROYECTO_INTEGRANTES').forEach((i) => { if (i.proyecto_id === proyecto.proyecto_id) nombrePorEmail[normalizarEmail_(i.usuario_email)] = i.usuario_nombre || i.usuario_email; });
   const dependientesDirectosPorId = {};
-  tareas.forEach((a) => { if (!a.depende_de || esTareaTerminalProyecto_(a)) return; (dependientesDirectosPorId[a.depende_de] = dependientesDirectosPorId[a.depende_de] || []).push(a); });
+  tareas.forEach((a) => {
+    if (esTareaTerminalProyecto_(a)) return;
+    dependenciasDe_(a).forEach((pid) => { (dependientesDirectosPorId[pid] = dependientesDirectosPorId[pid] || []).push(a); });
+  });
   const hijasPorPadre = {};
   tareas.forEach((a) => { if (a.tarea_padre_id) (hijasPorPadre[a.tarea_padre_id] = hijasPorPadre[a.tarea_padre_id] || []).push(a); });
-  const rutaCritica = calcularRutaCritica_(tareas);
+  const rutaCritica = calcularRutaCritica_(tareas, proyecto.fecha_inicio ? claveFecha_(proyecto.fecha_inicio) : '');
 
   return tareas.map((a) => {
     a.semaforo = Actividades.semaforoActividad_(a).codigo;
     a.semaforo_etiqueta = Actividades.semaforoActividad_(a).etiqueta;
-    if (a.depende_de) {
-      const dependencia = porId[a.depende_de];
-      a.dependencia_titulo = dependencia ? dependencia.titulo : '';
-      a.dependencia_comprometida = !!dependencia && Actividades.semaforoActividad_(dependencia).codigo === 'atrasada';
+    const deps = dependenciasDe_(a).map((pid) => porId[pid]).filter(Boolean);
+    if (deps.length) {
+      // dependencias: la lista completa; dependencia_titulo / _comprometida siguen
+      // existiendo (todas las títulos juntos / alguna atrasada) para lo de siempre.
+      a.dependencias = deps.map((d) => ({ actividad_id: d.actividad_id, titulo: d.titulo, atrasada: Actividades.semaforoActividad_(d).codigo === 'atrasada', terminada: d.estado === 'TERMINADA' }));
+      a.dependencia_titulo = deps.map((d) => d.titulo).join(', ');
+      a.dependencia_comprometida = a.dependencias.some((d) => d.atrasada);
     }
     const dependientes = calcularImpactoDependencia_(a.actividad_id, dependientesDirectosPorId);
     a.impacto_dependientes = dependientes.length;
@@ -2272,8 +2327,8 @@ function planInicioTareaClave_(a, claveCreacion, claveCompromiso, claveInicioPro
 function planInicioConOrigen_(a, claveCreacion, claveCompromiso, claveInicioProyecto, porId) {
   const propia = a && a.fecha_inicio_plan ? claveFecha_(a.fecha_inicio_plan) : '';
   if (propia && (!claveCompromiso || propia <= claveCompromiso)) return { clave: propia, origen: 'propio' };
-  const previa = porId && a && a.depende_de ? porId[a.depende_de] : null;
-  const finPrevia = previa ? claveFecha_(previa.fecha_compromiso) : '';
+  // Con varias dependencias, parte después de la que termina MÁS TARDE.
+  const finPrevia = porId ? dependenciasDe_(a).map((pid) => porId[pid] && claveFecha_(porId[pid].fecha_compromiso)).filter(Boolean).sort().slice(-1)[0] || '' : '';
   if (finPrevia) {
     const desde = siguienteDiaHabilClave_(finPrevia);
     if (!claveCompromiso || desde <= claveCompromiso) return { clave: desde, origen: 'dependencia' };
@@ -2618,6 +2673,7 @@ module.exports = {
   // -- exportadas para poder probarlas como unidades puras (§41/§45 del
   // encargo), sin tener que fabricar todo el ciclo de vida de una tarea
   // (entregar→validar) solo para fijar una fecha_terminada exacta de prueba.
+  dependenciasDe_, validarDependencias_,
   calcularDuracionDias_, calcularDesviacionPlazoDias_, calcularDesviacionAvancePp_,
   calcularEstadoPlazo_, calcularFechaInicioReal_,
   // Incremento 2 (v11 Reingenieria Cronograma).

@@ -54,7 +54,10 @@
       s += '<div class="sx2-py-aviso sx2-tono-hito">' + U.ico('candado', 16) + '<span><strong>Bloqueada:</strong> ' + U.esc(a.bloqueo_motivo) + '</span></div>';
     }
     if (a.dependencia_comprometida) {
-      s += '<div class="sx2-py-aviso sx2-tono-critico">' + U.ico('alerta', 16) + '<span>Depende de <strong>' + U.esc(a.dependencia_titulo) + '</strong>, que está atrasada.</span></div>';
+      // Con varias dependencias, se nombran solo las atrasadas.
+      var atrasadas = (a.dependencias || []).filter(function (d) { return d.atrasada; }).map(function (d) { return d.titulo; });
+      var nombres = atrasadas.length ? atrasadas : [a.dependencia_titulo];
+      s += '<div class="sx2-py-aviso sx2-tono-critico">' + U.ico('alerta', 16) + '<span>Depende de <strong>' + U.esc(nombres.join(', ')) + '</strong>, ' + (nombres.length > 1 ? 'que están atrasadas' : 'que está atrasada') + '.</span></div>';
     }
 
     // Control plan vs real: las 4 fechas en una tabla, con el desfase en días
@@ -170,6 +173,29 @@
     '</form>';
   }
 
+  // "Depende de" (auditoría 2026-09-29, etapa 4): una tarea puede depender de
+  // VARIAS. Lista de casillas con las tareas abiertas del proyecto (más las ya
+  // elegidas aunque estén cerradas); se envía como ids separados por coma.
+  function idsDependencias(a) { return String((a && a.depende_de) || '').split(/[\s,;]+/).filter(Boolean); }
+  function campoDependencias(ctx, a) {
+    var elegidas = idsDependencias(a);
+    var opciones = ctx.tareas.filter(function (t) {
+      return (!a || t.actividad_id !== a.actividad_id) && t.estado !== 'CANCELADA' && (!PY.esTerminal(t) || elegidas.indexOf(t.actividad_id) !== -1);
+    });
+    if (!opciones.length) return '';
+    return '<fieldset class="sx2-py-deps"><legend>Depende de</legend>' +
+      '<div class="sx2-py-deps__lista">' + opciones.map(function (t) {
+        var on = elegidas.indexOf(t.actividad_id) !== -1;
+        return '<label class="sx2-py-deps__op"><input type="checkbox" name="depende_de" value="' + U.esc(t.actividad_id) + '"' + (on ? ' checked' : '') + '>' +
+          '<span class="sx2-cortar">' + U.esc(t.titulo) + '</span>' + (PY.esTerminal(t) ? '<small>terminada</small>' : '') + '</label>';
+      }).join('') + '</div>' +
+      '<p class="sx2-campo__ayuda">No podrá empezar antes de que terminen las que marques. Su inicio de plan pasa al día hábil siguiente a la que termina más tarde.</p>' +
+    '</fieldset>';
+  }
+  function dependenciasMarcadas(form) {
+    return Array.prototype.map.call(form.querySelectorAll('input[name="depende_de"]:checked'), function (x) { return x.value; });
+  }
+
   function formEditar(ctx, a) {
     var integrantes = (ctx.detalle.integrantes || []).map(function (i) { return PY.persona(i.usuario_email, i.usuario_nombre); });
     var comp = a.fecha_compromiso ? String(a.fecha_compromiso).slice(0, 10) : '';
@@ -201,6 +227,7 @@
       PY.campo('Hito', '<select class="sx2-select" name="hito_id"><option value="">Sin hito</option>' + (ctx.detalle.hitos || []).map(function (h) {
         return '<option value="' + U.esc(h.hito_id) + '"' + (h.hito_id === a.hito_id ? ' selected' : '') + '>' + U.esc(h.nombre) + '</option>';
       }).join('') + '</select>') +
+      campoDependencias(ctx, a) +
       '<p class="sx2-campo__error js-py2p-error" hidden></p>' +
     '</form>';
   }
@@ -310,6 +337,8 @@
       });
       if (!cambios.titulo && cambios.titulo !== undefined) { error('El título no puede quedar vacío.'); return; }
       if (form.responsable_email.value.toLowerCase() !== String(a.responsable_email || '').toLowerCase()) cambios.responsable_email = form.responsable_email.value;
+      var deps = dependenciasMarcadas(form).sort().join(','), depsAntes = idsDependencias(a).sort().join(',');
+      if (form.querySelector('.sx2-py-deps') && deps !== depsAntes) cambios.depende_de = deps;
       var fechaNueva = form.fecha_compromiso.value;
       var fechaOriginal = a.fecha_compromiso ? String(a.fecha_compromiso).slice(0, 10) : '';
       var reprog = fechaNueva && fechaOriginal && fechaNueva !== fechaOriginal;
@@ -386,6 +415,23 @@
   }
 
   // --- Compromisos personales -------------------------------------------------------
+  // Reprogramar el término de una tarea de PROYECTO con su motivo (RN-703). Lo abre
+  // el arrastre del asa en la Carta Gantt con la fecha nueva ya puesta.
+  function abrirReprogramarProyecto(ctx, a, fechaNueva) {
+    PY.formulario({
+      titulo: 'Reprogramar', boton: 'Reprogramar',
+      subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">' + U.esc(a.titulo) + (a.fecha_compromiso ? ' · hoy vence el ' + PY.fecha(a.fecha_compromiso, true) : '') + '</span>',
+      campos: PY.campo('Nueva fecha comprometida', '<input class="sx2-input" type="date" name="fecha_compromiso" value="' + U.esc(fechaNueva || '') + '">') +
+        PY.campo('Motivo', '<textarea class="sx2-input" name="motivo" maxlength="500" placeholder="Toda reprogramación queda registrada con su motivo."></textarea>'),
+      preparar: function (d) {
+        if (!d.fecha_compromiso) return 'Indica la nueva fecha.';
+        if (!d.motivo) return 'Toda reprogramación necesita un motivo.';
+        return { proyecto_id: ctx.proyecto.proyecto_id, actividad_id: a.actividad_id, fecha_compromiso: d.fecha_compromiso, motivo: d.motivo };
+      },
+      accion: 'reprogramarTareaProyecto', aviso: 'Tarea reprogramada.'
+    });
+  }
+
   function abrirReprogramarPersonal(a, alGuardar) {
     PY.formulario({
       titulo: 'Reprogramar', boton: 'Reprogramar',
@@ -463,6 +509,13 @@
   }
 
   PY.abrirTarea = abrirTarea;
+  PY.campoDependencias = campoDependencias;
+  PY.abrirReprogramarProyecto = abrirReprogramarProyecto;
+  // ¿Puede esta persona reprogramar la tarea? (mismo criterio que "Editar").
+  PY.puedeReprogramar = function (ctx, a) {
+    return !!(ctx && ctx.proyecto && a && !PY.esTerminal(a) && (trabajaLa(a) || (ctx.detalle && ctx.detalle.puede_gestionar)));
+  };
+  PY.dependenciasMarcadas = dependenciasMarcadas;
   PY.abrirTareaDeProyecto = abrirTareaDeProyecto;
   PY.abrirTareaPersonal = abrirTareaPersonal;
 })();

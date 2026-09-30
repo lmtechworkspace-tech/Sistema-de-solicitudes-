@@ -1071,7 +1071,7 @@ function cuerpoConfiguradoV2_(config, detalle, tareasFiltradas, rendimiento, bit
     const G = DocV2.piezas().G;
     const ctxG = contextoGanttPapel_(detalle, tareasFiltradas, rendimiento, nombres);
     const bloques = G ? ganttPapelV2_(G, ctxG, GANTT_PAPEL_FILAS) : [];
-    const cuerpoG = bloques.length ? bloques.join('') + G.aviso(ctxG) + (incluye('leyenda') ? G.leyenda({ papel: true }) : '')
+    const cuerpoG = bloques.length ? bloques.join('') + G.aviso(ctxG) + (incluye('leyenda') ? G.leyenda({ papel: true, lineaBase: !!(rendimiento && rendimiento.baseline) }) : '')
       : P.gantt() + (incluye('leyenda') ? P.leyenda() : '');
     h += '<div class="rp2-apaisada">' + nivel('gantt', cuerpoG) + '</div>';
   }
@@ -1160,7 +1160,8 @@ function contextoGanttPapel_(detalle, tareas, rendimiento, nombres) {
 function ganttPapelV2_(G, ctx, primera) {
   const r = G.rango(ctx);
   return G.paginas(ctx, { desde: r.desde, semanas: r.semanas, agrupar: true, densidad: 'compacta', quieto: true,
-    anchoEstimado: GANTT_PAPEL_PISTA_PX, lineasSemana: true }, GANTT_PAPEL_FILAS, primera || GANTT_PAPEL_FILAS)
+    anchoEstimado: GANTT_PAPEL_PISTA_PX, lineasSemana: true,
+    lineaBase: !!(ctx.rendimiento && ctx.rendimiento.baseline) }, GANTT_PAPEL_FILAS, primera || GANTT_PAPEL_FILAS)
     .map((b) => '<div class="rp2-gantt-pag">' + b + '</div>');
 }
 
@@ -1272,7 +1273,7 @@ async function descargarGantt(db, data, contexto) {
     if (f && f.etiqueta && f.valor) filtros.push({ etiqueta: String(f.etiqueta).slice(0, 40), valor: String(f.valor).slice(0, 120) });
   });
   const cuerpo = (bloques.length ? bloques.join('') : '<p class="ot2-nota">No hay tareas con fecha comprometida ni hitos que graficar con estos filtros.</p>') +
-    G.aviso(ctxG) + G.leyenda({ papel: true });
+    G.aviso(ctxG) + G.leyenda({ papel: true, lineaBase: !!(rendimiento && rendimiento.baseline) });
   return DocV2.aPdf(db, contexto, {
     titulo: p.nombre, subtitulo: 'Carta Gantt', modulo: 'Proyectos', codigo: p.codigo || '',
     periodo: DocV2.fecha_(p.fecha_inicio, true) + ' al ' + DocV2.fecha_(p.fecha_objetivo, true), filtros,

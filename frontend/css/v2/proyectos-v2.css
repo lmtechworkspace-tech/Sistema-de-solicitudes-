@@ -133,6 +133,23 @@
 .sx2-py-gantt__fila:hover .sx2-py-gantt__barra {
   box-shadow: inset 0 0 0 1px var(--sx-tono), 0 3px 10px color-mix(in srgb, var(--sx-tono) 30%, transparent);
 }
+/* Etapa 4: línea base, asa para reprogramar y subtareas. */
+.sx2-py-gantt__base {
+  position: absolute; top: calc((var(--sx-gantt-fila) - var(--sx-gantt-barra)) / 2 - 7px); height: 3px; border-radius: 2px;
+  background: var(--sx-texto-3); opacity: .6; min-width: 3px;
+}
+.sx2-py-gantt__asa {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 9px; cursor: ew-resize; border-radius: 0 999px 999px 0;
+  background: color-mix(in srgb, var(--sx-tono) 55%, transparent); opacity: 0; transition: opacity var(--sx-dur-rapida);
+}
+.sx2-py-gantt__fila:hover .sx2-py-gantt__asa, .sx2-py-gantt__asa:focus { opacity: 1; }
+.sx2-py-gantt--arrastrando, .sx2-py-gantt--arrastrando * { cursor: ew-resize !important; user-select: none; }
+.sx2-py-gantt__fila--sub .sx2-py-gantt__nombre { padding-left: 22px; position: relative; }
+.sx2-py-gantt__fila--sub .sx2-py-gantt__nombre::before {
+  content: ''; position: absolute; left: 10px; top: 50%; width: 7px; height: 7px;
+  border-left: 1.5px solid var(--sx-texto-3); border-bottom: 1.5px solid var(--sx-texto-3); transform: translateY(-70%);
+}
+.sx2-py-leyenda-gantt__base { display: inline-block; width: 16px; height: 3px; border-radius: 2px; background: var(--sx-texto-3); opacity: .6; margin-right: 6px; vertical-align: middle; }
 .sx2-py-gantt__relleno { display: block; height: 100%; background: var(--sx-tono); border-radius: inherit; }
 .sx2-py-gantt__real { position: absolute; height: 4px; bottom: 3px; border-radius: 2px; min-width: 4px; background: var(--sx-info); }
 .sx2-py-gantt--compacta .sx2-py-gantt__real { height: 3px; bottom: 2px; }
@@ -145,6 +162,9 @@
   font: 500 .6875rem/1 var(--fuente); color: var(--sx-texto-2);
 }
 .sx2-py-gantt__et--izq { text-align: right; }
+/* Las flechas de dependencias pasan por debajo del nombre, y el nombre lleva un
+   halo del color de fondo: se lee aunque una flecha lo cruce (auditoría G9). */
+.sx2-py-gantt[data-deps] .sx2-py-gantt__et { z-index: 2; text-shadow: 0 0 2px var(--sx-superficie), 0 0 2px var(--sx-superficie), 0 0 3px var(--sx-superficie); }
 .sx2-py-gantt--compacta .sx2-py-gantt__et { font-size: .625rem; }
 .sx2-py-gantt__fila--cerrada .sx2-py-gantt__et { color: var(--sx-texto-3); }
 .sx2-py-gantt__hito {
@@ -228,6 +248,17 @@
 /* Barra de herramientas y pantalla completa */
 .sx2-py-gantt-barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .sx2-py-gantt-barra__grupo { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+/* Celular (auditoría G8): la barra de herramientas ocupaba media pantalla. Se
+   dejan zoom, Hoy, dependencias, línea base y descargas; el zoom se desplaza de lado. */
+@media (max-width: 720px) {
+  .sx2-py-gantt-barra { gap: 6px; }
+  .sx2-py-gantt-barra__grupo { gap: 6px; }
+  .sx2-py-gantt-barra .sx2-segmento:has(.js-py2t-densidad),
+  .sx2-py-gantt-barra .js-py2t-inicio,
+  .sx2-py-gantt-barra .js-py2t-plegar-todo,
+  .sx2-py-gantt-barra .js-py2t-completa { display: none; }
+  .sx2-py-gantt-barra .sx2-segmento:has(.js-py2t-zoom) { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+}
 .sx2-py-gantt-card--completa {
   position: fixed; inset: 10px; z-index: 70; margin: 0; overflow: auto;
   box-shadow: 0 20px 60px rgba(15, 23, 42, .35);
@@ -739,6 +770,13 @@ body:has(.sx2-py-gantt-card--completa) .sx2-cambio-seccion { animation: none; }
 /* Control plan vs real (2026-09-28): fechas de la tarea y su edición. */
 .sx2-py-tabla-fechas th[scope="row"] { font-weight: 600; color: var(--sx-texto-2); text-align: left; }
 .sx2-py-tabla-fechas td, .sx2-py-tabla-fechas th { padding: 6px 8px; font-size: .8125rem; }
+.sx2-py-deps { border: 1px solid var(--sx-borde-suave); border-radius: 10px; padding: 10px 12px 12px; margin: 0; display: grid; gap: 8px; }
+.sx2-py-deps legend { padding: 0 6px; font-size: .75rem; font-weight: 600; color: var(--sx-texto-2); text-transform: uppercase; letter-spacing: .04em; }
+.sx2-py-deps__lista { max-height: 176px; overflow-y: auto; display: grid; gap: 2px; }
+.sx2-py-deps__op { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 6px; border-radius: 6px; font-size: .8125rem; cursor: pointer; }
+.sx2-py-deps__op:hover { background: var(--sx-superficie-hover); }
+.sx2-py-deps__op input { flex: none; }
+.sx2-py-deps__op small { margin-left: auto; color: var(--sx-texto-3); flex: none; }
 .sx2-py-fechas-pr { border: 1px solid var(--sx-borde-suave); border-radius: 10px; padding: 10px 12px 12px; margin: 0; display: grid; gap: 8px; }
 .sx2-py-fechas-pr legend { padding: 0 6px; font-size: .75rem; font-weight: 600; color: var(--sx-texto-2); text-transform: uppercase; letter-spacing: .04em; }
 /* Costos: saldo y alerta avance físico vs financiero. */

@@ -20,7 +20,7 @@
   // completa. Las preferencias se recuerdan en este navegador.
   var ZOOM = { semana: 120, mes: 48, trimestre: 22, anio: 9 };
   var ZOOMS = [{ id: 'semana', texto: 'Semana' }, { id: 'mes', texto: 'Mes' }, { id: 'trimestre', texto: 'Trimestre' }, { id: 'anio', texto: 'Año' }, { id: 'todo', texto: 'Todo' }];
-  var g = { densidad: '', deps: true, completa: false, quieto: false };
+  var g = { densidad: '', deps: true, completa: false, quieto: false, base: true };
   function leerPref(k, def) { try { var v = localStorage.getItem('sigso_py2_gantt_' + k); return v === null ? def : v; } catch (e) { return def; } }
   function guardarPref(k, v) { try { localStorage.setItem('sigso_py2_gantt_' + k, v); } catch (e) { /* sin storage */ } }
   f.zoom = leerPref('zoom', 'todo');
@@ -210,6 +210,7 @@
   }
   function gantt(tareas, ctx) {
     var r = PY.ganttRangoProyecto(ctx);
+    var hayBase = !!(ctx.rendimiento && ctx.rendimiento.baseline);
     var densidad = g.densidad || (ctx.tareas.length > 40 ? 'compacta' : 'comoda');
     var hitos = (ctx.detalle.hitos || []);
     var todosCerrados = hitos.length && hitos.every(function (h) { return PY.gruposCerrados[h.hito_id]; });
@@ -226,15 +227,19 @@
         '<span class="sx2-py-gantt-barra__grupo">' +
           U.segmento([{ id: 'comoda', texto: 'Cómoda' }, { id: 'compacta', texto: 'Compacta' }], densidad, 'js-py2t-densidad') +
           U.chip({ texto: 'Dependencias', icono: 'enlace', activo: g.deps, clase: 'js-py2t-deps' }) +
+          // Solo si alguien congeló una línea base (menú Más → Congelar línea base).
+          (hayBase ? U.chip({ texto: 'Línea base', icono: 'capas', activo: g.base, clase: 'js-py2t-base', titulo: 'Compara con las fechas congeladas el ' + PY.fecha(ctx.rendimiento.baseline.timestamp, true) }) : '') +
           (hitos.length ? U.boton({ texto: todosCerrados ? 'Expandir hitos' : 'Contraer hitos', icono: todosCerrados ? 'abajo' : 'derecha', sm: true, variante: 'fantasma', clase: 'js-py2t-plegar-todo', datos: { abrir: todosCerrados ? '1' : '0' } }) : '') +
           U.boton({ texto: 'PDF', icono: 'descargar', sm: true, clase: 'js-py2t-gantt-pdf', titulo: 'Descargar esta Carta Gantt en PDF (con los filtros que estás viendo)' }) +
           U.boton({ texto: 'Excel', icono: 'tabla', sm: true, clase: 'js-py2t-gantt-xlsx', titulo: 'Descargar el libro Excel del proyecto (con su Carta Gantt)' }) +
           U.boton({ soloIcono: true, icono: g.completa ? 'reducir' : 'expandir', sm: true, clase: 'js-py2t-completa', titulo: g.completa ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa' }) +
         '</span>' +
       '</div>' +
-      PY.gantt(ctx, { tareas: tareas, desde: r.desde, semanas: r.semanas, pxSemana: px, agrupar: true, densidad: densidad, dependencias: g.deps, completa: true, quieto: quieto, anchoEstimado: anchoEstimado }) +
+      PY.gantt(ctx, { tareas: tareas, desde: r.desde, semanas: r.semanas, pxSemana: px, agrupar: true, densidad: densidad, dependencias: g.deps, completa: true, quieto: quieto, anchoEstimado: anchoEstimado,
+        lineaBase: hayBase && g.base,
+        reprogramable: PY.puedeReprogramar ? function (a) { return PY.puedeReprogramar(ctx, a) && !!a.fecha_compromiso; } : null }) +
       SigsoGantt.aviso(ctx) +
-      SigsoGantt.leyenda() +
+      SigsoGantt.leyenda({ lineaBase: hayBase && g.base }) +
     '</div>';
   }
   var ORDEN_ZOOM = ['semana', 'mes', 'trimestre', 'anio', 'todo'];
@@ -313,6 +318,7 @@
       var dz = t.closest('.js-py2t-densidad');
       if (dz) { g.densidad = dz.getAttribute('data-id'); guardarPref('densidad', g.densidad); repintarGantt(); return; }
       if (t.closest('.js-py2t-deps')) { g.deps = !g.deps; guardarPref('deps', g.deps ? '1' : '0'); repintarGantt(); return; }
+      if (t.closest('.js-py2t-base')) { g.base = !g.base; repintarGantt(); return; }
       var pt = t.closest('.js-py2t-plegar-todo');
       if (pt) {
         var abrir = pt.getAttribute('data-abrir') === '1';
@@ -415,10 +421,7 @@
           }).join('') + '</select>') +
           PY.campo('Prioridad', '<select class="sx2-select" name="prioridad"><option value="P1">P1 · Crítica</option><option value="P2">P2 · Alta</option><option value="P3" selected>P3 · Media</option><option value="P4">P4 · Baja</option></select>') +
         '</div>' +
-        PY.campo('Depende de', '<select class="sx2-select" name="depende_de"><option value="">No depende de otra tarea</option>' +
-          ctx.tareas.filter(function (a) { return !PY.esTerminal(a); }).map(function (a) {
-            return '<option value="' + U.esc(a.actividad_id) + '">' + U.esc(a.titulo) + '</option>';
-          }).join('') + '</select>', 'No podrá empezar antes de que esa termine.') +
+        (PY.campoDependencias ? PY.campoDependencias(ctx, null) : '') +
         '<p class="sx2-campo__error js-py2t-error" hidden></p>' +
       '</form>',
       pie: U.boton({ texto: 'Cancelar', clase: 'js-sx2-drawer-cerrar' }) + U.boton({ texto: 'Crear tarea', icono: 'check', variante: 'primario', clase: 'js-py2t-crear' })
@@ -429,7 +432,9 @@
     function enviar(ev) {
       if (ev) ev.preventDefault();
       var datos = { proyecto_id: ctx.proyecto.proyecto_id, origen: 'ASIGNADA' };
-      new FormData(form).forEach(function (v, k) { datos[k] = String(v).trim(); });
+      new FormData(form).forEach(function (v, k) { if (k !== 'depende_de') datos[k] = String(v).trim(); });
+      // Puede depender de varias: todas las casillas marcadas, separadas por coma.
+      if (PY.dependenciasMarcadas) datos.depende_de = PY.dependenciasMarcadas(form).join(',');
       if (!datos.titulo || !datos.fecha_compromiso) { err.textContent = 'Completa el título y la fecha comprometida.'; err.hidden = false; return; }
       var resp = integrantes.filter(function (p) { return p.email === datos.responsable_email; })[0];
       if (resp) datos.responsable_nombre = resp.nombre;
