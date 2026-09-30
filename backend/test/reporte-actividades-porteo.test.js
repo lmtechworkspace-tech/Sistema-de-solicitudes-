@@ -97,7 +97,7 @@ test('descargarActa: PDF valido con el nombre de archivo esperado, con y sin dat
   const res = await Reporte.descargarActa(db, {}, CTX_ADM);
 
   assert.ok(pdfValido_(res.pdf_base64));
-  assert.match(res.filename, /^SIGSO-acta-reunion-\d{4}-\d{2}-\d{2}\.pdf$/);
+  assert.match(res.filename, /^sigso-acta-reunion-\d{4}-\d{2}-\d{2}\.pdf$/, 'mismo nombre con pdfkit que con el diseño v2');
 
   // Sin actividades en ninguna categoria -- las 4 secciones caen en la
   // rama "Nada que reportar", no debe romper el render.

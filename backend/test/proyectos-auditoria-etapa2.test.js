@@ -21,7 +21,6 @@ const { COLUMNAS } = require('../db/schema');
 const Proyectos = require('../logica/proyectos');
 const Libro = require('../logica/libroProyecto');
 const DocV2 = require('../logica/documentoV2');
-const Motor = require('../logica/pdfChromium');
 const ReporteProyecto = require('../logica/reporteProyecto');
 const { leerZip_ } = require('../logica/xlsxZip');
 
@@ -120,16 +119,26 @@ test('descargarGantt: sin acceso al proyecto no genera nada', async () => {
   assert.ok(r._forbidden || r._validationError);
 });
 
-test('descargarGantt con Chromium: PDF apaisado, solo las tareas filtradas', { skip: !Motor.disponible() && 'sin Chromium en este equipo' }, async () => {
+// Sin lanzar Chromium (en el runner de GitHub, varios Chromium a la vez superan el
+// límite de 30 s y el despliegue falla): se revisa lo que recibe el motor de PDF.
+test('descargarGantt: página apaisada, solo las tareas filtradas y los filtros en la cabecera', async () => {
   const db = db_();
   const { p, tareas } = escenario_(db);
+  const orig = { disponible: DocV2.disponible, aPdf: DocV2.aPdf };
+  let recibido = null;
+  DocV2.disponible = () => true;
+  DocV2.aPdf = async (d, c, o) => { recibido = o; return { pdf_base64: '', filename: 'x.pdf' }; };
   try {
-    const r = await ReporteProyecto.descargarGantt(db, { proyecto_id: p.proyecto_id, actividades: [tareas[0].actividad_id],
+    await ReporteProyecto.descargarGantt(db, { proyecto_id: p.proyecto_id, actividades: [tareas[0].actividad_id],
       filtros: [{ etiqueta: 'Estado', valor: 'Atrasadas' }] }, CTX_LEO);
-    const buf = Buffer.from(r.pdf_base64, 'base64');
-    assert.equal(buf.slice(0, 5).toString(), '%PDF-');
-    assert.match(r.filename, /^carta-gantt-/);
-  } finally { await Motor.cerrar(); }
+  } finally { Object.assign(DocV2, orig); }
+  assert.equal(recibido.horizontal, true, 'A4 apaisado');
+  assert.equal(recibido.subtitulo, 'Carta Gantt');
+  assert.equal((recibido.cuerpo.match(/data-py2-tarea=/g) || []).length, 1, 'solo la tarea filtrada');
+  assert.match(recibido.cuerpo, /class="rp2-gantt-pag"/);
+  assert.match(recibido.cuerpo, /sx2-py-leyenda-gantt/);
+  assert.ok(recibido.filtros.some((f) => f.etiqueta === 'Estado' && f.valor === 'Atrasadas'), 'la cabecera dice qué se filtró');
+  assert.match(recibido.nombreArchivo, /^carta-gantt-/);
 });
 
 // ===== Excel ========================================================================

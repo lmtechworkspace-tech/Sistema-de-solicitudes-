@@ -105,7 +105,7 @@ test('si el diseño v2 falla, el Acta sale igual con pdfkit (nunca se queda sin 
   try {
     const r = await ReporteAct.descargarActa(dbActividades_(), {}, { email: 'adm@x.cl', rol: 'ADM' });
     assert.equal(Buffer.from(r.pdf_base64, 'base64').slice(0, 5).toString(), '%PDF-');
-    assert.match(r.filename, /^SIGSO-acta-reunion-/, 'versión pdfkit');
+    assert.match(r.filename, /^sigso-acta-reunion-\d{4}-\d{2}-\d{2}\.pdf$/, 'mismo nombre que la versión v2');
   } finally { Object.assign(DocV2, orig); console.error = errorOriginal; }
 });
 

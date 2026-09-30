@@ -18,6 +18,7 @@ const Actividades = require('./actividades');
 const Utils = require('./utils');
 const PdfDoc = require('./pdfDocumento');
 const DocV2 = require('./documentoV2');
+const ReportePdf = require('./reportePdf');
 
 const TITULOS = {
   estado_actual: 'Estado actual',
@@ -231,7 +232,9 @@ async function descargarActa(db, data, contexto) {
   PdfDoc.pie(doc);
   const buffer = await PdfDoc.finalizar(doc);
 
-  const filename = 'SIGSO-acta-reunion-' + Utils.claveDia_(new Date(), 'America/Santiago') + '.pdf';
+  // Mismo nombre que la versión v2 (ReportePdf.nombreArchivo_): el respaldo pdfkit
+  // no debe cambiar el archivo que recibe la persona (antes "SIGSO-acta-…").
+  const filename = ReportePdf.nombreArchivo_('sigso-acta-reunion');
   return { pdf_base64: buffer.toString('base64'), filename };
 }
 
