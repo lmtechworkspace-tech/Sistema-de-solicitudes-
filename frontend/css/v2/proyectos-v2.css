@@ -167,6 +167,7 @@
 
 /* Líneas verticales: inicio de mes y hoy */
 .sx2-py-gantt__lineas { position: absolute; inset: 0; pointer-events: none; }
+.sx2-py-gantt__linea-sem { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--sx-borde-suave); }
 .sx2-py-gantt__linea-mes { position: absolute; top: 0; bottom: 0; width: 1px; background: color-mix(in srgb, var(--sx-borde) 90%, transparent); }
 .sx2-py-gantt__hoy { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--sx-primario); opacity: .85; }
 @keyframes sx2-crece { from { transform: scaleX(0); opacity: 0; } to { transform: none; opacity: 1; } }

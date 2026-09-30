@@ -50,8 +50,32 @@ const XLSX_EST = {
   BARRA_ATRASO: 10,
   HITO_MARCA: 11,
   FECHA: 12,
-  PORCENTAJE: 13
+  PORCENTAJE: 13,
+  // Carta Gantt (auditoría 2026-09-29, etapa 2): los MISMOS tonos que la
+  // pantalla (tokens de css/tokens.css). Por tono, relleno lleno = parte hecha
+  // de la barra y relleno suave = lo que falta, como el relleno de la pantalla.
+  TONO: {
+    ok: [14, 15], info: [16, 17], alerta: [18, 19], critico: [20, 21],
+    hito: [22, 23], primario: [24, 25], neutro: [26, 27]
+  },
+  RESUMEN: [28, 29],   // barra resumen del hito (hecho / falta)
+  HOY: 30              // encabezado de la semana de hoy
 };
+// Mismo mapa que TONO_SEMAFORO del frontend (proyectos-v2/gantt-dibujo.js;
+// un test vigila que coincidan).
+const TONO_SEMAFORO_XLSX_ = {
+  terminada: 'ok', 'al-dia': 'info', riesgo: 'alerta', atrasada: 'critico',
+  bloqueada: 'hito', pendiente: 'neutro', revision: 'primario', cancelada: 'neutro'
+};
+const SITUACION_XLSX_ = {
+  terminada: 'Terminada', 'al-dia': 'Al día', riesgo: 'En riesgo', atrasada: 'Atrasada',
+  bloqueada: 'Bloqueada', pendiente: 'Pendiente', revision: 'En revisión', cancelada: 'Cancelada'
+};
+// [lleno, suave] por tono, en el orden de XLSX_EST.TONO.
+const COLORES_TONO_XLSX_ = [
+  ['FF1F7A55', 'FFDCF2E7'], ['FF2563EB', 'FFE3ECFD'], ['FFB45309', 'FFFCEDD8'], ['FFC2362B', 'FFFBE3E1'],
+  ['FF6D28D9', 'FFEBE1FA'], ['FF2A5FD6', 'FFE7EEFC'], ['FF8A93A5', 'FFDDE2EA']
+];
 
 function stylesXmlXlsx_() {
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -63,7 +87,7 @@ function stylesXmlXlsx_() {
       '<font><b/><sz val="11"/><name val="Calibri"/></font>' +
       '<font><sz val="11"/><color rgb="FF6B7280"/><name val="Calibri"/></font>' +
     '</fonts>' +
-    '<fills count="12">' +
+    '<fills count="' + (12 + COLORES_TONO_XLSX_.length * 2 + 2) + '">' +
       '<fill><patternFill patternType="none"/></fill>' +
       '<fill><patternFill patternType="gray125"/></fill>' +
       '<fill><patternFill patternType="solid"><fgColor rgb="FF14213D"/></patternFill></fill>' +
@@ -76,10 +100,15 @@ function stylesXmlXlsx_() {
       '<fill><patternFill patternType="solid"><fgColor rgb="FFB91C1C"/></patternFill></fill>' +
       '<fill><patternFill patternType="solid"><fgColor rgb="FFEEF2F7"/></patternFill></fill>' +
       '<fill><patternFill patternType="solid"><fgColor rgb="FFF1F4F9"/></patternFill></fill>' +
+      // 12..25: tonos (lleno, suave) · 26/27: resumen del hito
+      COLORES_TONO_XLSX_.map((c) => '<fill><patternFill patternType="solid"><fgColor rgb="' + c[0] + '"/></patternFill></fill>' +
+        '<fill><patternFill patternType="solid"><fgColor rgb="' + c[1] + '"/></patternFill></fill>').join('') +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FF475569"/></patternFill></fill>' +
+      '<fill><patternFill patternType="solid"><fgColor rgb="FFCBD5E1"/></patternFill></fill>' +
     '</fills>' +
     '<borders count="1"><border/></borders>' +
     '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
-    '<cellXfs count="14">' +
+    '<cellXfs count="31">' +
       '<xf xfId="0" fontId="0" fillId="0" borderId="0"/>' +
       '<xf xfId="0" fontId="1" fillId="2" borderId="0" applyFont="1" applyFill="1"><alignment vertical="center"/></xf>' +
       '<xf xfId="0" fontId="2" fillId="10" borderId="0" applyFont="1" applyFill="1"/>' +
@@ -94,6 +123,12 @@ function stylesXmlXlsx_() {
       '<xf xfId="0" fontId="2" fillId="0" borderId="0" applyFont="1"><alignment horizontal="center"/></xf>' +
       '<xf xfId="0" numFmtId="164" fontId="0" fillId="0" borderId="0" applyNumberFormat="1"/>' +
       '<xf xfId="0" numFmtId="165" fontId="0" fillId="0" borderId="0" applyNumberFormat="1"/>' +
+      // 14..27: celdas de barra por tono · 28/29: resumen del hito · 30: "hoy"
+      COLORES_TONO_XLSX_.map((c, k) => '<xf xfId="0" fontId="0" fillId="' + (12 + k * 2) + '" borderId="0" applyFill="1"/>' +
+        '<xf xfId="0" fontId="0" fillId="' + (13 + k * 2) + '" borderId="0" applyFill="1"/>').join('') +
+      '<xf xfId="0" fontId="0" fillId="26" borderId="0" applyFill="1"/>' +
+      '<xf xfId="0" fontId="0" fillId="27" borderId="0" applyFill="1"/>' +
+      '<xf xfId="0" fontId="1" fillId="22" borderId="0" applyFont="1" applyFill="1"><alignment horizontal="center" vertical="center"/></xf>' +
     '</cellXfs>' +
     '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
     '</styleSheet>';
@@ -140,9 +175,17 @@ function sheetXmlXlsx_(hoja) {
       '<pane xSplit="' + xSplit + '" ySplit="' + ySplit + '" topLeftCell="' + topLeft + '" activePane="bottomRight" state="frozen"/>' +
       '</sheetView></sheetViews>';
   }
+  // Filtro de columnas en las hojas de datos, y la Carta Gantt lista para imprimir:
+  // apaisada, ajustada al ancho de la hoja (auditoría E3/E4).
+  const filtro = hoja.filtro ? '<autoFilter ref="' + hoja.filtro + '"/>' : '';
+  const sheetPr = hoja.imprimir ? '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>' : '';
+  const impresion = hoja.imprimir
+    ? '<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>' +
+      '<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>'
+    : '';
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    panes + cols + '<sheetData>' + filasXml + '</sheetData>' + merges + '</worksheet>';
+    sheetPr + panes + cols + '<sheetData>' + filasXml + '</sheetData>' + filtro + merges + impresion + '</worksheet>';
 }
 
 function construirXlsx_(hojas) {
@@ -172,10 +215,18 @@ function construirXlsx_(hojas) {
   const stylesRid = 'rId' + (n + 1);
   relsWb += '<Relationship Id="' + stylesRid + '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>';
 
+  // Nombres definidos: rango del filtro (Excel lo espera) y títulos que se
+  // repiten al imprimir (la fila de semanas y las columnas de la tarea).
+  const nombres = [];
+  hojas.forEach((h, k) => {
+    const ref = "'" + escXmlXlsx_(h.nombre.slice(0, 31)).replace(/'/g, "''") + "'!";
+    if (h.filtro) nombres.push('<definedName name="_xlnm._FilterDatabase" localSheetId="' + k + '" hidden="1">' + ref + h.filtro.replace(/([A-Z]+)(\d+)/g, '$$$1$$$2') + '</definedName>');
+    if (h.titulos) nombres.push('<definedName name="_xlnm.Print_Titles" localSheetId="' + k + '">' + ref + '$' + h.titulos.cols.replace(':', ':$') + ',' + ref + '$' + h.titulos.filas.replace(':', ':$') + '</definedName>');
+  });
   const workbook = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' +
     'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
-    '<sheets>' + sheetsWb + '</sheets></workbook>';
+    '<sheets>' + sheetsWb + '</sheets>' + (nombres.length ? '<definedNames>' + nombres.join('') + '</definedNames>' : '') + '</workbook>';
   const workbookRels = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
     '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' + relsWb + '</Relationships>';
 
@@ -315,10 +366,17 @@ function hojaResumenXlsx_(detalle, tareas, hitos) {
   };
 }
 
+// Carta Gantt del Excel (auditoría 2026-09-29, etapa 2): las MISMAS reglas que la
+// pantalla y el PDF -- inicio de barra = plan_inicio (propio, por dependencia o
+// por creación), color = semáforo de la tarea con los tonos de la plataforma,
+// la parte hecha de la barra en tono lleno y lo que falta en tono suave, barra
+// resumen por hito, semana de hoy marcada y leyenda al pie. La columna
+// "Situación" dice lo mismo que el color (antes "Sin empezar" pintada de rojo).
 function hojaCartaGanttXlsx_(p, tareas, hitos, planPorId) {
   planPorId = planPorId || {};
   const H = XLSX_EST.HEADER, HITOEST = XLSX_EST.BOLD, MARCA = XLSX_EST.HITO_MARCA;
-  const tareasConFecha = tareas.filter((t) => t.fecha_compromiso);
+  const FIJAS = 7;
+  const tareasConFecha = tareas.filter((t) => t.fecha_compromiso && t.estado !== 'CANCELADA');
   const ahoraClave = Utils.claveDia_(new Date(), TZ);
   const proyIniClave = p.fecha_inicio ? (Utils.claveDiaCampo_(p.fecha_inicio, TZ) || null) : null;
   const claves = [ahoraClave];
@@ -333,35 +391,45 @@ function hojaCartaGanttXlsx_(p, tareas, hitos, planPorId) {
   });
   const claveMin = claves.reduce((m, c) => (m === null || c < m) ? c : m, null);
   const claveMax = claves.reduce((m, c) => (m === null || c > m) ? c : m, null);
-  const semanas = semanasXlsx_(claveMin, claveMax, 40);
+  const semanas = semanasXlsx_(claveMin, claveMax, 60);
+  const esHoy = (s) => s.inicioClave <= ahoraClave && s.finClave >= ahoraClave;
 
   const encabezado = [{ v: 'Hito', s: H }, { v: 'Tarea', s: H }, { v: 'Responsable', s: H },
-    { v: 'Estado', s: H }, { v: 'Inicio', s: H }, { v: 'Fin', s: H }];
-  semanas.forEach((s) => encabezado.push({ v: s.etiqueta, s: H }));
+    { v: 'Situación', s: H }, { v: 'Avance', s: H }, { v: 'Inicio', s: H }, { v: 'Fin', s: H }];
+  semanas.forEach((s) => encabezado.push({ v: s.etiqueta, s: esHoy(s) ? XLSX_EST.HOY : H }));
 
-  function celdasBarra_(a) {
-    const barIni = inicioBarraClave_(a, proyIniClave, planPorId[a.actividad_id]);
-    const fin = Utils.claveDiaCampo_(a.fecha_compromiso, TZ);
-    const terminal = (a.estado === 'TERMINADA' || a.estado === 'CANCELADA');
-    const estiloBarra = XLSX_EST.BARRA[a.semaforo] || XLSX_EST.BARRA.pendiente;
-    return semanas.map((s) => {
-      const enBarra = (s.finClave >= barIni && s.inicioClave <= fin);
-      if (enBarra) return { s: estiloBarra };
-      const enAtraso = (!terminal && s.inicioClave > fin && s.inicioClave <= ahoraClave);
-      if (enAtraso) return { s: XLSX_EST.BARRA_ATRASO };
+  const avanceDe = (a) => {
+    const pl = planPorId[a.actividad_id];
+    if (pl && pl.avance_real_pct !== null && pl.avance_real_pct !== undefined) return Number(pl.avance_real_pct);
+    return a.estado === 'TERMINADA' ? 100 : (Number(a.avance_pct) || 0);
+  };
+  // Celdas de una barra [ini..fin]: las primeras en lleno según el avance.
+  function celdasBarra_(ini, fin, avance, estilos, atrasoHasta) {
+    const enBarra = semanas.map((s) => s.finClave >= ini && s.inicioClave <= fin);
+    const total = enBarra.filter(Boolean).length;
+    const hechas = Math.round(total * Math.max(0, Math.min(100, avance)) / 100);
+    let k = 0;
+    return semanas.map((s, i) => {
+      if (enBarra[i]) { k++; return { s: k <= hechas ? estilos[0] : estilos[1] }; }
+      if (atrasoHasta && s.inicioClave > fin && s.inicioClave <= atrasoHasta) return { s: XLSX_EST.BARRA_ATRASO };
       return null;
     });
   }
   function filaTarea_(a) {
-    const base = [
+    const ini = inicioBarraClave_(a, proyIniClave, planPorId[a.actividad_id]);
+    const fin = Utils.claveDiaCampo_(a.fecha_compromiso, TZ);
+    const terminal = a.estado === 'TERMINADA' || a.estado === 'CANCELADA';
+    const tono = TONO_SEMAFORO_XLSX_[a.semaforo] || 'neutro';
+    const avance = avanceDe(a);
+    return [
       '',
       a.titulo || '',
       a.responsable_nombre || a.responsable_email || '',
-      XLSX_ESTADO_TAREA_[a.estado] || a.estado || '',
-      fechaXlsx_(inicioBarraClave_(a, proyIniClave, planPorId[a.actividad_id])),
+      { v: SITUACION_XLSX_[a.semaforo] || XLSX_ESTADO_TAREA_[a.estado] || a.estado || '', s: XLSX_EST.TONO[tono][1] },
+      porcentajeXlsx_(avance),
+      fechaXlsx_(ini),
       fechaXlsx_(a.fecha_compromiso)
-    ];
-    return base.concat(celdasBarra_(a));
+    ].concat(celdasBarra_(ini, fin, avance, XLSX_EST.TONO[tono], terminal ? null : ahoraClave));
   }
 
   const porHito = {}, sinHito = [];
@@ -369,27 +437,59 @@ function hojaCartaGanttXlsx_(p, tareas, hitos, planPorId) {
     if (a.hito_id && hitos.some((h) => h.hito_id === a.hito_id)) (porHito[a.hito_id] = porHito[a.hito_id] || []).push(a);
     else sinHito.push(a);
   });
-  const porFin = (a, b) => Utils.claveDiaCampo_(a.fecha_compromiso, TZ).localeCompare(Utils.claveDiaCampo_(b.fecha_compromiso, TZ));
+  const porInicio = (a, b) => {
+    const x = inicioBarraClave_(a, proyIniClave, planPorId[a.actividad_id]), y = inicioBarraClave_(b, proyIniClave, planPorId[b.actividad_id]);
+    return String(x).localeCompare(String(y)) || Utils.claveDiaCampo_(a.fecha_compromiso, TZ).localeCompare(Utils.claveDiaCampo_(b.fecha_compromiso, TZ));
+  };
+  // Barra resumen del grupo: de la primera a la última tarea, avance ponderado
+  // por tamaño (S/M/L/XL), igual que la pantalla.
+  function filaGrupo_(nombre, estado, objClave, suyas) {
+    const fila = [{ v: nombre, s: HITOEST }, '', '', { v: estado, s: HITOEST }];
+    let celdas = semanas.map(() => null);
+    let avanceGrupo = '';
+    if (suyas.length) {
+      const peso = { S: 1, M: 2, L: 3, XL: 5 };
+      let tot = 0, hecho = 0;
+      suyas.forEach((a) => { const w = peso[a.tamano] || 2; tot += w; hecho += w * avanceDe(a) / 100; });
+      const av = tot ? Math.round(hecho / tot * 100) : 0;
+      avanceGrupo = porcentajeXlsx_(av);
+      const ini = suyas.map((a) => inicioBarraClave_(a, proyIniClave, planPorId[a.actividad_id])).sort()[0];
+      const fin = suyas.map((a) => Utils.claveDiaCampo_(a.fecha_compromiso, TZ)).sort().slice(-1)[0];
+      celdas = celdasBarra_(ini, fin, av, XLSX_EST.RESUMEN, null);
+    }
+    if (objClave) semanas.forEach((s, i) => { if (objClave >= s.inicioClave && objClave <= s.finClave) celdas[i] = { v: '◆', s: MARCA }; });
+    return fila.concat([avanceGrupo, '', fechaXlsx_(objClave)]).concat(celdas);
+  }
 
   const filas = [encabezado];
   hitos.forEach((h) => {
-    const objClave = Utils.claveDiaCampo_(h.fecha_objetivo, TZ);
-    const fila = [{ v: h.nombre, s: HITOEST }, '', '', { v: XLSX_ESTADO_HITO_[h.estado] || h.estado, s: HITOEST }, '', ''];
-    semanas.forEach((s) => fila.push((objClave >= s.inicioClave && objClave <= s.finClave) ? { v: '◆', s: MARCA } : null));
-    filas.push(fila);
-    (porHito[h.hito_id] || []).sort(porFin).forEach((a) => filas.push(filaTarea_(a)));
+    const suyas = (porHito[h.hito_id] || []).sort(porInicio);
+    filas.push(filaGrupo_(h.nombre, XLSX_ESTADO_HITO_[h.estado] || h.estado, Utils.claveDiaCampo_(h.fecha_objetivo, TZ), suyas));
+    suyas.forEach((a) => filas.push(filaTarea_(a)));
   });
   if (sinHito.length) {
-    const filaSin = [{ v: 'Sin hito', s: HITOEST }, '', '', '', '', ''];
-    semanas.forEach(() => filaSin.push(null));
-    filas.push(filaSin);
-    sinHito.sort(porFin).forEach((a) => filas.push(filaTarea_(a)));
+    filas.push(filaGrupo_('Sin hito', '', null, sinHito.sort(porInicio)));
+    sinHito.forEach((a) => filas.push(filaTarea_(a)));
   }
 
-  const cols = [{ min: 1, max: 1, ancho: 22 }, { min: 2, max: 2, ancho: 32 }, { min: 3, max: 3, ancho: 22 },
-    { min: 4, max: 4, ancho: 13 }, { min: 5, max: 6, ancho: 11 }];
-  if (semanas.length) cols.push({ min: 7, max: 6 + semanas.length, ancho: 4.5 });
-  return { nombre: 'Carta Gantt', cols, filas, congelar: { filas: 1, cols: 6 } };
+  // Leyenda al pie: el color va en la primera columna de semanas y el texto al lado.
+  const vacias = () => Array(FIJAS).fill('');
+  filas.push([]);
+  filas.push([{ v: 'Leyenda', s: HITOEST }]);
+  [['info', 'En curso'], ['ok', 'Terminada'], ['alerta', 'En riesgo'], ['critico', 'Atrasada'], ['hito', 'Bloqueada'], ['primario', 'En revisión'], ['neutro', 'Pendiente']]
+    .forEach((x) => filas.push(vacias().concat([{ s: XLSX_EST.TONO[x[0]][0] }, { s: XLSX_EST.TONO[x[0]][1] }, x[1] + ' (lleno = avance, suave = lo que falta)'])));
+  filas.push(vacias().concat([{ s: XLSX_EST.RESUMEN[0] }, { s: XLSX_EST.RESUMEN[1] }, 'Resumen del hito']));
+  filas.push(vacias().concat([{ v: '◆', s: MARCA }, '', 'Fecha objetivo del hito']));
+  filas.push(vacias().concat([{ s: XLSX_EST.BARRA_ATRASO }, '', 'Semanas de atraso (vencida y sin terminar)']));
+  filas.push(vacias().concat([{ v: 'Hoy', s: XLSX_EST.HOY }, '', 'Semana de hoy']));
+
+  const cols = [{ min: 1, max: 1, ancho: 24 }, { min: 2, max: 2, ancho: 36 }, { min: 3, max: 3, ancho: 22 },
+    { min: 4, max: 4, ancho: 12 }, { min: 5, max: 5, ancho: 8 }, { min: 6, max: 7, ancho: 11 }];
+  if (semanas.length) cols.push({ min: FIJAS + 1, max: FIJAS + semanas.length, ancho: 4.5 });
+  return {
+    nombre: 'Carta Gantt', cols, filas, congelar: { filas: 1, cols: FIJAS },
+    imprimir: true, titulos: { filas: '1:1', cols: 'A:' + colLetraXlsx_(FIJAS) }
+  };
 }
 
 function hojaTareasXlsx_(tareas, hitos, planPorId) {
@@ -418,7 +518,7 @@ function hojaTareasXlsx_(tareas, hitos, planPorId) {
     nombre: 'Tareas',
     cols: [{ min: 1, max: 1, ancho: 14 }, { min: 2, max: 2, ancho: 22 }, { min: 3, max: 3, ancho: 34 },
       { min: 4, max: 4, ancho: 22 }, { min: 5, max: 5, ancho: 14 }, { min: 6, max: 7, ancho: 12 }, { min: 8, max: 11, ancho: 12 }],
-    filas, congelar: { filas: 1 }
+    filas, congelar: { filas: 1 }, filtro: 'A1:K' + filas.length
   };
 }
 
@@ -462,7 +562,7 @@ function hojaControlPlazosXlsx_(tareas, planPorId) {
     nombre: 'Control de Plazos',
     cols: [{ min: 1, max: 1, ancho: 34 }, { min: 2, max: 2, ancho: 22 }, { min: 3, max: 6, ancho: 13 },
       { min: 7, max: 9, ancho: 15 }, { min: 10, max: 10, ancho: 13 }],
-    filas, congelar: { filas: 1 }
+    filas, congelar: { filas: 1 }, filtro: 'A1:J' + filas.length
   };
 }
 
@@ -500,7 +600,7 @@ function hojaResponsablesXlsx_(tareas) {
   return {
     nombre: 'Responsables',
     cols: [{ min: 1, max: 1, ancho: 28 }, { min: 2, max: 6, ancho: 14 }],
-    filas, congelar: { filas: 1 }
+    filas, congelar: { filas: 1 }, filtro: 'A1:F' + filas.length
   };
 }
 
@@ -523,7 +623,7 @@ function hojaHitosXlsx_(hitos, tareas) {
   return {
     nombre: 'Hitos',
     cols: [{ min: 1, max: 1, ancho: 30 }, { min: 2, max: 2, ancho: 15 }, { min: 3, max: 3, ancho: 14 }, { min: 4, max: 6, ancho: 13 }],
-    filas, congelar: { filas: 1 }
+    filas, congelar: { filas: 1 }, filtro: 'A1:F' + filas.length
   };
 }
 
@@ -546,7 +646,7 @@ function hojaHistorialXlsx_(bitacora, tareasPorId) {
   return {
     nombre: 'Historial',
     cols: [{ min: 1, max: 1, ancho: 13 }, { min: 2, max: 2, ancho: 30 }, { min: 3, max: 3, ancho: 18 }, { min: 4, max: 4, ancho: 44 }, { min: 5, max: 5, ancho: 8 }],
-    filas, congelar: { filas: 1 }
+    filas, congelar: { filas: 1 }, filtro: 'A1:E' + filas.length
   };
 }
 
@@ -565,7 +665,7 @@ function hojaDependenciasXlsx_(tareas, tareasPorId) {
   return {
     nombre: 'Dependencias',
     cols: [{ min: 1, max: 2, ancho: 34 }, { min: 3, max: 3, ancho: 20 }],
-    filas, congelar: { filas: 1 }
+    filas, congelar: { filas: 1 }, filtro: 'A1:C' + filas.length
   };
 }
 
@@ -582,4 +682,4 @@ function descargarLibro(db, data, contexto) {
   return { xlsx_base64: buffer.toString('base64'), filename: (p.nombre || 'Proyecto') + '.xlsx' };
 }
 
-module.exports = { descargarLibro };
+module.exports = { descargarLibro, TONO_SEMAFORO_XLSX_ };

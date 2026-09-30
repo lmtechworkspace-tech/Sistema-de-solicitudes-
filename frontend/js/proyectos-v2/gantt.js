@@ -1,295 +1,20 @@
 /**
- * proyectos-v2/gantt.js — Carta Gantt de Proyectos v2, UN solo renderizador para
- * el adelanto del Resumen y el Gantt completo de Trabajo.
+ * proyectos-v2/gantt.js — Carta Gantt de Proyectos v2: la parte INTERACTIVA.
  *
- * Rediseño 2026-09-28 (proyectos grandes, ej. ISO 9001: 100+ tareas, 9 meses):
- *  - Cabecera de dos pisos (meses con año · semanas o días) que queda FIJA arriba
- *    al bajar, dentro de un área con scroll propio; la columna de nombres queda fija
- *    a la izquierda.
- *  - Cada hito muestra una barra resumen (de su primera a su última tarea) con su
- *    avance, además del rombo de la fecha objetivo. Los hitos van en el orden del plan.
- *  - Barra de plan con avance + línea de lo REAL (verde a tiempo, roja con atraso,
- *    azul en curso) y el nombre de la tarea al lado de la barra.
- *  - Flechas de dependencias (SVG) que se resaltan al pasar el mouse.
- *  - Ficha emergente con plan, real, desfase y avance; arrastrar para desplazarse.
- *  - Líneas de inicio de mes, sombreado de fin de semana en la vista por días y
- *    la marca de "Hoy" en la cabecera (ya no tapa las fechas).
- *
- * Posiciones en % dentro de la pista. Dos modos:
- *  - compacto (sin pxSemana): la pista ocupa el ancho disponible (Resumen).
- *  - con zoom (pxSemana): la grilla mide semanas × pxSemana, scroll propio.
- *
- * opts: { tareas, desde (Date), semanas, pxSemana, agrupar (por hito), limite,
- *         marcarHoy (true), densidad ('comoda'|'compacta'), dependencias (bool),
- *         completa (área con scroll y cabecera fija), quieto (sin animación) }
+ * El dibujo (barras, hitos, lo real, cabecera de meses/semanas, "Hoy") vive en
+ * gantt-dibujo.js (SigsoGantt), que también usa el servidor para el PDF: una
+ * sola Carta Gantt en pantalla y en papel (auditoría 2026-09-29, etapa 2).
+ * Aquí queda lo que necesita el navegador: flechas de dependencias (SVG medido
+ * sobre el DOM), ficha emergente, arrastre para desplazarse y "ir a hoy".
  */
 (function () {
   'use strict';
 
   var PY = window.PYv2;
   var U = UIv2;
+  var G = window.SigsoGantt;
   var DIA = 86400000;
-  var MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-  var MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-  var DIAS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-
-  function lunes(d) {
-    var x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-    return new Date(x.getTime() - ((x.getUTCDay() + 6) % 7) * DIA);
-  }
-  function dia(v) {
-    if (!v) return null;
-    var t = Date.parse(String(v).slice(0, 10));
-    return isNaN(t) ? null : new Date(t);
-  }
-
-  // Tramo de PLAN de una tarea: inicio de plan propio → término de plan.
-  function tramo(a, p) {
-    var fin = dia((p && p.plan_fin) || a.fecha_compromiso || a.fecha_propuesta);
-    if (!fin) return null;
-    var ini = dia(a.fecha_inicio_plan) || dia(p && p.plan_inicio) || dia(a.fecha_creacion) || new Date(fin.getTime() - 7 * DIA);
-    if (ini > fin) ini = fin;
-    return { ini: ini, fin: fin };
-  }
-  // Tramo REAL: inicio real → término real (o hoy si sigue abierta).
-  function tramoReal(a, p, hoy) {
-    var ini = dia(a.fecha_inicio_real || (p && p.fecha_inicio_real));
-    var fin = dia((p && p.fecha_fin_real) || a.fecha_terminada);
-    if (!ini && !fin) return null;
-    if (!ini) ini = fin;
-    var abierta = !fin;
-    if (!fin) fin = hoy;
-    if (fin < ini) fin = ini;
-    return { ini: ini, fin: fin, abierta: abierta };
-  }
-
-  // Rango que cubre todo el proyecto (Gantt completo), con una semana de aire.
-  function rangoProyecto(ctx) {
-    var plan = PY.planPorId(ctx);
-    var hoy = dia(PY.hoyClave());
-    var min = new Date(hoy.getTime() - 7 * DIA), max = new Date(hoy.getTime() + 14 * DIA);
-    var p = ctx.proyecto || {};
-    var pi = dia(p.fecha_inicio), po = dia(p.fecha_objetivo);
-    if (pi && pi < min) min = pi;
-    if (po && po > max) max = po;
-    ctx.tareas.forEach(function (a) {
-      var t = tramo(a, plan[a.actividad_id]);
-      if (t) { if (t.ini < min) min = t.ini; if (t.fin > max) max = t.fin; }
-      var r = tramoReal(a, plan[a.actividad_id] || {}, hoy);
-      if (r && r.ini < min) min = r.ini;
-    });
-    var desde = lunes(new Date(min.getTime() - 7 * DIA));
-    return { desde: desde, semanas: Math.max(8, Math.ceil((max - desde) / (7 * DIA)) + 2) };
-  }
-
-  function gantt(ctx, opts) {
-    opts = opts || {};
-    var plan = PY.planPorId(ctx);
-    var hoy = dia(PY.hoyClave());
-    var desde = opts.desde || lunes(new Date(hoy.getTime() - 14 * DIA));
-    var semanas = opts.semanas || 12;
-    var hasta = new Date(desde.getTime() + semanas * 7 * DIA);
-    var rango = hasta - desde;
-    var px = opts.pxSemana || 0;
-    var anchoPista = px ? semanas * px : 0;
-    function pos(t) { return Math.max(0, Math.min(100, (t - desde) / rango * 100)); }
-    function pct(n) { return n.toFixed(3) + '%'; }
-    var compacta = opts.densidad === 'compacta';
-
-    var tareas = (opts.tareas || ctx.tareas).filter(function (a) { return a.estado !== 'CANCELADA'; });
-    var visibles = {};
-    var filas = tareas.map(function (a) {
-      var p = plan[a.actividad_id] || {};
-      var t = tramo(a, p);
-      return t ? { a: a, p: p, ini: t.ini, fin: t.fin, real: tramoReal(a, p, hoy) } : null;
-    }).filter(function (f) { return f && f.fin >= desde && f.ini <= hasta; });
-
-    var hitos = ((ctx.detalle && ctx.detalle.hitos) || []);
-    var hitosEnRango = hitos.filter(function (h) { var d = dia(h.fecha_objetivo); return d && d >= desde && d <= hasta; });
-
-    function tonoHito(h) {
-      if (h.estado === 'COMPLETADO') return 'ok';
-      if (h.estado === 'CANCELADO') return 'neutro';
-      return (dia(h.fecha_objetivo) && dia(h.fecha_objetivo) < hoy) ? 'critico' : 'hito';
-    }
-    function marcaHito(h) {
-      return '<span class="sx2-py-gantt__hito sx2-tono-' + tonoHito(h) + '" style="left:' + pct(pos(dia(h.fecha_objetivo).getTime())) + '"' +
-        ' title="' + U.esc('Hito: ' + h.nombre + ' · objetivo ' + PY.fecha(h.fecha_objetivo, true)) + '"></span>';
-    }
-    function avanceDe(f) {
-      if (f.p.avance_real_pct !== undefined && f.p.avance_real_pct !== null) return Number(f.p.avance_real_pct);
-      return f.a.estado === 'TERMINADA' ? 100 : (Number(f.a.avance_pct) || 0);
-    }
-
-    // Línea de lo real: verde a tiempo, roja con atraso, azul si sigue en curso.
-    function barraReal(f) {
-      var r = f.real;
-      if (!r) return '';
-      var l = pos(r.ini.getTime()), d = pos(r.fin.getTime() + DIA);
-      var tarde = r.abierta ? hoy > f.fin : r.fin > f.fin;
-      var clase = tarde ? ' sx2-py-gantt__real--tarde' : (r.abierta ? ' sx2-py-gantt__real--curso' : ' sx2-py-gantt__real--ok');
-      return '<span class="sx2-py-gantt__real' + clase + '" style="left:' + pct(l) + ';width:calc(' + pct(Math.max(0, d - l)) + ' + 2px)"></span>';
-    }
-
-    function filaTarea(f, i) {
-      var tono = PY.tonoTarea(f.a);
-      var izq = pos(f.ini.getTime()), der = pos(f.fin.getTime() + DIA);
-      var avance = avanceDe(f);
-      var resp = PY.persona(f.a.responsable_email, f.a.responsable_nombre);
-      visibles[f.a.actividad_id] = true;
-      var anchoPx = px ? (der - izq) / 100 * anchoPista : null;
-      // Nombre junto a la barra (a la derecha): así se lee aunque la columna lo corte.
-      // Si no cabe antes del borde, va a la izquierda de la barra (no ensancha la grilla).
-      var etiqueta = '';
-      if (!px || anchoPista > 500) {
-        var anchoTotal = px ? anchoPista : (opts.anchoEstimado || 800);
-        var largoEt = Math.min(260, f.a.titulo.length * 5.6) + 12;
-        var cabeDer = (100 - der) / 100 * anchoTotal >= largoEt;
-        var cabeIzq = izq / 100 * anchoTotal >= largoEt;
-        etiqueta = (cabeDer || !cabeIzq)
-          ? '<span class="sx2-py-gantt__et" style="left:calc(' + pct(der) + ' + 8px)">' + U.esc(f.a.titulo) + '</span>'
-          : '<span class="sx2-py-gantt__et sx2-py-gantt__et--izq" style="right:calc(' + pct(100 - izq) + ' + 8px)">' + U.esc(f.a.titulo) + '</span>';
-      }
-      return '<div class="sx2-py-gantt__fila' + (PY.esTerminal(f.a) ? ' sx2-py-gantt__fila--cerrada' : '') + '" style="--i:' + Math.min(i, 14) + '" data-py2-tarea="' + U.esc(f.a.actividad_id) + '"' +
-          (f.a.depende_de ? ' data-dep="' + U.esc(f.a.depende_de) + '"' : '') + ' tabindex="0">' +
-        '<span class="sx2-py-gantt__nombre">' + U.avatar(resp, 'xs') + '<span class="sx2-cortar" title="' + U.esc(f.a.titulo) + '">' + U.esc(f.a.titulo) + '</span>' +
-          (f.a.es_critica ? '<span class="sx2-py-gantt__critica" title="Ruta crítica">' + U.ico('rayo', 11) + '</span>' : '') + '</span>' +
-        '<span class="sx2-py-gantt__pista">' +
-          '<span class="sx2-py-gantt__barra sx2-tono-' + tono + (anchoPx !== null && anchoPx < 10 ? ' sx2-py-gantt__barra--punto' : '') + '" style="left:' + pct(izq) + ';width:' + pct(Math.max(0.2, der - izq)) + '">' +
-            '<span class="sx2-py-gantt__relleno" style="width:' + Math.max(0, Math.min(100, avance)) + '%"></span>' +
-          '</span>' +
-          barraReal(f) + etiqueta +
-        '</span>' +
-      '</div>';
-    }
-
-    // Barra resumen del hito: de la primera a la última tarea, con su avance ponderado.
-    function resumenHito(h, filasGrupo) {
-      if (!filasGrupo.length) return '';
-      var ini = Math.min.apply(null, filasGrupo.map(function (f) { return f.ini.getTime(); }));
-      var fin = Math.max.apply(null, filasGrupo.map(function (f) { return f.fin.getTime(); }));
-      var peso = { S: 1, M: 2, L: 3, XL: 5 }, tot = 0, hecho = 0;
-      filasGrupo.forEach(function (f) { var w = peso[f.a.tamano] || 2; tot += w; hecho += w * avanceDe(f) / 100; });
-      var av = tot ? Math.round(hecho / tot * 100) : 0;
-      var l = pos(ini), d = pos(fin + DIA);
-      return '<span class="sx2-py-gantt__resumen" style="left:' + pct(l) + ';width:' + pct(Math.max(0.3, d - l)) + '" title="' + U.esc((h ? h.nombre : 'Sin hito') + ' · ' + av + '% · ' + PY.fecha(new Date(ini).toISOString()) + ' → ' + PY.fecha(new Date(fin).toISOString())) + '">' +
-        '<span class="sx2-py-gantt__resumen-av" style="width:' + av + '%"></span></span>';
-    }
-
-    var cuerpo = '', total = 0, limite = opts.limite || Infinity, i = 0;
-    var ordenar = function (x, y) {
-      var tx = PY.esTerminal(x.a) ? 1 : 0, ty = PY.esTerminal(y.a) ? 1 : 0;
-      return (opts.agrupar ? 0 : (tx - ty)) || (x.ini - y.ini) || (x.fin - y.fin);
-    };
-
-    if (opts.agrupar) {
-      // Los hitos en el orden del plan (no por fecha objetivo).
-      var grupos = hitos.slice().sort(function (a, b) {
-        return ((Number(a.orden) || 0) - (Number(b.orden) || 0)) || (new Date(a.fecha_objetivo || '9999-12-31') - new Date(b.fecha_objetivo || '9999-12-31'));
-      }).map(function (h) { return { h: h, filas: filas.filter(function (f) { return f.a.hito_id === h.hito_id; }).sort(ordenar) }; });
-      var idsHitos = {};
-      hitos.forEach(function (h) { idsHitos[h.hito_id] = true; });
-      var sueltas = filas.filter(function (f) { return !f.a.hito_id || !idsHitos[f.a.hito_id]; }).sort(ordenar);
-      if (sueltas.length) grupos.push({ h: null, filas: sueltas });
-      grupos.forEach(function (g) {
-        var enRango = g.h && dia(g.h.fecha_objetivo) && dia(g.h.fecha_objetivo) >= desde && dia(g.h.fecha_objetivo) <= hasta;
-        if (!g.filas.length && !enRango) return;
-        var clave = g.h ? g.h.hito_id : '_';
-        var cerrado = !!(PY.gruposCerrados && PY.gruposCerrados[clave]);
-        var hechas = g.filas.filter(function (f) { return f.a.estado === 'TERMINADA'; }).length;
-        cuerpo += '<div class="sx2-py-gantt__fila sx2-py-gantt__fila--grupo" data-py2-grupo="' + U.esc(clave) + '">' +
-          '<span class="sx2-py-gantt__nombre"><button type="button" class="sx2-py-gantt__plegar" aria-expanded="' + (cerrado ? 'false' : 'true') + '" aria-label="' + (cerrado ? 'Mostrar' : 'Ocultar') + ' tareas del hito">' + U.ico(cerrado ? 'derecha' : 'abajo', 14) + '</button>' +
-            (g.h ? U.ico('bandera', 13) : '') + '<span class="sx2-cortar" title="' + U.esc(g.h ? g.h.nombre : 'Sin hito') + '">' + U.esc(g.h ? g.h.nombre : 'Sin hito') + '</span>' +
-            '<span class="sx2-py-gantt__n" title="Tareas terminadas / total">' + hechas + '/' + g.filas.length + '</span></span>' +
-          '<span class="sx2-py-gantt__pista">' + resumenHito(g.h, g.filas) + (enRango ? marcaHito(g.h) : '') + '</span>' +
-        '</div>';
-        if (!cerrado) g.filas.forEach(function (f) { if (total < limite) { cuerpo += filaTarea(f, i++); total++; } });
-      });
-    } else {
-      if (hitosEnRango.length) {
-        cuerpo += '<div class="sx2-py-gantt__fila sx2-py-gantt__fila--hitos"><span class="sx2-py-gantt__nombre sx2-tenue">' + U.ico('bandera', 14) + 'Hitos</span>' +
-          '<span class="sx2-py-gantt__pista">' + hitosEnRango.map(marcaHito).join('') + '</span></div>';
-      }
-      filas.sort(ordenar).forEach(function (f) { if (total < limite) { cuerpo += filaTarea(f, i++); total++; } });
-    }
-
-    if (!filas.length && !hitosEnRango.length) {
-      return U.vacio({ icono: 'gantt', titulo: 'Nada planificado en este período', texto: 'Las tareas con fecha comprometida aparecen aquí.' });
-    }
-
-    // --- Cabecera: meses (con año) arriba · semanas o días abajo -----------------------
-    var pxEst = px || ((opts.anchoEstimado || 800) / semanas);
-    var mostrarSemanas = pxEst >= 22;
-    var porDias = px >= 100;
-    var meses = '', lineas = '';
-    var mostrarHoy = opts.marcarHoy !== false && hoy >= desde && hoy <= hasta;
-    var hoyPct = pos(hoy.getTime() + DIA / 2);
-    // La etiqueta "Hoy" vive en la fila de meses: si choca con el nombre de un mes,
-    // ese nombre se corre a la derecha de la etiqueta (o se acorta / se oculta).
-    var anchoTotal = px ? anchoPista : (opts.anchoEstimado || 800);
-    var hoyPx = mostrarHoy ? hoyPct / 100 * anchoTotal : null;
-    var m = new Date(Date.UTC(desde.getUTCFullYear(), desde.getUTCMonth(), 1));
-    var primero = true;
-    while (m < hasta) {
-      var sig = new Date(Date.UTC(m.getUTCFullYear(), m.getUTCMonth() + 1, 1));
-      var l = pos(Math.max(m.getTime(), desde.getTime())), r = pos(Math.min(sig.getTime(), hasta.getTime()));
-      var anchoMesPx = (r - l) / 100 * anchoTotal;
-      var nombre = anchoMesPx < 46 ? MESES[m.getUTCMonth()] : MESES_LARGOS[m.getUTCMonth()];
-      var conAnio = (primero || m.getUTCMonth() === 0) && anchoMesPx >= 60;
-      var relleno = '';
-      if (hoyPx !== null) {
-        var ini = l / 100 * anchoTotal;
-        var largo = function (n, anio) { return n.length * 6.8 + (anio ? 34 : 0); };
-        var chipI = hoyPx - 22, chipD = hoyPx + 22;
-        if (chipI < ini + 6 + largo(nombre, conAnio) && chipD > ini + 6) {
-          var corrido = chipD - ini;
-          if (corrido + largo(nombre, conAnio) > anchoMesPx) { nombre = MESES[m.getUTCMonth()]; conAnio = false; }
-          if (corrido + largo(nombre, false) <= anchoMesPx) relleno = ';padding-left:' + Math.round(corrido) + 'px';
-          else if (chipI - ini - 6 >= largo(nombre, false)) relleno = '';
-          else nombre = '';
-        }
-      }
-      meses += '<span class="sx2-py-gantt__mes" style="left:' + pct(l) + ';width:' + pct(r - l) + relleno + '" title="' + MESES_LARGOS[m.getUTCMonth()] + ' ' + m.getUTCFullYear() + '">' + nombre + (conAnio && nombre ? ' <b>' + m.getUTCFullYear() + '</b>' : '') + '</span>';
-      if (m > desde) lineas += '<span class="sx2-py-gantt__linea-mes" style="left:calc(var(--sx-gantt-et) + (100% - var(--sx-gantt-et)) * ' + pos(m.getTime()).toFixed(3) + ' / 100)"></span>';
-      primero = false;
-      m = sig;
-    }
-    var cab = '';
-    if (mostrarSemanas) {
-      for (var s = 0; s < semanas; s++) {
-        var d = new Date(desde.getTime() + s * 7 * DIA);
-        if (porDias) {
-          cab += '<span class="sx2-py-gantt__sem sx2-py-gantt__sem--dias">' + DIAS.map(function (x, k) {
-            var dd = new Date(d.getTime() + k * DIA);
-            var esHoy = dd.getTime() === hoy.getTime();
-            return '<i' + (k >= 5 ? ' class="sx2-py-gantt__finde"' : '') + (esHoy ? ' data-hoy' : '') + '>' + x + '<br>' + dd.getUTCDate() + '</i>';
-          }).join('') + '</span>';
-        } else {
-          cab += '<span class="sx2-py-gantt__sem" title="Semana del ' + d.getUTCDate() + ' de ' + MESES_LARGOS[d.getUTCMonth()] + '">' + d.getUTCDate() + '</span>';
-        }
-      }
-    }
-    var estilo = '--sx-semanas:' + semanas + (px ? ';min-width:calc(var(--sx-gantt-et) + ' + anchoPista + 'px)' : '');
-    var clases = 'sx2-py-gantt' + (compacta ? ' sx2-py-gantt--compacta' : '') + (porDias ? ' sx2-py-gantt--dias' : '') +
-      (!mostrarSemanas ? ' sx2-py-gantt--sin-semanas' : '') + (opts.quieto ? ' sx2-py-gantt--quieto' : '');
-
-    return '<div class="sx2-py-gantt-scroll' + (px ? ' sx2-py-gantt-scroll--zoom' : '') + (opts.completa ? ' sx2-py-gantt-scroll--completa' : '') + '">' +
-      '<div class="' + clases + '" style="' + estilo + '"' + (opts.completa ? ' data-completa' : '') + (opts.dependencias ? ' data-deps' : '') + '>' +
-        '<div class="sx2-py-gantt__fila sx2-py-gantt__fila--cab">' +
-          '<span class="sx2-py-gantt__nombre sx2-py-gantt__nombre--cab">' + (opts.agrupar ? 'Hito / tarea' : 'Tarea') + '</span>' +
-          '<span class="sx2-py-gantt__tiempo">' +
-            '<span class="sx2-py-gantt__meses">' + meses + (mostrarHoy ? '<span class="sx2-py-gantt__hoy-et" style="left:' + pct(hoyPct) + '">Hoy</span>' : '') + '</span>' +
-            (mostrarSemanas ? '<span class="sx2-py-gantt__semanas">' + cab + '</span>' : '') +
-          '</span>' +
-        '</div>' +
-        cuerpo +
-        '<div class="sx2-py-gantt__lineas" aria-hidden="true">' + lineas +
-          (mostrarHoy ? '<span class="sx2-py-gantt__hoy" style="left:calc(var(--sx-gantt-et) + (100% - var(--sx-gantt-et)) * ' + hoyPct.toFixed(3) + ' / 100)"></span>' : '') +
-        '</div>' +
-      '</div>' +
-    '</div>' +
-    (filas.length > total && !opts.agrupar ? '<p class="sx2-tenue" style="margin:12px 0 0;font-size:.8125rem">+ ' + (filas.length - total) + ' tareas más en este período.</p>' : '');
-  }
+  var dia = G.dia, tramo = G.tramo, tramoReal = G.tramoReal;
 
   // --- Después de pintar: dependencias, ficha emergente, arrastre --------------------
   function dibujarDependencias(g) {
@@ -431,10 +156,10 @@
   });
 
   PY.gruposCerrados = PY.gruposCerrados || {};
-  PY.gantt = gantt;
-  PY.ganttRangoProyecto = rangoProyecto;
+  PY.gantt = G.html;
+  PY.ganttRangoProyecto = G.rango;
   PY.ganttCentrarEnHoy = centrarEnHoy;
   PY.ganttIrAlInicio = irAlInicio;
   PY.ganttMontar = montar;
-  PY.lunes = lunes;
+  PY.lunes = G.lunes;
 })();

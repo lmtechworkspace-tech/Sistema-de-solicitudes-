@@ -105,3 +105,15 @@ completa; PDF con diseño v2 y "En una línea" + "Lo que requiere decisión"; si
 2. **Una sola Carta Gantt en los tres formatos**: el PDF con el renderizador de pantalla (apaisado, % de avance, línea real, hoy, dependencias y línea base) y el Excel con `libroExcel.js` más impresión. Botón "Descargar Gantt" en la propia vista, con el zoom y los filtros actuales (G7, P1, E3, E4).
 3. **Informe PDF más corto y legible**: una tabla de detalle, bitácora con tarea y persona, gráficos con la marca del plan, nombres de archivo uniformes y código de proyecto automático (P2, P4, P5, P6, C5).
 4. **Gantt operativo**: arrastrar para reprogramar (con motivo), línea base superpuesta, subtareas anidadas, varias dependencias, ruta crítica y mejoras de móvil (G3–G6, G8).
+
+---
+
+## 7 · Avance
+
+- **Etapa 1 — Datos correctos:** desplegada (`9141889`). C1, C2, C3, C4, E2 y P3.
+- **Etapa 2 — Una sola Carta Gantt:** el dibujo vive en `frontend/js/proyectos-v2/gantt-dibujo.js` y lo usan
+  la pantalla y el PDF (el servidor lo corre como los demás reportes v2). Botón "Descargar" PDF/Excel en la
+  propia Carta Gantt, con los filtros que se están viendo. El Excel usa los mismos tonos, el avance dentro de
+  la barra, la semana de hoy, el resumen por hito, la leyenda, filtros e impresión apaisada. Cubre P1, G7, E4
+  y la parte de E3 de formato; el paso completo al generador `libroExcel.js` queda para la etapa 3.
+  Pendiente: las flechas de dependencias no se dibujan en el papel (en pantalla sí).

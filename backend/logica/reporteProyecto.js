@@ -1028,7 +1028,15 @@ function cuerpoConfiguradoV2_(config, detalle, tareasFiltradas, rendimiento, bit
   if (incluye('kpis')) h += nivel('kpis', P.kpis());
   if (incluye('salud')) h += nivel('salud', P.salud());
   if (incluye('mini_gantt')) h += nivel('mini_gantt', P.avance(), { nota: 'real vs. lo planificado · lo más atrasado arriba' });
-  if (incluye('gantt')) h += '<div class="rp2-apaisada">' + nivel('gantt', P.gantt() + (incluye('leyenda') ? P.leyenda() : '')) + '</div>';
+  if (incluye('gantt')) {
+    // Carta Gantt: el mismo dibujo de la pantalla (antes, una tabla de semanas propia).
+    const G = DocV2.piezas().G;
+    const ctxG = contextoGanttPapel_(detalle, tareasFiltradas, rendimiento, nombres);
+    const bloques = G ? ganttPapelV2_(G, ctxG, GANTT_PAPEL_FILAS) : [];
+    const cuerpoG = bloques.length ? bloques.join('') + G.aviso(ctxG) + (incluye('leyenda') ? G.leyenda({ papel: true }) : '')
+      : P.gantt() + (incluye('leyenda') ? P.leyenda() : '');
+    h += '<div class="rp2-apaisada">' + nivel('gantt', cuerpoG) + '</div>';
+  }
   if (incluye('workload')) h += nivel('workload', P.carga(), { nota: 'tareas activas por responsable' });
   if (incluye('leyenda') && !incluye('gantt') && incluye('workload')) h += nivel('leyenda', P.leyenda());
   if (incluye('hitos')) h += nivel('hitos', P.hitos() || '<p class="ot2-nota">Sin hitos.</p>');
@@ -1087,6 +1095,37 @@ async function descargarReporteEstandar_(db, data, contexto, detalle, tareas, re
 const CSS_PAGINAS_PROYECTO = '@page { size: A4 portrait; } @page apaisada { size: A4 landscape; } ' +
   '.rp2-apaisada { page: apaisada; break-before: page; } .rp2-portada { break-after: page; }';
 
+// --- Carta Gantt v2 en papel (auditoría 2026-09-29, etapa 2) ------------------
+// El MISMO dibujo de la pantalla (frontend/js/proyectos-v2/gantt-dibujo.js,
+// corrido en el vm de documentoV2): mismos colores, mismo inicio de barra,
+// avance dentro de la barra, línea de lo real, hitos con barra resumen y "Hoy".
+// El papel no repite la cabecera de un <div>, así que se reparte en bloques de
+// filas, cada uno con su cabecera de meses/semanas, uno por página apaisada.
+const GANTT_PAPEL_FILAS = 21;          // filas por página apaisada (densidad compacta)
+const GANTT_PAPEL_FILAS_PRIMERA = 14;  // la primera comparte hoja con la cabecera del documento
+const GANTT_PAPEL_PISTA_PX = 720;      // ancho aproximado de la línea de tiempo en A4 apaisado
+const CSS_GANTT_PAPEL = '.rp2-gantt-pag + .rp2-gantt-pag { break-before: page; } ' +
+  '.rp2-gantt-pag { break-inside: avoid; } .rp2-gantt-pag .sx2-py-gantt__fila { break-inside: avoid; } ' +
+  '.rp2-gantt-pag .sx2-py-gantt { --sx-gantt-et: 250px; } .rp2-gantt-pag .sx2-py-gantt__pista { background-image: none; } ' +
+  // La regla de celular de la pantalla (max-width: 720px) oculta los nombres junto
+  // a las barras; al imprimir en vertical el papel "mide" menos que eso.
+  '.rp2-gantt-pag .sx2-py-gantt__et { display: block; }';
+
+function contextoGanttPapel_(detalle, tareas, rendimiento, nombres) {
+  const persona = (email, nombre) => (nombre && !/@/.test(nombre) ? String(nombre).trim() : '') || nombres[String(email || '').toLowerCase()] || email || 'Sin asignar';
+  return {
+    tareas: tareas.map((a) => Object.assign({}, a, { responsable_nombre: persona(a.responsable_email, a.responsable_nombre) })),
+    proyecto: detalle.proyecto || {}, detalle: { hitos: detalle.hitos || [] }, rendimiento: rendimiento || {}
+  };
+}
+// Bloques de HTML (uno por página) de la Carta Gantt; [] si no hay nada que dibujar.
+function ganttPapelV2_(G, ctx, primera) {
+  const r = G.rango(ctx);
+  return G.paginas(ctx, { desde: r.desde, semanas: r.semanas, agrupar: true, densidad: 'compacta', quieto: true,
+    anchoEstimado: GANTT_PAPEL_PISTA_PX, lineasSemana: true }, GANTT_PAPEL_FILAS, primera || GANTT_PAPEL_FILAS)
+    .map((b) => '<div class="rp2-gantt-pag">' + b + '</div>');
+}
+
 async function descargarReporteConfiguradoV2_(db, data, contexto, detalle, tareas, rendimiento, nombresPorEmail, config) {
   const p = detalle.proyecto;
   const tareasFiltradas = filtrarTareas_(tareas, config);
@@ -1103,7 +1142,7 @@ async function descargarReporteConfiguradoV2_(db, data, contexto, detalle, tarea
     titulo: p.nombre, subtitulo: 'Reporte de proyecto', modulo: 'Proyectos', codigo: p.codigo || '',
     periodo: DocV2.fecha_(p.fecha_inicio, true) + ' al ' + DocV2.fecha_(p.fecha_objetivo, true), filtros,
     cuerpo: cuerpoConfiguradoV2_(config, detalle, tareasFiltradas, rendimiento, bitacora, nombres, R, U, DocV2.fecha_),
-    cssExtra: CSS_PAGINAS_PROYECTO, tamanosCss: true
+    cssExtra: CSS_PAGINAS_PROYECTO + ' ' + CSS_GANTT_PAPEL, tamanosCss: true
   });
   // Mismo nombre que el informe de siempre ("Reporte - <proyecto>.pdf").
   return { pdf_base64: r.pdf_base64, filename: 'Reporte - ' + p.nombre + '.pdf' };
@@ -1168,4 +1207,41 @@ async function descargarReporte(db, data, contexto) {
   return descargarReporteEstandar_(db, data, contexto, detalle, tareas, rendimiento, nombresPorEmail);
 }
 
-module.exports = { descargarReporte, normalizarConfig_, filtrarTareas_, cuerpoProyectoV2_, cuerpoConfiguradoV2_ };
+// "Descargar Gantt" desde la propia vista (auditoría G7): solo la Carta Gantt,
+// en A4 apaisado, con las tareas que se están viendo. data.actividades (opcional)
+// = ids que dejó el filtro de la pantalla; data.filtros = [{etiqueta, valor}]
+// para decir en la cabecera qué se filtró. Sin Chromium no hay versión pdfkit
+// de este dibujo: se avisa y el informe configurable sigue disponible.
+async function descargarGantt(db, data, contexto) {
+  const detalle = Proyectos.getDetalle(db, data, contexto);
+  if (detalle && (detalle._validationError || detalle._forbidden)) return detalle;
+  if (!DocV2.disponible()) return errorValidacion('pdf', 'La Carta Gantt en PDF no está disponible en este momento. Prueba con el informe configurable (menú Más).');
+  let tareas = Proyectos.listarTareas(db, data, contexto);
+  const rendimiento = Proyectos.obtenerRendimiento(db, data, contexto);
+  if (Array.isArray(data.actividades)) {
+    const ids = {};
+    data.actividades.forEach((id) => { ids[String(id)] = true; });
+    tareas = tareas.filter((a) => ids[a.actividad_id]);
+  }
+  const { G } = DocV2.piezas();
+  const nombres = Object.assign({}, DocV2.nombresPorCorreo(db));
+  (detalle.integrantes || []).forEach((i) => { if (i.usuario_nombre && !/@/.test(i.usuario_nombre)) nombres[String(i.usuario_email || '').toLowerCase()] = i.usuario_nombre; });
+  const p = detalle.proyecto;
+  const ctxG = contextoGanttPapel_(detalle, tareas, rendimiento, nombres);
+  const bloques = ganttPapelV2_(G, ctxG, GANTT_PAPEL_FILAS_PRIMERA);
+  const filtros = [{ etiqueta: 'Líder', valor: nombres[String(p.lider_email || '').toLowerCase()] || p.lider_email || '—' },
+    { etiqueta: 'Estado', valor: ESTADO_PROYECTO_LABEL[p.estado] || p.estado }];
+  (Array.isArray(data.filtros) ? data.filtros : []).slice(0, 6).forEach((f) => {
+    if (f && f.etiqueta && f.valor) filtros.push({ etiqueta: String(f.etiqueta).slice(0, 40), valor: String(f.valor).slice(0, 120) });
+  });
+  const cuerpo = (bloques.length ? bloques.join('') : '<p class="ot2-nota">No hay tareas con fecha comprometida ni hitos que graficar con estos filtros.</p>') +
+    G.aviso(ctxG) + G.leyenda({ papel: true });
+  return DocV2.aPdf(db, contexto, {
+    titulo: p.nombre, subtitulo: 'Carta Gantt', modulo: 'Proyectos', codigo: p.codigo || '',
+    periodo: DocV2.fecha_(p.fecha_inicio, true) + ' al ' + DocV2.fecha_(p.fecha_objetivo, true), filtros,
+    cuerpo, horizontal: true, cssExtra: CSS_GANTT_PAPEL,
+    nombreArchivo: 'carta-gantt-' + p.nombre
+  });
+}
+
+module.exports = { descargarReporte, descargarGantt, normalizarConfig_, filtrarTareas_, cuerpoProyectoV2_, cuerpoConfiguradoV2_ };

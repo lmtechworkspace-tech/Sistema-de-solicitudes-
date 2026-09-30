@@ -149,7 +149,7 @@ test('C1: el Excel escribe fechas reales (serie de Excel) sin correrlas un día'
   assert.ok(!tareas.includes('<v>' + serieExcel_('2026-09-02') + '</v>'), 'no debe correrse al 02/09');
   assert.ok(!/\d{2}-\d{2}-\d{4}/.test(tareas), 'ninguna fecha como texto dd-mm-aaaa');
   const estilos = leerZip_(Buffer.from(r.xlsx_base64, 'base64')).find((x) => x.nombre === 'xl/styles.xml').contenido.toString('utf8');
-  assert.ok(estilos.includes('formatCode="dd/mm/yyyy"') && estilos.includes('<cellXfs count="14">'));
+  assert.ok(estilos.includes('formatCode="dd/mm/yyyy"') && /<cellXfs count="\d+">/.test(estilos));
 });
 
 test('C1/E2: porcentajes como número con formato %, y la Carta Gantt del Excel usa el inicio de plan', () => {

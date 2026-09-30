@@ -227,45 +227,14 @@
           U.segmento([{ id: 'comoda', texto: 'Cómoda' }, { id: 'compacta', texto: 'Compacta' }], densidad, 'js-py2t-densidad') +
           U.chip({ texto: 'Dependencias', icono: 'enlace', activo: g.deps, clase: 'js-py2t-deps' }) +
           (hitos.length ? U.boton({ texto: todosCerrados ? 'Expandir hitos' : 'Contraer hitos', icono: todosCerrados ? 'abajo' : 'derecha', sm: true, variante: 'fantasma', clase: 'js-py2t-plegar-todo', datos: { abrir: todosCerrados ? '1' : '0' } }) : '') +
+          U.boton({ texto: 'PDF', icono: 'descargar', sm: true, clase: 'js-py2t-gantt-pdf', titulo: 'Descargar esta Carta Gantt en PDF (con los filtros que estás viendo)' }) +
+          U.boton({ texto: 'Excel', icono: 'tabla', sm: true, clase: 'js-py2t-gantt-xlsx', titulo: 'Descargar el libro Excel del proyecto (con su Carta Gantt)' }) +
           U.boton({ soloIcono: true, icono: g.completa ? 'reducir' : 'expandir', sm: true, clase: 'js-py2t-completa', titulo: g.completa ? 'Salir de pantalla completa (Esc)' : 'Pantalla completa' }) +
         '</span>' +
       '</div>' +
       PY.gantt(ctx, { tareas: tareas, desde: r.desde, semanas: r.semanas, pxSemana: px, agrupar: true, densidad: densidad, dependencias: g.deps, completa: true, quieto: quieto, anchoEstimado: anchoEstimado }) +
-      avisoPlan(ctx) +
-      leyenda() +
-    '</div>';
-  }
-  // Auditoría 2026-09-29 (C2/G1): lo que el Gantt NO puede dibujar bien, dicho.
-  // - Tareas abiertas sin inicio planificado de verdad: ni fecha de inicio propia
-  //   ni una tarea de la que dependan, así que su barra parte el día en que
-  //   alguien las cargó (plan_inicio_origen del backend).
-  // - Tareas sin fecha comprometida: no tienen barra y no aparecen.
-  function avisoPlan(ctx) {
-    var plan = PY.planPorId(ctx);
-    var vivas = ctx.tareas.filter(function (a) { return a.estado !== 'CANCELADA'; });
-    var sinInicio = vivas.filter(function (a) {
-      var o = (plan[a.actividad_id] || {}).plan_inicio_origen;
-      return !PY.esTerminal(a) && a.fecha_compromiso && (o === 'creacion' || o === 'proyecto' || o === 'compromiso');
-    }).length;
-    var sinFecha = vivas.filter(function (a) { return !a.fecha_compromiso && !a.fecha_propuesta; }).length;
-    if (!sinInicio && !sinFecha) return '';
-    var partes = [];
-    if (sinInicio) partes.push('<strong>' + sinInicio + (sinInicio === 1 ? ' tarea abierta no tiene' : ' tareas abiertas no tienen') + ' inicio planificado</strong>: su barra parte el día en que se cargó. Indica su inicio o de qué tarea depende para que el plan muestre la secuencia.');
-    if (sinFecha) partes.push('<strong>' + sinFecha + (sinFecha === 1 ? ' tarea no aparece' : ' tareas no aparecen') + '</strong> porque no tienen fecha comprometida.');
-    return '<p class="sx2-py-gantt-aviso" role="note">' + U.ico('info', 15) + '<span>' + partes.join(' ') + '</span></p>';
-  }
-  function leyenda() {
-    return '<div class="sx2-py-leyenda-gantt">' +
-      [['info', 'En curso'], ['ok', 'Terminada'], ['alerta', 'En riesgo'], ['critico', 'Atrasada'], ['hito', 'Bloqueada'], ['neutro', 'Pendiente']].map(function (x) {
-        return '<span class="sx2-tono-' + x[0] + '"><i></i>' + x[1] + '</span>';
-      }).join('') +
-      '<span class="sx2-py-leyenda-gantt__sep"></span>' +
-      '<span><i class="sx2-py-leyenda-gantt__real sx2-py-leyenda-gantt__real--ok"></i>Real a tiempo</span>' +
-      '<span><i class="sx2-py-leyenda-gantt__real sx2-py-leyenda-gantt__real--tarde"></i>Real con atraso</span>' +
-      '<span><i class="sx2-py-leyenda-gantt__resumen"></i>Resumen del hito</span>' +
-      '<span class="sx2-tono-hito"><i class="sx2-py-leyenda-gantt__hito"></i>Hito</span>' +
-      '<span><i class="sx2-py-leyenda-gantt__hoy"></i>Hoy</span>' +
-      '<span class="sx2-tenue">Arrastra para moverte · Ctrl + rueda para acercar o alejar</span>' +
+      SigsoGantt.aviso(ctx) +
+      SigsoGantt.leyenda() +
     '</div>';
   }
   var ORDEN_ZOOM = ['semana', 'mes', 'trimestre', 'anio', 'todo'];
@@ -353,6 +322,8 @@
         return;
       }
       if (t.closest('.js-py2t-completa')) { g.completa = !g.completa; repintarGantt(); return; }
+      var dg = t.closest('.js-py2t-gantt-pdf, .js-py2t-gantt-xlsx');
+      if (dg) { descargarGantt(ctx, dg.classList.contains('js-py2t-gantt-pdf') ? 'pdf' : 'xlsx', dg); return; }
       if (t.closest('.js-py2t-limpiar')) { f.estado = 'todas'; f.responsable = ''; f.hito = ''; f.texto = ''; PY.pintar({ sinAnimacion: true }); return; }
       if (t.closest('.js-py2t-nueva')) { abrirNuevaTarea(ctx); return; }
       var o = t.closest('.js-py2t-orden');
@@ -388,6 +359,31 @@
     if (resp) resp.addEventListener('change', function () { f.responsable = resp.value; PY.pintar({ sinAnimacion: true }); });
     var hito = raiz.querySelector('.js-py2t-hito');
     if (hito) hito.addEventListener('change', function () { f.hito = hito.value; PY.pintar({ sinAnimacion: true }); });
+  }
+
+  // "Descargar Gantt" (auditoría G7): el PDF lleva las tareas que se están viendo
+  // (mismos filtros de persona, hito, estado y búsqueda) y dice cuáles son.
+  function descargarGantt(ctx, tipo, boton) {
+    var plan = PY.planPorId(ctx);
+    var p = ctx.proyecto;
+    var datos = { proyecto_id: p.proyecto_id };
+    if (tipo === 'pdf') {
+      var filtros = [];
+      if (f.estado !== 'todas') filtros.push({ etiqueta: 'Estado', valor: (ESTADOS.filter(function (e) { return e.id === f.estado; })[0] || {}).texto || f.estado });
+      if (f.responsable) filtros.push({ etiqueta: 'Persona', valor: PY.persona(f.responsable).nombre });
+      if (f.hito) filtros.push({ etiqueta: 'Hito', valor: f.hito === '_' ? 'Sin hito' : (((ctx.detalle.hitos || []).filter(function (h) { return h.hito_id === f.hito; })[0]) || {}).nombre || '' });
+      if (f.texto.trim()) filtros.push({ etiqueta: 'Búsqueda', valor: '“' + f.texto.trim() + '”' });
+      if (filtros.length) datos.actividades = filtrar(ctx, plan, false).map(function (a) { return a.actividad_id; });
+      datos.filtros = filtros;
+    }
+    boton.disabled = true;
+    PY.aviso(tipo === 'pdf' ? 'Generando la Carta Gantt en PDF…' : 'Generando el Excel…');
+    PY.api(tipo === 'pdf' ? 'descargarGanttProyecto' : 'descargarLibroProyecto', datos).then(function (r) {
+      boton.disabled = false;
+      if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo generar el archivo.', 'error'); return; }
+      if (tipo === 'pdf') PY.descargarBase64(r.data.pdf_base64, r.data.filename, 'application/pdf');
+      else PY.descargarBase64(r.data.xlsx_base64, r.data.filename, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    });
   }
 
   function ordenarPor(campo) {

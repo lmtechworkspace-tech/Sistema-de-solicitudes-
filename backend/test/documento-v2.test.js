@@ -210,9 +210,12 @@ test('informe configurable v2: solo las secciones elegidas, Gantt en página apa
   assert.match(html, /Carta Gantt ejecutiva/);
   assert.ok(!/Riesgos abiertos|Actividad reciente/.test(html), 'solo lo elegido');
   assert.match(html, /class="rp2-apaisada"/);
-  assert.match(html, /rp2-gantt__rombo/);
-  assert.match(html, /rp2-gantt__b sx2-tono-critico/, 'la tarea atrasada en rojo');
-  assert.match(html, /rp2-gantt-leyenda/);
+  // Auditoría 2026-09-29 (etapa 2): el MISMO dibujo de la pantalla (gantt-dibujo.js).
+  assert.match(html, /sx2-py-gantt__hito/, 'el rombo del hito');
+  assert.match(html, /sx2-py-gantt__barra sx2-tono-critico/, 'la tarea atrasada en rojo');
+  assert.match(html, /sx2-py-gantt__fila--grupo/, 'la fila del hito con su barra resumen');
+  assert.match(html, /sx2-py-leyenda-gantt/);
+  assert.match(html, /class="rp2-gantt-pag"/, 'repartida en páginas con su cabecera');
   assert.ok(html.includes('H1 &lt;arranque&gt;'));
   assert.match(html, /Ana Pérez/);
 });

@@ -347,6 +347,8 @@ const ACCIONES = {
   // motor pdfkit -- ver la cabecera de reporteProyecto.js para lo que
   // queda fuera de alcance a proposito (modo "Configurar informe").
   descargarReporteProyecto: (db, data, contexto) => ReporteProyecto.descargarReporte(db, data, contexto),
+  // Carta Gantt sola, en A4 apaisado, con el mismo dibujo de la pantalla.
+  descargarGanttProyecto: (db, data, contexto) => ReporteProyecto.descargarGantt(db, data, contexto),
   // Fase 1b: libro Excel del proyecto (Resumen/Carta Gantt/Tareas/Hitos/
   // Historial/Dependencias) -- motor distinto al PDF, OOXML a mano igual que
   // el .gs (ver la cabecera de libroProyecto.js). A diferencia del PDF

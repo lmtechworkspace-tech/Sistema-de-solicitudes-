@@ -27,7 +27,8 @@ const Motor = require('./pdfChromium');
 const ReportePdf = require('./reportePdf');
 
 const RAIZ = path.join(__dirname, '..', '..', 'frontend');
-const SCRIPTS = ['js/iconos.js', 'js/ui-v2.js', 'js/reportes-v2.js'];
+// gantt-dibujo.js: la Carta Gantt del PDF es el MISMO dibujo de la pantalla.
+const SCRIPTS = ['js/iconos.js', 'js/ui-v2.js', 'js/reportes-v2.js', 'js/proyectos-v2/gantt-dibujo.js'];
 const PAGINA = 'plataforma.html';
 
 // Mismo formato que PYv2.fecha (frontend/js/proyectos-v2/nucleo.js).
@@ -87,10 +88,10 @@ function disponible() {
   return Motor.disponible() && SCRIPTS.concat([PAGINA]).every((r) => fs.existsSync(path.join(RAIZ, r)));
 }
 
-/** { R: SigsoReportes, U: UIv2 } del frontend, para armar el cuerpo. */
+/** { R: SigsoReportes, U: UIv2, G: SigsoGantt } del frontend, para armar el cuerpo. */
 function piezas() {
   const c = cargar_();
-  return { R: c.ctx.SigsoReportes, U: c.ctx.UIv2 };
+  return { R: c.ctx.SigsoReportes, U: c.ctx.UIv2, G: c.ctx.SigsoGantt };
 }
 
 // Sin DOM, "toca al documento" = todas las clases que exige el selector están en
