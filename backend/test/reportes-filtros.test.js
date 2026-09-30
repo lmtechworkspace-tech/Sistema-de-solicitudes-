@@ -26,22 +26,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const vm = require('node:vm');
 
 const RAIZ = path.join(__dirname, '..', '..');
 
-function cargarMotor() {
-  const codigo = fs.readFileSync(path.join(RAIZ, 'frontend/js/reportes.js'), 'utf8');
-  const ventana = {};
-  const contexto = vm.createContext({
-    window: ventana, document: undefined, console,
-    Date, Math, Object, Array, String, Number, JSON, isNaN
-  });
-  vm.runInContext(codigo, contexto);
-  return ventana.SigsoReportes;
-}
-
-const M = cargarMotor();
+// El motor es frontend/js/reportes-v2.js (el reportes.js clásico se borró el
+// 2026-09-30 junto con el resto de app.html). Se carga igual que para los PDF
+// del servidor: documentoV2 lo corre en un vm con iconos.js y ui-v2.js.
+const M = require('../logica/documentoV2').piezas().R;
 
 // Los objetos que vuelven del vm traen el prototipo de OTRO realm, asi que
 // deepEqual los rechaza aunque su contenido sea identico. Es la misma trampa

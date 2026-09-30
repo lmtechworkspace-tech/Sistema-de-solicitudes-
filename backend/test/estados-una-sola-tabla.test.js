@@ -67,10 +67,10 @@ test('la tabla canónica de estados existe y está donde todos la ven', () => {
   assert.match(utils, /function formatearEstadoSigso/, 'y expone el formateador que debe usarse');
 });
 
-test('inicio.js usa el formateador canónico, no una tabla propia', () => {
+test('Inicio (inicio-v2.js) usa el formateador canónico, no una tabla propia', () => {
   // Es el archivo donde apareció la divergencia. Se comprueba en concreto
   // porque un test genérico que se relaje dejaría volver justo este caso.
-  const inicio = fs.readFileSync(path.join(DIR_JS, 'inicio.js'), 'utf8');
+  const inicio = fs.readFileSync(path.join(DIR_JS, 'inicio-v2.js'), 'utf8');
   assert.match(inicio, /formatearEstadoSigso\(/,
     'la actividad reciente de Inicio tiene que formatear con la tabla canónica');
   assert.equal(mapasDeEtiquetasEn(inicio).length, 0,
@@ -86,8 +86,7 @@ test('inicio.js usa el formateador canónico, no una tabla propia', () => {
  * termina dejando pasar justo el caso que este test existe para atrapar.
  */
 const NO_SON_NOMBRES_DE_ESTADO = {
-  'components.js': 'mapea el estado a un TONO visual (nueva, curso, espera), no a un texto',
-  'detalle.js': 'mapea el estado a la ACCIÓN que lo hace avanzar ("Aprobar", "Cerrar"): son verbos de botón'
+  'components.js': 'mapea el estado a un TONO visual (nueva, curso, espera), no a un texto'
 };
 
 test('ningún archivo del frontend declara una segunda tabla de estados', () => {

@@ -38,9 +38,8 @@
  * registra al cargar. Sin precarga, Calidad se vería como una hoja sin
  * flechita hasta que alguien la abriera una vez.
  *
- * app.html (la copia que sirve Apps Script) NO usa este archivo: sigue
- * cargando calidad.js de forma directa. Es una página distinta, con otro
- * despliegue —manual— y no vale la pena arrastrarla a esto.
+ * (app.html y el frontend clásico —calidad.js, proyectos.js y compañía— se
+ * borraron el 2026-09-30: todo SIGSO vive en plataforma.html.)
  */
 (function () {
   'use strict';

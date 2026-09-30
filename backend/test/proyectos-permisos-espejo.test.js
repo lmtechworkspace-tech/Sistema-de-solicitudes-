@@ -24,6 +24,9 @@
  * rompa: es que alguien vuelva a escribir la condicion a mano en una pestaña
  * nueva, como paso siete veces. Eso SI se puede detectar leyendo el archivo, y
  * es el mismo criterio de fuentes-texto.test.js.
+ *
+ * 2026-09-30: el frontend clásico (proyectos.js) se borró; la regla vive ahora
+ * en PY.puedeAportar (proyectos-v2/nucleo.js) y se vigila toda la carpeta v2.
  */
 
 const test = require('node:test');
@@ -32,40 +35,44 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const RAIZ = path.join(__dirname, '..', '..');
-const FRONT = path.join(RAIZ, 'frontend/js/proyectos.js');
+const DIR_V2 = path.join(RAIZ, 'frontend/js/proyectos-v2');
+const NUCLEO = path.join(DIR_V2, 'nucleo.js');
 const BACK = path.join(RAIZ, 'backend/logica/proyectos.js');
 
 test('el frontend de Proyectos no repite a mano la regla de "quien puede aportar"', () => {
-  const fuente = fs.readFileSync(FRONT, 'utf8');
-  const sueltas = fuente.split('\n')
-    .map((linea, i) => ({ n: i + 1, linea: linea.trim() }))
-    .filter((l) => /rol_actual\s*!==\s*'OBSERVADOR'/.test(l.linea))
-    // La unica aparicion legitima es dentro del propio helper.
-    .filter((l) => !/^return\s+!!detalle\.rol_actual/.test(l.linea));
+  const sueltas = [];
+  fs.readdirSync(DIR_V2).filter((f) => f.endsWith('.js')).forEach((f) => {
+    fs.readFileSync(path.join(DIR_V2, f), 'utf8').split('\n')
+      .map((linea, i) => ({ n: f + ':' + (i + 1), linea: linea.trim() }))
+      .filter((l) => /rol_actual\s*!==\s*'OBSERVADOR'/.test(l.linea))
+      // La unica aparicion legitima es dentro del propio helper.
+      .filter((l) => !(l.n.startsWith('nucleo.js:') && /^return\s+!!detalle\.rol_actual/.test(l.linea)))
+      .forEach((l) => sueltas.push(l));
+  });
 
   assert.deepEqual(
     sueltas, [],
     'Hay ' + sueltas.length + ' lugar(es) que vuelven a escribir la condicion a mano ' +
-    'en vez de llamar a puedeAportar_(detalle):\n' +
+    'en vez de llamar a PY.puedeAportar(detalle):\n' +
     sueltas.map((l) => '  linea ' + l.n + ': ' + l.linea).join('\n') +
     '\nEsa duplicacion es la que dejo al ADM sin controles en cuatro pestañas.'
   );
 });
 
-test('puedeAportar_ existe y contempla puede_gestionar (el caso del ADM)', () => {
-  const fuente = fs.readFileSync(FRONT, 'utf8');
-  assert.ok(/function puedeAportar_\(/.test(fuente), 'falta el helper puedeAportar_');
+test('PY.puedeAportar existe y contempla puede_gestionar (el caso del ADM)', () => {
+  const fuente = fs.readFileSync(NUCLEO, 'utf8');
+  assert.ok(/function puedeAportar\(/.test(fuente), 'falta el helper puedeAportar');
 
-  const cuerpo = fuente.slice(fuente.indexOf('function puedeAportar_('));
+  const cuerpo = fuente.slice(fuente.indexOf('function puedeAportar('));
   const hasta = cuerpo.slice(0, cuerpo.indexOf('\n  }') + 4);
   assert.ok(
     /detalle\.puede_gestionar\s*===\s*true/.test(hasta),
-    'puedeAportar_ tiene que aceptar puede_gestionar: es la unica via por la que ' +
+    'puedeAportar tiene que aceptar puede_gestionar: es la unica via por la que ' +
     'un ADM que no pertenece al proyecto obtiene los controles que el backend si le concede.'
   );
   assert.ok(
     /rol_actual\s*!==\s*'OBSERVADOR'/.test(hasta),
-    'puedeAportar_ tiene que seguir excluyendo al OBSERVADOR.'
+    'puedeAportar tiene que seguir excluyendo al OBSERVADOR.'
   );
 });
 
@@ -88,7 +95,7 @@ test('el backend sigue concediendo esas acciones al ADM', () => {
   assert.deepEqual(
     sinAdm, [],
     'Estas acciones dejaron de conceder al ADM: ' + sinAdm.join(', ') +
-    '. Si el cambio es intencional, hay que ajustar puedeAportar_ en el frontend.'
+    '. Si el cambio es intencional, hay que ajustar PY.puedeAportar (proyectos-v2/nucleo.js).'
   );
 
   // publicarEnSala usa la forma equivalente, escrita distinto.
