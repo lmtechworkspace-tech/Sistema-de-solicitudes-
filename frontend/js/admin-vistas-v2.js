@@ -230,7 +230,7 @@
       ],
       campos: function (r) {
         return U.campo('Nombre del área', input('nombre', r.nombre, ' required maxlength="80"'), 'Es lo que ve el solicitante al elegir a quién va su solicitud.') +
-          U.campo('Correo del responsable', input('responsable_email', r.responsable_email, ' type="email" list="av2-correos" required'), 'Recibe las solicitudes de esta área.') +
+          U.campo('Correo del responsable', input('responsable_email', r.responsable_email, ' type="email" required data-persona'), 'Recibe las solicitudes de esta área.') +
           checkbox('activo', 'Activa', r.area_id ? activo(r.activo) : true);
       },
       validar: function (x) { return /^[^\s@]+@[^\s@]+$/.test(x.responsable_email || '') ? '' : 'Indica un correo válido para el responsable.'; },
@@ -503,8 +503,8 @@
   function nuevaJefatura() {
     U.formulario({
       titulo: 'Nueva jefatura', boton: 'Agregar',
-      campos: U.campo('Correo del jefe', input('jefe_email', '', ' type="email" list="av2-correos" required')) +
-        U.campo('Correo de la persona a cargo', input('subordinado_email', '', ' type="email" list="av2-correos" required'), 'Escribe o elige de la lista: salen de las cuentas de la plataforma.') + datalistCorreos(),
+      campos: U.campo('Correo del jefe', input('jefe_email', '', ' type="email" required data-persona')) +
+        U.campo('Correo de la persona a cargo', input('subordinado_email', '', ' type="email" required data-persona'), 'Escribe o elige de la lista: salen de las cuentas de la plataforma.') + datalistCorreos(),
       preparar: function (x) {
         var re = /^[^\s@]+@[^\s@]+$/;
         if (!re.test(x.jefe_email || '') || !re.test(x.subordinado_email || '')) return 'Indica los dos correos.';

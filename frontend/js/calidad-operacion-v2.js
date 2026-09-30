@@ -138,7 +138,7 @@
       campos: U.campo('Cliente', select('cliente_id', [['', 'Elige el cliente…']].concat((d.clientes || []).map(function (c) { return [c.cliente_id, c.nombre + (c.rut ? ' (' + c.rut + ')' : '')]; })), '')) +
         U.campo('Proceso de servicio', select('proceso_id', [['', 'Elige el proceso…']].concat((d.procesos || []).map(function (p) { return [p.proceso_id, p.codigo + ' — ' + p.nombre]; })), '')) +
         fila2(U.campo('Período (si es recurrente)', select('periodo', [['', 'Puntual (sin período)']].concat(periodosMes()), '')), U.campo('Fecha de prestación', input('fecha_prestacion', PY.hoyClave(), ' type="date" required max="' + PY.hoyClave() + '"'))) +
-        U.campo('Quién lo prestó (correo)', input('responsable_email', '', ' type="email" required')) +
+        U.campo('Quién lo prestó', input('responsable_email', '', ' type="email" required data-persona')) +
         U.campo('Evidencia', area('evidencia', '', 2), 'Folio, número de formulario, enlace al archivo… lo que permita encontrarlo después.'),
       preparar: function (x) {
         if (!x.cliente_id || !x.proceso_id) return 'Elige cliente y proceso.';
@@ -149,7 +149,7 @@
   }
   function formLiberar(p) {
     paso({ titulo: 'Liberar el servicio', boton: 'Liberar', sub: txt(p.proceso_codigo + ' → ' + p.cliente_nombre) + '. §8.6 pide trazabilidad a quien autoriza la liberación (la jefatura de cada área, según el DOC-01).',
-      campos: U.campo('Autoriza (correo)', input('liberado_por', '', ' type="email" required')) + U.campo('Fecha de liberación', input('fecha_liberacion', PY.hoyClave(), ' type="date" max="' + PY.hoyClave() + '"')),
+      campos: U.campo('Autoriza', input('liberado_por', '', ' type="email" required data-persona')) + U.campo('Fecha de liberación', input('fecha_liberacion', PY.hoyClave(), ' type="date" max="' + PY.hoyClave() + '"')),
       alMontar: function (form) { var el = form.querySelector('[name=liberado_por]'); el.addEventListener('change', function () { var h = form.querySelector('.js-op2-mismo'); if (h) h.remove(); if (el.value.trim().toLowerCase() === String(p.responsable_email || '').toLowerCase()) el.insertAdjacentHTML('afterend', '<span class="sx2-campo__ayuda js-op2-mismo" style="color:var(--sx-alerta)">Es la misma persona que lo prestó: quedará marcado.</span>'); }); },
       preparar: function (x) { return x.liberado_por && esCorreo(x.liberado_por) ? x : 'Indica quién autoriza.'; },
       enviar: function (x) { x.prestacion_id = p.prestacion_id; return api('liberarPrestacionSgc', x); } });

@@ -266,7 +266,7 @@
         U.campo('Necesidades y requisitos', area('necesidades', p.necesidades, 3, ' required')) + U.campo('Expectativa', area('expectativa', p.expectativa, 2)) + U.campo('Cómo afecta al SGC', area('efecto_sgc', p.efecto_sgc, 2)) +
         fila2(U.campo('Impacto', select('impacto', niv, p.impacto || 'Alto')), U.campo('Nivel de influencia', select('influencia', niv, p.influencia || 'Alto'))) +
         '<h3 class="mj2-sub">Seguimiento (opcional)</h3>' + fila2(U.campo('Método de seguimiento', input('metodo_seguimiento', p.metodo_seguimiento)), U.campo('Frecuencia', input('frecuencia_seguimiento', p.frecuencia_seguimiento))) +
-        U.campo('Responsable (correo)', input('responsable_email', p.responsable_email, ' type="email"')),
+        U.campo('Responsable', input('responsable_email', p.responsable_email, ' type="email" data-persona')),
       preparar: function (x) { if (!x.nombre || !x.necesidades) return 'Completa nombre y necesidades.'; return esCorreo(x.responsable_email) ? x : 'Revisa el correo del responsable.'; },
       enviar: function (x) { x.parte_id = p.parte_id || ''; return api('guardarParteInteresadaSgc', x); } });
   }
@@ -349,7 +349,7 @@
       campos: fila2(U.campo('Nombre', input('nombre', p.nombre, ' required')), U.campo('Código', input('codigo', p.codigo), 'Si lo dejas vacío, el sistema lo asigna.')) +
         fila2(U.campo('Tipo', select('tipo', [['ESTRATEGICO', 'Estratégico'], ['OPERATIVO', 'Operativo'], ['APOYO', 'Apoyo']], p.tipo || 'OPERATIVO')), U.campo('Nivel', select('nivel', [['MAPA', 'Proceso del mapa'], ['SERVICIO', 'Proceso de servicio']], p.nivel || 'MAPA'))) +
         U.campo('Cuelga de', select('proceso_padre_id', padres, p.proceso_padre_id || ''), 'Obligatorio para un proceso de servicio; vacío para uno del mapa.') +
-        fila2(U.campo('Área', input('area', p.area)), U.campo('Responsable (correo)', input('responsable_email', p.responsable_email, ' type="email"'), '§4.4.2 e) pide asignar responsabilidad y autoridad.')) +
+        fila2(U.campo('Área', input('area', p.area)), U.campo('Responsable', input('responsable_email', p.responsable_email, ' type="email" data-persona'), '§4.4.2 e) pide asignar responsabilidad y autoridad.')) +
         U.campo('Objetivo', area('objetivo', p.objetivo, 2)) + U.campo('Alcance', area('alcance', p.alcance, 2)) +
         fila2(U.campo('Entradas', area('entradas', p.entradas, 3)), U.campo('Salidas', area('salidas', p.salidas, 3))) + U.campo('Actividades', area('actividades', p.actividades, 3)) +
         fila2(U.campo('Clientes', input('clientes', p.clientes)), U.campo('Proveedores', input('proveedores', p.proveedores))) +
@@ -453,7 +453,7 @@
   }
   function formAsignar(x) {
     paso({ titulo: 'Asignar la acción de ' + x.codigo, boton: 'Crear actividad', sub: txt(x.accion || '') + '<br>Se crea una actividad en "Mi trabajo" del responsable.',
-      campos: U.campo('Responsable (correo)', input('responsable_email', x.responsable_email, ' type="email" required')) +
+      campos: U.campo('Responsable', input('responsable_email', x.responsable_email, ' type="email" required data-persona')) +
         U.campo('Fecha comprometida', input('fecha_compromiso', '', ' type="date" required min="' + PY.hoyClave() + '"'), x.fecha_implementacion ? 'El DOC-08 dice: ' + x.fecha_implementacion : ''),
       preparar: function (y) { if (!y.responsable_email || !esCorreo(y.responsable_email)) return 'Indica el correo del responsable.'; return y.fecha_compromiso ? y : 'Indica la fecha.'; },
       enviar: function (y) { y.riesgo_id = x.riesgo_id; return api('asignarAccionRiesgoSgc', y); } });

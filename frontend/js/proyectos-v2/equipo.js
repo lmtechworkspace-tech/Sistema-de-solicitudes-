@@ -262,7 +262,7 @@
       titulo: 'Agregar integrante',
       subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">' + U.esc(ctx.proyecto.nombre) + '</span>',
       cuerpo: '<form class="sx2-form js-py2e-form" novalidate>' +
-        PY.campo('Correo', '<input class="sx2-input" type="email" name="usuario_email" required placeholder="nombre@empresa.cl">') +
+        PY.campo('Persona', '<input class="sx2-input" type="email" name="usuario_email" data-persona required>') +
         PY.campo('Nombre', '<input class="sx2-input" name="usuario_nombre" placeholder="Opcional: se completa con el directorio">') +
         PY.campo('Rol en el proyecto', '<select class="sx2-select" name="rol_proyecto">' + Object.keys(ROL).map(function (r) {
           return '<option value="' + r + '"' + (r === 'INTEGRANTE' ? ' selected' : '') + '>' + ROL[r] + '</option>';
@@ -273,11 +273,16 @@
       pie: U.boton({ texto: 'Cancelar', clase: 'js-sx2-drawer-cerrar' }) + U.boton({ texto: 'Agregar', icono: 'check', variante: 'primario', clase: 'js-py2e-guardar' })
     });
     var form = d.el.querySelector('form'), btn = d.el.querySelector('.js-py2e-guardar'), err = d.el.querySelector('.js-py2e-error');
+    // Al elegir a alguien del directorio, su nombre se completa solo.
+    form.usuario_email.addEventListener('change', function () {
+      var p = window.SigsoDirectorio && SigsoDirectorio.persona(form.usuario_email.value);
+      if (p && !form.usuario_nombre.value.trim()) form.usuario_nombre.value = p.nombre;
+    });
     function enviar(ev) {
       if (ev) ev.preventDefault();
       var datos = { proyecto_id: ctx.proyecto.proyecto_id };
       new FormData(form).forEach(function (v, k) { datos[k] = String(v).trim(); });
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(datos.usuario_email)) { err.textContent = 'Escribe un correo válido.'; err.hidden = false; return; }
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(datos.usuario_email)) { err.textContent = 'Elige a la persona de la lista o escribe su correo completo.'; err.hidden = false; return; }
       btn.disabled = true;
       PY.api('gestionarIntegranteProyecto', datos).then(function (r) {
         btn.disabled = false;

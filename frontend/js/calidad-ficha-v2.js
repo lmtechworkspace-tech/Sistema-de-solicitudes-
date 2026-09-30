@@ -223,8 +223,8 @@
           U.campo('Tipo', '<select class="sx2-select" name="tipo"><option value="INT"' + (p.tipo !== 'EXT' ? ' selected' : '') + '>Interno</option><option value="EXT"' + (p.tipo === 'EXT' ? ' selected' : '') + '>Externo</option></select>') + '</div>' +
         '<div class="sx2-form__fila">' + U.campo('Área', '<input class="sx2-input" name="area_id" value="' + U.esc(p.area_id || '') + '" placeholder="Ej.: PREVENCION">') +
           U.campo('Fecha de ingreso', '<input class="sx2-input" type="date" name="fecha_ingreso" max="' + PY.hoyClave() + '" value="' + U.esc(iso(p.fecha_ingreso)) + '">') + '</div>' +
-        '<div class="sx2-form__fila">' + U.campo('Jefatura directa (correo)', '<input class="sx2-input" type="email" name="jefatura_email" value="' + U.esc(p.jefatura_email || '') + '">') +
-          U.campo('Subrogante (correo)', '<input class="sx2-input" type="email" name="subrogante_email" value="' + U.esc(p.subrogante_email || '') + '">') + '</div>',
+        '<div class="sx2-form__fila">' + U.campo('Jefatura directa', '<input class="sx2-input" type="email" name="jefatura_email" data-persona value="' + U.esc(p.jefatura_email || '') + '">') +
+          U.campo('Subrogante', '<input class="sx2-input" type="email" name="subrogante_email" data-persona value="' + U.esc(p.subrogante_email || '') + '">') + '</div>',
       preparar: function (x) {
         if (!x.nombre) return 'Indica el nombre.';
         if (!x.usuario_email || !esCorreo(x.usuario_email)) return 'Indica un correo válido.';
@@ -296,7 +296,7 @@
     var ingreso = iso(p.fecha_ingreso), hoy = PY.hoyClave();
     paso({ titulo: 'Registrar inducción', boton: 'Registrar', sub: U.esc(item),
       campos: U.campo('Fecha en que se hizo', '<input class="sx2-input" type="date" name="fecha" required max="' + hoy + '" value="' + (ingreso && ingreso <= hoy ? ingreso : hoy) + '">', 'Por defecto, la fecha de ingreso. Nunca una fecha futura.') +
-        U.campo('Relator (correo, opcional)', '<input class="sx2-input" type="email" name="relator_email" placeholder="Si lo dejas vacío, quedas tú">'),
+        U.campo('Relator (opcional)', '<input class="sx2-input" type="email" name="relator_email" data-persona placeholder="Si lo dejas vacío, quedas tú">'),
       preparar: function (x) { if (!x.fecha || x.fecha > hoy) return 'La fecha no puede ser futura.'; return esCorreo(x.relator_email) ? x : 'Revisa el correo del relator.'; },
       enviar: function (x) { return api('registrarInduccionSgc', { persona_id: p.persona_id, induccion_id: id, estado: 'COMPLETADA', fecha: x.fecha + 'T12:00:00Z', relator_email: x.relator_email }); },
       aviso: 'Inducción registrada.' });

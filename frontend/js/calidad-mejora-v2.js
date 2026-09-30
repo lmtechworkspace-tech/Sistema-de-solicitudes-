@@ -290,7 +290,7 @@
       campos: U.campo('Qué pasó', '<textarea class="sx2-input" name="descripcion" rows="4" required placeholder="Describe la desviación con hechos concretos."></textarea>') +
         '<div class="sx2-form__fila">' + U.campo('¿De dónde salió?', '<select class="sx2-select" name="fuente">' + Object.keys(FUENTE_NC).map(function (k) { return '<option value="' + k + '"' + (k === 'PROCESO' ? ' selected' : '') + '>' + U.esc(FUENTE_NC[k]) + '</option>'; }).join('') + '</select>') +
           U.campo('Área', '<input class="sx2-input" name="area_id" placeholder="Ej.: RRHH">') + '</div>' +
-        '<div class="sx2-form__fila">' + U.campo('Responsable', '<input class="sx2-input" type="email" name="responsable_email" required placeholder="A quién se le asigna resolverla">') +
+        '<div class="sx2-form__fila">' + U.campo('Responsable', '<input class="sx2-input" type="email" name="responsable_email" data-persona required placeholder="A quién se le asigna resolverla">') +
           U.campo('Fecha de detección', '<input class="sx2-input" type="date" name="fecha_deteccion" value="' + PY.hoyClave() + '" max="' + PY.hoyClave() + '">') + '</div>' +
         U.campo('Referencia normativa (opcional)', '<input class="sx2-input" name="referencia_normativa" placeholder="Ej.: 7.5, si ya sabes qué cláusula se incumplió">'),
       preparar: function (x) { if ((x.descripcion || '').length < 10) return 'Describe qué pasó (mínimo 10 caracteres).'; return esCorreo(x.responsable_email) ? x : 'Indica el correo del responsable.'; },
@@ -301,7 +301,7 @@
     paso({ titulo: corr ? 'Definir corrección' : 'Definir acción correctiva', boton: 'Crear y asignar', accion: corr ? 'registrarCorreccionNcSgc' : 'registrarAccionNcSgc',
       sub: (corr ? 'Qué se hace ahora para contener el problema.' : 'Qué se cambia para que la causa raíz no vuelva a producirlo.') + ' Se crea como tarea en "Mi trabajo" del responsable.',
       campos: U.campo('Descripción', '<textarea class="sx2-input" name="descripcion" rows="4" required></textarea>') +
-        '<div class="sx2-form__fila">' + U.campo('Responsable', '<input class="sx2-input" type="email" name="responsable_email" value="' + U.esc(nc.responsable_email || '') + '">') +
+        '<div class="sx2-form__fila">' + U.campo('Responsable', '<input class="sx2-input" type="email" name="responsable_email" data-persona value="' + U.esc(nc.responsable_email || '') + '">') +
           U.campo('Fecha comprometida', '<input class="sx2-input" type="date" name="fecha_compromiso" value="' + U.esc(corr ? iso(nc.correccion_plazo) : '') + '">') + '</div>',
       preparar: function (x) { return (x.descripcion || '').length >= 5 ? x : 'Describe la acción.'; },
       datos: function (x) { var d = { nc_id: nc.nc_id, descripcion: x.descripcion, responsable_email: x.responsable_email }; if (x.fecha_compromiso) d.fecha_compromiso = x.fecha_compromiso; return d; },
@@ -399,7 +399,7 @@
         datos: function (x) { return { queja_id: q.queja_id, procede: x.procede === 'SI', motivo_no_procede: x.motivo || '' }; }, aviso: 'Recepción registrada.' }, reabrir);
       else if (t.closest('.js-q-investigador')) paso({ titulo: 'Asignar investigador', boton: 'Asignar', accion: 'registrarInvestigacionQuejaSgc',
         sub: 'No puede ser de la misma área que originó la queja (' + U.esc(AREA_QUEJA[q.area] || q.area || '') + ').',
-        campos: U.campo('Investigador (correo)', '<input class="sx2-input" type="email" name="investigador_email" required>'),
+        campos: U.campo('Investigador', '<input class="sx2-input" type="email" name="investigador_email" data-persona required>'),
         preparar: function (x) { return esCorreo(x.investigador_email) ? x : 'Indica el correo de quien investiga.'; },
         datos: function (x) { return { queja_id: q.queja_id, investigador_email: x.investigador_email }; }, aviso: 'Investigador asignado.' }, reabrir);
       else if (t.closest('.js-q-resultado')) paso({ titulo: 'Resultado de la investigación', accion: 'registrarResultadoQuejaSgc', ancho: true,
@@ -413,7 +413,7 @@
         preparar: function (x) { return (x.accion || '').length >= 10 ? x : 'Describe la acción (mínimo 10 caracteres).'; },
         datos: function (x) { return { queja_id: q.queja_id, accion_implementada: x.accion }; }, aviso: 'Resolución registrada.' }, reabrir);
       else if (t.closest('.js-q-notificar')) paso({ titulo: 'Notificar al cliente', boton: 'Notificar', accion: 'registrarNotificacionQuejaSgc', sub: 'Se envía por correo la respuesta final con la acción implementada.',
-        campos: U.campo('Revisado y aprobado por (correo)', '<input class="sx2-input" type="email" name="revisado_por" required placeholder="Persona no involucrada en el origen">'),
+        campos: U.campo('Revisado y aprobado por', '<input class="sx2-input" type="email" name="revisado_por" data-persona required placeholder="Persona no involucrada en el origen">'),
         preparar: function (x) { return esCorreo(x.revisado_por) ? x : 'Indica quién revisó la respuesta.'; },
         datos: function (x) { return { queja_id: q.queja_id, revisado_por: x.revisado_por }; }, aviso: 'Cliente notificado.' }, reabrir);
       else if (t.closest('.js-q-seguimiento')) paso({ titulo: 'Registrar seguimiento', accion: 'registrarSeguimientoQuejaSgc', sub: '30 días corridos después de la respuesta: ¿el cliente quedó conforme?',
@@ -542,7 +542,7 @@
   function formAuditoria() {
     paso({ titulo: 'Programar auditoría interna', boton: 'Programar', accion: 'programarAuditoriaSgc', ancho: true,
       campos: '<div class="sx2-form__fila">' + U.campo('Proceso a auditar', '<input class="sx2-input" name="proceso" required placeholder="Ej.: Gestión de personas">') + U.campo('Área', '<input class="sx2-input" name="area_id" placeholder="Ej.: RRHH">') + '</div>' +
-        '<div class="sx2-form__fila">' + U.campo('Auditor (correo)', '<input class="sx2-input" type="email" name="auditor_email" required placeholder="De otra área: nadie audita su propio trabajo">') +
+        '<div class="sx2-form__fila">' + U.campo('Auditor', '<input class="sx2-input" type="email" name="auditor_email" data-persona required placeholder="De otra área: nadie audita su propio trabajo">') +
           U.campo('Fecha planeada', '<input class="sx2-input" type="date" name="fecha_programada" required>') + '</div>' + selectorClausulas([]),
       preparar: function (x, form) {
         if (!x.proceso) return 'Indica el proceso.';
@@ -666,7 +666,7 @@
       else if (t.closest('.js-rev-acuerdo')) paso({ titulo: 'Nuevo acuerdo', boton: 'Guardar acuerdo', accion: 'registrarAcuerdoRevisionSgc', sub: 'Se convierte en una tarea real: le aparece al responsable en "Mi trabajo", con su plazo.',
         campos: U.campo('Relacionado con', '<select class="sx2-select" name="tipo">' + (data.catalogo_acuerdos || []).map(function (c) { return '<option value="' + U.esc(c.tipo) + '">' + U.esc(c.etiqueta) + '</option>'; }).join('') + '</select>') +
           U.campo('Observaciones', '<textarea class="sx2-input" name="observaciones" rows="3" required></textarea>') +
-          '<div class="sx2-form__fila">' + U.campo('Responsable (correo)', '<input class="sx2-input" type="email" name="responsable_email" required>') + U.campo('Plazo', '<input class="sx2-input" type="date" name="plazo" required min="' + PY.hoyClave() + '">') + '</div>',
+          '<div class="sx2-form__fila">' + U.campo('Responsable', '<input class="sx2-input" type="email" name="responsable_email" data-persona required>') + U.campo('Plazo', '<input class="sx2-input" type="date" name="plazo" required min="' + PY.hoyClave() + '">') + '</div>',
         preparar: function (x) { if ((x.observaciones || '').length < 5) return 'Describe el acuerdo.'; if (!esCorreo(x.responsable_email)) return 'Indica el correo del responsable.'; return x.plazo ? x : 'Indica el plazo.'; },
         datos: function (x) { x.revision_id = r.revision_id; return x; }, aviso: 'Acuerdo registrado: ya está en "Mi trabajo" del responsable.' }, reabrir);
       else if (t.closest('.js-rev-cerrar')) confirmarY({ titulo: '¿Cerrar la revisión?', texto: 'Queda como registro definitivo del año.', boton: 'Cerrar revisión', aviso: 'Revisión cerrada.' }, 'cerrarRevisionSgc', { revision_id: r.revision_id }, reabrir);
@@ -709,7 +709,7 @@
   }
   function formRevision() {
     paso({ titulo: 'Programar revisión por la dirección', boton: 'Programar', accion: 'programarRevisionSgc', sub: 'Mínimo una al año. El sistema calcula hasta cuándo hay plazo para convocar (10 días hábiles antes).',
-      campos: U.campo('Fecha de la reunión', '<input class="sx2-input" type="date" name="fecha_programada" required min="' + PY.hoyClave() + '">') + U.campo('Correo del Director', '<input class="sx2-input" type="email" name="director_email">'),
+      campos: U.campo('Fecha de la reunión', '<input class="sx2-input" type="date" name="fecha_programada" required min="' + PY.hoyClave() + '">') + U.campo('Director', '<input class="sx2-input" type="email" name="director_email" data-persona>'),
       preparar: function (x) { if (!x.fecha_programada) return 'Indica la fecha.'; return !x.director_email || esCorreo(x.director_email) ? x : 'Revisa el correo del Director.'; },
       datos: function (x) { return x; }, aviso: 'Revisión programada.' }, function (r) { cargar(true); if (r && r.data && r.data.revision_id) abrirRevision(r.data.revision_id); });
   }

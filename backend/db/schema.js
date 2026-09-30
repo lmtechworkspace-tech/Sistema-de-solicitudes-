@@ -782,13 +782,22 @@ function parsearListaDir_(valor) {
   try { const l = JSON.parse(valor); return Array.isArray(l) ? l : []; } catch (err) { return []; }
 }
 
+// Primer nombre sin tildes ni mayúsculas: "Valentina Paz Macarena Caballero" y
+// "Valentina Caballero" son la misma persona; "Bárbara Álvarez" no.
+function primerNombreDir_(nombre) {
+  let s = String(nombre || '').trim().toLowerCase();
+  if (typeof s.normalize === 'function') s = s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return s.split(/\s+/)[0] || '';
+}
+
 function asegurarDirectorioPersonas_(db) {
   const existentes = leerFilas_(db, 'DIRECTORIO_PERSONAS', COLUMNAS.DIRECTORIO_PERSONAS);
   const rutsVistos = new Set();
+  const nombrePorRut = {};
   const emailsVistos = new Set();
   existentes.forEach((p) => {
     const r = normalizarRutDir_(p.rut);
-    if (r) rutsVistos.add(r);
+    if (r) { rutsVistos.add(r); nombrePorRut[r] = p.nombre; }
     parsearListaDir_(p.emails).forEach((e) => { const n = normalizarEmailDir_(e); if (n) emailsVistos.add(n); });
   });
 
@@ -809,7 +818,7 @@ function asegurarDirectorioPersonas_(db) {
       tiene_cuenta: false, activa: true, origen: '', creado_en: ahora, actualizado_en: ahora
     }, fila));
     const r = normalizarRutDir_(fila.rut);
-    if (r) rutsVistos.add(r);
+    if (r) { rutsVistos.add(r); if (!nombrePorRut[r]) nombrePorRut[r] = fila.nombre; }
     parsearListaDir_(fila.emails).forEach((e) => { const n = normalizarEmailDir_(e); if (n) emailsVistos.add(n); });
   }
 
@@ -824,7 +833,15 @@ function asegurarDirectorioPersonas_(db) {
     if (normalizados.some((e) => emailsVistos.has(e))) return;
     let rut = '';
     for (const e of normalizados) { if (rutPorEmailSgc[e]) { rut = rutPorEmailSgc[e]; break; } }
-    if (rut && rutsVistos.has(normalizarRutDir_(rut))) return;
+    if (rut && rutsVistos.has(normalizarRutDir_(rut))) {
+      // Mismo RUT y mismo nombre: es la misma persona, ya está.
+      if (primerNombreDir_(nombrePorRut[normalizarRutDir_(rut)]) === primerNombreDir_(c.nombre)) return;
+      // Mismo RUT con OTRO nombre es un error de datos (caso real en producción:
+      // dos personas con el mismo RUT en Calidad → Personas). Una cuenta con
+      // login siempre es una persona real: entra igual, sin RUT, para que se
+      // la pueda encontrar y asignar. El RUT se corrige en Calidad.
+      rut = '';
+    }
     insertar_({
       organizacion_id: c.organizacion_id || ORGANIZACION_POR_DEFECTO_ID,
       nombre: c.nombre || normalizados[0], rut: rut || '',

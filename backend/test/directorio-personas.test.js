@@ -65,6 +65,34 @@ test('siembra: dos fichas SGC de la MISMA persona (mismo RUT, CORREOS distintos,
   assert.equal(Directorio.resolverPorRut(db, '18.383.016-3').tiene_cuenta, false);
 });
 
+test('siembra: una cuenta cuyo RUT (error de datos) choca con OTRA persona entra igual, sin RUT', () => {
+  // Caso real en producción: Valentina Caballero y Bárbara Álvarez con el mismo
+  // RUT en SGC_PERSONAS. Antes, Valentina (líder de un proyecto) desaparecía
+  // del directorio y el selector de personas no la encontraba.
+  const db = dbSembrada(
+    [{ cuenta_id: 'c-1', usuario: 'balvarez', nombre: 'Bárbara Álvarez', emails: '["balvarez@grupohb.cl"]', rol: 'DEV', activo: true, organizacion_id: ORGANIZACION_POR_DEFECTO_ID },
+     { cuenta_id: 'c-2', usuario: 'ventas', nombre: 'Valentina Caballero', emails: '["ventas@grupohb.cl"]', rol: 'DEV', activo: true, organizacion_id: ORGANIZACION_POR_DEFECTO_ID }],
+    [{ persona_id: 'SGCP-1', usuario_email: 'balvarez@grupohb.cl', nombre: 'Bárbara Álvarez', rut: '20.707.336-9', tipo: 'INT', activa: true },
+     { persona_id: 'SGCP-2', usuario_email: 'ventas@grupohb.cl', nombre: 'Valentina Caballero', rut: '20.707.336-9', tipo: 'INT', activa: true }]
+  );
+  assert.equal(dir(db).length, 2, 'las dos personas están');
+  assert.equal(Directorio.resolverPorEmail(db, 'balvarez@grupohb.cl').rut, '20.707.336-9');
+  const v = Directorio.resolverPorEmail(db, 'ventas@grupohb.cl');
+  assert.equal(v.nombre, 'Valentina Caballero');
+  assert.equal(v.rut, '', 'sin RUT: no se duplica la llave natural');
+  assert.deepEqual(Directorio.buscarPersonas(db, { texto: 'valen' }, CTX_DEV).personas.map((p) => p.nombre), ['Valentina Caballero']);
+});
+
+test('siembra: dos cuentas de la MISMA persona (mismo RUT, mismo nombre) siguen siendo una sola', () => {
+  const db = dbSembrada(
+    [{ cuenta_id: 'c-1', usuario: 'ralvarez', nombre: 'Rogelio Álvarez', emails: '["ralvarez@grupohb.cl"]', rol: 'DEV', activo: true, organizacion_id: ORGANIZACION_POR_DEFECTO_ID },
+     { cuenta_id: 'c-2', usuario: 'ralvarez2', nombre: 'Rogelio Alvarez', emails: '["rogelio@homepymes.cl"]', rol: 'DEV', activo: true, organizacion_id: ORGANIZACION_POR_DEFECTO_ID }],
+    [{ persona_id: 'SGCP-1', usuario_email: 'ralvarez@grupohb.cl', nombre: 'Rogelio Álvarez', rut: '12.345.678-5', tipo: 'INT', activa: true },
+     { persona_id: 'SGCP-2', usuario_email: 'rogelio@homepymes.cl', nombre: 'Rogelio Alvarez', rut: '12345678-5', tipo: 'INT', activa: true }]
+  );
+  assert.equal(dir(db).length, 1);
+});
+
 test('siembra: una persona del SGC sin cuenta de login entra como colaborador externo (tiene_cuenta=false)', () => {
   const db = dbSembrada([], [
     { persona_id: 'SGCP-20', usuario_email: 'colab@externo.cl', nombre: 'Colaborador Externo', rut: '9.999.999-9', cargo: 'Asesor', tipo: 'EXT', activa: true }

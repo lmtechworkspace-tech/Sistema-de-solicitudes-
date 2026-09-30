@@ -247,7 +247,7 @@
           U.campo('Frecuencia (texto de DOC-07)', '<input class="sx2-input" name="frecuencia_texto" value="' + U.esc(o.frecuencia_texto || '') + '">') + '</div>' +
         U.campo('Acciones para lograrlo', '<textarea class="sx2-input" name="acciones" rows="2">' + U.esc(o.acciones || '') + '</textarea>') +
         '<div class="sx2-form__fila">' + U.campo('Responsable', '<input class="sx2-input" name="responsable_texto" value="' + U.esc(o.responsable_texto || '') + '">') +
-          U.campo('Correo del responsable (opcional)', '<input class="sx2-input" type="email" name="responsable_email" value="' + U.esc(o.responsable_email || '') + '">') + '</div>',
+          U.campo('Responsable (opcional)', '<input class="sx2-input" type="email" name="responsable_email" data-persona value="' + U.esc(o.responsable_email || '') + '">') + '</div>',
       preparar: function (x) { if (!x.objetivo_general || !x.indicador) return 'Completa objetivo e indicador.'; if (x.meta_valor === '' || isNaN(Number(x.meta_valor))) return 'Indica el valor de la meta.'; return esCorreo(x.responsable_email) ? x : 'Revisa el correo del responsable.'; },
       enviar: function (x) { x.objetivo_id = o.objetivo_id; return api('guardarObjetivoSgc', x); }, aviso: 'Objetivo guardado.' }, reabrir);
   }
@@ -345,7 +345,7 @@
           U.campo('Unidad', '<select class="sx2-select" name="unidad">' + opciones(cat.unidades, i.unidad || 'PORCENTAJE') + '</select>') + '</div>' +
         '<div class="sx2-form__fila">' + U.campo('Tolerancia (opcional)', '<input class="sx2-input" type="number" step="any" name="tolerancia_valor" value="' + U.esc(i.tolerancia_valor === null || i.tolerancia_valor === undefined ? '' : i.tolerancia_valor) + '">', 'Umbral más laxo que la meta: entre los dos, queda "en alerta".') +
           U.campo('Frecuencia de medición', '<select class="sx2-select" name="frecuencia">' + opciones(cat.frecuencias, i.frecuencia || 'MENSUAL') + '</select>') + '</div>' +
-        '<div class="sx2-form__fila">' + U.campo('Responsable (correo)', '<input class="sx2-input" type="email" name="responsable_email" value="' + U.esc(i.responsable_email || '') + '">') +
+        '<div class="sx2-form__fila">' + U.campo('Responsable', '<input class="sx2-input" type="email" name="responsable_email" data-persona value="' + U.esc(i.responsable_email || '') + '">') +
           U.campo('Fuente del dato', '<input class="sx2-input" name="fuente" value="' + U.esc(i.fuente || '') + '" placeholder="Una planilla, el sistema, un informe">') + '</div>',
       preparar: function (x) {
         if (!x.nombre || !x.formula) return 'Completa nombre y fórmula.';

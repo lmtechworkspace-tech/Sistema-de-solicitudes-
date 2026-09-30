@@ -326,7 +326,7 @@
       subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">Queda pendiente de que la nueva persona la confirme.</span>',
       campos: U.campo('Nuevo responsable', equipo.length
           ? '<select class="sx2-select" name="responsable_nuevo">' + equipo.map(function (e) { return '<option value="' + U.esc(e) + '">' + U.esc(PY.persona(e).nombre) + '</option>'; }).join('') + '</select>'
-          : '<input class="sx2-input" type="email" name="responsable_nuevo" placeholder="nombre@empresa.cl">') +
+          : '<input class="sx2-input" type="email" name="responsable_nuevo" data-persona>') +
         U.campo('Motivo', '<textarea class="sx2-input" name="motivo" maxlength="500" required placeholder="Queda en la bitácora de la actividad"></textarea>'),
       preparar: function (x) { if (!x.responsable_nuevo) return 'Elige a quién reasignar.'; return x.motivo ? x : 'Indica el motivo de la reasignación.'; },
       enviar: function (x) { return api('reasignarActividad', { actividad_id: id, responsable_nuevo: x.responsable_nuevo, motivo: x.motivo }); },

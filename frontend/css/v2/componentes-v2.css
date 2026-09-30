@@ -217,6 +217,21 @@
 .sx2-buscar .sx2-input { padding-left: 36px; }
 .sx2-input:focus, .sx2-select:focus { outline: none; border-color: var(--sx-primario); box-shadow: var(--sx-anillo-foco); }
 .sx2-input::placeholder { color: var(--sx-texto-3); }
+
+/* Selector de personas (directorio.js, Fase 3): buscador por nombre, RUT o cargo. */
+.sigso-persona { position: relative; }
+.sigso-persona > .sx2-input { width: 100%; }
+.sigso-persona__lista {
+  position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: 4px; list-style: none;
+  background: var(--sx-superficie); border: 1px solid var(--sx-borde); border-radius: var(--sx-radio-sm);
+  box-shadow: var(--sx-sombra-3); max-height: 288px; overflow-y: auto;
+}
+.sigso-persona__op { display: grid; gap: 1px; padding: 7px 10px; border-radius: 6px; cursor: pointer; min-width: 0; }
+.sigso-persona__op:hover, .sigso-persona__op[aria-selected="true"] { background: var(--sx-primario-suave); }
+.sigso-persona__nombre { font-size: .875rem; font-weight: 600; color: var(--sx-texto); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sigso-persona__cargo { font-weight: 400; color: var(--sx-texto-2); }
+.sigso-persona__meta { font-size: .75rem; color: var(--sx-texto-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sigso-persona__vacio { padding: 8px 10px; font-size: .8125rem; color: var(--sx-texto-3); }
 .sx2-barra-filtros { display: flex; flex-wrap: wrap; gap: var(--sx-e-2); align-items: center; }
 .sx2-barra-filtros .sx2-select { width: auto; min-width: 150px; }
 
