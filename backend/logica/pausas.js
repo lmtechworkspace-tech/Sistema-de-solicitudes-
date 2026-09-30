@@ -39,6 +39,7 @@ const { errorValidacion, errorForbidden } = require('./errores');
 const { claveDia_ } = require('./utils');
 const { parsearListaPortal } = require('./portal');
 const Notificaciones = require('./notificaciones');
+const DirectorioPersonal = require('./directorioPersonal');
 const NotificacionesApp = require('./notificacionesApp');
 const PdfDoc = require('./pdfDocumento');
 const Almacenamiento = require('./almacenamiento');
@@ -171,9 +172,7 @@ function registrarLog_(db, pausaId, contexto, accion, detalle) {
   } catch (err) { /* la tabla puede no existir; el log es secundario */ }
 }
 function obtenerEmailsPorRol_(db, empresaId, roles) {
-  return leerSeguro_(db, 'USUARIOS')
-    .filter((u) => esVerdadero_(u.activo) && u.empresa_id === empresaId && roles.indexOf(u.rol) !== -1)
-    .map((u) => u.email);
+  return DirectorioPersonal.emailsPorRol_(db, roles, empresaId);
 }
 
 // ---- busquedas / resolucion ----------------------------------------------
@@ -243,9 +242,7 @@ function destinatariosResumen_(db, empresaId) {
 }
 function destinatariosReporteGerencia_(db) {
   const set = {};
-  leerSeguro_(db, 'USUARIOS').forEach((u) => {
-    if (esVerdadero_(u.activo) && (u.rol === 'GERENCIA' || u.rol === 'ADM') && u.email) set[normEmail_(u.email)] = u.email;
-  });
+  DirectorioPersonal.emailsPorRol_(db, ['GERENCIA', 'ADM']).forEach((e) => { set[normEmail_(e)] = e; });
   leerSeguro_(db, 'PAUSAS_COORDINADORES').forEach((c) => {
     if (esVerdadero_(c.activo) && c.email) set[normEmail_(c.email)] = c.email;
   });

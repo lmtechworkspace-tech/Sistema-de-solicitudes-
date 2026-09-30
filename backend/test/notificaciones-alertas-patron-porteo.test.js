@@ -17,10 +17,7 @@ const Resend = require('../logica/resend');
 function dbConSchema() {
   const db = abrirDb_();
   Object.keys(COLUMNAS).forEach((hoja) => sembrarTabla_(db, hoja, COLUMNAS[hoja], []));
-  agregarFila_(db, 'USUARIOS', {
-    usuario_id: 'U1', nombre: 'Gerente Demo', email: 'gerente@homepymes.cl', empresa_id: 'HP',
-    rol: 'GERENCIA', activo: true, ultimo_acceso: '', creado_por: 'sistema'
-  });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-U1', usuario: 'gerente', nombre: 'Gerente Demo', hash_password: 'h', salt: 's', emails: JSON.stringify(['gerente@homepymes.cl']), rol: 'GERENCIA', empresa_id: 'HP', activo: true, creado_por: 'seed' });
   return db;
 }
 
@@ -119,18 +116,9 @@ test('notificarPatron avisa a GERENCIA y ADM activos, no a otros roles', async (
   conApiKey(t);
   const mock = mockEnvioOk(t);
   const db = dbConSchema();
-  agregarFila_(db, 'USUARIOS', {
-    usuario_id: 'U2', nombre: 'Admin Demo', email: 'admin@homepymes.cl', empresa_id: 'HP',
-    rol: 'ADM', activo: true, ultimo_acceso: '', creado_por: 'sistema'
-  });
-  agregarFila_(db, 'USUARIOS', {
-    usuario_id: 'U3', nombre: 'Dev Demo', email: 'dev@homepymes.cl', empresa_id: 'HP',
-    rol: 'DEV', activo: true, ultimo_acceso: '', creado_por: 'sistema'
-  });
-  agregarFila_(db, 'USUARIOS', {
-    usuario_id: 'U4', nombre: 'Gerente Inactivo', email: 'inactivo@homepymes.cl', empresa_id: 'HP',
-    rol: 'GERENCIA', activo: false, ultimo_acceso: '', creado_por: 'sistema'
-  });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-U2', usuario: 'admin', nombre: 'Admin Demo', hash_password: 'h', salt: 's', emails: JSON.stringify(['admin@homepymes.cl']), rol: 'ADM', empresa_id: 'HP', activo: true, creado_por: 'seed' });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-U3', usuario: 'dev', nombre: 'Dev Demo', hash_password: 'h', salt: 's', emails: JSON.stringify(['dev@homepymes.cl']), rol: 'DEV', empresa_id: 'HP', activo: true, creado_por: 'seed' });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-U4', usuario: 'inactivo', nombre: 'Gerente Inactivo', hash_password: 'h', salt: 's', emails: JSON.stringify(['inactivo@homepymes.cl']), rol: 'GERENCIA', empresa_id: 'HP', activo: false, creado_por: 'seed' });
 
   await Notificaciones.notificarPatron(db, { modulo: 'Facturacion', tipo: 'Error', cantidad: 5, solicitantes_distintos: 3 });
 

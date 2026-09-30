@@ -627,7 +627,7 @@ test('escalarPausasSinIniciar avisa a ADM pasado el margen, una sola vez; no ant
   const mock = conMock(t);
   const db = dbBase();
   seedConfig(db, { hora_habitual: '10:00' });
-  agregarFila_(db, 'USUARIOS', { usuario_id: 'U1', nombre: 'Admin', email: 'admin@hp.cl', empresa_id: 'HP', rol: 'ADM', activo: true, ultimo_acceso: '', creado_por: 'seed' });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-U1', usuario: 'admin', nombre: 'Admin', hash_password: 'h', salt: 's', emails: JSON.stringify(['admin@hp.cl']), rol: 'ADM', empresa_id: 'HP', activo: true, creado_por: 'seed' });
   Pausas.programarDelDia(db, new Date(), ADMIN);
   const antes = await Pausas.escalarPausasSinIniciar(db, { ahoraMin: 10 * 60 + 10, margenMin: 30 }); // 10:10 < 10:30
   assert.equal(antes.pausas_escaladas, 0);
@@ -658,7 +658,7 @@ test('resumen diario: envia a coordinadora + admin; una Cancelada no genera resu
   const db = dbBase();
   seedConfig(db);
   seedCoord(db);
-  agregarFila_(db, 'USUARIOS', { usuario_id: 'U1', nombre: 'Admin', email: 'admin@hp.cl', empresa_id: 'HP', rol: 'ADM', activo: true, ultimo_acceso: '', creado_por: 'seed' });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-U1', usuario: 'admin', nombre: 'Admin', hash_password: 'h', salt: 's', emails: JSON.stringify(['admin@hp.cl']), rol: 'ADM', empresa_id: 'HP', activo: true, creado_por: 'seed' });
   seedPausaResuelta(db, hoy_(), 'Realizada');
   const r = await Pausas.enviarResumenDiario(db);
   assert.equal(r.pausas, 1);
@@ -677,7 +677,7 @@ test('enviarReportePeriodico manda a Gerencia+ADM+coordinadoras, con etiqueta se
   const db = dbBase();
   seedConfig(db);
   seedCoord(db);
-  agregarFila_(db, 'USUARIOS', { usuario_id: 'U1', nombre: 'Ger', email: 'ger@hp.cl', empresa_id: 'HP', rol: 'GERENCIA', activo: true, ultimo_acceso: '', creado_por: 'seed' });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-U1', usuario: 'ger', nombre: 'Ger', hash_password: 'h', salt: 's', emails: JSON.stringify(['ger@hp.cl']), rol: 'GERENCIA', empresa_id: 'HP', activo: true, creado_por: 'seed' });
   const sem = await Pausas.enviarReportePeriodico(db, 'semanal');
   assert.equal(sem.periodo, 'semanal');
   assert.ok(destinatarios(mock).includes('ger@hp.cl'));

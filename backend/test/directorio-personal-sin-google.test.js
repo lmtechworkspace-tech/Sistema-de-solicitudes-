@@ -44,3 +44,16 @@ test('Accesos: el rol que quedó en el correo viejo aparece como "rol sin cuenta
   assert.equal(r.cuentas.find((c) => c.email === 'ventas@grupohb.cl').rol_sgc, 'OPERATIVO', 'su rol real sigue');
   assert.deepEqual(r.enrolamiento.roles_sin_cuenta.map((x) => x.email), ['vcaballero@impulsapartners.cl']);
 });
+
+test('avisos por rol: salen de las cuentas (una cuenta GERENCIA sin fila en Google recibe) y una persona recibe una sola vez', () => {
+  const { emailsPorRol_ } = require('../logica/directorioPersonal');
+  const db = db_();
+  // Caso real: "Lu (Soporte)" tiene rol GERENCIA solo en su cuenta del portal.
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'C3', usuario: 'soporte', nombre: 'Lu (Soporte)', hash_password: 'h', salt: 's',
+    emails: JSON.stringify(['soporte@rld.cl']), rol: 'GERENCIA', empresa_id: 'HP', activo: true, creado_por: 'seed' });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'C4', usuario: 'gerrld', nombre: 'Gerente RLD', hash_password: 'h', salt: 's',
+    emails: JSON.stringify(['gerente@rld.cl', 'otro@rld.cl']), rol: 'GERENCIA', empresa_id: 'RLD', activo: true, creado_por: 'seed' });
+  agregarFila_(db, 'USUARIOS', { usuario_id: 'U7', nombre: 'Gerente Google', email: 'viejo@hp.cl', empresa_id: 'HP', rol: 'GERENCIA', activo: true, creado_por: 'seed' });
+  assert.deepEqual(emailsPorRol_(db, ['GERENCIA']).sort(), ['gerente@rld.cl', 'soporte@rld.cl'], 'un correo por cuenta; nada desde Google');
+  assert.deepEqual(emailsPorRol_(db, ['GERENCIA'], 'HP'), ['soporte@rld.cl']);
+});

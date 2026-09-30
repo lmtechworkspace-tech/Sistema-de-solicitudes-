@@ -32,6 +32,7 @@ const { errorValidacion, errorForbidden } = require('./errores');
 const { obtenerEquipoJefe_, jefeDeSubordinado_ } = require('./jefatura');
 const { parsearListaPortal } = require('./portal');
 const Notificaciones = require('./notificaciones');
+const DirectorioPersonal = require('./directorioPersonal');
 const NotificacionesApp = require('./notificacionesApp');
 const Almacenamiento = require('./almacenamiento');
 
@@ -320,26 +321,17 @@ function buscarNovedad_(db, novedadId) {
   return filasNovedades_(db).find((n) => n.novedad_id === novedadId) || null;
 }
 
-// Directorio: union de USUARIOS activos + correos de CUENTAS_PORTAL activas.
+// Audiencia: el personal activo que puede entrar a SIGSO (las cuentas del
+// portal; USUARIOS era la identidad de Google, apagada el 2026-09-27).
 function audienciaNovedades_(db) {
   const vistos = {};
   const lista = [];
-  leerSeguro_(db, 'USUARIOS').forEach((u) => {
-    const email = normalizarEmail_(u.email);
-    if (esVerdadero_(u.activo) && email && !vistos[email]) {
+  DirectorioPersonal.directorioPersonalActivo_(db).forEach((p) => {
+    const email = normalizarEmail_(p.email);
+    if (email && !vistos[email]) {
       vistos[email] = true;
-      lista.push({ email: email, nombre: u.nombre || email });
+      lista.push({ email: email, nombre: p.nombre || email });
     }
-  });
-  leerSeguro_(db, 'CUENTAS_PORTAL').forEach((c) => {
-    if (!esVerdadero_(c.activo)) return;
-    parsearListaPortal(c.emails).forEach((raw) => {
-      const email = normalizarEmail_(raw);
-      if (email && !vistos[email]) {
-        vistos[email] = true;
-        lista.push({ email: email, nombre: c.nombre || email });
-      }
-    });
   });
   return lista;
 }
@@ -347,9 +339,7 @@ function audienciaNovedades_(db) {
 function destinatariosRevision_(db, autorEmail) {
   const jefe = jefeDeSubordinado_(db, autorEmail);
   if (jefe) return [normalizarEmail_(jefe)];
-  return leerSeguro_(db, 'USUARIOS')
-    .filter((u) => esVerdadero_(u.activo) && u.rol === 'ADM')
-    .map((u) => normalizarEmail_(u.email));
+  return DirectorioPersonal.emailsPorRol_(db, ['ADM']).map(normalizarEmail_);
 }
 
 function resumenNovedad_(n) {

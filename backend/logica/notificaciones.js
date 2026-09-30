@@ -552,12 +552,7 @@ async function enviarDigestJefatura(db) {
 // portado). No usa un solicitud_id real (es un aviso agregado, no de una
 // solicitud puntual) -- el "solicitud_id" del log es un tag descriptivo.
 async function notificarPatron(db, alerta) {
-  const destinatarios = leerFilas_(db, 'USUARIOS', COLUMNAS.USUARIOS)
-    .filter((u) => {
-      const activo = u.activo === true || u.activo === 'TRUE' || u.activo === 1;
-      return activo && (u.rol === 'GERENCIA' || u.rol === 'ADM');
-    })
-    .map((u) => u.email);
+  const destinatarios = DirectorioPersonal.emailsPorRol_(db, ['GERENCIA', 'ADM']);
   const asunto = 'SIGSO - Patron detectado: ' + alerta.modulo + ' / ' + alerta.tipo;
   const cuerpo =
     'El modulo "' + alerta.modulo + '" acumula ' + alerta.cantidad + ' reportes de tipo "' + alerta.tipo +
@@ -823,12 +818,7 @@ function formatearCuerpoEjecutivo_(panel) {
 }
 
 function obtenerEmailsPorRol_(db, empresaId, roles) {
-  return leerFilas_(db, 'USUARIOS', COLUMNAS.USUARIOS)
-    .filter((u) => {
-      const activo = u.activo === true || u.activo === 'TRUE' || u.activo === 1;
-      return activo && u.empresa_id === empresaId && roles.indexOf(u.rol) !== -1;
-    })
-    .map((u) => u.email);
+  return DirectorioPersonal.emailsPorRol_(db, roles, empresaId);
 }
 
 async function enviarReporteGerenciaAhora(db, data, contexto) {
@@ -836,7 +826,7 @@ async function enviarReporteGerenciaAhora(db, data, contexto) {
     return { _forbidden: true, message: 'Solo un Administrador puede enviar el reporte a Gerencia.' };
   }
   const empresas = {};
-  leerFilas_(db, 'USUARIOS', COLUMNAS.USUARIOS).forEach((u) => { empresas[u.empresa_id] = true; });
+  DirectorioPersonal.cuentasActivasConRol_(db).forEach((c) => { if (c.empresa_id) empresas[c.empresa_id] = true; });
 
   const resultados = [];
   for (const empresaId of Object.keys(empresas)) {

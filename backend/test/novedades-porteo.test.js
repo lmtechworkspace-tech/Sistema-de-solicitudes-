@@ -46,11 +46,13 @@ function seedArea(db, overrides) {
   return base;
 }
 
-// Directorio: juan (USUARIOS activo) + leo (CUENTAS_PORTAL activa). inactivo y
+// Directorio: juan y leo (cuentas del portal activas). "google" está SOLO en
+// USUARIOS (identidad de Google, apagada): no es audiencia, no puede entrar. inactivo y
 // suspendido quedan fuera por no estar activos.
 function seedAudiencia(db) {
-  agregarFila_(db, 'USUARIOS', { usuario_id: 'U1', nombre: 'Juan Perez', email: 'juan@homepymes.cl', empresa_id: 'HP', rol: 'DEV', activo: true, ultimo_acceso: '', creado_por: 'seed' });
-  agregarFila_(db, 'USUARIOS', { usuario_id: 'U2', nombre: 'Ex Empleado', email: 'inactivo@homepymes.cl', empresa_id: 'HP', rol: 'DEV', activo: false, ultimo_acceso: '', creado_por: 'seed' });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-U1', usuario: 'juan', nombre: 'Juan Perez', hash_password: 'h', salt: 's', emails: JSON.stringify(['juan@homepymes.cl']), rol: 'DEV', empresa_id: 'HP', activo: true, creado_por: 'seed' });
+  agregarFila_(db, 'USUARIOS', { usuario_id: 'U8', nombre: 'Solo Google', email: 'google@homepymes.cl', empresa_id: 'HP', rol: 'DEV', activo: true, ultimo_acceso: '', creado_por: 'seed' });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-U2', usuario: 'inactivo', nombre: 'Ex Empleado', hash_password: 'h', salt: 's', emails: JSON.stringify(['inactivo@homepymes.cl']), rol: 'DEV', empresa_id: 'HP', activo: false, creado_por: 'seed' });
   agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-1', usuario: 'leo', nombre: 'Leo Estay', cargo: 'Desarrollador', hash_password: 'h', salt: 's', emails: JSON.stringify(['leo@rld.cl']), rol: 'DEV', modulos: JSON.stringify(['bandeja']), empresa_id: 'RLD', activo: true, debe_cambiar_password: false, ultimo_acceso: '', creado_por: 'seed' });
   agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-2', usuario: 'exportal', nombre: 'Cuenta Suspendida', cargo: 'Ex', hash_password: 'h', salt: 's', emails: JSON.stringify(['suspendido@rld.cl']), rol: 'DEV', modulos: JSON.stringify(['bandeja']), empresa_id: 'RLD', activo: false, debe_cambiar_password: false, ultimo_acceso: '', creado_por: 'seed' });
 }
@@ -497,11 +499,13 @@ test('26. recordatorioPendientes no reenvia el mismo dia (dedup por evento+dia)'
 });
 
 test('26b. recordatorioPendientes no le escribe a quien no tiene cuenta activa del portal (no puede acusar)', async (t) => {
-  conMock(t);
+  const mock = conMock(t);
   const db = dbBase(); seedAudiencia(db); seedArea(db);
   await Novedades.publicar(db, publicarBase_({ tipo: 'AVISO' }), ctxResponsable());
+  mock.mock.resetCalls();
   const res = await Novedades.recordatorioPendientes(db);
-  assert.equal(res.enviados, 1, 'solo leo (cuenta activa); juan esta solo en USUARIOS');
+  assert.equal(res.enviados, 2, 'juan y leo (cuentas activas)');
+  assert.ok(!destinatarios(mock).includes('google@homepymes.cl'), 'quien solo está en USUARIOS no puede acusar: no se le escribe');
 });
 
 test('27. recordatorioPendientes no molesta a quien no tiene nada pendiente', async (t) => {
@@ -668,7 +672,7 @@ test('40. getHistorial registra las transiciones en orden y respeta la visibilid
 test('41. sin jefatura configurada, el aviso de revision cae a ADM', async (t) => {
   const mock = conMock(t);
   const db = dbBase(); seedAudiencia(db); seedArea(db);
-  agregarFila_(db, 'USUARIOS', { usuario_id: 'U9', nombre: 'Admin General', email: 'adm@rld.cl', empresa_id: 'RLD', rol: 'ADM', activo: true, ultimo_acceso: '', creado_por: 'seed' });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-U9', usuario: 'adm', nombre: 'Admin General', hash_password: 'h', salt: 's', emails: JSON.stringify(['adm@rld.cl']), rol: 'ADM', empresa_id: 'RLD', activo: true, creado_por: 'seed' });
   const pub = await Novedades.publicar(db, publicarBase_({ tipo: 'LEY' }), ctxResponsable());
   assert.equal(pub.estado, 'EN_REVISION');
   assert.equal(destinatarios(mock).filter((d) => d === 'adm@rld.cl').length, 1);
@@ -941,13 +945,13 @@ test('64. una fila vieja contradictoria se puede rechazar', async (t) => {
 });
 
 // SIGSO v2 (Módulo 6A): quien no tiene cuenta activa no cuenta como incumplimiento.
-test('6A. getLectores marca sin_cuenta y el cumplimiento lo separa de los pendientes', async (t) => {
+test('6A. getLectores: quien solo estaba en Google no es audiencia (no puede entrar ni acusar)', async (t) => {
   conMock(t);
   const db = dbBase(); seedAudiencia(db); seedArea(db);
   const pub = await Novedades.publicar(db, publicarBase_({ tipo: 'AVISO' }), ctxResponsable());
   const l = Novedades.getLectores(db, { novedad_id: pub.novedad_id }, ctxResponsable());
-  const juan = l.pendientes.find((p) => p.email === 'juan@homepymes.cl');
-  assert.equal(juan.sin_cuenta, true);
+  assert.ok(!l.pendientes.some((p) => p.email === 'google@homepymes.cl'), 'antes aparecía como pendiente "sin cuenta" para siempre');
+  assert.equal(l.pendientes.find((p) => p.email === 'juan@homepymes.cl').sin_cuenta, false);
   assert.equal(l.pendientes.find((p) => p.email === 'leo@rld.cl').sin_cuenta, false);
   assert.equal(l.pendientes_sin_cuenta, l.pendientes.filter((p) => p.sin_cuenta).length);
   const panel = Novedades.getPanelCumplimiento(db, {}, { rol: 'ADM', email: 'admin@x.cl' });

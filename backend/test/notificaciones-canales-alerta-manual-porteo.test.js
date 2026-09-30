@@ -206,9 +206,9 @@ test('enviarReporteGerenciaAhora es ADM-only y manda a GERENCIA+ADM de cada empr
   conApiKey(t);
   const mock = mockEnvioOk(t);
   const db = dbConSchema();
-  agregarFila_(db, 'USUARIOS', { usuario_id: 'U1', nombre: 'Gerente HP', email: 'gerente@hp.cl', empresa_id: 'HP', rol: 'GERENCIA', activo: true, creado_por: 'seed' });
-  agregarFila_(db, 'USUARIOS', { usuario_id: 'U2', nombre: 'Admin HP', email: 'admin@hp.cl', empresa_id: 'HP', rol: 'ADM', activo: true, creado_por: 'seed' });
-  agregarFila_(db, 'USUARIOS', { usuario_id: 'U3', nombre: 'Dev HP', email: 'dev@hp.cl', empresa_id: 'HP', rol: 'DEV', activo: true, creado_por: 'seed' });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-U1', usuario: 'gerente', nombre: 'Gerente HP', hash_password: 'h', salt: 's', emails: JSON.stringify(['gerente@hp.cl']), rol: 'GERENCIA', empresa_id: 'HP', activo: true, creado_por: 'seed' });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-U2', usuario: 'admin', nombre: 'Admin HP', hash_password: 'h', salt: 's', emails: JSON.stringify(['admin@hp.cl']), rol: 'ADM', empresa_id: 'HP', activo: true, creado_por: 'seed' });
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'CTA-U3', usuario: 'dev', nombre: 'Dev HP', hash_password: 'h', salt: 's', emails: JSON.stringify(['dev@hp.cl']), rol: 'DEV', empresa_id: 'HP', activo: true, creado_por: 'seed' });
 
   assert.equal((await Notificaciones.enviarReporteGerenciaAhora(db, {}, NO_ADMIN))._forbidden, true);
 

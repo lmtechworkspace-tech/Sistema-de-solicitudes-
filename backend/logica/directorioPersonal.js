@@ -40,4 +40,26 @@ function directorioPersonalActivo_(db) {
   return Object.values(personas);
 }
 
-module.exports = { directorioPersonalActivo_ };
+// Una fila por CUENTA activa, con su correo principal (el primero), su rol y
+// su empresa: para los avisos que van "a Gerencia", "a los ADM de la empresa",
+// etc. Una persona con dos correos recibe UNA vez. Antes esto se leía de
+// USUARIOS (Google): quien tenía el rol solo en su cuenta del portal (caso
+// real: una cuenta GERENCIA creada después del apagado) no recibía nada.
+function cuentasActivasConRol_(db) {
+  const lista = [];
+  leerFilas_(db, 'CUENTAS_PORTAL', COLUMNAS.CUENTAS_PORTAL).forEach((c) => {
+    if (!esVerdadero_(c.activo)) return;
+    const principal = Portal.parsearListaPortal(c.emails).map((e) => String(e || '').trim()).filter(Boolean)[0];
+    if (principal) lista.push({ email: principal, nombre: c.nombre || principal, rol: c.rol || '', empresa_id: c.empresa_id || '' });
+  });
+  return lista;
+}
+
+// Correos de las cuentas activas con alguno de esos roles (y de esa empresa, si se indica).
+function emailsPorRol_(db, roles, empresaId) {
+  return cuentasActivasConRol_(db)
+    .filter((c) => roles.indexOf(c.rol) !== -1 && (empresaId === undefined || c.empresa_id === empresaId))
+    .map((c) => c.email);
+}
+
+module.exports = { directorioPersonalActivo_, cuentasActivasConRol_, emailsPorRol_ };
