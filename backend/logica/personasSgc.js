@@ -29,7 +29,7 @@
 
 const crypto = require('node:crypto');
 const { leerFilas_, agregarFila_, actualizarFilaPorId_ } = require('../db/sqliteRepo');
-const { COLUMNAS } = require('../db/schema');
+const { COLUMNAS, asegurarDirectorioPersonas_ } = require('../db/schema');
 const Calidad = require('./calidadSgc');
 const Jefatura = require('./jefatura');
 const Notificaciones = require('./notificaciones');
@@ -272,6 +272,8 @@ function guardarPersona(db, data, contexto) {
     agregarFila_(db, 'SGC_INDUCCIONES', { induccion_id: uuid_(), persona_id: persona.persona_id, item, fecha: '', relator_email: '', estado: 'PENDIENTE', observaciones: '' });
   });
   registrarLogSgc_(db, 'SGC_PERSONA_CREADA', persona.nombre + ' (' + email + ')', contexto);
+  // Al directorio de inmediato (selector de personas), no en el próximo arranque.
+  try { asegurarDirectorioPersonas_(db); } catch (err) { console.error('[directorio] siembra tras crear ficha SGC:', err && err.message); }
   return persona;
 }
 

@@ -83,6 +83,17 @@ test('siembra: una cuenta cuyo RUT (error de datos) choca con OTRA persona entra
   assert.deepEqual(Directorio.buscarPersonas(db, { texto: 'valen' }, CTX_DEV).personas.map((p) => p.nombre), ['Valentina Caballero']);
 });
 
+test('una cuenta recién creada se puede buscar al tiro (sin esperar al próximo arranque)', () => {
+  const CuentasPortal = require('../logica/cuentasPortal');
+  const db = dbSembrada([], []);
+  const r = CuentasPortal.gestionar(db, { operacion: 'crear', usuario: 'nueva', nombre: 'Nadia Nueva', cargo: 'Operaciones',
+    emails: ['nnueva@grupohb.cl'], rol: 'DEV' }, CTX_ADM);
+  assert.ok(r.cuenta_id, JSON.stringify(r));
+  const hallada = Directorio.buscarPersonas(db, { texto: 'nadia' }, CTX_DEV).personas;
+  assert.equal(hallada.length, 1);
+  assert.deepEqual(hallada[0].emails, ['nnueva@grupohb.cl']);
+});
+
 test('siembra: dos cuentas de la MISMA persona (mismo RUT, mismo nombre) siguen siendo una sola', () => {
   const db = dbSembrada(
     [{ cuenta_id: 'c-1', usuario: 'ralvarez', nombre: 'Rogelio Álvarez', emails: '["ralvarez@grupohb.cl"]', rol: 'DEV', activo: true, organizacion_id: ORGANIZACION_POR_DEFECTO_ID },

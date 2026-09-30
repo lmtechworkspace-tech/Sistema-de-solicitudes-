@@ -11,7 +11,7 @@
  */
 
 const { agregarFila_, actualizarFilaPorId_, eliminarFilasPorId_, leerFilas_ } = require('../db/sqliteRepo');
-const { COLUMNAS } = require('../db/schema');
+const { COLUMNAS, asegurarDirectorioPersonas_ } = require('../db/schema');
 const { errorValidacion, errorForbidden } = require('./errores');
 const Hash = require('./passwordHash');
 const { parsearListaPortal, normalizarUsuario } = require('./portal');
@@ -165,6 +165,11 @@ function crear(db, data, contexto) {
     ultimo_acceso: '',
     creado_por: contexto.email
   });
+
+  // Que se la pueda buscar y asignar de inmediato (selector de personas), sin
+  // esperar al próximo arranque. La siembra es idempotente; si fallara, la
+  // cuenta ya quedó creada y entra al directorio en el siguiente arranque.
+  try { asegurarDirectorioPersonas_(db); } catch (err) { console.error('[directorio] siembra tras crear cuenta:', err && err.message); }
 
   // La clave temporal se devuelve UNA sola vez, para que el Admin la
   // entregue en persona/WhatsApp. No queda guardada en ninguna parte.

@@ -878,4 +878,4 @@ function asegurarEsquema(db) {
   asegurarDirectorioPersonas_(db);
 }
 
-module.exports = { COLUMNAS, asegurarEsquema, ORGANIZACION_POR_DEFECTO_ID };
+module.exports = { COLUMNAS, asegurarEsquema, ORGANIZACION_POR_DEFECTO_ID, asegurarDirectorioPersonas_ };
