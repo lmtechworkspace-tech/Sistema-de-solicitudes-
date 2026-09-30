@@ -197,6 +197,14 @@
 .sx2-py-gantt__deps { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; z-index: 1; }
 .sx2-py-gantt__deps path { fill: none; stroke: color-mix(in srgb, var(--sx-texto-3) 60%, transparent); stroke-width: 1.25; transition: stroke var(--sx-dur-rapida); }
 .sx2-py-gantt__deps marker path { fill: color-mix(in srgb, var(--sx-texto-3) 80%, transparent); stroke: none; }
+/* Flechas en papel (trozos por fila; ver flechasPapel en gantt-dibujo.js). Color
+   sólido: con transparencia se notarían los cruces. Debajo de las barras. */
+.sx2-py-gantt__dep-t { position: absolute; background: color-mix(in srgb, var(--sx-texto-3) 65%, var(--sx-superficie)); }
+.sx2-py-gantt__dep-p {
+  position: absolute; top: calc(50% - 5.5px); width: 0; height: 0;
+  border-left: 5px solid color-mix(in srgb, var(--sx-texto-3) 80%, var(--sx-superficie));
+  border-top: 3.5px solid transparent; border-bottom: 3.5px solid transparent;
+}
 .sx2-py-gantt__deps path.activa { stroke: var(--sx-primario); stroke-width: 2; }
 
 /* Scroll: horizontal con zoom; en "completa", área propia con cabecera fija */

@@ -116,7 +116,7 @@ completa; PDF con diseño v2 y "En una línea" + "Lo que requiere decisión"; si
   propia Carta Gantt, con los filtros que se están viendo. El Excel usa los mismos tonos, el avance dentro de
   la barra, la semana de hoy, el resumen por hito, la leyenda, filtros e impresión apaisada. Cubre P1, G7, E4
   y la parte de E3 de formato; el paso completo al generador `libroExcel.js` queda para la etapa 3.
-  Pendiente: las flechas de dependencias no se dibujan en el papel (en pantalla sí).
+  Las flechas de dependencias en el papel se agregaron después de la etapa 4 (ver abajo).
 - **Arreglo del despliegue (`e1e320a`):** los fallos intermitentes de "Desplegar backend" (83ad545, e2de0a0,
   306b5db) eran Chromium lento en el runner de GitHub: el Acta caía al respaldo pdfkit, que usaba otro nombre de
   archivo. Ambos usan ahora el mismo nombre, y el test de "Descargar Gantt" ya no lanza Chromium real.
@@ -138,3 +138,7 @@ completa; PDF con diseño v2 y "En una línea" + "Lo que requiere decisión"; si
   del Excel trae una fila por dependencia.
   Corrección a G6: la ruta crítica **ya se calculaba** (holgura 0), no era una marca manual; ahora usa la
   duración de plan (inicio de plan → compromiso) y todas las dependencias.
+- **Flechas de dependencias en el PDF:** al imprimir no corre JavaScript, así que cada flecha se arma con
+  trozos dentro de cada fila (salida, vertical en las de en medio, llegada con punta). No depende del alto de
+  las filas y solo se dibujan las que tienen origen y destino en la misma página. Con esto no queda nada
+  pendiente de la auditoría.

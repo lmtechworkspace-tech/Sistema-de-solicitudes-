@@ -230,7 +230,13 @@
       return out;
     }
 
-    // Cada fila: { html, grupo (html de la fila del hito al que pertenece), esGrupo }.
+    // Dónde queda la barra (en % de la pista) y de qué depende: lo usan las flechas en papel.
+    function ubicacion(f) {
+      var izq = pos(f.ini.getTime());
+      return { id: f.a.actividad_id, dep: f.a.depende_de || '', izq: izq, der: izq + Math.max(0.2, pos(f.fin.getTime() + DIA) - izq) };
+    }
+
+    // Cada fila: { html, grupo (html de la fila del hito al que pertenece), esGrupo, t (ubicación de la barra) }.
     var lista = [], total = 0, limite = opts.limite || Infinity, i = 0;
     var ordenar = function (x, y) {
       var tx = esTerminal(x.a) ? 1 : 0, ty = esTerminal(y.a) ? 1 : 0;
@@ -264,14 +270,14 @@
         var cab = cabGrupo(false);
         lista.push({ html: cab, esGrupo: true });
         var cont = cabGrupo(true);
-        if (!cerrado) g.filas.forEach(function (f) { if (total < limite) { lista.push({ html: filaTarea(f, i++), grupo: cont }); total++; } });
+        if (!cerrado) g.filas.forEach(function (f) { if (total < limite) { lista.push({ html: filaTarea(f, i++), grupo: cont, t: ubicacion(f) }); total++; } });
       });
     } else {
       if (hitosEnRango.length) {
         lista.push({ html: '<div class="sx2-py-gantt__fila sx2-py-gantt__fila--hitos"><span class="sx2-py-gantt__nombre sx2-tenue">' + UI.ico('bandera', 14) + 'Hitos</span>' +
           '<span class="sx2-py-gantt__pista">' + hitosEnRango.map(marcaHito).join('') + '</span></div>', esGrupo: true });
       }
-      anidar(filas.sort(ordenar)).forEach(function (f) { if (total < limite) { lista.push({ html: filaTarea(f, i++) }); total++; } });
+      anidar(filas.sort(ordenar)).forEach(function (f) { if (total < limite) { lista.push({ html: filaTarea(f, i++), t: ubicacion(f) }); total++; } });
     }
 
     // --- Cabecera: meses (con año) arriba · semanas o días abajo -----------------------
@@ -351,7 +357,7 @@
       abrir: '<div class="' + clases + '" style="' + estilo + '" data-desde="' + desde.toISOString().slice(0, 10) + '" data-semanas="' + semanas + '"' +
         (opts.completa ? ' data-completa' : '') + (opts.dependencias ? ' data-deps' : '') + '>' + cabecera,
       cerrar: fondo + '</div>',
-      px: px, completa: opts.completa, agrupar: opts.agrupar
+      px: px, completa: opts.completa, agrupar: opts.agrupar, anchoTotal: anchoTotal
     };
   }
 
@@ -384,11 +390,59 @@
       // Un hito no queda solo al pie de una página: se lleva a la siguiente.
       var siguienteEsDeOtro = !P.filas[k + 1] || P.filas[k + 1].esGrupo;
       if (actual.length >= cabe() || (f.esGrupo && actual.length >= cabe() - 1 && !siguienteEsDeOtro)) { bloques.push(actual); actual = []; }
-      if (!actual.length && !f.esGrupo && f.grupo) actual.push(f.grupo);
-      actual.push(f.html);
+      if (!actual.length && !f.esGrupo && f.grupo) actual.push({ html: f.grupo });
+      actual.push(f);
     });
     if (actual.length) bloques.push(actual);
-    return bloques.map(function (b) { return P.abrir + b.join('') + P.cerrar; });
+    return bloques.map(function (b) {
+      var trozos = opts && opts.dependencias ? flechasPapel(b, P.anchoTotal) : [];
+      return P.abrir + b.map(function (f, k) {
+        return trozos[k] ? f.html.replace('<span class="sx2-py-gantt__pista">', '<span class="sx2-py-gantt__pista">' + trozos[k]) : f.html;
+      }).join('') + P.cerrar;
+    });
+  }
+
+  // Flechas de dependencias en papel. Al imprimir no corre JavaScript (no se puede
+  // medir como en pantalla), así que cada flecha se arma con trozos dentro de cada
+  // fila: la salida en la fila de origen, una vertical en las filas de en medio y
+  // la llegada con su punta en la fila de destino. No depende del alto de las filas.
+  // Solo se dibujan las que tienen origen y destino en la misma página.
+  // Devuelve, por fila del bloque, el HTML de sus trozos ('' si no tiene).
+  function flechasPapel(filas, anchoPx) {
+    var donde = {};
+    filas.forEach(function (f, k) { if (f.t) donde[f.t.id] = k; });
+    var trozos = filas.map(function () { return ''; });
+    var MEDIO = 'calc(50% - 2px)'; // centro de la barra
+    function p(n) { return n.toFixed(3) + '%'; }
+    function trozo(k, css) { trozos[k] += '<span class="sx2-py-gantt__dep-t" style="' + css + '"></span>'; }
+    filas.forEach(function (f, kd) {
+      if (!f.t || !f.t.dep) return;
+      String(f.t.dep).split(/[\s,;]+/).filter(Boolean).forEach(function (id) {
+        var ko = donde[id];
+        if (ko === undefined || ko === kd) return;
+        var o = filas[ko].t, d = f.t, baja = kd > ko;
+        var xV = 'calc(' + p(o.der) + ' + 6px)';
+        // Salida: del fin de la barra a la vertical, y media fila hacia el destino.
+        trozo(ko, 'left:' + p(o.der) + ';width:7px;top:' + MEDIO + ';height:1px');
+        trozo(ko, 'left:' + xV + ';width:1px;' + (baja ? 'top:' + MEDIO + ';bottom:-2px' : 'top:-2px;height:50%'));
+        // Filas de en medio: la vertical entera.
+        for (var k = Math.min(ko, kd) + 1; k < Math.max(ko, kd); k++) trozo(k, 'left:' + xV + ';width:1px;top:-2px;bottom:-2px');
+        var hueco = (d.izq - o.der) / 100 * (anchoPx || 720);
+        if (hueco >= 14) {
+          // Llegada directa: media fila y a la derecha hasta la punta.
+          trozo(kd, 'left:' + xV + ';width:1px;' + (baja ? 'top:-2px;height:50%' : 'top:' + MEDIO + ';bottom:-2px'));
+          trozo(kd, 'left:' + xV + ';width:calc(' + p(d.izq - o.der) + ' - 10px);top:' + MEDIO + ';height:1px');
+        } else {
+          // La tarea empieza antes de que termine la otra: rodeo por el borde de la fila.
+          var borde = baja ? 'top:-1px' : 'bottom:-1px';
+          trozo(kd, 'left:calc(' + p(d.izq) + ' - 9px);width:calc(' + p(o.der - d.izq) + ' + 16px);height:1px;' + borde);
+          trozo(kd, 'left:calc(' + p(d.izq) + ' - 9px);width:1px;' + (baja ? 'top:-1px;height:calc(50% - 1px)' : 'top:' + MEDIO + ';bottom:-1px'));
+          trozo(kd, 'left:calc(' + p(d.izq) + ' - 9px);width:5px;top:' + MEDIO + ';height:1px');
+        }
+        trozos[kd] += '<span class="sx2-py-gantt__dep-p" style="left:calc(' + p(d.izq) + ' - 5px)"></span>';
+      });
+    });
+    return trozos;
   }
 
   // Leyenda de colores (la misma en pantalla y en el PDF).

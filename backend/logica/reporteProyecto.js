@@ -1160,7 +1160,7 @@ function contextoGanttPapel_(detalle, tareas, rendimiento, nombres) {
 function ganttPapelV2_(G, ctx, primera) {
   const r = G.rango(ctx);
   return G.paginas(ctx, { desde: r.desde, semanas: r.semanas, agrupar: true, densidad: 'compacta', quieto: true,
-    anchoEstimado: GANTT_PAPEL_PISTA_PX, lineasSemana: true,
+    anchoEstimado: GANTT_PAPEL_PISTA_PX, lineasSemana: true, dependencias: true,
     lineaBase: !!(ctx.rendimiento && ctx.rendimiento.baseline) }, GANTT_PAPEL_FILAS, primera || GANTT_PAPEL_FILAS)
     .map((b) => '<div class="rp2-gantt-pag">' + b + '</div>');
 }

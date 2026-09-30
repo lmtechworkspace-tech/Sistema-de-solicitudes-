@@ -156,3 +156,27 @@ test('G3: el arrastre abre el formulario de reprogramar con motivo (no cambia na
   assert.match(panel, /accion: 'reprogramarTareaProyecto'/);
   assert.match(panel, /Toda reprogramación necesita un motivo/);
 });
+
+test('PDF: las flechas de dependencias se dibujan en papel, solo dentro de una misma página', () => {
+  const db = db_();
+  const p = proyecto_(db);
+  const a = tarea_(db, p, { titulo: 'Primera', fecha_inicio_plan: '2026-03-02', fecha_compromiso: '2026-03-06' });
+  const b = tarea_(db, p, { titulo: 'Segunda', fecha_compromiso: '2026-04-30', depende_de: a.actividad_id });
+  // Una tercera que empieza antes de que termine la segunda (rodeo por el borde).
+  tarea_(db, p, { titulo: 'Tercera', fecha_inicio_plan: '2026-03-09', fecha_compromiso: '2026-05-15', depende_de: b.actividad_id });
+  const { G } = DocV2.piezas();
+  const ctx = ctxGantt_(db, p);
+  const r = G.rango(ctx);
+  const o = { desde: r.desde, semanas: r.semanas, anchoEstimado: 720, dependencias: true };
+  const juntas = G.paginas(ctx, o, 20);
+  assert.equal(juntas.length, 1);
+  assert.equal((juntas[0].match(/sx2-py-gantt__dep-p/g) || []).length, 2, 'una punta por dependencia');
+  assert.ok(!/<script/.test(juntas[0]), 'sin JavaScript: el PDF se imprime con JS apagado');
+  // Sin el interruptor no hay flechas; si origen y destino quedan en páginas distintas, tampoco.
+  assert.ok(!/sx2-py-gantt__dep-/.test(G.paginas(ctx, Object.assign({}, o, { dependencias: false }), 20).join('')));
+  const sueltas = G.paginas(ctx, o, 1);
+  assert.equal(sueltas.length, 3);
+  assert.ok(!/sx2-py-gantt__dep-p/.test(sueltas.join('')));
+  const rp = fs.readFileSync(path.join(__dirname, '..', 'logica', 'reporteProyecto.js'), 'utf8');
+  assert.match(rp, /lineasSemana: true, dependencias: true/, 'el Gantt en papel pide las flechas');
+});
