@@ -66,6 +66,7 @@ const Indicadores = require('../logica/indicadoresSgc');
 const Tablero = require('../logica/tableroSgc');
 const Prestaciones = require('../logica/prestacionesSgc');
 const ControlInterno = require('../logica/controlInterno');
+const ControlInternoImportar = require('../logica/controlInternoImportar');
 const OrdenTrabajo = require('../logica/ordenTrabajo');
 const ReporteActividades = require('../logica/reporteActividades');
 const EvidenciaClausulaSgc = require('../logica/evidenciaClausulaSgc');
@@ -562,6 +563,9 @@ const ACCIONES = {
   reporteControlInterno: (db, data, contexto) => ControlInterno.reporte(db, data, contexto),
   listarMiembrosCI: (db, data, contexto) => ControlInterno.listarMiembros(db, data, contexto),
   guardarMiembrosCI: (db, data, contexto) => ControlInterno.guardarMiembros(db, data, contexto),
+  // Importar las planillas del Drive (solo ADM): el navegador lee el .xlsx y
+  // manda hoja por hoja; `simular` primero.
+  importarHojaCI: (db, data, contexto) => ControlInternoImportar.importarHoja(db, data, contexto),
   marcarNoConformePrestacionSgc: (db, data, contexto) => Prestaciones.marcarNoConforme(db, data, contexto),
   abrirNcPrestacionSgc: (db, data, contexto) => Prestaciones.abrirNoConformidad(db, data, contexto),
   anularPrestacionSgc: (db, data, contexto) => Prestaciones.anular(db, data, contexto),

@@ -692,5 +692,7 @@ function guardarMiembros(db, data, contexto) {
 
 module.exports = {
   getConfig, listar, getRegistro, guardar, abrirPeriodo, accionLote, reporte, listarMiembros, guardarMiembros,
-  moverPeriodo_, MODULO
+  // Para el importador (controlInternoImportar.js): mismas reglas que la carga a mano.
+  moverPeriodo_, periodoDeFecha_, limpiarDatos_, estadoCalculado_, consultar_, enTransaccion_, historial_, clientes_, uuid_,
+  MODULO
 };

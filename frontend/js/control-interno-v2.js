@@ -211,6 +211,7 @@
         }).join('') + '</div></section>';
     }).join('');
     pagina(cabecera('Control interno', 'Resumen de ' + perTexto(periodo_, true), SUB, selectorPeriodo() +
+      (cfg_.puede_administrar ? U.boton({ texto: 'Importar desde Excel', icono: 'subir', clase: 'js-ci2-importar' }) : '') +
       U.boton({ soloIcono: true, icono: 'tendencia', titulo: 'Actualizar', clase: 'js-ci2-recargar' })) + html, !!silencioso);
   }
 
@@ -668,6 +669,106 @@
   }
 
   // =========================================================================================
+  // Importar desde Excel (ADM): las planillas del Drive, hoja por hoja
+  // =========================================================================================
+  var MESES_RE = /(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|SETIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)/i;
+  // Hojas que vale la pena mandar: las del año elegido, y las que no son "de un mes"
+  // (las de RR.HH. y las listas de Anotaciones). El servidor decide el resto.
+  function hojaDelAnio(nombre_, anio) { return /20\d\d/.test(nombre_) ? nombre_.indexOf(anio) !== -1 : !MESES_RE.test(nombre_); }
+  function abrirImportar() {
+    var est = { paso: 'elegir', archivos: [], anio: String(new Date().getFullYear()), resultados: [], avance: '', error: '' };
+    var dr = U.drawer({ titulo: 'Importar desde Excel', subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">Las planillas del Drive. Se importa solo el año elegido y volver a importar no duplica.</span>', cuerpo: '', pie: ' ' });
+    dr.el.classList.add('sx2-drawer--ancho');
+    function totales() {
+      var t = { nuevas: 0, ya: 0, dup: 0, fuera: 0, hojas: 0, omitidas: 0, sinCuenta: {}, fueraEj: {}, errores: [] };
+      est.resultados.forEach(function (r) {
+        if (r.omitida || !r.matriz) { t.omitidas++; return; }
+        t.hojas++; t.nuevas += r.nuevas || 0; t.ya += r.ya_estaban || 0; t.dup += r.duplicadas || 0; t.fuera += r.fuera_catalogo || 0;
+        (r.sin_cuenta || []).forEach(function (n) { t.sinCuenta[n] = true; });
+        (r.fuera_catalogo_ejemplos || []).forEach(function (n) { t.fueraEj[n] = true; });
+        (r.errores || []).forEach(function (e) { if (t.errores.length < 10) t.errores.push(r.hoja + ': ' + e); });
+      });
+      return t;
+    }
+    function pintar() {
+      var c = '', p = '';
+      if (est.paso === 'elegir') {
+        c = '<div class="sx2-form">' +
+          U.campo('Planillas (.xlsx)', '<input class="sx2-input js-ci2-imp-arch" type="file" accept=".xlsx" multiple>', 'Puedes elegir varias a la vez: facturación, IVA, contabilización, convenios, acuse, anotaciones y el control de matrices de RR.HH.') +
+          U.campo('Año a importar', select('', [['2026', '2026'], ['2025', '2025'], ['2024', '2024']], est.anio, 'class="sx2-select js-ci2-imp-anio"'), 'Lo acordado: 2026 completo. Los años anteriores quedan en el Drive.') +
+          (est.archivos.length ? '<p class="sx2-tenue" style="margin:0">' + est.archivos.length + (est.archivos.length === 1 ? ' archivo elegido' : ' archivos elegidos') + '</p>' : '') +
+          (est.error ? '<p class="sx2-campo__error">' + txt(est.error) + '</p>' : '') + '</div>';
+        p = '<span style="flex:1"></span>' + U.boton({ texto: 'Cancelar', clase: 'js-sx2-drawer-cerrar' }) + U.boton({ texto: 'Revisar', icono: 'lupa', variante: 'primario', clase: 'js-ci2-imp-revisar', deshabilitado: !est.archivos.length });
+      } else if (est.paso === 'revisando' || est.paso === 'importando') {
+        c = '<div class="ci2-imp-avance">' + U.ico('reloj', 18) + '<span>' + txt(est.avance) + '</span></div>';
+        p = ' ';
+      } else {
+        var t = totales();
+        var filas = est.resultados.filter(function (r) { return r.matriz && !r.omitida; });
+        var listo = est.paso === 'listo';
+        c = (listo ? aviso('ok', 'check', '<b>' + t.nuevas + ' registros importados</b> en ' + t.hojas + ' hojas.') :
+            aviso(t.nuevas ? 'info' : 'alerta', 'info', 'Se importarían <b>' + t.nuevas + ' registros</b> de ' + t.hojas + ' hojas' + (t.ya ? ' (' + t.ya + ' ya estaban importados)' : '') + '. No se ha guardado nada todavía.')) +
+          (t.dup ? aviso('info', 'copiar', t.dup + ' filas aparecen repetidas tal cual dentro de la misma planilla: se importan una vez.') : '') +
+          (t.fuera ? aviso('alerta', 'empresa', t.fuera + ' registros con clientes que no calzan con el catálogo de SIGSO (quedan con su nombre y marcados “Fuera del catálogo”). Ej.: ' + txt(Object.keys(t.fueraEj).slice(0, 6).join(', ')) + '.') : '') +
+          (Object.keys(t.sinCuenta).length ? aviso('info', 'persona', 'Responsables sin cuenta en SIGSO (quedan en observaciones): ' + txt(Object.keys(t.sinCuenta).join(', ')) + '.') : '') +
+          (t.errores.length ? aviso('critico', 'alerta', 'Filas con problemas: ' + txt(t.errores.join(' · '))) : '') +
+          '<div class="sx2-tabla-wrap"><table class="sx2-tabla"><thead><tr><th>Hoja</th><th>Matriz</th><th class="sx2-num">' + (listo ? 'Importadas' : 'Nuevas') + '</th><th class="sx2-num">Ya estaban</th><th class="sx2-num">Otro año</th><th class="sx2-num">Fuera del catálogo</th></tr></thead><tbody>' +
+          filas.map(function (r) {
+            return '<tr><td>' + txt(r.hoja) + '<br><small class="sx2-tenue">' + txt(r.archivo) + '</small></td><td>' + txt(r.nombre) + '</td><td class="sx2-num"><b>' + r.nuevas + '</b></td><td class="sx2-num">' + (r.ya_estaban || 0) + '</td><td class="sx2-num">' + (r.otro_anio || 0) + '</td><td class="sx2-num">' + (r.fuera_catalogo || 0) + '</td></tr>';
+          }).join('') + '</tbody></table></div>' +
+          (t.omitidas ? '<p class="sx2-tenue" style="margin:8px 0 0;font-size:.8125rem">' + t.omitidas + ' hojas no corresponden a una matriz del módulo o son de otro año (listas auxiliares, fichas de texto libre, hojas vacías).</p>' : '');
+        p = '<span style="flex:1"></span>' + (listo
+          ? U.boton({ texto: 'Ver el resumen', icono: 'panel', variante: 'primario', clase: 'js-ci2-imp-fin' })
+          : U.boton({ texto: 'Volver', clase: 'js-ci2-imp-volver' }) + U.boton({ texto: 'Importar ' + t.nuevas + ' registros', icono: 'subir', variante: 'primario', clase: 'js-ci2-imp-ok', deshabilitado: !t.nuevas }));
+      }
+      dr.cuerpo(c);
+      dr.el.querySelector('.sx2-drawer__pie').innerHTML = p;
+    }
+    // Lee cada archivo y manda sus hojas de a una (simular o importar).
+    function procesar(simular) {
+      est.paso = simular ? 'revisando' : 'importando';
+      est.resultados = [];
+      var trabajos = [];
+      return est.archivos.reduce(function (p, archivo) {
+        return p.then(function () {
+          est.avance = 'Leyendo ' + archivo.name + '…';
+          pintar();
+          return SigsoLectorXlsx.leer(archivo, { hojas: function (n) { return hojaDelAnio(n, est.anio); } }).then(function (hojas) {
+            return hojas.reduce(function (q, h, k) {
+              return q.then(function () {
+                est.avance = (simular ? 'Revisando ' : 'Importando ') + archivo.name + ' › ' + h.hoja + ' (' + (k + 1) + ' de ' + hojas.length + ')';
+                pintar();
+                var filas = h.filas.filter(function (f) { return f.some(function (v) { return v !== undefined && v !== null && String(v).trim() !== ''; }); });
+                if (!filas.length) return null;
+                return api('importarHojaCI', { archivo: archivo.name, hoja: h.hoja, filas: filas, anio: est.anio, simular: simular }).then(function (r) {
+                  if (r && r.ok) est.resultados.push(r.data);
+                  else est.resultados.push({ archivo: archivo.name, hoja: h.hoja, omitida: false, matriz: '?', nombre: 'Error', nuevas: 0, errores: [(r && r.message) || 'No se pudo'] });
+                });
+              });
+            }, Promise.resolve());
+          });
+        });
+      }, Promise.resolve()).then(function () { est.paso = simular ? 'revisado' : 'listo'; pintar(); }, function (e) {
+        est.paso = 'elegir'; est.error = (e && e.message) || 'No se pudo leer el archivo.'; pintar();
+      });
+    }
+    dr.el.addEventListener('change', function (ev) {
+      if (ev.target.classList.contains('js-ci2-imp-arch')) { est.archivos = [].slice.call(ev.target.files || []); est.error = ''; pintar(); }
+      if (ev.target.classList.contains('js-ci2-imp-anio')) est.anio = ev.target.value;
+    });
+    dr.el.addEventListener('click', function (ev) {
+      if (ev.target.closest('.js-ci2-imp-revisar')) {
+        if (!window.SigsoLectorXlsx || typeof DecompressionStream === 'undefined') { est.error = 'Este navegador no puede leer .xlsx: usa Chrome o Edge actualizados.'; pintar(); return; }
+        procesar(true);
+      } else if (ev.target.closest('.js-ci2-imp-volver')) { est.paso = 'elegir'; pintar(); }
+      else if (ev.target.closest('.js-ci2-imp-ok')) {
+        U.confirmar({ titulo: '¿Importar los registros?', texto: 'Quedan en Control interno con su historial ("Importado de…"). Si después se vuelve a importar el mismo archivo, lo ya importado no se duplica.', boton: 'Importar' }).then(function (ok) { if (ok) procesar(false); });
+      } else if (ev.target.closest('.js-ci2-imp-fin')) { dr.cerrar(); cfg_ = null; vista_ = 'inicio'; cargar(); }
+    });
+    pintar();
+  }
+
+  // =========================================================================================
   // Eventos
   // =========================================================================================
   function mio(ev) { var c = document.getElementById('ci2'); return !!c && c.contains(ev.target); }
@@ -677,6 +778,7 @@
     if (t.closest('.js-ci2-recargar')) { cfg_ = null; cargar(); return; }
     if ((b = t.closest('.js-ci2-per'))) { cambiarPeriodo(Number(b.getAttribute('data-n'))); return; }
     if ((b = t.closest('[data-ci2-ir]'))) { irAItem(b.getAttribute('data-ci2-ir')); return; }
+    if (t.closest('.js-ci2-importar')) { abrirImportar(); return; }
     // Matriz
     if (t.closest('.js-ci2-nuevo')) { formRegistro(matriz(lista_.matriz), null); return; }
     if (t.closest('.js-ci2-excel')) { excelMatriz(); return; }

@@ -118,3 +118,8 @@
   .ci2-meses li { grid-template-columns: 54px 1fr auto; }
   .ci2-cuenta { margin-left: 0; }
 }
+
+/* Importar desde Excel */
+.ci2-imp-avance { display: flex; align-items: center; gap: 10px; padding: 18px; border: 1px dashed var(--sx-borde); border-radius: var(--sx-radio); font: var(--sx-t-chico); color: var(--sx-texto); }
+@media (prefers-reduced-motion: no-preference) { .ci2-imp-avance svg { animation: ci2-gira 1.4s linear infinite; } }
+@keyframes ci2-gira { to { transform: rotate(360deg); } }
