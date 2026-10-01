@@ -112,6 +112,34 @@ claves que no se cargan, hojas que no son matrices) → **Reemplazar e importar*
 Todos con PDF (Chromium en el servidor) y Excel, desde el motor común de reportes.
 Medido: informe mensual 6–21 ms, panel de un departamento 0,5 s, ficha 50 ms.
 
+## Seguimiento de convenios TGR (etapa 1, 2026-10-01)
+
+Reemplaza la hoja impresa de Francisca (reunión del 30-09): por cada folio
+imprimía "Imprimir cuotas de convenios vigentes" de la TGR, a mitad de mes
+marcaba cada cuota a mano (azul pagada, rojo vencida, verde contabilizada) y
+después traspasaba a la matriz Convenios (≈ medio día al mes).
+
+Control interno › Contabilidad › Convenios y postergaciones › **Seguimiento de
+cuotas TGR** (`frontend/js/control-interno-convenios-v2.js`,
+`backend/logica/controlInternoConvenios.js`, tabla `CI_CONVENIOS`).
+
+| Qué | Cómo |
+|---|---|
+| Convenio | Cliente (catálogo o texto), folio (único), tipo IVA / Renta / IVA y Renta / Otro, fecha, pie, deuda total. Estado vigente / terminado / caído (caído pide motivo). |
+| Cuotas | **Pegar desde la TGR**: se copia la tabla de "Imprimir cuotas de convenios vigentes" y se pega; "Revisar" muestra qué cambia antes de aplicar. Montos con punto de miles, "(*)", tabulaciones o una celda por línea. Si lo pegado es de otro folio, se rechaza. Sin claves: la persona entra a la TGR como siempre. |
+| Revisión manual | Por cuota (o varias a la vez): pagada / vencida y contabilizada, con fecha. Volver a pegar conserva lo marcado; si la TGR ya da por pagada una cuota marcada "vencida", pasa a pagada. |
+| Situación | Calculada: pagada (TGR o revisión), vencida (pasó la fecha), por vencer, y la **cuota de ajuste** (la última en $0) que no cuenta como impaga. |
+| Alertas | Cuotas vencidas sin pagar, pagadas sin contabilizar, vencen en 7 días, convenios sin cuotas cargadas, todas pagadas → marcar terminado. |
+| Desde la matriz | "Crear fichas desde la matriz Convenios" (botón ↑): cada folio del mes que no esté en el seguimiento entra con su fecha, pie, deuda, tipo (y caído si así figura). |
+| A la matriz | "Pasar a la matriz del mes": llena Convenio 1…9 de la fila del cliente (folio, pie, deuda, cuotas canceladas y vencidas, situación "AL DIA" / "N CUOTAS VENCIDAS" / "CAÍDO" / "TERMINADO", término y tipo); quién realiza = el primer nombre de la cuenta, fecha = hoy. **No pisa** lo que la matriz ya sabe: en convenios sin cuotas cargadas se mantienen cuotas pagadas/vencidas/situación de la matriz, y los folios que están en la matriz y no en el seguimiento se conservan. Solo se escriben las casillas que cambian. |
+| Historial | Cada pegado (con lo que cambió en la TGR), marca, cambio de estado y edición. |
+
+Permisos: los de la matriz Convenios (Contabilidad): solo lectura ve y puede
+revisar un pegado, no guardar. Tests: `backend/test/control-interno-convenios.test.js`.
+
+Siguiente (decidir con Francisca): robot de la TGR (etapa 3) que haga el pegado
+solo; mientras, el pegado manual ya evita imprimir y traspasar.
+
 ## Permisos (verificados en el servidor)
 
 1. La cuenta necesita el módulo **Control interno** (Administración › Cuentas).
@@ -130,7 +158,9 @@ Medido: informe mensual 6–21 ms, panel de un departamento 0,5 s, ficha 50 ms.
 ## Datos y escala
 
 - Tablas: `CI_REGISTROS` (cada fila de la planilla; sus celdas en `datos`, más
-  `_fila`, `_hoja` y `_origen` si se importó), `CI_MIEMBROS`, `CI_HISTORIAL`.
+  `_fila`, `_hoja` y `_origen` si se importó), `CI_MIEMBROS`, `CI_HISTORIAL`
+  (también el de los convenios: `registro_id` = `convenio_id`), `CI_CONVENIOS`
+  (las cuotas en JSON dentro de la fila: son ≤ 72 por convenio).
 - Siempre se consulta filtrando en SQL por matriz + período con índice. Los
   reportes leen solo las columnas fijas salvo cuando necesitan montos o fechas.
 

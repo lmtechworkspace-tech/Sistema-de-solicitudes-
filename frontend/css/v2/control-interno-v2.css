@@ -128,3 +128,24 @@ textarea.ci2-editor { height: auto; min-width: 260px; resize: vertical; }
 .ci2-imp-avance { display: flex; align-items: center; gap: 10px; padding: 18px; border: 1px dashed var(--sx-borde); border-radius: var(--sx-radio); font: var(--sx-t-chico); color: var(--sx-texto); }
 @media (prefers-reduced-motion: no-preference) { .ci2-imp-avance svg { animation: ci2-gira 1.4s linear infinite; } }
 @keyframes ci2-gira { to { transform: rotate(360deg); } }
+
+/* --- Seguimiento de convenios TGR (control-interno-convenios-v2.js) --------------------- */
+.cv-chk { display: inline-flex; align-items: center; gap: 6px; font: var(--sx-t-chico); color: var(--sx-texto-2); cursor: pointer; white-space: nowrap; }
+.cv-tabla .cv-fila { cursor: pointer; }
+.cv-tabla .cv-fila:hover td { background: var(--sx-superficie-hover); }
+.cv-av { display: inline-flex; flex-direction: column; gap: 4px; min-width: 110px; font-variant-numeric: tabular-nums; }
+.cv-datos dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px 20px; margin: 0; }
+.cv-datos dt { font: var(--sx-t-etiqueta); text-transform: uppercase; letter-spacing: .04em; color: var(--sx-texto-3); }
+.cv-datos dd { margin: 3px 0 0; font-variant-numeric: tabular-nums; }
+.cv-cuotas td { font-variant-numeric: tabular-nums; }
+.cv-cuotas tr.cv-cuota--vencida td { background: color-mix(in srgb, var(--sx-critico) 6%, var(--sx-superficie)); }
+.cv-cuotas tr.cv-cuota--pagada td:not(.ci2-col-sel) { color: var(--sx-texto-2); }
+.cv-si { color: var(--sx-ok); }
+.cv-seg { display: inline-flex; border: 1px solid var(--sx-borde); border-radius: var(--sx-radio-full); overflow: hidden; background: var(--sx-superficie); }
+.cv-seg__b { border: 0; background: transparent; padding: 2px 10px; font: var(--sx-t-micro); color: var(--sx-texto-2); cursor: pointer; transition: background var(--sx-dur-rapida), color var(--sx-dur-rapida); }
+.cv-seg__b + .cv-seg__b { border-left: 1px solid var(--sx-borde); }
+.cv-seg__b:hover { background: var(--sx-superficie-hover); }
+.cv-seg__b:focus-visible { outline: none; box-shadow: var(--sx-anillo-foco); }
+.cv-seg__b.is-pagada { background: var(--sx-ok-suave); color: var(--sx-ok); font-weight: 600; }
+.cv-seg__b.is-vencida { background: var(--sx-critico-suave); color: var(--sx-critico); font-weight: 600; }
+.cv-fcont { display: inline-block; min-width: 72px; color: var(--sx-texto-3); font-variant-numeric: tabular-nums; }

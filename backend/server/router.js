@@ -68,6 +68,7 @@ const Prestaciones = require('../logica/prestacionesSgc');
 const ControlInterno = require('../logica/controlInterno');
 const ControlInternoImportar = require('../logica/controlInternoImportar');
 const ControlInternoReportes = require('../logica/controlInternoReportes');
+const ControlInternoConvenios = require('../logica/controlInternoConvenios');
 const OrdenTrabajo = require('../logica/ordenTrabajo');
 const ReporteActividades = require('../logica/reporteActividades');
 const EvidenciaClausulaSgc = require('../logica/evidenciaClausulaSgc');
@@ -568,6 +569,16 @@ const ACCIONES = {
   buscarClientesCI: (db, data, contexto) => ControlInternoReportes.buscarClientes(db, data, contexto),
   fichaClienteCI: (db, data, contexto) => ControlInternoReportes.fichaCliente(db, data, contexto),
   personasTiemposCI: (db, data, contexto) => ControlInternoReportes.personasTiempos(db, data, contexto),
+  // Seguimiento de convenios TGR (cuotas pagadas / vencidas / contabilizadas).
+  listarConveniosTGR: (db, data, contexto) => ControlInternoConvenios.listar(db, data, contexto),
+  getConvenioTGR: (db, data, contexto) => ControlInternoConvenios.get(db, data, contexto),
+  guardarConvenioTGR: (db, data, contexto) => ControlInternoConvenios.guardar(db, data, contexto),
+  pegarCuotasTGR: (db, data, contexto) => ControlInternoConvenios.pegarCuotas(db, data, contexto),
+  marcarCuotasTGR: (db, data, contexto) => ControlInternoConvenios.marcarCuotas(db, data, contexto),
+  estadoConvenioTGR: (db, data, contexto) => ControlInternoConvenios.cambiarEstado(db, data, contexto),
+  anularConvenioTGR: (db, data, contexto) => ControlInternoConvenios.anular(db, data, contexto),
+  conveniosDesdeMatrizTGR: (db, data, contexto) => ControlInternoConvenios.desdeMatriz(db, data, contexto),
+  conveniosAMatrizTGR: (db, data, contexto) => ControlInternoConvenios.aMatriz(db, data, contexto),
   listarMiembrosCI: (db, data, contexto) => ControlInterno.listarMiembros(db, data, contexto),
   guardarMiembrosCI: (db, data, contexto) => ControlInterno.guardarMiembros(db, data, contexto),
   // Importar las planillas del Drive (solo ADM): el navegador lee el .xlsx y

@@ -13,6 +13,7 @@
  *                  cancela). La "Situación" la calcula el servidor con las
  *                  columnas: no se escribe.
  *  - rep:*         Reportes (control-interno-reportes-v2.js).
+ *  - conv[:id]     Seguimiento de convenios TGR (control-interno-convenios-v2.js).
  *  - accesos       (ADM) quién registra o solo mira cada departamento.
  *
  * Mensuales (Contabilidad): un mes a la vez, como una hoja por mes.
@@ -141,7 +142,8 @@
     (cfg_ ? cfg_.departamentos : []).forEach(function (d) {
       secciones(d).forEach(function (s, k) {
         subs.push({ id: 'd-' + d.clave + '-' + k, nombre: s.nombre, descripcion: d.nombre, icono: d.clave === 'RRHH' ? 'equipo' : 'dinero',
-          items: s.matrices.map(function (m) { return { id: 'm:' + m.clave, nombre: m.nombre }; }) });
+          items: s.matrices.map(function (m) { return { id: 'm:' + m.clave, nombre: m.nombre }; })
+            .concat(s.matrices.some(function (m) { return m.clave === 'CONVENIOS'; }) ? [{ id: 'conv', nombre: 'Seguimiento de cuotas TGR' }] : []) });
       });
     });
     if (cfg_ && cfg_.puede_administrar) subs.push({ id: 'accesos', nombre: 'Accesos', icono: 'llave', plano: true, items: [{ id: 'accesos', nombre: 'Accesos' }] });
@@ -178,6 +180,7 @@
     var p = String(vista_).split(':');
     if (p[0] === 'm' && matriz(p[1])) { sel_ = {}; f_ = { q: '', estado: '', resp: '', liberar: false }; mostrar_ = LOTE_FILAS; abrirMatriz(p[1]); return; }
     if (p[0] === 'rep' && window.SigsoCIReportes) { SigsoCIReportes.mostrar(p[1], ctxReportes()); return; }
+    if (p[0] === 'conv' && window.SigsoCIConvenios && matriz('CONVENIOS')) { SigsoCIConvenios.mostrar(p.slice(1).join(':'), ctxReportes()); return; }
     if (vista_ === 'accesos' && cfg_.puede_administrar) { vistaAccesos(); return; }
     vista_ = 'inicio';
     vistaInicio();
@@ -185,7 +188,7 @@
   function ctxReportes() {
     return { cfg: cfg_, api: api, pagina: pagina, cabecera: cabecera, raiz: raiz, perTexto: perTexto, mover: mover, periodoActual: periodoActual,
       nombre: nombre, titulo: titulo, miles: miles, resolverPersonas: resolverPersonas, irAItem: irAItem, matriz: matriz, depto: depto, secciones: secciones,
-      periodo: function () { return periodo_; } };
+      periodo: function () { return periodo_; }, vista: function () { return vista_; } };
   }
   function cambiarPeriodo(n) {
     periodo_ = mover(periodo_, n);

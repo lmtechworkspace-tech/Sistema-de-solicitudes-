@@ -756,6 +756,16 @@ const COLUMNAS = {
   // que el Drive no tiene.
   CI_HISTORIAL: [
     'historial_id', 'registro_id', 'accion', 'detalle', 'usuario_email', 'fecha'
+  ],
+  // Seguimiento de convenios TGR (2026-10-01): lo que Francisca hacía en papel
+  // (imprimir las cuotas de cada folio y marcar pagado / vencido /
+  // contabilizado). Un registro por convenio; sus cuotas van en `cuotas`
+  // (arreglo, ≤ 60). El historial usa CI_HISTORIAL con registro_id = convenio_id.
+  CI_CONVENIOS: [
+    'convenio_id', 'cliente_id', 'cliente_nombre', 'cliente_rut', 'folio', 'tipo',
+    'fecha_convenio', 'pie', 'deuda_total', 'estado', 'motivo_estado', 'fecha_estado', 'cuotas',
+    'fecha_revision_tgr', 'observaciones',
+    'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activa'
   ]
 };
 
