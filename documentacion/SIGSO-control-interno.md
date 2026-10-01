@@ -140,6 +140,30 @@ revisar un pegado, no guardar. Tests: `backend/test/control-interno-convenios.te
 Siguiente (decidir con Francisca): robot de la TGR (etapa 3) que haga el pegado
 solo; mientras, el pegado manual ya evita imprimir y traspasar.
 
+## Ajustes de la reunión con Francisca (etapa 2, 2026-10-01)
+
+| Qué | Dónde | Cómo |
+|---|---|---|
+| Columnas sin uso | Facturación: CÓDIGO, CLASIFICACIÓN INTERNA, ENVIAR A CLIENTE/OBRA | Ocultas por defecto, con sus datos; botón "Ver columnas sin uso" (`sinUso` en `AJUSTES` de `controlInternoMatrices.js`) |
+| Qué es cada columna | Facturación, IVA, Convenios, Anotaciones | Al pasar el mouse por el encabezado (subrayado punteado) y bajo cada campo de la fila completa (`ayuda`) |
+| Hojas que ya no se usan | Cartas poder (libro de IVA) y Arriendos | Al final del menú, en "Hojas que ya no se usan"; se siguen importando |
+| Postergación del IVA | IVA › fecha vencimiento | POSTERGA = SI + fecha de postergación → vence 2 meses después (sábado o domingo → lunes; sin feriados). Regla sacada de la planilla 2025-2026 (20-02 → 20-04, 19-03 → 19-05) |
+| PPM | IVA › columna nueva VENTAS (BASE PPM) | MONTO PPM = ventas × tasa. La tasa va en % (0,5 = 0,5 %); si viene como fracción de una celda con formato % (0,01) se entiende 1 % |
+| Lo calculado | Cualquier columna con fórmula | Se ve en azul y cursiva; se recalcula si cambian sus datos; si la persona escribe otro valor, ese manda (`datos._auto`) |
+| "No aplica" de una vez | Contabilización › Abrir el mes | Lo que el mes anterior decía NO APLICA / NA en las tareas se precarga (el perfil del cliente sale de su historia) |
+| Clientes nuevos del mes | Toda matriz mensual con cliente; informe mensual | Primera vez que el cliente aparece en esa matriz (el primer mes con datos no cuenta). Marca "Nuevo", filtro y KPI del informe |
+| Alertas del IVA | IVA, sobre la planilla | (1) impuesto único sin recordatorio pasado el 15; (2) postergaciones que vencen en 10 días sin pago; (3) impuesto único que RR.HH. informó en 3 % e IUSC y que en IVA está vacío o en 0, con "Usar este monto" (`controlInternoAlertas.js`) |
+| Anotaciones resueltas | Notificaciones y anotaciones SII | Columna RESUELTA; situación Vigente / Resuelta. Al importar se lee el color: celda azul = resuelta (en la planilla real: 42 de 222) |
+| Servicios sin matriz | Contabilidad › Otros servicios | Certificado de deuda TGR, E-RUT, carpeta tributaria, pre-renta, creación de empresa, declaración de renta, término de giro: una fila por solicitud |
+| Mes sin año | 3 % e IUSC (RR.HH.) | "MAYO" a secas = el último mayo que pasó (antes quedaba en el mes de la importación) |
+
+Hallazgo de control: en la copia de las planillas, RR.HH. informa impuesto único
+para clientes donde la matriz de IVA dice 0 (p. ej. $86.818 contra 0). La alerta
+(3) los muestra cuando los dos están en el mismo mes.
+
+Las columnas de RESUELTA y del mes de 3 % e IUSC necesitan **volver a importar**
+las planillas (Anotaciones y Control de matrices) para verse con los datos del Drive.
+
 ## Permisos (verificados en el servidor)
 
 1. La cuenta necesita el módulo **Control interno** (Administración › Cuentas).

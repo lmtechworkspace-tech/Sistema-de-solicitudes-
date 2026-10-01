@@ -52,7 +52,9 @@ function nuevo(db, extra, ctx) {
 }
 
 test('las 54 matrices son espejo de sus planillas y están bien declaradas', () => {
-  assert.equal(MATRICES.length, 54);
+  // 54 de las planillas + "Servicios sin matriz" (reunión con Francisca, 2026-10-01).
+  assert.equal(MATRICES.length, 55);
+  assert.equal(MATRICES.filter((m) => m.archivo).length, 54);
   assert.equal(MATRICES.filter((m) => m.depto === 'RRHH').length, 39, 'RR.HH.: una matriz por hoja del libro');
   const claves = new Set();
   MATRICES.forEach((m) => {

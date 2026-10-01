@@ -79,14 +79,16 @@
         var realizado = d.por_responsable.filter(function (p) { return p.clave !== '(sin responsable)'; }).map(function (p) { return quien(p.clave); });
         var delta = a && a.filas ? (s.avance_pct - (a.avance_pct || 0)) : null;
         var kpis = R().kpis([
-          { etiqueta: 'Clientes activos', valor: n(s.clientes_activos) },
+          { etiqueta: 'Clientes activos', valor: n(s.clientes_activos), titulo: s.clientes_nuevos ? s.clientes_nuevos + ' nuevos este mes' : '' },
+          { etiqueta: 'Clientes nuevos', valor: n(s.clientes_nuevos || 0), titulo: 'Primera vez en esta matriz' },
           { etiqueta: m.unaPorCliente ? 'Clientes pendientes de cierre' : 'Filas sin terminar', valor: n(m.unaPorCliente ? s.clientes_pendientes : s.pendientes), alerta: (m.unaPorCliente ? s.clientes_pendientes : s.pendientes) > 0 },
           { etiqueta: m.unaPorCliente ? 'Clientes cerrados' : 'Filas terminadas', valor: n(m.unaPorCliente ? s.clientes_cerrados : s.terminados) },
           { etiqueta: 'Avance del mes', valor: pct(s.avance_pct), titulo: delta == null ? '' : 'Mes anterior: ' + pct(a.avance_pct) }
         ].concat(d.sin_liberacion ? [] : [{ etiqueta: 'Por liberar', valor: n(s.por_liberar), alerta: s.por_liberar > 0 }]));
         var resumenTxt = '<p class="ci2-rep-linea">' + txt(m.nombre) + ' de ' + txt(x_.perTexto(d.periodo, true)) + ': <b>' + n(s.filas) + '</b> ' + (s.filas === 1 ? 'fila' : 'filas') + ' de <b>' + n(s.clientes_activos) + '</b> clientes; ' +
           '<b>' + pct(s.avance_pct) + '</b> terminado' + (a && a.filas ? ' (el mes anterior, ' + pct(a.avance_pct) + ' de ' + n(a.filas) + ')' : '') + '.' +
-          (s.liberados ? ' ' + n(s.liberados) + ' liberadas.' : '') + '</p>';
+          (s.liberados ? ' ' + n(s.liberados) + ' liberadas.' : '') +
+          (s.clientes_nuevos ? ' Clientes nuevos: <b>' + n(s.clientes_nuevos) + '</b> (' + txt(d.clientes_nuevos.slice(0, 6).join(', ')) + (d.clientes_nuevos.length > 6 ? '…' : '') + ').' : '') + '</p>';
         var porEstado = R().ranking(m.estados.map(function (es) { return { etiqueta: es.etiqueta, valor: s.por_estado[es.clave] || 0, tono: es.tono === 'ok' ? 'ok' : (es.tono === 'alerta' ? 'alerta' : (es.tono === 'critico' ? 'critico' : 'primario')) }; }).filter(function (f) { return f.valor; }), { max: s.filas, sinPosicion: true });
         var montos = d.montos.length ? seccion('Montos del mes', R().tabla([{ titulo: 'Concepto', campo: 'c' }, { titulo: 'Total', campo: 't', alinear: 'derecha' }, { titulo: 'Filas con monto', campo: 'n', alinear: 'derecha' }],
           d.montos.map(function (x) { return { c: x.etiqueta, t: pesos(x.total), n: n(x.casos) }; }), { id: 'cir-montos' })) : '';
@@ -97,7 +99,7 @@
         var detalle = seccion('Detalle del período', R().tabla([{ titulo: 'Empresa', campo: 'e' }, { titulo: 'RUT', campo: 'r' }, { titulo: 'Realizado por', campo: 'q' }, { titulo: 'Proceso', campo: 's', html: true }].concat(d.sin_liberacion ? [] : [{ titulo: 'Liberado por', campo: 'l' }]),
           d.detalle.map(function (f) {
             var es = m.estados.filter(function (k) { return k.clave === f.estado; })[0] || { etiqueta: f.estado, tono: 'neutro' };
-            return { e: f.cliente_nombre + (f.fuera_catalogo ? ' *' : ''), r: f.cliente_rut, q: f.responsable_email ? x_.nombre(f.responsable_email) : x_.titulo(f.responsable_texto) || '—', s: U.badge(es.etiqueta, es.tono), l: f.liberado_por ? x_.nombre(f.liberado_por) : '' };
+            return { e: f.cliente_nombre + (f.fuera_catalogo ? ' *' : '') + (f.nuevo ? ' (nuevo)' : ''), r: f.cliente_rut, q: f.responsable_email ? x_.nombre(f.responsable_email) : x_.titulo(f.responsable_texto) || '—', s: U.badge(es.etiqueta, es.tono), l: f.liberado_por ? x_.nombre(f.liberado_por) : '' };
           }), { id: 'cir-detalle' }), d.detalle.some(function (f) { return f.fuera_catalogo; }) ? '* fuera del catálogo de clientes' : '');
         var cuerpo = R().nivel('En una línea', resumenTxt) + kpis +
           R().nivel('Resumen del período', '<div class="ci2-rep-2">' + seccion('Situación de las filas', porEstado) + resp + '</div>' + montos + tiempos) +

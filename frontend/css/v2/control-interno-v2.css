@@ -149,3 +149,17 @@ textarea.ci2-editor { height: auto; min-width: 260px; resize: vertical; }
 .cv-seg__b.is-pagada { background: var(--sx-ok-suave); color: var(--sx-ok); font-weight: 600; }
 .cv-seg__b.is-vencida { background: var(--sx-critico-suave); color: var(--sx-critico); font-weight: 600; }
 .cv-fcont { display: inline-block; min-width: 72px; color: var(--sx-texto-3); font-variant-numeric: tabular-nums; }
+
+/* --- Ajustes de la reunión con Francisca (etapa 2) ----------------------------------------- */
+.ci2-th--ayuda { text-decoration: underline dotted color-mix(in srgb, var(--sx-texto-3) 70%, transparent); text-underline-offset: 3px; cursor: help; }
+.ci2-th--sinuso { color: var(--sx-texto-3); font-style: italic; }
+.ci2-c--auto { color: var(--sx-primario); font-style: italic; }
+.ci2-nuevo { display: inline-block; padding: 0 6px; border-radius: var(--sx-radio-full); background: var(--sx-info-suave); color: var(--sx-info); font: var(--sx-t-etiqueta); letter-spacing: .03em; text-transform: uppercase; vertical-align: 1px; }
+.ci2-alertas { display: grid; gap: 8px; }
+.ci2-alerta { border: 1px solid color-mix(in srgb, var(--sx-tono) 35%, var(--sx-borde)); border-left: 3px solid var(--sx-tono); border-radius: var(--sx-radio); background: color-mix(in srgb, var(--sx-tono-suave) 55%, var(--sx-superficie)); }
+.ci2-alerta > summary { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; cursor: pointer; list-style: none; color: var(--sx-texto); }
+.ci2-alerta > summary::-webkit-details-marker { display: none; }
+.ci2-alerta > summary svg { color: var(--sx-tono); flex: none; }
+.ci2-alerta ul { margin: 0; padding: 0 14px 10px 38px; display: grid; gap: 4px; }
+.ci2-alerta li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font: var(--sx-t-chico); }
+.ci2-alerta li > span { flex: 1 1 260px; }

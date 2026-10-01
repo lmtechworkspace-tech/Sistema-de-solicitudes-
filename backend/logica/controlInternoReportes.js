@@ -116,24 +116,27 @@ function informeMensual(db, data, contexto) {
     const etq = (k) => (m.columnas.find((c) => c.clave === k) || {}).etiqueta || k;
     tiempos = Object.assign({ desde: etq(a), hasta: etq(b), tramos }, st);
   }
+  // Clientes que entran por primera vez a esta matriz (el primer mes con datos no cuenta).
+  const nuevosIds = new Set(m.tipo !== 'lista' && !m.sinCliente ? CI.clientesNuevos_(db, m, periodo, filas).nuevos : []);
+  const nuevos = Array.from(new Set(filas.filter((r) => nuevosIds.has(r.registro_id)).map((r) => r.cliente_nombre))).sort((a, b) => a.localeCompare(b, 'es'));
   // Detalle: la fila tal cual + su situación (en el orden de la planilla).
   const cResp = m.columnas.find((c) => c.rol === 'responsable');
   const detalle = filas.slice().sort(CI.orden_).map((r) => ({
     registro_id: r.registro_id, cliente_nombre: r.cliente_nombre, cliente_rut: r.cliente_rut, fuera_catalogo: !r.cliente_id,
     responsable_email: r.responsable_email, responsable_texto: cResp ? String((r.datos || {})[cResp.clave] || '') : '',
-    estado: r.estado, liberado_por: r.liberado_por, fecha: r.fecha
+    estado: r.estado, liberado_por: r.liberado_por, fecha: r.fecha, nuevo: nuevosIds.has(r.registro_id)
   }));
   return {
     matriz: m.clave, nombre: m.nombre, codigo: m.codigo || '', depto: m.depto, tipo: m.tipo, periodo: m.tipo === 'lista' ? '' : periodo,
     estados: m.estados, sin_liberacion: !!m.sinLiberacion,
     resumen: {
-      clientes_activos: clientes.size, clientes_pendientes: clientesPend.size, clientes_cerrados: clientes.size - clientesPend.size,
+      clientes_activos: clientes.size, clientes_pendientes: clientesPend.size, clientes_cerrados: clientes.size - clientesPend.size, clientes_nuevos: nuevos.length,
       filas: res.total, terminados: res.finalizados, pendientes: res.pendientes, liberados: res.liberados, por_liberar: res.por_liberar,
       avance_pct: res.total ? Math.round(100 * res.finalizados / res.total) : null, por_estado: res.por_estado
     },
     anterior: m.tipo === 'lista' ? null : { periodo: CI.moverPeriodo_(periodo, -1), filas: resPrev.total, terminados: resPrev.finalizados, avance_pct: resPrev.total ? Math.round(100 * resPrev.finalizados / resPrev.total) : null },
     por_responsable: Object.values(porResp).sort((a, b) => b.total - a.total),
-    montos, tiempos, detalle
+    montos, tiempos, detalle, clientes_nuevos: nuevos
   };
 }
 

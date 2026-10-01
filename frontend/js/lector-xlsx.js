@@ -71,8 +71,26 @@
       return dec_((limpio.match(/<t[^>]*>[^<]*<\/t>/g) || []).map(function (t) { return t.replace(/<[^>]+>/g, ''); }).join(''));
     });
   }
-  function filas_(xml, ss) {
-    var filas = [];
+  /**
+   * Color de relleno de cada estilo (índice = atributo s de la celda): 'RRGGBB'
+   * si es sólido con color explícito, '' si no. Lo usan las fichas de
+   * anotaciones (azul = resuelta).
+   */
+  function estilos_(xml) {
+    if (!xml) return [];
+    var fills = [];
+    var fillsXml = (xml.match(/<fills[^>]*>([\s\S]*?)<\/fills>/) || [])[1] || '';
+    (fillsXml.match(/<fill\/>|<fill>[\s\S]*?<\/fill>/g) || []).forEach(function (f) {
+      var rgb = (f.match(/<fgColor [^>]*rgb="([0-9A-Fa-f]{6,8})"/) || [])[1] || '';
+      fills.push(/patternType="solid"/.test(f) && rgb ? rgb.slice(-6).toUpperCase() : '');
+    });
+    var xfs = (xml.match(/<cellXfs[^>]*>([\s\S]*?)<\/cellXfs>/) || [])[1] || '';
+    return (xfs.match(/<xf [^>]*?(\/>|>[\s\S]*?<\/xf>)/g) || []).map(function (x) {
+      return fills[Number((x.match(/ fillId="(\d+)"/) || [])[1] || 0)] || '';
+    });
+  }
+  function filas_(xml, ss, est) {
+    var filas = [], colores = est ? [] : null;
     var reFila = /<row [^>]*?(\/>|>[\s\S]*?<\/row>)/g, m;
     while ((m = reFila.exec(xml))) {
       var r = m[0];
@@ -89,17 +107,25 @@
         if (t === 's') val = ss[Number(v)];
         else if (t === 'inlineStr') val = dec_((c.match(/<t[^>]*>([^<]*)<\/t>/) || [])[1] || '');
         else val = v === undefined ? '' : dec_(v);
-        if (val !== undefined && val !== '') fila[colNum_(ref)] = String(val);
+        if (val !== undefined && val !== '') {
+          fila[colNum_(ref)] = String(val);
+          if (est) {
+            var color = est[Number((c.match(/ s="(\d+)"/) || [])[1] || 0)];
+            if (color && color !== 'FFFFFF') (colores[num - 1] = colores[num - 1] || {})[colNum_(ref)] = color;
+          }
+        }
       }
       filas[num - 1] = fila;
     }
     for (var j = 0; j < filas.length; j++) if (!filas[j]) filas[j] = [];
-    return filas;
+    return { filas: filas, colores: colores };
   }
 
   /**
    * @param {File|Blob|ArrayBuffer} fuente
-   * @param {{ hojas?: function(nombre):boolean }} opciones  filtro de hojas a leer
+   * @param {{ hojas?: function(nombre):boolean, colores?: function(nombre):boolean }} opciones
+   *   filtro de hojas a leer; en las hojas donde `colores` dice true, cada hoja
+   *   trae también `colores`: [fila][columna] = 'RRGGBB' (solo celdas con valor y relleno)
    */
   function leer(fuente, opciones) {
     opciones = opciones || {};
@@ -109,9 +135,10 @@
       return Promise.all([
         leerEntrada_(buf, mapa, 'xl/sharedStrings.xml'),
         leerEntrada_(buf, mapa, 'xl/workbook.xml'),
-        leerEntrada_(buf, mapa, 'xl/_rels/workbook.xml.rels')
+        leerEntrada_(buf, mapa, 'xl/_rels/workbook.xml.rels'),
+        opciones.colores ? leerEntrada_(buf, mapa, 'xl/styles.xml') : Promise.resolve('')
       ]).then(function (base) {
-        var ss = cadenas_(base[0]), wb = base[1], rels = base[2];
+        var ss = cadenas_(base[0]), wb = base[1], rels = base[2], est = opciones.colores ? estilos_(base[3]) : null;
         var hojas = [], re = /<sheet [^>]*>/g, m;
         while ((m = re.exec(wb))) {
           var nombre = dec_((m[0].match(/ name="([^"]*)"/) || [])[1] || '');
@@ -124,7 +151,12 @@
         var salida = [];
         return hojas.reduce(function (p, h) {
           return p.then(function () {
-            return leerEntrada_(buf, mapa, h.ruta).then(function (xml) { salida.push({ hoja: h.nombre, filas: filas_(xml, ss) }); });
+            return leerEntrada_(buf, mapa, h.ruta).then(function (xml) {
+              var r = filas_(xml, ss, est && opciones.colores(h.nombre) ? est : null);
+              var hoja = { hoja: h.nombre, filas: r.filas };
+              if (r.colores) hoja.colores = r.colores;
+              salida.push(hoja);
+            });
           });
         }, Promise.resolve()).then(function () { return salida; });
       });

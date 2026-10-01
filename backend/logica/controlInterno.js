@@ -31,6 +31,7 @@ const { COLUMNAS } = require('../db/schema');
 const { DEPARTAMENTOS, MATRICES, matriz_ } = require('./controlInternoMatrices');
 const P = require('./controlInternoPlanillas');
 const Prestaciones = require('./prestacionesSgc');
+const AlertasCI = require('./controlInternoAlertas');
 
 const MODULO = 'control_interno';
 const ROLES_MIEMBRO = ['REGISTRA', 'LECTURA'];
@@ -166,6 +167,11 @@ function situacion_(m, datos) {
 // --- columnas y valores -------------------------------------------------------------------
 
 function columna_(m, rol) { return m.columnas.find((c) => c.rol === rol) || null; }
+/** Las tareas de una matriz de bloques (Contabilización): columnas con grupo que no son quién/fecha. */
+function tareas_(m) {
+  return m.columnas.filter((c) => c.grupo && c.tipo === 'texto' && !/^(QUIEN|FECHA)/.test(P.n_(c.etiqueta)));
+}
+function porTextoNA_(v) { return /^(NO APLICA|N ?A)$/.test(P.n_(v)); }
 /**
  * Lo que llega de una celda, tal cual (como en la planilla): fecha, número u
  * hora si se entiende; si no, el texto. Nunca se guardan claves.
@@ -194,6 +200,11 @@ function periodoDeDatos_(m, datos) {
     if (periodoValido_(p)) return p;
     const mes = P.mesDeHoja_(v);
     if (mes && mes.anio && periodoValido_(String(mes.anio))) return mes.anio + '-M' + String(mes.mes).padStart(2, '0');
+    // "MAYO" a secas (hoja 3 %-IUSC): el último mayo que ya pasó, no el mes en que se importa.
+    if (mes && !mes.anio && k === (m.periodoDe || [])[0]) {
+      const hoy = periodoActual_(), a = Number(hoy.slice(0, 4)), mm = Number(hoy.slice(6, 8));
+      return (mes.mes <= mm ? a : a - 1) + '-M' + String(mes.mes).padStart(2, '0');
+    }
     const anio = /^(20\d{2})(\.0)?$/.exec(String(v || '').trim());
     if (anio && periodoValido_(anio[1])) return anio[1] + '-M01';
   }
@@ -259,6 +270,28 @@ function resolverClienteTexto_(ctx, texto, rutTexto, codigoTexto) {
  * Lo que el registro guarda aparte de `datos` (todo sale de las columnas):
  * cliente, responsable, fecha, situación y, en las de tipo registro, período.
  */
+/**
+ * Columnas que SIGSO calcula (m.calculos). Lo calculado queda anotado en
+ * datos._auto: se recalcula cuando cambian sus datos, pero si la persona
+ * escribe su propio valor, ese manda.
+ */
+function aplicarCalculos_(m, datos, escritas) {
+  if (!m.calculos) return datos;
+  const auto = new Set(Array.isArray(datos._auto) ? datos._auto : []);
+  Object.keys(escritas || {}).forEach((k) => auto.delete(k));
+  const r = m.calculos(datos);
+  Object.keys(r).forEach((k) => {
+    if (Object.prototype.hasOwnProperty.call(escritas || {}, k)) return;
+    const tiene = datos[k] !== undefined && datos[k] !== '';
+    if (tiene && !auto.has(k)) return;
+    if (r[k] === '' || r[k] === null || r[k] === undefined) { if (auto.has(k)) { delete datos[k]; auto.delete(k); } return; }
+    datos[k] = r[k];
+    auto.add(k);
+  });
+  if (auto.size) datos._auto = Array.from(auto); else delete datos._auto;
+  return datos;
+}
+
 function derivados_(m, datos, ctx) {
   const out = { fecha: m.fechaPrincipal && RE_FECHA.test(String(datos[m.fechaPrincipal] || '')) ? datos[m.fechaPrincipal] : '' };
   out.estado = situacion_(m, datos);
@@ -310,9 +343,12 @@ function definicionPublica_(m) {
   return {
     clave: m.clave, depto: m.depto, seccion: m.seccion, nombre: m.nombre, codigo: m.codigo || '', descripcion: m.descripcion || '',
     tipo: m.tipo, unaPorCliente: !!m.unaPorCliente, abrirMes: m.tipo === 'mensual' && !!(m.unaPorCliente || m.copiar),
-    sinLiberacion: !!m.sinLiberacion, sinCliente: !!m.sinCliente, tiempos: m.tiempos || null, montos: m.montos || [],
+    sinLiberacion: !!m.sinLiberacion, sinCliente: !!m.sinCliente, sinUso: !!m.sinUso, tiempos: m.tiempos || null, montos: m.montos || [],
     fechaPrincipal: m.fechaPrincipal || '', estados: m.estados, sensibles: m.sensibles || [],
-    columnas: m.columnas.map((c) => ({ clave: c.clave, etiqueta: c.etiqueta, tipo: c.tipo, rol: c.rol || '', grupo: c.grupo || '', antigua: !!c.antigua, sugerencias: c.sugerencias || [] }))
+    columnas: m.columnas.map((c) => ({
+      clave: c.clave, etiqueta: c.etiqueta, tipo: c.tipo, rol: c.rol || '', grupo: c.grupo || '', antigua: !!c.antigua, sugerencias: c.sugerencias || [],
+      ayuda: c.ayuda || '', sinUso: !!c.sinUso
+    }))
   };
 }
 
@@ -375,7 +411,9 @@ function listar(db, data, contexto) {
     res.periodo_anterior = anterior;
     res.en_periodo_anterior = delAnterior.length;
     res.por_abrir = m.unaPorCliente ? delAnterior.filter((a) => !filas.some((f) => mismoCliente_(f, a))).length : 0;
+    if (!m.sinCliente) Object.assign(res, clientesNuevos_(db, m, periodo, filas));
   }
+  if (m.alertas === 'IVA' && periodo) res.alertas = AlertasCI.iva(db, m, periodo, filas, { hoy: hoy_(), moverPeriodo_, consultar_, rango_, mismoCliente_ });
   if (m.tipo === 'registro') {
     // Años con datos (para el selector).
     const anios = db.prepare('SELECT DISTINCT substr("periodo", 2, 4) AS a FROM "CI_REGISTROS" WHERE "matriz" = ? AND "activa" = ? ORDER BY a DESC')
@@ -383,6 +421,22 @@ function listar(db, data, contexto) {
     res.anios = anios;
   }
   return res;
+}
+
+/**
+ * Clientes nuevos del mes: los que nunca antes tuvieron fila en esta matriz.
+ * El primer mes con datos no cuenta (ahí todos serían "nuevos").
+ */
+function clientesNuevos_(db, m, periodo, filas) {
+  const previos = db.prepare('SELECT "cliente_id", "cliente_nombre" FROM "CI_REGISTROS" WHERE "matriz" = ? AND "periodo" < ? AND "activa" = ?')
+    .all(JSON.stringify(m.clave), JSON.stringify(periodo), JSON.stringify(true));
+  if (!previos.length) return { nuevos: [], nuevos_desde: '' };
+  const leer = (v) => { try { return JSON.parse(v); } catch (e) { return v; } };
+  const ids = new Set(), nombres = new Set();
+  previos.forEach((r) => { const id = leer(r.cliente_id); if (id) ids.add(id); nombres.add(normalizarTexto_(leer(r.cliente_nombre))); });
+  const primero = db.prepare('SELECT MIN("periodo") AS p FROM "CI_REGISTROS" WHERE "matriz" = ? AND "activa" = ?').get(JSON.stringify(m.clave), JSON.stringify(true));
+  const nuevos = filas.filter((f) => !esAnulado_(f.estado) && (f.cliente_id ? !ids.has(f.cliente_id) && !nombres.has(normalizarTexto_(f.cliente_nombre)) : !nombres.has(normalizarTexto_(f.cliente_nombre))));
+  return { nuevos: nuevos.map((f) => f.registro_id), nuevos_desde: leer((primero || {}).p) || '' };
 }
 
 /** Un registro con su historial. */
@@ -443,7 +497,7 @@ function guardar(db, data, contexto) {
   // Lo sensible que no se ve no se puede pisar con los "•••" de la pantalla.
   const entrada = Object.assign({}, d.datos || {});
   (m.sensibles || []).forEach((k) => { if (!x.p.miembro || entrada[k] === '•••') delete entrada[k]; });
-  const datos = limpiarDatos_(m, entrada, existente ? existente.datos : {}).datos;
+  const datos = aplicarCalculos_(m, limpiarDatos_(m, entrada, existente ? existente.datos : {}).datos, entrada);
   const der = derivados_(m, datos, { persona: personas_(db) });
   const ahora = new Date().toISOString();
 
@@ -524,12 +578,17 @@ function abrirPeriodo(db, data, contexto) {
     : (m.copiar || []).concat(m.columnas.filter((c) => c.rol === 'cliente' || c.rol === 'rut').map((c) => c.clave));
   const persona = personas_(db);
   const ahora = new Date().toISOString();
-  let creadas = 0, omitidas = 0, fila_ = actuales.reduce((mx, r) => Math.max(mx, Number((r.datos || {})._fila) || 0), 0);
+  let creadas = 0, omitidas = 0, noAplica = 0, fila_ = actuales.reduce((mx, r) => Math.max(mx, Number((r.datos || {})._fila) || 0), 0);
   enTransaccion_(db, () => {
     origen.forEach((o) => {
       if (actuales.some((a) => mismoCliente_(a, o))) { omitidas++; return; }
       const datos = {};
       copiar.forEach((k) => { if (o.datos && o.datos[k] !== undefined && o.datos[k] !== '') datos[k] = o.datos[k]; });
+      if (m.arrastrarNoAplica) {
+        const auto = [];
+        tareas_(m).forEach((c) => { const v = (o.datos || {})[c.clave]; if (porTextoNA_(v)) { datos[c.clave] = v; auto.push(c.clave); } });
+        if (auto.length) { datos._auto = auto; noAplica += auto.length; }
+      }
       datos._fila = ++fila_;
       const der = derivados_(m, datos, { persona });
       const fila = {
@@ -544,7 +603,11 @@ function abrirPeriodo(db, data, contexto) {
       creadas++;
     });
   });
-  return { ok: true, creadas, omitidas, message: creadas + (creadas === 1 ? ' fila creada' : ' filas creadas') + (omitidas ? '; ' + omitidas + ' ya estaban.' : '.') };
+  return {
+    ok: true, creadas, omitidas, no_aplica: noAplica,
+    message: creadas + (creadas === 1 ? ' fila creada' : ' filas creadas') + (omitidas ? '; ' + omitidas + ' ya estaban' : '') +
+      (noAplica ? '; ' + noAplica + ' casillas quedaron en NO APLICA como el mes anterior.' : '.')
+  };
 }
 
 /**
@@ -666,5 +729,5 @@ module.exports = {
   moverPeriodo_, periodoDeFecha_, periodoActual_, periodoTexto_, limpiarDatos_, derivados_, situacion_, periodoDeDatos_,
   consultar_, rango_, enTransaccion_, historial_, clientes_, contextoClientes_, resolverClienteTexto_, personas_,
   matrizConPermiso_, acceso_, resumen_, esFinal_, esAnulado_, estadoDef_, columna_, normalizarTexto_, orden_, uuid_,
-  MODULO, PERIODO_LISTA, RE_PERIODO, RE_FECHA
+  aplicarCalculos_, clientesNuevos_, tareas_, MODULO, PERIODO_LISTA, RE_PERIODO, RE_FECHA
 };

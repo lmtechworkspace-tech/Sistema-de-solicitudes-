@@ -32,7 +32,7 @@
   var LOTE_FILAS = 200;
 
   var cfg_ = null, vista_ = 'inicio', periodo_ = '', anio_ = '', mesFiltro_ = '', lista_ = null, turno_ = 0;
-  var sel_ = {}, f_ = { q: '', estado: '', resp: '', liberar: false }, mostrar_ = LOTE_FILAS;
+  var sel_ = {}, f_ = { q: '', estado: '', resp: '', liberar: false, nuevos: false }, mostrar_ = LOTE_FILAS, verSinUso_ = false;
 
   // --- utilidades ----------------------------------------------------------------------
   function api(accion, datos) {
@@ -126,7 +126,7 @@
   // Contabilidad y RR.HH. en sus secciones, en el orden de las planillas.
   function secciones(d) {
     var out = [];
-    cfg_.matrices.filter(function (m) { return m.depto === d.clave; }).forEach(function (m) {
+    cfg_.matrices.filter(function (m) { return m.depto === d.clave && !m.sinUso; }).forEach(function (m) {
       var s = out.filter(function (x) { return x.nombre === m.seccion; })[0];
       if (!s) { s = { nombre: m.seccion, matrices: [] }; out.push(s); }
       s.matrices.push(m);
@@ -145,6 +145,10 @@
           items: s.matrices.map(function (m) { return { id: 'm:' + m.clave, nombre: m.nombre }; })
             .concat(s.matrices.some(function (m) { return m.clave === 'CONVENIOS'; }) ? [{ id: 'conv', nombre: 'Seguimiento de cuotas TGR' }] : []) });
       });
+      // Hojas que ya no se usan (reunión con Francisca): quedan para consulta, al final.
+      var sinUso = cfg_.matrices.filter(function (m) { return m.depto === d.clave && m.sinUso; });
+      if (sinUso.length) subs.push({ id: 'd-' + d.clave + '-sinuso', nombre: 'Hojas que ya no se usan', descripcion: d.nombre, icono: 'carpeta',
+        items: sinUso.map(function (m) { return { id: 'm:' + m.clave, nombre: m.nombre }; }) });
     });
     if (cfg_ && cfg_.puede_administrar) subs.push({ id: 'accesos', nombre: 'Accesos', icono: 'llave', plano: true, items: [{ id: 'accesos', nombre: 'Accesos' }] });
     return subs;
@@ -178,7 +182,7 @@
   function mostrar() {
     if (!cfg_) { cargar(); return; }
     var p = String(vista_).split(':');
-    if (p[0] === 'm' && matriz(p[1])) { sel_ = {}; f_ = { q: '', estado: '', resp: '', liberar: false }; mostrar_ = LOTE_FILAS; abrirMatriz(p[1]); return; }
+    if (p[0] === 'm' && matriz(p[1])) { sel_ = {}; f_ = { q: '', estado: '', resp: '', liberar: false, nuevos: false }; mostrar_ = LOTE_FILAS; verSinUso_ = false; abrirMatriz(p[1]); return; }
     if (p[0] === 'rep' && window.SigsoCIReportes) { SigsoCIReportes.mostrar(p[1], ctxReportes()); return; }
     if (p[0] === 'conv' && window.SigsoCIConvenios && matriz('CONVENIOS')) { SigsoCIConvenios.mostrar(p.slice(1).join(':'), ctxReportes()); return; }
     if (vista_ === 'accesos' && cfg_.puede_administrar) { vistaAccesos(); return; }
@@ -265,14 +269,18 @@
     var conDatos = {};
     (lista_.columnas_con_datos || []).forEach(function (k) { conDatos[k] = true; });
     var cCli = colRol(m, 'cliente');
-    return m.columnas.filter(function (c) { return c !== cCli && (!c.antigua || conDatos[c.clave]); });
+    return m.columnas.filter(function (c) { return c !== cCli && (!c.antigua || conDatos[c.clave]) && (verSinUso_ || !c.sinUso); });
   }
+  function esNuevo(x) { return !!lista_.nuevos && lista_.nuevos.indexOf(x.registro_id) !== -1; }
+  function tituloCol(c) { return c.etiqueta + (c.ayuda ? ' — ' + c.ayuda : '') + (c.sinUso ? ' (sin uso)' : ''); }
+  function claseTh(c) { return 'ci2-th-' + c.tipo + (c.ayuda ? ' ci2-th--ayuda' : '') + (c.sinUso ? ' ci2-th--sinuso' : ''); }
   function filtrados() {
     var m = matriz(lista_.matriz), q = norm(f_.q);
     return lista_.registros.filter(function (r) {
       if (f_.estado && r.estado !== f_.estado) return false;
       if (f_.resp && claveQuien(m, r) !== f_.resp) return false;
       if (f_.liberar && !liberable(m, r)) return false;
+      if (f_.nuevos && !esNuevo(r)) return false;
       if (mesFiltro_ && m.tipo === 'registro' && r.periodo !== mesFiltro_) return false;
       if (q) {
         var heno = norm([r.cliente_nombre, r.cliente_rut, r.observaciones].concat(Object.keys(r.datos || {}).filter(function (k) { return k.charAt(0) !== '_'; }).map(function (k) { return r.datos[k]; })).join(' '));
@@ -294,13 +302,13 @@
       '<th class="ci2-fija ci2-col-n" rowspan="' + (hayGrupos ? 2 : 1) + '">N°</th>' +
       '<th class="ci2-fija ci2-col-sit" rowspan="' + (hayGrupos ? 2 : 1) + '">Situación</th>' +
       (m.sinCliente ? '' : '<th class="ci2-fija ci2-col-cli" rowspan="' + (hayGrupos ? 2 : 1) + '">' + txt((colRol(m, 'cliente') || {}).etiqueta || 'Cliente') + '</th>');
-    if (!hayGrupos) return '<tr>' + fijas + cols.map(function (c) { return '<th class="ci2-th-' + c.tipo + '" title="' + U.esc(c.etiqueta) + '">' + txt(c.etiqueta) + '</th>'; }).join('') + '</tr>';
+    if (!hayGrupos) return '<tr>' + fijas + cols.map(function (c) { return '<th class="' + claseTh(c) + '" title="' + U.esc(tituloCol(c)) + '">' + txt(c.etiqueta) + '</th>'; }).join('') + '</tr>';
     var fila1 = '', fila2 = '', k = 0;
     while (k < cols.length) {
       var c = cols[k];
-      if (!c.grupo) { fila1 += '<th rowspan="2" class="ci2-th-' + c.tipo + '">' + txt(c.etiqueta) + '</th>'; k++; continue; }
+      if (!c.grupo) { fila1 += '<th rowspan="2" class="' + claseTh(c) + '" title="' + U.esc(tituloCol(c)) + '">' + txt(c.etiqueta) + '</th>'; k++; continue; }
       var n = 0;
-      while (k + n < cols.length && cols[k + n].grupo === c.grupo) { fila2 += '<th class="ci2-th-' + cols[k + n].tipo + '">' + txt(cols[k + n].etiqueta) + '</th>'; n++; }
+      while (k + n < cols.length && cols[k + n].grupo === c.grupo) { fila2 += '<th class="' + claseTh(cols[k + n]) + '" title="' + U.esc(tituloCol(cols[k + n])) + '">' + txt(cols[k + n].etiqueta) + '</th>'; n++; }
       fila1 += '<th colspan="' + n + '" class="ci2-th-grupo">' + txt(c.grupo) + '</th>';
       k += n;
     }
@@ -308,18 +316,20 @@
   }
   function fila(m, x, cols, reg, n) {
     var e = estadoDe(m, x.estado);
-    var sens = {};
+    var sens = {}, auto = {};
     (m.sensibles || []).forEach(function (k) { sens[k] = true; });
+    ((x.datos || {})._auto || []).forEach(function (k) { auto[k] = true; });
     return '<tr data-id="' + U.esc(x.registro_id) + '"' + (sel_[x.registro_id] ? ' class="ci2-fila--sel"' : '') + '>' +
       '<td class="ci2-fija ci2-col-sel">' + (reg || lista_.puede_liberar ? '<input type="checkbox" class="js-ci2-sel" aria-label="Marcar"' + (sel_[x.registro_id] ? ' checked' : '') + '>' : '') + '</td>' +
       '<td class="ci2-fija ci2-col-n"><button type="button" class="ci2-n js-ci2-ver" title="Ver la fila completa e historial">' + n + '</button></td>' +
       '<td class="ci2-fija ci2-col-sit">' + U.badge(e.etiqueta, e.tono) + (x.liberado_por ? ' <span class="ci2-lib" title="Liberado por ' + U.esc(nombre(x.liberado_por)) + '">' + U.ico('escudoCheck', 14) + '</span>' : '') + '</td>' +
-      (m.sinCliente ? '' : '<td class="ci2-fija ci2-col-cli' + (reg ? ' ci2-ed' : '') + '" data-col="__cliente" title="' + U.esc(x.cliente_nombre + (x.cliente_rut ? ' · ' + x.cliente_rut : '')) + '">' + txt(x.cliente_nombre) + (x.cliente_id ? '' : ' <span class="ci2-fuera" title="No está en el catálogo de clientes de SIGSO">•</span>') + '</td>') +
+      (m.sinCliente ? '' : '<td class="ci2-fija ci2-col-cli' + (reg ? ' ci2-ed' : '') + '" data-col="__cliente" title="' + U.esc(x.cliente_nombre + (x.cliente_rut ? ' · ' + x.cliente_rut : '')) + '">' + (esNuevo(x) ? '<span class="ci2-nuevo" title="Primera vez en esta matriz">Nuevo</span> ' : '') + txt(x.cliente_nombre) + (x.cliente_id ? '' : ' <span class="ci2-fuera" title="No está en el catálogo de clientes de SIGSO">•</span>') + '</td>') +
       cols.map(function (c) {
         var v = (x.datos || {})[c.clave];
         var vis = valorVisible(c, v);
         var editable = reg && !sens[c.clave];
-        return '<td class="ci2-c ci2-td-' + c.tipo + (editable ? ' ci2-ed' : '') + '" data-col="' + U.esc(c.clave) + '"' + (vis.length > 28 ? ' title="' + U.esc(vis) + '"' : '') + '>' + txt(vis) + '</td>';
+        var tit = auto[c.clave] ? 'Calculado por SIGSO. ' + (c.ayuda || 'Puedes escribir otro valor.') : (vis.length > 28 ? vis : '');
+        return '<td class="ci2-c ci2-td-' + c.tipo + (editable ? ' ci2-ed' : '') + (auto[c.clave] ? ' ci2-c--auto' : '') + '" data-col="' + U.esc(c.clave) + '"' + (tit ? ' title="' + U.esc(tit) + '"' : '') + '>' + txt(vis) + '</td>';
       }).join('') + '</tr>';
   }
   function pintarMatriz(silencioso) {
@@ -351,11 +361,14 @@
       '</div>';
     var resps = {};
     lista_.registros.forEach(function (x) { var k = claveQuien(m, x); if (k) resps[k] = quien(m, x); });
+    var nSinUso = m.columnas.filter(function (c) { return c.sinUso; }).length;
     var barra = '<div class="sx2-card ci2-herr sx2-entra"><div class="sx2-barra-filtros">' +
       '<input class="sx2-input js-ci2-q" type="search" placeholder="Buscar en ' + U.esc(m.nombre.toLowerCase()) + '…" value="' + U.esc(f_.q) + '" aria-label="Buscar">' +
       (m.tipo === 'lista' ? '' : select('', [['', 'Toda situación']].concat(m.estados.map(function (e) { return [e.clave, e.etiqueta]; })), f_.estado, 'class="sx2-select js-ci2-f" data-f="estado" aria-label="Situación"')) +
       (Object.keys(resps).length ? select('', [['', 'Todos los responsables']].concat(Object.keys(resps).sort(function (a, b) { return resps[a].localeCompare(resps[b]); }).map(function (k) { return [k, resps[k]]; })), f_.resp, 'class="sx2-select js-ci2-f" data-f="resp" aria-label="Responsable"') : '') +
-      (f_.q || f_.estado || f_.resp || f_.liberar ? U.boton({ texto: 'Limpiar', variante: 'fantasma', sm: true, clase: 'js-ci2-limpiar' }) : '') +
+      (lista_.nuevos && lista_.nuevos.length ? U.chip({ texto: 'Clientes nuevos', n: lista_.nuevos.length, icono: 'nueva', activo: f_.nuevos, clase: 'js-ci2-nuevos', tono: 'info' }) : '') +
+      (nSinUso ? U.chip({ texto: (verSinUso_ ? 'Ocultar' : 'Ver') + ' columnas sin uso', n: nSinUso, activo: verSinUso_, clase: 'js-ci2-sinuso' }) : '') +
+      (f_.q || f_.estado || f_.resp || f_.liberar || f_.nuevos ? U.boton({ texto: 'Limpiar', variante: 'fantasma', sm: true, clase: 'js-ci2-limpiar' }) : '') +
       '<span class="sx2-tenue ci2-cuenta">' + visibles.length + (visibles.length === 1 ? ' fila' : ' filas') + '</span></div>' +
       (nSel ? '<div class="ci2-lote">' + '<b>' + nSel + (nSel === 1 ? ' marcada' : ' marcadas') + '</b>' +
         (lib ? U.boton({ texto: 'Liberar', icono: 'escudoCheck', sm: true, variante: 'primario', clase: 'js-ci2-lote', datos: { accion: 'liberar' } }) + U.boton({ texto: 'Quitar liberación', sm: true, clase: 'js-ci2-lote', datos: { accion: 'desliberar' } }) : '') +
@@ -372,7 +385,31 @@
         (visibles.length > mostrar_ ? '<div class="ci2-mas">' + U.boton({ texto: 'Mostrar ' + Math.min(LOTE_FILAS, visibles.length - mostrar_) + ' más (de ' + (visibles.length - mostrar_) + ')', clase: 'js-ci2-mas' }) + '</div>' : '') + '</div>' +
         datalists(m, cols);
     }
-    pagina(cabecera('Control interno · ' + d.nombre + ' · ' + m.seccion, m.nombre + (m.codigo ? ' · ' + m.codigo : ''), m.descripcion, acciones) + kpis + barra + nota + cuerpo, !!silencioso);
+    pagina(cabecera('Control interno · ' + d.nombre + ' · ' + m.seccion, m.nombre + (m.codigo ? ' · ' + m.codigo : ''), m.descripcion, acciones) + kpis + alertas(reg) + barra + nota + cuerpo, !!silencioso);
+  }
+  /** Avisos que cruzan columnas o matrices (IVA: recordatorio, postergación, impuesto único de RR.HH.). */
+  function alertas(reg) {
+    var l = lista_.alertas || [];
+    if (!l.length) return '';
+    return '<div class="ci2-alertas sx2-entra">' + l.map(function (a) {
+      var max = 8;
+      return '<details class="ci2-alerta sx2-tono-' + U.esc(a.tono) + '"' + (a.tono === 'critico' ? ' open' : '') + '><summary>' + U.ico(a.tono === 'info' ? 'info' : 'alerta', 16) + '<b>' + txt(a.titulo) + '</b>' + (a.texto ? ' <span class="sx2-tenue">' + txt(a.texto) + '</span>' : '') + '</summary><ul>' +
+        a.items.slice(0, max).map(function (it) {
+          return '<li><span><b>' + txt(it.cliente) + '</b> · ' + txt(it.texto) + '</span>' +
+            (it.registro_id ? U.boton({ texto: 'Ver fila', sm: true, variante: 'fantasma', clase: 'js-ci2-alerta-fila', datos: { id: it.registro_id } }) : '') +
+            (reg && it.usar && it.registro_id ? U.boton({ texto: 'Usar este monto', sm: true, clase: 'js-ci2-alerta-usar', datos: { id: it.registro_id, usar: JSON.stringify(it.usar) } }) : '') + '</li>';
+        }).join('') + (a.items.length > max ? '<li class="sx2-tenue">… y ' + (a.items.length - max) + ' más.</li>' : '') + '</ul></details>';
+    }).join('') + '</div>';
+  }
+  function usarValor(b) {
+    var datos;
+    try { datos = JSON.parse(b.getAttribute('data-usar')); } catch (e) { return; }
+    b.disabled = true;
+    api('guardarRegistroCI', { registro_id: b.getAttribute('data-id'), datos: datos }).then(function (r) {
+      if (!r || !r.ok) { b.disabled = false; PY.aviso((r && r.message) || 'No se pudo guardar.', 'error'); return; }
+      PY.aviso('Guardado.', 'exito');
+      abrirMatriz(lista_.matriz, true);
+    });
   }
   // Sugerencias al escribir: los valores que más se repiten en la planilla.
   function datalists(m, cols) {
@@ -497,7 +534,9 @@
         var cuerpo = '<div class="ci2-form-grid">' + gr.cols.map(function (c) {
           var v = x ? (x.datos || {})[c.clave] : '';
           if (sens[c.clave] && v === '•••') return U.campo(c.etiqueta, '<input class="sx2-input" value="Reservado a RR.HH." disabled>');
-          return U.campo(c.etiqueta, control(c, v, 'name="d_' + U.esc(c.clave) + '"' + (reg ? '' : ' disabled')));
+          var esAuto = x && ((x.datos || {})._auto || []).indexOf(c.clave) !== -1;
+          return U.campo(c.etiqueta + (c.sinUso ? ' (sin uso)' : ''), control(c, v, 'name="d_' + U.esc(c.clave) + '"' + (reg ? '' : ' disabled')),
+            (esAuto ? 'Calculado por SIGSO. ' : '') + (c.ayuda || ''));
         }).join('') + '</div>';
         return gr.g ? '<fieldset class="ci2-grupo"><legend>' + txt(gr.g) + '</legend>' + cuerpo + '</fieldset>' : cuerpo;
       }).join('') +
@@ -698,14 +737,17 @@
           return p.then(function () {
             est.avance = 'Leyendo ' + archivo.name + '…';
             pintar();
-            return SigsoLectorXlsx.leer(archivo).then(function (hojas) {
+            // Fichas A–W de Anotaciones: también el color (azul = resuelta).
+            return SigsoLectorXlsx.leer(archivo, { colores: function (n) { return /^[A-Z]$/.test(n); } }).then(function (hojas) {
               var nombres = hojas.map(function (h) { return h.hoja; });
               return hojas.reduce(function (q, h, k) {
                 return q.then(function () {
                   est.avance = (simular ? 'Revisando ' : 'Importando ') + archivo.name + ' › ' + h.hoja + ' (' + (k + 1) + ' de ' + hojas.length + ')';
                   pintar();
                   if (!h.filas.some(function (f) { return f && f.some(function (v) { return v !== undefined && v !== null && String(v).trim() !== ''; }); })) return null;
-                  return api('importarHojaCI', { archivo: archivo.name, hoja: h.hoja, hojas: nombres, filas: h.filas, simular: simular }).then(function (r) {
+                  var pedido = { archivo: archivo.name, hoja: h.hoja, hojas: nombres, filas: h.filas, simular: simular };
+                  if (h.colores) pedido.colores = h.colores;
+                  return api('importarHojaCI', pedido).then(function (r) {
                     if (r && r.ok) est.resultados.push(r.data);
                     else est.resultados.push({ archivo: archivo.name, hoja: h.hoja, omitida: true, motivo: (r && r.message) || 'No se pudo' });
                   });
@@ -763,7 +805,11 @@
       return;
     }
     if (t.closest('.js-ci2-ver')) { var tr = t.closest('tr[data-id]'); if (tr) formFila(matriz(lista_.matriz), registroDe(tr.getAttribute('data-id'))); return; }
-    if (t.closest('.js-ci2-limpiar')) { f_ = { q: '', estado: '', resp: '', liberar: false }; mostrar_ = LOTE_FILAS; pintarMatriz(true); return; }
+    if (t.closest('.js-ci2-limpiar')) { f_ = { q: '', estado: '', resp: '', liberar: false, nuevos: false }; mostrar_ = LOTE_FILAS; pintarMatriz(true); return; }
+    if (t.closest('.js-ci2-sinuso')) { verSinUso_ = !verSinUso_; pintarMatriz(true); return; }
+    if (t.closest('.js-ci2-nuevos')) { f_.nuevos = !f_.nuevos; mostrar_ = LOTE_FILAS; pintarMatriz(true); return; }
+    if ((b = t.closest('.js-ci2-alerta-fila'))) { var xr = registroDe(b.getAttribute('data-id')); if (xr) formFila(matriz(lista_.matriz), xr); return; }
+    if ((b = t.closest('.js-ci2-alerta-usar'))) { usarValor(b); return; }
     if ((b = t.closest('.sx2-kpi--clic')) && b.getAttribute('data-filtro') === 'liberar') { f_.liberar = !f_.liberar; pintarMatriz(true); return; }
     if (t.closest('.js-ci2-desmarcar')) { sel_ = {}; pintarMatriz(true); return; }
     if ((b = t.closest('.js-ci2-lote'))) {

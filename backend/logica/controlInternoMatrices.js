@@ -77,12 +77,98 @@ function regla_(op) {
   return fn;
 }
 
+// --- cálculos (reunión con Francisca, 2026-10-01) -----------------------------------------
+const RE_FECHA = /^\d{4}-\d{2}-\d{2}$/;
+function num_(v) {
+  if (typeof v === 'number') return v;
+  const s = String(v == null ? '' : v).replace(/[$\s%]/g, '');
+  if (/^\d{1,3}(\.\d{3})+$/.test(s)) return Number(s.replace(/\./g, ''));
+  const n = Number(s.replace(',', '.'));
+  return s && isFinite(n) ? n : NaN;
+}
+/** Misma fecha N meses después (el 31 pasa al último día del mes); sábado o domingo → lunes. */
+function mesesDespuesHabil_(f, n) {
+  const [a, m, d] = f.split('-').map(Number);
+  const ultimo = new Date(Date.UTC(a, m - 1 + n + 1, 0)).getUTCDate();
+  const x = new Date(Date.UTC(a, m - 1 + n, Math.min(d, ultimo)));
+  const dia = x.getUTCDay();
+  if (dia === 6) x.setUTCDate(x.getUTCDate() + 2);
+  if (dia === 0) x.setUTCDate(x.getUTCDate() + 1);
+  return x.toISOString().slice(0, 10);
+}
+/**
+ * IVA. Postergación: vence 2 meses después de la fecha en que se posterga (así
+ * está en la planilla 2025-2026: 20-02 → 20-04, 19-03 → 19-05, 20-01 → 20-03).
+ * Si cae sábado o domingo pasa al lunes, como todo plazo del SII (la planilla
+ * no es pareja en eso: 20-04-2025 era domingo y lo escribieron igual). La
+ * persona puede escribir otra fecha. PPM: ventas × tasa; la tasa se escribe en % (0,5 =
+ * 0,5 %) o, si viene de una celda con formato %, como fracción (0,01 = 1 %).
+ */
+function calculosIva_(d) {
+  const out = {};
+  out.fecha_vencimiento_postergacion = /^SI/.test(t_(d.posterga_si_no)) && RE_FECHA.test(String(d.fecha_realizacion_postergacion || ''))
+    ? mesesDespuesHabil_(d.fecha_realizacion_postergacion, 2) : '';
+  const tasa = num_(d.tasa_ppm), ventas = num_(d.ventas_ppm);
+  out.monto_ppm = tasa > 0 && ventas > 0 ? Math.round(ventas * (tasa < 0.1 ? tasa : tasa / 100)) : '';
+  return out;
+}
+
+/**
+ * Qué es cada columna (se ve al pasar el mouse por el encabezado y en la fila
+ * completa) y cuáles ya no se usan (quedan ocultas, con sus datos, y se
+ * pueden mostrar). Sale de la reunión con Francisca del 1-10-2026.
+ */
+const DE_FACTURA = 'Se copia de la factura.';
+const DE_TGR = 'Sale de la TGR.';
+const AJUSTES = {
+  FACTURACION: {
+    codigo: { sinUso: true, ayuda: 'No se usa.' },
+    clasificacion_interna: { sinUso: true, ayuda: 'No se usa: nadie sabe qué clasificaba.' },
+    enviar_cliente_obra: { sinUso: true, ayuda: 'No se llena desde hace años (a qué cliente u obra se envió la factura). Opcional.' },
+    recepcion_informacion: { ayuda: 'Cuando llega la información para facturar.' },
+    fecha_realizacion: { ayuda: 'Cuando se empieza el servicio.' },
+    eepp: { ayuda: 'N° del estado de pago (solo obras).' },
+    empresa_mandante: { ayuda: DE_FACTURA }, rut_empresa_mandante: { ayuda: DE_FACTURA }, obra: { ayuda: DE_FACTURA + ' Solo si es una obra.' },
+    n_contrato: { ayuda: DE_FACTURA }, monto_neto: { ayuda: DE_FACTURA }, monto_total: { ayuda: DE_FACTURA }, folio_documento: { ayuda: DE_FACTURA },
+    tipo_documento: { ayuda: 'FE = factura electrónica, NC = nota de crédito; también guía de despacho y cesión.' }
+  },
+  IVA: {
+    tasa_ppm: { tipo: 'numero', ayuda: 'La define la señora Carmen según las ventas y la renta del cliente. En % (0,5 = 0,5 %).' },
+    ventas_ppm: { ayuda: 'Ventas del mes sobre las que se calcula el PPM. Con la tasa, el monto PPM se calcula solo.' },
+    monto_ppm: { ayuda: 'Ventas × tasa PPM: se calcula solo si están las ventas y la tasa (se puede escribir otro valor).' },
+    retencion_honorario: { ayuda: 'Solo si aplica.' },
+    monto_impuesto_unico: { ayuda: 'Lo informa RR.HH. (matriz 3 % e impuesto único). Si el cliente tiene, después del 15 se le manda recordatorio.' },
+    fecha_envio_carta: { ayuda: 'Cuando se envía la carta al cliente.' },
+    fecha_declaracion: { ayuda: 'Cuando se paga (la oficina o el cliente).' },
+    posterga_si_no: { ayuda: 'SI = se paga el IVA unos 2 meses después, sin intereses.' },
+    fecha_vencimiento_postergacion: { ayuda: 'Se calcula sola: 2 meses después de la postergación (si cae sábado o domingo, el lunes). No considera feriados.' }
+  },
+  CONVENIOS: Object.assign({ fecha_realizacion: { ayuda: 'Cuando se revisó la TGR (Francisca lo hace pasada la quincena).' } },
+    ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => ({
+      ['fecha_realizo_convenio_' + i]: { ayuda: DE_TGR }, ['pie_covenio_' + i]: { ayuda: DE_TGR }, ['monto_total_deuda_' + i]: { ayuda: DE_TGR },
+      ['folio_convenio_' + i]: { ayuda: DE_TGR }, ['cuotas_canceladas_convenio_' + i]: { ayuda: 'Cuotas pagadas (TGR).' },
+      ['cuotas_vencidas_convenio_' + i]: { ayuda: 'Cuotas que no se han pagado.' }, ['termino_convenio_' + i]: { ayuda: 'Cuándo debería terminar el convenio.' },
+      ['tipo_convenio_' + i]: { ayuda: 'IVA, IVA y renta o solo renta.' }
+    }))),
+  NOTIFICACIONES_SII: {
+    resuelta: { ayuda: 'SI = ya se solucionó (en la planilla, la celda en azul). Al importar se lee el color.' }
+  }
+};
+/** Columnas que SIGSO agrega a las de la planilla. */
+const EXTRA = {
+  IVA: [{ despuesDe: 'tasa_ppm', clave: 'ventas_ppm', etiqueta: 'VENTAS (BASE PPM)', tipo: 'monto', nombres: [] }],
+  NOTIFICACIONES_SII: [{ despuesDe: 'detalle', clave: 'resuelta', etiqueta: 'RESUELTA', tipo: 'texto', nombres: ['RESUELTA'], sugerencias: ['SI', 'NO'] }]
+};
+
 // --- definiciones ---------------------------------------------------------------------------
 const C = 'CONTABILIDAD', R = 'RRHH';
 const SC = {
   FAC: 'Facturación', IVA: 'Informe y pago de IVA', CONT: 'Contabilización mensual', CONV: 'Convenios y postergaciones',
-  ACU: 'Acuse de recibo', ANO: 'Anotaciones, notificaciones y subsanaciones'
+  ACU: 'Acuse de recibo', ANO: 'Anotaciones, notificaciones y subsanaciones', OTR: 'Otros servicios'
 };
+// Servicios de la tabla de servicios que no tenían matriz (reunión 1-10-2026).
+const SERVICIOS_SIN_MATRIZ = ['CERTIFICADO DE DEUDA TGR', 'E-RUT', 'CARPETA TRIBUTARIA', 'PRE-RENTA', 'CREACIÓN DE EMPRESA', 'DECLARACIÓN DE RENTA', 'TÉRMINO DE GIRO'];
+const col_ = (clave, etiqueta, tipo, extra) => Object.assign({ clave, etiqueta, tipo, nombres: [etiqueta] }, extra || {});
 const SR = {
   ING: 'Ingreso y término de clientes', CON: 'Contratos, anexos y finiquitos', LIC: 'Licencias, certificados y constancias',
   MEN: 'Proceso mensual', PLA: 'Plataformas, reclamos y procesos anuales', SUB: 'Subsanaciones y otros trámites'
@@ -104,9 +190,11 @@ const DEFS = [
     lectura: { alias: { 'PRE IVA': 'MONTO PRE IVA', 'CLASIFICACION INTERNA': 'CLASIFICACION', 'CARTA PODER': 'CARTA PODER ENVIADA' } },
     situacion: regla_({ estado: ['enviado_f29', 'estado_pago'], termina: ['fecha_envio_f_29'], proceso: ['monto_pre_iva', 'fecha_pre_iva', 'fecha_envio_carta', 'fecha_declaracion', 'fecha_pago'] }),
     tiempos: ['fecha_pre_iva', 'fecha_envio_f_29'], montos: ['monto_pago', 'monto_pre_iva', 'monto_ppm', 'retencion_honorario', 'monto_impuesto_unico'],
-    copiar: ['clasificacion', 'estatus', 'rrhh', 'quien_paga', 'correo_cliente']
+    copiar: ['clasificacion', 'estatus', 'rrhh', 'quien_paga', 'correo_cliente'],
+    calculos: calculosIva_, alertas: 'IVA'
   },
-  lista('IVA_CARTAS_PODER', SC.IVA, 'Cartas poder (IVA)', 'Estado de la carta poder de cada cliente para el informe de IVA.', { archivo: 'INFORME Y PAGO DE IVA', hojas: ['CARTA PODER'], sinEncabezado: { 1: 'EMPRESA', 2: 'CARTA PODER', 3: 'ESTADO' } }),
+  // Francisca no la usa: las cartas poder las lleva en Situación de clientes (Anotaciones).
+  lista('IVA_CARTAS_PODER', SC.IVA, 'Cartas poder (IVA)', 'Hoja del libro de IVA que ya no se usa: las cartas poder se llevan en Anotaciones › Cartas poder.', { archivo: 'INFORME Y PAGO DE IVA', hojas: ['CARTA PODER'], sinEncabezado: { 1: 'EMPRESA', 2: 'CARTA PODER', 3: 'ESTADO' }, sinUso: true }),
   lista('SITUACION_CLIENTES', SC.IVA, 'Situación de clientes', 'Cartas poder, IVAs pendientes, rectificatorias, domicilio, convenios y anotaciones por cliente.', { archivo: 'INFORME Y PAGO DE IVA', hojas: ['Hoja 10'] }),
   {
     clave: 'CONTABILIZACION', depto: C, seccion: SC.CONT, nombre: 'Contabilización mensual', codigo: 'CO-M-9', tipo: 'mensual', unaPorCliente: true,
@@ -127,9 +215,12 @@ const DEFS = [
       const pendiente = items.some((v) => /^(PENDIENTE|NO$|FALTA|POR )/.test(v));
       return !pendiente && items.length >= 8 ? 'TERMINADO' : 'EN_PROCESO';
     },
-    copiar: ['codigo', 'clasificacion_interna']
+    copiar: ['codigo', 'clasificacion_interna'],
+    // "Si no aplica, que quede al tiro que no aplica": al abrir el mes, lo que
+    // el mes anterior decía NO APLICA se precarga (el perfil del cliente sale de su historia).
+    arrastrarNoAplica: true
   },
-  lista('ARRIENDOS', SC.CONT, 'Arriendos', 'Clientes con arriendo: monto y dónde se registra.', { archivo: 'CONTABILIZACION', hojas: ['ARRIENDOS'] }),
+  lista('ARRIENDOS', SC.CONT, 'Arriendos', 'Clientes con arriendo: monto y dónde se registra. Francisca dice que ya no la usa.', { archivo: 'CONTABILIZACION', hojas: ['ARRIENDOS'], sinUso: true }),
   {
     clave: 'CONVENIOS', depto: C, seccion: SC.CONV, nombre: 'Convenios', codigo: 'CO-M-7', tipo: 'mensual', unaPorCliente: true,
     descripcion: 'Convenios de pago con la TGR por cliente (hasta 9): cuotas pagadas, vencidas y término. Se revisa cada mes.', archivo: 'CONVENIOS',
@@ -161,11 +252,30 @@ const DEFS = [
   lista('RECTIFICACIONES', SC.ANO, 'Rectificaciones', 'IVAs por rectificar y su motivo.', { archivo: 'ANOTACIONES', hojas: ['RECTIFICACIONES'] }),
   {
     clave: 'NOTIFICACIONES_SII', depto: C, seccion: SC.ANO, nombre: 'Notificaciones y anotaciones SII', tipo: 'registro',
-    descripcion: 'Notificaciones (giros) y anotaciones del SII de cada cliente: las fichas A–W de la planilla.', archivo: 'ANOTACIONES', especial: 'fichas',
-    estados: [E.REGISTRADO], situacion: () => 'REGISTRADO', sinLiberacion: true
+    descripcion: 'Notificaciones (giros) y anotaciones del SII de cada cliente: las fichas A–W de la planilla. Vigente hasta que se marca resuelta (en la planilla, en azul).', archivo: 'ANOTACIONES', especial: 'fichas',
+    estados: [{ clave: 'VIGENTE', etiqueta: 'Vigente', tono: 'alerta' }, { clave: 'RESUELTA', etiqueta: 'Resuelta', tono: 'ok', final: true }],
+    situacion: Object.assign((d) => (/^SI/.test(t_(d.resuelta)) || porTexto_(d.resuelta) === 'TERMINADO' ? 'RESUELTA' : 'VIGENTE'), { usa: ['resuelta'] }),
+    sinLiberacion: true
   },
   lista('SUBSANACION_DOMICILIO', SC.ANO, 'Subsanación de domicilio', 'Empresas que deben demostrar domicilio o actividad: peticiones y folios.', { archivo: 'ANOTACIONES', especial: 'subsanacion' }),
   lista('IVAS_POSTERGADOS', SC.ANO, 'IVAs postergados sin convenio', 'IVAs postergados que no tienen convenio.', { archivo: 'ANOTACIONES', hojas: ['Hoja 21'], sinEncabezado: { 1: 'EMPRESA', 3: 'DETALLE' } }),
+  {
+    // No viene de una planilla: los servicios de la tabla que no tenían matriz.
+    clave: 'OTROS_SERVICIOS', depto: C, seccion: SC.OTR, nombre: 'Servicios sin matriz', tipo: 'registro',
+    descripcion: 'Certificados de deuda TGR, E-RUT, carpetas tributarias, pre-renta, creación de empresa, declaración de renta y término de giro: una fila por solicitud.',
+    columnas: [
+      col_('servicio', 'SERVICIO', 'texto', { sugerencias: SERVICIOS_SIN_MATRIZ }),
+      col_('empresa', 'EMPRESA', 'texto', { rol: 'cliente' }),
+      col_('rut', 'RUT', 'texto', { rol: 'rut' }),
+      col_('fecha_solicitud', 'FECHA SOLICITUD', 'fecha'),
+      col_('fecha_realizacion', 'FECHA REALIZACIÓN', 'fecha'),
+      col_('quien_realiza', 'QUIÉN REALIZA', 'texto', { rol: 'responsable' }),
+      col_('estado', 'ESTADO', 'texto', { sugerencias: ['PENDIENTE', 'EN PROCESO', 'LISTO', 'NO APLICA'] }),
+      col_('fecha_envio_cliente', 'FECHA ENVÍO AL CLIENTE', 'fecha')
+    ],
+    situacion: regla_({ estado: ['estado'], termina: ['fecha_envio_cliente'], proceso: ['fecha_realizacion'] }),
+    tiempos: ['fecha_solicitud', 'fecha_envio_cliente'], periodoDe: ['fecha_solicitud', 'fecha_realizacion']
+  },
 
   // =================================== RR.HH. ===================================
   rh('INGRESO_CLIENTE_CREACION', SR.ING, 'Ingreso de cliente con creación de empresa', 'RH-M-1.1', 'Ingreso de cliente con creacion', { termina: ['fecha_digitalizacion_hp_incorporacion'], algo: true }, { tiempos: ['fecha_recepcion', 'fecha_digitalizacion_hp_incorporacion'] }),
@@ -224,7 +334,15 @@ const MATRICES = DEFS.map((d) => {
     m.sinLiberacion = true;
   }
   if (!m.estados) m.estados = BASE;
-  m.columnas = COLUMNAS[m.clave] || [];
+  m.columnas = (m.columnas || COLUMNAS[m.clave] || []).slice();
+  (EXTRA[m.clave] || []).forEach((x) => {
+    const c = Object.assign({}, x);
+    delete c.despuesDe;
+    const i = m.columnas.findIndex((k) => k.clave === x.despuesDe);
+    m.columnas.splice(i === -1 ? m.columnas.length : i + 1, 0, c);
+  });
+  const aj = AJUSTES[m.clave] || {};
+  m.columnas = m.columnas.map((c) => (aj[c.clave] ? Object.assign({}, c, aj[c.clave]) : c));
   if (!m.columnas.length) throw new Error('Control interno: la matriz ' + m.clave + ' no tiene columnas.');
   // Cada columna nombrada en las reglas tiene que existir (si no, el error es silencioso).
   const claves = new Set(m.columnas.map((c) => c.clave));
@@ -238,4 +356,4 @@ function matriz_(clave) {
   return MATRICES.find((m) => m.clave === clave) || null;
 }
 
-module.exports = { DEPARTAMENTOS, MATRICES, matriz_, hecho_, porTexto_, ESTADOS: E };
+module.exports = { DEPARTAMENTOS, MATRICES, matriz_, hecho_, porTexto_, ESTADOS: E, mesesDespuesHabil_, calculosIva_, SERVICIOS_SIN_MATRIZ };

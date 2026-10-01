@@ -109,14 +109,34 @@ function mapaPorPosicion_(m, filas) {
 }
 
 // --- filas especiales ---------------------------------------------------------------------------
-/** Fichas A–W: bloques por cliente con Notificaciones (col B) y Anotaciones (col G). */
-function filasDeFichas_(filas) {
+/** ¿Relleno azul? En las fichas, azul = la notificación o anotación ya se solucionó. */
+function esAzul_(rgb) {
+  const m = /^([0-9A-F]{2})([0-9A-F]{2})([0-9A-F]{2})$/i.exec(String(rgb || ''));
+  if (!m) return false;
+  const [r, g, b] = [m[1], m[2], m[3]].map((x) => parseInt(x, 16));
+  return b >= 150 && b > r + 30 && b > g + 10;
+}
+/**
+ * Fichas A–W: bloques por cliente con Notificaciones (col B) y Anotaciones
+ * (col G). Con `colores` (el relleno de cada celda), "Resuelta" = SI si alguna
+ * celda de la entrada está en azul; sin colores, no se dice nada.
+ */
+function filasDeFichas_(filas, colores) {
   const out = [];
   const realizado = P.vacio_(((filas[1] || [])[3]));
   const actualizada = P.fecha_(((filas[2] || [])[3]));
   let cliente = '';
   const lado = { B: null, G: null };
-  const cerrar = (k) => { const e = lado[k]; if (e && (e.fecha || e.detalle.length)) out.push({ i: e.i, datos: { empresa: cliente, tipo: k === 'B' ? 'NOTIFICACIÓN' : 'ANOTACIÓN', fecha: e.fecha, detalle: e.detalle.join(' ').slice(0, 4000), realizado_por: realizado, ultima_actualizacion: actualizada } }); lado[k] = null; };
+  const azul = (k, i) => { const c = (colores || [])[i] || {}; const desde = k === 'B' ? 1 : 6; for (let j = desde; j < desde + 5; j++) if (esAzul_(c[j])) return true; return false; };
+  const cerrar = (k) => {
+    const e = lado[k];
+    if (e && (e.fecha || e.detalle.length)) {
+      const datos = { empresa: cliente, tipo: k === 'B' ? 'NOTIFICACIÓN' : 'ANOTACIÓN', fecha: e.fecha, detalle: e.detalle.join(' ').slice(0, 4000), realizado_por: realizado, ultima_actualizacion: actualizada };
+      if (Array.isArray(colores)) datos.resuelta = e.filas.some((i) => azul(k, i)) ? 'SI' : 'NO';
+      out.push({ i: e.i, datos });
+    }
+    lado[k] = null;
+  };
   for (let i = 4; i < filas.length; i++) {
     const f = filas[i] || [];
     const b = P.vacio_(f[1]), g = P.vacio_(f[6]);
@@ -129,9 +149,10 @@ function filasDeFichas_(filas) {
       const textos = celdas.map(P.vacio_).filter(Boolean);
       if (!textos.length) return;
       const fecha = P.fecha_(textos[0]);
-      if (fecha) { cerrar(k); lado[k] = { i, fecha, detalle: textos.slice(1) }; return; }
-      if (!lado[k]) lado[k] = { i, fecha: '', detalle: [] };
+      if (fecha) { cerrar(k); lado[k] = { i, fecha, detalle: textos.slice(1), filas: [i] }; return; }
+      if (!lado[k]) lado[k] = { i, fecha: '', detalle: [], filas: [] };
       lado[k].detalle.push(...textos);
+      lado[k].filas.push(i);
     });
   }
   cerrar('B'); cerrar('G');
@@ -239,7 +260,7 @@ function importarHoja(db, data, contexto) {
   // 1. Filas -> { i, datos } según el tipo de hoja.
   let entradas = [];
   let periodoHoja = rec.periodo || '';
-  if (rec.modo === 'fichas') entradas = filasDeFichas_(filas);
+  if (rec.modo === 'fichas') entradas = filasDeFichas_(filas, Array.isArray(d.colores) ? d.colores.map((c) => (c && typeof c === 'object' ? c : {})) : null);
   else if (rec.modo === 'subsanacion') entradas = filasDeSubsanacion_(filas);
   else {
     let mapa = mapaColumnas_(m, filas, rec.modo);
@@ -358,4 +379,5 @@ function importarHoja(db, data, contexto) {
   return res;
 }
 
-module.exports = { importarHoja, prepararImportacion, reconocerHoja_, filasDeFichas_, filasDeSubsanacion_, mapaColumnas_ };
+module.exports = {
+  esAzul_, importarHoja, prepararImportacion, reconocerHoja_, filasDeFichas_, filasDeSubsanacion_, mapaColumnas_ };
