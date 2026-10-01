@@ -466,6 +466,15 @@ test('la jefatura marca la salida no conforme; la NC la abre el Encargado', () =
   assert.equal(Prestaciones.abrirNoConformidad(db, { prestacion_id: r.prestacion_id }, ENC).ok, true);
 });
 
+test('un rol con área del catálogo por persona (CONTABILIDAD_FRANCISCA) opera su área', () => {
+  const db = crear();
+  agregarFila_(db, 'CAT_AREAS', { area_id: 'AREA_002', nombre: 'CONTABILIDAD_FRANCISCA', responsable_email: '', activo: true });
+  const conCatalogo = { email: 'asistente2@homepymes.cl', nombre: 'Asistente', rol: 'DEV' };
+  Calidad.gestionarRol(db, { usuario_email: conCatalogo.email, rol_sgc: 'OPERATIVO', area_id: 'AREA_002' }, CTX_ADM);
+  const p = conProcesos(db);
+  assert.equal(Prestaciones.registrar(db, { cliente_id: 'CLI-1', proceso_id: p.srv1, periodo: '2026-M09', fecha_prestacion: '2026-09-10', responsable_email: conCatalogo.email }, conCatalogo).ok, true);
+});
+
 test('las claves de área del rol y los nombres del mapa son la misma área', () => {
   assert.equal(Prestaciones.claveArea_('Recursos Humanos'), Prestaciones.claveArea_('RRHH'));
   assert.equal(Prestaciones.claveArea_('Contabilidad'), Prestaciones.claveArea_('CONTABILIDAD'));

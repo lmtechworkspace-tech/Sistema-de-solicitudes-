@@ -102,7 +102,12 @@ function alcance_(db, contexto) {
     if (id) {
       areas.push(claveArea_(id));
       const cat = leerSeguro_(db, 'CAT_AREAS').find((a) => a.area_id === id);
-      if (cat) areas.push(claveArea_(cat.nombre));
+      // En producción CAT_AREAS nombra un área por persona ('RRHH_LISSETH',
+      // 'PREVENCION_AMARLLA'): el área es lo que va antes del guion bajo.
+      if (cat) {
+        areas.push(claveArea_(cat.nombre));
+        areas.push(claveArea_(String(cat.nombre || '').split('_')[0]));
+      }
     }
   }
   return { gobierna, veTodo, rol, areas, email: normalizarEmail_(contexto && contexto.email) };
