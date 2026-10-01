@@ -92,6 +92,7 @@ vistazo.
 | Por qué es su propio vocabulario, no los roles generales | Son distinciones de dominio ISO 9001 reales (quién audita, quién dirige, quién es del área) — forzarlas al vocabulario de `rol` general perdería la vigencia expirable del auditor externo, entre otras cosas. Decisión 3 del documento de arquitectura: se mantienen separadas a propósito |
 | Quién administra | `esAdminSgc_()` = `rol === 'ADM'` estricto — ni un `ENCARGADO_SGC` puede asignar roles de SGC |
 | Enforcement real | **SÍ** — es el único gate fino real del módulo Calidad hoy (el gate grueso, módulo `calidad` vía `modulos`, es decorativo, §3) |
+| Servicios prestados por área (2026-09-30) | `OPERATIVO`/`ENC_ADMIN` con `area_id` registran (de a uno o el mes completo) los servicios de SU área; `JEFATURA_AREA` además libera y marca salida no conforme, siempre a su propio nombre y nunca lo que ella misma prestó; abrir la NC y anular lo ya liberado sigue siendo del `ENCARGADO_SGC`. El área del rol (`RRHH`, `CONTABILIDAD`…) se compara con el área del proceso del mapa (`Recursos Humanos`, `Contabilidad`…) por clave normalizada (`claveArea_` en `prestacionesSgc.js`). Para que la persona vea Calidad en el menú, la cuenta además necesita el módulo `calidad` |
 | Código | `backend/logica/calidadSgc.js` |
 | Se edita en | Módulo Calidad → su propia pantalla de "Accesos" (NO está en Administración — ver nota abajo) |
 

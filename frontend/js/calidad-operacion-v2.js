@@ -93,8 +93,20 @@
       pintarPrs(!!silencioso);
     });
   }
+  // Lo que la persona puede hacer con cada fila: el Encargado todo; la
+  // jefatura del área libera y marca no conforme (nunca libera lo que ella
+  // prestó); quien registró anula lo suyo mientras no esté liberado.
+  function yo() { return String(prs_.datos.yo || '').toLowerCase(); }
+  function puedeLiberarFila(p) {
+    var d = prs_.datos;
+    return !!d.puede_liberar && p.estado === 'PRESTADO' && (!!d.puede_gestionar || String(p.responsable_email || '').toLowerCase() !== yo());
+  }
+  function puedeAnularFila(p) {
+    return !!prs_.datos.puede_gestionar || (p.estado === 'PRESTADO' && String(p.creado_por || '').toLowerCase() === yo());
+  }
   function pintarPrs(silencioso) {
     var d = prs_.datos, puede = !!d.puede_gestionar, r = d.resumen || {}, v = d.volumen || {};
+    var porLiberar = (d.prestaciones || []).filter(puedeLiberarFila);
     if (!d.procesos.length) {
       pagina(cabecera('Servicios prestados', PRS_SUB) + aviso('alerta', 'alerta', 'No hay procesos de servicio cargados. Cárgalos primero en <b>Mapa de procesos</b>: sin ellos no hay qué registrar.'), silencioso);
       return;
@@ -106,29 +118,32 @@
       '<select class="sx2-select js-op2-f" data-f="proceso_id" aria-label="Proceso"><option value="">Todos los procesos</option>' + (d.procesos || []).map(function (p) { return '<option value="' + U.esc(p.proceso_id) + '"' + (p.proceso_id === f.proceso_id ? ' selected' : '') + '>' + txt(p.codigo + ' — ' + p.nombre) + '</option>'; }).join('') + '</select>' +
       '<select class="sx2-select js-op2-f" data-f="estado" aria-label="Estado"><option value="">Todos los estados</option>' + (d.estados || []).map(function (e) { return '<option value="' + U.esc(e) + '"' + (e === f.estado ? ' selected' : '') + '>' + txt((ESTADO_PRS[e] || [e])[0]) + '</option>'; }).join('') + '</select>' +
       (f.periodo || f.cliente_id || f.proceso_id || f.estado ? U.chip({ texto: 'Quitar filtros', icono: 'equis', clase: 'js-op2-limpiar' }) : '') + '</div></div>';
-    pagina(cabecera('Servicios prestados', PRS_SUB, puede ? U.boton({ texto: 'Registrar prestación', icono: 'nueva', variante: 'primario', clase: 'js-op2-prs-nueva' }) : '') +
+    var acciones = (porLiberar.length ? U.boton({ texto: 'Liberar (' + porLiberar.length + ')', icono: 'check', clase: 'js-op2-lib-lote', titulo: 'Liberar de una vez lo que se ve en la lista' }) : '') +
+      (d.puede_registrar ? U.boton({ texto: 'Registrar una', icono: 'nueva', clase: 'js-op2-prs-nueva' }) +
+        U.boton({ texto: 'Registrar el mes', icono: 'calendario', variante: 'primario', clase: 'js-op2-prs-lote' }) : '');
+    pagina(cabecera('Servicios prestados', PRS_SUB, acciones) +
       '<div class="sx2-fila-kpis">' + U.kpi({ i: 0, etiqueta: 'Prestaciones', valor: r.total || 0, icono: 'caja', tono: 'primario' }) +
         U.kpi({ i: 1, etiqueta: 'Liberadas', valor: r.liberado || 0, icono: 'check', tono: 'ok' }) +
         U.kpi({ i: 2, etiqueta: 'Sin liberar', valor: r.prestado || 0, icono: 'reloj', tono: r.prestado ? 'alerta' : 'ok', titulo: '§8.6 pide que la liberación quede trazada a quien la autoriza.' }) +
         U.kpi({ i: 3, etiqueta: 'No conformes', valor: r.no_conforme || 0, icono: 'alerta', tono: r.no_conforme ? 'critico' : 'ok' }) +
         U.kpi({ i: 4, etiqueta: 'Sin evidencia', valor: r.sin_evidencia || 0, icono: 'documento', tono: r.sin_evidencia ? 'alerta' : 'ok' }) + '</div>' +
       (v.aviso ? aviso('critico', 'alerta', txt(v.aviso)) : '') + filtros +
-      (d.acotada ? aviso('info', 'info', 'Sin filtro se muestran las últimas ' + d.tope + ' de ' + d.total_filtrado + '. Filtra por período o cliente para ver el resto.') : '') +
+      (d.acotada && d.total_filtrado > d.tope ? aviso('info', 'info', 'Sin filtro se muestran las últimas ' + d.tope + ' de ' + d.total_filtrado + '. Filtra por período o cliente para ver el resto.') : '') +
       (d.prestaciones.length ? '<section class="sx2-card sx2-card--sin-relleno sx2-entra" style="--i:3"><ul class="md2-inds">' + d.prestaciones.map(function (p) {
         var e = ESTADO_PRS[p.estado] || [p.estado, 'neutro'];
         return '<li class="md2-ind sx2-tono-' + e[1] + '"><div class="sx2-apilado" style="gap:5px;flex:1;min-width:0">' +
           '<span class="sx2-flex" style="gap:8px;flex-wrap:wrap;align-items:center"><code class="mj2-cod">' + txt(p.proceso_codigo) + '</code><strong class="mj2-fila__tit">' + txt(p.cliente_nombre) + '</strong>' + U.badge(e[0], e[1]) +
-            (p.periodo ? U.badge(p.periodo, 'neutro', true) : '') + (p.liberada_por_el_mismo ? U.badge('Liberó quien prestó', 'alerta', true) : '') + (p.nc_id ? U.badge('Con NC', 'critico', true) : '') + '</span>' +
+            (p.periodo ? U.badge(periodoTexto(p.periodo), 'neutro', true) : '') + (p.liberada_por_el_mismo ? U.badge('Liberó quien prestó', 'alerta', true) : '') + (p.nc_id ? U.badge('Con NC', 'critico', true) : '') + '</span>' +
           '<span class="sx2-tenue mj2-fila__txt">' + txt(p.proceso_nombre) + '</span>' +
           '<span class="mj2-meta"><span>' + U.ico('calendario', 12) + 'Prestado ' + txt(fecha(p.fecha_prestacion)) + '</span><span>' + persona(p.responsable_email) + '</span>' +
             (p.liberado_por ? '<span>' + U.ico('check', 12) + 'Liberó ' + txt(PY.persona(p.liberado_por).nombre) + ' · ' + txt(fecha(p.fecha_liberacion)) + '</span>' : '') +
             '<span>' + U.ico('documento', 12) + (p.evidencia ? txt(p.evidencia) : '<i>Sin evidencia registrada</i>') + '</span></span>' +
           (p.observaciones ? '<span class="mj2-ayuda" style="margin:0">' + txt(p.observaciones) + '</span>' : '') + '</div>' +
-          (puede ? '<span class="mj2-acciones" style="margin:0;flex:none">' +
-            (p.estado === 'PRESTADO' ? U.boton({ texto: 'Liberar', icono: 'check', sm: true, variante: 'primario', clase: 'js-op2-liberar', datos: { id: p.prestacion_id } }) : '') +
-            (p.estado !== 'NO_CONFORME' ? U.boton({ texto: 'No conforme', sm: true, clase: 'js-op2-noconf', datos: { id: p.prestacion_id } }) : '') +
-            (p.estado === 'NO_CONFORME' && !p.nc_id ? U.boton({ texto: 'Abrir NC', sm: true, variante: 'primario', clase: 'js-op2-nc', datos: { id: p.prestacion_id } }) : '') +
-            U.boton({ soloIcono: true, icono: 'basura', sm: true, variante: 'fantasma', titulo: 'Anular', clase: 'js-op2-anular', datos: { id: p.prestacion_id } }) + '</span>' : '') + '</li>';
+          (puede || d.puede_liberar || puedeAnularFila(p) ? '<span class="mj2-acciones" style="margin:0;flex:none">' +
+            (puedeLiberarFila(p) ? U.boton({ texto: 'Liberar', icono: 'check', sm: true, variante: 'primario', clase: 'js-op2-liberar', datos: { id: p.prestacion_id } }) : '') +
+            (d.puede_liberar && p.estado !== 'NO_CONFORME' ? U.boton({ texto: 'No conforme', sm: true, clase: 'js-op2-noconf', datos: { id: p.prestacion_id } }) : '') +
+            (puede && p.estado === 'NO_CONFORME' && !p.nc_id ? U.boton({ texto: 'Abrir NC', sm: true, variante: 'primario', clase: 'js-op2-nc', datos: { id: p.prestacion_id } }) : '') +
+            (puedeAnularFila(p) ? U.boton({ soloIcono: true, icono: 'basura', sm: true, variante: 'fantasma', titulo: 'Anular', clase: 'js-op2-anular', datos: { id: p.prestacion_id } }) : '') + '</span>' : '') + '</li>';
       }).join('') + '</ul></section>' : U.card({ i: 3, cuerpo: U.vacio({ icono: 'caja', titulo: 'No hay prestaciones con esos filtros', texto: 'Un registro por servicio efectivamente entregado.' }) })), silencioso);
   }
   function prestacion(id) { return (prs_.datos.prestaciones || []).filter(function (p) { return p.prestacion_id === id; })[0]; }
@@ -138,7 +153,7 @@
       campos: U.campo('Cliente', select('cliente_id', [['', 'Elige el cliente…']].concat((d.clientes || []).map(function (c) { return [c.cliente_id, c.nombre + (c.rut ? ' (' + c.rut + ')' : '')]; })), '')) +
         U.campo('Proceso de servicio', select('proceso_id', [['', 'Elige el proceso…']].concat((d.procesos || []).map(function (p) { return [p.proceso_id, p.codigo + ' — ' + p.nombre]; })), '')) +
         fila2(U.campo('Período (si es recurrente)', select('periodo', [['', 'Puntual (sin período)']].concat(periodosMes()), '')), U.campo('Fecha de prestación', input('fecha_prestacion', PY.hoyClave(), ' type="date" required max="' + PY.hoyClave() + '"'))) +
-        U.campo('Quién lo prestó', input('responsable_email', '', ' type="email" required data-persona')) +
+        U.campo('Quién lo prestó', input('responsable_email', d.yo || '', ' type="email" required data-persona')) +
         U.campo('Evidencia', area('evidencia', '', 2), 'Folio, número de formulario, enlace al archivo… lo que permita encontrarlo después.'),
       preparar: function (x) {
         if (!x.cliente_id || !x.proceso_id) return 'Elige cliente y proceso.';
@@ -147,12 +162,150 @@
       },
       enviar: function (x) { return api('registrarPrestacionSgc', x); } });
   }
+  // El Encargado puede registrar la liberación que autorizó otra persona; la
+  // jefatura del área libera siempre a su propio nombre.
+  function campoAutoriza() {
+    return prs_.datos.puede_gestionar ? U.campo('Autoriza', input('liberado_por', '', ' type="email" required data-persona')) : '';
+  }
   function formLiberar(p) {
-    paso({ titulo: 'Liberar el servicio', boton: 'Liberar', sub: txt(p.proceso_codigo + ' → ' + p.cliente_nombre) + '. §8.6 pide trazabilidad a quien autoriza la liberación (la jefatura de cada área, según el DOC-01).',
-      campos: U.campo('Autoriza', input('liberado_por', '', ' type="email" required data-persona')) + U.campo('Fecha de liberación', input('fecha_liberacion', PY.hoyClave(), ' type="date" max="' + PY.hoyClave() + '"')),
-      alMontar: function (form) { var el = form.querySelector('[name=liberado_por]'); el.addEventListener('change', function () { var h = form.querySelector('.js-op2-mismo'); if (h) h.remove(); if (el.value.trim().toLowerCase() === String(p.responsable_email || '').toLowerCase()) el.insertAdjacentHTML('afterend', '<span class="sx2-campo__ayuda js-op2-mismo" style="color:var(--sx-alerta)">Es la misma persona que lo prestó: quedará marcado.</span>'); }); },
-      preparar: function (x) { return x.liberado_por && esCorreo(x.liberado_por) ? x : 'Indica quién autoriza.'; },
+    var gestor = !!prs_.datos.puede_gestionar;
+    paso({ titulo: 'Liberar el servicio', boton: 'Liberar', sub: txt(p.proceso_codigo + ' → ' + p.cliente_nombre) + '. §8.6 pide trazabilidad a quien autoriza la liberación (la jefatura de cada área, según el DOC-01).' + (gestor ? '' : ' Queda liberado a tu nombre.'),
+      campos: campoAutoriza() + U.campo('Fecha de liberación', input('fecha_liberacion', PY.hoyClave(), ' type="date" max="' + PY.hoyClave() + '"')),
+      alMontar: function (form) { var el = form.querySelector('[name=liberado_por]'); if (!el) return; el.addEventListener('change', function () { var h = form.querySelector('.js-op2-mismo'); if (h) h.remove(); if (el.value.trim().toLowerCase() === String(p.responsable_email || '').toLowerCase()) el.insertAdjacentHTML('afterend', '<span class="sx2-campo__ayuda js-op2-mismo" style="color:var(--sx-alerta)">Es la misma persona que lo prestó: quedará marcado.</span>'); }); },
+      preparar: function (x) { return !gestor || (x.liberado_por && esCorreo(x.liberado_por)) ? x : 'Indica quién autoriza.'; },
       enviar: function (x) { x.prestacion_id = p.prestacion_id; return api('liberarPrestacionSgc', x); } });
+  }
+
+  // --- Por lote: el mes completo de un servicio (Etapa A del control interno) ------------
+  // '2026-M09' → 'sep 2026' (el código del período queda para los filtros).
+  function periodoTexto(per) { var m = /^(\d{4})-M(\d{2})$/.exec(per || ''); return m ? MESES[+m[2] - 1] + ' ' + m[1] : String(per || ''); }
+  function mesAnterior(per) {
+    var m = /^(\d{4})-M(\d{2})$/.exec(per || '');
+    if (!m) return '';
+    var y = +m[1], n = +m[2] - 1;
+    if (!n) { y--; n = 12; }
+    return y + '-M' + ('0' + n).slice(-2);
+  }
+  function omitidasTexto(r) {
+    var o = (r && r.data && r.data.omitidas) || [];
+    if (!o.length) return '';
+    return ' ' + o.slice(0, 3).map(function (x) { return (x.cliente_nombre || 'Sin nombre') + ': ' + x.motivo; }).join(' · ') + (o.length > 3 ? ' · y ' + (o.length - 3) + ' más.' : '');
+  }
+  // Lista de casillas sin `name`: FormData no la recoge y `preparar` arma los ids.
+  function bloqueLista(titulo, barra) {
+    return '<div class="sx2-campo"><span class="sx2-campo__et">' + U.esc(titulo) + ' · <b class="js-op2-cuenta">0</b> marcados</span>' + (barra || '') +
+      '<div class="op2-lote__lista js-op2-lote-lista" role="group" aria-label="' + U.esc(titulo) + '"></div><span class="sx2-campo__ayuda js-op2-lote-estado"></span></div>';
+  }
+  function formLote() {
+    var d = prs_.datos, hoy = PY.hoyClave(), lote = { ya: {}, anterior: [], marcados: {} };
+    var clientes = d.clientes || [];
+    paso({ titulo: 'Registrar el mes', boton: 'Registrar', ancho: true, ocupado: 'Registrando…',
+      sub: 'Un registro por cliente atendido en el período, igual que la hoja mensual de la matriz. Lo ya registrado se respeta y no se duplica.',
+      campos: U.campo('Proceso de servicio', select('proceso_id', [['', 'Elige el proceso…']].concat((d.procesos || []).map(function (p) { return [p.proceso_id, p.codigo + ' — ' + p.nombre]; })), prs_.f.proceso_id)) +
+        fila2(U.campo('Período', select('periodo', periodosMes(), prs_.f.periodo || periodosMes()[1][0])), U.campo('Fecha de prestación', input('fecha_prestacion', hoy, ' type="date" required max="' + hoy + '"'))) +
+        fila2(U.campo('Quién lo prestó', input('responsable_email', d.yo || '', ' type="email" required data-persona')),
+          U.campo('Evidencia', input('evidencia', '', ' placeholder="Enlace a la matriz del mes o a la carpeta"'), 'Se guarda en cada cliente del lote.')) +
+        bloqueLista('Clientes', '<div class="op2-lote__barra"><input class="sx2-input js-op2-lote-q" type="search" placeholder="Buscar por nombre o RUT" aria-label="Buscar cliente">' +
+          U.boton({ texto: 'Marcar visibles', sm: true, clase: 'js-op2-lote-todos', tipo: 'button' }) + U.boton({ texto: 'Desmarcar', sm: true, clase: 'js-op2-lote-ninguno', tipo: 'button' }) +
+          U.boton({ texto: 'Copiar mes anterior', icono: 'calendario', sm: true, clase: 'js-op2-lote-anterior', tipo: 'button' }) + '</div>'),
+      alMontar: function (form) {
+        var lista = form.querySelector('.js-op2-lote-lista'), q = form.querySelector('.js-op2-lote-q');
+        var cuenta = form.querySelector('.js-op2-cuenta'), estado = form.querySelector('.js-op2-lote-estado');
+        var btnAnt = form.querySelector('.js-op2-lote-anterior');
+        var selProc = form.querySelector('[name=proceso_id]'), selPer = form.querySelector('[name=periodo]');
+        function contar() { cuenta.textContent = Object.keys(lote.marcados).filter(function (id) { return lote.marcados[id] && !lote.ya[id]; }).length; }
+        function pintar() {
+          var t = norm(q.value);
+          var vis = clientes.filter(function (c) { return !t || norm(c.nombre + ' ' + c.rut).indexOf(t) !== -1; });
+          lista.innerHTML = vis.length ? vis.map(function (c) {
+            var ya = !!lote.ya[c.cliente_id];
+            return '<label class="op2-lote__cli' + (ya ? ' is-ya' : '') + '"><input type="checkbox" class="js-op2-cli" data-id="' + U.esc(c.cliente_id) + '"' + (ya ? ' disabled' : '') + (lote.marcados[c.cliente_id] && !ya ? ' checked' : '') + '>' +
+              '<span>' + txt(c.nombre) + '</span>' + (c.rut ? '<small>' + txt(c.rut) + '</small>' : '') + (ya ? U.badge('Ya registrado', 'neutro', true) : '') + '</label>';
+          }).join('') : '<p class="sx2-tenue" style="margin:8px">Ningún cliente coincide con la búsqueda.</p>';
+          contar();
+        }
+        function refrescar() {
+          var pid = selProc.value, per = selPer.value;
+          lote.ya = {}; lote.anterior = [];
+          btnAnt.disabled = true;
+          estado.textContent = '';
+          pintar();
+          if (!pid || !per) return;
+          estado.textContent = 'Revisando lo ya registrado…';
+          Promise.all([api('listarPrestacionesSgc', { proceso_id: pid, periodo: per }), api('listarPrestacionesSgc', { proceso_id: pid, periodo: mesAnterior(per) })]).then(function (rs) {
+            if (selProc.value !== pid || selPer.value !== per) return;
+            var de = function (r) { return (r && r.ok && r.data && r.data.prestaciones) || []; };
+            de(rs[0]).forEach(function (p) { lote.ya[p.cliente_id] = true; });
+            lote.anterior = de(rs[1]).map(function (p) { return p.cliente_id; });
+            btnAnt.disabled = !lote.anterior.length;
+            var n = Object.keys(lote.ya).length;
+            estado.textContent = (n ? n + ' ya registrado' + (n === 1 ? '' : 's') + ' en este período. ' : '') +
+              (lote.anterior.length ? 'El mes anterior se registraron ' + lote.anterior.length + ': "Copiar mes anterior" los marca.' : 'El mes anterior no tiene registros de este servicio.');
+            pintar();
+          });
+        }
+        lista.addEventListener('change', function (ev) {
+          var cb = ev.target.closest('.js-op2-cli');
+          if (cb) { lote.marcados[cb.getAttribute('data-id')] = cb.checked; contar(); }
+        });
+        form.addEventListener('click', function (ev) {
+          if (ev.target.closest('.js-op2-lote-todos')) { lista.querySelectorAll('.js-op2-cli:not(:disabled)').forEach(function (cb) { lote.marcados[cb.getAttribute('data-id')] = true; }); pintar(); }
+          else if (ev.target.closest('.js-op2-lote-ninguno')) { lote.marcados = {}; pintar(); }
+          else if (ev.target.closest('.js-op2-lote-anterior')) { lote.anterior.forEach(function (id) { lote.marcados[id] = true; }); pintar(); }
+        });
+        // Enter en la búsqueda no envía el formulario.
+        q.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') ev.preventDefault(); });
+        q.addEventListener('input', pintar);
+        selProc.addEventListener('change', refrescar);
+        selPer.addEventListener('change', refrescar);
+        refrescar();
+      },
+      preparar: function (x) {
+        if (!x.proceso_id) return 'Elige el proceso de servicio.';
+        if (!x.fecha_prestacion) return 'Indica la fecha.';
+        if (!x.responsable_email || !esCorreo(x.responsable_email)) return 'Indica el correo de quien lo prestó.';
+        var ids = Object.keys(lote.marcados).filter(function (id) { return lote.marcados[id] && !lote.ya[id]; });
+        if (!ids.length) return 'Marca al menos un cliente.';
+        if (ids.length > (d.tope_lote || 300)) return 'Son ' + ids.length + ' clientes; el máximo por vez es ' + (d.tope_lote || 300) + '.';
+        x.cliente_ids = ids;
+        return x;
+      },
+      enviar: function (x) {
+        return api('registrarLotePrestacionesSgc', x).then(function (r) {
+          // Al volver, la lista queda en lo recién registrado: listo para liberar.
+          if (r && r.ok) prs_.f = { periodo: x.periodo, cliente_id: '', proceso_id: x.proceso_id, estado: '' };
+          return r;
+        });
+      },
+      aviso: function (r) { return ((r && r.data && r.data.message) || 'Registrado.') + omitidasTexto(r); } });
+  }
+  function formLiberarLote() {
+    var d = prs_.datos, hoy = PY.hoyClave();
+    var lista = (d.prestaciones || []).filter(puedeLiberarFila);
+    paso({ titulo: 'Liberar servicios', boton: 'Liberar marcadas', ancho: true, ocupado: 'Liberando…',
+      sub: 'La revisión de la jefatura (§8.6): cada una queda trazada a quien autoriza y la fecha.' + (d.puede_gestionar ? '' : ' Quedan liberadas a tu nombre. Lo que prestaste tú no aparece: lo libera otra jefatura o el Encargado del SGC.'),
+      campos: campoAutoriza() + U.campo('Fecha de liberación', input('fecha_liberacion', hoy, ' type="date" max="' + hoy + '"')) + bloqueLista('Prestaciones por liberar'),
+      alMontar: function (form) {
+        var el = form.querySelector('.js-op2-lote-lista'), cuenta = form.querySelector('.js-op2-cuenta');
+        el.innerHTML = lista.map(function (p) {
+          return '<label class="op2-lote__cli"><input type="checkbox" class="js-op2-cli" data-id="' + U.esc(p.prestacion_id) + '" checked>' +
+            '<span><code class="mj2-cod">' + txt(p.proceso_codigo) + '</code> ' + txt(p.cliente_nombre) + '</span>' +
+            '<small>' + txt(p.periodo ? periodoTexto(p.periodo) : fecha(p.fecha_prestacion)) + ' · ' + txt(PY.persona(p.responsable_email).nombre) + '</small></label>';
+        }).join('');
+        function contar() { cuenta.textContent = el.querySelectorAll('.js-op2-cli:checked').length; }
+        el.addEventListener('change', contar);
+        contar();
+        form.querySelector('.js-op2-lote-estado').textContent = d.acotada && d.total_filtrado > d.tope ? 'Solo las que se ven en la lista: filtra por período y proceso para revisar un mes completo.' : '';
+      },
+      preparar: function (x, form) {
+        if (d.puede_gestionar && !(x.liberado_por && esCorreo(x.liberado_por))) return 'Indica quién autoriza.';
+        var ids = [].map.call(form.querySelectorAll('.js-op2-cli:checked'), function (cb) { return cb.getAttribute('data-id'); });
+        if (!ids.length) return 'Marca al menos una prestación.';
+        x.prestacion_ids = ids;
+        return x;
+      },
+      enviar: function (x) { return api('liberarLotePrestacionesSgc', x); },
+      aviso: function (r) { return ((r && r.data && r.data.message) || 'Liberadas.') + omitidasTexto(r); } });
   }
   function formNoConforme(p) {
     paso({ titulo: 'Marcar salida no conforme', boton: 'Marcar', sub: txt(p.proceso_codigo + ' → ' + p.cliente_nombre) + '. Si estaba liberada, deja de estarlo: §8.7 pide no entregarla hasta corregirla.',
@@ -291,6 +444,8 @@
     if (t.closest('.js-op2-recargar')) { cargar(true); return; }
     // Servicios
     if (t.closest('.js-op2-prs-nueva')) { formPrestacion(); return; }
+    if (t.closest('.js-op2-prs-lote')) { formLote(); return; }
+    if (t.closest('.js-op2-lib-lote')) { formLiberarLote(); return; }
     if (t.closest('.js-op2-limpiar')) { prs_.f = { periodo: '', cliente_id: '', proceso_id: '', estado: '' }; cargarPrs(true); return; }
     if ((b = t.closest('.js-op2-liberar'))) { formLiberar(prestacion(b.getAttribute('data-id'))); return; }
     if ((b = t.closest('.js-op2-noconf'))) { formNoConforme(prestacion(b.getAttribute('data-id'))); return; }

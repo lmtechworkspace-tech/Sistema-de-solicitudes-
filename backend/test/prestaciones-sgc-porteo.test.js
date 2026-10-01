@@ -338,12 +338,137 @@ test('una salida no conforme sin NC deja 8.7 en parcial', () => {
 
 // --- 7. Permisos -------------------------------------------------------------
 
-test('un operativo no ve ni registra prestaciones', () => {
+// Etapa A del control interno (auditoría de procesos 30-09-2026): el área
+// registra y su jefatura libera; hasta aquí todo pasaba por el Encargado.
+const OTRA_AREA = { email: 'rrhh@homepymes.cl', nombre: 'Asistente RR.HH.', rol: 'DEV' };
+const JEFA = { email: 'jefa.conta@homepymes.cl', nombre: 'Jefa Contabilidad', rol: 'DEV' };
+const SIN_ROL = { email: 'nadie@homepymes.cl', nombre: 'Sin rol', rol: 'DEV' };
+function conAreas(db) {
+  Calidad.gestionarRol(db, { usuario_email: OTRA_AREA.email, rol_sgc: 'OPERATIVO', area_id: 'RRHH' }, CTX_ADM);
+  Calidad.gestionarRol(db, { usuario_email: JEFA.email, rol_sgc: 'JEFATURA_AREA', area_id: 'CONTABILIDAD' }, CTX_ADM);
+}
+
+test('sin rol del SGC no se ve ni se registra nada', () => {
   const db = crear();
   const p = conProcesos(db);
-  assert.equal(Prestaciones.listar(db, {}, OPERATIVO)._forbidden, true);
+  assert.equal(Prestaciones.listar(db, {}, SIN_ROL)._forbidden, true);
   assert.equal(Prestaciones.registrar(db, {
     cliente_id: 'CLI-1', proceso_id: p.srv1, fecha_prestacion: '2026-08-05', responsable_email: 'x@h.cl'
-  }, OPERATIVO)._forbidden, true);
+  }, SIN_ROL)._forbidden, true);
   assert.equal(filas(db, 'SGC_PRESTACIONES').length, 0);
+});
+
+test('el personal del área registra los servicios de su área y solo los ve a ellos', () => {
+  const db = crear();
+  conAreas(db);
+  const p = conProcesos(db);
+  // PO-04 es 'Contabilidad' en el mapa y el rol dice 'CONTABILIDAD': misma área.
+  const r = Prestaciones.registrar(db, { cliente_id: 'CLI-1', proceso_id: p.srv1, periodo: '2026-M09', fecha_prestacion: '2026-09-10', responsable_email: OPERATIVO.email }, OPERATIVO);
+  assert.equal(r.ok, true);
+  const vista = Prestaciones.listar(db, {}, OPERATIVO);
+  assert.equal(vista.puede_registrar, true);
+  assert.equal(vista.puede_liberar, false, 'el personal operativo registra pero no libera');
+  assert.equal(vista.prestaciones.length, 1);
+
+  // RR.HH. no ve los servicios de Contabilidad ni puede registrarlos.
+  const otra = Prestaciones.listar(db, {}, OTRA_AREA);
+  assert.equal(otra.procesos.length, 0);
+  assert.equal(otra.prestaciones.length, 0);
+  assert.equal(Prestaciones.registrar(db, { cliente_id: 'CLI-2', proceso_id: p.srv1, periodo: '2026-M09', fecha_prestacion: '2026-09-10', responsable_email: OTRA_AREA.email }, OTRA_AREA)._forbidden, true);
+  assert.equal(Calidad.seccionesVisiblesSgc_(db, OPERATIVO).servicios, true);
+  assert.equal(Calidad.seccionesVisiblesSgc_(db, SIN_ROL).servicios, false);
+});
+
+test('registro por lote: un mes completo de una vez, sin duplicar lo ya registrado', () => {
+  const db = crear();
+  const p = conProcesos(db);
+  Prestaciones.registrar(db, { cliente_id: 'CLI-1', proceso_id: p.srv1, periodo: '2026-M09', fecha_prestacion: '2026-09-10', responsable_email: OPERATIVO.email }, OPERATIVO);
+
+  const r = Prestaciones.registrarLote(db, {
+    proceso_id: p.srv1, periodo: '2026-M09', fecha_prestacion: '2026-09-20',
+    cliente_ids: ['CLI-1', 'CLI-2', 'CLI-2', 'NO-EXISTE'], evidencia: 'https://drive.google.com/matriz-iva'
+  }, OPERATIVO);
+  assert.equal(r.ok, true);
+  assert.equal(r.creadas, 1);
+  assert.deepEqual(r.omitidas.map((o) => o.motivo), ['Ya estaba registrado en ese período.', 'No está en el catálogo de clientes.']);
+  const nueva = filas(db, 'SGC_PRESTACIONES').find((x) => x.cliente_id === 'CLI-2');
+  assert.equal(nueva.responsable_email, OPERATIVO.email, 'sin responsable explícito, prestó quien registra');
+  assert.equal(nueva.evidencia, 'https://drive.google.com/matriz-iva');
+  assert.equal(nueva.estado, 'PRESTADO');
+
+  assert.match(Prestaciones.registrarLote(db, { proceso_id: p.srv1, periodo: '', fecha_prestacion: '2026-09-20', cliente_ids: ['CLI-1'] }, OPERATIVO).message, /período/);
+  assert.match(Prestaciones.registrarLote(db, { proceso_id: p.srv1, periodo: '2026-M09', fecha_prestacion: '2026-09-20', cliente_ids: [] }, OPERATIVO).message, /al menos un cliente/);
+  const muchos = Array.from({ length: 301 }, (_, i) => 'C' + i);
+  assert.match(Prestaciones.registrarLote(db, { proceso_id: p.srv1, periodo: '2026-M09', fecha_prestacion: '2026-09-20', cliente_ids: muchos }, OPERATIVO).message, /máximo/);
+});
+
+test('libera la jefatura del área, a su nombre y nunca lo que ella misma prestó', () => {
+  const db = crear();
+  conAreas(db);
+  const p = conProcesos(db);
+  Prestaciones.registrarLote(db, { proceso_id: p.srv1, periodo: '2026-M09', fecha_prestacion: '2026-09-20', cliente_ids: ['CLI-1'] }, OPERATIVO);
+  Prestaciones.registrarLote(db, { proceso_id: p.srv1, periodo: '2026-M09', fecha_prestacion: '2026-09-20', cliente_ids: ['CLI-2'], responsable_email: JEFA.email }, OPERATIVO);
+  const ids = filas(db, 'SGC_PRESTACIONES').map((x) => x.prestacion_id);
+
+  // El operativo no libera.
+  assert.equal(Prestaciones.liberarLote(db, { prestacion_ids: ids }, OPERATIVO)._forbidden, true);
+
+  // La jefatura intenta liberar a nombre de otro: queda a su propio nombre.
+  const r = Prestaciones.liberarLote(db, { prestacion_ids: ids, liberado_por: 'otro@homepymes.cl' }, JEFA);
+  assert.equal(r.ok, true);
+  assert.equal(r.liberadas, 1);
+  assert.equal(r.omitidas.length, 1);
+  assert.match(r.omitidas[0].motivo, /La prestaste tú/);
+  const lib = filas(db, 'SGC_PRESTACIONES').find((x) => x.cliente_id === 'CLI-1');
+  assert.equal(lib.estado, 'LIBERADO');
+  assert.equal(lib.liberado_por, JEFA.email);
+
+  // Lo que prestó la jefatura lo libera el Encargado del SGC.
+  const propia = filas(db, 'SGC_PRESTACIONES').find((x) => x.cliente_id === 'CLI-2');
+  assert.match(Prestaciones.liberar(db, { prestacion_id: propia.prestacion_id }, JEFA).message, /La prestaste tú/);
+  assert.equal(Prestaciones.liberar(db, { prestacion_id: propia.prestacion_id }, ENC).ok, true);
+
+  // Una jefatura de otra área no libera servicios ajenos.
+  Calidad.gestionarRol(db, { usuario_email: OTRA_AREA.email, rol_sgc: 'JEFATURA_AREA', area_id: 'RRHH' }, CTX_ADM);
+  Prestaciones.registrarLote(db, { proceso_id: p.srv2, periodo: '2026-M09', fecha_prestacion: '2026-09-20', cliente_ids: ['CLI-1'] }, OPERATIVO);
+  const ajena = filas(db, 'SGC_PRESTACIONES').find((x) => x.proceso_id === p.srv2);
+  assert.equal(Prestaciones.liberar(db, { prestacion_id: ajena.prestacion_id }, OTRA_AREA)._forbidden, true);
+});
+
+test('la liberación no acepta fecha futura', () => {
+  const db = crear();
+  conAreas(db);
+  const p = conProcesos(db);
+  const r = Prestaciones.registrar(db, { cliente_id: 'CLI-1', proceso_id: p.srv1, periodo: '2026-M09', fecha_prestacion: '2026-09-10', responsable_email: OPERATIVO.email }, OPERATIVO);
+  assert.match(Prestaciones.liberar(db, { prestacion_id: r.prestacion_id, fecha_liberacion: '2999-01-01' }, JEFA).message, /fecha futura/);
+});
+
+test('quien registró por error lo anula mientras no esté liberado', () => {
+  const db = crear();
+  conAreas(db);
+  const p = conProcesos(db);
+  const a = Prestaciones.registrar(db, { cliente_id: 'CLI-1', proceso_id: p.srv1, periodo: '2026-M09', fecha_prestacion: '2026-09-10', responsable_email: OPERATIVO.email }, OPERATIVO);
+  const b = Prestaciones.registrar(db, { cliente_id: 'CLI-2', proceso_id: p.srv1, periodo: '2026-M09', fecha_prestacion: '2026-09-10', responsable_email: OPERATIVO.email }, OPERATIVO);
+  assert.equal(Prestaciones.anular(db, { prestacion_id: a.prestacion_id }, OPERATIVO).ok, true);
+  Prestaciones.liberar(db, { prestacion_id: b.prestacion_id }, JEFA);
+  assert.equal(Prestaciones.anular(db, { prestacion_id: b.prestacion_id }, OPERATIVO)._forbidden, true,
+    'liberada ya es evidencia: solo la anula el Encargado');
+});
+
+test('la jefatura marca la salida no conforme; la NC la abre el Encargado', () => {
+  const db = crear();
+  conAreas(db);
+  const p = conProcesos(db);
+  const r = Prestaciones.registrar(db, { cliente_id: 'CLI-1', proceso_id: p.srv1, periodo: '2026-M09', fecha_prestacion: '2026-09-10', responsable_email: OPERATIVO.email }, OPERATIVO);
+  assert.equal(Prestaciones.marcarNoConforme(db, { prestacion_id: r.prestacion_id, observaciones: 'F29 declarado con base errónea' }, OPERATIVO)._forbidden, true);
+  assert.equal(Prestaciones.marcarNoConforme(db, { prestacion_id: r.prestacion_id, observaciones: 'F29 declarado con base errónea' }, JEFA).ok, true);
+  assert.equal(Prestaciones.abrirNoConformidad(db, { prestacion_id: r.prestacion_id }, JEFA)._forbidden, true);
+  assert.equal(Prestaciones.abrirNoConformidad(db, { prestacion_id: r.prestacion_id }, ENC).ok, true);
+});
+
+test('las claves de área del rol y los nombres del mapa son la misma área', () => {
+  assert.equal(Prestaciones.claveArea_('Recursos Humanos'), Prestaciones.claveArea_('RRHH'));
+  assert.equal(Prestaciones.claveArea_('Contabilidad'), Prestaciones.claveArea_('CONTABILIDAD'));
+  assert.equal(Prestaciones.claveArea_('Prevención de Riesgos'), Prestaciones.claveArea_('PREVENCION'));
+  assert.notEqual(Prestaciones.claveArea_('Contabilidad'), Prestaciones.claveArea_('RRHH'));
 });

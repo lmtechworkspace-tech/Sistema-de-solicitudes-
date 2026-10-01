@@ -142,9 +142,12 @@ function seccionesVisiblesSgc_(db, contexto) {
     if (!email) return false;
     return leerSeguro_(db, hoja).some((fila) => esVerdadero_(fila.activa) && campos.some((c) => normalizarEmail_(fila[c]) === email));
   }
+  // Servicios prestados: además de quien ve todo, el personal con área
+  // registra (y su jefatura libera) los servicios de esa área.
+  const conArea = ['OPERATIVO', 'JEFATURA_AREA', 'ENC_ADMIN'].indexOf(rol) !== -1 && !!areaSgc_(db, contexto);
   return {
     documentos: true, personas: true, alcance: true, contexto: true,
-    riesgos: veTodo, procesos: true, tablero: veTodo, indicadores: veTodo, servicios: veTodo,
+    riesgos: veTodo, procesos: true, tablero: veTodo, indicadores: veTodo, servicios: veTodo || conArea,
     nc: tieneAlgunaAsignada_('SGC_NC', ['responsable_email', 'detectada_por']),
     auditorias: tieneAlgunaAsignada_('SGC_AUDITORIAS', ['auditor_email']),
     quejas: veTodo, capacitaciones: veTodo, proveedores: veTodo, revision: veTodo,
