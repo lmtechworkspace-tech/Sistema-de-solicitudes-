@@ -65,6 +65,7 @@ const Procesos = require('../logica/procesosSgc');
 const Indicadores = require('../logica/indicadoresSgc');
 const Tablero = require('../logica/tableroSgc');
 const Prestaciones = require('../logica/prestacionesSgc');
+const ControlInterno = require('../logica/controlInterno');
 const OrdenTrabajo = require('../logica/ordenTrabajo');
 const ReporteActividades = require('../logica/reporteActividades');
 const EvidenciaClausulaSgc = require('../logica/evidenciaClausulaSgc');
@@ -548,6 +549,19 @@ const ACCIONES = {
   registrarLotePrestacionesSgc: (db, data, contexto) => Prestaciones.registrarLote(db, data, contexto),
   liberarLotePrestacionesSgc: (db, data, contexto) => Prestaciones.liberarLote(db, data, contexto),
   guardarLiberadoresSgc: (db, data, contexto) => Prestaciones.guardarLiberadores(db, data, contexto),
+
+  // Control interno (2026-10-01): las matrices de Contabilidad y RR.HH. en
+  // SIGSO. Los permisos los decide controlInterno.js (módulo de la cuenta +
+  // acceso por departamento + quién libera cada área).
+  getControlInterno: (db, data, contexto) => ControlInterno.getConfig(db, data, contexto),
+  listarRegistrosCI: (db, data, contexto) => ControlInterno.listar(db, data, contexto),
+  getRegistroCI: (db, data, contexto) => ControlInterno.getRegistro(db, data, contexto),
+  guardarRegistroCI: (db, data, contexto) => ControlInterno.guardar(db, data, contexto),
+  abrirPeriodoCI: (db, data, contexto) => ControlInterno.abrirPeriodo(db, data, contexto),
+  accionLoteCI: (db, data, contexto) => ControlInterno.accionLote(db, data, contexto),
+  reporteControlInterno: (db, data, contexto) => ControlInterno.reporte(db, data, contexto),
+  listarMiembrosCI: (db, data, contexto) => ControlInterno.listarMiembros(db, data, contexto),
+  guardarMiembrosCI: (db, data, contexto) => ControlInterno.guardarMiembros(db, data, contexto),
   marcarNoConformePrestacionSgc: (db, data, contexto) => Prestaciones.marcarNoConforme(db, data, contexto),
   abrirNcPrestacionSgc: (db, data, contexto) => Prestaciones.abrirNoConformidad(db, data, contexto),
   anularPrestacionSgc: (db, data, contexto) => Prestaciones.anular(db, data, contexto),

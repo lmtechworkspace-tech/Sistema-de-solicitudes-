@@ -65,7 +65,11 @@
     // persona ve SOLO los documentos que le corresponden -- el filtrado lo
     // hace el backend (Calidad.gs), no el shell. No es core: depende de que
     // la cuenta tenga 'calidad' en CUENTAS_PORTAL.modulos.
-    calidad: { icono: 'escudoCheck', nombre: 'Calidad', descripcion: 'Documentación, procesos, personas, control y mejora del SGC' }
+    calidad: { icono: 'escudoCheck', nombre: 'Calidad', descripcion: 'Documentación, procesos, personas, control y mejora del SGC' },
+    // 2026-10-01: las matrices de Contabilidad y RR.HH. (control-interno-v2.js).
+    // No es core: depende de 'control_interno' en CUENTAS_PORTAL.modulos, que
+    // el backend SÍ verifica en cada acción (controlInterno.js).
+    control_interno: { icono: 'tabla', nombre: 'Control interno', descripcion: 'Matrices de Contabilidad y RR.HH.: registro mensual, liberación y reportes' }
   };
 
   // v4.0 Frente 3: cada modulo tiene su propio acento -- antes todo el shell
@@ -88,7 +92,8 @@
     novedades: { acento: 'var(--mod-novedades)', suave: 'var(--mod-novedades-suave)' },
     mi_trabajo: { acento: 'var(--mod-mi-trabajo)', suave: 'var(--mod-mi-trabajo-suave)' },
     proyectos: { acento: 'var(--mod-proyectos)', suave: 'var(--mod-proyectos-suave)' },
-    calidad: { acento: 'var(--mod-calidad)', suave: 'var(--mod-calidad-suave)' }
+    calidad: { acento: 'var(--mod-calidad)', suave: 'var(--mod-calidad-suave)' },
+    control_interno: { acento: 'var(--mod-control)', suave: 'var(--mod-control-suave)' }
   };
 
   function acentoInline_(id) {
@@ -536,6 +541,9 @@
           if (modPy.refrescar) modPy.refrescar();
           else modPy.cargar();
         }
+        break;
+      case 'control_interno':
+        if (window.SigsoControlInterno) window.SigsoControlInterno.refrescar();
         break;
       case 'calidad':
         // Mismo criterio que Proyectos: si hay un documento abierto, el
@@ -1183,7 +1191,7 @@
     { titulo: '', modulos: ['home'] },
     { titulo: 'Mi espacio', modulos: ['novedades', 'mis_solicitudes', 'mi_trabajo', 'pausas'] },
     { titulo: 'Solicitudes', modulos: ['nueva_solicitud', 'bandeja'] },
-    { titulo: 'Gestión', modulos: ['proyectos', 'jefatura', 'gerencia', 'pausas_coordinacion', 'calidad'] },
+    { titulo: 'Gestión', modulos: ['proyectos', 'jefatura', 'gerencia', 'pausas_coordinacion', 'calidad', 'control_interno'] },
     { titulo: 'Sistema', modulos: ['administracion'] }
   ];
 
@@ -1244,6 +1252,7 @@
   // nuevo no obligue a tocar el shell.
   var IR_A_ITEM_POR_MODULO = {
     calidad: function (id) { return window.SigsoCalidad && window.SigsoCalidad.irAItem && window.SigsoCalidad.irAItem(id); },
+    control_interno: function (id) { return window.SigsoControlInterno && window.SigsoControlInterno.irAItem(id); },
     administracion: function (id) { return window.SigsoAdmin && window.SigsoAdmin.irAItem && window.SigsoAdmin.irAItem(id); },
     gerencia: function (id) { return window.SigsoGerencia && window.SigsoGerencia.irAItem && window.SigsoGerencia.irAItem(id); },
     jefatura: function (id) { return window.SigsoJefatura && window.SigsoJefatura.irAItem && window.SigsoJefatura.irAItem(id); },
@@ -1387,7 +1396,7 @@
   // el contenedor ancho, como app.html. Los demas (formulario, mis
   // solicitudes) se leen mejor angostos y centrados -- por eso el ancho del
   // <main> se adapta al modulo en vez de ser fijo.
-  var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad'];
+  var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad', 'control_interno'];
 
   // SIGSO v2 (documentacion/SIGSO-v2-hoja-de-ruta.md). Desde el 2026-09-25 la
   // versión clásica está retirada: cada módulo tiene UNA implementación, la v2.
@@ -1405,7 +1414,8 @@
     pausas: function () { return window.SigsoPausasV2; },
     novedades: function () { return window.SigsoNovedadesV2; },
     administracion: function () { return window.SigsoAdminV2; },
-    calidad: function () { return window.SigsoCalidadV2; }
+    calidad: function () { return window.SigsoCalidadV2; },
+    control_interno: function () { return window.SigsoControlInterno; }
   };
   function usaV2_(id) { return !!(MODULOS_V2[id] && MODULOS_V2[id]()); }
   function moduloImpl_(id) { return MODULOS_V2[id] ? MODULOS_V2[id]() : null; }
@@ -1557,6 +1567,9 @@
     actualizarModuloV2_(id);
     if (id === 'calidad') {
       abrirCalidad_();
+    }
+    if (id === 'control_interno' && window.SigsoControlInterno) {
+      window.SigsoControlInterno.cargar();
     }
     window.scrollTo(0, 0);
   }

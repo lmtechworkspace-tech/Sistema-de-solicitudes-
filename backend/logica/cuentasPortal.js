@@ -34,10 +34,10 @@ const MODULOS_POR_ROL = {
   ANA: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'mi_trabajo'],
   GERENCIA: ['nueva_solicitud', 'mis_solicitudes', 'gerencia', 'mi_trabajo'],
   JEFATURA: ['nueva_solicitud', 'mis_solicitudes', 'jefatura', 'mi_trabajo'],
-  ADM: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos', 'calidad']
+  ADM: ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos', 'calidad', 'control_interno']
 };
 
-const MODULOS_VALIDOS = ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos', 'calidad'];
+const MODULOS_VALIDOS = ['nueva_solicitud', 'mis_solicitudes', 'bandeja', 'gerencia', 'jefatura', 'administracion', 'pausas', 'pausas_coordinacion', 'mi_trabajo', 'proyectos', 'calidad', 'control_interno'];
 
 function leerCuentas(db) {
   return leerFilas_(db, 'CUENTAS_PORTAL', COLUMNAS.CUENTAS_PORTAL);

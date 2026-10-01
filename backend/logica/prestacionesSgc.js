@@ -710,4 +710,20 @@ function guardarLiberadores(db, data, contexto) {
   return { ok: true, altas, bajas, message: altas || bajas ? 'Quién libera, actualizado.' : 'Sin cambios.' };
 }
 
-module.exports = { listar, registrar, registrarLote, liberar, liberarLote, marcarNoConforme, abrirNoConformidad, anular, guardarLiberadores, claveArea_ };
+// Para otros módulos (Control interno): ¿esta persona libera el área? Misma
+// regla que aquí: Encargado/ADM, jefatura del área o designada en SGC_LIBERADORES.
+function liberaArea_(db, contexto, area) {
+  const al = alcance_(db, contexto);
+  const clave = claveArea_(area);
+  return al.gobierna || (al.rol === 'JEFATURA_AREA' && al.areas.indexOf(clave) !== -1) || al.areasLibera.indexOf(clave) !== -1;
+}
+function liberadoresDeArea_(db, area) {
+  const clave = claveArea_(area);
+  return liberadores_(db).filter((l) => l.area_clave === clave).map((l) => l.usuario_email);
+}
+function gobiernaLiberacion_(db, contexto) { return alcance_(db, contexto).gobierna; }
+
+module.exports = {
+  listar, registrar, registrarLote, liberar, liberarLote, marcarNoConforme, abrirNoConformidad, anular, guardarLiberadores,
+  claveArea_, liberaArea_, liberadoresDeArea_, gobiernaLiberacion_
+};

@@ -729,6 +729,33 @@ const COLUMNAS = {
   SGC_LIBERADORES: [
     'liberador_id', 'area_clave', 'area_nombre', 'usuario_email',
     'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // Control interno (2026-10-01): las matrices de Contabilidad y RR.HH. que
+  // hoy viven en el Drive. Una fila = un registro de cualquier matriz (la
+  // definición de cada una está en logica/controlInternoMatrices.js); lo
+  // propio de cada matriz va en `datos` (objeto). Se consulta SIEMPRE
+  // filtrando en SQL por matriz + período, con índice (controlInterno.js):
+  // a ~10.000 registros por año, leer la tabla completa en cada pantalla no
+  // escala (medido: 0,2 ms filtrado vs 300 ms completo con 60.000 filas).
+  CI_REGISTROS: [
+    'registro_id', 'depto', 'matriz', 'periodo',
+    'cliente_id', 'cliente_nombre', 'cliente_rut',
+    'fecha', 'estado', 'responsable_email',
+    'liberado_por', 'fecha_liberacion',
+    'datos', 'observaciones',
+    'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activa'
+  ],
+  // Quién entra a cada departamento del módulo: REGISTRA (llena y edita) o
+  // LECTURA. La liberación NO va aquí: es SGC_LIBERADORES, la misma lista
+  // que usa Calidad › Servicios prestados.
+  CI_MIEMBROS: [
+    'miembro_id', 'depto', 'usuario_email', 'rol', 'creado_por', 'fecha_creacion', 'activa'
+  ],
+  // Historial de cada registro (quién cambió qué y cuándo): la trazabilidad
+  // que el Drive no tiene.
+  CI_HISTORIAL: [
+    'historial_id', 'registro_id', 'accion', 'detalle', 'usuario_email', 'fecha'
   ]
 };
 

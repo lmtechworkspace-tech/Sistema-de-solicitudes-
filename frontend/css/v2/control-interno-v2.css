@@ -1,0 +1,120 @@
+/* =====================================================================
+ * Control interno (control-interno-v2.js). Prefijo .ci2-*
+ * La matriz del mes se trabaja como planilla: celdas que se editan en
+ * su lugar, primera columna fija y desplazamiento lateral propio (la
+ * página nunca se desplaza de lado).
+ * ===================================================================== */
+
+/* --- Selector de mes ----------------------------------------------- */
+.ci2-periodo { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--sx-borde); border-radius: 999px; background: var(--sx-superficie); }
+.ci2-periodo strong { min-width: 84px; text-align: center; font: 600 .875rem/1 var(--fuente); color: var(--sx-texto); text-transform: capitalize; font-variant-numeric: tabular-nums; }
+
+/* --- Resumen del mes ----------------------------------------------- */
+.ci2-depto { display: flex; flex-direction: column; gap: var(--sx-e-3); }
+.ci2-depto__cab { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.ci2-depto__cab h2 { margin: 0; font: 700 1.0625rem/1.3 var(--fuente); color: var(--sx-texto); }
+.ci2-depto__cab .sx2-tenue { font-size: .8125rem; }
+.ci2-tarjetas { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: var(--sx-e-3); }
+.ci2-tarjeta {
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px; text-align: left; cursor: pointer;
+  padding: 14px 16px; border: 1px solid var(--sx-borde); border-radius: var(--sx-radio); background: var(--sx-superficie);
+  color: var(--sx-texto); font: inherit; transition: border-color var(--sx-dur-rapida) var(--sx-curva), transform var(--sx-dur-rapida) var(--sx-curva);
+}
+.ci2-tarjeta:hover { border-color: var(--acento-modulo, var(--sx-primario)); transform: translateY(-1px); }
+.ci2-tarjeta:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: 2px; }
+.ci2-tarjeta__nom { font: 600 .9375rem/1.3 var(--fuente); }
+.ci2-tarjeta__desc { font: var(--sx-t-chico); color: var(--sx-texto-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ci2-tarjeta__cifras { display: flex; flex-wrap: wrap; gap: 4px 12px; font: var(--sx-t-chico); color: var(--sx-texto-2); font-variant-numeric: tabular-nums; }
+.ci2-tarjeta__cifras b { color: var(--sx-texto); }
+.ci2-tarjeta__cifras .sx2-tono-alerta b { color: var(--sx-alerta); }
+.ci2-tarjeta__cifras .sx2-tono-info b { color: var(--sx-info, var(--sx-primario)); }
+.ci2-tarjeta__cifras .sx2-tono-ok b { color: var(--sx-ok); }
+.ci2-tarjeta__vacia { font: var(--sx-t-chico); color: var(--sx-texto-2); font-style: italic; }
+@media (prefers-reduced-motion: reduce) { .ci2-tarjeta, .ci2-tarjeta:hover { transition: none; transform: none; } }
+
+/* --- La planilla ---------------------------------------------------- */
+.ci2-cuenta { margin-left: auto; font-size: .8125rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ci2-grilla { max-height: 70vh; }
+.ci2-tabla th, .ci2-tabla td { padding: 6px 8px; white-space: nowrap; }
+.ci2-tabla thead th { font-size: .75rem; letter-spacing: .02em; }
+.ci2-col-sel { width: 34px; text-align: center; }
+.ci2-col-sel input { width: 16px; height: 16px; accent-color: var(--sx-primario); }
+.ci2-col-cli { position: sticky; left: 0; z-index: 1; background: var(--sx-superficie); min-width: 200px; max-width: 280px; white-space: normal !important; }
+.ci2-tabla thead .ci2-col-cli { z-index: 2; }
+.ci2-tabla tbody tr:hover .ci2-col-cli { background: var(--sx-superficie-hover); }
+.ci2-cliente { display: block; padding: 0; border: 0; background: none; color: var(--sx-texto); font: 600 .8125rem/1.3 var(--fuente); text-align: left; cursor: pointer; }
+.ci2-cliente:hover { color: var(--sx-primario); text-decoration: underline; }
+.ci2-col-cli small { display: block; color: var(--sx-texto-2); font-size: .75rem; font-variant-numeric: tabular-nums; }
+.ci2-col-cli .sx2-badge { margin-top: 3px; }
+.ci2-fila--sel td, .ci2-fila--sel .ci2-col-cli { background: color-mix(in srgb, var(--sx-primario) 7%, var(--sx-superficie)); }
+
+/* Celdas editables: se ven como texto hasta que se tocan. */
+.ci2-celda.sx2-input, .ci2-celda.sx2-select { min-height: 30px; height: 30px; padding: 3px 8px; font-size: .8125rem; border-color: transparent; background-color: transparent; min-width: 110px; }
+.ci2-celda.sx2-input[type="date"] { min-width: 132px; }
+.ci2-celda.sx2-input[type="time"] { min-width: 90px; }
+.ci2-celda.sx2-input, .ci2-celda.sx2-select { border-bottom-color: var(--sx-borde-suave); }
+.ci2-celda:hover { border-color: var(--sx-borde); }
+.ci2-estado.sx2-select { min-width: 150px; }
+.ci2-celda:focus { border-color: var(--sx-primario); background-color: var(--sx-superficie); }
+.ci2-num { text-align: right; font-variant-numeric: tabular-nums; }
+.ci2-celda--guardando { opacity: .6; }
+.ci2-celda--ok { border-color: var(--sx-ok) !important; }
+.ci2-celda--error { border-color: var(--sx-critico) !important; background-color: var(--sx-critico-suave) !important; }
+.ci2-estado { font-weight: 600; }
+.ci2-estado.sx2-tono-alerta { color: var(--sx-alerta); }
+.ci2-estado.sx2-tono-ok { color: var(--sx-ok); }
+.ci2-estado.sx2-tono-critico { color: var(--sx-critico); }
+.ci2-mini { display: inline-flex; align-items: center; gap: 8px; padding: 3px 8px; border: 1px dashed var(--sx-borde); border-radius: 6px; background: none; color: var(--sx-texto); font: .8125rem/1.3 var(--fuente); cursor: pointer; }
+.ci2-mini:hover { border-color: var(--sx-primario); color: var(--sx-primario); }
+.ci2-avance { min-width: 130px; }
+.ci2-avance .sx2-barra { flex: 1; min-width: 60px; }
+.ci2-avance span { font-variant-numeric: tabular-nums; }
+.ci2-largo { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
+.ci2-td-resp { color: var(--sx-texto-2); }
+.ci2-lib { display: inline-flex; flex-direction: column; gap: 2px; }
+.ci2-lib small { color: var(--sx-texto-2); font-size: .75rem; }
+
+/* Barra de acciones sobre lo marcado. */
+.ci2-lote { position: sticky; top: 8px; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; border: 1px solid var(--sx-primario); border-radius: var(--sx-radio); background: var(--sx-superficie); box-shadow: 0 6px 20px rgba(0, 0, 0, .08); font: var(--sx-t-chico); color: var(--sx-texto); }
+.ci2-lote .sx2-select { width: auto; min-height: 32px; height: 32px; font-size: .8125rem; }
+
+/* --- Formulario del registro --------------------------------------- */
+.ci2-items { display: flex; flex-direction: column; gap: 8px; }
+.ci2-items__filas { display: flex; flex-direction: column; gap: 8px; }
+.ci2-items__fila { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; padding: 10px; border: 1px solid var(--sx-borde); border-radius: var(--sx-radio); }
+.ci2-items__c { flex: 1 1 140px; min-width: 0; display: flex; flex-direction: column; gap: 4px; font: .75rem/1.3 var(--fuente); color: var(--sx-texto-2); }
+.ci2-items__fila > .sx2-boton { flex: none; margin-left: auto; }
+.ci2-check { border: 1px solid var(--sx-borde); border-radius: var(--sx-radio); padding: 10px 12px 12px; margin: 0 0 10px; display: flex; flex-direction: column; gap: 10px; }
+.ci2-check legend { padding: 0 6px; font: 600 .8125rem/1.3 var(--fuente); color: var(--sx-texto); }
+.ci2-check__items { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 6px 12px; }
+.ci2-check__item { display: flex; align-items: center; justify-content: space-between; gap: 8px; font: var(--sx-t-chico); color: var(--sx-texto); }
+.ci2-check__item .sx2-select { width: 120px; min-height: 30px; height: 30px; font-size: .8125rem; }
+.ci2-check .sx2-boton { align-self: flex-start; }
+.ci2-historial { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--sx-borde-suave); }
+.ci2-hist { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.ci2-hist b { color: var(--sx-texto); }
+
+/* --- Reportes -------------------------------------------------------- */
+.ci2-rep-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--sx-e-4); }
+.ci2-arrastre { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ci2-arrastre li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font: var(--sx-t-chico); color: var(--sx-texto); }
+.ci2-meses { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ci2-meses li { display: grid; grid-template-columns: 64px 1fr auto; align-items: center; gap: 10px; font: var(--sx-t-chico); color: var(--sx-texto); }
+.ci2-meses__mes { text-transform: capitalize; color: var(--sx-texto-2); font-variant-numeric: tabular-nums; }
+.ci2-meses__barra { display: flex; height: 10px; border-radius: 999px; background: var(--sx-superficie-2); overflow: hidden; }
+.ci2-meses__fin { background: var(--sx-ok); }
+.ci2-meses__pen { background: var(--sx-alerta); }
+.ci2-meses__n { text-align: right; font-variant-numeric: tabular-nums; }
+.ci2-meses__n small { color: var(--sx-texto-2); }
+.ci2-leyenda { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; font: .75rem/1 var(--fuente); color: var(--sx-texto-2); }
+.ci2-leyenda span { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.ci2-leyenda__fin { background: var(--sx-ok); }
+.ci2-leyenda__pen { background: var(--sx-alerta); margin-left: 10px; }
+.ci2-miembros { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ci2-miembros li { display: flex; align-items: center; justify-content: space-between; gap: 8px; font: var(--sx-t-chico); color: var(--sx-texto); }
+
+@media (max-width: 700px) {
+  .ci2-col-cli { min-width: 150px; }
+  .ci2-meses li { grid-template-columns: 54px 1fr auto; }
+  .ci2-cuenta { margin-left: 0; }
+}
