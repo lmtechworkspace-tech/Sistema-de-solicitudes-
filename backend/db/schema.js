@@ -719,6 +719,16 @@ const COLUMNAS = {
     'liberado_por', 'fecha_liberacion',
     'nc_id', 'observaciones',
     'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // Quién libera los servicios de cada área (§8.6), aparte del rol del SGC:
+  // hoy libera Bárbara en Contabilidad y Lisseth en RR.HH. (cuyo rol es de
+  // Administración), y más adelante lo harán las asistentes. Así se cambia
+  // la persona sin tocar su rol. `area_clave` es la clave normalizada del
+  // área del proceso (CONTABILIDAD, RRHH…), ver claveArea_ en prestacionesSgc.
+  SGC_LIBERADORES: [
+    'liberador_id', 'area_clave', 'area_nombre', 'usuario_email',
+    'creado_por', 'fecha_creacion', 'activa'
   ]
 };
 

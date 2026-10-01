@@ -547,6 +547,7 @@ const ACCIONES = {
   liberarPrestacionSgc: (db, data, contexto) => Prestaciones.liberar(db, data, contexto),
   registrarLotePrestacionesSgc: (db, data, contexto) => Prestaciones.registrarLote(db, data, contexto),
   liberarLotePrestacionesSgc: (db, data, contexto) => Prestaciones.liberarLote(db, data, contexto),
+  guardarLiberadoresSgc: (db, data, contexto) => Prestaciones.guardarLiberadores(db, data, contexto),
   marcarNoConformePrestacionSgc: (db, data, contexto) => Prestaciones.marcarNoConforme(db, data, contexto),
   abrirNcPrestacionSgc: (db, data, contexto) => Prestaciones.abrirNoConformidad(db, data, contexto),
   anularPrestacionSgc: (db, data, contexto) => Prestaciones.anular(db, data, contexto),

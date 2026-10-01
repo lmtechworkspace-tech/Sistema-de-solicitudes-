@@ -144,7 +144,9 @@ function seccionesVisiblesSgc_(db, contexto) {
   }
   // Servicios prestados: además de quien ve todo, el personal con área
   // registra (y su jefatura libera) los servicios de esa área.
-  const conArea = ['OPERATIVO', 'JEFATURA_AREA', 'ENC_ADMIN'].indexOf(rol) !== -1 && !!areaSgc_(db, contexto);
+  // …y quien está designado para liberar un área (SGC_LIBERADORES).
+  const conArea = (['OPERATIVO', 'JEFATURA_AREA', 'ENC_ADMIN'].indexOf(rol) !== -1 && !!areaSgc_(db, contexto)) ||
+    (!!email && leerSeguro_(db, 'SGC_LIBERADORES').some((l) => esVerdadero_(l.activa) && normalizarEmail_(l.usuario_email) === email));
   return {
     documentos: true, personas: true, alcance: true, contexto: true,
     riesgos: veTodo, procesos: true, tablero: veTodo, indicadores: veTodo, servicios: veTodo || conArea,

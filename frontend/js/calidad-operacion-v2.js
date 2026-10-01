@@ -104,6 +104,37 @@
   function puedeAnularFila(p) {
     return !!prs_.datos.puede_gestionar || (p.estado === 'PRESTADO' && String(p.creado_por || '').toLowerCase() === yo());
   }
+  // Para registrar solo se ofrecen los servicios del área propia: quien solo
+  // está designada para liberar un área la ve, pero no registra en ella.
+  function registrables(d) { return (d.procesos || []).filter(function (p) { return p.registra !== false; }); }
+  // Una línea con quién libera cada área visible (§8.6: la liberación tiene dueño conocido).
+  function quienLibera(d) {
+    var l = d.liberadores || [];
+    if (!l.length) return '';
+    return aviso('info', 'check', '<b>Quién libera:</b> ' + l.map(function (a) {
+      return txt(a.area_nombre) + ' — ' + (a.emails.length ? a.emails.map(function (e) { return txt(PY.persona(e).nombre); }).join(', ') : '<i>sin asignar (solo la jefatura del área o el Encargado del SGC)</i>');
+    }).join(' · '));
+  }
+  function formLiberadores() {
+    var d = prs_.datos, POR_AREA = 3;
+    paso({ titulo: 'Quién libera cada área', boton: 'Guardar', ancho: true,
+      sub: 'La persona que revisa y autoriza los servicios del área (§8.6). Puede ser de otra área o de gerencia; cuando cambie, se reemplaza aquí sin tocar su rol. Nadie libera lo que prestó él mismo.',
+      campos: (d.liberadores || []).map(function (a, i) {
+        var filas = [];
+        for (var k = 0; k < POR_AREA; k++) filas.push(input('lib_' + i + '_' + k, a.emails[k] || '', ' type="email" data-persona'));
+        return '<fieldset class="op2-lib"><legend>' + txt(a.area_nombre) + '</legend>' + filas.join('') + '</fieldset>';
+      }).join(''),
+      preparar: function (x) {
+        var malo = '';
+        var areas = (d.liberadores || []).map(function (a, i) {
+          var emails = [];
+          for (var k = 0; k < POR_AREA; k++) { var e = (x['lib_' + i + '_' + k] || '').trim(); if (e) { if (!esCorreo(e)) malo = a.area_nombre; emails.push(e); } }
+          return { area_clave: a.area_clave, emails: emails };
+        });
+        return malo ? 'Revisa las personas de ' + malo + '.' : { areas: areas };
+      },
+      enviar: function (x) { return api('guardarLiberadoresSgc', x); } });
+  }
   function pintarPrs(silencioso) {
     var d = prs_.datos, puede = !!d.puede_gestionar, r = d.resumen || {}, v = d.volumen || {};
     var porLiberar = (d.prestaciones || []).filter(puedeLiberarFila);
@@ -120,14 +151,15 @@
       (f.periodo || f.cliente_id || f.proceso_id || f.estado ? U.chip({ texto: 'Quitar filtros', icono: 'equis', clase: 'js-op2-limpiar' }) : '') + '</div></div>';
     var acciones = (porLiberar.length ? U.boton({ texto: 'Liberar (' + porLiberar.length + ')', icono: 'check', clase: 'js-op2-lib-lote', titulo: 'Liberar de una vez lo que se ve en la lista' }) : '') +
       (d.puede_registrar ? U.boton({ texto: 'Registrar una', icono: 'nueva', clase: 'js-op2-prs-nueva' }) +
-        U.boton({ texto: 'Registrar el mes', icono: 'calendario', variante: 'primario', clase: 'js-op2-prs-lote' }) : '');
+        U.boton({ texto: 'Registrar el mes', icono: 'calendario', variante: 'primario', clase: 'js-op2-prs-lote' }) : '') +
+      (d.puede_asignar_liberadores ? U.boton({ texto: 'Quién libera', icono: 'llave', clase: 'js-op2-liberadores', titulo: 'Asignar quién libera los servicios de cada área' }) : '');
     pagina(cabecera('Servicios prestados', PRS_SUB, acciones) +
       '<div class="sx2-fila-kpis">' + U.kpi({ i: 0, etiqueta: 'Prestaciones', valor: r.total || 0, icono: 'caja', tono: 'primario' }) +
         U.kpi({ i: 1, etiqueta: 'Liberadas', valor: r.liberado || 0, icono: 'check', tono: 'ok' }) +
         U.kpi({ i: 2, etiqueta: 'Sin liberar', valor: r.prestado || 0, icono: 'reloj', tono: r.prestado ? 'alerta' : 'ok', titulo: '§8.6 pide que la liberación quede trazada a quien la autoriza.' }) +
         U.kpi({ i: 3, etiqueta: 'No conformes', valor: r.no_conforme || 0, icono: 'alerta', tono: r.no_conforme ? 'critico' : 'ok' }) +
         U.kpi({ i: 4, etiqueta: 'Sin evidencia', valor: r.sin_evidencia || 0, icono: 'documento', tono: r.sin_evidencia ? 'alerta' : 'ok' }) + '</div>' +
-      (v.aviso ? aviso('critico', 'alerta', txt(v.aviso)) : '') + filtros +
+      (v.aviso ? aviso('critico', 'alerta', txt(v.aviso)) : '') + quienLibera(d) + filtros +
       (d.acotada && d.total_filtrado > d.tope ? aviso('info', 'info', 'Sin filtro se muestran las últimas ' + d.tope + ' de ' + d.total_filtrado + '. Filtra por período o cliente para ver el resto.') : '') +
       (d.prestaciones.length ? '<section class="sx2-card sx2-card--sin-relleno sx2-entra" style="--i:3"><ul class="md2-inds">' + d.prestaciones.map(function (p) {
         var e = ESTADO_PRS[p.estado] || [p.estado, 'neutro'];
@@ -151,7 +183,7 @@
     var d = prs_.datos;
     paso({ titulo: 'Registrar prestación', boton: 'Registrar', ancho: true, sub: 'Un registro por servicio efectivamente entregado. No se generan por adelantado.',
       campos: U.campo('Cliente', select('cliente_id', [['', 'Elige el cliente…']].concat((d.clientes || []).map(function (c) { return [c.cliente_id, c.nombre + (c.rut ? ' (' + c.rut + ')' : '')]; })), '')) +
-        U.campo('Proceso de servicio', select('proceso_id', [['', 'Elige el proceso…']].concat((d.procesos || []).map(function (p) { return [p.proceso_id, p.codigo + ' — ' + p.nombre]; })), '')) +
+        U.campo('Proceso de servicio', select('proceso_id', [['', 'Elige el proceso…']].concat(registrables(d).map(function (p) { return [p.proceso_id, p.codigo + ' — ' + p.nombre]; })), '')) +
         fila2(U.campo('Período (si es recurrente)', select('periodo', [['', 'Puntual (sin período)']].concat(periodosMes()), '')), U.campo('Fecha de prestación', input('fecha_prestacion', PY.hoyClave(), ' type="date" required max="' + PY.hoyClave() + '"'))) +
         U.campo('Quién lo prestó', input('responsable_email', d.yo || '', ' type="email" required data-persona')) +
         U.campo('Evidencia', area('evidencia', '', 2), 'Folio, número de formulario, enlace al archivo… lo que permita encontrarlo después.'),
@@ -201,7 +233,7 @@
     var clientes = d.clientes || [];
     paso({ titulo: 'Registrar el mes', boton: 'Registrar', ancho: true, ocupado: 'Registrando…',
       sub: 'Un registro por cliente atendido en el período, igual que la hoja mensual de la matriz. Lo ya registrado se respeta y no se duplica.',
-      campos: U.campo('Proceso de servicio', select('proceso_id', [['', 'Elige el proceso…']].concat((d.procesos || []).map(function (p) { return [p.proceso_id, p.codigo + ' — ' + p.nombre]; })), prs_.f.proceso_id)) +
+      campos: U.campo('Proceso de servicio', select('proceso_id', [['', 'Elige el proceso…']].concat(registrables(d).map(function (p) { return [p.proceso_id, p.codigo + ' — ' + p.nombre]; })), prs_.f.proceso_id)) +
         fila2(U.campo('Período', select('periodo', periodosMes(), prs_.f.periodo || periodosMes()[1][0])), U.campo('Fecha de prestación', input('fecha_prestacion', hoy, ' type="date" required max="' + hoy + '"'))) +
         fila2(U.campo('Quién lo prestó', input('responsable_email', d.yo || '', ' type="email" required data-persona')),
           U.campo('Evidencia', input('evidencia', '', ' placeholder="Enlace a la matriz del mes o a la carpeta"'), 'Se guarda en cada cliente del lote.')) +
@@ -446,6 +478,7 @@
     if (t.closest('.js-op2-prs-nueva')) { formPrestacion(); return; }
     if (t.closest('.js-op2-prs-lote')) { formLote(); return; }
     if (t.closest('.js-op2-lib-lote')) { formLiberarLote(); return; }
+    if (t.closest('.js-op2-liberadores')) { formLiberadores(); return; }
     if (t.closest('.js-op2-limpiar')) { prs_.f = { periodo: '', cliente_id: '', proceso_id: '', estado: '' }; cargarPrs(true); return; }
     if ((b = t.closest('.js-op2-liberar'))) { formLiberar(prestacion(b.getAttribute('data-id'))); return; }
     if ((b = t.closest('.js-op2-noconf'))) { formNoConforme(prestacion(b.getAttribute('data-id'))); return; }

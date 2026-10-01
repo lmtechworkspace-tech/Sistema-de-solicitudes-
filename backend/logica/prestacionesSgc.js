@@ -83,7 +83,8 @@ function procesosServicio_(db) {
   const porId = {};
   todos.forEach((p) => { porId[p.proceso_id] = p; });
   return todos.filter((p) => p.nivel === 'SERVICIO').map((p) => Object.assign({}, p, {
-    clave_area: claveArea_(p.area || (porId[p.proceso_padre_id] || {}).area)
+    clave_area: claveArea_(p.area || (porId[p.proceso_padre_id] || {}).area),
+    area_nombre: p.area || (porId[p.proceso_padre_id] || {}).area || ''
   }));
 }
 
@@ -110,13 +111,33 @@ function alcance_(db, contexto) {
       }
     }
   }
-  return { gobierna, veTodo, rol, areas, email: normalizarEmail_(contexto && contexto.email) };
+  const email = normalizarEmail_(contexto && contexto.email);
+  const areasLibera = liberadores_(db).filter((l) => l.usuario_email === email).map((l) => l.area_clave);
+  return { gobierna, veTodo, rol, areas, areasLibera, email };
+}
+function liberadores_(db) {
+  return leerSeguro_(db, 'SGC_LIBERADORES').filter(esActivo_).map((l) => ({
+    liberador_id: l.liberador_id, area_clave: l.area_clave, area_nombre: l.area_nombre || '',
+    usuario_email: normalizarEmail_(l.usuario_email)
+  }));
 }
 function operaProceso_(al, proceso) {
   return al.gobierna || (!!proceso && al.areas.indexOf(proceso.clave_area) !== -1);
 }
+// Ve el área quien la opera o quien la libera (Lisseth libera RR.HH. con un
+// rol de Administración).
+function veProceso_(al, proceso) {
+  return al.veTodo || operaProceso_(al, proceso) || (!!proceso && al.areasLibera.indexOf(proceso.clave_area) !== -1);
+}
+// Libera: el Encargado, la jefatura del área o quien esté designado para
+// liberar esa área en SGC_LIBERADORES.
 function liberaProceso_(al, proceso) {
-  return al.gobierna || (al.rol === 'JEFATURA_AREA' && operaProceso_(al, proceso));
+  if (al.gobierna) return true;
+  if (!proceso) return false;
+  return (al.rol === 'JEFATURA_AREA' && operaProceso_(al, proceso)) || al.areasLibera.indexOf(proceso.clave_area) !== -1;
+}
+function puedeLiberarAlgo_(al) {
+  return al.gobierna || (al.rol === 'JEFATURA_AREA' && al.areas.length > 0) || al.areasLibera.length > 0;
 }
 function procesoDe_(db, prestacion) {
   return procesosServicio_(db).find((p) => p.proceso_id === prestacion.proceso_id) || null;
@@ -231,11 +252,11 @@ function validarPrestacion_(db, data) {
 
 function listar(db, data, contexto) {
   const al = alcance_(db, contexto);
-  if (!(al.veTodo || al.areas.length)) {
+  if (!(al.veTodo || al.areas.length || al.areasLibera.length)) {
     return { _forbidden: true, message: 'No tienes acceso al registro de servicios prestados.' };
   }
   // Quien entra por su área ve solo los servicios de su área.
-  const procesos = procesosServicio_(db).filter((p) => al.veTodo || operaProceso_(al, p));
+  const procesos = procesosServicio_(db).filter((p) => veProceso_(al, p));
   const visibles_ = {};
   procesos.forEach((p) => { visibles_[p.proceso_id] = true; });
 
@@ -263,15 +284,34 @@ function listar(db, data, contexto) {
 
   const clientes = leerSeguro_(db, 'CAT_CLIENTES').filter((c) => esVerdadero_(c.activo));
 
+  // Áreas con servicios y quién libera cada una: se muestra a todos los que
+  // ven el área, y lo cambia el administrador.
+  const areasServicio = {};
+  procesosServicio_(db).forEach((p) => {
+    if (p.clave_area && !areasServicio[p.clave_area]) areasServicio[p.clave_area] = p.area_nombre || p.clave_area;
+  });
+  const todosLiberadores = liberadores_(db);
+  const visiblesArea = {};
+  procesos.forEach((p) => { visiblesArea[p.clave_area] = true; });
+  const esAdmin = Calidad.esAdminSgc_(contexto);
+
   return {
     puede_gestionar: al.gobierna,
-    puede_registrar: al.gobierna || al.areas.length > 0,
-    puede_liberar: al.gobierna || (al.rol === 'JEFATURA_AREA' && al.areas.length > 0),
+    puede_registrar: procesos.some((p) => operaProceso_(al, p)),
+    puede_liberar: puedeLiberarAlgo_(al),
+    puede_asignar_liberadores: esAdmin,
+    liberadores: Object.keys(areasServicio).filter((k) => esAdmin || visiblesArea[k]).map((k) => ({
+      area_clave: k, area_nombre: areasServicio[k],
+      emails: todosLiberadores.filter((l) => l.area_clave === k).map((l) => l.usuario_email)
+    })),
     yo: al.email,
     tope_lote: TOPE_LOTE,
     // Lo que hay para elegir en los formularios: procesos de servicio de la
     // Fase 4 y clientes del catálogo que ya existía.
-    procesos: procesos.map((p) => ({ proceso_id: p.proceso_id, codigo: p.codigo, nombre: p.nombre, area: p.clave_area || '' })),
+    procesos: procesos.map((p) => ({
+      proceso_id: p.proceso_id, codigo: p.codigo, nombre: p.nombre, area: p.clave_area || '',
+      registra: operaProceso_(al, p), libera: liberaProceso_(al, p)
+    })),
     clientes: clientes.map((c) => ({ cliente_id: c.cliente_id, nombre: c.razon_social, rut: c.rut || '' })),
     estados: ESTADOS_PRESTACION,
     filtros: { periodo, cliente_id: clienteId, proceso_id: procesoId, estado },
@@ -368,7 +408,7 @@ function impedimentoLiberar_(al, p, proceso, quien) {
 
 function liberar(db, data, contexto) {
   const al = alcance_(db, contexto);
-  if (!al.gobierna && al.rol !== 'JEFATURA_AREA') {
+  if (!puedeLiberarAlgo_(al)) {
     return { _forbidden: true, message: 'Libera la jefatura del área o el Encargado del SGC.' };
   }
   const p = buscarPrestacion_(db, data && data.prestacion_id);
@@ -412,7 +452,7 @@ function liberar(db, data, contexto) {
  */
 function marcarNoConforme(db, data, contexto) {
   const al = alcance_(db, contexto);
-  if (!al.gobierna && al.rol !== 'JEFATURA_AREA') {
+  if (!puedeLiberarAlgo_(al)) {
     return { _forbidden: true, message: 'Marcan una salida no conforme la jefatura del área o el Encargado del SGC.' };
   }
   const p = buscarPrestacion_(db, data && data.prestacion_id);
@@ -576,7 +616,7 @@ function registrarLote(db, data, contexto) {
  */
 function liberarLote(db, data, contexto) {
   const al = alcance_(db, contexto);
-  if (!al.gobierna && al.rol !== 'JEFATURA_AREA') {
+  if (!puedeLiberarAlgo_(al)) {
     return { _forbidden: true, message: 'Libera la jefatura del área o el Encargado del SGC.' };
   }
   const ids = idsUnicos_(data && data.prestacion_ids);
@@ -615,4 +655,59 @@ function liberarLote(db, data, contexto) {
   };
 }
 
-module.exports = { listar, registrar, registrarLote, liberar, liberarLote, marcarNoConforme, abrirNoConformidad, anular, claveArea_ };
+// --- quién libera cada área ------------------------------------------------------
+
+const MAX_LIBERADORES_POR_AREA = 5;
+
+/**
+ * Fija quién libera los servicios de cada área. Es un acceso, así que lo
+ * reparte solo el administrador (mismo criterio que los roles del SGC).
+ * data.areas: [{ area_clave, emails: [...] }]; cada área enviada queda
+ * exactamente con esa lista (vacía = nadie más que la jefatura del área).
+ */
+function guardarLiberadores(db, data, contexto) {
+  if (!Calidad.esAdminSgc_(contexto)) {
+    return { _forbidden: true, message: 'Solo el administrador asigna quién libera cada área.' };
+  }
+  const nombres = {};
+  procesosServicio_(db).forEach((p) => { if (p.clave_area) nombres[p.clave_area] = p.area_nombre || p.clave_area; });
+  const pedidas = Array.isArray(data && data.areas) ? data.areas : [];
+  if (!pedidas.length) return { ok: false, message: 'No llegó ninguna área.' };
+
+  const planes = [];
+  for (const a of pedidas) {
+    const clave = claveArea_(a && a.area_clave);
+    if (!nombres[clave]) return { ok: false, message: 'El área "' + ((a && a.area_clave) || '') + '" no tiene servicios en el mapa de procesos.' };
+    const emails = idsUnicos_((Array.isArray(a.emails) ? a.emails : []).map(normalizarEmail_));
+    if (emails.some((e) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e))) return { ok: false, message: 'Revisa los correos de ' + nombres[clave] + '.' };
+    if (emails.length > MAX_LIBERADORES_POR_AREA) return { ok: false, message: 'Máximo ' + MAX_LIBERADORES_POR_AREA + ' personas por área.' };
+    planes.push({ clave, emails });
+  }
+
+  const actuales = leerSeguro_(db, 'SGC_LIBERADORES').filter(esActivo_);
+  const ahora = new Date().toISOString();
+  let altas = 0, bajas = 0;
+  enTransaccion_(db, () => {
+    planes.forEach((pl) => {
+      const deArea = actuales.filter((l) => l.area_clave === pl.clave);
+      deArea.forEach((l) => {
+        if (pl.emails.indexOf(normalizarEmail_(l.usuario_email)) === -1) {
+          actualizarFilaPorId_(db, 'SGC_LIBERADORES', 'liberador_id', l.liberador_id, { activa: false });
+          bajas++;
+        }
+      });
+      pl.emails.forEach((e) => {
+        if (deArea.some((l) => normalizarEmail_(l.usuario_email) === e)) return;
+        agregarFila_(db, 'SGC_LIBERADORES', {
+          liberador_id: uuid_(), area_clave: pl.clave, area_nombre: nombres[pl.clave], usuario_email: e,
+          creado_por: normalizarEmail_(contexto && contexto.email), fecha_creacion: ahora, activa: true
+        });
+        altas++;
+      });
+    });
+  });
+  registrarLogSgc_(db, 'SGC_LIBERADORES', planes.map((p) => p.clave + ': ' + (p.emails.join(', ') || '—')).join(' · '), contexto);
+  return { ok: true, altas, bajas, message: altas || bajas ? 'Quién libera, actualizado.' : 'Sin cambios.' };
+}
+
+module.exports = { listar, registrar, registrarLote, liberar, liberarLote, marcarNoConforme, abrirNoConformidad, anular, guardarLiberadores, claveArea_ };

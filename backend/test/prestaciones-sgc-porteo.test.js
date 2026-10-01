@@ -475,6 +475,62 @@ test('un rol con área del catálogo por persona (CONTABILIDAD_FRANCISCA) opera 
   assert.equal(Prestaciones.registrar(db, { cliente_id: 'CLI-1', proceso_id: p.srv1, periodo: '2026-M09', fecha_prestacion: '2026-09-10', responsable_email: conCatalogo.email }, conCatalogo).ok, true);
 });
 
+// Quién libera cada área va aparte del rol (decisión del dueño 30-09-2026:
+// hoy Bárbara en Contabilidad y Lisseth en RR.HH.; después las asistentes).
+test('quien está designado libera su área aunque su rol sea de otra área o de gerencia', () => {
+  const db = crear();
+  const p = conProcesos(db);
+  const po03 = Procesos.listar(db, {}, ENC).mapa.find((m) => m.codigo === 'PO-03');
+  const rem = Procesos.guardar(db, { nombre: 'Remuneraciones', tipo: 'OPERATIVO', nivel: 'SERVICIO', proceso_padre_id: po03.proceso_id }, ENC);
+  const GERENTA = { email: 'barbara@homepymes.cl', nombre: 'Gerencia', rol: 'DEV' };
+  const ADMIN_AREA = { email: 'lisseth@homepymes.cl', nombre: 'Administración', rol: 'DEV' };
+  const VANESSA = { email: 'vanessa@homepymes.cl', nombre: 'Asistente RR.HH.', rol: 'DEV' };
+  Calidad.gestionarRol(db, { usuario_email: GERENTA.email, rol_sgc: 'GERENCIA_ADM', area_id: 'CONTABILIDAD' }, CTX_ADM);
+  Calidad.gestionarRol(db, { usuario_email: ADMIN_AREA.email, rol_sgc: 'ENC_ADMIN', area_id: 'ADMINISTRACION' }, CTX_ADM);
+  Calidad.gestionarRol(db, { usuario_email: VANESSA.email, rol_sgc: 'OPERATIVO', area_id: 'RRHH' }, CTX_ADM);
+  Prestaciones.registrarLote(db, { proceso_id: p.srv1, periodo: '2026-M09', fecha_prestacion: '2026-09-20', cliente_ids: ['CLI-1'] }, OPERATIVO);
+  Prestaciones.registrarLote(db, { proceso_id: rem.proceso_id, periodo: '2026-M09', fecha_prestacion: '2026-09-20', cliente_ids: ['CLI-1'] }, VANESSA);
+  const conta = filas(db, 'SGC_PRESTACIONES').find((x) => x.proceso_id === p.srv1);
+  const rrhh = filas(db, 'SGC_PRESTACIONES').find((x) => x.proceso_id === rem.proceso_id);
+
+  // Sin designar, ninguna de las dos libera.
+  assert.equal(Prestaciones.liberar(db, { prestacion_id: conta.prestacion_id }, GERENTA)._forbidden, true);
+  assert.equal(Prestaciones.listar(db, {}, ADMIN_AREA).prestaciones.length, 0, 'Administración no ve RR.HH. todavía');
+
+  // Solo el administrador designa.
+  assert.equal(Prestaciones.guardarLiberadores(db, { areas: [{ area_clave: 'CONTABILIDAD', emails: [GERENTA.email] }] }, ENC)._forbidden, true);
+  const r = Prestaciones.guardarLiberadores(db, { areas: [
+    { area_clave: 'Contabilidad', emails: [GERENTA.email] },
+    { area_clave: 'RRHH', emails: [ADMIN_AREA.email.toUpperCase()] }
+  ] }, CTX_ADM);
+  assert.equal(r.ok, true);
+  assert.equal(r.altas, 2);
+  assert.match(Prestaciones.guardarLiberadores(db, { areas: [{ area_clave: 'Bodega', emails: [] }] }, CTX_ADM).message, /no tiene servicios/);
+
+  // Bárbara libera Contabilidad y no RR.HH.; Lisseth al revés.
+  assert.equal(Prestaciones.liberar(db, { prestacion_id: conta.prestacion_id }, GERENTA).ok, true);
+  assert.equal(Prestaciones.liberar(db, { prestacion_id: rrhh.prestacion_id }, GERENTA)._forbidden, true);
+  const vistaL = Prestaciones.listar(db, {}, ADMIN_AREA);
+  assert.equal(vistaL.puede_liberar, true);
+  assert.equal(vistaL.puede_registrar, false, 'designada para liberar no es lo mismo que registrar');
+  assert.deepEqual(vistaL.prestaciones.map((x) => x.proceso_id), [rem.proceso_id]);
+  assert.equal(Calidad.seccionesVisiblesSgc_(db, ADMIN_AREA).servicios, true);
+  assert.equal(Prestaciones.liberarLote(db, { prestacion_ids: [rrhh.prestacion_id] }, ADMIN_AREA).liberadas, 1);
+  assert.equal(filas(db, 'SGC_PRESTACIONES').find((x) => x.prestacion_id === rrhh.prestacion_id).liberado_por, ADMIN_AREA.email);
+
+  // El relevo: Vanessa pasa a liberar RR.HH. y Lisseth deja de poder.
+  const relevo = Prestaciones.guardarLiberadores(db, { areas: [{ area_clave: 'RRHH', emails: [VANESSA.email] }] }, CTX_ADM);
+  assert.deepEqual([relevo.altas, relevo.bajas], [1, 1]);
+  const sinRelevo = Prestaciones.listar(db, {}, ADMIN_AREA);
+  assert.equal(sinRelevo.puede_liberar, false);
+  assert.equal(sinRelevo.prestaciones.length, 0, 'su área (Administración) no tiene servicios: deja de ver RR.HH.');
+  assert.equal(Prestaciones.liberar(db, { prestacion_id: rrhh.prestacion_id }, ADMIN_AREA)._forbidden, true);
+  assert.equal(Prestaciones.listar(db, {}, VANESSA).puede_liberar, true);
+  const lista = Prestaciones.listar(db, {}, CTX_ADM).liberadores;
+  assert.deepEqual(lista.find((l) => l.area_clave === 'RRHH').emails, [VANESSA.email]);
+  assert.deepEqual(lista.find((l) => l.area_clave === 'CONTABILIDAD').emails, [GERENTA.email]);
+});
+
 test('las claves de área del rol y los nombres del mapa son la misma área', () => {
   assert.equal(Prestaciones.claveArea_('Recursos Humanos'), Prestaciones.claveArea_('RRHH'));
   assert.equal(Prestaciones.claveArea_('Contabilidad'), Prestaciones.claveArea_('CONTABILIDAD'));
