@@ -1,9 +1,11 @@
 'use strict';
 
 /**
- * Importación de las planillas del Drive a Control interno (2026-10-01).
- * Hojas sintéticas con la misma forma que las reales: encabezados, fechas como
- * número de serie de Excel, "NA", listas de clientes pegadas abajo, etc.
+ * Importación "espejo" de las planillas del Drive a Control interno y sus
+ * reportes (2026-10-01). Hojas sintéticas con la forma de las reales:
+ * encabezado en distintas filas y versiones, fechas como número de serie,
+ * "NA", hojas sin año, encabezado de dos niveles, listas pegadas abajo,
+ * claves escritas en celdas, fichas por cliente y la hoja de subsanación.
  */
 
 const test = require('node:test');
@@ -12,11 +14,13 @@ const { abrirDb_, sembrarTabla_, agregarFila_, leerFilas_ } = require('../db/sql
 const { COLUMNAS } = require('../db/schema');
 const CI = require('../logica/controlInterno');
 const Imp = require('../logica/controlInternoImportar');
+const Rep = require('../logica/controlInternoReportes');
+const P = require('../logica/controlInternoPlanillas');
 
 const ADM = { email: 'admin@homepymes.cl', rol: 'ADM', modulos: [] };
 const OTRO = { email: 'francisca@homepymes.cl', rol: 'DEV', modulos: ['control_interno'] };
-// Serie de Excel: 46265 = 2026-08-31, 46280 = 2026-09-15, 45900 = 2025-08-31.
-const SEP15 = '46280', AGO31 = '46265', AGO2025 = '45900';
+// Serie de Excel: 46265 = 2026-08-31, 46280 = 2026-09-15, 46245 = 2026-08-11.
+const SEP15 = '46280', AGO31 = '46265', AGO11 = '46245';
 
 function crear() {
   const db = abrirDb_();
@@ -26,144 +30,177 @@ function crear() {
   agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'C1', usuario: 'ffeliu', nombre: 'Francisca Feliú', cargo: 'Asistente', emails: JSON.stringify(['francisca@homepymes.cl']), rol: 'DEV', modulos: '[]', empresa_id: 'HP', activo: true });
   return db;
 }
-const registros = (db, matriz) => leerFilas_(db, 'CI_REGISTROS', COLUMNAS.CI_REGISTROS).filter((r) => r.matriz === matriz);
-const hojaIva = () => [
-  ['', 'INFORME Y PAGO DE IVA'],
+const registros = (db, matriz) => leerFilas_(db, 'CI_REGISTROS', COLUMNAS.CI_REGISTROS).filter((r) => r.matriz === matriz && r.activa === true);
+const LIBRO_IVA = 'MATRIZ INFORME Y PAGO DE IVA_ (2).xlsx';
+const HOJAS_IVA = ['SEPTIEMBRE 2026', 'AGOSTO 2026', 'Hoja 23', 'ENERO 23', 'SEPTIEMBRE', 'OCTUBRE', 'DICIEMBRE '];
+const hojaIva = (preIva) => [
+  ['INFORME Y PAGO DE IVA'],
   [],
-  ['N°', 'EMPRESA', 'RUT', 'CLASIFICACION', 'ESTATUS', 'RRHH', 'MONTO PRE IVA', 'FECHA PRE IVA', 'QUIEN REALIZA', 'POSTERGA SI - NO', 'FECHA DECLARACION', 'ENVIADO EL F29', 'OBS.'],
-  ['1', 'Aton Construcciones SpA', '76.841.123-4', 'HP', 'WHATSAPP', 'SI', '1.250.000', AGO31, 'FRANCISCA', 'NO', SEP15, 'SI', 'ok'],
-  ['2', 'Pyme Sur Ltda', '77222222-2', 'HC', 'enviar a wsp', 'No', '300000', AGO31, 'FRANCISCA', 'SI', '', '', ''],
-  ['3', 'Cliente Nuevo SpA', '78.000.000-1', 'NA', 'NA', 'NA', 'NA', '', 'Paulette', '', '', '', ''],
+  ['EMPRESA', 'RUT', 'CLASIFICACION', 'ESTATUS', preIva || 'MONTO PRE IVA', 'QUIEN REALIZA', 'FECHA DECLARACION', 'ENVIADO EL F29', 'OBS', 'USUARIO'],
+  ['Aton Construcciones SpA', '76.841.123-4', 'HP', 'WHATSAPP', '1.250.000', 'FRANCISCA', SEP15, 'OK', 'ok', 'aton123'],
+  ['Pyme Sur Ltda', '77222222-2', 'HC', 'enviar a wsp', 'NA', 'FRANCISCA', '', 'NO', 'Clave SII: 77abc', 'x'],
+  ['Cliente Nuevo SpA', '78.000.000-1', 'NA', 'NA', 'NA', 'Paulette', '', '', '', ''],
   [],
-  // Lista de clientes pegada abajo (pasa en Enero–Junio 2026): no son registros.
-  ['', 'Otra Empresa SpA', '79.000.000-1']
+  // Lista de clientes pegada abajo: no son filas de la matriz.
+  ['Otra Empresa SpA', '79.000.000-1']
 ];
 
-test('las fechas, horas, montos y meses de las planillas se leen bien', () => {
-  assert.equal(Imp.fecha_('46280'), '2026-09-15');
-  assert.equal(Imp.fecha_('15/09/2026'), '2026-09-15');
-  assert.equal(Imp.fecha_('NA'), '');
-  assert.equal(Imp.hora_('0.5'), '12:00');
-  assert.equal(Imp.hora_('46280.75'), '18:00');
-  assert.equal(Imp.numero_('1.250.000'), 1250000);
-  assert.equal(Imp.numero_('$ 300000'), 300000);
-  assert.equal(Imp.periodoHoja_('SEPTIEMBRE 2026'), '2026-M09');
-  assert.equal(Imp.periodoHoja_('AGOSTO25'), '2025-M08');
-  assert.equal(Imp.periodoHoja_('CONVENIO JULIO 2026'), '2026-M07');
-  assert.equal(Imp.periodoHoja_('SOLO RENTA 2026'), '');
+test('el período de cada hoja sale de su nombre; las sin año toman el de la última que lo dice', () => {
+  const p = P.periodosDeHojas_(HOJAS_IVA);
+  assert.equal(p['SEPTIEMBRE 2026'], '2026-M09');
+  assert.equal(p['Hoja 23'], '');
+  assert.equal(p['ENERO 23'], '2023-M01');
+  // Al final del libro las viejas van en orden ascendente: todas son de 2022.
+  assert.equal(p.SEPTIEMBRE, '2022-M09');
+  assert.equal(p.OCTUBRE, '2022-M10');
+  assert.equal(p['DICIEMBRE '], '2022-M12');
+  assert.equal(P.periodosDeHojas_(['AGOSTO25'])['AGOSTO25'], '2025-M08');
 });
 
-test('solo el administrador importa', () => {
-  const db = crear();
-  assert.equal(Imp.importarHoja(db, { hoja: 'SEPTIEMBRE 2026', filas: hojaIva(), anio: '2026' }, OTRO)._forbidden, true);
+test('encabezado de dos niveles: "quién realiza" y "fecha" son del bloque que firman', () => {
+  const grupos = ['', '', 'CENTRALIZACIONES', '', '', '', '', '', 'PAGOS', '', ''];
+  const enc = ['EMPRESA', 'ASIENTO DE APERTURA', 'QUIEN REALIZA', 'FECHA REALIZACION', 'COMPRAS', 'QUIEN REALIZA', 'FECHA REALIZACION', 'VENTAS', 'QUIEN REALIZA', 'FECHA REALIZACION', 'COMPRAS'];
+  const cols = P.columnasDeEncabezado_(enc, grupos, { siempreGrupo: true, gruposValidos: ['CENTRALIZACIONES', 'PAGOS'], sinGrupo: ['EMPRESA', 'ASIENTO DE APERTURA'] });
+  assert.deepEqual(cols.map((c) => c.clave), [
+    'EMPRESA', 'ASIENTO DE APERTURA', 'CENTRALIZACIONES / QUIEN REALIZA > COMPRAS', 'CENTRALIZACIONES / FECHA REALIZACION > COMPRAS', 'CENTRALIZACIONES / COMPRAS',
+    'CENTRALIZACIONES / QUIEN REALIZA > VENTAS', 'CENTRALIZACIONES / FECHA REALIZACION > VENTAS', 'CENTRALIZACIONES / VENTAS',
+    'PAGOS / QUIEN REALIZA > COMPRAS', 'PAGOS / FECHA REALIZACION > COMPRAS', 'PAGOS / COMPRAS'
+  ]);
 });
 
-test('IVA: reconoce la matriz, calza clientes por RUT, responsables por nombre y no toma la lista de abajo', () => {
+test('importar una hoja mensual: espejo de la fila, cliente, responsable, situación, NA y claves', () => {
   const db = crear();
-  const sim = Imp.importarHoja(db, { archivo: 'iva.xlsx', hoja: 'SEPTIEMBRE 2026', filas: hojaIva(), anio: '2026', simular: true }, ADM);
+  const sim = Imp.importarHoja(db, { archivo: LIBRO_IVA, hoja: 'SEPTIEMBRE 2026', hojas: HOJAS_IVA, filas: hojaIva(), simular: true }, ADM);
   assert.equal(sim.matriz, 'IVA');
-  assert.equal(sim.nuevas, 3);
-  assert.equal(sim.sin_datos, 1, 'la fila con solo nombre y RUT no es un registro');
-  assert.equal(sim.fuera_catalogo, 1);
-  assert.deepEqual(sim.sin_cuenta, ['Paulette']);
+  assert.equal(sim.periodo, '2026-M09');
+  assert.equal(sim.nuevas, 3, 'la lista pegada abajo no cuenta');
+  assert.deepEqual(sim.columnas_excluidas, ['USUARIO']);
   assert.equal(registros(db, 'IVA').length, 0, 'simular no escribe');
 
-  const r = Imp.importarHoja(db, { archivo: 'iva.xlsx', hoja: 'SEPTIEMBRE 2026', filas: hojaIva(), anio: '2026' }, ADM);
+  const r = Imp.importarHoja(db, { archivo: LIBRO_IVA, hoja: 'SEPTIEMBRE 2026', hojas: HOJAS_IVA, filas: hojaIva() }, ADM);
   assert.equal(r.nuevas, 3);
-  const regs = registros(db, 'IVA');
+  const regs = CI.listar(db, { matriz: 'IVA', periodo: '2026-M09' }, ADM).registros;
   const aton = regs.find((x) => x.cliente_id === 'CLI-1');
-  assert.equal(aton.periodo, '2026-M09');
-  assert.equal(aton.estado, 'CERRADO', 'F29 enviado');
   assert.equal(aton.datos.monto_pre_iva, 1250000);
-  assert.equal(aton.datos.contacto, 'WhatsApp');
-  assert.equal(aton.datos.rrhh, 'Sí');
+  assert.equal(aton.datos.fecha_declaracion, '2026-09-15');
   assert.equal(aton.responsable_email, 'francisca@homepymes.cl');
-  const sur = regs.find((x) => x.cliente_id === 'CLI-2');
-  assert.equal(sur.estado, 'POSTERGADO');
-  assert.equal(sur.datos.contacto, 'WhatsApp');
+  assert.equal(aton.datos.quien_realiza, 'FRANCISCA');
+  assert.equal(aton.estado, 'TERMINADO');
+  assert.equal(aton.datos.usuario, undefined, 'la columna USUARIO no se guarda');
+  const pyme = regs.find((x) => x.cliente_id === 'CLI-2');
+  assert.equal(pyme.datos.monto_pre_iva, 'NA', '"NA" se ve igual que en la planilla');
+  assert.equal(pyme.datos.obs, '[clave omitida]');
+  assert.equal(pyme.estado, 'PENDIENTE', 'ENVIADO EL F29 = NO');
   const nuevo = regs.find((x) => !x.cliente_id);
   assert.equal(nuevo.cliente_nombre, 'Cliente Nuevo SpA');
-  assert.match(nuevo.observaciones, /Realizado por: Paulette/);
-  assert.equal(nuevo.datos.clasificacion, '', 'NA queda vacío');
-
-  // Volver a importar no duplica.
-  const otra = Imp.importarHoja(db, { archivo: 'iva.xlsx', hoja: 'SEPTIEMBRE 2026', filas: hojaIva(), anio: '2026' }, ADM);
-  assert.equal(otra.nuevas, 0);
-  assert.equal(otra.ya_estaban, 3);
+  assert.equal(r.fuera_catalogo, 1);
+  assert.deepEqual(r.sin_cuenta, ['Paulette']);
+  // Mismo orden que la planilla.
+  assert.deepEqual(regs.map((x) => x.cliente_nombre), ['ATON CONSTRUCCIONES SPA', 'Pyme Sur Limitada', 'Cliente Nuevo SpA']);
+  // Volver a importar lo mismo no duplica.
+  assert.equal(Imp.importarHoja(db, { archivo: LIBRO_IVA, hoja: 'SEPTIEMBRE 2026', hojas: HOJAS_IVA, filas: hojaIva() }, ADM).ya_estaban, 3);
   assert.equal(registros(db, 'IVA').length, 3);
-  assert.ok(CI.getRegistro(db, { registro_id: aton.registro_id }, ADM).historial.some((h) => h.accion === 'IMPORTADO'));
 });
 
-test('una hoja de otro año o sin mes no se importa', () => {
+test('una versión vieja del encabezado ("PRE IVA") cae en la misma columna; solo ADM importa', () => {
   const db = crear();
-  assert.match(Imp.importarHoja(db, { hoja: 'SEPTIEMBRE 2025', filas: hojaIva(), anio: '2026' }, ADM).motivo, /2025/);
-  assert.match(Imp.importarHoja(db, { hoja: 'SOLO RENTA 2026', filas: hojaIva(), anio: '2026' }, ADM).motivo, /mes y año/);
-  assert.equal(Imp.importarHoja(db, { hoja: 'validador', filas: [['a', 'b']], anio: '2026' }, ADM).omitida, true);
+  const r = Imp.importarHoja(db, { archivo: LIBRO_IVA, hoja: 'ENERO 23', hojas: HOJAS_IVA, filas: hojaIva('PRE IVA') }, ADM);
+  assert.equal(r.periodo, '2023-M01');
+  const aton = CI.listar(db, { matriz: 'IVA', periodo: '2023-M01' }, ADM).registros.find((x) => x.cliente_id === 'CLI-1');
+  assert.equal(aton.datos.monto_pre_iva, 1250000);
+  assert.equal(Imp.importarHoja(db, { archivo: LIBRO_IVA, hoja: 'ENERO 23', hojas: HOJAS_IVA, filas: hojaIva() }, OTRO)._forbidden, true);
+  assert.equal(Imp.importarHoja(db, { archivo: LIBRO_IVA, hoja: 'Hoja 23', hojas: HOJAS_IVA, filas: hojaIva() }, ADM).omitida, true);
 });
 
-test('RR.HH.: el cliente por código, el año por la fecha de recepción y la licencia sin el motivo', () => {
+test('RR.HH.: una hoja = una matriz; el mes sale de la fecha y la fila sin fecha toma el de la anterior', () => {
   const db = crear();
-  const fin = Imp.importarHoja(db, { hoja: 'Finiquitos', anio: '2026', filas: [
-    ['EMPRESA', 'Recepcion del requerimiento', 'Quien realiza', 'CAUSAL DE FINIQUITO', 'Nombre', 'Rut', 'Nº trabajadores', 'Mes y año', 'ENVIO DE LA DOC. AL CLIENTE'],
-    ['HP-002-1 ATON CONSTRUCCIONES SPA 76.841.123-4', SEP15, 'Francisca Feliu', '159-4 Vencimiento del plazo convenido', 'Juan Pérez', '11.111.111-1', '1', 'sep', SEP15],
-    ['HP-002-1 ATON CONSTRUCCIONES SPA 76.841.123-4', AGO2025, 'Francisca Feliu', 'Renuncia', 'Ana Soto', '22.222.222-2', '1', 'ago', AGO2025]
-  ] }, ADM);
-  assert.equal(fin.nuevas, 1);
-  assert.equal(fin.otro_anio, 1);
-  const f = registros(db, 'FINIQUITOS')[0];
-  assert.equal(f.cliente_id, 'CLI-1');
-  assert.equal(f.periodo, '2026-M09');
-  assert.equal(f.estado, 'ENVIADO');
-  assert.equal(f.datos.causal, '159-4 Vencimiento del plazo');
-
-  Imp.importarHoja(db, { hoja: 'Licencias', anio: '2026', filas: [
-    ['EMPRESA', 'Quien realiza', 'Obra', 'Nombre Personal', 'Rut Personal', 'Fecha Tramite', 'Fecha Inicio', 'Fecha Termino', 'Motivo', 'Institucion', 'Días Licencia', 'Fecha de envio al cliente', 'Estado'],
-    ['HC-010-1 PYME SUR LIMITADA', 'Francisca', 'Obra 1', 'Pedro', '3.333.333-3', SEP15, SEP15, SEP15, 'diagnóstico reservado', 'Fonasa', '5', SEP15, 'Tramitada']
-  ] }, ADM);
-  const l = registros(db, 'LICENCIAS')[0];
-  assert.equal(l.cliente_id, 'CLI-2');
-  assert.equal(l.estado, 'TRAMITADA');
-  assert.ok(!JSON.stringify(l).includes('diagnóstico'), 'el motivo médico no se importa');
+  const filas = [
+    ['RH-M-2', 'SOLICITUDES DE CLIENTES'],
+    ['RH-M-2.7', 'FINIQUITOS'],
+    ['EMPRESA', 'RECEPCION DEL REQUERIMIENTO', 'QUIEN REALIZA', 'CAUSAL DE FINIQUITO', 'NOMBRE', 'RUT', 'N° TRABAJADORES', 'ENVIO DE LA DOC. AL CLIENTE'],
+    ['HP-002-1 ATON CONSTRUCCIONES SPA 76.841.123-4', AGO11, 'Francisca', 'RENUNCIA', 'Juan Pérez', '11.111.111-1', '1', AGO31],
+    ['HC-010-1 PYME SUR LIMITADA', '', 'Francisca', 'MUTUO ACUERDO', 'Ana Soto', '', '1', ''],
+    ['HP-002-1 ATON CONSTRUCCIONES SPA', '0204-04-12', 'Francisca', 'RENUNCIA', 'Luis Díaz', '', '1', '']
+  ];
+  const r = Imp.importarHoja(db, { archivo: 'control de matrices (2).xlsx', hoja: 'Finiquitos', hojas: ['Finiquitos'], filas }, ADM);
+  assert.equal(r.matriz, 'FINIQUITOS');
+  assert.equal(r.nuevas, 3);
+  const regs = CI.listar(db, { matriz: 'FINIQUITOS', anio: '2026' }, ADM).registros;
+  assert.ok(regs.every((x) => x.periodo === '2026-M08'), 'sin fecha o con año mal tipeado: el mes de la fila anterior');
+  assert.equal(regs[0].cliente_id, 'CLI-1', 'el código de cliente de la planilla calza con el catálogo');
+  assert.equal(regs[1].cliente_id, 'CLI-2');
+  assert.equal(regs[0].estado, 'TERMINADO');
+  assert.equal(regs[1].estado, 'PENDIENTE');
+  assert.equal(regs[2].datos.recepcion_requerimiento, '0204-04-12', 'el valor se conserva tal cual');
 });
 
-test('convenios: los bloques repetidos pasan a una lista y el estado sale de las cuotas', () => {
-  const db = crear();
-  const enc = ['EMPRESA', 'RUT', 'QUIEN REALIZA', 'FECHA REALIZACION', 'CONVENIOS', 'CANTIDAD DE CONVENIOS'];
-  const fila = ['Aton Construcciones', '76.841.123-4', 'FRANCISCA', SEP15, 'SI', '2'];
-  [1, 2, 3].forEach((i) => {
-    enc.push('FECHA QUE SE REALIZO EL CONVENIO ' + i, 'PIE DE COVENIO ' + i, 'MONTO TOTAL DEUDA ' + i, 'FOLIO CONVENIO ' + i, 'CUOTAS CANCEL' + (i === 3 ? 'D' : 'AD') + 'AS CONVENIO ' + i);
-    fila.push(i < 3 ? SEP15 : 'NA', i < 3 ? '100000' : 'NA', i < 3 ? '900000' : 'NA', i < 3 ? 'F' + i : 'NA', i < 3 ? '3' : 'NA');
-  });
-  [1, 2, 3].forEach((i) => { enc.push('CUOTAS VENCIDAS CONVENIO ' + i); fila.push(i === 2 ? '2' : (i === 1 ? '0' : 'NA')); });
-  [1, 2, 3].forEach((i) => { enc.push('TIPO DE CONVENIO ' + i); fila.push(i === 1 ? 'IVA RENTA' : (i === 2 ? 'RENTA' : 'NA')); });
-  const r = Imp.importarHoja(db, { hoja: 'CONVENIO SEPTIEMBRE 2026', anio: '2026', filas: [enc, fila] }, ADM);
-  assert.equal(r.nuevas, 1);
-  const c = registros(db, 'CONVENIOS')[0];
-  assert.equal(c.datos.convenios.length, 2);
-  assert.equal(c.datos.convenios[0].tipo, 'IVA y Renta');
-  assert.equal(c.datos.convenios[0].cuotas_pagadas, 3);
-  assert.equal(c.estado, 'CON_VENCIDAS');
+test('fichas A–W (notificaciones y anotaciones) y subsanación se leen como filas', () => {
+  const fichas = [
+    [], ['', 'Realizado por:', '', 'Krishna'], ['', 'Última actualización', '', '46175'], [], [],
+    ['', 'ATON CONSTRUCCIONES SPA'], [], ['', 'Notificaciones ', '', '', '', '', 'Anotaciones'], [],
+    ['', '45478', '', '', '', '', '44218'], ['', 'Giro Pago Diferido 2024', '', '', '', '', 'Debe demostrar domicilio'],
+    [], ['', 'Pyme Sur Limitada'], [], ['', 'Notificaciones', '', '', '', '', 'Anotaciones'], [], ['', '45500'], ['', 'Giro renta']
+  ];
+  const f = Imp.filasDeFichas_(fichas);
+  assert.equal(f.length, 3);
+  assert.deepEqual(f.map((x) => [x.datos.empresa, x.datos.tipo, x.datos.fecha]), [
+    ['ATON CONSTRUCCIONES SPA', 'NOTIFICACIÓN', '2024-07-05'], ['ATON CONSTRUCCIONES SPA', 'ANOTACIÓN', '2021-01-22'], ['Pyme Sur Limitada', 'NOTIFICACIÓN', '2024-07-27']
+  ]);
+  assert.equal(f[0].datos.realizado_por, 'Krishna');
+  const subs = [
+    [], [], ['', 'EMPRESAS QUE SE DEBE DEMOSTRAR'], [],
+    ['', 'Con domicilio en Grecia 1938', '', '', '', 'PETICIÓN', '', '', 'Otro domicilio'],
+    ['N°', '', '', '', '', 'fecha', 'folio', 'N°'],
+    ['1.0', 'ATON CONSTRUCCIONES SPA', '', '', '', '45917.0', '7.7325920254E10', '1.0', 'PYME SUR LIMITADA', '', '', '', '', '', '', '1.0', 'LOS MANZANOS 1237'],
+    ['', '', '', '', 'segunda peticion', '45931.0', '7.7325941447E10']
+  ];
+  const s = Imp.filasDeSubsanacion_(subs);
+  assert.equal(s.length, 2);
+  assert.equal(s[0].datos.peticion_1_fecha, '2025-09-17');
+  assert.equal(s[0].datos.peticion_2_folio, '77325941447');
+  assert.equal(s[1].datos.domicilio, 'LOS MANZANOS 1237');
+  assert.equal(s[1].datos.seccion, 'Otro domicilio');
 });
 
-test('contabilización: el encabezado en dos niveles arma la checklist por bloque', () => {
+test('preparar la importación borra lo importado (también la estructura vieja) y conserva lo ingresado a mano', () => {
   const db = crear();
-  const grupo = ['CARTA PODER', '', '', '', '', '', 'CENTRALIZACIONES', '', '', '', '', 'PAGOS', '', '', '', ''];
-  const enc = ['CODIGO', 'EMPRESA', 'RUT', 'CLASIFICACION INTERNA', 'QUIEN REALIZA', 'ASIENTO DE APERTURA', 'QUIEN REALIZA', 'FECHA REALIZACION', 'COMPRAS', 'BANCO', 'VENTAS', 'QUIEN REALIZA', 'FECHA REALIZACION', 'COMPRAS', 'ESTADO FINAL', 'OBS'];
-  const fila = ['', 'Aton', '76.841.123-4', 'Sí', 'Francisca', 'OK', 'Francisca', SEP15, 'OK', 'No Aplica', 'Pendiente', 'Francisca', SEP15, 'OK', '', ''];
-  const r = Imp.importarHoja(db, { hoja: 'SEPTIEMBRE 2026', anio: '2026', filas: [grupo, enc, fila] }, ADM);
-  assert.equal(r.matriz, 'CONTABILIZACION');
-  const c = registros(db, 'CONTABILIZACION')[0];
-  assert.equal(c.datos.tareas.centralizaciones.items.Compras, 'OK');
-  assert.equal(c.datos.tareas.centralizaciones.items.Banco, 'NO_APLICA');
-  assert.equal(c.datos.tareas.centralizaciones.items.Ventas, 'PENDIENTE');
-  assert.equal(c.datos.tareas.pagos.items.Compras, 'OK', 'las Compras de Pagos no se mezclan con las de Centralizaciones');
-  assert.equal(c.datos.tareas.centralizaciones.quien, 'francisca@homepymes.cl');
-  assert.equal(c.datos.tareas.centralizaciones.fecha, '2026-09-15');
-  assert.equal(c.estado, 'EN_PROCESO');
+  Imp.importarHoja(db, { archivo: LIBRO_IVA, hoja: 'SEPTIEMBRE 2026', hojas: HOJAS_IVA, filas: hojaIva() }, ADM);
+  CI.guardar(db, { matriz: 'IVA', periodo: '2026-M10', cliente_id: 'CLI-1', datos: { obs: 'a mano' } }, ADM);
+  // Fila de la carga anterior: matriz que ya no existe, con _origen.
+  agregarFila_(db, 'CI_REGISTROS', { registro_id: 'viejo', depto: 'RRHH', matriz: 'CERTIFICADOS', periodo: '2026-M01', datos: { _origen: 'x' }, estado: 'PENDIENTE', activa: true });
+  const sim = Imp.prepararImportacion(db, { simular: true }, ADM);
+  assert.equal(sim.a_borrar, 4);
+  assert.equal(sim.conservadas_a_mano, 1);
+  assert.equal(registros(db, 'IVA').length, 4, 'simular no borra');
+  assert.equal(Imp.prepararImportacion(db, { simular: true }, OTRO)._forbidden, true);
+  Imp.prepararImportacion(db, {}, ADM);
+  const quedan = leerFilas_(db, 'CI_REGISTROS', COLUMNAS.CI_REGISTROS);
+  assert.equal(quedan.length, 1);
+  assert.equal(quedan[0].datos.obs, 'a mano');
 });
 
-test('las filas vacías con formato no cuentan para el límite', () => {
+test('reportes: informe mensual, panel histórico, ficha por cliente y personas y tiempos', () => {
   const db = crear();
-  const filas = hojaIva().concat(Array.from({ length: 20000 }, () => []));
-  assert.equal(Imp.importarHoja(db, { hoja: 'SEPTIEMBRE 2026', filas, anio: '2026', simular: true }, ADM).nuevas, 3);
+  Imp.importarHoja(db, { archivo: LIBRO_IVA, hoja: 'SEPTIEMBRE 2026', hojas: HOJAS_IVA, filas: hojaIva() }, ADM);
+  Imp.importarHoja(db, { archivo: LIBRO_IVA, hoja: 'AGOSTO 2026', hojas: HOJAS_IVA, filas: hojaIva() }, ADM);
+  const inf = Rep.informeMensual(db, { matriz: 'IVA', periodo: '2026-M09' }, ADM);
+  assert.equal(inf.resumen.clientes_activos, 3);
+  assert.equal(inf.resumen.terminados, 1);
+  assert.equal(inf.resumen.avance_pct, 33);
+  assert.equal(inf.anterior.periodo, '2026-M08');
+  assert.equal(inf.anterior.filas, 3);
+  assert.equal(inf.detalle.length, 3);
+  assert.ok(inf.montos.find((m) => m.clave === 'monto_pre_iva').total === 1250000);
+  const pan = Rep.panelHistorico(db, { matriz: 'IVA', desde: '2026-M01', hasta: '2026-M09' }, ADM);
+  assert.equal(pan.serie.find((s) => s.periodo === '2026-M09').total, 3);
+  assert.equal(pan.anio_contra_anio[0].meses[7], 3, 'agosto');
+  const ficha = Rep.fichaCliente(db, { cliente_id: 'CLI-1' }, ADM);
+  assert.equal(ficha.total_filas, 2);
+  assert.equal(ficha.matrices[0].clave, 'IVA');
+  const busq = Rep.buscarClientes(db, { q: 'aton' }, ADM);
+  assert.equal(busq.clientes[0].cliente_id, 'CLI-1');
+  const per = Rep.personasTiempos(db, { depto: 'CONTABILIDAD', desde: '2026-M08', hasta: '2026-M09' }, ADM);
+  assert.equal(per.personas.find((p) => p.clave === 'francisca@homepymes.cl').total, 4);
+  assert.ok(per.total_pendientes >= 2);
+  assert.equal(Rep.informeMensual(db, { matriz: 'IVA' }, { email: 'x@x.cl', rol: 'DEV', modulos: [] })._forbidden, true);
 });

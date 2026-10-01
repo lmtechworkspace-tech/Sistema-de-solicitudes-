@@ -1,21 +1,23 @@
 'use strict';
 
 /**
- * Control interno (2026-10-01): las matrices de Contabilidad y RR.HH. en
- * SIGSO. Permisos reales (módulo + departamento + quién libera), validación
- * por tipo de campo, "abrir el mes", liberación sin auto-liberar, historial
- * y reportes.
+ * Control interno, versión "espejo del Excel" (2026-10-01): 54 matrices con
+ * las columnas de sus planillas, permisos reales (módulo + departamento +
+ * quién libera), situación calculada con las columnas, períodos por mes /
+ * por fecha / lista, liberación sin auto-liberar, columnas sensibles e
+ * historial.
  */
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { abrirDb_, sembrarTabla_, agregarFila_, leerFilas_ } = require('../db/sqliteRepo');
+const { abrirDb_, sembrarTabla_, agregarFila_ } = require('../db/sqliteRepo');
 const { COLUMNAS } = require('../db/schema');
 const Calidad = require('../logica/calidadSgc');
 const Procesos = require('../logica/procesosSgc');
 const Prestaciones = require('../logica/prestacionesSgc');
 const CI = require('../logica/controlInterno');
-const { MATRICES } = require('../logica/controlInternoMatrices');
+const { MATRICES, matriz_ } = require('../logica/controlInternoMatrices');
+const P = require('../logica/controlInternoPlanillas');
 
 const ADM = { email: 'admin@homepymes.cl', rol: 'ADM', modulos: [] };
 const conModulo = (email, rol) => ({ email, rol: rol || 'DEV', modulos: ['control_interno'] });
@@ -23,6 +25,7 @@ const FRANCISCA = conModulo('francisca@homepymes.cl');
 const BARBARA = conModulo('barbara@homepymes.cl', 'JEFATURA');
 const VANESSA = conModulo('vanessa@homepymes.cl');
 const LECTORA = conModulo('lectora@homepymes.cl');
+const GERENCIA = conModulo('gerente@homepymes.cl', 'GERENCIA');
 const SIN_MODULO = { email: 'francisca@homepymes.cl', rol: 'DEV', modulos: [] };
 
 function crear() {
@@ -32,7 +35,7 @@ function crear() {
     cliente_id: 'CLI-' + (i + 1), razon_social: n, rut: '7' + i + '.111.111-1', codigo_cliente: 'HP-00' + i, contacto: '', correo: '', telefono: '',
     representante_legal: '', direccion: '', estado: 'ACTIVO', bloqueo: '', activo: true
   }));
-  // Áreas con servicios en el mapa: sin eso no se puede designar quién libera.
+  agregarFila_(db, 'CUENTAS_PORTAL', { cuenta_id: 'C1', usuario: 'ffeliu', nombre: 'Francisca Feliú', cargo: 'Asistente', emails: JSON.stringify([FRANCISCA.email]), rol: 'DEV', modulos: '[]', empresa_id: 'HP', activo: true });
   const ENC = { email: 'sgc@homepymes.cl', rol: 'DEV' };
   Calidad.gestionarRol(db, { usuario_email: ENC.email, rol_sgc: 'ENCARGADO_SGC' }, ADM);
   Procesos.sembrarMapa(db, {}, ENC);
@@ -44,28 +47,35 @@ function crear() {
   Prestaciones.guardarLiberadores(db, { areas: [{ area_clave: 'CONTABILIDAD', emails: [BARBARA.email] }] }, ADM);
   return db;
 }
-const filas = (db, h) => leerFilas_(db, h, COLUMNAS[h]);
 function nuevo(db, extra, ctx) {
   return CI.guardar(db, Object.assign({ matriz: 'IVA', periodo: '2026-M09', cliente_id: 'CLI-1' }, extra || {}), ctx || FRANCISCA);
 }
 
-test('las 18 matrices están bien declaradas', () => {
-  assert.equal(MATRICES.length, 18);
+test('las 54 matrices son espejo de sus planillas y están bien declaradas', () => {
+  assert.equal(MATRICES.length, 54);
+  assert.equal(MATRICES.filter((m) => m.depto === 'RRHH').length, 39, 'RR.HH.: una matriz por hoja del libro');
   const claves = new Set();
   MATRICES.forEach((m) => {
     assert.ok(!claves.has(m.clave), 'clave repetida ' + m.clave);
     claves.add(m.clave);
-    assert.ok(m.estados.length && m.estados.some((e) => e.final), m.clave + ' necesita un estado final');
-    const campos = new Set();
-    m.campos.forEach((c) => {
-      assert.ok(!campos.has(c.clave), m.clave + ': campo repetido ' + c.clave);
-      campos.add(c.clave);
-      if (c.tipo === 'lista') assert.ok(c.opciones && c.opciones.length, m.clave + '.' + c.clave + ' sin opciones');
+    assert.ok(['mensual', 'registro', 'lista'].indexOf(m.tipo) !== -1, m.clave + ': tipo');
+    assert.ok(m.estados.some((e) => e.final), m.clave + ' necesita una situación final');
+    const cols = new Set();
+    m.columnas.forEach((c) => {
+      assert.ok(!cols.has(c.clave), m.clave + ': columna repetida ' + c.clave);
+      cols.add(c.clave);
+      // Nunca columnas de usuarios o claves de plataformas.
+      assert.equal(P.esColumnaDeClave_(P.n_(c.etiqueta)), false, m.clave + ': columna de clave ' + c.etiqueta);
     });
-    if (m.fechaPrincipal) assert.ok(campos.has(m.fechaPrincipal), m.clave + ': fechaPrincipal inexistente');
-    (m.copiar || []).forEach((k) => assert.ok(campos.has(k), m.clave + ': copiar ' + k + ' inexistente'));
-    (m.tiempos || []).forEach((k) => assert.ok(campos.has(k), m.clave + ': tiempos ' + k + ' inexistente'));
+    if (!m.sinCliente) assert.ok(m.columnas.some((c) => c.rol === 'cliente'), m.clave + ' sin columna de cliente');
   });
+  // Mismo orden que la planilla.
+  assert.deepEqual(matriz_('FACTURACION').columnas.slice(0, 5).map((c) => c.clave), ['codigo', 'empresa', 'rut', 'clasificacion_interna', 'recepcion_informacion']);
+  // Contabilización: quién y cuándo POR BLOQUE, con su grupo (encabezado de dos niveles).
+  const cont = matriz_('CONTABILIZACION').columnas;
+  assert.ok(cont.find((c) => c.clave === 'pagos_quien_realiza_sueldos' && c.grupo === 'PAGOS'));
+  assert.ok(cont.find((c) => c.clave === 'centralizaciones_banco' && c.grupo === 'CENTRALIZACIONES'));
+  assert.ok(matriz_('LICENCIAS').sensibles.indexOf('motivo') !== -1);
 });
 
 test('sin el módulo en la cuenta no se entra; cada uno ve solo su departamento', () => {
@@ -74,13 +84,10 @@ test('sin el módulo en la cuenta no se entra; cada uno ve solo su departamento'
   const f = CI.getConfig(db, {}, FRANCISCA);
   assert.deepEqual(f.departamentos.map((d) => d.clave), ['CONTABILIDAD']);
   assert.ok(f.matrices.every((m) => m.depto === 'CONTABILIDAD'));
-  const v = CI.getConfig(db, {}, VANESSA);
-  assert.deepEqual(v.departamentos.map((d) => d.clave), ['RRHH']);
+  assert.deepEqual(CI.getConfig(db, {}, VANESSA).departamentos.map((d) => d.clave), ['RRHH']);
   assert.equal(CI.listar(db, { matriz: 'IVA', periodo: '2026-M09' }, VANESSA)._forbidden, true);
-  // Bárbara no es miembro, pero libera Contabilidad: la ve.
   assert.deepEqual(CI.getConfig(db, {}, BARBARA).departamentos.map((d) => d.clave), ['CONTABILIDAD']);
   assert.equal(CI.getConfig(db, {}, ADM).departamentos.length, 2);
-  assert.deepEqual(CI.getConfig(db, {}, FRANCISCA).departamentos[0].liberadores, [BARBARA.email]);
 });
 
 test('solo lectura no registra', () => {
@@ -89,148 +96,151 @@ test('solo lectura no registra', () => {
   assert.equal(CI.listar(db, { matriz: 'IVA', periodo: '2026-M09' }, LECTORA).puede_registrar, false);
 });
 
-test('crear, validar por tipo y no duplicar el cliente en una matriz de una fila por cliente', () => {
+test('la celda se guarda como en la planilla: montos con puntos, "NA" tal cual, claves nunca', () => {
   const db = crear();
-  const r = nuevo(db, { datos: { monto_pago: '1.234.567', fecha_declaracion: '2026-09-20', posterga: 'No' } });
+  const r = nuevo(db, { datos: { monto_pago: '1.234.567', fecha_declaracion: '2026-09-20', posterga_si_no: 'NO', monto_ppm: 'NA', obs: 'Clave SII: 1234abcd' } });
   assert.equal(r.ok, true);
-  assert.equal(r.registro.datos.monto_pago, 1234567, 'el monto se escribe como en el Drive: con puntos');
-  assert.equal(r.registro.fecha, '2026-09-20');
-  assert.equal(r.registro.responsable_email, FRANCISCA.email);
-  assert.equal(r.registro.estado, 'PENDIENTE');
-  assert.match(nuevo(db).message, /ya tiene su registro/);
-  assert.match(nuevo(db, { cliente_id: 'CLI-2', datos: { posterga: 'Quizás' } }).message, /no está en la lista/);
-  assert.match(nuevo(db, { cliente_id: 'CLI-2', datos: { fecha_declaracion: '20/09/2026' } }).message, /fecha no es válida/);
+  assert.equal(r.registro.datos.monto_pago, 1234567);
+  assert.equal(r.registro.datos.monto_ppm, 'NA', 'lo que no es número se ve igual que en la planilla');
+  assert.equal(r.registro.datos.obs, '[clave omitida]');
+  assert.equal(r.registro.fecha, '');
+  assert.equal(r.registro.estado, 'EN_PROCESO', 'hay declaración pero no se envió el F29');
+  assert.match(nuevo(db).message, /ya tiene su fila/);
   assert.match(nuevo(db, { cliente_id: 'NO-EXISTE' }).message, /no está en el catálogo/);
-  // Fuera del catálogo: se escribe el nombre y queda marcado para conciliar.
   const fuera = nuevo(db, { cliente_id: '', cliente_nombre: 'Cliente Nuevo SpA' });
   assert.equal(fuera.ok, true);
   assert.equal(fuera.registro.cliente_id, '');
 });
 
-test('editar por celda conserva lo demás y deja historial', () => {
+test('la situación la calculan las columnas; editar por celda conserva lo demás y deja historial', () => {
   const db = crear();
-  const r = nuevo(db, { datos: { monto_pago: 1000, fecha_carta: '2026-09-10' } }).registro;
-  const e = CI.guardar(db, { registro_id: r.registro_id, datos: { monto_pago: 2500 } }, FRANCISCA);
-  assert.equal(e.registro.datos.monto_pago, 2500);
-  assert.equal(e.registro.datos.fecha_carta, '2026-09-10', 'la edición parcial no borra los otros campos');
-  assert.equal(CI.guardar(db, { registro_id: r.registro_id, datos: { monto_pago: 2500 } }, FRANCISCA).message, 'Sin cambios.');
+  const r = nuevo(db, { datos: { monto_pago: 1000, fecha_envio_carta: '2026-09-10' } }).registro;
+  const e = CI.guardar(db, { registro_id: r.registro_id, datos: { enviado_f29: 'OK' } }, FRANCISCA);
+  assert.equal(e.registro.estado, 'TERMINADO');
+  assert.equal(e.registro.datos.fecha_envio_carta, '2026-09-10', 'la edición parcial no borra las otras columnas');
+  assert.equal(CI.guardar(db, { registro_id: r.registro_id, datos: { enviado_f29: 'OK' } }, FRANCISCA).message, 'Sin cambios.');
   const h = CI.getRegistro(db, { registro_id: r.registro_id }, FRANCISCA).historial;
   assert.deepEqual(h.map((x) => x.accion).sort(), ['CREADO', 'EDITADO']);
-  assert.match(h.find((x) => x.accion === 'EDITADO').detalle, /Monto a pagar/);
+  assert.match(h.find((x) => x.accion === 'EDITADO').detalle, /ENVIADO EL F29/i);
+  assert.match(h.find((x) => x.accion === 'EDITADO').detalle, /Situación: En proceso → Terminado/);
 });
 
-test('matriz por requerimiento: el período sale de la fecha principal', () => {
+test('el responsable sale de "QUIÉN REALIZA": el nombre de la planilla contra las cuentas', () => {
   const db = crear();
-  const r = CI.guardar(db, { matriz: 'FINIQUITOS', cliente_id: 'CLI-1', datos: { fecha_recepcion: '2026-08-14', trabajador: 'Juan Pérez', causal: '159-2 Renuncia del trabajador' } }, VANESSA);
+  const r = nuevo(db, { datos: { quien_realiza: 'FRANCISCA' } }).registro;
+  assert.equal(r.responsable_email, FRANCISCA.email);
+  assert.equal(r.datos.quien_realiza, 'FRANCISCA', 'el texto de la planilla se conserva');
+  const otro = nuevo(db, { cliente_id: 'CLI-2', datos: { quien_realiza: 'Paulette' } }).registro;
+  assert.equal(otro.responsable_email, '', 'sin cuenta: queda el nombre');
+});
+
+test('RR.HH.: una fila por requerimiento, el mes sale de la fecha y se lista por año', () => {
+  const db = crear();
+  const r = CI.guardar(db, { matriz: 'FINIQUITOS', cliente_id: 'CLI-1', datos: { recepcion_requerimiento: '2026-08-14', nombre: 'Juan Pérez', causal_finiquito: 'RENUNCIA' } }, VANESSA);
   assert.equal(r.ok, true);
   assert.equal(r.registro.periodo, '2026-M08');
-  const mover = CI.guardar(db, { registro_id: r.registro.registro_id, datos: { fecha_recepcion: '2026-09-02' } }, VANESSA);
+  assert.equal(r.registro.estado, 'PENDIENTE');
+  const mover = CI.guardar(db, { registro_id: r.registro.registro_id, datos: { recepcion_requerimiento: '2026-09-02', envio_doc_cliente: '2026-09-03' } }, VANESSA);
   assert.equal(mover.registro.periodo, '2026-M09');
-  assert.equal(CI.listar(db, { matriz: 'FINIQUITOS', periodo: '2026-M09' }, VANESSA).registros.length, 1);
+  assert.equal(mover.registro.estado, 'TERMINADO');
+  const l = CI.listar(db, { matriz: 'FINIQUITOS', anio: '2026' }, VANESSA);
+  assert.equal(l.registros.length, 1);
+  assert.deepEqual(l.anios, ['2026']);
+  // Un error de tipeo en la fecha (año 0204) no inventa un mes.
+  const tipeo = CI.guardar(db, { matriz: 'FINIQUITOS', cliente_id: 'CLI-1', datos: { recepcion_requerimiento: '0204-04-12' } }, VANESSA);
+  assert.equal(tipeo.registro.periodo, CI.periodoActual_());
 });
 
-test('convenios: el estado sale de las cuotas vencidas', () => {
+test('convenios: la situación sale de las cuotas vencidas', () => {
   const db = crear();
-  const sin = CI.guardar(db, { matriz: 'CONVENIOS', periodo: '2026-M09', cliente_id: 'CLI-1', datos: { convenios: [] } }, FRANCISCA);
+  const sin = CI.guardar(db, { matriz: 'CONVENIOS', periodo: '2026-M09', cliente_id: 'CLI-1', datos: { convenios: 'NO' } }, FRANCISCA);
   assert.equal(sin.registro.estado, 'SIN_CONVENIO');
-  const con = CI.guardar(db, { registro_id: sin.registro.registro_id, datos: { convenios: [
-    { tipo: 'IVA', folio: '123', cuotas_pagadas: 7, cuotas_vencidas: 0 },
-    { tipo: 'Renta', folio: '456', cuotas_vencidas: 2 },
-    { tipo: '', folio: '' }
-  ] } }, FRANCISCA);
-  assert.equal(con.registro.datos.convenios.length, 2, 'la fila vacía no se guarda');
-  assert.equal(con.registro.estado, 'CON_VENCIDAS');
-  assert.equal(CI.guardar(db, { registro_id: sin.registro.registro_id, estado: 'AL_DIA' }, FRANCISCA).registro.estado, 'CON_VENCIDAS', 'no se puede forzar a mano');
+  const al = CI.guardar(db, { registro_id: sin.registro.registro_id, datos: { convenios: 'SI', folio_convenio_1: '123', cuotas_canceladas_convenio_1: 7 } }, FRANCISCA);
+  assert.equal(al.registro.estado, 'AL_DIA');
+  const venc = CI.guardar(db, { registro_id: sin.registro.registro_id, datos: { cuotas_vencidas_convenio_2: 2 } }, FRANCISCA);
+  assert.equal(venc.registro.estado, 'CON_VENCIDAS');
 });
 
-test('contabilización: la checklist calcula el avance sobre lo que aplica', () => {
+test('contabilización: ESTADO FINAL manda; sin él, las tareas del mes', () => {
   const db = crear();
-  const r = CI.guardar(db, { matriz: 'CONTABILIZACION', periodo: '2026-M09', cliente_id: 'CLI-1', datos: { tareas: {
-    centralizaciones: { quien: FRANCISCA.email, fecha: '2026-09-05', items: { Compras: 'OK', Banco: 'OK', 'Mantención de vehículos': 'NO_APLICA', Combustible: 'NO_APLICA', Ventas: 'PENDIENTE', Honorarios: 'NO_APLICA' } }
-  } } }, FRANCISCA);
-  assert.equal(r.ok, true);
-  // 22 ítems en total, 3 no aplican → 19 aplican, 2 OK.
-  assert.deepEqual(r.registro.avance, { ok: 2, aplica: 19, pct: 11 });
-  assert.equal(r.registro.datos.tareas.centralizaciones.quien, FRANCISCA.email);
+  const base = { matriz: 'CONTABILIZACION', periodo: '2026-M09' };
+  const fin = CI.guardar(db, Object.assign({ cliente_id: 'CLI-1', datos: { estado_final: 'FINALIZADO' } }, base), FRANCISCA);
+  assert.equal(fin.registro.estado, 'TERMINADO');
+  const tareas = { centralizaciones_compras: 'OK', centralizaciones_banco: 'NO APLICA', centralizaciones_ventas: 'OK', centralizaciones_honorarios: 'OK', contabilizaciones_f29: 'OK', contabilizaciones_ppm: 'OK', pagos_sueldos: 'OK', pagos_imposiciones: 'OK' };
+  const ok = CI.guardar(db, Object.assign({ cliente_id: 'CLI-2', datos: tareas }, base), FRANCISCA);
+  assert.equal(ok.registro.estado, 'TERMINADO');
+  const pend = CI.guardar(db, Object.assign({ cliente_id: 'CLI-3', datos: Object.assign({}, tareas, { pagos_sueldos: 'PENDIENTE' }) }, base), FRANCISCA);
+  assert.equal(pend.registro.estado, 'EN_PROCESO');
 });
 
-test('abrir el mes copia los clientes del mes anterior una sola vez', () => {
+test('abrir el mes copia los clientes del mes anterior una sola vez, con lo que se arrastra', () => {
   const db = crear();
   nuevo(db, { periodo: '2026-M08', datos: { clasificacion: 'HP', monto_pago: 500 } });
-  nuevo(db, { periodo: '2026-M08', cliente_id: 'CLI-2' });
+  nuevo(db, { periodo: '2026-M08', cliente_id: 'CLI-2', datos: { clasificacion: 'HC' } });
   nuevo(db, { periodo: '2026-M09', cliente_id: 'CLI-2' });
   const r = CI.abrirPeriodo(db, { matriz: 'IVA', periodo: '2026-M09' }, FRANCISCA);
   assert.equal(r.creadas, 1);
   assert.equal(r.omitidas, 1);
-  const sep = CI.listar(db, { matriz: 'IVA', periodo: '2026-M09' }, FRANCISCA).registros;
-  const copiado = sep.find((x) => x.cliente_id === 'CLI-1');
-  assert.equal(copiado.datos.clasificacion, 'HP', 'se copia lo que se arrastra (clasificación)');
-  assert.equal(copiado.datos.monto_pago, undefined, 'no se copian los montos del mes');
+  const sep = CI.listar(db, { matriz: 'IVA', periodo: '2026-M09' }, FRANCISCA).registros.find((x) => x.cliente_id === 'CLI-1');
+  assert.equal(sep.datos.clasificacion, 'HP', 'la clasificación se arrastra');
+  assert.equal(sep.datos.monto_pago, undefined, 'el monto del mes no');
   assert.equal(CI.abrirPeriodo(db, { matriz: 'IVA', periodo: '2026-M09' }, FRANCISCA).creadas, 0);
-  assert.match(CI.abrirPeriodo(db, { matriz: 'FACTURACION', periodo: '2026-M09' }, FRANCISCA).message, /no se abre por mes/);
 });
 
 test('libera quien libera el área, solo lo terminado y nunca lo propio; editar lo liberado lo devuelve a revisión', () => {
   const db = crear();
-  const a = nuevo(db).registro;
-  const b = nuevo(db, { cliente_id: 'CLI-2', estado: 'CERRADO' }).registro;
-  const c = nuevo(db, { cliente_id: 'CLI-3', estado: 'CERRADO', responsable_email: BARBARA.email }).registro;
-  assert.equal(CI.accionLote(db, { matriz: 'IVA', accion: 'liberar', ids: [b.registro_id] }, FRANCISCA)._forbidden, true);
-  const r = CI.accionLote(db, { matriz: 'IVA', accion: 'liberar', ids: [a.registro_id, b.registro_id, c.registro_id] }, BARBARA);
-  assert.equal(r.hechos, 1);
-  assert.deepEqual(r.omitidas.map((o) => o.motivo), ['Todavía no está terminado (Pendiente).', 'Lo realizaste tú: lo libera otra persona.']);
-  const lib = CI.getRegistro(db, { registro_id: b.registro_id }, FRANCISCA).registro;
-  assert.equal(lib.liberado_por, BARBARA.email);
-  assert.ok(lib.fecha_liberacion);
-  assert.equal(CI.listar(db, { matriz: 'IVA', periodo: '2026-M09' }, FRANCISCA).resumen.liberados, 1);
+  const r = nuevo(db, { datos: { quien_realiza: BARBARA.email } }).registro;
+  assert.match(CI.accionLote(db, { matriz: 'IVA', accion: 'liberar', ids: [r.registro_id] }, BARBARA).omitidas[0].motivo, /no está terminado/i);
+  CI.guardar(db, { registro_id: r.registro_id, datos: { enviado_f29: 'OK' } }, FRANCISCA);
+  assert.match(CI.accionLote(db, { matriz: 'IVA', accion: 'liberar', ids: [r.registro_id] }, BARBARA).omitidas[0].motivo, /lo realizaste tú/i);
+  CI.guardar(db, { registro_id: r.registro_id, datos: { quien_realiza: 'FRANCISCA' } }, FRANCISCA);
+  assert.equal(CI.accionLote(db, { matriz: 'IVA', accion: 'liberar', ids: [r.registro_id] }, FRANCISCA)._forbidden, true, 'Francisca no libera');
+  assert.equal(CI.accionLote(db, { matriz: 'IVA', accion: 'liberar', ids: [r.registro_id] }, BARBARA).hechos, 1);
+  const e = CI.guardar(db, { registro_id: r.registro_id, datos: { obs: 'corregido' } }, FRANCISCA);
+  assert.equal(e.registro.liberado_por, '');
+  assert.match(e.message, /liberar de nuevo/);
+});
 
-  const ed = CI.guardar(db, { registro_id: b.registro_id, datos: { monto_pago: 99 } }, FRANCISCA);
-  assert.match(ed.message, /liberar de nuevo/);
-  assert.equal(ed.registro.liberado_por, '');
-  assert.ok(CI.getRegistro(db, { registro_id: b.registro_id }, FRANCISCA).historial.some((h) => h.accion === 'LIBERACION_REVERTIDA'));
+test('las listas no tienen mes ni liberación', () => {
+  const db = crear();
+  const r = CI.guardar(db, { matriz: 'ARRIENDOS', cliente_id: 'CLI-1', datos: { arriendo_si_no: 'SI', monto: '250.000' } }, FRANCISCA);
+  assert.equal(r.registro.periodo, CI.PERIODO_LISTA);
+  assert.equal(r.registro.estado, 'REGISTRADO');
+  assert.equal(CI.listar(db, { matriz: 'ARRIENDOS' }, FRANCISCA).registros.length, 1);
+  assert.match(CI.accionLote(db, { matriz: 'ARRIENDOS', accion: 'liberar', ids: [r.registro.registro_id] }, BARBARA).message, /no se libera/);
+});
+
+test('el motivo de la licencia solo lo ve RR.HH.: Gerencia ve "•••" y no lo puede pisar', () => {
+  const db = crear();
+  const r = CI.guardar(db, { matriz: 'LICENCIAS', cliente_id: 'CLI-1', datos: { fecha_tramite: '2026-09-01', motivo: 'ENFERMEDAD COMÚN', nombre_personal: 'Ana' } }, VANESSA).registro;
+  assert.equal(r.datos.motivo, 'ENFERMEDAD COMÚN');
+  const g = CI.listar(db, { matriz: 'LICENCIAS', anio: '2026' }, GERENCIA);
+  assert.equal(g.registros[0].datos.motivo, '•••');
+  assert.equal(CI.getRegistro(db, { registro_id: r.registro_id }, GERENCIA).registro.datos.motivo, '•••');
+  CI.guardar(db, { registro_id: r.registro_id, datos: { motivo: '•••', nombre_personal: 'Ana María' } }, ADM);
+  assert.equal(CI.listar(db, { matriz: 'LICENCIAS', anio: '2026' }, VANESSA).registros[0].datos.motivo, 'ENFERMEDAD COMÚN');
 });
 
 test('anular: lo liberado solo lo anula el Encargado', () => {
   const db = crear();
-  const b = nuevo(db, { estado: 'CERRADO' }).registro;
-  CI.accionLote(db, { matriz: 'IVA', accion: 'liberar', ids: [b.registro_id] }, BARBARA);
-  const r = CI.accionLote(db, { matriz: 'IVA', accion: 'anular', ids: [b.registro_id] }, FRANCISCA);
-  assert.equal(r.hechos, 0);
-  assert.match(r.omitidas[0].motivo, /lo anula el Encargado/);
+  const r = nuevo(db, { datos: { enviado_f29: 'OK', quien_realiza: 'FRANCISCA' } }).registro;
+  CI.accionLote(db, { matriz: 'IVA', accion: 'liberar', ids: [r.registro_id] }, BARBARA);
+  assert.match(CI.accionLote(db, { matriz: 'IVA', accion: 'anular', ids: [r.registro_id] }, FRANCISCA).omitidas[0].motivo, /Encargado/);
   const otro = nuevo(db, { cliente_id: 'CLI-2' }).registro;
   assert.equal(CI.accionLote(db, { matriz: 'IVA', accion: 'anular', ids: [otro.registro_id] }, FRANCISCA).hechos, 1);
   assert.equal(CI.listar(db, { matriz: 'IVA', periodo: '2026-M09' }, FRANCISCA).registros.length, 1);
-});
-
-test('reporte: por mes, por responsable, arrastre y tiempos', () => {
-  const db = crear();
-  CI.guardar(db, { matriz: 'FINIQUITOS', cliente_id: 'CLI-1', estado: 'ENVIADO', datos: { fecha_recepcion: '2026-07-01', fecha_envio: '2026-07-04' } }, VANESSA);
-  CI.guardar(db, { matriz: 'FINIQUITOS', cliente_id: 'CLI-2', estado: 'ENVIADO', datos: { fecha_recepcion: '2026-07-10', fecha_envio: '2026-07-12' } }, VANESSA);
-  CI.guardar(db, { matriz: 'FINIQUITOS', cliente_id: 'CLI-1', datos: { fecha_recepcion: '2026-08-03' } }, VANESSA);
-  const r = CI.reporte(db, { matriz: 'FINIQUITOS', desde: '2026-07-M'.replace('-07-M', '-M07'), hasta: '2026-M09' }, VANESSA);
-  assert.deepEqual(r.por_mes.map((x) => [x.periodo, x.total, x.finalizados]), [['2026-M07', 2, 2], ['2026-M08', 1, 0], ['2026-M09', 0, 0]]);
-  assert.equal(r.por_responsable[0].email, VANESSA.email);
-  assert.equal(r.por_responsable[0].total, 3);
-  assert.equal(r.tiempos.por_mes[0].promedio, 2.5, '3 y 2 días entre recepción y envío');
-  assert.equal(r.arrastre.length, 1, 'agosto quedó sin terminar');
-  assert.equal(r.arrastre[0].periodo, '2026-M08');
 });
 
 test('los accesos los reparte solo el administrador', () => {
   const db = crear();
   assert.equal(CI.guardarMiembros(db, { depto: 'RRHH', miembros: [] }, FRANCISCA)._forbidden, true);
   assert.equal(CI.listarMiembros(db, {}, FRANCISCA)._forbidden, true);
-  const r = CI.guardarMiembros(db, { depto: 'CONTABILIDAD', miembros: [{ email: FRANCISCA.email, rol: 'LECTURA' }] }, ADM);
-  assert.deepEqual([r.altas, r.bajas, r.cambios], [0, 1, 1]);
-  assert.equal(nuevo(db)._forbidden, true, 'pasó a solo lectura');
-  assert.deepEqual(CI.listarMiembros(db, {}, ADM).departamentos[0].liberadores, [BARBARA.email]);
+  assert.equal(CI.guardarMiembros(db, { depto: 'RRHH', miembros: [{ email: 'nueva@homepymes.cl', rol: 'LECTURA' }] }, ADM).ok, true);
 });
 
 test('las consultas van por índice (matriz, período)', () => {
   const db = crear();
-  nuevo(db);
   CI.listar(db, { matriz: 'IVA', periodo: '2026-M09' }, FRANCISCA);
-  const plan = db.prepare('EXPLAIN QUERY PLAN SELECT * FROM "CI_REGISTROS" WHERE "matriz" = ? AND "periodo" = ? AND "activa" = ?').all('"IVA"', '"2026-M09"', 'true');
+  const plan = db.prepare('EXPLAIN QUERY PLAN SELECT * FROM "CI_REGISTROS" WHERE "matriz" = ? AND "periodo" = ?').all('"IVA"', '"2026-M09"');
   assert.ok(plan.some((p) => /ix_ci_registros_matriz_periodo/.test(p.detail)), JSON.stringify(plan));
-  assert.equal(filas(db, 'CI_REGISTROS').length, 1);
 });

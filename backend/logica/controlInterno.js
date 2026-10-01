@@ -1,41 +1,45 @@
 'use strict';
 
 /**
- * controlInterno.js — módulo "Control interno" (2026-10-01): las matrices de
- * Contabilidad y RR.HH. que hoy se llenan en el Drive, dentro de SIGSO.
- * Pedido del dueño: probar si ingresar los datos aquí suma al proceso actual
- * y, sobre todo, poder sacar reportes (hoy no se sacan por lo difícil que es
- * en el Drive). Mientras tanto el Drive sigue siendo el registro oficial para
- * la certificación: este módulo NO escribe en el SGC (servicios prestados).
+ * controlInterno.js — módulo "Control interno": las matrices de Contabilidad
+ * y RR.HH. del Drive dentro de SIGSO.
  *
- * Diseño (ver documentacion/SIGSO-control-interno.md):
- *  - Un solo motor; cada matriz es configuración (controlInternoMatrices.js).
- *  - Permisos REALES en el servidor: el módulo `control_interno` en la cuenta
- *    (o ADM) y, por departamento, CI_MIEMBROS (REGISTRA / LECTURA). Ven todo
- *    sin registrar: Gerencia y el Encargado del SGC. Libera quien libera el
- *    área en Calidad (SGC_LIBERADORES / jefatura / Encargado): una sola
- *    lista "Quién libera" para los dos módulos. Nadie libera lo suyo.
- *  - Escala: se consulta filtrando en SQL por matriz + período, con índice.
- *    Un mes de la matriz más grande son ~220 filas; el año, ~10.000.
- *  - Trazabilidad: CI_HISTORIAL guarda quién creó, cambió, liberó o anuló.
- *    Editar un registro liberado le quita la liberación (hay que revisarlo
- *    de nuevo): lo liberado es lo que alguien revisó, no una versión vieja.
+ * Versión "espejo del Excel" (2026-10-01, pedido del dueño): cada matriz
+ * tiene las MISMAS columnas, nombres y orden que su planilla
+ * (controlInternoColumnas.js) y se guarda TODO lo que la planilla dice, tal
+ * cual. Lo que SIGSO agrega sale de esas mismas columnas:
+ *  - el cliente (contra el catálogo), el responsable (contra las cuentas) y
+ *    la fecha/período de cada fila;
+ *  - la SITUACIÓN (pendiente, en proceso, terminado...), que se calcula con
+ *    la regla de cada matriz (controlInternoMatrices.js): nadie la escribe;
+ *  - liberación, historial y reportes.
+ *
+ * Permisos REALES en el servidor: el módulo `control_interno` en la cuenta
+ * (o ADM) y, por departamento, CI_MIEMBROS (REGISTRA / LECTURA). Ven todo sin
+ * registrar: Gerencia y el Encargado del SGC. Libera quien libera el área en
+ * Calidad (SGC_LIBERADORES): una sola lista "Quién libera". Nadie libera lo
+ * suyo. Las columnas sensibles (motivo de la licencia) solo las ven los
+ * miembros del departamento.
+ *
+ * Escala: ~50.000 filas (2022-2026). Siempre se filtra en SQL por matriz +
+ * período (índice); un año de la matriz más grande son ~2.000 filas.
  */
 
 const crypto = require('node:crypto');
 const { leerFilas_, agregarFila_, actualizarFilaPorId_, encabezadosReales_ } = require('../db/sqliteRepo');
 const { COLUMNAS } = require('../db/schema');
 const { DEPARTAMENTOS, MATRICES, matriz_ } = require('./controlInternoMatrices');
+const P = require('./controlInternoPlanillas');
 const Prestaciones = require('./prestacionesSgc');
 
 const MODULO = 'control_interno';
 const ROLES_MIEMBRO = ['REGISTRA', 'LECTURA'];
 const TOPE_LOTE = 300;
-const MAX_ITEMS = 30;
 const RE_PERIODO = /^\d{4}-M(0[1-9]|1[0-2])$/;
 const RE_FECHA = /^\d{4}-\d{2}-\d{2}$/;
-const RE_HORA = /^([01]?\d|2[0-3]):[0-5]\d$/;
-const ESTADOS_CHECK = ['OK', 'PENDIENTE', 'NO_APLICA'];
+const RE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Las listas (foto por cliente) no tienen período: todas sus filas van aquí.
+const PERIODO_LISTA = '0000-M01';
 
 function uuid_() { return crypto.randomUUID(); }
 function esVerdadero_(v) { return v === true || v === 'TRUE' || v === 1; }
@@ -85,6 +89,12 @@ function consultar_(db, tabla, iguales, extra) {
   const sql = 'SELECT * FROM "' + tabla + '"' + (conds.length ? ' WHERE ' + conds.join(' AND ') : '');
   return db.prepare(sql).all(...params).map((f) => mapear_(f, enc, COLUMNAS[tabla]));
 }
+/** Filas de una matriz entre dos períodos (inclusive), activas. */
+function rango_(db, matriz, desde, hasta) {
+  return consultar_(db, 'CI_REGISTROS', { matriz, activa: true }, {
+    sql: '"periodo" >= ? AND "periodo" <= ?', params: [JSON.stringify(desde), JSON.stringify(hasta)]
+  });
+}
 function registroPorId_(db, id) {
   if (!id) return null;
   return consultar_(db, 'CI_REGISTROS', { registro_id: String(id) }).find((r) => esVerdadero_(r.activa)) || null;
@@ -108,7 +118,8 @@ function miembros_(db) {
 /**
  * Qué puede hacer la persona en cada departamento. `tieneModulo` es la
  * puerta del módulo (CUENTAS_PORTAL.modulos, que aquí SÍ se verifica: el
- * módulo guarda datos de trabajadores y montos de clientes).
+ * módulo guarda datos de trabajadores y montos de clientes). `miembro` = está
+ * en la lista del departamento (o es ADM): ve las columnas sensibles.
  */
 function acceso_(db, contexto) {
   const email = normalizarEmail_(contexto && contexto.email);
@@ -123,7 +134,7 @@ function acceso_(db, contexto) {
     const m = mios.find((x) => x.depto === d.clave);
     const registra = esAdmin || (!!m && m.rol === 'REGISTRA');
     const libera = Prestaciones.liberaArea_(db, contexto, d.area);
-    deptos[d.clave] = { ve: registra || libera || veTodo || !!m, registra, libera };
+    deptos[d.clave] = { ve: registra || libera || veTodo || !!m, registra, libera, miembro: esAdmin || !!m };
   });
   return { email, esAdmin, tieneModulo, gobierna, deptos };
 }
@@ -141,125 +152,139 @@ function matrizConPermiso_(db, contexto, clave, que) {
 }
 function nombreDepto_(clave) { return (DEPARTAMENTOS.find((d) => d.clave === clave) || {}).nombre || clave; }
 
-// --- estados ------------------------------------------------------------------------------
+// --- situación -----------------------------------------------------------------------------
 
 function estadoDef_(m, clave) { return m.estados.find((e) => e.clave === clave) || null; }
 function esAnulado_(clave) { return /^ANULAD/.test(String(clave || '')); }
 function esFinal_(m, clave) { const e = estadoDef_(m, clave); return !!(e && e.final); }
-function liberable_(m, r) { return esFinal_(m, r.estado) && !esAnulado_(r.estado) && !r.liberado_por; }
-// Convenios: el estado sale de las cuotas (antes "SITUACIÓN CONVENIO 1..9" a mano).
-function estadoCalculado_(m, datos) {
-  if (m.estadoCalculado !== 'convenios') return '';
-  const l = Array.isArray(datos.convenios) ? datos.convenios : [];
-  if (!l.length) return 'SIN_CONVENIO';
-  return l.some((c) => Number(c.cuotas_vencidas) > 0) ? 'CON_VENCIDAS' : 'AL_DIA';
+function liberable_(m, r) { return !m.sinLiberacion && esFinal_(m, r.estado) && !esAnulado_(r.estado) && !r.liberado_por; }
+function situacion_(m, datos) {
+  const s = m.situacion(datos || {}, m);
+  return estadoDef_(m, s) ? s : m.estados[0].clave;
 }
 
-// --- validación de campos -------------------------------------------------------------------
+// --- columnas y valores -------------------------------------------------------------------
 
-function valorCampo_(c, v) {
-  if (v === undefined || v === null) return { v: '' };
-  switch (c.tipo) {
-    case 'numero': case 'monto': {
-      const s = String(v).trim().replace(/\$/g, '').replace(/\s/g, '');
-      if (s === '') return { v: '' };
-      const n = Number(c.tipo === 'monto' ? s.replace(/\./g, '').replace(',', '.') : s.replace(',', '.'));
-      if (!isFinite(n)) return { error: c.etiqueta + ' tiene que ser un número.' };
-      return { v: n };
-    }
-    case 'fecha': {
-      const s = String(v).trim().slice(0, 10);
-      if (s && !RE_FECHA.test(s)) return { error: c.etiqueta + ': la fecha no es válida.' };
-      return { v: s };
-    }
-    case 'hora': {
-      const s = String(v).trim().slice(0, 5);
-      if (s && !RE_HORA.test(s)) return { error: c.etiqueta + ': la hora no es válida (hh:mm).' };
-      return { v: s };
-    }
-    case 'lista': {
-      const s = String(v).trim();
-      if (s && (c.opciones || []).indexOf(s) === -1) return { error: c.etiqueta + ': "' + s + '" no está en la lista.' };
-      return { v: s };
-    }
-    case 'persona': {
-      const s = normalizarEmail_(v);
-      if (s && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) return { error: c.etiqueta + ': elige a la persona del directorio.' };
-      return { v: s };
-    }
-    case 'texto_largo': return { v: String(v).trim().slice(0, 4000) };
-    case 'items': {
-      if (!Array.isArray(v)) return { v: [] };
-      if (v.length > MAX_ITEMS) return { error: c.etiqueta + ': máximo ' + MAX_ITEMS + ' filas.' };
-      const filas = [];
-      for (const it of v) {
-        const fila = {};
-        let alguno = false;
-        for (const sc of c.subcampos) {
-          const r = valorCampo_(sc, it && it[sc.clave]);
-          if (r.error) return { error: c.etiqueta + ' › ' + r.error };
-          fila[sc.clave] = r.v;
-          if (r.v !== '') alguno = true;
-        }
-        if (alguno) filas.push(fila);
-      }
-      return { v: filas };
-    }
-    case 'checklist': {
-      const o = {};
-      const entrada = v && typeof v === 'object' ? v : {};
-      for (const g of c.grupos) {
-        const eg = entrada[g.clave] && typeof entrada[g.clave] === 'object' ? entrada[g.clave] : {};
-        const items = {};
-        g.items.forEach((nombre) => {
-          const e = String((eg.items || {})[nombre] || '').toUpperCase();
-          items[nombre] = ESTADOS_CHECK.indexOf(e) !== -1 ? e : '';
-        });
-        const quien = normalizarEmail_(eg.quien);
-        const fecha = String(eg.fecha || '').slice(0, 10);
-        if (fecha && !RE_FECHA.test(fecha)) return { error: g.nombre + ': la fecha no es válida.' };
-        o[g.clave] = { quien, fecha, items };
-      }
-      return { v: o };
-    }
-    default: return { v: String(v).trim().slice(0, 300) };
-  }
-}
+function columna_(m, rol) { return m.columnas.find((c) => c.rol === rol) || null; }
+/**
+ * Lo que llega de una celda, tal cual (como en la planilla): fecha, número u
+ * hora si se entiende; si no, el texto. Nunca se guardan claves.
+ */
 function limpiarDatos_(m, entrada, base) {
   const datos = Object.assign({}, base || {});
   const e = entrada && typeof entrada === 'object' ? entrada : {};
-  for (const c of m.campos) {
+  for (const c of m.columnas) {
     if (!Object.prototype.hasOwnProperty.call(e, c.clave)) continue;
-    const r = valorCampo_(c, e[c.clave]);
-    if (r.error) return { error: r.error };
-    datos[c.clave] = r.v;
+    const v = P.valor_(c.tipo, e[c.clave]);
+    if (v === '') delete datos[c.clave]; else datos[c.clave] = v;
   }
   return { datos };
 }
-// Avance de una checklist: OK sobre lo que aplica.
-function avanceChecklist_(m, datos) {
-  const c = m.campos.find((x) => x.tipo === 'checklist');
-  if (!c) return null;
-  let ok = 0, aplica = 0;
-  c.grupos.forEach((g) => g.items.forEach((nombre) => {
-    const e = (((datos[c.clave] || {})[g.clave] || {}).items || {})[nombre];
-    if (e === 'NO_APLICA') return;
-    aplica++;
-    if (e === 'OK') ok++;
-  }));
-  return { ok, aplica, pct: aplica ? Math.round(100 * ok / aplica) : 0 };
+// Fechas fuera de rango son errores de tipeo de la planilla (0204, 2016, 2032):
+// no dan período. Válido: desde 2020 hasta dos meses después de hoy.
+function periodoValido_(p) {
+  const s = String(p || '');
+  if (/^\d{4}$/.test(s)) return Number(s) >= 2020 && Number(s) <= new Date().getFullYear();
+  return RE_PERIODO.test(s) && s >= '2020-M01' && s <= moverPeriodo_(periodoActual_(), 2);
+}
+function periodoDeDatos_(m, datos) {
+  for (const k of (m.periodoDe || [m.fechaPrincipal]).concat(m.columnas.filter((c) => c.tipo === 'fecha').map((c) => c.clave))) {
+    const v = datos[k];
+    const p = periodoDeFecha_(v);
+    if (periodoValido_(p)) return p;
+    const mes = P.mesDeHoja_(v);
+    if (mes && mes.anio && periodoValido_(String(mes.anio))) return mes.anio + '-M' + String(mes.mes).padStart(2, '0');
+    const anio = /^(20\d{2})(\.0)?$/.exec(String(v || '').trim());
+    if (anio && periodoValido_(anio[1])) return anio[1] + '-M01';
+  }
+  return '';
 }
 
-function formatear_(m, r) {
+// Personas: "FRANCISCA", "Bárbara", "Vanessa Sepulveda" -> el correo de la única cuenta que calza.
+function personas_(db) {
+  let cuentas = [];
+  try { cuentas = leerFilas_(db, 'CUENTAS_PORTAL', COLUMNAS.CUENTAS_PORTAL).filter((c) => esVerdadero_(c.activo)); } catch (e) { /* sin cuentas */ }
+  const lista = cuentas.map((c) => {
+    let emails = c.emails;
+    if (typeof emails === 'string') { try { emails = JSON.parse(emails); } catch (e) { emails = emails.split(/[,;\s]+/); } }
+    return { nombre: P.n_(c.nombre), email: String((emails || [])[0] || '').toLowerCase() };
+  }).filter((c) => c.nombre && c.email);
+  const cache = {};
+  return function (texto) {
+    const s = P.n_(texto);
+    if (!s) return '';
+    if (RE_EMAIL.test(String(texto).trim())) return normalizarEmail_(texto);
+    if (cache[s] !== undefined) return cache[s];
+    let c = lista.filter((x) => x.nombre === s);
+    if (c.length !== 1) c = lista.filter((x) => x.nombre.indexOf(s) === 0);
+    if (c.length !== 1) { const pr = s.split(' ')[0]; c = lista.filter((x) => x.nombre.split(' ')[0] === pr); }
+    cache[s] = c.length === 1 ? c[0].email : '';
+    return cache[s];
+  };
+}
+
+// Clientes del catálogo. Lo que no calza queda con el nombre de la planilla y
+// "Fuera del catálogo" (el reporte lo cuenta: es la conciliación pendiente).
+function clientes_(db) {
+  try {
+    return leerFilas_(db, 'CAT_CLIENTES', COLUMNAS.CAT_CLIENTES).filter((c) => esVerdadero_(c.activo))
+      .map((c) => ({ cliente_id: c.cliente_id, nombre: c.razon_social || '', rut: c.rut || '', codigo: c.codigo_cliente || '' }));
+  } catch (e) { return []; }
+}
+function contextoClientes_(db) {
+  const porId = {}, porCodigo = {}, porRut = {}, porNombre = {};
+  clientes_(db).forEach((c) => {
+    porId[c.cliente_id] = c;
+    if (c.codigo) porCodigo[P.n_(c.codigo)] = c;
+    const r = P.rutNorm_(c.rut);
+    if (r) porRut[r] = c;
+    const k = P.nombreNorm_(c.nombre);
+    if (k && !porNombre[k]) porNombre[k] = c;
+  });
+  return { porId, porCodigo, porRut, porNombre };
+}
+/** Texto de la planilla (+ RUT / código si los hay) -> cliente del catálogo o nombre libre. */
+function resolverClienteTexto_(ctx, texto, rutTexto, codigoTexto) {
+  const s = String(texto || '').replace(/\s+/g, ' ').trim();
+  if (s.length < 2) return null;
+  const cod = (String(codigoTexto || '').match(/^([A-Z]{2,3}-\d{2,4}-\d+)/i) || s.match(/^([A-Z]{2,3}-\d{2,4}-\d+)/i) || [])[1];
+  const rut = P.rutNorm_(rutTexto) || P.rutNorm_(s);
+  const nombre = s.replace(/^[A-Z]{2,3}-\d{2,4}-\d+\s*/i, '').replace(/\s*\d{1,2}\.?\d{3}\.?\d{3}\s*-\s*[\dkK]\s*$/, '').trim() || s;
+  const c = (cod && ctx.porCodigo[P.n_(cod)]) || (rut && ctx.porRut[rut]) || ctx.porNombre[P.nombreNorm_(nombre)];
+  if (c) return { cliente_id: c.cliente_id, cliente_nombre: c.nombre, cliente_rut: c.rut };
+  return { cliente_id: '', cliente_nombre: nombre.slice(0, 200), cliente_rut: rut };
+}
+
+/**
+ * Lo que el registro guarda aparte de `datos` (todo sale de las columnas):
+ * cliente, responsable, fecha, situación y, en las de tipo registro, período.
+ */
+function derivados_(m, datos, ctx) {
+  const out = { fecha: m.fechaPrincipal && RE_FECHA.test(String(datos[m.fechaPrincipal] || '')) ? datos[m.fechaPrincipal] : '' };
+  out.estado = situacion_(m, datos);
+  const cResp = columna_(m, 'responsable');
+  if (cResp && ctx.persona) out.responsable_email = ctx.persona(datos[cResp.clave]);
+  if (m.tipo === 'registro') { const p = periodoDeDatos_(m, datos); if (p) out.periodo = p; }
+  return out;
+}
+
+function formatear_(m, r, verSensibles) {
+  const datos = Object.assign({}, r.datos && typeof r.datos === 'object' ? r.datos : {});
+  if (!verSensibles) (m.sensibles || []).forEach((k) => { if (datos[k] !== undefined) datos[k] = '•••'; });
   return {
     registro_id: r.registro_id, matriz: r.matriz, periodo: r.periodo,
     cliente_id: r.cliente_id || '', cliente_nombre: r.cliente_nombre || '', cliente_rut: r.cliente_rut || '',
     fecha: r.fecha || '', estado: r.estado, responsable_email: r.responsable_email || '',
     liberado_por: r.liberado_por || '', fecha_liberacion: r.fecha_liberacion || '',
-    datos: r.datos && typeof r.datos === 'object' ? r.datos : {}, observaciones: r.observaciones || '',
-    avance: avanceChecklist_(m, r.datos || {}),
+    datos, observaciones: r.observaciones || '',
     creado_por: r.creado_por || '', actualizado_por: r.actualizado_por || '', fecha_actualizacion: r.fecha_actualizacion || r.fecha_creacion || ''
   };
+}
+function orden_(a, b) {
+  const fa = Number((a.datos || {})._fila), fb = Number((b.datos || {})._fila);
+  if (isFinite(fa) && isFinite(fb) && fa !== fb) return fa - fb;
+  if (isFinite(fa) !== isFinite(fb)) return isFinite(fa) ? -1 : 1;
+  return String(a.fecha_creacion || '').localeCompare(String(b.fecha_creacion || '')) || String(a.registro_id).localeCompare(String(b.registro_id));
 }
 function resumen_(m, filas) {
   const r = { total: 0, por_estado: {}, pendientes: 0, finalizados: 0, liberados: 0, por_liberar: 0, anulados: 0 };
@@ -274,14 +299,21 @@ function resumen_(m, filas) {
   });
   return r;
 }
+/** Filas del resumen: mensual = el mes; registro = el año del mes; lista = todo. */
+function filasDelResumen_(db, m, periodo) {
+  if (m.tipo === 'lista') return consultar_(db, 'CI_REGISTROS', { matriz: m.clave, periodo: PERIODO_LISTA, activa: true });
+  if (m.tipo === 'registro') return consultar_(db, 'CI_REGISTROS', { matriz: m.clave, periodo, activa: true });
+  return consultar_(db, 'CI_REGISTROS', { matriz: m.clave, periodo, activa: true });
+}
 
-// Clientes del catálogo (los que se eligen al registrar). Fuera del catálogo se
-// permite escribir el nombre: así el propio módulo muestra qué falta conciliar.
-function clientes_(db) {
-  try {
-    return leerFilas_(db, 'CAT_CLIENTES', COLUMNAS.CAT_CLIENTES).filter((c) => esVerdadero_(c.activo))
-      .map((c) => ({ cliente_id: c.cliente_id, nombre: c.razon_social || '', rut: c.rut || '', codigo: c.codigo_cliente || '' }));
-  } catch (e) { return []; }
+function definicionPublica_(m) {
+  return {
+    clave: m.clave, depto: m.depto, seccion: m.seccion, nombre: m.nombre, codigo: m.codigo || '', descripcion: m.descripcion || '',
+    tipo: m.tipo, unaPorCliente: !!m.unaPorCliente, abrirMes: m.tipo === 'mensual' && !!(m.unaPorCliente || m.copiar),
+    sinLiberacion: !!m.sinLiberacion, sinCliente: !!m.sinCliente, tiempos: m.tiempos || null, montos: m.montos || [],
+    fechaPrincipal: m.fechaPrincipal || '', estados: m.estados, sensibles: m.sensibles || [],
+    columnas: m.columnas.map((c) => ({ clave: c.clave, etiqueta: c.etiqueta, tipo: c.tipo, rol: c.rol || '', grupo: c.grupo || '', antigua: !!c.antigua, sugerencias: c.sugerencias || [] }))
+  };
 }
 
 // =========================================================================================
@@ -295,49 +327,62 @@ function getConfig(db, data, contexto) {
   const periodo = RE_PERIODO.test(String((data && data.periodo) || '')) ? data.periodo : periodoActual_();
   const deptos = DEPARTAMENTOS.filter((d) => ac.deptos[d.clave].ve);
   const visibles = MATRICES.filter((m) => ac.deptos[m.depto].ve);
-
   const resumen = {};
-  if (visibles.length) {
-    // Una consulta por matriz: usa el índice (matriz, período).
-    visibles.forEach((m) => { resumen[m.clave] = resumen_(m, consultar_(db, 'CI_REGISTROS', { matriz: m.clave, periodo, activa: true })); });
-  }
+  visibles.forEach((m) => { if (m.tipo !== 'lista') resumen[m.clave] = resumen_(m, filasDelResumen_(db, m, periodo)); });
   return {
     yo: ac.email,
     periodo,
     puede_administrar: ac.esAdmin,
     departamentos: deptos.map((d) => Object.assign({ clave: d.clave, nombre: d.nombre, liberadores: Prestaciones.liberadoresDeArea_(db, d.area) }, ac.deptos[d.clave])),
-    matrices: visibles.map((m) => ({
-      clave: m.clave, depto: m.depto, nombre: m.nombre, descripcion: m.descripcion, servicio: m.servicio || '',
-      periodica: !!m.periodica, unaPorCliente: !!m.unaPorCliente, abrirMes: !!m.periodica && (m.unaPorCliente || !!m.copiar),
-      estadoCalculado: !!m.estadoCalculado, tiempos: m.tiempos || null, fechaPrincipal: m.fechaPrincipal || '',
-      estados: m.estados, campos: m.campos
-    })),
+    matrices: visibles.map(definicionPublica_),
     clientes: visibles.length ? clientes_(db) : [],
     resumen
   };
 }
 
-/** Registros de una matriz en un período (siempre acotado por período). */
+/**
+ * Filas de una matriz. Mensual: un mes (`periodo`). Registro: un año
+ * (`anio`) o un mes (`periodo`). Lista: todas. Siempre en el orden de la
+ * planilla. `columnas_con_datos`: las columnas antiguas que se muestran.
+ */
 function listar(db, data, contexto) {
   const d = data || {};
   const x = matrizConPermiso_(db, contexto, d.matriz, 've');
   if (x.error) return x.error;
-  const periodo = String(d.periodo || '');
-  if (!RE_PERIODO.test(periodo)) return { ok: false, message: 'Indica el período.' };
-  const filas = consultar_(db, 'CI_REGISTROS', { matriz: x.m.clave, periodo, activa: true });
-  const anterior = moverPeriodo_(periodo, -1);
-  const delAnterior = consultar_(db, 'CI_REGISTROS', { matriz: x.m.clave, periodo: anterior, activa: true }).filter((r) => !esAnulado_(r.estado));
-  const registros = filas.map((r) => formatear_(x.m, r))
-    .sort((a, b) => a.cliente_nombre.localeCompare(b.cliente_nombre, 'es') || String(a.registro_id).localeCompare(String(b.registro_id)));
-  return {
-    matriz: x.m.clave, periodo, periodo_anterior: anterior,
-    puede_registrar: x.p.registra, puede_liberar: x.p.libera, gobierna: x.ac.gobierna, yo: x.ac.email,
-    registros, resumen: resumen_(x.m, filas), en_periodo_anterior: delAnterior.length,
-    // Lo que "Abrir el mes" crearía (clientes del mes anterior que faltan en este).
-    por_abrir: x.m.periodica && (x.m.unaPorCliente || x.m.copiar)
-      ? delAnterior.filter((a) => !filas.some((f) => mismoCliente_(f, a) && (x.m.unaPorCliente || (x.m.copiar || []).every((k) => JSON.stringify((f.datos || {})[k]) === JSON.stringify((a.datos || {})[k]))))).length
-      : 0
+  const m = x.m;
+  let filas, periodo = '', anio = '';
+  if (m.tipo === 'lista') {
+    filas = consultar_(db, 'CI_REGISTROS', { matriz: m.clave, periodo: PERIODO_LISTA, activa: true });
+  } else if (m.tipo === 'registro' && /^\d{4}$/.test(String(d.anio || ''))) {
+    anio = String(d.anio);
+    filas = rango_(db, m.clave, anio + '-M01', anio + '-M12');
+  } else {
+    periodo = String(d.periodo || '');
+    if (!RE_PERIODO.test(periodo)) return { ok: false, message: 'Indica el período.' };
+    filas = consultar_(db, 'CI_REGISTROS', { matriz: m.clave, periodo, activa: true });
+  }
+  const registros = filas.map((r) => formatear_(m, r, x.p.miembro)).sort(orden_);
+  const conDatos = {};
+  registros.forEach((r) => Object.keys(r.datos).forEach((k) => { if (r.datos[k] !== '') conDatos[k] = true; }));
+  const res = {
+    matriz: m.clave, tipo: m.tipo, periodo, anio,
+    puede_registrar: x.p.registra, puede_liberar: x.p.libera && !m.sinLiberacion, gobierna: x.ac.gobierna, yo: x.ac.email,
+    registros, resumen: resumen_(m, filas), columnas_con_datos: Object.keys(conDatos)
   };
+  if (m.tipo === 'mensual' && periodo) {
+    const anterior = moverPeriodo_(periodo, -1);
+    const delAnterior = consultar_(db, 'CI_REGISTROS', { matriz: m.clave, periodo: anterior, activa: true });
+    res.periodo_anterior = anterior;
+    res.en_periodo_anterior = delAnterior.length;
+    res.por_abrir = m.unaPorCliente ? delAnterior.filter((a) => !filas.some((f) => mismoCliente_(f, a))).length : 0;
+  }
+  if (m.tipo === 'registro') {
+    // Años con datos (para el selector).
+    const anios = db.prepare('SELECT DISTINCT substr("periodo", 2, 4) AS a FROM "CI_REGISTROS" WHERE "matriz" = ? AND "activa" = ? ORDER BY a DESC')
+      .all(JSON.stringify(m.clave), JSON.stringify(true)).map((f) => f.a).filter((a) => /^\d{4}$/.test(a));
+    res.anios = anios;
+  }
+  return res;
 }
 
 /** Un registro con su historial. */
@@ -348,27 +393,40 @@ function getRegistro(db, data, contexto) {
   if (x.error) return x.error;
   const hist = consultar_(db, 'CI_HISTORIAL', { registro_id: r.registro_id })
     .sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
-  return { registro: formatear_(x.m, r), historial: hist.map((h) => ({ accion: h.accion, detalle: h.detalle, usuario_email: h.usuario_email, fecha: h.fecha })), puede_registrar: x.p.registra, puede_liberar: x.p.libera };
+  return {
+    registro: formatear_(x.m, r, x.p.miembro),
+    historial: hist.map((h) => ({ accion: h.accion, detalle: h.detalle, usuario_email: h.usuario_email, fecha: h.fecha })),
+    puede_registrar: x.p.registra, puede_liberar: x.p.libera && !x.m.sinLiberacion
+  };
 }
 
-function resolverCliente_(db, d) {
+function resolverCliente_(db, m, d, datos) {
+  if (m.sinCliente) return { cliente_id: '', cliente_nombre: '', cliente_rut: '' };
   const id = String(d.cliente_id || '').trim();
   if (id) {
     const c = clientes_(db).find((k) => k.cliente_id === id);
     if (!c) return { error: 'El cliente no está en el catálogo de SIGSO.' };
     return { cliente_id: c.cliente_id, cliente_nombre: c.nombre, cliente_rut: c.rut };
   }
-  const nombre = String(d.cliente_nombre || '').trim().slice(0, 200);
-  if (nombre.length < 3) return { error: 'Elige el cliente (o escribe su nombre si no está en el catálogo).' };
-  return { cliente_id: '', cliente_nombre: nombre, cliente_rut: String(d.cliente_rut || '').trim().slice(0, 20) };
+  const cCli = columna_(m, 'cliente'), cRut = columna_(m, 'rut');
+  const nombre = String(d.cliente_nombre || (cCli ? datos[cCli.clave] : '') || '').trim().slice(0, 200);
+  if (nombre.length < 2) return { error: 'Elige el cliente (o escribe su nombre si no está en el catálogo).' };
+  const ctx = contextoClientes_(db);
+  return resolverClienteTexto_(ctx, nombre, d.cliente_rut || (cRut ? datos[cRut.clave] : ''), datos.codigo);
 }
 function mismoCliente_(a, b) {
   if (a.cliente_id || b.cliente_id) return a.cliente_id === b.cliente_id;
   return normalizarTexto_(a.cliente_nombre) === normalizarTexto_(b.cliente_nombre);
 }
 function etiquetasCambiadas_(m, antes, despues) {
-  return m.campos.filter((c) => JSON.stringify(antes[c.clave] === undefined ? '' : antes[c.clave]) !== JSON.stringify(despues[c.clave] === undefined ? '' : despues[c.clave]))
-    .map((c) => c.etiqueta);
+  return m.columnas.filter((c) => JSON.stringify(antes[c.clave] === undefined ? '' : antes[c.clave]) !== JSON.stringify(despues[c.clave] === undefined ? '' : despues[c.clave]))
+    .map((c) => (c.grupo ? c.grupo + ' › ' : '') + c.etiqueta);
+}
+function siguienteFila_(db, m, periodo) {
+  const filas = m.tipo === 'lista' || m.tipo === 'mensual'
+    ? consultar_(db, 'CI_REGISTROS', { matriz: m.clave, periodo, activa: true })
+    : consultar_(db, 'CI_REGISTROS', { matriz: m.clave, activa: true });
+  return filas.reduce((mx, r) => Math.max(mx, Number((r.datos || {})._fila) || 0), 0) + 1;
 }
 
 /**
@@ -382,58 +440,53 @@ function guardar(db, data, contexto) {
   const x = matrizConPermiso_(db, contexto, existente ? existente.matriz : d.matriz, 'registra');
   if (x.error) return x.error;
   const m = x.m;
-
-  const limpio = limpiarDatos_(m, d.datos, existente ? existente.datos : {});
-  if (limpio.error) return { ok: false, message: limpio.error };
-  const datos = limpio.datos;
-
-  let estado = d.estado !== undefined ? String(d.estado) : (existente ? existente.estado : m.estados[0].clave);
-  if (!estadoDef_(m, estado)) return { ok: false, message: 'Estado no válido.' };
-  const calculado = estadoCalculado_(m, datos);
-  if (calculado) estado = calculado;
-
-  const responsable = d.responsable_email !== undefined ? normalizarEmail_(d.responsable_email) : (existente ? existente.responsable_email : x.ac.email);
-  if (responsable && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(responsable)) return { ok: false, message: 'Elige a la persona que lo realiza.' };
-  const fecha = m.fechaPrincipal ? String(datos[m.fechaPrincipal] || '') : '';
+  // Lo sensible que no se ve no se puede pisar con los "•••" de la pantalla.
+  const entrada = Object.assign({}, d.datos || {});
+  (m.sensibles || []).forEach((k) => { if (!x.p.miembro || entrada[k] === '•••') delete entrada[k]; });
+  const datos = limpiarDatos_(m, entrada, existente ? existente.datos : {}).datos;
+  const der = derivados_(m, datos, { persona: personas_(db) });
   const ahora = new Date().toISOString();
 
   if (!existente) {
-    const cli = resolverCliente_(db, d);
+    const cli = resolverCliente_(db, m, d, datos);
     if (cli.error) return { ok: false, message: cli.error };
     let periodo = String(d.periodo || '');
-    if (!m.periodica) periodo = periodoDeFecha_(fecha) || (RE_PERIODO.test(periodo) ? periodo : periodoActual_());
+    if (m.tipo === 'lista') periodo = PERIODO_LISTA;
+    else if (m.tipo === 'registro') periodo = der.periodo || (RE_PERIODO.test(periodo) ? periodo : periodoActual_());
     if (!RE_PERIODO.test(periodo)) return { ok: false, message: 'Indica el período.' };
     if (m.unaPorCliente) {
       const ya = consultar_(db, 'CI_REGISTROS', { matriz: m.clave, periodo, activa: true }).find((r) => mismoCliente_(r, cli));
-      if (ya) return { ok: false, message: cli.cliente_nombre + ' ya tiene su registro en este período: edítalo en la tabla.' };
+      if (ya) return { ok: false, message: cli.cliente_nombre + ' ya tiene su fila en este mes: edítala en la tabla.' };
     }
+    datos._fila = siguienteFila_(db, m, periodo);
     const fila = Object.assign({
       registro_id: uuid_(), depto: m.depto, matriz: m.clave, periodo,
-      fecha, estado, responsable_email: responsable, liberado_por: '', fecha_liberacion: '',
-      datos, observaciones: String(d.observaciones || '').trim().slice(0, 2000),
+      fecha: der.fecha, estado: der.estado, responsable_email: der.responsable_email || (columna_(m, 'responsable') ? '' : x.ac.email),
+      liberado_por: '', fecha_liberacion: '', datos, observaciones: String(d.observaciones || '').trim().slice(0, 2000),
       creado_por: x.ac.email, fecha_creacion: ahora, actualizado_por: x.ac.email, fecha_actualizacion: ahora, activa: true
     }, cli);
     enTransaccion_(db, () => {
       agregarFila_(db, 'CI_REGISTROS', fila);
-      historial_(db, fila.registro_id, 'CREADO', m.nombre + ' · ' + cli.cliente_nombre, contexto);
+      historial_(db, fila.registro_id, 'CREADO', m.nombre + (cli.cliente_nombre ? ' · ' + cli.cliente_nombre : ''), contexto);
     });
-    return { ok: true, registro: formatear_(m, fila), message: 'Registro creado.' };
+    return { ok: true, registro: formatear_(m, fila, x.p.miembro), message: 'Fila agregada.' };
   }
 
-  const cambios = { datos, estado, responsable_email: responsable, fecha, actualizado_por: x.ac.email, fecha_actualizacion: ahora };
+  const cambios = { datos, estado: der.estado, fecha: der.fecha, actualizado_por: x.ac.email, fecha_actualizacion: ahora };
+  if (der.responsable_email !== undefined) cambios.responsable_email = der.responsable_email;
+  if (m.tipo === 'registro' && der.periodo) cambios.periodo = der.periodo;
   if (d.observaciones !== undefined) cambios.observaciones = String(d.observaciones || '').trim().slice(0, 2000);
-  if (!m.periodica && fecha) cambios.periodo = periodoDeFecha_(fecha);
-  if (d.cliente_id !== undefined || d.cliente_nombre !== undefined) {
-    const cli = resolverCliente_(db, d);
+  const cCli = columna_(m, 'cliente');
+  if (d.cliente_id !== undefined || d.cliente_nombre !== undefined || (cCli && entrada[cCli.clave] !== undefined)) {
+    const cli = resolverCliente_(db, m, d, datos);
     if (cli.error) return { ok: false, message: cli.error };
     Object.assign(cambios, cli);
   }
   const detalle = etiquetasCambiadas_(m, existente.datos || {}, datos);
-  if (existente.estado !== estado) detalle.push('Estado: ' + ((estadoDef_(m, existente.estado) || {}).etiqueta || existente.estado) + ' → ' + estadoDef_(m, estado).etiqueta);
-  if (existente.responsable_email !== responsable) detalle.push('Responsable');
+  if (existente.estado !== cambios.estado) detalle.push('Situación: ' + ((estadoDef_(m, existente.estado) || {}).etiqueta || existente.estado) + ' → ' + estadoDef_(m, cambios.estado).etiqueta);
   if (cambios.observaciones !== undefined && cambios.observaciones !== existente.observaciones) detalle.push('Observaciones');
   if (cambios.cliente_nombre !== undefined && cambios.cliente_nombre !== existente.cliente_nombre) detalle.push('Cliente');
-  if (!detalle.length) return { ok: true, registro: formatear_(m, existente), message: 'Sin cambios.' };
+  if (!detalle.length) return { ok: true, registro: formatear_(m, existente, x.p.miembro), message: 'Sin cambios.' };
 
   // Lo liberado es lo que alguien revisó: si cambia, vuelve a revisión.
   const revierte = !!existente.liberado_por;
@@ -444,41 +497,45 @@ function guardar(db, data, contexto) {
     if (revierte) historial_(db, existente.registro_id, 'LIBERACION_REVERTIDA', 'Se editó después de liberado: hay que liberarlo de nuevo.', contexto);
   });
   return {
-    ok: true, registro: formatear_(m, Object.assign({}, existente, cambios)),
+    ok: true, registro: formatear_(m, Object.assign({}, existente, cambios), x.p.miembro),
     message: revierte ? 'Guardado. Estaba liberado: queda para liberar de nuevo.' : 'Guardado.'
   };
 }
 
 /**
- * "Abrir el mes": crea los registros del período a partir del anterior
- * (los mismos clientes, en estado inicial). En las matrices con una fila por
- * cliente es lo que hoy se hace copiando la hoja del mes pasado.
+ * "Abrir el mes": crea las filas del mes a partir del anterior (los mismos
+ * clientes, con las columnas que se arrastran). Es lo que hoy se hace
+ * copiando la hoja del mes pasado.
  */
 function abrirPeriodo(db, data, contexto) {
   const d = data || {};
   const x = matrizConPermiso_(db, contexto, d.matriz, 'registra');
   if (x.error) return x.error;
   const m = x.m;
-  if (!m.periodica || !(m.unaPorCliente || m.copiar)) return { ok: false, message: 'Esta matriz no se abre por mes: se registra cada requerimiento.' };
+  if (m.tipo !== 'mensual' || !m.unaPorCliente) return { ok: false, message: 'Esta matriz no se abre por mes: se agrega una fila por requerimiento.' };
   const periodo = String(d.periodo || '');
   if (!RE_PERIODO.test(periodo)) return { ok: false, message: 'Indica el período.' };
-  const origen = consultar_(db, 'CI_REGISTROS', { matriz: m.clave, periodo: moverPeriodo_(periodo, -1), activa: true }).filter((r) => !esAnulado_(r.estado));
-  if (!origen.length) return { ok: false, message: 'El mes anterior no tiene registros que copiar.' };
+  const origen = consultar_(db, 'CI_REGISTROS', { matriz: m.clave, periodo: moverPeriodo_(periodo, -1), activa: true }).sort(orden_);
+  if (!origen.length) return { ok: false, message: 'El mes anterior no tiene filas que copiar.' };
   const actuales = consultar_(db, 'CI_REGISTROS', { matriz: m.clave, periodo, activa: true });
-  const copiar = m.copiar || [];
+  const cResp = columna_(m, 'responsable');
+  const copiar = m.copiar === '*'
+    ? m.columnas.filter((c) => !c.antigua && c.rol !== 'responsable' && !/^fecha_realizacion$/.test(c.clave)).map((c) => c.clave)
+    : (m.copiar || []).concat(m.columnas.filter((c) => c.rol === 'cliente' || c.rol === 'rut').map((c) => c.clave));
+  const persona = personas_(db);
   const ahora = new Date().toISOString();
-  let creadas = 0, omitidas = 0;
+  let creadas = 0, omitidas = 0, fila_ = actuales.reduce((mx, r) => Math.max(mx, Number((r.datos || {})._fila) || 0), 0);
   enTransaccion_(db, () => {
     origen.forEach((o) => {
+      if (actuales.some((a) => mismoCliente_(a, o))) { omitidas++; return; }
       const datos = {};
-      copiar.forEach((k) => { if (o.datos && o.datos[k] !== undefined) datos[k] = o.datos[k]; });
-      const repetido = actuales.some((a) => mismoCliente_(a, o) && (m.unaPorCliente || copiar.every((k) => JSON.stringify((a.datos || {})[k]) === JSON.stringify(datos[k]))));
-      if (repetido) { omitidas++; return; }
-      const estado = estadoCalculado_(m, datos) || m.estados[0].clave;
+      copiar.forEach((k) => { if (o.datos && o.datos[k] !== undefined && o.datos[k] !== '') datos[k] = o.datos[k]; });
+      datos._fila = ++fila_;
+      const der = derivados_(m, datos, { persona });
       const fila = {
         registro_id: uuid_(), depto: m.depto, matriz: m.clave, periodo,
         cliente_id: o.cliente_id || '', cliente_nombre: o.cliente_nombre || '', cliente_rut: o.cliente_rut || '',
-        fecha: '', estado, responsable_email: o.responsable_email || x.ac.email, liberado_por: '', fecha_liberacion: '',
+        fecha: '', estado: der.estado, responsable_email: cResp ? '' : (o.responsable_email || ''), liberado_por: '', fecha_liberacion: '',
         datos, observaciones: '', creado_por: x.ac.email, fecha_creacion: ahora, actualizado_por: x.ac.email, fecha_actualizacion: ahora, activa: true
       };
       agregarFila_(db, 'CI_REGISTROS', fila);
@@ -487,13 +544,12 @@ function abrirPeriodo(db, data, contexto) {
       creadas++;
     });
   });
-  return { ok: true, creadas, omitidas, message: creadas + (creadas === 1 ? ' registro creado' : ' registros creados') + (omitidas ? '; ' + omitidas + ' ya estaban.' : '.') };
+  return { ok: true, creadas, omitidas, message: creadas + (creadas === 1 ? ' fila creada' : ' filas creadas') + (omitidas ? '; ' + omitidas + ' ya estaban.' : '.') };
 }
 
 /**
- * Acciones sobre varios registros: cambiar estado, cambiar responsable,
- * liberar, quitar la liberación o anular. Lo que no se puede no frena al
- * resto: vuelve en `omitidas` con el motivo.
+ * Acciones sobre varias filas: liberar, quitar la liberación o anular. Lo
+ * que no se puede no frena al resto: vuelve en `omitidas` con el motivo.
  */
 function accionLote(db, data, contexto) {
   const d = data || {};
@@ -503,13 +559,10 @@ function accionLote(db, data, contexto) {
   if (x.error) return x.error;
   const m = x.m;
   const ids = Array.isArray(d.ids) ? Array.from(new Set(d.ids.map(String))).filter(Boolean) : [];
-  if (!ids.length) return { ok: false, message: 'Marca al menos un registro.' };
+  if (!ids.length) return { ok: false, message: 'Marca al menos una fila.' };
   if (ids.length > TOPE_LOTE) return { ok: false, message: 'Máximo ' + TOPE_LOTE + ' por vez.' };
-  if (['estado', 'responsable', 'liberar', 'desliberar', 'anular'].indexOf(accion) === -1) return { ok: false, message: 'Acción no válida.' };
-  if (accion === 'estado' && !estadoDef_(m, d.estado)) return { ok: false, message: 'Estado no válido.' };
-  if (accion === 'estado' && m.estadoCalculado) return { ok: false, message: 'En esta matriz el estado se calcula solo.' };
-  const responsable = normalizarEmail_(d.responsable_email);
-  if (accion === 'responsable' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(responsable)) return { ok: false, message: 'Elige a la persona.' };
+  if (['liberar', 'desliberar', 'anular'].indexOf(accion) === -1) return { ok: false, message: 'Acción no válida.' };
+  if (que === 'libera' && m.sinLiberacion) return { ok: false, message: 'Esta matriz no se libera: es una lista de situación.' };
 
   const hoy = hoy_();
   const ahora = new Date().toISOString();
@@ -523,9 +576,8 @@ function accionLote(db, data, contexto) {
       let cambios = null, hist = '';
       if (accion === 'liberar') {
         if (r.liberado_por) return omitir('Ya estaba liberado.');
-        if (esAnulado_(r.estado)) return omitir('Está anulado.');
         if (!esFinal_(m, r.estado)) return omitir('Todavía no está terminado (' + ((estadoDef_(m, r.estado) || {}).etiqueta || r.estado) + ').');
-        if (!x.ac.gobierna && normalizarEmail_(r.responsable_email) === x.ac.email) return omitir('Lo realizaste tú: lo libera otra persona.');
+        if (!x.ac.gobierna && r.responsable_email && normalizarEmail_(r.responsable_email) === x.ac.email) return omitir('Lo realizaste tú: lo libera otra persona.');
         cambios = { liberado_por: x.ac.email, fecha_liberacion: hoy };
         hist = 'Liberado';
       } else if (accion === 'desliberar') {
@@ -537,15 +589,6 @@ function accionLote(db, data, contexto) {
         if (r.liberado_por && !x.ac.gobierna) return omitir('Está liberado: lo anula el Encargado del SGC.');
         cambios = { activa: false };
         hist = 'Anulado';
-      } else if (accion === 'estado') {
-        if (r.estado === d.estado) return omitir('Ya estaba en ese estado.');
-        cambios = { estado: d.estado };
-        if (r.liberado_por) { cambios.liberado_por = ''; cambios.fecha_liberacion = ''; }
-        hist = 'Estado: ' + ((estadoDef_(m, r.estado) || {}).etiqueta || r.estado) + ' → ' + estadoDef_(m, d.estado).etiqueta;
-      } else if (accion === 'responsable') {
-        if (normalizarEmail_(r.responsable_email) === responsable) return omitir('Ya era el responsable.');
-        cambios = { responsable_email: responsable };
-        hist = 'Responsable cambiado';
       }
       cambios.actualizado_por = x.ac.email;
       cambios.fecha_actualizacion = ahora;
@@ -554,85 +597,12 @@ function accionLote(db, data, contexto) {
       hechos++;
     });
   });
-  const VERBOS = { liberar: ['liberado', 'liberados'], desliberar: ['quedó sin liberar', 'quedaron sin liberar'], anular: ['anulado', 'anulados'], estado: ['actualizado', 'actualizados'], responsable: ['actualizado', 'actualizados'] };
+  const VERBOS = { liberar: ['liberada', 'liberadas'], desliberar: ['quedó sin liberar', 'quedaron sin liberar'], anular: ['anulada', 'anuladas'] };
   const v = VERBOS[accion];
   return {
     ok: true, hechos, omitidas,
-    message: hechos + (hechos === 1 ? ' registro ' + v[0] : ' registros ' + v[1]) +
+    message: hechos + (hechos === 1 ? ' fila ' + v[0] : ' filas ' + v[1]) +
       (omitidas.length ? '; ' + omitidas.length + ' sin cambio (ver motivo).' : '.')
-  };
-}
-
-/**
- * Reporte de una matriz en un rango de períodos: lo que hoy no se saca del
- * Drive. Por mes, por estado, por responsable, pendientes que arrastran
- * meses y, si la matriz los tiene, días entre recepción y envío.
- */
-function reporte(db, data, contexto) {
-  const d = data || {};
-  const x = matrizConPermiso_(db, contexto, d.matriz, 've');
-  if (x.error) return x.error;
-  const m = x.m;
-  const hasta = RE_PERIODO.test(String(d.hasta || '')) ? d.hasta : periodoActual_();
-  const desde = RE_PERIODO.test(String(d.desde || '')) ? d.desde : moverPeriodo_(hasta, -11);
-  if (desde > hasta) return { ok: false, message: 'El rango está al revés.' };
-  const filas = consultar_(db, 'CI_REGISTROS', { matriz: m.clave, activa: true }, {
-    sql: '"periodo" >= ? AND "periodo" <= ?', params: [JSON.stringify(desde), JSON.stringify(hasta)]
-  }).filter((r) => !esAnulado_(r.estado));
-
-  const meses = [];
-  for (let p = desde; p <= hasta && meses.length < 60; p = moverPeriodo_(p, 1)) meses.push(p);
-  const porMes = meses.map((p) => {
-    const f = filas.filter((r) => r.periodo === p);
-    const res = resumen_(m, f);
-    return { periodo: p, total: res.total, finalizados: res.finalizados, pendientes: res.pendientes, liberados: res.liberados, por_estado: res.por_estado };
-  });
-  const porResp = {};
-  filas.forEach((r) => {
-    const k = r.responsable_email || '(sin responsable)';
-    const o = porResp[k] = porResp[k] || { email: r.responsable_email || '', total: 0, finalizados: 0, liberados: 0 };
-    o.total++;
-    if (esFinal_(m, r.estado)) o.finalizados++;
-    if (r.liberado_por) o.liberados++;
-  });
-  const porCliente = {};
-  filas.forEach((r) => {
-    const k = r.cliente_id || 'N:' + normalizarTexto_(r.cliente_nombre);
-    const o = porCliente[k] = porCliente[k] || { cliente_nombre: r.cliente_nombre, fuera_catalogo: !r.cliente_id, total: 0, pendientes: 0 };
-    o.total++;
-    if (!esFinal_(m, r.estado)) o.pendientes++;
-  });
-  // Lo que arrastra: sin terminar en meses ya cerrados.
-  const actual = periodoActual_();
-  const arrastre = filas.filter((r) => r.periodo < actual && !esFinal_(m, r.estado))
-    .map((r) => ({ registro_id: r.registro_id, periodo: r.periodo, cliente_nombre: r.cliente_nombre, estado: r.estado, responsable_email: r.responsable_email }))
-    .sort((a, b) => a.periodo.localeCompare(b.periodo)).slice(0, 200);
-
-  let tiempos = null;
-  if (m.tiempos) {
-    const [a, b] = m.tiempos;
-    const dias = (r) => {
-      const fa = (r.datos || {})[a], fb = (r.datos || {})[b];
-      if (!RE_FECHA.test(String(fa || '')) || !RE_FECHA.test(String(fb || ''))) return null;
-      return Math.round((Date.parse(fb + 'T12:00:00Z') - Date.parse(fa + 'T12:00:00Z')) / 86400000);
-    };
-    const etq = (k) => (m.campos.find((c) => c.clave === k) || {}).etiqueta || k;
-    tiempos = {
-      desde: etq(a), hasta: etq(b),
-      por_mes: meses.map((p) => {
-        const l = filas.filter((r) => r.periodo === p).map(dias).filter((n) => n !== null && n >= 0);
-        return { periodo: p, casos: l.length, promedio: l.length ? Math.round(10 * l.reduce((s, n) => s + n, 0) / l.length) / 10 : null };
-      })
-    };
-  }
-  const total = resumen_(m, filas);
-  return {
-    matriz: m.clave, nombre: m.nombre, desde, hasta, estados: m.estados,
-    total, por_mes: porMes,
-    por_responsable: Object.values(porResp).sort((p, q) => q.total - p.total),
-    por_cliente: Object.values(porCliente).sort((p, q) => q.total - p.total).slice(0, 25),
-    fuera_catalogo: Object.values(porCliente).filter((c) => c.fuera_catalogo).length,
-    arrastre, tiempos
   };
 }
 
@@ -662,7 +632,7 @@ function guardarMiembros(db, data, contexto) {
   for (const it of lista) {
     const email = normalizarEmail_(it && it.email);
     if (!email) continue;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { ok: false, message: 'Revisa el correo ' + email + '.' };
+    if (!RE_EMAIL.test(email)) return { ok: false, message: 'Revisa el correo ' + email + '.' };
     const rol = ROLES_MIEMBRO.indexOf(it.rol) !== -1 ? it.rol : 'REGISTRA';
     if (vistos[email]) continue;
     vistos[email] = true;
@@ -691,8 +661,10 @@ function guardarMiembros(db, data, contexto) {
 }
 
 module.exports = {
-  getConfig, listar, getRegistro, guardar, abrirPeriodo, accionLote, reporte, listarMiembros, guardarMiembros,
-  // Para el importador (controlInternoImportar.js): mismas reglas que la carga a mano.
-  moverPeriodo_, periodoDeFecha_, limpiarDatos_, estadoCalculado_, consultar_, enTransaccion_, historial_, clientes_, uuid_,
-  MODULO
+  getConfig, listar, getRegistro, guardar, abrirPeriodo, accionLote, listarMiembros, guardarMiembros,
+  // Para el importador y los reportes: mismas reglas que la carga a mano.
+  moverPeriodo_, periodoDeFecha_, periodoActual_, periodoTexto_, limpiarDatos_, derivados_, situacion_, periodoDeDatos_,
+  consultar_, rango_, enTransaccion_, historial_, clientes_, contextoClientes_, resolverClienteTexto_, personas_,
+  matrizConPermiso_, acceso_, resumen_, esFinal_, esAnulado_, estadoDef_, columna_, normalizarTexto_, orden_, uuid_,
+  MODULO, PERIODO_LISTA, RE_PERIODO, RE_FECHA
 };
