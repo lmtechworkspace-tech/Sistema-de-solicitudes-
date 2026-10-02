@@ -53,7 +53,11 @@ async function configurar() {
   console.log('La llave se crea en SIGSO: Control interno › Convenios y postergaciones › Seguimiento de cuotas TGR › Recibir desde la TGR › "Robot de la oficina" (solo administrador).');
   const llave = await preguntar('Pega la llave del robot (empieza con sgr_): ', true);
   if (!/^sgr_[A-Za-z0-9_-]{40,}$/.test(llave)) { console.log('Esa no parece una llave del robot. No se guardó nada.'); process.exit(1); }
-  const url = (await preguntar('Dirección de SIGSO [' + URL_SIGSO + ']: ')) || URL_SIGSO;
+  let url = (await preguntar('Dirección de SIGSO (presiona Enter para usar ' + URL_SIGSO + '): ')) || URL_SIGSO;
+  if (!/^https?:\/\/[^\s]+$/.test(url)) {
+    console.log('Eso no es una dirección web: se usa ' + URL_SIGSO + '.');
+    url = URL_SIGSO;
+  }
   fs.mkdirSync(path.dirname(RUTA_CONFIG), { recursive: true });
   fs.writeFileSync(RUTA_CONFIG, JSON.stringify({ url, llave }, null, 2), { mode: 0o600 });
   console.log('Guardado en ' + RUTA_CONFIG + ' (fuera de OneDrive). Ahora inicia el robot con:');
@@ -81,6 +85,10 @@ function recetaDePrueba() {
 async function iniciar() {
   const cfg = leerConfig();
   if (!cfg || !cfg.llave) { console.log('Falta configurar el robot. Corre primero:\n  node backend/herramientas/robot-oficina/agente.js configurar'); process.exit(1); }
+  if (!/^https?:\/\/[^\s]+$/.test(String(cfg.url || ''))) {
+    console.log('La dirección de SIGSO guardada no es válida ("' + String(cfg.url).slice(0, 60) + '"). Vuelve a configurar y, cuando pregunte la dirección, presiona solo Enter:\n  node backend/herramientas/robot-oficina/agente.js configurar');
+    process.exit(1);
+  }
   const ventana = args.includes('--ventana');
   const receta = recetaDePrueba();
   if (!Robot.disponible()) { console.log('No se encontró Chrome ni Edge en este PC: el robot los necesita.'); process.exit(1); }
