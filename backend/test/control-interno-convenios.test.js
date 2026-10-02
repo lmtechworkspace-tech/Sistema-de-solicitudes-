@@ -273,3 +273,64 @@ test('pasar a la matriz no pisa lo que la matriz ya sabe: convenios sin cuotas y
   assert.equal(d.situacion_convenio_2, '1 CUOTA VENCIDA');
   assert.equal(String(d.cantidad_convenios), '2');
 });
+
+// --- Piloto "Enviar a SIGSO" (etapa 3): la página completa de la TGR ------------------------
+const PAGINA = [
+  'Tesorería General de la República', 'Contribuyente: CONSTRUCTORA ANDES SPA  RUT: 70.111.111-1',
+  'Folio N°: 123456789', 'Cuota\tFecha de Vencimiento\tMonto ($)\tPagada',
+  '(*) 1\t31-03-2025\t77.717\tSI', '2\t30-04-2025\t1.736.315\tSI', '3\t31-05-2025\t77.717\tSI',
+  'Folio N°: 98765', 'Cuota\tFecha de Vencimiento\tMonto ($)\tPagada',
+  '1\t10-01-2026\t50.000\tSI', '2\t10-02-2026\t50.000\tNO', 'Volver  Imprimir'
+].join('\n');
+
+test('la página de la TGR se separa por folio y trae el RUT del contribuyente', () => {
+  const r = CV.bloquesTGR_(PAGINA);
+  assert.equal(r.rut, '70.111.111-1');
+  assert.deepEqual(r.bloques.map((b) => [b.folio, b.cuotas.length]), [['123456789', 3], ['98765', 2]]);
+  // Sin folio en la página: un solo bloque sin folio.
+  assert.deepEqual(CV.bloquesTGR_('1\t31-03-2025\t77.717\tSI').bloques.map((b) => b.folio), ['']);
+  assert.equal(CV.bloquesTGR_('nada que ver').bloques.length, 0);
+});
+
+test('recibir desde la TGR: revisa, actualiza los que están y crea los nuevos con el cliente del RUT', () => {
+  const db = crear();
+  const id = nuevo(db, { texto: TGR }).convenio.convenio_id;
+  CV.marcarCuotas(db, { convenio_id: id, numeros: [1], campo: 'contabilizada', valor: true }, FRANCISCA);
+  const sim = CV.recibirTGR(db, { texto: PAGINA, simular: true }, FRANCISCA);
+  assert.equal(sim.ok, true, sim.message);
+  assert.equal(sim.cliente.cliente_id, 'CLI-1');
+  const [a, b] = sim.convenios;
+  assert.equal(a.convenio_id, id);
+  assert.match(a.texto_cambios, /cuota 3 la TGR la da por pagada/);
+  assert.equal(b.nuevo, true);
+  assert.equal(CV.listar(db, {}, FRANCISCA).convenios.length, 1, 'simular no cambia nada');
+  // Lectura puede revisar, no aplicar.
+  assert.equal(CV.recibirTGR(db, { texto: PAGINA, simular: true }, LECTORA).ok, true);
+  assert.ok(rechazado(CV.recibirTGR(db, { texto: PAGINA, crear: ['98765'] }, LECTORA)));
+  const r = CV.recibirTGR(db, { texto: PAGINA, crear: ['98765'] }, FRANCISCA);
+  assert.equal(r.ok, true, r.message);
+  assert.deepEqual([r.actualizados, r.creados, r.errores.length], [1, 1, 0]);
+  assert.equal(r.convenios[1].creado, true, 'el creado vuelve con su id para abrir la ficha');
+  assert.ok(r.convenios[1].convenio_id);
+  const l = CV.listar(db, {}, FRANCISCA).convenios;
+  const viejo = l.find((c) => c.folio === '123456789'), nuevoC = l.find((c) => c.folio === '98765');
+  assert.equal(viejo.cuotas[0].contabilizada, true, 'lo marcado a mano se conserva');
+  assert.equal(viejo.cuotas[2].situacion, 'PAGADA');
+  assert.equal(nuevoC.cliente_id, 'CLI-1');
+  assert.equal(nuevoC.cuotas.length, 2);
+  assert.ok(CV.get(db, { convenio_id: id }, FRANCISCA).historial.some((h) => h.accion === 'TGR' && /^Recibido desde la TGR/.test(h.detalle)));
+});
+
+test('recibir: un folio nuevo sin cliente reconocible pide elegirlo; con cliente_id se crea', () => {
+  const db = crear();
+  const pagina = PAGINA.replace('70.111.111-1', '99.999.999-9');
+  const sim = CV.recibirTGR(db, { texto: pagina, simular: true }, FRANCISCA);
+  assert.equal(sim.cliente, null);
+  let r = CV.recibirTGR(db, { texto: pagina, crear: ['98765'] }, FRANCISCA);
+  assert.equal(r.creados, 0);
+  assert.match(r.errores[0], /elige el cliente/);
+  r = CV.recibirTGR(db, { texto: pagina, crear: ['98765'], cliente_id: 'CLI-2' }, FRANCISCA);
+  assert.equal(r.creados, 1);
+  assert.equal(CV.listar(db, {}, FRANCISCA).convenios[0].cliente_nombre, 'Pyme Sur Ltda');
+  assert.equal(CV.recibirTGR(db, { texto: 'Bienvenido a la TGR' }, FRANCISCA).ok, false);
+});

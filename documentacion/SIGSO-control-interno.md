@@ -137,8 +137,38 @@ cuotas TGR** (`frontend/js/control-interno-convenios-v2.js`,
 Permisos: los de la matriz Convenios (Contabilidad): solo lectura ve y puede
 revisar un pegado, no guardar. Tests: `backend/test/control-interno-convenios.test.js`.
 
-Siguiente (decidir con Francisca): robot de la TGR (etapa 3) que haga el pegado
-solo; mientras, el pegado manual ya evita imprimir y traspasar.
+### Etapa 3: piloto "Enviar a SIGSO" (asistido en el navegador, 2026-10-01)
+
+Por qué este camino (decisión del dueño): BaseAPI, el proveedor que se iba a
+probar, **cierra el 11-12-2026** y ya no da cuentas gratis; Boufin no cubre TGR;
+Smartbot es a medida y por cotización; y la TGR rechaza accesos automatizados
+(403) y pide clave tributaria o ClaveÚnica de cada cliente. Un robot propio
+obligaría a custodiar esas claves. El asistido cuesta $0 y SIGSO no guarda claves.
+
+Cómo funciona:
+1. Seguimiento de cuotas TGR › **Recibir desde la TGR** (`conv:tgr`) muestra el
+   marcador **Enviar a SIGSO** para arrastrar a la barra de marcadores (una vez
+   por computador; el código se arma con la dirección de SIGSO).
+2. Francisca entra a la TGR con su sesión, abre *Imprimir cuotas de convenios
+   vigentes* y toca el marcador. El marcador lee el texto de la página (o lo
+   seleccionado), abre o reutiliza la pestaña `sigso_tgr` de SIGSO y se lo manda
+   con `postMessage`; reintenta cada medio segundo hasta que SIGSO responde.
+3. SIGSO acepta solo mensajes de `*.tgr.cl`, `*.tesoreria.cl` y `tgr.gob.cl` por
+   https (en local, también localhost). Separa la página por folio
+   (`bloquesTGR_`), reconoce al cliente por el RUT de la página y muestra por
+   folio qué cambia (o que no está en el seguimiento, para crearlo).
+4. **Aplicar** (`recibirTGR`) actualiza los convenios que existen —conservando
+   lo marcado a mano— y crea los nuevos. El texto de la página no se guarda.
+
+Respaldo sin marcador: Ctrl+A y Ctrl+C en la página de la TGR y pegar en la
+misma vista (lee varios convenios de una vez).
+
+Probado con una página de prueba local que imita la de la TGR (dos folios):
+reconoció al cliente por el RUT, detectó las cuotas pagadas nuevas, creó el folio
+que faltaba y no repitió el envío. Falta la prueba en la TGR real (la hace el
+equipo): confirmar que el navegador permite el marcador en ese sitio y que la
+página trae el folio en el texto. Si la página no trae el folio, el convenio se
+actualiza desde su ficha con "Pegar desde la TGR".
 
 ## Ajustes de la reunión con Francisca (etapa 2, 2026-10-01)
 

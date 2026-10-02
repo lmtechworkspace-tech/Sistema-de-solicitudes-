@@ -148,6 +148,40 @@ function parsearCuotas_(texto) {
   }
   return { cuotas: cuotas.sort((x, y) => x.n - y.n), folio };
 }
+/**
+ * La página completa de la TGR (lo que manda el botón "Enviar a SIGSO" o un
+ * Ctrl+A / Ctrl+C) puede traer varios convenios: se separa por folio. Las
+ * cuotas que aparecen antes del primer folio van con el primero; un folio
+ * repetido junta sus cuotas. Sin ningún folio, un solo bloque sin folio.
+ * También se busca el RUT del contribuyente (el primero que aparece).
+ */
+const RE_FOLIO_G = /folio\s*(?:n[°º.]?\s*)?:?\s*(\d{3,})/ig;
+const MAX_TEXTO = 400000;
+function bloquesTGR_(texto) {
+  const t = String(texto || '').slice(0, MAX_TEXTO).replace(/00a0/g, ' ');
+  const rut = (t.match(/\b(\d{1,2}\.?\d{3}\.?\d{3}\s*-\s*[\dkK])\b/) || [])[1] || '';
+  const marcas = [];
+  let m;
+  RE_FOLIO_G.lastIndex = 0;
+  while ((m = RE_FOLIO_G.exec(t))) marcas.push({ i: m.index, folio: m[1] });
+  if (!marcas.length) {
+    const p = parsearCuotas_(t);
+    return { rut, bloques: p.cuotas.length ? [{ folio: '', cuotas: p.cuotas, texto: t }] : [] };
+  }
+  const porFolio = new Map();
+  marcas.forEach((mk, k) => {
+    const tramo = t.slice(k === 0 ? 0 : mk.i, k + 1 < marcas.length ? marcas[k + 1].i : t.length);
+    const b = porFolio.get(mk.folio) || { folio: mk.folio, cuotas: [], texto: '' };
+    const vistos = new Set(b.cuotas.map((q) => q.n));
+    parsearCuotas_(tramo).cuotas.forEach((q) => { if (!vistos.has(q.n)) { b.cuotas.push(q); vistos.add(q.n); } });
+    b.texto += '\n' + tramo;
+    porFolio.set(mk.folio, b);
+  });
+  const bloques = Array.from(porFolio.values()).filter((b) => b.cuotas.length);
+  bloques.forEach((b) => b.cuotas.sort((x, y) => x.n - y.n));
+  return { rut, bloques };
+}
+
 /** Une lo pegado con lo que ya había: conserva la revisión manual y "contabilizada". */
 function unir_(anteriores, nuevas, hoy) {
   const porN = {};
@@ -286,6 +320,64 @@ function pegarCuotas(db, data, contexto) {
   CI.historial_(db, c.convenio_id, 'TGR', 'Revisión en la TGR: ' + (u.cambios.length ? res.texto_cambios : 'sin cambios'), contexto);
   res.convenio = publico_(porId_(db, c.convenio_id));
   res.message = u.cambios.length ? u.cambios.length + (u.cambios.length === 1 ? ' cambio' : ' cambios') + ' desde la TGR.' : 'Revisado: la TGR no muestra cambios.';
+  return res;
+}
+
+/**
+ * Recibir la página de la TGR (piloto "Enviar a SIGSO", 2026-10-01): uno o
+ * varios convenios de una vez. `simular` muestra, por folio, qué cambia (o
+ * que no está en el seguimiento); al aplicar se actualizan los que existen y
+ * se crean los folios de `crear` (con el cliente del RUT de la página o el
+ * `cliente_id` que se indique). El texto no se guarda: solo las cuotas.
+ */
+function recibirTGR(db, data, contexto) {
+  const d = data || {};
+  const x = permiso_(db, contexto, d.simular ? 've' : 'registra');
+  if (x.error) return x.error;
+  const leido = bloquesTGR_(d.texto);
+  if (!leido.bloques.length) return { ok: false, message: 'No se encontraron cuotas en la página. En la TGR abre "Imprimir cuotas de convenios vigentes" y elige el convenio antes de enviar.' };
+  const hoy = hoy_();
+  const todos = todos_(db);
+  let cliente = null;
+  if (leido.rut) {
+    const c = CI.resolverClienteTexto_(CI.contextoClientes_(db), leido.rut, leido.rut, '');
+    if (c && c.cliente_id) cliente = { cliente_id: c.cliente_id, nombre: c.cliente_nombre, rut: c.cliente_rut };
+  }
+  const resultado = leido.bloques.map((b) => {
+    const base = { folio: b.folio, leidas: b.cuotas.length, pagadas_tgr: b.cuotas.filter((q) => q.tgr === 'SI').length };
+    const c = b.folio ? todos.find((k) => k.folio === b.folio) : null;
+    if (!c) return Object.assign(base, { nuevo: true });
+    const u = unir_(cuotas_(c), b.cuotas, hoy);
+    return Object.assign(base, { convenio_id: c.convenio_id, cliente_nombre: c.cliente_nombre, estado: c.estado || 'VIGENTE', cambios: u.cambios, texto_cambios: textoCambios_(u.cambios) });
+  });
+  const res = { ok: true, simulado: !!d.simular, rut: leido.rut, cliente, convenios: resultado };
+  if (d.simular) return res;
+
+  const crear = new Set((Array.isArray(d.crear) ? d.crear : []).map(String));
+  const cliCrear = String(d.cliente_id || (cliente && cliente.cliente_id) || '');
+  let actualizados = 0, creados = 0;
+  const errores = [];
+  leido.bloques.forEach((b, k) => {
+    const r = resultado[k];
+    if (r.convenio_id) {
+      const c = porId_(db, r.convenio_id);
+      const u = unir_(cuotas_(c), b.cuotas, hoy);
+      actualizarFilaPorId_(db, 'CI_CONVENIOS', 'convenio_id', c.convenio_id, { cuotas: JSON.stringify(u.cuotas), fecha_revision_tgr: hoy, actualizado_por: email_(contexto), fecha_actualizacion: new Date().toISOString() });
+      CI.historial_(db, c.convenio_id, 'TGR', 'Recibido desde la TGR: ' + (u.cambios.length ? textoCambios_(u.cambios) : 'sin cambios'), contexto);
+      actualizados++;
+      return;
+    }
+    if (!b.folio || !crear.has(b.folio)) return;
+    if (!cliCrear) { errores.push('Folio ' + b.folio + ': elige el cliente.'); return; }
+    const g = guardar(db, { cliente_id: cliCrear, folio: b.folio, texto: b.texto }, contexto);
+    if (g && g.ok) { creados++; Object.assign(r, { nuevo: false, creado: true, convenio_id: g.convenio.convenio_id, cliente_nombre: g.convenio.cliente_nombre }); }
+    else errores.push('Folio ' + b.folio + ': ' + ((g && g.message) || 'no se pudo crear.'));
+  });
+  res.actualizados = actualizados;
+  res.creados = creados;
+  res.errores = errores;
+  res.message = [actualizados ? actualizados + (actualizados === 1 ? ' convenio actualizado' : ' convenios actualizados') : '', creados ? creados + (creados === 1 ? ' creado' : ' creados') : '']
+    .filter(Boolean).join(' y ') + (actualizados || creados ? ' desde la TGR.' : 'Nada que aplicar.') + (errores.length ? ' ' + errores.join(' ') : '');
   return res;
 }
 
@@ -492,4 +584,4 @@ function aMatriz(db, data, contexto) {
   return res;
 }
 
-module.exports = { listar, get, guardar, pegarCuotas, marcarCuotas, cambiarEstado, anular, desdeMatriz, aMatriz, parsearCuotas_, situacionCuota_, resumen_, textoCambios_, TIPOS };
+module.exports = { listar, get, guardar, pegarCuotas, recibirTGR, marcarCuotas, cambiarEstado, anular, desdeMatriz, aMatriz, parsearCuotas_, bloquesTGR_, situacionCuota_, resumen_, textoCambios_, TIPOS };

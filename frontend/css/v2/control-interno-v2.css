@@ -163,3 +163,11 @@ textarea.ci2-editor { height: auto; min-width: 260px; resize: vertical; }
 .ci2-alerta ul { margin: 0; padding: 0 14px 10px 38px; display: grid; gap: 4px; }
 .ci2-alerta li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font: var(--sx-t-chico); }
 .ci2-alerta li > span { flex: 1 1 260px; }
+
+/* --- Recibir desde la TGR (piloto asistido, etapa 3) --------------------------------------- */
+.cv-rec-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; align-items: start; }
+.cv-marcador { cursor: grab; text-decoration: none; }
+.cv-marcador:active { cursor: grabbing; }
+.cv-pasos { margin: 14px 0 0; padding-left: 20px; display: grid; gap: 6px; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.cv-hechos { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.cv-hechos li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

@@ -58,6 +58,7 @@
   function pintarLista(silencioso) {
     var k = lista_.kpis, reg = registra();
     var acciones = (reg ? U.boton({ texto: 'Nuevo convenio', icono: 'nueva', variante: 'primario', clase: 'js-cv-nuevo' }) +
+      U.boton({ texto: 'Recibir desde la TGR', icono: 'descargar', clase: 'js-cv-recibir', titulo: 'Botón "Enviar a SIGSO" en la página de la TGR' }) +
       U.boton({ texto: 'Pasar a la matriz del mes', icono: 'tabla', clase: 'js-cv-amatriz', titulo: 'Llena la matriz Convenios del mes con lo que hay aquí' }) +
       U.boton({ soloIcono: true, icono: 'subir', titulo: 'Crear fichas desde la matriz Convenios', clase: 'js-cv-desde' }) : '') +
       U.boton({ soloIcono: true, icono: 'tendencia', titulo: 'Actualizar', clase: 'js-cv-recargar' });
@@ -275,12 +276,143 @@
   // =========================================================================================
   // Eventos
   // =========================================================================================
+  // =========================================================================================
+  // Recibir desde la TGR (piloto "asistido en el navegador", 2026-10-01)
+  // =========================================================================================
+  // Francisca entra a la TGR con su sesión, abre "Imprimir cuotas de convenios
+  // vigentes" y toca el marcador "Enviar a SIGSO": el marcador lee el texto de
+  // la página y lo manda a esta pestaña con postMessage. SIGSO no guarda claves
+  // ni se conecta a la TGR; solo acepta mensajes de los dominios de la TGR.
+  var recibido_ = null, rec_ = { prev: null, crear: {}, cliente: '', error: '', hecho: null };
+  function origenTGR(o) {
+    var h = '';
+    try { h = new URL(o).hostname; } catch (e) { return false; }
+    if (/^https:/.test(o) && /(^|\.)(tgr\.cl|tesoreria\.cl|tgr\.gob\.cl)$/.test(h)) return true;
+    // Para probar en local (una página de prueba servida junto a SIGSO).
+    return /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /^(localhost|127\.0\.0\.1)$/.test(h);
+  }
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || d.tipo !== 'sigso-tgr' || typeof d.texto !== 'string' || !origenTGR(e.origin)) return;
+    try { e.source.postMessage('sigso-tgr-recibido', e.origin); } catch (er) { /* la pestaña de la TGR se cerró */ }
+    // El marcador reintenta hasta que SIGSO contesta: el mismo envío llega varias veces.
+    if (recibido_ && recibido_.texto === d.texto && Date.now() - recibido_.t < 5000) return;
+    recibido_ = { texto: d.texto.slice(0, 400000), pagina: String(d.pagina || '').slice(0, 80), t: Date.now() };
+    rec_ = { prev: null, crear: {}, cliente: '', error: '', hecho: null };
+    if (x_ && x_.vista && x_.vista() === 'conv:tgr') revisarRecibido();
+    else if (x_) x_.irAItem('conv:tgr');
+  });
+  function marcador() {
+    var destino = location.origin + location.pathname + '#/control_interno/conv%3Atgr';
+    var codigo = '(function(){var D=' + JSON.stringify(destino) + ',O=' + JSON.stringify(location.origin) + ';' +
+      'var t=String(window.getSelection?window.getSelection():"");' +
+      'if(t.length<40){t=document.body?document.body.innerText:"";for(var i=0;i<window.frames.length;i++){try{t+="\\n"+window.frames[i].document.body.innerText;}catch(e){}}}' +
+      'var w=window.open(D,"sigso_tgr");if(!w){alert("SIGSO: permite las ventanas emergentes de este sitio.");return;}' +
+      'var n=0,iv=setInterval(function(){n++;try{w.postMessage({tipo:"sigso-tgr",texto:t,pagina:location.hostname},O);}catch(e){}if(n>60)clearInterval(iv);},500);' +
+      'window.addEventListener("message",function(e){if(e.origin===O&&e.data==="sigso-tgr-recibido")clearInterval(iv);});})();';
+    return 'javascript:' + encodeURIComponent(codigo);
+  }
+  function vistaRecibir() {
+    var t = ++turno_;
+    var p = lista_ ? Promise.resolve() : api('listarConveniosTGR', {}).then(function (r) { if (r && r.ok) lista_ = r.data; });
+    p.then(function () { if (t !== turno_) return; if (recibido_ && !rec_.prev && !rec_.error && !rec_.hecho) revisarRecibido(); else pintarRecibir(); });
+  }
+  function revisarRecibido() {
+    var t = ++turno_;
+    pintarRecibir(true);
+    api('recibirTGR', { texto: recibido_.texto, simular: true }).then(function (r) {
+      if (t !== turno_) return;
+      rec_.prev = r && r.ok ? r.data : null;
+      rec_.error = r && r.ok ? '' : ((r && r.message) || 'No se pudo leer la página.');
+      rec_.crear = {};
+      if (rec_.prev) rec_.prev.convenios.forEach(function (c) { if (c.nuevo && c.folio && rec_.prev.cliente) rec_.crear[c.folio] = true; });
+      pintarRecibir();
+    });
+  }
+  function pintarRecibir(cargando) {
+    var reg = registra();
+    var pasos = '<ol class="cv-pasos"><li>En la TGR, con tu sesión: <b>Pagos › Convenios de pago › Imprimir documentos › Imprimir cuotas de convenios vigentes</b>, y elige el convenio.</li>' +
+      '<li>Toca el marcador <b>Enviar a SIGSO</b> (si seleccionas un trozo de la página, se envía solo eso).</li>' +
+      '<li>Se abre esta pestaña con lo que cambió: revisa y <b>Aplica</b>. Repite con el siguiente cliente: llega a esta misma pestaña.</li></ol>';
+    var instalar = U.card({ titulo: 'El marcador "Enviar a SIGSO"', icono: 'bandera', cuerpo:
+      '<p class="sx2-tenue" style="margin:0 0 10px">Arrastra este botón a la barra de marcadores del navegador (Ctrl+Shift+B la muestra). Se instala una sola vez por computador.</p>' +
+      '<a class="sx2-boton sx2-boton--primario cv-marcador js-cv-marcador" href="' + U.esc(marcador()) + '" draggable="true">' + U.ico('bandera', 16) + 'Enviar a SIGSO</a>' + pasos +
+      '<p class="sx2-tenue" style="font-size:.8125rem;margin:8px 0 0">SIGSO no guarda claves ni entra a la TGR: solo lee lo que la página ya muestra en tu pantalla, y solo acepta envíos desde los sitios de la TGR.</p>' }) ;
+    var pegar = U.card({ titulo: 'Sin marcador: pega la página', icono: 'copiar', cuerpo:
+      '<p class="sx2-tenue" style="margin:0 0 8px">En la página de cuotas de la TGR presiona Ctrl+A y Ctrl+C, y pega aquí (Ctrl+V). Puede traer varios convenios.</p>' +
+      '<textarea class="sx2-input js-cv-rec-texto" rows="5" placeholder="Pega aquí la página de la TGR"></textarea>' +
+      '<div style="margin-top:8px">' + U.boton({ texto: 'Revisar', icono: 'lupa', clase: 'js-cv-rec-pegar' }) + '</div>' });
+    var cuerpo = '';
+    if (cargando) cuerpo = U.esqueleto('tabla', 4);
+    else if (rec_.hecho) {
+      cuerpo = aviso('ok', 'check', txt(rec_.hecho.message)) +
+        '<div class="sx2-card sx2-entra"><ul class="cv-hechos">' + rec_.prev.convenios.filter(function (c) { return c.convenio_id; }).map(function (c) {
+          return '<li><b>' + txt(c.cliente_nombre) + '</b> · folio ' + txt(c.folio) + (c.creado ? ' · <span class="sx2-tenue">nuevo en el seguimiento</span>' : '') + ' ' + U.boton({ texto: 'Abrir ficha', sm: true, variante: 'fantasma', clase: 'js-cv-rec-ficha', datos: { id: c.convenio_id } }) + '</li>';
+        }).join('') + '</ul></div>';
+    } else if (rec_.error) cuerpo = aviso('critico', 'alerta', txt(rec_.error));
+    else if (rec_.prev) {
+      var d = rec_.prev, hay = false;
+      var cli = d.cliente ? '<b>' + txt(d.cliente.nombre) + '</b> (' + txt(d.cliente.rut) + ')' : (d.rut ? 'RUT ' + txt(d.rut) + ', que <b>no está en el catálogo</b>' : 'sin RUT reconocible');
+      var filas = d.convenios.map(function (c) {
+        var accion;
+        if (c.convenio_id) { hay = true; accion = c.cambios.length ? '<b>' + txt(c.texto_cambios) + '</b>' : '<span class="sx2-tenue">Sin cambios (queda la fecha de revisión)</span>'; }
+        else if (!c.folio) accion = '<span class="sx2-tenue">La página no dice el folio: usa "Pegar desde la TGR" en la ficha del convenio.</span>';
+        else {
+          if (rec_.crear[c.folio]) hay = true;
+          accion = reg ? '<label class="cv-chk"><input type="checkbox" class="js-cv-rec-crear" data-folio="' + U.esc(c.folio) + '"' + (rec_.crear[c.folio] ? ' checked' : '') + '> No está en el seguimiento: crearlo</label>' : 'No está en el seguimiento.';
+        }
+        return '<tr><td><b>' + txt(c.folio || '—') + '</b></td><td>' + txt(c.cliente_nombre || (c.nuevo ? (d.cliente ? d.cliente.nombre : '—') : '')) + '</td><td class="ci2-td-numero">' + c.leidas + '</td><td class="ci2-td-numero">' + c.pagadas_tgr + '</td><td>' + accion + '</td></tr>';
+      }).join('');
+      var faltaCliente = !d.cliente && d.convenios.some(function (c) { return c.nuevo && c.folio && rec_.crear[c.folio]; });
+      var clientes = (lista_ && lista_.clientes) || [];
+      cuerpo = '<div class="sx2-card sx2-entra"><p style="margin:0 0 10px">Recibido' + (recibido_.pagina ? ' de <b>' + txt(recibido_.pagina) + '</b>' : '') + ' a las ' + txt(new Date(recibido_.t).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })) + ' · contribuyente: ' + cli + '.</p>' +
+        '<div class="ci2-grilla-caja"><div class="ci2-grilla" style="max-height:none"><table class="ci2-tabla"><thead><tr><th>Folio</th><th>Cliente</th><th class="ci2-th-numero">Cuotas leídas</th><th class="ci2-th-numero">Pagadas (TGR)</th><th>Qué pasa</th></tr></thead><tbody>' + filas + '</tbody></table></div></div>' +
+        (faltaCliente && reg ? '<div style="margin-top:10px">' + U.campo('Cliente de los convenios nuevos', '<input class="sx2-input js-cv-rec-cliente" list="cv-dl-rec" value="' + U.esc(rec_.cliente) + '" placeholder="Busca por nombre o RUT" autocomplete="off"><datalist id="cv-dl-rec">' + clientes.map(function (k) { return '<option value="' + U.esc(etiquetaCliente(k)) + '"></option>'; }).join('') + '</datalist>') + '</div>' : '') +
+        '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">' + (reg ? U.boton({ texto: 'Aplicar', icono: 'check', variante: 'primario', clase: 'js-cv-rec-aplicar', deshabilitado: !hay }) : '') +
+        U.boton({ texto: 'Descartar', variante: 'fantasma', clase: 'js-cv-rec-descartar' }) + '</div></div>';
+    }
+    x_.pagina(x_.cabecera('Control interno · Seguimiento de convenios TGR', 'Recibir desde la TGR', 'Las cuotas llegan solas desde la página de la TGR que tienes abierta: sin imprimir ni copiar.',
+      U.boton({ texto: 'Volver', icono: 'izquierda', variante: 'fantasma', clase: 'js-cv-volver-lista' })) +
+      (cuerpo ? cuerpo : aviso('info', 'info', 'Esperando un envío desde la TGR. Deja esta pestaña abierta.')) +
+      '<div class="cv-rec-2">' + instalar + pegar + '</div>', true);
+  }
+  function aplicarRecibido() {
+    var d = rec_.prev, p = { texto: recibido_.texto, crear: Object.keys(rec_.crear).filter(function (k) { return rec_.crear[k]; }) };
+    if (!d.cliente && p.crear.length) {
+      var h = ((lista_ && lista_.clientes) || []).filter(function (k) { return etiquetaCliente(k) === rec_.cliente; })[0];
+      if (!h) { PY.aviso('Elige el cliente de los convenios nuevos.', 'error'); return; }
+      p.cliente_id = h.cliente_id;
+    }
+    api('recibirTGR', p).then(function (r) {
+      if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo aplicar.', 'error'); return; }
+      lista_ = null;
+      rec_.hecho = r.data;
+      rec_.prev = r.data;
+      PY.aviso(r.data.message, (r.data.errores || []).length ? 'info' : 'exito');
+      pintarRecibir();
+    });
+  }
+
   function mio(ev) { var c = document.getElementById('ci2'); return !!c && c.contains(ev.target) && !!x_; }
   function enFicha() { return /^conv:/.test(x_ && x_.vista ? x_.vista() : ''); }
   document.addEventListener('click', function (ev) {
     if (!mio(ev)) return;
     var t = ev.target, b;
     if (t.closest('.js-cv-recargar')) { lista_ = null; vistaLista(); return; }
+    if (t.closest('.js-cv-recibir')) { x_.irAItem('conv:tgr'); return; }
+    if (t.closest('.js-cv-marcador')) { ev.preventDefault(); PY.aviso('Arrástralo a la barra de marcadores; se usa en la página de la TGR.', 'info'); return; }
+    if (t.closest('.js-cv-volver-lista')) { x_.irAItem('conv'); return; }
+    if (t.closest('.js-cv-rec-pegar')) {
+      var ta = x_.raiz().querySelector('.js-cv-rec-texto');
+      if (!ta || ta.value.trim().length < 10) { PY.aviso('Pega primero la página de la TGR.', 'error'); return; }
+      recibido_ = { texto: ta.value.slice(0, 400000), pagina: '', t: Date.now() };
+      rec_ = { prev: null, crear: {}, cliente: '', error: '', hecho: null };
+      revisarRecibido();
+      return;
+    }
+    if (t.closest('.js-cv-rec-aplicar')) { aplicarRecibido(); return; }
+    if (t.closest('.js-cv-rec-descartar')) { recibido_ = null; rec_ = { prev: null, crear: {}, cliente: '', error: '', hecho: null }; pintarRecibir(); return; }
+    if ((b = t.closest('.js-cv-rec-ficha'))) { x_.irAItem('conv:' + b.getAttribute('data-id')); return; }
     if (t.closest('.js-cv-nuevo')) { formConvenio(null); return; }
     if (t.closest('.js-cv-amatriz')) { formMatriz(false); return; }
     if (t.closest('.js-cv-desde')) { formMatriz(true); return; }
@@ -308,6 +440,8 @@
   document.addEventListener('change', function (ev) {
     if (!mio(ev)) return;
     var t = ev.target;
+    if (t.classList.contains('js-cv-rec-crear')) { rec_.crear[t.getAttribute('data-folio')] = t.checked; pintarRecibir(); return; }
+    if (t.classList.contains('js-cv-rec-cliente')) { rec_.cliente = t.value.trim(); return; }
     if (t.classList.contains('js-cv-estado')) { f_.estado = t.value; pintarLista(true); return; }
     if (t.classList.contains('js-cv-alertas')) { f_.alertas = t.checked; pintarLista(true); return; }
     if (!ficha_) return;
@@ -327,7 +461,7 @@
   window.SigsoCIConvenios = {
     mostrar: function (id, ctx) {
       x_ = ctx;
-      if (id) { sel_ = {}; vistaFicha(id); } else { ficha_ = null; vistaLista(); }
+      if (id === 'tgr') { ficha_ = null; vistaRecibir(); } else if (id) { sel_ = {}; vistaFicha(id); } else { ficha_ = null; vistaLista(); }
     }
   };
 })();

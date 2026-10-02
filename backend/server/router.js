@@ -574,6 +574,7 @@ const ACCIONES = {
   getConvenioTGR: (db, data, contexto) => ControlInternoConvenios.get(db, data, contexto),
   guardarConvenioTGR: (db, data, contexto) => ControlInternoConvenios.guardar(db, data, contexto),
   pegarCuotasTGR: (db, data, contexto) => ControlInternoConvenios.pegarCuotas(db, data, contexto),
+  recibirTGR: (db, data, contexto) => ControlInternoConvenios.recibirTGR(db, data, contexto),
   marcarCuotasTGR: (db, data, contexto) => ControlInternoConvenios.marcarCuotas(db, data, contexto),
   estadoConvenioTGR: (db, data, contexto) => ControlInternoConvenios.cambiarEstado(db, data, contexto),
   anularConvenioTGR: (db, data, contexto) => ControlInternoConvenios.anular(db, data, contexto),
