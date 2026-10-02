@@ -765,7 +765,10 @@ const COLUMNAS = {
     'convenio_id', 'cliente_id', 'cliente_nombre', 'cliente_rut', 'folio', 'tipo',
     'fecha_convenio', 'pie', 'deuda_total', 'estado', 'motivo_estado', 'fecha_estado', 'cuotas',
     'fecha_revision_tgr', 'observaciones',
-    'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activa'
+    'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activa',
+    // N° de resolución con que la TGR identifica el convenio (lo trae el robot;
+    // queda guardado la primera vez que se asigna).
+    'resolucion'
   ]
 };
 

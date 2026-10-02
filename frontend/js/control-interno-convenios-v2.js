@@ -297,6 +297,70 @@
     recibido_ = e;
     rec_ = { prev: null, crear: {}, asignar: {}, cliente: '', error: '', hecho: null };
   }
+  // --- Robot TGR semiautomático (2026-10-02): la Clave Tributaria se escribe
+  // aquí, viaja una vez al servidor y no se guarda en ninguna parte. El robot
+  // corre en el servidor; esta pantalla pregunta por su avance cada 2 s y, al
+  // terminar, sus cuotas pasan por la misma revisión de abajo antes de aplicar.
+  var robot_ = { trabajo: null, estado: '', paso: '', inicio: 0, resultado: null, cliente: '', rut: '' };
+  function clientePorEtiqueta(v) { return ((lista_ && lista_.clientes) || []).filter(function (k) { return etiquetaCliente(k) === v; })[0] || null; }
+  function enRecibir() { return !!(x_ && x_.vista && x_.vista() === 'conv:tgr'); }
+  function repintarSiRecibir() { if (enRecibir()) pintarRecibir(); }
+  function iniciarRobot() {
+    var raiz = x_.raiz();
+    var inCli = raiz.querySelector('.js-cv-rob-cliente'), inRut = raiz.querySelector('.js-cv-rob-rut'), inClave = raiz.querySelector('.js-cv-rob-clave');
+    if (!inCli || !inRut || !inClave) return;
+    var clave = inClave.value;
+    inClave.value = '';
+    var cli = clientePorEtiqueta(inCli.value.trim());
+    if (!inRut.value.trim()) { PY.aviso('Escribe el RUT con que el cliente entra al SII.', 'error'); return; }
+    if (!clave) { PY.aviso('Escribe la Clave Tributaria del cliente.', 'error'); return; }
+    robot_ = { trabajo: null, estado: 'EN_CURSO', paso: 'Enviando', inicio: Date.now(), resultado: null, cliente: inCli.value.trim(), rut: inRut.value.trim(), cliente_id: cli ? cli.cliente_id : '' };
+    pintarRecibir();
+    api('robotTgrRevisar', { cliente_id: robot_.cliente_id, rut: robot_.rut, clave: clave }).then(function (r) {
+      if (!r || !r.ok) { robot_.estado = ''; PY.aviso((r && r.message) || 'No se pudo iniciar el robot.', 'error'); repintarSiRecibir(); return; }
+      robot_.trabajo = r.data.trabajo_id;
+      seguirRobot();
+    });
+    clave = '';
+  }
+  function seguirRobot() {
+    var id = robot_.trabajo;
+    setTimeout(function () {
+      if (!id || robot_.trabajo !== id) return;
+      api('robotTgrEstado', { trabajo_id: id }).then(function (r) {
+        if (robot_.trabajo !== id) return;
+        if (!r || !r.ok) { robot_.estado = 'DETENIDO'; robot_.resultado = { estado: 'ERROR', mensaje: (r && r.message) || 'Se perdió el contacto con el robot.', convenios: [] }; repintarSiRecibir(); return; }
+        robot_.paso = r.data.paso;
+        robot_.estado = r.data.estado;
+        if (r.data.estado === 'EN_CURSO') { repintarSiRecibir(); seguirRobot(); return; }
+        robot_.resultado = r.data.resultado;
+        if (r.data.estado === 'LISTO' && r.data.resultado.convenios.length) {
+          recibido_ = { texto: r.data.resultado.texto, pagina: 'el robot TGR', t: Date.now(), fuente: 'tgr', origen: 'robot' };
+          rec_ = { prev: null, crear: {}, asignar: {}, cliente: robot_.cliente, error: '', hecho: null };
+          if (enRecibir()) revisarRecibido();
+        } else repintarSiRecibir();
+      });
+    }, 2000);
+  }
+  function robotHtml() {
+    var corriendo = robot_.estado === 'EN_CURSO', dis = corriendo ? ' disabled' : '';
+    var r = robot_.resultado, estado = '';
+    if (corriendo) estado = aviso('info', 'reloj', '<b>' + txt(robot_.paso || 'Trabajando') + '…</b> ' + Math.round((Date.now() - robot_.inicio) / 1000) + ' s. Puede tardar 1 a 2 minutos; no cierres esta pestaña.');
+    else if (r && robot_.estado === 'DETENIDO') estado = aviso('critico', 'alerta', '<b>El robot se detuvo.</b> ' + txt(r.mensaje)) + diagnosticoHtml(r.diagnostico);
+    else if (r && robot_.estado === 'LISTO') estado = aviso('ok', 'check', txt(r.mensaje) + (r.convenios.length ? ' Revisa abajo qué cambia y aplica.' : ''));
+    return '<p class="sx2-tenue" style="margin:0 0 10px">El robot entra a la TGR con la Clave Tributaria del cliente, lee todos sus convenios y cuotas, y te muestra qué cambia antes de aplicar. <b>La clave no se guarda</b>: se usa una vez y se borra.</p>' +
+      '<div class="cv-rob">' +
+      U.campo('Cliente', '<input class="sx2-input js-cv-rob-cliente" list="cv-dl-rob" value="' + U.esc(robot_.cliente) + '" placeholder="Busca por nombre o RUT" autocomplete="off"' + dis + '><datalist id="cv-dl-rob">' +
+        ((lista_ && lista_.clientes) || []).map(function (k) { return '<option value="' + U.esc(etiquetaCliente(k)) + '"></option>'; }).join('') + '</datalist>') +
+      U.campo('RUT de ingreso', '<input class="sx2-input js-cv-rob-rut" value="' + U.esc(robot_.rut) + '" placeholder="76123456-7" autocomplete="off"' + dis + '>') +
+      U.campo('Clave Tributaria', '<input class="sx2-input js-cv-rob-clave" type="password" autocomplete="new-password" spellcheck="false"' + dis + '>') + '</div>' +
+      U.boton({ texto: corriendo ? 'Revisando…' : 'Revisar en la TGR', icono: 'rayo', variante: 'primario', clase: 'js-cv-rob-ir', deshabilitado: corriendo }) + estado;
+  }
+  function diagnosticoHtml(dg) {
+    if (!dg || (!dg.captura && !dg.url)) return '';
+    return '<details class="cv-diag"><summary>Ver dónde se detuvo el robot</summary>' + (dg.url ? '<p class="sx2-tenue">' + txt(dg.url) + '</p>' : '') +
+      (dg.captura ? '<img alt="Captura de la página donde se detuvo el robot" src="data:image/jpeg;base64,' + U.esc(dg.captura) + '">' : '') + '</details>';
+  }
   function vistaRecibir() {
     tomarEnvio();
     var t = ++turno_;
@@ -311,7 +375,8 @@
       rec_.prev = r && r.ok ? r.data : null;
       rec_.error = r && r.ok ? '' : ((r && r.message) || 'No se pudo leer la página.');
       rec_.crear = {};
-      if (rec_.prev) rec_.prev.convenios.forEach(function (c) { if (c.nuevo && c.folio && rec_.prev.cliente) rec_.crear[c.folio] = true; });
+      var conCliente = rec_.prev && (rec_.prev.cliente || (recibido_.origen === 'robot' && clientePorEtiqueta(rec_.cliente)));
+      if (rec_.prev) rec_.prev.convenios.forEach(function (c) { if (c.nuevo && c.folio && conCliente) rec_.crear[c.folio] = true; });
       pintarRecibir();
     });
   }
@@ -361,13 +426,14 @@
         '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">' + (reg ? U.boton({ texto: 'Aplicar', icono: 'check', variante: 'primario', clase: 'js-cv-rec-aplicar', deshabilitado: !hay }) : '') +
         U.boton({ texto: 'Descartar', variante: 'fantasma', clase: 'js-cv-rec-descartar' }) + '</div></div>';
     }
-    x_.pagina(x_.cabecera('Control interno · Seguimiento de convenios TGR', 'Recibir desde la TGR', 'Las cuotas llegan solas desde la página de la TGR que tienes abierta: sin imprimir ni copiar.',
-      U.boton({ texto: 'Volver', icono: 'izquierda', variante: 'fantasma', clase: 'js-cv-volver-lista' })) +
-      (cuerpo ? cuerpo : aviso('info', 'info', 'Esperando un envío desde la TGR. Deja esta pestaña abierta.')) +
+    var robot = reg ? U.card({ titulo: 'Robot TGR (semiautomático)', icono: 'rayo', clase: 'cv-robot', cuerpo: robotHtml() }) : '';
+    x_.pagina(x_.cabecera('Control interno · Seguimiento de convenios TGR', 'Recibir desde la TGR', 'Las cuotas llegan desde la TGR con el robot, el marcador o pegando la página: sin imprimir ni copiar.',
+      U.boton({ texto: 'Volver', icono: 'izquierda', variante: 'fantasma', clase: 'js-cv-volver-lista' })) + robot +
+      (cuerpo ? cuerpo : aviso('info', 'info', 'Usa el robot, o deja esta pestaña abierta y envía la página con el marcador.')) +
       '<div class="cv-rec-2">' + instalar + pegar + '</div>', true);
   }
   function aplicarRecibido() {
-    var d = rec_.prev, p = { texto: recibido_.texto, asignar: rec_.asignar, crear: Object.keys(rec_.crear).filter(function (k) { return rec_.crear[k]; }) };
+    var d = rec_.prev, p = { texto: recibido_.texto, origen: recibido_.origen || '', asignar: rec_.asignar, crear: Object.keys(rec_.crear).filter(function (k) { return rec_.crear[k]; }) };
     if (!d.cliente && p.crear.length) {
       var h = ((lista_ && lista_.clientes) || []).filter(function (k) { return etiquetaCliente(k) === rec_.cliente; })[0];
       if (!h) { PY.aviso('Elige el cliente de los convenios nuevos.', 'error'); return; }
@@ -389,6 +455,7 @@
     var t = ev.target, b;
     if (t.closest('.js-cv-recargar')) { lista_ = null; vistaLista(); return; }
     if (t.closest('.js-cv-recibir')) { x_.irAItem('conv:tgr'); return; }
+    if (t.closest('.js-cv-rob-ir')) { iniciarRobot(); return; }
     if (t.closest('.js-cv-marcador')) { ev.preventDefault(); PY.aviso('Arrástralo a la barra de marcadores; se usa en la página de la TGR.', 'info'); return; }
     if (t.closest('.js-cv-volver-lista')) { x_.irAItem('conv'); return; }
     if (t.closest('.js-cv-rec-pegar')) {
@@ -431,6 +498,13 @@
     var t = ev.target;
     if (t.classList.contains('js-cv-rec-crear')) { rec_.crear[t.getAttribute('data-folio')] = t.checked; pintarRecibir(); return; }
     if (t.classList.contains('js-cv-rec-cliente')) { rec_.cliente = t.value.trim(); return; }
+    if (t.classList.contains('js-cv-rob-cliente')) {
+      robot_.cliente = t.value.trim();
+      var cr = clientePorEtiqueta(robot_.cliente), inRut = x_.raiz().querySelector('.js-cv-rob-rut');
+      if (cr && cr.rut && inRut) { inRut.value = String(cr.rut).replace(/\./g, ''); robot_.rut = inRut.value; }
+      return;
+    }
+    if (t.classList.contains('js-cv-rob-rut')) { robot_.rut = t.value.trim(); return; }
     if (t.classList.contains('js-cv-rec-asignar')) {
       var v = t.value.trim(), k = t.getAttribute('data-k');
       var cv = ((lista_ && lista_.convenios) || []).filter(function (x) { return etiquetaConvenio(x) === v; })[0];
@@ -445,6 +519,9 @@
     if (t.classList.contains('js-cv-cont')) { marcar([Number(t.closest('tr').getAttribute('data-n'))], 'contabilizada', t.checked); return; }
     if (t.classList.contains('js-cv-sel')) { sel_[Number(t.closest('tr').getAttribute('data-n'))] = t.checked; pintarFicha(true); return; }
     if (t.classList.contains('js-cv-todas')) { ficha_.convenio.cuotas.forEach(function (q) { sel_[q.n] = t.checked; }); pintarFicha(true); }
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter' && ev.target && ev.target.classList && ev.target.classList.contains('js-cv-rob-clave') && mio(ev)) { ev.preventDefault(); iniciarRobot(); }
   });
   var tq_ = null;
   document.addEventListener('input', function (ev) {

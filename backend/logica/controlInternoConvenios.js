@@ -111,7 +111,7 @@ function publico_(c, hoy) {
   const h = hoy || hoy_();
   return {
     convenio_id: c.convenio_id, cliente_id: c.cliente_id || '', cliente_nombre: c.cliente_nombre || '', cliente_rut: c.cliente_rut || '',
-    folio: c.folio || '', tipo: c.tipo || '', fecha_convenio: c.fecha_convenio || '', pie: c.pie === '' ? '' : c.pie, deuda_total: c.deuda_total === '' ? '' : c.deuda_total,
+    folio: c.folio || '', resolucion: c.resolucion || '', tipo: c.tipo || '', fecha_convenio: c.fecha_convenio || '', pie: c.pie === '' ? '' : c.pie, deuda_total: c.deuda_total === '' ? '' : c.deuda_total,
     estado: c.estado || 'VIGENTE', motivo_estado: c.motivo_estado || '', fecha_estado: c.fecha_estado || '',
     fecha_revision_tgr: c.fecha_revision_tgr || '', observaciones: c.observaciones || '', fecha_actualizacion: c.fecha_actualizacion || '',
     cuotas: l.map((q) => Object.assign({}, q, { situacion: situacionCuota_(q, l, h), ajuste: esAjuste_(q, l) })),
@@ -349,7 +349,8 @@ function recibirTGR(db, data, contexto) {
   const resultado = leido.bloques.map((b, k) => {
     const base = { folio: b.folio, leidas: b.cuotas.length, pagadas_tgr: b.cuotas.filter((q) => q.tgr === 'SI').length };
     const elegido = asignar[k] ? todos.find((x) => x.convenio_id === String(asignar[k])) : null;
-    const c = elegido || (b.folio ? todos.find((x) => x.folio === b.folio) : null);
+    // El número de la TGR puede ser el folio que anota Contabilidad o la resolución ya recordada.
+    const c = elegido || (b.folio ? todos.find((x) => x.folio === b.folio) || todos.find((x) => String(x.resolucion || '') === b.folio) : null);
     if (!c) return Object.assign(base, { nuevo: true });
     const u = unir_(cuotas_(c), b.cuotas, hoy);
     return Object.assign(base, { convenio_id: c.convenio_id, cliente_nombre: c.cliente_nombre, folio_convenio: c.folio, asignado: !!elegido, estado: c.estado || 'VIGENTE', cambios: u.cambios, texto_cambios: textoCambios_(u.cambios) });
@@ -366,8 +367,12 @@ function recibirTGR(db, data, contexto) {
     if (r.convenio_id) {
       const c = porId_(db, r.convenio_id);
       const u = unir_(cuotas_(c), b.cuotas, hoy);
-      actualizarFilaPorId_(db, 'CI_CONVENIOS', 'convenio_id', c.convenio_id, { cuotas: JSON.stringify(u.cuotas), fecha_revision_tgr: hoy, actualizado_por: email_(contexto), fecha_actualizacion: new Date().toISOString() });
-      CI.historial_(db, c.convenio_id, 'TGR', 'Recibido desde la TGR: ' + (u.cambios.length ? textoCambios_(u.cambios) : 'sin cambios'), contexto);
+      const cambios = { cuotas: JSON.stringify(u.cuotas), fecha_revision_tgr: hoy, actualizado_por: email_(contexto), fecha_actualizacion: new Date().toISOString() };
+      // Asignado a mano con un número distinto de su folio: se recuerda como su resolución.
+      if (r.asignado && b.folio && b.folio !== c.folio) cambios.resolucion = b.folio;
+      actualizarFilaPorId_(db, 'CI_CONVENIOS', 'convenio_id', c.convenio_id, cambios);
+      CI.historial_(db, c.convenio_id, 'TGR', (d.origen === 'robot' ? 'Revisado por el robot TGR: ' : 'Recibido desde la TGR: ') + (u.cambios.length ? textoCambios_(u.cambios) : 'sin cambios') +
+        (cambios.resolucion ? ' · resolución ' + cambios.resolucion : ''), contexto);
       actualizados++;
       return;
     }

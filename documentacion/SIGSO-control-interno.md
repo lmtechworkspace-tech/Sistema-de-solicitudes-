@@ -180,6 +180,35 @@ equipo): confirmar que el navegador permite el marcador en ese sitio y que la
 página trae el folio en el texto. Si la página no trae el folio, el convenio se
 actualiza desde su ficha con "Pegar desde la TGR".
 
+### Robot TGR semiautomático (2026-10-02)
+
+Opción 2 del dueño, como paso previo a un robot completo: en **Recibir desde la
+TGR** › tarjeta **Robot TGR**, la persona elige el cliente, escribe su RUT y su
+Clave Tributaria y toca "Revisar en la TGR". En el servidor, `robotTgr.js`
+(Chromium con puppeteer-core, el mismo motor de los PDF) entra a tgr.cl › Imprimir
+cuotas de convenios vigentes → autentica.tgr.cl (Clave Tributaria) → formulario
+del SII → recorre las resoluciones del recuadro y lee las cuotas. Las cuotas pasan
+por la misma revisión (asignar la primera vez → queda `resolucion` en el
+convenio → la próxima vez se reconoce sola) y se aplican con historial "Revisado
+por el robot TGR".
+
+| Regla | Cómo |
+|---|---|
+| La clave no se guarda | Viaja una vez en la petición, se escribe en el formulario y se suelta; no va a la base, al trabajo, al historial ni a logs (el servidor no registra cuerpos de petición) |
+| Un intento de ingreso | Si el SII no acepta, se detiene (`CLAVE_INVALIDA`) |
+| No se salta controles | Se detiene ante verificación por correo (`DESAFIO`), cambio de clave (`CAMBIO_CLAVE`), CAPTCHA o 403/429 (`BLOQUEADO`); no se disfraza de persona |
+| Un robot a la vez | Para todo SIGSO; el trabajo vive 30 min en memoria (`controlInternoRobot.js`) |
+| Quién | Registra de Contabilidad; ve el avance quien lo inició (o ADM); constancia en CI_HISTORIAL `ROBOT_TGR` (cliente, RUT, resultado) |
+| Diagnóstico | Al detenerse devuelve una captura y la dirección donde quedó, solo a quien lo inició |
+
+Lo que depende de la página está en `RECETA` (robotTgr.js). Probado de punta a
+punta contra un sitio local que imita TGR + SII (test con navegador real; se salta
+en CI). Falta la primera prueba con la TGR real: la página después del ingreso no
+se pudo ver; si se detiene con `PAGINA_DISTINTA`, la captura dice qué ajustar.
+Riesgo conocido: la TGR podría rechazar accesos desde el servidor (ya respondió 403
+a una consulta automática); en ese caso habría que correrlo desde un equipo de la
+oficina.
+
 ### Lo mismo para el SII: F29 y Registro de Compras y Ventas (2026-10-01)
 
 Un solo marcador **Enviar a SIGSO** sirve para la TGR y el SII: abre (o reutiliza)
