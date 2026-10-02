@@ -283,36 +283,18 @@
   // vigentes" y toca el marcador "Enviar a SIGSO": el marcador lee el texto de
   // la página y lo manda a esta pestaña con postMessage. SIGSO no guarda claves
   // ni se conecta a la TGR; solo acepta mensajes de los dominios de la TGR.
-  var recibido_ = null, rec_ = { prev: null, crear: {}, cliente: '', error: '', hecho: null };
-  function origenTGR(o) {
-    var h = '';
-    try { h = new URL(o).hostname; } catch (e) { return false; }
-    if (/^https:/.test(o) && /(^|\.)(tgr\.cl|tesoreria\.cl|tgr\.gob\.cl)$/.test(h)) return true;
-    // Para probar en local (una página de prueba servida junto a SIGSO).
-    return /^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /^(localhost|127\.0\.0\.1)$/.test(h);
-  }
-  window.addEventListener('message', function (e) {
-    var d = e.data;
-    if (!d || d.tipo !== 'sigso-tgr' || typeof d.texto !== 'string' || !origenTGR(e.origin)) return;
-    try { e.source.postMessage('sigso-tgr-recibido', e.origin); } catch (er) { /* la pestaña de la TGR se cerró */ }
-    // El marcador reintenta hasta que SIGSO contesta: el mismo envío llega varias veces.
-    if (recibido_ && recibido_.texto === d.texto && Date.now() - recibido_.t < 5000) return;
-    recibido_ = { texto: d.texto.slice(0, 400000), pagina: String(d.pagina || '').slice(0, 80), t: Date.now() };
+  // El marcador y la recepción de mensajes viven en control-interno-v2.js (sirven
+  // también para el SII): aquí se toma el último envío de la TGR.
+  var recibido_ = null, visto_ = 0, rec_ = { prev: null, crear: {}, cliente: '', error: '', hecho: null };
+  function tomarEnvio() {
+    var e = x_.envio && x_.envio();
+    if (!e || e.fuente !== 'tgr' || e.t === visto_) return;
+    visto_ = e.t;
+    recibido_ = e;
     rec_ = { prev: null, crear: {}, cliente: '', error: '', hecho: null };
-    if (x_ && x_.vista && x_.vista() === 'conv:tgr') revisarRecibido();
-    else if (x_) x_.irAItem('conv:tgr');
-  });
-  function marcador() {
-    var destino = location.origin + location.pathname + '#/control_interno/conv%3Atgr';
-    var codigo = '(function(){var D=' + JSON.stringify(destino) + ',O=' + JSON.stringify(location.origin) + ';' +
-      'var t=String(window.getSelection?window.getSelection():"");' +
-      'if(t.length<40){t=document.body?document.body.innerText:"";for(var i=0;i<window.frames.length;i++){try{t+="\\n"+window.frames[i].document.body.innerText;}catch(e){}}}' +
-      'var w=window.open(D,"sigso_tgr");if(!w){alert("SIGSO: permite las ventanas emergentes de este sitio.");return;}' +
-      'var n=0,iv=setInterval(function(){n++;try{w.postMessage({tipo:"sigso-tgr",texto:t,pagina:location.hostname},O);}catch(e){}if(n>60)clearInterval(iv);},500);' +
-      'window.addEventListener("message",function(e){if(e.origin===O&&e.data==="sigso-tgr-recibido")clearInterval(iv);});})();';
-    return 'javascript:' + encodeURIComponent(codigo);
   }
   function vistaRecibir() {
+    tomarEnvio();
     var t = ++turno_;
     var p = lista_ ? Promise.resolve() : api('listarConveniosTGR', {}).then(function (r) { if (r && r.ok) lista_ = r.data; });
     p.then(function () { if (t !== turno_) return; if (recibido_ && !rec_.prev && !rec_.error && !rec_.hecho) revisarRecibido(); else pintarRecibir(); });
@@ -336,7 +318,7 @@
       '<li>Se abre esta pestaña con lo que cambió: revisa y <b>Aplica</b>. Repite con el siguiente cliente: llega a esta misma pestaña.</li></ol>';
     var instalar = U.card({ titulo: 'El marcador "Enviar a SIGSO"', icono: 'bandera', cuerpo:
       '<p class="sx2-tenue" style="margin:0 0 10px">Arrastra este botón a la barra de marcadores del navegador (Ctrl+Shift+B la muestra). Se instala una sola vez por computador.</p>' +
-      '<a class="sx2-boton sx2-boton--primario cv-marcador js-cv-marcador" href="' + U.esc(marcador()) + '" draggable="true">' + U.ico('bandera', 16) + 'Enviar a SIGSO</a>' + pasos +
+      '<a class="sx2-boton sx2-boton--primario cv-marcador js-cv-marcador" href="' + U.esc(x_.marcador()) + '" draggable="true">' + U.ico('bandera', 16) + 'Enviar a SIGSO</a>' + pasos +
       '<p class="sx2-tenue" style="font-size:.8125rem;margin:8px 0 0">SIGSO no guarda claves ni entra a la TGR: solo lee lo que la página ya muestra en tu pantalla, y solo acepta envíos desde los sitios de la TGR.</p>' }) ;
     var pegar = U.card({ titulo: 'Sin marcador: pega la página', icono: 'copiar', cuerpo:
       '<p class="sx2-tenue" style="margin:0 0 8px">En la página de cuotas de la TGR presiona Ctrl+A y Ctrl+C, y pega aquí (Ctrl+V). Puede traer varios convenios.</p>' +
@@ -405,7 +387,7 @@
     if (t.closest('.js-cv-rec-pegar')) {
       var ta = x_.raiz().querySelector('.js-cv-rec-texto');
       if (!ta || ta.value.trim().length < 10) { PY.aviso('Pega primero la página de la TGR.', 'error'); return; }
-      recibido_ = { texto: ta.value.slice(0, 400000), pagina: '', t: Date.now() };
+      recibido_ = { texto: ta.value.slice(0, 400000), pagina: '', t: Date.now(), fuente: 'tgr' };
       rec_ = { prev: null, crear: {}, cliente: '', error: '', hecho: null };
       revisarRecibido();
       return;

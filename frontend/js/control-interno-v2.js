@@ -14,6 +14,8 @@
  *                  columnas: no se escribe.
  *  - rep:*         Reportes (control-interno-reportes-v2.js).
  *  - conv[:id]     Seguimiento de convenios TGR (control-interno-convenios-v2.js).
+ *  - sii           Recibir F29 y Registro de Compras y Ventas (control-interno-sii-v2.js).
+ *  - recibir       Destino del marcador "Enviar a SIGSO": va a conv:tgr o a sii.
  *  - accesos       (ADM) quién registra o solo mira cada departamento.
  *
  * Mensuales (Contabilidad): un mes a la vez, como una hoja por mes.
@@ -143,7 +145,8 @@
       secciones(d).forEach(function (s, k) {
         subs.push({ id: 'd-' + d.clave + '-' + k, nombre: s.nombre, descripcion: d.nombre, icono: d.clave === 'RRHH' ? 'equipo' : 'dinero',
           items: s.matrices.map(function (m) { return { id: 'm:' + m.clave, nombre: m.nombre }; })
-            .concat(s.matrices.some(function (m) { return m.clave === 'CONVENIOS'; }) ? [{ id: 'conv', nombre: 'Seguimiento de cuotas TGR' }] : []) });
+            .concat(s.matrices.some(function (m) { return m.clave === 'CONVENIOS'; }) ? [{ id: 'conv', nombre: 'Seguimiento de cuotas TGR' }] : [])
+            .concat(s.matrices.some(function (m) { return m.clave === 'IVA'; }) ? [{ id: 'sii', nombre: 'Recibir desde el SII' }] : []) });
       });
       // Hojas que ya no se usan (reunión con Francisca): quedan para consulta, al final.
       var sinUso = cfg_.matrices.filter(function (m) { return m.depto === d.clave && m.sinUso; });
@@ -157,6 +160,50 @@
     if (!window.SigsoNav) return;
     SigsoNav.registrar('control_interno', { nombre: 'Control interno', submodulos: arbol() });
     if (window.SigsoShell && SigsoShell.refrescarArbol) SigsoShell.refrescarArbol();
+  }
+
+  // --- "Enviar a SIGSO" (TGR y SII, piloto asistido en el navegador, 2026-10-01) ----------
+  // La persona entra a la TGR o al SII con su sesión y toca el marcador: el
+  // marcador lee el texto de la página (o lo seleccionado) y lo manda a una
+  // pestaña de SIGSO con postMessage. SIGSO no guarda claves ni se conecta a
+  // esos sitios, y solo acepta mensajes de sus dominios (https).
+  var envio_ = null;
+  function fuenteDe(origen, texto) {
+    var h = '';
+    try { h = new URL(origen).hostname; } catch (e) { return ''; }
+    if (/^https:/.test(origen) && /(^|\.)(tgr\.cl|tesoreria\.cl|tgr\.gob\.cl)$/.test(h)) return 'tgr';
+    if (/^https:/.test(origen) && /(^|\.)sii\.cl$/.test(h)) return 'sii';
+    // Para probar en local (páginas de prueba servidas junto a SIGSO).
+    if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /^(localhost|127\.0\.0\.1)$/.test(h)) return /tesorer[ií]a|cuotas de convenios/i.test(texto) ? 'tgr' : 'sii';
+    return '';
+  }
+  window.addEventListener('message', function (e) {
+    var d = e.data;
+    if (!d || d.tipo !== 'sigso-envio' || typeof d.texto !== 'string') return;
+    var fuente = fuenteDe(e.origin, d.texto);
+    if (!fuente) return;
+    try { e.source.postMessage('sigso-envio-recibido', e.origin); } catch (er) { /* la pestaña de origen se cerró */ }
+    // El marcador reintenta hasta que SIGSO contesta: el mismo envío llega varias veces.
+    if (envio_ && envio_.texto === d.texto && Date.now() - envio_.t < 5000) return;
+    envio_ = { texto: d.texto.slice(0, 3000000), pagina: String(d.pagina || '').slice(0, 80), fuente: fuente, t: Date.now() };
+    var destino = fuente === 'tgr' ? 'conv:tgr' : 'sii';
+    if (!/^#\/control_interno(\/|$)/.test(location.hash)) location.hash = '#/control_interno/' + encodeURIComponent(destino);
+    else irAItem(destino);
+  });
+  /** El marcador (bookmarklet) que se arrastra a la barra de marcadores; lleva la dirección de este SIGSO. */
+  function marcador() {
+    var destino = location.origin + location.pathname + '#/control_interno/recibir';
+    var codigo = '(function(){var D=' + JSON.stringify(destino) + ',O=' + JSON.stringify(location.origin) + ';' +
+      'var t=String(window.getSelection?window.getSelection():"");' +
+      'if(t.length<40){t=document.body?document.body.innerText:"";for(var i=0;i<window.frames.length;i++){try{t+="\\n"+window.frames[i].document.body.innerText;}catch(e){}}}' +
+      'var w=window.open(D,"sigso_envio");if(!w){alert("SIGSO: permite las ventanas emergentes de este sitio.");return;}' +
+      'var n=0,iv=setInterval(function(){n++;try{w.postMessage({tipo:"sigso-envio",texto:t,pagina:location.hostname},O);}catch(e){}if(n>60)clearInterval(iv);},500);' +
+      'window.addEventListener("message",function(e){if(e.origin===O&&e.data==="sigso-envio-recibido")clearInterval(iv);});})();';
+    return 'javascript:' + encodeURIComponent(codigo);
+  }
+  function vistaEsperando() {
+    pagina(cabecera('Control interno', 'Enviar a SIGSO', 'Esperando lo que envía la página de la TGR o del SII…') +
+      U.card({ cuerpo: U.vacio({ icono: 'reloj', titulo: 'Esperando el envío', texto: 'Deja esta pestaña abierta. Si no llega en unos segundos, vuelve a tocar el marcador en la otra pestaña.' }) }));
   }
 
   // --- carga y navegación -----------------------------------------------------------------
@@ -185,6 +232,8 @@
     if (p[0] === 'm' && matriz(p[1])) { sel_ = {}; f_ = { q: '', estado: '', resp: '', liberar: false, nuevos: false }; mostrar_ = LOTE_FILAS; verSinUso_ = false; abrirMatriz(p[1]); return; }
     if (p[0] === 'rep' && window.SigsoCIReportes) { SigsoCIReportes.mostrar(p[1], ctxReportes()); return; }
     if (p[0] === 'conv' && window.SigsoCIConvenios && matriz('CONVENIOS')) { SigsoCIConvenios.mostrar(p.slice(1).join(':'), ctxReportes()); return; }
+    if (vista_ === 'sii' && window.SigsoCISII) { SigsoCISII.mostrar(ctxReportes()); return; }
+    if (vista_ === 'recibir') { if (envio_) irAItem(envio_.fuente === 'tgr' ? 'conv:tgr' : 'sii'); else vistaEsperando(); return; }
     if (vista_ === 'accesos' && cfg_.puede_administrar) { vistaAccesos(); return; }
     vista_ = 'inicio';
     vistaInicio();
@@ -192,7 +241,8 @@
   function ctxReportes() {
     return { cfg: cfg_, api: api, pagina: pagina, cabecera: cabecera, raiz: raiz, perTexto: perTexto, mover: mover, periodoActual: periodoActual,
       nombre: nombre, titulo: titulo, miles: miles, resolverPersonas: resolverPersonas, irAItem: irAItem, matriz: matriz, depto: depto, secciones: secciones,
-      periodo: function () { return periodo_; }, vista: function () { return vista_; } };
+      periodo: function () { return periodo_; }, vista: function () { return vista_; },
+      envio: function () { return envio_; }, marcador: marcador, fechaCorta: fechaCorta };
   }
   function cambiarPeriodo(n) {
     periodo_ = mover(periodo_, n);

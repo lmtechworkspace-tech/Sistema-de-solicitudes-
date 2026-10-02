@@ -170,6 +170,32 @@ equipo): confirmar que el navegador permite el marcador en ese sitio y que la
 página trae el folio en el texto. Si la página no trae el folio, el convenio se
 actualiza desde su ficha con "Pegar desde la TGR".
 
+### Lo mismo para el SII: F29 y Registro de Compras y Ventas (2026-10-01)
+
+Un solo marcador **Enviar a SIGSO** sirve para la TGR y el SII: abre (o reutiliza)
+la pestaña `sigso_envio` en `#/control_interno/recibir`, y el núcleo
+(`control-interno-v2.js`) decide por el sitio de origen si va a **Recibir desde
+la TGR** (`conv:tgr`) o a **Recibir desde el SII** (`sii`, en el menú bajo
+*Informe y pago de IVA*). Orígenes aceptados: https `*.tgr.cl`, `*.tesoreria.cl`,
+`tgr.gob.cl` y `*.sii.cl`.
+
+| Llega | Se lee | Se compara con | Qué se aplica (solo lo marcado) |
+|---|---|---|---|
+| Página del F29 (marcador o pegado) | Códigos 538, 537, 89, 77, 48, 151, 563, 115, 62, 91, 94; RUT; período; folio; fecha de presentación | Informe y pago de IVA (fila del cliente y mes) | Monto pago ← 91, tasa ← 115, ventas (base PPM) ← 563, monto PPM ← 62, retención honorarios ← 151, impuesto único ← 48, fecha declaración ← fecha de presentación. Débitos, créditos, IVA determinado y el pre-IVA de la matriz se muestran para comparar. Si no hay fila, se crea |
+| CSV "Descargar detalles" de **ventas** (.csv o .gz; RUT y mes del nombre del archivo) | Cada documento: tipo, folio, fecha, RUT y razón social del cliente, montos | Facturación (mismo cliente y mes), por folio y tipo | Agregar los folios que faltan, con tipo (33 → FE, 61 → NC…), mandante, RUT, neto y total; se avisan montos distintos y folios que están en la matriz y no en el SII |
+| CSV de **compras** | Ídem, con IVA recuperable y fecha de acuse | Acuse de recibo | Cantidad e IVA de facturas; cantidad e IVA de notas de crédito; se informa cuántos documentos no tienen fecha de acuse |
+| Resumen del RCV (la página) | Una línea por tipo de documento | Facturación o Acuse | Solo comparación (totales); para aplicar, el CSV |
+
+El servidor vuelve a leer todo al aplicar (nunca usa valores de la pantalla) y
+deja en el historial de la fila qué se trajo del SII. Si la página no trae RUT o
+mes, se eligen en la pantalla. Archivos: `backend/logica/controlInternoSII.js`,
+`frontend/js/control-interno-sii-v2.js`, tests `control-interno-sii.test.js`.
+
+Probado con páginas y archivos de prueba locales (F29, CSV de ventas en Latin-1
+como lo exporta el SII, flujo de la TGR con el marcador común). Falta la prueba
+con el SII real: confirmar que el texto del F29 trae los códigos junto a sus
+valores (si la página los muestra en otra disposición, se ajusta el lector).
+
 ## Ajustes de la reunión con Francisca (etapa 2, 2026-10-01)
 
 | Qué | Dónde | Cómo |
