@@ -182,9 +182,11 @@ function sitio() {
     // Como es la TGR real (2-10-2026): "Convenios Activos y Propuestas Aceptadas", el enlace es el
     // N° de la izquierda (no la resolución) y el recuadro llega tarde.
     // El menú "Convenios" real: el robot debe tocar Imprimir Documentos › "Cuotas convenios vigentes"
-    // y NUNCA "Cuotas de convenios vigentes" (Pagar). El enlace correcto abre otra pestaña (target).
+    // y NUNCA "Cuotas de convenios vigentes" (Pagar). El enlace correcto abre la página COMPLETA
+    // "Convenios Vigentes" (target=_top), que no se deja mostrar dentro de un recuadro.
     if (u.pathname === '/menu') return res.end('<h3>Convenios</h3><b>Pagar</b><p><a href="/pagar">Cuotas de convenios vigentes</a></p>' +
-      '<b>Imprimir Documentos</b><p><a href="/x">Comprobante de resolución</a><br><a href="/x">Estado de pago de convenio</a><br><a href="/lista3" target="_blank">Cuotas convenios vigentes</a></p>' +
+      '<b>Imprimir Documentos</b><p><a href="/x">Comprobante de resolución</a><br><a href="/x">Estado de pago de convenio</a><br>' +
+      '<a href="http://localhost:' + A.address().port + '/convenios-vigentes?go=' + encodeURIComponent('http://localhost:' + B.address().port + '/lista3') + '" target="_top">Cuotas convenios vigentes</a></p>' +
       '<b>Consultas</b><p><a href="/x">Convenios Vigentes</a><br><a href="/x">Convenios Caducados</a></p>');
     if (u.pathname === '/pagar') { pagos.push(1); return res.end('<p>Seleccione las cuotas que desea pagar</p><table><tr><th>N° de Resolución</th><th>N° de Cuota</th><th>N° de Folio</th></tr><tr><td>60225</td><td>6</td><td><a href="/x">6022506</a></td></tr></table><button>IR A PAGAR</button>'); }
     if (u.pathname === '/lista3') {
@@ -234,6 +236,10 @@ function sitio() {
           });
         };</script>`.split('${pa}').join(pa));
     }
+    if (u.pathname === '/convenios-vigentes') {
+      res.setHeader('X-Frame-Options', 'DENY'); // como la TGR: dentro de un recuadro queda en blanco
+      return res.end('<h1>Convenios Vigentes</h1><iframe src="' + u.searchParams.get('go') + '" style="width:900px;height:500px"></iframe>');
+    }
     if (u.pathname === '/portal4') return res.end('<h1>Imprimir Cuotas de Convenios Vigentes</h1><nav>Pagos · Consulta tu resolución</nav><iframe src="http://localhost:' + pb + '/menu" style="width:900px;height:500px"></iframe>');
     if (u.pathname === '/portal3') return res.end('<h1>Imprimir Cuotas de Convenios Vigentes</h1><nav>Pagos · Certificados · Consulta tu resolución</nav><iframe src="http://localhost:' + pb + '/lista3" style="width:900px;height:500px"></iframe>');
     if (u.pathname === '/portal2') return res.end('<h1>Imprimir Cuotas de Convenios Vigentes</h1><iframe src="http://localhost:' + pb + '/lista2" style="width:900px;height:500px"></iframe>');
@@ -244,7 +250,7 @@ function sitio() {
 }
 function receta(s, ruta) {
   const base = 'http://localhost:' + s.A.address().port;
-  return { inicio: Array.isArray(ruta) ? ruta.map((r) => base + r) : base + (ruta || '/tramite'), hostsIngreso: ['127.0.0.1'], esperaMs: 8000 };
+  return { inicio: Array.isArray(ruta) ? ruta.map((r) => base + r) : base + (ruta || '/tramite'), hostsIngreso: ['127.0.0.1'], hostsMenu: ['localhost'], esperaMs: 8000 };
 }
 
 test('de punta a punta: ingresa, recorre los convenios del recuadro y se detiene cuando corresponde', { skip: sinNavegador, timeout: 180000 }, async () => {

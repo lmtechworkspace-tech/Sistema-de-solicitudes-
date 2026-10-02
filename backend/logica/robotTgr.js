@@ -215,20 +215,36 @@ function tablaDe_(ts) {
 }
 // (se ejecutan en la página) Las resoluciones: primero la columna "Resolución" de
 // cualquier tabla; si no hay, enlaces o botones cuyo texto es un número (no montos ni RUT).
-/** Toca el enlace del menú de convenios que lleva a imprimir cuotas (nunca el de pagar). */
+/**
+ * Abre el enlace del menú de convenios que lleva a imprimir cuotas (nunca el de pagar).
+ * En la TGR real (2-10-2026) ese enlace abre la página COMPLETA "Convenios
+ * Vigentes" (web.tesoreria.cl/tramites-tgr/convenios-vigentes/?go=…), que no
+ * se deja mostrar dentro del recuadro: abierto ahí queda en blanco. Por eso, si
+ * es un enlace a una dirección de la TGR, se abre en la página entera, igual
+ * que cuando una persona hace clic.
+ */
+const RE_HOST_TGR = /(^|\.)(tesoreria\.cl|tgr\.cl|tgr\.gob\.cl)$/i;
 async function clicMenu_(page, receta) {
   if (!receta.menuCuotas) return false;
   for (const f of page.frames()) {
     try {
-      const ok = await f.evaluate((fuente) => {
+      const r = await f.evaluate((fuente) => {
         const re = new RegExp(fuente, 'i');
         const a = Array.from(document.querySelectorAll('a,button')).find((x) => re.test(String(x.innerText || x.value || '').replace(/\s+/g, ' ').trim()));
-        if (!a) return false;
-        if (a.removeAttribute) a.removeAttribute('target'); // que no abra otra pestaña
-        a.click();
-        return true;
+        if (!a) return null;
+        const href = a.tagName === 'A' ? a.href : '';
+        if (/^https?:/i.test(href)) return { href };
+        a.click(); // enlace de script o botón: se toca donde está
+        return { clic: true };
       }, receta.menuCuotas);
-      if (ok) return true;
+      if (!r) continue;
+      if (r.href) {
+        const u = new URL(r.href);
+        const permitido = RE_HOST_TGR.test(u.hostname) || (receta.hostsMenu || []).includes(u.hostname);
+        if (!permitido || /pagar/i.test(u.pathname)) return false;
+        await page.goto(r.href, { waitUntil: 'domcontentloaded', timeout: receta.esperaMs });
+      }
+      return true;
     } catch (e) { /* recuadro que navegaba */ }
   }
   return false;
