@@ -144,6 +144,7 @@ function sitio() {
     if (u.pathname === '/tramite') { res.statusCode = 302; res.setHeader('Location', 'http://127.0.0.1:' + pa + '/autentica'); return res.end(); }
     if (u.pathname === '/tramite-captcha') { res.statusCode = 302; res.setHeader('Location', 'http://127.0.0.1:' + pa + '/autentica?captcha=1'); return res.end(); }
     if (u.pathname === '/bloqueado') { res.statusCode = 403; return res.end('Forbidden'); }
+    if (u.pathname === '/no-existe') { res.statusCode = 404; return res.end('<h1>Ups! Lo sentimos</h1><p>La página que buscabas no existe</p>'); }
     if (u.pathname === '/autentica') {
       return res.end('<h1>Te damos la bienvenida</h1>' + (u.searchParams.get('captcha') ? '<div class="g-recaptcha"></div>' : '') +
         '<button id="id-button-idp-claveTributaria" onclick="location.href=\'/sii\'">Clave Tributaria</button>');
@@ -169,7 +170,10 @@ function sitio() {
   });
   return new Promise((ok) => B.listen(0, '127.0.0.1', () => A.listen(0, '127.0.0.1', () => ok({ A, B, intentos }))));
 }
-function receta(s, ruta) { return { inicio: 'http://localhost:' + s.A.address().port + (ruta || '/tramite'), hostsIngreso: ['127.0.0.1'], esperaMs: 8000 }; }
+function receta(s, ruta) {
+  const base = 'http://localhost:' + s.A.address().port;
+  return { inicio: Array.isArray(ruta) ? ruta.map((r) => base + r) : base + (ruta || '/tramite'), hostsIngreso: ['127.0.0.1'], esperaMs: 8000 };
+}
 
 test('de punta a punta: ingresa, recorre los convenios del recuadro y se detiene cuando corresponde', { skip: sinNavegador, timeout: 180000 }, async () => {
   const s = await sitio();
@@ -181,10 +185,18 @@ test('de punta a punta: ingresa, recorre los convenios del recuadro y se detiene
     assert.deepEqual(r.convenios[0].cuotas[1], { n: 2, vencimiento: '2026-01-31', monto: 190039, tgr: 'NO' });
     assert.ok(pasos.includes('Ingresando con la Clave Tributaria'));
 
+    // Como pasó el 2-10-2026 con www.tgr.cl: la primera dirección "no existe" → prueba la siguiente.
+    r = await Robot.revisarCliente({ rut: '76.123.456-7', clave: 'buena' }, { receta: receta(s, ['/no-existe', '/tramite']) });
+    assert.equal(r.estado, 'OK', r.mensaje);
+    assert.equal(r.convenios.length, 2);
+    r = await Robot.revisarCliente({ rut: '76.123.456-7', clave: 'buena' }, { receta: receta(s, ['/no-existe']) });
+    assert.equal(r.estado, 'PAGINA_DISTINTA');
+    assert.match(r.mensaje, /no existe/);
+
     r = await Robot.revisarCliente({ rut: '76123456-7', clave: 'mala' }, { receta: receta(s) });
     assert.equal(r.estado, 'CLAVE_INVALIDA', r.mensaje);
     assert.ok(r.diagnostico && r.diagnostico.captura, 'trae la captura para entender qué pasó');
-    assert.equal(s.intentos.filter((x) => x === '76123456-7').length, 2, 'un solo intento por revisión (1 bueno + 1 malo)');
+    assert.equal(s.intentos.filter((x) => x === '76123456-7').length, 3, 'un solo intento por revisión (2 buenos + 1 malo)');
 
     r = await Robot.revisarCliente({ rut: '11111111-1', clave: 'buena' }, { receta: receta(s) });
     assert.equal(r.estado, 'DESAFIO');

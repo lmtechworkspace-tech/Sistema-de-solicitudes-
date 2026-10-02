@@ -31,7 +31,12 @@ const Convenios = require('./controlInternoConvenios');
 
 const ESPERA_MS = 45 * 1000;
 const RECETA = {
-  inicio: 'https://www.tgr.cl/tramites-tgr/imprimir-cuotas-de-convenios-vigentes/',
+  // En orden: el primero que lleve a la pantalla de ingreso (revisado el 2-10-2026).
+  inicio: [
+    'https://web.tesoreria.cl/tramites-tgr/imprimir-cuotas-de-convenios-vigentes/',
+    'https://tgr.gob.cl/tramites-tgr/imprimir-cuotas-de-convenios-vigentes/',
+    'https://www.tgr.cl/tramites-tgr/imprimir-cuotas-de-convenios-vigentes/'
+  ],
   hostsIngreso: ['autentica.tgr.cl', 'www2.sii.cl', 'zeusr.sii.cl'],
   botonClaveTributaria: '#id-button-idp-claveTributaria',
   rut: '#inputRut',
@@ -119,14 +124,27 @@ async function hasta_(prueba, ms, queEspero) {
 }
 
 async function ingresar_(page, receta, rut, clave, alPaso) {
-  alPaso('Abriendo la TGR');
-  const r = await page.goto(receta.inicio, { waitUntil: 'domcontentloaded', timeout: receta.esperaMs });
-  if (r && (r.status() === 403 || r.status() === 429)) throw new Detencion('BLOQUEADO', 'La TGR rechazó el acceso automático (código ' + r.status() + ').');
-  // Pantalla de la TGR para elegir la clave (o directo el formulario del SII).
-  await hasta_(async () => {
-    if (await hayCaptchaEnAlguno_(page)) throw new Detencion('CAPTCHA', 'La TGR pidió un CAPTCHA: el robot no lo resuelve. Usa el marcador "Enviar a SIGSO".');
-    return (await page.$(receta.botonClaveTributaria)) || (await page.$(receta.rut));
-  }, receta.esperaMs, 'pantalla de ingreso');
+  // El trámite vive en varios dominios de la TGR y no todos responden igual
+  // (2-10-2026: www.tgr.cl, pedido desde el servidor, mostró "la página no
+  // existe"): se prueban en orden y se usa el primero que lleva al ingreso.
+  const inicios = [].concat(receta.inicio);
+  for (let i = 0; i < inicios.length; i++) {
+    alPaso(i ? 'Probando otra dirección de la TGR' : 'Abriendo la TGR');
+    const r = await page.goto(inicios[i], { waitUntil: 'domcontentloaded', timeout: receta.esperaMs }).catch(() => null);
+    if (r && (r.status() === 403 || r.status() === 429)) throw new Detencion('BLOQUEADO', 'La TGR rechazó el acceso automático (código ' + r.status() + ').');
+    // Pantalla de la TGR para elegir la clave (o directo el formulario del SII), o "no existe".
+    const llegada = await hasta_(async () => {
+      if (await hayCaptchaEnAlguno_(page)) throw new Detencion('CAPTCHA', 'La TGR pidió un CAPTCHA: el robot no lo resuelve. Usa el marcador "Enviar a SIGSO".');
+      if ((await page.$(receta.botonClaveTributaria)) || (await page.$(receta.rut))) return 'ingreso';
+      const t = await page.evaluate(() => (document.body ? document.body.innerText : ''));
+      return /no existe|no encontrada|not found|error 404/i.test(t) ? 'no-existe' : null;
+    }, receta.esperaMs, 'pantalla de ingreso').catch((e) => {
+      if (e instanceof Detencion && e.estado === 'SIN_RESPUESTA' && i + 1 < inicios.length) return 'no-existe';
+      throw e;
+    });
+    if (llegada === 'ingreso') { receta.inicioUsado = inicios[i]; break; }
+    if (i + 1 === inicios.length) throw new Detencion('PAGINA_DISTINTA', 'La TGR respondió "la página no existe" en todas las direcciones conocidas del trámite.');
+  }
   if (!(await page.$(receta.rut))) {
     alPaso('Eligiendo Clave Tributaria');
     await page.click(receta.botonClaveTributaria);
@@ -251,7 +269,7 @@ async function revisarCliente(datos, opciones) {
       const res = lista[i];
       alPaso('Leyendo el convenio ' + res + ' (' + (i + 1) + ' de ' + lista.length + ')');
       if (!(await abrirResolucion_(page, res))) {
-        await page.goto(receta.inicio, { waitUntil: 'domcontentloaded', timeout: receta.esperaMs });
+        await page.goto(receta.inicioUsado || [].concat(receta.inicio)[0], { waitUntil: 'domcontentloaded', timeout: receta.esperaMs });
         await contenido_(page, receta);
         if (!(await abrirResolucion_(page, res))) throw new Detencion('PAGINA_DISTINTA', 'No se pudo abrir el convenio ' + res + '.');
       }
@@ -262,7 +280,7 @@ async function revisarCliente(datos, opciones) {
         await page.goBack({ waitUntil: 'domcontentloaded', timeout: receta.esperaMs }).catch(() => null);
         ts = await contenido_(page, receta).catch(() => null);
         if (!ts || !(await resoluciones_(ts)).includes(lista[i + 1])) {
-          await page.goto(receta.inicio, { waitUntil: 'domcontentloaded', timeout: receta.esperaMs });
+          await page.goto(receta.inicioUsado || [].concat(receta.inicio)[0], { waitUntil: 'domcontentloaded', timeout: receta.esperaMs });
           await contenido_(page, receta);
         }
       }
