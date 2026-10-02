@@ -239,7 +239,9 @@ async function revisarCliente(datos, opciones) {
   const puppeteer = require('puppeteer-core');
   const navegador = await puppeteer.launch({
     executablePath: ruta,
-    headless: /headless-shell/i.test(ruta) ? 'shell' : true,
+    // ventana: true (piloto en la oficina) = se ve el navegador mientras trabaja.
+    headless: o.ventana ? false : (/headless-shell/i.test(ruta) ? 'shell' : true),
+    defaultViewport: o.ventana ? null : undefined,
     args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--disable-extensions', '--no-first-run', '--mute-audio'],
     timeout: receta.esperaMs
   });

@@ -53,7 +53,8 @@ test('la clave se usa una vez y no queda en ninguna parte; un robot a la vez', a
   const db = crear();
   let recibida = '', soltar;
   const espera = new Promise((r) => { soltar = r; });
-  RB._usar(async (datos, o) => { recibida = datos.clave; o.alPaso('Leyendo los convenios'); await espera; return { estado: 'OK', mensaje: '1 convenio leído.', convenios: [{ resolucion: '60225', cuotas: CUOTAS }] }; }, () => true);
+  RB._reiniciar();
+  RB._usar(async (datos, o) => { recibida = datos.clave; o.alPaso('Leyendo los convenios'); await espera; return { estado: 'OK', mensaje: '1 convenio leído.', convenios: [{ resolucion: '60225', cuotas: CUOTAS }] }; });
   try {
     const data = { cliente_id: 'CLI-1', rut: '76.123.456-7', clave: CLAVE };
     const r = RB.revisar(db, data, FRANCISCA);
@@ -85,7 +86,8 @@ test('la clave se usa una vez y no queda en ninguna parte; un robot a la vez', a
 
 test('validaciones y permisos; una detención llega con su motivo', async () => {
   const db = crear();
-  RB._usar(async () => ({ estado: 'CLAVE_INVALIDA', mensaje: 'El SII no aceptó el RUT o la clave.', convenios: [], diagnostico: { url: 'www2.sii.cl/x', textos: [], captura: '' } }), () => true);
+  RB._reiniciar();
+  RB._usar(async () => ({ estado: 'CLAVE_INVALIDA', mensaje: 'El SII no aceptó el RUT o la clave.', convenios: [], diagnostico: { url: 'www2.sii.cl/x', textos: [], captura: '' } }));
   try {
     assert.ok(rechazado(RB.revisar(db, { rut: '76123456-7', clave: CLAVE }, LECTORA)), 'solo lectura no lo usa');
     assert.equal(RB.revisar(db, { rut: '1-9', clave: CLAVE }, FRANCISCA).ok, false);
@@ -96,8 +98,9 @@ test('validaciones y permisos; una detención llega con su motivo', async () => 
     const e = RB.estado(db, { trabajo_id: r.trabajo_id }, FRANCISCA);
     assert.deepEqual([e.estado, e.resultado.estado, e.resultado.texto], ['DETENIDO', 'CLAVE_INVALIDA', '']);
     assert.equal(e.resultado.diagnostico.url, 'www2.sii.cl/x');
-    RB._usar(null, () => false);
-    assert.match(RB.revisar(db, { rut: '76123456-7', clave: CLAVE }, FRANCISCA).message, /navegador/);
+    RB._usar(null);
+    const sin = RB.revisar(db, { rut: '76123456-7', clave: CLAVE }, FRANCISCA);
+    assert.equal(sin.sin_agente, true, 'sin robot de la oficina conectado no se inicia');
   } finally { RB._usar(); }
 });
 
@@ -115,6 +118,52 @@ test('lo que trae el robot se asigna una vez y la resolución queda recordada', 
   // La próxima vez la reconoce sola.
   const sim = CV.recibirTGR(db, { texto, simular: true }, FRANCISCA).convenios[0];
   assert.deepEqual([sim.convenio_id, sim.asignado], [id, false]);
+});
+
+test('robot de la oficina: llave como hash, toma la revisión, avisa su avance y entrega', async () => {
+  const db = crear();
+  RB._reiniciar();
+  // Solo un ADM autoriza equipos; la llave se ve una vez y en la base queda su hash.
+  assert.ok(rechazado(RB.crearAgente(db, { nombre: 'PC Luis' }, FRANCISCA)));
+  const c = RB.crearAgente(db, { nombre: 'PC Luis' }, ADM);
+  assert.match(c.llave, /^sgr_[A-Za-z0-9_-]{40,}$/);
+  const fila = CI.consultar_(db, 'CI_ROBOT_AGENTES', { agente_id: c.agente.agente_id })[0];
+  assert.ok(!JSON.stringify(fila).includes(c.llave), 'la llave no se guarda');
+  assert.equal(fila.token_hash.length, 64);
+  assert.equal(RB.listarAgentes(db, {}, ADM).agentes[0].conectado, false);
+  // Sin el equipo conectado no se inicia.
+  assert.equal(RB.revisar(db, { rut: '76123456-7', clave: CLAVE }, FRANCISCA).sin_agente, true);
+  assert.ok(rechazado(RB.agenteTomar(db, { agente_token: 'sgr_' + 'x'.repeat(43) })), 'llave falsa');
+  // El equipo pregunta (queda esperando) y la revisión le llega en cuanto se pide.
+  const espera = RB.agenteTomar(db, { agente_token: c.llave });
+  assert.ok(espera instanceof Promise);
+  assert.equal(RB.general(db, {}, FRANCISCA).conectado, true);
+  const r = RB.revisar(db, { cliente_id: 'CLI-1', rut: '76.123.456-7', clave: CLAVE }, FRANCISCA);
+  assert.equal(r.ok, true, r.message);
+  const tomado = await espera;
+  assert.deepEqual(tomado.trabajo, { trabajo_id: r.trabajo_id, rut: '76123456-7', clave: CLAVE });
+  let e = RB.estado(db, { trabajo_id: r.trabajo_id }, FRANCISCA);
+  assert.match(e.paso, /tomó la revisión/);
+  assert.ok(!JSON.stringify(e).includes(CLAVE), 'una vez tomada, el servidor ya no la tiene');
+  assert.equal(RB.agentePaso(db, { agente_token: c.llave, trabajo_id: r.trabajo_id, paso: 'Leyendo el convenio 60225 (1 de 1)' }).ok, true);
+  assert.equal(RB.estado(db, { trabajo_id: r.trabajo_id }, FRANCISCA).paso, 'Leyendo el convenio 60225 (1 de 1)');
+  // Otro equipo no puede entregar un trabajo ajeno.
+  const otro = RB.crearAgente(db, { nombre: 'Otro PC' }, ADM);
+  assert.equal(RB.agenteEntregar(db, { agente_token: otro.llave, trabajo_id: r.trabajo_id, resultado: { estado: 'OK', convenios: [] } }).ok, false);
+  // Lo que entrega se valida (una cuota mal formada no pasa).
+  const malas = CUOTAS.concat([{ n: 'x', vencimiento: 'ayer', monto: 'mucho', tgr: 'QUIZAS' }]);
+  assert.equal(RB.agenteEntregar(db, { agente_token: c.llave, trabajo_id: r.trabajo_id, resultado: { estado: 'OK', mensaje: '1 convenio leído.', convenios: [{ resolucion: '60225', cuotas: malas }] } }).ok, true);
+  await RB._esperar(r.trabajo_id);
+  e = RB.estado(db, { trabajo_id: r.trabajo_id }, FRANCISCA);
+  assert.deepEqual([e.estado, e.agente], ['LISTO', 'PC Luis']);
+  assert.equal(CV.bloquesTGR_(e.resultado.texto).bloques[0].cuotas.length, 2);
+  const hist = CI.consultar_(db, 'CI_HISTORIAL', { registro_id: 'ROBOT_TGR' }).map((h) => h.detalle).join(' | ');
+  assert.match(hist, /PC Luis · OK · 1 convenios/);
+  assert.ok(!hist.includes(CLAVE) && !hist.includes(c.llave));
+  // Dado de baja: su llave deja de servir.
+  assert.equal(RB.revocarAgente(db, { agente_id: c.agente.agente_id }, ADM).ok, true);
+  assert.ok(rechazado(RB.agenteTomar(db, { agente_token: c.llave })));
+  RB._reiniciar();
 });
 
 // --- De punta a punta, con el navegador real y un sitio de prueba ---------------------------

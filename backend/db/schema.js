@@ -769,6 +769,14 @@ const COLUMNAS = {
     // N° de resolución con que la TGR identifica el convenio (lo trae el robot;
     // queda guardado la primera vez que se asigna).
     'resolucion'
+  ],
+
+  // Equipos de la oficina que corren el robot TGR (2026-10-02): la TGR rechaza
+  // las conexiones del servidor, así que el robot corre en un PC de la oficina
+  // que le pide trabajo a SIGSO. De su llave se guarda SOLO el hash (SHA-256),
+  // como una contraseña: se muestra una vez al crearla.
+  CI_ROBOT_AGENTES: [
+    'agente_id', 'nombre', 'token_hash', 'creado_por', 'fecha_creacion', 'ultimo_contacto', 'activo'
   ]
 };
 

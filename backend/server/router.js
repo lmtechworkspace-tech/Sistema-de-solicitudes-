@@ -96,6 +96,9 @@ const ArchivosSolicitud = require('../logica/archivosSolicitud');
 // cuenta puede enviar -- igual que en Apps Script, donde Intake es un
 // proyecto separado sin gate de identidad.
 const ACCIONES_PUBLICAS = new Set([
+  // Robot TGR de la oficina (2026-10-02): el PC se identifica con su propia
+  // llave (se verifica adentro, contra el hash guardado), no con una sesión.
+  'robotAgenteTomar', 'robotAgentePaso', 'robotAgenteEntregar',
   'portalLogin', 'portalLogout', 'portalSesion', 'portalCambiarPassword', 'crearSolicitud',
   'consultarEstado', 'solicitarCodigoAcceso', 'misSolicitudes',
   'editarSubsolicitud', 'eliminarArchivo', 'responderConsulta', 'validarCierre',
@@ -579,6 +582,14 @@ const ACCIONES = {
   recibirTGR: (db, data, contexto) => ControlInternoConvenios.recibirTGR(db, data, contexto),
   robotTgrRevisar: (db, data, contexto) => ControlInternoRobot.revisar(db, data, contexto),
   robotTgrEstado: (db, data, contexto) => ControlInternoRobot.estado(db, data, contexto),
+  robotTgrGeneral: (db, data, contexto) => ControlInternoRobot.general(db, data, contexto),
+  robotAgentes: (db, data, contexto) => ControlInternoRobot.listarAgentes(db, data, contexto),
+  robotAgenteCrear: (db, data, contexto) => ControlInternoRobot.crearAgente(db, data, contexto),
+  robotAgenteRevocar: (db, data, contexto) => ControlInternoRobot.revocarAgente(db, data, contexto),
+  // Las usa el programa del PC de la oficina: sin sesión de persona, con la llave del equipo.
+  robotAgenteTomar: (db, data) => ControlInternoRobot.agenteTomar(db, data),
+  robotAgentePaso: (db, data) => ControlInternoRobot.agentePaso(db, data),
+  robotAgenteEntregar: (db, data) => ControlInternoRobot.agenteEntregar(db, data),
   revisarSII: (db, data, contexto) => ControlInternoSII.revisar(db, data, contexto),
   aplicarSII: (db, data, contexto) => ControlInternoSII.aplicar(db, data, contexto),
   marcarCuotasTGR: (db, data, contexto) => ControlInternoConvenios.marcarCuotas(db, data, contexto),

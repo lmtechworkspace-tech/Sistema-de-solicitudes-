@@ -187,3 +187,10 @@ textarea.ci2-editor { height: auto; min-width: 260px; resize: vertical; }
 .cv-diag { margin-top: 8px; }
 .cv-diag summary { cursor: pointer; font: var(--sx-t-chico); color: var(--sx-texto-2); }
 .cv-diag img { display: block; max-width: 100%; margin-top: 8px; border: 1px solid var(--sx-borde); border-radius: var(--sx-radio-sm); }
+.cv-oficina { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 0 0 10px; font: var(--sx-t-chico); color: var(--sx-texto-2); }
+.cv-oficina__punto { width: 9px; height: 9px; border-radius: 50%; background: var(--sx-texto-3); flex: none; }
+.cv-oficina.is-on .cv-oficina__punto { background: var(--sx-ok); box-shadow: 0 0 0 3px var(--sx-ok-suave); }
+.cv-oficina.is-off .cv-oficina__punto { background: var(--sx-alerta); }
+.cv-llave { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
+.cv-llave code { flex: 1; min-width: 0; overflow-wrap: anywhere; padding: 8px 10px; border: 1px solid var(--sx-borde); border-radius: var(--sx-radio-sm); background: var(--sx-superficie-2, var(--sx-superficie)); font-size: .8125rem; }
+.cv-cmd { margin: 0; padding: 10px 12px; border-radius: var(--sx-radio-sm); background: var(--sx-superficie-2, var(--sx-superficie)); border: 1px solid var(--sx-borde); font-size: .8125rem; white-space: pre-wrap; }

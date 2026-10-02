@@ -209,6 +209,28 @@ Riesgo conocido: la TGR podría rechazar accesos desde el servidor (ya respondi�
 a una consulta automática); en ese caso habría que correrlo desde un equipo de la
 oficina.
 
+#### El robot corre en un PC de la oficina (2026-10-02)
+
+Primera prueba real desde el servidor: `www.tgr.cl` respondió "la página no
+existe" y `web.tesoreria.cl` **403 Access Denied** (protección de la TGR contra
+conexiones de centros de datos). El robot se detuvo antes de ingresar. Solución
+elegida por el dueño, con su PC como piloto: un **agente** en un equipo de la
+oficina (`backend/herramientas/robot-oficina/agente.js`, ver su LEEME).
+
+- El agente consulta a SIGSO (`robotAgenteTomar`, espera hasta 20 s; ningún
+  puerto abierto en el PC), recibe RUT + clave en memoria, corre `robotTgr.js`
+  con la conexión de la oficina y entrega (`robotAgentePaso`,
+  `robotAgenteEntregar`). Lo entregado se valida (cuotas con forma conocida).
+- Se identifica con su llave (`sgr_…`), creada por un ADM en Recibir desde la TGR
+  › Robot de la oficina; en `CI_ROBOT_AGENTES` queda solo su hash (SHA-256). Se
+  puede dar de baja.
+- Sin agente conectado (sin señal en 45 s) la revisión no se inicia y se dice; si
+  nadie la toma en 25 s se cancela; si no se entrega en 5 min, se da por perdida.
+- La clave espera en memoria del servidor solo hasta que el agente la toma y se
+  borra; en el PC no se escribe en disco ni en consola. Opción `--ventana` para
+  ver el navegador en el piloto. Probado de punta a punta en local (servidor +
+  TGR falsa + agente real).
+
 ### Lo mismo para el SII: F29 y Registro de Compras y Ventas (2026-10-01)
 
 Un solo marcador **Enviar a SIGSO** sirve para la TGR y el SII: abre (o reutiliza)

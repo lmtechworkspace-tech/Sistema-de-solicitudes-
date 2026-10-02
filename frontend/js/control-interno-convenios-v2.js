@@ -302,6 +302,61 @@
   // corre en el servidor; esta pantalla pregunta por su avance cada 2 s y, al
   // terminar, sus cuotas pasan por la misma revisión de abajo antes de aplicar.
   var robot_ = { trabajo: null, estado: '', paso: '', inicio: 0, resultado: null, cliente: '', rut: '' };
+  // El robot corre en un PC de la oficina (la TGR rechaza al servidor): ¿está conectado?
+  var oficina_ = null, oficinaT_ = 0;
+  function consultarOficina(repintar) {
+    api('robotTgrGeneral', {}).then(function (r) {
+      oficina_ = r && r.ok ? r.data : null;
+      oficinaT_ = Date.now();
+      if (repintar && robot_.estado !== 'EN_CURSO') repintarSiRecibir();
+    });
+  }
+  function oficinaHtml() {
+    if (!oficina_ || oficina_.en_servidor) return '';
+    var adm = !!(x_.cfg && x_.cfg.puede_administrar);
+    return '<p class="cv-oficina ' + (oficina_.conectado ? 'is-on' : 'is-off') + '"><span class="cv-oficina__punto"></span>' +
+      (oficina_.conectado ? 'Robot de la oficina <b>conectado</b>' + (oficina_.agentes_conectados.length ? ' (' + txt(oficina_.agentes_conectados.join(', ')) + ')' : '')
+        : 'Robot de la oficina <b>no conectado</b>: enciende el programa en el PC de la oficina (o usa el marcador).') +
+      (adm ? ' ' + U.boton({ texto: 'Robot de la oficina', icono: 'ajustes', sm: true, variante: 'fantasma', clase: 'js-cv-oficina' }) : '') + '</p>';
+  }
+  function abrirOficina() {
+    var dr = U.drawer({ titulo: 'Robot de la oficina', subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">La TGR rechaza las conexiones del servidor de SIGSO, así que el robot corre en un PC de la oficina. Aquí se autoriza ese equipo.</span>', cuerpo: '', pie: ' ' });
+    var llave = '';
+    function pintar(lista) {
+      dr.cuerpo(
+        (llave ? '<div class="mj2-aviso sx2-tono-alerta">' + U.ico('llave', 16) + '<span><b>Llave del equipo (se muestra una sola vez).</b> Cópiala ahora y pégala en el PC cuando el programa la pida.</span></div>' +
+          '<div class="cv-llave"><code class="js-cv-llave">' + U.esc(llave) + '</code>' + U.boton({ texto: 'Copiar', icono: 'copiar', sm: true, clase: 'js-cv-llave-copiar' }) + '</div>' +
+          '<p style="margin:12px 0 4px"><b>En el PC</b>, desde la carpeta del proyecto SIGSO:</p><pre class="cv-cmd">node backend/herramientas/robot-oficina/agente.js configurar\nnode backend/herramientas/robot-oficina/agente.js --ventana</pre>' : '') +
+        '<h3 class="ci2-seccion">Equipos autorizados</h3>' +
+        (lista && lista.length ? '<ul class="cv-hechos">' + lista.map(function (a) {
+          return '<li><span class="cv-oficina ' + (a.conectado ? 'is-on' : 'is-off') + '"><span class="cv-oficina__punto"></span></span><b>' + txt(a.nombre) + '</b> <span class="sx2-tenue">' + (a.conectado ? 'conectado' : (a.ultimo_contacto ? 'última señal ' + txt(PY.fecha(a.ultimo_contacto, true)) : 'nunca se conectó')) + '</span> ' +
+            U.boton({ texto: 'Dar de baja', sm: true, variante: 'fantasma', clase: 'js-cv-agente-baja', datos: { id: a.agente_id } }) + '</li>';
+        }).join('') + '</ul>' : '<p class="sx2-tenue">Todavía no hay equipos autorizados.</p>') +
+        '<h3 class="ci2-seccion">Autorizar un equipo</h3><div class="sx2-form">' + U.campo('Nombre del equipo', '<input class="sx2-input js-cv-agente-nombre" placeholder="Ej.: PC de Luis (oficina)" maxlength="60">') +
+        U.boton({ texto: 'Autorizar este equipo', icono: 'llave', variante: 'primario', clase: 'js-cv-agente-crear' }) + '</div>');
+    }
+    function cargar() { api('robotAgentes', {}).then(function (r) { pintar(r && r.ok ? r.data.agentes : []); }); }
+    dr.el.addEventListener('click', function (ev) {
+      var b;
+      if (ev.target.closest('.js-cv-agente-crear')) {
+        var n = dr.el.querySelector('.js-cv-agente-nombre');
+        api('robotAgenteCrear', { nombre: n ? n.value : '' }).then(function (r) {
+          if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo autorizar.', 'error'); return; }
+          llave = r.data.llave;
+          cargar();
+        });
+      } else if (ev.target.closest('.js-cv-llave-copiar')) {
+        var c = dr.el.querySelector('.js-cv-llave');
+        if (navigator.clipboard) navigator.clipboard.writeText(llave).then(function () { PY.aviso('Llave copiada.', 'exito'); }, function () { var rg = document.createRange(); rg.selectNodeContents(c); var sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg); });
+      } else if ((b = ev.target.closest('.js-cv-agente-baja'))) {
+        U.confirmar({ titulo: '¿Dar de baja este equipo?', texto: 'Ya no podrá tomar revisiones del robot. Para volver a usarlo hay que autorizarlo de nuevo.', boton: 'Dar de baja', peligro: true }).then(function (ok) {
+          if (ok) api('robotAgenteRevocar', { agente_id: b.getAttribute('data-id') }).then(function (r) { PY.aviso((r && (r.message || (r.data && r.data.message))) || 'Listo.', r && r.ok ? 'exito' : 'error'); cargar(); consultarOficina(true); });
+        });
+      }
+    });
+    pintar(null);
+    cargar();
+  }
   function clientePorEtiqueta(v) { return ((lista_ && lista_.clientes) || []).filter(function (k) { return etiquetaCliente(k) === v; })[0] || null; }
   function enRecibir() { return !!(x_ && x_.vista && x_.vista() === 'conv:tgr'); }
   function repintarSiRecibir() { if (enRecibir()) pintarRecibir(); }
@@ -317,7 +372,7 @@
     robot_ = { trabajo: null, estado: 'EN_CURSO', paso: 'Enviando', inicio: Date.now(), resultado: null, cliente: inCli.value.trim(), rut: inRut.value.trim(), cliente_id: cli ? cli.cliente_id : '' };
     pintarRecibir();
     api('robotTgrRevisar', { cliente_id: robot_.cliente_id, rut: robot_.rut, clave: clave }).then(function (r) {
-      if (!r || !r.ok) { robot_.estado = ''; PY.aviso((r && r.message) || 'No se pudo iniciar el robot.', 'error'); repintarSiRecibir(); return; }
+      if (!r || !r.ok) { robot_.estado = ''; PY.aviso((r && r.message) || 'No se pudo iniciar el robot.', 'error'); consultarOficina(true); return; }
       robot_.trabajo = r.data.trabajo_id;
       seguirRobot();
     });
@@ -334,6 +389,7 @@
         robot_.estado = r.data.estado;
         if (r.data.estado === 'EN_CURSO') { repintarSiRecibir(); seguirRobot(); return; }
         robot_.resultado = r.data.resultado;
+        consultarOficina(false);
         if (r.data.estado === 'LISTO' && r.data.resultado.convenios.length) {
           recibido_ = { texto: r.data.resultado.texto, pagina: 'el robot TGR', t: Date.now(), fuente: 'tgr', origen: 'robot' };
           rec_ = { prev: null, crear: {}, asignar: {}, cliente: robot_.cliente, error: '', hecho: null };
@@ -348,7 +404,7 @@
     if (corriendo) estado = aviso('info', 'reloj', '<b>' + txt(robot_.paso || 'Trabajando') + '…</b> ' + Math.round((Date.now() - robot_.inicio) / 1000) + ' s. Puede tardar 1 a 2 minutos; no cierres esta pestaña.');
     else if (r && robot_.estado === 'DETENIDO') estado = aviso('critico', 'alerta', '<b>El robot se detuvo.</b> ' + txt(r.mensaje)) + diagnosticoHtml(r.diagnostico);
     else if (r && robot_.estado === 'LISTO') estado = aviso('ok', 'check', txt(r.mensaje) + (r.convenios.length ? ' Revisa abajo qué cambia y aplica.' : ''));
-    return '<p class="sx2-tenue" style="margin:0 0 10px">El robot entra a la TGR con la Clave Tributaria del cliente, lee todos sus convenios y cuotas, y te muestra qué cambia antes de aplicar. <b>La clave no se guarda</b>: se usa una vez y se borra.</p>' +
+    return oficinaHtml() + '<p class="sx2-tenue" style="margin:0 0 10px">El robot entra a la TGR con la Clave Tributaria del cliente, lee todos sus convenios y cuotas, y te muestra qué cambia antes de aplicar. <b>La clave no se guarda</b>: se usa una vez y se borra.</p>' +
       '<div class="cv-rob">' +
       U.campo('Cliente', '<input class="sx2-input js-cv-rob-cliente" list="cv-dl-rob" value="' + U.esc(robot_.cliente) + '" placeholder="Busca por nombre o RUT" autocomplete="off"' + dis + '><datalist id="cv-dl-rob">' +
         ((lista_ && lista_.clientes) || []).map(function (k) { return '<option value="' + U.esc(etiquetaCliente(k)) + '"></option>'; }).join('') + '</datalist>') +
@@ -363,6 +419,7 @@
   }
   function vistaRecibir() {
     tomarEnvio();
+    if (Date.now() - oficinaT_ > 10000) consultarOficina(true);
     var t = ++turno_;
     var p = lista_ ? Promise.resolve() : api('listarConveniosTGR', {}).then(function (r) { if (r && r.ok) lista_ = r.data; });
     p.then(function () { if (t !== turno_) return; if (recibido_ && !rec_.prev && !rec_.error && !rec_.hecho) revisarRecibido(); else pintarRecibir(); });
@@ -456,6 +513,7 @@
     if (t.closest('.js-cv-recargar')) { lista_ = null; vistaLista(); return; }
     if (t.closest('.js-cv-recibir')) { x_.irAItem('conv:tgr'); return; }
     if (t.closest('.js-cv-rob-ir')) { iniciarRobot(); return; }
+    if (t.closest('.js-cv-oficina')) { abrirOficina(); return; }
     if (t.closest('.js-cv-marcador')) { ev.preventDefault(); PY.aviso('Arrástralo a la barra de marcadores; se usa en la página de la TGR.', 'info'); return; }
     if (t.closest('.js-cv-volver-lista')) { x_.irAItem('conv'); return; }
     if (t.closest('.js-cv-rec-pegar')) {
