@@ -334,3 +334,26 @@ test('recibir: un folio nuevo sin cliente reconocible pide elegirlo; con cliente
   assert.equal(CV.listar(db, {}, FRANCISCA).convenios[0].cliente_nombre, 'Pyme Sur Ltda');
   assert.equal(CV.recibirTGR(db, { texto: 'Bienvenido a la TGR' }, FRANCISCA).ok, false);
 });
+
+test('página real de la TGR sin folio (solo la tabla): se lee y se asigna al convenio elegido', () => {
+  const db = crear();
+  const id = nuevo(db).convenio.convenio_id;
+  // Así viene el texto de "Imprimir Cuotas de Convenios Vigentes" (2-10-2026): sin folio ni RUT.
+  const pagina = ['IMPRIMIR CUOTAS', 'Cuota\tFecha de Vencimiento\tMonto ($)\tPagada',
+    '(*) 1\t31-12-2025\t97.570\tSI', '(*) 2\t31-01-2026\t190.039\tSI', '(*) 7\t30-06-2026\t190.039\tSI',
+    '(*) 8\t31-07-2026\t190.039\tNO', '10\t30-09-2026\t190.039\tNO', '12\t30-11-2026\t0\tNO',
+    'La Cuota de Ajuste es la última cuota del convenio'].join('\n');
+  const sim = CV.recibirTGR(db, { texto: pagina, simular: true }, FRANCISCA);
+  assert.equal(sim.ok, true, sim.message);
+  assert.deepEqual([sim.convenios[0].folio, sim.convenios[0].nuevo, sim.convenios[0].leidas], ['', true, 6]);
+  // Sin elegir convenio no se aplica nada.
+  assert.equal(CV.recibirTGR(db, { texto: pagina }, FRANCISCA).actualizados, 0);
+  const con = CV.recibirTGR(db, { texto: pagina, simular: true, asignar: { 0: id } }, FRANCISCA).convenios[0];
+  assert.deepEqual([con.convenio_id, con.asignado, con.folio_convenio], [id, true, '123456789']);
+  assert.match(con.texto_cambios, /6 cuotas nuevas/);
+  const r = CV.recibirTGR(db, { texto: pagina, asignar: { 0: id } }, FRANCISCA);
+  assert.equal(r.actualizados, 1);
+  const c = CV.get(db, { convenio_id: id }, FRANCISCA).convenio;
+  assert.equal(c.cuotas.length, 6);
+  assert.equal(c.cuotas.find((q) => q.n === 12).situacion, 'AJUSTE');
+});

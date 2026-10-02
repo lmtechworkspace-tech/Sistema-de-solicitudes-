@@ -28,6 +28,10 @@
   function pesos(v) { return v === '' || v == null || !isFinite(Number(v)) ? '—' : '$ ' + Number(v).toLocaleString('es-CL', { maximumFractionDigits: 0 }); }
   function fecha(v) { var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v || '')); return m ? m[3] + '-' + m[2] + '-' + m[1] : (v || '—'); }
   function badge(par) { return U.badge(par[0], par[1]); }
+  function etiquetaConvenio(c) {
+    var n = c.cuotas ? c.cuotas.length : null;
+    return c.cliente_nombre + ' · folio ' + c.folio + (n === null ? '' : (n ? ' · ' + n + ' cuotas' : ' · sin cuotas')) + (c.estado && c.estado !== 'VIGENTE' ? ' · ' + c.estado.toLowerCase() : '');
+  }
   function etiquetaCliente(c) { return c.nombre + (c.rut ? ' · ' + c.rut : ''); }
   function registra() { return !!(lista_ && lista_.puede_registrar); }
   function api(a, d) { return x_.api(a, d); }
@@ -285,13 +289,13 @@
   // ni se conecta a la TGR; solo acepta mensajes de los dominios de la TGR.
   // El marcador y la recepción de mensajes viven en control-interno-v2.js (sirven
   // también para el SII): aquí se toma el último envío de la TGR.
-  var recibido_ = null, visto_ = 0, rec_ = { prev: null, crear: {}, cliente: '', error: '', hecho: null };
+  var recibido_ = null, visto_ = 0, rec_ = { prev: null, crear: {}, asignar: {}, cliente: '', error: '', hecho: null };
   function tomarEnvio() {
     var e = x_.envio && x_.envio();
     if (!e || e.fuente !== 'tgr' || e.t === visto_) return;
     visto_ = e.t;
     recibido_ = e;
-    rec_ = { prev: null, crear: {}, cliente: '', error: '', hecho: null };
+    rec_ = { prev: null, crear: {}, asignar: {}, cliente: '', error: '', hecho: null };
   }
   function vistaRecibir() {
     tomarEnvio();
@@ -302,7 +306,7 @@
   function revisarRecibido() {
     var t = ++turno_;
     pintarRecibir(true);
-    api('recibirTGR', { texto: recibido_.texto, simular: true }).then(function (r) {
+    api('recibirTGR', { texto: recibido_.texto, simular: true, asignar: rec_.asignar }).then(function (r) {
       if (t !== turno_) return;
       rec_.prev = r && r.ok ? r.data : null;
       rec_.error = r && r.ok ? '' : ((r && r.message) || 'No se pudo leer la página.');
@@ -329,27 +333,31 @@
     else if (rec_.hecho) {
       cuerpo = aviso('ok', 'check', txt(rec_.hecho.message)) +
         '<div class="sx2-card sx2-entra"><ul class="cv-hechos">' + rec_.prev.convenios.filter(function (c) { return c.convenio_id; }).map(function (c) {
-          return '<li><b>' + txt(c.cliente_nombre) + '</b> · folio ' + txt(c.folio) + (c.creado ? ' · <span class="sx2-tenue">nuevo en el seguimiento</span>' : '') + ' ' + U.boton({ texto: 'Abrir ficha', sm: true, variante: 'fantasma', clase: 'js-cv-rec-ficha', datos: { id: c.convenio_id } }) + '</li>';
+          return '<li><b>' + txt(c.cliente_nombre) + '</b> · folio ' + txt(c.folio_convenio || c.folio) + (c.creado ? ' · <span class="sx2-tenue">nuevo en el seguimiento</span>' : '') + ' ' + U.boton({ texto: 'Abrir ficha', sm: true, variante: 'fantasma', clase: 'js-cv-rec-ficha', datos: { id: c.convenio_id } }) + '</li>';
         }).join('') + '</ul></div>';
     } else if (rec_.error) cuerpo = aviso('critico', 'alerta', txt(rec_.error));
     else if (rec_.prev) {
       var d = rec_.prev, hay = false;
       var cli = d.cliente ? '<b>' + txt(d.cliente.nombre) + '</b> (' + txt(d.cliente.rut) + ')' : (d.rut ? 'RUT ' + txt(d.rut) + ', que <b>no está en el catálogo</b>' : 'sin RUT reconocible');
-      var filas = d.convenios.map(function (c) {
+      var filas = d.convenios.map(function (c, k) {
         var accion;
-        if (c.convenio_id) { hay = true; accion = c.cambios.length ? '<b>' + txt(c.texto_cambios) + '</b>' : '<span class="sx2-tenue">Sin cambios (queda la fecha de revisión)</span>'; }
-        else if (!c.folio) accion = '<span class="sx2-tenue">La página no dice el folio: usa "Pegar desde la TGR" en la ficha del convenio.</span>';
+        // Sin folio en la página (o para corregirlo): se elige el convenio del seguimiento.
+        var elegir = reg && (!c.folio || c.asignado || c.nuevo) ? '<div class="cv-asignar">' + U.campo(c.folio && !c.asignado ? 'O asígnalo a un convenio del seguimiento' : '¿De qué convenio son estas cuotas?',
+          '<input class="sx2-input js-cv-rec-asignar" data-k="' + k + '" list="cv-dl-conv" value="' + U.esc(c.asignado ? etiquetaConvenio(((lista_ && lista_.convenios) || []).filter(function (x) { return x.convenio_id === c.convenio_id; })[0] || { cliente_nombre: c.cliente_nombre, folio: c.folio_convenio }) : '') + '" placeholder="Busca por cliente o folio" autocomplete="off">') + '</div>' : '';
+        if (c.convenio_id) { hay = true; accion = (c.cambios.length ? '<b>' + txt(c.texto_cambios) + '</b>' : '<span class="sx2-tenue">Sin cambios (queda la fecha de revisión)</span>') + elegir; }
+        else if (!c.folio) accion = (reg ? '<span class="sx2-tenue">La página no dice el folio.</span>' : '<span class="sx2-tenue">La página no dice el folio: usa "Pegar desde la TGR" en la ficha del convenio.</span>') + elegir;
         else {
           if (rec_.crear[c.folio]) hay = true;
-          accion = reg ? '<label class="cv-chk"><input type="checkbox" class="js-cv-rec-crear" data-folio="' + U.esc(c.folio) + '"' + (rec_.crear[c.folio] ? ' checked' : '') + '> No está en el seguimiento: crearlo</label>' : 'No está en el seguimiento.';
+          accion = (reg ? '<label class="cv-chk"><input type="checkbox" class="js-cv-rec-crear" data-folio="' + U.esc(c.folio) + '"' + (rec_.crear[c.folio] ? ' checked' : '') + '> No está en el seguimiento: crearlo</label>' : 'No está en el seguimiento.') + elegir;
         }
-        return '<tr><td><b>' + txt(c.folio || '—') + '</b></td><td>' + txt(c.cliente_nombre || (c.nuevo ? (d.cliente ? d.cliente.nombre : '—') : '')) + '</td><td class="ci2-td-numero">' + c.leidas + '</td><td class="ci2-td-numero">' + c.pagadas_tgr + '</td><td>' + accion + '</td></tr>';
+        return '<tr><td><b>' + txt(c.asignado ? c.folio_convenio : (c.folio || '—')) + '</b></td><td>' + txt(c.cliente_nombre || (c.nuevo ? (d.cliente ? d.cliente.nombre : '—') : '')) + '</td><td class="ci2-td-numero">' + c.leidas + '</td><td class="ci2-td-numero">' + c.pagadas_tgr + '</td><td>' + accion + '</td></tr>';
       }).join('');
       var faltaCliente = !d.cliente && d.convenios.some(function (c) { return c.nuevo && c.folio && rec_.crear[c.folio]; });
       var clientes = (lista_ && lista_.clientes) || [];
       cuerpo = '<div class="sx2-card sx2-entra"><p style="margin:0 0 10px">Recibido' + (recibido_.pagina ? ' de <b>' + txt(recibido_.pagina) + '</b>' : '') + ' a las ' + txt(new Date(recibido_.t).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })) + ' · contribuyente: ' + cli + '.</p>' +
         '<div class="ci2-grilla-caja"><div class="ci2-grilla" style="max-height:none"><table class="ci2-tabla"><thead><tr><th>Folio</th><th>Cliente</th><th class="ci2-th-numero">Cuotas leídas</th><th class="ci2-th-numero">Pagadas (TGR)</th><th>Qué pasa</th></tr></thead><tbody>' + filas + '</tbody></table></div></div>' +
         (faltaCliente && reg ? '<div style="margin-top:10px">' + U.campo('Cliente de los convenios nuevos', '<input class="sx2-input js-cv-rec-cliente" list="cv-dl-rec" value="' + U.esc(rec_.cliente) + '" placeholder="Busca por nombre o RUT" autocomplete="off"><datalist id="cv-dl-rec">' + clientes.map(function (k) { return '<option value="' + U.esc(etiquetaCliente(k)) + '"></option>'; }).join('') + '</datalist>') + '</div>' : '') +
+        '<datalist id="cv-dl-conv">' + ((lista_ && lista_.convenios) || []).map(function (k) { return '<option value="' + U.esc(etiquetaConvenio(k)) + '"></option>'; }).join('') + '</datalist>' +
         '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">' + (reg ? U.boton({ texto: 'Aplicar', icono: 'check', variante: 'primario', clase: 'js-cv-rec-aplicar', deshabilitado: !hay }) : '') +
         U.boton({ texto: 'Descartar', variante: 'fantasma', clase: 'js-cv-rec-descartar' }) + '</div></div>';
     }
@@ -359,7 +367,7 @@
       '<div class="cv-rec-2">' + instalar + pegar + '</div>', true);
   }
   function aplicarRecibido() {
-    var d = rec_.prev, p = { texto: recibido_.texto, crear: Object.keys(rec_.crear).filter(function (k) { return rec_.crear[k]; }) };
+    var d = rec_.prev, p = { texto: recibido_.texto, asignar: rec_.asignar, crear: Object.keys(rec_.crear).filter(function (k) { return rec_.crear[k]; }) };
     if (!d.cliente && p.crear.length) {
       var h = ((lista_ && lista_.clientes) || []).filter(function (k) { return etiquetaCliente(k) === rec_.cliente; })[0];
       if (!h) { PY.aviso('Elige el cliente de los convenios nuevos.', 'error'); return; }
@@ -367,11 +375,10 @@
     }
     api('recibirTGR', p).then(function (r) {
       if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo aplicar.', 'error'); return; }
-      lista_ = null;
       rec_.hecho = r.data;
       rec_.prev = r.data;
       PY.aviso(r.data.message, (r.data.errores || []).length ? 'info' : 'exito');
-      pintarRecibir();
+      api('listarConveniosTGR', {}).then(function (l) { if (l && l.ok) lista_ = l.data; pintarRecibir(); });
     });
   }
 
@@ -388,12 +395,12 @@
       var ta = x_.raiz().querySelector('.js-cv-rec-texto');
       if (!ta || ta.value.trim().length < 10) { PY.aviso('Pega primero la página de la TGR.', 'error'); return; }
       recibido_ = { texto: ta.value.slice(0, 400000), pagina: '', t: Date.now(), fuente: 'tgr' };
-      rec_ = { prev: null, crear: {}, cliente: '', error: '', hecho: null };
+      rec_ = { prev: null, crear: {}, asignar: {}, cliente: '', error: '', hecho: null };
       revisarRecibido();
       return;
     }
     if (t.closest('.js-cv-rec-aplicar')) { aplicarRecibido(); return; }
-    if (t.closest('.js-cv-rec-descartar')) { recibido_ = null; rec_ = { prev: null, crear: {}, cliente: '', error: '', hecho: null }; pintarRecibir(); return; }
+    if (t.closest('.js-cv-rec-descartar')) { recibido_ = null; rec_ = { prev: null, crear: {}, asignar: {}, cliente: '', error: '', hecho: null }; pintarRecibir(); return; }
     if ((b = t.closest('.js-cv-rec-ficha'))) { x_.irAItem('conv:' + b.getAttribute('data-id')); return; }
     if (t.closest('.js-cv-nuevo')) { formConvenio(null); return; }
     if (t.closest('.js-cv-amatriz')) { formMatriz(false); return; }
@@ -424,6 +431,14 @@
     var t = ev.target;
     if (t.classList.contains('js-cv-rec-crear')) { rec_.crear[t.getAttribute('data-folio')] = t.checked; pintarRecibir(); return; }
     if (t.classList.contains('js-cv-rec-cliente')) { rec_.cliente = t.value.trim(); return; }
+    if (t.classList.contains('js-cv-rec-asignar')) {
+      var v = t.value.trim(), k = t.getAttribute('data-k');
+      var cv = ((lista_ && lista_.convenios) || []).filter(function (x) { return etiquetaConvenio(x) === v; })[0];
+      if (v && !cv) { PY.aviso('Elige un convenio de la lista.', 'error'); return; }
+      if (cv) rec_.asignar[k] = cv.convenio_id; else delete rec_.asignar[k];
+      revisarRecibido();
+      return;
+    }
     if (t.classList.contains('js-cv-estado')) { f_.estado = t.value; pintarLista(true); return; }
     if (t.classList.contains('js-cv-alertas')) { f_.alertas = t.checked; pintarLista(true); return; }
     if (!ficha_) return;

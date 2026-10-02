@@ -195,7 +195,10 @@
     var destino = location.origin + location.pathname + '#/control_interno/recibir';
     var codigo = '(function(){var D=' + JSON.stringify(destino) + ',O=' + JSON.stringify(location.origin) + ';' +
       'var t=String(window.getSelection?window.getSelection():"");' +
-      'if(t.length<40){t=document.body?document.body.innerText:"";for(var i=0;i<window.frames.length;i++){try{t+="\\n"+window.frames[i].document.body.innerText;}catch(e){}}}' +
+      // Recuadros (iframes) de otro sitio no se pueden leer desde afuera: se ofrece abrir el más grande solo.
+      'if(t.length<40){t=document.body?document.body.innerText:"";var B=null,F=document.querySelectorAll("iframe,frame");' +
+      'for(var i=0;i<F.length;i++){try{t+="\\n"+F[i].contentDocument.body.innerText;}catch(e){var r=F[i].getBoundingClientRect(),a=r.width*r.height;if(/^https?:/.test(F[i].src||"")&&(!B||a>B.a))B={u:F[i].src,a:a};}}' +
+      'if(B&&B.a>40000&&confirm("SIGSO: la tabla está en un recuadro que el navegador no deja leer desde afuera. Se abrirá sola en esta pestaña; cuando cargue, toca Enviar a SIGSO otra vez.")){location.href=B.u;return;}}' +
       'var w=window.open(D,"sigso_envio");if(!w){alert("SIGSO: permite las ventanas emergentes de este sitio.");return;}' +
       'var n=0,iv=setInterval(function(){n++;try{w.postMessage({tipo:"sigso-envio",texto:t,pagina:location.hostname},O);}catch(e){}if(n>60)clearInterval(iv);},500);' +
       'window.addEventListener("message",function(e){if(e.origin===O&&e.data==="sigso-envio-recibido")clearInterval(iv);});})();';

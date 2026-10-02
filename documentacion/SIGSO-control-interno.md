@@ -163,6 +163,16 @@ Cómo funciona:
 Respaldo sin marcador: Ctrl+A y Ctrl+C en la página de la TGR y pegar en la
 misma vista (lee varios convenios de una vez).
 
+**Primera prueba real (2-10-2026)**, en web.tesoreria.cl › Imprimir Cuotas de
+Convenios Vigentes: el marcador llegó a SIGSO, pero (1) la tabla está en un
+recuadro (iframe) de www.tesoreria.cl que el navegador no deja leer desde afuera,
+y (2) la página no muestra folio ni RUT, solo Cuota · Vencimiento · Monto ·
+Pagada. Ajustes: el marcador ahora ofrece abrir ese recuadro solo en la pestaña
+(y se toca de nuevo), y en Recibir desde la TGR se elige **"¿De qué convenio son
+estas cuotas?"** cuando la página no trae folio (`asignar` en `recibirTGR`).
+Ojo: la página "Cuotas Vigentes" del Centro de Pagos (N° de Resolución, N° de
+Cuota, N° de Folio por cuota) NO sirve: solo lista lo impago y sin SÍ/NO.
+
 Probado con una página de prueba local que imita la de la TGR (dos folios):
 reconoció al cliente por el RUT, detectó las cuotas pagadas nuevas, creó el folio
 que faltaba y no repitió el envío. Falta la prueba en la TGR real (la hace el

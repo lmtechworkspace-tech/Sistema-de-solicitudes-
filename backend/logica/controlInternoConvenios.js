@@ -343,12 +343,16 @@ function recibirTGR(db, data, contexto) {
     const c = CI.resolverClienteTexto_(CI.contextoClientes_(db), leido.rut, leido.rut, '');
     if (c && c.cliente_id) cliente = { cliente_id: c.cliente_id, nombre: c.cliente_nombre, rut: c.cliente_rut };
   }
-  const resultado = leido.bloques.map((b) => {
+  // La página de la TGR a veces no dice el folio (solo la tabla de cuotas):
+  // la persona elige el convenio y llega en `asignar` = { <n° de bloque>: convenio_id }.
+  const asignar = d.asignar && typeof d.asignar === 'object' ? d.asignar : {};
+  const resultado = leido.bloques.map((b, k) => {
     const base = { folio: b.folio, leidas: b.cuotas.length, pagadas_tgr: b.cuotas.filter((q) => q.tgr === 'SI').length };
-    const c = b.folio ? todos.find((k) => k.folio === b.folio) : null;
+    const elegido = asignar[k] ? todos.find((x) => x.convenio_id === String(asignar[k])) : null;
+    const c = elegido || (b.folio ? todos.find((x) => x.folio === b.folio) : null);
     if (!c) return Object.assign(base, { nuevo: true });
     const u = unir_(cuotas_(c), b.cuotas, hoy);
-    return Object.assign(base, { convenio_id: c.convenio_id, cliente_nombre: c.cliente_nombre, estado: c.estado || 'VIGENTE', cambios: u.cambios, texto_cambios: textoCambios_(u.cambios) });
+    return Object.assign(base, { convenio_id: c.convenio_id, cliente_nombre: c.cliente_nombre, folio_convenio: c.folio, asignado: !!elegido, estado: c.estado || 'VIGENTE', cambios: u.cambios, texto_cambios: textoCambios_(u.cambios) });
   });
   const res = { ok: true, simulado: !!d.simular, rut: leido.rut, cliente, convenios: resultado };
   if (d.simular) return res;
