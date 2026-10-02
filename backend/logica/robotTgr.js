@@ -180,12 +180,24 @@ async function ingresar_(page, receta, rut, clave, alPaso, dialogo) {
 
 const RE_CONTENIDO = /pagada|resoluci[oó]n|no (posee|tiene|registra|existen|hay)|sin convenios/i;
 
+const RE_SIN_CONVENIOS = /no (posee|tiene|registra|existen|hay)[^.]{0,40}convenio|sin convenios/i;
+/**
+ * Espera a que aparezca algo CONCRETO: la tabla de cuotas, la lista de
+ * convenios (con su columna Resolución) o el aviso de que no tiene. Una
+ * palabra suelta no basta: la página de afuera dice "Resolución" en sus menús
+ * y la tabla real llega después en un recuadro (2-10-2026, primera prueba).
+ */
 async function contenido_(page, receta) {
   return hasta_(async () => {
     if (await hayCaptchaEnAlguno_(page)) throw new Detencion('CAPTCHA', 'La TGR pidió un CAPTCHA después del ingreso.');
     const ts = await textosDeRecuadros_(page);
-    return ts.some((x) => RE_CONTENIDO.test(x.texto)) ? ts : null;
-  }, receta.esperaMs, 'lista de convenios');
+    if (!ts.some((x) => RE_CONTENIDO.test(x.texto))) return null;
+    if (tablaDe_(ts) || ts.some((x) => RE_SIN_CONVENIOS.test(x.texto)) || (await resoluciones_(ts)).length) return ts;
+    return null;
+  }, receta.esperaMs, 'lista de convenios').catch((e) => {
+    if (e instanceof Detencion && e.estado === 'SIN_RESPUESTA') throw new Detencion('PAGINA_DISTINTA', 'Se entró a la TGR, pero en ' + Math.round(receta.esperaMs / 1000) + ' s no apareció la lista de convenios ni la tabla de cuotas.');
+    throw e;
+  });
 }
 function tablaDe_(ts) {
   for (const x of ts) {
@@ -272,7 +284,7 @@ async function diagnostico_(page) {
         d.elementos.push(...l);
       } catch (e) { /* */ }
     }
-    d.captura = await page.screenshot({ type: 'jpeg', quality: 55, encoding: 'base64', fullPage: false });
+    d.captura = await page.screenshot({ type: 'jpeg', quality: 50, encoding: 'base64', fullPage: true });
   } catch (e) { /* lo que se alcanzó a juntar */ }
   return d;
 }
@@ -322,7 +334,7 @@ async function revisarCliente(datos, opciones) {
     if (directa) return { estado: 'OK', mensaje: '1 convenio leído.', convenios: [directa] };
     const lista = await resoluciones_(ts);
     if (!lista.length) {
-      const sin = ts.some((x) => /no (posee|tiene|registra|existen|hay)[^.]{0,40}convenio|sin convenios/i.test(x.texto));
+      const sin = ts.some((x) => RE_SIN_CONVENIOS.test(x.texto));
       if (sin) return { estado: 'OK', mensaje: 'El cliente no tiene convenios vigentes en la TGR.', convenios: [] };
       throw new Detencion('PAGINA_DISTINTA', 'Se entró a la TGR, pero la página no muestra convenios ni cuotas como se esperaba.');
     }
