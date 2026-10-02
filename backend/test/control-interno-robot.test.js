@@ -173,6 +173,7 @@ const sinNavegador = !RUTA || process.env.CI ? 'sin navegador local (o en CI)' :
 function sitio() {
   // A: TGR/portal (localhost) y "SII" (127.0.0.1, el host de ingreso). B: el recuadro de otro origen.
   const intentos = [];
+  const pagos = [];
   const B = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -180,6 +181,12 @@ function sitio() {
     if (u.pathname === '/lista2') return res.end('<table><tr><th>N° Resolución</th><th>Activación</th><th></th></tr><tr><td>60225</td><td>31-03-2026</td><td><button onclick="location.href=\'/cuotas?res=60225\'">Ver cuotas</button></td></tr></table>');
     // Como es la TGR real (2-10-2026): "Convenios Activos y Propuestas Aceptadas", el enlace es el
     // N° de la izquierda (no la resolución) y el recuadro llega tarde.
+    // El menú "Convenios" real: el robot debe tocar Imprimir Documentos › "Cuotas convenios vigentes"
+    // y NUNCA "Cuotas de convenios vigentes" (Pagar). El enlace correcto abre otra pestaña (target).
+    if (u.pathname === '/menu') return res.end('<h3>Convenios</h3><b>Pagar</b><p><a href="/pagar">Cuotas de convenios vigentes</a></p>' +
+      '<b>Imprimir Documentos</b><p><a href="/x">Comprobante de resolución</a><br><a href="/x">Estado de pago de convenio</a><br><a href="/lista3" target="_blank">Cuotas convenios vigentes</a></p>' +
+      '<b>Consultas</b><p><a href="/x">Convenios Vigentes</a><br><a href="/x">Convenios Caducados</a></p>');
+    if (u.pathname === '/pagar') { pagos.push(1); return res.end('<p>Seleccione las cuotas que desea pagar</p><table><tr><th>N° de Resolución</th><th>N° de Cuota</th><th>N° de Folio</th></tr><tr><td>60225</td><td>6</td><td><a href="/x">6022506</a></td></tr></table><button>IR A PAGAR</button>'); }
     if (u.pathname === '/lista3') {
       return setTimeout(() => res.end('<b>IMPRIMIR CUOTAS</b><p>Convenios Activos y Propuestas Aceptadas</p><table><tr><th>N°</th><th>N° Resolución</th><th>Fecha Resolución</th><th>Tipo de Convenio</th><th>N° Cuotas</th></tr>' +
         '<tr><td><a href="/cuotas?res=60225">1</a></td><td>60225</td><td>31-03-2026</td><td>Convenio Propyme Fiscal</td><td>16</td></tr></table>' +
@@ -219,6 +226,7 @@ function sitio() {
             if (rut==='11111111-1') return document.getElementById('mCorreo').style.display='block';
             if (rut==='22222222-2') return document.getElementById('mCambio').style.display='block';
             if (rut==='33333333-3') { alert('RUT o clave tributaria incorrecta'); return; }
+            if (cl==='buena4') return location.href='http://localhost:${'${pa}'}/portal4';
             if (cl==='buena3') return location.href='http://localhost:${'${pa}'}/portal3';
             if (cl==='buena2') return location.href='http://localhost:${'${pa}'}/portal2';
             if (cl==='buena') return location.href='http://localhost:${'${pa}'}/portal';
@@ -226,12 +234,13 @@ function sitio() {
           });
         };</script>`.split('${pa}').join(pa));
     }
+    if (u.pathname === '/portal4') return res.end('<h1>Imprimir Cuotas de Convenios Vigentes</h1><nav>Pagos · Consulta tu resolución</nav><iframe src="http://localhost:' + pb + '/menu" style="width:900px;height:500px"></iframe>');
     if (u.pathname === '/portal3') return res.end('<h1>Imprimir Cuotas de Convenios Vigentes</h1><nav>Pagos · Certificados · Consulta tu resolución</nav><iframe src="http://localhost:' + pb + '/lista3" style="width:900px;height:500px"></iframe>');
     if (u.pathname === '/portal2') return res.end('<h1>Imprimir Cuotas de Convenios Vigentes</h1><iframe src="http://localhost:' + pb + '/lista2" style="width:900px;height:500px"></iframe>');
     if (u.pathname === '/portal') return res.end('<h1>Imprimir Cuotas de Convenios Vigentes</h1><iframe src="http://localhost:' + pb + '/lista" style="width:900px;height:500px"></iframe>');
     res.statusCode = 404; res.end('no');
   });
-  return new Promise((ok) => B.listen(0, '127.0.0.1', () => A.listen(0, '127.0.0.1', () => ok({ A, B, intentos }))));
+  return new Promise((ok) => B.listen(0, '127.0.0.1', () => A.listen(0, '127.0.0.1', () => ok({ A, B, intentos, pagos }))));
 }
 function receta(s, ruta) {
   const base = 'http://localhost:' + s.A.address().port;
@@ -274,6 +283,13 @@ test('de punta a punta: ingresa, recorre los convenios del recuadro y se detiene
     r = await Robot.revisarCliente({ rut: '76123456-7', clave: 'buena2' }, { receta: receta(s) });
     assert.equal(r.estado, 'OK', r.mensaje + ' ' + JSON.stringify(r.diagnostico && r.diagnostico.elementos));
     assert.deepEqual(r.convenios.map((c) => [c.resolucion, c.cuotas.length]), [['60225', 3]]);
+    // El paso a paso real: menú › "Cuotas convenios vigentes" › "1" de la fila › cuotas. Nunca la página de pago.
+    const pasos4 = [];
+    r = await Robot.revisarCliente({ rut: '76123456-7', clave: 'buena4' }, { receta: receta(s), alPaso: (x) => pasos4.push(x) });
+    assert.equal(r.estado, 'OK', r.mensaje + ' ' + JSON.stringify(r.diagnostico && r.diagnostico.elementos));
+    assert.deepEqual(r.convenios.map((c) => [c.resolucion, c.cuotas.length]), [['60225', 3]]);
+    assert.ok(pasos4.includes('Abriendo "Cuotas convenios vigentes"'));
+    assert.equal(s.pagos.length, 0, 'nunca entra a la página de pago');
     // La página real: la palabra "Resolución" afuera no engaña; espera el recuadro y toca el "1" de la fila.
     r = await Robot.revisarCliente({ rut: '76123456-7', clave: 'buena3' }, { receta: receta(s) });
     assert.equal(r.estado, 'OK', r.mensaje + ' ' + JSON.stringify(r.diagnostico && r.diagnostico.elementos));

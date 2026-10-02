@@ -45,6 +45,10 @@ const RECETA = {
   desafio: '#correo',
   cambioClave: '#MCurrentPass2',
   errorSii: '#btn-no-autorizado',
+  // Menú "Convenios" de la TGR después del ingreso (2-10-2026): Imprimir
+  // Documentos › "Cuotas convenios vigentes". OJO: en Pagar está "Cuotas DE
+  // convenios vigentes", que lleva a pagar: ese nunca.
+  menuCuotas: '^cuotas\\s+convenios\\s+vigentes$',
   esperaMs: ESPERA_MS
 };
 const PASO_MS = 700;
@@ -188,11 +192,14 @@ const RE_SIN_CONVENIOS = /no (posee|tiene|registra|existen|hay)[^.]{0,40}conveni
  * y la tabla real llega después en un recuadro (2-10-2026, primera prueba).
  */
 async function contenido_(page, receta) {
+  let clicsMenu = 0;
+  const alPasoMenu = receta._alPaso || (() => {});
   return hasta_(async () => {
     if (await hayCaptchaEnAlguno_(page)) throw new Detencion('CAPTCHA', 'La TGR pidió un CAPTCHA después del ingreso.');
     const ts = await textosDeRecuadros_(page);
-    if (!ts.some((x) => RE_CONTENIDO.test(x.texto))) return null;
     if (tablaDe_(ts) || ts.some((x) => RE_SIN_CONVENIOS.test(x.texto)) || (await resoluciones_(ts)).length) return ts;
+    // Menú de convenios: Imprimir Documentos › Cuotas convenios vigentes (a lo más 2 veces por espera).
+    if (clicsMenu < 2 && (await clicMenu_(page, receta))) { clicsMenu++; alPasoMenu('Abriendo "Cuotas convenios vigentes"'); }
     return null;
   }, receta.esperaMs, 'lista de convenios').catch((e) => {
     if (e instanceof Detencion && e.estado === 'SIN_RESPUESTA') throw new Detencion('PAGINA_DISTINTA', 'Se entró a la TGR, pero en ' + Math.round(receta.esperaMs / 1000) + ' s no apareció la lista de convenios ni la tabla de cuotas.');
@@ -208,7 +215,28 @@ function tablaDe_(ts) {
 }
 // (se ejecutan en la página) Las resoluciones: primero la columna "Resolución" de
 // cualquier tabla; si no hay, enlaces o botones cuyo texto es un número (no montos ni RUT).
+/** Toca el enlace del menú de convenios que lleva a imprimir cuotas (nunca el de pagar). */
+async function clicMenu_(page, receta) {
+  if (!receta.menuCuotas) return false;
+  for (const f of page.frames()) {
+    try {
+      const ok = await f.evaluate((fuente) => {
+        const re = new RegExp(fuente, 'i');
+        const a = Array.from(document.querySelectorAll('a,button')).find((x) => re.test(String(x.innerText || x.value || '').replace(/\s+/g, ' ').trim()));
+        if (!a) return false;
+        if (a.removeAttribute) a.removeAttribute('target'); // que no abra otra pestaña
+        a.click();
+        return true;
+      }, receta.menuCuotas);
+      if (ok) return true;
+    } catch (e) { /* recuadro que navegaba */ }
+  }
+  return false;
+}
+
+// Una página para PAGAR cuotas nunca se opera: ni se buscan resoluciones ni se toca nada.
 function candidatos_() {
+  if (/desea pagar|ir a pagar/i.test(document.body ? document.body.innerText : '')) return [];
   const limpiar = (t) => String(t || '').replace(/\s+/g, ' ').trim();
   const out = [];
   for (const tabla of Array.from(document.querySelectorAll('table'))) {
@@ -220,6 +248,7 @@ function candidatos_() {
     filas.slice(iEnc + 1).forEach((r) => { const c = r.cells[col]; const m = c && limpiar(c.innerText).match(/^\D{0,6}(\d{3,12})\D{0,3}$/); if (m) out.push(m[1]); });
   }
   if (out.length) return out;
+  if (!/convenio/i.test(document.body.innerText || '') || !/resoluci/i.test(document.body.innerText || '')) return out;
   for (const el of Array.from(document.querySelectorAll('a,button,[onclick]'))) {
     const t = limpiar(el.innerText || el.value);
     const m = t.match(/^\D{0,12}(\d{3,12})\D{0,3}$/);
@@ -228,6 +257,7 @@ function candidatos_() {
   return out;
 }
 function abrir_(res) {
+  if (/desea pagar|ir a pagar/i.test(document.body ? document.body.innerText : '')) return false;
   const limpiar = (t) => String(t || '').replace(/\s+/g, ' ').trim();
   const CLIC = 'a,button,input[type=submit],input[type=button],input[type=radio],[onclick]';
   for (const tabla of Array.from(document.querySelectorAll('table'))) {
@@ -326,6 +356,7 @@ async function revisarCliente(datos, opciones) {
     await page.setRequestInterception(true);
     page.on('request', (rq) => { if (['image', 'media', 'font'].includes(rq.resourceType())) rq.abort(); else rq.continue(); });
 
+    receta._alPaso = alPaso;
     await ingresar_(page, receta, rut, clave, alPaso, dialogo);
     clave = ''; // ya se usó: no se vuelve a necesitar
     alPaso('Leyendo los convenios');
