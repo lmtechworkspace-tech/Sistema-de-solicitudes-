@@ -86,7 +86,10 @@ function cuotaValida_(q) {
 function diagnosticoSeguro_(d) {
   if (!d || typeof d !== 'object') return null;
   const captura = typeof d.captura === 'string' && /^[A-Za-z0-9+/=]+$/.test(d.captura) && d.captura.length < 3000000 ? d.captura : '';
-  return { url: String(d.url || '').slice(0, 300), captura };
+  // Texto y botones de la página donde se detuvo: para ajustar el lector a la TGR real.
+  const textos = (Array.isArray(d.textos) ? d.textos : []).slice(0, 4).map((t) => String(t || '').slice(0, 2500));
+  const elementos = (Array.isArray(d.elementos) ? d.elementos : []).slice(0, 80).map((t) => String(t || '').slice(0, 60));
+  return { url: String(d.url || '').slice(0, 300), captura, textos, elementos };
 }
 
 /** Inicia una revisión. data: { cliente_id?, rut, clave }. */

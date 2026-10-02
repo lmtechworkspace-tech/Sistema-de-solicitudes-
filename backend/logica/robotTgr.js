@@ -123,7 +123,16 @@ async function hasta_(prueba, ms, queEspero) {
   }
 }
 
-async function ingresar_(page, receta, rut, clave, alPaso) {
+/** Un aviso emergente del SII o la TGR (alert): se lee y se cierra; aquí se decide qué significa. */
+function revisarAviso_(dialogo) {
+  const t = dialogo.texto;
+  if (!t) return;
+  dialogo.texto = '';
+  if (/incorrect|inv[aá]lid|no coincide|no es v[aá]lid|bloquead|no autorizad|intentos/i.test(t)) throw new Detencion('CLAVE_INVALIDA', 'El SII no aceptó el RUT o la clave: "' + t + '". No se reintentó.');
+  throw new Detencion('AVISO', 'La página mostró un aviso: "' + t + '". El robot se detuvo sin reintentar.');
+}
+
+async function ingresar_(page, receta, rut, clave, alPaso, dialogo) {
   // El trámite vive en varios dominios de la TGR y no todos responden igual
   // (2-10-2026: www.tgr.cl, pedido desde el servidor, mostró "la página no
   // existe"): se prueban en orden y se usa el primero que lleva al ingreso.
@@ -157,6 +166,7 @@ async function ingresar_(page, receta, rut, clave, alPaso) {
   await page.click(receta.ingresar);
   // Un solo intento: o sale del ingreso, o se detiene diciendo por qué.
   await hasta_(async () => {
+    revisarAviso_(dialogo);
     if (!receta.hostsIngreso.includes(host_(page.url()))) return true;
     if (await page.evaluate(visible_, receta.desafio)) throw new Detencion('DESAFIO', 'El SII pide verificar un correo por intentos fallidos. Entra tú una vez al SII con esa clave; el robot no lo hará.');
     if (await page.evaluate(visible_, receta.cambioClave)) throw new Detencion('CAMBIO_CLAVE', 'El SII pide cambiar la Clave Tributaria del cliente. El robot no cambia claves: hazlo con el cliente y vuelve a intentar.');
@@ -184,28 +194,65 @@ function tablaDe_(ts) {
   }
   return null;
 }
-/** Números que parecen resoluciones: enlaces con solo dígitos en los recuadros. */
+// (se ejecutan en la página) Las resoluciones: primero la columna "Resolución" de
+// cualquier tabla; si no hay, enlaces o botones cuyo texto es un número (no montos ni RUT).
+function candidatos_() {
+  const limpiar = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+  const out = [];
+  for (const tabla of Array.from(document.querySelectorAll('table'))) {
+    const filas = Array.from(tabla.rows || []);
+    const iEnc = filas.findIndex((r) => /resoluci/i.test(r.innerText || ''));
+    if (iEnc === -1) continue;
+    const col = Array.from(filas[iEnc].cells).findIndex((c) => /resoluci/i.test(c.innerText || ''));
+    if (col === -1) continue;
+    filas.slice(iEnc + 1).forEach((r) => { const c = r.cells[col]; const m = c && limpiar(c.innerText).match(/^\D{0,6}(\d{3,12})\D{0,3}$/); if (m) out.push(m[1]); });
+  }
+  if (out.length) return out;
+  for (const el of Array.from(document.querySelectorAll('a,button,[onclick]'))) {
+    const t = limpiar(el.innerText || el.value);
+    const m = t.match(/^\D{0,12}(\d{3,12})\D{0,3}$/);
+    if (m && t.length <= 40 && !/\$|\d\.\d{3}|-\s*[\dkK]$/.test(t)) out.push(m[1]);
+  }
+  return out;
+}
+function abrir_(res) {
+  const limpiar = (t) => String(t || '').replace(/\s+/g, ' ').trim();
+  const CLIC = 'a,button,input[type=submit],input[type=button],input[type=radio],[onclick]';
+  for (const tabla of Array.from(document.querySelectorAll('table'))) {
+    const filas = Array.from(tabla.rows || []);
+    const iEnc = filas.findIndex((r) => /resoluci/i.test(r.innerText || ''));
+    if (iEnc === -1) continue;
+    const col = Array.from(filas[iEnc].cells).findIndex((c) => /resoluci/i.test(c.innerText || ''));
+    for (const r of filas.slice(iEnc + 1)) {
+      const c = r.cells[col];
+      const m = c && limpiar(c.innerText).match(/(\d{3,12})/);
+      if (!m || m[1] !== res) continue;
+      // El enlace o botón de la celda; si no, el de la fila; si no, la fila o la celda.
+      const blanco = c.querySelector(CLIC) || r.querySelector(CLIC) || (r.getAttribute('onclick') ? r : null) || c;
+      blanco.click();
+      // Si es un selector (radio), luego el botón de la página: Ver / Imprimir / Consultar / Aceptar.
+      if (blanco.type === 'radio') {
+        const b = Array.from(document.querySelectorAll('button,input[type=submit],input[type=button],a')).find((x) => /^(ver|imprimir|consultar|aceptar|continuar)/i.test(limpiar(x.innerText || x.value)));
+        if (b) b.click();
+      }
+      return true;
+    }
+  }
+  const el = Array.from(document.querySelectorAll('a,button,[onclick]')).find((x) => { const t = limpiar(x.innerText || x.value); const m = t.match(/(\d{3,12})/); return m && m[1] === res && t.length <= 40; });
+  if (!el) return false;
+  el.click();
+  return true;
+}
 async function resoluciones_(ts) {
   const out = [];
   for (const x of ts) {
-    try {
-      const l = await x.frame.evaluate(() => Array.from(document.querySelectorAll('a')).map((a) => (a.textContent || '').trim()).filter((t) => /^\d{3,12}$/.test(t)));
-      l.forEach((t) => { if (!out.includes(t)) out.push(t); });
-    } catch (e) { /* */ }
+    try { (await x.frame.evaluate(candidatos_)).forEach((t) => { if (!out.includes(t)) out.push(t); }); } catch (e) { /* */ }
   }
   return out.slice(0, MAX_CONVENIOS);
 }
 async function abrirResolucion_(page, res) {
   for (const f of page.frames()) {
-    try {
-      const ok = await f.evaluate((t) => {
-        const a = Array.from(document.querySelectorAll('a')).find((x) => (x.textContent || '').trim() === t);
-        if (!a) return false;
-        a.click();
-        return true;
-      }, res);
-      if (ok) return true;
-    } catch (e) { /* */ }
+    try { if (await f.evaluate(abrir_, res)) return true; } catch (e) { /* */ }
   }
   return false;
 }
@@ -215,7 +262,16 @@ async function diagnostico_(page) {
   try {
     const u = new URL(page.url());
     d.url = u.hostname + u.pathname;
-    d.textos = (await textosDeRecuadros_(page)).map((x) => x.texto.slice(0, 2500)).slice(0, 4);
+    const ts = (await textosDeRecuadros_(page)).slice(0, 4);
+    d.textos = ts.map((x) => x.texto.slice(0, 2500));
+    d.elementos = [];
+    for (const x of ts) {
+      try {
+        const l = await x.frame.evaluate(() => Array.from(document.querySelectorAll('a,button,input[type=submit],input[type=button],input[type=radio],[onclick]'))
+          .map((e) => ((e.tagName === 'INPUT' ? e.type + ':' : e.tagName.toLowerCase() + ':') + String(e.innerText || e.value || '').replace(/\s+/g, ' ').trim()).slice(0, 60)).slice(0, 40));
+        d.elementos.push(...l);
+      } catch (e) { /* */ }
+    }
     d.captura = await page.screenshot({ type: 'jpeg', quality: 55, encoding: 'base64', fullPage: false });
   } catch (e) { /* lo que se alcanzó a juntar */ }
   return d;
@@ -243,18 +299,22 @@ async function revisarCliente(datos, opciones) {
     headless: o.ventana ? false : (/headless-shell/i.test(ruta) ? 'shell' : true),
     defaultViewport: o.ventana ? null : undefined,
     args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--disable-extensions', '--no-first-run', '--mute-audio'],
-    timeout: receta.esperaMs
+    timeout: receta.esperaMs,
+    protocolTimeout: 60 * 1000
   });
   let page = null;
   try {
     const contexto = await navegador.createBrowserContext();
     page = await contexto.newPage();
     await page.setViewport({ width: 1280, height: 900 });
+    // Un aviso emergente bloquea la página hasta que se cierra: se lee, se cierra y se decide.
+    const dialogo = { texto: '' };
+    page.on('dialog', (d) => { dialogo.texto = String(d.message() || 'aviso sin texto').slice(0, 200); d.dismiss().catch(() => null); });
     // Sin imágenes, fuentes ni videos: menos carga para la TGR y para el servidor.
     await page.setRequestInterception(true);
     page.on('request', (rq) => { if (['image', 'media', 'font'].includes(rq.resourceType())) rq.abort(); else rq.continue(); });
 
-    await ingresar_(page, receta, rut, clave, alPaso);
+    await ingresar_(page, receta, rut, clave, alPaso, dialogo);
     clave = ''; // ya se usó: no se vuelve a necesitar
     alPaso('Leyendo los convenios');
     let ts = await contenido_(page, receta);

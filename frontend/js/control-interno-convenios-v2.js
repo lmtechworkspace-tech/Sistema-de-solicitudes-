@@ -415,7 +415,10 @@
   function diagnosticoHtml(dg) {
     if (!dg || (!dg.captura && !dg.url)) return '';
     return '<details class="cv-diag"><summary>Ver dónde se detuvo el robot</summary>' + (dg.url ? '<p class="sx2-tenue">' + txt(dg.url) + '</p>' : '') +
-      (dg.captura ? '<img alt="Captura de la página donde se detuvo el robot" src="data:image/jpeg;base64,' + U.esc(dg.captura) + '">' : '') + '</details>';
+      (dg.captura ? '<img alt="Captura de la página donde se detuvo el robot" src="data:image/jpeg;base64,' + U.esc(dg.captura) + '">' : '') +
+      ((dg.elementos && dg.elementos.length) ? '<p class="cv-diag__t">Botones y enlaces que había</p><pre class="cv-cmd">' + U.esc(dg.elementos.join('\n')) + '</pre>' : '') +
+      ((dg.textos && dg.textos.length) ? '<p class="cv-diag__t">Texto de la página</p>' + dg.textos.map(function (t) { return '<pre class="cv-cmd">' + U.esc(t) + '</pre>'; }).join('') : '') +
+      '<p class="sx2-tenue" style="font-size:.8125rem">Para ajustar el robot, envía esta captura y estos textos (puedes tapar RUT y montos).</p></details>';
   }
   function vistaRecibir() {
     tomarEnvio();

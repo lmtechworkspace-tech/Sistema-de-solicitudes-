@@ -176,6 +176,8 @@ function sitio() {
   const B = http.createServer((req, res) => {
     const u = new URL(req.url, 'http://x');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    // Como puede venir en la TGR real: el número en una celda y un botón "Ver cuotas" en la fila.
+    if (u.pathname === '/lista2') return res.end('<table><tr><th>N° Resolución</th><th>Activación</th><th></th></tr><tr><td>60225</td><td>31-03-2026</td><td><button onclick="location.href=\'/cuotas?res=60225\'">Ver cuotas</button></td></tr></table>');
     if (u.pathname === '/lista') return res.end('<h3>Convenios vigentes</h3><table><tr><th>N° Resolución</th></tr><tr><td><a href="/cuotas?res=60225">60225</a></td></tr><tr><td><a href="/cuotas?res=70001">70001</a></td></tr></table>');
     if (u.pathname === '/cuotas') {
       const filas = u.searchParams.get('res') === '60225'
@@ -209,11 +211,14 @@ function sitio() {
           fetch('/intento?rut='+encodeURIComponent(rut)).then(function(){
             if (rut==='11111111-1') return document.getElementById('mCorreo').style.display='block';
             if (rut==='22222222-2') return document.getElementById('mCambio').style.display='block';
+            if (rut==='33333333-3') { alert('RUT o clave tributaria incorrecta'); return; }
+            if (cl==='buena2') return location.href='http://localhost:${'${pa}'}/portal2';
             if (cl==='buena') return location.href='http://localhost:${'${pa}'}/portal';
             document.getElementById('err').style.display='block';
           });
-        };</script>`.replace('${pa}', pa));
+        };</script>`.split('${pa}').join(pa));
     }
+    if (u.pathname === '/portal2') return res.end('<h1>Imprimir Cuotas de Convenios Vigentes</h1><iframe src="http://localhost:' + pb + '/lista2" style="width:900px;height:500px"></iframe>');
     if (u.pathname === '/portal') return res.end('<h1>Imprimir Cuotas de Convenios Vigentes</h1><iframe src="http://localhost:' + pb + '/lista" style="width:900px;height:500px"></iframe>');
     res.statusCode = 404; res.end('no');
   });
@@ -246,9 +251,20 @@ test('de punta a punta: ingresa, recorre los convenios del recuadro y se detiene
     assert.equal(r.estado, 'CLAVE_INVALIDA', r.mensaje);
     assert.ok(r.diagnostico && r.diagnostico.captura, 'trae la captura para entender qué pasó');
     assert.equal(s.intentos.filter((x) => x === '76123456-7').length, 3, 'un solo intento por revisión (2 buenos + 1 malo)');
+    assert.ok(r.diagnostico && Array.isArray(r.diagnostico.elementos), 'el diagnóstico trae los botones de la página');
 
     r = await Robot.revisarCliente({ rut: '11111111-1', clave: 'buena' }, { receta: receta(s) });
     assert.equal(r.estado, 'DESAFIO');
+    // 2-10-2026: un aviso emergente del SII congelaba la página. Ahora se lee, se cierra y se detiene.
+    const t0 = Date.now();
+    r = await Robot.revisarCliente({ rut: '33333333-3', clave: 'buena' }, { receta: receta(s) });
+    assert.equal(r.estado, 'CLAVE_INVALIDA', r.mensaje);
+    assert.match(r.mensaje, /RUT o clave tributaria incorrecta/);
+    assert.ok(Date.now() - t0 < 30000, 'no se queda congelado');
+    // Lista con botón "Ver cuotas" en la fila de la resolución.
+    r = await Robot.revisarCliente({ rut: '76123456-7', clave: 'buena2' }, { receta: receta(s) });
+    assert.equal(r.estado, 'OK', r.mensaje + ' ' + JSON.stringify(r.diagnostico && r.diagnostico.elementos));
+    assert.deepEqual(r.convenios.map((c) => [c.resolucion, c.cuotas.length]), [['60225', 3]]);
     r = await Robot.revisarCliente({ rut: '22222222-2', clave: 'buena' }, { receta: receta(s) });
     assert.equal(r.estado, 'CAMBIO_CLAVE');
     r = await Robot.revisarCliente({ rut: '76123456-7', clave: 'buena' }, { receta: receta(s, '/tramite-captcha') });
