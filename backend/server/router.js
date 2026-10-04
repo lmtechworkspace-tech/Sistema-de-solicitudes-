@@ -67,6 +67,8 @@ const Tablero = require('../logica/tableroSgc');
 const Prestaciones = require('../logica/prestacionesSgc');
 const ControlInterno = require('../logica/controlInterno');
 const ReportesDepto = require('../logica/departamentosReportes');
+const IndicadoresDepto = require('../logica/indicadoresDepto');
+const InformesGestion = require('../logica/informesGestion');
 const ControlInternoImportar = require('../logica/controlInternoImportar');
 const ControlInternoReportes = require('../logica/controlInternoReportes');
 const ControlInternoConvenios = require('../logica/controlInternoConvenios');
@@ -611,6 +613,16 @@ const ACCIONES = {
   recibirReporteDep: (db, data, contexto) => ReportesDepto.recibir(db, data, contexto),
   panelReportesDep: (db, data, contexto) => ReportesDepto.panel(db, data, contexto),
   pendientesReportesDep: (db, data, contexto) => ReportesDepto.pendientes(db, data, contexto),
+  // Reportabilidad (2026-10-03): indicadores del área y el informe de gestión
+  // del mes con su cadena Finanzas y Cobranzas → Control → Gerencia.
+  indicadoresDep: (db, data, contexto) => IndicadoresDepto.area(db, data, contexto),
+  getInformeGestion: (db, data, contexto) => InformesGestion.obtener(db, data, contexto),
+  avanzarInformeGestion: (db, data, contexto) => InformesGestion.avanzar(db, data, contexto),
+  comentarInformeGestion: (db, data, contexto) => InformesGestion.comentar(db, data, contexto),
+  decisionesInformeGestion: (db, data, contexto) => InformesGestion.guardarDecisiones(db, data, contexto),
+  historialInformeGestion: (db, data, contexto) => InformesGestion.historial(db, data, contexto),
+  listarCadenaReportes: (db, data, contexto) => InformesGestion.listarCadena(db, data, contexto),
+  guardarCadenaReportes: (db, data, contexto) => InformesGestion.guardarCadena(db, data, contexto),
   // Importar las planillas del Drive (solo ADM): el navegador lee el .xlsx y
   // manda hoja por hoja; `simular` primero.
   importarHojaCI: (db, data, contexto) => ControlInternoImportar.importarHoja(db, data, contexto),

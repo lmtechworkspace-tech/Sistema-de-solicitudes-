@@ -33,6 +33,10 @@ const DEPARTAMENTOS = [
   { clave: 'RRHH', nombre: 'Recursos Humanos', area: 'RRHH', modulo: 'dep_rrhh', icono: 'equipo' },
   { clave: 'PREVENCION', nombre: 'Prevención de riesgos', area: 'PREVENCION', modulo: 'dep_prevencion', icono: 'escudoCheck' },
   { clave: 'MARKETING', nombre: 'Marketing corporativo', area: 'MARKETING', modulo: 'dep_marketing', icono: 'megafono' },
+  // Facturación y Cobranzas (organigrama DOC-09): lo que HomePymes cobra a sus
+  // clientes. No entrega reporte mensual del área (reporta: false): revisa el
+  // informe de gestión en la cadena, y sus cifras van en él.
+  { clave: 'COBRANZAS', nombre: 'Facturación y Cobranzas', area: 'COBRANZAS', modulo: 'dep_cobranzas', icono: 'tabla', reporta: false },
   { clave: 'ADMINISTRACION', nombre: 'Administración', area: 'ADMINISTRACION', modulo: 'dep_administracion', icono: 'empresa', recibe: true }
 ];
 
@@ -184,7 +188,48 @@ const SR = {
 const lista = (clave, seccion, nombre, descripcion, extra) => Object.assign({ clave, depto: C, seccion, nombre, descripcion, tipo: 'lista' }, extra || {});
 const rh = (clave, seccion, nombre, codigo, hoja, op, extra) => Object.assign({ clave, depto: R, seccion, nombre, codigo, tipo: 'registro', archivo: 'CONTROL DE MATRICES', hojas: [hoja], situacion: regla_(op || { algo: true }) }, extra || {});
 
+// Cobranza de honorarios (2026-10-03, "algo simple de momento"): una fila por
+// factura de HomePymes a su cliente. La situación sale de los montos; lo
+// vencido se calcula al leer (depende del día de hoy).
+const EST_COBRANZA = [
+  { clave: 'POR_COBRAR', etiqueta: 'Por cobrar', tono: 'alerta' },
+  { clave: 'ABONADA', etiqueta: 'Abonada', tono: 'info' },
+  { clave: 'PAGADA', etiqueta: 'Pagada', tono: 'ok', final: true },
+  { clave: 'ANULADA', etiqueta: 'Anulada', tono: 'neutro', final: true }
+];
+function situacionCobranza_(d) {
+  if (/ANULAD/.test(t_(d.estado_factura))) return 'ANULADA';
+  const monto = num_(d.monto), pagado = num_(d.monto_pagado);
+  if (monto > 0 && pagado >= monto) return 'PAGADA';
+  if (pagado > 0) return 'ABONADA';
+  return 'POR_COBRAR';
+}
+situacionCobranza_.usa = ['estado_factura', 'monto', 'monto_pagado'];
+
 const DEFS = [
+  // ============================ FACTURACIÓN Y COBRANZAS ============================
+  {
+    clave: 'COBRANZA', depto: 'COBRANZAS', seccion: 'Cobranza de honorarios', nombre: 'Cobranza de honorarios', tipo: 'mensual', unaPorCliente: false,
+    descripcion: 'Lo que HomePymes factura y cobra a sus clientes: una fila por factura. Si el monto pagado cubre lo facturado, queda pagada.',
+    columnas: [
+      col_('empresa', 'CLIENTE', 'texto', { rol: 'cliente' }),
+      col_('rut', 'RUT', 'texto', { rol: 'rut' }),
+      col_('n_factura', 'N° FACTURA', 'texto'),
+      col_('servicio', 'SERVICIO', 'texto', { sugerencias: ['CONTABILIDAD', 'REMUNERACIONES', 'PREVENCIÓN DE RIESGOS', 'MARKETING', 'PLATAFORMA', 'OTRO'] }),
+      col_('fecha_emision', 'FECHA EMISIÓN', 'fecha'),
+      col_('fecha_vencimiento', 'FECHA VENCIMIENTO', 'fecha'),
+      col_('monto', 'MONTO FACTURADO', 'monto'),
+      col_('monto_pagado', 'MONTO PAGADO', 'monto'),
+      col_('fecha_pago', 'FECHA PAGO', 'fecha'),
+      col_('medio_pago', 'MEDIO DE PAGO', 'texto', { sugerencias: ['TRANSFERENCIA', 'DEPÓSITO', 'CHEQUE', 'EFECTIVO'] }),
+      col_('gestion', 'GESTIÓN DE COBRO', 'texto'),
+      col_('estado_factura', 'ESTADO FACTURA', 'texto', { sugerencias: ['VIGENTE', 'ANULADA'] }),
+      col_('quien_realiza', 'QUIÉN REGISTRA', 'texto', { rol: 'responsable' })
+    ],
+    estados: EST_COBRANZA, situacion: situacionCobranza_, sinLiberacion: true,
+    montos: ['monto', 'monto_pagado'], tiempos: ['fecha_emision', 'fecha_pago'], periodoDe: ['fecha_emision']
+  },
+
   // ================================ CONTABILIDAD ================================
   {
     clave: 'FACTURACION', depto: C, seccion: SC.FAC, nombre: 'Facturación mensual', codigo: 'CO-M-3', tipo: 'mensual', unaPorCliente: false,

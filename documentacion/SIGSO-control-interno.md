@@ -357,3 +357,63 @@ una jefatura sin área.
 **Pendiente del dueño en producción:** cargar las listas de cada área en
 Accesos (quién es jefatura, quién registra) y la de Administración (la
 Encargada de Administración registra; Gerencia/Director en solo lectura).
+
+## Reportabilidad: indicadores, informe de gestión y cadena (2026-10-03)
+
+Propuesta aprobada por el dueño (artefacto «Reportabilidad HomePymes»): que
+cada reporte sirva para decidir, que se arme solo con los datos y que
+gerencia vea primero lo malo.
+
+**1. Limpieza del dato al arrancar** (`calidadDatos.js`, corre en
+`server/index.js`, idempotente):
+- Montos y RUT que Excel entregó en notación científica («1.3256668E7»)
+  pasan a número (montos) o a dígitos (RUT, N° de contrato). El importador
+  (`controlInternoPlanillas.numero_`/`valor_`) ya los lee bien.
+- Feriados de Chile 2024–2027 en `CONFIG_FERIADOS` (estaba vacía). Revisar la
+  lista cada diciembre (`FERIADOS_CHILE`).
+
+**2. Motor de indicadores** (`indicadoresDepto.js`): por área y mes calcula
+indicadores con meta, estado, serie de 12 meses, comparación (mes anterior,
+promedio 12 meses, hace un año) y una explicación escrita con reglas fijas;
+alertas con qué pasa / por qué / impacto / decisión sugerida, ordenadas de lo
+crítico a lo menor; tablas de detalle; y calidad del dato (matrices sin
+actualizar o con pendientes antiguos).
+- Contabilidad: F29 a tiempo (vencimiento hábil del día 20), F29 al límite,
+  sin registro, reincidentes, IVA a pagar, avance contable (alerta si empeora
+  3 meses seguidos), atraso acumulado, facturación, concentración en 5
+  clientes, convenios con cuotas vencidas, notificaciones del SII abiertas.
+- RR.HH.: liquidaciones, cotizaciones a tiempo e intereses (hoy «sin dato»:
+  esas columnas no se llenan), RLE pendiente fuera de plazo, salidas por cada
+  entrada, causales, anexos pendientes, certificados, licencias.
+- Transversal: clientes atendidos (altas, bajas, hace un año), dependencia de
+  una persona (cuenta también los nombres de la planilla).
+- Facturación y Cobranzas: cartera vencida (crítica si hay deuda de más de 90
+  días), cobrado y facturado del mes, días de cobro.
+- `ejecutivo_`: el semáforo de las áreas, todas las alertas, 6–7 indicadores
+  de gerencia y lo que va bien.
+
+**3. Reporte del área**: en Contabilidad y RR.HH. trae el bloque completo de
+indicadores (congelado al enviarlo); el texto del área pasa a ser un
+comentario opcional. Prevención y Marketing siguen con la plantilla (resumen
+obligatorio).
+
+**4. Informe de gestión** (`informesGestion.js`, tabla `DEP_INFORMES`, módulo
+Administración › Informe de gestión): Administración lo envía (avisa qué áreas
+faltan) → Finanzas y Cobranzas aprueban las dos → el Analista de Control deja
+su conclusión y propone decisiones (vienen sugeridas desde las alertas) →
+Gerencia acuerda o descarta y cierra. Cada paso devuelve con observación y
+deja un comentario opcional. Plazos: días hábiles 3, 5, 6, 8, 9 y 10 del mes
+siguiente; un paso atrasado se marca en rojo. Al enviarlo a Finanzas se
+congela el snapshot. Quién ocupa cada paso: `DEP_CADENA` (Administración ›
+Cadena de reportes, solo ADM); Administración = la lista de su departamento.
+Quien está en la cadena ve el módulo Administración.
+
+**5. Facturación y Cobranzas**: departamento nuevo (`dep_cobranzas`, sin
+reporte mensual propio) con la matriz «Cobranza de honorarios»: una fila por
+factura de HomePymes; la situación (por cobrar, abonada, pagada, anulada) sale
+de los montos y lo vencido se calcula al leer.
+
+**Pendiente del dueño en producción:** cargar la cadena (Finanzas: Gte. Adm. y
+Finanzas; Cobranzas: Enc. Facturación y Cobranzas; Control: Analista de
+Control; Gerencia: Director), las listas de cada área (incluida Facturación y
+Cobranzas) y empezar a registrar las facturas en la matriz de cobranza.

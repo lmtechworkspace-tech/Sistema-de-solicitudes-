@@ -80,6 +80,11 @@
   // =========================================================================================
   function bloqueAuto(a, congelado, rep) {
     if (!a) return '';
+    // Contabilidad y RR.HH.: lo que arma el motor de indicadores (alertas, KPIs, gráficos y detalle).
+    if (a.indicadores && a.indicadores.con_indicadores && window.SigsoIndicadores) {
+      var notaI = congelado ? 'Congelado al enviarlo (' + fecha(rep.fecha_envio) + '): lo validado no cambia.' : 'Calculado por SIGSO con las matrices del mes; se actualiza solo hasta que se envía.';
+      return '<section class="dr-auto"><p class="sx2-tenue">' + txt(notaI) + '</p>' + SigsoIndicadores.bloqueArea(a.indicadores) + '</section>';
+    }
     var t = a.tareas || {}, s = a.solicitudes || {};
     var nota = congelado ? 'Congelado al enviarlo (' + fecha(rep.fecha_envio) + '): lo validado no cambia.' : 'Se actualiza solo mientras el reporte está en preparación.';
     var kp = '<div class="dr-kpis">' +
@@ -113,7 +118,7 @@
       '<div><dt>Preparó</dt><dd>' + txt(nombre(rep.autor_email)) + (rep.fecha_envio ? ' · ' + txt(fecha(rep.fecha_envio)) : '') + '</dd></div>' +
       '<div><dt>Validó (jefatura)</dt><dd>' + (rep.validado_por ? txt(nombre(rep.validado_por)) + ' · ' + txt(fecha(rep.fecha_validacion)) + (rep.observacion_jefatura ? '<br><i>' + txt(rep.observacion_jefatura) + '</i>' : '') : '<span class="sx2-tenue">Pendiente</span>') + '</dd></div>' +
       '<div><dt>Recibió (Administración)</dt><dd>' + (rep.recibido_por ? txt(nombre(rep.recibido_por)) + ' · ' + txt(fecha(rep.fecha_recepcion)) + (rep.observacion_administracion ? '<br><i>' + txt(rep.observacion_administracion) + '</i>' : '') : '<span class="sx2-tenue">Pendiente</span>') + '</dd></div></dl>';
-    var cuerpo = seccionDoc('Resumen del mes', '<p class="dr-parrafo">' + parrafos(c.resumen) + '</p>') +
+    var cuerpo = seccionDoc(conIndicadores(d) ? 'Comentario del área' : 'Resumen del mes', '<p class="dr-parrafo">' + parrafos(c.resumen) + '</p>') +
       seccionDoc('Actividades realizadas', tablaDoc(COLS_ACT, c.actividades)) +
       seccionDoc('Indicadores', tablaDoc(COLS_IND, c.indicadores)) +
       seccionDoc('Dificultades y riesgos', '<p class="dr-parrafo">' + parrafos(c.dificultades) + '</p>') +
@@ -142,10 +147,13 @@
     return '<label class="dr-campo"><span class="dr-campo__tit">' + txt(titulo) + '</span>' + (ayuda ? '<span class="sx2-tenue dr-campo__ayuda">' + txt(ayuda) + '</span>' : '') +
       '<textarea class="sx2-input dr-texto" name="' + nombre_ + '" rows="' + (filas || 3) + '">' + U.esc(valor || '') + '</textarea></label>';
   }
+  function conIndicadores(d) { return !!(d && d.auto && d.auto.indicadores && d.auto.indicadores.con_indicadores); }
   function formulario(d) {
     var c = d.contenido;
+    var auto = conIndicadores(d);
     return '<form class="dr-form sx2-entra js-dr-form" onsubmit="return false">' +
-      area('resumen', 'Resumen del mes', c.resumen, 'Lo más importante del mes en el área: qué se hizo, qué cambió y cómo terminó. Obligatorio para enviarlo.', 5) +
+      (auto ? area('resumen', 'Comentario del área (opcional)', c.resumen, 'SIGSO ya armó los indicadores y las alertas del mes (abajo). Si tienes algo que agregar u opinar, escríbelo aquí: llega hasta Gerencia.', 3)
+        : area('resumen', 'Resumen del mes', c.resumen, 'Lo más importante del mes en el área: qué se hizo, qué cambió y cómo terminó. Obligatorio para enviarlo.', 5)) +
       '<div class="dr-campo"><span class="dr-campo__tit">Actividades realizadas</span><span class="sx2-tenue dr-campo__ayuda">Una fila por actividad o servicio; el cliente es opcional.</span>' + tablaEditable(COLS_ACT, c.actividades, 'act', 3) + '</div>' +
       '<div class="dr-campo"><span class="dr-campo__tit">Indicadores</span><span class="sx2-tenue dr-campo__ayuda">Los indicadores del área (DOC-07): meta y resultado del mes.</span>' + tablaEditable(COLS_IND, c.indicadores, 'ind', 2) + '</div>' +
       area('dificultades', 'Dificultades y riesgos', c.dificultades, 'Lo que frenó el trabajo o puede frenarlo.') +
@@ -263,7 +271,7 @@
   }
   function enviar() {
     var c = leerFormulario();
-    if (!c || !c.resumen.trim()) { window.PYv2.aviso('Escribe el resumen del mes antes de enviarlo.', 'error'); var t = x_.raiz().querySelector('[name="resumen"]'); if (t) t.focus(); return; }
+    if (!c || (!c.resumen.trim() && !conIndicadores(est_.datos))) { window.PYv2.aviso('Escribe el resumen del mes antes de enviarlo.', 'error'); var t = x_.raiz().querySelector('[name="resumen"]'); if (t) t.focus(); return; }
     var esJefatura = !!(x_.cfg && x_.cfg.departamentos[0] && x_.cfg.departamentos[0].jefatura);
     U.confirmar({ titulo: esJefatura ? '¿Enviar a Administración?' : '¿Enviar a la jefatura?', texto: esJefatura
       ? 'Como jefatura del área, al enviarlo queda validado y llega a Administración. Ya no se podrá editar, salvo que lo devuelvan.'
@@ -376,7 +384,7 @@
     var t = ev.target;
     if ((b = t.closest('.js-dr-mes'))) { est_.periodo = x_.mover(est_.periodo, Number(b.getAttribute('data-n'))); x_.irAItem('reporte'); return; }
     if ((b = t.closest('.js-dr-mes-adm'))) { est_.adminPeriodo = x_.mover(est_.adminPeriodo, Number(b.getAttribute('data-n'))); panel(x_); return; }
-    if (t.closest('.js-dr-panel')) { x_.irAItem('inicio'); return; }
+    if (t.closest('.js-dr-panel')) { x_.irAItem('areas'); return; }
     if (t.closest('.js-dr-guardar')) { guardar(); return; }
     if (t.closest('.js-dr-enviar')) { enviar(); return; }
     if (t.closest('.js-dr-validar')) { conObservacion('Validar y entregar a Administración', 'Validar', false, 'validarReporteDep', 'Queda registrado que lo validaste; le llega a la Encargada de Administración.'); return; }

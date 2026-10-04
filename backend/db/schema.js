@@ -793,6 +793,24 @@ const COLUMNAS = {
     'recibido_por', 'fecha_recepcion', 'observacion_administracion',
     'devuelto_por', 'fecha_devolucion', 'motivo_devolucion',
     'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activa'
+  ],
+
+  // Informe de gestión del mes (2026-10-03): el consolidado que arma
+  // Administración con los reportes de las áreas y sigue la cadena Finanzas
+  // y Cobranzas → Analista de Control → Gerencia. `snapshot` = indicadores y
+  // alertas congelados al enviarlo; `comentarios`, `aprobaciones` y
+  // `decisiones` son arreglos/objetos JSON. Uno por mes.
+  DEP_INFORMES: [
+    'informe_id', 'periodo', 'estado', 'snapshot', 'comentarios', 'aprobaciones', 'decisiones', 'conclusion',
+    'fecha_envio_finanzas', 'fecha_envio_control', 'fecha_envio_gerencia', 'cerrado_por', 'fecha_cierre',
+    'devuelto_por', 'fecha_devolucion', 'motivo_devolucion',
+    'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activa'
+  ],
+  // Quién ocupa cada paso de la cadena que no es un área: FINANZAS (Gte. Adm.
+  // y Finanzas), COBRANZAS (Enc. Facturación y Cobranzas), CONTROL (Analista
+  // de Control) y GERENCIA. Administración es la lista de su departamento.
+  DEP_CADENA: [
+    'cadena_id', 'rol', 'usuario_email', 'creado_por', 'fecha_creacion', 'activa'
   ]
 };
 

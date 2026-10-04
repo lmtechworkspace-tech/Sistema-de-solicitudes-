@@ -60,9 +60,10 @@ test('el camino completo: área → jefatura (devuelve y valida) → Administrac
   assert.equal(leido.contenido.resumen, 'Se cerró el IVA de todos los clientes. [clave omitida]', 'las claves nunca se guardan');
   assert.equal(leido.contenido.actividades.length, 1, 'las filas vacías no se guardan');
 
-  // Sin resumen no se envía.
+  // Donde no hay indicadores automáticos (Prevención), sin resumen no se envía.
+  CI.guardarMiembros(db, { depto: 'PREVENCION', miembros: [{ email: 'amarlla@homepymes.cl', rol: 'REGISTRA' }, { email: 'camila@homepymes.cl', rol: 'JEFATURA' }] }, ADM);
+  assert.match(RD.enviar(db, { depto: 'PREVENCION', periodo: PER, contenido: { resumen: '' } }, p('amarlla@homepymes.cl')).message, /resumen/);
   RD.guardar(db, { reporte_id: id, contenido: Object.assign({}, CONTENIDO, { resumen: '' }) }, FRANCISCA);
-  assert.match(RD.enviar(db, { reporte_id: id }, FRANCISCA).message, /resumen/);
   const env = RD.enviar(db, { reporte_id: id, contenido: CONTENIDO }, FRANCISCA);
   assert.equal(env.reporte.estado, 'EN_REVISION', env.message);
   assert.equal(avisosDe(db, BARBARA.email).length, 1, 'le avisa a la jefatura');
@@ -88,7 +89,7 @@ test('el camino completo: área → jefatura (devuelve y valida) → Administrac
 
   // Administración lo ve, el Director solo mira, Lisseth recibe.
   const pan = RD.panel(db, { periodo: PER }, LISSETH);
-  assert.deepEqual(pan.areas.map((a) => [a.depto, a.estado]), [['CONTABILIDAD', 'VALIDADO'], ['RRHH', 'SIN_INICIAR'], ['PREVENCION', 'SIN_INICIAR'], ['MARKETING', 'SIN_INICIAR']]);
+  assert.deepEqual(pan.areas.map((a) => [a.depto, a.estado]), [['CONTABILIDAD', 'VALIDADO'], ['RRHH', 'SIN_INICIAR'], ['PREVENCION', 'BORRADOR'], ['MARKETING', 'SIN_INICIAR']]);
   assert.equal(pan.por_recibir.length, 1);
   assert.equal(pan.puede_recibir, true);
   assert.equal(RD.panel(db, { periodo: PER }, DIRECTOR).puede_recibir, false);

@@ -143,8 +143,18 @@ function acceso_(db, contexto) {
     const libera = Prestaciones.liberaArea_(db, contexto, d.area);
     deptos[d.clave] = { ve: registra || libera || veTodo || !!m, registra, libera, jefatura, miembro: esAdmin || !!m, rol: m ? m.rol : '' };
   });
+  // La cadena del informe de gestión (Finanzas, Cobranzas, Control, Gerencia)
+  // trabaja en Administración: ahí ve el informe del mes (2026-10-03).
+  const cadena = email ? rolesCadena_(db, email) : [];
+  if (cadena.length && deptos.ADMINISTRACION) deptos.ADMINISTRACION.ve = true;
   const tieneModulo = DEPARTAMENTOS.some((d) => deptos[d.clave].ve);
-  return { email, esAdmin, tieneModulo, gobierna, veTodo, deptos };
+  return { email, esAdmin, tieneModulo, gobierna, veTodo, deptos, cadena };
+}
+/** Roles de la cadena de reportes de una persona: ['FINANZAS', 'CONTROL', …]. */
+function rolesCadena_(db, email) {
+  let filas = [];
+  try { filas = leerFilas_(db, 'DEP_CADENA', COLUMNAS.DEP_CADENA); } catch (e) { return []; }
+  return filas.filter((f) => esVerdadero_(f.activa) && normalizarEmail_(f.usuario_email) === email).map((f) => f.rol);
 }
 /** Las áreas donde la cuenta es JEFATURA en su lista (no cuenta ser ADM): ['dep_prevencion', …]. */
 function jefaturaDeDepartamentos_(db, contexto) {
@@ -749,7 +759,7 @@ function guardarMiembros(db, data, contexto) {
 }
 
 module.exports = {
-  getConfig, listar, getRegistro, guardar, abrirPeriodo, accionLote, listarMiembros, guardarMiembros, modulosDeDepartamento_, jefaturaDeDepartamentos_,
+  getConfig, listar, getRegistro, guardar, abrirPeriodo, accionLote, listarMiembros, guardarMiembros, modulosDeDepartamento_, jefaturaDeDepartamentos_, rolesCadena_,
   // Para el importador y los reportes: mismas reglas que la carga a mano.
   moverPeriodo_, periodoDeFecha_, periodoActual_, periodoTexto_, limpiarDatos_, derivados_, situacion_, periodoDeDatos_,
   consultar_, rango_, enTransaccion_, historial_, clientes_, contextoClientes_, resolverClienteTexto_, personas_,

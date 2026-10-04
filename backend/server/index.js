@@ -27,6 +27,9 @@ const MatrizCobertura = require('../logica/matrizCoberturaSgc');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
 const db = abrirDbProduccion();
+// Arreglos de datos idempotentes (montos en notación científica, feriados de
+// Chile): ver logica/calidadDatos.js. Nunca impiden que el servidor arranque.
+console.log('calidad de datos al arrancar:', JSON.stringify(require('../logica/calidadDatos').corregirAlArrancar(db)));
 const server = crearServidor(db);
 
 server.listen(PORT, '127.0.0.1', () => {

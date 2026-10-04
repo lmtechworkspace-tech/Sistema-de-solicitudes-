@@ -45,6 +45,7 @@
     { modulo: 'dep_rrhh', depto: 'RRHH', nombre: 'Recursos Humanos', icono: 'equipo' },
     { modulo: 'dep_prevencion', depto: 'PREVENCION', nombre: 'Prevención de riesgos', icono: 'escudoCheck' },
     { modulo: 'dep_marketing', depto: 'MARKETING', nombre: 'Marketing corporativo', icono: 'megafono' },
+    { modulo: 'dep_cobranzas', depto: 'COBRANZAS', nombre: 'Facturación y Cobranzas', icono: 'tabla', reporta: false },
     { modulo: 'dep_administracion', depto: 'ADMINISTRACION', nombre: 'Administración', icono: 'empresa', recibe: true }
   ];
 
@@ -156,12 +157,21 @@
   // los accesos. Así nadie se pierde al pasar de un área a otra.
   function arbol() {
     if (OPC.recibe) {
-      var adm = [{ id: 'inicio', nombre: 'Reportes de las áreas', icono: 'bandeja', plano: true, items: [{ id: 'inicio', nombre: 'Reportes de las áreas' }] }];
-      if (cfg_ && cfg_.puede_administrar) adm.push({ id: 'accesos', nombre: 'Accesos', icono: 'llave', plano: true, items: [{ id: 'accesos', nombre: 'Accesos' }] });
+      // Administración: el informe de gestión del mes (lo que llega a gerencia),
+      // los reportes que entregan las áreas y, para el administrador, quién
+      // ocupa cada paso de la cadena.
+      var adm = [{ id: 'inicio', nombre: 'Informe de gestión', icono: 'tendencia', plano: true, items: [{ id: 'inicio', nombre: 'Informe de gestión' }] },
+        { id: 'areas', nombre: 'Reportes de las áreas', icono: 'bandeja', plano: true, items: [{ id: 'areas', nombre: 'Reportes de las áreas' }] }];
+      if (cfg_ && cfg_.puede_administrar) {
+        adm.push({ id: 'cadena', nombre: 'Cadena de reportes', icono: 'equipo', plano: true, items: [{ id: 'cadena', nombre: 'Cadena de reportes' }] });
+        adm.push({ id: 'accesos', nombre: 'Accesos', icono: 'llave', plano: true, items: [{ id: 'accesos', nombre: 'Accesos' }] });
+      }
       return adm;
     }
     var subs = [{ id: 'inicio', nombre: 'Resumen del mes', icono: 'panel', plano: true, items: [{ id: 'inicio', nombre: 'Resumen del mes' }] },
       { id: 'reporte', nombre: 'Reporte mensual', icono: 'documento', plano: true, items: [{ id: 'reporte', nombre: 'Reporte mensual' }] }];
+    // Facturación y Cobranzas no entrega reporte del área: revisa el informe de gestión.
+    if (OPC.reporta === false) subs.pop();
     (cfg_ ? cfg_.departamentos : []).forEach(function (d) {
       secciones(d).forEach(function (s, k) {
         subs.push({ id: 'd-' + d.clave + '-' + k, nombre: s.nombre, descripcion: 'Trabajo del área', icono: OPC.icono,
@@ -273,8 +283,10 @@
     if (vista_ === 'recibir') { if (envio_) irAItem(envio_.fuente === 'tgr' ? 'conv:tgr' : 'sii'); else vistaEsperando(); return; }
     if (vista_ === 'accesos' && cfg_.puede_administrar) { vistaAccesos(); return; }
     if (p[0] === 'reporte' && window.SigsoReporteDepto) { SigsoReporteDepto.mostrar(p.slice(1).join(':'), ctxReportes()); return; }
+    if (OPC.recibe && vista_ === 'areas' && window.SigsoReporteDepto) { SigsoReporteDepto.panel(ctxReportes()); return; }
+    if (OPC.recibe && vista_ === 'cadena' && cfg_.puede_administrar && window.SigsoInformeGestion) { SigsoInformeGestion.cadena(ctxReportes()); return; }
     vista_ = 'inicio';
-    if (OPC.recibe && window.SigsoReporteDepto) { SigsoReporteDepto.panel(ctxReportes()); return; }
+    if (OPC.recibe && window.SigsoInformeGestion) { SigsoInformeGestion.mostrar(ctxReportes()); return; }
     vistaInicio();
   }
   // "Mi equipo": las vistas de jefatura-vistas-v2.js / jefatura-v2.js, pintadas aquí.

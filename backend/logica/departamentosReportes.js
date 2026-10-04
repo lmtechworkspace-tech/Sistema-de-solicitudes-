@@ -38,6 +38,7 @@ const P = require('./controlInternoPlanillas');
 const NotificacionesApp = require('./notificacionesApp');
 const Notificaciones = require('./notificaciones');
 const { ESTADOS_CERRADOS } = require('./constantesSolicitudes');
+const Indicadores = require('./indicadoresDepto');
 
 const E = { BORRADOR: 'BORRADOR', EN_REVISION: 'EN_REVISION', OBSERVADO: 'OBSERVADO', VALIDADO: 'VALIDADO', RECIBIDO: 'RECIBIDO' };
 const ETIQUETAS = {
@@ -60,7 +61,8 @@ function json_(v, porDefecto) {
 }
 function mesDe_(periodo) { const m = /^(\d{4})-M(\d{2})$/.exec(periodo || ''); return m ? m[1] + '-' + m[2] : ''; }
 function depto_(clave) { return DEPARTAMENTOS.find((d) => d.clave === clave) || null; }
-const AREAS = DEPARTAMENTOS.filter((d) => !d.recibe);
+// Las áreas que entregan reporte mensual (Facturación y Cobranzas no: revisa el informe de gestión).
+const AREAS = DEPARTAMENTOS.filter((d) => !d.recibe && d.reporta !== false);
 const ADMINISTRACION = DEPARTAMENTOS.find((d) => d.recibe);
 
 /** Quiénes están en la lista de un área, por rol. */
@@ -111,8 +113,11 @@ function resumenAuto_(db, depto, periodo) {
   // Solicitudes atendidas por el área.
   const subs = leer_(db, 'SUBSOLICITUDES').filter((s) => enEquipo(s.desarrollador_asignado) || enEquipo(s.atencion_resuelto_por));
   const cerrada = (s) => ESTADOS_CERRADOS.indexOf(s.estado) !== -1;
+  // Contabilidad y RR.HH.: los indicadores, alertas y explicaciones del mes
+  // (indicadoresDepto.js), que quedan congelados al enviar el reporte.
+  const indicadores = Indicadores.TIENE_INDICADORES.includes(depto) ? Indicadores.calcularArea_(db, depto, periodo) : null;
   return {
-    periodo, generado: ahora_(), personas: equipo.length,
+    periodo, generado: ahora_(), personas: equipo.length, indicadores,
     matrices,
     tareas: {
       terminadas: terminadasMes.length,
@@ -175,7 +180,7 @@ function acciones_(r, pm) {
 function listar(db, data, contexto) {
   const d = data || {};
   const dep = depto_(d.depto);
-  if (!dep || dep.recibe) return { ok: false, message: 'Elige un área.' };
+  if (!dep || dep.recibe || dep.reporta === false) return { ok: false, message: 'Elige un área.' };
   const pm = permisos_(db, contexto, dep.clave);
   if (!pm.ve) return { _forbidden: true, message: 'No tienes acceso a ' + dep.nombre + '.' };
   const anio = /^\d{4}$/.test(String(d.anio || '')) ? String(d.anio) : hoy_().slice(0, 4);
@@ -198,7 +203,7 @@ function obtener(db, data, contexto) {
     if (!r) return { ok: false, message: 'Ese reporte no existe.' };
   }
   const dep = depto_(r ? r.depto : d.depto);
-  if (!dep || dep.recibe) return { ok: false, message: 'Elige un área.' };
+  if (!dep || dep.recibe || dep.reporta === false) return { ok: false, message: 'Elige un área.' };
   const periodo = r ? r.periodo : String(d.periodo || '');
   if (!CI.RE_PERIODO.test(periodo)) return { ok: false, message: 'Mes no válido.' };
   const pm = permisos_(db, contexto, dep.clave);
@@ -301,7 +306,8 @@ function enviar(db, data, contexto) {
   if (!pm.registra) return { _forbidden: true, message: 'Tienes acceso de solo lectura en esta área.' };
   if (r.estado !== E.BORRADOR && r.estado !== E.OBSERVADO) return { ok: false, message: 'Este reporte ya se envió.' };
   const c = limpiarContenido_(json_(r.contenido, {}));
-  if (!c.resumen) return { ok: false, message: 'Escribe el resumen del mes antes de enviarlo.' };
+  // Donde SIGSO arma los indicadores solo, el texto del área es un comentario opcional.
+  if (!c.resumen && !Indicadores.TIENE_INDICADORES.includes(r.depto)) return { ok: false, message: 'Escribe el resumen del mes antes de enviarlo.' };
   const dep = depto_(r.depto);
   const equipo = personas_(db, r.depto);
   const yo = normalizarEmail_(contexto && contexto.email);
@@ -415,11 +421,14 @@ function pendientes(db, data, contexto) {
   DEPARTAMENTOS.forEach((dep) => {
     const p = ac.deptos[dep.clave] || {};
     if (!p.ve) return;
-    if (dep.recibe) { out[dep.modulo] = p.registra ? todos.filter((r) => r.estado === E.VALIDADO).length : 0; return; }
+    if (dep.recibe) {
+      out[dep.modulo] = (p.registra ? todos.filter((r) => r.estado === E.VALIDADO).length : 0) + require('./informesGestion').pendientes_(db, contexto);
+      return;
+    }
     out[dep.modulo] = (p.jefatura ? todos.filter((r) => r.depto === dep.clave && r.estado === E.EN_REVISION).length : 0) +
       (p.registra ? todos.filter((r) => r.depto === dep.clave && r.estado === E.OBSERVADO).length : 0);
   });
   return { pendientes: out };
 }
 
-module.exports = { listar, obtener, guardar, enviar, validar, devolver, recibir, panel, pendientes, resumenAuto_, ESTADOS: E, ETIQUETAS };
+module.exports = { listar, obtener, guardar, enviar, validar, devolver, recibir, panel, pendientes, resumenAuto_, ESTADOS: E, ETIQUETAS, TIENE_INDICADORES: Indicadores.TIENE_INDICADORES };

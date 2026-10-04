@@ -78,6 +78,7 @@
     ['dep_rrhh', 'Recursos Humanos', 'equipo', 'Matrices del área, reporte mensual y su equipo'],
     ['dep_prevencion', 'Prevención de riesgos', 'escudoCheck', 'Trabajo del área, reporte mensual y su equipo'],
     ['dep_marketing', 'Marketing corporativo', 'megafono', 'Trabajo del área, reporte mensual y su equipo'],
+    ['dep_cobranzas', 'Facturación y Cobranzas', 'tabla', 'Lo que HomePymes factura y cobra a sus clientes'],
     ['dep_administracion', 'Administración', 'empresa', 'Los reportes mensuales de las áreas, ya validados por su jefatura']
   ];
   var IDS_DEPARTAMENTO = DEPARTAMENTOS_SHELL.map(function (d) { return d[0]; });
@@ -559,7 +560,7 @@
           else modPy.cargar();
         }
         break;
-      case 'dep_contabilidad': case 'dep_rrhh': case 'dep_prevencion': case 'dep_marketing': case 'dep_administracion':
+      case 'dep_contabilidad': case 'dep_rrhh': case 'dep_prevencion': case 'dep_marketing': case 'dep_cobranzas': case 'dep_administracion':
         if (moduloDepartamento_(moduloActivo_)) moduloDepartamento_(moduloActivo_).refrescar();
         break;
       case 'calidad':

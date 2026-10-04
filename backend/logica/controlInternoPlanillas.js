@@ -198,6 +198,9 @@ function numero_(v) {
   let s = vacio_(v).replace(/\$/g, '').replace(/\s/g, '');
   if (!s) return '';
   if (/^-?\d+(\.\d+)?$/.test(s)) return Math.round(Number(s) * 100) / 100;
+  // Excel entrega los montos de 10 millones o más en notación científica
+  // ("1.3256668E7" = 13.256.668). Antes quedaban como texto (2026-10-03).
+  if (/^-?\d+(\.\d+)?E[+-]?\d+$/i.test(s)) return Math.round(Number(s) * 100) / 100;
   if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) return Number(s.replace(/\./g, '').replace(',', '.'));
   if (/^-?\d{1,3}(,\d{3})+(\.\d+)?$/.test(s)) return Number(s.replace(/,/g, ''));
   if (/^-?\d+,\d+$/.test(s)) return Number(s.replace(',', '.'));
@@ -215,6 +218,8 @@ function valor_(tipo, v) {
   if (tipo === 'fecha') return fecha_(s) || s.slice(0, 120);
   if (tipo === 'hora') return hora_(s) || s.slice(0, 40);
   if (tipo === 'monto' || tipo === 'numero') { const x = numero_(s); return x === '' ? s.slice(0, 120) : x; }
+  // RUT o N° guardado por Excel como número grande ("1.2345678E7"): se deja en dígitos.
+  if (/^-?\d+(\.\d+)?E[+-]?\d+$/i.test(s)) return String(Math.round(Number(s)));
   if (tipo === 'texto_largo') return s.slice(0, 4000);
   return s.slice(0, 600);
 }

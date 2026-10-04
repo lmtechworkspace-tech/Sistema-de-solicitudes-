@@ -55,7 +55,7 @@ function nuevo(db, extra, ctx) {
 
 test('las 54 matrices son espejo de sus planillas y están bien declaradas', () => {
   // 54 de las planillas + "Servicios sin matriz" (reunión con Francisca, 2026-10-01).
-  assert.equal(MATRICES.length, 55);
+  assert.equal(MATRICES.length, 56, '+ Cobranza de honorarios (2026-10-03)');
   assert.equal(MATRICES.filter((m) => m.archivo).length, 54);
   assert.equal(MATRICES.filter((m) => m.depto === 'RRHH').length, 39, 'RR.HH.: una matriz por hoja del libro');
   const claves = new Set();
@@ -92,7 +92,7 @@ test('cada uno ve solo su departamento: lo decide la lista del área, no la cuen
   assert.deepEqual(CI.getConfig(db, {}, VANESSA).departamentos.map((d) => d.clave), ['RRHH']);
   assert.equal(CI.listar(db, { matriz: 'IVA', periodo: '2026-M09' }, VANESSA)._forbidden, true);
   assert.deepEqual(CI.getConfig(db, {}, BARBARA).departamentos.map((d) => d.clave), ['CONTABILIDAD']);
-  assert.equal(CI.getConfig(db, {}, ADM).departamentos.length, 5);
+  assert.equal(CI.getConfig(db, {}, ADM).departamentos.length, 6);
 });
 
 test('departamentos del organigrama: un módulo cada uno, con su lista y su jefatura', () => {
@@ -104,8 +104,8 @@ test('departamentos del organigrama: un módulo cada uno, con su lista y su jefa
   assert.deepEqual(CI.modulosDeDepartamento_(db, AJENA), []);
   // La sesión los lleva al navegador (solo para pintar el menú).
   assert.deepEqual(require('../logica/portal').perfilPublico({ cuenta_id: 'C1', emails: JSON.stringify([FRANCISCA.email]), rol: 'DEV', modulos: '[]' }, db).departamentos, ['dep_contabilidad']);
-  assert.deepEqual(CI.modulosDeDepartamento_(db, ADM), ['dep_contabilidad', 'dep_rrhh', 'dep_prevencion', 'dep_marketing', 'dep_administracion']);
-  assert.equal(CI.modulosDeDepartamento_(db, GERENCIA).length, 5, 'Gerencia con "ver todas las áreas"');
+  assert.deepEqual(CI.modulosDeDepartamento_(db, ADM), ['dep_contabilidad', 'dep_rrhh', 'dep_prevencion', 'dep_marketing', 'dep_cobranzas', 'dep_administracion']);
+  assert.equal(CI.modulosDeDepartamento_(db, GERENCIA).length, 6, 'Gerencia con "ver todas las áreas"');
   assert.deepEqual(CI.modulosDeDepartamento_(db, { email: 'gerente@homepymes.cl', rol: 'GERENCIA', modulos: [] }), [], 'Gerencia sin ese permiso no ve áreas ajenas');
   // Prevención y Marketing, sin matrices todavía.
   const camila = { email: 'camila@homepymes.cl', rol: 'DEV', modulos: [] };
