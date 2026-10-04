@@ -54,8 +54,8 @@
     if (doc) R().wireAcciones(doc, { nombreArchivo: nombreArchivo });
   }
   function seccion(titulo, cuerpo, nota) { return '<section class="ci2-rep-sec"><h2 class="rp2-sub">' + txt(titulo) + (nota ? ' <small class="sx2-tenue">' + txt(nota) + '</small>' : '') + '</h2>' + cuerpo + '</section>'; }
-  function cargando(titulo, sub, filtros) { x_.pagina(x_.cabecera('Control interno · Reportes', titulo, sub) + (filtros || '') + U.esqueleto('kpis', 4) + U.esqueleto('tabla', 6)); }
-  function fallo(titulo, r) { x_.pagina(x_.cabecera('Control interno · Reportes', titulo, '') + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo armar el reporte', texto: (r && r.message) || '' }) })); }
+  function cargando(titulo, sub, filtros) { x_.pagina(x_.cabecera(x_.modNombre + ' · Reportes', titulo, sub) + (filtros || '') + U.esqueleto('kpis', 4) + U.esqueleto('tabla', 6)); }
+  function fallo(titulo, r) { x_.pagina(x_.cabecera(x_.modNombre + ' · Reportes', titulo, '') + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo armar el reporte', texto: (r && r.message) || '' }) })); }
 
   // =========================================================================================
   // 1. Informe mensual
@@ -66,7 +66,7 @@
     if (!e.periodo) e.periodo = x_.mover(x_.periodoActual(), -1);
     var TIT = 'Informe mensual';
     var filtros = herramientas(sel('js-cir-inf-matriz', opcionesMatrices(true), e.matriz, 'Matriz') + sel('js-cir-inf-per', opcionesMeses('2022-M01', x_.periodoActual()), e.periodo, 'Mes'));
-    if (!e.matriz) { x_.pagina(x_.cabecera('Control interno · Reportes', TIT, '') + U.card({ cuerpo: U.vacio({ titulo: 'Sin matrices visibles' }) })); return; }
+    if (!e.matriz) { x_.pagina(x_.cabecera(x_.modNombre + ' · Reportes', TIT, '') + U.card({ cuerpo: U.vacio({ titulo: 'Sin matrices visibles' }) })); return; }
     var t = ++turno_;
     cargando(TIT, 'El informe de proceso mensual que hoy se arma a mano, de cualquier matriz y mes.', filtros);
     x_.api('informeMensualCI', { matriz: e.matriz, periodo: e.periodo }).then(function (r) {
@@ -104,8 +104,8 @@
         var cuerpo = R().nivel('En una línea', resumenTxt) + kpis +
           R().nivel('Resumen del período', '<div class="ci2-rep-2">' + seccion('Situación de las filas', porEstado) + resp + '</div>' + montos + tiempos) +
           R().nivel('Detalle', detalle);
-        x_.pagina(x_.cabecera('Control interno · Reportes', TIT, 'El informe de proceso mensual que hoy se arma a mano, de cualquier matriz y mes.') + filtros +
-          documento(cuerpo, { titulo: 'Informe proceso mensual · ' + m.nombre, subtitulo: x_.depto(m.depto).nombre + ' · ' + m.seccion, codigo: m.codigo, modulo: 'Control interno',
+        x_.pagina(x_.cabecera(x_.modNombre + ' · Reportes', TIT, 'El informe de proceso mensual que hoy se arma a mano, de cualquier matriz y mes.') + filtros +
+          documento(cuerpo, { titulo: 'Informe proceso mensual · ' + m.nombre, subtitulo: x_.depto(m.depto).nombre + ' · ' + m.seccion, codigo: m.codigo, modulo: x_.modNombre,
             periodo: x_.perTexto(d.periodo, true), generadoPor: realizado.length ? 'Realizado por: ' + realizado.join(', ') : '' }));
         montar('Informe ' + m.nombre + ' ' + x_.perTexto(d.periodo));
       });
@@ -165,8 +165,8 @@
           seccion('Clientes con filas por mes', R().tendencia(d.meses.slice(k0).map(function (per, i) { return { etiqueta: etq(per), valor: dm.clientes_por_mes[k0 + i] }; }), { titulo: 'Clientes' }));
       }
       var cuerpo = kpis + R().nivel('Tendencia', '<div class="ci2-rep-2">' + volumen + cierre + '</div>') + R().nivel('Año contra año', yoy) + (porMatriz ? R().nivel('Detalle por matriz', porMatriz) : '') + (extra ? R().nivel('Montos y tiempos', '<div class="ci2-rep-2">' + extra + '</div>') : '');
-      x_.pagina(x_.cabecera('Control interno · Reportes', TIT, 'Cómo vienen los procesos mes a mes desde 2022: volumen, cierre, montos y tiempos.') + filtros +
-        documento(cuerpo, { titulo: 'Panel histórico · ' + nombreAlc, modulo: 'Control interno', periodo: x_.perTexto(serie[0] ? serie[0].periodo : d.desde, true) + ' a ' + x_.perTexto(d.hasta, true) }));
+      x_.pagina(x_.cabecera(x_.modNombre + ' · Reportes', TIT, 'Cómo vienen los procesos mes a mes desde 2022: volumen, cierre, montos y tiempos.') + filtros +
+        documento(cuerpo, { titulo: 'Panel histórico · ' + nombreAlc, modulo: x_.modNombre, periodo: x_.perTexto(serie[0] ? serie[0].periodo : d.desde, true) + ' a ' + x_.perTexto(d.hasta, true) }));
       montar('Panel histórico ' + nombreAlc);
     });
   }
@@ -180,7 +180,7 @@
     var buscador = herramientas('<input class="sx2-input js-cir-cli-q" type="search" placeholder="Busca el cliente por nombre o RUT…" value="' + U.esc(e.q) + '" aria-label="Buscar cliente" autocomplete="off">' +
       '<span class="sx2-tenue">Todo lo del cliente en las matrices de Contabilidad y RR.HH., desde 2022.</span>');
     if (!e.sel) {
-      x_.pagina(x_.cabecera('Control interno · Reportes', TIT, 'Elige un cliente para ver su historia completa.') + buscador + '<div class="js-cir-cli-res"></div>');
+      x_.pagina(x_.cabecera(x_.modNombre + ' · Reportes', TIT, 'Elige un cliente para ver su historia completa.') + buscador + '<div class="js-cir-cli-res"></div>');
       buscarClientes(e.q);
       var q = x_.raiz().querySelector('.js-cir-cli-q'); if (q) q.focus();
       return;
@@ -213,8 +213,8 @@
         var pendientes = seccion('Lo que está sin terminar', R().tabla([{ titulo: 'Matriz', campo: 'm' }, { titulo: 'Mes', campo: 'p' }, { titulo: 'Situación', campo: 's' }, { titulo: 'Responsable', campo: 'r' }],
           d.pendientes.map(function (x) { return { m: x.matriz_nombre, p: x_.perTexto(x.periodo), s: x.estado_texto, r: x.responsable_email ? x_.nombre(x.responsable_email) : '—' }; }), { id: 'cir-cli-pend', vacio: 'Nada pendiente.' }));
         var cuerpo = kpis + R().nivel('Lo que requiere atención', pendientes) + R().nivel('Por matriz', tabla) + R().nivel('Historia', act + montos);
-        x_.pagina(x_.cabecera('Control interno · Reportes', TIT, '', '<button type="button" class="sx2-boton sx2-boton--fantasma js-cir-cli-otro">Otro cliente</button>') + buscador +
-          documento(cuerpo, { titulo: d.cliente_nombre, subtitulo: (d.cliente_rut ? 'RUT ' + d.cliente_rut + ' · ' : '') + (d.fuera_catalogo ? 'No está en el catálogo de clientes de SIGSO' : 'Cliente del catálogo'), modulo: 'Control interno · Ficha por cliente' }));
+        x_.pagina(x_.cabecera(x_.modNombre + ' · Reportes', TIT, '', '<button type="button" class="sx2-boton sx2-boton--fantasma js-cir-cli-otro">Otro cliente</button>') + buscador +
+          documento(cuerpo, { titulo: d.cliente_nombre, subtitulo: (d.cliente_rut ? 'RUT ' + d.cliente_rut + ' · ' : '') + (d.fuera_catalogo ? 'No está en el catálogo de clientes de SIGSO' : 'Cliente del catálogo'), modulo: x_.modNombre + ' · Ficha por cliente' }));
         montar('Ficha ' + d.cliente_nombre);
       });
     });
@@ -269,8 +269,8 @@
         var viejosT = seccion('Lo más antiguo sin terminar', R().tabla([{ titulo: 'Días', campo: 'd', alinear: 'derecha' }, { titulo: 'Matriz', campo: 'm' }, { titulo: 'Mes', campo: 'p' }, { titulo: 'Cliente', campo: 'c' }, { titulo: 'Responsable', campo: 'r' }, { titulo: 'Situación', campo: 's' }],
           d.pendientes_antiguos.map(function (x) { return { d: n(x.dias), m: x.matriz_nombre, p: x_.perTexto(x.periodo), c: x.cliente_nombre, r: quien(x.responsable), s: x.estado_texto }; }), { id: 'cir-antiguos', vacio: 'Nada pendiente.' }));
         var cuerpo = kpis + R().nivel('Lo que requiere atención', '<div class="ci2-rep-2">' + antig + viejosT + '</div>') + R().nivel('Personas', '<div class="ci2-rep-2">' + carga + tiempos + '</div>' + tablaP);
-        x_.pagina(x_.cabecera('Control interno · Reportes', TIT, 'Quién hace qué, cuánto demora y qué quedó sin terminar.') + filtros +
-          documento(cuerpo, { titulo: 'Personas y tiempos · ' + x_.depto(e.depto).nombre, modulo: 'Control interno', periodo: x_.perTexto(d.desde, true) + ' a ' + x_.perTexto(d.hasta, true) }));
+        x_.pagina(x_.cabecera(x_.modNombre + ' · Reportes', TIT, 'Quién hace qué, cuánto demora y qué quedó sin terminar.') + filtros +
+          documento(cuerpo, { titulo: 'Personas y tiempos · ' + x_.depto(e.depto).nombre, modulo: x_.modNombre, periodo: x_.perTexto(d.desde, true) + ' a ' + x_.perTexto(d.hasta, true) }));
         montar('Personas y tiempos ' + x_.depto(e.depto).nombre);
       });
     });
@@ -279,7 +279,7 @@
   // =========================================================================================
   // Eventos y API
   // =========================================================================================
-  function mio(ev) { var c = document.getElementById('ci2'); return !!c && c.contains(ev.target); }
+  function mio(ev) { var c = x_ && x_.raiz(); return !!c && c.contains(ev.target); }
   document.addEventListener('change', function (ev) {
     if (!mio(ev) || !x_) return;
     var t = ev.target;

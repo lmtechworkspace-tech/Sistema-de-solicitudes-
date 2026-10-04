@@ -46,6 +46,8 @@ var Iconos = (function () {
     // v6.5: modulo Novedades -- campana de "algo nuevo que atender", el
     // icono universal para esta idea (distinto de `alerta`, que es un
     // triangulo de advertencia puntual).
+    // Marketing corporativo (2026-10-03): megáfono, mismo trazo que el resto.
+    megafono: '<path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 11-5.8-1.6"/>',
     campana: '<path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>',
     documento: '<path d="M14 2H7a2 2 0 00-2 2v16a2 2 0 002 2h10a2 2 0 002-2V7z"/><path d="M14 2v5h5"/>',
 

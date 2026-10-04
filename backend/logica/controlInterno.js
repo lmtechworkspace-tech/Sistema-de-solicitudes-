@@ -14,9 +14,11 @@
  *    la regla de cada matriz (controlInternoMatrices.js): nadie la escribe;
  *  - liberación, historial y reportes.
  *
- * Permisos REALES en el servidor: el módulo `control_interno` en la cuenta
- * (o ADM) y, por departamento, CI_MIEMBROS (REGISTRA / LECTURA). Ven todo sin
- * registrar: Gerencia y el Encargado del SGC. Libera quien libera el área en
+ * Desde 2026-10-03 cada departamento (Contabilidad, RR.HH., Prevención,
+ * Marketing y Administración) es un módulo propio del menú (dep_*), que ve
+ * solo su personal. Permisos REALES en el servidor, por departamento:
+ * CI_MIEMBROS (JEFATURA / REGISTRA / LECTURA). Ven todo sin registrar: ADM, y
+ * Gerencia o el Encargado del SGC con el módulo `control_interno`. Libera quien libera el área en
  * Calidad (SGC_LIBERADORES): una sola lista "Quién libera". Nadie libera lo
  * suyo. Las columnas sensibles (motivo de la licencia) solo las ven los
  * miembros del departamento.
@@ -34,7 +36,7 @@ const Prestaciones = require('./prestacionesSgc');
 const AlertasCI = require('./controlInternoAlertas');
 
 const MODULO = 'control_interno';
-const ROLES_MIEMBRO = ['REGISTRA', 'LECTURA'];
+const ROLES_MIEMBRO = ['JEFATURA', 'REGISTRA', 'LECTURA'];
 const TOPE_LOTE = 300;
 const RE_PERIODO = /^\d{4}-M(0[1-9]|1[0-2])$/;
 const RE_FECHA = /^\d{4}-\d{2}-\d{2}$/;
@@ -117,29 +119,48 @@ function miembros_(db) {
   try { return leerFilas_(db, 'CI_MIEMBROS', COLUMNAS.CI_MIEMBROS).filter((m) => esVerdadero_(m.activa)); } catch (e) { return []; }
 }
 /**
- * Qué puede hacer la persona en cada departamento. `tieneModulo` es la
- * puerta del módulo (CUENTAS_PORTAL.modulos, que aquí SÍ se verifica: el
- * módulo guarda datos de trabajadores y montos de clientes). `miembro` = está
- * en la lista del departamento (o es ADM): ve las columnas sensibles.
+ * Qué puede hacer la persona en cada departamento (2026-10-03: cada
+ * departamento es un módulo propio que ve SOLO su personal). La puerta es la
+ * lista del departamento (CI_MIEMBROS): JEFATURA (registra y valida el reporte
+ * mensual), REGISTRA o LECTURA. También entra quien libera el área en Calidad.
+ * Ver TODAS las áreas sin estar en sus listas: ADM, o la cuenta con el módulo
+ * `control_interno` ("Departamentos: ver todas las áreas") si es Gerencia o
+ * Encargado del SGC. `miembro` = está en la lista (o es ADM): ve las columnas
+ * sensibles. `tieneModulo` = ve al menos un departamento.
  */
 function acceso_(db, contexto) {
   const email = normalizarEmail_(contexto && contexto.email);
   const esAdmin = !!contexto && contexto.rol === 'ADM';
   const modulos = (contexto && Array.isArray(contexto.modulos)) ? contexto.modulos : [];
-  const tieneModulo = esAdmin || modulos.indexOf(MODULO) !== -1;
   const gobierna = Prestaciones.gobiernaLiberacion_(db, contexto);
-  const veTodo = esAdmin || gobierna || (!!contexto && contexto.rol === 'GERENCIA');
-  const mios = miembros_(db).filter((m) => normalizarEmail_(m.usuario_email) === email);
+  const veTodo = esAdmin || (modulos.indexOf(MODULO) !== -1 && (gobierna || (!!contexto && contexto.rol === 'GERENCIA')));
+  const mios = email ? miembros_(db).filter((m) => normalizarEmail_(m.usuario_email) === email) : [];
   const deptos = {};
   DEPARTAMENTOS.forEach((d) => {
     const m = mios.find((x) => x.depto === d.clave);
-    const registra = esAdmin || (!!m && m.rol === 'REGISTRA');
+    const jefatura = esAdmin || (!!m && m.rol === 'JEFATURA');
+    const registra = jefatura || (!!m && m.rol === 'REGISTRA');
     const libera = Prestaciones.liberaArea_(db, contexto, d.area);
-    deptos[d.clave] = { ve: registra || libera || veTodo || !!m, registra, libera, miembro: esAdmin || !!m };
+    deptos[d.clave] = { ve: registra || libera || veTodo || !!m, registra, libera, jefatura, miembro: esAdmin || !!m, rol: m ? m.rol : '' };
   });
-  return { email, esAdmin, tieneModulo, gobierna, deptos };
+  const tieneModulo = DEPARTAMENTOS.some((d) => deptos[d.clave].ve);
+  return { email, esAdmin, tieneModulo, gobierna, veTodo, deptos };
 }
-function sinModulo_() { return { _forbidden: true, message: 'Tu cuenta no tiene el módulo Control interno.' }; }
+/** Las áreas donde la cuenta es JEFATURA en su lista (no cuenta ser ADM): ['dep_prevencion', …]. */
+function jefaturaDeDepartamentos_(db, contexto) {
+  try {
+    const ac = acceso_(db, contexto);
+    return DEPARTAMENTOS.filter((d) => !d.recibe && ac.deptos[d.clave].rol === 'JEFATURA').map((d) => d.modulo);
+  } catch (e) { return []; }
+}
+/** Los módulos de departamento que ve la cuenta (para el menú): ['dep_contabilidad', …]. */
+function modulosDeDepartamento_(db, contexto) {
+  try {
+    const ac = acceso_(db, contexto);
+    return DEPARTAMENTOS.filter((d) => ac.deptos[d.clave].ve).map((d) => d.modulo);
+  } catch (e) { return []; }
+}
+function sinModulo_() { return { _forbidden: true, message: 'No tienes acceso a ningún departamento. Pide al administrador que te agregue en Accesos de tu área.' }; }
 function matrizConPermiso_(db, contexto, clave, que) {
   const ac = acceso_(db, contexto);
   if (!ac.tieneModulo) return { error: sinModulo_() };
@@ -361,15 +382,19 @@ function getConfig(db, data, contexto) {
   const ac = acceso_(db, contexto);
   if (!ac.tieneModulo) return sinModulo_();
   const periodo = RE_PERIODO.test(String((data && data.periodo) || '')) ? data.periodo : periodoActual_();
-  const deptos = DEPARTAMENTOS.filter((d) => ac.deptos[d.clave].ve);
-  const visibles = MATRICES.filter((m) => ac.deptos[m.depto].ve);
+  // Un módulo de departamento pide solo lo suyo (`depto`); sin él, todo lo que ve.
+  const solo = data && data.depto ? DEPARTAMENTOS.find((d) => d.clave === data.depto) : null;
+  if (data && data.depto && !solo) return { ok: false, message: 'Departamento no válido.' };
+  if (solo && !ac.deptos[solo.clave].ve) return { _forbidden: true, message: 'No tienes acceso a ' + solo.nombre + '.' };
+  const deptos = DEPARTAMENTOS.filter((d) => ac.deptos[d.clave].ve && (!solo || d === solo));
+  const visibles = MATRICES.filter((m) => ac.deptos[m.depto].ve && (!solo || m.depto === solo.clave));
   const resumen = {};
   visibles.forEach((m) => { if (m.tipo !== 'lista') resumen[m.clave] = resumen_(m, filasDelResumen_(db, m, periodo)); });
   return {
     yo: ac.email,
     periodo,
     puede_administrar: ac.esAdmin,
-    departamentos: deptos.map((d) => Object.assign({ clave: d.clave, nombre: d.nombre, liberadores: Prestaciones.liberadoresDeArea_(db, d.area) }, ac.deptos[d.clave])),
+    departamentos: deptos.map((d) => Object.assign({ clave: d.clave, nombre: d.nombre, modulo: d.modulo, icono: d.icono, recibe: !!d.recibe, liberadores: Prestaciones.liberadoresDeArea_(db, d.area) }, ac.deptos[d.clave])),
     matrices: visibles.map(definicionPublica_),
     clientes: visibles.length ? clientes_(db) : [],
     resumen
@@ -675,7 +700,7 @@ function listarMiembros(db, data, contexto) {
   if (!contexto || contexto.rol !== 'ADM') return { _forbidden: true, message: 'Solo el administrador ve los accesos.' };
   const todos = miembros_(db);
   return {
-    departamentos: DEPARTAMENTOS.map((d) => ({
+    departamentos: DEPARTAMENTOS.filter((d) => !data || !data.depto || d.clave === data.depto).map((d) => ({
       clave: d.clave, nombre: d.nombre,
       miembros: todos.filter((m) => m.depto === d.clave).map((m) => ({ email: normalizarEmail_(m.usuario_email), rol: m.rol })),
       liberadores: Prestaciones.liberadoresDeArea_(db, d.area)
@@ -724,10 +749,10 @@ function guardarMiembros(db, data, contexto) {
 }
 
 module.exports = {
-  getConfig, listar, getRegistro, guardar, abrirPeriodo, accionLote, listarMiembros, guardarMiembros,
+  getConfig, listar, getRegistro, guardar, abrirPeriodo, accionLote, listarMiembros, guardarMiembros, modulosDeDepartamento_, jefaturaDeDepartamentos_,
   // Para el importador y los reportes: mismas reglas que la carga a mano.
   moverPeriodo_, periodoDeFecha_, periodoActual_, periodoTexto_, limpiarDatos_, derivados_, situacion_, periodoDeDatos_,
   consultar_, rango_, enTransaccion_, historial_, clientes_, contextoClientes_, resolverClienteTexto_, personas_,
   matrizConPermiso_, acceso_, resumen_, esFinal_, esAnulado_, estadoDef_, columna_, normalizarTexto_, orden_, uuid_,
-  aplicarCalculos_, clientesNuevos_, tareas_, MODULO, PERIODO_LISTA, RE_PERIODO, RE_FECHA
+  aplicarCalculos_, clientesNuevos_, tareas_, filasDelResumen_, miembros_, MODULO, PERIODO_LISTA, RE_PERIODO, RE_FECHA
 };

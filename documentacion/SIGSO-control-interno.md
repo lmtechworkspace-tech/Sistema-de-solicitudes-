@@ -310,3 +310,50 @@ las planillas (Anotaciones y Control de matrices) para verse con los datos del D
 - Que la liberación aquí genere la evidencia de Servicios prestados (§8.5/8.6)
   sin doble registro — apagado a propósito mientras el Drive sea el oficial.
 - Conciliar los clientes fuera del catálogo (el panel los muestra con "•").
+
+## Departamentos del organigrama (2026-10-03)
+
+Pedido del dueño: dividir "Control interno" por área y darle a cada área solo
+lo suyo, con un fin de **reportabilidad**: cada departamento genera su reporte,
+lo valida su jefatura y la jefatura lo entrega a la Encargada de
+Administración. Base: organigramas DOC-05 (servicios a clientes) y DOC-09.
+
+**Menú.** El módulo "Control interno" desaparece. En su lugar, el grupo
+**Departamentos** con un módulo por área: Contabilidad (`dep_contabilidad`),
+Recursos Humanos (`dep_rrhh`), Prevención de riesgos (`dep_prevencion`),
+Marketing corporativo (`dep_marketing`) y Administración
+(`dep_administracion`). Todos tienen las mismas secciones, en el mismo orden:
+Resumen del mes · Reporte mensual · el trabajo del área (sus matrices) · Mi
+equipo (solo jefatura) · Reportes · Accesos (solo ADM). Administración tiene
+"Reportes de las áreas".
+
+**Quién ve qué.** Lo decide la lista de cada área (`CI_MIEMBROS`), no la
+cuenta: JEFATURA (registra y valida el reporte), REGISTRA o LECTURA. La sesión
+trae `cuenta.departamentos` (los dep_* que ve) y `cuenta.jefatura_de`. Ver
+todas las áreas sin estar en sus listas: ADM, o Gerencia / Encargado del SGC
+con el módulo `control_interno` (en Cuentas se llama "Departamentos: ver todas
+las áreas"). El enlace antiguo `#/control_interno/...` (y el marcador "Enviar a
+SIGSO" ya instalado) abre Contabilidad.
+
+**Reporte mensual** (`departamentosReportes.js`, tabla `DEP_REPORTES`):
+BORRADOR → EN_REVISION (jefatura) → VALIDADO (por recibir) → RECIBIDO; la
+jefatura o Administración pueden devolverlo (OBSERVADO) con una observación
+obligatoria. Uno MENSUAL por área y mes, más los EXTRAORDINARIOS que hagan
+falta. Si lo envía la jefatura (p. ej. Marketing, una sola persona) queda
+validado al enviarlo. Sin jefatura asignada no se puede enviar. Plantilla común
+(resumen, actividades, indicadores, dificultades, pendientes, respaldos) + lo
+que SIGSO ya sabe del mes (matrices, tareas, solicitudes del equipo), que se
+congela al enviarlo. Avisos en SIGSO y por correo en cada paso; contador en el
+menú de lo que espera a cada persona. Las claves escritas se reemplazan por
+"[clave omitida]".
+
+**Mi equipo.** La jefatura de un área tiene a cargo a quienes REGISTRAN en su
+lista (`jefatura.obtenerEquipoJefe_` suma esto a Administración › Jefaturas;
+`jefeDeSubordinado_` también lo usa). Por eso "Mi equipo", reasignar tareas y
+aprobar novedades siguen al organigrama. El panel de "Mi departamento" se pinta
+dentro de cada área (`SigsoJefatura.hospedar`); el módulo suelto solo lo ve
+una jefatura sin área.
+
+**Pendiente del dueño en producción:** cargar las listas de cada área en
+Accesos (quién es jefatura, quién registra) y la de Administración (la
+Encargada de Administración registra; Gerencia/Director en solo lectura).

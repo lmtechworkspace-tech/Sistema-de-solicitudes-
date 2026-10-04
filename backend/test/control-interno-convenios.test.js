@@ -186,8 +186,8 @@ test('permisos: los de la matriz Convenios (Contabilidad)', () => {
   assert.ok(rechazado(CV.guardar(db, { cliente_id: 'CLI-2', folio: '77' }, LECTORA)));
   // RR.HH. no ve Contabilidad.
   assert.ok(rechazado(CV.listar(db, {}, VANESSA)));
-  // Sin el módulo, nada.
-  assert.ok(rechazado(CV.listar(db, {}, { email: FRANCISCA.email, rol: 'DEV', modulos: [] })));
+  // Fuera de la lista de Contabilidad, nada (aunque la cuenta tenga el módulo).
+  assert.ok(rechazado(CV.listar(db, {}, { email: 'ajena@homepymes.cl', rol: 'DEV', modulos: ['control_interno'] })));
   // ADM, todo.
   assert.equal(CV.listar(db, {}, ADM).puede_registrar, true);
 });

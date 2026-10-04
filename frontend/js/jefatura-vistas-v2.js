@@ -61,6 +61,12 @@
   ];
 
   var vista_ = 'resumen', turno_ = 0;
+  // 2026-10-03: "Mi equipo" también vive dentro de cada departamento, para su
+  // jefatura. host_ = { seccion, prefijo, migas }: dónde se pinta, con qué
+  // prefijo se publica la ruta (equipo:tablero…) y qué dicen las migas.
+  var host_ = null;
+  function migas() { return host_ ? host_.migas : 'Mi departamento'; }
+  function anfitrion() { return host_ ? host_.seccion : document.getElementById('modulo-bandeja'); }
   var panel_ = null, actividades_ = null, filtro_ = '', q_ = '';
   var reporteAbierto_ = null, filtrosRep_ = {}, panelRep_ = null, personasConocidas_ = [];
 
@@ -88,7 +94,7 @@
     if (window.SigsoShell && SigsoShell.refrescarArbol) SigsoShell.refrescarArbol();
   }
   function contenedor() {
-    var s = document.getElementById('modulo-bandeja');
+    var s = anfitrion();
     if (!s) return null;
     var c = document.getElementById('jefatura-v2');
     if (!c) {
@@ -102,7 +108,7 @@
   }
   function cabecera() {
     var v = VISTAS[vista_];
-    return '<header class="sx2-cabecera sx2-entra"><div class="sx2-cabecera__txt"><span class="sx2-cabecera__migas">Mi departamento</span><h1>' + U.esc(v[0]) + '</h1>' +
+    return '<header class="sx2-cabecera sx2-entra"><div class="sx2-cabecera__txt"><span class="sx2-cabecera__migas">' + U.esc(migas()) + '</span><h1>' + U.esc(v[0]) + '</h1>' +
       '<span class="sx2-tenue" style="font-size:.875rem">' + U.esc(v[1]) + '</span></div>' +
       '<div class="sx2-cabecera__acciones">' + U.boton({ soloIcono: true, icono: 'tendencia', titulo: 'Actualizar', clase: 'js-jv2-recargar' }) + '</div></header>';
   }
@@ -122,7 +128,7 @@
       accion: U.boton({ texto: 'Reintentar', icono: 'tendencia', clase: 'js-jv2-recargar' }) }) }));
   }
   function sinEquipo() {
-    return U.card({ i: 1, cuerpo: U.vacio({ icono: 'equipo', titulo: 'Todavía no tienes a nadie a cargo', texto: 'Pide al administrador que te asigne tu equipo en Administración → Jefaturas.' }) });
+    return U.card({ i: 1, cuerpo: U.vacio({ icono: 'equipo', titulo: 'Todavía no tienes a nadie a cargo', texto: 'Tu equipo son las personas que registran en tu área (Accesos del área) y las que te asigne el administrador en Administración → Jefaturas.' }) });
   }
 
   // --- Datos del panel (compartidos por tablero, persona, carga) -------------------------
@@ -400,7 +406,7 @@
     else if (r.id === 'jef-resbalon') cuerpo = SigsoReportes.cuerpoResbalon(items, { columnasExtra: [{ campo: 'modulo_nombre', titulo: 'Módulo' }] });
     cont.innerHTML = SigsoReportes.barraAcciones({}) +
       SigsoReportes.cabeceraDocumento({
-        titulo: r.nombre, subtitulo: r.desc, modulo: 'Mi departamento',
+        titulo: r.nombre, subtitulo: r.desc, modulo: migas(),
         codigo: 'SIGSO-REP-JEF-' + String(r.id).replace(/^[a-z]+-/, '').toUpperCase(),
         generadoPor: PY.miNombre() || '', filtros: SigsoReportes.filtrosParaCabecera(r, opciones, filtrosRep_)
       }) +
@@ -414,7 +420,7 @@
     vista_ = v === 'resumen' || VISTAS[v] ? v : 'resumen';
     if (vista_ !== 'reportes') { reporteAbierto_ = null; filtrosRep_ = {}; }
     registrarArbol();
-    if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(vista_);
+    if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem((host_ ? host_.prefijo : '') + vista_);
     if (vista_ === 'resumen') { if (window.SigsoJefaturaV2) SigsoJefaturaV2.mostrar(); return; }
     var hay = !!document.getElementById('jefatura-v2');
     if (vista_ === 'actividades') { cargarActividades(!!actividades_ && hay); return; }
@@ -461,6 +467,11 @@
     },
     irAItem: irA,
     registrarArbol: registrarArbol,
+    // Dentro de un departamento (control-interno-v2.js) y de vuelta a "Mi departamento".
+    hospedar: function (h) { host_ = h || null; },
+    soltar: function () { host_ = null; },
+    anfitrion: anfitrion,
+    migas: migas,
     // jefatura-v2.js ("Mi equipo hoy") pregunta si sigue siendo la vista activa antes de pintar.
     vista: function () { return vista_; }
   };

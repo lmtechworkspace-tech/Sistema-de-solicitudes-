@@ -178,11 +178,11 @@
       '<input type="file" class="sx2-input js-sii-archivo" accept=".csv,.gz,.txt">' +
       '<p class="sx2-tenue" style="margin:12px 0 6px">O pega la página (Ctrl+A y Ctrl+C en el SII):</p><textarea class="sx2-input js-sii-texto" rows="3" placeholder="Pega aquí"></textarea>' +
       '<div style="margin-top:8px">' + U.boton({ texto: 'Revisar lo pegado', icono: 'lupa', clase: 'js-sii-pegar' }) + '</div>' });
-    x_.pagina(x_.cabecera('Control interno · Contabilidad · Informe y pago de IVA', 'Recibir desde el SII', 'F29 y Registro de Compras y Ventas, comparados con las matrices: sin copiar ni tipear.') + cuerpo + '<div class="cv-rec-2">' + instalar + subir + '</div>', true);
+    x_.pagina(x_.cabecera(x_.modNombre + ' · Informe y pago de IVA', 'Recibir desde el SII', 'F29 y Registro de Compras y Ventas, comparados con las matrices: sin copiar ni tipear.') + cuerpo + '<div class="cv-rec-2">' + instalar + subir + '</div>', true);
   }
 
   // --- eventos ------------------------------------------------------------------------------------
-  function mio(ev) { var c = document.getElementById('ci2'); return !!c && c.contains(ev.target) && !!x_ && x_.vista && x_.vista() === 'sii'; }
+  function mio(ev) { var c = x_ && x_.raiz(); return !!c && c.contains(ev.target) && x_.vista && x_.vista() === 'sii'; }
   document.addEventListener('click', function (ev) {
     if (!mio(ev)) return;
     var t = ev.target, b;

@@ -26,7 +26,9 @@ const BARBARA = conModulo('barbara@homepymes.cl', 'JEFATURA');
 const VANESSA = conModulo('vanessa@homepymes.cl');
 const LECTORA = conModulo('lectora@homepymes.cl');
 const GERENCIA = conModulo('gerente@homepymes.cl', 'GERENCIA');
+// Está en la lista de Contabilidad pero su cuenta no tiene el módulo: desde 2026-10-03 entra igual.
 const SIN_MODULO = { email: 'francisca@homepymes.cl', rol: 'DEV', modulos: [] };
+const AJENA = { email: 'ajena@homepymes.cl', rol: 'DEV', modulos: ['control_interno'] };
 
 function crear() {
   const db = abrirDb_();
@@ -80,16 +82,47 @@ test('las 54 matrices son espejo de sus planillas y están bien declaradas', () 
   assert.ok(matriz_('LICENCIAS').sensibles.indexOf('motivo') !== -1);
 });
 
-test('sin el módulo en la cuenta no se entra; cada uno ve solo su departamento', () => {
+test('cada uno ve solo su departamento: lo decide la lista del área, no la cuenta', () => {
   const db = crear();
-  assert.equal(CI.getConfig(db, {}, SIN_MODULO)._forbidden, true);
+  assert.equal(CI.getConfig(db, {}, AJENA)._forbidden, true, 'sin estar en ninguna lista no entra, aunque tenga el módulo');
+  assert.deepEqual(CI.getConfig(db, {}, SIN_MODULO).departamentos.map((d) => d.clave), ['CONTABILIDAD'], 'estar en la lista basta');
   const f = CI.getConfig(db, {}, FRANCISCA);
   assert.deepEqual(f.departamentos.map((d) => d.clave), ['CONTABILIDAD']);
   assert.ok(f.matrices.every((m) => m.depto === 'CONTABILIDAD'));
   assert.deepEqual(CI.getConfig(db, {}, VANESSA).departamentos.map((d) => d.clave), ['RRHH']);
   assert.equal(CI.listar(db, { matriz: 'IVA', periodo: '2026-M09' }, VANESSA)._forbidden, true);
   assert.deepEqual(CI.getConfig(db, {}, BARBARA).departamentos.map((d) => d.clave), ['CONTABILIDAD']);
-  assert.equal(CI.getConfig(db, {}, ADM).departamentos.length, 2);
+  assert.equal(CI.getConfig(db, {}, ADM).departamentos.length, 5);
+});
+
+test('departamentos del organigrama: un módulo cada uno, con su lista y su jefatura', () => {
+  const db = crear();
+  // El menú: cada persona recibe solo los módulos de sus áreas.
+  assert.deepEqual(CI.modulosDeDepartamento_(db, FRANCISCA), ['dep_contabilidad']);
+  assert.deepEqual(CI.modulosDeDepartamento_(db, VANESSA), ['dep_rrhh']);
+  assert.deepEqual(CI.modulosDeDepartamento_(db, BARBARA), ['dep_contabilidad'], 'quien libera el área también entra');
+  assert.deepEqual(CI.modulosDeDepartamento_(db, AJENA), []);
+  // La sesión los lleva al navegador (solo para pintar el menú).
+  assert.deepEqual(require('../logica/portal').perfilPublico({ cuenta_id: 'C1', emails: JSON.stringify([FRANCISCA.email]), rol: 'DEV', modulos: '[]' }, db).departamentos, ['dep_contabilidad']);
+  assert.deepEqual(CI.modulosDeDepartamento_(db, ADM), ['dep_contabilidad', 'dep_rrhh', 'dep_prevencion', 'dep_marketing', 'dep_administracion']);
+  assert.equal(CI.modulosDeDepartamento_(db, GERENCIA).length, 5, 'Gerencia con "ver todas las áreas"');
+  assert.deepEqual(CI.modulosDeDepartamento_(db, { email: 'gerente@homepymes.cl', rol: 'GERENCIA', modulos: [] }), [], 'Gerencia sin ese permiso no ve áreas ajenas');
+  // Prevención y Marketing, sin matrices todavía.
+  const camila = { email: 'camila@homepymes.cl', rol: 'DEV', modulos: [] };
+  CI.guardarMiembros(db, { depto: 'PREVENCION', miembros: [{ email: camila.email, rol: 'JEFATURA' }, { email: 'amarlla@homepymes.cl', rol: 'REGISTRA' }] }, ADM);
+  assert.deepEqual(CI.modulosDeDepartamento_(db, camila), ['dep_prevencion']);
+  const c = CI.getConfig(db, { depto: 'PREVENCION' }, camila);
+  assert.deepEqual(c.departamentos.map((d) => [d.clave, d.rol, d.jefatura, d.registra]), [['PREVENCION', 'JEFATURA', true, true]]);
+  assert.equal(c.matrices.length, 0);
+  // Un módulo pide solo lo suyo; un área ajena se rechaza.
+  assert.ok(CI.getConfig(db, { depto: 'CONTABILIDAD' }, ADM).matrices.every((m) => m.depto === 'CONTABILIDAD'));
+  assert.equal(CI.getConfig(db, { depto: 'RRHH' }, FRANCISCA)._forbidden, true);
+  assert.equal(CI.getConfig(db, { depto: 'VENTAS' }, ADM).ok, false);
+  // Accesos de una sola área, con el rol Jefatura.
+  const acc = CI.listarMiembros(db, { depto: 'PREVENCION' }, ADM);
+  assert.deepEqual(acc.departamentos.map((d) => d.clave), ['PREVENCION']);
+  assert.deepEqual(acc.departamentos[0].miembros.map((m) => m.rol), ['JEFATURA', 'REGISTRA']);
+  assert.ok(acc.roles.indexOf('JEFATURA') !== -1);
 });
 
 test('solo lectura no registra', () => {

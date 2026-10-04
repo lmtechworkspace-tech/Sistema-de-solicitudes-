@@ -66,6 +66,7 @@ const Indicadores = require('../logica/indicadoresSgc');
 const Tablero = require('../logica/tableroSgc');
 const Prestaciones = require('../logica/prestacionesSgc');
 const ControlInterno = require('../logica/controlInterno');
+const ReportesDepto = require('../logica/departamentosReportes');
 const ControlInternoImportar = require('../logica/controlInternoImportar');
 const ControlInternoReportes = require('../logica/controlInternoReportes');
 const ControlInternoConvenios = require('../logica/controlInternoConvenios');
@@ -599,6 +600,17 @@ const ACCIONES = {
   conveniosAMatrizTGR: (db, data, contexto) => ControlInternoConvenios.aMatriz(db, data, contexto),
   listarMiembrosCI: (db, data, contexto) => ControlInterno.listarMiembros(db, data, contexto),
   guardarMiembrosCI: (db, data, contexto) => ControlInterno.guardarMiembros(db, data, contexto),
+  // Reporte mensual de cada departamento (2026-10-03): el área lo prepara, su
+  // jefatura lo valida y Administración lo recibe (departamentosReportes.js).
+  listarReportesDep: (db, data, contexto) => ReportesDepto.listar(db, data, contexto),
+  getReporteDep: (db, data, contexto) => ReportesDepto.obtener(db, data, contexto),
+  guardarReporteDep: (db, data, contexto) => ReportesDepto.guardar(db, data, contexto),
+  enviarReporteDep: (db, data, contexto) => ReportesDepto.enviar(db, data, contexto),
+  validarReporteDep: (db, data, contexto) => ReportesDepto.validar(db, data, contexto),
+  devolverReporteDep: (db, data, contexto) => ReportesDepto.devolver(db, data, contexto),
+  recibirReporteDep: (db, data, contexto) => ReportesDepto.recibir(db, data, contexto),
+  panelReportesDep: (db, data, contexto) => ReportesDepto.panel(db, data, contexto),
+  pendientesReportesDep: (db, data, contexto) => ReportesDepto.pendientes(db, data, contexto),
   // Importar las planillas del Drive (solo ADM): el navegador lee el .xlsx y
   // manda hoja por hoja; `simular` primero.
   importarHojaCI: (db, data, contexto) => ControlInternoImportar.importarHoja(db, data, contexto),

@@ -1,8 +1,13 @@
 /**
- * control-interno-v2.js — módulo "Control interno": las matrices de
- * Contabilidad y RR.HH. del Drive dentro de SIGSO, como ESPEJO del Excel
- * (versión 2026-10-01, pedido del dueño: "toda la información, lo más
- * parecido al Excel").
+ * control-interno-v2.js — los módulos de DEPARTAMENTO (2026-10-03): Contabilidad,
+ * RR.HH., Prevención de riesgos, Marketing corporativo y Administración, según
+ * el organigrama de HomePymes. Antes era un solo módulo "Control interno" con
+ * todo adentro; ahora cada área es un módulo propio del menú que ve SOLO su
+ * personal, y todos tienen las mismas secciones (Resumen del mes, el trabajo
+ * del área, reportes, accesos) para que nadie se pierda al cambiar de área.
+ * Este archivo es la fábrica: crearModulo({ modulo, depto, nombre }) arma cada
+ * uno con su propio estado. Las matrices de Contabilidad y RR.HH. son el
+ * ESPEJO del Excel del Drive (versión 2026-10-01).
  *
  * Vistas (el árbol del sidebar las elige):
  *  - inicio        Resumen del mes por departamento y sección.
@@ -33,6 +38,17 @@
   var MESES_LARGO = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
   var LOTE_FILAS = 200;
 
+  // Los departamentos del organigrama (mismo catálogo que el servidor:
+  // controlInternoMatrices.DEPARTAMENTOS). Administración recibe los reportes.
+  var DEPARTAMENTOS = [
+    { modulo: 'dep_contabilidad', depto: 'CONTABILIDAD', nombre: 'Contabilidad', icono: 'dinero' },
+    { modulo: 'dep_rrhh', depto: 'RRHH', nombre: 'Recursos Humanos', icono: 'equipo' },
+    { modulo: 'dep_prevencion', depto: 'PREVENCION', nombre: 'Prevención de riesgos', icono: 'escudoCheck' },
+    { modulo: 'dep_marketing', depto: 'MARKETING', nombre: 'Marketing corporativo', icono: 'megafono' },
+    { modulo: 'dep_administracion', depto: 'ADMINISTRACION', nombre: 'Administración', icono: 'empresa', recibe: true }
+  ];
+
+  function crearModulo(OPC) {
   var cfg_ = null, vista_ = 'inicio', periodo_ = '', anio_ = '', mesFiltro_ = '', lista_ = null, turno_ = 0;
   var sel_ = {}, f_ = { q: '', estado: '', resp: '', liberar: false, nuevos: false }, mostrar_ = LOTE_FILAS, verSinUso_ = false;
 
@@ -89,10 +105,10 @@
 
   // --- marco ------------------------------------------------------------------------------
   function raiz() {
-    var s = document.getElementById('modulo-control_interno');
+    var s = document.getElementById('modulo-' + OPC.modulo);
     if (!s) return null;
-    var c = document.getElementById('ci2');
-    if (!c) { c = document.createElement('div'); c.id = 'ci2'; c.className = 'sx2 ci2'; s.appendChild(c); }
+    var c = document.getElementById('ci2-' + OPC.modulo);
+    if (!c) { c = document.createElement('div'); c.id = 'ci2-' + OPC.modulo; c.className = 'sx2 ci2'; s.appendChild(c); }
     return c;
   }
   function pagina(html, silencioso) {
@@ -121,7 +137,7 @@
   }
   function aviso(tono, icono, html) { return '<div class="mj2-aviso sx2-tono-' + tono + ' sx2-entra">' + U.ico(icono, 16) + '<span>' + html + '</span></div>'; }
   function error(r) {
-    pagina(cabecera('Control interno', 'No se pudo cargar', '') + U.card({ i: 1, cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo cargar', texto: (r && r.message) || '', accion: U.boton({ texto: 'Reintentar', icono: 'tendencia', clase: 'js-ci2-recargar' }) }) }));
+    pagina(cabecera(OPC.nombre, 'No se pudo cargar', '') + U.card({ i: 1, cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo cargar', texto: (r && r.message) || '', accion: U.boton({ texto: 'Reintentar', icono: 'tendencia', clase: 'js-ci2-recargar' }) }) }));
   }
 
   // --- árbol del sidebar ----------------------------------------------------------------
@@ -135,30 +151,46 @@
     });
     return out;
   }
+  // Siempre el mismo orden: Resumen del mes, el trabajo del área (sus
+  // secciones, como en las planillas), los reportes y, para el administrador,
+  // los accesos. Así nadie se pierde al pasar de un área a otra.
   function arbol() {
-    var subs = [{ id: 'inicio', nombre: 'Resumen del mes', icono: 'panel', plano: true, items: [{ id: 'inicio', nombre: 'Resumen del mes' }] }];
-    subs.push({ id: 'reportes', nombre: 'Reportes', icono: 'grafico', items: [
-      { id: 'rep:informe', nombre: 'Informe mensual' }, { id: 'rep:panel', nombre: 'Panel histórico' },
-      { id: 'rep:cliente', nombre: 'Ficha por cliente' }, { id: 'rep:personas', nombre: 'Personas y tiempos' }
-    ] });
+    if (OPC.recibe) {
+      var adm = [{ id: 'inicio', nombre: 'Reportes de las áreas', icono: 'bandeja', plano: true, items: [{ id: 'inicio', nombre: 'Reportes de las áreas' }] }];
+      if (cfg_ && cfg_.puede_administrar) adm.push({ id: 'accesos', nombre: 'Accesos', icono: 'llave', plano: true, items: [{ id: 'accesos', nombre: 'Accesos' }] });
+      return adm;
+    }
+    var subs = [{ id: 'inicio', nombre: 'Resumen del mes', icono: 'panel', plano: true, items: [{ id: 'inicio', nombre: 'Resumen del mes' }] },
+      { id: 'reporte', nombre: 'Reporte mensual', icono: 'documento', plano: true, items: [{ id: 'reporte', nombre: 'Reporte mensual' }] }];
     (cfg_ ? cfg_.departamentos : []).forEach(function (d) {
       secciones(d).forEach(function (s, k) {
-        subs.push({ id: 'd-' + d.clave + '-' + k, nombre: s.nombre, descripcion: d.nombre, icono: d.clave === 'RRHH' ? 'equipo' : 'dinero',
+        subs.push({ id: 'd-' + d.clave + '-' + k, nombre: s.nombre, descripcion: 'Trabajo del área', icono: OPC.icono,
           items: s.matrices.map(function (m) { return { id: 'm:' + m.clave, nombre: m.nombre }; })
             .concat(s.matrices.some(function (m) { return m.clave === 'CONVENIOS'; }) ? [{ id: 'conv', nombre: 'Seguimiento de cuotas TGR' }] : [])
             .concat(s.matrices.some(function (m) { return m.clave === 'IVA'; }) ? [{ id: 'sii', nombre: 'Recibir desde el SII' }] : []) });
       });
       // Hojas que ya no se usan (reunión con Francisca): quedan para consulta, al final.
       var sinUso = cfg_.matrices.filter(function (m) { return m.depto === d.clave && m.sinUso; });
-      if (sinUso.length) subs.push({ id: 'd-' + d.clave + '-sinuso', nombre: 'Hojas que ya no se usan', descripcion: d.nombre, icono: 'carpeta',
+      if (sinUso.length) subs.push({ id: 'd-' + d.clave + '-sinuso', nombre: 'Hojas que ya no se usan', descripcion: 'Trabajo del área', icono: 'carpeta',
         items: sinUso.map(function (m) { return { id: 'm:' + m.clave, nombre: m.nombre }; }) });
     });
+    // La jefatura del área: su equipo (lo que antes era el módulo suelto "Mi departamento").
+    if (esJefaturaDelArea()) subs.push({ id: 'equipo', nombre: 'Mi equipo', icono: 'equipo', descripcion: 'Solo jefatura', items: [
+      { id: 'equipo:resumen', nombre: 'Mi equipo hoy' }, { id: 'equipo:tablero', nombre: 'Solicitudes del equipo' },
+      { id: 'equipo:persona', nombre: 'Por persona' }, { id: 'equipo:actividades', nombre: 'Actividades del equipo' },
+      { id: 'equipo:reportes', nombre: 'Reportes del equipo' }
+    ] });
+    if (cfg_ && cfg_.matrices.length) subs.push({ id: 'reportes', nombre: 'Reportes', icono: 'grafico', items: [
+      { id: 'rep:informe', nombre: 'Informe mensual' }, { id: 'rep:panel', nombre: 'Panel histórico' },
+      { id: 'rep:cliente', nombre: 'Ficha por cliente' }, { id: 'rep:personas', nombre: 'Personas y tiempos' }
+    ] });
     if (cfg_ && cfg_.puede_administrar) subs.push({ id: 'accesos', nombre: 'Accesos', icono: 'llave', plano: true, items: [{ id: 'accesos', nombre: 'Accesos' }] });
     return subs;
   }
+  function esJefaturaDelArea() { var d = cfg_ && cfg_.departamentos[0]; return !!d && d.rol === 'JEFATURA'; }
   function registrarArbol() {
     if (!window.SigsoNav) return;
-    SigsoNav.registrar('control_interno', { nombre: 'Control interno', submodulos: arbol() });
+    SigsoNav.registrar(OPC.modulo, { nombre: OPC.nombre, submodulos: arbol() });
     if (window.SigsoShell && SigsoShell.refrescarArbol) SigsoShell.refrescarArbol();
   }
 
@@ -177,7 +209,7 @@
     if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname) && /^(localhost|127\.0\.0\.1)$/.test(h)) return /tesorer[ií]a|cuotas de convenios/i.test(texto) ? 'tgr' : 'sii';
     return '';
   }
-  window.addEventListener('message', function (e) {
+  if (OPC.depto === 'CONTABILIDAD') window.addEventListener('message', function (e) {
     var d = e.data;
     if (!d || d.tipo !== 'sigso-envio' || typeof d.texto !== 'string') return;
     var fuente = fuenteDe(e.origin, d.texto);
@@ -187,12 +219,12 @@
     if (envio_ && envio_.texto === d.texto && Date.now() - envio_.t < 5000) return;
     envio_ = { texto: d.texto.slice(0, 3000000), pagina: String(d.pagina || '').slice(0, 80), fuente: fuente, t: Date.now() };
     var destino = fuente === 'tgr' ? 'conv:tgr' : 'sii';
-    if (!/^#\/control_interno(\/|$)/.test(location.hash)) location.hash = '#/control_interno/' + encodeURIComponent(destino);
+    if (location.hash.indexOf('#/' + OPC.modulo) !== 0) location.hash = '#/' + OPC.modulo + '/' + encodeURIComponent(destino);
     else irAItem(destino);
   });
   /** El marcador (bookmarklet) que se arrastra a la barra de marcadores; lleva la dirección de este SIGSO. */
   function marcador() {
-    var destino = location.origin + location.pathname + '#/control_interno/recibir';
+    var destino = location.origin + location.pathname + '#/' + OPC.modulo + '/recibir';
     var codigo = '(function(){var D=' + JSON.stringify(destino) + ',O=' + JSON.stringify(location.origin) + ';' +
       'var t=String(window.getSelection?window.getSelection():"");' +
       // Recuadros (iframes) de otro sitio no se pueden leer desde afuera: se ofrece abrir el más grande solo.
@@ -205,7 +237,7 @@
     return 'javascript:' + encodeURIComponent(codigo);
   }
   function vistaEsperando() {
-    pagina(cabecera('Control interno', 'Enviar a SIGSO', 'Esperando lo que envía la página de la TGR o del SII…') +
+    pagina(cabecera(OPC.nombre, 'Enviar a SIGSO', 'Esperando lo que envía la página de la TGR o del SII…') +
       U.card({ cuerpo: U.vacio({ icono: 'reloj', titulo: 'Esperando el envío', texto: 'Deja esta pestaña abierta. Si no llega en unos segundos, vuelve a tocar el marcador en la otra pestaña.' }) }));
   }
 
@@ -213,8 +245,8 @@
   function cargar() {
     var pedido = (window.SigsoShell && SigsoShell.tomarItemDeRuta && SigsoShell.tomarItemDeRuta()) || '';
     if (!periodo_) periodo_ = periodoActual();
-    if (!cfg_) pagina(cabecera('Control interno', 'Control interno', 'Cargando…') + U.esqueleto('tarjetas', 6));
-    return api('getControlInterno', { periodo: periodo_ }).then(function (r) {
+    if (!cfg_) pagina(cabecera(OPC.nombre, 'Resumen del mes', 'Cargando…') + U.esqueleto('tarjetas', 6));
+    return api('getControlInterno', { periodo: periodo_, depto: OPC.depto }).then(function (r) {
       if (!r || !r.ok) { error(r); return; }
       cfg_ = r.data;
       registrarArbol();
@@ -232,17 +264,29 @@
   function mostrar() {
     if (!cfg_) { cargar(); return; }
     var p = String(vista_).split(':');
+    if (p[0] === 'equipo' && esJefaturaDelArea() && window.SigsoJefatura && SigsoJefatura.hospedar) { mostrarEquipo(p[1] || 'resumen'); return; }
+    if (window.SigsoJefatura && SigsoJefatura.soltar) SigsoJefatura.soltar();
     if (p[0] === 'm' && matriz(p[1])) { sel_ = {}; f_ = { q: '', estado: '', resp: '', liberar: false, nuevos: false }; mostrar_ = LOTE_FILAS; verSinUso_ = false; abrirMatriz(p[1]); return; }
     if (p[0] === 'rep' && window.SigsoCIReportes) { SigsoCIReportes.mostrar(p[1], ctxReportes()); return; }
     if (p[0] === 'conv' && window.SigsoCIConvenios && matriz('CONVENIOS')) { SigsoCIConvenios.mostrar(p.slice(1).join(':'), ctxReportes()); return; }
     if (vista_ === 'sii' && window.SigsoCISII) { SigsoCISII.mostrar(ctxReportes()); return; }
     if (vista_ === 'recibir') { if (envio_) irAItem(envio_.fuente === 'tgr' ? 'conv:tgr' : 'sii'); else vistaEsperando(); return; }
     if (vista_ === 'accesos' && cfg_.puede_administrar) { vistaAccesos(); return; }
+    if (p[0] === 'reporte' && window.SigsoReporteDepto) { SigsoReporteDepto.mostrar(p.slice(1).join(':'), ctxReportes()); return; }
     vista_ = 'inicio';
+    if (OPC.recibe && window.SigsoReporteDepto) { SigsoReporteDepto.panel(ctxReportes()); return; }
     vistaInicio();
   }
+  // "Mi equipo": las vistas de jefatura-vistas-v2.js / jefatura-v2.js, pintadas aquí.
+  function mostrarEquipo(v) {
+    var c = raiz();
+    if (!c) return;
+    c.innerHTML = '';
+    SigsoJefatura.hospedar({ seccion: c, prefijo: 'equipo:', migas: OPC.nombre + ' · Mi equipo' });
+    SigsoJefatura.irAItem(v);
+  }
   function ctxReportes() {
-    return { cfg: cfg_, api: api, pagina: pagina, cabecera: cabecera, raiz: raiz, perTexto: perTexto, mover: mover, periodoActual: periodoActual,
+    return { cfg: cfg_, api: api, pagina: pagina, cabecera: cabecera, raiz: raiz, modNombre: OPC.nombre, opc: OPC, contadores: contadores, perTexto: perTexto, mover: mover, periodoActual: periodoActual,
       nombre: nombre, titulo: titulo, miles: miles, resolverPersonas: resolverPersonas, irAItem: irAItem, matriz: matriz, depto: depto, secciones: secciones,
       periodo: function () { return periodo_; }, vista: function () { return vista_; },
       envio: function () { return envio_; }, marcador: marcador, fechaCorta: fechaCorta };
@@ -259,27 +303,28 @@
   function vistaInicio(silencioso) {
     var t = ++turno_;
     if (cfg_.periodo !== periodo_) {
-      pagina(cabecera('Control interno', 'Resumen del mes', 'Cargando…', selectorPeriodo()) + U.esqueleto('tarjetas', 6));
-      api('getControlInterno', { periodo: periodo_ }).then(function (r) { if (t !== turno_) return; if (!r || !r.ok) { error(r); return; } cfg_ = r.data; vistaInicio(); });
+      pagina(cabecera(OPC.nombre, 'Resumen del mes', 'Cargando…', selectorPeriodo()) + U.esqueleto('tarjetas', 6));
+      api('getControlInterno', { periodo: periodo_, depto: OPC.depto }).then(function (r) { if (t !== turno_) return; if (!r || !r.ok) { error(r); return; } cfg_ = r.data; vistaInicio(); });
       return;
     }
-    var SUB = 'Las matrices de Contabilidad y RR.HH. con las mismas columnas que sus planillas. Mientras dure la prueba, el registro oficial sigue siendo el Drive.';
-    if (!cfg_.departamentos.length) {
-      pagina(cabecera('Control interno', 'Resumen del mes', SUB) + U.card({ i: 1, cuerpo: U.vacio({ icono: 'candado', titulo: 'Todavía no tienes un departamento asignado', texto: 'Pide al administrador que te dé acceso a Contabilidad o a RR.HH. en Control interno › Accesos.' }) }));
+    var d = cfg_.departamentos[0];
+    if (!d) {
+      pagina(cabecera(OPC.nombre, 'Resumen del mes', '') + U.card({ i: 1, cuerpo: U.vacio({ icono: 'candado', titulo: 'No tienes acceso a ' + OPC.nombre, texto: 'Pide al administrador que te agregue en Accesos de tu área.' }) }));
       return;
     }
-    var i = 0;
-    var html = cfg_.departamentos.map(function (d) {
-      var lib = (d.liberadores || []).map(nombre).join(', ');
-      return '<section class="ci2-depto sx2-entra" style="--i:' + (i++) + '"><div class="ci2-depto__cab"><h2>' + txt(d.nombre) + '</h2>' +
-        '<span class="sx2-tenue">' + (d.registra ? 'Registras' : 'Solo lectura') + (d.libera ? ' · Liberas' : '') + ' · Libera: ' + (lib ? txt(lib) : '<i>sin asignar</i>') + '</span></div>' +
-        secciones(d).map(function (s) {
-          return '<h3 class="ci2-seccion">' + txt(s.nombre) + '</h3><div class="ci2-tarjetas">' + s.matrices.map(tarjeta).join('') + '</div>';
-        }).join('') + '</section>';
-    }).join('');
-    pagina(cabecera('Control interno', 'Resumen de ' + perTexto(periodo_, true), SUB, selectorPeriodo() +
-      (cfg_.puede_administrar ? U.boton({ texto: 'Importar planillas', icono: 'subir', clase: 'js-ci2-importar' }) : '') +
+    var SUB = cfg_.matrices.length ? 'Las matrices del área con las mismas columnas que sus planillas. Mientras dure la prueba, el registro oficial sigue siendo el Drive.' : '';
+    var lib = (d.liberadores || []).map(nombre).join(', ');
+    var rolTxt = d.rol === 'JEFATURA' ? 'Jefatura' : (d.registra ? 'Registras' : 'Solo lectura');
+    var html = '<div class="js-dr-tarjeta"></div><section class="ci2-depto sx2-entra"><div class="ci2-depto__cab"><span class="sx2-tenue">' + rolTxt + (d.libera ? ' · Liberas' : '') +
+        (cfg_.matrices.length ? ' · Libera: ' + (lib ? txt(lib) : '<i>sin asignar</i>') : '') + '</span></div>' +
+      (cfg_.matrices.length ? secciones(d).map(function (s) {
+        return '<h3 class="ci2-seccion">' + txt(s.nombre) + '</h3><div class="ci2-tarjetas">' + s.matrices.map(tarjeta).join('') + '</div>';
+      }).join('') : U.card({ i: 1, cuerpo: U.vacio({ icono: OPC.icono, titulo: OPC.recibe ? 'Aquí llegan los reportes de las áreas' : OPC.nombre + ' todavía no tiene matrices en SIGSO',
+        texto: OPC.recibe ? 'Cada área genera su reporte mensual, su jefatura lo valida y llega aquí.' : 'Su trabajo del mes se registra en el reporte mensual del área.' }) })) + '</section>';
+    pagina(cabecera(OPC.nombre, 'Resumen de ' + perTexto(periodo_, true), SUB, selectorPeriodo() +
+      (cfg_.puede_administrar && cfg_.matrices.length ? U.boton({ texto: 'Importar planillas', icono: 'subir', clase: 'js-ci2-importar' }) : '') +
       U.boton({ soloIcono: true, icono: 'tendencia', titulo: 'Actualizar', clase: 'js-ci2-recargar' })) + html, !!silencioso);
+    if (window.SigsoReporteDepto) SigsoReporteDepto.tarjeta(ctxReportes(), raiz().querySelector('.js-dr-tarjeta'));
   }
   function tarjeta(m) {
     var r = cfg_.resumen[m.clave];
@@ -308,7 +353,7 @@
   }
   function abrirMatriz(clave, silencioso) {
     var m = matriz(clave), t = ++turno_;
-    if (!silencioso) pagina(cabecera('Control interno · ' + depto(m.depto).nombre + ' · ' + m.seccion, m.nombre, m.descripcion) + U.esqueleto('kpis', 4) + U.esqueleto('tabla', 10));
+    if (!silencioso) pagina(cabecera(OPC.nombre + ' · ' + m.seccion, m.nombre, m.descripcion) + U.esqueleto('kpis', 4) + U.esqueleto('tabla', 10));
     return api('listarRegistrosCI', pedidoMatriz(m)).then(function (r) {
       if (t !== turno_) return;
       if (!r || !r.ok) { error(r); return; }
@@ -438,7 +483,7 @@
         (visibles.length > mostrar_ ? '<div class="ci2-mas">' + U.boton({ texto: 'Mostrar ' + Math.min(LOTE_FILAS, visibles.length - mostrar_) + ' más (de ' + (visibles.length - mostrar_) + ')', clase: 'js-ci2-mas' }) + '</div>' : '') + '</div>' +
         datalists(m, cols);
     }
-    pagina(cabecera('Control interno · ' + d.nombre + ' · ' + m.seccion, m.nombre + (m.codigo ? ' · ' + m.codigo : ''), m.descripcion, acciones) + kpis + alertas(reg) + barra + nota + cuerpo, !!silencioso);
+    pagina(cabecera(OPC.nombre + ' · ' + m.seccion, m.nombre + (m.codigo ? ' · ' + m.codigo : ''), m.descripcion, acciones) + kpis + alertas(reg) + barra + nota + cuerpo, !!silencioso);
   }
   /** Avisos que cruzan columnas o matrices (IVA: recordatorio, postergación, impuesto único de RR.HH.). */
   function alertas(reg) {
@@ -672,7 +717,7 @@
       }), m.sinLiberacion ? [] : [x.liberado_por ? nombre(x.liberado_por) : '', fechaCorta(x.fecha_liberacion)], [x.observaciones]);
     });
     var donde = m.tipo === 'mensual' ? perTexto(periodo_, true) : (m.tipo === 'registro' ? (mesFiltro_ ? perTexto(mesFiltro_, true) : anio_) : 'lista');
-    SigsoReportes.descargarExcelDeDatos({ titulo: m.nombre + ' · ' + donde, subtitulo: depto(m.depto).nombre + ' · Control interno',
+    SigsoReportes.descargarExcelDeDatos({ titulo: m.nombre + ' · ' + donde, subtitulo: OPC.nombre + ' · ' + m.seccion,
       meta: [['Período', donde], ['Filas', String(filas.length)]], hojas: [{ nombre: m.nombre.slice(0, 30), columnas: columnas, filas: filas }],
       nombreArchivo: m.nombre + ' ' + donde }, { boton: raiz().querySelector('.js-ci2-excel') });
   }
@@ -680,10 +725,11 @@
   // =========================================================================================
   // Accesos (ADM)
   // =========================================================================================
+  var ROL_TXT = { JEFATURA: 'Jefatura (valida el reporte)', REGISTRA: 'Registra', LECTURA: 'Solo lectura' };
   function vistaAccesos() {
     var t = ++turno_;
-    pagina(cabecera('Control interno', 'Accesos', 'Quién registra o solo mira cada departamento.') + U.esqueleto('tarjetas', 2));
-    api('listarMiembrosCI', {}).then(function (r) {
+    pagina(cabecera(OPC.nombre, 'Accesos', 'Quién entra a ' + OPC.nombre + '.') + U.esqueleto('tarjetas', 1));
+    api('listarMiembrosCI', { depto: OPC.depto }).then(function (r) {
       if (t !== turno_) return;
       if (!r || !r.ok) { error(r); return; }
       var data = r.data;
@@ -692,11 +738,11 @@
       resolverPersonas(todos).then(function () {
         if (t !== turno_) return;
         var i = 0;
-        pagina(cabecera('Control interno', 'Accesos', 'Quién registra o solo mira cada departamento. La cuenta además necesita el módulo “Control interno” (Administración › Cuentas).') +
-          aviso('info', 'escudoCheck', 'Quién <b>libera</b> cada área se define en un solo lugar para Calidad y Control interno: Calidad › Servicios prestados › <b>Quién libera</b>. El motivo de las licencias solo lo ven las personas de RR.HH. de esta lista.') +
+        pagina(cabecera(OPC.nombre, 'Accesos', 'Quién entra a ' + OPC.nombre + '. Solo estas personas ven el módulo en su menú.') +
+          aviso('info', 'escudoCheck', '<b>Jefatura</b> registra y valida el reporte mensual del área. Quién <b>libera</b> los servicios se define en un solo lugar: Calidad › Servicios prestados › <b>Quién libera</b>.' + (OPC.depto === 'RRHH' ? ' El motivo de las licencias solo lo ven las personas de esta lista.' : '')) +
           '<div class="ci2-rep-grid">' + data.departamentos.map(function (d) {
-            return U.card({ i: ++i, titulo: d.nombre, icono: d.clave === 'RRHH' ? 'equipo' : 'dinero', accion: { texto: 'Editar', clase: 'js-ci2-acc-editar', datos: { depto: d.clave } }, cuerpo:
-              (d.miembros.length ? '<ul class="ci2-miembros">' + d.miembros.map(function (m) { return '<li>' + txt(nombre(m.email)) + U.badge(m.rol === 'REGISTRA' ? 'Registra' : 'Solo lectura', m.rol === 'REGISTRA' ? 'ok' : 'neutro') + '</li>'; }).join('') + '</ul>' : '<p class="sx2-tenue">Nadie asignado.</p>') +
+            return U.card({ i: ++i, titulo: d.nombre, icono: OPC.icono, accion: { texto: 'Editar', clase: 'js-ci2-acc-editar', datos: { depto: d.clave } }, cuerpo:
+              (d.miembros.length ? '<ul class="ci2-miembros">' + d.miembros.map(function (m) { return '<li>' + txt(nombre(m.email)) + U.badge(ROL_TXT[m.rol] || m.rol, m.rol === 'LECTURA' ? 'neutro' : (m.rol === 'JEFATURA' ? 'info' : 'ok')) + '</li>'; }).join('') + '</ul>' : '<p class="sx2-tenue">Nadie asignado.</p>') +
               '<p class="sx2-tenue" style="margin:8px 0 0">Libera: ' + (d.liberadores.length ? txt(d.liberadores.map(nombre).join(', ')) : '<i>sin asignar</i>') + '</p>' });
           }).join('') + '</div>');
         raiz().__accesos = data;
@@ -711,7 +757,7 @@
       subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">Deja vacía una fila para quitar a esa persona.</span>',
       campos: filas.map(function (m, k) {
         return '<div class="sx2-form__fila">' + U.campo('Persona', '<input class="sx2-input" type="email" data-persona name="p_' + k + '" value="' + U.esc(m.email) + '">') +
-          U.campo('Acceso', select('r_' + k, [['REGISTRA', 'Registra'], ['LECTURA', 'Solo lectura']], m.rol)) + '</div>';
+          U.campo('Acceso', select('r_' + k, [['JEFATURA', ROL_TXT.JEFATURA], ['REGISTRA', ROL_TXT.REGISTRA], ['LECTURA', ROL_TXT.LECTURA]], m.rol)) + '</div>';
       }).join(''),
       preparar: function (v) {
         var miembros = [];
@@ -831,7 +877,7 @@
   // =========================================================================================
   // Eventos
   // =========================================================================================
-  function mio(ev) { var c = document.getElementById('ci2'); return !!c && c.contains(ev.target); }
+  function mio(ev) { var c = document.getElementById('ci2-' + OPC.modulo); return !!c && c.contains(ev.target); }
   document.addEventListener('click', function (ev) {
     if (!mio(ev)) return;
     var t = ev.target, b;
@@ -898,9 +944,28 @@
     if (ev.key === 'Tab') { ev.preventDefault(); cerrarEditor(true, ev.shiftKey ? 'izquierda' : 'derecha'); }
   });
 
-  window.SigsoControlInterno = {
+  return {
     cargar: cargar,
     refrescar: function () { if (!cfg_) cargar(); else mostrar(); },
     irAItem: irAItem
+  };
+  }
+
+  var MODULOS = {};
+  DEPARTAMENTOS.forEach(function (d) { MODULOS[d.modulo] = crearModulo(d); });
+  // Reportes que esperan a esta persona (por validar, por recibir, devueltos): el número en el menú.
+  function contadores() {
+    if (!window.SigsoShell || !SigsoShell.pintarBadge) return;
+    llamarApi((window.SIGSO_CONFIG || {}).BACKOFFICE_URL, 'pendientesReportesDep', {}).then(function (r) {
+      var p = (r && r.ok && r.data && r.data.pendientes) || {};
+      Object.keys(p).forEach(function (id) { SigsoShell.pintarBadge(id, p[id]); });
+    }).catch(function () { /* sin contador */ });
+  }
+  // El shell pide el módulo por su id (dep_contabilidad…).
+  window.SigsoDepartamentos = {
+    lista: DEPARTAMENTOS,
+    modulo: function (id) { return MODULOS[id] || null; },
+    esDepartamento: function (id) { return !!MODULOS[id]; },
+    contadores: contadores
   };
 })();

@@ -23,9 +23,17 @@
 
 const COLUMNAS = require('./controlInternoColumnas');
 
+// Los departamentos de HomePymes según su organigrama (DOC-05 "servicios
+// integrales a clientes" y DOC-09): Administración y sus 4 áreas. Cada uno es
+// un módulo propio en el menú (`modulo`) que ve solo su personal (CI_MIEMBROS).
+// Administración no tiene matrices: recibe los reportes mensuales de las áreas
+// ya validados por su jefatura (`recibe`). Pedido del dueño, 2026-10-03.
 const DEPARTAMENTOS = [
-  { clave: 'CONTABILIDAD', nombre: 'Contabilidad', area: 'CONTABILIDAD' },
-  { clave: 'RRHH', nombre: 'Recursos Humanos', area: 'RRHH' }
+  { clave: 'CONTABILIDAD', nombre: 'Contabilidad', area: 'CONTABILIDAD', modulo: 'dep_contabilidad', icono: 'dinero' },
+  { clave: 'RRHH', nombre: 'Recursos Humanos', area: 'RRHH', modulo: 'dep_rrhh', icono: 'equipo' },
+  { clave: 'PREVENCION', nombre: 'Prevención de riesgos', area: 'PREVENCION', modulo: 'dep_prevencion', icono: 'escudoCheck' },
+  { clave: 'MARKETING', nombre: 'Marketing corporativo', area: 'MARKETING', modulo: 'dep_marketing', icono: 'megafono' },
+  { clave: 'ADMINISTRACION', nombre: 'Administración', area: 'ADMINISTRACION', modulo: 'dep_administracion', icono: 'empresa', recibe: true }
 ];
 
 // --- situación de una fila --------------------------------------------------------------

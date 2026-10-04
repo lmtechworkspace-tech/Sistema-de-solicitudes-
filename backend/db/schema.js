@@ -777,6 +777,22 @@ const COLUMNAS = {
   // como una contraseña: se muestra una vez al crearla.
   CI_ROBOT_AGENTES: [
     'agente_id', 'nombre', 'token_hash', 'creado_por', 'fecha_creacion', 'ultimo_contacto', 'activo'
+  ],
+
+  // Reporte mensual de cada departamento (2026-10-03, organigrama HomePymes):
+  // el área lo prepara, su jefatura lo valida y Administración lo recibe.
+  // `contenido` = lo que escribe el área (plantilla común); `resumen_auto` =
+  // lo que SIGSO ya sabe del mes (matrices, tareas, solicitudes), congelado
+  // al enviarlo para que lo validado no cambie después. El historial usa
+  // CI_HISTORIAL con registro_id = reporte_id.
+  DEP_REPORTES: [
+    'reporte_id', 'depto', 'periodo', 'tipo', 'titulo', 'estado',
+    'contenido', 'resumen_auto',
+    'autor_email', 'fecha_envio',
+    'validado_por', 'fecha_validacion', 'observacion_jefatura',
+    'recibido_por', 'fecha_recepcion', 'observacion_administracion',
+    'devuelto_por', 'fecha_devolucion', 'motivo_devolucion',
+    'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activa'
   ]
 };
 

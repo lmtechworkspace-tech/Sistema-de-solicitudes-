@@ -529,6 +529,9 @@
     var h = String(window.location.hash || '').replace(new RegExp('^#/?'), '');
     if (!h) return { modulo: '', item: '' };
     var trozos = h.split('/');
+    // "Control interno" se dividió en departamentos (2026-10-03): sus enlaces
+    // y el marcador "Enviar a SIGSO" ya instalado eran de Contabilidad.
+    if (trozos[0] === 'control_interno') trozos[0] = 'dep_contabilidad';
     return {
       modulo: decodeURIComponent(trozos[0] || ''),
       // El item puede traer ':' (documentos:PRO); se rearma por si el split

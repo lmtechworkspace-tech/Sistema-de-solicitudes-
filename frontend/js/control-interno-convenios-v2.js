@@ -42,10 +42,10 @@
   // =========================================================================================
   function vistaLista(silencioso) {
     var t = ++turno_;
-    if (!silencioso) x_.pagina(x_.cabecera('Control interno · Contabilidad · Convenios y postergaciones', 'Seguimiento de convenios TGR', 'Las cuotas de cada folio, como en la hoja impresa.') + U.esqueleto('kpis', 4) + U.esqueleto('tabla', 8));
+    if (!silencioso) x_.pagina(x_.cabecera(x_.modNombre + ' · Convenios y postergaciones', 'Seguimiento de convenios TGR', 'Las cuotas de cada folio, como en la hoja impresa.') + U.esqueleto('kpis', 4) + U.esqueleto('tabla', 8));
     api('listarConveniosTGR', {}).then(function (r) {
       if (t !== turno_) return;
-      if (!r || !r.ok) { x_.pagina(x_.cabecera('Control interno', 'Seguimiento de convenios TGR', '') + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo cargar', texto: (r && r.message) || '' }) })); return; }
+      if (!r || !r.ok) { x_.pagina(x_.cabecera(x_.modNombre, 'Seguimiento de convenios TGR', '') + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo cargar', texto: (r && r.message) || '' }) })); return; }
       lista_ = r.data;
       pintarLista(!!silencioso);
     });
@@ -90,7 +90,7 @@
           '<td>' + badge(EST[c.estado] || EST.VIGENTE) + '</td></tr>';
       }).join('') + '</tbody></table></div></div>'
       : U.card({ cuerpo: U.vacio({ icono: 'documento', titulo: lista_.convenios.length ? 'Ningún convenio calza con el filtro' : 'Todavía no hay convenios en el seguimiento', texto: lista_.convenios.length ? '' : 'Créalos desde la matriz Convenios (botón con la flecha) o uno por uno con "Nuevo convenio".' }) });
-    x_.pagina(x_.cabecera('Control interno · Contabilidad · Convenios y postergaciones', 'Seguimiento de convenios TGR', 'Las cuotas de cada folio, como en la hoja impresa: lo que dice la TGR, tu revisión y si está contabilizada.', acciones) + kpis + sinCuotas + barra + tabla, silencioso);
+    x_.pagina(x_.cabecera(x_.modNombre + ' · Convenios y postergaciones', 'Seguimiento de convenios TGR', 'Las cuotas de cada folio, como en la hoja impresa: lo que dice la TGR, tu revisión y si está contabilizada.', acciones) + kpis + sinCuotas + barra + tabla, silencioso);
   }
 
   // =========================================================================================
@@ -98,7 +98,7 @@
   // =========================================================================================
   function vistaFicha(id, silencioso) {
     var t = ++turno_;
-    if (!silencioso) x_.pagina(x_.cabecera('Control interno · Seguimiento de convenios TGR', 'Convenio', '') + U.esqueleto('kpis', 4) + U.esqueleto('tabla', 10));
+    if (!silencioso) x_.pagina(x_.cabecera(x_.modNombre + ' · Seguimiento de convenios TGR', 'Convenio', '') + U.esqueleto('kpis', 4) + U.esqueleto('tabla', 10));
     var p = lista_ ? Promise.resolve(null) : api('listarConveniosTGR', {}).then(function (r) { if (r && r.ok) lista_ = r.data; });
     p.then(function () { return api('getConvenioTGR', { convenio_id: id }); }).then(function (r) {
       if (t !== turno_) return;
@@ -155,7 +155,7 @@
     var hist = '<div class="sx2-card sx2-entra"><h3 class="ci2-seccion">Historial</h3>' + (ficha_.historial.length ? '<ol class="ci2-hist">' + ficha_.historial.slice(0, 40).map(function (h) {
       return '<li><b>' + txt(x_.nombre(h.usuario_email)) + '</b> · ' + txt(PY.fecha(h.fecha, true)) + ' — ' + txt(h.detalle || h.accion) + '</li>';
     }).join('') + '</ol>' : '<p class="sx2-tenue">Sin movimientos.</p>') + '</div>';
-    x_.pagina(x_.cabecera('Control interno · Seguimiento de convenios TGR', c.cliente_nombre + ' · folio ' + c.folio, (c.tipo ? 'Convenio por ' + c.tipo.toLowerCase().replace('iva', 'IVA') : 'Convenio') + (c.fecha_convenio ? ' del ' + fecha(c.fecha_convenio) : ''), acciones) +
+    x_.pagina(x_.cabecera(x_.modNombre + ' · Seguimiento de convenios TGR', c.cliente_nombre + ' · folio ' + c.folio, (c.tipo ? 'Convenio por ' + c.tipo.toLowerCase().replace('iva', 'IVA') : 'Convenio') + (c.fecha_convenio ? ' del ' + fecha(c.fecha_convenio) : ''), acciones) +
       datos + alertas + kpis + lote + cuotas + hist, silencioso);
   }
 
@@ -487,7 +487,7 @@
         U.boton({ texto: 'Descartar', variante: 'fantasma', clase: 'js-cv-rec-descartar' }) + '</div></div>';
     }
     var robot = reg ? U.card({ titulo: 'Robot TGR (semiautomático)', icono: 'rayo', clase: 'cv-robot', cuerpo: robotHtml() }) : '';
-    x_.pagina(x_.cabecera('Control interno · Seguimiento de convenios TGR', 'Recibir desde la TGR', 'Las cuotas llegan desde la TGR con el robot, el marcador o pegando la página: sin imprimir ni copiar.',
+    x_.pagina(x_.cabecera(x_.modNombre + ' · Seguimiento de convenios TGR', 'Recibir desde la TGR', 'Las cuotas llegan desde la TGR con el robot, el marcador o pegando la página: sin imprimir ni copiar.',
       U.boton({ texto: 'Volver', icono: 'izquierda', variante: 'fantasma', clase: 'js-cv-volver-lista' })) + robot +
       (cuerpo ? cuerpo : aviso('info', 'info', 'Usa el robot, o deja esta pestaña abierta y envía la página con el marcador.')) +
       '<div class="cv-rec-2">' + instalar + pegar + '</div>', true);
@@ -508,7 +508,7 @@
     });
   }
 
-  function mio(ev) { var c = document.getElementById('ci2'); return !!c && c.contains(ev.target) && !!x_; }
+  function mio(ev) { var c = x_ && x_.raiz(); return !!c && c.contains(ev.target); }
   function enFicha() { return /^conv:/.test(x_ && x_.vista ? x_.vista() : ''); }
   document.addEventListener('click', function (ev) {
     if (!mio(ev)) return;

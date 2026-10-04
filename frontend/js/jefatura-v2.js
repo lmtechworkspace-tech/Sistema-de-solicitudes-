@@ -30,7 +30,7 @@
   function esResumen() { return !window.SigsoJefatura || !SigsoJefatura.vista || SigsoJefatura.vista() === 'resumen'; }
 
   // --- Montaje ----------------------------------------------------------------------
-  function seccion() { return document.getElementById('modulo-bandeja'); }
+  function seccion() { return window.SigsoJefatura && SigsoJefatura.anfitrion ? SigsoJefatura.anfitrion() : document.getElementById('modulo-bandeja'); }
   function contenedor() {
     var s = seccion();
     if (!s) return null;
@@ -75,7 +75,7 @@
   function cabecera(d) {
     var n = d ? d.personas.length : 0;
     return '<header class="sx2-cabecera sx2-entra">' +
-      '<div class="sx2-cabecera__txt"><span class="sx2-cabecera__migas">Mi departamento</span><h1>Mi equipo</h1>' +
+      '<div class="sx2-cabecera__txt"><span class="sx2-cabecera__migas">' + U.esc(window.SigsoJefatura && SigsoJefatura.migas ? SigsoJefatura.migas() : 'Mi departamento') + '</span><h1>Mi equipo</h1>' +
         '<span class="sx2-tenue" style="font-size:.875rem">' + (d ? (n === 1 ? '1 persona' : n + ' personas') + ' · todo su trabajo: tareas, horas y solicitudes.' : 'Cargando…') + '</span></div>' +
       '<div class="sx2-cabecera__acciones">' + U.boton({ soloIcono: true, icono: 'tendencia', titulo: 'Actualizar', clase: 'js-je2-recargar' }) + '</div>' +
     '</header>';
@@ -168,7 +168,7 @@
     var cuerpo;
     if (!d.personas.length) {
       cuerpo = U.card({ i: 1, cuerpo: U.vacio({ icono: 'equipo', titulo: 'Aún no tienes equipo configurado',
-        texto: 'Mi departamento muestra el trabajo de las personas a tu cargo. Pide a Administración que configure tu jefatura.' }) });
+        texto: 'Aquí ves el trabajo de las personas a tu cargo: las que registran en tu área (Accesos del área) y las que te asigne Administración en Jefaturas.' }) });
     } else {
       var avisos = [];
       if (d.resumen.sin_registro_7d) avisos.push(d.resumen.sin_registro_7d + (d.resumen.sin_registro_7d === 1 ? ' persona tiene tareas abiertas y no registró horas' : ' personas tienen tareas abiertas y no registraron horas') + ' en los últimos 7 días.');

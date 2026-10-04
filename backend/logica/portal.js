@@ -48,7 +48,7 @@ const HASH_RELLENO_LOGIN = Hash.hashPassword('relleno-sin-significado', SALT_REL
 
 // Perfil que viaja al navegador: SOLO lo que el shell necesita. Nunca el
 // hash ni la sal.
-function perfilPublico(cuenta) {
+function perfilPublico(cuenta, db) {
   return {
     cuenta_id: cuenta.cuenta_id,
     usuario: cuenta.usuario,
@@ -62,9 +62,26 @@ function perfilPublico(cuenta) {
     // Ver la nota de 'super_admin' en schema.js: viaja al frontend solo para
     // decidir si mostrar la UI (el gate real vive en el servidor, en cada
     // acción protegida -- ver resolverContextoPortal_ en router.js).
-    super_admin: cuenta.super_admin === true || cuenta.super_admin === 'TRUE' || cuenta.super_admin === 1
+    super_admin: cuenta.super_admin === true || cuenta.super_admin === 'TRUE' || cuenta.super_admin === 1,
+    // Los departamentos (módulos dep_*) que ve: los decide su lista en cada
+    // área, no la cuenta (2026-10-03). Solo para pintar el menú: cada acción
+    // vuelve a verificar el permiso en el servidor.
+    departamentos: db ? departamentosDe_(db, cuenta) : [],
+    // Las áreas donde es JEFATURA: su "Mi equipo" vive dentro de cada una y
+    // el módulo suelto "Mi departamento" deja de mostrarse.
+    jefatura_de: db ? jefaturaDe_(db, cuenta) : []
   };
 }
+function contextoDe_(cuenta) {
+  return {
+    email: parsearListaPortal(cuenta.emails)[0] || '',
+    rol: cuenta.rol === 'SOLICITANTE' ? 'DEV' : cuenta.rol,
+    modulos: parsearListaPortal(cuenta.modulos)
+  };
+}
+// require tardío: controlInterno carga Calidad/Prestaciones, que no hacen falta para el login.
+function departamentosDe_(db, cuenta) { return require('./controlInterno').modulosDeDepartamento_(db, contextoDe_(cuenta)); }
+function jefaturaDe_(db, cuenta) { return require('./controlInterno').jefaturaDeDepartamentos_(db, contextoDe_(cuenta)); }
 
 function login(db, data, ip) {
   const usuario = normalizarUsuario(data.usuario);
@@ -99,7 +116,7 @@ function login(db, data, ip) {
     ultimo_acceso: new Date().toISOString()
   });
 
-  return { token: token, cuenta: perfilPublico(cuenta) };
+  return { token: token, cuenta: perfilPublico(cuenta, db) };
 }
 
 function logout(db, data) {
@@ -110,7 +127,7 @@ function logout(db, data) {
 function sesion(db, data) {
   const cuenta = Sesiones.resolverCuentaPorToken(db, data.token);
   if (!cuenta) return errorForbidden('Sesion invalida o expirada. Ingresa de nuevo.');
-  return { cuenta: perfilPublico(cuenta) };
+  return { cuenta: perfilPublico(cuenta, db) };
 }
 
 function cambiarPassword(db, data) {

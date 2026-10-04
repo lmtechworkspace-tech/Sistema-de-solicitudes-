@@ -65,12 +65,25 @@
     // persona ve SOLO los documentos que le corresponden -- el filtrado lo
     // hace el backend (Calidad.gs), no el shell. No es core: depende de que
     // la cuenta tenga 'calidad' en CUENTAS_PORTAL.modulos.
-    calidad: { icono: 'escudoCheck', nombre: 'Calidad', descripcion: 'Documentación, procesos, personas, control y mejora del SGC' },
-    // 2026-10-01: las matrices de Contabilidad y RR.HH. (control-interno-v2.js).
-    // No es core: depende de 'control_interno' en CUENTAS_PORTAL.modulos, que
-    // el backend SÍ verifica en cada acción (controlInterno.js).
-    control_interno: { icono: 'tabla', nombre: 'Control interno', descripcion: 'Matrices de Contabilidad y RR.HH.: registro mensual, liberación y reportes' }
+    calidad: { icono: 'escudoCheck', nombre: 'Calidad', descripcion: 'Documentación, procesos, personas, control y mejora del SGC' }
   };
+
+  // 2026-10-03: los DEPARTAMENTOS del organigrama, un módulo cada uno
+  // (control-interno-v2.js). Reemplazan al antiguo "Control interno". No se
+  // asignan en la cuenta: el servidor manda en la sesión (cuenta.departamentos)
+  // los que ve cada persona según la lista de cada área, y verifica el permiso
+  // en cada acción. Todos comparten acento: son una misma familia.
+  var DEPARTAMENTOS_SHELL = [
+    ['dep_contabilidad', 'Contabilidad', 'dinero', 'Matrices del área, reporte mensual y su equipo'],
+    ['dep_rrhh', 'Recursos Humanos', 'equipo', 'Matrices del área, reporte mensual y su equipo'],
+    ['dep_prevencion', 'Prevención de riesgos', 'escudoCheck', 'Trabajo del área, reporte mensual y su equipo'],
+    ['dep_marketing', 'Marketing corporativo', 'megafono', 'Trabajo del área, reporte mensual y su equipo'],
+    ['dep_administracion', 'Administración', 'empresa', 'Los reportes mensuales de las áreas, ya validados por su jefatura']
+  ];
+  var IDS_DEPARTAMENTO = DEPARTAMENTOS_SHELL.map(function (d) { return d[0]; });
+  DEPARTAMENTOS_SHELL.forEach(function (d) { MODULOS_SHELL[d[0]] = { icono: d[2], nombre: d[1], descripcion: d[3] }; });
+  function esDepartamento_(id) { return IDS_DEPARTAMENTO.indexOf(id) !== -1; }
+  function moduloDepartamento_(id) { return window.SigsoDepartamentos ? window.SigsoDepartamentos.modulo(id) : null; }
 
   // v4.0 Frente 3: cada modulo tiene su propio acento -- antes todo el shell
   // (nav activo, icono de tarjeta) usaba el mismo naranja de marca sin
@@ -92,9 +105,9 @@
     novedades: { acento: 'var(--mod-novedades)', suave: 'var(--mod-novedades-suave)' },
     mi_trabajo: { acento: 'var(--mod-mi-trabajo)', suave: 'var(--mod-mi-trabajo-suave)' },
     proyectos: { acento: 'var(--mod-proyectos)', suave: 'var(--mod-proyectos-suave)' },
-    calidad: { acento: 'var(--mod-calidad)', suave: 'var(--mod-calidad-suave)' },
-    control_interno: { acento: 'var(--mod-control)', suave: 'var(--mod-control-suave)' }
+    calidad: { acento: 'var(--mod-calidad)', suave: 'var(--mod-calidad-suave)' }
   };
+  IDS_DEPARTAMENTO.forEach(function (id) { MODULO_COLOR[id] = { acento: 'var(--mod-control)', suave: 'var(--mod-control-suave)' }; });
 
   function acentoInline_(id) {
     var c = MODULO_COLOR[id];
@@ -455,10 +468,14 @@
       },
       // El modulo avisa que cambiaron sus permisos (llego seccionesVisibles_)
       // para que el arbol muestre lo que de verdad puede abrir.
-      refrescarArbol: function () { renderNav_(); }
+      refrescarArbol: function () { renderNav_(); },
+      // Un módulo que lleva su propio contador en el menú (reportes de los departamentos).
+      pintarBadge: function (id, n) { pintarBadge_(id, n); }
     };
 
     mostrarModulo_(moduloInicial);
+    // Reportes de departamento que esperan a esta persona: el número en el menú desde que entra.
+    if (window.SigsoDepartamentos && modulosDeLaCuenta_().some(esDepartamento_)) window.SigsoDepartamentos.contadores();
 
     // Calidad sale del camino critico (carga-diferida.js) pero se pide en
     // cuanto el navegador queda ocioso: asi no se paga en el arranque y ya
@@ -542,8 +559,8 @@
           else modPy.cargar();
         }
         break;
-      case 'control_interno':
-        if (window.SigsoControlInterno) window.SigsoControlInterno.refrescar();
+      case 'dep_contabilidad': case 'dep_rrhh': case 'dep_prevencion': case 'dep_marketing': case 'dep_administracion':
+        if (moduloDepartamento_(moduloActivo_)) moduloDepartamento_(moduloActivo_).refrescar();
         break;
       case 'calidad':
         // Mismo criterio que Proyectos: si hay un documento abierto, el
@@ -1158,7 +1175,11 @@
     // Sin esta guarda, renderNavAhora_ moria con una excepcion y el sidebar
     // quedaba VACIO: la persona no veia ni Inicio para reintentar.
     var cuenta = (sesion && sesion.cuenta) || {};
-    var propios = (cuenta.modulos || []).filter(function (m) { return MODULOS_SHELL[m]; });
+    var propios = (cuenta.modulos || []).filter(function (m) { return MODULOS_SHELL[m] && !esDepartamento_(m); })
+      .concat((cuenta.departamentos || []).filter(esDepartamento_));
+    // Quien es jefatura de un área tiene "Mi equipo" dentro de ella: el módulo
+    // suelto "Mi departamento" queda para las jefaturas sin área (2026-10-03).
+    if ((cuenta.jefatura_de || []).length) propios = propios.filter(function (m) { return m !== 'jefatura'; });
     // v6.5: "novedades" es core -- se agrega siempre, aunque la cuenta no lo
     // tenga en su lista asignada. Justo despues de home (primera posicion
     // entre los internos) porque es lo que se quiere que se vea primero.
@@ -1191,7 +1212,9 @@
     { titulo: '', modulos: ['home'] },
     { titulo: 'Mi espacio', modulos: ['novedades', 'mis_solicitudes', 'mi_trabajo', 'pausas'] },
     { titulo: 'Solicitudes', modulos: ['nueva_solicitud', 'bandeja'] },
-    { titulo: 'Gestión', modulos: ['proyectos', 'jefatura', 'gerencia', 'pausas_coordinacion', 'calidad', 'control_interno'] },
+    // Cada persona ve solo su(s) área(s); el orden es el del organigrama.
+    { titulo: 'Departamentos', modulos: IDS_DEPARTAMENTO },
+    { titulo: 'Gestión', modulos: ['proyectos', 'jefatura', 'gerencia', 'pausas_coordinacion', 'calidad'] },
     { titulo: 'Sistema', modulos: ['administracion'] }
   ];
 
@@ -1252,7 +1275,6 @@
   // nuevo no obligue a tocar el shell.
   var IR_A_ITEM_POR_MODULO = {
     calidad: function (id) { return window.SigsoCalidad && window.SigsoCalidad.irAItem && window.SigsoCalidad.irAItem(id); },
-    control_interno: function (id) { return window.SigsoControlInterno && window.SigsoControlInterno.irAItem(id); },
     administracion: function (id) { return window.SigsoAdmin && window.SigsoAdmin.irAItem && window.SigsoAdmin.irAItem(id); },
     gerencia: function (id) { return window.SigsoGerencia && window.SigsoGerencia.irAItem && window.SigsoGerencia.irAItem(id); },
     jefatura: function (id) { return window.SigsoJefatura && window.SigsoJefatura.irAItem && window.SigsoJefatura.irAItem(id); },
@@ -1260,6 +1282,7 @@
     novedades: function (id) { return window.SigsoNovedades && window.SigsoNovedades.irAItem && window.SigsoNovedades.irAItem(id); },
     pausas_coordinacion: function (id) { return window.SigsoCoordinacion && window.SigsoCoordinacion.irAItem && window.SigsoCoordinacion.irAItem(id); }
   };
+  IDS_DEPARTAMENTO.forEach(function (dep) { IR_A_ITEM_POR_MODULO[dep] = function (id) { var m = moduloDepartamento_(dep); return m && m.irAItem(id); }; });
 
   // Ir a una sección de un árbol (sidebar y buscador). Si es de OTRO módulo,
   // primero se abre: el módulo consume la ruta al montarse (tomarItemDeRuta).
@@ -1396,7 +1419,7 @@
   // el contenedor ancho, como app.html. Los demas (formulario, mis
   // solicitudes) se leen mejor angostos y centrados -- por eso el ancho del
   // <main> se adapta al modulo en vez de ser fijo.
-  var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad', 'control_interno'];
+  var MODULOS_ANCHOS = ['bandeja', 'gerencia', 'jefatura', 'administracion', 'proyectos', 'calidad'].concat(IDS_DEPARTAMENTO);
 
   // SIGSO v2 (documentacion/SIGSO-v2-hoja-de-ruta.md). Desde el 2026-09-25 la
   // versión clásica está retirada: cada módulo tiene UNA implementación, la v2.
@@ -1414,9 +1437,9 @@
     pausas: function () { return window.SigsoPausasV2; },
     novedades: function () { return window.SigsoNovedadesV2; },
     administracion: function () { return window.SigsoAdminV2; },
-    calidad: function () { return window.SigsoCalidadV2; },
-    control_interno: function () { return window.SigsoControlInterno; }
+    calidad: function () { return window.SigsoCalidadV2; }
   };
+  IDS_DEPARTAMENTO.forEach(function (id) { MODULOS_V2[id] = function () { return moduloDepartamento_(id); }; });
   function usaV2_(id) { return !!(MODULOS_V2[id] && MODULOS_V2[id]()); }
   function moduloImpl_(id) { return MODULOS_V2[id] ? MODULOS_V2[id]() : null; }
   function moduloProyectos_() { return moduloImpl_('proyectos'); }
@@ -1543,7 +1566,9 @@
       if (window.SigsoGerencia) window.SigsoGerencia.cargar();
     }
     if (id === 'jefatura') {
-      // R5: Mi departamento es 100 % v2 (jefatura-vistas-v2.js).
+      // R5: Mi departamento es 100 % v2 (jefatura-vistas-v2.js). Si venía
+      // pintándose dentro de un departamento, vuelve a su lugar.
+      if (window.SigsoJefatura && window.SigsoJefatura.soltar) window.SigsoJefatura.soltar();
       if (window.SigsoJefatura) window.SigsoJefatura.cargar();
     }
     if (id === 'administracion') {
@@ -1568,8 +1593,8 @@
     if (id === 'calidad') {
       abrirCalidad_();
     }
-    if (id === 'control_interno' && window.SigsoControlInterno) {
-      window.SigsoControlInterno.cargar();
+    if (esDepartamento_(id) && moduloDepartamento_(id)) {
+      moduloDepartamento_(id).cargar();
     }
     window.scrollTo(0, 0);
   }

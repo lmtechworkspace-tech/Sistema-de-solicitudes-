@@ -32,29 +32,59 @@ function leerFilasSeguro_(db, hoja) {
   try { return leerFilas_(db, hoja, COLUMNAS[hoja]); } catch (err) { return []; }
 }
 
+// 2026-10-03: los DEPARTAMENTOS del organigrama también arman equipos. En
+// la lista de cada área (CI_MIEMBROS), la JEFATURA tiene a cargo a quienes
+// REGISTRAN en ella (no a quien solo lee). Así "Mi equipo", reasignar tareas
+// o aprobar novedades siguen al organigrama sin cargar la relación dos veces.
+// Se lee la tabla directo (sin requerir controlInterno) para no crear un
+// ciclo de módulos: controlInterno -> prestacionesSgc -> calidadSgc -> aquí.
+function miembrosActivos_(db) {
+  return leerFilasSeguro_(db, 'CI_MIEMBROS').filter((m) => m.activa === true || m.activa === 'TRUE' || m.activa === 1);
+}
+function normalizarCorreo_(e) { return String(e || '').trim().toLowerCase(); }
+function equipoDeDepartamentos_(db, jefeEmail) {
+  const yo = normalizarCorreo_(jefeEmail);
+  const filas = miembrosActivos_(db);
+  const areas = filas.filter((m) => m.rol === 'JEFATURA' && normalizarCorreo_(m.usuario_email) === yo).map((m) => m.depto);
+  if (!areas.length) return [];
+  return filas.filter((m) => m.rol === 'REGISTRA' && areas.indexOf(m.depto) !== -1 && normalizarCorreo_(m.usuario_email) !== yo)
+    .map((m) => normalizarCorreo_(m.usuario_email));
+}
+
 // Equipo ACTIVO de un jefe -- lista de correos (sin el propio). [] si el
 // jefe no tiene a nadie a cargo (tolerante a instalaciones sin la hoja).
+// Suma la relación jefe->subordinado de Administración (JEFATURAS) y las
+// áreas donde es jefatura.
 function obtenerEquipoJefe_(db, jefeEmail) {
   if (!jefeEmail) return [];
-  return leerFilasSeguro_(db, 'JEFATURAS')
+  const directos = leerFilasSeguro_(db, 'JEFATURAS')
     .filter((j) => {
       const activo = j.activo === true || j.activo === 'TRUE' || j.activo === 1;
       return activo && j.jefe_email === jefeEmail;
     })
-    .map((j) => j.subordinado_email)
+    .map((j) => j.subordinado_email);
+  const vistos = {};
+  directos.forEach((e) => { vistos[normalizarCorreo_(e)] = true; });
+  return directos.concat(equipoDeDepartamentos_(db, jefeEmail).filter((e) => !vistos[e]))
     .filter((email, i, todos) => email && todos.indexOf(email) === i);
 }
 
 // Inverso de obtenerEquipoJefe_: el jefe ACTIVO de un subordinado (o '' si
 // no tiene). Lo usa Novedades.gs (aprobacion controlada por la jefatura del
-// autor); mismo criterio de igualdad exacta que obtenerEquipoJefe_.
+// autor); mismo criterio de igualdad exacta que obtenerEquipoJefe_. Si no
+// tiene una relación directa, la jefatura del área donde registra.
 function jefeDeSubordinado_(db, subordinadoEmail) {
   if (!subordinadoEmail) return '';
   const fila = leerFilasSeguro_(db, 'JEFATURAS').find((j) => {
     const activo = j.activo === true || j.activo === 'TRUE' || j.activo === 1;
     return activo && j.subordinado_email === subordinadoEmail;
   });
-  return fila ? fila.jefe_email : '';
+  if (fila) return fila.jefe_email;
+  const yo = normalizarCorreo_(subordinadoEmail);
+  const filas = miembrosActivos_(db);
+  const areas = filas.filter((m) => m.rol === 'REGISTRA' && normalizarCorreo_(m.usuario_email) === yo).map((m) => m.depto);
+  const jef = filas.find((m) => m.rol === 'JEFATURA' && areas.indexOf(m.depto) !== -1 && normalizarCorreo_(m.usuario_email) !== yo);
+  return jef ? normalizarCorreo_(jef.usuario_email) : '';
 }
 
 /**

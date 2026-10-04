@@ -176,7 +176,7 @@
   var ROLES = [['SOLICITANTE', 'Solicitante'], ['ANA', 'Gestor/Analista'], ['DEV', 'Desarrollador'], ['GERENCIA', 'Gerencia'], ['JEFATURA', 'Jefatura'], ['ADM', 'Administrador']];
   var MODULOS = [['nueva_solicitud', 'Nueva solicitud'], ['mis_solicitudes', 'Mis solicitudes'], ['bandeja', 'Bandeja de trabajo'], ['mi_trabajo', 'Mi trabajo'],
     ['proyectos', 'Proyectos'], ['gerencia', 'Panel de gerencia'], ['jefatura', 'Mi departamento'], ['administracion', 'Administración'],
-    ['pausas', 'Pausas activas'], ['pausas_coordinacion', 'Coordinación de pausas'], ['calidad', 'Calidad (SGC)'], ['control_interno', 'Control interno']];
+    ['pausas', 'Pausas activas'], ['pausas_coordinacion', 'Coordinación de pausas'], ['calidad', 'Calidad (SGC)'], ['control_interno', 'Departamentos: ver todas las áreas (Gerencia / SGC)']];
   var cuentas_ = null, saludPorCuenta_ = {}, fc_ = { estado: 'activas', texto: '', rol: '' }, turnoC_ = 0;
   function rolTxt(r) { var x = ROLES.filter(function (k) { return k[0] === r; })[0]; return x ? x[1] : r; }
   function modTxt(m) { var x = MODULOS.filter(function (k) { return k[0] === m; })[0]; return x ? x[1] : m; }
