@@ -44,7 +44,10 @@ const RUTA_CANDADO = path.join(CARPETA, 'robot-oficina.lock');
 const PROYECTO = path.resolve(__dirname, '..', '..', '..');
 // Arranque con Windows: la carpeta Inicio del usuario (no necesita permisos de administrador).
 const CARPETA_INICIO = path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
-const ARRANQUE_VBS = path.join(CARPETA_INICIO, 'SIGSO Robot TGR.vbs');
+// En Inicio queda un acceso directo; el script que abre el robot sin ventana vive en CARPETA.
+const ACCESO_INICIO = path.join(CARPETA_INICIO, 'SIGSO Robot TGR.lnk');
+const ARRANQUE_VIEJO = path.join(CARPETA_INICIO, 'SIGSO Robot TGR.vbs');   // versión anterior del instalador
+const ARRANQUE_VBS = path.join(CARPETA, 'robot-oficina.vbs');
 const LANZADOR_CMD = path.join(CARPETA, 'robot-oficina.cmd');
 const args = process.argv.slice(2);
 const OCULTO = args.includes('--oculto');      // lo inicia el arranque con Windows: sin consola, al registro
@@ -238,18 +241,31 @@ function instalarInicio() {
     ''
   ].join('\r\n'));
   fs.writeFileSync(ARRANQUE_VBS, 'Rem Robot TGR de la oficina (SIGSO): abre el robot sin ventana al iniciar sesion.\r\nCreateObject("WScript.Shell").Run """' + LANZADOR_CMD + '""", 0, False\r\n');
+  try { fs.unlinkSync(ARRANQUE_VIEJO); } catch (e) { /* no estaba */ }
+  crearAcceso_(ACCESO_INICIO);
   console.log('Listo: el robot arrancará solo cada vez que inicies sesión en Windows (sin ventana).');
-  console.log('  Lanzador: ' + ARRANQUE_VBS);
+  console.log('  Acceso directo: ' + ACCESO_INICIO);
   console.log('  Registro: ' + RUTA_LOG);
   const otro = candadoActivo();
   if (otro) { console.log('Ya hay un robot corriendo (proceso ' + otro + '): se usará ese hasta que se cierre.'); return; }
   require('node:child_process').spawn('wscript.exe', [ARRANQUE_VBS], { detached: true, stdio: 'ignore' }).unref();
   console.log('Se inició ahora en segundo plano. En SIGSO la tarjeta del robot debería decir "conectado" en unos segundos.');
 }
+/** Acceso directo de Windows (.lnk) a wscript con el script oculto; las rutas van por el entorno. */
+function crearAcceso_(destino) {
+  require('node:child_process').execFileSync('powershell.exe', ['-NoProfile', '-Command',
+    '$a = (New-Object -ComObject WScript.Shell).CreateShortcut($env:SIGSO_ACCESO); ' +
+    '$a.TargetPath = "$env:SystemRoot\\System32\\wscript.exe"; $a.Arguments = \'"\' + $env:SIGSO_VBS + \'"\'; ' +
+    '$a.WorkingDirectory = $env:SIGSO_PROYECTO; $a.IconLocation = $env:SIGSO_ICONO + ",0"; ' +
+    '$a.Description = "Robot TGR de la oficina (SIGSO): se abre sin ventana"; $a.Save()'],
+  { stdio: 'ignore', env: Object.assign({}, process.env, { SIGSO_ACCESO: destino, SIGSO_VBS: ARRANQUE_VBS, SIGSO_PROYECTO: PROYECTO, SIGSO_ICONO: process.execPath }) });
+}
 function candadoActivo() { try { const p = Number(fs.readFileSync(RUTA_CANDADO, 'utf8')); return p && vivo(p) ? p : 0; } catch (e) { return 0; } }
 function quitarInicio() {
   let algo = false;
-  try { fs.unlinkSync(ARRANQUE_VBS); algo = true; console.log('Quitado del inicio de Windows.'); } catch (e) { /* no estaba */ }
+  [ACCESO_INICIO, ARRANQUE_VIEJO].forEach((f) => { try { fs.unlinkSync(f); algo = true; } catch (e) { /* no estaba */ } });
+  if (algo) console.log('Quitado del inicio de Windows.');
+  try { fs.unlinkSync(ARRANQUE_VBS); } catch (e) { /* */ }
   try { fs.unlinkSync(LANZADOR_CMD); } catch (e) { /* */ }
   // Detiene el lanzador (para que no lo vuelva a abrir) y el robot.
   if (process.platform === 'win32') {
@@ -264,7 +280,7 @@ function quitarInicio() {
   console.log(algo || p ? 'Robot detenido.' : 'No estaba instalado ni corriendo.');
 }
 function estadoInicio() {
-  const instalado = fs.existsSync(ARRANQUE_VBS);
+  const instalado = fs.existsSync(ACCESO_INICIO) || fs.existsSync(ARRANQUE_VIEJO);
   const p = candadoActivo();
   console.log('Arranque con Windows: ' + (instalado ? 'instalado' : 'no instalado') + '.');
   console.log('Robot: ' + (p ? 'corriendo (proceso ' + p + ')' : 'detenido') + '.');

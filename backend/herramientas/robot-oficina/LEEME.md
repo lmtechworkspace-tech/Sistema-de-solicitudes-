@@ -83,8 +83,9 @@ Una vez configurada la llave, desde la carpeta del proyecto:
 node backend/herramientas/robot-oficina/agente.js instalar-inicio
 ```
 
-Deja un acceso en la carpeta Inicio del usuario (`SIGSO Robot TGR.vbs`) que, al
-iniciar sesión, abre el robot **sin ventana**; si el programa se cae, vuelve a
+Deja un **acceso directo** en la carpeta Inicio del usuario (`SIGSO Robot TGR`,
+con el ícono de Node; se ve en Administrador de tareas › Aplicaciones de
+arranque) que, al iniciar sesión, abre el robot **sin ventana**; si el programa se cae, vuelve a
 abrirlo a los 30 segundos. Lo arranca de inmediato, sin reiniciar el PC. No pide
 permisos de administrador ni toca el registro de Windows.
 
