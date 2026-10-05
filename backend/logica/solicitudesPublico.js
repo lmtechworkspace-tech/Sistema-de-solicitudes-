@@ -32,6 +32,7 @@ const Cache = require('./cacheEfimero');
 const ArchivosSolicitud = require('./archivosSolicitud');
 const DirectorioPersonal = require('./directorioPersonal');
 const CierreAutomatico = require('./cierreAutomaticoSolicitudes');
+const Servicios = require('./serviciosSolicitud');
 
 function errorValidacion_(campo, mensaje) {
   return { _validationError: true, message: mensaje, fields: [{ campo: campo, mensaje: mensaje }] };
@@ -518,15 +519,29 @@ function resolverDestinatariosRespuesta_(db, solicitud, subsolicitudId) {
 /**
  * Respuesta del solicitante a un pedido de informacion (Fase 10.1): se
  * agrega como comentario publico (es_interno=false), visible para el staff
- * en getDetalle (COMENTARIOS). No cambia el estado -- es el equipo quien
- * decide, al leer la respuesta, mover el item de "esperando informacion" al
- * siguiente paso.
+ * en getDetalle (COMENTARIOS). Etapa 3 (2026-10-05): "En curso ⇄ Esperando
+ * respuesta" -- al responder, el ítem vuelve solo a En curso (S06 → S05); el
+ * equipo ya no tiene que moverlo a mano para saber que le contestaron.
  */
 async function responderConsulta(db, data) {
+  return mensajeDelSolicitante_(db, data, true);
+}
+
+/**
+ * Etapa 3: el solicitante escribe en la conversación de su solicitud cuando
+ * quiera (no solo para responder una pregunta). Si algún ítem esperaba su
+ * respuesta, vuelve a En curso. Avisa al equipo (campana).
+ */
+async function enviarMensajeSolicitud(db, data) {
+  return mensajeDelSolicitante_(db, data, false);
+}
+
+async function mensajeDelSolicitante_(db, data, esRespuesta) {
   data = data || {};
   if (!data.solicitud_id || !data.email || !data.texto || String(data.texto).trim() === '') {
-    return errorValidacion_('texto', 'Debes indicar la solicitud, tu correo y una respuesta.');
+    return errorValidacion_('texto', 'Debes indicar la solicitud, tu correo y un mensaje.');
   }
+  if (String(data.texto).length > 4000) return errorValidacion_('texto', 'El mensaje es demasiado largo (máximo 4.000 caracteres).');
 
   const solicitud = buscarSolicitudPorId_(db, data.solicitud_id);
   if (!solicitud) return errorValidacion_('solicitud_id', 'No existe una solicitud con ese numero.');
@@ -537,19 +552,38 @@ async function responderConsulta(db, data) {
     return { _forbidden: true, message: 'El correo no coincide con el registrado para esta solicitud.' };
   }
 
+  const items = leerFilas_(db, 'SUBSOLICITUDES', COLUMNAS.SUBSOLICITUDES).filter((s) => s.solicitud_id === data.solicitud_id);
+  if (!esRespuesta && items.length && items.every((s) => ESTADOS_CERRADOS.indexOf(s.estado) !== -1)) {
+    return errorValidacion_('solicitud_id', 'Esta solicitud ya está cerrada. Si necesitas algo más, crea una nueva.');
+  }
+
   agregarFila_(db, 'COMENTARIOS', {
     comentario_id: crypto.randomUUID(), solicitud_id: data.solicitud_id, subsolicitud_id: data.subsolicitud_id || '',
     usuario: data.email, texto: data.texto, es_interno: false, timestamp: new Date().toISOString()
   });
 
-  // P5: cierra el ciclo "pedir informacion / responder" -- avisa al
-  // responsable real del item (no siempre al buzon por defecto).
-  await Notificaciones.notificarRespuestaSolicitante(
-    db, solicitud, data.subsolicitud_id || '', data.texto,
-    resolverDestinatariosRespuesta_(db, solicitud, data.subsolicitud_id)
-  );
+  // Lo que esperaba su respuesta vuelve a En curso (el ítem puntual, o todos
+  // los que esperaban si el mensaje es general).
+  const esperando = items.filter((s) => s.estado === ESTADOS.S06 && (!data.subsolicitud_id || s.subsolicitud_id === data.subsolicitud_id));
+  esperando.forEach((s) => {
+    SolicitudesBO.actualizarEstado(db, { subsolicitud_id: s.subsolicitud_id, estado_nuevo: ESTADOS.S05, comentario: 'Respondió el solicitante.' },
+      { email: String(data.email).trim().toLowerCase(), rol: 'SISTEMA' }, { sistemaAutomatico: true });
+  });
 
-  return { ok: true };
+  // P5: cierra el ciclo "pedir informacion / responder" -- avisa al
+  // responsable real del item (no siempre al buzon por defecto). Sin
+  // responsable (pedido de un departamento aún sin tomar), a su equipo.
+  let destinatarios = resolverDestinatariosRespuesta_(db, solicitud, data.subsolicitud_id);
+  if (!destinatarios.length) {
+    const deptos = Array.from(new Set(items.map((s) => s.depto).filter(Boolean)));
+    destinatarios = [].concat.apply([], deptos.map((d) => Servicios.equipoDepto_(db, d).map((m) => m.email)));
+  }
+  try { Notificaciones.avisarMensajeAlEquipo(db, solicitud, data.texto, destinatarios); } catch (err) { /* el aviso nunca frena el mensaje */ }
+  if (esRespuesta || esperando.length) {
+    await Notificaciones.notificarRespuestaSolicitante(db, solicitud, data.subsolicitud_id || '', data.texto, destinatarios);
+  }
+
+  return { ok: true, retomados: esperando.map((s) => s.subsolicitud_id) };
 }
 
 /**
@@ -654,5 +688,5 @@ async function validarCierre(db, data) {
 
 module.exports = {
   estadoPublico, solicitarCodigoAcceso, misSolicitudes,
-  editarSubsolicitud, eliminarArchivo, responderConsulta, validarCierre
+  editarSubsolicitud, eliminarArchivo, responderConsulta, enviarMensajeSolicitud, validarCierre
 };

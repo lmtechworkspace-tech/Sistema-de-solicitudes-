@@ -91,7 +91,7 @@ test('armarVista_ trae la ficha, el item y la URL como enlace real (no texto pla
   const item = vista.items[0];
   assert.equal(item.titulo, 'Corregir el calculo del IVA');
   assert.equal(item.prioridad, 'P1');
-  assert.equal(item.estadoLabel, 'En desarrollo'); // S05
+  assert.equal(item.estadoLabel, 'En curso'); // S05
   assert.deepEqual(
     item.accesos.find((a) => a[0] === 'URL principal')[1],
     { texto: 'https://erp.gde.cl/facturacion', link: 'https://erp.gde.cl/facturacion' }
@@ -176,7 +176,7 @@ test('Sin adjuntos de solicitud, adjuntosGenerales queda null (no un bloque vaci
 });
 
 test('estadoLabel_ traduce el codigo a la etiqueta legible', () => {
-  assert.equal(OrdenTrabajo.estadoLabel_('S05'), 'En desarrollo');
+  assert.equal(OrdenTrabajo.estadoLabel_('S05'), 'En curso');
   assert.equal(OrdenTrabajo.estadoLabel_('S09'), 'Cerrada');
   assert.equal(OrdenTrabajo.estadoLabel_('CODIGO-RARO'), 'CODIGO-RARO');
 });

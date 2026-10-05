@@ -30,8 +30,8 @@ const CREDENCIAL_OCULTA = 'Registrada en SIGSO (verla en la solicitud)';
 
 const ESTADO_LABEL_OT = {
   S01: 'Nueva', S02: 'Recibida', S03: 'En revisión', S04: 'Aprobada',
-  S05: 'En desarrollo', S06: 'Esperando información', S07: 'En pruebas',
-  S08: 'Terminada', S09: 'Cerrada', S10: 'Rechazada', S11: 'Cancelada'
+  S05: 'En curso', S06: 'Esperando respuesta', S07: 'En pruebas',
+  S08: 'Resuelta', S09: 'Cerrada', S10: 'Rechazada', S11: 'Cancelada'
 };
 
 function estadoLabel_(codigo) {

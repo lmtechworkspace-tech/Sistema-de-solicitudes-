@@ -50,8 +50,16 @@
     });
   }
   function estadoTxt(c) { return window.formatearEstadoSigso ? formatearEstadoSigso(c) : c; }
+  // Etapa 3: lo que se ve son 5 estados (utils.js); el código fino solo como
+  // detalle en lo de Desarrollo / TI (Recibida, En revisión, Aprobada, En pruebas).
+  function estadoVis(c) { return window.formatearEstadoVisibleSigso ? formatearEstadoVisibleSigso(c) : estadoTxt(c); }
+  function visible(c) { return window.estadoVisibleSigso ? estadoVisibleSigso(c) : ''; }
+  function badgeEstado(i) {
+    var fino = !i.depto && ['S02', 'S03', 'S04', 'S07'].indexOf(i.estado) !== -1;
+    return U.badge(estadoVis(i.estado), tonoEstado(i.estado)) + (fino ? '<span class="bj2-fino">' + U.esc(estadoTxt(i.estado)) + '</span>' : '');
+  }
   function tonoEstado(c) {
-    if (c === 'S01' || c === 'S02') return 'info';
+    if (c === 'S01') return 'info';
     if (c === 'S06') return 'alerta';
     if (c === 'S08') return 'primario';
     if (c === 'S09') return 'ok';
@@ -141,7 +149,7 @@
   // --- Filtro y orden --------------------------------------------------------------------
   var KPIS = [
     { id: 'abiertos', etiqueta: 'Abiertos', icono: 'bandeja', tono: 'primario', unidad: 'ítems en curso', f: abierto },
-    { id: 'por_revisar', etiqueta: 'Por revisar', icono: 'ojo', tono: 'info', unidad: 'nuevos o recibidos, sin triar', f: function (i) { return abierto(i) && (i.estado === 'S01' || i.estado === 'S02'); } },
+    { id: 'por_revisar', etiqueta: 'Nuevos', icono: 'ojo', tono: 'info', unidad: 'nadie los tomó ni empezó', f: function (i) { return abierto(i) && i.estado === 'S01'; } },
     { id: 'fuera_de_plazo', etiqueta: 'Fuera de plazo', icono: 'alerta', tono: 'critico', unidad: 'pasaron su SLA', f: function (i) { return abierto(i) && i.situacion_sla === 'FUERA_DE_PLAZO'; } },
     { id: 'sin_fecha', etiqueta: 'Sin fecha comprometida', icono: 'calendario', tono: 'alerta', unidad: 'nadie se comprometió', f: function (i) { return abierto(i) && !i.fecha_comprometida; } },
     { id: 'sin_asignar', etiqueta: 'Sin asignar', icono: 'persona', tono: 'hito', unidad: 'sin responsable', f: function (i) { return abierto(i) && !i.asignado; } },
@@ -237,12 +245,12 @@
   // "Ponerse al día": aparece solo si hay un rezago real de ítems sin triar.
   function bannerRezago() {
     if (datos_.solo_lectura) return '';
-    var viejos = datos_.items.filter(function (i) { return abierto(i) && (i.estado === 'S01' || i.estado === 'S02') && (Date.now() - new Date(i.fecha_creacion)) / 86400000 > 14; });
+    var viejos = datos_.items.filter(function (i) { return abierto(i) && i.estado === 'S01' && (Date.now() - new Date(i.fecha_creacion)) / 86400000 > 14; });
     if (viejos.length < 3) return '';
     var masViejo = Math.max.apply(null, viejos.map(function (i) { return Math.floor((Date.now() - new Date(i.fecha_creacion)) / 86400000); }));
     return '<div class="bj2-rezago" title="Revísalos de a varios: recíbelos, asígnalos o ciérralos con su motivo.">' +
       '<span class="bj2-rezago__ico">' + U.ico('reloj', 16) + '</span>' +
-      '<span class="bj2-rezago__txt"><strong>' + viejos.length + ' ítems llevan más de 2 semanas sin revisar</strong> <span class="sx2-tenue">· el más antiguo tiene ' + masViejo + ' días</span></span>' +
+      '<span class="bj2-rezago__txt"><strong>' + viejos.length + ' ítems llevan más de 2 semanas sin que nadie los tome</strong> <span class="sx2-tenue">· el más antiguo tiene ' + masViejo + ' días</span></span>' +
       U.boton({ texto: 'Ponerse al día', icono: 'rayo', sm: true, variante: 'primario', clase: 'js-bj2-rezago' }) +
     '</div>';
   }
@@ -278,10 +286,10 @@
           '<span class="bj2-id">' + U.esc(i.solicitud_id) + (i.cantidad_items > 1 ? ' · ítem ' + i.numero_item + '/' + i.cantidad_items : '') + '</span>' +
           '<span class="sx2-cortar">' + (i.solicitante_nombre ? '<b class="bj2-pide">' + U.esc(i.solicitante_nombre) + '</b> · ' : '') + (i.depto && !f.cola ? U.esc(i.depto_nombre) + ' · ' : '') + (i.servicio_nombre ? U.esc(i.servicio_nombre) : U.esc(i.empresa_nombre || '') + (i.tipo_nombre ? ' · ' + U.esc(i.tipo_nombre) : '')) + '</span>' +
           (i.es_cliente || i.empresa_cliente ? U.badge('Cliente' + (i.empresa_cliente ? ': ' + i.empresa_cliente : ''), 'hito', true) : '') +
-          (i.respuesta_pendiente ? U.badge('Respondió', 'info') : '') +
+          (i.respuesta_pendiente ? U.badge('Te escribió', 'info') : '') +
         '</span>' +
       '</span>' +
-      '<span class="bj2-fila__estado">' + U.badge(estadoTxt(i.estado), tonoEstado(i.estado)) + slaBadge(i) + '</span>' +
+      '<span class="bj2-fila__estado">' + badgeEstado(i) + slaBadge(i) + '</span>' +
       '<span class="bj2-fila__quien">' + (persona
         ? U.avatar(persona, 'sm') + '<span class="sx2-apilado" style="gap:0;min-width:0"><span class="sx2-cortar">' + U.esc(persona.nombre) + '</span>' + (i.asignado_heredado ? '<small class="sx2-tenue">de la solicitud</small>' : '') + '</span>'
         : '<span class="bj2-sin">' + U.ico('persona', 14) + 'Sin asignar</span>') + '</span>' +
@@ -734,18 +742,47 @@
       var cab = d.el.querySelector('.sx2-drawer__cab > .sx2-drawer__fila-titulo .sx2-apilado');
       var sub = cab.querySelector('.bj2-det-sub') || cab.appendChild(Object.assign(document.createElement('span'), { className: 'bj2-det-sub sx2-flex' }));
       cab.querySelectorAll('.sx2-tenue').forEach(function (e) { if (!e.closest('.bj2-det-sub')) e.remove(); });
-      sub.innerHTML = U.badge(estadoTxt(s.estado_derivado), tonoEstado(s.estado_derivado)) + U.badge(s.prioridad_derivada || '—', tonoPrioridad(s.prioridad_derivada), true) +
+      sub.innerHTML = U.badge(estadoVis(s.estado_derivado), tonoEstado(s.estado_derivado)) + U.badge(s.prioridad_derivada || '—', tonoPrioridad(s.prioridad_derivada), true) +
         '<span class="sx2-tenue" style="font-size:.8125rem">' + U.esc(s.empresa_nombre || s.empresa_id || '') + ' · ' + U.esc(s.solicitante_nombre || s.solicitante_email || '') + '</span>';
-      var tabs = [['items', 'Ítems (' + subs.length + ')'], ['ficha', 'Ficha'], ['actividad', 'Actividad'], ['archivos', 'Archivos (' + (detalle.archivos || []).length + ')']];
+      var nConv = conversacion_().length;
+      var tabs = [['items', 'Ítems (' + subs.length + ')'], ['conversacion', 'Conversación' + (nConv ? ' (' + nConv + ')' : '')], ['ficha', 'Ficha'], ['actividad', 'Actividad'], ['archivos', 'Archivos (' + (detalle.archivos || []).length + ')']];
       var tabsHtml = '<div class="sx2-tabs bj2-tabs" role="tablist">' + tabs.map(function (t) {
         return '<button type="button" class="sx2-tabs__op js-bj2-tab" role="tab" data-tab="' + t[0] + '" aria-selected="' + (t[0] === pestana ? 'true' : 'false') + '">' + t[1] + '</button>';
       }).join('') + '</div>';
-      var cuerpo = pestana === 'ficha' ? ficha(s) : (pestana === 'actividad' ? actividad() : (pestana === 'archivos' ? archivos() : itemsHtml(subs)));
+      var cuerpo = pestana === 'ficha' ? ficha(s) : (pestana === 'actividad' ? actividad() : (pestana === 'archivos' ? archivos() : (pestana === 'conversacion' ? conversacionHtml(s) : itemsHtml(subs))));
       d.cuerpo(tabsHtml + cuerpo);
       var pie = d.el.querySelector('.sx2-drawer__pie');
       pie.innerHTML = U.boton({ texto: 'Orden de trabajo', icono: 'documento', clase: 'js-bj2-ot' }) +
         (window.SigsoProyectosV2 && !s.proyecto_id && !soloLectura() ? U.boton({ texto: 'Convertir en proyecto', icono: 'capas', clase: 'js-bj2-proyecto' }) : '') +
         '<span style="flex:1"></span>' + U.boton({ texto: 'Cerrar', clase: 'js-sx2-drawer-cerrar' });
+    }
+
+    // Etapa 3: la conversación con el solicitante (lo que NO es nota interna),
+    // en orden, de los dos lados. Escribir aquí siempre le llega.
+    function conversacion_() {
+      return (detalle.comentarios || []).filter(function (c) { return !(c.es_interno === true || c.es_interno === 'TRUE'); })
+        .slice().sort(function (a, b) { return new Date(a.timestamp) - new Date(b.timestamp); });
+    }
+    function conversacionHtml(s) {
+      var suyos = [String(s.solicitante_email || '').toLowerCase(), String(s.correo_cliente || '').toLowerCase()].filter(Boolean);
+      var nItem = {};
+      (detalle.subsolicitudes || []).forEach(function (x) { nItem[x.subsolicitud_id] = x.numero_item; });
+      var multi = (detalle.subsolicitudes || []).length > 1;
+      var ms = conversacion_();
+      return '<div class="bj2-conv">' + (ms.length ? '<ul class="bj2-conv__lista">' + ms.map(function (c) {
+          var delSolicitante = suyos.indexOf(String(c.usuario || '').toLowerCase()) !== -1;
+          var p = PY.persona(c.usuario, delSolicitante ? s.solicitante_nombre : '');
+          return '<li class="bj2-msj' + (delSolicitante ? ' bj2-msj--solicitante' : '') + '">' +
+            '<span class="bj2-msj__quien">' + U.esc(p.nombre) + (delSolicitante ? ' · solicitante' : '') + (multi && nItem[c.subsolicitud_id] ? ' · ítem ' + nItem[c.subsolicitud_id] : '') +
+              ' · <span class="sx2-tenue">' + U.esc(PY.haceTiempo(c.timestamp)) + '</span></span>' +
+            '<p class="bj2-msj__texto">' + U.esc(c.texto) + '</p></li>';
+        }).join('') + '</ul>'
+        : U.vacio({ icono: 'comentario', titulo: 'Sin mensajes', texto: 'Lo que escribas aquí le llega por correo a ' + U.esc(s.solicitante_nombre || 'quien pidió') + ', y su respuesta aparece en esta conversación.' })) +
+        (soloLectura() ? '' : '<form class="sx2-py-sala-form js-bj2-comentar bj2-conv__form" data-destino="solicitante" novalidate>' +
+          '<textarea class="sx2-input" name="texto" maxlength="4000" placeholder="Escribe a ' + U.esc(s.solicitante_nombre || 'quien pidió') + '…"></textarea>' +
+          '<div class="sx2-entre"><small class="bj2-destino__ayuda">Le llega por correo y lo ve en Mis solicitudes. Para algo solo del equipo, usa una nota interna en Actividad.</small>' +
+          U.boton({ texto: 'Enviar', icono: 'derecha', sm: true, variante: 'primario', tipo: 'submit' }) + '</div></form>') +
+      '</div>';
     }
 
     function dato(et, v) { return v ? '<dt>' + U.esc(et) + '</dt><dd>' + v + '</dd>' : ''; }
@@ -774,7 +811,7 @@
         var foco = subFoco === id;
         return '<article class="bj2-item' + (foco ? ' bj2-item--foco' : '') + '" data-bj2-det="' + U.esc(id) + '">' +
           '<div class="sx2-entre" style="align-items:flex-start"><strong>' + it.numero_item + '. ' + U.esc(it.titulo) + '</strong>' +
-            '<span class="sx2-flex" style="gap:6px;flex:none">' + U.badge(it.prioridad || '—', tonoPrioridad(it.prioridad), true) + U.badge(estadoTxt(it.estado), tonoEstado(it.estado)) + '</span></div>' +
+            '<span class="sx2-flex" style="gap:6px;flex:none;align-items:center">' + U.badge(it.prioridad || '—', tonoPrioridad(it.prioridad), true) + badgeEstado(it) + '</span></div>' +
           '<span class="sx2-flex sx2-tenue" style="gap:10px;flex-wrap:wrap;font-size:.8125rem">' +
             (it.tipo_nombre ? '<span>' + U.esc(it.tipo_nombre) + '</span>' : '') + (it.modulo_nombre ? '<span>' + U.esc(it.modulo_nombre) + '</span>' : '') +
             '<span>' + (persona ? U.avatar(persona, 'xs') + ' ' + U.esc(persona.nombre) : 'Sin responsable propio') + '</span>' +
@@ -784,17 +821,62 @@
           (it.descripcion ? '<p class="sx2-py-descripcion" style="margin:0">' + U.esc(it.descripcion) + '</p>' : '') +
           (it.contexto || it.resultado_esperado ? '<details class="bj2-mas"><summary>Contexto y resultado esperado</summary>' +
             (it.contexto ? '<p><b>Contexto:</b> ' + U.esc(it.contexto) + '</p>' : '') + (it.resultado_esperado ? '<p><b>Resultado esperado:</b> ' + U.esc(it.resultado_esperado) + '</p>' : '') + '</details>' : '') +
-          (soloLectura() ? '' : '<div class="sx2-flex bj2-item__acc" style="gap:6px;flex-wrap:wrap">' +
-            [['estado', 'Estado', 'estado'], ['fecha', 'Fecha', 'calendario'], ['prioridad', 'Prioridad', 'bandera'], ['derivar', 'Asignar', 'persona'], ['editar', 'Corregir', 'editar']].map(function (a) {
+          (soloLectura() ? '' : pasos(it, acc) +
+            '<div class="sx2-flex bj2-item__acc" style="gap:6px;flex-wrap:wrap">' + masAcciones(it).map(function (a) {
               return U.chip({ texto: a[1], icono: a[2], activo: acc === a[0], clase: 'js-bj2-acc', datos: { id: id, acc: a[0] } });
             }).join('') + '</div>' + (acc ? formItem(it, acc, trans[id] || []) : '')) +
         '</article>';
       }).join('') + '</div>';
     }
 
+    // Etapa 3: el paso siguiente según el estado visible ("Nueva → En curso ⇄
+    // Esperando respuesta → Resuelta → Cerrada"). Lo demás va en "Más".
+    function pasos(it, acc) {
+      var v = visible(it.estado), id = it.subsolicitud_id, b = [], nota = '';
+      var paso = function (texto, icono, estado, primario) { return U.boton({ texto: texto, icono: icono, sm: true, variante: primario ? 'primario' : 'secundario', clase: 'js-bj2-paso', datos: { id: id, estado: estado } }); };
+      var form = function (texto, icono, a, primario) { return U.boton({ texto: texto, icono: icono, sm: true, variante: primario ? 'primario' : 'secundario', clase: 'js-bj2-acc' + (acc === a ? ' is-activo' : ''), datos: { id: id, acc: a } }); };
+      var sinResponsable = !it.desarrollador_asignado;
+      if (v === 'NUEVA') {
+        b.push(it.depto && sinResponsable ? U.boton({ texto: 'Tomar', icono: 'check', sm: true, variante: 'primario', clase: 'js-bj2-tomar-det', datos: { id: id } }) : paso('Empezar', 'derecha', 'S05', true));
+        nota = 'Nadie lo ha empezado todavía.';
+      } else if (v === 'EN_CURSO') {
+        b.push(form('Marcar resuelta', 'check', 'resolver', true), form('Pedir información', 'comentario', 'preguntar'));
+        if (it.estado !== 'S05') b.push(paso('Empezar', 'derecha', 'S05'));
+      } else if (v === 'ESPERANDO') {
+        b.push(paso('Retomar', 'derecha', 'S05', true));
+        nota = 'Esperando que el solicitante responda: cuando escriba, vuelve solo a En curso.';
+      } else if (v === 'RESUELTA') {
+        b.push(form('Reabrir', 'derivar', 'reabrir'));
+        nota = 'Esperando que el solicitante confirme' + (it.fecha_terminada ? ' (se cierra solo a los 5 días hábiles)' : '') + '.';
+      } else {
+        b.push(form('Reabrir', 'derivar', 'reabrir'));
+      }
+      return '<div class="bj2-pasos">' + b.join('') + (nota ? '<span class="sx2-tenue bj2-pasos__nota">' + U.esc(nota) + '</span>' : '') + '</div>';
+    }
+    function masAcciones(it) {
+      var v = visible(it.estado), cerrado = ['CERRADA', 'RECHAZADA', 'CANCELADA'].indexOf(v) !== -1;
+      var a = [['fecha', 'Fecha', 'calendario'], ['prioridad', 'Prioridad', 'bandera'], ['derivar', 'Asignar', 'persona'], ['editar', 'Corregir', 'editar']];
+      if (!cerrado) a.push(['rechazar', 'Rechazar', 'equis'], ['cancelar', 'Cancelar', 'basura']);
+      // El selector completo de los 11 estados: Desarrollo / TI y el administrador.
+      if (!it.depto || detalle.rol_actual === 'ADM') a.push(['estado', 'Otro estado', 'estado']);
+      return a;
+    }
+
     function formItem(it, acc, trans) {
       var id = it.subsolicitud_id, campos = '', boton = 'Aplicar';
-      if (acc === 'estado') {
+      if (acc === 'resolver') {
+        campos = PY.campo('¿Qué se hizo? (opcional)', '<textarea class="sx2-input" name="comentario" maxlength="1000" placeholder="Lo ve el solicitante en el correo y en la conversación"></textarea>', 'Le pedimos que confirme; si no responde, se cierra solo a los 5 días hábiles.');
+        boton = 'Marcar resuelta';
+      } else if (acc === 'preguntar') {
+        campos = PY.campo('¿Qué necesitas saber?', '<textarea class="sx2-input" name="comentario" maxlength="1000" placeholder="Le llega escrita por correo"></textarea>', 'El ítem queda en "Esperando respuesta" y vuelve solo a "En curso" cuando conteste.');
+        boton = 'Pedir información';
+      } else if (acc === 'rechazar' || acc === 'cancelar') {
+        campos = PY.campo('Motivo', '<textarea class="sx2-input" name="comentario" maxlength="1000" placeholder="Lo ve el solicitante"></textarea>');
+        boton = acc === 'rechazar' ? 'Rechazar' : 'Cancelar el ítem';
+      } else if (acc === 'reabrir') {
+        campos = PY.campo('Por qué se reabre', '<textarea class="sx2-input" name="comentario" maxlength="1000" placeholder="Queda en el historial del equipo"></textarea>');
+        boton = 'Reabrir';
+      } else if (acc === 'estado') {
         campos = PY.campo('Nuevo estado', '<select class="sx2-select" name="estado_nuevo">' + trans.map(function (t) {
             return '<option value="' + t.estado + '" data-obl="' + (t.comentario_obligatorio ? '1' : '0') + '">' + U.esc(estadoTxt(t.estado)) + (t.comentario_obligatorio ? ' (pide motivo)' : '') + '</option>';
           }).join('') + '</select>') +
@@ -834,7 +916,14 @@
       var err = form.querySelector('.js-bj2-item-error');
       function mal(m) { err.textContent = m; err.hidden = false; }
       var accion, datos = { subsolicitud_id: id };
-      if (acc === 'estado') {
+      var DESTINO = { resolver: 'S08', preguntar: 'S06', rechazar: 'S10', cancelar: 'S11', reabrir: 'S05' };
+      if (DESTINO[acc]) {
+        if (acc !== 'resolver' && !x.comentario && (acc !== 'reabrir' || ['S09', 'S10', 'S11'].indexOf(it.estado) !== -1)) {
+          return mal(acc === 'preguntar' ? 'Escribe la pregunta.' : (acc === 'reabrir' ? 'Cuenta por qué se reabre.' : 'Indica el motivo.'));
+        }
+        accion = 'actualizarEstado'; datos.estado_nuevo = DESTINO[acc]; datos.comentario = x.comentario || '';
+        datos.comentario_al_solicitante = acc === 'resolver' || acc === 'rechazar' || acc === 'cancelar';
+      } else if (acc === 'estado') {
         var op = form.querySelector('[name=estado_nuevo]').selectedOptions[0];
         if (!op) return mal('No hay cambios de estado disponibles.');
         if (op.getAttribute('data-obl') === '1' && !x.comentario) return mal('Este cambio exige un comentario con el motivo.');
@@ -918,6 +1007,26 @@
       if ((b = t.closest('.js-bj2-tab'))) { pestana = b.getAttribute('data-tab'); pintarDetalle(); return; }
       if ((b = t.closest('.js-bj2-acc'))) { var id = b.getAttribute('data-id'); abiertoAcc[id] = abiertoAcc[id] === b.getAttribute('data-acc') ? '' : b.getAttribute('data-acc'); pintarDetalle(); return; }
       if ((b = t.closest('.js-bj2-acc-cerrar'))) { abiertoAcc[b.getAttribute('data-id')] = ''; pintarDetalle(); return; }
+      if ((b = t.closest('.js-bj2-paso'))) {
+        b.disabled = true;
+        api('actualizarEstado', { subsolicitud_id: b.getAttribute('data-id'), estado_nuevo: b.getAttribute('data-estado'), comentario: '' }).then(function (r) {
+          b.disabled = false;
+          if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo cambiar.', 'error'); return; }
+          PY.aviso('Listo: ' + estadoVis(b.getAttribute('data-estado')) + '.', 'exito');
+          cargarDetalle(); avisarCambio();
+        });
+        return;
+      }
+      if ((b = t.closest('.js-bj2-tomar-det'))) {
+        b.disabled = true;
+        api('tomarItemSolicitud', { subsolicitud_id: b.getAttribute('data-id') }).then(function (r) {
+          b.disabled = false;
+          if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo tomar.', 'error'); cargarDetalle(); return; }
+          PY.aviso('Es tuyo: quedó a tu nombre y en curso.', 'exito');
+          cargarDetalle(); avisarCambio();
+        });
+        return;
+      }
       if ((b = t.closest('.js-bj2-ot'))) {
         b.disabled = true;
         api('descargarOrdenTrabajo', { solicitud_id: solicitudId }).then(function (r) {
@@ -945,7 +1054,7 @@
         var texto = form.texto.value.trim();
         if (!texto) return;
         var btn = form.querySelector('[type=submit]'); btn.disabled = true;
-        var alSolicitante = !!form.querySelector('[name=destino][value=solicitante]:checked');
+        var alSolicitante = form.getAttribute('data-destino') === 'solicitante' || !!form.querySelector('[name=destino][value=solicitante]:checked');
         api('agregarComentario', { solicitud_id: solicitudId, texto: texto, es_interno: !alSolicitante }).then(function (r) {
           btn.disabled = false;
           if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo guardar.', 'error'); return; }
@@ -1083,10 +1192,10 @@
         '<span class="sx2-flex" style="gap:6px;flex-wrap:wrap">' +
           '<span class="sx2-py-ref sx2-py-ref--sol" title="' + U.esc((i.empresa_nombre || '') + (i.solicitante_nombre ? ' · ' + i.solicitante_nombre : '')) + '">' + U.ico('bandeja', 12) +
             '<span class="sx2-cortar">' + U.esc(i.solicitud_id) + (i.cantidad_items > 1 ? ' · ítem ' + i.numero_item + '/' + i.cantidad_items : '') + '</span></span>' +
-          U.badge(estadoTxt(i.estado), tonoEstado(i.estado)) +
+          U.badge(estadoVis(i.estado), tonoEstado(i.estado)) +
           (i.situacion_sla === 'FUERA_DE_PLAZO' ? U.badge('Fuera de plazo', 'critico') : (i.situacion_sla === 'EN_RIESGO' ? U.badge('En riesgo', 'alerta') : '')) +
           (i.prioridad === 'P1' || i.prioridad === 'P2' ? U.badge(i.prioridad, tonoPrioridad(i.prioridad), true) : '') +
-          (i.respuesta_pendiente ? U.badge('El solicitante respondió', 'info', true) : '') +
+          (i.respuesta_pendiente ? U.badge('Te escribió el solicitante', 'info', true) : '') +
         '</span>' +
       '</span>' +
       '<span class="sx2-py-mt-cuando' + (vencida ? ' sx2-delta--mal' : '') + '">' +

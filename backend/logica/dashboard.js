@@ -443,7 +443,24 @@ function getPautaDesarrollador(db, data, contexto) {
 // Módulo 3B: `solo_mios` (cualquier rol) = solo los ítems ABIERTOS asignados
 // a quien pregunta, sin huérfanos ni lista de responsables -- lo que Mi
 // trabajo e Inicio muestran como "Solicitudes a tu cargo".
-const ESTADOS_POR_REVISAR = [ESTADOS.S01, ESTADOS.S02];
+// Etapa 3: "Nuevos" = lo que nadie tomó ni empezó (estado visible Nueva).
+const ESTADOS_POR_REVISAR = [ESTADOS.S01];
+
+// Etapa 3: el solicitante escribió en la conversación DESPUÉS de lo último
+// que hizo el equipo (un mensaje, una nota o un cambio). Por solicitud.
+function escribioSolicitante_(solicitud, comentarios, historial) {
+  const suyos = [String(solicitud.solicitante_email || '').toLowerCase(), String(solicitud.correo_cliente || '').toLowerCase()].filter(Boolean);
+  let ultimoSuyo = 0, ultimoEquipo = 0;
+  comentarios.forEach((c) => {
+    const t = new Date(c.timestamp).getTime();
+    if (suyos.indexOf(String(c.usuario || '').toLowerCase()) !== -1) { if (!(c.es_interno === true || c.es_interno === 'TRUE') && t > ultimoSuyo) ultimoSuyo = t; } else if (t > ultimoEquipo) ultimoEquipo = t;
+  });
+  historial.forEach((h) => {
+    const u = String(h.usuario || '').toLowerCase();
+    if (u && u !== 'sistema' && suyos.indexOf(u) === -1) { const t = new Date(h.timestamp).getTime(); if (t > ultimoEquipo) ultimoEquipo = t; }
+  });
+  return ultimoSuyo > 0 && ultimoSuyo > ultimoEquipo;
+}
 function getCola(db, filtros, contexto) {
   filtros = filtros || {};
   const rol = contexto ? contexto.rol : '';
@@ -462,10 +479,14 @@ function getCola(db, filtros, contexto) {
   const itemsPorSolicitud = {};
   todas.forEach((i) => { (itemsPorSolicitud[i.solicitud_id] = itemsPorSolicitud[i.solicitud_id] || []).push(i); });
   const historial = leerFilas_(db, 'HISTORIAL_ESTADOS', COLUMNAS.HISTORIAL_ESTADOS);
-  const comentariosPublicos = leerFilas_(db, 'COMENTARIOS', COLUMNAS.COMENTARIOS).filter((c) => !c.es_interno);
+  const comentariosTodos = leerFilas_(db, 'COMENTARIOS', COLUMNAS.COMENTARIOS);
+  const comentariosPublicos = comentariosTodos.filter((c) => !c.es_interno);
+  const comentariosPorSolicitud = {}, historialPorSolicitud = {};
+  comentariosTodos.forEach((c) => { (comentariosPorSolicitud[c.solicitud_id] = comentariosPorSolicitud[c.solicitud_id] || []).push(c); });
   const nombrePorEmail = nombresPorEmail_(db);
   const ultimoMovimiento = {};
   historial.forEach((h) => {
+    (historialPorSolicitud[h.solicitud_id] = historialPorSolicitud[h.solicitud_id] || []).push(h);
     const k = h.subsolicitud_id || h.solicitud_id;
     if (!ultimoMovimiento[k] || new Date(h.timestamp) > new Date(ultimoMovimiento[k])) ultimoMovimiento[k] = h.timestamp;
   });
@@ -500,7 +521,8 @@ function getCola(db, filtros, contexto) {
       dias_sin_movimiento: Math.floor((Date.now() - new Date(mov).getTime()) / 86400000),
       situacion_sla: medicion ? medicion.situacion : null,
       sla_restante_horas: medicion ? Math.round(medicion.restantes_horas * 10) / 10 : null,
-      respuesta_pendiente: respuestaPendienteLectura_(i, historial, comentariosPublicos),
+      respuesta_pendiente: respuestaPendienteLectura_(i, historial, comentariosPublicos) ||
+        (ESTADOS_CERRADOS.indexOf(i.estado) === -1 && escribioSolicitante_(s, comentariosPorSolicitud[i.solicitud_id] || [], historialPorSolicitud[i.solicitud_id] || [])),
       empresa_id: s.empresa_id, empresa_nombre: s.empresa_nombre || s.empresa_id, plataforma_nombre: s.plataforma_nombre || s.plataforma || '',
       solicitante_nombre: s.solicitante_nombre || '', solicitante_email: s.solicitante_email || '',
       es_cliente: s.es_cliente === true || s.es_cliente === 'TRUE', empresa_cliente: s.empresa_cliente || '',

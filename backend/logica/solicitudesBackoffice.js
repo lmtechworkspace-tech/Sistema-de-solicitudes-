@@ -150,7 +150,7 @@ function actualizarEstado(db, data, contexto, opciones) {
   // el solicitante (Intake.validarCierre, no portado) salvo consulta tecnica.
   if (data.estado_nuevo === ESTADOS.S09 && !opts.sistemaAutomatico && !esConsultaTecnica_(subsolicitud)) {
     return errorForbidden(
-      'Solo el solicitante puede confirmar el cierre (o el cierre automatico por inactividad). Mueve el item a Terminada para que quede listo para su validacion.'
+      'Solo el solicitante puede confirmar el cierre (o el cierre automatico por inactividad). Mueve el item a Resuelta para que quede listo para su validacion.'
     );
   }
   const comentario = data.comentario || '';
@@ -190,8 +190,23 @@ function actualizarEstado(db, data, contexto, opciones) {
 
   // El comentario de "Esperando información" ES la pregunta para el
   // solicitante: va escrita en el correo (los demás comentarios no salen).
+  // Etapa 3: los botones de paso siguiente ("Marcar resuelta", "Rechazar",
+  // "Cancelar") pueden mandar su comentario AL SOLICITANTE
+  // (comentario_al_solicitante); sin esa marca, el comentario de un cambio
+  // sigue siendo del equipo (un motivo interno nunca sale por descuido). La
+  // pregunta de "Esperando respuesta" siempre es para el solicitante. Lo que
+  // le llega queda además en la conversación (COMENTARIOS públicos), sin un
+  // segundo correo: ya va en el del hito.
+  const alSolicitante = !opts.sistemaAutomatico && !!String(comentario || '').trim() &&
+    (data.estado_nuevo === ESTADOS.S06 || data.comentario_al_solicitante === true);
+  if (alSolicitante) {
+    agregarFila_(db, 'COMENTARIOS', {
+      comentario_id: crypto.randomUUID(), solicitud_id: subsolicitud.solicitud_id, subsolicitud_id: data.subsolicitud_id,
+      usuario: contexto.email, texto: String(comentario).trim(), es_interno: false, timestamp: timestamp
+    });
+  }
   Notificaciones.notificarCambioEstado(db, subsolicitud.solicitud_id, data.subsolicitud_id, estadoActual, data.estado_nuevo, {
-    comentario: data.estado_nuevo === ESTADOS.S06 ? comentario : '', automatico: !!opts.sistemaAutomatico
+    comentario: alSolicitante ? comentario : '', automatico: !!opts.sistemaAutomatico
   });
 
   return {
@@ -422,7 +437,7 @@ async function derivarSolicitud(db, data, contexto) {
 /**
  * Etapa 2: "Tomar" un pedido que llegó sin asignar a la cola de un
  * departamento donde la persona trabaja (JEFATURA o REGISTRA). Queda a su
- * nombre y, si estaba Nueva, pasa a Recibida. Si alguien lo tomó un instante
+ * nombre y pasa a En curso (etapa 3). Si alguien lo tomó un instante
  * antes, se avisa en vez de pisarlo.
  */
 function tomarItem(db, data, contexto) {
@@ -440,8 +455,9 @@ function tomarItem(db, data, contexto) {
     aplicarDerivacion_(db, { solicitud, solicitudId: sub.solicitud_id, subsolicitudId: sub.subsolicitud_id, items: [sub], anterior: '' },
       yo, 'Lo tomó de la cola de ' + (sub.depto_nombre || sub.depto) + '.', contexto, new Date().toISOString());
   }
-  if (sub.estado === ESTADOS.S01) {
-    actualizarEstado(db, { subsolicitud_id: sub.subsolicitud_id, estado_nuevo: ESTADOS.S02, comentario: '' }, Object.assign({}, contexto, { rol_origen: '' }));
+  // Etapa 3: quien lo toma lo empieza -- pasa a En curso (S05) si aún no lo estaba.
+  if ([ESTADOS.S01, ESTADOS.S02, ESTADOS.S03, ESTADOS.S04].indexOf(sub.estado) !== -1) {
+    actualizarEstado(db, { subsolicitud_id: sub.subsolicitud_id, estado_nuevo: ESTADOS.S05, comentario: '' }, Object.assign({}, contexto, { rol_origen: '' }));
   }
   return { subsolicitud_id: sub.subsolicitud_id, desarrollador_asignado: yo };
 }

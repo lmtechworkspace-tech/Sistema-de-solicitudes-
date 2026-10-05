@@ -47,10 +47,13 @@ function correos(db) { return filas(db, 'LOG_NOTIFICACIONES'); }
 
 test('hitoSolicitante_: solo los hitos generan correo', () => {
   const h = Notificaciones.hitoSolicitante_;
-  assert.equal(h('S01', 'S02'), null);
+  // Etapa 3: "En curso" es hito solo al salir de Nueva (estado visible).
+  assert.equal(h('S01', 'S02'), 'EN_CURSO');
+  assert.equal(h('S01', 'S05'), 'EN_CURSO');
   assert.equal(h('S02', 'S03'), null);
   assert.equal(h('S03', 'S04'), null);
-  assert.equal(h('S04', 'S05'), 'EN_CURSO');
+  assert.equal(h('S04', 'S05'), null);
+  assert.equal(h('S08', 'S05'), null, 'reabrir no es un hito');
   assert.equal(h('S06', 'S05'), null, 'volver de Esperando información no es un hito nuevo');
   assert.equal(h('S05', 'S06'), 'PREGUNTA');
   assert.equal(h('S05', 'S07'), null);
@@ -60,16 +63,20 @@ test('hitoSolicitante_: solo los hitos generan correo', () => {
   assert.equal(h('S02', 'S11'), 'CANCELADA');
 });
 
-test('un cambio que no es hito solo va a la campana (si tiene cuenta), sin correo', () => {
+test('un cambio que no es hito solo va a la campana (si cambia lo que se ve), sin correo', () => {
   const db = dbConSchema();
   cuenta(db, 'C1', 'Juan Pérez', 'juan@homepymes.cl');
   solicitud(db); item(db, 1);
-  const r = Notificaciones.notificarCambioEstado(db, 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'S02', 'S03');
+  // Dentro de "En curso" (Recibida → En revisión): ni correo ni campana.
+  assert.equal(Notificaciones.notificarCambioEstado(db, 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'S02', 'S03').motivo, 'no_es_hito');
+  assert.equal(filas(db, 'NOTIFICACIONES_APP').length, 0);
+  // Reabierto (Resuelta → En curso): campana con el nombre visible, sin correo.
+  const r = Notificaciones.notificarCambioEstado(db, 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'S08', 'S05');
   assert.equal(r.motivo, 'no_es_hito');
   assert.equal(correos(db).length, 0);
   const campana = filas(db, 'NOTIFICACIONES_APP');
   assert.equal(campana.length, 1);
-  assert.match(campana[0].titulo, /En revisión/);
+  assert.match(campana[0].titulo, /En curso/);
 });
 
 test('el correo de un hito usa nombres de estado, enlace a Mis solicitudes y agrupa los ítems de un lote', () => {
@@ -91,7 +98,7 @@ test('el correo de un hito usa nombres de estado, enlace a Mis solicitudes y agr
 test('sin cuenta en la plataforma, el enlace del correo es la página pública de estado', () => {
   const db = dbConSchema();
   solicitud(db); item(db, 1);
-  Notificaciones.notificarCambioEstado(db, 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'S04', 'S05');
+  Notificaciones.notificarCambioEstado(db, 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'S01', 'S05');
   const log = correos(db);
   assert.equal(log.length, 1);
   assert.match(log[0].cuerpo, /estado\.html/);
@@ -235,8 +242,8 @@ test('la campana deja UN aviso por solicitud (se actualiza), no uno por cada cam
   solicitud(db); item(db, 1); item(db, 2);
   Notificaciones.notificarCambioEstado(db, 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'S01', 'S02');
   Notificaciones.notificarCambioEstado(db, 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-02', 'S01', 'S02');
-  Notificaciones.notificarCambioEstado(db, 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'S02', 'S03');
+  Notificaciones.notificarCambioEstado(db, 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'S05', 'S06');
   const campana = filas(db, 'NOTIFICACIONES_APP');
   assert.equal(campana.length, 1);
-  assert.equal(campana[0].titulo, 'SOL-2026-HP-0001: En revisión');
+  assert.equal(campana[0].titulo, 'SOL-2026-HP-0001: Esperando respuesta');
 });

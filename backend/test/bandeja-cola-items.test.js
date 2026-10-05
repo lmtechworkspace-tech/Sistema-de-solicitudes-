@@ -43,7 +43,7 @@ test('getCola lista ítems (no solicitudes) y cuenta los KPIs sobre ítems', () 
   const r = Dashboard.getCola(db, {}, ADM);
   assert.equal(r.items.length, 4);
   assert.equal(r.resumen.abiertos, 3, 'S08 (terminada, por validar) no cuenta como abierto');
-  assert.equal(r.resumen.por_revisar, 2, 'S01 y S02 sin triar');
+  assert.equal(r.resumen.por_revisar, 1, 'etapa 3: "Nuevos" = solo S01 (S02 ya está En curso)');
   assert.equal(r.resumen.sin_asignar, 1, 'solo el ítem sin responsable propio ni de la solicitud');
   assert.equal(r.resumen.sin_fecha, 2);
   assert.equal(r.resumen.por_validar, 1);

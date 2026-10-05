@@ -35,7 +35,7 @@
 const crypto = require('node:crypto');
 const { agregarFila_, leerFilas_, actualizarFilaPorId_ } = require('../db/sqliteRepo');
 const { COLUMNAS } = require('../db/schema');
-const { EMAIL_DESARROLLO, ETIQUETA_ESTADO } = require('./constantesSolicitudes');
+const { EMAIL_DESARROLLO, ETIQUETA_ESTADO, estadoVisible_, etiquetaVisible_ } = require('./constantesSolicitudes');
 const Resend = require('./resend');
 const { claveDia_, sumarDiasHabiles_ } = require('./utils');
 const Jefatura = require('./jefatura');
@@ -421,8 +421,13 @@ function feriados_(db) {
 }
 
 // Qué cambio de estado es un hito para el solicitante (null = solo campana).
+// Etapa 3: se mira el estado VISIBLE. "En curso" es un hito solo al salir de
+// Nueva (recibida y asignada / tomada); moverse dentro de En curso (Recibida
+// → Aprobada → En desarrollo), o volver a él tras una respuesta o reapertura,
+// no lo es.
 function hitoSolicitante_(anterior, nuevo) {
-  if (nuevo === 'S05' && ['', 'S01', 'S02', 'S03', 'S04'].indexOf(anterior || '') !== -1) return 'EN_CURSO';
+  const va = estadoVisible_(anterior), vn = estadoVisible_(nuevo);
+  if (vn === 'EN_CURSO' && (!anterior || va === 'NUEVA')) return 'EN_CURSO';
   if (nuevo === 'S06') return 'PREGUNTA';
   if (nuevo === 'S08') return 'RESUELTA';
   if (nuevo === 'S09') return 'CERRADA';
@@ -438,8 +443,8 @@ function cuerpoHito_(hito, solicitud, item, opciones) {
   const id = solicitud.solicitud_id;
   switch (hito) {
     case 'EN_CURSO':
-      return { asunto: 'SIGSO — Comenzamos a trabajar en tu solicitud ' + id,
-        cuerpo: hola + 'El equipo comenzó a trabajar en tu solicitud ' + id + '.\n\n' + items + 'Puedes ver cómo va aquí:\n' + enlace };
+      return { asunto: 'SIGSO — Tu solicitud ' + id + ' está en curso',
+        cuerpo: hola + (opciones.responsable ? opciones.responsable + ' recibió tu solicitud ' + id + ' y está a cargo.' : 'El equipo recibió tu solicitud ' + id + ' y ya está en curso.') + '\n\n' + items + 'Puedes ver cómo va y escribirle al equipo aquí:\n' + enlace };
     case 'PREGUNTA':
       return { asunto: 'SIGSO — Necesitamos un dato para seguir con tu solicitud ' + id,
         cuerpo: hola + 'Para seguir con "' + (item.titulo || id) + '" el equipo necesita:\n\n«' + (opciones.comentario || 'Revisa la pregunta en SIGSO.') + '»\n\n' +
@@ -447,6 +452,7 @@ function cuerpoHito_(hito, solicitud, item, opciones) {
     case 'RESUELTA':
       return { asunto: 'SIGSO — Tu solicitud ' + id + ' está resuelta: confírmalo',
         cuerpo: hola + 'El equipo marcó como resuelto lo que pediste en la solicitud ' + id + '.\n\n' + items +
+          (opciones.comentario ? 'Lo que se hizo:\n«' + opciones.comentario + '»\n\n' : '') +
           'Revisa que haya quedado bien y confírmalo (o cuéntanos qué falta):\n' + enlace + '\n\n' +
           'Si no recibimos respuesta, se cerrará automáticamente' + (opciones.cierre ? ' el ' + opciones.cierre : ' en 5 días hábiles') + '.' };
     case 'CERRADA':
@@ -458,6 +464,7 @@ function cuerpoHito_(hito, solicitud, item, opciones) {
     case 'CANCELADA':
       return { asunto: 'SIGSO — Solicitud ' + id + (hito === 'RECHAZADA' ? ' rechazada' : ' cancelada'),
         cuerpo: hola + 'Lo siguiente de tu solicitud ' + id + ' fue ' + (hito === 'RECHAZADA' ? 'rechazado' : 'cancelado') + ':\n\n' + items +
+          (opciones.comentario ? 'Motivo:\n«' + opciones.comentario + '»\n\n' : '') +
           'Puedes ver el detalle aquí:\n' + enlace + '\n\nSi tienes dudas, escribe al equipo desde SIGSO.' };
     default:
       return null;
@@ -507,7 +514,9 @@ function notificarCambioEstado(db, solicitudId, subsolicitudId, estadoAnterior, 
   // solicitud: si ya hay un aviso sin leer de esta solicitud, se actualiza en
   // vez de sumar otro (probado en el sandbox: sin esto, recibir/aprobar/
   // iniciar varios ítems dejaba 72 avisos a una sola persona).
-  if (conCuenta) campanaEstado_(db, solicitud.solicitante_email, solicitudId, etiquetaEstado_(estadoNuevo), item.titulo || '');
+  if (conCuenta && estadoVisible_(estadoAnterior) !== estadoVisible_(estadoNuevo)) {
+    campanaEstado_(db, solicitud.solicitante_email, solicitudId, etiquetaVisible_(estadoNuevo), item.titulo || '');
+  }
 
   const hito = hitoSolicitante_(estadoAnterior, estadoNuevo);
   if (!hito) return { enviado: false, motivo: 'no_es_hito', campana: conCuenta };
@@ -529,7 +538,12 @@ function notificarCambioEstado(db, solicitudId, subsolicitudId, estadoAnterior, 
 
   let cierre = '';
   if (hito === 'RESUELTA') cierre = fechaCorta_(sumarDiasHabiles_(new Date().toISOString(), 5, { feriados: feriados_(db) }));
-  const texto = cuerpoHito_(hito, solicitud, item, { enlace: enlaceSolicitante_(db, solicitud), comentario: opts.comentario, automatico: !!opts.automatico, cierre });
+  let responsable = '';
+  if (hito === 'EN_CURSO') {
+    const a = String(item.desarrollador_asignado || '').trim().toLowerCase();
+    if (a) { try { responsable = (DirectorioPersonal.directorioPersonalActivo_(db).find((p) => String(p.email).toLowerCase() === a) || {}).nombre || ''; } catch (err) { responsable = ''; } }
+  }
+  const texto = cuerpoHito_(hito, solicitud, item, { enlace: enlaceSolicitante_(db, solicitud), comentario: opts.comentario, automatico: !!opts.automatico, cierre, responsable });
   const resultado = encolarCorreo_(db, { solicitudId, destinatario, evento, asunto: texto.asunto, cuerpo: texto.cuerpo + pieCorreo_() });
   return resultado.encolado ? { encolado: true } : resultado;
 }
@@ -679,9 +693,7 @@ async function notificarRespuestaSolicitante(db, solicitud, subsolicitudId, text
     solicitud.solicitud_id + (subsolicitudId ? ' (ítem ' + subsolicitudId + ')' : '') + '.\n\n' +
     'RESPUESTA DEL SOLICITANTE\n' +
     '"' + texto + '"\n\n' +
-    'ACCIÓN REQUERIDA\n' +
-    'Ingrese al Backoffice para revisar la respuesta y continuar con la gestión ' +
-    'del ítem (sigue en estado "Esperando información" hasta que usted lo avance).' +
+    'El ítem volvió a "En curso": revise la respuesta en la Bandeja de trabajo y continúe.\n' +
     pieCorreo_();
   const resultados = [];
   for (const email of emails) {
@@ -691,6 +703,22 @@ async function notificarRespuestaSolicitante(db, solicitud, subsolicitudId, text
     }));
   }
   return resultados;
+}
+
+/**
+ * Etapa 3: el solicitante escribió en la conversación. Campana a quienes
+ * atienden (o, si nadie lo tiene aún, al equipo del departamento). El correo
+ * queda solo para la respuesta a una pregunta (notificarRespuestaSolicitante).
+ */
+function avisarMensajeAlEquipo(db, solicitud, texto, destinatarios) {
+  const lista = Array.from(new Set((destinatarios || []).map((e) => String(e || '').trim().toLowerCase()).filter(Boolean)))
+    .filter((e) => tieneCuentaActiva_(db, e));
+  if (!lista.length) return { encolado: 0 };
+  return NotificacionesApp.encolarLote(db, lista.map((e) => ({
+    destinatario: e, tipo: 'SOLICITUD_MENSAJE_EQUIPO',
+    titulo: solicitud.solicitud_id + ': ' + (solicitud.solicitante_nombre || 'El solicitante') + ' escribió',
+    mensaje: String(texto || '').slice(0, 140), modulo_id: 'bandeja', texto_accion: 'Ver la conversación', vidaHoras: 168
+  })));
 }
 
 // v4.2 (§4): formatea la lista compacta de items (hoy.nuevas/cerradas/...
@@ -1043,7 +1071,7 @@ async function enviarReporteGerenciaAhora(db, data, contexto) {
 }
 
 module.exports = {
-  enviarAcuseRecibo, enviarAvisoDesarrollo, avisarAtencionDirectaRegistrada, avisarPedidoDepartamento,
+  enviarAcuseRecibo, enviarAvisoDesarrollo, avisarAtencionDirectaRegistrada, avisarPedidoDepartamento, avisarMensajeAlEquipo,
   notificarCambioEstado, avisarCompromisoFecha, notificarDerivacion, enviarCodigoAcceso,
   // Solicitudes, etapa 1 (2026-10-05): mensajes del equipo y aviso previo al cierre automático.
   avisarMensajeEquipo, avisarCierreProximo, hitoSolicitante_, etiquetaEstado_,

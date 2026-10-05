@@ -107,7 +107,7 @@ const ACCIONES_PUBLICAS = new Set([
   'robotAgenteTomar', 'robotAgentePaso', 'robotAgenteEntregar',
   'portalLogin', 'portalLogout', 'portalSesion', 'portalCambiarPassword', 'crearSolicitud',
   'consultarEstado', 'solicitarCodigoAcceso', 'misSolicitudes',
-  'editarSubsolicitud', 'eliminarArchivo', 'responderConsulta', 'validarCierre',
+  'editarSubsolicitud', 'eliminarArchivo', 'responderConsulta', 'enviarMensajeSolicitud', 'validarCierre',
   'getCatalogos',
   // Apagado de Apps Script (2026-09-27): lo que quedaba del Intake. subirArchivo
   // prueba la propiedad con el correo (ver archivosSolicitud.js) y crearQuejaSgc
@@ -146,6 +146,8 @@ const ACCIONES = {
   editarSubsolicitud: (db, data) => SolicitudesPublico.editarSubsolicitud(db, data),
   eliminarArchivo: (db, data) => SolicitudesPublico.eliminarArchivo(db, data),
   responderConsulta: (db, data) => SolicitudesPublico.responderConsulta(db, data),
+  // Etapa 3: el solicitante escribe en la conversación (mismo control de correo).
+  enviarMensajeSolicitud: (db, data) => SolicitudesPublico.enviarMensajeSolicitud(db, data),
   validarCierre: (db, data) => SolicitudesPublico.validarCierre(db, data),
 
   actualizarEstado: (db, data, contexto) => SolicitudesBO.actualizarEstado(db, data, contexto),

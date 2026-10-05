@@ -67,6 +67,10 @@ div.ms2-aviso { justify-content: space-between; flex-wrap: wrap; }
 .ms2-msj__quien { font: 600 0.75rem/1.2 var(--fuente); color: var(--sx-texto-2, var(--sx-texto)); }
 .ms2-msj__texto { margin: 0; font: var(--sx-t-chico); color: var(--sx-texto); white-space: pre-wrap; overflow-wrap: anywhere; }
 
+/* Etapa 3: escribir al equipo desde la conversación. */
+.ms2-conv__form { margin-top: var(--sx-e-4); padding: var(--sx-e-4); border-radius: var(--sx-radio); background: var(--sx-superficie-2); }
+.ms2-conv__form textarea { min-height: 72px; resize: vertical; background: var(--sx-superficie); }
+
 @media (max-width: 900px) {
   .ms2-fila { grid-template-columns: minmax(0, 1fr) 16px; row-gap: 8px; padding: 12px var(--sx-e-4); }
   .ms2-fila__estado, .ms2-fila__fecha { grid-column: 1; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; }

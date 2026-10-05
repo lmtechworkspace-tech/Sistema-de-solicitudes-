@@ -185,7 +185,7 @@ test('notificarCambioEstado (Fase 10.2) ENCOLA el correo de un hito sin intentar
     { solicitud_id: 'SOL-2026-HP-0001', solicitante_email: 'juan@x.cl', empresa_id: 'HP' }
   ));
 
-  const resultado = Notificaciones.notificarCambioEstado(db, 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'S04', 'S05');
+  const resultado = Notificaciones.notificarCambioEstado(db, 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'S01', 'S05');
 
   assert.equal(resultado.encolado, true);
   assert.equal(mock.mock.callCount(), 0, 'no debe llamar a Resend de inmediato');
@@ -206,7 +206,7 @@ test('procesarColaCorreo entrega el correo real de un cambio de estado encolado'
     Object.fromEntries(COLUMNAS.SOLICITUDES.map((c) => [c, ''])),
     { solicitud_id: 'SOL-2026-HP-0001', solicitante_email: 'juan@x.cl', empresa_id: 'HP' }
   ));
-  Notificaciones.notificarCambioEstado(db, 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'S04', 'S05');
+  Notificaciones.notificarCambioEstado(db, 'SOL-2026-HP-0001', 'SOL-2026-HP-0001-01', 'S01', 'S05');
 
   const resultado = await Notificaciones.procesarColaCorreo(db);
 

@@ -23,8 +23,9 @@
   var U = UIv2;
   var CERRADOS = ['S09', 'S10', 'S11'];
   var EDITABLES = ['S01', 'S02', 'S03', 'S04'];
-  var HITOS = ['Recibida', 'Aprobada', 'En desarrollo', 'Terminada', 'Cerrada'];
-  var NIVEL = { S01: 0, S02: 0, S03: 1, S04: 1, S05: 2, S06: 2, S07: 2, S08: 3, S09: 4 };
+  // Etapa 3: el camino que ve quien pide (5 estados visibles, utils.js).
+  var HITOS = ['Nueva', 'En curso', 'Resuelta', 'Cerrada'];
+  var NIVEL_VISIBLE = { NUEVA: 0, EN_CURSO: 1, ESPERANDO: 1, RESUELTA: 2, CERRADA: 3 };
   var TONO_CUMPLIMIENTO = {
     ATRASADA_DESARROLLADOR: 'critico', EN_RIESGO: 'alerta', ESPERANDO_VALIDACION: 'info',
     EN_PLAZO: 'ok', SIN_COMPROMISO: 'neutro', CERRADA_A_TIEMPO: 'ok', CERRADA_CON_ATRASO: 'critico'
@@ -40,9 +41,10 @@
     });
   }
   function token() { try { return localStorage.getItem('sigso_portal_token') || ''; } catch (e) { return ''; } }
-  function estadoTxt(c) { return window.formatearEstadoSigso ? formatearEstadoSigso(c) : c; }
+  function estadoTxt(c) { return window.formatearEstadoVisibleSigso ? formatearEstadoVisibleSigso(c) : (window.formatearEstadoSigso ? formatearEstadoSigso(c) : c); }
+  function visible(c) { return window.estadoVisibleSigso ? estadoVisibleSigso(c) : c; }
   function tonoEstado(c) {
-    if (c === 'S01' || c === 'S02') return 'info';
+    if (c === 'S01') return 'info';
     if (c === 'S06') return 'alerta';
     if (c === 'S08') return 'primario';
     if (c === 'S09') return 'ok';
@@ -168,11 +170,11 @@
     });
   }
 
-  // Cómo van los ítems: "2 En desarrollo · 1 Terminada".
+  // Cómo van los ítems: "2 En curso · 1 Resuelta" (agrupado por estado visible).
   function reparto(s) {
-    var n = {}, orden = [];
-    (s.items || []).forEach(function (i) { if (!n[i.estado]) { n[i.estado] = 0; orden.push(i.estado); } n[i.estado]++; });
-    return orden.map(function (e) { return U.badge(n[e] + ' ' + estadoTxt(e), tonoEstado(e), true); }).join('');
+    var n = {}, orden = [], muestra = {};
+    (s.items || []).forEach(function (i) { var v = visible(i.estado); if (!n[v]) { n[v] = 0; orden.push(v); muestra[v] = i.estado; } n[v]++; });
+    return orden.map(function (v) { return U.badge(n[v] + ' ' + estadoTxt(muestra[v]), tonoEstado(muestra[v]), true); }).join('');
   }
   // Fecha comprometida ya pasada en un ítem que el equipo aún no termina (lo
   // Terminado espera al solicitante, no al equipo: eso no es atraso).
@@ -257,10 +259,11 @@
       if (e === 'S10' || e === 'S11') {
         return '<p class="ms2-aviso sx2-tono-neutro">' + U.ico('info', 15) + 'Esta solicitud fue ' + (e === 'S10' ? 'rechazada' : 'cancelada') + '. En cada ítem verás el motivo.</p>';
       }
-      var nivel = NIVEL[e];
+      var nivel = NIVEL_VISIBLE[visible(e)];
       if (nivel === undefined) return '';
       return '<ol class="ms2-hitos">' + HITOS.map(function (h, i) {
         var hecho = i < nivel || e === 'S09', actual = i === nivel && e !== 'S09';
+        if (actual && e === 'S06') h = 'Esperando tu respuesta';
         return '<li class="' + (hecho ? 'is-hecho' : (actual ? 'is-actual' : '')) + '"><span>' + (hecho ? U.ico('check', 12) : (i + 1)) + '</span>' + h + '</li>';
       }).join('') + '</ol>';
     }
@@ -275,12 +278,12 @@
         '<span class="sx2-tenue" style="font-size:.8125rem">Ingresada el ' + U.esc(fechaCorta(det.fecha_creacion)) + '</span></span>');
       var nArch = subs.reduce(function (n, s) { return n + (s.archivos || []).length; }, 0);
       var nMsj = (det.mensajes || []).length;
-      var tabs = [['items', 'Ítems (' + subs.length + ')'], ['mensajes', 'Mensajes' + (nMsj ? ' (' + nMsj + ')' : '')], ['historial', 'Historial'], ['archivos', 'Archivos (' + nArch + ')']];
+      var tabs = [['items', 'Ítems (' + subs.length + ')'], ['mensajes', 'Conversación' + (nMsj ? ' (' + nMsj + ')' : '')], ['historial', 'Historial'], ['archivos', 'Archivos (' + nArch + ')']];
       var pendientes = subs.filter(function (s) { return s.estado === 'S08' || s.pregunta_pendiente; }).length;
       var terminados = subs.filter(function (s) { return s.estado === 'S08'; }).length;
       var cuerpo = hitos(det.estado_derivado) +
         (pendientes ? '<div class="ms2-aviso sx2-tono-alerta"><span class="ms2-aviso__texto">' + U.ico('rayo', 15) + (pendientes === 1 ? 'Un ítem espera' : pendientes + ' ítems esperan') + ' tu acción: está marcado abajo.</span>' +
-          (terminados >= 2 ? U.boton({ texto: 'Confirmar los ' + terminados + ' terminados', icono: 'check', sm: true, variante: 'primario', clase: 'js-ms2-confirmar-todos' }) : '') + '</div>' : '') +
+          (terminados >= 2 ? U.boton({ texto: 'Confirmar los ' + terminados + ' resueltos', icono: 'check', sm: true, variante: 'primario', clase: 'js-ms2-confirmar-todos' }) : '') + '</div>' : '') +
         (typeof det.posicion_cola === 'number' ? '<p class="sx2-tenue" style="margin:0;font-size:.8125rem">' + (det.posicion_cola > 0
           ? 'Hay ' + det.posicion_cola + (det.posicion_cola === 1 ? ' solicitud' : ' solicitudes') + ' de tu empresa con igual o mayor prioridad por delante.'
           : 'Es la solicitud de mayor prioridad en espera de tu empresa.') + '</p>' : '') +
@@ -337,7 +340,7 @@
     }
     function bloqueValidar(s, reabrir) {
       return '<form class="sx2-form bj2-item__form ms2-accion sx2-tono-primario js-ms2-form" data-id="' + U.esc(s.subsolicitud_id) + '" data-acc="' + (reabrir ? 'reabrir' : 'confirmar') + '" novalidate>' +
-        '<p class="ms2-pregunta">' + U.ico('check', 15) + '<span><b>Este ítem está terminado.</b> Confírmalo si quedó resuelto, o cuéntanos qué falta.' +
+        '<p class="ms2-pregunta">' + U.ico('check', 15) + '<span><b>El equipo lo marcó como resuelto.</b> Confírmalo si quedó bien, o cuéntanos qué falta.' +
           (s.cierre_automatico_el ? ' <span class="sx2-tenue">Si no respondes, se cerrará solo el ' + U.esc(PY.fecha(s.cierre_automatico_el, true)) + '.</span>' : '') + '</span></p>' +
         (reabrir ? PY.campo('¿Qué falta?', '<textarea class="sx2-input" name="comentario" maxlength="2000" placeholder="Sé concreto: el equipo lo retomará con esto"></textarea>') : '') + error() +
         '<div class="sx2-flex" style="justify-content:flex-end;gap:6px">' +
@@ -373,7 +376,8 @@
     }
 
     function historial() {
-      var ev = det.historial || [];
+      // Solo los cambios que se ven (Recibida → En revisión es "En curso" → "En curso": no se muestra).
+      var ev = (det.historial || []).filter(function (h) { return !h.estado_anterior || visible(h.estado_anterior) !== visible(h.estado_nuevo); });
       if (!ev.length) return U.vacio({ icono: 'reloj', texto: 'Sin movimientos todavía.' });
       var tit = {};
       (det.subsolicitudes || []).forEach(function (s) { tit[s.subsolicitud_id] = s.numero_item; });
@@ -389,11 +393,17 @@
       }).join('') + '</ul>';
     }
 
-    // Lo que el equipo te escribió (no las notas internas) y lo que tú
-    // respondiste, en orden. Responder: en el ítem que espera tu respuesta.
+    // Etapa 3: la conversación con el equipo, de los dos lados, y para
+    // escribirles cuando quieras (si un ítem esperaba tu respuesta, vuelve a
+    // En curso). Las notas internas del equipo nunca aparecen aquí.
     function mensajes() {
       var ms = det.mensajes || [];
-      if (!ms.length) return U.vacio({ icono: 'comentario', titulo: 'Sin mensajes', texto: 'Cuando el equipo te escriba algo sobre esta solicitud lo verás aquí, y también te llegará por correo.' });
+      var abierta = (det.subsolicitudes || []).some(function (s) { return CERRADOS.indexOf(s.estado) === -1; });
+      var form = abierta ? '<form class="sx2-form ms2-conv__form js-ms2-form" data-id="" data-acc="mensaje" novalidate>' +
+          PY.campo('Escribe al equipo', '<textarea class="sx2-input" name="texto" maxlength="4000" placeholder="Una duda, un dato que faltó, cómo va…"></textarea>') + error() +
+          '<div class="sx2-flex" style="justify-content:flex-end">' + U.boton({ texto: 'Enviar', icono: 'derecha', sm: true, variante: 'primario', tipo: 'submit' }) + '</div></form>'
+        : '<p class="sx2-tenue" style="margin:0;font-size:.8125rem">Esta solicitud está cerrada. Si necesitas algo más, crea una nueva.</p>';
+      if (!ms.length) return U.vacio({ icono: 'comentario', titulo: 'Sin mensajes', texto: 'Aquí verás lo que el equipo te escriba (también te llega por correo), y puedes escribirles.' }) + form;
       var num = {};
       (det.subsolicitudes || []).forEach(function (s) { num[s.subsolicitud_id] = s.numero_item; });
       var multi = (det.subsolicitudes || []).length > 1;
@@ -404,7 +414,7 @@
             (multi && num[m.subsolicitud_id] ? ' · ítem ' + num[m.subsolicitud_id] : '') +
             ' · <span class="sx2-tenue">' + U.esc(PY.haceTiempo(m.timestamp)) + '</span></span>' +
           '<p class="ms2-msj__texto">' + U.esc(m.texto) + '</p></li>';
-      }).join('') + '</ul>';
+      }).join('') + '</ul>' + form;
     }
 
     function archivos() {
@@ -472,7 +482,11 @@
       }
       if (acc === 'responder') {
         if (!x.texto) return mal('Escribe tu respuesta antes de enviar.');
-        return correr('responderConsulta', { texto: x.texto }, function () { PY.aviso('Respuesta enviada al equipo.', 'exito'); });
+        return correr('responderConsulta', { texto: x.texto }, function () { PY.aviso('Respuesta enviada: el ítem vuelve a En curso.', 'exito'); });
+      }
+      if (acc === 'mensaje') {
+        if (!x.texto) return mal('Escribe tu mensaje antes de enviar.');
+        return correr('enviarMensajeSolicitud', { texto: x.texto }, function () { PY.aviso('Mensaje enviado al equipo.', 'exito'); });
       }
       if (acc === 'confirmar') {
         return correr('validarCierre', { accion: 'confirmar', comentario: '', atencion_directa: null }, function () { PY.aviso('Listo: ítem cerrado. ¡Gracias por confirmar!', 'exito'); });
@@ -505,7 +519,7 @@
     // "Confirmar todos": uno tras otro (cada cierre recalcula la solicitud).
     function confirmarTodos(btn) {
       var ids = (det.subsolicitudes || []).filter(function (s) { return s.estado === 'S08'; });
-      U.confirmar({ titulo: '¿Confirmar ' + ids.length + ' ítems terminados?', texto: ids.map(function (s) { return '• ' + (s.titulo || s.subsolicitud_id); }).join('\n') + '\n\nQuedan cerrados como resueltos.', boton: 'Confirmar y cerrar' }).then(function (si) {
+      U.confirmar({ titulo: '¿Confirmar ' + ids.length + ' ítems resueltos?', texto: ids.map(function (s) { return '• ' + (s.titulo || s.subsolicitud_id); }).join('\n') + '\n\nQuedan cerrados.', boton: 'Confirmar y cerrar' }).then(function (si) {
         if (!si) return;
         btn.disabled = true;
         var ok = 0, fallo = '';

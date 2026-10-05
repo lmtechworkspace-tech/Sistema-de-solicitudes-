@@ -60,7 +60,7 @@ test('los avisos al SOLICITANTE EXTERNO nunca se bloquean (no tienen categoría)
   const db = dbConSchema();
   ['PAUSAS', 'ACTIVIDADES', 'NOVEDADES', 'SOLICITUDES', 'SLA', 'REPORTES'].forEach((c) => Notificaciones.guardarCanalAlerta(db, { clave: c, activo: false }, ADMIN));
   agregarFila_(db, 'SOLICITUDES', { solicitud_id: 'SOL-1', solicitante_email: 'cliente@externo.cl', solicitante_nombre: 'Cliente', estado_derivado: 'S05' });
-  const r = Notificaciones.notificarCambioEstado(db, 'SOL-1', 'SOL-1-01', 'S02', 'S05');
+  const r = Notificaciones.notificarCambioEstado(db, 'SOL-1', 'SOL-1-01', 'S01', 'S05');
   assert.equal(r.encolado, true);
   assert.equal(filas(db, 'LOG_NOTIFICACIONES').length, 1);
 });

@@ -153,7 +153,7 @@ test('la cola del departamento: la ven sus miembros; un ajeno no; lo sin asignar
   assert.deepEqual(jefa.responsables.map((r) => r.email).sort(), [ANALISTA, JEFA].sort(), 'reparte entre su equipo');
 });
 
-test('tomar: queda a su nombre y pasa a Recibida; nadie lo pisa después; un ajeno no puede', async () => {
+test('tomar: queda a su nombre y pasa a En curso; nadie lo pisa después; un ajeno no puede', async () => {
   const db = dbConSchema();
   equipoContabilidad(db);
   await pedir(db, {});
@@ -164,11 +164,11 @@ test('tomar: queda a su nombre y pasa a Recibida; nadie lo pisa después; un aje
   assert.equal(r.desarrollador_asignado, ANALISTA);
   const item = filas(db, 'SUBSOLICITUDES')[0];
   assert.equal(item.desarrollador_asignado, ANALISTA);
-  assert.equal(item.estado, 'S02');
+  assert.equal(item.estado, 'S05', 'etapa 3: quien lo toma lo empieza');
   assert.ok(BO.tomarItem(db, { subsolicitud_id: id }, ctx(JEFA))._validationError, 'ya lo tomó otra persona');
   assert.equal(filas(db, 'HISTORIAL_ASIGNACION').length, 1);
   // Ya es suyo: puede avanzarlo.
-  assert.ok(!BO.actualizarEstado(db, { subsolicitud_id: id, estado_nuevo: 'S05', comentario: '' }, ctx(ANALISTA))._forbidden);
+  assert.ok(!BO.actualizarEstado(db, { subsolicitud_id: id, estado_nuevo: 'S08', comentario: '' }, ctx(ANALISTA))._forbidden);
 });
 
 test('repartir: la jefatura asigna dentro de su equipo y actúa sobre lo de su departamento; no fuera del equipo', async () => {
