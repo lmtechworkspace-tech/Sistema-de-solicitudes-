@@ -239,12 +239,13 @@ test('medición: recordatorios a tiempo, sin respuesta y atribución del atraso 
   const IND = require('../logica/indicadoresDepto');
   actualizarFilaPorId_(db, 'CI_REGISTROS', 'registro_id', 'I1', { datos: { monto_pago: 500000, fecha_declaracion: '2026-10-22' } });
   actualizarFilaPorId_(db, 'CI_REGISTROS', 'registro_id', 'I2', { datos: { monto_pago: 120000, fecha_declaracion: '2026-10-19' } });
-  const r = IND.calcularArea_(db, 'CONTABILIDAD', '2026-M09');
+  const c = IND.contexto_(db, '2026-M10'); c.hoy = '2026-11-20';
+  const r = IND.calcularArea_(db, 'CONTABILIDAD', '2026-M10', c);
   const k = r.kpis.find((x) => x.clave === 'f29_a_tiempo');
   assert.equal(k.extra.atraso_cliente, 1);
   assert.equal(k.extra.atraso_interno, 0);
   assert.match(r.detalle.f29_atrasos_mes[0].recordatorio, /^Sí, desde el 13-10-2026/);
-  const r10 = IND.calcularArea_(db, 'CONTABILIDAD', '2026-M10');
+  const r10 = r;
   assert.equal(r10.kpis.find((x) => x.clave === 'recordatorios_a_tiempo').valor, 50);
   assert.equal(r10.kpis.find((x) => x.clave === 'clientes_sin_respuesta').valor, 1);
   assert.equal(IND.calcularArea_(db, 'CONTABILIDAD', '2026-M08').kpis.some((x) => x.clave === 'recordatorios_a_tiempo'), false, 'antes de la agenda no se mide');

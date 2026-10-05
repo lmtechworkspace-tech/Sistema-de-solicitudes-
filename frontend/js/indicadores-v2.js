@@ -16,8 +16,8 @@
 
   var U = UIv2;
   var MES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
-  var TONO = { ok: 'ok', alerta: 'alerta', critico: 'critico', info: 'info', sin_dato: 'neutro', sin_datos: 'neutro' };
-  var ESTADO_TXT = { ok: 'En meta', alerta: 'Vigilar', critico: 'Crítico', info: 'Informativo', sin_dato: 'Sin dato', sin_datos: 'Sin datos' };
+  var TONO = { ok: 'ok', alerta: 'alerta', critico: 'critico', info: 'info', sin_dato: 'neutro', sin_datos: 'neutro', en_curso: 'neutro' };
+  var ESTADO_TXT = { ok: 'En meta', alerta: 'Vigilar', critico: 'Crítico', info: 'Informativo', sin_dato: 'Sin dato', sin_datos: 'Sin datos', en_curso: 'En curso' };
 
   function txt(v) { return U.esc(String(v == null ? '' : v)); }
   function n1(v, dec) { return Number(v).toLocaleString('es-CL', { maximumFractionDigits: dec == null ? 1 : dec }); }
@@ -50,7 +50,8 @@
     var s = k.serie || [];
     var vals = s.map(function (x) { return x.valor; }).filter(function (x) { return x !== null && x !== undefined; });
     if (vals.length < 2) return '';
-    var W = 560, H = 200, L = 46, R = 12, T = 18, B = 24, n = s.length;
+    var W = 420, H = 190, L = 44, R = 10, T = 20, B = 26, n = s.length;
+    var prel = !!k.preliminar; // el último mes todavía se registra: punteado
     var esPct = k.formato === 'pct';
     var max = Math.max.apply(null, vals.concat(k.umbrales && k.umbrales.meta != null ? [k.umbrales.meta] : []));
     var min = esPct ? Math.max(0, Math.floor((Math.min.apply(null, vals.concat(k.umbrales && k.umbrales.meta != null ? [k.umbrales.meta] : [])) - 5) / 5) * 5) : 0;
@@ -69,15 +70,19 @@
     var malo = function (v) { if (meta === null || v === null) return false; return k.sentido === 'menor' ? v > (k.umbrales.alerta != null ? k.umbrales.alerta : meta) : v < (k.umbrales.alerta != null ? k.umbrales.alerta : meta); };
     if (esPct || k.formato === 'ratio') {
       var d = '', ult = null;
-      s.forEach(function (p, i) { if (p.valor === null || p.valor === undefined) return; d += (d ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p.valor).toFixed(1) + ' '; ult = [i, p.valor]; });
+      var pts = [];
+      s.forEach(function (p, i) { if (p.valor === null || p.valor === undefined) return; pts.push([i, p.valor]); ult = [i, p.valor]; });
+      var hasta = prel && pts.length > 1 ? pts.length - 1 : pts.length;
+      pts.slice(0, hasta).forEach(function (q, j) { d += (j ? 'L' : 'M') + x(q[0]).toFixed(1) + ' ' + y(q[1]).toFixed(1) + ' '; });
       o += '<path d="' + d + '" class="ind-graf__l"/>';
+      if (hasta < pts.length) { var a2 = pts[pts.length - 2], b2 = pts[pts.length - 1]; o += '<path d="M' + x(a2[0]).toFixed(1) + ' ' + y(a2[1]).toFixed(1) + ' L' + x(b2[0]).toFixed(1) + ' ' + y(b2[1]).toFixed(1) + '" class="ind-graf__l ind-graf__l--prel"/>'; }
       s.forEach(function (p, i) { if (p.valor === null || p.valor === undefined) return; o += '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(p.valor).toFixed(1) + '" r="' + (i === n - 1 ? 4.5 : 3) + '" class="' + (malo(p.valor) ? 'ind-graf__pm' : 'ind-graf__p') + '"/>'; });
       if (ult) o += '<text x="' + x(ult[0]).toFixed(1) + '" y="' + (y(ult[1]) - 9).toFixed(1) + '" text-anchor="middle" class="ind-graf__v">' + U.esc(corto(k, ult[1])) + '</text>';
     } else {
       var bw = Math.min(28, paso * 0.66);
       s.forEach(function (p, i) {
         if (p.valor === null || p.valor === undefined) return;
-        o += '<rect x="' + (x(i) - bw / 2).toFixed(1) + '" y="' + y(p.valor).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(0, y(min) - y(p.valor)).toFixed(1) + '" rx="2" class="' + (i === n - 1 ? 'ind-graf__b ind-graf__b--ult' : 'ind-graf__b') + '"/>';
+        o += '<rect x="' + (x(i) - bw / 2).toFixed(1) + '" y="' + y(p.valor).toFixed(1) + '" width="' + bw.toFixed(1) + '" height="' + Math.max(0, y(min) - y(p.valor)).toFixed(1) + '" rx="2" class="' + (i === n - 1 ? 'ind-graf__b ind-graf__b--ult' + (prel ? ' ind-graf__b--prel' : '') : 'ind-graf__b') + '"/>';
       });
       var u = s[n - 1];
       if (u && u.valor !== null) o += '<text x="' + x(n - 1).toFixed(1) + '" y="' + (y(u.valor) - 5).toFixed(1) + '" text-anchor="middle" class="ind-graf__v">' + U.esc(corto(k, u.valor)) + '</text>';
@@ -88,7 +93,7 @@
   // --- piezas -------------------------------------------------------------------------------
   function tarjeta(k, i) {
     return '<article class="ind-kpi ind-kpi--' + U.esc(k.estado) + ' sx2-entra" style="--i:' + (i || 0) + '">' +
-      '<header class="ind-kpi__cab"><span class="ind-kpi__nom">' + txt(k.nombre) + '</span>' + chip(k.estado) + '</header>' +
+      '<header class="ind-kpi__cab"><span class="ind-kpi__nom">' + txt(k.nombre) + (k.mide ? '<small class="ind-kpi__mide">' + txt(k.mide) + '</small>' : '') + '</span>' + chip(k.estado) + '</header>' +
       '<div class="ind-kpi__fila"><span class="ind-kpi__v">' + txt(valor(k, k.valor)) + '</span>' + linea(k.serie || []) + '</div>' +
       (k.meta_texto ? '<span class="ind-kpi__meta">Meta: ' + txt(k.meta_texto) + (k.confiable === false ? ' · <b>dato no confiable</b>' : '') + '</span>' : '') +
       '<p class="ind-kpi__exp">' + txt(k.explicacion || k.nota || '') + '</p>' +

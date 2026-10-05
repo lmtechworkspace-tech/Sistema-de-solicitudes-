@@ -46,7 +46,7 @@ test('el vencimiento hábil corre al lunes y salta los feriados', () => {
   assert.equal(I.num_('1.234.567'), 1234567);
 });
 
-test('F29: puntualidad, al límite y clientes que se atrasan casi siempre', () => {
+test('F29: el reporte mide el F29 que venció en el mes (el de septiembre mide el de agosto)', () => {
   const db = crear();
   // El cliente A se atrasa 4 de 12 meses; B siempre a tiempo; C sin declaración en agosto.
   meses(PER, 12).forEach((p, i) => {
@@ -54,17 +54,31 @@ test('F29: puntualidad, al límite y clientes que se atrasan casi siempre', () =
     const tarde = new Date(new Date(venc).getTime() + 3 * 864e5).toISOString().slice(0, 10);
     fila(db, 'IVA', p, 'A', { fecha_declaracion: i % 3 === 2 ? tarde : venc.slice(0, 8) + '05', monto_pago: 1000000 });
     fila(db, 'IVA', p, 'B', { fecha_declaracion: venc.slice(0, 8) + '10', monto_pago: '1.5E7' });
+    ['D', 'E', 'F', 'G'].forEach((c) => fila(db, 'IVA', p, c, { fecha_declaracion: venc.slice(0, 8) + '12', monto_pago: 0 }));
     if (p === PER) fila(db, 'IVA', p, 'C', {}, 'PENDIENTE');
   });
-  const r = I.calcularArea_(db, 'CONTABILIDAD', PER);
+  const r = I.calcularArea_(db, 'CONTABILIDAD', CI.moverPeriodo_(PER, 1));
   const k = (c) => r.kpis.find((x) => x.clave === c);
-  assert.equal(k('f29_a_tiempo').valor, 50, 'en agosto A se atrasó: 1 de 2');
+  assert.equal(k('f29_a_tiempo').valor, 83.3, 'en el F29 de agosto A se atrasó: 1 de 6');
+  assert.equal(k('f29_a_tiempo').mide, 'F29 de agosto de 2026 (venció el 21-09-2026)');
   assert.equal(k('f29_a_tiempo').estado, 'critico');
-  assert.match(k('f29_a_tiempo').explicacion, /clientes que se atrasan 3 meses o más/);
+  assert.match(k('f29_a_tiempo').explicacion, /cliente que se atrasa 3 meses o más/);
   assert.deepEqual(r.detalle.f29_reincidentes, [{ cliente: 'Cliente A', meses_tarde: 4 }]);
   assert.equal(k('f29_sin_registro').valor, 1);
   assert.equal(k('iva_pagado').valor, 16000000, 'el monto en notación científica también suma');
   assert.equal(k('f29_a_tiempo').serie.length, 12);
+  assert.equal(k('f29_a_tiempo').serie[11].periodo, PER, 'la serie va por el período del F29');
+  // Con menos de 5 declarados no se da un estado.
+  const db2 = crear();
+  fila(db2, 'IVA', PER, 'A', { fecha_declaracion: '2026-09-25' });
+  const r2 = I.calcularArea_(db2, 'CONTABILIDAD', CI.moverPeriodo_(PER, 1));
+  assert.equal(r2.kpis.find((x) => x.clave === 'f29_a_tiempo').estado, 'info');
+  assert.match(r2.kpis.find((x) => x.clave === 'f29_a_tiempo').explicacion, /muy pocos/);
+  // Lo que todavía no vence va «en curso», sin color.
+  const c3 = I.contexto_(db, CI.moverPeriodo_(PER, 1)); c3.hoy = '2026-09-10';
+  const k3 = I.calcularArea_(db, 'CONTABILIDAD', CI.moverPeriodo_(PER, 1), c3).kpis.find((x) => x.clave === 'f29_a_tiempo');
+  assert.equal(k3.estado, 'en_curso');
+  assert.equal(k3.valor, null);
   assert.ok(r.alertas.some((a) => a.clave === 'f29_reincidentes'));
 });
 
@@ -101,8 +115,8 @@ test('RR.HH.: registros de la DT pendientes, salidas por entrada y lo que no se 
   assert.equal(r.alertas[0].clave, 'rle_pendiente', 'lo crítico va primero');
   assert.equal(k('salidas_por_entrada').valor, 2);
   assert.ok(r.alertas.some((a) => a.clave === 'salidas_por_entrada'));
-  assert.equal(k('cotizaciones_a_tiempo').estado, 'sin_dato');
-  assert.match(k('cotizaciones_a_tiempo').explicacion, /No se puede medir/);
+  assert.equal(k('cotizaciones_a_tiempo'), undefined, 'sin dato no ocupa una tarjeta');
+  assert.ok(r.detalle.calidad.some((x) => /Cotizaciones a tiempo: no se puede medir/.test(x.problema)), 'va a calidad del dato');
   assert.equal(k('liquidaciones').valor, 30);
   assert.equal(r.detalle.causales[0].participacion, 100);
 });

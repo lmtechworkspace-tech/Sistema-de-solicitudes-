@@ -138,13 +138,17 @@
 .ind-fig__lec { margin: 0; font: var(--sx-t-chico); line-height: 1.5; color: var(--sx-texto); border-left: 3px solid var(--sx-primario); padding-left: 8px; }
 .ind-graf { width: 100%; height: auto; display: block; }
 .ind-graf__eje { stroke: var(--sx-borde); stroke-width: 1; }
-.ind-graf__t { fill: var(--sx-texto-3); font: 400 10px var(--fuente); }
+.ind-graf__t { fill: var(--sx-texto-3); font: 500 13px var(--fuente); }
 .ind-graf__meta { stroke: var(--sx-critico); stroke-width: 1.2; stroke-dasharray: 4 3; }
-.ind-graf__mt { fill: var(--sx-critico); font: 600 10px var(--fuente); }
+.ind-graf__mt { fill: var(--sx-critico); font: 600 12px var(--fuente); }
 .ind-graf__l { fill: none; stroke: var(--sx-primario); stroke-width: 2.2; }
 .ind-graf__p { fill: var(--sx-primario); } .ind-graf__pm { fill: var(--sx-critico); }
 .ind-graf__b { fill: var(--sx-primario); opacity: .45; } .ind-graf__b--ult { opacity: 1; }
-.ind-graf__v { fill: var(--sx-texto); font: 700 10.5px var(--fuente); }
+/* El mes que todavía se registra: hueco y punteado (cifra preliminar). */
+.ind-graf__b--prel { fill: var(--sx-primario-suave); stroke: var(--sx-primario); stroke-width: 1.5; stroke-dasharray: 4 3; }
+.ind-graf__l--prel { stroke-dasharray: 5 4; opacity: .7; }
+.ind-kpi__mide { display: block; margin-top: 2px; font: 400 .75rem/1.3 var(--fuente); color: var(--sx-texto-3); }
+.ind-graf__v { fill: var(--sx-texto); font: 700 14px var(--fuente); }
 .ind-detalles { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: var(--sx-e-3); }
 @media (max-width: 720px) { .ind-detalles, .ind-figs { grid-template-columns: minmax(0, 1fr); } }
 .ind-tabla { display: flex; flex-direction: column; gap: 6px; min-width: 0; }

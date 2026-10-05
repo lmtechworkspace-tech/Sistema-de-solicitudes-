@@ -111,7 +111,7 @@
 .rp2-tendencia { margin: 0; }
 .rp2-tendencia svg { width: 100%; height: auto; display: block; }
 .rp2-g-rejilla { stroke: var(--sx-borde-suave); stroke-width: 1; }
-.rp2-g-tick { font: 500 11px var(--fuente); fill: var(--sx-texto-3); }
+.rp2-g-tick { font: 500 14px var(--fuente); fill: var(--sx-texto-3); }
 .rp2-g-linea { stroke: var(--sx-primario); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
 .rp2-g-stop1 { stop-color: var(--sx-primario); stop-opacity: .22; }
 .rp2-g-stop2 { stop-color: var(--sx-primario); stop-opacity: 0; }
@@ -119,7 +119,9 @@
 .rp2-g-punto--fin { fill: var(--sx-primario); }
 .rp2-g-meta { stroke: var(--sx-ok); stroke-width: 1.5; stroke-dasharray: 5 4; }
 .rp2-g-meta-txt { font: 600 11px var(--fuente); fill: var(--sx-ok); }
-.rp2-tendencia__pie { margin-top: 6px; font: var(--sx-t-micro); color: var(--sx-texto-3); }
+/* Los valores de la serie quedan para lectores de pantalla: impresos bajo el gráfico solo ensuciaban (auditoría A5). */
+.rp2-tendencia__pie { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.rp2-tendencia { position: relative; }
 
 .rp2-doc { display: flex; flex-direction: column; gap: 8px; padding: var(--sx-e-5) var(--sx-e-6); margin-bottom: var(--sx-e-2);
   background: var(--sx-superficie); border: 1px solid var(--sx-borde-suave); border-radius: var(--sx-radio-lg); box-shadow: var(--sx-sombra-1); }

@@ -287,7 +287,7 @@ function personasTiempos(db, data, contexto) {
 
   const personas = {};
   const tiemposMatriz = {};
-  const pendientes = [];
+  const pendientes = [], fechasInvalidas = [];
   filas.forEach((r) => {
     const m = porM[r.matriz];
     const k = claveResp_(m, r) || '(sin responsable)';
@@ -303,7 +303,11 @@ function personasTiempos(db, data, contexto) {
     }
     if (!fin) {
       // Antigüedad: desde la fecha de la fila (o el fin de su mes si no tiene).
-      const base = RE_FECHA.test(String(r.fecha || '')) ? r.fecha : (r.periodo.slice(0, 4) + '-' + r.periodo.slice(6, 8) + '-28');
+      // Una fecha con año imposible (error de tipeo en la planilla) no se usa: se lista para corregirla (auditoría A4).
+      const conFecha = RE_FECHA.test(String(r.fecha || ''));
+      const valida = conFecha && r.fecha >= '2015-01-01' && r.fecha <= hoy;
+      if (conFecha && !valida && fechasInvalidas.length < 30) fechasInvalidas.push({ matriz_nombre: m.nombre, periodo: r.periodo, cliente_nombre: r.cliente_nombre, fecha: r.fecha });
+      const base = valida ? r.fecha : (r.periodo.slice(0, 4) + '-' + r.periodo.slice(6, 8) + '-28');
       const dias = Math.max(0, Math.round((Date.parse(hoy + 'T12:00:00Z') - Date.parse(base + 'T12:00:00Z')) / 86400000));
       pendientes.push({ registro_id: r.registro_id, matriz: m.clave, matriz_nombre: m.nombre, periodo: r.periodo, cliente_nombre: r.cliente_nombre, responsable: k, dias, estado_texto: (CI.estadoDef_(m, r.estado) || {}).etiqueta || r.estado });
     }
@@ -321,7 +325,7 @@ function personasTiempos(db, data, contexto) {
   }).sort((a, b) => (b.promedio || 0) - (a.promedio || 0));
   return {
     desde, hasta, depto: d.depto || '', personas: listaPersonas, tiempos, tramos_pendientes: tramos,
-    pendientes_antiguos: pendientes.sort((a, b) => b.dias - a.dias).slice(0, 60), total_pendientes: pendientes.length
+    pendientes_antiguos: pendientes.sort((a, b) => b.dias - a.dias).slice(0, 60), total_pendientes: pendientes.length, fechas_invalidas: fechasInvalidas
   };
 }
 

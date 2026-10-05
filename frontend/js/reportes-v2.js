@@ -258,7 +258,7 @@
   function tendencia(puntos, opts) {
     opts = opts || {};
     if (!puntos || puntos.length < 2) return vacio_(opts.vacio || 'Hacen falta al menos dos períodos medidos para dibujar una tendencia.');
-    var an = 640, al = 200, m = { i: 40, d: 16, s: 18, b: 30 };
+    var an = 640, al = 220, m = { i: 52, d: 16, s: 20, b: 34 };
     var valores = puntos.map(function (p) { return Number(p.valor) || 0; });
     var max = Math.max.apply(null, valores), min = Math.min(0, Math.min.apply(null, valores));
     if (opts.meta !== undefined && opts.meta !== null && opts.meta !== '') max = Math.max(max, Number(opts.meta));
@@ -272,7 +272,7 @@
     var grid = [0, 0.5, 1].map(function (f) {
       var v = min + (max - min) * f, yy = y(v).toFixed(1);
       return '<line x1="' + m.i + '" y1="' + yy + '" x2="' + (an - m.d) + '" y2="' + yy + '" class="rp2-g-rejilla"/>' +
-        '<text x="' + (m.i - 8) + '" y="' + (Number(yy) + 4) + '" class="rp2-g-tick" text-anchor="end">' + esc_(Math.round(v * 10) / 10) + '</text>';
+        '<text x="' + (m.i - 8) + '" y="' + (Number(yy) + 4) + '" class="rp2-g-tick" text-anchor="end">' + esc_((max - min > 10 ? Math.round(v) : Math.round(v * 10) / 10).toLocaleString('es-CL')) + '</text>';
     }).join('');
     var meta = opts.meta !== undefined && opts.meta !== null && opts.meta !== ''
       ? '<line x1="' + m.i + '" y1="' + y(Number(opts.meta)).toFixed(1) + '" x2="' + (an - m.d) + '" y2="' + y(Number(opts.meta)).toFixed(1) + '" class="rp2-g-meta"/>' +

@@ -145,8 +145,11 @@
         { etiqueta: 'Mes en curso', valor: n(ult.total) + ' filas', titulo: ult.periodo ? x_.perTexto(ult.periodo, true) : '' }
       ]);
       var etq = function (per) { return MESES[Number(per.slice(6, 8)) - 1] + ' ' + per.slice(2, 4); };
-      var volumen = seccion('Filas por mes', R().tendencia(serie.map(function (s) { return { etiqueta: etq(s.periodo), valor: s.total }; }), { titulo: 'Filas por mes' }));
-      var cierre = seccion('% terminado por mes', R().tendencia(serie.filter(function (s) { return s.total; }).map(function (s) { return { etiqueta: etq(s.periodo), valor: s.avance_pct }; }), { titulo: '% terminado', meta: 90 }), 'meta 90 %');
+      // Las curvas terminan en el último mes cerrado: el mes en curso, a medio registrar, dibujaba una caída falsa (auditoría A5).
+      var cerrados = serie.filter(function (s) { return s.periodo < x_.periodoActual(); });
+      var hastaK = function (per) { return per < x_.periodoActual(); };
+      var volumen = seccion('Filas por mes', R().tendencia(cerrados.map(function (s) { return { etiqueta: etq(s.periodo), valor: s.total }; }), { titulo: 'Filas por mes' }));
+      var cierre = seccion('% terminado por mes', R().tendencia(cerrados.filter(function (s) { return s.total; }).map(function (s) { return { etiqueta: etq(s.periodo), valor: s.avance_pct }; }), { titulo: '% terminado', meta: 90 }), 'meta 90 %');
       var yoy = seccion('Año contra año (filas por mes)', '<div class="sx2-tabla-wrap rp2-tabla"><table class="sx2-tabla" id="cir-yoy"><thead><tr><th>Año</th>' + MESES.map(function (mm) { return '<th class="sx2-num">' + mm + '</th>'; }).join('') + '<th class="sx2-num">Total</th></tr></thead><tbody>' +
         d.anio_contra_anio.filter(function (a2) { return a2.meses.some(function (v) { return v; }); }).map(function (a2) {
           var s = a2.meses.reduce(function (x, v) { return x + (v || 0); }, 0);
@@ -158,11 +161,11 @@
       if (d.detalle_matriz) {
         var dm = d.detalle_matriz;
         extra = dm.montos.map(function (mo) {
-          var pts = d.meses.slice(k0).map(function (per, i) { return { etiqueta: etq(per), valor: Math.round(mo.por_mes[k0 + i] || 0) }; });
+          var pts = d.meses.slice(k0).map(function (per, i) { return { per: per, etiqueta: etq(per), valor: Math.round(mo.por_mes[k0 + i] || 0) }; }).filter(function (q) { return hastaK(q.per); });
           return seccion(mo.etiqueta + ' por mes', R().tendencia(pts, { titulo: mo.etiqueta }));
         }).join('') +
-          (dm.tiempos ? seccion('Días de respuesta promedio por mes', R().tendencia(d.meses.slice(k0).map(function (per, i) { return { etiqueta: etq(per), valor: dm.tiempos.por_mes[k0 + i] }; }).filter(function (q) { return q.valor !== null; }), { titulo: 'Días promedio' })) : '') +
-          seccion('Clientes con filas por mes', R().tendencia(d.meses.slice(k0).map(function (per, i) { return { etiqueta: etq(per), valor: dm.clientes_por_mes[k0 + i] }; }), { titulo: 'Clientes' }));
+          (dm.tiempos ? seccion('Días de respuesta promedio por mes', R().tendencia(d.meses.slice(k0).map(function (per, i) { return { per: per, etiqueta: etq(per), valor: dm.tiempos.por_mes[k0 + i] }; }).filter(function (q) { return q.valor !== null && hastaK(q.per); }), { titulo: 'Días promedio' })) : '') +
+          seccion('Clientes con filas por mes', R().tendencia(d.meses.slice(k0).map(function (per, i) { return { per: per, etiqueta: etq(per), valor: dm.clientes_por_mes[k0 + i] }; }).filter(function (q) { return hastaK(q.per); }), { titulo: 'Clientes' }));
       }
       var cuerpo = kpis + R().nivel('Tendencia', '<div class="ci2-rep-2">' + volumen + cierre + '</div>') + R().nivel('Año contra año', yoy) + (porMatriz ? R().nivel('Detalle por matriz', porMatriz) : '') + (extra ? R().nivel('Montos y tiempos', '<div class="ci2-rep-2">' + extra + '</div>') : '');
       x_.pagina(x_.cabecera(x_.modNombre + ' · Reportes', TIT, 'Cómo vienen los procesos mes a mes desde 2022: volumen, cierre, montos y tiempos.') + filtros +
@@ -268,7 +271,9 @@
         var antig = seccion('Antigüedad de lo sin terminar', R().ranking(d.tramos_pendientes.map(function (x) { return { etiqueta: x.etiqueta, valor: x.casos, tono: /180/.test(x.etiqueta) && /Más/.test(x.etiqueta) ? 'critico' : (/91/.test(x.etiqueta) ? 'alerta' : 'primario') }; }), { max: d.total_pendientes || 1, sinPosicion: true }));
         var viejosT = seccion('Lo más antiguo sin terminar', R().tabla([{ titulo: 'Días', campo: 'd', alinear: 'derecha' }, { titulo: 'Matriz', campo: 'm' }, { titulo: 'Mes', campo: 'p' }, { titulo: 'Cliente', campo: 'c' }, { titulo: 'Responsable', campo: 'r' }, { titulo: 'Situación', campo: 's' }],
           d.pendientes_antiguos.map(function (x) { return { d: n(x.dias), m: x.matriz_nombre, p: x_.perTexto(x.periodo), c: x.cliente_nombre, r: quien(x.responsable), s: x.estado_texto }; }), { id: 'cir-antiguos', vacio: 'Nada pendiente.' }));
-        var cuerpo = kpis + R().nivel('Lo que requiere atención', '<div class="ci2-rep-2">' + antig + viejosT + '</div>') + R().nivel('Personas', '<div class="ci2-rep-2">' + carga + tiempos + '</div>' + tablaP);
+        var malas = (d.fechas_invalidas || []).length ? seccion('Fechas para corregir', R().tabla([{ titulo: 'Matriz', campo: 'm' }, { titulo: 'Mes', campo: 'p' }, { titulo: 'Cliente', campo: 'c' }, { titulo: 'Fecha escrita', campo: 'f' }],
+          d.fechas_invalidas.map(function (x) { return { m: x.matriz_nombre, p: x_.perTexto(x.periodo), c: x.cliente_nombre, f: x.fecha }; }), { id: 'cir-fechas' }), 'Tienen un año imposible: no se usan para la antigüedad hasta corregirlas') : '';
+        var cuerpo = kpis + R().nivel('Lo que requiere atención', '<div class="ci2-rep-2">' + antig + viejosT + '</div>') + R().nivel('Personas', '<div class="ci2-rep-2">' + carga + tiempos + '</div>' + tablaP) + (malas ? R().nivel('Calidad del dato', malas) : '');
         x_.pagina(x_.cabecera(x_.modNombre + ' · Reportes', TIT, 'Quién hace qué, cuánto demora y qué quedó sin terminar.') + filtros +
           documento(cuerpo, { titulo: 'Personas y tiempos · ' + x_.depto(e.depto).nombre, modulo: x_.modNombre, periodo: x_.perTexto(d.desde, true) + ' a ' + x_.perTexto(d.hasta, true) }));
         montar('Personas y tiempos ' + x_.depto(e.depto).nombre);
