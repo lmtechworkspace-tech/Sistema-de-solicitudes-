@@ -232,7 +232,9 @@ function instalarInicio() {
     'rem se rehace con "agente.js instalar-inicio".',
     'cd /d "' + PROYECTO + '"',
     ':otra',
-    '"' + process.execPath + '" "' + agente + '" --oculto',
+    // --ventana: la TGR rechaza (403) el navegador invisible; el programa no tiene ventana,
+    // pero Chrome se ve mientras revisa un cliente y se cierra al terminar.
+    '"' + process.execPath + '" "' + agente + '" --oculto --ventana',
     'if errorlevel ' + SALIDA_DEFINITIVA + ' goto fin',
     // timeout no espera sin ventana: ping sí (30 s entre un reintento y otro).
     'ping -n 31 127.0.0.1 >nul',
@@ -243,7 +245,7 @@ function instalarInicio() {
   fs.writeFileSync(ARRANQUE_VBS, 'Rem Robot TGR de la oficina (SIGSO): abre el robot sin ventana al iniciar sesion.\r\nCreateObject("WScript.Shell").Run """' + LANZADOR_CMD + '""", 0, False\r\n');
   try { fs.unlinkSync(ARRANQUE_VIEJO); } catch (e) { /* no estaba */ }
   crearAcceso_(ACCESO_INICIO);
-  console.log('Listo: el robot arrancará solo cada vez que inicies sesión en Windows (sin ventana).');
+  console.log('Listo: el robot arrancará solo cada vez que inicies sesión en Windows (sin ventana propia; Chrome se verá mientras revisa un cliente).');
   console.log('  Acceso directo: ' + ACCESO_INICIO);
   console.log('  Registro: ' + RUTA_LOG);
   const otro = candadoActivo();

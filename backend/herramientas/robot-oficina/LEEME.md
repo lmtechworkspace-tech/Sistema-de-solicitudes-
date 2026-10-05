@@ -85,7 +85,9 @@ node backend/herramientas/robot-oficina/agente.js instalar-inicio
 
 Deja un **acceso directo** en la carpeta Inicio del usuario (`SIGSO Robot TGR`,
 con el ícono de Node; se ve en Administrador de tareas › Aplicaciones de
-arranque) que, al iniciar sesión, abre el robot **sin ventana**; si el programa se cae, vuelve a
+arranque) que, al iniciar sesión, abre el robot **sin ventana propia**. Mientras revisa un cliente sí se ve
+Chrome (se cierra al terminar): la TGR rechaza con 403 el navegador invisible
+(probado el 5-10-2026), así que no se usa ese modo; si el programa se cae, vuelve a
 abrirlo a los 30 segundos. Lo arranca de inmediato, sin reiniciar el PC. No pide
 permisos de administrador ni toca el registro de Windows.
 
