@@ -811,6 +811,34 @@ const COLUMNAS = {
   // de Control) y GERENCIA. Administración es la lista de su departamento.
   DEP_CADENA: [
     'cadena_id', 'rol', 'usuario_email', 'creado_por', 'fecha_creacion', 'activa'
+  ],
+
+  // Agenda de los departamentos (2026-10-04): fechas clave y recordatorios.
+  // Una obligación = algo que vence (IVA, Previred, cuota de convenio, LRE…)
+  // con su regla de fecha, su escalera de recordatorios (cada escalón con
+  // canal y mensaje) y qué pasa si no se recuerda o el cliente no responde.
+  // `regla` y `escalones` son JSON. Parten como propuesta (origen PROPUESTA)
+  // y las jefaturas o el superusuario las editan (origen EDITADA).
+  DEP_OBLIGACIONES: [
+    'obligacion_id', 'clave', 'depto', 'nombre', 'descripcion', 'tipo', 'fuente', 'regla', 'escalones',
+    'sin_recordatorio', 'sin_respuesta', 'proceso', 'origen', 'orden',
+    'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activa'
+  ],
+  // Cada recordatorio enviado (y cada respuesta del cliente): lo que hoy se
+  // manda por WhatsApp o correo y no queda en ninguna parte. `item_clave`
+  // identifica al cliente (o la cuota, o la factura) dentro de la obligación
+  // y el período. Una fila de respuesta usa escalon_id = 'RESPUESTA'.
+  DEP_RECORDATORIOS: [
+    'recordatorio_id', 'depto', 'obligacion_id', 'periodo', 'fecha_limite', 'item_clave', 'cliente_id', 'cliente_nombre',
+    'escalon_id', 'canal', 'destino', 'mensaje', 'respuesta', 'nota',
+    'usuario_email', 'fecha', 'activa'
+  ],
+  // Fechas que se agregan a mano al calendario: eventos propios (reuniones,
+  // cierres) y vencimientos de obligaciones sin matriz (examen ocupacional,
+  // pacto de horas extra), con sus datos para el mensaje (`datos`, JSON).
+  DEP_EVENTOS: [
+    'evento_id', 'depto', 'obligacion_id', 'titulo', 'fecha', 'hora', 'cliente_id', 'cliente_nombre', 'datos',
+    'alcance', 'usuario_email', 'nota', 'creado_por', 'fecha_creacion', 'activa'
   ]
 };
 

@@ -417,3 +417,53 @@ de los montos y lo vencido se calcula al leer.
 Finanzas; Cobranzas: Enc. Facturación y Cobranzas; Control: Analista de
 Control; Gerencia: Director), las listas de cada área (incluida Facturación y
 Cobranzas) y empezar a registrar las facturas en la matriz de cobranza.
+
+## Agenda de los departamentos (2026-10-04)
+
+Propuesta aprobada por el dueño (artefacto «Agenda de departamentos»): fechas
+clave, recordatorios a clientes con escalamiento y registro de cada aviso.
+Decisiones: SIGSO **no envía** nada (costo cero): prepara el mensaje; WhatsApp
+se abre con el texto listo (`wa.me`, gratis) y el correo se copia y sale desde
+el correo corporativo del área. Todo queda registrado.
+
+**Menú de cada área (las mismas seis entradas):** Hoy · Agenda (Calendario,
+Recordatorios enviados, Por cliente) · Trabajo (las 5 matrices más usadas en
+12 meses + convenios/SII + «Todo el trabajo») · Reportes · Equipo (jefatura) ·
+Ajustes (Recordatorios y fechas; Accesos para ADM). «Todo el trabajo» agrupa
+las matrices por cómo se trabajan: Proceso mensual, Por solicitud, Consulta y
+Archivo (sin filas en 12 meses o sin uso, cerrado). Administración suma
+«Agenda general» (todas las áreas). `getControlInterno` devuelve `uso`
+(filas por matriz en 12 meses).
+
+**Obligaciones** (`DEP_OBLIGACIONES`, propuesta inicial en
+`agendaPropuesta.js`, sacada de DOC-10 a 13 y de las matrices): qué vence,
+la regla de la fecha (mensual/anual con día hábil, o «evento» = cada caso trae
+su fecha), la escalera de recordatorios (escalones en días hábiles respecto
+al vencimiento, canal, a quién y el mensaje con variables {contacto}
+{empresa} {periodo} {monto} {fecha_limite} {dias}…), y qué pasa si no se
+recuerda o el cliente no responde. A quién recordar sale de las matrices
+(fuentes): IVA por pagar, cuotas de convenio impagas, asistencia sin recibir,
+Previred, facturas por cobrar, clientes con contabilidad (Renta); las fechas
+manuales (examen ocupacional, pacto de horas extra) y las propias del área
+van en `DEP_EVENTOS`. Un cliente sale de la lista cuando la matriz lo da por
+cumplido o cuando se registra «Ya cumplió» / «No corresponde».
+
+**Registro** (`DEP_RECORDATORIOS`): cada envío (canal, destino, mensaje
+final, quién, cuándo) y cada respuesta (Confirmó, Ya cumplió, Pidió plazo,
+No contesta, No corresponde). Deshacer: quien lo registró o la jefatura.
+
+**Editar:** la jefatura del área, ADM o el superusuario (`ajustesAgenda`,
+`guardarObligacionAgenda`, `restaurarObligacionAgenda`); historial en
+`CI_HISTORIAL`. Una obligación nueva solo puede ser tarea interna o fecha
+manual (las fuentes de matrices son las de la propuesta).
+
+**Alertas:** número de «Hoy» en el menú (recordatorios de hoy + atrasados,
+rojo si hay atrasados); aviso llamativo al entrar, una vez al día; franja
+con cuenta regresiva del próximo vencimiento (roja a 3 días hábiles o menos);
+a las 08:00 de cada día hábil, notificación en SIGSO a quien registra en el
+área y, a la jefatura, los atrasados y los clientes sin respuesta.
+
+**Reportes:** desde octubre de 2026 el área mide «Recordatorios enviados a
+tiempo» y «Clientes que no respondieron»; en el F29 atrasado se indica si el
+cliente tuvo recordatorio antes del vencimiento (atraso del cliente) o no
+(atraso interno).

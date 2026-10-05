@@ -69,6 +69,7 @@ const ControlInterno = require('../logica/controlInterno');
 const ReportesDepto = require('../logica/departamentosReportes');
 const IndicadoresDepto = require('../logica/indicadoresDepto');
 const InformesGestion = require('../logica/informesGestion');
+const AgendaDepto = require('../logica/agendaDepto');
 const ControlInternoImportar = require('../logica/controlInternoImportar');
 const ControlInternoReportes = require('../logica/controlInternoReportes');
 const ControlInternoConvenios = require('../logica/controlInternoConvenios');
@@ -623,6 +624,22 @@ const ACCIONES = {
   historialInformeGestion: (db, data, contexto) => InformesGestion.historial(db, data, contexto),
   listarCadenaReportes: (db, data, contexto) => InformesGestion.listarCadena(db, data, contexto),
   guardarCadenaReportes: (db, data, contexto) => InformesGestion.guardarCadena(db, data, contexto),
+  // Agenda de cada departamento (2026-10-04): fechas clave, recordatorios a
+  // clientes con su mensaje listo y el registro de cada envío (agendaDepto.js).
+  hoyAgenda: (db, data, contexto) => AgendaDepto.hoy(db, data, contexto),
+  calendarioAgenda: (db, data, contexto) => AgendaDepto.calendario(db, data, contexto),
+  registrarRecordatorio: (db, data, contexto) => AgendaDepto.registrarEnvio(db, data, contexto),
+  deshacerRecordatorio: (db, data, contexto) => AgendaDepto.deshacer(db, data, contexto),
+  responderRecordatorio: (db, data, contexto) => AgendaDepto.responder(db, data, contexto),
+  registroAgenda: (db, data, contexto) => AgendaDepto.listarRegistro(db, data, contexto),
+  porClienteAgenda: (db, data, contexto) => AgendaDepto.porCliente(db, data, contexto),
+  guardarEventoAgenda: (db, data, contexto) => AgendaDepto.guardarEvento(db, data, contexto),
+  eliminarEventoAgenda: (db, data, contexto) => AgendaDepto.eliminarEvento(db, data, contexto),
+  ajustesAgenda: (db, data, contexto) => AgendaDepto.ajustes(db, data, contexto),
+  guardarObligacionAgenda: (db, data, contexto) => AgendaDepto.guardarObligacion(db, data, contexto),
+  restaurarObligacionAgenda: (db, data, contexto) => AgendaDepto.restaurarPropuesta(db, data, contexto),
+  historialObligacionAgenda: (db, data, contexto) => AgendaDepto.historialObligacion(db, data, contexto),
+  resumenAgenda: (db, data, contexto) => AgendaDepto.resumen(db, data, contexto),
   // Importar las planillas del Drive (solo ADM): el navegador lee el .xlsx y
   // manda hoja por hoja; `simular` primero.
   importarHojaCI: (db, data, contexto) => ControlInternoImportar.importarHoja(db, data, contexto),

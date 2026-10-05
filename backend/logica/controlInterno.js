@@ -387,6 +387,20 @@ function definicionPublica_(m) {
 // Acciones
 // =========================================================================================
 
+/**
+ * Filas por matriz en los últimos 12 meses (las listas: todas sus filas). Ordena
+ * el menú del área: las más usadas arriba y las sin filas al Archivo (2026-10-04).
+ */
+function uso12Meses_(db, periodo) {
+  const out = {};
+  try {
+    asegurarIndices_(db);
+    db.prepare('SELECT "matriz" AS m, COUNT(*) AS n FROM "CI_REGISTROS" WHERE "activa" = ? AND (("periodo" >= ? AND "periodo" <= ?) OR "periodo" = ?) GROUP BY "matriz"')
+      .all(JSON.stringify(true), JSON.stringify(moverPeriodo_(periodo, -11)), JSON.stringify(periodo), JSON.stringify(PERIODO_LISTA))
+      .forEach((f) => { out[JSON.parse(f.m)] = Number(f.n) || 0; });
+  } catch (e) { /* sin la tabla: todo en cero */ }
+  return out;
+}
 /** Configuración del módulo para esta persona + el resumen del período. */
 function getConfig(db, data, contexto) {
   const ac = acceso_(db, contexto);
@@ -401,12 +415,14 @@ function getConfig(db, data, contexto) {
   const resumen = {};
   visibles.forEach((m) => { if (m.tipo !== 'lista') resumen[m.clave] = resumen_(m, filasDelResumen_(db, m, periodo)); });
   return {
+    uso: uso12Meses_(db, periodoActual_()),
     yo: ac.email,
     periodo,
     puede_administrar: ac.esAdmin,
     departamentos: deptos.map((d) => Object.assign({ clave: d.clave, nombre: d.nombre, modulo: d.modulo, icono: d.icono, recibe: !!d.recibe, liberadores: Prestaciones.liberadoresDeArea_(db, d.area) }, ac.deptos[d.clave])),
     matrices: visibles.map(definicionPublica_),
-    clientes: visibles.length ? clientes_(db) : [],
+    // También sin matrices: la agenda (examen ocupacional, pacto de horas extra) elige el cliente.
+    clientes: deptos.length ? clientes_(db) : [],
     resumen
   };
 }

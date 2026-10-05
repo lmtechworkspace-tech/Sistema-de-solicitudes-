@@ -24,6 +24,7 @@ const Proveedores = require('../logica/proveedoresSgc');
 const RevisionDireccion = require('../logica/revisionDireccionSgc');
 const Objetivos = require('../logica/objetivosSgc');
 const MatrizCobertura = require('../logica/matrizCoberturaSgc');
+const AgendaDepto = require('../logica/agendaDepto');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
 const db = abrirDbProduccion();
@@ -148,6 +149,12 @@ const intervaloTriggersDiarios = setInterval(() => {
   }
   if (enVentanaDiaria_(ahora, 23)) {
     try { Pausas.cerrarPausasAbiertas(db); } catch (err) { console.error('error cerrando pausas del dia:', err); }
+  }
+  // Agenda de los departamentos (2026-10-04): a las 08:00 de cada día hábil,
+  // cuántos recordatorios tiene hoy cada persona y, a la jefatura, los
+  // atrasados y los clientes sin respuesta. Una vez por día (dedup interno).
+  if (enVentanaDiaria_(ahora, 8)) {
+    try { AgendaDepto.alertasDiarias(db); } catch (err) { console.error('error en las alertas de la agenda:', err); }
   }
   if (enVentanaDiaria_(ahora, 8) && ahora.getDay() === 1) {
     Pausas.enviarReportePeriodico(db, 'semanal').catch((err) => { console.error('error en reporte semanal de pausas:', err); });

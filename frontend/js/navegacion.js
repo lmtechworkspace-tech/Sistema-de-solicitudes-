@@ -100,6 +100,12 @@
     return sub.plano === true || items[0].nombre === sub.nombre;
   }
 
+  // Número en una hoja del árbol (2026-10-04: "Hoy" de cada área con sus
+  // recordatorios). `tono` 'peligro' = hay algo atrasado.
+  function hojaBadge_(valor, tono) {
+    if (!valor) return '';
+    return '<span class="plataforma-nav__hbadge' + (tono === 'peligro' ? ' plataforma-nav__hbadge--peligro' : '') + '">' + esc_(valor) + '</span>';
+  }
   function badgeHtml_(valor) {
     if (valor === undefined || valor === null || valor === '' || valor === 0) return '';
     return '<span class="sigso-nav2__badge">' + esc_(valor) + '</span>';
@@ -430,6 +436,7 @@
             ' data-item="' + esc_(it0.id) + '" data-de-modulo="' + esc_(m.id) + '"' +
             (it0.id === itemActivo ? ' aria-current="page"' : '') + '>' +
             '<span class="plataforma-nav__etiqueta">' + esc_(sub.nombre) + '</span>' +
+            hojaBadge_(it0.badge, it0.tono) +
           '</button>';
         }
 
@@ -441,6 +448,7 @@
           ' data-sub="' + esc_(sub.id) + '" data-de-modulo="' + esc_(m.id) + '"' +
           ' aria-expanded="' + (abierto ? 'true' : 'false') + '" aria-controls="' + idLista + '">' +
           '<span class="plataforma-nav__etiqueta">' + esc_(sub.nombre) + '</span>' +
+          (abierto ? '' : hojaBadge_(items.reduce(function (s, it) { return s + (Number(it.badge) || 0); }, 0), items.some(function (it) { return it.badge && it.tono === 'peligro'; }) ? 'peligro' : '')) +
           '<span class="plataforma-nav__chevron" aria-hidden="true"></span>' +
         '</button>' +
         '<div class="plataforma-nav__items" id="' + idLista + '"' + (abierto ? '' : ' hidden') + '>' +
@@ -451,6 +459,7 @@
               (it.id === itemActivo ? ' aria-current="page"' : '') + '>' +
               '<span class="plataforma-nav__punto" aria-hidden="true"></span>' +
               '<span class="plataforma-nav__etiqueta">' + esc_(it.nombre) + '</span>' +
+              hojaBadge_(it.badge, it.tono) +
             '</button>';
           }).join('') +
         '</div>';

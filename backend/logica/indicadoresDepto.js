@@ -87,6 +87,10 @@ function diasHabiles_(a, b, feriados) {
 /** Lector con caché por cálculo: una consulta por matriz para todo el rango. */
 // Las que se miran por sus pendientes antiguos (y las notificaciones, por su
 // fecha) se leen completas: un pendiente de hace dos años también cuenta.
+// La Agenda de los departamentos registra recordatorios desde octubre de 2026 (agendaDepto.js):
+// antes de eso no hay con qué medir, y no se muestran esos indicadores.
+const INICIO_AGENDA = '2026-M10';
+function agenda_() { return require('./agendaDepto'); }
 const COMPLETAS = ['NOTIFICACIONES_SII', 'RLE_CONTRATOS', 'RLE_FINIQUITOS', 'ANEXOS', 'COBRANZA'];
 function lector_(db, desde, hasta) {
   const cache = {};
@@ -194,6 +198,18 @@ function contabilidad_(db, periodo, ctx) {
     k.explicacion = k.valor === null ? 'Ningún F29 del mes tiene fecha de declaración registrada.'
       : (nT === 0 ? 'Todos los F29 declarados del mes (' + mesActual.decl.length + ') se presentaron a tiempo. ' : nT + ' de ' + mesActual.decl.length + ' F29 se declararon después del vencimiento (' + mesActual.venc.split('-').reverse().join('-') + ')' +
         (nR ? '; ' + (nR === nT ? 'todos' : nR) + ' de clientes que se atrasan 3 meses o más de cada 12: el problema está en esos clientes, no en el proceso. ' : '. ')) + variacion_(k, (x) => d_(x) + ' puntos') + '.';
+    // Con la agenda (desde el IVA de septiembre de 2026): ¿al cliente atrasado se le avisó antes del vencimiento?
+    if (CI.moverPeriodo_(periodo, 1) >= INICIO_AGENDA && nT) {
+      const av = agenda_().avisos_(db, 'IVA_F29', periodo);
+      let conAviso = 0;
+      detalle.f29_atrasos_mes.forEach((x, i) => {
+        const r = mesActual.tarde[i], primer = av[r.cliente_id || 'N:' + r.cliente_nombre];
+        x.recordatorio = primer && primer <= mesActual.venc ? 'Sí, desde el ' + primer.split('-').reverse().join('-') : 'No';
+        if (primer && primer <= mesActual.venc) conAviso++;
+      });
+      k.extra = Object.assign({}, k.extra, { atraso_cliente: conAviso, atraso_interno: nT - conAviso });
+      k.explicacion += ' Atribución: ' + conAviso + ' con recordatorio antes del vencimiento (atraso del cliente) y ' + (nT - conAviso) + ' sin recordatorio (atraso interno).';
+    }
     kpis.push(k);
 
     const kl = indicador_({ clave: 'f29_al_limite', nombre: 'F29 declarados al límite', unidad: '%', formato: 'pct', sentido: 'menor',
@@ -484,6 +500,21 @@ function transversal_(db, depto, periodo, ctx) {
     if (p > 60) alertas.push({ nivel: 'alerta', area: (DEPARTAMENTOS.find((d) => d.clave === depto) || {}).nombre, clave: 'dependencia', titulo: 'El área depende de una sola persona',
       cifra: d_(p) + ' % de los registros', que_pasa: 'Una persona hizo ' + miles_(top[1]) + ' de ' + miles_(tot) + ' registros en 12 meses.', persona: top[0],
       por_que: 'No hay una segunda persona que haga el mismo trabajo.', impacto: 'Si se ausenta, los cierres del mes quedan sin respaldo.', decision: 'Designar y capacitar a una persona de respaldo.' });
+  }
+
+  // Agenda del área (desde octubre de 2026): recordatorios a tiempo y clientes que no respondieron.
+  if (periodo >= INICIO_AGENDA) {
+    const ag = agenda_().medirMes_(db, depto, periodo);
+    const medidos = ag.a_tiempo + ag.tarde, p = medidos ? pct_(ag.a_tiempo, medidos) : null;
+    kpis.push(indicador_({ clave: 'recordatorios_a_tiempo', nombre: 'Recordatorios enviados a tiempo', unidad: '%', formato: 'pct', sentido: 'mayor', valor: p, serie: [],
+      estado: p === null ? 'sin_dato' : (p >= 90 ? 'ok' : (p >= 75 ? 'alerta' : 'critico')), meta_texto: '≥ 90 %',
+      definicion: 'Recordatorios a clientes registrados en la Agenda el día que tocaba o antes ÷ registrados.',
+      explicacion: p === null ? 'No hay recordatorios registrados en la Agenda este mes.' : ag.envios + ' recordatorios a clientes; ' + ag.a_tiempo + ' a tiempo y ' + ag.tarde + ' tarde. ' + ag.respuestas + ' respuestas registradas.' }));
+    const nSR = ag.sin_respuesta.length;
+    detalle.clientes_sin_respuesta = ag.sin_respuesta.map((c) => ({ cliente: c }));
+    kpis.push(indicador_({ clave: 'clientes_sin_respuesta', nombre: 'Clientes que no respondieron', unidad: 'clientes', formato: 'num', sentido: 'menor', valor: ag.envios ? nSR : null, serie: [],
+      estado: !ag.envios ? 'sin_dato' : (nSR ? 'alerta' : 'ok'), meta_texto: '0', definicion: 'Clientes con recordatorios este mes y sin respuesta registrada.',
+      explicacion: !ag.envios ? '' : (nSR ? nSR + ' clientes no respondieron: ' + ag.sin_respuesta.slice(0, 3).join(', ') + (nSR > 3 ? ' y otros.' : '.') : 'Todos los clientes avisados respondieron.') }));
   }
 
   // Calidad del dato: matrices sin registros recientes y pendientes antiguos.

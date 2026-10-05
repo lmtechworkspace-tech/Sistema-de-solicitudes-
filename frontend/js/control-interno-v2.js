@@ -49,8 +49,12 @@
     { modulo: 'dep_administracion', depto: 'ADMINISTRACION', nombre: 'Administración', icono: 'empresa', recibe: true }
   ];
 
+  // La agenda de cada área (2026-10-04): lo que toca recordar hoy, por módulo.
+  // La llena contadores(); el árbol la usa para el número de "Hoy".
+  var AGENDA = {};
+
   function crearModulo(OPC) {
-  var cfg_ = null, vista_ = 'inicio', periodo_ = '', anio_ = '', mesFiltro_ = '', lista_ = null, turno_ = 0;
+  var cfg_ = null, vista_ = OPC.recibe ? 'inicio' : 'hoy', periodo_ = '', anio_ = '', mesFiltro_ = '', lista_ = null, turno_ = 0;
   var sel_ = {}, f_ = { q: '', estado: '', resp: '', liberar: false, nuevos: false }, mostrar_ = LOTE_FILAS, verSinUso_ = false;
 
   // --- utilidades ----------------------------------------------------------------------
@@ -152,15 +156,23 @@
     });
     return out;
   }
-  // Siempre el mismo orden: Resumen del mes, el trabajo del área (sus
-  // secciones, como en las planillas), los reportes y, para el administrador,
-  // los accesos. Así nadie se pierde al pasar de un área a otra.
+  // Las MISMAS seis entradas en todas las áreas (2026-10-04), para que nadie se
+  // pierda al pasar de una a otra y ninguna quede con una lista gigante:
+  //   Hoy · Agenda · Trabajo · Reportes · Equipo (jefatura) · Ajustes.
+  // "Trabajo" muestra solo las 5 matrices más usadas en 12 meses; el resto
+  // vive en la página "Todo el trabajo", agrupado por cómo se trabaja.
+  function principales(d) {
+    var uso = (cfg_ && cfg_.uso) || {};
+    return cfg_.matrices.filter(function (m) { return m.depto === d.clave && !m.sinUso && uso[m.clave] > 0; })
+      .sort(function (a, b) { return (uso[b.clave] || 0) - (uso[a.clave] || 0); }).slice(0, 5);
+  }
   function arbol() {
     if (OPC.recibe) {
       // Administración: el informe de gestión del mes (lo que llega a gerencia),
-      // los reportes que entregan las áreas y, para el administrador, quién
-      // ocupa cada paso de la cadena.
+      // la agenda de todas las áreas, los reportes que entregan las áreas y,
+      // para el administrador, quién ocupa cada paso de la cadena.
       var adm = [{ id: 'inicio', nombre: 'Informe de gestión', icono: 'tendencia', plano: true, items: [{ id: 'inicio', nombre: 'Informe de gestión' }] },
+        { id: 'agenda', nombre: 'Agenda general', icono: 'calendario', plano: true, items: [{ id: 'agenda:general', nombre: 'Agenda general' }] },
         { id: 'areas', nombre: 'Reportes de las áreas', icono: 'bandeja', plano: true, items: [{ id: 'areas', nombre: 'Reportes de las áreas' }] }];
       if (cfg_ && cfg_.puede_administrar) {
         adm.push({ id: 'cadena', nombre: 'Cadena de reportes', icono: 'equipo', plano: true, items: [{ id: 'cadena', nombre: 'Cadena de reportes' }] });
@@ -168,33 +180,34 @@
       }
       return adm;
     }
-    var subs = [{ id: 'inicio', nombre: 'Resumen del mes', icono: 'panel', plano: true, items: [{ id: 'inicio', nombre: 'Resumen del mes' }] },
-      { id: 'reporte', nombre: 'Reporte mensual', icono: 'documento', plano: true, items: [{ id: 'reporte', nombre: 'Reporte mensual' }] }];
+    var ag = AGENDA[OPC.modulo];
+    var subs = [
+      { id: 'hoy', nombre: 'Hoy', icono: 'campana', plano: true, items: [{ id: 'hoy', nombre: 'Hoy', badge: ag ? ag.por_enviar + ag.atrasados : 0, tono: ag && ag.atrasados ? 'peligro' : '' }] },
+      { id: 'agenda', nombre: 'Agenda', icono: 'calendario', items: [{ id: 'agenda:cal', nombre: 'Calendario' }, { id: 'agenda:reg', nombre: 'Recordatorios enviados' }, { id: 'agenda:cli', nombre: 'Por cliente' }] }
+    ];
+    var d = cfg_ && cfg_.departamentos[0];
+    if (d && cfg_.matrices.length) {
+      var top = principales(d);
+      var tiene = function (clave) { return cfg_.matrices.some(function (m) { return m.clave === clave && m.depto === d.clave; }); };
+      subs.push({ id: 'trabajo', nombre: 'Trabajo', icono: OPC.icono, items: top.map(function (m) { return { id: 'm:' + m.clave, nombre: m.nombre }; })
+        .concat(tiene('CONVENIOS') ? [{ id: 'conv', nombre: 'Seguimiento de cuotas TGR' }] : [])
+        .concat(tiene('IVA') ? [{ id: 'sii', nombre: 'Recibir desde el SII' }] : [])
+        .concat([{ id: 'inicio', nombre: 'Todo el trabajo' }]) });
+    }
     // Facturación y Cobranzas no entrega reporte del área: revisa el informe de gestión.
-    if (OPC.reporta === false) subs.pop();
-    (cfg_ ? cfg_.departamentos : []).forEach(function (d) {
-      secciones(d).forEach(function (s, k) {
-        subs.push({ id: 'd-' + d.clave + '-' + k, nombre: s.nombre, descripcion: 'Trabajo del área', icono: OPC.icono,
-          items: s.matrices.map(function (m) { return { id: 'm:' + m.clave, nombre: m.nombre }; })
-            .concat(s.matrices.some(function (m) { return m.clave === 'CONVENIOS'; }) ? [{ id: 'conv', nombre: 'Seguimiento de cuotas TGR' }] : [])
-            .concat(s.matrices.some(function (m) { return m.clave === 'IVA'; }) ? [{ id: 'sii', nombre: 'Recibir desde el SII' }] : []) });
-      });
-      // Hojas que ya no se usan (reunión con Francisca): quedan para consulta, al final.
-      var sinUso = cfg_.matrices.filter(function (m) { return m.depto === d.clave && m.sinUso; });
-      if (sinUso.length) subs.push({ id: 'd-' + d.clave + '-sinuso', nombre: 'Hojas que ya no se usan', descripcion: 'Trabajo del área', icono: 'carpeta',
-        items: sinUso.map(function (m) { return { id: 'm:' + m.clave, nombre: m.nombre }; }) });
-    });
+    var reps = (OPC.reporta === false ? [] : [{ id: 'reporte', nombre: 'Reporte mensual' }]).concat(cfg_ && cfg_.matrices.length ? [
+      { id: 'rep:informe', nombre: 'Informe mensual' }, { id: 'rep:panel', nombre: 'Panel histórico' },
+      { id: 'rep:cliente', nombre: 'Ficha por cliente' }, { id: 'rep:personas', nombre: 'Personas y tiempos' }] : []);
+    if (reps.length) subs.push({ id: 'reportes', nombre: reps.length === 1 ? reps[0].nombre : 'Reportes', icono: 'grafico', plano: reps.length === 1, items: reps });
     // La jefatura del área: su equipo (lo que antes era el módulo suelto "Mi departamento").
-    if (esJefaturaDelArea()) subs.push({ id: 'equipo', nombre: 'Mi equipo', icono: 'equipo', descripcion: 'Solo jefatura', items: [
+    if (esJefaturaDelArea()) subs.push({ id: 'equipo', nombre: 'Equipo', icono: 'equipo', descripcion: 'Solo jefatura', items: [
       { id: 'equipo:resumen', nombre: 'Mi equipo hoy' }, { id: 'equipo:tablero', nombre: 'Solicitudes del equipo' },
       { id: 'equipo:persona', nombre: 'Por persona' }, { id: 'equipo:actividades', nombre: 'Actividades del equipo' },
       { id: 'equipo:reportes', nombre: 'Reportes del equipo' }
     ] });
-    if (cfg_ && cfg_.matrices.length) subs.push({ id: 'reportes', nombre: 'Reportes', icono: 'grafico', items: [
-      { id: 'rep:informe', nombre: 'Informe mensual' }, { id: 'rep:panel', nombre: 'Panel histórico' },
-      { id: 'rep:cliente', nombre: 'Ficha por cliente' }, { id: 'rep:personas', nombre: 'Personas y tiempos' }
-    ] });
-    if (cfg_ && cfg_.puede_administrar) subs.push({ id: 'accesos', nombre: 'Accesos', icono: 'llave', plano: true, items: [{ id: 'accesos', nombre: 'Accesos' }] });
+    // Todos ven sus recordatorios y fechas; los edita la jefatura o el superusuario.
+    var aj = [{ id: 'ajustes', nombre: 'Recordatorios y fechas' }].concat(cfg_ && cfg_.puede_administrar ? [{ id: 'accesos', nombre: 'Accesos' }] : []);
+    subs.push({ id: 'ajustes-g', nombre: aj.length === 1 ? aj[0].nombre : 'Ajustes', icono: 'ajustes', plano: aj.length === 1, items: aj });
     return subs;
   }
   function esJefaturaDelArea() { var d = cfg_ && cfg_.departamentos[0]; return !!d && d.rol === 'JEFATURA'; }
@@ -260,7 +273,7 @@
       if (!r || !r.ok) { error(r); return; }
       cfg_ = r.data;
       registrarArbol();
-      irAItem(pedido || vista_ || 'inicio');
+      irAItem(pedido || vista_ || (OPC.recibe ? 'inicio' : 'hoy'));
       var libs = [];
       cfg_.departamentos.forEach(function (d) { (d.liberadores || []).forEach(function (e) { libs.push({ email: e }); }); });
       resolverPersonas(libs).then(function () { if (vista_ === 'inicio') vistaInicio(true); });
@@ -285,6 +298,13 @@
     if (p[0] === 'reporte' && window.SigsoReporteDepto) { SigsoReporteDepto.mostrar(p.slice(1).join(':'), ctxReportes()); return; }
     if (OPC.recibe && vista_ === 'areas' && window.SigsoReporteDepto) { SigsoReporteDepto.panel(ctxReportes()); return; }
     if (OPC.recibe && vista_ === 'cadena' && cfg_.puede_administrar && window.SigsoInformeGestion) { SigsoInformeGestion.cadena(ctxReportes()); return; }
+    // Agenda (2026-10-04): Hoy, calendario, registro, por cliente y ajustes (agenda-depto-v2.js).
+    if (window.SigsoAgenda && cfg_.departamentos[0]) {
+      if (OPC.recibe && vista_ === 'agenda:general') { SigsoAgenda.mostrar(vista_, ctxReportes()); return; }
+      if (!OPC.recibe && (vista_ === 'hoy' || p[0] === 'agenda' || vista_ === 'ajustes')) { SigsoAgenda.mostrar(vista_, ctxReportes()); return; }
+      // Lo que no se reconoce (un enlace viejo) cae en Hoy.
+      if (!OPC.recibe && vista_ !== 'inicio') { vista_ = 'hoy'; if (window.SigsoShell && SigsoShell.publicarItem) SigsoShell.publicarItem(vista_); SigsoAgenda.mostrar('hoy', ctxReportes()); return; }
+    }
     vista_ = 'inicio';
     if (OPC.recibe && window.SigsoInformeGestion) { SigsoInformeGestion.mostrar(ctxReportes()); return; }
     vistaInicio();
@@ -327,13 +347,28 @@
     var SUB = cfg_.matrices.length ? 'Las matrices del área con las mismas columnas que sus planillas. Mientras dure la prueba, el registro oficial sigue siendo el Drive.' : '';
     var lib = (d.liberadores || []).map(nombre).join(', ');
     var rolTxt = d.rol === 'JEFATURA' ? 'Jefatura' : (d.registra ? 'Registras' : 'Solo lectura');
+    // Agrupado por CÓMO se trabaja (2026-10-04), las más usadas primero; lo
+    // que no tiene filas en 12 meses (o ya no se usa) va al Archivo, cerrado.
+    var uso = cfg_.uso || {};
+    var archivada = function (m) { return m.sinUso || !(uso[m.clave] > 0); };
+    var porUso = function (a, b) { return (uso[b.clave] || 0) - (uso[a.clave] || 0); };
+    var mats = cfg_.matrices.filter(function (m) { return m.depto === d.clave; });
+    var GRUPOS = [
+      { t: 'Proceso mensual', d: 'Se trabajan todos los meses, cliente por cliente.', f: function (m) { return !archivada(m) && m.tipo === 'mensual'; } },
+      { t: 'Por solicitud', d: 'Una fila por requerimiento, cuando el cliente lo pide.', f: function (m) { return !archivada(m) && m.tipo === 'registro'; } },
+      { t: 'Consulta', d: 'Listas con la situación de cada cliente.', f: function (m) { return !archivada(m) && m.tipo === 'lista'; } }
+    ];
+    var archivo = mats.filter(archivada).sort(function (a, b) { return a.nombre.localeCompare(b.nombre); });
     var html = '<div class="js-dr-tarjeta"></div><section class="ci2-depto sx2-entra"><div class="ci2-depto__cab"><span class="sx2-tenue">' + rolTxt + (d.libera ? ' · Liberas' : '') +
         (cfg_.matrices.length ? ' · Libera: ' + (lib ? txt(lib) : '<i>sin asignar</i>') : '') + '</span></div>' +
-      (cfg_.matrices.length ? secciones(d).map(function (s) {
-        return '<h3 class="ci2-seccion">' + txt(s.nombre) + '</h3><div class="ci2-tarjetas">' + s.matrices.map(tarjeta).join('') + '</div>';
-      }).join('') : U.card({ i: 1, cuerpo: U.vacio({ icono: OPC.icono, titulo: OPC.recibe ? 'Aquí llegan los reportes de las áreas' : OPC.nombre + ' todavía no tiene matrices en SIGSO',
+      (cfg_.matrices.length ? GRUPOS.map(function (g) {
+        var l = mats.filter(g.f).sort(porUso);
+        return l.length ? '<h3 class="ci2-seccion">' + txt(g.t) + ' <small class="sx2-tenue">' + txt(g.d) + '</small></h3><div class="ci2-tarjetas">' + l.map(tarjeta).join('') + '</div>' : '';
+      }).join('') + (archivo.length ? '<details class="ci2-archivo"><summary><h3 class="ci2-seccion">Archivo <small class="sx2-tenue">' + archivo.length + ' matrices sin filas en los últimos 12 meses o que ya no se usan. Quedan para consulta.</small></h3></summary>' +
+        '<div class="ci2-tarjetas">' + archivo.map(tarjeta).join('') + '</div></details>' : '')
+      : U.card({ i: 1, cuerpo: U.vacio({ icono: OPC.icono, titulo: OPC.recibe ? 'Aquí llegan los reportes de las áreas' : OPC.nombre + ' todavía no tiene matrices en SIGSO',
         texto: OPC.recibe ? 'Cada área genera su reporte mensual, su jefatura lo valida y llega aquí.' : 'Su trabajo del mes se registra en el reporte mensual del área.' }) })) + '</section>';
-    pagina(cabecera(OPC.nombre, 'Resumen de ' + perTexto(periodo_, true), SUB, selectorPeriodo() +
+    pagina(cabecera(OPC.nombre, 'Todo el trabajo · ' + perTexto(periodo_, true), SUB, selectorPeriodo() +
       (cfg_.puede_administrar && cfg_.matrices.length ? U.boton({ texto: 'Importar planillas', icono: 'subir', clase: 'js-ci2-importar' }) : '') +
       U.boton({ soloIcono: true, icono: 'tendencia', titulo: 'Actualizar', clase: 'js-ci2-recargar' })) + html, !!silencioso);
     if (window.SigsoReporteDepto) SigsoReporteDepto.tarjeta(ctxReportes(), raiz().querySelector('.js-dr-tarjeta'));
@@ -351,6 +386,7 @@
         (r.liberados ? '<span class="sx2-tono-ok"><b>' + r.liberados + '</b> liberadas</span>' : '') + '</span>' + U.barra(pct, pct === 100 ? 'ok' : 'primario');
     }
     return '<button type="button" class="ci2-tarjeta" data-ci2-ir="m:' + U.esc(m.clave) + '">' +
+      '<span class="ci2-tarjeta__sec">' + txt(m.seccion) + '</span>' +
       '<span class="ci2-tarjeta__nom">' + txt(m.nombre) + (m.codigo ? ' <small class="sx2-tenue">' + txt(m.codigo) + '</small>' : '') + '</span>' +
       '<span class="ci2-tarjeta__desc">' + txt(m.descripcion || (m.tipo === 'registro' ? 'Una fila por requerimiento, como en la planilla.' : '')) + '</span>' + cuerpo + '</button>';
   }
@@ -959,19 +995,32 @@
   return {
     cargar: cargar,
     refrescar: function () { if (!cfg_) cargar(); else mostrar(); },
-    irAItem: irAItem
+    irAItem: irAItem,
+    // Repinta el árbol (cambió el número de "Hoy").
+    arbol: function () { if (cfg_) registrarArbol(); }
   };
   }
 
   var MODULOS = {};
   DEPARTAMENTOS.forEach(function (d) { MODULOS[d.modulo] = crearModulo(d); });
-  // Reportes que esperan a esta persona (por validar, por recibir, devueltos): el número en el menú.
+  // El número en el menú: reportes que esperan a esta persona (por validar, por
+  // recibir, devueltos) + recordatorios de hoy y atrasados de la agenda. La
+  // primera vez del día, además, el aviso llamativo con la agenda de hoy.
+  var avisado_ = false;
   function contadores() {
     if (!window.SigsoShell || !SigsoShell.pintarBadge) return;
-    llamarApi((window.SIGSO_CONFIG || {}).BACKOFFICE_URL, 'pendientesReportesDep', {}).then(function (r) {
-      var p = (r && r.ok && r.data && r.data.pendientes) || {};
-      Object.keys(p).forEach(function (id) { SigsoShell.pintarBadge(id, p[id]); });
-    }).catch(function () { /* sin contador */ });
+    var url = (window.SIGSO_CONFIG || {}).BACKOFFICE_URL;
+    var nada = function () { return null; };
+    Promise.all([llamarApi(url, 'pendientesReportesDep', {}).catch(nada), llamarApi(url, 'resumenAgenda', {}).catch(nada)]).then(function (rs) {
+      var p = (rs[0] && rs[0].ok && rs[0].data && rs[0].data.pendientes) || {};
+      var a = (rs[1] && rs[1].ok && rs[1].data) || {};
+      var tot = {};
+      [p, a.pendientes || {}].forEach(function (o) { Object.keys(o).forEach(function (k) { tot[k] = (tot[k] || 0) + (Number(o[k]) || 0); }); });
+      DEPARTAMENTOS.forEach(function (d) { if (tot[d.modulo] !== undefined || AGENDA[d.modulo]) SigsoShell.pintarBadge(d.modulo, tot[d.modulo] || 0); });
+      AGENDA = a.detalle || {};
+      Object.keys(MODULOS).forEach(function (k) { MODULOS[k].arbol(); });
+      if (!avisado_ && window.SigsoAgenda) { avisado_ = true; SigsoAgenda.avisoDelDia(AGENDA); }
+    });
   }
   // El shell pide el módulo por su id (dep_contabilidad…).
   window.SigsoDepartamentos = {

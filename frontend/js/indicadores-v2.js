@@ -116,7 +116,8 @@
   }
   var M = function (v) { return '$' + Number(v || 0).toLocaleString('es-CL'); };
   var DETALLES = [
-    ['f29_atrasos_mes', 'F29 declarados después del vencimiento', [{ t: 'Cliente', v: 'cliente' }, { t: 'Declarado', v: 'declarado' }, { t: 'Días hábiles tarde', v: 'dias_habiles_tarde', num: true }, { t: 'Reincidente', v: function (f) { return f.reincidente ? 'Sí' : ''; } }]],
+    ['f29_atrasos_mes', 'F29 declarados después del vencimiento', [{ t: 'Cliente', v: 'cliente' }, { t: 'Declarado', v: 'declarado' }, { t: 'Días hábiles tarde', v: 'dias_habiles_tarde', num: true }, { t: 'Reincidente', v: function (f) { return f.reincidente ? 'Sí' : ''; } }, { t: 'Recordatorio antes', v: function (f) { return f.recordatorio || ''; } }]],
+    ['clientes_sin_respuesta', 'Clientes que no respondieron a los recordatorios', [{ t: 'Cliente', v: 'cliente' }]],
     ['f29_reincidentes', 'Clientes que más se atrasan con el F29 (12 meses)', [{ t: 'Cliente', v: 'cliente' }, { t: 'Meses tarde', v: function (f) { return f.meses_tarde + ' de 12'; }, num: true }]],
     ['f29_sin_registro', 'Clientes sin declaración registrada', [{ t: 'Cliente', v: 'cliente' }, { t: 'Situación', v: 'situacion' }, { t: 'Estado de pago', v: 'estado_pago' }]],
     ['contabilizacion_atrasada', 'Contabilidad atrasada (2 meses o más)', [{ t: 'Cliente', v: 'cliente' }, { t: 'Meses sin cerrar', v: 'meses_pendientes', num: true }, { t: 'Desde', v: 'desde' }]],
