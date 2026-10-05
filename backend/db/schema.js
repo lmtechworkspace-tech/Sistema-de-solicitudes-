@@ -152,7 +152,11 @@ const COLUMNAS = {
     'frecuencia', 'personas_afectadas', 'imagen_descripciones',
     'fecha_propuesta', 'fecha_comprometida', 'fecha_terminada', 'comprometida_por',
     'area', 'area_nombre',
-    'atencion_resuelto_por', 'atencion_fecha_resolucion', 'atencion_detalle'
+    'atencion_resuelto_por', 'atencion_fecha_resolucion', 'atencion_detalle',
+    // Solicitudes, etapa 2 (2026-10-05): el pedido va a un DEPARTAMENTO y a un
+    // servicio de su catálogo (serviciosSolicitud.js). Vacíos = soporte de
+    // plataformas (Desarrollo / TI), con su ruteo de siempre por área.
+    'depto', 'depto_nombre', 'servicio_id', 'servicio_nombre'
   ],
   HISTORIAL_ESTADOS: [
     'historial_id', 'solicitud_id', 'subsolicitud_id',
@@ -749,6 +753,13 @@ const COLUMNAS = {
   // Quién entra a cada departamento del módulo: REGISTRA (llena y edita) o
   // LECTURA. La liberación NO va aquí: es SGC_LIBERADORES, la misma lista
   // que usa Calidad › Servicios prestados.
+  // Solicitudes, etapa 2: catálogo de servicios que cada departamento recibe
+  // (lo arma su jefatura; puede partir del mapa de procesos del SGC).
+  // plazo_dias = días hábiles; fija el plazo (SLA) del ítem al crearse.
+  SOL_SERVICIOS: [
+    'servicio_id', 'depto', 'nombre', 'descripcion', 'ayuda', 'plazo_dias', 'prioridad',
+    'proceso_codigo', 'orden', 'activa', 'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion'
+  ],
   CI_MIEMBROS: [
     'miembro_id', 'depto', 'usuario_email', 'rol', 'creado_por', 'fecha_creacion', 'activa'
   ],

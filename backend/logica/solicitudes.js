@@ -27,6 +27,7 @@ const {
 } = require('./constantesSolicitudes');
 const Correlativo = require('./correlativo');
 const Notificaciones = require('./notificaciones');
+const Servicios = require('./serviciosSolicitud');
 
 function errorValidacion_(campo, mensaje) {
   return { _validationError: true, message: mensaje, fields: [{ campo: campo, mensaje: mensaje }] };
@@ -77,10 +78,16 @@ function validarSolicitud_(data) {
       if (!item || !item.descripcion || String(item.descripcion).trim() === '') {
         errores.push({ campo: 'subsolicitudes[' + idx + '].descripcion', mensaje: 'Descripcion obligatoria (RN-004)' });
       }
-      if (!item || !item.tipo || String(item.tipo).trim() === '') {
+      // Etapa 2: un pedido a un departamento se clasifica por su servicio, no
+      // por tipo/módulo de plataforma.
+      const aDepto = !!(item && item.depto);
+      if (aDepto && !Servicios.departamento_(item.depto)) {
+        errores.push({ campo: 'subsolicitudes[' + idx + '].depto', mensaje: 'Departamento desconocido' });
+      }
+      if (!aDepto && (!item || !item.tipo || String(item.tipo).trim() === '')) {
         errores.push({ campo: 'subsolicitudes[' + idx + '].tipo', mensaje: 'Tipo obligatorio (RN-002)' });
       }
-      if (asociadaPlataforma && (!item || !item.modulo || String(item.modulo).trim() === '')) {
+      if (asociadaPlataforma && !aDepto && (!item || !item.modulo || String(item.modulo).trim() === '')) {
         errores.push({ campo: 'subsolicitudes[' + idx + '].modulo', mensaje: 'Modulo obligatorio (RN-002)' });
       }
     });
@@ -162,7 +169,7 @@ function resolverResponsable_(db, areaId) {
 function calcularHashDuplicado_(data) {
   const primerItem = data.subsolicitudes[0] || {};
   const base = [
-    data.empresa_id, data.plataforma, primerItem.modulo || '',
+    data.empresa_id, data.plataforma, primerItem.modulo || primerItem.servicio_id || primerItem.depto || '',
     String(data.solicitante_email || '').toLowerCase(),
     String(primerItem.descripcion || '').trim().toLowerCase()
   ].join('|');
@@ -257,12 +264,26 @@ async function crearSolicitud(db, data) {
   const timestamp = new Date().toISOString();
 
   const subsolicitudesGuardadas = data.subsolicitudes.map((item, idx) => {
-    const esUrgentePorTipo = !!data.es_cliente || tipoEsUrgente_(db, item.tipo);
-    const prioridad = derivarPrioridad_(item.impacto, esUrgentePorTipo);
-    const slaHoras = obtenerSlaHoras_(db, prioridad);
     const subId = solicitudId + '-' + ('0' + (idx + 1)).slice(-2);
-    const areaId = item.area || data.area || '';
-    const responsable = resolverResponsable_(db, areaId);
+    const depto = item.depto ? Servicios.departamento_(item.depto) : null;
+    let prioridad, slaHoras, responsable, areaId, servicio = null;
+    if (depto) {
+      // Etapa 2: llega a la COLA del departamento, sin asignar -- la jefatura
+      // reparte o alguien del equipo lo toma. La prioridad y el plazo los
+      // fija el servicio (urgente = al menos P2 y el plazo de P2 si es menor).
+      const c = Servicios.condicionesDelServicio_(db, item.servicio_id, !!item.urgente || !!data.es_cliente, (p) => obtenerSlaHoras_(db, p));
+      servicio = c.servicio && c.servicio.depto === depto.clave ? c.servicio : null;
+      prioridad = c.prioridad;
+      slaHoras = c.sla;
+      responsable = '';
+      areaId = '';
+    } else {
+      const esUrgentePorTipo = !!data.es_cliente || tipoEsUrgente_(db, item.tipo);
+      prioridad = derivarPrioridad_(item.impacto, esUrgentePorTipo);
+      slaHoras = obtenerSlaHoras_(db, prioridad);
+      areaId = item.area || data.area || '';
+      responsable = resolverResponsable_(db, areaId);
+    }
 
     agregarFila_(db, 'SUBSOLICITUDES', {
       subsolicitud_id: subId, solicitud_id: solicitudId, numero_item: idx + 1,
@@ -280,13 +301,15 @@ async function crearSolicitud(db, data) {
       imagen_descripciones: JSON.stringify(item.imagen_descripciones || []),
       fecha_propuesta: data.fecha_propuesta || '', fecha_comprometida: '', fecha_terminada: '', comprometida_por: '',
       desarrollador_asignado: responsable, area: areaId,
-      area_nombre: resolverNombreCatalogo_(db, 'CAT_AREAS', 'area_id', areaId),
+      area_nombre: depto ? depto.nombre : resolverNombreCatalogo_(db, 'CAT_AREAS', 'area_id', areaId),
+      depto: depto ? depto.clave : '', depto_nombre: depto ? depto.nombre : '',
+      servicio_id: servicio ? servicio.servicio_id : '', servicio_nombre: servicio ? servicio.nombre : (depto ? 'Otro pedido' : ''),
       atencion_resuelto_por: atencion ? atencion.resuelto_por : '',
       atencion_fecha_resolucion: atencion ? atencion.fecha_resolucion : '',
       atencion_detalle: atencion ? atencion.detalle : ''
     });
 
-    return { subsolicitud_id: subId, prioridad: prioridad, responsable: responsable };
+    return { subsolicitud_id: subId, prioridad: prioridad, responsable: responsable, depto: depto ? depto.clave : '', titulo: item.titulo };
   });
 
   const primerItem = data.subsolicitudes[0] || {};
@@ -341,6 +364,19 @@ async function crearSolicitud(db, data) {
     prioridad: prioridadDerivada, total_items: data.subsolicitudes.length,
     resumen_whatsapp: resumenWhatsapp, cc: data.cc || '', atencion_directa: !!atencion
   });
+
+  // Etapa 2: lo que va a un departamento se avisa a su equipo (correo a la
+  // jefatura, campana a todos los que trabajan el área).
+  const porDepto = {};
+  subsolicitudesGuardadas.filter((s) => s.depto).forEach((s) => { (porDepto[s.depto] = porDepto[s.depto] || []).push(s); });
+  for (const clave of Object.keys(porDepto)) {
+    if (atencion) continue;
+    try {
+      await Notificaciones.avisarPedidoDepartamento(db, {
+        solicitud_id: solicitudId, solicitante_nombre: data.solicitante_nombre, prioridad: prioridadDerivada, es_cliente: !!data.es_cliente
+      }, Servicios.departamento_(clave), porDepto[clave], Servicios.equipoDepto_(db, clave));
+    } catch (err) { console.error('error avisando al departamento:', err); }
+  }
 
   // v3.0: se avisa al RESPONSABLE ruteado de cada item, no a un buzon fijo.
   // Dos items del mismo responsable -> un solo aviso.

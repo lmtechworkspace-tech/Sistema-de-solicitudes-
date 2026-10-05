@@ -309,6 +309,7 @@
             '<span class="sx2-flex" style="gap:6px;flex:none">' + U.badge(s.prioridad || '—', tonoPrioridad(s.prioridad), true) + U.badge(estadoTxt(s.estado), tonoEstado(s.estado)) + '</span></div>' +
           '<span class="sx2-flex sx2-tenue" style="gap:10px;flex-wrap:wrap;font-size:.8125rem">' +
             (s.responsable_nombre ? '<span class="ms2-atiende">' + U.ico('persona', 12) + ' Te atiende <b>' + U.esc(s.responsable_nombre) + '</b></span>' : '') +
+            (s.depto_nombre ? '<span>' + U.ico('equipo', 12) + ' ' + U.esc(s.depto_nombre) + (s.servicio_nombre ? ' · ' + U.esc(s.servicio_nombre) : '') + '</span>' : '') +
             (s.tipo_nombre ? '<span>' + U.esc(s.tipo_nombre) + '</span>' : '') + (s.modulo_nombre ? '<span>' + U.esc(s.modulo_nombre) + '</span>' : '') +
             '<span' + (atrasado(s) ? ' class="ms2-tarde"' : '') + '>' + U.ico('calendario', 12) + ' ' + (s.fecha_comprometida ? (atrasado(s) ? 'Atrasada: era para el ' : 'Comprometida para el ') + U.esc(PY.fecha(s.fecha_comprometida, true))
               : (s.fecha_propuesta ? 'Pediste para el ' + U.esc(PY.fecha(s.fecha_propuesta, true)) + ' (a confirmar)' : 'Sin fecha comprometida aún')) + '</span>' +

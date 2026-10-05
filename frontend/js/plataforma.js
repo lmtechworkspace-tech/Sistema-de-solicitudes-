@@ -1230,6 +1230,9 @@
     // Quien es jefatura de un área tiene "Mi equipo" dentro de ella: el módulo
     // suelto "Mi departamento" queda para las jefaturas sin área (2026-10-03).
     if ((cuenta.jefatura_de || []).length) propios = propios.filter(function (m) { return m !== 'jefatura'; });
+    // Solicitudes, etapa 2: quien está en la lista de un departamento recibe
+    // sus pedidos en la Bandeja (la cola del área), tenga o no el módulo.
+    if ((cuenta.colas_solicitudes || []).length && propios.indexOf('bandeja') === -1) propios.push('bandeja');
     // v6.5: "novedades" es core -- se agrega siempre, aunque la cuenta no lo
     // tenga en su lista asignada. Justo despues de home (primera posicion
     // entre los internos) porque es lo que se quiere que se vea primero.

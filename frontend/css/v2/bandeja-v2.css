@@ -158,6 +158,30 @@ body:has(.bj2-lote) #py2-interruptor { display: none; }
 .js-bj2-comentar:has(input[value=solicitante]:checked) .bj2-destino__si-interno { display: none; }
 .js-bj2-comentar:has(input[value=solicitante]:checked) textarea { border-color: color-mix(in srgb, var(--sx-info) 55%, var(--sx-borde)); }
 
+/* Etapa 2 (2026-10-05): pestañas "mi bandeja" / cola de cada departamento. */
+.bj2-colas { display: flex; gap: 6px; flex-wrap: wrap; }
+.bj2-colas__op {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px;
+  border: 1px solid var(--sx-borde-suave); background: var(--sx-superficie); color: var(--sx-texto-2);
+  font: 600 0.8125rem/1 var(--fuente); cursor: pointer;
+  transition: background var(--sx-dur-rapida) var(--sx-curva), border-color var(--sx-dur-rapida) var(--sx-curva);
+}
+.bj2-colas__op:hover { background: var(--sx-superficie-2); }
+.bj2-colas__op:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: 2px; }
+.bj2-colas__op.is-activo { background: var(--sx-primario-suave); border-color: color-mix(in srgb, var(--sx-primario) 45%, transparent); color: var(--sx-primario); }
+.bj2-colas__n { min-width: 20px; padding: 2px 6px; border-radius: 999px; background: var(--sx-superficie-2); color: var(--sx-texto); font-variant-numeric: tabular-nums; text-align: center; }
+.bj2-colas__op.is-activo .bj2-colas__n { background: var(--sx-superficie); }
+.bj2-colas__sin { color: var(--sx-alerta); font-weight: 600; font-size: .75rem; }
+
+/* Catálogo de servicios del departamento (panel lateral). */
+.bj2-servicios { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.bj2-servicio {
+  display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px;
+  border: 1px solid var(--sx-borde-suave); border-radius: var(--sx-radio); color: var(--sx-texto);
+}
+.bj2-servicio strong { font: 600 0.875rem/1.3 var(--fuente); }
+.bj2-servicio.is-inactivo { opacity: .6; }
+
 /* Anchos intermedios: se pliegan columnas */
 @media (max-width: 1280px) {
   .bj2-fila { grid-template-columns: 22px 34px minmax(0, 1fr) 236px 150px auto; }

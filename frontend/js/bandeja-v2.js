@@ -33,6 +33,15 @@
   var sel_ = {};  // subsolicitud_id -> true
   var f = { kpi: 'abiertos', texto: '', empresa: '', prioridad: '', orden: 'urgencia', agrupar: false, verBandeja: '', vista: 'cola' };
   try { f.agrupar = localStorage.getItem('sigso_bj2_agrupar') === '1'; } catch (e) { /* sin storage */ }
+  // Etapa 2: '' = mi bandeja (o toda, ADM); 'CONTABILIDAD'… = cola de ese departamento.
+  f.cola = '';
+  var colaElegida_ = false;
+  try { var guardada = localStorage.getItem('sigso_bj2_cola'); f.cola = guardada || ''; colaElegida_ = guardada !== null; } catch (e) { /* sin storage */ }
+  function elegirCola(clave) {
+    f.cola = clave || ''; colaElegida_ = true; sel_ = {}; f.kpi = 'abiertos'; mostrar_ = POR_PAGINA;
+    try { localStorage.setItem('sigso_bj2_cola', f.cola); } catch (e) { /* sin storage */ }
+    cargar(false);
+  }
   var graficos_ = [];
 
   function api(accion, datos) {
@@ -102,14 +111,23 @@
     if (!c) return;
     var t = ++turno_;
     if (!silencioso || !datos_) c.innerHTML = '<div class="sx2-pagina">' + U.esqueleto('kpis', 6) + U.esqueleto('tabla', 8) + '</div>';
-    Promise.all([api('getColaSolicitudes', { verBandeja: f.verBandeja }), PY.cargarMiPerfil()]).then(function (r) {
+    Promise.all([api('getColaSolicitudes', { verBandeja: f.cola ? '' : f.verBandeja, depto: f.cola }), PY.cargarMiPerfil()]).then(function (r) {
       if (t !== turno_) return;
+      // Ya no está en la lista de ese departamento: vuelve a su bandeja.
+      if (f.cola && r[0] && !r[0].ok && /departamento/i.test(r[0].message || '')) {
+        f.cola = ''; try { localStorage.removeItem('sigso_bj2_cola'); } catch (e) { /* sin storage */ }
+        cargar(silencioso); return;
+      }
       if (!r[0] || !r[0].ok) {
         c.innerHTML = '<div class="sx2-pagina">' + U.card({ cuerpo: U.vacio({ icono: 'alerta', titulo: 'No se pudo cargar la bandeja', texto: (r[0] && r[0].message) || 'Inténtalo de nuevo.',
           accion: U.boton({ texto: 'Reintentar', icono: 'tendencia', clase: 'js-bj2-reintentar' }) }) }) + '</div>';
         return;
       }
       datos_ = r[0].data;
+      // Primera vez, sin nada propio y con un departamento: abre su cola.
+      if (!f.cola && !colaElegida_ && (datos_.colas || []).length && !datos_.items.length && datos_.rol_actual !== 'ADM') {
+        colaElegida_ = true; f.cola = datos_.colas[0].clave; cargar(silencioso); return;
+      }
       var ids = {};
       datos_.items.forEach(function (i) { ids[i.subsolicitud_id] = true; });
       Object.keys(sel_).forEach(function (k) { if (!ids[k]) delete sel_[k]; });
@@ -140,7 +158,7 @@
       if (f.empresa && i.empresa_id !== f.empresa) return false;
       if (f.prioridad && i.prioridad !== f.prioridad) return false;
       if (q) {
-        var t = [i.solicitud_id, i.titulo, i.empresa_nombre, i.solicitante_nombre, i.solicitante_email, i.modulo_nombre, i.tipo_nombre, i.asignado_nombre, i.empresa_cliente].join(' ').toLowerCase();
+        var t = [i.solicitud_id, i.titulo, i.empresa_nombre, i.solicitante_nombre, i.solicitante_email, i.modulo_nombre, i.tipo_nombre, i.asignado_nombre, i.empresa_cliente, i.servicio_nombre, i.depto_nombre].join(' ').toLowerCase();
         if (t.indexOf(q) === -1) return false;
       }
       return true;
@@ -162,18 +180,22 @@
   // --- Pintado -------------------------------------------------------------------------
   function cabecera() {
     var d = datos_;
-    var esAdm = d.rol_actual === 'ADM';
+    var esAdm = d.rol_actual === 'ADM' && !f.cola;
+    var colaActual = (d.colas || []).filter(function (c) { return c.clave === f.cola; })[0];
     var quien = esAdm
       ? '<select class="sx2-select js-bj2-ver" aria-label="Ver bandeja de"><option value="">Toda la bandeja</option>' + (d.responsables || []).map(function (r) {
           return '<option value="' + U.esc(r.email) + '"' + (String(r.email).toLowerCase() === String(f.verBandeja).toLowerCase() ? ' selected' : '') + '>Bandeja de ' + U.esc(PY.persona(r.email, r.nombre).nombre) + '</option>';
         }).join('') + '</select>'
-      : '<span class="sx2-tenue" style="font-size:.875rem">Tu bandeja: lo asignado a ti' + (d.rol_actual === 'DEV' ? ' y lo huérfano en curso' : '') + '.</span>';
+      : (colaActual
+        ? '<span class="sx2-tenue" style="font-size:.875rem">Lo que llega a ' + U.esc(colaActual.nombre) + '. ' + (colaActual.rol === 'JEFATURA' ? 'Repártelo o tómalo.' : (colaActual.rol === 'LECTURA' ? 'Acceso de solo lectura.' : 'Toma lo que esté sin asignar.')) + '</span>'
+        : '<span class="sx2-tenue" style="font-size:.875rem">Tu bandeja: lo asignado a ti' + (d.rol_actual === 'DEV' ? ' y lo huérfano en curso' : '') + '.</span>');
     return '<header class="sx2-cabecera sx2-entra">' +
-      '<div class="sx2-cabecera__txt"><span class="sx2-cabecera__migas">Solicitudes</span><h1>Bandeja de trabajo</h1>' + (esAdm ? '' : quien) + '</div>' +
+      '<div class="sx2-cabecera__txt"><span class="sx2-cabecera__migas">Solicitudes · Bandeja de trabajo</span><h1>' + (colaActual ? 'Cola de ' + U.esc(colaActual.nombre) : 'Bandeja de trabajo') + '</h1>' + (esAdm ? '' : quien) + '</div>' +
       '<div class="sx2-cabecera__acciones">' + (esAdm ? quien : '') +
+        (colaActual && colaActual.rol === 'JEFATURA' ? U.boton({ texto: 'Servicios', icono: 'lista', clase: 'js-bj2-servicios', titulo: 'Catálogo de servicios de ' + colaActual.nombre }) : '') +
         U.segmento([{ id: 'cola', texto: 'Cola', icono: 'lista' }, { id: 'analisis', texto: 'Análisis', icono: 'grafico' }], f.vista, 'js-bj2-vista') +
         U.boton({ soloIcono: true, icono: 'exportar', titulo: 'Descargar Excel', clase: 'js-bj2-excel' }) +
-        (esAdm && f.verBandeja ? U.boton({ texto: 'Pauta (PDF)', icono: 'documento', clase: 'js-bj2-pauta' }) : '') +
+        (esAdm && f.verBandeja && !f.cola ? U.boton({ texto: 'Pauta (PDF)', icono: 'documento', clase: 'js-bj2-pauta' }) : '') +
         U.boton({ soloIcono: true, icono: 'tendencia', titulo: 'Actualizar', clase: 'js-bj2-reintentar' }) +
       '</div>' +
     '</header>';
@@ -185,6 +207,20 @@
       var v = r[k.id] || 0;
       return U.kpi({ i: i, icono: k.icono, tono: v || k.id === 'abiertos' ? k.tono : 'neutro', etiqueta: k.etiqueta, valor: v, unidad: k.unidad, filtro: k.id, activo: f.kpi === k.id });
     }).join('') + '</div>';
+  }
+
+  // Etapa 2: pestañas entre "mi bandeja" y la cola de cada departamento de la persona.
+  function colas() {
+    var cs = datos_.colas || [];
+    if (!cs.length) return '';
+    var mia = datos_.rol_actual === 'ADM' ? 'Toda la bandeja' : 'Mi bandeja';
+    return '<nav class="bj2-colas sx2-entra" aria-label="Colas">' +
+      '<button type="button" class="bj2-colas__op js-bj2-cola' + (!f.cola ? ' is-activo' : '') + '" data-cola="" aria-pressed="' + !f.cola + '">' + U.ico('bandeja', 14) + U.esc(mia) + '</button>' +
+      cs.map(function (c) {
+        return '<button type="button" class="bj2-colas__op js-bj2-cola' + (f.cola === c.clave ? ' is-activo' : '') + '" data-cola="' + U.esc(c.clave) + '" aria-pressed="' + (f.cola === c.clave) + '">' +
+          U.ico(c.icono || 'equipo', 14) + U.esc(c.nombre) + '<span class="bj2-colas__n">' + c.abiertos + '</span>' +
+          (c.sin_asignar ? '<span class="bj2-colas__sin" title="Sin asignar">' + c.sin_asignar + ' sin asignar</span>' : '') + '</button>';
+      }).join('') + '</nav>';
   }
 
   // Etapa 1 (2026-10-05): en la Cola los indicadores son una banda de una
@@ -240,8 +276,8 @@
         '<strong class="sx2-cortar">' + U.esc(i.titulo || '(sin título)') + '</strong>' +
         '<span class="sx2-flex bj2-fila__meta">' +
           '<span class="bj2-id">' + U.esc(i.solicitud_id) + (i.cantidad_items > 1 ? ' · ítem ' + i.numero_item + '/' + i.cantidad_items : '') + '</span>' +
-          '<span class="sx2-cortar">' + (i.solicitante_nombre ? '<b class="bj2-pide">' + U.esc(i.solicitante_nombre) + '</b> · ' : '') + U.esc(i.empresa_nombre || '') + (i.tipo_nombre ? ' · ' + U.esc(i.tipo_nombre) : '') + '</span>' +
-          (i.es_cliente ? U.badge('Cliente' + (i.empresa_cliente ? ': ' + i.empresa_cliente : ''), 'hito', true) : '') +
+          '<span class="sx2-cortar">' + (i.solicitante_nombre ? '<b class="bj2-pide">' + U.esc(i.solicitante_nombre) + '</b> · ' : '') + (i.depto && !f.cola ? U.esc(i.depto_nombre) + ' · ' : '') + (i.servicio_nombre ? U.esc(i.servicio_nombre) : U.esc(i.empresa_nombre || '') + (i.tipo_nombre ? ' · ' + U.esc(i.tipo_nombre) : '')) + '</span>' +
+          (i.es_cliente || i.empresa_cliente ? U.badge('Cliente' + (i.empresa_cliente ? ': ' + i.empresa_cliente : ''), 'hito', true) : '') +
           (i.respuesta_pendiente ? U.badge('Respondió', 'info') : '') +
         '</span>' +
       '</span>' +
@@ -251,7 +287,9 @@
         : '<span class="bj2-sin">' + U.ico('persona', 14) + 'Sin asignar</span>') + '</span>' +
       '<span class="bj2-fila__fecha">' + (i.fecha_comprometida ? '<span' + (vencida(i) ? ' class="bj2-tarde" title="Fecha comprometida vencida"' : '') + '>' + (vencida(i) ? U.ico('alerta', 12) + ' ' : '') + fechaCorta(i.fecha_comprometida) + '</span>' : '<span class="sx2-tenue">Sin fecha</span>') +
         '<small class="sx2-tenue">' + (i.dias_sin_movimiento ? i.dias_sin_movimiento + ' d sin mover' : 'hoy') + '</small></span>' +
-      '<span class="bj2-fila__acc">' + (!datos_.solo_lectura && i.estado === 'S01' ? U.boton({ texto: 'Recibir', sm: true, variante: 'primario', clase: 'js-bj2-recibir', datos: { id: i.subsolicitud_id } }) : '') +
+      '<span class="bj2-fila__acc">' + (datos_.solo_lectura ? '' : (i.puede_tomar
+          ? U.boton({ texto: 'Tomar', icono: 'check', sm: true, variante: 'primario', clase: 'js-bj2-tomar', datos: { id: i.subsolicitud_id }, titulo: 'Queda a tu nombre' })
+          : (i.estado === 'S01' && (!i.depto || i.puede_asignar || i.asignado === datos_.mi_email) ? U.boton({ texto: 'Recibir', sm: true, variante: 'primario', clase: 'js-bj2-recibir', datos: { id: i.subsolicitud_id } }) : ''))) +
         U.boton({ soloIcono: true, icono: 'derecha', sm: true, variante: 'fantasma', titulo: 'Abrir', clase: 'js-bj2-abrir' }) + '</span>' +
     '</li>';
   }
@@ -333,7 +371,7 @@
     graficos_.forEach(function (g) { try { g.destroy(); } catch (e) { /* ya destruido */ } });
     graficos_ = [];
     c.innerHTML = '<div class="sx2-pagina">' + cabecera() +
-      (f.vista === 'analisis' ? kpis() + analisis() : banda() + lista()) +
+      colas() + (f.vista === 'analisis' ? kpis() + analisis() : banda() + lista()) +
     '</div>' + (f.vista === 'cola' ? barraLote() : '');
     if (silencioso) {
       c.querySelectorAll('.sx2-entra').forEach(function (el) { el.style.animation = 'none'; });
@@ -503,6 +541,119 @@
     }).join('');
   }
 
+  // Etapa 2: catálogo de servicios del departamento. Lo administra su
+  // jefatura: qué se le puede pedir, con qué plazo (días hábiles) y qué tiene
+  // que indicar quien pide. Puede partir del mapa de procesos del SGC.
+  var PRIORIDAD_TXT = { P1: 'P1 · Crítica', P2: 'P2 · Alta', P3: 'P3 · Media', P4: 'P4 · Baja', P5: 'P5 · Planificada' };
+  function abrirServicios(depto) {
+    var d = U.drawer({ titulo: 'Servicios', subtitulo: '<span class="sx2-tenue" style="font-size:.8125rem">Cargando…</span>', cuerpo: U.esqueleto('tabla', 5), pie: ' ' });
+    d.el.classList.add('bj2-drawer');
+    var dep = null, disponibles = 0, editando = null;
+
+    function cargarS() {
+      return api('listarServiciosSolicitudAdmin', {}).then(function (r) {
+        if (!r || !r.ok) { d.cuerpo(U.vacio({ icono: 'alerta', titulo: 'No se pudo abrir', texto: (r && r.message) || 'Inténtalo de nuevo.' })); return; }
+        dep = (r.data.departamentos || []).filter(function (x) { return x.clave === depto; })[0];
+        disponibles = (r.data.procesos_disponibles || {})[depto] || 0;
+        if (!dep) { d.cuerpo(U.vacio({ icono: 'alerta', titulo: 'Sin acceso', texto: 'Solo la jefatura del departamento administra su catálogo.' })); return; }
+        pintarS();
+      });
+    }
+    function formS(sv) {
+      sv = sv || { nombre: '', descripcion: '', ayuda: '', plazo_dias: 3, prioridad: 'P3', activa: true };
+      return '<form class="sx2-form bj2-item__form js-srv-form" data-id="' + U.esc(sv.servicio_id || '') + '" novalidate>' +
+        PY.campo('Nombre del servicio', '<input class="sx2-input" name="nombre" maxlength="120" value="' + U.esc(sv.nombre) + '" placeholder="Ej.: Certificado de antigüedad">') +
+        PY.campo('Qué incluye (opcional)', '<textarea class="sx2-input" name="descripcion" maxlength="500">' + U.esc(sv.descripcion) + '</textarea>') +
+        PY.campo('Qué debe indicar quien pide (opcional)', '<input class="sx2-input" name="ayuda" maxlength="300" value="' + U.esc(sv.ayuda) + '" placeholder="Ej.: nombre y RUT del trabajador, y para qué lo necesita">', 'Aparece como guía al escribir el pedido.') +
+        '<div class="sx2-form__fila">' +
+          PY.campo('Plazo (días hábiles)', '<input class="sx2-input" type="number" name="plazo_dias" min="1" max="60" step="1" value="' + U.esc(sv.plazo_dias) + '">') +
+          PY.campo('Prioridad', '<select class="sx2-select" name="prioridad">' + PRIORIDADES.map(function (p) { return '<option value="' + p + '"' + (sv.prioridad === p ? ' selected' : '') + '>' + PRIORIDAD_TXT[p] + '</option>'; }).join('') + '</select>') +
+        '</div>' +
+        '<p class="sx2-campo__error js-srv-error" hidden></p>' +
+        '<div class="sx2-flex" style="justify-content:flex-end;gap:6px">' + U.boton({ texto: 'Cancelar', sm: true, clase: 'js-srv-cancelar' }) +
+          U.boton({ texto: sv.servicio_id ? 'Guardar' : 'Agregar', icono: 'check', sm: true, variante: 'primario', tipo: 'submit' }) + '</div></form>';
+    }
+    function pintarS() {
+      d.el.querySelector('.sx2-drawer__titulo').textContent = 'Servicios de ' + dep.nombre;
+      var cab = d.el.querySelector('.sx2-drawer__fila-titulo .sx2-apilado');
+      if (cab) {
+        cab.querySelectorAll('.sx2-tenue, .bj2-det-sub').forEach(function (e) { e.remove(); });
+        cab.insertAdjacentHTML('beforeend', '<span class="bj2-det-sub sx2-tenue" style="font-size:.8125rem">Lo que se le puede pedir al departamento. "Otro pedido" existe siempre.</span>');
+      }
+      var lista = dep.servicios || [];
+      var activos = lista.filter(function (x) { return x.activa; }).length;
+      d.cuerpo(
+        '<div class="sx2-entre" style="gap:8px;flex-wrap:wrap"><strong>' + activos + (activos === 1 ? ' servicio activo' : ' servicios activos') + '</strong>' +
+          '<span class="sx2-flex" style="gap:6px">' +
+            (disponibles ? U.boton({ texto: 'Traer del mapa de procesos', icono: 'capas', sm: true, clase: 'js-srv-importar', titulo: disponibles + ' servicios del SGC para este departamento' }) : '') +
+            U.boton({ texto: 'Nuevo servicio', icono: 'nueva', sm: true, variante: 'primario', clase: 'js-srv-nuevo' }) +
+          '</span></div>' +
+        (editando === 'nuevo' ? formS(null) : '') +
+        (lista.length ? '<ul class="bj2-servicios">' + lista.map(function (sv) {
+          if (editando === sv.servicio_id) return '<li>' + formS(sv) + '</li>';
+          return '<li class="bj2-servicio' + (sv.activa ? '' : ' is-inactivo') + '">' +
+            '<span class="sx2-apilado" style="gap:2px;min-width:0;flex:1"><strong>' + U.esc(sv.nombre) + '</strong>' +
+              '<span class="sx2-tenue" style="font-size:.75rem">' + sv.plazo_dias + (sv.plazo_dias === 1 ? ' día hábil' : ' días hábiles') + ' · ' + U.esc(PRIORIDAD_TXT[sv.prioridad] || sv.prioridad) +
+                (sv.proceso_codigo ? ' · ' + U.esc(sv.proceso_codigo) : '') + (sv.activa ? '' : ' · desactivado') + '</span>' +
+              (sv.ayuda ? '<span class="sx2-tenue" style="font-size:.75rem">Pide: ' + U.esc(sv.ayuda) + '</span>' : '') + '</span>' +
+            '<span class="sx2-flex" style="gap:4px;flex:none">' +
+              U.boton({ texto: 'Editar', sm: true, variante: 'fantasma', clase: 'js-srv-editar', datos: { id: sv.servicio_id } }) +
+              U.boton({ texto: sv.activa ? 'Desactivar' : 'Activar', sm: true, variante: 'fantasma', clase: 'js-srv-activar', datos: { id: sv.servicio_id, activa: sv.activa ? '0' : '1' } }) +
+            '</span></li>';
+        }).join('') + '</ul>'
+          : (editando ? '' : U.vacio({ icono: 'lista', titulo: 'Sin servicios todavía', texto: 'Agrega los pedidos más comunes de ' + dep.nombre + (disponibles ? ', o tráelos del mapa de procesos del SGC.' : '.') + ' Mientras tanto, igual reciben "Otro pedido".' })))
+      );
+      d.el.querySelector('.sx2-drawer__pie').innerHTML = U.boton({ texto: 'Cerrar', clase: 'js-sx2-drawer-cerrar' });
+      var f1 = d.el.querySelector('.js-srv-form input');
+      if (f1) f1.focus();
+    }
+    function guardarS(datos, exito) {
+      return api('guardarServicioSolicitud', datos).then(function (r) {
+        if (!r || !r.ok) return (r && r.message) || 'No se pudo guardar.';
+        editando = null;
+        if (exito) PY.aviso(exito, 'exito');
+        return cargarS().then(function () { return ''; });
+      });
+    }
+    d.el.addEventListener('click', function (ev) {
+      var t = ev.target, b;
+      if (t.closest('.js-srv-nuevo')) { editando = 'nuevo'; pintarS(); return; }
+      if (t.closest('.js-srv-cancelar')) { editando = null; pintarS(); return; }
+      if ((b = t.closest('.js-srv-editar'))) { editando = b.getAttribute('data-id'); pintarS(); return; }
+      if ((b = t.closest('.js-srv-activar'))) {
+        b.disabled = true;
+        guardarS({ servicio_id: b.getAttribute('data-id'), activa: b.getAttribute('data-activa') === '1' }).then(function (m) { if (m) { b.disabled = false; PY.aviso(m, 'error'); } });
+        return;
+      }
+      if ((b = t.closest('.js-srv-importar'))) {
+        b.disabled = true;
+        api('importarServiciosSolicitudDesdeProcesos', { depto: depto }).then(function (r) {
+          b.disabled = false;
+          if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo traer.', 'error'); return; }
+          PY.aviso(r.data.creados ? r.data.creados + (r.data.creados === 1 ? ' servicio agregado' : ' servicios agregados') + ' desde el mapa de procesos. Revisa sus plazos.' : 'Ya estaban todos en el catálogo.', 'exito');
+          cargarS();
+        });
+      }
+    });
+    d.el.addEventListener('submit', function (ev) {
+      if (!ev.target.classList.contains('js-srv-form')) return;
+      ev.preventDefault();
+      var form = ev.target, x = {};
+      new FormData(form).forEach(function (v, k) { x[k] = String(v).trim(); });
+      var err = form.querySelector('.js-srv-error');
+      var id = form.getAttribute('data-id');
+      var datos = { nombre: x.nombre, descripcion: x.descripcion, ayuda: x.ayuda, plazo_dias: Number(x.plazo_dias), prioridad: x.prioridad };
+      if (id) datos.servicio_id = id; else datos.depto = depto;
+      var btn = form.querySelector('[type=submit]'); btn.disabled = true;
+      guardarS(datos, id ? 'Servicio actualizado.' : 'Servicio agregado.').then(function (m) {
+        btn.disabled = false;
+        if (m) { err.textContent = m; err.hidden = false; }
+      });
+    });
+    cargarS();
+    return d;
+  }
+
   function lote(accion) {
     var lista = seleccionados();
     if (!lista.length) return;
@@ -575,7 +726,7 @@
       });
     }
 
-    function soloLectura() { return !detalle || detalle.rol_actual === 'GERENCIA' || detalle.rol_actual === 'JEFATURA'; }
+    function soloLectura() { return !detalle || (detalle.solo_lectura !== undefined ? !!detalle.solo_lectura : (detalle.rol_actual === 'GERENCIA' || detalle.rol_actual === 'JEFATURA')); }
 
     function pintarDetalle() {
       var s = detalle.solicitud, subs = detalle.subsolicitudes || [];
@@ -819,6 +970,18 @@
     var t = ev.target, b;
     if (t.closest('.js-bj2-reintentar')) { cargar(!!datos_); return; }
     if (!datos_) return;
+    if ((b = t.closest('.js-bj2-cola'))) { elegirCola(b.getAttribute('data-cola')); return; }
+    if (t.closest('.js-bj2-servicios')) { abrirServicios(f.cola); return; }
+    if ((b = t.closest('.js-bj2-tomar'))) {
+      ev.stopPropagation();
+      b.disabled = true;
+      api('tomarItemSolicitud', { subsolicitud_id: b.getAttribute('data-id') }).then(function (r) {
+        if (!r || !r.ok) { b.disabled = false; PY.aviso((r && r.message) || 'No se pudo tomar.', 'error'); avisarCambio(); return; }
+        PY.aviso('Es tuyo: quedó a tu nombre y el solicitante ve que ya lo recibieron.', 'exito');
+        avisarCambio();
+      });
+      return;
+    }
     if ((b = t.closest('.js-bj2-vista'))) { f.vista = b.getAttribute('data-id'); pintar(); return; }
     if ((b = t.closest('.sx2-kpi[data-filtro], .bj2-banda__op[data-filtro]'))) { f.kpi = b.getAttribute('data-filtro'); f.vista = 'cola'; mostrar_ = POR_PAGINA; pintar(true); return; }
     if (t.closest('.js-bj2-todos')) { f.kpi = f.kpi === 'todos' ? 'abiertos' : 'todos'; pintar(true); return; }

@@ -231,6 +231,7 @@ function estadoPublico(db, solicitudId, email) {
       tipo_nombre: s.tipo_nombre || '',
       modulo_nombre: s.modulo_nombre || '',
       area_nombre: s.area_nombre || '',
+      depto_nombre: s.depto_nombre || '', servicio_nombre: s.servicio_nombre || '',
       descripcion: s.descripcion || '',
       resultado_esperado: s.resultado_esperado || '',
       contexto: s.contexto || '',

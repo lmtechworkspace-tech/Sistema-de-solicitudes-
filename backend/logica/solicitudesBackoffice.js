@@ -31,6 +31,7 @@ const Notificaciones = require('./notificaciones');
 const Cumplimiento = require('./cumplimiento');
 const Jefatura = require('./jefatura');
 const { obtenerResponsablesActivos_ } = require('./dashboard');
+const Servicios = require('./serviciosSolicitud');
 
 function normalizarEmail_(email) {
   return String(email || '').trim().toLowerCase();
@@ -47,6 +48,14 @@ function fueraDeSuPropioTrabajo_(contexto, subsolicitud, accion) {
   const suyo = normalizarEmail_(subsolicitud && subsolicitud.desarrollador_asignado) === normalizarEmail_(contexto.email);
   if (suyo) return null;
   return errorForbidden('Tu cuenta solo puede ' + accion + ' en los items que tiene asignados.');
+}
+
+// Etapa 2: la JEFATURA de un departamento (su lista en CI_MIEMBROS) actúa
+// sobre todo lo de su departamento aunque no lo tenga asignado; el resto
+// sigue con la regla de arriba (solo lo suyo).
+function vetoFueraDeAlcance_(db, contexto, subsolicitud, accion) {
+  if (subsolicitud && subsolicitud.depto && Servicios.rolesEnDeptos_(db, contexto)[subsolicitud.depto] === 'JEFATURA') return null;
+  return fueraDeSuPropioTrabajo_(contexto, subsolicitud, accion);
 }
 
 function buscarSolicitudPorId_(db, solicitudId) {
@@ -126,7 +135,7 @@ function actualizarEstado(db, data, contexto, opciones) {
     return errorValidacion('subsolicitud_id', 'Subsolicitud no encontrada: ' + data.subsolicitud_id);
   }
   if (!opts.sistemaAutomatico) {
-    const veto = fueraDeSuPropioTrabajo_(contexto, subsolicitud, 'cambiar el estado');
+    const veto = vetoFueraDeAlcance_(db, contexto, subsolicitud, 'cambiar el estado');
     if (veto) return veto;
   }
 
@@ -273,7 +282,7 @@ async function comprometerFecha(db, data, contexto) {
   const subsolicitud = buscarSubsolicitud_(db, data.subsolicitud_id);
   if (!subsolicitud) return errorValidacion('subsolicitud_id', 'Subsolicitud no encontrada: ' + data.subsolicitud_id);
 
-  const veto = fueraDeSuPropioTrabajo_(contexto, subsolicitud, 'comprometer fechas');
+  const veto = vetoFueraDeAlcance_(db, contexto, subsolicitud, 'comprometer fechas');
   if (veto) return veto;
 
   const esReCompromiso = !!subsolicitud.fecha_comprometida;
@@ -322,9 +331,12 @@ function planificarDerivacion_(db, solicitudId, subsolicitudId, contexto) {
     if (!items.length) return errorValidacion('subsolicitud_id', 'Subsolicitud no encontrada: ' + subsolicitudId);
   }
 
-  // §2.4: un Desarrollador solo puede traspasar SU trabajo.
+  // §2.4: un Desarrollador solo puede traspasar SU trabajo. Etapa 2: la
+  // jefatura de un departamento reparte lo de su departamento.
+  const rolesDepto = Servicios.rolesEnDeptos_(db, contexto);
+  const esJefaturaDe = (s) => !!s.depto && rolesDepto[s.depto] === 'JEFATURA';
   if (contexto.rol === 'DEV') {
-    const ajeno = items.filter((s) => responsableDeItem_(s, solicitud) !== contexto.email);
+    const ajeno = items.filter((s) => responsableDeItem_(s, solicitud) !== contexto.email && !esJefaturaDe(s));
     if (ajeno.length) return errorForbidden('Solo puedes derivar solicitudes asignadas a ti (' + solicitudId + ').');
   }
 
@@ -382,6 +394,19 @@ async function derivarSolicitud(db, data, contexto) {
     planes.push(plan);
   }
 
+  if (contexto.rol !== 'ADM') {
+    const nuevo = normalizarEmail_(data.responsable_nuevo);
+    for (const plan of planes) {
+      for (const item of plan.items) {
+        if (!item.depto) continue;
+        const equipo = Servicios.equipoDepto_(db, item.depto);
+        if (equipo.length && !equipo.some((m) => m.email === nuevo)) {
+          return errorForbidden('Lo de ' + (item.depto_nombre || item.depto) + ' se reparte entre su equipo: esa persona no está en la lista del departamento.');
+        }
+      }
+    }
+  }
+
   const timestamp = new Date().toISOString();
   const derivadas = planes.map((plan) => aplicarDerivacion_(db, plan, data.responsable_nuevo, motivo, contexto, timestamp));
 
@@ -394,16 +419,45 @@ async function derivarSolicitud(db, data, contexto) {
   };
 }
 
+/**
+ * Etapa 2: "Tomar" un pedido que llegó sin asignar a la cola de un
+ * departamento donde la persona trabaja (JEFATURA o REGISTRA). Queda a su
+ * nombre y, si estaba Nueva, pasa a Recibida. Si alguien lo tomó un instante
+ * antes, se avisa en vez de pisarlo.
+ */
+function tomarItem(db, data, contexto) {
+  const sub = buscarSubsolicitud_(db, data && data.subsolicitud_id);
+  if (!sub) return errorValidacion('subsolicitud_id', 'Ítem no encontrado.');
+  if (!sub.depto) return errorForbidden('Solo se toman pedidos que llegan a la cola de un departamento.');
+  const rol = Servicios.rolesEnDeptos_(db, contexto)[sub.depto];
+  if (!Servicios.puedeTrabajar_(rol)) return errorForbidden('No estás en el equipo de ' + (sub.depto_nombre || sub.depto) + '.');
+  if (ESTADOS_CERRADOS.indexOf(sub.estado) !== -1 || sub.estado === ESTADOS.S08) return errorValidacion('estado', 'Ese ítem ya no está abierto.');
+  const solicitud = buscarSolicitudPorId_(db, sub.solicitud_id);
+  const actual = responsableDeItem_(sub, solicitud || {});
+  const yo = normalizarEmail_(contexto.email);
+  if (actual && normalizarEmail_(actual) !== yo) return errorValidacion('desarrollador_asignado', 'Ya lo tomó otra persona.');
+  if (!actual) {
+    aplicarDerivacion_(db, { solicitud, solicitudId: sub.solicitud_id, subsolicitudId: sub.subsolicitud_id, items: [sub], anterior: '' },
+      yo, 'Lo tomó de la cola de ' + (sub.depto_nombre || sub.depto) + '.', contexto, new Date().toISOString());
+  }
+  if (sub.estado === ESTADOS.S01) {
+    actualizarEstado(db, { subsolicitud_id: sub.subsolicitud_id, estado_nuevo: ESTADOS.S02, comentario: '' }, Object.assign({}, contexto, { rol_origen: '' }));
+  }
+  return { subsolicitud_id: sub.subsolicitud_id, desarrollador_asignado: yo };
+}
+
 function editarContenidoSubsolicitud(db, data, contexto) {
   const rol = contexto ? contexto.rol : '';
-  if (rol === 'GERENCIA' || rol === 'JEFATURA') {
+  const subDepto = rol === 'JEFATURA' ? buscarSubsolicitud_(db, data && data.subsolicitud_id) : null;
+  const trabajaElDepto = !!(subDepto && subDepto.depto && Servicios.puedeTrabajar_(Servicios.rolesEnDeptos_(db, contexto)[subDepto.depto]));
+  if (rol === 'GERENCIA' || (rol === 'JEFATURA' && !trabajaElDepto)) {
     return errorForbidden('El rol ' + rol + ' es de solo lectura: no puede editar el contenido.');
   }
   if (!data || !data.subsolicitud_id) return errorValidacion('subsolicitud_id', 'Falta la subsolicitud a editar.');
   const sub = buscarSubsolicitud_(db, data.subsolicitud_id);
   if (!sub) return errorValidacion('subsolicitud_id', 'Subsolicitud no encontrada: ' + data.subsolicitud_id);
 
-  const veto = fueraDeSuPropioTrabajo_(contexto, sub, 'editar el contenido');
+  const veto = vetoFueraDeAlcance_(db, contexto, sub, 'editar el contenido');
   if (veto) return veto;
 
   const titulo = String(data.titulo || '').trim();
@@ -460,6 +514,21 @@ function fechaHoraCelda_(valor) {
   return String(valor);
 }
 
+// A quién se puede derivar desde el detalle: si todo es de un departamento y
+// quien mira no es ADM, su equipo; si no, todas las cuentas activas.
+function responsablesDelDetalle_(db, items, contexto) {
+  const deptos = Array.from(new Set(items.map((i) => i.depto).filter(Boolean)));
+  if (contexto && contexto.rol !== 'ADM' && deptos.length === 1 && items.every((i) => i.depto === deptos[0])) {
+    const equipo = Servicios.equipoDepto_(db, deptos[0]);
+    if (equipo.length) {
+      const nombres = {};
+      obtenerResponsablesActivos_(db).forEach((r) => { nombres[String(r.email).toLowerCase()] = r.nombre; });
+      return equipo.map((m) => ({ email: m.email, nombre: nombres[m.email] || m.email }));
+    }
+  }
+  return obtenerResponsablesActivos_(db);
+}
+
 /**
  * Detalle completo de una solicitud (RF-018). El JEFATURA solo puede abrir
  * el detalle de una solicitud de SU equipo (v4.2) -- sin este guardia,
@@ -470,7 +539,13 @@ function getDetalle(db, solicitudId, contexto) {
   const solicitud = buscarSolicitudPorId_(db, solicitudId);
   if (!solicitud) return errorValidacion('solicitud_id', 'No existe una solicitud con ese numero.');
 
-  if (contexto && contexto.rol === 'JEFATURA') {
+  // Etapa 2: quien está en la lista del departamento de algún ítem lo abre
+  // (y, si trabaja el área, actúa sobre él).
+  const rolesDepto = Servicios.rolesEnDeptos_(db, contexto);
+  const itemsGuardia = obtenerSubsolicitudesDeSolicitud_(db, solicitudId);
+  const deptoPropio = itemsGuardia.find((i) => i.depto && rolesDepto[i.depto]);
+  const trabajaDepto = itemsGuardia.some((i) => i.depto && Servicios.puedeTrabajar_(rolesDepto[i.depto]));
+  if (contexto && contexto.rol === 'JEFATURA' && !deptoPropio) {
     const equipoJefe = Jefatura.obtenerEquipoJefe_(db, contexto.email);
     const equipoJefeSet = {};
     equipoJefe.forEach((email) => { equipoJefeSet[email] = true; });
@@ -499,7 +574,7 @@ function getDetalle(db, solicitudId, contexto) {
   // Fase 10.1: cualquier estado es un destino valido -- el selector ofrece
   // los 11 estados menos el actual, marcando cuales piden comentario.
   const rolActual = contexto ? contexto.rol : '';
-  const esSoloLectura = rolActual === 'GERENCIA' || rolActual === 'JEFATURA';
+  const esSoloLectura = rolActual === 'GERENCIA' || (rolActual === 'JEFATURA' && !trabajaDepto);
   const transicionesPorSubsolicitud = {};
   subsolicitudes.forEach((sub) => {
     transicionesPorSubsolicitud[sub.subsolicitud_id] = esSoloLectura ? [] : Object.keys(ESTADOS)
@@ -539,14 +614,15 @@ function getDetalle(db, solicitudId, contexto) {
     historial_prioridad: historialPrioridad, historial_compromiso: historialCompromiso,
     historial_asignacion: historialAsignacion, comentarios: comentarios, archivos: archivos,
     rol_actual: rolActual,
-    responsables: esSoloLectura ? [] : obtenerResponsablesActivos_(db),
+    responsables: esSoloLectura ? [] : responsablesDelDetalle_(db, itemsGuardia, contexto),
+    solo_lectura: esSoloLectura,
     transiciones_por_subsolicitud: transicionesPorSubsolicitud
   };
 }
 
 module.exports = {
   actualizarEstado, actualizarPrioridad, comprometerFecha, derivarSolicitud,
-  editarContenidoSubsolicitud, getDetalle,
+  editarContenidoSubsolicitud, getDetalle, tomarItem,
   recalcularEstadoDerivado_, calcularEstadoDerivado_,
   buscarSolicitudPorId_, buscarSubsolicitud_, fechaHoraCelda_
 };

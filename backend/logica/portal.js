@@ -69,7 +69,10 @@ function perfilPublico(cuenta, db) {
     departamentos: db ? departamentosDe_(db, cuenta) : [],
     // Las áreas donde es JEFATURA: su "Mi equipo" vive dentro de cada una y
     // el módulo suelto "Mi departamento" deja de mostrarse.
-    jefatura_de: db ? jefaturaDe_(db, cuenta) : []
+    jefatura_de: db ? jefaturaDe_(db, cuenta) : [],
+    // Solicitudes, etapa 2: los departamentos en cuya lista está (su cola de
+    // pedidos aparece en la Bandeja aunque la cuenta no tenga ese módulo).
+    colas_solicitudes: db ? colasDe_(db, cuenta) : []
   };
 }
 function contextoDe_(cuenta) {
@@ -81,6 +84,7 @@ function contextoDe_(cuenta) {
 }
 // require tardío: controlInterno carga Calidad/Prestaciones, que no hacen falta para el login.
 function departamentosDe_(db, cuenta) { return require('./controlInterno').modulosDeDepartamento_(db, contextoDe_(cuenta)); }
+function colasDe_(db, cuenta) { try { return require('./serviciosSolicitud').colasDe_(db, contextoDe_(cuenta)); } catch (e) { return []; } }
 function jefaturaDe_(db, cuenta) { return require('./controlInterno').jefaturaDeDepartamentos_(db, contextoDe_(cuenta)); }
 
 function login(db, data, ip) {

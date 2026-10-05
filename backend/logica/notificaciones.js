@@ -78,8 +78,8 @@ const CANALES_ALERTA = [
     descripcion: 'Avisos y logros publicados, novedades por aprobar y recordatorios de acuse.',
     prefijos: ['NOVEDAD'] },
   { clave: 'SOLICITUDES', nombre: 'Solicitudes (equipo)', tiene_en_vivo: false,
-    descripcion: 'Derivaciones a tu bandeja y avisos de documento listo. Hoy solo por correo.',
-    prefijos: ['DERIVACION', 'DOC_LISTO', 'FALLO_DOCUMENTO'] },
+    descripcion: 'Pedidos nuevos a tu departamento, derivaciones a tu bandeja y avisos de documento listo.',
+    prefijos: ['DERIVACION', 'DOC_LISTO', 'FALLO_DOCUMENTO', 'PEDIDO_DEPTO'] },
   { clave: 'SLA', nombre: 'SLA y vencimientos (equipo)', tiene_en_vivo: false,
     descripcion: 'SLA próximo o vencido, fecha comprometida en riesgo y alertas de patrón. Hoy solo por correo.',
     prefijos: ['SLA_PROXIMO', 'SLA_VENCIDO', 'FECHA_EN_RIESGO', 'ALERTA_PATRON'] },
@@ -335,6 +335,35 @@ async function enviarAvisoDesarrollo(db, solicitud, motivo, destinatario) {
     'RESUMEN\n' + solicitud.resumen_whatsapp +
     pieCorreo_();
   return enviarCorreo_(db, { solicitudId: solicitud.solicitud_id, destinatario: email, evento: 'AVISO_DESARROLLO', asunto, cuerpo });
+}
+
+/**
+ * Etapa 2: llegó un pedido a la cola de un departamento. Campana a todos los
+ * que lo trabajan; correo solo a la jefatura (si no hay jefatura, a quienes
+ * registran). Sin equipo cargado, a las cuentas ADM para que no se pierda.
+ */
+async function avisarPedidoDepartamento(db, solicitud, depto, items, equipo) {
+  const lista = (equipo || []).filter((m) => m.email);
+  const jefes = lista.filter((m) => m.rol === 'JEFATURA').map((m) => m.email);
+  let correo = jefes.length ? jefes : lista.map((m) => m.email);
+  if (!correo.length) {
+    try { correo = DirectorioPersonal.emailsPorRol_(db, ['ADM']); } catch (err) { correo = []; }
+  }
+  const titulos = (items || []).map((i) => '- ' + (i.titulo || i.subsolicitud_id)).join('\n');
+  const enlace = urlPortal_() + '#/bandeja';
+  const campana = lista.map((m) => m.email).filter((e) => tieneCuentaActiva_(db, e)).map((e) => ({
+    destinatario: e, tipo: 'SOLICITUD_DEPTO', titulo: depto.nombre + ': pedido nuevo ' + solicitud.solicitud_id,
+    mensaje: ((items || [])[0] || {}).titulo || '', modulo_id: 'bandeja', texto_accion: 'Ver la cola', vidaHoras: 168
+  }));
+  if (campana.length) NotificacionesApp.encolarLote(db, campana);
+  const asunto = 'SIGSO — Pedido nuevo para ' + depto.nombre + ': ' + solicitud.solicitud_id + (solicitud.prioridad === 'P1' || solicitud.prioridad === 'P2' ? ' (urgente)' : '');
+  const cuerpo = 'Hola:\n\n' + (solicitud.solicitante_nombre || 'Alguien') + ' pidió a ' + depto.nombre + ':\n\n' + titulos + '\n\n' +
+    'Llegó a la cola del departamento sin asignar: repártelo o tómalo aquí:\n' + enlace + pieCorreo_();
+  const resultados = [];
+  for (const email of correo) {
+    resultados.push(await enviarCorreo_(db, { solicitudId: solicitud.solicitud_id, destinatario: email, evento: 'PEDIDO_DEPTO:' + depto.clave, asunto, cuerpo }));
+  }
+  return resultados;
 }
 
 async function avisarAtencionDirectaRegistrada(db, solicitud, atencion, destinatario) {
@@ -1014,7 +1043,7 @@ async function enviarReporteGerenciaAhora(db, data, contexto) {
 }
 
 module.exports = {
-  enviarAcuseRecibo, enviarAvisoDesarrollo, avisarAtencionDirectaRegistrada,
+  enviarAcuseRecibo, enviarAvisoDesarrollo, avisarAtencionDirectaRegistrada, avisarPedidoDepartamento,
   notificarCambioEstado, avisarCompromisoFecha, notificarDerivacion, enviarCodigoAcceso,
   // Solicitudes, etapa 1 (2026-10-05): mensajes del equipo y aviso previo al cierre automático.
   avisarMensajeEquipo, avisarCierreProximo, hitoSolicitante_, etiquetaEstado_,

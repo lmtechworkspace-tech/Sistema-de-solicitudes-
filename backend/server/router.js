@@ -30,6 +30,7 @@ const CuentasPortal = require('../logica/cuentasPortal');
 const Sesiones = require('../logica/sesiones');
 const Solicitudes = require('../logica/solicitudes');
 const SolicitudesBO = require('../logica/solicitudesBackoffice');
+const ServiciosSolicitud = require('../logica/serviciosSolicitud');
 const SolicitudesPublico = require('../logica/solicitudesPublico');
 const Jefatura = require('../logica/jefatura');
 const Dashboard = require('../logica/dashboard');
@@ -153,6 +154,13 @@ const ACCIONES = {
   derivarSolicitud: (db, data, contexto) => SolicitudesBO.derivarSolicitud(db, data, contexto),
   editarContenidoSubsolicitud: (db, data, contexto) => SolicitudesBO.editarContenidoSubsolicitud(db, data, contexto),
   getSolicitudDetalle: (db, data, contexto) => SolicitudesBO.getDetalle(db, data.solicitud_id, contexto),
+  // Solicitudes, etapa 2 (2026-10-05): pedidos a departamentos. Catálogo de
+  // servicios por departamento (lo arma su jefatura) y "Tomar" de la cola.
+  tomarItemSolicitud: (db, data, contexto) => SolicitudesBO.tomarItem(db, data, contexto),
+  catalogoServiciosSolicitud: (db) => ServiciosSolicitud.catalogo(db),
+  listarServiciosSolicitudAdmin: (db, data, contexto) => ServiciosSolicitud.listarAdmin(db, data, contexto),
+  guardarServicioSolicitud: (db, data, contexto) => ServiciosSolicitud.guardar(db, data, contexto),
+  importarServiciosSolicitudDesdeProcesos: (db, data, contexto) => ServiciosSolicitud.importarDesdeProcesos(db, data, contexto),
   // §8.3 del handoff de migracion: motor de PDF en Node (pdfkit), primer
   // modulo completo (antes stub inline, ver git blame). descargar() es
   // async (genera el PDF con pdfkit) -- ejecutarAccion ya espera con

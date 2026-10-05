@@ -24,6 +24,7 @@ const { ESTADOS, ESTADOS_CERRADOS, ESTADOS_EXCLUIDOS_DERIVACION } = require('./c
 const Utils = require('./utils');
 const Cumplimiento = require('./cumplimiento');
 const DirectorioPersonal = require('./directorioPersonal');
+const Servicios = require('./serviciosSolicitud');
 
 const ESTADOS_TRABAJO_DEV = [ESTADOS.S04, ESTADOS.S05, ESTADOS.S06, ESTADOS.S07];
 const TOP_MODULOS_CANTIDAD = 5;
@@ -449,6 +450,11 @@ function getCola(db, filtros, contexto) {
   const email = String((contexto && contexto.email) || '').toLowerCase();
   const soloMios = filtros.solo_mios === true || filtros.solo_mios === 'true';
   const verBandeja = (rol === 'ADM' && !soloMios) ? String(filtros.verBandeja || '').toLowerCase() : email;
+  // Etapa 2: la cola de un DEPARTAMENTO (filtros.depto) la ve quien está en
+  // su lista (CI_MIEMBROS) o ADM; trae todo lo del área, asignado o no.
+  const rolesDepto = Servicios.rolesEnDeptos_(db, contexto);
+  const deptoVista = soloMios ? '' : String(filtros.depto || '').toUpperCase();
+  if (deptoVista && !rolesDepto[deptoVista]) return { _forbidden: true, message: 'No estás en la lista de ese departamento.' };
   const feriados = Cumplimiento.obtenerFeriados(db);
   const solicitudes = {};
   leerFilas_(db, 'SOLICITUDES', COLUMNAS.SOLICITUDES).forEach((s) => { solicitudes[s.solicitud_id] = s; });
@@ -468,9 +474,12 @@ function getCola(db, filtros, contexto) {
     const s = solicitudes[i.solicitud_id];
     const asignado = (responsableValido_(i.desarrollador_asignado) || responsableValido_(s.desarrollador_asignado)).toLowerCase();
     if (soloMios) return !!email && asignado === email && ESTADOS_CERRADOS.indexOf(i.estado) === -1 && i.estado !== ESTADOS.S08;
+    if (deptoVista) return i.depto === deptoVista;
     if (!verBandeja) return true; // ADM sin acotar
     if (asignado === verBandeja) return true;
-    return rol === 'DEV' && !filtros.verBandeja && !asignado && ESTADOS_TRABAJO_DEV.indexOf(i.estado) !== -1;
+    // Huérfanos en curso: solo los de soporte de plataformas. Lo de un
+    // departamento sin asignar vive en la cola de ese departamento.
+    return rol === 'DEV' && !filtros.verBandeja && !asignado && !i.depto && ESTADOS_TRABAJO_DEV.indexOf(i.estado) !== -1;
   });
 
   const hoy = Utils.claveDia_(new Date(), 'America/Santiago');
@@ -494,12 +503,32 @@ function getCola(db, filtros, contexto) {
       respuesta_pendiente: respuestaPendienteLectura_(i, historial, comentariosPublicos),
       empresa_id: s.empresa_id, empresa_nombre: s.empresa_nombre || s.empresa_id, plataforma_nombre: s.plataforma_nombre || s.plataforma || '',
       solicitante_nombre: s.solicitante_nombre || '', solicitante_email: s.solicitante_email || '',
-      es_cliente: s.es_cliente === true || s.es_cliente === 'TRUE', empresa_cliente: s.empresa_cliente || ''
+      es_cliente: s.es_cliente === true || s.es_cliente === 'TRUE', empresa_cliente: s.empresa_cliente || '',
+      depto: i.depto || '', depto_nombre: i.depto_nombre || '', servicio_nombre: i.servicio_nombre || '',
+      // Tomar: lo sin asignar y abierto de un departamento donde la persona trabaja.
+      puede_tomar: !!i.depto && !asignado && ESTADOS_CERRADOS.indexOf(i.estado) === -1 && i.estado !== ESTADOS.S08 && Servicios.puedeTrabajar_(rolesDepto[i.depto]),
+      puede_asignar: !!i.depto && rolesDepto[i.depto] === 'JEFATURA'
     };
   });
 
   const abiertos = items.filter((i) => ESTADOS_CERRADOS.indexOf(i.estado) === -1 && i.estado !== ESTADOS.S08);
-  const soloLectura = rol === 'GERENCIA' || rol === 'JEFATURA';
+  const soloLectura = deptoVista ? !Servicios.puedeTrabajar_(rolesDepto[deptoVista]) : (rol === 'GERENCIA' || rol === 'JEFATURA');
+  // Pestañas de la Bandeja: los departamentos de la persona, con lo abierto y lo sin asignar.
+  const colas = soloMios ? [] : Servicios.departamentos_().filter((d) => rolesDepto[d.clave]).map((d) => {
+    const delDepto = todas.filter((i) => i.depto === d.clave && ESTADOS_CERRADOS.indexOf(i.estado) === -1 && i.estado !== ESTADOS.S08);
+    return {
+      clave: d.clave, nombre: d.nombre, icono: d.icono, rol: rolesDepto[d.clave], abiertos: delDepto.length,
+      sin_asignar: delDepto.filter((i) => !(responsableValido_(i.desarrollador_asignado) || responsableValido_(solicitudes[i.solicitud_id].desarrollador_asignado))).length
+    };
+  });
+  let responsables = (soloLectura || soloMios) ? [] : obtenerResponsablesActivos_(db);
+  if (deptoVista) {
+    // En la cola de un departamento se reparte entre su equipo.
+    responsables = rolesDepto[deptoVista] === 'JEFATURA'
+      ? Servicios.equipoDepto_(db, deptoVista).map((m) => ({ email: m.email, nombre: nombrePorEmail[m.email] || m.email, rol: m.rol }))
+      : [];
+    if (rol === 'ADM' && !responsables.length) responsables = obtenerResponsablesActivos_(db);
+  }
   return {
     items: items,
     resumen: {
@@ -517,7 +546,11 @@ function getCola(db, filtros, contexto) {
     rol_actual: rol,
     solo_lectura: soloLectura,
     ver_bandeja: rol === 'ADM' ? (filtros.verBandeja || '') : email,
-    responsables: (soloLectura || soloMios) ? [] : obtenerResponsablesActivos_(db)
+    responsables: responsables,
+    colas: colas,
+    mi_email: email,
+    depto_actual: deptoVista,
+    rol_depto: deptoVista ? rolesDepto[deptoVista] : ''
   };
 }
 
