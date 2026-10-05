@@ -17,6 +17,12 @@
  *
  * La pregunta de gravedad en un toque (obligatoria dentro de la plataforma)
  * vive en formulario.js, porque es un dato -- no depende de la versión.
+ *
+ * Etapa 4 (2026-10-05): TODO EN UNA PANTALLA. "¿Qué necesitas?" con un
+ * buscador sobre los servicios de todos los departamentos ("certificado F30",
+ * "liquidación"), filtros por departamento y, al elegir, el formulario corto
+ * debajo, sin cambiar de paso. El cliente aparece solo si el servicio lo pide
+ * (pide_cliente: no / opcional / si).
  */
 (function () {
   'use strict';
@@ -24,7 +30,11 @@
   var MAX_ADJUNTOS = 5;
   var MAX_BYTES = 10 * 1024 * 1024;
   var catalogo_ = null, clientes_ = null;
-  var e = { paso: 'destino', depto: null, servicio: null, enviando: false, archivos: [], resultado: null };
+  var e = { paso: 'destino', depto: null, servicio: null, enviando: false, archivos: [], resultado: null, q: '', filtro: '' };
+  // Para buscar sin importar tildes ni mayúsculas.
+  function norm(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+  function plazoTxt(d) { return d ? d + (d === 1 ? ' día hábil' : ' días hábiles') : ''; }
+  function otroPedido(d) { return { servicio_id: '', nombre: 'Otro pedido', descripcion: 'Algo que no está en la lista de ' + d.nombre + '.', plazo_dias: 0, pide_cliente: 'opcional' }; }
 
   function U() { return window.UIv2; }
   function esc(t) { return U() ? U().esc(t) : String(t == null ? '' : t); }
@@ -60,7 +70,7 @@
   function pintar() {
     var s = seccion(), r = raiz();
     if (!s || !r) return;
-    // Mientras se elige destino o se pide a un departamento, el formulario técnico se oculta.
+    // Mientras se pide a un departamento, el formulario técnico se oculta.
     s.classList.toggle('ns2-modo-depto', e.paso !== 'tecnico');
     if (e.paso === 'tecnico') {
       r.innerHTML = '<div class="ns2-volver"><button type="button" class="sx2-boton sx2-boton--fantasma sx2-boton--sm js-ns2-destino">' + ico('izquierda', 14) + 'Cambiar a quién le pides</button>' +
@@ -69,43 +79,92 @@
     }
     if (e.paso === 'listo') { r.innerHTML = vistaListo(); return; }
     if (!catalogo_) { r.innerHTML = '<div class="ns2-pedido">' + (U() ? U().esqueleto('kpis', 4) : '') + '</div>'; return; }
-    r.innerHTML = '<div class="ns2-pedido">' +
-      '<header class="ns2-pedido__cab"><span class="sx2-cabecera__migas">Solicitudes</span><h1>Nueva solicitud</h1>' +
-        '<p class="sx2-tenue">' + (e.paso === 'destino' ? '¿A quién le pides? Elige el departamento; ellos lo reciben en su cola y te avisan cuando esté listo.' : 'Pedido a ' + esc(e.depto.nombre) + '.') + '</p></header>' +
-      (e.paso === 'destino' ? vistaDestino() : vistaPedido()) + '</div>';
-    var foco = r.querySelector('.js-ns2-foco');
-    if (foco) foco.focus();
-  }
-
-  function vistaDestino() {
-    var deps = catalogo_.departamentos || [];
-    return '<div class="ns2-destinos">' + deps.map(function (d) {
-      var n = (d.servicios || []).length;
-      return '<button type="button" class="ns2-destino js-ns2-depto" data-depto="' + esc(d.clave) + '">' +
-        '<span class="ns2-destino__ico">' + ico(d.icono || 'equipo', 20) + '</span>' +
-        '<span class="ns2-destino__txt"><strong>' + esc(d.nombre) + '</strong>' +
-        '<small>' + (n ? n + (n === 1 ? ' servicio' : ' servicios') : 'Cuéntales qué necesitas') + '</small></span></button>';
-    }).join('') +
-      '<button type="button" class="ns2-destino ns2-destino--tecnico js-ns2-tecnico">' +
-        '<span class="ns2-destino__ico">' + ico('ajustes', 20) + '</span>' +
-        '<span class="ns2-destino__txt"><strong>Soporte de plataformas</strong><small>Errores o mejoras de un sistema (Desarrollo / TI)</small></span></button>' +
+    r.innerHTML = '<div class="ns2-pedido ns2-una">' +
+      '<header class="ns2-pedido__cab"><span class="sx2-cabecera__migas">Solicitudes</span><h1>¿Qué necesitas?</h1>' +
+        '<p class="sx2-tenue">Busca el servicio o elige el departamento. Llega a su cola y te avisan por correo cuando lo tomen, si necesitan algo de ti y cuando esté listo.</p></header>' +
+      (e.servicio ? elegido() + formulario() : buscador() + '<div class="js-ns2-res" aria-live="polite">' + resultados() + '</div>') +
     '</div>';
+    var foco = r.querySelector('.js-ns2-foco');
+    if (foco) { foco.focus(); if (foco.setSelectionRange && foco.value) foco.setSelectionRange(foco.value.length, foco.value.length); }
   }
 
-  function vistaPedido() {
+  function buscador() {
+    var deps = catalogo_.departamentos || [];
+    var chip = function (id, texto, icono) {
+      var on = e.filtro === id;
+      return '<button type="button" class="ns2-chip js-ns2-filtro' + (on ? ' is-activo' : '') + '" data-filtro="' + esc(id) + '" aria-pressed="' + on + '">' + (icono ? ico(icono, 14) : '') + esc(texto) + '</button>';
+    };
+    return '<div class="ns2-busca"><label class="ns2-busca__caja">' + ico('lupa', 18) +
+        '<input type="search" class="sx2-input js-ns2-q js-ns2-foco" value="' + esc(e.q) + '" placeholder="Por ejemplo: certificado F30, liquidación, error en la intranet" aria-label="¿Qué necesitas?" autocomplete="off"></label>' +
+      '<div class="ns2-chips" role="group" aria-label="Departamento">' + chip('', 'Todos') +
+        deps.map(function (d) { return chip(d.clave, d.nombre, d.icono || 'equipo'); }).join('') + chip('TECNICO', 'Soporte de plataformas', 'ajustes') + '</div></div>';
+  }
+
+  // Los servicios que calzan con lo escrito (todas las palabras, sin tildes), agrupados por departamento.
+  function coincidencias() {
+    var palabras = norm(e.q).split(/\s+/).filter(Boolean);
+    var deps = (catalogo_.departamentos || []).filter(function (d) { return !e.filtro || e.filtro === d.clave; });
+    return deps.map(function (d) {
+      var lista = (d.servicios || []).filter(function (x) {
+        if (!palabras.length) return true;
+        var t = norm([x.nombre, x.descripcion, x.ayuda, d.nombre, x.proceso_codigo].join(' '));
+        return palabras.every(function (p) { return t.indexOf(p) !== -1; });
+      }).sort(function (a, b) {
+        // Lo que calza en el nombre, primero.
+        var na = palabras.every(function (p) { return norm(a.nombre).indexOf(p) !== -1; }) ? 0 : 1;
+        var nb = palabras.every(function (p) { return norm(b.nombre).indexOf(p) !== -1; }) ? 0 : 1;
+        return na - nb;
+      });
+      return { d: d, lista: lista };
+    });
+  }
+
+  function tarjeta(d, x, conDepto) {
+    return '<button type="button" class="ns2-servicio js-ns2-servicio" data-depto="' + esc(d.clave) + '" data-id="' + esc(x.servicio_id) + '">' +
+      '<strong>' + esc(x.nombre) + '</strong>' +
+      (conDepto ? '<small class="ns2-servicio__depto">' + ico(d.icono || 'equipo', 12) + ' ' + esc(d.nombre) + '</small>' : '') +
+      (x.descripcion ? '<small>' + esc(x.descripcion) + '</small>' : '') +
+      (x.plazo_dias ? '<small class="ns2-servicio__plazo">' + ico('reloj', 12) + ' ' + plazoTxt(x.plazo_dias) + '</small>' : '') +
+    '</button>';
+  }
+  function tecnico() {
+    return '<button type="button" class="ns2-destino ns2-destino--tecnico js-ns2-tecnico">' +
+      '<span class="ns2-destino__ico">' + ico('ajustes', 20) + '</span>' +
+      '<span class="ns2-destino__txt"><strong>Soporte de plataformas</strong><small>Errores o mejoras de un sistema (Desarrollo / TI): el formulario técnico.</small></span></button>';
+  }
+
+  function resultados() {
+    if (e.filtro === 'TECNICO') return '<div class="ns2-grupo">' + tecnico() + '</div>';
+    var grupos = coincidencias();
+    var hay = grupos.some(function (g) { return g.lista.length; });
+    if (e.q && !hay) {
+      var deps = grupos.map(function (g) { return g.d; });
+      return '<div class="ns2-sin">' + U().vacio({ icono: 'lupa', titulo: 'No hay un servicio con «' + esc(e.q) + '»', texto: 'Pídelo como «Otro pedido» al departamento que corresponda, o a Soporte de plataformas si es un sistema.' }) +
+        '<div class="ns2-otros">' + deps.map(function (d) {
+          return '<button type="button" class="ns2-chip js-ns2-servicio" data-depto="' + esc(d.clave) + '" data-id="">' + ico(d.icono || 'equipo', 14) + 'Otro pedido a ' + esc(d.nombre) + '</button>';
+        }).join('') + '</div>' + tecnico() + '</div>';
+    }
+    // Con búsqueda: lista plana de lo que calza, con su departamento. Sin búsqueda: por departamento.
+    if (e.q) {
+      var planos = [];
+      grupos.forEach(function (g) { g.lista.forEach(function (x) { planos.push(tarjeta(g.d, x, true)); }); });
+      return '<p class="sx2-tenue ns2-cuenta">' + planos.length + (planos.length === 1 ? ' servicio' : ' servicios') + '</p><div class="ns2-servicios">' + planos.join('') + '</div>' +
+        '<p class="sx2-tenue ns2-nota">¿No es ninguno? Borra la búsqueda y elige «Otro pedido» en el departamento.</p>';
+    }
+    return grupos.map(function (g) {
+      return '<section class="ns2-grupo"><h2 class="ns2-grupo__tit">' + ico(g.d.icono || 'equipo', 16) + esc(g.d.nombre) +
+          (g.d.con_equipo === false ? ' <small class="sx2-tenue">· todavía sin equipo: lo recibe Administración</small>' : '') + '</h2>' +
+        '<div class="ns2-servicios">' + g.lista.map(function (x) { return tarjeta(g.d, x, false); }).join('') + tarjeta(g.d, otroPedido(g.d), false) + '</div></section>';
+    }).join('') + (e.filtro ? '' : '<section class="ns2-grupo"><h2 class="ns2-grupo__tit">' + ico('ajustes', 16) + 'Sistemas</h2>' + tecnico() + '</section>');
+  }
+
+  // El servicio elegido, arriba del formulario, con su plazo y cómo cambiarlo.
+  function elegido() {
     var d = e.depto, sv = e.servicio;
-    var servicios = (d.servicios || []).concat([{ servicio_id: '', nombre: 'Otro pedido', descripcion: 'Algo que no está en la lista.', plazo_dias: 0 }]);
-    var lista = '<div class="ns2-servicios" role="radiogroup" aria-label="Servicio">' + servicios.map(function (x) {
-      var activo = sv && sv.servicio_id === x.servicio_id;
-      return '<button type="button" role="radio" aria-checked="' + !!activo + '" class="ns2-servicio js-ns2-servicio' + (activo ? ' is-activo' : '') + '" data-id="' + esc(x.servicio_id) + '">' +
-        '<strong>' + esc(x.nombre) + '</strong>' +
-        (x.descripcion ? '<small>' + esc(x.descripcion) + '</small>' : '') +
-        (x.plazo_dias ? '<small class="ns2-servicio__plazo">' + ico('reloj', 12) + ' ' + x.plazo_dias + (x.plazo_dias === 1 ? ' día hábil' : ' días hábiles') + '</small>' : '') +
-      '</button>';
-    }).join('') + '</div>';
-    return '<div class="ns2-pasos"><button type="button" class="sx2-boton sx2-boton--fantasma sx2-boton--sm js-ns2-destino">' + ico('izquierda', 14) + 'Otro departamento</button></div>' +
-      '<section class="ns2-bloque"><h2>¿Qué le pides a ' + esc(d.nombre) + '?</h2>' + lista + '</section>' +
-      (sv ? formulario() : '');
+    return '<div class="ns2-elegido"><span class="ns2-destino__ico">' + ico(d.icono || 'equipo', 18) + '</span>' +
+      '<span class="ns2-elegido__txt"><small class="sx2-tenue">Pedido a ' + esc(d.nombre) + '</small><strong>' + esc(sv.nombre) + '</strong>' +
+        (sv.plazo_dias ? '<small class="sx2-tenue">' + ico('reloj', 12) + ' Plazo habitual: ' + plazoTxt(sv.plazo_dias) + '</small>' : '') + '</span>' +
+      '<button type="button" class="sx2-boton sx2-boton--fantasma sx2-boton--sm js-ns2-cambiar">' + ico('izquierda', 14) + 'Elegir otro</button></div>';
   }
 
   function formulario() {
@@ -114,11 +173,11 @@
     var opcionesClientes = (clientes_ || []).slice(0, 2000).map(function (c) {
       return '<option value="' + esc(c.razon_social + (c.rut ? ' — ' + c.rut : '')) + '"></option>';
     }).join('');
-    return '<form class="ns2-bloque ns2-form js-ns2-form" novalidate><h2>Tu pedido</h2>' +
+    return '<form class="ns2-bloque ns2-form js-ns2-form" novalidate>' +
       campo('¿Qué necesitas?', '<input class="sx2-input js-ns2-foco" name="titulo" maxlength="200" value="' + esc(sv.servicio_id ? sv.nombre : '') + '" placeholder="En una línea">') +
       campo('Detalle', '<textarea class="sx2-input" name="descripcion" rows="4" maxlength="4000" placeholder="' + esc(sv.ayuda || 'Cuéntales lo necesario para que no tengan que preguntarte.') + '"></textarea>', sv.ayuda ? 'Indica: ' + sv.ayuda : '') +
       '<div class="sx2-form__fila">' +
-        campo('¿Para qué cliente? (opcional)', '<input class="sx2-input" name="cliente" list="ns2-clientes" maxlength="200" placeholder="Escribe para buscar" autocomplete="off"><datalist id="ns2-clientes">' + opcionesClientes + '</datalist>') +
+        (sv.pide_cliente === 'no' ? '' : campo(sv.pide_cliente === 'si' ? '¿Para qué cliente?' : '¿Para qué cliente? (opcional)', '<input class="sx2-input" name="cliente" list="ns2-clientes" maxlength="200" placeholder="Escribe para buscar" autocomplete="off"' + (sv.pide_cliente === 'si' ? ' required' : '') + '><datalist id="ns2-clientes">' + opcionesClientes + '</datalist>')) +
         campo('¿Para cuándo lo necesitas? (opcional)', '<input class="sx2-input" type="date" name="fecha" min="' + min + '">', sv.plazo_dias ? 'Plazo habitual: ' + sv.plazo_dias + (sv.plazo_dias === 1 ? ' día hábil.' : ' días hábiles.') : '') +
       '</div>' +
       '<label class="ns2-urgente"><input type="checkbox" name="urgente"> <span><b>Es urgente</b> <small class="sx2-tenue">Solo si de verdad no puede esperar el plazo habitual.</small></span></label>' +
@@ -184,7 +243,8 @@
     if (archivos.some(function (f) { return f.size > MAX_BYTES; })) return mal('Cada archivo puede pesar hasta 10 MB.');
     var c = cuenta(), email = (c.emails || [])[0] || '';
     if (!email) return mal('Tu sesión no tiene correo. Vuelve a ingresar.');
-    var cli = clienteDe(form.cliente.value);
+    var cli = form.cliente ? clienteDe(form.cliente.value) : null;
+    if (e.servicio.pide_cliente === 'si' && !cli) return mal('Este pedido necesita el cliente: escríbelo o búscalo en la lista.');
     var datos = {
       empresa_id: c.empresa_id || 'HP', asociada_plataforma: false, plataforma: '',
       solicitante_nombre: c.nombre || email, solicitante_cargo: c.cargo || 'Sin cargo', solicitante_email: email,
@@ -227,26 +287,29 @@
     var r = document.getElementById('ns2-pedido');
     if (!r || !r.contains(ev.target)) return;
     var t = ev.target, b;
-    if ((b = t.closest('.js-ns2-depto'))) {
-      e.depto = (catalogo_.departamentos || []).filter(function (d) { return d.clave === b.getAttribute('data-depto'); })[0];
-      e.servicio = null; e.paso = 'pedido';
-      // Con un solo camino ("Otro pedido"), se elige solo.
-      if (e.depto && !(e.depto.servicios || []).length) e.servicio = { servicio_id: '', nombre: 'Otro pedido', plazo_dias: 0 };
-      pintar(); cargarClientes();
-      return;
-    }
+    if ((b = t.closest('.js-ns2-filtro'))) { e.filtro = b.getAttribute('data-filtro'); pintar(); return; }
     if ((b = t.closest('.js-ns2-servicio'))) {
       var id = b.getAttribute('data-id');
-      e.servicio = id ? (e.depto.servicios || []).filter(function (x) { return x.servicio_id === id; })[0] : { servicio_id: '', nombre: 'Otro pedido', plazo_dias: 0 };
-      pintar();
-      var f = r.querySelector('.js-ns2-form');
-      if (f) f.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      e.depto = (catalogo_.departamentos || []).filter(function (d) { return d.clave === b.getAttribute('data-depto'); })[0];
+      if (!e.depto) return;
+      e.servicio = id ? (e.depto.servicios || []).filter(function (x) { return x.servicio_id === id; })[0] : otroPedido(e.depto);
+      e.paso = 'pedido';
+      pintar(); cargarClientes();
+      window.scrollTo(0, 0);
       return;
     }
+    if (t.closest('.js-ns2-cambiar')) { e.servicio = null; e.depto = null; e.paso = 'destino'; pintar(); return; }
     if (t.closest('.js-ns2-destino')) { e.paso = 'destino'; e.depto = null; e.servicio = null; pintar(); return; }
     if (t.closest('.js-ns2-tecnico')) { e.paso = 'tecnico'; pintar(); window.scrollTo(0, 0); return; }
-    if (t.closest('.js-ns2-otra')) { e.paso = 'destino'; e.depto = null; e.servicio = null; e.resultado = null; pintar(); return; }
+    if (t.closest('.js-ns2-otra')) { e.paso = 'destino'; e.depto = null; e.servicio = null; e.resultado = null; e.q = ''; e.filtro = ''; pintar(); return; }
     if (t.closest('.js-ns2-mis') && window.SigsoShell) { SigsoShell.irAModulo('mis_solicitudes'); }
+  });
+  // Buscar mientras se escribe: solo se repintan los resultados (el foco queda en la caja).
+  document.addEventListener('input', function (ev) {
+    if (!ev.target.classList || !ev.target.classList.contains('js-ns2-q')) return;
+    e.q = ev.target.value;
+    var res = document.querySelector('#ns2-pedido .js-ns2-res');
+    if (res) res.innerHTML = resultados();
   });
   document.addEventListener('submit', function (ev) {
     if (!ev.target.classList || !ev.target.classList.contains('js-ns2-form')) return;
@@ -266,7 +329,7 @@
     if (s) s.classList.remove('sx2', 'ns2', 'ns2-modo-depto');
     var r = document.getElementById('ns2-pedido');
     if (r) r.remove();
-    e = { paso: 'destino', depto: null, servicio: null, enviando: false, archivos: [], resultado: null };
+    e = { paso: 'destino', depto: null, servicio: null, enviando: false, archivos: [], resultado: null, q: '', filtro: '' };
   }
   // 2026-09-25: la versión clásica se retiró; la v2 es la única.
   function activo() { return true; }

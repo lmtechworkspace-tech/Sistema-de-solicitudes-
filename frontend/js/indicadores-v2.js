@@ -154,12 +154,14 @@
     facturacion: ['facturacion_top'], concentracion: ['facturacion_top'], convenios_vencidos: ['convenios_vencidos'], notificaciones_sii: ['notificaciones_abiertas'],
     rle_pendiente: ['rle_pendiente'], anexos_pendientes: [], liquidaciones: ['liquidaciones_por_cliente'], salidas_por_entrada: ['causales'],
     cartera_vencida: ['morosos'], clientes_sin_respuesta: ['clientes_sin_respuesta'], dependencia: ['carga_por_persona'],
-    tareas_a_tiempo: ['tareas_area'], citas_avisadas: ['citas_clientes']
+    tareas_a_tiempo: ['tareas_area'], citas_avisadas: ['citas_clientes'],
+    pedidos_recibidos: ['pedidos_por_servicio'], pedidos_a_tiempo: ['pedidos_por_servicio'], pedidos_respuesta: ['pedidos_por_servicio'], pedidos_atrasados: ['pedidos_por_servicio']
   };
   var DET_EXTRA = {
     contabilizacion_pendiente_mes: ['Clientes sin cerrar la contabilización del mes', [{ t: 'Cliente', v: 'cliente' }, { t: 'Situación', v: 'situacion' }]],
     tareas_area: ['Fechas del área en el mes', [{ t: 'Tarea', v: 'tarea' }, { t: 'Fecha', v: 'fecha' }, { t: 'Estado', v: 'estado' }, { t: 'Hecha el', v: 'hecho' }]],
     citas_clientes: ['Citas de clientes del mes', [{ t: 'Cita', v: 'cita' }, { t: 'Cliente', v: 'cliente' }, { t: 'Fecha', v: 'fecha' }, { t: 'Avisada', v: 'avisada' }]],
+    pedidos_por_servicio: ['Pedidos del mes por servicio', [{ t: 'Servicio', v: 'servicio' }, { t: 'Recibidos', v: 'recibidos', num: true }, { t: 'Resueltos', v: 'resueltos', num: true }, { t: 'A tiempo', v: 'a_tiempo', num: true }, { t: 'Abiertos', v: 'abiertos', num: true }, { t: 'Atrasados', v: 'atrasados', num: true }]],
     carga_por_persona: ['Registros por persona (12 meses)', [{ t: 'Persona', v: function (f) { return persona(f.email); } }, { t: 'Registros', v: 'registros', num: true }, { t: '%', v: function (f) { return f.participacion + ' %'; }, num: true }]]
   };
   function persona(e) {
@@ -314,7 +316,7 @@
   var HOJA_CORTA = { f29_atrasos_mes: 'F29 fuera de plazo', f29_reincidentes: 'Reincidentes en el F29', f29_sin_registro: 'Sin F29 registrado', contabilizacion_atrasada: 'Contabilidad atrasada',
     facturacion_top: 'Mayores clientes', convenios_vencidos: 'Convenios vencidos', notificaciones_abiertas: 'Notificaciones SII', contabilizacion_pendiente_mes: 'Sin cerrar este mes',
     carga_por_persona: 'Registros por persona', rle_pendiente: 'RLE pendiente', liquidaciones_por_cliente: 'Liquidaciones por cliente', causales: 'Causales de término',
-    morosos: 'Facturas vencidas', clientes_sin_respuesta: 'Clientes sin respuesta', tareas_area: 'Fechas del área', citas_clientes: 'Citas de clientes' };
+    morosos: 'Facturas vencidas', clientes_sin_respuesta: 'Clientes sin respuesta', tareas_area: 'Fechas del área', citas_clientes: 'Citas de clientes', pedidos_por_servicio: 'Pedidos por servicio' };
   var MES_LARGO = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
   function mesAnio(p) { var m = /^(\d{4})-M(\d{2})$/.exec(p || ''); return m ? MES_LARGO[+m[2] - 1] + ' ' + m[1] : String(p || ''); }
   function unidadDe(k) { return k.formato === 'pct' ? '%' : (k.formato === 'monto' ? '$' : (k.formato === 'ratio' ? 'veces' : (k.unidad || ''))); }

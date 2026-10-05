@@ -160,6 +160,8 @@ const ACCIONES = {
   // servicios por departamento (lo arma su jefatura) y "Tomar" de la cola.
   tomarItemSolicitud: (db, data, contexto) => SolicitudesBO.tomarItem(db, data, contexto),
   catalogoServiciosSolicitud: (db) => ServiciosSolicitud.catalogo(db),
+  // Solicitudes, etapa 4: reportes de pedidos por departamento, servicio y persona.
+  reporteSolicitudes: (db, data, contexto) => require('../logica/reporteSolicitudes').reporte(db, data, contexto),
   listarServiciosSolicitudAdmin: (db, data, contexto) => ServiciosSolicitud.listarAdmin(db, data, contexto),
   guardarServicioSolicitud: (db, data, contexto) => ServiciosSolicitud.guardar(db, data, contexto),
   importarServiciosSolicitudDesdeProcesos: (db, data, contexto) => ServiciosSolicitud.importarDesdeProcesos(db, data, contexto),

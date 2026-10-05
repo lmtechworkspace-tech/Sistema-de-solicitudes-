@@ -244,6 +244,13 @@ function generarResumenWhatsapp_(solicitudId, data, prioridad) {
 
 async function crearSolicitud(db, data) {
   const errores = validarSolicitud_(data);
+  // Etapa 4: un servicio puede exigir el cliente (p. ej. "Certificado F30").
+  (Array.isArray(data.subsolicitudes) ? data.subsolicitudes : []).forEach((item, idx) => {
+    const s = item && item.depto && item.servicio_id ? Servicios.servicioPorId_(db, item.servicio_id) : null;
+    if (s && s.pide_cliente === 'si' && !String(data.empresa_cliente || '').trim()) {
+      errores.push({ campo: 'subsolicitudes[' + idx + '].cliente', mensaje: 'Este pedido necesita el cliente: indícalo.' });
+    }
+  });
   if (errores.length > 0) {
     return { _validationError: true, message: 'La solicitud tiene datos invalidos o incompletos.', fields: errores };
   }

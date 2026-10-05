@@ -212,3 +212,39 @@
   .ns2-bloque { padding: var(--sx-e-4); }
   .ns2-destinos, .ns2-servicios { grid-template-columns: 1fr; }
 }
+
+/* Etapa 4 (2026-10-05): todo en una pantalla. Buscador "¿Qué necesitas?",
+   filtros por departamento, servicios agrupados y el formulario debajo. */
+.ns2-una { gap: var(--sx-e-4); }
+.ns2-busca { display: flex; flex-direction: column; gap: 10px; position: sticky; top: 0; z-index: 2; padding: 8px 0 6px; background: var(--sx-fondo); }
+.ns2-busca__caja { position: relative; display: flex; align-items: center; }
+.ns2-busca__caja svg { position: absolute; left: 14px; color: var(--sx-texto-3); pointer-events: none; }
+.ns2-busca__caja input { width: 100%; height: 48px; padding-left: 44px; font-size: 1rem; border-radius: var(--sx-radio-lg); box-shadow: var(--sx-sombra-1); }
+.ns2-chips, .ns2-otros { display: flex; flex-wrap: wrap; gap: 6px; }
+.ns2-chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; cursor: pointer;
+  border: 1px solid var(--sx-borde); border-radius: 999px; background: var(--sx-superficie); color: var(--sx-texto-2);
+  font: 500 .8125rem/1 var(--fuente);
+}
+.ns2-chip:hover { border-color: color-mix(in srgb, var(--sx-primario) 45%, transparent); color: var(--sx-texto); }
+.ns2-chip:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: 2px; }
+.ns2-chip.is-activo { background: var(--sx-primario-suave); border-color: var(--sx-primario); color: var(--sx-primario); }
+.ns2-grupo { display: flex; flex-direction: column; gap: 8px; }
+.ns2-grupo + .ns2-grupo { margin-top: var(--sx-e-3); }
+.ns2-grupo__tit { display: flex; align-items: center; gap: 8px; margin: 0; font: 700 .9375rem/1.3 var(--fuente); color: var(--sx-texto); }
+.ns2-grupo__tit svg { color: var(--sx-primario); }
+.ns2-grupo__tit small { font-weight: 500; }
+.ns2-servicio__depto { display: inline-flex; align-items: center; gap: 4px; color: var(--sx-primario) !important; font-weight: 600; }
+.ns2-cuenta, .ns2-nota { margin: 0; font: var(--sx-t-chico); }
+.ns2-sin { display: flex; flex-direction: column; gap: 12px; }
+.ns2-elegido {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--sx-radio-lg);
+  background: var(--sx-primario-suave); border: 1px solid color-mix(in srgb, var(--sx-primario) 35%, transparent);
+}
+.ns2-elegido__txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ns2-elegido__txt strong { font: 700 1rem/1.3 var(--fuente); color: var(--sx-texto); }
+.ns2-elegido__txt small { display: inline-flex; align-items: center; gap: 4px; font: var(--sx-t-chico); }
+@media (max-width: 600px) {
+  .ns2-elegido { flex-wrap: wrap; }
+  .ns2-busca { position: static; }
+}

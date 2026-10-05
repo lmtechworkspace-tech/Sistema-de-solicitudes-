@@ -758,7 +758,9 @@ const COLUMNAS = {
   // plazo_dias = días hábiles; fija el plazo (SLA) del ítem al crearse.
   SOL_SERVICIOS: [
     'servicio_id', 'depto', 'nombre', 'descripcion', 'ayuda', 'plazo_dias', 'prioridad',
-    'proceso_codigo', 'orden', 'activa', 'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion'
+    'proceso_codigo', 'orden', 'activa', 'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion',
+    // Etapa 4: si el formulario pregunta por el cliente ('no' | 'opcional' | 'si'; vacío = opcional).
+    'pide_cliente'
   ],
   CI_MIEMBROS: [
     'miembro_id', 'depto', 'usuario_email', 'rol', 'creado_por', 'fecha_creacion', 'activa'

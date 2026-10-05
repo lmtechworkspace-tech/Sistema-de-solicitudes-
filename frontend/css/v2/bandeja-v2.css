@@ -242,3 +242,147 @@ body:has(.bj2-lote) #py2-interruptor { display: none; }
   .bj2-pauta__ctx { color: #555; font-size: 9pt; }
   .bj2-pauta__pie { margin-top: 12pt; color: #555; font-size: 9pt; }
 }
+
+/* ===== Etapa 4 (2026-10-05): tabla densa, vista por estado, reportes y "Más" ===== */
+/* Semáforo del plazo. */
+.bj2-sem { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: none; background: var(--sx-texto-3); box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 0%, transparent); }
+.bj2-sem--rojo { background: var(--sx-critico); box-shadow: 0 0 0 3px var(--sx-critico-suave); }
+.bj2-sem--ambar { background: var(--sx-alerta); box-shadow: 0 0 0 3px var(--sx-alerta-suave); }
+.bj2-sem--verde { background: var(--sx-ok); box-shadow: 0 0 0 3px var(--sx-ok-suave); }
+.bj2-sem--gris { background: var(--sx-borde); }
+
+/* Tabla densa: una línea por ítem (~44 px). */
+.bj2-tabla-caja { overflow-x: auto; }
+.bj2-tabla { width: 100%; border-collapse: collapse; font: var(--sx-t-chico); color: var(--sx-texto); }
+.bj2-tabla thead th {
+  position: sticky; top: 0; z-index: 1; padding: 7px 10px; text-align: left; white-space: nowrap;
+  font: 600 .6875rem/1.2 var(--fuente); letter-spacing: .04em; text-transform: uppercase; color: var(--sx-texto-3);
+  background: var(--sx-superficie); border-bottom: 1px solid var(--sx-borde);
+}
+.bj2-tabla td { height: 44px; padding: 4px 10px; border-bottom: 1px solid var(--sx-borde-suave); vertical-align: middle; white-space: nowrap; max-width: 0; }
+.bj2-tabla tbody tr:last-child td { border-bottom: 0; }
+.bj2-tr { cursor: pointer; transition: background var(--sx-dur-rapida) var(--sx-curva); }
+.bj2-tr:hover { background: var(--sx-superficie-2); }
+.bj2-tr:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: -2px; }
+.bj2-tr.bj2-fila--sel { background: var(--sx-primario-suave); }
+.bj2-tc-check { width: 34px; max-width: none !important; }
+.bj2-tc-sem { width: 22px; max-width: none !important; text-align: center; }
+.bj2-tabla .bj2-id { width: 1%; max-width: none; }
+.bj2-tabla .bj2-id small { color: var(--sx-texto-3); font-weight: 500; }
+.bj2-tc-titulo { width: 34%; }
+.bj2-tc-cortar { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+.bj2-tc-cortar > strong, .bj2-tc-cortar > span:not(.bj2-prio-mini):not(.sx2-badge), .bj2-tc-cortar { text-overflow: ellipsis; white-space: nowrap; }
+.bj2-tc-cortar > strong { font: 600 .8125rem/1.3 var(--fuente); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.bj2-tabla td > .bj2-tc-cortar { width: 100%; }
+.bj2-tc-quien { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; }
+.bj2-tc-num { width: 1%; max-width: none !important; text-align: right; font-variant-numeric: tabular-nums; }
+.bj2-tc-acc { width: 1%; max-width: none !important; text-align: right; }
+.bj2-tabla th.bj2-tc-acc, .bj2-tabla th.bj2-tc-num { text-align: right; }
+.bj2-prio-mini { flex: none; display: inline-grid; place-items: center; min-width: 24px; height: 18px; padding: 0 4px; border-radius: 5px; font: 700 .625rem/1 var(--fuente); background: var(--sx-tono-suave); color: var(--sx-tono); }
+.bj2-tabla .sx2-badge { white-space: nowrap; }
+.bj2-tabla .bj2-fino { display: none; }
+
+/* Por estado: cuatro columnas; cada tarjeta abre el detalle. */
+.bj2-tablero { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 12px; padding: 12px; overflow-x: auto; background: var(--sx-superficie-2); }
+.bj2-col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.bj2-col__cab { display: flex; align-items: center; gap: 8px; padding: 4px 4px 2px; border-top: 3px solid var(--sx-tono); font: 600 .8125rem/1.3 var(--fuente); color: var(--sx-texto); }
+.bj2-col__n { margin-left: auto; min-width: 22px; padding: 2px 7px; border-radius: 999px; background: var(--sx-tono-suave); color: var(--sx-tono); font: 700 .75rem/1.2 var(--fuente); text-align: center; }
+.bj2-col__lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.bj2-tarj {
+  display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; cursor: pointer;
+  background: var(--sx-superficie); border: 1px solid var(--sx-borde-suave); border-radius: var(--sx-radio); box-shadow: var(--sx-sombra-1);
+  transition: border-color var(--sx-dur-rapida) var(--sx-curva), transform var(--sx-dur-rapida) var(--sx-curva);
+}
+.bj2-tarj:hover { border-color: color-mix(in srgb, var(--sx-primario) 45%, transparent); transform: translateY(-1px); }
+.bj2-tarj:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: 2px; }
+.bj2-tarj__cab { display: flex; align-items: center; gap: 8px; }
+.bj2-tarj__edad { margin-left: auto; font-size: .75rem; }
+.bj2-tarj__tit { font: 600 .8125rem/1.35 var(--fuente); color: var(--sx-texto); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.bj2-tarj__meta { font-size: .75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bj2-tarj__pie { display: flex; align-items: center; gap: 6px; min-width: 0; font: var(--sx-t-chico); }
+.bj2-col__vacia, .bj2-col__mas { padding: 6px 4px; font-size: .75rem; }
+
+/* La cola: los controles de vista en la misma fila del encabezado de la lista. */
+.bj2-lista__cab .sx2-segmento__op { padding: 4px 9px; font-size: .75rem; }
+
+/* Reportes */
+.bj2-rep__barra { padding: 0; }
+.bj2-rep__barra .sx2-select { width: auto; }
+.bj2-rep__nota { margin: 0; font: var(--sx-t-chico); }
+.sx2-fila-kpis--5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 1100px) { .sx2-fila-kpis--5 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .sx2-fila-kpis--5 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.bj2-tabla--rep td { height: 38px; max-width: none; white-space: normal; }
+.bj2-tabla--rep td:first-child { min-width: 180px; }
+.bj2-rep__atr { list-style: none; margin: 0; padding: 0; }
+.bj2-rep__atr-op {
+  width: 100%; display: grid; grid-template-columns: 12px auto minmax(0, 1.4fr) minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  padding: 9px 16px; border: 0; border-bottom: 1px solid var(--sx-borde-suave); background: transparent; cursor: pointer; text-align: left; font: var(--sx-t-chico); color: var(--sx-texto);
+}
+.bj2-rep__atr li:last-child .bj2-rep__atr-op { border-bottom: 0; }
+.bj2-rep__atr-op:hover { background: var(--sx-superficie-2); }
+.bj2-rep__atr-op:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: -2px; }
+
+/* Detalle: "Más" como menú y la conversación en la vista principal. */
+.bj2-menu { position: relative; }
+.bj2-menu > summary { list-style: none; cursor: pointer; }
+.bj2-menu > summary::-webkit-details-marker { display: none; }
+.bj2-menu__lista {
+  position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; min-width: 200px; padding: 6px;
+  display: flex; flex-direction: column; background: var(--sx-superficie); border: 1px solid var(--sx-borde); border-radius: var(--sx-radio); box-shadow: var(--sx-sombra-3);
+}
+.bj2-menu__op { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; text-align: left; font: var(--sx-t-chico); color: var(--sx-texto); }
+.bj2-menu__op:hover, .bj2-menu__op.is-activo { background: var(--sx-superficie-2); }
+.bj2-menu__op:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: -2px; }
+.bj2-det-conv { margin-top: var(--sx-e-5); padding-top: var(--sx-e-4); border-top: 1px solid var(--sx-borde-suave); scroll-margin-top: 12px; }
+.bj2-det-conv h3 { display: flex; align-items: center; gap: 6px; }
+
+@media (max-width: 900px) {
+  .bj2-tablero { grid-template-columns: repeat(4, minmax(240px, 80vw)); }
+  .bj2-rep__atr-op { grid-template-columns: 12px auto minmax(0, 1fr); }
+  .bj2-rep__atr-op > :nth-child(4) { grid-column: 3; }
+  .bj2-rep__atr-op > :nth-child(5) { grid-column: 3; }
+}
+
+/* Etapa 4: la primera fila de la cola a menos de 300 px en un notebook (1366×768). */
+#bandeja-v2 > .sx2-pagina { gap: 12px; padding-top: 16px; }
+#bandeja-v2 .sx2-cabecera { align-items: flex-end; }
+#bandeja-v2 .sx2-cabecera .bj2-colas { margin-top: 6px; }
+#bandeja-v2 .bj2-colas__op { padding: 5px 10px; }
+.bj2-lista__cab { flex-wrap: nowrap; padding-top: 4px; padding-bottom: 4px; min-height: 38px; }
+.bj2-lista__cab-acc { flex-wrap: nowrap; align-items: center; }
+.bj2-lista__cab .sx2-chip { white-space: nowrap; }
+.bj2-filtros { padding-top: 6px; padding-bottom: 6px; }
+@media (max-width: 1100px) { .bj2-lista__cab, .bj2-lista__cab-acc { flex-wrap: wrap; } }
+
+.bj2-rezago-chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; cursor: pointer; white-space: nowrap;
+  border: 1px solid color-mix(in srgb, var(--sx-alerta) 40%, transparent); background: var(--sx-alerta-suave); color: var(--sx-texto); font: var(--sx-t-chico);
+}
+.bj2-rezago-chip svg { color: var(--sx-alerta); }
+.bj2-rezago-chip span { color: var(--sx-primario); font-weight: 600; }
+.bj2-rezago-chip:hover { border-color: var(--sx-alerta); }
+.bj2-rezago-chip:focus-visible { outline: 2px solid var(--sx-primario); outline-offset: 2px; }
+.bj2-banda__op { padding-top: 7px; padding-bottom: 7px; }
+/* Anchos de la tabla (fijos): el título del pedido se lleva lo que sobra y siempre se lee. */
+.bj2-tabla:not(.bj2-tabla--rep) { table-layout: fixed; min-width: 900px; }
+.bj2-tabla:not(.bj2-tabla--rep) td { max-width: none; overflow: hidden; text-overflow: ellipsis; }
+.bj2-tabla:not(.bj2-tabla--rep) th:nth-child(1) { width: 34px; }
+.bj2-tabla:not(.bj2-tabla--rep) th:nth-child(2) { width: 24px; }
+.bj2-tabla:not(.bj2-tabla--rep) th:nth-child(3) { width: 126px; }
+.bj2-tabla:not(.bj2-tabla--rep) th:nth-child(5) { width: 24%; }
+.bj2-tabla:not(.bj2-tabla--rep) th:nth-child(6) { width: 14%; }
+.bj2-tabla:not(.bj2-tabla--rep) th:nth-child(7) { width: 98px; }
+.bj2-tabla:not(.bj2-tabla--rep) th:nth-child(8) { width: 56px; }
+.bj2-tabla:not(.bj2-tabla--rep) th:nth-child(9) { width: 92px; }
+.bj2-tabla:not(.bj2-tabla--rep) th:nth-child(10) { width: 82px; }
+.bj2-tabla:not(.bj2-tabla--rep) { min-width: 820px; }
+/* En notebook (bajo 1500 px) el compromiso queda en la vista de lista; el semáforo ya marca el plazo. */
+@media (max-width: 1499px) { .bj2-tabla .bj2-tc-comp { display: none; } }
+.bj2-tabla .bj2-id { font-size: .6875rem; }
+.bj2-tc-cortar > strong { flex: 0 1 auto; }
+.bj2-tc-cortar > small, .bj2-tc-cortar > .sx2-badge { flex: 0 3 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bj2-tc-cortar > .sx2-badge { flex: none; }
+.bj2-tabla thead th { padding-top: 6px; padding-bottom: 6px; }
+
+.bj2-lista__cab > strong { white-space: nowrap; }

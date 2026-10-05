@@ -171,7 +171,7 @@
       '<div class="sb-lista sb-fijados">' + l.map(function (f, i) {
         return '<div class="sb-fila" draggable="true" data-pos="' + i + '">' +
           '<button type="button" class="sb-hoja" data-fijado="' + i + '"' + (i < 8 ? ' title="Alt+' + (i + 1) + '"' : '') + '><span class="sb-hoja__t">' + esc(f.nombre) +
-            (f.ruta && f.ruta !== f.nombre ? '<small>' + esc(f.ruta) + '</small>' : '') + '</span>' + (badgeDe(f) ? contador(badgeDe(f)) : '') + '</button>' +
+            (f.ruta && f.nombre.indexOf(f.ruta) === -1 ? '<small>' + esc(f.ruta) + '</small>' : '') + '</span>' + (badgeDe(f) ? contador(badgeDe(f)) : '') + '</button>' +
           '<button type="button" class="sb-quitar" data-quitar="' + i + '" aria-label="Quitar ' + esc(f.nombre) + ' de fijados" title="Quitar de fijados">' + ico('equis', 12) + '</button>' +
         '</div>';
       }).join('') + '</div>';
@@ -182,7 +182,7 @@
     if (!l.length) return '';
     return '<p class="sb-sec">' + ico('reloj', 12) + 'Recientes</p><div class="sb-lista">' + l.map(function (r) {
       return '<div class="sb-fila"><button type="button" class="sb-hoja" data-reciente="' + esc(r.modulo) + '|' + esc(r.item || '') + '"><span class="sb-hoja__t">' + esc(r.nombre) +
-        (r.ruta && r.ruta !== r.nombre ? '<small>' + esc(r.ruta) + '</small>' : '') + '</span></button></div>';
+        (r.ruta && r.nombre.indexOf(r.ruta) === -1 ? '<small>' + esc(r.ruta) + '</small>' : '') + '</span></button></div>';
     }).join('') + '</div>';
   }
 

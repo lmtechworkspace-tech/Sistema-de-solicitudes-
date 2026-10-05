@@ -34,6 +34,9 @@ const PLAZO_DIAS_DEFECTO = 3;
 const PRIORIDAD_DEFECTO = 'P3';
 const PRIORIDADES = ['P1', 'P2', 'P3', 'P4', 'P5'];
 const ROLES_QUE_TRABAJAN = ['JEFATURA', 'REGISTRA'];
+// Etapa 4: el formulario muestra el cliente solo si el servicio lo pide.
+const PIDE_CLIENTE = ['no', 'opcional', 'si'];
+function pideCliente_(v) { return PIDE_CLIENTE.indexOf(v) !== -1 ? v : 'opcional'; }
 
 function esVerdadero_(v) { return v === true || v === 'TRUE' || v === 1 || v === 'true'; }
 function normalizarEmail_(e) { return String(e || '').trim().toLowerCase(); }
@@ -86,7 +89,8 @@ function proyectar_(s) {
     servicio_id: s.servicio_id, depto: s.depto, nombre: s.nombre, descripcion: s.descripcion || '',
     ayuda: s.ayuda || '', plazo_dias: Number(s.plazo_dias) || PLAZO_DIAS_DEFECTO,
     prioridad: PRIORIDADES.indexOf(s.prioridad) !== -1 ? s.prioridad : PRIORIDAD_DEFECTO,
-    proceso_codigo: s.proceso_codigo || '', orden: Number(s.orden) || 0, activa: esVerdadero_(s.activa)
+    proceso_codigo: s.proceso_codigo || '', orden: Number(s.orden) || 0, activa: esVerdadero_(s.activa),
+    pide_cliente: pideCliente_(s.pide_cliente)
   };
 }
 function ordenar_(a, b) { return (a.orden - b.orden) || a.nombre.localeCompare(b.nombre, 'es'); }
@@ -144,6 +148,7 @@ function guardar(db, data, contexto) {
     descripcion: String(d.descripcion !== undefined ? d.descripcion : (existente || {}).descripcion || '').trim().slice(0, 500),
     ayuda: String(d.ayuda !== undefined ? d.ayuda : (existente || {}).ayuda || '').trim().slice(0, 300),
     orden: Number(d.orden !== undefined ? d.orden : (existente || {}).orden || 0) || 0,
+    pide_cliente: pideCliente_(d.pide_cliente !== undefined ? d.pide_cliente : (existente || {}).pide_cliente),
     activa: d.activa === undefined ? (existente ? esVerdadero_(existente.activa) : true) : esVerdadero_(d.activa),
     actualizado_por: normalizarEmail_(contexto.email), fecha_actualizacion: ahora
   };

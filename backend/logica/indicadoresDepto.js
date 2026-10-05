@@ -555,6 +555,61 @@ function agendaKpis_(db, depto, periodo, ctx) {
 }
 
 // =========================================================================================
+// PEDIDOS INTERNOS (Solicitudes, etapa 4, 2026-10-05): lo que otras áreas le piden al
+// área por la Bandeja. Mismas definiciones que el reporte de la Bandeja
+// (reporteSolicitudes.js): tomados, resueltos dentro del plazo del servicio y
+// abiertos fuera de plazo. Solo aparece si el área recibió pedidos en 12 meses.
+// =========================================================================================
+function pedidosKpis_(db, depto, periodo, ctx) {
+  const kpis = [], alertas = [], detalle = {};
+  const RS = require('./reporteSolicitudes');
+  ctx._pedidos = ctx._pedidos || {};
+  let r;
+  try { r = RS.resumenArea_(db, depto, periodo, ctx._pedidos); } catch (e) { return { kpis, alertas, detalle }; }
+  if (!r.serie.some((x) => x.recibidos || x.abiertos)) return { kpis, alertas, detalle };
+  const area = (DEPARTAMENTOS.find((d) => d.clave === depto) || {}).nombre;
+  const m = r.mes, dias = (h) => (h === null ? null : r1_(h / RS.HORAS_DIA));
+  const serieDe = (k) => r.serie.map((x) => ({ periodo: x.periodo, valor: x[k] }));
+  kpis.push(indicador_({ clave: 'pedidos_recibidos', nombre: 'Pedidos recibidos', unidad: 'pedidos', formato: 'num', serie: serieDe('recibidos'), estado: 'info',
+    definicion: 'Pedidos que otras personas le hicieron al área por Solicitudes en el mes (los rechazados y cancelados incluidos).',
+    explicacion: plural_(m.recibidos, 'pedido recibido', 'pedidos recibidos') + (m.rechazados ? ', ' + plural_(m.rechazados, 'rechazado o cancelado', 'rechazados o cancelados') : '') + '.' }));
+  if (m.con_plazo) {
+    const p = m.pct_a_tiempo;
+    const k = indicador_({ clave: 'pedidos_a_tiempo', nombre: 'Pedidos resueltos a tiempo', unidad: '%', formato: 'pct', sentido: 'mayor', serie: serieDe('pct_a_tiempo'), gerencia: true,
+      estado: m.con_plazo < MIN_CASOS ? 'info' : (p >= 90 ? 'ok' : (p >= 75 ? 'alerta' : 'critico')), meta_texto: '≥ 90 %',
+      definicion: 'Pedidos resueltos en el mes dentro del plazo de su servicio ÷ resueltos con plazo. El tiempo «Esperando respuesta» del solicitante no cuenta.',
+      explicacion: m.a_tiempo + ' de ' + plural_(m.con_plazo, 'pedido resuelto a tiempo', 'pedidos resueltos a tiempo') + (m.mediana_resolver_h !== null ? '; la mitad se resolvió en ' + d_(dias(m.mediana_resolver_h)) + ' días hábiles o menos' : '') + '.' });
+    kpis.push(k);
+    if (k.estado === 'critico') alertas.push({ nivel: 'critico', area, clave: 'pedidos_a_tiempo', breve: d_(p) + ' % a tiempo', titulo: 'Pedidos internos fuera de plazo',
+      cifra: m.a_tiempo + ' de ' + m.con_plazo + ' a tiempo', que_pasa: k.explicacion, por_que: 'Los pedidos tardan más que el plazo de su servicio.',
+      impacto: 'Las otras áreas esperan más de lo prometido y el trabajo se encadena con atraso.', decision: 'Revisar en Bandeja › Reportes qué servicios se atrasan y ajustar el reparto o el plazo.' });
+  }
+  if (m.tomados) {
+    const h = m.mediana_tomar_h;
+    kpis.push(indicador_({ clave: 'pedidos_respuesta', nombre: 'Tiempo hasta tomar un pedido', unidad: 'h hábiles', formato: 'num', sentido: 'menor', valor: h, serie: serieDe('mediana_tomar_h'),
+      estado: m.tomados < MIN_CASOS ? 'info' : (h <= 9 ? 'ok' : (h <= 18 ? 'alerta' : 'critico')), meta_texto: '≤ 9 h (1 día hábil)',
+      definicion: 'Mediana de horas hábiles desde que llega un pedido hasta que alguien del área lo toma o lo empieza.',
+      explicacion: 'La mitad de los ' + plural_(m.tomados, 'pedido tomado', 'pedidos tomados') + ' se tomó en ' + d_(h) + ' horas hábiles o menos.' }));
+  }
+  const k2 = indicador_({ clave: 'pedidos_atrasados', nombre: 'Pedidos abiertos fuera de plazo', unidad: 'pedidos', formato: 'num', sentido: 'menor', serie: serieDe('atrasados'),
+    estado: m.atrasados ? (m.atrasados >= 3 ? 'alerta' : 'info') : 'ok', meta_texto: '0',
+    definicion: 'Pedidos sin resolver con el plazo de su servicio vencido, al cierre del mes (o a hoy si el mes no termina).',
+    explicacion: m.atrasados ? plural_(m.atrasados, 'pedido abierto pasó su plazo', 'pedidos abiertos pasaron su plazo') + ' de ' + plural_(m.abiertos, 'abierto', 'abiertos') + '.' : 'Ningún pedido abierto pasó su plazo.' });
+  kpis.push(k2);
+  if (m.atrasados >= 3) alertas.push({ nivel: 'alerta', area, clave: 'pedidos_atrasados', breve: plural_(m.atrasados, 'pedido', 'pedidos'), titulo: 'Pedidos internos atrasados',
+    cifra: plural_(m.atrasados, 'pedido fuera de plazo', 'pedidos fuera de plazo'), que_pasa: k2.explicacion, por_que: 'Pedidos que nadie resolvió dentro del plazo de su servicio.',
+    impacto: 'Quien pidió sigue esperando.', decision: 'Repartir o resolver los atrasados desde la cola del área en la Bandeja.' });
+  // Detalle para el anexo y el Excel: por servicio.
+  const porServ = {};
+  r.lista.forEach((p) => { (porServ[p.servicio] = porServ[p.servicio] || []).push(p); });
+  detalle.pedidos_por_servicio = Object.keys(porServ).map((sv) => {
+    const a = RS.agregar_(porServ[sv], periodo, r.corte);
+    return { servicio: sv, recibidos: a.recibidos, resueltos: a.resueltos, a_tiempo: a.pct_a_tiempo === null ? '' : a.pct_a_tiempo + ' %', abiertos: a.abiertos, atrasados: a.atrasados };
+  }).filter((x) => x.recibidos || x.resueltos || x.abiertos).sort((a, b) => b.recibidos - a.recibidos);
+  return { kpis, alertas, detalle };
+}
+
+// =========================================================================================
 // METAS PROPIAS del área: las define la jefatura en Ajustes; el valor de cada mes lo
 // anota el área en su reporte mensual (contenido.metas). La serie sale de los reportes.
 // =========================================================================================
@@ -644,6 +699,9 @@ function transversal_(db, depto, periodo, ctx) {
   // Agenda del área (desde octubre de 2026): fechas cumplidas, recordatorios y respuestas.
   const ag = agendaKpis_(db, depto, periodo, ctx);
   kpis.push(...ag.kpis); alertas.push(...ag.alertas); Object.assign(detalle, ag.detalle);
+  // Pedidos de otras áreas por Solicitudes (etapa 4).
+  const pd = pedidosKpis_(db, depto, periodo, ctx);
+  kpis.push(...pd.kpis); alertas.push(...pd.alertas); Object.assign(detalle, pd.detalle);
 
   // Calidad del dato: matrices sin registros recientes y pendientes antiguos.
   const calidad = [];
@@ -677,6 +735,7 @@ const TEMAS = {
   rle_pendiente: 'Registro ante la DT', anexos_pendientes: 'Registro ante la DT',
   salidas_por_entrada: 'Movimientos de personal', certificados: 'Trámites', licencias: 'Trámites',
   cartera_vencida: 'Cobranza', cobrado: 'Cobranza', facturado_hp: 'Cobranza', dias_cobro: 'Cobranza',
+  pedidos_recibidos: 'Pedidos internos', pedidos_a_tiempo: 'Pedidos internos', pedidos_respuesta: 'Pedidos internos', pedidos_atrasados: 'Pedidos internos',
   dependencia: 'Equipo y Agenda', recordatorios_a_tiempo: 'Equipo y Agenda', clientes_sin_respuesta: 'Equipo y Agenda', tareas_a_tiempo: 'Equipo y Agenda', citas_avisadas: 'Equipo y Agenda'
 };
 // La PORTADA del reporte (2026-10-04, auditoría · etapa 2): lo que se entiende en 30 segundos.
@@ -725,7 +784,8 @@ function contexto_(db, periodo) {
 // Cifras que dependen del trabajo DEL MES: mientras el mes no termina son parciales,
 // sin color ni alerta. Lo acumulado (RLE pendiente, reincidentes, convenios, cartera) sí alerta.
 const DEL_MES = ['avance_contable', 'clientes_activos', 'facturacion', 'liquidaciones', 'salidas_por_entrada', 'certificados', 'licencias',
-  'tareas_a_tiempo', 'citas_avisadas', 'recordatorios_a_tiempo', 'clientes_sin_respuesta', 'cobrado', 'facturado_hp'];
+  'tareas_a_tiempo', 'citas_avisadas', 'recordatorios_a_tiempo', 'clientes_sin_respuesta', 'cobrado', 'facturado_hp',
+  'pedidos_recibidos', 'pedidos_a_tiempo', 'pedidos_respuesta'];
 function finDeMes_(p) { const a = Number(p.slice(0, 4)), m = Number(p.slice(6)); return new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10); }
 /** Indicadores, alertas y detalle de un área en un mes (sin permisos: lo usan otras acciones). */
 function calcularArea_(db, depto, periodo, ctx) {
@@ -746,12 +806,14 @@ function calcularAreaBase_(db, depto, periodo, ctx) {
   if (!dep || !TIENE_INDICADORES.includes(depto)) return { depto, nombre: dep ? dep.nombre : depto, periodo, con_indicadores: false, kpis: [], alertas: [], detalle: {} };
   if (depto === 'COBRANZAS') {
     const x = cobranzas_(db, periodo, c);
+    const pdc = pedidosKpis_(db, depto, periodo, c);
+    x.kpis = x.kpis.concat(pdc.kpis); x.alertas = x.alertas.concat(pdc.alertas); Object.assign(x.detalle, pdc.detalle);
     const nivel = x.sin_datos ? 'sin_datos' : (x.alertas.some((a) => a.nivel === 'critico') ? 'critico' : (x.alertas.length ? 'alerta' : 'ok'));
     return { depto, nombre: dep.nombre, periodo, periodo_texto: mesAnio_(periodo), con_indicadores: !x.sin_datos, semaforo: nivel, kpis: conTema_(x.kpis), alertas: x.alertas, detalle: x.detalle,
       portada: x.sin_datos ? { titular: 'Todavía no hay facturas registradas en la matriz de cobranza: cuando se carguen, aquí se verá la cartera y lo cobrado.', cifras: [], decisiones: [], bien: [] } : portada_(depto, x.kpis, x.alertas) };
   }
   if (SOLO_AGENDA.includes(depto)) {
-    const ps = [agendaKpis_(db, depto, periodo, c), metasKpis_(db, depto, periodo, c)];
+    const ps = [agendaKpis_(db, depto, periodo, c), pedidosKpis_(db, depto, periodo, c), metasKpis_(db, depto, periodo, c)];
     const kp = [].concat(...ps.map((x) => x.kpis)), al = [].concat(...ps.map((x) => x.alertas)).sort((a, b) => ORDEN_NIVEL[a.nivel] - ORDEN_NIVEL[b.nivel]);
     const det = Object.assign({}, ...ps.map((x) => x.detalle));
     const nivel = al.some((a) => a.nivel === 'critico') ? 'critico' : (al.length ? 'alerta' : 'ok');

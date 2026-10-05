@@ -126,7 +126,7 @@ var UIv2 = (function () {
   function chip(o) {
     o = o || {};
     return '<button type="button" class="sx2-chip' + tono(o.tono) + (o.clase ? ' ' + o.clase : '') + '"' +
-      ' aria-pressed="' + (o.activo ? 'true' : 'false') + '"' + datos(o.datos) + '>' +
+      ' aria-pressed="' + (o.activo ? 'true' : 'false') + '"' + (o.titulo ? ' title="' + esc(o.titulo) + '"' : '') + datos(o.datos) + '>' +
       (o.icono ? ico(o.icono, 14) : '') + esc(o.texto) +
       (o.n !== undefined && o.n !== null ? '<span class="sx2-chip__n">' + esc(o.n) + '</span>' : '') +
     '</button>';
