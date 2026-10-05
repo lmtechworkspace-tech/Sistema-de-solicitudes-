@@ -84,6 +84,18 @@
   var IDS_DEPARTAMENTO = DEPARTAMENTOS_SHELL.map(function (d) { return d[0]; });
   DEPARTAMENTOS_SHELL.forEach(function (d) { MODULOS_SHELL[d[0]] = { icono: d[2], nombre: d[1], descripcion: d[3] }; });
   function esDepartamento_(id) { return IDS_DEPARTAMENTO.indexOf(id) !== -1; }
+  // Barra lateral (2026-10-05, decisión 2): nombre corto donde falta espacio
+  // (fijados, recientes) y título completo en el riel. "Administración" a
+  // secas es el área; la del sistema se nombra entera para no confundirlas.
+  var CORTOS_SHELL = {
+    bandeja: 'Bandeja', gerencia: 'Gerencia', jefatura: 'Mi depto.', pausas_coordinacion: 'Coord. de pausas',
+    administracion: 'Sistema', dep_rrhh: 'RR.HH.', dep_prevencion: 'Prevención', dep_marketing: 'Marketing', dep_cobranzas: 'Facturación'
+  };
+  var TITULOS_SHELL = { administracion: 'Administración del sistema' };
+  Object.keys(MODULOS_SHELL).forEach(function (id) {
+    MODULOS_SHELL[id].corto = CORTOS_SHELL[id] || MODULOS_SHELL[id].nombre;
+    MODULOS_SHELL[id].titulo = TITULOS_SHELL[id] || MODULOS_SHELL[id].nombre;
+  });
   function moduloDepartamento_(id) { return window.SigsoDepartamentos ? window.SigsoDepartamentos.modulo(id) : null; }
 
   // v4.0 Frente 3: cada modulo tiene su propio acento -- antes todo el shell
@@ -109,11 +121,6 @@
     calidad: { acento: 'var(--mod-calidad)', suave: 'var(--mod-calidad-suave)' }
   };
   IDS_DEPARTAMENTO.forEach(function (id) { MODULO_COLOR[id] = { acento: 'var(--mod-control)', suave: 'var(--mod-control-suave)' }; });
-
-  function acentoInline_(id) {
-    var c = MODULO_COLOR[id];
-    return c ? ' style="--acento:' + c.acento + ';--acento-suave:' + c.suave + '"' : '';
-  }
 
   var sesion = { token: null, cuenta: null };
   // v6.0 (Pausas P4.1): si el enlace magico traia "?modulo=", se guarda aca
@@ -421,6 +428,8 @@
     // el header aparezca de inmediato con las iniciales y la foto lo
     // reemplace al llegar (nunca un hueco esperando la red).
     cargarFotoPropia_();
+    // Fijados de la cuenta (la siguen a cualquier equipo) y recientes de este equipo.
+    if (window.SigsoBarra) SigsoBarra.iniciar({ cuenta: (sesion.cuenta && sesion.cuenta.cuenta_id) || '' });
     renderNav_();
     renderHome_();
     // v6.0 (Pausas P4.1): si el enlace magico pedia un modulo puntual (p.ej.
@@ -465,13 +474,15 @@
         // navegacion -- que es justamente donde el usuario mira para saber
         // donde esta.
         itemActivoDelModulo_ = itemId;
+        if (window.SigsoBarra && moduloActivo_) SigsoBarra.visita(moduloActivo_, itemId);
         renderNav_();
       },
       // El modulo avisa que cambiaron sus permisos (llego seccionesVisibles_)
       // para que el arbol muestre lo que de verdad puede abrir.
       refrescarArbol: function () { renderNav_(); },
       // Un módulo que lleva su propio contador en el menú (reportes de los departamentos).
-      pintarBadge: function (id, n) { pintarBadge_(id, n); }
+      // tono: 'rojo' atrasado, 'ambar' para hoy, 'gris' por revisar (sin tono, el del módulo).
+      pintarBadge: function (id, n, tono) { pintarBadge_(id, n, tono); }
     };
 
     mostrarModulo_(moduloInicial);
@@ -579,18 +590,24 @@
   // Tour de bienvenida: solo la primera sesión (por navegador), en escritorio.
   // Señala el marco, no datos, así sirve para cualquier rol. En celular el
   // sidebar es un cajón oculto: se deja para la primera sesión en escritorio.
-  var LLAVE_TOUR = 'sigso_tour_visto';
+  // 2026-10-05: llave nueva para que quien ya vio el recorrido anterior vea
+  // una vez la barra renovada (riel + panel); a quien entra por primera vez
+  // se le da la bienvenida de siempre.
+  var LLAVE_TOUR = 'sigso_tour_barra_v1';
+  var LLAVE_TOUR_ANTERIOR = 'sigso_tour_visto';
   var TOUR_PASOS = [
-    { selector: '.plataforma-sidebar__cab .plataforma-header__marca', titulo: 'Bienvenido a SIGSO',
+    { selector: '#plataforma-sidebar .plataforma-header__marca', titulo: 'Bienvenido a SIGSO',
       texto: 'Este es tu panel: desde aquí llegas a todo lo que tu cuenta puede ver.' },
-    { selector: '#nav-modulos', titulo: 'Tus módulos',
-      texto: 'La lista se arma según tu cuenta. Los módulos con flecha se despliegan en sus secciones.' },
+    { selector: '#sb-riel', titulo: 'Tus módulos',
+      texto: 'Cada ícono es un módulo; al pasar el mouse ves su nombre. El número dice cuánto te espera: rojo, atrasado; ámbar, para hoy; gris, por revisar.' },
+    { selector: '#nav-modulos', titulo: 'El menú y tus fijados',
+      texto: 'Aquí está el menú completo del módulo abierto. Toca la estrella de una pantalla para dejarla fija arriba; con Alt+1 a Alt+8 vas directo a ellas.' },
     { selector: '#btn-shell-buscar', titulo: 'Busca y salta rápido',
       texto: 'Encuentra una pantalla o una solicitud por su número. También con Ctrl+K (Cmd+K en Mac) desde cualquier parte.' },
-    { selector: '.plataforma-sidebar__cab .js-shell-campana', titulo: 'Tus avisos',
+    { selector: '#plataforma-sidebar .js-shell-campana', titulo: 'Tus avisos',
       texto: 'Lo que requiere tu atención llega aquí: asignaciones, novedades por leer y cambios en tus solicitudes.' },
     { selector: '#btn-menu-usuario', titulo: 'Tu cuenta',
-      texto: 'Tu perfil y foto, los atajos de teclado y cerrar sesión. El modo oscuro está justo arriba.' }
+      texto: 'Tu perfil y foto, el modo oscuro, los atajos de teclado y cerrar sesión. Con [ angostas la barra y queda solo el riel.' }
   ];
   var tourPasoActual_ = 0;
 
@@ -598,6 +615,12 @@
     var visto = false;
     try { visto = localStorage.getItem(LLAVE_TOUR) === '1'; } catch (err) { visto = true; }
     if (visto || window.innerWidth <= 900) return;
+    var conocia = false;
+    try { conocia = localStorage.getItem(LLAVE_TOUR_ANTERIOR) === '1'; } catch (err) { conocia = false; }
+    if (conocia) {
+      TOUR_PASOS[0] = { selector: '#plataforma-sidebar .plataforma-header__marca', titulo: 'Tu barra lateral, renovada',
+        texto: 'Los módulos quedan en un riel de íconos y el menú de cada uno, completo, al lado. Te muestro lo nuevo en unos pasos.' };
+    }
     tourPasoActual_ = 0;
     mostrarPasoTour_();
   }
@@ -812,11 +835,13 @@
     var sidebar = document.getElementById('plataforma-sidebar');
     var telon = document.getElementById('telon-sidebar');
     var btnColapsar = document.getElementById('btn-colapsar-sidebar');
+    var btnExpandir = document.getElementById('btn-expandir-sidebar');
     var btnAbrir = document.getElementById('btn-abrir-sidebar');
     var btnTema = document.getElementById('btn-tema');
     if (!sidebar || !btnColapsar || !btnAbrir || !btnTema) return;
 
     document.getElementById('ico-colapsar').innerHTML = Iconos.svg('colapsar', { tam: 16 });
+    if (btnExpandir) document.getElementById('ico-expandir').innerHTML = Iconos.svg('colapsar', { tam: 18 });
     document.getElementById('ico-hamburguesa').innerHTML = Iconos.svg('menu', { tam: 18 });
 
     function esMovil_() {
@@ -842,33 +867,58 @@
       if (abierto) cerrarDrawer_(); else abrirDrawer_();
     });
     telon.addEventListener('click', cerrarDrawer_);
-    // Al elegir un modulo desde el drawer, se cierra solo -- de otro modo
-    // taparia el contenido recien elegido.
-    document.getElementById('nav-modulos').addEventListener('click', function () {
-      if (esMovil_()) cerrarDrawer_();
-    });
+
+    // 2026-10-05: angostada, la barra es solo el riel y el menú del módulo se
+    // abre FLOTANDO al tocar su ícono; se cierra al elegir una pantalla, al
+    // hacer clic fuera o con Esc.
+    function cerrarFlotante_() { sidebar.classList.remove('sb--flotante'); }
+    // Al elegir una pantalla: en el celular se cierra el cajón (si no, taparía
+    // lo recién elegido) y, angostada, el menú flotante.
+    alNavegarBarra_ = function () { if (esMovil_()) cerrarDrawer_(); cerrarFlotante_(); };
+    abrirMenuBarra_ = function (mismo) {
+      if (esMovil_() || !sidebar.classList.contains('plataforma-sidebar--colapsado')) return;
+      // Tocar de nuevo el módulo abierto cierra su menú flotante.
+      if (mismo && sidebar.classList.contains('sb--flotante')) { cerrarFlotante_(); return; }
+      sidebar.classList.add('sb--flotante');
+    };
+    document.addEventListener('click', function (ev) { if (!sidebar.contains(ev.target)) cerrarFlotante_(); });
+    document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') cerrarFlotante_(); });
 
     function aplicarColapso_(colapsado) {
       sidebar.classList.toggle('plataforma-sidebar--colapsado', colapsado);
+      cerrarFlotante_();
       btnColapsar.setAttribute('aria-expanded', String(!colapsado));
-      btnColapsar.setAttribute('aria-label', colapsado ? 'Expandir menú' : 'Colapsar menú');
+      if (btnExpandir) btnExpandir.setAttribute('aria-expanded', String(!colapsado));
+    }
+    function alternarColapso_() {
+      if (esMovil_()) return;
+      var colapsado = !sidebar.classList.contains('plataforma-sidebar--colapsado');
+      aplicarColapso_(colapsado);
+      guardar_(LLAVE_SIDEBAR_COLAPSADO, colapsado ? '1' : '0');
     }
 
     var colapsadoGuardado = leer_(LLAVE_SIDEBAR_COLAPSADO) === '1';
     aplicarColapso_(colapsadoGuardado);
 
-    btnColapsar.addEventListener('click', function () {
-      var colapsado = !sidebar.classList.contains('plataforma-sidebar--colapsado');
-      aplicarColapso_(colapsado);
-      guardar_(LLAVE_SIDEBAR_COLAPSADO, colapsado ? '1' : '0');
+    btnColapsar.addEventListener('click', alternarColapso_);
+    if (btnExpandir) btnExpandir.addEventListener('click', alternarColapso_);
+    // "[" angosta o ensancha, salvo mientras se escribe.
+    document.addEventListener('keydown', function (ev) {
+      if (ev.key !== '[' || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+      var t = ev.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (document.getElementById('vista-shell').hidden) return;
+      ev.preventDefault();
+      alternarColapso_();
     });
 
     // El colapso es de escritorio y el drawer es de movil: si la ventana
     // cruza el umbral con el otro estado activo, se limpia para no mezclar
-    // ambos (ej. un sidebar angosto de 68px atascado como drawer movil).
+    // ambos (ej. un sidebar angosto atascado como drawer movil).
     window.addEventListener('resize', function () {
       if (esMovil_()) {
         sidebar.classList.remove('plataforma-sidebar--colapsado');
+        cerrarFlotante_();
       } else {
         cerrarDrawer_();
         aplicarColapso_(leer_(LLAVE_SIDEBAR_COLAPSADO) === '1');
@@ -880,8 +930,7 @@
     // no pisar "sigue al sistema" con un "claro" a la fuerza.
     function pintarIconoTema_(esOscuro) {
       document.getElementById('ico-tema').innerHTML = Iconos.svg(esOscuro ? 'sol' : 'luna', { tam: 16 });
-      document.querySelector('#btn-tema .plataforma-sidebar__txt').textContent =
-        esOscuro ? 'Modo claro' : 'Modo oscuro';
+      document.getElementById('txt-tema').textContent = esOscuro ? 'Modo claro' : 'Modo oscuro';
       btnTema.setAttribute('aria-label', esOscuro ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro');
     }
 
@@ -1219,10 +1268,6 @@
     { titulo: 'Sistema', modulos: ['administracion'] }
   ];
 
-  // Debajo de este numero de destinos NO se agrupa. Un solicitante ve cuatro
-  // cosas: ponerle tres encabezados encima seria decorar, no ordenar.
-  var MINIMO_PARA_AGRUPAR = 7;
-
   // Una sola navegacion dispara hasta tres repintados (el modulo se monta,
   // publica su item y refresca sus permisos). Cada uno reconstruia el arbol
   // entero. Se agrupan en uno por frame: el resultado visible es el mismo y
@@ -1239,37 +1284,35 @@
     setTimeout(function () { repintadoPedido_ = false; renderNavAhora_(); }, 0);
   }
 
+  // 2026-10-05: la barra es riel + panel (barra-lateral.js). "Nueva solicitud"
+  // sale del riel: es una acción, va como botón arriba del panel.
   function renderNavAhora_() {
-    var nav = document.getElementById('nav-modulos');
-    if (!nav) return;
-
-    var modulos = [{ id: 'home', nombre: 'Inicio', icono: 'inicio' }]
-      .concat(modulosDeLaCuenta_().map(function (id) {
+    if (!window.SigsoBarra) return;
+    var grupoDe = {};
+    GRUPOS_SIDEBAR.forEach(function (g) { g.modulos.forEach(function (id) { grupoDe[id] = g.titulo; }); });
+    var modulos = [{ id: 'home', nombre: 'Inicio', corto: 'Inicio', titulo: 'Inicio', icono: 'inicio', grupo: '' }]
+      .concat(modulosDeLaCuenta_().filter(function (id) { return id !== 'nueva_solicitud'; }).map(function (id) {
         var def = MODULOS_SHELL[id];
-        return { id: id, nombre: def.nombre, icono: def.icono, acento: acentoInline_(id) };
+        var color = MODULO_COLOR[id];
+        return { id: id, nombre: def.nombre, corto: def.corto, titulo: def.titulo, icono: def.icono, grupo: grupoDe[id] || '', acento: color ? color.acento : '' };
       }));
-
-    SigsoNav.renderArbol({
-      contenedor: nav,
+    SigsoBarra.actualizar({
       modulos: modulos,
-      grupos: modulos.length >= MINIMO_PARA_AGRUPAR ? GRUPOS_SIDEBAR : null,
+      grupos: GRUPOS_SIDEBAR,
       moduloActivo: moduloActivo_,
       itemActivo: itemActivoDelModulo_,
-      onModulo: function (id) {
-        // Volver a tocar el módulo abierto lo cierra; tocar otro lo abre.
-        if (id === moduloActivo_ && id !== 'home') {
-          moduloActivo_ = null;
-          renderNav_();
-          return;
-        }
-        mostrarModulo_(id);
-      },
-      onItem: irAItemArbol_
+      accion: puedeAbrirModulo_('nueva_solicitud') ? { modulo: 'nueva_solicitud', texto: 'Nueva solicitud', icono: 'nueva', ir: function () { mostrarModulo_('nueva_solicitud'); } } : null,
+      onModulo: function (id) { if (id !== moduloActivo_) mostrarModulo_(id); },
+      onItem: irAItemArbol_,
+      // Los módulos con menú propio (aunque todavía no lo hayan registrado al hacer clic).
+      conMenu: function (id) { return !!IR_A_ITEM_POR_MODULO[id]; },
+      alNavegar: function () { if (alNavegarBarra_) alNavegarBarra_(); },
+      abrirMenu: function (mismo) { if (abrirMenuBarra_) abrirMenuBarra_(mismo); }
     });
-
-    // Los contadores los rellena actualizarContadores_ sobre [data-badge].
-    actualizarContadoresSiHay_();
   }
+  // Los define wireSidebar_: cerrar el cajón (celular) o el menú flotante (barra angosta).
+  var alNavegarBarra_ = null;
+  var abrirMenuBarra_ = null;
 
   // Cada módulo expone cómo ir a una de sus secciones. Se busca por convención
   // (SigsoX.irAItem) para no tener que enumerarlos acá y que agregar un módulo
@@ -1310,7 +1353,7 @@
   // desaparecia al primer clic en el sidebar.
   function actualizarContadoresSiHay_() {
     Object.keys(badgesRecordados_).forEach(function (id) {
-      pintarBadge_(id, badgesRecordados_[id]);
+      pintarBadge_(id, badgesRecordados_[id].n, badgesRecordados_[id].tono);
     });
   }
 
@@ -1406,14 +1449,15 @@
     });
   }
 
-  function pintarBadge_(modulo, cantidad) {
-    // v13.0: se recuerda, porque el arbol del sidebar se repinta al abrir y
-    // cerrar ramas y el contador se perdia en el primer clic.
-    badgesRecordados_[modulo] = cantidad;
-    var badge = document.querySelector('[data-badge="' + modulo + '"]');
-    if (!badge) return;
-    badge.textContent = cantidad > 99 ? '99+' : String(cantidad);
-    badge.classList.toggle('sigso-oculto', !cantidad);
+  // 2026-10-05 (decisión 4): cada contador dice QUÉ tan urgente es. Lo que el
+  // módulo no indica toma el tono de lo que cuenta: la Bandeja cuenta lo que
+  // venció su plazo (rojo), Mis solicitudes lo que espera tu validación
+  // (ámbar) y Novedades lo que falta leer (gris).
+  var TONO_CONTADOR = { bandeja: 'rojo', mis_solicitudes: 'ambar', mi_trabajo: 'ambar', novedades: 'gris' };
+  function pintarBadge_(modulo, cantidad, tono) {
+    var t = tono || TONO_CONTADOR[modulo] || 'ambar';
+    badgesRecordados_[modulo] = { n: Number(cantidad) || 0, tono: t };
+    if (window.SigsoBarra) SigsoBarra.badge(modulo, cantidad, t);
   }
 
   // Modulos "de trabajo" (tablas, dashboard, detalle de 3 columnas): necesitan
@@ -1546,6 +1590,7 @@
     // porque al cambiar de modulo hay que cerrar la rama del anterior y abrir
     // la del nuevo. El item lo publicara el modulo al montarse.
     itemActivoDelModulo_ = itemPendienteDeRuta_ || '';
+    if (window.SigsoBarra) SigsoBarra.visita(id, '');
     renderNav_();
 
     if (id === 'home' && Date.now() - ultimoRenderHome_ > 3000) renderHome_();

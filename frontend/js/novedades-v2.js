@@ -74,6 +74,8 @@
   function actualizarBadge() {
     feed().then(function (r) {
       var n = r && r.ok ? (r.data.resumen && r.data.resumen.pendientes) || 0 : 0;
+      // Por leer: gris (decisión 4 de la barra lateral). El shell lo recuerda entre repintados.
+      if (window.SigsoShell && SigsoShell.pintarBadge) { SigsoShell.pintarBadge('novedades', n, 'gris'); return; }
       document.querySelectorAll('[data-badge="novedades"]').forEach(function (b) {
         b.textContent = n > 99 ? '99+' : String(n);
         b.classList.toggle('sigso-oculto', !n);

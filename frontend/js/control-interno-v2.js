@@ -1016,7 +1016,12 @@
       var a = (rs[1] && rs[1].ok && rs[1].data) || {};
       var tot = {};
       [p, a.pendientes || {}].forEach(function (o) { Object.keys(o).forEach(function (k) { tot[k] = (tot[k] || 0) + (Number(o[k]) || 0); }); });
-      DEPARTAMENTOS.forEach(function (d) { if (tot[d.modulo] !== undefined || AGENDA[d.modulo]) SigsoShell.pintarBadge(d.modulo, tot[d.modulo] || 0); });
+      // Rojo si hay recordatorios atrasados; ámbar si es lo de hoy o reportes por validar.
+      var det = a.detalle || {};
+      DEPARTAMENTOS.forEach(function (d) {
+        if (tot[d.modulo] === undefined && !AGENDA[d.modulo] && !det[d.modulo]) return;
+        SigsoShell.pintarBadge(d.modulo, tot[d.modulo] || 0, det[d.modulo] && det[d.modulo].atrasados ? 'rojo' : 'ambar');
+      });
       AGENDA = a.detalle || {};
       Object.keys(MODULOS).forEach(function (k) { MODULOS[k].arbol(); });
       if (!avisado_ && window.SigsoAgenda) { avisado_ = true; SigsoAgenda.avisoDelDia(AGENDA); }

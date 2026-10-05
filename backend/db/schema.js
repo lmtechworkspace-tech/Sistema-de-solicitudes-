@@ -846,7 +846,11 @@ const COLUMNAS = {
   DEP_METAS: [
     'meta_id', 'depto', 'nombre', 'descripcion', 'unidad', 'meta', 'sentido', 'orden',
     'creado_por', 'fecha_creacion', 'actualizado_por', 'fecha_actualizacion', 'activa'
-  ]
+  ],
+
+  // Preferencias de cada persona que la siguen a cualquier equipo (2026-10-05):
+  // hoy, los fijados de la barra lateral (clave 'barra_fijados', valor JSON).
+  PREFERENCIAS_CUENTA: ['cuenta_id', 'clave', 'valor', 'fecha_actualizacion']
 };
 
 // Crea la organización por defecto si todavía no existe ninguna, y le

@@ -607,6 +607,9 @@
     partes: partes,
     render: render,
     renderArbol: renderArbol,
-    migas: migas
+    migas: migas,
+    // La barra lateral (barra-lateral.js) arma su panel con las mismas reglas.
+    itemsVisibles: itemsVisibles_,
+    esPlano: esPlano_
   };
 })();

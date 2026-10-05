@@ -90,6 +90,7 @@ const DirectorioPersonas = require('../logica/directorioPersonas');
 const ReportePdf = require('../logica/reportePdf');
 const ReporteExcel = require('../logica/reporteExcel');
 const ArchivosSolicitud = require('../logica/archivosSolicitud');
+const Preferencias = require('../logica/preferencias');
 
 // Acciones que NO requieren una sesion ya resuelta: o bien la crean
 // (portalLogin), o bien resuelven su propio token internamente y devuelven
@@ -646,6 +647,9 @@ const ACCIONES = {
   // Metas propias de cada área (2026-10-04): las define la jefatura; el valor va en el reporte mensual.
   listarMetasDep: (db, data, contexto) => AgendaDepto.listarMetas(db, data, contexto),
   guardarMetaDep: (db, data, contexto) => AgendaDepto.guardarMeta(db, data, contexto),
+  // Barra lateral (2026-10-05): fijados de cada persona.
+  obtenerPreferencias: (db, data, contexto) => Preferencias.obtener(db, data, contexto),
+  guardarFijados: (db, data, contexto) => Preferencias.guardarFijados(db, data, contexto),
   // Importar las planillas del Drive (solo ADM): el navegador lee el .xlsx y
   // manda hoja por hoja; `simular` primero.
   importarHojaCI: (db, data, contexto) => ControlInternoImportar.importarHoja(db, data, contexto),

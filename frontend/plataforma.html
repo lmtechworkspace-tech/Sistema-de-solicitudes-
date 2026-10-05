@@ -44,6 +44,7 @@
   <link rel="stylesheet" href="css/v2/departamentos-v2.css" />
   <link rel="stylesheet" href="css/v2/agenda-v2.css" />
   <link rel="stylesheet" href="css/v2/shell-v2.css" />
+  <link rel="stylesheet" href="css/v2/barra-v2.css" />
   <link rel="stylesheet" href="css/v2/acceso-v2.css" />
   <link rel="stylesheet" href="css/v2/perfil-v2.css" />
   <link rel="stylesheet" href="css/v2/reportes-v2.css" />
@@ -203,62 +204,76 @@
        estandar de herramienta seria (Linear/Notion/Stripe). En movil el
        sidebar es un drawer que se abre con el boton hamburguesa. -->
   <div id="vista-shell" class="plataforma-shell" hidden>
-    <aside class="plataforma-sidebar" id="plataforma-sidebar">
-      <div class="plataforma-sidebar__cab">
-        <div class="plataforma-header__marca">
-          <svg class="sigso-marca" width="26" height="26" viewBox="0 0 32 32" aria-hidden="true">
-            <rect width="32" height="32" rx="8" fill="#14213D"></rect>
-            <text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#fff" text-anchor="middle">S</text>
-          </svg>
-          <span class="plataforma-sidebar__txt-marca">SIGSO</span>
-        </div>
-        <!-- SIGSO v2, Módulo 9A: la campana vive en el marco (antes flotaba
-             abajo a la derecha tapando contenido). La llena notificaciones-vivas.js. -->
-        <button type="button" class="shell-campana js-shell-campana" hidden aria-label="Notificaciones"></button>
-        <button type="button" class="plataforma-sidebar__colapsar" id="btn-colapsar-sidebar"
-                aria-label="Colapsar menú" aria-expanded="true">
-          <span id="ico-colapsar"></span>
-        </button>
-      </div>
-
-      <!-- SIGSO v2, Módulo 9B: "Buscar y saltar" (Ctrl+K) existía pero no tenía
-           ningún botón visible. -->
-      <button type="button" class="shell-buscar" id="btn-shell-buscar" aria-label="Buscar (Ctrl+K)">
-        <span id="ico-shell-buscar"></span><span class="plataforma-sidebar__txt shell-buscar__txt">Buscar</span><kbd class="plataforma-sidebar__txt">Ctrl K</kbd>
-      </button>
-
-      <nav class="plataforma-sidebar__nav" id="nav-modulos"></nav>
-
-      <div class="plataforma-sidebar__pie">
-        <button type="button" class="plataforma-sidebar__tema" id="btn-tema" aria-label="Cambiar a modo oscuro">
-          <span id="ico-tema"></span><span class="plataforma-sidebar__txt">Modo oscuro</span>
-        </button>
-        <!-- v4.0: identidad con avatar de iniciales y rol visible; el botón de
-             salir pasa a un menú para no competir con la navegación. -->
-        <div class="plataforma-header__usuario">
-          <button type="button" class="plataforma-usuario" id="btn-menu-usuario"
-                  aria-haspopup="menu" aria-expanded="false">
-            <span class="plataforma-avatar" id="nav-avatar"></span>
-            <span class="plataforma-usuario__txt">
-              <span class="plataforma-usuario__nombre" id="nav-nombre-usuario"></span>
-              <span class="plataforma-usuario__rol" id="nav-rol-usuario"></span>
-            </span>
-            <span id="nav-chevron"></span>
-          </button>
-          <div class="plataforma-menu sigso-oculto" id="menu-usuario" role="menu">
-            <div class="plataforma-menu__cab" id="menu-correos"></div>
-            <!-- "Mi perfil" abre el panel de perfil/foto (perfil-v2.js). -->
-            <button type="button" class="plataforma-menu__item" id="btn-mi-perfil" role="menuitem">
-              <span id="ico-perfil"></span> Mi perfil
-            </button>
-            <button type="button" class="plataforma-menu__item" id="btn-menu-atajos" role="menuitem">
-              <span id="ico-atajos"></span> Atajos de teclado
-            </button>
-            <button type="button" class="plataforma-menu__item" id="btn-logout" role="menuitem">
-              <span id="ico-salir"></span> Cerrar sesi&oacute;n
-            </button>
+    <!-- 2026-10-05: riel + panel (barra-lateral.js). El riel lleva el ícono de
+         cada módulo con su contador, siempre a la vista; el panel, el menú
+         completo del módulo abierto, tus fijados y la acción principal.
+         Angostada (escritorio) queda solo el riel y el panel se abre flotando. -->
+    <aside class="plataforma-sidebar sb" id="plataforma-sidebar" aria-label="Navegación de SIGSO">
+      <div class="sb-riel">
+        <div class="sb-riel__cab">
+          <div class="plataforma-header__marca" title="SIGSO">
+            <svg class="sigso-marca" width="30" height="30" viewBox="0 0 32 32" aria-hidden="true">
+              <rect width="32" height="32" rx="8" fill="#fff"></rect>
+              <text x="16" y="23" font-family="Arial, sans-serif" font-weight="700" font-size="20" fill="#14213D" text-anchor="middle">S</text>
+            </svg>
+            <span class="sb-oculto-visual">SIGSO</span>
           </div>
         </div>
+        <nav class="sb-riel__mods" id="sb-riel" aria-label="Módulos"></nav>
+        <div class="sb-riel__pie">
+          <button type="button" class="sb-rb sb-expandir" id="btn-expandir-sidebar" aria-label="Mostrar el menú" title="Mostrar el menú ([)">
+            <span id="ico-expandir"></span>
+          </button>
+          <!-- SIGSO v2, Módulo 9A: la campana vive en el marco. La llena notificaciones-vivas.js. -->
+          <button type="button" class="shell-campana js-shell-campana" hidden aria-label="Notificaciones"></button>
+          <!-- Tu foto: perfil, modo oscuro, atajos y cerrar sesión. -->
+          <div class="plataforma-header__usuario">
+            <button type="button" class="plataforma-usuario sb-usuario" id="btn-menu-usuario"
+                    aria-haspopup="menu" aria-expanded="false" title="Tu cuenta">
+              <span class="plataforma-avatar" id="nav-avatar"></span>
+              <span class="sb-oculto-visual">
+                <span id="nav-nombre-usuario"></span>, <span id="nav-rol-usuario"></span>
+              </span>
+              <span id="nav-chevron" hidden></span>
+            </button>
+            <div class="plataforma-menu sb-menu sigso-oculto" id="menu-usuario" role="menu">
+              <div class="plataforma-menu__cab" id="menu-correos"></div>
+              <!-- "Mi perfil" abre el panel de perfil/foto (perfil-v2.js). -->
+              <button type="button" class="plataforma-menu__item" id="btn-mi-perfil" role="menuitem">
+                <span id="ico-perfil"></span> Mi perfil
+              </button>
+              <button type="button" class="plataforma-menu__item" id="btn-tema" role="menuitem" aria-label="Cambiar a modo oscuro">
+                <span id="ico-tema"></span> <span id="txt-tema">Modo oscuro</span>
+              </button>
+              <button type="button" class="plataforma-menu__item" id="btn-menu-atajos" role="menuitem">
+                <span id="ico-atajos"></span> Atajos de teclado
+              </button>
+              <button type="button" class="plataforma-menu__item" id="btn-logout" role="menuitem">
+                <span id="ico-salir"></span> Cerrar sesi&oacute;n
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sb-panel" id="sb-panel">
+        <div class="sb-panel__cab">
+          <div class="sb-panel__tit">
+            <strong id="sb-panel-titulo">Inicio</strong>
+            <small id="sb-panel-sub"></small>
+          </div>
+          <button type="button" class="sb-fijar sb-fijar--cab" id="sb-fijar-actual" hidden aria-pressed="false" aria-label="Fijar esta pantalla arriba"></button>
+          <button type="button" class="plataforma-sidebar__colapsar" id="btn-colapsar-sidebar"
+                  aria-label="Angostar el menú" aria-expanded="true" title="Angostar el menú ([)">
+            <span id="ico-colapsar"></span>
+          </button>
+        </div>
+        <button type="button" class="sb-accion" id="sb-accion" hidden></button>
+        <!-- SIGSO v2, Módulo 9B: "Buscar y saltar" (Ctrl+K). -->
+        <button type="button" class="shell-buscar" id="btn-shell-buscar" aria-label="Buscar (Ctrl+K)">
+          <span id="ico-shell-buscar"></span><span class="shell-buscar__txt">Buscar en SIGSO</span><kbd>Ctrl K</kbd>
+        </button>
+        <nav class="sb-panel__nav" id="nav-modulos" aria-label="Menú del módulo"></nav>
       </div>
     </aside>
 
@@ -296,6 +311,9 @@
           <div><dt><kbd>N</kbd></dt><dd>Nueva solicitud</dd></div>
           <div><dt><kbd>G</kbd> luego <kbd>B</kbd></dt><dd>Ir a la Bandeja de trabajo</dd></div>
           <div><dt><kbd>/</kbd></dt><dd>Buscar dentro de la Bandeja</dd></div>
+          <div><dt><kbd>Alt</kbd><kbd>1</kbd>…<kbd>8</kbd></dt><dd>Ir a tus fijados (en orden)</dd></div>
+          <div><dt><kbd>[</kbd></dt><dd>Angostar o ensanchar la barra lateral</dd></div>
+          <div><dt><kbd>↑</kbd><kbd>↓</kbd></dt><dd>Moverse por la barra lateral</dd></div>
           <div><dt><kbd>Esc</kbd></dt><dd>Cerrar lo que esté abierto</dd></div>
           <div><dt><kbd>?</kbd></dt><dd>Esta hoja de atajos</dd></div>
         </dl>
@@ -593,6 +611,8 @@
   <!-- Árbol del sidebar (Módulo > Submódulo > Ítem). Va antes que los
        módulos: cada uno registra su árbol al cargar. -->
   <script src="js/navegacion.js"></script>
+  <!-- 2026-10-05: la barra lateral (riel + panel, fijados y recientes). -->
+  <script src="js/barra-lateral.js"></script>
   <!-- UIv2 va temprano: la usan el motor de reportes y todos los módulos. -->
   <script src="js/ui-v2.js"></script>
   <script src="js/reportes-v2.js"></script>

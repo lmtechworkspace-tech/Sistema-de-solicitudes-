@@ -1,0 +1,162 @@
+/* barra-v2.css — la barra lateral como riel + panel (2026-10-05, barra-lateral.js).
+   Riel (64 px): el ícono de cada módulo con su contador. Panel (240 px): el
+   menú completo del módulo abierto, tus fijados y la acción principal.
+   Contadores: rojo atrasado, ámbar para hoy, gris por revisar. La barra viste
+   la marca en claro y en oscuro, como antes. */
+
+#vista-shell .plataforma-sidebar.sb {
+  --sb-panel: color-mix(in srgb, var(--marca, #14213D) 94%, #ffffff);
+  --sb-texto: rgba(255, 255, 255, 0.76);
+  --sb-tenue: rgba(255, 255, 255, 0.48);
+  --sb-linea: rgba(255, 255, 255, 0.09);
+  --sb-activo: #8FB3FF;
+  width: auto;
+  flex-direction: row;
+  font-family: var(--fuente);
+}
+#vista-shell .plataforma-sidebar.sb.plataforma-sidebar--colapsado { width: auto; }
+.sb-oculto-visual { position: absolute !important; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* ===== Riel ===== */
+.sb-riel { width: 64px; flex: none; display: flex; flex-direction: column; align-items: center; min-height: 0; border-right: 1px solid var(--sb-linea); }
+.sb-riel__cab { flex: none; padding: 14px 0 12px; }
+.sb-riel__cab .sigso-marca { display: block; border-radius: 8px; }
+.sb-riel__mods {
+  flex: 1; min-height: 0; width: 100%; overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 2px 0 10px;
+  scrollbar-width: none;
+  /* Sombra arriba/abajo cuando hay más íconos por ver. */
+  background:
+    linear-gradient(var(--marca, #14213D) 30%, transparent) top / 100% 20px no-repeat local,
+    linear-gradient(transparent, var(--marca, #14213D) 70%) bottom / 100% 20px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgba(0, 0, 0, 0.45), transparent) top / 100% 10px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(0, 0, 0, 0.45), transparent) bottom / 100% 10px no-repeat scroll;
+}
+.sb-riel__mods::-webkit-scrollbar { display: none; }
+.sb-rb {
+  position: relative; flex: none; width: 44px; height: 40px; display: grid; place-items: center;
+  border: 0; border-radius: 11px; background: transparent; color: rgba(255, 255, 255, 0.68); cursor: pointer;
+  transition: background var(--mov-normal, .15s), color var(--mov-normal, .15s);
+}
+.sb-rb:hover { background: rgba(255, 255, 255, 0.09); color: #fff; }
+.sb-rb:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.sb-rb--act { background: rgba(255, 255, 255, 0.15); color: #fff; }
+.sb-rb--act::before { content: ''; position: absolute; left: -10px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: var(--sb-activo); }
+.sb-rb .sb-n { position: absolute; top: 1px; right: -2px; min-width: 17px; height: 17px; padding: 0 4px; font-size: .625rem; line-height: 17px; box-shadow: 0 0 0 2px var(--marca, #14213D); }
+.sb-sep { flex: none; width: 28px; height: 1px; margin: 6px 0; background: rgba(255, 255, 255, 0.13); }
+.sb-riel__pie { flex: none; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0 12px; border-top: 1px solid var(--sb-linea); }
+.sb-riel__pie .shell-campana { width: 40px; height: 40px; border-radius: 11px; }
+.sb-expandir { display: none; }
+.plataforma-sidebar--colapsado .sb-expandir { display: grid; }
+.plataforma-sidebar--colapsado .sb-expandir svg { transform: rotate(180deg); }
+
+/* Tu foto: abre el menú de la cuenta hacia la derecha. */
+#vista-shell .sb-usuario { padding: 2px; border: 2px solid transparent; border-radius: 50%; gap: 0; }
+#vista-shell .sb-usuario:hover, #vista-shell .sb-usuario[aria-expanded="true"] { background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.25); }
+#vista-shell .sb-usuario:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.sb-menu { left: calc(100% + 10px); right: auto; bottom: 0; min-width: 15.5rem; z-index: 50; color: var(--texto); }
+#txt-tema { pointer-events: none; }
+
+/* ===== Panel ===== */
+.sb-panel { width: 240px; flex: none; display: flex; flex-direction: column; min-height: 0; background: var(--sb-panel); }
+.sb-panel__cab { flex: none; display: flex; align-items: flex-start; gap: 4px; padding: 16px 8px 10px 16px; }
+.sb-panel__tit { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sb-panel__tit strong { font: 700 .98rem/1.25 var(--fuente); color: #fff; overflow-wrap: anywhere; }
+.sb-panel__tit small { font: 500 .72rem/1.3 var(--fuente); color: var(--sb-tenue); }
+#vista-shell .sb-panel .plataforma-sidebar__colapsar { color: var(--sb-tenue); padding: 6px; }
+#vista-shell .sb-panel .plataforma-sidebar__colapsar:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+.sb-accion {
+  flex: none; display: flex; align-items: center; justify-content: center; gap: 6px; height: 36px; margin: 0 12px 8px;
+  border: 0; border-radius: 10px; background: #2A5FD6; color: #fff; font: 600 .84rem/1 var(--fuente); cursor: pointer;
+  transition: background var(--mov-normal, .15s);
+}
+.sb-accion:hover { background: #3A6FE6; }
+.sb-accion:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.sb-accion[hidden], .sb-fijar[hidden] { display: none; }
+.sb-panel .shell-buscar { margin: 0 12px 4px; }
+
+/* El menú: con sombra arriba/abajo cuando hay más por ver. */
+.sb-panel__nav {
+  flex: 1; min-height: 0; overflow-y: auto; padding: 2px 8px 16px;
+  scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+  background:
+    linear-gradient(var(--sb-panel) 30%, transparent) top / 100% 24px no-repeat local,
+    linear-gradient(transparent, var(--sb-panel) 70%) bottom / 100% 24px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgba(0, 0, 0, 0.35), transparent) top / 100% 10px no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgba(0, 0, 0, 0.35), transparent) bottom / 100% 10px no-repeat scroll;
+  background-color: var(--sb-panel);
+}
+.sb-sec { display: flex; align-items: center; gap: 6px; margin: 16px 8px 4px; font: 600 .66rem/1.2 var(--fuente); letter-spacing: .09em; text-transform: uppercase; color: var(--sb-tenue); }
+.sb-sec small { letter-spacing: 0; text-transform: none; font-weight: 500; opacity: .85; }
+.sb-sec:first-child { margin-top: 8px; }
+.sb-sec--vacia { display: block; height: 10px; margin: 0; }
+.sb-sec--vacia:first-child { height: 4px; margin: 0; }
+.sb-sec--fij svg { color: #F2C14E; }
+.sb-pista { margin: 2px 8px 6px; font: 500 .72rem/1.45 var(--fuente); color: var(--sb-tenue); }
+.sb-pista svg { vertical-align: -1px; color: #F2C14E; }
+.sb-lista { display: flex; flex-direction: column; gap: 1px; }
+.sb-fila { position: relative; display: flex; align-items: center; border-radius: 8px; transition: background var(--mov-normal, .15s); }
+.sb-fila:hover { background: rgba(255, 255, 255, 0.07); }
+.sb-fila--act { background: rgba(143, 179, 255, 0.17); }
+.sb-fila--act::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 3px; border-radius: 0 3px 3px 0; background: var(--sb-activo); }
+.sb-hoja {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 7px 6px 7px 12px;
+  border: 0; border-radius: 8px; background: transparent; color: var(--sb-texto); font: 500 .84rem/1.3 var(--fuente); text-align: left; cursor: pointer;
+}
+.sb-hoja:hover { color: #fff; }
+.sb-fila--act .sb-hoja { color: #fff; font-weight: 600; }
+.sb-hoja:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+.sb-hoja__t { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.sb-hoja__t small { display: block; margin-top: 1px; font-size: .68rem; font-weight: 500; color: var(--sb-tenue); }
+.sb-fijar, .sb-quitar {
+  flex: none; width: 26px; height: 26px; margin-right: 4px; display: grid; place-items: center;
+  border: 0; border-radius: 7px; background: transparent; color: var(--sb-tenue); cursor: pointer; opacity: 0;
+  transition: opacity var(--mov-normal, .15s), background var(--mov-normal, .15s), color var(--mov-normal, .15s);
+}
+.sb-fila:hover .sb-fijar, .sb-fila:hover .sb-quitar, .sb-fila:focus-within .sb-fijar, .sb-fila:focus-within .sb-quitar, .sb-fijar--on, .sb-fijar--cab { opacity: 1; }
+.sb-fijar:hover, .sb-quitar:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+.sb-fijar:focus-visible, .sb-quitar:focus-visible { opacity: 1; outline: 2px solid #fff; outline-offset: -2px; }
+.sb-fijar--on { color: #F2C14E; }
+.sb-fijar--on svg { fill: currentColor; }
+.sb-fijar--cab { margin: 2px 0 0; }
+.sb-fijados .sb-fila { cursor: grab; }
+.sb-fila--arrastre { opacity: .45; }
+.sb-fila--destino { box-shadow: inset 0 2px 0 var(--sb-activo); }
+@media (hover: none) { .sb-fijar, .sb-quitar { opacity: .7; } }
+
+/* ===== Contadores (decisión 4) ===== */
+.sb-n { flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; font: 700 .66rem/18px var(--fuente); text-align: center; color: #fff; font-variant-numeric: tabular-nums; }
+.sb-n--rojo { background: #E5484D; }
+.sb-n--ambar { background: #E3A008; color: #2A1B00; }
+.sb-n--gris { background: rgba(255, 255, 255, 0.22); }
+
+/* Nombre del módulo al pasar el mouse por el riel. */
+.sb-tip {
+  position: fixed; z-index: 95; transform: translateY(-50%); display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+  border-radius: 8px; background: #0B1428; color: #fff; font: 500 .78rem/1.2 var(--fuente); white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.25); pointer-events: none; opacity: 0; transition: opacity .12s;
+}
+.sb-tip--ver { opacity: 1; }
+.sb-tip b { font-weight: 600; }
+.sb-tip__s { color: rgba(255, 255, 255, 0.6); font-size: .72rem; }
+
+/* ===== Angostada (escritorio): solo el riel; el menú se abre flotando ===== */
+.plataforma-sidebar--colapsado .sb-panel { display: none; }
+.plataforma-sidebar--colapsado.sb--flotante .sb-panel {
+  display: flex; position: absolute; left: 64px; top: 0; bottom: 0; z-index: 2;
+  box-shadow: 10px 0 28px rgba(15, 23, 42, 0.28); animation: sb-entra .16s ease-out;
+}
+.plataforma-sidebar--colapsado.sb--flotante .sb-panel .shell-buscar { justify-content: flex-start; margin: 0 12px 4px; padding: 0 10px; }
+@keyframes sb-entra { from { transform: translateX(-8px); opacity: .6; } to { transform: none; opacity: 1; } }
+
+/* ===== Celular: el cajón trae riel + panel ===== */
+@media (max-width: 900px) {
+  #vista-shell .plataforma-sidebar.sb, #vista-shell .plataforma-sidebar.sb.plataforma-sidebar--colapsado { width: auto; max-width: 100vw; }
+  .sb-panel, .plataforma-sidebar--colapsado .sb-panel { display: flex; width: min(240px, calc(100vw - 64px)); }
+  .sb-expandir, .plataforma-sidebar--colapsado .sb-expandir { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plataforma-sidebar--colapsado.sb--flotante .sb-panel { animation: none; }
+  .sb-tip, .sb-rb, .sb-fila, .sb-fijar, .sb-quitar { transition: none; }
+}
