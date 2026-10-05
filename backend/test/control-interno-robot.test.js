@@ -226,6 +226,10 @@ test('por lote con el robot de la oficina: solo lo toma un programa que sabe de 
   let e = RB.estadoLote(db, { lote_id: r.lote_id }, FRANCISCA);
   assert.ok(!JSON.stringify(e).includes(CLAVE), 'entregado el lote, el servidor ya no tiene claves');
   assert.match(e.items[1].paso, /En cola \(2 de 2\)/);
+  // Revisando, el programa no consulta por trabajo nuevo: no debe verse "no conectado".
+  const reloj = Date.now;
+  Date.now = () => reloj() + 10 * 60 * 1000;
+  try { assert.equal(RB.general(db, {}, FRANCISCA).conectado, true, 'con un lote en curso sigue conectado'); } finally { Date.now = reloj; }
   const [t1, t2] = tomado.lote.trabajos;
   assert.equal(RB.agenteEntregar(db, { agente_token: c2.llave, trabajo_id: t1.trabajo_id, resultado: { estado: 'OK', mensaje: '1 convenio leído.', convenios: [{ resolucion: '60225', cuotas: CUOTAS }] } }).ok, true);
   assert.equal(RB.general(db, {}, FRANCISCA).ocupado, true, 'falta uno: sigue ocupado');

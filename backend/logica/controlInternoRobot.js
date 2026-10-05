@@ -62,9 +62,14 @@ function esVerdadero_(v) { return v === true || v === 'TRUE' || v === 1; }
 function agentes_(db) {
   try { return leerFilas_(db, 'CI_ROBOT_AGENTES', COLUMNAS.CI_ROBOT_AGENTES).filter((a) => esVerdadero_(a.activo)); } catch (e) { return []; }
 }
+/** Un agente que está revisando no consulta por trabajo nuevo: sigue conectado mientras tenga uno en curso. */
+function trabajando_(agenteId) {
+  for (const t of trabajos_.values()) if (t.agente_id === agenteId && t.estado === 'EN_CURSO' && !t.pendiente) return true;
+  return false;
+}
 function conectados_(db) {
   const ahora = Date.now();
-  return agentes_(db).filter((a) => (senales_.get(a.agente_id) || 0) > ahora - CONECTADO_MS);
+  return agentes_(db).filter((a) => (senales_.get(a.agente_id) || 0) > ahora - CONECTADO_MS || trabajando_(a.agente_id));
 }
 function enServidor_() { return !!revisor_ || process.env.SIGSO_ROBOT_EN_SERVIDOR === '1'; }
 
@@ -302,7 +307,7 @@ function general(db, data, contexto) {
 function soloAdm_(ctx) { return ctx && ctx.rol === 'ADM' ? null : { _forbidden: true, message: 'Solo un administrador configura el robot de la oficina.' }; }
 function publicoAgente_(db, a) {
   const s = senales_.get(a.agente_id) || 0;
-  return { agente_id: a.agente_id, nombre: a.nombre, fecha_creacion: a.fecha_creacion, ultimo_contacto: s ? new Date(s).toISOString() : (a.ultimo_contacto || ''), conectado: s > Date.now() - CONECTADO_MS };
+  return { agente_id: a.agente_id, nombre: a.nombre, fecha_creacion: a.fecha_creacion, ultimo_contacto: s ? new Date(s).toISOString() : (a.ultimo_contacto || ''), conectado: s > Date.now() - CONECTADO_MS || trabajando_(a.agente_id) };
 }
 function listarAgentes(db, data, contexto) {
   const no = soloAdm_(contexto);
