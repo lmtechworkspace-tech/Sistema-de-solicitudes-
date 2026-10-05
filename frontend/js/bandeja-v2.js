@@ -58,6 +58,11 @@
     return '';
   }
   function abierto(i) { return CERRADOS.indexOf(i.estado) === -1 && i.estado !== 'S08'; }
+  function vencida(i) {
+    if (!i.fecha_comprometida || !abierto(i)) return false;
+    var t = new Date(String(i.fecha_comprometida).replace(' ', 'T')).getTime();
+    return !isNaN(t) && t < Date.now();
+  }
   function fechaCorta(v) { return v ? PY.fecha(v, true) : ''; }
 
   // Algo cambió en una solicitud (desde la cola, el detalle o una fila de Mi
@@ -182,24 +187,34 @@
     }).join('') + '</div>';
   }
 
+  // Etapa 1 (2026-10-05): en la Cola los indicadores son una banda de una
+  // línea (antes 6 tarjetas de ~110 px empujaban la primera fila a 600 px).
+  function banda() {
+    var r = datos_.resumen || {};
+    return '<div class="bj2-banda sx2-entra" role="group" aria-label="Filtrar la cola">' + KPIS.filter(function (k) { return k.id !== 'todos'; }).map(function (k) {
+      var v = r[k.id] || 0;
+      return '<button type="button" class="bj2-banda__op sx2-tono-' + (v || k.id === 'abiertos' ? k.tono : 'neutro') + (f.kpi === k.id ? ' is-activo' : '') + '" data-filtro="' + k.id + '" aria-pressed="' + (f.kpi === k.id) + '" title="' + U.esc(k.unidad) + '">' +
+        '<span class="bj2-banda__n">' + v + '</span><span class="bj2-banda__et">' + U.esc(k.etiqueta) + '</span></button>';
+    }).join('') + '</div>';
+  }
+
   // "Ponerse al día": aparece solo si hay un rezago real de ítems sin triar.
   function bannerRezago() {
     if (datos_.solo_lectura) return '';
     var viejos = datos_.items.filter(function (i) { return abierto(i) && (i.estado === 'S01' || i.estado === 'S02') && (Date.now() - new Date(i.fecha_creacion)) / 86400000 > 14; });
     if (viejos.length < 3) return '';
     var masViejo = Math.max.apply(null, viejos.map(function (i) { return Math.floor((Date.now() - new Date(i.fecha_creacion)) / 86400000); }));
-    return '<div class="bj2-rezago sx2-entra" style="--i:1">' +
-      '<span class="bj2-rezago__ico">' + U.ico('reloj', 20) + '</span>' +
-      '<span class="sx2-apilado" style="gap:2px;flex:1;min-width:0"><strong>' + viejos.length + ' ítems llevan más de 2 semanas sin revisar</strong>' +
-        '<span class="sx2-tenue" style="font-size:.8125rem">El más antiguo tiene ' + masViejo + ' días. Revísalos de a varios: recíbelos, asígnalos o ciérralos con su motivo.</span></span>' +
-      U.boton({ texto: 'Ponerse al día', icono: 'rayo', variante: 'primario', clase: 'js-bj2-rezago' }) +
+    return '<div class="bj2-rezago" title="Revísalos de a varios: recíbelos, asígnalos o ciérralos con su motivo.">' +
+      '<span class="bj2-rezago__ico">' + U.ico('reloj', 16) + '</span>' +
+      '<span class="bj2-rezago__txt"><strong>' + viejos.length + ' ítems llevan más de 2 semanas sin revisar</strong> <span class="sx2-tenue">· el más antiguo tiene ' + masViejo + ' días</span></span>' +
+      U.boton({ texto: 'Ponerse al día', icono: 'rayo', sm: true, variante: 'primario', clase: 'js-bj2-rezago' }) +
     '</div>';
   }
 
   function barraFiltros() {
     var empresas = {};
     datos_.items.forEach(function (i) { empresas[i.empresa_id] = i.empresa_nombre || i.empresa_id; });
-    return '<div class="sx2-card sx2-py-herramientas sx2-entra" style="--i:2"><div class="sx2-barra-filtros">' +
+    return '<div class="sx2-barra-filtros bj2-filtros">' +
       '<label class="sx2-buscar">' + U.ico('lupa', 16) + '<input class="sx2-input js-bj2-buscar" type="search" placeholder="Buscar por título, N°, solicitante, empresa…" value="' + U.esc(f.texto) + '"></label>' +
       '<select class="sx2-select js-bj2-empresa" aria-label="Empresa"><option value="">Todas las empresas</option>' + Object.keys(empresas).sort().map(function (e) {
         return '<option value="' + U.esc(e) + '"' + (f.empresa === e ? ' selected' : '') + '>' + U.esc(empresas[e]) + '</option>';
@@ -212,9 +227,7 @@
         '<option value="movimiento"' + (f.orden === 'movimiento' ? ' selected' : '') + '>Más tiempo sin movimiento</option>' +
         '<option value="prioridad"' + (f.orden === 'prioridad' ? ' selected' : '') + '>Por prioridad</option>' +
         '<option value="recientes"' + (f.orden === 'recientes' ? ' selected' : '') + '>Más recientes</option></select>' +
-      U.chip({ texto: 'Agrupar por solicitud', icono: 'capas', activo: f.agrupar, clase: 'js-bj2-agrupar' }) +
-      U.chip({ texto: 'Ver todos (incl. cerrados)', activo: f.kpi === 'todos', clase: 'js-bj2-todos' }) +
-    '</div></div>';
+    '</div>';
   }
 
   function fila(i, n) {
@@ -227,7 +240,7 @@
         '<strong class="sx2-cortar">' + U.esc(i.titulo || '(sin título)') + '</strong>' +
         '<span class="sx2-flex bj2-fila__meta">' +
           '<span class="bj2-id">' + U.esc(i.solicitud_id) + (i.cantidad_items > 1 ? ' · ítem ' + i.numero_item + '/' + i.cantidad_items : '') + '</span>' +
-          '<span class="sx2-cortar">' + U.esc(i.empresa_nombre || '') + (i.tipo_nombre ? ' · ' + U.esc(i.tipo_nombre) : '') + '</span>' +
+          '<span class="sx2-cortar">' + (i.solicitante_nombre ? '<b class="bj2-pide">' + U.esc(i.solicitante_nombre) + '</b> · ' : '') + U.esc(i.empresa_nombre || '') + (i.tipo_nombre ? ' · ' + U.esc(i.tipo_nombre) : '') + '</span>' +
           (i.es_cliente ? U.badge('Cliente' + (i.empresa_cliente ? ': ' + i.empresa_cliente : ''), 'hito', true) : '') +
           (i.respuesta_pendiente ? U.badge('Respondió', 'info') : '') +
         '</span>' +
@@ -236,7 +249,7 @@
       '<span class="bj2-fila__quien">' + (persona
         ? U.avatar(persona, 'sm') + '<span class="sx2-apilado" style="gap:0;min-width:0"><span class="sx2-cortar">' + U.esc(persona.nombre) + '</span>' + (i.asignado_heredado ? '<small class="sx2-tenue">de la solicitud</small>' : '') + '</span>'
         : '<span class="bj2-sin">' + U.ico('persona', 14) + 'Sin asignar</span>') + '</span>' +
-      '<span class="bj2-fila__fecha">' + (i.fecha_comprometida ? '<span>' + fechaCorta(i.fecha_comprometida) + '</span>' : '<span class="sx2-tenue">Sin fecha</span>') +
+      '<span class="bj2-fila__fecha">' + (i.fecha_comprometida ? '<span' + (vencida(i) ? ' class="bj2-tarde" title="Fecha comprometida vencida"' : '') + '>' + (vencida(i) ? U.ico('alerta', 12) + ' ' : '') + fechaCorta(i.fecha_comprometida) + '</span>' : '<span class="sx2-tenue">Sin fecha</span>') +
         '<small class="sx2-tenue">' + (i.dias_sin_movimiento ? i.dias_sin_movimiento + ' d sin mover' : 'hoy') + '</small></span>' +
       '<span class="bj2-fila__acc">' + (!datos_.solo_lectura && i.estado === 'S01' ? U.boton({ texto: 'Recibir', sm: true, variante: 'primario', clase: 'js-bj2-recibir', datos: { id: i.subsolicitud_id } }) : '') +
         U.boton({ soloIcono: true, icono: 'derecha', sm: true, variante: 'fantasma', titulo: 'Abrir', clase: 'js-bj2-abrir' }) + '</span>' +
@@ -246,9 +259,9 @@
   function lista() {
     var items = filtrados();
     if (!items.length) {
-      return U.card({ i: 3, cuerpo: U.vacio({ icono: f.kpi === 'abiertos' && !f.texto ? 'check' : 'lupa',
+      return '<section class="sx2-card sx2-card--sin-relleno sx2-entra" style="--i:3">' + barraFiltros() + '<div style="padding:var(--sx-e-5)">' + U.vacio({ icono: f.kpi === 'abiertos' && !f.texto ? 'check' : 'lupa',
         titulo: f.kpi === 'abiertos' && !f.texto && !f.empresa && !f.prioridad ? 'Bandeja al día' : 'Nada con estos filtros',
-        texto: f.kpi === 'abiertos' && !f.texto ? 'No hay ítems en curso.' : 'Prueba quitando algún filtro.' }) });
+        texto: f.kpi === 'abiertos' && !f.texto ? 'No hay ítems en curso.' : 'Prueba quitando algún filtro.' }) + '</div></section>';
     }
     var visibles = items.slice(0, mostrar_);
     var cuerpo;
@@ -269,10 +282,12 @@
       cuerpo = '<ul class="bj2-lista">' + visibles.map(fila).join('') + '</ul>';
     }
     var todosMarcados = !datos_.solo_lectura && visibles.length && visibles.every(function (i) { return sel_[i.subsolicitud_id]; });
-    return '<section class="sx2-card sx2-card--sin-relleno sx2-entra" style="--i:3">' +
+    return '<section class="sx2-card sx2-card--sin-relleno sx2-entra" style="--i:3">' + bannerRezago() + barraFiltros() +
       '<div class="bj2-lista__cab">' +
         (datos_.solo_lectura ? '' : '<label class="bj2-check" title="Seleccionar todo lo visible"><input type="checkbox" class="js-bj2-sel-todo"' + (todosMarcados ? ' checked' : '') + ' aria-label="Seleccionar todo lo visible"></label>') +
         '<strong>' + items.length + (items.length === 1 ? ' ítem' : ' ítems') + '</strong><span class="sx2-tenue">' + U.esc(kpiDe(f.kpi).etiqueta.toLowerCase()) + '</span>' +
+        '<span class="bj2-lista__cab-acc">' + U.chip({ texto: 'Agrupar por solicitud', icono: 'capas', activo: f.agrupar, clase: 'js-bj2-agrupar' }) +
+          U.chip({ texto: 'Incluir cerrados', activo: f.kpi === 'todos', clase: 'js-bj2-todos' }) + '</span>' +
       '</div>' + cuerpo +
       (items.length > visibles.length ? '<div style="text-align:center;padding:12px">' + U.boton({ texto: 'Mostrar más (' + (items.length - visibles.length) + ')', icono: 'abajo', sm: true, variante: 'fantasma', clase: 'js-bj2-mas' }) + '</div>' : '') +
     '</section>';
@@ -318,7 +333,7 @@
     graficos_.forEach(function (g) { try { g.destroy(); } catch (e) { /* ya destruido */ } });
     graficos_ = [];
     c.innerHTML = '<div class="sx2-pagina">' + cabecera() +
-      (f.vista === 'analisis' ? kpis() + analisis() : kpis() + bannerRezago() + barraFiltros() + lista()) +
+      (f.vista === 'analisis' ? kpis() + analisis() : banda() + lista()) +
     '</div>' + (f.vista === 'cola' ? barraLote() : '');
     if (silencioso) {
       c.querySelectorAll('.sx2-entra').forEach(function (el) { el.style.animation = 'none'; });
@@ -541,7 +556,7 @@
   var TIPO_ACT = {
     estado: { icono: 'estado', tono: 'primario' }, prioridad: { icono: 'bandera', tono: 'alerta' },
     compromiso: { icono: 'calendario', tono: 'info' }, asignacion: { icono: 'persona', tono: 'hito' },
-    comentario: { icono: 'comentario', tono: 'neutro' }, interno: { icono: 'candado', tono: 'neutro' }
+    comentario: { icono: 'correo', tono: 'info' }, interno: { icono: 'candado', tono: 'neutro' }
   };
 
   function abrirDetalle(solicitudId, subFoco) {
@@ -708,15 +723,19 @@
       (detalle.historial_prioridad || []).forEach(function (h) { ev.push({ ts: h.timestamp, tipo: 'prioridad', usuario: h.usuario, txt: 'Prioridad ' + (h.prioridad_anterior || '—') + ' → ' + h.prioridad_nueva, nota: h.justificacion, sub: h.subsolicitud_id }); });
       (detalle.historial_compromiso || []).forEach(function (h) { ev.push({ ts: h.timestamp, tipo: 'compromiso', usuario: h.usuario, txt: (h.fecha_anterior ? 'Fecha ' + PY.fecha(h.fecha_anterior, true) + ' → ' : 'Comprometió para el ') + PY.fecha(h.fecha_nueva, true), nota: h.motivo, sub: h.subsolicitud_id }); });
       (detalle.historial_asignacion || []).forEach(function (h) { ev.push({ ts: h.timestamp, tipo: 'asignacion', usuario: h.usuario, txt: 'Asignó a ' + PY.persona(h.responsable_nuevo).nombre, nota: h.motivo, sub: h.subsolicitud_id }); });
-      (detalle.comentarios || []).forEach(function (c) { var interno = c.es_interno === true || c.es_interno === 'TRUE'; ev.push({ ts: c.timestamp, tipo: interno ? 'interno' : 'comentario', usuario: c.usuario, txt: interno ? 'Nota interna' : 'Comentó', nota: c.texto, sub: c.subsolicitud_id }); });
+      (detalle.comentarios || []).forEach(function (c) { var interno = c.es_interno === true || c.es_interno === 'TRUE'; ev.push({ ts: c.timestamp, tipo: interno ? 'interno' : 'comentario', usuario: c.usuario, txt: interno ? 'Nota interna' : 'Escribió al solicitante', nota: c.texto, sub: c.subsolicitud_id }); });
       ev.sort(function (a, b) { return new Date(b.ts) - new Date(a.ts); });
       var nItem = {};
       (detalle.subsolicitudes || []).forEach(function (s) { nItem[s.subsolicitud_id] = s.numero_item; });
       var multi = (detalle.subsolicitudes || []).length > 1;
       return (soloLectura() ? '' : '<form class="sx2-py-sala-form js-bj2-comentar" novalidate>' +
-          '<textarea class="sx2-input" name="texto" maxlength="4000" placeholder="Escribe un comentario…"></textarea>' +
-          '<div class="sx2-entre"><label class="sx2-flex" style="gap:6px;font-size:.8125rem"><input type="checkbox" name="interno" checked> Nota interna (el solicitante no la ve)</label>' +
-          U.boton({ texto: 'Comentar', icono: 'derecha', sm: true, variante: 'primario', tipo: 'submit' }) + '</div></form>') +
+          '<div class="bj2-destino" role="radiogroup" aria-label="¿Para quién es?">' +
+            '<label><input type="radio" name="destino" value="interno" checked>' + U.ico('candado', 13) + 'Nota interna</label>' +
+            '<label><input type="radio" name="destino" value="solicitante">' + U.ico('correo', 13) + 'Mensaje al solicitante</label>' +
+          '</div>' +
+          '<textarea class="sx2-input" name="texto" maxlength="4000" placeholder="Escribe aquí…"></textarea>' +
+          '<div class="sx2-entre"><small class="bj2-destino__ayuda"><span class="bj2-destino__si-interno">Solo la ve el equipo.</span><span class="bj2-destino__si-solicitante">Le llega por correo y la ve en Mis solicitudes.</span></small>' +
+          '<button type="submit" class="sx2-boton sx2-boton--primario sx2-boton--sm">' + U.ico('derecha', 14) + '<span class="bj2-destino__si-interno">Guardar nota</span><span class="bj2-destino__si-solicitante">Enviar al solicitante</span></button></div></form>') +
         (ev.length ? '<ul class="sx2-lista" style="gap:0">' + ev.map(function (e) {
           var p = PY.persona(e.usuario), t = TIPO_ACT[e.tipo];
           return '<li class="sx2-py-sala-ev">' + U.avatar(p, 'sm') +
@@ -775,9 +794,11 @@
         var texto = form.texto.value.trim();
         if (!texto) return;
         var btn = form.querySelector('[type=submit]'); btn.disabled = true;
-        api('agregarComentario', { solicitud_id: solicitudId, texto: texto, es_interno: form.interno.checked }).then(function (r) {
+        var alSolicitante = !!form.querySelector('[name=destino][value=solicitante]:checked');
+        api('agregarComentario', { solicitud_id: solicitudId, texto: texto, es_interno: !alSolicitante }).then(function (r) {
           btn.disabled = false;
-          if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo comentar.', 'error'); return; }
+          if (!r || !r.ok) { PY.aviso((r && r.message) || 'No se pudo guardar.', 'error'); return; }
+          PY.aviso(alSolicitante ? 'Mensaje enviado al solicitante.' : 'Nota interna guardada.', 'exito');
           cargarDetalle();
         });
       }
@@ -799,7 +820,7 @@
     if (t.closest('.js-bj2-reintentar')) { cargar(!!datos_); return; }
     if (!datos_) return;
     if ((b = t.closest('.js-bj2-vista'))) { f.vista = b.getAttribute('data-id'); pintar(); return; }
-    if ((b = t.closest('.sx2-kpi[data-filtro]'))) { f.kpi = b.getAttribute('data-filtro'); f.vista = 'cola'; mostrar_ = POR_PAGINA; pintar(true); return; }
+    if ((b = t.closest('.sx2-kpi[data-filtro], .bj2-banda__op[data-filtro]'))) { f.kpi = b.getAttribute('data-filtro'); f.vista = 'cola'; mostrar_ = POR_PAGINA; pintar(true); return; }
     if (t.closest('.js-bj2-todos')) { f.kpi = f.kpi === 'todos' ? 'abiertos' : 'todos'; pintar(true); return; }
     if (t.closest('.js-bj2-agrupar')) { f.agrupar = !f.agrupar; try { localStorage.setItem('sigso_bj2_agrupar', f.agrupar ? '1' : '0'); } catch (e) { /* sin storage */ } pintar(true); return; }
     if (t.closest('.js-bj2-rezago')) { f.kpi = 'por_revisar'; f.orden = 'antiguedad'; f.texto = ''; mostrar_ = POR_PAGINA; pintar(true); var l = raiz.querySelector('.bj2-lista'); if (l) l.scrollIntoView({ block: 'start', behavior: 'smooth' }); return; }

@@ -23,6 +23,7 @@ const { errorValidacion } = require('./errores');
 const { ESTADOS, ESTADOS_CERRADOS, ESTADOS_EXCLUIDOS_DERIVACION } = require('./constantesSolicitudes');
 const Utils = require('./utils');
 const Cumplimiento = require('./cumplimiento');
+const DirectorioPersonal = require('./directorioPersonal');
 
 const ESTADOS_TRABAJO_DEV = [ESTADOS.S04, ESTADOS.S05, ESTADOS.S06, ESTADOS.S07];
 const TOP_MODULOS_CANTIDAD = 5;
@@ -66,16 +67,31 @@ function agregarResponsablesSiCorresponde_(db, datos, contexto) {
   }
 }
 
-// Personas que pueden tener una bandeja propia (Gestor/Analista o Gestor
-// tecnico, activos) -- a quien CAT_AREAS.responsable_email puede apuntar.
+// A quién se le puede asignar un pedido. 2026-10-05 (auditoría, etapa 1):
+// antes salía de USUARIOS (la identidad de Google, apagada el 27-09) y solo
+// con roles DEV/ANA, así que no se podía asignar a nadie de Contabilidad ni de
+// RR.HH. Ahora: toda cuenta ACTIVA de la plataforma (una vez por persona, con
+// su correo principal y el nombre del Directorio de Personas). Lo asignado le
+// aparece en Mi trabajo e Inicio aunque no tenga el módulo Bandeja.
 function obtenerResponsablesActivos_(db) {
-  return leerFilasSeguro_(db, 'USUARIOS')
-    .filter((u) => {
-      const activo = u.activo === true || u.activo === 'TRUE' || u.activo === 1;
-      return activo && (u.rol === 'DEV' || u.rol === 'ANA');
-    })
-    .map((u) => ({ email: u.email, nombre: u.nombre || u.email }))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  let cuentas = [];
+  try { cuentas = DirectorioPersonal.cuentasActivasConRol_(db); } catch (err) { return []; }
+  const nombres = nombresPorEmail_(db);
+  const vistos = {};
+  return cuentas
+    .filter((c) => { const k = String(c.email).toLowerCase(); if (vistos[k]) return false; vistos[k] = true; return true; })
+    .map((c) => ({ email: c.email, nombre: nombres[String(c.email).toLowerCase()] || c.nombre || c.email }))
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+}
+
+// Nombre para mostrar de cada correo: cuentas de la plataforma (con el nombre
+// del Directorio); USUARIOS solo como respaldo para correos viejos que ya no
+// tienen cuenta (siguen apareciendo en solicitudes antiguas).
+function nombresPorEmail_(db) {
+  const n = {};
+  leerFilasSeguro_(db, 'USUARIOS').forEach((u) => { if (u.email) n[String(u.email).toLowerCase()] = u.nombre || u.email; });
+  try { DirectorioPersonal.directorioPersonalActivo_(db).forEach((p) => { n[String(p.email).toLowerCase()] = p.nombre; }); } catch (err) { /* sin cuentas */ }
+  return n;
 }
 
 function esAtencionDirecta_(solicitud) {
@@ -275,8 +291,7 @@ function calcularKpis_(db, filtros) {
   const abiertas = solicitudes.filter((s) => ESTADOS_CERRADOS.indexOf(s.estado_derivado) === -1);
   const hoy = Utils.claveDia_(new Date(), 'America/Santiago');
 
-  const nombrePorEmail = {};
-  leerFilasSeguro_(db, 'USUARIOS').forEach((u) => { nombrePorEmail[u.email] = u.nombre || u.email; });
+  const nombrePorEmail = nombresPorEmail_(db);
 
   const ultimoMovimientoPorSolicitud = {};
   historial.forEach((h) => {
@@ -363,7 +378,7 @@ function asignadoDeSolicitud_(solicitud, items) {
   const asignados = items.map((i) => responsableValido_(i.desarrollador_asignado)).filter(Boolean);
   return asignados.length ? asignados[0] : '';
 }
-function nombreAsignado_(email, nombrePorEmail) { return email ? (nombrePorEmail[email] || email) : ''; }
+function nombreAsignado_(email, nombrePorEmail) { return email ? (nombrePorEmail[String(email).toLowerCase()] || email) : ''; }
 function solicitudSinAsignar_(solicitud, items) {
   if (responsableValido_(solicitud.desarrollador_asignado)) return false;
   const abiertos = items.filter((i) => ESTADOS_CERRADOS.indexOf(i.estado) === -1 && i.estado !== ESTADOS.S08);
@@ -442,8 +457,7 @@ function getCola(db, filtros, contexto) {
   todas.forEach((i) => { (itemsPorSolicitud[i.solicitud_id] = itemsPorSolicitud[i.solicitud_id] || []).push(i); });
   const historial = leerFilas_(db, 'HISTORIAL_ESTADOS', COLUMNAS.HISTORIAL_ESTADOS);
   const comentariosPublicos = leerFilas_(db, 'COMENTARIOS', COLUMNAS.COMENTARIOS).filter((c) => !c.es_interno);
-  const nombrePorEmail = {};
-  leerFilasSeguro_(db, 'USUARIOS').forEach((u) => { nombrePorEmail[String(u.email || '').toLowerCase()] = u.nombre || u.email; });
+  const nombrePorEmail = nombresPorEmail_(db);
   const ultimoMovimiento = {};
   historial.forEach((h) => {
     const k = h.subsolicitud_id || h.solicitud_id;

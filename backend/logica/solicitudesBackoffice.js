@@ -179,7 +179,11 @@ function actualizarEstado(db, data, contexto, opciones) {
   const estadoDerivado = calcularEstadoDerivado_(estadosActualizados);
   actualizarFilaPorId_(db, 'SOLICITUDES', 'solicitud_id', subsolicitud.solicitud_id, { estado_derivado: estadoDerivado });
 
-  Notificaciones.notificarCambioEstado(db, subsolicitud.solicitud_id, data.subsolicitud_id, estadoActual, data.estado_nuevo);
+  // El comentario de "Esperando información" ES la pregunta para el
+  // solicitante: va escrita en el correo (los demás comentarios no salen).
+  Notificaciones.notificarCambioEstado(db, subsolicitud.solicitud_id, data.subsolicitud_id, estadoActual, data.estado_nuevo, {
+    comentario: data.estado_nuevo === ESTADOS.S06 ? comentario : '', automatico: !!opts.sistemaAutomatico
+  });
 
   return {
     subsolicitud_id: data.subsolicitud_id, solicitud_id: subsolicitud.solicitud_id,

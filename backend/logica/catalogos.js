@@ -85,10 +85,47 @@ function filtrarActivos_(filas) {
   return filas.filter((f) => activo_(f.activo));
 }
 
+// 2026-10-05 (auditoría de Solicitudes, etapa 1): en producción CAT_AREAS
+// tiene un área POR PERSONA ("RRHH_LISSETH", "CONTABILIDAD_FRANCISCA",
+// "DESARROLADOR_LEO") y esos nombres los veía quien pide algo en "¿A qué área
+// va dirigida?". Al solicitante se le muestra el DEPARTAMENTO, una vez: lo que
+// va antes del "_", con su nombre legible. Mientras el ruteo siga siendo por
+// área (la etapa 2 lo lleva a la cola del departamento), cada departamento
+// envía a su primera área activa (por area_id), que es como ya estaba
+// configurado. Un área sin "_" ("Plataformas", "CONTROL Y GESTIÓN") conserva
+// su nombre, con mayúsculas normales.
+const NOMBRE_DEPARTAMENTO = {
+  RRHH: 'Recursos Humanos', 'RECURSOS HUMANOS': 'Recursos Humanos', CONTABILIDAD: 'Contabilidad',
+  FACTURACION: 'Facturación y Cobranzas', COBRANZAS: 'Facturación y Cobranzas',
+  PREVENCION: 'Prevención de Riesgos', MARKETING: 'Marketing', COMERCIAL: 'Comercial',
+  DESARROLADOR: 'Desarrollo / TI', DESARROLLADOR: 'Desarrollo / TI', DESARROLLO: 'Desarrollo / TI', TI: 'Desarrollo / TI',
+  OPERACIONES: 'Operaciones', GERENCIA: 'Gerencia', ADMINISTRACION: 'Administración', CALIDAD: 'Calidad'
+};
+const MARCAS_DIACRITICAS = new RegExp('[\\u0300-\\u036f]', 'g');
+function sinTildes_(t) { return String(t || '').normalize('NFD').replace(MARCAS_DIACRITICAS, ''); }
+function nombreLegible_(t) {
+  const s = String(t || '').trim().toLowerCase();
+  return s.replace(/(^|\s)(\S)/g, (m, sp, c) => sp + c.toUpperCase()).replace(/\b(Y|De|Del|La|Las|El|Los)\b/g, (p) => p.toLowerCase());
+}
+function departamentoDeArea_(nombre) {
+  const base = String(nombre || '').trim();
+  const prefijo = base.indexOf('_') !== -1 ? base.slice(0, base.indexOf('_')) : base;
+  const clave = sinTildes_(prefijo).toUpperCase().trim();
+  if (NOMBRE_DEPARTAMENTO[clave]) return NOMBRE_DEPARTAMENTO[clave];
+  // Un nombre ya legible ("Plataformas", "Soporte TI") se respeta tal cual.
+  if (base.indexOf('_') === -1 && base !== base.toUpperCase()) return base;
+  return nombreLegible_(prefijo);
+}
 function proyectarAreasPublicas_(db) {
   let filas;
   try { filas = leerFilas_(db, 'CAT_AREAS', COLUMNAS.CAT_AREAS); } catch (err) { return []; }
-  return filtrarActivos_(filas).map((a) => ({ area_id: a.area_id, nombre: a.nombre }));
+  const vistos = {};
+  return filtrarActivos_(filas)
+    .slice()
+    .sort((a, b) => String(a.area_id).localeCompare(String(b.area_id)))
+    .map((a) => ({ area_id: a.area_id, nombre: departamentoDeArea_(a.nombre) }))
+    .filter((a) => { if (vistos[a.nombre]) return false; vistos[a.nombre] = true; return true; })
+    .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
 }
 
 function getCatalogosPublicos(db) {

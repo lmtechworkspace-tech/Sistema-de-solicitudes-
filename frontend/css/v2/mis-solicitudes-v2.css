@@ -51,6 +51,22 @@
 .ms2-adjuntos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font: var(--sx-t-chico); }
 .ms2-drawer .sx2-drawer__pie a.sx2-boton { flex: 1; justify-content: center; text-decoration: none; }
 
+/* Etapa 1 (2026-10-05): atraso visible, quién te atiende, confirmar varios y mensajes. */
+.ms2-fila__fecha--tarde, .ms2-fila__fecha--tarde small { color: var(--sx-critico); }
+.ms2-tarde { color: var(--sx-critico); font-weight: 600; }
+.ms2-atiende b { color: var(--sx-texto); font-weight: 600; }
+div.ms2-aviso { justify-content: space-between; flex-wrap: wrap; }
+.ms2-aviso__texto { display: inline-flex; align-items: center; gap: 8px; }
+.ms2-mensajes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.ms2-msj {
+  max-width: 85%; align-self: flex-start; display: flex; flex-direction: column; gap: 4px;
+  padding: 10px 14px; border-radius: 4px 14px 14px 14px;
+  background: var(--sx-superficie-2); border: 1px solid var(--sx-borde-suave);
+}
+.ms2-msj--mio { align-self: flex-end; border-radius: 14px 4px 14px 14px; background: var(--sx-primario-suave); border-color: transparent; }
+.ms2-msj__quien { font: 600 0.75rem/1.2 var(--fuente); color: var(--sx-texto-2, var(--sx-texto)); }
+.ms2-msj__texto { margin: 0; font: var(--sx-t-chico); color: var(--sx-texto); white-space: pre-wrap; overflow-wrap: anywhere; }
+
 @media (max-width: 900px) {
   .ms2-fila { grid-template-columns: minmax(0, 1fr) 16px; row-gap: 8px; padding: 12px var(--sx-e-4); }
   .ms2-fila__estado, .ms2-fila__fecha { grid-column: 1; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; }

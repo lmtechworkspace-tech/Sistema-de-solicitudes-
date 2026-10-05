@@ -78,35 +78,30 @@ test('Dashboard.getData (v3.0): ADM elige "verBandeja" y ve solo esa persona', (
   assert.deepEqual(datos.recientes.map((r) => r.solicitud_id), ['SOL-2026-HP-0002']);
 });
 
-test('Dashboard.getData (v4.1.1): GERENCIA ignora "verBandeja" -- siempre ve solo la suya', () => {
+test('Dashboard.getData (2026-10-05): "responsables" son las cuentas activas de la plataforma, solo para ADM', () => {
   const db = dbConSchema();
-  seedSolicitud(db, { solicitud_id: 'SOL-2026-HP-0001', desarrollador_asignado: 'dev1@homepymes.cl' });
-  seedSubsolicitud(db, { subsolicitud_id: 'SOL-2026-HP-0001-01', solicitud_id: 'SOL-2026-HP-0001' });
-
-  const datos = Dashboard.getData(db, { verBandeja: 'dev1@homepymes.cl' }, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
-  assert.equal(datos.recientes.length, 0);
-});
-
-test('Dashboard.getData (v4.1.1): expone "responsables" (DEV/ANA activos) solo para ADM', () => {
-  const db = dbConSchema();
-  sembrarTabla_(db, 'USUARIOS', COLUMNAS.USUARIOS, [
-    ['U1', 'Dev Uno', 'dev1@homepymes.cl', 'HP', 'DEV', true, '', 'sistema'],
-    ['U2', 'Analista Dos', 'ana2@homepymes.cl', 'HP', 'ANA', true, '', 'sistema'],
-    ['U3', 'Inactivo', 'x@homepymes.cl', 'HP', 'DEV', false, '', 'sistema'],
-    ['U4', 'Admin Uno', 'admin@homepymes.cl', 'HP', 'ADM', true, '', 'sistema']
-  ]);
+  const cuenta = (id, nombre, emails, rol, activo) => Object.assign(Object.fromEntries(COLUMNAS.CUENTAS_PORTAL.map((c) => [c, ''])),
+    { cuenta_id: id, usuario: id, nombre, emails: JSON.stringify(emails), rol, activo, empresa_id: 'HP' });
+  [
+    cuenta('C1', 'Dev Uno', ['dev1@homepymes.cl'], 'DEV', true),
+    cuenta('C2', 'Contadora Dos', ['conta2@homepymes.cl', 'otro@homepymes.cl'], 'SOLICITANTE', true),
+    cuenta('C3', 'Inactivo', ['x@homepymes.cl'], 'DEV', false),
+    cuenta('C4', 'Admin Uno', ['admin@homepymes.cl'], 'ADM', true)
+  ].forEach((c) => agregarFila_(db, 'CUENTAS_PORTAL', c));
+  // USUARIOS (identidad vieja de Google) ya no define a quién se asigna.
+  sembrarTabla_(db, 'USUARIOS', COLUMNAS.USUARIOS, [['U9', 'Solo Google', 'google@homepymes.cl', 'HP', 'DEV', true, '', 'sistema']]);
 
   const datosAdmin = Dashboard.getData(db, {}, { rol: 'ADM', email: 'admin@homepymes.cl' });
   const datosGerencia = Dashboard.getData(db, {}, { rol: 'GERENCIA', email: 'gerencia@homepymes.cl' });
   const datosDev = Dashboard.getData(db, {}, { rol: 'DEV', email: 'dev1@homepymes.cl' });
 
-  const emailsAdmin = datosAdmin.responsables.map((r) => r.email).sort();
-  assert.deepEqual(emailsAdmin, ['ana2@homepymes.cl', 'dev1@homepymes.cl']);
+  assert.deepEqual(datosAdmin.responsables.map((r) => r.email).sort(), ['admin@homepymes.cl', 'conta2@homepymes.cl', 'dev1@homepymes.cl']);
+  assert.equal(datosAdmin.responsables.find((r) => r.email === 'conta2@homepymes.cl').nombre, 'Contadora Dos');
   assert.equal(datosGerencia.responsables, undefined);
   assert.equal(datosDev.responsables, undefined);
 });
 
-test('Dashboard.getData (v3.0): sin la hoja USUARIOS, "responsables" queda vacio sin romper', () => {
+test('Dashboard.getData (v3.0): sin cuentas ni USUARIOS, "responsables" queda vacio sin romper', () => {
   const db = abrirDb_();
   ['SOLICITUDES', 'SUBSOLICITUDES', 'HISTORIAL_ESTADOS', 'CONFIG_FERIADOS', 'COMENTARIOS'].forEach((h) => sembrarTabla_(db, h, COLUMNAS[h], []));
   const datos = Dashboard.getData(db, {}, { rol: 'ADM', email: 'admin@homepymes.cl' });

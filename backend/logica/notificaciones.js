@@ -35,9 +35,9 @@
 const crypto = require('node:crypto');
 const { agregarFila_, leerFilas_, actualizarFilaPorId_ } = require('../db/sqliteRepo');
 const { COLUMNAS } = require('../db/schema');
-const { EMAIL_DESARROLLO } = require('./constantesSolicitudes');
+const { EMAIL_DESARROLLO, ETIQUETA_ESTADO } = require('./constantesSolicitudes');
 const Resend = require('./resend');
-const { claveDia_ } = require('./utils');
+const { claveDia_, sumarDiasHabiles_ } = require('./utils');
 const Jefatura = require('./jefatura');
 const Dashboard = require('./dashboard');
 const Gerencia = require('./gerencia');
@@ -356,23 +356,195 @@ async function avisarAtencionDirectaRegistrada(db, solicitud, atencion, destinat
   return enviarCorreo_(db, { solicitudId: solicitud.solicitud_id, destinatario: email, evento: 'ATENCION_DIRECTA', asunto, cuerpo });
 }
 
-// Fase 10.2: sigue encolando directo (sin intentar un envio inmediato),
-// ahora con dedup (RN-026) que antes no aplicaba aqui.
-function notificarCambioEstado(db, solicitudId, subsolicitudId, estadoAnterior, estadoNuevo) {
+// --- Avisos al solicitante (Solicitudes, etapa 1 de la auditoría 2026-10-05) ---------
+//
+// Antes: un correo por CADA cambio de estado de CADA ítem, con los códigos
+// crudos ("Estado anterior: S01 / Estado nuevo: S02"), sin enlace ni la
+// pregunta. Ahora (decisión del dueño): correo solo en los hitos que le piden
+// algo o le cuentan algo que importa, con nombres, enlace y la pregunta
+// escrita; todo cambio va además a la campana de SIGSO si tiene cuenta. Varios
+// ítems que llegan al mismo hito juntos (un lote) salen en UN correo.
+
+function etiquetaEstado_(codigo) { return ETIQUETA_ESTADO[codigo] || codigo || '—'; }
+function urlPortal_() {
+  return process.env.PORTAL_URL || 'https://lmtechworkspace-tech.github.io/Sistema-de-solicitudes-/plataforma.html';
+}
+// ¿El solicitante entra a SIGSO? Con cuenta, el enlace lleva a Mis solicitudes
+// y los avisos van también a la campana; sin cuenta (un cliente), a la
+// consulta por número.
+function tieneCuentaActiva_(db, email) {
+  const e = String(email || '').trim().toLowerCase();
+  if (!e) return false;
+  return DirectorioPersonal.directorioPersonalActivo_(db).some((p) => String(p.email).toLowerCase() === e);
+}
+function enlaceSolicitante_(db, solicitud) {
+  return tieneCuentaActiva_(db, solicitud.solicitante_email)
+    ? urlPortal_() + '#/mis_solicitudes'
+    : urlPortal_().replace(/plataforma\.html.*$/, 'estado.html');
+}
+function fechaCorta_(iso) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', year: 'numeric' }).format(d);
+}
+function feriados_(db) {
+  try { return leerFilas_(db, 'CONFIG_FERIADOS', COLUMNAS.CONFIG_FERIADOS).map((f) => f.fecha); } catch (err) { return []; }
+}
+
+// Qué cambio de estado es un hito para el solicitante (null = solo campana).
+function hitoSolicitante_(anterior, nuevo) {
+  if (nuevo === 'S05' && ['', 'S01', 'S02', 'S03', 'S04'].indexOf(anterior || '') !== -1) return 'EN_CURSO';
+  if (nuevo === 'S06') return 'PREGUNTA';
+  if (nuevo === 'S08') return 'RESUELTA';
+  if (nuevo === 'S09') return 'CERRADA';
+  if (nuevo === 'S10') return 'RECHAZADA';
+  if (nuevo === 'S11') return 'CANCELADA';
+  return null;
+}
+const MARCA_ITEMS_ = 'Ítems:\n';
+function cuerpoHito_(hito, solicitud, item, opciones) {
+  const hola = 'Hola' + (solicitud.solicitante_nombre ? ' ' + solicitud.solicitante_nombre : '') + ':\n\n';
+  const items = MARCA_ITEMS_ + '- ' + (item.titulo || item.subsolicitud_id) + '\n\n';
+  const enlace = opciones.enlace;
+  const id = solicitud.solicitud_id;
+  switch (hito) {
+    case 'EN_CURSO':
+      return { asunto: 'SIGSO — Comenzamos a trabajar en tu solicitud ' + id,
+        cuerpo: hola + 'El equipo comenzó a trabajar en tu solicitud ' + id + '.\n\n' + items + 'Puedes ver cómo va aquí:\n' + enlace };
+    case 'PREGUNTA':
+      return { asunto: 'SIGSO — Necesitamos un dato para seguir con tu solicitud ' + id,
+        cuerpo: hola + 'Para seguir con "' + (item.titulo || id) + '" el equipo necesita:\n\n«' + (opciones.comentario || 'Revisa la pregunta en SIGSO.') + '»\n\n' +
+          'Responde desde aquí:\n' + enlace + '\n\nMientras no respondas, este ítem queda en pausa.' };
+    case 'RESUELTA':
+      return { asunto: 'SIGSO — Tu solicitud ' + id + ' está resuelta: confírmalo',
+        cuerpo: hola + 'El equipo marcó como resuelto lo que pediste en la solicitud ' + id + '.\n\n' + items +
+          'Revisa que haya quedado bien y confírmalo (o cuéntanos qué falta):\n' + enlace + '\n\n' +
+          'Si no recibimos respuesta, se cerrará automáticamente' + (opciones.cierre ? ' el ' + opciones.cierre : ' en 5 días hábiles') + '.' };
+    case 'CERRADA':
+      return { asunto: 'SIGSO — Solicitud ' + id + ' cerrada',
+        cuerpo: hola + (opciones.automatico
+          ? 'Cerramos tu solicitud ' + id + ' porque no recibimos respuesta en 5 días hábiles desde que se marcó como resuelta.\n\n' + items + 'Si algo quedó pendiente, crea una solicitud nueva y la retomamos.'
+          : 'Tu solicitud ' + id + ' quedó cerrada.\n\n' + items + 'Puedes ver el detalle aquí:\n' + enlace) };
+    case 'RECHAZADA':
+    case 'CANCELADA':
+      return { asunto: 'SIGSO — Solicitud ' + id + (hito === 'RECHAZADA' ? ' rechazada' : ' cancelada'),
+        cuerpo: hola + 'Lo siguiente de tu solicitud ' + id + ' fue ' + (hito === 'RECHAZADA' ? 'rechazado' : 'cancelado') + ':\n\n' + items +
+          'Puedes ver el detalle aquí:\n' + enlace + '\n\nSi tienes dudas, escribe al equipo desde SIGSO.' };
+    default:
+      return null;
+  }
+}
+
+/**
+ * Aviso al solicitante de un cambio de estado. Se encola (no espera a Resend).
+ * opciones: { comentario (lo que escribió el equipo al pasar a "Esperando
+ * información"), automatico (cierre por falta de respuesta) }.
+ */
+const VIDA_CAMPANA_SOLICITUD_H = 168;
+function campanaEstado_(db, destinatario, solicitudId, estado, tituloItem) {
+  const titulo = solicitudId + ': ' + estado;
+  const email = String(destinatario || '').trim().toLowerCase();
+  let previa = null;
+  try {
+    const ahora = Date.now();
+    previa = leerFilas_(db, 'NOTIFICACIONES_APP', COLUMNAS.NOTIFICACIONES_APP).find((n) =>
+      n.tipo === 'SOLICITUD_ESTADO' && String(n.destinatario_email || '').toLowerCase() === email &&
+      String(n.titulo || '').indexOf(solicitudId + ':') === 0 &&
+      !(n.leida === true || n.leida === 'TRUE') && (!n.expira_en || new Date(n.expira_en).getTime() > ahora));
+  } catch (err) { previa = null; }
+  if (previa) {
+    const ahora = new Date();
+    actualizarFilaPorId_(db, 'NOTIFICACIONES_APP', 'notif_id', previa.notif_id, {
+      titulo, mensaje: tituloItem, creada_en: ahora.toISOString(),
+      expira_en: new Date(ahora.getTime() + VIDA_CAMPANA_SOLICITUD_H * 3600000).toISOString()
+    });
+    return;
+  }
+  NotificacionesApp.encolarLote(db, [{
+    destinatario, tipo: 'SOLICITUD_ESTADO', titulo, mensaje: tituloItem,
+    modulo_id: 'mis_solicitudes', texto_accion: 'Ver mi solicitud', vidaHoras: VIDA_CAMPANA_SOLICITUD_H
+  }]);
+}
+
+function notificarCambioEstado(db, solicitudId, subsolicitudId, estadoAnterior, estadoNuevo, opciones) {
+  const opts = opciones || {};
   const solicitud = leerFilas_(db, 'SOLICITUDES', COLUMNAS.SOLICITUDES).find((s) => s.solicitud_id === solicitudId);
   if (!solicitud) return { enviado: false, motivo: 'solicitud_no_encontrada' };
   if (!solicitud.solicitante_email) return { enviado: false, motivo: 'sin_destinatario' };
-  const asunto = 'SIGSO — Actualización de su solicitud ' + solicitudId;
-  const cuerpo =
-    'Estimado/a ' + (solicitud.solicitante_nombre || '') + ':\n\n' +
-    'Le informamos que su solicitud ha registrado un cambio de estado en el sistema.\n\n' +
-    'DETALLE\n- N° de solicitud: ' + solicitudId + '\n- Estado anterior: ' + estadoAnterior +
-    '\n- Estado nuevo: ' + estadoNuevo + '\n\n' +
-    'Puede revisar el detalle completo en la página de Consultar Estado del sistema.' +
-    pieCorreo_();
-  const evento = 'CAMBIO_ESTADO:' + subsolicitudId + ':' + estadoNuevo;
-  const resultado = encolarCorreo_(db, { solicitudId, destinatario: solicitud.solicitante_email, evento, asunto, cuerpo });
+  const item = leerFilas_(db, 'SUBSOLICITUDES', COLUMNAS.SUBSOLICITUDES).find((s) => s.subsolicitud_id === subsolicitudId) || { subsolicitud_id: subsolicitudId, titulo: '' };
+  const conCuenta = tieneCuentaActiva_(db, solicitud.solicitante_email);
+
+  // Campana: todo cambio, con nombre de estado (vive 7 días). UNA por
+  // solicitud: si ya hay un aviso sin leer de esta solicitud, se actualiza en
+  // vez de sumar otro (probado en el sandbox: sin esto, recibir/aprobar/
+  // iniciar varios ítems dejaba 72 avisos a una sola persona).
+  if (conCuenta) campanaEstado_(db, solicitud.solicitante_email, solicitudId, etiquetaEstado_(estadoNuevo), item.titulo || '');
+
+  const hito = hitoSolicitante_(estadoAnterior, estadoNuevo);
+  if (!hito) return { enviado: false, motivo: 'no_es_hito', campana: conCuenta };
+
+  // Cada pregunta es distinta: una por ítem. Los demás hitos, uno por solicitud.
+  const evento = 'HITO:' + hito + ':' + (hito === 'PREGUNTA' ? subsolicitudId : solicitudId);
+  const destinatario = solicitud.solicitante_email;
+  const pendiente = hito === 'PREGUNTA' ? null : leerFilas_(db, 'LOG_NOTIFICACIONES', COLUMNAS.LOG_NOTIFICACIONES).find((f) =>
+    f.solicitud_id === solicitudId && f.evento === evento && f.destinatario === destinatario &&
+    f.resultado === 'PENDIENTE_REINTENTO' && !Number(f.reintentos));
+  if (pendiente) {
+    // Todavía no sale: se le suma este ítem al mismo correo.
+    const linea = '- ' + (item.titulo || subsolicitudId) + '\n';
+    if (String(pendiente.cuerpo).indexOf(linea) === -1 && String(pendiente.cuerpo).indexOf(MARCA_ITEMS_) !== -1) {
+      actualizarFilaPorId_(db, 'LOG_NOTIFICACIONES', 'log_id', pendiente.log_id, { cuerpo: String(pendiente.cuerpo).replace(MARCA_ITEMS_, MARCA_ITEMS_ + linea) });
+    }
+    return { agrupado: true };
+  }
+
+  let cierre = '';
+  if (hito === 'RESUELTA') cierre = fechaCorta_(sumarDiasHabiles_(new Date().toISOString(), 5, { feriados: feriados_(db) }));
+  const texto = cuerpoHito_(hito, solicitud, item, { enlace: enlaceSolicitante_(db, solicitud), comentario: opts.comentario, automatico: !!opts.automatico, cierre });
+  const resultado = encolarCorreo_(db, { solicitudId, destinatario, evento, asunto: texto.asunto, cuerpo: texto.cuerpo + pieCorreo_() });
   return resultado.encolado ? { encolado: true } : resultado;
+}
+
+/** Un mensaje del equipo (comentario no interno) le llega al solicitante. */
+async function avisarMensajeEquipo(db, comentario) {
+  const solicitud = leerFilas_(db, 'SOLICITUDES', COLUMNAS.SOLICITUDES).find((s) => s.solicitud_id === comentario.solicitud_id);
+  if (!solicitud || !solicitud.solicitante_email) return { enviado: false, motivo: 'sin_destinatario' };
+  const autor = String(comentario.usuario || '').trim().toLowerCase();
+  if (autor && autor === String(solicitud.solicitante_email).trim().toLowerCase()) return { enviado: false, motivo: 'es_del_solicitante' };
+  const nombre = (DirectorioPersonal.directorioPersonalActivo_(db).find((p) => String(p.email).toLowerCase() === autor) || {}).nombre || 'El equipo';
+  if (tieneCuentaActiva_(db, solicitud.solicitante_email)) {
+    NotificacionesApp.encolarLote(db, [{
+      destinatario: solicitud.solicitante_email, tipo: 'SOLICITUD_MENSAJE', titulo: solicitud.solicitud_id + ': mensaje de ' + nombre,
+      mensaje: String(comentario.texto || '').slice(0, 140), modulo_id: 'mis_solicitudes', texto_accion: 'Ver mi solicitud', vidaHoras: 168
+    }]);
+  }
+  const asunto = 'SIGSO — Mensaje sobre tu solicitud ' + solicitud.solicitud_id;
+  const cuerpo = 'Hola' + (solicitud.solicitante_nombre ? ' ' + solicitud.solicitante_nombre : '') + ':\n\n' +
+    nombre + ' te escribió sobre tu solicitud ' + solicitud.solicitud_id + ':\n\n«' + String(comentario.texto || '') + '»\n\n' +
+    'Puedes verlo aquí:\n' + enlaceSolicitante_(db, solicitud) + pieCorreo_();
+  return enviarCorreo_(db, { solicitudId: solicitud.solicitud_id, destinatario: solicitud.solicitante_email, evento: 'MENSAJE:' + comentario.comentario_id, asunto, cuerpo });
+}
+
+/**
+ * Aviso previo al cierre automático (2 días hábiles antes). Uno por solicitud
+ * con todos sus ítems resueltos sin confirmar; el evento queda registrado y es
+ * lo que habilita el cierre (cierreAutomaticoSolicitudes.js).
+ */
+function avisarCierreProximo(db, solicitud, items, fechaCierreIso) {
+  if (!solicitud.solicitante_email) return { enviado: false, motivo: 'sin_destinatario' };
+  const fecha = fechaCorta_(fechaCierreIso);
+  if (tieneCuentaActiva_(db, solicitud.solicitante_email)) {
+    NotificacionesApp.encolarLote(db, [{
+      destinatario: solicitud.solicitante_email, tipo: 'SOLICITUD_CIERRE', titulo: solicitud.solicitud_id + ': se cerrará el ' + fecha,
+      mensaje: 'Confirma que quedó resuelto o cuéntanos qué falta.', modulo_id: 'mis_solicitudes', texto_accion: 'Validar', vidaHoras: 168
+    }]);
+  }
+  const asunto = 'SIGSO — Tu solicitud ' + solicitud.solicitud_id + ' se cerrará el ' + fecha;
+  const cuerpo = 'Hola' + (solicitud.solicitante_nombre ? ' ' + solicitud.solicitante_nombre : '') + ':\n\n' +
+    'Lo siguiente de tu solicitud ' + solicitud.solicitud_id + ' está resuelto y espera tu confirmación:\n\n' +
+    items.map((i) => '- ' + (i.titulo || i.subsolicitud_id)).join('\n') + '\n\n' +
+    'Si no nos respondes, se cerrará automáticamente el ' + fecha + '. Confirma o cuéntanos qué falta aquí:\n' + enlaceSolicitante_(db, solicitud) + pieCorreo_();
+  return encolarCorreo_(db, { solicitudId: solicitud.solicitud_id, destinatario: solicitud.solicitante_email, evento: 'AVISO_CIERRE:' + solicitud.solicitud_id + ':' + claveDia_(new Date(), 'America/Santiago'), asunto, cuerpo });
 }
 
 async function avisarCompromisoFecha(db, solicitud, subsolicitud, fechaComprometida) {
@@ -844,6 +1016,8 @@ async function enviarReporteGerenciaAhora(db, data, contexto) {
 module.exports = {
   enviarAcuseRecibo, enviarAvisoDesarrollo, avisarAtencionDirectaRegistrada,
   notificarCambioEstado, avisarCompromisoFecha, notificarDerivacion, enviarCodigoAcceso,
+  // Solicitudes, etapa 1 (2026-10-05): mensajes del equipo y aviso previo al cierre automático.
+  avisarMensajeEquipo, avisarCierreProximo, hitoSolicitante_, etiquetaEstado_,
   enviarCorreoRecuperacion,
   notificarValidacionSolicitante, notificarRespuestaSolicitante, enviarDigestJefatura,
   notificarPatron, detectarPatrones, enviarCorreoModulo,

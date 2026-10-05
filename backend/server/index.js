@@ -24,6 +24,7 @@ const Proveedores = require('../logica/proveedoresSgc');
 const RevisionDireccion = require('../logica/revisionDireccionSgc');
 const Objetivos = require('../logica/objetivosSgc');
 const MatrizCobertura = require('../logica/matrizCoberturaSgc');
+const CierreAutomatico = require('../logica/cierreAutomaticoSolicitudes');
 const AgendaDepto = require('../logica/agendaDepto');
 
 const PORT = Number(process.env.SIGSO_PORT || 3000);
@@ -155,6 +156,9 @@ const intervaloTriggersDiarios = setInterval(() => {
   // atrasados y los clientes sin respuesta. Una vez por día (dedup interno).
   if (enVentanaDiaria_(ahora, 8)) {
     try { AgendaDepto.alertasDiarias(db); } catch (err) { console.error('error en las alertas de la agenda:', err); }
+    // Solicitudes (2026-10-05): lo terminado que el solicitante no confirma se
+    // avisa a los 3 días hábiles y se cierra a los 5 (nunca sin aviso previo).
+    try { CierreAutomatico.revisar(db); } catch (err) { console.error('error en el cierre automático de solicitudes:', err); }
   }
   if (enVentanaDiaria_(ahora, 8) && ahora.getDay() === 1) {
     Pausas.enviarReportePeriodico(db, 'semanal').catch((err) => { console.error('error en reporte semanal de pausas:', err); });

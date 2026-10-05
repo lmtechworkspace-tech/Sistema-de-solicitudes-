@@ -15,6 +15,15 @@ const ESTADOS = {
 
 const ESTADOS_CERRADOS = [ESTADOS.S09, ESTADOS.S10, ESTADOS.S11];
 
+// Nombres de los estados para lo que sale del servidor (correos, avisos). Los
+// mismos de frontend/js/utils.js (SIGSO_ESTADOS_LABEL): un correo nunca debe
+// mostrar "S01".
+const ETIQUETA_ESTADO = {
+  S01: 'Nueva', S02: 'Recibida', S03: 'En revisión', S04: 'Aprobada',
+  S05: 'En desarrollo', S06: 'Esperando información', S07: 'En pruebas',
+  S08: 'Terminada', S09: 'Cerrada', S10: 'Rechazada', S11: 'Cancelada'
+};
+
 // Backoffice (§8.2): estado_derivado del padre = el minimo (menos avanzado)
 // entre subsolicitudes NO excluidas (S10/S11).
 const ORDEN_ESTADOS = [
@@ -49,7 +58,7 @@ const PRIORIDAD_POR_DEFECTO = 'P4';
 const EMAIL_DESARROLLO = 'lestay@rld.cl';
 
 module.exports = {
-  ESTADOS, ESTADOS_CERRADOS, ORDEN_ESTADOS, ESTADOS_EXCLUIDOS_DERIVACION,
+  ESTADOS, ESTADOS_CERRADOS, ETIQUETA_ESTADO, ORDEN_ESTADOS, ESTADOS_EXCLUIDOS_DERIVACION,
   ORDEN_PRIORIDAD, PRIORIDAD_ETIQUETA, PRIORIDAD_EMOJI,
   MAPA_IMPACTO_PRIORIDAD, PRIORIDAD_POR_DEFECTO, EMAIL_DESARROLLO
 };

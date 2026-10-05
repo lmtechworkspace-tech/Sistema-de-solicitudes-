@@ -30,6 +30,8 @@ const Sesiones = require('./sesiones');
 const Portal = require('./portal');
 const Cache = require('./cacheEfimero');
 const ArchivosSolicitud = require('./archivosSolicitud');
+const DirectorioPersonal = require('./directorioPersonal');
+const CierreAutomatico = require('./cierreAutomaticoSolicitudes');
 
 function errorValidacion_(campo, mensaje) {
   return { _validationError: true, message: mensaje, fields: [{ campo: campo, mensaje: mensaje }] };
@@ -136,6 +138,41 @@ function historialPublico_(db, solicitudId, solicitud, email) {
     .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 }
 
+// 2026-10-05 (auditoría, etapa 1): los mensajes que el equipo escribe SIN
+// marcar "nota interna" son para el solicitante. Se muestran los del equipo
+// desde que la Bandeja v2 rotula explícitamente "Nota interna (el solicitante
+// no la ve)" (25-09-2026); los anteriores, escritos con la pantalla clásica,
+// no se exponen. Los del propio solicitante (sus respuestas) siempre.
+const MENSAJES_EQUIPO_DESDE = '2026-09-25T00:00:00-03:00';
+function esInterno_(v) { return v === true || v === 'TRUE' || v === 1 || v === 'true'; }
+function nombresEquipo_(db) {
+  const n = {};
+  try { DirectorioPersonal.directorioPersonalActivo_(db).forEach((p) => { n[String(p.email).toLowerCase()] = p.nombre; }); } catch (err) { /* sin directorio */ }
+  return n;
+}
+function mensajesPublicos_(db, solicitudId, email, nombres) {
+  let filas;
+  try { filas = leerFilas_(db, 'COMENTARIOS', COLUMNAS.COMENTARIOS).filter((c) => c.solicitud_id === solicitudId && !esInterno_(c.es_interno)); } catch (err) { return []; }
+  const desde = new Date(MENSAJES_EQUIPO_DESDE).getTime();
+  return filas
+    .map((c) => {
+      const mio = compararEmail_(c.usuario, email);
+      if (!mio && new Date(c.timestamp).getTime() < desde) return null;
+      return {
+        subsolicitud_id: c.subsolicitud_id || '', autor: mio ? 'tu' : 'equipo',
+        // Nunca el correo del equipo: su nombre, o "El equipo".
+        nombre: mio ? '' : (nombres[String(c.usuario || '').toLowerCase()] || 'El equipo'),
+        texto: String(c.texto || ''), timestamp: c.timestamp
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+}
+function responsableValido_(v) {
+  const t = String(v || '').trim();
+  return /^[^\s@[\]]+@[^\s@]+\.[^\s@]+$/.test(t) ? t.toLowerCase() : '';
+}
+
 function estadoPublico(db, solicitudId, email) {
   if (!solicitudId || !email) {
     return errorValidacion_('solicitud_id', 'Debes indicar el numero de solicitud y el correo.');
@@ -178,9 +215,14 @@ function estadoPublico(db, solicitudId, email) {
       });
   } catch (err) { archivosPorSub = {}; }
 
+  const nombres = nombresEquipo_(db);
   const subsolicitudes = leerFilas_(db, 'SUBSOLICITUDES', COLUMNAS.SUBSOLICITUDES)
     .filter((s) => s.solicitud_id === solicitudId)
     .map((s) => ({
+      // Quién lo atiende (nombre; nunca el correo) y, si está terminado, cuándo
+      // se cierra solo si no lo confirma (cierreAutomaticoSolicitudes.js).
+      responsable_nombre: nombres[responsableValido_(s.desarrollador_asignado) || responsableValido_(solicitud.desarrollador_asignado)] || '',
+      cierre_automatico_el: s.estado === ESTADOS.S08 ? CierreAutomatico.fechaCierreEstimada(db, s) : '',
       subsolicitud_id: s.subsolicitud_id,
       numero_item: s.numero_item,
       titulo: s.titulo,
@@ -212,7 +254,8 @@ function estadoPublico(db, solicitudId, email) {
       ? calcularPosicionCola_(db, solicitud)
       : null,
     subsolicitudes: subsolicitudes,
-    historial: historialPublico_(db, solicitudId, solicitud, email)
+    historial: historialPublico_(db, solicitudId, solicitud, email),
+    mensajes: mensajesPublicos_(db, solicitudId, email, nombres)
   };
 }
 
